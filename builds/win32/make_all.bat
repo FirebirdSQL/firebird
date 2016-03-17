@@ -121,6 +121,10 @@ copy %FB_ROOT_PATH%\src\extlib\fbudf\fbudf.sql %FB_OUTPUT_DIR%\udf > nul
 @copy %FB_INSTALL_SCRIPTS%\uninstall_service.bat %FB_OUTPUT_DIR% >nul
 
 :: MSVC runtime
+if %MSVC_VERSION% == 14 (
+@copy "%VS140COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC140.CRT\vcruntime140.dll" %FB_OUTPUT_DIR% >nul
+@copy "%VS140COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC140.CRT\msvcp140.dll" %FB_OUTPUT_DIR% >nul
+) else (
 if %MSVC_VERSION% == 12 (
 @copy "%VS120COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC120.CRT\msvcr120.dll" %FB_OUTPUT_DIR% >nul
 @copy "%VS120COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC120.CRT\msvcp120.dll" %FB_OUTPUT_DIR% >nul
@@ -138,6 +142,7 @@ if %MSVC_VERSION% == 8 (
 @copy "%VS80COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC80.CRT\msvcr80.dll" %FB_OUTPUT_DIR% >nul
 @copy "%VS80COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC80.CRT\msvcp80.dll" %FB_OUTPUT_DIR% >nul
 @copy "%VS80COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC80.CRT\Microsoft.VC80.CRT.manifest" %FB_OUTPUT_DIR% >nul
+)
 )
 )
 )
