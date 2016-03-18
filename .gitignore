@@ -10,6 +10,7 @@
 temp/
 gen/
 builds/install_images
+output*/
 
 # Roslyn cache directories
 *.ide/
