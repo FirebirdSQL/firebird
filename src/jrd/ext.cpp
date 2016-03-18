@@ -87,7 +87,7 @@ namespace Jrd
 	class ExternalFileDirectoryList : public DirectoryList
 	{
 	private:
-		const PathName getConfigString() const
+		PathName getConfigString() const
 		{
 			return PathName(config->getExternalFileAccess());
 		}
@@ -265,7 +265,7 @@ ExternalFile* EXT_file(jrd_rel* relation, const TEXT* file_name) //, bid* descri
 
 	// If file_name is relative expand it in ExternalFilesPath.
 	PathName newName, name(file_name);
-	if (PathUtils::isRelative(name))
+	if (name.isRelative())
 	{
 		ExternalFileDirectoryList::create(dbb);
 		if (!(dbb->dbb_external_file_directory_list->expandFileName(newName, name)))

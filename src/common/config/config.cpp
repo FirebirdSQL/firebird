@@ -280,7 +280,7 @@ void Config::loadValues(const ConfigFile& file)
 	for (int i = 0; i < MAX_CONFIG_KEY; i++)
 	{
 		const ConfigEntry& entry = entries[i];
-		const ConfigFile::Parameter* par = file.findParameter(entry.key);
+		const ConfigFile::Parameter* par = file.findParameter(ConfigFile::KeyType(entry.key));
 
 		if (par)
 		{

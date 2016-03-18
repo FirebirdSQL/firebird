@@ -295,6 +295,8 @@ void SecurityDatabase::prepare()
 	const char* providers = "Providers=" CURRENT_ENGINE;
 	dpb.insertString(isc_dpb_config, providers, fb_strlen(providers));
 
+	dpb.insertTag(isc_dpb_utf8_filename);
+
 	isc_db_handle tempHandle = 0;
 	isc_attach_database(status, 0, secureDbName, &tempHandle,
 		dpb.getBufferLength(), reinterpret_cast<const char*>(dpb.getBuffer()));
@@ -354,7 +356,7 @@ int SecurityDatabase::verify(IWriter* authBlock, IServerBlock* sBlock)
 	storedHash.rtrim();
 
 	string newHash;
-	LegacyHash::hash(newHash, login, passwordEnc, storedHash);
+	LegacyHash::hash(newHash, login, passwordEnc.c_str(), storedHash);
 	if (newHash != storedHash)
 	{
 		bool legacyHash = Config::getLegacyHash();

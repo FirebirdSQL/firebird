@@ -117,7 +117,10 @@ bool SkipRowsStream::lockRecord(thread_db* tdbb) const
 void SkipRowsStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
 {
 	if (detailed)
-		plan += printIndent(++level) + "Skip N Records";
+	{
+		plan += printIndent(++level);
+		plan += "Skip N Records";
+	}
 
 	m_next->print(tdbb, plan, detailed, level);
 }

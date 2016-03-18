@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
+#include <locale.h>
 #include "../jrd/license.h"
 #include "../utilities/install/install_nt.h"
 #include "../utilities/install/regis_proto.h"
@@ -57,24 +58,26 @@ int CLIB_ROUTINE main( int argc, char** argv)
  *	Install or remove Firebird.
  *
  **************************************/
-	TEXT directory[MAXPATHLEN];
+	WCHAR directory[MAXPATHLEN];
 
 	USHORT sw_command = COMMAND_NONE;
 	bool sw_version = false;
 
+	setlocale(LC_ALL, "");
+
 	// Let's get the root directory from the instance path of this program.
 	// argv[0] is only _mostly_ guaranteed to give this info,
 	// so we GetModuleFileName()
-	const USHORT len = GetModuleFileName(NULL, directory, sizeof(directory));
+	const USHORT len = GetModuleFileNameW(NULL, directory, sizeof(directory)/sizeof(WCHAR));
 	if (len == 0)
 		return reg_error(GetLastError(), "GetModuleFileName", NULL);
 
 	// Get to the last '\' (this one precedes the filename part). There is
 	// always one after a call to GetModuleFileName().
-	TEXT* p = directory + len;
-	do {--p;} while (*p != '\\');
-
-	*p = '\0';
+	for (WCHAR* p = directory + len - 1; *p != L'\\'; p--)
+	{
+		*p = L'\0';
+	}
 
 	const TEXT* const* const end = argv + argc;
 	while (++argv < end)
@@ -86,6 +89,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			for (i = 0; cmd = commands[i].name; i++)
 			{
 				const TEXT* q = cmd;
+				const TEXT* p;
 				for (p = *argv; *p && UPPER(*p) == *q; ++p, ++q)
 					;
 				if (!*p && commands[i].abbrev <= (USHORT) (q - cmd))
@@ -100,7 +104,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		}
 		else
 		{
-			p = *argv + 1;
+			const TEXT* p = *argv + 1;
 			switch (UPPER(*p))
 			{
 				case 'Z':
@@ -192,7 +196,6 @@ static USHORT reg_error( SLONG status, const TEXT* string, HKEY hkey)
 		}
 		else
 		{
-			CharToOem(buffer, buffer);
 			printf("%s\n", buffer);
 		}
 	}

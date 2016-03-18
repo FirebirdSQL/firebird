@@ -117,8 +117,9 @@ void WriterImplementation::setDb(Firebird::CheckStatusWrapper* st, const char* v
 	{
 		if (value)
 		{
+			PathName alias(value);
 			PathName target;
-			expandDatabaseName(value, target, NULL);
+			expandDatabaseName(alias, target, NULL);
 			current.insertPath(AuthReader::AUTH_SECURE_DB, target);
 		}
 	}

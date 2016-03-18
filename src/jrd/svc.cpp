@@ -2034,7 +2034,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 				string auth = "-user ";
 				auth += svc_username;
 				auth += ' ';
-				svc_switches = auth + svc_switches;
+				svc_switches.insert(0, auth);
 			}
 		}
 
@@ -2043,7 +2043,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 			string auth = "-role ";
 			auth += svc_sql_role;
 			auth += ' ';
-			svc_switches = auth + svc_switches;
+			svc_switches.insert(0, auth);
 		}
 	}
 
@@ -2704,7 +2704,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 
 				if (spb.getClumpTag() != isc_spb_sec_username)
 				{
-					userPos = switches.getCount();
+					userPos = switches.length();
 				}
 			}
 
@@ -2742,7 +2742,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 
 				if (spb.getClumpTag() != isc_spb_sec_username)
 				{
-					userPos = switches.getCount();
+					userPos = switches.length();
 				}
 			}
 
@@ -3023,7 +3023,8 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 	switch (svc_action)
 	{
 	case isc_action_svc_backup:
-		switches += (burp_database + burp_backup);
+		switches += burp_database;
+		switches += burp_backup;
 		break;
 	case isc_action_svc_restore:
 		if (! (burp_options & (isc_spb_res_create | isc_spb_res_replace)))
@@ -3032,7 +3033,8 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			// default to create for restore
 			switches += "-CREATE_DATABASE ";
 		}
-		switches += (burp_backup + burp_database);
+		switches += burp_backup;
+		switches += burp_database;
 		break;
 
 	case isc_action_svc_nbak:

@@ -1475,6 +1475,10 @@ public:
 		if (size > Limits::TOP_LIMIT)
 			return false;		// Not our block
 
+#ifdef MEM_DEBUG
+		memset(&blk->body, DEL_BYTE, size - offsetof(MemBlock, body));
+#endif
+
 		unsigned slot = Limits::getSlot(size, SLOT_ALLOC);
 		listBuilder.putElement(&freeObjects[slot], blk);
 		return true;
@@ -2137,8 +2141,14 @@ void MemPool::releaseBlock(MemBlock* block) throw ()
 #ifdef MEM_DEBUG
 	for (const UCHAR* end = (UCHAR*) block + block->getSize(), *p = end - GUARD_BYTES; p < end;)
 	{
-		if (*p++ != GUARD_BYTE)
-			corrupt("guard bytes overwritten");
+		const UCHAR c = *p++;
+		if (c != GUARD_BYTE)
+		{
+			if (c == DEL_BYTE)
+				corrupt("double deallocation of block");
+			else
+				corrupt("guard bytes overwritten");
+		}
 	}
 #endif
 

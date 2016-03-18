@@ -233,12 +233,12 @@ bool IntlUtil::parseSpecificAttributes(Jrd::CharSet* cs, ULONG len, const UCHAR*
 }
 
 
-string IntlUtil::convertAsciiToUtf16(const string& ascii)
+string IntlUtil::convertAsciiToUtf16(const char* ascii)
 {
 	string s;
-	const char* end = ascii.c_str() + ascii.length();
+	const char* end = strchr(ascii, 0);
 
-	for (const char* p = ascii.c_str(); p < end; ++p)
+	for (const char* p = ascii; p < end; ++p)
 	{
 		USHORT c = *(UCHAR*) p;
 		s.append((char*) &c, sizeof(c));
@@ -262,7 +262,7 @@ string IntlUtil::convertUtf16ToAscii(const string& utf16, bool* error)
 		else
 		{
 			*error = true;
-			return "";
+			return string("");
 		}
 	}
 
@@ -623,17 +623,17 @@ bool IntlUtil::setupIcuAttributes(charset* cs, const string& specificAttributes,
 	}
 
 	string icuVersion;
-	map.get("ICU-VERSION", icuVersion);
+	map.get(string("ICU-VERSION"), icuVersion);
 
 	string collVersion;
 	if (!UnicodeUtil::getCollVersion(icuVersion, configInfo, collVersion))
 		return false;
 
-	map.remove("ICU-VERSION");
-	map.remove("COLL-VERSION");
+	map.remove(string("ICU-VERSION"));
+	map.remove(string("COLL-VERSION"));
 
 	if (collVersion.hasData())
-		map.put("COLL-VERSION", collVersion);
+		map.put(string("COLL-VERSION"), collVersion);
 
 	newSpecificAttributes = IntlUtil::generateSpecificAttributes(charSet, map);
 	return true;
@@ -730,7 +730,7 @@ void IntlUtil::getDefaultCollationAttributes(UCharBuffer& collAttributes, charse
 {
 	string attributes("ICU-VERSION=");
 	attributes += Jrd::UnicodeUtil::getDefaultIcuVersion();
-	setupIcuAttributes(&cs, attributes, "", attributes);
+	setupIcuAttributes(&cs, attributes, string(""), attributes);
 
 	collAttributes.push(reinterpret_cast<const UCHAR*>(attributes.c_str()), attributes.length());
 }

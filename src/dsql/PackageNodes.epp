@@ -373,7 +373,7 @@ string CreateAlterPackageNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, functionNames);
 	NODE_PRINT(printer, procedureNames);
 
-	return "CreateAlterPackageNode";
+	return string("CreateAlterPackageNode");
 }
 
 
@@ -631,7 +631,7 @@ string DropPackageNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, silent);
 
-	return "DropPackageNode";
+	return string("DropPackageNode");
 }
 
 
@@ -738,7 +738,7 @@ string CreatePackageBodyNode::internalPrint(NodePrinter& printer) const
 	//// FIXME-PRINT: NODE_PRINT(printer, declaredItems);
 	//// FIXME-PRINT: NODE_PRINT(printer, items);
 
-	return "CreatePackageBodyNode";
+	return string("CreatePackageBodyNode");
 }
 
 
@@ -1011,7 +1011,7 @@ string DropPackageBodyNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, silent);
 
-	return "DropPackageBodyNode";
+	return string("DropPackageBodyNode");
 }
 
 

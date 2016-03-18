@@ -249,7 +249,7 @@ protected:
 		const Firebird::MetaName& oldNewObjectName);
 	void storeGlobalField(thread_db* tdbb, jrd_tra* transaction, Firebird::MetaName& name,
 		const TypeClause* field,
-		const Firebird::string& computedSource = "",
+		const Firebird::string& computedSource = Firebird::string(""),
 		const BlrDebugWriter::BlrData& computedValue = BlrDebugWriter::BlrData());
 
 public:

@@ -35,16 +35,16 @@
 
 
 USHORT SERVICES_install(SC_HANDLE manager,
-						const char* service_name,
-						const char* display_name,
-						const char* display_description,
-						const char* executable,
-						const char* directory,
-						const char* switches,
-						const char* dependencies,
+						const WCHAR* service_name,
+						const WCHAR* display_name,
+						const WCHAR* display_description,
+						const WCHAR* executable,
+						const WCHAR* directory,
+						const WCHAR* switches,
+						const WCHAR* dependencies,
 						USHORT sw_startup,
-						const char* nt_user_name,
-						const char* nt_user_password,
+						const WCHAR* nt_user_name,
+						const WCHAR* nt_user_password,
 						bool interactive_mode,
 						bool auto_restart,
 						pfnSvcError err_handler)
@@ -60,42 +60,46 @@ USHORT SERVICES_install(SC_HANDLE manager,
  *
  **************************************/
 
-	char exe_name[MAX_PATH];
-	size_t len = strlen(directory);
-	const char last_char = len ? directory[len - 1] : '\\';
-	const char* exe_format = (last_char == '\\' || last_char == '/') ? "%s%s.exe" : "%s\\%s.exe";
-
-	int rc = snprintf(exe_name, sizeof(exe_name), exe_format, directory, executable);
-	if (rc == sizeof(exe_name) || rc < 0) {
-		return (*err_handler) (0, "service executable path name is too long", 0);
+	WCHAR exe_name[MAX_PATH * 2];
+	if (wcschr(directory, L' ') || wcschr(executable, ' '))
+	{
+		// Must quote executable
+		wcscpy(exe_name, L"\"");
+		wcscat(exe_name, directory);
+		// Separator at the end of directory is assured by calling code
+		wcscat(exe_name, executable);
+		wcscat(exe_name, L".exe\"");
 	}
-
-	char path_name[MAX_PATH * 2];
-	const char* path_format = (strchr(exe_name, ' ') ? "\"%s\"" : "%s");
-	sprintf(path_name, path_format, exe_name);
+	else
+	{
+		wcscpy(exe_name, directory);
+		// Separator at the end of directory is assured by calling code
+		wcscat(exe_name, executable);
+		wcscat(exe_name, L".exe");
+	}
 
 	if (switches)
 	{
-		len = sizeof(path_name) - strlen(path_name) - 1;
-		if (len < strlen(switches) + 1) {
+		if (wcslen(exe_name) + wcslen(switches) + 1 > sizeof(exe_name) / sizeof(WCHAR))
+		{
 			return (*err_handler) (0, "service command line is too long", 0);
 		}
-		strcat(path_name, " ");
-		strcat(path_name, switches);
+		wcscat(exe_name, L" ");
+		wcscat(exe_name, switches);
 	}
 
 	DWORD dwServiceType = SERVICE_WIN32_OWN_PROCESS;
 	if (nt_user_name != 0)
 	{
-		if (nt_user_password == 0)
-			nt_user_password = "";
+		if (nt_user_password == NULL)
+			nt_user_password = L"";
 	}
 	else if (interactive_mode)
 	{
 		dwServiceType |= SERVICE_INTERACTIVE_PROCESS;
 	}
 
-	SC_HANDLE service = CreateService(manager,
+	SC_HANDLE service = CreateServiceW(manager,
 							service_name,
 							display_name,
 							SERVICE_CHANGE_CONFIG | SERVICE_START,
@@ -103,7 +107,7 @@ USHORT SERVICES_install(SC_HANDLE manager,
 							(sw_startup == STARTUP_DEMAND) ?
 								SERVICE_DEMAND_START : SERVICE_AUTO_START,
 							SERVICE_ERROR_NORMAL,
-							path_name, NULL, NULL, dependencies,
+							exe_name, NULL, NULL, dependencies,
 							nt_user_name, nt_user_password);
 
 	if (service == NULL)
@@ -123,7 +127,7 @@ USHORT SERVICES_install(SC_HANDLE manager,
 		typedef BOOL __stdcall proto_config2(SC_HANDLE, DWORD, LPVOID);
 
 		proto_config2* const config2 =
-			(proto_config2*) GetProcAddress(advapi32, "ChangeServiceConfig2A");
+			(proto_config2*) GetProcAddress(advapi32, "ChangeServiceConfig2W");
 
 		if (config2 != 0)
 		{
@@ -134,7 +138,7 @@ USHORT SERVICES_install(SC_HANDLE manager,
 
 			if (auto_restart)
 			{
-				SERVICE_FAILURE_ACTIONS fa;
+				SERVICE_FAILURE_ACTIONSW fa;
 				SC_ACTION	acts;
 
 				memset(&fa, 0, sizeof(fa));
@@ -159,7 +163,7 @@ USHORT SERVICES_install(SC_HANDLE manager,
 
 
 USHORT SERVICES_remove(SC_HANDLE manager,
-					   const char* service_name,
+					   const WCHAR* service_name,
 					   //const char* display_name,
 					   pfnSvcError err_handler)
 {
@@ -175,7 +179,7 @@ USHORT SERVICES_remove(SC_HANDLE manager,
  **************************************/
 	SERVICE_STATUS service_status;
 
-	SC_HANDLE service = OpenService(manager, service_name, SERVICE_QUERY_STATUS | DELETE);
+	SC_HANDLE service = OpenServiceW(manager, service_name, SERVICE_QUERY_STATUS | DELETE);
 	if (service == NULL)
 		return (*err_handler) (GetLastError(), "OpenService", NULL);
 
@@ -196,7 +200,7 @@ USHORT SERVICES_remove(SC_HANDLE manager,
 	// Let's loop until the service is actually confirmed deleted
 	while (true)
 	{
-		service = OpenService(manager, service_name, GENERIC_READ);
+		service = OpenServiceW(manager, service_name, GENERIC_READ);
 		if (service == NULL)
 		{
 			if (GetLastError() == ERROR_SERVICE_DOES_NOT_EXIST)
@@ -213,7 +217,7 @@ USHORT SERVICES_remove(SC_HANDLE manager,
 
 
 USHORT SERVICES_start(SC_HANDLE manager,
-					  const char* service_name,
+					  const WCHAR* service_name,
 					  //const char* display_name,
 					  USHORT sw_mode,
 					  pfnSvcError err_handler)
@@ -228,7 +232,7 @@ USHORT SERVICES_start(SC_HANDLE manager,
  *	Start an installed service.
  *
  **************************************/
-	const SC_HANDLE service = OpenService(manager, service_name, SERVICE_START | SERVICE_QUERY_STATUS);
+	const SC_HANDLE service = OpenServiceW(manager, service_name, SERVICE_START | SERVICE_QUERY_STATUS);
 
 	if (service == NULL)
 		return (*err_handler) (GetLastError(), "OpenService", NULL);
@@ -277,7 +281,7 @@ USHORT SERVICES_start(SC_HANDLE manager,
 
 
 USHORT SERVICES_stop(SC_HANDLE manager,
-					 const char* service_name,
+					 const WCHAR* service_name,
 					 //const char* display_name,
 					 pfnSvcError err_handler)
 {
@@ -291,7 +295,7 @@ USHORT SERVICES_stop(SC_HANDLE manager,
  *	Stop a running service.
  *
  **************************************/
-	const SC_HANDLE service = OpenService(manager, service_name, SERVICE_STOP | SERVICE_QUERY_STATUS);
+	const SC_HANDLE service = OpenServiceW(manager, service_name, SERVICE_STOP | SERVICE_QUERY_STATUS);
 
 	if (service == NULL)
 		return (*err_handler) (GetLastError(), "OpenService", NULL);
@@ -324,7 +328,7 @@ USHORT SERVICES_stop(SC_HANDLE manager,
 	return FB_SUCCESS;
 }
 
-USHORT SERVICES_status (const char* service_name)
+USHORT SERVICES_status (const WCHAR* service_name)
 {
 /**************************************
  *
@@ -344,7 +348,7 @@ USHORT SERVICES_status (const char* service_name)
 	if (manager == NULL)
 		return FB_SERVICE_STATUS_UNKNOWN;
 
-	SC_HANDLE service = OpenService(manager, service_name, GENERIC_READ);
+	SC_HANDLE service = OpenServiceW(manager, service_name, GENERIC_READ);
 	if (service == NULL)
 	{
 		CloseServiceHandle(manager);
@@ -373,7 +377,7 @@ USHORT SERVICES_status (const char* service_name)
 	return status;
 }
 
-USHORT SERVICES_grant_privilege(const TEXT* account, pfnSvcError err_handler, const WCHAR* privilege)
+USHORT SERVICES_grant_privilege(const WCHAR* account, pfnSvcError err_handler, const WCHAR* privilege)
 {
 /***************************************************
  *
@@ -413,7 +417,7 @@ USHORT SERVICES_grant_privilege(const TEXT* account, pfnSvcError err_handler, co
 	DWORD cchDomain;
 	cbSid = cchDomain = 0;
 	SID_NAME_USE peUse;
-	LookupAccountName(NULL, account, NULL, &cbSid, NULL, &cchDomain, &peUse);
+	LookupAccountNameW(NULL, account, NULL, &cbSid, NULL, &cchDomain, &peUse);
 	PSID pSid = (PSID) LocalAlloc(LMEM_ZEROINIT, cbSid);
 	if (pSid == 0)
 	{
@@ -421,7 +425,7 @@ USHORT SERVICES_grant_privilege(const TEXT* account, pfnSvcError err_handler, co
 		LsaClose(PolicyHandle);
 		return (*err_handler)(err, "LocalAlloc(Sid)", NULL);
 	}
-	TEXT* pDomain = (LPTSTR) LocalAlloc(LMEM_ZEROINIT, cchDomain);
+	WCHAR* pDomain = (LPWSTR) LocalAlloc(LMEM_ZEROINIT, cchDomain * sizeof(WCHAR));
 	if (pDomain == 0)
 	{
 		DWORD err = GetLastError();
@@ -430,7 +434,7 @@ USHORT SERVICES_grant_privilege(const TEXT* account, pfnSvcError err_handler, co
 		return (*err_handler)(err, "LocalAlloc(Domain)", NULL);
 	}
 	// Now, really obtain the SID of the user/group.
-	if (LookupAccountName(NULL, account, pSid, &cbSid, pDomain, &cchDomain, &peUse) == 0)
+	if (LookupAccountNameW(NULL, account, pSid, &cbSid, pDomain, &cchDomain, &peUse) == 0)
 	{
 		DWORD err = GetLastError();
 		LsaClose(PolicyHandle);
@@ -488,7 +492,7 @@ USHORT SERVICES_grant_privilege(const TEXT* account, pfnSvcError err_handler, co
 }
 
 
-USHORT SERVICES_grant_access_rights(const char* service_name, const TEXT* account, pfnSvcError err_handler)
+USHORT SERVICES_grant_access_rights(const WCHAR* service_name, const WCHAR* account, pfnSvcError err_handler)
 {
 /*********************************************************
  *
@@ -518,7 +522,7 @@ USHORT SERVICES_grant_access_rights(const char* service_name, const TEXT* accoun
 	// not allowed to do this. Administrators should be allowed, by default.
 	// CVC: Only GetNamedSecurityInfoEx has the first param declared const, so we need
 	// to make the compiler happy after Blas' cleanup.
-	if (GetNamedSecurityInfo(const_cast<CHAR*>(service_name), SE_SERVICE, DACL_SECURITY_INFORMATION,
+	if (GetNamedSecurityInfoW(const_cast<WCHAR*>(service_name), SE_SERVICE, DACL_SECURITY_INFORMATION,
 		NULL /*Owner Sid*/, NULL /*Group Sid*/,
 		&pOldDACL, NULL /*Sacl*/, &pSD) != ERROR_SUCCESS)
 	{
@@ -526,7 +530,7 @@ USHORT SERVICES_grant_access_rights(const char* service_name, const TEXT* accoun
 	}
 
 	// Initialize an EXPLICIT_ACCESS structure.
-	EXPLICIT_ACCESS ea;
+	EXPLICIT_ACCESSW ea;
 	ZeroMemory(&ea, sizeof(ea));
 	ea.grfAccessPermissions = GENERIC_READ | GENERIC_EXECUTE;
 	ea.grfAccessMode = SET_ACCESS;
@@ -534,11 +538,11 @@ USHORT SERVICES_grant_access_rights(const char* service_name, const TEXT* accoun
 	ea.Trustee.MultipleTrusteeOperation = NO_MULTIPLE_TRUSTEE;
 	ea.Trustee.TrusteeForm = TRUSTEE_IS_NAME;
 	ea.Trustee.TrusteeType = TRUSTEE_IS_USER;
-	ea.Trustee.ptstrName = const_cast<char*>(account); // safe
+	ea.Trustee.ptstrName = const_cast<WCHAR*>(account); // safe
 
 	// Create a new DACL, adding this right to whatever exists.
 	PACL pNewDACL = NULL;
-	if (SetEntriesInAcl(1, &ea, pOldDACL, &pNewDACL) != ERROR_SUCCESS)
+	if (SetEntriesInAclW(1, &ea, pOldDACL, &pNewDACL) != ERROR_SUCCESS)
 	{
 		DWORD err = GetLastError();
 		LocalFree(pSD);
@@ -546,7 +550,7 @@ USHORT SERVICES_grant_access_rights(const char* service_name, const TEXT* accoun
 	}
 
 	// Updates the new rights in the object
-	if (SetNamedSecurityInfo(const_cast<CHAR*>(service_name), SE_SERVICE, DACL_SECURITY_INFORMATION,
+	if (SetNamedSecurityInfoW(const_cast<WCHAR*>(service_name), SE_SERVICE, DACL_SECURITY_INFORMATION,
 		NULL /*Owner Sid*/, NULL /*Group Sid*/,
 		pNewDACL, NULL /*Sacl*/) != ERROR_SUCCESS)
 	{

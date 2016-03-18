@@ -1343,7 +1343,7 @@ ISC_STATUS filter_debug_info(USHORT action, BlobControl* control)
 		string_put(control, "Parameters:");
 		str.printf("%10s %-32s %-6s", "Number", "Name", "Type");
 		string_put(control, str.c_str());
-		str.replace(str.begin(), str.end(), str.length(), '-');
+		str.assign(str.length(), '-');
 		string_put(control, str.c_str());
 
 		do
@@ -1364,7 +1364,7 @@ ISC_STATUS filter_debug_info(USHORT action, BlobControl* control)
 		string_put(control, "Variables:");
 		str.printf("%10s %-32s", "Number", "Name");
 		string_put(control, str.c_str());
-		str.replace(str.begin(), str.end(), str.length(), '-');
+		str.assign(str.length(), '-');
 		string_put(control, str.c_str());
 
 		do
@@ -1382,7 +1382,7 @@ ISC_STATUS filter_debug_info(USHORT action, BlobControl* control)
 		string_put(control, "Cursors:");
 		str.printf("%10s %-32s", "Number", "Name");
 		string_put(control, str.c_str());
-		str.replace(str.begin(), str.end(), str.length(), '-');
+		str.assign(str.length(), '-');
 		string_put(control, str.c_str());
 
 		do
@@ -1397,7 +1397,7 @@ ISC_STATUS filter_debug_info(USHORT action, BlobControl* control)
 	string_put(control, "BLR to Source mapping:");
 	str.printf("%10s %10s %10s", "BLR offset", "Line", "Column");
 	string_put(control, str.c_str());
-	str.replace(str.begin(), str.end(), str.length(), '-');
+	str.assign(str.length(), '-');
 	string_put(control, str.c_str());
 
 	for (const MapBlrToSrcItem* i = dbgInfo.blrToSrc.begin(); i < dbgInfo.blrToSrc.end(); i++)

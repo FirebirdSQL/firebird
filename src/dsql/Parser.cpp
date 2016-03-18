@@ -209,7 +209,7 @@ void Parser::transformString(const char* start, unsigned length, string& dest)
 	fb_assert(start + length - pos >= 0);
 	buffer.add(pos, start + length - pos);
 
-	dest.assign(buffer.begin(), MIN(string::max_length(), buffer.getCount()));
+	dest.assign(buffer.begin(), MIN(dest.max_size(), buffer.getCount()));
 }
 
 

@@ -54,9 +54,6 @@
 
 class ConfigRoot : public Firebird::PermanentStorage
 {
-	// we deal with names of files here
-	typedef Firebird::PathName string;
-
 private:
 	void GetRoot()
 	{
@@ -103,7 +100,7 @@ public:
 	}
 
 private:
-	string root_dir, install_dir;
+	Firebird::PathName root_dir, install_dir;
 
 	// If the path ends with a separator, remove it.
 	void fixPath()
@@ -116,7 +113,7 @@ private:
 
 	bool getRootFromEnvironment(const char* envName)
 	{
-		string envValue;
+		Firebird::PathName envValue;
 		if (!fb_utils::readenv(envName, envValue))
 			return false;
 

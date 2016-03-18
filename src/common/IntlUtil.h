@@ -57,7 +57,7 @@ public:
 	static bool parseSpecificAttributes(Jrd::CharSet* cs, ULONG len, const UCHAR* s,
 										SpecificAttributesMap* map);
 
-	static string convertAsciiToUtf16(const string& ascii);
+	static string convertAsciiToUtf16(const char* ascii);
 	static string convertUtf16ToAscii(const string& utf16, bool* error);
 
 	static ULONG cvtAsciiToUtf16(csconvert* obj, ULONG nSrc, const UCHAR* pSrc,

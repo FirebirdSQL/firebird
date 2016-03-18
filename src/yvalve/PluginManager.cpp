@@ -62,17 +62,26 @@ namespace
 		{
 			p = 0;
 		}
-		p = file.find('.', p);
-		if (p == PathName::npos)
+#ifdef WIN_NT
+		// On Windows extension is everything after the last dot of file name:
+		// library.name.dll
+		PathName::size_type dotPos = file.rfind('.');
+		if (dotPos == PathName::npos || dotPos < p)
+#else
+		// Anywhere else it is everything after the first dot of file name:
+		// libname.so.1.2.3
+		PathName::size_type dotPos = file.find('.', p);
+		if (dotPos == PathName::npos)
+#endif
 		{
-			file += '.';
+			file.appendString('.');
 		}
 		else
 		{
-			file.erase(p + 1);
+			file.erase(dotPos + 1);
 		}
 
-		file += newExt;
+		file.appendString(newExt);
 	}
 
 	// Holds a reference to plugins.conf file
@@ -95,12 +104,12 @@ namespace
 	};
 	InitInstance<StaticConfHolder> pluginsConf;
 
-	RefPtr<ConfigFile> findConfig(const char* param, const char* pluginName)
+	RefPtr<ConfigFile> findConfig(const char* param, const ConfigFile::String& pluginName)
 	{
 		ConfigFile* f = pluginsConf().get();
 		if (f)
 		{
-			const ConfigFile::Parameter* plugPar = f->findParameter(param, pluginName);
+			const ConfigFile::Parameter* plugPar = f->findParameter(ConfigFile::KeyType(param), pluginName);
 			if (plugPar && plugPar->sub.hasData())
 			{
 				return plugPar->sub;
@@ -168,7 +177,7 @@ namespace
 		{
 			try
 			{
-				return confFile.hasData() ? newParam(confFile->findParameter(name)) : NULL;
+				return confFile.hasData() ? newParam(confFile->findParameter(ConfigFile::KeyType(name))) : NULL;
 			}
 			catch (const Firebird::Exception& ex)
 			{
@@ -181,7 +190,7 @@ namespace
 		{
 			try
 			{
-				return confFile.hasData() ? newParam(confFile->findParameter(name, value)) : NULL;
+				return confFile.hasData() ? newParam(confFile->findParameter(ConfigFile::KeyType(name), ConfigFile::String(value))) : NULL;
 			}
 			catch (const Firebird::Exception& ex)
 			{
@@ -201,7 +210,7 @@ namespace
 
 				const ConfigFile::Parameters& p = confFile->getParameters();
 				FB_SIZE_T pos;
-				if (!p.find(name, pos))
+				if (!p.find(ConfigFile::KeyType(name), pos))
 				{
 					return NULL;
 				}
@@ -272,8 +281,8 @@ namespace
 		CheckStatusWrapper s(&ls);
 		if (defaultConfig)
 		{
-			const ConfigFile::Parameter* p = defaultConfig->findParameter("Config");
-			IConfig* rc = FB_NEW ConfigAccess(p ? findConfig("Config", p->value.c_str()) : RefPtr<ConfigFile>(NULL));
+			const ConfigFile::Parameter* p = defaultConfig->findParameter(ConfigFile::KeyType("Config"));
+			IConfig* rc = FB_NEW ConfigAccess(p ? findConfig("Config", p->value) : RefPtr<ConfigFile>(NULL));
 			rc->addRef();
 			return rc;
 		}
@@ -448,10 +457,10 @@ namespace
 		{
 			if (defaultConfig.hasData())
 			{
-				const ConfigFile::Parameter* p = defaultConfig->findParameter("ConfigFile");
+				const ConfigFile::Parameter* p = defaultConfig->findParameter(ConfigFile::KeyType("ConfigFile"));
 				if (p && p->value.hasData())
 				{
-					confName = p->value.ToPathName();
+					confName = p->value;
 				}
 			}
 			if (module != builtin)
@@ -637,7 +646,7 @@ namespace
 			bool operator>(const MapKey& c) const	{	return type > c.type || (type == c.type && name > c.name);	}
 		private:
 			unsigned int type;
-			PathName name;
+			mutable PathName name;
 	};
 
 	static bool destroyingPluginsMap = false;
@@ -739,23 +748,23 @@ namespace
 			required = false;
 
 			// and try to load them from conf file
-			conf = findConfig("Plugin", pluginName);
+			conf = findConfig("Plugin", ConfigFile::String(pluginName));
 
 			if (conf.hasData())
 			{
-				const ConfigFile::Parameter* v = conf->findParameter("RegisterName");
+				const ConfigFile::Parameter* v = conf->findParameter(ConfigFile::KeyType("RegisterName"));
 				if (v)
 				{
-					regName = v->value.ToPathName();
+					regName = v->value;
 				}
 
-				v = conf->findParameter("Module");
+				v = conf->findParameter(ConfigFile::KeyType("Module"));
 				if (v)
 				{
-					curModule = v->value.ToPathName();
+					curModule = v->value;
 				}
 
-				v = conf->findParameter("Required");
+				v = conf->findParameter(ConfigFile::KeyType("Required"));
 				if (v)
 				{
 					required = v->asBoolean();
@@ -806,7 +815,7 @@ namespace
 			  currentName(getPool()), currentPlugin(NULL),
 			  firebirdConf(fbConf)
 		{
-			namesList.assign(pnamesList);
+			namesList = pnamesList;
 			namesList.alltrim(" \t");
 			Firebird::LocalStatus s;
 			Firebird::CheckStatusWrapper statusWrapper(&s);
@@ -993,7 +1002,7 @@ PluginManager::PluginManager()
 
 	if (!builtin)
 	{
-		builtin = FB_NEW PluginModule(NULL, "<builtin>");
+		builtin = FB_NEW PluginModule(NULL, PathName("<builtin>"));
 		builtin->addRef();	// Will never be unloaded
 		current = builtin;
 	}
@@ -1019,9 +1028,9 @@ void PluginManager::registerPluginFactory(unsigned int interfaceType, const char
 		changeExtension(plugConfigFile, "conf");
 
 		ConfiguredPlugin* p = FB_NEW ConfiguredPlugin(RefPtr<PluginModule>(builtin), r,
-									findConfig("Plugin", defaultName), plugConfigFile, defaultName);
+									findConfig("Plugin", ConfigFile::String(defaultName)), plugConfigFile, PathName(defaultName));
 		p->addRef();  // Will never be unloaded
-		plugins->put(MapKey(interfaceType, defaultName), p);
+		plugins->put(MapKey(interfaceType, PathName(defaultName)), p);
 	}
 }
 
@@ -1109,7 +1118,7 @@ IConfig* PluginManager::getConfig(CheckStatusWrapper* status, const char* filena
 	try
 	{
 		IConfig* rc = FB_NEW ConfigAccess(RefPtr<ConfigFile>(
-			FB_NEW_POOL(*getDefaultMemoryPool()) ConfigFile(*getDefaultMemoryPool(), filename)));
+			FB_NEW_POOL(*getDefaultMemoryPool()) ConfigFile(*getDefaultMemoryPool(), PathName(filename))));
 		rc->addRef();
 		return rc;
 	}
@@ -1247,7 +1256,7 @@ public:
 		{
 			PathName dummy;
 			Firebird::RefPtr<Config> config;
-			expandDatabaseName(dbName, dummy, &config);
+			expandDatabaseName(PathName(dbName), dummy, &config);
 
 			IFirebirdConf* firebirdConf = FB_NEW FirebirdConf(config);
 			firebirdConf->addRef();

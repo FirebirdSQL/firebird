@@ -34,11 +34,11 @@
 : Without DEV_BUILD this checks are also not performed to give compareable results
 :   for both string classes.
 
-set cpp_files=string_test.cpp fb_string.cpp alloc.cpp locks.cpp ..\fb_exception.cpp
-set inc_dirs=-I ..\..\include
-set lib_files=user32.lib
+set cpp_files=string_test.cpp ..\fb_string.cpp ..\alloc.cpp ..\locks.cpp ..\..\fb_exception.cpp ..\..\os\win32\os_utils.cpp ..\..\os\win32\path_utils.cpp
+set inc_dirs=-I ..\..\..\include
+set lib_files=user32.lib shlwapi.lib shell32.lib ws2_32.lib Advapi32.lib
 set filesNdirs=%cpp_files% %inc_dirs% %lib_files%
-set cc=cl -GR -GX
+set cc=cl -GR -EHsc
 
 : This line tests our test using std::basic_string
 : set flags=-DDEV_BUILD
@@ -54,7 +54,7 @@ set flags=-DFIRESTR -DDEV_BUILD
 
 del /Q string_test.exe
 %cc% %flags% %filesNdirs%
-if errorlevel 1 exit
+if errorlevel 1 goto :eof
 del /Q *.obj
 
 string_test.exe

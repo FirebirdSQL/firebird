@@ -308,8 +308,11 @@ const string SHOW_trigger_action(SINT64 type)
 		}
 
 	case TRIGGER_TYPE_DB:
-		return string("ON ") + Db_trigger_types[type & ~TRIGGER_TYPE_DB];
-
+		{
+			string buffer("ON ");
+			buffer += Db_trigger_types[type & ~TRIGGER_TYPE_DB];
+			return buffer;
+		}
 	case TRIGGER_TYPE_DDL:
 		{
 			bool first = true;
@@ -333,8 +336,9 @@ const string SHOW_trigger_action(SINT64 type)
 
 					if (pos < FB_NELEM(DDL_TRIGGER_ACTION_NAMES))
 					{
-						buffer += string(DDL_TRIGGER_ACTION_NAMES[pos][0]) + " " +
-							DDL_TRIGGER_ACTION_NAMES[pos][1];
+						buffer += DDL_TRIGGER_ACTION_NAMES[pos][0];
+						buffer += ' ';
+						buffer += DDL_TRIGGER_ACTION_NAMES[pos][1];
 					}
 					else
 						buffer += "<unknown>";

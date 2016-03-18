@@ -28,6 +28,7 @@
 #ifndef CLASSES_OBJECTS_ARRAY_H
 #define CLASSES_OBJECTS_ARRAY_H
 
+#include <utility>
 #include "../common/classes/alloc.h"
 #include "../common/classes/array.h"
 
@@ -214,7 +215,7 @@ namespace Firebird
 		T pop()
 		{
 			T* pntr = inherited::pop();
-			T rc = *pntr;
+			T rc = std::move(*pntr);
 			delete pntr;
 			return rc;
 		}

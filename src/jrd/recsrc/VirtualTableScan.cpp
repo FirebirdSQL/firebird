@@ -113,15 +113,18 @@ void VirtualTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsig
 {
 	if (detailed)
 	{
-		plan += printIndent(++level) + "Table " +
-			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan";
+		plan += printIndent(++level);
+		plan += "Table ";
+		plan += printName(tdbb, m_relation->rel_name.c_str(), m_alias);
+		plan += " Full Scan";
 	}
 	else
 	{
 		if (!level)
 			plan += "(";
 
-		plan += printName(tdbb, m_alias, false) + " NATURAL";
+		plan += printName(tdbb, m_alias, false);
+		plan += " NATURAL";
 
 		if (!level)
 			plan += ")";

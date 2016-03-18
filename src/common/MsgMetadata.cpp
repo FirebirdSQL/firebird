@@ -198,7 +198,7 @@ void MetadataBuilder::moveNameToIndex(CheckStatusWrapper* status, const char* na
 			}
 		}
 
-		(Arg::Gds(isc_random) << (string("Name not found in IMetadataBuilder: ") + name)).raise();
+		(Arg::Gds(isc_random) << (string("Name not found in IMetadataBuilder: ") += name)).raise();
 	}
 	catch (const Exception& ex)
 	{
@@ -256,7 +256,7 @@ void MetadataBuilder::metadataError(const char* functionName)
 	if (!msgMetadata)
 	{
 		(Arg::Gds(isc_random) << (string("IMetadataBuilder interface is already inactive: "
-			"IMetadataBuilder::") + functionName)).raise();
+			"IMetadataBuilder::") += functionName)).raise();
 	}
 }
 
@@ -266,8 +266,7 @@ void MetadataBuilder::indexError(unsigned index, const char* functionName)
 
 	if (index >= msgMetadata->items.getCount())
 	{
-		(Arg::Gds(isc_invalid_index_val) << Arg::Num(index) << (string("IMetadataBuilder::") +
-			functionName)).raise();
+		(Arg::Gds(isc_invalid_index_val) << Arg::Num(index) << (string("IMetadataBuilder::") += functionName)).raise();
 	}
 }
 

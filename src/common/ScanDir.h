@@ -67,7 +67,7 @@ public:
 	Firebird::PathName	filePath;
 private:
 #ifdef _WIN32
-	WIN32_FIND_DATA	data;
+	WIN32_FIND_DATAW	data;
 	HANDLE			handle;
 #else
 	DIR				*dir;

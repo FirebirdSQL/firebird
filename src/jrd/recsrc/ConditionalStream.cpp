@@ -115,7 +115,8 @@ void ConditionalStream::print(thread_db* tdbb, string& plan, bool detailed, unsi
 {
 	if (detailed)
 	{
-		plan += printIndent(++level) + "Condition";
+		plan += printIndent(++level);
+		plan += "Condition";
 		m_first->print(tdbb, plan, true, level);
 		m_second->print(tdbb, plan, true, level);
 	}

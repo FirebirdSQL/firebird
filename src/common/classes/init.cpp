@@ -102,7 +102,7 @@ namespace
 			if (dladdr((void*) &allClean, &path))
 			{
 				name = path.dli_fname;
-				name += ".memdebug.log";
+				name.appendString(".memdebug.log");
 			}
 			else
 			{
@@ -121,7 +121,7 @@ namespace
 				if (len < MAX_PATH)
 				{
 					name = moduleName;
-					name += ".memdebug.log";
+					name.appendString(".memdebug.log");
 				}
 			}
 #endif	// HAVE_DLADDR

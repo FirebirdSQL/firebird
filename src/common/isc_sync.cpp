@@ -1746,8 +1746,10 @@ void SharedMemoryBase::unlinkFile()
 	// therefore do not check for errors - at least it's just /tmp.
 
 #ifdef WIN_NT
+	os_utils::WideCharBuffer fn;
+	fn.fromString(CP_UTF8, expanded_filename);
 	// Delete file only if it is not used by anyone else
-	HANDLE hFile = CreateFile(expanded_filename,
+	HANDLE hFile = CreateFileW(fn,
 		DELETE,
 		0,
 		NULL,
@@ -2195,13 +2197,15 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 		}
 	}
 
-	file_handle = CreateFile(expanded_filename,
-							 GENERIC_READ | GENERIC_WRITE,
-							 FILE_SHARE_READ | FILE_SHARE_WRITE,
-							 NULL,
-							 OPEN_ALWAYS,
-							 FILE_ATTRIBUTE_NORMAL,
-							 NULL);
+	os_utils::WideCharBuffer fn;
+	fn.fromString(CP_UTF8, expanded_filename);
+	file_handle = CreateFileW(fn,
+							  GENERIC_READ | GENERIC_WRITE,
+							  FILE_SHARE_READ | FILE_SHARE_WRITE,
+							  NULL,
+							  OPEN_ALWAYS,
+							  FILE_ATTRIBUTE_NORMAL,
+							  NULL);
 	err = GetLastError();
 
 	if (file_handle == INVALID_HANDLE_VALUE)

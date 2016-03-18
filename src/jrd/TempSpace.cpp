@@ -98,7 +98,7 @@ FB_SIZE_T TempSpace::FileBlock::write(offset_t offset, const void* buffer, FB_SI
 // Constructor
 //
 
-TempSpace::TempSpace(MemoryPool& p, const Firebird::PathName& prefix, bool dynamic)
+TempSpace::TempSpace(MemoryPool& p, const Firebird::string& prefix, bool dynamic)
 		: pool(p), filePrefix(p, prefix),
 		  logicalSize(0), physicalSize(0), localCacheUsage(0),
 		  head(NULL), tail(NULL), tempFiles(p),
@@ -377,15 +377,15 @@ TempFile* TempSpace::setupFile(FB_SIZE_T size)
 	{
 		TempFile* file = NULL;
 
-		Firebird::PathName directory = (*tempDirs)[i];
-		PathUtils::ensureSeparator(directory);
+		Firebird::PathName directory((*tempDirs)[i]);
+		directory.ensureSeparator();
 
 		for (FB_SIZE_T j = 0; j < tempFiles.getCount(); j++)
 		{
 			Firebird::PathName dirname, filename;
 			PathUtils::splitLastComponent(dirname, filename, tempFiles[j]->getName());
-			PathUtils::ensureSeparator(dirname);
-			if (!directory.compare(dirname))
+			dirname.ensureSeparator();
+			if (directory != dirname)
 			{
 				file = tempFiles[j];
 				break;

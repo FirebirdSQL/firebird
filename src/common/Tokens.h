@@ -49,7 +49,7 @@ public:
 	{
 		const char* text;
 		FB_SIZE_T length, origin;
-		string stripped() const;
+		NoCaseString stripped() const;
 	};
 
 	Tokens();

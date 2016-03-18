@@ -818,7 +818,7 @@ IAttachment* RProvider::attach(CheckStatusWrapper* status, const char* filename,
 		HANDSHAKE_DEBUG(fprintf(stderr, "Cli: call init for DB='%s'\n", expanded_name.c_str()));
 		init(status, cBlock, port, op_attach, expanded_name, newDpb, intl, cryptCallback);
 
-		Attachment* a = FB_NEW Attachment(port->port_context, filename);
+		Attachment* a = FB_NEW Attachment(port->port_context, PathName(filename));
 		a->addRef();
 		return a;
 	}
@@ -1441,7 +1441,7 @@ Firebird::IAttachment* RProvider::create(CheckStatusWrapper* status, const char*
 		IntlDpb intl;
 		init(status, cBlock, port, op_create, expanded_name, newDpb, intl, cryptCallback);
 
-		Firebird::IAttachment* a = FB_NEW Attachment(rdb, filename);
+		Firebird::IAttachment* a = FB_NEW Attachment(rdb, PathName(filename));
 		a->addRef();
 		return a;
 	}
@@ -5335,7 +5335,6 @@ static void add_working_directory(ClumpletWriter& dpb, const PathName& node_name
 	{
 		fb_utils::getCwd(cwd);
 
-		ISC_systemToUtf8(cwd);
 		ISC_escape(cwd);
 
 		if (!dpb.find(isc_dpb_utf8_filename))
@@ -5467,6 +5466,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 			cBlock.getConfig(), ref_db_name, inet_af);
 	}
 
+#ifdef NOT_USED // No mounted drive expansion
 	// We have a local connection string. If it's a file on a network share,
 	// try to connect to the corresponding host remotely.
 	if (flags & ANALYZE_MOUNTS)
@@ -5503,6 +5503,8 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 		}
 #endif
 	}
+#endif // NOT_USED
+
 
 	if ((flags & ANALYZE_LOOPBACK) && !port)
 	{
@@ -6320,25 +6322,19 @@ static void authReceiveResponse(bool havePacket, ClntAuthBlock& cBlock, rem_port
 			return;
 		}
 
-		if (n && n->cstr_length && cBlock.plugins.hasData())
-		{
-			// if names match, do not change instance
-			if (strlen(cBlock.plugins.name()) == n->cstr_length &&
-				memcmp(cBlock.plugins.name(), n->cstr_address, n->cstr_length) == 0)
-			{
-				n = NULL;
-			}
-		}
-
 		if (n && n->cstr_length)
 		{
-			// switch to other plugin
-			PathName tmp(n->cstr_address, n->cstr_length);
-			if (!cBlock.checkPluginName(tmp))
+			PluginName tmp(reinterpret_cast<PluginName::pointer>(n->cstr_address), n->cstr_length);
+			// if names match, do not change instance
+			if (!cBlock.plugins.hasData() || tmp != cBlock.plugins.name())
 			{
-				break;
+				// switch to other plugin
+				if (!cBlock.checkPluginName(tmp))
+				{
+					break;
+				}
+				cBlock.plugins.set(tmp.c_str());
 			}
-			cBlock.plugins.set(tmp.c_str());
 		}
 
 		if (!cBlock.plugins.hasData())
@@ -7478,7 +7474,7 @@ void ClntAuthBlock::extractDataFromPluginTo(Firebird::ClumpletWriter& dpb,
 		return;
 	}
 
-	PathName pluginName = getPluginName();
+	PluginName pluginName = getPluginName();
 	if (protocol >= PROTOCOL_VERSION13)
 	{
 		if (firstTime)
@@ -7486,9 +7482,9 @@ void ClntAuthBlock::extractDataFromPluginTo(Firebird::ClumpletWriter& dpb,
 			fb_assert(tags->plugin_name && tags->plugin_list);
 			if (pluginName.hasData())
 			{
-				dpb.insertPath(tags->plugin_name, pluginName);
+				dpb.insertString(tags->plugin_name, pluginName);
 			}
-			dpb.insertPath(tags->plugin_list, pluginList);
+			dpb.insertString(tags->plugin_list, pluginList);
 			firstTime = false;
 			HANDSHAKE_DEBUG(fprintf(stderr,
 				"Cli: extractDataFromPluginTo: first time - added plugName & pluginList\n"));
@@ -7569,7 +7565,7 @@ void ClntAuthBlock::extractDataFromPluginTo(P_AUTH_CONT* to)
 {
 	extractDataFromPluginTo(&to->p_data);
 
-	PathName pluginName = getPluginName();
+	PluginName pluginName = getPluginName();
 	to->p_name.cstr_length = (ULONG) pluginName.length();
 	to->p_name.cstr_address = FB_NEW_POOL(*getDefaultMemoryPool()) UCHAR[to->p_name.cstr_length];
 	to->p_name.cstr_allocated = to->p_name.cstr_length;
@@ -7632,10 +7628,10 @@ int ClntAuthBlock::release()
 	return 0;
 }
 
-bool ClntAuthBlock::checkPluginName(Firebird::PathName& nameToCheck)
+bool ClntAuthBlock::checkPluginName(Firebird::PluginName& nameToCheck)
 {
 	Remote::ParsedList parsed;
-	REMOTE_parseList(parsed, pluginList);
+	Remote::parseList(parsed, pluginList);
 	for (unsigned i = 0; i < parsed.getCount(); ++i)
 	{
 		if (parsed[i] == nameToCheck)

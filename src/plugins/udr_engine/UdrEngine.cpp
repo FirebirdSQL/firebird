@@ -564,8 +564,7 @@ UdrPluginImpl* Engine::loadModule(ThrowStatusWrapper* status, IRoutineMetadata* 
 
 	for (ObjectsArray<PathName>::iterator i = paths->begin(); i != paths->end(); ++i)
 	{
-		PathName path;
-		PathUtils::concatPath(path, *i, *moduleName);
+		PathName path(*i, *moduleName);
 
 		ModuleLoader::Module* module = ModuleLoader::fixAndLoadModule(path);
 

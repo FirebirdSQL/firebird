@@ -169,7 +169,8 @@ void Union::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) 
 {
 	if (detailed)
 	{
-		plan += printIndent(++level) + (m_args.getCount() == 1 ? "Materialize" : "Union");
+		plan += printIndent(++level);
+		plan += (m_args.getCount() == 1 ? "Materialize" : "Union");
 
 		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 			m_args[i]->print(tdbb, plan, true, level);

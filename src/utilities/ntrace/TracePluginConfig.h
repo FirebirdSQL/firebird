@@ -51,8 +51,8 @@ struct TracePluginConfig
 
 	// Default constructor. Pass pool to all string parameters, initialize everything to defaults
 	TracePluginConfig() :
-#define PATH_PARAMETER(NAME, VALUE) NAME(*getDefaultMemoryPool(), VALUE, fb_strlen(VALUE)),
-#define STR_PARAMETER(NAME, VALUE) NAME(*getDefaultMemoryPool(), VALUE, fb_strlen(VALUE)),
+#define PATH_PARAMETER(NAME, VALUE) NAME(VALUE, fb_strlen(VALUE), *getDefaultMemoryPool()),
+#define STR_PARAMETER(NAME, VALUE) NAME(VALUE, fb_strlen(VALUE), *getDefaultMemoryPool()),
 #define BOOL_PARAMETER(NAME, VALUE) NAME(VALUE),
 #define UINT_PARAMETER(NAME, VALUE) NAME(VALUE),
 #include "paramtable.h"
@@ -65,8 +65,8 @@ struct TracePluginConfig
 
 	// Copy constructor
 	TracePluginConfig(const TracePluginConfig& from) :
-#define PATH_PARAMETER(NAME, VALUE) NAME(*getDefaultMemoryPool(), from.NAME),
-#define STR_PARAMETER(NAME, VALUE) NAME(*getDefaultMemoryPool(), from.NAME),
+#define PATH_PARAMETER(NAME, VALUE) NAME(from.NAME, *getDefaultMemoryPool()),
+#define STR_PARAMETER(NAME, VALUE) NAME(from.NAME, *getDefaultMemoryPool()),
 #define BOOL_PARAMETER(NAME, VALUE) NAME(from.NAME),
 #define UINT_PARAMETER(NAME, VALUE) NAME(from.NAME),
 #include "paramtable.h"

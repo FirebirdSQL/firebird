@@ -105,7 +105,7 @@ static NoCaseString getToken(unsigned& pos, const Tokens& toks, int symbol = SYM
 	if (pos >= toks.getCount())
 		generate_error("", UNEXPECTED_END_OF_COMMAND);
 
-	NoCaseString curTok(NoCaseString(toks[pos].text, toks[pos].length));
+	NoCaseString curTok(toks[pos].text, toks[pos].length);
 
 	switch(symbol)
 	{
@@ -115,7 +115,7 @@ static NoCaseString getToken(unsigned& pos, const Tokens& toks, int symbol = SYM
 	case STRING:
 		if (!strchr(quotes, toks[pos].text[0]))
 			generate_error(curTok, UNEXPECTED_TOKEN);
-		return toks[pos++].stripped().ToNoCaseString();
+		return toks[pos++].stripped();
 
 	case NUMERIC:
 		{
@@ -192,7 +192,7 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 				return false;
 			}
 
-			PathName file_name(getToken(pos, tks, STRING).ToPathName());
+			PathName file_name(getToken(pos, tks, STRING));
 			*stmt_eaten = false;
 			ClumpletWriter dpb(ClumpletReader::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
 
@@ -238,7 +238,7 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 						case PP_USER:
 							token = getToken(pos, tks, qStrip ? STRING : SYMBOL);
 
-							dpb.insertString(isc_dpb_user_name, token.ToString());
+							dpb.insertString(isc_dpb_user_name, token.c_str(), token.length());
 							matched = true;
 							hasUser = true;
 							break;
@@ -246,14 +246,14 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 						case PP_PASSWORD:
 							token = getToken(pos, tks, STRING);
 
-							dpb.insertString(isc_dpb_password, token.ToString());
+							dpb.insertString(isc_dpb_password, token.c_str(), token.length());
 							matched = true;
 							break;
 
 						case PP_ROLE:
 							token = getToken(pos, tks);
 
-							dpb.insertString(isc_dpb_sql_role_name, token.ToString());
+							dpb.insertString(isc_dpb_sql_role_name, token.c_str(), token.length());
 							matched = true;
 							break;
 
@@ -263,7 +263,7 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 								generate_error(token, UNEXPECTED_TOKEN);
 							token = getToken(pos, tks, STRING);
 
-							dpb.insertString(isc_dpb_lc_ctype, token.ToString());
+							dpb.insertString(isc_dpb_lc_ctype, token.c_str(), token.length());
 							matched = true;
 							break;
 
@@ -341,11 +341,11 @@ static void generate_error(const NoCaseString& token, SSHORT error, char result)
 		if (result)
 		{
 			err_string = result;
-			err_string += token.ToString();
+			err_string += token;
 			err_string += result;
 		}
 		else
-			err_string = token.ToString();
+			err_string = token;
 		temp_status[5] = isc_token_err;
 		temp_status[6] = isc_arg_gds;
 		temp_status[7] = isc_random;

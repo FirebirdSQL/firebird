@@ -385,7 +385,7 @@ int fb_msg_format(void* handle, USHORT facility, USHORT number, unsigned int bsi
 		else if (n == -2)
 		{
 			s += "message file ";
-			s += fb_utils::getPrefix(Firebird::IConfigManager::DIR_MSG, MSG_FILE).ToString();
+			s += fb_utils::getPrefix(Firebird::IConfigManager::DIR_MSG, MSG_FILE);
 			s += " not found";
 		}
 		else

@@ -46,6 +46,12 @@
 #ifdef HAVE_FCNTL_H
 #include <fcntl.h>
 #endif
+#ifdef HAVE_ICONV_H
+#include <iconv.h>
+#endif
+#ifdef HAVE_LANGINFO_H
+#include <langinfo.h>
+#endif
 
 #ifdef AIX_PPC
 #define _UNIX95
@@ -158,12 +164,13 @@ namespace
 // create directory for lock files and set appropriate access rights
 void createLockDirectory(const char* pathname)
 {
+	SystemCharBuffer fn(pathname);
 	do
 	{
-		if (access(pathname, R_OK | W_OK | X_OK) == 0)
+		if (access(fn, R_OK | W_OK | X_OK) == 0)
 		{
 			struct STAT st;
-			if (os_utils::stat(pathname, &st) != 0)
+			if (os_utils::stat(fn, &st) != 0)
 				system_call_failed::raise("stat");
 
 			if (S_ISDIR(st.st_mode))
@@ -174,7 +181,7 @@ void createLockDirectory(const char* pathname)
 		}
 	} while (SYSCALL_INTERRUPTED(errno));
 
-	while (mkdir(pathname, 0700) != 0)		// anyway need chmod to avoid umask effects
+	while (mkdir(fn, 0700) != 0)		// anyway need chmod to avoid umask effects
 	{
 		if (SYSCALL_INTERRUPTED(errno))
 		{
@@ -238,7 +245,7 @@ int openCreateSharedFile(const char* pathname, int flags)
 bool touchFile(const char* pathname)
 {
 #ifdef HAVE_UTIME_H
-	while (utime(pathname, NULL) < 0)
+	while (utime(SystemCharBuffer(pathname), NULL) < 0)
 	{
 		if (SYSCALL_INTERRUPTED(errno))
 		{
@@ -273,11 +280,38 @@ void setCloseOnExec(int fd)
 	}
 }
 
+int stat(const char* path, struct STAT* buf)
+{
+	int rc;
+	do {
+#ifdef LSB_BUILD
+		rc = stat64(SystemCharBuffer(path), buf);
+#else
+		rc = ::stat(SystemCharBuffer(path), buf);
+#endif
+	} while (rc == -1 && SYSCALL_INTERRUPTED(errno));
+	return rc;
+}
+
+int fstat(int fd, struct STAT* buf)
+{
+	int rc;
+	do {
+#ifdef LSB_BUILD
+		rc = fstat64(fd, buf);
+#else
+		rc = ::fstat(fd, buf);
+#endif
+	} while (rc == -1 && SYSCALL_INTERRUPTED(errno));
+	return rc;
+}
+
 // force file descriptor to have O_CLOEXEC set
 int open(const char* pathname, int flags, mode_t mode)
 {
+	SystemCharBuffer fn(pathname);
 	int fd;
-	fd = openFile(pathname, flags | O_CLOEXEC, mode);
+	fd = openFile(fn, flags | O_CLOEXEC, mode);
 
 	if (fd < 0 && errno == EINVAL)	// probably O_CLOEXEC not accepted
 		fd = openFile(pathname, flags, mode);
@@ -293,15 +327,20 @@ FILE* fopen(const char* pathname, const char* mode)
 	{
 #ifdef LSB_BUILD
 		// TODO: use open + fdopen to avoid races
-		f = fopen64(pathname, mode);
+		f = fopen64(SystemCharBuffer(pathname), mode);
 #else
-		f = ::fopen(pathname, mode);
+		f = ::fopen(SystemCharBuffer(pathname), mode);
 #endif
 	} while (f == NULL && SYSCALL_INTERRUPTED(errno));
 
 	if (f)
 		setCloseOnExec(fileno(f));
 	return f;
+}
+
+int unlink(const char* pathname)
+{
+	return ::unlink(SystemCharBuffer(pathname));
 }
 
 static void makeUniqueFileId(const struct STAT& statistics, UCharBuffer& id)
@@ -360,6 +399,150 @@ CtrlCHandler::~CtrlCHandler()
 void CtrlCHandler::handler(void*)
 {
 	terminated = true;
+}
+
+namespace {
+
+	class Converter
+	{
+	public:
+		virtual ~Converter() {}
+		virtual char* convert(const char* fromBuf, size_t fromLen) = 0;
+		virtual void destroy(char* &outBuf) = 0;
+	};
+
+	// No real conversion, system locale is UTF-8 or iconv is not available
+	class NullConverter : public Converter
+	{
+		char* convert(const char* fromBuf, size_t fromLen) override
+		{
+			return const_cast<char*>(fromBuf);
+		}
+		void destroy(char* &outBuf)
+		{
+			outBuf = NULL;
+		}
+	};
+
+#ifdef HAVE_ICONV_H
+	class IConvConverter : public Converter
+	{
+	public:
+
+		IConvConverter(const char* sysLocale) : ic(NULL)
+		{
+			iconv_t tmp = iconv_open(sysLocale, "UTF-8");
+			if (tmp == (iconv_t)-1)
+			{
+				(Arg::Gds(isc_random) << "Error opening conversion descriptor" <<
+					Arg::Unix(errno)).raise();
+				// adding text "from @1 to @2" is good idea
+			}
+			ic = tmp;
+		}
+
+		~IConvConverter()
+		{
+			if (ic && iconv_close(ic) < 0)
+			{
+				system_call_failed::raise("iconv_close");
+			}
+		}
+
+		char* convert(const char* fromBuf, size_t fromLen) override
+		{
+			if (fromBuf == NULL)
+				return NULL;
+
+			size_t outSize = fromLen + 1; // FIXME: Conversion from utf-8 cannot make string longer
+			char* res = FB_NEW_POOL(AutoStorage::getAutoMemoryPool()) char[outSize];
+			char* outBuf = res;
+			char* inBuf = const_cast<char*>(fromBuf);
+
+			MutexLockGuard g(mtx, FB_FUNCTION);
+
+			// First of al reset state of iconv struct
+			iconv(ic, NULL, NULL, NULL, NULL);
+
+			if (iconv(ic, &inBuf, &fromLen, &outBuf, &outSize) == (size_t)-1)
+			{
+				delete[] res;
+				(Arg::Gds(isc_bad_conn_str) <<
+					Arg::Gds(isc_transliteration_failed) <<
+					Arg::Unix(errno)).raise();
+			}
+
+			*outBuf = '\0';
+
+			return res;
+		}
+
+		void destroy(char* &outBuf)
+		{
+			delete[] outBuf;
+			outBuf = NULL;
+		}
+
+	private:
+		iconv_t ic;
+		Mutex mtx;
+	};
+#endif
+
+	class ConverterAllocator
+	{
+	public:
+		static Converter* create()
+		{
+#ifdef HAVE_ICONV_H
+			string charmap;
+#ifdef HAVE_LANGINFO_H
+			charmap = nl_langinfo(CODESET);
+#else
+			if (!fb_utils::readenv("LC_CTYPE", charmap))
+			{
+				charmap = "ANSI_X3.4-1968";		// ascii
+			}
+#endif
+			if (charmap != "UTF-8" && charmap != "ANSI_X3.4-1968")		// cross finers and pray that ascii only means not called setlocale(), not real ascii
+			{
+				charmap += "//TRANSLIT";
+				return FB_NEW IConvConverter(charmap.c_str());
+			}
+#endif
+			return FB_NEW NullConverter();
+		}
+
+		static void destroy(Converter* inst)
+		{
+			delete inst;
+		}
+
+	};
+
+	InitInstance<Converter, ConverterAllocator> conv;
+} // namespace
+
+SystemCharBuffer::SystemCharBuffer(const char* buffer, size_t len)
+{
+	internalBuffer = conv().convert(buffer, len);
+}
+
+SystemCharBuffer::SystemCharBuffer(const char* buffer)
+{
+	if (buffer)
+	{
+		internalBuffer = conv().convert(buffer, strlen(buffer));
+	}
+	else
+	{
+		internalBuffer = NULL;
+	}
+}
+
+SystemCharBuffer::~SystemCharBuffer()
+{
+	conv().destroy(internalBuffer);
 }
 
 } // namespace os_utils

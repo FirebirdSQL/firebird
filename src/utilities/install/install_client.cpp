@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <windows.h>
 #include <conio.h>
+#include <locale.h>
 #include "../jrd/license.h"
 #include "../utilities/install/install_nt.h"
 #include "../utilities/install/install_proto.h"
@@ -80,25 +81,29 @@ int CLIB_ROUTINE main( int argc, char **argv)
 	bool sw_force = false;
 	bool sw_version = false;
 
+	setlocale(LC_ALL, "");
+
 	// Let's get the root directory from the instance path of this program.
 	// argv[0] is only _mostly_ guaranteed to give this info,
 	// so we GetModuleFileName()
-	TEXT directory[MAXPATHLEN];
-	USHORT len = GetModuleFileName(NULL, directory, sizeof(directory));
+	
+	WCHAR directory[MAXPATHLEN];
+	USHORT len = GetModuleFileNameW(NULL, directory, sizeof(directory)/sizeof(WCHAR));
 	if (len == 0)
 		return inst_error(GetLastError(), "GetModuleFileName");
 
 	// Get to the last '\' (this one precedes the filename part). There is
 	// always one after a call to GetModuleFileName().
-	TEXT* p = directory + len;
-	do {--p;} while (*p != '\\');
+	for (WCHAR* p = directory + len - 1; *p != L'\\'; --p)
+	{
+		*p = L'\0';
+	}
 
 /*	Instclient no longer strips the bin\\ part. This section can be removed after fb2.1.0 beta2
 	// Get to the previous '\' (this one should precede the supposed 'bin\\' part).
 	// There is always an additional '\' OR a ':'.
 	do {--p;} while (*p != '\\' && *p != ':');
 */
-	*p = '\0';
 
 	const TEXT* const* const end = argv + argc;
 	while (++argv < end)
@@ -112,6 +117,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 				for (i = 0; cmd = commands[i].name; i++)
 				{
 					const TEXT* q;
+					const TEXT* p;
 					for (p = *argv, q = cmd; *p && UPPER(*p) == *q; p++, q++);
 					if (!*p && commands[i].abbrev <= (USHORT) (q - cmd))
 						break;
@@ -130,6 +136,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 				for (i = 0; cln = clients[i].name; i++)
 				{
 					const TEXT* q;
+					const TEXT* p;
 					for (p = *argv, q = cln; *p && UPPER(*p) == *q; p++, q++);
 					if (!*p && clients[i].abbrev <= (USHORT) (q - cln))
 						break;
@@ -144,7 +151,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 		}
 		else
 		{
-			p = *argv + 1;
+			const TEXT* p = *argv + 1;
 			switch (UPPER(*p))
 			{
 				case 'F':
@@ -306,7 +313,6 @@ static USHORT inst_error(ULONG status, const TEXT* string)
 		}
 		else
 		{
-			CharToOem(buffer, buffer);
 			printf("%s", buffer);	// '\n' is included in system messages
 		}
 	}

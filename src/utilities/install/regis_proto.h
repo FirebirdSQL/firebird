@@ -26,7 +26,7 @@
 
 typedef USHORT (*pfnRegError)(SLONG, const TEXT*, HKEY);
 
-USHORT	REGISTRY_install (HKEY, const TEXT*, pfnRegError);
+USHORT	REGISTRY_install (HKEY, const WCHAR*, pfnRegError);
 USHORT	REGISTRY_remove (HKEY, bool, pfnRegError);
 
 #endif // UTILITIES_REGIS_PROTO_H

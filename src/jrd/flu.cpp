@@ -124,7 +124,7 @@ namespace {
 	class UdfDirectoryList : public Firebird::DirectoryList
 	{
 	private:
-		const Firebird::PathName getConfigString() const
+		Firebird::PathName getConfigString() const
 		{
 			return Firebird::PathName(Config::getUdfAccess());
 		}
@@ -213,10 +213,10 @@ namespace Jrd
 			switch (l->kind)
 			{
 			case MOD_PREFIX:
-				fixedModule = l->txt + fixedModule;
+				fixedModule.insert(0, l->txt);
 				break;
 			case MOD_SUFFIX:
-				fixedModule += l->txt;
+				fixedModule.appendString(l->txt);
 			}
 			if (l->permanent)
 			{
@@ -236,7 +236,7 @@ namespace Jrd
 			// Search for module name in UdfAccess restricted
 			// paths list
 			PathUtils::splitLastComponent(path, relative, fixedModule);
-			if (path.isEmpty() && PathUtils::isRelative(fixedModule))
+			if (path.isEmpty() && fixedModule.isRelative())
 			{
 				path = fixedModule;
 				if (! iUdfDirectoryList().expandFileName(fixedModule, path))

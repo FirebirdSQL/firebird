@@ -54,7 +54,7 @@ namespace Jrd
 				{
 					return 0;
 				}
-				return handle->findSymbol(name);
+				return handle->findSymbol(name.c_str());
 			}
 
 			InternalModule(MemoryPool& p,

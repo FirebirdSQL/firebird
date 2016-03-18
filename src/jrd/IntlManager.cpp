@@ -465,7 +465,7 @@ bool IntlManager::initialize()
 						fatal_exception::raiseFmt("Missing parameter 'filename' for intl_module %s\n", module->value.c_str());
 					}
 
-					filename = fname->value.ToPathName();
+					filename = fname->value;
 					configInfo = getConfigInfo(objModule);
 
 					ModuleLoader::Module* mod = NULL;
@@ -512,8 +512,7 @@ bool IntlManager::initialize()
 						}
 						else
 						{
-							gds__log((string("Can't load INTL module '") +
-								filename.c_str() + "'").c_str());
+							gds__log("Can't load INTL module '%s'", filename.c_str());
 							ok = false;
 						}
 					}
@@ -534,12 +533,14 @@ bool IntlManager::initialize()
 					{
 						externalName = collationName.substr(pos);
 						externalName.ltrim(" \t");
-						collationName = collationName.substr(0, pos);
+						collationName.erase(pos);
 					}
-					const ConfigFile::String charSetCollation = charSetName + ":" + collationName;
+					ConfigFile::String charSetCollation(charSetName);
+					charSetCollation += ':';
+					charSetCollation += collationName;
 
-					if (!registerCharSetCollation(charSetCollation.ToString(), filename,
-							(externalName.hasData() ? externalName : collationName).ToString(),
+					if (!registerCharSetCollation(charSetCollation, filename,
+							externalName.hasData() ? externalName : collationName,
 							configInfo))
 					{
 						conflicts.add(charSetCollation);
@@ -573,7 +574,7 @@ bool IntlManager::initialize()
 #endif
 
 	for (ObjectsArray<ConfigFile::String>::const_iterator name(conflicts.begin()); name != conflicts.end(); ++name)
-		charSetCollations->remove(name->ToString());
+		charSetCollations->remove(*name);
 
 	return ok;
 }
@@ -581,13 +582,19 @@ bool IntlManager::initialize()
 
 bool IntlManager::charSetInstalled(const string& charSetName)
 {
-	return charSetCollations->exist(charSetName + ":" + charSetName);
+	string fullName(charSetName);
+	fullName += ':';
+	fullName += charSetName;
+	return charSetCollations->exist(fullName);
 }
 
 
 bool IntlManager::collationInstalled(const string& collationName, const string& charSetName)
 {
-	return charSetCollations->exist(charSetName + ":" + collationName);
+	string fullName(charSetName);
+	fullName += ':';
+	fullName += collationName;
+	return charSetCollations->exist(fullName);
 }
 
 
@@ -595,7 +602,11 @@ bool IntlManager::lookupCharSet(const string& charSetName, charset* cs)
 {
 	ExternalInfo externalInfo;
 
-	if (charSetCollations->get(charSetName + ":" + charSetName, externalInfo))
+	string fullName(charSetName);
+	fullName += ':';
+	fullName += charSetName;
+
+	if (charSetCollations->get(fullName, externalInfo))
 	{
 		pfn_INTL_lookup_charset lookupFunction = NULL;
 
@@ -629,8 +640,16 @@ bool IntlManager::lookupCollation(const string& collationName,
 	ExternalInfo charSetExternalInfo;
 	ExternalInfo collationExternalInfo;
 
-	if (charSetCollations->get(charSetName + ":" + charSetName, charSetExternalInfo) &&
-		charSetCollations->get(charSetName + ":" + collationName, collationExternalInfo))
+	string fullCharSetName(charSetName);
+	fullCharSetName += ':';
+	fullCharSetName += charSetName;
+
+	string fullCollationName(charSetName);
+	fullCollationName += ':';
+	fullCollationName += collationName;
+
+	if (charSetCollations->get(fullCharSetName, charSetExternalInfo) &&
+		charSetCollations->get(fullCollationName, collationExternalInfo))
 	{
 		pfn_INTL_lookup_texttype lookupFunction = NULL;
 
@@ -666,8 +685,16 @@ bool IntlManager::setupCollationAttributes(
 
 	newSpecificAttributes = specificAttributes;
 
-	if (charSetCollations->get(charSetName + ":" + charSetName, charSetExternalInfo) &&
-		charSetCollations->get(charSetName + ":" + collationName, collationExternalInfo))
+	string fullCharSetName(charSetName);
+	fullCharSetName += ':';
+	fullCharSetName += charSetName;
+
+	string fullCollationName(charSetName);
+	fullCollationName += ':';
+	fullCollationName += collationName;
+
+	if (charSetCollations->get(fullCharSetName, charSetExternalInfo) &&
+		charSetCollations->get(fullCollationName, collationExternalInfo))
 	{
 		pfn_INTL_setup_attributes attributesFunction = NULL;
 
@@ -729,24 +756,25 @@ string IntlManager::getConfigInfo(const ConfigFile::Parameter* confObj)
 		return "";
 	}
 
-	ConfigFile::String configInfo;
+	string configInfo;
 	const ConfigFile::Parameters& all = confObj->sub->getParameters();
 
 	for (FB_SIZE_T n = 0; n < all.getCount(); ++n)
 	{
 		const ConfigFile::Parameter& par = all[n];
-		const string parName = par.name.ToString();
 
-		if (parName == "filename")
+		if (par.name == "filename")
 			continue;
 
 		if (configInfo.hasData())
 			configInfo.append(";");
 
-		configInfo.append(parName + "=" + par.value);
+		configInfo += par.name;
+		configInfo += '=';
+		configInfo += par.value;
 	}
 
-	return configInfo.ToString();
+	return configInfo;
 }
 
 
@@ -758,9 +786,9 @@ bool IntlManager::registerCharSetCollation(const string& name, const PathName& f
 
 	if (charSetCollations->get(name, conflict))
 	{
-		gds__log((string("INTL plugin conflict: ") + name + " defined in " +
-			(conflict.moduleName.isEmpty() ? "<builtin>" : conflict.moduleName.c_str()) +
-			" and " + filename.c_str()).c_str());
+		gds__log("INTL plugin conflict: %s defined in %s and %s", name.c_str(),
+				 (conflict.moduleName.isEmpty() ? "<builtin>" : conflict.moduleName.c_str()),
+				 filename.c_str());
 		return false;
 	}
 

@@ -370,7 +370,10 @@ AggregatedStream::AggregatedStream(thread_db* tdbb, CompilerScratch* csb, Stream
 void AggregatedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
 {
 	if (detailed)
-		plan += printIndent(++level) + "Aggregate";
+	{
+		plan += printIndent(++level);
+		plan += "Aggregate";
+	}
 
 	m_next->print(tdbb, plan, detailed, level);
 }

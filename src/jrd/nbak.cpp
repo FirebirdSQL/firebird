@@ -217,7 +217,8 @@ void BackupManager::StateWriteGuard::releaseHeader()
 
 void BackupManager::generateFilename()
 {
-	diff_name = database->dbb_filename + ".delta";
+	diff_name = database->dbb_filename;
+	diff_name.appendString(".delta");
 	explicit_diff_name = false;
 }
 
@@ -600,7 +601,7 @@ void BackupManager::endBackup(thread_db* tdbb, bool recover)
 		}
 
 		closeDelta(tdbb);
-		unlink(diff_name.c_str());
+		os_utils::unlink(diff_name.c_str());
 
 		NBAK_TRACE(("backup is over"));
 		endLock.unlockWrite(tdbb);

@@ -135,6 +135,7 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 				dpb.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
 				const char* providers = "Providers=" CURRENT_ENGINE;
 				dpb.insertString(isc_dpb_config, providers, fb_strlen(providers));
+				dpb.insertTag(isc_dpb_utf8_filename);
 				att = p->attachDatabase(status, secDbName, dpb.getBufferLength(), dpb.getBuffer());
 				check(status);
 				HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: attached sec db %s\n", secDbName));

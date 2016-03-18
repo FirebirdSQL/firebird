@@ -168,7 +168,7 @@ void ClumpletWriter::reset(UCHAR tag)
 			}
 		}
 
-		invalid_structure("Unknown tag value - missing in the list of possible");
+		invalid_structure("Unknown tag value - missing in the list of possible", tag);
 	}
 
 	dynamic_buffer.shrink(0);
@@ -349,6 +349,8 @@ void ClumpletWriter::insertBytesLengthCheck(UCHAR tag, const void* bytes, const 
 				m.printf("attempt to store %d bytes in a clumplet, need 1", length);
 			}
 			break;
+		default:
+			invalid_structure("unknown clumplet type", t);
 		}
 
 		if (m.isEmpty())

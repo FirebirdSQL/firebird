@@ -5942,17 +5942,21 @@ string print_key(thread_db* tdbb, jrd_rel* relation, index_desc* idx, Record* re
 				if (desc->isText() && desc->getTextType() == ttype_binary)
 				{
 					string hex;
-					char* s = hex.getBuffer(2 * len);
+					char* s = hex.getBuffer(2 * len + 3, false);
+					*s++ = 'x';
+					*s++ = '\'';
 					for (int i = 0; i < len; i++)
 					{
 						sprintf(s, "%02X", (int) (unsigned char) str[i]);
 						s += 2;
 					}
-					value = "x'" + hex + "'";
+					*s++ = '\'';
+					value = hex;
 				}
 				else
 				{
-					value = "'" + value + "'";
+					value.insert(0, 1, '\'');
+					value.append(1, '\'');
 				}
 			}
 
@@ -5989,7 +5993,8 @@ string print_key(thread_db* tdbb, jrd_rel* relation, index_desc* idx, Record* re
 			bool notNull = false;
 			const dsc* const desc = BTR_eval_expression(tdbb, idx, record, notNull);
 			value = Printer(tdbb, notNull ? desc : NULL).get();
-			key += "<expression> = " + value;
+			key += "<expression> = ";
+			key += value;
 		}
 		else
 		{
@@ -6008,7 +6013,8 @@ string print_key(thread_db* tdbb, jrd_rel* relation, index_desc* idx, Record* re
 				dsc desc;
 				const bool notNull = EVL_field(relation, record, field_id, &desc);
 				value = Printer(tdbb, notNull ? &desc : NULL).get();
-				key += " = " + value;
+				key += " = ";
+				key += value;
 
 				if (i < idx->idx_count - 1)
 					key += ", ";
@@ -6020,7 +6026,9 @@ string print_key(thread_db* tdbb, jrd_rel* relation, index_desc* idx, Record* re
 		return "";
 	}
 
-	return "(" + key + ")";
+	key.insert(0, 1, '(');
+	key.append(1, ')');
+	return key;
 }
 
 

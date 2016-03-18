@@ -103,7 +103,7 @@ public:
 		for (const char** p = patterns; *p; ++p)
 		{
 			symbol.printf(*p, name, majorVersion, minorVersion);
-			module->findSymbol(symbol, ptr);
+			module->findSymbol(symbol.c_str(), ptr);
 			if (ptr)
 				return;
 		}
@@ -368,7 +368,7 @@ static void getVersions(const string& configInfo, ObjectsArray<string>& versions
 		(const UCHAR*) configInfo.c_str(), &config);
 
 	string versionsStr;
-	if (config.get("icu_versions", versionsStr))
+	if (config.get(string("icu_versions"), versionsStr))
 		versionsStr.trim();
 	else
 		versionsStr = "default";
@@ -383,12 +383,12 @@ static void getVersions(const string& configInfo, ObjectsArray<string>& versions
 	{
 		if ((n = versionsStr.find_first_not_of(' ', start)) != versionsStr.npos)
 			start = n;
-		versions.add(versionsStr.substr(start, i - start));
+		versions.add(string(versionsStr, start, i - start));
 	}
 
 	if ((n = versionsStr.find_first_not_of(' ', start)) != versionsStr.npos)
 		start = n;
-	versions.add(versionsStr.substr(start));
+	versions.add(string(versionsStr, start));
 }
 
 
@@ -1129,10 +1129,16 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 	try
 	{
 		if ((convIcu = ImplementConversionICU::create(favMaj, favMin)))
+		{
 			return *convIcu;
+		}
 	}
-	catch (const Exception&)
-	{ }
+	catch (const Exception& e)
+	{
+#ifdef DEV_BUILD
+		iscLogException("Load preferred ICU", e);
+#endif
+	}
 
 	// Do a regular search
 	LocalStatus ls;

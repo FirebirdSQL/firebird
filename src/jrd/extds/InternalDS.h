@@ -63,7 +63,7 @@ protected:
 	virtual ~InternalConnection();
 
 public:
-	virtual void attach(Jrd::thread_db* tdbb, const Firebird::PathName& dbName,
+	virtual void attach(Jrd::thread_db* tdbb, const Firebird::string& dbName,
 		const Firebird::MetaName& user, const Firebird::string& pwd,
 		const Firebird::MetaName& role);
 
@@ -73,7 +73,7 @@ public:
 
 	virtual bool isConnected() const { return (m_attachment != 0); }
 
-	virtual bool isSameDatabase(Jrd::thread_db* tdbb, const Firebird::PathName& dbName,
+	virtual bool isSameDatabase(Jrd::thread_db* tdbb, const Firebird::string& dbName,
 		const Firebird::MetaName& user, const Firebird::string& pwd,
 		const Firebird::MetaName& role) const;
 

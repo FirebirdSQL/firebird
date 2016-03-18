@@ -109,14 +109,14 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 			logname = DEFAULT_LOG_NAME;
 		}
 
-		if (PathUtils::isRelative(logname))
+		PathName logFullName;
+		if (logname.isRelative())
 		{
-			PathName root(initInfo->getFirebirdRootDirectory());
-			PathUtils::ensureSeparator(root);
-			logname.insert(0, root);
+			logFullName = initInfo->getFirebirdRootDirectory();
 		}
+		logFullName.appendPath(logname);
 
-		logWriter = FB_NEW PluginLogWriter(logname.c_str(), config.max_log_size * 1024 * 1024);
+		logWriter = FB_NEW PluginLogWriter(logFullName.c_str(), config.max_log_size * 1024 * 1024);
 		logWriter->addRef();
 	}
 
@@ -130,7 +130,7 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 		{
 			str = config.include_filter.c_str();
 			string filter(config.include_filter);
-			ISC_systemToUtf8(filter);
+			//ISC_systemToUtf8(filter);
 
 			include_matcher = FB_NEW SimilarToMatcher<UCHAR, UpcaseConverter<> >(
 				*getDefaultMemoryPool(), textType, (const UCHAR*) filter.c_str(),
@@ -141,7 +141,7 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 		{
 			str = config.exclude_filter.c_str();
 			string filter(config.exclude_filter);
-			ISC_systemToUtf8(filter);
+			//ISC_systemToUtf8(filter);
 
 			exclude_matcher = FB_NEW SimilarToMatcher<UCHAR, UpcaseConverter<> >(
 				*getDefaultMemoryPool(), textType, (const UCHAR*) filter.c_str(),

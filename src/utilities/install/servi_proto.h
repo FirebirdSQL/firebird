@@ -30,30 +30,30 @@
 typedef USHORT (*pfnSvcError)(SLONG, const TEXT*, SC_HANDLE);
 
 USHORT SERVICES_install(SC_HANDLE manager,
-						const char* service_name,
-						const char* display_name,
-						const char* display_description,
-						const char* executable,
-						const char* directory,
-						const char* switches,
-						const char* dependencies,
+						const WCHAR* service_name,
+						const WCHAR* display_name,
+						const WCHAR* display_description,
+						const WCHAR* executable,
+						const WCHAR* directory,
+						const WCHAR* switches,
+						const WCHAR* dependencies,
 						USHORT		sw_startup,
-						const char* nt_user_name,
-						const char* nt_user_password,
+						const WCHAR* nt_user_name,
+						const WCHAR* nt_user_password,
 						bool		interactive_mode,
 						bool		auto_restart,
 						pfnSvcError err_handler);
 
-USHORT	SERVICES_remove(SC_HANDLE, const char*, /*const char*,*/ pfnSvcError);
+USHORT	SERVICES_remove(SC_HANDLE, const WCHAR*, /*const char*,*/ pfnSvcError);
 
-USHORT	SERVICES_start(SC_HANDLE, const char*, /*const char*,*/ USHORT, pfnSvcError);
+USHORT	SERVICES_start(SC_HANDLE, const WCHAR*, /*const char*,*/ USHORT, pfnSvcError);
 
-USHORT	SERVICES_stop(SC_HANDLE, const char*, /*const char*,*/ pfnSvcError);
+USHORT	SERVICES_stop(SC_HANDLE, const WCHAR*, /*const char*,*/ pfnSvcError);
 
-USHORT	SERVICES_status(const char*);
+USHORT	SERVICES_status(const WCHAR*);
 
-USHORT	SERVICES_grant_privilege(const TEXT* account, pfnSvcError err_handler, const WCHAR* privilege);
+USHORT	SERVICES_grant_privilege(const WCHAR* account, pfnSvcError err_handler, const WCHAR* privilege);
 
-USHORT	SERVICES_grant_access_rights(const char*, const TEXT*, pfnSvcError);
+USHORT	SERVICES_grant_access_rights(const WCHAR*, const WCHAR*, pfnSvcError);
 
 #endif // UTILITIES_SERVI_PROTO_H

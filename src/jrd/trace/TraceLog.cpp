@@ -73,7 +73,8 @@ TraceLog::TraceLog(MemoryPool& pool, const PathName& fileName, bool reader) :
 
 	char dir[MAXPATHLEN];
 	iscPrefixLock(dir, "", true);
-	PathUtils::concatPath(m_baseFileName, dir, fileName);
+	m_baseFileName = dir;
+	m_baseFileName.appendPath(fileName);
 
 	TraceLogGuard guard(this);
 	if (m_reader)

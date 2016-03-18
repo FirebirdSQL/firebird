@@ -730,8 +730,13 @@ public:
 			hasData = 2;
 		}
 
+		string fullName(first);
+		fullName += ' ';
+		fullName += middle;
+		fullName += ' ';
+		fullName += last;
 		printf("%-28.28s %-40.40s %4d %4d %3.3s\n", login.c_str(),
-			(first + " " + middle + " " + last).c_str(), uid, gid, admin ? "yes" : "no");
+			fullName.c_str(), uid, gid, admin ? "yes" : "no");
 		clear();
 	}
 };

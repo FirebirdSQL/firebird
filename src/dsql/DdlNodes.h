@@ -321,7 +321,10 @@ protected:
 		str = objName.toString();
 
 		if (subName.hasData())
-			str.append(".").append(subName.c_str());
+		{
+			str += '.';
+			str += subName.c_str();
+		}
 
 		statusVector << Firebird::Arg::Gds(isc_dsql_comment_on_failed) << str;
 	}

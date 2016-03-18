@@ -89,7 +89,7 @@ public:
 		}
 		else
 		{
-			Firebird::string str(*getDefaultMemoryPool(), m_string, m_string_len);
+			Firebird::string str(m_string, m_string_len, *getDefaultMemoryPool());
 
 			TraceFailedSQLStatement stmt(str);
 			TraceManager::event_dsql_prepare(m_attachment, m_transaction, &stmt, millis, result);

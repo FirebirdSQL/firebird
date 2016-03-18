@@ -186,8 +186,17 @@ static void raiseError(SecurityClass::flags_t mask, SLONG type, const Firebird::
 	}
 
 	const char* const typeAsStr = accTypeNumToStr(type);
-	const Firebird::string fullName = r_name.hasData() ?
-		r_name.c_str() + Firebird::string(".") + name.c_str() : name.c_str();
+	Firebird::string fullName;
+	if (r_name.hasData())
+	{
+		fullName = r_name.c_str();
+		fullName += '.';
+		fullName += name.c_str();
+	}
+	else
+	{
+		fullName = name.c_str();
+	}
 
 	ERR_post(Arg::Gds(isc_no_priv) << Arg::Str(names->p_names_string) <<
 									  Arg::Str(typeAsStr) <<

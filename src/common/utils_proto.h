@@ -53,8 +53,8 @@ namespace fb_utils
 	bool implicit_pk(const char* pk_name);
 	int name_length(const TEXT* const name);
 	int name_length_limit(const TEXT* const name, size_t bufsize);
-	bool readenv(const char* env_name, Firebird::string& env_value);
-	bool readenv(const char* env_name, Firebird::PathName& env_value);
+	// get environment variable in utf-8
+	bool readenv(const char* env_name, Firebird::AbstractString& env_value);
 	int snprintf(char* buffer, size_t count, const char* format...);
 	char* cleanup_passwd(char* arg);
 	inline char* get_passwd(char* arg)
@@ -150,6 +150,7 @@ namespace fb_utils
 		FETCH_PASS_FILE_READ_ERROR,
 		FETCH_PASS_FILE_EMPTY
 	};
+	FetchPassResult fetchPassword(const Firebird::PathName& name, Firebird::AbstractString& password);
 	FetchPassResult fetchPassword(const Firebird::PathName& name, const char*& password);
 
 	// Returns current value of performance counter

@@ -27,6 +27,9 @@
 
 #include "firebird.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+
 #include "../common/classes/array.h"
 #include "../common/classes/init.h"
 #include "../common/gdsassert.h"
@@ -38,9 +41,6 @@
 
 #include <direct.h>
 #include <io.h> // isatty()
-#ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
-#endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -48,6 +48,9 @@
 
 #include <aclapi.h>
 #include <Winsock2.h>
+#include <ShlObj.h>
+#include <shlwapi.h>
+#include <wchar.h>
 
 namespace os_utils
 {
@@ -72,9 +75,10 @@ bool get_user_home(int /*user_id*/, Firebird::PathName& /*homeDir*/)
 	return false;
 }
 
+
 // allow different users to read\write\delete files in lock directory
 // in case of any error just log it and don't stop engine execution
-void adjustLockDirectoryAccess(const char* pathname)
+void adjustLockDirectoryAccess(WCHAR* pathname)
 {
 	PSECURITY_DESCRIPTOR pSecDesc = NULL;
 	PSID pSID_Users = NULL;
@@ -85,16 +89,13 @@ void adjustLockDirectoryAccess(const char* pathname)
 		// We should pass root directory in format "C:\" into GetVolumeInformation().
 		// In case of pathname is not local folder (i.e. \\share\folder) let
 		// GetVolumeInformation() return an error.
-		Firebird::PathName root(pathname);
-		const Firebird::PathName::size_type pos = root.find(':', 0);
-		if (pos == 1)
-		{
-			root.erase(pos + 1, root.length());
-			PathUtils::ensureSeparator(root);
-		}
+		int drive = PathGetDriveNumberW(pathname);
+		if (drive == -1) // Path contains no drive
+			return;
 
+		WCHAR root[5] = L"";
 		DWORD fsflags;
-		if (!GetVolumeInformation(root.c_str(), NULL, 0, NULL, NULL, &fsflags, NULL, 0))
+		if (!GetVolumeInformationW(PathBuildRootW(root, drive), NULL, 0, NULL, NULL, &fsflags, NULL, 0))
 			Firebird::system_error::raise("GetVolumeInformation");
 
 		if (!(fsflags & FS_PERSISTENT_ACLS))
@@ -104,7 +105,7 @@ void adjustLockDirectoryAccess(const char* pathname)
 		// read\write\delete files
 		PACL pOldACL = NULL;
 
-		if (GetNamedSecurityInfo((LPSTR) pathname,
+		if (GetNamedSecurityInfoW(pathname,
 				SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
 				NULL, NULL, &pOldACL, NULL,
 				&pSecDesc) != ERROR_SUCCESS)
@@ -145,7 +146,7 @@ void adjustLockDirectoryAccess(const char* pathname)
 		if (SetEntriesInAcl(2, eas, pOldACL, &pNewACL) != ERROR_SUCCESS)
 			Firebird::system_error::raise("SetEntriesInAcl");
 
-		if (SetNamedSecurityInfo((LPSTR) pathname,
+		if (SetNamedSecurityInfoW(pathname,
 				SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
 				NULL, NULL, pNewACL, NULL) != ERROR_SUCCESS)
 		{
@@ -180,21 +181,23 @@ void createLockDirectory(const char* pathname)
 {
 	static bool errorLogged = false;
 
-	DWORD attr = GetFileAttributes(pathname);
+	WideCharBuffer fn;
+	fn.fromString(CP_UTF8, pathname);
+	DWORD attr = GetFileAttributesW(fn);
 	DWORD errcode = 0;
 	if (attr == INVALID_FILE_ATTRIBUTES)
 	{
 		errcode = GetLastError();
 		if (errcode == ERROR_FILE_NOT_FOUND)
 		{
-			if (!CreateDirectory(pathname, NULL)) {
+			if (!CreateDirectoryW(fn, NULL)) {
 				errcode = GetLastError();
 			}
 			else
 			{
-				adjustLockDirectoryAccess(pathname);
+				adjustLockDirectoryAccess(fn);
 
-				attr = GetFileAttributes(pathname);
+				attr = GetFileAttributesW(fn);
 				if (attr == INVALID_FILE_ATTRIBUTES) {
 					errcode = GetLastError();
 				}
@@ -255,7 +258,9 @@ bool touchFile(const char* pathname)
     FILETIME ft;
     SYSTEMTIME st;
 
-	HANDLE hFile = CreateFile(pathname,
+	WideCharBuffer fn;
+	fn.fromString(CP_UTF8, pathname);
+	HANDLE hFile = CreateFileW(fn,
 		GENERIC_READ | FILE_WRITE_ATTRIBUTES,
 		FILE_SHARE_READ | FILE_SHARE_WRITE,
 		ISC_get_security_desc(),
@@ -303,14 +308,52 @@ bool isIPv6supported()
 	return false;
 }
 
+int stat(const char* path, struct STAT* buf)
+{
+	WideCharBuffer fn;
+	fn.fromString(CP_UTF8, path);
+	return _wstat(fn, buf);
+}
+	
+int fstat(int fd, struct STAT* buf)
+{
+	return _fstat(fd, buf);
+}
+
 int open(const char* pathname, int flags, mode_t mode)
 {
-	return ::_open(pathname, flags, mode);
+	WideCharBuffer fn;
+	if (fn.fromString(CP_UTF8, pathname))
+	{
+		return ::_wopen(fn, flags, mode);
+	}
+	else // Fallback to ANSI version
+	{
+		return ::_open(pathname, flags, mode);
+	}
 }
 
 FILE* fopen(const char* pathname, const char* mode)
 {
-	return ::fopen(pathname, mode);
+	WideCharBuffer wfn, wmode;
+	if (wfn.fromString(CP_UTF8, pathname))
+	{
+		wmode.fromString(CP_ASCII, mode);
+		return ::_wfopen(wfn, wmode);
+	}
+	else // fallback to ANSI version
+		return ::fopen(pathname, mode);
+}
+
+int unlink(const char* pathname)
+{
+	WideCharBuffer wfn;
+	if (wfn.fromString(CP_UTF8, pathname))
+	{
+		return ::_wunlink(wfn);
+	}
+	else // fallback to ANSI version
+		return ::unlink(pathname);
 }
 
 void getUniqueFileId(HANDLE fd, Firebird::UCharBuffer& id)
@@ -363,6 +406,214 @@ BOOL WINAPI CtrlCHandler::handler(DWORD dwCtrlType)
 	default:
 		return FALSE;
 	}
+}
+
+WideCharBuffer::WideCharBuffer(const Firebird::PathName& path) :
+m_len16(0)
+{
+	if (!fromString(CP_UTF8, path))
+	{
+		Firebird::system_error::raise("MultiByteToWideChar"); // it hardly can happen, but just in case
+	}
+}
+
+bool WideCharBuffer::fromString(UINT codePage, const char* str, const int length)
+{
+	if (codePage == CP_ASCII)
+	{
+		// No need to bother kernel functions for such simple case
+		WCHAR* buf = m_utf16.getBuffer(length + 1, false);
+		for (int i = 0; i < length; i++)
+		{
+			*buf++ = *str++;
+		}
+		*buf = 0;
+		return true;
+	}
+
+	int bufSize = m_utf16.getCapacity() - 1; // Reserve space for terminating zero
+	WCHAR* utf16Buffer = m_utf16.begin();
+	if (str == NULL || length == 0)
+	{
+		m_len16 = 0;
+		utf16Buffer[0] = 0;
+		return true;
+	}
+
+	m_len16 = MultiByteToWideChar(codePage, 0, str, length, utf16Buffer, bufSize);
+
+	if (m_len16 == 0)
+	{
+		DWORD err = GetLastError();
+		if (err != ERROR_INSUFFICIENT_BUFFER)
+			return false;
+
+		bufSize = MultiByteToWideChar(codePage, 0, str, length, NULL, 0);
+		if (bufSize == 0)
+			return false;
+
+		utf16Buffer = m_utf16.getBuffer(bufSize + 1);
+		m_len16 = MultiByteToWideChar(codePage, 0, str, length, utf16Buffer, bufSize);
+	}
+
+	utf16Buffer[m_len16] = 0;
+	return (m_len16 != 0);
+}
+
+
+bool WideCharBuffer::toString(UINT codePage, Firebird::AbstractString& str)
+{
+	if (m_len16 == 0)
+	{
+		str.resize(0);
+		return true;
+	}
+
+	BOOL defaultCharUsed = FALSE;
+	LPBOOL pDefaultCharUsed = &defaultCharUsed;
+	if (codePage == CP_UTF8 || codePage == CP_UTF7)
+		pDefaultCharUsed = NULL;
+
+	WCHAR* utf16Buffer = m_utf16.begin();
+
+	char* utf8Buffer = str.getBuffer(str.capacity());
+	int len8 = WideCharToMultiByte(codePage, 0, utf16Buffer, m_len16,
+		utf8Buffer, str.capacity(), NULL, pDefaultCharUsed);
+
+	if (len8 == 0 || defaultCharUsed)
+	{
+		DWORD err = GetLastError();
+		if (err != ERROR_INSUFFICIENT_BUFFER)
+			return false;
+
+		len8 = WideCharToMultiByte(codePage, 0, utf16Buffer, m_len16, NULL, 0, NULL, pDefaultCharUsed);
+		if (len8 == 0 || defaultCharUsed)
+			return false;
+
+		utf8Buffer = str.getBuffer(len8);
+
+		len8 = WideCharToMultiByte(codePage, 0, utf16Buffer, m_len16, utf8Buffer, len8,
+			NULL, pDefaultCharUsed);
+	}
+
+	if (len8 == 0 || defaultCharUsed)
+		return false;
+
+	str.resize(len8);
+
+	return true;
+}
+
+bool WideCharBuffer::toUpper()
+{
+	if (m_len16 == 0)
+	{
+		return true;
+	}
+
+	int bufSize = m_utf16.getCapacity();
+	bufSize = LCMapStringW(LOCALE_INVARIANT, LCMAP_UPPERCASE, getBuffer(), m_len16 + 1, getBuffer(), bufSize);
+	if (bufSize == 0)
+	{
+		DWORD err = GetLastError();
+		if (err != ERROR_INSUFFICIENT_BUFFER)
+			return false;
+
+		bufSize = LCMapStringW(LOCALE_INVARIANT, LCMAP_UPPERCASE, getBuffer(), m_len16 + 1, NULL, 0);
+		if (bufSize == 0)
+			return false;
+
+		WCHAR* utf16Buffer = m_utf16.getBuffer(bufSize);
+		m_len16 = LCMapStringW(LOCALE_INVARIANT, LCMAP_UPPERCASE, getBuffer(), m_len16 + 1, utf16Buffer, bufSize);
+	}
+	return (m_len16 != 0);
+}
+
+bool WideCharBuffer::getCwd()
+{
+	m_len16 = GetCurrentDirectoryW(m_utf16.getCapacity(), m_utf16.begin());
+	if (m_len16 > m_utf16.getCapacity())
+	{
+		m_len16 = GetCurrentDirectoryW(m_len16, m_utf16.getBuffer(m_len16, false));
+	}
+	return m_len16 != 0;
+}
+
+bool WideCharBuffer::getTempPath()
+{
+	m_len16 = GetTempPathW(m_utf16.getCapacity(), m_utf16.begin());
+	if (m_len16 > m_utf16.getCapacity())
+	{
+		m_len16 = GetTempPathW(m_len16, m_utf16.getBuffer(m_len16, false));
+	}
+	return m_len16 != 0;
+}
+
+bool WideCharBuffer::searchFile(WideCharBuffer& path, WideCharBuffer& fileName)
+{
+	m_len16 = SearchPathW(path.getBuffer(), fileName.getBuffer(), NULL, m_utf16.getCapacity(), getBuffer(), NULL);
+	if (m_len16 > m_utf16.getCapacity())
+	{
+		m_len16 = SearchPathW(path.getBuffer(), fileName.getBuffer(), NULL, m_len16, m_utf16.getBuffer(m_len16, false), NULL);
+	}
+	return m_len16 != 0;
+}
+
+
+bool WideCharBuffer::getLongFileName()
+{
+	m_len16 = GetLongPathNameW(getBuffer(), getBuffer(), m_utf16.getCapacity());
+	if (m_len16 > m_utf16.getCapacity())
+	{
+		WCHAR* buf = m_utf16.getBuffer(m_len16);
+		m_len16 = GetLongPathNameW(buf, buf, m_len16);
+	}
+	return m_len16 != 0;
+}
+
+void WideCharBuffer::getEnvironmentVariable(const char* name)
+{
+	WideCharBuffer wname;
+	wname.fromString(CP_UTF8, name);
+	m_len16 = GetEnvironmentVariableW(wname.getBuffer(), m_utf16.begin(), m_utf16.getCapacity());
+	if (m_len16 > m_utf16.getCapacity())
+	{
+		m_len16 = GetEnvironmentVariableW(wname.getBuffer(), m_utf16.getBuffer(m_len16), m_len16);
+	}
+}
+
+bool WideCharBuffer::getModuleFileName(HMODULE module)
+{
+	m_len16 = GetModuleFileNameW(module, getBuffer(), m_utf16.getCapacity());
+	if (m_len16 != 0 && GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+	{
+		// Try to blindly repeat with bigger buffer
+		WCHAR* buf = m_utf16.getBuffer(m_len16 * 2);
+		m_len16 = GetModuleFileNameW(module, buf, m_utf16.getCapacity());
+	}
+	return m_len16 != 0;
+}
+
+bool WideCharBuffer::getSpecialFolderPath(int csidl, BOOL fCreate)
+{
+	WCHAR* buf = m_utf16.getBuffer(MAXPATHLEN, false);
+	BOOL res = SHGetSpecialFolderPathW(NULL, buf, csidl, fCreate);
+	if (res)
+	{
+		m_len16 = static_cast<unsigned int>(wcslen(buf));
+		return true;
+	}
+	m_len16 = 0;
+	return false;
+}
+
+void WideCharBuffer::insert(unsigned int pos, WCHAR c)
+{
+	if (pos > m_len16)
+		pos = m_len16;
+	WCHAR* buf = m_utf16.getBuffer(m_len16 + 1);
+	wmemmove(buf + pos + 1, buf + pos, m_len16 - pos + 1); // Include terminating zero to copy op
+	buf[pos] = c;
 }
 
 } // namespace os_utils

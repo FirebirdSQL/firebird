@@ -38,7 +38,7 @@ static void cleanup_key(HKEY, const char*);
 static USHORT remove_subkeys(HKEY, bool, pfnRegError);
 #endif
 
-USHORT REGISTRY_install(HKEY hkey_rootnode, const TEXT* directory, pfnRegError err_handler)
+USHORT REGISTRY_install(HKEY hkey_rootnode, const WCHAR* directory, pfnRegError err_handler)
 {
 /**************************************
  *
@@ -63,18 +63,19 @@ USHORT REGISTRY_install(HKEY hkey_rootnode, const TEXT* directory, pfnRegError e
 		return (*err_handler) (status, "RegCreateKeyEx", NULL);
 	}
 
-	TEXT path_name[MAXPATHLEN];
-	TEXT* p;
-	USHORT len = GetFullPathName(directory, sizeof(path_name), path_name, &p);
-	if (len && path_name[len - 1] != '/' && path_name[len - 1] != '\\')
-	{
-		path_name[len++] = '\\';
-		path_name[len] = 0;
-	}
+	// On input we already have directory.
+	//TEXT path_name[MAXPATHLEN];
+	//TEXT* p;
+	//USHORT len = GetFullPathName(directory, sizeof(path_name), path_name, &p);
+	//if (len && path_name[len - 1] != '/' && path_name[len - 1] != '\\')
+	//{
+	//	path_name[len++] = '\\';
+	//	path_name[len] = 0;
+	//}
 
-	if ((status = RegSetValueEx(hkey_instances, FB_DEFAULT_INSTANCE, 0,
-			REG_SZ, reinterpret_cast<const BYTE*>(path_name),
-			(DWORD) (len + 1))) != ERROR_SUCCESS)
+	if ((status = RegSetValueExW(hkey_instances, FB_DEFAULT_INSTANCE, 0,
+			REG_SZ, reinterpret_cast<const BYTE*>(directory),
+			(DWORD) (wcslen(directory) + 1))) != ERROR_SUCCESS)
 	{
 		(*err_handler) (status, "RegSetValueEx", hkey_instances);
 
@@ -120,7 +121,7 @@ USHORT REGISTRY_remove(HKEY hkey_rootnode,
 	}
 
 	// Remove the FB_DEFAULT_INSTANCE value
-	if ((status = RegDeleteValue(hkey_instances, FB_DEFAULT_INSTANCE)) != ERROR_SUCCESS)
+	if ((status = RegDeleteValueW(hkey_instances, FB_DEFAULT_INSTANCE)) != ERROR_SUCCESS)
 	{
 		RegCloseKey(hkey_instances);
 		return silent_flag ? FB_FAILURE : (*err_handler) (status, "RegDeleteValue", NULL);

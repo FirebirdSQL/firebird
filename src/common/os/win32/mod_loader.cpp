@@ -5,11 +5,13 @@
 
 // required to use activation context API structures
 #define _WIN32_WINNT 0x0501
+#define UNICODE	// Use wide char versions of functions
 
 #include "firebird.h"
 #include "../../../common/dllinst.h"
 #include "../common/os/mod_loader.h"
 #include <windows.h>
+#include "../common/os/os_utils.h"
 #include "../common/os/path_utils.h"
 #include "../common/config/config.h"
 #include "../common/classes/ImplementHelper.h"
@@ -19,12 +21,12 @@ using namespace Firebird;
 /// This is the Win32 implementation of the mod_loader abstraction.
 
 /// activation context API prototypes
-typedef HANDLE (WINAPI * PFN_CAC)(PCACTCTXA pActCtx);
+typedef HANDLE (WINAPI * PFN_CAC)(PCACTCTXW pActCtx);
 
 typedef BOOL (WINAPI * PFN_FINDAC)(DWORD dwFlags,
 								   const GUID *lpExtensionGuid,
 								   ULONG ulSectionId,
-								   LPCSTR lpStringToFind,
+								   LPCWSTR lpStringToFind,
 								   PACTCTX_SECTION_KEYED_DATA ReturnedData);
 
 typedef void (WINAPI * PFN_RAC)(HANDLE hActCtx);
@@ -42,7 +44,7 @@ public:
 	WinApiFunction(const char *dllName, const char *fnName)
 	{
 		m_ptr = NULL;
-		const HMODULE hDll = GetModuleHandle(dllName);
+		const HMODULE hDll = GetModuleHandleA(dllName);
 		if (hDll)
 			m_ptr = (PFN) GetProcAddress(hDll, fnName);
 	}
@@ -65,8 +67,8 @@ class ContextActivator
 {
 public:
 	ContextActivator() :
-	  mFindActCtxSectionString(KERNEL32_DLL, "FindActCtxSectionStringA"),
-	  mCreateActCtx(KERNEL32_DLL, "CreateActCtxA"),
+	  mFindActCtxSectionString(KERNEL32_DLL, "FindActCtxSectionStringW"),
+	  mCreateActCtx(KERNEL32_DLL, "CreateActCtxW"),
 	  mReleaseActCtx(KERNEL32_DLL, "ReleaseActCtx"),
 	  mActivateActCtx(KERNEL32_DLL, "ActivateActCtx"),
 	  mDeactivateActCtx(KERNEL32_DLL, "DeactivateActCtx")
@@ -92,17 +94,17 @@ public:
 				(0, NULL,
 				ACTIVATION_CONTEXT_SECTION_DLL_REDIRECTION,
 #if _MSC_VER == 1400
-                    "msvcr80.dll",
+                    L"msvcr80.dll",
 #elif _MSC_VER == 1500
-                    "msvcr90.dll",
+                    L"msvcr90.dll",
 #elif _MSC_VER == 1600
-				"msvcr100.dll",
+				L"msvcr100.dll",
 #elif _MSC_VER == 1700
-				"msvcr110.dll",
+				L"msvcr110.dll",
 #elif _MSC_VER == 1800
-					"msvcr120.dll",
+					L"msvcr120.dll",
 #elif _MSC_VER == 1900
-					"vcruntime140.dll",
+					L"vcruntime140.dll",
 #else
                     #error Specify CRT DLL name here !
 #endif
@@ -112,7 +114,7 @@ public:
 		}
 
 		// create and use activation context from our own manifest
-		ACTCTXA actCtx;
+		ACTCTXW actCtx;
 		memset(&actCtx, 0, sizeof(actCtx));
 		actCtx.cbSize = sizeof(actCtx);
 		actCtx.dwFlags = ACTCTX_FLAG_RESOURCE_NAME_VALID | ACTCTX_FLAG_HMODULE_VALID;
@@ -121,8 +123,8 @@ public:
 
 		if (actCtx.hModule)
 		{
-			char name[1024];
-			GetModuleFileName(actCtx.hModule, name, sizeof(name));
+			os_utils::WideCharBuffer name;
+			name.getModuleFileName(actCtx.hModule);
 			actCtx.lpSource = name;
 
 			hActCtx = (*mCreateActCtx) (&actCtx);
@@ -164,7 +166,7 @@ public:
 
 	~Win32Module();
 
-	void *findSymbol(const string&);
+	void *findSymbol(const char* symbol);
 
 private:
 	const HMODULE module;
@@ -175,7 +177,7 @@ bool ModuleLoader::isLoadableModule(const PathName& module)
 	ContextActivator ctx;
 
 	const HMODULE hMod =
-		LoadLibraryEx(module.c_str(), 0, LOAD_WITH_ALTERED_SEARCH_PATH | LOAD_LIBRARY_AS_DATAFILE);
+		LoadLibraryEx(os_utils::WideCharBuffer(module), 0, LOAD_WITH_ALTERED_SEARCH_PATH | LOAD_LIBRARY_AS_DATAFILE);
 
 	if (hMod) {
 		FreeLibrary(hMod);
@@ -185,10 +187,13 @@ bool ModuleLoader::isLoadableModule(const PathName& module)
 
 void ModuleLoader::doctorModuleExtension(PathName& name)
 {
-	const PathName::size_type pos = name.rfind(".dll");
-	if (pos != PathName::npos && pos == name.length() - 4)
-		return;
-	name += ".dll";
+	const char* dllExt = ".dll";
+	const size_t dllExtLen = strlen(dllExt);
+	if (name.length() <= dllExtLen ||
+		PathName(name, name.length() - dllExtLen, dllExtLen) != dllExt)
+	{
+		name.appendString(dllExt);
+	}
 }
 
 ModuleLoader::Module* ModuleLoader::loadModule(const PathName& modPath)
@@ -200,19 +205,21 @@ ModuleLoader::Module* ModuleLoader::loadModule(const PathName& modPath)
 		SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 
 	HMODULE module = 0;
-	if (PathUtils::isRelative(modPath))
+	if (modPath.isRelative())
 	{
 		MasterInterfacePtr master;
 		const char* baseDir = master->getConfigManager()->getDirectory(IConfigManager::DIR_BIN);
 
-		PathName fullName;
-		PathUtils::concatPath(fullName, baseDir, modPath);
+		PathName fullName(baseDir);
+		fullName.appendPath(modPath);
 
-		module = LoadLibraryEx(fullName.c_str(), 0, LOAD_WITH_ALTERED_SEARCH_PATH);
+		module = LoadLibraryEx(os_utils::WideCharBuffer(fullName), 0, LOAD_WITH_ALTERED_SEARCH_PATH);
 	}
 
 	if (!module)
-		module = LoadLibraryEx(modPath.c_str(), 0, LOAD_WITH_ALTERED_SEARCH_PATH);
+	{
+		module = LoadLibraryEx(os_utils::WideCharBuffer(modPath), 0, LOAD_WITH_ALTERED_SEARCH_PATH);
+	}
 
 	// Restore old mode in case we are embedded into user application
 	SetErrorMode(oldErrorMode);
@@ -220,8 +227,10 @@ ModuleLoader::Module* ModuleLoader::loadModule(const PathName& modPath)
 	if (!module)
 		return 0;
 
-	char fileName[MAX_PATH];
-	GetModuleFileName(module, fileName, sizeof(fileName));
+	os_utils::WideCharBuffer m;
+	m.getModuleFileName(module);
+	PathName fileName;
+	m.toString(CP_UTF8, fileName);
 
 	return FB_NEW_POOL(*getDefaultMemoryPool()) Win32Module(*getDefaultMemoryPool(), fileName, module);
 }
@@ -234,12 +243,13 @@ Win32Module::~Win32Module()
 		FreeLibrary(module);
 }
 
-void* Win32Module::findSymbol(const string& symName)
+void* Win32Module::findSymbol(const char* symName)
 {
-	FARPROC result = GetProcAddress(module, symName.c_str());
+	FARPROC result = GetProcAddress(module, symName);
 	if (!result)
 	{
-		string newSym = '_' + symName;
+		string newSym("_");
+		newSym += symName;
 		result = GetProcAddress(module, newSym.c_str());
 	}
 	return (void*) result;

@@ -29,6 +29,7 @@
 #include "../../../../common/classes/fb_string.h"
 #include "../../../../common/dllinst.h"
 #include "../../../../yvalve/config/os/config_root.h"
+#include "../../../../common/os/os_utils.h"
 
 using Firebird::PathName;
 
@@ -47,12 +48,8 @@ bool getPathFromHInstance(PathName& root)
 		return false;
 	}
 
-	char* filename = root.getBuffer(MAX_PATH);
-	GetModuleFileName(hDllInst, filename, MAX_PATH);
-
-	root.recalculate_length();
-
-	return root.hasData();
+	os_utils::WideCharBuffer filename;
+	return filename.getModuleFileName(hDllInst) && filename.toString(CP_UTF8, root);
 }
 
 } // namespace
@@ -79,8 +76,11 @@ void ConfigRoot::osConfigInstallDir()
 		PathUtils::splitLastComponent(bin_dir, file_name, module_path);
 
 		// search for the configuration file in the bin directory
-		PathUtils::concatPath(file_name, bin_dir, CONFIG_FILE);
-		DWORD attributes = GetFileAttributes(file_name.c_str());
+		file_name = bin_dir;
+		file_name.ensureSeparator();
+		file_name.appendString(CONFIG_FILE);
+		os_utils::WideCharBuffer fn(file_name);
+		DWORD attributes = GetFileAttributesW(fn);
 		if (attributes == INVALID_FILE_ATTRIBUTES || attributes == FILE_ATTRIBUTE_DIRECTORY)
 		{
 			// search for the configuration file in the parent directory
@@ -89,8 +89,12 @@ void ConfigRoot::osConfigInstallDir()
 
 			if (parent_dir.hasData())
 			{
-				PathUtils::concatPath(file_name, parent_dir, CONFIG_FILE);
-				attributes = GetFileAttributes(file_name.c_str());
+				file_name = parent_dir;
+				file_name.ensureSeparator();
+				file_name.appendString(CONFIG_FILE);
+
+				fn.fromString(CP_UTF8, file_name);
+				attributes = GetFileAttributesW(fn);
 				if (attributes != INVALID_FILE_ATTRIBUTES && attributes != FILE_ATTRIBUTE_DIRECTORY)
 				{
 					install_dir = parent_dir;
@@ -110,5 +114,5 @@ void ConfigRoot::osConfigInstallDir()
 		install_dir = FB_PREFIX;
 	}
 
-	PathUtils::ensureSeparator(install_dir);
+	install_dir.ensureSeparator();
 }

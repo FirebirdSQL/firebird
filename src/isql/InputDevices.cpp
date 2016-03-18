@@ -134,12 +134,11 @@ void InputDevices::indev::setPos(const fpos_t* in)
 
 void InputDevices::indev::makeFullFileName()
 {
-	if (!indev_fn.isEmpty() && PathUtils::isRelative(indev_fn))
+	if (!indev_fn.isEmpty() && indev_fn.isRelative())
 	{
 		PathName name = indev_fn;
-		PathName path;
-		fb_utils::getCwd(path);
-		PathUtils::concatPath(indev_fn, path, name);
+		fb_utils::getCwd(indev_fn);
+		indev_fn.appendPath(name);
 	}
 }
 

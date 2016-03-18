@@ -120,11 +120,13 @@ int CLIB_ROUTINE main(int argc, char** argv)
 
 #ifdef UNIX
 	// If a Unix system, get home directory from environment
-	SCHAR home_directory[MAXPATHLEN];
 	if (!fb_utils::readenv("HOME", startup_file))
 		startup_file = ".qli_startup";
 	else
-		startup_file.append("/.qli_startup");
+	{
+		startup_file.ensureSeparator();
+		startup_file.appendString(".qli_startup");
+	}
 #endif
 
 #ifdef HAVE_LOCALE_H

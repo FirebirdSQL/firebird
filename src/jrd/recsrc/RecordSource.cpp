@@ -63,8 +63,13 @@ string RecordSource::printName(thread_db* tdbb, const string& name, bool quote)
 		namePtr = nameBuffer.begin();
 	}
 
-	const string result(namePtr, nameLength);
-	return quote ? "\"" + result + "\"" : result;
+	string result(reinterpret_cast<string::const_pointer>(namePtr), nameLength);
+	if (quote)
+	{
+		result.insert(0, 1, '\"');
+		result.append(1, '\"');
+	}
+	return result;
 }
 
 string RecordSource::printName(thread_db* tdbb, const string& name, const string& alias)
@@ -84,8 +89,10 @@ string RecordSource::printIndent(unsigned level)
 {
 	fb_assert(level);
 
-	const string indent(level * 4, ' ');
-	return string("\n" + indent + "-> ");
+	string indent("\n");
+	indent.append(level * 4, ' ');
+	indent.append("-> ");
+	return indent;
 }
 
 void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversion,
@@ -130,7 +137,10 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 			if (detailed)
 			{
 				if (!navigation)
-					plan += "Bitmap" + printIndent(++level);
+				{
+					plan += "Bitmap";
+					plan += printIndent(++level);
+				}
 
 				const index_desc& idx = retrieval->irb_desc;
 				const bool uniqueIdx = (idx.idx_flags & idx_unique);
@@ -176,12 +186,17 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 					}
 				}
 
-				plan += "Index " + printName(tdbb, indexName.c_str()) +
-					(fullscan ? " Full" : unique ? " Unique" : " Range") + " Scan" + bounds;
+				plan += "Index ";
+				plan += printName(tdbb, indexName.c_str());
+				plan += (fullscan ? " Full" : unique ? " Unique" : " Range");
+				plan += " Scan";
+				plan += bounds;
 			}
 			else
 			{
-				plan += (plan.hasData() ? ", " : "") + printName(tdbb, indexName.c_str(), false);
+				if (plan.hasData())
+					plan += ", ";
+				plan += printName(tdbb, indexName.c_str(), false);
 			}
 		}
 		break;

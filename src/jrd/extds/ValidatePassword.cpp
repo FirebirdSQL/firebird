@@ -179,10 +179,11 @@ void validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb
 
 	// Build list of client/server plugins
 	RefPtr<Config> config;
-	PathName list;
-	expandDatabaseName(file, list /* unused value */, &config);
-	PathName serverList = config->getPlugins(IPluginManager::TYPE_AUTH_SERVER);
-	PathName clientList = config->getPlugins(IPluginManager::TYPE_AUTH_CLIENT);
+	PluginName list;
+	PathName dummy;
+	expandDatabaseName(file, dummy /* unused value */, &config);
+	PluginName serverList = config->getPlugins(IPluginManager::TYPE_AUTH_SERVER);
+	PluginName clientList = config->getPlugins(IPluginManager::TYPE_AUTH_CLIENT);
 	Auth::mergeLists(list, serverList, clientList);
 
 	if (!list.hasData())

@@ -1015,6 +1015,13 @@ bool INTL_defined_type(thread_db* tdbb, USHORT t_type)
 		ThreadStatusGuard local_status(tdbb);
 		INTL_texttype_lookup(tdbb, t_type);
 	}
+	catch (const Firebird::Exception& ex)
+	{
+#ifdef DEV_BUILD
+		iscLogException("INTL_texttype_lookup", ex);
+#endif
+		return false;
+	}
 	catch (...)
 	{
 		return false;

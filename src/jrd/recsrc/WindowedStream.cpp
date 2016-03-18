@@ -884,7 +884,10 @@ void WindowedStream::WindowStream::print(thread_db* tdbb, string& plan, bool det
 	unsigned level) const
 {
 	if (detailed)
-		plan += printIndent(++level) + "Window";
+	{
+		plan += printIndent(++level);
+		plan += "Window";
+	}
 
 	m_next->print(tdbb, plan, detailed, level);
 }

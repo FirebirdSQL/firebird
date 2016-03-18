@@ -132,6 +132,7 @@ void ExecInSecurityDb::executeInSecurityDb(jrd_tra* localTransaction)
 		ClumpletWriter dpb(ClumpletWriter::WideTagged, MAX_DPB_SIZE, isc_dpb_version2);
 		if (lAtt->att_user)
 			lAtt->att_user->populateDpb(dpb);
+		dpb.insertTag(isc_dpb_utf8_filename);
 		IAttachment* att = DispatcherPtr()->attachDatabase(&statusWrapper, secDb,
 			dpb.getBufferLength(), dpb.getBuffer());
 		check(&statusWrapper);
@@ -145,7 +146,9 @@ void ExecInSecurityDb::executeInSecurityDb(jrd_tra* localTransaction)
 	// run all statements under savepoint control
 	string savePoint;
 	savePoint.printf("ExecInSecurityDb%d", secDbContext->savePoint++);
-	secDbContext->att->execute(&statusWrapper, secDbContext->tra, 0, ("SAVEPOINT " + savePoint).c_str(),
+	string sqlCmd = "SAVEPOINT ";
+	sqlCmd += savePoint;
+	secDbContext->att->execute(&statusWrapper, secDbContext->tra, 0, sqlCmd.c_str(),
 		SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
 	check(&statusWrapper);
 
@@ -153,8 +156,10 @@ void ExecInSecurityDb::executeInSecurityDb(jrd_tra* localTransaction)
 	{
 		runInSecurityDb(secDbContext);
 
+		sqlCmd = "RELEASE SAVEPOINT ";
+		sqlCmd += savePoint;
 		secDbContext->att->execute(&statusWrapper, secDbContext->tra, 0,
-			("RELEASE SAVEPOINT " + savePoint).c_str(),
+			sqlCmd.c_str(),
 			SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
 		savePoint.erase();
 		check(&statusWrapper);
@@ -165,8 +170,10 @@ void ExecInSecurityDb::executeInSecurityDb(jrd_tra* localTransaction)
 		{
 			LocalStatus tmp;
 			CheckStatusWrapper tmpCheckStatusWrapper(&tmp);
+			sqlCmd = "ROLLBACK TO SAVEPOINT ";
+			sqlCmd += savePoint;
 			secDbContext->att->execute(&tmpCheckStatusWrapper, secDbContext->tra, 0,
-				("ROLLBACK TO SAVEPOINT " + savePoint).c_str(),
+				sqlCmd.c_str(),
 				SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
 		}
 
@@ -1091,7 +1098,7 @@ string ParameterClause::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, parameterExpr);
 	NODE_PRINT(printer, udfMechanism);
 
-	return "ParameterClause";
+	return string("ParameterClause");
 }
 
 
@@ -1105,7 +1112,7 @@ string AlterCharSetNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, charSet);
 	NODE_PRINT(printer, defaultCollation);
 
-	return "AlterCharSetNode";
+	return string("AlterCharSetNode");
 }
 
 bool AlterCharSetNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -1182,7 +1189,7 @@ string CommentOnNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, text);
 	NODE_PRINT(printer, str);
 
-	return "CommentOnNode";
+	return string("CommentOnNode");
 }
 
 bool CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -1531,7 +1538,7 @@ string CreateAlterFunctionNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, privateScope);
 	NODE_PRINT(printer, udfReturnPos);
 
-	return "CreateAlterFunctionNode";
+	return string("CreateAlterFunctionNode");
 }
 
 DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -2262,7 +2269,7 @@ string AlterExternalFunctionNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, clauses);
 
-	return "AlterExternalFunctionNode";
+	return string("AlterExternalFunctionNode");
 }
 
 bool AlterExternalFunctionNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -2388,7 +2395,7 @@ string DropFunctionNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, silent);
 	NODE_PRINT(printer, package);
 
-	return "DropFunctionNode";
+	return string("DropFunctionNode");
 }
 
 DdlNode* DropFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -2507,7 +2514,7 @@ string CreateAlterProcedureNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, packageOwner);
 	NODE_PRINT(printer, privateScope);
 
-	return "CreateAlterProcedureNode";
+	return string("CreateAlterProcedureNode");
 }
 
 DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -3175,7 +3182,7 @@ string DropProcedureNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, silent);
 	NODE_PRINT(printer, package);
 
-	return "DropProcedureNode";
+	return string("DropProcedureNode");
 }
 
 DdlNode* DropProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -3429,7 +3436,7 @@ string CreateAlterTriggerNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, compiled);
 	NODE_PRINT(printer, invalid);
 
-	return "CreateAlterTriggerNode";
+	return string("CreateAlterTriggerNode");
 }
 
 DdlNode* CreateAlterTriggerNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -3641,7 +3648,7 @@ string DropTriggerNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, silent);
 
-	return "DropTriggerNode";
+	return string("DropTriggerNode");
 }
 
 DdlNode* DropTriggerNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -3791,7 +3798,7 @@ string CreateCollationNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, forCharSetId);
 	NODE_PRINT(printer, fromCollationId);
 
-	return "CreateCollationNode";
+	return string("CreateCollationNode");
 }
 
 bool CreateCollationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -3912,7 +3919,7 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		{
 			X.RDB$SPECIFIC_ATTRIBUTES.NULL = FALSE;
 			attachment->storeMetaDataBlob(tdbb, transaction, &X.RDB$SPECIFIC_ATTRIBUTES,
-				string(info.specificAttributes.begin(), info.specificAttributes.getCount()),
+				string(reinterpret_cast<string::pointer>(info.specificAttributes.begin()), info.specificAttributes.getCount()),
 				forCharSetId);
 		}
 
@@ -4010,7 +4017,7 @@ string DropCollationNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 
-	return "DropCollationNode";
+	return string("DropCollationNode");
 }
 
 bool DropCollationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -4170,7 +4177,7 @@ string CreateDomainNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, notNull);
 	NODE_PRINT(printer, check);
 
-	return "CreateDomainNode";
+	return string("CreateDomainNode");
 }
 
 bool CreateDomainNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -4730,7 +4737,7 @@ string AlterDomainNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, type);
 	NODE_PRINT(printer, notNullFlag);
 
-	return "AlterDomainNode";
+	return string("AlterDomainNode");
 }
 
 bool AlterDomainNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -5088,7 +5095,7 @@ string DropDomainNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 
-	return "DropDomainNode";
+	return string("DropDomainNode");
 }
 
 bool DropDomainNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -5221,7 +5228,7 @@ string CreateAlterExceptionNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, create);
 	NODE_PRINT(printer, alter);
 
-	return "CreateAlterExceptionNode";
+	return string("CreateAlterExceptionNode");
 }
 
 bool CreateAlterExceptionNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -5362,7 +5369,7 @@ string DropExceptionNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, silent);
 
-	return "DropExceptionNode";
+	return string("DropExceptionNode");
 }
 
 bool DropExceptionNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -5437,7 +5444,7 @@ string CreateAlterSequenceNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, value);
 	NODE_PRINT(printer, step);
 
-	return "CreateAlterSequenceNode";
+	return string("CreateAlterSequenceNode");
 }
 
 bool CreateAlterSequenceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -5710,7 +5717,7 @@ string DropSequenceNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, silent);
 
-	return "DropSequenceNode";
+	return string("DropSequenceNode");
 }
 
 bool DropSequenceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -7167,7 +7174,7 @@ string CreateRelationNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, externalFile);
 	NODE_PRINT(printer, relationType);
 
-	return "CreateRelationNode";
+	return string("CreateRelationNode");
 }
 
 bool CreateRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -7297,7 +7304,7 @@ const ObjectsArray<MetaName>* CreateRelationNode::findPkColumns()
 string AlterRelationNode::internalPrint(NodePrinter& printer) const
 {
 	RelationNode::internalPrint(printer);
-	return "AlterRelationNode";
+	return string("AlterRelationNode");
 }
 
 bool AlterRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -8035,7 +8042,7 @@ string DropRelationNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, view);
 	NODE_PRINT(printer, silent);
 
-	return "DropRelationNode";
+	return string("DropRelationNode");
 }
 
 bool DropRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -8283,7 +8290,7 @@ string CreateAlterViewNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, source);
 	NODE_PRINT(printer, withCheckOption);
 
-	return "CreateAlterViewNode";
+	return string("CreateAlterViewNode");
 }
 
 DdlNode* CreateAlterViewNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -9433,7 +9440,7 @@ string CreateIndexNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, columns);
 	NODE_PRINT(printer, computed);
 
-	return "CreateIndexNode";
+	return string("CreateIndexNode");
 }
 
 bool CreateIndexNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -9504,7 +9511,7 @@ string AlterIndexNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, active);
 
-	return "AlterIndexNode";
+	return string("AlterIndexNode");
 }
 
 bool AlterIndexNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -9566,7 +9573,7 @@ string SetStatisticsNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 
-	return "SetStatisticsNode";
+	return string("SetStatisticsNode");
 }
 
 bool SetStatisticsNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -9647,7 +9654,7 @@ string DropIndexNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 
-	return "DropIndexNode";
+	return string("DropIndexNode");
 }
 
 bool DropIndexNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -9716,7 +9723,7 @@ string CreateFilterNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, entryPoint);
 	NODE_PRINT(printer, moduleName);
 
-	return "CreateFilterNode";
+	return string("CreateFilterNode");
 }
 
 bool CreateFilterNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -9797,7 +9804,7 @@ string DropFilterNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 
-	return "DropFilterNode";
+	return string("DropFilterNode");
 }
 
 bool DropFilterNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -9846,7 +9853,7 @@ string CreateShadowNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, firstLength);
 	NODE_PRINT(printer, files);
 
-	return "CreateShadowNode";
+	return string("CreateShadowNode");
 }
 
 bool CreateShadowNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -9916,7 +9923,7 @@ string DropShadowNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, number);
 	NODE_PRINT(printer, nodelete);
 
-	return "DropShadowNode";
+	return string("DropShadowNode");
 }
 
 bool DropShadowNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -10136,7 +10143,7 @@ string MappingNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, global);
 	NODE_PRINT(printer, role);
 
-	return "MappingNode";
+	return string("MappingNode");
 }
 
 void MappingNode::validateAdmin()
@@ -10520,7 +10527,7 @@ string DropRoleNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 
-	return "DropRoleNode";
+	return string("DropRoleNode");
 }
 
 bool DropRoleNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -10628,7 +10635,7 @@ string CreateAlterUserNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, active);
 	NODE_PRINT(printer, mode);
 
-	return "CreateAlterUserNode";
+	return string("CreateAlterUserNode");
 }
 
 
@@ -10787,7 +10794,7 @@ string DropUserNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, plugin);
 
-	return "DropUserNode";
+	return string("DropUserNode");
 }
 
 bool DropUserNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -10843,7 +10850,7 @@ string GrantRevokeNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, grantor);
 	NODE_PRINT(printer, isDdl);
 
-	return "GrantRevokeNode";
+	return string("GrantRevokeNode");
 }
 
 bool GrantRevokeNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
@@ -11796,7 +11803,7 @@ string AlterDatabaseNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, cryptPlugin);
 	NODE_PRINT(printer, keyName);
 
-	return "AlterDatabaseNode";
+	return string("AlterDatabaseNode");
 }
 
 bool AlterDatabaseNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)

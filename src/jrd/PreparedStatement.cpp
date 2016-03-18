@@ -168,7 +168,8 @@ void PreparedStatement::Builder::moveFromResultSet(thread_db* tdbb, ResultSet* r
 			case TYPE_STRING:
 			{
 				AbstractString* str = (AbstractString*) i->address;
-				str->replace(0, str->length(), rs->getString(tdbb, i->number));
+				string value(rs->getString(tdbb, i->number));
+				str->assign(value.c_str(), value.length());
 				break;
 			}
 
