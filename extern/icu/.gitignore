@@ -1,0 +1,8 @@
+bin/
+include/
+lib/
+Win32/
+x64/
+icudt52l.dat
+icudt52l_empty.dat
+license.html
