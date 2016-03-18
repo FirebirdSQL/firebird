@@ -51,6 +51,7 @@ dlldata.c
 *.pidb
 *.svclog
 *.scc
+*.diff
 
 # Visual C++ cache files
 ipch/
