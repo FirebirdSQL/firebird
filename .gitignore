@@ -19,6 +19,16 @@ libtool
 builds/install_images
 output_Win32/
 output_x64/
+extern/icu/win32/
+extern/icu/x64/
+extern/icu/include/
+extern/icu/license.html
+extern/icu/*.dat
+extern/libtommath/lib/
+extern/zlib/
+!extern/zlib/zlib.exe
+!extern/zlib/Readme.txt
+src/dsql/parse.cpp
 
 # Roslyn cache directories
 *.ide/
@@ -62,6 +72,7 @@ dlldata.c
 *.scc
 *.patch
 *.diff
+*.bak
 
 # Visual C++ cache files
 ipch/
