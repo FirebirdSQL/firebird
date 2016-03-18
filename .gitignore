@@ -11,6 +11,16 @@ temp/
 gen/
 builds/install_images
 output*/
+extern/icu/win32/
+extern/icu/x64/
+extern/icu/include/
+extern/icu/license.html
+extern/icu/*.dat
+extern/libtommath/lib/
+extern/zlib/
+!extern/zlib/zlib.exe
+!extern/zlib/Readme.txt
+src/dsql/parse.cpp
 
 # Roslyn cache directories
 *.ide/
@@ -53,6 +63,7 @@ dlldata.c
 *.svclog
 *.scc
 *.diff
+*.bak
 
 # Visual C++ cache files
 ipch/
