@@ -16,3 +16,22 @@ libtool
 *.bak
 *.tmp
 src/dsql/parse.cpp
+
+# Visual Studio 2015 cache/options directory
+.vs/
+
+# Visual C++ cache files
+ipch/
+*.aps
+*.ncb
+*.opendb
+*.opensdf
+*.sdf
+*.cachefile
+
+# Visual Studio profiler
+*.psess
+*.vsp
+*.vspx
+*.sap
+
