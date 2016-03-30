@@ -668,7 +668,7 @@ static void gen_based( const act* action, int column)
 				*q = *p;
 		}
 
-		sprintf(s2, "%s range % " SLONGFORMAT"..%" SLONGFORMAT") of ",
+		sprintf(s2, "%s range %" SLONGFORMAT"..%" SLONGFORMAT") of ",
 				LONG_DCL, dimension->dim_lower, dimension->dim_upper);
 		for (p = s2; *p; p++, q++)
 			*q = *p;
