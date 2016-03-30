@@ -1172,7 +1172,7 @@ void DPM_fetch_fragment( thread_db* tdbb, record_param* rpb, USHORT lock)
 			rpb->rpb_number.getValue(), lock);
 	if (debug_flag > DEBUG_READS_INFO)
 	{
-		printf("    record  %" SLONGFORMAT":%d transaction % "SLONGFORMAT
+		printf("    record  %" SLONGFORMAT":%d transaction %" SLONGFORMAT
 				  " back %" SLONGFORMAT":%d\n",
 				  rpb->rpb_page, rpb->rpb_line, rpb->rpb_transaction_nr,
 				  rpb->rpb_b_page, rpb->rpb_b_line);
