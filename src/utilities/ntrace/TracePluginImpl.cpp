@@ -499,32 +499,32 @@ void TracePluginImpl::appendGlobalCounts(const PerformanceInfo* info)
 {
 	string temp;
 
-	temp.printf("%7"QUADFORMAT"d ms", info->pin_time);
+	temp.printf("%7" QUADFORMAT"d ms", info->pin_time);
 	record.append(temp);
 
 	ntrace_counter_t cnt;
 
 	if ((cnt = info->pin_counters[RuntimeStatistics::PAGE_READS]) != 0)
 	{
-		temp.printf(", %"QUADFORMAT"d read(s)", cnt);
+		temp.printf(", %" QUADFORMAT"d read(s)", cnt);
 		record.append(temp);
 	}
 
 	if ((cnt = info->pin_counters[RuntimeStatistics::PAGE_WRITES]) != 0)
 	{
-		temp.printf(", %"QUADFORMAT"d write(s)", cnt);
+		temp.printf(", %" QUADFORMAT"d write(s)", cnt);
 		record.append(temp);
 	}
 
 	if ((cnt = info->pin_counters[RuntimeStatistics::PAGE_FETCHES]) != 0)
 	{
-		temp.printf(", %"QUADFORMAT"d fetch(es)", cnt);
+		temp.printf(", %" QUADFORMAT"d fetch(es)", cnt);
 		record.append(temp);
 	}
 
 	if ((cnt = info->pin_counters[RuntimeStatistics::PAGE_MARKS]) != 0)
 	{
-		temp.printf(", %"QUADFORMAT"d mark(s)", cnt);
+		temp.printf(", %" QUADFORMAT"d mark(s)", cnt);
 		record.append(temp);
 	}
 
@@ -558,7 +558,7 @@ void TracePluginImpl::appendTableCounts(const PerformanceInfo *info)
 			{
 				//fb_utils::exactNumericToStr(trc->trc_counters[j], 0, temp);
 				//record.append(' ', 10 - temp.length());
-				temp.printf("%10"QUADFORMAT"d", trc->trc_counters[j]);
+				temp.printf("%10" QUADFORMAT"d", trc->trc_counters[j]);
 				record.append(temp);
 			}
 		}
@@ -1256,7 +1256,7 @@ void TracePluginImpl::log_event_proc_execute(TraceDatabaseConnection* connection
 		if (info->pin_records_fetched)
 		{
 			string temp;
-			temp.printf("%"QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
+			temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
 			record.append(temp);
 		}
 		appendGlobalCounts(info);
@@ -1446,7 +1446,7 @@ void TracePluginImpl::log_event_dsql_execute(TraceDatabaseConnection* connection
 	if (info)
 	{
 		string temp;
-		temp.printf("%"QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
+		temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
 		record.append(temp);
 
 		appendGlobalCounts(info);

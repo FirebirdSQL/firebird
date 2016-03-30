@@ -439,11 +439,11 @@ static void array_dimensions( qli_dbb* database, const TEXT* field_name)
 
 		if (D.RDB$LOWER_BOUND != 1)
 		{
-			sprintf(p, "%"SLONGFORMAT":", D.RDB$LOWER_BOUND);
+			sprintf(p, "%" SLONGFORMAT":", D.RDB$LOWER_BOUND);
 			while (*++p);
 		}
 
-		sprintf(p, "%"SLONGFORMAT", ", D.RDB$UPPER_BOUND);
+		sprintf(p, "%" SLONGFORMAT", ", D.RDB$UPPER_BOUND);
 		while (*++p);
 	END_FOR;
 

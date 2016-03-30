@@ -250,7 +250,7 @@ int main( int argc, char *argv[])
 
 					if (strlen(string) > MAX_FILE_NM_LEN) {
 						fprintf(stderr, "%s: file name %s is too long\n", prog_name, string);
-						fprintf(stderr, "%s: maximum length of file name is %"SIZEFORMAT" bytes\n",
+						fprintf(stderr, "%s: maximum length of file name is %" SIZEFORMAT" bytes\n",
 								   prog_name, MAX_FILE_NM_LEN);
 						print_clo(prog_name);
 						free_file_list(file_list);

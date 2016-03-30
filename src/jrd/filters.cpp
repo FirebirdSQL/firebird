@@ -1072,7 +1072,7 @@ ISC_STATUS filter_trans(USHORT action, BlobControl* control)
 			case TDR_TRANSACTION_ID:
 				{
 					const SLONG id = gds__vax_integer(p, length);
-					sprintf(out, "    Transaction id: %"SLONGFORMAT, id);
+					sprintf(out, "    Transaction id: %" SLONGFORMAT, id);
 					break;
 				}
 

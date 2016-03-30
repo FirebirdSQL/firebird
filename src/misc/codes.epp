@@ -401,9 +401,9 @@ static void build_iberror_h()
 	fprintf(iberror,
 			   "const ISC_STATUS isc_facility	= %d;\n", isc_facility_local);
 	fprintf(iberror,
-			   "const ISC_STATUS isc_base = %"SLONGFORMAT"L;\n", isc_base_local);
+			   "const ISC_STATUS isc_base = %" SLONGFORMAT"L;\n", isc_base_local);
 	fprintf(iberror,
-			   "const ISC_STATUS isc_factor = %"SLONGFORMAT";\n", isc_factor_local);
+			   "const ISC_STATUS isc_factor = %" SLONGFORMAT";\n", isc_factor_local);
 
 // Append the ISC C++ boiler plate
 
@@ -445,8 +445,8 @@ static void build_iberror_h()
 	new_code = 0L;
 
 	fprintf(iberror, "#define isc_facility %d\n", isc_facility_local);
-	fprintf(iberror, "#define isc_base %"SLONGFORMAT"L\n", isc_base_local);
-	fprintf(iberror, "#define isc_factor %"SLONGFORMAT"\n", isc_factor_local);
+	fprintf(iberror, "#define isc_base %" SLONGFORMAT"L\n", isc_base_local);
+	fprintf(iberror, "#define isc_factor %" SLONGFORMAT"\n", isc_factor_local);
 	fprintf(iberror, "\n");
 
 // Append the ISC C boiler plate

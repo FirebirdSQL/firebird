@@ -67,8 +67,8 @@ static const char* const BY_VALUE		= "BY VALUE ";
 static const char* const END_VALUE		= "";
 static const char* const BY_REF			= "BY REFERENCE ";
 static const char* const BY_DESC 		= "BY REFERENCE ";
-static const char* const RAW_BLR_TEMPLATE	= "03  %s%d%s%d PIC XXXX USAGE COMP-X VALUE IS %"ULONGFORMAT".";
-static const char* const RAW_TPB_TEMPLATE	= "03  %s%d%s%d PIC XXXX USAGE COMP-X VALUE IS %"ULONGFORMAT".";
+static const char* const RAW_BLR_TEMPLATE	= "03  %s%d%s%d PIC XXXX USAGE COMP-X VALUE IS %" ULONGFORMAT".";
+static const char* const RAW_TPB_TEMPLATE	= "03  %s%d%s%d PIC XXXX USAGE COMP-X VALUE IS %" ULONGFORMAT".";
 static const char* const COMP_VALUE		= "COMP-5";
 #else
 static const char* const COMP_VALUE		= "COMP";

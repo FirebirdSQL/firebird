@@ -1899,7 +1899,7 @@ static int fork(SOCKET old_handle, USHORT flag)
 	}
 
 	Firebird::string cmdLine;
-	cmdLine.printf("%s -i -h %"HANDLEFORMAT"@%"ULONGFORMAT, name, new_handle, GetCurrentProcessId());
+	cmdLine.printf("%s -i -h %" HANDLEFORMAT"@%" ULONGFORMAT, name, new_handle, GetCurrentProcessId());
 
 	STARTUPINFO start_crud;
 	start_crud.cb = sizeof(STARTUPINFO);
@@ -2396,7 +2396,7 @@ static bool select_wait( rem_port* main_port, Select* selct)
 							if (badSocket || INET_ERRNO == NOTASOCKET)
 							{
 								// not a socket, strange !
-								gds__log("INET/select_wait: found \"not a socket\" socket : %"HANDLEFORMAT,
+								gds__log("INET/select_wait: found \"not a socket\" socket : %" HANDLEFORMAT,
 										 port->port_handle);
 
 								// this will lead to receive() which will break bad connection

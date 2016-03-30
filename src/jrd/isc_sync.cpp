@@ -2084,7 +2084,7 @@ void ISC_exception_post(ULONG sig_num, const TEXT* err_msg)
 		break;
 	default:
 		sprintf(log_msg, "%s Unknown Exception.\n"
-				"\t\tException number %"ULONGFORMAT"."
+				"\t\tException number %" ULONGFORMAT"."
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg, sig_num);
 		break;
@@ -2247,7 +2247,7 @@ ULONG ISC_exception_post(ULONG except_code, const TEXT* err_msg)
 		break;
 	default:
 		sprintf (log_msg, "%s An exception occurred that does\n"
-				"\t\tnot have a description.  Exception number %"XLONGFORMAT".\n"
+				"\t\tnot have a description.  Exception number %" XLONGFORMAT".\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg, except_code);
 		break;
@@ -2760,7 +2760,7 @@ UCHAR* ISC_map_file(ISC_STATUS* status_vector,
 /* Create the real file mapping object. */
 
 	TEXT mapping_name[64]; // enough for int32 as text
-	sprintf(mapping_name, "_mapping_%"ULONGFORMAT, header_address[1]);
+	sprintf(mapping_name, "_mapping_%" ULONGFORMAT, header_address[1]);
 
 	if (!make_object_name(object_name, sizeof(object_name), filename, mapping_name))
 	{
@@ -4030,7 +4030,7 @@ UCHAR* ISC_remap_file(ISC_STATUS * status_vector,
 	while (true)
 	{
 		TEXT mapping_name[64]; // enough for int32 as text
-		sprintf(mapping_name, "_mapping_%"ULONGFORMAT, shmem_data->sh_mem_hdr_address[1] + 1);
+		sprintf(mapping_name, "_mapping_%" ULONGFORMAT, shmem_data->sh_mem_hdr_address[1] + 1);
 
 		TEXT object_name[MAXPATHLEN];
 		if (!make_object_name(object_name, sizeof(object_name), shmem_data->sh_mem_name, mapping_name))

@@ -699,7 +699,7 @@ static void gen_based( const act* action, int column)
 		SLONG length = field->fld_seg_length;
 		if (!length)
 			length = 256;
-		fprintf(gpreGlob.out_file, "%s [1..%"SLONGFORMAT"] of ", PACKED_ARRAY, length);
+		fprintf(gpreGlob.out_file, "%s [1..%" SLONGFORMAT"] of ", PACKED_ARRAY, length);
 	}
 	else if (field->fld_array_info)
 	{
@@ -712,7 +712,7 @@ static void gen_based( const act* action, int column)
 		for (dim* dimension = field->fld_array_info->ary_dimension; dimension;
 			dimension = dimension->dim_next)
 		{
-			fprintf(gpreGlob.out_file, "%"SLONGFORMAT"..%"SLONGFORMAT, dimension->dim_lower,
+			fprintf(gpreGlob.out_file, "%" SLONGFORMAT"..%" SLONGFORMAT, dimension->dim_lower,
 					   dimension->dim_upper);
 			if (dimension->dim_next)
 				fprintf(gpreGlob.out_file, ", ");
@@ -3193,7 +3193,7 @@ static void make_array_declaration( const ref* reference)
 	for (const dim* dimension = field->fld_array_info->ary_dimension; dimension;
 		dimension = dimension->dim_next)
 	{
-		fprintf(gpreGlob.out_file, "%"SLONGFORMAT"..%"SLONGFORMAT, dimension->dim_lower,
+		fprintf(gpreGlob.out_file, "%" SLONGFORMAT"..%" SLONGFORMAT, dimension->dim_lower,
 				   dimension->dim_upper);
 		if (dimension->dim_next)
 			fprintf(gpreGlob.out_file, ", ");

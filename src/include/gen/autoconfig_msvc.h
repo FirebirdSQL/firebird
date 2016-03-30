@@ -250,7 +250,9 @@
 #undef HAVE_STRUCT_XDR_OPS
 
 /* Functions */
+#if defined(_MSC_VER) && (_MSC_VER < 1900)
 #define snprintf _snprintf
+#endif
 
 /* Is the platform big endian? */
 #undef WORDS_BIGENDIAN

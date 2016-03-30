@@ -126,8 +126,8 @@ static const StatFormat STAT_FORMATS[] =
 {
 	{"time",	"%4lu.%03u ",  9},
 	{"delta",	"%2lu.%03u ",  7},
-	{"reads",	"%6"UQUADFORMAT" ", 7},
-	{"writes",	"%6"UQUADFORMAT" ", 7}
+	{"reads",	"%6" UQUADFORMAT" ", 7},
+	{"writes",	"%6" UQUADFORMAT" ", 7}
 };
 
 

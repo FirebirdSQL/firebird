@@ -1081,7 +1081,7 @@ static void sql_time_to_text( const ULONG date[1], DSC* to)
 	isc_decode_date((const ISC_QUAD*) date2, &times);
 
 	TEXT temp[35];
-	sprintf(temp, " %2d:%.2d:%.2d.%.4"SLONGFORMAT, times.tm_hour, times.tm_min,
+	sprintf(temp, " %2d:%.2d:%.2d.%.4" SLONGFORMAT, times.tm_hour, times.tm_min,
 			times.tm_sec, date2[1] % PRECISION);
 
 	const TEXT* p = temp;
@@ -1122,7 +1122,7 @@ static void timestamp_to_text( const SLONG date[2], DSC* to)
 	if (times.tm_hour || times.tm_min || times.tm_sec || date[1])
 	{
 		TEXT time[15];
-		sprintf(time, " %2d:%.2d:%.2d.%.4"SLONGFORMAT, times.tm_hour, times.tm_min,
+		sprintf(time, " %2d:%.2d:%.2d.%.4" SLONGFORMAT, times.tm_hour, times.tm_min,
 				times.tm_sec, date[1] % PRECISION);
 		strcat(temp, time);
 	}

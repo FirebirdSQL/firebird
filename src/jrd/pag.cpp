@@ -960,7 +960,7 @@ PAG PAG_allocate(thread_db* tdbb, WIN* window)
 		CCH_precedence(tdbb, window, pip_window.win_page);
 #ifdef VIO_DEBUG
 		if (debug_flag > DEBUG_WRITES_INFO)
-			printf("\tPAG_allocate:  allocated page %"SLONGFORMAT"\n",
+			printf("\tPAG_allocate:  allocated page %" SLONGFORMAT"\n",
 					  window->win_page.getPageNum());
 #endif
 		return new_page;
@@ -1797,7 +1797,7 @@ void PAG_release_page(thread_db* tdbb, const PageNumber& number, const PageNumbe
 
 #ifdef VIO_DEBUG
 	if (debug_flag > DEBUG_WRITES_INFO)
-		printf("\tPAG_release_page:  about to release page %"SLONGFORMAT"\n", number.getPageNum());
+		printf("\tPAG_release_page:  about to release page %" SLONGFORMAT"\n", number.getPageNum());
 #endif
 
 	PageManager& pageMgr = dbb->dbb_page_manager;

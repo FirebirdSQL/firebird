@@ -3596,7 +3596,7 @@ static USHORT find_order(thread_db* tdbb,
 			fprintf(opt_debug_file, "%2.2d ", tail->opt_best_stream);
 		}
 		fprintf(opt_debug_file,
-				   "\n\t\t\tbest_cost: %g\tcombinations: %"SLONGFORMAT"\n",
+				   "\n\t\t\tbest_cost: %g\tcombinations: %" SLONGFORMAT"\n",
 				   opt->opt_best_cost, opt->opt_combinations);
 	}
 #endif

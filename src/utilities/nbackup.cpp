@@ -613,7 +613,7 @@ void NBackup::pr_error(const ISC_STATUS* status, const char* operation) const
 
 	isc_print_status(status);
 
-	fprintf(stderr, "SQLCODE:%"SLONGFORMAT"\n", isc_sqlcode(status));
+	fprintf(stderr, "SQLCODE:%" SLONGFORMAT"\n", isc_sqlcode(status));
 
 	fprintf(stderr, "]\n");
 

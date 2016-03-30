@@ -2490,7 +2490,7 @@ static bool fork(ULONG client_pid, USHORT flag, ULONG* forked_pid)
 	GetModuleFileName(NULL, name, sizeof(name));
 
 	Firebird::string cmdLine;
-	cmdLine.printf("%s -x -h %"ULONGFORMAT, name, client_pid);
+	cmdLine.printf("%s -x -h %" ULONGFORMAT, name, client_pid);
 
 	STARTUPINFO start_crud;
 	start_crud.cb = sizeof(STARTUPINFO);

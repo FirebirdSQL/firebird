@@ -882,9 +882,9 @@ static void gen_based(const act* action)
 				 dimension = dimension->dim_next)
 			{
 				if (dimension->dim_lower != 1)
-					fprintf(gpreGlob.out_file, "%"SLONGFORMAT":", dimension->dim_lower);
+					fprintf(gpreGlob.out_file, "%" SLONGFORMAT":", dimension->dim_lower);
 
-				fprintf(gpreGlob.out_file, "%"SLONGFORMAT, dimension->dim_upper);
+				fprintf(gpreGlob.out_file, "%" SLONGFORMAT, dimension->dim_upper);
 				if (dimension->dim_next)
 					fprintf(gpreGlob.out_file, ", ");
 			}
@@ -2677,9 +2677,9 @@ static void gen_raw(const UCHAR* blr, req_t request_type, int request_length, in
 			}
 		}
 		if (blr_length)
-			sprintf(p, "%"SLONGFORMAT",", blr_hunk.longword_blr);
+			sprintf(p, "%" SLONGFORMAT",", blr_hunk.longword_blr);
 		else
-			sprintf(p, "%"SLONGFORMAT, blr_hunk.longword_blr);
+			sprintf(p, "%" SLONGFORMAT, blr_hunk.longword_blr);
 		while (*p)
 			p++;
 		if (p - buffer > 50)
@@ -3427,9 +3427,9 @@ static void gen_tpb_data(const tpb* tpb_buffer)
 				break;
 		}
 		if (length)
-			sprintf(p, "%"SLONGFORMAT",", tpb_hunk.longword_tpb);
+			sprintf(p, "%" SLONGFORMAT",", tpb_hunk.longword_tpb);
 		else
-			sprintf(p, "%"SLONGFORMAT"/\n", tpb_hunk.longword_tpb);
+			sprintf(p, "%" SLONGFORMAT"/\n", tpb_hunk.longword_tpb);
 		p += 12; // ???
 	}
 
@@ -3625,9 +3625,9 @@ static void make_array_declaration( const ref* reference)
 		dimension = dimension->dim_next)
 	{
 		if (dimension->dim_lower != 1)
-			fprintf(gpreGlob.out_file, "%"SLONGFORMAT":", dimension->dim_lower);
+			fprintf(gpreGlob.out_file, "%" SLONGFORMAT":", dimension->dim_lower);
 
-		fprintf(gpreGlob.out_file, "%"SLONGFORMAT, dimension->dim_upper);
+		fprintf(gpreGlob.out_file, "%" SLONGFORMAT, dimension->dim_upper);
 		if (dimension->dim_next)
 			fprintf(gpreGlob.out_file, ", ");
 	}

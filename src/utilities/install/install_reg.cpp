@@ -192,7 +192,7 @@ static USHORT reg_error( SLONG status, const TEXT* string, HKEY hkey)
 								sizeof(buffer),
 								NULL);
 		if (!l) {
-			printf("Windows NT error %"SLONGFORMAT"\n", status);
+			printf("Windows NT error %" SLONGFORMAT"\n", status);
 		}
 		else
 		{

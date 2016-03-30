@@ -2508,7 +2508,7 @@ static processing_state blobedit(const TEXT* action, const TEXT* const* cmd)
 
 	// Find the high and low values of the blob id
 	ISC_QUAD blobid;
-	sscanf(p, "%"xLONGFORMAT":%"xLONGFORMAT, &blobid.gds_quad_high, &blobid.gds_quad_low);
+	sscanf(p, "%" xLONGFORMAT":%" xLONGFORMAT, &blobid.gds_quad_high, &blobid.gds_quad_low);
 
 	// If it isn't an explicit blobedit, then do a dump. Since this is a
 	// user operation, put it on the M__trans handle.
@@ -4176,7 +4176,7 @@ static void do_isql()
 
 	M__trans = 0;
 
-#if defined(_MSC_VER) && _MSC_VER >= 1400
+#if defined(_MSC_VER) && _MSC_VER >= 1400 && _MSC_VER < 1900
 	_set_output_format(_TWO_DIGIT_EXPONENT);
 #endif
 
@@ -7448,7 +7448,7 @@ static SSHORT print_item(TEXT** s, XSQLVAR* var, const int length)
 			// Print blob-ids only here
 
 			blobid = (ISC_QUAD*) var->sqldata;
-			sprintf(blobbuf, "%"xLONGFORMAT":%"xLONGFORMAT, blobid->gds_quad_high,
+			sprintf(blobbuf, "%" xLONGFORMAT":%" xLONGFORMAT, blobid->gds_quad_high,
 					blobid->gds_quad_low);
 			sprintf(p, "%17s ", blobbuf);
 			break;
@@ -7458,7 +7458,7 @@ static SSHORT print_item(TEXT** s, XSQLVAR* var, const int length)
 			// Print blob-ids only here
 
 			blobid = (ISC_QUAD*) var->sqldata;
-			sprintf(blobbuf, "%"xLONGFORMAT":%"xLONGFORMAT, blobid->gds_quad_high,
+			sprintf(blobbuf, "%" xLONGFORMAT":%" xLONGFORMAT, blobid->gds_quad_high,
 					blobid->gds_quad_low);
 			sprintf(p, "%17s ", blobbuf);
 			if (List)
@@ -7673,7 +7673,7 @@ static SSHORT print_item(TEXT** s, XSQLVAR* var, const int length)
 
 			if (isqlGlob.SQL_dialect > SQL_DIALECT_V5)
 			{
-				sprintf(d, "%4.4d-%2.2d-%2.2d %2.2d:%2.2d:%2.2d.%4.4"ULONGFORMAT,
+				sprintf(d, "%4.4d-%2.2d-%2.2d %2.2d:%2.2d:%2.2d.%4.4" ULONGFORMAT,
 						times.tm_year + 1900, (times.tm_mon + 1),
 						times.tm_mday, times.tm_hour, times.tm_min,
 						times.tm_sec,
@@ -7682,7 +7682,7 @@ static SSHORT print_item(TEXT** s, XSQLVAR* var, const int length)
 			else
 			{
 				if (Time_display)
-					sprintf(d, "%2d-%s-%4d %2.2d:%2.2d:%2.2d.%4.4"ULONGFORMAT,
+					sprintf(d, "%2d-%s-%4d %2.2d:%2.2d:%2.2d.%4.4" ULONGFORMAT,
 							times.tm_mday, alpha_months[times.tm_mon],
 							times.tm_year + 1900, times.tm_hour, times.tm_min,
 							times.tm_sec,
@@ -7700,7 +7700,7 @@ static SSHORT print_item(TEXT** s, XSQLVAR* var, const int length)
 
 		case SQL_TYPE_TIME:
 			isc_decode_sql_time((ISC_TIME*) var->sqldata, &times);
-			sprintf(d, "%2.2d:%2.2d:%2.2d.%4.4"ULONGFORMAT,
+			sprintf(d, "%2.2d:%2.2d:%2.2d.%4.4" ULONGFORMAT,
 					times.tm_hour, times.tm_min, times.tm_sec,
 					(*(ISC_TIME*) var->sqldata) % ISC_TIME_SECONDS_PRECISION);
 			sprintf(p, "%-*s ", length, d);

@@ -368,11 +368,11 @@ static USHORT do_msgs( const TEXT* filename, const TEXT* locale, bool sw_warning
 			END_FOR;
 			if (!found_one && sw_warning)
 				printf
-					("build_file: Warning - no %s translation of msg# %"QUADFORMAT"d\n",
+					("build_file: Warning - no %s translation of msg# %" QUADFORMAT"d\n",
 					 locale, X.CODE);
 			if (found_one > 1 && sw_warning)
 				printf
-					("build_file: Warning - multiple %s translations of msg# %"QUADFORMAT"d\n",
+					("build_file: Warning - multiple %s translations of msg# %" QUADFORMAT"d\n",
 					 locale, X.CODE);
 			if (found_one != 1)
 				warning_counter++;

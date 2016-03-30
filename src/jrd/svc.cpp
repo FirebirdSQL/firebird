@@ -3242,7 +3242,7 @@ void Service::get_action_svc_data(const ClumpletReader& spb,
 								  string& switches)
 {
 	string s;
-	s.printf("%"SLONGFORMAT" ", spb.getInt());
+	s.printf("%" SLONGFORMAT" ", spb.getInt());
 	switches += s;
 }
 

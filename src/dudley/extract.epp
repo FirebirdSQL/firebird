@@ -231,7 +231,7 @@ static void binary_to_ascii(SLONG value, SSHORT scale, TEXT * buffer)
 /* Handle non-negative scale factor in straightforward manner */
 
 	if (scale >= 0) {
-		sprintf(p, "%"SLONGFORMAT, value);
+		sprintf(p, "%" SLONGFORMAT, value);
 		while (*p)
 			p++;
 		if (scale)
@@ -541,7 +541,7 @@ static void extract_database(const TEXT * DB_file_nameL)
             d += 2;
             page_size = gds__vax_integer(reinterpret_cast<const UCHAR*>(d), length);
             if (page_size)
-                fprintf(output_file, "\n\tpage_size %"SLONGFORMAT, page_size);
+                fprintf(output_file, "\n\tpage_size %" SLONGFORMAT, page_size);
         }
 
         if (EXT_capabilities & EXT_files)
@@ -550,14 +550,14 @@ static void extract_database(const TEXT * DB_file_nameL)
                 FOR F IN RDB$FILES WITH F.RDB$SHADOW_NUMBER MISSING OR
                     F.RDB$SHADOW_NUMBER EQ 0
                     name_trunc(F.RDB$FILE_NAME, buffer);
-                    fprintf(output_file, "\n\tfile \"%s\" starting at page %"SLONGFORMAT,
+                    fprintf(output_file, "\n\tfile \"%s\" starting at page %" SLONGFORMAT,
                                buffer, F.RDB$FILE_START);
                 END_FOR;
             }
             else {
                 FOR F IN RDB$FILES
 					name_trunc(F.RDB$FILE_NAME, buffer);
-                    fprintf(output_file, "\n\tfile \"%s\" starting at page %"SLONGFORMAT,
+                    fprintf(output_file, "\n\tfile \"%s\" starting at page %" SLONGFORMAT,
                                buffer, F.RDB$FILE_START);
                 END_FOR;
 			}
@@ -595,7 +595,7 @@ static void extract_database(const TEXT * DB_file_nameL)
 	           fprintf(output_file, ",\n\t\t\"%s\"", F.RDB$FILE_NAME);
 
 	       if (F.RDB$FILE_LENGTH)
-	           fprintf(output_file, " size = %"SLONGFORMAT, F.RDB$FILE_LENGTH);
+	           fprintf(output_file, " size = %" SLONGFORMAT, F.RDB$FILE_LENGTH);
 
 	       if (F.RDB$FILE_PARTITIONS)
 	           fprintf(output_file, " partitions = %d",
@@ -616,7 +616,7 @@ static void extract_database(const TEXT * DB_file_nameL)
 	       fprintf(output_file, " \"%s\"", F.RDB$FILE_NAME);
 
 	       if (F.RDB$FILE_LENGTH)
-	           fprintf(output_file, " size = %"SLONGFORMAT, F.RDB$FILE_LENGTH);
+	           fprintf(output_file, " size = %" SLONGFORMAT, F.RDB$FILE_LENGTH);
 
 	       if (F.RDB$FILE_PARTITIONS)
 	           fprintf(output_file, " partitions = %d",
@@ -638,12 +638,12 @@ static void extract_database(const TEXT * DB_file_nameL)
 			if (num_buf)
 				fprintf(output_file, "\n\tnum_log_buffers %d", num_buf);
 			if (buf_size)
-				fprintf(output_file, "\n\tlog_buffer_size %"SLONGFORMAT, buf_size);
+				fprintf(output_file, "\n\tlog_buffer_size %" SLONGFORMAT, buf_size);
 			if (chkpt_len)
-				fprintf(output_file, "\n\tcheck_point_length %"SLONGFORMAT,
+				fprintf(output_file, "\n\tcheck_point_length %" SLONGFORMAT,
 						   chkpt_len / OneK);
 			if (grp_commit)
-				fprintf(output_file, "\n\tgroup_commit_wait_time %"SLONGFORMAT,
+				fprintf(output_file, "\n\tgroup_commit_wait_time %" SLONGFORMAT,
 						   grp_commit);
 		}
  */
@@ -658,7 +658,7 @@ static void extract_database(const TEXT * DB_file_nameL)
 				SORTED BY F.RDB$SHADOW_NUMBER, F.RDB$FILE_START
 				name_trunc(F.RDB$FILE_NAME, buffer);
 				if (F.RDB$FILE_START)
-					fprintf(output_file, "\n\tfile \"%s\" starting at page %"SLONGFORMAT,
+					fprintf(output_file, "\n\tfile \"%s\" starting at page %" SLONGFORMAT,
 							   buffer, F.RDB$FILE_START);
 				else
 					fprintf(output_file, "%s\ndefine shadow %d \"%s\"",
@@ -2056,9 +2056,9 @@ static void type_scalar(USHORT dtype,
             D.RDB$FIELD_NAME EQ field_name
             SORTED BY D.RDB$DIMENSION
             if (D.RDB$LOWER_BOUND  == 1)
-                fprintf(output_file, "%c%"SLONGFORMAT, c, D.RDB$UPPER_BOUND);
+                fprintf(output_file, "%c%" SLONGFORMAT, c, D.RDB$UPPER_BOUND);
             else
-                fprintf(output_file, "%c%"SLONGFORMAT":%"SLONGFORMAT, c, D.RDB$LOWER_BOUND,
+                fprintf(output_file, "%c%" SLONGFORMAT":%" SLONGFORMAT, c, D.RDB$LOWER_BOUND,
                            D.RDB$UPPER_BOUND);
             c = ',';
 	    END_FOR;

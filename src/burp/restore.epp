@@ -1278,7 +1278,7 @@ void fix_security_class_name(BurpGlobals* tdgbl, TEXT* sec_class, bool is_field)
 
 	fb_assert(id);
 
-	snprintf(sec_class, MAX_SQL_IDENTIFIER_SIZE, "%s%"SQUADFORMAT, prefix, id);
+	snprintf(sec_class, MAX_SQL_IDENTIFIER_SIZE, "%s%" SQUADFORMAT, prefix, id);
 }
 
 void general_on_error()

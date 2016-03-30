@@ -662,13 +662,13 @@ static void gen_based( const act* action, int column)
 		for (SSHORT i = 1; i < field->fld_array_info->ary_dimension_count;
 			 dimension = dimension->dim_next, i++)
 		{
-			sprintf(s2, "%s range %"SLONGFORMAT"..%"SLONGFORMAT",\n                            ",
+			sprintf(s2, "%s range %" SLONGFORMAT"..%" SLONGFORMAT",\n                            ",
 					LONG_DCL, dimension->dim_lower, dimension->dim_upper);
 			for (p = s2; *p; p++, q++)
 				*q = *p;
 		}
 
-		sprintf(s2, "%s range %"SLONGFORMAT"..%"SLONGFORMAT") of ",
+		sprintf(s2, "%s range % " SLONGFORMAT"..%" SLONGFORMAT") of ",
 				LONG_DCL, dimension->dim_lower, dimension->dim_upper);
 		for (p = s2; *p; p++, q++)
 			*q = *p;
@@ -3235,11 +3235,11 @@ static void make_array_declaration( ref* reference, int column)
 		 i < field->fld_array_info->ary_dimension_count;
 		 dimension = dimension->dim_next, ++i)
 	{
-		fprintf(gpreGlob.out_file, "%s range %"SLONGFORMAT"..%"SLONGFORMAT",\n                        ",
+		fprintf(gpreGlob.out_file, "%s range %" SLONGFORMAT"..%" SLONGFORMAT",\n                        ",
 				LONG_DCL, dimension->dim_lower, dimension->dim_upper);
 	}
 
-	fprintf(gpreGlob.out_file, "%s range %"SLONGFORMAT"..%"SLONGFORMAT") of ",
+	fprintf(gpreGlob.out_file, "%s range %" SLONGFORMAT"..%" SLONGFORMAT") of ",
 			   LONG_DCL, dimension->dim_lower, dimension->dim_upper);
 
 	switch (field->fld_array_info->ary_dtype)

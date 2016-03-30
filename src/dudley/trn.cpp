@@ -1766,9 +1766,9 @@ static void raw_ftn( STR dyn)
 				break;
 		}
 		if (blr_length)
-			sprintf(p, "%"SLONGFORMAT",", blr_hunk.longword_blr);
+			sprintf(p, "%" SLONGFORMAT",", blr_hunk.longword_blr);
 		else
-			sprintf(p, "%"SLONGFORMAT"/", blr_hunk.longword_blr);
+			sprintf(p, "%" SLONGFORMAT"/", blr_hunk.longword_blr);
 		while (*p)
 			p++;
 		if (p - buffer > 50) {

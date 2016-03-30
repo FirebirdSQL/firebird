@@ -179,7 +179,7 @@ RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, SLONG tran, bool alloc
 #ifdef VIO_DEBUG
 		if (debug_flag > DEBUG_WRITES)
 		{
-			printf("jrd_rel::getPages inst %"SLONGFORMAT", ppp %"SLONGFORMAT", irp %"SLONGFORMAT", addr 0x%x\n",
+			printf("jrd_rel::getPages inst %" SLONGFORMAT", ppp %" SLONGFORMAT", irp %" SLONGFORMAT", addr 0x%x\n",
 				newPages->rel_instance_id,
 				newPages->rel_pages ? (*newPages->rel_pages)[0] : 0,
 				newPages->rel_index_root,
@@ -217,7 +217,7 @@ RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, SLONG tran, bool alloc
 #ifdef VIO_DEBUG
 			if (debug_flag > DEBUG_WRITES)
 			{
-				printf("jrd_rel::getPages inst %"SLONGFORMAT", irp %"SLONGFORMAT", idx %u, idx_root %"SLONGFORMAT", addr 0x%x\n",
+				printf("jrd_rel::getPages inst %" SLONGFORMAT", irp %" SLONGFORMAT", idx %u, idx_root %" SLONGFORMAT", addr 0x%x\n",
 					newPages->rel_instance_id,
 					newPages->rel_index_root,
 					idx->idx_id,
@@ -255,7 +255,7 @@ bool jrd_rel::delPages(thread_db* tdbb, SLONG tran, RelationPages* aPages)
 #ifdef VIO_DEBUG
 	if (debug_flag > DEBUG_WRITES)
 	{
-		printf("jrd_rel::delPages inst %"SLONGFORMAT", ppp %"SLONGFORMAT", irp %"SLONGFORMAT", addr 0x%x\n",
+		printf("jrd_rel::delPages inst %" SLONGFORMAT", ppp %" SLONGFORMAT", irp %" SLONGFORMAT", addr 0x%x\n",
 			pages->rel_instance_id,
 			pages->rel_pages ? (*pages->rel_pages)[0] : 0,
 			pages->rel_index_root,

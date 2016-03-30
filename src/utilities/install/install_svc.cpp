@@ -739,7 +739,7 @@ static USHORT svc_error( SLONG status, const TEXT* string, SC_HANDLE service)
 							sizeof(buffer),
 							NULL))
 		{
-			printf("Windows NT error %"SLONGFORMAT"\n", status);
+			printf("Windows NT error %" SLONGFORMAT"\n", status);
 		}
 		else
 		{

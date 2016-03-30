@@ -127,9 +127,9 @@ public:
 	HtmlLink(const TEXT* prefix, const SLONG value)
 	{
 		if (sw_html_format && value && prefix)
-			sprintf(strBuffer, "<a href=\"#%s%"SLONGFORMAT"\">%6"SLONGFORMAT"</a>", prefix, value, value);
+			sprintf(strBuffer, "<a href=\"#%s%" SLONGFORMAT"\">%6" SLONGFORMAT"</a>", prefix, value, value);
 		else
-			sprintf(strBuffer, "%6"SLONGFORMAT, value);
+			sprintf(strBuffer, "%6" SLONGFORMAT, value);
 	}
 	operator const TEXT*()
 	{
@@ -764,8 +764,8 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 
 	FPRINTF(outfile, "LOCK_HEADER BLOCK\n");
 	FPRINTF(outfile,
-			"\tVersion: %d, Active owner: %s, Length: %6"SLONGFORMAT
-			", Used: %6"SLONGFORMAT"\n",
+			"\tVersion: %d, Active owner: %s, Length: %6" SLONGFORMAT
+			", Used: %6" SLONGFORMAT"\n",
 			LOCK_header->lhb_version, (const TEXT*)HtmlLink(preOwn, LOCK_header->lhb_active_owner),
 			LOCK_header->lhb_length, LOCK_header->lhb_used);
 
@@ -773,20 +773,20 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 			LOCK_header->lhb_flags);
 
 	FPRINTF(outfile,
-			"\tEnqs: %6"UQUADFORMAT", Converts: %6"UQUADFORMAT
-			", Rejects: %6"UQUADFORMAT", Blocks: %6"UQUADFORMAT"\n",
+			"\tEnqs: %6" UQUADFORMAT", Converts: %6" UQUADFORMAT
+			", Rejects: %6" UQUADFORMAT", Blocks: %6" UQUADFORMAT"\n",
 			LOCK_header->lhb_enqs, LOCK_header->lhb_converts,
 			LOCK_header->lhb_denies, LOCK_header->lhb_blocks);
 
 	FPRINTF(outfile,
-			"\tDeadlock scans: %6"UQUADFORMAT", Deadlocks: %6"UQUADFORMAT
-			", Scan interval: %3"ULONGFORMAT"\n",
+			"\tDeadlock scans: %6" UQUADFORMAT", Deadlocks: %6" UQUADFORMAT
+			", Scan interval: %3" ULONGFORMAT"\n",
 			LOCK_header->lhb_scans, LOCK_header->lhb_deadlocks,
 			LOCK_header->lhb_scan_interval);
 
 	FPRINTF(outfile,
-			"\tAcquires: %6"UQUADFORMAT", Acquire blocks: %6"UQUADFORMAT
-			", Spin count: %3"ULONGFORMAT"\n",
+			"\tAcquires: %6" UQUADFORMAT", Acquire blocks: %6" UQUADFORMAT
+			", Spin count: %3" ULONGFORMAT"\n",
 			LOCK_header->lhb_acquires, LOCK_header->lhb_acquire_blocks,
 			LOCK_header->lhb_acquire_spins);
 
@@ -822,14 +822,14 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 
 	FPRINTF(outfile, "\tHash slots: %4d, ", LOCK_header->lhb_hash_slots);
 
-	FPRINTF(outfile, "Hash lengths (min/avg/max): %4"SLONGFORMAT"/%4"SLONGFORMAT"/%4"SLONGFORMAT"\n",
+	FPRINTF(outfile, "Hash lengths (min/avg/max): %4" SLONGFORMAT"/%4" SLONGFORMAT"/%4" SLONGFORMAT"\n",
 			hash_min_count, (hash_total_count / LOCK_header->lhb_hash_slots),
 			hash_max_count);
 
 	const shb* a_shb = (shb*) SRQ_ABS_PTR(LOCK_header->lhb_secondary);
 	FPRINTF(outfile,
-			"\tRemove node: %6"SLONGFORMAT", Insert queue: %6"SLONGFORMAT
-			", Insert prior: %6"SLONGFORMAT"\n",
+			"\tRemove node: %6" SLONGFORMAT", Insert queue: %6" SLONGFORMAT
+			", Insert prior: %6" SLONGFORMAT"\n",
 			a_shb->shb_remove_node, a_shb->shb_insert_que,
 			a_shb->shb_insert_prior);
 
@@ -948,8 +948,8 @@ static void prt_lock_activity(OUTFILE outfile,
 
 		if (flag & SW_I_ACQUIRE)
 		{
-			FPRINTF(outfile, "%9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-					" %9"UQUADFORMAT" %9"UQUADFORMAT" ",
+			FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+					" %9" UQUADFORMAT" %9" UQUADFORMAT" ",
 					(header->lhb_acquires - prior.lhb_acquires) / seconds,
 					(header->lhb_acquire_blocks - prior.lhb_acquire_blocks) / seconds,
 					(header->lhb_acquires - prior.lhb_acquires) ?
@@ -968,9 +968,9 @@ static void prt_lock_activity(OUTFILE outfile,
 
 		if (flag & SW_I_OPERATION)
 		{
-			FPRINTF(outfile, "%9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-					" %9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-					" %9"UQUADFORMAT" ",
+			FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+					" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+					" %9" UQUADFORMAT" ",
 					(header->lhb_enqs - prior.lhb_enqs) / seconds,
 					(header->lhb_converts - prior.lhb_converts) / seconds,
 					(header->lhb_downgrades - prior.lhb_downgrades) / seconds,
@@ -990,9 +990,9 @@ static void prt_lock_activity(OUTFILE outfile,
 
 		if (flag & SW_I_TYPE)
 		{
-			FPRINTF(outfile, "%9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-					" %9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-					" %9"UQUADFORMAT" ",
+			FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+					" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+					" %9" UQUADFORMAT" ",
 					(header->lhb_operations[Jrd::LCK_database] -
 					 	prior.lhb_operations[Jrd::LCK_database]) / seconds,
 					(header->lhb_operations[Jrd::LCK_relation] -
@@ -1018,9 +1018,9 @@ static void prt_lock_activity(OUTFILE outfile,
 
 		if (flag & SW_I_WAIT)
 		{
-			FPRINTF(outfile, "%9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-					" %9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-					" %9"UQUADFORMAT" ",
+			FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+					" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+					" %9" UQUADFORMAT" ",
 					(header->lhb_waits - prior.lhb_waits) / seconds,
 					(header->lhb_denies - prior.lhb_denies) / seconds,
 					(header->lhb_timeouts - prior.lhb_timeouts) / seconds,
@@ -1048,8 +1048,8 @@ static void prt_lock_activity(OUTFILE outfile,
 	FPRINTF(outfile, "\nAverage: ");
 	if (flag & SW_I_ACQUIRE)
 	{
-		FPRINTF(outfile, "%9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-				" %9"UQUADFORMAT" %9"UQUADFORMAT" ",
+		FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+				" %9" UQUADFORMAT" %9" UQUADFORMAT" ",
 				(header->lhb_acquires - base.lhb_acquires) / (factor),
 				(header->lhb_acquire_blocks -
 				 base.lhb_acquire_blocks) / (factor),
@@ -1062,8 +1062,8 @@ static void prt_lock_activity(OUTFILE outfile,
 
 	if (flag & SW_I_OPERATION)
 	{
-		FPRINTF(outfile, "%9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-				" %9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT" %9"
+		FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+				" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT" %9"
 				UQUADFORMAT" ",
 				(header->lhb_enqs - base.lhb_enqs) / (factor),
 				(header->lhb_converts - base.lhb_converts) / (factor),
@@ -1076,9 +1076,9 @@ static void prt_lock_activity(OUTFILE outfile,
 
 	if (flag & SW_I_TYPE)
 	{
-		FPRINTF(outfile, "%9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-				" %9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-				" %9"UQUADFORMAT" ",
+		FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+				" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+				" %9" UQUADFORMAT" ",
 				(header->lhb_operations[Jrd::LCK_database] -
 				 	base.lhb_operations[Jrd::LCK_database]) / (factor),
 				(header->lhb_operations[Jrd::LCK_relation] -
@@ -1096,9 +1096,9 @@ static void prt_lock_activity(OUTFILE outfile,
 
 	if (flag & SW_I_WAIT)
 	{
-		FPRINTF(outfile, "%9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-				" %9"UQUADFORMAT" %9"UQUADFORMAT" %9"UQUADFORMAT
-				" %9"UQUADFORMAT" ",
+		FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+				" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
+				" %9" UQUADFORMAT" ",
 				(header->lhb_waits - base.lhb_waits) / (factor),
 				(header->lhb_denies - base.lhb_denies) / (factor),
 				(header->lhb_timeouts - base.lhb_timeouts) / (factor),
@@ -1177,15 +1177,15 @@ static void prt_lock(OUTFILE outfile, const lhb* LOCK_header, const lbl* lock, U
 		return;
 
 	if (!sw_html_format)
-		FPRINTF(outfile, "LOCK BLOCK %6"SLONGFORMAT"\n", SRQ_REL_PTR(lock));
+		FPRINTF(outfile, "LOCK BLOCK %6" SLONGFORMAT"\n", SRQ_REL_PTR(lock));
 	else
 	{
 		const SLONG rel_lock = SRQ_REL_PTR(lock);
-		FPRINTF(outfile, "<a name=\"%s%"SLONGFORMAT"\">LOCK BLOCK %6"SLONGFORMAT"</a>\n",
+		FPRINTF(outfile, "<a name=\"%s%" SLONGFORMAT"\">LOCK BLOCK %6" SLONGFORMAT"</a>\n",
 				preLock, rel_lock, rel_lock);
 	}
 	FPRINTF(outfile,
-			"\tSeries: %d, Parent: %s, State: %d, size: %d length: %d data: %"ULONGFORMAT"\n",
+			"\tSeries: %d, Parent: %s, State: %d, size: %d length: %d data: %" ULONGFORMAT"\n",
 			lock->lbl_series, (const TEXT*)HtmlLink(preLock, lock->lbl_parent), lock->lbl_state,
 			lock->lbl_size, lock->lbl_length, lock->lbl_data);
 
@@ -1204,14 +1204,14 @@ static void prt_lock(OUTFILE outfile, const lhb* LOCK_header, const lbl* lock, U
 		ULONG pg_space;
 		memcpy(&pg_space, q, sizeof(SLONG));
 
-		FPRINTF(outfile, "\tKey: %04"ULONGFORMAT":%06"SLONGFORMAT",", pg_space, key);
+		FPRINTF(outfile, "\tKey: %04" ULONGFORMAT":%06" SLONGFORMAT",", pg_space, key);
 	}
 	else if (lock->lbl_length == 4)
 	{
 		SLONG key;
 		memcpy(&key, lock->lbl_key, 4);
 
-		FPRINTF(outfile, "\tKey: %06"SLONGFORMAT",", key);
+		FPRINTF(outfile, "\tKey: %06" SLONGFORMAT",", key);
 	}
 	else
 	{
@@ -1289,18 +1289,18 @@ static void prt_owner(OUTFILE outfile,
 	const prc* process = (prc*) SRQ_ABS_PTR(owner->own_process);
 
 	if (!sw_html_format)
-		FPRINTF(outfile, "OWNER BLOCK %6"SLONGFORMAT"\n", SRQ_REL_PTR(owner));
+		FPRINTF(outfile, "OWNER BLOCK %6" SLONGFORMAT"\n", SRQ_REL_PTR(owner));
 	else
 	{
 		const SLONG rel_owner = SRQ_REL_PTR(owner);
-		FPRINTF(outfile, "<a name=\"%s%"SLONGFORMAT"\">OWNER BLOCK %6"SLONGFORMAT"</a>\n",
+		FPRINTF(outfile, "<a name=\"%s%" SLONGFORMAT"\">OWNER BLOCK %6" SLONGFORMAT"</a>\n",
 				preOwn, rel_owner, rel_owner);
 	}
-	FPRINTF(outfile, "\tOwner id: %6"QUADFORMAT"d, type: %1d, pending: %s\n",
+	FPRINTF(outfile, "\tOwner id: %6" QUADFORMAT"d, type: %1d, pending: %s\n",
 			owner->own_owner_id, owner->own_owner_type,
 			(const TEXT*)HtmlLink(preRequest, owner->own_pending_request));
 
-	FPRINTF(outfile, "\tProcess id: %6d (%s), thread id: %6"SIZEFORMAT"\n",
+	FPRINTF(outfile, "\tProcess id: %6d (%s), thread id: %6" SIZEFORMAT"\n",
 			process->prc_process_id,
 			ISC_check_process_existence(process->prc_process_id) ? "Alive" : "Dead",
 			owner->own_thread_id);
@@ -1454,11 +1454,11 @@ static void prt_request(OUTFILE outfile, const lhb* LOCK_header, const lrq* requ
  **************************************/
 
 	if (!sw_html_format)
-		FPRINTF(outfile, "REQUEST BLOCK %6"SLONGFORMAT"\n", SRQ_REL_PTR(request));
+		FPRINTF(outfile, "REQUEST BLOCK %6" SLONGFORMAT"\n", SRQ_REL_PTR(request));
 	else
 	{
 		const SLONG rel_request = SRQ_REL_PTR(request);
-		FPRINTF(outfile, "<a name=\"%s%"SLONGFORMAT"\">REQUEST BLOCK %6"SLONGFORMAT"</a>\n",
+		FPRINTF(outfile, "<a name=\"%s%" SLONGFORMAT"\">REQUEST BLOCK %6" SLONGFORMAT"</a>\n",
 				preRequest, rel_request, rel_request);
 	}
 	FPRINTF(outfile, "\tOwner: %s, Lock: %s, State: %d, Mode: %d, Flags: 0x%02X\n",
@@ -1505,7 +1505,7 @@ static void prt_que(OUTFILE outfile,
 	SRQ_LOOP((*que_inst), next)
 		++count;
 
-	FPRINTF(outfile, "%s (%"SLONGFORMAT"):\tforward: %s, backward: %s\n", string, count,
+	FPRINTF(outfile, "%s (%" SLONGFORMAT"):\tforward: %s, backward: %s\n", string, count,
 			(const TEXT*) HtmlLink(prefix, que_inst->srq_forward - que_offset),
 			(const TEXT*) HtmlLink(prefix, que_inst->srq_backward - que_offset));
 }

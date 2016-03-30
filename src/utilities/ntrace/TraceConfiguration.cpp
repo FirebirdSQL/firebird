@@ -270,7 +270,7 @@ ULONG TraceCfgReader::parseUInteger(const Element* el) const
 {
 	const char *value = el->getAttributeName(0);
 	ULONG result = 0;
-	if (!sscanf(value, "%"ULONGFORMAT, &result)) {
+	if (!sscanf(value, "%" ULONGFORMAT, &result)) {
 		fatal_exception::raiseFmt(ERROR_PREFIX
 			"line %d, element \"%s\": \"%s\" is not a valid integer value",
 			el->lineNumber + 1, el->name.c_str(), value);

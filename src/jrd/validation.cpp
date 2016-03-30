@@ -706,25 +706,25 @@ static const TEXT msg_table[VAL_MAX_ERROR][80] =
 	"Page %ld doubly allocated",
 	"Page %ld is used but marked free",
 	"Page %ld is an orphan",
-	"Warning: blob %"QUADFORMAT"d appears inconsistent",	// 5
-	"Blob %"QUADFORMAT"d is corrupt",
-	"Blob %"QUADFORMAT"d is truncated",
-	"Chain for record %"QUADFORMAT"d is broken",
+	"Warning: blob %" QUADFORMAT"d appears inconsistent",	// 5
+	"Blob %" QUADFORMAT"d is corrupt",
+	"Blob %" QUADFORMAT"d is truncated",
+	"Chain for record %" QUADFORMAT"d is broken",
 	"Data page %ld (sequence %ld) is confused",
 	"Data page %ld (sequence %ld), line %ld is bad",	// 10
 	"Index %d is corrupt on page %ld level %d at offset %d. File: %s, line: %d\n\t",
 	"Pointer page (sequence %ld) lost",
 	"Pointer page (sequence %ld) inconsistent",
-	"Record %"QUADFORMAT"d is marked as damaged",
-	"Record %"QUADFORMAT"d has bad transaction %ld",	// 15
-	"Fragmented record %"QUADFORMAT"d is corrupt",
-	"Record %"QUADFORMAT"d is wrong length",
+	"Record %" QUADFORMAT"d is marked as damaged",
+	"Record %" QUADFORMAT"d has bad transaction %ld",	// 15
+	"Fragmented record %" QUADFORMAT"d is corrupt",
+	"Record %" QUADFORMAT"d is wrong length",
 	"Missing index root page",
 	"Transaction inventory pages lost",
 	"Transaction inventory page lost, sequence %ld",	// 20
 	"Transaction inventory pages confused, sequence %ld",
 	"Relation has %ld orphan backversions (%ld in use)",
-	"Index %d is corrupt (record %"QUADFORMAT"d have missing entries)",
+	"Index %d is corrupt (record %" QUADFORMAT"d have missing entries)",
 	"Index %d has orphan child page at page %ld",
 	"Index %d has a circular reference at page %ld",	// 25
 	"Index %d has inconsistent left sibling pointer, page %ld level %d",

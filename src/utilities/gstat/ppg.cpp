@@ -63,24 +63,24 @@ void PPG_print_header(const header_page* header, SLONG page,
 	{
 		uSvc->printf(false, "\tFlags\t\t\t%d\n", header->hdr_header.pag_flags);
 		uSvc->printf(false, "\tChecksum\t\t%d\n", header->hdr_header.pag_checksum);
-		uSvc->printf(false, "\tGeneration\t\t%"ULONGFORMAT"\n", header->hdr_header.pag_generation);
+		uSvc->printf(false, "\tGeneration\t\t%" ULONGFORMAT"\n", header->hdr_header.pag_generation);
 		uSvc->printf(false, "\tPage size\t\t%d\n", header->hdr_page_size);
 		uSvc->printf(false, "\tODS version\t\t%d.%d\n",
 				header->hdr_ods_version & ~ODS_FIREBIRD_FLAG, header->hdr_ods_minor);
-		uSvc->printf(false, "\tOldest transaction\t%"SLONGFORMAT"\n", header->hdr_oldest_transaction);
-		uSvc->printf(false, "\tOldest active\t\t%"SLONGFORMAT"\n", header->hdr_oldest_active);
-		uSvc->printf(false, "\tOldest snapshot\t\t%"SLONGFORMAT"\n", header->hdr_oldest_snapshot);
-		uSvc->printf(false, "\tNext transaction\t%"SLONGFORMAT"\n", header->hdr_next_transaction);
-		uSvc->printf(false, "\tBumped transaction\t%"SLONGFORMAT"\n", header->hdr_bumped_transaction);
+		uSvc->printf(false, "\tOldest transaction\t%" SLONGFORMAT"\n", header->hdr_oldest_transaction);
+		uSvc->printf(false, "\tOldest active\t\t%" SLONGFORMAT"\n", header->hdr_oldest_active);
+		uSvc->printf(false, "\tOldest snapshot\t\t%" SLONGFORMAT"\n", header->hdr_oldest_snapshot);
+		uSvc->printf(false, "\tNext transaction\t%" SLONGFORMAT"\n", header->hdr_next_transaction);
+		uSvc->printf(false, "\tBumped transaction\t%" SLONGFORMAT"\n", header->hdr_bumped_transaction);
 		uSvc->printf(false, "\tSequence number\t\t%d\n", header->hdr_sequence);
 
-		uSvc->printf(false, "\tNext attachment ID\t%"SLONGFORMAT"\n", header->hdr_attachment_id);
+		uSvc->printf(false, "\tNext attachment ID\t%" SLONGFORMAT"\n", header->hdr_attachment_id);
 		uSvc->printf(false, "\tImplementation ID\t%d\n", header->hdr_implementation);
-		uSvc->printf(false, "\tShadow count\t\t%"SLONGFORMAT"\n", header->hdr_shadow_count);
-		uSvc->printf(false, "\tPage buffers\t\t%"ULONGFORMAT"\n", header->hdr_page_buffers);
+		uSvc->printf(false, "\tShadow count\t\t%" SLONGFORMAT"\n", header->hdr_shadow_count);
+		uSvc->printf(false, "\tPage buffers\t\t%" ULONGFORMAT"\n", header->hdr_page_buffers);
 	}
 
-	uSvc->printf(false, "\tNext header page\t%"ULONGFORMAT"\n", header->hdr_next_page);
+	uSvc->printf(false, "\tNext header page\t%" ULONGFORMAT"\n", header->hdr_next_page);
 #ifdef DEV_BUILD
 	uSvc->printf(false, "\tClumplet End\t\t%d\n", header->hdr_end);
 #endif

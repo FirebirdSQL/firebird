@@ -1612,7 +1612,7 @@ void LockManager::bug_assert(const TEXT* string, ULONG line)
 	TEXT buffer[MAXPATHLEN + 100];
 	lhb LOCK_header_copy;
 
-	sprintf((char*) buffer, "%s %"ULONGFORMAT": lock assertion failure: %.60s\n",
+	sprintf((char*) buffer, "%s %" ULONGFORMAT": lock assertion failure: %.60s\n",
 			__FILE__, line, string);
 
 	// Copy the shared memory so we can examine its state when we crashed
@@ -1985,7 +1985,7 @@ lrq* LockManager::deadlock_walk(lrq* request, bool* maybe_deadlock)
 #ifdef DEBUG_TRACE_DEADLOCKS
 		const own* owner = (own*) SRQ_ABS_PTR(request->lrq_owner);
 		const prc* proc = (prc*) SRQ_ABS_PTR(owner->own_process);
-		gds__log("deadlock chain: OWNER BLOCK %6"SLONGFORMAT"\tProcess id: %6d\tFlags: 0x%02X ",
+		gds__log("deadlock chain: OWNER BLOCK %6" SLONGFORMAT"\tProcess id: %6d\tFlags: 0x%02X ",
 			request->lrq_owner, proc->prc_process_id, owner->own_flags);
 #endif
 		return request;
@@ -2096,7 +2096,7 @@ lrq* LockManager::deadlock_walk(lrq* request, bool* maybe_deadlock)
 #ifdef DEBUG_TRACE_DEADLOCKS
 			const own* owner2 = (own*) SRQ_ABS_PTR(request->lrq_owner);
 			const prc* proc = (prc*) SRQ_ABS_PTR(owner2->own_process);
-			gds__log("deadlock chain: OWNER BLOCK %6"SLONGFORMAT"\tProcess id: %6d\tFlags: 0x%02X ",
+			gds__log("deadlock chain: OWNER BLOCK %6" SLONGFORMAT"\tProcess id: %6d\tFlags: 0x%02X ",
 				request->lrq_owner, proc->prc_process_id, owner2->own_flags);
 #endif
 			return target;
@@ -2226,14 +2226,14 @@ lrq* LockManager::get_request(SRQ_PTR offset)
 	lrq* request = (lrq*) SRQ_ABS_PTR(offset);
 	if (offset == -1 || request->lrq_type != type_lrq)
 	{
-		sprintf(s, "invalid lock id (%"SLONGFORMAT")", offset);
+		sprintf(s, "invalid lock id (%" SLONGFORMAT")", offset);
 		bug(NULL, s);
 	}
 
 	const lbl* lock = (lbl*) SRQ_ABS_PTR(request->lrq_lock);
 	if (lock->lbl_type != type_lbl)
 	{
-		sprintf(s, "invalid lock (%"SLONGFORMAT")", offset);
+		sprintf(s, "invalid lock (%" SLONGFORMAT")", offset);
 		bug(NULL, s);
 	}
 
