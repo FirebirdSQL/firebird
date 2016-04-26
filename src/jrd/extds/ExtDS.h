@@ -156,8 +156,8 @@ public:
 	Provider* getProvider() { return &m_provider; }
 
 	virtual void attach(Jrd::thread_db* tdbb, const Firebird::PathName& dbName,
-		const Firebird::string& user, const Firebird::string& pwd,
-		const Firebird::string& role) = 0;
+		const Firebird::MetaName& user, const Firebird::string& pwd,
+		const Firebird::MetaName& role) = 0;
 	virtual void detach(Jrd::thread_db* tdbb);
 
 	virtual bool cancelExecution() = 0;
@@ -173,8 +173,8 @@ public:
 	virtual bool isConnected() const = 0;
 
 	virtual bool isSameDatabase(Jrd::thread_db* tdbb, const Firebird::PathName& dbName,
-		const Firebird::string& user, const Firebird::string& pwd,
-		const Firebird::string& role) const;
+		const Firebird::MetaName& user, const Firebird::string& pwd,
+		const Firebird::MetaName& role) const;
 
 	bool isBroken() const
 	{
@@ -214,8 +214,8 @@ public:
 
 protected:
 	void generateDPB(Jrd::thread_db* tdbb, Firebird::ClumpletWriter& dpb,
-		const Firebird::string& user, const Firebird::string& pwd,
-		const Firebird::string& role) const;
+		const Firebird::MetaName &user, const Firebird::string& pwd,
+		const Firebird::MetaName &role) const;
 
 	virtual Transaction* doCreateTransaction() = 0;
 	virtual Statement* doCreateStatement() = 0;

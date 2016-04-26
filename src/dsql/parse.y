@@ -589,6 +589,10 @@ using namespace Firebird;
 %token <metaNamePtr> REGR_SXY
 %token <metaNamePtr> REGR_SYY
 
+// tokens added for Firebird 4.0
+
+%token <metaNamePtr> RDB_ROLE_IN_USE
+
 // precedence declarations for expression evaluation
 
 %left	OR
@@ -876,7 +880,7 @@ grant0($node)
 			$node->grantor = $6;
 			$node->isDdl = true;
 		}
-	| role_name_list(NOTRIAL(&$node->roles)) TO role_grantee_list(NOTRIAL(&$node->users))
+	| role_name_list(NOTRIAL($node)) TO role_grantee_list(NOTRIAL(&$node->users))
 			role_admin_option granted_by
 		{
 			$node->grantAdminOption = $4;
@@ -1133,7 +1137,7 @@ revoke0($node)
 			$node->grantor = $6;
 			$node->isDdl = true;
 		}
-	| rev_admin_option role_name_list(NOTRIAL(&$node->roles))
+	| rev_admin_option role_name_list(NOTRIAL($node))
 			FROM role_grantee_list(NOTRIAL(&$node->users)) granted_by
 		{
 			$node->grantAdminOption = $1;
@@ -1191,16 +1195,24 @@ user_grantee($granteeArray)
 		{ $granteeArray->add(GranteeClause(obj_user_group, *$2)); }
 	;
 
-%type role_name_list(<granteeArray>)
-role_name_list($granteeArray)
-	: role_name($granteeArray)
-	| role_name_list ',' role_name($granteeArray)
+%type role_name_list(<grantRevokeNode>)
+role_name_list($grantRevokeNode)
+	: role_name($grantRevokeNode)
+	| role_name_list ',' role_name($grantRevokeNode)
 	;
 
-%type role_name(<granteeArray>)
-role_name($granteeArray)
+%type role_name(<grantRevokeNode>)
+role_name($grantRevokeNode)
 	: symbol_role_name
-		{ $granteeArray->add(GranteeClause(obj_sql_role, *$1)); }
+		{
+			$grantRevokeNode->roles.add(GranteeClause(obj_sql_role, *$1));
+			$grantRevokeNode->defaultRoles.add(false);
+		}
+	| DEFAULT symbol_role_name
+		{
+			$grantRevokeNode->roles.add(GranteeClause(obj_sql_role, *$2));
+			$grantRevokeNode->defaultRoles.add(true);
+		}
 	;
 
 %type role_grantee_list(<granteeArray>)
@@ -1211,9 +1223,10 @@ role_grantee_list($granteeArray)
 
 %type role_grantee(<granteeArray>)
 role_grantee($granteeArray)
-	: grantor	{ $granteeArray->add(GranteeClause(obj_user, *$1)); }
+	: symbol_user_name	{ $granteeArray->add(GranteeClause(obj_user_or_role, *$1)); }
+	| USER symbol_user_name	{ $granteeArray->add(GranteeClause(obj_user, *$2)); }
+	| ROLE symbol_user_name	{ $granteeArray->add(GranteeClause(obj_sql_role, *$2)); }
 	;
-
 
 // DECLARE operations
 
@@ -7093,6 +7106,7 @@ system_function_std_syntax
 	| TANH
 	| TRUNC
 	| UUID_TO_CHAR
+	| RDB_ROLE_IN_USE
 	;
 
 %type <sysFuncCallNode> system_function_special_syntax
@@ -7783,6 +7797,7 @@ non_reserved_word
 	| SERVERWIDE
 	| INCREMENT
 	| TRUSTED
+	| RDB_ROLE_IN_USE		// added in FB 4.0
 	;
 
 %%

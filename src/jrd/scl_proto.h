@@ -57,7 +57,9 @@ void SCL_init(Jrd::thread_db* tdbb, bool, const Jrd::UserId& tempId);
 Jrd::SecurityClass* SCL_recompute_class(Jrd::thread_db*, const TEXT*);
 void SCL_release_all(Jrd::SecurityClassList*&);
 bool SCL_role_granted(Jrd::thread_db* tdbb, const Jrd::UserId& usr, const TEXT* sql_role);
-bool SCL_admin_role(Jrd::thread_db* tdbb, const TEXT* sql_role);
+void SCL_find_granted_roles(Jrd::thread_db* tdbb, const Firebird::MetaName& object, bool isRole,
+							Firebird::SortedArray<Firebird::MetaName> &grantedRoles, bool defaultOnly);
+bool SCL_admin_role(Jrd::thread_db* tdbb, const Firebird::SortedArray<Firebird::MetaName> &roles);
 Jrd::SecurityClass::flags_t SCL_get_object_mask(const int object_type);
 
 namespace Jrd {

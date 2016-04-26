@@ -903,7 +903,7 @@ void DdlNode::storePrivileges(thread_db* tdbb, jrd_tra* transaction,
 							  const char* privileges)
 {
 	Attachment* const attachment = transaction->tra_attachment;
-	const string& userName = attachment->att_user->usr_user_name;
+	const MetaName& userName = attachment->att_user->usr_user_name;
 
 	AutoCacheRequest request(tdbb, drq_s_usr_prvs, DYN_REQUESTS);
 
@@ -966,7 +966,7 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, MetaName& 
 	const TypeClause* field, const string& computedSource, const BlrDebugWriter::BlrData& computedValue)
 {
 	Attachment* const attachment = transaction->tra_attachment;
-	const string& userName = attachment->att_user->usr_user_name;
+	const MetaName& userName = attachment->att_user->usr_user_name;
 
 	const ValueListNode* elements = field->ranges;
 	const USHORT dims = elements ? elements->items.getCount() / 2 : 0;
@@ -1674,7 +1674,7 @@ void CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->getAttachment();
-	const string& userName = attachment->att_user->usr_user_name;
+	const MetaName& userName = attachment->att_user->usr_user_name;
 
 	if (package.isEmpty())
 	{
@@ -2661,7 +2661,7 @@ void CreateAlterProcedureNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->getAttachment();
-	const string& userName = attachment->att_user->usr_user_name;
+	const MetaName& userName = attachment->att_user->usr_user_name;
 
 	if (package.isEmpty())
 	{
@@ -3801,7 +3801,7 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->tra_attachment;
-	const string& userName = attachment->att_user->usr_user_name;
+	const MetaName& userName = attachment->att_user->usr_user_name;
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -5264,7 +5264,7 @@ void CreateAlterExceptionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->getAttachment();
-	const string& userName = attachment->att_user->usr_user_name;
+	const MetaName& userName = attachment->att_user->usr_user_name;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_EXCEPTION, name, NULL);
@@ -5637,7 +5637,7 @@ SSHORT CreateAlterSequenceNode::store(thread_db* tdbb, jrd_tra* transaction, con
 	fb_sysflag sysFlag, SINT64 val, SLONG step)
 {
 	Attachment* const attachment = transaction->tra_attachment;
-	const string& userName = attachment->att_user->usr_user_name;
+	const MetaName& userName = attachment->att_user->usr_user_name;
 
 	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_generator);
 
@@ -8304,7 +8304,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->tra_attachment;
-	const string& userName = attachment->att_user->usr_user_name;
+	const MetaName& userName = attachment->att_user->usr_user_name;
 
 	const dsql_rel* modifyingView = NULL;
 
@@ -10624,7 +10624,7 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 	Auth::DynamicUserData* userData = FB_NEW_POOL(*transaction->tra_pool) Auth::DynamicUserData;
 
-	string text = name.c_str();
+	MetaName text = name.c_str();
 	if (text.isEmpty() && mode == USER_MOD)
 	{
 		// alter current user
@@ -10825,12 +10825,15 @@ void GrantRevokeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 			if (grantAdminOption)
 				option = 2; // with admin option
 
+			const GranteeClause* rolesPtr = roles.begin();
 			const GranteeClause* rolesEnd = roles.end();
-			for (const GranteeClause* rolesPtr = roles.begin(); rolesPtr != rolesEnd; ++rolesPtr)
+			const bool* defaultRolesPtr = defaultRoles.begin();
+			for (; rolesPtr != rolesEnd; ++rolesPtr, ++defaultRolesPtr)
 			{
 				usersEnd = users.end();
+				const bool defaultRole = *defaultRolesPtr;
 				for (usersPtr = users.begin(); usersPtr != usersEnd; ++usersPtr)
-					grantRevoke(tdbb, transaction, rolesPtr, usersPtr, "M", NULL, option);
+					grantRevoke(tdbb, transaction, rolesPtr, usersPtr, "M", defaultRole ? "D" : NULL, option);
 			}
 		}
 	}
@@ -10968,9 +10971,9 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 {
 	SSHORT userType = userNod->first;
 	MetaName user(userNod->second);
-    MetaName dummyName;
+	MetaName dummyName;
 	const SSHORT objType = object ? object->first : obj_type_MAX;
-    bool crdb = false;
+	bool crdb = false;
 
 	char privileges[16];
 	strcpy(privileges, privs ? privs : "");
@@ -11158,9 +11161,12 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 
 				if (userType == obj_sql_role)
 				{
-					// Temporary restriction. This should be removed once GRANT role1 TO rolex is
-					// supported and this message could be reused for blocking cycles of role grants.
-					status_exception::raise(Arg::PrivateDyn(192) << user.c_str());
+					// Check for blocking cycles of role grants.
+					Firebird::SortedArray<Firebird::MetaName> grantedRoles;
+					SCL_find_granted_roles(tdbb, objName, true, grantedRoles, false);
+					// 292: role @1 can not be granted to role @2
+					if (grantedRoles.exist(user.c_str()))
+						status_exception::raise(Arg::PrivateDyn(292) << objName.c_str() << user.c_str());
 				}
 			}
 			else
@@ -11196,6 +11202,8 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 	}
 	else	// REVOKE
 	{
+		const bool revokeRoleDefault = (objType == obj_sql_role) && field.hasData();
+
 		AutoCacheRequest request(tdbb, (field.hasData() ? drq_e_grant1 : drq_e_grant2), DYN_REQUESTS);
 
 		for (const char* pr = privileges; (priv[0] = *pr); ++pr)
@@ -11251,7 +11259,13 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 				END_FOR
 			}
 
-			if (options && grantErased)
+			if (revokeRoleDefault)
+			{
+				// Add role grant again without default
+				storePrivilege(tdbb, transaction, objName, user, NULL, pr, userType, objType,
+					options, grantorRevoker);
+			}
+			else if (options && grantErased)
 			{
 				// Add the privilege without the grant option. There is a modify trigger on the
 				// rdb$user_privileges which disallows the table from being updated. It would have
@@ -11478,7 +11492,57 @@ void GrantRevokeNode::checkGrantorCanGrant(thread_db* tdbb, jrd_tra* transaction
 	END_FOR
 }
 
-// Check if the grantor has admin privilege on the role.
+/*
+ * Function takes a role and grantor name and go through all roles granted to specified one.
+ * If found target role with admin option returns 2, without admin option - 1.
+ * Otherwise returns 0;
+ *
+ */
+int getGrantorOption(thread_db* tdbb, jrd_tra* transaction, const MetaName& grantor, int grantorType, const MetaName& roleName)
+{
+	AutoCacheRequest request(tdbb, drq_get_role_au, DYN_REQUESTS);
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		PRV IN RDB$USER_PRIVILEGES WITH
+			PRV.RDB$USER = UPPERCASE(grantor.c_str()) AND
+			PRV.RDB$USER_TYPE = grantorType AND
+			PRV.RDB$OBJECT_TYPE = obj_sql_role AND
+			PRV.RDB$PRIVILEGE EQ "M"
+	{
+		const Firebird::MetaName role = PRV.RDB$RELATION_NAME;
+		const bool grantable = PRV.RDB$GRANT_OPTION == 2;
+
+		if (role == roleName)
+		{
+			return grantable ? 2 : 1;
+		}
+		else
+		{
+			switch (getGrantorOption(tdbb, transaction, role, obj_sql_role, roleName))
+			{
+			case 0:
+				continue;
+			case 1: // call found roleName we should stop searching
+				return 1;
+			case 2: // call found roleName with admin option but have we admin option of intermediate roles?
+				return grantable ? 2 : 1;
+			}
+		}
+	}
+	END_FOR
+
+	// we and calls did not found granted roleName and have to return 0
+	return 0;
+}
+
+/*
+ * Check if the grantor has admin privilege on the role or admin privilege on another role
+ * which has admin privilege on it, etc
+ * If recoursive call of getGrantorOption returns:
+ * 0 - role does not grant to grantor.
+ * 1 - found but without admin option.
+ * 2 - with admin option.
+*/
 void GrantRevokeNode::checkGrantorCanGrantRole(thread_db* tdbb, jrd_tra* transaction,
 	const MetaName& grantor, const MetaName& roleName)
 {
@@ -11496,32 +11560,13 @@ void GrantRevokeNode::checkGrantorCanGrantRole(thread_db* tdbb, jrd_tra* transac
 		status_exception::raise(Arg::PrivateDyn(188) << roleName.c_str());
 	}
 
-	AutoCacheRequest request(tdbb, drq_get_role_au, DYN_REQUESTS);
-	bool grantable = false;
-	bool noAdmin = false;
+	const int r = getGrantorOption(tdbb, transaction, grantor, obj_user, roleName);
 
-	// The 'grantor' is not the owner of the ROLE, see if they have admin privilege on the role.
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		PRV IN RDB$USER_PRIVILEGES WITH
-			PRV.RDB$USER = UPPERCASE(grantor.c_str()) AND
-			PRV.RDB$USER_TYPE = obj_user AND
-			PRV.RDB$RELATION_NAME EQ roleName.c_str() AND
-			PRV.RDB$OBJECT_TYPE = obj_sql_role AND
-			PRV.RDB$PRIVILEGE EQ "M"
-	{
-		if (PRV.RDB$GRANT_OPTION == 2)
-			grantable = true;
-		else
-			noAdmin = true;
-	}
-	END_FOR
-
-	if (!grantable)
+	if (r < 2)
 	{
 		// 189: user have no admin option.
 		// 190: user is not a member of the role.
-		status_exception::raise(Arg::PrivateDyn(noAdmin ? 189 : 190) <<
-			grantor.c_str() << roleName.c_str());
+		status_exception::raise(Arg::PrivateDyn(r ? 189 : 190) << grantor.c_str() << roleName.c_str());
 	}
 }
 
@@ -11619,7 +11664,6 @@ void GrantRevokeNode::setFieldClassName(thread_db* tdbb, jrd_tra* transaction,
 	}
 	END_FOR
 }
-
 
 //----------------------
 

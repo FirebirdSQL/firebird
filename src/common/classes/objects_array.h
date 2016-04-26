@@ -332,6 +332,12 @@ namespace Firebird
 		{
 		}
 
+		ObjectsArray(const ObjectsArray<T, A>& o)
+			: A()
+		{
+			add(o);
+		}
+
 		ObjectsArray() :
 			A()
 		{
@@ -434,6 +440,12 @@ namespace Firebird
 			ObjectsArray <ObjectValue, SortedArray<ObjectValue*,
 				ObjectStorage, const ObjectKey*, ObjectKeyOfValue,
 				ObjectCmp> >(p)
+		{ }
+
+		explicit SortedObjectsArray() :
+			ObjectsArray <ObjectValue, SortedArray<ObjectValue*,
+				ObjectStorage, const ObjectKey*, ObjectKeyOfValue,
+				ObjectCmp> >()
 		{ }
 
 		bool find(const ObjectKey& item, size_type& pos) const

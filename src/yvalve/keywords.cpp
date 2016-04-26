@@ -359,6 +359,7 @@ static const TOK tokens[] =
 	{REVOKE, "REVOKE", 1, false},
 	{RIGHT, "RIGHT", 1, false},
 	{ROLE, "ROLE", 1, true},
+	{RDB_ROLE_IN_USE, "RDB$ROLE_IN_USE", 2, false},
 	{ROLLBACK, "ROLLBACK", 1, false},
 	{ROUND, "ROUND", 2, false},
 	{ROW, "ROW", 2, false},

@@ -42,6 +42,10 @@ namespace Jrd {
 	class dsql_req;
 }
 
+namespace Firebird {
+	class MetaName;
+}
+
 void jrd_vtof(const char*, char*, SSHORT);
 
 typedef Firebird::SortedObjectsArray<Firebird::PathName> PathNameList;
@@ -75,7 +79,7 @@ bool JRD_verify_database_access(const Firebird::PathName&);
 void JRD_shutdown_attachment(Jrd::Attachment* attachment);
 void JRD_shutdown_attachments(Jrd::Database* dbb);
 void JRD_cancel_operation(Jrd::thread_db* tdbb, Jrd::Attachment* attachment, int option);
-void JRD_make_role_name(Firebird::string& userIdRole, const int dialect);
+void JRD_make_role_name(Firebird::MetaName &userIdRole, const int dialect);
 
 bool JRD_shutdown_database(Jrd::Database* dbb, const unsigned flags = 0);
 // JRD_shutdown_database() flags

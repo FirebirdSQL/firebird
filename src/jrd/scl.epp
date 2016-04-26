@@ -1003,7 +1003,7 @@ bool SCL_role_granted(thread_db* tdbb, const UserId& usr, const TEXT* sql_role)
 		return true;
 	}
 
-	Firebird::string loginName(usr.usr_user_name);
+	Firebird::MetaName loginName(usr.usr_user_name);
 	const TEXT* login_name = loginName.c_str();
 
 	bool found = false;
@@ -1036,7 +1036,38 @@ bool SCL_role_granted(thread_db* tdbb, const UserId& usr, const TEXT* sql_role)
 }
 
 
-bool SCL_admin_role(thread_db* tdbb, const TEXT* sql_role)
+void SCL_find_granted_roles(thread_db* tdbb, const Firebird::MetaName& object, bool isRole,
+	Firebird::SortedArray<Firebird::MetaName>& grantedRoles, bool defaultOnly)
+{
+	SET_TDBB(tdbb);
+
+	Jrd::Attachment* const attachment = tdbb->getAttachment();
+
+	const int obj_type = isRole ? obj_sql_role : obj_user;
+
+	AutoCacheRequest request(tdbb, drq_l_granted_roles, DYN_REQUESTS);
+
+	FOR(REQUEST_HANDLE request)
+		U IN RDB$USER_PRIVILEGES WITH
+		U.RDB$USER EQ object.c_str() AND
+		U.RDB$USER_TYPE EQ obj_type AND
+		U.RDB$OBJECT_TYPE EQ obj_sql_role AND
+		U.RDB$PRIVILEGE EQ "M"
+
+		const Firebird::MetaName roleName = U.RDB$RELATION_NAME;
+		const bool defaultRole = !defaultOnly || !U.RDB$FIELD_NAME.NULL && (U.RDB$FIELD_NAME[0] == 'D');
+
+		if (defaultRole && !grantedRoles.exist(roleName))
+		{
+			grantedRoles.add(roleName);
+			SCL_find_granted_roles(tdbb, roleName, true, grantedRoles, defaultOnly);
+		}
+
+	END_FOR
+}
+
+
+bool SCL_admin_role(thread_db* tdbb, const Firebird::SortedArray<Firebird::MetaName>& roles)
 {
 /**************************************
  *
@@ -1045,7 +1076,7 @@ bool SCL_admin_role(thread_db* tdbb, const TEXT* sql_role)
  **************************************
  *
  * Functional description
- *	Check is sql_role is an admin role.
+ *	Check if roles has an admin role.
  *
  **************************************/
 	SET_TDBB(tdbb);
@@ -1053,15 +1084,19 @@ bool SCL_admin_role(thread_db* tdbb, const TEXT* sql_role)
 
 	bool adminRole = false;
 
-	AutoCacheRequest request(tdbb, irq_is_admin_role, IRQ_REQUESTS);
-
-	FOR(REQUEST_HANDLE request) R IN RDB$ROLES
-		WITH R.RDB$ROLE_NAME EQ sql_role
-		 AND R.RDB$SYSTEM_FLAG != 0
+	for (int i = 0; !adminRole && (i < roles.getCount()); i++)
 	{
-		adminRole = true;
+		AutoCacheRequest request(tdbb, irq_is_admin_role, IRQ_REQUESTS);
+
+		FOR(REQUEST_HANDLE request) R IN RDB$ROLES
+			WITH R.RDB$ROLE_NAME EQ roles[i].c_str()
+			 AND R.RDB$SYSTEM_FLAG != 0
+		{
+			adminRole = true;
+			break;
+		}
+		END_FOR
 	}
-	END_FOR
 
 	return adminRole;
 }
@@ -1094,7 +1129,7 @@ void SCL_init(thread_db* tdbb, bool create, const UserId& tempId)
 	{
 		if (!create)
 		{
-			Firebird::string loginName(tempId.usr_user_name);
+			Firebird::MetaName loginName(tempId.usr_user_name);
 			const TEXT* login_name = loginName.c_str();
 
 			AutoCacheRequest request(tdbb, irq_get_role_name, IRQ_REQUESTS);
@@ -1129,6 +1164,16 @@ void SCL_init(thread_db* tdbb, bool create, const UserId& tempId)
 
 	if (!create)
 	{
+		const bool isRole = role_name != NULL_ROLE;
+		if (isRole)
+		{
+			// Add role itself and all roles cumulatively granted to it. Not only default.
+			user->usr_granted_roles.add(user->usr_sql_role_name);
+			SCL_find_granted_roles(tdbb, user->usr_sql_role_name, true, user->usr_granted_roles, false);
+		}
+		// Add all default roles granted to user
+		SCL_find_granted_roles(tdbb, user->usr_user_name, false, user->usr_granted_roles, true);
+
 		AutoCacheRequest request(tdbb, irq_get_att_class, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request) X IN RDB$DATABASE
@@ -1155,7 +1200,7 @@ void SCL_init(thread_db* tdbb, bool create, const UserId& tempId)
 		if (dbb->dbb_owner == user->usr_user_name)
 			user->usr_flags |= USR_owner;
 
-		if (sql_role && SCL_admin_role(tdbb, role_name.c_str()))
+		if (sql_role && SCL_admin_role(tdbb, user->usr_granted_roles))
 			user->usr_flags |= USR_dba;
 	}
 	else
@@ -1388,9 +1433,27 @@ static bool check_string(const UCHAR* acl, const Firebird::MetaName& string)
 	const FB_SIZE_T length = *acl++;
 	const TEXT* const ptr = (TEXT*) acl;
 
-    return (string.compare(ptr, length) != 0);
+	return (string.compare(ptr, length) != 0);
 }
 
+static void get_string(const UCHAR* acl, Firebird::MetaName& string)
+{
+/**************************************
+ *
+ *	g e t _ s t r i n g
+ *
+ **************************************
+ *
+ * Functional description
+ *	Get a string from acl string.
+ *
+ **************************************/
+	fb_assert(acl);
+
+	const size_t length = *acl++;
+	const TEXT* const ptr = (TEXT*) acl;
+	string.assign(ptr, length);
+}
 
 static SecurityClass::flags_t compute_access(thread_db* tdbb,
 											 const SecurityClass* s_class,
@@ -1477,8 +1540,7 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 
 	// Munch ACL. If we find a hit, eat up privileges.
 
-	UserId user = *tdbb->getAttachment()->att_user;
-	const TEXT* role_name = user.usr_sql_role_name.nullStr();
+	UserId user = *attachment->att_user;
 
 	if (view && (view->rel_flags & REL_sql_relation))
 	{
@@ -1535,38 +1597,17 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 
 				case id_group:
 					if (check_user_group(tdbb, a, user.usr_group_id))
-					{
 						hit = false;
-					}
 					break;
 
 				case id_sql_role:
-					if (!role_name || check_string(a, role_name))
+				{
+					Firebird::MetaName role_name;
+					get_string(a, role_name);
+					if (!user.usr_granted_roles.exist(role_name))
 						hit = false;
-					else if (user.usr_sql_role_name != user.usr_trusted_role)
-					{
-						Firebird::string loginName(user.usr_user_name);
-						const TEXT* login_name = loginName.c_str();
-						bool roleHit = false;
-						AutoCacheRequest request(tdbb, irq_get_role_mem, IRQ_REQUESTS);
-
-						FOR(REQUEST_HANDLE request) U IN RDB$USER_PRIVILEGES WITH
-							(U.RDB$USER EQ login_name OR
-							 U.RDB$USER EQ "PUBLIC") AND
-								U.RDB$USER_TYPE EQ obj_user AND
-								U.RDB$RELATION_NAME EQ user.usr_sql_role_name.c_str() AND
-								U.RDB$OBJECT_TYPE EQ obj_sql_role AND
-								U.RDB$PRIVILEGE EQ "M"
-						{
-							if (!U.RDB$USER.NULL)
-								roleHit = true;
-						}
-						END_FOR
-
-						if (!roleHit)
-							hit = false;
-					}
 					break;
+				}
 
 				case id_view:
 					if (!view || check_string(a, view->rel_name))
@@ -1578,9 +1619,7 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 				case id_trigger:
 				case id_function:
 					if (c != obj_type || check_string(a, obj_name))
-					{
 						hit = false;
-					}
 					break;
 
 				case id_views:
@@ -1590,15 +1629,13 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 					// generated for SQL.
 
 					hit = false;
-					if (!view) {
+					if (!view)
 						hit = false;
-					}
 					break;
 
 				case id_user:
-					if (check_number(a, user.usr_user_id)) {
+					if (check_number(a, user.usr_user_id))
 						hit = false;
-					}
 					break;
 
 				case id_node:

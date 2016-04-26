@@ -102,8 +102,8 @@ bool openDb(const char* securityDb, RefPtr<IAttachment>& att, RefPtr<ITransactio
 
 namespace Jrd {
 
-bool checkCreateDatabaseGrant(const string& userName, const string& trustedRole,
-	const string& sqlRole, const char* securityDb)
+bool checkCreateDatabaseGrant(const MetaName& userName, const MetaName& trustedRole,
+	const MetaName& sqlRole, const char* securityDb)
 {
 	if (userName == SYSDBA_USER_NAME)
 		return true;
@@ -114,7 +114,7 @@ bool checkCreateDatabaseGrant(const string& userName, const string& trustedRole,
 		return false;
 
 	FbLocalStatus st;
-	string role(sqlRole);
+	MetaName role(sqlRole);
 	if (role.hasData())
 	{
 		const UCHAR info[] = { isc_info_db_sql_dialect, isc_info_end };

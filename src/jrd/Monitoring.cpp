@@ -391,7 +391,7 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 
 	// Enumerate active sessions
 
-	const string& user_name = attachment->att_user->usr_user_name;
+	const MetaName& user_name = attachment->att_user->usr_user_name;
 	const bool locksmith = attachment->locksmith();
 	const char* user_name_ptr = locksmith ? NULL : user_name.c_str();
 
@@ -1240,7 +1240,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment)
 	attachment->mergeStats();
 
 	const AttNumber att_id = attachment->att_attachment_id;
-	const string& user_name = attachment->att_user->usr_user_name;
+	const MetaName& user_name = attachment->att_user->usr_user_name;
 
 	if (!dbb->dbb_monitoring_data)
 		dbb->dbb_monitoring_data = FB_NEW_POOL(pool) MonitoringData(dbb);
@@ -1309,7 +1309,7 @@ void Monitoring::publishAttachment(thread_db* tdbb)
 	if (!dbb->dbb_monitoring_data)
 		dbb->dbb_monitoring_data = FB_NEW_POOL(*dbb->dbb_permanent) MonitoringData(dbb);
 
-	const string& user_name = attachment->att_user->usr_user_name;
+	const MetaName& user_name = attachment->att_user->usr_user_name;
 
 	MonitoringData::Guard guard(dbb->dbb_monitoring_data);
 	dbb->dbb_monitoring_data->setup(attachment->att_attachment_id, user_name.c_str());

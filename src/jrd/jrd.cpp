@@ -1030,7 +1030,7 @@ static void		rollback(thread_db*, jrd_tra*, const bool);
 static void		purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsigned flags = 0);
 static void		getUserInfo(UserId&, const DatabaseOptions&, const char*, const char*,
 	const RefPtr<Config>*, bool, ICryptKeyCallback*);
-static void		makeRoleName(Database*, string&, DatabaseOptions&);
+static void		makeRoleName(Database*, MetaName &, DatabaseOptions&);
 
 static THREAD_ENTRY_DECLARE shutdown_thread(THREAD_ENTRY_PARAM);
 
@@ -1101,7 +1101,7 @@ static void successful_completion(CheckStatusWrapper* s, ISC_STATUS acceptCode =
 }
 
 
-static void makeRoleName(Database* dbb, string& userIdRole, DatabaseOptions& options)
+static void makeRoleName(Database* dbb, MetaName& userIdRole, DatabaseOptions& options)
 {
 	if (userIdRole.isEmpty())
 		return;
@@ -1303,7 +1303,7 @@ static void trace_failed_attach(TraceManager* traceManager, const char* filename
 }
 
 
-void JRD_make_role_name(string& userIdRole, const int dialect)
+void JRD_make_role_name(MetaName& userIdRole, const int dialect)
 {
 	switch (dialect)
 	{

@@ -136,8 +136,8 @@ private:
 };
 
 void InternalConnection::attach(thread_db* tdbb, const PathName& dbName,
-		const string& user, const string& pwd,
-		const string& role)
+		const MetaName& user, const string& pwd,
+		const MetaName& role)
 {
 	fb_assert(!m_attachment);
 	Database* dbb = tdbb->getDatabase();
@@ -243,8 +243,8 @@ bool InternalConnection::isAvailable(thread_db* tdbb, TraScope /*traScope*/) con
 }
 
 bool InternalConnection::isSameDatabase(thread_db* tdbb, const PathName& dbName,
-		const string& user, const string& pwd,
-		const string& role) const
+		const MetaName& user, const string& pwd,
+		const MetaName& role) const
 {
 	if (m_isCurrent)
 	{

@@ -187,6 +187,7 @@ dsc* evlSign(thread_db* tdbb, const SysFunction* function, const NestValueArray&
 dsc* evlSqrt(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlTrunc(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlUuidToChar(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlRoleInUse(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 
 
 // System context function names
@@ -521,6 +522,17 @@ void makeLongResult(DataTypeUtilBase*, const SysFunction*, dsc* result,
 	result->setNullable(isNullable);
 }
 
+void makeBooleanResult(DataTypeUtilBase*, const SysFunction*, dsc* result,
+	int argsCount, const dsc** args)
+{
+	result->makeBoolean(0);
+
+	bool isNullable;
+	if (initResult(result, argsCount, args, &isNullable))
+		return;
+
+	result->setNullable(isNullable);
+}
 
 /***
  * This function doesn't work yet, because makeFromListResult isn't totally prepared for blobs vs strings.
@@ -2222,14 +2234,14 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 			if (!attachment->att_user || attachment->att_user->usr_user_name.isEmpty())
 				return NULL;
 
-			resultStr = attachment->att_user->usr_user_name;
+			resultStr = attachment->att_user->usr_user_name.c_str();
 		}
 		else if (nameStr == CURRENT_ROLE_NAME)
 		{
 			if (!attachment->att_user || attachment->att_user->usr_sql_role_name.isEmpty())
 				return NULL;
 
-			resultStr = attachment->att_user->usr_sql_role_name;
+			resultStr = attachment->att_user->usr_sql_role_name.c_str();
 		}
 		else if (nameStr == TRANSACTION_ID_NAME)
 			resultStr.printf("%" SQUADFORMAT, transaction->tra_number);
@@ -3776,6 +3788,29 @@ dsc* evlUuidToChar(thread_db* tdbb, const SysFunction* function, const NestValue
 	return &impure->vlu_desc;
 }
 
+dsc* evlRoleInUse(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
+	impure_value* impure)
+{
+	fb_assert(args.getCount() == 1);
+
+	jrd_req* request = tdbb->getRequest();
+	Jrd::Attachment* attachment = tdbb->getAttachment();
+
+	const dsc* value = EVL_expr(tdbb, request, args[0]);
+	if (request->req_flags & req_null)	// return NULL if value is NULL
+		return NULL;
+
+	string roleStr(MOV_make_string2(tdbb, value, ttype_none));
+	roleStr.upper();
+
+	impure->vlu_misc.vlu_uchar = attachment->att_user->usr_granted_roles.exist(roleStr) ? 1 : 0;
+
+	impure->vlu_desc.makeBoolean(&impure->vlu_misc.vlu_uchar);
+
+	return &impure->vlu_desc;
+}
+
+
 } // anonymous namespace
 
 
@@ -3840,6 +3875,7 @@ const SysFunction SysFunction::functions[] =
 		{"TANH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfTanh},
 		{"TRUNC", 1, 2, setParamsRoundTrunc, makeTrunc, evlTrunc, NULL},
 		{"UUID_TO_CHAR", 1, 1, setParamsUuidToChar, makeUuidToChar, evlUuidToChar, NULL},
+		{"RDB$ROLE_IN_USE", 1, 1, setParamsAsciiVal, makeBooleanResult, evlRoleInUse, NULL},
 		{"", 0, 0, NULL, NULL, NULL, NULL}
 	};
 

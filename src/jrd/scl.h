@@ -90,9 +90,10 @@ const USHORT USR_mapdown	= 8;		// Mapping failed when getting context
 class UserId
 {
 public:
-	Firebird::string	usr_user_name;		// User name
-	Firebird::string	usr_sql_role_name;	// Role name
-	Firebird::string	usr_trusted_role;	// Trusted role if set
+	Firebird::MetaName	usr_user_name;		// User name
+	Firebird::MetaName	usr_sql_role_name;	// Role name
+	Firebird::SortedArray<Firebird::MetaName> usr_granted_roles; // Granted roles list
+	Firebird::MetaName	usr_trusted_role;	// Trusted role if set
 	Firebird::string	usr_project_name;	// Project name
 	Firebird::string	usr_org_name;		// Organization name
 	Firebird::string	usr_auth_method;	// Authentication method
@@ -108,11 +109,12 @@ public:
 
 	UserId()
 		: usr_user_id(0), usr_group_id(0), usr_flags(0)
-	{ }
+	{}
 
 	UserId(Firebird::MemoryPool& p, const UserId& ui)
 		: usr_user_name(p, ui.usr_user_name),
 		  usr_sql_role_name(p, ui.usr_sql_role_name),
+		  usr_granted_roles(p),
 		  usr_trusted_role(p, ui.usr_trusted_role),
 		  usr_project_name(p, ui.usr_project_name),
 		  usr_org_name(p, ui.usr_org_name),
@@ -123,11 +125,13 @@ public:
 		  usr_flags(ui.usr_flags)
 	{
 		usr_auth_block.assign(ui.usr_auth_block);
+		usr_granted_roles = ui.usr_granted_roles;
 	}
 
 	UserId(const UserId& ui)
 		: usr_user_name(ui.usr_user_name),
 		  usr_sql_role_name(ui.usr_sql_role_name),
+		  usr_granted_roles(ui.usr_granted_roles),
 		  usr_trusted_role(ui.usr_trusted_role),
 		  usr_project_name(ui.usr_project_name),
 		  usr_org_name(ui.usr_org_name),
@@ -143,6 +147,7 @@ public:
 	{
 		usr_user_name = ui.usr_user_name;
 		usr_sql_role_name = ui.usr_sql_role_name;
+		usr_granted_roles = ui.usr_granted_roles;
 		usr_trusted_role = ui.usr_trusted_role;
 		usr_project_name = ui.usr_project_name;
 		usr_org_name = ui.usr_org_name;

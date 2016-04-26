@@ -112,7 +112,7 @@ public:
 	Firebird::SortedArray<Firebird::MetaName> procedureNames;
 
 private:
-	Firebird::string owner;
+	Firebird::MetaName owner;
 };
 
 

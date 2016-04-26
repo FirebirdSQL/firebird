@@ -312,7 +312,7 @@ Connection::~Connection()
 }
 
 void Connection::generateDPB(thread_db* tdbb, ClumpletWriter& dpb,
-	const string& user, const string& pwd, const string& role) const
+	const MetaName& user, const string& pwd, const MetaName& role) const
 {
 	dpb.reset(isc_dpb_version1);
 
@@ -346,7 +346,7 @@ void Connection::generateDPB(thread_db* tdbb, ClumpletWriter& dpb,
 }
 
 bool Connection::isSameDatabase(thread_db* tdbb, const PathName& dbName,
-	const string& user, const string& pwd, const string& role) const
+	const MetaName &user, const string& pwd, const MetaName &role) const
 {
 	if (m_dbName != dbName)
 		return false;

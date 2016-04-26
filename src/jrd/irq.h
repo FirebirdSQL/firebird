@@ -105,7 +105,6 @@ enum irq_type_t
 	irq_l_check,			// lookup check constraint for trigger
 	irq_l_check2,			// lookup constraint for index
 	irq_c_trg_perm,			// check if trig can ignore perm. checks
-	irq_get_role_mem,		// get SQL role membership
 	irq_get_role_name,		// get SQL role name
 	irq_is_admin_role, 		// check is current role admin or not
 	irq_get_att_class,		// get security class for current attachment

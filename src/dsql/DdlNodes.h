@@ -405,7 +405,7 @@ public:
 	bool compiled;
 	bool invalid;
 	Firebird::MetaName package;
-	Firebird::string packageOwner;
+	Firebird::MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
 	SLONG udfReturnPos;
@@ -539,7 +539,7 @@ public:
 	bool compiled;
 	bool invalid;
 	Firebird::MetaName package;
-	Firebird::string packageOwner;
+	Firebird::MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
 };
@@ -2118,6 +2118,7 @@ public:
 		  isGrant(aIsGrant),
 		  privileges(p),
 		  roles(p),
+		  defaultRoles(p),
 		  object(NULL),
 		  users(p),
 		  grantAdminOption(false),
@@ -2197,6 +2198,7 @@ public:
 	bool isGrant;
 	Firebird::Array<PrivilegeClause> privileges;
 	Firebird::Array<GranteeClause> roles;
+	Firebird::Array<bool> defaultRoles;
 	NestConst<GranteeClause> object;
 	Firebird::Array<GranteeClause> users;
 	bool grantAdminOption;

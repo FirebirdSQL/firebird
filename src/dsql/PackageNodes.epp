@@ -491,7 +491,7 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 	jrd_tra* transaction)
 {
 	Attachment* attachment = transaction->getAttachment();
-	const string& userName = attachment->att_user->usr_user_name;
+	const MetaName& userName = attachment->att_user->usr_user_name;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_PACKAGE, name, NULL);
