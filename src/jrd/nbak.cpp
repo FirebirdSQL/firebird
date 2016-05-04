@@ -280,14 +280,13 @@ void BackupManager::beginBackup(thread_db* tdbb)
 		// adjust difference file access rights to make it match main DB ones
 		if (diff_file && geteuid() == 0)
 		{
-			struct stat st;
+			struct STAT st;
 			PageSpace* pageSpace = database->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 			const char* func = NULL;
 
-			while (!func && fstat(pageSpace->file->fil_desc, &st) != 0)
+			if (fb_io::fstat(pageSpace->file->fil_desc, &st) != 0)
 			{
-				if (errno != EINTR)
-					func = "fstat";
+				func = "fstat";
 			}
 
 			while (!func && fchown(diff_file->fil_desc, st.st_uid, st.st_gid) != 0)

@@ -533,8 +533,8 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		memcpy(p, &file_info.nFileIndexLow, len3);
 		CloseHandle(h);
 #else
-		struct stat statistics;
-		if (stat(db_name.c_str(), &statistics) == -1)
+		struct STAT statistics;
+		if (fb_io::stat(db_name.c_str(), &statistics) == -1)
 		{
 			FPRINTF(outfile, "Unable to open the database file.\n");
 			exit(FINI_OK);
@@ -681,15 +681,15 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 	}
 	else if (lock_file)
 	{
-		const int fd = open(filename.c_str(), O_RDONLY | O_BINARY);
+		const int fd = fb_io::open(filename.c_str(), O_RDONLY | O_BINARY);
 		if (fd == -1)
 		{
 			FPRINTF(outfile, "Unable to open lock file.\n");
 			exit(FINI_OK);
 		}
 
-		struct stat file_stat;
-		if (fstat(fd, &file_stat) == -1)
+		struct STAT file_stat;
+		if (fb_io::fstat(fd, &file_stat) == -1)
 		{
 			close(fd);
 			FPRINTF(outfile, "Unable to retrieve lock file size.\n");
@@ -747,7 +747,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 			Firebird::PathName extName;
 			extName.printf("%s.ext%d", filename.c_str(), extent);
 
-			const int fd = open(extName.c_str(), O_RDONLY | O_BINARY);
+			const int fd = fb_io::open(extName.c_str(), O_RDONLY | O_BINARY);
 			if (fd == -1)
 			{
 				FPRINTF(outfile, "Unable to open lock file extent number %d, file %s.\n",

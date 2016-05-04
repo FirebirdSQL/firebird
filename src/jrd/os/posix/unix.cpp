@@ -104,6 +104,10 @@ using namespace Firebird;
 #define O_BINARY	0
 #endif
 
+#if !defined(O_DIRECT) && defined(LSB_BUILD)
+#define O_DIRECT 00040000
+#endif
+
 // please undefine FCNTL_BROKEN for operating systems,
 // that can successfully change BOTH O_DIRECT and O_SYNC using fcntl()
 
@@ -260,7 +264,7 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 #endif
 	}
 
-	// posix_fadvise(desc, 0, 0, POSIX_FADV_RANDOM);
+	// fb_io::posix_fadvise(desc, 0, 0, POSIX_FADV_RANDOM);
 
 	// File open succeeded.  Now expand the file name.
 
@@ -472,8 +476,8 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
 		return (0);
 	}
 
-	struct stat statistics;
-	if (fstat(file->fil_desc, &statistics)) {
+	struct STAT statistics;
+	if (fb_io::fstat(file->fil_desc, &statistics)) {
 		unix_error("fstat", file, isc_io_access_err);
 	}
 
@@ -649,8 +653,8 @@ jrd_file* PIO_open(thread_db* tdbb,
 	else if (geteuid() == 0)
 	{
 		// root has too many rights - therefore artificially check for readonly file
-		struct stat st;
-		if (fstat(desc, &st) == 0)
+		struct STAT st;
+		if (fb_io::fstat(desc, &st) == 0)
 		{
 			readOnly = ((st.st_mode & 0222) == 0);	// nobody has write permissions
 		}
@@ -670,7 +674,7 @@ jrd_file* PIO_open(thread_db* tdbb,
 	const bool shareMode = dbb->dbb_config->getServerMode() != MODE_SUPER;
 	lockDatabaseFile(desc, shareMode || readOnly, false, file_name.c_str(), isc_io_open_err);
 
-	// posix_fadvise(desc, 0, 0, POSIX_FADV_RANDOM);
+	// fb_io::posix_fadvise(desc, 0, 0, POSIX_FADV_RANDOM);
 
 #ifdef SUPPORT_RAW_DEVICES
 	// At this point the file has successfully been opened in either RW or RO
@@ -741,7 +745,7 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 		}
 	}
 
-	// posix_fadvise(file->desc, offset, size, POSIX_FADV_NOREUSE);
+	// fb_io::posix_fadvise(file->desc, offset, size, POSIX_FADV_NOREUSE);
 	return true;
 }
 
@@ -782,7 +786,7 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 	}
 
 
-	// posix_fadvise(file->desc, offset, size, POSIX_FADV_DONTNEED);
+	// fb_io::posix_fadvise(file->desc, offset, size, POSIX_FADV_DONTNEED);
 	return true;
 }
 
@@ -938,7 +942,7 @@ static void lockDatabaseFile(int& desc, const bool share, const bool temporary,
 	do
 	{
 #ifndef HAVE_FLOCK
-		struct flock lck;
+		struct FLOCK lck;
 		lck.l_type = shared ? F_RDLCK : F_WRLCK;
 		lck.l_whence = SEEK_SET;
 		lck.l_start = 0;
@@ -1112,9 +1116,9 @@ bool PIO_on_raw_device(const PathName& file_name)
  *	Checks if the supplied file name is a special file
  *
  **************************************/
-	struct stat s;
+	struct STAT s;
 
-	return (stat(file_name.c_str(), &s) == 0 && (S_ISCHR(s.st_mode) || S_ISBLK(s.st_mode)));
+	return (fb_io::stat(file_name.c_str(), &s) == 0 && (S_ISCHR(s.st_mode) || S_ISBLK(s.st_mode)));
 }
 
 
@@ -1145,7 +1149,7 @@ static bool raw_devices_validate_database(int desc, const PathName& file_name)
 
 	for (int i = 0; i < IO_RETRY; i++)
 	{
-		if (lseek(desc, LSEEK_OFFSET_CAST 0, 0) == (off_t) -1)
+		if (fb_io::lseek(desc, LSEEK_OFFSET_CAST 0, 0) == (off_t) -1)
 		{
 			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("lseek") << Arg::Str(file_name) <<
 					 Arg::Gds(isc_io_read_err) << Arg::Unix(errno));
@@ -1167,7 +1171,7 @@ static bool raw_devices_validate_database(int desc, const PathName& file_name)
 
   read_finished:
 	// Rewind file pointer
-	if (lseek(desc, LSEEK_OFFSET_CAST 0, 0) == (off_t) -1)
+	if (fb_io::lseek(desc, LSEEK_OFFSET_CAST 0, 0) == (off_t) -1)
 	{
 		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("lseek") << Arg::Str(file_name) <<
 				 Arg::Gds(isc_io_read_err) << Arg::Unix(errno));

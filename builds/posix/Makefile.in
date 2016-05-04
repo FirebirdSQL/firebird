@@ -58,6 +58,12 @@ else
   Process := master_process
 endif
 
+ifeq ($(LSB_FLG),Y)
+  GCC=/opt/lsb/bin/lsbcc
+else
+  GCC=gcc
+endif
+
 .PHONY:	master_process cross_process firebird Debug Release extern
 
 all:	firebird
@@ -123,18 +129,18 @@ $(GEN_ROOT)/Make.Version : $(SRC_ROOT)/misc/writeBuildNum.sh
 #
 
 extern:
-	$(MAKE) -C $(ROOT)/extern/btyacc
-	$(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop
+	$(MAKE) -C $(ROOT)/extern/btyacc CC="$(CC)" CXX="$(CXX)"
+	$(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop CC="$(CC)" CXX="$(CXX)"
 
 ifeq ($(TOMBUILD_FLG),Y)
-	$(MAKE) -C $(ROOT)/extern/libtommath -f makefile.shared
+	CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/libtommath -f makefile.shared GCC=$(GCC)
 	ln -sf $(TOMMATH_SO).$(TOMMATH_VER) $(LIB)
 	ln -sf $(TOMMATH_SO) $(LIB)
 endif
 
 ifeq ($(STD_EDITLINE),false)
 ifeq ($(EDITLINE_FLG),Y)
-	$(MAKE) -f $(GEN_ROOT)/Makefile.extern.editline
+	$(MAKE) -f $(GEN_ROOT)/Makefile.extern.editline CC="$(CC)" CXX="$(CXX)"
 endif
 endif
 
@@ -567,7 +573,7 @@ $(FIREBIRD_MSG):	$(BUILD_FILE) msg.timestamp
 	$(CHMOD_6) $@
 
 $(BUILD_FILE):	$(BUILD_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $(LSB_UNDEF) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
 
 gbak_files: $(GBAK_FILES)
 

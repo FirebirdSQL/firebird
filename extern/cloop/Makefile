@@ -4,8 +4,8 @@ WITH_FPC	:= 1
 
 TARGET	:= release
 
-CC	:= gcc
-CXX	:= g++
+CC	:= $(CC)
+CXX	:= $(CXX)
 LD	:= $(CXX)
 
 SRC_DIR		:= src

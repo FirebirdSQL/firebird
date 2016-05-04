@@ -68,7 +68,7 @@ static const char* genFtnPasDirectory = NULL;
 
 static void check_open(FILE*& f, const char* name, const char* tmp, const char* mode)
 {
-	f = fopen(tmp, mode);
+	f = fb_io::fopen(tmp, mode);
 	if (!f)
 	{
 		fprintf(stderr, "CODES: Unable to open %s in filemode %s for %s\n",

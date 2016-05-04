@@ -652,7 +652,7 @@ public:
 				system_call_failed::raise("open");
 			}
 
-			struct flock lock;
+			struct FLOCK lock;
 			lock.l_type = F_WRLCK;
 			lock.l_whence = 0;
 			lock.l_start = 0;
@@ -671,7 +671,7 @@ public:
 	{
 		if (fd != -1)
 		{
-			struct flock lock;
+			struct FLOCK lock;
 			lock.l_type = F_UNLCK;
 			lock.l_whence = 0;
 			lock.l_start = 0;

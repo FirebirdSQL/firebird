@@ -38,6 +38,10 @@ ifeq ($(TOMBUILD_FLG),Y)
   WFLAGS += -I$(TOMMATH_INC)
 endif
 
+ifeq ($(LSB_FLG),Y)
+  WFLAGS += -DLSB_BUILD
+endif
+
 ifeq ($(TARGET),Release)
   WFLAGS += $(PROD_FLAGS)
 else

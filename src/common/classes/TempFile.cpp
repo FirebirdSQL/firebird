@@ -211,7 +211,7 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 	filename += NAME_PATTERN;
 
 #ifdef HAVE_MKSTEMP
-	handle = (IPTR) mkstemp(filename.begin());
+	handle = (IPTR) fb_io::mkstemp(filename.begin());
 #else
 	if (!mktemp(filename.begin()))
 	{
@@ -275,7 +275,7 @@ void TempFile::seek(const offset_t offset)
 		system_error::raise("SetFilePointer");
 	}
 #else
-	const off_t seek_result = ::lseek(handle, (off_t) offset, SEEK_SET);
+	const off_t seek_result = fb_io::lseek(handle, (off_t) offset, SEEK_SET);
 	if (seek_result == (off_t) -1)
 	{
 		system_error::raise("lseek");

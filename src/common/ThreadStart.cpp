@@ -201,7 +201,7 @@ void Thread::kill(Handle& thread)
 
 ThreadId Thread::getId()
 {
-#if defined(LINUX) && !defined(ANDROID)
+#if defined(LINUX) && !defined(ANDROID) && !defined(LSB_BUILD)
 	return syscall(SYS_gettid);
 #else
 	return pthread_self();

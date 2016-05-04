@@ -55,8 +55,8 @@ private:
 
 bool ModuleLoader::isLoadableModule(const Firebird::PathName& module)
 {
-	struct stat sb;
-	if (-1 == stat(module.c_str(), &sb))
+	struct STAT sb;
+	if (-1 == fb_io::stat(module.c_str(), &sb))
 		return false;
 	if ( ! (sb.st_mode & S_IFREG) )		// Make sure it is a plain file
 		return false;

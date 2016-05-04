@@ -555,6 +555,26 @@ if test "x$enable_rpath" != "xno" || test "x$enable_rpath" = "x" ; then
   AC_SUBST(USE_RPATH, 1)
 fi
 
+LSB_FLG=N
+AC_ARG_ENABLE(lsb-build,
+  [  --enable-lsb-build      build LSB-compliant binaries (default=no)],
+  [case "$enableval" in
+     yes) LSB_FLG=Y;;
+     no)  LSB_FLG=N;;
+     *)   AC_MSG_ERROR(bad value '${enableval}' for --enable-lsb-build);;
+   esac])
+AC_SUBST(LSB_FLG)
+if test "$LSB_FLG" = "Y"; then
+  CFLAGS="$CFLAGS --lsb-besteffort --lsb-shared-libs=fbclient:ib_util:tommath --lsb-target-version=4.1"
+  CXXFLAGS="$CXXFLAGS --lsb-besteffort  --lsb-shared-libs=fbclient:ib_util:tommath --lsb-target-version=4.1"
+  AC_SUBST(TOMBUILD, Y)
+  AC_PATH_PROG(CC, lsbcc, "", [$PATH$PATH_SEPARATOR/opt/lsb/bin$PATH_SEPARATOR])
+  AC_PATH_PROG(CXX, lsbc++, "", [$PATH$PATH_SEPARATOR/opt/lsb/bin$PATH_SEPARATOR])
+  if test "x$CC" = "x" || test "x$CXX" = "x" ; then
+    AC_MSG_ERROR(Can not find LSB compilers in /opt/lsb/bin)
+  fi
+fi
+
 AC_ARG_WITH(editline,
   [  --with-editline         support fancy command line editing],
   [case "$withval" in
@@ -767,8 +787,11 @@ fi
 
 dnl check for ICU presence
 AC_CHECK_HEADER(unicode/ucnv.h,,AC_MSG_ERROR(ICU support not found - please install development ICU package))
+
+if test "$LSB_FLG" = "N"; then
 dnl setting ICU_OK here is done to only avoid default action
 AC_CHECK_LIB(icuuc, main, ICU_OK=yes, AC_MSG_ERROR(ICU support not found - please install development ICU package))
+fi
 
 dnl check for tommath presence
 if test "$TOMBUILD" = "Y"; then

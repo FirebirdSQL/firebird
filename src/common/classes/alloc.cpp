@@ -2215,13 +2215,13 @@ void* MemPool::allocRaw(size_t size) throw (OOM_EXCEPTION)
 
 #ifdef MAP_ANONYMOUS
 
-	void* result = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	void* result = fb_io::mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
 #else // MAP_ANONYMOUS
 
 	if (dev_zero_fd < 0)
 		dev_zero_fd = os_utils::open("/dev/zero", O_RDWR);
-	void* result = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, dev_zero_fd, 0);
+	void* result = fb_io::mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, dev_zero_fd, 0);
 
 #endif // MAP_ANONYMOUS
 

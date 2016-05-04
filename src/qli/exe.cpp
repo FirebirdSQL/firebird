@@ -297,7 +297,7 @@ FILE* EXEC_open_output(qli_nod* node)
 
 	if (!node->nod_arg[e_out_pipe])
 	{
-	    FILE* out_file = fopen(filename, FOPEN_WRITE_TYPE);
+	    FILE* out_file = fb_io::fopen(filename, FOPEN_WRITE_TYPE);
 		if (out_file)
 			return out_file;
 

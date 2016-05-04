@@ -133,6 +133,11 @@ CAS_OPTIONS=@CAS_OPTIONS@
 # multiple-precision integer library
 MATHLIB=@MATHLIB@
 
+LSB_FLG=@LSB_FLG@
+ifeq ($(LSB_FLG), Y)
+  LSB_UNDEF=-Wl,--allow-shlib-undefined
+endif
+
 # switch to make sed edit files inplace
 INLINE_EDIT_SED:= -i
 
@@ -161,6 +166,9 @@ CLOOP=$(GEN_ROOT)/$(TARGET)/cloop/release/bin/cloop
 CC =	@CC@
 CXX =	@CXX@
 LD =	@CXX@
+
+CFLAGS =	@CFLAGS@
+CXXFLAGS =	@CXXFLAGS@
 
 # LINKER COMMANDS
 

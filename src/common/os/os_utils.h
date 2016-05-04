@@ -37,7 +37,6 @@
 #ifdef WIN_NT
 #include <sys/stat.h>
 
-#define mode_t int
 #define DEFAULT_OPEN_MODE (_S_IREAD | _S_IWRITE)
 #else
 #define DEFAULT_OPEN_MODE (0666)

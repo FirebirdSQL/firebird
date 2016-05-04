@@ -142,7 +142,7 @@ bool putFileFromArgument(char**& av, ClumpletWriter& spb, unsigned int tag)
 	if (! *av)
 		return false;
 
-	FILE* const file = fopen(*av, "rb");
+	FILE* const file = fb_io::fopen(*av, "rb");
 	if (!file) {
 		(Arg::Gds(isc_fbsvcmgr_fp_open) << *av << Arg::OsError()).raise();
 	}

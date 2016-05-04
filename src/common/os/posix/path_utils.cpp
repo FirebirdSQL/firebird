@@ -85,7 +85,7 @@ const PosixDirItr& PosixDirItr::operator++()
 {
 	if (done)
 		return *this;
-	struct dirent *ent = readdir(dir);
+	struct dirent *ent = fb_io::readdir(dir);
 	if (ent == NULL)
 	{
 		done = true;
@@ -180,10 +180,10 @@ bool PathUtils::isRelative(const Firebird::PathName& path)
 
 bool PathUtils::isSymLink(const Firebird::PathName& path)
 {
-	struct stat st, lst;
-	if (stat(path.c_str(), &st) != 0)
+	struct STAT st, lst;
+	if (fb_io::stat(path.c_str(), &st) != 0)
 		return false;
-	if (lstat(path.c_str(), &lst) != 0)
+	if (fb_io::lstat(path.c_str(), &lst) != 0)
 		return false;
 	return st.st_ino != lst.st_ino;
 }

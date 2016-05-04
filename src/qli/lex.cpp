@@ -168,7 +168,7 @@ void LEX_edit(SLONG start, SLONG stop)
  *
  **************************************/
 	const Firebird::PathName filename = TempFile::create(SCRATCH);
-	FILE* scratch = fopen(filename.c_str(), "w+b");
+	FILE* scratch = fb_io::fopen(filename.c_str(), "w+b");
 	if (!scratch)
 		IBERROR(61);			// Msg 61 couldn't open scratch file
 
@@ -517,7 +517,7 @@ void LEX_init()
  **************************************/
 	const Firebird::PathName filename = TempFile::create(SCRATCH);
 	strcpy(trace_file_name, filename.c_str());
-	trace_file = fopen(trace_file_name, "w+b");
+	trace_file = fb_io::fopen(trace_file_name, "w+b");
 #ifdef UNIX
 	unlink(trace_file_name);
 #endif
@@ -631,12 +631,12 @@ bool LEX_push_file(const TEXT* filename, const bool error_flag)
  *	if the error flag is set, otherwise return quietly.
  *
  **************************************/
-	FILE *file = fopen(filename, FOPEN_INPUT_TYPE);
+	FILE *file = fb_io::fopen(filename, FOPEN_INPUT_TYPE);
 	if (!file)
 	{
 	    TEXT buffer[64];
 		sprintf(buffer, "%s.com", filename);
-		if (!(file = fopen(buffer, FOPEN_INPUT_TYPE)))
+		if (!(file = fb_io::fopen(buffer, FOPEN_INPUT_TYPE)))
 		{
 			if (error_flag)
 				ERRQ_msg_put(67, filename);

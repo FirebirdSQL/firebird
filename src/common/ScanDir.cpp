@@ -90,7 +90,7 @@ bool ScanDir::next()
 	if (!dir)
 		return false;
 
-	while ((data = readdir (dir)))
+	while ((data = fb_io::readdir (dir)))
 	{
 		if (match (pattern.c_str(), data->d_name))
 			return true;
@@ -150,12 +150,12 @@ bool ScanDir::isDirectory()
 {
 #if defined(_WIN32)
 	return (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-#elif defined(HAVE_STRUCT_DIRENT_D_TYPE)
+#elif defined(HAVE_STRUCT_DIRENT_D_TYPE) && !defined(LSB_BUILD)
 	return (data->d_type == DT_DIR);
 #else
-	struct stat buf;
+	struct STAT buf;
 
-    if (stat (getFilePath(), &buf))
+    if (fb_io::stat(getFilePath(), &buf))
 		return false;
 
 	return S_ISDIR (buf.st_mode);

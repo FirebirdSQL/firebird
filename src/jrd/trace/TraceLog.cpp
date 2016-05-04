@@ -140,7 +140,7 @@ FB_SIZE_T TraceLog::read(void* buf, FB_SIZE_T size)
 		if (reads == 0)
 		{
 			// EOF reached, check the reason
-			const off_t len = lseek(m_fileHandle, 0, SEEK_CUR);
+			const off_t len = fb_io::lseek(m_fileHandle, 0, SEEK_CUR);
 
 			if (len == -1)
 				system_call_failed::raise("lseek", errno);

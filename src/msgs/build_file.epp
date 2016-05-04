@@ -336,7 +336,7 @@ static USHORT do_msgs( const TEXT* filename, const TEXT* locale, bool sw_warning
 
 	// Open output file
 
-	global_file = open(filename, O_WRONLY | O_CREAT | O_BINARY, 0666);
+	global_file = fb_io::open(filename, O_WRONLY | O_CREAT | O_BINARY, 0666);
 	if (global_file == -1)
 	{
 		printf("Can't open %s\n", filename);
@@ -448,7 +448,7 @@ static USHORT do_msgs( const TEXT* filename, const TEXT* locale, bool sw_warning
 
 	// Re-write header record and finish
 
-	lseek(global_file, LSEEK_OFFSET_CAST 0, 0);
+	fb_io::lseek(global_file, LSEEK_OFFSET_CAST 0, 0);
 	FB_UNUSED(write(global_file, &header, sizeof(header)));
 	close(global_file);
 	global_file = -1;

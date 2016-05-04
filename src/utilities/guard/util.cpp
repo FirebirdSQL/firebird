@@ -249,7 +249,7 @@ int UTIL_ex_lock(const TEXT* file)
 	Firebird::PathName expanded_filename = fb_utils::getPrefix(Firebird::IConfigManager::DIR_GUARD, file);
 
 	// file fd for the opened and locked file
-	int fd_file = open(expanded_filename.c_str(), O_RDWR | O_CREAT, 0660);
+	int fd_file = fb_io::open(expanded_filename.c_str(), O_RDWR | O_CREAT, 0660);
 	if (fd_file == -1)
 	{
 		fprintf(stderr, "Could not open %s for write\n", expanded_filename.c_str());
@@ -260,7 +260,7 @@ int UTIL_ex_lock(const TEXT* file)
 
 #ifndef HAVE_FLOCK
 	// get an exclusive lock on the GUARD file without blocking on the call
-	struct flock lock;
+	struct FLOCK lock;
 	lock.l_type = F_WRLCK;
 	lock.l_whence = 0;
 	lock.l_start = 0;
@@ -294,7 +294,7 @@ void UTIL_ex_unlock( int fd_file)
 
 #ifndef HAVE_FLOCK
 
-	struct flock lock;
+	struct FLOCK lock;
 
 	// get an exclusive lock on the GUARD file with a block
 	lock.l_type = F_UNLCK;

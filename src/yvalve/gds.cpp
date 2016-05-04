@@ -36,10 +36,11 @@
 //#define ISC_TIME_SECONDS_PRECISION_SCALE	-4
 
 #include "firebird.h"
-#include "firebird/Interface.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include "firebird/Interface.h"
 #include "../common/gdsassert.h"
 #include "../common/file_params.h"
 #include "../common/msg_encode.h"
@@ -78,7 +79,6 @@
 #endif
 
 #include <sys/types.h>
-#include <sys/stat.h>
 #ifdef HAVE_SYS_FILE_H
 #include <sys/file.h>
 #endif
@@ -1192,7 +1192,7 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 #ifdef HAVE_FLOCK
 		if (flock(fileno(file), LOCK_EX))
 #else
-		if (lockf(fileno(file), F_LOCK, 0))
+		if (fb_io::lockf(fileno(file), F_LOCK, 0))
 #endif
 		{
 			// give up
@@ -1511,7 +1511,7 @@ SSHORT API_ROUTINE gds__msg_lookup(void* handle,
 		status = 0;
 		for (USHORT n = 1; !status; n++)
 		{
-			if (lseek(messageL->msg_file, LSEEK_OFFSET_CAST position, 0) < 0)
+			if (fb_io::lseek(messageL->msg_file, LSEEK_OFFSET_CAST position, 0) < 0)
 				status = -6;
 			else if (read(messageL->msg_file, messageL->msg_bucket, messageL->msg_bucket_size) < 0)
 				status = -7;

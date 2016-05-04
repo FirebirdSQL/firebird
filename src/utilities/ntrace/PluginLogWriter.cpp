@@ -78,7 +78,7 @@ SINT64 PluginLogWriter::seekToEnd()
 #ifdef WIN_NT
 	SINT64 nFileLen = _lseeki64(m_fileHandle, 0, SEEK_END);
 #else
-	off_t nFileLen = lseek(m_fileHandle, 0, SEEK_END);
+	off_t nFileLen = fb_io::lseek(m_fileHandle, 0, SEEK_END);
 #endif
 
 	if (nFileLen < 0)
@@ -104,7 +104,7 @@ void PluginLogWriter::reopen()
 		);
 	m_fileHandle = _open_osfhandle((intptr_t) hFile, 0);
 #else
-	m_fileHandle = ::open(m_fileName.c_str(), O_CREAT | O_APPEND | O_RDWR, S_IREAD | S_IWRITE);
+	m_fileHandle = fb_io::open(m_fileName.c_str(), O_CREAT | O_APPEND | O_RDWR, S_IREAD | S_IWRITE);
 #endif
 
 	if (m_fileHandle < 0)

@@ -73,6 +73,11 @@
 #include <sys/signal.h>
 #endif
 
+#if defined(LSB_BUILD) && LSB_BUILD < 50
+#define O_CLOEXEC       02000000
+#endif
+
+
 using namespace Firebird;
 
 namespace os_utils
@@ -140,13 +145,9 @@ void createLockDirectory(const char* pathname)
 	{
 		if (access(pathname, R_OK | W_OK | X_OK) == 0)
 		{
-			struct stat st;
-			while (stat(pathname, &st) != 0)
+			struct STAT st;
+			if (fb_io::stat(pathname, &st) != 0)
 			{
-				if (SYSCALL_INTERRUPTED(errno))
-				{
-					continue;
-				}
 				system_call_failed::raise("stat");
 			}
 
@@ -197,12 +198,10 @@ int openCreateSharedFile(const char* pathname, int flags)
 	// Malicious user can create a symlink with this name pointing to say
 	// security2.fdb and when the lock file is created the file will be damaged.
 
-	struct stat st;
+	struct STAT st;
 	int rc;
 
-	do {
-		rc = fstat(fd, &st);
-	} while (fd != 0 && SYSCALL_INTERRUPTED(errno));
+	rc = fb_io::fstat(fd, &st);
 
 	if (rc != 0)
 	{
@@ -265,15 +264,11 @@ void setCloseOnExec(int fd)
 int open(const char* pathname, int flags, mode_t mode)
 {
 	int fd;
-	do {
-		fd = ::open(pathname, flags | O_CLOEXEC, mode);
-	} while (fd < 0 && SYSCALL_INTERRUPTED(errno));
+	fd = fb_io::open(pathname, flags | O_CLOEXEC, mode);
 
 	if (fd < 0 && errno == EINVAL)	// probably O_CLOEXEC not accepted
 	{
-		do {
-			fd = ::open(pathname, flags | O_CLOEXEC, mode);
-		} while (fd < 0 && SYSCALL_INTERRUPTED(errno));
+		fd = fb_io::open(pathname, flags | O_CLOEXEC, mode);
 	}
 
 	setCloseOnExec(fd);
@@ -282,13 +277,13 @@ int open(const char* pathname, int flags, mode_t mode)
 
 FILE* fopen(const char* pathname, const char* mode)
 {
-	FILE* f = ::fopen(pathname, mode);	// TODO: use open + fdopen to avoid races
+	FILE* f = fb_io::fopen(pathname, mode);	// TODO: use open + fdopen to avoid races
 	if (f)
 		setCloseOnExec(fileno(f));
 	return f;
 }
 
-static void makeUniqueFileId(const struct stat& statistics, UCharBuffer& id)
+static void makeUniqueFileId(const struct STAT& statistics, UCharBuffer& id)
 {
 	const size_t len1 = sizeof(statistics.st_dev);
 	const size_t len2 = sizeof(statistics.st_ino);
@@ -303,11 +298,9 @@ static void makeUniqueFileId(const struct stat& statistics, UCharBuffer& id)
 
 void getUniqueFileId(int fd, UCharBuffer& id)
 {
-	struct stat statistics;
-	while (fstat(fd, &statistics) != 0)
+	struct STAT statistics;
+	if (fb_io::fstat(fd, &statistics) != 0)
 	{
-		if (errno == EINTR)
-			continue;
 		system_call_failed::raise("fstat");
 	}
 
@@ -317,12 +310,9 @@ void getUniqueFileId(int fd, UCharBuffer& id)
 
 void getUniqueFileId(const char* name, UCharBuffer& id)
 {
-	struct stat statistics;
-	while (stat(name, &statistics) != 0)
+	struct STAT statistics;
+	if (fb_io::stat(name, &statistics) != 0)
 	{
-		if (errno == EINTR)
-			continue;
-
 		id.clear();
 		return;
 	}

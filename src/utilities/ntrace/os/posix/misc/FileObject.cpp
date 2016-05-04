@@ -68,7 +68,7 @@ void FileObject::open(int flags, int pflags)
 	if (flags & fo_excl)
 		oflags |= O_EXCL;
 
-	file = ::open(filename.c_str(), oflags, pflags);
+	file = fb_io::open(filename.c_str(), oflags, pflags);
 	open_mutex.leave();
 
 	if (file < 0)
@@ -87,8 +87,8 @@ FileObject::~FileObject()
 FB_UINT64 FileObject::size()
 {
 	off_t nFileLen = 0;
-	struct stat file_stat;
-	if (!fstat(file, &file_stat))
+	struct STAT file_stat;
+	if (!fb_io::fstat(file, &file_stat))
 		nFileLen = file_stat.st_size;
 	else
 		fatal_exception::raiseFmt("IO error (%d) file stat: %s", errno, filename.c_str());
@@ -176,7 +176,7 @@ SINT64 FileObject::seek(SINT64 newOffset, SeekOrigin origin)
 			break;
 	}
 
-	off_t result = lseek(file, newOffset, moveMethod);
+	off_t result = fb_io::lseek(file, newOffset, moveMethod);
 
 	if (result == (off_t) -1)
 	{

@@ -106,6 +106,11 @@ static wchar_t *do_svis(wchar_t *, wint_t, int, wint_t, const wchar_t *);
 
 #define MAXEXTRAS	30
 
+// LSB compliance
+#ifndef NBBY
+#define NBBY            CHAR_BIT
+#endif
+
 static const wchar_t char_shell[] = L"'`\";&<>()|{}]\\$!^~";
 static const wchar_t char_glob[] = L"*?[#";
 

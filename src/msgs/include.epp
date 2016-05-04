@@ -221,7 +221,7 @@ static void gen( const char* language, const char* filename)
 	FOR X IN TEMPLATES WITH X.LANGUAGE EQ language
 		if (!filename)
 			filename = FILE;
-		if (!(output = fopen(filename, "w")))
+		if (!(output = fb_io::fopen(filename, "w")))
 		{
 			perror(FILE);
 			return;

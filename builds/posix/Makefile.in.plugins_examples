@@ -106,7 +106,7 @@ AllObjects += $(CA_Objects)
 crypt_app: $(CRYPT_APP)
 
 $(CRYPT_APP):	$(CA_Objects)
-	$(EXE_LINK) $^ -o $@ $(FIREBIRD_LIBRARY_LINK)
+	$(EXE_LINK) $(LSB_UNDEF) $^ -o $@ $(FIREBIRD_LIBRARY_LINK)
 
 
 include $(ROOT)/gen/make.shared.targets

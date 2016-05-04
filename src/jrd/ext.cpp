@@ -72,6 +72,9 @@ __int64 __cdecl _ftelli64(FILE*);
 #ifdef WIN_NT
 #define FTELL64 _ftelli64
 #define FSEEK64 _fseeki64
+#elif defined(LSB_BUILD)
+#define FTELL64 ftello64
+#define FSEEK64 fseeko64
 #else
 #define FTELL64 ftello
 #define FSEEK64 fseeko
@@ -186,8 +189,8 @@ double EXT_cardinality(thread_db* tdbb, jrd_rel* relation)
 		struct __stat64 statistics;
 		if (!_fstat64(_fileno(file->ext_ifi), &statistics))
 #else
-		struct stat statistics;
-		if (!fstat(fileno(file->ext_ifi), &statistics))
+		struct STAT statistics;
+		if (!fb_io::fstat(fileno(file->ext_ifi), &statistics))
 #endif
 		{
 			file_size = statistics.st_size;

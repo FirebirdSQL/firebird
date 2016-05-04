@@ -255,8 +255,8 @@ namespace {
 
 	DevNode getNode(const char* name)
 	{
-		struct stat statistics;
-		if (stat(name, &statistics) != 0)
+		struct STAT statistics;
+		if (fb_io::stat(name, &statistics) != 0)
 		{
 			if (errno == ENOENT)
 			{
@@ -272,8 +272,8 @@ namespace {
 
 	DevNode getNode(int fd)
 	{
-		struct stat statistics;
-		if (fstat(fd, &statistics) != 0)
+		struct STAT statistics;
+		if (fb_io::fstat(fd, &statistics) != 0)
 		{
 			system_call_failed::raise("stat");
 		}
@@ -447,7 +447,7 @@ int FileLock::setlock(const LockMode mode)
 
 #ifdef USE_FCNTL
 	// Take lock on a file
-	struct flock lock;
+	struct FLOCK lock;
 	lock.l_type = shared ? F_RDLCK : F_WRLCK;
 	lock.l_whence = SEEK_SET;
 	lock.l_start = lStart;
@@ -545,7 +545,7 @@ void FileLock::unlock()
 	}
 
 #ifdef USE_FCNTL
-	struct flock lock;
+	struct FLOCK lock;
 	lock.l_type = F_UNLCK;
 	lock.l_whence = SEEK_SET;
 	lock.l_start = lStart;
@@ -719,7 +719,7 @@ namespace {
 				return;
 			}
 
-			FB_UNUSED(ftruncate(fdSem, sizeof(*this)));
+			FB_UNUSED(fb_io::ftruncate(fdSem, sizeof(*this)));
 
 			for (int i = 0; i < N_SETS; ++i)
 			{
@@ -1839,7 +1839,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	public:
 		static void init(int fd)
 		{
-			void* sTab = mmap(0, sizeof(SemTable), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+			void* sTab = fb_io::mmap(0, sizeof(SemTable), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 			if ((U_IPTR) sTab == (U_IPTR) -1)
 			{
 				system_call_failed::raise("mmap");
@@ -1878,8 +1878,8 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	if (length == 0)
 	{
 		// Get and use the existing length of the shared segment
-		struct stat file_stat;
-		if (fstat(mainLock->getFd(), &file_stat) == -1)
+		struct STAT file_stat;
+		if (fb_io::fstat(mainLock->getFd(), &file_stat) == -1)
 		{
 			system_call_failed::raise("fstat");
 		}
@@ -1893,7 +1893,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	}
 
 	// map file to memory
-	void* const address = mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
+	void* const address = fb_io::mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
 	if ((U_IPTR) address == (U_IPTR) -1)
 	{
 		system_call_failed::raise("mmap", errno);
@@ -1958,7 +1958,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	if (mainLock->setlock(&statusVector, FileLock::FLM_TRY_EXCLUSIVE))
 	{
 		if (trunc_flag)
-			FB_UNUSED(ftruncate(mainLock->getFd(), length));
+			FB_UNUSED(fb_io::ftruncate(mainLock->getFd(), length));
 
 		if (callback->initialize(this, true))
 		{
@@ -2470,7 +2470,7 @@ UCHAR* SharedMemoryBase::mapObject(CheckStatusWrapper* statusVector, ULONG objec
 	const ULONG end = FB_ALIGN(object_offset + object_length, page_size);
 	const ULONG length = end - start;
 
-	UCHAR* address = (UCHAR*) mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), start);
+	UCHAR* address = (UCHAR*) fb_io::mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), start);
 
 	if ((U_IPTR) address == (U_IPTR) -1)
 	{
@@ -3085,10 +3085,10 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector, ULONG new_len
 	}
 
 	if (flag)
-		FB_UNUSED(ftruncate(mainLock->getFd(), new_length));
+		FB_UNUSED(fb_io::ftruncate(mainLock->getFd(), new_length));
 
 	MemoryHeader* const address = (MemoryHeader*)
-		mmap(0, new_length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
+		fb_io::mmap(0, new_length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
 	if ((U_IPTR) address == (U_IPTR) -1)
 	{
 		error(statusVector, "mmap() failed", errno);
@@ -3290,8 +3290,8 @@ static SLONG create_semaphores(CheckStatusWrapper* statusVector, SLONG key, int 
 			// We want to limit access to semaphores, created here
 			// Reasonable access rights to them - exactly like security database has
 			const char* secDb = Config::getDefaultConfig()->getSecurityDatabase();
-			struct stat st;
-			if (stat(secDb, &st) == 0)
+			struct STAT st;
+			if (fb_io::stat(secDb, &st) == 0)
 			{
 				union semun arg;
 				semid_ds ds;
