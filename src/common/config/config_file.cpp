@@ -684,6 +684,9 @@ void ConfigFile::parse(Stream* stream)
 
 void ConfigFile::include(const char* currentFileName, const PathName& parPath)
 {
+#ifdef DEBUG_INCLUDES
+	fprintf(stderr, "include into %s file(s) %s\n", currentFileName, parPath.c_str());
+#endif
 	// We should better limit include depth
 	AutoSetRestore<unsigned> depth(&includeLimit, includeLimit + 1);
 	if (includeLimit > INCLUDE_LIMIT)
@@ -695,19 +698,15 @@ void ConfigFile::include(const char* currentFileName, const PathName& parPath)
 	PathName path;
 	if (PathUtils::isRelative(parPath))
 	{
-		PathName curPath;
-		PathUtils::splitLastComponent(curPath, path /*dummy*/, currentFileName);
-		PathUtils::concatPath(path, curPath, parPath);
+		PathName dummy;
+		PathUtils::splitLastComponent(path, dummy, currentFileName);
 	}
-	else
-	{
-		path = parPath;
-	}
+	PathUtils::concatPath(path, path, parPath);
 
 	// split path into components
 	PathName pathPrefix;
 	PathUtils::splitPrefix(path, pathPrefix);
-	PathName savedPath(path);		// Expect no *? in prefix
+	bool hadWildCards = hasWildCards(path);		// Expect no *? in prefix
 	FilesArray components;
 	while (path.hasData())
 	{
@@ -726,7 +725,7 @@ void ConfigFile::include(const char* currentFileName, const PathName& parPath)
 	if (!wildCards(currentFileName, pathPrefix, components))
 	{
 		// no matches found - check for presence of wild symbols in path
-		if (!hasWildCards(savedPath))
+		if (!hadWildCards)
 		{
 			(Arg::Gds(isc_conf_include) << currentFileName << parPath << Arg::Gds(isc_include_miss)).raise();
 		}
@@ -750,6 +749,7 @@ bool ConfigFile::wildCards(const char* currentFileName, const PathName& pathPref
 
 	bool found = false;
 	PathName next(components.pop());
+	bool mustBeDir = components.hasData();
 
 #ifdef DEBUG_INCLUDES
 	fprintf(stderr, "wildCards: prefix=%s next=%s left=%d\n",
@@ -761,9 +761,9 @@ bool ConfigFile::wildCards(const char* currentFileName, const PathName& pathPref
 	{
 		PathName name;
 		const PathName fileName = list.getFileName();
-		if (fileName == PathUtils::curr_dir_link)
+		if (fileName == PathUtils::curr_dir_link || fileName == PathUtils::up_dir_link)
 			continue;
-		if (fileName[0] == '.' && next[0] != '.')
+		if (mustBeDir && !list.isDirectory())
 			continue;
 		PathUtils::concatPath(name, pathPrefix, fileName);
 
@@ -773,11 +773,15 @@ bool ConfigFile::wildCards(const char* currentFileName, const PathName& pathPref
 #endif
 
 		if (filesCache)
-			filesCache->addFile(name);
-
-		if (components.hasData())	// should be directory
 		{
-			found = found || wildCards(currentFileName, name, components);
+			bool added = filesCache->addFile(name);
+			if (!mustBeDir && !added)
+				continue; // Prevent loops in includes
+		}
+
+		if (mustBeDir)	// should be directory
+		{
+			found = wildCards(currentFileName, name, components) || found;
 		}
 		else
 		{
@@ -789,6 +793,8 @@ bool ConfigFile::wildCards(const char* currentFileName, const PathName& pathPref
 			}
 		}
 	}
+	// Return component back to allow use it for next path as well
+	components.push(next);
 
 	return found;
 }
