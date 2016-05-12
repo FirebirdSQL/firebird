@@ -2143,7 +2143,7 @@ protected:
 private:
 	void modifyPrivileges(thread_db* tdbb, jrd_tra* transaction, SSHORT option, const GranteeClause* user);
 	void grantRevoke(thread_db* tdbb, jrd_tra* transaction, const GranteeClause* object,
-		const GranteeClause* userNod, const char* privs, const Firebird::MetaName& field, int options);
+		const GranteeClause* userNod, const char* privs, Firebird::MetaName field, int options);
 	static void checkGrantorCanGrant(thread_db* tdbb, jrd_tra* transaction, const char* grantor,
 		const char* privilege, const Firebird::MetaName& relationName,
 		const Firebird::MetaName& fieldName, bool topLevel);
