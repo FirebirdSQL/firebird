@@ -1806,7 +1806,7 @@ void SHOW_grant_roles2 (const SCHAR* terminator,
  * Functional description
  *	Show grants for each role name
  *	This function is also called by extract for privileges.
- *	All membership privilege may have the with_admin option set.
+ *	All membership privilege may have the with_admin or/and default options set.
  *
  **************************************/
 	TEXT SQL_identifier2[BUFFER_LENGTH128];
@@ -1818,7 +1818,8 @@ void SHOW_grant_roles2 (const SCHAR* terminator,
 
 	FOR PRV IN RDB$USER_PRIVILEGES WITH
 		PRV.RDB$OBJECT_TYPE   EQ obj_sql_role AND
-		PRV.RDB$USER_TYPE     EQ obj_user     AND
+		(PRV.RDB$USER_TYPE    EQ obj_user      OR
+		PRV.RDB$USER_TYPE     EQ obj_sql_role) AND
 		PRV.RDB$PRIVILEGE     EQ 'M'
 		SORTED BY PRV.RDB$RELATION_NAME, PRV.RDB$USER
 
@@ -1833,8 +1834,11 @@ void SHOW_grant_roles2 (const SCHAR* terminator,
 		const char* user_string = fb_utils::exact_name(PRV.RDB$USER);
 
 		const char* with_option = "";
+		const char* default_option = "";
 		if (PRV.RDB$GRANT_OPTION)
 			with_option = " WITH ADMIN OPTION";
+		if (!PRV.RDB$FIELD_NAME.NULL && PRV.RDB$FIELD_NAME[0] == 'D')
+			default_option = " DEFAULT";
 
 		const char* role = fb_utils::exact_name(PRV.RDB$RELATION_NAME);
 		const char* grantor = fb_utils::exact_name(PRV.RDB$GRANTOR);
@@ -1845,7 +1849,7 @@ void SHOW_grant_roles2 (const SCHAR* terminator,
 			IUTILS_copy_SQL_id(PRV.RDB$USER, SQL_identifier2, DBL_QUOTE);
 			user_string = SQL_identifier2;
 		}
-		isqlGlob.printf("GRANT %s TO %s%s%s%s%s", role,
+		isqlGlob.printf("GRANT%s %s TO %s%s%s%s%s", default_option, role,
 			user_string, with_option, granted_by(buf_grantor, grantor, false), terminator, NEWLINE);
 
 	END_FOR
