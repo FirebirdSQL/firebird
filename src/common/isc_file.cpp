@@ -1459,7 +1459,7 @@ bool Mnt::get()
  **************************************/
 
 
-	TEXT device[128], mount_point[128], mount_type[16], rw[128], foo1[16];
+	TEXT device[MAXPATHLEN], mount_point[MAXPATHLEN], mount_type[16], rw[512], foo1[16];
 
 	const int n = fscanf(mtab, "%s %s %s %s %s %s", device, mount_point, mount_type, rw, foo1, foo1);
 	if (n < 0)
