@@ -606,6 +606,10 @@ using namespace Firebird;
 %token <metaNamePtr> SYSTEM
 %token <metaNamePtr> TIES
 %token <metaNamePtr> UNBOUNDED
+%token <metaNamePtr> SQL
+%token <metaNamePtr> SECURITY
+%token <metaNamePtr> INVOKER
+%token <metaNamePtr> DEFINER
 
 // precedence declarations for expression evaluation
 
@@ -2476,10 +2480,20 @@ external_procedure_clause
 
 %type <createAlterProcedureNode> procedure_clause_start
 procedure_clause_start
-	: symbol_procedure_name
-			{ $$ = newNode<CreateAlterProcedureNode>(*$1); }
-		input_parameters(NOTRIAL(&$2->parameters)) output_parameters(NOTRIAL(&$2->returns))
-			{ $$ = $2; }
+	: symbol_procedure_name sql_security_clause
+		{
+			$$ = newNode<CreateAlterProcedureNode>(*$1);
+			$$->ssDefiner = $2;
+		}
+	input_parameters(NOTRIAL(&$3->parameters)) output_parameters(NOTRIAL(&$3->returns))
+			{ $$ = $3; }
+	;
+
+%type <boolVal> sql_security_clause
+sql_security_clause
+	: { $$ = false; }
+	| SQL SECURITY DEFINER { $$ = true; }
+	| SQL SECURITY INVOKER { $$ = false; }
 	;
 
 %type <createAlterProcedureNode> alter_procedure_clause
@@ -7976,7 +7990,11 @@ non_reserved_word
 	| SYSTEM
 	| ERROR_MESSAGE
 	| TIES
-;
+	| SQL
+	| SECURITY
+	| INVOKER
+	| DEFINER
+	;
 
 %%
 

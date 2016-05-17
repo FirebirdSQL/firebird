@@ -454,17 +454,30 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 		{
 			const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());
 
+			MetaName userName;
+
+			if (access->acc_view_id)
+			{
+				const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_view_id, false);
+				if (view && (view->rel_flags & REL_sql_relation))
+					userName = view->rel_owner_name;
+			}
+
 			if (routine->getName().package.isEmpty())
 			{
-				SCL_check_access(tdbb, sec_class, access->acc_view_id, aclType,
+				if (userName.isEmpty() && routine->ssDefiner && routine->owner.hasData())
+					userName = routine->owner;
+
+				SCL_check_access(tdbb, sec_class, userName, aclType,
 					routine->getName().identifier, access->acc_mask, access->acc_type,
 					true, access->acc_name, access->acc_r_name);
 			}
 			else
 			{
-				SCL_check_access(tdbb, sec_class, access->acc_view_id,
-					id_package, routine->getName().package,
-					access->acc_mask, access->acc_type,
+				// simakov: do we need to check package definer here?
+
+				SCL_check_access(tdbb, sec_class, userName, id_package,
+					routine->getName().package, access->acc_mask, access->acc_type,
 					true, access->acc_name, access->acc_r_name);
 			}
 		}
@@ -511,7 +524,16 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 			objName = transaction->tra_caller_name.name;
 		}
 
-		SCL_check_access(tdbb, sec_class, access->acc_view_id, objType, objName,
+		MetaName userName;
+
+		if (access->acc_view_id) // simakov: Is it necessary?
+		{
+			const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_view_id, false);
+			if (view && (view->rel_flags & REL_sql_relation))
+				userName = view->rel_owner_name;
+		}
+
+		SCL_check_access(tdbb, sec_class, userName, objType, objName,
 			access->acc_mask, access->acc_type, true, access->acc_name, access->acc_r_name);
 	}
 }
@@ -629,10 +651,20 @@ void JrdStatement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 			}
 
 			// a direct access to an object from this trigger
+			MetaName userName;
+
+			if (access->acc_view_id)
+			{
+				const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_view_id, false);
+				if (view && (view->rel_flags & REL_sql_relation))
+					userName = view->rel_owner_name;
+			}
+			else if (view && (view->rel_flags & REL_sql_relation))
+				userName = view->rel_owner_name;
+
 			const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());
-			SCL_check_access(tdbb, sec_class,
-				(access->acc_view_id) ? access->acc_view_id : (view ? view->rel_id : 0),
-				id_trigger, t.statement->triggerName, access->acc_mask,
+			SCL_check_access(tdbb, sec_class, userName, id_trigger,
+				t.statement->triggerName, access->acc_mask,
 				access->acc_type, true, access->acc_name, access->acc_r_name);
 		}
 	}

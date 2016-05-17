@@ -3331,6 +3331,8 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 				END_FOR
 			}
 
+			procedure->ssDefiner = P.RDB$SQL_SECURITY;
+			procedure->owner = P.RDB$OWNER_NAME;
 			procedure->setImplemented(true);
 			procedure->getInputFields().resize(P.RDB$PROCEDURE_INPUTS);
 			procedure->getOutputFields().resize(P.RDB$PROCEDURE_OUTPUTS);

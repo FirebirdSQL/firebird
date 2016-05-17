@@ -72,8 +72,8 @@ static bool check_number(const UCHAR*, USHORT);
 static bool check_user_group(thread_db* tdbb, const UCHAR*, USHORT);
 static bool check_string(const UCHAR*, const Firebird::MetaName&);
 static SecurityClass::flags_t compute_access(thread_db* tdbb, const SecurityClass*,
-	const jrd_rel*,	SLONG, const Firebird::MetaName&);
-static SecurityClass::flags_t walk_acl(thread_db* tdbb, const Acl&, const jrd_rel*,
+	const MetaName &userName,	SLONG, const Firebird::MetaName&);
+static SecurityClass::flags_t walk_acl(thread_db* tdbb, const Acl&, const MetaName&,
 	SLONG, const Firebird::MetaName&);
 static void raiseError(SecurityClass::flags_t mask, SLONG type, const Firebird::MetaName& name,
 	const Firebird::MetaName& r_name);
@@ -198,7 +198,7 @@ static void raiseError(SecurityClass::flags_t mask, SLONG type, const Firebird::
 
 void SCL_check_access(thread_db* tdbb,
 					  const SecurityClass* s_class,
-					  SLONG view_id,
+					  MetaName userName,
 					  SLONG obj_type,
 					  const Firebird::MetaName& obj_name,
 					  SecurityClass::flags_t mask,
@@ -215,6 +215,7 @@ void SCL_check_access(thread_db* tdbb,
  *
  * Functional description
  *	Check security class for desired permission.
+ *	userName a name of user in which context permissions will be checked.
  *
  **************************************/
 	SET_TDBB(tdbb);
@@ -237,13 +238,8 @@ void SCL_check_access(thread_db* tdbb,
 	if (!s_class ||	(mask & s_class->scl_flags))
 		return;
 
-	const jrd_rel* view = NULL;
-
-	if (view_id)
-		view = MET_lookup_relation_id(tdbb, view_id, false);
-
-	if ((view || obj_name.hasData()) &&
-		 (compute_access(tdbb, s_class, view, obj_type, obj_name) & mask))
+	if ((userName.hasData() || obj_name.hasData()) &&
+		 (compute_access(tdbb, s_class, userName, obj_type, obj_name) & mask))
 	{
 		return;
 	}
@@ -1421,7 +1417,7 @@ static void get_string(const UCHAR* acl, Firebird::MetaName& string)
 
 static SecurityClass::flags_t compute_access(thread_db* tdbb,
 											 const SecurityClass* s_class,
-											 const jrd_rel* view,
+											 const MetaName& userName,
 											 SLONG obj_type,
 											 const Firebird::MetaName& obj_name)
 {
@@ -1487,7 +1483,7 @@ static SecurityClass::flags_t compute_access(thread_db* tdbb,
 		acl.shrink(end - buffer);
 
 		if (acl.getCount() > 0)
-			privileges |= walk_acl(tdbb, acl, view, obj_type, obj_name);
+			privileges |= walk_acl(tdbb, acl, userName, obj_type, obj_name);
 	}
 	END_FOR
 
@@ -1497,7 +1493,7 @@ static SecurityClass::flags_t compute_access(thread_db* tdbb,
 
 static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 									   const Acl& acl,
-									   const jrd_rel* view,
+									   const MetaName& userName,
 									   SLONG obj_type,
 									   const Firebird::MetaName& obj_name)
 {
@@ -1510,6 +1506,7 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
  * Functional description
  *	Walk an access control list looking for a hit.  If a hit
  *	is found, return privileges.
+ * userName a name of user which privileges must be computed. NULL is current user (INVOKER)
  *
  **************************************/
 	SET_TDBB(tdbb);
@@ -1517,18 +1514,12 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 
 	// Munch ACL. If we find a hit, eat up privileges.
 
-	UserId user = *attachment->att_user;
+	UserId user;
 
-	if (view && (view->rel_flags & REL_sql_relation))
-	{
-		// Use the owner of the view to perform the sql security
-		// checks with: (1) The view user must have sufficient privileges
-		// to the view, and (2a) the view owner must have sufficient
-		// privileges to the base table or (2b) the view must have
-		// sufficient privileges on the base table.
-
-		user.setUserName(view->rel_owner_name.c_str());
-	}
+	if (userName.hasData())
+		user.setUserName(userName);
+	else
+		user = *attachment->att_user;
 
 	SecurityClass::flags_t privilege = 0;
 	const UCHAR* a = acl.begin();
@@ -1582,10 +1573,6 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 				}
 
 				case id_view:
-					if (!view || check_string(a, view->rel_name))
-						hit = false;
-					break;
-
 				case id_package:
 				case id_procedure:
 				case id_trigger:
@@ -1601,8 +1588,8 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 					// generated for SQL.
 
 					hit = false;
-					if (!view)
-						hit = false;
+//					if (!view)
+//						hit = false;
 					break;
 
 				case id_user:

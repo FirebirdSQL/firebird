@@ -542,6 +542,7 @@ public:
 	Firebird::MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
+	bool ssDefiner;	// true ? SQL SECURITY DEFINER : SQL SECURITY INVOKER
 };
 
 

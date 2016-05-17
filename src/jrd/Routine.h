@@ -59,7 +59,8 @@ namespace Jrd
 			  useCount(0),
 			  intUseCount(0),
 			  alterCount(0),
-			  existenceLock(NULL)
+			  existenceLock(NULL),
+			  ssDefiner(false)
 		{
 		}
 
@@ -177,6 +178,9 @@ namespace Jrd
 								// (it will usually be 0)
 		USHORT alterCount;		// No. of times the routine was altered
 		Lock* existenceLock;	// existence lock, if any
+
+		bool ssDefiner;	// true ? SQL DEFINER : SQL INVOKER
+		Firebird::MetaName owner;
 	};
 }
 

@@ -2790,6 +2790,8 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 				}
 				else
 					P.RDB$PRIVATE_FLAG.NULL = TRUE;
+
+				P.RDB$SQL_SECURITY = ssDefiner ? 1 : 0;
 			}
 
 			if (external)

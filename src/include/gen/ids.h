@@ -383,6 +383,7 @@
 	const USHORT  f_prc_entry = 15;
 	const USHORT  f_prc_pkg_name = 16;
 	const USHORT  f_prc_private_flag = 17;
+	const USHORT  f_prc_sql_security = 18;
 
 
 // Relation 27 (RDB$PROCEDURE_PARAMETERS)

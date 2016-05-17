@@ -185,7 +185,7 @@ class jrd_prc : public Routine
 {
 public:
 	const Format*	prc_record_format;
-	prc_t		prc_type;					// procedure type
+	prc_t			prc_type;					// procedure type
 
 	const ExtEngineManager::Procedure* getExternal() const { return prc_external; }
 	void setExternal(ExtEngineManager::Procedure* value) { prc_external = value; }
