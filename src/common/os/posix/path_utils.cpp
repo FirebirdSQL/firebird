@@ -26,6 +26,7 @@
  */
 
 #include "firebird.h"
+#include "../common/os/os_utils.h"
 #include "../common/os/path_utils.h"
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -85,7 +86,7 @@ const PosixDirItr& PosixDirItr::operator++()
 {
 	if (done)
 		return *this;
-	struct dirent *ent = fb_io::readdir(dir);
+	struct dirent *ent = os_utils::readdir(dir);
 	if (ent == NULL)
 	{
 		done = true;
@@ -182,10 +183,10 @@ bool PathUtils::isSymLink(const Firebird::PathName& path)
 {
 	struct STAT st, lst;
 
-	if (fb_io::stat(path.c_str(), &st) != 0)
+	if (os_utils::stat(path.c_str(), &st) != 0)
 		return false;
 
-	if (fb_io::lstat(path.c_str(), &lst) != 0)
+	if (os_utils::lstat(path.c_str(), &lst) != 0)
 		return false;
 
 	return st.st_ino != lst.st_ino;

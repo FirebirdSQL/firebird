@@ -59,6 +59,7 @@
 #include "../gpre/gpre_meta.h"
 #include "../gpre/msc_proto.h"
 #include "../gpre/par_proto.h"
+#include "../common/os/os_utils.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/TempFile.h"
 #include "../common/classes/Switches.h"
@@ -403,7 +404,7 @@ int main(int argc, char* argv[])
 		{
 			strcpy(spare_file_name, file_name);
 			if (file_rename(spare_file_name, ext_tab->in, NULL) &&
-				(input_file = fb_io::fopen(spare_file_name, FOPEN_READ_TYPE)))
+				(input_file = os_utils::fopen(spare_file_name, FOPEN_READ_TYPE)))
 			{
 				file_name = spare_file_name;
 				break;
@@ -432,11 +433,11 @@ int main(int argc, char* argv[])
 		while (ext_tab->ext_language != gpreGlob.sw_language)
 			ext_tab++;
 		const bool renamed = file_rename(spare_file_name, ext_tab->in, NULL);
-		if (renamed && (input_file = fb_io::fopen(spare_file_name, FOPEN_READ_TYPE)))
+		if (renamed && (input_file = os_utils::fopen(spare_file_name, FOPEN_READ_TYPE)))
 		{
 			file_name = spare_file_name;
 		}
-		else if (!(input_file = fb_io::fopen(file_name, FOPEN_READ_TYPE)))
+		else if (!(input_file = os_utils::fopen(file_name, FOPEN_READ_TYPE)))
 		{
 			if (renamed) {
 				fprintf(stderr, "gpre: can't open %s or %s\n", file_name, spare_file_name);
@@ -828,7 +829,7 @@ int main(int argc, char* argv[])
 			fprintf(stderr, "gpre: output file %s would duplicate input\n", out_file_name);
 			CPR_exit(FINI_ERROR);
 		}
-		if ((gpreGlob.out_file = fb_io::fopen(out_file_name, FOPEN_WRITE_TYPE)) == NULL)
+		if ((gpreGlob.out_file = os_utils::fopen(out_file_name, FOPEN_WRITE_TYPE)) == NULL)
 		{
 			fprintf(stderr, "gpre: can't open output file %s\n", out_file_name);
 			CPR_exit(FINI_ERROR);
@@ -1312,7 +1313,7 @@ static SLONG compile_module( SLONG start_position, const TEXT* base_directory)
 
 	const Firebird::PathName filename = Firebird::TempFile::create(SCRATCH);
 	strcpy(trace_file_name, filename.c_str());
-	trace_file = fb_io::fopen(trace_file_name, "w+b");
+	trace_file = os_utils::fopen(trace_file_name, "w+b");
 #ifdef UNIX
 	unlink(trace_file_name);
 #endif

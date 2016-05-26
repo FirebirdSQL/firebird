@@ -1192,7 +1192,7 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 #ifdef HAVE_FLOCK
 		if (flock(fileno(file), LOCK_EX))
 #else
-		if (fb_io::lockf(fileno(file), F_LOCK, 0))
+		if (os_utils::lockf(fileno(file), F_LOCK, 0))
 #endif
 		{
 			// give up
@@ -1511,7 +1511,7 @@ SSHORT API_ROUTINE gds__msg_lookup(void* handle,
 		status = 0;
 		for (USHORT n = 1; !status; n++)
 		{
-			if (fb_io::lseek(messageL->msg_file, LSEEK_OFFSET_CAST position, 0) < 0)
+			if (os_utils::lseek(messageL->msg_file, LSEEK_OFFSET_CAST position, 0) < 0)
 				status = -6;
 			else if (read(messageL->msg_file, messageL->msg_bucket, messageL->msg_bucket_size) < 0)
 				status = -7;

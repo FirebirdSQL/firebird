@@ -108,9 +108,9 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 
 	flag_jrd = flag_msg = true;
 
-	if (ind_jrd = fb_io::fopen(INCLUDE_INDICATOR, "r"))
+	if (ind_jrd = os_utils::fopen(INCLUDE_INDICATOR, "r"))
 	{
-		if (!fb_io::fstat(fileno(ind_jrd), &file_stat))
+		if (!os_utils::fstat(fileno(ind_jrd), &file_stat))
 		{
 			isc_encode_date(localtime(&file_stat.st_mtime), (ISC_QUAD*) &date_jrd);
 			flag_jrd = false;
@@ -118,9 +118,9 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		fclose(ind_jrd);
 	}
 
-	if (ind_msg = fb_io::fopen(MESSAGE_INDICATOR, "r"))
+	if (ind_msg = os_utils::fopen(MESSAGE_INDICATOR, "r"))
 	{
-		if (!fb_io::fstat(fileno(ind_msg), &file_stat))
+		if (!os_utils::fstat(fileno(ind_msg), &file_stat))
 		{
 			isc_encode_date(localtime(&file_stat.st_mtime), (ISC_QUAD*) &date_msg);
 			flag_msg = false;
@@ -131,9 +131,9 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 	if (do_locales)
 	{
 		flag_loc = true;
-		if (ind_loc = fb_io::fopen(LOCALE_INDICATOR, "r"))
+		if (ind_loc = os_utils::fopen(LOCALE_INDICATOR, "r"))
 		{
-			if (!fb_io::fstat(fileno(ind_loc), &file_stat))
+			if (!os_utils::fstat(fileno(ind_loc), &file_stat))
 			{
 				isc_encode_date(localtime(&file_stat.st_mtime), (ISC_QUAD*) &date_loc);
 				flag_loc = false;
@@ -179,7 +179,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 
 	if (flag_jrd)
 	{
-		if (ind_jrd = fb_io::fopen(INCLUDE_INDICATOR, "w"))
+		if (ind_jrd = os_utils::fopen(INCLUDE_INDICATOR, "w"))
 		{
 			fputc(' ', ind_jrd);
 			fclose(ind_jrd);
@@ -188,7 +188,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 
 	if (flag_msg)
 	{
-		if (ind_msg = fb_io::fopen(MESSAGE_INDICATOR, "w"))
+		if (ind_msg = os_utils::fopen(MESSAGE_INDICATOR, "w"))
 		{
 			fputc(' ', ind_msg);
 			fclose(ind_msg);
@@ -197,7 +197,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 
 	if (flag_loc)
 	{
-		if (ind_loc = fb_io::fopen(LOCALE_INDICATOR, "w"))
+		if (ind_loc = os_utils::fopen(LOCALE_INDICATOR, "w"))
 		{
 			fputc(' ', ind_loc);
 			fclose(ind_loc);

@@ -27,6 +27,7 @@
 
 #include "firebird.h"
 #include "../common/os/mod_loader.h"
+#include "../common/os/os_utils.h"
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -54,7 +55,7 @@ bool ModuleLoader::isLoadableModule(const Firebird::PathName& module)
 {
 	struct STAT sb;
 
-	if (-1 == fb_io::stat(module.c_str(), &sb))
+	if (-1 == os_utils::stat(module.c_str(), &sb))
 		return false;
 
 	if ( ! (sb.st_mode & S_IFREG) )		// Make sure it is a plain file

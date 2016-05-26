@@ -1555,7 +1555,7 @@ int API_ROUTINE gds__edit(const TEXT* file_name, USHORT /*type*/)
 #endif
 
 	struct STAT before;
-	fb_io::stat(file_name, &before);
+	os_utils::stat(file_name, &before);
 	// The path of the editor + the path of the file + quotes + one space.
 	// We aren't using quotes around the editor for now.
 	TEXT buffer[MAXPATHLEN * 2 + 5];
@@ -1564,7 +1564,7 @@ int API_ROUTINE gds__edit(const TEXT* file_name, USHORT /*type*/)
 	FB_UNUSED(system(buffer));
 
 	struct STAT after;
-	fb_io::stat(file_name, &after);
+	os_utils::stat(file_name, &after);
 
 	return (before.st_mtime != after.st_mtime || before.st_size != after.st_size);
 }

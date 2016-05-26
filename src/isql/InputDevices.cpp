@@ -35,6 +35,7 @@
 #endif
 
 #include "../common/utils_proto.h"
+#include "../common/os/os_utils.h"
 #include "InputDevices.h"
 
 using Firebird::PathName;
@@ -115,7 +116,7 @@ void InputDevices::indev::getPos(fpos_t* out) const
 {
 	fb_assert(out);
 	fb_assert(indev_fpointer);
-	fb_io::fgetpos(indev_fpointer, out);
+	os_utils::fgetpos(indev_fpointer, out);
 }
 
 // Restore a previously stored reading position held in the parameter.
@@ -125,9 +126,9 @@ void InputDevices::indev::setPos(const fpos_t* in)
 	fb_assert(indev_fpointer);
 #ifdef SFIO
 // hack to fix bad sfio header
-	fb_io::fsetpos(indev_fpointer, const_cast<fpos_t*>(in));
+	os_utils::fsetpos(indev_fpointer, const_cast<fpos_t*>(in));
 #else
-	fb_io::fsetpos(indev_fpointer, in);
+	os_utils::fsetpos(indev_fpointer, in);
 #endif
 }
 

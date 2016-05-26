@@ -60,6 +60,8 @@ endif
 
 ifeq ($(LSB_FLG),Y)
   GCC=/opt/lsb/bin/lsbcc
+  export CC
+  export CXX
 else
   GCC=gcc
 endif
@@ -129,8 +131,8 @@ $(GEN_ROOT)/Make.Version : $(SRC_ROOT)/misc/writeBuildNum.sh
 #
 
 extern:
-	$(MAKE) -C $(ROOT)/extern/btyacc CC="$(CC)" CXX="$(CXX)"
-	$(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop CC="$(CC)" CXX="$(CXX)"
+	$(MAKE) -C $(ROOT)/extern/btyacc
+	$(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop
 
 ifeq ($(TOMBUILD_FLG),Y)
 	CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/libtommath -f makefile.shared GCC=$(GCC)
@@ -140,7 +142,7 @@ endif
 
 ifeq ($(STD_EDITLINE),false)
 ifeq ($(EDITLINE_FLG),Y)
-	$(MAKE) -f $(GEN_ROOT)/Makefile.extern.editline CC="$(CC)" CXX="$(CXX)"
+	$(MAKE) -f $(GEN_ROOT)/Makefile.extern.editline
 endif
 endif
 

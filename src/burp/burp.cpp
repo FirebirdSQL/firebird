@@ -2122,7 +2122,7 @@ static gbak_action open_files(const TEXT* file1,
 			else
 				SetTapePosition(fil->fil_fd, TAPE_REWIND, 0, 0, 0, FALSE);
 #else
-			fb_io::lseek(fil->fil_fd, 0, SEEK_SET);
+			os_utils::lseek(fil->fil_fd, 0, SEEK_SET);
 #endif
 			tdgbl->file_desc = fil->fil_fd;
 			tdgbl->gbl_sw_files = fil->fil_next;
@@ -2381,10 +2381,10 @@ void close_platf(DESC file)
 #define O_ACCMODE 3
 #endif
 
-		off_t fileSize = fb_io::lseek(file, 0, SEEK_CUR);
+		off_t fileSize = os_utils::lseek(file, 0, SEEK_CUR);
 		if (fileSize != (off_t)(-1))
 		{
-			FB_UNUSED(fb_io::ftruncate(file, fileSize));
+			FB_UNUSED(os_utils::ftruncate(file, fileSize));
 		}
 	}
 

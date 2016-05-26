@@ -45,6 +45,7 @@
 #endif
 
 #include "../common/gdsassert.h"
+#include "../common/os/os_utils.h"
 #include "../common/os/path_utils.h"
 #include "../common/classes/init.h"
 
@@ -211,7 +212,7 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 	filename += NAME_PATTERN;
 
 #ifdef HAVE_MKSTEMP
-	handle = (IPTR) fb_io::mkstemp(filename.begin());
+	handle = (IPTR) os_utils::mkstemp(filename.begin());
 #else
 	if (!mktemp(filename.begin()))
 	{
@@ -275,7 +276,7 @@ void TempFile::seek(const offset_t offset)
 		system_error::raise("SetFilePointer");
 	}
 #else
-	const off_t seek_result = fb_io::lseek(handle, (off_t) offset, SEEK_SET);
+	const off_t seek_result = os_utils::lseek(handle, (off_t) offset, SEEK_SET);
 	if (seek_result == (off_t) -1)
 	{
 		system_error::raise("lseek");

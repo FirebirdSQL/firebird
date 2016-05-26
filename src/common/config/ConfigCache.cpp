@@ -27,6 +27,7 @@
 
 #include "../common/config/ConfigCache.h"
 #include "../common/config/config_file.h"
+#include "../common/os/os_utils.h"
 
 #include "gen/iberror.h"
 
@@ -85,7 +86,7 @@ time_t ConfigCache::File::getTime()
 {
 	struct STAT st;
 
-	if (fb_io::stat(fileName.c_str(), &st) != 0)
+	if (os_utils::stat(fileName.c_str(), &st) != 0)
 	{
 		if (errno == ENOENT)
 		{

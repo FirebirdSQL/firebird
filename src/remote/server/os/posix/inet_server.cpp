@@ -180,7 +180,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		// It's very easy to detect that we are spawned - just check fd 0 to be a socket.
 		const int channel = 0;
 		struct STAT stat0;
-		if (fb_io::fstat(channel, &stat0) == 0 && S_ISSOCK(stat0.st_mode))
+		if (os_utils::fstat(channel, &stat0) == 0 && S_ISSOCK(stat0.st_mode))
 		{
 			// classic server mode
 			classic = true;
@@ -507,12 +507,12 @@ static void raiseLimit(int resource)
 {
 	struct rlimit lim;
 
-	if (fb_io::getrlimit(resource, &lim) == 0)
+	if (os_utils::getrlimit(resource, &lim) == 0)
 	{
 		if (lim.rlim_cur != lim.rlim_max)
 		{
 			lim.rlim_cur = lim.rlim_max;
-			if (fb_io::setrlimit(resource, &lim) != 0)
+			if (os_utils::setrlimit(resource, &lim) != 0)
 			{
 				gds__log("setrlimit() failed, errno=%d", errno);
 			}

@@ -2018,7 +2018,7 @@ static const pag* db_read( SLONG page_number, bool ok_enc)
 
 	page_number -= fil->fil_min_page - fil->fil_fudge;
 	const FB_UINT64 offset = ((FB_UINT64) page_number) * ((FB_UINT64) tddba->page_size);
-	if (fb_io::lseek (fil->fil_desc, offset, 0) == -1)
+	if (os_utils::lseek (fil->fil_desc, offset, 0) == -1)
 	{
 		tddba->uSvc->setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
 		// msg 30: Can't read a database page

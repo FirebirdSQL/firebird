@@ -201,7 +201,7 @@ namespace
 #ifdef HAVE_POSIX_FADVISE
 	int fb_fadvise(int fd, off_t offset, off_t len, int advice)
 	{
-		int rc = fb_io::posix_fadvise(fd, offset, len, advice);
+		int rc = os_utils::posix_fadvise(fd, offset, len, advice);
 
 		if (rc < 0)
 		{
@@ -440,7 +440,7 @@ void NBackup::seek_file(FILE_HANDLE &file, SINT64 pos)
 		return;
 	}
 #else
-	if (fb_io::lseek(file, pos, SEEK_SET) != (off_t) -1)
+	if (os_utils::lseek(file, pos, SEEK_SET) != (off_t) -1)
 		return;
 #endif
 
@@ -466,7 +466,7 @@ void NBackup::open_database_write(bool exclusive)
 		O_EXCL | O_RDWR | O_LARGEFILE :
 		O_RDWR | O_LARGEFILE;
 
-	dbase = fb_io::open(dbname.c_str(), flags);
+	dbase = os_utils::open(dbname.c_str(), flags);
 	if (dbase >= 0)
 		return;
 #endif

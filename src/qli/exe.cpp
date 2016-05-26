@@ -41,6 +41,7 @@
 #include "../yvalve/utl_proto.h"
 #include "../common/classes/UserBlob.h"
 #include "../common/classes/VaryStr.h"
+#include "../common/os/os_utils.h"
 
 using MsgFormat::SafeArg;
 
@@ -297,7 +298,7 @@ FILE* EXEC_open_output(qli_nod* node)
 
 	if (!node->nod_arg[e_out_pipe])
 	{
-	    FILE* out_file = fb_io::fopen(filename, FOPEN_WRITE_TYPE);
+	    FILE* out_file = os_utils::fopen(filename, FOPEN_WRITE_TYPE);
 		if (out_file)
 			return out_file;
 

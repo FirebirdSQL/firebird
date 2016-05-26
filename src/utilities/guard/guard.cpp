@@ -49,6 +49,7 @@ int errno = -1;
 #include <time.h>
 
 #include "../common/os/divorce.h"
+#include "../common/os/os_utils.h"
 #include "../common/isc_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/file_params.h"
@@ -200,7 +201,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 
 		if (pidfilename)
 		{
-			FILE *pf = fb_io::fopen(pidfilename, "w");
+			FILE *pf = os_utils::fopen(pidfilename, "w");
 			if (pf)
 			{
 				fprintf(pf, "%d", child_pid);

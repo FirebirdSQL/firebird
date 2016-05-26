@@ -284,7 +284,7 @@ void BackupManager::beginBackup(thread_db* tdbb)
 			PageSpace* pageSpace = database->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 			const char* func = NULL;
 
-			if (fb_io::fstat(pageSpace->file->fil_desc, &st) != 0)
+			if (os_utils::fstat(pageSpace->file->fil_desc, &st) != 0)
 			{
 				func = "fstat";
 			}

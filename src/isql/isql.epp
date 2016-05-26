@@ -62,6 +62,7 @@
 #include "../common/classes/TempFile.h"
 #include "../common/classes/FpeControl.h"
 #include "../common/classes/GenericMap.h"
+#include "../common/os/os_utils.h"
 #include "../common/os/path_utils.h"
 #include "../common/StatusHolder.h"
 #include "../common/Tokens.h"
@@ -3533,7 +3534,7 @@ static processing_state copy_table(TEXT* source,
 	const bool domain_flag = otherdb[0];
 
 	const Firebird::PathName ftmp = TempFile::create(SCRATCH);
-	isqlGlob.Out = fb_io::fopen(ftmp.c_str(), "w+b");
+	isqlGlob.Out = os_utils::fopen(ftmp.c_str(), "w+b");
 	if (!isqlGlob.Out)
 	{
 		// If we can't open a temp file then bail
@@ -4153,7 +4154,7 @@ static processing_state edit(const TEXT* const* cmd)
 	{
 		TEXT path[MAXPATHLEN];
 		strip_quotes(file, path);
-		FILE* fp = fb_io::fopen(path, "r");
+		FILE* fp = os_utils::fopen(path, "r");
 		if (fp)
 		{
 			// Push the current ifp on the indev
@@ -4185,7 +4186,7 @@ static processing_state edit(const TEXT* const* cmd)
 			// File used to edit sessions
 			const Firebird::PathName filename = TempFile::create(SCRATCH);
 			const char* Tmpfile = filename.c_str();
-			FILE* f = fb_io::fopen(Tmpfile, "w+"); // It was w+b
+			FILE* f = os_utils::fopen(Tmpfile, "w+"); // It was w+b
 			if (f)
 			{
 				Ofp.init(f, Tmpfile, Tmpfile);
@@ -4204,7 +4205,7 @@ static processing_state edit(const TEXT* const* cmd)
 		Ofp.close();
 		PathName tmpfile = Ofp.fileName(false);
 		gds__edit(tmpfile.c_str(), 0);
-		Ofp.init(fb_io::fopen(tmpfile.c_str(), "r+"), tmpfile.c_str(), tmpfile.c_str()); // We don't check for failure.
+		Ofp.init(os_utils::fopen(tmpfile.c_str(), "r+"), tmpfile.c_str(), tmpfile.c_str()); // We don't check for failure.
 		Filelist->Ifp().init(Ofp);
 		Input_file = true;
 		getColumn = -1;
@@ -6270,7 +6271,7 @@ static processing_state newinput(const TEXT* infile)
 	// the linked list before discarding the current Ifp.
 	// Filelist is a global pointing to base of list.
 
-	FILE* fp = fb_io::fopen(file.c_str(), "r");
+	FILE* fp = os_utils::fopen(file.c_str(), "r");
 	if (fp)
 	{
 		Filelist->insertIfp();
@@ -6310,7 +6311,7 @@ static processing_state newoutput(const TEXT* outfile)
 		TEXT path[MAXPATHLEN];
 		strip_quotes(outfile, path);
 		outfile = path;
-		FILE* fp = fb_io::fopen(outfile, "a");
+		FILE* fp = os_utils::fopen(outfile, "a");
 		if (fp)
 		{
 			if (isqlGlob.Out && isqlGlob.Out != stdout)

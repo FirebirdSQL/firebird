@@ -256,7 +256,7 @@ namespace {
 	DevNode getNode(const char* name)
 	{
 		struct STAT statistics;
-		if (fb_io::stat(name, &statistics) != 0)
+		if (os_utils::stat(name, &statistics) != 0)
 		{
 			if (errno == ENOENT)
 			{
@@ -273,7 +273,7 @@ namespace {
 	DevNode getNode(int fd)
 	{
 		struct STAT statistics;
-		if (fb_io::fstat(fd, &statistics) != 0)
+		if (os_utils::fstat(fd, &statistics) != 0)
 		{
 			system_call_failed::raise("stat");
 		}
@@ -719,7 +719,7 @@ namespace {
 				return;
 			}
 
-			FB_UNUSED(fb_io::ftruncate(fdSem, sizeof(*this)));
+			FB_UNUSED(os_utils::ftruncate(fdSem, sizeof(*this)));
 
 			for (int i = 0; i < N_SETS; ++i)
 			{
@@ -1839,7 +1839,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	public:
 		static void init(int fd)
 		{
-			void* sTab = fb_io::mmap(0, sizeof(SemTable), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+			void* sTab = os_utils::mmap(0, sizeof(SemTable), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 			if ((U_IPTR) sTab == (U_IPTR) -1)
 			{
 				system_call_failed::raise("mmap");
@@ -1879,7 +1879,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	{
 		// Get and use the existing length of the shared segment
 		struct STAT file_stat;
-		if (fb_io::fstat(mainLock->getFd(), &file_stat) == -1)
+		if (os_utils::fstat(mainLock->getFd(), &file_stat) == -1)
 		{
 			system_call_failed::raise("fstat");
 		}
@@ -1893,7 +1893,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	}
 
 	// map file to memory
-	void* const address = fb_io::mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
+	void* const address = os_utils::mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
 	if ((U_IPTR) address == (U_IPTR) -1)
 	{
 		system_call_failed::raise("mmap", errno);
@@ -1958,7 +1958,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	if (mainLock->setlock(&statusVector, FileLock::FLM_TRY_EXCLUSIVE))
 	{
 		if (trunc_flag)
-			FB_UNUSED(fb_io::ftruncate(mainLock->getFd(), length));
+			FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), length));
 
 		if (callback->initialize(this, true))
 		{
@@ -2470,7 +2470,7 @@ UCHAR* SharedMemoryBase::mapObject(CheckStatusWrapper* statusVector, ULONG objec
 	const ULONG end = FB_ALIGN(object_offset + object_length, page_size);
 	const ULONG length = end - start;
 
-	UCHAR* address = (UCHAR*) fb_io::mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), start);
+	UCHAR* address = (UCHAR*) os_utils::mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), start);
 
 	if ((U_IPTR) address == (U_IPTR) -1)
 	{
@@ -3085,10 +3085,10 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector, ULONG new_len
 	}
 
 	if (flag)
-		FB_UNUSED(fb_io::ftruncate(mainLock->getFd(), new_length));
+		FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), new_length));
 
 	MemoryHeader* const address = (MemoryHeader*)
-		fb_io::mmap(0, new_length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
+		os_utils::mmap(0, new_length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
 	if ((U_IPTR) address == (U_IPTR) -1)
 	{
 		error(statusVector, "mmap() failed", errno);
@@ -3291,7 +3291,7 @@ static SLONG create_semaphores(CheckStatusWrapper* statusVector, SLONG key, int 
 			// Reasonable access rights to them - exactly like security database has
 			const char* secDb = Config::getDefaultConfig()->getSecurityDatabase();
 			struct STAT st;
-			if (fb_io::stat(secDb, &st) == 0)
+			if (os_utils::stat(secDb, &st) == 0)
 			{
 				union semun arg;
 				semid_ds ds;

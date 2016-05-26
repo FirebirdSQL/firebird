@@ -228,7 +228,7 @@ int main( int argc, char *argv[])
 	gdbb->tdbb_database->dbb_pcontrol->pgc_pip = 1;
 
 	if (ascii_out)
-		dbg_file = fb_io::fopen(ascii_out, "w");
+		dbg_file = os_utils::fopen(ascii_out, "w");
 
 	if (sw_print && rbdb && header)
 		write_headers(dbg_file, rbdb, p_lower_bound, p_upper_bound);
@@ -349,7 +349,7 @@ void RBDB_open( rbdb* rbdb)
  *	Open a database file.
  *
  **************************************/
-	if ((rbdb->rbdb_file.fil_file = fb_io::open(rbdb->rbdb_file.fil_name, O_RDWR, 0)) == -1)
+	if ((rbdb->rbdb_file.fil_file = os_utils::open(rbdb->rbdb_file.fil_name, O_RDWR, 0)) == -1)
 	{
 		db_error(errno);
 	}
@@ -371,7 +371,7 @@ PAG RBDB_read(rbdb* rbdb, SLONG page_number)
 	int file = rbdb->rbdb_file.fil_file;
 
 	const FB_UINT64 offset = ((FB_UINT64) page_number) * ((FB_UINT64) rbdb->rbdb_page_size);
-	if (fb_io::lseek (file, offset, 0) == -1)
+	if (os_utils::lseek (file, offset, 0) == -1)
 		db_error(errno);
 
 	SSHORT length = rbdb->rbdb_page_size;
@@ -407,7 +407,7 @@ void RBDB_write( rbdb* rbdb, PAG page, SLONG page_number)
 	int fd = rbdb->rbdb_file.fil_file;
 
 	const FB_UINT64 offset = ((FB_UINT64) page_number) * ((FB_UINT64) page_size);
-	if (fb_io::lseek (fd, offset, 0) == -1)
+	if (os_utils::lseek (fd, offset, 0) == -1)
 		db_error(errno);
 	if (write(fd, page, page_size) == -1)
 		db_error(errno);

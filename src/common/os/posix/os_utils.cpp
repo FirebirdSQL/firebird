@@ -135,6 +135,20 @@ namespace
 		while (chmod(pathname, mode) < 0 && SYSCALL_INTERRUPTED(errno))
 			;
 	}
+
+	inline int openFile(const char* pathname, int flags, mode_t mode = 0666)
+	{
+		int rc;
+		do {
+#ifdef LSB_BUILD
+			rc = open64(pathname, flags, mode);
+#else
+			rc = ::open(pathname, flags, mode);
+#endif
+		} while (rc == -1 && SYSCALL_INTERRUPTED(errno));
+		return rc;
+	}
+
 } // anonymous namespace
 
 
@@ -146,7 +160,7 @@ void createLockDirectory(const char* pathname)
 		if (access(pathname, R_OK | W_OK | X_OK) == 0)
 		{
 			struct STAT st;
-			if (fb_io::stat(pathname, &st) != 0)
+			if (os_utils::stat(pathname, &st) != 0)
 			{
 				system_call_failed::raise("stat");
 			}
@@ -201,7 +215,7 @@ int openCreateSharedFile(const char* pathname, int flags)
 	struct STAT st;
 	int rc;
 
-	rc = fb_io::fstat(fd, &st);
+	rc = os_utils::fstat(fd, &st);
 
 	if (rc != 0)
 	{
@@ -264,11 +278,11 @@ void setCloseOnExec(int fd)
 int open(const char* pathname, int flags, mode_t mode)
 {
 	int fd;
-	fd = fb_io::open(pathname, flags | O_CLOEXEC, mode);
+	fd = openFile(pathname, flags | O_CLOEXEC, mode);
 
 	if (fd < 0 && errno == EINVAL)	// probably O_CLOEXEC not accepted
 	{
-		fd = fb_io::open(pathname, flags | O_CLOEXEC, mode);
+		fd = openFile(pathname, flags | O_CLOEXEC, mode);
 	}
 
 	setCloseOnExec(fd);
@@ -277,7 +291,16 @@ int open(const char* pathname, int flags, mode_t mode)
 
 FILE* fopen(const char* pathname, const char* mode)
 {
-	FILE* f = fb_io::fopen(pathname, mode);	// TODO: use open + fdopen to avoid races
+	FILE* f = NULL;
+	do {
+#ifdef LSB_BUILD
+		// TODO: use open + fdopen to avoid races
+		f = fopen64(pathname, mode);
+#else
+		f = ::fopen(pathname, mode);
+#endif
+	} while (f == NULL && SYSCALL_INTERRUPTED(errno));
+
 	if (f)
 		setCloseOnExec(fileno(f));
 	return f;
@@ -299,7 +322,7 @@ static void makeUniqueFileId(const struct STAT& statistics, UCharBuffer& id)
 void getUniqueFileId(int fd, UCharBuffer& id)
 {
 	struct STAT statistics;
-	if (fb_io::fstat(fd, &statistics) != 0)
+	if (os_utils::fstat(fd, &statistics) != 0)
 	{
 		system_call_failed::raise("fstat");
 	}
@@ -311,7 +334,7 @@ void getUniqueFileId(int fd, UCharBuffer& id)
 void getUniqueFileId(const char* name, UCharBuffer& id)
 {
 	struct STAT statistics;
-	if (fb_io::stat(name, &statistics) != 0)
+	if (os_utils::stat(name, &statistics) != 0)
 	{
 		id.clear();
 		return;

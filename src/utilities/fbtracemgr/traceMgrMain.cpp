@@ -115,7 +115,7 @@ void TraceSvcUtil::startSession(TraceSession& session, bool /*interactive*/)
 	try
 	{
 		const char* fileName = session.ses_config.c_str();
-		file = fb_io::fopen(fileName, "rb");
+		file = os_utils::fopen(fileName, "rb");
 		if (!file)
 		{
 			(Arg::Gds(isc_io_error) << Arg::Str("fopen") << Arg::Str(fileName) <<

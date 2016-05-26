@@ -190,7 +190,7 @@ double EXT_cardinality(thread_db* tdbb, jrd_rel* relation)
 		if (!_fstat64(_fileno(file->ext_ifi), &statistics))
 #else
 		struct STAT statistics;
-		if (!fb_io::fstat(fileno(file->ext_ifi), &statistics))
+		if (!os_utils::fstat(fileno(file->ext_ifi), &statistics))
 #endif
 		{
 			file_size = statistics.st_size;

@@ -46,6 +46,7 @@
 #endif
 
 #include "../common/classes/fb_string.h"
+#include "../common/os/os_utils.h"
 
 class ScanDir : public Firebird::AutoStorage
 {
