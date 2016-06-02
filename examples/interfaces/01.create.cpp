@@ -47,10 +47,6 @@ int main()
 {
 	int rc = 0;
 
-	// set default password if none specified in environment
-	setenv("ISC_USER", "sysdba", 0);
-	setenv("ISC_PASSWORD", "masterkey", 0);
-
 	// Declare pointers to required interfaces
 	// IStatus is used to return wide error description to user
 	// IProvider is needed to start to work with database (or service)
@@ -77,6 +73,8 @@ int main()
 		// create DPB - use non-default page size 4Kb
 		dpb = utl->getXpbBuilder(&status, IXpbBuilder::DPB, NULL, 0);
 		dpb->insertInt(&status, isc_dpb_page_size, 4 * 1024);
+		dpb->insertString(&status, isc_dpb_user_name, "sysdba");
+		dpb->insertString(&status, isc_dpb_password, "masterkey");
 
 		// create empty database
 		att = prov->createDatabase(&status, "fbtests.fdb", dpb->getBufferLength(&status),
@@ -88,7 +86,8 @@ int main()
 		att = NULL;
 
 		// attach it once again
-		att = prov->attachDatabase(&status, "fbtests.fdb", 0, NULL);
+		att = prov->attachDatabase(&status, "fbtests.fdb",
+			dpb->getBufferLength(&status), dpb->getBuffer(&status));
 		printf("Re-attached database fbtests.fdb\n");
 
 		// start transaction
