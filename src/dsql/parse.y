@@ -2613,14 +2613,17 @@ external_function_clause
 
 %type <createAlterFunctionNode> function_clause_start
 function_clause_start
-	: symbol_UDF_name
-			{ $$ = newNode<CreateAlterFunctionNode>(*$1); }
-		input_parameters(NOTRIAL(&$2->parameters))
+	: symbol_UDF_name sql_security_clause
+			{
+				$$ = newNode<CreateAlterFunctionNode>(*$1);
+				$$->ssDefiner = $2;
+			}
+		input_parameters(NOTRIAL(&$3->parameters))
 		RETURNS domain_or_non_array_type collate_clause deterministic_opt
 			{
-				$$ = $2;
-				$$->returnType = newNode<ParameterClause>($5, optName($6));
-				$$->deterministic = $7;
+				$$ = $3;
+				$$->returnType = newNode<ParameterClause>($6, optName($7));
+				$$->deterministic = $8;
 			}
 	;
 

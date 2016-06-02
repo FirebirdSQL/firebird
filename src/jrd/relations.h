@@ -239,6 +239,7 @@ RELATION(nam_funs, rel_funs, ODS_8_0, rel_persistent)
 	FIELD(f_fun_owner, nam_owner, fld_user, 1, ODS_12_0)
 	FIELD(f_fun_legacy_flag, nam_legacy_flag, fld_flag_nullable, 0, ODS_12_0)
 	FIELD(f_fun_deterministic_flag, nam_deterministic_flag, fld_flag_nullable, 0, ODS_12_0)
+	FIELD(f_fun_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
 END_RELATION
 
 // Relation 15 (RDB$FUNCTION_ARGUMENTS)

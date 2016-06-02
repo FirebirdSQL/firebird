@@ -355,7 +355,8 @@ public:
 		  packageOwner(pool),
 		  privateScope(false),
 		  preserveDefaults(false),
-		  udfReturnPos(0)
+		  udfReturnPos(0),
+		  ssDefiner(false)
 	{
 	}
 
@@ -409,6 +410,7 @@ public:
 	bool privateScope;
 	bool preserveDefaults;
 	SLONG udfReturnPos;
+	bool ssDefiner;
 };
 
 

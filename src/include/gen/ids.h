@@ -240,6 +240,7 @@
 	const USHORT  f_fun_owner = 17;
 	const USHORT  f_fun_legacy_flag = 18;
 	const USHORT  f_fun_deterministic_flag = 19;
+	const USHORT  f_fun_sql_security = 20;
 
 
 // Relation 15 (RDB$FUNCTION_ARGUMENTS)

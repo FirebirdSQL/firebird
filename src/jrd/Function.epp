@@ -220,6 +220,9 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 			function->setName(QualifiedName(X.RDB$FUNCTION_NAME,
 				(X.RDB$PACKAGE_NAME.NULL ? NULL : X.RDB$PACKAGE_NAME)));
 
+			function->ssDefiner = X.RDB$SQL_SECURITY;
+			function->owner = X.RDB$OWNER_NAME;
+
 			if (!X.RDB$SECURITY_CLASS.NULL)
 			{
 				function->setSecurityName(X.RDB$SECURITY_CLASS);

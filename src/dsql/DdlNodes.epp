@@ -1733,6 +1733,8 @@ void CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 
 				FUN.RDB$RETURN_ARGUMENT.NULL = FALSE;
 				FUN.RDB$RETURN_ARGUMENT = 0;
+
+				FUN.RDB$SQL_SECURITY = ssDefiner ? 1 : 0;
 			}
 			END_STORE
 
