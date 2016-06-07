@@ -145,6 +145,7 @@
 	const USHORT  f_rel_def_class = 14;
 	const USHORT  f_rel_flags = 15;
 	const USHORT  f_rel_type = 16;
+	const USHORT  f_rel_sql_security = 17;
 
 
 // Relation 7 (RDB$VIEW_RELATIONS)
@@ -206,6 +207,7 @@
 	const USHORT  f_trg_debug_info = 11;
 	const USHORT  f_trg_engine_name = 12;
 	const USHORT  f_trg_entry = 13;
+	const USHORT  f_trg_sql_security = 14;
 
 
 // Relation 13 (RDB$DEPENDENCIES)

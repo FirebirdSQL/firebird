@@ -3301,6 +3301,8 @@ void TriggerDefinition::store(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 
 		TRG.RDB$TRIGGER_SEQUENCE = (!position.specified ? 0 : position.value);
 		TRG.RDB$TRIGGER_INACTIVE = (!active.specified ? 0 : (USHORT) !active.value);
+
+		TRG.RDB$SQL_SECURITY = ssDefiner ? 1 : 0;
 	}
 	END_STORE
 
@@ -3406,6 +3408,8 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 				TRG.RDB$TRIGGER_SOURCE.NULL = FALSE;
 				attachment->storeMetaDataBlob(tdbb, transaction, &TRG.RDB$TRIGGER_SOURCE, source);
 			}
+
+			TRG.RDB$SQL_SECURITY = ssDefiner ? 1 : 0;
 
 			modified = true;
 		END_MODIFY
@@ -7210,6 +7214,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		REL.RDB$SYSTEM_FLAG = 0;
 		REL.RDB$FLAGS = REL_sql;
 		REL.RDB$RELATION_TYPE = relationType;
+		REL.RDB$SQL_SECURITY = ssDefiner ? 1 : 0;
 
 		REL.RDB$VIEW_BLR.NULL = TRUE;
 		REL.RDB$VIEW_SOURCE.NULL = TRUE;

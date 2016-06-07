@@ -2057,10 +2057,13 @@ page_noise
 
 %type <createRelationNode> table_clause
 table_clause
-	: simple_table_name external_file
-			{ $<createRelationNode>$ = newNode<CreateRelationNode>($1, $2); }
-		'(' table_elements($3) ')'
-			{ $$ = $3; }
+	: simple_table_name sql_security_clause external_file
+			{
+				$<createRelationNode>$ = newNode<CreateRelationNode>($1, $3);
+				$<createRelationNode>$->ssDefiner = $2;
+			}
+		'(' table_elements($4) ')'
+			{ $$ = $4; }
 	;
 
 %type <createRelationNode> gtt_table_clause
@@ -3519,16 +3522,17 @@ check_opt
 
 %type <createAlterTriggerNode> trigger_clause
 trigger_clause
-	: symbol_trigger_name trigger_active trigger_type trigger_position
+	: symbol_trigger_name sql_security_clause trigger_active trigger_type trigger_position
 			AS local_declaration_list full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
-			$$->active = $2;
-			$$->type = $3;
-			$$->position = $4;
-			$$->source = makeParseStr(YYPOSNARG(5), YYPOSNARG(7));
-			$$->localDeclList = $6;
-			$$->body = $7;
+			$$->ssDefiner = $2;
+			$$->active = $3;
+			$$->type = $4;
+			$$->position = $5;
+			$$->source = makeParseStr(YYPOSNARG(6), YYPOSNARG(8));
+			$$->localDeclList = $7;
+			$$->body = $8;
 		}
 	| symbol_trigger_name trigger_active trigger_type trigger_position
 			external_clause external_body_clause_opt
@@ -3541,17 +3545,18 @@ trigger_clause
 			if ($6)
 				$$->source = *$6;
 		}
-	| symbol_trigger_name trigger_active trigger_type trigger_position ON symbol_table_name
+	| symbol_trigger_name sql_security_clause trigger_active trigger_type trigger_position ON symbol_table_name
 			AS local_declaration_list full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
-			$$->active = $2;
-			$$->type = $3;
-			$$->position = $4;
-			$$->relationName = *$6;
-			$$->source = makeParseStr(YYPOSNARG(7), YYPOSNARG(9));
-			$$->localDeclList = $8;
-			$$->body = $9;
+			$$->ssDefiner = $2;
+			$$->active = $3;
+			$$->type = $4;
+			$$->position = $5;
+			$$->relationName = *$7;
+			$$->source = makeParseStr(YYPOSNARG(8), YYPOSNARG(10));
+			$$->localDeclList = $9;
+			$$->body = $10;
 		}
 	| symbol_trigger_name trigger_active trigger_type trigger_position ON symbol_table_name
 			external_clause external_body_clause_opt
@@ -3565,17 +3570,18 @@ trigger_clause
 			if ($8)
 				$$->source = *$8;
 		}
-	| symbol_trigger_name FOR symbol_table_name trigger_active trigger_type trigger_position
+	| symbol_trigger_name sql_security_clause FOR symbol_table_name trigger_active trigger_type trigger_position
 			AS local_declaration_list full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
-			$$->active = $4;
-			$$->type = $5;
-			$$->position = $6;
-			$$->relationName = *$3;
-			$$->source = makeParseStr(YYPOSNARG(7), YYPOSNARG(9));
-			$$->localDeclList = $8;
-			$$->body = $9;
+			$$->ssDefiner = $2;
+			$$->active = $5;
+			$$->type = $6;
+			$$->position = $7;
+			$$->relationName = *$4;
+			$$->source = makeParseStr(YYPOSNARG(8), YYPOSNARG(10));
+			$$->localDeclList = $9;
+			$$->body = $10;
 		}
 	| symbol_trigger_name FOR symbol_table_name trigger_active trigger_type trigger_position
 			external_clause external_body_clause_opt

@@ -144,6 +144,7 @@ RELATION(nam_relations, rel_relations, ODS_8_0, rel_persistent)
 	FIELD(f_rel_def_class, nam_def_class, fld_class, 1, ODS_8_0)
 	FIELD(f_rel_flags, nam_flags, fld_flag_nullable, 0, ODS_8_0)
 	FIELD(f_rel_type, nam_r_type, fld_r_type, 0, ODS_11_1)
+	FIELD(f_rel_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
 END_RELATION
 
 // Relation 7 (RDB$VIEW_RELATIONS)
@@ -205,6 +206,7 @@ RELATION(nam_trgs, rel_triggers, ODS_8_0, rel_persistent)
 	FIELD(f_trg_debug_info, nam_debug_info, fld_debug_info, 1, ODS_11_1)
 	FIELD(f_trg_engine_name, nam_engine_name, fld_engine_name, 1, ODS_12_0)
 	FIELD(f_trg_entry, nam_entry, fld_ext_name, 1, ODS_12_0)
+	FIELD(f_trg_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
 END_RELATION
 
 // Relation 13 (RDB$DEPENDENCIES)

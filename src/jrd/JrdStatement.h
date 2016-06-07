@@ -58,7 +58,7 @@ public:
 
 private:
 	static void verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation, trig_vec* triggers,
-		jrd_rel* view);
+		Firebird::MetaName userName);
 	static void triggersExternalAccess(thread_db* tdbb, ExternalAccessList& list, trig_vec* tvec);
 
 	void buildExternalAccess(thread_db* tdbb, ExternalAccessList& list);

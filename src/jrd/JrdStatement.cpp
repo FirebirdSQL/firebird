@@ -416,26 +416,31 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 		else
 		{
 			jrd_rel* relation = MET_lookup_relation_id(tdbb, item->exa_rel_id, false);
-			jrd_rel* view = NULL;
-			if (item->exa_view_id)
-				view = MET_lookup_relation_id(tdbb, item->exa_view_id, false);
 
 			if (!relation)
 				continue;
 
+			MetaName userName;
+			if (item->exa_view_id)
+			{
+				jrd_rel* view = MET_lookup_relation_id(tdbb, item->exa_view_id, false);
+				if (view && (view->rel_flags & REL_sql_relation))
+					userName = view->rel_owner_name;
+			}
+
 			switch (item->exa_action)
 			{
 				case ExternalAccess::exa_insert:
-					verifyTriggerAccess(tdbb, relation, relation->rel_pre_store, view);
-					verifyTriggerAccess(tdbb, relation, relation->rel_post_store, view);
+					verifyTriggerAccess(tdbb, relation, relation->rel_pre_store, userName);
+					verifyTriggerAccess(tdbb, relation, relation->rel_post_store, userName);
 					break;
 				case ExternalAccess::exa_update:
-					verifyTriggerAccess(tdbb, relation, relation->rel_pre_modify, view);
-					verifyTriggerAccess(tdbb, relation, relation->rel_post_modify, view);
+					verifyTriggerAccess(tdbb, relation, relation->rel_pre_modify, userName);
+					verifyTriggerAccess(tdbb, relation, relation->rel_post_modify, userName);
 					break;
 				case ExternalAccess::exa_delete:
-					verifyTriggerAccess(tdbb, relation, relation->rel_pre_erase, view);
-					verifyTriggerAccess(tdbb, relation, relation->rel_post_erase, view);
+					verifyTriggerAccess(tdbb, relation, relation->rel_pre_erase, userName);
+					verifyTriggerAccess(tdbb, relation, relation->rel_post_erase, userName);
 					break;
 				default:
 					fb_assert(false);
@@ -610,7 +615,7 @@ void JrdStatement::release(thread_db* tdbb)
 
 // Check that we have enough rights to access all resources this list of triggers touches.
 void JrdStatement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
-	trig_vec* triggers, jrd_rel* view)
+	trig_vec* triggers, MetaName userName)
 {
 	if (!triggers)
 		return;
@@ -651,16 +656,14 @@ void JrdStatement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 			}
 
 			// a direct access to an object from this trigger
-			MetaName userName;
-
 			if (access->acc_view_id)
 			{
 				const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_view_id, false);
 				if (view && (view->rel_flags & REL_sql_relation))
 					userName = view->rel_owner_name;
 			}
-			else if (view && (view->rel_flags & REL_sql_relation))
-				userName = view->rel_owner_name;
+			else if (t.ssDefiner)
+				userName = ownerRelation->rel_owner_name;
 
 			const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());
 			SCL_check_access(tdbb, sec_class, userName, id_trigger,

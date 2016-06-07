@@ -156,6 +156,7 @@ public:
 	Firebird::string	entryPoint;			// External trigger entrypoint
 	Firebird::string	extBody;			// External trigger body
 	ExtEngineManager::Trigger* extTrigger;	// External trigger
+	bool ssDefiner;
 
 	void compile(thread_db*);				// Ensure that trigger is compiled
 	void release(thread_db*);				// Try to free trigger request
@@ -167,7 +168,8 @@ public:
 		  engine(p),
 		  entryPoint(p),
 		  extBody(p),
-		  extTrigger(NULL)
+		  extTrigger(NULL),
+		  ssDefiner(false)
 	{}
 };
 

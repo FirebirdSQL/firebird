@@ -595,7 +595,8 @@ public:
 		  external(NULL),
 		  source(p),
 		  systemFlag(fb_sysflag_user),
-		  fkTrigger(false)
+		  fkTrigger(false),
+		  ssDefiner(false)
 	{
 	}
 
@@ -629,6 +630,7 @@ public:
 	Firebird::ByteChunk debugData;
 	USHORT systemFlag;
 	bool fkTrigger;
+	bool ssDefiner;
 };
 
 
@@ -1451,6 +1453,7 @@ public:
 	NestConst<RelationSourceNode> dsqlNode;
 	Firebird::MetaName name;
 	Firebird::Array<NestConst<Clause> > clauses;
+	bool ssDefiner;
 };
 
 

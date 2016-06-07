@@ -114,7 +114,7 @@ static int partners_ast_relation(void*);
 static int rescan_ast_relation(void*);
 static ULONG get_rel_flags_from_FLAGS(USHORT);
 static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, trig_vec**, const TEXT*, FB_UINT64, bool,
-	USHORT, const MetaName&, const string&, const bid*);
+	USHORT, const MetaName&, const string&, const bid*, bool ssDefiner);
 static bool get_type(thread_db*, USHORT*, const UCHAR*, const TEXT*);
 static void lookup_view_contexts(thread_db*, jrd_rel*);
 static void make_relation_scope_name(const TEXT*, const USHORT, string& str);
@@ -123,7 +123,7 @@ static BoolExprNode* parse_field_validation_blr(thread_db* tdbb, bid* blob_id, c
 static bool resolve_charset_and_collation(thread_db*, USHORT*, const UCHAR*, const UCHAR*);
 static void save_trigger_data(thread_db*, trig_vec**, jrd_rel*, JrdStatement*, blb*, blb*,
 	const TEXT*, FB_UINT64, bool, USHORT, const MetaName&, const string&,
-	const bid*);
+	const bid*, bool ssDefiner);
 static void scan_partners(thread_db*, jrd_rel*);
 static void store_dependencies(thread_db*, CompilerScratch*, const jrd_rel*,
 	const MetaName&, int, jrd_tra*);
@@ -1972,6 +1972,8 @@ void MET_load_trigger(thread_db* tdbb,
 		if (!TRG.RDB$ENTRYPOINT.NULL)	// ODS_12_0
 			entryPoint = TRG.RDB$ENTRYPOINT;
 
+		bool ssDefiner = TRG.RDB$SQL_SECURITY;
+
 		if (TRG.RDB$RELATION_NAME.NULL)
 		{
 			if ((TRG.RDB$TRIGGER_TYPE & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DB ||
@@ -1989,7 +1991,8 @@ void MET_load_trigger(thread_db* tdbb,
 							trig_flags,
 							engine,
 							entryPoint,
-							&extBodyId);
+							&extBodyId,
+							ssDefiner);
 			}
 		}
 		else
@@ -2009,7 +2012,8 @@ void MET_load_trigger(thread_db* tdbb,
 							trig_flags,
 							engine,
 							entryPoint,
-							&extBodyId);
+							&extBodyId,
+							ssDefiner);
 			}
 		}
 	}
@@ -3159,7 +3163,7 @@ void MET_parse_sys_trigger(thread_db* tdbb, jrd_rel* relation)
 				statement->flags |= JrdStatement::FLAG_IGNORE_PERM;
 
 			save_trigger_data(tdbb, ptr, relation, statement, NULL, NULL, NULL, type, true, 0, "",
-				"", NULL);
+				"", NULL, 0);
 		}
 	}
 	END_FOR
@@ -4433,7 +4437,7 @@ static void get_trigger(thread_db* tdbb, jrd_rel* relation,
 						const TEXT* name, FB_UINT64 type,
 						bool sys_trigger, USHORT flags,
 						const MetaName& engine, const string& entryPoint,
-						const bid* body)
+						const bid* body, bool ssDefiner)
 {
 /**************************************
  *
@@ -4461,7 +4465,7 @@ static void get_trigger(thread_db* tdbb, jrd_rel* relation,
 		debugInfoBlob = blb::open(tdbb, attachment->getSysTransaction(), debug_blob_id);
 
 	save_trigger_data(tdbb, ptr, relation, NULL, blrBlob, debugInfoBlob,
-					  name, type, sys_trigger, flags, engine, entryPoint, body);
+					  name, type, sys_trigger, flags, engine, entryPoint, body, ssDefiner);
 }
 
 
@@ -4824,7 +4828,7 @@ static void save_trigger_data(thread_db* tdbb, trig_vec** ptr, jrd_rel* relation
 							  const TEXT* name, FB_UINT64 type,
 							  bool sys_trigger, USHORT flags,
 							  const MetaName& engine, const string& entryPoint,
-							  const bid* body)
+							  const bid* body, bool ssDefiner)
 {
 /**************************************
  *
@@ -4884,6 +4888,7 @@ static void save_trigger_data(thread_db* tdbb, trig_vec** ptr, jrd_rel* relation
 	t.relation = relation;
 	t.engine = engine;
 	t.entryPoint = entryPoint;
+	t.ssDefiner = ssDefiner;
 }
 
 
