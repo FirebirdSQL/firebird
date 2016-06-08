@@ -1,11 +1,11 @@
 /*
  *	PROGRAM:	Object oriented API samples.
  *	MODULE:		09.service.cpp
- *	DESCRIPTION:	A sample of using service maanger.
+ *	DESCRIPTION:	A sample of using service manager.
  *					Prints server version and employee's encryption statistics.
  *
  *					Example for the following interfaces:
- *					IService - interface to work with service maanger.
+ *					IService - interface to work with service manager.
  *
  *  The contents of this file are subject to the Initial
  *  Developer's Public License Version 1.0 (the "License");

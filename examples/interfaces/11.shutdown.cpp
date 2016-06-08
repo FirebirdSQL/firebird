@@ -1,7 +1,7 @@
 /*
  *	PROGRAM:	Object oriented API samples.
- *	MODULE:		10.backup.cpp
- *	DESCRIPTION:	A sample of making backup of database using service manager.
+ *	MODULE:		11.shutdown.cpp
+ *	DESCRIPTION:	A sample of shutting database down using service manager.
  *
  *					Example for the following interfaces:
  *					IService - interface to work with service manager.
@@ -113,21 +113,18 @@ int main()
 		svc = prov->attachServiceManager(&status, "service_mgr", spb1->getBufferLength(&status),
 			spb1->getBuffer(&status));
 
-		// In the simplest case sendItems parameter may be NULL
-		// Building receiveItems is mostly trivial
-		const unsigned char receiveItems[] = {isc_info_svc_server_version};
-
 		// Output buffer
 		unsigned char results[1024];
 
-		printf("** Demo of making backup using service manager...\n");
+		printf("** Demo of shutting database down...\n");
 
 		// Build service start SPB
 		spb2 = utl->getXpbBuilder(&status, IXpbBuilder::SPB_START, NULL, 0);
-		spb2->insertTag(&status, isc_action_svc_backup);
+		spb2->insertTag(&status, isc_action_svc_properties);
 		spb2->insertString(&status, isc_spb_dbname, "employee.fdb");
-		spb2->insertString(&status, isc_spb_bkp_file, "employee.fbk");
-		spb2->insertInt(&status, isc_spb_options, isc_spb_bkp_no_garbage_collect);
+		unsigned char mode = isc_spb_prp_sm_single;
+		spb2->insertBytes(&status, isc_spb_prp_shutdown_mode, &mode, 1);
+		spb2->insertInt(&status, isc_spb_prp_force_shutdown, 1);
 
 		// Start service
 		svc->start(&status, spb2->getBufferLength(&status), spb2->getBuffer(&status));
