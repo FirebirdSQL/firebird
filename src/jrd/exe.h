@@ -514,6 +514,7 @@ public:
 	// used in cmp.cpp/pass1
 	jrd_rel*	csb_view;
 	StreamType	csb_view_stream;
+	jrd_rel*	csb_parent_relation;
 	unsigned	blrVersion;
 	USHORT		csb_remap_variable;
 	bool		csb_validate_expr;

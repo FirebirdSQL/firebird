@@ -531,7 +531,7 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 
 		MetaName userName;
 
-		if (access->acc_view_id) // simakov: Is it necessary?
+		if (access->acc_view_id)
 		{
 			const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_view_id, false);
 			if (view && (view->rel_flags & REL_sql_relation))

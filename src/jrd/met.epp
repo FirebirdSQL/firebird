@@ -3788,6 +3788,7 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 		relation->rel_name = REL.RDB$RELATION_NAME;
 		relation->rel_owner_name = REL.RDB$OWNER_NAME;
+		relation->rel_ss_definer = REL.RDB$SQL_SECURITY;
 
 		if (!REL.RDB$VIEW_BLR.isEmpty())
 		{

@@ -5498,8 +5498,11 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	// the nodes in the subtree are involved in a validation
 	// clause only, the subtree is a validate_subtree in our notation.
 
-	const SLONG viewId = tail->csb_view ?
+	SLONG viewId = tail->csb_view ?
 		tail->csb_view->rel_id : (csb->csb_view ? csb->csb_view->rel_id : 0);
+
+	if (!viewId && relation->rel_ss_definer)
+		viewId = relation->rel_id;
 
 	if (tail->csb_flags & csb_modify)
 	{
@@ -5594,6 +5597,8 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 		sub = cast;
 	}
+
+	AutoSetRestore<jrd_rel*> autoRelationStream(&csb->csb_parent_relation, relation->rel_ss_definer ? relation : 0);
 
 	if (relation->rel_view_rse)
 	{
@@ -11177,8 +11182,15 @@ ValueExprNode* UdfCallNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		{
 			if (function->getName().package.isEmpty())
 			{
-				CMP_post_access(tdbb, csb, function->getSecurityName(),
-					(csb->csb_view ? csb->csb_view->rel_id : 0),
+				SLONG viewId = csb->csb_view ? csb->csb_view->rel_id : 0;
+
+				if (!viewId && csb->csb_parent_relation)
+				{
+					fb_assert(csb->csb_parent_relation->rel_ss_definer);
+					viewId = csb->csb_parent_relation->rel_id;
+				}
+
+				CMP_post_access(tdbb, csb, function->getSecurityName(), viewId,
 					SCL_execute, SCL_object_function, function->getName().identifier);
 			}
 			else

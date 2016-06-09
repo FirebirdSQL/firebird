@@ -178,6 +178,7 @@ public:
 	trig_vec*	rel_post_store;		// Post-operation store trigger
 	prim		rel_primary_dpnds;	// foreign dependencies on this relation's primary key
 	frgn		rel_foreign_refs;	// foreign references to other relations' primary keys
+	bool		rel_ss_definer;
 
 	Firebird::Mutex rel_drop_mutex;
 
@@ -319,7 +320,7 @@ const ULONG REL_gc_lockneed				= 0x80000;	// gc lock should be acquired
 inline jrd_rel::jrd_rel(MemoryPool& p)
 	: rel_pool(&p), rel_flags(REL_gc_lockneed),
 	  rel_name(p), rel_owner_name(p), rel_security_name(p),
-	  rel_view_contexts(p), rel_gc_records(p)
+	  rel_view_contexts(p), rel_gc_records(p), rel_ss_definer(false)
 {
 }
 
