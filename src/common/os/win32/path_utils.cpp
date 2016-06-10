@@ -10,6 +10,8 @@ const char PathUtils::dir_sep = '\\';
 const char* PathUtils::curr_dir_link = ".";
 const char* PathUtils::up_dir_link = "..";
 const char PathUtils::dir_list_sep = ';';
+const size_t PathUtils::curr_dir_link_len = strlen(curr_dir_link);
+const size_t PathUtils::up_dir_link_len = strlen(up_dir_link);
 
 class Win32DirItr : public PathUtils::dir_iterator
 {
@@ -121,7 +123,10 @@ void PathUtils::concatPath(Firebird::PathName& result,
 
 	for (Firebird::PathName::size_type pos = 0; cur_pos < second.length(); cur_pos = pos + 1)
 	{
-		pos = second.find_first_of("/\\", cur_pos);
+		static const char separators[] = "/\\";
+		static const Firebird::PathName::size_type separatorsLen = static_cast<Firebird::PathName::size_type>(strlen(separators));
+
+		pos = second.find_first_of(separators, cur_pos, separatorsLen);
 		if (pos == Firebird::PathName::npos) // simple name, simple handling
 		{
 			pos = second.length();
@@ -130,16 +135,16 @@ void PathUtils::concatPath(Firebird::PathName& result,
 		{
 			continue;
 		}
-		if (pos == cur_pos + 1 && memcmp(second.c_str() + cur_pos, PathUtils::curr_dir_link, 1) == 0) // Current dir, ignore
+		if (pos == cur_pos + curr_dir_link_len && memcmp(second.c_str() + cur_pos, curr_dir_link, curr_dir_link_len) == 0) // Current dir, ignore
 		{
 			continue;
 		}
-		if (pos == cur_pos + 2 && memcmp(second.c_str() + cur_pos, PathUtils::up_dir_link, 2) == 0) // One dir up
+		if (pos == cur_pos + up_dir_link_len && memcmp(second.c_str() + cur_pos, up_dir_link, up_dir_link_len) == 0) // One dir up
 		{
 			if (result.length() < 2) // We have nothing to cut off, ignore this piece (may be throw an error?..)
 				continue;
 
-			const Firebird::PathName::size_type up_dir = result.find_last_of("/\\", result.length() - 2, 2);
+			const Firebird::PathName::size_type up_dir = result.find_last_of(separators, result.length() - 2, separatorsLen);
 			if (up_dir == Firebird::PathName::npos)
 				continue;
 

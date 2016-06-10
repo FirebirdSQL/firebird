@@ -47,9 +47,11 @@ public:
 
 	/// String used to point to current directory
 	static const char* curr_dir_link;
+	static const size_t curr_dir_link_len;
 
 	/// String used to point to parent directory
 	static const char* up_dir_link;
+	static const size_t up_dir_link_len;
 
 	/// The directory list separator for the platform.
 	static const char dir_list_sep;
