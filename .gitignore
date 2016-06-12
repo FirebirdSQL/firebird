@@ -11,3 +11,6 @@ config.status
 configure
 libtool
 *.log
+builds/win32/*/*.sdf
+builds/win32/*/*.VC.db
+builds/win32/*/*.VC.opendb
