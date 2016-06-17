@@ -3934,6 +3934,7 @@ void YRequest::destroy(unsigned dstrFlags)
 	}
 
 	attachment->childRequests.remove(this);
+	attachment = NULL;
 
 	removeHandle(&requests, handle);
 
