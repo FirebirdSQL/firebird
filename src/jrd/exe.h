@@ -188,7 +188,7 @@ typedef Firebird::SortedArray<Resource, Firebird::EmptyStorage<Resource>,
 struct AccessItem
 {
 	Firebird::MetaName		acc_security_name;
-	SLONG					acc_view_id;
+	SLONG					acc_ss_rel_id;	// Relation Id which owner will be used to check permissions
 	Firebird::MetaName		acc_name, acc_r_name;
 	SLONG					acc_type;
 	SecurityClass::flags_t	acc_mask;
@@ -209,8 +209,8 @@ struct AccessItem
 		if ((v = i1.acc_security_name.compare(i2.acc_security_name)) != 0)
 			return v > 0;
 
-		if (i1.acc_view_id != i2.acc_view_id)
-			return i1.acc_view_id > i2.acc_view_id;
+		if (i1.acc_ss_rel_id != i2.acc_ss_rel_id)
+			return i1.acc_ss_rel_id > i2.acc_ss_rel_id;
 
 		if (i1.acc_mask != i2.acc_mask)
 			return i1.acc_mask > i2.acc_mask;
@@ -227,7 +227,7 @@ struct AccessItem
 	AccessItem(const Firebird::MetaName& security_name, SLONG view_id,
 		const Firebird::MetaName& name, SLONG type,
 		SecurityClass::flags_t mask, const Firebird::MetaName& relName)
-		: acc_security_name(security_name), acc_view_id(view_id), acc_name(name),
+		: acc_security_name(security_name), acc_ss_rel_id(view_id), acc_name(name),
 			acc_r_name(relName), acc_type(type), acc_mask(mask)
 	{}
 };

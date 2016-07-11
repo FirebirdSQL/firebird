@@ -49,7 +49,7 @@ Jrd::jrd_req* CMP_make_request(Jrd::thread_db*, Jrd::CompilerScratch*, bool);
 void CMP_mark_variant(Jrd::CompilerScratch*, StreamType stream);
 Jrd::ItemInfo* CMP_pass2_validation(Jrd::thread_db*, Jrd::CompilerScratch*, const Jrd::Item&);
 
-void CMP_post_access(Jrd::thread_db*, Jrd::CompilerScratch*, const Firebird::MetaName&, SLONG,
+void CMP_post_access(Jrd::thread_db*, Jrd::CompilerScratch*, const Firebird::MetaName&, SLONG ssRelationId,
 					 Jrd::SecurityClass::flags_t, SLONG type_name, const Firebird::MetaName&,
 					 const Firebird::MetaName& = "");
 

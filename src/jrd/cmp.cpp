@@ -355,7 +355,7 @@ ULONG CMP_impure(CompilerScratch* csb, ULONG size)
 void CMP_post_access(thread_db* tdbb,
 					 CompilerScratch* csb,
 					 const Firebird::MetaName& security_name,
-					 SLONG view_id,
+					 SLONG ssRelationId,			// SQL SECURITY relation in which contex permissions should be check
 					 SecurityClass::flags_t mask,
 					 SLONG type_name,
 					 const Firebird::MetaName& name,
@@ -383,7 +383,7 @@ void CMP_post_access(thread_db* tdbb,
 
 	SET_TDBB(tdbb);
 
-	AccessItem access(security_name, view_id, name, type_name, mask, r_name);
+	AccessItem access(security_name, ssRelationId, name, type_name, mask, r_name);
 
 	FB_SIZE_T i;
 

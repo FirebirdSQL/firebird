@@ -461,9 +461,9 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 
 			MetaName userName;
 
-			if (access->acc_view_id)
+			if (access->acc_ss_rel_id)
 			{
-				const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_view_id, false);
+				const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_ss_rel_id, false);
 				if (view && (view->rel_flags & REL_sql_relation))
 					userName = view->rel_owner_name;
 			}
@@ -531,9 +531,9 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 
 		MetaName userName;
 
-		if (access->acc_view_id)
+		if (access->acc_ss_rel_id)
 		{
-			const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_view_id, false);
+			const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_ss_rel_id, false);
 			if (view && (view->rel_flags & REL_sql_relation))
 				userName = view->rel_owner_name;
 		}
@@ -656,9 +656,9 @@ void JrdStatement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 			}
 
 			// a direct access to an object from this trigger
-			if (access->acc_view_id)
+			if (access->acc_ss_rel_id)
 			{
-				const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_view_id, false);
+				const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_ss_rel_id, false);
 				if (view && (view->rel_flags & REL_sql_relation))
 					userName = view->rel_owner_name;
 			}
