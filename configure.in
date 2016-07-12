@@ -354,6 +354,17 @@ dnl CPU_TYPE=ppc64
    SHRLIB_EXT=so
    ;;
 
+  m68k*-*-linux*)
+   MAKEFILE_PREFIX=linux_generic
+   INSTALL_PREFIX=linux
+   PLATFORM=LINUX
+   AC_DEFINE(LINUX, 1, [Define this if OS is Linux])
+   AC_DEFINE(M68K, 1, [Define this if CPU is M68k])
+   LOCK_MANAGER_FLG=Y
+   EDITLINE_FLG=Y
+   SHRLIB_EXT=so
+   ;;
+
   *-*-linux* | *-*-gnu*)
     MAKEFILE_PREFIX=linux_generic
     INSTALL_PREFIX=linux
