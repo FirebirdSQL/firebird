@@ -195,6 +195,10 @@
 #define FB_CPU CpuPowerPc64
 #endif /* PPC64 */
 
+#ifdef M68K
+#define FB_CPU CpuM68k
+#endif /* M68K */
+
 #endif /* LINUX */
 
 
