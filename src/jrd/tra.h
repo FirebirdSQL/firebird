@@ -370,6 +370,7 @@ public:
 	void rollbackToSavepoint(thread_db* tdbb, SavNumber number);
 	void rollforwardSavepoint(thread_db* tdbb);
 	DbCreatorsList* getDbCreatorsList();
+	void checkBlob(thread_db* tdbb, const bid* blob_id);
 
 	GenIdCache* getGenIdCache()
 	{

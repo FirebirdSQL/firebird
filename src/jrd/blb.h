@@ -157,6 +157,9 @@ private:
 	USHORT blb_pg_space_id;			// page space
 	USHORT blb_fragment_size;		// Residual fragment size
 	USHORT blb_max_segment;			// Longest segment
+#ifdef CHECK_BLOB_SELECT
+	USHORT blb_fld_id;				// Field ID
+#endif
 	bool blb_has_buffer;
 };
 
