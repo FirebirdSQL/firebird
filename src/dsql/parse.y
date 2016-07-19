@@ -2461,12 +2461,13 @@ procedure_clause
 
 %type <createAlterProcedureNode> psql_procedure_clause
 psql_procedure_clause
-	: procedure_clause_start AS local_declaration_list full_proc_block
+	: procedure_clause_start sql_security_clause AS local_declaration_list full_proc_block
 		{
 			$$ = $1;
-			$$->source = makeParseStr(YYPOSNARG(3), YYPOSNARG(4));
-			$$->localDeclList = $3;
-			$$->body = $4;
+			$$->ssDefiner = $2;
+			$$->source = makeParseStr(YYPOSNARG(4), YYPOSNARG(5));
+			$$->localDeclList = $4;
+			$$->body = $5;
 		}
 	;
 
@@ -2483,13 +2484,12 @@ external_procedure_clause
 
 %type <createAlterProcedureNode> procedure_clause_start
 procedure_clause_start
-	: symbol_procedure_name sql_security_clause
+	: symbol_procedure_name
 		{
 			$$ = newNode<CreateAlterProcedureNode>(*$1);
-			$$->ssDefiner = $2;
 		}
-	input_parameters(NOTRIAL(&$3->parameters)) output_parameters(NOTRIAL(&$3->returns))
-			{ $$ = $3; }
+	input_parameters(NOTRIAL(&$2->parameters)) output_parameters(NOTRIAL(&$2->returns))
+			{ $$ = $2; }
 	;
 
 %type <nullableBoolVal> sql_security_clause
@@ -2597,12 +2597,13 @@ function_clause
 
 %type <createAlterFunctionNode> psql_function_clause
 psql_function_clause
-	: function_clause_start AS local_declaration_list full_proc_block
+	: function_clause_start sql_security_clause AS local_declaration_list full_proc_block
 		{
 			$$ = $1;
-			$$->source = makeParseStr(YYPOSNARG(3), YYPOSNARG(4));
-			$$->localDeclList = $3;
-			$$->body = $4;
+			$$->ssDefiner = $2;
+			$$->source = makeParseStr(YYPOSNARG(4), YYPOSNARG(5));
+			$$->localDeclList = $4;
+			$$->body = $5;
 		}
 	;
 
@@ -2619,17 +2620,16 @@ external_function_clause
 
 %type <createAlterFunctionNode> function_clause_start
 function_clause_start
-	: symbol_UDF_name sql_security_clause
+	: symbol_UDF_name
 			{
 				$$ = newNode<CreateAlterFunctionNode>(*$1);
-				$$->ssDefiner = $2;
 			}
-		input_parameters(NOTRIAL(&$3->parameters))
+		input_parameters(NOTRIAL(&$2->parameters))
 		RETURNS domain_or_non_array_type collate_clause deterministic_opt
 			{
-				$$ = $3;
-				$$->returnType = newNode<ParameterClause>($6, optName($7));
-				$$->deterministic = $8;
+				$$ = $2;
+				$$->returnType = newNode<ParameterClause>($5, optName($6));
+				$$->deterministic = $7;
 			}
 	;
 
@@ -3526,14 +3526,14 @@ check_opt
 
 %type <createAlterTriggerNode> trigger_clause
 trigger_clause
-	: symbol_trigger_name sql_security_clause trigger_active trigger_type trigger_position
+	: symbol_trigger_name trigger_active trigger_type trigger_position sql_security_clause
 			AS local_declaration_list full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
-			$$->ssDefiner = $2;
-			$$->active = $3;
-			$$->type = $4;
-			$$->position = $5;
+			$$->active = $2;
+			$$->type = $3;
+			$$->position = $4;
+			$$->ssDefiner = $5;
 			$$->source = makeParseStr(YYPOSNARG(6), YYPOSNARG(8));
 			$$->localDeclList = $7;
 			$$->body = $8;
@@ -3549,15 +3549,15 @@ trigger_clause
 			if ($6)
 				$$->source = *$6;
 		}
-	| symbol_trigger_name sql_security_clause trigger_active trigger_type trigger_position ON symbol_table_name
+	| symbol_trigger_name trigger_active trigger_type trigger_position ON symbol_table_name sql_security_clause
 			AS local_declaration_list full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
-			$$->ssDefiner = $2;
-			$$->active = $3;
-			$$->type = $4;
-			$$->position = $5;
-			$$->relationName = *$7;
+			$$->active = $2;
+			$$->type = $3;
+			$$->position = $4;
+			$$->relationName = *$6;
+			$$->ssDefiner = $7;
 			$$->source = makeParseStr(YYPOSNARG(8), YYPOSNARG(10));
 			$$->localDeclList = $9;
 			$$->body = $10;
@@ -3574,15 +3574,15 @@ trigger_clause
 			if ($8)
 				$$->source = *$8;
 		}
-	| symbol_trigger_name sql_security_clause FOR symbol_table_name trigger_active trigger_type trigger_position
+	| symbol_trigger_name FOR symbol_table_name trigger_active trigger_type trigger_position sql_security_clause
 			AS local_declaration_list full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
-			$$->ssDefiner = $2;
-			$$->active = $5;
-			$$->type = $6;
-			$$->position = $7;
-			$$->relationName = *$4;
+			$$->active = $4;
+			$$->type = $5;
+			$$->position = $6;
+			$$->relationName = *$3;
+			$$->ssDefiner = $7;
 			$$->source = makeParseStr(YYPOSNARG(8), YYPOSNARG(10));
 			$$->localDeclList = $9;
 			$$->body = $10;
