@@ -1532,6 +1532,12 @@ static void list_procedure_bodies()
 			isqlGlob.printf("EXTERNAL NAME %s%s", SQL_identifier2, NEWLINE);
 		}
 
+		if (!PRC.RDB$SQL_SECURITY.NULL)
+		{
+			const char* ss = PRC.RDB$SQL_SECURITY ? "SQL SECURITY DEFINER" : "SQL SECURITY INVOKER";
+			isqlGlob.printf("%s%s", ss, NEWLINE);
+		}
+
 		if (!PRC.RDB$ENGINE_NAME.NULL)
 		{
 			fb_utils::exact_name(PRC.RDB$ENGINE_NAME);
@@ -3087,6 +3093,12 @@ static void list_functions_ods12_bodies()
 			fb_utils::exact_name(FUN.RDB$ENTRYPOINT);
 			IUTILS_copy_SQL_id(FUN.RDB$ENTRYPOINT, SQL_identifier2, SINGLE_QUOTE);
 			isqlGlob.printf("EXTERNAL NAME %s%s", SQL_identifier2, NEWLINE);
+		}
+
+		if (!FUN.RDB$SQL_SECURITY.NULL)
+		{
+			const char* ss = FUN.RDB$SQL_SECURITY ? "SQL SECURITY DEFINER" : "SQL SECURITY INVOKER";
+			isqlGlob.printf("%s%s", ss, NEWLINE);
 		}
 
 		if (!FUN.RDB$ENGINE_NAME.NULL)

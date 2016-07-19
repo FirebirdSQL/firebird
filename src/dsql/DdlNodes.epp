@@ -1741,14 +1741,6 @@ void CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 
 				FUN.RDB$RETURN_ARGUMENT.NULL = FALSE;
 				FUN.RDB$RETURN_ARGUMENT = 0;
-
-				if (ssDefiner.specified)
-				{
-					FUN.RDB$SQL_SECURITY.NULL = FALSE;
-					FUN.RDB$SQL_SECURITY = ssDefiner.value ? 1 : 0;
-				}
-				else
-					FUN.RDB$SQL_SECURITY.NULL = TRUE;
 			}
 			END_STORE
 
@@ -1818,6 +1810,14 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 
 				FUN.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
 				FUN.RDB$DETERMINISTIC_FLAG = deterministic ? TRUE : FALSE;
+
+				if (ssDefiner.specified)
+				{
+					FUN.RDB$SQL_SECURITY.NULL = FALSE;
+					FUN.RDB$SQL_SECURITY = ssDefiner.value ? 1 : 0;
+				}
+				else
+					FUN.RDB$SQL_SECURITY.NULL = TRUE;
 
 				if (isUdf())
 				{

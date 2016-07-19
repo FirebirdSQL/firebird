@@ -4265,6 +4265,12 @@ static processing_state show_func(const SCHAR* funcname)
 			isqlGlob.printf("External name: %s%s", FUN.RDB$ENTRYPOINT, NEWLINE);
 		}
 
+		if (!FUN.RDB$SQL_SECURITY.NULL)
+		{
+			const char* ss = FUN.RDB$SQL_SECURITY ? "DEFINER" : "INVOKER";
+			isqlGlob.printf("SQL SECURITY: %s%s", ss, NEWLINE);
+		}
+
 		if (!FUN.RDB$ENGINE_NAME.NULL)
 		{
 			fb_utils::exact_name(FUN.RDB$ENGINE_NAME);
@@ -5122,6 +5128,12 @@ static processing_state show_proc(const SCHAR* procname)
 		{
 			fb_utils::exact_name(PRC.RDB$ENTRYPOINT);
 			isqlGlob.printf("External name: %s%s", PRC.RDB$ENTRYPOINT, NEWLINE);
+		}
+
+		if (!PRC.RDB$SQL_SECURITY.NULL)
+		{
+			const char* ss = PRC.RDB$SQL_SECURITY ? "DEFINER" : "INVOKER";
+			isqlGlob.printf("SQL SECURITY: %s%s", ss, NEWLINE);
 		}
 
 		if (!PRC.RDB$ENGINE_NAME.NULL)
