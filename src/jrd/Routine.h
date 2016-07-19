@@ -28,6 +28,7 @@
 #include "../common/classes/QualifiedName.h"
 #include "../common/classes/NestConst.h"
 #include "../common/MsgMetadata.h"
+#include "../common/classes/Nullable.h"
 
 namespace Jrd
 {
@@ -59,8 +60,7 @@ namespace Jrd
 			  useCount(0),
 			  intUseCount(0),
 			  alterCount(0),
-			  existenceLock(NULL),
-			  ssDefiner(false)
+			  existenceLock(NULL)
 		{
 		}
 
@@ -179,7 +179,7 @@ namespace Jrd
 		USHORT alterCount;		// No. of times the routine was altered
 		Lock* existenceLock;	// existence lock, if any
 
-		bool ssDefiner;	// true ? SQL DEFINER : SQL INVOKER
+		Nullable<bool> ssDefiner;	// true ? SQL DEFINER : SQL INVOKER
 		Firebird::MetaName owner;
 	};
 }

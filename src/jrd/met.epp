@@ -114,7 +114,7 @@ static int partners_ast_relation(void*);
 static int rescan_ast_relation(void*);
 static ULONG get_rel_flags_from_FLAGS(USHORT);
 static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, trig_vec**, const TEXT*, FB_UINT64, bool,
-	USHORT, const MetaName&, const string&, const bid*, bool ssDefiner);
+	USHORT, const MetaName&, const string&, const bid*, Nullable<bool> ssDefiner);
 static bool get_type(thread_db*, USHORT*, const UCHAR*, const TEXT*);
 static void lookup_view_contexts(thread_db*, jrd_rel*);
 static void make_relation_scope_name(const TEXT*, const USHORT, string& str);
@@ -123,7 +123,7 @@ static BoolExprNode* parse_field_validation_blr(thread_db* tdbb, bid* blob_id, c
 static bool resolve_charset_and_collation(thread_db*, USHORT*, const UCHAR*, const UCHAR*);
 static void save_trigger_data(thread_db*, trig_vec**, jrd_rel*, JrdStatement*, blb*, blb*,
 	const TEXT*, FB_UINT64, bool, USHORT, const MetaName&, const string&,
-	const bid*, bool ssDefiner);
+	const bid*, Nullable<bool> ssDefiner);
 static void scan_partners(thread_db*, jrd_rel*);
 static void store_dependencies(thread_db*, CompilerScratch*, const jrd_rel*,
 	const MetaName&, int, jrd_tra*);
@@ -1972,7 +1972,9 @@ void MET_load_trigger(thread_db* tdbb,
 		if (!TRG.RDB$ENTRYPOINT.NULL)	// ODS_12_0
 			entryPoint = TRG.RDB$ENTRYPOINT;
 
-		bool ssDefiner = TRG.RDB$SQL_SECURITY;
+
+		const Nullable<bool> ssDefiner = TRG.RDB$SQL_SECURITY.NULL ?
+					relation->rel_ss_definer : Nullable<bool>(static_cast<bool>(TRG.RDB$SQL_SECURITY));
 
 		if (TRG.RDB$RELATION_NAME.NULL)
 		{
@@ -3163,7 +3165,7 @@ void MET_parse_sys_trigger(thread_db* tdbb, jrd_rel* relation)
 				statement->flags |= JrdStatement::FLAG_IGNORE_PERM;
 
 			save_trigger_data(tdbb, ptr, relation, statement, NULL, NULL, NULL, type, true, 0, "",
-				"", NULL, 0);
+				"", NULL, Nullable<bool>());
 		}
 	}
 	END_FOR
@@ -3331,11 +3333,14 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 				{
 					if (!PKG.RDB$SECURITY_CLASS.NULL)
 						procedure->setSecurityName(PKG.RDB$SECURITY_CLASS);
+					if (!PKG.RDB$SQL_SECURITY.NULL)
+						procedure->ssDefiner = Nullable<bool>::val(PKG.RDB$SQL_SECURITY);
 				}
 				END_FOR
 			}
 
-			procedure->ssDefiner = P.RDB$SQL_SECURITY;
+			if (!procedure->ssDefiner.specified && !P.RDB$SQL_SECURITY.NULL)
+				procedure->ssDefiner = Nullable<bool>::val(P.RDB$SQL_SECURITY);
 			procedure->owner = P.RDB$OWNER_NAME;
 			procedure->setImplemented(true);
 			procedure->getInputFields().resize(P.RDB$PROCEDURE_INPUTS);
@@ -4438,7 +4443,7 @@ static void get_trigger(thread_db* tdbb, jrd_rel* relation,
 						const TEXT* name, FB_UINT64 type,
 						bool sys_trigger, USHORT flags,
 						const MetaName& engine, const string& entryPoint,
-						const bid* body, bool ssDefiner)
+						const bid* body, Nullable<bool> ssDefiner)
 {
 /**************************************
  *
@@ -4829,7 +4834,7 @@ static void save_trigger_data(thread_db* tdbb, trig_vec** ptr, jrd_rel* relation
 							  const TEXT* name, FB_UINT64 type,
 							  bool sys_trigger, USHORT flags,
 							  const MetaName& engine, const string& entryPoint,
-							  const bid* body, bool ssDefiner)
+							  const bid* body, Nullable<bool> ssDefiner)
 {
 /**************************************
  *

@@ -2492,11 +2492,14 @@ procedure_clause_start
 			{ $$ = $3; }
 	;
 
-%type <boolVal> sql_security_clause
+%type <nullableBoolVal> sql_security_clause
 sql_security_clause
-	: { $$ = false; }
-	| SQL SECURITY DEFINER { $$ = true; }
-	| SQL SECURITY INVOKER { $$ = false; }
+	: SQL SECURITY DEFINER
+		{ $$ = Nullable<bool>::val(true); }
+	| SQL SECURITY INVOKER
+		{ $$ = Nullable<bool>::val(false); }
+	|	// nothing
+		{ $$ = Nullable<bool>::empty(); }
 	;
 
 %type <createAlterProcedureNode> alter_procedure_clause
@@ -2682,11 +2685,12 @@ replace_function_clause
 
 %type <createAlterPackageNode> package_clause
 package_clause
-	: symbol_package_name AS BEGIN package_items_opt END
+	: symbol_package_name sql_security_clause AS BEGIN package_items_opt END
 		{
 			CreateAlterPackageNode* node = newNode<CreateAlterPackageNode>(*$1);
-			node->source = makeParseStr(YYPOSNARG(3), YYPOSNARG(5));
-			node->items = $4;
+			node->ssDefiner = $2;
+			node->source = makeParseStr(YYPOSNARG(4), YYPOSNARG(6));
+			node->items = $5;
 			$$ = node;
 		}
 	;

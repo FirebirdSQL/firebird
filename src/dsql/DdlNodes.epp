@@ -1612,6 +1612,14 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (returnType && returnType->type)
 		returnType->type->resolve(dsqlScratch);
 
+	// check SQL SECURITY is not set if function declared in package
+	if (package.hasData() && ssDefiner.specified)
+	{
+		// parameter without default value after parameters with default
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+				  Arg::Gds(isc_invalid_clause) << Arg::Str("SQL SECURITY for functions is prohibit in packages"));
+	}
+
 	return DdlNode::dsqlPass(dsqlScratch);
 }
 
@@ -1734,7 +1742,13 @@ void CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 				FUN.RDB$RETURN_ARGUMENT.NULL = FALSE;
 				FUN.RDB$RETURN_ARGUMENT = 0;
 
-				FUN.RDB$SQL_SECURITY = ssDefiner ? 1 : 0;
+				if (ssDefiner.specified)
+				{
+					FUN.RDB$SQL_SECURITY.NULL = FALSE;
+					FUN.RDB$SQL_SECURITY = ssDefiner.value ? 1 : 0;
+				}
+				else
+					FUN.RDB$SQL_SECURITY.NULL = TRUE;
 			}
 			END_STORE
 
@@ -2603,6 +2617,14 @@ DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	for (unsigned i = 0; i < returns.getCount(); ++i)
 		returns[i]->type->resolve(dsqlScratch);
 
+	// check SQL SECURITY is not set if function declared in package
+	if (package.hasData() && ssDefiner.specified)
+	{
+		// parameter without default value after parameters with default
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+				  Arg::Gds(isc_invalid_clause) << Arg::Str("SQL SECURITY for procedures is prohibit in packages"));
+	}
+
 	return DdlNode::dsqlPass(dsqlScratch);
 }
 
@@ -2793,7 +2815,13 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 				else
 					P.RDB$PRIVATE_FLAG.NULL = TRUE;
 
-				P.RDB$SQL_SECURITY = ssDefiner ? 1 : 0;
+				if (ssDefiner.specified)
+				{
+					P.RDB$SQL_SECURITY.NULL = FALSE;
+					P.RDB$SQL_SECURITY = ssDefiner.value ? 1 : 0;
+				}
+				else
+					P.RDB$SQL_SECURITY.NULL = TRUE;
 			}
 
 			if (external)
@@ -3302,7 +3330,13 @@ void TriggerDefinition::store(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		TRG.RDB$TRIGGER_SEQUENCE = (!position.specified ? 0 : position.value);
 		TRG.RDB$TRIGGER_INACTIVE = (!active.specified ? 0 : (USHORT) !active.value);
 
-		TRG.RDB$SQL_SECURITY = ssDefiner ? 1 : 0;
+		if (ssDefiner.specified)
+		{
+			TRG.RDB$SQL_SECURITY.NULL = FALSE;
+			TRG.RDB$SQL_SECURITY = ssDefiner.value ? 1 : 0;
+		}
+		else
+			TRG.RDB$SQL_SECURITY.NULL = TRUE;
 	}
 	END_STORE
 
@@ -3409,7 +3443,13 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 				attachment->storeMetaDataBlob(tdbb, transaction, &TRG.RDB$TRIGGER_SOURCE, source);
 			}
 
-			TRG.RDB$SQL_SECURITY = ssDefiner ? 1 : 0;
+			if (ssDefiner.specified)
+			{
+				TRG.RDB$SQL_SECURITY.NULL = FALSE;
+				TRG.RDB$SQL_SECURITY = ssDefiner.value ? 1 : 0;
+			}
+			else
+				TRG.RDB$SQL_SECURITY.NULL = TRUE;
 
 			modified = true;
 		END_MODIFY
@@ -7214,7 +7254,14 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		REL.RDB$SYSTEM_FLAG = 0;
 		REL.RDB$FLAGS = REL_sql;
 		REL.RDB$RELATION_TYPE = relationType;
-		REL.RDB$SQL_SECURITY = ssDefiner ? 1 : 0;
+
+		if (ssDefiner.specified)
+		{
+			REL.RDB$SQL_SECURITY.NULL = FALSE;
+			REL.RDB$SQL_SECURITY = ssDefiner.value ? 1 : 0;
+		}
+		else
+			REL.RDB$SQL_SECURITY.NULL = TRUE;
 
 		REL.RDB$VIEW_BLR.NULL = TRUE;
 		REL.RDB$VIEW_SOURCE.NULL = TRUE;

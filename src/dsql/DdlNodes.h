@@ -355,8 +355,7 @@ public:
 		  packageOwner(pool),
 		  privateScope(false),
 		  preserveDefaults(false),
-		  udfReturnPos(0),
-		  ssDefiner(false)
+		  udfReturnPos(0)
 	{
 	}
 
@@ -410,7 +409,7 @@ public:
 	bool privateScope;
 	bool preserveDefaults;
 	SLONG udfReturnPos;
-	bool ssDefiner;
+	Nullable<bool> ssDefiner;
 };
 
 
@@ -544,7 +543,7 @@ public:
 	Firebird::MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
-	bool ssDefiner;	// true ? SQL SECURITY DEFINER : SQL SECURITY INVOKER
+	Nullable<bool> ssDefiner;
 };
 
 
@@ -595,8 +594,7 @@ public:
 		  external(NULL),
 		  source(p),
 		  systemFlag(fb_sysflag_user),
-		  fkTrigger(false),
-		  ssDefiner(false)
+		  fkTrigger(false)
 	{
 	}
 
@@ -630,7 +628,7 @@ public:
 	Firebird::ByteChunk debugData;
 	USHORT systemFlag;
 	bool fkTrigger;
-	bool ssDefiner;
+	Nullable<bool> ssDefiner;
 };
 
 
@@ -1453,7 +1451,7 @@ public:
 	NestConst<RelationSourceNode> dsqlNode;
 	Firebird::MetaName name;
 	Firebird::Array<NestConst<Clause> > clauses;
-	bool ssDefiner;
+	Nullable<bool> ssDefiner;
 };
 
 

@@ -512,6 +512,14 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 
 		PKG.RDB$PACKAGE_HEADER_SOURCE.NULL = FALSE;
 		attachment->storeMetaDataBlob(tdbb, transaction, &PKG.RDB$PACKAGE_HEADER_SOURCE, source);
+
+		if (ssDefiner.specified)
+		{
+			PKG.RDB$SQL_SECURITY.NULL = FALSE;
+			PKG.RDB$SQL_SECURITY = ssDefiner.value ? 1 : 0;
+		}
+		else
+			PKG.RDB$SQL_SECURITY.NULL = TRUE;
 	}
 	END_STORE
 

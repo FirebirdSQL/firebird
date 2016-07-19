@@ -178,7 +178,7 @@ public:
 	trig_vec*	rel_post_store;		// Post-operation store trigger
 	prim		rel_primary_dpnds;	// foreign dependencies on this relation's primary key
 	frgn		rel_foreign_refs;	// foreign references to other relations' primary keys
-	bool		rel_ss_definer;
+	Nullable<bool>	rel_ss_definer;
 
 	Firebird::Mutex rel_drop_mutex;
 

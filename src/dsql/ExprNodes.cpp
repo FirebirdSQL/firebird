@@ -5501,7 +5501,7 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	SLONG ssRelationId = tail->csb_view ?
 		tail->csb_view->rel_id : (csb->csb_view ? csb->csb_view->rel_id : 0);
 
-	if (!ssRelationId && relation->rel_ss_definer)
+	if (!ssRelationId && relation->rel_ss_definer.value)
 		ssRelationId = relation->rel_id;
 
 	if (tail->csb_flags & csb_modify)
@@ -5598,7 +5598,7 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		sub = cast;
 	}
 
-	AutoSetRestore<jrd_rel*> autoRelationStream(&csb->csb_parent_relation, relation->rel_ss_definer ? relation : 0);
+	AutoSetRestore<jrd_rel*> autoRelationStream(&csb->csb_parent_relation, relation->rel_ss_definer.value ? relation : 0);
 
 	if (relation->rel_view_rse)
 	{
@@ -11186,7 +11186,7 @@ ValueExprNode* UdfCallNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 				if (!ssRelationId && csb->csb_parent_relation)
 				{
-					fb_assert(csb->csb_parent_relation->rel_ss_definer);
+					fb_assert(csb->csb_parent_relation->rel_ss_definer.value);
 					ssRelationId = csb->csb_parent_relation->rel_id;
 				}
 

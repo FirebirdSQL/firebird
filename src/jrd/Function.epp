@@ -220,7 +220,6 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 			function->setName(QualifiedName(X.RDB$FUNCTION_NAME,
 				(X.RDB$PACKAGE_NAME.NULL ? NULL : X.RDB$PACKAGE_NAME)));
 
-			function->ssDefiner = X.RDB$SQL_SECURITY;
 			function->owner = X.RDB$OWNER_NAME;
 
 			if (!X.RDB$SECURITY_CLASS.NULL)
@@ -240,8 +239,15 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 						function->setSecurityName(PKG.RDB$SECURITY_CLASS);
 					}
 
+					// SQL SECURITY of function must be NULL if it's defined in package
+					if (!PKG.RDB$SQL_SECURITY.NULL)
+						function->ssDefiner = Nullable<bool>::val(PKG.RDB$SQL_SECURITY);
+
 				END_FOR
 			}
+
+			if (!function->ssDefiner.specified && !X.RDB$SQL_SECURITY.NULL)
+				function->ssDefiner = Nullable<bool>::val(X.RDB$SQL_SECURITY);
 
 			size_t count = 0;
 			ULONG length = 0;

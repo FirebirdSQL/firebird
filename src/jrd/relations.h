@@ -619,6 +619,7 @@ RELATION(nam_packages, rel_packages, ODS_12_0, rel_persistent)
 	FIELD(f_pkg_owner, nam_owner, fld_user, 1, ODS_12_0)
 	FIELD(f_pkg_sys_flag, nam_sys_flag, fld_flag, 1, ODS_12_0)
 	FIELD(f_pkg_desc, nam_description, fld_description, 1, ODS_12_0)
+	FIELD(f_pkg_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
 END_RELATION
 
 // Relation 43 (SEC$USERS)

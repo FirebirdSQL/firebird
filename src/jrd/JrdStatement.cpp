@@ -468,19 +468,17 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 					userName = view->rel_owner_name;
 			}
 
+			if (userName.isEmpty() && routine->ssDefiner.specified && routine->ssDefiner.value && routine->owner.hasData())
+				userName = routine->owner;
+
 			if (routine->getName().package.isEmpty())
 			{
-				if (userName.isEmpty() && routine->ssDefiner && routine->owner.hasData())
-					userName = routine->owner;
-
 				SCL_check_access(tdbb, sec_class, userName, aclType,
 					routine->getName().identifier, access->acc_mask, access->acc_type,
 					true, access->acc_name, access->acc_r_name);
 			}
 			else
 			{
-				// simakov: do we need to check package definer here?
-
 				SCL_check_access(tdbb, sec_class, userName, id_package,
 					routine->getName().package, access->acc_mask, access->acc_type,
 					true, access->acc_name, access->acc_r_name);
@@ -662,7 +660,7 @@ void JrdStatement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 				if (view && (view->rel_flags & REL_sql_relation))
 					userName = view->rel_owner_name;
 			}
-			else if (t.ssDefiner)
+			else if (t.ssDefiner.specified && t.ssDefiner.value)
 				userName = ownerRelation->rel_owner_name;
 
 			const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());

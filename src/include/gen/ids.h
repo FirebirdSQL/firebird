@@ -620,6 +620,7 @@
 	const USHORT  f_pkg_owner = 5;
 	const USHORT  f_pkg_sys_flag = 6;
 	const USHORT  f_pkg_desc = 7;
+	const USHORT  f_pkg_sql_security = 8;
 
 
 // Relation 43 (SEC$USERS)
