@@ -8,11 +8,12 @@ Author:
 
 Syntax is:
 
-CREATE TABLE <TABLENAME> [SQL SECURITY {DEFINER | INVOKER}] ...
+CREATE TABLE <TABLENAME> (...) [SQL SECURITY {DEFINER | INVOKER}]
+ALTER TABLE <TABLENAME> ... [{ALTER SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY}]
 CREATE [OR ALTER] FUNCTION <FUNCTIONNAME> ... [SQL SECURITY {DEFINER | INVOKER}] AS ...
 CREATE [OR ALTER] PROCEDURE <PROCEDURENAME> ... [SQL SECURITY {DEFINER | INVOKER}] AS ...
-CREATE TRIGGER <TRIGGERNAME> ... [SQL SECURITY {DEFINER | INVOKER}] AS ...
-CREATE PACKAGE <PACKAGENAME> [SQL SECURITY {DEFINER | INVOKER}] AS ...
+CREATE [OR ALTER] TRIGGER <TRIGGERNAME> ... [SQL SECURITY {DEFINER | INVOKER}] [AS ...]
+CREATE [OR ALTER] PACKAGE <PACKAGENAME> [SQL SECURITY {DEFINER | INVOKER}] AS ...
 
 Description:
 
@@ -26,7 +27,8 @@ Trigger inherits SQL SECURITY option from TABLE but can overwrite it by explicit
 
 For procedures and functions defined in package explicit SQL SECURITY clause is prohibit.
 
-Example 1. It's enought to grant only select privilege to user "us" for table.
+
+Example 1. It's enought to grant only SELECT privilege to user US for table T.
 In case of INVOKER it will require also EXECUTE for function F.
 
 set term ^;
@@ -36,7 +38,7 @@ begin
     return 3;
 end^
 set term ;^
-create table t sql security definer (i integer, c computed by (i + f()));
+create table t (i integer, c computed by (i + f())) sql security definer;
 insert into t values (2);
 grant select on table t to user us;
 
@@ -45,11 +47,31 @@ commit;
 connect 'localhost:/tmp/7.fdb' user us password 'pas';
 select * from t;
 
-Example 2. It's enought to grant only execute privilege to user "us". In case of INVOKER it will require also INSERT for table T to either user "us" or procedure "p".
 
-create table t (i integer);
+Example 2. It's enough to grant EXECUTE privilege to user US for function F.
+In case of INVOKER it will require also INSERT for table T.
+
 set term ^;
-create procedure p sql security definer (i integer)
+create function f (i integer) returns int sql security definer
+as
+begin
+  insert into t values (:i);
+  return i + 1;
+end^
+set term ;^
+grant execute on function f to user us;
+
+commit;
+
+connect 'localhost:/tmp/59.fdb' user us password 'pas';
+select f(3) from rdb$database;
+
+
+Example 3. It's enought to grant only EXECUTE privilege to user US for procedure P.
+In case of INVOKER it will require also INSERT for table T to either user US or procedure P.
+
+set term ^;
+create procedure p (i integer) sql security definer
 as
 begin
   insert into t values (:i);
@@ -62,26 +84,47 @@ commit;
 connect 'localhost:/tmp/17.fdb' user us password 'pas';
 execute procedure p(1);
 
-Example 3. In this example SQL SECURITY is used for table and provide access to calculated columns without explicit grant execute privilege of function f to user "us".
 
+Example 4. It's enought to grant only INSERT privilege to user US for table TR.
+In case of INVOKER it will require also INSERT for table T to user US.
+
+create table tr (i integer);
+create table t (i integer);
 set term ^;
-create function f() returns int
+create trigger tr_ins for tr after insert sql security definer
 as
 begin
-    return 3;
+  insert into t values (NEW.i);
 end^
 set term ;^
-create table t sql security definer (i integer, c computed by (i + f()));
-insert into t values (2);
-grant select on table t to user us;
+grant insert on table tr to user us;
 
 commit;
 
-connect 'localhost:/tmp/7.fdb' user us password 'pas';
-select * from t;
+connect 'localhost:/tmp/29.fdb' user us password 'pas';
+insert into tr values(2);
 
-Example 4. It's enought to grant only execute privilege to user "us" for package pk.
-In case of INVOKER it will require also INSERT for table T to either user "us".
+the same result if specify SQL SECURITY DEFINER for table TR.
+
+create table tr (i integer) sql security definer;
+create table t (i integer);
+set term ^;
+create trigger tr_ins for tr after insert
+as
+begin
+  insert into t values (NEW.i);
+end^
+set term ;^
+grant insert on table tr to user us;
+
+commit;
+
+connect 'localhost:/tmp/29.fdb' user us password 'pas';
+insert into tr values(2);
+
+
+Example 5. It's enought to grant only EXECUTE privilege to user US for package PK.
+In case of INVOKER it will require also INSERT for table T to user US.
 
 create table t (i integer);
 set term ^;

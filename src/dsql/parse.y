@@ -2057,23 +2057,26 @@ page_noise
 
 %type <createRelationNode> table_clause
 table_clause
-	: simple_table_name sql_security_clause external_file
+	: simple_table_name external_file
 			{
-				$<createRelationNode>$ = newNode<CreateRelationNode>($1, $3);
-				$<createRelationNode>$->ssDefiner = $2;
+				$<createRelationNode>$ = newNode<CreateRelationNode>($1, $2);
 			}
-		'(' table_elements($4) ')'
-			{ $$ = $4; }
+		'(' table_elements($3) ')' sql_security_clause
+			{
+				$$ = $3;
+				$$->ssDefiner = $7;
+			}
 	;
 
 %type <createRelationNode> gtt_table_clause
 gtt_table_clause
 	: simple_table_name
 			{ $<createRelationNode>$ = newNode<CreateRelationNode>($1); }
-		'(' table_elements($2) ')' gtt_scope
+		'(' table_elements($2) ')' gtt_scope sql_security_clause
 			{
 				$$ = $2;
 				$$->relationType = static_cast<rel_t>($6);
+				$$->ssDefiner = $7;
 			}
 	;
 
@@ -3906,6 +3909,27 @@ alter_op($relationNode)
 			clause->identityRestartValue = $4;
 			$relationNode->clauses.add(clause);
 		}
+	| ALTER SQL SECURITY DEFINER
+			{
+				RelationNode::AlterSqlSecurityClause* clause =
+					newNode<RelationNode::AlterSqlSecurityClause>();
+				clause->ssDefiner = Nullable<bool>::val(true);
+				$relationNode->clauses.add(clause);
+			}
+	| ALTER SQL SECURITY INVOKER
+			{
+				RelationNode::AlterSqlSecurityClause* clause =
+					newNode<RelationNode::AlterSqlSecurityClause>();
+				clause->ssDefiner = Nullable<bool>::val(false);
+				$relationNode->clauses.add(clause);
+			}
+	| DROP SQL SECURITY
+			{
+				RelationNode::AlterSqlSecurityClause* clause =
+					newNode<RelationNode::AlterSqlSecurityClause>();
+				clause->ssDefiner = Nullable<bool>::empty();
+				$relationNode->clauses.add(clause);
+			}
 	;
 
 %type <metaNamePtr> alter_column_name
@@ -4128,7 +4152,7 @@ crypt_key_clause($alterDatabaseNode)
 
 %type <createAlterTriggerNode> alter_trigger_clause
 alter_trigger_clause
-	: symbol_trigger_name trigger_active trigger_type_opt trigger_position
+	: symbol_trigger_name trigger_active trigger_type_opt trigger_position sql_security_clause
 			AS local_declaration_list full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
@@ -4137,9 +4161,10 @@ alter_trigger_clause
 			$$->active = $2;
 			$$->type = $3;
 			$$->position = $4;
-			$$->source = makeParseStr(YYPOSNARG(5), YYPOSNARG(7));
-			$$->localDeclList = $6;
-			$$->body = $7;
+			$$->ssDefiner = $5;
+			$$->source = makeParseStr(YYPOSNARG(6), YYPOSNARG(8));
+			$$->localDeclList = $7;
+			$$->body = $8;
 		}
 	| symbol_trigger_name trigger_active trigger_type_opt trigger_position
 			external_clause external_body_clause_opt
@@ -4154,7 +4179,7 @@ alter_trigger_clause
 			if ($6)
 				$$->source = *$6;
 		}
-	| symbol_trigger_name trigger_active trigger_type_opt trigger_position
+	| symbol_trigger_name trigger_active trigger_type_opt trigger_position sql_security_clause
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
 			$$->alter = true;
@@ -4162,6 +4187,7 @@ alter_trigger_clause
 			$$->active = $2;
 			$$->type = $3;
 			$$->position = $4;
+			$$->ssDefiner = $5;
 		}
 	;
 

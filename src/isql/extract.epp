@@ -303,6 +303,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 	bool first = true;
 	SCHAR char_sets[86];
 	rel_t rel_type = rel_persistent;
+	char ss[28] = "";
 
 	// Query to obtain relation detail information
 
@@ -349,6 +350,12 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			}
 			else
 				isqlGlob.printf("%s ", new_name ? new_name : relation_name);
+
+			if (!REL.RDB$SQL_SECURITY.NULL)
+				if (REL.RDB$SQL_SECURITY)
+					strcpy(ss, "SQL SECURITY DEFINER");
+				else
+					strcpy(ss, "SQL SECURITY INVOKER");
 
 			if (!REL.RDB$EXTERNAL_FILE.NULL)
 			{
@@ -555,10 +562,11 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 	if (first) // we extracted nothing
 		return FINI_ERROR;
 
-	if (rel_type == rel_global_temp_preserve)
-		isqlGlob.printf(")%sON COMMIT PRESERVE ROWS", NEWLINE);
-	else if (rel_type == rel_global_temp_delete)
-		isqlGlob.printf(")%sON COMMIT DELETE ROWS", NEWLINE);
+	const char* gtt_scope = (rel_type == rel_global_temp_preserve) ? "ON COMMIT PRESERVE ROWS" :
+							((rel_type == rel_global_temp_delete) ? "ON COMMIT DELETE ROWS" : "");
+
+	if (*gtt_scope || *ss)
+		isqlGlob.printf(")%s%s%s", NEWLINE, gtt_scope, ss);
 	else
 		isqlGlob.printf(")");
 
@@ -1664,6 +1672,12 @@ static void list_all_triggers()
 				 SHOW_trigger_action(TRG.RDB$TRIGGER_TYPE).c_str(), TRG.RDB$TRIGGER_SEQUENCE,
 				 NEWLINE);
 
+		if (!TRG.RDB$SQL_SECURITY.NULL)
+		{
+			const char* ss = TRG.RDB$SQL_SECURITY ? "SQL SECURITY DEFINER" : "SQL SECURITY INVOKER";
+			isqlGlob.printf("%s%s", ss, NEWLINE);
+		}
+
 		if (!TRG.RDB$ENTRYPOINT.NULL)
 		{
 			fb_utils::exact_name(TRG.RDB$ENTRYPOINT);
@@ -1742,6 +1756,12 @@ static void list_all_triggers()
 				 (TRG.RDB$TRIGGER_INACTIVE ? "INACTIVE" : "ACTIVE"),
 				 SHOW_trigger_action(TRG.RDB$TRIGGER_TYPE).c_str(), TRG.RDB$TRIGGER_SEQUENCE,
 				 NEWLINE);
+
+		if (!TRG.RDB$SQL_SECURITY.NULL)
+		{
+			const char* ss = TRG.RDB$SQL_SECURITY ? "SQL SECURITY DEFINER" : "SQL SECURITY INVOKER";
+			isqlGlob.printf("%s%s", ss, NEWLINE);
+		}
 
 		if (!TRG.RDB$ENTRYPOINT.NULL)
 		{
@@ -3384,7 +3404,11 @@ static void list_package_headers()
 				 PACK.RDB$PACKAGE_NAME,
 				 PACK.RDB$OWNER_NAME,
 				 NEWLINE);
-		isqlGlob.printf("CREATE PACKAGE %s AS%s", SQL_identifier, NEWLINE);
+
+		const char* ss = PACK.RDB$SQL_SECURITY.NULL ? "" :
+						(PACK.RDB$SQL_SECURITY ? " SQL SECURITY DEFINER" : " SQL SECURITY INVOKER");
+
+		isqlGlob.printf("CREATE PACKAGE %s%s AS%s", SQL_identifier, ss, NEWLINE);
 
 		if (!PACK.RDB$PACKAGE_HEADER_SOURCE.NULL)
 			SHOW_print_metadata_text_blob(isqlGlob.Out, &PACK.RDB$PACKAGE_HEADER_SOURCE);

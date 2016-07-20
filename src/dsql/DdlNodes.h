@@ -1233,7 +1233,8 @@ public:
 			TYPE_ALTER_COL_POS,
 			TYPE_ALTER_COL_TYPE,
 			TYPE_DROP_COLUMN,
-			TYPE_DROP_CONSTRAINT
+			TYPE_DROP_CONSTRAINT,
+			TYPE_ALTER_SQL_SECURITY
 		};
 
 		explicit Clause(MemoryPool& p, Type aType)
@@ -1402,6 +1403,16 @@ public:
 		}
 
 		Firebird::MetaName name;
+	};
+
+	struct AlterSqlSecurityClause : public Clause
+	{
+		explicit AlterSqlSecurityClause(MemoryPool& p)
+			: Clause(p, TYPE_ALTER_SQL_SECURITY)
+		{
+		}
+
+		Nullable<bool> ssDefiner;
 	};
 
 	RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode);

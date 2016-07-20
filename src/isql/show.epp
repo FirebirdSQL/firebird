@@ -4836,6 +4836,12 @@ static processing_state show_packages(const SCHAR* package_name)
 
 			isqlGlob.printf(NEWLINE);
 
+			if (!PACK.RDB$SQL_SECURITY.NULL)
+			{
+				const char* ss = PACK.RDB$SQL_SECURITY ? "DEFINER" : "INVOKER";
+				isqlGlob.printf("SQL SECURITY: %s%s", ss, NEWLINE);
+			}
+
 			if (!PACK.RDB$PACKAGE_HEADER_SOURCE.NULL)
 			{
 				isqlGlob.printf("%s%s", "Header source:", NEWLINE);
@@ -5694,6 +5700,12 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 		WITH REL.RDB$RELATION_NAME EQ relation_name
 		if (first)
 		{
+			if (!REL.RDB$SQL_SECURITY.NULL)
+			{
+				const char* ss = REL.RDB$SQL_SECURITY ? "DEFINER" : "INVOKER";
+				isqlGlob.printf("SQL SECURITY: %s%s", ss, NEWLINE);
+			}
+
 			if (!REL.RDB$EXTERNAL_FILE.NULL)
 				isqlGlob.printf("External file: %s%s", REL.RDB$EXTERNAL_FILE, NEWLINE);
 		}
@@ -6129,11 +6141,15 @@ static processing_state show_trigger(const SCHAR* object, bool show_source, bool
 			first = false;
 		}
 
-		isqlGlob.printf("%s, Sequence: %d, Type: %s, %s%s",
+		const char* ss = TRG.RDB$SQL_SECURITY.NULL ? "" :
+							(TRG.RDB$SQL_SECURITY ? ", SQL SECURITY DEFINER" : ", SQL SECURITY INVOKER");
+
+		isqlGlob.printf("%s, Sequence: %d, Type: %s, %s%s%s",
 				 TRG.RDB$TRIGGER_NAME,
 				 TRG.RDB$TRIGGER_SEQUENCE,
 				 SHOW_trigger_action(TRG.RDB$TRIGGER_TYPE).c_str(),
 				 (TRG.RDB$TRIGGER_INACTIVE ? "Inactive" : "Active"),
+				ss,
 				 NEWLINE);
 
 		if (show_source)

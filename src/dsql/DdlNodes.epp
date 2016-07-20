@@ -3329,14 +3329,6 @@ void TriggerDefinition::store(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 
 		TRG.RDB$TRIGGER_SEQUENCE = (!position.specified ? 0 : position.value);
 		TRG.RDB$TRIGGER_INACTIVE = (!active.specified ? 0 : (USHORT) !active.value);
-
-		if (ssDefiner.specified)
-		{
-			TRG.RDB$SQL_SECURITY.NULL = FALSE;
-			TRG.RDB$SQL_SECURITY = ssDefiner.value ? 1 : 0;
-		}
-		else
-			TRG.RDB$SQL_SECURITY.NULL = TRUE;
 	}
 	END_STORE
 
@@ -7581,6 +7573,36 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					CreateDropConstraint& dropConstraint = constraints.add();
 					dropConstraint.name =
 						static_cast<const DropConstraintClause*>(i->getObject())->name;
+					break;
+				}
+
+				case Clause::TYPE_ALTER_SQL_SECURITY:
+				{
+					AutoRequest request;
+					bool found = false;
+
+					FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+						REL IN RDB$RELATIONS
+						WITH REL.RDB$RELATION_NAME EQ name.c_str()
+					{
+						found = true;
+
+						MODIFY REL
+						{
+							const Nullable<bool> ssDefiner = static_cast<const AlterSqlSecurityClause*>(
+										i->getObject())->ssDefiner;
+
+							if (ssDefiner.specified)
+							{
+								REL.RDB$SQL_SECURITY.NULL = FALSE;
+								REL.RDB$SQL_SECURITY = ssDefiner.value ? TRUE : FALSE;
+							}
+							else
+								REL.RDB$SQL_SECURITY.NULL = TRUE;
+						}
+						END_MODIFY
+					}
+					END_FOR
 					break;
 				}
 
