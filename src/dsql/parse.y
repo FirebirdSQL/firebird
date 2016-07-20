@@ -2072,12 +2072,22 @@ table_clause
 gtt_table_clause
 	: simple_table_name
 			{ $<createRelationNode>$ = newNode<CreateRelationNode>($1); }
-		'(' table_elements($2) ')' gtt_scope sql_security_clause
+		'(' table_elements($2) ')' gtt_ops($2)
 			{
 				$$ = $2;
-				$$->relationType = static_cast<rel_t>($6);
-				$$->ssDefiner = $7;
 			}
+	;
+
+%type gtt_ops(<createRelationNode>)
+gtt_ops($createRelationNode)
+	: gtt_op($createRelationNode)
+	| gtt_ops ',' gtt_op($createRelationNode)
+	;
+
+%type gtt_op(<createRelationNode>)
+gtt_op($createRelationNode)
+	: sql_security_clause	{ $createRelationNode->ssDefiner = $1; }
+	| gtt_scope		{ $createRelationNode->relationType = static_cast<rel_t>($1); }
 	;
 
 %type <intVal> gtt_scope
@@ -2105,7 +2115,6 @@ table_element($createRelationNode)
 	: column_def($createRelationNode)
 	| table_constraint_definition($createRelationNode)
 	;
-
 
 // column definition
 
