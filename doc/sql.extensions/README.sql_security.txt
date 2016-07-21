@@ -20,10 +20,12 @@ Description:
 Makes it possible to execute some objects with permissions of either definer or invoker.
 By default INVOKER is used to keep backword compatibility.
 
-If INVOKER is specified a current set of privileges of the current user will ba used.
+If INVOKER is specified a current set of privileges of the current user will be used.
 If DEFINER - a set of privileges of object owner will be used to check an access to database objects used by this object.
 
-Trigger inherits SQL SECURITY option from TABLE but can overwrite it by explicit specifying.
+Trigger inherits SQL SECURITY option from TABLE but can overwrite it by explicit specifying. If SQL SECURITY option
+will be changed for table, existing triggers without explicitly specified option will not use new value immediately
+it will take effect next time trigger will be loaded into metadata cache.
 
 For procedures and functions defined in package explicit SQL SECURITY clause is prohibit.
 
