@@ -628,7 +628,7 @@ public:
 	Firebird::ByteChunk debugData;
 	USHORT systemFlag;
 	bool fkTrigger;
-	Nullable<bool> ssDefiner;
+	Nullable<BaseNullable<bool> > ssDefiner;
 };
 
 

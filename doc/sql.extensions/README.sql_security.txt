@@ -12,7 +12,7 @@ CREATE TABLE <TABLENAME> (...) [SQL SECURITY {DEFINER | INVOKER}]
 ALTER TABLE <TABLENAME> ... [{ALTER SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY}]
 CREATE [OR ALTER] FUNCTION <FUNCTIONNAME> ... [SQL SECURITY {DEFINER | INVOKER}] AS ...
 CREATE [OR ALTER] PROCEDURE <PROCEDURENAME> ... [SQL SECURITY {DEFINER | INVOKER}] AS ...
-CREATE [OR ALTER] TRIGGER <TRIGGERNAME> ... [SQL SECURITY {DEFINER | INVOKER}] [AS ...]
+CREATE [OR ALTER] TRIGGER <TRIGGERNAME> ... [SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY] [AS ...]
 CREATE [OR ALTER] PACKAGE <PACKAGENAME> [SQL SECURITY {DEFINER | INVOKER}] AS ...
 
 Description:
@@ -153,3 +153,10 @@ commit;
 
 connect 'localhost:/tmp/69.fdb' user us password 'pas';
 select pk.f(3) from rdb$database;
+
+Example 6. Altering explicit option SQL SECURITY for triggers.
+To remove explicit SQL SECURITY OPTION from trigger you can execute:
+alter trigger tr_ins drop sql security;
+
+To set it again to SQL SECURITY INVOKER you can:
+alter trigger tr_ins sql security invoker;

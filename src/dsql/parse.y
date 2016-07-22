@@ -641,6 +641,7 @@ using namespace Firebird;
 {
 	BaseNullable<int> nullableIntVal;
 	BaseNullable<bool> nullableBoolVal;
+	BaseNullable<BaseNullable<bool> > nullableNullableBoolVal;
 	bool boolVal;
 	int intVal;
 	unsigned uintVal;
@@ -3545,7 +3546,7 @@ trigger_clause
 			$$->active = $2;
 			$$->type = $3;
 			$$->position = $4;
-			$$->ssDefiner = $5;
+			$$->ssDefiner = Nullable<BaseNullable<bool> >::val($5);
 			$$->source = makeParseStr(YYPOSNARG(6), YYPOSNARG(8));
 			$$->localDeclList = $7;
 			$$->body = $8;
@@ -3569,7 +3570,7 @@ trigger_clause
 			$$->type = $3;
 			$$->position = $4;
 			$$->relationName = *$6;
-			$$->ssDefiner = $7;
+			$$->ssDefiner = Nullable<BaseNullable<bool> >::val($7);
 			$$->source = makeParseStr(YYPOSNARG(8), YYPOSNARG(10));
 			$$->localDeclList = $9;
 			$$->body = $10;
@@ -3594,7 +3595,7 @@ trigger_clause
 			$$->type = $5;
 			$$->position = $6;
 			$$->relationName = *$3;
-			$$->ssDefiner = $7;
+			$$->ssDefiner = Nullable<BaseNullable<bool> >::val($7);
 			$$->source = makeParseStr(YYPOSNARG(8), YYPOSNARG(10));
 			$$->localDeclList = $9;
 			$$->body = $10;
@@ -4161,7 +4162,7 @@ crypt_key_clause($alterDatabaseNode)
 
 %type <createAlterTriggerNode> alter_trigger_clause
 alter_trigger_clause
-	: symbol_trigger_name trigger_active trigger_type_opt trigger_position sql_security_clause
+	: symbol_trigger_name trigger_active trigger_type_opt trigger_position alter_sql_security_clause
 			AS local_declaration_list full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
@@ -4188,7 +4189,7 @@ alter_trigger_clause
 			if ($6)
 				$$->source = *$6;
 		}
-	| symbol_trigger_name trigger_active trigger_type_opt trigger_position sql_security_clause
+	| symbol_trigger_name trigger_active trigger_type_opt trigger_position alter_sql_security_clause
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
 			$$->alter = true;
@@ -4208,6 +4209,17 @@ trigger_type_opt	// we do not allow alter database triggers, hence we do not use
 		{ $$ = Nullable<FB_UINT64>::empty(); }
 	;
 
+%type <nullableNullableBoolVal> alter_sql_security_clause
+alter_sql_security_clause
+	: SQL SECURITY DEFINER
+		{ $$ = Nullable<BaseNullable<bool> >::val( Nullable<bool>::val(true) ); }
+	| SQL SECURITY INVOKER
+		{ $$ = Nullable<BaseNullable<bool> >::val( Nullable<bool>::val(false) ); }
+	| DROP SQL SECURITY
+		{ $$ = Nullable<BaseNullable<bool> >::val( Nullable<bool>::empty() ); }
+	| // nothing
+		{ $$ = Nullable<BaseNullable<bool> >::empty(); }
+	;
 
 // DROP metadata operations
 

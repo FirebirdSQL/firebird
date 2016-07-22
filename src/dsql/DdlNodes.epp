@@ -3437,11 +3437,14 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 			if (ssDefiner.specified)
 			{
-				TRG.RDB$SQL_SECURITY.NULL = FALSE;
-				TRG.RDB$SQL_SECURITY = ssDefiner.value ? 1 : 0;
+				if (ssDefiner.value.specified)
+				{
+					TRG.RDB$SQL_SECURITY.NULL = FALSE;
+					TRG.RDB$SQL_SECURITY = ssDefiner.value.value ? 1 : 0;
+				}
+				else
+					TRG.RDB$SQL_SECURITY.NULL = TRUE;
 			}
-			else
-				TRG.RDB$SQL_SECURITY.NULL = TRUE;
 
 			modified = true;
 		END_MODIFY
