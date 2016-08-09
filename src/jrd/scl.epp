@@ -231,11 +231,10 @@ void SCL_check_access(thread_db* tdbb,
 	}
 
 	// Check global DDL permissions with ANY option which allow user to make changes non owned objects
-	const SecurityClass::flags_t obj_mask = SCL_get_object_mask(type);
-	if (mask & obj_mask)
-		return;
+	if ( (type > obj_last_non_ddl) && (mask & SCL_get_object_mask(type)))
+			return;
 
-	if (!s_class ||	(mask & s_class->scl_flags))
+	if (userName.isEmpty() && (!s_class ||	(mask & s_class->scl_flags)))
 		return;
 
 	if ((userName.hasData() || obj_name.hasData()) &&
