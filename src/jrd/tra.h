@@ -108,9 +108,10 @@ typedef Firebird::BePlusTree<BlobIndex, ULONG, MemoryPool, BlobIndex> BlobIndexT
 
 struct CallerName
 {
-	CallerName(int aType, const Firebird::MetaName& aName)
+	CallerName(int aType, const Firebird::MetaName& aName, const Firebird::MetaName& aUserName)
 		: type(aType),
-		  name(aName)
+		  name(aName),
+		  userName(aUserName)
 	{
 	}
 
@@ -121,7 +122,8 @@ struct CallerName
 
 	CallerName(const CallerName& o)
 		: type(o.type),
-		  name(o.name)
+		  name(o.name),
+		  userName(o.userName)
 	{
 	}
 
@@ -131,11 +133,13 @@ struct CallerName
 		{
 			type = o.type;
 			name = o.name;
+			userName = o.userName;
 		}
 	}
 
 	int type;
 	Firebird::MetaName name;
+	Firebird::MetaName userName;
 };
 
 const int DEFAULT_LOCK_TIMEOUT = -1; // infinite

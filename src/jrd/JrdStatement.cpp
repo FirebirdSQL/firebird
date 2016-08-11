@@ -54,6 +54,7 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	  accessList(*p),
 	  resources(*p),
 	  triggerName(*p),
+	  triggerOwner(*p),
 	  parentStatement(NULL),
 	  subStatements(*p),
 	  fors(*p),
@@ -501,6 +502,8 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 		MetaName objName;
 		SLONG objType = 0;
 
+		MetaName userName;
+
 		if (useCallerPrivs)
 		{
 			switch (transaction->tra_caller_name.type)
@@ -525,9 +528,9 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 			}
 
 			objName = transaction->tra_caller_name.name;
+			userName = transaction->tra_caller_name.userName;
 		}
 
-		MetaName userName;
 
 		if (access->acc_ss_rel_id)
 		{

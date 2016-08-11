@@ -76,6 +76,7 @@ public:
 	const jrd_prc* procedure;			// procedure, if any
 	const Function* function;			// function, if any
 	Firebird::MetaName triggerName;		// name of request (trigger), if any
+	Firebird::MetaName triggerOwner;	// user name if trigger run with SQL SECURITY DEFINER
 	JrdStatement* parentStatement;		// Sub routine's parent statement
 	Firebird::Array<JrdStatement*> subStatements;	// Array of subroutines' statements
 	const StmtNode* topNode;			// top of execution tree

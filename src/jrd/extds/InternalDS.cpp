@@ -406,19 +406,20 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 				statement = statement->parentStatement;
 
 			if (statement && statement->triggerName.hasData())
-				tran->getHandle()->tra_caller_name = CallerName(obj_trigger, statement->triggerName);
+				tran->getHandle()->tra_caller_name = CallerName(obj_trigger, statement->triggerName, statement->triggerOwner);
 			else if (statement && (routine = statement->getRoutine()) &&
 				routine->getName().identifier.hasData())
 			{
+				const MetaName& userName = routine->ssDefiner.specified && routine->ssDefiner.value ? routine->owner : "";
 				if (routine->getName().package.isEmpty())
 				{
 					tran->getHandle()->tra_caller_name = CallerName(routine->getObjectType(),
-						routine->getName().identifier);
+						routine->getName().identifier, userName);
 				}
 				else
 				{
 					tran->getHandle()->tra_caller_name = CallerName(obj_package_header,
-						routine->getName().package);
+						routine->getName().package, userName);
 				}
 			}
 			else
