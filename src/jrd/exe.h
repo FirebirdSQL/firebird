@@ -639,6 +639,8 @@ public:
 	SLONG as_gdscode() const;
 	SLONG as_sqlcode() const;
 	void as_sqlstate(char*) const;
+	SLONG as_xcpcode() const;
+	Firebird::string as_text() const;
 };
 
 // must correspond to the declared size of RDB$EXCEPTIONS.RDB$MESSAGE

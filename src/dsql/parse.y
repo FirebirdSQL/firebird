@@ -591,6 +591,7 @@ using namespace Firebird;
 
 // tokens added for Firebird 4.0
 
+%token <metaNamePtr> ERROR_MESSAGE
 %token <metaNamePtr> PRIVILEGE
 %token <metaNamePtr> RDB_ROLE_IN_USE
 %token <metaNamePtr> RDB_SYSTEM_PRIVILEGE
@@ -6818,6 +6819,10 @@ internal_info
 		{ $$ = newNode<InternalInfoNode>(MAKE_const_slong(INFO_TYPE_SQLSTATE)); }
 	| ROW_COUNT
 		{ $$ = newNode<InternalInfoNode>(MAKE_const_slong(INFO_TYPE_ROWS_AFFECTED)); }
+	| EXCEPTION
+		{ $$ = newNode<InternalInfoNode>(MAKE_const_slong(INFO_TYPE_EXCEPTION)); }
+	| ERROR_MESSAGE
+		{ $$ = newNode<InternalInfoNode>(MAKE_const_slong(INFO_TYPE_ERROR_MSG)); }
 	;
 
 %type <intlStringPtr> sql_string
@@ -7848,6 +7853,7 @@ non_reserved_word
 	| RDB_SYSTEM_PRIVILEGE
 	| PRIVILEGE
 	| SYSTEM
+	| ERROR_MESSAGE
 	;
 
 %%

@@ -192,6 +192,30 @@ void StatusXcp::as_sqlstate(char* sqlstate) const
 	fb_sqlstate(sqlstate, status->getErrors());
 }
 
+SLONG StatusXcp::as_xcpcode() const
+{
+	return (status->getErrors()[1] == isc_except) ? (SLONG) status->getErrors()[3] : 0;
+}
+
+string StatusXcp::as_text() const
+{
+	const ISC_STATUS* status_ptr = status->getErrors();
+
+	string errorText;
+
+	TEXT buffer[BUFFER_LARGE];
+	while (fb_interpret(buffer, sizeof(buffer), &status_ptr))
+	{
+		if (errorText.hasData())
+			errorText += "\n";
+
+		errorText += buffer;
+	}
+
+	return errorText;
+}
+
+
 static void execute_looper(thread_db*, jrd_req*, jrd_tra*, const StmtNode*, jrd_req::req_s);
 static void looper_seh(thread_db*, jrd_req*, const StmtNode*);
 static void release_blobs(thread_db*, jrd_req*);

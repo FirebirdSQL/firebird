@@ -58,25 +58,6 @@ Exception re-raise semantics (FB 1.5)
     Evaluates to no-op if used outside the exception handling block.
 
 
-Run-time error codes (FB 1.5)
------------------------------
-
-  Function:
-    Allows to get a numeric error code for the catched exception.
-
-  Author:
-    Dmitry Yemanov <yemanov@yandex.ru>
-
-  Syntax rules:
-    SQLCODE / GDSCODE;
-
-  Scope:
-    PSQL, context of the exception handling block
-
-  See also:
-    README.context_variables
-
-
 Parameterized exceptions (FB 3.0)
 ---------------------------------
 

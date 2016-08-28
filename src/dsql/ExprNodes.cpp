@@ -6037,6 +6037,14 @@ void InternalInfoNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 			desc->makeText(FB_SQLSTATE_LENGTH, ttype_ascii);
 			break;
 
+		case INFO_TYPE_EXCEPTION:
+			desc->makeVarying(MAX_SQL_IDENTIFIER_LEN, ttype_metadata);
+			break;
+
+		case INFO_TYPE_ERROR_MSG:
+			desc->makeVarying(MAX_ERROR_MSG_LENGTH, ttype_utf8);
+			break;
+
 		case INFO_TYPE_CONNECTION_ID:
 		case INFO_TYPE_TRANSACTION_ID:
 		case INFO_TYPE_ROWS_AFFECTED:
@@ -6068,6 +6076,14 @@ void InternalInfoNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 	{
 		case INFO_TYPE_SQLSTATE:
 			desc->makeText(FB_SQLSTATE_LENGTH, ttype_ascii);
+			break;
+
+		case INFO_TYPE_EXCEPTION:
+			desc->makeVarying(MAX_SQL_IDENTIFIER_LEN, ttype_metadata);
+			break;
+
+		case INFO_TYPE_ERROR_MSG:
+			desc->makeVarying(MAX_ERROR_MSG_LENGTH, ttype_utf8);
 			break;
 
 		case INFO_TYPE_CONNECTION_ID:
@@ -6125,6 +6141,41 @@ dsc* InternalInfoNode::execute(thread_db* tdbb, jrd_req* request) const
 
 		dsc desc;
 		desc.makeText(FB_SQLSTATE_LENGTH, ttype_ascii, (UCHAR*) sqlstate);
+		EVL_make_value(tdbb, &desc, impure);
+
+		return &impure->vlu_desc;
+	}
+	else if (infoType == INFO_TYPE_EXCEPTION)
+	{
+		if (request->req_last_xcp.success())
+			return NULL;
+
+		const SLONG xcpCode = request->req_last_xcp.as_xcpcode();
+
+		if (!xcpCode)
+			return NULL;
+
+		MetaName xcpName;
+		MET_lookup_exception(tdbb, xcpCode, xcpName, NULL);
+
+		if (xcpName.isEmpty())
+			return NULL;
+
+		dsc desc;
+		desc.makeText(xcpName.length(), ttype_metadata, (UCHAR*) xcpName.c_str());
+		EVL_make_value(tdbb, &desc, impure);
+
+		return &impure->vlu_desc;
+	}
+	else if (infoType == INFO_TYPE_ERROR_MSG)
+	{
+		if (request->req_last_xcp.success())
+			return NULL;
+
+		const string errorText = request->req_last_xcp.as_text();
+
+		dsc desc;
+		desc.makeText(errorText.length(), ttype_utf8, (UCHAR*) errorText.c_str());
 		EVL_make_value(tdbb, &desc, impure);
 
 		return &impure->vlu_desc;

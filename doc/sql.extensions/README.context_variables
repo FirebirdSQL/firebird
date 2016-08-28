@@ -12,7 +12,7 @@ CURRENT_CONNECTION / CURRENT_TRANSACTION (FB 1.5)
     statement is executed.
 
   Author:
-    Dmitry Yemanov <yemanov@yandex.ru>
+    Dmitry Yemanov <dimitr@firebirdsql.org>
 
   Syntax rules:
     CURRENT_CONNECTION / CURRENT_TRANSACTION
@@ -40,7 +40,7 @@ ROW_COUNT (FB 1.5)
     Returns number of rows, affected by the last SQL statement.
 
   Author:
-    Dmitry Yemanov <yemanov@yandex.ru>
+    Dmitry Yemanov <dimitr@firebirdsql.org>
 
   Syntax rules:
     ROW_COUNT
@@ -75,7 +75,7 @@ SQLCODE / GDSCODE (FB 1.5)
     Returns numeric error code for the active exception.
 
   Author:
-    Dmitry Yemanov <yemanov@yandex.ru>
+    Dmitry Yemanov <dimitr@firebirdsql.org>
 
   Syntax rules:
     SQLCODE / GDSCODE
@@ -112,9 +112,6 @@ SQLCODE / GDSCODE (FB 1.5)
        variables contain zero, regardless of the exception handling
        block type.
 
-  See also:
-    README.exception_handling
-
 
 INSERTING / UPDATING / DELETING (FB 1.5)
 ----------------------------------------
@@ -123,7 +120,7 @@ INSERTING / UPDATING / DELETING (FB 1.5)
     Determines type of row operation being executed.
 
   Author:
-    Dmitry Yemanov <yemanov@yandex.ru>
+    Dmitry Yemanov <dimitr@firebirdsql.org>
 
   Syntax rules:
     INSERTING / UPDATING / DELETING
@@ -140,3 +137,96 @@ INSERTING / UPDATING / DELETING (FB 1.5)
 
   See also:
     README.universal_triggers
+
+    
+SQLSTATE (FB 2.5)
+-----------------
+
+  Function:
+    Returns character-encoded state for the active exception.
+
+  Author:
+    Dmitry Yemanov <dimitr@firebirdsql.org>
+
+  Syntax rules:
+    SQLSTATE
+
+  Type:
+    CHAR(5) CHARACTER SET ASCII
+
+  Scope:
+    PSQL, context of the exception handling block.
+
+  Example(s):
+    BEGIN
+      ...
+    WHEN SQLSTATE '44000' DO
+      EXCEPTION E_CHECK_VIOLATION;
+    WHEN ANY DO
+      EXECUTE PROCEDURE P_ANY_EXCEPTION(SQLSTATE);
+    END
+
+  Note(s):
+    1. SQLSTATE always evaluates to NULL outside the exception handling block.
+
+
+EXCEPTION (FB 4.0)
+------------------
+
+  Function:
+    Returns name of the active user-defined exception.
+
+  Author:
+    Dmitry Yemanov <dimitr@firebirdsql.org>
+
+  Syntax rules:
+    EXCEPTION
+
+  Type:
+    VARCHAR(63) CHARACTER SET UTF8
+
+  Scope:
+    PSQL, context of the exception handling block.
+
+  Example(s):
+    BEGIN
+      ...
+    WHEN ANY DO
+      IF (EXCEPTION IS NOT NULL)
+        EXECUTE PROCEDURE P_USR_EXCEPTION(EXCEPTION);
+      ELSE
+        EXECUTE PROCEDURE P_SYS_EXCEPTION;
+    END
+
+  Note(s):
+    1. EXCEPTION always contains NULL outside the exception handling block.
+    2. If system exception is thrown, EXCEPTION also contains NULL.
+
+
+ERROR_MESSAGE (FB 4.0)
+----------------------
+
+  Function:
+    Returns interpreted text for the active exception.
+
+  Author:
+    Dmitry Yemanov <dimitr@firebirdsql.org>
+
+  Syntax rules:
+    ERROR_MESSAGE
+
+  Type:
+    VARCHAR(1024) CHARACTER SET UTF8
+
+  Scope:
+    PSQL, context of the exception handling block.
+
+  Example(s):
+    BEGIN
+      ...
+    WHEN ANY DO
+      EXECUTE PROCEDURE P_LOG_EXCEPTION(ERROR_MESSAGE);
+    END
+
+  Note(s):
+    1. ERROR_MESSAGE always contains NULL outside the exception handling block.

@@ -180,6 +180,7 @@ static const TOK tokens[] =
 	{END, "END", false},
 	{ENGINE, "ENGINE", true},
 	{ENTRY_POINT, "ENTRY_POINT", false},
+	{ERROR_MESSAGE, "ERROR_MESSAGE", true},
 	{ESCAPE, "ESCAPE", false},
 	{EXCEPTION, "EXCEPTION", false},
 	{EXECUTE, "EXECUTE", false},
