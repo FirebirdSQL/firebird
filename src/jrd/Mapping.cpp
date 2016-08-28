@@ -973,14 +973,15 @@ public:
 		return &sync;
 	}
 
-	bool getPrivileges(const PathName& db, const string& name, const string& trusted_role,
-			UserId::Privileges& system_privileges)
+	bool getPrivileges(const PathName& db, const string& name, const string& sql_role,
+		const string& trusted_role, UserId::Privileges& system_privileges)
 	{
 		DbCache* c;
-		return databases.get(db, c) && c->getPrivileges(name, trusted_role, system_privileges);
+		return databases.get(db, c) && c->getPrivileges(name, sql_role, trusted_role, system_privileges);
 	}
 
-	void populate(const PathName& db, DbHandle& iDb, const string& name, const string& trusted_role)
+	void populate(const PathName& db, DbHandle& iDb, const string& name, const string& sql_role,
+		const string& trusted_role)
 	{
 		DbCache* c;
 		if (!databases.get(db, c))
@@ -988,7 +989,7 @@ public:
 			c = FB_NEW_POOL(getPool()) DbCache(getPool());
 			*(databases.put(db)) = c;
 		}
-		c->populate(iDb, name, trusted_role);
+		c->populate(iDb, name, sql_role, trusted_role);
 
 		setupIpc();
 	}
@@ -1006,26 +1007,41 @@ private:
 	public:
 		DbCache(MemoryPool& p)
 			: logins(p, userSql),
-			  roles(p, roleSql)
+			  roles(p, roleSql),
+			  pairs(p)
 		{ }
 
-		bool getPrivileges(const string& name, const string& trusted_role, UserId::Privileges& system_privileges)
+		bool getPrivileges(const string& name, const string& sql_role, const string& trusted_role,
+			UserId::Privileges& system_privileges)
 		{
 			system_privileges.clearAll();
-			return logins.getPrivileges(name, system_privileges) &&
-				roles.getPrivileges(trusted_role, system_privileges);
+			if (!logins.getPrivileges(name, system_privileges))
+				return false;
+
+			MAP_DEBUG(fprintf(stderr, "name=%s\n", name.c_str()));
+
+			bool granted = false;
+			if (!pairs.isRoleGranted(name, sql_role, granted))
+				return false;
+
+			MAP_DEBUG(fprintf(stderr, "granted=%d\n", granted));
+			return roles.getPrivileges((granted ? sql_role : trusted_role), system_privileges);
 		}
 
-		void populate(DbHandle& iDb, const string& name, const string& trusted_role)
+		void populate(DbHandle& iDb, const string& name, const string& sql_role,
+			const string& trusted_role)
 		{
 			logins.populate(name, iDb);
 			roles.populate(trusted_role, iDb);
+			roles.populate(sql_role, iDb);
+			pairs.populate(name, sql_role, iDb);
 		}
 
 		void invalidate()
 		{
 			logins.invalidate();
 			roles.invalidate();
+			pairs.invalidate();
 		}
 
 	private:
@@ -1055,6 +1071,9 @@ private:
 				if (!key.hasData())
 					return;
 
+				if (get(key))
+					return;
+
 				ThrowLocalStatus st;
 				RefPtr<ITransaction> tra(REF_NO_INCR, iDb->startTransaction(&st, 0, NULL));
 
@@ -1076,6 +1095,8 @@ private:
 					g |= l;
 				}
 
+				ULONG gg = 0; g.store(&gg);
+				MAP_DEBUG(fprintf(stderr, "poprole %s 0x%x\n", key.c_str(), gg));
 				put(key, g);
 			}
 
@@ -1088,7 +1109,84 @@ private:
 			const char* sql;
 		};
 
+		class RoleCache : private GenericMap<Pair<Full<string, string> > >
+		{
+			static const char ROLESEP = '\1';
+
+		public:
+			RoleCache(MemoryPool& p)
+				: GenericMap(p)
+			{ }
+
+			bool isRoleGranted(const string& name, const string& role, bool& granted)
+			{
+				if (!(name.hasData() && role.hasData()))
+				{
+					granted = false;
+					return true;
+				}
+
+				string* r = get(name);
+				if (!r)
+					return false;
+
+				string zRole;
+				zRole += ROLESEP;
+				zRole += role;
+				zRole += ROLESEP;
+
+				MAP_DEBUG(fprintf(stderr, "isRoleGranted '%s' '%s'\n", r->c_str(), role.c_str()));
+
+				granted = r->find(zRole) != string::npos;
+				return true;
+			}
+
+			void populate(const string& name, const string& /*role*/, DbHandle& iDb)
+			{
+				MAP_DEBUG(fprintf(stderr, "populate %s\n", name.c_str()));
+				if (!name.hasData())
+					return;
+
+				ThrowLocalStatus st;
+				RefPtr<ITransaction> tra(REF_NO_INCR, iDb->startTransaction(&st, 0, NULL));
+
+				Message par;
+				Field<Varying> user(par, MAX_SQL_IDENTIFIER_SIZE);
+				user = name.c_str();
+
+				Message cols;
+				Field<Varying> role(cols, MAX_SQL_IDENTIFIER_SIZE);
+
+				const char* sql = "select RDB$RELATION_NAME from RDB$USER_PRIVILEGES "
+					"where RDB$USER = ? and RDB$PRIVILEGE = 'M' and RDB$USER_TYPE = 8 and RDB$OBJECT_TYPE = 13";
+
+				RefPtr<IResultSet> curs(REF_NO_INCR, iDb->openCursor(&st, tra, 0, sql, 3,
+					par.getMetadata(), par.getBuffer(), cols.getMetadata(), NULL, 0));
+
+				void* buffer = cols.getBuffer();
+				string z;
+				z += ROLESEP;
+
+				while (curs->fetchNext(&st, buffer) == IStatus::RESULT_OK)
+				{
+					string r = (const char*) role;
+					r.trim();
+					MAP_DEBUG(fprintf(stderr, "populate 2 %s\n", r.c_str()));
+					z += r;
+					z += ROLESEP;
+				}
+
+				put(name, z);
+			}
+
+			void invalidate()
+			{
+				clear();
+			}
+		};
+
 		NameCache logins, roles;
+		RoleCache pairs;
 	};
 
 	SyncObject sync;
@@ -1123,7 +1221,8 @@ ULONG mapUser(const bool throwNotFoundError,
 	string& name, string& trusted_role, Firebird::string* auth_method,
 	AuthReader::AuthBlock* newAuthBlock, UserId::Privileges* system_privileges,
 	const AuthReader::AuthBlock& authBlock,	const char* alias, const char* db,
-	const char* securityAlias, ICryptKeyCallback* cryptCb, Firebird::IAttachment* att)
+	const char* securityAlias, const string& sql_role,
+	ICryptKeyCallback* cryptCb, Firebird::IAttachment* att)
 {
 	AuthReader::Info info;
 
@@ -1344,18 +1443,23 @@ ULONG mapUser(const bool throwNotFoundError,
 			Sync sync(spCache().getSync(), FB_FUNCTION);
 			sync.lock(SYNC_SHARED);
 
-			if (!spCache().getPrivileges(db, name, trusted_role, *system_privileges))
+			MAP_DEBUG(fprintf(stderr, "GP: name=%s sql=%s trusted=%s\n",
+				name.c_str(), sql_role.c_str(), trusted_role.c_str()));
+
+			if (!spCache().getPrivileges(db, name, sql_role, trusted_role, *system_privileges))
 			{
 				sync.unlock();
 				sync.lock(SYNC_EXCLUSIVE);
-				if (!spCache().getPrivileges(db, name, trusted_role, *system_privileges))
+
+				if (!spCache().getPrivileges(db, name, sql_role, trusted_role, *system_privileges))
 				{
 					if (!iDb)
 						iDb.attach(st, alias, cryptCb);
+
 					if (iDb)
 					{
-						spCache().populate(db, iDb, name, trusted_role);
-						spCache().getPrivileges(db, name, trusted_role, *system_privileges);
+						spCache().populate(db, iDb, name, sql_role, trusted_role);
+						spCache().getPrivileges(db, name, sql_role, trusted_role, *system_privileges);
 					}
 				}
 			}

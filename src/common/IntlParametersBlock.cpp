@@ -233,14 +233,17 @@ IntlParametersBlock::TagType IntlSpb::checkTag(UCHAR tag, const char** tagName)
 
 IntlParametersBlock::TagType IntlSpbStart::checkTag(UCHAR tag, const char** tagName)
 {
+	switch (tag)
+	{
+	FB_IPB_TAG(isc_spb_dbname);
+		return TAG_STRING;
+	}
+
 	switch (mode)
 	{
 	case 0:
 		switch (tag)
 		{
-		FB_IPB_TAG(isc_spb_dbname);
-			return TAG_STRING;
-
 		case isc_action_svc_backup:
 		case isc_action_svc_restore:
 		case isc_action_svc_properties:
@@ -255,6 +258,8 @@ IntlParametersBlock::TagType IntlSpbStart::checkTag(UCHAR tag, const char** tagN
 		case isc_action_svc_trace_start:
 		case isc_action_svc_db_stats:
 		case isc_action_svc_validate:
+		case isc_action_svc_set_mapping:
+		case isc_action_svc_drop_mapping:
 			mode = tag;
 			break;
 		}
@@ -285,6 +290,7 @@ IntlParametersBlock::TagType IntlSpbStart::checkTag(UCHAR tag, const char** tagN
 	case isc_action_svc_display_user_adm:
 		switch (tag)
 		{
+		FB_IPB_TAG(isc_spb_sql_role_name);
 		FB_IPB_TAG(isc_spb_sec_username);
 		FB_IPB_TAG(isc_spb_sec_password);
 		FB_IPB_TAG(isc_spb_sec_groupname);
@@ -316,6 +322,8 @@ IntlParametersBlock::TagType IntlSpbStart::checkTag(UCHAR tag, const char** tagN
 	case isc_action_svc_db_stats:
 		switch (tag)
 		{
+		FB_IPB_TAG(isc_spb_sts_table);
+			return TAG_STRING;
 		FB_IPB_TAG(isc_spb_command_line);
 			return TAG_COMMAND_LINE;
 		}
@@ -324,11 +332,19 @@ IntlParametersBlock::TagType IntlSpbStart::checkTag(UCHAR tag, const char** tagN
 	case isc_action_svc_validate:
 		switch (tag)
 		{
-		FB_IPB_TAG(isc_spb_dbname);
 		FB_IPB_TAG(isc_spb_val_tab_incl);
 		FB_IPB_TAG(isc_spb_val_tab_excl);
 		FB_IPB_TAG(isc_spb_val_idx_incl);
 		FB_IPB_TAG(isc_spb_val_idx_excl);
+			return TAG_STRING;
+		}
+		break;
+
+	case isc_action_svc_set_mapping:
+	case isc_action_svc_drop_mapping:
+		switch (tag)
+		{
+		FB_IPB_TAG(isc_spb_sql_role_name);
 			return TAG_STRING;
 		}
 		break;

@@ -77,7 +77,7 @@ static void* stopAddress = (void*) 0x2254938;
 ***/
 
 #undef MEM_DEBUG
-#ifdef DEBUG_GDS_ALLOC
+#if defined(DEBUG_GDS_ALLOC) && !defined(USE_VALGRIND)
 #define MEM_DEBUG
 #endif
 
@@ -97,6 +97,14 @@ T absVal(T n) throw ()
 }
 
 #ifdef USE_VALGRIND
+// When memory block is deallocated by user from the pool it must pass queue of this
+// length before it is actually deallocated and access protection from it removed.
+#define DELAYED_FREE_COUNT 1024
+
+// When memory extent is deallocated when pool is destroying it must pass through
+// queue of this length before it is actually returned to system
+#define DELAYED_EXTENT_COUNT 32
+
 // Circular FIFO buffer of read/write protected extents pending free operation
 // Race protected via cache_mutex.
 struct DelayedExtent
@@ -182,16 +190,10 @@ namespace SemiDoubleLink
 
 #ifdef USE_VALGRIND
 // Size of Valgrind red zone applied before and after memory block allocated for user
-#define VALGRIND_REDZONE 0 //8
-// When memory block is deallocated by user from the pool it must pass queue of this
-// length before it is actually deallocated and access protection from it removed.
-#define DELAYED_FREE_COUNT 1024
-// When memory extent is deallocated when pool is destroying it must pass through
-// queue of this length before it is actually returned to system
-#define DELAYED_EXTENT_COUNT 32
+#define VALGRIND_REDZONE 8
 #undef MEM_DEBUG	// valgrind works instead
 #else
-#define VALGRIND_REDZONE 8
+#define VALGRIND_REDZONE 0
 #endif
 
 typedef SLONG INT32;
@@ -225,7 +227,7 @@ public:
 	const char	*fileName;
 #endif
 #if defined(USE_VALGRIND) && (VALGRIND_REDZONE != 0)
-    const char mbk_valgrind_redzone[VALGRIND_REDZONE];
+	char mbk_valgrind_redzone[VALGRIND_REDZONE];
 #endif
 
 	MemHeader(size_t size)
@@ -1862,7 +1864,7 @@ MemPool::~MemPool(void)
 		VALGRIND_DISCARD(
             VALGRIND_MAKE_MEM_DEFINED(block, offsetof(MemBlock, body)));
 		VALGRIND_DISCARD(
-            VALGRIND_MAKE_WRITABLE(object, block->length));
+            VALGRIND_MAKE_WRITABLE(object, block->getSize()));
 	}
 #endif
 
@@ -2102,10 +2104,10 @@ void MemPool::release(void* object, bool flagDecr) throw ()
 		// Remove protection from memory block
 #ifdef VALGRIND_FIX_IT
 		VALGRIND_DISCARD(
-			VALGRIND_MAKE_MEM_DEFINED(object, block->length - VALGRIND_REDZONE));
+			VALGRIND_MAKE_MEM_DEFINED(object, block->getSize() - VALGRIND_REDZONE));
 #else
 		VALGRIND_DISCARD(
-			VALGRIND_MAKE_WRITABLE(object, block->length - VALGRIND_REDZONE));
+			VALGRIND_MAKE_WRITABLE(object, block->getSize() - VALGRIND_REDZONE));
 #endif
 
 		// Replace element in circular buffer

@@ -39,8 +39,7 @@ public:
 	virtual ~ConfigCache();
 
 	void checkLoadConfig();
-	// returns true if file was added
-	bool addFile(const Firebird::PathName& fName);
+	bool addFile(const Firebird::PathName& fName);	// Returns true if file was added.
 	Firebird::PathName getFileName();
 
 protected:
@@ -54,8 +53,7 @@ private:
 		~File();
 
 		bool checkLoadConfig(bool set);
-		// Returns true if file was added
-		bool add(const Firebird::PathName& fName);
+		bool add(const Firebird::PathName& fName);	// Returns true if file was added.
 		void trim();
 
 	public:

@@ -6639,6 +6639,7 @@ static void receive_packet_with_callback(rem_port* port, PACKET* packet)
  *
  **************************************/
 
+	UCharBuffer buf;
 	for (;;)
 	{
 		if (!port->receive(packet))
@@ -6651,7 +6652,6 @@ static void receive_packet_with_callback(rem_port* port, PACKET* packet)
 		case op_crypt_key_callback:
 			{
 				P_CRYPT_CALLBACK* cc = &packet->p_cc;
-				UCharBuffer buf;
 
 				if (port->port_client_crypt_callback)
 				{
@@ -6662,15 +6662,19 @@ static void receive_packet_with_callback(rem_port* port, PACKET* packet)
 					UCHAR* reply = buf.getBuffer(cc->p_cc_reply);
 					unsigned l = port->port_client_crypt_callback->callback(cc->p_cc_data.cstr_length,
 						cc->p_cc_data.cstr_address, cc->p_cc_reply, reply);
+
+					REMOTE_free_packet(port, packet, true);
 					cc->p_cc_data.cstr_length = l;
 					cc->p_cc_data.cstr_address = reply;
 				}
 				else
 				{
+					REMOTE_free_packet(port, packet, true);
 					cc->p_cc_data.cstr_length = 0;
 				}
-				cc->p_cc_data.cstr_allocated = 0;
 
+				packet->p_operation = op_crypt_key_callback;
+				cc->p_cc_reply = 0;
 				port->send(packet);
 			}
 			break;

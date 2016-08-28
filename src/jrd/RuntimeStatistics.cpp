@@ -33,19 +33,15 @@ namespace Jrd {
 
 GlobalPtr<RuntimeStatistics> RuntimeStatistics::dummy;
 
-void RuntimeStatistics::bumpRelValue(const StatType index, SLONG relation_id, SINT64 delta)
+void RuntimeStatistics::findAndBumpRelValue(const StatType index, SLONG relation_id, SINT64 delta)
 {
-	fb_assert(index >= 0);
-	++relChgNumber;
-
-	FB_SIZE_T pos;
-	if (rel_counts.find(relation_id, pos))
-		rel_counts[pos].bumpCounter(index, delta);
+	if (rel_counts.find(relation_id, rel_last_pos))
+		rel_counts[rel_last_pos].bumpCounter(index, delta);
 	else
 	{
 		RelationCounts counts(relation_id);
 		counts.bumpCounter(index, delta);
-		rel_counts.add(counts);
+		rel_counts.insert(rel_last_pos, counts);
 	}
 }
 

@@ -275,6 +275,7 @@ const int BDB_db_dirty 			= 0x1000;	// page must be written to database
 const int BDB_prefetch			= 0x4000;	// page has been prefetched but not yet referenced
 const int BDB_no_blocking_ast	= 0x8000;	// No blocking AST registered with page lock
 const int BDB_lru_chained		= 0x10000;	// buffer is in pending LRU chain
+const int BDB_nbak_state_lock	= 0x20000;	// nbak state lock should be released after buffer is written
 
 // bdb_ast_flags
 

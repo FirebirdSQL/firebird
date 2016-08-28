@@ -38,6 +38,9 @@
 #include "../common/classes/RefCounted.h"
 #include "../common/StatusArg.h"
 #include "consts_pub.h"
+#ifdef DEV_BUILD
+#include <stdio.h>
+#endif
 
 namespace Firebird {
 
@@ -84,18 +87,46 @@ public:
 template <class C>
 class RefCntIface : public VersionedIface<C>, public GlobalStorage
 {
-public:
-	RefCntIface() : refCounter(0) { }
-
 #ifdef DEV_BUILD
+
+public:
+	RefCntIface(const char* m = NULL)
+		: refCounter(0), mark(m)
+	{
+		refCntDPrt('^');
+	}
+
 protected:
 	~RefCntIface()
 	{
+		refCntDPrt('_');
 		fb_assert(refCounter.value() == 0);
 	}
 
 public:
-#endif
+
+	void addRef()
+	{
+		refCntDPrt('+');
+		++refCounter;
+	}
+
+	//// TODO: can move release method to here, cause C has virtual destructor.
+
+protected:
+	void refCntDPrt(char f)
+	{
+		if (mark)
+			fprintf(stderr, "%s %p %c %lld\n", mark, this, f, refCounter.value());
+	}
+
+	AtomicCounter refCounter;
+	const char* mark;
+
+#else
+
+public:
+	RefCntIface() : refCounter(0) { }
 
 	void addRef()
 	{
@@ -106,6 +137,11 @@ public:
 
 protected:
 	AtomicCounter refCounter;
+
+	void refCntDPrt(char)
+	{ }
+
+#endif
 };
 
 
@@ -117,7 +153,12 @@ private:
 	IReferenceCounted* owner;
 
 public:
-	StdPlugin() : owner(NULL)
+	StdPlugin(const char* m = NULL)
+#ifdef DEV_BUILD
+		: RefCntIface<C>(m), owner(NULL)
+#else
+		: owner(NULL)
+#endif
 	{ }
 
 	IReferenceCounted* getOwner()

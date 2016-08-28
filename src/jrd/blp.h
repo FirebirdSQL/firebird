@@ -206,9 +206,9 @@ static const struct
 	// New BLR in FB2
 	{"exec_sql", one},
 	{"internal_info", one},
-	{"nullsfirst", zero},
+	{"nullsfirst", one},
 	{"writelock", zero},
-	{"nullslast", zero}, // 180
+	{"nullslast", one}, // 180
 	{"lowcase", one},
 	{"strlen", strlength},
 	{"trim", trim},

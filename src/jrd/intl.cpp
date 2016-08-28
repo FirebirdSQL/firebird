@@ -547,32 +547,9 @@ void INTL_adjust_text_descriptor(thread_db* tdbb, dsc* desc)
 		{
 			Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
 
-			if (charSet->getFlags() & CHARSET_LEGACY_SEMANTICS)
-			{
-				desc->dsc_length = charSet->substring(TEXT_LEN(desc), desc->dsc_address, TEXT_LEN(desc),
-										buffer.getBuffer(TEXT_LEN(desc) * charSet->maxBytesPerChar()), 0,
-										TEXT_LEN(desc));
-
-				const ULONG maxLength = TEXT_LEN(desc) / charSet->maxBytesPerChar();
-				ULONG charLength = charSet->length(desc->dsc_length, desc->dsc_address, true);
-
-				while (charLength > maxLength)
-				{
-					if (desc->dsc_address[desc->dsc_length - 1] == *charSet->getSpace())
-					{
-						--desc->dsc_length;
-						--charLength;
-					}
-					else
-						break;
-				}
-			}
-			else
-			{
-				desc->dsc_length = charSet->substring(TEXT_LEN(desc), desc->dsc_address,
-										TEXT_LEN(desc), buffer.getBuffer(TEXT_LEN(desc)), 0,
-										TEXT_LEN(desc) / charSet->maxBytesPerChar());
-			}
+			desc->dsc_length = charSet->substring(TEXT_LEN(desc), desc->dsc_address,
+				TEXT_LEN(desc), buffer.getBuffer(TEXT_LEN(desc)), 0,
+				TEXT_LEN(desc) / charSet->maxBytesPerChar());
 		}
 	}
 }
@@ -951,9 +928,7 @@ int INTL_convert_string(dsc* to, const dsc* from, ErrorFunction err)
 	const ULONG src_len = toCharSet->length(toLength, start, false);
 	const ULONG dest_len  = (ULONG) to_size / toCharSet->maxBytesPerChar();
 
-	if (toCharSet->isMultiByte() &&
-		!(toCharSet->getFlags() & CHARSET_LEGACY_SEMANTICS) &&
-		src_len > dest_len)
+	if (toCharSet->isMultiByte() && src_len > dest_len)
 	{
 		err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
 			Arg::Gds(isc_trunc_limits) << Arg::Num(dest_len) << Arg::Num(src_len));

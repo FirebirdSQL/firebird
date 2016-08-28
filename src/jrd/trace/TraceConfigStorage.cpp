@@ -351,6 +351,9 @@ void ConfigStorage::addSession(TraceSession& session)
 		putItem(tagAuthBlock, session.ses_auth.getCount(), session.ses_auth.begin());
 	}
 	putItem(tagUserName, session.ses_user.length(), session.ses_user.c_str());
+	if (session.ses_role.hasData()) {
+		putItem(tagRole, session.ses_role.length(), session.ses_role.c_str());
+	}
 	putItem(tagFlags, sizeof(session.ses_flags), &session.ses_flags);
 	putItem(tagConfig, session.ses_config.length(), session.ses_config.c_str());
 	putItem(tagStartTS, sizeof(session.ses_start), &session.ses_start);
@@ -426,6 +429,11 @@ bool ConfigStorage::getNextSession(TraceSession& session)
 			case tagAuthBlock:
 				if (session.ses_id)
 					p = session.ses_auth.getBuffer(len);
+				break;
+
+			case tagRole:
+				if (session.ses_id)
+					p = session.ses_role.getBuffer(len);
 				break;
 
 			default:

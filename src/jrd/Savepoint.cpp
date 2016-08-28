@@ -441,7 +441,6 @@ Savepoint* Savepoint::rollforward(thread_db* tdbb, Savepoint* prior)
 			fb_assert(!m_next->m_next); // check that transaction savepoint is the last in list
 			// get rid of tx-level savepoint
 			m_next->rollforward(tdbb);
-			m_next->release();
 			m_next = NULL;
 		}
 
@@ -506,7 +505,6 @@ Savepoint* Savepoint::rollforward(thread_db* tdbb, Savepoint* prior)
 		fb_assert(!m_next->m_next); // check that transaction savepoint is the last in list
 		// get rid of tx-level savepoint
 		m_next->rollforward(tdbb);
-		m_next->release();
 		m_next = NULL;
 	}
 
@@ -561,10 +559,14 @@ Savepoint* Savepoint::release(Savepoint* prior)
 	Savepoint* const next = m_next;
 
 	if (prior)
+	{
+		fb_assert(prior != next);
 		prior->m_next = next;
+	}
 
 	m_next = m_transaction->tra_save_free;
 	m_transaction->tra_save_free = this;
+	fb_assert(m_next != this);
 
 	return next;
 }

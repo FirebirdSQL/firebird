@@ -171,7 +171,7 @@ void blb::BLB_check_well_formed(Jrd::thread_db* tdbb, const dsc* desc)
 }
 
 
-void blb::BLB_close(thread_db* tdbb)
+bool blb::BLB_close(thread_db* tdbb)
 {
 /**************************************
  *
@@ -183,6 +183,7 @@ void blb::BLB_close(thread_db* tdbb)
  *      Close a blob.  If the blob is open for retrieval, release the
  *      blob block.  If it's a temporary blob, flush out the last page
  *      (if necessary) in preparation for materialization.
+ *      Return true if the blob was physically destroyed.
  *
  **************************************/
 
@@ -198,7 +199,7 @@ void blb::BLB_close(thread_db* tdbb)
 	if (!(blb_flags & BLB_temporary))
 	{
 		destroy(true);
-		return;
+		return true;
 	}
 
 	if (blb_level == 0)
@@ -222,6 +223,7 @@ void blb::BLB_close(thread_db* tdbb)
 	}
 
 	freeBuffer();
+	return false;
 }
 
 

@@ -94,10 +94,7 @@ namespace
 		{
 			if (!(csb_ptr && (m_csb = *csb_ptr)))
 			{
-				FB_SIZE_T count = 5;
-				if (view_csb)
-					count += view_csb->csb_rpt.getCapacity();
-				m_csb = CompilerScratch::newCsb(pool, count);
+				m_csb = FB_NEW_POOL(pool) CompilerScratch(pool);
 				m_csb->csb_g_flags |= flags;
 			}
 
@@ -669,7 +666,9 @@ CompilerScratch* PAR_parse(thread_db* tdbb, const UCHAR* blr, ULONG blr_length,
  **************************************/
 	SET_TDBB(tdbb);
 
-	CompilerScratch* csb = CompilerScratch::newCsb(*tdbb->getDefaultPool(), 5);
+	MemoryPool& pool = *tdbb->getDefaultPool();
+	AutoPtr<CompilerScratch> csb(FB_NEW_POOL(pool) CompilerScratch(pool));
+
 	csb->csb_blr_reader = BlrReader(blr, blr_length);
 
 	if (internal_flag)
@@ -686,7 +685,7 @@ CompilerScratch* PAR_parse(thread_db* tdbb, const UCHAR* blr, ULONG blr_length,
 	if (csb->csb_blr_reader.getByte() != (UCHAR) blr_eoc)
 		PAR_syntax_error(csb, "end_of_command");
 
-	return csb;
+	return csb.release();
 }
 
 

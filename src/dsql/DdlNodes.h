@@ -1899,7 +1899,8 @@ public:
 	}
 
 protected:
-	static USHORT convertPrivilegeFromString(thread_db* tdbb, jrd_tra* transaction, Firebird::MetaName privilege);
+	static USHORT convertPrivilegeFromString(thread_db* tdbb, jrd_tra* transaction,
+		Firebird::MetaName privilege);
 };
 
 class CreateAlterRoleNode : public PrivilegesNode

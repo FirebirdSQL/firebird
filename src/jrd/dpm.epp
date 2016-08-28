@@ -2555,6 +2555,10 @@ static void fragment(thread_db* tdbb,
 			header = (rhdf*) ((SCHAR *) page + space);
 			header->rhdf_flags = rhd_deleted;
 			header->rhdf_f_page = header->rhdf_f_line = 0;
+
+			const FB_SIZE_T header_size = (transaction->tra_number > MAX_ULONG) ? RHDE_SIZE : RHD_SIZE;
+			Ods::writeTraNum(header, transaction->tra_number, header_size);
+
 			page->dpg_rpt[line].dpg_offset = space;
 			page->dpg_rpt[line].dpg_length = available_space;
 		}

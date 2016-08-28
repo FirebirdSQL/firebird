@@ -77,6 +77,11 @@ const USHORT PROTOCOL_VERSION12	= (FB_PROTOCOL_FLAG | 12);
 
 const USHORT PROTOCOL_VERSION13	= (FB_PROTOCOL_FLAG | 13);
 
+// Protocol 14:
+//	- fixes a bug in database crypt key callback
+
+const USHORT PROTOCOL_VERSION14	= (FB_PROTOCOL_FLAG | 14);
+
 // Architecture types
 
 enum P_ARCH

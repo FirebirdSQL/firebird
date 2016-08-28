@@ -370,7 +370,6 @@ public:
 
 	Firebird::SyncObject	dbb_sync;
 	Firebird::SyncObject	dbb_sys_attach;		// synchronize operations with dbb_sys_attachments
-	Firebird::SyncObject	dbb_lck_sync;		// synchronize operations with att_long_locks at different attachments
 
 	MemoryPool* dbb_permanent;
 
@@ -430,9 +429,6 @@ public:
 
 	Firebird::SyncObject			dbb_sortbuf_sync;
 	Firebird::Array<UCHAR*>			dbb_sort_buffers;	// sort buffers ready for reuse
-
-	Firebird::SyncObject			dbb_threads_sync;
-	thread_db*						dbb_active_threads;
 
 	TraNumber dbb_oldest_active;		// Cached "oldest active" transaction
 	TraNumber dbb_oldest_transaction;	// Cached "oldest interesting" transaction

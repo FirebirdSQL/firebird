@@ -38,6 +38,7 @@
 #include "../../jrd/trace/TraceLog.h"
 #include "../../jrd/trace/TraceManager.h"
 #include "../../jrd/trace/TraceService.h"
+#include "../../jrd/scl.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -54,8 +55,8 @@ public:
 
 	virtual ~TraceSvcJrd() {};
 
-	virtual void setAttachInfo(const string& service_name, const string& user, const string& pwd,
-		const AuthReader::AuthBlock& authBlock, bool isAdmin);
+	virtual void setAttachInfo(const string& service_name, const string& user, const string& role,
+		const string& pwd, const AuthReader::AuthBlock& authBlock, bool isAdmin);
 
 	virtual void startSession(TraceSession& session, bool interactive);
 	virtual void stopSession(ULONG id);
@@ -69,16 +70,18 @@ private:
 
 	Service& m_svc;
 	string m_user;
+	string m_role;
 	AuthReader::AuthBlock m_authBlock;
 	bool   m_admin;
 	ULONG  m_chg_number;
 };
 
-void TraceSvcJrd::setAttachInfo(const string& /*svc_name*/, const string& user, const string& pwd,
-	const AuthReader::AuthBlock& authBlock, bool isAdmin)
+void TraceSvcJrd::setAttachInfo(const string& /*svc_name*/, const string& user, const string& role,
+	const string& pwd, const AuthReader::AuthBlock& authBlock, bool isAdmin)
 {
 	m_authBlock = authBlock;
 	m_user = user;
+	m_role = role;
 	m_admin = isAdmin || (m_user == DBA_USER_NAME);
 }
 
@@ -97,6 +100,9 @@ void TraceSvcJrd::startSession(TraceSession& session, bool interactive)
 
 		session.ses_auth = m_authBlock;
 		session.ses_user = m_user;
+		MetaName role = m_role;
+		UserId::makeRoleName(role, SQL_DIALECT_V6);
+		session.ses_role = role.c_str();
 
 		session.ses_flags = trs_active;
 		if (m_admin) {

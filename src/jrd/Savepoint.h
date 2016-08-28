@@ -143,6 +143,7 @@ namespace Jrd
 			m_number = number;
 			m_flags |= root ? SAV_root : 0;
 			m_next = next;
+			fb_assert(m_next != this);
 		}
 
 		VerbAction* getAction(const jrd_rel* relation) const
@@ -210,6 +211,7 @@ namespace Jrd
 
 			Savepoint* const next = m_next;
 			m_next = target;
+			fb_assert(m_next != this);
 			target = this;
 			return next;
 		}
@@ -298,7 +300,7 @@ namespace Jrd
 		bool isLarge() const;
 		Savepoint* release(Savepoint* prior = NULL);
 
-		jrd_tra* m_transaction; 		// transaction this savepoint belongs to
+		jrd_tra* const m_transaction; 	// transaction this savepoint belongs to
 		SavNumber m_number;				// savepoint number
 		USHORT m_flags;					// misc flags
 		USHORT m_count;					// active verb count

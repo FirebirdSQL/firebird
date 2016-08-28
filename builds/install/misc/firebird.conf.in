@@ -99,7 +99,7 @@
 # Relative paths are treated relative to the root directory of firebird.
 # Default value 'Full' gives full access to all files on your site.
 # To specify access to specific trees, enum all required paths 
-# (for Win32 this may be something like 'C:\DataBase;D:\Mirror',
+# (for Windows this may be something like 'C:\DataBase;D:\Mirror',
 # for unix - '/db;/mnt/mirrordb'). If you choose 'None', then only
 # databases listed in databases.conf can be attached.
 #
@@ -148,7 +148,7 @@
 # are stored. Relative paths are treated relative to the root directory 
 # of firebird. Default value 'None' disables any use of external files
 # on your site. To specify access to specific trees, enum all required
-# paths (for Win32 this may be something like 'C:\ExternalTables',
+# paths (for Windows this may be something like 'C:\ExternalTables',
 # for unix - '/db/extern;/mnt/extern').
 #
 # Per-database configurable.
@@ -174,7 +174,7 @@
 #
 # Default value 'Restrict UDF' provides the same restrictions
 # as in FB 1.0. To specify access to specific trees, enum all required
-# paths (for Win32 this may be something like 'C:\ExternalFunctions',
+# paths (for Windows this may be something like 'C:\ExternalFunctions',
 # for unix - '/db/extern;/mnt/extern').
 @UDF_COMMENT@
 # NOTE: THE EXTERNAL FUNCTION ENGINE FEATURE COULD BE USED TO COMPROMISE
@@ -501,7 +501,7 @@
 # (for databases with ForcedWrites=Off only)
 #
 # Number of unflushed writes which will accumulate before they are
-# flushed, at the next transaction commit.  For non-Win32 ports,
+# flushed, at the next transaction commit.  For non-Windows ports,
 # the default value is -1 (Disabled)
 #
 # Per-database configurable.
@@ -512,7 +512,7 @@
 
 #
 # Number of seconds during which unflushed writes will accumulate
-# before they are flushed, at the next transaction commit. For non-Win32
+# before they are flushed, at the next transaction commit. For non-Windows
 # ports, the default value is -1 (Disabled)
 #
 # Per-database configurable.

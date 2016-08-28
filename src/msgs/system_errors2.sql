@@ -800,6 +800,8 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (-901, '0A', '000', 0, 791, 'wrong_prvlg', NULL, NULL)
 (-902, '28', '000', 0, 792, 'miss_prvlg', NULL, NULL)
 (-902, 'XX', '000', 0, 793, 'crypt_checksum', NULL, NULL)
+(-902, '28', '000', 0, 794, 'not_dba', NULL, NULL)
+(-901, '07', '005', 0, 795, 'no_cursor', NULL, NULL)
 -- GFIX
 (-901, '00', '000', 3, 1, 'gfix_db_name', NULL, NULL)
 (-901, '00', '000', 3, 2, 'gfix_invalid_sw', NULL, NULL)

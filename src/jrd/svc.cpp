@@ -734,7 +734,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 
 					string trusted_role;
 					mapUser(true, svc_username, trusted_role, NULL, &svc_auth_block, NULL,
-						svc_auth_block, "services manager", NULL, config->getSecurityDatabase(),
+						svc_auth_block, "services manager", NULL, config->getSecurityDatabase(), "",
 						svc_crypt_callback, NULL);
 					trusted_role.upper();
 					svc_trusted_role = trusted_role == ADMIN_ROLE;
@@ -2050,7 +2050,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 #ifdef DEV_BUILD
 	if (svc_debug)
 	{
-		::printf("%s %s\n", svc_service_run->serv_name, svc_switches.c_str());
+		::fprintf(stderr, "%s %s\n", svc_service_run->serv_name, svc_switches.c_str());
 		return;
 	}
 #endif
@@ -2066,7 +2066,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 	// Do not let everyone look at server log
 	if (svc_id == isc_action_svc_get_fb_log && !(svc_user_flag & SVC_user_dba))
     {
-       	status_exception::raise(Arg::Gds(isc_adm_task_denied));
+       	status_exception::raise(Arg::Gds(isc_adm_task_denied) << Arg::Gds(isc_not_dba));
     }
 
 	// Break up the command line into individual arguments.

@@ -129,6 +129,16 @@ bool GlobalRWLock::lockWrite(thread_db* tdbb, SSHORT wait)
 
 		fb_assert(!readers && !currentWriter);
 
+		if (cachedLock->lck_physical == LCK_write)
+		{
+			--pendingWriters;
+
+			fb_assert(!currentWriter);
+			currentWriter = true;
+
+			return true;
+		}
+
 		if (cachedLock->lck_physical > LCK_none)
 		{
 			LCK_release(tdbb, cachedLock);	// To prevent self deadlock

@@ -403,40 +403,6 @@ typedef Firebird::GenericMap<Firebird::Pair<Firebird::Right<Item, ItemInfo> > > 
 
 class CompilerScratch : public pool_alloc<type_csb>
 {
-	CompilerScratch(MemoryPool& p, FB_SIZE_T len, const Firebird::MetaName& domain_validation)
-	:	/*csb_node(0),
-		csb_variables(0),
-		csb_dependencies(0),
-		csb_count(0),
-		csb_n_stream(0),
-		csb_msg_number(0),
-		csb_impure(0),
-		csb_g_flags(0),*/
-#ifdef CMP_DEBUG
-		csb_dump(p),
-#endif
-		csb_external(p),
-		csb_access(p),
-		csb_resources(p),
-		csb_dependencies(p),
-		csb_fors(p),
-		csb_cursors(p),
-		csb_invariants(p),
-		csb_current_nodes(p),
-		csb_pool(p),
-		csb_map_field_info(p),
-		csb_map_item_info(p),
-		csb_message_pad(p),
-		csb_domain_validation(domain_validation),
-		subFunctions(p),
-		subProcedures(p),
-		csb_currentForNode(NULL),
-		csb_currentDMLNode(NULL),
-		csb_rpt(p, len)
-	{
-		csb_dbg_info = FB_NEW_POOL(p) Firebird::DbgInfo(p);
-	}
-
 public:
 	struct Dependency
 	{
@@ -461,18 +427,44 @@ public:
 		SLONG subNumber;
 	};
 
-	static CompilerScratch* newCsb(MemoryPool& p, FB_SIZE_T len,
-								   const Firebird::MetaName& domain_validation = Firebird::MetaName())
+	explicit CompilerScratch(MemoryPool& p)
+	:	/*csb_node(0),
+		csb_variables(0),
+		csb_dependencies(0),
+		csb_count(0),
+		csb_n_stream(0),
+		csb_msg_number(0),
+		csb_impure(0),
+		csb_g_flags(0),*/
+#ifdef CMP_DEBUG
+		csb_dump(p),
+#endif
+		csb_external(p),
+		csb_access(p),
+		csb_resources(p),
+		csb_dependencies(p),
+		csb_fors(p),
+		csb_cursors(p),
+		csb_invariants(p),
+		csb_current_nodes(p),
+		csb_pool(p),
+		csb_map_field_info(p),
+		csb_map_item_info(p),
+		csb_message_pad(p),
+		subFunctions(p),
+		subProcedures(p),
+		csb_currentForNode(NULL),
+		csb_currentDMLNode(NULL),
+		csb_rpt(p)
 	{
-		return FB_NEW_POOL(p) CompilerScratch(p, len, domain_validation);
+		csb_dbg_info = FB_NEW_POOL(p) Firebird::DbgInfo(p);
 	}
 
 	StreamType nextStream(bool check = true)
 	{
 		if (csb_n_stream >= MAX_STREAMS && check)
-		{
 			ERR_post(Firebird::Arg::Gds(isc_too_many_contexts));
-		}
+
 		return csb_n_stream++;
 	}
 

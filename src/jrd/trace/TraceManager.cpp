@@ -259,8 +259,8 @@ void TraceManager::update_session(const TraceSession& session)
 				fb_assert(dbb);
 				mapResult = mapUser(false, s_user, t_role, NULL, NULL, &priv, session.ses_auth,
 					attachment->att_filename.c_str(), dbb->dbb_filename.c_str(),
-					dbb->dbb_config->getSecurityDatabase(), dbb->dbb_provider->getCryptCallback(),
-					attachment->getInterface());
+					dbb->dbb_config->getSecurityDatabase(), session.ses_role,
+					dbb->dbb_provider->getCryptCallback(), attachment->getInterface());
 			}
 
 			if (session.ses_auth.hasData())
@@ -289,7 +289,7 @@ void TraceManager::update_session(const TraceSession& session)
 				expandDatabaseName(service->getExpectedDb(), dummy, &config);
 
 				if (mapUser(false, s_user, t_role, NULL, NULL, NULL, session.ses_auth, "services manager",
-					NULL, config->getSecurityDatabase(), service->getCryptCallback(),
+					NULL, config->getSecurityDatabase(), session.ses_role, service->getCryptCallback(),
 					NULL) & MAPUSER_ERROR_NOT_THROWN)
 				{
 					// Error in mapUser() means missing context, therefore...

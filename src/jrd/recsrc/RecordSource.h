@@ -602,8 +602,40 @@ namespace Jrd
 	{
 	public:
 		SlidingWindow(thread_db* aTdbb, const BaseBufferedStream* aStream,
-			const NestValueArray* aGroup, jrd_req* aRequest);
+			const NestValueArray* aGroup, jrd_req* aRequest,
+			FB_UINT64 aPartitionStart, FB_UINT64 aPartitionEnd,
+			FB_UINT64 aOrderStart, FB_UINT64 aOrderEnd);
 		~SlidingWindow();
+
+		FB_UINT64 getPartitionStart() const
+		{
+			return partitionStart;
+		}
+
+		FB_UINT64 getPartitionEnd() const
+		{
+			return partitionEnd;
+		}
+
+		FB_UINT64 getPartitionSize() const
+		{
+			return partitionEnd - partitionStart + 1;
+		}
+
+		FB_UINT64 getOrderStart() const
+		{
+			return orderStart;
+		}
+
+		FB_UINT64 getOrderEnd() const
+		{
+			return orderEnd;
+		}
+
+		FB_UINT64 getOrderSize() const
+		{
+			return orderEnd - orderStart + 1;
+		}
 
 		bool move(SINT64 delta);
 
@@ -613,25 +645,37 @@ namespace Jrd
 		const NestValueArray* group;
 		jrd_req* request;
 		Firebird::Array<impure_value> partitionKeys;
-		bool moved;
+		FB_UINT64 partitionStart;
+		FB_UINT64 partitionEnd;
+		FB_UINT64 orderStart;
+		FB_UINT64 orderEnd;
 		FB_UINT64 savedPosition;
+		bool moved;
 	};
 
 	class AggregatedStream : public RecordStream
 	{
 		enum State
 		{
-			STATE_PROCESS_EOF = 0,	// We processed everything now process (EOF)
-			STATE_PENDING,			// Values are pending from a prior fetch
-			STATE_EOF_FOUND,		// We encountered EOF from the last attempted fetch
-			STATE_GROUPING			// Entering EVL group before fetching the first record
+			STATE_EOF,			// We processed everything now process EOF
+			STATE_FETCHED,		// Values are pending from a prior fetch
+			STATE_GROUPING		// Entering EVL group before fetching the first record
+		};
+
+		struct Block
+		{
+			FB_UINT64 startPosition;
+			FB_UINT64 endPosition;
+			FB_UINT64 pending;
 		};
 
 		struct Impure : public RecordSource::Impure
 		{
-			State state;
-			FB_UINT64 pending;
 			impure_value* impureValues;
+			Block partitionBlock;
+			Block orderBlock;
+			State state;
+			bool lastGroup;
 		};
 
 	public:
@@ -661,7 +705,11 @@ namespace Jrd
 	private:
 		void init(thread_db* tdbb, CompilerScratch* csb);
 
-		State evaluateGroup(thread_db* tdbb, State state) const;
+		bool evaluateGroup(thread_db* tdbb, AggType aggType, FB_UINT64 limit) const;
+		void aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const;
+		bool aggPass(thread_db* tdbb, jrd_req* request) const;
+		void aggExecute(thread_db* tdbb, jrd_req* request) const;
+		bool getNextRecord(thread_db* tdbb, jrd_req* request, FB_UINT64& limit) const;
 		void cacheValues(thread_db* tdbb, jrd_req* request,
 			const NestValueArray* group, unsigned impureOffset) const;
 		bool lookForChange(thread_db* tdbb, jrd_req* request,

@@ -815,6 +815,8 @@ static const struct {
 	{"wrong_prvlg", 335545111},
 	{"miss_prvlg", 335545112},
 	{"crypt_checksum", 335545113},
+	{"not_dba", 335545114},
+	{"no_cursor", 335545115},
 	{"gfix_db_name", 335740929},
 	{"gfix_invalid_sw", 335740930},
 	{"gfix_incmp_sw", 335740932},

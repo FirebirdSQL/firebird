@@ -743,8 +743,8 @@ namespace
 			rs->fetch(tdbb);
 
 			UserId* u = attachment->att_user;
-			Arg::Gds err(isc_miss_prvlg);
-			err << missPriv;
+			Arg::Gds err(isc_adm_task_denied);
+			err << Arg::Gds(isc_miss_prvlg) << missPriv;
 			if (u->testFlag(USR_mapdown))
 				err << Arg::Gds(isc_map_down);
 
@@ -800,12 +800,13 @@ void Trigger::compile(thread_db* tdbb)
 		else
 			par_flags |= csb_post_trigger;
 
-		CompilerScratch* csb = NULL;
 		try
 		{
 			Jrd::ContextPoolHolder context(tdbb, new_pool);
 
-			csb = CompilerScratch::newCsb(*tdbb->getDefaultPool(), 5);
+			AutoPtr<CompilerScratch> auto_csb(FB_NEW_POOL(*new_pool) CompilerScratch(*new_pool));
+			CompilerScratch* csb = auto_csb;
+
 			csb->csb_g_flags |= par_flags;
 
 			if (engine.isEmpty())
@@ -826,14 +827,10 @@ void Trigger::compile(thread_db* tdbb)
 						(type & 1 ? IExternalTrigger::TYPE_BEFORE : IExternalTrigger::TYPE_AFTER) :
 						IExternalTrigger::TYPE_DATABASE));
 			}
-
-			delete csb;
 		}
 		catch (const Exception&)
 		{
 			compile_in_progress = false;
-			delete csb;
-			csb = NULL;
 
 			if (statement)
 			{
@@ -1028,7 +1025,7 @@ namespace {
 static VdnResult	verifyDatabaseName(const PathName&, FbStatusVector*, bool);
 
 static void		unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* userStatus,
-	Jrd::Attachment* attachment, Database* dbb, unsigned internalFlags);
+	Jrd::Attachment* attachment, Database* dbb, bool internalFlag);
 static JAttachment*	initAttachment(thread_db*, const PathName&, const PathName&, RefPtr<Config>, bool,
 	const DatabaseOptions&, RefMutexUnlock&, IPluginConfig*, JProvider*);
 static JAttachment*	create_attachment(const PathName&, Database*, const DatabaseOptions&, bool newDb);
@@ -1302,11 +1299,11 @@ jrd_tra* JAttachment::getEngineTransaction(CheckStatusWrapper* status, ITransact
 JAttachment* JProvider::attachDatabase(CheckStatusWrapper* user_status, const char* filename,
 	unsigned int dpb_length, const unsigned char* dpb)
 {
-	return internalAttach(user_status, filename, dpb_length, dpb, 0);
+	return internalAttach(user_status, filename, dpb_length, dpb, NULL);
 }
 
 JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const char* filename,
-		unsigned int dpb_length, const unsigned char* dpb, unsigned int internal_flags)
+		unsigned int dpb_length, const unsigned char* dpb, const UserId* existingId)
 {
 /**************************************
  *
@@ -1370,8 +1367,11 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				ERR_post(Arg::Gds(isc_unavailable));
 
 			// Check for correct credentials supplied
-			getUserInfo(userId, options, org_filename.c_str(), expanded_name.c_str(),
-				&config, false, cryptCallback);
+			if (existingId)
+				userId = *existingId;
+			else
+				getUserInfo(userId, options, org_filename.c_str(), expanded_name.c_str(),
+					&config, false, cryptCallback);
 
 #ifdef WIN_NT
 			guardDbInit.enter();		// Required to correctly expand name of just created database
@@ -1446,6 +1446,9 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 			attachment->att_crypt_callback = getDefCryptCallback(cryptCallback);
 			attachment->att_client_charset = attachment->att_charset = options.dpb_interp;
+
+			if (existingId)
+				attachment->att_flags |= ATT_overwrite_check;
 
 			if (options.dpb_no_garbage)
 				attachment->att_flags |= ATT_no_cleanup;
@@ -1897,7 +1900,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 					filename, options, false, user_status);
 			}
 
-			unwindAttach(tdbb, ex, user_status, attachment, dbb, internal_flags);
+			unwindAttach(tdbb, ex, user_status, attachment, dbb, existingId);
 		}
 	}
 	catch (const Exception& ex)
@@ -2117,7 +2120,8 @@ void JBlob::close(CheckStatusWrapper* user_status)
 
 		try
 		{
-			getHandle()->BLB_close(tdbb);
+			if (!getHandle()->BLB_close(tdbb))
+				getHandle()->blb_interface = NULL;
 			blob = NULL;
 		}
 		catch (const Exception& ex)
@@ -2572,7 +2576,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 					OverwriteHolder overwriteCheckHolder(dbb);
 
 					JAttachment* attachment2 = internalAttach(user_status, filename, dpb_length,
-						dpb, INTERNAL_ATT_OVERWRITE_CHECK);
+						dpb, &userId);
 					switch (user_status->getErrors()[1])
 					{
 						case isc_adm_task_denied:
@@ -2755,7 +2759,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			trace_failed_attach(attachment ? attachment->att_trace_manager : NULL,
 				filename, options, true, user_status);
 
-			unwindAttach(tdbb, ex, user_status, attachment, dbb, 0);
+			unwindAttach(tdbb, ex, user_status, attachment, dbb, false);
 		}
 	}
 	catch (const Exception& ex)
@@ -4368,6 +4372,9 @@ SysStableAttachment::SysStableAttachment(Attachment* handle)
 	: StableAttachmentPart(handle)
 {
 	handle->att_flags |= ATT_system;
+
+	m_JAttachment = FB_NEW JAttachment(this);
+	this->setInterface(m_JAttachment);
 }
 
 
@@ -4402,6 +4409,7 @@ void SysStableAttachment::destroy(Attachment* attachment)
 	MutexLockGuard async(*getMutex(true), FB_FUNCTION);
 	MutexLockGuard sync(*getMutex(), FB_FUNCTION);
 
+	setInterface(NULL);
 	Jrd::Attachment::destroy(attachment);
 }
 
@@ -6946,6 +6954,8 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 	if (!sAtt->getHandle())
 		return;
 
+	bool overwriteCheck = attachment->att_flags & ATT_overwrite_check;
+
 	// Unlink attachment from database
 	release_attachment(tdbb, attachment);
 
@@ -6953,7 +6963,8 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 	MutexUnlockGuard cout(*attMutex, FB_FUNCTION);
 
 	// Try to close database if there are no attachments
-	JRD_shutdown_database(dbb, SHUT_DBB_RELEASE_POOLS | (flags & PURGE_LINGER ? SHUT_DBB_LINGER : 0));
+	JRD_shutdown_database(dbb, SHUT_DBB_RELEASE_POOLS | (flags & PURGE_LINGER ? SHUT_DBB_LINGER : 0) |
+		(overwriteCheck ? SHUT_DBB_OVERWRITE_CHECK : 0));
 }
 
 
@@ -7093,7 +7104,7 @@ static void getUserInfo(UserId& user, const DatabaseOptions& options,
 		{
 			if (mapUser(true, name, trusted_role, &auth_method, &user.usr_auth_block, NULL,
 				options.dpb_auth_block, aliasName, dbName,
-				(config ? (*config)->getSecurityDatabase() : NULL), cryptCb, NULL) & MAPUSER_MAP_DOWN)
+				(config ? (*config)->getSecurityDatabase() : NULL), "", cryptCb, NULL) & MAPUSER_MAP_DOWN)
 			{
 				user.setFlag(USR_mapdown);
 			}
@@ -7159,7 +7170,7 @@ static void getUserInfo(UserId& user, const DatabaseOptions& options,
 }
 
 static void unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* userStatus,
-	Jrd::Attachment* attachment, Database* dbb, unsigned internalFlags)
+	Jrd::Attachment* attachment, Database* dbb, bool internalFlag)
 {
 	RefDeb(DEB_RLS_JATT, "unwindAttach");
 	RefDeb(DEB_AR_JATT, "unwindAttach");
@@ -7202,7 +7213,7 @@ static void unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* u
 			}
 
 			JRD_shutdown_database(dbb, SHUT_DBB_RELEASE_POOLS |
-				(internalFlags & INTERNAL_ATT_OVERWRITE_CHECK ? SHUT_DBB_OVERWRITE_CHECK : 0));
+				(internalFlag ? SHUT_DBB_OVERWRITE_CHECK : 0));
 		}
 	}
 	catch (const Exception&)
@@ -7380,16 +7391,8 @@ void thread_db::setDatabase(Database* val)
 {
 	if (database != val)
 	{
-		const bool wasActive = database && (priorThread || nextThread || database->dbb_active_threads == this);
-
-		if (wasActive)
-			deactivate();
-
 		database = val;
 		dbbStat = val ? &val->dbb_stats : RuntimeStatistics::getDummy();
-
-		if (wasActive)
-			activate();
 	}
 }
 

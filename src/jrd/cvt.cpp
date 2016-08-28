@@ -419,7 +419,7 @@ void EngineCallbacks::validateData(CharSet* toCharSet, SLONG length, const UCHAR
 void EngineCallbacks::validateLength(CharSet* toCharSet, SLONG toLength, const UCHAR* start,
 	const USHORT to_size)
 {
-	if (toCharSet)
+	if (toCharSet && toCharSet->isMultiByte())
 	{
 		Jrd::thread_db* tdbb = NULL;
 		SET_TDBB(tdbb);
@@ -427,9 +427,7 @@ void EngineCallbacks::validateLength(CharSet* toCharSet, SLONG toLength, const U
 		const ULONG src_len = toCharSet->length(toLength, start, false);
 		const ULONG dest_len  = (ULONG) to_size / toCharSet->maxBytesPerChar();
 
-		if (toCharSet->isMultiByte() &&
-			!(toCharSet->getFlags() & CHARSET_LEGACY_SEMANTICS) &&
-			src_len > dest_len)
+		if (src_len > dest_len)
 		{
 			err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
 				Arg::Gds(isc_trunc_limits) << Arg::Num(dest_len) << Arg::Num(src_len));

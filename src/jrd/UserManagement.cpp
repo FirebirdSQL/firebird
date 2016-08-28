@@ -362,12 +362,13 @@ void UserManagement::execute(USHORT id)
 
 		OldAttributes oldAttributes;
 		int ret = manager->execute(&statusWrapper, &cmd, &oldAttributes);
-		checkSecurityResult(ret, &status, command->userName()->get(), command->operation());
+		if (ret == 0 || status.getErrors()[1] != isc_missing_data_structures)
+			checkSecurityResult(ret, &status, command->userName()->get(), command->operation());
+		else
+			statusWrapper.init();
 
 		if (command->op == Auth::ADDMOD_OPER)
-		{
 			command->op = oldAttributes.present ? Auth::MOD_OPER : Auth::ADD_OPER;
-		}
 
 		if (command->attr.entered())
 		{
@@ -384,9 +385,8 @@ void UserManagement::execute(USHORT id)
 			while (cur != curEnd)
 			{
 				if (cur->name == prev)
-				{
 					(Arg::Gds(isc_dup_attribute) << cur->name).raise();
-				}
+
 				prev = cur->name;
 				++cur;
 			}

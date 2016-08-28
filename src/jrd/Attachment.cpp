@@ -601,9 +601,6 @@ void Jrd::Attachment::detachLocks()
 	if (!att_long_locks)
 		return;
 
-	Sync lckSync(&att_database->dbb_lck_sync, "Attachment::detachLocks");
-	lckSync.lock(SYNC_EXCLUSIVE);
-
 	Lock* long_lock = att_long_locks;
 	while (long_lock)
 		long_lock = long_lock->detach();

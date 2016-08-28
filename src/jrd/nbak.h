@@ -174,7 +174,7 @@ protected:
 
 class BackupManager
 {
-public:
+private:
 	class StateWriteGuard
 	{
 	public:
@@ -198,6 +198,7 @@ public:
 		bool m_success;
 	};
 
+public:
 	class StateReadGuard
 	{
 	public:
@@ -246,6 +247,29 @@ public:
 	};
 
 private:
+	// Set and clear "master" status for BackupManager instance
+	class MasterGuard
+	{
+	public:
+		MasterGuard(BackupManager& bm) :
+			m_bm(bm)
+		{
+			m_bm.master = true;
+		}
+
+		~MasterGuard()
+		{
+			m_bm.master = false;
+		}
+
+	private:
+		// copying is prohibited
+		MasterGuard(const MasterGuard&);
+		MasterGuard& operator=(const MasterGuard&);
+
+		BackupManager& m_bm;
+	};
+
 	template<bool Exclusive>
 	class LocalAllocGuard
 	{
@@ -375,30 +399,37 @@ public:
 
 	bool lockStateRead(thread_db* tdbb, SSHORT wait)
 	{
-		if ( !(tdbb->tdbb_flags & TDBB_backup_write_locked))
-			return stateLock->lockRead(tdbb, wait);
+		if (tdbb->tdbb_flags & TDBB_backup_write_locked)
+			return true;
+
+		localStateLock.beginRead(FB_FUNCTION);
+		if (backup_state == Ods::hdr_nbak_unknown)
+		{
+			if (!stateLock->lockRead(tdbb, wait))
+			{
+				localStateLock.endRead();
+				return false;
+			}
+			stateLock->unlockRead(tdbb);
+		}
 		return true;
 	}
 
 	void unlockStateRead(thread_db* tdbb)
 	{
-		if ( !(tdbb->tdbb_flags & TDBB_backup_write_locked))
-			stateLock->unlockRead(tdbb);
-	}
-
-	void lockDirtyPage(thread_db* tdbb)
-	{
 		if (tdbb->tdbb_flags & TDBB_backup_write_locked)
 			return;
-		if (!stateLock->lockRead(tdbb, LCK_WAIT, true))
-			ERR_bugcheck_msg("Can't lock backup state to set dirty flag");
-	}
 
-	void unlockDirtyPage(thread_db* tdbb)
-	{
-		if (tdbb->tdbb_flags & TDBB_backup_write_locked)
-			return;
-		unlockStateRead(tdbb);
+		localStateLock.endRead();
+
+		if (stateBlocking && localStateLock.tryBeginWrite(FB_FUNCTION))
+		{
+			if (!stateLock->tryReleaseLock(tdbb))
+				fb_assert(false);
+
+			stateBlocking = false;
+			localStateLock.endWrite();
+		}
 	}
 
 	bool actualizeState(thread_db* tdbb);
@@ -442,6 +473,11 @@ public:
 		return flushInProgress;
 	}
 
+	bool isMaster() const
+	{
+		return master;
+	}
+
 	bool isShutDown() const
 	{
 		return shutDown;
@@ -450,6 +486,8 @@ public:
 	// Get size (in pages) of locked database file
 	ULONG getPageCount(thread_db* tdbb);
 private:
+	friend class NBackupStateLock;
+
 	Database* database;
 	jrd_file* diff_file;
 	AllocItemTree* alloc_table; // Cached allocation table of pages in difference file
@@ -463,8 +501,12 @@ private:
 	bool flushInProgress;
 	bool shutDown;
 	bool allocIsValid;			// true, if alloc table cache is completely read from disk
+	bool master;				// this instance performs current begin\end backup process
+	bool stateBlocking;			// blocking AST handler doesn't released stateLock
 
 	NBackupStateLock* stateLock;
+	Firebird::RWLock localStateLock;	// must be acquired before global stateLock
+										// Important: this lock must prefer readers to writers !
 	NBackupAllocLock* allocLock;
 	Firebird::RWLock localAllocLock;	// must be acquired before global allocLock
 

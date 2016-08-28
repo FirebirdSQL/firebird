@@ -1638,6 +1638,10 @@ C --
       PARAMETER (GDS__miss_prvlg                       = 335545112)
       INTEGER*4 GDS__crypt_checksum                  
       PARAMETER (GDS__crypt_checksum                   = 335545113)
+      INTEGER*4 GDS__not_dba                         
+      PARAMETER (GDS__not_dba                          = 335545114)
+      INTEGER*4 GDS__no_cursor                       
+      PARAMETER (GDS__no_cursor                        = 335545115)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 

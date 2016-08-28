@@ -814,6 +814,8 @@ static const struct {
 	{335545111, -901}, /* 791 wrong_prvlg */
 	{335545112, -902}, /* 792 miss_prvlg */
 	{335545113, -902}, /* 793 crypt_checksum */
+	{335545114, -902}, /* 794 not_dba */
+	{335545115, -901}, /* 795 no_cursor */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */

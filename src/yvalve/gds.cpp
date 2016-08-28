@@ -3383,10 +3383,14 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 
 			int inputs = 0;
 			int outputs = 0;
+
 			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
 			{
 				blr_indent(control, level);
-				blr_format(control, "blr_exec_stmt_%s, ", sub_codes[blr_operator]);
+
+				if (blr_operator > 0 && blr_operator < FB_NELEM(sub_codes))
+					blr_format(control, "blr_exec_stmt_%s, ", sub_codes[blr_operator]);
+
 				switch (blr_operator)
 				{
 				case blr_exec_stmt_inputs:

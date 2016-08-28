@@ -49,6 +49,15 @@
 #include <linux/falloc.h>
 #endif
 
+#ifdef SUPPORT_RAW_DEVICES
+#include <sys/ioctl.h>
+
+#ifdef LINUX
+#include <linux/fs.h>
+#endif
+
+#endif //SUPPORT_RAW_DEVICES
+
 #include "../jrd/jrd.h"
 #include "../jrd/os/pio.h"
 #include "../jrd/ods.h"
@@ -115,7 +124,7 @@ static const mode_t MASK = 0660;
 
 #define FCNTL_BROKEN
 static jrd_file* seek_file(jrd_file*, BufferDesc*, FB_UINT64*, FbStatusVector*);
-static jrd_file* setup_file(Database*, const PathName&, const int, const bool, const bool);
+static jrd_file* setup_file(Database*, const PathName&, const int, const bool, const bool, const bool);
 static void lockDatabaseFile(int& desc, const bool shareMode, const bool temporary,
 							 const char* fileName, ISC_STATUS operation);
 static bool unix_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* = NULL);
@@ -271,7 +280,7 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 	PathName expanded_name(file_name);
 	ISC_expand_filename(expanded_name, false);
 
-	return setup_file(dbb, expanded_name, desc, false, shareMode);
+	return setup_file(dbb, expanded_name, desc, false, shareMode, !(flag & O_CREAT));
 }
 
 
@@ -480,9 +489,42 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
 	if (os_utils::fstat(file->fil_desc, &statistics))
 		unix_error("fstat", file, isc_io_access_err);
 
-	const FB_UINT64 length = statistics.st_size;
+	FB_UINT64 length = statistics.st_size;
 
-	return (length + pagesize - 1) / pagesize;
+#ifdef SUPPORT_RAW_DEVICES
+	if (S_ISCHR(statistics.st_mode) || S_ISBLK(statistics.st_mode))
+	{
+// This place is highly OS-dependent
+// Looks like any OS needs own ioctl() to determine raw device size
+#undef HAS_RAW_SIZE
+
+#ifdef LINUX
+#ifdef BLKGETSIZE64
+		if (ioctl(file->fil_desc, BLKGETSIZE64, &length) != 0)
+#endif /*BLKGETSIZE64*/
+		{
+			unsigned long sectorCount;
+			if (ioctl(file->fil_desc, BLKGETSIZE, &sectorCount) != 0)
+				unix_error("ioctl(BLKGETSIZE)", file, isc_io_access_err);
+
+			unsigned int sectorSize;
+			if (ioctl(file->fil_desc, BLKSSZGET, &sectorSize) != 0)
+				unix_error("ioctl(BLKSSZGET)", file, isc_io_access_err);
+
+			length = sectorCount;
+			length *= sectorSize;
+		}
+#define HAS_RAW_SIZE
+#endif /*LINUX*/
+
+#ifndef HAS_RAW_SIZE
+error: Raw device support for your OS is missing. Fix it or turn off raw device support.
+#endif
+#undef HAS_RAW_SIZE
+	}
+#endif /*SUPPORT_RAW_DEVICES*/
+
+	return length / pagesize;
 }
 
 
@@ -675,19 +717,24 @@ jrd_file* PIO_open(thread_db* tdbb,
 
 	// os_utils::posix_fadvise(desc, 0, 0, POSIX_FADV_RANDOM);
 
+	bool raw = false;
 #ifdef SUPPORT_RAW_DEVICES
 	// At this point the file has successfully been opened in either RW or RO
 	// mode. Check if it is a special file (i.e. raw block device) and if a
 	// valid database is on it. If not, return an error.
 
-	if (PIO_on_raw_device(file_name) && !raw_devices_validate_database(desc, file_name))
+	if (PIO_on_raw_device(file_name))
 	{
-		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("open") << Arg::Str(file_name) <<
-				 Arg::Gds(isc_io_open_err) << Arg::Unix(ENOENT));
+		raw = true;
+		if (!raw_devices_validate_database(desc, file_name))
+		{
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("open") << Arg::Str(file_name) <<
+					 Arg::Gds(isc_io_open_err) << Arg::Unix(ENOENT));
+		}
 	}
 #endif // SUPPORT_RAW_DEVICES
 
-	return setup_file(dbb, string, desc, readOnly, shareMode);
+	return setup_file(dbb, string, desc, readOnly, shareMode, raw);
 }
 
 
@@ -894,7 +941,8 @@ static jrd_file* setup_file(Database* dbb,
 							const PathName& file_name,
 							const int desc,
 							const bool readOnly,
-							const bool shareMode)
+							const bool shareMode,
+							const bool onRawDev)
 {
 /**************************************
  *
@@ -919,6 +967,8 @@ static jrd_file* setup_file(Database* dbb,
 			file->fil_flags |= FIL_readonly;
 		if (shareMode)
 			file->fil_flags |= FIL_sh_write;
+		if (onRawDev)
+			file->fil_flags |= FIL_raw_device;
 	}
 	catch (const Exception&)
 	{

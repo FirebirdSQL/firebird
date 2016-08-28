@@ -489,7 +489,7 @@ static const struct {
 	{335544785, "Floating Point Error. The Code caused an Arithmetic Exception or a floating point exception."},		/* exception_sigfpe */
 	{335544786, "Cannot delete rows from external files."},		/* ext_file_delete */
 	{335544787, "Cannot update rows in external files."},		/* ext_file_modify */
-	{335544788, "Unable to perform operation.  You must be either SYSDBA or owner of the database"},		/* adm_task_denied */
+	{335544788, "Unable to perform operation"},		/* adm_task_denied */
 	{335544789, "Specified EXTRACT part does not exist in input datatype"},		/* extract_input_mismatch */
 	{335544790, "Service @1 requires SYSDBA permissions.  Reattach to the Service Manager using the SYSDBA account."},		/* insufficient_svc_privileges */
 	{335544791, "The file @1 is currently in use by another process.  Try again later."},		/* file_in_use */
@@ -816,8 +816,10 @@ Data source : @4"},		/* eds_statement */
 	{335545109, "Page requires encyption but crypt plugin is missing"},		/* encrypt_error */
 	{335545110, "Maximum index depth (@1 levels) is reached"},		/* max_idx_depth */
 	{335545111, "System privilege @1 does not exist"},		/* wrong_prvlg */
-	{335545112, "Unable to perform operation: system privilege @1 is missing"},		/* miss_prvlg */
+	{335545112, "System privilege @1 is missing"},		/* miss_prvlg */
 	{335545113, "Invalid or missing checksum of encrypted database"},		/* crypt_checksum */
+	{335545114, "You must have SYSDBA rights at this server"},		/* not_dba */
+	{335545115, "Cannot open cursor for non-SELECT statement"},		/* no_cursor */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */
@@ -1021,7 +1023,7 @@ Data source : @4"},		/* eds_statement */
 	{336330967, "collation"},		/* gbak_err_restore_collation */
 	{336330972, "Unexpected I/O error while reading from backup file"},		/* gbak_read_error */
 	{336330973, "Unexpected I/O error while writing to backup file"},		/* gbak_write_error */
-	{336330985, "could not drop database @1 (database might be in use)"},		/* gbak_db_in_use */
+	{336330985, "could not drop database @1 (no privilege or database might be in use)"},		/* gbak_db_in_use */
 	{336330990, "System memory exhausted"},		/* gbak_sysmemex */
 	{336331002, "SQL role"},		/* gbak_restore_role_failed */
 	{336331005, "SQL role parameter missing"},		/* gbak_role_op_missing */

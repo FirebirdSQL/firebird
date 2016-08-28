@@ -70,6 +70,7 @@ static void internal_dequeue(thread_db*, Lock*);
 static USHORT internal_downgrade(thread_db*, CheckStatusWrapper*, Lock*);
 static bool internal_enqueue(thread_db*, CheckStatusWrapper*, Lock*, USHORT, SSHORT, bool);
 static SLONG get_owner_handle(thread_db* tdbb, enum lck_t lock_type);
+static lck_owner_t get_owner_type(enum lck_t lock_type);
 
 #ifdef DEBUG_LCK
 namespace
@@ -508,6 +509,33 @@ static SLONG get_owner_handle(thread_db* tdbb, enum lck_t lock_type)
 
 	SLONG handle = 0;
 
+	switch (get_owner_type(lock_type))
+	{
+	case LCK_OWNER_database:
+		handle = *LCK_OWNER_HANDLE_DBB(tdbb);
+		break;
+
+	case LCK_OWNER_attachment:
+		handle = *LCK_OWNER_HANDLE_ATT(tdbb);
+		break;
+
+	default:
+		bug_lck("Invalid lock owner type in get_owner_handle()");
+	}
+
+	if (!handle)
+	{
+		bug_lck("Invalid lock owner handle");
+	}
+
+	return handle;
+}
+
+
+static lck_owner_t get_owner_type(enum lck_t lock_type)
+{
+	lck_owner_t owner_type;
+
 	switch (lock_type)
 	{
 	case LCK_database:
@@ -519,7 +547,7 @@ static SLONG get_owner_handle(thread_db* tdbb, enum lck_t lock_type)
 	case LCK_sweep:
 	case LCK_crypt:
 	case LCK_crypt_status:
-		handle = *LCK_OWNER_HANDLE_DBB(tdbb);
+		owner_type = LCK_OWNER_database;
 		break;
 
 	case LCK_attachment:
@@ -543,19 +571,14 @@ static SLONG get_owner_handle(thread_db* tdbb, enum lck_t lock_type)
 	case LCK_btr_dont_gc:
 	case LCK_rel_gc:
 	case LCK_record_gc:
-		handle = *LCK_OWNER_HANDLE_ATT(tdbb);
+		owner_type = LCK_OWNER_attachment;
 		break;
 
 	default:
-		bug_lck("Invalid lock type in get_owner_handle()");
+		bug_lck("Invalid lock type in get_owner_type()");
 	}
 
-	if (!handle)
-	{
-		bug_lck("Invalid lock owner handle");
-	}
-
-	return handle;
+	return owner_type;
 }
 
 
@@ -1441,20 +1464,20 @@ Lock::Lock(thread_db* tdbb, USHORT length, lck_t type, void* object, lock_ast_t 
 
 void Lock::setLockAttachment(thread_db* tdbb, Jrd::Attachment* attachment)
 {
+	if (get_owner_type(lck_type) == LCK_OWNER_database)
+		return;
+
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
 	fb_assert(dbb);
 	if (!dbb)
 		return;
 
-	Sync lckSync(&dbb->dbb_lck_sync, "setLockAttachment");
-	lckSync.lock(SYNC_EXCLUSIVE);
-
 	Attachment* att = lck_attachment ? lck_attachment->getHandle() : NULL;
 	if (att == attachment)
 		return;
 
-	// If lock has an attachment it must not be a part of linked list
+	// If lock has no attachment it must not be a part of linked list
 	fb_assert(!lck_attachment ? !lck_prior && !lck_next : true);
 
 	// Delist in old attachment

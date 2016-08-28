@@ -1043,6 +1043,7 @@ void testServices()
 		perror(fileTest);
 		exit(1);
 	}
+
 	fputs(fileTest, f);
 	fclose(f);
 
@@ -1066,7 +1067,6 @@ void testServices()
 
 	isc_service_detach(status, &svc_handle);
 }
-
 #endif //DEV_BUILD
 
 // short usage from firebird.msg

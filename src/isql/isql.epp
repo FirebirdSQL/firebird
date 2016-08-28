@@ -2666,11 +2666,13 @@ static processing_state bulk_insert_hack(const char* command)
 	if (!statement_type)
 		return ps_ERR;
 
+	/*** ASF: This is util to test others commands too.
 	if (statement_type != isc_info_sql_stmt_insert)
 	{
 		isqlGlob.printf("Only INSERT commands are accepted in bulk mode.%s", NEWLINE);
 		return ps_ERR;
 	}
+	***/
 
 	Firebird::RefPtr<Firebird::IMessageMetadata> message(global_Stmt->getInputMetadata(fbStatus));
 	if (ISQL_errmsg(fbStatus))
@@ -4205,7 +4207,8 @@ static processing_state edit(const TEXT* const* cmd)
 		Ofp.close();
 		PathName tmpfile = Ofp.fileName(false);
 		gds__edit(tmpfile.c_str(), 0);
-		Ofp.init(os_utils::fopen(tmpfile.c_str(), "r+"), tmpfile.c_str(), tmpfile.c_str()); // We don't check for failure.
+		Ofp.init(os_utils::fopen(tmpfile.c_str(), "r+"),
+			tmpfile.c_str(), tmpfile.c_str()); // We don't check for failure.
 		Filelist->Ifp().init(Ofp);
 		Input_file = true;
 		getColumn = -1;

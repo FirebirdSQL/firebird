@@ -254,13 +254,14 @@ void dump(CheckStatusWrapper* status, ISC_QUAD* blobId, IAttachment* att, ITrans
 	SCHAR buffer[256];
 	const SSHORT short_length = sizeof(buffer);
 
-	for (;;)
+	for (bool cond = true; cond; )
 	{
 		unsigned l = 0;
 		switch (blob->getSegment(status, short_length, buffer, &l))
 		{
 		case Firebird::IStatus::RESULT_ERROR:
 		case Firebird::IStatus::RESULT_NO_DATA:
+			cond = false;
 			break;
 		}
 

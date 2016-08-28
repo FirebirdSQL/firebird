@@ -32,7 +32,7 @@ CHARSET_ENTRY(CS_unicode_fss)
 {
 	csptr->charset_version = CHARSET_VERSION_1;
 	csptr->charset_name = "UNICODE_FSS";
-	csptr->charset_flags |= CHARSET_LEGACY_SEMANTICS | CHARSET_ASCII_BASED;
+	csptr->charset_flags |= CHARSET_ASCII_BASED;
 	csptr->charset_min_bytes_per_char = 1;
 	csptr->charset_max_bytes_per_char = 3;
 	csptr->charset_space_length = 1;

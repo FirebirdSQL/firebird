@@ -60,6 +60,11 @@ bool	PIO_status(Jrd::thread_db*, struct Jrd::phys_io_blk*, Jrd::FbStatusVector*)
 #ifdef SUPPORT_RAW_DEVICES
 bool	PIO_on_raw_device(const Firebird::PathName&);
 int		PIO_unlink(const Firebird::PathName&);
+#else
+inline bool PIO_on_raw_device(const Firebird::PathName&)
+{
+	return false;
+}
 #endif
 bool	PIO_write(Jrd::thread_db*, Jrd::jrd_file*, Jrd::BufferDesc*, Ods::pag*, Jrd::FbStatusVector*);
 

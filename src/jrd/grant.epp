@@ -504,6 +504,21 @@ static void get_object_info(thread_db* tdbb,
 		}
 		END_FOR
 	}
+	else if (obj_type == obj_sql_role)
+	{
+		AutoCacheRequest request(tdbb, irq_grant19, IRQ_REQUESTS);
+
+		FOR(REQUEST_HANDLE request)
+			ROL IN RDB$ROLES WITH
+				ROL.RDB$ROLE_NAME EQ object_name
+		{
+			s_class = ROL.RDB$SECURITY_CLASS;
+			default_class = "";
+			owner = ROL.RDB$OWNER_NAME;
+			view = false;
+		}
+		END_FOR
+	}
 	else
 	{
 		s_class = get_object_name(obj_type);
@@ -546,7 +561,10 @@ static void get_user_privs(thread_db*					tdbb,
 			PRV.RDB$OBJECT_TYPE EQ obj_type AND
 			(PRV.RDB$USER NE "PUBLIC" OR PRV.RDB$USER_TYPE NE obj_user) AND
 			(PRV.RDB$USER NE owner.c_str() OR PRV.RDB$USER_TYPE NE obj_user) AND
-			PRV.RDB$FIELD_NAME MISSING
+			((PRV.RDB$OBJECT_TYPE NE obj_sql_role AND
+			  PRV.RDB$FIELD_NAME MISSING) OR
+			 (PRV.RDB$OBJECT_TYPE EQ obj_sql_role AND
+			  PRV.RDB$GRANT_OPTION EQ WITH_ADMIN_OPTION))
 			SORTED BY PRV.RDB$USER, PRV.RDB$USER_TYPE
 	{
 		fb_utils::exact_name_limit(PRV.RDB$USER, sizeof(PRV.RDB$USER));
@@ -567,7 +585,7 @@ static void get_user_privs(thread_db*					tdbb,
 			}
 			user = PRV.RDB$USER;
 		}
-		priv |= trans_sql_priv(PRV.RDB$PRIVILEGE);
+		priv |= trans_sql_priv(obj_type == obj_sql_role ? "O" : PRV.RDB$PRIVILEGE);
 	}
 	END_FOR
 
@@ -591,6 +609,8 @@ static void grant_user(Acl& acl,
  *	Grant privileges to a particular user.
  *
  **************************************/
+	Acl::size_type back = acl.getCount();
+
 	CHECK_AND_MOVE(acl, ACL_id_list);
 	switch (user_type)
 	{
@@ -642,7 +662,8 @@ static void grant_user(Acl& acl,
 		acl.add(reinterpret_cast<const UCHAR*>(user.c_str()), length);
 	}
 
-	SCL_move_priv(privs, acl);
+	if (!SCL_move_priv(privs, acl))
+		acl.shrink(back);
 }
 
 

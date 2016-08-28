@@ -86,6 +86,16 @@ namespace Jrd {
 			header = static_cast<Ods::header_page*>(buf);
 		}
 
+		void setHeader(Ods::header_page* newHdr)
+		{
+			header = newHdr;
+		}
+
+		Ods::header_page* getHeader()
+		{
+			return header;
+		}
+
 	public:
 		const Ods::header_page* operator->() const
 		{
@@ -115,7 +125,8 @@ namespace Jrd {
 		CchHdr(Jrd::thread_db* p_tdbb, USHORT lockType)
 			: window(Jrd::HEADER_PAGE_NUMBER),
 			  tdbb(p_tdbb),
-			  wrtFlag(false)
+			  wrk(NULL),
+			  buffer(*tdbb->getDefaultPool())
 		{
 			void* h = CCH_FETCH(tdbb, &window, lockType, pag_header);
 			if (!h)
@@ -127,12 +138,26 @@ namespace Jrd {
 
 		Ods::header_page* write()
 		{
-			if (!wrtFlag)
+			if (!wrk)
+			{
+				Ods::header_page* hdr = getHeader();
+				wrk = reinterpret_cast<Ods::header_page*>(buffer.getBuffer(hdr->hdr_page_size));
+				memcpy(wrk, hdr, hdr->hdr_page_size);
+
+				// swap headers
+				setHeader(wrk);
+				wrk = hdr;
+			}
+			return getHeader();
+		}
+
+		void flush()
+		{
+			if (wrk)
 			{
 				CCH_MARK_MUST_WRITE(tdbb, &window);
-				wrtFlag = true;
+				memcpy(wrk, getHeader(), wrk->hdr_page_size);
 			}
-			return const_cast<Ods::header_page*>(operator->());
 		}
 
 		void setClumplets(const ClumpletWriter& writer)
@@ -160,7 +185,8 @@ namespace Jrd {
 	private:
 		Jrd::WIN window;
 		Jrd::thread_db* tdbb;
-		bool wrtFlag;
+		Ods::header_page* wrk;
+		Array<UCHAR> buffer;
 	};
 
 	class PhysHdr : public Header
@@ -531,6 +557,7 @@ namespace Jrd {
 			process = true;
 
 			digitalySignDatabase(hdr);
+			hdr.flush();
 		}
 		catch (const Exception&)
 		{
@@ -872,6 +899,7 @@ namespace Jrd {
 		}
 
 		digitalySignDatabase(hdr);
+		hdr.flush();
 	}
 
 	bool CryptoManager::read(thread_db* tdbb, FbStatusVector* sv, Ods::pag* page, IOCallback* io)
@@ -1192,7 +1220,7 @@ namespace Jrd {
 
 	void CryptoManager::calcDigitalSignature(string& signature, const Header& hdr)
 	{
-	   /*
+		/*
 		We use the following items to calculate digital signature (hash of encrypted string)
 		for database:
 			hdr_flags & (hdr_crypt_process | hdr_encrypted)

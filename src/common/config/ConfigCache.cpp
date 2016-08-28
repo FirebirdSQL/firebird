@@ -143,6 +143,7 @@ bool ConfigCache::File::add(const PathName& fName)
 		next = FB_NEW_POOL(getPool()) ConfigCache::File(getPool(), fName);
 		next->checkLoadConfig(true); // To set current time and avoid unnecessary invalidation
 	}
+
 	return true;
 }
 

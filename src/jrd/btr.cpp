@@ -5140,7 +5140,7 @@ static void generate_jump_nodes(thread_db* tdbb, btree_page* page,
 			// more difficult then needed.
 			jumpNode.offset = node.nodePointer - (UCHAR*) page;
 			jumpNode.prefix = IndexNode::computePrefix(jumpData, jumpLength,
-														   currentData, node.prefix);
+													   currentData, node.prefix);
 			jumpNode.length = node.prefix - jumpNode.prefix;
 
 			// make sure split page has enough space for new jump node
@@ -5177,10 +5177,7 @@ static void generate_jump_nodes(thread_db* tdbb, btree_page* page,
 			}
 
 			// Set new position for generating jumpnode
-			if (newAreaPosition < halfpoint && newAreaPosition + jumpAreaSize >= halfpoint)
-				newAreaPosition = halfpoint;
-			else
-				newAreaPosition += jumpAreaSize;
+			newAreaPosition += jumpAreaSize;
 
 			*jumpersSize += jumpNode.getJumpNodeSize();
 

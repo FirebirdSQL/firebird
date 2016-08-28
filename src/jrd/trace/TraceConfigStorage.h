@@ -116,6 +116,7 @@ private:
 		tagConfig,			// configuration
 		tagStartTS,			// date+time when started
 		tagLogFile,			// log file name, if any
+		tagRole,			// SQL role name, if any
 		tagEnd
 	};
 

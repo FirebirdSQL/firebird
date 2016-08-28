@@ -112,13 +112,13 @@ public:
 	{
 		if (lock.value() < 0)
 			return false;
-		if (++lock > 0)
+		if (lock.exchangeAdd(1) >= 0)
 		{
 			reason(aReason);
 			return true;
 		}
 		// We stepped on writer's toes. Fix our mistake
-		if (--lock == 0)
+		if (lock.exchangeAdd(-1) == 1)
 			unblockWaiting();
 		return false;
 	}

@@ -212,6 +212,7 @@ namespace
 				BoolExprNode* const node = tail->opt_conjunct_node;
 
 				if (!(tail->opt_conjunct_flags & opt_conjunct_used) &&
+					!(node->nodFlags & ExprNode::FLAG_RESIDUAL) &&
 					node->computable(csb, INVALID_STREAM, false))
 				{
 					compose(csb->csb_pool, &boolean, node);
@@ -247,8 +248,9 @@ namespace
 
 			if (riverCount == 1)
 			{
-				River* const sub_river = rivers.front();
+				River* const sub_river = rivers.pop();
 				m_rsb = sub_river->getRecordSource();
+				sub_river->activate(csb);
 			}
 			else
 			{
@@ -256,52 +258,30 @@ namespace
 
 				// Reorder input rivers according to their possible inter-dependencies
 
-				while (rsbs.getCount() < riverCount)
+				while (rivers.hasData())
 				{
-					bool added = false;
-
 					for (River** iter = rivers.begin(); iter < rivers.end(); iter++)
 					{
 						River* const sub_river = *iter;
 						RecordSource* const sub_rsb = sub_river->getRecordSource();
 
-						if (!rsbs.exist(sub_rsb) && sub_river->isComputable(csb))
+						fb_assert(!rsbs.exist(sub_rsb));
+
+						sub_river->activate(csb);
+
+						if (sub_river->isComputable(csb))
 						{
-							added = true;
 							rsbs.add(sub_rsb);
-							sub_river->activate(csb);
+							rivers.remove(iter);
+							break;
 						}
-					}
 
-					if (!added)
-						break;
-				}
-
-				if (rsbs.getCount() < riverCount)
-				{
-					// Ideally, we should never get here. Now it's possible only if some booleans
-					// were faked to be non-computable (FLAG_DEOPTIMIZE and FLAG_RESIDUAL).
-
-					for (River** iter = rivers.begin(); iter < rivers.end(); iter++)
-					{
-						River* const sub_river = *iter;
-						RecordSource* const sub_rsb = sub_river->getRecordSource();
-
-						const FB_SIZE_T pos = iter - rivers.begin();
-
-						if (!rsbs.exist(sub_rsb))
-							rsbs.insert(pos, sub_rsb);
+						sub_river->deactivate(csb);
 					}
 				}
 
-				fb_assert(rsbs.getCount() == riverCount);
-
-				m_rsb = FB_NEW_POOL(csb->csb_pool) NestedLoopJoin(csb, riverCount, rsbs.begin());
+				m_rsb = FB_NEW_POOL(csb->csb_pool) NestedLoopJoin(csb, rsbs.getCount(), rsbs.begin());
 			}
-
-			// Clear the input rivers list
-
-			rivers.clear();
 		}
 	};
 } // namespace
@@ -753,9 +733,7 @@ RecordSource* OPT_compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 				// Generate one river which holds a cross join rsb between
 				// all currently available rivers
 
-				River* const river = FB_NEW_POOL(*pool) CrossJoin(csb, rivers);
-				river->activate(csb);
-				rivers.add(river);
+				rivers.add(FB_NEW_POOL(*pool) CrossJoin(csb, rivers));
 			}
 			else
 			{
@@ -2355,6 +2333,7 @@ static RecordSource* gen_retrieval(thread_db*     tdbb,
 			BoolExprNode* node = tail->opt_conjunct_node;
 
 			if (!(tail->opt_conjunct_flags & opt_conjunct_used) &&
+				!(node->nodFlags & ExprNode::FLAG_RESIDUAL) &&
 				node->computable(csb, INVALID_STREAM, false))
 			{
 				compose(*tdbb->getDefaultPool(), return_boolean, node);
@@ -2379,6 +2358,7 @@ static RecordSource* gen_retrieval(thread_db*     tdbb,
 		BoolExprNode* const node = tail->opt_conjunct_node;
 
 		if (!(tail->opt_conjunct_flags & opt_conjunct_used) &&
+			!(node->nodFlags & ExprNode::FLAG_RESIDUAL) &&
 			node->computable(csb, INVALID_STREAM, false))
 		{
 			// If inversion is available, utilize all conjuncts that refer to
@@ -3030,6 +3010,7 @@ static bool gen_equi_join(thread_db* tdbb, OptimizerBlk* opt, RiverList& org_riv
 		BoolExprNode* const node = tail->opt_conjunct_node;
 
 		if (!(tail->opt_conjunct_flags & opt_conjunct_used) &&
+			!(node->nodFlags & ExprNode::FLAG_RESIDUAL) &&
 			node->computable(csb, INVALID_STREAM, false))
 		{
 			compose(*tdbb->getDefaultPool(), &boolean, node);

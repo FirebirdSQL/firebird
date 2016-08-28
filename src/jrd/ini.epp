@@ -1215,6 +1215,7 @@ static void store_admin_grant(thread_db* tdbb, const char* user, USHORT user_typ
 		STORE(REQUEST_HANDLE handle) PRIV IN RDB$USER_PRIVILEGES
 			PAD(user, PRIV.RDB$USER);
 			PAD(object, PRIV.RDB$RELATION_NAME);
+
 			if (dflt)
 			{
 				PRIV.RDB$FIELD_NAME[0] = 'D';
@@ -1223,6 +1224,7 @@ static void store_admin_grant(thread_db* tdbb, const char* user, USHORT user_typ
 			}
 			else
 				PRIV.RDB$FIELD_NAME.NULL = TRUE;
+
 			PRIV.RDB$PRIVILEGE[0] = *prvl++;
 			PRIV.RDB$PRIVILEGE[1] = 0;
 			PRIV.RDB$GRANT_OPTION = option;

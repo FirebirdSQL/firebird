@@ -40,6 +40,7 @@ const int IN_SW_TRACE_SERVICE_NAME	= 11;
 const int IN_SW_TRACE_FETCH_PWD		= 12;
 const int IN_SW_TRACE_TRUSTED_AUTH	= 13;
 const int IN_SW_TRACE_VERSION		= 14;
+const int IN_SW_TRACE_ROLE			= 15;
 
 
 // list of possible actions (services) for use with trace services
@@ -72,5 +73,6 @@ static const struct Switches::in_sw_tab_t trace_auth_in_sw_table [] =
 	{IN_SW_TRACE_SERVICE_NAME,	0,	"SERVICE",				0, 0, 0, false,	false,	0,	2, NULL},
 	{IN_SW_TRACE_TRUSTED_AUTH,	0,	"TRUSTED",				0, 0, 0, false,	false,	0,	1, NULL},
 	{IN_SW_TRACE_USERNAME,		0,	USERNAME_SWITCH,		0, 0, 0, false,	false,	0,	1, NULL},
+	{IN_SW_TRACE_ROLE,			0,	"ROLE",					0, 0, 0, false, false,  0,  3, NULL},
 	{0,							0,	NULL,					0, 0, 0, false,	false, 0,	0, NULL}	// End of List
 };

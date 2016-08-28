@@ -146,7 +146,7 @@ void PathUtils::concatPath(Firebird::PathName& result,
 
 	// First path used to be from trusted sources like getRootDirectory, etc.
 	// Second path is mostly user-entered and must be carefully parsed to avoid hacking
-	if (second.length() == 0)
+	if (second.isEmpty())
 	{
 		return;
 	}
@@ -158,22 +158,27 @@ void PathUtils::concatPath(Firebird::PathName& result,
 	for (Firebird::PathName::size_type pos = 0; cur_pos < second.length(); cur_pos = pos + 1)
 	{
 		pos = second.find(dir_sep, cur_pos);
+
 		if (pos == Firebird::PathName::npos) // simple name, simple handling
-		{
 			pos = second.length();
-		}
+
 		if (pos == cur_pos) // Empty piece, ignore
+			continue;
+
+		if (pos == cur_pos + curr_dir_link_len &&
+			memcmp(second.c_str() + cur_pos, curr_dir_link, curr_dir_link_len) == 0) // Current dir, ignore
 		{
 			continue;
 		}
-		if (pos == cur_pos + curr_dir_link_len && memcmp(second.c_str() + cur_pos, curr_dir_link, curr_dir_link_len) == 0) // Current dir, ignore
+
+		if (pos == cur_pos + up_dir_link_len &&
+			memcmp(second.c_str() + cur_pos, up_dir_link, up_dir_link_len) == 0) // One dir up
 		{
-			continue;
-		}
-		if (pos == cur_pos + up_dir_link_len && memcmp(second.c_str() + cur_pos, up_dir_link, up_dir_link_len) == 0) // One dir up
-		{
-			if (result.length() < 2) // We have nothing to cut off, ignore this piece (may be throw an error?..)
+			if (result.length() < 2)
+			{
+				// We have nothing to cut off, ignore this piece (may be throw an error?..)
 				continue;
+			}
 
 			const Firebird::PathName::size_type up_dir = result.rfind(dir_sep, result.length() - 2);
 			if (up_dir == Firebird::PathName::npos)
@@ -182,6 +187,7 @@ void PathUtils::concatPath(Firebird::PathName& result,
 			result.erase(up_dir + 1);
 			continue;
 		}
+
 		result.append(second, cur_pos, pos - cur_pos + 1); // append the piece including separator
 	}
 }

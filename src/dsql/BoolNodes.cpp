@@ -91,15 +91,6 @@ namespace
 //--------------------
 
 
-bool BoolExprNode::computable(CompilerScratch* csb, StreamType stream,
-	bool allowOnlyCurrentStream, ValueExprNode* /*value*/)
-{
-	if (nodFlags & (FLAG_DEOPTIMIZE | FLAG_RESIDUAL))
-		return false;
-
-	return ExprNode::computable(csb, stream, allowOnlyCurrentStream);
-}
-
 BoolExprNode* BoolExprNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	pass2Boolean1(tdbb, csb);

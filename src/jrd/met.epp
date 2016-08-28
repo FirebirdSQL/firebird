@@ -1673,8 +1673,12 @@ DmlNode* MET_get_dependencies(thread_db* tdbb,
 
 	fb_assert(domain_validation.isEmpty() || object_name == domain_validation); // for now
 
-	CompilerScratch* csb = CompilerScratch::newCsb(*tdbb->getDefaultPool(), 5, domain_validation);
+	MemoryPool& pool = *tdbb->getDefaultPool();
+	AutoPtr<CompilerScratch> auto_csb(FB_NEW_POOL(pool) CompilerScratch(pool));
+	CompilerScratch* csb = auto_csb;
+
 	csb->csb_g_flags |= (csb_get_dependencies | flags);
+	csb->csb_domain_validation = domain_validation;
 
 	DmlNode* node;
 
@@ -1716,9 +1720,7 @@ DmlNode* MET_get_dependencies(thread_db* tdbb,
 	}
 
 	if (csb_ptr)
-		*csb_ptr = csb;
-	else
-		delete csb;
+		*csb_ptr = auto_csb.release();
 
 	return node;
 }
@@ -3435,7 +3437,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 
 				try
 				{
-					AutoPtr<CompilerScratch> csb(CompilerScratch::newCsb(*csb_pool, 5));
+					AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*csb_pool) CompilerScratch(*csb_pool));
 
 					if (external)
 					{
@@ -4583,7 +4585,9 @@ static ValueExprNode* parse_field_default_blr(thread_db* tdbb, bid* blob_id)
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
 
-	CompilerScratch* csb = CompilerScratch::newCsb(*tdbb->getDefaultPool(), 5);
+	MemoryPool& pool = *tdbb->getDefaultPool();
+	AutoPtr<CompilerScratch> auto_csb(FB_NEW_POOL(pool) CompilerScratch(pool));
+	CompilerScratch* csb = auto_csb;
 
 	blb* blob = blb::open(tdbb, attachment->getSysTransaction(), blob_id);
 	ULONG length = blob->blb_length + 10;
@@ -4591,11 +4595,7 @@ static ValueExprNode* parse_field_default_blr(thread_db* tdbb, bid* blob_id)
 
 	length = blob->BLB_get_data(tdbb, temp.getBuffer(length), length);
 
-	DmlNode* node = PAR_blr(tdbb, NULL, temp.begin(), length, NULL, &csb, NULL, false, 0);
-
-	csb->csb_blr_reader = BlrReader();
-	delete csb;
-
+	DmlNode* const node = PAR_blr(tdbb, NULL, temp.begin(), length, NULL, &csb, NULL, false, 0);
 	return static_cast<ValueExprNode*>(node);
 }
 
@@ -4606,7 +4606,11 @@ static BoolExprNode* parse_field_validation_blr(thread_db* tdbb, bid* blob_id, c
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
 
-	CompilerScratch* csb = CompilerScratch::newCsb(*tdbb->getDefaultPool(), 5, name);
+	MemoryPool& pool = *tdbb->getDefaultPool();
+	AutoPtr<CompilerScratch> auto_csb(FB_NEW_POOL(pool) CompilerScratch(pool));
+	CompilerScratch* csb = auto_csb;
+
+	csb->csb_domain_validation = name;
 
 	blb* blob = blb::open(tdbb, attachment->getSysTransaction(), blob_id);
 	ULONG length = blob->blb_length + 10;
@@ -4614,13 +4618,7 @@ static BoolExprNode* parse_field_validation_blr(thread_db* tdbb, bid* blob_id, c
 
 	length = blob->BLB_get_data(tdbb, temp.getBuffer(length), length);
 
-	BoolExprNode* expr = PAR_validation_blr(tdbb, NULL,
-		temp.begin(), length, NULL, &csb, 0);
-
-	csb->csb_blr_reader = BlrReader();
-	delete csb;
-
-	return expr;
+	return PAR_validation_blr(tdbb, NULL, temp.begin(), length, NULL, &csb, 0);
 }
 
 

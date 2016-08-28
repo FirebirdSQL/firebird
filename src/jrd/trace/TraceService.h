@@ -48,8 +48,8 @@ namespace Firebird {
 class TraceSvcIntf
 {
 public:
-	virtual void setAttachInfo(const string& service_name, const string& user, const string& pwd,
-		const AuthReader::AuthBlock& authBlock, bool isAdmin) = 0;
+	virtual void setAttachInfo(const string& service_name, const string& user, const string& role,
+		const string& pwd, const AuthReader::AuthBlock& authBlock, bool isAdmin) = 0;
 
 	virtual void startSession(TraceSession& session, bool interactive) = 0;
 	virtual void stopSession(ULONG id) = 0;

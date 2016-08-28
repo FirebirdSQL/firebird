@@ -644,8 +644,11 @@ void makeBin(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 		}
 
 		if (!args[i]->isExact() || args[i]->dsc_scale != 0)
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_argmustbe_exact) << Arg::Str(function->name));
+		{
+			status_exception::raise(
+				Arg::Gds(isc_expression_eval_err) <<
+				Arg::Gds(isc_sysf_argmustbe_exact) << Arg::Str(function->name));
+		}
 
 		if (first)
 		{
@@ -3811,7 +3814,8 @@ dsc* evlRoleInUse(thread_db* tdbb, const SysFunction*, const NestValueArray& arg
 	string roleStr(MOV_make_string2(tdbb, value, ttype_none));
 	roleStr.upper();
 
-	impure->vlu_misc.vlu_uchar = attachment->att_user->roleInUse(tdbb, roleStr.c_str()) ? FB_TRUE : FB_FALSE;
+	impure->vlu_misc.vlu_uchar = attachment->att_user->roleInUse(tdbb, roleStr.c_str()) ?
+		FB_TRUE : FB_FALSE;
 
 	impure->vlu_desc.makeBoolean(&impure->vlu_misc.vlu_uchar);
 
@@ -3830,7 +3834,7 @@ dsc* evlSystemPrivilege(thread_db* tdbb, const SysFunction*, const NestValueArra
 		return NULL;
 
 	fb_assert(value->dsc_dtype == dtype_short);
-	USHORT p = *((USHORT *) value->dsc_address);
+	USHORT p = *((USHORT*) value->dsc_address);
 
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	impure->vlu_misc.vlu_uchar = attachment->att_user->locksmith(tdbb, p) ? FB_TRUE : FB_FALSE;

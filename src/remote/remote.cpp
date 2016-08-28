@@ -1491,7 +1491,7 @@ bool REMOTE_inflate(rem_port* port, PacketReceive* packet_receive, UCHAR* buffer
 #endif
 }
 
-bool REMOTE_deflate(XDR* xdrs, ProtoWrite* proto_write, PacketSend* packet_send, bool flash)
+bool REMOTE_deflate(XDR* xdrs, ProtoWrite* proto_write, PacketSend* packet_send, bool flush)
 {
 #ifdef WIRE_COMPRESS_SUPPORT
 	rem_port* port = (rem_port*) xdrs->x_public;
@@ -1508,7 +1508,7 @@ bool REMOTE_deflate(XDR* xdrs, ProtoWrite* proto_write, PacketSend* packet_send,
 		strm.next_out = (Bytef*) &port->port_compressed[REM_SEND_OFFSET(port->port_buff_size)];
 	}
 
-	bool expectMoreOut = flash;
+	bool expectMoreOut = flush;
 
 	while (strm.avail_in || expectMoreOut)
 	{
@@ -1519,7 +1519,7 @@ bool REMOTE_deflate(XDR* xdrs, ProtoWrite* proto_write, PacketSend* packet_send,
 		fprintf(stderr, "\n");
 #endif
 #endif
-		int ret = zlib().deflate(&strm, flash ? Z_SYNC_FLUSH : Z_NO_FLUSH);
+		int ret = zlib().deflate(&strm, flush ? Z_SYNC_FLUSH : Z_NO_FLUSH);
 		if (ret == Z_BUF_ERROR)
 			ret = 0;
 		if (ret != 0)
@@ -1540,8 +1540,11 @@ bool REMOTE_deflate(XDR* xdrs, ProtoWrite* proto_write, PacketSend* packet_send,
 #endif
 
 		expectMoreOut = !strm.avail_out;
-		if ((port->port_buff_size != strm.avail_out) && (flash || !strm.avail_out))
+		if ((port->port_buff_size != strm.avail_out) && (flush || !strm.avail_out))
 		{
+#if COMPRESS_DEBUG>1
+			fprintf(stderr, "Send packet %d bytes size\n", port->port_buff_size - strm.avail_out);
+#endif
 			if (!packet_send(port, (SCHAR*) &port->port_compressed[REM_SEND_OFFSET(port->port_buff_size)],
 				(SSHORT) (port->port_buff_size - strm.avail_out)))
 			{

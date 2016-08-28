@@ -1304,11 +1304,12 @@ int gbak(Firebird::UtilSvc* uSvc)
 			if (file->fil_fd != INVALID_HANDLE_VALUE)
 			{
 				close_platf(file->fil_fd);
-			}
-			if (exit_code != FINI_OK &&
-				(tdgbl->action->act_action == ACT_backup_split || tdgbl->action->act_action == ACT_backup))
-			{
-				unlink_platf(tdgbl->toSystem(file->fil_name).c_str());
+
+				if (exit_code != FINI_OK &&
+					(tdgbl->action->act_action == ACT_backup_split || tdgbl->action->act_action == ACT_backup))
+				{
+					unlink_platf(tdgbl->toSystem(file->fil_name).c_str());
+				}
 			}
 		}
 	}

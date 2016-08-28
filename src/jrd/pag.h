@@ -85,6 +85,7 @@ public:
 		file = 0;
 		dbb = aDbb;
 		maxPageNumber = 0;
+		pipMaxKnown = 0;
 	}
 
 	~PageSpace();
@@ -135,9 +136,13 @@ public:
 	ULONG getSCNPageNum(ULONG sequence);
 	static ULONG getSCNPageNum(const Database* dbb, ULONG sequence);
 
+	// is pagespace on raw device
+	bool onRawDevice() const;
+
 private:
 	ULONG	maxPageNumber;
 	Database* dbb;
+	ULONG	pipMaxKnown;
 };
 
 class PageManager : public pool_alloc<type_PageManager>

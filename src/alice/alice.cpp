@@ -575,7 +575,8 @@ int alice(Firebird::UtilSvc* uSvc)
 	}
 #endif
 
-	if ((exit_code != FINI_OK) && uSvc->isService())
+	if ((exit_code != FINI_OK) && uSvc->isService() &&
+		(tdgbl->status[0] == 1) && (tdgbl->status[1] != 0))
 	{
 		uSvc->initStatus();
 		uSvc->setServiceStatus(tdgbl->status);

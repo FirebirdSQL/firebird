@@ -2767,7 +2767,7 @@ void write_exceptions()
 			BURP_verbose (198, temp);
 			// msg 198 writing exception %s
 			PUT_MESSAGE(att_exception_msg, att_exception_msg2, X.RDB$MESSAGE);
-			put_source_blob (att_exception_description2, att_procedure_description, X.RDB$DESCRIPTION);
+			put_source_blob (att_exception_description2, att_exception_description, X.RDB$DESCRIPTION);
 
 			if (!X.RDB$SECURITY_CLASS.NULL)
 				PUT_TEXT(att_exception_security_class, X.RDB$SECURITY_CLASS);
@@ -2791,7 +2791,7 @@ void write_exceptions()
 			BURP_verbose (198, temp);
 			// msg 198 writing exception %s
 			PUT_MESSAGE(att_exception_msg, att_exception_msg2, X.RDB$MESSAGE);
-			put_source_blob (att_exception_description2, att_procedure_description, X.RDB$DESCRIPTION);
+			put_source_blob (att_exception_description2, att_exception_description, X.RDB$DESCRIPTION);
 			put(tdgbl, att_end);
 		END_FOR;
 		ON_ERROR
@@ -4379,7 +4379,8 @@ void write_user_privileges()
 		// msg 152 writing privilege for user %s
 		PUT_TEXT (att_priv_grantor, X.RDB$GRANTOR);
 		PUT_TEXT (att_priv_privilege, X.RDB$PRIVILEGE);
-		put_int32 (att_priv_grant_option, X.RDB$GRANT_OPTION);
+		if (!X.RDB$GRANT_OPTION.NULL)
+			put_int32 (att_priv_grant_option, X.RDB$GRANT_OPTION);
 		PUT_TEXT (att_priv_object_name, X.RDB$RELATION_NAME);
 		if (!X.RDB$FIELD_NAME.NULL)
 		   PUT_TEXT (att_priv_field_name, X.RDB$FIELD_NAME);

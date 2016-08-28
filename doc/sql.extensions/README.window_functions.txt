@@ -144,6 +144,9 @@ Syntax:
     <ranking window function> ::=
         DENSE_RANK() |
         RANK() |
+        PERCENT_RANK() |
+        CUME_DIST() |
+        NTILE(<expr>) |
         ROW_NUMBER()
 
 The rank functions compute the ordinal rank of a row within the window partition. In this category
@@ -158,6 +161,9 @@ select
     salary,
     dense_rank() over (order by salary),
     rank() over (order by salary),
+    percent_rank() over (order by salary),
+    cume_dist() over (order by salary),
+    ntile(3) over (order by salary),
     row_number() over (order by salary),
     sum(1) over (order by salary)
   from employee
@@ -165,18 +171,22 @@ select
 
 And the result set:
 
-id  salary  dense_rank  rank  row_number  sum
---  ------  ----------  ----  ----------  ---
-3     8.00           1     1           1    1
-4     9.00           2     2           2    2
-1    10.00           3     3           3    4
-5    10.00           3     3           4    4
-2    12.00           4     5           5    5
+id  salary  dense_rank  rank       percent_rank            cume_dist  ntile  row_number  sum
+--  ------  ----------  ---- ------------------ -------------------- ------  ----------  ---
+3     8.00           1     1  0.000000000000000   0.2000000000000000      1           1    1
+4     9.00           2     2 0.2500000000000000   0.4000000000000000      1           2    2
+1    10.00           3     3 0.5000000000000000   0.8000000000000000      2           3    4
+5    10.00           3     3 0.5000000000000000   0.8000000000000000      2           4    4
+2    12.00           4     5  1.000000000000000    1.000000000000000      3           5    5
 
 The difference between DENSE_RANK and RANK is that there is a gap related to duplicate rows (in
 relation to the window ordering) only in RANK. DENSE_RANK continues assigning sequential numbers
 after the duplicate salary. On the other hand, ROW_NUMBER always assigns sequential numbers, even
 when there is duplicate values.
+PERCENT_RANK is a ratio of RANK to group count.
+CUME_DIST is cumulative distribution of a value in a group.
+NTILE distributes the rows into a specified number of groups. NTILE argument is restricted to
+integral positive literal, variable (:var) and DSQL parameter (question mark).
 
 4.2 Navigational functions
 --------------------------

@@ -50,10 +50,12 @@
 //const int BLOB_max_predefined_subtype = 9;
 //
 
-// Column Limits
+// Column Limits (in bytes)
 
-const ULONG MAX_COLUMN_SIZE = 32767;	// Bytes
-const ULONG MAX_STR_SIZE = 65535;		// Bytes
+const ULONG MAX_COLUMN_SIZE = 32767;
+const ULONG MAX_VARY_COLUMN_SIZE = MAX_COLUMN_SIZE - sizeof(USHORT);
+
+const ULONG MAX_STR_SIZE = 65535;
 
 // Metadata constants
 

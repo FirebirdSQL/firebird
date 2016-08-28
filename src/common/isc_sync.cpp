@@ -1890,7 +1890,9 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	}
 
 	// map file to memory
-	void* const address = os_utils::mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
+	void* const address = os_utils::mmap(0, length,
+		PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
+
 	if ((U_IPTR) address == (U_IPTR) -1)
 	{
 		system_call_failed::raise("mmap", errno);
@@ -2467,7 +2469,8 @@ UCHAR* SharedMemoryBase::mapObject(CheckStatusWrapper* statusVector, ULONG objec
 	const ULONG end = FB_ALIGN(object_offset + object_length, page_size);
 	const ULONG length = end - start;
 
-	UCHAR* address = (UCHAR*) os_utils::mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), start);
+	UCHAR* address = (UCHAR*) os_utils::mmap(0, length,
+		PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), start);
 
 	if ((U_IPTR) address == (U_IPTR) -1)
 	{
@@ -3084,8 +3087,8 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector, ULONG new_len
 	if (flag)
 		FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), new_length));
 
-	MemoryHeader* const address = (MemoryHeader*)
-		os_utils::mmap(0, new_length, PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
+	MemoryHeader* const address = (MemoryHeader*) os_utils::mmap(0, new_length,
+		PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
 
 	if ((U_IPTR) address == (U_IPTR) -1)
 	{

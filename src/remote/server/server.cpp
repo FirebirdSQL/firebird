@@ -981,7 +981,7 @@ static void		ping_connection(rem_port*, PACKET*);
 static bool		process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_port** result);
 static void		release_blob(Rbl*);
 static void		release_event(Rvnt*);
-static void		release_request(Rrq*);
+static void		release_request(Rrq*, bool rlsIface = false);
 static void		release_statement(Rsr**);
 static void		release_sql_request(Rsr*);
 static void		release_transaction(Rtr*);
@@ -1716,7 +1716,8 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 		if ((protocol->p_cnct_version == PROTOCOL_VERSION10 ||
 			 protocol->p_cnct_version == PROTOCOL_VERSION11 ||
 			 protocol->p_cnct_version == PROTOCOL_VERSION12 ||
-			 protocol->p_cnct_version == PROTOCOL_VERSION13) &&
+			 protocol->p_cnct_version == PROTOCOL_VERSION13 ||
+			 protocol->p_cnct_version == PROTOCOL_VERSION14) &&
 			 (protocol->p_cnct_architecture == arch_generic ||
 			  protocol->p_cnct_architecture == ARCHITECTURE) &&
 			protocol->p_cnct_weight >= weight)
@@ -2710,7 +2711,7 @@ void rem_port::disconnect(PACKET* sendL, PACKET* receiveL)
 		rdb->rdb_iface->cancelOperation(&status_vector, fb_cancel_disable);
 
 		while (rdb->rdb_requests)
-			release_request(rdb->rdb_requests);
+			release_request(rdb->rdb_requests, true);
 
 		while (rdb->rdb_sql_requests)
 			release_sql_request(rdb->rdb_sql_requests);
@@ -2827,7 +2828,7 @@ void rem_port::drop_database(P_RLSE* /*release*/, PACKET* sendL)
 		release_event(rdb->rdb_events);
 
 	while (rdb->rdb_requests)
-		release_request(rdb->rdb_requests);
+		release_request(rdb->rdb_requests, true);
 
 	while (rdb->rdb_sql_requests)
 		release_sql_request(rdb->rdb_sql_requests);
@@ -2909,7 +2910,7 @@ ISC_STATUS rem_port::end_database(P_RLSE* /*release*/, PACKET* sendL)
 	rdb->rdb_iface = NULL;
 
 	while (rdb->rdb_requests)
-		release_request(rdb->rdb_requests);
+		release_request(rdb->rdb_requests, true);
 
 	while (rdb->rdb_sql_requests)
 		release_sql_request(rdb->rdb_sql_requests);
@@ -4660,10 +4661,15 @@ ISC_STATUS rem_port::que_events(P_EVENT * stuff, PACKET* sendL)
 	event->rvnt_rdb = rdb;
 
 	rem_port* asyncPort = rdb->rdb_port->port_async;
-	RefMutexGuard portGuard(*asyncPort->port_sync, FB_FUNCTION);
+	if (!asyncPort || (asyncPort->port_flags & PORT_detached))
+		Arg::Gds(isc_net_event_connect_err).copyTo(&status_vector);
+	else
+	{
+		RefMutexGuard portGuard(*asyncPort->port_sync, FB_FUNCTION);
 
-	event->rvnt_iface = rdb->rdb_iface->queEvents(&status_vector, event->rvnt_callback,
-		stuff->p_event_items.cstr_length, stuff->p_event_items.cstr_address);
+		event->rvnt_iface = rdb->rdb_iface->queEvents(&status_vector, event->rvnt_callback,
+			stuff->p_event_items.cstr_length, stuff->p_event_items.cstr_address);
+	}
 
 	return this->send_response(sendL, 0, 0, &status_vector, false);
 }
@@ -4949,7 +4955,7 @@ static void release_event( Rvnt* event)
 }
 
 
-static void release_request( Rrq* request)
+static void release_request( Rrq* request, bool rlsIface)
 {
 /**************************************
  *
@@ -4961,6 +4967,12 @@ static void release_request( Rrq* request)
  *	Release a request block.
  *
  **************************************/
+	if (rlsIface && request->rrq_iface)
+	{
+		request->rrq_iface->release();
+		request->rrq_iface = NULL;
+	}
+
 	Rdb* rdb = request->rrq_rdb;
 	rdb->rdb_port->releaseObject(request->rrq_id);
 	REMOTE_release_request(request);
@@ -6000,6 +6012,7 @@ SSHORT rem_port::asyncReceive(PACKET* asyncPacket, const UCHAR* buffer, SSHORT d
 
 		port_async_receive->clearRecvQue();
 		port_async_receive->port_receive.x_handy = 0;
+		port_async_receive->port_protocol = port_protocol;
 		memcpy(port_async_receive->port_queue.add().getBuffer(dataSize), buffer, dataSize);
 
 		// It's required, that async packets follow simple rule:

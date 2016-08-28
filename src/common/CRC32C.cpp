@@ -53,12 +53,12 @@ unsigned int CRC32C(unsigned int length, const unsigned char* value)
 	if (length >= 2)
 	{
 		hash_value = _mm_crc32_u16(hash_value, *(unsigned short*) value);
+		value += 2;
 		length -= 2;
 	}
 
 	if (length)
 	{
-		value += 2;
 		hash_value = _mm_crc32_u8(hash_value, *value);
 	}
 

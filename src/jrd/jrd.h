@@ -350,7 +350,6 @@ private:
 	jrd_tra*	transaction;
 	jrd_req*	request;
 	RuntimeStatistics *reqStat, *traStat, *attStat, *dbbStat;
-	thread_db	*priorThread, *nextThread;
 
 public:
 	explicit thread_db(FbStatusVector* status)
@@ -360,8 +359,6 @@ public:
 		  attachment(NULL),
 		  transaction(NULL),
 		  request(NULL),
-		  priorThread(NULL),
-		  nextThread(NULL),
 		  tdbb_status_vector(status),
 		  tdbb_quantum(QUANTUM),
 		  tdbb_flags(0),
@@ -545,54 +542,6 @@ public:
 		}
 
 		return true;
-	}
-
-	void activate()
-	{
-		fb_assert(!priorThread && !nextThread);
-
-		if (database)
-		{
-			Firebird::SyncLockGuard sync(&database->dbb_threads_sync, Firebird::SYNC_EXCLUSIVE,
-										 "thread_db::activate");
-
-			if (database->dbb_active_threads)
-			{
-				fb_assert(!database->dbb_active_threads->priorThread);
-				database->dbb_active_threads->priorThread = this;
-				nextThread = database->dbb_active_threads;
-			}
-
-			database->dbb_active_threads = this;
-		}
-	}
-
-	void deactivate()
-	{
-		if (database)
-		{
-			Firebird::SyncLockGuard sync(&database->dbb_threads_sync, Firebird::SYNC_EXCLUSIVE,
-										 "thread_db::deactivate");
-
-			if (nextThread)
-			{
-				fb_assert(nextThread->priorThread == this);
-				nextThread->priorThread = priorThread;
-			}
-
-			if (priorThread)
-			{
-				fb_assert(priorThread->nextThread == this);
-				priorThread->nextThread = nextThread;
-			}
-			else
-			{
-				fb_assert(database->dbb_active_threads == this);
-				database->dbb_active_threads = nextThread;
-			}
-		}
-
-		priorThread = nextThread = NULL;
 	}
 
 	void resetStack()
@@ -829,23 +778,13 @@ namespace Jrd {
 	{
 	public:
 		explicit DatabaseContextHolder(thread_db* tdbb)
-			: Jrd::ContextPoolHolder(tdbb, tdbb->getDatabase()->dbb_permanent),
-			  savedTdbb(tdbb)
-		{
-			savedTdbb->activate();
-		}
-
-		~DatabaseContextHolder()
-		{
-			savedTdbb->deactivate();
-		}
+			: Jrd::ContextPoolHolder(tdbb, tdbb->getDatabase()->dbb_permanent)
+		{}
 
 	private:
 		// copying is prohibited
 		DatabaseContextHolder(const DatabaseContextHolder&);
 		DatabaseContextHolder& operator=(const DatabaseContextHolder&);
-
-		thread_db* const savedTdbb;
 	};
 
 	class BackgroundContextHolder : public ThreadContextHolder, public DatabaseContextHolder,

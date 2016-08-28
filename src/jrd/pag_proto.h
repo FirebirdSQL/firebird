@@ -67,16 +67,6 @@ void	PAG_set_db_SQL_dialect(Jrd::thread_db* tdbb, SSHORT);
 void	PAG_set_page_buffers(Jrd::thread_db* tdbb, ULONG);
 void	PAG_set_page_scn(Jrd::thread_db* tdbb, Jrd::win* window);
 void	PAG_sweep_interval(Jrd::thread_db* tdbb, SLONG);
-
-namespace Jrd {
-	class PageCountCallback
-	{
-	public:
-//		PageCountCallback() { }
-		virtual void newPage(Jrd::thread_db*, const SLONG, Ods::pag*) = 0;
-		virtual ~PageCountCallback() { }
-	};
-}
-ULONG	PAG_page_count(Jrd::thread_db*, Jrd::PageCountCallback*);
+ULONG	PAG_page_count(Jrd::thread_db*);
 
 #endif // JRD_PAG_PROTO_H

@@ -85,6 +85,8 @@ static bool fieldExists(thread_db* tdbb, jrd_tra* transaction, const MetaName& r
 	const MetaName& fieldName);
 static bool isItSqlRole(thread_db* tdbb, jrd_tra* transaction, const MetaName& inputName,
 	MetaName& outputName);
+static int getGrantorOption(thread_db* tdbb, jrd_tra* transaction, const MetaName& grantor,
+	int grantorType, const MetaName& roleName);
 static MetaName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
 	const MetaName& indexName);
 static const char* getRelationScopeName(const rel_t type);
@@ -10365,7 +10367,7 @@ void MappingNode::runInSecurityDb(SecDbContext* secDbContext)
 void MappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
 	if (!(tdbb->getAttachment() && tdbb->getAttachment()->locksmith(tdbb, CHANGE_MAPPING_RULES)))
-		(Arg::Gds(isc_miss_prvlg) << "CHANGE_MAPPING_RULES").raise();
+		(Arg::Gds(isc_adm_task_denied) << Arg::Gds(isc_miss_prvlg) << "CHANGE_MAPPING_RULES").raise();
 
 	if (global)
 	{
@@ -10577,6 +10579,9 @@ void DropRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 		ERASE ROL;
 
 		found = true;
+
+		if (!ROL.RDB$SECURITY_CLASS.NULL)
+			deleteSecurityClass(tdbb, transaction, ROL.RDB$SECURITY_CLASS);
 	}
 	END_FOR
 
@@ -11129,9 +11134,6 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 		}
 	}
 
-	MetaName grantorRevoker(grantor ?
-		*grantor : tdbb->getAttachment()->att_user->getUserName());
-
 	if (grantor && !tdbb->getAttachment()->locksmith(tdbb, USE_GRANTED_BY_CLAUSE))
 	{
 		const Firebird::MetaName& owner(tdbb->getDatabase()->dbb_owner);
@@ -11141,6 +11143,9 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 		else
 			(Arg::PrivateDyn(295) << DBA_USER_NAME << owner).raise();
 	}
+
+	MetaName currentUser(tdbb->getAttachment()->att_user->getUserName());
+	MetaName grantorRevoker(grantor ? *grantor : currentUser);
 
 	if (!isGrant && !privs)	// REVOKE ALL ON ALL
 	{
@@ -11345,7 +11350,14 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 					// columns. So for all fields in this table which have been granted the
 					// privilege, we erase the entries from RDB$USER_PRIVILEGES.
 
-					if (grantorRevoker == PRIV.RDB$GRANTOR)
+					MetaName owner;
+					if ((grantorRevoker == PRIV.RDB$GRANTOR) ||
+						((objType == obj_sql_role) && (PRIV.RDB$PRIVILEGE[0] == 'M') &&		// This is ROLE to USER grant
+						 (currentUser != user) &&						// And current user does not revoke his own grant
+						 ((isItSqlRole(tdbb, transaction, objName, owner) &&		// Pick up role owner name
+						   (tdbb->getAttachment()->locksmith(tdbb, GRANT_REVOKE_ON_ANY_OBJECT) ||	// God-like check
+						    (owner == currentUser))) ||					// Current user is role owner
+						  (getGrantorOption(tdbb, transaction, currentUser, obj_user, objName) == 2))))	// or has ADMIN option
 					{
 						curOptions = PRIV.RDB$GRANT_OPTION;
 						curField = PRIV.RDB$FIELD_NAME;

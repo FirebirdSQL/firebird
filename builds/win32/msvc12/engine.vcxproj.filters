@@ -459,6 +459,9 @@
     <ClCompile Include="..\..\..\src\jrd\extds\ValidatePassword.cpp">
       <Filter>JRD files\EXTDS</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\Savepoint.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\jrd\recsrc\RecordSource.h">

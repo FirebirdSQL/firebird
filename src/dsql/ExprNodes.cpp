@@ -7825,7 +7825,7 @@ bool ParameterNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 			dsqlParameter->par_desc.dsc_dtype = dtype_varying;
 			// The error msgs is inaccurate, but causing dsc_length
 			// to be outsise range can be worse.
-			if (dsqlParameter->par_desc.dsc_length > MAX_COLUMN_SIZE - sizeof(USHORT))
+			if (dsqlParameter->par_desc.dsc_length > MAX_VARY_COLUMN_SIZE)
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 							//Arg::Gds(isc_dsql_datatype_err)
@@ -7969,6 +7969,54 @@ dsc* ParameterNode::execute(thread_db* tdbb, jrd_req* request) const
 
 	if (!(*impure_flags & VLU_checked))
 	{
+		if (!(request->req_flags & req_null))
+		{
+			USHORT maxLen = desc->dsc_length;	// not adjusted length
+			desc = &impure->vlu_desc;
+
+			if (DTYPE_IS_TEXT(desc->dsc_dtype))
+			{
+				const UCHAR* p = desc->dsc_address;
+				USHORT len;
+
+				switch (desc->dsc_dtype)
+				{
+					case dtype_cstring:
+						len = strnlen((const char*) p, maxLen);
+						--maxLen;
+						break;
+
+					case dtype_text:
+						len = desc->dsc_length;
+						break;
+
+					case dtype_varying:
+						len = reinterpret_cast<const vary*>(p)->vary_length;
+						p += sizeof(USHORT);
+						maxLen -= sizeof(USHORT);
+						break;
+				}
+
+				CharSet* charSet = INTL_charset_lookup(tdbb, DSC_GET_CHARSET(desc));
+
+				EngineCallbacks::instance->validateData(charSet, len, p);
+				EngineCallbacks::instance->validateLength(charSet, len, p, maxLen);
+			}
+			else if (desc->isBlob())
+			{
+				if (desc->getCharSet() != CS_NONE && desc->getCharSet() != CS_BINARY)
+				{
+					const bid* const blobId = reinterpret_cast<bid*>(desc->dsc_address);
+
+					if (!blobId->isEmpty())
+					{
+						AutoBlb blob(tdbb, blb::open(tdbb, tdbb->getTransaction(), blobId));
+						blob.getBlb()->BLB_check_well_formed(tdbb, desc);
+					}
+				}
+			}
+		}
+
 		if (argInfo)
 		{
 			EVL_validate(tdbb, Item(Item::TYPE_PARAMETER, message->messageNumber, argNumber),

@@ -140,6 +140,9 @@ public:
 
 	void setInterface(JAttachment* ja)
 	{
+		if (jAtt)
+			jAtt->detachEngine();
+
 		jAtt = ja;
 	}
 
@@ -397,6 +400,7 @@ const ULONG ATT_no_db_triggers		= 0x00400L;	// Don't execute database triggers
 const ULONG ATT_manual_lock			= 0x00800L;	// Was locked manually
 const ULONG ATT_async_manual_lock	= 0x01000L;	// Async mutex was locked manually
 //const ULONG ATT_purge_started		= 0x02000L; // Purge already started - avoid 2 purges at once
+const ULONG ATT_overwrite_check		= 0x02000L;	// Attachment checks is it possible to overwrite DB
 const ULONG ATT_system				= 0x04000L; // Special system attachment
 const ULONG ATT_creator				= 0x08000L; // This attachment created the DB
 const ULONG ATT_monitor_done		= 0x10000L; // Monitoring data is refreshed
@@ -552,6 +556,9 @@ public:
 
 private:
 	void destroy(Attachment* attachment);
+
+	// "public" interface for internal (system) attachment
+	Firebird::RefPtr<JAttachment> m_JAttachment;
 };
 
 

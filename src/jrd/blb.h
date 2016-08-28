@@ -98,7 +98,7 @@ public:
 
 	void	BLB_cancel(thread_db* tdbb);
 	void	BLB_check_well_formed(thread_db*, const dsc* desc);
-	void	BLB_close(thread_db*);
+	bool	BLB_close(thread_db*);
 	static blb*	create(thread_db*, jrd_tra*, bid*);
 	static blb*	create2(thread_db*, jrd_tra*, bid*, USHORT, const UCHAR*, bool = false);
 	static Jrd::blb* get_array(Jrd::thread_db*, Jrd::jrd_tra*, const Jrd::bid*, Ods::InternalArrayDesc*);

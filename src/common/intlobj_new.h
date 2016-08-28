@@ -275,8 +275,9 @@ typedef void (*pfn_INTL_cs_destroy) (
 #define CHARSET_VERSION_1	1
 
 /* charset flag values */
-#define CHARSET_LEGACY_SEMANTICS 1 /* MBCS strings may overflow declared lengths
-                                      in characters (but not in bytes) */
+
+/* MBCS strings may overflow declared lengths in characters (but not in bytes) */
+/* Removed from FB 4 - #define CHARSET_LEGACY_SEMANTICS 1 */
 
 #define CHARSET_ASCII_BASED 2 /* Value of ASCII characters is equal to the
                                  ASCII character set */

@@ -42,7 +42,8 @@ ULONG mapUser(const bool throwNotFoundError,
 	Firebird::string& name, Firebird::string& trusted_role, Firebird::string* auth_method,
 	Firebird::AuthReader::AuthBlock* newAuthBlock, UserId::Privileges* system_privileges,
 	const Firebird::AuthReader::AuthBlock& authBlock, const char* alias, const char* db,
-	const char* securityDb, Firebird::ICryptKeyCallback* cryptCb, Firebird::IAttachment* att);
+	const char* securityDb, const Firebird::string& sql_role,
+	Firebird::ICryptKeyCallback* cryptCb, Firebird::IAttachment* att);
 // bits returned by mapUser
 const ULONG MAPUSER_ERROR_NOT_THROWN = 1;
 const ULONG MAPUSER_MAP_DOWN = 2;

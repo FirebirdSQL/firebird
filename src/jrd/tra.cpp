@@ -143,7 +143,13 @@ void TRA_attach_request(Jrd::jrd_tra* transaction, Jrd::jrd_req* request)
 void TRA_detach_request(Jrd::jrd_req* request)
 {
 	if (!request->req_transaction)
+	{
+		fb_assert(!request->req_savepoints);
 		return;
+	}
+
+	// Release stored looper savepoints
+	Savepoint::destroy(request->req_savepoints);
 
 	// Remove request from the doubly linked list
 	if (request->req_tra_next)
@@ -569,7 +575,7 @@ void TRA_get_inventory(thread_db* tdbb, UCHAR* bit_vector, TraNumber base, TraNu
 	{
 		ULONG l = base % trans_per_tip;
 		const UCHAR* q = tip->tip_transactions + TRANS_OFFSET(l);
-		l = TRANS_OFFSET(MIN((top + TRA_MASK - base), trans_per_tip - l));
+		l = TRANS_OFFSET(MIN((top + TRA_MASK + 1 - base), trans_per_tip - l));
 		memcpy(p, q, l);
 		p += l;
 	}
@@ -588,7 +594,7 @@ void TRA_get_inventory(thread_db* tdbb, UCHAR* bit_vector, TraNumber base, TraNu
 		TPC_update_cache(tdbb, tip, sequence - 1);
 		if (p)
 		{
-			const ULONG l = TRANS_OFFSET(MIN((top + TRA_MASK - base), trans_per_tip));
+			const ULONG l = TRANS_OFFSET(MIN((top + TRA_MASK + 1 - base), trans_per_tip));
 			memcpy(p, tip->tip_transactions, l);
 			p += l;
 		}
@@ -3090,7 +3096,7 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 	// of four, which puts the transaction on a byte boundary.
 
 	TraNumber base = oldest & ~TRA_MASK;
-	const ULONG top = (dbb->dbb_flags & DBB_read_only) ?
+	const TraNumber top = (dbb->dbb_flags & DBB_read_only) ?
 		dbb->dbb_next_transaction : number;
 
 	if (!(trans->tra_flags & TRA_read_committed) && (top >= oldest))
@@ -3291,7 +3297,7 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 	if (oldest >= top && dbb->dbb_flags & DBB_read_only)
 		oldest = number;
 
-	if (--oldest > (ULONG) dbb->dbb_oldest_transaction)
+	if (--oldest > dbb->dbb_oldest_transaction)
 		dbb->dbb_oldest_transaction = oldest;
 
 	if (oldest_active > dbb->dbb_oldest_active)

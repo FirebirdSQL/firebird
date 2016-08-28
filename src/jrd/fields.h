@@ -155,7 +155,7 @@
 	FIELD(fld_src_info		, nam_src_info		, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true)
 
 	FIELD(fld_ctx_var_name	, nam_ctx_var_name	, dtype_varying	, 80						, 0							, NULL		, true)
-	FIELD(fld_ctx_var_value	, nam_ctx_var_value	, dtype_varying	, 255						, 0							, NULL		, true)
+	FIELD(fld_ctx_var_value	, nam_ctx_var_value	, dtype_varying	, MAX_VARY_COLUMN_SIZE		, 0							, NULL		, true)
 
 	FIELD(fld_engine_name	, nam_engine_name	, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true)
 

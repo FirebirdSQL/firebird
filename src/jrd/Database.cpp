@@ -48,11 +48,8 @@ namespace Jrd
 {
 	bool Database::onRawDevice() const
 	{
-#ifdef SUPPORT_RAW_DEVICES
-		return PIO_on_raw_device(dbb_filename);
-#else
-		return false;
-#endif
+		const PageSpace* const pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		return pageSpace->onRawDevice();
 	}
 
 	string Database::getUniqueFileId() const
@@ -99,14 +96,6 @@ namespace Jrd
 		delete dbb_monitoring_data;
 		delete dbb_backup_manager;
 		delete dbb_crypto_manager;
-
-		while (dbb_active_threads)
-		{
-			thread_db* tdbb = dbb_active_threads;
-			tdbb->deactivate();
-			tdbb->setDatabase(NULL);
-		}
-
 		delete dbb_tip_cache;
 
 		fb_assert(!locked());

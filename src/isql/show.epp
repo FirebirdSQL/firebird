@@ -104,7 +104,7 @@ static void show_index(SCHAR*, SCHAR*, const SSHORT, const SSHORT, const SSHORT)
 static processing_state show_indices(const SCHAR* const*);
 static processing_state show_proc(const SCHAR*);
 static processing_state show_packages(const SCHAR* package_name);
-static processing_state show_role(const SCHAR*, bool, const char* msg = 0);
+static processing_state show_role(const SCHAR*, bool, const char* msg = NULL);
 static processing_state show_secclass(const char* object, const char* opt);
 static processing_state show_table(const SCHAR*, bool);
 static processing_state show_trigger(const SCHAR*, bool, bool);
@@ -702,8 +702,8 @@ static void set_grantee(int user_type, const char* SQL_identifier, char* user_st
 		break;
 	case obj_privilege:
 		FOR T IN RDB$TYPES
-			WITH T.RDB$FIELD_NAME EQ 'RDB$SYSTEM_PRIVILEGES'
-			 AND T.RDB$TYPE EQ atoi(SQL_identifier)
+			WITH T.RDB$FIELD_NAME EQ 'RDB$SYSTEM_PRIVILEGES' AND
+				 T.RDB$TYPE EQ atoi(SQL_identifier)
 		{
 			sprintf(user_string, "SYSTEM PRIVILEGE %s", fb_utils::exact_name(T.RDB$TYPE_NAME));
 		}
@@ -5309,8 +5309,8 @@ bool SHOW_system_privileges(const char* role, const char* prefix, bool lf)
 					if (b & (1 << bit))
 					{
 						FOR T IN RDB$TYPES
-							WITH T.RDB$FIELD_NAME EQ 'RDB$SYSTEM_PRIVILEGES'
-							 AND T.RDB$TYPE EQ (byte * 8 + bit)
+							WITH T.RDB$FIELD_NAME EQ 'RDB$SYSTEM_PRIVILEGES' AND
+								 T.RDB$TYPE EQ (byte * 8 + bit)
 						{
 							if (first)
 							{

@@ -1157,7 +1157,7 @@ void UserId::sclInit(thread_db* tdbb, bool create, const UserId& tempId)
 }
 
 
-void SCL_move_priv(SecurityClass::flags_t mask, Acl& acl)
+bool SCL_move_priv(SecurityClass::flags_t mask, Acl& acl)
 {
 /**************************************
  *
@@ -1174,16 +1174,19 @@ void SCL_move_priv(SecurityClass::flags_t mask, Acl& acl)
 	acl.push(ACL_end);
 	acl.push(ACL_priv_list);
 
+	bool rc = false;
 	for (const P_NAMES* priv = p_names; priv->p_names_priv; priv++)
 	{
 		if (mask & priv->p_names_priv)
 		{
 			fb_assert(priv->p_names_acl <= MAX_UCHAR);
 			acl.push(priv->p_names_acl);
+			rc = true;
 		}
 	}
 
 	acl.push(0);
+	return rc;
 }
 
 
@@ -1778,4 +1781,3 @@ USHORT SCL_convert_privilege(thread_db* tdbb, jrd_tra* transaction, const Firebi
 
 	return rc;
 }
-

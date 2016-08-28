@@ -9101,6 +9101,7 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 
 			X.RDB$FIELD_NAME.NULL = TRUE;
 			X.RDB$OBJECT_TYPE.NULL = TRUE;
+			X.RDB$GRANT_OPTION.NULL = TRUE;
 
 			if (flags & USER_PRIV_USER)
 				strcpy (X.RDB$USER, user);
@@ -9113,11 +9114,8 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 
 			if (flags & USER_PRIV_GRANT_OPTION)
 			{
+				X.RDB$GRANT_OPTION.NULL = FALSE;
 				X.RDB$GRANT_OPTION = grant_option;
-				if (grant_option == 0)
-					X.RDB$GRANT_OPTION.NULL = TRUE;
-				else
-					X.RDB$GRANT_OPTION.NULL = FALSE;
 			}
 
 			if (flags & USER_PRIV_OBJECT_NAME)

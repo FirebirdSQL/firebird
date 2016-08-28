@@ -280,7 +280,7 @@ int open(const char* pathname, int flags, mode_t mode)
 	fd = openFile(pathname, flags | O_CLOEXEC, mode);
 
 	if (fd < 0 && errno == EINVAL)	// probably O_CLOEXEC not accepted
-		fd = openFile(pathname, flags | O_CLOEXEC, mode);
+		fd = openFile(pathname, flags, mode);
 
 	setCloseOnExec(fd);
 	return fd;

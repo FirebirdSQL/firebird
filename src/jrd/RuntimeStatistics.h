@@ -191,6 +191,7 @@ public:
 	{
 		memset(values, 0, sizeof values);
 		rel_counts.clear();
+		rel_last_pos = (FB_SIZE_T) ~0;
 		allChgNumber = 0;
 		relChgNumber = 0;
 	}
@@ -212,7 +213,18 @@ public:
 		return rel_counts.find(relation_id, pos) ? rel_counts[pos].getCounter(index) : 0;
 	}
 
-	void bumpRelValue(const StatType index, SLONG relation_id, SINT64 delta = 1);
+	void bumpRelValue(const StatType index, SLONG relation_id, SINT64 delta = 1)
+	{
+		fb_assert(index >= 0);
+		++relChgNumber;
+
+		if (rel_last_pos != (FB_SIZE_T)~0 && rel_counts[rel_last_pos].getRelationId() == relation_id)
+			rel_counts[rel_last_pos].bumpCounter(index, delta);
+		else
+			findAndBumpRelValue(index, relation_id, delta);
+	}
+
+	void findAndBumpRelValue(const StatType index, SLONG relation_id, SINT64 delta);
 
 	// Calculate difference between counts stored in this object and current
 	// counts of given request. Counts stored in object are destroyed.
@@ -333,6 +345,7 @@ private:
 
 	SINT64 values[TOTAL_ITEMS];
 	RelCounters rel_counts;
+	FB_SIZE_T rel_last_pos;
 
 	// These two numbers are used in adjust() and assign() methods as "generation"
 	// values in order to avoid costly operations when two instances of RuntimeStatistics

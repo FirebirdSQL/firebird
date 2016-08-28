@@ -87,7 +87,6 @@ public:
 						getMetadataBuilder(&statusWrapper, 0);
 				check(&statusWrapper);
 				builder = bld;
-				builder->addRef();
 			}
 		}
 		catch (...)
@@ -200,7 +199,6 @@ public:
 			Firebird::IMessageMetadata* aMeta = builder->getMetadata(&statusWrapper);
 			check(&statusWrapper);
 			metadata = aMeta;
-			metadata->addRef();
 			builder->release();
 			builder = NULL;
 		}

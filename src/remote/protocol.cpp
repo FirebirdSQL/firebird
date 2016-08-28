@@ -285,6 +285,11 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 	if (!xdr_enum(xdrs, reinterpret_cast<xdr_op*>(&p->p_operation)))
 		return P_FALSE(xdrs, p);
 
+#if COMPRESS_DEBUG>1
+	fprintf(stderr, "operation=%d %c\n", p->p_operation,
+		xdrs->x_op == XDR_ENCODE ? 'E' : xdrs->x_op == XDR_DECODE ? 'D' : xdrs->x_op == XDR_FREE ? 'F' : 'U');
+#endif
+
 	switch (p->p_operation)
 	{
 	case op_reject:
@@ -796,6 +801,11 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 		{
 			P_CRYPT_CALLBACK* cc = &p->p_cc;
 			MAP(xdr_cstring, cc->p_cc_data);
+
+			rem_port* port = (rem_port*) xdrs->x_public;
+			if (port->port_protocol >= PROTOCOL_VERSION14)
+				MAP(xdr_short, reinterpret_cast<SSHORT&>(cc->p_cc_reply));
+
 			DEBUG_PRINTSIZE(xdrs, p->p_operation);
 
 			return P_TRUE(xdrs, p);

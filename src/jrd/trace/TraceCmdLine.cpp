@@ -278,7 +278,7 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 	// search for authentication parameters
 	const Switches authSwitches(trace_auth_in_sw_table, FB_NELEM(trace_auth_in_sw_table),
 								false, true);
-	string svc_name, user, pwd;
+	string svc_name, user, role, pwd;
 	bool adminRole = false;
 	argv = uSvc->argv.begin();
 	for (++argv; argv < end; argv++)
@@ -300,6 +300,17 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 			argv++;
 			if (argv < end && *argv)
 				user = *argv;
+			else
+				usage(uSvc, isc_trace_param_val_miss, sw->in_sw_name);
+			break;
+
+		case IN_SW_TRACE_ROLE:
+			if (!role.empty())
+				usage(uSvc, isc_trace_switch_once, sw->in_sw_name);
+
+			argv++;
+			if (argv < end && *argv)
+				role = *argv;
 			else
 				usage(uSvc, isc_trace_param_val_miss, sw->in_sw_name);
 			break;
@@ -411,7 +422,7 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 		adminRole = false;
 	}
 
-	traceSvc->setAttachInfo(svc_name, user, pwd, authBlock, adminRole);
+	traceSvc->setAttachInfo(svc_name, user, role, pwd, authBlock, adminRole);
 
 	switch (action_sw->in_sw)
 	{
