@@ -455,6 +455,6 @@ const int WITH_GRANT_OPTION = 1;
 const int WITH_ADMIN_OPTION = 2;
 
 // Max length of the string returned by ERROR_TEXT context variable
-const USHORT MAX_ERROR_MSG_LENGTH = 4096; // corresponds to 1024 UTF-8 characters
+const USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; // 1024 UTF-8 characters
 
 #endif // JRD_CONSTANTS_H
