@@ -1402,7 +1402,7 @@ SortNode* PAR_sort(thread_db* tdbb, CompilerScratch* csb, UCHAR expectedBlr,
 	if (count == 0 && nullForEmpty)
 		return NULL;
 
-	SortNode* sort = PAR_sort_internal(tdbb, csb, blrOp, count);
+	SortNode* sort = PAR_sort_internal(tdbb, csb, blrOp == blr_sort, count);
 
 	if (blrOp != blr_sort)
 		sort->unique = true;
@@ -1413,8 +1413,7 @@ SortNode* PAR_sort(thread_db* tdbb, CompilerScratch* csb, UCHAR expectedBlr,
 
 // Parse the internals of a sort clause. This is used for blr_sort, blr_project, blr_group_by
 // and blr_partition_by.
-SortNode* PAR_sort_internal(thread_db* tdbb, CompilerScratch* csb, UCHAR blrOp,
-	USHORT count)
+SortNode* PAR_sort_internal(thread_db* tdbb, CompilerScratch* csb, bool allClauses, USHORT count)
 {
 	SET_TDBB(tdbb);
 
@@ -1427,7 +1426,7 @@ SortNode* PAR_sort_internal(thread_db* tdbb, CompilerScratch* csb, UCHAR blrOp,
 
 	while (count-- > 0)
 	{
-		if (blrOp == blr_sort)
+		if (allClauses)
 		{
 			UCHAR code = csb->csb_blr_reader.getByte();
 

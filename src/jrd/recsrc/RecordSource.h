@@ -30,6 +30,7 @@
 #include "../jrd/req.h"
 #include "../jrd/rse.h"
 #include "../jrd/inf_pub.h"
+#include "../jrd/evl_proto.h"
 
 namespace Jrd
 {
@@ -601,10 +602,9 @@ namespace Jrd
 	class SlidingWindow
 	{
 	public:
-		SlidingWindow(thread_db* aTdbb, const BaseBufferedStream* aStream,
-			const NestValueArray* aGroup, jrd_req* aRequest,
+		SlidingWindow(thread_db* aTdbb, const BaseBufferedStream* aStream, jrd_req* request,
 			FB_UINT64 aPartitionStart, FB_UINT64 aPartitionEnd,
-			FB_UINT64 aOrderStart, FB_UINT64 aOrderEnd);
+			FB_UINT64 aFrameStart, FB_UINT64 aFrameEnd);
 		~SlidingWindow();
 
 		FB_UINT64 getPartitionStart() const
@@ -622,39 +622,44 @@ namespace Jrd
 			return partitionEnd - partitionStart + 1;
 		}
 
-		FB_UINT64 getOrderStart() const
+		FB_UINT64 getFrameStart() const
 		{
-			return orderStart;
+			return frameStart;
 		}
 
-		FB_UINT64 getOrderEnd() const
+		FB_UINT64 getFrameEnd() const
 		{
-			return orderEnd;
+			return frameEnd;
 		}
 
-		FB_UINT64 getOrderSize() const
+		FB_UINT64 getFrameSize() const
 		{
-			return orderEnd - orderStart + 1;
+			return frameEnd - frameStart + 1;
 		}
 
-		bool move(SINT64 delta);
+		FB_UINT64 getRecordPosition() const
+		{
+			return savedPosition;
+		}
+
+		bool moveWithinPartition(SINT64 delta);
+		bool moveWithinFrame(SINT64 delta);
 
 	private:
 		thread_db* tdbb;
 		const BaseBufferedStream* const stream;
-		const NestValueArray* group;
-		jrd_req* request;
-		Firebird::Array<impure_value> partitionKeys;
 		FB_UINT64 partitionStart;
 		FB_UINT64 partitionEnd;
-		FB_UINT64 orderStart;
-		FB_UINT64 orderEnd;
+		FB_UINT64 frameStart;
+		FB_UINT64 frameEnd;
 		FB_UINT64 savedPosition;
 		bool moved;
 	};
 
-	class AggregatedStream : public RecordStream
+	template <typename ThisType, typename NextType>
+	class BaseAggWinStream : public RecordStream
 	{
+	protected:
 		enum State
 		{
 			STATE_EOF,			// We processed everything now process EOF
@@ -662,74 +667,196 @@ namespace Jrd
 			STATE_GROUPING		// Entering EVL group before fetching the first record
 		};
 
-		struct Block
-		{
-			FB_UINT64 startPosition;
-			FB_UINT64 endPosition;
-			FB_UINT64 pending;
-		};
-
 		struct Impure : public RecordSource::Impure
 		{
-			impure_value* impureValues;
-			Block partitionBlock;
-			Block orderBlock;
+			impure_value* groupValues;
 			State state;
-			bool lastGroup;
+		};
+
+		struct DummyAdjustFunctor
+		{
+			void operator ()(impure_value* target)
+			{
+			}
 		};
 
 	public:
-		AggregatedStream(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
-			const NestValueArray* group, MapNode* map, BaseBufferedStream* next,
-			const NestValueArray* order);
+		BaseAggWinStream(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
+			const NestValueArray* group, MapNode* groupMap, bool oneRowWhenEmpty, NextType* next);
 
-		AggregatedStream(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
-			const NestValueArray* group, MapNode* map, RecordSource* next);
-
+	public:
 		void open(thread_db* tdbb) const;
 		void close(thread_db* tdbb) const;
 
-		bool getRecord(thread_db* tdbb) const;
 		bool refetchRecord(thread_db* tdbb) const;
 		bool lockRecord(thread_db* tdbb) const;
-
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level) const;
 
 		void markRecursive();
 		void invalidateRecords(jrd_req* request) const;
 
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const;
-		void nullRecords(thread_db* tdbb) const;
+
+	protected:
+		Impure* getImpure(jrd_req* request) const
+		{
+			return request->getImpure<typename ThisType::Impure>(m_impure);
+		}
+
+		bool evaluateGroup(thread_db* tdbb) const;
+
+		void aggInit(thread_db* tdbb, jrd_req* request, const MapNode* map) const;
+		bool aggPass(thread_db* tdbb, jrd_req* request,
+			const NestValueArray& sourceList, const NestValueArray& targetList) const;
+		void aggExecute(thread_db* tdbb, jrd_req* request,
+			const NestValueArray& sourceList, const NestValueArray& targetList) const;
+		void aggFinish(thread_db* tdbb, jrd_req* request, const MapNode* map) const;
+
+		// Cache the values of a group/order in the impure.
+		template <typename AdjustFunctor>
+		void cacheValues(thread_db* tdbb, jrd_req* request,
+			const NestValueArray* group, impure_value* values,
+			AdjustFunctor adjustFunctor) const
+		{
+			if (!group)
+				return;
+
+			Impure* const impure = getImpure(request);
+
+			for (const NestConst<ValueExprNode>* ptrValue = group->begin(), *endValue = group->end();
+				 ptrValue != endValue;
+				 ++ptrValue)
+			{
+				const ValueExprNode* from = *ptrValue;
+				impure_value* target = &values[ptrValue - group->begin()];
+
+				dsc* desc = EVL_expr(tdbb, request, from);
+
+				if (request->req_flags & req_null)
+					target->vlu_desc.dsc_address = NULL;
+				else
+				{
+					EVL_make_value(tdbb, desc, target);
+					adjustFunctor(target);
+				}
+			}
+		}
+
+		int lookForChange(thread_db* tdbb, jrd_req* request,
+			const NestValueArray* group, const SortNode* sort, impure_value* values) const;
 
 	private:
-		void init(thread_db* tdbb, CompilerScratch* csb);
+		bool getNextRecord(thread_db* tdbb, jrd_req* request) const;
 
-		bool evaluateGroup(thread_db* tdbb, AggType aggType, FB_UINT64 limit) const;
-		void aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const;
-		bool aggPass(thread_db* tdbb, jrd_req* request) const;
-		void aggExecute(thread_db* tdbb, jrd_req* request) const;
-		bool getNextRecord(thread_db* tdbb, jrd_req* request, FB_UINT64& limit) const;
-		void cacheValues(thread_db* tdbb, jrd_req* request,
-			const NestValueArray* group, unsigned impureOffset) const;
-		bool lookForChange(thread_db* tdbb, jrd_req* request,
-			const NestValueArray* group, unsigned impureOffset) const;
-		void finiDistinct(thread_db* tdbb, jrd_req* request) const;
-
-		NestConst<BaseBufferedStream> m_bufferedStream;
-		NestConst<RecordSource> m_next;
+	protected:
+		NestConst<NextType> m_next;
 		const NestValueArray* const m_group;
-		NestConst<MapNode> m_map;
-		const NestValueArray* const m_order;
-		NestValueArray m_winPassSources;
-		NestValueArray m_winPassTargets;
+		NestConst<MapNode> m_groupMap;
+		bool m_oneRowWhenEmpty;
+	};
+
+	class AggregatedStream : public BaseAggWinStream<AggregatedStream, RecordSource>
+	{
+	public:
+		AggregatedStream(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
+			const NestValueArray* group, MapNode* map, RecordSource* next);
+
+	public:
+		void print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsigned level) const;
+		bool getRecord(thread_db* tdbb) const;
 	};
 
 	class WindowedStream : public RecordSource
 	{
 	public:
+		class WindowStream : public BaseAggWinStream<WindowStream, BaseBufferedStream>
+		{
+		private:
+			struct AdjustFunctor
+			{
+				AdjustFunctor(const ArithmeticNode* aArithNode, const dsc* aOffsetDesc)
+					: arithNode(aArithNode),
+					  offsetDesc(aOffsetDesc)
+				{
+				}
+
+				void operator ()(impure_value* target)
+				{
+					ArithmeticNode::add2(offsetDesc, target, arithNode, arithNode->blrOp);
+				}
+
+				const ArithmeticNode* arithNode;
+				const dsc* offsetDesc;
+			};
+
+			struct Block
+			{
+				SINT64 startPosition;
+				SINT64 endPosition;
+
+				void invalidate()
+				{
+					startPosition = endPosition = MIN_SINT64;
+				}
+
+				bool isValid() const
+				{
+					return !(startPosition == MIN_SINT64 && endPosition == MIN_SINT64);
+				}
+			};
+
+		public:
+			struct Impure : public BaseAggWinStream::Impure
+			{
+				impure_value* orderValues;
+				SINT64 partitionPending, rangePending;
+				Block partitionBlock, windowBlock;
+				impure_value_ex startOffset, endOffset;
+			};
+
+		public:
+			WindowStream(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
+				const NestValueArray* group, BaseBufferedStream* next,
+				SortNode* order, MapNode* windowMap,
+				WindowClause::FrameExtent* frameExtent,
+				WindowClause::Exclusion exclusion);
+
+		public:
+			void open(thread_db* tdbb) const;
+			void close(thread_db* tdbb) const;
+
+			bool getRecord(thread_db* tdbb) const;
+
+			void print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsigned level) const;
+			void findUsedStreams(StreamList& streams, bool expandAll = false) const;
+			void nullRecords(thread_db* tdbb) const;
+
+		protected:
+			Impure* getImpure(jrd_req* request) const
+			{
+				return request->getImpure<Impure>(m_impure);
+			}
+
+		private:
+			const void getFrameValue(thread_db* tdbb, jrd_req* request,
+				const WindowClause::Frame* frame, impure_value_ex* impureValue) const;
+
+			SINT64 locateFrameRange(thread_db* tdbb, jrd_req* request, Impure* impure,
+				const WindowClause::Frame* frame, const dsc* offsetDesc, SINT64 position) const;
+
+		private:
+			NestConst<SortNode> m_order;
+			const MapNode* m_windowMap;
+			NestConst<WindowClause::FrameExtent> m_frameExtent;
+			Firebird::Array<NestConst<ArithmeticNode> > m_arithNodes;
+			NestValueArray m_aggSources, m_aggTargets;
+			NestValueArray m_winPassSources, m_winPassTargets;
+			WindowClause::Exclusion m_exclusion;
+			UCHAR m_invariantOffsets;	// 0x1 | 0x2 bitmask
+		};
+
+	public:
 		WindowedStream(thread_db* tdbb, CompilerScratch* csb,
-			Firebird::ObjectsArray<WindowSourceNode::Partition>& partitions, RecordSource* next);
+			Firebird::ObjectsArray<WindowSourceNode::Window>& windows, RecordSource* next);
 
 		void open(thread_db* tdbb) const;
 		void close(thread_db* tdbb) const;
@@ -738,9 +865,7 @@ namespace Jrd
 		bool refetchRecord(thread_db* tdbb) const;
 		bool lockRecord(thread_db* tdbb) const;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level) const;
-
+		void print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsigned level) const;
 		void markRecursive();
 		void invalidateRecords(jrd_req* request) const;
 
@@ -821,7 +946,6 @@ namespace Jrd
 		Firebird::HalfStaticArray<FieldMap, OPT_STATIC_ITEMS> m_map;
 		const Format* m_format;
 	};
-
 
 	// Multiplexing (many -> one) access methods
 

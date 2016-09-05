@@ -87,50 +87,6 @@ namespace
 		NestConst<BufferedStream> m_next;
 	};
 
-#ifdef NOT_USED_OR_REPLACED
-	// Make join between outer stream and already sorted (aggregated) partition.
-	class WindowJoin : public RecordSource
-	{
-		struct DscNull
-		{
-			dsc* desc;
-			bool null;
-		};
-
-		struct Impure : public RecordSource::Impure
-		{
-			FB_UINT64 innerRecordCount;
-		};
-
-	public:
-		WindowJoin(CompilerScratch* csb, RecordSource* outer, RecordSource* inner,
-			const SortNode* outerKeys, const SortNode* innerKeys);
-
-		void open(thread_db* tdbb) const;
-		void close(thread_db* tdbb) const;
-
-		bool getRecord(thread_db* tdbb) const;
-		bool refetchRecord(thread_db* tdbb) const;
-		bool lockRecord(thread_db* tdbb) const;
-
-		void print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsigned level) const;
-
-		void markRecursive();
-		void invalidateRecords(jrd_req* request) const;
-
-		void findUsedStreams(StreamList& streams, bool expandAll) const;
-		void nullRecords(thread_db* tdbb) const;
-
-	private:
-		int compareKeys(thread_db* tdbb, jrd_req* request, DscNull* outerValues) const;
-
-		RecordSource* const m_outer;
-		BufferedStream* const m_inner;
-		const SortNode* const m_outerKeys;
-		const SortNode* const m_innerKeys;
-	};
-#endif	// NOT_USED_OR_REPLACED
-
 	// BufferedStreamWindow implementation
 
 	BufferedStreamWindow::BufferedStreamWindow(CompilerScratch* csb, BufferedStream* next)
@@ -211,213 +167,23 @@ namespace
 		m_next->nullRecords(tdbb);
 	}
 
-#ifdef NOT_USED_OR_REPLACED
-	// WindowJoin implementation
+	// ------------------------------
 
-	WindowJoin::WindowJoin(CompilerScratch* csb, RecordSource* outer, RecordSource* inner,
-					   const SortNode* outerKeys,
-					   const SortNode* innerKeys)
-		: m_outer(outer), m_inner(FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, inner)),
-		  m_outerKeys(outerKeys), m_innerKeys(innerKeys)
+	SLONG zero = 0;
+
+	struct InitDsc : public dsc
 	{
-		fb_assert(m_outerKeys && m_innerKeys);
-		fb_assert(m_outer && m_inner &&
-			m_innerKeys->expressions.getCount() == m_outerKeys->expressions.getCount());
-
-		m_impure = CMP_impure(csb, sizeof(Impure));
-	}
-
-	void WindowJoin::open(thread_db* tdbb) const
-	{
-		jrd_req* const request = tdbb->getRequest();
-		Impure* const impure = request->getImpure<Impure>(m_impure);
-
-		impure->irsb_flags = irsb_open;
-
-		// Read and cache the inner stream. Also gets its total number of records.
-
-		m_inner->open(tdbb);
-		FB_UINT64 position = 0;
-
-		while (m_inner->getRecord(tdbb))
-			++position;
-
-		impure->innerRecordCount = position;
-
-		m_outer->open(tdbb);
-	}
-
-	void WindowJoin::close(thread_db* tdbb) const
-	{
-		jrd_req* const request = tdbb->getRequest();
-
-		invalidateRecords(request);
-
-		Impure* const impure = request->getImpure<Impure>(m_impure);
-
-		if (impure->irsb_flags & irsb_open)
+		InitDsc()
 		{
-			impure->irsb_flags &= ~irsb_open;
-
-			m_outer->close(tdbb);
-			m_inner->close(tdbb);
+			makeLong(0, &zero);
 		}
-	}
-
-	bool WindowJoin::getRecord(thread_db* tdbb) const
-	{
-		jrd_req* const request = tdbb->getRequest();
-		Impure* const impure = request->getImpure<Impure>(m_impure);
-
-		if (!(impure->irsb_flags & irsb_open))
-			return false;
-
-		if (!m_outer->getRecord(tdbb))
-			return false;
-
-		// Evaluate the outer stream keys.
-
-		HalfStaticArray<DscNull, 8> outerValues;
-		DscNull* outerValue = outerValues.getBuffer(m_outerKeys->expressions.getCount());
-
-		for (unsigned i = 0; i < m_outerKeys->expressions.getCount(); ++i)
-		{
-			outerValue->desc = EVL_expr(tdbb, m_outerKeys->expressions[i]);
-			outerValue->null = (request->req_flags & req_null);
-			++outerValue;
-		}
-
-		outerValue -= m_outerKeys->expressions.getCount();	// go back to begin
-
-		// Join the streams. That should be a 1-to-1 join.
-
-		SINT64 start = 0;
-		SINT64 finish = impure->innerRecordCount;
-		SINT64 pos = finish / 2;
-
-		while (pos >= start && pos < finish)
-		{
-			m_inner->locate(tdbb, pos);
-			if (!m_inner->getRecord(tdbb))
-			{
-				fb_assert(false);
-				return false;
-			}
-
-			int cmp = compareKeys(tdbb, request, outerValue);
-
-			if (cmp == 0)
-				return true;
-
-			if (cmp < 0)
-			{
-				finish = pos;
-				pos -= MAX(1, (finish - start) / 2);
-			}
-			else //if (cmp > 0)
-			{
-				start = pos;
-				pos += MAX(1, (finish - start) / 2);
-			}
-		}
-
-		fb_assert(false);
-
-		return false;
-	}
-
-	bool WindowJoin::refetchRecord(thread_db* tdbb) const
-	{
-		return true;
-	}
-
-	bool WindowJoin::lockRecord(thread_db* tdbb) const
-	{
-		status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-		return false; // compiler silencer
-	}
-
-	void WindowJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
-	{
-		if (detailed)
-		{
-			plan += printIndent(level) + "Window Join";
-			m_outer->print(tdbb, plan, true, level + 1);
-			m_inner->print(tdbb, plan, true, level + 1);
-		}
-		else
-		{
-			if (!level)
-			{
-				plan += "(";
-			}
-
-			m_outer->print(tdbb, plan, false, level + 1);
-
-			plan += ", ";
-
-			m_inner->print(tdbb, plan, false, level + 1);
-
-			if (!level)
-			{
-				plan += ")";
-			}
-		}
-	}
-
-	void WindowJoin::markRecursive()
-	{
-		m_outer->markRecursive();
-		m_inner->markRecursive();
-	}
-
-	void WindowJoin::findUsedStreams(StreamList& streams) const
-	{
-		m_outer->findUsedStreams(streams);
-		m_inner->findUsedStreams(streams);
-	}
-
-	void WindowJoin::invalidateRecords(jrd_req* request) const
-	{
-		m_outer->invalidateRecords(request);
-		m_inner->invalidateRecords(request);
-	}
-
-	void WindowJoin::nullRecords(thread_db* tdbb) const
-	{
-		m_outer->nullRecords(tdbb);
-		m_inner->nullRecords(tdbb);
-	}
-
-	int WindowJoin::compareKeys(thread_db* tdbb, jrd_req* request, DscNull* outerValues) const
-	{
-		int cmp;
-
-		for (size_t i = 0; i < m_innerKeys->expressions.getCount(); i++)
-		{
-			const DscNull& outerValue = outerValues[i];
-			const dsc* const innerDesc = EVL_expr(tdbb, m_innerKeys->expressions[i]);
-			const bool innerNull = (request->req_flags & req_null);
-
-			if (outerValue.null && !innerNull)
-				return -1;
-
-			if (!outerValue.null && innerNull)
-				return 1;
-
-			if (!outerValue.null && !innerNull && (cmp = MOV_compare(outerValue.desc, innerDesc)) != 0)
-				return cmp;
-		}
-
-		return 0;
-	}
-#endif	// NOT_USED_OR_REPLACED
+	} zeroDsc;
 }	// namespace
 
 // ------------------------------
 
 WindowedStream::WindowedStream(thread_db* tdbb, CompilerScratch* csb,
-			ObjectsArray<WindowSourceNode::Partition>& partitions, RecordSource* next)
+			ObjectsArray<WindowSourceNode::Window>& windows, RecordSource* next)
 	: m_next(FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, next)),
 	  m_joinedStream(NULL)
 {
@@ -425,84 +191,144 @@ WindowedStream::WindowedStream(thread_db* tdbb, CompilerScratch* csb,
 
 	// Process the unpartioned and unordered map, if existent.
 
-	for (ObjectsArray<WindowSourceNode::Partition>::iterator partition = partitions.begin();
-		 partition != partitions.end();
-		 ++partition)
+	for (ObjectsArray<WindowSourceNode::Window>::iterator window = windows.begin();
+		 window != windows.end();
+		 ++window)
 	{
 		// While here, verify not supported functions/clauses.
 
-		const NestConst<ValueExprNode>* source = partition->map->sourceList.begin();
-
-		for (const NestConst<ValueExprNode>* const end = partition->map->sourceList.end();
-			 source != end;
-			 ++source)
+		if (window->order)
 		{
-			const AggNode* aggNode = (*source)->as<AggNode>();
+			const NestConst<ValueExprNode>* source = window->map->sourceList.begin();
 
-			if (partition->order && aggNode)
-				aggNode->checkOrderedWindowCapable();
+			for (const NestConst<ValueExprNode>* const end = window->map->sourceList.end();
+				 source != end;
+				 ++source)
+			{
+				const AggNode* aggNode = (*source)->as<AggNode>();
+
+				if (aggNode)
+				{
+					if (aggNode->distinct)
+					{
+						status_exception::raise(
+							Arg::Gds(isc_wish_list) <<
+							Arg::Gds(isc_random) << "DISTINCT is not supported in ordered windows");
+					}
+
+					if (!(aggNode->getCapabilities() & AggNode::CAP_SUPPORTS_WINDOW_FRAME))
+					{
+						string msg;
+						msg.printf("%s is not supported in ordered windows", aggNode->aggInfo.name);
+
+						status_exception::raise(
+							Arg::Gds(isc_wish_list) <<
+							Arg::Gds(isc_random) << msg);
+					}
+				}
+			}
 		}
 
-		if (!partition->group && !partition->order)
+		if (!window->group && !window->order)
 		{
 			fb_assert(!m_joinedStream);
 
-			m_joinedStream = FB_NEW_POOL(csb->csb_pool) AggregatedStream(tdbb, csb, partition->stream,
-				NULL, partition->map, FB_NEW_POOL(csb->csb_pool) BufferedStreamWindow(csb, m_next),
-				NULL);
+			m_joinedStream = FB_NEW_POOL(csb->csb_pool) WindowStream(tdbb, csb, window->stream,
+				NULL, FB_NEW_POOL(csb->csb_pool) BufferedStreamWindow(csb, m_next),
+				NULL, window->map, NULL, window->exclusion);
 
-			OPT_gen_aggregate_distincts(tdbb, csb, partition->map);
+			OPT_gen_aggregate_distincts(tdbb, csb, window->map);
 		}
 	}
 
 	if (!m_joinedStream)
 		m_joinedStream = FB_NEW_POOL(csb->csb_pool) BufferedStreamWindow(csb, m_next);
 
-	// Process ordered partitions.
+	// Process ordered windows.
 
 	StreamList streams;
 
-	for (ObjectsArray<WindowSourceNode::Partition>::iterator partition = partitions.begin();
-		 partition != partitions.end();
-		 ++partition)
+	for (ObjectsArray<WindowSourceNode::Window>::iterator window = windows.begin();
+		 window != windows.end();
+		 ++window)
 	{
 		// Refresh the stream list based on the last m_joinedStream.
 		streams.clear();
 		m_joinedStream->findUsedStreams(streams);
 
-		// Build the sort key. It's the order items following the partition items.
+#if 0	//// FIXME: This causes problems, for example with FIRST_VALUE.
+		//// I think it can be fixed with the help of SlidingWindow.
 
-		SortNode* partitionOrder;
+		// Invert bounds and order if necessary for faster execution.
 
-		if (partition->group)
+		// between !{<n> following || unbounded preceding} and unbounded following
+		if (window->frameExtent &&
+			window->frameExtent->frame2->bound == WindowClause::Frame::BOUND_FOLLOWING &&
+			!window->frameExtent->frame2->value &&
+			!(window->frameExtent->frame1->bound == WindowClause::Frame::BOUND_FOLLOWING ||
+			  (window->frameExtent->frame1->bound == WindowClause::Frame::BOUND_PRECEDING &&
+			   !window->frameExtent->frame1->value)))
 		{
-			partitionOrder = FB_NEW_POOL(csb->csb_pool) SortNode(csb->csb_pool);
-			partitionOrder->expressions.join(partition->group->expressions);
-			partitionOrder->descending.join(partition->group->descending);
-			partitionOrder->nullOrder.join(partition->group->nullOrder);
-
-			if (partition->order)
+			if (window->order)
 			{
-				partitionOrder->expressions.join(partition->order->expressions);
-				partitionOrder->descending.join(partition->order->descending);
-				partitionOrder->nullOrder.join(partition->order->nullOrder);
+				Array<int>::iterator nullIt = window->order->nullOrder.begin();
+
+				for (Array<bool>::iterator descIt = window->order->descending.begin();
+					 descIt != window->order->descending.end();
+					 ++descIt, ++nullIt)
+				{
+					*descIt = !*descIt;
+
+					if (*nullIt == rse_nulls_first)
+						*nullIt = rse_nulls_last;
+					else if (*nullIt == rse_nulls_last)
+						*nullIt = rse_nulls_first;
+				}
+			}
+
+			WindowClause::Frame* temp = window->frameExtent->frame1;
+			window->frameExtent->frame1 = window->frameExtent->frame2;
+			window->frameExtent->frame2 = temp;
+
+			window->frameExtent->frame1->bound = WindowClause::Frame::BOUND_PRECEDING;
+
+			if (window->frameExtent->frame2->bound == WindowClause::Frame::BOUND_PRECEDING)
+				window->frameExtent->frame2->bound = WindowClause::Frame::BOUND_FOLLOWING;
+		}
+#endif
+
+		// Build the sort key. It's the order items following the window items.
+
+		SortNode* windowOrder;
+
+		if (window->group)
+		{
+			windowOrder = FB_NEW_POOL(csb->csb_pool) SortNode(csb->csb_pool);
+			windowOrder->expressions.join(window->group->expressions);
+			windowOrder->descending.join(window->group->descending);
+			windowOrder->nullOrder.join(window->group->nullOrder);
+
+			if (window->order)
+			{
+				windowOrder->expressions.join(window->order->expressions);
+				windowOrder->descending.join(window->order->descending);
+				windowOrder->nullOrder.join(window->order->nullOrder);
 			}
 		}
 		else
-			partitionOrder = partition->order;
+			windowOrder = window->order;
 
-		if (partitionOrder)
+		if (windowOrder)
 		{
 			SortedStream* sortedStream = OPT_gen_sort(tdbb, csb, streams, NULL,
-				m_joinedStream, partitionOrder, false);
+				m_joinedStream, windowOrder, false);
 
-			m_joinedStream = FB_NEW_POOL(csb->csb_pool) AggregatedStream(tdbb, csb, partition->stream,
-				(partition->group ? &partition->group->expressions : NULL),
-				partition->map,
+			m_joinedStream = FB_NEW_POOL(csb->csb_pool) WindowStream(tdbb, csb, window->stream,
+				(window->group ? &window->group->expressions : NULL),
 				FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, sortedStream),
-				(partition->order ? &partition->order->expressions : NULL));
+				window->order, window->map, window->frameExtent, window->exclusion);
 
-			OPT_gen_aggregate_distincts(tdbb, csb, partition->map);
+			OPT_gen_aggregate_distincts(tdbb, csb, window->map);
 		}
 	}
 }
@@ -585,4 +411,705 @@ void WindowedStream::findUsedStreams(StreamList& streams, bool expandAll) const
 void WindowedStream::nullRecords(thread_db* tdbb) const
 {
 	m_joinedStream->nullRecords(tdbb);
+}
+
+// ------------------------------
+
+// Note that we can have NULL order here, in case of window function with shouldCallWinPass
+// returning true, with partition, and without order. Example: ROW_NUMBER() OVER (PARTITION BY N).
+WindowedStream::WindowStream::WindowStream(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
+			const NestValueArray* group, BaseBufferedStream* next,
+			SortNode* order, MapNode* windowMap,
+			WindowClause::FrameExtent* frameExtent,
+			WindowClause::Exclusion exclusion)
+	: BaseAggWinStream(tdbb, csb, stream, group, NULL, false, next),
+	  m_order(order),
+	  m_windowMap(windowMap),
+	  m_frameExtent(frameExtent),
+	  m_arithNodes(csb->csb_pool),
+	  m_aggSources(csb->csb_pool),
+	  m_aggTargets(csb->csb_pool),
+	  m_winPassSources(csb->csb_pool),
+	  m_winPassTargets(csb->csb_pool),
+	  m_exclusion(exclusion),
+	  m_invariantOffsets(0)
+{
+	// Separate nodes that requires the winPass call.
+
+	const NestConst<ValueExprNode>* const sourceEnd = m_windowMap->sourceList.end();
+
+	for (const NestConst<ValueExprNode>* source = m_windowMap->sourceList.begin(),
+			*target = m_windowMap->targetList.begin();
+		 source != sourceEnd;
+		 ++source, ++target)
+	{
+		const AggNode* aggNode = (*source)->as<AggNode>();
+
+		if (aggNode)
+		{
+			unsigned capabilities = aggNode->getCapabilities();
+
+			if (capabilities & AggNode::CAP_WANTS_AGG_CALLS)
+			{
+				m_aggSources.add(*source);
+				m_aggTargets.add(*target);
+			}
+
+			if (capabilities & AggNode::CAP_WANTS_WIN_PASS_CALL)
+			{
+				m_winPassSources.add(*source);
+				m_winPassTargets.add(*target);
+			}
+		}
+	}
+
+	m_arithNodes.resize(2);
+
+	if (m_order)
+	{
+		dsc dummyDesc;
+
+		for (unsigned i = 0; i < 2; ++i)
+		{
+			WindowClause::Frame* frame = i == 0 ?
+				m_frameExtent->frame1 : m_frameExtent->frame2;
+
+			if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_RANGE && frame->value)
+			{
+				int direction = frame->bound == WindowClause::Frame::BOUND_FOLLOWING ? 1 : -1;
+
+				if (m_order->descending[0])
+					direction *= -1;
+
+				m_arithNodes[i] = FB_NEW_POOL(csb->csb_pool) ArithmeticNode(csb->csb_pool,
+					(direction == 1 ? blr_add : blr_subtract),
+					(csb->blrVersion == 4),
+					m_order->expressions[0],
+					frame->value);
+
+				// Set parameters as nodFlags and nodScale
+				m_arithNodes[i]->getDesc(tdbb, csb, &dummyDesc);
+			}
+
+			//// TODO: Better check for invariants.
+
+			if (frame->value &&
+				(frame->value->is<LiteralNode>() ||
+				 frame->value->is<VariableNode>() ||
+				 frame->value->is<ParameterNode>()))
+			{
+				m_invariantOffsets |= i == 0 ? 0x1 : 0x2;
+			}
+		}
+	}
+
+	(void) m_exclusion;	// avoid warning
+}
+
+void WindowedStream::WindowStream::open(thread_db* tdbb) const
+{
+	BaseAggWinStream::open(tdbb);
+
+	jrd_req* const request = tdbb->getRequest();
+	Impure* const impure = getImpure(request);
+
+	impure->partitionBlock.startPosition = impure->partitionBlock.endPosition =
+		impure->partitionPending = impure->rangePending = 0;
+	impure->windowBlock.invalidate();
+
+	unsigned impureCount = m_order ? m_order->expressions.getCount() : 0;
+
+	if (!impure->orderValues && impureCount > 0)
+	{
+		impure->orderValues = FB_NEW_POOL(*tdbb->getDefaultPool()) impure_value[impureCount];
+		memset(impure->orderValues, 0, sizeof(impure_value) * impureCount);
+	}
+
+	if (m_invariantOffsets & 0x1)
+		getFrameValue(tdbb, request, m_frameExtent->frame1, &impure->startOffset);
+
+	if (m_invariantOffsets & 0x2)
+		getFrameValue(tdbb, request, m_frameExtent->frame2, &impure->endOffset);
+}
+
+void WindowedStream::WindowStream::close(thread_db* tdbb) const
+{
+	jrd_req* const request = tdbb->getRequest();
+	Impure* const impure = request->getImpure<Impure>(m_impure);
+
+	if (impure->irsb_flags & irsb_open)
+		aggFinish(tdbb, request, m_windowMap);
+
+	BaseAggWinStream::close(tdbb);
+}
+
+bool WindowedStream::WindowStream::getRecord(thread_db* tdbb) const
+{
+	if (--tdbb->tdbb_quantum < 0)
+		JRD_reschedule(tdbb, 0, true);
+
+	jrd_req* const request = tdbb->getRequest();
+	record_param* const rpb = &request->req_rpb[m_stream];
+	Impure* const impure = getImpure(request);
+
+	if (!(impure->irsb_flags & irsb_open))
+	{
+		rpb->rpb_number.setValid(false);
+		return false;
+	}
+
+	const SINT64 position = (SINT64) m_next->getPosition(request);
+
+	if (impure->partitionPending == 0)
+	{
+		if (m_group)
+		{
+			if (!evaluateGroup(tdbb))
+			{
+				rpb->rpb_number.setValid(false);
+				return false;
+			}
+		}
+		else
+		{
+			FB_UINT64 count = m_next->getCount(tdbb);
+
+			if (position != 0 || count == 0)
+			{
+				rpb->rpb_number.setValid(false);
+				return false;
+			}
+
+			m_next->locate(tdbb, count);
+			impure->state = STATE_EOF;
+		}
+
+		impure->partitionBlock.startPosition = position;
+		impure->partitionBlock.endPosition = m_next->getPosition(request) - 1 -
+			(impure->state == STATE_FETCHED ? 1 : 0);
+		impure->partitionPending =
+			impure->partitionBlock.endPosition - impure->partitionBlock.startPosition + 1;
+
+		fb_assert(impure->partitionPending > 0);
+
+		m_next->locate(tdbb, position);
+		impure->state = STATE_GROUPING;
+	}
+
+	if (!m_next->getRecord(tdbb))
+		fb_assert(false);
+
+	if (impure->rangePending > 0)
+		--impure->rangePending;
+	else
+	{
+		Block lastWindow = impure->windowBlock;
+
+		// Find the window start.
+
+		if (m_order && m_frameExtent->frame1->value && !(m_invariantOffsets & 0x1))
+			getFrameValue(tdbb, request, m_frameExtent->frame1, &impure->startOffset);
+
+		if (!m_order)
+			impure->windowBlock.startPosition = impure->partitionBlock.startPosition;
+		// {range | rows} between unbounded preceding and ...
+		else if (m_frameExtent->frame1->bound == WindowClause::Frame::BOUND_PRECEDING &&
+			!m_frameExtent->frame1->value)
+		{
+			impure->windowBlock.startPosition = impure->partitionBlock.startPosition;
+		}
+		// rows between current row and ...
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_ROWS &&
+			m_frameExtent->frame1->bound == WindowClause::Frame::BOUND_CURRENT_ROW)
+		{
+			impure->windowBlock.startPosition = position;
+		}
+		// rows between <n> {preceding | following} and ...
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_ROWS &&
+			m_frameExtent->frame1->value)
+		{
+			impure->windowBlock.startPosition = position + impure->startOffset.vlux_count;
+		}
+		// range between current row and ...
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_RANGE &&
+			m_frameExtent->frame1->bound == WindowClause::Frame::BOUND_CURRENT_ROW)
+		{
+			impure->windowBlock.startPosition = position;
+		}
+		// range between <n> {preceding | following} and ...
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_RANGE &&
+			m_frameExtent->frame1->value)
+		{
+			impure->windowBlock.startPosition = locateFrameRange(tdbb, request, impure,
+				m_frameExtent->frame1, &impure->startOffset.vlu_desc, position);
+		}
+		else
+		{
+			fb_assert(false);
+			return false;
+		}
+
+		// Find the window end.
+
+		if (m_order && m_frameExtent->frame2->value && !(m_invariantOffsets & 0x2))
+			getFrameValue(tdbb, request, m_frameExtent->frame2, &impure->endOffset);
+
+		if (!m_order)
+			impure->windowBlock.endPosition = impure->partitionBlock.endPosition;
+		// {range | rows} between ... and unbounded following
+		else if (m_frameExtent->frame2->bound == WindowClause::Frame::BOUND_FOLLOWING &&
+			!m_frameExtent->frame2->value)
+		{
+			impure->windowBlock.endPosition = impure->partitionBlock.endPosition;
+		}
+		// rows between ... and current row
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_ROWS &&
+			m_frameExtent->frame2->bound == WindowClause::Frame::BOUND_CURRENT_ROW)
+		{
+			impure->windowBlock.endPosition = position;
+		}
+		// rows between ... and <n> {preceding | following}
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_ROWS &&
+			m_frameExtent->frame2->value)
+		{
+			impure->windowBlock.endPosition = position + impure->endOffset.vlux_count;
+		}
+		// range between ... and current row
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_RANGE &&
+			m_frameExtent->frame2->bound == WindowClause::Frame::BOUND_CURRENT_ROW)
+		{
+			SINT64 rangePos = position;
+			cacheValues(tdbb, request, &m_order->expressions, impure->orderValues,
+				DummyAdjustFunctor());
+
+			while (++rangePos <= impure->partitionBlock.endPosition)
+			{
+				if (!m_next->getRecord(tdbb))
+					fb_assert(false);
+
+				if (lookForChange(tdbb, request, &m_order->expressions, m_order,
+						impure->orderValues))
+				{
+					break;
+				}
+			}
+
+			impure->windowBlock.endPosition = rangePos - 1;
+
+			m_next->locate(tdbb, position);
+
+			if (!m_next->getRecord(tdbb))
+				fb_assert(false);
+		}
+		// range between ... and <n> {preceding | following}
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_RANGE &&
+			m_frameExtent->frame2->value)
+		{
+			impure->windowBlock.endPosition = locateFrameRange(tdbb, request, impure,
+				m_frameExtent->frame2, &impure->endOffset.vlu_desc, position);
+		}
+		else
+		{
+			fb_assert(false);
+			return false;
+		}
+
+		if (!m_order)
+			impure->rangePending = MAX(0, impure->windowBlock.endPosition - position);
+		else if (m_order && m_frameExtent->unit == WindowClause::FrameExtent::UNIT_RANGE)
+		{
+			if (m_frameExtent->frame1->bound == WindowClause::Frame::BOUND_PRECEDING &&
+			    !m_frameExtent->frame1->value &&
+			    m_frameExtent->frame2->bound == WindowClause::Frame::BOUND_FOLLOWING &&
+			    !m_frameExtent->frame2->value)
+			{
+				impure->rangePending = MAX(0, impure->windowBlock.endPosition - position);
+			}
+			else
+			{
+				SINT64 rangePos = position;
+				cacheValues(tdbb, request, &m_order->expressions, impure->orderValues,
+					DummyAdjustFunctor());
+
+				while (++rangePos <= impure->partitionBlock.endPosition)
+				{
+					if (!m_next->getRecord(tdbb))
+						fb_assert(false);
+
+					if (lookForChange(tdbb, request, &m_order->expressions, m_order,
+							impure->orderValues))
+					{
+						break;
+					}
+				}
+
+				impure->rangePending = rangePos - position - 1;
+			}
+
+			m_next->locate(tdbb, position);
+
+			if (!m_next->getRecord(tdbb))
+				fb_assert(false);
+		}
+
+		//// TODO: There is no need to pass record by record when m_aggSources.isEmpty()
+
+		if (!impure->windowBlock.isValid() ||
+			impure->windowBlock.endPosition < impure->windowBlock.startPosition ||
+			impure->windowBlock.startPosition > impure->partitionBlock.endPosition ||
+			impure->windowBlock.endPosition < impure->partitionBlock.startPosition)
+		{
+			if (position == 0 || impure->windowBlock.isValid())
+			{
+				impure->windowBlock.invalidate();
+				aggInit(tdbb, request, m_windowMap);
+				aggExecute(tdbb, request, m_aggSources, m_aggTargets);
+			}
+		}
+		else
+		{
+			impure->windowBlock.startPosition =
+				MAX(impure->windowBlock.startPosition, impure->partitionBlock.startPosition);
+			impure->windowBlock.endPosition =
+				MIN(impure->windowBlock.endPosition, impure->partitionBlock.endPosition);
+
+			// If possible, reuse the last window aggregation.
+			//
+			// This may be incompatible with some function like LIST, but currently LIST cannot
+			// be used in ordered windows anyway.
+
+			if (!lastWindow.isValid() ||
+				impure->windowBlock.startPosition > lastWindow.startPosition ||
+				impure->windowBlock.endPosition < lastWindow.endPosition)
+			{
+				aggInit(tdbb, request, m_windowMap);
+				m_next->locate(tdbb, impure->windowBlock.startPosition);
+			}
+			else
+			{
+				if (impure->windowBlock.startPosition < lastWindow.startPosition)
+				{
+					m_next->locate(tdbb, impure->windowBlock.startPosition);
+					SINT64 pending = lastWindow.startPosition - impure->windowBlock.startPosition;
+
+					while (pending-- > 0)
+					{
+						if (!m_next->getRecord(tdbb))
+							fb_assert(false);
+
+						aggPass(tdbb, request, m_aggSources, m_aggTargets);
+					}
+				}
+
+				m_next->locate(tdbb, lastWindow.endPosition + 1);
+			}
+
+			SINT64 aggPos = (SINT64) m_next->getPosition(request);
+
+			while (aggPos++ <= impure->windowBlock.endPosition)
+			{
+				if (!m_next->getRecord(tdbb))
+					fb_assert(false);
+
+				aggPass(tdbb, request, m_aggSources, m_aggTargets);
+			}
+
+			aggExecute(tdbb, request, m_aggSources, m_aggTargets);
+
+			m_next->locate(tdbb, position);
+
+			if (!m_next->getRecord(tdbb))
+				fb_assert(false);
+		}
+	}
+
+	--impure->partitionPending;
+
+	if (m_winPassSources.hasData())
+	{
+		SlidingWindow window(tdbb, m_next, request,
+			impure->partitionBlock.startPosition, impure->partitionBlock.endPosition,
+			impure->windowBlock.startPosition, impure->windowBlock.endPosition);
+		dsc* desc;
+
+		const NestConst<ValueExprNode>* const sourceEnd = m_winPassSources.end();
+
+		for (const NestConst<ValueExprNode>* source = m_winPassSources.begin(),
+				*target = m_winPassTargets.begin();
+			 source != sourceEnd;
+			 ++source, ++target)
+		{
+			const AggNode* aggNode = (*source)->as<AggNode>();
+
+			const FieldNode* field = (*target)->as<FieldNode>();
+			const USHORT id = field->fieldId;
+			Record* record = request->req_rpb[field->fieldStream].rpb_record;
+
+			desc = aggNode->winPass(tdbb, request, &window);
+
+			if (!desc)
+				record->setNull(id);
+			else
+			{
+				MOV_move(tdbb, desc, EVL_assign_to(tdbb, *target));
+				record->clearNull(id);
+			}
+
+			window.moveWithinPartition(0);
+		}
+	}
+
+	// If there is no partition, we should reassign the map items.
+	if (!m_group)
+	{
+		const NestConst<ValueExprNode>* const sourceEnd = m_windowMap->sourceList.end();
+
+		for (const NestConst<ValueExprNode>* source = m_windowMap->sourceList.begin(),
+				*target = m_windowMap->targetList.begin();
+			 source != sourceEnd;
+			 ++source, ++target)
+		{
+			const AggNode* aggNode = (*source)->as<AggNode>();
+
+			if (!aggNode)
+				EXE_assignment(tdbb, *source, *target);
+		}
+	}
+
+	rpb->rpb_number.setValid(true);
+	return true;
+}
+
+void WindowedStream::WindowStream::print(thread_db* tdbb, string& plan, bool detailed,
+	unsigned level) const
+{
+	if (detailed)
+		plan += printIndent(++level) + "Window";
+
+	m_next->print(tdbb, plan, detailed, level);
+}
+
+void WindowedStream::WindowStream::findUsedStreams(StreamList& streams, bool expandAll) const
+{
+	BaseAggWinStream::findUsedStreams(streams);
+
+	m_next->findUsedStreams(streams, expandAll);
+}
+
+void WindowedStream::WindowStream::nullRecords(thread_db* tdbb) const
+{
+	BaseAggWinStream::nullRecords(tdbb);
+
+	m_next->nullRecords(tdbb);
+}
+
+const void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, jrd_req* request,
+	const WindowClause::Frame* frame, impure_value_ex* impureValue) const
+{
+	dsc* desc = EVL_expr(tdbb, request, frame->value);
+	bool error = false;
+
+	if (request->req_flags & req_null)
+		error = true;
+	else
+	{
+		if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_ROWS)
+		{
+			// Purposedly used 32-bit here. So long distance will complicate things for no gain.
+			impureValue->vlux_count = MOV_get_long(desc, 0);
+
+			if (impureValue->vlux_count < 0)
+				error = true;
+
+			if (frame->bound == WindowClause::Frame::BOUND_PRECEDING)
+				impureValue->vlux_count = -impureValue->vlux_count;
+		}
+		else if (MOV_compare(desc, &zeroDsc) < 0)
+			error = true;
+
+		if (!error)
+			EVL_make_value(tdbb, desc, impureValue);
+	}
+
+	if (error)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_window_frame_value_invalid));
+	}
+}
+
+SINT64 WindowedStream::WindowStream::locateFrameRange(thread_db* tdbb, jrd_req* request, Impure* impure,
+	const WindowClause::Frame* frame, const dsc* offsetDesc, SINT64 position) const
+{
+	if (m_order->expressions.getCount() != 1)
+	{
+		fb_assert(false);
+		return false;
+	}
+
+	SINT64 rangePos = position;
+
+	if (offsetDesc)
+	{
+		int direction = (frame->bound == WindowClause::Frame::BOUND_FOLLOWING ? 1 : -1);
+
+		if (m_order->descending[0])
+			direction *= -1;
+
+		cacheValues(tdbb, request, &m_order->expressions, impure->orderValues,
+			AdjustFunctor(m_arithNodes[frame == m_frameExtent->frame1 ? 0 : 1], offsetDesc));
+	}
+	else
+	{
+		cacheValues(tdbb, request, &m_order->expressions, impure->orderValues,
+			DummyAdjustFunctor());
+	}
+
+	// We found a NULL...
+	if (!impure->orderValues[0].vlu_desc.dsc_address)
+	{
+		if (frame == m_frameExtent->frame2)
+		{
+			while (++rangePos <= impure->partitionBlock.endPosition)
+			{
+				if (!m_next->getRecord(tdbb))
+					fb_assert(false);
+
+				if (lookForChange(tdbb, request, &m_order->expressions, m_order,
+						impure->orderValues))
+				{
+					break;
+				}
+			}
+
+			--rangePos;
+		}
+	}
+	else if (frame->bound == WindowClause::Frame::BOUND_FOLLOWING)
+	{
+		const int bound = frame == m_frameExtent->frame1 ? 0 : 1;
+
+		do
+		{
+			if (lookForChange(tdbb, request, &m_order->expressions, m_order, impure->orderValues) >=
+					bound ||
+				++rangePos > impure->partitionBlock.endPosition)
+			{
+				break;
+			}
+
+			if (!m_next->getRecord(tdbb))
+				fb_assert(false);
+		} while (true);
+
+		if (frame == m_frameExtent->frame2)
+			--rangePos;
+	}
+	else
+	{
+		const int bound = frame == m_frameExtent->frame1 ? -1 : 0;
+
+		do
+		{
+			if (lookForChange(tdbb, request, &m_order->expressions, m_order, impure->orderValues) <=
+					bound ||
+				--rangePos < impure->partitionBlock.startPosition)
+			{
+				break;
+			}
+
+			//// FIXME: Going backward may be slow...
+
+			m_next->locate(tdbb, rangePos);
+
+			if (!m_next->getRecord(tdbb))
+				fb_assert(false);
+		} while (true);
+
+		if (frame == m_frameExtent->frame1)
+			++rangePos;
+		else if (rangePos >= impure->partitionBlock.startPosition)
+		{
+			// This should be necessary for the case where offsetDesc is 0.
+
+			while (++rangePos <= impure->partitionBlock.endPosition)
+			{
+				if (!m_next->getRecord(tdbb))
+					fb_assert(false);
+
+				if (lookForChange(tdbb, request, &m_order->expressions, m_order,
+						impure->orderValues))
+				{
+					break;
+				}
+			}
+
+			--rangePos;
+		}
+	}
+
+	m_next->locate(tdbb, position);
+
+	if (!m_next->getRecord(tdbb))
+		fb_assert(false);
+
+	return rangePos;
+}
+
+// ------------------------------
+
+SlidingWindow::SlidingWindow(thread_db* aTdbb, const BaseBufferedStream* aStream,
+			jrd_req* request,
+			FB_UINT64 aPartitionStart, FB_UINT64 aPartitionEnd,
+			FB_UINT64 aFrameStart, FB_UINT64 aFrameEnd)
+	: tdbb(aTdbb),	// Note: instantiate the class only as local variable
+	  stream(aStream),
+	  partitionStart(aPartitionStart),
+	  partitionEnd(aPartitionEnd),
+	  frameStart(aFrameStart),
+	  frameEnd(aFrameEnd),
+	  moved(false)
+{
+	savedPosition = stream->getPosition(request) - 1;
+}
+
+SlidingWindow::~SlidingWindow()
+{
+	if (!moved)
+		return;
+
+	// Position the stream where we received it.
+	moveWithinPartition(0);
+}
+
+// Move in the window without pass partition boundaries.
+bool SlidingWindow::moveWithinPartition(SINT64 delta)
+{
+	const SINT64 newPosition = SINT64(savedPosition) + delta;
+
+	if (newPosition < partitionStart || newPosition > partitionEnd)
+		return false;
+
+	moved = true;
+
+	stream->locate(tdbb, newPosition);
+
+	if (!stream->getRecord(tdbb))
+	{
+		fb_assert(false);
+		return false;
+	}
+
+	return true;
+}
+
+// Move in the window without pass frame boundaries.
+bool SlidingWindow::moveWithinFrame(SINT64 delta)
+{
+	const SINT64 newPosition = SINT64(savedPosition) + delta;
+
+	if (newPosition < frameStart || newPosition > frameEnd)
+		return false;
+
+	return moveWithinPartition(delta);
 }

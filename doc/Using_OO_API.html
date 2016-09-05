@@ -7,12 +7,12 @@
 	<META NAME="AUTHOR" CONTENT="alex ">
 	<META NAME="CREATED" CONTENT="20130531;10003100">
 	<META NAME="CHANGEDBY" CONTENT="Alex Peshkoff">
-	<META NAME="CHANGED" CONTENT="20160407;18553100">
+	<META NAME="CHANGED" CONTENT="20160905;13142600">
+	<META NAME="CHANGEDBY" CONTENT="Alex Peshkoff">
 	<META NAME="CHANGEDBY" CONTENT="Alex Peshkoff">
 	<STYLE TYPE="text/css">
 	<!--
 		@page { size: 8.5in 11in; margin: 0.79in }
-		TD P { margin-bottom: 0.08in; color: #000000 }
 		H1 { color: #000000 }
 		P { margin-bottom: 0.08in; color: #000000 }
 	-->
@@ -519,7 +519,7 @@ cycle:</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>while
 (curs-&gt;fetchNext(&amp;status, buffer) == IStatus::RESULT_OK)</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">   <FONT SIZE=4><I>// row processing</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>// row processing</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
@@ -587,43 +587,43 @@ namespace Firebird), timestamp – with class FbTimestamp, containing
 two public data members date and time of appropriate class, char -
 with struct <A HREF="#FbChar">FbChar</A> and varchar – with struct
 <A HREF="#FbVarChar">FbVarChar</A>. For each field preprocessor
-creates two data members in the message – <I>name</I> for
-field/parameter value and <I>nameNull</I> for NULL indicator. Message
-constructor has 2 parameters – pointer to status wrapper and master
-interface:</FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>FB_MESSAGE(Output,
+creates two data members in the message – </FONT><FONT SIZE=4><I>name</I></FONT><FONT SIZE=4>
+for field/parameter value and </FONT><FONT SIZE=4><I>nameNull</I></FONT><FONT SIZE=4>
+for NULL indicator. Message constructor has 2 parameters – pointer
+to status wrapper and master interface:</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>FB_MESSAGE(Output,
 ThrowStatusWrapper,</I></FONT></P>
-<P STYLE="margin-bottom: 0in">            <FONT SIZE=4><I>(FB_SMALLINT,
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>(FB_SMALLINT,
 relationId)</I></FONT></P>
-<P STYLE="margin-bottom: 0in">            <FONT SIZE=4><I>(FB_CHAR(31),
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>(FB_CHAR(31),
 relationName)</I></FONT></P>
-<P STYLE="margin-bottom: 0in">            <FONT SIZE=4><I>(FB_VARCHAR(100),
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>(FB_VARCHAR(100),
 description)</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>)
-output(&amp;status, master);</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>) output(&amp;status,
+master);</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>For static messages use of
 FB_MESSAGE is sooner of all the best choice – they can be at the
 same time easily passed to execute, openCursor and fetch methods:</FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>rs =
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>rs =
 att-&gt;openCursor(&amp;status, tra, 0, sqlText,</I></FONT></P>
-<P STYLE="margin-bottom: 0in">            <FONT SIZE=4><I>SQL_DIALECT_V6,
-NULL, NULL, output.getMetadata(), NULL, 0);</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>SQL_DIALECT_V6, NULL,
+NULL, output.getMetadata(), NULL, 0);</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>and used to work with
 values of individual fields:</FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>while
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>while
 (rs-&gt;fetchNext(&amp;status, output.getData()) ==
 IStatus::RESULT_OK)</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">            <FONT SIZE=4><I>printf(&quot;%4d
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>printf(&quot;%4d
 %31.31s %*.*s\n&quot;, output-&gt;relationId,
 output-&gt;relationName.str,</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                <FONT SIZE=4><I>output-&gt;descriptionNull
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>output-&gt;descriptionNull
 ? 0 : output-&gt;description.length,</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                <FONT SIZE=4><I>output-&gt;descriptionNull
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>output-&gt;descriptionNull
 ? 0 : output-&gt;description.length, output-&gt;description.str);</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>An example of using macro
@@ -663,9 +663,8 @@ blobFieldNumber)];</I></FONT></P>
 and FB_MESSAGE macro blob field is declared as having FB_BLOB type:</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>FB_MESSAGE(Msg,
 ThrowStatusWrapper,</I></FONT></P>
-<P STYLE="margin-bottom: 0in">            <FONT SIZE=4><I>(FB_BLOB,
-b)</I></FONT></P>
-<P STYLE="margin-bottom: 0in">   <FONT SIZE=4><I>) message(&amp;status,
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>(FB_BLOB, b)</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>) message(&amp;status,
 master);</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>ISC_QUAD* blobPtr =
 &amp;message-&gt;b;</I></FONT></P>
@@ -687,7 +686,7 @@ engine:</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>unsigned segmentLength;</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>while
 (userFunctionProvidingBlobData(&amp;segmentData, &amp;segmentLength))</I></FONT></P>
-<P STYLE="margin-bottom: 0in">      <FONT SIZE=4><I>blob-&gt;putSegment(&amp;status,
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>blob-&gt;putSegment(&amp;status,
 segmentLength, segmentData);</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>After sending some data to
 blob do not forget to close blob interface:</FONT></P>
@@ -707,32 +706,30 @@ may be done using fetch() or execute() methods. After it use
 openBlob() attachment's method:</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I><A HREF="#Blob">IBlob</A>*
 blob = att-&gt;openBlob(status, tra, blobPtr, 0, NULL);</I></FONT></P>
-<P STYLE="margin-bottom: 0in"><FONT SIZE=4>Blob  interface is ready
-to provide blob data. Use getSegment() method to receive data from
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>Blob interface is ready to
+provide blob data. Use getSegment() method to receive data from
 engine:</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>char buffer[BUFSIZE];</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>unsigned actualLength;</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>for(;;)</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>switch
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>switch
 (blob-&gt;getSegment(&amp;status, sizeof(buffer), buffer,
 &amp;actualLength))</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>case
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>case
 IStatus::RESULT_OK:</I></FONT></P>
-<P STYLE="margin-bottom: 0in">       
-<FONT SIZE=4><I>userFunctionAcceptingBlobData(buffer, actualLength,
-true);</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>continue;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>case
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>userFunctionAcceptingBlobData(buffer,
+actualLength, true);</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>continue;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>case
 IStatus::RESULT_SEGMENT:</I></FONT></P>
-<P STYLE="margin-bottom: 0in">       
-<FONT SIZE=4><I>userFunctionAcceptingBlobData(buffer, actualLength,
-false);</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>continue;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>default:</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>break;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>userFunctionAcceptingBlobData(buffer,
+actualLength, false);</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>continue;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>default:</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>break;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>Last parameter in
 userFunctionAcceptingBlobData() is a flag that end of segment is
@@ -751,23 +748,25 @@ completed in FB3, we expect to have something more interesting in
 next version. The minimum existing support is as follows: <A HREF="#Attachment">IAttachment</A>
 contains call queEvents() which performs almost same functions as
 isc_que_events() call. Instead the pair of parameters
-<I>FPTR_EVENT_CALLBACK ast</I> and <I>void* arg</I>, required to
-invoke user code when event happens in firebird engine, callback
-interface IEventCallback is used. This is traditional approach which
-helps to avoid non-safe casts from void* in user function. Another
-important difference is that instead event identifier (a kind of
-handler) this function returns reference counted interface <A HREF="#Events">IEvents</A>
-having method cancel() used when waiting for event should be stopped.
-Unlike identifier which is automatically destroyed when event arrives
+</FONT><FONT SIZE=4><I>FPTR_EVENT_CALLBACK ast</I></FONT><FONT SIZE=4>
+and </FONT><FONT SIZE=4><I>void* arg</I></FONT><FONT SIZE=4>,
+required to invoke user code when event happens in firebird engine,
+callback interface IEventCallback is used. This is traditional
+approach which helps to avoid non-safe casts from void* in user
+function. Another important difference is that instead event
+identifier (a kind of handler) this function returns reference
+counted interface <A HREF="#Events">IEvents</A> having method
+cancel() used when waiting for event should be stopped. Unlike
+identifier which is automatically destroyed when event arrives
 interface can not be automatically destroyed – in case when event
 is received right before canceling interface call to cancel() would
 cause segfault when interface is already destroyed. Therefore
 interface <A HREF="#Events">IEvents</A> must be explicitly released
 after receiving an event. This may be done for example right before
 queuing for an event next time:</FONT></P>
-<P STYLE="margin-bottom: 0in">  <FONT SIZE=4><I>events-&gt;release();</I></FONT></P>
-<P STYLE="margin-bottom: 0in">  <FONT SIZE=4><I>events = NULL;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">  <FONT SIZE=4><I>events =
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>events-&gt;release();</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>events = NULL;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>events =
 attachment-&gt;queEvents(&amp;status, this, eveLen, eveBuffer);</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>Setting interface pointer
 to NULL is useful in case of exception during queEvents. In other
@@ -780,7 +779,7 @@ use for additional details our sample 08.events.cpp. </FONT>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>To begin to use services
 one should first of all connect to service manager. This is done
 using attachServiceManager() method of <A HREF="#Provider">IProvider</A>.
- This method returns <A HREF="#Service">IService</A> interface which
+This method returns <A HREF="#Service">IService</A> interface which
 is used later to talk to service. To prepare SPB to attach to service
 manager one can use IXpbBuilder:</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>IXpbBuilder* spb1 =
@@ -830,7 +829,7 @@ spb2-&gt;getBufferLength(&amp;status), spb2-&gt;getBuffer(&amp;status));</FONT><
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>Many started services
 (including mentioned here gstat) return text information during
 execution. To display it one should query started service anout that
-information line by line. This is done by calling query() method of 
+information line by line. This is done by calling query() method of
 <A HREF="#Service">IService</A> interface with appropriate send and
 receive blocks of parameters. Send block may contain various helper
 information (like timeout when querying service) or information to be
@@ -848,7 +847,7 @@ steps we are ready to query service in a loop (each line returned in
 a single call to query()):</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>do</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">     <FONT SIZE=4><I>svc-&gt;query(&amp;status,
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>svc-&gt;query(&amp;status,
 0, NULL, sizeof(receiveItems1), receiveItems1, sizeof(results),
 results);</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>} while
@@ -890,13 +889,13 @@ services tasks do not forget to close an interface:</FONT></P>
 <FONT FACE="Albany, sans-serif"><FONT SIZE=5>Writing plugins.</FONT></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>To write a plugin means to
 implement some interfaces and place your implementation into dynamic
-library (.dll in windows or .so in linux) later referenced as <I>plugin
-module</I> or just <I>module</I>. In most cases single plugin is
-place in dynamic library but in common case. One of that interfaces –
-<A HREF="#PluginModule">IPluginModule</A> – is module-wide (as more
-or less clear from it's name), others are per plugin. Also each
-plugin module should contain special exported entrypoint
-firebird_plugin() which name is defined in include file
+library (.dll in windows or .so in linux) later referenced as </FONT><FONT SIZE=4><I>plugin
+module</I></FONT><FONT SIZE=4> or just </FONT><FONT SIZE=4><I>module</I></FONT><FONT SIZE=4>.
+In most cases single plugin is place in dynamic library but in common
+case. One of that interfaces – <A HREF="#PluginModule">IPluginModule</A>
+– is module-wide (as more or less clear from it's name), others are
+per plugin. Also each plugin module should contain special exported
+entrypoint firebird_plugin() which name is defined in include file
 firebird/Interfaces.h as FB_PLUGIN_ENTRY_POINT.</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>In previous part of this
 text we were mostly describing how to use existing interfaces, here
@@ -915,12 +914,13 @@ sample yourself and learn it when reading later.</FONT></P>
 </P>
 <H1><FONT SIZE=4>Implementation of plugin module.</FONT></H1>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>Plugins actively interact
-with special firebird component called <I>plugin manager</I>. In
-particular plugin manager should be aware what plugin modules were
-loaded and must be notified if operating system tries to unload one
-of that modules without explicit plugin manager command (this may
-happen first of all when using embedded access – when exit() is
-called in a program or main firebird library <I><SPAN STYLE="font-weight: normal">fbclient</SPAN></I>
+with special firebird component called </FONT><FONT SIZE=4><I>plugin
+manager</I></FONT><FONT SIZE=4>. In particular plugin manager should
+be aware what plugin modules were loaded and must be notified if
+operating system tries to unload one of that modules without explicit
+plugin manager command (this may happen first of all when using
+embedded access – when exit() is called in a program or main
+firebird library </FONT><FONT SIZE=4><I><SPAN STYLE="font-weight: normal">fbclient</SPAN></I></FONT><FONT SIZE=4>
 is unloaded). Primary task of IPluginModule interface is that
 notification. First of all one must decide - how to detect that
 module is going to be unloaded? When dynamic library is unloaded for
@@ -943,44 +943,38 @@ looks as follows:</FONT></P>
 public IPluginModuleImpl&lt;PluginModule, CheckStatusWrapper&gt;</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>private:</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>IPluginManager*
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>IPluginManager*
 pluginManager;</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>public:</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>PluginModule()</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>:
-pluginManager(NULL)</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>{ }</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>PluginModule()</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>: pluginManager(NULL)</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{ }</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>~PluginModule()</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>if
-(pluginManager)</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">           
-<FONT SIZE=4><I>pluginManager-&gt;unregisterModule(this);</I></FONT></P>
-<P STYLE="margin-bottom: 0in">            <FONT SIZE=4><I>doClean();</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>}</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>~PluginModule()</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>if (pluginManager)</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>pluginManager-&gt;unregisterModule(this);</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>doClean();</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>void
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>void
 registerMe(IPluginManager* m)</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>pluginManager =
-m;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">       
-<FONT SIZE=4><I>pluginManager-&gt;registerModule(this);</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>pluginManager = m;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>pluginManager-&gt;registerModule(this);</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>void doClean()</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">          <FONT SIZE=4><I>pluginManager
-= NULL;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>void doClean()</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>pluginManager = NULL;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>};</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
@@ -989,15 +983,15 @@ plugin manager interface <A HREF="#PluginManager">IPluginManager</A>.
 It's passed to registerModule() function and saved in private
 variable, at the same time module is registered in plugin manager by
 the call to registerModule() method with own address as a single
-parameter. Variable <I>pluginManager </I>not only stores pointer to
-interface, at the same time it serves as a flag that module is
-registered. When destructor of registered module is invoked it
-notifies plugin manager (yes, this is what for this class exists!)
-about unexpected unload by the call to unregisterModule() passing
-pointer to itself. When plugin manager is going to unload module in
-regular way in first of all calls doClean() method changing module
-state to unregistered and this avoiding call to unregisterModule()
-when OS performs actual unload.</FONT></P>
+parameter. Variable </FONT><FONT SIZE=4><I>pluginManager </I></FONT><FONT SIZE=4>not
+only stores pointer to interface, at the same time it serves as a
+flag that module is registered. When destructor of registered module
+is invoked it notifies plugin manager (yes, this is what for this
+class exists!) about unexpected unload by the call to
+unregisterModule() passing pointer to itself. When plugin manager is
+going to unload module in regular way in first of all calls doClean()
+method changing module state to unregistered and this avoiding call
+to unregisterModule() when OS performs actual unload.</FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>Implementing plugin's
@@ -1031,13 +1025,13 @@ non-existent type SomePlugin):</FONT></P>
 ISomePluginImpl&lt;MyPlugin, CheckStatusWrapper&gt;</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>public:</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>explicit
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>explicit
 MyPlugin(<A HREF="#PluginConfig">IPluginConfig</A>* cnf) throw()</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                <FONT SIZE=4><I>:
-config(cnf), refCounter(0), owner(NULL)</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                <FONT SIZE=4><I>config-&gt;addRef();</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>: config(cnf),
+refCounter(0), owner(NULL)</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>config-&gt;addRef();</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in; font-style: normal"><FONT SIZE=4>Constructor
 gets as parameter plugin configuration interface. If you are going to
 have you plugin configured in some way it's good idea to save this
@@ -1047,74 +1041,67 @@ familiar configuration and minimize code written. Certainly when
 saving any reference counted interface it's better not forget to add
 reference to it. Also set reference counter to 0 and plugin owner to
 NULL.</FONT></P>
-<P STYLE="margin-bottom: 0in; font-style: normal"><BR>
+<P STYLE="margin-bottom: 0in"><BR>
 </P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>~MyPlugin()</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                <FONT SIZE=4><I>config-&gt;release();</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>~MyPlugin()</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>config-&gt;release();</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in; font-style: normal"><FONT SIZE=4>Destructor
 releases config interface. Pay attention – we do not change
 reference counter of our owner cause it owns us, not we own it.</FONT></P>
-<P STYLE="margin-bottom: 0in; font-style: normal"><BR>
-</P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>// IRefCounted
-implementation</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>int release()</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                <FONT SIZE=4><I>if
-(--refCounter == 0)</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                        <FONT SIZE=4><I>delete
-this;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                        <FONT SIZE=4><I>return
-0;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                <FONT SIZE=4><I>}</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                <FONT SIZE=4><I>return
-1;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>void addRef()</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                <FONT SIZE=4><I>++refCounter;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>// IRefCounted
+implementation</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>int release()</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>if (--refCounter == 0)</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>delete this;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>return 0;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>return 1;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><BR>
+</P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>void addRef()</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>++refCounter;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in; font-style: normal"><FONT SIZE=4>Absolutely
 typical implementation of reference counted object.</FONT></P>
-<P STYLE="margin-bottom: 0in; font-style: normal"><BR>
-</P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>// IPluginBase
-implementation</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>void
-setOwner(IReferenceCounted* o)</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                <FONT SIZE=4><I>owner =
-o;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>IReferenceCounted*
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>// IPluginBase
+implementation</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>void
+setOwner(IReferenceCounted* o)</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>owner = o;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><BR>
+</P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>IReferenceCounted*
 getOwner()</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">                <FONT SIZE=4><I>return
-owner;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>return owner;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in; font-style: normal"><FONT SIZE=4>As it
 was promised implementation of IPluginBase is trivial.</FONT></P>
-<P STYLE="margin-bottom: 0in; font-style: normal"><BR>
+<P STYLE="margin-bottom: 0in"><BR>
 </P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>// ISomePlugin
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>// ISomePlugin
 implementation</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>// … here go
-various methods required for particular plugin type</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>// … here go various
+methods required for particular plugin type</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>private:</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>IPluginConfig*
-config;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>FbSampleAtomic
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>IPluginConfig* config;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>FbSampleAtomic
 refCounter;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>IReferenceCounted*
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>IReferenceCounted*
 owner;</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>};</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
@@ -1134,17 +1121,17 @@ manager. Factory typically looks this way:</FONT></P>
 IPluginFactoryImpl&lt;Factory, CheckStatusWrapper&gt;</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>public:</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>IPluginBase*
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>IPluginBase*
 createPlugin(CheckStatusWrapper* status, IPluginConfig*
 factoryParameter)</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>{</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>MyPlugin* p =
-new MyPlugin(factoryParameter);</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>p-&gt;addRef();</I></FONT></P>
-<P STYLE="margin-bottom: 0in">        <FONT SIZE=4><I>return p;</I></FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4><I>}</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>{</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>MyPlugin* p = new
+MyPlugin(factoryParameter);</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>p-&gt;addRef();</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>return p;</I></FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>}</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>};</I></FONT></P>
-<P STYLE="margin-bottom: 0in; font-style: normal"><BR>
+<P STYLE="margin-bottom: 0in"><BR>
 </P>
 <P STYLE="margin-bottom: 0in; font-style: normal"><FONT SIZE=4>Here
 attention should be payed to the fact that even in a case when code
@@ -1182,13 +1169,12 @@ plugin manager:</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>extern &quot;C&quot; void
 FB_DLL_EXPORT FB_PLUGIN_ENTRY_POINT(IMaster* master)</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>{</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>IPluginManager*
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>IPluginManager*
 pluginManager = master-&gt;getPluginManager();</FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>module.registerMe(pluginManager);</FONT></P>
-<P STYLE="margin-bottom: 0in">   
-<FONT SIZE=4>pluginManager-&gt;registerPluginFactory(IPluginManager::TYPE_DB_CRYPT,
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>module.registerMe(pluginManager);</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>pluginManager-&gt;registerPluginFactory(IPluginManager::TYPE_DB_CRYPT,
 &quot;DbCrypt_example&quot;, &amp;factory);</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>}</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>First of all we call
@@ -1396,39 +1382,38 @@ objects:</FONT></P>
 </OL>
 <P STYLE="margin-bottom: 0in"><A NAME="Directory codes"></A><FONT SIZE=4>Directory
 codes:</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_BIN – bin
-(utilities like isql, gbak, gstat)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_SBIN – sbin
-(fbguard and firebird server)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_CONF –
-configuration files (firebird.conf, databases.conf, plugins.conf)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_LIB – lib
-(fbclient, ib_util)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_INC – include
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_BIN – bin (utilities
+like isql, gbak, gstat)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_SBIN – sbin (fbguard
+and firebird server)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_CONF – configuration
+files (firebird.conf, databases.conf, plugins.conf)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_LIB – lib (fbclient,
+ib_util)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_INC – include
 (ibase.h, firebird/Interfaces.h)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_DOC -
-documentation</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_UDF – UDF
-(ib_udf, fbudf)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_SAMPLE - samples</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_SAMPLEDB –
-samples database (employee.fdb)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_HELP – qli help
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_DOC - documentation</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_UDF – UDF (ib_udf,
+fbudf)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_SAMPLE - samples</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_SAMPLEDB – samples
+database (employee.fdb)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_HELP – qli help
 (help.fdb)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_INTL –
-international libraries (fbintl)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_MISC –
-miscellaneous files (like uninstall manifest and something else)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_SECDB – where
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_INTL – international
+libraries (fbintl)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_MISC – miscellaneous
+files (like uninstall manifest and something else)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_SECDB – where
 security database is stored (securityN.fdb)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_MSG – where
-messages file is stored (firebird.msg)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_LOG – where log
-file is stored (firebird.log)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_GUARD – where
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_MSG – where messages
+file is stored (firebird.msg)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_LOG – where log file
+is stored (firebird.log)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_GUARD – where
 guardian lock is stored (fb_guard)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>DIR_PLUGINS –
-plugins directory ([lib]Engine13.{dll|so})</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>DIR_PLUGINS – plugins
+directory ([lib]Engine13.{dll|so})</FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
 <P STYLE="margin-bottom: 0in"><BR>
@@ -1757,15 +1742,15 @@ interface – API of plugin manager.</FONT></P>
 </P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>Constants defined by
 PluginManager interface (plugin types):</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>TYPE_PROVIDER</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>TYPE_AUTH_SERVER</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>TYPE_AUTH_CLIENT</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>TYPE_AUTH_USER_MANAGEMENT</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>TYPE_EXTERNAL_ENGINE</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>TYPE_TRACE</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>TYPE_WIRE_CRYPT</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>TYPE_DB_CRYPT</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>TYPE_KEY_HOLDER</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>TYPE_PROVIDER</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>TYPE_AUTH_SERVER</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>TYPE_AUTH_CLIENT</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>TYPE_AUTH_USER_MANAGEMENT</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>TYPE_EXTERNAL_ENGINE</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>TYPE_TRACE</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>TYPE_WIRE_CRYPT</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>TYPE_DB_CRYPT</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>TYPE_KEY_HOLDER</FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
 <P STYLE="margin-bottom: 0in"><BR>
@@ -1966,7 +1951,7 @@ Statement interface:</FONT></P>
 </P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>IAttachment::prepare()
 flags:</FONT></P>
-<P STYLE="margin-left: 0.38in; text-indent: -0.01in; margin-bottom: 0in; page-break-before: auto">
+<P STYLE="margin-left: 0.38in; text-indent: -0.01in; margin-bottom: 0in; page-break-before: auto; page-break-after: auto">
 <FONT SIZE=4>PREPARE_PREFETCH_NONE – constant to pass no flags, 0
 value.</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>The following flags may be
@@ -2088,8 +2073,8 @@ moment when given timer should alarm.</FONT></P>
 	<LI><P STYLE="margin-bottom: 0in"><FONT SIZE=4>void
 	start(StatusType* status, ITimer* timer, ISC_UINT64 microSeconds) –
 	start <A HREF="#Timer">ITimer</A> to alarm after given delay (in
-	microseconds, 10<SUP>-6</SUP> seconds). Timer will be waked up only
-	once after this call.</FONT></P>
+	microseconds, 10</FONT><SUP><FONT SIZE=4>-6</FONT></SUP><FONT SIZE=4>
+	seconds). Timer will be waked up only once after this call.</FONT></P>
 	<LI><P STYLE="margin-bottom: 0in"><FONT SIZE=4>void stop(StatusType*
 	status, ITimer* timer) – stop <A HREF="#Timer">ITimer</A>. It's
 	not an error to stop not started timer thus avoiding problems with
@@ -2190,7 +2175,8 @@ interface – various helper methods required here or there.</FONT></P>
 	unsigned fractions) – replaces isc_encode_sql_time().</FONT></P>
 	<LI><P STYLE="margin-bottom: 0in"><FONT SIZE=4>unsigned
 	formatStatus(char* buffer, unsigned bufferSize, IStatus* status) –
-	replaces fb_interpret().</FONT></P>
+	replaces fb_interpret(). Size of buffer, passed into this method,
+	should not be less than 50 bytes.</FONT></P>
 	<LI><P STYLE="margin-bottom: 0in"><FONT SIZE=4>unsigned
 	getClientVersion() – returns integer, containing major version in
 	byte 0 and minor version in byte 1.</FONT></P>
@@ -2311,13 +2297,13 @@ be selected by firebird and passed to that interface.</FONT></P>
 <OL>
 	<LI><P STYLE="margin-bottom: 0in"><FONT SIZE=4>void
 	setSymmetric(StatusType* status, const char* type, unsigned
-	keyLength, const void* key) – make it store symmetric key of 
-	given type.</FONT></P>
+	keyLength, const void* key) – make it store symmetric key of given
+	type.</FONT></P>
 	<LI><P STYLE="margin-bottom: 0in"><FONT SIZE=4>void
 	setAsymmetric(StatusType* status, const char* type, unsigned
 	encryptKeyLength, const void* encryptKey, unsigned decryptKeyLength,
 	const void* decryptKey) – make it store pair of asymmetric keys of
-	 given type.</FONT></P>
+	given type.</FONT></P>
 	<LI><P STYLE="margin-bottom: 0in"><FONT SIZE=4>const void*
 	getEncryptKey(unsigned* length) – get a key for encryption.</FONT></P>
 	<LI><P STYLE="margin-bottom: 0in"><FONT SIZE=4>const void*
@@ -2502,7 +2488,7 @@ interface:</FONT></P>
 <P STYLE="margin-bottom: 0in"><A NAME="IntUserField"></A><FONT SIZE=4>IntUserField
 interface:</FONT></P>
 <OL>
-	<LI><P STYLE="margin-bottom: 0in"><FONT SIZE=4>int get() -  get
+	<LI><P STYLE="margin-bottom: 0in"><FONT SIZE=4>int get() - get
 	field's value.</FONT></P>
 	<LI><P STYLE="margin-bottom: 0in"><FONT SIZE=4>void set(StatusType*
 	status, int newValue) – assigns value to the field. Sets entered
@@ -2663,7 +2649,7 @@ plugin or key holder plugin.</FONT></P>
 	bufferLength, void* buffer) – when performing callback information
 	is passed in both directions. The source of a key receives
 	dataLength bytes of data and may send up to bufferLength bytes into
-	buffer returning actual number of  bytes placed into buffer.</FONT></P>
+	buffer returning actual number of bytes placed into buffer.</FONT></P>
 </OL>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
@@ -2737,40 +2723,40 @@ static messages.</FONT></P>
 </P>
 <P STYLE="margin-bottom: 0in"><A NAME="FbDate"></A><FONT SIZE=4>class
 FbDate methods:</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>void decode(IUtil*
-util, unsigned* year, unsigned* month, unsigned* day)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>unsigned
-getYear(IUtil* util) </FONT>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>void decode(IUtil* util,
+unsigned* year, unsigned* month, unsigned* day)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>unsigned getYear(IUtil*
+util) </FONT>
 </P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>unsigned
-getMonth(IUtil* util)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>unsigned getDay(IUtil*
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>unsigned getMonth(IUtil*
 util)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>void encode(IUtil*
-util, unsigned year, unsigned month, unsigned day)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>unsigned getDay(IUtil*
+util)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>void encode(IUtil* util,
+unsigned year, unsigned month, unsigned day)</FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
 <P STYLE="margin-bottom: 0in"><A NAME="FbTime"></A><FONT SIZE=4>class
 FbTime methods:</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>void decode(IUtil*
-util, unsigned* hours, unsigned* minutes, unsigned* seconds,
-unsigned* fractions)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>unsigned
-getHours(IUtil* util)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>unsigned
-getMinutes(IUtil* util)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>unsigned
-getSeconds(IUtil* util)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>unsigned
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>void decode(IUtil* util,
+unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned*
+fractions)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>unsigned getHours(IUtil*
+util)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>unsigned getMinutes(IUtil*
+util)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>unsigned getSeconds(IUtil*
+util)</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>unsigned
 getFractions(IUtil* util)</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>void encode(IUtil*
-util, unsigned hours, unsigned minutes, unsigned seconds, unsigned
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>void encode(IUtil* util,
+unsigned hours, unsigned minutes, unsigned seconds, unsigned
 fractions)</FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>class FbTimestamp members:</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>FbDate date;</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>FbTime time;</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>FbDate date;</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>FbTime time;</FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
 <P STYLE="margin-bottom: 0in"><BR>
@@ -2785,7 +2771,7 @@ fields. </FONT>
 <P STYLE="margin-bottom: 0in"><A NAME="FbChar"></A><FONT SIZE=4>struct
 FbChar</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>{</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>char str[N];</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>char str[N];</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>};</FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>
@@ -2793,10 +2779,9 @@ FbChar</FONT></P>
 <P STYLE="margin-bottom: 0in"><A NAME="FbVarChar"></A><FONT SIZE=4>struct
 FbVarChar</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>{</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>ISC_USHORT length;</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>char str[N];</FONT></P>
-<P STYLE="margin-bottom: 0in">    <FONT SIZE=4>void set(const char*
-s);</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>ISC_USHORT length;</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>char str[N];</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>void set(const char* s);</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>};</FONT></P>
 <P STYLE="margin-bottom: 0in"><BR>
 </P>

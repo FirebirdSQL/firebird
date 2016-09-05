@@ -37,71 +37,51 @@ using namespace Jrd;
 // Data access: aggregation
 // ------------------------
 
-// Note that we can have NULL order here, in case of window function with shouldCallWinPass
-// returning true, with partition, and without order. Example: ROW_NUMBER() OVER (PARTITION BY N).
-AggregatedStream::AggregatedStream(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
-			const NestValueArray* group, MapNode* map, BaseBufferedStream* next,
-			const NestValueArray* order)
+template <typename ThisType, typename NextType>
+BaseAggWinStream<ThisType, NextType>::BaseAggWinStream(thread_db* tdbb, CompilerScratch* csb,
+			StreamType stream, const NestValueArray* group, MapNode* groupMap,
+			bool oneRowWhenEmpty, NextType* next)
 	: RecordStream(csb, stream),
-	  m_bufferedStream(next),
-	  m_next(m_bufferedStream),
-	  m_group(group),
-	  m_map(map),
-	  m_order(order),
-	  m_winPassSources(csb->csb_pool),
-	  m_winPassTargets(csb->csb_pool)
-{
-	init(tdbb, csb);
-}
-
-AggregatedStream::AggregatedStream(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
-			const NestValueArray* group, MapNode* map, RecordSource* next)
-	: RecordStream(csb, stream),
-	  m_bufferedStream(NULL),
 	  m_next(next),
 	  m_group(group),
-	  m_map(map),
-	  m_order(NULL),
-	  m_winPassSources(csb->csb_pool),
-	  m_winPassTargets(csb->csb_pool)
+	  m_groupMap(groupMap),
+	  m_oneRowWhenEmpty(oneRowWhenEmpty)
 {
-	init(tdbb, csb);
+	fb_assert(m_next);
+	m_impure = CMP_impure(csb, sizeof(typename ThisType::Impure));
 }
 
-void AggregatedStream::open(thread_db* tdbb) const
+template <typename ThisType, typename NextType>
+void BaseAggWinStream<ThisType, NextType>::open(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
-	Impure* const impure = request->getImpure<Impure>(m_impure);
+	Impure* const impure = getImpure(request);
 
 	impure->irsb_flags = irsb_open;
 
 	impure->state = STATE_GROUPING;
-	impure->lastGroup = false;
-	impure->partitionBlock.startPosition = impure->partitionBlock.endPosition =
-		impure->partitionBlock.pending = 0;
-	impure->orderBlock = impure->partitionBlock;
 
 	VIO_record(tdbb, &request->req_rpb[m_stream], m_format, tdbb->getDefaultPool());
 
 	unsigned impureCount = m_group ? m_group->getCount() : 0;
-	impureCount += m_order ? m_order->getCount() : 0;
 
-	if (!impure->impureValues && impureCount > 0)
+	if (!impure->groupValues && impureCount > 0)
 	{
-		impure->impureValues = FB_NEW_POOL(*tdbb->getDefaultPool()) impure_value[impureCount];
-		memset(impure->impureValues, 0, sizeof(impure_value) * impureCount);
+		impure->groupValues = FB_NEW_POOL(*tdbb->getDefaultPool()) impure_value[impureCount];
+		memset(impure->groupValues, 0, sizeof(impure_value) * impureCount);
 	}
 
 	m_next->open(tdbb);
 }
 
-void AggregatedStream::close(thread_db* tdbb) const
+template <typename ThisType, typename NextType>
+void BaseAggWinStream<ThisType, NextType>::close(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 
 	invalidateRecords(request);
 
-	Impure* const impure = request->getImpure<Impure>(m_impure);
+	Impure* const impure = getImpure(request);
 
 	if (impure->irsb_flags & irsb_open)
 	{
@@ -111,232 +91,51 @@ void AggregatedStream::close(thread_db* tdbb) const
 	}
 }
 
-bool AggregatedStream::getRecord(thread_db* tdbb) const
-{
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
-
-	jrd_req* const request = tdbb->getRequest();
-	record_param* const rpb = &request->req_rpb[m_stream];
-	Impure* const impure = request->getImpure<Impure>(m_impure);
-
-	if (!(impure->irsb_flags & irsb_open))
-	{
-		rpb->rpb_number.setValid(false);
-		return false;
-	}
-
-	if (m_bufferedStream)	// Is that a window stream?
-	{
-		const FB_UINT64 position = m_bufferedStream->getPosition(request);
-
-		if (impure->orderBlock.pending == 0)
-		{
-			if (impure->partitionBlock.pending == 0)
-			{
-				if (impure->lastGroup || !evaluateGroup(tdbb, AGG_TYPE_GROUP, MAX_UINT64))
-				{
-					rpb->rpb_number.setValid(false);
-					return false;
-				}
-
-				impure->partitionBlock.startPosition = position;
-				impure->partitionBlock.endPosition = m_bufferedStream->getPosition(request) - 1 -
-					(impure->state == STATE_FETCHED ? 1 : 0);
-				impure->partitionBlock.pending =
-					impure->partitionBlock.endPosition - impure->partitionBlock.startPosition + 1;
-
-				fb_assert(impure->partitionBlock.pending > 0);
-
-				m_bufferedStream->locate(tdbb, position);
-				impure->state = STATE_GROUPING;
-
-				impure->lastGroup = impure->state == STATE_EOF;
-			}
-
-			// Check if we need to re-aggregate by the ORDER BY clause.
-			if (!m_order && m_winPassSources.isEmpty())
-				impure->orderBlock = impure->partitionBlock;
-			else
-			{
-				if (!evaluateGroup(tdbb, AGG_TYPE_ORDER, impure->partitionBlock.pending))
-					fb_assert(false);
-
-				impure->orderBlock.startPosition = position;
-				impure->orderBlock.endPosition = m_bufferedStream->getPosition(request) - 1 -
-					(impure->state == STATE_FETCHED ? 1 : 0);
-				impure->orderBlock.pending =
-					impure->orderBlock.endPosition - impure->orderBlock.startPosition + 1;
-
-				fb_assert(impure->orderBlock.pending > 0);
-			}
-
-			m_bufferedStream->locate(tdbb, position);
-			impure->state = STATE_GROUPING;
-		}
-
-		fb_assert(impure->orderBlock.pending > 0 && impure->partitionBlock.pending > 0);
-
-		--impure->orderBlock.pending;
-		--impure->partitionBlock.pending;
-
-		if (m_winPassSources.hasData())
-		{
-			SlidingWindow window(tdbb, m_bufferedStream, m_group, request,
-				impure->partitionBlock.startPosition, impure->partitionBlock.endPosition,
-				impure->orderBlock.startPosition, impure->orderBlock.endPosition);
-			dsc* desc;
-
-			const NestConst<ValueExprNode>* const sourceEnd = m_winPassSources.end();
-
-			for (const NestConst<ValueExprNode>* source = m_winPassSources.begin(),
-					*target = m_winPassTargets.begin();
-				 source != sourceEnd;
-				 ++source, ++target)
-			{
-				const AggNode* aggNode = (*source)->as<AggNode>();
-
-				const FieldNode* field = (*target)->as<FieldNode>();
-				const USHORT id = field->fieldId;
-				Record* record = request->req_rpb[field->fieldStream].rpb_record;
-
-				desc = aggNode->winPass(tdbb, request, &window);
-
-				if (!desc)
-					record->setNull(id);
-				else
-				{
-					MOV_move(tdbb, desc, EVL_assign_to(tdbb, *target));
-					record->clearNull(id);
-				}
-			}
-		}
-
-		if (!m_bufferedStream->getRecord(tdbb))
-			fb_assert(false);
-
-		// If there is no group, we should reassign the map items.
-		if (!m_group)
-		{
-			const NestConst<ValueExprNode>* const sourceEnd = m_map->sourceList.end();
-
-			for (const NestConst<ValueExprNode>* source = m_map->sourceList.begin(),
-					*target = m_map->targetList.begin();
-				 source != sourceEnd;
-				 ++source, ++target)
-			{
-				const AggNode* aggNode = (*source)->as<AggNode>();
-
-				if (!aggNode)
-					EXE_assignment(tdbb, *source, *target);
-			}
-		}
-	}
-	else
-	{
-		if (!evaluateGroup(tdbb, AGG_TYPE_GROUP, MAX_UINT64))
-		{
-			rpb->rpb_number.setValid(false);
-			return false;
-		}
-	}
-
-	rpb->rpb_number.setValid(true);
-	return true;
-}
-
-bool AggregatedStream::refetchRecord(thread_db* tdbb) const
+template <typename ThisType, typename NextType>
+bool BaseAggWinStream<ThisType, NextType>::refetchRecord(thread_db* tdbb) const
 {
 	return m_next->refetchRecord(tdbb);
 }
 
-bool AggregatedStream::lockRecord(thread_db* /*tdbb*/) const
+template <typename ThisType, typename NextType>
+bool BaseAggWinStream<ThisType, NextType>::lockRecord(thread_db* /*tdbb*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 	return false; // compiler silencer
 }
 
-void AggregatedStream::print(thread_db* tdbb, string& plan,
-							 bool detailed, unsigned level) const
-{
-	if (detailed)
-		plan += printIndent(++level) + (m_bufferedStream ? "Window" : "Aggregate");
-
-	m_next->print(tdbb, plan, detailed, level);
-}
-
-void AggregatedStream::markRecursive()
+template <typename ThisType, typename NextType>
+void BaseAggWinStream<ThisType, NextType>::markRecursive()
 {
 	m_next->markRecursive();
 }
 
-void AggregatedStream::invalidateRecords(jrd_req* request) const
+template <typename ThisType, typename NextType>
+void BaseAggWinStream<ThisType, NextType>::invalidateRecords(jrd_req* request) const
 {
 	m_next->invalidateRecords(request);
 }
 
-void AggregatedStream::findUsedStreams(StreamList& streams, bool expandAll) const
+template <typename ThisType, typename NextType>
+void BaseAggWinStream<ThisType, NextType>::findUsedStreams(StreamList& streams,
+	bool expandAll) const
 {
 	RecordStream::findUsedStreams(streams);
 
 	if (expandAll)
 		m_next->findUsedStreams(streams, true);
-
-	if (m_bufferedStream)
-		m_bufferedStream->findUsedStreams(streams, expandAll);
-}
-
-void AggregatedStream::nullRecords(thread_db* tdbb) const
-{
-	RecordStream::nullRecords(tdbb);
-
-	if (m_bufferedStream)
-		m_bufferedStream->nullRecords(tdbb);
-}
-
-void AggregatedStream::init(thread_db* tdbb, CompilerScratch* csb)
-{
-	fb_assert(m_map && m_next);
-	m_impure = CMP_impure(csb, sizeof(Impure));
-
-	// Separate nodes that requires the winPass call.
-
-	NestConst<ValueExprNode>* const sourceEnd = m_map->sourceList.end();
-
-	for (NestConst<ValueExprNode>* source = m_map->sourceList.begin(),
-			*target = m_map->targetList.begin();
-		 source != sourceEnd;
-		 ++source, ++target)
-	{
-		AggNode* aggNode = (*source)->as<AggNode>();
-
-		if (aggNode)
-		{
-			aggNode->ordered = m_order != NULL;
-
-			bool wantWinPass = false;
-			aggNode->aggSetup(wantWinPass);
-
-			if (wantWinPass)
-			{
-				m_winPassSources.add(*source);
-				m_winPassTargets.add(*target);
-			}
-		}
-	}
 }
 
 // Compute the next aggregated record of a value group.
-bool AggregatedStream::evaluateGroup(thread_db* tdbb, AggType aggType, FB_UINT64 limit) const
+template <typename ThisType, typename NextType>
+bool BaseAggWinStream<ThisType, NextType>::evaluateGroup(thread_db* tdbb) const
 {
-	const NestValueArray* const group = aggType == AGG_TYPE_GROUP ? m_group : m_order;
-	unsigned groupOffset = aggType == AGG_TYPE_GROUP || !m_group ? 0 : m_group->getCount();
 	jrd_req* const request = tdbb->getRequest();
 
 	if (--tdbb->tdbb_quantum < 0)
 		JRD_reschedule(tdbb, 0, true);
 
-	Impure* const impure = request->getImpure<Impure>(m_impure);
+	Impure* const impure = getImpure(request);
 
 	// if we found the last record last time, we're all done
 	if (impure->state == STATE_EOF)
@@ -344,48 +143,50 @@ bool AggregatedStream::evaluateGroup(thread_db* tdbb, AggType aggType, FB_UINT64
 
 	try
 	{
-		if (aggType == AGG_TYPE_GROUP || group != NULL)
-			aggInit(tdbb, request, aggType);
+		if (m_groupMap)
+			aggInit(tdbb, request, m_groupMap);
 
 		// If there isn't a record pending, open the stream and get one
 
-		if (!getNextRecord(tdbb, request, limit))
+		if (!getNextRecord(tdbb, request))
 		{
 			impure->state = STATE_EOF;
 
-			if (group || m_bufferedStream)
+			if (!m_oneRowWhenEmpty)
 			{
-				finiDistinct(tdbb, request);
+				if (m_groupMap)
+					aggFinish(tdbb, request, m_groupMap);
 				return false;
 			}
 		}
 		else
-			cacheValues(tdbb, request, group, groupOffset);
+			cacheValues(tdbb, request, m_group, impure->groupValues, DummyAdjustFunctor());
 
 		// Loop thru records until either a value change or EOF
 
 		while (impure->state == STATE_GROUPING)
 		{
-			if ((aggType == AGG_TYPE_GROUP || group != NULL) && !aggPass(tdbb, request))
+			if (m_groupMap && !aggPass(tdbb, request, m_groupMap->sourceList, m_groupMap->targetList))
 				impure->state = STATE_EOF;
-			else if (getNextRecord(tdbb, request, limit))
+			else if (getNextRecord(tdbb, request))
 			{
 				// In the case of a group by, look for a change in value of any of
 				// the columns; if we find one, stop aggregating and return what we have.
 
-				if (lookForChange(tdbb, request, group, groupOffset))
+				if (lookForChange(tdbb, request, m_group, NULL, impure->groupValues))
 					impure->state = STATE_FETCHED;
 			}
 			else
 				impure->state = STATE_EOF;
 		}
 
-		if (aggType == AGG_TYPE_GROUP || group != NULL)
-			aggExecute(tdbb, request);
+		if (m_groupMap)
+			aggExecute(tdbb, request, m_groupMap->sourceList, m_groupMap->targetList);
 	}
 	catch (const Exception&)
 	{
-		finiDistinct(tdbb, request);
+		if (m_groupMap)
+			aggFinish(tdbb, request, m_groupMap);
 		throw;
 	}
 
@@ -393,32 +194,36 @@ bool AggregatedStream::evaluateGroup(thread_db* tdbb, AggType aggType, FB_UINT64
 }
 
 // Initialize the aggregate record
-void AggregatedStream::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+template <typename ThisType, typename NextType>
+void BaseAggWinStream<ThisType, NextType>::aggInit(thread_db* tdbb, jrd_req* request,
+	const MapNode* map) const
 {
-	const NestConst<ValueExprNode>* const sourceEnd = m_map->sourceList.end();
+	const NestConst<ValueExprNode>* const sourceEnd = map->sourceList.end();
 
-	for (const NestConst<ValueExprNode>* source = m_map->sourceList.begin(),
-			*target = m_map->targetList.begin();
+	for (const NestConst<ValueExprNode>* source = map->sourceList.begin(),
+			*target = map->targetList.begin();
 		 source != sourceEnd;
 		 ++source, ++target)
 	{
 		const AggNode* aggNode = (*source)->as<AggNode>();
 
 		if (aggNode)
-			aggNode->aggInit(tdbb, request, aggType);
+			aggNode->aggInit(tdbb, request);
 		else if ((*source)->is<LiteralNode>())
 			EXE_assignment(tdbb, *source, *target);
 	}
 }
 
 // Go through and compute all the aggregates on this record
-bool AggregatedStream::aggPass(thread_db* tdbb, jrd_req* request) const
+template <typename ThisType, typename NextType>
+bool BaseAggWinStream<ThisType, NextType>::aggPass(thread_db* tdbb, jrd_req* request,
+	const NestValueArray& sourceList, const NestValueArray& targetList) const
 {
 	bool ret = true;
-	const NestConst<ValueExprNode>* const sourceEnd = m_map->sourceList.end();
+	const NestConst<ValueExprNode>* const sourceEnd = sourceList.end();
 
-	for (const NestConst<ValueExprNode>* source = m_map->sourceList.begin(),
-			*target = m_map->targetList.begin();
+	for (const NestConst<ValueExprNode>* source = sourceList.begin(),
+			*target = targetList.begin();
 		 source != sourceEnd;
 		 ++source, ++target)
 	{
@@ -440,12 +245,14 @@ bool AggregatedStream::aggPass(thread_db* tdbb, jrd_req* request) const
 	return ret;
 }
 
-void AggregatedStream::aggExecute(thread_db* tdbb, jrd_req* request) const
+template <typename ThisType, typename NextType>
+void BaseAggWinStream<ThisType, NextType>::aggExecute(thread_db* tdbb, jrd_req* request,
+	const NestValueArray& sourceList, const NestValueArray& targetList) const
 {
-	const NestConst<ValueExprNode>* const sourceEnd = m_map->sourceList.end();
+	const NestConst<ValueExprNode>* const sourceEnd = sourceList.end();
 
-	for (const NestConst<ValueExprNode>* source = m_map->sourceList.begin(),
-			*target = m_map->targetList.begin();
+	for (const NestConst<ValueExprNode>* source = sourceList.begin(),
+			*target = targetList.begin();
 		 source != sourceEnd;
 		 ++source, ++target)
 	{
@@ -469,87 +276,14 @@ void AggregatedStream::aggExecute(thread_db* tdbb, jrd_req* request) const
 	}
 }
 
-bool AggregatedStream::getNextRecord(thread_db* tdbb, jrd_req* request, FB_UINT64& limit) const
-{
-	Impure* const impure = request->getImpure<Impure>(m_impure);
-
-	if (limit == 0)
-		return false;
-	else if (impure->state == STATE_FETCHED)
-	{
-		impure->state = STATE_GROUPING;
-		return true;
-	}
-	else if (m_next->getRecord(tdbb))
-	{
-		--limit;
-		return true;
-	}
-	else
-		return false;
-}
-
-// Cache the values of a group/order in the impure.
-inline void AggregatedStream::cacheValues(thread_db* tdbb, jrd_req* request,
-	const NestValueArray* group, unsigned impureOffset) const
-{
-	if (!group)
-		return;
-
-	Impure* const impure = request->getImpure<Impure>(m_impure);
-
-	for (const NestConst<ValueExprNode>* ptrValue = group->begin(), *endValue = group->end();
-		 ptrValue != endValue;
-		 ++ptrValue, ++impureOffset)
-	{
-		const ValueExprNode* from = *ptrValue;
-		impure_value* target = &impure->impureValues[impureOffset];
-
-		dsc* desc = EVL_expr(tdbb, request, from);
-
-		if (request->req_flags & req_null)
-			target->vlu_desc.dsc_address = NULL;
-		else
-			EVL_make_value(tdbb, desc, target);
-	}
-}
-
-// Look for change in the values of a group/order.
-inline bool AggregatedStream::lookForChange(thread_db* tdbb, jrd_req* request,
-	const NestValueArray* group, unsigned impureOffset) const
-{
-	if (!group)
-		return false;
-
-	Impure* const impure = request->getImpure<Impure>(m_impure);
-
-	for (const NestConst<ValueExprNode>* ptrValue = group->begin(), *endValue = group->end();
-		 ptrValue != endValue;
-		 ++ptrValue, ++impureOffset)
-	{
-		const ValueExprNode* from = *ptrValue;
-		impure_value* vtemp = &impure->impureValues[impureOffset];
-
-		dsc* desc = EVL_expr(tdbb, request, from);
-
-		if (request->req_flags & req_null)
-		{
-			if (vtemp->vlu_desc.dsc_address)
-				return true;
-		}
-		else if (!vtemp->vlu_desc.dsc_address || MOV_compare(&vtemp->vlu_desc, desc) != 0)
-			return true;
-	}
-
-	return false;
-}
-
 // Finalize a sort for distinct aggregate
-void AggregatedStream::finiDistinct(thread_db* tdbb, jrd_req* request) const
+template <typename ThisType, typename NextType>
+void BaseAggWinStream<ThisType, NextType>::aggFinish(thread_db* tdbb, jrd_req* request,
+	const MapNode* map) const
 {
-	const NestConst<ValueExprNode>* const sourceEnd = m_map->sourceList.end();
+	const NestConst<ValueExprNode>* const sourceEnd = map->sourceList.end();
 
-	for (const NestConst<ValueExprNode>* source = m_map->sourceList.begin();
+	for (const NestConst<ValueExprNode>* source = map->sourceList.begin();
 		 source != sourceEnd;
 		 ++source)
 	{
@@ -560,131 +294,108 @@ void AggregatedStream::finiDistinct(thread_db* tdbb, jrd_req* request) const
 	}
 }
 
-
-SlidingWindow::SlidingWindow(thread_db* aTdbb, const BaseBufferedStream* aStream,
-			const NestValueArray* aGroup, jrd_req* aRequest,
-			FB_UINT64 aPartitionStart, FB_UINT64 aPartitionEnd,
-			FB_UINT64 aOrderStart, FB_UINT64 aOrderEnd)
-	: tdbb(aTdbb),	// Note: instanciate the class only as local variable
-	  stream(aStream),
-	  group(aGroup),
-	  request(aRequest),
-	  partitionStart(aPartitionStart),
-	  partitionEnd(aPartitionEnd),
-	  orderStart(aOrderStart),
-	  orderEnd(aOrderEnd),
-	  moved(false)
+// Look for change in the values of a group/order.
+template <typename ThisType, typename NextType>
+int BaseAggWinStream<ThisType, NextType>::lookForChange(thread_db* tdbb, jrd_req* request,
+	const NestValueArray* group, const SortNode* sort, impure_value* values) const
 {
-	savedPosition = stream->getPosition(request);
-}
-
-SlidingWindow::~SlidingWindow()
-{
-	if (!moved)
-		return;
-
-	for (impure_value* impure = partitionKeys.begin(); impure != partitionKeys.end(); ++impure)
-		delete impure->vlu_string;
-
-	// Position the stream where we received it.
-	stream->locate(tdbb, savedPosition);
-}
-
-// Move in the window without pass partition boundaries.
-bool SlidingWindow::move(SINT64 delta)
-{
-	const SINT64 newPosition = SINT64(savedPosition) + delta;
-
-	// If we try to go out of bounds, no need to check the partition.
-	if (newPosition < 0 || newPosition >= (SINT64) stream->getCount(tdbb))
-		return false;
-
 	if (!group)
-	{
-		// No partition, we may go everywhere.
-
-		moved = true;
-
-		stream->locate(tdbb, newPosition);
-
-		if (!stream->getRecord(tdbb))
-		{
-			fb_assert(false);
-			return false;
-		}
-
-		return true;
-	}
-
-	if (!moved)
-	{
-		// This is our first move. We should cache the partition values, so subsequente moves didn't
-		// need to evaluate them again.
-
-		if (!stream->getRecord(tdbb))
-		{
-			fb_assert(false);
-			return false;
-		}
-
-		try
-		{
-			impure_value* impure = partitionKeys.getBuffer(group->getCount());
-			memset(impure, 0, sizeof(impure_value) * group->getCount());
-
-			const NestConst<ValueExprNode>* const end = group->end();
-			dsc* desc;
-
-			for (const NestConst<ValueExprNode>* ptr = group->begin(); ptr < end; ++ptr, ++impure)
-			{
-				const ValueExprNode* from = *ptr;
-				desc = EVL_expr(tdbb, request, from);
-
-				if (request->req_flags & req_null)
-					impure->vlu_desc.dsc_address = NULL;
-				else
-					EVL_make_value(tdbb, desc, impure);
-			}
-		}
-		catch (const Exception&)
-		{
-			stream->locate(tdbb, savedPosition);	// Reposition for a new try.
-			throw;
-		}
-
-		moved = true;
-	}
-
-	stream->locate(tdbb, newPosition);
-
-	if (!stream->getRecord(tdbb))
-	{
-		fb_assert(false);
 		return false;
-	}
 
-	// Verify if we're still inside the same partition.
+	Impure* const impure = getImpure(request);
 
-	impure_value* impure = partitionKeys.begin();
-	dsc* desc;
-	const NestConst<ValueExprNode>* const end = group->end();
-
-	for (const NestConst<ValueExprNode>* ptr = group->begin(); ptr != end; ++ptr, ++impure)
+	for (const NestConst<ValueExprNode>* ptrValue = group->begin(), *endValue = group->end();
+		 ptrValue != endValue;
+		 ++ptrValue)
 	{
-		const ValueExprNode* from = *ptr;
-		desc = EVL_expr(tdbb, request, from);
+		int direction = 1;
+		int nullDirection = 1;
+
+		if (sort)
+		{
+			unsigned index = ptrValue - group->begin();
+
+			if (sort->descending[index])
+				direction = -1;
+
+			nullDirection = (sort->getEffectiveNullOrder(index) == rse_nulls_first ? 1 : -1);
+		}
+
+		const ValueExprNode* from = *ptrValue;
+		impure_value* vtemp = &values[ptrValue - group->begin()];
+
+		dsc* desc = EVL_expr(tdbb, request, from);
+		int n;
 
 		if (request->req_flags & req_null)
 		{
-			if (impure->vlu_desc.dsc_address)
-				return false;
+			if (vtemp->vlu_desc.dsc_address)
+				return -1 * nullDirection;
 		}
-		else
-		{
-			if (!impure->vlu_desc.dsc_address || MOV_compare(&impure->vlu_desc, desc) != 0)
-				return false;
-		}
+		else if (!vtemp->vlu_desc.dsc_address)
+			return 1 * nullDirection;
+		else if ((n = MOV_compare(desc, &vtemp->vlu_desc)) != 0)
+			return n * direction;
 	}
 
+	return 0;
+}
+
+template <typename ThisType, typename NextType>
+bool BaseAggWinStream<ThisType, NextType>::getNextRecord(thread_db* tdbb, jrd_req* request) const
+{
+	Impure* const impure = getImpure(request);
+
+	if (impure->state == STATE_FETCHED)
+	{
+		impure->state = STATE_GROUPING;
+		return true;
+	}
+	else
+		return m_next->getRecord(tdbb);
+}
+
+// Export the template for WindowedStream::WindowStream.
+template class BaseAggWinStream<WindowedStream::WindowStream, BaseBufferedStream>;
+
+// ------------------------------
+
+AggregatedStream::AggregatedStream(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
+			const NestValueArray* group, MapNode* map, RecordSource* next)
+	: BaseAggWinStream(tdbb, csb, stream, group, map, !group, next)
+{
+	fb_assert(map);
+}
+
+void AggregatedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+{
+	if (detailed)
+		plan += printIndent(++level) + "Aggregate";
+
+	m_next->print(tdbb, plan, detailed, level);
+}
+
+bool AggregatedStream::getRecord(thread_db* tdbb) const
+{
+	if (--tdbb->tdbb_quantum < 0)
+		JRD_reschedule(tdbb, 0, true);
+
+	jrd_req* const request = tdbb->getRequest();
+	record_param* const rpb = &request->req_rpb[m_stream];
+	Impure* const impure = getImpure(request);
+
+	if (!(impure->irsb_flags & irsb_open))
+	{
+		rpb->rpb_number.setValid(false);
+		return false;
+	}
+
+	if (!evaluateGroup(tdbb))
+	{
+		rpb->rpb_number.setValid(false);
+		return false;
+	}
+
+	rpb->rpb_number.setValid(true);
 	return true;
 }

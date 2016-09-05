@@ -407,4 +407,17 @@
 #define blr_record_version2			(unsigned char) 209
 #define blr_gen_id2					(unsigned char) 210 // NEXT VALUE FOR generator
 
+// FB 4.0 specific BLR
+
+#define blr_window_win				(unsigned char) 211
+
+// subcodes of blr_window_win
+#define blr_window_win_partition			(unsigned char) 1
+#define blr_window_win_order				(unsigned char) 2
+#define blr_window_win_map					(unsigned char) 3
+#define blr_window_win_extent_unit 			(unsigned char) 4
+#define blr_window_win_extent_frame_bound	(unsigned char) 5
+#define blr_window_win_extent_frame_value	(unsigned char) 6
+#define blr_window_win_exclusion			(unsigned char) 7
+
 #endif // JRD_BLR_H

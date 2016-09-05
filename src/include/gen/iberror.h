@@ -851,6 +851,11 @@ const ISC_STATUS isc_miss_prvlg                       = 335545112L;
 const ISC_STATUS isc_crypt_checksum                   = 335545113L;
 const ISC_STATUS isc_not_dba                          = 335545114L;
 const ISC_STATUS isc_no_cursor                        = 335545115L;
+const ISC_STATUS isc_dsql_window_incompat_frames      = 335545116L;
+const ISC_STATUS isc_dsql_window_range_multi_key      = 335545117L;
+const ISC_STATUS isc_dsql_window_range_inv_key_type   = 335545118L;
+const ISC_STATUS isc_dsql_window_frame_value_inv_type = 335545119L;
+const ISC_STATUS isc_window_frame_value_invalid       = 335545120L;
 const ISC_STATUS isc_gfix_db_name                     = 335740929L;
 const ISC_STATUS isc_gfix_invalid_sw                  = 335740930L;
 const ISC_STATUS isc_gfix_incmp_sw                    = 335740932L;
@@ -1322,7 +1327,7 @@ const ISC_STATUS isc_trace_switch_user_only           = 337182757L;
 const ISC_STATUS isc_trace_switch_param_miss          = 337182758L;
 const ISC_STATUS isc_trace_param_act_notcompat        = 337182759L;
 const ISC_STATUS isc_trace_mandatory_switch_miss      = 337182760L;
-const ISC_STATUS isc_err_max                          = 1266;
+const ISC_STATUS isc_err_max                          = 1271;
 
 #else /* c definitions */
 
@@ -2143,6 +2148,11 @@ const ISC_STATUS isc_err_max                          = 1266;
 #define isc_crypt_checksum                   335545113L
 #define isc_not_dba                          335545114L
 #define isc_no_cursor                        335545115L
+#define isc_dsql_window_incompat_frames      335545116L
+#define isc_dsql_window_range_multi_key      335545117L
+#define isc_dsql_window_range_inv_key_type   335545118L
+#define isc_dsql_window_frame_value_inv_type 335545119L
+#define isc_window_frame_value_invalid       335545120L
 #define isc_gfix_db_name                     335740929L
 #define isc_gfix_invalid_sw                  335740930L
 #define isc_gfix_incmp_sw                    335740932L
@@ -2614,7 +2624,7 @@ const ISC_STATUS isc_err_max                          = 1266;
 #define isc_trace_switch_param_miss          337182758L
 #define isc_trace_param_act_notcompat        337182759L
 #define isc_trace_mandatory_switch_miss      337182760L
-#define isc_err_max                          1266
+#define isc_err_max                          1271
 
 #endif
 

@@ -816,6 +816,11 @@ static const struct {
 	{335545113, -902}, /* 793 crypt_checksum */
 	{335545114, -902}, /* 794 not_dba */
 	{335545115, -901}, /* 795 no_cursor */
+	{335545116, -104}, /* 796 dsql_window_incompat_frames */
+	{335545117, -104}, /* 797 dsql_window_range_multi_key */
+	{335545118, -104}, /* 798 dsql_window_range_inv_key_type */
+	{335545119, -104}, /* 799 dsql_window_frame_value_inv_type */
+	{335545120, -833}, /* 800 window_frame_value_invalid */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */

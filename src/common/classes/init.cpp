@@ -108,7 +108,7 @@ namespace
 			{
 				fprintf(stderr, "dladdr: %s\n", dlerror());
 			}
-#else if defined(WIN_32)
+#elif defined(WIN_32)
 			HMODULE hmod = 0;
 			GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 				(LPCTSTR) &allClean,

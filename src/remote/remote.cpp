@@ -38,6 +38,7 @@
 #include "firebird/Interface.h"
 #include "../common/os/mod_loader.h"
 #include "../jrd/license.h"
+#include "../common/classes/ImplementHelper.h"
 
 #ifdef DEV_BUILD
 Firebird::AtomicCounter rem_port::portCounter;
@@ -1495,7 +1496,7 @@ bool REMOTE_deflate(XDR* xdrs, ProtoWrite* proto_write, PacketSend* packet_send,
 {
 #ifdef WIRE_COMPRESS_SUPPORT
 	rem_port* port = (rem_port*) xdrs->x_public;
-	if (!port->port_compressed)
+	if (!(port->port_compressed && (port->port_flags & PORT_compressed)))
 		return proto_write(xdrs);
 
 	z_stream& strm = port->port_send_stream;

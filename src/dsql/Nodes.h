@@ -434,6 +434,9 @@ public:
 		TYPE_UDF_CALL,
 		TYPE_VALUE_IF,
 		TYPE_VARIABLE,
+		TYPE_WINDOW_CLAUSE,
+		TYPE_WINDOW_CLAUSE_FRAME,
+		TYPE_WINDOW_CLAUSE_FRAME_EXTENT,
 
 		// Bool types
 		TYPE_BINARY_BOOL,
@@ -820,8 +823,74 @@ public:
 	dsc nodDesc;
 };
 
+template <typename T, typename ValueExprNode::Type typeConst>
+class DsqlNode : public TypedNode<ValueExprNode, typeConst>
+{
+public:
+	DsqlNode(MemoryPool& pool)
+		: TypedNode<ValueExprNode, typeConst>(pool)
+	{
+	}
+
+public:
+	virtual void setParameterName(dsql_par* /*parameter*/) const
+	{
+		fb_assert(false);
+	}
+
+	virtual void genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
+	{
+		fb_assert(false);
+	}
+
+	virtual void make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* /*desc*/)
+	{
+		fb_assert(false);
+	}
+
+	virtual void getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* /*desc*/)
+	{
+		fb_assert(false);
+	}
+
+	virtual DsqlNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
+	{
+		fb_assert(false);
+		return NULL;
+	}
+
+	virtual DsqlNode* pass2(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
+	{
+		fb_assert(false);
+		return NULL;
+	}
+
+	virtual ValueExprNode* copy(thread_db* /*tdbb*/, NodeCopier& /*copier*/) const
+	{
+		fb_assert(false);
+		return NULL;
+	}
+
+	virtual dsc* execute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
+	{
+		fb_assert(false);
+		return NULL;
+	}
+};
+
 class AggNode : public TypedNode<ValueExprNode, ExprNode::TYPE_AGGREGATE>
 {
+public:
+	// Capabilities
+	// works in a window frame
+	static const unsigned CAP_SUPPORTS_WINDOW_FRAME	= 0x01;
+	// respects window frame boundaries
+	static const unsigned CAP_RESPECTS_WINDOW_FRAME	= 0x02 | CAP_SUPPORTS_WINDOW_FRAME;
+	// wants aggPass/aggExecute calls in a window
+	static const unsigned CAP_WANTS_AGG_CALLS		= 0x04;
+	// wants winPass call in a window
+	static const unsigned CAP_WANTS_WIN_PASS_CALL	= 0x08;
+
 protected:
 	struct AggInfo
 	{
@@ -913,6 +982,7 @@ public:
 		RegisterNode<T> registerNode1, registerNode2;
 	};
 
+public:
 	explicit AggNode(MemoryPool& pool, const AggInfo& aAggInfo, bool aDistinct, bool aDialect1,
 		ValueExprNode* aArg = NULL);
 
@@ -955,31 +1025,17 @@ public:
 		return false;
 	}
 
-	virtual void checkOrderedWindowCapable() const
-	{
-		if (distinct)
-		{
-			Firebird::status_exception::raise(
-				Firebird::Arg::Gds(isc_wish_list) <<
-				Firebird::Arg::Gds(isc_random) <<
-					"DISTINCT is not supported in ordered windows");
-		}
-	}
-
-	virtual void aggSetup(bool& wantWinPass) const
-	{
-	}
-
 	virtual dsc* winPass(thread_db* /*tdbb*/, jrd_req* /*request*/, SlidingWindow* /*window*/) const
 	{
 		return NULL;
 	}
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const = 0;	// pure, but defined
+	virtual void aggInit(thread_db* tdbb, jrd_req* request) const = 0;	// pure, but defined
 	virtual void aggFinish(thread_db* tdbb, jrd_req* request) const;
 	virtual bool aggPass(thread_db* tdbb, jrd_req* request) const;
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
+	virtual unsigned getCapabilities() const = 0;
 	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const = 0;
 	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const = 0;
 
@@ -1000,7 +1056,6 @@ public:
 	NestConst<ValueExprNode> arg;
 	const AggregateSort* asb;
 	bool indexed;
-	bool ordered;
 
 private:
 	static Factory* factories;
@@ -1012,6 +1067,16 @@ class WinFuncNode : public AggNode
 {
 public:
 	explicit WinFuncNode(MemoryPool& pool, const AggInfo& aAggInfo, ValueExprNode* aArg = NULL);
+
+public:
+	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const
+	{
+	}
+
+	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const
+	{
+		return NULL;
+	}
 };
 
 

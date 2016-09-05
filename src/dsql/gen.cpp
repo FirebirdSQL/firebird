@@ -561,7 +561,7 @@ void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 	}
 
 	if (rse->dsqlOrder)
-		GEN_sort(dsqlScratch, rse->dsqlOrder);
+		GEN_sort(dsqlScratch, blr_sort, rse->dsqlOrder);
 
 	if (rse->dsqlDistinct)
 	{
@@ -587,28 +587,32 @@ void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 
 
 // Generate a sort clause.
-void GEN_sort(DsqlCompilerScratch* dsqlScratch, ValueListNode* list)
+void GEN_sort(DsqlCompilerScratch* dsqlScratch, UCHAR blrVerb, ValueListNode* list)
 {
-	dsqlScratch->appendUChar(blr_sort);
-	dsqlScratch->appendUChar(list->items.getCount());
+	dsqlScratch->appendUChar(blrVerb);
+	dsqlScratch->appendUChar(list ? list->items.getCount() : 0);
 
-	NestConst<ValueExprNode>* ptr = list->items.begin();
-	for (const NestConst<ValueExprNode>* const end = list->items.end(); ptr != end; ++ptr)
+	if (list)
 	{
-		OrderNode* orderNode = (*ptr)->as<OrderNode>();
+		NestConst<ValueExprNode>* ptr = list->items.begin();
 
-		switch (orderNode->nullsPlacement)
+		for (const NestConst<ValueExprNode>* const end = list->items.end(); ptr != end; ++ptr)
 		{
-			case OrderNode::NULLS_FIRST:
-				dsqlScratch->appendUChar(blr_nullsfirst);
-				break;
-			case OrderNode::NULLS_LAST:
-				dsqlScratch->appendUChar(blr_nullslast);
-				break;
-		}
+			OrderNode* orderNode = (*ptr)->as<OrderNode>();
 
-		dsqlScratch->appendUChar((orderNode->descending ? blr_descending : blr_ascending));
-		GEN_expr(dsqlScratch, orderNode->value);
+			switch (orderNode->nullsPlacement)
+			{
+				case OrderNode::NULLS_FIRST:
+					dsqlScratch->appendUChar(blr_nullsfirst);
+					break;
+				case OrderNode::NULLS_LAST:
+					dsqlScratch->appendUChar(blr_nullslast);
+					break;
+			}
+
+			dsqlScratch->appendUChar((orderNode->descending ? blr_descending : blr_ascending));
+			GEN_expr(dsqlScratch, orderNode->value);
+		}
 	}
 }
 

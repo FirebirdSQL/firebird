@@ -5273,7 +5273,7 @@ ValueExprNode* FieldNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	if (dsqlContext->ctx_scope_level == visitor.context->ctx_scope_level)
 	{
 		return PASS1_post_map(visitor.dsqlScratch, this, visitor.context,
-			visitor.partitionNode, visitor.orderNode);
+			visitor.partitionNode, visitor.windowNode);
 	}
 
 	return this;
@@ -6799,7 +6799,7 @@ ValueExprNode* DsqlMapNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	if (visitor.window && context->ctx_scope_level == visitor.context->ctx_scope_level)
 	{
 		return PASS1_post_map(visitor.dsqlScratch, this,
-			visitor.context, visitor.partitionNode, visitor.orderNode);
+			visitor.context, visitor.partitionNode, visitor.windowNode);
 	}
 
 	return this;
@@ -6994,7 +6994,7 @@ ValueExprNode* DerivedFieldNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	if (scope == visitor.context->ctx_scope_level)
 	{
 		return PASS1_post_map(visitor.dsqlScratch, this,
-			visitor.context, visitor.partitionNode, visitor.orderNode);
+			visitor.context, visitor.partitionNode, visitor.windowNode);
 	}
 	else if (visitor.context->ctx_scope_level < scope)
 		doDsqlFieldRemapper(visitor, value);
@@ -7383,7 +7383,7 @@ dsc* NullNode::execute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
 
 
 OrderNode::OrderNode(MemoryPool& pool, ValueExprNode* aValue)
-	: TypedNode<ValueExprNode, ExprNode::TYPE_ORDER>(pool),
+	: DsqlNode(pool),
 	  value(aValue),
 	  descending(false),
 	  nullsPlacement(NULLS_DEFAULT)
@@ -7424,16 +7424,163 @@ bool OrderNode::dsqlMatch(const ExprNode* other, bool ignoreMapCast) const
 //--------------------
 
 
+bool WindowClause::Frame::sameAs(const ExprNode* other, bool ignoreStreams) const
+{
+	if (!ExprNode::sameAs(other, ignoreStreams))
+		return false;
+
+	const Frame* const otherNode = other->as<Frame>();
+	fb_assert(otherNode);
+
+	return bound == otherNode->bound;
+}
+
+WindowClause::Frame* WindowClause::Frame::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	ListExprNode::pass1(tdbb, csb);
+	return this;
+}
+
+WindowClause::Frame* WindowClause::Frame::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	ListExprNode::pass2(tdbb, csb);
+	return this;
+}
+
+WindowClause::Frame* WindowClause::Frame::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	Frame* node = FB_NEW_POOL(*tdbb->getDefaultPool()) Frame(*tdbb->getDefaultPool(), bound);
+	node->value = copier.copy(tdbb, value);
+	return node;
+}
+
+//--------------------
+
+bool WindowClause::FrameExtent::sameAs(const ExprNode* other, bool ignoreStreams) const
+{
+	if (!ExprNode::sameAs(other, ignoreStreams))
+		return false;
+
+	const FrameExtent* const otherNode = other->as<FrameExtent>();
+	fb_assert(otherNode);
+
+	return unit == otherNode->unit;
+}
+
+WindowClause::FrameExtent* WindowClause::FrameExtent::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	if (frame1 && frame2)
+	{
+		if (frame1->bound == Frame::BOUND_CURRENT_ROW && frame2->bound == Frame::BOUND_PRECEDING)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_dsql_window_incompat_frames) << "CURRENT ROW" << "PRECEDING");
+		}
+
+		if (frame1->bound == Frame::BOUND_FOLLOWING && frame2->bound != Frame::BOUND_FOLLOWING)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_dsql_window_incompat_frames) <<
+					"FOLLOWING" << "PRECEDING or CURRENT ROW");
+		}
+	}
+
+	return FB_NEW_POOL(getPool()) FrameExtent(getPool(), unit,
+		doDsqlPass(dsqlScratch, frame1),
+		doDsqlPass(dsqlScratch, frame2));
+}
+
+WindowClause::FrameExtent* WindowClause::FrameExtent::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	ListExprNode::pass1(tdbb, csb);
+	return this;
+}
+
+WindowClause::FrameExtent* WindowClause::FrameExtent::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	ListExprNode::pass2(tdbb, csb);
+	return this;
+}
+
+WindowClause::FrameExtent* WindowClause::FrameExtent::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	FrameExtent* node = FB_NEW_POOL(*tdbb->getDefaultPool()) FrameExtent(
+		*tdbb->getDefaultPool(), unit);
+	node->frame1 = copier.copy(tdbb, frame1);
+	node->frame2 = copier.copy(tdbb, frame2);
+	return node;
+}
+
+//--------------------
+
+WindowClause* WindowClause::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	WindowClause* node = FB_NEW_POOL(getPool()) WindowClause(getPool(),
+		doDsqlPass(dsqlScratch, order),
+		doDsqlPass(dsqlScratch, extent),
+		exclusion);
+
+	if (node->order && node->extent && node->extent->unit == FrameExtent::UNIT_RANGE &&
+		(node->extent->frame1->value || (node->extent->frame2 && node->extent->frame2->value)))
+	{
+		if (node->order->items.getCount() > 1)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_dsql_window_range_multi_key));
+		}
+		else
+		{
+			OrderNode* key = node->order->items[0]->as<OrderNode>();
+			fb_assert(key);
+
+			dsc desc;
+			MAKE_desc(dsqlScratch, &desc, key->value);
+
+			if (!desc.isDateTime() && !desc.isNumeric())
+			{
+				status_exception::raise(
+					Arg::Gds(isc_dsql_window_range_inv_key_type));
+			}
+		}
+	}
+
+	if (node->extent)
+	{
+		for (unsigned i = 0; i < 2; ++i)
+		{
+			WindowClause::Frame* frame = i == 0 ? node->extent->frame1 : node->extent->frame2;
+
+			if (frame && frame->value)
+			{
+				dsc desc;
+				MAKE_desc(dsqlScratch, &desc, frame->value);
+
+				if (!desc.isNumeric())
+				{
+					status_exception::raise(
+						Arg::Gds(isc_dsql_window_frame_value_inv_type));
+				}
+			}
+		}
+	}
+
+	return node;
+}
+
+
+//--------------------
+
+
 OverNode::OverNode(MemoryPool& pool, AggNode* aAggExpr, ValueListNode* aPartition,
-			ValueListNode* aOrder)
+			WindowClause* aWindow)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_OVER>(pool),
 	  aggExpr(aAggExpr),
 	  partition(aPartition),
-	  order(aOrder)
+	  window(aWindow)
 {
 	addDsqlChildNode(aggExpr);
 	addDsqlChildNode(partition);
-	addDsqlChildNode(order);
+	addDsqlChildNode(window);
 }
 
 string OverNode::internalPrint(NodePrinter& printer) const
@@ -7442,7 +7589,7 @@ string OverNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, aggExpr);
 	NODE_PRINT(printer, partition);
-	NODE_PRINT(printer, order);
+	NODE_PRINT(printer, window);
 
 	return "OverNode";
 }
@@ -7463,7 +7610,7 @@ bool OverNode::dsqlAggregateFinder(AggregateFinder& visitor)
 		aggregate |= visitor.visit(aggExpr);
 
 	aggregate |= visitor.visit(partition);
-	aggregate |= visitor.visit(order);
+	aggregate |= visitor.visit(window);
 
 	return aggregate;
 }
@@ -7478,7 +7625,7 @@ bool OverNode::dsqlAggregate2Finder(Aggregate2Finder& visitor)
 	}
 
 	found |= visitor.visit(partition);
-	found |= visitor.visit(order);
+	found |= visitor.visit(window);
 
 	return found;
 }
@@ -7492,7 +7639,7 @@ bool OverNode::dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor)
 
 	invalid |= visitor.visit(aggExpr);
 	invalid |= visitor.visit(partition);
-	invalid |= visitor.visit(order);
+	invalid |= visitor.visit(window);
 
 	return invalid;
 }
@@ -7506,7 +7653,7 @@ ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 {
 	// Save the values to restore them in the end.
 	AutoSetRestore<ValueListNode*> autoPartitionNode(&visitor.partitionNode, visitor.partitionNode);
-	AutoSetRestore<ValueListNode*> autoOrderNode(&visitor.orderNode, visitor.orderNode);
+	AutoSetRestore<WindowClause*> autoWindowNode(&visitor.windowNode, visitor.windowNode);
 
 	if (partition)
 	{
@@ -7520,16 +7667,16 @@ ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 		visitor.partitionNode = partition;
 	}
 
-	if (order)
+	if (window)
 	{
 		if (Aggregate2Finder::find(visitor.context->ctx_scope_level, FIELD_MATCH_TYPE_EQUAL,
-				true, order))
+				true, window))
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 					  Arg::Gds(isc_dsql_agg_nested_err));
 		}
 
-		visitor.orderNode = order;
+		visitor.windowNode = window;
 	}
 
 	// Before remap, aggExpr must always be an AggNode;
@@ -7557,7 +7704,7 @@ ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 		{
 			{	// scope
 				AutoSetRestore<ValueListNode*> autoPartitionNode2(&visitor.partitionNode, NULL);
-				AutoSetRestore<ValueListNode*> autoOrderNode2(&visitor.orderNode, NULL);
+				AutoSetRestore<WindowClause*> autoWindowNode2(&visitor.windowNode, NULL);
 
 				Array<NodeRef*>& exprChildren = aggNode->dsqlChildNodes;
 				for (NodeRef** i = exprChildren.begin(); i != exprChildren.end(); ++i)
@@ -7569,27 +7716,29 @@ ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 				for (unsigned i = 0; i < partition->items.getCount(); ++i)
 				{
 					AutoSetRestore<ValueListNode*> autoPartitionNode2(&visitor.partitionNode, NULL);
-					AutoSetRestore<ValueListNode*> autoOrderNode2(&visitor.orderNode, NULL);
+					AutoSetRestore<WindowClause*> autoWindowNode2(&visitor.windowNode, NULL);
 
 					doDsqlFieldRemapper(visitor, partition->items[i]);
 				}
 			}
 
-			if (order)
+			// ASF: I'm not sure if this is enough or frame values needs to be remapped as well.
+			if (window && window->order)
 			{
-				for (unsigned i = 0; i < order->items.getCount(); ++i)
+				for (unsigned i = 0; i < window->order->items.getCount(); ++i)
 				{
 					AutoSetRestore<ValueListNode*> autoPartitionNode(&visitor.partitionNode, NULL);
-					AutoSetRestore<ValueListNode*> autoOrderNode(&visitor.orderNode, NULL);
+					AutoSetRestore<WindowClause*> autoWindowNode2(&visitor.windowNode, NULL);
 
-					doDsqlFieldRemapper(visitor, order->items[i]);
+					doDsqlFieldRemapper(visitor, window->order->items[i]);
 				}
 			}
 		}
 		else if (visitor.dsqlScratch->scopeLevel == aggFinder.deepestLevel)
 		{
+
 			return PASS1_post_map(visitor.dsqlScratch, aggNode, visitor.context,
-				visitor.partitionNode, visitor.orderNode);
+				visitor.partitionNode, visitor.windowNode);
 		}
 	}
 
@@ -7631,10 +7780,24 @@ dsc* OverNode::execute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
 
 ValueExprNode* OverNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	return FB_NEW_POOL(getPool()) OverNode(getPool(),
+	OverNode* node = FB_NEW_POOL(getPool()) OverNode(getPool(),
 		static_cast<AggNode*>(doDsqlPass(dsqlScratch, aggExpr)),
 		doDsqlPass(dsqlScratch, partition),
-		doDsqlPass(dsqlScratch, order));
+		doDsqlPass(dsqlScratch, window));
+
+	const AggNode* aggNode = node->aggExpr->as<AggNode>();
+
+	if (window &&
+		window->extent &&
+		aggNode &&
+		(aggNode->getCapabilities() & AggNode::CAP_RESPECTS_WINDOW_FRAME) !=
+			AggNode::CAP_RESPECTS_WINDOW_FRAME)
+	{
+		node->window->extent = WindowClause::FrameExtent::createDefault(getPool());
+		node->window->exclusion = WindowClause::EXCLUDE_NO_OTHERS;
+	}
+
+	return node;
 }
 
 
@@ -8199,7 +8362,7 @@ bool RecordKeyNode::dsqlFieldFinder(FieldFinder& /*visitor*/)
 ValueExprNode* RecordKeyNode::dsqlFieldRemapper(FieldRemapper& visitor)
 {
 	return PASS1_post_map(visitor.dsqlScratch, this,
-		visitor.context, visitor.partitionNode, visitor.orderNode);
+		visitor.context, visitor.partitionNode, visitor.windowNode);
 }
 
 void RecordKeyNode::setParameterName(dsql_par* parameter) const

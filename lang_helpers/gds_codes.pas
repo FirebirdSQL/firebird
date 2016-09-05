@@ -1637,6 +1637,16 @@ const
 	gds_not_dba                          = 335545114;
 	isc_no_cursor                        = 335545115;
 	gds_no_cursor                        = 335545115;
+	isc_dsql_window_incompat_frames      = 335545116;
+	gds_dsql_window_incompat_frames      = 335545116;
+	isc_dsql_window_range_multi_key      = 335545117;
+	gds_dsql_window_range_multi_key      = 335545117;
+	isc_dsql_window_range_inv_key_type   = 335545118;
+	gds_dsql_window_range_inv_key_type   = 335545118;
+	isc_dsql_window_frame_value_inv_type = 335545119;
+	gds_dsql_window_frame_value_inv_type = 335545119;
+	isc_window_frame_value_invalid       = 335545120;
+	gds_window_frame_value_invalid       = 335545120;
 	isc_gfix_db_name                     = 335740929;
 	gds_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;

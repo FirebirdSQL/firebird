@@ -593,12 +593,19 @@ using namespace Firebird;
 
 %token <metaNamePtr> CUME_DIST
 %token <metaNamePtr> ERROR_MESSAGE
+%token <metaNamePtr> EXCLUDE
+%token <metaNamePtr> FOLLOWING
 %token <metaNamePtr> NTILE
+%token <metaNamePtr> OTHERS
 %token <metaNamePtr> PERCENT_RANK
+%token <metaNamePtr> PRECEDING
 %token <metaNamePtr> PRIVILEGE
+%token <metaNamePtr> RANGE
 %token <metaNamePtr> RDB_ROLE_IN_USE
 %token <metaNamePtr> RDB_SYSTEM_PRIVILEGE
 %token <metaNamePtr> SYSTEM
+%token <metaNamePtr> TIES
+%token <metaNamePtr> UNBOUNDED
 
 // precedence declarations for expression evaluation
 
@@ -656,6 +663,10 @@ using namespace Firebird;
 	Firebird::Array<NestConst<Jrd::DbFileClause> >* dbFilesClause;
 	Jrd::ExternalClause* externalClause;
 	Firebird::Array<NestConst<Jrd::ParameterClause> >* parametersClause;
+	Jrd::WindowClause* windowClause;
+	Jrd::WindowClause::FrameExtent* windowClauseFrameExtent;
+	Jrd::WindowClause::Frame* windowClauseFrame;
+	Jrd::WindowClause::Exclusion windowClauseExclusion;
 	Jrd::Node* node;
 	Jrd::ExprNode* exprNode;
 	Jrd::ValueExprNode* valueExprNode;
@@ -3960,6 +3971,7 @@ keyword_or_column
 	| UPDATING
 	| VAR_SAMP
 	| VAR_POP
+	| UNBOUNDED				// added in FB 4.0
 	;
 
 col_opt
@@ -5059,7 +5071,7 @@ lock_clause
 
 %type <selectExprNode> select_expr
 select_expr
-	: with_clause select_expr_body order_clause rows_clause
+	: with_clause select_expr_body order_clause_opt rows_clause
 		{
 			SelectExprNode* node = $$ = newNode<SelectExprNode>();
 			node->querySpec = $2;
@@ -5067,7 +5079,7 @@ select_expr
 			node->rowsClause = $4;
 			node->withClause = $1;
 		}
-	| with_clause select_expr_body order_clause result_offset_clause fetch_first_clause
+	| with_clause select_expr_body order_clause_opt result_offset_clause fetch_first_clause
 		{
 			SelectExprNode* node = $$ = newNode<SelectExprNode>();
 			node->querySpec = $2;
@@ -5594,10 +5606,15 @@ extra_indices_opt($accessType)
 
 // ORDER BY clause
 
+%type <valueListNode> order_clause_opt
+order_clause_opt
+	: /* nothing */			{ $$ = NULL; }
+	| order_clause
+	;
+
 %type <valueListNode> order_clause
 order_clause
-	: /* nothing */			{ $$ = NULL; }
-	| ORDER BY order_list	{ $$ = $3; }
+	: ORDER BY order_list	{ $$ = $3; }
 	;
 
 %type <valueListNode> order_list
@@ -5805,7 +5822,7 @@ delete
 
 %type <stmtNode> delete_searched
 delete_searched
-	: KW_DELETE FROM table_name where_clause plan_clause order_clause rows_clause_optional returning_clause
+	: KW_DELETE FROM table_name where_clause plan_clause order_clause_opt rows_clause_optional returning_clause
 		{
 			EraseNode* node = newNode<EraseNode>();
 			node->dsqlRelation = $3;
@@ -5842,7 +5859,7 @@ update
 %type <stmtNode> update_searched
 update_searched
 	: UPDATE table_name SET assignments where_clause plan_clause
-			order_clause rows_clause_optional returning_clause
+			order_clause_opt rows_clause_optional returning_clause
 		{
 			ModifyNode* node = newNode<ModifyNode>();
 			node->dsqlRelation = $2;
@@ -7058,7 +7075,7 @@ aggregate_window_function
 
 %type <valueExprNode> over_clause
 over_clause
-	: aggregate_window_function OVER '(' window_partition_opt order_clause ')'
+	: aggregate_window_function OVER '(' window_partition_opt window_clause ')'
 		{ $$ = newNode<OverNode>($1, $4, $5); }
 	;
 
@@ -7066,6 +7083,86 @@ over_clause
 window_partition_opt
 	: /* nothing */				{ $$ = NULL; }
 	| PARTITION BY value_list	{ $$ = $3; }
+	;
+
+%type <windowClause> window_clause
+window_clause
+	: /* nothing */
+		{ $$ = NULL; }
+	| order_clause window_frame_extent window_frame_exclusion_opt
+		{ $$ = newNode<WindowClause>($1, $2, $3); }
+	;
+
+%type <windowClauseFrameExtent> window_frame_extent
+window_frame_extent
+	: /* nothing */
+		{ $$ = NULL; }
+	| RANGE
+		{ $$ = newNode<WindowClause::FrameExtent>(WindowClause::FrameExtent::UNIT_RANGE); }
+		window_frame($2)
+		{ $$ = $2; }
+	| ROWS
+		{ $$ = newNode<WindowClause::FrameExtent>(WindowClause::FrameExtent::UNIT_ROWS); }
+		window_frame($2)
+		{ $$ = $2; }
+	;
+
+%type window_frame(<windowClauseFrameExtent>)
+window_frame($frameExtent)
+	: window_frame_start
+		{
+			$frameExtent->frame1 = $1;
+			$frameExtent->frame2 =
+				newNode<WindowClause::Frame>(WindowClause::Frame::BOUND_CURRENT_ROW);
+		}
+	| BETWEEN window_frame_between_bound1 AND window_frame_between_bound2
+		{
+			$frameExtent->frame1 = $2;
+			$frameExtent->frame2 = $4;
+		}
+	;
+
+%type <windowClauseFrame> window_frame_start
+window_frame_start
+	: UNBOUNDED PRECEDING
+		{ $$ = newNode<WindowClause::Frame>(WindowClause::Frame::BOUND_PRECEDING); }
+	| CURRENT ROW
+		{ $$ = newNode<WindowClause::Frame>(WindowClause::Frame::BOUND_CURRENT_ROW); }
+	| value PRECEDING
+		{ $$ = newNode<WindowClause::Frame>(WindowClause::Frame::BOUND_PRECEDING, $1); }
+	;
+
+%type <windowClauseFrame> window_frame_between_bound1
+window_frame_between_bound1
+	: UNBOUNDED PRECEDING
+		{ $$ = newNode<WindowClause::Frame>(WindowClause::Frame::BOUND_PRECEDING); }
+	| CURRENT ROW
+		{ $$ = newNode<WindowClause::Frame>(WindowClause::Frame::BOUND_CURRENT_ROW); }
+	| value PRECEDING
+		{ $$ = newNode<WindowClause::Frame>(WindowClause::Frame::BOUND_PRECEDING, $1); }
+	| value FOLLOWING
+		{ $$ = newNode<WindowClause::Frame>(WindowClause::Frame::BOUND_FOLLOWING, $1); }
+	;
+
+%type <windowClauseFrame> window_frame_between_bound2
+window_frame_between_bound2
+	: UNBOUNDED FOLLOWING
+		{ $$ = newNode<WindowClause::Frame>(WindowClause::Frame::BOUND_FOLLOWING); }
+	| CURRENT ROW
+		{ $$ = newNode<WindowClause::Frame>(WindowClause::Frame::BOUND_CURRENT_ROW); }
+	| value PRECEDING
+		{ $$ = newNode<WindowClause::Frame>(WindowClause::Frame::BOUND_PRECEDING, $1); }
+	| value FOLLOWING
+		{ $$ = newNode<WindowClause::Frame>(WindowClause::Frame::BOUND_FOLLOWING, $1); }
+	;
+
+%type <windowClauseExclusion> window_frame_exclusion_opt
+window_frame_exclusion_opt
+	: /* nothing */			{ $$ = WindowClause::EXCLUDE_NO_OTHERS; }
+	| EXCLUDE NO OTHERS		{ $$ = WindowClause::EXCLUDE_NO_OTHERS; }
+	| EXCLUDE CURRENT ROW	{ $$ = WindowClause::EXCLUDE_CURRENT_ROW; }
+	| EXCLUDE GROUP			{ $$ = WindowClause::EXCLUDE_GROUP; }
+	| EXCLUDE TIES			{ $$ = WindowClause::EXCLUDE_TIES; }
 	;
 
 %type <valueExprNode> delimiter_opt
@@ -7866,14 +7963,20 @@ non_reserved_word
 	| INCREMENT
 	| TRUSTED
 	| CUME_DIST				// added in FB 4.0
+	| EXCLUDE
+	| FOLLOWING
 	| NTILE
+	| OTHERS
 	| PERCENT_RANK
+	| PRECEDING
+	| PRIVILEGE
+	| RANGE
 	| RDB_ROLE_IN_USE
 	| RDB_SYSTEM_PRIVILEGE
-	| PRIVILEGE
 	| SYSTEM
 	| ERROR_MESSAGE
-	;
+	| TIES
+;
 
 %%
 

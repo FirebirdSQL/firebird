@@ -802,6 +802,11 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (-902, 'XX', '000', 0, 793, 'crypt_checksum', NULL, NULL)
 (-902, '28', '000', 0, 794, 'not_dba', NULL, NULL)
 (-901, '07', '005', 0, 795, 'no_cursor', NULL, NULL)
+(-104, '42', '000', 0, 796, 'dsql_window_incompat_frames', NULL, NULL)
+(-104, '42', '000', 0, 797, 'dsql_window_range_multi_key', NULL, NULL)
+(-104, '42', '000', 0, 798, 'dsql_window_range_inv_key_type', NULL, NULL)
+(-104, '42', '000', 0, 799, 'dsql_window_frame_value_inv_type', NULL, NULL)
+(-833, '42', '000', 0, 800, 'window_frame_value_invalid', NULL, NULL)
 -- GFIX
 (-901, '00', '000', 3, 1, 'gfix_db_name', NULL, NULL)
 (-901, '00', '000', 3, 2, 'gfix_invalid_sw', NULL, NULL)

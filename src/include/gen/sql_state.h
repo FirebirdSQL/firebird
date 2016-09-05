@@ -816,6 +816,11 @@ static const struct {
 	{335545113, "XX000"}, // 793 crypt_checksum
 	{335545114, "28000"}, // 794 not_dba
 	{335545115, "07005"}, // 795 no_cursor
+	{335545116, "42000"}, // 796 dsql_window_incompat_frames
+	{335545117, "42000"}, // 797 dsql_window_range_multi_key
+	{335545118, "42000"}, // 798 dsql_window_range_inv_key_type
+	{335545119, "42000"}, // 799 dsql_window_frame_value_inv_type
+	{335545120, "42000"}, // 800 window_frame_value_invalid
 	{335740929, "00000"}, //   1 gfix_db_name
 	{335740930, "00000"}, //   2 gfix_invalid_sw
 	{335740932, "00000"}, //   4 gfix_incmp_sw

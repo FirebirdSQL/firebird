@@ -70,8 +70,7 @@ void			PAR_procedure_parms(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::jrd_prc*
 Jrd::RseNode*	PAR_rse(Jrd::thread_db*, Jrd::CompilerScratch*, SSHORT);
 Jrd::RseNode*	PAR_rse(Jrd::thread_db*, Jrd::CompilerScratch*);
 Jrd::SortNode*	PAR_sort(Jrd::thread_db*, Jrd::CompilerScratch*, UCHAR, bool);
-Jrd::SortNode*	PAR_sort_internal(Jrd::thread_db*, Jrd::CompilerScratch*, UCHAR blrOp,
-	USHORT);
+Jrd::SortNode*	PAR_sort_internal(Jrd::thread_db*, Jrd::CompilerScratch*, bool, USHORT);
 SLONG			PAR_symbol_to_gdscode(const Firebird::string&);
 
 typedef Jrd::DmlNode* (*NodeParseFunc)(Jrd::thread_db* tdbb, MemoryPool& pool,

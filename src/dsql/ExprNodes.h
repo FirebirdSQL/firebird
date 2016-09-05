@@ -951,7 +951,7 @@ public:
 };
 
 
-class OrderNode : public TypedNode<ValueExprNode, ExprNode::TYPE_ORDER>
+class OrderNode : public DsqlNode<OrderNode, ExprNode::TYPE_ORDER>
 {
 public:
 	enum NullsPlacement
@@ -967,38 +967,6 @@ public:
 	virtual OrderNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual bool dsqlMatch(const ExprNode* other, bool ignoreMapCast) const;
 
-	virtual void setParameterName(dsql_par* /*parameter*/) const
-	{
-		fb_assert(false);
-	}
-
-	virtual void genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
-	{
-		fb_assert(false);
-	}
-
-	virtual void make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* /*desc*/)
-	{
-		fb_assert(false);
-	}
-
-	virtual void getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* /*desc*/)
-	{
-		fb_assert(false);
-	}
-
-	virtual ValueExprNode* copy(thread_db* /*tdbb*/, NodeCopier& /*copier*/) const
-	{
-		fb_assert(false);
-		return NULL;
-	}
-
-	virtual dsc* execute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
-	{
-		fb_assert(false);
-		return NULL;
-	}
-
 public:
 	NestConst<ValueExprNode> value;
 	bool descending;
@@ -1006,13 +974,227 @@ public:
 };
 
 
+class WindowClause : public DsqlNode<WindowClause, ExprNode::TYPE_WINDOW_CLAUSE>
+{
+public:
+	// ListExprNode has no relation with this but works perfectly here for now.
+
+	class Frame : public TypedNode<ListExprNode, ExprNode::TYPE_WINDOW_CLAUSE_FRAME>
+	{
+	public:
+		enum Bound
+		{
+			// Warning: used in BLR
+			BOUND_PRECEDING = 0,
+			BOUND_FOLLOWING,
+			BOUND_CURRENT_ROW
+		};
+
+	public:
+		explicit Frame(MemoryPool& p, Bound aBound, ValueExprNode* aValue = NULL)
+			: TypedNode(p),
+			  bound(aBound),
+			  value(aValue)
+		{
+			addChildNode(value, value);
+		}
+
+	public:
+		virtual Firebird::string internalPrint(NodePrinter& printer) const
+		{
+			NODE_PRINT(printer, bound);
+			NODE_PRINT(printer, value);
+
+			return "WindowClause::Frame";
+		}
+
+		virtual Frame* dsqlPass(DsqlCompilerScratch* dsqlScratch)
+		{
+			Frame* node = FB_NEW_POOL(getPool()) Frame(getPool(), bound,
+				doDsqlPass(dsqlScratch, value));
+
+			if (node->value)
+			{
+				dsc desc;
+				desc.makeLong(0);
+
+				node->value->setParameterType(dsqlScratch, &desc, false);
+			}
+
+			return node;
+		}
+
+		bool dsqlMatch(const ExprNode* other, bool ignoreMapCast) const
+		{
+			if (!ListExprNode::dsqlMatch(other, ignoreMapCast))
+				return false;
+
+			const Frame* o = other->as<Frame>();
+			fb_assert(o);
+
+			return bound == o->bound;
+		}
+
+		virtual Frame* dsqlFieldRemapper(FieldRemapper& visitor)
+		{
+			ListExprNode::dsqlFieldRemapper(visitor);
+			return this;
+		}
+
+		virtual bool sameAs(const ExprNode* other, bool ignoreStreams) const;
+		virtual Frame* pass1(thread_db* tdbb, CompilerScratch* csb);
+		virtual Frame* pass2(thread_db* tdbb, CompilerScratch* csb);
+		virtual Frame* copy(thread_db* tdbb, NodeCopier& copier) const;
+
+	public:
+		Bound bound;
+		NestConst<ValueExprNode> value;
+	};
+
+	class FrameExtent : public TypedNode<ListExprNode, ExprNode::TYPE_WINDOW_CLAUSE_FRAME_EXTENT>
+	{
+	public:
+		enum Unit
+		{
+			// Warning: used in BLR
+			UNIT_RANGE = 0,
+			UNIT_ROWS
+			//// TODO: SQL-2013: GROUPS
+		};
+
+	public:
+		explicit FrameExtent(MemoryPool& p, Unit aUnit, Frame* aFrame1 = NULL, Frame* aFrame2 = NULL)
+			: TypedNode(p),
+			  unit(aUnit),
+			  frame1(aFrame1),
+			  frame2(aFrame2)
+		{
+			addChildNode(frame1, frame1);
+			addChildNode(frame2, frame2);
+		}
+
+		static FrameExtent* createDefault(MemoryPool& p)
+		{
+			FrameExtent* frameExtent = FB_NEW_POOL(p) WindowClause::FrameExtent(p, UNIT_RANGE);
+			frameExtent->frame1 = FB_NEW_POOL(p) WindowClause::Frame(p, Frame::BOUND_PRECEDING);
+			frameExtent->frame2 = FB_NEW_POOL(p) WindowClause::Frame(p, Frame::BOUND_CURRENT_ROW);
+			return frameExtent;
+		}
+
+	public:
+		virtual Firebird::string internalPrint(NodePrinter& printer) const
+		{
+			NODE_PRINT(printer, unit);
+			NODE_PRINT(printer, frame1);
+			NODE_PRINT(printer, frame2);
+
+			return "WindowClause::FrameExtent";
+		}
+
+		virtual FrameExtent* dsqlPass(DsqlCompilerScratch* dsqlScratch);
+
+		bool dsqlMatch(const ExprNode* other, bool ignoreMapCast) const
+		{
+			if (!ListExprNode::dsqlMatch(other, ignoreMapCast))
+				return false;
+
+			const FrameExtent* o = other->as<FrameExtent>();
+			fb_assert(o);
+
+			return unit == o->unit;
+		}
+
+		virtual FrameExtent* dsqlFieldRemapper(FieldRemapper& visitor)
+		{
+			ListExprNode::dsqlFieldRemapper(visitor);
+			return this;
+		}
+
+		virtual bool sameAs(const ExprNode* other, bool ignoreStreams) const;
+		virtual FrameExtent* pass1(thread_db* tdbb, CompilerScratch* csb);
+		virtual FrameExtent* pass2(thread_db* tdbb, CompilerScratch* csb);
+		virtual FrameExtent* copy(thread_db* tdbb, NodeCopier& copier) const;
+
+	public:
+		Unit unit;
+		NestConst<Frame> frame1;
+		NestConst<Frame> frame2;
+	};
+
+	enum Exclusion
+	{
+		// Warning: used in BLR
+		EXCLUDE_NO_OTHERS = 0,
+		EXCLUDE_CURRENT_ROW,
+		EXCLUDE_GROUP,
+		EXCLUDE_TIES
+	};
+
+public:
+	explicit WindowClause(MemoryPool& p, ValueListNode* aOrder, FrameExtent* aFrameExtent,
+			Exclusion aExclusion)
+		: DsqlNode(p),
+		  order(aOrder),
+		  extent(aFrameExtent),
+		  exclusion(aExclusion)
+	{
+		addDsqlChildNode(order);
+		addDsqlChildNode(extent);
+	}
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	{
+		NODE_PRINT(printer, order);
+		NODE_PRINT(printer, extent);
+
+		return "WindowClause";
+	}
+
+	virtual WindowClause* dsqlPass(DsqlCompilerScratch* dsqlScratch);
+
+	bool dsqlMatch(const ExprNode* other, bool ignoreMapCast) const
+	{
+		if (!DsqlNode::dsqlMatch(other, ignoreMapCast))
+			return false;
+
+		const WindowClause* o = other->as<WindowClause>();
+		fb_assert(o);
+
+		return exclusion == o->exclusion;
+	}
+
+	virtual WindowClause* dsqlFieldRemapper(FieldRemapper& visitor)
+	{
+		DsqlNode::dsqlFieldRemapper(visitor);
+		return this;
+	}
+
+	virtual WindowClause* pass1(thread_db* tdbb, CompilerScratch* csb)
+	{
+		fb_assert(false);
+		return this;
+	}
+
+	virtual WindowClause* pass2(thread_db* tdbb, CompilerScratch* csb)
+	{
+		fb_assert(false);
+		return this;
+	}
+
+public:
+	NestConst<ValueListNode> order;
+	NestConst<FrameExtent> extent;
+	Exclusion exclusion;
+};
+
 // OVER is used only in DSQL. In the engine, normal aggregate functions are used in partitioned
 // maps.
 class OverNode : public TypedNode<ValueExprNode, ExprNode::TYPE_OVER>
 {
 public:
 	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr = NULL, ValueListNode* aPartition = NULL,
-		ValueListNode* aOrder = NULL);
+		WindowClause* aWindow = NULL);
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
@@ -1034,7 +1216,7 @@ public:
 public:
 	NestConst<ValueExprNode> aggExpr;
 	NestConst<ValueListNode> partition;
-	NestConst<ValueListNode> order;
+	NestConst<WindowClause> window;
 };
 
 

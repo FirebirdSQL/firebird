@@ -259,6 +259,7 @@ const int op_derived_expr	= 25;
 const int op_partition_args	= 26;
 const int op_subproc_decl	= 27;
 const int op_subfunc_decl	= 28;
+const int op_window_win		= 29;
 
 static const UCHAR
 	// generic print formats
@@ -339,7 +340,8 @@ static const UCHAR
 	decode[] = { op_line, op_verb, op_indent, op_byte, op_line, op_args, op_indent, op_byte,
 				 op_line, op_args, 0},
 	subproc_decl[] = { op_subproc_decl, 0},
-	subfunc_decl[] = { op_subfunc_decl, 0};
+	subfunc_decl[] = { op_subfunc_decl, 0},
+	window_win[] = { op_byte, op_window_win, 0};
 
 
 #include "../jrd/blp.h"
@@ -3594,6 +3596,94 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 			blr_format(control, "blr_eoc");
 
 			offset = blr_print_line(control, (SSHORT) offset);
+			break;
+		}
+
+		case op_window_win:
+		{
+			offset = blr_print_line(control, offset);
+			static const char* sub_codes[] =
+			{
+				NULL,
+				"partition",
+				"order",
+				"map",
+				"extent_unit",
+				"extent_frame_bound",
+				"extent_frame_value",
+				"exclusion"
+			};
+
+			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
+			{
+				blr_indent(control, level);
+
+				if (blr_operator > 0 && blr_operator < FB_NELEM(sub_codes))
+					blr_format(control, "blr_window_win_%s, ", sub_codes[blr_operator]);
+
+				switch (blr_operator)
+				{
+					case blr_window_win_partition:
+					case blr_window_win_order:
+						n = blr_print_byte(control);
+						offset = blr_print_line(control, offset);
+						++level;
+
+						while (--n >= 0)
+						{
+							blr_print_verb(control, level);
+
+							if (blr_operator == blr_window_win_partition)
+								blr_print_verb(control, level);
+						}
+
+						--level;
+						break;
+
+					case blr_window_win_map:
+						n = blr_print_word(control);
+						offset = blr_print_line(control, offset);
+						++level;
+
+						while (--n >= 0)
+						{
+							blr_indent(control, level);
+							blr_print_word(control);
+							offset = blr_print_line(control, (SSHORT) offset);
+							blr_print_verb(control, level);
+						}
+
+						--level;
+						break;
+
+					case blr_window_win_extent_unit:
+					case blr_window_win_exclusion:
+						blr_print_byte(control);
+						offset = blr_print_line(control, offset);
+						break;
+
+					case blr_window_win_extent_frame_bound:
+						blr_print_byte(control);
+						blr_print_byte(control);
+						offset = blr_print_line(control, offset);
+						break;
+
+					case blr_window_win_extent_frame_value:
+						blr_print_byte(control);
+						offset = blr_print_line(control, offset);
+						++level;
+						blr_print_verb(control, level);
+						--level;
+						break;
+
+					default:
+						fb_assert(false);
+				}
+			}
+
+			// print blr_end
+			control->ctl_blr_reader.seekBackward(1);
+			blr_print_verb(control, level);
 			break;
 		}
 

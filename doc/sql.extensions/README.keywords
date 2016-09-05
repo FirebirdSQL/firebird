@@ -285,3 +285,27 @@ Firebird 3.0
     TAGS *
     TRUSTED *
     USAGE
+
+
+Firebird 4.0
+------------
+
+  Added as reserved words:
+
+    UNBOUNDED
+
+  Added as non-reserved words:
+
+    CUME_DIST *
+    EXCLUDE
+    FOLLOWING
+    NTILE *
+    OTHERS
+    PERCENT_RANK *
+    PRECEDING
+    PRIVILEGE *
+    RANGE *
+    RDB$ROLE_IN_USE *
+    RDB$SYSTEM_PRIVILEGE *
+    SYSTEM *
+    TIES

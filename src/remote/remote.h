@@ -859,6 +859,7 @@ const USHORT PORT_detached		= 0x0100;	// op_detach, op_drop_database or op_servi
 const USHORT PORT_rdb_shutdown	= 0x0200;	// Database is shut down
 const USHORT PORT_connecting	= 0x0400;	// Aux connection waits for a channel to be activated by client
 const USHORT PORT_z_data		= 0x0800;	// Zlib incoming buffer has data left after decompression
+const USHORT PORT_compressed	= 0x1000;	// Compress outgoing stream (does not affect incoming)
 
 // Port itself
 

@@ -69,7 +69,7 @@ inline bool DTYPE_IS_APPROX(UCHAR d)
 
 inline bool DTYPE_IS_NUMERIC(UCHAR d)
 {
-	return (d >= dtype_byte && d <= dtype_d_float) || d  == dtype_int64;
+	return (d >= dtype_byte && d <= dtype_d_float) || d == dtype_int64;
 }
 
 // Descriptor format
@@ -133,6 +133,11 @@ typedef struct dsc
 	bool isExact() const
 	{
 		return dsc_dtype == dtype_int64 || dsc_dtype == dtype_long || dsc_dtype == dtype_short;
+	}
+
+	bool isNumeric() const
+	{
+		return (dsc_dtype >= dtype_byte && dsc_dtype <= dtype_d_float) || dsc_dtype == dtype_int64;
 	}
 
 	bool isText() const

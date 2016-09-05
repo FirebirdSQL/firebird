@@ -60,8 +60,7 @@ AggNode::AggNode(MemoryPool& pool, const AggInfo& aAggInfo, bool aDistinct, bool
 	  dialect1(aDialect1),
 	  arg(aArg),
 	  asb(NULL),
-	  indexed(false),
-	  ordered(false)
+	  indexed(false)
 {
 	addChildNode(arg, arg);
 }
@@ -270,7 +269,7 @@ ValueExprNode* AggNode::dsqlFieldRemapper(FieldRemapper& visitor)
 		if (!visitor.window && visitor.dsqlScratch->scopeLevel == aggFinder.deepestLevel)
 		{
 			return PASS1_post_map(visitor.dsqlScratch, this,
-				visitor.context, visitor.partitionNode, visitor.orderNode);
+				visitor.context, visitor.partitionNode, visitor.windowNode);
 		}
 	}
 
@@ -337,14 +336,10 @@ AggNode* AggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
-void AggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void AggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (aggType == AGG_TYPE_GROUP)
-		impure->vlux_count = 0;
-
-	impure->aggType = aggType;
+	impure->vlux_count = 0;
 
 	if (distinct)
 	{
@@ -627,12 +622,9 @@ string AvgAggNode::internalPrint(NodePrinter& printer) const
 	return "AvgAggNode";
 }
 
-void AvgAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void AvgAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 
@@ -652,10 +644,6 @@ void AvgAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) con
 void AvgAggNode::aggPass(thread_db* /*tdbb*/, jrd_req* request, dsc* desc) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (ordered && impure->aggType != AGG_TYPE_ORDER)
-		return;
-
 	++impure->vlux_count;
 
 	if (dialect1)
@@ -760,12 +748,9 @@ string ListAggNode::internalPrint(NodePrinter& printer) const
 	return "ListAggNode";
 }
 
-void ListAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void ListAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	// We don't know here what should be the sub-type and text-type.
 	// Defer blob creation for when first record is found.
@@ -777,9 +762,6 @@ void ListAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) co
 void ListAggNode::aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (ordered && impure->aggType != AGG_TYPE_ORDER)
-		return;
 
 	if (!impure->vlu_blob)
 	{
@@ -918,12 +900,9 @@ string CountAggNode::internalPrint(NodePrinter& printer) const
 	return "CountAggNode";
 }
 
-void CountAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void CountAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->make_int64(0);
@@ -932,9 +911,6 @@ void CountAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) c
 void CountAggNode::aggPass(thread_db* /*tdbb*/, jrd_req* request, dsc* /*desc*/) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (ordered && impure->aggType != AGG_TYPE_ORDER)
-		return;
 
 	if (dialect1)
 		++impure->vlu_misc.vlu_long;
@@ -1152,12 +1128,9 @@ string SumAggNode::internalPrint(NodePrinter& printer) const
 	return "SumAggNode";
 }
 
-void SumAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void SumAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 
@@ -1174,10 +1147,6 @@ void SumAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) con
 void SumAggNode::aggPass(thread_db* /*tdbb*/, jrd_req* request, dsc* desc) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (ordered && impure->aggType != AGG_TYPE_ORDER)
-		return;
-
 	++impure->vlux_count;
 
 	if (dialect1)
@@ -1252,12 +1221,9 @@ string MaxMinAggNode::internalPrint(NodePrinter& printer) const
 	return "MaxMinAggNode";
 }
 
-void MaxMinAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void MaxMinAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->vlu_desc.dsc_dtype = 0;
@@ -1266,11 +1232,8 @@ void MaxMinAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) 
 void MaxMinAggNode::aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (ordered && impure->aggType != AGG_TYPE_ORDER)
-		return;
-
 	++impure->vlux_count;
+
 	if (!impure->vlu_desc.dsc_dtype)
 	{
 		EVL_make_value(tdbb, desc, impure);
@@ -1366,12 +1329,9 @@ string StdDevAggNode::internalPrint(NodePrinter& printer) const
 	return "StdDevAggNode";
 }
 
-void StdDevAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void StdDevAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->make_double(0);
@@ -1383,10 +1343,6 @@ void StdDevAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) 
 void StdDevAggNode::aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (ordered && impure->aggType != AGG_TYPE_ORDER)
-		return;
-
 	++impure->vlux_count;
 
 	const double d = MOV_get_double(desc);
@@ -1510,12 +1466,9 @@ string CorrAggNode::internalPrint(NodePrinter& printer) const
 	return "CorrAggNode";
 }
 
-void CorrAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void CorrAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->make_double(0);
@@ -1527,9 +1480,6 @@ void CorrAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) co
 bool CorrAggNode::aggPass(thread_db* tdbb, jrd_req* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (ordered && impure->aggType != AGG_TYPE_ORDER)
-		return true;
 
 	dsc* desc = NULL;
 	dsc* desc2 = NULL;
@@ -1702,12 +1652,9 @@ string RegrAggNode::internalPrint(NodePrinter& printer) const
 	return "RegrAggNode";
 }
 
-void RegrAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void RegrAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->make_double(0);
@@ -1719,9 +1666,6 @@ void RegrAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) co
 bool RegrAggNode::aggPass(thread_db* tdbb, jrd_req* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (ordered && impure->aggType != AGG_TYPE_ORDER)
-		return true;
 
 	dsc* desc = NULL;
 	dsc* desc2 = NULL;
@@ -1882,12 +1826,9 @@ string RegrCountAggNode::internalPrint(NodePrinter& printer) const
 	return "RegrCountAggNode";
 }
 
-void RegrCountAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void RegrCountAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->make_int64(0);
@@ -1896,9 +1837,6 @@ void RegrCountAggNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggTyp
 bool RegrCountAggNode::aggPass(thread_db* tdbb, jrd_req* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (ordered && impure->aggType != AGG_TYPE_ORDER)
-		return true;
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
 	if (request->req_flags & req_null)

@@ -300,12 +300,12 @@ bool InvalidReferenceFinder::visit(ExprNode* node)
 
 
 FieldRemapper::FieldRemapper(DsqlCompilerScratch* aDsqlScratch, dsql_ctx* aContext, bool aWindow,
-			ValueListNode* aPartitionNode, ValueListNode* aOrderNode)
+			ValueListNode* aPartitionNode, WindowClause* aWindowNode)
 	: dsqlScratch(aDsqlScratch),
 	  context(aContext),
 	  window(aWindow),
 	  partitionNode(aPartitionNode),
-	  orderNode(aOrderNode),
+	  windowNode(aWindowNode),
 	  currentLevel(dsqlScratch->scopeLevel)
 {
 	DEV_BLKCHK(dsqlScratch, dsql_type_req);
@@ -2213,7 +2213,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 				partitionMap->partitionRemapped = Node::doDsqlPass(dsqlScratch, partitionMap->partition);
 
 				FieldRemapper remapper2(dsqlScratch, parent_context, true, partitionMap->partition,
-					partitionMap->order);
+					partitionMap->window);
 				ExprNode::doDsqlFieldRemapper(remapper2, partitionMap->partitionRemapped);
 			}
 		}
@@ -2802,7 +2802,7 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 
 // Post an item to a map for a context.
 DsqlMapNode* PASS1_post_map(DsqlCompilerScratch* dsqlScratch, ValueExprNode* node, dsql_ctx* context,
-	ValueListNode* partitionNode, ValueListNode* orderNode)
+	ValueListNode* partitionNode, WindowClause* windowNode)
 {
 	DEV_BLKCHK(node, dsql_type_nod);
 	DEV_BLKCHK(context, dsql_type_ctx);
@@ -2814,7 +2814,7 @@ DsqlMapNode* PASS1_post_map(DsqlCompilerScratch* dsqlScratch, ValueExprNode* nod
 
 	if (dsqlScratch->processingWindow)
 	{
-		partitionMap = context->getPartitionMap(dsqlScratch, partitionNode, orderNode);
+		partitionMap = context->getPartitionMap(dsqlScratch, partitionNode, windowNode);
 		map = partitionMap->map;
 	}
 	else
@@ -2931,7 +2931,7 @@ bool dsql_ctx::getImplicitJoinField(const MetaName& name, NestConst<ValueExprNod
 
 // Returns (creating, if necessary) the PartitionMap of a given partition (that may be NULL).
 PartitionMap* dsql_ctx::getPartitionMap(DsqlCompilerScratch* dsqlScratch, ValueListNode* partitionNode,
-	ValueListNode* orderNode)
+	WindowClause* windowNode)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
@@ -2942,7 +2942,7 @@ PartitionMap* dsql_ctx::getPartitionMap(DsqlCompilerScratch* dsqlScratch, ValueL
 		 ++i)
 	{
 		if (PASS1_node_match((*i)->partition, partitionNode, false) &&
-			PASS1_node_match((*i)->order, orderNode, false))
+			PASS1_node_match((*i)->window, windowNode, false))
 		{
 			partitionMap = *i;
 		}
@@ -2950,7 +2950,7 @@ PartitionMap* dsql_ctx::getPartitionMap(DsqlCompilerScratch* dsqlScratch, ValueL
 
 	if (!partitionMap)
 	{
-		partitionMap = FB_NEW_POOL(*tdbb->getDefaultPool()) PartitionMap(partitionNode, orderNode);
+		partitionMap = FB_NEW_POOL(*tdbb->getDefaultPool()) PartitionMap(partitionNode, windowNode);
 		ctx_win_maps.add(partitionMap);
 		partitionMap->context = dsqlScratch->contextNumber++;
 	}

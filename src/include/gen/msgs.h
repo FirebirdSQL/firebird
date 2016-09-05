@@ -820,6 +820,11 @@ Data source : @4"},		/* eds_statement */
 	{335545113, "Invalid or missing checksum of encrypted database"},		/* crypt_checksum */
 	{335545114, "You must have SYSDBA rights at this server"},		/* not_dba */
 	{335545115, "Cannot open cursor for non-SELECT statement"},		/* no_cursor */
+	{335545116, "If <window frame bound 1> specifies @1, then <window frame bound 2> shall not specify @2"},		/* dsql_window_incompat_frames */
+	{335545117, "RANGE based window with <expr> {PRECEDING | FOLLOWING} cannot have ORDER BY with more than one value"},		/* dsql_window_range_multi_key */
+	{335545118, "RANGE based window must have an ORDER BY key of numerical, date, time or timestamp types"},		/* dsql_window_range_inv_key_type */
+	{335545119, "Window RANGE/ROWS PRECEDING/FOLLOWING value must be of a numerical type"},		/* dsql_window_frame_value_inv_type */
+	{335545120, "Invalid PRECEDING or FOLLOWING offset in window function: cannot be negative"},		/* window_frame_value_invalid */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */

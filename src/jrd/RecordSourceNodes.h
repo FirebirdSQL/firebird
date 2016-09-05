@@ -26,6 +26,7 @@
 #include "../common/classes/objects_array.h"
 #include "../common/classes/NestConst.h"
 #include "../common/classes/QualifiedName.h"
+#include "../dsql/ExprNodes.h"
 #include "../jrd/jrd.h"
 #include "../jrd/exe.h"
 #include "../dsql/Visitors.h"
@@ -69,6 +70,14 @@ public:
 	SortNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	bool computable(CompilerScratch* csb, StreamType stream, bool allowOnlyCurrentStream);
 	void findDependentFromStreams(const OptimizerRetrieval* optRet, SortedStreamList* streamList);
+
+	int getEffectiveNullOrder(unsigned index) const
+	{
+		if (descending[index])
+			return nullOrder[index] == rse_nulls_default ? rse_nulls_last : nullOrder[index];
+		else
+			return nullOrder[index] == rse_nulls_default ? rse_nulls_first : nullOrder[index];
+	}
 
 public:
 	bool unique;						// sorts using unique key - for distinct and group by
@@ -460,7 +469,7 @@ public:
 	virtual RecordSource* compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream);
 
 private:
-	void genMap(DsqlCompilerScratch* dsqlScratch, dsql_map* map);
+	void genMap(DsqlCompilerScratch* dsqlScratch, UCHAR blrVerb, dsql_map* map);
 
 	RecordSource* generate(thread_db* tdbb, OptimizerBlk* opt, BoolExprNodeStack* parentStack,
 		StreamType shellStream);
@@ -543,10 +552,11 @@ private:
 class WindowSourceNode : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_WINDOW>
 {
 public:
-	struct Partition
+	struct Window
 	{
-		explicit Partition(MemoryPool&)
-			: stream(INVALID_STREAM)
+		explicit Window(MemoryPool&)
+			: stream(INVALID_STREAM),
+			  exclusion(WindowClause::EXCLUDE_NO_OTHERS)
 		{
 		}
 
@@ -555,19 +565,22 @@ public:
 		NestConst<SortNode> regroup;
 		NestConst<SortNode> order;
 		NestConst<MapNode> map;
+		NestConst<WindowClause::FrameExtent> frameExtent;
+		WindowClause::Exclusion exclusion;
 	};
 
 	explicit WindowSourceNode(MemoryPool& pool)
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_WINDOW>(pool),
 		  rse(NULL),
-		  partitions(pool)
+		  windows(pool)
 	{
 	}
 
 	static WindowSourceNode* parse(thread_db* tdbb, CompilerScratch* csb);
 
 private:
-	void parsePartitionBy(thread_db* tdbb, CompilerScratch* csb);
+	void parseLegacyPartitionBy(thread_db* tdbb, CompilerScratch* csb);
+	void parseWindow(thread_db* tdbb, CompilerScratch* csb);
 
 public:
 	virtual StreamType getStream() const
@@ -602,7 +615,7 @@ public:
 
 private:
 	NestConst<RseNode> rse;
-	Firebird::ObjectsArray<Partition> partitions;
+	Firebird::ObjectsArray<Window> windows;
 };
 
 class RseNode : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RSE>

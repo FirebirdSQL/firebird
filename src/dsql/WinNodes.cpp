@@ -79,12 +79,9 @@ ValueExprNode* DenseRankWinNode::copy(thread_db* tdbb, NodeCopier& /*copier*/) c
 	return FB_NEW_POOL(*tdbb->getDefaultPool()) DenseRankWinNode(*tdbb->getDefaultPool());
 }
 
-void DenseRankWinNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void DenseRankWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->make_int64(0, 0);
@@ -97,10 +94,7 @@ void DenseRankWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* /*request*/, dsc* /
 dsc* DenseRankWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (!ordered || impure->aggType == AGG_TYPE_ORDER)
-		++impure->vlu_misc.vlu_int64;
-
+	++impure->vlu_misc.vlu_int64;
 	return &impure->vlu_desc;
 }
 
@@ -158,12 +152,9 @@ AggNode* RankWinNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
-void RankWinNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void RankWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->make_int64(1, 0);
@@ -173,9 +164,7 @@ void RankWinNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) co
 void RankWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* request, dsc* /*desc*/) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (!ordered || impure->aggType == AGG_TYPE_ORDER)
-		++impure->vlux_count;
+	++impure->vlux_count;
 }
 
 dsc* RankWinNode::aggExecute(thread_db* tdbb, jrd_req* request) const
@@ -206,7 +195,8 @@ AggNode* RankWinNode::dsqlCopy(DsqlCompilerScratch* /*dsqlScratch*/) /*const*/
 static WinFuncNode::RegisterFactory0<PercentRankWinNode> percentRankWinInfo("PERCENT_RANK");
 
 PercentRankWinNode::PercentRankWinNode(MemoryPool& pool)
-	: WinFuncNode(pool, percentRankWinInfo)
+	: WinFuncNode(pool, percentRankWinInfo),
+	  tempImpure(0)
 {
 	fb_assert(dsqlChildNodes.getCount() == 1 && jrdChildNodes.getCount() == 1);
 	dsqlChildNodes.clear();
@@ -237,44 +227,51 @@ ValueExprNode* PercentRankWinNode::copy(thread_db* tdbb, NodeCopier& /*copier*/)
 AggNode* PercentRankWinNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	AggNode::pass2(tdbb, csb);
+	tempImpure = CMP_impure(csb, sizeof(impure_value_ex));
 	return this;
 }
 
-void PercentRankWinNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void PercentRankWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-	impure->make_int64(0, 0);
+	impure->make_int64(1, 0);
 	impure->vlux_count = 0;
+
+	impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
+	impureTemp->make_double(0);
+	impureTemp->vlux_count = 0;
 }
 
 void PercentRankWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* request, dsc* /*desc*/) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (!ordered || impure->aggType == AGG_TYPE_ORDER)
-		++impure->vlux_count;
+	++impure->vlux_count;
 }
 
-dsc* PercentRankWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
+dsc* PercentRankWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* request) const
 {
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
+
+	impureTemp->vlux_count = impure->vlu_misc.vlu_int64;
+
+	impure->vlu_misc.vlu_int64 += impure->vlux_count;
+	impure->vlux_count = 0;
+
 	return NULL;
 }
 
 dsc* PercentRankWinNode::winPass(thread_db* /*tdbb*/, jrd_req* request, SlidingWindow* window) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
 
-	double n = impure->vlux_count;
 	double partitionSize = window->getPartitionSize();
-	double orderSize = window->getOrderSize();
 
-	impure->make_double(n == 1 ? 0 : 1 / (partitionSize - 1) * (n - orderSize));
-	return &impure->vlu_desc;
+	impureTemp->vlu_misc.vlu_double = 1 / (partitionSize - 1) * (impureTemp->vlux_count - 1);
+	return &impureTemp->vlu_desc;
 }
 
 AggNode* PercentRankWinNode::dsqlCopy(DsqlCompilerScratch* /*dsqlScratch*/) /*const*/
@@ -323,39 +320,22 @@ AggNode* CumeDistWinNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
-void CumeDistWinNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void CumeDistWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-	impure->make_int64(0, 0);
-	impure->vlux_count = 0;
-}
-
-void CumeDistWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* request, dsc* /*desc*/) const
-{
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	if (!ordered || impure->aggType == AGG_TYPE_ORDER)
-		++impure->vlux_count;
-}
-
-dsc* CumeDistWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
-{
-	return NULL;
+	impure->make_double(0);
 }
 
 dsc* CumeDistWinNode::winPass(thread_db* /*tdbb*/, jrd_req* request, SlidingWindow* window) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 
-	double n = impure->vlux_count;
+	double frameSize = window->getFrameSize();
 	double partitionSize = window->getPartitionSize();
 
-	impure->make_double(n / partitionSize);
+	impure->vlu_misc.vlu_double = frameSize / partitionSize;
 	return &impure->vlu_desc;
 }
 
@@ -402,30 +382,18 @@ ValueExprNode* RowNumberWinNode::copy(thread_db* tdbb, NodeCopier& /*copier*/) c
 	return FB_NEW_POOL(*tdbb->getDefaultPool()) RowNumberWinNode(*tdbb->getDefaultPool());
 }
 
-void RowNumberWinNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void RowNumberWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->make_int64(0, 0);
 }
 
-void RowNumberWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* /*request*/, dsc* /*desc*/) const
-{
-}
-
-dsc* RowNumberWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* request) const
-{
-	return NULL;
-}
-
-dsc* RowNumberWinNode::winPass(thread_db* /*tdbb*/, jrd_req* request, SlidingWindow* /*window*/) const
+dsc* RowNumberWinNode::winPass(thread_db* /*tdbb*/, jrd_req* request, SlidingWindow* window) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-	++impure->vlu_misc.vlu_int64;
+	impure->vlu_misc.vlu_int64 = window->getRecordPosition() - window->getPartitionStart() + 1;
 	return &impure->vlu_desc;
 }
 
@@ -474,36 +442,17 @@ ValueExprNode* FirstValueWinNode::copy(thread_db* tdbb, NodeCopier& copier) cons
 	return node;
 }
 
-void FirstValueWinNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void FirstValueWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
-
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-	impure->make_int64(0, 0);
-}
-
-void FirstValueWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* /*request*/, dsc* /*desc*/) const
-{
-}
-
-dsc* FirstValueWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
-{
-	return NULL;
+	AggNode::aggInit(tdbb, request);
 }
 
 dsc* FirstValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* window) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-	SINT64 records = impure->vlu_misc.vlu_int64++;
 
-	if (!window->move(-records))
-	{
-		window->move(0);	// Come back to our row.
+	if (!window->moveWithinFrame(-(window->getRecordPosition() - window->getFrameStart())))
 		return NULL;
-	}
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
 	if (!desc || (request->req_flags & req_null))
@@ -557,23 +506,16 @@ ValueExprNode* LastValueWinNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	return node;
 }
 
-void LastValueWinNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void LastValueWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-}
-
-void LastValueWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* /*request*/, dsc* /*desc*/) const
-{
-}
-
-dsc* LastValueWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
-{
-	return NULL;
+	AggNode::aggInit(tdbb, request);
 }
 
 dsc* LastValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* window) const
 {
-	if (!window->move(0))
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+
+	if (!window->moveWithinFrame(window->getFrameEnd() - window->getRecordPosition()))
 		return NULL;
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
@@ -641,31 +583,17 @@ ValueExprNode* NthValueWinNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	return node;
 }
 
-void NthValueWinNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void NthValueWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->make_int64(0, 0);
 }
 
-void NthValueWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* /*request*/, dsc* /*desc*/) const
-{
-}
-
-dsc* NthValueWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
-{
-	return NULL;
-}
-
 dsc* NthValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* window) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	window->move(0);	// Come back to our row because row may reference columns.
 
 	dsc* desc = EVL_expr(tdbb, request, row);
 	if (!desc || (request->req_flags & req_null))
@@ -682,20 +610,12 @@ dsc* NthValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* 
 	const SLONG fromPos = desc ? MOV_get_long(desc, 0) : FROM_FIRST;
 
 	if (fromPos == FROM_FIRST)
-	{
-		if (records > ++impure->vlu_misc.vlu_int64)
-			return NULL;
-
-		records -= impure->vlu_misc.vlu_int64;
-	}
+		records += -(window->getRecordPosition() - window->getFrameStart()) - 1;
 	else
-		records = impure->vlu_misc.vlu_int64 - records + 1;
+		records = window->getFrameEnd() - window->getRecordPosition() - records + 1;
 
-	if (!window->move(records))
-	{
-		window->move(0);	// Come back to our row.
+	if (!window->moveWithinFrame(records))
 		return NULL;
-	}
 
 	desc = EVL_expr(tdbb, request, arg);
 	if (!desc || (request->req_flags & req_null))
@@ -757,24 +677,13 @@ void LagLeadWinNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 	arg->getDesc(tdbb, csb, desc);
 }
 
-void LagLeadWinNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void LagLeadWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-}
-
-void LagLeadWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* /*request*/, dsc* /*desc*/) const
-{
-}
-
-dsc* LagLeadWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
-{
-	return NULL;
+	AggNode::aggInit(tdbb, request);
 }
 
 dsc* LagLeadWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* window) const
 {
-	window->move(0);	// Come back to our row because rows may reference columns.
-
 	dsc* desc = EVL_expr(tdbb, request, rows);
 	if (!desc || (request->req_flags & req_null))
 		return NULL;
@@ -786,10 +695,8 @@ dsc* LagLeadWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* w
 			Arg::Num(2) << Arg::Str(aggInfo.name));
 	}
 
-	if (!window->move(records * direction))
+	if (!window->moveWithinPartition(records * direction))
 	{
-		window->move(0);	// Come back to our row because outExpr may reference columns.
-
 		desc = EVL_expr(tdbb, request, outExpr);
 		if (!desc || (request->req_flags & req_null))
 			return NULL;
@@ -924,12 +831,9 @@ AggNode* NTileWinNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
-void NTileWinNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const
+void NTileWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
-	AggNode::aggInit(tdbb, request, aggType);
-
-	if (aggType != AGG_TYPE_GROUP)
-		return;
+	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	ThisImpure* thisImpure = request->getImpure<ThisImpure>(thisImpureOffset);
@@ -956,15 +860,6 @@ void NTileWinNode::aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) c
 	}
 }
 
-void NTileWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* /*request*/, dsc* /*desc*/) const
-{
-}
-
-dsc* NTileWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
-{
-	return NULL;
-}
-
 dsc* NTileWinNode::winPass(thread_db* /*tdbb*/, jrd_req* request, SlidingWindow* window) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
@@ -986,7 +881,7 @@ dsc* NTileWinNode::winPass(thread_db* /*tdbb*/, jrd_req* request, SlidingWindow*
 
 	++n;
 
-	impure->make_int64(result);
+	impure->vlu_misc.vlu_int64 = result;
 	return &impure->vlu_desc;
 }
 

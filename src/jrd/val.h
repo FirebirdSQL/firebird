@@ -127,17 +127,10 @@ inline void impure_value::make_double(const double val)
 	this->vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&this->vlu_misc.vlu_double);
 }
 
-enum AggType
-{
-	AGG_TYPE_GROUP,
-	AGG_TYPE_ORDER
-};
-
 struct impure_value_ex : public impure_value
 {
 	SINT64 vlux_count;
 	blb* vlu_blob;
-	AggType aggType;
 };
 
 const int VLU_computed	= 1;	// An invariant sub-query has been computed

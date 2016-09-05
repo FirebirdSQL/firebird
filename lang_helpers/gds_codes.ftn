@@ -1642,6 +1642,16 @@ C --
       PARAMETER (GDS__not_dba                          = 335545114)
       INTEGER*4 GDS__no_cursor                       
       PARAMETER (GDS__no_cursor                        = 335545115)
+      INTEGER*4 GDS__dsql_window_incompat_frames     
+      PARAMETER (GDS__dsql_window_incompat_frames      = 335545116)
+      INTEGER*4 GDS__dsql_window_range_multi_key     
+      PARAMETER (GDS__dsql_window_range_multi_key      = 335545117)
+      INTEGER*4 GDS__dsql_window_range_inv_key_type  
+      PARAMETER (GDS__dsql_window_range_inv_key_type   = 335545118)
+      INTEGER*4 GDS__dsql_window_frame_value_inv_type
+      PARAMETER (GDS__dsql_window_frame_value_inv_type = 335545119)
+      INTEGER*4 GDS__window_frame_value_invalid      
+      PARAMETER (GDS__window_frame_value_invalid       = 335545120)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 

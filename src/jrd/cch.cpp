@@ -1560,7 +1560,8 @@ void CCH_must_write(thread_db* tdbb, WIN* window)
 	}
 
 	bdb->bdb_flags |= BDB_must_write | BDB_dirty;
-	fb_assert(bdb->bdb_flags & BDB_nbak_state_lock);
+	fb_assert(bdb->bdb_flags & BDB_nbak_state_lock || 
+			  PageSpace::isTemporary(bdb->bdb_page.getPageSpaceID()));
 }
 
 
@@ -4999,7 +5000,7 @@ static void clear_dirty_flag_and_nbak_state(thread_db* tdbb, BufferDesc* bdb)
 		tdbb->getDatabase()->dbb_backup_manager->unlockStateRead(tdbb);
 	}
 	else if ((oldFlags & BDB_dirty) && bdb->bdb_page != HEADER_PAGE_NUMBER)
-		fb_assert(false);
+		fb_assert(PageSpace::isTemporary(bdb->bdb_page.getPageSpaceID()));
 }
 
 void recentlyUsed(BufferDesc* bdb)

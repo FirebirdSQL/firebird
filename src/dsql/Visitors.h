@@ -151,13 +151,13 @@ class FieldRemapper
 {
 public:
 	FieldRemapper(DsqlCompilerScratch* aDsqlScratch, dsql_ctx* aContext, bool aWindow,
-				ValueListNode* aPartitionNode = NULL, ValueListNode* aOrderNode = NULL);
+				ValueListNode* aPartitionNode = NULL, WindowClause* aWindowNode = NULL);
 
 	static ExprNode* remap(DsqlCompilerScratch* dsqlScratch, dsql_ctx* context, bool window,
-		ExprNode* field, ValueListNode* partitionNode = NULL, ValueListNode* orderNode = NULL)
+		ExprNode* field, ValueListNode* partitionNode = NULL, WindowClause* windowNode = NULL)
 	{
 		// The bool value returned by the visitor is completely discarded in this class.
-		return FieldRemapper(dsqlScratch, context, window, partitionNode, orderNode).visit(field);
+		return FieldRemapper(dsqlScratch, context, window, partitionNode, windowNode).visit(field);
 	}
 
 	ExprNode* visit(ExprNode* node);
@@ -167,7 +167,7 @@ public:
 	dsql_ctx* const context;
 	const bool window;
 	ValueListNode* partitionNode;
-	ValueListNode* orderNode;
+	WindowClause* windowNode;
 	USHORT currentLevel;
 };
 

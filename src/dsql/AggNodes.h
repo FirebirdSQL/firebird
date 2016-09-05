@@ -37,13 +37,18 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
+	virtual unsigned getCapabilities() const
+	{
+		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
+	}
+
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const;
+	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
 	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
 	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
 
@@ -62,6 +67,11 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
+	virtual unsigned getCapabilities() const
+	{
+		return CAP_WANTS_AGG_CALLS;
+	}
+
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -69,15 +79,7 @@ public:
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 
-	virtual void checkOrderedWindowCapable() const
-	{
-		Firebird::status_exception::raise(
-			Firebird::Arg::Gds(isc_wish_list) <<
-			Firebird::Arg::Gds(isc_random) <<
-				"LIST is not supported in ordered windows");
-	}
-
-	virtual void aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const;
+	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
 	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
 	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
 
@@ -95,13 +97,18 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
+	virtual unsigned getCapabilities() const
+	{
+		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
+	}
+
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const;
+	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
 	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
 	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
 
@@ -116,12 +123,17 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
+	virtual unsigned getCapabilities() const
+	{
+		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
+	}
+
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const;
+	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
 	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
 	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
 
@@ -142,12 +154,17 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
+	virtual unsigned getCapabilities() const
+	{
+		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
+	}
+
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const;
+	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
 	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
 	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
 
@@ -176,6 +193,11 @@ public:
 
 	explicit StdDevAggNode(MemoryPool& pool, StdDevType aType, ValueExprNode* aArg = NULL);
 
+	virtual unsigned getCapabilities() const
+	{
+		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
+	}
+
 	virtual void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count);
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -184,7 +206,7 @@ public:
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const;
+	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
 	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
 	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
 
@@ -216,6 +238,11 @@ public:
 	explicit CorrAggNode(MemoryPool& pool, CorrType aType,
 		ValueExprNode* aArg = NULL, ValueExprNode* aArg2 = NULL);
 
+	virtual unsigned getCapabilities() const
+	{
+		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
+	}
+
 	virtual void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count);
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -224,7 +251,7 @@ public:
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const;
+	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
 	virtual bool aggPass(thread_db* tdbb, jrd_req* request) const;
 	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
 	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
@@ -263,6 +290,11 @@ public:
 	explicit RegrAggNode(MemoryPool& pool, RegrType aType,
 		ValueExprNode* aArg = NULL, ValueExprNode* aArg2 = NULL);
 
+	virtual unsigned getCapabilities() const
+	{
+		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
+	}
+
 	virtual void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count);
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -271,7 +303,7 @@ public:
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const;
+	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
 	virtual bool aggPass(thread_db* tdbb, jrd_req* request) const;
 	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
 	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
@@ -293,6 +325,11 @@ public:
 	explicit RegrCountAggNode(MemoryPool& pool,
 		ValueExprNode* aArg = NULL, ValueExprNode* aArg2 = NULL);
 
+	virtual unsigned getCapabilities() const
+	{
+		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
+	}
+
 	virtual void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count);
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -300,7 +337,7 @@ public:
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request, AggType aggType) const;
+	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
 	virtual bool aggPass(thread_db* tdbb, jrd_req* request) const;
 	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
 	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;

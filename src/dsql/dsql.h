@@ -82,6 +82,7 @@ namespace Jrd
 	class TransactionNode;
 	class ValueExprNode;
 	class ValueListNode;
+	class WindowClause;
 	class jrd_tra;
 	class jrd_req;
 	class blb;
@@ -674,10 +675,10 @@ public:
 
 struct PartitionMap
 {
-	PartitionMap(ValueListNode* aPartition, ValueListNode* aOrder)
+	PartitionMap(ValueListNode* aPartition, WindowClause* aWindow)
 		: partition(aPartition),
 		  partitionRemapped(NULL),
-		  order(aOrder),
+		  window(aWindow),
 		  map(NULL),
 		  context(0)
 	{
@@ -685,7 +686,7 @@ struct PartitionMap
 
 	NestConst<ValueListNode> partition;
 	NestConst<ValueListNode> partitionRemapped;
-	NestConst<ValueListNode> order;
+	NestConst<WindowClause> window;
 	dsql_map* map;
 	USHORT context;
 };
@@ -756,7 +757,7 @@ public:
 
 	bool getImplicitJoinField(const Firebird::MetaName& name, NestConst<ValueExprNode>& node);
 	PartitionMap* getPartitionMap(DsqlCompilerScratch* dsqlScratch,
-		ValueListNode* partitionNode, ValueListNode* orderNode);
+		ValueListNode* partitionNode, WindowClause* windowNode);
 };
 
 // Flag values for ctx_flags

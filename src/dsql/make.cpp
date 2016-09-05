@@ -64,21 +64,6 @@ using namespace Jrd;
 using namespace Firebird;
 
 
-static void adjustLength(dsc* desc)
-{
-	USHORT adjust = 0;
-
-	if (desc->dsc_dtype == dtype_varying)
-		adjust = sizeof(USHORT);
-	else if (desc->dsc_dtype == dtype_cstring)
-		adjust = 1;
-
-	desc->dsc_length -= adjust;
-	desc->dsc_length *= 3;
-	desc->dsc_length += adjust;
-}
-
-
 LiteralNode* MAKE_const_slong(SLONG value)
 {
 	thread_db* tdbb = JRD_get_thread_data();

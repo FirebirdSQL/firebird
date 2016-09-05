@@ -241,5 +241,6 @@ static const struct
 	{"subfunc", function},
 	{"record_version2", byte_line},
 	{"gen_id2", gen_id2}, // 210
+	{"window_win", window_win},
 	{0, 0}
 };

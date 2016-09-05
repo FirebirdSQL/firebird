@@ -702,7 +702,10 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 	}
 
 	if (compress)
+	{
 		port->initCompression();
+		port->port_flags |= PORT_compressed;
+	}
 
 	return port;
 }
