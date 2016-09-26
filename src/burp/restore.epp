@@ -187,7 +187,7 @@ static inline FB_BOOLEAN get_boolean(BurpGlobals* tdgbl)
 	if (--(tdgbl->io_cnt) >= 0)
 		return *(tdgbl->io_ptr)++;
 
-	return static_cast<FB_BOOLEAN>(MVOL_read(&tdgbl->io_cnt, &tdgbl->io_ptr));
+	return MVOL_read(&tdgbl->io_cnt, &tdgbl->io_ptr) ? FB_TRUE : FB_FALSE;
 }
 
 static inline att_type get_attribute(att_type* att, BurpGlobals* tdgbl)
