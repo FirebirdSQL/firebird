@@ -117,7 +117,8 @@ void put_data(burp_rel*);
 void put_index(burp_rel*);
 int put_message(att_type, att_type, const TEXT*, const ULONG);
 void put_int32(att_type, SLONG);
-void put_int64( att_type attribute, SINT64 value);
+void put_int64(att_type attribute, SINT64 value);
+void put_boolean(att_type, FB_BOOLEAN value);
 void put_relation(burp_rel*);
 bool put_source_blob(att_type, att_type, ISC_QUAD&);
 int put_text(att_type, const TEXT*, SSHORT);
@@ -1984,7 +1985,7 @@ void put_int32( att_type attribute, SLONG value)
 }
 
 
-void put_int64( att_type attribute, SINT64 value)
+void put_int64(att_type attribute, SINT64 value)
 {
 /**************************************
  *
@@ -2006,6 +2007,24 @@ void put_int64( att_type attribute, SINT64 value)
 	put(tdgbl, attribute);
 	put(tdgbl, (UCHAR) sizeof(value));
 	put_block(tdgbl, (const UCHAR*) &le_value, sizeof(le_value));
+}
+
+
+void put_boolean(att_type attribute, const FB_BOOLEAN value)
+{
+	/**************************************
+	 *
+	 *	p u t _ b o o l e a n
+	 *
+	 **************************************
+	 *
+	 * Functional description
+	 *	Write a FB_BOOLEAN value as an attribute.
+	 **************************************/
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	put(tdgbl, attribute);
+	put(tdgbl, static_cast<UCHAR>(value));
 }
 
 
@@ -2946,6 +2965,8 @@ void write_functions()
 				put_int32(att_function_legacy_flag, X.RDB$LEGACY_FLAG);
 			if (!X.RDB$DETERMINISTIC_FLAG.NULL)
 				put_int32(att_function_deterministic_flag, X.RDB$DETERMINISTIC_FLAG);
+			if (!X.RDB$SQL_SECURITY.NULL)
+				put_boolean(att_function_sql_security, X.RDB$SQL_SECURITY);
 
 			put(tdgbl, att_end);
 
@@ -3523,6 +3544,9 @@ void write_packages()
 		if (!X.RDB$DESCRIPTION.NULL)
 			put_source_blob(att_package_description, att_package_description, X.RDB$DESCRIPTION);
 
+		if (!X.RDB$SQL_SECURITY.NULL)
+			put_boolean(att_package_sql_security, X.RDB$SQL_SECURITY);
+
 		put(tdgbl, att_end);
 	}
 	END_FOR
@@ -3601,6 +3625,9 @@ void write_procedures()
 
 			if (!X.RDB$PRIVATE_FLAG.NULL)
 				put_int32(att_procedure_private_flag, X.RDB$PRIVATE_FLAG);
+
+			if (!X.RDB$SQL_SECURITY.NULL)
+				put_boolean(att_procedure_sql_security, X.RDB$SQL_SECURITY);
 
 			put(tdgbl, att_end);
 			COPY(X.RDB$PROCEDURE_NAME, proc);
@@ -3871,6 +3898,9 @@ void write_relations()
 
 			if (!X.RDB$RELATION_TYPE.NULL)
 				put_int32 (att_relation_type, X.RDB$RELATION_TYPE);
+
+			if (!X.RDB$SQL_SECURITY.NULL)
+				put_boolean(att_relation_sql_security, X.RDB$SQL_SECURITY);
 
 			put(tdgbl, att_end);
 			burp_rel* relation = (burp_rel*) BURP_alloc_zero (sizeof(burp_rel));
@@ -4225,6 +4255,9 @@ void write_triggers()
 
 			if (!X.RDB$ENTRYPOINT.NULL)
 				PUT_TEXT(att_trig_entrypoint, X.RDB$ENTRYPOINT);
+
+			if (!X.RDB$SQL_SECURITY.NULL)
+				put_boolean(att_trig_sql_security, X.RDB$SQL_SECURITY);
 
 			put(tdgbl, att_end);
 

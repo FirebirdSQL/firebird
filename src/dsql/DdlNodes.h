@@ -588,12 +588,12 @@ typedef RecreateNode<CreateAlterProcedureNode, DropProcedureNode, isc_dsql_recre
 class TriggerDefinition
 {
 public:
-	typedef enum
+	enum SqlSecurity
 	{
 		SS_INVOKER,
 		SS_DEFINER,
 		SS_DROP
-	} SqlSecurity;
+	};
 
 	explicit TriggerDefinition(MemoryPool& p)
 		: name(p),

@@ -182,6 +182,14 @@ static inline int get(BurpGlobals* tdgbl)
 	return MVOL_read(&tdgbl->io_cnt, &tdgbl->io_ptr);
 }
 
+static inline FB_BOOLEAN get_boolean(BurpGlobals* tdgbl)
+{
+	if (--(tdgbl->io_cnt) >= 0)
+		return *(tdgbl->io_ptr)++;
+
+	return static_cast<FB_BOOLEAN>(MVOL_read(&tdgbl->io_cnt, &tdgbl->io_ptr));
+}
+
 static inline att_type get_attribute(att_type* att, BurpGlobals* tdgbl)
 {
 	*att = (att_type) get(tdgbl);
@@ -4350,6 +4358,16 @@ bool get_function(BurpGlobals* tdgbl)
 						bad_attribute(scan_next_attr, attribute, 89);
 					break;
 
+				case att_function_sql_security:
+					if (tdgbl->RESTORE_format >= 11)
+					{
+						X.RDB$SQL_SECURITY = get_boolean(tdgbl);
+						X.RDB$SQL_SECURITY.NULL = FALSE;
+					}
+					else
+						bad_attribute(scan_next_attr, attribute, 89);
+					break;
+
 				default:
 					bad_attribute(scan_next_attr, attribute, 89);
 					// msg 89 function
@@ -4467,6 +4485,13 @@ bool get_function(BurpGlobals* tdgbl)
 				case att_function_deterministic_flag:
 					if (tdgbl->RESTORE_format >= 10)
 						get_int32(tdgbl);
+					else
+						bad_attribute(scan_next_attr, attribute, 89);
+					break;
+
+				case att_function_sql_security:
+					if (tdgbl->RESTORE_format >= 11)
+						get_boolean(tdgbl);
 					else
 						bad_attribute(scan_next_attr, attribute, 89);
 					break;
@@ -6551,6 +6576,7 @@ bool get_package(BurpGlobals* tdgbl)
 		X.RDB$SYSTEM_FLAG = 0;
 		X.RDB$SYSTEM_FLAG.NULL = FALSE;
 		X.RDB$DESCRIPTION.NULL = TRUE;
+		X.RDB$SQL_SECURITY.NULL = TRUE;
 
 		skip_init(&scan_next_attr);
 		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
@@ -6592,6 +6618,16 @@ bool get_package(BurpGlobals* tdgbl)
 			case att_package_description:
 				get_source_blob(tdgbl, X.RDB$DESCRIPTION, true);
 				X.RDB$DESCRIPTION.NULL = FALSE;
+				break;
+
+			case att_package_sql_security:
+				if (tdgbl->RESTORE_format >= 11)
+				{
+					X.RDB$SQL_SECURITY = get_boolean(tdgbl);
+					X.RDB$SQL_SECURITY.NULL = FALSE;
+				}
+				else
+					bad_attribute(scan_next_attr, attribute, 338);
 				break;
 
 			default:
@@ -6656,6 +6692,7 @@ bool get_procedure(BurpGlobals* tdgbl)
 			X.RDB$ENTRYPOINT.NULL = TRUE;
 			X.RDB$PACKAGE_NAME.NULL = TRUE;
 			X.RDB$PRIVATE_FLAG.NULL = TRUE;
+			X.RDB$SQL_SECURITY.NULL = TRUE;
 
 			skip_init(&scan_next_attr);
 			while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
@@ -6800,6 +6837,16 @@ bool get_procedure(BurpGlobals* tdgbl)
 						bad_attribute(scan_next_attr, attribute, 290);
 					break;
 
+				case att_procedure_sql_security:
+					if (tdgbl->RESTORE_format >= 11)
+					{
+						X.RDB$SQL_SECURITY = get_boolean(tdgbl);
+						X.RDB$SQL_SECURITY.NULL = FALSE;
+					}
+					else
+						bad_attribute(scan_next_attr, attribute, 290);
+					break;
+
 				default:
 					bad_attribute(scan_next_attr, attribute, 290);
 					// msg 290 procedure
@@ -6911,6 +6958,13 @@ bool get_procedure(BurpGlobals* tdgbl)
 				case att_procedure_private_flag:
 					if (tdgbl->RESTORE_format >= 10)
 						get_int32(tdgbl);
+					else
+						bad_attribute(scan_next_attr, attribute, 290);
+					break;
+
+				case att_procedure_sql_security:
+					if (tdgbl->RESTORE_format >= 11)
+						get_boolean(tdgbl);
 					else
 						bad_attribute(scan_next_attr, attribute, 290);
 					break;
@@ -7280,6 +7334,8 @@ bool get_relation(BurpGlobals* tdgbl)
 				rel_desc = isc_blob_null, ext_desc = isc_blob_null;
 	bool		view_blr_null = true, view_src_null = true, rel_desc_null = true,
 				ext_desc_null = true;
+	FB_BOOLEAN	sql_security = 0;
+	bool		sql_security_null = true;
 
 	BASED_ON RDB$RELATIONS.RDB$SECURITY_CLASS sec_class;
 	sec_class[0] = '\0';
@@ -7399,6 +7455,11 @@ bool get_relation(BurpGlobals* tdgbl)
 				bad_attribute(scan_next_attr, attribute, 111);
 			break;
 
+		case att_relation_sql_security:
+			sql_security_null = false;
+			sql_security = get_boolean(tdgbl);
+			break;
+
 		default:
 			bad_attribute(scan_next_attr, attribute, 111);
 			// msg 111 table
@@ -7429,6 +7490,7 @@ bool get_relation(BurpGlobals* tdgbl)
 			X.RDB$EXTERNAL_DESCRIPTION.NULL = ext_desc_null;
 			X.RDB$EXTERNAL_FILE.NULL = ext_file_name_null;
 			X.RDB$RELATION_TYPE.NULL = type_null;
+			X.RDB$SQL_SECURITY.NULL = sql_security_null;
 
 			X.RDB$SYSTEM_FLAG = (USHORT) sys_flag;
 			X.RDB$FLAGS = (USHORT) rel_flags;
@@ -7442,6 +7504,7 @@ bool get_relation(BurpGlobals* tdgbl)
 			strcpy(X.RDB$EXTERNAL_FILE, ext_file_name);
 
 			X.RDB$RELATION_TYPE = (USHORT) type;
+			X.RDB$SQL_SECURITY = (FB_BOOLEAN) sql_security;
 
 		END_STORE;
 		ON_ERROR
@@ -8482,6 +8545,7 @@ bool get_trigger(BurpGlobals* tdgbl)
 			X.RDB$DEBUG_INFO.NULL = TRUE;
 			X.RDB$ENGINE_NAME.NULL = TRUE;
 			X.RDB$ENTRYPOINT.NULL = TRUE;
+			X.RDB$SQL_SECURITY.NULL = TRUE;
 
 			skip_init(&scan_next_attr);
 			while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
@@ -8589,6 +8653,16 @@ bool get_trigger(BurpGlobals* tdgbl)
 					{
 						GET_TEXT(X.RDB$ENTRYPOINT);
 						X.RDB$ENTRYPOINT.NULL = FALSE;
+					}
+					else
+						bad_attribute(scan_next_attr, attribute, 134);
+					break;
+
+				case att_trig_sql_security:
+					if (tdgbl->RESTORE_format >= 11)
+					{
+						X.RDB$SQL_SECURITY = get_boolean(tdgbl);
+						X.RDB$SQL_SECURITY.NULL = FALSE;
 					}
 					else
 						bad_attribute(scan_next_attr, attribute, 134);
@@ -8708,6 +8782,13 @@ bool get_trigger(BurpGlobals* tdgbl)
 				case att_trig_type2:
 					if (tdgbl->RESTORE_format >= 10)
 						get_int64(tdgbl);
+					else
+						bad_attribute(scan_next_attr, attribute, 134);
+					break;
+
+				case att_trig_sql_security:
+					if (tdgbl->RESTORE_format >= 11)
+						get_boolean(tdgbl);
 					else
 						bad_attribute(scan_next_attr, attribute, 134);
 					break;

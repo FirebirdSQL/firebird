@@ -4212,13 +4212,13 @@ trigger_type_opt	// we do not allow alter database triggers, hence we do not use
 %type <nullableSqlSecurityVal> trg_sql_security_clause
 trg_sql_security_clause
 	: SQL SECURITY DEFINER
-		{ $$ = Nullable<Jrd::TriggerDefinition::SqlSecurity>::val(Jrd::TriggerDefinition::SS_DEFINER); }
+		{ $$ = Nullable<TriggerDefinition::SqlSecurity>::val(TriggerDefinition::SS_DEFINER); }
 	| SQL SECURITY INVOKER
-		{ $$ = Nullable<Jrd::TriggerDefinition::SqlSecurity>::val(Jrd::TriggerDefinition::SS_INVOKER); }
+		{ $$ = Nullable<TriggerDefinition::SqlSecurity>::val(TriggerDefinition::SS_INVOKER); }
 	| DROP SQL SECURITY
-		{ $$ = Nullable<Jrd::TriggerDefinition::SqlSecurity>::val(Jrd::TriggerDefinition::SS_DROP); }
+		{ $$ = Nullable<TriggerDefinition::SqlSecurity>::val(TriggerDefinition::SS_DROP); }
 	| // nothing
-		{ $$ = Nullable<Jrd::TriggerDefinition::SqlSecurity>::empty(); }
+		{ $$ = Nullable<TriggerDefinition::SqlSecurity>::empty(); }
 	;
 
 // DROP metadata operations
