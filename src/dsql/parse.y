@@ -641,7 +641,7 @@ using namespace Firebird;
 {
 	BaseNullable<int> nullableIntVal;
 	BaseNullable<bool> nullableBoolVal;
-	BaseNullable<BaseNullable<bool> > nullableNullableBoolVal;
+	BaseNullable<Jrd::TriggerDefinition::SqlSecurity> nullableSqlSecurityVal;
 	bool boolVal;
 	int intVal;
 	unsigned uintVal;
@@ -3539,14 +3539,14 @@ check_opt
 
 %type <createAlterTriggerNode> trigger_clause
 trigger_clause
-	: symbol_trigger_name trigger_active trigger_type trigger_position sql_security_clause
+	: symbol_trigger_name trigger_active trigger_type trigger_position trg_sql_security_clause
 			AS local_declaration_list full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
 			$$->active = $2;
 			$$->type = $3;
 			$$->position = $4;
-			$$->ssDefiner = Nullable<BaseNullable<bool> >::val($5);
+			$$->ssDefiner = $5;
 			$$->source = makeParseStr(YYPOSNARG(6), YYPOSNARG(8));
 			$$->localDeclList = $7;
 			$$->body = $8;
@@ -3562,7 +3562,7 @@ trigger_clause
 			if ($6)
 				$$->source = *$6;
 		}
-	| symbol_trigger_name trigger_active trigger_type trigger_position ON symbol_table_name sql_security_clause
+	| symbol_trigger_name trigger_active trigger_type trigger_position ON symbol_table_name trg_sql_security_clause
 			AS local_declaration_list full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
@@ -3570,7 +3570,7 @@ trigger_clause
 			$$->type = $3;
 			$$->position = $4;
 			$$->relationName = *$6;
-			$$->ssDefiner = Nullable<BaseNullable<bool> >::val($7);
+			$$->ssDefiner = $7;
 			$$->source = makeParseStr(YYPOSNARG(8), YYPOSNARG(10));
 			$$->localDeclList = $9;
 			$$->body = $10;
@@ -3587,7 +3587,7 @@ trigger_clause
 			if ($8)
 				$$->source = *$8;
 		}
-	| symbol_trigger_name FOR symbol_table_name trigger_active trigger_type trigger_position sql_security_clause
+	| symbol_trigger_name FOR symbol_table_name trigger_active trigger_type trigger_position trg_sql_security_clause
 			AS local_declaration_list full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
@@ -3595,7 +3595,7 @@ trigger_clause
 			$$->type = $5;
 			$$->position = $6;
 			$$->relationName = *$3;
-			$$->ssDefiner = Nullable<BaseNullable<bool> >::val($7);
+			$$->ssDefiner = $7;
 			$$->source = makeParseStr(YYPOSNARG(8), YYPOSNARG(10));
 			$$->localDeclList = $9;
 			$$->body = $10;
@@ -4162,7 +4162,7 @@ crypt_key_clause($alterDatabaseNode)
 
 %type <createAlterTriggerNode> alter_trigger_clause
 alter_trigger_clause
-	: symbol_trigger_name trigger_active trigger_type_opt trigger_position alter_sql_security_clause
+	: symbol_trigger_name trigger_active trigger_type_opt trigger_position trg_sql_security_clause
 			AS local_declaration_list full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
@@ -4189,7 +4189,7 @@ alter_trigger_clause
 			if ($6)
 				$$->source = *$6;
 		}
-	| symbol_trigger_name trigger_active trigger_type_opt trigger_position alter_sql_security_clause
+	| symbol_trigger_name trigger_active trigger_type_opt trigger_position trg_sql_security_clause
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
 			$$->alter = true;
@@ -4209,16 +4209,16 @@ trigger_type_opt	// we do not allow alter database triggers, hence we do not use
 		{ $$ = Nullable<FB_UINT64>::empty(); }
 	;
 
-%type <nullableNullableBoolVal> alter_sql_security_clause
-alter_sql_security_clause
+%type <nullableSqlSecurityVal> trg_sql_security_clause
+trg_sql_security_clause
 	: SQL SECURITY DEFINER
-		{ $$ = Nullable<BaseNullable<bool> >::val( Nullable<bool>::val(true) ); }
+		{ $$ = Nullable<Jrd::TriggerDefinition::SqlSecurity>::val(Jrd::TriggerDefinition::SS_DEFINER); }
 	| SQL SECURITY INVOKER
-		{ $$ = Nullable<BaseNullable<bool> >::val( Nullable<bool>::val(false) ); }
+		{ $$ = Nullable<Jrd::TriggerDefinition::SqlSecurity>::val(Jrd::TriggerDefinition::SS_INVOKER); }
 	| DROP SQL SECURITY
-		{ $$ = Nullable<BaseNullable<bool> >::val( Nullable<bool>::empty() ); }
+		{ $$ = Nullable<Jrd::TriggerDefinition::SqlSecurity>::val(Jrd::TriggerDefinition::SS_DROP); }
 	| // nothing
-		{ $$ = Nullable<BaseNullable<bool> >::empty(); }
+		{ $$ = Nullable<Jrd::TriggerDefinition::SqlSecurity>::empty(); }
 	;
 
 // DROP metadata operations

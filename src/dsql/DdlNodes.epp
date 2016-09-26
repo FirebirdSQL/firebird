@@ -3437,10 +3437,10 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 			if (ssDefiner.specified)
 			{
-				if (ssDefiner.value.specified)
+				if (ssDefiner.value != SS_DROP)
 				{
 					TRG.RDB$SQL_SECURITY.NULL = FALSE;
-					TRG.RDB$SQL_SECURITY = ssDefiner.value.value ? 1 : 0;
+					TRG.RDB$SQL_SECURITY = ssDefiner.value == SS_DEFINER ? 1 : 0;
 				}
 				else
 					TRG.RDB$SQL_SECURITY.NULL = TRUE;
@@ -3493,6 +3493,9 @@ DdlNode* CreateAlterTriggerNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				Arg::Gds(isc_dsql_incompatible_trigger_type));
 		}
 	}
+
+	if (create && ssDefiner.specified && ssDefiner.value == TriggerDefinition::SS_DROP)
+		status_exception::raise(Arg::Gds(isc_dsql_command_err) << Arg::Gds(isc_dsql_invalid_drop_ss_clause));
 
 	return DdlNode::dsqlPass(dsqlScratch);
 }

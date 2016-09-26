@@ -588,6 +588,13 @@ typedef RecreateNode<CreateAlterProcedureNode, DropProcedureNode, isc_dsql_recre
 class TriggerDefinition
 {
 public:
+	typedef enum
+	{
+		SS_INVOKER,
+		SS_DEFINER,
+		SS_DROP
+	} SqlSecurity;
+
 	explicit TriggerDefinition(MemoryPool& p)
 		: name(p),
 		  relationName(p),
@@ -628,7 +635,7 @@ public:
 	Firebird::ByteChunk debugData;
 	USHORT systemFlag;
 	bool fkTrigger;
-	Nullable<BaseNullable<bool> > ssDefiner;
+	Nullable<SqlSecurity> ssDefiner;
 };
 
 

@@ -921,6 +921,7 @@ const ISC_STATUS isc_dsql_no_sqldata                  = 336003108L;
 const ISC_STATUS isc_dsql_no_input_sqlda              = 336003109L;
 const ISC_STATUS isc_dsql_no_output_sqlda             = 336003110L;
 const ISC_STATUS isc_dsql_wrong_param_num             = 336003111L;
+const ISC_STATUS isc_dsql_invalid_drop_ss_clause      = 336003112L;
 const ISC_STATUS isc_dyn_filter_not_found             = 336068645L;
 const ISC_STATUS isc_dyn_func_not_found               = 336068649L;
 const ISC_STATUS isc_dyn_index_not_found              = 336068656L;
@@ -2218,6 +2219,7 @@ const ISC_STATUS isc_err_max                          = 1271;
 #define isc_dsql_no_input_sqlda              336003109L
 #define isc_dsql_no_output_sqlda             336003110L
 #define isc_dsql_wrong_param_num             336003111L
+#define isc_dsql_invalid_drop_ss_clause      336003112L
 #define isc_dyn_filter_not_found             336068645L
 #define isc_dyn_func_not_found               336068649L
 #define isc_dyn_index_not_found              336068656L

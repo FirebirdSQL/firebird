@@ -1782,6 +1782,8 @@ C --
       PARAMETER (GDS__dsql_no_output_sqlda             = 336003110)
       INTEGER*4 GDS__dsql_wrong_param_num            
       PARAMETER (GDS__dsql_wrong_param_num             = 336003111)
+      INTEGER*4 GDS__dsql_invalid_drop_ss_clause     
+      PARAMETER (GDS__dsql_invalid_drop_ss_clause      = 336003112)
       INTEGER*4 GDS__dyn_filter_not_found            
       PARAMETER (GDS__dyn_filter_not_found             = 336068645)
       INTEGER*4 GDS__dyn_func_not_found              

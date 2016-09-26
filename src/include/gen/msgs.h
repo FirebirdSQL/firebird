@@ -890,6 +890,7 @@ Data source : @4"},		/* eds_statement */
 	{336003109, "No SQLDA for input values provided"},		/* dsql_no_input_sqlda */
 	{336003110, "No SQLDA for output values provided"},		/* dsql_no_output_sqlda */
 	{336003111, "Wrong number of parameters (expected @1, got @2)"},		/* dsql_wrong_param_num */
+	{336003112, "Invalid DROP SQL SECURITY clause"},		/* dsql_invalid_drop_ss_clause */
 	{336068645, "BLOB Filter @1 not found"},		/* dyn_filter_not_found */
 	{336068649, "Function @1 not found"},		/* dyn_func_not_found */
 	{336068656, "Index not found"},		/* dyn_index_not_found */

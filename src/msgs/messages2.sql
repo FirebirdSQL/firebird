@@ -1694,6 +1694,7 @@ COMMIT WORK;
 ('dsql_no_output_sqlda', NULL, NULL, NULL, 7, 38, NULL, 'No SQLDA for output values provided', NULL, NULL);
 ('dsql_wrong_param_num', NULL, NULL, NULL, 7, 39, NULL, 'Wrong number of parameters (expected @1, got @2)', NULL, NULL);
 -- Do not change the arguments of the previous DSQL messages.
+('dsql_invalid_drop_ss_clause', 'CreateAlterTriggerNode::dsqlPass', 'DdlNodes.epp', NULL, 7, 40, NULL, 'Invalid DROP SQL SECURITY clause', NULL, NULL);
 -- Write the new DSQL messages here.
 -- DYN
 (NULL, NULL, 'dyn.c', NULL, 8, 1, NULL, 'ODS version not supported by DYN', NULL, NULL);

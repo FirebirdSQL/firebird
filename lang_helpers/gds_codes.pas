@@ -1777,6 +1777,8 @@ const
 	gds_dsql_no_output_sqlda             = 336003110;
 	isc_dsql_wrong_param_num             = 336003111;
 	gds_dsql_wrong_param_num             = 336003111;
+	isc_dsql_invalid_drop_ss_clause      = 336003112;
+	gds_dsql_invalid_drop_ss_clause      = 336003112;
 	isc_dyn_filter_not_found             = 336068645;
 	gds_dyn_filter_not_found             = 336068645;
 	isc_dyn_func_not_found               = 336068649;
