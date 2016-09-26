@@ -35,7 +35,7 @@ class NullableClear
 public:
 	static void clear(T& v)
 	{
-		v = static_cast<T>(0);
+		v = 0;
 	}
 };
 

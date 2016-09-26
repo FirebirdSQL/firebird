@@ -2321,4 +2321,14 @@ public:
 
 } // namespace
 
+template <>
+class NullableClear<Jrd::TriggerDefinition::SqlSecurity>	// TriggerDefinition::SqlSecurity especialization for NullableClear
+{
+public:
+	static void clear(Jrd::TriggerDefinition::SqlSecurity& v)
+	{
+		v = Jrd::TriggerDefinition::SS_INVOKER;
+	}
+};
+
 #endif // DSQL_DDL_NODES_H
