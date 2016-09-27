@@ -234,7 +234,7 @@ void SCL_check_access(thread_db* tdbb,
 	if ( (type > obj_last_non_ddl) && (mask & SCL_get_object_mask(type)))
 			return;
 
-	if (userName.isEmpty() && (!s_class ||	(mask & s_class->scl_flags)))
+	if (!s_class || (userName.isEmpty() && (mask & s_class->scl_flags)))
 		return;
 
 	if ((userName.hasData() || obj_name.hasData()) &&
