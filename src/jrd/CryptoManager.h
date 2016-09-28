@@ -41,6 +41,8 @@
 #include "../jrd/status.h"
 #include "firebird/Interface.h"
 
+#define CRYPT_DEBUG(A)
+
 // forward
 
 class Config;
@@ -278,7 +280,7 @@ public:
 	void detach(thread_db* tdbb, Attachment* att);
 
 	void startCryptThread(thread_db* tdbb);
-	void terminateCryptThread(thread_db* tdbb);
+	void terminateCryptThread(thread_db* tdbb, bool wait = false);
 	void stopThreadUsing(thread_db* tdbb, Attachment* att);
 
 	class IOCallback
@@ -411,6 +413,9 @@ private:
 
 	SINT64 slowIO;
 	bool crypt, process, down, run;
+
+public:
+	Firebird::Mutex cryptAttMutex;
 };
 
 } // namespace Jrd

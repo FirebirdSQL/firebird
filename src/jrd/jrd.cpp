@@ -6350,10 +6350,49 @@ static void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 
 	attachment->mergeStats();
 
-	// remove the attachment block from the dbb linked list
+	// avoid races with crypt thread
+	Mutex dummyMutex;
+	MutexEnsureUnlock cryptGuard(dbb->dbb_crypto_manager ? dbb->dbb_crypto_manager->cryptAttMutex :
+		dummyMutex, FB_FUNCTION);
+	cryptGuard.enter();
+
 	Sync sync(&dbb->dbb_sync, "jrd.cpp: release_attachment");
 	sync.lock(SYNC_EXCLUSIVE);
 
+	// stop the crypt thread if we release last regular attachment
+	Jrd::Attachment* crypt_att = NULL;
+	CRYPT_DEBUG(fprintf(stderr, "\nrelease attachment=%p\n", attachment));
+	for (Jrd::Attachment* att = dbb->dbb_attachments; att; att = att->att_next)
+	{
+		CRYPT_DEBUG(fprintf(stderr, "att=%p crypt_att=%p F=%c ", att, crypt_att, att->att_flags & ATT_crypt_thread ? '1' : '0'));
+		if (att == attachment)
+		{
+			CRYPT_DEBUG(fprintf(stderr, "self\n"));
+			continue;
+		}
+		if (att->att_flags & ATT_crypt_thread)
+		{
+			crypt_att = att;
+			CRYPT_DEBUG(fprintf(stderr, "found crypt_att=%p\n", crypt_att));
+			continue;
+		}
+		crypt_att = NULL;
+		CRYPT_DEBUG(fprintf(stderr, "other\n"));
+		break;
+	}
+	cryptGuard.leave();
+
+	if (crypt_att)
+	{
+		sync.unlock();
+
+		CRYPT_DEBUG(fprintf(stderr, "crypt_att=%p terminateCryptThread\n", crypt_att));
+		dbb->dbb_crypto_manager->terminateCryptThread(tdbb, true);
+
+		sync.lock(SYNC_EXCLUSIVE);
+	}
+
+	// remove the attachment block from the dbb linked list
 	for (Jrd::Attachment** ptr = &dbb->dbb_attachments; *ptr; ptr = &(*ptr)->att_next)
 	{
 		if (*ptr == attachment)
@@ -6377,8 +6416,7 @@ static void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 	}
 
 	tdbb->setAttachment(NULL);
-	Jrd::Attachment::destroy(attachment);	// string were re-saved in the beginning of this function,
-											// keep that in sync please
+	Jrd::Attachment::destroy(attachment);
 }
 
 

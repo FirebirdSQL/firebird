@@ -54,18 +54,19 @@ checkIfServerRunning
 removeInetdServiceEntry
 removeServiceAutostart
 
-echo "Starting firebird in $multiAnswer server mode..."
+sc=Starting
+[ ${fb_install_prefix} = ${default_prefix} ] || sc=Configure
+echo "$sc firebird in $multiAnswer server mode..."
 fbconf="@FB_CONFDIR@/firebird.conf"
 if [ $multiAnswer = classic ]; then
 	replaceLineInFile $fbconf "ServerMode = Classic" "^ServerMode"
 
 	updateInetdServiceEntry
-	resetInetdServer
 else
 	replaceLineInFile $fbconf "ServerMode = Super" "^ServerMode"
 
 	installInitdScript
-	startService
 fi
+startFirebird
 
 echo "Done."

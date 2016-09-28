@@ -5337,7 +5337,8 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		store->dsqlFields = notMatched->fields;
 		store->dsqlValues = notMatched->values;
 
-		thisIf->trueAction = store = store->internalDsqlPass(dsqlScratch, false)->as<StoreNode>();
+		bool needSavePoint; // unused
+		thisIf->trueAction = store = store->internalDsqlPass(dsqlScratch, false, needSavePoint)->as<StoreNode>();
 		fb_assert(store);
 
 		if (notMatched->condition)
@@ -6439,7 +6440,8 @@ DmlNode* StoreNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 	return node;
 }
 
-StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool updateOrInsert)
+StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, 
+	bool updateOrInsert, bool& needSavePoint)
 {
 	thread_db* tdbb = JRD_get_thread_data(); // necessary?
 	DsqlContextStack::AutoRestore autoContext(*dsqlScratch->context);
@@ -6463,9 +6465,13 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool upd
 		RseNode* rse = PASS1_rse(dsqlScratch, selExpr, false);
 		node->dsqlRse = rse;
 		values = rse->dsqlSelectList;
+		needSavePoint = false;
 	}
 	else
+	{
 		values = doDsqlPass(dsqlScratch, dsqlValues, false);
+		needSavePoint = SubSelectFinder::find(values);
+	}
 
 	// Process relation
 
@@ -6601,7 +6607,14 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool upd
 
 StmtNode* StoreNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	return SavepointEncloseNode::make(getPool(), dsqlScratch, internalDsqlPass(dsqlScratch, false));
+	bool needSavePoint;
+	StmtNode* node = SavepointEncloseNode::make(getPool(), dsqlScratch, 
+		internalDsqlPass(dsqlScratch, false, needSavePoint));
+
+	if (!needSavePoint || node->is<SavepointEncloseNode>())
+		return node;
+
+	return FB_NEW SavepointEncloseNode(getPool(), node);
 }
 
 string StoreNode::internalPrint(NodePrinter& printer) const
@@ -7955,13 +7968,15 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	const MetaName& relation_name = relation->as<RelationSourceNode>()->dsqlName;
 	MetaName base_name = relation_name;
 
+	bool needSavePoint;
+
 	// Build the INSERT node.
 	StoreNode* insert = FB_NEW_POOL(pool) StoreNode(pool);
 	insert->dsqlRelation = relation;
 	insert->dsqlFields = fields;
 	insert->dsqlValues = values;
 	insert->dsqlReturning = returning;
-	insert = insert->internalDsqlPass(dsqlScratch, true)->as<StoreNode>();
+	insert = insert->internalDsqlPass(dsqlScratch, true, needSavePoint)->as<StoreNode>();
 	fb_assert(insert);
 
 	dsql_ctx* context = insert->dsqlRelation->dsqlContext;
@@ -8141,7 +8156,11 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (!returning)
 		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_INSERT);
 
-	return SavepointEncloseNode::make(getPool(), dsqlScratch, list);
+	StmtNode* ret = SavepointEncloseNode::make(getPool(), dsqlScratch, list);
+	if (!needSavePoint || ret->is<SavepointEncloseNode>())
+		return ret;
+
+	return FB_NEW SavepointEncloseNode(getPool(), ret);
 }
 
 string UpdateOrInsertNode::internalPrint(NodePrinter& printer) const

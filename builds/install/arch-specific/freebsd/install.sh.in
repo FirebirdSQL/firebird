@@ -23,6 +23,8 @@
 #		Alex Peshkoff
 #
 
+fb_install_prefix=@prefix@
+
 # Script to copy install files from the build/transport area
 
 

@@ -19,6 +19,7 @@
  */
 
 #include "firebird.h"
+#include <initializer_list>
 #include "../jrd/align.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/DataTypeUtil.h"
@@ -1324,15 +1325,15 @@ void AggregateSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		fb_assert(dsqlContext->ctx_win_maps.hasData());
 		dsqlScratch->appendUChar(dsqlContext->ctx_win_maps.getCount());	// number of windows
 
-		for (Array<PartitionMap*>::iterator i = dsqlContext->ctx_win_maps.begin();
+		for (Array<WindowMap*>::iterator i = dsqlContext->ctx_win_maps.begin();
 			 i != dsqlContext->ctx_win_maps.end();
 			 ++i)
 		{
 			bool v3 = !((*i)->window &&
 				((*i)->window->extent ||
-				 (*i)->window->exclusion != WindowClause::EXCLUDE_NO_OTHERS));
+				 (*i)->window->exclusion != WindowClause::Exclusion::NO_OTHERS));
 
-			ValueListNode* partition = (*i)->partition;
+			ValueListNode* partition = (*i)->window ? (*i)->window->partition : NULL;
 			ValueListNode* partitionRemapped = (*i)->partitionRemapped;
 			ValueListNode* order = (*i)->window ? (*i)->window->order : NULL;
 
@@ -1398,7 +1399,7 @@ void AggregateSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 					}
 				}
 
-				if ((*i)->window->exclusion != WindowClause::EXCLUDE_NO_OTHERS)
+				if ((*i)->window->exclusion != WindowClause::Exclusion::NO_OTHERS)
 				{
 					dsqlScratch->appendUChar(blr_window_win_exclusion);
 					dsqlScratch->appendUChar((UCHAR) (*i)->window->exclusion);
@@ -2121,8 +2122,8 @@ void WindowSourceNode::parseWindow(thread_db* tdbb, CompilerScratch* csb)
 
 				switch (window.frameExtent->unit)
 				{
-					case WindowClause::FrameExtent::UNIT_RANGE:
-					case WindowClause::FrameExtent::UNIT_ROWS:
+					case WindowClause::FrameExtent::Unit::RANGE:
+					case WindowClause::FrameExtent::Unit::ROWS:
 						break;
 
 					default:
@@ -2141,10 +2142,10 @@ void WindowSourceNode::parseWindow(thread_db* tdbb, CompilerScratch* csb)
 
 				switch (window.exclusion)
 				{
-					case WindowClause::EXCLUDE_NO_OTHERS:
-					case WindowClause::EXCLUDE_CURRENT_ROW:
-					case WindowClause::EXCLUDE_GROUP:
-					case WindowClause::EXCLUDE_TIES:
+					case WindowClause::Exclusion::NO_OTHERS:
+					case WindowClause::Exclusion::CURRENT_ROW:
+					case WindowClause::Exclusion::GROUP:
+					case WindowClause::Exclusion::TIES:
 						break;
 
 					default:
@@ -2174,9 +2175,9 @@ void WindowSourceNode::parseWindow(thread_db* tdbb, CompilerScratch* csb)
 
 						switch (frame->bound)
 						{
-							case WindowClause::Frame::BOUND_PRECEDING:
-							case WindowClause::Frame::BOUND_FOLLOWING:
-							case WindowClause::Frame::BOUND_CURRENT_ROW:
+							case WindowClause::Frame::Bound::PRECEDING:
+							case WindowClause::Frame::Bound::FOLLOWING:
+							case WindowClause::Frame::Bound::CURRENT_ROW:
 								break;
 
 							default:
@@ -2585,30 +2586,22 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			PASS1_expand_select_node(dsqlScratch, streamList->items[1], &rightStack, true);
 
 			// verify columns that exist in both sides
-			for (int i = 0; i < 2; ++i)
+			for (const auto* currentStack : {&leftStack, &rightStack})
 			{
-				ValueListNode& currentStack = i == 0 ? leftStack : rightStack;
-
-				for (NestConst<ValueExprNode>* j = currentStack.items.begin();
-					 j != currentStack.items.end();
-					 ++j)
+				for (auto& item : currentStack->items)
 				{
 					const TEXT* name = NULL;
-					ValueExprNode* item = *j;
-					DsqlAliasNode* aliasNode;
-					FieldNode* fieldNode;
-					DerivedFieldNode* derivedField;
 
-					if ((aliasNode = item->as<DsqlAliasNode>()))
+					if (auto* aliasNode = item->as<DsqlAliasNode>())
 						name = aliasNode->name.c_str();
-					else if ((fieldNode = item->as<FieldNode>()))
+					else if (auto* fieldNode = item->as<FieldNode>())
 						name = fieldNode->dsqlField->fld_name.c_str();
-					else if ((derivedField = item->as<DerivedFieldNode>()))
+					else if (auto* derivedField = item->as<DerivedFieldNode>())
 						name = derivedField->name.c_str();
 
 					if (name)
 					{
-						if (i == 0)	// left
+						if (currentStack == &leftStack)
 							leftNames.add(name);
 						else	// right
 						{

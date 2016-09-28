@@ -356,7 +356,7 @@ bool BaseAggWinStream<ThisType, NextType>::getNextRecord(thread_db* tdbb, jrd_re
 }
 
 // Export the template for WindowedStream::WindowStream.
-template class BaseAggWinStream<WindowedStream::WindowStream, BaseBufferedStream>;
+template class Jrd::BaseAggWinStream<WindowedStream::WindowStream, BaseBufferedStream>;
 
 // ------------------------------
 

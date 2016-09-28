@@ -1,9 +1,6 @@
 # default: on
 # description: FirebirdSQL server
 #
-# Be careful when commenting out entries in this file. Active key entry should
-# be the first as some scripts (CSchangeRunUser.sh in particular) use sed 
-# scripting to modify it.
 
 service @FB_SERVICE_NAME@
 {

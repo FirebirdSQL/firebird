@@ -104,6 +104,9 @@ namespace Firebird
 	public:
 		static void catchException(IStatus* status)
 		{
+			if (!status)
+				return;
+
 			try
 			{
 				throw;

@@ -160,12 +160,14 @@ bool ExprNode::dsqlMatch(const ExprNode* other, bool ignoreMapCast) const
 	if (other->dsqlChildNodes.getCount() != count)
 		return false;
 
-	const NodeRef* const* j = other->dsqlChildNodes.begin();
+	const auto* j = other->dsqlChildNodes.begin();
 
-	for (const NodeRef* const* i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i, ++j)
+	for (const auto& i : dsqlChildNodes)
 	{
-		if (!**i != !**j || !PASS1_node_match((*i)->getExpr(), (*j)->getExpr(), ignoreMapCast))
+		if (!*i != !**j || !PASS1_node_match(i->getExpr(), (*j)->getExpr(), ignoreMapCast))
 			return false;
+
+		++j;
 	}
 
 	return true;
@@ -180,15 +182,17 @@ bool ExprNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 	if (other->jrdChildNodes.getCount() != count)
 		return false;
 
-	const NodeRef* const* j = other->jrdChildNodes.begin();
+	const auto* j = other->jrdChildNodes.begin();
 
-	for (const NodeRef* const* i = jrdChildNodes.begin(); i != jrdChildNodes.end(); ++i, ++j)
+	for (const auto& i : jrdChildNodes)
 	{
-		if (!**i && !**j)
+		if (!*i && !**j)
 			continue;
 
-		if (!**i || !**j || !(*i)->getExpr()->sameAs((*j)->getExpr(), ignoreStreams))
+		if (!*i || !**j || !i->getExpr()->sameAs((*j)->getExpr(), ignoreStreams))
 			return false;
+
+		++j;
 	}
 
 	return true;
@@ -197,9 +201,9 @@ bool ExprNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 bool ExprNode::computable(CompilerScratch* csb, StreamType stream,
 	bool allowOnlyCurrentStream, ValueExprNode* /*value*/)
 {
-	for (NodeRef** i = jrdChildNodes.begin(); i != jrdChildNodes.end(); ++i)
+	for (auto& i : jrdChildNodes)
 	{
-		if (**i && !(*i)->getExpr()->computable(csb, stream, allowOnlyCurrentStream))
+		if (*i && !i->getExpr()->computable(csb, stream, allowOnlyCurrentStream))
 			return false;
 	}
 
@@ -208,19 +212,19 @@ bool ExprNode::computable(CompilerScratch* csb, StreamType stream,
 
 void ExprNode::findDependentFromStreams(const OptimizerRetrieval* optRet, SortedStreamList* streamList)
 {
-	for (NodeRef** i = jrdChildNodes.begin(); i != jrdChildNodes.end(); ++i)
+	for (auto& i : jrdChildNodes)
 	{
-		if (**i)
-			(*i)->getExpr()->findDependentFromStreams(optRet, streamList);
+		if (*i)
+			i->getExpr()->findDependentFromStreams(optRet, streamList);
 	}
 }
 
 ExprNode* ExprNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
-	for (NodeRef** i = jrdChildNodes.begin(); i != jrdChildNodes.end(); ++i)
+	for (auto& i : jrdChildNodes)
 	{
-		if (**i)
-			(*i)->pass1(tdbb, csb);
+		if (*i)
+			i->pass1(tdbb, csb);
 	}
 
 	return this;
@@ -228,10 +232,10 @@ ExprNode* ExprNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 ExprNode* ExprNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
-	for (NodeRef** i = jrdChildNodes.begin(); i != jrdChildNodes.end(); ++i)
+	for (auto& i : jrdChildNodes)
 	{
-		if (**i)
-			(*i)->pass2(tdbb, csb);
+		if (*i)
+			i->pass2(tdbb, csb);
 	}
 
 	return this;
@@ -2839,8 +2843,8 @@ bool CoalesceNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 {
 	bool ret = false;
 
-	for (NestConst<ValueExprNode>* ptr = args->items.begin(); ptr != args->items.end(); ++ptr)
-		ret |= PASS1_set_parameter_type(dsqlScratch, *ptr, desc, false);
+	for (auto& item : args->items)
+		ret |= PASS1_set_parameter_type(dsqlScratch, item, desc, false);
 
 	return ret;
 }
@@ -2855,8 +2859,8 @@ void CoalesceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->appendUChar(blr_coalesce);
 	dsqlScratch->appendUChar(args->items.getCount());
 
-	for (NestConst<ValueExprNode>* ptr = args->items.begin(); ptr != args->items.end(); ++ptr)
-		GEN_expr(dsqlScratch, *ptr);
+	for (auto& item : args->items)
+		GEN_expr(dsqlScratch, item);
 }
 
 void CoalesceNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
@@ -2873,10 +2877,11 @@ void CoalesceNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 	Array<const dsc*> descPtrs;
 	descPtrs.resize(args->items.getCount());
 
-	for (NestConst<ValueExprNode>* p = args->items.begin(); p != args->items.end(); ++p, ++i)
+	for (auto& item : args->items)
 	{
-		(*p)->getDesc(tdbb, csb, &descs[i]);
+		item->getDesc(tdbb, csb, &descs[i]);
 		descPtrs[i] = &descs[i];
+		++i;
 	}
 
 	DataTypeUtil(tdbb).makeFromList(desc, "COALESCE", descPtrs.getCount(), descPtrs.begin());
@@ -2902,12 +2907,9 @@ ValueExprNode* CoalesceNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 dsc* CoalesceNode::execute(thread_db* tdbb, jrd_req* request) const
 {
-	const NestConst<ValueExprNode>* ptr = args->items.begin();
-	const NestConst<ValueExprNode>* end = args->items.end();
-
-	for (; ptr != end; ++ptr)
+	for (auto& item : args->items)
 	{
-		dsc* desc = EVL_expr(tdbb, request, *ptr);
+		dsc* desc = EVL_expr(tdbb, request, item);
 
 		if (desc && !(request->req_flags & req_null))
 			return desc;
@@ -3819,11 +3821,9 @@ bool DecodeNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 
 	if (!setParameters)
 	{
-		for (NestConst<ValueExprNode>* ptr = conditions->items.begin();
-			 ptr != conditions->items.end();
-			 ++ptr)
+		for (auto& condition : conditions->items)
 		{
-			if ((*ptr)->is<ParameterNode>())
+			if (condition->is<ParameterNode>())
 			{
 				setParameters = true;
 				break;
@@ -3844,11 +3844,10 @@ bool DecodeNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 
 		node1->items[i++] = test;
 
-		for (NestConst<ValueExprNode>* ptr = conditions->items.begin();
-			 ptr != conditions->items.end();
-			 ++ptr, ++i)
+		for (auto& condition : conditions->items)
 		{
-			node1->items[i] = *ptr;
+			node1->items[i] = condition;
+			++i;
 		}
 
 		MAKE_desc_from_list(dsqlScratch, &node1Desc, node1, label.c_str());
@@ -3858,19 +3857,17 @@ bool DecodeNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 			// Set parameter describe information.
 			PASS1_set_parameter_type(dsqlScratch, test, &node1Desc, false);
 
-			for (NestConst<ValueExprNode>* ptr = conditions->items.begin();
-				 ptr != conditions->items.end();
-				 ++ptr)
+			for (auto& condition : conditions->items)
 			{
-				PASS1_set_parameter_type(dsqlScratch, *ptr, &node1Desc, false);
+				PASS1_set_parameter_type(dsqlScratch, condition, &node1Desc, false);
 			}
 		}
 	}
 
 	bool ret = false;
 
-	for (NestConst<ValueExprNode>* ptr = values->items.begin(); ptr != values->items.end(); ++ptr)
-		ret |= PASS1_set_parameter_type(dsqlScratch, *ptr, desc, false);
+	for (auto& value : values->items)
+		ret |= PASS1_set_parameter_type(dsqlScratch, value, desc, false);
 
 	return ret;
 }
@@ -3882,17 +3879,15 @@ void DecodeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	dsqlScratch->appendUChar(conditions->items.getCount());
 
-	for (NestConst<ValueExprNode>* ptr = conditions->items.begin();
-		 ptr != conditions->items.end();
-		++ptr)
+	for (auto& condition : conditions->items)
 	{
-		(*ptr)->genBlr(dsqlScratch);
+		condition->genBlr(dsqlScratch);
 	}
 
 	dsqlScratch->appendUChar(values->items.getCount());
 
-	for (NestConst<ValueExprNode>* ptr = values->items.begin(); ptr != values->items.end(); ++ptr)
-		(*ptr)->genBlr(dsqlScratch);
+	for (auto& value : values->items)
+		value->genBlr(dsqlScratch);
 }
 
 void DecodeNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
@@ -3910,10 +3905,11 @@ void DecodeNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 	Array<const dsc*> descPtrs;
 	descPtrs.resize(values->items.getCount());
 
-	for (NestConst<ValueExprNode>* p = values->items.begin(); p != values->items.end(); ++p, ++i)
+	for (auto& value : values->items)
 	{
-		(*p)->getDesc(tdbb, csb, &descs[i]);
+		value->getDesc(tdbb, csb, &descs[i]);
 		descPtrs[i] = &descs[i];
+		++i;
 	}
 
 	DataTypeUtil(tdbb).makeFromList(desc, label.c_str(), descPtrs.getCount(), descPtrs.begin());
@@ -3949,16 +3945,16 @@ dsc* DecodeNode::execute(thread_db* tdbb, jrd_req* request) const
 	// NULL we have nothing to compare.
 	if (testDesc && !(request->req_flags & req_null))
 	{
-		const NestConst<ValueExprNode>* conditionsPtr = conditions->items.begin();
-		const NestConst<ValueExprNode>* conditionsEnd = conditions->items.end();
 		const NestConst<ValueExprNode>* valuesPtr = values->items.begin();
 
-		for (; conditionsPtr != conditionsEnd; ++conditionsPtr, ++valuesPtr)
+		for (auto& condition : conditions->items)
 		{
-			dsc* desc = EVL_expr(tdbb, request, *conditionsPtr);
+			dsc* desc = EVL_expr(tdbb, request, condition);
 
 			if (desc && !(request->req_flags & req_null) && MOV_compare(testDesc, desc) == 0)
 				return EVL_expr(tdbb, request, *valuesPtr);
+
+			++valuesPtr;
 		}
 	}
 
@@ -3996,10 +3992,10 @@ void DerivedExprNode::collectStreams(SortedStreamList& streamList) const
 {
 	arg->collectStreams(streamList);
 
-	for (const StreamType* i = internalStreamList.begin(); i != internalStreamList.end(); ++i)
+	for (const auto i : internalStreamList)
 	{
-		if (!streamList.exist(*i))
-			streamList.add(*i);
+		if (!streamList.exist(i))
+			streamList.add(i);
 	}
 }
 
@@ -4012,10 +4008,8 @@ bool DerivedExprNode::computable(CompilerScratch* csb, StreamType stream,
 	SortedStreamList argStreams;
 	arg->collectStreams(argStreams);
 
-	for (StreamType* i = internalStreamList.begin(); i != internalStreamList.end(); ++i)
+	for (const auto n : internalStreamList)
 	{
-		const StreamType n = *i;
-
 		if (argStreams.exist(n))
 		{
 			// We've already checked computability of the argument,
@@ -4046,10 +4040,8 @@ void DerivedExprNode::findDependentFromStreams(const OptimizerRetrieval* optRet,
 {
 	arg->findDependentFromStreams(optRet, streamList);
 
-	for (StreamType* i = internalStreamList.begin(); i != internalStreamList.end(); ++i)
+	for (const auto derivedStream : internalStreamList)
 	{
-		const StreamType derivedStream = *i;
-
 		if (derivedStream != optRet->stream &&
 			(optRet->csb->csb_rpt[derivedStream].csb_flags & csb_active))
 		{
@@ -4074,12 +4066,12 @@ ValueExprNode* DerivedExprNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	{
 #ifdef CMP_DEBUG
 		csb->dump("remap nod_derived_expr:\n");
-		for (StreamType* i = node->streamList.begin(); i != node->streamList.end(); ++i)
-			csb->dump("\t%d: %d -> %d\n", i, *i, copier.remap[*i]);
+		for (const auto i : node->streamList)
+			csb->dump("\t%d: %d -> %d\n", i, i, copier.remap[i]);
 #endif
 
-		for (StreamType* i = node->internalStreamList.begin(); i != node->internalStreamList.end(); ++i)
-			*i = copier.remap[*i];
+		for (auto& i : node->internalStreamList)
+			i = copier.remap[i];
 	}
 
 	fb_assert(!cursorNumber.specified);
@@ -4093,15 +4085,15 @@ ValueExprNode* DerivedExprNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 #ifdef CMP_DEBUG
 	csb->dump("expand nod_derived_expr:");
-	for (const StreamType* i = streamList.begin(); i != streamList.end(); ++i)
-		csb->dump(" %d", *i);
+	for (const auto i : streamList)
+		csb->dump(" %d", i);
 	csb->dump("\n");
 #endif
 
-	for (StreamType* i = internalStreamList.begin(); i != internalStreamList.end(); ++i)
+	for (const auto i : internalStreamList)
 	{
-		CMP_mark_variant(csb, *i);
-		CMP_expand_view_nodes(tdbb, csb, *i, stack, blr_dbkey, true);
+		CMP_mark_variant(csb, i);
+		CMP_expand_view_nodes(tdbb, csb, i, stack, blr_dbkey, true);
 	}
 
 	internalStreamList.clear();
@@ -4139,9 +4131,9 @@ dsc* DerivedExprNode::execute(thread_db* tdbb, jrd_req* request) const
 
 	dsc* value = NULL;
 
-	for (const StreamType* i = internalStreamList.begin(); i != internalStreamList.end(); ++i)
+	for (const auto i : internalStreamList)
 	{
-		if (request->req_rpb[*i].rpb_number.isValid())
+		if (request->req_rpb[i].rpb_number.isValid())
 		{
 			value = EVL_expr(tdbb, request, arg);
 
@@ -5040,12 +5032,10 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 					// Because every select item has an alias we can just walk
 					// through the list and return the correct node when found.
 					ValueListNode* rseItems = context->ctx_rse->dsqlSelectList;
-					NestConst<ValueExprNode>* ptr = rseItems->items.begin();
 
-					for (const NestConst<ValueExprNode>* const end = rseItems->items.end();
-						 ptr != end; ++ptr)
+					for (auto& rseItem : rseItems->items)
 					{
-						DerivedFieldNode* selectItem = (*ptr)->as<DerivedFieldNode>();
+						DerivedFieldNode* selectItem = rseItem->as<DerivedFieldNode>();
 
 						// select-item should always be a alias!
 						if (selectItem)
@@ -5067,7 +5057,7 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 								if (node)
 									break;
 
-								node = usingField ? usingField.getObject() : ptr->getObject();
+								node = usingField ? usingField : rseItem;
 								break;
 							}
 						}
@@ -5271,10 +5261,7 @@ bool FieldNode::dsqlFieldFinder(FieldFinder& visitor)
 ValueExprNode* FieldNode::dsqlFieldRemapper(FieldRemapper& visitor)
 {
 	if (dsqlContext->ctx_scope_level == visitor.context->ctx_scope_level)
-	{
-		return PASS1_post_map(visitor.dsqlScratch, this, visitor.context,
-			visitor.partitionNode, visitor.windowNode);
-	}
+		return PASS1_post_map(visitor.dsqlScratch, this, visitor.context, visitor.windowNode);
 
 	return this;
 }
@@ -5308,12 +5295,8 @@ void FieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		dsqlScratch->appendUChar(dsqlIndices->items.getCount());
 
-		for (NestConst<ValueExprNode>* ptr = dsqlIndices->items.begin();
-			 ptr != dsqlIndices->items.end();
-			 ++ptr)
-		{
-			GEN_expr(dsqlScratch, *ptr);
-		}
+		for (auto& index : dsqlIndices->items)
+			GEN_expr(dsqlScratch, index);
 	}
 }
 
@@ -6802,10 +6785,7 @@ ValueExprNode* DsqlMapNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	}
 
 	if (visitor.window && context->ctx_scope_level == visitor.context->ctx_scope_level)
-	{
-		return PASS1_post_map(visitor.dsqlScratch, this,
-			visitor.context, visitor.partitionNode, visitor.windowNode);
-	}
+		return PASS1_post_map(visitor.dsqlScratch, this, visitor.context, visitor.windowNode);
 
 	return this;
 }
@@ -6872,8 +6852,8 @@ void DsqlMapNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->appendUChar(blr_fid);
 
-	if (map->map_partition)
-		dsqlScratch->appendUChar(map->map_partition->context);
+	if (map->map_window)
+		dsqlScratch->appendUChar(map->map_window->context);
 	else
 		GEN_stuff_context(dsqlScratch, context);
 
@@ -6997,10 +6977,7 @@ ValueExprNode* DerivedFieldNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	// the given context (of course only if we're in the same scope-level).
 
 	if (scope == visitor.context->ctx_scope_level)
-	{
-		return PASS1_post_map(visitor.dsqlScratch, this,
-			visitor.context, visitor.partitionNode, visitor.windowNode);
-	}
+		return PASS1_post_map(visitor.dsqlScratch, this, visitor.context, visitor.windowNode);
 	else if (visitor.context->ctx_scope_level < scope)
 		doDsqlFieldRemapper(visitor, value);
 
@@ -7051,12 +7028,11 @@ void DerivedFieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 				if (derivedContext->ctx_win_maps.hasData())
 				{
-					for (const PartitionMap* const* iter = derivedContext->ctx_win_maps.begin();
-						iter != derivedContext->ctx_win_maps.end(); ++iter)
+					for (auto& winMap : derivedContext->ctx_win_maps)
 					{
 						// bottleneck
-						fb_assert((*iter)->context <= MAX_UCHAR);
-						derivedContexts.add((*iter)->context);
+						fb_assert(winMap->context <= MAX_UCHAR);
+						derivedContexts.add(winMap->context);
 					}
 				}
 				else
@@ -7476,13 +7452,13 @@ WindowClause::FrameExtent* WindowClause::FrameExtent::dsqlPass(DsqlCompilerScrat
 {
 	if (frame1 && frame2)
 	{
-		if (frame1->bound == Frame::BOUND_CURRENT_ROW && frame2->bound == Frame::BOUND_PRECEDING)
+		if (frame1->bound == Frame::Bound::CURRENT_ROW && frame2->bound == Frame::Bound::PRECEDING)
 		{
 			status_exception::raise(
 				Arg::Gds(isc_dsql_window_incompat_frames) << "CURRENT ROW" << "PRECEDING");
 		}
 
-		if (frame1->bound == Frame::BOUND_FOLLOWING && frame2->bound != Frame::BOUND_FOLLOWING)
+		if (frame1->bound == Frame::Bound::FOLLOWING && frame2->bound != Frame::Bound::FOLLOWING)
 		{
 			status_exception::raise(
 				Arg::Gds(isc_dsql_window_incompat_frames) <<
@@ -7520,12 +7496,52 @@ WindowClause::FrameExtent* WindowClause::FrameExtent::copy(thread_db* tdbb, Node
 
 WindowClause* WindowClause::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	WindowClause* node = FB_NEW_POOL(getPool()) WindowClause(getPool(),
-		doDsqlPass(dsqlScratch, order),
-		doDsqlPass(dsqlScratch, extent),
-		exclusion);
+	NestConst<WindowClause> window;
 
-	if (node->order && node->extent && node->extent->unit == FrameExtent::UNIT_RANGE &&
+	if (name)
+	{
+		fb_assert(dsqlScratch->context->hasData());
+		dsql_ctx* context = dsqlScratch->context->object();
+
+		if (!context->ctx_named_windows.get(*name, window))
+		{
+			ERRD_post(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+				Arg::Gds(isc_dsql_window_not_found) << *name);
+		}
+
+		if (partition)
+		{
+			ERRD_post(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+				Arg::Gds(isc_dsql_window_cant_overr_part) << *name);
+		}
+
+		if (order && window->order)
+		{
+			ERRD_post(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+				Arg::Gds(isc_dsql_window_cant_overr_order) << *name);
+		}
+
+		if (window->extent)
+		{
+			ERRD_post(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+				Arg::Gds(isc_dsql_window_cant_overr_frame) << *name);
+		}
+	}
+	else
+		window = this;
+
+	WindowClause* node = FB_NEW_POOL(getPool()) WindowClause(getPool(),
+		window->name,
+		doDsqlPass(dsqlScratch, window->partition),
+		doDsqlPass(dsqlScratch, window->order),
+		doDsqlPass(dsqlScratch, window->extent),
+		window->exclusion);
+
+	if (node->order && node->extent && node->extent->unit == FrameExtent::Unit::RANGE &&
 		(node->extent->frame1->value || (node->extent->frame2 && node->extent->frame2->value)))
 	{
 		if (node->order->items.getCount() > 1)
@@ -7576,15 +7592,23 @@ WindowClause* WindowClause::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-OverNode::OverNode(MemoryPool& pool, AggNode* aAggExpr, ValueListNode* aPartition,
-			WindowClause* aWindow)
+OverNode::OverNode(MemoryPool& pool, AggNode* aAggExpr, const MetaName* aWindowName)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_OVER>(pool),
 	  aggExpr(aAggExpr),
-	  partition(aPartition),
+	  windowName(aWindowName),
+	  window(NULL)
+{
+	addDsqlChildNode(aggExpr);
+	addDsqlChildNode(window);
+}
+
+OverNode::OverNode(MemoryPool& pool, AggNode* aAggExpr, WindowClause* aWindow)
+	: TypedNode<ValueExprNode, ExprNode::TYPE_OVER>(pool),
+	  aggExpr(aAggExpr),
+	  windowName(NULL),
 	  window(aWindow)
 {
 	addDsqlChildNode(aggExpr);
-	addDsqlChildNode(partition);
 	addDsqlChildNode(window);
 }
 
@@ -7593,7 +7617,6 @@ string OverNode::internalPrint(NodePrinter& printer) const
 	ValueExprNode::internalPrint(printer);
 
 	NODE_PRINT(printer, aggExpr);
-	NODE_PRINT(printer, partition);
 	NODE_PRINT(printer, window);
 
 	return "OverNode";
@@ -7607,14 +7630,12 @@ bool OverNode::dsqlAggregateFinder(AggregateFinder& visitor)
 
 	if (!wereWindow)
 	{
-		Array<NodeRef*>& exprChildren = aggExpr->dsqlChildNodes;
-		for (NodeRef** i = exprChildren.begin(); i != exprChildren.end(); ++i)
-			aggregate |= visitor.visit((*i)->getExpr());
+		for (auto& child : aggExpr->dsqlChildNodes)
+			aggregate |= visitor.visit(child->getExpr());
 	}
 	else
 		aggregate |= visitor.visit(aggExpr);
 
-	aggregate |= visitor.visit(partition);
 	aggregate |= visitor.visit(window);
 
 	return aggregate;
@@ -7629,7 +7650,6 @@ bool OverNode::dsqlAggregate2Finder(Aggregate2Finder& visitor)
 		found |= visitor.visit(aggExpr);
 	}
 
-	found |= visitor.visit(partition);
 	found |= visitor.visit(window);
 
 	return found;
@@ -7643,7 +7663,6 @@ bool OverNode::dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor)
 	AutoSetRestore<bool> autoInsideHigherMap(&visitor.insideHigherMap, true);
 
 	invalid |= visitor.visit(aggExpr);
-	invalid |= visitor.visit(partition);
 	invalid |= visitor.visit(window);
 
 	return invalid;
@@ -7657,42 +7676,34 @@ bool OverNode::dsqlSubSelectFinder(SubSelectFinder& /*visitor*/)
 ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 {
 	// Save the values to restore them in the end.
-	AutoSetRestore<ValueListNode*> autoPartitionNode(&visitor.partitionNode, visitor.partitionNode);
 	AutoSetRestore<WindowClause*> autoWindowNode(&visitor.windowNode, visitor.windowNode);
 
-	if (partition)
+	if (window->partition)
 	{
 		if (Aggregate2Finder::find(visitor.context->ctx_scope_level, FIELD_MATCH_TYPE_EQUAL,
-				true, partition))
+				true, window->partition))
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 					  Arg::Gds(isc_dsql_agg_nested_err));
 		}
-
-		visitor.partitionNode = partition;
 	}
 
-	if (window)
+	if (Aggregate2Finder::find(visitor.context->ctx_scope_level, FIELD_MATCH_TYPE_EQUAL,
+			true, window))
 	{
-		if (Aggregate2Finder::find(visitor.context->ctx_scope_level, FIELD_MATCH_TYPE_EQUAL,
-				true, window))
-		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-					  Arg::Gds(isc_dsql_agg_nested_err));
-		}
-
-		visitor.windowNode = window;
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_agg_nested_err));
 	}
+
+	visitor.windowNode = window;
 
 	// Before remap, aggExpr must always be an AggNode;
 	AggNode* aggNode = static_cast<AggNode*>(aggExpr.getObject());
 
-	Array<NodeRef*>& exprChildren = aggNode->dsqlChildNodes;
-
-	for (NodeRef** i = exprChildren.begin(); i != exprChildren.end(); ++i)
+	for (auto& child : aggNode->dsqlChildNodes)
 	{
 		if (Aggregate2Finder::find(visitor.context->ctx_scope_level, FIELD_MATCH_TYPE_EQUAL,
-				true, (*i)->getExpr()))
+				true, child->getExpr()))
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 					  Arg::Gds(isc_dsql_agg_nested_err));
@@ -7708,31 +7719,27 @@ ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 		if (!visitor.window)
 		{
 			{	// scope
-				AutoSetRestore<ValueListNode*> autoPartitionNode2(&visitor.partitionNode, NULL);
 				AutoSetRestore<WindowClause*> autoWindowNode2(&visitor.windowNode, NULL);
 
-				Array<NodeRef*>& exprChildren = aggNode->dsqlChildNodes;
-				for (NodeRef** i = exprChildren.begin(); i != exprChildren.end(); ++i)
-					(*i)->remap(visitor);
+				for (auto& child : aggNode->dsqlChildNodes)
+					child->remap(visitor);
 			}
 
-			if (partition)
+			if (window->partition)
 			{
-				for (unsigned i = 0; i < partition->items.getCount(); ++i)
+				for (unsigned i = 0; i < window->partition->items.getCount(); ++i)
 				{
-					AutoSetRestore<ValueListNode*> autoPartitionNode2(&visitor.partitionNode, NULL);
 					AutoSetRestore<WindowClause*> autoWindowNode2(&visitor.windowNode, NULL);
 
-					doDsqlFieldRemapper(visitor, partition->items[i]);
+					doDsqlFieldRemapper(visitor, window->partition->items[i]);
 				}
 			}
 
 			// ASF: I'm not sure if this is enough or frame values needs to be remapped as well.
-			if (window && window->order)
+			if (window->order)
 			{
 				for (unsigned i = 0; i < window->order->items.getCount(); ++i)
 				{
-					AutoSetRestore<ValueListNode*> autoPartitionNode(&visitor.partitionNode, NULL);
 					AutoSetRestore<WindowClause*> autoWindowNode2(&visitor.windowNode, NULL);
 
 					doDsqlFieldRemapper(visitor, window->order->items[i]);
@@ -7743,7 +7750,7 @@ ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 		{
 
 			return PASS1_post_map(visitor.dsqlScratch, aggNode, visitor.context,
-				visitor.partitionNode, visitor.windowNode);
+				visitor.windowNode);
 		}
 	}
 
@@ -7785,21 +7792,36 @@ dsc* OverNode::execute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
 
 ValueExprNode* OverNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
+	NestConst<WindowClause> refWindow;
+
+	if (windowName)
+	{
+		fb_assert(dsqlScratch->context->hasData());
+		dsql_ctx* context = dsqlScratch->context->object();
+
+		if (!context->ctx_named_windows.get(*windowName, refWindow))
+		{
+			ERRD_post(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+				Arg::Gds(isc_dsql_window_not_found) << *windowName);
+		}
+	}
+	else
+		refWindow = window;
+
 	OverNode* node = FB_NEW_POOL(getPool()) OverNode(getPool(),
-		static_cast<AggNode*>(doDsqlPass(dsqlScratch, aggExpr)),
-		doDsqlPass(dsqlScratch, partition),
-		doDsqlPass(dsqlScratch, window));
+		static_cast<AggNode*>(doDsqlPass(dsqlScratch, aggExpr)), doDsqlPass(dsqlScratch, refWindow));
 
 	const AggNode* aggNode = node->aggExpr->as<AggNode>();
 
-	if (window &&
-		window->extent &&
+	if (node->window &&
+		node->window->extent &&
 		aggNode &&
 		(aggNode->getCapabilities() & AggNode::CAP_RESPECTS_WINDOW_FRAME) !=
 			AggNode::CAP_RESPECTS_WINDOW_FRAME)
 	{
 		node->window->extent = WindowClause::FrameExtent::createDefault(getPool());
-		node->window->exclusion = WindowClause::EXCLUDE_NO_OTHERS;
+		node->window->exclusion = WindowClause::Exclusion::NO_OTHERS;
 	}
 
 	return node;
@@ -8366,8 +8388,7 @@ bool RecordKeyNode::dsqlFieldFinder(FieldFinder& /*visitor*/)
 
 ValueExprNode* RecordKeyNode::dsqlFieldRemapper(FieldRemapper& visitor)
 {
-	return PASS1_post_map(visitor.dsqlScratch, this,
-		visitor.context, visitor.partitionNode, visitor.windowNode);
+	return PASS1_post_map(visitor.dsqlScratch, this, visitor.context, visitor.windowNode);
 }
 
 void RecordKeyNode::setParameterName(dsql_par* parameter) const
@@ -8847,11 +8868,10 @@ dsc* ScalarNode::execute(thread_db* tdbb, jrd_req* request) const
 
 	SLONG numSubscripts[MAX_ARRAY_DIMENSIONS];
 	int iter = 0;
-	const NestConst<ValueExprNode>* ptr = subscripts->items.begin();
 
-	for (const NestConst<ValueExprNode>* const end = subscripts->items.end(); ptr != end;)
+	for (const auto& subscript : subscripts->items)
 	{
-		const dsc* temp = EVL_expr(tdbb, request, *ptr++);
+		const dsc* temp = EVL_expr(tdbb, request, subscript);
 
 		if (temp && !(request->req_flags & req_null))
 			numSubscripts[iter++] = MOV_get_long(temp, 0);
@@ -9059,8 +9079,7 @@ dsc* StrCaseNode::execute(thread_db* tdbb, jrd_req* request) const
 		return NULL;
 
 	TextType* textType = INTL_texttype_lookup(tdbb, value->getTextType());
-	ULONG (TextType::*intlFunction)(ULONG, const UCHAR*, ULONG, UCHAR*) =
-		(blrOp == blr_lowcase ? &TextType::str_to_lower : &TextType::str_to_upper);
+	auto intlFunction = (blrOp == blr_lowcase ? &TextType::str_to_lower : &TextType::str_to_upper);
 
 	if (value->isBlob())
 	{
@@ -10301,18 +10320,13 @@ ValueExprNode* SubstringSimilarNode::pass1(thread_db* tdbb, CompilerScratch* csb
 	// because it may be dependent on data or variables.
 	if ((nodFlags & FLAG_INVARIANT) && (!pattern->is<LiteralNode>() || !escape->is<LiteralNode>()))
 	{
-		ExprNode* const* ctx_node;
-		ExprNode* const* end;
-
-		for (ctx_node = csb->csb_current_nodes.begin(), end = csb->csb_current_nodes.end();
-			 ctx_node != end; ++ctx_node)
+		for (const auto& ctxNode : csb->csb_current_nodes)
 		{
-			if ((*ctx_node)->as<RseNode>())
-				break;
+			if (ctxNode->as<RseNode>())
+				return this;
 		}
 
-		if (ctx_node >= end)
-			nodFlags &= ~FLAG_INVARIANT;
+		nodFlags &= ~FLAG_INVARIANT;
 	}
 
 	return this;
@@ -10505,18 +10519,18 @@ void SysFuncCallNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->appendMetaString(function->name.c_str());
 	dsqlScratch->appendUChar(args->items.getCount());
 
-	for (NestConst<ValueExprNode>* ptr = args->items.begin(); ptr != args->items.end(); ++ptr)
-		GEN_expr(dsqlScratch, *ptr);
+	for (auto& arg : args->items)
+		GEN_expr(dsqlScratch, arg);
 }
 
 void SysFuncCallNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 {
 	Array<const dsc*> argsArray;
 
-	for (NestConst<ValueExprNode>* p = args->items.begin(); p != args->items.end(); ++p)
+	for (auto& arg : args->items)
 	{
-		MAKE_desc(dsqlScratch, &(*p)->nodDesc, *p);
-		argsArray.add(&(*p)->nodDesc);
+		MAKE_desc(dsqlScratch, &arg->nodDesc, arg);
+		argsArray.add(&arg->nodDesc);
 	}
 
 	DSqlDataTypeUtil dataTypeUtil(dsqlScratch);
@@ -10528,24 +10542,24 @@ void SysFuncCallNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 {
 	Array<const dsc*> argsArray;
 
-	for (NestConst<ValueExprNode>* p = args->items.begin(); p != args->items.end(); ++p)
+	for (auto& arg : args->items)
 	{
 		dsc* targetDesc = FB_NEW_POOL(*tdbb->getDefaultPool()) dsc();
 		argsArray.push(targetDesc);
-		(*p)->getDesc(tdbb, csb, targetDesc);
+		arg->getDesc(tdbb, csb, targetDesc);
 
 		// dsc_address is verified in makeFunc to get literals. If the node is not a
 		// literal, set it to NULL, to prevent wrong interpretation of offsets as
 		// pointers - CORE-2612.
-		if (!(*p)->is<LiteralNode>())
+		if (!arg->is<LiteralNode>())
 			targetDesc->dsc_address = NULL;
 	}
 
 	DataTypeUtil dataTypeUtil(tdbb);
 	function->makeFunc(&dataTypeUtil, function, desc, argsArray.getCount(), argsArray.begin());
 
-	for (const dsc** pArgs = argsArray.begin(); pArgs != argsArray.end(); ++pArgs)
-		delete *pArgs;
+	for (const auto& pArgs : argsArray)
+		delete pArgs;
 }
 
 ValueExprNode* SysFuncCallNode::copy(thread_db* tdbb, NodeCopier& copier) const
@@ -11108,8 +11122,8 @@ void UdfCallNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->appendMetaString(dsqlFunction->udf_name.identifier.c_str());
 	dsqlScratch->appendUChar(args->items.getCount());
 
-	for (NestConst<ValueExprNode>* ptr = args->items.begin(); ptr != args->items.end(); ++ptr)
-		GEN_expr(dsqlScratch, *ptr);
+	for (auto& arg : args->items)
+		GEN_expr(dsqlScratch, arg);
 }
 
 void UdfCallNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
@@ -11327,11 +11341,9 @@ dsc* UdfCallNode::execute(thread_db* tdbb, jrd_req* request) const
 
 		if (function->fun_inputs != 0)
 		{
-			const NestConst<ValueExprNode>* const sourceEnd = args->items.end();
-			const NestConst<ValueExprNode>* sourcePtr = args->items.begin();
 			const dsc* fmtDesc = function->getInputFormat()->fmt_desc.begin();
 
-			for (; sourcePtr != sourceEnd; ++sourcePtr, fmtDesc += 2)
+			for (auto& source : args->items)
 			{
 				const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
 				const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
@@ -11341,7 +11353,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, jrd_req* request) const
 
 				SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(inMsg + nullOffset);
 
-				dsc* const srcDesc = EVL_expr(tdbb, request, *sourcePtr);
+				dsc* const srcDesc = EVL_expr(tdbb, request, source);
 				if (srcDesc && !(request->req_flags & req_null))
 				{
 					*nullPtr = 0;
@@ -11349,6 +11361,8 @@ dsc* UdfCallNode::execute(thread_db* tdbb, jrd_req* request) const
 				}
 				else
 					*nullPtr = -1;
+
+				fmtDesc += 2;
 			}
 		}
 
@@ -11465,19 +11479,19 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (count > arg_count || count < arg_count - node->dsqlFunction->udf_def_count)
 		ERRD_post(Arg::Gds(isc_fun_param_mismatch) << Arg::Str(name.toString()));
 
-	for (NestConst<ValueExprNode>* ptr = node->args->items.begin();
-		 ptr != node->args->items.end();
-		 ++ptr)
-	{
-		unsigned pos = ptr - node->args->items.begin();
+	unsigned pos = 0;
 
+	for (auto& arg : node->args->items)
+	{
 		if (pos < node->dsqlFunction->udf_arguments.getCount())
-			PASS1_set_parameter_type(dsqlScratch, *ptr, &node->dsqlFunction->udf_arguments[pos], false);
+			PASS1_set_parameter_type(dsqlScratch, arg, &node->dsqlFunction->udf_arguments[pos], false);
 		else
 		{
 			// We should complain here in the future! The parameter is
 			// out of bounds or the function doesn't declare input params.
 		}
+
+		++pos;
 	}
 
 	return node;

@@ -47,11 +47,11 @@ export tarExt
 TryAddGroup() {
 
 	AdditionalParameter=$1
-	testStr=`grep firebird /etc/group`
+	testStr=`grep $RunGroup /etc/group`
 
     if [ -z "$testStr" ]
       then
-        groupadd $AdditionalParameter firebird
+        groupadd $AdditionalParameter $RunGroup
     fi
 
 }
@@ -60,12 +60,12 @@ TryAddGroup() {
 TryAddUser() {
 
 	AdditionalParameter=$1
-	testStr=`grep firebird /etc/passwd`
+	testStr=`grep $RunUser /etc/passwd`
 
     if [ -z "$testStr" ]
       then
         useradd $AdditionalParameter -d @FB_CONFDIR@ -s /sbin/nologin \
-            -c "Firebird Database Owner" -g firebird firebird
+            -c "Firebird Database Owner" -g $RunUser $RunGroup
     fi
 
 }
@@ -91,60 +91,18 @@ addFirebirdUser() {
 
 
 #------------------------------------------------------------------------
-#  Detect Distribution.
-#	AP: very beautiful, but unused. Let's keep alive for a while. (2005)
-
-detectDistro() {
-
-    # it's not provided...
-    if [ -z "$linuxDistro"  ]
-    then
-	if [ -e /etc/SuSE-release  ]
-	then
-	    # SuSE
-	    linuxDistro="SuSE"
-	elif [ -e /etc/mandrake-release ]
-	then
-	    # Mandrake
-	    linuxDistro="MDK"
-	elif [ -e /etc/debian_version ]
-	then
-	    # Debian
-	    linuxDistro="Debian"
-	elif [ -e /etc/gentoo-release ]
-	then
-	    # Gentoo
-	    linuxDistro="Gentoo"
-	elif [ -e /etc/rc.d/init.d/functions ]
-	then
-	    # very likely Red Hat
-	    linuxDistro="RH"
-	elif [ -d /etc/rc.d/init.d ]
-	then
-	    # generic Red Hat
-	    linuxDistro="G-RH"
-	elif [ -d /etc/init.d ]
-	then
-	    # generic SuSE
-	    linuxDistro="G-SuSE"
-	fi
-    fi
-}
-
-
-#------------------------------------------------------------------------
 #  print location of init script
 
 getInitScriptLocation() {
-    if [ -f /etc/rc.d/init.d/firebird ]
+    if [ -f /etc/rc.d/init.d/${fb_startup_name} ]
 	then
-		printf %s /etc/rc.d/init.d/firebird
-    elif [ -f /etc/rc.d/rc.firebird ]
+		printf %s /etc/rc.d/init.d/${fb_startup_name}
+    elif [ -f /etc/rc.d/rc.${fb_startup_name} ]
 	then
-		printf %s /etc/rc.d/rc.firebird
-    elif [ -f /etc/init.d/firebird ]
+		printf %s /etc/rc.d/rc.${fb_startup_name}
+    elif [ -f /etc/init.d/${fb_startup_name} ]
 	then
-		printf %s /etc/init.d/firebird
+		printf %s /etc/init.d/${fb_startup_name}
     fi
 }
 
@@ -153,8 +111,8 @@ getInitScriptLocation() {
 #  register/start/stop server using systemd
 
 SYSTEMCTL=systemctl
-CLASSIC_CTRL=firebird-classic.socket
-SUPER_CTRL=firebird-superserver.service
+CLASSIC_CTRL=${fb_startup_name}-classic.socket
+SUPER_CTRL=${fb_startup_name}-superserver.service
 SYSTEMD_DIR=/usr/lib/systemd/system
 [ -d $SYSTEMD_DIR ] || SYSTEMD_DIR=/lib/systemd/system
 TMPFILE_CONF=/usr/lib/tmpfiles.d/firebird.conf
@@ -181,17 +139,22 @@ installSystemdCtrlFiles() {
 			echo Misconfigured - can not proceed with FB install.
 			exit 1
 		fi
-		cp @FB_MISCDIR@/*.service @FB_MISCDIR@/*.socket ${SYSTEMD_DIR}
-		tempdir=/var/run/firebird
-		mkdir -p ${tempdir}
-		chown firebird:firebird ${tempdir}
-		chmod 0775 ${tempdir}
-		echo "d ${tempdir} 0775 firebird firebird -" >${TMPFILE_CONF}
+
+		cp @FB_MISCDIR@/firebird-superserver.service ${SYSTEMD_DIR}/${fb_startup_name}-superserver.service
+		cp @FB_MISCDIR@/firebird-classic@.service ${SYSTEMD_DIR}/${fb_startup_name}-classic@.service
+		cp @FB_MISCDIR@/firebird-classic.socket ${SYSTEMD_DIR}/${fb_startup_name}-classic.socket
+		editFile ${fb_startup_name}-superserver.service ExecStart ExecStart=${fb_install_prefix}/bin/fbguard -pidfile $PidDir/${fb_startup_name}.pid -daemon -forever
+		editFile ${fb_startup_name}-classic@.service ExecStart ExecStart=${fb_install_prefix}/bin/firebird
+
+		mkdir -p ${PidDir}
+		chown $RunUser:$RunGroup ${PidDir}
+		chmod 0775 ${PidDir}
+		echo "d ${PidDir} 0775 $RunUser $RunGroup -" >${TMPFILE_CONF}
 	fi
 }
 
 osRemoveStartupFiles() {
-	rm -f ${SYSTEMD_DIR}/firebird-*
+	rm -f ${SYSTEMD_DIR}/${fb_startup_name}-*
 	rm -f ${TMPFILE_CONF}
 }
 
@@ -346,32 +309,32 @@ installInitdScript() {
     if [ -e /etc/rc.d/init.d/functions ]
     then
         srcScript=firebird.init.d.mandrake
-        initScript=/etc/rc.d/init.d/firebird
+        initScript=/etc/rc.d/init.d/${fb_startup_name}
 
 # SuSE specific
 
     elif [ -r /etc/SuSE-release ]
     then
         srcScript=firebird.init.d.suse
-        initScript=/etc/init.d/firebird
-        rm -f /usr/sbin/rcfirebird
-        ln -s ../../etc/init.d/firebird /usr/sbin/rcfirebird
+        initScript=/etc/init.d/${fb_startup_name}
+        rm -f /usr/sbin/rc${fb_startup_name}
+        ln -s ../../etc/init.d/${fb_startup_name} /usr/sbin/rc${fb_startup_name}
 
 # Debian specific
 
     elif [ -r /etc/debian_version ]
     then
         srcScript=firebird.init.d.debian
-        initScript=/etc/init.d/firebird
-        rm -f /usr/sbin/rcfirebird
-        ln -s ../../etc/init.d/firebird /usr/sbin/rcfirebird
+        initScript=/etc/init.d/${fb_startup_name}
+        rm -f /usr/sbin/rc${fb_startup_name}
+        ln -s ../../etc/init.d/${fb_startup_name} /usr/sbin/rc${fb_startup_name}
 
 # Slackware specific
 
     elif [ -r /etc/slackware-version ]
     then
         srcScript=firebird.init.d.slackware
-        initScript=/etc/rc.d/rc.firebird
+        initScript=/etc/rc.d/rc.${fb_startup_name}
 		rclocal=/etc/rc.d/rc.local
 		if ! grep -q "$initScript" $rclocal
 		then
@@ -387,14 +350,14 @@ EOF
     elif [ -r /etc/gentoo-release ]
     then
         srcScript=firebird.init.d.gentoo
-        initScript=/etc/init.d/firebird
+        initScript=/etc/init.d/${fb_startup_name}
 
 # Generic...
 
     elif [ -d /etc/rc.d/init.d ]
     then
         srcScript=firebird.init.d.generic
-        initScript=/etc/rc.d/init.d/firebird
+        initScript=/etc/rc.d/init.d/${fb_startup_name}
     fi
 
 
@@ -405,39 +368,41 @@ EOF
 	    chown root:root $initScript
     	chmod u=rwx,g=rx,o=r $initScript
 
+		if [ "${fb_install_prefix}" == "${default_prefix}" ]
+		then
+		    # RedHat and Mandrake specific 
+    		if [ -x /sbin/chkconfig ]
+	    	then
+    	    	/sbin/chkconfig --add ${fb_startup_name}
 
-	    # RedHat and Mandrake specific 
-    	if [ -x /sbin/chkconfig ]
-	    then
-    	    /sbin/chkconfig --add firebird
+		    # Gentoo specific 
+    		elif [ -x /sbin/rc-update ]
+	    	then
+				/sbin/rc-update add ${fb_startup_name} default
 
-	    # Gentoo specific 
-    	elif [ -x /sbin/rc-update ]
-	    then
-			/sbin/rc-update add firebird default
+		    # Suse specific 
+    		elif [ -x /sbin/insserv ]
+	    	then
+    	    	/sbin/insserv /etc/init.d/${fb_startup_name}
 
-	    # Suse specific 
-    	elif [ -x /sbin/insserv ]
-	    then
-    	    /sbin/insserv /etc/init.d/firebird
+			# One more way to register service - used in Debian 
+    		elif [ -x /usr/sbin/update-rc.d ]
+	    	then
+		    	/usr/sbin/update-rc.d -f ${fb_startup_name} remove
+			    /usr/sbin/update-rc.d -f ${fb_startup_name} defaults
+		    fi
 
-		# One more way to register service - used in Debian 
-    	elif [ -x /usr/sbin/update-rc.d ]
-	    then
-		    /usr/sbin/update-rc.d -f firebird remove	
-		    /usr/sbin/update-rc.d -f firebird defaults
-	    fi
-
-    	# More SuSE - rc.config fillup
-	    if [ -f /etc/rc.config ]
-    	then
+	    	# More SuSE - rc.config fillup
+		    if [ -f /etc/rc.config ]
+    		then
       		if [ -x /bin/fillup ]
-	        then
-    	      /bin/fillup -q -d = /etc/rc.config @FB_MISCDIR@/rc.config.firebird
-        	fi
-	    elif [ -d /etc/sysconfig ]
-    	then
-        	cp @FB_MISCDIR@/rc.config.firebird /etc/sysconfig/firebird
+	        	then
+	    	      /bin/fillup -q -d = /etc/rc.config @FB_MISCDIR@/rc.config.firebird
+    	    	fi
+	    	elif [ -d /etc/sysconfig ]
+	    	then
+    	    	cp @FB_MISCDIR@/rc.config.firebird /etc/sysconfig/firebird
+	    	fi
 	    fi
 
 	else
@@ -491,6 +456,8 @@ startService() {
 removeServiceAutostart() {
 	if standaloneServerInstalled
 	then
+		# Must try to stop server cause it can be started manually when -path is used
+
 		# systemd case
 		unregisterSuperServer && return 0
 
@@ -500,17 +467,17 @@ removeServiceAutostart() {
 		fi
 
 		if [ -x /sbin/chkconfig ]; then
-			/sbin/chkconfig --del firebird
+			/sbin/chkconfig --del ${fb_startup_name}
 		fi
 
 		if [ -x /sbin/rc-update ]; then
-			/sbin/rc-update del firebird
+			/sbin/rc-update del ${fb_startup_name}
 		fi
 
 		# Remove /usr/sbin/rcfirebird symlink
-		if [ -e /usr/sbin/rcfirebird ]
+		if [ -e /usr/sbin/rc${fb_startup_name} ]
 		then
-			rm -f /usr/sbin/rcfirebird
+			rm -f /usr/sbin/rc${fb_startup_name}
 		fi
 
 		# Remove initd script

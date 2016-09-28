@@ -48,6 +48,7 @@ int main()
 	// status vector and main dispatcher
 	ThrowStatusWrapper status(master->getStatus());
 	IProvider* prov = master->getDispatcher();
+	IUtil* utl = master->getUtilInterface();
 
 	// declare pointers to required interfaces
 	IAttachment* att = NULL;
@@ -55,6 +56,7 @@ int main()
 	IStatement* stmt = NULL;
 	IMessageMetadata* meta = NULL;
 	IMetadataBuilder* builder = NULL;
+	IXpbBuilder* tpb = NULL;
 
 	// Interface provides access to data returned by SELECT statement
 	IResultSet* curs = NULL;
@@ -64,8 +66,13 @@ int main()
 		// attach employee db
 		att = prov->attachDatabase(&status, "employee", 0, NULL);
 
-		// start default transaction
-		tra = att->startTransaction(&status, 0, NULL);
+		// start read only transaction
+		tpb = utl->getXpbBuilder(&status, IXpbBuilder::TPB, NULL, 0);
+		tpb->insertTag(&status, isc_tpb_read_committed);
+		tpb->insertTag(&status, isc_tpb_no_rec_version);
+		tpb->insertTag(&status, isc_tpb_wait);
+		tpb->insertTag(&status, isc_tpb_read);
+		tra = att->startTransaction(&status, tpb->getBufferLength(&status), tpb->getBuffer(&status));
 
 		// prepare statement
 		stmt = att->prepare(&status, tra, 0, "select last_name, first_name, phone_ext from phone_list "
@@ -192,6 +199,8 @@ int main()
 		tra->release();
 	if (att)
 		att->release();
+	if (tpb)
+		tpb->dispose();
 
 	prov->release();
 	status.dispose();

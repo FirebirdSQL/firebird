@@ -48,12 +48,52 @@ fi
 
 # Here we are installing from a install tar.gz file
 
-if [ -e scripts ]; then
-	MANIFEST_TXT=`pwd`/manifest.txt
-    displayMessage "Extracting install data"
-    runAndCheckExit "./scripts/preinstall.sh"
-    runAndCheckExit "./scripts/tarinstall.sh"
-    runAndCheckExit "./scripts/postinstall.sh"
+MANIFEST_TXT=`pwd`/manifest.txt
+origDir=`pwd`
+
+# It's good idea not to have running firebird/interbase instances
+checkIfServerRunning
+
+# Make sure we have required libraries installed
+checkLibraries
+
+# Archive any files we find
+archivePriorInstallSystemFiles
+
+# Extract installation archive
+extractBuildroot
+
+# Update /etc/services
+newLine="@FB_SERVICE_NAME@          @FB_SERVICE_PORT@/tcp  # Firebird SQL Database Remote Protocol"
+replaceLineInFile /etc/services "$newLine" "^@FB_SERVICE_NAME@"
+
+# add Firebird user
+if [ $RunUser = firebird ]; then
+	addFirebirdUser
 fi
+
+# Set correct fb prefix in installed files
+setNewPrefix
+
+# Update ownership for files.
+fixFilePermissions
+
+# Install script in /etc/init.d (exact location is distro dependent)
+installInitdScript
+
+# Prepare for uninstall
+buildUninstallFile
+
+# Create links to libraries in system lib directory
+createLinksInSystemLib
+
+# Create libgds.so links
+createLinksForBackCompatibility
+
+# Add sysdba and set password (use embedded access)
+setDBAPassword
+
+# start the RDBMS server
+startFirebird
 
 displayMessage "Install completed"

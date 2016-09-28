@@ -20,6 +20,8 @@
 # functions actually used: checkpid killproc daemon
 . /etc/rc.d/init.d/functions
 
+fb_install_prefix=@prefix@
+
 # To run more instances of firebird:
 #   Copy @prefix@ somewhere
 #   Copy this script under a new name

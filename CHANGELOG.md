@@ -39,8 +39,14 @@
 
 ## New features
 
+* [CORE-5346](http://tracker.firebirdsql.org/browse/CORE-5346): Named windows
+  Contributor(s): Adriano dos Santos Fernandes
+
 * [CORE-5343](http://tracker.firebirdsql.org/browse/CORE-5343): Allow particular DBA privileges to be transferred to regular users  
   Contributor(s): Alex Peshkoff
+
+* [CORE-3647](http://tracker.firebirdsql.org/browse/CORE-3647): Frames for window functions
+  Contributor(s): Adriano dos Santos Fernandes
 
 * [CORE-2762](http://tracker.firebirdsql.org/browse/CORE-2762): New built-in function to check whether some role is implicitly active  
   Contributor(s): Roman Simakov

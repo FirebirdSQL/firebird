@@ -22,6 +22,47 @@
 #		Alex Peshkoff
 #
 
+fb_install_prefix=@prefix@
+default_prefix=@prefix@
+fb_startup_name=firebird
+
+#------------------------------------------------------------------------
+# Build startup name from install path
+
+startupName() {
+	# sanity check
+	if [ -z "${fb_install_prefix}" ]
+	then
+		echo "Empty install path - can not proceed"
+		exit 1
+	fi
+
+	if [ "${fb_install_prefix}" = "${default_prefix}" ]
+	then
+		fb_startup_name=firebird
+	else
+		# strip first '/' if present
+		fb_startup_name=`echo ${fb_install_prefix} | colrm 2`
+		if [ ${fb_startup_name} = / ]
+		then
+			fb_startup_name=`echo ${fb_install_prefix} | colrm 1 1`
+			if [ -z "$fb_startup_name" ]
+			then
+				# root specified - hmmm...
+				fb_startup_name=root
+			fi
+		else
+			echo "Parameter (${fb_install_prefix}) for -path option should start with /"
+			exit 1
+		fi
+
+		# build final name
+		fb_startup_name=firebird.`echo $fb_startup_name | tr / _`
+	fi
+}
+
+startupName		## build it for what's present in current file
+
 
 #------------------------------------------------------------------------
 # Adds parameter to $PATH if it's missing in it
@@ -43,9 +84,11 @@ Answer=""
 OrigPasswd=""
 TmpFile=""
 MANIFEST_TXT=""
+Manifest=manifest.txt
 SecurityDatabase=security4.fdb
 DefaultLibrary=libfbclient
 UninstallScript=FirebirdUninstall.sh
+XINETD=/etc/xinetd.d/
 ArchiveDateTag=`date +"%Y%m%d_%H%M"`
 export ArchiveDateTag
 ArchiveMainFile="@FB_CONFDIR@_${ArchiveDateTag}"
@@ -188,11 +231,6 @@ checkLibraries() {
 #  Works for both inetd and xinetd
 
 resetInetdServer() {
-	if [ "$OS_Has_Specific_Classic_Startup" ]
-	then
-		return
-	fi
-
 	pid=`grepProcess "inetd|xinetd" | awk '{print $2}'`
     if [ "$pid" ]
     then
@@ -202,33 +240,11 @@ resetInetdServer() {
 
 
 #------------------------------------------------------------------------
-# check does directory have files
-
-hasFiles() {
-	dir=$1
-	for i in $dir/*
-	do
-		if [ -f "$i" ]
-		then
-			return 0
-		fi
-	done
-	return 1
-}
-
-
-#------------------------------------------------------------------------
 # remove the xinetd config file(s)
-# take into account possible pre-firebird xinetd services
 
 removeXinetdEntry() {
-	if hasFiles /etc/xinetd.d
-	then
-		for i in `grep -l "service @FB_SERVICE_NAME@" /etc/xinetd.d/*`
-		do
-			rm -f $i
-		done
-	fi
+	file="${XINETD}${fb_startup_name}"
+	[ -f $file ] && rm -f $file
 }
 
 
@@ -427,7 +443,7 @@ removeLineFromFile() {
     FileName=$1
     oldLine=$2
 
-    if [ ! -z "$oldLine" ] 
+    if [ ! -z "$oldLine" ]
     then
         cat $FileName | grep -v "$oldLine" > ${FileName}.tmp
         cp ${FileName}.tmp $FileName && rm -f ${FileName}.tmp
@@ -515,22 +531,37 @@ setDBAPassword() {
 #------------------------------------------------------------------------
 #  buildUninstallFile
 #  This will work only for the .tar.gz install and it builds an
-#  uninstall shell script.  The RPM system, if present, takes care of it's own.
+#  uninstall shell script.
 
 buildUninstallFile() {
     cd "$origDir"
 
-    if [ ! -f manifest.txt ]  # Only exists if we are a .tar.gz install
+    if [ ! -f $Manifest ]  # Only exists if we are a .tar.gz install
     then
         return
     fi
 
-	cp manifest.txt @FB_MISCDIR@
-	MANIFEST_TXT=@FB_MISCDIR@/manifest.txt
+	MANIFEST_TXT=@FB_MISCDIR@/$Manifest
+	if [ "${fb_install_prefix}" = "${default_prefix}" ]
+	then
+		cp $Manifest $MANIFEST_TXT
+	else
+		rm -f $MANIFEST_TXT
+		oldPath=".${default_prefix}"
 
-	cp -r scripts @FB_MISCDIR@
-	[ -f scripts/tarMainUninstall.sh ] && cp scripts/tarMainUninstall.sh @FB_SBINDIR@/$UninstallScript
-	[ -f scripts/tarmainUninstall.sh ] && cp scripts/tarmainUninstall.sh @FB_SBINDIR@/$UninstallScript
+		for line in `grep "^${oldPath}" $Manifest | colrm 1 ${#oldPath}`
+		do
+			echo ".${fb_install_prefix}${line}" >>$MANIFEST_TXT
+		done
+
+		newPath=`dirname "${fb_install_prefix}"`
+		while [ ${#newPath} -gt 1 ]
+		do
+			echo ".${newPath}" >>$MANIFEST_TXT
+			newPath=`dirname $newPath`
+		done
+	fi
+
 	[ -f @FB_SBINDIR@/$UninstallScript ] && chmod u=rx,go= @FB_SBINDIR@/$UninstallScript
 }
 
@@ -556,7 +587,7 @@ safeLink() {
 	Target=$2
 	Manifest=$3
 
-	if [ $Source != $Target ]
+	if [ $Source != $Target -a "${fb_install_prefix}" = "${default_prefix}" ]
 	then
 		removeIfOnlyAlink $Target
     	if [ ! -e $Target ]
@@ -807,8 +838,7 @@ removeInstalledFiles() {
 # If some files remain then
 
 removeUninstallFiles() {
-    # remove the uninstall scripts files.
-    rm -rf @FB_MISCDIR@/scripts
+    # remove the uninstall files
     rm -f @FB_MISCDIR@/manifest*.txt
     rm -f @FB_SBINDIR@/$UninstallScript
 }
@@ -950,19 +980,6 @@ fixFilePermissions() {
 
 
 #------------------------------------------------------------------------
-#  changeXinetdServiceUser
-#  Change the run user of the xinetd service
-
-changeXinetdServiceUser() {
-    InitFile=/etc/xinetd.d/firebird
-    if [ -f $InitFile ]
-    then
-        editFile $InitFile user "\tuser\t\t\t= $RunUser"
-    fi
-}
-
-
-#------------------------------------------------------------------------
 #  Update inetd service entry
 #  This just adds/replaces the service entry line
 
@@ -976,8 +993,17 @@ updateInetdEntry() {
 #  Update xinetd service entry
 
 updateXinetdEntry() {
-    cp @FB_MISCDIR@/firebird.xinetd /etc/xinetd.d/firebird
-    changeXinetdServiceUser
+    InitFile="${XINETD}${fb_startup_name}"
+    cp @FB_MISCDIR@/firebird.xinetd $InitFile
+
+    if [ -f $InitFile ]
+    then
+        editFile $InitFile user "\tuser\t\t\t= $RunUser"
+        editFile $InitFile server "\tserver\t\t= ${fb_install_prefix}/bin/firebird"
+        yesno=yes
+        [ ${fb_install_prefix} = ${default_prefix} ] && yesno=no
+       	editFile $InitFile disable "\tdisable\t\t= ${yesno}"
+    fi
 }
 
 
@@ -992,7 +1018,6 @@ updateInetdServiceEntry() {
 		if [ "$OS_Has_Specific_Classic_Startup" ]
 		then
 			osRegisterClassicServer
-			osStartClassicServer
 			return
 		fi
 
@@ -1000,9 +1025,27 @@ updateInetdServiceEntry() {
     	then
         	updateXinetdEntry
     	else
-        	updateInetdEntry
+    		if [ ${fb_install_prefix} = ${default_prefix} ]
+    		then
+        		updateInetdEntry
+        	else
+        		echo "Install of classic server in non-default path is not supported with inetd - xinetd needed"
+        		exit 1
+        	fi
 		fi
     fi
+}
+
+
+fbUsage() {
+	pf=""
+	if [ "@CHANGE_PATH_SUPPORT@" = "yes" ]
+	then
+		pf=', -path <install path>'
+	fi
+
+	echo "$1 option: $2. Known option(s): -silent${pf}."
+	exit 1
 }
 
 
@@ -1015,13 +1058,26 @@ parseArgs() {
 	flSilent=0
 
 	while [ -n "$1" ]; do
-		case $1 in
+		case "$1" in
 			-silent)
 				flSilent=1
 				;;
+			-path)
+				if [ "@CHANGE_PATH_SUPPORT@" = "yes" ]
+				then
+					{ fb_install_prefix="$2"; }
+					if [ -z "${fb_install_prefix}" ]
+					then
+						fbUsage "Missing argument for" "$1"
+					fi
+					shift
+					startupName
+				else
+					fbUsage "Not supported" "$1"
+				fi
+				;;
 			*)
-				echo "Invalid option: $1. Known option is '-silent'."
-				exit 1
+				fbUsage Invalid "$1"
 				;;
 		esac
 		shift
@@ -1035,12 +1091,75 @@ parseArgs() {
 
 
 #---------------------------------------------------------------------------
+#  set new prefix for fb installation
+
+setNewPrefix() {
+	binlist="@FB_BINDIR@/changeServerMode.sh @FB_BINDIR@/fb_config @FB_BINDIR@/registerDatabase.sh @FB_BINDIR@/FirebirdUninstall.sh"
+	filelist="$binlist @FB_MISCDIR@/firebird.init.d.*"
+	for file in $filelist
+	do
+		editFile $file fb_install_prefix "fb_install_prefix=${fb_install_prefix}"
+	done
+	for file in $binlist
+	do
+		chmod 0700 $file
+	done
+}
+
+
+#---------------------------------------------------------------------------
+#  extract installation archive
+
+extractBuildroot() {
+	displayMessage "Extracting install data"
+
+	if [ "${fb_install_prefix}" = "${default_prefix}" ]
+	then
+		# Extract archive in root directory
+		cd /
+		tar -xzof "$origDir/buildroot.tar.gz"
+	else
+		mkdir -p ${fb_install_prefix}
+		cd ${fb_install_prefix}
+		defDir=".${default_prefix}"
+		if [ -d $defDir ]
+		then
+			echo "${default_prefix} should not exist in ${fb_install_prefix}"
+		fi
+
+		tar -xzof "$origDir/buildroot.tar.gz" ${defDir}
+		for p in ${defDir}/*
+		do
+			mv $p .
+		done
+
+		while [ ${#defDir} -gt 2 ]
+		do
+			rm -rf ${defDir}
+			defDir=`dirname $defDir`
+		done
+	fi
+
+	cd "$origDir"
+}
+
+
+#---------------------------------------------------------------------------
 #  depending upon presence of startup script starts super or classic server
 
 startFirebird() {
-	if standaloneServerInstalled; then
-		startService
-	else
-		resetInetdServer
+	if [ "${fb_install_prefix}" == "${default_prefix}" ]
+	then
+		if standaloneServerInstalled; then
+			startService
+		else
+			if [ "$OS_Has_Specific_Classic_Startup" ]
+			then
+				osStartClassicServer
+				return
+			fi
+
+			resetInetdServer
+		fi
 	fi
 }

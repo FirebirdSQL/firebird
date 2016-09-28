@@ -821,6 +821,11 @@ static const struct {
 	{335545118, -104}, /* 798 dsql_window_range_inv_key_type */
 	{335545119, -104}, /* 799 dsql_window_frame_value_inv_type */
 	{335545120, -833}, /* 800 window_frame_value_invalid */
+	{335545121, -833}, /* 801 dsql_window_not_found */
+	{335545122, -833}, /* 802 dsql_window_cant_overr_part */
+	{335545123, -833}, /* 803 dsql_window_cant_overr_order */
+	{335545124, -833}, /* 804 dsql_window_cant_overr_frame */
+	{335545125, -833}, /* 805 dsql_window_duplicate */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */

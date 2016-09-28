@@ -32,7 +32,7 @@
 #   Alex Peshkoff
 # 
 
-
+fb_install_prefix=@prefix@
 
 #------------------------------------------------------------------------------
 # appendDatabaseEntry

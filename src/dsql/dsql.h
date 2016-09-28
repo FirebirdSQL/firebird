@@ -95,6 +95,11 @@ namespace Jrd
 	class dsql_intlsym;
 
 	typedef Firebird::Stack<dsql_ctx*> DsqlContextStack;
+
+	typedef Firebird::Pair<Firebird::Left<Firebird::MetaName, NestConst<Jrd::WindowClause> > >
+		NamedWindowClause;
+
+	typedef Firebird::ObjectsArray<NamedWindowClause> NamedWindowsClause;
 }
 
 namespace Firebird
@@ -673,18 +678,16 @@ public:
 	dsql_ctx* visibleInContext;
 };
 
-struct PartitionMap
+struct WindowMap
 {
-	PartitionMap(ValueListNode* aPartition, WindowClause* aWindow)
-		: partition(aPartition),
-		  partitionRemapped(NULL),
+	WindowMap(WindowClause* aWindow)
+		: partitionRemapped(NULL),
 		  window(aWindow),
 		  map(NULL),
 		  context(0)
 	{
 	}
 
-	NestConst<ValueListNode> partition;
 	NestConst<ValueListNode> partitionRemapped;
 	NestConst<WindowClause> window;
 	dsql_map* map;
@@ -701,7 +704,8 @@ public:
 		  ctx_main_derived_contexts(p),
 		  ctx_childs_derived_table(p),
 	      ctx_imp_join(p),
-	      ctx_win_maps(p)
+	      ctx_win_maps(p),
+	      ctx_named_windows(p)
 	{
 	}
 
@@ -722,7 +726,8 @@ public:
 	DsqlContextStack	ctx_childs_derived_table;	// Childs derived table context
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
 		Firebird::MetaName, ImplicitJoin*> > > ctx_imp_join;	// Map of USING fieldname to ImplicitJoin
-	Firebird::Array<PartitionMap*> ctx_win_maps;	// Maps for window functions
+	Firebird::Array<WindowMap*> ctx_win_maps;	// Maps for window functions
+	Firebird::GenericMap<NamedWindowClause> ctx_named_windows;
 
 	dsql_ctx& operator=(dsql_ctx& v)
 	{
@@ -742,6 +747,7 @@ public:
 		ctx_childs_derived_table.assign(v.ctx_childs_derived_table);
 		ctx_imp_join.assign(v.ctx_imp_join);
 		ctx_win_maps.assign(v.ctx_win_maps);
+		ctx_named_windows.assign(v.ctx_named_windows);
 
 		return *this;
 	}
@@ -756,8 +762,7 @@ public:
 	}
 
 	bool getImplicitJoinField(const Firebird::MetaName& name, NestConst<ValueExprNode>& node);
-	PartitionMap* getPartitionMap(DsqlCompilerScratch* dsqlScratch,
-		ValueListNode* partitionNode, WindowClause* windowNode);
+	WindowMap* getWindowMap(DsqlCompilerScratch* dsqlScratch, WindowClause* windowNode);
 };
 
 // Flag values for ctx_flags
@@ -779,7 +784,7 @@ public:
 	dsql_map* map_next;						// Next map in item
 	NestConst<ValueExprNode> map_node;		// Value for map item
 	USHORT map_position;					// Position in map
-	NestConst<PartitionMap> map_partition;	// Partition
+	NestConst<WindowMap> map_window;		// Partition
 };
 
 // Message block used in communicating with a running request

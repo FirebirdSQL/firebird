@@ -74,6 +74,10 @@
 #include "fb_macros.h"
 #include "fb_types.h"
 
+#if (__cplusplus >= 201103L)
+#define CPP_11
+#endif
+
 /*****************************************************
 * Linux platforms
 *****************************************************/
@@ -886,6 +890,9 @@ void GDS_breakpoint(int);
 #endif
 
 // Check for "final" keyword support
+#ifdef CPP_11
+#define FB_FINAL final
+#else
 #ifdef __GNUC__
 #if ((__GNUC__ == 4 && __GNUC_MINOR__ >= 7) || (__GNUC__ >= 5))
 #define FB_FINAL __final
@@ -894,6 +901,7 @@ void GDS_breakpoint(int);
 // Please add support for other compilers here
 #ifndef FB_FINAL
 #define FB_FINAL
+#endif
 #endif
 
 #define FB_UNUSED(value) do { if (value) {} } while (false)

@@ -1647,6 +1647,16 @@ const
 	gds_dsql_window_frame_value_inv_type = 335545119;
 	isc_window_frame_value_invalid       = 335545120;
 	gds_window_frame_value_invalid       = 335545120;
+	isc_dsql_window_not_found            = 335545121;
+	gds_dsql_window_not_found            = 335545121;
+	isc_dsql_window_cant_overr_part      = 335545122;
+	gds_dsql_window_cant_overr_part      = 335545122;
+	isc_dsql_window_cant_overr_order     = 335545123;
+	gds_dsql_window_cant_overr_order     = 335545123;
+	isc_dsql_window_cant_overr_frame     = 335545124;
+	gds_dsql_window_cant_overr_frame     = 335545124;
+	isc_dsql_window_duplicate            = 335545125;
+	gds_dsql_window_duplicate            = 335545125;
 	isc_gfix_db_name                     = 335740929;
 	gds_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;

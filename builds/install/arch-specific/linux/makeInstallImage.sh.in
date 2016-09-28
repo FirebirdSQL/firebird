@@ -22,6 +22,8 @@
 #		Alex Peshkoff
 #
 
+fb_install_prefix=@prefix@
+
 # Script to copy install files from the build/transport area
 
 
@@ -184,19 +186,13 @@ copyFiles() {
     addLibs $BuiltFBDir/bin changeServerMode.sh ${TargetDir}@FB_SBINDIR@
     cp $BuiltFBDir/bin/registerDatabase.sh ${TargetDir}@FB_SBINDIR@
     cp $BuiltFBDir/bin/fb_config ${TargetDir}@FB_SBINDIR@
+    addLibs $BuiltFBDir/bin FirebirdUninstall.sh ${TargetDir}@FB_SBINDIR@
 
 	chmod 0755 ${TargetDir}@FB_SBINDIR@/*
 	chmod 0700 ${TargetDir}@FB_SBINDIR@/*.sh
 
-	#install scripts
-    addLibs $BuiltFBDir/bin tarMainInstall.sh $BuildRootDir/gen/install/scripts
-    addLibs $BuiltFBDir/bin tarinstall.sh $BuildRootDir/gen/install/scripts
-    addLibs $BuiltFBDir/bin preinstall.sh $BuildRootDir/gen/install/scripts
-    addLibs $BuiltFBDir/bin postinstall.sh $BuildRootDir/gen/install/scripts
-    addLibs $BuiltFBDir/bin preuninstall.sh $BuildRootDir/gen/install/scripts
-    addLibs $BuiltFBDir/bin postuninstall.sh $BuildRootDir/gen/install/scripts
-    addLibs $BuiltFBDir/bin taruninstall.sh $BuildRootDir/gen/install/scripts
-    addLibs $BuiltFBDir/bin tarMainUninstall.sh $BuildRootDir/gen/install/scripts
+	#install script
+    addLibs $BuiltFBDir/bin install.sh $BuildRootDir/gen/install
 
     #examples - copy only if we have them
     exampleFiles=`find $BuiltFBDir/examples/README -type f -print`

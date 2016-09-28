@@ -21,6 +21,8 @@
 # Description:    Start the Firebird database server.
 ### END INIT INFO
 
+fb_install_prefix=@prefix@
+
 # Source SuSE config
 if [ -r /etc/rc.config ]
   then

@@ -60,7 +60,6 @@ fi
 
 # If NOCONFIGURE is set, skip the call to configure
 if test "x$NOCONFIGURE" = "x"; then
-  conf_flags="$conf_flags --enable-binreloc"
   echo Running $SRCDIR/configure $conf_flags "$@" ...
   rm -f config.cache config.log
   chmod a+x $SRCDIR/configure

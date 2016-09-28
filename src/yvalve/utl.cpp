@@ -739,6 +739,7 @@ public:
 		: pb(NULL), strVal(getPool())
 	{
 		ClumpletReader::Kind k;
+		UCHAR tag = 0;
 		const ClumpletReader::KindList* kl = NULL;
 
 		switch(kind)
@@ -754,6 +755,7 @@ public:
 			break;
 		case TPB:
 			k = ClumpletReader::Tpb;
+			tag = isc_tpb_version3;
 			break;
 		default:
 			fatal_exception::raiseFmt("Wrong parameters block kind %d, should be from %d to %d", kind, DPB, TPB);
@@ -765,7 +767,7 @@ public:
 			if (kl)
 				pb = FB_NEW_POOL(getPool()) ClumpletWriter(getPool(), kl, MAX_DPB_SIZE);
 			else
-				pb = FB_NEW_POOL(getPool()) ClumpletWriter(getPool(), k, MAX_DPB_SIZE);
+				pb = FB_NEW_POOL(getPool()) ClumpletWriter(getPool(), k, MAX_DPB_SIZE, tag);
 		}
 		else
 		{

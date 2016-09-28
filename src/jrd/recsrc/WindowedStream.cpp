@@ -263,10 +263,10 @@ WindowedStream::WindowedStream(thread_db* tdbb, CompilerScratch* csb,
 
 		// between !{<n> following || unbounded preceding} and unbounded following
 		if (window->frameExtent &&
-			window->frameExtent->frame2->bound == WindowClause::Frame::BOUND_FOLLOWING &&
+			window->frameExtent->frame2->bound == WindowClause::Frame::Bound::FOLLOWING &&
 			!window->frameExtent->frame2->value &&
-			!(window->frameExtent->frame1->bound == WindowClause::Frame::BOUND_FOLLOWING ||
-			  (window->frameExtent->frame1->bound == WindowClause::Frame::BOUND_PRECEDING &&
+			!(window->frameExtent->frame1->bound == WindowClause::Frame::Bound::FOLLOWING ||
+			  (window->frameExtent->frame1->bound == WindowClause::Frame::Bound::PRECEDING &&
 			   !window->frameExtent->frame1->value)))
 		{
 			if (window->order)
@@ -290,10 +290,10 @@ WindowedStream::WindowedStream(thread_db* tdbb, CompilerScratch* csb,
 			window->frameExtent->frame1 = window->frameExtent->frame2;
 			window->frameExtent->frame2 = temp;
 
-			window->frameExtent->frame1->bound = WindowClause::Frame::BOUND_PRECEDING;
+			window->frameExtent->frame1->bound = WindowClause::Frame::Bound::PRECEDING;
 
-			if (window->frameExtent->frame2->bound == WindowClause::Frame::BOUND_PRECEDING)
-				window->frameExtent->frame2->bound = WindowClause::Frame::BOUND_FOLLOWING;
+			if (window->frameExtent->frame2->bound == WindowClause::Frame::Bound::PRECEDING)
+				window->frameExtent->frame2->bound = WindowClause::Frame::Bound::FOLLOWING;
 		}
 #endif
 
@@ -474,9 +474,9 @@ WindowedStream::WindowStream::WindowStream(thread_db* tdbb, CompilerScratch* csb
 			WindowClause::Frame* frame = i == 0 ?
 				m_frameExtent->frame1 : m_frameExtent->frame2;
 
-			if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_RANGE && frame->value)
+			if (m_frameExtent->unit == WindowClause::FrameExtent::Unit::RANGE && frame->value)
 			{
-				int direction = frame->bound == WindowClause::Frame::BOUND_FOLLOWING ? 1 : -1;
+				int direction = frame->bound == WindowClause::Frame::Bound::FOLLOWING ? 1 : -1;
 
 				if (m_order->descending[0])
 					direction *= -1;
@@ -613,31 +613,31 @@ bool WindowedStream::WindowStream::getRecord(thread_db* tdbb) const
 		if (!m_order)
 			impure->windowBlock.startPosition = impure->partitionBlock.startPosition;
 		// {range | rows} between unbounded preceding and ...
-		else if (m_frameExtent->frame1->bound == WindowClause::Frame::BOUND_PRECEDING &&
+		else if (m_frameExtent->frame1->bound == WindowClause::Frame::Bound::PRECEDING &&
 			!m_frameExtent->frame1->value)
 		{
 			impure->windowBlock.startPosition = impure->partitionBlock.startPosition;
 		}
 		// rows between current row and ...
-		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_ROWS &&
-			m_frameExtent->frame1->bound == WindowClause::Frame::BOUND_CURRENT_ROW)
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::Unit::ROWS &&
+			m_frameExtent->frame1->bound == WindowClause::Frame::Bound::CURRENT_ROW)
 		{
 			impure->windowBlock.startPosition = position;
 		}
 		// rows between <n> {preceding | following} and ...
-		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_ROWS &&
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::Unit::ROWS &&
 			m_frameExtent->frame1->value)
 		{
 			impure->windowBlock.startPosition = position + impure->startOffset.vlux_count;
 		}
 		// range between current row and ...
-		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_RANGE &&
-			m_frameExtent->frame1->bound == WindowClause::Frame::BOUND_CURRENT_ROW)
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::Unit::RANGE &&
+			m_frameExtent->frame1->bound == WindowClause::Frame::Bound::CURRENT_ROW)
 		{
 			impure->windowBlock.startPosition = position;
 		}
 		// range between <n> {preceding | following} and ...
-		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_RANGE &&
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::Unit::RANGE &&
 			m_frameExtent->frame1->value)
 		{
 			impure->windowBlock.startPosition = locateFrameRange(tdbb, request, impure,
@@ -657,26 +657,26 @@ bool WindowedStream::WindowStream::getRecord(thread_db* tdbb) const
 		if (!m_order)
 			impure->windowBlock.endPosition = impure->partitionBlock.endPosition;
 		// {range | rows} between ... and unbounded following
-		else if (m_frameExtent->frame2->bound == WindowClause::Frame::BOUND_FOLLOWING &&
+		else if (m_frameExtent->frame2->bound == WindowClause::Frame::Bound::FOLLOWING &&
 			!m_frameExtent->frame2->value)
 		{
 			impure->windowBlock.endPosition = impure->partitionBlock.endPosition;
 		}
 		// rows between ... and current row
-		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_ROWS &&
-			m_frameExtent->frame2->bound == WindowClause::Frame::BOUND_CURRENT_ROW)
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::Unit::ROWS &&
+			m_frameExtent->frame2->bound == WindowClause::Frame::Bound::CURRENT_ROW)
 		{
 			impure->windowBlock.endPosition = position;
 		}
 		// rows between ... and <n> {preceding | following}
-		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_ROWS &&
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::Unit::ROWS &&
 			m_frameExtent->frame2->value)
 		{
 			impure->windowBlock.endPosition = position + impure->endOffset.vlux_count;
 		}
 		// range between ... and current row
-		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_RANGE &&
-			m_frameExtent->frame2->bound == WindowClause::Frame::BOUND_CURRENT_ROW)
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::Unit::RANGE &&
+			m_frameExtent->frame2->bound == WindowClause::Frame::Bound::CURRENT_ROW)
 		{
 			SINT64 rangePos = position;
 			cacheValues(tdbb, request, &m_order->expressions, impure->orderValues,
@@ -702,7 +702,7 @@ bool WindowedStream::WindowStream::getRecord(thread_db* tdbb) const
 				fb_assert(false);
 		}
 		// range between ... and <n> {preceding | following}
-		else if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_RANGE &&
+		else if (m_frameExtent->unit == WindowClause::FrameExtent::Unit::RANGE &&
 			m_frameExtent->frame2->value)
 		{
 			impure->windowBlock.endPosition = locateFrameRange(tdbb, request, impure,
@@ -716,11 +716,11 @@ bool WindowedStream::WindowStream::getRecord(thread_db* tdbb) const
 
 		if (!m_order)
 			impure->rangePending = MAX(0, impure->windowBlock.endPosition - position);
-		else if (m_order && m_frameExtent->unit == WindowClause::FrameExtent::UNIT_RANGE)
+		else if (m_order && m_frameExtent->unit == WindowClause::FrameExtent::Unit::RANGE)
 		{
-			if (m_frameExtent->frame1->bound == WindowClause::Frame::BOUND_PRECEDING &&
+			if (m_frameExtent->frame1->bound == WindowClause::Frame::Bound::PRECEDING &&
 			    !m_frameExtent->frame1->value &&
-			    m_frameExtent->frame2->bound == WindowClause::Frame::BOUND_FOLLOWING &&
+			    m_frameExtent->frame2->bound == WindowClause::Frame::Bound::FOLLOWING &&
 			    !m_frameExtent->frame2->value)
 			{
 				impure->rangePending = MAX(0, impure->windowBlock.endPosition - position);
@@ -913,7 +913,7 @@ const void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, jrd_req*
 		error = true;
 	else
 	{
-		if (m_frameExtent->unit == WindowClause::FrameExtent::UNIT_ROWS)
+		if (m_frameExtent->unit == WindowClause::FrameExtent::Unit::ROWS)
 		{
 			// Purposedly used 32-bit here. So long distance will complicate things for no gain.
 			impureValue->vlux_count = MOV_get_long(desc, 0);
@@ -921,7 +921,7 @@ const void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, jrd_req*
 			if (impureValue->vlux_count < 0)
 				error = true;
 
-			if (frame->bound == WindowClause::Frame::BOUND_PRECEDING)
+			if (frame->bound == WindowClause::Frame::Bound::PRECEDING)
 				impureValue->vlux_count = -impureValue->vlux_count;
 		}
 		else if (MOV_compare(desc, &zeroDsc) < 0)
@@ -951,7 +951,7 @@ SINT64 WindowedStream::WindowStream::locateFrameRange(thread_db* tdbb, jrd_req* 
 
 	if (offsetDesc)
 	{
-		int direction = (frame->bound == WindowClause::Frame::BOUND_FOLLOWING ? 1 : -1);
+		int direction = (frame->bound == WindowClause::Frame::Bound::FOLLOWING ? 1 : -1);
 
 		if (m_order->descending[0])
 			direction *= -1;
@@ -985,7 +985,7 @@ SINT64 WindowedStream::WindowStream::locateFrameRange(thread_db* tdbb, jrd_req* 
 			--rangePos;
 		}
 	}
-	else if (frame->bound == WindowClause::Frame::BOUND_FOLLOWING)
+	else if (frame->bound == WindowClause::Frame::Bound::FOLLOWING)
 	{
 		const int bound = frame == m_frameExtent->frame1 ? 0 : 1;
 

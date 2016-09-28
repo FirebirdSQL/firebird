@@ -14,6 +14,10 @@
 
 %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\btyacc\btyacc -l -d -S %FB_ROOT_PATH%\src\dsql\btyacc_fb.ske y.y
 @if errorlevel 1 (exit /B 1)
+
+@sed -i "s/#define \([A-Z].*\)/#define TOK_\1/" y_tab.h
+@sed -i "s/#define TOK_YY\(.*\)/#define YY\1/" y_tab.h
+
 @copy y_tab.h %FB_ROOT_PATH%\src\include\gen\parse.h > nul
 @copy y_tab.c %FB_ROOT_PATH%\src\dsql\parse.cpp > nul
 @del y.y

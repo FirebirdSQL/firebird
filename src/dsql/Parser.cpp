@@ -444,7 +444,7 @@ int Parser::yylexAux()
 		// make a string value to hold the name, the name is resolved in pass1_constant.
 		yylval.metaNamePtr = FB_NEW_POOL(pool) MetaName(pool, string, p - string);
 
-		return INTRODUCER;
+		return TOK_INTRODUCER;
 	}
 
 	// parse a quoted string, being sure to look for double quotes
@@ -555,7 +555,7 @@ int Parser::yylexAux()
 				if (buffer != string)
 					gds__free (buffer);
 
-				return SYMBOL;
+				return TOK_SYMBOL;
 			}
 		}
 		yylval.intlStringPtr = newIntlString(Firebird::string(buffer, p - buffer));
@@ -566,7 +566,7 @@ int Parser::yylexAux()
 		mark.str = yylval.intlStringPtr;
 		strMarks.put(mark.str, mark);
 
-		return STRING;
+		return TOK_STRING;
 	}
 
 	/*
@@ -694,7 +694,7 @@ int Parser::yylexAux()
 
 			yylval.intlStringPtr = newIntlString(temp, "BINARY");
 
-			return STRING;
+			return TOK_STRING;
 		}  // if (!hexerror)...
 
 		// If we got here, there was a parsing error.  Set the
@@ -749,7 +749,7 @@ int Parser::yylexAux()
 				mark.str = yylval.intlStringPtr;
 				strMarks.put(mark.str, mark);
 
-				return STRING;
+				return TOK_STRING;
 			}
 		}
 
@@ -859,7 +859,7 @@ int Parser::yylexAux()
 				}
 
 				// The return value can be a negative number.
-				return NUMBER64BIT;
+				return TOK_NUMBER64BIT;
 			}
 			else
 			{
@@ -908,7 +908,7 @@ int Parser::yylexAux()
 				}
 
 				yylval.int32Val = (SLONG) value;
-				return NUMBER;
+				return TOK_NUMBER;
 			} // integer value
 		}  // if (!hexerror)...
 
@@ -1017,7 +1017,7 @@ int Parser::yylexAux()
 				lex.line_start_bk = lex.line_start;
 				lex.lines_bk = lex.lines;
 
-				return FLOAT_NUMBER;
+				return TOK_FLOAT_NUMBER;
 			}
 
 			if (!have_exp)
@@ -1030,7 +1030,7 @@ int Parser::yylexAux()
 				{
 					yylval.int32Val = (SLONG) number;
 					//printf ("parse.y %p %d\n", yylval.legacyStr, number);
-					return NUMBER;
+					return TOK_NUMBER;
 				}
 				else
 				{
@@ -1061,7 +1061,7 @@ int Parser::yylexAux()
 					{
 						yylval.stringPtr = newString(
 							Firebird::string(lex.last_token, lex.ptr - lex.last_token));
-						return FLOAT_NUMBER;
+						return TOK_FLOAT_NUMBER;
 					}
 
 					yylval.scaledNumber.number = number;
@@ -1069,9 +1069,9 @@ int Parser::yylexAux()
 					yylval.scaledNumber.hex = false;
 
 					if (have_decimal)
-						return SCALEDINT;
+						return TOK_SCALEDINT;
 
-					return NUMBER64BIT;
+					return TOK_NUMBER64BIT;
 				}
 			} // else if (!have_exp)
 		} // if (!have_error)
@@ -1108,7 +1108,7 @@ int Parser::yylexAux()
 		const MetaName str(string, p - string);
 		const Keyword* const keyVer = keywordsMap->get(str);
 
-		if (keyVer && (keyVer->keyword != COMMENT || lex.prev_keyword == -1))
+		if (keyVer && (keyVer->keyword != TOK_COMMENT || lex.prev_keyword == -1))
 		{
 			yylval.metaNamePtr = keyVer->str;
 			lex.last_token_bk = lex.last_token;
@@ -1121,7 +1121,7 @@ int Parser::yylexAux()
 		lex.last_token_bk = lex.last_token;
 		lex.line_start_bk = lex.line_start;
 		lex.lines_bk = lex.lines;
-		return SYMBOL;
+		return TOK_SYMBOL;
 	}
 
 	// Must be punctuation -- test for double character punctuation

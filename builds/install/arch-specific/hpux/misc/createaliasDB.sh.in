@@ -32,7 +32,7 @@
 #  
 # 
 
-
+fb_install_prefix=@prefix@
 
 #------------------------------------------------------------------------
 # Prompt for response, store result in Answer

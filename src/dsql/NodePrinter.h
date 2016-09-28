@@ -26,6 +26,7 @@
 #include "../dsql/Nodes.h"
 
 #define NODE_PRINT(var, property)	var.print(STRINGIZE(property), property)
+#define NODE_PRINT_ENUM(var, property)	var.print(STRINGIZE(property), (int) property)
 
 namespace Jrd {
 

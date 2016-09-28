@@ -982,12 +982,12 @@ public:
 	class Frame : public TypedNode<ListExprNode, ExprNode::TYPE_WINDOW_CLAUSE_FRAME>
 	{
 	public:
-		enum Bound
+		enum class Bound : UCHAR
 		{
 			// Warning: used in BLR
-			BOUND_PRECEDING = 0,
-			BOUND_FOLLOWING,
-			BOUND_CURRENT_ROW
+			PRECEDING = 0,
+			FOLLOWING,
+			CURRENT_ROW
 		};
 
 	public:
@@ -1002,7 +1002,7 @@ public:
 	public:
 		virtual Firebird::string internalPrint(NodePrinter& printer) const
 		{
-			NODE_PRINT(printer, bound);
+			NODE_PRINT_ENUM(printer, bound);
 			NODE_PRINT(printer, value);
 
 			return "WindowClause::Frame";
@@ -1054,11 +1054,11 @@ public:
 	class FrameExtent : public TypedNode<ListExprNode, ExprNode::TYPE_WINDOW_CLAUSE_FRAME_EXTENT>
 	{
 	public:
-		enum Unit
+		enum class Unit : UCHAR
 		{
 			// Warning: used in BLR
-			UNIT_RANGE = 0,
-			UNIT_ROWS
+			RANGE = 0,
+			ROWS
 			//// TODO: SQL-2013: GROUPS
 		};
 
@@ -1075,16 +1075,16 @@ public:
 
 		static FrameExtent* createDefault(MemoryPool& p)
 		{
-			FrameExtent* frameExtent = FB_NEW_POOL(p) WindowClause::FrameExtent(p, UNIT_RANGE);
-			frameExtent->frame1 = FB_NEW_POOL(p) WindowClause::Frame(p, Frame::BOUND_PRECEDING);
-			frameExtent->frame2 = FB_NEW_POOL(p) WindowClause::Frame(p, Frame::BOUND_CURRENT_ROW);
+			FrameExtent* frameExtent = FB_NEW_POOL(p) WindowClause::FrameExtent(p, Unit::RANGE);
+			frameExtent->frame1 = FB_NEW_POOL(p) WindowClause::Frame(p, Frame::Bound::PRECEDING);
+			frameExtent->frame2 = FB_NEW_POOL(p) WindowClause::Frame(p, Frame::Bound::CURRENT_ROW);
 			return frameExtent;
 		}
 
 	public:
 		virtual Firebird::string internalPrint(NodePrinter& printer) const
 		{
-			NODE_PRINT(printer, unit);
+			NODE_PRINT_ENUM(printer, unit);
 			NODE_PRINT(printer, frame1);
 			NODE_PRINT(printer, frame2);
 
@@ -1121,23 +1121,30 @@ public:
 		NestConst<Frame> frame2;
 	};
 
-	enum Exclusion
+	enum Exclusion : UCHAR
 	{
 		// Warning: used in BLR
-		EXCLUDE_NO_OTHERS = 0,
-		EXCLUDE_CURRENT_ROW,
-		EXCLUDE_GROUP,
-		EXCLUDE_TIES
+		NO_OTHERS = 0,
+		CURRENT_ROW,
+		GROUP,
+		TIES
 	};
 
 public:
-	explicit WindowClause(MemoryPool& p, ValueListNode* aOrder, FrameExtent* aFrameExtent,
-			Exclusion aExclusion)
+	explicit WindowClause(MemoryPool& p,
+			const Firebird::MetaName* aName = NULL,
+			ValueListNode* aPartition = NULL,
+			ValueListNode* aOrder = NULL,
+			FrameExtent* aFrameExtent = NULL,
+			Exclusion aExclusion = Exclusion::NO_OTHERS)
 		: DsqlNode(p),
+		  name(aName),
+		  partition(aPartition),
 		  order(aOrder),
 		  extent(aFrameExtent),
 		  exclusion(aExclusion)
 	{
+		addDsqlChildNode(partition);
 		addDsqlChildNode(order);
 		addDsqlChildNode(extent);
 	}
@@ -1145,8 +1152,10 @@ public:
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const
 	{
+		NODE_PRINT(printer, partition);
 		NODE_PRINT(printer, order);
 		NODE_PRINT(printer, extent);
+		NODE_PRINT_ENUM(printer, exclusion);
 
 		return "WindowClause";
 	}
@@ -1183,6 +1192,8 @@ public:
 	}
 
 public:
+	const Firebird::MetaName* name;
+	NestConst<ValueListNode> partition;
 	NestConst<ValueListNode> order;
 	NestConst<FrameExtent> extent;
 	Exclusion exclusion;
@@ -1193,8 +1204,8 @@ public:
 class OverNode : public TypedNode<ValueExprNode, ExprNode::TYPE_OVER>
 {
 public:
-	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr = NULL, ValueListNode* aPartition = NULL,
-		WindowClause* aWindow = NULL);
+	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr, const Firebird::MetaName* aWindowName);
+	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr, WindowClause* aWindow);
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
@@ -1215,7 +1226,7 @@ public:
 
 public:
 	NestConst<ValueExprNode> aggExpr;
-	NestConst<ValueListNode> partition;
+	const Firebird::MetaName* windowName;
 	NestConst<WindowClause> window;
 };
 
@@ -1681,6 +1692,11 @@ public:
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+
+	virtual bool possiblyUnknown()
+	{
+		return true;
+	}
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;

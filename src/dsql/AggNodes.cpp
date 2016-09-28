@@ -267,10 +267,7 @@ ValueExprNode* AggNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	if (dsqlAggregateFinder(aggFinder))
 	{
 		if (!visitor.window && visitor.dsqlScratch->scopeLevel == aggFinder.deepestLevel)
-		{
-			return PASS1_post_map(visitor.dsqlScratch, this,
-				visitor.context, visitor.partitionNode, visitor.windowNode);
-		}
+			return PASS1_post_map(visitor.dsqlScratch, this, visitor.context, visitor.windowNode);
 	}
 
 	for (NodeRef** i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)

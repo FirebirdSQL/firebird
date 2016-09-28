@@ -11,7 +11,10 @@ Syntax:
 ```
 <window function> ::=
   <window function name>([<expr> [, <expr> ...]])
-    OVER ([<window partition>] [<window order>] [<window frame>])
+    OVER {<window specification> | <existing window name>}
+
+<window specification> ::=
+  ([<existing window name>] [<window partition>] [<window order>] [<window frame>])
 
 <window partition> ::=
   PARTITION BY <expr> [, <expr> ...]
@@ -37,6 +40,25 @@ Syntax:
 
 <nulls placement> ::=
   NULLS {FIRST | LAST}
+```
+
+```
+<query spec> ::=
+  SELECT
+    [<limit clause>]
+    [<distinct clause>]
+    <select list>
+    [<where clause>]
+    [<group clause>]
+    [<having clause>]
+    [<named windows clause>]
+    [<plan clause>]
+
+<named windows clause> ::=
+  WINDOW <window definition> [, <window definition>] ...
+
+<window definition> ::=
+  <new window name> AS <window specification>
 ```
 
 ## 1. Aggregate functions used as window functions
@@ -260,6 +282,26 @@ The frame syntax with `<window frame start>` specifies the start frame, with the
 Some window functions discard frames. `ROW_NUMBER`, `LAG` and `LEAD` always work as `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. And `DENSE_RANK`, `RANK`, `PERCENT_RANK` and `CUME_DIST` always work as `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.
 
 `FIRST_VALUE`, `LAST_VALUE` and `NTH_VALUE` respect frames, but the `RANGE` unit works identically as `ROWS`.
+
+## 6. Named windows (FB 4.0)
+
+To avoid write repetitive or confusing expressions, windows can be named in a query with the `WINDOW` clause. A named window can be used in `OVER` to reference a window definition and can also be used as a base window of another named or inline (`OVER`) window. A window with frame (`ROWS` or `RANGE` clauses) can't be used as base window (but can be used with `OVER <window name>`). And a window with a base window can't have `PARTITION BY` nor can override `ORDER BY` of a base window.
+
+Example query with named windows:
+
+```sql
+select
+    id,
+    department,
+    salary,
+    count(*) over w1,
+    first_value(salary) over w2,
+    last_value(salary) over w2
+  from employee
+  window w1 as (partition by department),
+         w2 as (w1 order by salary)
+  order by department, salary;
+```
 
 
 Author:

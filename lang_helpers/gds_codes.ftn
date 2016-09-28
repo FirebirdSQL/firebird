@@ -1652,6 +1652,16 @@ C --
       PARAMETER (GDS__dsql_window_frame_value_inv_type = 335545119)
       INTEGER*4 GDS__window_frame_value_invalid      
       PARAMETER (GDS__window_frame_value_invalid       = 335545120)
+      INTEGER*4 GDS__dsql_window_not_found           
+      PARAMETER (GDS__dsql_window_not_found            = 335545121)
+      INTEGER*4 GDS__dsql_window_cant_overr_part     
+      PARAMETER (GDS__dsql_window_cant_overr_part      = 335545122)
+      INTEGER*4 GDS__dsql_window_cant_overr_order    
+      PARAMETER (GDS__dsql_window_cant_overr_order     = 335545123)
+      INTEGER*4 GDS__dsql_window_cant_overr_frame    
+      PARAMETER (GDS__dsql_window_cant_overr_frame     = 335545124)
+      INTEGER*4 GDS__dsql_window_duplicate           
+      PARAMETER (GDS__dsql_window_duplicate            = 335545125)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 

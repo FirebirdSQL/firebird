@@ -23,6 +23,8 @@
 
 # stored configuration values
 
+fb_install_prefix=@prefix@
+
 fb_bindir=@FB_BINDIR@
 fb_libdir=@FB_LIBDIR@
 fb_incdir=@FB_INCDIR@

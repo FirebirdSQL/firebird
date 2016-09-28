@@ -556,7 +556,7 @@ public:
 	{
 		explicit Window(MemoryPool&)
 			: stream(INVALID_STREAM),
-			  exclusion(WindowClause::EXCLUDE_NO_OTHERS)
+			  exclusion(WindowClause::Exclusion::NO_OTHERS)
 		{
 		}
 
@@ -639,6 +639,7 @@ public:
 		  dsqlJoinUsing(NULL),
 		  dsqlGroup(NULL),
 		  dsqlHaving(NULL),
+		  dsqlNamedWindows(NULL),
 		  dsqlOrder(NULL),
 		  dsqlStreams(NULL),
 		  dsqlExplicitJoin(false),
@@ -670,6 +671,7 @@ public:
 		obj->dsqlJoinUsing = dsqlJoinUsing;
 		obj->dsqlGroup = dsqlGroup;
 		obj->dsqlHaving = dsqlHaving;
+		obj->dsqlNamedWindows = dsqlNamedWindows;
 		obj->dsqlOrder = dsqlOrder;
 		obj->dsqlStreams = dsqlStreams;
 		obj->dsqlContext = dsqlContext;
@@ -739,6 +741,7 @@ public:
 	NestConst<ValueListNode> dsqlJoinUsing;
 	NestConst<ValueListNode> dsqlGroup;
 	NestConst<BoolExprNode> dsqlHaving;
+	NamedWindowsClause* dsqlNamedWindows;
 	NestConst<ValueListNode> dsqlOrder;
 	NestConst<RecSourceListNode> dsqlStreams;
 	bool dsqlExplicitJoin;

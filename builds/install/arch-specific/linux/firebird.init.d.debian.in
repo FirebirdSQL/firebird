@@ -20,9 +20,9 @@
 #                    running
 ### END INIT INFO
 
-# This init script contains functions specific for debian
-# init scripts.
+fb_install_prefix=@prefix@
 
+# This init script contains functions specific for debian.
 # Source LSB function library.
 . /lib/lsb/init-functions
 

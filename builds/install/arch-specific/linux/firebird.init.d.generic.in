@@ -2,6 +2,8 @@
 
 # description: Start/Stop firebird database server
 
+fb_install_prefix=@prefix@
+
 # To run more instances of firebird:
 #   Copy @prefix@ somewhere
 #   Copy this script under a new name

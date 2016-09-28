@@ -555,6 +555,18 @@ public:
 		if (sorted)
 			return;
 
+		auto compare = [] (const void* a, const void* b) {
+			const Key& first(KeyOfValue::generate(*static_cast<const Value*>(a)));
+			const Key& second(KeyOfValue::generate(*static_cast<const Value*>(b)));
+
+			if (Cmp::greaterThan(first, second))
+				return 1;
+			if (Cmp::greaterThan(second, first))
+				return -1;
+
+			return 0;
+		};
+
 		qsort(this->begin(), this->getCount(), sizeof(Value), compare);
 		sorted = true;
 	}
@@ -562,19 +574,6 @@ public:
 private:
 	int sortMode;
 	bool sorted;
-
-	static int compare(const void* a, const void* b)
-	{
-		const Key& first(KeyOfValue::generate(*static_cast<const Value*>(a)));
-		const Key& second(KeyOfValue::generate(*static_cast<const Value*>(b)));
-
-		if (Cmp::greaterThan(first, second))
-			return 1;
-		if (Cmp::greaterThan(second, first))
-			return -1;
-
-		return 0;
-	}
 };
 
 // Nice shorthand for arrays with static part

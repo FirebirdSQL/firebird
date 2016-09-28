@@ -48,8 +48,9 @@ public:
 	{}
 
 protected:
-	const Format* getFormat(thread_db* tdbb, jrd_rel* relation) const;
-	bool retrieveRecord(thread_db* tdbb, jrd_rel* relation, FB_UINT64 position, Record* record) const;
+	const Format* getFormat(thread_db* tdbb, jrd_rel* relation) const override;
+	bool retrieveRecord(thread_db* tdbb, jrd_rel* relation, FB_UINT64 position,
+		Record* record) const override;
 };
 
 class DbCreatorsList : public SnapshotData

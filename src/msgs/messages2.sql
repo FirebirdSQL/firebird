@@ -908,6 +908,11 @@ Data source : @4', NULL, NULL)
 ('dsql_window_range_inv_key_type', NULL, 'ExprNodes.cpp', NULL, 0, 798, NULL, 'RANGE based window must have an ORDER BY key of numerical, date, time or timestamp types', NULL, NULL);
 ('dsql_window_frame_value_inv_type', NULL, 'ExprNodes.cpp', NULL, 0, 799, NULL, 'Window RANGE/ROWS PRECEDING/FOLLOWING value must be of a numerical type', NULL, NULL);
 ('window_frame_value_invalid', NULL, 'ExprNodes.cpp', NULL, 0, 800, NULL, 'Invalid PRECEDING or FOLLOWING offset in window function: cannot be negative', NULL, NULL);
+('dsql_window_not_found', NULL, 'ExprNodes.cpp', NULL, 0, 801, NULL, 'Window @1 not found', NULL, NULL);
+('dsql_window_cant_overr_part', NULL, 'ExprNodes.cpp', NULL, 0, 802, NULL, 'Cannot use PARTITION BY clause while overriding the window @1', NULL, NULL);
+('dsql_window_cant_overr_order', NULL, 'ExprNodes.cpp', NULL, 0, 803, NULL, 'Cannot use ORDER BY clause while overriding the window @1 which already has an ORDER BY clause', NULL, NULL);
+('dsql_window_cant_overr_frame', NULL, 'ExprNodes.cpp', NULL, 0, 804, NULL, 'Cannot override the window @1 because it has a frame clause. Tip: it can be used without parenthesis in OVER', NULL, NULL);
+('dsql_window_duplicate', NULL, 'ExprNodes.cpp', NULL, 0, 805, NULL, 'Duplicate window definition for @1', NULL, NULL);
 -- QLI
 (NULL, NULL, NULL, NULL, 1, 0, NULL, 'expected type', NULL, NULL);
 (NULL, NULL, NULL, NULL, 1, 1, NULL, 'bad block type', NULL, NULL);

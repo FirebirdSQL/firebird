@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/sh
 #
 #  The contents of this file are subject to the Initial
 #  Developer's Public License Version 1.0 (the "License");
@@ -22,7 +22,35 @@
 #		Alex Peshkoff
 #
 
-# The pre uninstall routines for Firebird Server
+#  UnInstall script for FirebirdSQL database engine
+#  http://www.firebirdsql.org
+
+parseArgs ${*}
+
+checkInstallUser
+
+BuildVersion=@FIREBIRD_VERSION@.@FB_BUILD_NUM@
+PackageVersion=@FIREBIRD_PACKAGE_VERSION@
+CpuType=@CPU_TYPE@
+
+Version="$BuildVersion-$PackageVersion.$CpuType"
+
+if [ ! -z "$InteractiveInstall" ]
+then
+	cat <<EOF
+
+Firebird $Version Uninstall program
+
+Are you sure you want to proceed?
+
+EOF
+
+	AskQuestion "Press Enter to start uninstall or ^C to abort"
+fi
+
+# Here we are uninstalling from a install tar.gz file
+
+displayMessage "Uninstalling..."
 
 checkIfServerRunning
 
@@ -38,3 +66,25 @@ for i in @FB_GUARDDIR@/fb_guard @FB_LOGDIR@/firebird.log @FB_CONFDIR@/SYSDBA.pas
 		rm -f $i
 	fi
 done
+
+removeLinksForBackCompatibility
+removeServiceAutostart
+removeInetdServiceEntry
+
+if [ -d $PidDir ]
+then
+    rm -rf $PidDir
+fi
+
+reconfigDynamicLoader
+
+removeInstalledFiles  # Remove installed files 
+removeUninstallFiles  # Remove the 'uninstall' utility files
+removeEmptyDirs       # Remove empty directories
+
+if [ "$OS_Has_Specific_Classic_Startup" ]
+then
+	osRemoveStartupFiles
+fi
+
+displayMessage "Uninstall completed"

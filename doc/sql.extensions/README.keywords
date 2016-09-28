@@ -293,6 +293,7 @@ Firebird 4.0
   Added as reserved words:
 
     UNBOUNDED
+    WINDOW
 
   Added as non-reserved words:
 

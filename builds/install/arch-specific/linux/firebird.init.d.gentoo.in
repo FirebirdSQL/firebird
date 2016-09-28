@@ -6,6 +6,8 @@
 # on system startup and shutdown to start the background
 # Firebird database server daemon
 
+fb_install_prefix=@prefix@
+
 # To run more instances of firebird:
 #   Copy @prefix@ somewhere
 #   Copy this script under a new name
