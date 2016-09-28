@@ -4186,6 +4186,8 @@ bool get_function(BurpGlobals* tdgbl)
 			X.RDB$LEGACY_FLAG.NULL = FALSE;
 			X.RDB$LEGACY_FLAG = 1;
 
+			X.RDB$SQL_SECURITY.NULL = TRUE;
+
 			skip_init(&scan_next_attr);
 			while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
 			{

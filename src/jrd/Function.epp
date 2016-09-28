@@ -239,7 +239,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 						function->setSecurityName(PKG.RDB$SECURITY_CLASS);
 					}
 
-					// SQL SECURITY of function must be NULL if it's defined in package
+					// SQL SECURITY of function must be the same if it's defined in package
 					if (!PKG.RDB$SQL_SECURITY.NULL)
 						function->ssDefiner = Nullable<bool>::val(PKG.RDB$SQL_SECURITY);
 
