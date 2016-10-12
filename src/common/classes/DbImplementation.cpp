@@ -48,6 +48,7 @@ static const UCHAR CpuHppa = 13;
 static const UCHAR CpuAlpha = 14;
 static const UCHAR CpuArm64 = 15;
 static const UCHAR CpuPowerPc64el = 16;
+static const UCHAR CpuM68k = 17;
 
 static const UCHAR OsWindows = 0;
 static const UCHAR OsLinux = 1;
@@ -87,7 +88,8 @@ const char* hardware[] = {
 	"HPPA",
 	"Alpha",
 	"ARM64",
-	"PowerPC64el"
+	"PowerPC64el",
+	"M68k"
 };
 
 const char* operatingSystem[] = {
@@ -128,8 +130,8 @@ const UCHAR backwardTable[FB_NELEM(hardware) * FB_NELEM(operatingSystem)] =
 
 const UCHAR backEndianess[FB_NELEM(hardware)] =
 {
-//	Intel	AMD		Sparc	PPC		PPC64	MIPSEL	MIPS	ARM		IA64	s390	s390x	SH		SHEB	HPPA	Alpha	ARM64	PowerPC64el
-	0,		0,		1,		1,		1,		0,		1,		0,		0,		1,		1,		0,		1,		1,		0,		0,		0
+//	Intel	AMD		Sparc	PPC		PPC64	MIPSEL	MIPS	ARM		IA64	s390	s390x	SH		SHEB	HPPA	Alpha	ARM64	PowerPC64el	M68k
+	0,		0,		1,		1,		1,		0,		1,		0,		0,		1,		1,		0,		1,		1,		0,		0,		0,		1
 };
 
 } // anonymous namespace
