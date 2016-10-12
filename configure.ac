@@ -1008,10 +1008,11 @@ AC_CHECK_MEMBER([struct dirent.d_type],
 dnl EKU: try to determine the alignment of long and double
 dnl      replaces FB_ALIGNMENT and FB_DOUBLE_ALIGN in src/jrd/common.h
 AC_MSG_CHECKING(alignment of long)
-AC_RUN_IFELSE([AC_LANG_SOURCE([[main () {
+AC_RUN_IFELSE([AC_LANG_SOURCE([[#include <semaphore.h>
+main () {
   struct s {
     char a;
-    long long b;
+    union { long long x; sem_t y; } b;
   };
   exit((int)&((struct s*)0)->b);
 }]])],[ac_cv_c_alignment=$ac_status],[ac_cv_c_alignment=$ac_status],[])
