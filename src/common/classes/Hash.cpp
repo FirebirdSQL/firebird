@@ -23,10 +23,12 @@
 #include "firebird.h"
 #include "../common/classes/Hash.h"
 
+#if defined(_M_IX86) || defined(_M_X64) || defined(__x86_64__) || defined(__i386__)
 #ifdef _MSC_VER
 #include <intrin.h>
 #else
 #include <cpuid.h>
+#endif
 #endif
 
 using namespace Firebird;
