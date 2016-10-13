@@ -57,6 +57,7 @@ platform_linux() {
 		echo "${TAB}$i;"
 	done
 
+	echo "${TAB}_IO_stdin_used;"
 	echo 'local:'
 	echo "${TAB}*;"
 	echo '};'
