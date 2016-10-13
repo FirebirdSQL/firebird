@@ -123,7 +123,7 @@ namespace
 #ifdef HAVE_ID_BY_NAME
 			  , id(NULL)
 #endif
-		{}
+		{ }
 
 		DbName* get()
 		{
@@ -149,7 +149,7 @@ namespace
 	{
 		AliasName(MemoryPool& p, const PathName& al, DbName* db)
 			: name(p, al), database(db)
-		{}
+		{ }
 
 		AliasName* get()
 		{

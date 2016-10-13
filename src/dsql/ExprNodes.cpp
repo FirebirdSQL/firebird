@@ -133,7 +133,7 @@ string Node::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, line);
 	NODE_PRINT(printer, column);
 
-	return string("Node");
+	return "Node";
 }
 
 
@@ -147,7 +147,7 @@ string ExprNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, nodFlags);
 	NODE_PRINT(printer, impureOffset);
 
-	return string("ExprNode");
+	return "ExprNode";
 }
 
 
@@ -248,7 +248,7 @@ string ValueExprNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, nodScale);
 	NODE_PRINT(printer, nodDesc);
 
-	return string("ValueExprNode");
+	return "ValueExprNode";
 }
 
 
@@ -261,7 +261,7 @@ Firebird::string ValueListNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, items);
 
-	return string("ValueListNode");
+	return "ValueListNode";
 }
 
 
@@ -274,7 +274,7 @@ Firebird::string RecSourceListNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, items);
 
-	return string("RecSourceListNode");
+	return "RecSourceListNode";
 }
 
 
@@ -343,7 +343,7 @@ string ArithmeticNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, arg1);
 	NODE_PRINT(printer, arg2);
 
-	return string("ArithmeticNode");
+	return "ArithmeticNode";
 }
 
 void ArithmeticNode::setParameterName(dsql_par* parameter) const
@@ -2416,7 +2416,7 @@ string ArrayNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, field);
 
-	return string("ArrayNode");
+	return "ArrayNode";
 }
 
 ValueExprNode* ArrayNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -2456,7 +2456,7 @@ string BoolAsValueNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, boolean);
 
-	return string("BoolAsValueNode");
+	return "BoolAsValueNode";
 }
 
 ValueExprNode* BoolAsValueNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -2570,7 +2570,7 @@ string CastNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, source);
 	NODE_PRINT(printer, itemInfo);
 
-	return string("CastNode");
+	return "CastNode";
 }
 
 ValueExprNode* CastNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -2817,7 +2817,7 @@ string CoalesceNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, args);
 
-	return string("CoalesceNode");
+	return "CoalesceNode";
 }
 
 ValueExprNode* CoalesceNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -2935,7 +2935,7 @@ string CollateNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, arg);
 	NODE_PRINT(printer, collation);
 
-	return string("CollateNode");
+	return "CollateNode";
 }
 
 // Turn a collate clause into a cast clause.
@@ -3032,7 +3032,7 @@ string ConcatenateNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, arg1);
 	NODE_PRINT(printer, arg2);
 
-	return string("ConcatenateNode");
+	return "ConcatenateNode";
 }
 
 void ConcatenateNode::setParameterName(dsql_par* parameter) const
@@ -3291,7 +3291,7 @@ string CurrentDateNode::internalPrint(NodePrinter& printer) const
 {
 	ValueExprNode::internalPrint(printer);
 
-	return string("CurrentDateNode");
+	return "CurrentDateNode";
 }
 
 void CurrentDateNode::setParameterName(dsql_par* parameter) const
@@ -3387,7 +3387,7 @@ string CurrentTimeNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, precision);
 
-	return string("CurrentTimeNode");
+	return "CurrentTimeNode";
 }
 
 void CurrentTimeNode::setParameterName(dsql_par* parameter) const
@@ -3500,7 +3500,7 @@ string CurrentTimeStampNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, precision);
 
-	return string("CurrentTimeStampNode");
+	return "CurrentTimeStampNode";
 }
 
 void CurrentTimeStampNode::setParameterName(dsql_par* parameter) const
@@ -3598,7 +3598,7 @@ string CurrentRoleNode::internalPrint(NodePrinter& printer) const
 {
 	ValueExprNode::internalPrint(printer);
 
-	return string("CurrentRoleNode");
+	return "CurrentRoleNode";
 }
 
 void CurrentRoleNode::setParameterName(dsql_par* parameter) const
@@ -3692,7 +3692,7 @@ string CurrentUserNode::internalPrint(NodePrinter& printer) const
 {
 	ValueExprNode::internalPrint(printer);
 
-	return string("CurrentUserNode");
+	return "CurrentUserNode";
 }
 
 void CurrentUserNode::setParameterName(dsql_par* parameter) const
@@ -3793,7 +3793,7 @@ string DecodeNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, conditions);
 	NODE_PRINT(printer, values);
 
-	return string("DecodeNode");
+	return "DecodeNode";
 }
 
 ValueExprNode* DecodeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -4165,7 +4165,7 @@ string DomainValidationNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, domDesc);
 
-	return string("DomainValidationNode");
+	return "DomainValidationNode";
 }
 
 ValueExprNode* DomainValidationNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -4259,7 +4259,7 @@ string ExtractNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, blrSubOp);
 	NODE_PRINT(printer, arg);
 
-	return string("ExtractNode");
+	return "ExtractNode";
 }
 
 ValueExprNode* ExtractNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -4796,7 +4796,7 @@ string FieldNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, dsqlCursorField);
 	NODE_PRINT(printer, cursorNumber);
 
-	return string("FieldNode");
+	return "FieldNode";
 }
 
 ValueExprNode* FieldNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -5801,7 +5801,7 @@ string GenIdNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, implicit);
 	NODE_PRINT(printer, identity);
 
-	return string("GenIdNode");
+	return "GenIdNode";
 }
 
 ValueExprNode* GenIdNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -6012,7 +6012,7 @@ string InternalInfoNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, arg);
 
-	return string("InternalInfoNode");
+	return "InternalInfoNode";
 }
 
 void InternalInfoNode::setParameterName(dsql_par* parameter) const
@@ -6482,7 +6482,7 @@ string LiteralNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, dsqlStr);
 	NODE_PRINT(printer, litDesc);
 
-	return string("LiteralNode");
+	return "LiteralNode";
 }
 
 // Turn an international string reference into internal subtype ID.
@@ -6689,7 +6689,7 @@ string DsqlAliasNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, value);
 	NODE_PRINT(printer, implicitJoin);
 
-	return string("DsqlAliasNode");
+	return "DsqlAliasNode";
 }
 
 ValueExprNode* DsqlAliasNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -6734,7 +6734,7 @@ string DsqlMapNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, context);
 	NODE_PRINT(printer, map);
 
-	return string("DsqlMapNode");
+	return "DsqlMapNode";
 }
 
 ValueExprNode* DsqlMapNode::dsqlPass(DsqlCompilerScratch* /*dsqlScratch*/)
@@ -6914,7 +6914,7 @@ string DerivedFieldNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, value);
 	NODE_PRINT(printer, context);
 
-	return string("DerivedFieldNode");
+	return "DerivedFieldNode";
 }
 
 ValueExprNode* DerivedFieldNode::dsqlPass(DsqlCompilerScratch* /*dsqlScratch*/)
@@ -7126,7 +7126,7 @@ string NegateNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, arg);
 
-	return string("NegateNode");
+	return "NegateNode";
 }
 
 void NegateNode::setParameterName(dsql_par* parameter) const
@@ -7319,7 +7319,7 @@ string NullNode::internalPrint(NodePrinter& printer) const
 {
 	ValueExprNode::internalPrint(printer);
 
-	return string("NullNode");
+	return "NullNode";
 }
 
 void NullNode::setParameterName(dsql_par* parameter) const
@@ -7399,7 +7399,7 @@ string OrderNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, descending);
 	NODE_PRINT(printer, nullsPlacement);
 
-	return string("OrderNode");
+	return "OrderNode";
 }
 
 OrderNode* OrderNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -7591,7 +7591,7 @@ string OverNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, partition);
 	NODE_PRINT(printer, window);
 
-	return string("OverNode");
+	return "OverNode";
 }
 
 bool OverNode::dsqlAggregateFinder(AggregateFinder& visitor)
@@ -7879,7 +7879,7 @@ string ParameterNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, argIndicator);
 	NODE_PRINT(printer, argInfo);
 
-	return string("ParameterNode");
+	return "ParameterNode";
 }
 
 ValueExprNode* ParameterNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -8236,7 +8236,7 @@ string RecordKeyNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, recStream);
 	NODE_PRINT(printer, aggregate);
 
-	return string("RecordKeyNode");
+	return "RecordKeyNode";
 }
 
 // Resolve a dbkey to an available context.
@@ -8953,7 +8953,7 @@ string StrCaseNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, blrOp);
 	NODE_PRINT(printer, arg);
 
-	return string("StrCaseNode");
+	return "StrCaseNode";
 }
 
 ValueExprNode* StrCaseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -9150,7 +9150,7 @@ string StrLenNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, blrSubOp);
 	NODE_PRINT(printer, arg);
 
-	return string("StrLenNode");
+	return "StrLenNode";
 }
 
 ValueExprNode* StrLenNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -9424,7 +9424,7 @@ string SubQueryNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, value2);
 	NODE_PRINT(printer, subQuery);
 
-	return string("SubQueryNode");
+	return "SubQueryNode";
 }
 
 ValueExprNode* SubQueryNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -9890,7 +9890,7 @@ string SubstringNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, start);
 	NODE_PRINT(printer, length);
 
-	return string("SubstringNode");
+	return "SubstringNode";
 }
 
 ValueExprNode* SubstringNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -10234,7 +10234,7 @@ string SubstringSimilarNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, pattern);
 	NODE_PRINT(printer, escape);
 
-	return string("SubstringSimilarNode");
+	return "SubstringSimilarNode";
 }
 
 void SubstringSimilarNode::setParameterName(dsql_par* parameter) const
@@ -10484,7 +10484,7 @@ string SysFuncCallNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, dsqlSpecialSyntax);
 	NODE_PRINT(printer, args);
 
-	return string("SysFuncCallNode");
+	return "SysFuncCallNode";
 }
 
 void SysFuncCallNode::setParameterName(dsql_par* parameter) const
@@ -10677,7 +10677,7 @@ string TrimNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, value);
 	NODE_PRINT(printer, trimChars);
 
-	return string("TrimNode");
+	return "TrimNode";
 }
 
 ValueExprNode* TrimNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -11086,7 +11086,7 @@ string UdfCallNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, args);
 
-	return string("UdfCallNode");
+	return "UdfCallNode";
 }
 
 void UdfCallNode::setParameterName(dsql_par* parameter) const
@@ -11611,7 +11611,7 @@ string ValueIfNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, trueValue);
 	NODE_PRINT(printer, falseValue);
 
-	return string("ValueIfNode");
+	return "ValueIfNode";
 }
 
 ValueExprNode* ValueIfNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -11736,7 +11736,7 @@ string VariableNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, varDecl);
 	NODE_PRINT(printer, varInfo);
 
-	return string("VariableNode");
+	return "VariableNode";
 }
 
 ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -11878,7 +11878,7 @@ Firebird::string RowsClause::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, length);
 	NODE_PRINT(printer, skip);
 
-	return string("RowsClause");
+	return "RowsClause";
 }
 
 
@@ -11891,7 +11891,7 @@ Firebird::string GeneratorItem::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, secName);
 
-	return string("GeneratorItem");
+	return "GeneratorItem";
 }
 
 

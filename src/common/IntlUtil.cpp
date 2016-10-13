@@ -262,7 +262,7 @@ string IntlUtil::convertUtf16ToAscii(const string& utf16, bool* error)
 		else
 		{
 			*error = true;
-			return string("");
+			return "";
 		}
 	}
 
@@ -623,17 +623,17 @@ bool IntlUtil::setupIcuAttributes(charset* cs, const string& specificAttributes,
 	}
 
 	string icuVersion;
-	map.get(string("ICU-VERSION"), icuVersion);
+	map.get("ICU-VERSION", icuVersion);
 
 	string collVersion;
 	if (!UnicodeUtil::getCollVersion(icuVersion, configInfo, collVersion))
 		return false;
 
-	map.remove(string("ICU-VERSION"));
-	map.remove(string("COLL-VERSION"));
+	map.remove("ICU-VERSION");
+	map.remove("COLL-VERSION");
 
 	if (collVersion.hasData())
-		map.put(string("COLL-VERSION"), collVersion);
+		map.put("COLL-VERSION", collVersion);
 
 	newSpecificAttributes = IntlUtil::generateSpecificAttributes(charSet, map);
 	return true;
@@ -730,7 +730,7 @@ void IntlUtil::getDefaultCollationAttributes(UCharBuffer& collAttributes, charse
 {
 	string attributes("ICU-VERSION=");
 	attributes += Jrd::UnicodeUtil::getDefaultIcuVersion();
-	setupIcuAttributes(&cs, attributes, string(""), attributes);
+	setupIcuAttributes(&cs, attributes, "", attributes);
 
 	collAttributes.push(reinterpret_cast<const UCHAR*>(attributes.c_str()), attributes.length());
 }

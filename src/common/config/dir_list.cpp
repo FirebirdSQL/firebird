@@ -87,7 +87,7 @@ PathName ParsedPath::subPath(FB_SIZE_T n) const
 ParsedPath::operator PathName() const
 {
 	if (!getCount())
-		return PathName("");
+		return "";
 	return subPath(getCount());
 }
 

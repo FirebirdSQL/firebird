@@ -43,7 +43,7 @@ public:
 	TempFile(const string& prefix, bool do_unlink = true)
 		: position(0), size(0), doUnlink(do_unlink)
 	{
-		init(PathName(""), prefix);
+		init("", prefix);
 	}
 
 	virtual ~TempFile();
@@ -66,9 +66,9 @@ public:
 	}
 
 	static void getTempPath(PathName& path);
-	static PathName create(const string& prefix, const PathName& directory = PathName(""));
+	static PathName create(const string& prefix, const PathName& directory = "");
 	static PathName create(CheckStatusWrapper* status, const string& prefix,
-		const PathName& directory = PathName(""));
+		const PathName& directory = "");
 
 private:
 	void init(const PathName& dir, const string& prefix);

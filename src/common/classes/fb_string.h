@@ -727,6 +727,12 @@ namespace Firebird
 			return *this;
 		}
 
+		// Ugly and ineffective
+		string operator+(const_pointer str) const
+		{
+			return string(*this) += str;
+		}
+
 		unsigned int hash(size_type tableSize) const
 		{
 			return InternalHash::hash(length(), reinterpret_cast<const UCHAR*>(c_str()), tableSize);

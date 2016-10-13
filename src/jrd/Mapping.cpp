@@ -524,7 +524,10 @@ public:
 			if (val.plugin.hasData())
 				method = val.plugin;
 			else
-				(method = "Mapped from ") += val.origPlug;
+			{
+				method = "Mapped from ";
+				method += val.origPlug;
+			}
 		}
 	}
 

@@ -274,7 +274,7 @@ private:
 	void raiseIndexError(CheckStatusWrapper* status, unsigned index, const char* method) const
 	{
 		(Arg::Gds(isc_invalid_index_val) <<
-		 Arg::Num(index) << (string("IMessageMetadata::") += method)).copyTo(status);
+		 Arg::Num(index) << (string("IMessageMetadata::") + method)).copyTo(status);
 	}
 
 	void assign(IMessageMetadata* from);
