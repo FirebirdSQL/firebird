@@ -31,7 +31,7 @@ USAGE RULES
 4) The new files contributed by people who are not members of the Firebird
    project should follow the rule #3. If an author (initial developer) doesn't
    specify the license to be used, the person who applies the contributed code
-   to the SVN tree (a committer) becomes responsible for the license assigned
+   to the Git tree (a committer) becomes responsible for the license assigned
    to the contributed code.
 
 5) Every non-binary file that exists in the SVN tree, should have a header
@@ -41,4 +41,4 @@ USAGE RULES
 
 
 You may find the exhibits for the approved licenses in /doc/license directory
-of the SVN tree.
+of the Git tree.
