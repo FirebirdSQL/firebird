@@ -8141,11 +8141,14 @@ dsc* ParameterNode::execute(thread_db* tdbb, jrd_req* request) const
 			}
 			else if (desc->isBlob())
 			{
-				if (desc->getCharSet() != CS_NONE && desc->getCharSet() != CS_BINARY)
-				{
-					const bid* const blobId = reinterpret_cast<bid*>(desc->dsc_address);
+				const bid* const blobId = reinterpret_cast<bid*>(desc->dsc_address);
 
-					if (!blobId->isEmpty())
+				if (!blobId->isEmpty())
+				{
+					if (!request->hasInternalStatement())
+						tdbb->getTransaction()->checkBlob(tdbb, blobId);
+
+					if (desc->getCharSet() != CS_NONE && desc->getCharSet() != CS_BINARY)
 					{
 						AutoBlb blob(tdbb, blb::open(tdbb, tdbb->getTransaction(), blobId));
 						blob.getBlb()->BLB_check_well_formed(tdbb, desc);

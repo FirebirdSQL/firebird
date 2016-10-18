@@ -369,6 +369,7 @@ public:
 	void eraseSecDbContext();
 	MappingList* getMappingList();
 	DbCreatorsList* getDbCreatorsList();
+	void checkBlob(thread_db* tdbb, const bid* blob_id);
 
 	GenIdCache* getGenIdCache()
 	{

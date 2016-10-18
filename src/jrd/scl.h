@@ -45,11 +45,12 @@ public:
     typedef ULONG flags_t;
 
 	SecurityClass(Firebird::MemoryPool &pool, const Firebird::MetaName& name)
-		: scl_flags(0), scl_name(pool, name)
+		: scl_flags(0), scl_name(pool, name), scl_blb_access(false)
 	{}
 
 	flags_t scl_flags;			// Access permissions
 	const Firebird::MetaName scl_name;
+	bool scl_blb_access;
 
 	static const Firebird::MetaName& generate(const void*, const SecurityClass* item)
 	{
