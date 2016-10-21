@@ -314,33 +314,67 @@ namespace Firebird
 			return toSize;
 		}
 
-		virtual void assign(const void* s, size_type n)
+		virtual AbstractString& assign(const void* s, size_type n)
 		{
 			baseAssign(s, n);
+			return *this;
+		}
+
+		AbstractString& append(const AbstractString& str)
+		{
+			fb_assert(&str != this);
+			return append(str.c_str(), str.length());
+		}
+		AbstractString& append(const AbstractString& str, size_type pos, size_type n = npos)
+		{
+			fb_assert(&str != this);
+			adjustRange(str.length(), pos, n);
+			return append(str.c_str() + pos, n);
+		}
+		AbstractString& append(const_pointer s, const size_type n)
+		{
+			memcpy(baseAppend(n), s, n);
+			return *this;
+		}
+		AbstractString& append(const_pointer s)
+		{
+			return append(s, static_cast<size_type>(strlen(s)));
+		}
+		AbstractString& append(size_type n, char_type c)
+		{
+			memset(baseAppend(n), c, n);
+			return *this;
+		}
+		AbstractString& append(const_iterator first, const_iterator last)
+		{
+			return append(first, last - first);
 		}
 
 	protected:
 		// Following methods are protected to allow to override them in derived classes
 		// without being virtual
 
-		void assign(const AbstractString& v)
+		AbstractString& assign(const AbstractString& v)
 		{
 			if (this != &v)
 			{
 				baseAssign(v.c_str(), v.length());
 			}
+			return *this;
 		}
-		void assign(const_pointer s)
+		AbstractString& assign(const_pointer s)
 		{
 			assign(s, static_cast<size_type>(strlen(s)));
+			return *this;
 		}
-		void assign(const size_type n, const char_type c)
+		AbstractString& assign(const size_type n, const char_type c)
 		{
 			checkLength(n);
 			memset(getBuffer(n, false), c, n);
+			return *this;
 		}
 		// Pick up substring from other string
-		void assign(const AbstractString& v, size_type pos, size_type n = npos);
+		AbstractString& assign(const AbstractString& v, size_type pos, size_type n = npos);
 
 		// Move buffer from source if possible
 		void move(AbstractString& v)
@@ -369,63 +403,37 @@ namespace Firebird
 			}
 		}
 
-		void append(const AbstractString& str)
+		AbstractString& insert(size_type p0, const AbstractString& str)
 		{
 			fb_assert(&str != this);
-			append(str.c_str(), str.length());
+			return insert(p0, str.c_str(), str.length());
 		}
-		void append(const AbstractString& str, size_type pos, size_type n = npos)
-		{
-			fb_assert(&str != this);
-			adjustRange(str.length(), pos, n);
-			append(str.c_str() + pos, n);
-		}
-		void append(const_pointer s, const size_type n)
-		{
-			memcpy(baseAppend(n), s, n);
-		}
-		void append(const_pointer s)
-		{
-			append(s, static_cast<size_type>(strlen(s)));
-		}
-		void append(size_type n, char_type c)
-		{
-			memset(baseAppend(n), c, n);
-		}
-		void append(const_iterator first, const_iterator last)
-		{
-			append(first, last - first);
-		}
-
-		void insert(size_type p0, const AbstractString& str)
-		{
-			fb_assert(&str != this);
-			insert(p0, str.c_str(), str.length());
-		}
-		void insert(size_type p0, const AbstractString& str, size_type pos,
+		AbstractString& insert(size_type p0, const AbstractString& str, size_type pos,
 			size_type n)
 		{
 			fb_assert(&str != this);
 			adjustRange(str.length(), pos, n);
-			insert(p0, &str.c_str()[pos], n);
+			return insert(p0, &str.c_str()[pos], n);
 		}
-		void insert(size_type p0, const_pointer s, const size_type n)
+		AbstractString& insert(size_type p0, const_pointer s, const size_type n)
 		{
 			if (p0 >= length())
 				append(s, n);
 			else
 				memcpy(baseInsert(p0, n), s, n);
+			return *this;
 		}
-		void insert(size_type p0, const_pointer s)
+		AbstractString& insert(size_type p0, const_pointer s)
 		{
-			insert(p0, s, static_cast<size_type>(strlen(s)));
+			return insert(p0, s, static_cast<size_type>(strlen(s)));
 		}
-		void insert(size_type p0, const size_type n, const char_type c)
+		AbstractString& insert(size_type p0, const size_type n, const char_type c)
 		{
 			if (p0 >= length()) {
 				append(n, c);
 			}
 			memset(baseInsert(p0, n), c, n);
+			return *this;
 		}
 		//Following methods have conflicting signature with methods above because of implicit conversion int->*void
 		//void insert(iterator it, size_type n, char_type c)
@@ -514,15 +522,15 @@ namespace Firebird
 		}
 
 		// Replaces piece of string from pos with value of s
-		void replace(size_type pos, size_type len, const_pointer s, size_type n);
-		void replace(size_type p0, size_type n0, const_pointer s)
+		AbstractString& replace(size_type pos, size_type len, const_pointer s, size_type n);
+		AbstractString& replace(size_type p0, size_type n0, const_pointer s)
 		{
-			replace(p0, n0, s, static_cast<size_type>(strlen(s)));
+			return replace(p0, n0, s, static_cast<size_type>(strlen(s)));
 		}
-		void replace(size_type p0, size_type n0, const AbstractString& str)
+		AbstractString& replace(size_type p0, size_type n0, const AbstractString& str)
 		{
 			fb_assert(&str != this);
-			replace(p0, n0, str.c_str(), str.length());
+			return replace(p0, n0, str.c_str(), str.length());
 		}
 #ifdef TO_BE_OPTIMIZED_IF_EVER_USED
 		AbstractString& replace(const size_type p0, const size_type n0,
@@ -647,7 +655,6 @@ namespace Firebird
 		explicit string(const AbstractString& v, const size_type pos, const size_type n = npos, MemoryPool& p = getAutoMemoryPool()) : AbstractString(MAX_SIZE, v, pos, n, p) {}
 
 		using AbstractString::assign;
-		using AbstractString::append;
 		using AbstractString::insert;
 		using AbstractString::replace;
 		using AbstractString::find;
@@ -729,6 +736,10 @@ namespace Firebird
 
 		// Ugly and ineffective
 		string operator+(const_pointer str) const
+		{
+			return string(*this) += str;
+		}
+		string operator+(const AbstractString& str) const
 		{
 			return string(*this) += str;
 		}
@@ -838,7 +849,6 @@ namespace Firebird
 		}
 
 		using AbstractString::assign;
-		using AbstractString::append;
 		using AbstractString::insert;
 		using AbstractString::replace;
 		using AbstractString::find;
@@ -849,6 +859,15 @@ namespace Firebird
 		using AbstractString::find_last_not_of;
 
 		unsigned int hash(const size_type tableSize);
+
+		NoCaseString operator+(const_pointer str) const
+		{
+			return NoCaseString(*this) += str;
+		}
+		NoCaseString operator+(const AbstractString& str) const
+		{
+			return NoCaseString(*this) += str;
+		}
 
 		NoCaseString substr(const size_type pos, const size_type n = npos)
 		{
@@ -880,8 +899,8 @@ namespace Firebird
 		// Optimized constructor for concatenation of two paths
 		PathName(PathName& prefix, PathName& suffix, MemoryPool& p = getAutoMemoryPool());
 		// Optimized constructor for concatenation of path and file name
-		explicit PathName(PathName& dir, const char* fileName, size_type n = npos, MemoryPool& p = getAutoMemoryPool());
-		explicit PathName(PathName& dir, const AbstractString& fileName, MemoryPool& p = getAutoMemoryPool()) : PathName(dir, fileName.c_str(), fileName.length(), p) {}
+		explicit PathName(const PathName& dir, const char* fileName, size_type n = npos, MemoryPool& p = getAutoMemoryPool());
+		explicit PathName(const PathName& dir, const AbstractString& fileName, MemoryPool& p = getAutoMemoryPool()) : PathName(dir, fileName.c_str(), fileName.length(), p) {}
 
 		PathName& assign(const PathName& v)
 		{
@@ -892,15 +911,17 @@ namespace Firebird
 			}
 			return *this;
 		}
-		void assign(const AbstractString& s, const size_type pos, const size_type n = npos)
+		PathName& assign(const AbstractString& s, const size_type pos, const size_type n = npos)
 		{
 			AbstractString::assign(s, pos, n);
 			normalized = false;
+			return *this;
 		}
-		void assign(const void* s, size_type n) override
+		PathName& assign(const void* s, size_type n) override
 		{
 			baseAssign(s, n);
 			normalized = false;
+			return *this;
 		}
 		PathName& assign(const PathName& v, size_type pos, size_type n);
 
@@ -997,8 +1018,25 @@ namespace Firebird
 			normalized = false;
 			return *this;
 		}
+
+		PathName substr(const size_type pos, const size_type n = npos)
+		{
+			return PathName(*this, pos, n);
+		}
 	};
 
+	static inline string operator+(string::const_pointer s, const string& str)
+	{
+		string rc(s);
+		rc += str;
+		return rc;
+	}
+	static inline NoCaseString operator+(NoCaseString::const_pointer s, const NoCaseString& str)
+	{
+		NoCaseString rc(s);
+		rc += str;
+		return rc;
+	}
 	// Type for plugin names
 	typedef NoCaseString PluginName;
 	// reference-counted strings

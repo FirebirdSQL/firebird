@@ -291,7 +291,7 @@ public:
 		PathName db(_database), host_port;
 		if (ISC_extract_host(db, host_port, false) == ISC_PROTOCOL_TCPIP)
 		{
-			const PathName host(host_port, 0, sizeof(localhost) - 1);
+			const PathName host = host_port.substr(0, sizeof(localhost) - 1);
 			const char delim = host_port.length() >= sizeof(localhost) ? host_port[sizeof(localhost) - 1] : '/';
 			if (delim != '/' || !(host == localhost))
 				pr_error(status, "nbackup needs local access to database file");

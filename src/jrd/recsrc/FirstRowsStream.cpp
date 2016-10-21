@@ -116,10 +116,7 @@ bool FirstRowsStream::lockRecord(thread_db* tdbb) const
 void FirstRowsStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
 {
 	if (detailed)
-	{
-		plan += printIndent(++level);
-		plan += "First N Records";
-	}
+		plan += printIndent(++level) + "First N Records";
 
 	m_next->print(tdbb, plan, detailed, level);
 }

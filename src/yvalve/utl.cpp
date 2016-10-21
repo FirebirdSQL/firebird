@@ -1116,9 +1116,7 @@ public:
 
 			if (ev.length() > 255)
 			{
-				string errMsg("Too long event name: ");
-				errMsg += ev;
-				(Arg::Gds(isc_random) << errMsg
+				(Arg::Gds(isc_random) << ("Too long event name: " + ev)
 					<< Arg::SqlState("HY024")).raise();
 					// HY024: Invalid attribute value
 			}

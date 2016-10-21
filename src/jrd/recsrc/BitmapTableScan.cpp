@@ -127,26 +127,22 @@ void BitmapTableScan::print(thread_db* tdbb, string& plan,
 {
 	if (detailed)
 	{
-		plan += printIndent(++level);
-		plan += "Table ";
-		plan += printName(tdbb, m_relation->rel_name.c_str(), m_alias);
-		plan += " Access By ID";
+		plan += printIndent(++level) + "Table " +
+			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
 
 		printInversion(tdbb, m_inversion, plan, true, level);
 	}
 	else
 	{
 		if (!level)
-			plan += '(';
+			plan += "(";
 
-		plan += printName(tdbb, m_alias, false);
-		plan += " INDEX (";
+		plan += printName(tdbb, m_alias, false) + " INDEX (";
 		string indices;
 		printInversion(tdbb, m_inversion, indices, false, level);
-		plan += indices;
-		plan += ')';
+		plan += indices + ")";
 
 		if (!level)
-			plan += ')';
+			plan += ")";
 	}
 }

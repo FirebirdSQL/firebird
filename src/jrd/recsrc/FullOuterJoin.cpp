@@ -115,8 +115,7 @@ void FullOuterJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned
 {
 	if (detailed)
 	{
-		plan += printIndent(++level);
-		plan += "Full Outer Join";
+		plan += printIndent(++level) + "Full Outer Join";
 		m_arg1->print(tdbb, plan, true, level);
 		m_arg2->print(tdbb, plan, true, level);
 	}

@@ -138,7 +138,7 @@ FB_SIZE_T PluginLogWriter::write(const void* buf, FB_SIZE_T size)
 		const FB_SIZE_T last_dot_pos = m_fileName.rfind('.');
 		if (last_dot_pos > 0)
 		{
-			PathName log_name(m_fileName, 0, last_dot_pos);
+			PathName log_name = m_fileName.substr(0, last_dot_pos);
 			PathName log_ext(m_fileName, last_dot_pos + 1, m_fileName.length());
 			newName.printf("%s.%04d-%02d-%02dT%02d-%02d-%02d.%s", log_name.c_str(), times.tm_year + 1900,
 				times.tm_mon + 1, times.tm_mday, times.tm_hour, times.tm_min, times.tm_sec, log_ext.c_str());

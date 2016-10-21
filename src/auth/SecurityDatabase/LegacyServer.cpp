@@ -356,7 +356,7 @@ int SecurityDatabase::verify(IWriter* authBlock, IServerBlock* sBlock)
 	storedHash.rtrim();
 
 	string newHash;
-	LegacyHash::hash(newHash, login, passwordEnc.c_str(), storedHash);
+	LegacyHash::hash(newHash, login, passwordEnc, storedHash);
 	if (newHash != storedHash)
 	{
 		bool legacyHash = Config::getLegacyHash();

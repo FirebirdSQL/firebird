@@ -210,9 +210,9 @@ void dumpIt(const char* name, const Firebird::UCharBuffer& data)
 	fprintf(stderr, "\n");
 }
 
-void dumpIt(const char* name, const char* str)
+void dumpIt(const char* name, const Firebird::string& str)
 {
-	fprintf(stderr, "%s: '%s'\n", name, str);
+	fprintf(stderr, "%s: '%s'\n", name, str.c_str());
 }
 
 void dumpBin(const char* name, const Firebird::string& str)

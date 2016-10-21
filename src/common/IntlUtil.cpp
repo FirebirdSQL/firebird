@@ -233,12 +233,12 @@ bool IntlUtil::parseSpecificAttributes(Jrd::CharSet* cs, ULONG len, const UCHAR*
 }
 
 
-string IntlUtil::convertAsciiToUtf16(const char* ascii)
+string IntlUtil::convertAsciiToUtf16(const string& ascii)
 {
 	string s;
-	const char* end = strchr(ascii, 0);
+	const char* end = ascii.c_str() + ascii.length();
 
-	for (const char* p = ascii; p < end; ++p)
+	for (const char* p = ascii.c_str(); p < end; ++p)
 	{
 		USHORT c = *(UCHAR*) p;
 		s.append((char*) &c, sizeof(c));

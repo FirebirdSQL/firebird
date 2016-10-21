@@ -368,7 +368,7 @@ static void getVersions(const string& configInfo, ObjectsArray<string>& versions
 		(const UCHAR*) configInfo.c_str(), &config);
 
 	string versionsStr;
-	if (config.get(string("icu_versions"), versionsStr))
+	if (config.get("icu_versions", versionsStr))
 		versionsStr.trim();
 	else
 		versionsStr = "default";
@@ -383,12 +383,12 @@ static void getVersions(const string& configInfo, ObjectsArray<string>& versions
 	{
 		if ((n = versionsStr.find_first_not_of(' ', start)) != versionsStr.npos)
 			start = n;
-		versions.add(string(versionsStr, start, i - start));
+		versions.add(versionsStr.substr(start, i - start));
 	}
 
 	if ((n = versionsStr.find_first_not_of(' ', start)) != versionsStr.npos)
 		start = n;
-	versions.add(string(versionsStr, start));
+	versions.add(versionsStr.substr(start));
 }
 
 
@@ -1129,9 +1129,7 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 	try
 	{
 		if ((convIcu = ImplementConversionICU::create(favMaj, favMin)))
-		{
 			return *convIcu;
-		}
 	}
 	catch (const Exception& e)
 	{

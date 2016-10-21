@@ -203,8 +203,7 @@ void NestedLoopJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigne
 	{
 		if (detailed)
 		{
-			plan += printIndent(++level);
-			plan += "Nested Loop Join ";
+			plan += printIndent(++level) + "Nested Loop Join ";
 
 			switch (m_joinType)
 			{

@@ -106,10 +106,7 @@ bool FilteredStream::lockRecord(thread_db* tdbb) const
 void FilteredStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
 {
 	if (detailed)
-	{
-		plan += printIndent(++level);
-		plan += "Filter";
-	}
+		plan += printIndent(++level) + "Filter";
 
 	m_next->print(tdbb, plan, detailed, level);
 }

@@ -194,13 +194,12 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 
 	for (int itr = 1; itr < argc; ++itr)
 	{
-		Firebird::string arg(argv[itr]);
-		const Switches::in_sw_tab_t* inSw = switches.findSwitch(arg);
+		const Switches::in_sw_tab_t* inSw = switches.findSwitch(argv[itr]);
 		if (! inSw)
 		{
-			if (arg.hasData() && fileIndex < 2)
+			if (argv[itr][0] && fileIndex < 2)
 			{
-				files[fileIndex++] = arg;
+				files[fileIndex++] = argv[itr];
 			}
 			continue;
 		}
@@ -312,7 +311,7 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 			{
 				continue;
 			}
-			Firebird::UtilSvc::addStringWithSvcTrmntr(Firebird::string(argv[itr]), options);
+			Firebird::UtilSvc::addStringWithSvcTrmntr(argv[itr], options);
 		}
 		options.rtrim();
 
@@ -527,7 +526,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 
 	for (int itr = 1; itr < argc; ++itr)
 	{
-		Firebird::string str(argv[itr]);
+		Firebird::string str = argv[itr];
 		if (str.isEmpty())
 		{
 			continue;
@@ -684,7 +683,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 				BURP_error(307, true);
 				// too many passwords provided
 			}
-			switch (fb_utils::fetchPassword(Firebird::PathName(argv[itr]), tdgbl->gbl_sw_password))
+			switch (fb_utils::fetchPassword(argv[itr], tdgbl->gbl_sw_password))
 			{
 			case fb_utils::FETCH_PASS_OK:
 				break;
@@ -716,7 +715,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 				BURP_error(354, true);
 				// missing regular expression to skip tables
 			}
-			tdgbl->setupSkipData(Firebird::string(argv[itr]));
+			tdgbl->setupSkipData(argv[itr]);
 			break;
 		case IN_SW_BURP_ROLE:
 			if (++itr >= argc)
@@ -2581,7 +2580,7 @@ UnicodeCollationHolder::UnicodeCollationHolder(MemoryPool& pool)
 
 	Firebird::string collAttributes("ICU-VERSION=");
 	collAttributes += Jrd::UnicodeUtil::getDefaultIcuVersion();
-	Firebird::IntlUtil::setupIcuAttributes(cs, collAttributes, Firebird::string(), collAttributes);
+	Firebird::IntlUtil::setupIcuAttributes(cs, collAttributes, "", collAttributes);
 
 	Firebird::UCharBuffer collAttributesBuffer;
 	collAttributesBuffer.push(reinterpret_cast<const UCHAR*>(collAttributes.c_str()),

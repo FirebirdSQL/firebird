@@ -356,7 +356,7 @@ bool BaseAggWinStream<ThisType, NextType>::getNextRecord(thread_db* tdbb, jrd_re
 }
 
 // Export the template for WindowedStream::WindowStream.
-template class BaseAggWinStream<WindowedStream::WindowStream, BaseBufferedStream>;
+template class Jrd::BaseAggWinStream<WindowedStream::WindowStream, BaseBufferedStream>;
 
 // ------------------------------
 
@@ -370,10 +370,7 @@ AggregatedStream::AggregatedStream(thread_db* tdbb, CompilerScratch* csb, Stream
 void AggregatedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
 {
 	if (detailed)
-	{
-		plan += printIndent(++level);
-		plan += "Aggregate";
-	}
+		plan += printIndent(++level) + "Aggregate";
 
 	m_next->print(tdbb, plan, detailed, level);
 }

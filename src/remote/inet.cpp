@@ -767,8 +767,8 @@ rem_port* INET_connect(const TEXT* name,
 
 		if (pos != string::npos)
 		{
-			protocol.assign(host, pos + 1);
-			host.resize(pos);
+			protocol = host.substr(pos + 1);
+			host = host.substr(0, pos);
 		}
 
 		if (host.hasData() && host[0] == '[' && host[host.length() - 1] == ']')

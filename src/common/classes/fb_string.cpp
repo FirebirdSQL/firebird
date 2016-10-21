@@ -260,7 +260,7 @@ namespace Firebird
 		}
 	}
 
-	void AbstractString::assign(const AbstractString& v, size_type pos, size_type n)
+	AbstractString& AbstractString::assign(const AbstractString& v, size_type pos, size_type n)
 	{
 		adjustRange(v.length(), pos, n);
 		if (&v == this)
@@ -272,6 +272,7 @@ namespace Firebird
 		{
 			baseAssign(v.c_str() + pos, n);
 		}
+		return *this;
 	}
 
 	AbstractString::size_type AbstractString::rfind(const_pointer s, const size_type pos) const
@@ -377,7 +378,7 @@ namespace Firebird
 		return npos;
 	}
 
-	void AbstractString::replace(size_type pos, size_type len, const_pointer s, size_type n)
+	AbstractString& AbstractString::replace(size_type pos, size_type len, const_pointer s, size_type n)
 	{
 		adjustRange(length(), pos, len);
 		if (len < n)
@@ -391,6 +392,7 @@ namespace Firebird
 			baseErase(pos, len - n);
 		}
 		memcpy(stringBuffer + pos, s, n);
+		return *this;
 	}
 
 	bool AbstractString::LoadFromFile(FILE* file)
@@ -555,7 +557,7 @@ namespace Firebird
 		appendPath(suffix);
 	}
 
-	PathName::PathName(PathName& dir, const char* fileName, size_type n, MemoryPool& p)
+	PathName::PathName(const PathName& dir, const char* fileName, size_type n, MemoryPool& p)
 		: AbstractString(MAX_SIZE, p), normalized(true)
 	{
 		if (fileName == NULL)

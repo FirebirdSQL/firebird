@@ -2289,11 +2289,7 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 		else if (nameStr == OBJECT_TYPE_NAME)
 			resultStr = context.objectType;
 		else if (nameStr == DDL_EVENT_NAME)
-		{
-			resultStr = context.eventType;
-			resultStr += ' ';
-			resultStr += context.objectType;
-		}
+			resultStr = context.eventType + " " + context.objectType;
 		else if (nameStr == OBJECT_NAME)
 		{
 			resultStr = context.objectName.c_str();

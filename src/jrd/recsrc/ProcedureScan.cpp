@@ -233,18 +233,15 @@ void ProcedureScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned
 {
 	if (detailed)
 	{
-		plan += printIndent(++level);
-		plan += "Procedure ";
-		plan += printName(tdbb, m_procedure->getName().toString(), m_alias);
-		plan += " Scan";
+		plan += printIndent(++level) + "Procedure " +
+			printName(tdbb, m_procedure->getName().toString(), m_alias) + " Scan";
 	}
 	else
 	{
 		if (!level)
 			plan += "(";
 
-		plan += printName(tdbb, m_alias, false);
-		plan += " NATURAL";
+		plan += printName(tdbb, m_alias, false) + " NATURAL";
 
 		if (!level)
 			plan += ")";

@@ -533,11 +533,9 @@ bool IntlManager::initialize()
 					{
 						externalName = collationName.substr(pos);
 						externalName.ltrim(" \t");
-						collationName.erase(pos);
+						collationName = collationName.substr(0, pos);
 					}
-					ConfigFile::String charSetCollation(charSetName);
-					charSetCollation += ':';
-					charSetCollation += collationName;
+					const ConfigFile::String charSetCollation = charSetName + ":" + collationName;
 
 					if (!registerCharSetCollation(charSetCollation, filename,
 							externalName.hasData() ? externalName : collationName,
@@ -582,19 +580,13 @@ bool IntlManager::initialize()
 
 bool IntlManager::charSetInstalled(const string& charSetName)
 {
-	string fullName(charSetName);
-	fullName += ':';
-	fullName += charSetName;
-	return charSetCollations->exist(fullName);
+	return charSetCollations->exist(charSetName + ":" + charSetName);
 }
 
 
 bool IntlManager::collationInstalled(const string& collationName, const string& charSetName)
 {
-	string fullName(charSetName);
-	fullName += ':';
-	fullName += collationName;
-	return charSetCollations->exist(fullName);
+	return charSetCollations->exist(charSetName + ":" + collationName);
 }
 
 
@@ -602,11 +594,7 @@ bool IntlManager::lookupCharSet(const string& charSetName, charset* cs)
 {
 	ExternalInfo externalInfo;
 
-	string fullName(charSetName);
-	fullName += ':';
-	fullName += charSetName;
-
-	if (charSetCollations->get(fullName, externalInfo))
+	if (charSetCollations->get(charSetName + ":" + charSetName, externalInfo))
 	{
 		pfn_INTL_lookup_charset lookupFunction = NULL;
 
@@ -640,16 +628,8 @@ bool IntlManager::lookupCollation(const string& collationName,
 	ExternalInfo charSetExternalInfo;
 	ExternalInfo collationExternalInfo;
 
-	string fullCharSetName(charSetName);
-	fullCharSetName += ':';
-	fullCharSetName += charSetName;
-
-	string fullCollationName(charSetName);
-	fullCollationName += ':';
-	fullCollationName += collationName;
-
-	if (charSetCollations->get(fullCharSetName, charSetExternalInfo) &&
-		charSetCollations->get(fullCollationName, collationExternalInfo))
+	if (charSetCollations->get(charSetName + ":" + charSetName, charSetExternalInfo) &&
+		charSetCollations->get(charSetName + ":" + collationName, collationExternalInfo))
 	{
 		pfn_INTL_lookup_texttype lookupFunction = NULL;
 
@@ -685,16 +665,8 @@ bool IntlManager::setupCollationAttributes(
 
 	newSpecificAttributes = specificAttributes;
 
-	string fullCharSetName(charSetName);
-	fullCharSetName += ':';
-	fullCharSetName += charSetName;
-
-	string fullCollationName(charSetName);
-	fullCollationName += ':';
-	fullCollationName += collationName;
-
-	if (charSetCollations->get(fullCharSetName, charSetExternalInfo) &&
-		charSetCollations->get(fullCollationName, collationExternalInfo))
+	if (charSetCollations->get(charSetName + ":" + charSetName, charSetExternalInfo) &&
+		charSetCollations->get(charSetName + ":" + collationName, collationExternalInfo))
 	{
 		pfn_INTL_setup_attributes attributesFunction = NULL;
 
@@ -756,22 +728,21 @@ string IntlManager::getConfigInfo(const ConfigFile::Parameter* confObj)
 		return "";
 	}
 
-	string configInfo;
+	ConfigFile::String configInfo;
 	const ConfigFile::Parameters& all = confObj->sub->getParameters();
 
 	for (FB_SIZE_T n = 0; n < all.getCount(); ++n)
 	{
 		const ConfigFile::Parameter& par = all[n];
+		const ConfigFile::KeyType parName = par.name;
 
-		if (par.name == "filename")
+		if (parName == "filename")
 			continue;
 
 		if (configInfo.hasData())
 			configInfo.append(";");
 
-		configInfo += par.name;
-		configInfo += '=';
-		configInfo += par.value;
+		configInfo.append(parName + "=" + par.value);
 	}
 
 	return configInfo;

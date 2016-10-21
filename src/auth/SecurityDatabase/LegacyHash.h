@@ -50,7 +50,7 @@ public:
 
 	static void hash(Firebird::string& h,
 					 const Firebird::string& userName,
-					 const TEXT* passwd,
+					 const Firebird::string& passwd,
 					 const Firebird::string& oldHash)
 	{
 		Firebird::string salt(oldHash);
@@ -59,7 +59,7 @@ public:
 		allData += userName;
 		allData += passwd;
 		Firebird::Sha1::hashBased64(h, allData);
-		h.insert(0, salt);
+		h = salt + h;
 	}
 };
 

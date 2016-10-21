@@ -186,10 +186,7 @@ public:
 
 	const Firebird::string getDataSourceName() const
 	{
-		Firebird::string rc(m_provider.getName());
-		rc += "::";
-		rc += m_dbName;
-		return  rc;
+		return m_provider.getName() + "::" + m_dbName;
 	}
 
 	// Get error description from provider and put it with additional context

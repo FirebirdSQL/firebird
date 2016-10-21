@@ -121,9 +121,8 @@ void SortedStream::print(thread_db* tdbb, string& plan,
 		extras.printf(" (record length: %" ULONGFORMAT", key length: %" ULONGFORMAT")",
 					  m_map->length, m_map->keyLength);
 
-		plan += printIndent(++level);
-		plan += ((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort");
-		plan += extras;
+		plan += printIndent(++level) +
+			((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
 
 		m_next->print(tdbb, plan, true, level);
 	}

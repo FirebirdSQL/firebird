@@ -142,7 +142,7 @@ private:
 	bool translate(const char* fileName, const Macro& from, String& to) const;
 	void badLine(const char* fileName, const String& line);
 	void include(const char* currentFileName, const String& param);
-	bool wildCards(const char* currentFileName, Firebird::PathName& pathPrefix, FilesArray& components);
+	bool wildCards(const char* currentFileName, const Firebird::PathName& pathPrefix, FilesArray& components);
 	bool substituteStandardDir(const Macro& from, String& to) const;
 };
 

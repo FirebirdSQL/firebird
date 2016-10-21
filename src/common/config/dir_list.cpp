@@ -32,7 +32,8 @@ namespace Firebird {
 void ParsedPath::parse(const PathName& path)
 {
 	clear();
-	PathName oldpath(path);
+
+	PathName oldpath = path;
 	int toSkip = 0;
 
 	do
@@ -170,18 +171,15 @@ void DirectoryList::initialize(bool simple_mode)
 		}
 	}
 
-	FB_SIZE_T last = 0;
+	PathName root = Config::getRootDirectory();
 
-	PathName root(Config::getRootDirectory());
-
-	while (!val.isEmpty())
+	while (val.hasData())
 	{
 		string::size_type sep = val.find(';');
 		if (sep == string::npos)
 			sep = val.length();
 
-		PathName dir(val, 0, sep);
-
+		PathName dir(val.c_str(), sep);
 		dir.alltrim(" \t\r");
 
 		val.erase(0, sep + 1);

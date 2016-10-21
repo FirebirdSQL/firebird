@@ -1201,11 +1201,7 @@ static void stuff_stack_trace(const jrd_req* request)
 			name.trim();
 
 			if (name.hasData())
-			{
-				context += " '";
-				context += name;
-				context += '\'';
-			}
+				context += string(" '") + name + string("'");
 
 			if (sTrace.length() + context.length() > MAX_STACK_TRACE)
 				break;

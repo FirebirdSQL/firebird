@@ -132,14 +132,14 @@ public:
 		{
 			if (!s)
 			{
-				input.erase();
+				input = "";
 				return false;
 			}
 
 			const char* ptr = strchr(s, '\n');
 			if (!ptr)
 			{
-				input = s;
+				input.assign(s);
 				s = NULL;
 			}
 			else
@@ -299,7 +299,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 		case '=':
 			if (par.name.isEmpty())
 			{
-				par.name.assign(input, 0, n);
+				par.name = input.substr(0, n);
 				par.name.rtrim(" \t\r");
 				if (par.name.isEmpty())		// not good - no key
 					return LINE_BAD;
@@ -330,7 +330,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 				KeyType inc(input, 0, n);
 				if (inc == include)
 				{
-					par.value.assign(input, n);
+					par.value = input.substr(0, n);
 					par.value.alltrim(" \t\r");
 
 					if (!macroParse(par.value, fileName))
@@ -352,13 +352,13 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 				{
 					if (input[n] == '}')
 					{
-						String s(input, n + 1);
+						String s = input.substr(n + 1);
 						s.ltrim(" \t\r");
 						if (s.hasData() && ((s[0] != '#') || (flags & NO_COMMENTS)))
 						{
 							return LINE_BAD;
 						}
-						par.value.assign(input, 0, n);
+						par.value = input.substr(0, n);
 						return LINE_END_SUB;
 					}
 
@@ -382,13 +382,13 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 
 	if (par.name.isEmpty())
 	{
-		par.name.assign(input, 0, eol);
+		par.name = input.substr(0, eol);
 		par.name.rtrim(" \t\r");
 		par.value.erase();
 	}
 	else
 	{
-		par.value.assign(input, valStart, eol - valStart);
+		par.value = input.substr(valStart, eol - valStart);
 		par.value.alltrim(" \t\r");
 		par.value.alltrim("\"");
 	}
@@ -417,8 +417,7 @@ bool ConfigFile::macroParse(String& value, const char* fileName) const
 		if (subTo != String::npos)
 		{
 			String macro;
-			Macro m;
-			m.assign(value, subFrom + 2, subTo - (subFrom + 2));
+			Macro m(value.substr(subFrom + 2, subTo - (subFrom + 2)));
 			if (! translate(fileName, m, macro))
 			{
 				return false;
@@ -699,16 +698,14 @@ void ConfigFile::include(const char* currentFileName, const String& param)
 	PathName parPath(param);
 	if (parPath.isRelative())
 	{
-		path = currentFileName;
-		PathName::size_type pos = path.rfind(PathUtils::dir_sep);
-		if (pos != PathName::npos)
-			path.erase(pos + 1);
+		PathName dummy;
+		PathUtils::splitLastComponent(path, dummy, currentFileName);
 	}
 	path.appendPath(parPath);
 
 	// split path into components
+	bool hadWildCards = hasWildCards(path);		// Expect no *? in prefix
 	FilesArray components;
-	bool hadWildcards = hasWildCards(path);
 	PathName::size_type prefix = path.find(PathUtils::dir_sep);
 	while (path.length() - 1 > prefix)
 	{
@@ -727,7 +724,7 @@ void ConfigFile::include(const char* currentFileName, const String& param)
 	if (!wildCards(currentFileName, path, components))
 	{
 		// no matches found - check for presence of wild symbols in path
-		if (!hadWildcards)
+		if (!hadWildCards)
 		{
 			(Arg::Gds(isc_conf_include) << currentFileName << parPath << Arg::Gds(isc_include_miss)).raise();
 		}
@@ -742,7 +739,7 @@ void ConfigFile::include(const char* currentFileName, const String& param)
  *		- returns true if some match was found
  */
 
-bool ConfigFile::wildCards(const char* currentFileName, PathName& pathPrefix, FilesArray& components)
+bool ConfigFile::wildCards(const char* currentFileName, const PathName& pathPrefix, FilesArray& components)
 {
 	// Any change in directory can cause config change
 	PathName prefix(pathPrefix);
@@ -761,7 +758,7 @@ bool ConfigFile::wildCards(const char* currentFileName, PathName& pathPrefix, Fi
 	ScanDir list(prefix.c_str(), next.c_str());
 	while (list.next())
 	{
-		const PathName fileName(list.getFileName());
+		const PathName fileName = list.getFileName();
 		if (fileName == PathUtils::curr_dir_link || fileName == PathUtils::up_dir_link)
 			continue;
 		if (mustBeDir && !list.isDirectory())
@@ -815,7 +812,7 @@ SINT64 ConfigFile::Parameter::asInteger() const
 	int sign = 1;
 	int state = 1; // 1 - sign, 2 - numbers, 3 - multiplier
 
-	Firebird::string trimmed(value);
+	Firebird::string trimmed = value;
 	trimmed.trim(" \t");
 
 	if (trimmed.isEmpty())

@@ -146,9 +146,7 @@ void ExecInSecurityDb::executeInSecurityDb(jrd_tra* localTransaction)
 	// run all statements under savepoint control
 	string savePoint;
 	savePoint.printf("ExecInSecurityDb%d", secDbContext->savePoint++);
-	string sqlCmd = "SAVEPOINT ";
-	sqlCmd += savePoint;
-	secDbContext->att->execute(&statusWrapper, secDbContext->tra, 0, sqlCmd.c_str(),
+	secDbContext->att->execute(&statusWrapper, secDbContext->tra, 0, ("SAVEPOINT " + savePoint).c_str(),
 		SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
 	check(&statusWrapper);
 
@@ -156,10 +154,8 @@ void ExecInSecurityDb::executeInSecurityDb(jrd_tra* localTransaction)
 	{
 		runInSecurityDb(secDbContext);
 
-		sqlCmd = "RELEASE SAVEPOINT ";
-		sqlCmd += savePoint;
 		secDbContext->att->execute(&statusWrapper, secDbContext->tra, 0,
-			sqlCmd.c_str(),
+			("RELEASE SAVEPOINT " + savePoint).c_str(),
 			SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
 		savePoint.erase();
 		check(&statusWrapper);
@@ -170,10 +166,8 @@ void ExecInSecurityDb::executeInSecurityDb(jrd_tra* localTransaction)
 		{
 			LocalStatus tmp;
 			CheckStatusWrapper tmpCheckStatusWrapper(&tmp);
-			sqlCmd = "ROLLBACK TO SAVEPOINT ";
-			sqlCmd += savePoint;
 			secDbContext->att->execute(&tmpCheckStatusWrapper, secDbContext->tra, 0,
-				sqlCmd.c_str(),
+				("ROLLBACK TO SAVEPOINT " + savePoint).c_str(),
 				SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
 		}
 

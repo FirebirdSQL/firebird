@@ -1100,7 +1100,7 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 
 		case Firebird::IConfigManager::DIR_MSG:
 			gds__prefix_msg(tmp, name);
-			return Firebird::PathName(tmp);
+			return tmp;
 
 		default:
 			fb_assert(false);
@@ -1113,7 +1113,7 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 	}
 	s.appendString(name);
 	gds__prefix(tmp, s.c_str());
-	return Firebird::PathName(tmp);
+	return tmp;
 }
 
 unsigned int copyStatus(ISC_STATUS* const to, const unsigned int space,

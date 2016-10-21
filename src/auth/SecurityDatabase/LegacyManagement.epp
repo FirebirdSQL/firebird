@@ -567,9 +567,7 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 							if (!U.PLG$GROUP_NAME.NULL)
 								a3.printf("GroupName=%s\n", U.PLG$GROUP_NAME);
 
-							attr = a1;
-							attr += a2;
-							attr += a3;
+							attr = a1 + a2 + a3;
 							user->attributes()->set(s, attr.c_str());
 							check(s);
 							user->attributes()->setEntered(s, attr.hasData() ? 1 : 0);
@@ -652,9 +650,7 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 						if (!U.PLG$GROUP_NAME.NULL)
 							a3.printf("GroupName=%s\n", U.PLG$GROUP_NAME);
 
-						attr = a1;
-						attr += a2;
-						attr += a3;
+						attr = a1 + a2 + a3;
 						user->attributes()->set(s, attr.c_str());
 						check(s);
 						user->attributes()->setEntered(s, attr.hasData() ? 1 : 0);

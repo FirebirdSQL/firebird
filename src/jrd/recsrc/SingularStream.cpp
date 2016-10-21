@@ -146,10 +146,7 @@ bool SingularStream::lockRecord(thread_db* tdbb) const
 void SingularStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
 {
 	if (detailed)
-	{
-		plan += printIndent(++level);
-		plan += "Singularity Check";
-	}
+		plan += printIndent(++level) + "Singularity Check";
 
 	m_next->print(tdbb, plan, detailed, level);
 }

@@ -248,8 +248,7 @@ void RecursiveStream::print(thread_db* tdbb, string& plan, bool detailed, unsign
 {
 	if (detailed)
 	{
-		plan += printIndent(++level);
-		plan += "Recursion";
+		plan += printIndent(++level) + "Recursion";
 		m_root->print(tdbb, plan, true, level);
 		m_inner->print(tdbb, plan, true, level);
 	}

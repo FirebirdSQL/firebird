@@ -49,7 +49,7 @@ void PathUtils::splitLastComponent(Firebird::PathName& path, Firebird::PathName&
 	Firebird::PathName::size_type pos = orgPath.rfind(dir_sep);
 	if (pos == Firebird::PathName::npos)
 	{
-		path.erase();
+		path = "";
 		file = orgPath;
 		return;
 	}

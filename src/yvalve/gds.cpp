@@ -2410,7 +2410,7 @@ VoidPtr API_ROUTINE gds__temp_file(BOOLEAN stdio_flag, const TEXT* string, TEXT*
 		// Fortunately, utilities never pass non-default values.
 		fb_assert(!dir && !unlink_flag);
 
-		Firebird::PathName filename(Firebird::TempFile::create(Firebird::string(string)));
+		Firebird::PathName filename = Firebird::TempFile::create(string);
 
 		if (expanded_string)
 		{
@@ -3930,10 +3930,7 @@ public:
 		Firebird::PathName msgPrefix;
 		if (!fb_utils::readenv(FB_MSG_ENV, msgPrefix))
 		{
-			if (FB_MSGDIR[0])
-				msgPrefix = FB_MSGDIR;
-			else
-				msgPrefix = prefix;
+			msgPrefix = FB_MSGDIR[0] ? FB_MSGDIR : prefix;
 		}
 		msgPrefix.copyTo(fb_prefix_msg_val, sizeof(fb_prefix_msg_val));
 		fb_prefix_msg = fb_prefix_msg_val;

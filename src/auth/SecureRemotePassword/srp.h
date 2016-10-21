@@ -119,14 +119,12 @@ public:
 #if SRP_DEBUG > 0
 void dumpIt(const char* name, const Firebird::BigInteger& bi);
 void dumpIt(const char* name, const Firebird::UCharBuffer& data);
-void dumpIt(const char* name, const char* str);
-inline void dumpIt(const char* name, const Firebird::string& str) { dumpIt(name, str.c_str()); }
+void dumpIt(const char* name, const Firebird::string& str);
 void dumpBin(const char* name, const Firebird::string& str);
 #else
 void static inline dumpIt(const char* /*name*/, const Firebird::BigInteger& /*bi*/) { }
 void static inline dumpIt(const char* /*name*/, const Firebird::UCharBuffer& /*data*/) { }
 void static inline dumpIt(const char* /*name*/, const Firebird::string& /*str*/) { }
-void static inline dumpIt(const char* /*name*/, const char* /*str*/) { }
 void static inline dumpBin(const char* /*name*/, const Firebird::string& /*str*/) { }
 #endif
 

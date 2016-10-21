@@ -8761,11 +8761,7 @@ void RecordKeyNode::raiseError(dsql_ctx* context) const
 	if (alias.hasData() && name != alias)
 	{
 		if (name.hasData())
-		{
-			name += " (alias ";
-			name += alias;
-			name += ')';
-		}
+			name += " (alias " + alias + ")";
 		else
 			name = alias;
 	}

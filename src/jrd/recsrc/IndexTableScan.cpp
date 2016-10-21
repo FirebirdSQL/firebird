@@ -251,10 +251,8 @@ void IndexTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsigne
 {
 	if (detailed)
 	{
-		plan += printIndent(++level);
-		plan += "Table ";
-		plan += printName(tdbb, m_relation->rel_name.c_str(), m_alias);
-		plan += " Access By ID";
+		plan += printIndent(++level) + "Table " +
+			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
 
 		printInversion(tdbb, m_index, plan, true, level, true);
 
@@ -266,8 +264,7 @@ void IndexTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsigne
 		if (!level)
 			plan += "(";
 
-		plan += printName(tdbb, m_alias, false);
-		plan += " ORDER ";
+		plan += printName(tdbb, m_alias, false) + " ORDER ";
 		string index;
 		printInversion(tdbb, m_index, index, false, level);
 		plan += index;
@@ -277,8 +274,7 @@ void IndexTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsigne
 			plan += " INDEX (";
 			string indices;
 			printInversion(tdbb, m_inversion, indices, false, level);
-			plan += indices;
-			plan += ')';
+			plan += indices + ")";
 		}
 
 		if (!level)

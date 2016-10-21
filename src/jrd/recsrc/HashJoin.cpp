@@ -570,8 +570,7 @@ void HashJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned leve
 {
 	if (detailed)
 	{
-		plan += printIndent(++level);
-		plan += "Hash Join (inner)";
+		plan += printIndent(++level) + "Hash Join (inner)";
 
 		m_leader.source->print(tdbb, plan, true, level);
 

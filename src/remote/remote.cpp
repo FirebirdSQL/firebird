@@ -868,10 +868,7 @@ Firebird::string rem_port::getRemoteId() const
 	Firebird::string id = port_protocol_id;
 
 	if (port_address.hasData())
-	{
-		id += '/';
-		id += port_address;
-	}
+		id += Firebird::string("/") + port_address;
 
 	return id;
 }

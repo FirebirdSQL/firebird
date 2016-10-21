@@ -80,11 +80,11 @@ void test()
 		string h(5, '7');
 		validate(h, "77777");
 #ifdef FULL_FIRE
-//		string i('7');
-//		validate(i, "7");
+		string i('7');
+		validate(i, "7");
 #endif
-//		string j(&lbl[3], &lbl[5]);
-//		validate(j, "34");
+		string j(&lbl[3], &lbl[5]);
+		validate(j, "34");
 	}
 
 	{
@@ -113,17 +113,17 @@ void test()
 	}
 
 #ifdef FULL_FIRE
-//	{
-//		const string a(lbl);
-//		string b = a.at(5);
-//		validate(b, "5");
-//	}
+	{
+		const string a = lbl;
+		string b = a.at(5);
+		validate(b, "5");
+	}
 
-//	{
-//		string a = lbl;
-//		string b = a.at(5);
-//		validate(b, "5");
-//	}
+	{
+		string a = lbl;
+		string b = a.at(5);
+		validate(b, "5");
+	}
 #endif
 
 	// conflict with J. requirement to string class - operator const char*
@@ -286,10 +286,10 @@ void test()
 
 		a = "";
 		validate(a, "");
-//		string::iterator x = b.begin();
-//		string::iterator y = b.end();
-//		a.assign(x, y);
-//		validate(a, lbl);
+		string::iterator x = b.begin();
+		string::iterator y = b.end();
+		a.assign(x, y);
+		validate(a, lbl);
 	}
 
 	{
@@ -371,57 +371,57 @@ void test()
 		string::iterator f0, t0;
 		string::const_iterator f, t;
 
-//		a = lbl;
-//		a.replace(5, 2, 3, 'u');
-//		validate(a, "01234uuu789");
+		a = lbl;
+		a.replace(5, 2, 3, 'u');
+		validate(a, "01234uuu789");
 
-//		a = lbl;
-//		f0 = a.begin() + 5;
-//		t0 = f0 + 2;
-//		a.replace(f0, t0, 3, 'u');
-//		validate(a, "01234uuu789");
+		a = lbl;
+		f0 = a.begin() + 5;
+		t0 = f0 + 2;
+		a.replace(f0, t0, 3, 'u');
+		validate(a, "01234uuu789");
 
 		a = lbl;
 		a.replace(3, 3, lbl);
 		validate(a, "01201234567896789");
 
-//		a = lbl;
-//		f0 = a.begin() + 3;
-//		t0 = f0 + 3;
-//		a.replace(f0, t0, lbl);
-//		validate(a, "01201234567896789");
+		a = lbl;
+		f0 = a.begin() + 3;
+		t0 = f0 + 3;
+		a.replace(f0, t0, lbl);
+		validate(a, "01201234567896789");
 
 		a = lbl;
 		a.replace(4, 4, lbl, 2);
 		validate(a, "01230189");
 
-//		a = lbl;
-//		f0 = a.begin() + 4;
-//		t0 = f0 + 4;
-//		a.replace(f0, t0, lbl, 2);
-//		validate(a, "01230189");
+		a = lbl;
+		f0 = a.begin() + 4;
+		t0 = f0 + 4;
+		a.replace(f0, t0, lbl, 2);
+		validate(a, "01230189");
 
-//		a = lbl;
-//		a.replace(5, 10, b, 3, 3);
-//		validate(a, "01234345");
+		a = lbl;
+		a.replace(5, 10, b, 3, 3);
+		validate(a, "01234345");
 
-//		a = lbl;
-//		f0 = a.begin() + 5;
-//		t0 = f0 + 10;
-//		f = b.begin() + 3;
-//		t = f + 3;
-//		a.replace(f0, t0, f, t);
-//		validate(a, "01234345");
+		a = lbl;
+		f0 = a.begin() + 5;
+		t0 = f0 + 10;
+		f = b.begin() + 3;
+		t = f + 3;
+		a.replace(f0, t0, f, t);
+		validate(a, "01234345");
 
 		a = lbl;
 		a.replace(5, 0, b);
 		validate(a, "01234012345678956789");
 
-//		a = lbl;
-//		f0 = a.begin() + 5;
-//		t0 = f0;
-//		a.replace(f0, t0, b);
-//		validate(a, "01234012345678956789");
+		a = lbl;
+		f0 = a.begin() + 5;
+		t0 = f0;
+		a.replace(f0, t0, b);
+		validate(a, "01234012345678956789");
 
 		a = lbl;
 		a.replace(2, 1, "Something reaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaally long");
@@ -554,8 +554,8 @@ void test()
 
 #ifdef DEV_BUILD
 #undef check
-#define check(get) if ( !(get) )\
-	printf("Wanted %s at %d\n\n", #get, __LINE__)
+#define check(get, want) if ( (get < 0 ? -1 : get > 0 ? 1 : 0) != want)\
+	printf("Wanted %d got %d at %d\n\n", want, get, __LINE__)
 #endif
 
 #ifdef FULL_FIRE
@@ -563,7 +563,7 @@ void test()
 		PathName c = "Aa";
 		PathName d = "AB";
 
-		check(c < d);
+		check(c.compare(d), -1);
 	}
 #endif
 
@@ -574,17 +574,17 @@ void test()
 		string d = "AB";
 		string e = "Aa";
 
-		check(a == b);
-		check(a < c);
-		check(c > a);
+		check(a.compare(b), 0);
+		check(a.compare(c), -1);
+		check(c.compare(a), 1);
 
-		check(c > d);
-		check(c > e);
+		check(c.compare(d), 1);
+		check(c.compare(e), 1);
 
-//		check(a.compare(1, 10, b), 1);
-//		check(a.compare(1, 10, b, 1, 10), 0);
-		check(a == lbl);
-//		check(a.compare(1, 3, lbl + 1, 3), 0);
+		check(a.compare(1, 10, b), 1);
+		check(a.compare(1, 10, b, 1, 10), 0);
+		check(a.compare(lbl), 0);
+		check(a.compare(1, 3, lbl + 1, 3), 0);
 	}
 
 #ifdef FULL_FIRE
