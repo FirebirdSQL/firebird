@@ -658,7 +658,7 @@ void add_files(BurpGlobals* tdgbl, const char* file_name)
 
 	for (burp_fil* file = tdgbl->gbl_sw_files; file; file = file->fil_next)
 	{
-		if (!(file->fil_name == file_name))
+		if (file->fil_name != file_name)
 		{
 			if (start > MAX_ULONG)
 			{
