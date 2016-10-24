@@ -79,7 +79,7 @@
 #define FB_PLATFORM	"S4"
 #endif // Solaris
 #endif // Sparc
-#ifdef i386
+#if defined(i386) || defined(__i386__)
 #define FB_PLATFORM     "SI"
 #endif // i386
 #ifdef AMD64
@@ -99,7 +99,7 @@
 #endif // aix
 
 #ifdef WIN_NT
-#ifdef i386
+#if defined(i386) || defined(__i386__)
 #define FB_PLATFORM	"WI"
 #else
 #define FB_PLATFORM	"NP"
@@ -119,7 +119,7 @@
 #endif
 
 #ifdef DARWIN
-#if defined(i386) || defined(__x86_64__)
+#if defined(i386) || defined(__i386__) || defined(__x86_64__)
 #define FB_PLATFORM		"UI"	// Darwin/Intel
 #endif
 #if defined(__ppc__) || defined(__ppc64__)
