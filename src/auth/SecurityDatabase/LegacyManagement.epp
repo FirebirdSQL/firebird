@@ -148,6 +148,8 @@ void SecurityDatabaseManagement::start(Firebird::CheckStatusWrapper* st, Firebir
 		if (role && role[0])
 			dpb.insertString(isc_dpb_sql_role_name, role, fb_strlen(role));
 
+		dpb.insertTag(isc_dpb_utf8_filename);
+
 		ISC_STATUS_ARRAY status;
 		if (isc_attach_database(status, 0, secDbName, &database,
 								dpb.getBufferLength(), reinterpret_cast<const char*>(dpb.getBuffer())))

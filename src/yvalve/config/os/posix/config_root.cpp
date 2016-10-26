@@ -35,8 +35,6 @@
 #include "../common/os/path_utils.h"
 #include "binreloc.h"
 
-typedef Firebird::PathName string;
-
 /******************************************************************************
  *
  *	Platform-specific root locator
@@ -48,15 +46,13 @@ void ConfigRoot::osConfigRoot()
 	if (FB_CONFDIR[0])
 	{
 		root_dir = FB_CONFDIR;
-		if (root_dir[root_dir.length() - 1] != PathUtils::dir_sep)
-		{
-			root_dir += PathUtils::dir_sep;
-		}
-		return;
 	}
-
-    // As a last resort get it from the default install directory
-	root_dir = install_dir + PathUtils::dir_sep;
+	else
+	{
+		// As a last resort get it from the default install directory
+		root_dir = install_dir;
+	}
+	root_dir.ensureSeparator();
 }
 
 
@@ -69,7 +65,7 @@ void ConfigRoot::osConfigInstallDir()
 		char* temp = br_find_exe_dir(NULL);
 		if (temp)
 		{
-			string dummy;
+			Firebird::PathName dummy;
 			PathUtils::splitLastComponent(install_dir, dummy, temp);
 			free(temp);
 			return;
@@ -78,5 +74,5 @@ void ConfigRoot::osConfigInstallDir()
 #endif
 
     // As a last resort get it from the default install directory
-	install_dir = string(FB_PREFIX);
+	install_dir = Firebird::PathName(FB_PREFIX);
 }

@@ -111,7 +111,7 @@ IscConnection::~IscConnection()
 {
 }
 
-void IscConnection::attach(thread_db* tdbb, const PathName& dbName, const MetaName& user,
+void IscConnection::attach(thread_db* tdbb, const string& dbName, const MetaName& user,
 	const string& pwd, const MetaName& role)
 {
 	m_dbName = dbName;
@@ -119,7 +119,7 @@ void IscConnection::attach(thread_db* tdbb, const PathName& dbName, const MetaNa
 
 	// Avoid change of m_dpb by validatePassword() below
 	ClumpletWriter newDpb(m_dpb);
-	validatePassword(tdbb, m_dbName, newDpb);
+	validatePassword(tdbb, PathName(m_dbName), newDpb);
 
 	FbLocalStatus status;
 	{

@@ -84,6 +84,10 @@
 #ifdef HAVE_ICONV_H
 #include <iconv.h>
 #endif
+#ifdef WIN_NT
+#include "Shlwapi.h"
+#endif
+
 
 #include "../common/config/config.h"
 
@@ -193,6 +197,7 @@ static void expand_filename2(tstring&, bool);
 #endif
 
 
+#ifdef NOT_USED
 #if defined(WIN_NT)
 static void translate_slashes(tstring&);
 static void expand_share_name(tstring&);
@@ -200,6 +205,7 @@ static void share_name_from_resource(tstring&, LPNETRESOURCE);
 static void share_name_from_unc(tstring&, LPREMOTE_NAME_INFO);
 static bool get_full_path(const tstring&, tstring&);
 #endif
+#endif // NOT_USED
 
 #if defined(HPUX) && (!defined HP11)
 static bool get_server(tstring&, tstring&);
@@ -249,8 +255,8 @@ bool ISC_analyze_nfs(tstring& expanded_filename, tstring& node_name)
 			size colon = mount.special.find(':');
 			if (colon != tstring::npos)
 			{
-				node = mount.special.substr(0, colon);
-				path = mount.special.substr(colon + 1);
+				node.assign(mount.special, 0, colon);
+				path.assign(mount.special, colon + 1);
 			}
 		}
 
@@ -260,14 +266,12 @@ bool ISC_analyze_nfs(tstring& expanded_filename, tstring& node_name)
 		// if the whole mount point is not contained in the expanded_filename
 		// or the mount point is not a valid pathname in the expanded_filename,
 		// skip it
-		if (expanded_filename.length() <= mount.mount.length() ||
-			expanded_filename.compare(0, mount.mount.length(), mount.mount) != 0 ||
-			expanded_filename[mount.mount.length()] != '/')
+		if (!expanded_filename.isSubdirOf(mount.mount))
 		{
 			if (mount.mount == "/" && path.hasData())
 			{
 				// root mount point = diskless client case
-				path += '/';
+				path.appendString('/');
 			}
 			else
 			{
@@ -303,7 +307,9 @@ bool ISC_analyze_nfs(tstring& expanded_filename, tstring& node_name)
 	bool flag = !max_path.isEmpty();
 	if (flag)
 	{
-		expanded_filename.replace(0, len, max_path);
+		expanded_filename.erase(0, len);
+		max_path.appendPath(expanded_filename);
+		expanded_filename = max_path;
 		node_name = max_node;
 	}
 #if defined(HPUX) && (!defined HP11)
@@ -335,8 +341,10 @@ bool ISC_analyze_protocol(const char* protocol, tstring& expanded_name, tstring&
  **************************************/
 	node_name.erase();
 
-	const PathName prefix = PathName(protocol) + "://";
-	if (expanded_name.find(prefix) != 0)
+	NoCaseString prefix(protocol);
+	prefix += "://";
+	NoCaseString proto(expanded_name, 0, prefix.length());
+	if (prefix != proto)
 		return false;
 
 	expanded_name.erase(0, prefix.length());
@@ -346,7 +354,7 @@ bool ISC_analyze_protocol(const char* protocol, tstring& expanded_name, tstring&
 		size p = expanded_name.find_first_of('/');
 		if (p != 0 && p != npos)
 		{
-			node_name = expanded_name.substr(0, p);
+			node_name.assign(expanded_name, 0, p);
 			expanded_name.erase(0, node_name.length() + 1);
 
 			if (node_name[0] == '[')
@@ -402,15 +410,19 @@ bool ISC_analyze_pclan(tstring& expanded_name, tstring& node_name)
 	}
 
 	node_name = "\\\\";
-	node_name += expanded_name.substr(2, p - 2);
 
 	// If this is a loopback, substitute "." for the host name.  Otherwise,
 	// the CreateFile on the pipe will fail.
+	NoCaseString host(expanded_name, 2, p - 2);
 	TEXT localhost[MAXHOSTLEN];
 	ISC_get_host(localhost, sizeof(localhost));
-	if (node_name.substr(2, npos) == localhost)
+	if (host == localhost)
 	{
-		node_name.replace(2, npos, ".");
+		node_name.appendString('.');
+	}
+	else
+	{
+		node_name.appendString(host);
 	}
 
 	expanded_name.erase(0, p + 1);
@@ -457,7 +469,7 @@ bool ISC_analyze_tcp(tstring& file_name, tstring& node_name)
 	if (p == npos || p == 0 || p == file_name.length() - 1)
 		return false;
 
-	node_name = file_name.substr(0, p);
+	node_name.assign(file_name, 0, p);
 
 #ifdef WIN_NT
 	// For Windows NT, insure that a single character node name does
@@ -465,7 +477,9 @@ bool ISC_analyze_tcp(tstring& file_name, tstring& node_name)
 
 	if (p == 1)
 	{
-		const ULONG dtype = GetDriveType((node_name + ":\\").c_str());
+		char driveName[] = "X:\\";
+		driveName[0] = node_name[0];
+		const ULONG dtype = GetDriveType(driveName);
 		// Is it removable, fixed, cdrom or ramdisk?
 		if (dtype > DRIVE_NO_ROOT_DIR && (dtype != DRIVE_REMOTE || Config::getRemoteFileOpenAbility()))
 		{
@@ -552,6 +566,7 @@ iscProtocol ISC_extract_host(Firebird::PathName& file_name,
 		return ISC_PROTOCOL_WLAN;
 	}
 
+#ifdef NOT_USED // No implicit expansion
 	if (implicit_flag)
 	{
 		// Check for a file on a shared drive.  First try to expand
@@ -568,6 +583,8 @@ iscProtocol ISC_extract_host(Firebird::PathName& file_name,
 		}
 
 	}
+#endif // NOT_USED
+
 #endif	// WIN_NT
 
 	return ISC_PROTOCOL_LOCAL;
@@ -597,11 +614,14 @@ bool ISC_expand_filename(tstring& buff, bool expand_mounts)
 
 #ifdef WIN_NT
 
-static void translate_slashes(tstring& Path)
+#ifdef NOT_USED
+static void translate_slashes(os_utils::WideCharBuffer& Path)
 {
-	const char sep = '\\';
-	const char bad_sep = '/';
-	for (char *p = Path.begin(), *q = Path.end(); p < q; p++)
+	const WCHAR sep = L'\\';
+	const WCHAR bad_sep = L'/';
+	WCHAR* p = Path.getBuffer();
+	WCHAR* q = p + Path.getLength();
+	for (; p < q; p++)
 	{
 		if (*p == bad_sep) {
 			*p = sep;
@@ -700,7 +720,7 @@ static bool ShortToLongPathName(tstring& Path)
 		// escape sequences to produce long names beyond MAXPATHLEN with ??
 		if (Path.find_first_of("*") != npos || Path.find_first_of("?") != npos)
 		{
-		    right = npos;
+			right = npos;
 			error = true;
 		}
 		else
@@ -825,151 +845,6 @@ static bool ShortToLongPathName(tstring& Path)
 	return true;
 }
 
-bool ISC_expand_filename(tstring& file_name, bool expand_mounts)
-{
-/**************************************
- *
- *	I S C _ e x p a n d _ f i l e n a m e		( W I N _ N T )
- *
- **************************************
- *
- * Functional description
- *	Fully expand a file name.  If the file doesn't exist, do something
- *	intelligent.
- *
- **************************************/
-	// check for empty filename to avoid multiple checks later
-	if (file_name.isEmpty())
-	{
-		return false;
-	}
-
-	bool fully_qualified_path = false;
-	tstring temp = file_name;
-
-	expand_share_name(temp);
-
-	// If there is an explicit node name of the form \\DOPEY or //DOPEY
-	// assume named pipes.  Translate forward slashes to back slashes
-	// and return with no further processing.
-
-	if ((file_name.length() >= 2) &&
-		((file_name[0] == '\\' && file_name[1] == '\\') ||
-			(file_name[0] == '/' && file_name[1] == '/')))
-	{
-		file_name = temp;
-
-		// Translate forward slashes to back slashes
-		translate_slashes(file_name);
-		return true;
-	}
-
-	tstring device;
-	const size colon_pos = temp.find(INET_FLAG);
-	if (colon_pos != npos)
-	{
-		file_name = temp;
-		if (colon_pos != 1)
-		{
-			return true;
-		}
-		device = temp.substr(0, 1) + ":\\";
-		const USHORT dtype = GetDriveType(device.c_str());
-		if (dtype <= DRIVE_NO_ROOT_DIR)
-		{
-			return true;
-		}
-
-		// This happen if remote interface of our server
-		// rejected WNet connection or we were called with:
-		// localhost:R:\Path\To\Database, where R - remote disk
-		if (dtype == DRIVE_REMOTE && expand_mounts)
-		{
-			ISC_expand_share(file_name);
-			translate_slashes(file_name);
-			return true;
-		}
-
-		if ((temp.length() >= 3) && (temp[2] == '/' || temp[2] == '\\'))
-		{
-			fully_qualified_path = true;
-		}
-	}
-
-	// Translate forward slashes to back slashes
-
-	translate_slashes(temp);
-
-	// If there is an explicit node name of the form \\DOPEY don't do any
-	// additional translations -- everything will need to be applied at
-	// the other end.
-
-	if ((temp.length() >= 2) && (temp[0] == '\\' && temp[1] == '\\'))
-	{
-		file_name = temp;
-		return true;
-	}
-	if (temp[0] == '\\' || temp[0] == '/')
-	{
-		fully_qualified_path = true;
-	}
-
-	// Expand the file name
-
-#ifdef SUPERSERVER
-	if (!fully_qualified_path)
-	{
-		fb_utils::getCwd(file_name);
-		if (device.hasData() && device[0] == file_name[0])
-		{
-			// case where temp is of the form "c:foo.fdb" and
-			// expanded_name is "c:\x\y".
-			file_name += '\\';
-			file_name.append (temp, 2, npos);
-		}
-		else if (device.empty())
-		{
-			// case where temp is of the form "foo.fdb" and
-			// expanded_name is "c:\x\y".
-			file_name += '\\';
-			file_name += temp;
-		}
-		else
-		{
-			// case where temp is of the form "d:foo.fdb" and
-			// expanded_name is "c:\x\y".
-			// Discard expanded_name and use temp as it is.
-			// In this case use the temp but we need to ensure that we expand to
-			// temp from "d:foo.fdb" to "d:\foo.fdb"
-			if (!get_full_path(temp, file_name))
-			{
-				file_name = temp;
-			}
-		}
-	}
-	else
-#endif
-	{
-		// Here we get "." and ".." translated by the API.
-		if (!get_full_path(temp, file_name))
-		{
-			file_name = temp;
-		}
-	}
-
-	// convert then name to its longer version ie. convert longfi~1.fdb
-	// to longfilename.fdb
-	bool rc = ShortToLongPathName(file_name);
-
-	// Filenames are case insensitive on NT.  If filenames are
-	// typed in mixed cases, strcmp () used in various places
-	// results in incorrect behavior.
-	file_name.upper();
-	return rc;
-}
-#endif
-
-
 #if defined(WIN_NT)
 void ISC_expand_share(tstring& file_name)
 {
@@ -1075,7 +950,90 @@ void ISC_expand_share(tstring& file_name)
 		gds__free(resources);
 	}
 }
+
 #endif	// WIN_NT
+#endif // NOT_USED
+
+bool ISC_expand_filename(tstring& file_name, bool expand_mounts)
+{
+/**************************************
+ *
+ *	I S C _ e x p a n d _ f i l e n a m e		( W I N _ N T )
+ *
+ **************************************
+ *
+ * Functional description
+ *	Fully expand a file name.  If the file doesn't exist, do something
+ *	intelligent.
+ *
+ **************************************/
+	// check for empty filename to avoid multiple checks later
+	if (file_name.isEmpty())
+	{
+		return false;
+	}
+
+	os_utils::WideCharBuffer temp;
+
+	if (!temp.fromString(CP_UTF8, file_name) || !temp.toUpper())
+	{
+		DWORD err = GetLastError();
+		status_exception::raise(
+			Arg::Gds(isc_bad_conn_str) << Arg::Gds(isc_transliteration_failed) <<
+			Arg::Windows(err));
+	}
+
+	os_utils::WideCharBuffer cwd;
+	if (!cwd.getCwd())
+		return false;
+
+	os_utils::WideCharBuffer result;
+	if (!result.searchFile(cwd, temp))
+	{
+		// Check that file name contains only valid characters
+		const WCHAR* p = temp;
+		for (int i = 0; i < temp.getLength(); i++)
+		{
+			WCHAR c = *p++;
+
+			// Add exception for foreign dir separator
+			if (c == L'/')
+				continue;
+
+			UINT charType = PathGetCharTypeW(c);
+			if (charType == GCT_INVALID || (charType & GCT_WILD) != 0)
+			{
+				return false;
+			}
+		}
+
+		PathName res;
+		cwd.toString(CP_UTF8, res);
+		res.appendPath(file_name);
+		return true;
+	}
+	else
+	{
+		// Ok, the file exists, we can be sure that it is valid
+		// Now check that it is not a directory and have long name
+		if (PathIsDirectoryW(result) || !result.getLongFileName())
+			return false;
+	}
+
+	// Filenames are case insensitive on NT.  If filenames are
+	// typed in mixed cases, strcmp () used in various places
+	// results in incorrect behavior.
+	if (!result.toUpper() || !result.toString(CP_UTF8, file_name))
+	{
+		DWORD err = GetLastError();
+		status_exception::raise(
+			Arg::Gds(isc_bad_conn_str) << Arg::Gds(isc_transliteration_failed) <<
+			Arg::Windows(err));
+	}
+
+	return true;
+}
+#endif
 
 
 #ifndef WIN_NT
@@ -1109,7 +1067,7 @@ static void expand_filename2(tstring& buff, bool expand_mounts)
 		++from;
 		tstring q;
 		while (*from && *from != '/')
-			q += *from++;
+			q.appendString(*from++);
 		if (os_utils::get_user_home(q.hasData() ? os_utils::get_user_id(q.c_str()) : geteuid(),
 									buff))
 		{
@@ -1121,7 +1079,7 @@ static void expand_filename2(tstring& buff, bool expand_mounts)
 	if (*from && *from != '/')
 	{
 		fb_utils::getCwd(buff);
-		buff += '/';
+		buff.appendString('/');
 	}
 
 	// Process file name segment by segment looking for symbolic links.
@@ -1144,7 +1102,7 @@ static void expand_filename2(tstring& buff, bool expand_mounts)
 			}
 			else
 			{
-				buff += *from++;
+				buff.appendString(*from++);
 			}
 			continue;
 		}
@@ -1158,7 +1116,10 @@ static void expand_filename2(tstring& buff, bool expand_mounts)
 				if (buff.length() > 2)
 				{
 					const size slash = buff.rfind('/', buff.length() - 2);
-					buff = slash != npos ? buff.substr(0, slash + 1) : "/";
+					if (slash != npos)
+						buff.erase(slash + 1);
+					else
+						buff = "/";
 				}
 			}
 			continue;
@@ -1168,7 +1129,7 @@ static void expand_filename2(tstring& buff, bool expand_mounts)
 		const int segment = buff.length();
 		while (*from && *from != '/')
 		{
-			buff += *from++;
+			buff.appendString(*from++);
 		}
 
 		// If the file is local, check for a symbol link
@@ -1193,7 +1154,8 @@ static void expand_filename2(tstring& buff, bool expand_mounts)
 		}
 		else
 		{
-			buff.replace(segment, buff.length() - segment, link);
+			buff.erase(segment);
+			buff.appendPath(link);
 		}
 
 		// Whole link needs translating -- recurse
@@ -1215,7 +1177,7 @@ static void expand_filename2(tstring& buff, bool expand_mounts)
 }
 #endif
 
-
+#ifdef NOT_USED
 #ifdef WIN_NT
 static void expand_share_name(tstring& share_name)
 {
@@ -1331,7 +1293,9 @@ static bool get_full_path(const tstring& part, tstring& full)
 
 	return false;
 }
+
 #endif
+#endif // NOT_USED
 
 
 namespace {
@@ -1508,7 +1472,7 @@ static bool get_server(tstring&, tstring& node_name)
 #endif // NO_NFS
 } // anonymous namespace
 
-
+#ifdef NOT_USED
 #ifdef WIN_NT
 static void share_name_from_resource(tstring& file_name, LPNETRESOURCE resource)
 {
@@ -1531,10 +1495,10 @@ static void share_name_from_resource(tstring& file_name, LPNETRESOURCE resource)
 	if (!strnicmp(resource->lpProvider, mwn, strlen(mwn)))
 	{
 		/* If the shared drive is via Windows
-		   package it up so that resolution of the share name can
-		   occur on the remote machine. The name
-		   that will be transmitted to the remote machine will
-		   have the form \\REMOTE_NODE\!SHARE_POINT!\FILENAME */
+			package it up so that resolution of the share name can
+			occur on the remote machine. The name
+			that will be transmitted to the remote machine will
+			have the form \\REMOTE_NODE\!SHARE_POINT!\FILENAME */
 
 		size p = expanded_name.find('\\', 2);
 		expanded_name.insert(++p, 1, '!');
@@ -1602,6 +1566,8 @@ static void share_name_from_unc(tstring& file_name, LPREMOTE_NAME_INFO unc_remot
 	file_name.replace(0, 2, expanded_name);
 }
 #endif // WIN_NT
+
+#endif // NOT_USED
 
 #ifdef HAVE_ICONV_H
 namespace {
@@ -1711,105 +1677,6 @@ InitInstance<Converters> iConv;
 }
 #endif // HAVE_ICONV_H
 
-#if defined WIN_NT
-
-template <int BUFSIZE>
-class WideCharBuffer
-{
-public:
-	WideCharBuffer() :
-		m_len16(0)
-	{}
-
-	bool fromString(UINT codePage, const AbstractString& str)
-	{
-		if (str.isEmpty())
-		{
-			m_len16 = 0;
-			return true;
-		}
-
-		int bufSize = m_utf16.getCapacity();
-		WCHAR* utf16Buffer = m_utf16.getBuffer(bufSize);
-		m_len16 = MultiByteToWideChar(codePage, 0, str.c_str(), str.length(), utf16Buffer, bufSize);
-
-		if (m_len16 == 0)
-		{
-			DWORD err = GetLastError();
-			if (err != ERROR_INSUFFICIENT_BUFFER)
-				return false;
-
-			bufSize = MultiByteToWideChar(codePage, 0, str.c_str(), str.length(), NULL, 0);
-			if (bufSize == 0)
-				return false;
-
-			utf16Buffer = m_utf16.getBuffer(bufSize);
-			m_len16 = MultiByteToWideChar(codePage, 0, str.c_str(), str.length(), utf16Buffer, bufSize);
-		}
-
-		return (m_len16 != 0);
-	}
-
-	bool toString(UINT codePage, AbstractString& str)
-	{
-		if (m_len16 == 0)
-		{
-			str.resize(0);
-			return true;
-		}
-
-		BOOL defaultCharUsed = FALSE;
-		LPBOOL pDefaultCharUsed = &defaultCharUsed;
-		if (codePage == CP_UTF8 || codePage == CP_UTF7)
-			pDefaultCharUsed = NULL;
-
-		WCHAR* utf16Buffer = m_utf16.begin();
-
-		char* utf8Buffer = str.getBuffer(str.capacity());
-		int len8 = WideCharToMultiByte(codePage, 0, utf16Buffer, m_len16,
-			utf8Buffer, str.capacity(), NULL, pDefaultCharUsed);
-
-		if (len8 == 0 || defaultCharUsed)
-		{
-			DWORD err = GetLastError();
-			if (err != ERROR_INSUFFICIENT_BUFFER)
-				return false;
-
-			len8 = WideCharToMultiByte(codePage, 0, utf16Buffer, m_len16, NULL, 0, NULL, pDefaultCharUsed);
-			if (len8 == 0 || defaultCharUsed)
-				return false;
-
-			utf8Buffer = str.getBuffer(len8);
-
-			len8 = WideCharToMultiByte(codePage, 0, utf16Buffer, m_len16, utf8Buffer, len8,
-				NULL, pDefaultCharUsed);
-		}
-
-		if (len8 == 0 || defaultCharUsed)
-			return false;
-
-		str.resize(len8);
-
-		return true;
-	}
-
-	WCHAR* getBuffer()
-	{
-		return m_utf16.begin();
-	}
-
-	int getLength()
-	{
-		return m_len16;
-	}
-
-private:
-	HalfStaticArray<WCHAR, BUFSIZE> m_utf16;
-	int m_len16;
-};
-
-#endif // WIN_NT
-
 
 // Converts a string from the system charset to UTF-8.
 void ISC_systemToUtf8(Firebird::AbstractString& str)
@@ -1818,7 +1685,7 @@ void ISC_systemToUtf8(Firebird::AbstractString& str)
 		return;
 
 #if defined(WIN_NT)
-	WideCharBuffer<MAX_PATH> wBuffer;
+	os_utils::WideCharBuffer wBuffer;
 
 	if (!wBuffer.fromString(CP_ACP, str) || !wBuffer.toString(CP_UTF8, str))
 	{
@@ -1841,7 +1708,7 @@ void ISC_utf8ToSystem(Firebird::AbstractString& str)
 		return;
 
 #if defined(WIN_NT)
-	WideCharBuffer<MAX_PATH> wBuffer;
+	os_utils::WideCharBuffer wBuffer;
 
 	if (!wBuffer.fromString(CP_UTF8, str) || !wBuffer.toString(CP_ACP, str))
 	{

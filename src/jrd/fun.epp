@@ -91,8 +91,8 @@ namespace
 #elif defined(DARWIN)
 			libUtilPath = "/Library/Frameworks/Firebird.framework/Versions/A/Libraries/" LIBNAME;
 #else
-			const PathName id(Config::getInstallDirectory());
-			PathUtils::concatPath(libUtilPath, id, "lib/" LIBNAME);
+			libUtilPath = Config::getInstallDirectory();
+			libUtilPath.appendPath("lib/" LIBNAME);
 #endif // WIN_NT
 		}
 

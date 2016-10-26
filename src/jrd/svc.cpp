@@ -2704,7 +2704,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 
 				if (spb.getClumpTag() != isc_spb_sec_username)
 				{
-					userPos = switches.getCount();
+					userPos = switches.length();
 				}
 			}
 
@@ -2742,7 +2742,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 
 				if (spb.getClumpTag() != isc_spb_sec_username)
 				{
-					userPos = switches.getCount();
+					userPos = switches.length();
 				}
 			}
 

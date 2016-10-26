@@ -155,7 +155,7 @@ void ConfigStorage::shutdown()
 		--(m_sharedMemory->getHeader()->cnt_uses);
 		if (m_sharedMemory->getHeader()->cnt_uses == 0)
 		{
-			unlink(m_sharedMemory->getHeader()->cfg_file_name);
+			os_utils::unlink(m_sharedMemory->getHeader()->cfg_file_name);
 			memset(m_sharedMemory->getHeader()->cfg_file_name, 0,
 				sizeof(m_sharedMemory->getHeader()->cfg_file_name));
 
@@ -248,11 +248,11 @@ void ConfigStorage::checkFile()
 			if (configFileName.empty())
 				return;
 
-			if (PathUtils::isRelative(configFileName))
+			if (configFileName.isRelative())
 			{
-				PathName root(Config::getRootDirectory());
-				PathUtils::ensureSeparator(root);
-				configFileName.insert(0, root);
+				PathName temp(configFileName);
+				configFileName = Config::getRootDirectory();
+				configFileName.appendPath(temp);
 			}
 
 			cfgFile = os_utils::fopen(configFileName.c_str(), "rb");

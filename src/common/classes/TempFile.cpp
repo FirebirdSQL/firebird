@@ -47,6 +47,7 @@
 #include "../common/gdsassert.h"
 #include "../common/os/os_utils.h"
 #include "../common/os/path_utils.h"
+#include "../common/os/os_utils.h"
 #include "../common/classes/init.h"
 
 #include "../common/classes/TempFile.h"
@@ -81,23 +82,19 @@ static InitInstance<ZeroBuffer> zeros;
 // Returns a pathname to the system temporary directory
 //
 
-PathName TempFile::getTempPath()
+void TempFile::getTempPath(PathName& path)
 {
-	const char* env_temp = getenv(ENV_VAR);
-	PathName path = env_temp ? env_temp : "";
-	if (path.empty())
+	if (!fb_utils::readenv(ENV_VAR, path))
 	{
 #if defined(WIN_NT)
-		char temp_dir[MAXPATHLEN];
+		os_utils::WideCharBuffer temp_dir;
 		// this checks "TEMP" and "TMP" environment variables
-		const int len = GetTempPath(sizeof(temp_dir), temp_dir);
-		if (len && len < sizeof(temp_dir))
+		if (temp_dir.getTempPath())
 		{
-			path = temp_dir;
+			temp_dir.toString(CP_UTF8, path);
 		}
 #else
-		env_temp = getenv("TMP");
-		path = env_temp ? env_temp : "";
+		fb_utils::readenv("TMP", path);
 #endif
 	}
 	if (path.empty())
@@ -106,7 +103,6 @@ PathName TempFile::getTempPath()
 	}
 
 	fb_assert(path.length());
-	return path;
 }
 
 //
@@ -115,7 +111,7 @@ PathName TempFile::getTempPath()
 // Creates a temporary file and returns its name
 //
 
-PathName TempFile::create(const PathName& prefix, const PathName& directory)
+PathName TempFile::create(const string& prefix, const PathName& directory)
 {
 	PathName filename;
 
@@ -136,7 +132,7 @@ PathName TempFile::create(const PathName& prefix, const PathName& directory)
 // In error case store exception in status arg.
 //
 
-PathName TempFile::create(CheckStatusWrapper* status, const PathName& prefix, const PathName& directory)
+PathName TempFile::create(CheckStatusWrapper* status, const string& prefix, const PathName& directory)
 {
 	PathName filename;
 
@@ -162,15 +158,14 @@ PathName TempFile::create(CheckStatusWrapper* status, const PathName& prefix, co
 // Creates temporary file with a unique filename
 //
 
-void TempFile::init(const PathName& directory, const PathName& prefix)
+void TempFile::init(const PathName& directory, const string& prefix)
 {
 	// set up temporary directory, if not specified
 	filename = directory;
 	if (filename.empty())
 	{
-		filename = getTempPath();
+		getTempPath(filename);
 	}
-	PathUtils::ensureSeparator(filename);
 
 #if defined(WIN_NT)
 	_timeb t;
@@ -178,24 +173,26 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 	__int64 randomness = t.time;
 	randomness *= 1000;
 	randomness += t.millitm;
-	PathName suffix = NAME_PATTERN;
 	for (int tries = 0; tries < MAX_TRIES; tries++)
 	{
-		PathName name = filename + prefix;
+		string fileName(prefix);
 		__int64 temp = randomness;
-		for (FB_SIZE_T i = 0; i < suffix.length(); i++)
+		for (FB_SIZE_T i = 0; i < strlen(NAME_PATTERN); i++)
 		{
-			suffix[i] = NAME_LETTERS[temp % (strlen(NAME_LETTERS))];
+			fileName += NAME_LETTERS[temp % (strlen(NAME_LETTERS))];
 			temp /= strlen(NAME_LETTERS);
 		}
-		name += suffix;
+		PathName name(filename, fileName);
+
 		DWORD attributes = FILE_ATTRIBUTE_NORMAL | FILE_ATTRIBUTE_TEMPORARY;
 		if (doUnlink)
 		{
 			attributes |= FILE_FLAG_DELETE_ON_CLOSE;
 		}
-		handle = CreateFile(name.c_str(), GENERIC_READ | GENERIC_WRITE,
-							0, NULL, CREATE_NEW, attributes, NULL);
+
+		handle = CreateFileW(os_utils::WideCharBuffer(name), GENERIC_READ | GENERIC_WRITE,
+							 0, NULL, CREATE_NEW, attributes, NULL);
+
 		if (handle != INVALID_HANDLE_VALUE)
 		{
 			filename = name;
@@ -208,28 +205,32 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 		system_error::raise("CreateFile");
 	}
 #else
-	filename += prefix;
-	filename += NAME_PATTERN;
+	filename.ensureSeparator();
+	filename.appendString(prefix);
+	filename.appendString(NAME_PATTERN);
 
+	{ // scope
+		os_utils::SystemCharBuffer fn(filename);
 #ifdef HAVE_MKSTEMP
-	handle = (IPTR) os_utils::mkstemp(filename.begin());
+		handle = (IPTR) os_utils::mkstemp(filename.begin());
 #else
-	if (!mktemp(filename.begin()))
-	{
-		system_error::raise("mktemp");
-	}
+		if (!mktemp(fn))
+		{
+			system_error::raise("mktemp");
+		}
 
-	handle = os_utils::open(filename.c_str(), O_RDWR | O_EXCL | O_CREAT);
+		handle = ::open(fn, O_RDWR | O_EXCL | O_CREAT | O_CLOEXEC);
 #endif
 
-	if (handle == -1)
-	{
-		system_error::raise("open");
-	}
+		if (handle == -1)
+		{
+			system_error::raise("open");
+		}
 
-	if (doUnlink)
-	{
-		::unlink(filename.c_str());
+		if (doUnlink)
+		{
+			::unlink(fn); // default unlink is used here because file name already in system locale
+		}
 	}
 #endif
 
@@ -251,7 +252,7 @@ TempFile::~TempFile()
 #endif
 	if (doUnlink)
 	{
-		::unlink(filename.c_str());
+		os_utils::unlink(filename.c_str());
 	}
 }
 

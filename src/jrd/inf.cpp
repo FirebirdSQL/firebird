@@ -460,7 +460,7 @@ void INF_database_info(thread_db* tdbb,
 				counts_buffer.resize(BUFFER_SMALL);
 				const UCHAR* const end_buf = counts_buffer.end();
 				// May be simpler to code using a server-side version of isql's Extender class.
-				const PathName& str_fn = dbb->dbb_database_name;
+				const string str_fn(tdbb->getAttachment()->stringToUserCharSet(tdbb, dbb->dbb_database_name));
 				STUFF(p, 2);
 				USHORT len = str_fn.length();
 				if (p + len + 1 >= end_buf)

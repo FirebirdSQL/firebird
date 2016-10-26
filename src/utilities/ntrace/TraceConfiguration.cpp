@@ -273,7 +273,7 @@ ULONG TraceCfgReader::parseUInteger(const ConfigFile::Parameter* el) const
 
 void TraceCfgReader::expandPattern(const ConfigFile::Parameter* el, PathName& valueToExpand)
 {
-	valueToExpand = el->value.ToPathName();
+	valueToExpand = el->value;
 	PathName::size_type pos = 0;
 	while (pos < valueToExpand.length())
 	{
@@ -304,9 +304,8 @@ void TraceCfgReader::expandPattern(const ConfigFile::Parameter* el, PathName& va
 				if (subpattern->end != -1 && subpattern->start != -1)
 				{
 					const off_t subpattern_len = subpattern->end - subpattern->start;
-					valueToExpand.insert(pos,
-						m_databaseName.substr(subpattern->start, subpattern_len).c_str(),
-						subpattern_len);
+					PathName sub(m_databaseName, subpattern->start, subpattern_len);
+					valueToExpand.insert(pos, sub);
 					pos += subpattern_len;
 				}
 				continue;

@@ -181,7 +181,7 @@ static void db_error(int);
 
 static USHORT get_format_length(ISC_STATUS*, isc_db_handle, isc_tr_handle, ISC_QUAD&);
 
-static dba_fil* db_open(const char*, USHORT);
+static dba_fil* db_open(Firebird::PathName&);
 static const pag* db_read(SLONG page_number, bool ok_enc = false);
 #ifdef WIN_NT
 static void db_close(void* file_desc);
@@ -357,11 +357,7 @@ int gstat(Firebird::UtilSvc* uSvc)
  **************************************/
 	isc_db_handle db_handle = 0;
 
-	TEXT pass_buff[128], user_buff[128], *password = pass_buff, *username = user_buff;
-	TEXT role_buff[128], *role = role_buff;
-	MOVE_CLEAR(user_buff, sizeof(user_buff));
-	MOVE_CLEAR(pass_buff, sizeof(pass_buff));
-	MOVE_CLEAR(role_buff, sizeof(role_buff));
+	Firebird::string password, username, role;
 
 	// TEXT tr_buff[128], *tr_user = tr_buff;
 	// MOVE_CLEAR(tr_buff, sizeof(tr_buff));
@@ -439,26 +435,25 @@ int gstat(Firebird::UtilSvc* uSvc)
 			break;
 		case IN_SW_DBA_USERNAME:
 			if (argv < end)
-				fb_utils::copy_terminate(username, *argv++, sizeof(user_buff));
+				username = *argv++;
 			break;
 		case IN_SW_DBA_ROLE:
 			if (argv < end)
-				fb_utils::copy_terminate(role, *argv++, sizeof(role_buff));
+				role = *argv++;
 			break;
 		case IN_SW_DBA_PASSWORD:
 			if (argv < end)
 			{
 				uSvc->hidePasswd(uSvc->argv, argv - uSvc->argv.begin());
-				fb_utils::copy_terminate(password, *argv++, sizeof(pass_buff));
+				password = *argv++;
 			}
 			break;
 		case IN_SW_DBA_FETCH_PASS:
 			if (argv < end)
 			{
-				const char* passwd = NULL;
-				if (fb_utils::fetchPassword(*argv++, passwd) == fb_utils::FETCH_PASS_OK)
+				if (fb_utils::fetchPassword(*argv++, password) != fb_utils::FETCH_PASS_OK)
 				{
-					fb_utils::copy_terminate(password, passwd, sizeof(pass_buff));
+					// Then what?..
 				}
 			}
 			break;
@@ -498,18 +493,20 @@ int gstat(Firebird::UtilSvc* uSvc)
 			sw_relation = true;
 			while (argv < end && **argv != '-')
 			{
-				if (strlen(*argv) > MAX_SQL_IDENTIFIER_LEN)
+				Firebird::string tableName = *argv++;
+				tableName.rtrim();
+				if (!uSvc->utf8FileNames())
 				{
-					char tbname[MAX_SQL_IDENTIFIER_LEN + 5];
-					fb_utils::copy_terminate(tbname, *argv, MAX_SQL_IDENTIFIER_SIZE);
-					memcpy(tbname + MAX_SQL_IDENTIFIER_LEN, "...\0", 4);
-					dba_error(42, SafeArg() << tbname);	// option -t got a too long table name @1
+					ISC_systemToUtf8(tableName);
+				}
+				if (tableName.length() > MAX_SQL_IDENTIFIER_LEN)
+				{
+					dba_error(42, SafeArg() << tableName.c_str());	// option -t got a too long table name @1
 					break;
 				}
 
 				dba_rel* relation = (dba_rel*) alloc(sizeof(struct dba_rel));
-				strcpy(relation->rel_name, *argv++);
-				fb_utils::exact_name(relation->rel_name);
+				tableName.copyTo(relation->rel_name, MAX_SQL_IDENTIFIER_SIZE);
 				relation->rel_id = -1;
 				dba_rel** next = &tddba->relations;
 				while (*next) {
@@ -561,7 +558,16 @@ int gstat(Firebird::UtilSvc* uSvc)
 	// Open database and go to work
 
 	Firebird::PathName fileName = name;
-	const Firebird::PathName connName = fileName;
+
+	if (!uSvc->utf8FileNames())
+	{
+		ISC_systemToUtf8(fileName);
+		ISC_systemToUtf8(username);
+		ISC_systemToUtf8(password); // No need to care about encrypted password, service always use data in Utf8
+		ISC_systemToUtf8(role);
+	}
+
+	Firebird::PathName connName = fileName;
 	Firebird::PathName tempStr;
 
 #ifdef WIN_NT
@@ -580,9 +586,8 @@ int gstat(Firebird::UtilSvc* uSvc)
 	}
 
 	expandDatabaseName(fileName, tempStr, NULL);
-	fileName = tempStr;
 
-	dba_fil* current = db_open(fileName.c_str(), fileName.length());
+	dba_fil* current = db_open(tempStr);
 
 	SCHAR temp[RAW_HEADER_SIZE];
 	tddba->page_size = sizeof(temp);
@@ -599,10 +604,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 		// msg 3: Wrong ODS version, expected %d, encountered %d?
 	}
 
-	char file_name[1024];
-	fileName.copyTo(file_name, sizeof(file_name));
-
-	dba_print(false, 6, SafeArg() << file_name);	// msg 6: \nDatabase \"%s\"\n
+	dba_print(false, 6, SafeArg() << connName.c_str());	// msg 6: \nDatabase \"%s\"\n
 
 	tddba->page_size = header->hdr_page_size;
 	tddba->dp_per_pp = Ods::dataPagesPerPP(tddba->page_size);
@@ -617,20 +619,21 @@ int gstat(Firebird::UtilSvc* uSvc)
 	ULONG page = HEADER_PAGE;
 	do {
 		if (page != HEADER_PAGE)
-			current = db_open(file_name, static_cast<USHORT>(strlen(file_name)));
+		{
+			current = db_open(tempStr);
+		}
 		do {
 			header = (const header_page*) db_read(page);
 			if (current != tddba->files)
 				current->fil_fudge = 1;	// ignore header page once read it
-			*file_name = '\0';
 			const UCHAR* vp = header->hdr_data;
+			tempStr = "";
 			for (const UCHAR* const vend = vp + header->hdr_page_size;
 				 vp < vend && *vp != HDR_end; vp += 2 + vp[1])
 			{
 				if (*vp == HDR_file)
 				{
-					memcpy(file_name, vp + 2, vp[1]);
-					*(file_name + vp[1]) = '\0';
+					tempStr.assign(vp + 2, vp[1]);
 				}
 				if (*vp == HDR_last_page) {
 					memcpy(&current->fil_max_page, vp + 2, sizeof(current->fil_max_page));
@@ -638,7 +641,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 			}
 		} while (page = header->hdr_next_page);
 		page = current->fil_max_page + 1;	// first page of next file
-	} while (*file_name);
+	} while (tempStr.hasData());
 
 	// Print header page
 
@@ -738,13 +741,13 @@ int gstat(Firebird::UtilSvc* uSvc)
 	}
 	else
 	{
-		if (*username)
-			dpb.insertString(isc_dpb_user_name, username, fb_strlen(username));
+		if (username.hasData())
+			dpb.insertString(isc_dpb_user_name, username);
 
-		if (*password)
+		if (password.hasData())
 		{
 			dpb.insertString(uSvc->isService() ? isc_dpb_password_enc : isc_dpb_password,
-							password, fb_strlen(password));
+							password);
 		}
 
 #ifdef TRUSTED_AUTH
@@ -752,8 +755,11 @@ int gstat(Firebird::UtilSvc* uSvc)
 			dpb.insertTag(isc_dpb_trusted_auth);
 #endif
 	}
-	if (*role)
-		dpb.insertString(isc_dpb_sql_role_name, role, fb_strlen(role));
+	if (role.hasData())
+		dpb.insertString(isc_dpb_sql_role_name, role);
+
+	dpb.insertTag(isc_dpb_utf8_filename);
+	dpb.insertString(isc_dpb_lc_ctype, "utf-8", 5);
 
 	isc_attach_database(status_vector, 0, connName.c_str(), &DB, dpb.getBufferLength(),
 						reinterpret_cast<const char*>(dpb.getBuffer()));
@@ -1731,10 +1737,7 @@ static void db_error( SLONG status)
 }
 
 
-// CVC: This function was using cast to char* for the first param always
-// and the callers had to cast their char*'s to UCHAR*, too. Since the
-// real parameter is char* and always the usage is char*, I changed signature.
-static dba_fil* db_open(const char* file_name, USHORT file_length)
+static dba_fil* db_open(Firebird::PathName& file_name)
 {
 /**************************************
  *
@@ -1753,24 +1756,24 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 	if (tddba->files)
 	{
 		for (fil = tddba->files; fil->fil_next; fil = fil->fil_next);
-		fil->fil_next = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
+		fil->fil_next = (dba_fil*) alloc(sizeof(dba_fil) + file_name.length() + 1);
 		fil->fil_next->fil_min_page = fil->fil_max_page + 1;
 		fil = fil->fil_next;
 	}
 	else
 	{
 		// empty list
-		fil = tddba->files = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
+		fil = tddba->files = (dba_fil*) alloc(sizeof(dba_fil) + file_name.length() + 1);
 		fil->fil_min_page = 0L;
 	}
 
 	fil->fil_next = NULL;
-	strcpy(fil->fil_string, file_name);
-	fil->fil_length = file_length;
+	strcpy(fil->fil_string, file_name.c_str());
+	fil->fil_length = file_name.length();
 	fil->fil_fudge = 0;
 	fil->fil_max_page = 0L;
 
-	fil->fil_desc = CreateFile(	file_name,
+	fil->fil_desc = CreateFileW(os_utils::WideCharBuffer(file_name),
 								GENERIC_READ,
 								FILE_SHARE_READ | FILE_SHARE_WRITE,
 								NULL,
@@ -1780,7 +1783,7 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 
 	if (fil->fil_desc  == INVALID_HANDLE_VALUE)
 	{
-		tddba->uSvc->setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name);
+		tddba->uSvc->setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name.c_str());
 		// msg 29: Can't open database file %s
 		db_error(GetLastError());
 	}
@@ -1922,10 +1925,7 @@ static void db_error( int status)
 }
 
 
-// CVC: This function was using cast to char* for the first param always
-// and the callers had to cast their char*'s to UCHAR*, too. Since the
-// real parameter is char* and always the usage is char*, I changed signature.
-static dba_fil* db_open(const char* file_name, USHORT file_length)
+static dba_fil* db_open(Firebird::PathName& file_name)
 {
 /**************************************
  *
@@ -1945,7 +1945,7 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 	{
 		for (fil = tddba->files; fil->fil_next; fil = fil->fil_next)
 			;
-		fil->fil_next = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
+		fil->fil_next = (dba_fil*) alloc(sizeof(dba_fil) + file_name.length() + 1);
 		fil->fil_next->fil_min_page = fil->fil_max_page + 1;
 		fil = fil->fil_next;
 	}
@@ -1953,19 +1953,19 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 	{
 		// empty list
 
-		fil = tddba->files = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
+		fil = tddba->files = (dba_fil*) alloc(sizeof(dba_fil) + file_name.length() + 1);
 		fil->fil_min_page = 0L;
 	}
 
 	fil->fil_next = NULL;
-	strcpy(fil->fil_string, file_name);
-	fil->fil_length = file_length;
+	strcpy(fil->fil_string, file_name.c_str());
+	fil->fil_length = file_name.length();
 	fil->fil_fudge = 0;
 	fil->fil_max_page = 0L;
 
-	if ((fil->fil_desc = os_utils::open(file_name, O_RDONLY)) == -1)
+	if ((fil->fil_desc = os_utils::open(file_name.c_str(), O_RDONLY)) == -1)
 	{
-		tddba->uSvc->setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name);
+		tddba->uSvc->setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name.c_str());
 		// msg 29: Can't open database file %s
 		db_error(errno);
 	}
@@ -2094,11 +2094,12 @@ static void dba_print(bool err, USHORT number, const SafeArg& arg)
  *      Retrieve a message from the error file, format it, and print it.
  *
  **************************************/
-	TEXT buffer[256];
+	Firebird::string buffer;
 	tdba* tddba = tdba::getSpecific();
 
-	fb_msg_format(NULL, GSTAT_MSG_FAC, number, sizeof(buffer), buffer, arg);
-	tddba->uSvc->printf(err, "%s\n", buffer);
+	fb_msg_format(NULL, GSTAT_MSG_FAC, number, BUFFER_SMALL, buffer.getBuffer(BUFFER_SMALL), arg);
+	buffer.recalculate_length();
+	tddba->uSvc->printf(err, "%s\n", buffer.c_str());
 }
 
 

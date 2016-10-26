@@ -2196,7 +2196,7 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 		if (nameStr == ENGINE_VERSION)
 			resultStr.printf("%s.%s.%s", FB_MAJOR_VER, FB_MINOR_VER, FB_REV_NO);
 		else if (nameStr == DATABASE_NAME)
-			resultStr = dbb->dbb_database_name.ToString();
+			resultStr = dbb->dbb_database_name;
 		else if (nameStr == SESSION_ID_NAME)
 			resultStr.printf("%" SQUADFORMAT, PAG_attachment_id(tdbb));
 		else if (nameStr == NETWORK_PROTOCOL_NAME)
@@ -2232,7 +2232,7 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 			if (attachment->att_remote_process.isEmpty())
 				return NULL;
 
-			resultStr = attachment->att_remote_process.ToString();
+			resultStr = attachment->att_remote_process;
 		}
 		else if (nameStr == CURRENT_USER_NAME)
 		{
@@ -2354,7 +2354,7 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 
 	dsc result;
 	result.makeText(resultStr.length(), resultType,
-		(UCHAR*) const_cast<char*>(resultStr.c_str()));	// safe const_cast
+		(UCHAR*)resultStr.begin());
 	EVL_make_value(tdbb, &result, impure);
 
 	request->req_flags &= ~req_null;

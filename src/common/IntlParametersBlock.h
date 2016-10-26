@@ -38,7 +38,7 @@ class ClumpletWriter;
 class IntlParametersBlock
 {
 public:
-	enum TagType { TAG_SKIP, TAG_STRING, TAG_COMMAND_LINE };
+	enum TagType { TAG_SKIP, TAG_STRING, TAG_COMMAND_LINE, TAG_EOF };
 	typedef void ProcessString(string& s);
 
 	virtual TagType checkTag(UCHAR tag, const char** tagName) = 0;
@@ -77,6 +77,13 @@ public:
 
 private:
 	UCHAR mode;
+};
+
+class IntlSpbResponse : public IntlParametersBlock
+{
+public:
+	TagType checkTag(UCHAR tag, const char** tagName);
+	UCHAR getUtf8Tag();
 };
 
 } // namespace Firebird

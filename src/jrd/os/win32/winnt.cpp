@@ -220,7 +220,6 @@ jrd_file* PIO_create(thread_db* tdbb, const Firebird::PathName& string,
 
 	Database* const dbb = tdbb->getDatabase();
 
-	const TEXT* file_name = string.c_str();
 	const bool shareMode = dbb->dbb_config->getServerMode() != MODE_SUPER;
 
 	DWORD dwShareMode = getShareFlags(shareMode, temporary);
@@ -229,7 +228,7 @@ jrd_file* PIO_create(thread_db* tdbb, const Firebird::PathName& string,
 	if (temporary)
 		dwFlagsAndAttributes |= g_dwExtraTempFlags;
 
-	const HANDLE desc = CreateFile(file_name,
+	const HANDLE desc = CreateFileW(os_utils::WideCharBuffer(string),
 					  GENERIC_READ | GENERIC_WRITE,
 					  dwShareMode,
 					  NULL,
@@ -325,6 +324,19 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
 	}
 }
 
+void PIO_erase(const jrd_file* file)
+{
+	os_utils::WideCharBuffer file_name;
+	if (!file_name.fromString(CP_UTF8, file->fil_string))
+		ERR_post(Arg::Gds(isc_transliteration_failed));
+
+	if (!DeleteFileW(file_name))
+	{
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("DeleteFile") <<
+			Arg::Str(file->fil_string) <<
+			Arg::Gds(isc_io_delete_err) << Arg::Windows(GetLastError()));
+	}
+}
 
 void PIO_flush(thread_db* tdbb, jrd_file* main_file)
 {
@@ -370,7 +382,12 @@ void PIO_force_write(jrd_file* file, const bool forceWrite, const bool notUseFSC
 
         HANDLE& hFile = file->fil_desc;
 		maybeCloseFile(hFile);
-		hFile = CreateFile(file->fil_string,
+
+		os_utils::WideCharBuffer file_name;
+		if (!file_name.fromString(CP_UTF8, file->fil_string))
+			ERR_post(Arg::Gds(isc_transliteration_failed));
+
+		hFile = CreateFileW(file_name,
 						  GENERIC_READ | writeMode,
 						  getShareFlags(sharedMode),
 						  NULL,
@@ -546,13 +563,14 @@ jrd_file* PIO_open(thread_db* tdbb,
  **************************************/
 	Database* const dbb = tdbb->getDatabase();
 
-	const TEXT* const ptr = (string.hasData() ? string : file_name).c_str();
+	os_utils::WideCharBuffer fileName(string.hasData() ? string : file_name);
+
 	bool readOnly = false;
 	const bool shareMode = dbb->dbb_config->getServerMode() != MODE_SUPER;
 
 	adjustFsCacheOnce.init();
 
-	HANDLE desc = CreateFile(ptr,
+	HANDLE desc = CreateFileW(fileName,
 					  GENERIC_READ | GENERIC_WRITE,
 					  getShareFlags(shareMode),
 					  NULL,
@@ -566,7 +584,7 @@ jrd_file* PIO_open(thread_db* tdbb,
 		// Try opening the database file in ReadOnly mode.
 		// The database file could be on a RO medium (CD-ROM etc.).
 		// If this fileopen fails, return error.
-		desc = CreateFile(ptr,
+		desc = CreateFileW(fileName,
 						  GENERIC_READ,
 						  FILE_SHARE_READ,
 						  NULL,
@@ -576,8 +594,11 @@ jrd_file* PIO_open(thread_db* tdbb,
 
 		if (desc == INVALID_HANDLE_VALUE)
 		{
-			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("CreateFile (open)") << Arg::Str(file_name) <<
-					 Arg::Gds(isc_io_open_err) << Arg::Windows(GetLastError()));
+			DWORD err = GetLastError();
+			Firebird::PathName s;
+			fileName.toString(CP_UTF8, s);
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("CreateFile (open)") << Arg::Str(s.c_str()) <<
+					 Arg::Gds(isc_io_open_err) << Arg::Windows(err));
 		}
 		else
 		{

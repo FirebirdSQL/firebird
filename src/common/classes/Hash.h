@@ -32,45 +32,24 @@
 
 namespace Firebird
 {
+	class InternalHash
+	{
+	public:
+		static unsigned int hash(unsigned int length, const UCHAR* value);
+
+		static unsigned int hash(unsigned int length, const UCHAR* value, unsigned int hashSize)
+		{
+			return hash(length, value) % hashSize;
+		}
+	};
+
 	template <typename K>
 	class DefaultHash
 	{
 	public:
-		static FB_SIZE_T hash(const void* value, FB_SIZE_T length, FB_SIZE_T hashSize)
-		{
-			size_t sum = 0;
-			size_t val;
-
-			const UCHAR* data = static_cast<const UCHAR*>(value);
-
-			while (length >= sizeof(size_t))
-			{
-				memcpy(&val, data, sizeof(size_t));
-				sum += val;
-				data += sizeof(size_t);
-				length -= sizeof(size_t);
-			}
-
-			if (length)
-			{
-				val = 0;
-				memcpy(&val, data, length);
-				sum += val;
-			}
-
-			size_t rc = 0;
-			while (sum)
-			{
-				rc += (sum % hashSize);
-				sum /= hashSize;
-			}
-
-			return rc % hashSize;
-		}
-
 		static FB_SIZE_T hash(const K& value, FB_SIZE_T hashSize)
 		{
-			return hash(&value, sizeof value, hashSize);
+			return InternalHash::hash(sizeof value, reinterpret_cast<const UCHAR*>(&value), hashSize);
 		}
 	};
 
@@ -329,17 +308,6 @@ namespace Firebird
 			}
 		}; // class iterator
 	}; // class HashTable
-
-	class InternalHash
-	{
-	public:
-		static unsigned int hash(unsigned int length, const UCHAR* value);
-
-		static unsigned int hash(unsigned int length, const UCHAR* value, unsigned int hashSize)
-		{
-			return hash(length, value) % hashSize;
-		}
-	};
 
 } // namespace Firebird
 

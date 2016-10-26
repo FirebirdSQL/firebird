@@ -63,7 +63,7 @@ string RecordSource::printName(thread_db* tdbb, const string& name, bool quote)
 		namePtr = nameBuffer.begin();
 	}
 
-	const string result(namePtr, nameLength);
+	const string result(reinterpret_cast<string::const_pointer>(namePtr), nameLength);
 	return quote ? "\"" + result + "\"" : result;
 }
 

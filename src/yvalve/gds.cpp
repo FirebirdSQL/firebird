@@ -112,7 +112,10 @@
 static char fb_prefix_val[MAXPATHLEN];
 static char fb_prefix_lock_val[MAXPATHLEN];
 static char fb_prefix_msg_val[MAXPATHLEN];
+#ifdef NOT_USED
 static char fbTempDir[MAXPATHLEN];
+#endif // NOT_USED
+
 static char* fb_prefix = NULL;
 static char* fb_prefix_lock = NULL;
 static char* fb_prefix_msg = NULL;
@@ -1051,10 +1054,11 @@ void API_ROUTINE gds__trace_raw(const char* text, unsigned int length)
 	{
 		if (CleanupTraceHandles::trace_file_handle == INVALID_HANDLE_VALUE)
 		{
-			Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
 			// We do not care to close this file.
 			// It will be closed automatically when our process terminates.
-			CleanupTraceHandles::trace_file_handle = CreateFile(name.c_str(), GENERIC_WRITE,
+			CleanupTraceHandles::trace_file_handle = CreateFileW(
+				os_utils::WideCharBuffer(fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE)),
+				GENERIC_WRITE,
 				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
 				NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 			if (CleanupTraceHandles::trace_file_handle == INVALID_HANDLE_VALUE)
@@ -3839,6 +3843,7 @@ public:
 		prefix.copyTo(fb_prefix_val, sizeof(fb_prefix_val));
 		fb_prefix = fb_prefix_val;
 
+#ifdef NOT_USED
 		// Find appropiate temp directory
 		Firebird::PathName tempDir;
 		if (!fb_utils::readenv(FB_TMP_ENV, tempDir))
@@ -3860,6 +3865,8 @@ public:
 		}
 		tempDir.copyTo(fbTempDir, sizeof(fbTempDir));
 
+#endif // NOT_USED
+
 		// Find appropriate Firebird lock file prefix
 		// Override conditional defines with the enviroment
 		// variable FIREBIRD_LOCK if it is set.
@@ -3867,7 +3874,8 @@ public:
 		if (!fb_utils::readenv(FB_LOCK_ENV, lockPrefix))
 		{
 #ifndef WIN_NT
-			PathUtils::concatPath(lockPrefix, WORKFILE, LOCKDIR);
+			lockPrefix = WORKFILE;
+			lockPrefix.appendPath(LOCKDIR);
 #else
 #ifdef WIN9X_SUPPORT
 			// shell32.dll version 5.0 and later supports SHGetFolderPath entry point
@@ -3889,7 +3897,10 @@ public:
 				pfnSHGetFolderPath(NULL, CSIDL_COMMON_APPDATA | CSIDL_FLAG_CREATE, NULL,
 					SHGFP_TYPE_CURRENT, cmnData) == S_OK)
 			{
-				PathUtils::concatPath(lockPrefix, cmnData, LOCKDIR);
+				lockPrefix = cmnData;
+				ISCSystemToUtf8(lockPrefix);
+				lockPrefix.ensureSeparator();
+				lockPrefix.appendString(LOCKDIR);
 			}
 			else
 			{
@@ -3898,10 +3909,12 @@ public:
 			}
 			FreeLibrary(hShFolder);
 #else
-			char cmnData[MAXPATHLEN];
-			if (SHGetSpecialFolderPath(NULL, cmnData, CSIDL_COMMON_APPDATA, TRUE))
+			os_utils::WideCharBuffer cmnData;
+			if (cmnData.getSpecialFolderPath(CSIDL_COMMON_APPDATA, TRUE))
 			{
-				PathUtils::concatPath(lockPrefix, cmnData, LOCKDIR);
+				cmnData.toString(CP_UTF8, lockPrefix);
+				lockPrefix.ensureSeparator();
+				lockPrefix.appendString(LOCKDIR);
 			}
 			else
 			{
@@ -3979,7 +3992,7 @@ static bool GetProgramFilesDir(Firebird::PathName& output)
 		return false;
 
 	output.recalculate_length();
-	output += "\\Firebird\\";
+	output.appendString("\\Firebird\\");
 	return true;
 #else
 	return false;

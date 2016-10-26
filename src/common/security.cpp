@@ -119,31 +119,7 @@ int setGsecCode(int code, unsigned int operation)
 	return GsecMsg17;
 }
 
-void parseList(ParsedList& parsed, PathName list)
-{
-	list.alltrim(" \t");
-	parsed.clear();
-	const char* sep = " \t,;";
-
-	for (;;)
-	{
-		PathName::size_type p = list.find_first_of(sep);
-		if (p == PathName::npos)
-		{
-			if (list.hasData())
-			{
-				parsed.push(list);
-			}
-			break;
-		}
-
-		parsed.push(list.substr(0, p));
-		list = list.substr(p + 1);
-		list.ltrim(sep);
-	}
-}
-
-void makeList(PathName& list, const ParsedList& parsed)
+void makeList(PluginName& list, const ParsedList& parsed)
 {
 	fb_assert(parsed.hasData());
 	list = parsed[0];
@@ -154,7 +130,7 @@ void makeList(PathName& list, const ParsedList& parsed)
 	}
 }
 
-void mergeLists(PathName& list, const PathName& serverList, const PathName& clientList)
+void mergeLists(PluginName& list, const PluginName& serverList, const PluginName& clientList)
 {
 	ParsedList onClient, onServer, merged;
 	parseList(onClient, clientList);

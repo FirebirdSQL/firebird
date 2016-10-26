@@ -251,7 +251,7 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 		// ignore possible errors in these calls - even if they have failed
 		// we cannot help much with former recovery
 		close(desc);
-		unlink(file_name.c_str());
+		os_utils::unlink(file_name.c_str());
 		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("chmod") << Arg::Str(file_name) <<
 				 Arg::Gds(isc_io_create_err) << Arg::Unix(chmodError));
 	}
@@ -262,7 +262,7 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 #endif
 				 )
 	{
-		int rc = unlink(file_name.c_str());
+		int rc = os_utils::unlink(file_name.c_str());
 		// it's no use throwing an error if unlink() failed for temp file in release build
 #ifdef DEV_BUILD
 		if (rc < 0)
@@ -369,6 +369,17 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
 
 	// not implemented
 	return;
+}
+
+
+void PIO_erase(const jrd_file* file)
+{
+	if (os_utils::unlink(file->fil_string))
+	{
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("unlink") <<
+			Arg::Str(file->fil_string) <<
+			Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
+	}
 }
 
 

@@ -547,7 +547,9 @@ int gbak(Firebird::UtilSvc* uSvc)
 				// (dummy in a length for the backup file
 
 				file = FB_NEW_POOL(*getDefaultMemoryPool()) burp_fil(*getDefaultMemoryPool());
-				file->fil_name = str.ToPathName();
+				if (!(uSvc->utf8FileNames()))
+					ISC_systemToUtf8(str);
+				file->fil_name = str;
 				file->fil_length = file_list ? 0 : MAX_LENGTH;
 				file->fil_next = file_list;
 				file_list = file;
@@ -992,6 +994,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
 
 	dpb.insertString(isc_dpb_gbak_attach, FB_VERSION, fb_strlen(FB_VERSION));
+	dpb.insertTag(isc_dpb_utf8_filename);
 	uSvc->fillDpb(dpb);
 
 	const UCHAR* authBlock;
@@ -1308,7 +1311,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 				if (exit_code != FINI_OK &&
 					(tdgbl->action->act_action == ACT_backup_split || tdgbl->action->act_action == ACT_backup))
 				{
-					unlink_platf(tdgbl->toSystem(file->fil_name).c_str());
+					os_utils::unlink(file->fil_name.c_str());
 				}
 			}
 		}
@@ -1917,12 +1920,11 @@ static gbak_action open_files(const TEXT* file1,
 			}
 			else
 			{
-				Firebird::string nm = tdgbl->toSystem(fil->fil_name);
 #ifdef WIN_NT
-				if ((fil->fil_fd = MVOL_open(nm.c_str(), MODE_WRITE, CREATE_ALWAYS)) ==
+				if ((fil->fil_fd = MVOL_open(fil->fil_name, MODE_WRITE, CREATE_ALWAYS)) ==
 					INVALID_HANDLE_VALUE)
 #else
-				if ((fil->fil_fd = os_utils::open(nm.c_str(), MODE_WRITE, open_mask)) == -1)
+				if ((fil->fil_fd = os_utils::open(fil->fil_name.c_str(), MODE_WRITE, open_mask)) == -1)
 #endif // WIN_NT
 
 				{
@@ -2025,12 +2027,11 @@ static gbak_action open_files(const TEXT* file1,
 		tdgbl->stdIoMode = false;
 
 		// open first file
-		Firebird::string nm = tdgbl->toSystem(fil->fil_name);
 #ifdef WIN_NT
-		if ((fil->fil_fd = MVOL_open(nm.c_str(), MODE_READ, OPEN_EXISTING)) ==
+		if ((fil->fil_fd = MVOL_open(fil->fil_name, MODE_READ, OPEN_EXISTING)) ==
 			INVALID_HANDLE_VALUE)
 #else
-		if ((fil->fil_fd = os_utils::open(nm.c_str(), MODE_READ)) == INVALID_HANDLE_VALUE)
+		if ((fil->fil_fd = os_utils::open(fil->fil_name.c_str(), MODE_READ)) == INVALID_HANDLE_VALUE)
 #endif
 		{
 			BURP_error(65, true, fil->fil_name.c_str());
@@ -2071,12 +2072,11 @@ static gbak_action open_files(const TEXT* file1,
 					return QUIT;
 				}
 				tdgbl->action->act_file = fil;
-				Firebird::string nm = tdgbl->toSystem(fil->fil_name);
 #ifdef WIN_NT
-				if ((fil->fil_fd = MVOL_open(nm.c_str(), MODE_READ, OPEN_EXISTING)) ==
+				if ((fil->fil_fd = MVOL_open(fil->fil_name, MODE_READ, OPEN_EXISTING)) ==
 					INVALID_HANDLE_VALUE)
 #else
-				if ((fil->fil_fd = os_utils::open(nm.c_str(), MODE_READ)) == INVALID_HANDLE_VALUE)
+				if ((fil->fil_fd = os_utils::open(fil->fil_name.c_str(), MODE_READ)) == INVALID_HANDLE_VALUE)
 #endif
 				{
 					BURP_error(65, false, fil->fil_name.c_str());
@@ -2430,7 +2430,7 @@ void BurpGlobals::setupSkipData(const Firebird::string& regexp)
 
 Firebird::string BurpGlobals::toSystem(const Firebird::PathName& from)
 {
-	Firebird::string to = from.ToString();
+	Firebird::string to(from);
 	if (uSvc->utf8FileNames())
 		ISC_utf8ToSystem(to);
 	return to;

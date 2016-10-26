@@ -62,6 +62,8 @@ public:
 
 	// config_file strings are mostly case sensitive
 	typedef Firebird::string String;
+	// Macro names are case-insesitive
+	typedef Firebird::NoCaseString Macro;
 	// keys are case-insensitive
 	typedef Firebird::NoCaseString KeyType;
 
@@ -137,11 +139,11 @@ private:
 	bool getLine(Stream* stream, String&, unsigned int&);
 	void parse(Stream* stream);
 	LineType parseLine(const char* fileName, const String& input, Parameter& par);
-	bool translate(const char* fileName, const String& from, String& to) const;
+	bool translate(const char* fileName, const Macro& from, String& to) const;
 	void badLine(const char* fileName, const String& line);
-	void include(const char* currentFileName, const Firebird::PathName& path);
+	void include(const char* currentFileName, const String& param);
 	bool wildCards(const char* currentFileName, const Firebird::PathName& pathPrefix, FilesArray& components);
-	bool substituteStandardDir(const String& from, String& to) const;
+	bool substituteStandardDir(const Macro& from, String& to) const;
 };
 
 #endif	// CONFIG_CONFIG_FILE_H

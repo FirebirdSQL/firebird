@@ -132,6 +132,7 @@ void ExecInSecurityDb::executeInSecurityDb(jrd_tra* localTransaction)
 		ClumpletWriter dpb(ClumpletWriter::WideTagged, MAX_DPB_SIZE, isc_dpb_version2);
 		if (lAtt->att_user)
 			lAtt->att_user->populateDpb(dpb);
+		dpb.insertTag(isc_dpb_utf8_filename);
 		IAttachment* att = DispatcherPtr()->attachDatabase(&statusWrapper, secDb,
 			dpb.getBufferLength(), dpb.getBuffer());
 		check(&statusWrapper);
@@ -3956,7 +3957,7 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		{
 			X.RDB$SPECIFIC_ATTRIBUTES.NULL = FALSE;
 			attachment->storeMetaDataBlob(tdbb, transaction, &X.RDB$SPECIFIC_ATTRIBUTES,
-				string(info.specificAttributes.begin(), info.specificAttributes.getCount()),
+				string(reinterpret_cast<string::pointer>(info.specificAttributes.begin()), info.specificAttributes.getCount()),
 				forCharSetId);
 		}
 

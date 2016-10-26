@@ -135,13 +135,13 @@ private:
 	FbStatusVector *v;
 };
 
-void InternalConnection::attach(thread_db* tdbb, const PathName& dbName,
+void InternalConnection::attach(thread_db* tdbb, const string& dbName,
 		const MetaName& user, const string& pwd,
 		const MetaName& role)
 {
 	fb_assert(!m_attachment);
 	Database* dbb = tdbb->getDatabase();
-	fb_assert(dbName.isEmpty() || dbName == dbb->dbb_database_name.c_str());
+	fb_assert(dbName.isEmpty() || PathName(dbName) == dbb->dbb_database_name);
 
 	// Don't wrap raised errors. This is needed for backward compatibility.
 	setWrapErrors(false);
@@ -157,12 +157,12 @@ void InternalConnection::attach(thread_db* tdbb, const PathName& dbName,
 	else
 	{
 		m_isCurrent = false;
-		m_dbName = dbb->dbb_database_name.c_str();
+		m_dbName = dbb->dbb_database_name;
 		generateDPB(tdbb, m_dpb, user, pwd, role);
 
 		// Avoid change of m_dpb by validatePassword() below
 		ClumpletWriter newDpb(m_dpb);
-		validatePassword(tdbb, m_dbName, newDpb);
+		validatePassword(tdbb, PathName(m_dbName), newDpb);
 
 		FbLocalStatus status;
 		{
@@ -242,7 +242,7 @@ bool InternalConnection::isAvailable(thread_db* tdbb, TraScope /*traScope*/) con
 		(m_isCurrent && (tdbb->getAttachment() == m_attachment->getHandle()));
 }
 
-bool InternalConnection::isSameDatabase(thread_db* tdbb, const PathName& dbName,
+bool InternalConnection::isSameDatabase(thread_db* tdbb, const string& dbName,
 		const MetaName& user, const string& pwd,
 		const MetaName& role) const
 {

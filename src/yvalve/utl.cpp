@@ -325,7 +325,7 @@ FB_BOOLEAN edit(CheckStatusWrapper* status, ISC_QUAD* blob_id, IAttachment* att,
 	FILE* file = os_utils::fopen(tmpf.c_str(), FOPEN_WRITE_TYPE_TEXT);
 	if (!file)
 	{
-		unlink(tmpf.c_str());
+		os_utils::unlink(tmpf.c_str());
 		system_error::raise("fopen");
 	}
 
@@ -335,7 +335,7 @@ FB_BOOLEAN edit(CheckStatusWrapper* status, ISC_QUAD* blob_id, IAttachment* att,
 	{
 		isc_print_status(status->getErrors());
 		fclose(file);
-		unlink(tmpf.c_str());
+		os_utils::unlink(tmpf.c_str());
 		return FB_FALSE;
 	}
 
@@ -346,7 +346,7 @@ FB_BOOLEAN edit(CheckStatusWrapper* status, ISC_QUAD* blob_id, IAttachment* att,
 
 		if (!(file = os_utils::fopen(tmpf.c_str(), FOPEN_READ_TYPE_TEXT)))
 		{
-			unlink(tmpf.c_str());
+			os_utils::unlink(tmpf.c_str());
 			system_error::raise("fopen");
 		}
 
@@ -356,7 +356,7 @@ FB_BOOLEAN edit(CheckStatusWrapper* status, ISC_QUAD* blob_id, IAttachment* att,
 		return status->getState() & IStatus::STATE_ERRORS ? FB_FALSE : FB_TRUE;
 	}
 
-	unlink(tmpf.c_str());
+	os_utils::unlink(tmpf.c_str());
 	return FB_FALSE;
 }
 

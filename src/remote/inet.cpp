@@ -1754,8 +1754,8 @@ static int fork(SOCKET old_handle, USHORT flag)
  *	Create a child process.
  *
  **************************************/
-	TEXT name[MAXPATHLEN];
-	GetModuleFileName(NULL, name, sizeof(name));
+	os_utils::WideCharBuffer name;
+	name.getModuleFileName();
 
 	HANDLE new_handle;
 	if (!DuplicateHandle(GetCurrentProcess(), (HANDLE) old_handle,
@@ -1767,10 +1767,12 @@ static int fork(SOCKET old_handle, USHORT flag)
 	}
 
 	string cmdLine;
-	cmdLine.printf("%s -i -h %" HANDLEFORMAT"@%" ULONGFORMAT, name, new_handle, GetCurrentProcessId());
+	cmdLine.printf("%ws -i -h %" HANDLEFORMAT"@%" ULONGFORMAT, REMOTE_EXECUTABLE, new_handle, GetCurrentProcessId());
+	os_utils::WideCharBuffer cmd;
+	cmd.fromString(CP_ACP, cmdLine);
 
-	STARTUPINFO start_crud;
-	start_crud.cb = sizeof(STARTUPINFO);
+	STARTUPINFOW start_crud;
+	start_crud.cb = sizeof(start_crud);
 	start_crud.lpReserved = NULL;
 	start_crud.lpReserved2 = NULL;
 	start_crud.cbReserved2 = 0;
@@ -1779,7 +1781,7 @@ static int fork(SOCKET old_handle, USHORT flag)
 	start_crud.dwFlags = STARTF_FORCEOFFFEEDBACK;
 
 	PROCESS_INFORMATION pi;
-	if (CreateProcess(NULL, cmdLine.begin(), NULL, NULL, FALSE,
+	if (CreateProcessW(name, cmd, NULL, NULL, FALSE,
 					  (flag & SRVR_high_priority ?
 						 HIGH_PRIORITY_CLASS | DETACHED_PROCESS :
 						 NORMAL_PRIORITY_CLASS | DETACHED_PROCESS),

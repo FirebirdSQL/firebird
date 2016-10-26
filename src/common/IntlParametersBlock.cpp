@@ -158,6 +158,9 @@ void IntlParametersBlock::processParametersBlock(ProcessString* processString, C
 				pb.deleteClumplet();
 				pb.insertString(tag, s);
 				break;
+
+			case TAG_EOF:
+				return;
 			}
 		}
 	}
@@ -353,6 +356,22 @@ IntlParametersBlock::TagType IntlSpbStart::checkTag(UCHAR tag, const char** tagN
 	return TAG_SKIP;
 }
 
+
+IntlParametersBlock::TagType IntlSpbResponse::checkTag(UCHAR tag, const char** tagName)
+{
+	switch (tag)
+	{
+	FB_IPB_TAG(isc_info_svc_line);
+	FB_IPB_TAG(isc_info_svc_user_dbpath);
+	FB_IPB_TAG(isc_spb_dbname);
+	FB_IPB_TAG(isc_spb_tra_db_path);
+		return TAG_STRING;
+	case isc_info_end:
+		return TAG_EOF;
+	}
+	return TAG_SKIP;
+}
+
 #undef FB_IPB_TAG
 
 
@@ -369,6 +388,12 @@ UCHAR IntlSpb::getUtf8Tag()
 
 
 UCHAR IntlSpbStart::getUtf8Tag()
+{
+	return 0;
+}
+
+
+UCHAR IntlSpbResponse::getUtf8Tag()
 {
 	return 0;
 }

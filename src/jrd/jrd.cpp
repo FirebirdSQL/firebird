@@ -1349,19 +1349,12 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				ISC_unescape(org_filename);
 			}
 
-			ISC_utf8ToSystem(org_filename);
-
 			// Resolve given alias name
 			is_alias = expandDatabaseName(org_filename, expanded_name, &config);
 			if (!is_alias)
 			{
 				expanded_name = filename;
-
-				if (!options.dpb_utf8_filename)
-					ISC_systemToUtf8(expanded_name);
-
 				ISC_unescape(expanded_name);
-				ISC_utf8ToSystem(expanded_name);
 			}
 
 			// Check to see if the database is truly local
@@ -1385,12 +1378,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			if (!is_alias)
 			{
 				expanded_name = filename;
-
-				if (!options.dpb_utf8_filename)
-					ISC_systemToUtf8(expanded_name);
-
 				ISC_unescape(expanded_name);
-				ISC_utf8ToSystem(expanded_name);
 			}
 #endif
 		}
@@ -2419,19 +2407,12 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				ISC_unescape(org_filename);
 			}
 
-			ISC_utf8ToSystem(org_filename);
-
 			// Resolve given alias name
 			is_alias = expandDatabaseName(org_filename, expanded_name, &config);
 			if (!is_alias)
 			{
 				expanded_name = filename;
-
-				if (!options.dpb_utf8_filename)
-					ISC_systemToUtf8(expanded_name);
-
 				ISC_unescape(expanded_name);
-				ISC_utf8ToSystem(expanded_name);
 			}
 
 			// Check to see if the database is truly local or if it just looks
@@ -2450,12 +2431,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			if (!is_alias)
 			{
 				expanded_name = filename;
-
-				if (!options.dpb_utf8_filename)
-					ISC_systemToUtf8(expanded_name);
-
 				ISC_unescape(expanded_name);
-				ISC_utf8ToSystem(expanded_name);
 			}
 #endif
 		}
@@ -5471,22 +5447,23 @@ static bool drop_files(const jrd_file* file)
  *	drop a linked list of files
  *
  **************************************/
-	FbLocalStatus status;
 
+	bool result = false;
 	for (; file; file = file->fil_next)
 	{
-		if (unlink(file->fil_string))
+		try
 		{
-			ERR_build_status(&status, Arg::Gds(isc_io_error) << Arg::Str("unlink") <<
-							   								   Arg::Str(file->fil_string) <<
-									 Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
-			Database* dbb = GET_DBB();
-			PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-			iscDbLogStatus(pageSpace->file->fil_string, &status);
+			PIO_erase(file);
+		}
+		catch (const Firebird::Exception& ex)
+		{
+			result = true;
+			FbLocalStatus status;
+			ex.stuffException(&status);
+			iscDbLogStatus(file->fil_string, &status);
 		}
 	}
-
-	return status->getState() & IStatus::STATE_ERRORS ? true : false;
+	return result;
 }
 
 
@@ -7920,7 +7897,7 @@ namespace
 	class DatabaseDirList : public DirectoryList
 	{
 	private:
-		const PathName getConfigString() const
+		PathName getConfigString() const
 		{
 			return PathName(Config::getDatabaseAccess());
 		}

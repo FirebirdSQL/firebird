@@ -26,33 +26,34 @@
 #include <stdlib.h>
 #include <windows.h>
 #include <conio.h>
+#include <locale.h>
 #include "../jrd/license.h"
 #include "../utilities/install/install_nt.h"
 #include "../utilities/install/servi_proto.h"
 #include "../utilities/install/registry.h"
 #include "../common/config/config.h"
 
-static void svc_query(const char*, const char*, SC_HANDLE manager);
+static void svc_query(const WCHAR*, const WCHAR*, SC_HANDLE manager);
 static USHORT svc_query_ex(SC_HANDLE manager);
 static USHORT svc_error(SLONG, const TEXT*, SC_HANDLE);
 static void usage_exit();
 
 static const struct
 {
-	const TEXT *name;
+	const WCHAR *name;
 	USHORT abbrev;
 	USHORT code;
 } commands[] =
 {
-	{"INSTALL", 1, COMMAND_INSTALL},
-	{"REMOVE", 1, COMMAND_REMOVE},
-	{"START", 3, COMMAND_START},
-	{"STOP", 3, COMMAND_STOP},
-	{"QUERY", 1, COMMAND_QUERY},
+	{L"INSTALL", 1, COMMAND_INSTALL},
+	{L"REMOVE", 1, COMMAND_REMOVE},
+	{L"START", 3, COMMAND_START},
+	{L"STOP", 3, COMMAND_STOP},
+	{L"QUERY", 1, COMMAND_QUERY},
 	{NULL, 0, 0}
 };
 
-int CLIB_ROUTINE main( int argc, char **argv)
+int CLIB_ROUTINE wmain( int argc, WCHAR **argv)
 {
 /**************************************
  *
@@ -72,91 +73,89 @@ int CLIB_ROUTINE main( int argc, char **argv)
 	USHORT sw_arch = ARCH_SS;
 	bool sw_interactive = false;
 
-	const TEXT* instance = FB_DEFAULT_INSTANCE;
+	// force using ANSI codepage for input and output
+	setlocale(LC_ALL, "");
 
-	const TEXT* username = NULL;
-	const TEXT* password = NULL;
+	const WCHAR* instance = FB_DEFAULT_INSTANCE;
+
+	const WCHAR* username = NULL;
+	const WCHAR* password = NULL;
 
 	// Let's get the root directory from the instance path of this program.
 	// argv[0] is only _mostly_ guaranteed to give this info,
 	// so we GetModuleFileName()
-	TEXT directory[MAXPATHLEN];
-	const USHORT len = GetModuleFileName(NULL, directory, sizeof(directory));
+	WCHAR directory[MAXPATHLEN];
+	const USHORT len = GetModuleFileNameW(NULL, directory, sizeof(directory)/sizeof(WCHAR));
 	if (len == 0)
 		return svc_error(GetLastError(), "GetModuleFileName", NULL);
 
-	fb_assert(len <= sizeof(directory));
+	fb_assert(len <= sizeof(directory)/sizeof(WCHAR));
 
 	// Get to the last '\' (this one precedes the filename part). There is
 	// always one after a call to GetModuleFileName().
-	TEXT* p = directory + len;
-
-	while (p != directory)
+	for (WCHAR* p = directory + len - 1; p != directory && *p != L'\\'; p--)
 	{
-		--p;
-
-		if ((*p) == '\\')
-			break;
+		*p = '\0';
 	}
-	*p = '\0';
 
-	TEXT full_username[128];
-	TEXT oem_username[128];
+	WCHAR full_username[128];
 	TEXT keyb_password[64];
+	WCHAR password_buf[64];
 
-	const TEXT* const* const end = argv + argc;
+	const WCHAR* const* const end = argv + argc;
 	while (++argv < end)
 	{
-		if (**argv != '-')
+		if (**argv != L'-')
 		{
 			int i;
-			const TEXT* cmd;
+			const WCHAR* cmd;
 			for (i = 0; cmd = commands[i].name; i++)
 			{
-				const TEXT* q;
-				for (p = *argv, q = cmd; *p && UPPER(*p) == *q; p++, q++)
+				const WCHAR* q;
+				const WCHAR* p;
+				for (p = *argv, q = cmd; *p && towupper(*p) == *q; p++, q++)
 					;
 				if (!*p && commands[i].abbrev <= (USHORT) (q - cmd))
 					break;
 			}
 			if (!cmd)
 			{
-				printf("Unknown command \"%s\"\n", *argv);
+				printf("Unknown command \"%ws\"\n", *argv);
 				usage_exit();
 			}
 			sw_command = commands[i].code;
 		}
 		else
 		{
-			p = *argv + 1;
-			switch (UPPER(*p))
+			WCHAR *p = *argv + 1;
+			switch (towupper(*p))
 			{
-				case 'A':
+				case L'A':
 					sw_startup = STARTUP_AUTO;
 					break;
 
-				case 'D':
+				case L'D':
 					sw_startup = STARTUP_DEMAND;
 					break;
 
 				/*
-				case 'R':
+				case L'R':
 					sw_mode = NORMAL_PRIORITY;
 					break;
 				*/
-				case 'B':
+				case L'B':
 					sw_mode = HIGH_PRIORITY;
 					break;
 
-				case 'Z':
+				case L'Z':
 					sw_version = true;
 					break;
 
-				case 'G':
+				case L'G':
 					sw_guardian = USE_GUARDIAN;
 					break;
 
-				case 'L':
+				case L'L':
 					if (++argv < end)
 						username = *argv;
 					if (++argv < end)
@@ -168,20 +167,20 @@ int CLIB_ROUTINE main( int argc, char **argv)
 					}
 					break;
 
-				case 'I':
+				case L'I':
 					sw_interactive = true;
 					break;
 
-				case 'N':
+				case L'N':
 					if (++argv < end)
 						instance = *argv;
 					break;
 
-				case '?':
+				case L'?':
 					usage_exit();
 
 				default:
-					printf("Unknown switch \"%s\"\n", p);
+					printf("Unknown switch \"%ws\"\n", p);
 					usage_exit();
 			}
 		}
@@ -203,32 +202,30 @@ int CLIB_ROUTINE main( int argc, char **argv)
 			exit(FINI_ERROR);
 		}
 
-		const char* limit = username;
-		while (*limit != '\0' && *limit != '\\')
+		const WCHAR* limit = username;
+		while (*limit != L'\0' && *limit != L'\\')
 			++limit;
 
 		if (!*limit)
 		{
-			DWORD cnlen = sizeof(full_username) - 1;
-			GetComputerName(full_username, &cnlen);
-			strcat(full_username, "\\");
-			strncat(full_username, username, sizeof(full_username) - (cnlen + 1));
+			DWORD cnlen = sizeof(full_username)/sizeof(WCHAR) - 1;
+			GetComputerNameW(full_username, &cnlen);
+			wcscat(full_username, L"\\");
+			wcsncat(full_username, username, sizeof(full_username)/sizeof(WCHAR) - (cnlen + 1));
 		}
 		else
 		{
-			strncpy(full_username, username, sizeof(full_username));
+			wcsncpy(full_username, username, sizeof(full_username)/sizeof(WCHAR));
 		}
 
-		full_username[sizeof(full_username) - 1] = '\0';
-
-		CharToOem(full_username, oem_username);
+		full_username[sizeof(full_username)/sizeof(WCHAR) - 1] = L'\0';
 
 		username = full_username;
 
 		if (password == 0)
 		{
-			printf("Enter %s user password : ", oem_username);
-			p = keyb_password;
+			printf("Enter %ws user password : ", username);
+			TEXT* p = keyb_password;
 			const TEXT* const pass_end = p + sizeof(keyb_password) - 1;	// keep room for '\0'
 
 			while (p < pass_end && (*p++ = getch()) != '\r')
@@ -237,8 +234,9 @@ int CLIB_ROUTINE main( int argc, char **argv)
 			*(p - 1) = '\0';	// Cuts at '\r'
 
 			printf("\n");
-			OemToChar(keyb_password, keyb_password);
-			password = keyb_password;
+			if (MultiByteToWideChar(CP_ACP, 0, keyb_password, p - keyb_password, password_buf, sizeof(password_buf) / sizeof(WCHAR)) == 0)
+				return svc_error(GetLastError(), "MultibyteToWideChar", NULL);
+			password = password_buf;
 		}
 
 		// Let's grant "Logon as a Service" right to the -login user
@@ -247,15 +245,15 @@ int CLIB_ROUTINE main( int argc, char **argv)
 			case FB_PRIVILEGE_ALREADY_GRANTED:
 				/*
 				// OM - I think it is better not to bother the admin with this message.
-				printf("The 'Logon as a Service' right was already granted to %s\n", oem_username);
+				printf("The 'Logon as a Service' right was already granted to %ws\n", username);
 				*/
 				break;
 			case FB_SUCCESS:
-				printf("The 'Logon as a Service' right has been granted to %s\n", oem_username);
+				printf("The 'Logon as a Service' right has been granted to %ws\n", username);
 				break;
 			case FB_FAILURE:
 			default:
-				printf("Failed granting the 'Logon as a Service' right to %s\n", oem_username);
+				printf("Failed granting the 'Logon as a Service' right to %ws\n", username);
 				exit(FINI_ERROR);
 				break;
 		}
@@ -266,11 +264,11 @@ int CLIB_ROUTINE main( int argc, char **argv)
 			case FB_PRIVILEGE_ALREADY_GRANTED:
 				break;
 			case FB_SUCCESS:
-				printf("The 'Adjust memory quotas for a process' right has been granted to %s\n", oem_username);
+				printf("The 'Adjust memory quotas for a process' right has been granted to %ws\n", username);
 				break;
 			case FB_FAILURE:
 			default:
-				printf("Failed granting the 'Adjust memory quotas for a process' right to %s\n", oem_username);
+				printf("Failed granting the 'Adjust memory quotas for a process' right to %ws\n", username);
 				exit(FINI_ERROR);
 				break;
 		}
@@ -305,19 +303,29 @@ int CLIB_ROUTINE main( int argc, char **argv)
 	USHORT status, status2;
 	SC_HANDLE service;
 
-	Firebird::string guard_service_name, guard_display_name;
-	guard_service_name.printf(ISCGUARD_SERVICE, instance);
-	guard_display_name.printf(ISCGUARD_DISPLAY_NAME, instance);
+	WCHAR guard_service_name[256], guard_display_name[256];
+	wcscpy(guard_service_name, ISCGUARD_SERVICE);
+	wcscat(guard_service_name, instance);
+	wcscpy(guard_display_name, ISCGUARD_DISPLAY_NAME);
+	wcscat(guard_display_name, instance);
 
-	Firebird::string remote_service_name, remote_display_name;
-	remote_service_name.printf(REMOTE_SERVICE, instance);
-	remote_display_name.printf(REMOTE_DISPLAY_NAME, instance);
+	WCHAR remote_service_name[256], remote_display_name[256];
+	wcscpy(remote_service_name, REMOTE_SERVICE);
+	wcscat(remote_service_name, instance);
+	wcscpy(remote_display_name, REMOTE_DISPLAY_NAME);
+	wcscat(remote_display_name, instance);
 
-	Firebird::string switches;
-	if (strchr(instance, ' '))
-		switches.printf("-s \"%s\"", instance);
+	WCHAR switches[128] = L"-s ";
+	if (wcschr(instance, L' '))
+	{
+		wcscat(switches, L"\"");
+		wcscat(switches, instance);
+		wcscat(switches, L"\"");
+	}
 	else
-		switches.printf("-s %s", instance);
+	{
+		wcscat(switches, instance);
+	}
 
 	switch (sw_command)
 	{
@@ -326,12 +334,12 @@ int CLIB_ROUTINE main( int argc, char **argv)
 			if (sw_guardian)
 			{
 				status = SERVICES_install(manager,
-										  guard_service_name.c_str(),
-										  guard_display_name.c_str(),
+										  guard_service_name,
+										  guard_display_name,
 										  ISCGUARD_DISPLAY_DESCR,
 										  ISCGUARD_EXECUTABLE,
 										  directory,
-										  switches.c_str(),
+										  switches,
 										  NULL,
 										  sw_startup,
 										  username,
@@ -345,12 +353,12 @@ int CLIB_ROUTINE main( int argc, char **argv)
 				if (username != 0)
 				{
 					status2 =
-						SERVICES_grant_access_rights(guard_service_name.c_str(), username, svc_error);
+						SERVICES_grant_access_rights(guard_service_name, username, svc_error);
 				}
 
 				if (status == FB_SUCCESS && status2 == FB_SUCCESS)
 				{
-					printf("Service \"%s\" successfully created.\n", guard_display_name.c_str());
+					printf("Service \"%ws\" successfully created.\n", guard_display_name);
 				}
 
 				// Set sw_startup to manual in preparation for install the service
@@ -359,12 +367,12 @@ int CLIB_ROUTINE main( int argc, char **argv)
 
 			// do the install of the server
 			status = SERVICES_install(manager,
-									  remote_service_name.c_str(),
-									  remote_display_name.c_str(),
+									  remote_service_name,
+									  remote_display_name,
 									  REMOTE_DISPLAY_DESCR,
 									  REMOTE_EXECUTABLE,
 									  directory,
-									  switches.c_str(),
+									  switches,
 									  NULL,
 									  sw_startup,
 									  username,
@@ -378,32 +386,31 @@ int CLIB_ROUTINE main( int argc, char **argv)
 			if (username != 0)
 			{
 				status2 =
-					SERVICES_grant_access_rights(remote_service_name.c_str(), username, svc_error);
+					SERVICES_grant_access_rights(remote_service_name, username, svc_error);
 			}
 
 			if (status == FB_SUCCESS && status2 == FB_SUCCESS)
 			{
-				printf("Service \"%s\" successfully created.\n", remote_display_name.c_str());
+				printf("Service \"%ws\" successfully created.\n", remote_display_name);
 			}
 
 			break;
 
 		case COMMAND_REMOVE:
-			service = OpenService(manager, guard_service_name.c_str(), SERVICE_ALL_ACCESS);
+			service = OpenServiceW(manager, guard_service_name, SERVICE_ALL_ACCESS);
 			if (service)
 			{
 				CloseServiceHandle(service);
 
-				status = SERVICES_remove(manager, guard_service_name.c_str(),
-										 /*guard_display_name.c_str(),*/ svc_error);
+				status = SERVICES_remove(manager, guard_service_name, svc_error);
 
 				if (status == FB_SUCCESS)
 				{
-					printf("Service \"%s\" successfully deleted.\n", guard_display_name.c_str());
+					printf("Service \"%ws\" successfully deleted.\n", guard_display_name);
 				}
 				else if (status == IB_SERVICE_RUNNING)
 				{
-					printf("Service \"%s\" not deleted.\n", guard_display_name.c_str());
+					printf("Service \"%ws\" not deleted.\n", guard_display_name);
 					printf("You must stop it before attempting to delete it.\n\n");
 				}
 			}
@@ -412,21 +419,20 @@ int CLIB_ROUTINE main( int argc, char **argv)
 				status = (GetLastError() == ERROR_SERVICE_DOES_NOT_EXIST) ? FB_SUCCESS : FB_FAILURE;
 			}
 
-			service = OpenService(manager, remote_service_name.c_str(), SERVICE_ALL_ACCESS);
+			service = OpenServiceW(manager, remote_service_name, SERVICE_ALL_ACCESS);
 			if (service)
 			{
 				CloseServiceHandle(service);
 
-				status2 = SERVICES_remove(manager, remote_service_name.c_str(),
-										  /*remote_display_name.c_str(),*/ svc_error);
+				status2 = SERVICES_remove(manager, remote_service_name, svc_error);
 
 				if (status2 == FB_SUCCESS)
 				{
-					printf("Service \"%s\" successfully deleted.\n", remote_display_name.c_str());
+					printf("Service \"%ws\" successfully deleted.\n", remote_display_name);
 				}
 				else if (status2 == IB_SERVICE_RUNNING)
 				{
-					printf("Service \"%s\" not deleted.\n", remote_display_name.c_str());
+					printf("Service \"%ws\" not deleted.\n", remote_display_name);
 					printf("You must stop it before attempting to delete it.\n\n");
 				}
 			}
@@ -442,58 +448,54 @@ int CLIB_ROUTINE main( int argc, char **argv)
 
 		case COMMAND_START:
 			// Test for use of the guardian. If so, start the guardian else start the server
-			service = OpenService(manager, guard_service_name.c_str(), SERVICE_START);
+			service = OpenServiceW(manager, guard_service_name, SERVICE_START);
 			if (service)
 			{
 				CloseServiceHandle(service);
 
-				status = SERVICES_start(manager, guard_service_name.c_str(),
-										/*guard_display_name.c_str(),*/ sw_mode, svc_error);
+				status = SERVICES_start(manager, guard_service_name, sw_mode, svc_error);
 
 				if (status == FB_SUCCESS)
 				{
-					printf("Service \"%s\" successfully started.\n", guard_display_name.c_str());
+					printf("Service \"%ws\" successfully started.\n", guard_display_name);
 				}
 			}
 			else
 			{
 				CloseServiceHandle(service);
 
-				status = SERVICES_start(manager, remote_service_name.c_str(),
-										/*remote_display_name.c_str(),*/ sw_mode, svc_error);
+				status = SERVICES_start(manager, remote_service_name, sw_mode, svc_error);
 
 				if (status == FB_SUCCESS)
 				{
-					printf("Service \"%s\" successfully started.\n", remote_display_name.c_str());
+					printf("Service \"%ws\" successfully started.\n", remote_display_name);
 				}
 			}
 			break;
 
 		case COMMAND_STOP:
 			// Test for use of the guardian. If so, stop the guardian else stop the server
-			service = OpenService(manager, guard_service_name.c_str(), SERVICE_STOP);
+			service = OpenServiceW(manager, guard_service_name, SERVICE_STOP);
 			if (service)
 			{
 				CloseServiceHandle(service);
 
-				status = SERVICES_stop(manager, guard_service_name.c_str(),
-									   /*guard_display_name.c_str(),*/ svc_error);
+				status = SERVICES_stop(manager, guard_service_name, svc_error);
 
 				if (status == FB_SUCCESS)
 				{
-					printf("Service \"%s\" successfully stopped.\n", guard_display_name.c_str());
+					printf("Service \"%ws\" successfully stopped.\n", guard_display_name);
 				}
 			}
 			else
 			{
 				CloseServiceHandle(service);
 
-				status = SERVICES_stop(manager, remote_service_name.c_str(),
-									   /*remote_display_name.c_str(),*/ svc_error);
+				status = SERVICES_stop(manager, remote_service_name, svc_error);
 
 				if (status == FB_SUCCESS)
 				{
-					printf("Service \"%s\" successfully stopped.\n", remote_display_name.c_str());
+					printf("Service \"%ws\" successfully stopped.\n", remote_display_name);
 				}
 			}
 			break;
@@ -501,8 +503,8 @@ int CLIB_ROUTINE main( int argc, char **argv)
 		case COMMAND_QUERY:
 			if (svc_query_ex(manager) == FB_FAILURE)
 			{
-				svc_query(guard_service_name.c_str(), guard_display_name.c_str(), manager);
-				svc_query(remote_service_name.c_str(), remote_display_name.c_str(), manager);
+				svc_query(guard_service_name, guard_display_name, manager);
+				svc_query(remote_service_name, remote_display_name, manager);
 			}
 
 			status = FB_SUCCESS;
@@ -541,27 +543,25 @@ static USHORT svc_query_ex(SC_HANDLE manager)
 	DWORD pcbBytesNeeded = 0;
 	USHORT rc = FB_FAILURE;
 
-	EnumServicesStatus(manager, SERVICE_WIN32, SERVICE_STATE_ALL, NULL, 0,
+	EnumServicesStatusW(manager, SERVICE_WIN32, SERVICE_STATE_ALL, NULL, 0,
 		&pcbBytesNeeded, &lpServicesReturned, &lpResumeHandle);
 
     if ( GetLastError() == ERROR_MORE_DATA )
 	{
-		const DWORD dwBytes = pcbBytesNeeded + sizeof(ENUM_SERVICE_STATUS);
-		ENUM_SERVICE_STATUS* service_data = FB_NEW ENUM_SERVICE_STATUS [dwBytes];
-		EnumServicesStatus(manager, SERVICE_WIN32, SERVICE_STATE_ALL, service_data, dwBytes,
+		const DWORD dwBytes = pcbBytesNeeded + sizeof(ENUM_SERVICE_STATUSW);
+		ENUM_SERVICE_STATUSW* service_data = FB_NEW ENUM_SERVICE_STATUSW [dwBytes];
+		EnumServicesStatusW(manager, SERVICE_WIN32, SERVICE_STATE_ALL, service_data, dwBytes,
 			&pcbBytesNeeded, &lpServicesReturned, &lpResumeHandle);
 
 		if (lpServicesReturned == 0)
 			delete[] service_data;
 		else
 		{
-			Firebird::string serverServiceName;
 			bool firebirdServicesInstalled = false;
 
 			for ( DWORD i = 0; i < lpServicesReturned; i++ )
 			{
-				serverServiceName = service_data[i].lpServiceName;
-				if ( serverServiceName.substr(0, 8) == "Firebird" )
+				if (wcsncmp(service_data[i].lpServiceName, L"Firebird", 8) == 0)
 				{
 					svc_query(service_data[i].lpServiceName, service_data[i].lpDisplayName, manager);
 
@@ -582,7 +582,7 @@ static USHORT svc_query_ex(SC_HANDLE manager)
 }
 
 
-static void svc_query(const char* name, const char* display_name, SC_HANDLE manager)
+static void svc_query(const WCHAR* name, const WCHAR* display_name, SC_HANDLE manager)
 {
 /**************************************
  *
@@ -597,11 +597,11 @@ static void svc_query(const char* name, const char* display_name, SC_HANDLE mana
 	if (manager == NULL)
 		return;
 
-	SC_HANDLE service = OpenService(manager, name, SERVICE_QUERY_STATUS | SERVICE_QUERY_CONFIG);
+	SC_HANDLE service = OpenServiceW(manager, name, SERVICE_QUERY_STATUS | SERVICE_QUERY_CONFIG);
 
 	if (service)
 	{
-		printf("\n%s IS installed.\n", display_name);
+		printf("\n%ws IS installed.\n", display_name);
 		SERVICE_STATUS service_status;
 		if (QueryServiceStatus(service, &service_status))
 		{
@@ -629,13 +629,11 @@ static void svc_query(const char* name, const char* display_name, SC_HANDLE mana
 			svc_error(GetLastError(), "QueryServiceStatus", NULL);
 
 		ULONG uSize;
-		QueryServiceConfig(service, NULL, 0, &uSize);
-		QUERY_SERVICE_CONFIG* qsc = (QUERY_SERVICE_CONFIG*) FB_NEW UCHAR[uSize];
-		if (qsc && QueryServiceConfig(service, qsc, uSize, &uSize))
+		QueryServiceConfigW(service, NULL, 0, &uSize);
+		QUERY_SERVICE_CONFIGW* qsc = (QUERY_SERVICE_CONFIGW*) FB_NEW UCHAR[uSize];
+		if (qsc && QueryServiceConfigW(service, qsc, uSize, &uSize))
 		{
-			CharToOem(qsc->lpBinaryPathName, qsc->lpBinaryPathName);
-			CharToOem(qsc->lpServiceStartName, qsc->lpServiceStartName);
-			printf("  Path    : %s\n", qsc->lpBinaryPathName);
+			printf("  Path    : %ws\n", qsc->lpBinaryPathName);
 			printf("  Startup : ");
 			switch (qsc->dwStartType)
 			{
@@ -655,7 +653,7 @@ static void svc_query(const char* name, const char* display_name, SC_HANDLE mana
 			if (! qsc->lpServiceStartName)
 				printf("  Run as  : LocalSystem");
 			else
-				printf("  Run as  : %s", qsc->lpServiceStartName);
+				printf("  Run as  : %ws", qsc->lpServiceStartName);
 
 			if (qsc->dwServiceType & SERVICE_INTERACTIVE_PROCESS)
 				printf(" (Interactive)\n");
@@ -670,7 +668,7 @@ static void svc_query(const char* name, const char* display_name, SC_HANDLE mana
 		CloseServiceHandle(service);
 	}
 	else
-		printf("\n%s is NOT installed.\n", display_name);
+		printf("\n%ws is NOT installed.\n", display_name);
 
 	return;
 }
@@ -713,7 +711,6 @@ static USHORT svc_error( SLONG status, const TEXT* string, SC_HANDLE service)
 		}
 		else
 		{
-			CharToOem(buffer, buffer);
 			printf("%s", buffer);	// '\n' is included in system messages
 		}
 	}

@@ -56,65 +56,6 @@ public:
 	/// The directory list separator for the platform.
 	static const char dir_list_sep;
 
-	/** An abstract base class for iterating through the contents of a directory.
-		Instances of this class are created using the newDirItr method of
-		the PathUtils class.  Each platform implementation is expected to
-		subclass dir_iterator to create dir_iterator objects that function
-		correctly on the platform.
-	**/
-	class dir_iterator : protected Firebird::AutoStorage
-	{
-	public:
-		/// The constructor requires a string that is the path of the
-		///	directory being iterater.
-		/// dir_iterator may be located on stack, therefore use AutoStorage
-		dir_iterator(MemoryPool& p, const Firebird::PathName& dir)
-			: AutoStorage(p), dirPrefix(getPool(), dir)
-		{}
-
-		dir_iterator(const Firebird::PathName& dir)
-			: AutoStorage(), dirPrefix(getPool(), dir)
-		{}
-
-		/// destructor provided for memory cleanup.
-		virtual ~dir_iterator() {}
-
-		/// The prefix increment operator (++itr) advances the iteration by
-		/// one and returns a reference to itself to allow cascading operations.
-		virtual const dir_iterator& operator++() = 0;
-
-		/// The dereference operator returns a reference to the current
-		/// item in the iteration.  This path is prefixed with the path of
-		/// the directory.  If the last element of the path is wanted use
-		/// PathUtils::splitLastComponent on the result of this function.
-		virtual const Firebird::PathName& operator*() = 0;
-
-		/// Tests if the iterator has reached the end of the iteration.
-		/// It is implemented in such a way to make the following for loop
-		/// work correctly: for (dir_iterator *itr = PathUtils::newDirItr(); *itr; ++(*itr))
-		virtual operator bool() = 0;
-
-	protected:
-		/// Stores the path to the directory as given in the constructor.
-		const Firebird::PathName dirPrefix;
-
-	private:
-		/// default constructor not allowed.
-		dir_iterator();		// no impl
-		/// copy constructor not allowed
-		dir_iterator(const dir_iterator&);		// no impl
-		/// assignment operator not allowed
-		const dir_iterator& operator=(const dir_iterator&);		// no impl
-
-	};
-
-	/** isRelative returns true if the given path is relative, and false if not.
-		A relative path is one specified in relation to the current directory.
-		For example, the path 'firebird/bin' is a relative path in unix while
-		the path '/opt/firebird/bin' is not.
-	**/
-	static bool isRelative(const Firebird::PathName& path);
-
 	/** isSymLink returns true if the given path is symbolic link, and false if not.
 		Use of this links may provide way to override system security.
 		Example: ln -s /usr/firebird/ExternalTables/mytable /etc/xinet.d/remoteshell
@@ -127,49 +68,19 @@ public:
 	**/
 	static bool canAccess(const Firebird::PathName& path, int mode);
 
-	/** Concatenates the two paths given in the second and third parameters,
-		and writes the resulting path into the first parameter.  The
-		two path input arguments (arg 2 and 3) are concatenated in the order
-		arg2 arg3.  The concatenation is done is such a way as to remove
-		any duplicate directory separators that may have resulted from
-		a simple string concatenation of the arguments with the directory
-		separator character.
-	**/
-	static void concatPath(Firebird::PathName&, const Firebird::PathName&,
-					const Firebird::PathName&);
-
-	// Tries to ensure our path finishes with a platform-specific directory separator.
-	// We don't work correctly with MBCS.
-	static void ensureSeparator(Firebird::PathName& in_out);
-
 	/** splitLastComponent takes a path as the third argument and
 		removes the last component in that path (usually a file or directory name).
 		The removed component is returned in the second parameter, and the path left
 		after the component is removed is returned in the first parameter.
 		If the input path has only one component that component is returned in the
 		second parameter and the first parameter is set to the empty string.
+		It is safe to use the same variable as input and any output parameters.
 	**/
 	static void splitLastComponent(Firebird::PathName&, Firebird::PathName&,
 									const Firebird::PathName&);
 
-	/**	splitPrefix takes a path as the first argument, splits OS-dependent prefix
-		from it (something like C:\, D: or \ in windows or / in posix),
-		and returns stripped path inplace, i.e. as first argument.
-		Prefix is returned as the second argument.
-	**/
-	static void splitPrefix(Firebird::PathName& path, Firebird::PathName& prefix);
-
-	/** This is the factory method for allocating dir_iterator objects.
-		It takes a reference to a memory pool to use for all heap allocations,
-		and the path of the directory to iterate (in that order).  It is the
-		responsibility of the caller to delete the object when they are done with it.
-		All errors result in either exceptions being thrown, or a valid empty
-		dir_iterator being returned.
-	**/
-	static dir_iterator* newDirItr(MemoryPool&, const Firebird::PathName&);
-
 	/** setDirIterator converts all dir iterators to one required on current
-		platform.
+	platform.
 	**/
 	static void setDirIterator(char* path);
 

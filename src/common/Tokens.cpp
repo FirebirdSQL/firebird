@@ -215,9 +215,9 @@ void Tokens::error(const char* fmt, ...)
 	(Arg::Gds(isc_random) << "Parse to tokens error" << Arg::Gds(isc_random) << buffer).raise();
 }
 
-string Tokens::Tok::stripped() const
+NoCaseString Tokens::Tok::stripped() const
 {
-	string rc;
+	NoCaseString rc;
 	char q = text[0];
 
 	for (FB_SIZE_T i = 1; i < length - 1; ++i)

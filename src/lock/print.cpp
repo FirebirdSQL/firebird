@@ -46,6 +46,7 @@
 #include "../common/isc_s_proto.h"
 #include "../common/StatusHolder.h"
 #include "../common/os/os_utils.h"
+#include "../common/isc_f_proto.h"
 
 namespace Jrd {
 // Lock types
@@ -508,13 +509,14 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 	else if (db_file)
 	{
 		Firebird::PathName org_name = db_file;
+		ISC_systemToUtf8(org_name);
 		Firebird::PathName db_name;
 		expandDatabaseName(org_name, db_name, NULL);
 
 		// Below code mirrors the one in JRD (PIO modules and Database class).
 		// Maybe it's worth putting it into common, if no better solution is found.
 #ifdef WIN_NT
-		const HANDLE h = CreateFile(db_name.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+		const HANDLE h = CreateFileW(os_utils::WideCharBuffer(db_name), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
 									NULL, OPEN_EXISTING, 0, 0);
 		if (h == INVALID_HANDLE_VALUE)
 		{

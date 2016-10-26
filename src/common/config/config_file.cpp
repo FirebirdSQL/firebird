@@ -299,7 +299,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 		case '=':
 			if (par.name.isEmpty())
 			{
-				par.name = input.substr(0, n).ToNoCaseString();
+				par.name = input.substr(0, n);
 				par.name.rtrim(" \t\r");
 				if (par.name.isEmpty())		// not good - no key
 					return LINE_BAD;
@@ -327,10 +327,10 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 		case '\t':
 			if (n == incLen && par.name.isEmpty())
 			{
-				KeyType inc = input.substr(0, n).ToNoCaseString();
+				KeyType inc(input, 0, n);
 				if (inc == include)
 				{
-					par.value = input.substr(n);
+					par.value = input.substr(0, n);
 					par.value.alltrim(" \t\r");
 
 					if (!macroParse(par.value, fileName))
@@ -382,7 +382,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 
 	if (par.name.isEmpty())
 	{
-		par.name = input.substr(0, eol).ToNoCaseString();
+		par.name = input.substr(0, eol);
 		par.name.rtrim(" \t\r");
 		par.value.erase();
 	}
@@ -417,7 +417,7 @@ bool ConfigFile::macroParse(String& value, const char* fileName) const
 		if (subTo != String::npos)
 		{
 			String macro;
-			String m = value.substr(subFrom + 2, subTo - (subFrom + 2));
+			Macro m(value.substr(subFrom + 2, subTo - (subFrom + 2)));
 			if (! translate(fileName, m, macro))
 			{
 				return false;
@@ -456,7 +456,7 @@ bool ConfigFile::macroParse(String& value, const char* fileName) const
  *	Find macro value
  */
 
-bool ConfigFile::translate(const char* fileName, const String& from, String& to) const
+bool ConfigFile::translate(const char* fileName, const Macro& from, String& to) const
 {
 	if (from == "root")
 	{
@@ -484,13 +484,13 @@ bool ConfigFile::translate(const char* fileName, const String& from, String& to)
 
 			if (n != -1)
 			{
-				tempPath.assign(temp, n);
+				PathName link(temp, n);
 
-				if (PathUtils::isRelative(tempPath))
+				if (link.isRelative())
 				{
-					PathName parent;
-					PathUtils::splitLastComponent(parent, tempPath, fileName);
-					PathUtils::concatPath(tempPath, parent, temp);
+					PathName dummy;
+					PathUtils::splitLastComponent(tempPath, dummy, tempPath);
+					tempPath.appendPath(link);
 				}
 			}
 		}
@@ -498,7 +498,7 @@ bool ConfigFile::translate(const char* fileName, const String& from, String& to)
 
 		PathName path, file;
 		PathUtils::splitLastComponent(path, file, tempPath);
-		to = path.ToString();
+		to = path;
 	}
 	else if (!substituteStandardDir(from, to))
 	{
@@ -513,7 +513,7 @@ bool ConfigFile::translate(const char* fileName, const String& from, String& to)
  *	Return parameter value as boolean
  */
 
-bool ConfigFile::substituteStandardDir(const String& from, String& to) const
+bool ConfigFile::substituteStandardDir(const Macro& from, String& to) const
 {
 	using namespace fb_utils;
 
@@ -521,7 +521,7 @@ bool ConfigFile::substituteStandardDir(const String& from, String& to) const
 		unsigned code;
 		const char* name;
 	} dirs[] = {
-#define NMDIR(a) {Firebird::IConfigManager::a, "FB_"#a},
+#define NMDIR(a) {Firebird::IConfigManager::a, #a},
 		NMDIR(DIR_CONF)
 		NMDIR(DIR_SECDB)
 		NMDIR(DIR_PLUGINS)
@@ -536,10 +536,9 @@ bool ConfigFile::substituteStandardDir(const String& from, String& to) const
 
 	for (const Dir* d = dirs; d->name; ++d)
 	{
-		const char* target = &(d->name[3]);		// skip FB_
-		if (from.equalsNoCase(target))
+		if (from == d->name)
 		{
-			to = getPrefix(d->code, "").c_str();
+			to = getPrefix(d->code, "");
 			return true;
 		}
 	}
@@ -631,7 +630,7 @@ void ConfigFile::parse(Stream* stream)
 			break;
 
 		case LINE_INCLUDE:
-			include(streamName, current.value.ToPathName());
+			include(streamName, current.value);
 			break;
 
 		case LINE_START_SUB:
@@ -682,7 +681,7 @@ void ConfigFile::parse(Stream* stream)
  *	Parse include operator
  */
 
-void ConfigFile::include(const char* currentFileName, const PathName& parPath)
+void ConfigFile::include(const char* currentFileName, const String& param)
 {
 #ifdef DEBUG_INCLUDES
 	fprintf(stderr, "include into %s file(s) %s\n", currentFileName, parPath.c_str());
@@ -691,24 +690,24 @@ void ConfigFile::include(const char* currentFileName, const PathName& parPath)
 	AutoSetRestore<unsigned> depth(&includeLimit, includeLimit + 1);
 	if (includeLimit > INCLUDE_LIMIT)
 	{
-		(Arg::Gds(isc_conf_include) << currentFileName << parPath << Arg::Gds(isc_include_depth)).raise();
+		(Arg::Gds(isc_conf_include) << currentFileName << param << Arg::Gds(isc_include_depth)).raise();
 	}
 
 	// for relative paths first of all prepend with current path (i.e. path of current conf file)
 	PathName path;
-	if (PathUtils::isRelative(parPath))
+	PathName parPath(param);
+	if (parPath.isRelative())
 	{
 		PathName dummy;
 		PathUtils::splitLastComponent(path, dummy, currentFileName);
 	}
-	PathUtils::concatPath(path, path, parPath);
+	path.appendPath(parPath);
 
 	// split path into components
-	PathName pathPrefix;
-	PathUtils::splitPrefix(path, pathPrefix);
 	bool hadWildCards = hasWildCards(path);		// Expect no *? in prefix
 	FilesArray components;
-	while (path.hasData())
+	PathName::size_type prefix = path.find(PathUtils::dir_sep);
+	while (path.length() - 1 > prefix)
 	{
 		PathName cur, tmp;
 		PathUtils::splitLastComponent(tmp, cur, path);
@@ -722,7 +721,7 @@ void ConfigFile::include(const char* currentFileName, const PathName& parPath)
 	}
 
 	// analyze components for wildcards
-	if (!wildCards(currentFileName, pathPrefix, components))
+	if (!wildCards(currentFileName, path, components))
 	{
 		// no matches found - check for presence of wild symbols in path
 		if (!hadWildCards)
@@ -759,13 +758,12 @@ bool ConfigFile::wildCards(const char* currentFileName, const PathName& pathPref
 	ScanDir list(prefix.c_str(), next.c_str());
 	while (list.next())
 	{
-		PathName name;
 		const PathName fileName = list.getFileName();
 		if (fileName == PathUtils::curr_dir_link || fileName == PathUtils::up_dir_link)
 			continue;
 		if (mustBeDir && !list.isDirectory())
 			continue;
-		PathUtils::concatPath(name, pathPrefix, fileName);
+		PathName name(pathPrefix, fileName);
 
 #ifdef DEBUG_INCLUDES
 		fprintf(stderr, "in Scan: name=%s pathPrefix=%s list.fileName=%s\n",

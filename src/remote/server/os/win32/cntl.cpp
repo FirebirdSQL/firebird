@@ -44,13 +44,13 @@ static USHORT report_status(DWORD, DWORD, DWORD, DWORD);
 
 static ThreadEntryPoint* main_handler;
 static SERVICE_STATUS_HANDLE service_handle;
-static Firebird::GlobalPtr<Firebird::string> service_name;
-static Firebird::GlobalPtr<Firebird::string> mutex_name;
+static WCHAR service_name[257];
+static WCHAR mutex_name[MAX_PATH];
 static HANDLE stop_event_handle;
 static HANDLE hMutex = NULL;
 
 
-void CNTL_init(ThreadEntryPoint* handler, const TEXT* name)
+void CNTL_init(ThreadEntryPoint* handler, const WCHAR* name)
 {
 /**************************************
  *
@@ -63,12 +63,14 @@ void CNTL_init(ThreadEntryPoint* handler, const TEXT* name)
  **************************************/
 
 	main_handler = handler;
-	service_name->printf(REMOTE_SERVICE, name);
-	mutex_name->printf(GUARDIAN_MUTEX, name);
+	wcscpy(service_name, REMOTE_SERVICE);
+	wcscat(service_name, name);
+	wcscpy(mutex_name, GUARDIAN_MUTEX);
+	wcscat(mutex_name, name);
 }
 
 
-void WINAPI CNTL_main_thread( DWORD /*argc*/, char* /*argv*/[])
+void WINAPI CNTL_main_thread( DWORD /*argc*/, WCHAR* /*argv*/[])
 {
 /**************************************
  *
@@ -79,7 +81,7 @@ void WINAPI CNTL_main_thread( DWORD /*argc*/, char* /*argv*/[])
  * Functional description
  *
  **************************************/
-	service_handle = RegisterServiceCtrlHandler(service_name->c_str(), control_thread);
+	service_handle = RegisterServiceCtrlHandlerW(service_name, control_thread);
 	if (!service_handle)
 		return;
 
@@ -134,9 +136,9 @@ void CNTL_shutdown_service( const TEXT* message)
 	const char* strings[2];
 
 	char buffer[BUFFER_LARGE];
-	sprintf(buffer, "%s error: %lu", service_name->c_str(), GetLastError());
+	sprintf(buffer, "%ws error: %lu", service_name, GetLastError());
 
-	HANDLE event_source = RegisterEventSource(NULL, service_name->c_str());
+	HANDLE event_source = RegisterEventSourceW(NULL, REMOTE_SERVICE);
 	if (event_source)
 	{
 		strings[0] = buffer;
@@ -148,7 +150,7 @@ void CNTL_shutdown_service( const TEXT* message)
 					NULL,
 					2,
 					0,
-					const_cast<const char**>(strings), NULL);
+					strings, NULL);
 		DeregisterEventSource(event_source);
 	}
 
@@ -185,7 +187,7 @@ static void WINAPI control_thread( DWORD action)
 		break;
 
 	case SERVICE_CREATE_GUARDIAN_MUTEX:
-		hMutex = OpenMutex(SYNCHRONIZE, FALSE, mutex_name->c_str());
+		hMutex = OpenMutexW(SYNCHRONIZE, FALSE, mutex_name);
 		if (hMutex)
 		{
 			UINT error_mode = SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |

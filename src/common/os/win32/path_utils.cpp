@@ -1,6 +1,7 @@
 
 #include "firebird.h"
 #include "../common/os/path_utils.h"
+#include "../common/os/os_utils.h"
 #include <io.h> 		// _access
 #include <direct.h>		// _mkdir
 
@@ -13,74 +14,6 @@ const char PathUtils::dir_list_sep = ';';
 const size_t PathUtils::curr_dir_link_len = strlen(curr_dir_link);
 const size_t PathUtils::up_dir_link_len = strlen(up_dir_link);
 
-class Win32DirItr : public PathUtils::dir_iterator
-{
-public:
-	Win32DirItr(MemoryPool& p, const Firebird::PathName& path)
-		: dir_iterator(p, path), dir(0), file(getPool()), done(false)
-	{
-		Win32DirInit();
-	}
-	Win32DirItr(const Firebird::PathName& path)
-		: dir_iterator(path), dir(0), file(getPool()), done(false)
-	{
-		Win32DirInit();
-	}
-	~Win32DirItr();
-	const PathUtils::dir_iterator& operator++();
-	const Firebird::PathName& operator*() { return file; }
-	operator bool() { return !done; }
-
-private:
-	HANDLE dir;
-	WIN32_FIND_DATA fd;
-	Firebird::PathName file;
-	bool done;
-
-	void Win32DirInit();
-};
-
-void Win32DirItr::Win32DirInit()
-{
-	Firebird::PathName dirPrefix2 = dirPrefix;
-
-	if (dirPrefix.length() && dirPrefix[dirPrefix.length() - 1] != PathUtils::dir_sep)
-		dirPrefix2 = dirPrefix2 + PathUtils::dir_sep;
-	dirPrefix2 += "*.*";
-
-	dir = FindFirstFile(dirPrefix2.c_str(), &fd);
-	if (dir == INVALID_HANDLE_VALUE) {
-		dir = 0;
-		done = true;
-	}
-}
-
-Win32DirItr::~Win32DirItr()
-{
-	if (dir)
-		FindClose(dir);
-
-	dir = 0;
-	done = true;
-}
-
-const PathUtils::dir_iterator& Win32DirItr::operator++()
-{
-	if (done)
-		return *this;
-
-	if (!FindNextFile(dir, &fd))
-		done = true;
-	else
-		PathUtils::concatPath(file, dirPrefix, fd.cFileName);
-
-	return *this;
-}
-
-PathUtils::dir_iterator *PathUtils::newDirItr(MemoryPool& p, const Firebird::PathName& path)
-{
-	return FB_NEW_POOL(p) Win32DirItr(p, path);
-}
 
 void PathUtils::splitLastComponent(Firebird::PathName& path, Firebird::PathName& file,
 		const Firebird::PathName& orgPath)
@@ -88,126 +21,20 @@ void PathUtils::splitLastComponent(Firebird::PathName& path, Firebird::PathName&
 	Firebird::PathName::size_type pos = orgPath.rfind(PathUtils::dir_sep);
 	if (pos == Firebird::PathName::npos)
 	{
-		pos = orgPath.rfind('/');	// temp hack to make it work with paths,
-									// not expanded by ISC_expand_filename
-		if (pos == Firebird::PathName::npos)
-		{
-			path = "";
-			file = orgPath;
-			return;
-		}
-	}
-
-	path.erase();
-	path.append(orgPath, 0, pos);	// skip the directory separator
-	file.erase();
-	file.append(orgPath, pos + 1, orgPath.length() - pos - 1);
-}
-
-void PathUtils::concatPath(Firebird::PathName& result,
-		const Firebird::PathName& first,
-		const Firebird::PathName& second)
-{
-	if (first.length() == 0)
-	{
-		result = second;
+		file = orgPath;
+		path.erase();
 		return;
 	}
 
-	result = first;
-
-	// First path used to be from trusted sources like getRootDirectory, etc.
-	// Second path is mostly user-entered and must be carefully parsed to avoid hacking
-	if (second.length() == 0)
+	if (&orgPath == &file)
 	{
-		return;
+		path.assign(orgPath, 0, pos);	// skip the directory separator
+		file.assign(orgPath, pos + 1, orgPath.length() - pos - 1);
 	}
-
-	ensureSeparator(result);
-
-	Firebird::PathName::size_type cur_pos = 0;
-
-	for (Firebird::PathName::size_type pos = 0; cur_pos < second.length(); cur_pos = pos + 1)
+	else
 	{
-		static const char separators[] = "/\\";
-		static const Firebird::PathName::size_type separatorsLen =
-			static_cast<Firebird::PathName::size_type>(strlen(separators));
-
-		pos = second.find_first_of(separators, cur_pos, separatorsLen);
-		if (pos == Firebird::PathName::npos) // simple name, simple handling
-			pos = second.length();
-
-		if (pos == cur_pos) // Empty piece, ignore
-			continue;
-
-		if (pos == cur_pos + curr_dir_link_len &&
-			memcmp(second.c_str() + cur_pos, curr_dir_link, curr_dir_link_len) == 0) // Current dir, ignore
-		{
-			continue;
-		}
-
-		if (pos == cur_pos + up_dir_link_len &&
-			memcmp(second.c_str() + cur_pos, up_dir_link, up_dir_link_len) == 0) // One dir up
-		{
-			if (result.length() < 2)
-			{
-				// We have nothing to cut off, ignore this piece (may be throw an error?..)
-				continue;
-			}
-
-			const Firebird::PathName::size_type up_dir = result.find_last_of(
-				separators, result.length() - 2, separatorsLen);
-
-			if (up_dir == Firebird::PathName::npos)
-				continue;
-
-			result.erase(up_dir + 1);
-			continue;
-		}
-
-		result.append(second, cur_pos, pos - cur_pos + 1); // append the piece including separator
-	}
-}
-
-// We don't work correctly with MBCS.
-void PathUtils::ensureSeparator(Firebird::PathName& in_out)
-{
-	if (in_out.length() == 0)
-		in_out = PathUtils::dir_sep;
-
-	if (in_out[in_out.length() - 1] != PathUtils::dir_sep)
-		in_out += PathUtils::dir_sep;
-}
-
-static bool hasDriveLetter(const Firebird::PathName& path)
-{
-	return path.length() > 2 && path[1] == ':' &&
-		(('A' <= path[0] && path[0] <= 'Z') ||
-		 ('a' <= path[0] && path[0] <= 'z'));
-}
-
-bool PathUtils::isRelative(const Firebird::PathName& path)
-{
-	if (path.length() > 0)
-	{
-		const char ds = hasDriveLetter(path) ? path[2] : path[0];
-		return ds != PathUtils::dir_sep && ds != '/';
-	}
-	return true;
-}
-
-void PathUtils::splitPrefix(Firebird::PathName& path, Firebird::PathName& prefix)
-{
-	prefix.erase();
-	if (hasDriveLetter(path))
-	{
-		prefix = path.substr(0, 2);
-		path.erase(0, 2);
-	}
-	if (path.hasData() && (path[0] == PathUtils::dir_sep || path[0] == '/'))
-	{
-		prefix += path[0];
-		path.erase(0, 1);
+		file.assign(orgPath, pos + 1, orgPath.length() - pos - 1);
+		path.assign(orgPath, 0, pos);	// skip the directory separator
 	}
 }
 
@@ -220,7 +47,7 @@ bool PathUtils::isSymLink(const Firebird::PathName&)
 
 bool PathUtils::canAccess(const Firebird::PathName& path, int mode)
 {
-	return _access(path.c_str(), mode) == 0;
+	return _waccess(os_utils::WideCharBuffer(path), mode) == 0;
 }
 
 void PathUtils::setDirIterator(char* path)
@@ -234,5 +61,5 @@ void PathUtils::setDirIterator(char* path)
 
 int PathUtils::makeDir(const Firebird::PathName& path)
 {
-	return _mkdir(path.c_str()) ? errno : 0;
+	return _wmkdir(os_utils::WideCharBuffer(path)) ? errno : 0;
 }

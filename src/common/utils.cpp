@@ -52,6 +52,7 @@
 #include "../common/StatusArg.h"
 #include "../common/os/os_utils.h"
 #include "../dsql/sqlda_pub.h"
+#include "isc_f_proto.h"
 
 #ifdef WIN_NT
 #include <direct.h>
@@ -266,40 +267,25 @@ int name_length_limit(const TEXT* const name, size_t bufsize)
 //***************
 // Goes to read directly the environment variables from the operating system on Windows
 // and provides a stub for UNIX.
-bool readenv(const char* env_name, Firebird::string& env_value)
+bool readenv(const char* env_name, Firebird::AbstractString& env_value)
 {
 #ifdef WIN_NT
-	const DWORD rc = GetEnvironmentVariable(env_name, NULL, 0);
-	if (rc)
-	{
-		env_value.reserve(rc - 1);
-		DWORD rc2 = GetEnvironmentVariable(env_name, env_value.begin(), rc);
-		if (rc2 < rc && rc2 != 0)
-		{
-			env_value.recalculate_length();
-			return true;
-		}
-	}
+	os_utils::WideCharBuffer value;
+	value.getEnvironmentVariable(env_name);
+	return value.toString(CP_UTF8, env_value) && env_value.hasData();
 #else
 	const char* p = getenv(env_name);
 	if (p)
-		return env_value.assign(p).length() != 0;
-#endif
+	{
+		env_value.assign(p, strlen(p));
+		ISC_systemToUtf8(env_value);
+		return env_value.length() != 0;
+	}
 	// Not found, clear the output var.
-	env_value.begin()[0] = 0;
-	env_value.recalculate_length();
+	env_value.resize(0);
 	return false;
+#endif
 }
-
-
-bool readenv(const char* env_name, Firebird::PathName& env_value)
-{
-	Firebird::string result;
-	bool rc = readenv(env_name, result);
-	env_value.assign(result.c_str(), result.length());
-	return rc;
-}
-
 
 // ***************
 // s n p r i n t f
@@ -686,12 +672,16 @@ bool validateProductSuite (LPCSTR lpszSuiteToValidate)
 
 Firebird::PathName get_process_name()
 {
-	char buffer[MAXPATHLEN];
-
 #if defined(WIN_NT)
-	const int len = GetModuleFileName(NULL, buffer, sizeof(buffer));
-#elif defined(HAVE__PROC_SELF_EXE)
-    const int len = readlink("/proc/self/exe", buffer, sizeof(buffer));
+	os_utils::WideCharBuffer buffer;
+	Firebird::PathName result;
+	buffer.getModuleFileName();
+	buffer.toString(CP_UTF8, result);
+	return result;
+#else
+	char buffer[MAXPATHLEN];
+#if defined(HAVE__PROC_SELF_EXE)
+	const int len = readlink("/proc/self/exe", buffer, sizeof(buffer));
 #else
 	const int len = 0;
 #endif
@@ -703,7 +693,10 @@ Firebird::PathName get_process_name()
 	else
 		buffer[len - 1] = 0;
 
-	return buffer;
+	Firebird::PathName res(buffer);
+	ISC_systemToUtf8(res);
+	return res;
+#endif // defined(WIN_NT)
 }
 
 SLONG genUniqueId()
@@ -714,15 +707,20 @@ SLONG genUniqueId()
 
 void getCwd(Firebird::PathName& pn)
 {
-	char* buffer = pn.getBuffer(MAXPATHLEN);
 #if defined(WIN_NT)
-	_getcwd(buffer, MAXPATHLEN);
-#elif defined(HAVE_GETCWD)
+	os_utils::WideCharBuffer buffer;
+	buffer.getCwd();
+	buffer.toString(CP_UTF8, pn);
+	return;
+#else
+	char* buffer = pn.getBuffer(MAXPATHLEN);
+#if defined(HAVE_GETCWD)
 	FB_UNUSED(getcwd(buffer, MAXPATHLEN));
 #else
 	FB_UNUSED(getwd(buffer));
 #endif
 	pn.recalculate_length();
+#endif
 }
 
 namespace {
@@ -798,22 +796,31 @@ namespace {
 // fetch password from file
 FetchPassResult fetchPassword(const Firebird::PathName& name, const char*& password)
 {
+	Firebird::string pwd;
+	FetchPassResult res = fetchPassword(name, pwd);
+	if (res == FETCH_PASS_OK)
+	{
+		// this is planned leak of a few bytes of memory in utilities
+		char* pass = FB_NEW_POOL(*getDefaultMemoryPool()) char[pwd.length() + 1];
+		pwd.copyTo(pass, pwd.length() + 1);
+		password = pass;
+	}
+	return res;
+}
+
+FetchPassResult fetchPassword(const Firebird::PathName& name, Firebird::AbstractString& pwd)
+{
 	InputFile file(name);
 	if (!file)
 	{
 		return FETCH_PASS_FILE_OPEN_ERROR;
 	}
 
-	Firebird::string pwd;
 	if (! pwd.LoadFromFile(file.getStdioFile()))
 	{
 		return ferror(file.getStdioFile()) ? FETCH_PASS_FILE_READ_ERROR : FETCH_PASS_FILE_EMPTY;
 	}
 
-	// this is planned leak of a few bytes of memory in utilities
-	char* pass = FB_NEW_POOL(*getDefaultMemoryPool()) char[pwd.length() + 1];
-	pwd.copyTo(pass, pwd.length() + 1);
-	password = pass;
 	return FETCH_PASS_OK;
 }
 
@@ -1023,7 +1030,8 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 			configDir[prefType][0])
 		{
 			// Value is set explicitly and is not environment overridable
-			PathUtils::concatPath(s, configDir[prefType], name);
+			s = configDir[prefType];
+			s.appendPath(Firebird::PathName(name));
 			return s;
 		}
 	}
@@ -1101,9 +1109,9 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 
 	if (s.hasData() && name[0])
 	{
-		s += '/';
+		s.appendString(PathUtils::dir_sep);
 	}
-	s += name;
+	s.appendString(name);
 	gds__prefix(tmp, s.c_str());
 	return tmp;
 }

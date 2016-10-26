@@ -103,7 +103,7 @@ public:
 		for (const char** p = patterns; *p; ++p)
 		{
 			symbol.printf(*p, name, majorVersion, minorVersion);
-			module->findSymbol(symbol, ptr);
+			module->findSymbol(symbol.c_str(), ptr);
 			if (ptr)
 				return;
 		}
@@ -1131,8 +1131,12 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 		if ((convIcu = ImplementConversionICU::create(favMaj, favMin)))
 			return *convIcu;
 	}
-	catch (const Exception&)
-	{ }
+	catch (const Exception& e)
+	{
+#ifdef DEV_BUILD
+		iscLogException("Load preferred ICU", e);
+#endif
+	}
 
 	// Do a regular search
 	LocalStatus ls;

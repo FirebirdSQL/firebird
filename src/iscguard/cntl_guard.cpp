@@ -47,12 +47,12 @@ static USHORT report_status(DWORD, DWORD, DWORD, DWORD);
 static DWORD current_state;
 static ThreadEntryPoint* main_handler;
 static SERVICE_STATUS_HANDLE service_handle;
-static Firebird::GlobalPtr<Firebird::string> service_name;
-static Firebird::GlobalPtr<Firebird::string> remote_name;
+static WCHAR service_name[257];
+static WCHAR remote_name[257];
 static HANDLE stop_event_handle;
 
 
-void CNTL_init(ThreadEntryPoint* handler, const TEXT* name)
+void CNTL_init(ThreadEntryPoint* handler, const WCHAR* name)
 {
 /**************************************
  *
@@ -66,12 +66,14 @@ void CNTL_init(ThreadEntryPoint* handler, const TEXT* name)
 
 	main_handler = handler;
 	//MemoryPool& pool = *getDefaultMemoryPool();
-	service_name->printf(ISCGUARD_SERVICE, name);
-	remote_name->printf(REMOTE_SERVICE, name);
+	wcscpy(service_name, ISCGUARD_SERVICE);
+	wcscat(service_name, name);
+	wcscpy(remote_name, REMOTE_SERVICE);
+	wcscat(remote_name, name);
 }
 
 
-void WINAPI CNTL_main_thread( DWORD /*argc*/, char* /*argv*/[])
+void WINAPI CNTL_main_thread( DWORD /*argc*/, WCHAR* /*argv*/[])
 {
 /**************************************
  *
@@ -82,7 +84,7 @@ void WINAPI CNTL_main_thread( DWORD /*argc*/, char* /*argv*/[])
  * Functional description
  *
  **************************************/
-	service_handle = RegisterServiceCtrlHandler(service_name->c_str(), control_thread);
+	service_handle = RegisterServiceCtrlHandlerW(service_name, control_thread);
 	if (!service_handle)
 		return;
 
@@ -125,7 +127,7 @@ void WINAPI CNTL_main_thread( DWORD /*argc*/, char* /*argv*/[])
 	SERVICE_STATUS status_info;
 	SC_HANDLE hScManager = 0, hService = 0;
 	hScManager = OpenSCManager(NULL, NULL, GENERIC_READ);
-	hService = OpenService(hScManager, remote_name->c_str(), GENERIC_READ | GENERIC_EXECUTE);
+	hService = OpenServiceW(hScManager, remote_name, GENERIC_READ | GENERIC_EXECUTE);
 	ControlService(hService, SERVICE_CONTROL_STOP, &status_info);
 	CloseServiceHandle(hScManager);
 	CloseServiceHandle(hService);
@@ -147,9 +149,9 @@ void CNTL_shutdown_service(const TEXT* message)
 	const char* strings[2];
 	char buffer[BUFFER_SMALL];
 
-	sprintf(buffer, "%s error: %lu", service_name->c_str(), GetLastError());
+	sprintf(buffer, "%ws error: %lu", service_name, GetLastError());
 
-	HANDLE event_source = RegisterEventSource(NULL, service_name->c_str());
+	HANDLE event_source = RegisterEventSourceW(NULL, ISCGUARD_SERVICE);
 	if (event_source)
 	{
 		strings[0] = buffer;
@@ -187,7 +189,7 @@ void CNTL_stop_service() //const TEXT* service) // unused param
 	}
 
 	SC_HANDLE service_handleL =
-		OpenService(servicemgr_handle, service_name->c_str(), GENERIC_READ | GENERIC_EXECUTE);
+		OpenServiceW(servicemgr_handle, service_name, GENERIC_READ | GENERIC_EXECUTE);
 
 	if (service_handleL == NULL)
 	{

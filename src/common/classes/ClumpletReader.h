@@ -58,7 +58,8 @@ public:
 		WideTagged,
 		WideUnTagged,
 		SpbSendItems,
-		SpbReceiveItems
+		SpbReceiveItems,
+		SpbResponse
 	};
 
 	struct KindList
@@ -101,7 +102,7 @@ public:
 	SLONG getInt() const;
 	bool getBoolean() const;
 	SINT64 getBigInt() const;
-	string& getString(string& str) const;
+	AbstractString& getString(AbstractString& str) const;
 	MetaName& getString(MetaName& str) const;
 	PathName& getPath(PathName& str) const;
 	void getData(UCharBuffer& data) const;
@@ -123,7 +124,7 @@ public:
 		FB_SIZE_T rc = getBufferEnd() - getBuffer();
 		if (rc == 1 && kind != UnTagged     && kind != SpbStart &&
 					   kind != WideUnTagged && kind != SpbSendItems &&
-					   kind != SpbReceiveItems)
+					   kind != SpbReceiveItems && kind != SpbResponse)
 		{
 			rc = 0;
 		}
@@ -146,7 +147,14 @@ public:
 	}
 
 protected:
-	enum ClumpletType {TraditionalDpb, SingleTpb, StringSpb, IntSpb, BigIntSpb, ByteSpb, Wide};
+	enum ClumpletType {TraditionalDpb,	// one byte length, n bytes value
+					   SingleTpb,		// no data after
+					   StringSpb,		// two bytes length, n bytes data
+					   IntSpb,			// four bytes data
+					   BigIntSpb,		// eight bytes data
+					   ByteSpb,			// one byte data
+					   Wide				// four bytes length, n bytes data
+					  };
 	ClumpletType getClumpletType(UCHAR tag) const;
 	FB_SIZE_T getClumpletSize(bool wTag, bool wLength, bool wData) const;
 	void adjustSpbState();
@@ -167,7 +175,7 @@ protected:
 	virtual void usage_mistake(const char* what) const;
 
 	// This is called when passed buffer appears invalid
-	virtual void invalid_structure(const char* what) const;
+	virtual void invalid_structure(const char* what, const int data = 0) const;
 
 private:
 	// Assignment not implemented.

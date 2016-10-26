@@ -60,12 +60,80 @@
 #define STAT stat64
 #define FLOCK flock64
 #else
+#ifdef WIN_NT
+#define STAT _stat
+#else
 #define STAT stat
+#endif
 #define FLOCK flock
 #endif
 
 namespace os_utils
 {
+#if defined WIN_NT
+#define CP_ASCII 20127
+
+class WideCharBuffer
+{
+public:
+	WideCharBuffer() :
+		m_len16(0)
+	{}
+	explicit WideCharBuffer(const Firebird::PathName& path);
+
+	bool fromString(UINT codePage, const char* str, const int length);
+	inline bool fromString(UINT codePage, const char* str)
+	{
+		return fromString(codePage, str, static_cast<int>(strlen(str)));
+	}
+	inline bool fromString(UINT codePage, const Firebird::AbstractString& str)
+	{
+		return fromString(codePage, str.c_str(), str.length());
+	}
+	bool toString(UINT codePage, Firebird::AbstractString& str);
+	bool toUpper();
+	bool getCwd();
+	bool getTempPath();
+	bool searchFile(WideCharBuffer& path, WideCharBuffer& fileName);
+	// convert then name to its longer version ie. convert longfi~1.fdb
+	// to longfilename.fdb
+	bool getLongFileName();
+	void getEnvironmentVariable(const char* name);
+	bool getModuleFileName(HMODULE module = NULL);
+	bool getSpecialFolderPath(int csidl, BOOL fCreate);
+	operator WCHAR*() { return getBuffer();  }
+	void insert(unsigned int pos, WCHAR c);
+
+	unsigned int getLength()
+	{
+		return m_len16;
+	}
+
+private:
+	WCHAR* getBuffer()
+	{
+		return m_utf16.begin();
+	}
+
+	Firebird::HalfStaticArray<WCHAR, MAX_PATH> m_utf16;
+	unsigned int m_len16;
+};
+
+#else
+class SystemCharBuffer
+{
+	char* internalBuffer;
+public:
+	SystemCharBuffer(const char* buffer, size_t len);
+	SystemCharBuffer(const char* buffer);
+	SystemCharBuffer(const Firebird::PathName& path) : SystemCharBuffer(path.c_str(), path.length()) {}
+	~SystemCharBuffer();
+
+	operator char*() { return internalBuffer; }
+};
+
+#endif // WIN_NT
+
 
 	SLONG get_user_group_id(const TEXT* user_group_name);
 	SLONG get_user_id(const TEXT* user_name);
@@ -81,6 +149,7 @@ namespace os_utils
 	int open(const char* pathname, int flags, mode_t mode = DEFAULT_OPEN_MODE);
 	void setCloseOnExec(int fd);	// posix only
 	FILE* fopen(const char* pathname, const char* mode);
+	int unlink(const char* pathname);
 
 	// return a binary string that uniquely identifies the file
 #ifdef WIN_NT
@@ -107,39 +176,10 @@ namespace os_utils
 
 		return rc;
 	}
-
-	inline int stat(const char* path, struct STAT* buf)
-	{
-		int rc;
-
-		do
-		{
-#ifdef LSB_BUILD
-			rc = stat64(path, buf);
-#else
-			rc = ::stat(path, buf);
-#endif
-		} while (rc == -1 && SYSCALL_INTERRUPTED(errno));
-
-		return rc;
-	}
-
-	inline int fstat(int fd, struct STAT* buf)
-	{
-		int rc;
-
-		do
-		{
-#ifdef LSB_BUILD
-			rc = fstat64(fd, buf);
-#else
-			rc = ::fstat(fd, buf);
-#endif
-		} while (rc == -1 && SYSCALL_INTERRUPTED(errno));
-
-		return rc;
-	}
-
+	
+	int stat(const char* path, struct STAT* buf);
+	int fstat(int fd, struct STAT* buf);
+	
 	inline int fgetpos(FILE* stream, fpos_t* pos)
 	{
 		int rc;
@@ -280,9 +320,9 @@ namespace os_utils
 		do
 		{
 #ifdef LSB_BUILD
-			rc = lstat64(path, buf);
+			rc = lstat64(SystemCharBuffer(path), buf);
 #else
-			rc = ::lstat(path, buf);
+			rc = ::lstat(SystemCharBuffer(path), buf);
 #endif
 		} while (rc == -1 && SYSCALL_INTERRUPTED(errno));
 
@@ -361,6 +401,7 @@ namespace os_utils
 		bool procTerm;
 #endif
 	};
+
 } // namespace os_utils
 
 #endif // INCLUDE_OS_FILE_UTILS_H

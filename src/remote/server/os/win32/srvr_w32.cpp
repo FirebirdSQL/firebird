@@ -84,6 +84,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
+#include <shellapi.h>
 
 #include "fb_exception.h"
 #include "gen/iberror.h"
@@ -120,7 +121,7 @@ static THREAD_ENTRY_DECLARE wnet_connect_wait_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE xnet_connect_wait_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE process_connection_thread(THREAD_ENTRY_PARAM);
-static HANDLE parse_args(LPCSTR, USHORT*);
+static HANDLE parse_args(PWSTR, USHORT*);
 static void service_connection(rem_port*);
 static int wait_threads(const int reason, const int mask, void* arg);
 
@@ -128,7 +129,7 @@ static HINSTANCE hInst;
 
 static TEXT protocol_inet[128];
 static TEXT protocol_wnet[128];
-static TEXT instance[MAXPATHLEN];
+static WCHAR instance[MAXPATHLEN];
 static USHORT server_flag = 0;
 static bool server_shutdown = false;
 
@@ -168,7 +169,7 @@ AtomicCounter ThreadCounter::m_count;
 Semaphore ThreadCounter::m_semaphore;
 
 
-int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs, int nWndMode)
+int WINAPI wWinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, PWSTR lpszArgs, int nWndMode)
 {
 /**************************************
  *
@@ -224,7 +225,7 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 	protocol_inet[0] = 0;
 	protocol_wnet[0] = 0;
 
-	strcpy(instance, FB_DEFAULT_INSTANCE);
+	wcscpy(instance, FB_DEFAULT_INSTANCE);
 
 	if (Config::getServerMode() != MODE_CLASSIC)
 		server_flag = SRVR_multi_client;
@@ -252,10 +253,19 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 		master->serverMode(server_flag & SRVR_multi_client ? 1 : 0);
 	}
 
-	TEXT mutex_name[MAXPATHLEN];
-	fb_utils::snprintf(mutex_name, sizeof(mutex_name), SERVER_MUTEX, instance);
-	fb_utils::prefix_kernel_object_name(mutex_name, sizeof(mutex_name));
-	CreateMutex(ISC_get_security_desc(), FALSE, mutex_name);
+	TEXT mutex_name_prefix[MAXPATHLEN] = "";
+	WCHAR mutex_name[MAXPATHLEN];
+	if (fb_utils::prefix_kernel_object_name(mutex_name_prefix, sizeof(mutex_name_prefix)))
+	{
+		// convert ASCII prefix to WCHAR
+		for (int i = 0; i < sizeof(mutex_name_prefix); i++)
+			if ((mutex_name[i] = mutex_name_prefix[i]) == 0)
+				break;
+	}
+
+	wcscat(mutex_name, SERVER_MUTEX);
+	wcscat(mutex_name, instance);
+	CreateMutexW(ISC_get_security_desc(), FALSE, mutex_name);
 
 	// Initialize the service
 
@@ -310,24 +320,25 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 	}
 	else if (!(server_flag & SRVR_non_service))
 	{
-		string service_name;
-		service_name.printf(REMOTE_SERVICE, instance);
+		WCHAR service_name[257];
+		wcscpy(service_name, REMOTE_SERVICE);
+		wcscat(service_name, instance);
 
 		CNTL_init(start_connections_thread, instance);
 
-		const SERVICE_TABLE_ENTRY service_table[] =
+		const SERVICE_TABLE_ENTRYW service_table[] =
 		{
-			{const_cast<char*>(service_name.c_str()), CNTL_main_thread},
+			{service_name, CNTL_main_thread},
 			{NULL, NULL}
 		};
 
 		// BRS There is a error in MinGW (3.1.0) headers
 		// the parameter of StartServiceCtrlDispatcher is declared const in msvc headers
 #if defined(MINGW)
-		if (!StartServiceCtrlDispatcher(const_cast<SERVICE_TABLE_ENTRY*>(service_table)))
+		if (!StartServiceCtrlDispatcherW(const_cast<SERVICE_TABLE_ENTRYW*>(service_table)))
 		{
 #else
-		if (!StartServiceCtrlDispatcher(service_table))
+		if (!StartServiceCtrlDispatcherW(service_table))
 		{
 #endif
 			if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED) {
@@ -593,7 +604,7 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 }
 
 
-static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag)
+static HANDLE parse_args(PWSTR lpszArgs, USHORT* pserver_flag)
 {
 /**************************************
  *
@@ -614,174 +625,157 @@ static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag)
 
 	HANDLE connection_handle = INVALID_HANDLE_VALUE;
 
-	const TEXT* p = lpszArgs;
-	while (*p)
+	int argc = 0;
+	LPWSTR* argv = CommandLineToArgvW(lpszArgs, &argc);
+
+	for (int i = 0; i < argc; i++)
 	{
-		TEXT c;
+		WCHAR* p = argv[i];
 		if (*p++ == '-')
 		{
-			while ((*p) && (c = *p++) && (c != ' '))
+			WCHAR c = *p;
+			switch (towupper(c))
 			{
-				switch (UPPER(c))
+			case L'A':
+				*pserver_flag |= SRVR_non_service;
+				break;
+
+			case L'B':
+				*pserver_flag |= SRVR_high_priority;
+				break;
+
+			case L'D':
+				*pserver_flag |= (SRVR_debug | SRVR_non_service);
+				break;
+
+			case L'H':
 				{
-				case 'A':
-					*pserver_flag |= SRVR_non_service;
-					break;
-
-				case 'B':
-					*pserver_flag |= SRVR_high_priority;
-					break;
-
-				case 'D':
-					*pserver_flag |= (SRVR_debug | SRVR_non_service);
-					break;
-
-				case 'H':
-					while (*p && *p == ' ')
-						p++;
-					if (*p)
+					if (++i >= argc)
 					{
-						TEXT buffer[32];
-						char* pp = buffer;
-						while (*p && *p != ' ' && (pp - buffer < sizeof(buffer) - 1))
+						gds__log("SERVER: Missed parameter for -H switch");
+						exit(FINI_ERROR);
+					}
+					p = argv[i];
+					TEXT buffer[32];
+					char* pp = buffer;
+					while (*p && (pp - buffer < sizeof(buffer) - 1))
+					{
+						if (*p == '@')
 						{
-							if (*p == '@')
-							{
-								p++;
-								*pp++ = '\0';
-								connection_handle = (HANDLE) _atoi64(buffer);
-								pp = buffer;
-							}
-							else
-								*pp++ = *p++;
-						}
-						*pp++ = '\0';
-
-						if (connection_handle == INVALID_HANDLE_VALUE)
-						{
+							p++;
+							*pp++ = '\0';
 							connection_handle = (HANDLE) _atoi64(buffer);
+							pp = buffer;
 						}
 						else
-						{
-							const DWORD parent_id = atol(buffer);
-							const HANDLE parent_handle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, parent_id);
-							if (!parent_handle)
-							{
-								gds__log("SERVER: OpenProcess failed. Errno = %d, parent PID = %d", GetLastError(), parent_id);
-								exit(FINI_ERROR);
-							}
-
-							if (!DuplicateHandle(parent_handle, connection_handle, GetCurrentProcess(), &connection_handle,
-									0, FALSE, DUPLICATE_SAME_ACCESS | DUPLICATE_CLOSE_SOURCE))
-							{
-								gds__log("SERVER: DuplicateHandle failed. Errno = %d, parent PID = %d", GetLastError(), parent_id);
-								exit(FINI_ERROR);
-							}
-
-							CloseHandle(parent_handle);
-						}
+							*pp++ = *p++;
 					}
-					break;
+					*pp++ = '\0';
 
-				case 'I':
-					*pserver_flag |= SRVR_inet;
-					break;
-
-				case 'N':
-					*pserver_flag |= SRVR_no_icon;
-					break;
-
-				case 'P':	// Specify a port or named pipe other than the default
-					while (*p && *p == ' ')
-						p++;
-					if (*p)
+					if (connection_handle == INVALID_HANDLE_VALUE)
 					{
-						// Assumed the buffer size for both protocols may differ
-						// in the future, hence I did generic code.
-						char* pi = protocol_inet;
-						const char* piend = protocol_inet + sizeof(protocol_inet) - 1;
-						char* pw = protocol_wnet;
-						const char* pwend = protocol_wnet + sizeof(protocol_wnet) - 1;
-
-						*pi++ = '/';
-						*pw++ = '\\';
-						*pw++ = '\\';
-						*pw++ = '.';
-						*pw++ = '@';
-						while (*p && *p != ' ')
-						{
-							if (pi < piend)
-								*pi++ = *p;
-							if (pw < pwend)
-								*pw++ = *p++;
-						}
-						*pi++ = '\0';
-						*pw++ = '\0';
-					}
-					break;
-
-				case 'R':
-					*pserver_flag &= ~SRVR_high_priority;
-					break;
-
-				case 'S':
-					delimited = false;
-					while (*p && *p == ' ')
-						p++;
-					if (*p && *p == '"')
-					{
-						p++;
-						delimited = true;
-					}
-					if (delimited)
-					{
-						char* pi = instance;
-						const char* pend = instance + sizeof(instance) - 1;
-						while (*p && *p != '"' && pi < pend) {
-							*pi++ = *p++;
-						}
-						*pi++ = '\0';
-						if (*p && *p == '"')
-							p++;
+						connection_handle = (HANDLE) _atoi64(buffer);
 					}
 					else
 					{
-						if (*p && *p != '-')
+						const DWORD parent_id = atol(buffer);
+						const HANDLE parent_handle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, parent_id);
+						if (!parent_handle)
 						{
-							char* pi = instance;
-							const char* pend = instance + sizeof(instance) - 1;
-							while (*p && *p != ' ' && pi < pend) {
-								*pi++ = *p++;
-							}
-							*pi++ = '\0';
+							gds__log("SERVER: OpenProcess failed. Errno = %d, parent PID = %d", GetLastError(), parent_id);
+							exit(FINI_ERROR);
 						}
+
+						if (!DuplicateHandle(parent_handle, connection_handle, GetCurrentProcess(), &connection_handle,
+								0, FALSE, DUPLICATE_SAME_ACCESS | DUPLICATE_CLOSE_SOURCE))
+						{
+							gds__log("SERVER: DuplicateHandle failed. Errno = %d, parent PID = %d", GetLastError(), parent_id);
+							exit(FINI_ERROR);
+						}
+
+						CloseHandle(parent_handle);
 					}
-					break;
+				}
+				break;
 
-				case 'W':
-					*pserver_flag |= SRVR_wnet;
-					break;
+			case L'I':
+				*pserver_flag |= SRVR_inet;
+				break;
 
-				case 'X':
-					*pserver_flag |= SRVR_xnet;
-					break;
+			case L'N':
+				*pserver_flag |= SRVR_no_icon;
+				break;
 
-				case 'Z':
-					// CVC: printf doesn't work because we don't have a console attached.
-					//printf("Firebird remote server version %s\n",  FB_VERSION);
-					MessageBox(NULL, FB_VERSION, "Firebird server version",
-						MB_OK | MB_ICONINFORMATION | MB_TOPMOST | MB_DEFAULT_DESKTOP_ONLY);
-					exit(FINI_OK);
+			case L'P':	// Specify a port or named pipe other than the default
+				{
+					if (++i >= argc)
+					{
+						gds__log("SERVER: Missed parameter for -P switch");
+						exit(FINI_ERROR);
+					}
+					p = argv[++i];
 
-				default:
-					// In case of something unrecognized, just
-					// continue, since we have already taken it off
-					// of p.
+					// Assumed the buffer size for both protocols may differ
+					// in the future, hence I did generic code.
+					char* pi = protocol_inet;
+					const char* piend = protocol_inet + sizeof(protocol_inet) - 1;
+					char* pw = protocol_wnet;
+					const char* pwend = protocol_wnet + sizeof(protocol_wnet) - 1;
+
+					*pi++ = '/';
+					*pw++ = '\\';
+					*pw++ = '\\';
+					*pw++ = '.';
+					*pw++ = '@';
+					while (*p && *p != ' ')
+					{
+						if (pi < piend)
+							*pi++ = *p;
+						if (pw < pwend)
+							*pw++ = *p++;
+					}
+					*pi++ = '\0';
+					*pw++ = '\0';
 					break;
 				}
+			case L'R':
+				*pserver_flag &= ~SRVR_high_priority;
+				break;
+
+			case L'S':
+				if (++i >= argc)
+				{
+					gds__log("SERVER: Missed parameter for -S switch");
+					exit(FINI_ERROR);
+				}
+				wcscpy(instance, argv[i]);
+				break;
+
+			case L'W':
+				*pserver_flag |= SRVR_wnet;
+				break;
+
+			case L'X':
+				*pserver_flag |= SRVR_xnet;
+				break;
+
+			case L'Z':
+				// CVC: printf doesn't work because we don't have a console attached.
+				//printf("Firebird remote server version %s\n",  FB_VERSION);
+				MessageBox(NULL, FB_VERSION, "Firebird server version",
+					MB_OK | MB_ICONINFORMATION | MB_TOPMOST | MB_DEFAULT_DESKTOP_ONLY);
+				exit(FINI_OK);
+
+			default:
+				// In case of something unrecognized, just
+				// continue, since we have already taken it off
+				// of p.
+				break;
 			}
 		}
 	}
+
+	LocalFree(argv);
 
 	if ((*pserver_flag & (SRVR_inet | SRVR_wnet | SRVR_xnet)) == 0)
 	{

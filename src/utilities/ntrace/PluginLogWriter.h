@@ -33,6 +33,7 @@
 #include "../../jrd/ntrace.h"
 #include "../../common/classes/timestamp.h"
 #include "../../common/isc_s_proto.h"
+#include "../../common/os/os_utils.h"
 #include "../../common/os/path_utils.h"
 #include "../../common/classes/ImplementHelper.h"
 

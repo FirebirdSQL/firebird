@@ -5586,6 +5586,12 @@ void YService::query(CheckStatusWrapper* status, unsigned int sendLength, const 
 		YEntry<YService> entry(status, this);
 		entry.next()->query(status, sendLength, sendItems,
 			receiveLength, receiveItems, bufferLength, buffer);
+		if (!utf8Connection)
+		{
+			ClumpletWriter ret(ClumpletReader::SpbResponse, bufferLength, buffer, bufferLength);
+			IntlSpbResponse().fromUtf8(ret);
+			memcpy(buffer, ret.getBuffer(), ret.getBufferLength());
+		}
 	}
 	catch (const Exception& e)
 	{
@@ -5655,10 +5661,11 @@ YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* st
 		}
 
 		// Take care about filename
+		// Convert to UTF8
 		PathName orgFilename(filename);
-		if (utfData)
+		if (!utfData)
 		{
-			ISC_utf8ToSystem(orgFilename);
+			ISC_systemToUtf8(orgFilename);
 		}
 		orgFilename.rtrim();
 
@@ -5675,10 +5682,6 @@ YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* st
 			newDpb.getString(dpb_config);
 			Config::merge(config, &dpb_config);
 		}
-
-		// Convert to UTF8
-		ISC_systemToUtf8(orgFilename);
-		ISC_systemToUtf8(expandedFilename);
 
 		// Add original filename to DPB
 		if (orgFilename != expandedFilename && !newDpb.find(isc_dpb_org_filename))
@@ -5714,12 +5717,10 @@ YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* st
 					config->notify();
 #ifdef WIN_NT
 	            	// Now we can expand, the file exists
-					ISC_utf8ToSystem(orgFilename);
 					if (expandDatabaseName(orgFilename, expandedFilename, NULL))
 					{
 						expandedFilename = orgFilename;
 					}
-					ISC_systemToUtf8(expandedFilename);
 #endif
 				}
 

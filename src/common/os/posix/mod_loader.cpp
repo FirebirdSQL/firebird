@@ -45,7 +45,7 @@ public:
 	{}
 
 	~DlfcnModule();
-	void* findSymbol(const Firebird::string&);
+	void* findSymbol(const char* symbol);
 
 private:
 	void* module;
@@ -72,12 +72,14 @@ void ModuleLoader::doctorModuleExtension(Firebird::PathName& name)
 	if (name.isEmpty())
 		return;
 
-	Firebird::PathName::size_type pos = name.rfind("." SHRLIB_EXT);
-	if (pos != name.length() - 3)
-	{
-		name += "." SHRLIB_EXT;
-	}
-	pos = name.rfind('/');
+	const char* soExt = "." SHRLIB_EXT;
+	size_t extLen = strlen(soExt);
+	if (name.length() <= extLen ||
+		Firebird::PathName(name, name.length() - extLen, extLen) != soExt)
+		{
+			name.appendString(soExt);
+		}
+	Firebird::PathName::size_type pos = name.rfind('/');
 	pos = (pos == Firebird::PathName::npos) ? 0 : pos + 1;
 	if (name.find("lib", pos) != pos)
 	{
@@ -93,7 +95,7 @@ void ModuleLoader::doctorModuleExtension(Firebird::PathName& name)
 
 ModuleLoader::Module* ModuleLoader::loadModule(const Firebird::PathName& modPath)
 {
-	void* module = dlopen(modPath.nullStr(), FB_RTLD_MODE);
+	void* module = dlopen(os_utils::SystemCharBuffer(modPath.nullStr()), FB_RTLD_MODE);
 	if (module == NULL)
 	{
 #ifdef DEV_BUILD
@@ -118,12 +120,13 @@ DlfcnModule::~DlfcnModule()
 		dlclose(module);
 }
 
-void* DlfcnModule::findSymbol(const Firebird::string& symName)
+void* DlfcnModule::findSymbol(const char* symName)
 {
-	void* result = dlsym(module, symName.c_str());
+	void* result = dlsym(module, symName);
 	if (!result)
 	{
-		Firebird::string newSym = '_' + symName;
+		Firebird::string newSym(1, '_');
+		newSym += symName;
 
 		result = dlsym(module, newSym.c_str());
 	}

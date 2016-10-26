@@ -2533,7 +2533,7 @@ static processing_state blobedit(const TEXT* action, const TEXT* const* cmd)
 		else
 			gds__edit(filename, 0);
 
-		unlink(filename);
+		os_utils::unlink(filename);
 	}
 	else if ((!strcmp(action, "BLOBDUMP")) && (*cmd[2]))
 	{
@@ -6258,17 +6258,15 @@ static processing_state newinput(const TEXT* infile)
 	TEXT path[MAXPATHLEN];
 	strip_quotes(infile, path);
 
-	PathName file;
+	PathName file = path;
 
-	if (PathUtils::isRelative(path))
+	if (file.isRelative())
 	{
 		PathName newPath, temp;
 		PathUtils::splitLastComponent(newPath, temp, Filelist->Ifp().fileName(false));
-
-		PathUtils::concatPath(file, newPath, path);
+		newPath.appendPath(file);
+		file = newPath;
 	}
-	else
-		file = path;
 
 	// filelist is a linked list of file pointers.  We must add a node to
 	// the linked list before discarding the current Ifp.

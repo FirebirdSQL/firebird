@@ -26,9 +26,9 @@
 
 #include "../common/ThreadStart.h"
 
-void	CNTL_init(ThreadEntryPoint*, const TEXT*);
+void	CNTL_init(ThreadEntryPoint*, const WCHAR*);
 void*	CNTL_insert_thread();
-void	WINAPI CNTL_main_thread(DWORD, char* []);
+void	WINAPI CNTL_main_thread(DWORD, WCHAR* []);
 void	CNTL_remove_thread(void*);
 void	CNTL_shutdown_service(const TEXT*);
 void	CNTL_stop_service(); //(const TEXT*);

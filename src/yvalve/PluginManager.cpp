@@ -62,17 +62,26 @@ namespace
 		{
 			p = 0;
 		}
-		p = file.find('.', p);
-		if (p == PathName::npos)
+#ifdef WIN_NT
+		// On Windows extension is everything after the last dot of file name:
+		// library.name.dll
+		PathName::size_type dotPos = file.rfind('.');
+		if (dotPos == PathName::npos || dotPos < p)
+#else
+		// Anywhere else it is everything after the first dot of file name:
+		// libname.so.1.2.3
+		PathName::size_type dotPos = file.find('.', p);
+		if (dotPos == PathName::npos)
+#endif
 		{
-			file += '.';
+			file.appendString('.');
 		}
 		else
 		{
-			file.erase(p + 1);
+			file.erase(dotPos + 1);
 		}
 
-		file += newExt;
+		file.appendString(newExt);
 	}
 
 	// Holds a reference to plugins.conf file
@@ -95,7 +104,7 @@ namespace
 	};
 	InitInstance<StaticConfHolder> pluginsConf;
 
-	RefPtr<ConfigFile> findConfig(const char* param, const char* pluginName)
+	RefPtr<ConfigFile> findConfig(const char* param, const ConfigFile::String& pluginName)
 	{
 		ConfigFile* f = pluginsConf().get();
 		if (f)
@@ -273,7 +282,7 @@ namespace
 		if (defaultConfig)
 		{
 			const ConfigFile::Parameter* p = defaultConfig->findParameter("Config");
-			IConfig* rc = FB_NEW ConfigAccess(p ? findConfig("Config", p->value.c_str()) : RefPtr<ConfigFile>(NULL));
+			IConfig* rc = FB_NEW ConfigAccess(p ? findConfig("Config", p->value) : RefPtr<ConfigFile>(NULL));
 			rc->addRef();
 			return rc;
 		}
@@ -451,7 +460,7 @@ namespace
 				const ConfigFile::Parameter* p = defaultConfig->findParameter("ConfigFile");
 				if (p && p->value.hasData())
 				{
-					confName = p->value.ToPathName();
+					confName = p->value;
 				}
 			}
 			if (module != builtin)
@@ -746,13 +755,13 @@ namespace
 				const ConfigFile::Parameter* v = conf->findParameter("RegisterName");
 				if (v)
 				{
-					regName = v->value.ToPathName();
+					regName = v->value;
 				}
 
 				v = conf->findParameter("Module");
 				if (v)
 				{
-					curModule = v->value.ToPathName();
+					curModule = v->value;
 				}
 
 				v = conf->findParameter("Required");

@@ -258,6 +258,8 @@ public:
 					dpb.insertString(isc_dpb_trusted_auth, str, fb_strlen(str));
 			}
 
+			dpb.insertTag(isc_dpb_utf8_filename);
+
 			Firebird::DispatcherPtr p;
 			att = p->attachDatabase(status, secDbName, dpb.getBufferLength(), dpb.getBuffer());
 			check(status);

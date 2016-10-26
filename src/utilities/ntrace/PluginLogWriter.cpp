@@ -57,8 +57,8 @@ PluginLogWriter::PluginLogWriter(const char* fileName, size_t maxSize) :
 	m_fileName = fileName;
 
 #ifdef WIN_NT
-	PathName mutexName("fb_mutex_");
-	mutexName.append(m_fileName);
+	string mutexName("fb_mutex_");
+	mutexName += m_fileName;
 
 	checkMutex("init", ISC_mutex_init(&m_mutex, mutexName.c_str()));
 #endif
@@ -94,8 +94,8 @@ void PluginLogWriter::reopen()
 		::close(m_fileHandle);
 
 #ifdef WIN_NT
-	HANDLE hFile = CreateFile(
-		m_fileName.c_str(),
+	HANDLE hFile = CreateFileW(
+		os_utils::WideCharBuffer(m_fileName),
 		GENERIC_READ | GENERIC_WRITE,
 		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
 		NULL,
@@ -135,11 +135,11 @@ FB_SIZE_T PluginLogWriter::write(const void* buf, FB_SIZE_T size)
 		stamp.decode(&times);
 
 		PathName newName;
-		const FB_SIZE_T last_dot_pos = m_fileName.rfind(".");
+		const FB_SIZE_T last_dot_pos = m_fileName.rfind('.');
 		if (last_dot_pos > 0)
 		{
 			PathName log_name = m_fileName.substr(0, last_dot_pos);
-			PathName log_ext = m_fileName.substr(last_dot_pos + 1, m_fileName.length());
+			PathName log_ext(m_fileName, last_dot_pos + 1, m_fileName.length());
 			newName.printf("%s.%04d-%02d-%02dT%02d-%02d-%02d.%s", log_name.c_str(), times.tm_year + 1900,
 				times.tm_mon + 1, times.tm_mday, times.tm_hour, times.tm_min, times.tm_sec, log_ext.c_str());
 		}
@@ -154,7 +154,7 @@ FB_SIZE_T PluginLogWriter::write(const void* buf, FB_SIZE_T size)
 		// exists. Therefore we can't just check "rename" result for EEXIST and need
 		// to write platform-dependent code. In reality, "rename" returns EEXIST to
 		// me, not EACCES, strange...
-		if (!MoveFile(m_fileName.c_str(), newName.c_str()))
+		if (!MoveFileW(os_utils::WideCharBuffer(m_fileName), os_utils::WideCharBuffer(newName)))
 		{
 			const DWORD dwError = GetLastError();
 			if (dwError != ERROR_ALREADY_EXISTS && dwError != ERROR_FILE_NOT_FOUND)

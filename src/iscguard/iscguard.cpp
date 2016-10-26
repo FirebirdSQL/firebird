@@ -42,6 +42,7 @@
 #include "../remote/server/os/win32/chop_proto.h"
 #include "../common/config/config.h"
 #include "../common/classes/init.h"
+#include "../common/os/os_utils.h"
 #include "../common/os/path_utils.h"
 
 #ifdef WIN_NT
@@ -71,7 +72,7 @@ static THREAD_ENTRY_DECLARE WINDOW_main(THREAD_ENTRY_PARAM);
 #ifdef NOT_USED_OR_REPLACED
 static void StartGuardian(HWND);
 #endif
-static bool parse_args(LPCSTR);
+static bool parse_args(PWSTR);
 
 THREAD_ENTRY_DECLARE start_and_watch_server(THREAD_ENTRY_PARAM);
 THREAD_ENTRY_DECLARE swap_icons(THREAD_ENTRY_PARAM);
@@ -86,17 +87,17 @@ HINSTANCE hInstance_gbl;
 HWND hPSDlg, hWndGbl;
 static int nRestarts = 0;		// the number of times the server was restarted
 static bool service_flag = true;
-static TEXT instance[MAXPATHLEN];
-static Firebird::GlobalPtr<Firebird::string> service_name;
-static Firebird::GlobalPtr<Firebird::string> remote_name;
-static Firebird::GlobalPtr<Firebird::string> mutex_name;
+static WCHAR instance[MAXPATHLEN] = L"";
+static WCHAR service_name[257];
+static WCHAR remote_name[257];
+static WCHAR mutex_name[MAX_PATH];
 // unsigned short shutdown_flag = FALSE;
 static log_info* log_entry;
 static Thread::Handle watcher_thd = 0;
 static Thread::Handle swap_icons_thd = 0;
 
-int WINAPI WinMain(HINSTANCE hInstance,
-				   HINSTANCE /*hPrevInstance*/, LPSTR lpszCmdLine, int /*nCmdShow*/)
+int WINAPI wWinMain(HINSTANCE hInstance,
+				   HINSTANCE /*hPrevInstance*/, PWSTR lpszCmdLine, int /*nCmdShow*/)
 {
 /**************************************
 *
@@ -109,13 +110,16 @@ int WINAPI WinMain(HINSTANCE hInstance,
 *
 **************************************/
 
-	strcpy(instance, FB_DEFAULT_INSTANCE);
+	wcscpy(instance, FB_DEFAULT_INSTANCE);
 
 	service_flag = parse_args(lpszCmdLine);
 
-	service_name->printf(ISCGUARD_SERVICE, instance);
-	remote_name->printf(REMOTE_SERVICE, instance);
-	mutex_name->printf(GUARDIAN_MUTEX, instance);
+	wcscpy(service_name, ISCGUARD_SERVICE);
+	wcscat(service_name, instance);
+	wcscpy(remote_name, REMOTE_SERVICE);
+	wcscat(remote_name, instance);
+	wcscpy(mutex_name, GUARDIAN_MUTEX);
+	wcscat(mutex_name, instance);
 
 	// set the global HINSTANCE as we need it in WINDOW_main
 	hInstance_gbl = hInstance;
@@ -129,18 +133,18 @@ int WINAPI WinMain(HINSTANCE hInstance,
 	{
 		CNTL_init(WINDOW_main, instance);
 
-		const SERVICE_TABLE_ENTRY service_table[] =
+		const SERVICE_TABLE_ENTRYW service_table[] =
 		{
-			{const_cast<char*>(service_name->c_str()), CNTL_main_thread},
+			{service_name, CNTL_main_thread},
 			{NULL, NULL}
 		};
 
 		// BRS There is a error in MinGW (3.1.0) headers
 		// the parameter of StartServiceCtrlDispatcher is declared const in msvc headers
 #if defined(MINGW)
-		if (!StartServiceCtrlDispatcher(const_cast<SERVICE_TABLE_ENTRY*>(service_table)))
+		if (!StartServiceCtrlDispatcherW(const_cast<SERVICE_TABLE_ENTRYW*>(service_table)))
 #else
-		if (!StartServiceCtrlDispatcher(service_table))
+		if (!StartServiceCtrlDispatcherW(service_table))
 #endif
 		{
 			if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
@@ -160,7 +164,7 @@ int WINAPI WinMain(HINSTANCE hInstance,
 	return TRUE;
 }
 
-static bool parse_args(LPCSTR lpszArgs)
+static bool parse_args(PWSTR lpszArgs)
 {
 /**************************************
 *
@@ -179,54 +183,29 @@ static bool parse_args(LPCSTR lpszArgs)
 *
 **************************************/
 	bool is_service = true;
-	bool delimited = false;
 
-	for (const char* p = lpszArgs; *p; p++)
+	int argc = 0;
+	LPWSTR* argv = CommandLineToArgvW(lpszArgs, &argc);
+	if (!argv)
+		return false;
+
+	for (int i = 0; i < argc; i++)
 	{
-		if (*p++ == '-')
+		const WCHAR* p = argv[i];
+		if (*p++ == L'-')
 		{
-			char c;
+			WCHAR c;
 			while (c = *p++)
 			{
-				switch (UPPER(c))
+				switch (towupper(c))
 				{
 				case 'A':
 					is_service = false;
 					break;
 
 				case 'S':
-					delimited = false;
-					while (*p && *p == ' ')
-						p++;
-					if (*p && *p == '"')
-					{
-						p++;
-						delimited = true;
-					}
-
-					if (delimited)
-					{
-						char* pi = instance;
-						const char* pend = instance + sizeof(instance) - 1;
-						while (*p && *p != '"' && pi < pend) {
-							*pi++ = *p++;
-						}
-						*pi++ = '\0';
-						if (*p && *p == '"')
-							p++;
-					}
-					else
-					{
-						if (*p && *p != '-')
-						{
-							char* pi = instance;
-							const char* pend = instance + sizeof(instance) - 1;
-							while (*p && *p != ' ' && pi < pend) {
-								*pi++ = *p++;
-							}
-							*pi++ = '\0';
-						}
-					}
+					if (++i < argc)
+						wcscpy(instance, argv[i]);
 					break;
 
 				default:
@@ -236,6 +215,8 @@ static bool parse_args(LPCSTR lpszArgs)
 			}
 		}
 	}
+
+	LocalFree(argv);
 
 	return is_service;
 }
@@ -588,12 +569,15 @@ THREAD_ENTRY_DECLARE start_and_watch_server(THREAD_ENTRY_PARAM)
 	// get the guardian startup information
 	const short option = Config::getGuardianOption();
 
-	char prefix_buffer[MAXPATHLEN];
-	GetModuleFileName(NULL, prefix_buffer, sizeof(prefix_buffer));
-	Firebird::PathName path = prefix_buffer;
-	path = path.substr(0, path.rfind(PathUtils::dir_sep) + 1) + FBSERVER;
-	path = "\"" + path + "\"";
-	Firebird::PathName prog_name = path + " -a -n";
+	Firebird::PathName prefix_buffer(fb_utils::get_process_name());
+
+	Firebird::PathName path, dummy;
+	PathUtils::splitLastComponent(path, dummy, prefix_buffer);
+	path.appendPath(FBSERVER);
+	path.insert(0, "\"");
+	path.appendString('\"');
+	Firebird::PathName prog_name(path);
+	prog_name.appendString(" -a -n");
 
 	// if the guardian is set to FOREVER then set the error mode
 	UINT old_error_mode = 0;
@@ -618,7 +602,7 @@ THREAD_ENTRY_DECLARE start_and_watch_server(THREAD_ENTRY_PARAM)
 				}
 			}
 
-			procHandle = CreateMutex(NULL, FALSE, mutex_name->c_str());
+			procHandle = CreateMutexW(NULL, FALSE, mutex_name);
 
 			// start as a service.  If the service can not be found or
 			// fails to start, close the handle to the mutex and set
@@ -627,7 +611,7 @@ THREAD_ENTRY_DECLARE start_and_watch_server(THREAD_ENTRY_PARAM)
 				hScManager = OpenSCManager(NULL, NULL, GENERIC_READ);
 			if (!hService)
 			{
-				hService = OpenService(hScManager, remote_name->c_str(),
+				hService = OpenServiceW(hScManager, remote_name,
 					GENERIC_READ | GENERIC_EXECUTE);
 			}
 			success = StartService(hService, 0, NULL);
@@ -654,7 +638,7 @@ THREAD_ENTRY_DECLARE start_and_watch_server(THREAD_ENTRY_PARAM)
 			HWND hTmpWnd = FindWindow(szClassName, szWindowName);
 			if (hTmpWnd == NULL)
 			{
-				STARTUPINFO si;
+				STARTUPINFOW si;
 				SECURITY_ATTRIBUTES sa;
 				PROCESS_INFORMATION pi;
 				ZeroMemory(&si, sizeof(si));
@@ -662,7 +646,7 @@ THREAD_ENTRY_DECLARE start_and_watch_server(THREAD_ENTRY_PARAM)
 				sa.nLength = sizeof(sa);
 				sa.lpSecurityDescriptor = NULL;
 				sa.bInheritHandle = TRUE;
-				success = CreateProcess(NULL, const_cast<char*>(prog_name.c_str()),
+				success = CreateProcessW(NULL, os_utils::WideCharBuffer(prog_name),
 										&sa, NULL, FALSE, 0, NULL, NULL, &si, &pi);
 				if (success != TRUE)
 					error = GetLastError();
@@ -703,7 +687,7 @@ THREAD_ENTRY_DECLARE start_and_watch_server(THREAD_ENTRY_PARAM)
 				// then close it
 				WaitForSingleObject(procHandle, 1000);
 				CloseHandle(procHandle);
-				hService = OpenService(hScManager, remote_name->c_str(),
+				hService = OpenServiceW(hScManager, remote_name,
 					GENERIC_READ | GENERIC_EXECUTE);
 				ControlService(hService, SERVICE_CONTROL_STOP, &status_info);
 				CloseServiceHandle(hScManager);
@@ -1133,7 +1117,7 @@ static void write_log(int log_action, const char* buff)
 	if (service_flag)
 	{
 		// on NT
-		HANDLE hLog = RegisterEventSource(NULL, service_name->c_str());
+		HANDLE hLog = RegisterEventSourceW(NULL, ISCGUARD_SERVICE);
 		if (!hLog)
 			gds__log("Error opening Windows NT Event Log");
 		else

@@ -266,11 +266,34 @@ public:
 int setGsecCode(int code, unsigned int operation);
 
 // tools to operate lists of security-related plugins
-typedef Firebird::ObjectsArray<Firebird::PathName> ParsedList;
-void parseList(ParsedList& parsed, Firebird::PathName list);
-void makeList(Firebird::PathName& list, const ParsedList& parsed);
-void mergeLists(Firebird::PathName& list, const Firebird::PathName& serverList,
-	const Firebird::PathName& clientList);
+typedef Firebird::ObjectsArray<Firebird::PluginName> ParsedList;
+template <class StringType>
+void parseList(Firebird::ObjectsArray<StringType>& parsed, StringType list)
+{
+	list.alltrim(" \t");
+	parsed.clear();
+	const char* sep = " \t,;";
+
+	for (;;)
+	{
+		typename StringType::size_type p = list.find_first_of(sep);
+		if (p == StringType::npos)
+		{
+			if (list.hasData())
+			{
+				parsed.push(list);
+			}
+			break;
+		}
+
+		parsed.push(StringType(list, 0, p));
+		list.erase(0, p + 1);
+		list.ltrim(sep);
+	}
+}
+void makeList(Firebird::PluginName& list, const ParsedList& parsed);
+void mergeLists(Firebird::PluginName& list, const Firebird::PluginName& serverList,
+	const Firebird::PluginName& clientList);
 
 } // namespace Auth
 

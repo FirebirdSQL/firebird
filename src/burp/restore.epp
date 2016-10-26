@@ -567,6 +567,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 
 	// set forced writes to the value which was in the header
 	dpb.insertByte(isc_dpb_force_write, tdgbl->hdr_forced_writes ? 1 : 0);
+	dpb.insertTag(isc_dpb_utf8_filename);
 
 	FB_API_HANDLE db_handle = 0;
 	if (isc_attach_database(tdgbl->status_vector, 0, database_name, &db_handle,
@@ -889,6 +890,7 @@ void create_database(BurpGlobals* tdgbl, const TEXT* file_name)
 
 	dpb.insertInt(isc_dpb_page_size, page_size & 0xff00);
 	dpb.insertString(isc_dpb_gbak_attach, FB_VERSION, fb_strlen(FB_VERSION));
+	dpb.insertTag(isc_dpb_utf8_filename);
 
 	if (sweep_interval != MAX_ULONG)
 	{

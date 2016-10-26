@@ -80,7 +80,7 @@ private:
 	// followed by any character from Next.
 	// If Next is empty, Value shoult exactly match Key.
 	// If Key found, sets Mode to KeyMode and returns true.
-	bool keyword(const ListMode keyMode, PathName& value, PathName key, PathName next);
+	bool keyword(const ListMode keyMode, PathName& value, const char* key, const char* next);
 protected:
 	// Clear allocated memory and reinitialize
 	void clear()
@@ -90,7 +90,7 @@ protected:
 	}
 	// Used for various configuration parameters -
 	// returns parameter PathName from Config Manager.
-	virtual const PathName getConfigString() const = 0;
+	virtual PathName getConfigString() const = 0;
 	// Initialize loads data from Config Manager.
 	// With simple mutex add-on may be easily used to
 	// load them dynamically. Now called locally
@@ -134,7 +134,7 @@ public:
 
 private:
 	// implementation of the inherited function
-	const PathName getConfigString() const;
+	PathName getConfigString() const;
 };
 
 } //namespace Firebird

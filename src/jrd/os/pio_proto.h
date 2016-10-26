@@ -42,6 +42,7 @@ Jrd::jrd_file*	PIO_create(Jrd::thread_db*, const Firebird::PathName&,
 							const bool, const bool);
 bool	PIO_expand(const TEXT*, USHORT, TEXT*, FB_SIZE_T);
 void	PIO_extend(Jrd::thread_db*, Jrd::jrd_file*, const ULONG, const USHORT);
+void	PIO_erase(const Jrd::jrd_file*);
 void	PIO_flush(Jrd::thread_db*, Jrd::jrd_file*);
 void	PIO_force_write(Jrd::jrd_file*, const bool, const bool);
 ULONG	PIO_get_number_of_pages(const Jrd::jrd_file*, const USHORT);

@@ -291,9 +291,9 @@ public:
 	static FB_SIZE_T hash(const DeferredWork& work, FB_SIZE_T hashSize)
 	{
 		const int nameLimit = 32;
-		char key[sizeof work.dfw_type + sizeof work.dfw_id + nameLimit];
+		unsigned char key[sizeof work.dfw_type + sizeof work.dfw_id + nameLimit];
 		memset(key, 0, sizeof key);
-		char* place = key;
+		unsigned char* place = key;
 
 		memcpy(place, &work.dfw_type, sizeof work.dfw_type);
 		place += sizeof work.dfw_type;
@@ -301,9 +301,9 @@ public:
 		memcpy(place, &work.dfw_id, sizeof work.dfw_id);
 		place += sizeof work.dfw_id;
 
-		work.dfw_name.copyTo(place, nameLimit);	// It's good enough to have first 32 bytes
+		work.dfw_name.copyTo(reinterpret_cast<Firebird::string::pointer>(place), nameLimit);	// It's good enough to have first 32 bytes
 
-		return DefaultHash<DeferredWork>::hash(key, sizeof key, hashSize);
+		return InternalHash::hash(sizeof key, key, hashSize);
 	}
 };
 
@@ -1556,7 +1556,7 @@ void DFW_perform_post_commit_work(jrd_tra* transaction)
 			break;
 		case dfw_delete_shadow:
 			if (work->dfw_name.hasData())
-				unlink(work->dfw_name.c_str());
+				os_utils::unlink(work->dfw_name.c_str());
 			delete work;
 			break;
 		default:
@@ -2938,7 +2938,7 @@ static void check_filename(const Firebird::string& name, bool shareExpand)
  *	inet node name.
  *
  **************************************/
-	const Firebird::PathName file_name(name.ToPathName());
+	const Firebird::PathName file_name(name);
 	const bool valid = file_name.find("::") == Firebird::PathName::npos;
 
 	if (!valid || ISC_check_if_remote(file_name, shareExpand)) {

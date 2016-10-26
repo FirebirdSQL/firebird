@@ -79,9 +79,7 @@ PathName ParsedPath::subPath(FB_SIZE_T n) const
 #endif
 	for (FB_SIZE_T i = 0; i < n; i++)
 	{
-		PathName newpath;
-		PathUtils::concatPath(newpath, rc, (*this)[i]);
-		rc = newpath;
+		rc.appendPath((*this)[i]);
 	}
 
 	return rc;
@@ -121,36 +119,28 @@ bool ParsedPath::contains(const ParsedPath& pPath) const
 	return true;
 }
 
-bool DirectoryList::keyword(const ListMode keyMode, PathName& value, PathName key, PathName next)
+bool DirectoryList::keyword(const ListMode keyMode, PathName& value, const char* key, const char* next)
 {
-	if (value.length() < key.length()) {
-		return false;
-	}
-	PathName keyValue = value.substr(0, key.length());
-	if (keyValue != key) {
-		return false;
-	}
-	if (next.length() > 0)
+	// Keywords are case-insensitive on all platforms
+	NoCaseString keyValue;
+	if (*next) // We have a list of separators
 	{
-		if (value.length() == key.length()) {
+		PathName::size_type pos = value.find_first_of(next);
+		if (pos == string::npos)
 			return false;
-		}
-		keyValue = value.substr(key.length());
-		if (next.find(keyValue[0]) == PathName::npos) {
+
+		keyValue.assign(value, 0, pos);
+		if (keyValue != key)
 			return false;
-		}
-		PathName::size_type startPos = keyValue.find_first_not_of(next);
-		if (startPos == PathName::npos) {
-			return false;
-		}
-		value = keyValue.substr(startPos);
+
+		value.erase(0, pos + 1);
+		value.ltrim(next);
 	}
 	else
 	{
-		if (value.length() > key.length()) {
+		keyValue.assign(value);
+		if (keyValue != key)
 			return false;
-		}
-		value.erase();
 	}
 	mode = keyMode;
 	return true;
@@ -194,14 +184,7 @@ void DirectoryList::initialize(bool simple_mode)
 
 		val.erase(0, sep + 1);
 
-		if (PathUtils::isRelative(dir))
-		{
-			PathName fullPath;
-			PathUtils::concatPath(fullPath, root, dir);
-			dir = fullPath;
-		}
-
-		add(ParsedPath(dir));
+		add(ParsedPath(PathName(root, dir)));
 	}
 }
 
@@ -223,16 +206,22 @@ bool DirectoryList::isPathInList(const PathName& path) const
 		return true;
 	}
 
-	PathName varpath(path);
-	if (PathUtils::isRelative(path)) {
-		PathUtils::concatPath(varpath, PathName(Config::getRootDirectory()), path);
+	PathName varpath;
+	if (path.isRelative())
+	{
+		varpath = Config::getRootDirectory();
+		varpath.appendPath(path);
+	}
+	else
+	{
+		varpath = path;
 	}
 
 	ParsedPath pPath(varpath);
 	bool rc = false;
-	for (FB_SIZE_T i = 0; i < getCount(); i++)
+	for (const_iterator itr = begin(); itr != end(); ++itr)
 	{
-		if ((*this)[i].contains(pPath))
+		if (itr->contains(pPath))
 		{
 			rc = true;
 			break;
@@ -246,7 +235,8 @@ bool DirectoryList::expandFileName(PathName& path, const PathName& name) const
 	fb_assert(mode != NotInitialized);
 	for (FB_SIZE_T i = 0; i < getCount(); i++)
 	{
-		PathUtils::concatPath(path, (*this)[i], name);
+		path = (*this)[i];
+		path.appendPath(name);
 		if (PathUtils::canAccess(path, 4)) {
 			return true;
 		}
@@ -262,18 +252,21 @@ bool DirectoryList::defaultName(PathName& path, const PathName& name) const
 	{
 		return false;
 	}
-	PathUtils::concatPath(path, (*this)[0], name);
+	path = (*this)[0];
+	path.appendPath(name);
 	return true;
 }
 
-const PathName TempDirectoryList::getConfigString() const
+PathName TempDirectoryList::getConfigString() const
 {
 	const char* value = Config::getTempDirectories();
 	if (!value)
 	{
 		// Temporary directory configuration has not been defined.
 		// Let's make default configuration.
-		return TempFile::getTempPath();
+		PathName tempDir;
+		TempFile::getTempPath(tempDir);
+		return tempDir;
 	}
 	return PathName(value);
 }

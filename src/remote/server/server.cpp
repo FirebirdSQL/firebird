@@ -783,30 +783,30 @@ class CryptKeyTypeManager : public PermanentStorage
 			: PermanentStorage(p), keyType(getPool()), plugins(getPool())
 		{ }
 
-		bool operator==(const PathName& t) const
+		bool operator==(const NoCaseString& t) const
 		{
 			return keyType == t;
 		}
 
-		void set(const PathName& t, const PathName& p)
+		void set(const NoCaseString& t, const PluginName& p)
 		{
 			fb_assert(keyType.isEmpty() && plugins.isEmpty());
 			keyType = t;
 			plugins.add() = p;
 		}
 
-		void add(const PathName& p)
+		void add(const PluginName& p)
 		{
 			plugins.add() = p;		// Here we assume that init code runs once, i.e. plugins do not repeat
 		}
 
-		void value(PathName& to) const
+		void value(PluginName& to) const
 		{
-			REMOTE_makeList(to, plugins);
+			Remote::makeList(to, plugins);
 		}
 
 	private:
-		PathName keyType;
+		NoCaseString keyType;
 		Remote::ParsedList plugins;
 	};
 
@@ -822,10 +822,10 @@ public:
 			check(&st);
 
 			fb_assert(list);
-			Remote::ParsedList newTypes;
-			REMOTE_parseList(newTypes, PathName(list));
+			ObjectsArray<NoCaseString> newTypes;
+			Remote::parseList(newTypes, NoCaseString(list));
 
-			PathName plugin(cpItr.name());
+			PluginName plugin(cpItr.name());
 			for (unsigned i = 0; i < newTypes.getCount(); ++i)
 			{
 				bool found = false;
@@ -847,13 +847,13 @@ public:
 		}
 	}
 
-	PathName operator[](const PathName& keyType) const
+	PluginName operator[](const NoCaseString& keyType) const
 	{
 		for (unsigned j = 0; j < knownTypes.getCount(); ++j)
 		{
 			if (knownTypes[j] == keyType)
 			{
-				PathName rc;
+				PluginName rc;
 				knownTypes[j].value(rc);
 				return rc;
 			}
@@ -1766,7 +1766,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	if (accepted)
 	{
 		// Setup correct configuration for port
-		PathName dbName(connect->p_cnct_file.cstr_address, connect->p_cnct_file.cstr_length);
+		PathName dbName(reinterpret_cast<PathName::const_pointer>(connect->p_cnct_file.cstr_address), connect->p_cnct_file.cstr_length);
 		port->port_config = REMOTE_get_config(&dbName);
 
 		// Clear accept data
@@ -2184,7 +2184,7 @@ static void attach_database(rem_port* port, P_OP operation, P_ATCH* attach, PACK
 		ClumpletReader::dpbList, MAX_DPB_SIZE, attach->p_atch_dpb.cstr_address,
 		attach->p_atch_dpb.cstr_length);
 
-	port->port_srv_auth = FB_NEW DatabaseAuth(port, PathName(attach->p_atch_file.cstr_address,
+	port->port_srv_auth = FB_NEW DatabaseAuth(port, PathName(reinterpret_cast<PathName::const_pointer>(attach->p_atch_file.cstr_address),
 		attach->p_atch_file.cstr_length), wrt, operation);
 
 	if (port->port_srv_auth->authenticate(send))
@@ -5309,12 +5309,12 @@ static void attach_service(rem_port* port, P_ATCH* attach, PACKET* sendL)
 		Arg::Gds(isc_miss_wirecrypt).raise();
 	}
 
-	PathName manager(attach->p_atch_file.cstr_address, attach->p_atch_file.cstr_length);
+	PathName manager(reinterpret_cast<PathName::const_pointer>(attach->p_atch_file.cstr_address), attach->p_atch_file.cstr_length);
 
 	ClumpletWriter* wrt = FB_NEW_POOL(*getDefaultMemoryPool()) ClumpletWriter(*getDefaultMemoryPool(),
 		ClumpletReader::spbList, MAX_DPB_SIZE, attach->p_atch_dpb.cstr_address, attach->p_atch_dpb.cstr_length);
 	port->port_srv_auth = FB_NEW ServiceAttachAuth(port,
-		PathName(attach->p_atch_file.cstr_address, attach->p_atch_file.cstr_length), wrt);
+		PathName(reinterpret_cast<PathName::const_pointer>(attach->p_atch_file.cstr_address), attach->p_atch_file.cstr_length), wrt);
 
 	if (port->port_srv_auth->authenticate(sendL))
 	{
@@ -5525,7 +5525,7 @@ void rem_port::start_crypt(P_CRYPT * crypt, PACKET* sendL)
 	try
 	{
 		ICryptKey* key = NULL;
-		PathName keyName(crypt->p_key.cstr_address, crypt->p_key.cstr_length);
+		NoCaseString keyName(reinterpret_cast<NoCaseString::const_pointer>(crypt->p_key.cstr_address), crypt->p_key.cstr_length);
 		for (unsigned k = 0; k < port_crypt_keys.getCount(); ++k)
 		{
 			if (keyName == port_crypt_keys[k]->t)
@@ -5540,12 +5540,12 @@ void rem_port::start_crypt(P_CRYPT * crypt, PACKET* sendL)
 			(Arg::Gds(isc_wirecrypt_key) << keyName).raise();
 		}
 
-		PathName plugName(crypt->p_plugin.cstr_address, crypt->p_plugin.cstr_length);
+		PluginName plugName(reinterpret_cast<PluginName::const_pointer>(crypt->p_plugin.cstr_address), crypt->p_plugin.cstr_length);
 		// Check it's availability
 		Remote::ParsedList plugins;
 
-		REMOTE_parseList(plugins, Config::getDefaultConfig()->getPlugins(
-			IPluginManager::TYPE_WIRE_CRYPT));
+		Remote::parseList(plugins, PluginName(Config::getDefaultConfig()->getPlugins(
+			IPluginManager::TYPE_WIRE_CRYPT)));
 
 		bool found = false;
 
@@ -6343,14 +6343,14 @@ void SrvAuthBlock::load(Firebird::ClumpletReader& id)
 
 	if (id.find(CNCT_plugin_name))
 	{
-		id.getPath(pluginName);
+		id.getString(pluginName);
 		firstTime = false;
 		HANDSHAKE_DEBUG(fprintf(stderr, "Srv: AuthBlock: plugin %s\n", pluginName.c_str()));
 	}
 
 	if (id.find(CNCT_plugin_list))
 	{
-		id.getPath(pluginList);
+		id.getString(pluginList);
 		HANDSHAKE_DEBUG(fprintf(stderr, "Srv: AuthBlock: plugin list %s\n", pluginList.c_str()));
 	}
 
@@ -6369,14 +6369,14 @@ const char* SrvAuthBlock::getPluginName()
 
 void SrvAuthBlock::setPluginName(const Firebird::string& name)
 {
-	pluginName = name.ToPathName();
+	pluginName = name;
 }
 
 void SrvAuthBlock::setPluginList(const Firebird::string& list)
 {
 	if (firstTime)
 	{
-		pluginList = list.ToPathName();
+		pluginList = list;
 	}
 	if (pluginList.hasData())
 	{
@@ -6441,10 +6441,10 @@ void SrvAuthBlock::createPluginsItr()
 	}
 
 	Remote::ParsedList fromClient;
-	REMOTE_parseList(fromClient, pluginList);
+	Remote::parseList(fromClient, pluginList);
 
 	Remote::ParsedList onServer;
-	REMOTE_parseList(onServer, port->getPortConfig()->getPlugins(IPluginManager::TYPE_AUTH_SERVER));
+	Remote::parseList(onServer, PluginName(port->getPortConfig()->getPlugins(IPluginManager::TYPE_AUTH_SERVER)));
 
 	Remote::ParsedList final;
 	for (unsigned s = 0; s < onServer.getCount(); ++s)
@@ -6498,7 +6498,7 @@ void SrvAuthBlock::createPluginsItr()
 		final.push(onServer[onServer.getCount() - 1]);
 	}
 
-	REMOTE_makeList(pluginList, final);
+	Remote::makeList(pluginList, final);
 
 	RefPtr<Config> portConf(port->getPortConfig());
 	plugins = FB_NEW AuthServerPlugins(IPluginManager::TYPE_AUTH_SERVER, portConf, pluginList.c_str());
@@ -6526,18 +6526,18 @@ bool SrvAuthBlock::extractNewKeys(CSTRING* to, ULONG flags)
 	{
 		for (unsigned n = 0; n < newKeys.getCount(); ++n)
 		{
-			const PathName& t = newKeys[n]->t;
-			PathName plugins = knownCryptKeyTypes()[t];
+			const NoCaseString& t = newKeys[n]->t;
+			PluginName plugins = knownCryptKeyTypes()[t];
 			if (plugins.hasData())
 			{
-				lastExtractedKeys.insertPath(TAG_KEY_TYPE, t);
-				lastExtractedKeys.insertPath(TAG_KEY_PLUGINS, plugins);
+				lastExtractedKeys.insertString(TAG_KEY_TYPE, t);
+				lastExtractedKeys.insertString(TAG_KEY_PLUGINS, plugins);
 			}
 		}
 
 		if ((flags & EXTRACT_PLUGINS_LIST) && (dataFromPlugin.getCount() == 0))
 		{
-			lastExtractedKeys.insertPath(TAG_KNOWN_PLUGINS, pluginList);
+			lastExtractedKeys.insertString(TAG_KNOWN_PLUGINS, pluginList);
 		}
 	}
 

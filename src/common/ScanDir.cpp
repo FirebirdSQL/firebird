@@ -31,6 +31,8 @@
 
 #include "firebird.h"
 #include "ScanDir.h"
+#include "os/os_utils.h"
+#include "isc_f_proto.h"
 
 // In order to have readdir() working correct on solaris 10,
 // firebird.h should be included before sys/stat.h and unistd.
@@ -61,7 +63,7 @@ ScanDir::ScanDir(const char *direct, const char *pat) :
 #ifdef _WIN32
 	handle = NULL;
 #else
-	dir = opendir (direct);
+	dir = opendir (os_utils::SystemCharBuffer(direct));
 #endif
 }
 
@@ -81,11 +83,12 @@ bool ScanDir::next()
 #ifdef _WIN32
 	if (handle == NULL)
 	{
-		handle = FindFirstFile ((directory + "\\" + pattern).c_str(), &data);
+		Firebird::PathName fn(directory, pattern);
+		handle = FindFirstFileW(os_utils::WideCharBuffer(fn), &data);
 		return handle != INVALID_HANDLE_VALUE;
 	}
 
-	return FindNextFile (handle, &data) != 0;
+	return FindNextFileW(handle, &data) != 0;
 #else
 	if (!dir)
 		return false;
@@ -103,9 +106,21 @@ bool ScanDir::next()
 const char* ScanDir::getFileName()
 {
 #ifdef _WIN32
-	fileName = data.cFileName;
+	int len8 = WideCharToMultiByte(CP_UTF8, 0, data.cFileName, -1, NULL, 0, NULL, NULL);
+	if (len8 == 0)
+		return "";
+
+	char* utf8Buffer = fileName.getBuffer(len8);
+
+	len8 = WideCharToMultiByte(CP_UTF8, 0, data.cFileName, -1, utf8Buffer, len8, NULL, NULL);
+
+	if (len8 == 0)
+		return "";
+
+	fileName.recalculate_length();
 #else
 	fileName = data->d_name;
+	ISC_systemToUtf8(fileName);
 #endif
 
 	return fileName.c_str();
@@ -115,7 +130,7 @@ const char* ScanDir::getFileName()
 const char* ScanDir::getFilePath()
 {
 #ifdef _WIN32
-	filePath.printf("%s\\%s", directory.c_str(), data.cFileName);
+	filePath.printf("%s\\%s", directory.c_str(), getFileName());
 #else
 	filePath.printf("%s/%s", directory.c_str(), data->d_name);
 #endif

@@ -465,7 +465,7 @@ bool IntlManager::initialize()
 						fatal_exception::raiseFmt("Missing parameter 'filename' for intl_module %s\n", module->value.c_str());
 					}
 
-					filename = fname->value.ToPathName();
+					filename = fname->value;
 					configInfo = getConfigInfo(objModule);
 
 					ModuleLoader::Module* mod = NULL;
@@ -512,8 +512,7 @@ bool IntlManager::initialize()
 						}
 						else
 						{
-							gds__log((string("Can't load INTL module '") +
-								filename.c_str() + "'").c_str());
+							gds__log("Can't load INTL module '%s'", filename.c_str());
 							ok = false;
 						}
 					}
@@ -538,8 +537,8 @@ bool IntlManager::initialize()
 					}
 					const ConfigFile::String charSetCollation = charSetName + ":" + collationName;
 
-					if (!registerCharSetCollation(charSetCollation.ToString(), filename,
-							(externalName.hasData() ? externalName : collationName).ToString(),
+					if (!registerCharSetCollation(charSetCollation, filename,
+							externalName.hasData() ? externalName : collationName,
 							configInfo))
 					{
 						conflicts.add(charSetCollation);
@@ -573,7 +572,7 @@ bool IntlManager::initialize()
 #endif
 
 	for (ObjectsArray<ConfigFile::String>::const_iterator name(conflicts.begin()); name != conflicts.end(); ++name)
-		charSetCollations->remove(name->ToString());
+		charSetCollations->remove(*name);
 
 	return ok;
 }
@@ -735,7 +734,7 @@ string IntlManager::getConfigInfo(const ConfigFile::Parameter* confObj)
 	for (FB_SIZE_T n = 0; n < all.getCount(); ++n)
 	{
 		const ConfigFile::Parameter& par = all[n];
-		const string parName = par.name.ToString();
+		const ConfigFile::KeyType parName = par.name;
 
 		if (parName == "filename")
 			continue;
@@ -746,7 +745,7 @@ string IntlManager::getConfigInfo(const ConfigFile::Parameter* confObj)
 		configInfo.append(parName + "=" + par.value);
 	}
 
-	return configInfo.ToString();
+	return configInfo;
 }
 
 
@@ -758,9 +757,9 @@ bool IntlManager::registerCharSetCollation(const string& name, const PathName& f
 
 	if (charSetCollations->get(name, conflict))
 	{
-		gds__log((string("INTL plugin conflict: ") + name + " defined in " +
-			(conflict.moduleName.isEmpty() ? "<builtin>" : conflict.moduleName.c_str()) +
-			" and " + filename.c_str()).c_str());
+		gds__log("INTL plugin conflict: %s defined in %s and %s", name.c_str(),
+				 (conflict.moduleName.isEmpty() ? "<builtin>" : conflict.moduleName.c_str()),
+				 filename.c_str());
 		return false;
 	}
 

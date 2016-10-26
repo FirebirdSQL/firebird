@@ -39,17 +39,30 @@ const char* SHARED_KEY	= "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\SharedDL
 
 namespace
 {
-	USHORT GetVersion(const TEXT* gds32, DWORD& verMS, DWORD& verLS, err_handler_t);
-	USHORT PatchVersion(const TEXT* gds32, DWORD verMS, err_handler_t);
-	USHORT IncrementSharedCount(const TEXT* gds32, err_handler_t);
-	USHORT DecrementSharedCount(const TEXT* gds32, bool sw_force, err_handler_t);
+	USHORT GetVersion(const WCHAR* gds32, DWORD& verMS, DWORD& verLS, err_handler_t);
+	USHORT PatchVersion(const WCHAR* gds32, DWORD verMS, err_handler_t);
+	USHORT IncrementSharedCount(const WCHAR* gds32, err_handler_t);
+	USHORT DecrementSharedCount(const WCHAR* gds32, bool sw_force, err_handler_t);
 } // namespace
 
 //
 //	--- Public Functions ---
 //
 
-USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_handler_t err_handler)
+static WCHAR* asciiToWchar(const char* source)
+{
+	static WCHAR buf[MAXPATHLEN];
+	WCHAR* q = buf;
+	while (*source)
+	{
+		*q++ = *source++;
+	}
+	*q = L'\0';
+	return buf;
+}
+
+
+USHORT CLIENT_install(const WCHAR* rootdir, USHORT client, bool sw_force, err_handler_t err_handler)
 {
 /**************************************
  *
@@ -77,18 +90,18 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
  **************************************/
 
 	// Get Windows System Directory
-	TEXT sysdir[MAXPATHLEN];
-	int len = GetSystemDirectory(sysdir, sizeof(sysdir));
+	WCHAR sysdir[MAXPATHLEN];
+	int len = GetSystemDirectoryW(sysdir, sizeof(sysdir));
 	if (len == 0)
 		return (*err_handler) (GetLastError(), "GetSystemDirectory()");
 
 	// Compute newverMS and newverLS. They will contain the full client version
 	// number that we intend to install to WinSysDir.
-	TEXT fbdll[MAXPATHLEN];
-	lstrcpy(fbdll, rootdir);
-//	lstrcat(fbdll, "\\bin\\");
-	lstrcat(fbdll, "\\");
-	lstrcat(fbdll, FBCLIENT_NAME);
+	WCHAR fbdll[MAXPATHLEN];
+	wcscpy(fbdll, rootdir);
+//	wstrcat(fbdll, "\\bin\\");
+	wcscat(fbdll, L"\\");
+	wcscat(fbdll, asciiToWchar(FBCLIENT_NAME));
 
 	DWORD newverMS = 0, newverLS = 0;
 	USHORT status = GetVersion(fbdll, newverMS, newverLS, err_handler);
@@ -102,10 +115,10 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 	}
 
 	// Check for existence and version of current installed DLL
-	TEXT target[MAXPATHLEN];
-	lstrcpy(target, sysdir);
-	lstrcat(target, "\\");
-	lstrcat(target, client == CLIENT_GDS ? GDS32_NAME : FBCLIENT_NAME);
+	WCHAR target[MAXPATHLEN];
+	wcscpy(target, sysdir);
+	wcscat(target, L"\\");
+	wcscat(target, asciiToWchar(client == CLIENT_GDS ? GDS32_NAME : FBCLIENT_NAME));
 
 	DWORD targetverMS = 0, targetverLS = 0;
 	status = GetVersion(target, targetverMS, targetverLS, err_handler);
@@ -150,12 +163,12 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 	// Such a step is needed because the MoveFile techniques used later
 	// can't span different volumes. So the intermediate target has to be
 	// already on the same final destination volume as the final target.
-	TEXT workfile[MAXPATHLEN];
-	lstrcpy(workfile, sysdir);
-	lstrcat(workfile, "\\_");
-	lstrcat(workfile, FBCLIENT_NAME);
+	WCHAR workfile[MAXPATHLEN];
+	wcscpy(workfile, sysdir);
+	wcscat(workfile, L"\\_");
+	wcscat(workfile, asciiToWchar(FBCLIENT_NAME));
 
-	if (CopyFile(fbdll, workfile, FALSE) == 0)
+	if (CopyFileW(fbdll, workfile, FALSE) == 0)
 	{
 		return (*err_handler) (GetLastError(),
 			"CopyFile(FBCLIENT.DLL, WinSysDir\\_FBCLIENT.DLL)");
@@ -170,22 +183,22 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 	}
 
 	// Move _FBCLIENT.DLL as the final target
-	if (MoveFile(workfile, target) == 0)
+	if (MoveFileW(workfile, target) == 0)
 	{
 		// MoveFile failed, this is expected if target already exists
 		ULONG werr = GetLastError();
 		if (werr != ERROR_ALREADY_EXISTS)
 		{
-			DeleteFile(workfile);
+			DeleteFileW(workfile);
 			return (*err_handler) (werr, "MoveFile(_FBCLIENT.DLL, 'target')");
 		}
 
 		// Failed moving because a destination target file already exists
 		// Let's try again by attempting a remove of the destination
-		if (DeleteFile(target) != 0)
+		if (DeleteFileW(target) != 0)
 		{
 			// Success deleting the target, MoveFile should now succeed.
-			if (MoveFile(workfile, target) != 0)
+			if (MoveFileW(workfile, target) != 0)
 			{
 				// Successfull !
 				IncrementSharedCount(target, err_handler);
@@ -198,8 +211,8 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 		HMODULE kernel32 = LoadLibrary("KERNEL32.DLL");
 		if (kernel32 != 0)
 		{
-			typedef BOOL __stdcall proto_ntmove(LPCSTR, LPCSTR, DWORD);
-			proto_ntmove* ntmove = (proto_ntmove*) GetProcAddress(kernel32, "MoveFileExA");
+			typedef BOOL __stdcall proto_ntmove(LPWSTR, LPWSTR, DWORD);
+			proto_ntmove* ntmove = (proto_ntmove*) GetProcAddress(kernel32, "MoveFileExW");
 			if (ntmove != 0)
 			{
 				// We are definitely running on a system supporting the
@@ -209,7 +222,7 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 				{
 					ULONG werr = GetLastError();
 					FreeLibrary(kernel32);
-					DeleteFile(workfile);
+					DeleteFileW(workfile);
 					return (*err_handler) (werr, "MoveFileEx(delete 'target')");
 				}
 
@@ -217,7 +230,7 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 				{
 					ULONG werr = GetLastError();
 					FreeLibrary(kernel32);
-					DeleteFile(workfile);
+					DeleteFileW(workfile);
 					return (*err_handler) (werr, "MoveFileEx(replace 'target')");
 				}
 
@@ -234,8 +247,8 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 		// For this we need "short file names".
 
 		TEXT ssysdir[MAXPATHLEN];
-		if (GetShortPathName(sysdir, ssysdir, sizeof(ssysdir)) == 0)
-			return (*err_handler) (GetLastError(), "GetShortPathName()");
+		if (GetSystemDirectory(ssysdir, sizeof(ssysdir)) == 0)
+			return (*err_handler) (GetLastError(), "GetSystemDirectory()");
 
 		TEXT sworkfile[MAXPATHLEN];
 		lstrcpy(sworkfile, ssysdir);
@@ -251,7 +264,7 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 				"WININIT.INI") == 0)
 		{
 			ULONG werr = GetLastError();
-			DeleteFile(workfile);
+			DeleteFileW(workfile);
 			return (*err_handler) (werr, "WritePrivateProfileString(delete 'target')");
 		}
 
@@ -259,7 +272,7 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 				"WININIT.INI") == 0)
 		{
 			ULONG werr = GetLastError();
-			DeleteFile(workfile);
+			DeleteFileW(workfile);
 			return (*err_handler) (werr, "WritePrivateProfileString(replace 'target')");
 		}
 
@@ -272,7 +285,7 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 	return FB_SUCCESS;
 }
 
-USHORT CLIENT_remove(const TEXT* rootdir, USHORT client, bool sw_force, err_handler_t err_handler)
+USHORT CLIENT_remove(const WCHAR* rootdir, USHORT client, bool sw_force, err_handler_t err_handler)
 {
 /**************************************
  *
@@ -300,18 +313,17 @@ USHORT CLIENT_remove(const TEXT* rootdir, USHORT client, bool sw_force, err_hand
  **************************************/
 
 	// Get Windows System Directory
-	TEXT sysdir[MAXPATHLEN];
-	int len = GetSystemDirectory(sysdir, sizeof(sysdir));
+	WCHAR sysdir[MAXPATHLEN];
+	int len = GetSystemDirectoryW(sysdir, sizeof(sysdir)/sizeof(WCHAR));
 	if (len == 0)
 		return (*err_handler) (GetLastError(), "GetSystemDirectory()");
 
 	// Compute ourverMS and ourverLS. They will contain the full client version
 	// number that we could have installed to WinSysDir.
-	TEXT fbdll[MAXPATHLEN];
-	lstrcpy(fbdll, rootdir);
-//	lstrcat(fbdll, "\\bin\\");
-	lstrcat(fbdll, "\\");
-	lstrcat(fbdll, FBCLIENT_NAME);
+	WCHAR fbdll[MAXPATHLEN];
+	wcscpy(fbdll, rootdir);
+	wcscat(fbdll, L"\\");
+	wcscat(fbdll, asciiToWchar(FBCLIENT_NAME));
 
 	DWORD ourverMS = 0, ourverLS = 0;
 	USHORT status = GetVersion(fbdll, ourverMS, ourverLS, err_handler);
@@ -325,10 +337,10 @@ USHORT CLIENT_remove(const TEXT* rootdir, USHORT client, bool sw_force, err_hand
 	}
 
 	// Check for existence and version of current installed client
-	TEXT target[MAXPATHLEN];
-	lstrcpy(target, sysdir);
-	lstrcat(target, "\\");
-	lstrcat(target, client == CLIENT_GDS ? GDS32_NAME : FBCLIENT_NAME);
+	WCHAR target[MAXPATHLEN];
+	wcscpy(target, sysdir);
+	wcscat(target, L"\\");
+	wcscat(target, asciiToWchar(client == CLIENT_GDS ? GDS32_NAME : FBCLIENT_NAME));
 
 	DWORD targetverMS = 0, targetverLS = 0;
 	status = GetVersion(target, targetverMS, targetverLS, err_handler);
@@ -341,7 +353,7 @@ USHORT CLIENT_remove(const TEXT* rootdir, USHORT client, bool sw_force, err_hand
 	status = DecrementSharedCount(target, sw_force, err_handler);
 	if (status == FB_INSTALL_SHARED_COUNT_ZERO)
 	{
-		if (! DeleteFile(target))
+		if (! DeleteFileW(target))
 		{
 			// Could not delete the file, restore shared count
 			IncrementSharedCount(target, err_handler);
@@ -369,15 +381,15 @@ USHORT CLIENT_query(USHORT client, ULONG& verMS, ULONG& verLS, ULONG& sharedCoun
  **************************************/
 
 	// Get Windows System Directory
-	TEXT sysdir[MAXPATHLEN];
-	int len = GetSystemDirectory(sysdir, sizeof(sysdir));
+	WCHAR sysdir[MAXPATHLEN];
+	int len = GetSystemDirectoryW(sysdir, sizeof(sysdir)/sizeof(WCHAR));
 	if (len == 0)
 		return (*err_handler) (GetLastError(), "GetSystemDirectory()");
 
-	TEXT target[MAXPATHLEN];
-	lstrcpy(target, sysdir);
-	lstrcat(target, "\\");
-	lstrcat(target, client == CLIENT_GDS ? GDS32_NAME : FBCLIENT_NAME);
+	WCHAR target[MAXPATHLEN];
+	wcscpy(target, sysdir);
+	wcscat(target, L"\\");
+	wcscat(target, asciiToWchar(client == CLIENT_GDS ? GDS32_NAME : FBCLIENT_NAME));
 
 	verMS = verLS = sharedCount = 0;
 	USHORT status = GetVersion(target, verMS, verLS, err_handler);
@@ -392,7 +404,7 @@ USHORT CLIENT_query(USHORT client, ULONG& verMS, ULONG& verLS, ULONG& sharedCoun
 
 	DWORD type, size = sizeof(sharedCount);
 	sharedCount = 0;
-	RegQueryValueEx(hkey, target, NULL, &type, reinterpret_cast<BYTE*>(&sharedCount), &size);
+	RegQueryValueExW(hkey, target, NULL, &type, reinterpret_cast<BYTE*>(&sharedCount), &size);
 	RegCloseKey(hkey);
 
 	return FB_SUCCESS;
@@ -404,7 +416,7 @@ USHORT CLIENT_query(USHORT client, ULONG& verMS, ULONG& verLS, ULONG& sharedCoun
 
 namespace {
 
-USHORT GetVersion(const TEXT* filename, DWORD& verMS, DWORD& verLS, err_handler_t err_handler)
+USHORT GetVersion(const WCHAR* filename, DWORD& verMS, DWORD& verLS, err_handler_t err_handler)
 {
 /**************************************
  *
@@ -419,7 +431,7 @@ USHORT GetVersion(const TEXT* filename, DWORD& verMS, DWORD& verLS, err_handler_
  *
  **************************************/
 
-	HANDLE hfile = CreateFile(filename, GENERIC_READ,
+	HANDLE hfile = CreateFileW(filename, GENERIC_READ,
 		FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, 0, 0);
 	if (hfile == INVALID_HANDLE_VALUE)
 		return FB_INSTALL_FILE_NOT_FOUND;
@@ -428,7 +440,7 @@ USHORT GetVersion(const TEXT* filename, DWORD& verMS, DWORD& verLS, err_handler_
 	// can't be deleted between check for existence and version read.
 
 	DWORD dwUnused;
-	DWORD rsize = GetFileVersionInfoSize(const_cast<TEXT*>(filename), &dwUnused);
+	DWORD rsize = GetFileVersionInfoSizeW(const_cast<WCHAR*>(filename), &dwUnused);
 	if (rsize == 0)
 	{
 		ULONG werr = GetLastError();
@@ -437,7 +449,7 @@ USHORT GetVersion(const TEXT* filename, DWORD& verMS, DWORD& verLS, err_handler_
 	}
 
 	BYTE* hver = new BYTE[rsize];
-	if (! GetFileVersionInfo(const_cast<TEXT*>(filename), 0, rsize, hver))
+	if (! GetFileVersionInfoW(const_cast<WCHAR*>(filename), 0, rsize, hver))
 	{
 		ULONG werr = GetLastError();
 		delete[] hver;
@@ -462,7 +474,7 @@ USHORT GetVersion(const TEXT* filename, DWORD& verMS, DWORD& verLS, err_handler_
 	return FB_SUCCESS;
 }
 
-USHORT PatchVersion(const TEXT* filename, DWORD verMS, err_handler_t err_handler)
+USHORT PatchVersion(const WCHAR* filename, DWORD verMS, err_handler_t err_handler)
 {
 /**************************************
  *
@@ -489,7 +501,7 @@ USHORT PatchVersion(const TEXT* filename, DWORD verMS, err_handler_t err_handler
  *
  **************************************/
 
-	HANDLE hfile = CreateFile(filename, GENERIC_READ | GENERIC_WRITE,
+	HANDLE hfile = CreateFileW(filename, GENERIC_READ | GENERIC_WRITE,
 		0 /* FILE_SHARE_NONE */, 0, OPEN_EXISTING,
 		FILE_FLAG_SEQUENTIAL_SCAN, 0);
 	if (hfile == INVALID_HANDLE_VALUE)
@@ -646,7 +658,7 @@ USHORT PatchVersion(const TEXT* filename, DWORD verMS, err_handler_t err_handler
 	return FB_SUCCESS;
 }
 
-USHORT IncrementSharedCount(const TEXT* filename, err_handler_t err_handler)
+USHORT IncrementSharedCount(const WCHAR* filename, err_handler_t err_handler)
 {
 /**************************************
  *
@@ -671,12 +683,12 @@ USHORT IncrementSharedCount(const TEXT* filename, err_handler_t err_handler)
 
 	DWORD count = 0;
 	DWORD type, size = sizeof(count);
-	RegQueryValueEx(hkey, filename, NULL, &type,
+	RegQueryValueExW(hkey, filename, NULL, &type,
 		reinterpret_cast<BYTE*>(&count), &size);
 
 	++count;
 
-	status = RegSetValueEx(hkey, filename, 0, REG_DWORD,
+	status = RegSetValueExW(hkey, filename, 0, REG_DWORD,
 		reinterpret_cast<BYTE*>(&count), sizeof(DWORD));
 	if (status != ERROR_SUCCESS)
 	{
@@ -688,7 +700,7 @@ USHORT IncrementSharedCount(const TEXT* filename, err_handler_t err_handler)
 	return FB_SUCCESS;
 }
 
-USHORT DecrementSharedCount(const TEXT* filename, bool sw_force, err_handler_t err_handler)
+USHORT DecrementSharedCount(const WCHAR* filename, bool sw_force, err_handler_t err_handler)
 {
 /**************************************
  *
@@ -723,7 +735,7 @@ USHORT DecrementSharedCount(const TEXT* filename, bool sw_force, err_handler_t e
 	{
 		DWORD type;
 		DWORD size = sizeof(count);
-		RegQueryValueEx(hkey, filename, NULL, &type,
+		RegQueryValueExW(hkey, filename, NULL, &type,
 			reinterpret_cast<BYTE*>(&count), &size);
 
 		--count;
@@ -731,7 +743,7 @@ USHORT DecrementSharedCount(const TEXT* filename, bool sw_force, err_handler_t e
 
 	if (count > 0)
 	{
-		status = RegSetValueEx(hkey, filename, 0, REG_DWORD,
+		status = RegSetValueExW(hkey, filename, 0, REG_DWORD,
 			reinterpret_cast<BYTE*>(&count), sizeof(DWORD));
 		if (status != ERROR_SUCCESS)
 		{
@@ -742,7 +754,7 @@ USHORT DecrementSharedCount(const TEXT* filename, bool sw_force, err_handler_t e
 		return FB_SUCCESS;
 	}
 
-	status = RegDeleteValue(hkey, filename);
+	status = RegDeleteValueW(hkey, filename);
 	if (status != ERROR_SUCCESS)
 	{
 		RegCloseKey(hkey);

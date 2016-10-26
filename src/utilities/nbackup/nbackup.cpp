@@ -94,12 +94,14 @@ namespace
 
 	void printMsg(USHORT number, const SafeArg& arg, bool newLine = true)
 	{
-		char buffer[256];
-		fb_msg_format(NULL, nbackup_msg_fac, number, sizeof(buffer), buffer, arg);
+		string buffer;
+		fb_msg_format(NULL, nbackup_msg_fac, number, BUFFER_SMALL, buffer.getBuffer(BUFFER_SMALL), arg);
+		buffer.recalculate_length();
+		ISC_utf8ToSystem(buffer); // Is called unconditionally because this routine only works with console
 		if (newLine)
-			fprintf(stderr, "%s\n", buffer);
+			fprintf(stderr, "%s\n", buffer.c_str());
 		else
-			fprintf(stderr, "%s", buffer);
+			fprintf(stderr, "%s", buffer.c_str());
 	}
 
 	void printMsg(USHORT number, bool newLine = true)
@@ -291,7 +293,7 @@ public:
 		{
 			const PathName host = host_port.substr(0, sizeof(localhost) - 1);
 			const char delim = host_port.length() >= sizeof(localhost) ? host_port[sizeof(localhost) - 1] : '/';
-			if (delim != '/' || !host.equalsNoCase(localhost))
+			if (delim != '/' || !(host == localhost))
 				pr_error(status, "nbackup needs local access to database file");
 		}
 
@@ -356,7 +358,6 @@ private:
 	void internal_unlock_database();
 	void attach_database();
 	void detach_database();
-	string to_system(const PathName& from);
 
 	// Create/open database and backup
 	void open_database_write(bool exclusive = false);
@@ -457,7 +458,7 @@ void NBackup::open_database_write(bool exclusive)
 		FILE_SHARE_READ :
 		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
 
-	dbase = CreateFile(dbname.c_str(), GENERIC_READ | GENERIC_WRITE,
+	dbase = CreateFileW(os_utils::WideCharBuffer(dbname), GENERIC_READ | GENERIC_WRITE,
 		shareFlags, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (dbase != INVALID_HANDLE_VALUE)
 		return;
@@ -485,7 +486,7 @@ void NBackup::open_database_scan()
 	// and OS itself. Basically, reading any large file brings the whole system
 	// down for extended period of time. Documented workaround is to avoid using
 	// system cache when reading large files.
-	dbase = CreateFile(dbname.c_str(),
+	dbase = CreateFileW(os_utils::WideCharBuffer(dbname),
 		GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING,
 		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN | (direct_io ? FILE_FLAG_NO_BUFFERING : 0),
 		NULL);
@@ -544,7 +545,7 @@ void NBackup::open_database_scan()
 void NBackup::create_database()
 {
 #ifdef WIN_NT
-	dbase = CreateFile(dbname.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_DELETE,
+	dbase = CreateFileW(os_utils::WideCharBuffer(dbname), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_DELETE,
 		NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
 	if (dbase != INVALID_HANDLE_VALUE)
 		return;
@@ -566,20 +567,11 @@ void NBackup::close_database()
 #endif
 }
 
-string NBackup::to_system(const PathName& from)
-{
-	string to = from.ToString();
-	if (uSvc->utf8FileNames())
-		ISC_utf8ToSystem(to);
-	return to;
-}
-
 
 void NBackup::open_backup_scan()
 {
-	string nm = to_system(bakname);
 #ifdef WIN_NT
-	backup = CreateFile(nm.c_str(), GENERIC_READ, 0,
+	backup = CreateFileW(os_utils::WideCharBuffer(bakname), GENERIC_READ, 0,
 		NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
 	if (backup != INVALID_HANDLE_VALUE)
 		return;
@@ -664,7 +656,7 @@ void NBackup::open_backup_scan()
 	}
 	else
 	{
-		backup = os_utils::open(nm.c_str(), O_RDONLY | O_LARGEFILE);
+		backup = os_utils::open(bakname.c_str(), O_RDONLY | O_LARGEFILE);
 		if (backup >= 0)
 			return;
 	}
@@ -675,14 +667,13 @@ void NBackup::open_backup_scan()
 
 void NBackup::create_backup()
 {
-	string nm = to_system(bakname);
 #ifdef WIN_NT
 	if (bakname == "stdout") {
 		backup = GetStdHandle(STD_OUTPUT_HANDLE);
 	}
 	else
 	{
-		backup = CreateFile(nm.c_str(), GENERIC_WRITE, FILE_SHARE_DELETE,
+		backup = CreateFileW(os_utils::WideCharBuffer(bakname), GENERIC_WRITE, FILE_SHARE_DELETE,
 			NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
 	}
 	if (backup != INVALID_HANDLE_VALUE)
@@ -693,7 +684,7 @@ void NBackup::create_backup()
 		backup = 1; // Posix file handle for stdout
 		return;
 	}
-	backup = os_utils::open(nm.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, 0660);
+	backup = os_utils::open(bakname.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, 0660);
 	if (backup >= 0)
 		return;
 #endif
@@ -789,14 +780,11 @@ void NBackup::attach_database()
 	if (!run_db_triggers)
 		dpb.insertByte(isc_dpb_no_db_triggers, 1);
 
-	if (m_silent)
-	{
-		ISC_STATUS_ARRAY temp;
-		isc_attach_database(temp, 0, database.c_str(), &newdb,
-			dpb.getBufferLength(), reinterpret_cast<const char*>(dpb.getBuffer()));
-	}
-	else if (isc_attach_database(status, 0, database.c_str(), &newdb,
-				dpb.getBufferLength(), reinterpret_cast<const char*>(dpb.getBuffer())))
+	dpb.insertTag(isc_dpb_utf8_filename);
+	dpb.insertString(isc_dpb_lc_ctype, "utf8");
+
+	if (isc_attach_database(status, 0, database.c_str(), &newdb,
+							dpb.getBufferLength(), reinterpret_cast<const char*>(dpb.getBuffer())) && !m_silent)
 	{
 		pr_error(status, "attach database");
 	}
@@ -1052,7 +1040,8 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 					today.tm_hour, today.tm_min);
 			}
 			if (!uSvc->isService())
-				printf("%s\n", bakname.c_str()); // Print out generated filename for script processing
+				// Fixme: should it really be printed to stdout? If backup destination is stdout too it will spoil data
+				uSvc->printf(false, "%s\n", bakname.c_str()); // Print out generated filename for script processing
 		}
 
 		// Level 0 backup is a full reconstructed database image that can be
@@ -1351,7 +1340,7 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 	{
 		m_silent = true;
 		if (delete_backup)
-			remove(bakname.c_str());
+			os_utils::unlink(bakname.c_str());
 		if (trans)
 		{
 			// Do not report a secondary exception
@@ -1423,7 +1412,7 @@ void NBackup::restore_database(const BackupFiles& files, bool inc_rest)
 						close_database();
 						if (!curLevel)
 						{
-							remove(dbname.c_str());
+							os_utils::unlink(dbname.c_str());
 							status_exception::raise(Arg::Gds(isc_nbackup_failed_lzbk));
 						}
 						fixup_database();
@@ -1459,7 +1448,13 @@ void NBackup::restore_database(const BackupFiles& files, bool inc_rest)
 					return;
 				}
 				if (!inc_rest || curLevel)
+				{
 					bakname = files[curLevel - (inc_rest ? 1 : 0)];
+					if (!uSvc->utf8FileNames())
+					{
+						ISC_systemToUtf8(bakname);
+					}
+				}
 #ifdef WIN_NT
 				if (curLevel)
 #else
@@ -1513,7 +1508,7 @@ void NBackup::restore_database(const BackupFiles& files, bool inc_rest)
 				if (!inc_rest)
 				{
 #ifdef WIN_NT
-					if (!CopyFile(bakname.c_str(), dbname.c_str(), TRUE))
+					if (!CopyFileW(os_utils::WideCharBuffer(bakname), os_utils::WideCharBuffer(dbname), TRUE))
 					{
 						status_exception::raise(Arg::Gds(isc_nbackup_err_copy) <<
 							dbname.c_str() << bakname.c_str() << Arg::OsError());
@@ -1587,7 +1582,7 @@ void NBackup::restore_database(const BackupFiles& files, bool inc_rest)
 		m_silent = true;
 		delete[] page_buffer;
 		if (delete_database)
-			remove(dbname.c_str());
+			os_utils::unlink(dbname.c_str());
 		throw;
 	}
 }
@@ -1853,6 +1848,15 @@ void nbackup(UtilSvc* uSvc)
 	if (print_size && op != nbLock)
 	{
 		usage(uSvc, isc_nbackup_size_with_lock);
+	}
+
+	if (!uSvc->utf8FileNames())
+	{
+		ISC_systemToUtf8(username);
+		ISC_systemToUtf8(role);
+		ISC_systemToUtf8(password);
+		ISC_systemToUtf8(database);
+		ISC_systemToUtf8(filename);
 	}
 
 	NBackup nbk(uSvc, database, username, role, password, run_db_triggers, direct_io, decompress);

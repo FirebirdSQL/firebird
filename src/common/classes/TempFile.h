@@ -33,14 +33,14 @@ namespace Firebird {
 class TempFile : public File
 {
 public:
-	TempFile(MemoryPool& pool, const PathName& prefix, const PathName& directory,
+	TempFile(MemoryPool& pool, const string& prefix, const PathName& directory,
 			 bool do_unlink = true)
 		: filename(pool), position(0), size(0), doUnlink(do_unlink)
 	{
 		init(directory, prefix);
 	}
 
-	TempFile(const PathName& prefix, bool do_unlink = true)
+	TempFile(const string& prefix, bool do_unlink = true)
 		: position(0), size(0), doUnlink(do_unlink)
 	{
 		init("", prefix);
@@ -65,13 +65,13 @@ public:
 		return filename;
 	}
 
-	static PathName getTempPath();
-	static PathName create(const PathName& prefix, const PathName& directory = "");
-	static PathName create(CheckStatusWrapper* status, const PathName& prefix,
+	static void getTempPath(PathName& path);
+	static PathName create(const string& prefix, const PathName& directory = "");
+	static PathName create(CheckStatusWrapper* status, const string& prefix,
 		const PathName& directory = "");
 
 private:
-	void init(const PathName&, const PathName&);
+	void init(const PathName& dir, const string& prefix);
 	void seek(const offset_t);
 
 #if defined(WIN_NT)

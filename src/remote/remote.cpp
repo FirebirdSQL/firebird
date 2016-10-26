@@ -891,9 +891,9 @@ LegacyPlugin REMOTE_legacy_auth(const char* nm, int p)
 	return PLUGIN_NEW;
 }
 
-Firebird::PathName ClntAuthBlock::getPluginName()
+Firebird::PluginName ClntAuthBlock::getPluginName()
 {
-	return plugins.hasData() ? plugins.name() : "";
+	return Firebird::PluginName(plugins.hasData() ? plugins.name() : "");
 }
 
 template <typename T>
@@ -935,17 +935,17 @@ void ClntAuthBlock::extractDataFromPluginTo(Firebird::ClumpletWriter& user_id)
 	}
 
 	// Add plugin name
-	Firebird::PathName pluginName = getPluginName();
+	Firebird::PluginName pluginName = getPluginName();
 	if (pluginName.hasData())
 	{
 		HANDSHAKE_DEBUG(fprintf(stderr, "Cli: extractDataFromPluginTo: pluginName=%s\n", pluginName.c_str()));
-		user_id.insertPath(CNCT_plugin_name, pluginName);
+		user_id.insertString(CNCT_plugin_name, pluginName);
 	}
 
 	// Add plugin list
 	if (pluginList.hasData())
 	{
-		user_id.insertPath(CNCT_plugin_list, pluginList);
+		user_id.insertString(CNCT_plugin_list, pluginList);
 	}
 
 	// This is specially tricky field - user_id is limited to 255 bytes per entry,
@@ -973,7 +973,7 @@ void ClntAuthBlock::resetClnt(const Firebird::PathName* fileName, const CSTRING*
 
 		if (srvList.find(TAG_KNOWN_PLUGINS))
 		{
-			srvList.getPath(serverPluginList);
+			srvList.getString(serverPluginList);
 		}
 	}
 
@@ -984,7 +984,7 @@ void ClntAuthBlock::resetClnt(const Firebird::PathName* fileName, const CSTRING*
 	clntConfig = REMOTE_get_config(fileName, &dpbConfig);
 	pluginList = clntConfig->getPlugins(Firebird::IPluginManager::TYPE_AUTH_CLIENT);
 
-	Firebird::PathName final;
+	Firebird::PluginName final;
 	if (serverPluginList.hasData())
 	{
 		Auth::mergeLists(final, serverPluginList, pluginList);
@@ -1151,14 +1151,14 @@ void rem_port::addServerKeys(CSTRING* passedStr)
 
 		KnownServerKey key;
 		fb_assert(newKeys.getClumpTag() == TAG_KEY_TYPE);
-		newKeys.getPath(key.type);
+		newKeys.getString(key.type);
 		newKeys.moveNext();
 		if (newKeys.isEof())
 		{
 			break;
 		}
 		fb_assert(newKeys.getClumpTag() == TAG_KEY_PLUGINS);
-		newKeys.getPath(key.plugins);
+		newKeys.getString(key.plugins);
 		key.plugins += ' ';
 		key.plugins.insert(0, " ");
 
@@ -1201,14 +1201,16 @@ bool rem_port::tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptK
 	// we got correct key's type pair
 	// check what about crypt plugin for it
 	Remote::ParsedList clientPlugins;
-	REMOTE_parseList(clientPlugins, getPortConfig()->getPlugins(Firebird::IPluginManager::TYPE_WIRE_CRYPT));
+	Remote::parseList(clientPlugins, Firebird::PluginName(getPortConfig()->getPlugins(Firebird::IPluginManager::TYPE_WIRE_CRYPT)));
 	for (unsigned n = 0; n < clientPlugins.getCount(); ++n)
 	{
-		Firebird::PathName p(clientPlugins[n]);
-		if (srvKey.plugins.find(" " + p + " ") != Firebird::PathName::npos)
+		Firebird::string p(" ", 1);
+		p += clientPlugins[n];
+		p += ' ';
+		if (srvKey.plugins.find(p) != Firebird::PathName::npos)
 		{
 			Firebird::GetPlugins<Firebird::IWireCryptPlugin>
-				cp(Firebird::IPluginManager::TYPE_WIRE_CRYPT, p.c_str());
+				cp(Firebird::IPluginManager::TYPE_WIRE_CRYPT, clientPlugins[n].c_str());
 			if (cp.hasData())
 			{
 				Firebird::LocalStatus st;
@@ -1231,7 +1233,7 @@ bool rem_port::tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptK
 				PACKET crypt;
 				crypt.p_operation = op_crypt;
 				setCStr(crypt.p_crypt.p_key, cryptKey->t.c_str());
-				setCStr(crypt.p_crypt.p_plugin, p.c_str());
+				setCStr(crypt.p_crypt.p_plugin, clientPlugins[n].c_str());
 				send(&crypt);
 
 				// Validate answer - decryptor is not affected by port_crypt_complete,
@@ -1325,9 +1327,9 @@ namespace {
 		explicit ZLib(Firebird::MemoryPool&)
 		{
 #ifdef WIN_NT
-			const char* name = "zlib1.dll";
+			Firebird::PathName name("zlib1.dll");
 #else
-			const char* name = "libz." SHRLIB_EXT ".1";
+			Firebird::PathName name("libz." SHRLIB_EXT ".1");
 #endif
 			z.reset(ModuleLoader::fixAndLoadModule(name));
 			if (z)

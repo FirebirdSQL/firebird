@@ -153,11 +153,10 @@ class Map : public MapHash::Entry, public GlobalStorage
 public:
 	static FB_SIZE_T hash(const Map& value, FB_SIZE_T hashSize)
 	{
-		NoCaseString key = value.makeHashKey();
-		return DefaultHash<Map>::hash(key.c_str(), key.length(), hashSize);
+		return value.makeHash(hashSize);
 	}
 
-	NoCaseString makeHashKey() const
+	FB_SIZE_T makeHash(FB_SIZE_T hashSize) const
 	{
 		NoCaseString key;
 		key += usng;
@@ -169,9 +168,9 @@ public:
 		key += fromType;
 		MAP_DEBUG(key += ':');
 		key += from;
+		MAP_DEBUG(fprintf(stderr, "hashKey = %s\n", key.c_str()));
 
-		key.upper();
-		return key;
+		return key.hash(hashSize);
 	}
 
 	NoCaseString plugin, db, fromType, from, to;
@@ -313,7 +312,7 @@ public:
 
 				Map* map = FB_NEW Map(usng, plugin.null ? "*" : plugin, expandedDb,
 					fromType, from, role, to.null ? "*" : to);
-				MAP_DEBUG(fprintf(stderr, "Add = %s\n", map->makeHashKey().c_str()));
+				MAP_DEBUG(fprintf(stderr, "Adding...\n"));
 				add(map);
 			}
 			check("IResultSet::fetchNext", &st);
@@ -358,7 +357,7 @@ public:
 	void search(AuthReader::Info& info, const Map& from, AuthWriter& newBlock,
 		const NoCaseString& originalUserName)
 	{
-		MAP_DEBUG(fprintf(stderr, "Key = %s\n", from.makeHashKey().c_str()));
+		MAP_DEBUG(fprintf(stderr, "Search...\n"));
 		if (!dataFlag)
 			return;
 
@@ -914,6 +913,7 @@ public:
 		embeddedSysdba.insertByte(isc_dpb_sec_attach, TRUE);
 		embeddedSysdba.insertByte(isc_dpb_map_attach, TRUE);
 		embeddedSysdba.insertByte(isc_dpb_no_db_triggers, TRUE);
+		embeddedSysdba.insertTag(isc_dpb_utf8_filename);
 
 		IAttachment* att = prov->attachDatabase(&st, aliasDb,
 			embeddedSysdba.getBufferLength(), embeddedSysdba.getBuffer());
@@ -1236,7 +1236,7 @@ ULONG mapUser(const bool throwNotFoundError,
 		{
 			if (info.type == NM_USER && info.name.hasData())
 			{
-				name = info.name.ToString();
+				name = info.name;
 				break;
 			}
 		}
@@ -1419,11 +1419,11 @@ ULONG mapUser(const bool throwNotFoundError,
 	}
 	else
 	{
-		name = fName.value.ToString();
-		trusted_role = fRole.value.ToString();
+		name = fName.value;
+		trusted_role = fRole.value;
 		MAP_DEBUG(fprintf(stderr, "login=%s tr=%s\n", name.c_str(), trusted_role.c_str()));
 		if (auth_method)
-			*auth_method = fName.method.ToString();
+			*auth_method = fName.method;
 
 		if (newAuthBlock)
 		{
@@ -1523,6 +1523,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, jrd_rel* relation)
 			fb_strlen(DBA_USER_NAME));
 		embeddedSysdba.insertByte(isc_dpb_sec_attach, TRUE);
 		embeddedSysdba.insertByte(isc_dpb_no_db_triggers, TRUE);
+		embeddedSysdba.insertTag(isc_dpb_utf8_filename);
 
 		const char* dbName = tdbb->getDatabase()->dbb_config->getSecurityDatabase();
 		att = prov->attachDatabase(&st, dbName,

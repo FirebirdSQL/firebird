@@ -97,7 +97,7 @@ static void  bad_attribute(int, USHORT);
 static void  file_not_empty();
 static SLONG get_numeric();
 static int   get_text(UCHAR*, SSHORT);
-static void  prompt_for_name(SCHAR*, int);
+static void  prompt_for_name(Firebird::PathName&);
 static void  put_asciz(SCHAR, const SCHAR*);
 static void  put_numeric(SCHAR, int);
 static bool  read_header(DESC, ULONG*, USHORT*, bool);
@@ -463,7 +463,7 @@ void MVOL_skip_block( BurpGlobals* tdgbl, ULONG count)
 // detect if it's a tape, rewind if so
 // and set the buffer size
 //
-DESC MVOL_open(const char* name, ULONG mode, ULONG create)
+DESC MVOL_open(Firebird::PathName& name, ULONG mode, ULONG create)
 {
 	HANDLE handle;
 	TAPE_GET_MEDIA_PARAMETERS param;
@@ -471,9 +471,9 @@ DESC MVOL_open(const char* name, ULONG mode, ULONG create)
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
-	if (strnicmp(name, "\\\\.\\tape", 8))
+	if (strnicmp(name.c_str(), "\\\\.\\tape", 8))
 	{
-		handle = CreateFile(name, mode,
+		handle = CreateFileW(os_utils::WideCharBuffer(name), mode,
 							mode == MODE_WRITE ? 0 : FILE_SHARE_READ,
 							NULL, create, FILE_ATTRIBUTE_NORMAL, NULL);
 	}
@@ -492,7 +492,7 @@ DESC MVOL_open(const char* name, ULONG mode, ULONG create)
 		// work unless we specify FILE_SHARE_WRITE as the open mode.
 		// So it goes...
 		//
-		handle = CreateFile(name, mode | MODE_READ,
+		handle = CreateFileW(os_utils::WideCharBuffer(name), mode | MODE_READ,
 							mode == MODE_WRITE ? FILE_SHARE_WRITE : FILE_SHARE_READ,
 							0, OPEN_EXISTING, 0, NULL);
 		if (handle != INVALID_HANDLE_VALUE)
@@ -888,7 +888,7 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 
 	// Loop until we have opened a file successfully
 
-	SCHAR new_file[MAX_FILE_NAME_SIZE];
+	Firebird::PathName new_file;
 	DESC new_desc = INVALID_HANDLE_VALUE;
 	for (;;)
 	{
@@ -902,17 +902,17 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 
 		// Get file name to try
 
-		prompt_for_name(new_file, sizeof(new_file));
+		prompt_for_name(new_file);
 
 #ifdef WIN_NT
 		new_desc = MVOL_open(new_file, mode, OPEN_ALWAYS);
 		if (new_desc == INVALID_HANDLE_VALUE)
 #else
-		new_desc = os_utils::open(new_file, mode, open_mask);
+		new_desc = os_utils::open(new_file.c_str(), mode, open_mask);
 		if (new_desc < 0)
 #endif // WIN_NT
 		{
-			BURP_print(true, 222, new_file);
+			BURP_print(true, 222, new_file.c_str());
 			// msg 222 \n\nCould not open file name \"%s\"\n
 			continue;
 		}
@@ -927,15 +927,15 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 		{
 			if (!write_header(new_desc, 0L, full_buffer))
 			{
-				BURP_print(true, 223, new_file);
+				BURP_print(true, 223, new_file.c_str());
 				// msg223 \n\nCould not write to file \"%s\"\n
 				continue;
 			}
 			else
 			{
-				BURP_msg_put(false, 261, SafeArg() << tdgbl->mvol_volume_count << new_file);
+				BURP_msg_put(false, 261, SafeArg() << tdgbl->mvol_volume_count << new_file.c_str());
 				// Starting with volume #vol_count, new_file
-				BURP_verbose(75, new_file);	// msg 75  creating file %s
+				BURP_verbose(75, new_file.c_str());	// msg 75  creating file %s
 			}
 		}
 		else
@@ -946,18 +946,18 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 			USHORT format;
 			if (!read_header(new_desc, &temp_buffer_size, &format, false))
 			{
-				BURP_print(true, 224, new_file);
+				BURP_print(true, 224, new_file.c_str());
 				continue;
 			}
 			else
 			{
-				BURP_msg_put(false, 261, SafeArg() << tdgbl->mvol_volume_count << new_file);
+				BURP_msg_put(false, 261, SafeArg() << tdgbl->mvol_volume_count << new_file.c_str());
 				// Starting with volume #vol_count, new_file
-				BURP_verbose(100, new_file);	// msg 100  opened file %s
+				BURP_verbose(100, new_file.c_str());	// msg 100  opened file %s
 			}
 		}
 
-		strcpy(tdgbl->mvol_old_file, new_file);
+		new_file.copyTo(tdgbl->mvol_old_file, sizeof(tdgbl->mvol_old_file));
 		return new_desc;
 	}
 }
@@ -966,7 +966,7 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 //____________________________________________________________
 //
 //
-static void prompt_for_name(SCHAR* name, int length)
+static void prompt_for_name(Firebird::PathName& name)
 {
 	FILE*	term_in = NULL;
 	FILE*	term_out =  NULL;
@@ -1013,22 +1013,23 @@ static void prompt_for_name(SCHAR* name, int length)
 		fprintf(term_out, "%s", msg);
 
 		fflush(term_out);
-		if (fgets(name, length, term_in) == NULL)
+		if (fgets(name.getBuffer(MAX_FILE_NAME_SIZE), MAX_FILE_NAME_SIZE, term_in) == NULL)
 		{
 			BURP_msg_get(229, msg);
 			// \n\nERROR: Backup incomplete\n
 			fprintf(term_out, "%s", msg);
 			BURP_exit_local(FINI_ERROR, tdgbl);
 		}
+		name.recalculate_length();
 
 		// If the user typed just a carriage return, they
 		// want the old file.  If there isn't one, reprompt
 
-		if (name[0] == '\n')
+		if (name == "\n")
 		{
 			if (strlen(tdgbl->mvol_old_file) > 0)
 			{
-				strcpy(name, tdgbl->mvol_old_file);
+				name = tdgbl->mvol_old_file;
 				break;
 			}
 
@@ -1036,13 +1037,7 @@ static void prompt_for_name(SCHAR* name, int length)
 		}
 
 		// OK, its a file name, strip the carriage return
-
-		SCHAR* name_ptr = name;
-		while (*name_ptr && *name_ptr != '\n')
-		{
-			name_ptr++;
-		}
-		*name_ptr = 0;
+		name.rtrim("\n");
 		break;
 	}
 
@@ -1368,10 +1363,9 @@ bool MVOL_split_hdr_write()
 
 	time_t seconds = time(NULL);
 
-	Firebird::string nm = tdgbl->toSystem(tdgbl->action->act_file->fil_name);
 	sprintf(buffer, "%s%.24s      , file No. %4d of %4d, %-27.27s",
 			HDR_SPLIT_TAG, ctime(&seconds), tdgbl->action->act_file->fil_seq,
-			tdgbl->action->act_total, nm.c_str());
+			tdgbl->action->act_total, tdgbl->action->act_file->fil_name.c_str());
 
 #ifdef WIN_NT
 	DWORD bytes_written = 0;

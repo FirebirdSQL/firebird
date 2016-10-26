@@ -305,10 +305,10 @@ string Jrd::Attachment::stringToMetaCharSet(thread_db* tdbb, const string& str,
 }
 
 
-string Jrd::Attachment::stringToUserCharSet(thread_db* tdbb, const string& str)
+string Jrd::Attachment::stringToUserCharSet(thread_db* tdbb, const AbstractString& str)
 {
 	if (att_charset == CS_METADATA || att_charset == CS_NONE)
-		return str;
+		return string(str);
 
 	HalfStaticArray<UCHAR, BUFFER_MEDIUM> buffer(str.length() * sizeof(ULONG));
 	ULONG len = INTL_convert_bytes(tdbb, att_charset, buffer.begin(), buffer.getCapacity(),

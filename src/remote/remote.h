@@ -683,7 +683,7 @@ public:
 	};
 
 	Key encrypt, decrypt;
-	Firebird::PathName t;
+	Firebird::NoCaseString t;
 };
 
 
@@ -695,8 +695,8 @@ class ClntAuthBlock FB_FINAL :
 	public Firebird::RefCntIface<Firebird::IClientBlockImpl<ClntAuthBlock, Firebird::CheckStatusWrapper> >
 {
 private:
-	Firebird::PathName pluginList;				// To be passed to server
-	Firebird::PathName serverPluginList;		// Received from server
+	Firebird::PluginName pluginList;				// To be passed to server
+	Firebird::PluginName serverPluginList;		// Received from server
 	Firebird::string cliUserName, cliPassword;	// Used by plugin, taken from DPB
 	Firebird::string cliOrigUserName;			// Original user name, passed to server
 	// These two are legacy encrypted password, trusted auth data and so on - what plugin needs
@@ -729,8 +729,8 @@ public:
 	void loadClnt(Firebird::ClumpletWriter& dpb, const ParametersSet*);
 	void extractDataFromPluginTo(Firebird::ClumpletWriter& user_id);
 	void resetClnt(const Firebird::PathName* fileName, const CSTRING* listStr = NULL);
-	bool checkPluginName(Firebird::PathName& nameToCheck);
-	Firebird::PathName getPluginName();
+	bool checkPluginName(Firebird::PluginName& nameToCheck);
+	Firebird::PluginName getPluginName();
 	void tryNewKeys(rem_port*);
 	void releaseKeys(unsigned from);
 	Firebird::RefPtr<Config>* getConfig();
@@ -755,7 +755,7 @@ class SrvAuthBlock FB_FINAL :
 private:
 	rem_port* port;
 	Firebird::string userName;
-	Firebird::PathName pluginName, pluginList;
+	Firebird::PluginName pluginName, pluginList;
 	// These two may be legacy encrypted password, trusted auth data and so on
 	Firebird::UCharBuffer dataForPlugin, dataFromPlugin;
 	Firebird::ClumpletWriter lastExtractedKeys;
@@ -817,7 +817,8 @@ public:
 class KnownServerKey : public Firebird::AutoStorage
 {
 public:
-	Firebird::PathName type, plugins;
+	Firebird::NoCaseString type;
+	Firebird::PluginName plugins;
 
 	KnownServerKey()
 		: Firebird::AutoStorage(), type(getPool()), plugins(getPool())

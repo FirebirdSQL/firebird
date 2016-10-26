@@ -31,6 +31,7 @@
 #include "../common/UtilSvc.h"
 #include "../common/classes/alloc.h"
 #include "../common/StatusArg.h"
+#include "../common/isc_f_proto.h"
 #include "iberror.h"
 
 #include <string.h>
@@ -90,13 +91,15 @@ public:
 	{
 		va_list arglist;
 		va_start(arglist, format);
-		int rc = ::vfprintf((usvcDataMode || err) ? stderr : stdout, format, arglist);
+		string s;
+		s.vprintf(format, arglist);
 		va_end(arglist);
-
-		if (rc < 0)
+		// Dirty hack to make standalone utility work as before while they are not fully unicode-aware
+		if (!usvcDataMode)
 		{
-			system_call_failed::raise("StandaloneUtilityInterface::printf()/vfprintf()");
+			ISC_utf8ToSystem(s);
 		}
+		outputFile((usvcDataMode || err) ? stderr : stdout, s.c_str(), s.length());
 	}
 
 	virtual void hidePasswd(ArgvType& argv, int pos)

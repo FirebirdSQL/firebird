@@ -41,7 +41,7 @@ UCHAR			MVOL_write(const UCHAR, int*, UCHAR**);
 const UCHAR*	MVOL_write_block(BurpGlobals*, const UCHAR*, ULONG);
 
 #if defined WIN_NT
-DESC			MVOL_open(const char*, ULONG, ULONG);
+DESC			MVOL_open(Firebird::PathName&, ULONG, ULONG);
 #endif
 
 

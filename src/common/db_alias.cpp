@@ -44,7 +44,7 @@ namespace
 	class DatabaseDirectoryList : public DirectoryList
 	{
 	private:
-		const PathName getConfigString() const
+		PathName getConfigString() const
 		{
 			return PathName(Config::getDatabaseAccess());
 		}
@@ -59,37 +59,8 @@ namespace
 
 	const char* const ALIAS_FILE = "databases.conf";
 
-	void replace_dir_sep(PathName& s)
-	{
-		const char correct_dir_sep = PathUtils::dir_sep;
-		const char incorrect_dir_sep = (correct_dir_sep == '/') ? '\\' : '/';
-		for (char* itr = s.begin(); itr < s.end(); ++itr)
-		{
-			if (*itr == incorrect_dir_sep)
-			{
-				*itr = correct_dir_sep;
-			}
-		}
-	}
-
-	struct CalcHash
-	{
-		static FB_SIZE_T chash(FB_SIZE_T sum, FB_SIZE_T hashSize)
-		{
-			FB_SIZE_T rc = 0;
-			while (sum)
-			{
-				rc += (sum % hashSize);
-				sum /= hashSize;
-			}
-
-			return rc % hashSize;
-		}
-	};
-
-
 	template <typename T>
-	struct PathHash : public CalcHash
+	struct PathHash
 	{
 		static const PathName& generate(const T& item)
 		{
@@ -98,52 +69,13 @@ namespace
 
 		static FB_SIZE_T hash(const PathName& value, FB_SIZE_T hashSize)
 		{
-			return hash(value.c_str(), value.length(), hashSize);
-		}
-
-		static void upcpy(FB_SIZE_T* toPar, const char* from, FB_SIZE_T length)
-		{
-			char* to = reinterpret_cast<char*>(toPar);
-			while (length--)
-			{
-				if (CASE_SENSITIVITY)
-				{
-					*to++ = *from++;
-				}
-				else
-				{
-					*to++ = toupper(*from++);
-				}
-			}
-		}
-
-		static FB_SIZE_T hash(const char* value, FB_SIZE_T length, FB_SIZE_T hashSize)
-		{
-			FB_SIZE_T sum = 0;
-			FB_SIZE_T val;
-
-			while (length >= sizeof(FB_SIZE_T))
-			{
-				upcpy(&val, value, sizeof(FB_SIZE_T));
-				sum += val;
-				value += sizeof(FB_SIZE_T);
-				length -= sizeof(FB_SIZE_T);
-			}
-
-			if (length)
-			{
-				val = 0;
-				upcpy(&val, value, length);
-				sum += val;
-			}
-
-			return chash(sum, hashSize);
+			return value.hash(hashSize);
 		}
 	};
 
 #ifdef HAVE_ID_BY_NAME
 	template <typename T>
-	struct BinHash : public CalcHash
+	struct BinHash
 	{
 		static const UCharBuffer& generate(const T& item)
 		{
@@ -152,30 +84,7 @@ namespace
 
 		static FB_SIZE_T hash(const UCharBuffer& value, FB_SIZE_T hashSize)
 		{
-			return hash(value.begin(), value.getCount(), hashSize);
-		}
-
-		static FB_SIZE_T hash(const UCHAR* value, FB_SIZE_T length, FB_SIZE_T hashSize)
-		{
-			FB_SIZE_T sum = 0;
-			FB_SIZE_T val;
-
-			while (length >= sizeof(FB_SIZE_T))
-			{
-				memcpy(&val, value, sizeof(FB_SIZE_T));
-				sum += val;
-				value += sizeof(FB_SIZE_T);
-				length -= sizeof(FB_SIZE_T);
-			}
-
-			if (length)
-			{
-				val = 0;
-				memcpy(&val, value, length);
-				sum += val;
-			}
-
-			return chash(sum, hashSize);
+			return InternalHash::hash(value.getCount(), value.begin(), hashSize);
 		}
 	};
 #endif
@@ -283,9 +192,8 @@ namespace
 			{
 				const ConfigFile::Parameter* par = &params[n];
 
-				PathName file(par->value.ToPathName());
-				replace_dir_sep(file);
-				if (PathUtils::isRelative(file))
+				PathName file(par->value);
+				if (file.isRelative())
 				{
 					gds__log("Value %s configured for alias %s "
 						"is not a fully qualified path name, ignored",
@@ -335,7 +243,7 @@ namespace
 							FB_NEW Config(*par->sub, *Config::getDefaultConfig());
 				}
 
-				PathName correctedAlias(par->name.ToPathName());
+				PathName correctedAlias(par->name);
 				AliasName* alias = aliasHash.lookup(correctedAlias);
 				if (alias)
 				{
@@ -419,10 +327,7 @@ static inline bool hasSeparator(const PathName& name)
 // Returns true if alias is found in databases.conf.
 static bool resolveAlias(const PathName& alias, PathName& file, RefPtr<Config>* config)
 {
-	PathName correctedAlias = alias;
-	replace_dir_sep(correctedAlias);
-
-	AliasName* a = aliasesConf().aliasHash.lookup(correctedAlias);
+	AliasName* a = aliasesConf().aliasHash.lookup(alias);
 	DbName* db = a ? a->database : NULL;
 	if (db)
 	{
@@ -466,8 +371,7 @@ static bool resolveDatabaseAccess(const PathName& alias, PathName& file)
 static bool setPath(const PathName& filename, PathName& expandedName)
 {
 	// Look for the environment variables to tack onto the beginning of the database path.
-	PathName pathname;
-	if (!fb_utils::readenv("ISC_PATH", pathname))
+	if (!fb_utils::readenv("ISC_PATH", expandedName))
 		return false;
 
 	// If the file already contains a remote node or any path at all forget it.
@@ -475,15 +379,7 @@ static bool setPath(const PathName& filename, PathName& expandedName)
 		return false;
 
 	// concatenate the strings
-
-	expandedName = pathname;
-
-	// CVC: Make the concatenation work if no slash is present.
-	char lastChar = expandedName[expandedName.length() - 1];
-	if (lastChar != ':' && lastChar != '/' && lastChar != '\\')
-		expandedName.append(1, PathUtils::dir_sep);
-
-	expandedName.append(filename);
+	expandedName.appendPath(filename);
 
 	return true;
 }
@@ -507,12 +403,14 @@ bool expandDatabaseName(Firebird::PathName alias,
 	// remove whitespaces from database name
 	alias.trim();
 
-	ReadLockGuard guard(aliasesConf().rwLock, "expandDatabaseName");
+	{ // Scope
+		ReadLockGuard guard(aliasesConf().rwLock, "expandDatabaseName");
 
-	// First of all check in databases.conf
-	if (resolveAlias(alias, file, config))
-	{
-		return true;
+		// First of all check in databases.conf
+		if (resolveAlias(alias, file, config))
+		{
+			return true;
+		}
 	}
 
 	// Now try ISC_PATH environment variable
@@ -524,15 +422,9 @@ bool expandDatabaseName(Firebird::PathName alias,
 			// Last chance - regular filename expansion
 			file = alias;
 
-			ISC_systemToUtf8(file);
 			ISC_unescape(file);
-			ISC_utf8ToSystem(file);
-
 			ISC_expand_filename(file, true);
-
-			ISC_systemToUtf8(file);
 			ISC_escape(file);
-			ISC_utf8ToSystem(file);
 		}
 	}
 

@@ -391,10 +391,10 @@ int gsec(Firebird::UtilSvc* uSvc)
 	switch (ISC_extract_host(databaseName, serverName, true))
 	{
 	case ISC_PROTOCOL_TCPIP:
-		serverName += ":";
+		serverName.appendString(":");
 		break;
 	case ISC_PROTOCOL_WLAN:
-		serverName = "\\\\" + serverName + "\\";
+		serverName.appendString("\\\\").appendString(serverName).appendString('\\');
 		break;
 	}
 

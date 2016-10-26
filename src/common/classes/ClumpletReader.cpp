@@ -67,9 +67,9 @@ protected:
 	{
 		fatal_exception::raiseFmt("Internal error when using clumplet API: %s", what);
 	}
-	virtual void invalid_structure(const char* what) const
+	virtual void invalid_structure(const char* what, const int data) const
 	{
-		fatal_exception::raiseFmt("Invalid clumplet buffer structure: %s", what);
+		fatal_exception::raiseFmt("Invalid clumplet buffer structure: %s (%d)", what, data);
 	}
 };
 
@@ -87,7 +87,7 @@ void ClumpletReader::dump() const
 
 	try {
 		ClumpletDump d(kind, getBuffer(), getBufferLength());
-		int t = (kind == SpbStart || kind == UnTagged || kind == WideUnTagged) ? -1 : d.getBufferTag();
+		int t = (kind == SpbStart || kind == UnTagged || kind == WideUnTagged || kind == SpbResponse) ? -1 : d.getBufferTag();
 		gds__log("Tag=%d Offset=%d Length=%d Eof=%d\n", t, getCurOffset(), getBufferLength(), isEof());
 		for (d.rewind(); !(d.isEof()); d.moveNext())
 		{
@@ -197,12 +197,12 @@ void ClumpletReader::usage_mistake(const char* what) const
 	fatal_exception::raiseFmt("Internal error when using clumplet API: %s", what);
 }
 
-void ClumpletReader::invalid_structure(const char* what) const
+void ClumpletReader::invalid_structure(const char* what, const int data) const
 {
 #ifdef DEBUG_CLUMPLETS
 	dump();
 #endif
-	fatal_exception::raiseFmt("Invalid clumplet buffer structure: %s", what);
+	fatal_exception::raiseFmt("Invalid clumplet buffer structure: %s (%d)", what, data);
 }
 
 bool ClumpletReader::isTagged() const
@@ -240,6 +240,7 @@ UCHAR ClumpletReader::getBufferTag() const
 	case WideUnTagged:
 	case SpbSendItems:
 	case SpbReceiveItems:
+	case SpbResponse:
 		usage_mistake("buffer is not tagged");
 		return 0;
 	case SpbAttach:
@@ -258,7 +259,7 @@ UCHAR ClumpletReader::getBufferTag() const
 			// Buffer's tag is the second byte
 			if (buffer_end - buffer_start == 1)
 			{
-				invalid_structure("buffer too short (1 byte)");
+				invalid_structure("buffer too short", 1);
 				return 0;
 			}
 			return buffer_start[1];
@@ -266,7 +267,7 @@ UCHAR ClumpletReader::getBufferTag() const
 			// This is wide SPB attach format - buffer's tag is the first byte.
 			return buffer_start[0];
 		default:
-			invalid_structure("spb in service attach should begin with isc_spb_version1 or isc_spb_version");
+			invalid_structure("spb in service attach should begin with isc_spb_version1 or isc_spb_version", buffer_start[0]);
 			return 0;
 		}
 	default:
@@ -349,7 +350,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_res_access_mode:
 				return ByteSpb;
 			}
-			invalid_structure("unknown parameter for backup/restore");
+			invalid_structure("unknown parameter for backup/restore", tag);
 			break;
 		case isc_action_svc_repair:
 			switch (tag)
@@ -366,7 +367,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_rpr_recover_two_phase_64:
 				return BigIntSpb;
 			}
-			invalid_structure("unknown parameter for repair");
+			invalid_structure("unknown parameter for repair", tag);
 			break;
 		case isc_action_svc_add_user:
 		case isc_action_svc_delete_user:
@@ -391,7 +392,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_sec_admin:
 				return IntSpb;
 			}
-			invalid_structure("unknown parameter for security database operation");
+			invalid_structure("unknown parameter for security database operation", tag);
 			break;
 		case isc_action_svc_properties:
 			switch (tag)
@@ -416,7 +417,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_prp_online_mode:
 				return ByteSpb;
 			}
-			invalid_structure("unknown parameter for setting database properties");
+			invalid_structure("unknown parameter for setting database properties", tag);
 			break;
 //		case isc_action_svc_add_license:
 //		case isc_action_svc_remove_license:
@@ -430,10 +431,10 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_options:
 				return IntSpb;
 			}
-			invalid_structure("unknown parameter for getting statistics");
+			invalid_structure("unknown parameter for getting statistics", tag);
 			break;
 		case isc_action_svc_get_ib_log:
-			invalid_structure("unknown parameter for getting log");
+			invalid_structure("unknown parameter for getting log", tag);
 			break;
 		case isc_action_svc_nbak:
 		case isc_action_svc_nrest:
@@ -448,7 +449,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_options:
 				return IntSpb;
 			}
-			invalid_structure("unknown parameter for nbackup");
+			invalid_structure("unknown parameter for nbackup", tag);
 			break;
 		case isc_action_svc_trace_start:
 		case isc_action_svc_trace_stop:
@@ -477,10 +478,54 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			}
 			break;
 		}
-		invalid_structure("wrong spb state");
+		invalid_structure("wrong spb state", spbState);
+		break;
+	case SpbResponse:
+		switch(tag)
+		{
+		case isc_info_svc_version:
+		case isc_spb_num_att:
+		case isc_spb_num_db:
+		case isc_spb_multi_tra_id:
+		case isc_spb_single_tra_id:
+		case isc_spb_tra_id:
+		case isc_info_svc_stdin:
+		case isc_info_svc_capabilities:
+			return IntSpb;
+		case isc_spb_multi_tra_id_64:
+		case isc_spb_single_tra_id_64:
+		case isc_spb_tra_id_64:
+			return BigIntSpb;
+		case isc_info_svc_server_version:
+		case isc_info_svc_implementation:
+		case isc_info_svc_get_env_msg:
+		case isc_info_svc_get_env:
+		case isc_info_svc_get_env_lock:
+		case isc_info_svc_user_dbpath:
+		case isc_spb_dbname:
+		case isc_spb_tra_host_site:
+		case isc_spb_tra_remote_site:
+		case isc_spb_tra_db_path:
+		case isc_info_svc_get_users:
+		case isc_info_svc_line:
+		case isc_info_svc_to_eof:
+			return StringSpb;
+		case isc_info_end:
+		case isc_info_svc_svr_db_info:
+		case isc_info_svc_limbo_trans:
+		case isc_info_flag_end:
+		case isc_info_truncated:
+		case isc_info_svc_timeout:
+		case isc_info_data_not_ready:
+			return SingleTpb;
+		case isc_spb_tra_state:
+		case isc_spb_tra_advise:
+			return ByteSpb;
+		}
+		invalid_structure("unrecognized service response tag", tag);
 		break;
 	}
-	invalid_structure("unknown reason");
+	invalid_structure("unknown clumplet kind", kind);
 	return SingleTpb;
 }
 
@@ -516,7 +561,8 @@ FB_SIZE_T ClumpletReader::getClumpletSize(bool wTag, bool wLength, bool wData) c
 	FB_SIZE_T lengthSize = 0;
 	FB_SIZE_T dataSize = 0;
 
-	switch (getClumpletType(clumplet[0]))
+	ClumpletType t = getClumpletType(clumplet[0]);
+	switch (t)
 	{
 
 	// This form allows clumplets of virtually any size
@@ -524,7 +570,7 @@ FB_SIZE_T ClumpletReader::getClumpletSize(bool wTag, bool wLength, bool wData) c
 		// Check did we receive length component for clumplet
 		if (buffer_end - clumplet < 5)
 		{
-			invalid_structure("buffer end before end of clumplet - no length component");
+			invalid_structure("buffer end before end of clumplet - no length component", buffer_end - clumplet);
 			return rc;
 		}
 		lengthSize = 4;
@@ -542,7 +588,7 @@ FB_SIZE_T ClumpletReader::getClumpletSize(bool wTag, bool wLength, bool wData) c
 		// Check did we receive length component for clumplet
 		if (buffer_end - clumplet < 2)
 		{
-			invalid_structure("buffer end before end of clumplet - no length component");
+			invalid_structure("buffer end before end of clumplet - no length component", buffer_end - clumplet);
 			return rc;
 		}
 		lengthSize = 1;
@@ -558,7 +604,7 @@ FB_SIZE_T ClumpletReader::getClumpletSize(bool wTag, bool wLength, bool wData) c
 		// Check did we receive length component for clumplet
 		if (buffer_end - clumplet < 3)
 		{
-			invalid_structure("buffer end before end of clumplet - no length component");
+			invalid_structure("buffer end before end of clumplet - no length component", buffer_end - clumplet);
 			return rc;
 		}
 		lengthSize = 2;
@@ -581,12 +627,15 @@ FB_SIZE_T ClumpletReader::getClumpletSize(bool wTag, bool wLength, bool wData) c
 	case ByteSpb:
 		dataSize = 1;
 		break;
+
+	default:
+		invalid_structure("unknown clumplet type", t);
 	}
 
 	const FB_SIZE_T total = 1 + lengthSize + dataSize;
 	if (clumplet + total > buffer_end)
 	{
-		invalid_structure("buffer end before end of clumplet - clumplet too long");
+		invalid_structure("buffer end before end of clumplet - clumplet too long", total);
 		FB_SIZE_T delta = total - (buffer_end - clumplet);
 		if (delta > dataSize)
 			dataSize = 0;
@@ -627,6 +676,7 @@ void ClumpletReader::rewind()
 	case SpbStart:
 	case SpbSendItems:
 	case SpbReceiveItems:
+	case SpbResponse:
 		cur_offset = 0;
 		break;
 	default:
@@ -722,7 +772,7 @@ SLONG ClumpletReader::getInt() const
 
 	if (length > 4)
 	{
-		invalid_structure("length of integer exceeds 4 bytes");
+		invalid_structure("length of integer exceeds 4 bytes", length);
 		return 0;
 	}
 
@@ -731,10 +781,10 @@ SLONG ClumpletReader::getInt() const
 
 double ClumpletReader::getDouble() const
 {
-
-	if (getClumpLength() != sizeof(double))
+	const FB_SIZE_T length = getClumpLength();
+	if (length != sizeof(double))
 	{
-		invalid_structure("length of double must be equal 8 bytes");
+		invalid_structure("length of double must be equal 8 bytes", length);
 		return 0;
 	}
 
@@ -757,9 +807,10 @@ ISC_TIMESTAMP ClumpletReader::getTimeStamp() const
 {
 	ISC_TIMESTAMP value;
 
-	if (getClumpLength() != sizeof(ISC_TIMESTAMP))
+	const FB_SIZE_T length = getClumpLength();
+	if (length != sizeof(ISC_TIMESTAMP))
 	{
-		invalid_structure("length of ISC_TIMESTAMP must be equal 8 bytes");
+		invalid_structure("length of ISC_TIMESTAMP must be equal 8 bytes", length);
 		value.timestamp_date = 0;
 		value.timestamp_time = 0;
 		return value;
@@ -777,14 +828,14 @@ SINT64 ClumpletReader::getBigInt() const
 
 	if (length > 8)
 	{
-		invalid_structure("length of BigInt exceeds 8 bytes");
+		invalid_structure("length of BigInt exceeds 8 bytes", length);
 		return 0;
 	}
 
 	return fromVaxInteger(getBytes(), length);
 }
 
-string& ClumpletReader::getString(string& str) const
+AbstractString& ClumpletReader::getString(AbstractString& str) const
 {
 	const UCHAR* ptr = getBytes();
 	const FB_SIZE_T length = getClumpLength();
@@ -792,7 +843,7 @@ string& ClumpletReader::getString(string& str) const
 	str.recalculate_length();
 	if (str.length() + 1 < length)
 	{
-		invalid_structure("string length doesn't match with clumplet");
+		invalid_structure("string length doesn't match with clumplet", str.length() + 1);
 	}
 	return str;
 }
@@ -813,7 +864,7 @@ PathName& ClumpletReader::getPath(PathName& str) const
 	str.recalculate_length();
 	if (str.length() + 1 < length)
 	{
-		invalid_structure("path length doesn't match with clumplet");
+		invalid_structure("path length doesn't match with clumplet", str.length() + 1);
 	}
 	return str;
 }
@@ -829,7 +880,7 @@ bool ClumpletReader::getBoolean() const
 	const FB_SIZE_T length = getClumpLength();
 	if (length > 1)
 	{
-		invalid_structure("length of boolean exceeds 1 byte");
+		invalid_structure("length of boolean exceeds 1 byte", length);
 		return false;
 	}
 	return length && ptr[0];
