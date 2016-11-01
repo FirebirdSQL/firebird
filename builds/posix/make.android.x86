@@ -44,7 +44,10 @@ STRIP:=$(CROSS_PREFIX)strip
 
 COMMON_FLAGS=-ggdb -DFB_SEND_FLAGS=MSG_NOSIGNAL -DLINUX -DANDROID -pipe -MMD -fPIC -fmessage-length=0 \
 			 -I$(ROOT)/extern/libtommath --sysroot=$(CROSS_PLATFORM) \
-			 -I$(CROSS_PLATFORM)/usr/include -I$(ROOT)/gen/cross
+			 -I$(CROSS_PLATFORM)/usr/include -I$(ROOT)/gen/cross \
+			 -I$(NDK)/sources/cxx-stl/gnu-libstdc++/$(NDK_TOOLCHAIN_VERSION)/include \
+			 -I$(NDK)/sources/cxx-stl/gnu-libstdc++/$(NDK_TOOLCHAIN_VERSION)/libs/x86/include
+
 
 OPTIMIZE_FLAGS=-fno-omit-frame-pointer
 WARN_FLAGS=-Wall -Wno-switch -Wno-parentheses -Wno-unknown-pragmas -Wno-unused-variable
