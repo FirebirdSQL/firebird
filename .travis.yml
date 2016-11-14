@@ -4,7 +4,7 @@ notifications:
   email: false
 
 sudo: required
-dist: trusty
+dist: xenial
 
 branches:
   only:
