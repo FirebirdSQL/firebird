@@ -529,7 +529,7 @@ DESC MVOL_open(const char* name, ULONG mode, ULONG create)
 UCHAR MVOL_write(const UCHAR c, int* io_cnt, UCHAR** io_ptr)
 {
 	const UCHAR* ptr;
-	ULONG cnt = 0;
+	SLONG cnt = 0;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -590,7 +590,7 @@ UCHAR MVOL_write(const UCHAR c, int* io_cnt, UCHAR** io_ptr)
 #else
 
 			DWORD ret = 0;
-			if (!WriteFile(tdgbl->file_desc, ptr, (DWORD) nBytesToWrite, &cnt, NULL))
+			if (!WriteFile(tdgbl->file_desc, ptr, (DWORD) nBytesToWrite, (LPDWORD)&cnt, NULL))
 			{
 				ret = GetLastError();
 			}
@@ -610,12 +610,11 @@ UCHAR MVOL_write(const UCHAR c, int* io_cnt, UCHAR** io_ptr)
 			}
 			else
 			{
-				if (!cnt ||
 #ifndef WIN_NT
-					errno == ENOSPC || errno == EIO || errno == ENXIO ||
+				if (!cnt || errno == ENOSPC || errno == EIO || errno == ENXIO ||
 					errno == EFBIG)
 #else
-					ret == ERROR_DISK_FULL || ret == ERROR_HANDLE_DISK_FULL)
+				if (ret == ERROR_DISK_FULL || ret == ERROR_HANDLE_DISK_FULL)
 #endif // !WIN_NT
 				{
 					if (tdgbl->action->act_action == ACT_backup_split)
@@ -698,7 +697,7 @@ UCHAR MVOL_write(const UCHAR c, int* io_cnt, UCHAR** io_ptr)
 					// msg 221 Unexpected I/O error while writing to backup file
 				}
 			}
-			if (left < cnt) {	// this is impossible, but...
+			if (cnt > 0 && left < cnt) {	// this is impossible, but...
 				cnt = left;
 			}
 
