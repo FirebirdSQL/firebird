@@ -167,7 +167,7 @@ const char* StatementMetadata::getPlan(bool detailed)
 
 	if (plan->isEmpty())
 	{
-		UCHAR info[] = {detailed ? isc_info_sql_explain_plan : isc_info_sql_get_plan};
+		UCHAR info[] = {detailed ? (UCHAR)isc_info_sql_explain_plan : (UCHAR)isc_info_sql_get_plan};
 		UCHAR result[INFO_BUFFER_SIZE];
 
 		getAndParse(sizeof(info), info, sizeof(result), result);
@@ -482,10 +482,10 @@ void StatementMetadata::fetchParameters(UCHAR code, Parameters* parameters)
 
 		UCHAR items[5 + sizeof(DESCRIBE_VARS)] =
 		{
-			isc_info_sql_sqlda_start,
+			(UCHAR)isc_info_sql_sqlda_start,
 			2,
-			(startIndex & 0xFF),
-			((startIndex >> 8) & 0xFF),
+			(UCHAR)(startIndex & 0xFF),
+			(UCHAR)((startIndex >> 8) & 0xFF),
 			code
 		};
 		memcpy(items + 5, DESCRIBE_VARS, sizeof(DESCRIBE_VARS));

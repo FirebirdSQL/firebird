@@ -5413,7 +5413,7 @@ void ISQL_get_version(bool call_by_create_db)
 		isc_info_ods_minor_version,
 		isc_info_db_sql_dialect,
 		frb_info_att_charset,
-		Version_info ? isc_info_firebird_version: isc_info_end,
+		Version_info ? (UCHAR)isc_info_firebird_version: (UCHAR)isc_info_end,
 		isc_info_end
 	};
 	/*

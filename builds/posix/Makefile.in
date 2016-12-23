@@ -63,7 +63,9 @@ ifeq ($(LSB_FLG),Y)
   export CC
   export CXX
 else
-  GCC=gcc
+  ifndef GCC
+    GCC=gcc
+  endif
 endif
 
 .PHONY:	master_process cross_process firebird Debug Release extern

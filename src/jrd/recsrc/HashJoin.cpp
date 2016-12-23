@@ -53,7 +53,7 @@ namespace
 	  qsort_compare_callback compare;
 	};
 
-#if defined(DARWIN) // || defined(FREEBSD)
+#if defined(DARWIN) || defined(FREEBSD)
 #undef HAVE_QSORT_R
 #endif
 
