@@ -33,11 +33,14 @@ export MACOSX_DEPLOYMENT_TARGET
 
 PROD_FLAGS=-O1 -DDARWIN -pipe -MMD -fPIC -fno-common -mmacosx-version-min=10.7
 DEV_FLAGS=-ggdb -DDARWIN -pipe -MMD -fPIC -fno-omit-frame-pointer -fno-common -Wall -fno-optimize-sibling-calls -mmacosx-version-min=10.7 -Wno-non-virtual-dtor
-CXXFLAGS:=$(CXXFLAGS) -fvisibility-inlines-hidden -fvisibility=hidden 
+CXXFLAGS:=$(CXXFLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -std=c++11 -stdlib=libc++
 
-EXE_LINK_OPTIONS:= 
+EXE_LINK_OPTIONS:=-liconv
 LD_FLAGS+=-liconv
 FIREBIRD_LIBRARY_LINK+=-liconv
 UNDEF_PLATFORM=
+
+# This file must be compiled with SSE4.2 support
+%/CRC32C.o: CXXFLAGS += -msse4
 
 include $(ROOT)/gen/darwin.defaults

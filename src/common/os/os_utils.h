@@ -294,6 +294,9 @@ namespace os_utils
 
 	inline int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	{
+#ifdef DARWIN
+		return 0;
+#else
 		int rc;
 
 		do
@@ -306,6 +309,7 @@ namespace os_utils
 		} while (rc != 0 && SYSCALL_INTERRUPTED(rc));
 
 		return rc;
+#endif
 	}
 
 	inline int getrlimit(int resource, struct rlimit* rlim)
