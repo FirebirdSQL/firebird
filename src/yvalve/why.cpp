@@ -330,7 +330,7 @@ int SQLDAMetadata::getSubType(CheckStatusWrapper* status, unsigned index)
 		fb_assert(sqlda->sqld > (int) index);
 		ISC_SHORT sqltype = sqlda->sqlvar[index].sqltype & ~1;
 		if (sqltype == SQL_VARYING || sqltype == SQL_TEXT)
-			return 0;
+			return sqlda->sqlvar[index].sqlsubtype == 1 ? 1 : 0;
 		return sqlda->sqlvar[index].sqlsubtype;
 	}
 

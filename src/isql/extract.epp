@@ -410,7 +410,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 		}
 		else
 		{
-			if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SCALE))
+			if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE, FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 				return FINI_ERROR;
 
 			if ((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR))
@@ -440,7 +440,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			}
 
 			// International character sets
-			if ((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR ||
+			if ((((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == 0) ||
 				 FLD.RDB$FIELD_TYPE == BLOB) &&
 				!FLD.RDB$CHARACTER_SET_ID.NULL)
 			{
@@ -801,7 +801,7 @@ static void get_procedure_args(const char* proc_name)
 			}
 			else
 			{
-				if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SCALE))
+				if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE, FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 					return; // ps_ERR;
 
 				// Changed this to return RDB$CHARACTER_LENGTH if available
@@ -816,7 +816,8 @@ static void get_procedure_args(const char* proc_name)
 				}
 
 				// Show international character sets and collations
-				if (!FLD.RDB$COLLATION_ID.NULL || !FLD.RDB$CHARACTER_SET_ID.NULL)
+				if ((!FLD.RDB$COLLATION_ID.NULL || !FLD.RDB$CHARACTER_SET_ID.NULL) &&
+					!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) && FLD.RDB$FIELD_SUB_TYPE != 0))
 				{
 					char_sets[0] = 0;
 
@@ -1017,7 +1018,7 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 			}
 			else
 			{
-				if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SCALE))
+				if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE, FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 					return; // ps_ERR;
 
 				// Changed this to return RDB$CHARACTER_LENGTH if available
@@ -1032,7 +1033,8 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 				}
 
 				// Show international character sets and collations
-				if (!FLD.RDB$COLLATION_ID.NULL || !FLD.RDB$CHARACTER_SET_ID.NULL)
+				if ((!FLD.RDB$COLLATION_ID.NULL || !FLD.RDB$CHARACTER_SET_ID.NULL) &&
+					!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) && FLD.RDB$FIELD_SUB_TYPE != 0))
 				{
 					char_sets[0] = 0;
 
@@ -2235,7 +2237,7 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 
 		isqlGlob.printf("CREATE DOMAIN %s AS ", FLD.RDB$FIELD_NAME);
 
-		if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SCALE))
+		if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE, FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 			return; // ps_ERR;
 
 		if (FLD.RDB$FIELD_TYPE == BLOB)
@@ -2265,7 +2267,8 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 		// do, then the domain syntax when printed is not correct.
 
 		// Since the character set is part of the field type, display that information now.
-		if (!FLD.RDB$CHARACTER_SET_ID.NULL)
+		if (!FLD.RDB$CHARACTER_SET_ID.NULL &&
+			!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) && FLD.RDB$FIELD_SUB_TYPE != 0))
 		{
 
 			char_sets[0] = 0;
@@ -2357,7 +2360,7 @@ static void list_domains(SSHORT default_char_set_id)
 		else
 			isqlGlob.printf("CREATE DOMAIN %s AS ", FLD.RDB$FIELD_NAME);
 
-		if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SCALE))
+		if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE, FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 			return; // ps_ERR;
 
 		if (FLD.RDB$FIELD_TYPE == BLOB)
@@ -2388,7 +2391,8 @@ static void list_domains(SSHORT default_char_set_id)
 		// do, then the domain syntax when printed is not correct.
 
 		// Since the character set is part of the field type, display that information now.
-		if (!FLD.RDB$CHARACTER_SET_ID.NULL)
+		if (!FLD.RDB$CHARACTER_SET_ID.NULL &&
+			!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) && FLD.RDB$FIELD_SUB_TYPE != 0))
 		{
 			char_sets[0] = 0;
 			if ((FLD.RDB$CHARACTER_SET_ID != default_char_set_id) ||
@@ -2575,7 +2579,7 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 			}
 			else
 			{
-				if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SCALE))
+				if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE, FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 					return;
 
 				if ((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR))
@@ -2605,7 +2609,7 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 				}
 
 				// International character sets
-				if ((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR ||
+				if ((((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == 0) ||
 					 FLD.RDB$FIELD_TYPE == BLOB) &&
 					!FLD.RDB$CHARACTER_SET_ID.NULL)
 				{

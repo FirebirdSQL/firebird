@@ -591,6 +591,7 @@ using namespace Firebird;
 
 // tokens added for Firebird 4.0
 
+%token <metaNamePtr> BINARY
 %token <metaNamePtr> CUME_DIST
 %token <metaNamePtr> DEFINER
 %token <metaNamePtr> EXCLUDE
@@ -611,6 +612,7 @@ using namespace Firebird;
 %token <metaNamePtr> SYSTEM
 %token <metaNamePtr> TIES
 %token <metaNamePtr> UNBOUNDED
+%token <metaNamePtr> VARBINARY
 %token <metaNamePtr> WINDOW
 
 // precedence declarations for expression evaluation
@@ -4429,6 +4431,7 @@ simple_type
 %type <legacyField> non_charset_simple_type
 non_charset_simple_type
 	: national_character_type
+	| binary_character_type
 	| numeric_type
 	| float_type
 	| BIGINT
@@ -4614,6 +4617,40 @@ national_character_type
 		}
 	;
 
+%type <legacyField> binary_character_type
+binary_character_type
+	: binary_character_keyword '(' pos_short_integer ')'
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_text;
+			$$->charLength = (USHORT) $3;
+			$$->length = (USHORT) $3;
+			$$->textType = ttype_binary;
+			$$->charSetId = CS_BINARY;
+			$$->subType = dsc_text_type_fixed;
+		}
+	| binary_character_keyword
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_text;
+			$$->charLength = 1;
+			$$->length = 1;
+			$$->textType = ttype_binary;
+			$$->charSetId = CS_BINARY;
+			$$->subType = dsc_text_type_fixed;
+		}
+	| varbinary_character_keyword '(' pos_short_integer ')'
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = (USHORT) $3;
+			$$->length = (USHORT) $3 + sizeof(USHORT);
+			$$->textType = ttype_binary;
+			$$->charSetId = CS_BINARY;
+			$$->subType = dsc_text_type_fixed;
+		}
+	;
+
 %type <legacyField> character_type
 character_type
 	: character_keyword '(' pos_short_integer ')'
@@ -4653,6 +4690,14 @@ national_character_keyword
 	| NATIONAL CHAR
 	;
 
+binary_character_keyword
+	: BINARY
+	;
+
+varbinary_character_keyword
+	: VARBINARY
+	| BINARY VARYING
+	;
 
 // numeric type
 

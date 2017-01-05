@@ -324,6 +324,24 @@ static const SCHAR* Integral_subtypes[] = {
 	"DECIMAL"					// DECIMAL, keyword
 };
 
+// Text subtypes
+
+const int MAX_TEXTSUBTYPES = 1;
+
+static const SCHAR* Text_subtypes[] = {
+	"CHAR",
+	"BINARY"
+};
+
+// Varying subtypes
+
+const int MAX_VARYINGSUBTYPES = 1;
+
+static const SCHAR* Varying_subtypes[] = {
+	"VARCHAR",
+	"VARBINARY"
+};
+
 // Blob subtypes
 
 const int MAX_BLOBSUBTYPES	= 8;

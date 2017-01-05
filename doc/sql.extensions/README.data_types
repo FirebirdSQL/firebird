@@ -74,3 +74,30 @@ BOOLEAN (FB 3.0)
     5. It's allowed to test booleans without compare with TRUE or FALSE. For example,
        "field1 OR field2" and "NOT field1" are valid expressions. It's also allowed to compare with
        others operators, including the new IS operator: "field1 IS FALSE".
+
+
+BINARY, VARBINARY, BINARY VARYING (FB 4.0)
+------------------------------------------
+
+  Function:
+    Alias for CHAR, VARCHAR, VARYING CHAR with CHARACTER SET OCTETS.
+
+  Author:
+    Dimitry Sibiryakov
+
+  Syntax rules:
+    BINARY[(length)]
+    VARBINARY(length)
+    BINARY VARYING(length)
+
+  Example(s):
+    1. DECLARE VARIABLE VAR1 VARBINARY(10);
+    2. CREATE TABLE TABLE1 (FIELD1 BINARY(16),
+                            FIELD2 VARBINARY(100),
+                            FIELD3 BINARY VARYING(1000));
+
+  Note(s):
+    1. If length is omitted for type BINARY, it is considered to be 1.
+    2. Can be distinguished from text types by value 1 in RDB$FIELD_SUB_TYPE.
+    3. Character set is set to OCTETS for backward compatibility.
+    4. In API are similar to corresponding text types, getSubType() returns 0.

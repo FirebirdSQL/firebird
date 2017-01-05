@@ -3855,7 +3855,7 @@ static processing_state show_domains(const SCHAR* domain_name)
 				isqlGlob.printf("%s                                ", NEWLINE);
 			}
 
-			if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SCALE))
+			if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE, FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 				return ps_ERR;
 
 			// Length for CHARs
@@ -3877,8 +3877,8 @@ static processing_state show_domains(const SCHAR* domain_name)
 			}
 
 			// Show international character sets
-			if (FLD.RDB$FIELD_TYPE == T_CHAR ||
-				FLD.RDB$FIELD_TYPE == VARCHAR ||
+			if (((FLD.RDB$FIELD_TYPE == T_CHAR ||
+				  FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == 0) ||
 				FLD.RDB$FIELD_TYPE == BLOB)
 			{
 				show_charsets(NULL, FLD.RDB$FIELD_NAME, true, false, false, false);
@@ -4351,7 +4351,7 @@ static processing_state show_func(const SCHAR* funcname)
 				}
 			}
 
-			if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SCALE))
+			if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE, FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 				return ps_ERR;
 
 			// Use RDB$CHARACTER_LENGTH instead of RDB$FIELD_LENGTH
@@ -4364,8 +4364,8 @@ static processing_state show_func(const SCHAR* funcname)
 
 			// Show international character sets and collations
 
-			if (FLD.RDB$FIELD_TYPE == T_CHAR ||
-				FLD.RDB$FIELD_TYPE == VARCHAR  ||
+			if (((FLD.RDB$FIELD_TYPE == T_CHAR ||
+				  FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == 0) ||
 				FLD.RDB$FIELD_TYPE == BLOB)
 			{
 				SSHORT charset = 0, collation = 0;
@@ -5244,7 +5244,7 @@ static processing_state show_proc(const SCHAR* procname)
 				}
 			}
 
-			if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SCALE))
+			if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE, FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 				return ps_ERR;
 
 			// Use RDB$CHARACTER_LENGTH instead of RDB$FIELD_LENGTH
@@ -5257,8 +5257,8 @@ static processing_state show_proc(const SCHAR* procname)
 
 			// Show international character sets and collations
 
-			if (FLD.RDB$FIELD_TYPE == T_CHAR ||
-				FLD.RDB$FIELD_TYPE == VARCHAR  ||
+			if (((FLD.RDB$FIELD_TYPE == T_CHAR ||
+				  FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == 0) ||
 				FLD.RDB$FIELD_TYPE == BLOB)
 			{
 				SSHORT charset = 0;
@@ -5775,14 +5775,17 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 			continue;
 		}
 
-		if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SCALE))
+		if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE, FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 			return ps_ERR;
 
 		if ((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) {
 			isqlGlob.printf("(%d)", ISQL_get_field_length(FLD.RDB$FIELD_NAME));
 
-			// Show international character sets and collations
-			show_charsets(relation_name, RFR.RDB$FIELD_NAME, true, false, false, false);
+			if (FLD.RDB$FIELD_SUB_TYPE == 0)
+			{
+				// Show international character sets and collations
+				show_charsets(relation_name, RFR.RDB$FIELD_NAME, true, false, false, false);
+			}
 		}
 
 		if (FLD.RDB$FIELD_TYPE == BLOB)

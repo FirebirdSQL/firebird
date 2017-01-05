@@ -1808,7 +1808,7 @@ bool ISQL_is_domain(const TEXT* field_name)
 
 // Print the numeric type as accurately as possible, depending on the ODS.
 // If it isn't numeric/decimal or is another non-numeric data type, print only the type.
-bool ISQL_printNumericType(const char* fieldName, const int fieldType, const int fieldScale)
+bool ISQL_printNumericType(const char* fieldName, const int fieldType, const int fieldSubType, const int fieldPrecision, const int fieldScale)
 {
 	// Look through types array
 	int i = 0;
@@ -1822,62 +1822,67 @@ bool ISQL_printNumericType(const char* fieldName, const int fieldType, const int
 		return false;
 	}
 
-	bool precision_known = false;
-
-	if (isqlGlob.major_ods >= ODS_VERSION10 &&
-		(fieldType == SMALLINT || fieldType == INTEGER || fieldType == BIGINT))
+	switch (fieldType)
 	{
+	case SMALLINT:
+	case INTEGER:
+	case BIGINT:
 		// Handle Integral subtypes NUMERIC and DECIMAL
 		// We are ODS >= 10 and could be any Dialect
-		FOR FLD1 IN RDB$FIELDS WITH
-			FLD1.RDB$FIELD_NAME EQ fieldName
-			AND NOT FLD1.RDB$FIELD_PRECISION EQ 0
 
-			// We are Dialect >=3 since FIELD_PRECISION is non-NULL
-			if (FLD1.RDB$FIELD_SUB_TYPE > 0 && FLD1.RDB$FIELD_SUB_TYPE <= MAX_INTSUBTYPES)
-			{
-				isqlGlob.printf("%s(%d, %d)",
-						 Integral_subtypes[FLD1.RDB$FIELD_SUB_TYPE],
-						 FLD1.RDB$FIELD_PRECISION,
-						 -FLD1.RDB$FIELD_SCALE);
-				precision_known = true;
-			}
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg (fbStatus);
-			return false;
-		END_ERROR;
-	}
-
-	if (!precision_known)
-	{
-		if (fieldScale < 0)
+		// We are Dialect >=3 since FIELD_PRECISION is non-NULL
+		if (isqlGlob.major_ods >= ODS_VERSION10 && fieldPrecision != 0 && fieldSubType > 0 && fieldSubType <= MAX_INTSUBTYPES)
 		{
-			// Take a stab at numerics and decimals
-			switch (fieldType)
-			{
-			case SMALLINT:
-				isqlGlob.printf("NUMERIC(4, %d)", -fieldScale);
-				break;
-			case INTEGER:
-				isqlGlob.printf("NUMERIC(9, %d)", -fieldScale);
-				break;
-			case BIGINT:
-				isqlGlob.printf("NUMERIC(18, %d)", -fieldScale);
-				break;
-			case DOUBLE_PRECISION:
-				isqlGlob.printf("NUMERIC(15, %d)", -fieldScale);
-				break;
-			default:
-				isqlGlob.printf("%s", Column_types[i].type_name);
-			}
+			isqlGlob.printf("%s(%d, %d)",
+				Integral_subtypes[fieldSubType],
+				fieldPrecision,
+				-fieldScale);
 		}
 		else
 		{
-			// This is a non-numeric data type
-			isqlGlob.printf("%s", Column_types[i].type_name);
+			if (fieldScale < 0)
+			{
+				// Take a stab at numerics and decimals
+				switch (fieldType)
+				{
+				case SMALLINT:
+					isqlGlob.printf("NUMERIC(4, %d)", -fieldScale);
+					break;
+				case INTEGER:
+					isqlGlob.printf("NUMERIC(9, %d)", -fieldScale);
+					break;
+				case BIGINT:
+					isqlGlob.printf("NUMERIC(18, %d)", -fieldScale);
+					break;
+				case DOUBLE_PRECISION:
+					isqlGlob.printf("NUMERIC(15, %d)", -fieldScale);
+					break;
+				}
+			}
+			else
+			{
+				break;
+			}
 		}
+		return true;
+	case T_CHAR:
+		if (fieldSubType >= 0 && fieldSubType <= MAX_TEXTSUBTYPES)
+		{
+			isqlGlob.printf("%s", Text_subtypes[fieldSubType]);
+			return true;
+		}
+		break;
+	case VARCHAR:
+		if (fieldSubType >= 0 && fieldSubType <= MAX_VARYINGSUBTYPES)
+		{
+			isqlGlob.printf("%s", Varying_subtypes[fieldSubType]);
+			return true;
+		}
+		break;
 	}
+
+	// Field type without recognizable subtypes
+	isqlGlob.printf("%s", Column_types[i].type_name);
 
 	return true;
 }
