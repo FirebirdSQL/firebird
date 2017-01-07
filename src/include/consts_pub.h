@@ -650,6 +650,13 @@
 //#define isc_blob_dbase_ole                23
 //#define isc_blob_typed_binary             24
 
+/*****************/
+/* Text Subtypes */
+/*****************/
+
+#define fb_text_subtype_text	0
+#define fb_text_subtype_binary	1
+
 /* Deprecated definitions maintained for compatibility only */
 
 //#define isc_info_db_SQL_dialect           62

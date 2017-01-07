@@ -440,7 +440,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			}
 
 			// International character sets
-			if ((((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == 0) ||
+			if ((((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == fb_text_subtype_text) ||
 				 FLD.RDB$FIELD_TYPE == BLOB) &&
 				!FLD.RDB$CHARACTER_SET_ID.NULL)
 			{
@@ -817,7 +817,7 @@ static void get_procedure_args(const char* proc_name)
 
 				// Show international character sets and collations
 				if ((!FLD.RDB$COLLATION_ID.NULL || !FLD.RDB$CHARACTER_SET_ID.NULL) &&
-					!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) && FLD.RDB$FIELD_SUB_TYPE != 0))
+					!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) && FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 				{
 					char_sets[0] = 0;
 
@@ -1034,7 +1034,7 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 
 				// Show international character sets and collations
 				if ((!FLD.RDB$COLLATION_ID.NULL || !FLD.RDB$CHARACTER_SET_ID.NULL) &&
-					!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) && FLD.RDB$FIELD_SUB_TYPE != 0))
+					!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) && FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 				{
 					char_sets[0] = 0;
 
@@ -2268,7 +2268,7 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 
 		// Since the character set is part of the field type, display that information now.
 		if (!FLD.RDB$CHARACTER_SET_ID.NULL &&
-			!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) && FLD.RDB$FIELD_SUB_TYPE != 0))
+			!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) && FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 		{
 
 			char_sets[0] = 0;
@@ -2392,7 +2392,7 @@ static void list_domains(SSHORT default_char_set_id)
 
 		// Since the character set is part of the field type, display that information now.
 		if (!FLD.RDB$CHARACTER_SET_ID.NULL &&
-			!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) && FLD.RDB$FIELD_SUB_TYPE != 0))
+			!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) && FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 		{
 			char_sets[0] = 0;
 			if ((FLD.RDB$CHARACTER_SET_ID != default_char_set_id) ||
@@ -2609,7 +2609,7 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 				}
 
 				// International character sets
-				if ((((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == 0) ||
+				if ((((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == fb_text_subtype_text) ||
 					 FLD.RDB$FIELD_TYPE == BLOB) &&
 					!FLD.RDB$CHARACTER_SET_ID.NULL)
 				{

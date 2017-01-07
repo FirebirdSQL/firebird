@@ -4627,7 +4627,7 @@ binary_character_type
 			$$->length = (USHORT) $3;
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
-			$$->subType = dsc_text_type_fixed;
+			$$->subType = fb_text_subtype_binary;
 		}
 	| binary_character_keyword
 		{
@@ -4637,7 +4637,7 @@ binary_character_type
 			$$->length = 1;
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
-			$$->subType = dsc_text_type_fixed;
+			$$->subType = fb_text_subtype_binary;
 		}
 	| varbinary_character_keyword '(' pos_short_integer ')'
 		{
@@ -4647,7 +4647,7 @@ binary_character_type
 			$$->length = (USHORT) $3 + sizeof(USHORT);
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
-			$$->subType = dsc_text_type_fixed;
+			$$->subType = fb_text_subtype_binary;
 		}
 	;
 

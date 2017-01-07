@@ -3878,7 +3878,7 @@ static processing_state show_domains(const SCHAR* domain_name)
 
 			// Show international character sets
 			if (((FLD.RDB$FIELD_TYPE == T_CHAR ||
-				  FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == 0) ||
+				FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == fb_text_subtype_text) ||
 				FLD.RDB$FIELD_TYPE == BLOB)
 			{
 				show_charsets(NULL, FLD.RDB$FIELD_NAME, true, false, false, false);
@@ -4365,7 +4365,7 @@ static processing_state show_func(const SCHAR* funcname)
 			// Show international character sets and collations
 
 			if (((FLD.RDB$FIELD_TYPE == T_CHAR ||
-				  FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == 0) ||
+				FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == fb_text_subtype_text) ||
 				FLD.RDB$FIELD_TYPE == BLOB)
 			{
 				SSHORT charset = 0, collation = 0;
@@ -5258,7 +5258,7 @@ static processing_state show_proc(const SCHAR* procname)
 			// Show international character sets and collations
 
 			if (((FLD.RDB$FIELD_TYPE == T_CHAR ||
-				  FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == 0) ||
+				FLD.RDB$FIELD_TYPE == VARCHAR) && FLD.RDB$FIELD_SUB_TYPE == fb_text_subtype_text) ||
 				FLD.RDB$FIELD_TYPE == BLOB)
 			{
 				SSHORT charset = 0;
@@ -5781,7 +5781,7 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 		if ((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) {
 			isqlGlob.printf("(%d)", ISQL_get_field_length(FLD.RDB$FIELD_NAME));
 
-			if (FLD.RDB$FIELD_SUB_TYPE == 0)
+			if (FLD.RDB$FIELD_SUB_TYPE == fb_text_subtype_text)
 			{
 				// Show international character sets and collations
 				show_charsets(relation_name, RFR.RDB$FIELD_NAME, true, false, false, false);
