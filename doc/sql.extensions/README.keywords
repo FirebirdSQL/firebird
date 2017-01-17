@@ -294,6 +294,8 @@ Firebird 4.0
 
     UNBOUNDED
     WINDOW
+    BINARY
+    VARBINARY
 
   Added as non-reserved words:
 
