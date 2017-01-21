@@ -573,7 +573,7 @@ void iscLogStatus(const TEXT* text, const ISC_STATUS* status_vector)
 		{
 			if (!buffer.isEmpty())
 			{
-				buffer += "\n\t";
+				buffer += " ";
 			}
 			buffer += temp;
 		}

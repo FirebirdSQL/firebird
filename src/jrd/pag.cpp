@@ -2306,7 +2306,7 @@ bool PageSpace::extend(thread_db* tdbb, const ULONG pageNum, const bool forceSiz
 				}
 				else
 				{
-					gds__log("Error extending file \"%s\" by %lu page(s).\nCurrently allocated %lu pages, requested page number %lu",
+					gds__log("Error extending file \"%s\" by %lu page(s). Currently allocated %lu pages, requested page number %lu",
 						file->fil_string, extPages, maxPageNumber, pageNum);
 					return false;
 				}

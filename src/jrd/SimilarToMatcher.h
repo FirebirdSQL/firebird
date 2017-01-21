@@ -573,7 +573,7 @@ bool SimilarToMatcher<CharType, StrConverter>::Evaluator::getResult()
 
 		debugLog.add('\0');
 
-		gds__log("\n%s", debugLog.begin());
+		gds__log("%s", debugLog.begin());
 	}
 #endif	// DEBUG_SIMILAR
 

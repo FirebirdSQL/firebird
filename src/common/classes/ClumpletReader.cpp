@@ -88,7 +88,7 @@ void ClumpletReader::dump() const
 	try {
 		ClumpletDump d(kind, getBuffer(), getBufferLength());
 		int t = (kind == SpbStart || kind == UnTagged || kind == WideUnTagged) ? -1 : d.getBufferTag();
-		gds__log("Tag=%d Offset=%d Length=%d Eof=%d\n", t, getCurOffset(), getBufferLength(), isEof());
+		gds__log("Tag=%d Offset=%d Length=%d Eof=%d", t, getCurOffset(), getBufferLength(), isEof());
 		for (d.rewind(); !(d.isEof()); d.moveNext())
 		{
 			gds__log("Clump %d at offset %d: %s", d.getClumpTag(), d.getCurOffset(),

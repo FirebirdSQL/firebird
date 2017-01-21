@@ -1670,7 +1670,7 @@ void LockManager::bug(CheckStatusWrapper* statusVector, const TEXT* string)
 	if (isatty(2))
 		fprintf(stderr, "Attach to pid=%d\n", getpid());
 	else
-		gds__log("Attach to pid=%d\n", getpid());
+		gds__log("Attach to pid=%d", getpid());
 	sleep(120);
 	*/
 #endif
@@ -1938,7 +1938,7 @@ lrq* LockManager::deadlock_walk(lrq* request, bool* maybe_deadlock)
 #ifdef DEBUG_TRACE_DEADLOCKS
 		const own* owner = (own*) SRQ_ABS_PTR(request->lrq_owner);
 		const prc* proc = (prc*) SRQ_ABS_PTR(owner->own_process);
-		gds__log("deadlock chain: OWNER BLOCK %6" SLONGFORMAT"\tProcess id: %6d\tFlags: 0x%02X ",
+		gds__log("deadlock chain: OWNER BLOCK %6" SLONGFORMAT" Process id: %6d Flags: 0x%02X ",
 			request->lrq_owner, proc->prc_process_id, owner->own_flags);
 #endif
 		return request;
@@ -2039,7 +2039,7 @@ lrq* LockManager::deadlock_walk(lrq* request, bool* maybe_deadlock)
 #ifdef DEBUG_TRACE_DEADLOCKS
 				const own* const owner2 = (own*) SRQ_ABS_PTR(request->lrq_owner);
 				const prc* const proc = (prc*) SRQ_ABS_PTR(owner2->own_process);
-				gds__log("deadlock chain: OWNER BLOCK %6" SLONGFORMAT"\tProcess id: %6d\tFlags: 0x%02X ",
+				gds__log("deadlock chain: OWNER BLOCK %6" SLONGFORMAT" Process id: %6d Flags: 0x%02X ",
 					request->lrq_owner, proc->prc_process_id, owner2->own_flags);
 #endif
 				return target;

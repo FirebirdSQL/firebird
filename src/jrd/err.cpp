@@ -169,7 +169,7 @@ void ERR_log(int facility, int number, const TEXT* message)
 	const size_t len = strlen(errmsg);
 	fb_utils::snprintf(errmsg + len, sizeof(errmsg) - len, " (%d)", number);
 
-	gds__log("Database: %s\n\t%s", (tdbb && tdbb->getAttachment()) ?
+	gds__log("Database: %s %s", (tdbb && tdbb->getAttachment()) ?
 		tdbb->getAttachment()->att_filename.c_str() : "", errmsg);
 }
 
