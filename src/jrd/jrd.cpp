@@ -5326,7 +5326,7 @@ void JRD_print_procedure_info(thread_db* tdbb, const char* mesg)
 	FILE* fptr = os_utils::fopen(fname.c_str(), "a+");
 	if (!fptr)
 	{
-		gds__log("Failed to open %s\n", fname.c_str());
+		gds__log("Failed to open %s", fname.c_str());
 		return;
 	}
 

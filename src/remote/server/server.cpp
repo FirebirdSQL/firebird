@@ -6467,7 +6467,7 @@ void SrvAuthBlock::createPluginsItr()
 #ifdef DEV_BUILD
 		loginError << Arg::Gds(isc_random) << "No matching plugins on server";
 #endif
-		gds__log("Authentication error\n\tNo matching plugins on server");
+		gds__log("Authentication error No matching plugins on server");
 		loginError.raise();
 	}
 

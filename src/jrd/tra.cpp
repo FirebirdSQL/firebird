@@ -3582,9 +3582,9 @@ TraceSweepEvent::TraceSweepEvent(thread_db* tdbb)
 
 	Attachment* att = m_tdbb->getAttachment();
 
-	gds__log("Sweep is started by %s\n"
-		"\tDatabase \"%s\" \n"
-		"\tOIT %" SQUADFORMAT", OAT %" SQUADFORMAT", OST %" SQUADFORMAT", Next %" SQUADFORMAT,
+	gds__log("Sweep is started by %s "
+		"Database \"%s\" "
+		"OIT %" SQUADFORMAT", OAT %" SQUADFORMAT", OST %" SQUADFORMAT", Next %" SQUADFORMAT,
 		att->att_user->usr_user_name.c_str(),
 		att->att_filename.c_str(),
 		m_sweep_info.getOIT(),
@@ -3671,9 +3671,9 @@ void TraceSweepEvent::report(ntrace_process_state_t state)
 
 	if (state == ITracePlugin::SWEEP_STATE_FINISHED)
 	{
-		gds__log("Sweep is finished\n"
-			"\tDatabase \"%s\" \n"
-			"\tOIT %" SQUADFORMAT", OAT %" SQUADFORMAT", OST %" SQUADFORMAT", Next %" SQUADFORMAT,
+		gds__log("Sweep is finished "
+			"Database \"%s\" "
+			"OIT %" SQUADFORMAT", OAT %" SQUADFORMAT", OST %" SQUADFORMAT", Next %" SQUADFORMAT,
 			att->att_filename.c_str(),
 			m_sweep_info.getOIT(),
 			m_sweep_info.getOAT(),

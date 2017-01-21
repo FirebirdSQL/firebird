@@ -820,7 +820,7 @@ const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 	{true, isc_info_record_errors,	"Chain for record %" SQUADFORMAT" is broken"},
 	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} is confused"},
 	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"}, line %" ULONGFORMAT" is bad"},	// 10
-	{true, isc_info_ipage_errors,	"Index %d is corrupt on page %" ULONGFORMAT" level %d at offset %" ULONGFORMAT". File: %s, line: %d\n\t"},
+	{true, isc_info_ipage_errors,	"Index %d is corrupt on page %" ULONGFORMAT" level %d at offset %" ULONGFORMAT". File: %s, line: %d"},
 	{true, isc_info_ppage_errors,	"Pointer page {sequence %" ULONGFORMAT"} lost"},
 	{true, isc_info_ppage_errors,	"Pointer page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} inconsistent"},
 	{true, isc_info_record_errors,	"Record %" SQUADFORMAT" is marked as damaged"},
@@ -1034,7 +1034,7 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 
 		tdbb->tdbb_flags |= TDBB_sweeper;
 
-		gds__log("Database: %s\n\tValidation started", fileName.c_str());
+		gds__log("Database: %s Validation started", fileName.c_str());
 
 		walk_database();
 		if (vdr_errors || vdr_warns)
@@ -1055,7 +1055,7 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 
 		cleanup();
 
-		gds__log("Database: %s\n\tValidation finished: %d errors, %d warnings, %d fixed",
+		gds__log("Database: %s Validation finished: %d errors, %d warnings, %d fixed",
 			fileName.c_str(), vdr_errors, vdr_warns, vdr_fixed);
 	}	// try
 	catch (const Firebird::Exception& ex)
@@ -1155,11 +1155,11 @@ Validation::RTN Validation::corrupt(int err_code, const jrd_rel* relation, ...)
 
 	if (relation)
 	{
-		gds__log("Database: %s\n\t%s in table %s (%d)",
+		gds__log("Database: %s %s in table %s (%d)",
 			fn, s.c_str(), relation->rel_name.c_str(), relation->rel_id);
 	}
 	else
-		gds__log("Database: %s\n\t%s", fn, s.c_str());
+		gds__log("Database: %s %s", fn, s.c_str());
 
 	s.append("\n");
 	output(s.c_str());

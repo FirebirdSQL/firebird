@@ -795,7 +795,7 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 				{
 					if (retryCount++ == 3)
 					{
-						gds__log("IO error loop Unwind to avoid a hang\n");
+						gds__log("IO error loop Unwind to avoid a hang");
 						return false;
 					}
 				}
@@ -1398,7 +1398,7 @@ void CCH_init(thread_db* tdbb, ULONG number)
 
 	if (count != (SLONG) bcb->bcb_count)
 	{
-		gds__log("Database: %s\n\tAllocated %ld page buffers of %ld requested",
+		gds__log("Database: %s Allocated %ld page buffers of %ld requested",
 			 tdbb->getAttachment()->att_filename.c_str(), bcb->bcb_count, count);
 	}
 

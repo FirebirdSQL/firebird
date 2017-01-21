@@ -382,7 +382,7 @@ namespace
 			}
 			else
 			{
-				gds__log("Failed to reset cleanup %p\n", c);
+				gds__log("Failed to reset cleanup %p", c);
 			}
 		}
 
@@ -1014,7 +1014,7 @@ void PluginManager::registerPluginFactory(unsigned int interfaceType, const char
 	if (!current)
 	{
 		// not good time to call this function - ignore request
-		gds__log("Unexpected call to register plugin %s, type %d - ignored\n", defaultName, interfaceType);
+		gds__log("Unexpected call to register plugin %s, type %d - ignored", defaultName, interfaceType);
 		return;
 	}
 
@@ -1040,7 +1040,7 @@ void PluginManager::registerModule(IPluginModule* cleanup)
 	if (!current)
 	{
 		// not good time to call this function - ignore request
-		gds__log("Unexpected call to set module cleanup - ignored\n");
+		gds__log("Unexpected call to set module cleanup - ignored");
 		return;
 	}
 

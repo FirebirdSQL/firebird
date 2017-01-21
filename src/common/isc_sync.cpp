@@ -977,7 +977,7 @@ public:
 				break;
 			if (!SYSCALL_INTERRUPTED(errno))
 			{
-				gds__log("semctl() failed, errno %d\n", errno);
+				gds__log("semctl() failed, errno %d", errno);
 				break;
 			}
 		}
