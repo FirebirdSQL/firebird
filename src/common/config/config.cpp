@@ -192,7 +192,8 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_STRING,		"KeyHolderPlugin",			(ConfigValue) ""},
 	{TYPE_BOOLEAN,		"RemoteAccess",				(ConfigValue) true},
 	{TYPE_BOOLEAN,		"IPv6V6Only",				(ConfigValue) false},
-	{TYPE_BOOLEAN,		"WireCompression",			(ConfigValue) false}
+	{TYPE_BOOLEAN,		"WireCompression",			(ConfigValue) false},
+	{TYPE_INTEGER,		"LogLevel",					(ConfigValue) 1}
 };
 
 /******************************************************************************
@@ -416,6 +417,12 @@ bool Config::getBoolean(unsigned int key) const
 int Config::getTempBlockSize()
 {
 	return (int) getDefaultConfig()->values[KEY_TEMP_BLOCK_SIZE];
+}
+
+
+int Config::getLogLevel() 
+{
+	return (int)getDefaultConfig()->values[KEY_LOG_LEVEL];
 }
 
 FB_UINT64 Config::getTempCacheLimit()

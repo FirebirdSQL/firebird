@@ -37,6 +37,7 @@
 #include "../common/file_params.h"
 #endif
 #include "../remote/remote.h"
+#include "../common/config/config.h"
 #include "../common/file_params.h"
 #include "../common/ThreadStart.h"
 #include "../common/classes/timestamp.h"
@@ -446,6 +447,11 @@ public:
 				authServer = NULL;
 				authPort->port_srv_auth_block->authCompleted(true);
 				accept(send, &authPort->port_srv_auth_block->authBlockWriter);
+				if (Config::getLogLevel() > 0)
+				{
+					gds__log("AUTH_SUCCESS %s %s %s", authPort->port_address.c_str(), userName.c_str(),
+						authItr->name());
+				}
 				return true;
 
 			case IAuth::AUTH_CONTINUE:
@@ -516,6 +522,12 @@ public:
 				working = false;
 				break;
 			}
+		}
+
+		if (Config::getLogLevel() > 0)
+		{
+			gds__log("AUTH_FAILED %s %s", authPort->port_address.c_str(), userName.c_str(),
+				authItr->name());
 		}
 
 		// no success - perform failure processing
@@ -1849,6 +1861,11 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 					{
 					case IAuth::AUTH_SUCCESS:
 						HANDSHAKE_DEBUG(fprintf(stderr, "AUTH_SUCCESS\n"));
+						if (Config::getLogLevel() > 0)
+						{
+							gds__log("AUTH_SUCCESS %s %s %s", port->port_address.c_str(),
+								port->port_user_name.c_str(), plugins->name());
+						}
 						loginSuccess(port->port_login, port->getRemoteId());
 						port->port_srv_auth_block->authCompleted(true);
 						send->p_acpd.p_acpt_authenticated = 1;
@@ -1880,6 +1897,11 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 
 					case IAuth::AUTH_FAILED:
 						HANDSHAKE_DEBUG(fprintf(stderr, "AUTH_FAILED\n"));
+						if (Config::getLogLevel() > 0)
+						{
+							gds__log("AUTH_FAILED %s %s %s", port->port_address.c_str(),
+								port->port_user_name.c_str(), plugins->name());
+						}
 						setErrorStatus(&status);
 						accepted = false;
 						loginFail(port->port_login, port->getRemoteId());
