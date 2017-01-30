@@ -99,10 +99,13 @@ public:
 	void destroy(unsigned dstrFlags)
 	{
 		Firebird::MutexLockGuard guard(mtx, FB_FUNCTION);
-		FB_SIZE_T i;
 
-		while ((i = array.getCount()) > 0)
-			array[i - 1]->destroy(dstrFlags);
+		// Call destroy() only once even if handle is not removed from array
+		// by this call for any reason
+		for (int i = array.getCount() - 1; i >= 0; i--)
+			array[i]->destroy(dstrFlags);
+
+		clear();
 	}
 
 	void assign(HandleArray& from)

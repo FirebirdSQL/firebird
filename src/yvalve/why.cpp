@@ -1202,7 +1202,7 @@ namespace Why
 		~IscStatement() override;
 
 		FB_API_HANDLE& getHandle();
-		void destroy(unsigned) { release(); }
+		void destroy(unsigned);
 		void openCursor(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
 			IMessageMetadata* inMetadata, UCHAR* buffer, IMessageMetadata* outMetadata);
 		void closeCursor(CheckStatusWrapper* status, bool raise);
@@ -2489,7 +2489,7 @@ ISC_STATUS API_ROUTINE isc_dsql_free_statement(ISC_STATUS* userStatus, FB_API_HA
 			// statement->userHandle is not erased here because this routine can be called
 			// against a copy of original variable.
 			// This call must release statement and clean handles
-			statement->release();
+			statement->destroy(0);
  			*stmtHandle = 0;
 		}
 		else if (option & DSQL_unprepare)
@@ -4352,9 +4352,14 @@ IscStatement::~IscStatement()
 		*userHandle = 0;
 		userHandle = nullptr;
 	}
+	removeHandle(&statements, handle);
+}
+
+void IscStatement::destroy(unsigned)
+{
 	attachment->childIscStatements.remove(this);
 	attachment = NULL;
-	removeHandle(&statements, handle);
+	release();
 }
 
 FB_API_HANDLE& IscStatement::getHandle()
