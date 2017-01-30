@@ -28,5 +28,3 @@ DEV_FLAGS=$(COMMON_FLAGS) $(WARN_FLAGS) -fmax-errors=8
 
 # This file must be compiled with SSE4.2 support
 %/CRC32C.o: COMMON_FLAGS += -msse4
-
-CXXFLAGS := $(CXXFLAGS) -std=c++11
