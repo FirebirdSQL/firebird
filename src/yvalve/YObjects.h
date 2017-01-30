@@ -49,6 +49,7 @@ class YRequest;
 class YResultSet;
 class YService;
 class YStatement;
+class IscStatement;
 class YTransaction;
 
 class YObject
@@ -473,6 +474,7 @@ public:
 	HandleArray<YEvents> childEvents;
 	HandleArray<YRequest> childRequests;
 	HandleArray<YStatement> childStatements;
+	HandleArray<IscStatement> childIscStatements;
 	HandleArray<YTransaction> childTransactions;
 	Firebird::Array<CleanupCallback*> cleanupHandlers;
 	Firebird::StatusHolder savedStatus;	// Do not use raise() method of this class in yValve.

@@ -634,55 +634,6 @@ int SQLDAMetadata::detach()
 }
 
 
-class IscStatement : public RefCounted, public GlobalStorage, public YObject
-{
-public:
-	static const ISC_STATUS ERROR_CODE = isc_bad_stmt_handle;
-
-	explicit IscStatement(YAttachment* aAttachment)
-		: cursorName(getPool()),
-		  attachment(aAttachment),
-		  statement(NULL),
-		  userHandle(NULL),
-		  pseudoOpened(false),
-		  delayedFormat(false)
-	{ }
-
-	FB_API_HANDLE& getHandle();
-	void openCursor(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
-					IMessageMetadata* inMetadata, UCHAR* buffer, IMessageMetadata* outMetadata);
-	void closeCursor(CheckStatusWrapper* status, bool raise);
-	void closeStatement(CheckStatusWrapper* status);
-
-	void execute(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
-				 IMessageMetadata* inMetadata, UCHAR* inBuffer, IMessageMetadata* outMetadata, UCHAR* outBuffer);
-	FB_BOOLEAN fetch(CheckStatusWrapper* status, IMessageMetadata* outMetadata, UCHAR* outBuffer);
-
-	void checkPrepared(ISC_STATUS code = isc_unprepared_stmt) const
-	{
-		if (!statement)
-			Arg::Gds(code).raise();
-	}
-
-	void checkCursorOpened() const
-	{
-		if (!statement || !statement->cursor)
-			Arg::Gds(isc_dsql_cursor_not_open).raise();
-	}
-
-	void checkCursorClosed() const
-	{
-		if (statement && statement->cursor)
-			Arg::Gds(isc_dsql_cursor_open_err).raise();
-	}
-
-	string cursorName;
-	YAttachment* attachment;
-	YStatement* statement;
-	FB_API_HANDLE* userHandle;
-	bool pseudoOpened, delayedFormat;
-};
-
 GlobalPtr<RWLock> handleMappingLock;
 GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, YService*> > > > services;
 GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, YAttachment*> > > > attachments;
@@ -764,13 +715,6 @@ RefPtr<T> translateHandle(GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, T*>
 		status_exception::raise(Arg::Gds(T::ERROR_CODE));
 
 	return RefPtr<T>(*obj);
-}
-
-FB_API_HANDLE& IscStatement::getHandle()
-{
-	if (!handle)
-		makeHandle(&statements, this, handle);
-	return handle;
 }
 
 //-------------------------------------
@@ -1241,6 +1185,58 @@ namespace Why
 		RefPtr<typename Y::NextInterface> nextRef;
 	};
 
+	class IscStatement : public RefCounted, public GlobalStorage, public YObject
+	{
+	public:
+		static const ISC_STATUS ERROR_CODE = isc_bad_stmt_handle;
+
+		explicit IscStatement(YAttachment* aAttachment)
+			: cursorName(getPool()),
+			attachment(aAttachment),
+			statement(NULL),
+			userHandle(NULL),
+			pseudoOpened(false),
+			delayedFormat(false)
+		{ }
+
+		~IscStatement() override;
+
+		FB_API_HANDLE& getHandle();
+		void destroy(unsigned) { release(); }
+		void openCursor(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
+			IMessageMetadata* inMetadata, UCHAR* buffer, IMessageMetadata* outMetadata);
+		void closeCursor(CheckStatusWrapper* status, bool raise);
+		void closeStatement(CheckStatusWrapper* status);
+
+		void execute(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
+			IMessageMetadata* inMetadata, UCHAR* inBuffer, IMessageMetadata* outMetadata, UCHAR* outBuffer);
+		FB_BOOLEAN fetch(CheckStatusWrapper* status, IMessageMetadata* outMetadata, UCHAR* outBuffer);
+
+		void checkPrepared(ISC_STATUS code = isc_unprepared_stmt) const
+		{
+			if (!statement)
+				Arg::Gds(code).raise();
+		}
+
+		void checkCursorOpened() const
+		{
+			if (!statement || !statement->cursor)
+				Arg::Gds(isc_dsql_cursor_not_open).raise();
+		}
+
+		void checkCursorClosed() const
+		{
+			if (statement && statement->cursor)
+				Arg::Gds(isc_dsql_cursor_open_err).raise();
+		}
+
+		string cursorName;
+		YAttachment* attachment;
+		YStatement* statement;
+		FB_API_HANDLE* userHandle;
+		bool pseudoOpened, delayedFormat;
+	};
+
 	template <>
 	YEntry<YAttachment>::YEntry(CheckStatusWrapper* aStatus, YAttachment* aAttachment, int checkAttachment)
 		: ref(aAttachment), nextRef(NULL)
@@ -1310,103 +1306,6 @@ namespace Why
 	};
 
 }	// namespace Why
-
-namespace {
-	void IscStatement::openCursor(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
-					IMessageMetadata* inMetadata, UCHAR* buffer, IMessageMetadata* outMetadata)
-	{
-		checkCursorClosed();
-
-		// Transaction is not optional for statement returning result set
-		RefPtr<YTransaction> transaction = translateHandle(transactions, traHandle);;
-
-		statement->openCursor(status, transaction, inMetadata, buffer, outMetadata, 0);
-
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
-			return;
-
-		fb_assert(statement->cursor);
-
-		delayedFormat = (outMetadata == DELAYED_OUT_FORMAT);
-	}
-
-	void IscStatement::closeCursor(CheckStatusWrapper* status, bool raise)
-	{
-		if (statement && statement->cursor)
-		{
-			fb_assert(!pseudoOpened);
-
-			statement->cursor->close(status);
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
-				status_exception::raise(status);
-
-			statement->cursor = NULL;
-		}
-		else if (pseudoOpened)
-			pseudoOpened = false;
-		else if (raise)
-			Arg::Gds(isc_dsql_cursor_close_err).raise();
-	}
-
-	void IscStatement::closeStatement(CheckStatusWrapper* status)
-	{
-		if (statement)
-		{
-			statement->free(status);
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
-				status_exception::raise(status);
-
-			statement = NULL;
-		}
-	}
-
-	void IscStatement::execute(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
-				IMessageMetadata* inMetadata, UCHAR* inBuffer, IMessageMetadata* outMetadata,
-				UCHAR* outBuffer)
-	{
-		checkCursorClosed();
-
-		RefPtr<YTransaction> transaction;
-		if (traHandle && *traHandle)
-			transaction = translateHandle(transactions, traHandle);
-
-		ITransaction* newTrans = statement->execute(status, transaction,
-			inMetadata, inBuffer, outMetadata, outBuffer);
-
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
-		{
-			if (transaction && !newTrans)
-			{
-				transaction->destroy(0);
-				*traHandle = 0;
-			}
-			else if (!transaction && newTrans)
-			{
-				// in this case we know for sure that newTrans points to YTransaction
-				if (traHandle)
-					*traHandle = static_cast<YTransaction*>(newTrans)->getHandle();
-			}
-		}
-	}
-
-	FB_BOOLEAN IscStatement::fetch(CheckStatusWrapper* status, IMessageMetadata* outMetadata,
-		UCHAR* outBuffer)
-	{
-		checkCursorOpened();
-
-		if (delayedFormat)
-		{
-			statement->cursor->setDelayedOutputFormat(status, outMetadata);
-
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
-				return FB_FALSE;
-
-			delayedFormat = false;
-		}
-
-		return statement->cursor->fetchNext(status, outBuffer) == IStatus::RESULT_OK;
-	}
-}
 
 struct TEB
 {
@@ -2163,6 +2062,7 @@ ISC_STATUS API_ROUTINE isc_dsql_allocate_statement(ISC_STATUS* userStatus, FB_AP
 
 		statement = FB_NEW IscStatement(attachment);
 		statement->addRef();
+		attachment->childIscStatements.add(statement);
 		*stmtHandle = statement->getHandle();
 	}
 	catch (const Exception& e)
@@ -2586,8 +2486,10 @@ ISC_STATUS API_ROUTINE isc_dsql_free_statement(ISC_STATUS* userStatus, FB_API_HA
 			// Release everything
 			statement->closeCursor(&statusWrapper, false);
 			statement->closeStatement(&statusWrapper);
+			// statement->userHandle is not erased here because this routine can be called
+			// against a copy of original variable.
+			// This call must release statement and clean handles
 			statement->release();
-			removeHandle(&statements, *stmtHandle);
  			*stmtHandle = 0;
 		}
 		else if (option & DSQL_unprepare)
@@ -4201,8 +4103,6 @@ void YStatement::destroy(unsigned dstrFlags)
 	attachment->childStatements.remove(this);
 	attachment = NULL;
 
-	removeHandle(&statements, handle);
-
 	destroy2(dstrFlags);
 }
 
@@ -4443,6 +4343,121 @@ void YStatement::free(CheckStatusWrapper* status)
 	}
 }
 
+//-------------------------------------
+
+IscStatement::~IscStatement()
+{
+	if (userHandle)
+	{
+		*userHandle = 0;
+		userHandle = nullptr;
+	}
+	attachment->childIscStatements.remove(this);
+	attachment = NULL;
+	removeHandle(&statements, handle);
+}
+
+FB_API_HANDLE& IscStatement::getHandle()
+{
+	if (!handle)
+		makeHandle(&statements, this, handle);
+	return handle;
+}
+
+void IscStatement::openCursor(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
+	IMessageMetadata* inMetadata, UCHAR* buffer, IMessageMetadata* outMetadata)
+{
+	checkCursorClosed();
+
+	// Transaction is not optional for statement returning result set
+	RefPtr<YTransaction> transaction = translateHandle(transactions, traHandle);;
+
+	statement->openCursor(status, transaction, inMetadata, buffer, outMetadata, 0);
+
+	if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		return;
+
+	fb_assert(statement->cursor);
+
+	delayedFormat = (outMetadata == DELAYED_OUT_FORMAT);
+}
+
+void IscStatement::closeCursor(CheckStatusWrapper* status, bool raise)
+{
+	if (statement && statement->cursor)
+	{
+		fb_assert(!pseudoOpened);
+
+		statement->cursor->close(status);
+		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			status_exception::raise(status);
+
+		statement->cursor = NULL;
+	}
+	else if (pseudoOpened)
+		pseudoOpened = false;
+	else if (raise)
+		Arg::Gds(isc_dsql_cursor_close_err).raise();
+}
+
+void IscStatement::closeStatement(CheckStatusWrapper* status)
+{
+	if (statement)
+	{
+		statement->free(status);
+		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			status_exception::raise(status);
+
+		statement = NULL;
+	}
+}
+
+void IscStatement::execute(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
+	IMessageMetadata* inMetadata, UCHAR* inBuffer, IMessageMetadata* outMetadata,
+	UCHAR* outBuffer)
+{
+	checkCursorClosed();
+
+	RefPtr<YTransaction> transaction;
+	if (traHandle && *traHandle)
+		transaction = translateHandle(transactions, traHandle);
+
+	ITransaction* newTrans = statement->execute(status, transaction,
+		inMetadata, inBuffer, outMetadata, outBuffer);
+
+	if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
+	{
+		if (transaction && !newTrans)
+		{
+			transaction->destroy(0);
+			*traHandle = 0;
+		}
+		else if (!transaction && newTrans)
+		{
+			// in this case we know for sure that newTrans points to YTransaction
+			if (traHandle)
+				*traHandle = static_cast<YTransaction*>(newTrans)->getHandle();
+		}
+	}
+}
+
+FB_BOOLEAN IscStatement::fetch(CheckStatusWrapper* status, IMessageMetadata* outMetadata,
+	UCHAR* outBuffer)
+{
+	checkCursorOpened();
+
+	if (delayedFormat)
+	{
+		statement->cursor->setDelayedOutputFormat(status, outMetadata);
+
+		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			return FB_FALSE;
+
+		delayedFormat = false;
+	}
+
+	return statement->cursor->fetchNext(status, outBuffer) == IStatus::RESULT_OK;
+}
 
 //-------------------------------------
 
@@ -4955,6 +4970,7 @@ YAttachment::YAttachment(IProvider* aProvider, IAttachment* aNext, const PathNam
 	  childEvents(getPool()),
 	  childRequests(getPool()),
 	  childStatements(getPool()),
+	  childIscStatements(getPool()),
 	  childTransactions(getPool()),
 	  cleanupHandlers(getPool())
 {
@@ -4987,6 +5003,7 @@ void YAttachment::destroy(unsigned dstrFlags)
 
 	childRequests.destroy(dstrFlags & ~DF_RELEASE);
 	childStatements.destroy(dstrFlags & ~DF_RELEASE);
+	childIscStatements.destroy(dstrFlags & ~DF_RELEASE);
 	childBlobs.destroy(dstrFlags & ~DF_RELEASE);
 	childEvents.destroy(dstrFlags & ~DF_RELEASE);
 	childTransactions.destroy(dstrFlags & ~DF_RELEASE);
