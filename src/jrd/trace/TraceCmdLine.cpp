@@ -134,7 +134,8 @@ namespace Firebird
 
 void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 {
-	const char* const* end = uSvc->argv.end();
+	UtilSvc::ArgvType& argv = uSvc->argv;
+	const int argc = argv.getCount();
 
 	bool version = false, help = false;
 	// search for "action" switch, set NULL into recognized argv
@@ -143,23 +144,22 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 								false, true);
 
 	const Switches::in_sw_tab_t* action_sw = NULL;
-	const char** argv = uSvc->argv.begin();
-	for (++argv; argv < end; argv++)
+	for (int itr = 1; itr < argc; ++itr)
 	{
-		if (!uSvc->isService() && strcmp(argv[0], "-?") == 0)
+		if (!uSvc->isService() && strcmp(argv[itr], "-?") == 0)
 		{
 			help = true;
-			*argv = NULL;
+			argv[itr] = NULL;
 			break;
 		}
 
-		const Switches::in_sw_tab_t* sw = actSwitches.findSwitch(*argv);
+		const Switches::in_sw_tab_t* sw = actSwitches.findSwitch(argv[itr]);
 		if (sw)
 		{
 			if (sw->in_sw == IN_SW_TRACE_VERSION)
 			{
 				version = true;
-				*argv = NULL;
+				argv[itr] = NULL;
 				continue;
 			}
 			if (action_sw)
@@ -167,7 +167,7 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 			else
 				action_sw = sw;
 
-			*argv = NULL;
+			argv[itr] = NULL;
 		}
 	}
 
@@ -190,17 +190,16 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 	const Switches optSwitches(trace_option_in_sw_table, FB_NELEM(trace_option_in_sw_table),
 								false, true);
 	TraceSession session(*getDefaultMemoryPool());
-	argv = uSvc->argv.begin();
-	for (++argv; argv < end; argv++)
+	for (int itr = 1; itr < argc; ++itr)
 	{
-		if (!*argv)
+		if (!argv[itr])
 			continue;
 
-		const Switches::in_sw_tab_t* sw = optSwitches.findSwitch(*argv);
+		const Switches::in_sw_tab_t* sw = optSwitches.findSwitch(argv[itr]);
 		if (!sw)
 			continue;
 
-		*argv = NULL;
+		argv[itr] = NULL;
 
 		switch (sw->in_sw)
 		{
@@ -218,9 +217,9 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 			if (!session.ses_config.empty())
 				usage(uSvc, isc_trace_switch_once, sw->in_sw_name);
 
-			argv++;
-			if (argv < end && *argv)
-				session.ses_config = *argv;
+			itr++;
+			if (itr < argc && argv[itr])
+				session.ses_config = argv[itr];
 			else
 				usage(uSvc, isc_trace_param_val_miss, sw->in_sw_name);
 			break;
@@ -239,9 +238,9 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 			if (!session.ses_name.empty())
 				usage(uSvc, isc_trace_switch_once, sw->in_sw_name);
 
-			argv++;
-			if (argv < end && *argv)
-				session.ses_name = *argv;
+			itr++;
+			if (itr < argc && argv[itr])
+				session.ses_name = argv[itr];
 			else
 				usage(uSvc, isc_trace_param_val_miss, sw->in_sw_name);
 			break;
@@ -258,12 +257,12 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 			if (session.ses_id)
 				usage(uSvc, isc_trace_switch_once, sw->in_sw_name);
 
-			argv++;
-			if (argv < end && *argv)
+			itr++;
+			if (itr < argc && argv[itr])
 			{
-				session.ses_id = atol(*argv);
+				session.ses_id = atol(argv[itr]);
 				if (!session.ses_id)
-					usage(uSvc, isc_trace_param_invalid, *argv, sw->in_sw_name);
+					usage(uSvc, isc_trace_param_invalid, argv[itr], sw->in_sw_name);
 			}
 			else
 				usage(uSvc, isc_trace_param_val_miss, sw->in_sw_name);
@@ -272,7 +271,7 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 		default:
 			fb_assert(false);
 		}
-		*argv = NULL;
+		argv[itr] = NULL;
 	}
 
 	// search for authentication parameters
@@ -280,15 +279,14 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 								false, true);
 	string svc_name, user, role, pwd;
 	bool adminRole = false;
-	argv = uSvc->argv.begin();
-	for (++argv; argv < end; argv++)
+	for (int itr = 1; itr < argc; ++itr)
 	{
-		if (!*argv)
+		if (!argv[itr])
 			continue;
 
-		const Switches::in_sw_tab_t* sw = authSwitches.findSwitch(*argv);
+		const Switches::in_sw_tab_t* sw = authSwitches.findSwitch(argv[itr]);
 		if (!sw) {
-			usage(uSvc, isc_trace_switch_unknown, *argv);
+			usage(uSvc, isc_trace_switch_unknown, argv[itr]);
 		}
 
 		switch (sw->in_sw)
@@ -297,9 +295,9 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 			if (!user.empty())
 				usage(uSvc, isc_trace_switch_once, sw->in_sw_name);
 
-			argv++;
-			if (argv < end && *argv)
-				user = *argv;
+			itr++;
+			if (itr < argc && argv[itr])
+				user = argv[itr];
 			else
 				usage(uSvc, isc_trace_param_val_miss, sw->in_sw_name);
 			break;
@@ -308,9 +306,9 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 			if (!role.empty())
 				usage(uSvc, isc_trace_switch_once, sw->in_sw_name);
 
-			argv++;
-			if (argv < end && *argv)
-				role = *argv;
+			itr++;
+			if (itr < argc && argv[itr])
+				role = argv[itr];
 			else
 				usage(uSvc, isc_trace_param_val_miss, sw->in_sw_name);
 			break;
@@ -319,9 +317,12 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 			if (!pwd.empty())
 				usage(uSvc, isc_trace_switch_once, sw->in_sw_name);
 
-			argv++;
-			if (argv < end && *argv)
-				pwd = *argv;
+			itr++;
+			if (itr < argc && argv[itr])
+			{
+				pwd = argv[itr];
+				uSvc->hidePasswd(argv, itr);
+			}
 			else
 				usage(uSvc, isc_trace_param_val_miss, sw->in_sw_name);
 			break;
@@ -333,10 +334,10 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 			if (!pwd.empty())
 				usage(uSvc, isc_trace_switch_once, sw->in_sw_name);
 
-			argv++;
-			if (argv < end && *argv)
+			itr++;
+			if (itr < argc && argv[itr])
 			{
-				const PathName fileName(*argv);
+				const PathName fileName(argv[itr]);
 				const char *s = NULL;
 				switch (fb_utils::fetchPassword(fileName, s))
 				{
@@ -374,9 +375,9 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 			if (!svc_name.empty())
 				usage(uSvc, isc_trace_switch_once, sw->in_sw_name);
 
-			argv++;
-			if (argv < end && *argv)
-				svc_name = *argv;
+			itr++;
+			if (itr < argc && argv[itr])
+				svc_name = argv[itr];
 			else
 				usage(uSvc, isc_trace_param_val_miss, sw->in_sw_name);
 			break;
