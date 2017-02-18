@@ -86,7 +86,7 @@ $(DebugFile) :  buildImageDir
 	(cd $(GEN_ROOT)/$(DebugDir); tar -czf ../$(DebugFile) .)
 
 buildRoot:
-	(cd $(GEN_ROOT); ./install/makeInstallImage.sh)
+	command -v fakeroot > /dev/null 2> /dev/null && (cd $(GEN_ROOT); fakeroot ./install/makeInstallImage.sh) || (cd $(GEN_ROOT); ./install/makeInstallImage.sh)
 
 buildDebugInfo: buildRoot
 	mkdir -p $(GEN_ROOT)/$(DebugDir)
