@@ -1178,7 +1178,7 @@ static void write_log(int log_action, const char* buff)
 							  GetLastError(),
 							  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),	// Default language
 							  (LPTSTR) & lpMsgBuf, 0, NULL);
-				gds__log("Unable to update NT Event Log.\n\tOS Message: %s", lpMsgBuf);
+				gds__log("Unable to update NT Event Log. OS Message: %s", lpMsgBuf);
 				LocalFree(lpMsgBuf);
 			}
 			DeregisterEventSource(hLog);

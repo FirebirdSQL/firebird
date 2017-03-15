@@ -244,7 +244,7 @@ namespace Jrd {
 						{
 							if (retryCount++ == 3)
 							{
-								gds__log("IO error loop Unwind to avoid a hang\n");
+								gds__log("IO error loop Unwind to avoid a hang");
 								ERR_punt();
 							}
 						}

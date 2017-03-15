@@ -811,7 +811,7 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 #ifdef DEV_BUILD
 		if (xdrs->x_op != XDR_FREE)
 		{
-			gds__log("xdr_packet: operation %d not recognized\n", p->p_operation);
+			gds__log("xdr_packet: operation %d not recognized", p->p_operation);
 		}
 #endif
 		return P_FALSE(xdrs, p);

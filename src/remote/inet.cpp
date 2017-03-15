@@ -1115,11 +1115,11 @@ rem_port* INET_reconnect(SOCKET handle)
 	int n = 0, optval = TRUE;
 	n = setsockopt(port->port_handle, SOL_SOCKET, SO_KEEPALIVE, (SCHAR*) &optval, sizeof(optval));
 	if (n == -1) {
-		gds__log("inet server err: setting KEEPALIVE socket option \n");
+		gds__log("inet server err: setting KEEPALIVE socket option");
 	}
 
 	if (! setNoNagleOption(port)) {
-		gds__log("inet server err: setting NODELAY socket option \n");
+		gds__log("inet server err: setting NODELAY socket option");
 	}
 
 	return port;
@@ -1147,11 +1147,11 @@ rem_port* INET_server(SOCKET sock)
 	int optval = 1;
 	n = setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (SCHAR*) &optval, sizeof(optval));
 	if (n == -1) {
-		gds__log("inet server err: setting KEEPALIVE socket option \n");
+		gds__log("inet server err: setting KEEPALIVE socket option");
 	}
 
 	if (! setNoNagleOption(port)) {
-		gds__log("inet server err: setting NODELAY socket option \n");
+		gds__log("inet server err: setting NODELAY socket option");
 	}
 
 	return port;
@@ -1214,7 +1214,7 @@ static bool accept_connection(rem_port* port, const P_CNCT* cnct)
 		{
 			if (chdir(home.c_str()))
 			{
-				gds__log("inet_server: unable to cd to %s errno %d\n", home.c_str(), INET_ERRNO);
+				gds__log("inet_server: unable to cd to %s errno %d", home.c_str(), INET_ERRNO);
 				// We continue after the error
 			}
 		}

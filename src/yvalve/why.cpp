@@ -5758,7 +5758,13 @@ YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* st
 		}
 
 		if (status->getErrors()[1] == 0)
+		{
+			if (Config::getLogLevel() > 0)
+			{
+				gds__log("Database Not Found %s", expandedFilename.c_str());
+			}
 			Arg::Gds(isc_unavailable).raise();
+		}
 	}
 	catch (const Exception& e)
 	{

@@ -28,6 +28,7 @@
  * 2002.10.30 Sean Leyne - Removed support for obsolete "PC_PLATFORM" define
  * 2003.05.11 Nickolay Samofatov - rework temp stuff
  *
+ * 2017.20.01 Simon Carter - Support for CORE-782
  */
 
 // 11 Sept 2002 Nickolay Samofatov
@@ -1185,7 +1186,9 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 	now = time((time_t *)0);
 #endif
 
-	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
+	char buff[20];
+	strftime(buff, 20, LOGFILE, localtime(&now));
+	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, buff);
 
 #ifdef WIN_NT
 	WaitForSingleObject(CleanupTraceHandles::trace_mutex_handle, INFINITE);
@@ -1212,11 +1215,13 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 #endif
 
 		TEXT buffer[MAXPATHLEN];
-		fprintf(file, "\n%s\t%.25s\t", ISC_get_host(buffer, MAXPATHLEN), ctime(&now));
+		memset(buff, 0, sizeof(buff));
+		strftime(buff, 20, "%Y-%m-%d %H:%M:%S", localtime(&now));
+		fprintf(file, "%s %s ", buff, ISC_get_host(buffer, MAXPATHLEN));
 		va_start(ptr, text);
 		vfprintf(file, text, ptr);
 		va_end(ptr);
-		fprintf(file, "\n\n");
+		fprintf(file, "\n");
 
 		// This will release file lock set in posix case
 		fclose(file);
