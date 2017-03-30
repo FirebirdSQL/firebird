@@ -1901,7 +1901,11 @@ static void gen_emodify( const act* action, int column)
 		align(column);
 		gen_name(s1, source, true);
 		gen_name(s2, reference, true);
-		if (field->fld_dtype > dtype_cstring || (field->fld_sub_type == 1 && field->fld_length == 1))
+		if (field->fld_dtype == dtype_varying && field->fld_sub_type == dsc_text_type_fixed)
+		{
+			fprintf(gpreGlob.out_file, "memcpy (&%s, &%s, %d);", s2, s1, field->fld_length + sizeof(USHORT));
+		}
+		else if (field->fld_dtype > dtype_cstring || (field->fld_sub_type == dsc_text_type_fixed && field->fld_length == 1))
 		{
 			fprintf(gpreGlob.out_file, "%s = %s;", s2, s1);
 		}
@@ -3716,6 +3720,10 @@ static void make_port(const gpre_port* port, int column)
 		case dtype_long:
 			dtype = DCL_LONG;
 			break;
+
+		case dtype_varying:
+			fprintf(gpreGlob.out_file, "    struct { ISC_USHORT length; ISC_UCHAR data[%d]; } isc_%d;\t/* %s */", field->fld_length, reference->ref_ident, name);
+			continue;
 
 		case dtype_cstring:
 		case dtype_text:
