@@ -1731,20 +1731,20 @@ static gpre_port* make_port( gpre_req* request, ref* reference)
 			CPR_bugcheck("missing prototype field for value");
 		if (temp->ref_value && (temp->ref_flags & REF_array_elem))
 			field = field->fld_array;
-		FLD_LENGTH l = field->fld_length;
+		FLD_LENGTH len = field->fld_length;
 		if (field->fld_dtype == dtype_varying)
-			l += sizeof(USHORT);
-		if ((l & 7) == 0)
+			len += sizeof(USHORT);
+		if ((len & 7) == 0)
 		{
 			temp->ref_next = alignments[2];
 			alignments[2] = temp;
 		}
-		else if ((l & 3) == 0)
+		else if ((len & 3) == 0)
 		{
 			temp->ref_next = alignments[1];
 			alignments[1] = temp;
 		}
-		else if ((l & 1) == 0)
+		else if ((len & 1) == 0)
 		{
 			temp->ref_next = alignments[0];
 			alignments[0] = temp;
@@ -1777,10 +1777,10 @@ static gpre_port* make_port( gpre_req* request, ref* reference)
 #ifdef GPRE_FORTRAN
 		reference->ref_offset = port->por_length;
 #endif
-		FLD_LENGTH l = field->fld_length;
+		FLD_LENGTH len = field->fld_length;
 		if (field->fld_dtype == dtype_varying)
-			l += sizeof(USHORT);
-		port->por_length += l;
+			len += sizeof(USHORT);
+		port->por_length += len;
 	}
 
 	return port;
