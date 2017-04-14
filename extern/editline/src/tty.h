@@ -1,4 +1,4 @@
-/*	$NetBSD: tty.h,v 1.15 2014/05/19 19:54:12 christos Exp $	*/
+/*	$NetBSD: tty.h,v 1.21 2016/05/09 21:46:56 christos Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993
@@ -40,8 +40,6 @@
 #ifndef _h_el_tty
 #define	_h_el_tty
 
-#include "sys.h"
-#include "histedit.h"
 #include <termios.h>
 #include <unistd.h>
 
@@ -458,14 +456,14 @@ typedef struct {
 
 typedef unsigned char ttychar_t[NN_IO][C_NCC];
 
-protected int	tty_init(EditLine *);
-protected void	tty_end(EditLine *);
-protected int	tty_stty(EditLine *, int, const Char **);
-protected int	tty_rawmode(EditLine *);
-protected int	tty_cookedmode(EditLine *);
-protected int	tty_quotemode(EditLine *);
-protected int	tty_noquotemode(EditLine *);
-protected void	tty_bind_char(EditLine *, int);
+libedit_private int	tty_init(EditLine *);
+libedit_private void	tty_end(EditLine *);
+libedit_private int	tty_stty(EditLine *, int, const wchar_t **);
+libedit_private int	tty_rawmode(EditLine *);
+libedit_private int	tty_cookedmode(EditLine *);
+libedit_private int	tty_quotemode(EditLine *);
+libedit_private int	tty_noquotemode(EditLine *);
+libedit_private void	tty_bind_char(EditLine *, int);
 
 typedef struct {
     ttyperm_t t_t;
@@ -474,8 +472,9 @@ typedef struct {
     int t_tabs;
     int t_eight;
     speed_t t_speed;
-    int t_mode;
+    unsigned char t_mode;
     unsigned char t_vdisable;
+    unsigned char t_initialized;
 } el_tty_t;
 
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: readline.h,v 1.34 2013/05/28 00:10:34 christos Exp $	*/
+/*	$NetBSD: readline.h,v 1.41 2016/10/28 18:32:35 christos Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -39,9 +39,8 @@
 /* typedefs */
 typedef int	  Function(const char *, int);
 typedef void	  VFunction(void);
-typedef void	  VCPFunction(char *);
-typedef char	 *CPFunction(const char *, int);
-typedef char	**CPPFunction(const char *, int, int);
+typedef void	  rl_vcpfunc_t(char *);
+typedef char	**rl_completion_func_t(const char *, int, int);
 typedef char     *rl_compentry_func_t(const char *, int);
 typedef int	  rl_command_func_t(int, int);
 
@@ -54,7 +53,7 @@ typedef void *histdata_t;
 
 typedef struct _hist_entry {
 	const char	*line;
-	histdata_t 	 data;
+	histdata_t	 data;
 } HIST_ENTRY;
 
 typedef struct _keymap_entry {
@@ -88,7 +87,7 @@ typedef KEYMAP_ENTRY *Keymap;
 
 #define RUBOUT		0x7f
 #define ABORT_CHAR	CTRL('G')
-#define RL_READLINE_VERSION 	0x0402
+#define RL_READLINE_VERSION	0x0402
 #define RL_PROMPT_START_IGNORE	'\1'
 #define RL_PROMPT_END_IGNORE	'\2'
 
@@ -97,7 +96,7 @@ typedef KEYMAP_ENTRY *Keymap;
 extern "C" {
 #endif
 extern const char	*rl_library_version;
-extern int 		rl_readline_version; 
+extern int		rl_readline_version;
 extern char		*rl_readline_name;
 extern FILE		*rl_instream;
 extern FILE		*rl_outstream;
@@ -108,9 +107,9 @@ extern int		 max_input_history;
 extern char		*rl_basic_word_break_characters;
 extern char		*rl_completer_word_break_characters;
 extern char		*rl_completer_quote_characters;
-extern Function		*rl_completion_entry_function;
+extern rl_compentry_func_t *rl_completion_entry_function;
 extern char		*(*rl_completion_word_break_hook)(void);
-extern CPPFunction	*rl_attempted_completion_function;
+extern rl_completion_func_t *rl_attempted_completion_function;
 extern int		 rl_attempted_completion_over;
 extern int		rl_completion_type;
 extern int		rl_completion_query_items;
@@ -122,6 +121,7 @@ extern Function		*rl_startup_hook;
 extern char		*rl_terminal_name;
 extern int		rl_already_prompted;
 extern char		*rl_prompt;
+extern int		rl_done;
 /*
  * The following is not implemented
  */
@@ -159,6 +159,7 @@ int		 history_total_bytes(void);
 int		 history_set_pos(int);
 HIST_ENTRY	*previous_history(void);
 HIST_ENTRY	*next_history(void);
+HIST_ENTRY     **history_list(void);
 int		 history_search(const char *, int);
 int		 history_search_prefix(const char *, int);
 int		 history_search_pos(const char *, int, int);
@@ -175,7 +176,7 @@ char		*filename_completion_function(const char *, int);
 char		*username_completion_function(const char *, int);
 int		 rl_complete(int, int);
 int		 rl_read_key(void);
-char	       **completion_matches(const char *, CPFunction *);
+char	       **completion_matches(const char *, rl_compentry_func_t *);
 void		 rl_display_match_list(char **, int, int);
 
 int		 rl_insert(int, int);
@@ -184,7 +185,7 @@ void		 rl_reset_terminal(const char *);
 int		 rl_bind_key(int, rl_command_func_t *);
 int		 rl_newline(int, int);
 void		 rl_callback_read_char(void);
-void		 rl_callback_handler_install(const char *, VCPFunction *);
+void		 rl_callback_handler_install(const char *, rl_vcpfunc_t *);
 void		 rl_callback_handler_remove(void);
 void		 rl_redisplay(void);
 int		 rl_get_previous_history(int, int);
@@ -194,14 +195,14 @@ int		 rl_read_init_file(const char *);
 int		 rl_parse_and_bind(const char *);
 int		 rl_variable_bind(const char *, const char *);
 void		 rl_stuff_char(int);
-int		 rl_add_defun(const char *, Function *, int);
+int		 rl_add_defun(const char *, rl_command_func_t *, int);
 HISTORY_STATE	*history_get_history_state(void);
 void		 rl_get_screen_size(int *, int *);
 void		 rl_set_screen_size(int, int);
-char 		*rl_filename_completion_function (const char *, int);
+char		*rl_filename_completion_function (const char *, int);
 int		 _rl_abort_internal(void);
 int		 _rl_qsort_string_compare(char **, char **);
-char 	       **rl_completion_matches(const char *, rl_compentry_func_t *);
+char	       **rl_completion_matches(const char *, rl_compentry_func_t *);
 void		 rl_forced_update_display(void);
 int		 rl_set_prompt(const char *);
 int		 rl_on_new_line(void);
@@ -217,6 +218,8 @@ int		 rl_generic_bind(int, const char *, const char *, Keymap);
 int		 rl_bind_key_in_map(int, rl_command_func_t *, Keymap);
 void		 rl_cleanup_after_signal(void);
 void		 rl_free_line_state(void);
+int		 rl_set_keyboard_input_timeout(int);
+
 #ifdef __cplusplus
 }
 #endif
