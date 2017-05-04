@@ -354,6 +354,17 @@ dnl CPU_TYPE=ppc64
    SHRLIB_EXT=so
    ;;
 
+  m68k*-*-linux*)
+   MAKEFILE_PREFIX=linux_generic
+   INSTALL_PREFIX=linux
+   PLATFORM=LINUX
+   AC_DEFINE(LINUX, 1, [Define this if OS is Linux])
+   AC_DEFINE(M68K, 1, [Define this if CPU is M68k])
+   LOCK_MANAGER_FLG=Y
+   EDITLINE_FLG=Y
+   SHRLIB_EXT=so
+   ;;
+
   *-*-linux* | *-*-gnu*)
     MAKEFILE_PREFIX=linux_generic
     INSTALL_PREFIX=linux
@@ -956,10 +967,11 @@ AC_CHECK_MEMBER([struct dirent.d_type],
 dnl EKU: try to determine the alignment of long and double
 dnl      replaces FB_ALIGNMENT and FB_DOUBLE_ALIGN in src/jrd/common.h
 AC_MSG_CHECKING(alignment of long)
-AC_TRY_RUN([main () {
+AC_TRY_RUN([#include <semaphore.h>
+main () {
   struct s {
     char a;
-    long long b;
+    union { long long x; sem_t y; } b;
   };
   exit((int)&((struct s*)0)->b);
 }], ac_cv_c_alignment=$ac_status, ac_cv_c_alignment=$ac_status)

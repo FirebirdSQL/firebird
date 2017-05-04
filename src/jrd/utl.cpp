@@ -229,8 +229,8 @@ static const TEXT* const impl_implementation[] =
 	"Firebird/linux HPPA",			// 82
 	"Firebird/linux ALPHA",			// 83
 	"Firebird/linux ARM64",			// 84
-	"Firebird/linux PPC64EL"		// 85
-
+	"Firebird/linux PPC64EL",		// 85
+	"Firebird/linux M68K"			// 86
 };
 
 

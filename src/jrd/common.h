@@ -200,7 +200,9 @@
 #define IMPLEMENTATION  isc_info_db_impl_linux_ppc64el	/* 85  */
 #endif /* PPC64EL */
 
-
+#ifdef M68K
+#define IMPLEMENTATION  isc_info_db_impl_linux_m68k	/* 86  */
+#endif /* M68K */
 
 #endif /* LINUX */
 
