@@ -69,6 +69,7 @@ class Decimal64
 
 public:
 	Decimal64 set(int value, DecimalStatus decSt, int scale);
+	Decimal64 set(long value, DecimalStatus decSt, int scale);
 	Decimal64 set(SINT64 value, DecimalStatus decSt, int scale);
 	Decimal64 set(const char* value, DecimalStatus decSt);
 	Decimal64 set(double value, DecimalStatus decSt);
@@ -111,6 +112,7 @@ class Decimal128
 public:
 	Decimal128 set(Decimal64 d64);
 	Decimal128 set(int value, DecimalStatus decSt, int scale);
+	Decimal128 set(long value, DecimalStatus decSt, int scale);
 	Decimal128 set(SINT64 value, DecimalStatus decSt, int scale);
 	Decimal128 set(const char* value, DecimalStatus decSt);
 	Decimal128 set(double value, DecimalStatus decSt);

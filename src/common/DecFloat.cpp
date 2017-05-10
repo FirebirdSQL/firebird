@@ -238,6 +238,18 @@ Decimal64 Decimal64::set(int value, DecimalStatus decSt, int scale)
 	return *this;
 }
 
+Decimal64 Decimal64::set(long value, DecimalStatus decSt, int scale)
+{
+#if SIZEOF_LONG > 4
+	return set((SINT64)value, decSt, scale);
+#else
+	decDoubleFromInt32(&dec, value);
+	setScale(decSt, -scale);
+
+	return *this;
+#endif
+}
+
 Decimal64 Decimal64::set(SINT64 value, DecimalStatus decSt, int scale)
 {
 	{
@@ -462,6 +474,18 @@ Decimal128 Decimal128::set(int value, DecimalStatus decSt, int scale)
 	setScale(decSt, -scale);
 
 	return *this;
+}
+
+Decimal128 Decimal128::set(long value, DecimalStatus decSt, int scale)
+{
+#if SIZEOF_LONG > 4
+	return set((SINT64)value, decSt, scale);
+#else
+	decQuadFromInt32(&dec, value);
+	setScale(decSt, -scale);
+
+	return *this;
+#endif
 }
 
 Decimal128 Decimal128::set(SINT64 value, DecimalStatus decSt, int scale)
