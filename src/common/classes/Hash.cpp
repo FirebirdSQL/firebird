@@ -46,9 +46,9 @@ namespace
 		UCHAR* p;
 		const UCHAR* q = value;
 
+		p = (UCHAR*) &hash_value;
 		while (length >= 4)
 		{
-			p = (UCHAR*) &hash_value;
 			p[0] += q[0];
 			p[1] += q[1];
 			p[2] += q[2];
@@ -56,8 +56,6 @@ namespace
 			length -= 4;
 			q += 4;
 		}
-
-		p = (UCHAR*) &hash_value;
 
 		if (length >= 2)
 		{
