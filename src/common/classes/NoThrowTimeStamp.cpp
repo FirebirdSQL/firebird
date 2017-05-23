@@ -67,6 +67,12 @@ NoThrowTimeStamp NoThrowTimeStamp::getCurrentTimeStamp(const char** error) throw
 	seconds = time_buffer.time;
 	milliseconds = time_buffer.millitm;
 #endif
+	char *source_date_epoch;
+	time_t override_seconds;
+	if ((source_date_epoch = getenv("SOURCE_DATE_EPOCH")) != NULL && (override_seconds = (time_t)strtol(source_date_epoch, NULL, 10)) > 0) {
+		seconds = override_seconds;
+		milliseconds = 0;
+	}
 
 	// NS: Current FB behavior of using server time zone is not appropriate for
 	// distributed applications. We should be storing UTC times everywhere and
