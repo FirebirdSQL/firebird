@@ -231,6 +231,13 @@ ULONG API_ROUTINE gds__free(void* blk)
 static SLONG gds_pid = 0;
 #endif
 
+enum LogLevels
+{
+	LOG_ORIGINAL = 1,
+	LOG_DAILYLOGS = 2,
+	LOG_MACHINEREADABLE = 4
+};
+
 // BLR Pretty print stuff
 
 const int op_line		= 1;
@@ -1184,8 +1191,19 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 #else
 	now = time((time_t *)0);
 #endif
+	int logLevel = Config::getLogLevel();
+	Firebird::PathName name;
 
-	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
+	if (logLevel & LOG_DAILYLOGS)
+	{
+		char buff[20];
+		strftime(buff, 20, "FB-%Y-%m-%d.log", localtime(&now));
+		name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, buff);
+	}
+	else
+	{
+		name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
+	}
 
 #ifdef WIN_NT
 	WaitForSingleObject(CleanupTraceHandles::trace_mutex_handle, INFINITE);
@@ -1210,14 +1228,55 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 		// Now make sure file is correctly positioned after lock is got
 		fseek(file, 0, SEEK_END);
 #endif
-
+			
 		TEXT buffer[MAXPATHLEN];
-		fprintf(file, "\n%s\t%.25s\t", ISC_get_host(buffer, MAXPATHLEN), ctime(&now));
-		va_start(ptr, text);
-		vfprintf(file, text, ptr);
-		va_end(ptr);
-		fprintf(file, "\n\n");
 
+		if (logLevel & LOG_MACHINEREADABLE)
+		{
+			char buff[20];
+			memset(buff, 0, sizeof(buff));
+			strftime(buff, 20, "%Y-%m-%d %H:%M:%S", localtime(&now));
+			fprintf(file, "%s %s ", buff, ISC_get_host(buffer, MAXPATHLEN));
+
+			char* removed = new char[strlen(text)];
+			memset(removed, 0, strlen(text));
+			int i = 0, rPos = 0;
+			char lastChar = ' ';
+
+			while (text[i] != '\0')
+			{
+				if (text[i] == '\t' || (lastChar == ' ' && text[i] == ' '))
+				{
+					i++;
+					lastChar = ' ';
+					continue;
+				}
+
+				if (text[i] == '\n')
+					removed[rPos] = ' ';
+				else
+					removed[rPos] = text[i];
+
+				lastChar = text[i];
+				rPos++;
+				i++;
+			}
+
+			va_start(ptr, removed);
+			vfprintf(file, removed, ptr);
+			va_end(ptr);
+			fprintf(file, "\n");
+
+			delete removed;
+		}
+		else // default behaviour
+		{
+			fprintf(file, "\n%s\t%.25s\t", ISC_get_host(buffer, MAXPATHLEN), ctime(&now));
+			va_start(ptr, text);
+			vfprintf(file, text, ptr);
+			va_end(ptr);
+			fprintf(file, "\n\n");
+		}
 		// This will release file lock set in posix case
 		fclose(file);
 	}

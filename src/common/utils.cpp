@@ -1039,8 +1039,11 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 #endif
 			break;
 
-		case Firebird::IConfigManager::DIR_CONF:
 		case Firebird::IConfigManager::DIR_LOG:
+			s = "logs";
+			break;
+			
+		case Firebird::IConfigManager::DIR_CONF:
 		case Firebird::IConfigManager::DIR_GUARD:
 		case Firebird::IConfigManager::DIR_SECDB:
 			s = "";

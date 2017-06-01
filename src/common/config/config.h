@@ -141,6 +141,7 @@ public:
 		KEY_IPV6_V6ONLY,
 		KEY_WIRE_COMPRESSION,
 		KEY_ENCRYPT_SECURITY_DATABASE,
+		KEY_LOG_LEVEL,
 		MAX_CONFIG_KEY		// keep it last
 	};
 
@@ -346,6 +347,8 @@ public:
 	bool getWireCompression() const;
 
 	bool getCryptSecurityDatabase() const;
+
+	static int getLogLevel();
 };
 
 // Implementation of interface to access master configuration file

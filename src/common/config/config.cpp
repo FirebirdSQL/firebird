@@ -195,7 +195,8 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_BOOLEAN,		"RemoteAccess",				(ConfigValue) true},
 	{TYPE_BOOLEAN,		"IPv6V6Only",				(ConfigValue) false},
 	{TYPE_BOOLEAN,		"WireCompression",			(ConfigValue) false},
-	{TYPE_BOOLEAN,		"AllowEncryptedSecurityDatabase", (ConfigValue) false}
+	{TYPE_BOOLEAN,		"AllowEncryptedSecurityDatabase", (ConfigValue) false},
+	{TYPE_INTEGER,		"LogLevel",					(ConfigValue) 1 }
 };
 
 /******************************************************************************
@@ -795,4 +796,9 @@ bool Config::getWireCompression() const
 bool Config::getCryptSecurityDatabase() const
 {
 	return get<bool>(KEY_ENCRYPT_SECURITY_DATABASE);
+}
+
+int Config::getLogLevel()
+{
+	return (int)getDefaultConfig()->values[KEY_LOG_LEVEL];
 }
