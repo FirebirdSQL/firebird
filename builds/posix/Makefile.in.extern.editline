@@ -63,7 +63,7 @@ libeditline : $(LIB)/libedit.a
 
 $(LIB)/libedit.a:
 	AR=ar
-	cd $(ROOT)/extern/editline; chmod +x configure; ./configure --enable-static --disable-shared --enable-widec
+	cd $(ROOT)/extern/editline; chmod +x configure; ./configure --enable-static --disable-shared
 	$(MAKE) -C $(ROOT)/extern/editline
 	cp $(ROOT)/extern/editline/src/libedit.a $(LIB)
 

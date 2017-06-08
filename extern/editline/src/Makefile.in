@@ -16,38 +16,37 @@
 
 build_triplet = @build@
 host_triplet = @host@
-@WIDECHAR_TRUE@append_1 = tokenizern.c historyn.c
+@append_1 =
 @HAVE_STRLCPY_FALSE@append_2 = strlcpy.c
 @HAVE_STRLCAT_FALSE@append_3 = strlcat.c
 @HAVE_VIS_FALSE@append_4 = vis.c
 @HAVE_UNVIS_FALSE@append_5 = unvis.c
-@WIDECHAR_TRUE@append_6 = eln.c
+@append_6 = eln.c
 
 CONFIG_HEADER = ../config.h
 
 SOURCES_DIST = chared.c common.c el.c emacs.c hist.c \
 	keymacro.c map.c chartype.c parse.c prompt.c read.c refresh.c \
-	search.c sig.c terminal.c tty.c vi.c fgetln.c wcsdup.c \
+	search.c sig.c terminal.c tty.c vi.c wcsdup.c \
 	tokenizer.c history.c filecomplete.c readline.c chared.h el.h \
 	hist.h histedit.h keymacro.h map.h chartype.h parse.h prompt.h \
 	read.h refresh.h search.h sig.h sys.h terminal.h tty.h vis.h \
 	filecomplete.h editline/readline.h strlcpy.c strlcat.c vis.c \
-	unvis.c eln.c
+	unvis.c eln.c tokenizern.c historyn.c
 
 @HAVE_STRLCPY_FALSE@objects_1 = strlcpy.o
 @HAVE_STRLCAT_FALSE@objects_2 = strlcat.o
 @HAVE_VIS_FALSE@objects_3 = vis.o
 @HAVE_UNVIS_FALSE@objects_4 = unvis.o
-@WIDECHAR_TRUE@objects_5 = eln.o
+@objects_5 = eln.o
 OBJECTS1 = chared.o common.o el.o emacs.o hist.o \
 	keymacro.o map.o chartype.o parse.o prompt.o read.o \
-	refresh.o search.o sig.o terminal.o tty.o vi.o fgetln.o \
+	refresh.o search.o sig.o terminal.o tty.o vi.o  \
 	wcsdup.o tokenizer.o history.o filecomplete.o readline.o \
 	$(objects_1) $(objects_2) $(objects_3) \
 	$(objects_4) $(objects_5)
-@WIDECHAR_TRUE@objects_6 = tokenizern.o historyn.o
-objects_7 = fcns.o help.o $(objects_6)
-OBJECTS2 = $(objects_7)
+objects_6 = tokenizern.o historyn.o
+OBJECTS2 = $(objects_6)
 OBJECTS = $(OBJECTS1) $(OBJECTS2)
 
 DEFAULT_INCLUDES = -I. -I..
@@ -93,19 +92,18 @@ VERSION = @VERSION@
 
 srcdir = .
 
-BUILT_SOURCES = vi.h emacs.h common.h fcns.h help.h fcns.c help.c \
-	$(append_1)
-AHDR = vi.h emacs.h common.h 
+BUILT_SOURCES = vi.h emacs.h common.h fcns.h help.h func.h
+AHDR = vi.h emacs.h common.h
 ASRC = $(srcdir)/vi.c $(srcdir)/emacs.c $(srcdir)/common.c
 CLEANFILES = $(BUILT_SOURCES)
 LIBRARY = libedit.a
 libedit_la_SOURCES = chared.c common.c el.c emacs.c hist.c keymacro.c \
 	map.c chartype.c parse.c prompt.c read.c refresh.c search.c \
-	sig.c terminal.c tty.c vi.c fgetln.c wcsdup.c tokenizer.c \
+	sig.c terminal.c tty.c vi.c wcsdup.c tokenizer.c \
 	history.c filecomplete.c readline.c chared.h el.h hist.h \
 	histedit.h keymacro.h map.h chartype.h parse.h prompt.h read.h \
 	refresh.h search.h sig.h sys.h terminal.h tty.h vis.h \
-	filecomplete.h editline/readline.h $(append_2) \
+	filecomplete.h editline/readline.h $(append_1) $(append_2) \
 	$(append_3) $(append_4) $(append_5) \
 	$(append_6)
 
@@ -165,17 +163,8 @@ fcns.h: Makefile $(AHDR)
 help.h: Makefile $(ASRC)
 	AWK=$(AWK) sh $(srcdir)/makelist -bh $(ASRC) > $@
 
-fcns.c: Makefile $(AHDR)
+func.h: Makefile $(AHDR)
 	AWK=$(AWK) sh $(srcdir)/makelist -fc $(AHDR) > $@
-
-help.c: Makefile $(ASRC)
-	AWK=$(AWK) sh $(srcdir)/makelist -bc $(ASRC) > $@
-
-tokenizern.c: Makefile $(srcdir)/tokenizer.c
-	AWK=$(AWK) sh $(srcdir)/makelist -n $(srcdir)/tokenizer.c > $@
-
-historyn.c: Makefile $(srcdir)/history.c
-	AWK=$(AWK) sh $(srcdir)/makelist -n $(srcdir)/history.c > $@
 
 Dependencies = $(OBJECTS:.o=.d)
 -include $(Dependencies)
@@ -183,4 +172,3 @@ Dependencies = $(OBJECTS:.o=.d)
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.
 .NOEXPORT:
-
