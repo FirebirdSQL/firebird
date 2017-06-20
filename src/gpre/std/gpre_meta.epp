@@ -884,11 +884,20 @@ USHORT MET_get_dtype(USHORT blr_dtype, USHORT sub_type, USHORT char_length, USHO
 	{
 	case blr_varying:
 	case blr_text:
-		if (char_length != 0 && sub_type != dsc_text_type_none)
+		if (char_length != 0 && sub_type >= dsc_text_type_metadata) // subtypes below are single byte characters
 			l = char_length * 4;
 
 		dtype = dtype_text;
-		if (gpreGlob.sw_cstring && sub_type != dsc_text_type_fixed)
+		if (sub_type == dsc_text_type_fixed)
+		{
+			if (blr_dtype == blr_varying)
+			{
+				dtype = dtype_varying;
+				// Round up size of field to get right alignment and workaround message length mismatch error
+				l = (l + 1) & ~1U;
+			}
+		}
+		else if (gpreGlob.sw_cstring)
 		{
 			++l;
 			dtype = dtype_cstring;
@@ -897,7 +906,7 @@ USHORT MET_get_dtype(USHORT blr_dtype, USHORT sub_type, USHORT char_length, USHO
 
 	case blr_cstring:
 		dtype = dtype_cstring;
-		if (char_length != 0 && sub_type != dsc_text_type_none)
+		if (char_length != 0 && sub_type >= dsc_text_type_metadata)
 			l = char_length * 4;
 		++l;
 		break;

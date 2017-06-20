@@ -788,7 +788,7 @@ static void cmp_field( gpre_req* request, const gpre_fld* field,
 		break;
 
 	case dtype_varying:
-		if (!(field->fld_flags & FLD_charset) && field->fld_ttype)
+		if (!(field->fld_flags & FLD_charset) && field->fld_ttype >= dsc_text_type_metadata)
 		{
 			request->add_byte(blr_varying);
 			request->add_word(field->fld_length);
@@ -1731,17 +1731,20 @@ static gpre_port* make_port( gpre_req* request, ref* reference)
 			CPR_bugcheck("missing prototype field for value");
 		if (temp->ref_value && (temp->ref_flags & REF_array_elem))
 			field = field->fld_array;
-		if ((field->fld_length & 7) == 0)
+		FLD_LENGTH len = field->fld_length;
+		if (field->fld_dtype == dtype_varying)
+			len += sizeof(USHORT);
+		if ((len & 7) == 0)
 		{
 			temp->ref_next = alignments[2];
 			alignments[2] = temp;
 		}
-		else if ((field->fld_length & 3) == 0)
+		else if ((len & 3) == 0)
 		{
 			temp->ref_next = alignments[1];
 			alignments[1] = temp;
 		}
-		else if ((field->fld_length & 1) == 0)
+		else if ((len & 1) == 0)
 		{
 			temp->ref_next = alignments[0];
 			alignments[0] = temp;
@@ -1774,7 +1777,10 @@ static gpre_port* make_port( gpre_req* request, ref* reference)
 #ifdef GPRE_FORTRAN
 		reference->ref_offset = port->por_length;
 #endif
-		port->por_length += field->fld_length;
+		FLD_LENGTH len = field->fld_length;
+		if (field->fld_dtype == dtype_varying)
+			len += sizeof(USHORT);
+		port->por_length += len;
 	}
 
 	return port;

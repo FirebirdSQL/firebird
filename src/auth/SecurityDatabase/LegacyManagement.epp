@@ -227,6 +227,15 @@ int SecurityDatabaseManagement::release()
 }
 
 #define STR_STORE(to, from) fb_utils::copy_terminate(to, from, sizeof(to))
+#define STR_VSTORE(to, from) string2vary(&to, from, sizeof(to))
+static void string2vary(void* to, Firebird::string& from, size_t to_size)
+{
+	size_t len = MIN(to_size - sizeof(USHORT), from.size());
+	paramvary* v = reinterpret_cast<paramvary*>(to);
+	v->vary_length = len;
+	memcpy(v->vary_string, from.c_str(), len);
+}
+
 
 int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebird::IUser* user,
 	Firebird::IListUsers* callback)
@@ -371,7 +380,7 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 				{
 					ENC_crypt(encrypted1, sizeof encrypted1, user->password()->get(), LEGACY_PASSWORD_SALT);
 					LegacyHash::hash(encrypted2, user->userName()->get(), &encrypted1[2]);
-					STR_STORE(U.PLG$PASSWD, encrypted2.c_str());
+					STR_VSTORE(U.PLG$PASSWD, encrypted2);
 					U.PLG$PASSWD.NULL = ISC_FALSE;
 				}
 				else
@@ -456,7 +465,7 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 					{
 						ENC_crypt(encrypted1, sizeof encrypted1, user->password()->get(), LEGACY_PASSWORD_SALT);
 						LegacyHash::hash(encrypted2, user->userName()->get(), &encrypted1[2]);
-						STR_STORE(U.PLG$PASSWD, encrypted2.c_str());
+						STR_VSTORE(U.PLG$PASSWD, encrypted2);
 						U.PLG$PASSWD.NULL = ISC_FALSE;
 					}
 					else if (user->password()->specified())
