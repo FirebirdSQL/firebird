@@ -4062,6 +4062,7 @@ namespace Firebird
 		{
 			unsigned (CLOOP_CARG *getCount)(ITraceParams* self) throw();
 			const dsc* (CLOOP_CARG *getParam)(ITraceParams* self, unsigned idx) throw();
+			const char* (CLOOP_CARG *getTextUTF8)(ITraceParams* self, unsigned idx) throw();
 		};
 
 	protected:
@@ -4086,6 +4087,12 @@ namespace Firebird
 		const dsc* getParam(unsigned idx)
 		{
 			const dsc* ret = static_cast<VTable*>(this->cloopVTable)->getParam(this, idx);
+			return ret;
+		}
+
+		const char* getTextUTF8(unsigned idx)
+		{
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getTextUTF8(this, idx);
 			return ret;
 		}
 	};
@@ -13666,6 +13673,7 @@ namespace Firebird
 					this->version = Base::VERSION;
 					this->getCount = &Name::cloopgetCountDispatcher;
 					this->getParam = &Name::cloopgetParamDispatcher;
+					this->getTextUTF8 = &Name::cloopgetTextUTF8Dispatcher;
 				}
 			} vTable;
 
@@ -13697,6 +13705,19 @@ namespace Firebird
 				return static_cast<const dsc*>(0);
 			}
 		}
+
+		static const char* CLOOP_CARG cloopgetTextUTF8Dispatcher(ITraceParams* self, unsigned idx) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getTextUTF8(idx);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceParams> > >
@@ -13714,6 +13735,7 @@ namespace Firebird
 
 		virtual unsigned getCount() = 0;
 		virtual const dsc* getParam(unsigned idx) = 0;
+		virtual const char* getTextUTF8(unsigned idx) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

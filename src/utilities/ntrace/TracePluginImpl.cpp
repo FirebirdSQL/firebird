@@ -765,19 +765,22 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 			{
 				// Handle potentially long string values
 				case dtype_text:
-					formatStringArgument(paramvalue,
-						parameters->dsc_address, parameters->dsc_length);
+				{
+					const char* text = params->getTextUTF8(i);
+					formatStringArgument(paramvalue, (UCHAR*)text, strlen(text));
 					break;
+				}
 				case dtype_cstring:
 					formatStringArgument(paramvalue,
 						parameters->dsc_address,
 						strlen(reinterpret_cast<const char*>(parameters->dsc_address)));
 					break;
 				case dtype_varying:
-					formatStringArgument(paramvalue,
-						parameters->dsc_address + 2,
-						*(USHORT*)parameters->dsc_address);
+				{
+					const char* text = params->getTextUTF8(i);
+					formatStringArgument(paramvalue, (UCHAR*)text, strlen(text));
 					break;
+				}
 
 				// Handle quad
 				case dtype_quad:
