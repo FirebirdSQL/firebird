@@ -94,10 +94,11 @@ eof
 
 createMakeVersion() {
 
+TmpDir="${TMPDIR:-/tmp}"
 OdsH="${Root}/src/jrd/ods.h"
-Mini="/tmp/miniods.h"
-TestCpp="/tmp/test.cpp"
-AOut="/tmp/a.out"
+Mini="${TmpDir}/miniods.h"
+TestCpp="${TmpDir}/test.cpp"
+AOut="${TmpDir}/a.out"
 
 grep ODS_VERSION $OdsH | grep -v ENCODE_ODS >$Mini
 
