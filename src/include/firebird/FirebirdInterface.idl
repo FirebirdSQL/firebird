@@ -1048,7 +1048,9 @@ interface TraceParams : Versioned
 {
 	uint getCount();
 	const dsc* getParam(uint idx);
-	const string getTextUTF8(uint idx);
+
+version:
+	const string getTextUTF8(Status status, uint idx);
 }
 
 interface TraceStatement : Versioned

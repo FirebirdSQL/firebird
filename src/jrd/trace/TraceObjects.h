@@ -206,7 +206,7 @@ private:
 
 		FB_SIZE_T getCount();
 		const dsc* getParam(FB_SIZE_T idx);
-		const char* getTextUTF8(FB_SIZE_T idx);
+		const char* getTextUTF8(Firebird::CheckStatusWrapper* status, FB_SIZE_T idx);
 
 	private:
 		void fillParams();
@@ -287,7 +287,7 @@ public:
 	// TraceParams implementation
 	FB_SIZE_T getCount();
 	const dsc* getParam(FB_SIZE_T idx);
-	const char* getTextUTF8(FB_SIZE_T idx);
+	const char* getTextUTF8(Firebird::CheckStatusWrapper* status, FB_SIZE_T idx);
 
 private:
 	TraceDescriptors* m_descs;

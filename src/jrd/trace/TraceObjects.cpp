@@ -280,7 +280,7 @@ const dsc* TraceSQLStatementImpl::DSQLParamsImpl::getParam(FB_SIZE_T idx)
 	return NULL;
 }
 
-const char* TraceSQLStatementImpl::DSQLParamsImpl::getTextUTF8(FB_SIZE_T idx)
+const char* TraceSQLStatementImpl::DSQLParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T idx)
 {
 	const dsc* param = getParam(idx);
 	UCHAR* address;
@@ -334,7 +334,7 @@ const dsc* TraceParamsImpl::getParam(FB_SIZE_T idx)
 	return m_descs->getParam(idx);
 }
 
-const char* TraceParamsImpl::getTextUTF8(FB_SIZE_T idx)
+const char* TraceParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T idx)
 {
 	const dsc* param = getParam(idx);
 	UCHAR* address;
