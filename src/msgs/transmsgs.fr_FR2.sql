@@ -2395,7 +2395,7 @@ ERROR: Backup incomplete', NULL, NULL, 12, 229, '#', NULL, NULL, 'truser', '1000
 ('Current memory = !c
 Delta memory = !d
 Max memory = !x
-Elapsed time= !e sec
+Elapsed time = !e sec
 ', NULL, NULL, 17, 44, '#', NULL, NULL, 'truser', '1000-01-01 00:00:00')
 ('Cpu = !u sec
 Buffers = !b

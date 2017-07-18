@@ -7704,7 +7704,7 @@ static processing_state print_performance(const SINT64* perf_before)
 	{
 		TEXT report_1[MSG_LENGTH];
 		IUTILS_msg_get(REPORT_NEW1, report_1);
-		// Current memory = !\nDelta memory = !\nMax memory = !\nElapsed time= ~ sec\n
+		// Current memory = !\nDelta memory = !\nMax memory = !\nElapsed time = ~ sec\n
 		diag->assign(report_1);
 
 #ifndef WIN_NT

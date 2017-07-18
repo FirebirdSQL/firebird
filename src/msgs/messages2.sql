@@ -2934,7 +2934,7 @@ This message begins with a TAB (''\t'') and ends with a newline (''\n'').', 17, 
 ('REPORT1', 'process_statement', 'isql.e', 'Each of these 4 items is followed by a newline (''\n'').', 17, 44, NULL, 'Current memory = !c
 Delta memory = !d
 Max memory = !x
-Elapsed time= !e sec
+Elapsed time = !e sec
 ', NULL, NULL);
 ('REPORT2', 'process_statement', 'isql.e', 'Each of these 5 items is followed by a newline (''\n'').', 17, 45, NULL, 'Cpu = !u sec
 Buffers = !b
@@ -3082,7 +3082,7 @@ Fetches = !f', NULL, NULL);
 ('REPORT_NEW1', 'print_performance', 'isql.epp', 'Each of these 4 items is followed by a newline (''\n'').', 17, 181, NULL, 'Current memory = !
 Delta memory = !
 Max memory = !
-Elapsed time= ~ sec
+Elapsed time = ~ sec
 ', NULL, NULL);
 ('REPORT_NEW2', 'print_performance', 'isql.epp', 'Each of these 5 items is followed by a newline (''\n'').', 17, 182, NULL, 'Cpu = ~ sec
 ', NULL, NULL);
