@@ -280,6 +280,33 @@ const dsc* TraceSQLStatementImpl::DSQLParamsImpl::getParam(FB_SIZE_T idx)
 	return NULL;
 }
 
+const char* TraceSQLStatementImpl::DSQLParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T idx)
+{
+	const dsc* param = getParam(idx);
+	UCHAR* address;
+
+	switch (param->dsc_dtype)
+	{
+	case dtype_text:
+		address = param->dsc_address;
+		break;
+
+	case dtype_varying:
+		address = param->dsc_address + sizeof(USHORT);
+		break;
+
+	default:
+		return NULL;
+	}
+
+	string src(address);
+
+	if (DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
+		return temp_utf8_text.c_str();
+	else
+		return (const char*)address;
+}
+
 
 /// TraceFailedSQLStatement
 
@@ -305,6 +332,33 @@ FB_SIZE_T TraceParamsImpl::getCount()
 const dsc* TraceParamsImpl::getParam(FB_SIZE_T idx)
 {
 	return m_descs->getParam(idx);
+}
+
+const char* TraceParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T idx)
+{
+	const dsc* param = getParam(idx);
+	UCHAR* address;
+
+	switch (param->dsc_dtype)
+	{
+	case dtype_text:
+		address = param->dsc_address;
+		break;
+
+	case dtype_varying:
+		address = param->dsc_address + sizeof(USHORT);
+		break;
+
+	default:
+		return NULL;
+	}
+
+	string src(address);
+
+	if (DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
+		return temp_utf8_text.c_str();
+	else
+		return (const char*)address;
 }
 
 

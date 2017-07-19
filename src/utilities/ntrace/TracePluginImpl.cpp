@@ -46,6 +46,7 @@
 #include "../../dsql/sqlda_pub.h"
 #include "../../common/classes/ImplementHelper.h"
 #include "../../common/SimpleStatusVector.h"
+#include "../../jrd/status.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -789,19 +790,41 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 			{
 				// Handle potentially long string values
 				case dtype_text:
-					formatStringArgument(paramvalue,
-						parameters->dsc_address, parameters->dsc_length);
+				{
+					FbLocalStatus status;
+					const char* text = params->getTextUTF8(&status, i);
+					
+					if (status->getState() & IStatus::STATE_ERRORS)
+					{
+						formatStringArgument(paramvalue,
+							parameters->dsc_address, parameters->dsc_length);
+					}
+					else
+						formatStringArgument(paramvalue, (UCHAR*)text, strlen(text));
+
 					break;
+				}
 				case dtype_cstring:
 					formatStringArgument(paramvalue,
 						parameters->dsc_address,
 						strlen(reinterpret_cast<const char*>(parameters->dsc_address)));
 					break;
 				case dtype_varying:
-					formatStringArgument(paramvalue,
-						parameters->dsc_address + 2,
-						*(USHORT*)parameters->dsc_address);
+				{
+					FbLocalStatus status;
+					const char* text = params->getTextUTF8(&status, i);
+
+					if (status->getState() & IStatus::STATE_ERRORS)
+					{
+						formatStringArgument(paramvalue,
+							parameters->dsc_address + 2,
+							*(USHORT*)parameters->dsc_address);
+					}
+					else
+						formatStringArgument(paramvalue, (UCHAR*)text, strlen(text));
+
 					break;
+				}
 
 				// Handle quad
 				case dtype_quad:

@@ -4259,6 +4259,7 @@ namespace Firebird
 		{
 			unsigned (CLOOP_CARG *getCount)(ITraceParams* self) throw();
 			const dsc* (CLOOP_CARG *getParam)(ITraceParams* self, unsigned idx) throw();
+			const char* (CLOOP_CARG *getTextUTF8)(ITraceParams* self, IStatus* status, unsigned idx) throw();
 		};
 
 	protected:
@@ -4272,7 +4273,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 2;
+		static const unsigned VERSION = 3;
 
 		unsigned getCount()
 		{
@@ -4283,6 +4284,20 @@ namespace Firebird
 		const dsc* getParam(unsigned idx)
 		{
 			const dsc* ret = static_cast<VTable*>(this->cloopVTable)->getParam(this, idx);
+			return ret;
+		}
+
+		template <typename StatusType> const char* getTextUTF8(StatusType* status, unsigned idx)
+		{
+			if (cloopVTable->version < 3)
+			{
+				StatusType::setVersionError(status, "ITraceParams", cloopVTable->version, 3);
+				StatusType::checkException(status);
+				return 0;
+			}
+			StatusType::clearException(status);
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getTextUTF8(this, status, idx);
+			StatusType::checkException(status);
 			return ret;
 		}
 	};
@@ -14254,6 +14269,7 @@ namespace Firebird
 					this->version = Base::VERSION;
 					this->getCount = &Name::cloopgetCountDispatcher;
 					this->getParam = &Name::cloopgetParamDispatcher;
+					this->getTextUTF8 = &Name::cloopgetTextUTF8Dispatcher;
 				}
 			} vTable;
 
@@ -14285,6 +14301,21 @@ namespace Firebird
 				return static_cast<const dsc*>(0);
 			}
 		}
+
+		static const char* CLOOP_CARG cloopgetTextUTF8Dispatcher(ITraceParams* self, IStatus* status, unsigned idx) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::getTextUTF8(&status2, idx);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<const char*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceParams> > >
@@ -14302,6 +14333,7 @@ namespace Firebird
 
 		virtual unsigned getCount() = 0;
 		virtual const dsc* getParam(unsigned idx) = 0;
+		virtual const char* getTextUTF8(StatusType* status, unsigned idx) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

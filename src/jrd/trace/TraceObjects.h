@@ -206,6 +206,7 @@ private:
 
 		FB_SIZE_T getCount();
 		const dsc* getParam(FB_SIZE_T idx);
+		const char* getTextUTF8(Firebird::CheckStatusWrapper* status, FB_SIZE_T idx);
 
 	private:
 		void fillParams();
@@ -213,6 +214,7 @@ private:
 		const dsql_req* const m_stmt;
 		const Firebird::Array<dsql_par*>* m_params;
 		Firebird::HalfStaticArray<dsc, 16> m_descs;
+		Firebird::string temp_utf8_text;
 	};
 
 	void fillPlan(bool explained);
@@ -285,9 +287,11 @@ public:
 	// TraceParams implementation
 	FB_SIZE_T getCount();
 	const dsc* getParam(FB_SIZE_T idx);
+	const char* getTextUTF8(Firebird::CheckStatusWrapper* status, FB_SIZE_T idx);
 
 private:
 	TraceDescriptors* m_descs;
+	Firebird::string temp_utf8_text;
 };
 
 
