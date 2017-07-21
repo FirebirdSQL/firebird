@@ -1516,24 +1516,18 @@ void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
 	if (!sql_length)
 		return;
 
-	if (config.include_filter.hasData() || config.exclude_filter.hasData())
+	if (config.include_filter.hasData())
 	{
-		const char* sqlUtf8 = statement->getTextUTF8();
-		FB_SIZE_T utf8_length = fb_strlen(sqlUtf8);
+		include_matcher->reset();
+		include_matcher->process((const UCHAR*)sql, sql_length);
+		need_statement = include_matcher->result();
+	}
 
-		if (config.include_filter.hasData())
-		{
-			include_matcher->reset();
-			include_matcher->process((const UCHAR*) sqlUtf8, utf8_length);
-			need_statement = include_matcher->result();
-		}
-
-		if (need_statement && config.exclude_filter.hasData())
-		{
-			exclude_matcher->reset();
-			exclude_matcher->process((const UCHAR*) sqlUtf8, utf8_length);
-			need_statement = !exclude_matcher->result();
-		}
+	if (need_statement && config.exclude_filter.hasData())
+	{
+		exclude_matcher->reset();
+		exclude_matcher->process((const UCHAR*)sql, sql_length);
+		need_statement = !exclude_matcher->result();
 	}
 
 	if (need_statement)
