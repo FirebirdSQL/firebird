@@ -498,9 +498,13 @@ using Firebird::MemoryPool;
 
 inline static MemoryPool* getDefaultMemoryPool() { return Firebird::MemoryPool::processMemoryPool; }
 
+#if (( ! __GNUC__ ) || ( __GNUC__ < 6 ))
+
 // Global versions of operators new and delete
 void* operator new(size_t s) THROW_BAD_ALLOC;
 void* operator new[](size_t s) THROW_BAD_ALLOC;
+
+#endif
 
 void operator delete(void* mem) throw();
 void operator delete[](void* mem) throw();

@@ -2884,9 +2884,9 @@ static USHORT get_prot_mask( const TEXT * relation, TEXT * field)
 		blr_parameter, 0, 0, 0,
 		blr_parameter, 0, 1, 0,
 		blr_parameter, 1, 0, 0,
-		blr_end,
-		blr_end,
-		blr_end,
+		static_cast<SCHAR>(blr_end),
+		static_cast<SCHAR>(blr_end),
+		static_cast<SCHAR>(blr_end),
 		blr_eoc
 	};
 	static FB_API_HANDLE req_handle;
