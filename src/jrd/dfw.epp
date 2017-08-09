@@ -1294,6 +1294,26 @@ void DFW_delete_deferred( jrd_tra* transaction, SavNumber sav_number)
 	for (DfwHash::iterator i(h->hash); i.hasData();)
 	{
 		DeferredWork* work(i);
+		// If the index deleting was rolled back,
+		// We need to deque the index lock from lock manager
+		if (work->dfw_type == dfw_delete_index ||
+			work->dfw_type == dfw_delete_expression_index)
+		{
+			DeferredWork* w = work;
+			const DeferredWork* arg = w->findArg(dfw_arg_index_name);
+			fb_assert(arg);
+			fb_assert(arg->dfw_id > 0);
+			const USHORT id = arg->dfw_id - 1;
+
+			Jrd::thread_db* tdbb = JRD_get_thread_data();
+			jrd_rel* relation = MET_lookup_relation_id(tdbb, w->dfw_id, false);
+
+			IndexLock* index = CMP_get_index_lock(tdbb, relation, id);
+
+			// mark index as non deleted and make it shared
+			index->idl_deletion = false;
+			LCK_lock(tdbb, index->idl_lock, LCK_SR, LCK_WAIT);
+		}
 		++i;
 		delete work;
 	}

@@ -73,6 +73,8 @@ static bool internal_enqueue(thread_db*, CheckStatusWrapper*, Lock*, USHORT, SSH
 static SLONG get_owner_handle(thread_db* tdbb, enum lck_t lock_type);
 static lck_owner_t get_owner_type(enum lck_t lock_type);
 
+static Firebird::GlobalPtr<Firebird::Array<Jrd::Lock*> > index_locks;
+
 #ifdef DEBUG_LCK
 namespace
 {

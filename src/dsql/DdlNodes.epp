@@ -62,6 +62,8 @@
 #include "../common/StatusArg.h"
 #include "../auth/SecureRemotePassword/Message.h"
 #include "../jrd/Mapping.h"
+#include "../jrd/btr_proto.h"
+#include "../jrd/lck_proto.h"
 
 namespace Jrd {
 
@@ -110,6 +112,7 @@ static void updateRdbFields(const TypeClause* type,
 	SSHORT& fieldPrecisionNull, SSHORT& fieldPrecision,
 	SSHORT& collationIdNull, SSHORT& collationId,
 	SSHORT& segmentLengthNull, SSHORT& segmentLength);
+static int blocking_ast_index(void* ast_object);
 
 static const char* const CHECK_CONSTRAINT_EXCEPTION = "check_constraint";
 
@@ -9794,6 +9797,35 @@ bool DropIndexNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 	return true;
 }
 
+static int blocking_ast_index(void* ast_object)
+{
+/**************************************
+ *
+ *	b l o c k i n g _ a s t _ i n d e x
+ *
+ **************************************
+ *
+ * Functional description
+ *	Someone is trying to get lock on index.
+ *	If index is not on deletion, relese the lock.
+ *
+ **************************************/
+	IndexLock* const index = static_cast<IndexLock*>(ast_object);
+	try
+	{
+		if (!index->idl_deletion && index->idl_lock)
+		{
+			Database* const dbb = index->idl_lock->lck_dbb;
+			AsyncContextHolder tdbb(dbb, FB_FUNCTION, index->idl_lock);
+			LCK_release(tdbb, index->idl_lock);
+		}
+	}
+	catch (const Exception&)
+	{} // no-op
+
+	return 0;
+}
+
 void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
 	// run all statements under savepoint control
@@ -9801,6 +9833,28 @@ void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 
 	AutoCacheRequest request(tdbb, drq_e_indices, DYN_REQUESTS);
 	bool found = false;
+
+	Jrd::IndexStatus idx_state;
+	SLONG idx_id;
+	SLONG rel_id;
+
+	// Need to create lock on index. This lock guarantees
+	// that index which are deleted and should not be used in future queries
+	idx_id = MET_lookup_index_name(tdbb, name, &rel_id, &idx_state);
+
+	if (idx_id != -1)
+	{
+		jrd_rel* relation = MET_lookup_relation_id(tdbb, rel_id, true);
+		IndexLock* index = CMP_get_index_lock(tdbb, relation, idx_id);
+		if (index)
+		{
+			// mark the index to deletion stage and get exclusive lock on it
+			index->idl_lock->lck_ast = blocking_ast_index;
+			index->idl_lock->lck_object = index;
+			index->idl_deletion = true;
+			LCK_lock(tdbb, index->idl_lock, LCK_EX, LCK_WAIT);
+		}
+	}
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES

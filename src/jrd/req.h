@@ -324,6 +324,7 @@ public:
 	jrd_rel*	idl_relation;	// Parent relation
 	USHORT		idl_id;			// Index id
 	USHORT		idl_count;		// Use count
+	bool		idl_deletion;	// Deletion stage
 };
 
 } //namespace Jrd
