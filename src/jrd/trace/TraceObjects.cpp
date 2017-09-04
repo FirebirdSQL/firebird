@@ -284,27 +284,30 @@ const char* TraceSQLStatementImpl::DSQLParamsImpl::getTextUTF8(CheckStatusWrappe
 {
 	const dsc* param = getParam(idx);
 	UCHAR* address;
+	USHORT length;
 
 	switch (param->dsc_dtype)
 	{
 	case dtype_text:
 		address = param->dsc_address;
+		length = param->dsc_length;
 		break;
 
 	case dtype_varying:
 		address = param->dsc_address + sizeof(USHORT);
+		length = *(USHORT*)param->dsc_address;
 		break;
 
 	default:
 		return NULL;
 	}
 
-	string src(address);
+	string src(address, length);
 
-	if (DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
-		return temp_utf8_text.c_str();
-	else
-		return (const char*)address;
+	if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
+		temp_utf8_text = src;
+
+	return temp_utf8_text.c_str();
 }
 
 
@@ -338,27 +341,30 @@ const char* TraceParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T i
 {
 	const dsc* param = getParam(idx);
 	UCHAR* address;
+	USHORT length;
 
 	switch (param->dsc_dtype)
 	{
 	case dtype_text:
 		address = param->dsc_address;
+		length = param->dsc_length;
 		break;
 
 	case dtype_varying:
 		address = param->dsc_address + sizeof(USHORT);
+		length = *(USHORT*)param->dsc_address;
 		break;
 
 	default:
 		return NULL;
 	}
 
-	string src(address);
+	string src(address, length);
 
-	if (DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
-		return temp_utf8_text.c_str();
-	else
-		return (const char*)address;
+	if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
+		temp_utf8_text = src;
+
+	return temp_utf8_text.c_str();
 }
 
 
