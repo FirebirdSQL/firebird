@@ -1223,7 +1223,7 @@ public:
 	}
 };
 
-IDecFixed* UtilInterface::getDecFixed(CheckStatusWrapper* status)
+IDecFixed* UtilInterface::getDecFixed(CheckStatusWrapper* /*status*/)
 {
 	static DecFixed decFixed;
 	return &decFixed;

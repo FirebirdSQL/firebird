@@ -582,7 +582,7 @@ DecimalFixed DecimalFixed::set(SINT64 value)
 
 DecimalFixed DecimalFixed::set(const char* value, int scale, DecimalStatus decSt)
 {
-	{
+	{	// scope for 'context'
 		DecimalContext context(this, decSt);
 		decQuadFromString(&dec, value, &context);
 	}
@@ -595,7 +595,7 @@ DecimalFixed DecimalFixed::set(double value, int scale, DecimalStatus decSt)
 {
 	char s[50];
 	sprintf(s, "%18.016e", value);
-	{ //scope for 'context'
+	{	// scope for 'context'
 		DecimalContext context(this, decSt);
 		decQuadFromString(&dec, s, &context);
 	}

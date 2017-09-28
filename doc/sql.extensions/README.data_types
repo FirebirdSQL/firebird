@@ -197,7 +197,7 @@ Enhancement in precision of calculations with NUMERIC/DECIMAL (FB 4.0)
 
   Syntax rules:
     NUMERIC ( P {, N} )
-    DECUMAL ( P {, N} )
+    DECIMAL ( P {, N} )
 		where P is precision (P <= 34, was limited prior with 18 digits) and N is optional number
 		of digits after decimal separator (as before).
 
@@ -215,4 +215,3 @@ Enhancement in precision of calculations with NUMERIC/DECIMAL (FB 4.0)
     complex calculations such digits are casted (internally, in trivial way) to DECFLOAT(34) and
     the result of various math (log, exp, etc.) and aggregate functions using high precision
     numeric argument is DECFLOAT(34).
-

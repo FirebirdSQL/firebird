@@ -444,7 +444,7 @@ DecimalFixed MOV_get_dec_fixed(Jrd::thread_db* tdbb, const dsc* desc, SSHORT sca
 {
 /**************************************
  *
- *	M O V _ g e t _ d e c 1 2 8
+ *	M O V _ g e t _ d e c _ f i x e d
  *
  **************************************/
 

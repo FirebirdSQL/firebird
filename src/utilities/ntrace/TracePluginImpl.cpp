@@ -886,7 +886,7 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 						DecimalStatus decSt(DEC_Errors);
 						((DecimalFixed*) parameters->dsc_address)->toString(decSt, parameters->dsc_scale, paramvalue);
 					}
-					catch(const Exception& ex)
+					catch (const Exception& ex)
 					{
 						StaticStatusVector status;
 						ex.stuffException(status);

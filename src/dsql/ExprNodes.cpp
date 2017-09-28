@@ -488,7 +488,7 @@ const UCHAR decDescTable[5][5] = {
 
 UCHAR getFType(const dsc& desc)
 {
-	switch(desc.dsc_dtype)
+	switch (desc.dsc_dtype)
 	{
 	case dtype_dec64:
 		return f64;
@@ -504,7 +504,7 @@ UCHAR getFType(const dsc& desc)
 	return other;
 }
 
-enum Scaling {SCALE_MIN, SCALE_SUM};
+enum Scaling { SCALE_MIN, SCALE_SUM };
 
 unsigned setDecDesc(dsc* desc, const dsc& desc1, const dsc& desc2, Scaling sc, SCHAR* nodScale = nullptr)
 {
@@ -517,9 +517,10 @@ unsigned setDecDesc(dsc* desc, const dsc& desc1, const dsc& desc2, Scaling sc, S
 	desc->dsc_sub_type = 0;
 	desc->dsc_flags = (desc1.dsc_flags | desc2.dsc_flags) & DSC_nullable;
 	desc->dsc_scale = 0;
+
 	if (ft == fixed)
 	{
-		switch(sc)
+		switch (sc)
 		{
 		case SCALE_MIN:
 			desc->dsc_scale = MIN(NUMERIC_SCALE(desc1), NUMERIC_SCALE(desc2));
@@ -529,9 +530,12 @@ unsigned setDecDesc(dsc* desc, const dsc& desc1, const dsc& desc2, Scaling sc, S
 			break;
 		}
 	}
+
 	if (nodScale)
 		*nodScale = desc->dsc_scale;
+
 	desc->dsc_length = ft == f64 ? sizeof(Decimal64) : ft == f128 ? sizeof(Decimal128) : sizeof(DecimalFixed);
+
 	return ft == fixed ? ExprNode::FLAG_DECFIXED : ExprNode::FLAG_DECFLOAT;
 }
 

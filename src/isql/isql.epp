@@ -2001,7 +2001,7 @@ static Firebird::string get_numeric_value(const char* fromStr)
 	Firebird::string val;
 	for (const char* q = fromStr; *q; ++q)
 	{
-		switch(*q)
+		switch (*q)
 		{
 		case '0':
 		case '1':
@@ -2381,8 +2381,10 @@ static processing_state add_row(TEXT* tabname)
 						return (SKIP);
 
 					dfixvalue = (FB_DEC_FIXED*) datap;
+
 					if (isqlGlob.dfix)
 						isqlGlob.dfix->fromString(fbStatus, lastInputLine, scale, dfixvalue);
+
 					if ((!isqlGlob.dfix) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
