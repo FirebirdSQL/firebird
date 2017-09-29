@@ -695,7 +695,6 @@ double Decimal128Base::toDouble(DecimalStatus decSt) const
 	else
 	{
 		char s[IDecFloat34::STRING_SIZE];
-		memset(s, 0, sizeof(s));
 		decQuadToString(&dec, s);
 		return atof(s);
 	}
