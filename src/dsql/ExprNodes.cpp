@@ -470,20 +470,20 @@ void ArithmeticNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 namespace
 {
 
-const UCHAR f64 = 0;
-const UCHAR f128 = 1;
-const UCHAR fixed = 2;
-const UCHAR fint = 3;
-const UCHAR other = 4;
-const UCHAR dbad = 5;
+const UCHAR DSC_ZTYPE_FLT64 = 0;
+const UCHAR DSC_ZTYPE_FLT128 = 1;
+const UCHAR DSC_ZTYPE_FIXED = 2;
+const UCHAR DSC_ZTYPE_INT = 3;
+const UCHAR DSC_ZTYPE_OTHER = 4;
+const UCHAR DSC_ZTYPE_BAD = 5;
 
-const UCHAR decDescTable[5][5] = {
-/*				f64		f128	fixed	fint	other	*/
-/*	f64		*/	{f64,	f128,	f128,	f128,	f128},
-/*	f128	*/	{f128,	f128,	f128,	f128,	f128},
-/*	fixed	*/	{f128,	f128,	fixed,	fixed,	f128},
-/*	fint	*/	{f128,	f128,	fixed,	dbad,	dbad},
-/*	other	*/	{f128,	f128,	f128,	dbad,	dbad}
+const UCHAR decimalDescTable[5][5] = {
+/*							DSC_ZTYPE_FLT64		DSC_ZTYPE_FLT128	DSC_ZTYPE_FIXED		DSC_ZTYPE_INT		DSC_ZTYPE_OTHER	*/
+/*	DSC_ZTYPE_FLT64		*/	{DSC_ZTYPE_FLT64,	DSC_ZTYPE_FLT128,	DSC_ZTYPE_FLT128,	DSC_ZTYPE_FLT128,	DSC_ZTYPE_FLT128},
+/*	DSC_ZTYPE_FLT128	*/	{DSC_ZTYPE_FLT128,	DSC_ZTYPE_FLT128,	DSC_ZTYPE_FLT128,	DSC_ZTYPE_FLT128,	DSC_ZTYPE_FLT128},
+/*	DSC_ZTYPE_FIXED	*/		{DSC_ZTYPE_FLT128,	DSC_ZTYPE_FLT128,	DSC_ZTYPE_FIXED,	DSC_ZTYPE_FIXED,	DSC_ZTYPE_FLT128},
+/*	DSC_ZTYPE_INT	*/		{DSC_ZTYPE_FLT128,	DSC_ZTYPE_FLT128,	DSC_ZTYPE_FIXED,	DSC_ZTYPE_BAD,		DSC_ZTYPE_BAD},
+/*	DSC_ZTYPE_OTHER	*/		{DSC_ZTYPE_FLT128,	DSC_ZTYPE_FLT128,	DSC_ZTYPE_FLT128,	DSC_ZTYPE_BAD,		DSC_ZTYPE_BAD}
 };
 
 UCHAR getFType(const dsc& desc)
@@ -491,34 +491,35 @@ UCHAR getFType(const dsc& desc)
 	switch (desc.dsc_dtype)
 	{
 	case dtype_dec64:
-		return f64;
+		return DSC_ZTYPE_FLT64;
 	case dtype_dec128:
-		return f128;
+		return DSC_ZTYPE_FLT128;
 	case dtype_dec_fixed:
-		return fixed;
+		return DSC_ZTYPE_FIXED;
 	}
 
 	if (DTYPE_IS_EXACT(desc.dsc_dtype))
-		return fint;
+		return DSC_ZTYPE_INT;
 
-	return other;
+	return DSC_ZTYPE_OTHER;
 }
 
 enum Scaling { SCALE_MIN, SCALE_SUM };
 
 unsigned setDecDesc(dsc* desc, const dsc& desc1, const dsc& desc2, Scaling sc, SCHAR* nodScale = nullptr)
 {
-	UCHAR ft = decDescTable[getFType(desc1)][getFType(desc2)];
-	fb_assert(ft <= fixed);
-	if (ft > fixed)
-		ft = f128;		// In production case fallback to Decimal128
+	UCHAR zipType = decimalDescTable[getFType(desc1)][getFType(desc2)];
+	fb_assert(zipType <= DSC_ZTYPE_FIXED);
+	if (zipType > DSC_ZTYPE_FIXED)
+		zipType = DSC_ZTYPE_FLT128;		// In production case fallback to Decimal128
 
-	desc->dsc_dtype = ft == f64 ? dtype_dec64 : ft == f128 ? dtype_dec128 : dtype_dec_fixed;
+	desc->dsc_dtype = zipType == DSC_ZTYPE_FLT64 ? dtype_dec64 :
+		zipType == DSC_ZTYPE_FLT128 ? dtype_dec128 : dtype_dec_fixed;
 	desc->dsc_sub_type = 0;
 	desc->dsc_flags = (desc1.dsc_flags | desc2.dsc_flags) & DSC_nullable;
 	desc->dsc_scale = 0;
 
-	if (ft == fixed)
+	if (zipType == DSC_ZTYPE_FIXED)
 	{
 		switch (sc)
 		{
@@ -534,9 +535,10 @@ unsigned setDecDesc(dsc* desc, const dsc& desc1, const dsc& desc2, Scaling sc, S
 	if (nodScale)
 		*nodScale = desc->dsc_scale;
 
-	desc->dsc_length = ft == f64 ? sizeof(Decimal64) : ft == f128 ? sizeof(Decimal128) : sizeof(DecimalFixed);
+	desc->dsc_length = zipType == DSC_ZTYPE_FLT64 ? sizeof(Decimal64) :
+		zipType == DSC_ZTYPE_FLT128 ? sizeof(Decimal128) : sizeof(DecimalFixed);
 
-	return ft == fixed ? ExprNode::FLAG_DECFIXED : ExprNode::FLAG_DECFLOAT;
+	return zipType == DSC_ZTYPE_FIXED ? ExprNode::FLAG_DECFIXED : ExprNode::FLAG_DECFLOAT;
 }
 
 } // anon namespace
