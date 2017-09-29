@@ -301,14 +301,6 @@ typedef struct dsc
 		dsc_address = (UCHAR*) address;
 	}
 
-	void makeDecimalFixed(Firebird::DecimalFixed* address = NULL)
-	{
-		clear();
-		dsc_dtype = dtype_dec_fixed;
-		dsc_length = sizeof(Firebird::DecimalFixed);
-		dsc_address = (UCHAR*) address;
-	}
-
 	void makeInt64(SCHAR scale, SINT64* address = NULL)
 	{
 		clear();
