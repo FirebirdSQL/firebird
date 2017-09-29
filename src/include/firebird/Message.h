@@ -141,9 +141,10 @@
 	builder->setType(status, index, SQL_DEC34);	\
 	builder->setLength(status, index, sizeof(FB_DEC34));
 
-#define FB__META_FB_DEC_FIXED	\
+#define FB__META_FB_DEC_FIXED(scale)	\
 	builder->setType(status, index, SQL_DEC_FIXED);	\
-	builder->setLength(status, index, sizeof(FB_DEC_FIXED));
+	builder->setLength(status, index, sizeof(FB_DEC_FIXED));	\
+	builder->setScale(status, index, scale);
 
 #define FB__META_FB_BLOB	\
 	builder->setType(status, index, SQL_BLOB);	\

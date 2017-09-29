@@ -111,6 +111,7 @@ namespace
 
 			case dtype_dec_fixed:
 				item.type = SQL_DEC_FIXED;
+				item.scale = desc->dsc_scale;
 				item.length = sizeof(DecimalFixed);
 				break;
 
