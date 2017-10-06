@@ -186,7 +186,9 @@ now.) The main trick is that client should NOT send more data than requested by
 server - this causes an error "Size of data is more than requested". The data is
 sent in next isc_service_query() call in the send_items block, using
 isc_info_svc_to_eof tag in tradition form: isc_info_svc_to_eof, 2 bytes length,
-data.
+data. Usage of isc_info_svc_line for sending backup data is still supported in
+this version for backward compatibility, but highly discouraged, as it is
+intended rather for text than binary data.
 When server needs next portion, it once more returns non-zero isc_info_svc_stdin
 value from isc_service_query().
 
