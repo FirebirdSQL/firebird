@@ -1253,7 +1253,7 @@ int main(int ac, char** av)
 					}
 
 					stdinRequest = n;
-					sendBlock[sendSize] = isc_info_svc_line;
+					sendBlock[sendSize] = isc_info_svc_to_eof;
 					sendBlock[sendSize + 1] = stdinRequest;
 					sendBlock[sendSize + 2] = stdinRequest >> 8;
 					sendBlock[sendSize + 1 + 2 + stdinRequest] = isc_info_end;

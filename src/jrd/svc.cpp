@@ -1048,6 +1048,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 					switch (item)
 					{
 					case isc_info_svc_line:
+					case isc_info_svc_to_eof:
 						requestFromPut = put(items, l);
 						break;
 					case isc_info_svc_message:
