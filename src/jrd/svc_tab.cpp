@@ -95,6 +95,7 @@ const serv_entry services[] =
 
 	// NEW VERSION 2 calls, the name field MUST be different from those names above
 	{ isc_action_max, "service_mgr", NULL, NULL },
+	{ isc_action_max, NULL, NULL, NULL }, // Cut off services that are not supposed to be located by name
 	{ isc_action_svc_backup, "Backup Database", NULL, BURP_main },
 	{ isc_action_svc_restore, "Restore Database", NULL, BURP_main },
 	{ isc_action_svc_repair, "Repair Database", NULL, ALICE_main },

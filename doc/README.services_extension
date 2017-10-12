@@ -252,3 +252,19 @@ fbsvcmgr host:service_mgr user leg password leg action_restore dbname target.fdb
 fbsvcmgr host:service_mgr user leg password leg role 'rdb$admin' action_restore dbname target.fdb bkp_file some.fbk
    (works as expected)
 
+
+8) Services API extension - passing database connection string as a service manager name.
+(Dmitry Sibiryakov, 2017)
+
+When database connection string is used in call isc_service_attach() or as
+the first parameter of fbsvcmgr utility, this database is used
+as a default value for "expected_db". And expected db become a default value
+for "dbname".
+If "expected_db" or "dbname" tags are specified explicitly, defaults have no
+effect.
+Old service names are still recognized, so this feature cannot be used with
+databases named like "service_mgr", "backup", "anonymous", etc.
+
+Example (following commands do exactly the same):
+fbsvcmgr host:service_mgr user sysdba password xxx expected_db employee action_db_stats dbname employee
+fbsvcmgr host:employee user sysdba password xxx action_db_stats

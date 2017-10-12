@@ -672,13 +672,15 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	// Since this moment we should remove this service from allServices in case of error thrown
 	try
 	{
+		// Find the service by looking for an exact match.
+		string svcname;
+
 		// If the service name begins with a slash, ignore it.
 		if (*service_name == '/' || *service_name == '\\') {
-			service_name++;
+			svcname = service_name + 1;
 		}
-
-		// Find the service by looking for an exact match.
-		string svcname(service_name);
+		else
+			svcname = service_name;
 
 #ifdef DEV_BUILD
 		if (svcname == "@@@")
@@ -697,8 +699,9 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 
 		if (!serv->serv_name)
 		{
-			status_exception::raise(Arg::Gds(isc_service_att_err) <<
-									Arg::Gds(isc_svcnotdef) << Arg::Str(svcname));
+			// It can be database name. Let's use it as a default value for expected database
+			// If expected database name is proided in SPB as well, it will override this value later
+			svc_expected_db = service_name;
 		}
 
 		// Process the service parameter block.
@@ -718,7 +721,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 
 		// Perhaps checkout the user in the security database.
 		USHORT user_flag;
-		if (!strcmp(serv->serv_name, "anonymous")) {
+		if (svcname == "anonymous") {
 			user_flag = SVC_user_none;
 		}
 		else
@@ -2585,11 +2588,11 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 	string nbk_database, nbk_file, nbk_guid;
 	int nbk_level = -1;
 
-	bool val_database = false;
+	bool database_found = false;
 	bool found = false;
 	string::size_type userPos = string::npos;
 
-	do
+	while (!spb.isEof())
 	{
 		bool bigint = false;
 
@@ -2802,8 +2805,14 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				{
 					return false;
 				}
-				// fall through ....
+				get_action_svc_string(spb, switches);
+				break;
+
 			case isc_spb_dbname:
+				if (database_found) {
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_dbname")).raise();
+				}
+				database_found = true;
 				get_action_svc_string(spb, switches);
 				break;
 
@@ -2893,7 +2902,11 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			switch (spb.getClumpTag())
 			{
 			case isc_spb_dbname:
-                get_action_svc_string(spb, switches);
+				if (database_found) {
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_dbname")).raise();
+				}
+				database_found = true;
+				get_action_svc_string(spb, switches);
 				break;
 			case isc_spb_options:
 				if (!get_action_svc_bitmask(spb, alice_in_sw_table, switches))
@@ -2993,10 +3006,10 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			switch (spb.getClumpTag())
 			{
 			case isc_spb_dbname:
-				if (val_database) {
+				if (database_found) {
 					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_dbname")).raise();
 				}
-				val_database = true;
+				database_found = true;
 				// fall thru
 			case isc_spb_val_tab_incl:
 			case isc_spb_val_tab_excl:
@@ -3015,7 +3028,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		}
 
 		spb.moveNext();
-	} while (! spb.isEof());
+	}
 
 	if (userPos != string::npos && svc_action != isc_action_svc_display_user &&
 		svc_action != isc_action_svc_display_user_adm)
@@ -3028,6 +3041,8 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 	switch (svc_action)
 	{
 	case isc_action_svc_backup:
+		if (burp_database.isEmpty())
+			addStringWithSvcTrmntr(svc_expected_db.c_str(), burp_database);
 		switches += (burp_database + burp_backup);
 		break;
 	case isc_action_svc_restore:
@@ -3037,11 +3052,17 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			// default to create for restore
 			switches += "-CREATE_DATABASE ";
 		}
+		if (burp_database.isEmpty())
+			addStringWithSvcTrmntr(svc_expected_db.c_str(), burp_database);
 		switches += (burp_backup + burp_database);
 		break;
 
 	case isc_action_svc_nbak:
 	case isc_action_svc_nrest:
+		if (nbk_database.isEmpty() && svc_expected_db.hasData())
+		{
+			addStringWithSvcTrmntr(svc_expected_db.c_str(), nbk_database);
+		}
 		if (nbk_database.isEmpty())
 		{
 			(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_dbname")).raise();
@@ -3074,9 +3095,17 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		break;
 
 	case isc_action_svc_validate:
-		if (!val_database)
+	case isc_action_svc_db_stats:
+	case isc_action_svc_repair:
+	case isc_action_svc_properties:
+		if (!database_found)
 		{
-			(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_dbname")).raise();
+			if (svc_expected_db.hasData())
+			{
+				addStringWithSvcTrmntr(svc_expected_db.c_str(), switches);
+			}
+			else
+				(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_dbname")).raise();
 		}
 		break;
 	}
