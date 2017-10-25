@@ -1,0 +1,35 @@
+language: cpp
+
+notifications:
+  email: false
+
+sudo: required
+dist: trusty
+
+branches:
+  only:
+    - master
+    - B3_0_Release
+
+install:
+  # wget --no-check-certificate https://www.cmake.org/files/v3.2/cmake-3.2.3-Linux-x86_64.sh
+  # sudo sh cmake-3.2.3-Linux-x86_64.sh --skip-license --prefix=/usr
+  - sudo apt-get update
+  - sudo apt-get install -y libtommath0 libtommath-dev libtomcrypt0 libtomcrypt-dev
+  # sudo python -m pip install Mako fdb
+  # svn co http://svn.code.sf.net/p/firebird/code/qa/fbtest/trunk/ fbtest
+  # svn co http://svn.code.sf.net/p/firebird/code/qa/fbt-repository/trunk/ fbtest/fbt
+
+script:
+  - ./autogen.sh --enable-binreloc --prefix=/opt/firebird
+  - make -j4
+  - make dist
+  - tar xzvf gen/Firebird-[0-9]*.tar.gz
+  - (cd Firebird-[0-9]*; sudo ./install.sh -silent)
+  - sudo usermod -a -G firebird travis
+  # sg firebird -c "/opt/firebird/bin/gsec -user sysdba -add sysdba -pw masterkey"
+  # ./travis.sh dummy_output &
+  # ./travis.sh skip_tests
+  # sleep 3
+  # cd fbtest/fbt
+  # sg firebird -c "python ../fbtest.py -d `pwd`/tmp -b /opt/firebird/bin -v -x -k ../../skip.txt"
