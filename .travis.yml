@@ -23,7 +23,7 @@ install:
 script:
   - ./autogen.sh --enable-binreloc --prefix=/opt/firebird
   - make 
-  - make dist
+  - sudo make dist
   - tar xzvf gen/Firebird-[0-9]*.tar.gz
   - (cd Firebird-[0-9]*; sudo ./install.sh -silent)
   - sudo usermod -a -G firebird travis
