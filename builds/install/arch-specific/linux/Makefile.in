@@ -76,20 +76,17 @@ PackageDir:=$(shell if [ -d $(RedhatPackageDir) ]; then echo $(RedhatPackageDir)
 
 PkgSrcDir=$(InstallRoot)/$(ArchType)
 ScriptDir=$(GEN_ROOT)/install/scripts/
-RPMSrcDir=$(GEN_ROOT)/install/scripts
 
 
 TarInstallDir=$(GEN_ROOT)/install
 
-#Target for required libraries detection
-RpmRequiredVersionTarget=$(GEN_ROOT)/firebird/bin/isql
 #Curses library
 TermLib=@TERMLIB@.so
 
 
 dist : packages
 
-packages: tarfile rpmfile debugfile
+packages: tarfile debugfile
 
 tarfile:  $(TarFile)
 
@@ -99,25 +96,7 @@ $(TarFile) :  buildTarDir
 debugfile:  $(DebugFile)
 
 $(DebugFile) :  buildImageDir
-	(cd $(GEN_ROOT)/$(DebugDir); tar -czf ../$(DebugFile) *)
-
-# objcopy --add-gnu-debuglink fails with binutils 2.14 or older
-# its failure affects only GDB ability to pick up external debug 
-# symbols automatically. We may use eu-strip command from elfutils 
-# instead, but it doesn't work or compile with such distros 
-# as Mandrake 9.0 not saying about older ones. New binutils
-# seem to compile and work everywhere I tried, but we try to 
-# use eu-strip first since it is a part of default Red Hat 9 
-# install and is available in binary form for Mandrake 9.1 and newer.
-#
-#     28-Dec-2003. Nickolay Samofatov
-#
-# Do not use eu-strip any longer because version 0.89/AMD64 shipped with 
-# Mandrake 9.2 produces broken debuginfo packages and there is no easy way to 
-# detect the breakage. Binutils seem to be more reliable alternative to me.
-#
-#     05-Apr-2004. Nickolay Samofatov
-#
+	(cd $(GEN_ROOT)/$(DebugDir); tar -czf ../$(DebugFile) .)
 
 buildRoot:
 	(cd $(GEN_ROOT); ./install/makeInstallImage.sh)
@@ -160,49 +139,6 @@ install: buildTarDir
 	(cd $(GEN_ROOT)/$(TarDir); FIREBIRD= FIREBIRD_LOCK= ./install.sh)
 	cp -r $(GEN_ROOT)/$(DebugDir)/* /
 
-
 silent_install: buildTarDir
 	(cd $(GEN_ROOT)/$(TarDir); FIREBIRD= FIREBIRD_LOCK= ./install.sh -silent)
 	cp -r $(GEN_ROOT)/$(DebugDir)/* /
-
-
-rpmfile: $(RPMFile)
-
-$(RPMFile) : $(GEN_ROOT)/install/rpmscript buildImageDir
-	rpmbuild --define='_topdir @BUILD_ROOT_DIR@/gen/RPM' -bb --target @CPU_TYPE@ $(GEN_ROOT)/install/rpmscript
-#	rpmbuild -bb --buildroot `pwd`/buildroot $(GEN_ROOT)/rpmscript
-	cp @BUILD_ROOT_DIR@/gen/RPM/RPMS/@CPU_TYPE@/$(RPMFile) $(GEN_ROOT)
-
-
-.PHONY: $(GEN_ROOT)/install/rpmscript
-
-$(GEN_ROOT)/install/rpmscript :
-	echo $@
-	awk < $(RPMSrcDir)/rpmheader.txt 'BEGIN {fl=1;} ($$1 == "Requires:") {fl=0;} (fl) {print $$0;}' > $@
-	echo -n "Requires: `ldd $(RpmRequiredVersionTarget) | grep $(TermLib) | awk '{print $$1;}'`" >> $@
-	echo ", `ldd $(RpmRequiredVersionTarget) | grep libstdc++ | awk '{print $$1;}'`" >> $@
-	awk < $(RPMSrcDir)/rpmheader.txt 'BEGIN {fl=0;} (fl) {print $$0;} ($$1 == "Requires:") {fl=1;}' >> $@
-	echo "" >> $@
-	echo "%prep" >> $@
-#	cat $(ClassicSrcDir)/prepinstall.sh >> $@
-	echo "" >> $@
-	echo "%build" >> $@
-#	cat $(ScriptDir)/buildinstall.sh >> $@
-	echo "" >> $@
-	echo "%install" >> $@
-#	cat $(ScriptDir)/install.sh >> $@
-	echo "" >> $@
-	echo "%files" >> $@
-	cat $(RPMSrcDir)/rpmfiles.txt >> $@
-	echo "" >> $@
-	echo "%pre" >> $@
-	cat $(ScriptDir)/preinstall.sh >> $@
-	echo "" >> $@
-	echo "%post" >> $@
-	cat $(ScriptDir)/postinstall.sh >> $@
-	echo "" >> $@
-	echo "%preun" >> $@
-	cat $(ScriptDir)/preuninstall.sh >> $@
-	echo "" >> $@
-	echo "%postun" >> $@
-	cat $(ScriptDir)/postuninstall.sh >> $@
