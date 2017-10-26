@@ -22,11 +22,11 @@ install:
   # svn co http://svn.code.sf.net/p/firebird/code/qa/fbt-repository/trunk/ fbtest/fbt
 
 script:
-  - ./autogen.sh --enable-binreloc --prefix=/opt/firebird
+  - ./autogen.sh --enable-binreloc --prefix=/opt/firebird --enable-superserver
   - make 
   - sudo make dist
-  - tar xzvf gen/Firebird-[0-9]*.tar.gz
-  - (cd Firebird-[0-9]*; sudo ./install.sh -silent)
+  - tar xzvf gen/FirebirdSS-[0-9]*.tar.gz
+  - (cd FirebirdSS-[0-9]*; sudo ./install.sh -silent)
   - sudo usermod -a -G firebird travis
   # sg firebird -c "/opt/firebird/bin/gsec -user sysdba -add sysdba -pw masterkey"
   # ./travis.sh dummy_output &
