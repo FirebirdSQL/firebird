@@ -24,10 +24,10 @@ install:
 script:
   - ./autogen.sh --enable-binreloc --prefix=/opt/firebird --enable-superserver
   - make 
-  - sudo make dist
-  - tar xzvf gen/FirebirdSS-[0-9]*.tar.gz
-  - (cd FirebirdSS-[0-9]*; sudo ./install.sh -silent)
-  - sudo usermod -a -G firebird travis
+  #- sudo make dist
+  #- tar xzvf gen/FirebirdSS-[0-9]*.tar.gz
+  #- (cd FirebirdSS-[0-9]*; sudo ./install.sh -silent)
+  #- sudo usermod -a -G firebird travis
   # sg firebird -c "/opt/firebird/bin/gsec -user sysdba -add sysdba -pw masterkey"
   # ./travis.sh dummy_output &
   # ./travis.sh skip_tests
