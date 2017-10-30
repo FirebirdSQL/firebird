@@ -304,8 +304,16 @@ const char* TraceSQLStatementImpl::DSQLParamsImpl::getTextUTF8(CheckStatusWrappe
 
 	string src(address, length);
 
-	if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
+	try
+	{
+		if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
+			temp_utf8_text = src;
+	}
+	catch (const Firebird::Exception&)
+	{
+		fb_utils::init_status(JRD_get_thread_data()->tdbb_status_vector);
 		temp_utf8_text = src;
+	}
 
 	return temp_utf8_text.c_str();
 }
@@ -361,8 +369,16 @@ const char* TraceParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T i
 
 	string src(address, length);
 
-	if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
+	try
+	{
+		if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
+			temp_utf8_text = src;
+	}
+	catch (const Firebird::Exception&)
+	{
+		fb_utils::init_status(JRD_get_thread_data()->tdbb_status_vector);
 		temp_utf8_text = src;
+	}
 
 	return temp_utf8_text.c_str();
 }
