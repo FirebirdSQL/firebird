@@ -182,7 +182,7 @@ const char* TraceSQLStatementImpl::getTextUTF8()
 
 	if (m_textUTF8.isEmpty() && stmtText && !stmtText->isEmpty())
 	{
-		if (!DataTypeUtil::convertToUTF8(*stmtText, m_textUTF8))
+		if (!DataTypeUtil::convertToUTF8(*stmtText, m_textUTF8, CS_dynamic, status_exception::raise))
 			return stmtText->c_str();
 	}
 
@@ -306,12 +306,11 @@ const char* TraceSQLStatementImpl::DSQLParamsImpl::getTextUTF8(CheckStatusWrappe
 
 	try
 	{
-		if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
+		if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type, status_exception::raise))
 			temp_utf8_text = src;
 	}
 	catch (const Firebird::Exception&)
 	{
-		fb_utils::init_status(JRD_get_thread_data()->tdbb_status_vector);
 		temp_utf8_text = src;
 	}
 
@@ -325,7 +324,7 @@ const char* TraceFailedSQLStatement::getTextUTF8()
 {
 	if (m_textUTF8.isEmpty() && !m_text.isEmpty())
 	{
-		if (!DataTypeUtil::convertToUTF8(m_text, m_textUTF8))
+		if (!DataTypeUtil::convertToUTF8(m_text, m_textUTF8, CS_dynamic, status_exception::raise))
 			return m_text.c_str();
 	}
 
@@ -371,12 +370,11 @@ const char* TraceParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T i
 
 	try
 	{
-		if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
+		if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type, status_exception::raise))
 			temp_utf8_text = src;
 	}
 	catch (const Firebird::Exception&)
 	{
-		fb_utils::init_status(JRD_get_thread_data()->tdbb_status_vector);
 		temp_utf8_text = src;
 	}
 

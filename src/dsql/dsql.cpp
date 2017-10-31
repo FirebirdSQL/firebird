@@ -1654,7 +1654,7 @@ string IntlString::toUtf8(DsqlCompilerScratch* dsqlScratch) const
 	}
 
 	string utf;
-	return DataTypeUtil::convertToUTF8(s, utf, id) ? utf : s;
+	return DataTypeUtil::convertToUTF8(s, utf, id, ERRD_post) ? utf : s;
 }
 
 

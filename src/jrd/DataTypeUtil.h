@@ -29,6 +29,7 @@
 
 #include "../intl/charsets.h"
 #include "../common/classes/fb_string.h"
+#include "../jrd/err_proto.h"
 
 struct dsc;
 
@@ -78,7 +79,7 @@ public:
 
 public:
 	static bool convertToUTF8(const Firebird::string& src, Firebird::string& dst,
-		CHARSET_ID charset = CS_dynamic);
+		CHARSET_ID charset = CS_dynamic, ErrorFunction err = ERR_post);
 
 private:
 	thread_db* tdbb;
