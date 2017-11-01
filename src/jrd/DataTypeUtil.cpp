@@ -34,7 +34,6 @@
 #include "../common/dsc_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../common/gdsassert.h"
-#include "../jrd/err_proto.h"
 
 using namespace Firebird;
 
@@ -351,7 +350,7 @@ USHORT DataTypeUtil::getDialect() const
 }
 
 // Returns false if conversion is not needed.
-bool DataTypeUtil::convertToUTF8(const string& src, string& dst, CHARSET_ID charset)
+bool DataTypeUtil::convertToUTF8(const string& src, string& dst, CHARSET_ID charset, ErrorFunction err)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
@@ -382,7 +381,7 @@ bool DataTypeUtil::convertToUTF8(const string& src, string& dst, CHARSET_ID char
 		length = INTL_convert_bytes(tdbb,
 			CS_UTF8, (UCHAR*) dst.getBuffer(length), length,
 			charset, (const BYTE*) src.begin(), src.length(),
-			ERR_post);
+			err);
 
 		dst.resize(length);
 	}
