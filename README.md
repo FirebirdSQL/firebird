@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/FirebirdSQL/firebird.svg?branch=master)](https://travis-ci.org/FirebirdSQL/firebird)
+[![Build Status](https://api.travis-ci.org/FirebirdSQL/firebird.svg?branch=B2_5_Release)](https://travis-ci.org/FirebirdSQL/firebird)
 
 # Firebird README
 
