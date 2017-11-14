@@ -3056,17 +3056,8 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 					BURP_error_redirect(status_vector, 342);	// isc_gbak_invalid_data
 			}
 			else
-			{
-				if (tdgbl->gbl_sw_incremental)
-				{
-					BURP_print (false, 114, relation->rel_name);
-					// msg 114 restore failed for record in relation %s
-					BURP_print_status (false, status_vector);
-				}
-				else
-					BURP_error_redirect (status_vector, 48);
-					// msg 48 isc_send failed
-			}
+				BURP_error_redirect (status_vector, 48);
+				// msg 48 isc_send failed
 
 			records--;
 		}
