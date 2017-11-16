@@ -403,6 +403,9 @@
 /* Define to 1 if you have the `clock_gettime' function. */
 #cmakedefine HAVE_CLOCK_GETTIME 1
 
+/* Define to 1 if you have the `ctime_r' function. */
+#cmakedefine HAVE_CTIME_R 1
+
 /* Define to 1 if you have the `dirname' function. */
 #cmakedefine HAVE_DIRNAME 1
 

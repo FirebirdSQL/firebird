@@ -200,6 +200,7 @@ set(functions_list
     accept4
     AO_compare_and_swap_full
     clock_gettime
+    ctime_r
     dirname
     fallocate
     fchmod
