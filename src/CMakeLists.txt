@@ -54,7 +54,6 @@ set(epp_boot_gds_files
     jrd/grant.epp
     jrd/ini.epp
     jrd/met.epp
-    jrd/pcmet.epp
     jrd/scl.epp
     jrd/Function.epp
 )
@@ -484,7 +483,6 @@ set(engine12_generated_src
     jrd/grant.epp
     jrd/ini.epp
     jrd/met.epp
-    jrd/pcmet.epp
     jrd/scl.epp
     utilities/gstat/dba.epp
 )
