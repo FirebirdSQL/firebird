@@ -1464,9 +1464,9 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 		memmove(start_info + 7, start_info, number);
 		if (stdin_request_notification)
 			stdin_request_notification += 7;
-		USHORT length2 = INF_convert(number, buffer);
-		fb_assert(length2 == 4); // We only accept SLONG
-		INF_put_item(isc_info_length, length2, buffer, start_info, end, true);
+		// Do not use INF_convert() as it can produce variable length result
+		put_vax_long(buffer, number);
+		INF_put_item(isc_info_length, sizeof(SLONG), buffer, start_info, end, true);
 	}
 
 	if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_QUERY))
