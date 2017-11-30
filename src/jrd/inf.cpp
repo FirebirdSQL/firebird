@@ -191,19 +191,22 @@ USHORT INF_convert(SINT64 number, UCHAR* buffer)
  *
  * Functional description
  *	Convert a number to VAX form -- least significant bytes first.
+ *  Do not store leading zero bytes.
  *	Return the length.
  *
  **************************************/
-	if (number >= MIN_SLONG && number <= MAX_SLONG)
+
+	UCHAR* p = buffer;
+	USHORT result = 0;
+
+	do
 	{
-		put_vax_long(buffer, (SLONG) number);
-		return sizeof(SLONG);
-	}
-	else
-	{
-		put_vax_int64(buffer, number);
-		return sizeof(SINT64);
-	}
+		*p++ = (UCHAR)(number % 0x100);
+		number /= 0x100;
+		result++;
+	} while (number != 0);
+
+	return result;
 }
 
 
