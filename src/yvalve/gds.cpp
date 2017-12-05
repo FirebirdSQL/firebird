@@ -616,7 +616,7 @@ SINT64 API_ROUTINE isc_portable_integer(const UCHAR* ptr, SSHORT length)
  *
  * Functional description
  *	Pick up (and convert) a Little Endian (VAX) style integer
- *      of length 1, 2, 4 or 8 bytes to local system's Endian format.
+ *      of variable length to local system's Endian format.
  *
  *   various parameter blocks (i.e., dpb, tpb, spb) flatten out multibyte
  *   values into little endian byte ordering before network transmission.
@@ -635,10 +635,14 @@ SINT64 API_ROUTINE isc_portable_integer(const UCHAR* ptr, SSHORT length)
 		return 0;
 
 	SINT64 value = 0;
+	int shift = 0;
 
-	for (int shift = 0; --length >= 0; shift += 8) {
+	while (--length > 0)
+	{
 		value += ((SINT64) *ptr++) << shift;
+		shift += 8;
 	}
+	value += ((SINT64)(SCHAR) *ptr) << shift;
 
 	return value;
 }
@@ -2542,18 +2546,21 @@ SLONG API_ROUTINE gds__vax_integer(const UCHAR* ptr, SSHORT length)
  **************************************
  *
  * Functional description
- *	Pick up (and convert) a VAX style integer of length 1, 2, or 4
- *	bytes.
+ *	Pick up (and convert) a VAX style integer of variable length.
  *
  **************************************/
 	if (!ptr || length <= 0 || length > 4)
 		return 0;
 
 	SLONG value = 0;
+	int shift = 0;
 
-	for (int shift = 0; --length >= 0; shift += 8) {
+	while (--length > 0)
+	{
 		value += ((SLONG) *ptr++) << shift;
+		shift += 8;
 	}
+	value += ((SLONG)(SCHAR) *ptr) << shift;
 
 	return value;
 }
