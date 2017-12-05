@@ -3549,6 +3549,30 @@ static bool create_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	switch (phase)
 	{
 	case 0:
+		// We need to cleanup RDB$PAGES and pages if they were added at phase 3.
+		request.reset(tdbb, irq_c_relation3, IRQ_REQUESTS);
+
+		FOR(REQUEST_HANDLE request)
+			X IN RDB$RELATIONS WITH
+				X.RDB$RELATION_NAME EQ work->dfw_name.c_str()
+		{
+			rel_id = X.RDB$RELATION_ID;
+			if ( (relation = MET_lookup_relation_id(tdbb, rel_id, false)) )
+			{
+				RelationPages* const relPages = relation->getBasePages();
+
+				if (relPages->rel_index_root)
+				  IDX_delete_indices(tdbb, relation, relPages);
+
+				if (relPages->rel_pages)
+					DPM_delete_relation(tdbb, relation);
+
+				// Mark relation in the cache as dropped
+				relation->rel_flags |= REL_deleted;
+			}
+		}
+		END_FOR
+
 		if (work->dfw_lock)
 		{
 			LCK_release(tdbb, work->dfw_lock);
@@ -3593,7 +3617,9 @@ static bool create_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 				if (rel_id < local_min_relation_id || rel_id > MAX_RELATION_ID)
 					rel_id = X.RDB$RELATION_ID = local_min_relation_id;
 
-				while ( (relation = MET_lookup_relation_id(tdbb, rel_id++, false)) )
+				// Roman Simakov: We need to return deleted relations to skip them.
+				// This maybe result of cleanup failure after phase 3.
+				while ( (relation = MET_lookup_relation_id(tdbb, rel_id++, true)) )
 				{
 					if (rel_id < local_min_relation_id || rel_id > MAX_RELATION_ID)
 						rel_id = local_min_relation_id;
@@ -4794,7 +4820,7 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 		    EXT_fini(relation, false);
 		}
 
-		RelationPages* relPages = relation->getBasePages();
+		RelationPages* const relPages = relation->getBasePages();
 		if (relPages->rel_index_root) {
 			IDX_delete_indices(tdbb, relation, relPages);
 		}

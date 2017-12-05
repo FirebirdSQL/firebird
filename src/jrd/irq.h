@@ -177,6 +177,7 @@ enum irq_type_t
 	irq_grant18,			// process grant option (filters)
 	irq_grant19,			// process grant option (roles)
 	irq_l_curr_format,		// lookup table's current format
+	irq_c_relation3,		// lookup relation in phase 0 to cleanup
 
 	irq_linger,				// get database linger value
 
