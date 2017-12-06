@@ -567,15 +567,21 @@ SINT64 ClumpletReader::fromVaxInteger(const UCHAR* ptr, size_t length)
 {
 	// We can't handle numbers bigger than int64. Some cases use length == 0.
 	fb_assert(ptr && length >= 0 && length < 9);
-	// This code is taken from gds__vax_integer
+
+	// This code is taken from isc_portable_integer()
+	// Be ready to parse buffer made by hand instead of ClumpletWriter
+	if (!ptr || length <= 0 || length > 8)
+		return 0;
+
 	SINT64 value = 0;
 	int shift = 0;
-	while (length > 0)
+
+	while (--length > 0)
 	{
-		--length;
 		value += ((SINT64) *ptr++) << shift;
 		shift += 8;
 	}
+	value += ((SINT64)(SCHAR)*ptr) << shift;
 
 	return value;
 }
