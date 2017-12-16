@@ -298,7 +298,9 @@ extern Yshort final_state;
 
 /* system variable */
 #ifndef _MSC_VER
+#ifndef _CRT_ERRNO_DEFINED
 extern int errno;
+#endif
 #endif
 
 /* global functions */
