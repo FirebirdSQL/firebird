@@ -20,10 +20,9 @@
 
 #LD=@CXX@
 
-#PROD_FLAGS=-ggdb -O3 -fno-omit-frame-pointer -DLINUX -pipe -MMD -fPIC
-#DEV_FLAGS=-ggdb -DLINUX -DDEBUG_GDS_ALLOC -pipe -MMD -p -fPIC -Wall -Wno-switch
+COMMON_FLAGS=-DLINUX -DARM -pipe -MMD -fPIC -fsigned-char -fmessage-length=0 -DFB_SEND_FLAGS=MSG_NOSIGNAL
 
-PROD_FLAGS=-O3 -DLINUX -DARM -pipe -p -MMD -fPIC -fsigned-char -fmessage-length=0
-DEV_FLAGS=-ggdb -DLINUX -DARM -pipe -p -MMD -fPIC -Wall -fsigned-char -fmessage-length=0 -Wno-non-virtual-dtor
+PROD_FLAGS=$(COMMON_FLAGS) -O3
+DEV_FLAGS=$(COMMON_FLAGS) -p -ggdb -Wall -Wno-non-virtual-dtor
 
 CXXFLAGS := $(CXXFLAGS) -std=c++11
