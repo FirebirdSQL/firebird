@@ -1785,7 +1785,7 @@ static bool add_file(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra*
  *
  **************************************/
 	USHORT section, shadow_number;
-	SLONG start, max;
+	SLONG start, min_start;
 
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
@@ -1807,7 +1807,7 @@ static bool add_file(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra*
 
 	case 4:
 		CCH_flush(tdbb, FLUSH_FINI, 0);
-		max = PageSpace::maxAlloc(dbb) + 1;
+		min_start = PageSpace::maxAlloc(dbb) + 1;
 		AutoRequest handle;
 		AutoRequest handle2;
 
@@ -1839,20 +1839,19 @@ static bool add_file(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra*
 			// too low a value, make a stab at assigning one based on
 			// the indicated preference for the previous file length.
 
-			if ((start = X.RDB$FILE_START) < max)
-			{
-				FOR(REQUEST_HANDLE handle2 TRANSACTION_HANDLE transaction)
-					FIRST 1 Y IN RDB$FILES
-						WITH Y.RDB$SHADOW_NUMBER EQ X.RDB$SHADOW_NUMBER
-						AND Y.RDB$FILE_SEQUENCE NOT MISSING
-						SORTED BY DESCENDING Y.RDB$FILE_SEQUENCE
-				{
-					start = Y.RDB$FILE_START + Y.RDB$FILE_LENGTH;
-				}
-				END_FOR
-			}
+			start = MAX(min_start, X.RDB$FILE_START);
 
-			start = MAX(max, start);
+			FOR(REQUEST_HANDLE handle2 TRANSACTION_HANDLE transaction)
+				FIRST 1 Y IN RDB$FILES
+					WITH Y.RDB$SHADOW_NUMBER EQ X.RDB$SHADOW_NUMBER
+					AND Y.RDB$FILE_SEQUENCE NOT MISSING
+					SORTED BY DESCENDING Y.RDB$FILE_SEQUENCE
+			{
+				min_start = Y.RDB$FILE_START + (Y.RDB$FILE_LENGTH ? Y.RDB$FILE_LENGTH : 1);
+				start = MAX(min_start, start);
+			}
+			END_FOR
+
 			shadow_number = X.RDB$SHADOW_NUMBER;
 			if ((shadow_number &&
 				(section = SDW_add_file(tdbb, X.RDB$FILE_NAME, start, shadow_number))) ||
