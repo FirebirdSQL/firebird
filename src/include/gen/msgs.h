@@ -814,6 +814,7 @@ Data source : @4"},		/* eds_statement */
 	{335545107, "Database already opened with engine instance, incompatible with current"},		/* already_opened */
 	{335545108, "Invalid crypt key @1"},		/* bad_crypt_key */
 	{335545109, "Page requires encyption but crypt plugin is missing"},		/* encrypt_error */
+	{335545110, "Starting page number for file @1 must be @2 or greater"},		/* file_starting_page_err */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */
