@@ -1820,6 +1820,8 @@ C --
       PARAMETER (GDS__vld_plugins                      = 335545203)
       INTEGER*4 GDS__db_crypt_key                    
       PARAMETER (GDS__db_crypt_key                     = 335545204)
+      INTEGER*4 GDS__file_starting_page_err          
+      PARAMETER (GDS__file_starting_page_err           = 335545205)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 

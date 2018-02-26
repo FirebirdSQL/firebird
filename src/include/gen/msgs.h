@@ -909,6 +909,7 @@ Data source : @4"},		/* eds_statement */
 	{335545202, "Header page overflow - too many clumplets on it"},		/* hdr_overflow */
 	{335545203, "No matching client/server authentication plugins configured for execute statement in embedded datasource"},		/* vld_plugins */
 	{335545204, "Missing database encryption key for your attachment"},		/* db_crypt_key */
+	{335545205, "Starting page number for file @1 must be @2 or greater"},		/* file_starting_page_err */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */

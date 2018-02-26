@@ -905,6 +905,7 @@ static const struct {
 	{335545202, -901}, /* 882 hdr_overflow */
 	{335545203, -901}, /* 883 vld_plugins */
 	{335545204, -902}, /* 884 db_crypt_key */
+	{335545205, -901}, /* 885 file_starting_page_err */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */

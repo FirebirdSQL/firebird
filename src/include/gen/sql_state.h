@@ -905,6 +905,7 @@ static const struct {
 	{335545202, "54000"}, // 882 hdr_overflow
 	{335545203, "28000"}, // 883 vld_plugins
 	{335545204, "08004"}, // 884 db_crypt_key
+	{335545205, "HY000"}, // 885 file_starting_page_err
 	{335740929, "00000"}, //   1 gfix_db_name
 	{335740930, "00000"}, //   2 gfix_invalid_sw
 	{335740932, "00000"}, //   4 gfix_incmp_sw

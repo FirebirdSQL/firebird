@@ -1808,7 +1808,7 @@ static bool add_file(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra*
 
 	case 4:
 		CCH_flush(tdbb, FLUSH_FINI, 0);
-		min_start = PageSpace::maxAlloc(dbb) + 1;
+		start = PageSpace::maxAlloc(dbb) + 1;
 		AutoRequest handle;
 		AutoRequest handle2;
 
@@ -1836,22 +1836,30 @@ static bool add_file(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra*
 				END_MODIFY
 			}
 
-			// If there is no starting position specified, or if it is
-			// too low a value, make a stab at assigning one based on
-			// the indicated preference for the previous file length.
-
-			start = MAX(min_start, X.RDB$FILE_START);
-
+			// Check the previous file length
 			FOR(REQUEST_HANDLE handle2 TRANSACTION_HANDLE transaction)
 				FIRST 1 Y IN RDB$FILES
 					WITH Y.RDB$SHADOW_NUMBER EQ X.RDB$SHADOW_NUMBER
 					AND Y.RDB$FILE_SEQUENCE NOT MISSING
 					SORTED BY DESCENDING Y.RDB$FILE_SEQUENCE
 			{
-				min_start = Y.RDB$FILE_START + (Y.RDB$FILE_LENGTH ? Y.RDB$FILE_LENGTH : 1);
-				start = MAX(min_start, start);
+				if (!Y.RDB$FILE_START.NULL && !Y.RDB$FILE_LENGTH.NULL)
+				{
+					min_start = Y.RDB$FILE_START + (Y.RDB$FILE_LENGTH ? Y.RDB$FILE_LENGTH : 1);
+					start = MAX(min_start, start);
+				}
 			}
 			END_FOR
+
+			// If there is no starting position specified, or if it is
+			// too low a value, raise the error.
+			if (X.RDB$FILE_START < start)
+			{
+				ERR_post(Arg::Gds(isc_file_starting_page_err) <<
+					Arg::Str(X.RDB$FILE_NAME) << Arg::Num(start));
+			}
+
+			start = X.RDB$FILE_START;
 
 			shadow_number = X.RDB$SHADOW_NUMBER;
 			if ((shadow_number &&

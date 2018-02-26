@@ -940,6 +940,7 @@ const ISC_STATUS isc_map_overflow                     = 335545201L;
 const ISC_STATUS isc_hdr_overflow                     = 335545202L;
 const ISC_STATUS isc_vld_plugins                      = 335545203L;
 const ISC_STATUS isc_db_crypt_key                     = 335545204L;
+const ISC_STATUS isc_file_starting_page_err           = 335545205L;
 const ISC_STATUS isc_gfix_db_name                     = 335740929L;
 const ISC_STATUS isc_gfix_invalid_sw                  = 335740930L;
 const ISC_STATUS isc_gfix_incmp_sw                    = 335740932L;
@@ -1414,7 +1415,7 @@ const ISC_STATUS isc_trace_switch_user_only           = 337182757L;
 const ISC_STATUS isc_trace_switch_param_miss          = 337182758L;
 const ISC_STATUS isc_trace_param_act_notcompat        = 337182759L;
 const ISC_STATUS isc_trace_mandatory_switch_miss      = 337182760L;
-const ISC_STATUS isc_err_max                          = 1358;
+const ISC_STATUS isc_err_max                          = 1359;
 
 #else /* c definitions */
 
@@ -2324,6 +2325,7 @@ const ISC_STATUS isc_err_max                          = 1358;
 #define isc_hdr_overflow                     335545202L
 #define isc_vld_plugins                      335545203L
 #define isc_db_crypt_key                     335545204L
+#define isc_file_starting_page_err           335545205L
 #define isc_gfix_db_name                     335740929L
 #define isc_gfix_invalid_sw                  335740930L
 #define isc_gfix_incmp_sw                    335740932L
@@ -2798,7 +2800,7 @@ const ISC_STATUS isc_err_max                          = 1358;
 #define isc_trace_switch_param_miss          337182758L
 #define isc_trace_param_act_notcompat        337182759L
 #define isc_trace_mandatory_switch_miss      337182760L
-#define isc_err_max                          1358
+#define isc_err_max                          1359
 
 #endif
 
