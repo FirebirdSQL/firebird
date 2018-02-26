@@ -838,6 +838,7 @@ static int print_sdl_verb( ctl* control, SSHORT level)
 	case isc_sdl_subtract:
 	case isc_sdl_multiply:
 	case isc_sdl_divide:
+	case isc_sdl_modulo:
 		print_line(control, offset);
 		PRINT_SDL_VERB;
 		PRINT_SDL_VERB;

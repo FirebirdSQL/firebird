@@ -223,7 +223,7 @@ enum nod_t {
 	nod_le, nod_gt, nod_lt,
 	nod_containing, nod_matches, nod_any,
 	nod_unique, nod_plus, nod_times,
-	nod_divide, nod_minus, nod_negate,
+	nod_divide, nod_modulo, nod_minus, nod_negate,
 	//nod_msg,
 	//nod_for,
 	//nod_send,

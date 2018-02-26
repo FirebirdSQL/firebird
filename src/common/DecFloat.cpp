@@ -936,6 +936,14 @@ Decimal128 Decimal128::div(DecimalStatus decSt, Decimal128 op2) const
 	return rc;
 }
 
+Decimal128 Decimal128::mod(DecimalStatus decSt, Decimal128 op2) const
+{
+	DecimalContext context(this, decSt);
+	Decimal128 rc;
+	decQuadRemainder(&rc.dec, &dec, &op2.dec, &context);
+	return rc;
+}
+
 DecimalFixed DecimalFixed::div(DecimalStatus decSt, DecimalFixed op2, int scale) const
 {
 	DecimalContext context(this, decSt);

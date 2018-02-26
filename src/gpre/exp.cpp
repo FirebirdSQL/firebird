@@ -1289,6 +1289,8 @@ static gpre_nod* par_multiply( gpre_req* request, gpre_fld* field)
 			nod_type = nod_times;
 		else if (MSC_match(KW_SLASH))
 			nod_type = nod_divide;
+		else if (MSC_match(KW_PERCENT))
+			nod_type = nod_modulo;
 		else
 			return node;
 

@@ -621,6 +621,7 @@
 #define isc_sdl_do2                       34
 #define isc_sdl_do1                       35
 #define isc_sdl_element                   36
+#define isc_sdl_modulo                    37
 
 /********************************************/
 /* International text interpretation values */

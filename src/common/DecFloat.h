@@ -180,6 +180,7 @@ public:
 	Decimal128 sub(DecimalStatus decSt, Decimal128 op2) const;
 	Decimal128 mul(DecimalStatus decSt, Decimal128 op2) const;
 	Decimal128 div(DecimalStatus decSt, Decimal128 op2) const;
+	Decimal128 mod(DecimalStatus decSt, Decimal128 op2) const;
 	Decimal128 fma(DecimalStatus decSt, Decimal128 op2, Decimal128 op3) const;
 
 	Decimal128 sqrt(DecimalStatus decSt) const;

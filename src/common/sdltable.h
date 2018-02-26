@@ -53,3 +53,4 @@
 	"gds__sdl_do2",				// 34
 	"gds__sdl_do1",				// 35
 	"gds__sdl_element",			// 36
+	"gds__sdl_modulo",			// 37

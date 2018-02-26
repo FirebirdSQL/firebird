@@ -165,6 +165,7 @@ enum nod_t {
 	nod_subtract,
 	nod_multiply,
 	nod_divide,
+	nod_modulo,
 	nod_negate,
 	nod_concatenate,
 	nod_substr,

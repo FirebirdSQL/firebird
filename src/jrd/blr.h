@@ -427,4 +427,6 @@
 #define blr_default					(unsigned char) 212
 #define blr_store3					(unsigned char) 213
 
+#define blr_modulo		(unsigned char)214
+
 #endif // JRD_BLR_H

@@ -244,5 +244,6 @@ static const struct
 	{"window_win", window_win},
 	{"default", relation_field},
 	{"store3", store3},
+	{"modulo", two},
 	{0, 0}
 };

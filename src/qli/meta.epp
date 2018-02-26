@@ -3165,6 +3165,9 @@ static qli_syntax* parse_blr( UCHAR** ptr, qli_symbol* symbol)
 	case blr_divide:
 		operatr = nod_divide;
 		break;
+	case blr_modulo:
+		operatr = nod_modulo;
+		break;
 	case blr_upcase:
 		operatr = nod_upcase;
 		break;

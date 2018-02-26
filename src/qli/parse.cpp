@@ -2518,7 +2518,7 @@ static qli_syntax* parse_multiply( USHORT * paren_count, bool* bool_flag)
  **************************************
  *
  * Functional description
- *	Parse the operatrs * and /.
+ *	Parse the operatrs *, / and %.
  *
  **************************************/
 	nod_t operatr;
@@ -2531,6 +2531,8 @@ static qli_syntax* parse_multiply( USHORT * paren_count, bool* bool_flag)
 			operatr = nod_multiply;
 		else if (PAR_match(KW_SLASH))
 			operatr = nod_divide;
+		else if (PAR_match(KW_PERCENT))
+			operatr = nod_modulo;
 		else
 			return node;
 		qli_syntax* arg = node;

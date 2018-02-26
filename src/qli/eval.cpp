@@ -23,6 +23,7 @@
 
 #include "firebird.h"
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 #include "../jrd/ibase.h"
 #include "../qli/dtr.h"
@@ -454,6 +455,16 @@ dsc* EVAL_value(qli_nod* node)
 		}
 		desc->dsc_missing = FALSE;
 		*((double*) desc->dsc_address) = MOVQ_get_double(values[0]) / MOVQ_get_double(values[1]);
+		return desc;
+
+	case nod_modulo:
+		if ((values[0]->dsc_missing & DSC_missing) || (values[1]->dsc_missing & DSC_missing))
+		{
+			desc->dsc_missing = DSC_missing;
+			return desc;
+		}
+		desc->dsc_missing = FALSE;
+		*((double*) desc->dsc_address) = fmod(MOVQ_get_double(values[0]), MOVQ_get_double(values[1]));
 		return desc;
 
 	case nod_multiply:
