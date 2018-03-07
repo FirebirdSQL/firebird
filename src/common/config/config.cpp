@@ -202,7 +202,16 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_BOOLEAN,		"AllowEncryptedSecurityDatabase", (ConfigValue) false},
 	{TYPE_INTEGER,		"StatementTimeout",			(ConfigValue) 0},
 	{TYPE_INTEGER,		"ConnectionIdleTimeout",	(ConfigValue) 0},
-	{TYPE_INTEGER,		"ClientBatchBuffer",		(ConfigValue) (128 * 1024)}
+	{TYPE_INTEGER,		"ClientBatchBuffer",		(ConfigValue) (128 * 1024)},
+#ifdef DEV_BUILD
+	{TYPE_STRING,		"OutputRedirectionFile", 	(ConfigValue) "-"},
+#else
+#ifdef WIN_NT
+	{TYPE_STRING,		"OutputRedirectionFile", 	(ConfigValue) "nul"},
+#else
+	{TYPE_STRING,		"OutputRedirectionFile", 	(ConfigValue) "/dev/null"}
+#endif
+#endif
 };
 
 /******************************************************************************
@@ -839,3 +848,8 @@ unsigned int Config::getClientBatchBuffer() const
 	return get<unsigned int>(KEY_CLIENT_BATCH_BUFFER);
 }
 
+const char* Config::getOutputRedirectionFile()
+{
+	const char* file = (const char*) (getDefaultConfig()->values[KEY_OUTPUT_REDIRECTION_FILE]);
+	return file;
+}

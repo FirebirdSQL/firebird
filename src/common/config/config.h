@@ -146,6 +146,7 @@ public:
 		KEY_STMT_TIMEOUT,
 		KEY_CONN_IDLE_TIMEOUT,
 		KEY_CLIENT_BATCH_BUFFER,
+		KEY_OUTPUT_REDIRECTION_FILE,
 		MAX_CONFIG_KEY		// keep it last
 	};
 
@@ -362,6 +363,8 @@ public:
 	unsigned int getConnIdleTimeout() const;
 
 	unsigned int getClientBatchBuffer() const;
+
+	static const char* getOutputRedirectionFile();
 };
 
 // Implementation of interface to access master configuration file
