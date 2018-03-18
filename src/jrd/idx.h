@@ -30,7 +30,7 @@
 /* Indices to be created */
 
 /* Maxinum number of segments in any existing system index */
-const int  INI_IDX_MAX_SEGMENTS		= 3;
+const int  INI_IDX_MAX_SEGMENTS		= 6;
 
 struct ini_idx_t
 {
@@ -286,6 +286,20 @@ static const struct ini_idx_t indices[] =
 	// define index RDB$INDEX_53 for RDB$FUNCTIONS unique RDB$FUNCTION_ID;
 	INDEX(53, rel_funs, idx_unique, 1)
 		SEGMENT(f_fun_id, idx_numeric)			// function id
+	}},
+	// define index RDB$INDEX_54 for RDB$DEPENDENCIES RDB$DEPENDENT_NAME, RDB$DEPENDENT_TYPE;
+	INDEX(54, rel_dpds, 0, 2)
+		SEGMENT(f_dpd_name, idx_metadata),		// dependent name
+		SEGMENT(f_dpd_type, idx_numeric)		// dependent on type
+	}},
+	// define index RDB$INDEX_55 for RDB$DEPENDENCIES RDB$DEPENDENT_NAME, RDB$DEPENDED_ON_NAME, RDB$FIELD_NAME, RDB$DEPENDENT_TYPE, RDB$DEPENDED_ON_TYPE, RDB$PACKAGE_NAME;
+	INDEX(55, rel_dpds, idx_unique, 6)
+		SEGMENT(f_dpd_name, idx_metadata),		// dependent name
+		SEGMENT(f_dpd_o_name, idx_metadata),	// dependent on name
+		SEGMENT(f_dpd_f_name, idx_metadata),	// field name
+		SEGMENT(f_dpd_type, idx_numeric),		// dependent type
+		SEGMENT(f_dpd_o_type, idx_numeric),		// dependent on type
+		SEGMENT(f_dpd_pkg_name, idx_metadata)	// package name
 	}}
 };
 
