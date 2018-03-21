@@ -51,7 +51,7 @@ script:
       icu-config --cppflags --prefix
       CFLAGS=-I/usr/local/Cellar/icu4c/include
       LDFLAGS=-L/usr/local/Cellar/icu4c/lib
-      export CXXFLAGS="-stdlib=libc++ -Wno-c++11-narrowing "
+      export CXXFLAGS="-std=c++11 -stdlib=libc++ -Wno-c++11-narrowing "
       export CXX=clang++
       export CC=clang
       alias libtoolize=glibtoolize
