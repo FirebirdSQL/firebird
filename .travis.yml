@@ -54,14 +54,16 @@ script:
       export CXXFLAGS="-std=c++11 -stdlib=libc++ -Wno-c++11-narrowing -msse4"
       export CXX=clang++
       export CC=clang
-      alias libtoolize=glibtoolize
-      alias sed=gsed
+      alias libtoolize=glibtoolize      
       git clone https://github.com/libtom/libtomcrypt.git
       cd libtomcrypt
       git checkout tags/v1.18.0
       make
       make install
       cd ..
+      alias sed=gsed
+      wich sed
+      sed --version
       ./autogen.sh --disable-raw-devices 
       make 
     fi 
