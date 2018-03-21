@@ -43,9 +43,11 @@
 class DlfcnModule : public ModuleLoader::Module
 {
 public:
-	DlfcnModule(void* m)
-		: module(m)
+	DlfcnModule(MemoryPool& pool, const Firebird::PathName& aFileName, void* m)
+		: ModuleLoader::Module(pool, aFileName),
+		  module(m)
 	{}
+
 
 	~DlfcnModule();
 	void* findSymbol (const Firebird::string&);
