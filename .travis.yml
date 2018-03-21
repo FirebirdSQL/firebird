@@ -62,7 +62,7 @@ script:
       make install
       cd ..
       alias sed=gsed
-      wich sed
+      which sed
       sed --version
       ./autogen.sh --disable-raw-devices 
       make 
