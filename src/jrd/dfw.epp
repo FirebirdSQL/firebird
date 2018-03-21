@@ -1854,8 +1854,9 @@ static bool add_file(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra*
 			// too low a value, raise the error.
 			if (X.RDB$FILE_START < start)
 			{
-				ERR_post(Arg::Gds(isc_file_starting_page_err) <<
-					Arg::Str(X.RDB$FILE_NAME) << Arg::Num(start));
+				string error;
+				error.printf("Starting page number for file %s must be %i or greater", X.RDB$FILE_NAME, start);
+				ERR_post(Arg::Gds(isc_random) << error);
 			}
 
 			start = X.RDB$FILE_START;

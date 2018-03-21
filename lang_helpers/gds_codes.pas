@@ -1625,8 +1625,6 @@ const
 	gds_bad_crypt_key                    = 335545108;
 	isc_encrypt_error                    = 335545109;
 	gds_encrypt_error                    = 335545109;
-	isc_file_starting_page_err           = 335545110;
-	gds_file_starting_page_err           = 335545110;
 	isc_gfix_db_name                     = 335740929;
 	gds_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;

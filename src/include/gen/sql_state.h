@@ -810,7 +810,6 @@ static const struct {
 	{335545107, "08006"}, // 787 already_opened
 	{335545108, "08006"}, // 788 bad_crypt_key
 	{335545109, "XX000"}, // 789 encrypt_error
-	{335545110, "HY000"}, // 790 file_starting_page_err
 	{335740929, "00000"}, //   1 gfix_db_name
 	{335740930, "00000"}, //   2 gfix_invalid_sw
 	{335740932, "00000"}, //   4 gfix_incmp_sw

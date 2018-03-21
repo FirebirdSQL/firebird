@@ -796,7 +796,6 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (-902, '08', '006', 0, 787, 'already_opened', NULL, NULL)
 (-902, '08', '006', 0, 788, 'bad_crypt_key', NULL, NULL)
 (-901, 'XX', '000', 0, 789, 'encrypt_error', NULL, NULL)
-(-901, 'HY', '000', 0, 790, 'file_starting_page_err', NULL, NULL)
 -- GFIX
 (-901, '00', '000', 3, 1, 'gfix_db_name', NULL, NULL)
 (-901, '00', '000', 3, 2, 'gfix_invalid_sw', NULL, NULL)
