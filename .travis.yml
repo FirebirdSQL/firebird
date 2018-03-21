@@ -1,3 +1,9 @@
+matrix:
+  include:
+  - os: osx
+    osx_image: xcode9.1
+  - os: linux 
+
 language: cpp
 
 notifications:
@@ -10,23 +16,55 @@ branches:
   only:
     - master
     - B3_0_Release
-
 install:
   # wget --no-check-certificate https://www.cmake.org/files/v3.2/cmake-3.2.3-Linux-x86_64.sh
   # sudo sh cmake-3.2.3-Linux-x86_64.sh --skip-license --prefix=/usr
-  - sudo apt-get update
-  - sudo apt-get install -y libtommath0 libtommath-dev libtomcrypt0 libtomcrypt-dev
+  - |  
+    if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then 
+      sudo apt-get update
+      sudo apt-get install -y libtommath0 libtommath-dev libtomcrypt0 libtomcrypt-dev
+    fi   
+    if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      brew update
+      brew install make libtool autoconf libtommath libtool   
+    fi
   # sudo python -m pip install Mako fdb
   # svn co http://svn.code.sf.net/p/firebird/code/qa/fbtest/trunk/ fbtest
   # svn co http://svn.code.sf.net/p/firebird/code/qa/fbt-repository/trunk/ fbtest/fbt
 
 script:
-  - ./autogen.sh --enable-binreloc --prefix=/opt/firebird
-  - make -j4
-  - make dist
-  - tar xzvf gen/Firebird-[0-9]*.tar.gz
-  - (cd Firebird-[0-9]*; sudo ./install.sh -silent)
-  - sudo usermod -a -G firebird travis
+  - |  
+    if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then 
+      ./autogen.sh --enable-binreloc --prefix=/opt/firebird 
+      make -j4 
+      make dist 
+      tar xzvf gen/Firebird-[0-9]*.tar.gz 
+      (cd Firebird-[0-9]*; sudo ./install.sh -silent) 
+      sudo usermod -a -G firebird travis
+    fi 
+    if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      export LIBTOOLIZE=glibtoolize
+      export LIBTOOL=glibtool
+      brew list icu4c 
+      brew link icu4c --force
+      brew list libtommath 
+      icu-config --cppflags --prefix
+      CFLAGS=-I/usr/local/Cellar/icu4c/include
+      LDFLAGS=-L/usr/local/Cellar/icu4c/lib
+      export CXXFLAGS="-std=c++11 -stdlib=libc++ -Wno-c++11-narrowing "
+      export CXX=clang++
+      export CC=clang
+      alias libtoolize=glibtoolize
+      git clone https://github.com/libtom/libtomcrypt.git
+      cd libtomcrypt
+      git checkout tags/v1.18.0
+      make
+      make install
+      cd ..
+      ./autogen.sh --disable-raw-devices 
+      make 
+    fi 
+  
   # sg firebird -c "/opt/firebird/bin/gsec -user sysdba -add sysdba -pw masterkey"
   # ./travis.sh dummy_output &
   # ./travis.sh skip_tests
