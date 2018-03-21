@@ -55,6 +55,7 @@ script:
       export CXX=clang++
       export CC=clang
       alias libtoolize=glibtoolize
+      alias sed=gsed
       git clone https://github.com/libtom/libtomcrypt.git
       cd libtomcrypt
       git checkout tags/v1.18.0
