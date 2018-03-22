@@ -64,9 +64,9 @@ script:
       cd ..
       #alias sed=gsed
       which sed
-      sed --version
-      echo $PATH | grep -q '/usr/local/bin'; [ $? -ne 0 ] && export PATH=/usr/local/bin:$PATH
-      echo a | sed 's_A_X_i'
+      #sed --version
+      #echo $PATH | grep -q '/usr/local/bin'; [ $? -ne 0 ] && export PATH=/usr/local/bin:$PATH
+      #echo a | sed 's_A_X_i'
       ./autogen.sh --disable-raw-devices 
       make 
     fi 
