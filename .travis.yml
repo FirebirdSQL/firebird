@@ -52,8 +52,9 @@ script:
       icu-config --cppflags --prefix
       CFLAGS=-I/usr/local/Cellar/icu4c/include
       LDFLAGS=-L/usr/local/Cellar/icu4c/lib
+      ls /usr/local/opt/icu4c/lib
+      export DYLD_LIBRARY_PATH=/usr/local/opt/icu4c/lib:$DYLD_LIBRARY_PATH
       echo $DYLD_LIBRARY_PATH
-      export DYLD_LIBRARY_PATH=/usr/local/Cellar/icu4c/lib:$DYLD_LIBRARY_PATH
       export CXXFLAGS="-std=c++11 -stdlib=libc++ -Wno-c++11-narrowing -msse4"
       export CXX=clang++
       export CC=clang
