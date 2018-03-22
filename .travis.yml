@@ -48,7 +48,7 @@ script:
       brew list icu4c 
       brew link icu4c --force
       brew list libtommath      
-      brew install gnu-sed --with-default-names
+      #brew install gnu-sed --with-default-names
       icu-config --cppflags --prefix
       CFLAGS=-I/usr/local/Cellar/icu4c/include
       LDFLAGS=-L/usr/local/Cellar/icu4c/lib
