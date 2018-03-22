@@ -85,11 +85,12 @@ public:
 	void unmapV4();
 };
 
-// Definitions below taken from sources at correspondent operating systems.
+// Definitions below taken from sources (socket.h) on the correspondent operating systems.
 // If something else arrives, it should be added here and into checkAndFixFamily() also.
 
 #define AF_INET6_POSIX		10
 #define AF_INET6_WINDOWS	23
+#define AF_INET6_DARWIN		30
 
 inline void SockAddr::checkAndFixFamily()
 {
@@ -97,6 +98,8 @@ inline void SockAddr::checkAndFixFamily()
 	if (data.sock.sa_family == AF_INET6_WINDOWS)
 #elif AF_INET6 == AF_INET6_WINDOWS
 	if (data.sock.sa_family == AF_INET6_POSIX)
+#elif AF_INET6 == AF_INET6_DARWIN
+	if (data.sock.sa_family == AF_INET6_DARWIN)
 #else
 #error Unknown value of AF_INET6 !
 #endif
