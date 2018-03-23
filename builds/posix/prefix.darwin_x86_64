@@ -33,7 +33,7 @@ export MACOSX_DEPLOYMENT_TARGET
 
 PROD_FLAGS=-DDARWIN -pipe -MMD -fPIC -fno-common -mmacosx-version-min=10.9
 DEV_FLAGS=-ggdb -DDARWIN -pipe -MMD -fPIC -fno-omit-frame-pointer -fno-common -Wall -fno-optimize-sibling-calls -mmacosx-version-min=10.9 -Wno-non-virtual-dtor
-CXXFLAGS:=$(CXXFLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -msse4
+CXXFLAGS:=$(CXXFLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -msse4 -std=c++11
 
 EXE_LINK_OPTIONS:= 
 LD_FLAGS+=-liconv
