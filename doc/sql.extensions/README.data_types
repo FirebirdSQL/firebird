@@ -116,23 +116,25 @@ DECFLOAT (FB 4.0)
     Alex Peshkoff <peshkoff@mail.ru>
 
   Syntax rules:
+    DECFLOAT
     DECFLOAT(16)
     DECFLOAT(34)
 
   Storage:
-    64-bit / 128-bit, format according to IEEE 754.
+    64-bit / 128-bit, format according to IEEE 754 Decimal64/Decimal128
 
   Example(s):
     1. DECLARE VARIABLE VAR1 DECFLOAT(34);
     2. CREATE TABLE TABLE1 (FIELD1 DECFLOAT(16));
 
   Note(s):
-    1.	A number of standard functions can be used with DECFLOAT datatype. It is:
+    1.	If no precision has been specified in the type declaration, the precision is 34.
+    2.	A number of standard functions can be used with DECFLOAT datatype. It is:
     	ABS, CEILING, EXP, FLOOR, LN, LOG, LOG10, POWER, SIGN, SQRT.
     	Agregate functions SUM, AVG, MAX and MIN also work with DECFLOAT data.
     	All statistics aggregates (like but not limited to STDDEV or CORR) work with DECFLOAT data.
 
-    2.	Firebird supports four functions, specially designed to support DECFLOAT data:
+    3.	Firebird supports four functions, specially designed to support DECFLOAT data:
     	- COMPARE_DECFLOAT - compares two DECFLOAT values to be equal, different or unordered.
     		Returns SMALLINT value which can be as follows:
     			0 - values are equal
@@ -155,7 +157,7 @@ DECFLOAT (FB 4.0)
     		DECFLOAT values are ordered as follows:
     			-nan < -snan < -inf < -0.1 < -0.10 < -0 < 0 < 0.10 < 0.1 < inf < snan < nan
 
-	3.	Firebird supports new session control operator SET DECFLOAT. It has following forms:
+	4.	Firebird supports new session control operator SET DECFLOAT. It has following forms:
 			SET DECFLOAT ROUND <mode> - controls rounding mode used in operations with DECFLOAT
 				values. Valid modes are: CEILING (towards +infinity), UP (away from 0), HALF_UP
 				(to nearest, if equidistant - up), HALF_EVEN (to nearest, if equidistant - ensure
@@ -180,7 +182,7 @@ DECFLOAT (FB 4.0)
 				required precision but range of values is very limited). When using is a tool like
 				generic purporse GUI client choice of CHAR binding is OK in most cases.
 
-	4.	The length of DECFLOAT literals are limited to 1024 characters. For longer values, you will
+	5.	The length of DECFLOAT literals are limited to 1024 characters. For longer values, you will
 			need to use the scientific notation. For example, the 0.0<1020 zeroes>11 cannot be used
 			as a literal, instead you can use the equivalent in scientific notation: 1.1E-1022.
 			Similarly 10<1022 zeroes>0 can be presented as 1.0E1024.
