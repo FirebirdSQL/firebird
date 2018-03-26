@@ -8488,7 +8488,6 @@ non_reserved_word
 	| BIND					// added in FB 4.0
 	| COMPARE_DECFLOAT
 	| CUME_DIST
-	| DECFLOAT
 	| DEFINER
 	| EXCLUDE
 	| FIRST_DAY
