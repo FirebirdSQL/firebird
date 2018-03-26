@@ -4135,7 +4135,8 @@ keyword_or_column
 	| UPDATING
 	| VAR_SAMP
 	| VAR_POP
-	| UNBOUNDED				// added in FB 4.0
+	| DECFLOAT				// added in FB 4.0
+	| UNBOUNDED
 	| WINDOW
 	;
 
