@@ -151,6 +151,11 @@ static int closePort(const int reason, const int, void* arg)
 	return 0;
 }
 
+bool check_fd(int fd)
+{
+    return fcntl(fd, F_GETFL) != -1 || errno != EBADF;
+}
+
 extern "C" {
 
 int CLIB_ROUTINE main( int argc, char** argv)
@@ -362,13 +367,26 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		if (!debug)
 		{
 			const char* redirection_file = Config::getOutputRedirectionFile();
-			if (redirection_file && strcmp(redirection_file, "-") != 0)
+
+			int stdout_no = fileno(stdout);
+			int stderr_no = fileno(stderr);
+			const char* dev_null_file = "/dev/null";
+			bool keep_as_is = !redirection_file || redirection_file && (strcmp(redirection_file, "-") == 0 || strcmp(redirection_file, "") == 0);
+
+			//guard close all fds to properly demonize. Detect this case
+			//and if we spawned from daemon we reopen stdout and stderr
+			//and redirect it to /dev/null if user want us to print to stdout
+			if ((!check_fd(stdout_no) || !check_fd(stderr_no)) && keep_as_is)
+			{
+				redirection_file = dev_null_file;
+				keep_as_is = false;
+			}
+
+			if (!keep_as_is)
 			{
 				int f = open(redirection_file, O_CREAT|O_APPEND|O_WRONLY, 0644);
 				if (f >= 0)
 				{
-					int stdout_no = fileno(stdout);
-					int stderr_no = fileno(stderr);
 
 					if (f != stdout_no)
 						dup2(f, stdout_no);
