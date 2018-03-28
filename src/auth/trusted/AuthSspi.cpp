@@ -196,8 +196,12 @@ bool AuthSspi::checkAdminPrivilege(PCtxtHandle phContext) const
 		if (EqualSid(ptg->Groups[i].Sid, domain_admin_sid) ||
 			EqualSid(ptg->Groups[i].Sid, local_admin_sid))
 		{
-			matched = true;
-			break;
+			// consider denied ACE with Administrator SID
+			if (ptg->Groups[i] & SE_GROUP_USE_FOR_DENY_ONLY != SE_GROUP_USE_FOR_DENY_ONLY)
+			{
+				matched = true;
+				break;
+			}
 		}
 	}
 
