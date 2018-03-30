@@ -405,10 +405,13 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 				writerInterface->setType(status, FB_PREDEFINED_GROUP);
 			}
 
-			// ToDo: walk groups to which login belongs and list them using writerInterface
+			// walk groups to which login belongs and list them using writerInterface
+			Firebird::string grName;
 			while (grNames.getCount())
-			{				
-				writerInterface->add(status, grNames.pop().c_str());
+			{			
+				grName = grNames.pop();
+				ISC_systemToUtf8(grName);
+				writerInterface->add(status, grName.c_str());
 				writerInterface->setType(status, FB_WINDOWS_GROUP);
 			}
 
