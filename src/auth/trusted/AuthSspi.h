@@ -33,6 +33,7 @@
 // This is old versions backward compatibility
 #define FB_PREDEFINED_GROUP "Predefined_Group"
 #define FB_DOMAIN_ANY_RID_ADMINS "DOMAIN_ANY_RID_ADMINS"
+#define FB_WINDOWS_GROUP "Windows_Group"
 
 #ifdef TRUSTED_AUTH
 
@@ -41,6 +42,7 @@
 #include "../common/classes/ImplementHelper.h"
 #include <../jrd/ibase.h>
 #include "firebird/Interface.h"
+#include "../common/classes/objects_array.h"
 
 #define SECURITY_WIN32
 
@@ -61,6 +63,7 @@ private:
 	bool hasContext;
 	Firebird::string ctName;
 	bool wheel;
+	Firebird::ObjectsArray<Firebird::string> groupNames;
 
 	// Handle of library
 	static HINSTANCE library;
@@ -74,12 +77,12 @@ private:
 	INITIALIZE_SECURITY_CONTEXT_FN_A fInitializeSecurityContext;
 	ACCEPT_SECURITY_CONTEXT_FN fAcceptSecurityContext;
 
-	bool checkAdminPrivilege(PCtxtHandle phContext) const;
+	bool checkAdminPrivilege(PCtxtHandle phContext, Firebird::ObjectsArray<Firebird::string>& groupNames) const;
 	bool initEntries();
 
 public:
 	typedef Firebird::Array<unsigned char> DataHolder;
-
+	
 	AuthSspi();
 	~AuthSspi();
 
@@ -97,7 +100,7 @@ public:
 	bool accept(DataHolder& data);
 
 	// returns Windows user name, matching accepted security context
-	bool getLogin(Firebird::string& login, bool& wh);
+	bool getLogin(Firebird::string& login, bool& wh, Firebird::ObjectsArray<Firebird::string>& grNames);
 };
 
 class WinSspiServer :
