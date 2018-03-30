@@ -114,7 +114,7 @@ bool AuthSspi::initEntries()
 }
 
 AuthSspi::AuthSspi()
-	: hasContext(false), ctName(*getDefaultMemoryPool()), wheel(false)
+	: hasContext(false), ctName(*getDefaultMemoryPool()), wheel(false), groupNames(*getDefaultMemoryPool())
 {
 	TimeStamp timeOut;
 	hasCredentials = initEntries() && (fAcquireCredentialsHandle(0, "NTLM",
@@ -134,7 +134,7 @@ AuthSspi::~AuthSspi()
 	}
 }
 
-bool AuthSspi::checkAdminPrivilege(PCtxtHandle phContext) const
+bool AuthSspi::checkAdminPrivilege(PCtxtHandle phContext, ObjectsArray<string>& groupNames) const
 {
 #if defined (__GNUC__) && !defined(__MINGW64_VERSION_MAJOR)
 	// ASF: MinGW hack.
@@ -188,25 +188,43 @@ bool AuthSspi::checkAdminPrivilege(PCtxtHandle phContext) const
 	}
 
 	bool matched = false;
-
+	char groupName[256];
+	char domainName[256];
+	DWORD dwAcctName = 1, dwDomainName = 1;
+	SID_NAME_USE snu = SidTypeUnknown;
+	
+	groupNames.clear();
 	// Finally we'll iterate through the list of groups for this access
-	// token looking for a match against the SID we created above.
+	// token looking for a match against the SID we created above.	
 	for (DWORD i = 0; i < ptg->GroupCount; i++)
 	{
-		if (EqualSid(ptg->Groups[i].Sid, domain_admin_sid) ||
-			EqualSid(ptg->Groups[i].Sid, local_admin_sid))
+		// consider denied ACE with Administrator SID
+		if (((ptg->Groups[i].Attributes & SE_GROUP_USE_FOR_DENY_ONLY) != SE_GROUP_USE_FOR_DENY_ONLY) && ((ptg->Groups[i].Attributes & SE_GROUP_ENABLED) == SE_GROUP_ENABLED))
 		{
-			// consider denied ACE with Administrator SID
-			if (ptg->Groups[i] & SE_GROUP_USE_FOR_DENY_ONLY != SE_GROUP_USE_FOR_DENY_ONLY)
+			DWORD dwSize = 256;
+			if (!LookupAccountSid(NULL, ptg->Groups[i].Sid, groupName, &dwSize, domainName, &dwSize, &snu))
 			{
+				return false;
+			}
+
+			string sumName = domainName;		
+			sumName += "\\";
+			sumName += groupName;
+
+			groupNames.add(sumName);
+			if (EqualSid(ptg->Groups[i].Sid, domain_admin_sid) ||
+				EqualSid(ptg->Groups[i].Sid, local_admin_sid))
+			{
+
 				matched = true;
-				break;
+				//break;
 			}
 		}
 	}
 
 	FreeSid(domain_admin_sid);
 	FreeSid(local_admin_sid);
+	GlobalFree(ptg);
 	return matched;
 }
 
@@ -293,7 +311,7 @@ bool AuthSspi::accept(AuthSspi::DataHolder& data)
 			ctName = name.sUserName;
 			ctName.upper();
 			fFreeContextBuffer(name.sUserName);
-			wheel = checkAdminPrivilege(&ctxtHndl);
+			wheel = checkAdminPrivilege(&ctxtHndl, groupNames);
 		}
 		fDeleteSecurityContext(&ctxtHndl);
 		hasContext = false;
@@ -324,15 +342,24 @@ bool AuthSspi::accept(AuthSspi::DataHolder& data)
 	return true;
 }
 
-bool AuthSspi::getLogin(string& login, bool& wh)
+bool AuthSspi::getLogin(string& login, bool& wh, Firebird::ObjectsArray<Firebird::string>& grNames)
 {
 	wh = false;
 	if (ctName.hasData())
 	{
 		login = ctName;
 		ctName.erase();
+		
 		wh = wheel;
 		wheel = false;
+
+		//for (ObjectsArray<string>::const_iterator i(groupNames.begin()); i != groupNames.end(); ++i)
+		while (groupNames.getCount())
+		{
+			grNames.add(groupNames.pop());
+		}
+		groupNames.clear();
+
 		return true;
 	}
 	return false;
@@ -367,7 +394,8 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 		{
 			bool wheel = false;
 			string login;
-			sspi.getLogin(login, wheel);
+			Firebird::ObjectsArray<Firebird::string> grNames;
+			sspi.getLogin(login, wheel, grNames);
 			ISC_systemToUtf8(login);
 
 			writerInterface->add(status, login.c_str());
@@ -378,6 +406,11 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 			}
 
 			// ToDo: walk groups to which login belongs and list them using writerInterface
+			while (grNames.getCount())
+			{				
+				writerInterface->add(status, grNames.pop().c_str());
+				writerInterface->setType(status, FB_WINDOWS_GROUP);
+			}
 
 			return AUTH_SUCCESS;
 		}
