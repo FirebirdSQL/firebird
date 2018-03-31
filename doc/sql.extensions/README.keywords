@@ -2,21 +2,24 @@
 SQL keywords introduced in different server versions
 ----------------------------------------------------
 
-An asterisk (*) mark shows that a keyword doesn't exist in the SQL specification
-and hence should be considered a non-standard language extention.
+Deviations from the standard:
+ *  : keyword does not exist in the SQL:2016 specification and should be
+      considered a non-standard language extention.
+(1) : reserved word in SQL:2016, non-reserved in Firebird
+(2) : non-reserved word in SQL:2016, reserved word in Firebird
 
 Firebird 1.0
 ------------
 
   Added as reserved words:
 
-    CURRENT_USER
-    CURRENT_ROLE
     BREAK *
-    DESCRIPTOR
-    FIRST
+    CURRENT_ROLE
+    CURRENT_USER
+    DESCRIPTOR (2)
+    FIRST (2)
     RECREATE *
-    SKIP *
+    SKIP
     SUBSTRING
 
 Firebird 1.5
@@ -24,42 +27,42 @@ Firebird 1.5
 
   Added as reserved words:
 
-    CURRENT_CONNECTION *
-    CURRENT_TRANSACTION *
     BIGINT
     CASE
+    CURRENT_CONNECTION *
+    CURRENT_TRANSACTION *
     RELEASE
     ROW_COUNT
     SAVEPOINT
 
   Added as non-reserved words:
 
-    COALESCE
+    COALESCE (1)
     DELETING *
     INSERTING *
     LAST
-    LEAVE
+    LEAVE *
     LOCK *
-    NULLIF
+    NULLIF (1)
     NULLS
     STATEMENT
     UPDATING *
-    USING
+    USING (1)
 
   Moved from reserved words to non-reserved:
 
     BREAK *
     DESCRIPTOR
     FIRST
-    SKIP *
-    SUBSTRING
+    SKIP (1)
+    SUBSTRING (1)
 
 Firebird 2.0
 ------------
 
   Added as reserved words:
 
-    BIT_LENGTH
+    BIT_LENGTH *
     BOTH
     CHAR_LENGTH
     CHARACTER_LENGTH
@@ -90,7 +93,7 @@ Firebird 2.0
     SCALAR_ARRAY *
     SEQUENCE
     RESTART
-    RETURNING *
+    RETURNING
 
   Moved from reserved words to non-reserved:
 
@@ -129,49 +132,49 @@ Firebird 2.1
 
   Added as non-reserved words:
 
-    ABS
+    ABS (1)
     ACCENT *
-    ACOS *
-    ALWAYS *
+    ACOS (1)
+    ALWAYS
     ASCII_CHAR *
     ASCII_VAL *
-    ASIN *
-    ATAN *
+    ASIN (1)
+    ATAN (1)
     ATAN2 *
     BIN_AND *
     BIN_OR *
     BIN_SHL *
     BIN_SHR *
     BIN_XOR *
-    CEIL
-    CEILING
-    COS *
-    COSH *
+    CEIL (1)
+    CEILING (1)
+    COS (1)
+    COSH (1)
     COT *
     DATEADD *
     DATEDIFF *
     DECODE *
-    EXP
-    FLOOR
+    EXP (1)
+    FLOOR (1)
     GEN_UUID *
     GENERATED
     HASH *
     LIST *
-    LN
-    LOG *
-    LOG10 *
+    LN (1)
+    LOG (1)
+    LOG10 (1)
     LPAD *
     MATCHED
     MATCHING *
-    MAXVALUE *
+    MAXVALUE
     MILLISECOND *
-    MINVALUE *
-    MOD
-    OVERLAY
+    MINVALUE
+    MOD (1)
+    OVERLAY (1)
     PAD
     PI *
     PLACING
-    POWER
+    POWER (1)
     PRESERVE
     RAND *
     REPLACE *
@@ -179,12 +182,12 @@ Firebird 2.1
     ROUND *
     RPAD *
     SIGN *
-    SIN *
-    SINH *
+    SIN (1)
+    SINH (1)
     SPACE
-    SQRT
-    TAN *
-    TANH *
+    SQRT (1)
+    TAN (1)
+    TANH (1)
     TEMPORARY
     TRUNC *
     WEEK *
@@ -210,10 +213,9 @@ Firebird 2.5
     MIDDLENAME *
     MAPPING *
     OS_NAME *
-    SOURCE *
+    SOURCE
     TWO_PHASE *
     UUID_TO_CHAR *
-
 
 Firebird 3.0
 ------------
@@ -224,10 +226,8 @@ Firebird 3.0
     CORR
     COVAR_POP
     COVAR_SAMP
-    DELETING *
     DETERMINISTIC
     FALSE
-    INSERTING *
     OFFSET
     OVER
     RDB$RECORD_VERSION *
@@ -243,14 +243,21 @@ Firebird 3.0
     RETURN
     ROW
     SCROLL
-    SQLSTATE *
+    SQLSTATE
     STDDEV_POP
     STDDEV_SAMP
     TRUE
     UNKNOWN
-    UPDATING *
     VAR_POP
     VAR_SAMP
+
+  Moved from non-reserved words to reserved:
+
+    DELETING *
+    INSERTING *
+    RDB$GET_CONTEXT *
+    RDB$SET_CONTEXT *
+    UPDATING *
 
   Added as non-reserved words:
 
@@ -262,53 +269,71 @@ Firebird 3.0
     CONTINUE
     DDL *
     DECRYPT *
-    DENSE_RANK
+    DENSE_RANK (1)
     ENCRYPT *
     ENGINE *
-    FIRST_VALUE
-    IDENTITY
+    FIRST_VALUE (1)
+    IDENTITY (1)
     INCREMENT
-    LAST_VALUE
-    LAG
-    LEAD
+    LAST_VALUE (1)
+    LAG (1)
+    LEAD (1)
     LINGER *
     NAME
-    NTH_VALUE
+    NTH_VALUE (1)
     PACKAGE *
-    PARTITION
+    PARTITION (1)
     PLUGIN *
     PRIOR
-    RANK
+    RANK (1)
     RELATIVE
-    ROW_NUMBER
+    ROW_NUMBER (1)
     SERVERWIDE *
     TAGS *
     TRUSTED *
     USAGE
-
 
 Firebird 4.0
 ------------
 
   Added as reserved words:
 
-    UNBOUNDED
-    WINDOW
     BINARY
+    DECFLOAT
+    RDB$ERROR *
+    RDB$ROLE_IN_USE *
+    RDB$SYSTEM_PRIVILEGE *
+    UNBOUNDED (2)
     VARBINARY
+    WINDOW
 
   Added as non-reserved words:
 
-    CUME_DIST *
+    BIND *
+    COMPARE_DECFLOAT *
+    CUME_DIST (1)
+    DEFINER
     EXCLUDE
+    FIRST_DAY *
     FOLLOWING
-    NTILE *
+    IDLE *
+    INVOKER
+    LAST_DAY *
+    MESSAGE *
+    NATIVE *
+    NORMALIZE_DECFLOAT *
+    NTILE (1)
     OTHERS
-    PERCENT_RANK *
+    OVERRIDING
+    PERCENT_RANK (1)
     PRECEDING
     PRIVILEGE *
-    RANGE *
-    RDB$ROLE_IN_USE *
-    RDB$SYSTEM_PRIVILEGE *
-    SYSTEM *
+    QUANTIZE *
+    RANGE (1)
+    SECURITY
+    SESSION
+    SQL (1)
+    SYSTEM (1)
     TIES
+    TOTALORDER *
+    TRAPS *
