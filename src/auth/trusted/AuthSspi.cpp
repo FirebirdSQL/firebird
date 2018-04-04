@@ -196,22 +196,30 @@ bool AuthSspi::checkAdminPrivilege(PCtxtHandle phContext, ObjectsArray<string>& 
 	groupNames.clear();
 	// Finally we'll iterate through the list of groups for this access
 	// token looking for a match against the SID we created above.	
+	
 	for (DWORD i = 0; i < ptg->GroupCount; i++)
 	{
 		// consider denied ACE with Administrator SID
 		if (((ptg->Groups[i].Attributes & SE_GROUP_USE_FOR_DENY_ONLY) != SE_GROUP_USE_FOR_DENY_ONLY) && ((ptg->Groups[i].Attributes & SE_GROUP_ENABLED) == SE_GROUP_ENABLED))
 		{
 			DWORD dwSize = 256;
-			if (!LookupAccountSid(NULL, ptg->Groups[i].Sid, groupName, &dwSize, domainName, &dwSize, &snu))
+			if (LookupAccountSid(NULL, ptg->Groups[i].Sid, groupName, &dwSize, domainName, &dwSize, &snu))
 			{
-				return false;
+				string sumName = domainName;
+				sumName += "\\";
+				sumName += groupName;
+
+				groupNames.add(sumName);				
+			}
+			else
+			{
+				// "No mapping between account names and security IDs was done"
+				// some groups mapping between names can not exists and returning from this point is not ok
+				// simply ignore "error" and go to the next group name
+				// return false;					
 			}
 
-			string sumName = domainName;		
-			sumName += "\\";
-			sumName += groupName;
-
-			groupNames.add(sumName);
+			
 			if (EqualSid(ptg->Groups[i].Sid, domain_admin_sid) ||
 				EqualSid(ptg->Groups[i].Sid, local_admin_sid))
 			{
@@ -219,12 +227,11 @@ bool AuthSspi::checkAdminPrivilege(PCtxtHandle phContext, ObjectsArray<string>& 
 				matched = true;
 				//break;
 			}
-		}
+		}		
 	}
 
 	FreeSid(domain_admin_sid);
 	FreeSid(local_admin_sid);
-	GlobalFree(ptg);
 	return matched;
 }
 
@@ -405,10 +412,10 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 				writerInterface->setType(status, FB_PREDEFINED_GROUP);
 			}
 
-			// walk groups to which login belongs and list them using writerInterface
+			// ToDo: walk groups to which login belongs and list them using writerInterface
 			Firebird::string grName;
 			while (grNames.getCount())
-			{			
+			{
 				grName = grNames.pop();
 				ISC_systemToUtf8(grName);
 				writerInterface->add(status, grName.c_str());
