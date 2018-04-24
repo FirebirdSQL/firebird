@@ -2761,6 +2761,9 @@ ISC_STATUS GDS_OPEN_BLOB2(ISC_STATUS* user_status,
 
 			jrd_tra* const transaction = find_transaction(tdbb, isc_segstr_wrong_db);
 
+			if (blob_id->bid_internal.bid_relation_id)
+				transaction->checkBlob(tdbb, blob_id);
+
 			*blob_handle = BLB_open2(tdbb, transaction, blob_id, bpb_length, bpb, true);
 		}
 		catch (const Exception& ex)

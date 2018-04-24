@@ -238,6 +238,7 @@ public:
 	MemoryPool* getAutonomousPool();
 	void releaseAutonomousPool(MemoryPool* toRelease);
 	jrd_tra* getOuter();
+	void checkBlob(thread_db* tdbb, const bid* blob_id);
 
 	SSHORT getLockWait() const
 	{

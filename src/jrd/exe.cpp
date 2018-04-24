@@ -954,12 +954,15 @@ void EXE_send(thread_db*		tdbb,
 		}
 		else if (desc->isBlob())
 		{
-			if (desc->getCharSet() != CS_NONE && desc->getCharSet() != CS_BINARY)
-			{
-				const Jrd::bid* bid = (Jrd::bid*) ((UCHAR*)request +
-					message->nod_impure + (ULONG)(IPTR)desc->dsc_address);
+			const Jrd::bid* bid = (Jrd::bid*) ((UCHAR*)request +
+				message->nod_impure + (ULONG)(IPTR)desc->dsc_address);
 
-				if (!bid->isEmpty())
+			if (!bid->isEmpty())
+			{
+				if (!(request->req_flags & req_internal))
+					transaction->checkBlob(tdbb, bid);
+
+				if (desc->getCharSet() != CS_NONE && desc->getCharSet() != CS_BINARY)
 				{
 					AutoBlb blob(tdbb, BLB_open(tdbb, transaction/*tdbb->getTransaction()*/, bid));
 					BLB_check_well_formed(tdbb, desc, blob.getBlb());
