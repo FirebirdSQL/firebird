@@ -250,12 +250,12 @@ objs: $(OBJECTS)
 
 #$(LIBNAME): $(OBJECTS) testprof/$(LIBTEST)
 $(LIBNAME): $(OBJECTS)
-	libtool --silent --mode=link gcc $(CFLAGS) `find . -type f | grep "[.]lo" | grep "src/" | xargs` $(EXTRALIBS) -o $(LIBNAME) -rpath $(LIBPATH) -version-info $(VERSION)
+	libtool --silent --mode=link --tag=CC gcc $(CFLAGS) `find . -type f | grep "[.]lo" | grep "src/" | xargs` $(EXTRALIBS) -o $(LIBNAME) -rpath $(LIBPATH) -version-info $(VERSION)
 
 install: $(LIBNAME)
 	install -d -g $(GROUP) -o $(USER) $(DESTDIR)$(LIBPATH)
 	cd testprof ; CFLAGS="$(CFLAGS)" GROUP=$(GROUP) USER=$(USER) VERSION=$(VERSION) LIBPATH=$(LIBPATH) LIBTEST=$(LIBTEST) LIBTEST_S=$(LIBTEST_S) DESTDIR=$(DESTDIR) make -f makefile.shared install
-	libtool --silent --mode=install install -c libtomcrypt.la $(DESTDIR)$(LIBPATH)/libtomcrypt.la
+	libtool --silent --tag=CC --mode=install install -c libtomcrypt.la $(DESTDIR)$(LIBPATH)/libtomcrypt.la
 	install -d -g $(GROUP) -o $(USER) $(DESTDIR)$(INCPATH)
 	install -g $(GROUP) -o $(USER) $(HEADERS) $(DESTDIR)$(INCPATH)
 
