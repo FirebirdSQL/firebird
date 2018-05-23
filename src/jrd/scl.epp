@@ -1126,6 +1126,7 @@ void UserId::sclInit(thread_db* tdbb, bool create, const UserId& tempId)
 	MemoryPool& pool = *attachment->att_pool;
 	UserId* const user = FB_NEW_POOL(pool) UserId(pool, tempId);
 	user->setSqlRole(role_name);
+	user->usr_init_role = role_name;
 	attachment->att_user = user;
 
 	if (!create)

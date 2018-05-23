@@ -54,6 +54,7 @@ public:
 
 	static void shutdown();
 	static void waitForType(unsigned int typeThatMustGoAway);
+	static void threadDetach();
 };
 
 }	// namespace Firebird

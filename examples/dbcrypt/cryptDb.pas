@@ -47,6 +47,7 @@ Type
 
     // TPluginModule implementation
     procedure doClean; override;
+	procedure threadDetach; override;
   end;
 
   TMyCrypt = class(IDbCryptPluginImpl)
@@ -113,6 +114,10 @@ end;
 procedure TMyPluginModule.doClean;
 begin
   FRegistered := False;
+end;
+
+procedure TMyPluginModule.threadDetach; 
+begin
 end;
 
 procedure TMyPluginModule.registerMe;

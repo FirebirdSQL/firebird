@@ -728,7 +728,7 @@ namespace Jrd {
 				continue;
 
 			// validate a key
-			AutoPtr<IDbCryptPlugin, ReleasePlugin> crypt(checkFactory->makeInstance());
+			AutoPlugin<IDbCryptPlugin> crypt(checkFactory->makeInstance());
 			setDbInfo(crypt);
 			crypt->setKey(&st, 1, &keyHolder, keyName.c_str());
 
@@ -947,7 +947,11 @@ namespace Jrd {
 
 				if (!down)
 				{
-					RefPtr<JAttachment> jAtt(REF_NO_INCR, dbb.dbb_provider->attachDatabase(&status_vector,
+					AutoPlugin<JProvider> jInstance(JProvider::getInstance());
+					jInstance->setDbCryptCallback(&status_vector, dbb.dbb_callback);
+					check(&status_vector);
+
+					RefPtr<JAttachment> jAtt(REF_NO_INCR, jInstance->attachDatabase(&status_vector,
 						dbb.dbb_database_name.c_str(), writer.getBufferLength(), writer.getBuffer()));
 					check(&status_vector);
 

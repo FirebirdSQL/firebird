@@ -8094,6 +8094,17 @@ void SetTransactionNode::genTableLock(DsqlCompilerScratch* dsqlScratch,
 //--------------------
 
 
+void SessionResetNode::execute(thread_db* tdbb, dsql_req* request) const
+{
+	SET_TDBB(tdbb);
+	Attachment* const attachment = tdbb->getAttachment();
+	attachment->resetSession(tdbb);
+}
+
+
+//--------------------
+
+
 void SetRoleNode::execute(thread_db* tdbb, dsql_req* request) const
 {
 	SET_TDBB(tdbb);

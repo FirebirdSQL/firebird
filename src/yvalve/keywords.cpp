@@ -355,6 +355,7 @@ static const TOK tokens[] =
 	{TOK_RDB_SYSTEM_PRIVILEGE, "RDB$SYSTEM_PRIVILEGE", false},
 	{TOK_READ, "READ", true},
 	{TOK_REAL, "REAL", false},
+	{TOK_RESET, "RESET", true},
 	{TOK_VERSION, "RECORD_VERSION", false},
 	{TOK_RECREATE, "RECREATE", false},
 	{TOK_RECURSIVE, "RECURSIVE", false},

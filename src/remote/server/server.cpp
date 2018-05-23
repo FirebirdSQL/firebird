@@ -1600,6 +1600,9 @@ void SRVR_multi_thread( rem_port* main_port, USHORT flags)
 					else
 					{
 						request->req_receive.p_operation = ok ? op_dummy : op_exit;
+
+						if (port->port_server_crypt_callback)
+							port->port_server_crypt_callback->wakeup(0, NULL);
 					}
 
 					request->req_port = port;
@@ -1776,13 +1779,8 @@ public:
 static void setErrorStatus(IStatus* status)
 {
 	Arg::Gds loginError(isc_login);
-#ifndef DEV_BUILD
-	if (status->getErrors()[1] == isc_missing_data_structures)
-#endif
-	{
-		loginError << Arg::StatusVector(status->getErrors());
-	}
-	status->setErrors(loginError.value());
+	if (!(status->getState() & IStatus::STATE_ERRORS))
+		status->setErrors(loginError.value());
 }
 
 static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
@@ -2001,12 +1999,27 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 		}
 	}
 
+
 	// Send off out gracious acceptance or flag rejection
 	if (!accepted)
 	{
 		HANDSHAKE_DEBUG(fprintf(stderr, "!accepted, sending reject\n"));
 		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
-			port->send_response(send, 0, 0, &status, false);
+		{
+			if (status.getErrors()[1] != isc_missing_data_structures)
+			{
+				iscLogStatus("Authentication error", &status);
+				Arg::Gds loginError(isc_login_error);
+#ifdef DEV_BUILD
+				loginError << Arg::StatusVector(&status);
+#endif
+				LocalStatus tmp;
+				loginError.copyTo(&tmp);
+				port->send_response(send, 0, 0, &tmp, false);
+			}
+			else
+				port->send_response(send, 0, 0, &status, false);
+		}
 		else
 			port->send(send);
 		return false;

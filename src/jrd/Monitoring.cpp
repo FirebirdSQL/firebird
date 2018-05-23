@@ -1030,12 +1030,11 @@ void Monitoring::putRequest(SnapshotData::DumpRecord& record, const jrd_req* req
 	if (request->req_attachment)
 		record.storeInteger(f_mon_stmt_att_id, request->req_attachment->att_attachment_id);
 	// state, transaction ID, timestamp
-	if (request->req_flags & req_active)
+	if (request->req_transaction && (request->req_flags & req_active))
 	{
 		const bool is_stalled = (request->req_flags & req_stall);
 		record.storeInteger(f_mon_stmt_state, is_stalled ? mon_state_stalled : mon_state_active);
-		if (request->req_transaction)
-			record.storeInteger(f_mon_stmt_tra_id, request->req_transaction->tra_number);
+		record.storeInteger(f_mon_stmt_tra_id, request->req_transaction->tra_number);
 		record.storeTimestamp(f_mon_stmt_timestamp, request->req_timestamp);
 
 		ISC_TIMESTAMP ts;

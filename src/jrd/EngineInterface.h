@@ -460,9 +460,10 @@ public:
 	{
 	}
 
-	static Firebird::RefPtr<JProvider> getInstance()
+	static JProvider* getInstance()
 	{
-		Firebird::RefPtr<JProvider> p(FB_NEW JProvider(NULL));
+		JProvider* p = FB_NEW JProvider(NULL);
+		p->addRef();
 		return p;
 	}
 

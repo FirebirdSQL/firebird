@@ -406,6 +406,10 @@ public:
 	void storeBinaryBlob(thread_db* tdbb, jrd_tra* transaction, bid* blobId,
 		const Firebird::ByteChunk& chunk);
 
+
+	void releaseGTTs(thread_db* tdbb);
+	void resetSession(thread_db* tdbb);
+
 	void signalCancel();
 	void signalShutdown(ISC_STATUS code);
 

@@ -213,6 +213,10 @@ interface PluginFactory : Versioned
 interface PluginModule : Versioned
 {
 	void doClean();
+
+version:		// 3.0.3 => 3.0.4
+	// Used to release resources allocated per-thread 
+	void threadDetach();
 }
 
 // Interface to deal with plugins here and there, returned by master interface

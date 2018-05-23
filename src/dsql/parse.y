@@ -618,6 +618,7 @@ using namespace Firebird;
 %token <metaNamePtr> RDB_ERROR
 %token <metaNamePtr> RDB_ROLE_IN_USE
 %token <metaNamePtr> RDB_SYSTEM_PRIVILEGE
+%token <metaNamePtr> RESET
 %token <metaNamePtr> SECURITY
 %token <metaNamePtr> SESSION
 %token <metaNamePtr> SQL
@@ -777,6 +778,7 @@ using namespace Firebird;
 	Jrd::SetRoundNode* setRoundNode;
 	Jrd::SetTrapsNode* setTrapsNode;
 	Jrd::SetBindNode* setBindNode;
+	Jrd::SessionResetNode* sessionResetNode;
 }
 
 %include types.y
@@ -839,6 +841,7 @@ mng_statement
 	| set_bind									{ $$ = $1; }
 	| session_statement							{ $$ = $1; }
 	| set_role									{ $$ = $1; }
+	| session_reset								{ $$ = $1; }
 	;
 
 
@@ -5108,6 +5111,12 @@ set_transaction
 			{ $$ = $3; }
 	;
 
+%type <sessionResetNode> session_reset
+session_reset
+	: ALTER SESSION RESET
+		{ $$ = newNode<SessionResetNode>(); }
+	;
+
 %type <setRoleNode> set_role
 set_role
 	: SET ROLE valid_symbol_name
@@ -8509,6 +8518,7 @@ non_reserved_word
 	| PRIVILEGE
 	| QUANTIZE
 	| RANGE
+	| RESET
 	| SECURITY
 	| SESSION
 	| SQL

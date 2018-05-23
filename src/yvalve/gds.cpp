@@ -2964,10 +2964,11 @@ static int blr_print_dtype(gds_ctl* control)
 		break;
 
 	case blr_double:
+	case blr_dec128:
 		{
-			string = "double";
+			string = dtype == blr_double ? "double" : "dec128";
 
-			// for double literal, return the length of the numeric string
+			// for double/dec_128 literal, return the length of the numeric string
 			const UCHAR* pos = control->ctl_blr_reader.getPos();
 			const UCHAR v1 = control->ctl_blr_reader.getByte();
 			const UCHAR v2 = control->ctl_blr_reader.getByte();
@@ -3013,6 +3014,16 @@ static int blr_print_dtype(gds_ctl* control)
 	case blr_bool:
 		string = "bool";
 		length = 1;
+		break;
+
+	case blr_dec64:
+		string = "dec64";
+		length = sizeof(Firebird::Decimal64);
+		break;
+
+	case blr_dec_fixed:
+		string = "dec_fixed";
+		length = sizeof(Firebird::DecimalFixed);
 		break;
 
 	case blr_domain_name:
@@ -3076,6 +3087,7 @@ static int blr_print_dtype(gds_ctl* control)
 	case blr_long:
 	case blr_quad:
 	case blr_int64:
+	case blr_dec_fixed:
 		blr_print_byte(control);
 		break;
 

@@ -260,7 +260,7 @@ void TraceManager::update_session(const TraceSession& session)
 
 				Database* dbb = attachment->att_database;
 				fb_assert(dbb);
-				Mapping mapping(Mapping::MAP_NO_FLAGS, dbb->dbb_provider->getCryptCallback());
+				Mapping mapping(Mapping::MAP_NO_FLAGS, dbb->dbb_callback);
 				mapping.needSystemPrivileges(priv);
 				mapping.setAuthBlock(session.ses_auth);
 				mapping.setSqlRole(session.ses_role);

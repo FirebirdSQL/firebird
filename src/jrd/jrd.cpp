@@ -393,7 +393,7 @@ static void shutdownBeforeUnload()
 	LocalStatus status;
 	CheckStatusWrapper statusWrapper(&status);
 
-	JProvider::getInstance()->shutdown(&statusWrapper, 0, fb_shutrsn_exit_called);
+	AutoPlugin<JProvider>(JProvider::getInstance())->shutdown(&statusWrapper, 0, fb_shutrsn_exit_called);
 	threadDetach();
 };
 
@@ -426,9 +426,12 @@ static Static<EngineFactory> engineFactory;
 
 void registerEngine(IPluginManager* iPlugin)
 {
-	getUnloadDetector()->setCleanup(shutdownBeforeUnload);
+	UnloadDetectorHelper* module = getUnloadDetector();
+	module->setCleanup(shutdownBeforeUnload);
+	module->setThreadDetach(threadDetach);
+
 	iPlugin->registerPluginFactory(IPluginManager::TYPE_PROVIDER, CURRENT_ENGINE, &engineFactory);
-	getUnloadDetector()->registerMe();
+	module->registerMe();
 }
 
 } // namespace Jrd
@@ -6700,9 +6703,10 @@ static JAttachment* initAttachment(thread_db* tdbb, const PathName& expanded_nam
 
 		Config::merge(config, &options.dpb_config);
 
-		dbb = Database::create(pConf, provider, shared);
+		dbb = Database::create(pConf, shared);
 		dbb->dbb_config = config;
 		dbb->dbb_filename = expanded_name;
+		dbb->dbb_callback = provider->getCryptCallback();
 #ifdef HAVE_ID_BY_NAME
 		dbb->dbb_id = db_id;		// will be reassigned in create database after PIO operation
 #endif
@@ -6936,19 +6940,8 @@ static void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 
 	dbb->dbb_extManager.closeAttachment(tdbb, attachment);
 
-	if ((dbb->dbb_config->getServerMode() == MODE_SUPER) && attachment->att_relations)
-	{
-		vec<jrd_rel*>& rels = *attachment->att_relations;
-		for (FB_SIZE_T i = 1; i < rels.count(); i++)
-		{
-			jrd_rel* relation = rels[i];
-			if (relation && (relation->rel_flags & REL_temp_conn) &&
-				!(relation->rel_flags & (REL_deleted | REL_deleting)) )
-			{
-				relation->delPages(tdbb);
-			}
-		}
-	}
+	if (dbb->dbb_config->getServerMode() == MODE_SUPER)
+		attachment->releaseGTTs(tdbb);
 
 	if (dbb->dbb_event_mgr && attachment->att_event_session)
 		dbb->dbb_event_mgr->deleteSession(attachment->att_event_session);
@@ -7946,6 +7939,7 @@ namespace
 		{
 			StableAttachmentPart* const sAtt = *iter;
 
+			MutexLockGuard guardBlocking(*(sAtt->getBlockingMutex()), FB_FUNCTION);
 			MutexLockGuard guard(*(sAtt->getMutex()), FB_FUNCTION);
 			Attachment* attachment = sAtt->getHandle();
 

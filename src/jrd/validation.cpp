@@ -732,7 +732,7 @@ static int validate(Firebird::UtilSvc* svc)
 		dpb.insertPath(isc_dpb_org_filename, dbName);
 
 	FbLocalStatus status;
-	RefPtr<JProvider> jProv(JProvider::getInstance());
+	AutoPlugin<JProvider> jProv(JProvider::getInstance());
 	RefPtr<JAttachment> jAtt;
 	jAtt.assignRefNoIncr(jProv->attachDatabase(&status, expandedFilename.c_str(), dpb.getBufferLength(), dpb.getBuffer()));
 

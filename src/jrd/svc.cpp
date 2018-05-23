@@ -136,6 +136,61 @@ namespace {
 	GlobalPtr<AllServices> allServices;	// protected by globalServicesMutex
 	volatile bool svcShutdown = false;
 
+	class ThreadCollect
+	{
+	public:
+		ThreadCollect(MemoryPool& p)
+			: threads(p)
+		{ }
+
+		void join()
+		{
+			// join threads to be sure they are gone when shutdown is complete
+			// no need locking something cause this is expected to run when services are closing
+			waitFor(threads);
+		}
+
+		void add(Thread::Handle& h)
+		{
+			// put thread into completion wait queue when it finished running
+			MutexLockGuard g(threadsMutex, FB_FUNCTION);
+			threads.add(h);
+		}
+
+		void houseKeeping()
+		{
+			if (!threads.hasData())
+				return;
+
+			// join finished threads
+			AllThreads t;
+			{ // mutex scope
+				MutexLockGuard g(threadsMutex, FB_FUNCTION);
+				t.assign(threads);
+				threads.clear();
+			}
+
+			waitFor(t);
+		}
+
+	private:
+		typedef Array<Thread::Handle> AllThreads;
+
+		static void waitFor(AllThreads& thr)
+		{
+			while (thr.hasData())
+			{
+				Thread::Handle h(thr.pop());
+				Thread::waitForCompletion(h);
+			}
+		}
+
+		AllThreads threads;
+		Mutex threadsMutex;
+	};
+
+	GlobalPtr<ThreadCollect> threadCollect;
+
 	void spbVersionError()
 	{
 		ERR_post(Arg::Gds(isc_bad_spb_form) <<
@@ -660,7 +715,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	svc_remote_pid(0), svc_trace_manager(NULL), svc_crypt_callback(crypt_callback),
 	svc_existence(FB_NEW_POOL(*getDefaultMemoryPool()) SvcMutex(this)),
 	svc_stdin_size_requested(0), svc_stdin_buffer(NULL), svc_stdin_size_preload(0),
-	svc_stdin_preload_requested(0), svc_stdin_user_size(0)
+	svc_stdin_preload_requested(0), svc_stdin_user_size(0), svc_thread(0)
 #ifdef DEV_BUILD
 	, svc_debug(false)
 #endif
@@ -1000,6 +1055,8 @@ void Service::shutdownServices()
 
 		++pos;
 	}
+
+	threadCollect->join();
 }
 
 
@@ -1924,6 +1981,7 @@ THREAD_ENTRY_DECLARE Service::run(THREAD_ENTRY_PARAM arg)
 		RefPtr<SvcMutex> ref(svc->svc_existence);
 		exit_code = svc->svc_service_run->serv_thd(svc);
 
+		threadCollect->add(svc->svc_thread);
 		svc->started();
 		svc->svc_sem_full.release();
 		svc->finish(SVC_finished);
@@ -2086,7 +2144,10 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 
 		svc_stdout_head = svc_stdout_tail = 0;
 
-		Thread::start(run, this, THREAD_medium);
+		Thread::start(run, this, THREAD_medium, &svc_thread);
+
+		// good time for housekeeping while new thread starts
+		threadCollect->houseKeeping();
 
 		// Check for the service being detached. This will prevent the thread
 		// from waiting infinitely if the client goes away.

@@ -1569,6 +1569,26 @@ public:
 };
 
 
+class SessionResetNode : public SessionManagementNode
+{
+public:
+	explicit SessionResetNode(MemoryPool& pool)
+		: SessionManagementNode(pool)
+	{
+	}
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	{
+		SessionManagementNode::internalPrint(printer);
+
+		return "SessionResetNode";
+	}
+
+	virtual void execute(thread_db* tdbb, dsql_req* request) const;
+};
+
+
 class SetRoleNode : public SessionManagementNode
 {
 public:

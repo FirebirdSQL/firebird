@@ -56,6 +56,7 @@
 #include "../yvalve/YObjects.h"
 #include "../yvalve/why_proto.h"
 #include "../yvalve/prepa_proto.h"
+#include "../yvalve/PluginManager.h"
 #include "../jrd/constants.h"
 #include "../jrd/build_no.h"
 #include "../common/classes/ClumpletWriter.h"
@@ -3172,6 +3173,7 @@ void ThreadCleanup::initThreadCleanup()
 void ThreadCleanup::finiThreadCleanup()
 {
 	pthread_setspecific(key, NULL);
+	PluginManager::threadDetach();
 }
 
 
@@ -3204,6 +3206,7 @@ void ThreadCleanup::initThreadCleanup()
 
 void ThreadCleanup::finiThreadCleanup()
 {
+	PluginManager::threadDetach();
 }
 #endif // #ifdef WIN_NT
 

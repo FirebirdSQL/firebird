@@ -80,19 +80,20 @@ const BYTE CVT2_compare_priority[] =
 	dtype_short,
 	dtype_long,
 	dtype_quad + 1,				// Move quad up by one to make room for int64 at its proper place in the table.
-	dtype_real + 3,				// Also leave space for dec64 and dec 128.
-	dtype_double + 3,
-	dtype_d_float + 3,
-	dtype_sql_date + 3,
-	dtype_sql_time + 3,
-	dtype_timestamp + 3,
-	dtype_blob + 3,
-	dtype_array + 3,
+	dtype_real + 4,				// Also leave space for dec_fixed, dec64 and dec128.
+	dtype_double + 4,
+	dtype_d_float + 4,
+	dtype_sql_date + 4,
+	dtype_sql_time + 4,
+	dtype_timestamp + 4,
+	dtype_blob + 4,
+	dtype_array + 4,
 	dtype_long + 1,				// int64 goes right after long
 	dtype_dbkey,				// compares with nothing except itself
 	dtype_boolean,				// compares with nothing except itself
-	dtype_quad + 2,				// dec64 and dec128 go after quad before real
-	dtype_quad + 3
+	dtype_quad + 3,				// dec64 and dec128 go after dec64 before real
+	dtype_quad + 4,
+	dtype_quad + 2				// dec_fixed goes after quad before dec64
 };
 
 static inline int QUAD_COMPARE(const SQUAD* arg1, const SQUAD* arg2)

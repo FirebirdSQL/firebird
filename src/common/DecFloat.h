@@ -70,6 +70,10 @@ struct DecimalBinding
 	SCHAR numScale;
 };
 
+// Default values for user sessions
+const DecimalStatus DefaultDecimalStatus(FB_DEC_Errors);
+const DecimalBinding DefaultDecimalBinding;
+
 class DecimalFixed;
 
 class Decimal64

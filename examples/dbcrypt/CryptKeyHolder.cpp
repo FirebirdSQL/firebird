@@ -56,6 +56,8 @@ public:
 		pluginManager = NULL;
 	}
 
+	void threadDetach() {};
+
 private:
 	IPluginManager* pluginManager;
 };

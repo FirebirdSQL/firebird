@@ -37,6 +37,7 @@
 #include "../jrd/ext_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/met_proto.h"
+#include "../jrd/scl_proto.h"
 #include "../jrd/tra_proto.h"
 
 #include "../jrd/extds/ExtDS.h"
@@ -203,7 +204,8 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 	  att_functions(*pool),
 	  att_internal(*pool),
 	  att_dyn_req(*pool),
-	  att_dec_status(FB_DEC_Errors),
+	  att_dec_status(DefaultDecimalStatus),
+	  att_dec_binding(DefaultDecimalBinding),
 	  att_charsets(*pool),
 	  att_charset_ids(*pool),
 	  att_pools(*pool),
@@ -361,6 +363,43 @@ void Jrd::Attachment::storeBinaryBlob(thread_db* tdbb, jrd_tra* transaction,
 	}
 
 	blob->BLB_close(tdbb);
+}
+
+void Jrd::Attachment::releaseGTTs(thread_db* tdbb)
+{
+	if (!att_relations)
+		return;
+
+	for (FB_SIZE_T i = 1; i < att_relations->count(); i++)
+	{
+		jrd_rel* relation = (*att_relations)[i];
+		if (relation && (relation->rel_flags & REL_temp_conn) &&
+			!(relation->rel_flags & (REL_deleted | REL_deleting)))
+		{
+			relation->delPages(tdbb);
+		}
+	}
+}
+
+void Jrd::Attachment::resetSession(thread_db* tdbb)
+{
+	// reset DecFloat
+	att_dec_status = DefaultDecimalStatus;
+	att_dec_binding = DefaultDecimalBinding;
+
+	// reset timeouts
+	setIdleTimeout(0);
+	setStatementTimeout(0);
+
+	// reset context variables
+	att_context_vars.clear();
+
+	// reset role
+	if (att_user->resetRole())
+		SCL_release_all(att_security_classes);
+
+	// reset GTT's
+	releaseGTTs(tdbb);
 }
 
 

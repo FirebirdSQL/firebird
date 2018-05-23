@@ -163,7 +163,7 @@ DECFLOAT (FB 4.0)
 				(to nearest, if equidistant - up), HALF_EVEN (to nearest, if equidistant - ensure
 				last digit in the result to be even), HALF_DOWN (to nearest, if equidistant - down),
 				DOWN (towards 0), FLOOR (towards -infinity), REROUND (up if digit to be rounded is
-				0 or 5, down in other cases).
+				0 or 5, down in other cases). HALF_UP rounding is used by default.
 
 			SET DECFLOAT TRAPS TO <comma-separated traps list - may be empty> - controls which
 				exceptional conditions cause a trap. Valid traps are: Division_by_zero, Inexact,
@@ -179,8 +179,9 @@ DECFLOAT (FB 4.0)
 				native format. One can choose between strings (ideal precision, but poor support
 				for further processing), floating point values (ideal support for further processing
 				but poor precision) or scaled integers (good support for further processing and
-				required precision but range of values is very limited). When using is a tool like
-				generic purporse GUI client choice of CHAR binding is OK in most cases.
+				required precision but range of values is very limited). When using in a tool like
+				generic purporse GUI client choice of CHAR binding is OK in most cases. By default
+				NATIVE binding is used.
 
 	5.	The length of DECFLOAT literals are limited to 1024 characters. For longer values, you will
 			need to use the scientific notation. For example, the 0.0<1020 zeroes>11 cannot be used
