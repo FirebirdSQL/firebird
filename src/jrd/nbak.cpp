@@ -45,6 +45,7 @@
 #include "../common/os/guid.h"
 #include "../common/os/isc_i_proto.h"
 #include "../jrd/CryptoManager.h"
+#include "../common/classes/WipeFile.h"
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -233,10 +234,24 @@ void BackupManager::openDelta(thread_db* tdbb)
 	}
 }
 
-void BackupManager::closeDelta(thread_db* tdbb)
+void BackupManager::closeDelta(thread_db* tdbb, bool doUnlink)
 {
 	if (diff_file)
 	{
+		//If the file is only unlink called PIO_flush pointless if the file has been wipe is required PIO_flush
+		if (doUnlink)
+		{
+			if (MemoryPool::wipePasses > 0)
+			{
+				WipeFile(diff_file->fil_desc);
+				PIO_flush(tdbb, diff_file);
+			}
+			PIO_close(diff_file);
+			unlink(diff_name.c_str());
+			diff_file = NULL;
+			return;
+		}
+
 		PIO_flush(tdbb, diff_file);
 		PIO_close(diff_file);
 		diff_file = NULL;
@@ -613,7 +628,6 @@ void BackupManager::endBackup(thread_db* tdbb, bool recover)
 		}
 
 		closeDelta(tdbb);
-		unlink(diff_name.c_str());
 
 		NBAK_TRACE(("backup is over"));
 		endLock.unlockWrite(tdbb);

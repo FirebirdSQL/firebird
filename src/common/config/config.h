@@ -140,6 +140,7 @@ public:
 		KEY_REMOTE_ACCESS,
 		KEY_IPV6_V6ONLY,
 		KEY_WIRE_COMPRESSION,
+		KEY_MEMORY_WIPE_PASSES,
 		KEY_MAX_IDENTIFIER_BYTE_LENGTH,
 		KEY_MAX_IDENTIFIER_CHAR_LENGTH,
 		KEY_ENCRYPT_SECURITY_DATABASE,
@@ -340,6 +341,8 @@ public:
 	static FB_UINT64 getMaxUserTraceLogSize();
 
 	static int getServerMode();
+
+	static int getMemoryWipePasses();
 
 	const char* getPlugins(unsigned int type) const;
 

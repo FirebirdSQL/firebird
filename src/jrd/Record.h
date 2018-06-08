@@ -206,6 +206,10 @@ namespace Jrd
 			if (m_record)
 			{
 				m_record->m_flags &= ~FLAG;
+
+				if (FLAG == REC_gc_active && MemoryPool::wipePasses > 0)
+					MemoryPool::wipeMemory(m_record->getData(), m_record->getLength());
+
 				m_record = NULL;
 			}
 		}

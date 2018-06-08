@@ -84,6 +84,7 @@ private:
 	offset_t position;
 	offset_t size;
 	bool doUnlink;
+	bool needWipe;
 };
 
 }	// namespace Firebird

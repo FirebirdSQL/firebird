@@ -210,6 +210,9 @@
     <ClCompile Include="..\..\..\src\common\Tokens.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\WipeFile.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\classes\Hash.cpp">
       <Filter>classes</Filter>
     </ClCompile>

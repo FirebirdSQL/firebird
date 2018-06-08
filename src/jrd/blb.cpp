@@ -2169,6 +2169,15 @@ void blb::delete_blob(thread_db* tdbb, ULONG prior_page)
 		for (; ptr < end; ++ptr)
 		{
 			if (*ptr) {
+				//wipe unnecessary blob data page
+				if(MemoryPool::wipePasses > 0)
+				{
+					WIN window(PageNumber(pageSpaceID, *ptr));
+					CCH_FETCH(tdbb, &window, LCK_write, pag_blob);
+					CCH_MARK(tdbb, &window);
+					MemoryPool::wipeMemory(window.win_buffer, dbb->dbb_page_size);
+					CCH_RELEASE(tdbb, &window);
+				}
 				PAG_release_page(tdbb, PageNumber(pageSpaceID, *ptr), prior);
 			}
 		}

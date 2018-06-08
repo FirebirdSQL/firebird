@@ -197,6 +197,7 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_BOOLEAN,		"RemoteAccess",				(ConfigValue) true},
 	{TYPE_BOOLEAN,		"IPv6V6Only",				(ConfigValue) false},
 	{TYPE_BOOLEAN,		"WireCompression",			(ConfigValue) false},
+	{TYPE_INTEGER,		"MemoryWipePasses",			(ConfigValue) 0},
 	{TYPE_INTEGER,		"MaxIdentifierByteLength",	(ConfigValue) -1},
 	{TYPE_INTEGER,		"MaxIdentifierCharLength",	(ConfigValue) -1},
 	{TYPE_BOOLEAN,		"AllowEncryptedSecurityDatabase", (ConfigValue) false},
@@ -806,6 +807,11 @@ bool Config::getRemoteAccess() const
 bool Config::getWireCompression() const
 {
 	return get<bool>(KEY_WIRE_COMPRESSION);
+}
+
+int Config::getMemoryWipePasses()
+{
+	return fb_utils::bootBuild() ? 0 : ((int) getDefaultConfig()->values[KEY_MEMORY_WIPE_PASSES]);
 }
 
 int Config::getMaxIdentifierByteLength() const

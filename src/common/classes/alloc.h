@@ -182,6 +182,9 @@ public:
 
 	static MemoryPool* defaultMemoryManager;
 
+	// Memory wipe passes
+	static int wipePasses;
+
 public:
 	// Create memory pool instance
 	static MemoryPool* createPool(MemoryPool* parent = NULL, MemoryStats& stats = *default_stats_group);
@@ -227,6 +230,14 @@ public:
 	// Initialize and finalize global memory pool
 	static void init();
 	static void cleanup();
+
+	static inline void wipeMemory(void* ptr, size_t size)
+	{
+		for (int currentWipe = 1; currentWipe <= wipePasses; currentWipe++)
+		{
+			memset(ptr, ((currentWipe & 1) || (currentWipe == wipePasses)) ? 0 : 0xFF, size);
+		}
+	}
 
 	// Initialize context pool
 	static void contextPoolInit();

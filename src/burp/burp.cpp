@@ -57,6 +57,7 @@
 #include "../common/isc_f_proto.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/Switches.h"
+#include "../common/classes/WipeFile.h"
 #include "../common/IntlUtil.h"
 #include "../common/os/os_utils.h"
 #include "../burp/burpswi.h"
@@ -1339,15 +1340,15 @@ int gbak(Firebird::UtilSvc* uSvc)
 	{
 		if (file->fil_fd != GBAK_STDIN_DESC() && file->fil_fd != GBAK_STDOUT_DESC())
 		{
-			if (file->fil_fd != INVALID_HANDLE_VALUE)
-			{
-				close_platf(file->fil_fd);
+			bool doUnlink = (exit_code != FINI_OK && (tdgbl->action->act_action == ACT_backup_split || tdgbl->action->act_action == ACT_backup));
+			if (doUnlink && MemoryPool::wipePasses > 0)
+				WipeFile(file->fil_fd);
 
-				if (exit_code != FINI_OK &&
-					(tdgbl->action->act_action == ACT_backup_split || tdgbl->action->act_action == ACT_backup))
-				{
-					unlink_platf(tdgbl->toSystem(file->fil_name).c_str());
-				}
+			close_platf(file->fil_fd);
+
+			if (doUnlink)
+			{
+				unlink_platf(tdgbl->toSystem(file->fil_name).c_str());
 			}
 		}
 	}

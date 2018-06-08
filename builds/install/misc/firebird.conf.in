@@ -986,3 +986,10 @@
 # Type: string
 #
 #ServerMode = Super
+
+# ----------------------------
+# Memory wipe passes
+#
+# Type: integer
+#
+#MemoryWipePasses = 0

@@ -3890,6 +3890,8 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 			QUE_INSERT((*mod_que), bdb->bdb_que);
 			bdb->bdb_flags &= ~BDB_free_pending;
 
+			if (MemoryPool::wipePasses > 0)
+				MemoryPool::wipeMemory(bdb->bdb_buffer, dbb->dbb_page_size);
 			// This correction for bdb_use_count below is needed to
 			// avoid a deadlock situation in latching code.  It's not
 			// clear though how the bdb_use_count can get < 0 for a bdb

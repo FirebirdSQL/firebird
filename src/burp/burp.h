@@ -799,16 +799,16 @@ const unsigned int MAX_FILE_NAME_SIZE		= 256;
 
 #include "../burp/std_desc.h"
 
+inline static void unlink_platf(const TEXT* file_name)
+{
+	unlink(file_name);
+}
+
 #ifdef WIN_NT
 
 inline static void close_platf(DESC file)
 {
 	CloseHandle(file);
-}
-
-inline static void unlink_platf(const TEXT* file_name)
-{
-	DeleteFile(file_name);
 }
 
 inline static void flush_platf(DESC file)
@@ -819,11 +819,6 @@ inline static void flush_platf(DESC file)
 #else // WIN_NT
 
 void close_platf(DESC file);
-
-inline static void unlink_platf(const TEXT* file_name)
-{
-	unlink(file_name);
-}
 
 inline static void flush_platf(DESC file)
 {

@@ -450,7 +450,7 @@ public:
 
 	// Must have FbStatusVector because it is called from write_page
 	void openDelta(thread_db* tdbb);
-	void closeDelta(thread_db* tdbb);
+	void closeDelta(thread_db* tdbb, bool doUnlink = false);
 	bool writeDifference(thread_db* tdbb, FbStatusVector* status, ULONG diff_page, Ods::pag* page);
 	bool readDifference(thread_db* tdbb, ULONG diff_page, Ods::pag* page);
 	void flushDifference(thread_db* tdbb);

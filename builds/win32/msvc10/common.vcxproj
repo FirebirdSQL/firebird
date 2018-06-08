@@ -98,6 +98,7 @@
     <ClCompile Include="..\..\..\src\common\utils.cpp" />
     <ClCompile Include="..\..\..\src\common\UtilSvc.cpp" />
     <ClCompile Include="..\..\..\src\common\xdr.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\WipeFile.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\common\Auth.h" />

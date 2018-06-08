@@ -733,6 +733,8 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 
 	CCH_precedence(tdbb, window, prior_page);
 	CCH_MARK(tdbb, window);
+	if (MemoryPool::wipePasses > 0)
+		MemoryPool::wipeMemory(rpb->rpb_address, rpb->rpb_length);
 	index->dpg_offset = 0;
 	index->dpg_length = 0;
 
@@ -980,6 +982,8 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 
 	relPages->rel_slot_space = MIN(relPages->rel_slot_space, pp_sequence);
 
+	if (MemoryPool::wipePasses > 0)
+		MemoryPool::wipeMemory(window->win_buffer, dbb->dbb_page_size);
 	CCH_RELEASE(tdbb, &pwindow);
 	CCH_RELEASE(tdbb, window);
 
@@ -1086,6 +1090,16 @@ void DPM_delete_relation_pages(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation,
 
 				CCH_RELEASE_TAIL(tdbb, &data_window);
 			}
+
+			if(MemoryPool::wipePasses > 0)
+			{
+				WIN window(PageNumber(relPages->rel_pg_space_id, *page));
+				CCH_FETCH(tdbb, &window, LCK_write, pag_data);
+				CCH_MARK(tdbb, &window);
+				MemoryPool::wipeMemory(window.win_buffer, dbb->dbb_page_size);
+				CCH_RELEASE(tdbb, &window);
+			}
+
 			pages.add(*page);
 		}
 
@@ -2575,6 +2589,7 @@ static void delete_tail(thread_db* tdbb, rhdf* header, const USHORT page_space, 
 				PAG_release_page(tdbb, PageNumber(page_space, *page2++), ZERO_PAGE_NUMBER);
 
 			CCH_RELEASE_TAIL(tdbb, &window);
+
 		}
 		PAG_release_page(tdbb, PageNumber(page_space, *page1), ZERO_PAGE_NUMBER);
 	}
