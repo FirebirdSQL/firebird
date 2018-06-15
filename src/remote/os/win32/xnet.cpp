@@ -2385,10 +2385,25 @@ bool XnetServerEndPoint::fork(ULONG client_pid, USHORT flag, ULONG* forked_pid)
 	start_crud.lpDesktop = NULL;
 	start_crud.lpTitle = NULL;
 	start_crud.dwFlags = STARTF_FORCEOFFFEEDBACK;
-	PROCESS_INFORMATION pi;
 
+	//If stdout is file, then we configured to pass output from child
+	//so pass stdout/stderr handles to child process
+	HANDLE stdout_dup = INVALID_HANDLE_VALUE;
+	HANDLE stdout_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	if (GetFileType(stdout_handle) == FILE_TYPE_DISK)
+	{
+		if (DuplicateHandle(GetCurrentProcess(), GetStdHandle(STD_OUTPUT_HANDLE), GetCurrentProcess(),
+			&stdout_dup, 0, TRUE, DUPLICATE_SAME_ACCESS))
+		{
+			start_crud.hStdOutput = stdout_dup;
+			start_crud.hStdError = stdout_dup;
+		}
+		start_crud.dwFlags |= STARTF_USESTDHANDLES;
+	}
+
+	PROCESS_INFORMATION pi;
 	const bool cp_result =
-		CreateProcess(NULL, cmdLine.begin(), NULL, NULL, FALSE,
+		CreateProcess(NULL, cmdLine.begin(), NULL, NULL, TRUE,
 					  (flag & SRVR_high_priority ? HIGH_PRIORITY_CLASS : NORMAL_PRIORITY_CLASS)
 						| DETACHED_PROCESS | CREATE_SUSPENDED,
 					   NULL, NULL, &start_crud, &pi);
@@ -2404,6 +2419,8 @@ bool XnetServerEndPoint::fork(ULONG client_pid, USHORT flag, ULONG* forked_pid)
 	}
 	else {
 		xnet_log_error("CreateProcess() failed");
+		if (stdout_dup != INVALID_HANDLE_VALUE)
+			CloseHandle(stdout_dup);
 	}
 
 	return cp_result;

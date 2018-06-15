@@ -203,11 +203,11 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,		"StatementTimeout",			(ConfigValue) 0},
 	{TYPE_INTEGER,		"ConnectionIdleTimeout",	(ConfigValue) 0},
 	{TYPE_INTEGER,		"ClientBatchBuffer",		(ConfigValue) (128 * 1024)},
-#ifdef DEV_BUILD
-	{TYPE_STRING,		"OutputRedirectionFile", 	(ConfigValue) "-"},
-#else
 #ifdef WIN_NT
 	{TYPE_STRING,		"OutputRedirectionFile", 	(ConfigValue) "nul"},
+#else
+#ifdef DEV_BUILD
+	{TYPE_STRING,		"OutputRedirectionFile", 	(ConfigValue) "-"},
 #else
 	{TYPE_STRING,		"OutputRedirectionFile", 	(ConfigValue) "/dev/null"}
 #endif

@@ -1835,6 +1835,7 @@ static int fork(SOCKET old_handle, USHORT flag)
 	string cmdLine;
 	cmdLine.printf("%s -i -h %" HANDLEFORMAT"@%" ULONGFORMAT, name, new_handle, GetCurrentProcessId());
 
+
 	STARTUPINFO start_crud;
 	start_crud.cb = sizeof(STARTUPINFO);
 	start_crud.lpReserved = NULL;
@@ -1844,8 +1845,23 @@ static int fork(SOCKET old_handle, USHORT flag)
 	start_crud.lpTitle = NULL;
 	start_crud.dwFlags = STARTF_FORCEOFFFEEDBACK;
 
+	//If stdout is file, then we configured to pass output from child
+	//so pass stdout/stderr handles to child process
+	HANDLE stdout_dup = INVALID_HANDLE_VALUE;
+	HANDLE stdout_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	if (GetFileType(stdout_handle) == FILE_TYPE_DISK)
+	{
+		if (DuplicateHandle(GetCurrentProcess(), GetStdHandle(STD_OUTPUT_HANDLE), GetCurrentProcess(),
+			&stdout_dup, 0, TRUE, DUPLICATE_SAME_ACCESS))
+		{
+			start_crud.hStdOutput = stdout_dup;
+			start_crud.hStdError = stdout_dup;
+		}
+		start_crud.dwFlags |= STARTF_USESTDHANDLES;
+	}
+
 	PROCESS_INFORMATION pi;
-	if (CreateProcess(NULL, cmdLine.begin(), NULL, NULL, FALSE,
+	if (CreateProcess(NULL, cmdLine.begin(), NULL, NULL, TRUE,
 					  (flag & SRVR_high_priority ?
 						 HIGH_PRIORITY_CLASS | DETACHED_PROCESS :
 						 NORMAL_PRIORITY_CLASS | DETACHED_PROCESS),
@@ -1859,6 +1875,8 @@ static int fork(SOCKET old_handle, USHORT flag)
 
 	gds__log("INET/inet_error: fork/CreateProcess errno = %d", GetLastError());
 	CloseHandle(new_handle);
+	if (stdout_dup != INVALID_HANDLE_VALUE)
+		CloseHandle(stdout_dup);
 	return 0;
 }
 

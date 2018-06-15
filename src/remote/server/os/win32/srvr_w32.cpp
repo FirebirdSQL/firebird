@@ -252,6 +252,65 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 		master->serverMode(server_flag & SRVR_multi_client ? 1 : 0);
 	}
 
+
+	//Preparations for redirection between child and parent processes
+	const char* redirection_file = Config::getOutputRedirectionFile();
+	HANDLE redirection_handle = INVALID_HANDLE_VALUE;
+	if (redirection_file)
+	{
+		//We want emit output to console, just open console for each process
+		//Looks like there is no easy way to redirect output to console from 
+		//child to parent (only by using pipes).
+		if (strcmp(redirection_file, "-") == 0 || stricmp(redirection_file, "CON") == 0)
+		{
+			AllocConsole();
+			AttachConsole(GetCurrentProcessId());
+			freopen("CON", "w", stdout);
+			freopen("CON", "w", stderr);
+		}
+		//Redirect all output to nul device
+		else if (stricmp(redirection_file, "nul") == 0)
+		{
+			freopen("NUL", "w", stdout);
+			freopen("NUL", "w", stderr);
+		}
+		//Redirect output to file
+		else
+		{
+			//If we in parent process, then open file and dup handles and descriptors
+			if (connection_handle == INVALID_HANDLE_VALUE)
+			{
+				SECURITY_ATTRIBUTES sa;
+				sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+				sa.lpSecurityDescriptor = NULL;
+				sa.bInheritHandle = TRUE;
+
+				redirection_handle = CreateFile(redirection_file, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ,
+					&sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+				if (redirection_handle != INVALID_HANDLE_VALUE)
+				{
+					int descr = _open_osfhandle((intptr_t)redirection_handle, _O_APPEND);
+					_dup2(descr, _fileno(stdout));
+					_dup2(descr, _fileno(stderr));
+					setvbuf(stdout, NULL, _IONBF, 0);
+					setvbuf(stderr, NULL, _IONBF, 0);
+					SetStdHandle(STD_OUTPUT_HANDLE, redirection_handle);
+					SetStdHandle(STD_ERROR_HANDLE, redirection_handle);
+				}
+				else
+				{
+					gds__log("Unable to open file %s for stdout redirection", redirection_file);
+				}
+			}
+			else
+			{
+				setvbuf(stdout, NULL, _IONBF, 0);
+				setvbuf(stderr, NULL, _IONBF, 0);
+			}
+		}
+	}
+
 	TEXT mutex_name[MAXPATHLEN];
 	fb_utils::snprintf(mutex_name, sizeof(mutex_name), SERVER_MUTEX, instance);
 	fb_utils::prefix_kernel_object_name(mutex_name, sizeof(mutex_name));
@@ -355,6 +414,27 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 		fclose(file);
 	}
 #endif
+
+	//Cleanup handles and descriptors opened for stderr/stdout redirection
+	if (connection_handle != INVALID_HANDLE_VALUE)
+	{
+		HANDLE stdout_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		if (stdout_handle != INVALID_HANDLE_VALUE && GetFileType(stdout_handle) == FILE_TYPE_DISK)
+		{
+			CloseHandle(stdout_handle);
+			fclose(stdout);
+			fclose(stderr);
+		}
+	}
+	else
+	{
+		if (redirection_handle != INVALID_HANDLE_VALUE)
+		{
+			CloseHandle(redirection_handle);
+			fclose(stdout);
+			fclose(stderr);
+		}
+	}
 
 	return nReturnValue;
 }

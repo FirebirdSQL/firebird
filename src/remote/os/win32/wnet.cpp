@@ -379,7 +379,22 @@ rem_port* WNET_connect(const TEXT* name, PACKET* packet, USHORT flag, Firebird::
 		start_crud.lpTitle = NULL;
 		start_crud.dwFlags = STARTF_FORCEOFFFEEDBACK;
 
-		if (CreateProcess(NULL, cmdLine.begin(), NULL, NULL, FALSE,
+		//If stdout is file, then we configured to pass output from child
+		//so pass stdout/stderr handles to child process
+		HANDLE stdout_dup = INVALID_HANDLE_VALUE;
+		HANDLE stdout_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		if (GetFileType(stdout_handle) == FILE_TYPE_DISK)
+		{
+			if (DuplicateHandle(GetCurrentProcess(), GetStdHandle(STD_OUTPUT_HANDLE), GetCurrentProcess(),
+				&stdout_dup, 0, TRUE, DUPLICATE_SAME_ACCESS))
+			{
+				start_crud.hStdOutput = stdout_dup;
+				start_crud.hStdError = stdout_dup;
+			}
+			start_crud.dwFlags |= STARTF_USESTDHANDLES;
+		}
+
+		if (CreateProcess(NULL, cmdLine.begin(), NULL, NULL, TRUE,
 						  (flag & SRVR_high_priority ?
 							 HIGH_PRIORITY_CLASS | DETACHED_PROCESS :
 							 NORMAL_PRIORITY_CLASS | DETACHED_PROCESS),
@@ -393,6 +408,8 @@ rem_port* WNET_connect(const TEXT* name, PACKET* packet, USHORT flag, Firebird::
 		{
 			gds__log("WNET/inet_error: fork/CreateProcess errno = %d", GetLastError());
 			CloseHandle(port->port_pipe);
+			if (stdout_dup != INVALID_HANDLE_VALUE)
+				CloseHandle(stdout_dup);
 		}
 
 		if (wnet_shutdown)
