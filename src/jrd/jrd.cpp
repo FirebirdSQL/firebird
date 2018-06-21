@@ -3235,7 +3235,7 @@ JBlob* JAttachment::openBlob(CheckStatusWrapper* user_status, ITransaction* tra,
 			const bid* id = reinterpret_cast<bid*>(blob_id);
 
 			if (blob_id->gds_quad_high)
-				transaction->checkBlob(tdbb, id);
+				transaction->checkBlob(tdbb, id, true);
 
 			blob = blb::open2(tdbb, transaction, id, bpb_length, bpb, true);
 		}

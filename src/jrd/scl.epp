@@ -1230,6 +1230,7 @@ SecurityClass* SCL_recompute_class(thread_db* tdbb, const TEXT* string)
 	}
 
 	s_class->scl_flags = compute_access(tdbb, s_class, NULL, 0, NULL);
+	s_class->scl_blb_access = SecurityClass::BA_UNKNOWN;
 
 	if (s_class->scl_flags & SCL_exists) {
 		return s_class;

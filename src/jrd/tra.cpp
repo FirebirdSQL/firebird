@@ -3631,7 +3631,7 @@ void jrd_tra::releaseAutonomousPool(MemoryPool* toRelease)
 }
 
 
-void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id)
+void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, bool punt)
 {
 	USHORT rel_id = blob_id->bid_internal.bid_relation_id;
 	if ((tra_attachment->isGbak()) ||
@@ -3642,7 +3642,8 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id)
 		return;
 	}
 
-	if (!tra_blobs->locate(blob_id->bid_temp_id()))
+	if (!tra_blobs->locate(blob_id->bid_temp_id()) && 
+		!tra_fetched_blobs.locate(*blob_id))
 	{
 		vec<jrd_rel*>* vector = tra_attachment->att_relations;
 		jrd_rel* blb_relation;
@@ -3651,11 +3652,45 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id)
 			if (blb_relation->rel_security_name.isEmpty())
 				MET_scan_relation(tdbb, blb_relation);
 			SecurityClass* s_class = SCL_get_class(tdbb, blb_relation->rel_security_name.c_str());
-			if (s_class && !s_class->scl_blb_access)
+			if (s_class)
 			{
-				SCL_check_access(tdbb, s_class, 0, 0, NULL, SCL_select, SCL_object_table, false, 
-					blb_relation->rel_name);
-				s_class->scl_blb_access = true;
+				if (s_class->scl_blb_access == SecurityClass::BA_UNKNOWN)
+				{
+					// Relation has not been checked for access rights
+					try
+					{
+						SCL_check_access(tdbb, s_class, 0, 0, NULL, SCL_select, SCL_object_table, false,
+							blb_relation->rel_name);
+						s_class->scl_blb_access = SecurityClass::BA_SUCCESS;
+					}
+					catch (const Exception&)
+					{
+						if (tdbb->tdbb_status_vector->getErrors()[1] != isc_no_priv)
+							throw;
+
+						// We don't have access to this relation
+						s_class->scl_blb_access = SecurityClass::BA_FAILURE;
+
+						if (punt)
+							throw;
+
+						// but someone else has (SP, view)
+						// store Blob ID as allowed in this transaction
+						tra_fetched_blobs.add(*blob_id);
+						tdbb->tdbb_status_vector->clearException();
+					}
+				}
+				else 
+					// Relation has been checked earlier and check was failed
+					if (s_class->scl_blb_access == SecurityClass::BA_FAILURE)
+					{
+						if (punt)
+							ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("SELECT") <<
+								Arg::Str("TABLE") <<
+								Arg::Str(blb_relation->rel_name));
+						else
+							tra_fetched_blobs.add(*blob_id);
+					}
 			}
 		}
 	}
