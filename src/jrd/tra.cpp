@@ -3652,45 +3652,56 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, bool punt)
 			if (blb_relation->rel_security_name.isEmpty())
 				MET_scan_relation(tdbb, blb_relation);
 			SecurityClass* s_class = SCL_get_class(tdbb, blb_relation->rel_security_name.c_str());
-			if (s_class)
+
+			if (!s_class)
+				return;
+			
+			switch (s_class->scl_blb_access)
 			{
-				if (s_class->scl_blb_access == SecurityClass::BA_UNKNOWN)
+			case SecurityClass::BA_UNKNOWN:
+				// Relation has not been checked for access rights
+				try
 				{
-					// Relation has not been checked for access rights
-					try
-					{
-						SCL_check_access(tdbb, s_class, 0, 0, NULL, SCL_select, SCL_object_table, false,
-							blb_relation->rel_name);
-						s_class->scl_blb_access = SecurityClass::BA_SUCCESS;
-					}
-					catch (const Exception&)
-					{
-						if (tdbb->tdbb_status_vector->getErrors()[1] != isc_no_priv)
-							throw;
-
-						// We don't have access to this relation
-						s_class->scl_blb_access = SecurityClass::BA_FAILURE;
-
-						if (punt)
-							throw;
-
-						// but someone else has (SP, view)
-						// store Blob ID as allowed in this transaction
-						tra_fetched_blobs.add(*blob_id);
-						tdbb->tdbb_status_vector->clearException();
-					}
+					SCL_check_access(tdbb, s_class, 0, 0, NULL, SCL_select, SCL_object_table, false,
+						blb_relation->rel_name);
+					s_class->scl_blb_access = SecurityClass::BA_SUCCESS;
 				}
-				else 
-					// Relation has been checked earlier and check was failed
-					if (s_class->scl_blb_access == SecurityClass::BA_FAILURE)
-					{
-						if (punt)
-							ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("SELECT") <<
-								Arg::Str("TABLE") <<
-								Arg::Str(blb_relation->rel_name));
-						else
-							tra_fetched_blobs.add(*blob_id);
-					}
+				catch (const Exception& ex)
+				{
+					StaticStatusVector status;
+					ex.stuffException(status);
+					if (status[1] != isc_no_priv)
+						throw;
+
+					// We don't have access to this relation
+					s_class->scl_blb_access = SecurityClass::BA_FAILURE;
+
+					if (punt)
+						throw;
+
+					// but someone else has (SP, view)
+					// store Blob ID as allowed in this transaction
+					tra_fetched_blobs.add(*blob_id);
+					tdbb->tdbb_status_vector->clearException();
+				}
+				break;
+						
+			case SecurityClass::BA_FAILURE:
+				// Relation has been checked earlier and check was failed
+				if (punt)
+					ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("SELECT") <<
+						Arg::Str("TABLE") <<
+						Arg::Str(blb_relation->rel_name));
+				else
+					tra_fetched_blobs.add(*blob_id);
+				break;
+
+			case SecurityClass::BA_SUCCESS:
+				// do nothing
+				break;
+
+			default:
+				fb_assert(false);
 			}
 		}
 	}
