@@ -3655,13 +3655,15 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, bool punt)
 
 			if (!s_class)
 				return;
-			
+
 			switch (s_class->scl_blb_access)
 			{
 			case SecurityClass::BA_UNKNOWN:
 				// Relation has not been checked for access rights
 				try
 				{
+					ThreadStatusGuard status_vector(tdbb);
+
 					SCL_check_access(tdbb, s_class, 0, 0, NULL, SCL_select, SCL_object_table, false,
 						blb_relation->rel_name);
 					s_class->scl_blb_access = SecurityClass::BA_SUCCESS;
@@ -3682,7 +3684,6 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, bool punt)
 					// but someone else has (SP, view)
 					// store Blob ID as allowed in this transaction
 					tra_fetched_blobs.add(*blob_id);
-					tdbb->tdbb_status_vector->clearException();
 				}
 				break;
 						
