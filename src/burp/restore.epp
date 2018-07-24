@@ -3030,7 +3030,9 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 
 		if (s)
 		{
-			if (status_vector[1] == isc_not_valid)
+			ISC_STATUS error_code = status_vector[1];
+
+			if (error_code == isc_not_valid)
 			{
 				if (tdgbl->gbl_sw_incremental)
 				{
@@ -3042,7 +3044,7 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 					BURP_error_redirect (status_vector, 47);
 					// msg 47 warning -- record could not be restored
 			}
-			else if (status_vector[1] == isc_malformed_string)
+			else if (error_code == isc_malformed_string)
 			{
 				if (tdgbl->gbl_sw_incremental)
 				{
@@ -3056,8 +3058,20 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 					BURP_error_redirect(status_vector, 342);	// isc_gbak_invalid_data
 			}
 			else
-				BURP_error_redirect (status_vector, 48);
-				// msg 48 isc_send failed
+			{
+				if (tdgbl->gbl_sw_incremental &&
+					error_code != isc_io_error &&
+					error_code != isc_att_shutdown &&
+					error_code != isc_net_write_err)
+				{
+					BURP_print (false, 114, relation->rel_name);
+					// msg 114 restore failed for record in relation %s
+					BURP_print_status (false, status_vector);
+				}
+				else
+					BURP_error_redirect (status_vector, 48);
+					// msg 48 isc_send failed
+			}
 
 			records--;
 		}
