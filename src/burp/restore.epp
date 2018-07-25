@@ -3327,7 +3327,7 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 				}
 				else
 				{
-					if (tdgbl->gbl_sw_incremental)
+					if (tdgbl->gbl_sw_incremental && isc_sqlcode(status_vector.getErrors()) != -902)
 					{
 						BURP_print (false, 114, relation->rel_name);
 						// msg 114 restore failed for record in relation %s
@@ -3832,7 +3832,7 @@ rec_type get_data_old(BurpGlobals* tdgbl, burp_rel* relation)
 			}
 			else
 			{
-				if (tdgbl->gbl_sw_incremental)
+				if (tdgbl->gbl_sw_incremental && isc_sqlcode(status_vector->getErrors()) != -902)
 				{
 					BURP_print (false, 114, relation->rel_name);
 					// msg 114 restore failed for record in relation %s
