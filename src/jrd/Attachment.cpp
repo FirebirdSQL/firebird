@@ -253,6 +253,20 @@ Jrd::Attachment::~Attachment()
 	for (unsigned n = 0; n < att_batches.getCount(); ++n)
 		att_batches[n]->resetHandle();
 
+	for (Function** iter = att_functions.begin(); iter < att_functions.end(); ++iter)
+	{
+		Function* const function = *iter;
+		if (function)
+			delete function;
+	}
+
+	for (jrd_prc** iter = att_procedures.begin(); iter < att_procedures.end(); ++iter)
+	{
+		jrd_prc* const procedure = *iter;
+		if (procedure)
+			delete procedure;
+	}
+
 	while (att_pools.hasData())
 		deletePool(att_pools.pop());
 

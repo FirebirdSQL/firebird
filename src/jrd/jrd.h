@@ -170,6 +170,11 @@ public:
 		  extBody(p),
 		  extTrigger(NULL)
 	{}
+
+	virtual ~Trigger()
+	{
+		delete extTrigger;
+	}
 };
 
 
@@ -251,6 +256,11 @@ public:
 	{
 		delete prc_record_format;
 		prc_record_format = NULL;
+	}
+
+	virtual ~jrd_prc()
+	{
+		delete prc_external;
 	}
 
 	virtual bool checkCache(thread_db* tdbb) const;

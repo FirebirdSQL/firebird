@@ -9020,8 +9020,6 @@ void TrigVector::release(thread_db* tdbb) const
 			JrdStatement* stmt = t->statement;
 			if (stmt)
 				stmt->release(tdbb);
-
-			delete t->extTrigger;
 		}
 
 		delete this;
