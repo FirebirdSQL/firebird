@@ -148,6 +148,7 @@ namespace Jrd
 		void release(thread_db* tdbb);
 		void releaseStatement(thread_db* tdbb);
 		void remove(thread_db* tdbb);
+		virtual void releaseExternal() {};
 
 	public:
 		virtual int getObjectType() const = 0;

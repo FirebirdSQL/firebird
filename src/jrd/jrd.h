@@ -265,6 +265,12 @@ public:
 
 	virtual bool checkCache(thread_db* tdbb) const;
 	virtual void clearCache(thread_db* tdbb);
+
+	virtual void releaseExternal()
+	{
+		delete prc_external;
+		prc_external = NULL;
+	}
 };
 
 
