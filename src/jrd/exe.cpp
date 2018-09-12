@@ -705,6 +705,10 @@ void EXE_receive(thread_db* tdbb,
 						current->bli_request = NULL;
 					}
 				}
+				else
+				{
+					transaction->checkBlob(tdbb, id, NULL, false);
+				}
 			}
 		}
 	}

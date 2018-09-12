@@ -1403,16 +1403,7 @@ blb* blb::open2(thread_db* tdbb,
 		if (!blob->blb_relation->isSystem() && blob->blb_fld_id < blob->blb_relation->rel_fields->count())
 		{
 			jrd_fld* fld = (*blob->blb_relation->rel_fields)[blob->blb_fld_id];
-			if (fld->fld_security_name.hasData())
-			{
-				SecurityClass* s_class = SCL_get_class(tdbb, fld->fld_security_name.c_str());
-				if (s_class && !s_class->scl_blb_access)
-				{
-					SCL_check_access(tdbb, s_class, 0, 0, NULL, SCL_select, SCL_object_column, false,
-						fld->fld_name, blob->blb_relation->rel_name);
-					s_class->scl_blb_access = true;
-				}
-			}
+			transaction->checkBlob(tdbb, &blobId, fld, true);
 		}
 #endif
 
