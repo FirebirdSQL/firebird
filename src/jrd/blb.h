@@ -135,6 +135,13 @@ struct bid
 		return bid_quad.bid_quad_high == other.bid_quad.bid_quad_high &&
 			bid_quad.bid_quad_low == other.bid_quad.bid_quad_low;
 	}
+
+	bool operator > (const bid& other) const
+	{
+		return bid_quad.bid_quad_high > other.bid_quad.bid_quad_high ||
+				(bid_quad.bid_quad_high == other.bid_quad.bid_quad_high &&
+				bid_quad.bid_quad_low > other.bid_quad.bid_quad_low);
+	}
 };
 
 /* Your basic blob block. */

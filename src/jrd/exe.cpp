@@ -763,6 +763,10 @@ void EXE_receive(thread_db*		tdbb,
 						current->bli_request = NULL;
 					}
 				}
+				else
+				{
+					transaction->checkBlob(tdbb, id, false);
+				}
 			}
 		}
 	}
@@ -960,7 +964,7 @@ void EXE_send(thread_db*		tdbb,
 			if (!bid->isEmpty())
 			{
 				if (!(request->req_flags & req_internal))
-					transaction->checkBlob(tdbb, bid);
+					transaction->checkBlob(tdbb, bid, true);
 
 				if (desc->getCharSet() != CS_NONE && desc->getCharSet() != CS_BINARY)
 				{
