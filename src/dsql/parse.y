@@ -618,6 +618,7 @@ using namespace Firebird;
 %token <metaNamePtr> RDB_ERROR
 %token <metaNamePtr> RDB_ROLE_IN_USE
 %token <metaNamePtr> RDB_SYSTEM_PRIVILEGE
+%token <metaNamePtr> RESET
 %token <metaNamePtr> SECURITY
 %token <metaNamePtr> SESSION
 %token <metaNamePtr> SQL
@@ -628,6 +629,15 @@ using namespace Firebird;
 %token <metaNamePtr> UNBOUNDED
 %token <metaNamePtr> VARBINARY
 %token <metaNamePtr> WINDOW
+%token <metaNamePtr> CONSISTENCY
+%token <metaNamePtr> RDB_GET_TRANSACTION_CN
+
+// external connections pool management
+%token <metaNamePtr> CONNECTIONS
+%token <metaNamePtr> POOL
+%token <metaNamePtr> LIFETIME
+%token <metaNamePtr> CLEAR
+%token <metaNamePtr> OLDEST
 
 // precedence declarations for expression evaluation
 
@@ -777,6 +787,7 @@ using namespace Firebird;
 	Jrd::SetRoundNode* setRoundNode;
 	Jrd::SetTrapsNode* setTrapsNode;
 	Jrd::SetBindNode* setBindNode;
+	Jrd::SessionResetNode* sessionResetNode;
 }
 
 %include types.y
@@ -839,6 +850,7 @@ mng_statement
 	| set_bind									{ $$ = $1; }
 	| session_statement							{ $$ = $1; }
 	| set_role									{ $$ = $1; }
+	| session_reset								{ $$ = $1; }
 	;
 
 
@@ -1968,6 +1980,29 @@ alter_charset_clause
 	: symbol_character_set_name SET DEFAULT COLLATION symbol_collation_name
 		{ $$ = newNode<AlterCharSetNode>(*$1, *$5); }
 	;
+
+//
+%type <ddlNode> alter_eds_conn_pool_clause
+alter_eds_conn_pool_clause
+	: SET SIZE unsigned_short_integer
+		{ $$ = newNode<AlterEDSPoolSetNode>(AlterEDSPoolSetNode::POOL_SIZE, $3); }
+	| SET LIFETIME unsigned_short_integer eds_pool_lifetime_mult
+		{ $$ = newNode<AlterEDSPoolSetNode>(AlterEDSPoolSetNode::POOL_LIFETIME, $3 * $4); }
+	| CLEAR sql_string
+		{ $$ = newNode<AlterEDSPoolClearNode>(AlterEDSPoolClearNode::POOL_DB, $2->getString()); }
+	| CLEAR ALL
+		{ $$ = newNode<AlterEDSPoolClearNode>(AlterEDSPoolClearNode::POOL_ALL); }
+	| CLEAR OLDEST
+		{ $$ = newNode<AlterEDSPoolClearNode>(AlterEDSPoolClearNode::POOL_OLDEST); }
+	;
+
+%type <intVal> eds_pool_lifetime_mult
+eds_pool_lifetime_mult
+	: HOUR		{ $$ = 3600; }
+	| MINUTE	{ $$ = 60; }
+	| SECOND	{ $$ = 1; }
+	;
+
 
 // CREATE DATABASE
 // ASF: CREATE DATABASE command is divided in three pieces: name, initial options and
@@ -3111,6 +3146,7 @@ simple_proc_statement
 	| SUSPEND			{ $$ = newNode<SuspendNode>(); }
 	| EXIT				{ $$ = newNode<ExitNode>(); }
 	| RETURN value		{ $$ = newNode<ReturnNode>($2); }
+	| mng_statement		{ $$ = newNode<SessionManagementWrapperNode>($1, makeParseStr(YYPOSNARG(1), YYPOSNARG(1))); }
 	;
 
 %type <stmtNode> assignment_statement
@@ -3870,6 +3906,7 @@ alter_clause
 	| SEQUENCE alter_sequence_clause		{ $$ = $2; }
 	| MAPPING alter_map_clause(false)		{ $$ = $2; }
 	| GLOBAL MAPPING alter_map_clause(true)	{ $$ = $3; }
+	| EXTERNAL CONNECTIONS POOL alter_eds_conn_pool_clause	{ $$ = $4; }
 	;
 
 %type <alterDomainNode> alter_domain
@@ -4135,7 +4172,8 @@ keyword_or_column
 	| UPDATING
 	| VAR_SAMP
 	| VAR_POP
-	| UNBOUNDED				// added in FB 4.0
+	| DECFLOAT				// added in FB 4.0
+	| UNBOUNDED
 	| WINDOW
 	;
 
@@ -4799,15 +4837,17 @@ varbinary_character_keyword
 
 %type <legacyField> decfloat_type
 decfloat_type
-	: DECFLOAT '(' signed_long_integer ')'
+	: DECFLOAT precision_opt_nz
 		{
-			if ($3 != 16 && $3 != 34)
-				yyabandon(YYPOSNARG(3), -842, isc_decprecision_err);	// DecFloat precision must be 16 or 34.
+			SLONG precision = $2;
+
+			if (precision != 0 && precision != 16 && precision != 34)
+				yyabandon(YYPOSNARG(2), -842, isc_decprecision_err);	// DecFloat precision must be 16 or 34.
 
 			$$ = newNode<dsql_fld>();
-			$$->precision = $3;
-			$$->dtype = $3 == 16 ? dtype_dec64 : dtype_dec128;
-			$$->length = $3 == 16 ? sizeof(Decimal64) : sizeof(Decimal128);
+			$$->precision = precision == 0 ? 34 : (USHORT) precision;
+			$$->dtype = precision == 16 ? dtype_dec64 : dtype_dec128;
+			$$->length = precision == 16 ? sizeof(Decimal64) : sizeof(Decimal128);
 		}
 	;
 
@@ -5009,6 +5049,12 @@ precision_opt
 	| '(' nonneg_short_integer ')'	{ $$ = $2; }
 	;
 
+// alternative to precision_opt that does not allow zero
+%type <int32Val> precision_opt_nz
+precision_opt_nz
+	: /* nothing */				{ $$ = 0; }
+	| '(' pos_short_integer ')'	{ $$ = $2; }
+	;
 
 // transaction statements
 
@@ -5097,6 +5143,12 @@ set_transaction
 			{ $$ = newNode<SetTransactionNode>(); }
 		tran_option_list_opt($3)
 			{ $$ = $3; }
+	;
+
+%type <sessionResetNode> session_reset
+session_reset
+	: ALTER SESSION RESET
+		{ $$ = newNode<SessionResetNode>(); }
 	;
 
 %type <setRoleNode> set_role
@@ -5261,9 +5313,10 @@ snap_shot
 
 %type <uintVal>	version_mode
 version_mode
-	: /* nothing */	{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION; }
-	| VERSION		{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_REC_VERSION; }
-	| NO VERSION	{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION; }
+	: /* nothing */		{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION; }
+	| VERSION			{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_REC_VERSION; }
+	| NO VERSION		{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION; }
+	| READ CONSISTENCY	{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_READ_CONSISTENCY; }
 	;
 
 %type <uintVal> lock_type
@@ -7735,6 +7788,7 @@ system_function_std_syntax
 	| POWER
 	| RAND
 	| RDB_GET_CONTEXT
+	| RDB_GET_TRANSACTION_CN
 	| RDB_ROLE_IN_USE
 	| RDB_SET_CONTEXT
 	| REPLACE
@@ -8482,7 +8536,6 @@ non_reserved_word
 	| BIND					// added in FB 4.0
 	| COMPARE_DECFLOAT
 	| CUME_DIST
-	| DECFLOAT
 	| DEFINER
 	| EXCLUDE
 	| FIRST_DAY
@@ -8501,6 +8554,7 @@ non_reserved_word
 	| PRIVILEGE
 	| QUANTIZE
 	| RANGE
+	| RESET
 	| SECURITY
 	| SESSION
 	| SQL
@@ -8508,6 +8562,12 @@ non_reserved_word
 	| TIES
 	| TOTALORDER
 	| TRAPS
+	| CONNECTIONS		// external connections pool management
+	| POOL
+	| LIFETIME
+	| CLEAR
+	| OLDEST
+	| CONSISTENCY
 	;
 
 %%

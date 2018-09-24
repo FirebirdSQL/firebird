@@ -153,6 +153,91 @@ FB_UDR_BEGIN_FUNCTION(sum_args)
 FB_UDR_END_FUNCTION
 
 
+/***
+create function mult (
+    a decfloat(34) not null,
+    b decimal(34,6) not null
+) returns decfloat(34) not null
+    external name 'udrcpp_example!mult'
+    engine udr;
+***/
+FB_UDR_BEGIN_FUNCTION(mult)
+	// Without InMessage/OutMessage definitions, messages will be byte-based.
+
+	FB_UDR_CONSTRUCTOR
+	{
+		AutoRelease<IMessageMetadata> inMetadata(metadata->getInputMetadata(status));
+		aOffset = inMetadata->getOffset(status, 0);
+		bOffset = inMetadata->getOffset(status, 1);
+
+		AutoRelease<IMessageMetadata> outMetadata(metadata->getOutputMetadata(status));
+		outOffset = outMetadata->getOffset(status, 0);
+		outNullOffset = outMetadata->getNullOffset(status, 0);
+
+		df34 = master->getUtilInterface()->getDecFloat34(status);
+	}
+
+	// This function requires the INTEGER parameters and return value, otherwise it will crash.
+	// Metadata is inspected dynamically (in execute). This is not the fastest method.
+	FB_UDR_EXECUTE_FUNCTION
+	{
+		struct ExampleBCD
+		{
+			unsigned char bcd[IDecFloat34::BCD_SIZE];
+			int sign, exp;
+
+			void load(void* from, IDecFloat34* df34)
+			{
+				df34->toBcd((FB_DEC34*) from, &sign, bcd, &exp);
+			}
+
+			void store(void* to, IDecFloat34* df34) const
+			{
+				df34->fromBcd(sign, bcd, exp, (FB_DEC34*) to);
+			}
+		};
+
+		ExampleBCD a, b, rc;
+		a.load(in + aOffset, df34);
+		b.load(in + bOffset, df34);
+
+		// multiply (trivial example - a lot of features are missing)
+		rc.sign = a.sign ^ b.sign;
+		rc.exp = a.exp + b.exp;
+
+		unsigned char buf[2 * IDecFloat34::BCD_SIZE + 1];
+		memset(buf, 0, sizeof(buf));
+
+		for (unsigned i = IDecFloat34::BCD_SIZE; i--;)
+		{
+			for (unsigned j = IDecFloat34::BCD_SIZE; j--;)
+			{
+				unsigned char v = a.bcd[i] * b.bcd[j] + buf[i + j + 1];
+				buf[i + j + 1] = v % 10;
+				buf[i + j] += v / 10;
+			}
+		}
+
+		unsigned offset = 0;
+
+		for (; offset < IDecFloat34::BCD_SIZE; ++offset)
+		{
+			if (buf[offset])
+				break;
+		}
+
+		memcpy(rc.bcd, buf + offset, sizeof rc.bcd);
+		rc.exp += (IDecFloat34::BCD_SIZE - offset);
+
+		rc.store(out + outOffset, df34);
+		*(ISC_SHORT*) (out + outNullOffset) = FB_FALSE;
+	}
+
+	unsigned aOffset, bOffset, outOffset, outNullOffset;
+	IDecFloat34* df34;
+FB_UDR_END_FUNCTION
+
+
 //------------------------------------------------------------------------------
 
 

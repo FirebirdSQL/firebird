@@ -1260,6 +1260,10 @@ void TracePluginImpl::register_transaction(ITraceTransaction* transaction)
 		trans_data.description->append("READ_COMMITTED | NO_REC_VERSION");
 		break;
 
+	case ITraceTransaction::ISOLATION_READ_COMMITTED_READ_CONSISTENCY:
+		trans_data.description->append("READ_COMMITTED | READ_CONSISTENCY");
+		break;
+
 	default:
 		trans_data.description->append("<unknown>");
 	}

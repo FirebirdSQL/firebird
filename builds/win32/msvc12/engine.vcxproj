@@ -141,7 +141,6 @@
     <ClCompile Include="..\..\..\src\jrd\sort.cpp" />
     <ClCompile Include="..\..\..\src\jrd\sqz.cpp" />
     <ClCompile Include="..\..\..\src\jrd\svc.cpp" />
-    <ClCompile Include="..\..\..\src\jrd\svc_tab.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SysFunction.cpp" />
     <ClCompile Include="..\..\..\src\jrd\TempSpace.cpp" />
     <ClCompile Include="..\..\..\src\jrd\tpc.cpp" />
@@ -314,7 +313,6 @@
     <ClInclude Include="..\..\..\src\jrd\sqz.h" />
     <ClInclude Include="..\..\..\src\jrd\status.h" />
     <ClInclude Include="..\..\..\src\jrd\svc.h" />
-    <ClInclude Include="..\..\..\src\jrd\svc_tab.h" />
     <ClInclude Include="..\..\..\src\jrd\svc_undoc.h" />
     <ClInclude Include="..\..\..\src\jrd\SysFunction.h" />
     <ClInclude Include="..\..\..\src\jrd\TempSpace.h" />

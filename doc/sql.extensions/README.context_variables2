@@ -56,6 +56,14 @@ Usage:
    NETWORK_PROTOCOL | The network protocol used by client to connect. Currently
                     | used values: "TCPv4", "TCPv6", "WNET", "XNET" and NULL
                     |
+   WIRE_COMPRESSED  | Compression status of current connection. 
+                    | If connection is compressed - returns "TRUE", if it is 
+                    | not compressed - returns "FALSE". 
+                    | If connection is embedded - returns NULL.
+                    |
+   WIRE_ENCRYPTED   | Encryption status of current connection. 
+                    | Value is the same as for compression status above.
+                    |
    CLIENT_ADDRESS   | The wire protocol address and port number of remote client
                     | represented as string. Value is IP address concatenated with
                     | port number using the '/' separator character. Value is
@@ -94,6 +102,13 @@ Usage:
                     | same as of CURRENT_ROLE pseudo-variable
                     |
    ENGINE_VERSION   | Engine version number, e.g. "2.1.0" (since V2.1)
+                    |
+   GLOBAL_CN        | Most current value of global Commit Number counter
+                    |
+   SNAPSHOT_CN      | Value of Commit Number of currently database snapshot: either
+                    | transaction level (for SNAPSHOT or CONSISTENCY transaction),
+                    | or request level (for READ COMMITTED READ CONSISTENCY 
+                    | transaction). NULL, if snapshot is not exist.
 
 Notes:
    To prevent DoS attacks against Firebird Server you are not allowed to have

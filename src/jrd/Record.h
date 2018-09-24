@@ -165,11 +165,22 @@ namespace Jrd
 			return ((m_flags & mask) != 0);
 		}
 
+		TraNumber getTransactionNumber() const
+		{
+		    return m_transaction_nr;
+		}
+
+		void setTransactionNumber(const TraNumber& transaction_nr)
+		{
+		    m_transaction_nr = transaction_nr;
+		}
+
 	private:
 		PageStack m_precedence;			// stack of higher precedence pages/transactions
 		Firebird::Array<UCHAR> m_data;	// space for record data
 		const Format* m_format;			// what the data looks like
 		UCHAR m_flags;					// misc record flags
+		TraNumber m_transaction_nr;   // transaction number for a record
 	};
 
 	// Wrapper for reusable temporary records
@@ -226,7 +237,6 @@ namespace Jrd
 
 	typedef AutoTempRecord<REC_gc_active> AutoGCRecord;
 	typedef AutoTempRecord<REC_undo_active> AutoUndoRecord;
-
 } // namespace
 
 #endif // JRD_RECORD_H

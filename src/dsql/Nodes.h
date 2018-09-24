@@ -303,7 +303,7 @@ public:
 		return this;
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request) const = 0;
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const = 0;
 };
 
 
@@ -1434,6 +1434,7 @@ public:
 		TYPE_SAVEPOINT,
 		TYPE_SAVEPOINT_ENCLOSE,
 		TYPE_SELECT,
+		TYPE_SESSION_MANAGEMENT_WRAPPER,
 		TYPE_SET_GENERATOR,
 		TYPE_STALL,
 		TYPE_STORE,

@@ -101,7 +101,7 @@ private:
 
 	dsql_req* const m_request;
 	JBatch* m_batch;
-	Firebird::RefPtr<Firebird::IMessageMetadata> m_meta;
+	Firebird::IMessageMetadata* m_meta;
 
 	class DataCache : public Firebird::PermanentStorage
 	{

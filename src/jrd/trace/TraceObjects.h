@@ -148,7 +148,7 @@ public:
 		m_perf(perf)
 	{}
 
-	ISC_INT64 getStmtID()		{ return m_stmt->req_id; }
+	ISC_INT64 getStmtID()		{ return m_stmt->getRequestId(); }
 	PerformanceInfo* getPerf()	{ return m_perf; }
 
 private:

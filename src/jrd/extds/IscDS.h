@@ -49,7 +49,6 @@ public:
 			loadAPI();
 	}
 
-	virtual void jrdAttachmentEnd(Jrd::thread_db* /*tdbb*/, Jrd::Attachment* /*att*/) {}
 	virtual void getRemoteError(const Jrd::FbStatusVector* status, Firebird::string& err) const;
 
 protected:
@@ -517,15 +516,16 @@ protected:
 public:
 	FB_API_HANDLE& getAPIHandle() { return m_handle; }
 
-	virtual void attach(Jrd::thread_db* tdbb, const Firebird::PathName& dbName,
-		const Firebird::MetaName& user, const Firebird::string& pwd,
-		const Firebird::MetaName& role);
+	virtual void attach(Jrd::thread_db* tdbb);
 
 	virtual bool cancelExecution(bool forced);
+	virtual bool resetSession();
 
 	virtual bool isAvailable(Jrd::thread_db* tdbb, TraScope traScope) const;
 
 	virtual bool isConnected() const { return (m_handle != 0); }
+
+	virtual bool validate(Jrd::thread_db* tdbb);
 
 	virtual Blob* createBlob();
 

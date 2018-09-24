@@ -449,6 +449,7 @@ public:
 		csb_cursors(p),
 		csb_invariants(p),
 		csb_current_nodes(p),
+		csb_current_for_nodes(p),
 		csb_computing_fields(p),
 		csb_pool(p),
 		csb_map_field_info(p),
@@ -458,6 +459,7 @@ public:
 		subProcedures(p),
 		csb_currentForNode(NULL),
 		csb_currentDMLNode(NULL),
+		csb_currentAssignTarget(NULL),
 		csb_rpt(p)
 	{
 		csb_dbg_info = FB_NEW_POOL(p) Firebird::DbgInfo(p);
@@ -509,6 +511,7 @@ public:
 	Firebird::Array<ULONG*> csb_invariants;		// stack of pointer to nodes invariant offsets
 	Firebird::Array<ExprNode*> csb_current_nodes;	// RseNode's and other invariant
 												// candidates within whose scope we are
+	Firebird::Array<ForNode*> csb_current_for_nodes;
 	Firebird::SortedArray<jrd_fld*> csb_computing_fields;	// Computed fields being compiled
 	StreamType		csb_n_stream;				// Next available stream
 	USHORT			csb_msg_number;				// Highest used message number
@@ -538,6 +541,7 @@ public:
 
 	ForNode*	csb_currentForNode;
 	StmtNode*	csb_currentDMLNode;	// could be StoreNode or ModifyNode
+	ExprNode*	csb_currentAssignTarget;
 
 	struct csb_repeat
 	{
@@ -619,6 +623,7 @@ const int csb_sub_stream	= 128;		// a sub-stream of the RSE being processed
 const int csb_erase			= 256;		// we are processing an erase
 const int csb_unmatched		= 512;		// stream has conjuncts unmatched by any index
 const int csb_update		= 1024;		// erase or modify for relation
+const int csb_unstable		= 2048;		// unstable explicit cursor
 
 inline void CompilerScratch::csb_repeat::activate()
 {

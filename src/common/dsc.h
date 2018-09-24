@@ -173,7 +173,7 @@ typedef struct dsc
 
 	bool isDecOrInt() const
 	{
-		return isDecFloat() || isExact();
+		return isDecFloat() || isDecFixed() || isExact();
 	}
 
 	bool isApprox() const

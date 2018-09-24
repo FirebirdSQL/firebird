@@ -225,6 +225,94 @@ namespace Firebird {
 
 		class iterator;
 		friend class iterator;
+		friend class reverse_iterator;
+
+		// Very basic iterator, that permits to walk linked list in backwards direction
+		// and remove elements along the way.
+		class reverse_iterator
+		{
+		private:
+			Stack<Object, Capacity>& stack;
+			Stack<Entry*> entries;
+			Entry* current_entry;
+			FB_SIZE_T elem;
+
+		public:
+			explicit reverse_iterator(Stack<Object, Capacity>& s)
+				: stack(s), entries(s.getPool()), elem(0)
+			{
+				current_entry = s.stk;
+				if (current_entry) {
+					while (Entry *next = current_entry->next) {
+						entries.push(current_entry);
+						current_entry = next;
+					}
+				}
+			}
+
+			bool hasData() const
+			{
+				return current_entry;
+			}
+
+			reverse_iterator& operator++()
+			{
+				fb_assert(current_entry);
+				elem++;
+
+				if (elem >= current_entry->getCount()) {
+					elem = 0;
+					if (entries.hasData())
+						current_entry = entries.pop();
+					else
+						current_entry = NULL;
+				}
+
+				return *this;
+			}
+
+			Object object() const
+			{
+				fb_assert(current_entry);
+				return current_entry->getObject(elem);
+			}
+
+			void remove() {
+				fb_assert(current_entry);
+				current_entry->remove(elem);
+
+				if (elem >= current_entry->getCount()) {
+					if (elem) {
+						// Simple case - just advance pointer
+						elem = 0;
+						if (entries.hasData())
+							current_entry = entries.pop();
+						else
+							current_entry = NULL;
+					}
+					else {
+						// Complicated case - Entry is empty and we need to delete it
+						if (entries.hasData()) {
+							Entry* previous = entries.pop();
+							previous->next = current_entry->next;
+							current_entry->next = NULL;
+							delete current_entry;
+							current_entry = previous;
+						}
+						else {
+							stack.stk = current_entry->next;
+							current_entry->next = NULL;
+							delete current_entry;
+							current_entry = NULL;
+						}
+					}
+				}
+			}
+
+		private:
+			reverse_iterator(const reverse_iterator&); // Not implemented
+			reverse_iterator& operator= (const reverse_iterator&); // Not implemented
+		}; // reverse_iterator
 
 		class iterator
 		{

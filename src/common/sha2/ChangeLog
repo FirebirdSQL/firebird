@@ -1,0 +1,17 @@
+2007-02-02  Olivier Gay  <olivier.gay@a3.epfl.ch>
+
+	* sha2.c (sha512_transf) [UNROLL_LOOPS]: Group together SHA512_EXP calls
+	in a loop to optimize speed in SHA-384 and SHA-512.
+
+	* sha2.h, sha2.c: Remove HAVE_STDINT and use new typedef for fixed-width
+	integer types.
+
+2007-02-02  Tad  <sha2@ds3switch.com>
+
+	* sha2.c (sha224_update, sha256_update, sha384_update, sha512_update): Check
+	the read size is within the buffer limits when updating small data.
+
+2005-05-23  Olivier Gay  <olivier.gay@a3.epfl.ch>
+
+	* sha2.h, sha2.c: Support of SHA-224 functions.
+

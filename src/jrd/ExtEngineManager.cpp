@@ -602,8 +602,8 @@ ExtEngineManager::ExternalContextImpl::ExternalContextImpl(thread_db* tdbb,
 
 	internalAttachment->getStable()->addRef();
 
-	externalAttachment = MasterInterfacePtr()->registerAttachment(JProvider::getInstance(),
-		internalAttachment->getInterface());
+	externalAttachment = MasterInterfacePtr()->registerAttachment
+		(AutoPlugin<JProvider>(JProvider::getInstance()), internalAttachment->getInterface());
 }
 
 ExtEngineManager::ExternalContextImpl::~ExternalContextImpl()
@@ -1076,8 +1076,8 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 	metadata->name = udf->getName().identifier;
 	metadata->entryPoint = entryPointTrimmed;
 	metadata->body = body;
-	metadata->inputParameters = Routine::createMetadata(udf->getInputFields());
-	metadata->outputParameters = Routine::createMetadata(udf->getOutputFields());
+	metadata->inputParameters = Routine::createMetadata(udf->getInputFields(), true);
+	metadata->outputParameters = Routine::createMetadata(udf->getOutputFields(), true);
 
 	FbLocalStatus status;
 
@@ -1200,8 +1200,8 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 	metadata->name = prc->getName().identifier;
 	metadata->entryPoint = entryPointTrimmed;
 	metadata->body = body;
-	metadata->inputParameters = Routine::createMetadata(prc->getInputFields());
-	metadata->outputParameters = Routine::createMetadata(prc->getOutputFields());
+	metadata->inputParameters = Routine::createMetadata(prc->getInputFields(), true);
+	metadata->outputParameters = Routine::createMetadata(prc->getOutputFields(), true);
 
 	FbLocalStatus status;
 
@@ -1346,7 +1346,13 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 		{
 			jrd_fld* field = (*relation->rel_fields)[i];
 			if (field)
-				fieldsMsg->addItem(field->fld_name, !field->fld_not_null, relFormat->fmt_desc[i]);
+			{
+				dsc d(relFormat->fmt_desc[i]);
+				if (d.dsc_dtype == dtype_dec_fixed)
+					d.dsc_dtype = dtype_dec128;
+
+				fieldsMsg->addItem(field->fld_name, !field->fld_not_null, d);
+			}
 		}
 	}
 

@@ -42,11 +42,11 @@
 #include "../common/xdr_proto.h"
 #include "../common/gdsassert.h"
 #include "../common/StatusHolder.h"
+#include "../common/status.h"
 #include "fb_types.h"
 
-// TMN: Currently we can't include remote/remote.h because we'd get
-// conflicting blk_t definitions (we are gonna fix this, in due time).
 
+using Firebird::FbLocalStatus;
 
 static bool_t burp_getbytes(XDR*, SCHAR *, u_int);
 static bool_t burp_putbytes(XDR*, const SCHAR*, u_int);
@@ -426,8 +426,7 @@ static bool_t xdr_slice(XDR* xdrs, lstring* slice, /*USHORT sdl_length,*/ const 
 
 	sdl_info info;
 	{
-		Firebird::LocalStatus ls;
-		Firebird::CheckStatusWrapper s(&ls);
+		FbLocalStatus s;
 		if (SDL_info(&s, sdl, &info, 0))
 			return FALSE;
 	}

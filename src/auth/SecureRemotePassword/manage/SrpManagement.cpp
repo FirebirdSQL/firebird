@@ -199,7 +199,7 @@ private:
 		}
 		else
 		{
-			sql.printf("GRANT %s TO \"%s\"", ADMIN_ROLE, userName.c_str());
+			sql.printf("GRANT DEFAULT %s TO \"%s\"", ADMIN_ROLE, userName.c_str());
 		}
 
 		att->execute(&statusWrapper, tra, sql.length(), sql.c_str(),
@@ -688,7 +688,7 @@ private:
 	Firebird::RefPtr<Firebird::IFirebirdConf> config;
 	Firebird::RefPtr<Firebird::IAttachment> att;
 	Firebird::RefPtr<Firebird::ITransaction> tra;
-	RemotePassword server;
+	RemotePasswordImpl<Firebird::Sha1> server;
 	int upCount, delCount;
 
 	bool checkCount(Firebird::CheckStatusWrapper* status, int* count, UCHAR item)

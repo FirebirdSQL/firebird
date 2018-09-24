@@ -29,7 +29,6 @@ set(epp_boot_internal_files
     burp/backup.epp
     burp/restore.epp
     burp/OdsDetection.epp
-    utilities/gstat/dba.epp
 )
 set(epp_boot_ocxx_files
     isql/extract.epp
@@ -42,6 +41,7 @@ set(epp_boot_files
     utilities/stats.epp
     yvalve/array.epp
     yvalve/blob.epp
+    utilities/gstat/dba.epp
 )
 set(epp_boot_gds_files
     dsql/metd.epp
@@ -53,7 +53,7 @@ set(epp_boot_gds_files
     jrd/fun.epp
     jrd/grant.epp
     jrd/ini.epp
-    jrd/met.epp    
+    jrd/met.epp
     jrd/scl.epp
     jrd/Function.epp
 )
@@ -69,12 +69,12 @@ set(epp_master_files
 
 if (NOT CMAKE_CROSSCOMPILING)
 
-epp_process(boot    epp_boot_internal_files ${GPRE_BOOT_CMD} -lang_internal -n -m)
+epp_process(boot    epp_boot_internal_files ${GPRE_BOOT_CMD} -lang_internal -n -ids -ocxx -m)
 epp_process(boot    epp_boot_ocxx_files     ${GPRE_BOOT_CMD} -lang_internal -n -ids -ocxx)
 epp_process(boot    epp_boot_files          ${GPRE_BOOT_CMD} -n -m)
 epp_process(boot    epp_boot_gds_files      ${GPRE_BOOT_CMD} -n -ids -gds_cxx)
 
-epp_process(master  epp_boot_internal_files ${BOOT_GPRE_CMD} -n -m)
+epp_process(master  epp_boot_internal_files ${BOOT_GPRE_CMD} -n -m -ids -ocxx -m)
 epp_process(master  epp_boot_ocxx_files     ${BOOT_GPRE_CMD} -n -ids -ocxx)
 epp_process(master  epp_boot_files          ${BOOT_GPRE_CMD} -n -m)
 epp_process(master  epp_boot_gds_files      ${BOOT_GPRE_CMD} -n -ids -gds_cxx)
@@ -364,7 +364,7 @@ add_library                 (burp ${burp_src} ${burp_generated_src_master})
 # LIBRARY common
 ########################################
 
-file(GLOB common_src "common/*.cpp" "common/classes/*.cpp" "common/config/*.cpp" "common/os/${OS_DIR}/*.cpp")
+file(GLOB common_src "common/*.cpp" "common/classes/*.cpp" "common/config/*.cpp" "common/os/${OS_DIR}/*.cpp" "common/sha2/*.cpp")
 file(GLOB_RECURSE common_include "common/*.h")
 
 if (APPLE)
@@ -469,9 +469,9 @@ set(engine_src ${engine_src}
     lock/lock.cpp
     utilities/gsec/gsec.cpp
     utilities/gstat/ppg.cpp
-    utilities/nbackup/nbackup.cpp    
+    utilities/nbackup/nbackup.cpp
     # parse
-    ${GENERATED_DIR}/dsql/parse.cpp   
+    ${GENERATED_DIR}/dsql/parse.cpp
 )
 add_src_apple(engine_src
     jrd/os/posix/unix.cpp
@@ -487,7 +487,7 @@ set(engine_generated_src
     jrd/Function.epp
     jrd/grant.epp
     jrd/ini.epp
-    jrd/met.epp    
+    jrd/met.epp
     jrd/scl.epp
     utilities/gstat/dba.epp
 )
@@ -910,7 +910,7 @@ add_custom_target(copy_files
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${GENERATED_DIR}/security.fdb ${output_dir}/security4.fdb
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${GENERATED_DIR}/help.fdb ${output_dir}/help/help.fdb
     # configs, text files
-    COMMAND sed "/@UDF_COMMENT@/d" < ${CMAKE_SOURCE_DIR}/builds/install/misc/firebird.conf.in > ${output_dir}/firebird.conf    
+    COMMAND sed "/@UDF_COMMENT@/d" < ${CMAKE_SOURCE_DIR}/builds/install/misc/firebird.conf.in > ${output_dir}/firebird.conf
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/misc/databases.conf.in ${output_dir}/databases.conf
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/misc/fbintl.conf ${output_dir}/intl/fbintl.conf
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/misc/plugins.conf ${output_dir}/plugins.conf
@@ -934,7 +934,7 @@ add_custom_target(copy_files
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples/udr ${output_dir}/examples/udr
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples/stat ${output_dir}/examples/stat
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/examples/functions.c ${output_dir}/examples/functions.c
-    # headers    
+    # headers
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/extlib/ib_util.h ${output_dir}/include/ib_util.h
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/include/gen/iberror.h ${output_dir}/include/iberror.h
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/yvalve/perf.h ${output_dir}/include/perf.h
@@ -986,7 +986,7 @@ if (WIN32)
         # installers
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/arch-specific/win32/install_classic.bat ${output_dir}/install_classic.bat
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/arch-specific/win32/install_super.bat ${output_dir}/install_super.bat
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/arch-specific/win32/uninstall.bat ${output_dir}/uninstall.bat        
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/arch-specific/win32/uninstall.bat ${output_dir}/uninstall.bat
         # examples
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples/build_unix ${output_dir}/examples/build_unix
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples/build_win32 ${output_dir}/examples/build_win32
@@ -995,7 +995,7 @@ if (WIN32)
         COMMAND echo "#pragma message(\"Non-production version of ibase.h.\")" > ${output_dir}/include/ibase.tmp
         COMMAND echo "#pragma message(\"Using raw, unprocessed concatenation of header files.\")" >> ${output_dir}/include/ibase.tmp
     )
-    set(files    
+    set(files
         ${CMAKE_SOURCE_DIR}/src/misc/ibase_header.txt
         ${CMAKE_SOURCE_DIR}/src/include/types_pub.h
         ${CMAKE_SOURCE_DIR}/src/common/dsc_pub.h

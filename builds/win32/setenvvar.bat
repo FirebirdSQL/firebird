@@ -23,6 +23,10 @@ set FB_PROCESSOR_ARCHITECTURE=%PROCESSOR_ARCHITECTURE%
 
 :: To disable some particular MSVC build, slightly alter the env var names in "if" conditions below
 
+if DEFINED VS150COMNTOOLS (
+@devenv /? >nul 2>nul
+@if errorlevel 9009 (call "%VS150COMNTOOLS%\..\..\VC\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS150COMNTOOLS%\..\..\VC\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
+) else (
 if DEFINED VS140COMNTOOLS (
 @devenv /? >nul 2>nul
 @if errorlevel 9009 (call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
@@ -36,6 +40,7 @@ if DEFINED VS100COMNTOOLS (
 @if errorlevel 9009 (call "%VS100COMNTOOLS%\..\..\VC\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS100COMNTOOLS%\..\..\VC\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
 ) else (
 @goto :HELP
+)
 )
 )
 )

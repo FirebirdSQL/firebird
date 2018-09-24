@@ -460,10 +460,10 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 			}
 			else
 			{
-				RefPtr<MsgMetadata> inputMetadata(REF_NO_INCR, createMetadata(function->getInputFields()));
+				RefPtr<MsgMetadata> inputMetadata(REF_NO_INCR, createMetadata(function->getInputFields(), false));
 				function->setInputFormat(createFormat(function->getPool(), inputMetadata, false));
 
-				RefPtr<MsgMetadata> outputMetadata(REF_NO_INCR, createMetadata(function->getOutputFields()));
+				RefPtr<MsgMetadata> outputMetadata(REF_NO_INCR, createMetadata(function->getOutputFields(), false));
 				function->setOutputFormat(createFormat(function->getPool(), outputMetadata, true));
 
 				function->setImplemented(false);

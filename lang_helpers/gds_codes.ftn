@@ -1820,8 +1820,22 @@ C --
       PARAMETER (GDS__vld_plugins                      = 335545203)
       INTEGER*4 GDS__db_crypt_key                    
       PARAMETER (GDS__db_crypt_key                     = 335545204)
+      INTEGER*4 GDS__no_keyholder_plugin             
+      PARAMETER (GDS__no_keyholder_plugin              = 335545205)
+      INTEGER*4 GDS__ses_reset_err                   
+      PARAMETER (GDS__ses_reset_err                    = 335545206)
+      INTEGER*4 GDS__ses_reset_open_trans            
+      PARAMETER (GDS__ses_reset_open_trans             = 335545207)
+      INTEGER*4 GDS__ses_reset_warn                  
+      PARAMETER (GDS__ses_reset_warn                   = 335545208)
+      INTEGER*4 GDS__ses_reset_tran_rollback         
+      PARAMETER (GDS__ses_reset_tran_rollback          = 335545209)
+      INTEGER*4 GDS__plugin_name                     
+      PARAMETER (GDS__plugin_name                      = 335545210)
+      INTEGER*4 GDS__parameter_name                  
+      PARAMETER (GDS__parameter_name                   = 335545211)
       INTEGER*4 GDS__file_starting_page_err          
-      PARAMETER (GDS__file_starting_page_err           = 335545205)
+      PARAMETER (GDS__file_starting_page_err           = 335545212)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 

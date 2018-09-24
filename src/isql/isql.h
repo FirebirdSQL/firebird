@@ -406,7 +406,6 @@ public:
 	USHORT att_charset;
 	Firebird::IDecFloat16* df16;
 	Firebird::IDecFloat34* df34;
-	Firebird::IDecFixed* dfix;
 	void printf(const char* buffer, ...);
 	void prints(const char* buffer);
 
@@ -466,7 +465,6 @@ struct IsqlVar
 		char* asChar;
 		FB_DEC16* asDec16;
 		FB_DEC34* asDec34;
-		FB_DEC_FIXED* asDecFixed;
 		void* setPtr;
 	};
 	TypeMix value;

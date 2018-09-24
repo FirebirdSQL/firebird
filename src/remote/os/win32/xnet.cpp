@@ -1481,6 +1481,11 @@ static void disconnect(rem_port* port)
  *
  **************************************/
 
+	if (port->port_state == rem_port::DISCONNECTED)
+		return;
+
+	port->port_state = rem_port::DISCONNECTED;
+
 	if (port->port_async)
 	{
 		disconnect(port->port_async);
@@ -1750,7 +1755,7 @@ static void xnet_error(rem_port* port, ISC_STATUS operation, int status)
  **************************************/
 	if (status)
 	{
-		if (port->port_state != rem_port::BROKEN)
+		if (port->port_state == rem_port::PENDING)
 		{
 			gds__log("XNET/xnet_error: errno = %d", status);
 		}

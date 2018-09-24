@@ -77,7 +77,9 @@ void ModuleLoader::doctorModuleExtension(Firebird::PathName& name)
 	Firebird::PathName::size_type pos = name.rfind("." SHRLIB_EXT);
 	if (pos != name.length() - 3)
 	{
-		name += "." SHRLIB_EXT;
+		pos = name.rfind("." SHRLIB_EXT ".");
+		if (pos == Firebird::PathName::npos)
+			name += "." SHRLIB_EXT;
 	}
 	pos = name.rfind('/');
 	pos = (pos == Firebird::PathName::npos) ? 0 : pos + 1;
@@ -93,14 +95,19 @@ void ModuleLoader::doctorModuleExtension(Firebird::PathName& name)
 #define FB_RTLD_MODE RTLD_LAZY	// save time when loading library
 #endif
 
-ModuleLoader::Module* ModuleLoader::loadModule(const Firebird::PathName& modPath)
+ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const Firebird::PathName& modPath)
 {
 	void* module = dlopen(modPath.nullStr(), FB_RTLD_MODE);
 	if (module == NULL)
 	{
-#ifdef DEV_BUILD
-//		gds__log("loadModule failed loading %s: %s", modPath.c_str(), dlerror());
-#endif
+		if (status)
+		{
+			status[0] = isc_arg_gds;
+			status[1] = isc_random;
+			status[2] = isc_arg_string;
+			status[3] = (ISC_STATUS) dlerror();
+			status[4] = isc_arg_end;
+		}
 		return 0;
 	}
 

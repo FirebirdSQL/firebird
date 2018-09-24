@@ -389,6 +389,14 @@ namespace
 			}
 		}
 
+		void threadDetach()
+		{
+			if (cleanup)
+				cleanup->threadDetach();
+			if (next)
+				next->threadDetach();
+		}
+
 	private:
 		~PluginModule()
 		{
@@ -492,8 +500,6 @@ namespace
 
 		IPluginBase* factory(IFirebirdConf *iFirebirdConf);
 
-		~ConfiguredPlugin();
-
 		const char* getPlugName()
 		{
 			return plugName.c_str();
@@ -519,6 +525,8 @@ namespace
 		int release();
 
 	private:
+		~ConfiguredPlugin();
+
 		RefPtr<PluginModule> module;
 		unsigned int regPlugin;
 		RefPtr<ConfigFile> pluginLoaderConfig;
@@ -682,6 +690,8 @@ namespace
 
 	ConfiguredPlugin::~ConfiguredPlugin()
 	{
+		MutexLockGuard g(plugins->mutex, FB_FUNCTION);
+
 		if (!destroyingPluginsMap)
 		{
 			plugins->remove(MapKey(module->getPlugin(regPlugin).type, plugName));
@@ -718,8 +728,6 @@ namespace
 
 	int ConfiguredPlugin::release()
 	{
-		MutexLockGuard g(plugins->mutex, FB_FUNCTION);
-
 		int x = --refCounter;
 
 #ifdef DEBUG_PLUGINS
@@ -870,6 +878,10 @@ namespace
 				currentPlugin = NULL;
 			}
 
+			// Avoid concurrent load of the same module
+			static Static<Mutex> loadModuleMutex;
+			MutexLockGuard lmGuard(*(&loadModuleMutex), FB_FUNCTION);
+
 			MutexLockGuard g(plugins->mutex, FB_FUNCTION);
 
 			while (currentName.getWord(namesList, " \t,;"))
@@ -889,6 +901,7 @@ namespace
 				RefPtr<PluginModule> m(modules->findModule(info.curModule));
 				if (!m.hasData() && !flShutdown)
 				{
+					MutexUnlockGuard cout(plugins->mutex, FB_FUNCTION);
 					m = loadModule(info);
 				}
 				if (!m.hasData())
@@ -918,24 +931,27 @@ namespace
 	RefPtr<PluginModule> PluginSet::loadModule(const PluginLoadInfo& info)
 	{
 		PathName fixedModuleName(info.curModule);
+		ISC_STATUS_ARRAY statusArray;
 
-		ModuleLoader::Module* module = ModuleLoader::loadModule(fixedModuleName);
+		ModuleLoader::Module* module = ModuleLoader::loadModule(statusArray, fixedModuleName);
 
 		if (!module && !ModuleLoader::isLoadableModule(fixedModuleName))
 		{
 			ModuleLoader::doctorModuleExtension(fixedModuleName);
-			module = ModuleLoader::loadModule(fixedModuleName);
+			module = ModuleLoader::loadModule(statusArray, fixedModuleName);
 		}
 
 		if (!module)
 		{
 			if (ModuleLoader::isLoadableModule(fixedModuleName))
 			{
-				loadError(Arg::Gds(isc_pman_module_bad) << fixedModuleName);
+				loadError(Arg::Gds(isc_pman_module_bad) << fixedModuleName <<
+					Arg::StatusVector(statusArray));
 			}
 			if (info.required)
 			{
-				loadError(Arg::Gds(isc_pman_module_notfound) << fixedModuleName);
+				loadError(Arg::Gds(isc_pman_module_notfound) << fixedModuleName <<
+					Arg::StatusVector(statusArray));
 			}
 
 			return RefPtr<PluginModule>(NULL);
@@ -1078,8 +1094,6 @@ IPluginSet* PluginManager::getPlugins(CheckStatusWrapper* status, unsigned int i
 		static InitMutex<BuiltinRegister> registerBuiltinPlugins("RegisterBuiltinPlugins");
 		registerBuiltinPlugins.init();
 
-		MutexLockGuard g(plugins->mutex, FB_FUNCTION);
-
 		IPluginSet* rc = FB_NEW PluginSet(interfaceType, namesList, firebirdConf);
 		rc->addRef();
 		return rc;
@@ -1101,9 +1115,9 @@ void PluginManager::releasePlugin(IPluginBase* plugin)
 		///fb_assert(parent);
 		if (parent)
 		{
-			MutexLockGuard g(plugins->mutex, FB_FUNCTION);
-
 			parent->release();
+
+			MutexLockGuard g(plugins->mutex, FB_FUNCTION);
 			if (plugins->wakeIt)
 			{
 				plugins->wakeIt->release();
@@ -1168,6 +1182,14 @@ void PluginManager::waitForType(unsigned int typeThatMustGoAway)
 		semPtr->enter();
 	}
 }
+
+void PluginManager::threadDetach()
+{
+	MutexLockGuard g(plugins->mutex, FB_FUNCTION);
+	if (modules)
+		modules->threadDetach();
+}
+
 
 }	// namespace Firebird
 

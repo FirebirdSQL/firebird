@@ -48,7 +48,7 @@ const unsigned int SZ_LOGIN = 31;
 
 namespace Auth {
 
-class SrpServer FB_FINAL : public StdPlugin<IServerImpl<SrpServer, CheckStatusWrapper> >
+class SrpServer : public StdPlugin<IServerImpl<SrpServer, CheckStatusWrapper> >
 {
 public:
 	explicit SrpServer(IPluginConfig* par)
@@ -68,12 +68,12 @@ public:
 	void setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback);
     int release();
 
-private:
 	~SrpServer()
 	{
 		delete server;
 	}
 
+private:
 	RemotePassword* server;
 	string data;
 	string account;
@@ -84,6 +84,23 @@ private:
 	RefPtr<IFirebirdConf> config;
 	const char* secDbName;
 	ICryptKeyCallback* cryptCallback;
+
+protected:
+    virtual RemotePassword* remotePasswordFactory() = 0;
+};
+
+template <class SHA> class SrpServerImpl FB_FINAL : public SrpServer
+{
+public:
+	explicit SrpServerImpl<SHA>(IPluginConfig* ipc)
+		: SrpServer(ipc)
+	{}
+
+protected:
+    RemotePassword* remotePasswordFactory()
+    {
+		return FB_NEW RemotePasswordImpl<SHA>;
+	}
 };
 
 int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWriter* writerInterface)
@@ -215,7 +232,7 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 				throw;
 			}
 
-			server = FB_NEW RemotePassword;
+			server = remotePasswordFactory();
 			server->genServerKey(serverPubKey, verifier);
 
 			// Ready to prepare data for client and calculate session key
@@ -248,6 +265,10 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 		proof.assign(val, length);
 		BigInteger clientProof(proof.c_str());
 		BigInteger serverProof = server->clientProof(account.c_str(), salt.c_str(), sessionKey);
+		HANDSHAKE_DEBUG(fprintf(stderr, "Client Proof Received, Length = %d\n", clientProof.length()));
+		dumpIt("Srv: Client Proof", clientProof);
+		dumpIt("Srv: Server Proof", serverProof);
+
 		if (clientProof == serverProof)
 		{
 			// put the record into authentication block
@@ -311,12 +332,20 @@ int SrpServer::release()
 
 namespace
 {
-	SimpleFactory<SrpServer> factory;
+	SimpleFactory<SrpServerImpl<Sha1> > factory_sha1;
+	SimpleFactory<SrpServerImpl<sha224> > factory_sha224;
+	SimpleFactory<SrpServerImpl<sha256> > factory_sha256;
+	SimpleFactory<SrpServerImpl<sha384> > factory_sha384;
+	SimpleFactory<SrpServerImpl<sha512> > factory_sha512;
 }
 
 void registerSrpServer(IPluginManager* iPlugin)
 {
-	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, RemotePassword::plugName, &factory);
+	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, RemotePassword::plugName, &factory_sha1);
+	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, RemotePassword::pluginName(224).c_str(), &factory_sha224);
+	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, RemotePassword::pluginName(256).c_str(), &factory_sha256);
+	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, RemotePassword::pluginName(384).c_str(), &factory_sha384);
+	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, RemotePassword::pluginName(512).c_str(), &factory_sha512);
 }
 
 } // namespace Auth

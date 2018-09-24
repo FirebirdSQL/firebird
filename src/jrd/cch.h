@@ -126,7 +126,7 @@ public:
 	// Recently used buffer put there without locking common LRU que (bcb_in_use).
 	// When bcb_syncLRU is locked this chain is merged into bcb_in_use. See also
 	// requeueRecentlyUsed() and recentlyUsed()
-	Firebird::AtomicPointer<BufferDesc>	bcb_lru_chain;
+	std::atomic<BufferDesc*>	bcb_lru_chain;
 
 	que			bcb_dirty;			// que of dirty buffers
 	SLONG		bcb_dirty_count;	// count of pages in dirty page btree

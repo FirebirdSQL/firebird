@@ -211,7 +211,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		if (field->dtype <= dtype_any_text ||
 			(field->dtype == dtype_blob && field->subType == isc_blob_text))
 		{
-			field->charSet = METD_get_charset_name(dsqlScratch->getTransaction(), field->charSetId);
+			field->charSet = METD_get_charset_name(dsqlScratch->getTransaction(), field->charSetId.value);
 		}
 	}
 
@@ -269,7 +269,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			return;
 	}
 
-	if (field->charSetId != 0 && collation_name.isEmpty())
+	if (field->charSetId.specified && collation_name.isEmpty())
 	{
 		// This field has already been resolved once, and the collation
 		// hasn't changed.  Therefore, no need to do it again.
@@ -296,7 +296,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		if (afield)
 		{
 			field->charSetId = afield->charSetId;
-			bpc = METD_get_charset_bpc(dsqlScratch->getTransaction(), field->charSetId);
+			bpc = METD_get_charset_bpc(dsqlScratch->getTransaction(), field->charSetId.value);
 			field->collationId = afield->collationId;
 			field->textType = afield->textType;
 
@@ -310,7 +310,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		}
 	}
 
-	if (!(field->charSet.hasData() || field->charSetId ||	// set if a domain
+	if (!(field->charSet.hasData() || field->charSetId.specified ||	// set if a domain
 		(field->flags & FLD_national)))
 	{
 		// Attach the database default character set, if not otherwise specified
@@ -371,7 +371,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 	if (collation_name.hasData())
 	{
 		const dsql_intlsym* resolved_collation = METD_get_collation(dsqlScratch->getTransaction(),
-			collation_name, field->charSetId);
+			collation_name, field->charSetId.value);
 
 		if (!resolved_collation)
 		{
@@ -382,7 +382,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			else
 			{
 				charSetName = METD_get_charset_name(dsqlScratch->getTransaction(),
-					field->charSetId);
+					field->charSetId.value);
 			}
 
 			// Specified collation not found
@@ -396,8 +396,8 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 
 		resolved_type = resolved_collation;
 
-		if ((field->charSetId != resolved_type->intlsym_charset_id) &&
-			(field->charSetId != ttype_dynamic))
+		if ((field->charSetId.value != resolved_type->intlsym_charset_id) &&
+			(field->charSetId.value != ttype_dynamic))
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 					  Arg::Gds(isc_dsql_datatype_err) <<

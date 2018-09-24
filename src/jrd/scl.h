@@ -45,15 +45,16 @@ const size_t ACL_BLOB_BUFFER_SIZE = MAX_USHORT; // used to read/write acl blob
 class SecurityClass
 {
 public:
-    typedef ULONG flags_t;
+	typedef ULONG flags_t;
+	enum BlobAccessCheck { BA_UNKNOWN, BA_SUCCESS, BA_FAILURE };
 
 	SecurityClass(Firebird::MemoryPool &pool, const Firebird::MetaName& name)
-		: scl_flags(0), scl_name(pool, name), scl_blb_access(false)
+		: scl_flags(0), scl_name(pool, name), scl_blb_access(BA_UNKNOWN)
 	{}
 
 	flags_t scl_flags;			// Access permissions
 	const Firebird::MetaName scl_name;
-	bool scl_blb_access;
+	BlobAccessCheck scl_blb_access;
 
 	static const Firebird::MetaName& generate(const void*, const SecurityClass* item)
 	{
@@ -217,6 +218,7 @@ private:
 	Firebird::MetaName	usr_sql_role_name;	// Role name
 	mutable Firebird::SortedArray<Firebird::MetaName> usr_granted_roles; // Granted roles list
 	Firebird::MetaName	usr_trusted_role;	// Trusted role if set
+	Firebird::MetaName	usr_init_role;		// Initial role, assigned at sclInit()
 
 public:
 	Firebird::string	usr_project_name;	// Project name
@@ -244,6 +246,7 @@ public:
 		  usr_sql_role_name(p, ui.usr_sql_role_name),
 		  usr_granted_roles(p),
 		  usr_trusted_role(p, ui.usr_trusted_role),
+		  usr_init_role(p, ui.usr_init_role),
 		  usr_project_name(p, ui.usr_project_name),
 		  usr_org_name(p, ui.usr_org_name),
 		  usr_auth_method(p, ui.usr_auth_method),
@@ -262,6 +265,7 @@ public:
 		: usr_user_name(ui.usr_user_name),
 		  usr_sql_role_name(ui.usr_sql_role_name),
 		  usr_trusted_role(ui.usr_trusted_role),
+		  usr_init_role(ui.usr_init_role),
 		  usr_project_name(ui.usr_project_name),
 		  usr_org_name(ui.usr_org_name),
 		  usr_auth_method(ui.usr_auth_method),
@@ -280,6 +284,7 @@ public:
 		usr_user_name = ui.usr_user_name;
 		usr_sql_role_name = ui.usr_sql_role_name;
 		usr_trusted_role = ui.usr_trusted_role;
+		usr_init_role = ui.usr_init_role;
 		usr_project_name = ui.usr_project_name;
 		usr_org_name = ui.usr_org_name;
 		usr_privileges = ui.usr_privileges;
@@ -345,6 +350,13 @@ public:
 	}
 
 	void setRoleTrusted();
+
+	// Restore initial role, returns true if role was actually changed
+	bool resetRole()
+	{
+		setSqlRole(usr_init_role);
+		return (usr_flags & USR_newrole);
+	}
 
 	bool roleInUse(thread_db* tdbb, const Firebird::MetaName& role) const
 	{

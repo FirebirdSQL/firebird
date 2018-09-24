@@ -9,3 +9,4 @@ ipch/
 *.VC.opendb
 *.vsp
 *.psess
+.vs/

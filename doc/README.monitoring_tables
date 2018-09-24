@@ -119,6 +119,7 @@ Monitoring tables
           1: concurrency
           2: read committed record version
           3: read committed no record version
+		  4: read committed read consistency
       - MON$LOCK_TIMEOUT (lock timeout)
           -1: infinite wait
           0: no wait

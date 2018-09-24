@@ -46,6 +46,7 @@
 #include "../jrd/mov_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/tra_proto.h"
+#include "../jrd/tpc_proto.h"
 #include "../jrd/scl_proto.h"
 #include "../common/os/guid.h"
 #include "../jrd/license.h"
@@ -53,6 +54,7 @@
 #include "../jrd/trace/TraceObjects.h"
 #include "../jrd/Collation.h"
 #include "../common/classes/FpeControl.h"
+#include "../jrd/extds/ExtDS.h"
 #include <math.h>
 
 using namespace Firebird;
@@ -168,6 +170,7 @@ void setParamsDblDec(DataTypeUtilBase* dataTypeUtil, const SysFunction* function
 void setParamsDecFloat(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsFromList(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsInteger(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
+void setParamsInt64(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsSecondInteger(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 
 // specific setParams functions
@@ -234,6 +237,7 @@ dsc* evlFloor(thread_db* tdbb, const SysFunction* function, const NestValueArray
 dsc* evlGenUuid(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlGetContext(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlSetContext(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlGetTranCN(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlHash(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlLeft(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlLnLog10(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
@@ -275,9 +279,16 @@ const char
 	// SYSTEM namespace: global and database wise items
 	ENGINE_VERSION[] = "ENGINE_VERSION",
 	DATABASE_NAME[] = "DB_NAME",
+	GLOBAL_CN_NAME[] = "GLOBAL_CN",
+	EXT_CONN_POOL_SIZE[] = "EXT_CONN_POOL_SIZE",
+	EXT_CONN_POOL_IDLE[] = "EXT_CONN_POOL_IDLE_COUNT",
+	EXT_CONN_POOL_ACTIVE[] = "EXT_CONN_POOL_ACTIVE_COUNT",
+	EXT_CONN_POOL_LIFETIME[] = "EXT_CONN_POOL_LIFETIME",
 	// SYSTEM namespace: connection wise items
 	SESSION_ID_NAME[] = "SESSION_ID",
 	NETWORK_PROTOCOL_NAME[] = "NETWORK_PROTOCOL",
+	WIRE_COMPRESSED_NAME[] = "WIRE_COMPRESSED",
+	WIRE_ENCRYPTED_NAME[] = "WIRE_ENCRYPTED",
 	CLIENT_ADDRESS_NAME[] = "CLIENT_ADDRESS",
 	CLIENT_HOST_NAME[] = "CLIENT_HOST",
 	CLIENT_PID_NAME[] = "CLIENT_PID",
@@ -291,6 +302,7 @@ const char
 	ISOLATION_LEVEL_NAME[] = "ISOLATION_LEVEL",
 	LOCK_TIMEOUT_NAME[] = "LOCK_TIMEOUT",
 	READ_ONLY_NAME[] = "READ_ONLY",
+	SNAPSHOT_CN_NAME[] = "SNAPSHOT_CN",
 	// DDL_TRIGGER namespace
 	DDL_EVENT_NAME[] = "DDL_EVENT",
 	EVENT_TYPE_NAME[] = "EVENT_TYPE",
@@ -462,6 +474,16 @@ void setParamsInteger(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc*
 	{
 		if (args[i]->isUnknown())
 			args[i]->makeLong(0);
+	}
+}
+
+
+void setParamsInt64(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	for (int i = 0; i < argsCount; ++i)
+	{
+		if (args[i]->isUnknown())
+			args[i]->makeInt64(0);
 	}
 }
 
@@ -2597,6 +2619,20 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 
 			resultStr = attachment->att_network_protocol;
 		}
+		else if (nameStr == WIRE_COMPRESSED_NAME)
+		{
+			if (attachment->att_network_protocol.isEmpty())
+				return NULL;
+
+			resultStr = (attachment->att_remote_flags & isc_dpb_addr_flag_conn_compressed) ? TRUE_VALUE : FALSE_VALUE;
+		}
+		else if (nameStr == WIRE_ENCRYPTED_NAME)
+		{
+			if (attachment->att_network_protocol.isEmpty())
+				return NULL;
+
+			resultStr = (attachment->att_remote_flags & isc_dpb_addr_flag_conn_encrypted) ? TRUE_VALUE : FALSE_VALUE;
+		}
 		else if (nameStr == CLIENT_ADDRESS_NAME)
 		{
 			if (attachment->att_remote_address.isEmpty())
@@ -2664,6 +2700,35 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 			resultStr.printf("%" SLONGFORMAT, transaction->tra_lock_timeout);
 		else if (nameStr == READ_ONLY_NAME)
 			resultStr = (transaction->tra_flags & TRA_readonly) ? TRUE_VALUE : FALSE_VALUE;
+		else if (nameStr == GLOBAL_CN_NAME)
+			resultStr.printf("%" SQUADFORMAT, dbb->dbb_tip_cache->getGlobalCommitNumber());
+		else if (nameStr == SNAPSHOT_CN_NAME)
+		{
+			if (!(transaction->tra_flags & TRA_read_committed))
+				resultStr.printf("%" SQUADFORMAT, transaction->tra_snapshot_number);
+			else if ((transaction->tra_flags & TRA_read_committed) &&
+				(transaction->tra_flags & TRA_read_consistency))
+			{
+				jrd_req* snapshot_req = request->req_snapshot.m_owner;
+				if (snapshot_req)
+					resultStr.printf("%" SQUADFORMAT, snapshot_req->req_snapshot.m_number);
+				else
+					return NULL;
+			}
+			else
+				return NULL;
+		}
+		else if (nameStr == EXT_CONN_POOL_SIZE)
+			resultStr.printf("%d", EDS::Manager::getConnPool()->getMaxCount());
+		else if (nameStr == EXT_CONN_POOL_IDLE)
+			resultStr.printf("%d", EDS::Manager::getConnPool()->getIdleCount());
+		else if (nameStr == EXT_CONN_POOL_ACTIVE)
+		{
+			EDS::ConnectionsPool* connPool = EDS::Manager::getConnPool();
+			resultStr.printf("%d", connPool->getAllCount() - connPool->getIdleCount());
+		}
+		else if (nameStr == EXT_CONN_POOL_LIFETIME)
+			resultStr.printf("%d", EDS::Manager::getConnPool()->getLifeTime());
 		else
 		{
 			// "Context variable %s is not found in namespace %s"
@@ -2852,6 +2917,38 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 
 		attachment->att_trace_manager->event_set_context(&conn, &tran, &ctxvar);
 	}
+
+	request->req_flags &= ~req_null;
+	return &impure->vlu_desc;
+}
+
+
+dsc* evlGetTranCN(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, 
+	impure_value* impure)
+{
+	fb_assert(args.getCount() == 1);
+
+	Database* dbb = tdbb->getDatabase();
+	jrd_req* request = tdbb->getRequest();
+
+	request->req_flags &= ~req_null;
+	const dsc* value = EVL_expr(tdbb, request, args[0]);
+	if (request->req_flags & req_null)
+		return NULL;
+
+	TraNumber traNum = MOV_get_int64(tdbb, value, 0);
+	if (traNum > dbb->dbb_next_transaction)
+	{
+		request->req_flags |= req_null;
+		return NULL;
+	}
+
+	CommitNumber cn = dbb->dbb_tip_cache->snapshotState(tdbb, traNum);
+
+	dsc result;
+	result.makeInt64(0, (SINT64*)&cn);
+
+	EVL_make_value(tdbb, &result, impure);
 
 	request->req_flags &= ~req_null;
 	return &impure->vlu_desc;
@@ -4443,7 +4540,10 @@ dsc* evlRoleInUse(thread_db* tdbb, const SysFunction*, const NestValueArray& arg
 		return NULL;
 
 	string roleStr(MOV_make_string2(tdbb, value, ttype_none));
-	roleStr.upper();
+
+	// sorry - but this breaks role names containing lower case letters
+	// roles to be entered as returned by CURRENT_ROLE
+	//roleStr.upper();
 
 	impure->vlu_misc.vlu_uchar = (attachment->att_user &&
 		attachment->att_user->roleInUse(tdbb, roleStr.c_str())) ? FB_TRUE : FB_FALSE;
@@ -4530,6 +4630,7 @@ const SysFunction SysFunction::functions[] =
 		{"QUANTIZE", 2, 2, setParamsDecFloat, makeDecFloatResult, evlQuantize, NULL},
 		{"RAND", 0, 0, NULL, makeDoubleResult, evlRand, NULL},
 		{RDB_GET_CONTEXT, 2, 2, setParamsGetSetContext, makeGetSetContext, evlGetContext, NULL},
+		{"RDB$GET_TRANSACTION_CN", 1, 1, setParamsInt64, makeInt64Result, evlGetTranCN, NULL},
 		{"RDB$ROLE_IN_USE", 1, 1, setParamsAsciiVal, makeBooleanResult, evlRoleInUse, NULL},
 		{RDB_SET_CONTEXT, 3, 3, setParamsGetSetContext, makeGetSetContext, evlSetContext, NULL},
 		{"RDB$SYSTEM_PRIVILEGE", 1, 1, NULL, makeBooleanResult, evlSystemPrivilege, NULL},

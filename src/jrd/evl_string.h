@@ -339,6 +339,8 @@ LikeEvaluator<CharType>::LikeEvaluator(
 					case piEscapedString:
 						item->str.length++;
 						break;
+					default:
+						break;
 					}
 					continue;
 				}
@@ -358,6 +360,8 @@ LikeEvaluator<CharType>::LikeEvaluator(
 			case piSkipFixed:
 			case piNone:
 				item->type = piSkipMore;
+				break;
+			default:
 				break;
 			}
 			continue;
@@ -380,6 +384,8 @@ LikeEvaluator<CharType>::LikeEvaluator(
 			case piSkipMore:
 				item->skipCount++;
 				break;
+			default:
+				break;
 			}
 			continue;
 		}
@@ -399,6 +405,8 @@ LikeEvaluator<CharType>::LikeEvaluator(
 		case piSearch:
 		case piEscapedString:
 			item->str.length++;
+			break;
+		default:
 			break;
 		}
 	}
@@ -460,6 +468,8 @@ LikeEvaluator<CharType>::LikeEvaluator(
 				itemL->type = piNone;
 				itemL->match_any = true;
 			}
+			break;
+		default:
 			break;
 		}
 		i++;
@@ -584,6 +594,8 @@ bool LikeEvaluator<CharType>::processNextChunk(const CharType* data, SLONG data_
 						}
 					}
 				}
+				break;
+			default:
 				break;
 			}
 			branch_number++;

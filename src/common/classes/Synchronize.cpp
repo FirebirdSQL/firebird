@@ -31,6 +31,7 @@
 
 #include "firebird.h"
 #include "fb_tls.h"
+#include "init.h"
 #include "../ThreadStart.h"
 #include "SyncObject.h"
 #include "Synchronize.h"
@@ -182,6 +183,37 @@ void Synchronize::shutdown()
 }
 
 
+class ThreadSyncInstance : public ThreadSync
+{
+	typedef InstanceControl::InstanceLink<ThreadSyncInstance, InstanceControl::PRIORITY_REGULAR> Link;
+
+public:
+	ThreadSyncInstance(const char* desc)
+		: ThreadSync(desc)
+	{
+		m_link = FB_NEW Link(this);
+	}
+
+	virtual ~ThreadSyncInstance()
+	{
+		if (m_link)
+		{
+			m_link->remove();
+			delete m_link;
+		}
+	}
+
+	// Used at InstanceControl::dtor
+	void dtor()
+	{
+		m_link = nullptr;
+		delete this;
+	}
+
+private:
+	Link* m_link;
+};
+
 /// ThreadSync
 
 TLS_DECLARE(ThreadSync*, threadIndex);
@@ -210,7 +242,7 @@ ThreadSync* ThreadSync::getThread(const char* desc)
 
 	if (!thread)
 	{
-		thread = FB_NEW ThreadSync(desc);
+		thread = FB_NEW ThreadSyncInstance(desc);
 
 		fb_assert(thread == findThread());
 	}
@@ -220,6 +252,12 @@ ThreadSync* ThreadSync::getThread(const char* desc)
 
 void ThreadSync::setThread(ThreadSync* thread)
 {
+	if (thread != NULL)
+	{
+		ThreadSync* other = findThread();
+		fb_assert(other == NULL);
+	}
+
 	TLS_SET(threadIndex, thread);
 }
 

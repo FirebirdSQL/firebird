@@ -141,11 +141,6 @@
 	builder->setType(status, index, SQL_DEC34);	\
 	builder->setLength(status, index, sizeof(FB_DEC34));
 
-#define FB__META_FB_DEC_FIXED(scale)	\
-	builder->setType(status, index, SQL_DEC_FIXED);	\
-	builder->setLength(status, index, sizeof(FB_DEC_FIXED));	\
-	builder->setScale(status, index, scale);
-
 #define FB__META_FB_BLOB	\
 	builder->setType(status, index, SQL_BLOB);	\
 	builder->setLength(status, index, sizeof(ISC_QUAD));
@@ -200,7 +195,6 @@
 #define FB__TYPE_FB_DOUBLE						double
 #define FB__TYPE_FB_DECFLOAT16					FB_DEC16
 #define FB__TYPE_FB_DECFLOAT34					FB_DEC34
-#define FB__TYPE_FB_DEC_FIXED					FB_DEC_FIXED
 #define FB__TYPE_FB_BLOB						ISC_QUAD
 #define FB__TYPE_FB_BOOLEAN						ISC_UCHAR
 #define FB__TYPE_FB_DATE						::Firebird::FbDate

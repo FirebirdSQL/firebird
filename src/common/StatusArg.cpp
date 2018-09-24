@@ -298,6 +298,32 @@ void StatusVector::ImplStatusVector::copyTo(IStatus* dest) const throw()
 	}
 }
 
+void StatusVector::ImplStatusVector::appendTo(IStatus* dest) const throw()
+{
+	if (hasData())
+	{
+		ImplStatusVector tmpVector(dest);
+		ImplStatusVector newVector(getKind(), getCode());
+
+		if (newVector.appendErrors(&tmpVector))
+		{
+			if (newVector.appendErrors(this))
+			{
+				if (newVector.appendWarnings(&tmpVector))
+					newVector.appendWarnings(this);
+			}
+		}
+
+		// take special care about strings safety
+		// that's why tmpStatus is needed here
+		AutoPtr<IStatus, SimpleDispose> tmpStatus(dest->clone());
+		newVector.copyTo(tmpStatus);
+
+		dest->setErrors(tmpStatus->getErrors());
+		dest->setWarnings(tmpStatus->getWarnings());
+	}
+}
+
 Gds::Gds(ISC_STATUS s) throw() :
 	StatusVector(isc_arg_gds, s) { }
 

@@ -80,20 +80,25 @@ void EventManager::init(Attachment* attachment)
 
 		MutexLockGuard guard(g_mapMutex, FB_FUNCTION);
 
-		if (!g_emMap->get(id, eventMgr))
+		eventMgr = dbb->dbb_event_mgr;
+		if (!eventMgr)
 		{
-			eventMgr = FB_NEW EventManager(id, dbb->dbb_config);
 
-			if (g_emMap->put(id, eventMgr))
+			if (!g_emMap->get(id, eventMgr))
 			{
-				fb_assert(false);
+				eventMgr = FB_NEW EventManager(id, dbb->dbb_config);
+
+				if (g_emMap->put(id, eventMgr))
+				{
+					fb_assert(false);
+				}
 			}
+
+			fb_assert(eventMgr);
+
+			eventMgr->addRef();
+			dbb->dbb_event_mgr = eventMgr;
 		}
-
-		fb_assert(eventMgr);
-
-		eventMgr->addRef();
-		dbb->dbb_event_mgr = eventMgr;
 	}
 
 	if (!attachment->att_event_session)

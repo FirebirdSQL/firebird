@@ -501,7 +501,7 @@ SRQ_PTR LockManager::enqueue(thread_db* tdbb,
 							 UCHAR type,
 							 lock_ast_t ast_routine,
 							 void* ast_argument,
-							 SINT64 data,
+							 LOCK_DATA_T data,
 							 SSHORT lck_wait,
 							 SRQ_PTR owner_offset)
 {
@@ -885,7 +885,7 @@ bool LockManager::cancelWait(SRQ_PTR owner_offset)
 }
 
 
-SINT64 LockManager::queryData(const USHORT series, const USHORT aggregate)
+LOCK_DATA_T LockManager::queryData(const USHORT series, const USHORT aggregate)
 {
 /**************************************
  *
@@ -911,7 +911,7 @@ SINT64 LockManager::queryData(const USHORT series, const USHORT aggregate)
 	++(m_sharedMemory->getHeader()->lhb_query_data);
 
 	const srq& data_header = m_sharedMemory->getHeader()->lhb_data[series];
-	SINT64 data = 0, count = 0;
+	LOCK_DATA_T data = 0, count = 0;
 
 	// Simply walk the lock series data queue forward for the minimum
 	// and backward for the maximum -- it's maintained in sorted order.
@@ -983,7 +983,7 @@ SINT64 LockManager::queryData(const USHORT series, const USHORT aggregate)
 }
 
 
-SINT64 LockManager::readData(SRQ_PTR request_offset)
+LOCK_DATA_T LockManager::readData(SRQ_PTR request_offset)
 {
 /**************************************
  *
@@ -1005,8 +1005,7 @@ SINT64 LockManager::readData(SRQ_PTR request_offset)
 	++(m_sharedMemory->getHeader()->lhb_read_data);
 
 	const lbl* const lock = (lbl*) SRQ_ABS_PTR(request->lrq_lock);
-	const SINT64 data = lock->lbl_data;
-
+	const LOCK_DATA_T data = lock->lbl_data;
 	if (lock->lbl_series < LCK_MAX_SERIES)
 		++(m_sharedMemory->getHeader()->lhb_operations[lock->lbl_series]);
 	else
@@ -1016,10 +1015,10 @@ SINT64 LockManager::readData(SRQ_PTR request_offset)
 }
 
 
-SINT64 LockManager::readData2(USHORT series,
-							  const UCHAR* value,
-							  USHORT length,
-							  SRQ_PTR owner_offset)
+LOCK_DATA_T LockManager::readData2(USHORT series,
+							 const UCHAR* value,
+							 USHORT length,
+							 SRQ_PTR owner_offset)
 {
 /**************************************
  *
@@ -1052,7 +1051,7 @@ SINT64 LockManager::readData2(USHORT series,
 }
 
 
-SINT64 LockManager::writeData(SRQ_PTR request_offset, SINT64 data)
+LOCK_DATA_T LockManager::writeData(SRQ_PTR request_offset, LOCK_DATA_T data)
 {
 /**************************************
  *

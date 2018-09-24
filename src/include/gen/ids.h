@@ -521,8 +521,8 @@
 	const USHORT  f_mon_att_idle_timeout = 20;
 	const USHORT  f_mon_att_idle_timer = 21;
 	const USHORT  f_mon_att_stmt_timeout = 22;
-	const USHORT  f_mon_att_conn_compressed = 23;
-	const USHORT  f_mon_att_conn_encrypted = 24;
+	const USHORT  f_mon_att_wire_compressed = 23;
+	const USHORT  f_mon_att_wire_encrypted = 24;
 
 
 // Relation 35 (MON$TRANSACTIONS)
@@ -598,6 +598,7 @@
 	const USHORT  f_mon_rec_bkver_reads = 13;
 	const USHORT  f_mon_rec_frg_reads = 14;
 	const USHORT  f_mon_rec_rpt_reads = 15;
+	const USHORT  f_mon_rec_rpt_imgc = 16;
 
 
 // Relation 40 (MON$CONTEXT_VARIABLES)

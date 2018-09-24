@@ -882,6 +882,8 @@ void PascalGenerator::generate()
 {
 	fprintf(out, "{ %s }\n\n", AUTOGEN_MSG);
 
+	fprintf(out, "{$IFDEF FPC}\n{$MODE DELPHI}\n{$OBJECTCHECKS OFF}\n{$ENDIF}\n\n");
+
 	fprintf(out, "unit %s;\n\n", unitName.c_str());
 	fprintf(out, "interface\n\n");
 	fprintf(out, "uses Classes");

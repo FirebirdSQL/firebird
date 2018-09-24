@@ -520,8 +520,8 @@ RELATION(nam_mon_attachments, rel_mon_attachments, ODS_11_1, rel_virtual)
 	FIELD(f_mon_att_idle_timeout, nam_idle_timeout, fld_idle_timeout, 0, ODS_13_0)
 	FIELD(f_mon_att_idle_timer, nam_idle_timer, fld_idle_timer, 0, ODS_13_0)
 	FIELD(f_mon_att_stmt_timeout, nam_stmt_timeout, fld_stmt_timeout, 0, ODS_13_0)
-	FIELD(f_mon_att_conn_compressed, nam_conn_compressed, fld_bool, 0, ODS_13_0)
-	FIELD(f_mon_att_conn_encrypted, nam_conn_encrypted, fld_bool, 0, ODS_13_0)
+	FIELD(f_mon_att_wire_compressed, nam_wire_compressed, fld_bool, 0, ODS_13_0)
+	FIELD(f_mon_att_wire_encrypted, nam_wire_encrypted, fld_bool, 0, ODS_13_0)
 END_RELATION
 
 // Relation 35 (MON$TRANSACTIONS)
@@ -597,6 +597,7 @@ RELATION(nam_mon_rec_stats, rel_mon_rec_stats, ODS_11_1, rel_virtual)
 	FIELD(f_mon_rec_bkver_reads, nam_mon_bkversion_reads, fld_counter, 0, ODS_12_0)
 	FIELD(f_mon_rec_frg_reads, nam_mon_fragment_reads, fld_counter, 0, ODS_12_0)
 	FIELD(f_mon_rec_rpt_reads, nam_mon_rec_rpt_reads, fld_counter, 0, ODS_12_0)
+	FIELD(f_mon_rec_rpt_imgc, nam_mon_rec_imgc, fld_counter, 0, ODS_13_0)
 END_RELATION
 
 // Relation 40 (MON$CONTEXT_VARIABLES)

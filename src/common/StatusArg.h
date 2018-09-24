@@ -73,6 +73,7 @@ protected:
 		virtual void assign(const Exception& ex) throw() { }
 		virtual ISC_STATUS copyTo(ISC_STATUS*) const throw() { return 0; }
 		virtual void copyTo(IStatus*) const throw() { }
+		virtual void appendTo(IStatus*) const throw() { }
 
 		virtual void shiftLeft(const Base&) throw() { }
 		virtual void shiftLeft(const Warning&) throw() { }
@@ -123,6 +124,7 @@ protected:
 		virtual void assign(const Exception& ex) throw();
 		virtual ISC_STATUS copyTo(ISC_STATUS* dest) const throw();
 		virtual void copyTo(IStatus* dest) const throw();
+		virtual void appendTo(IStatus* dest) const throw();
 		virtual void shiftLeft(const Base& arg) throw();
 		virtual void shiftLeft(const Warning& arg) throw();
 		virtual void shiftLeft(const char* text) throw();
@@ -164,6 +166,7 @@ public:
 	void raise() const;
 	ISC_STATUS copyTo(ISC_STATUS* dest) const throw() { return implementation->copyTo(dest); }
 	void copyTo(IStatus* dest) const throw() { implementation->copyTo(dest); }
+	void appendTo(IStatus* dest) const throw() { implementation->appendTo(dest); }
 
 	// generic argument insert
 	StatusVector& operator<<(const Base& arg) throw()

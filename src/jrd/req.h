@@ -123,6 +123,7 @@ const USHORT rpb_long_tranum	= 1024;		// transaction number is 64-bit
 const USHORT RPB_s_update	= 0x01;	// input stream fetched for update
 const USHORT RPB_s_no_data	= 0x02;	// nobody is going to access the data
 const USHORT RPB_s_sweeper	= 0x04;	// garbage collector - skip swept pages
+const USHORT RPB_s_unstable = 0x08;	// don't use undo log, used with unstable explicit cursors
 
 // Runtime flags
 
@@ -177,10 +178,10 @@ public:
 		  req_ext_resultset(NULL),
 		  req_timeout(0),
 		  req_domain_validation(NULL),
-		  req_auto_trans(*req_pool),
 		  req_sorts(*req_pool),
 		  req_rpb(*req_pool),
-		  impureArea(*req_pool)
+		  impureArea(*req_pool),
+		  req_auto_trans(*req_pool)
 	{
 		fb_assert(statement);
 		setAttachment(attachment);
@@ -215,13 +216,25 @@ public:
 			CS_METADATA : req_attachment->att_charset;
 	}
 
+	StmtNumber getRequestId() const
+	{
+		if (!req_id)
+			req_id = JRD_get_thread_data()->getDatabase()->generateStatementId();
+		return req_id;
+	}
+
+	void setRequestId(StmtNumber id)
+	{
+		req_id = id;
+	}
+
 private:
 	JrdStatement* const statement;
+	mutable StmtNumber	req_id;			// request identifier
 
 public:
 	MemoryPool* req_pool;
 	Attachment*	req_attachment;			// database attachment
-	StmtNumber	req_id;					// request identifier
 	USHORT		req_incarnation;		// incarnation number
 	Firebird::MemoryStats req_memory_stats;
 
@@ -266,12 +279,49 @@ public:
 	ULONG req_src_column;
 
 	dsc*			req_domain_validation;	// Current VALUE for constraint validation
-	Firebird::Stack<jrd_tra*> req_auto_trans;	// Autonomous transactions
 	SortOwner req_sorts;
 	Firebird::Array<record_param> req_rpb;	// record parameter blocks
 	Firebird::Array<UCHAR> impureArea;		// impure area
 	USHORT charSetId;						// "client" character set of the request
 	TriggerAction req_trigger_action;		// action that caused trigger to fire
+
+	// Fields to support read consistency in READ COMMITTED transactions
+	struct snapshot_data
+	{
+		jrd_req*		m_owner;
+		SnapshotHandle	m_handle;
+		CommitNumber	m_number;
+
+		void init()
+		{
+			m_owner = nullptr;
+			m_handle = 0;
+			m_number = 0;
+		}
+	};
+
+	snapshot_data req_snapshot;
+
+	// Context data saved\restored with every new autonomous transaction
+	struct auto_tran_ctx
+	{
+		auto_tran_ctx() :
+			m_transaction(nullptr)
+		{
+			m_snapshot.init();
+		};
+
+		auto_tran_ctx(jrd_tra* const tran, const snapshot_data& snap) :
+			m_transaction(tran),
+			m_snapshot(snap)
+		{
+		};
+
+		jrd_tra*		m_transaction;
+		snapshot_data	m_snapshot;
+	};
+
+	Firebird::Stack<auto_tran_ctx> req_auto_trans;	// Autonomous transactions
 
 	enum req_s {
 		req_evaluate,
@@ -284,7 +334,7 @@ public:
 	} req_operation;				// operation for next node
 
 	StatusXcp req_last_xcp;			// last known exception
-	bool req_batch;
+	bool req_batch_mode;
 
 	template <typename T> T* getImpure(unsigned offset)
 	{
@@ -297,6 +347,22 @@ public:
 			req_caller->req_stats.adjust(req_base_stats, req_stats);
 		}
 		req_base_stats.assign(req_stats);
+	}
+
+	// Save transaction and snapshot context when switching to the autonomous transaction
+	void pushTransaction(jrd_tra* const transaction)
+	{
+		req_auto_trans.push(auto_tran_ctx(transaction, req_snapshot));
+		req_snapshot.init();
+	}
+
+	// Restore transaction and snapshot context 
+	jrd_tra* popTransaction()
+	{
+		const auto_tran_ctx tmp = req_auto_trans.pop();
+		req_snapshot = tmp.m_snapshot;
+
+		return tmp.m_transaction;
 	}
 };
 

@@ -422,22 +422,29 @@
 #
 # Type: string
 
-# AuthServer and AuthClient determine what authentication methods will be used
-# by network server and client redirector. Secure remote passwords plugin
-# is default one. Except configured by default SRP plugin firebird also has
-# Legacy_Auth plugin which is used to emulate pre-FB3 login protocol making it
-# possible for client to talk to old servers and for server to listen to requests
-# from old clients. Legacy_Auth is VERY unsecure. On windows Win_Sspi plugin may
-# be also used - it implements windows trusted authentication and backward
-# compatible with 2.1 and 2.5 clients and servers running on windows.
+# AuthServer and AuthClient determine which authentication methods will be used
+# by network server and client redirector. The Secure remote password plugin
+# using SHA-256 for the client proof is the default for both client and Server.
+# Additionally, the default client configuration (AuthClient) also supports old Srp
+# plugin using SHA-1 for the client proof. This enables backwards compatibility
+# with old Firebird 3 servers but does not comply with NIST security requirements.
+#
+# The default client configuration (AuthClient) also supports the pre-Firebird 3 legacy 
+# authentication protocol (Legacy_Auth). This is again for backwards 
+# compatibility but has many known weaknesses and is deprecated for current use.
+#
+# The default Windows client configuration (AuthClient) also includes support for
+# the Win_Sspi plugin. This implements windows trusted authentication and is backward
+# compatible with 2.1 and 2.5 clients and servers running on Windows.
 #
 # Per-database configurable.
 #
-#AuthServer = Srp
+#AuthServer = Srp256
 #
 # Per-connection and per-database configurable.
 #
-#AuthClient = Srp, Win_Sspi, Legacy_Auth
+#AuthClient = Srp256, Srp, Legacy_Auth           #Non Windows clients
+#AuthClient = Srp256, Srp, Win_Sspi, Legacy_Auth #Windows clients
 #
 # If you need to use server plugins that do not provide encryption key (both Legacy_Auth
 # & Win_Sspi) you should also turn off required encryption on the wire with WireCrypt
@@ -625,6 +632,19 @@
 #
 #RelaxedAliasChecking = 0
 
+# ----------------------------
+# Engine currently provides statement-level read consistency in READ COMMITTED
+# mode by default. In this mode rec_version/no_rec_version transaction flags have
+# no effect. Setting this parameter to 0 effectively reverts engine to legacy
+# behavior.
+# 
+# CAUTION!
+# There is no guarantee that legacy behavior will be available in future Firebird
+# versions.
+#
+#	Type: boolean
+#
+#ReadConsistency = 1
 
 # ----------------------------
 # Client Connection Settings (Basic)
@@ -811,6 +831,47 @@
 #
 #EventMemSize = 64K
 
+# ----------------------------
+#
+# Bytes of shared memory allocated for snapshots management.
+# This will grow automatically unless you use an exotic platform
+# that is neither Windows nor supports mmap system call.
+# Each active shapshot uses 16 bytes of memory.
+#
+# Per-database configurable.
+#
+# Type: integer
+#
+#SnapshotsMemSize = 64K
+
+
+# ----------------------------
+#
+# Bytes of shared memory allocated for each block of TIP cache.
+# The reason to reduce this value is if you have small TIP and
+# want to conserve some memory. The reason to increase this
+# value is if you need very large cache and approach limits 
+# on kernel objects allocated for each block (files, mutexes, etc).
+# Each cached transaction uses 8 bytes of memory.
+#
+# Per-database configurable.
+#
+# Type: integer
+#
+#TpcBlockSize = 4M
+
+
+# ----------------------------
+#
+# File to redirect stdout and stderr output of server
+#
+# Default '/dev/null' for *nix and 'nul' for Windows
+# Empty value or '-' keeps stdout and stderr as is.
+#
+# Type: string
+#
+#OutputRedirectionFile = /dev/null
+
 
 # ===========================
 # Engine Settings
@@ -975,3 +1036,22 @@
 # Type: string
 #
 #ServerMode = Super
+
+# ============================
+# Settings of External Connections Pool 
+# ============================
+
+# Set the maximum number of inactive (idle) external connections to retain at
+# the pool. Valid values are between 0 and 1000. If set to zero, pool is disabled,
+# i.e. external connection is destroyed immediately after the use.
+#
+# Type: integer
+#
+#ExtConnPoolSize = 0
+
+# Set the time before destroyng inactive external connection, seconds.
+# Valid values are between 1 and 86400.
+#
+# Type: integer
+#
+#ExtConnPoolLifeTime = 7200

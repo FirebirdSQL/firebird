@@ -56,6 +56,7 @@
 #include "../yvalve/YObjects.h"
 #include "../yvalve/why_proto.h"
 #include "../yvalve/prepa_proto.h"
+#include "../yvalve/PluginManager.h"
 #include "../jrd/constants.h"
 #include "../jrd/build_no.h"
 #include "../common/classes/ClumpletWriter.h"
@@ -1185,56 +1186,6 @@ IDecFloat34* UtilInterface::getDecFloat34(CheckStatusWrapper* status)
 {
 	static DecFloat34 decFloat34;
 	return &decFloat34;
-}
-
-class DecFixed FB_FINAL : public AutoIface<IDecFixedImpl<DecFixed, CheckStatusWrapper> >
-{
-public:
-	// IDecFixed implementation
-	void toBcd(const FB_DEC_FIXED* from, int* sign, unsigned char* bcd)
-	{
-		int exp = 0;
-		*sign = decQuadToBCD(reinterpret_cast<const decQuad*>(from), &exp, bcd);
-		fb_assert(exp == 0);
-	}
-
-	void toString(CheckStatusWrapper* status, const FB_DEC_FIXED* from, int scale, unsigned bufSize, char* buffer)
-	{
-		try
-		{
-			DecimalStatus decSt(FB_DEC_Errors);
-			reinterpret_cast<const DecimalFixed*>(from)->toString(decSt, scale, bufSize, buffer);
-		}
-		catch (const Exception& ex)
-		{
-			ex.stuffException(status);
-		}
-	}
-
-	void fromBcd(int sign, const unsigned char* bcd, FB_DEC_FIXED* to)
-	{
-		decQuadFromBCD(reinterpret_cast<decQuad*>(to), 0, bcd, sign ? DECFLOAT_Sign : 0);
-	}
-
-	void fromString(CheckStatusWrapper* status, const char* from, int scale, FB_DEC_FIXED* to)
-	{
-		try
-		{
-			DecimalStatus decSt(FB_DEC_Errors);
-			DecimalFixed* val = reinterpret_cast<DecimalFixed*>(to);
-			val->set(from, scale, decSt);
-		}
-		catch (const Exception& ex)
-		{
-			ex.stuffException(status);
-		}
-	}
-};
-
-IDecFixed* UtilInterface::getDecFixed(CheckStatusWrapper* /*status*/)
-{
-	static DecFixed decFixed;
-	return &decFixed;
 }
 
 unsigned UtilInterface::setOffsets(CheckStatusWrapper* status, IMessageMetadata* metadata,
@@ -3222,6 +3173,7 @@ void ThreadCleanup::initThreadCleanup()
 void ThreadCleanup::finiThreadCleanup()
 {
 	pthread_setspecific(key, NULL);
+	PluginManager::threadDetach();
 }
 
 
@@ -3254,6 +3206,7 @@ void ThreadCleanup::initThreadCleanup()
 
 void ThreadCleanup::finiThreadCleanup()
 {
+	PluginManager::threadDetach();
 }
 #endif // #ifdef WIN_NT
 

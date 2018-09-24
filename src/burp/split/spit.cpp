@@ -480,7 +480,7 @@ static int get_file_size(const SCHAR* prog_name, const SCHAR* string, SINT64* fi
 
 	UCHAR c;
 
-	for (const SCHAR* p = string; c = *p++;)
+	for (const SCHAR* p = string; (c = *p++);)
 	{
 		if (c == '\0')
 			break;

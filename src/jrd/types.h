@@ -137,6 +137,7 @@ TYPE("CONSISTENCY", iso_mode_consistency, nam_mon_iso_mode)
 TYPE("CONCURRENCY", iso_mode_concurrency, nam_mon_iso_mode)
 TYPE("READ_COMMITTED_VERSION", iso_mode_rc_version, nam_mon_iso_mode)
 TYPE("READ_COMMITTED_NO_VERSION", iso_mode_rc_no_version, nam_mon_iso_mode)
+TYPE("READ_COMMITTED_READ_CONSISTENCY", iso_mode_rc_read_consistency, nam_mon_iso_mode)
 
 TYPE("NORMAL", backup_state_normal, nam_mon_backup_state)
 TYPE("STALLED", backup_state_stalled, nam_mon_backup_state)

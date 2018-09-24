@@ -1672,6 +1672,9 @@ bool SimilarToMatcher<CharType, StrConverter>::Evaluator::match()
 			case msReturningTrue:
 				scopeStack.pop();
 				break;
+
+			default:
+				break;
 		}
 	}
 

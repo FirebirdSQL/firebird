@@ -5,6 +5,10 @@
 	"editor.rulers": [120],
 
 	"files.trimTrailingWhitespace": true,
+	"[markdown]": {
+		"files.trimTrailingWhitespace": false
+	},
+
 	"files.insertFinalNewline": true,
 
 	"files.exclude": {

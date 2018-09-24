@@ -354,9 +354,6 @@
     <ClCompile Include="..\..\..\src\jrd\svc.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\jrd\svc_tab.cpp">
-      <Filter>JRD files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\SysFunction.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
@@ -924,9 +921,6 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\svc.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\jrd\svc_tab.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\svc_undoc.h">

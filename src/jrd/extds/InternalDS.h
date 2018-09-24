@@ -40,8 +40,9 @@ public:
 	~InternalProvider()
 	{}
 
+	virtual void jrdAttachmentEnd(Jrd::thread_db* tdbb, Jrd::Attachment* att, bool forced);
+
 	virtual void initialize() {}
-	virtual void jrdAttachmentEnd(Jrd::thread_db* tdbb, Jrd::Attachment* att);
 	virtual void getRemoteError(const Jrd::FbStatusVector* status, Firebird::string& err) const;
 
 protected:
@@ -63,21 +64,20 @@ protected:
 	virtual ~InternalConnection();
 
 public:
-	virtual void attach(Jrd::thread_db* tdbb, const Firebird::PathName& dbName,
-		const Firebird::MetaName& user, const Firebird::string& pwd,
-		const Firebird::MetaName& role);
+	virtual void attach(Jrd::thread_db* tdbb);
 
 	virtual bool cancelExecution(bool forced);
+	virtual bool resetSession();
 
 	virtual bool isAvailable(Jrd::thread_db* tdbb, TraScope traScope) const;
 
 	virtual bool isConnected() const { return (m_attachment != 0); }
+	virtual bool validate(Jrd::thread_db* tdbb);
 
-	virtual bool isSameDatabase(Jrd::thread_db* tdbb, const Firebird::PathName& dbName,
-		const Firebird::MetaName& user, const Firebird::string& pwd,
-		const Firebird::MetaName& role) const;
+	virtual bool isSameDatabase(const Firebird::PathName& dbName,
+		Firebird::ClumpletReader& dpb) const;
 
-	bool isCurrent() const { return m_isCurrent; }
+	virtual bool isCurrent() const { return m_isCurrent; }
 
 	Jrd::JAttachment* getJrdAtt() { return m_attachment; }
 

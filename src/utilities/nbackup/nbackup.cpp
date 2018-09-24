@@ -1089,7 +1089,7 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		if (read_file(dbase, header, SECTOR_ALIGNMENT/*sizeof(*header)*/) != SECTOR_ALIGNMENT/*sizeof(*header)*/)
 			status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdrdb) << dbname.c_str() << Arg::Num(1));
 
-		if (!Ods::isSupported(header->hdr_ods_version, header->hdr_ods_minor))
+		if (!Ods::isSupported(header))
 		{
 			const USHORT ods_version = header->hdr_ods_version & ~ODS_FIREBIRD_FLAG;
 			status_exception::raise(Arg::Gds(isc_wrong_ods) << Arg::Str(database.c_str()) <<
@@ -1494,7 +1494,18 @@ void NBackup::restore_database(const BackupFiles& files, bool inc_rest)
 				// We may also add SCN check, but GUID check covers this case too
 				if (memcmp(&bakheader.prev_guid, &prev_guid, sizeof(Guid)) != 0)
 					status_exception::raise(Arg::Gds(isc_nbackup_wrong_orderbk) << bakname.c_str());
-				seek_file(backup, bakheader.page_size);
+
+				// Emulate seek_file(backup, bakheader.page_size)
+				// Backup is stream-oriented, if -decompress is used pipe can't be seek()'ed
+				FB_SIZE_T left = bakheader.page_size - sizeof(bakheader);
+				while (left)
+				{
+					char char_buf[1024];
+					FB_SIZE_T step = left > sizeof(char_buf) ? sizeof(char_buf) : left;
+					if (read_file(backup, &char_buf, step) != step)
+						status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdrbk) << bakname.c_str());
+					left -= step;
+				}
 
 				if (!inc_rest)
 					delete_database = true;

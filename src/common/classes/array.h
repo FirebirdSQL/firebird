@@ -413,6 +413,18 @@ public:
 		return false;
 	}
 
+	bool findAndRemove(const T& item)
+	{
+		size_type pos;
+		if (find(item, pos))
+		{
+			remove(pos);
+			return true;
+		}
+
+		return false;
+	}
+
 	bool exist(const T& item) const
 	{
 		size_type pos;	// ignored

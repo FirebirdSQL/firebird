@@ -30,6 +30,7 @@
 #include "firebird/Interface.h"
 #include "gen/iberror.h"
 #include "../common/StatusHolder.h"
+#include "../common/classes/fb_atomic.h"
 #include "../common/classes/alloc.h"
 #include "../common/classes/array.h"
 #include "../common/MsgMetadata.h"
@@ -175,6 +176,35 @@ public:
 	Firebird::RefPtr<NextInterface> next;
 };
 
+template <class YT>
+class AtomicYPtr
+{
+public:
+	AtomicYPtr(YT* v)
+	{
+		atmPtr.store(v, std::memory_order_relaxed);
+	}
+
+	YT* get()
+	{
+		return atmPtr.load(std::memory_order_relaxed);
+	}
+
+	YT* release()
+	{
+		YT* v = atmPtr;
+		if (v && atmPtr.compare_exchange_strong(v, nullptr))
+			return v;
+		return nullptr;
+	}
+
+private:
+	std::atomic<YT*> atmPtr;
+};
+
+typedef AtomicYPtr<YAttachment> AtomicAttPtr;
+typedef AtomicYPtr<YTransaction> AtomicTraPtr;
+
 class YEvents FB_FINAL :
 	public YHelper<YEvents, Firebird::IEventsImpl<YEvents, Firebird::CheckStatusWrapper> >
 {
@@ -190,7 +220,7 @@ public:
 	void cancel(Firebird::CheckStatusWrapper* status);
 
 public:
-	YAttachment* attachment;
+	AtomicAttPtr attachment;
 	Firebird::RefPtr<Firebird::IEventCallback> callback;
 
 private:
@@ -222,7 +252,7 @@ public:
 	void free(Firebird::CheckStatusWrapper* status);
 
 public:
-	YAttachment* attachment;
+	AtomicAttPtr attachment;
 	FB_API_HANDLE* userHandle;
 };
 
@@ -255,7 +285,7 @@ public:
 	void selfCheck();
 
 public:
-	YAttachment* attachment;
+	AtomicAttPtr attachment;
 	HandleArray<YBlob> childBlobs;
 	HandleArray<YResultSet> childCursors;
 	Firebird::Array<CleanupCallback*> cleanupHandlers;
@@ -263,7 +293,7 @@ public:
 private:
 	YTransaction(YTransaction* from)
 		: YHelper(from->next),
-		  attachment(from->attachment),
+		  attachment(from->attachment.get()),
 		  childBlobs(getPool()),
 		  childCursors(getPool()),
 		  cleanupHandlers(getPool())
@@ -279,7 +309,8 @@ private:
 
 typedef Firebird::RefPtr<Firebird::ITransaction> NextTransaction;
 
-class YBlob FB_FINAL : public YHelper<YBlob, Firebird::IBlobImpl<YBlob, Firebird::CheckStatusWrapper> >
+class YBlob FB_FINAL :
+	public YHelper<YBlob, Firebird::IBlobImpl<YBlob, Firebird::CheckStatusWrapper> >
 {
 public:
 	static const ISC_STATUS ERROR_CODE = isc_bad_segstr_handle;
@@ -300,8 +331,8 @@ public:
 	int seek(Firebird::CheckStatusWrapper* status, int mode, int offset);
 
 public:
-	YAttachment* attachment;
-	YTransaction* transaction;
+	AtomicAttPtr attachment;
+	AtomicTraPtr transaction;
 };
 
 class YResultSet FB_FINAL :
@@ -330,8 +361,8 @@ public:
 	void setDelayedOutputFormat(Firebird::CheckStatusWrapper* status, Firebird::IMessageMetadata* format);
 
 public:
-	YAttachment* attachment;
-	YTransaction* transaction;
+	AtomicAttPtr attachment;
+	AtomicTraPtr transaction;
 	YStatement* statement;
 };
 
@@ -359,7 +390,7 @@ public:
 	void setDefaultBpb(Firebird::CheckStatusWrapper* status, unsigned parLength, const unsigned char* par);
 
 public:
-	YAttachment* attachment;
+	AtomicAttPtr attachment;
 };
 
 
@@ -413,8 +444,8 @@ public:
 		unsigned parLength, const unsigned char* par);
 
 public:
+	AtomicAttPtr attachment;
 	Firebird::Mutex statementMutex;
-	YAttachment* attachment;
 	YResultSet* cursor;
 
 	Firebird::IMessageMetadata* getMetadata(bool in, Firebird::IStatement* next);
@@ -623,7 +654,6 @@ public:
 	Firebird::IEventBlock* createEventBlock(Firebird::CheckStatusWrapper* status, const char** events);
 	Firebird::IDecFloat16* getDecFloat16(Firebird::CheckStatusWrapper* status);
 	Firebird::IDecFloat34* getDecFloat34(Firebird::CheckStatusWrapper* status);
-	Firebird::IDecFixed* getDecFixed(Firebird::CheckStatusWrapper* status);
 };
 
 }	// namespace Why

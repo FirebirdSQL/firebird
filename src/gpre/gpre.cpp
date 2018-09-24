@@ -388,7 +388,8 @@ int main(int argc, char* argv[])
 	TEXT spare_file_name[MAXPATHLEN];
 	if (gpreGlob.sw_language == lang_undef)
 		for (const ext_table_t* ext_tab = dml_ext_table;
-			gpreGlob.sw_language = ext_tab->ext_language; ext_tab++)
+			 (gpreGlob.sw_language = ext_tab->ext_language);
+			 ext_tab++)
 		{
 			strcpy(spare_file_name, file_name);
 			if (!file_rename(spare_file_name, ext_tab->in, NULL))
@@ -400,7 +401,8 @@ int main(int argc, char* argv[])
 
 	if (gpreGlob.sw_language == lang_undef)
 		for (const ext_table_t* ext_tab = dml_ext_table;
-			gpreGlob.sw_language = ext_tab->ext_language; ext_tab++)
+			 (gpreGlob.sw_language = ext_tab->ext_language);
+			 ext_tab++)
 		{
 			strcpy(spare_file_name, file_name);
 			if (file_rename(spare_file_name, ext_tab->in, NULL) &&
@@ -799,7 +801,7 @@ int main(int argc, char* argv[])
 		{
 			out_file_name = spare_out_file_name;
 			strcpy(spare_out_file_name, file_name);
-			if (renamed = file_rename(spare_out_file_name, out_src_ext_tab->in, out_src_ext_tab->out))
+			if ((renamed = file_rename(spare_out_file_name, out_src_ext_tab->in, out_src_ext_tab->out)))
 			{
 				explicitt = false;
 			}
@@ -842,7 +844,7 @@ int main(int argc, char* argv[])
 
 	try {
 		SLONG end_position = 0;
-		while (end_position = compile_module(end_position, filename_array[3]))
+		while ((end_position = compile_module(end_position, filename_array[3])))
 			; // empty loop body
 	}	// try
 	catch (const Firebird::Exception&) {}  // fall through to the cleanup code

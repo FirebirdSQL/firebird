@@ -74,3 +74,4 @@ goto :END
 
 :END
 
+if "%ERRLEV%"=="1" exit /b 1

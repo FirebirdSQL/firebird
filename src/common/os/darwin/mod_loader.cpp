@@ -90,20 +90,24 @@ void ModuleLoader::doctorModuleExtension(Firebird::PathName& name)
 #define FB_RTLD_MODE RTLD_LAZY
 #endif
 
-ModuleLoader::Module* ModuleLoader::loadModule(const Firebird::PathName& modPath)
+ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const Firebird::PathName& modPath)
 {
 	void* module = dlopen(modPath.c_str(), FB_RTLD_MODE);
 	if (module == NULL)
 	{
-#ifdef DEBUG_LOADER
-		fprintf(stderr, "load error: %s: %s\n", modPath.c_str(), dlerror());
-#endif // DEBUG_LOADER
+		if (status)
+		{
+			status[0] = isc_arg_gds;
+			status[1] = isc_random;
+			status[2] = isc_arg_string;
+			status[3] = (ISC_STATUS) dlerror();
+			status[4] = isc_arg_end;
+		}
 		return 0;
 	}
 
 	return FB_NEW_POOL(*getDefaultMemoryPool()) DlfcnModule(module);
 }
-
 
 DlfcnModule::~DlfcnModule()
 {

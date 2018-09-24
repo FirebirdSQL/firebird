@@ -29,6 +29,7 @@
 #ifndef COMMON_STATUS_H
 #define COMMON_STATUS_H
 
+#include "fb_exception.h"
 #include "../common/StatusHolder.h"
 #include "../common/utils_proto.h"
 
@@ -110,7 +111,24 @@ namespace Firebird
 	};
 
 	typedef LocalStatusWrapper<CheckStatusWrapper> FbLocalStatus;
-	typedef LocalStatusWrapper<ThrowStatusWrapper> ThrowLocalStatus;
+
+	class ThrowWrapper : public BaseStatusWrapper<ThrowWrapper>
+	{
+	public:
+		ThrowWrapper(IStatus* aStatus)
+			: BaseStatusWrapper(aStatus)
+		{
+		}
+
+	public:
+		static void checkException(ThrowWrapper* status)
+		{
+			if (status->dirty && (status->getState() & IStatus::STATE_ERRORS))
+				status_exception::raise(status->status);
+		}
+	};
+
+	typedef LocalStatusWrapper<ThrowWrapper> ThrowLocalStatus;
 }
 
 #endif // COMMON_STATUS_H

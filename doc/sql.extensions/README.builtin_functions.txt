@@ -734,6 +734,38 @@ Example:
 
 
 --------------------
+RDB$GET_TRANSACTION_CN
+--------------------
+
+(FB4 extension)
+Function:
+    Returns commit number of given transaction. Result type is BIGINT.
+
+	Note, engine internally uses unsigned 8-byte integer for commit numbers, 
+	and unsigned 6-byte integer for transaction numbers. Thus, despite of	
+	SQL language have no unsigned integers and RDB$GET_TRANSACTION_CN returns
+	signed BIGINT, it is impossible to see negative commit numbers except of 
+	few special values used for non-committed transactions. 
+	Summary, numbers returned by RDB$GET_TRANSACTION_CN could have values below:
+
+	-2 - transaction is dead (rolled back)
+	-1 - transaction is in limbo
+	 0 - transaction is active,
+	 1 - transaction committed before database started
+	>1 - transaction committed after database started
+	NULL - given transaction number is NULL or greater than database Next Transaction
+
+	See also README.read_consistency.md
+
+Format:
+    RDB$GET_TRANSACTION_CN( <transaction number> )
+
+Examples:
+	select rdb$get_transaction_cn(current_transaction) from rdb$database;
+	select rdb$get_transaction_cn(123) from rdb$database;
+
+
+--------------------
 RDB$SYSTEM_PRIVILEGE
 --------------------
 

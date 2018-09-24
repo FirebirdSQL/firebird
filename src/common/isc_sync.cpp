@@ -239,6 +239,8 @@ namespace {
 		explicit FileLockHolder(FileLock* l)
 			: lock(l)
 		{
+			if (!lock)
+				return;
 			LocalStatus ls;
 			CheckStatusWrapper status(&ls);
 			if (!lock->setlock(&status, FileLock::FLM_EXCLUSIVE))
@@ -247,7 +249,8 @@ namespace {
 
 		~FileLockHolder()
 		{
-			lock->unlock();
+			if (lock)
+				lock->unlock();
 		}
 
 	private:
@@ -1783,7 +1786,7 @@ void SharedMemoryBase::internalUnmap()
 	}
 }
 
-SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject* callback)
+SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject* callback, bool skipLock)
 	:
 #ifdef HAVE_SHARED_MUTEX_SECTION
 	sh_mem_mutex(0),
@@ -1827,9 +1830,11 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	// open the init lock file
 	MutexLockGuard guard(openFdInit, FB_FUNCTION);
 
-	initFile.reset(FB_NEW_POOL(*getDefaultMemoryPool()) FileLock(init_filename));
+	if (!skipLock)
+		initFile.reset(FB_NEW_POOL(*getDefaultMemoryPool()) FileLock(init_filename));
 
-	// get an exclusive lock on the INIT file with blocking
+	// get an exclusive lock on the INIT file with blocking except TransactionStatusBlock
+	// since its initialized under FileLock
 	FileLockHolder initLock(initFile);
 
 #ifdef USE_SYS5SEMAPHORE
@@ -2111,7 +2116,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 
 
 #ifdef WIN_NT
-SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject* cb)
+SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject* cb, bool /*skipLock*/)
   :	sh_mem_mutex(0), sh_mem_length_mapped(0),
 	sh_mem_handle(0), sh_mem_object(0), sh_mem_interest(0), sh_mem_hdr_object(0),
 	sh_mem_hdr_address(0), sh_mem_header(NULL), sh_mem_callback(cb), sh_mem_unlink(false)
@@ -2207,12 +2212,14 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 
 	if (file_handle == INVALID_HANDLE_VALUE)
 	{
-		if ((err == ERROR_SHARING_VIOLATION))
+		if ((err == ERROR_SHARING_VIOLATION) || (err == ERROR_ACCESS_DENIED))
 		{
 			if (!init_flag) {
 				CloseHandle(event_handle);
 			}
-			goto retry;
+
+			if (retry_count < 200)	// 2 sec
+				goto retry;
 		}
 
 		CloseHandle(event_handle);

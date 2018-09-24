@@ -282,9 +282,9 @@ private:
 	void init();
 	void mergeRuns(USHORT);
 	ULONG order();
-	void orderAndSave();
-	void putRun();
-	void sort();
+	void orderAndSave(Jrd::thread_db*);
+	void putRun(Jrd::thread_db*);
+	void sortBuffer(Jrd::thread_db*);
 	void sortRunsBySeek(int);
 
 #ifdef DEV_BUILD

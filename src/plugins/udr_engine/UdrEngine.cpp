@@ -567,47 +567,42 @@ UdrPluginImpl* Engine::loadModule(ThrowStatusWrapper* status, IRoutineMetadata* 
 		PathName path;
 		PathUtils::concatPath(path, *i, *moduleName);
 
-		ModuleLoader::Module* module = ModuleLoader::fixAndLoadModule(path);
+		static ISC_STATUS_ARRAY statusArray = {
+			isc_arg_gds, isc_random,
+			isc_arg_string, (ISC_STATUS) "UDR module not loaded",
+			isc_arg_end
+		};
+		const unsigned ARG_END = 4;
 
-		if (module)
-		{
-			FB_BOOLEAN* (*entryPoint)(IStatus*, FB_BOOLEAN*, IUdrPlugin*);
+		ModuleLoader::Module* module = ModuleLoader::fixAndLoadModule(&statusArray[ARG_END], path);
+		if (!module)
+			throw FbException(status, statusArray);
 
-			if (!module->findSymbol(STRINGIZE(FB_UDR_PLUGIN_ENTRY_POINT), entryPoint))
-			{
-				static const ISC_STATUS statusVector[] = {
-					isc_arg_gds, isc_random,
-					isc_arg_string, (ISC_STATUS) "UDR plugin entry point not found",
-					isc_arg_end
-				};
+		FB_BOOLEAN* (*entryPoint)(IStatus*, FB_BOOLEAN*, IUdrPlugin*);
 
-				throw FbException(status, statusVector);
-			}
-
-			UdrPluginImpl* udrPlugin = FB_NEW UdrPluginImpl(*moduleName, module);
-			udrPlugin->theirUnloadFlag = entryPoint(status, &udrPlugin->myUnloadFlag, udrPlugin);
-
-			if (status->getState() & IStatus::STATE_ERRORS)
-			{
-				delete udrPlugin;
-				ThrowStatusWrapper::checkException(status);
-			}
-
-			modules->put(*moduleName, udrPlugin);
-
-			return udrPlugin;
-		}
-		else
+		if (!module->findSymbol(STRINGIZE(FB_UDR_PLUGIN_ENTRY_POINT), entryPoint))
 		{
 			static const ISC_STATUS statusVector[] = {
 				isc_arg_gds, isc_random,
-				isc_arg_string, (ISC_STATUS) "Module not found",
-				//// TODO: isc_arg_gds, isc_random, isc_arg_string, (ISC_STATUS) moduleName->c_str(),
+				isc_arg_string, (ISC_STATUS) "UDR plugin entry point not found",
 				isc_arg_end
 			};
 
 			throw FbException(status, statusVector);
 		}
+
+		UdrPluginImpl* udrPlugin = FB_NEW UdrPluginImpl(*moduleName, module);
+		udrPlugin->theirUnloadFlag = entryPoint(status, &udrPlugin->myUnloadFlag, udrPlugin);
+
+		if (status->getState() & IStatus::STATE_ERRORS)
+		{
+			delete udrPlugin;
+			ThrowStatusWrapper::checkException(status);
+		}
+
+		modules->put(*moduleName, udrPlugin);
+
+		return udrPlugin;
 	}
 
 	static const ISC_STATUS statusVector[] = {

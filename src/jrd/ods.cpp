@@ -36,8 +36,10 @@ namespace
 
 namespace Ods {
 
-bool isSupported(USHORT majorVersion, USHORT minorVersion)
+bool isSupported(const header_page* hdr)
 {
+	USHORT majorVersion = hdr->hdr_ods_version;
+	USHORT minorVersion = hdr->hdr_ods_minor;
 	const bool isFirebird = (majorVersion & ODS_FIREBIRD_FLAG);
 	majorVersion &= ~ODS_FIREBIRD_FLAG;
 
@@ -251,6 +253,17 @@ void writeTraNum(void* ptr, TraNumber number, FB_SIZE_T header_size)
 			((rhde*) ptr)->rhde_tra_high = (USHORT) high_word;
 		}
 	}
+}
+
+AttNumber getAttID(const header_page* page)
+{
+	return ((AttNumber)page->hdr_att_high << BITS_PER_LONG | page->hdr_attachment_id);
+}
+
+void writeAttID(header_page* page, AttNumber number)
+{
+	page->hdr_att_high = number >> BITS_PER_LONG;
+	page->hdr_attachment_id = (ULONG) (number & MAX_ULONG);
 }
 
 } // namespace

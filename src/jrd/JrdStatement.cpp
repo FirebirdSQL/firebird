@@ -162,6 +162,9 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 			if (!tail->csb_fields && !(tail->csb_flags & csb_update))
 				 rpb->rpb_stream_flags |= RPB_s_no_data;
 
+			if (tail->csb_flags & csb_unstable)
+				rpb->rpb_stream_flags |= RPB_s_unstable;
+
 			rpb->rpb_relation = tail->csb_relation;
 
 			delete tail->csb_fields;
@@ -382,7 +385,7 @@ jrd_req* JrdStatement::getRequest(thread_db* tdbb, USHORT level)
 
 	// Create the request.
 	jrd_req* const request = FB_NEW_POOL(*pool) jrd_req(attachment, this, parentStats);
-	request->req_id = dbb->generateStatementId(tdbb);
+	request->setRequestId(dbb->generateStatementId());
 
 	requests[level] = request;
 

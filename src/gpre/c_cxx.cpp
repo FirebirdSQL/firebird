@@ -243,6 +243,9 @@ void C_CXX_action(const act* action, int column)
 	case ACT_update:
 	case ACT_statistics:
 		begin(column);
+
+	default:
+		break;
 	}
 
 	switch (action->act_type)
@@ -658,7 +661,7 @@ static void asgn_to( const act* action, ref* reference, int column)
 
 			// Pick up NULL value if one is there
 
-			if (reference = reference->ref_null)
+			if ((reference = reference->ref_null))
 			{
 				align(column);
 				fprintf(gpreGlob.out_file, "%s = %s;", reference->ref_value,
@@ -687,7 +690,7 @@ static void asgn_to( const act* action, ref* reference, int column)
 
 	// Pick up NULL value if one is there
 
-	if (reference = reference->ref_null)
+	if ((reference = reference->ref_null))
 	{
 		align(column);
 		fprintf(gpreGlob.out_file, "%s = %s;", reference->ref_value, gen_name(s, reference, true));
@@ -1049,7 +1052,7 @@ static void gen_blob_open( const act* action, USHORT column)
 		fprintf(gpreGlob.out_file, "%s = %s;", s, reference->ref_value);
 	}
 
-	if (args.pat_value1 = blob->blb_bpb_length)
+	if ((args.pat_value1 = blob->blb_bpb_length))
 		PATTERN_expand(column, pattern1, &args);
 	else
 		PATTERN_expand(column, pattern2, &args);

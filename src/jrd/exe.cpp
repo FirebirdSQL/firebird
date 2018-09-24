@@ -705,6 +705,10 @@ void EXE_receive(thread_db* tdbb,
 						current->bli_request = NULL;
 					}
 				}
+				else
+				{
+					transaction->checkBlob(tdbb, id, NULL, false);
+				}
 			}
 		}
 	}
@@ -898,6 +902,8 @@ void EXE_start(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
 	request->req_src_line = 0;
 	request->req_src_column = 0;
 
+	TRA_setup_request_snapshot(tdbb, request);
+
 	execute_looper(tdbb, request, transaction,
 				   request->getStatement()->topNode,
 				   jrd_req::req_evaluate);
@@ -970,6 +976,7 @@ void EXE_unwind(thread_db* tdbb, jrd_req* request)
 		fb_assert(!request->req_proc_sav_point);
 	}
 
+	TRA_release_request_snapshot(tdbb, request);
 	TRA_detach_request(request);
 
 	request->req_flags &= ~(req_active | req_proc_fetch | req_reserved);
@@ -1363,6 +1370,7 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 				(*ptr)->close(tdbb);
 		}
 
+		TRA_release_request_snapshot(tdbb, request);
 		request->req_flags &= ~(req_active | req_reserved);
 		request->req_timestamp.invalidate();
 		release_blobs(tdbb, request);

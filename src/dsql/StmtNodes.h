@@ -1491,6 +1491,58 @@ public:
 };
 
 
+class SessionManagementWrapperNode : public TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_SESSION_MANAGEMENT_WRAPPER>
+{
+public:
+	explicit SessionManagementWrapperNode(MemoryPool& pool, SessionManagementNode* aWrapped,
+				const Firebird::string& aText)
+		: TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_SESSION_MANAGEMENT_WRAPPER>(pool),
+		  wrapped(aWrapped),
+		  text(pool, aText)
+	{
+	}
+
+public:
+	virtual SessionManagementWrapperNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
+	{
+		Node::dsqlPass(dsqlScratch);
+
+		// Save and reset the statement type, as SessionManagementNode sets it to TYPE_SESSION_MANAGEMENT but
+		// we are a DML statement.
+		DsqlCompiledStatement::Type statementType = dsqlScratch->getStatement()->getType();
+		wrapped->dsqlPass(dsqlScratch);
+		dsqlScratch->getStatement()->setType(statementType);
+
+		return this;
+	}
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	{
+		DsqlOnlyStmtNode::internalPrint(printer);
+
+		NODE_PRINT(printer, wrapped);
+		NODE_PRINT(printer, text);
+
+		return "SessionManagementWrapperNode";
+	}
+
+	virtual void genBlr(DsqlCompilerScratch* dsqlScratch)
+	{
+		dsqlScratch->appendUChar(blr_exec_sql);
+		dsqlScratch->appendUChar(blr_literal);
+		dsqlScratch->appendUChar(blr_text2);
+		dsqlScratch->appendUShort(CS_METADATA);
+		dsqlScratch->appendUShort((USHORT) text.length());
+		dsqlScratch->appendBytes((const UCHAR*) text.c_str(), text.length());
+	}
+
+public:
+	SessionManagementNode* wrapped;
+	const Firebird::string text;
+};
+
+
 class SetTransactionNode : public TransactionNode
 {
 public:
@@ -1513,7 +1565,8 @@ public:
 		ISO_LEVEL_CONCURRENCY,
 		ISO_LEVEL_CONSISTENCY,
 		ISO_LEVEL_READ_COMMITTED_REC_VERSION,
-		ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION
+		ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION,
+		ISO_LEVEL_READ_COMMITTED_READ_CONSISTENCY
 	};
 
 	static const unsigned LOCK_MODE_SHARED 		= 0x1;
@@ -1569,6 +1622,26 @@ public:
 };
 
 
+class SessionResetNode : public SessionManagementNode
+{
+public:
+	explicit SessionResetNode(MemoryPool& pool)
+		: SessionManagementNode(pool)
+	{
+	}
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	{
+		SessionManagementNode::internalPrint(printer);
+
+		return "SessionResetNode";
+	}
+
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+};
+
+
 class SetRoleNode : public SessionManagementNode
 {
 public:
@@ -1597,7 +1670,7 @@ public:
 		return "SetRoleNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request) const;
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
 
 public:
 	bool trusted;
@@ -1614,7 +1687,7 @@ public:
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void execute(thread_db* tdbb, dsql_req* request) const;
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
 
 private:
 	Type m_type;
@@ -1637,7 +1710,7 @@ public:
 		return "SetRoundNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request) const;
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
 
 public:
 	USHORT rndMode;
@@ -1663,7 +1736,7 @@ public:
 		return "SetTrapsNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request) const;
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
 
 	void trap(Firebird::MetaName* name);
 
@@ -1691,7 +1764,7 @@ public:
 		return "SetBindNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request) const;
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
 
 public:
 	Firebird::DecimalBinding bind;

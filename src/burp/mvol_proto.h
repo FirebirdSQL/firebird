@@ -24,24 +24,27 @@
 #ifndef BURP_MVOL_PROTO_H
 #define BURP_MVOL_PROTO_H
 
-#include "../burp/burp.h"
+#include "firebird/Interface.h"
+#include "std_desc.h"
 
+class BurpGlobals;
 
 FB_UINT64		MVOL_fini_read();
-FB_UINT64		MVOL_fini_write(int*, UCHAR**);
+FB_UINT64		MVOL_fini_write();
 void			MVOL_init(ULONG);
-void			MVOL_init_read(const char*, USHORT*, int*, UCHAR**);
-void			MVOL_init_write(const char*, int*, UCHAR**);
+void			MVOL_init_read(const char*, USHORT*);
+void			MVOL_init_write(const char*);
 bool			MVOL_split_hdr_write();
 bool			MVOL_split_hdr_read();
-int				MVOL_read(int*, UCHAR**);
+void			MVOL_read(BurpGlobals*);
 UCHAR*			MVOL_read_block(BurpGlobals*, UCHAR*, ULONG);
 void			MVOL_skip_block(BurpGlobals*, ULONG);
-UCHAR			MVOL_write(const UCHAR, int*, UCHAR**);
+void			MVOL_write(BurpGlobals*);
 const UCHAR*	MVOL_write_block(BurpGlobals*, const UCHAR*, ULONG);
+Firebird::ICryptKeyCallback*	MVOL_get_crypt(BurpGlobals*);
 
 #if defined WIN_NT
-DESC			MVOL_open(const char*, ULONG, ULONG);
+DESC			NT_tape_open(const char*, ULONG, ULONG);
 #endif
 
 

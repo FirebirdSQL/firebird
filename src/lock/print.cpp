@@ -408,7 +408,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 				break;
 
 			case 'i':
-				while (c = *p++)
+				while ((c = *p++))
 					switch (c)
 					{
 					case 'a':

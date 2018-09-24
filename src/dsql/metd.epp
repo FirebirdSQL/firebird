@@ -568,7 +568,7 @@ bool METD_get_domain(jrd_tra* transaction, TypeClause* field, const MetaName& na
 		field->subType = FLX.RDB$FIELD_SUB_TYPE;
 		field->dimensions = FLX.RDB$DIMENSIONS.NULL ? 0 : FLX.RDB$DIMENSIONS;
 
-		field->charSetId = 0;
+		field->charSetId = Nullable<SSHORT>::empty();
 		if (!FLX.RDB$CHARACTER_SET_ID.NULL)
 			field->charSetId = FLX.RDB$CHARACTER_SET_ID;
 		field->collationId = 0;

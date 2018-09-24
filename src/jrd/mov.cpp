@@ -416,6 +416,42 @@ void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to)
 }
 
 
+void MOV_move_ext(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to, bool toExtern)
+{
+/**************************************
+ *
+ *	M O V _ m o v e _ e x t
+ *
+ **************************************
+ *
+ * Functional description
+ *	Move data to/from outer world.
+ *
+ **************************************/
+
+	MOV_move(tdbb, from, to);
+
+	switch (to->dsc_dtype)
+	{
+	case dtype_dec_fixed:
+		if (toExtern)
+		{
+			((Decimal128*) to->dsc_address)->setScale(tdbb->getAttachment()->att_dec_status,
+				to->dsc_scale);
+		}
+		else
+		{
+			((DecimalFixed*) to->dsc_address)->exactInt(tdbb->getAttachment()->att_dec_status,
+				to->dsc_scale);
+		}
+		break;
+
+	default:
+		break;
+	}
+}
+
+
 Decimal64 MOV_get_dec64(Jrd::thread_db* tdbb, const dsc* desc)
 {
 /**************************************
@@ -455,7 +491,7 @@ DecimalFixed MOV_get_dec_fixed(Jrd::thread_db* tdbb, const dsc* desc, SSHORT sca
 namespace Jrd
 {
 
-DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, int mLen)
+DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen)
 	: maxLen(mLen)
 {
 	const char* const NULL_KEY_STRING = "NULL";
@@ -468,9 +504,9 @@ DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, int mLen)
 
 	fb_assert(!desc->isBlob());
 
-	value = MOV_make_string2(tdbb, desc, ttype_dynamic);
+	const bool isBinary = (desc->isText() && desc->getTextType() == ttype_binary);
+	value = MOV_make_string2(tdbb, desc, isBinary ? ttype_binary : ttype_dynamic);
 
-	const int len = (int) value.length();
 	const char* const str = value.c_str();
 
 	if (desc->isText() || desc->isDateTime())
@@ -481,18 +517,23 @@ DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, int mLen)
 			value.rtrim(pad);
 		}
 
-		if (desc->isText() && desc->getTextType() == ttype_binary)
+		if (isBinary)
 		{
-			Firebird::string hex;
-			char* s = hex.getBuffer(2 * len);
+			string hex;
 
-			for (int i = 0; i < len; i++)
+			FB_SIZE_T len = value.length();
+			const bool cut = (len > (maxLen - 3) / 2);	// 3 is a length of enclosing symbols: x' and '
+			if (cut)
+				len = (maxLen - 5) / 2;					// 5 is a length of enclosing symbols: x' and ...
+
+			char* s = hex.getBuffer(2 * len);			// each raw byte represented by 2 chars in string
+
+			for (FB_SIZE_T i = 0; i < len; i++)
 			{
 				sprintf(s, "%02X", (int)(unsigned char) str[i]);
 				s += 2;
 			}
-
-			value = "x'" + hex + "'";
+			value = "x'" + hex + (cut ? "..." : "'");
 		}
 		else
 			value = "'" + value + "'";

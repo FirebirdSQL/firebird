@@ -73,10 +73,7 @@ void PPG_print_header(const header_page* header, ULONG page,
 		uSvc->printf(false, "\tOldest snapshot\t\t%" SQUADFORMAT"\n", Ods::getOST(header));
 		uSvc->printf(false, "\tNext transaction\t%" SQUADFORMAT"\n", Ods::getNT(header));
 		uSvc->printf(false, "\tSequence number\t\t%d\n", header->hdr_sequence);
-
-		const AttNumber att_id =
-			(AttNumber) header->hdr_att_high << BITS_PER_LONG | header->hdr_attachment_id;
-		uSvc->printf(false, "\tNext attachment ID\t%" SQUADFORMAT"\n", att_id);
+		uSvc->printf(false, "\tNext attachment ID\t%" SQUADFORMAT"\n", Ods::getAttID(header));
 
 		Firebird::DbImplementation imp(header);
 		uSvc->printf(false, "\tImplementation\t\tHW=%s %s-endian OS=%s CC=%s\n",
@@ -226,13 +223,7 @@ void PPG_print_header(const header_page* header, ULONG page,
 			temp[p[1]] = '\0';
 			uSvc->printf(false, "\tRoot file name:\t\t%s\n", temp);
 			break;
-/*
-		case HDR_journal_server:
-			memcpy(temp, p + 2, p[1]);
-			temp[p[1]] = '\0';
-			uSvc->printf(false, "\tJournal server:\t\t%s\n", temp);
-			break;
-*/
+
 		case HDR_file:
 			memcpy(temp, p + 2, p[1]);
 			temp[p[1]] = '\0';
@@ -243,30 +234,12 @@ void PPG_print_header(const header_page* header, ULONG page,
 			memcpy(&number, p + 2, sizeof(number));
 			uSvc->printf(false, "\tLast logical page:\t\t%ld\n", number);
 			break;
-/*
-		case HDR_unlicensed:
-			memcpy(&number, p + 2, sizeof(number));
-			uSvc->printf(false, "\tUnlicensed accesses:\t\t%ld\n", number);
-			break;
-*/
+
 		case HDR_sweep_interval:
 			memcpy(&number, p + 2, sizeof(number));
 			uSvc->printf(false, "\tSweep interval:\t\t%ld\n", number);
 			break;
 
-/*
-		case HDR_log_name:
-			memcpy(temp, p + 2, p[1]);
-			temp[p[1]] = '\0';
-			uSvc->printf(false, "\tReplay logging file:\t\t%s\n", temp);
-			break;
-
-		case HDR_cache_file:
-			memcpy(temp, p + 2, p[1]);
-			temp[p[1]] = '\0';
-			uSvc->printf(false, "\tShared Cache file:\t\t%s\n", temp);
-			break;
-*/
 		case HDR_difference_file:
 			memcpy(temp, p + 2, p[1]);
 			temp[p[1]] = '\0';
@@ -287,6 +260,10 @@ void PPG_print_header(const header_page* header, ULONG page,
 
 		case HDR_crypt_hash:
 			uSvc->printf(false, "\tKey hash:\t%*.*s\n", p[1], p[1], p + 2);
+			break;
+
+		case HDR_crypt_checksum:
+			uSvc->printf(false, "\tCrypt checksum:\t%*.*s\n", p[1], p[1], p + 2);
 			break;
 
 		default:

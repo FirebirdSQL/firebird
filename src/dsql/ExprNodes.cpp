@@ -1397,18 +1397,6 @@ void ArithmeticNode::getDescDialect1(thread_db* /*tdbb*/, dsc* desc, dsc& desc1,
 			break;
 
 		case blr_divide:
-			/***
-			if (desc1.isDecOrInt() && desc2.isDecOrInt())
-			{
-				desc->dsc_dtype = dtype_dec128;
-				desc->dsc_length = sizeof(Decimal128);
-				desc->dsc_scale = 0;
-				desc->dsc_sub_type = 0;
-				desc->dsc_flags = 0;
-				return;
-			}
-			***/
-
 			// for compatibility with older versions of the product, we accept
 			// text types for division in blr_version4 (dialect <= 1) only
 			if (!(DTYPE_IS_NUMERIC(desc1.dsc_dtype) || DTYPE_IS_TEXT(desc1.dsc_dtype)))
@@ -6249,6 +6237,14 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	// See CORE-5097.
 	if (field->fld_computation && !relation->rel_view_rse)
 	{
+		if (csb->csb_currentAssignTarget == this)
+		{
+			// This is an assignment to a computed column. Report the error here when we have the field name.
+			ERR_post(
+				Arg::Gds(isc_read_only_field) <<
+				(string(relation->rel_name.c_str()) + "." + field->fld_name.c_str()));
+		}
+
 		FB_SIZE_T pos;
 
 		if (csb->csb_computing_fields.find(field, pos))
@@ -7734,10 +7730,10 @@ void DerivedFieldNode::setParameterName(dsql_par* parameter) const
 
 	while (drvField)
 	{
-		if (fieldNode = nodeAs<FieldNode>(drvField->value))
+		if ((fieldNode = nodeAs<FieldNode>(drvField->value)))
 			break;
 
-		if (dbKeyNode = nodeAs<RecordKeyNode>(drvField->value))
+		if ((dbKeyNode = nodeAs<RecordKeyNode>(drvField->value)))
 			break;
 
 		drvField = nodeAs<DerivedFieldNode>(drvField->value);
@@ -8939,7 +8935,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, jrd_req* request) const
 				if (!blobId->isEmpty())
 				{
 					if (!request->hasInternalStatement())
-						tdbb->getTransaction()->checkBlob(tdbb, blobId);
+						tdbb->getTransaction()->checkBlob(tdbb, blobId, NULL, true);
 
 					if (desc->getCharSet() != CS_NONE && desc->getCharSet() != CS_BINARY)
 					{

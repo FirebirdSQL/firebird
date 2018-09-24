@@ -130,6 +130,13 @@ namespace Firebird
 			return ptr;
 		}
 
+		void moveFrom(RefPtr& r)
+		{
+			assign(NULL);
+			ptr = r.ptr;
+			r.ptr = NULL;
+		}
+
 		T* operator=(T* p)
 		{
 			return assign(p);

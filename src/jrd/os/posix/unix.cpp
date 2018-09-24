@@ -1230,7 +1230,7 @@ static bool raw_devices_validate_database(int desc, const PathName& file_name)
 	if (hp->hdr_header.pag_type != pag_header /*|| hp->hdr_sequence*/)
 		goto quit;
 
-	if (!Ods::isSupported(hp->hdr_ods_version, hp->hdr_ods_minor))
+	if (!Ods::isSupported(hp))
 		goto quit;
 
 	if (hp->hdr_page_size < MIN_PAGE_SIZE || hp->hdr_page_size > MAX_PAGE_SIZE)

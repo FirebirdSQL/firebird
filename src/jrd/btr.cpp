@@ -5948,7 +5948,7 @@ string print_key(thread_db* tdbb, jrd_rel* relation, index_desc* idx, Record* re
 		MET_scan_relation(tdbb, relation);
 	}
 
-	const int MAX_KEY_STRING_LEN = 250;
+	const FB_SIZE_T MAX_KEY_STRING_LEN = 250;
 	string key, value;
 
 	try

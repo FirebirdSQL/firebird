@@ -90,11 +90,11 @@ public:
 	/** loadModule is given as a string the path to the module to load.  It
 		attempts to load the module.  If successful it returns the ModuleLoader::Module
 		object that represents the loaded module in memory and can be used to
-		perform symbol lookups on the module.  If unsuccessful it returns NULL.
-		It is the callers responsibility to delete the returned module object
-		when it is no longer needed.
+		perform symbol lookups on the module. It is the callers responsibility to delete
+		the returned module object when it is no longer needed.
+		If unsuccessful it returns NULL. OS-specific error is returned in status parameter.
 	**/
-	static Module* loadModule(const Firebird::PathName&);
+	static Module* loadModule(ISC_STATUS* status, const Firebird::PathName&);
 
 	/** doctorModuleExtension modifies the given path name to add the platform
 		specific module extention.  This allows the user to provide the root name
@@ -107,14 +107,14 @@ public:
 	/** Almost like loadModule(), but in case of failure invokes doctorModuleExtension()
 		and retries.
 	**/
-	static Module* fixAndLoadModule(const Firebird::PathName& modName)
+	static Module* fixAndLoadModule(ISC_STATUS* status, const Firebird::PathName& modName)
 	{
-		Module* mod = loadModule(modName);
+		Module* mod = loadModule(NULL, modName);
 		if (!mod)
 		{
 			Firebird::PathName fixed(modName);
 			doctorModuleExtension(fixed);
-			mod = loadModule(fixed);
+			mod = loadModule(status, fixed);
 		}
 		return mod;
 	}

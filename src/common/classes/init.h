@@ -71,10 +71,16 @@ public:
 		virtual ~InstanceList();
 		static void destructors();
 
+		// remove self from common list under StaticMutex protection
+		void remove();
+
 	private:
-		InstanceList* next;
-		DtorPriority priority;
 		virtual void dtor() = 0;
+		void unlist();
+
+		InstanceList* next;
+		InstanceList* prev;
+		DtorPriority priority;
 	};
 
 	template <typename T, InstanceControl::DtorPriority P = InstanceControl::PRIORITY_REGULAR>
@@ -88,6 +94,11 @@ public:
 			: InstanceControl::InstanceList(P), link(l)
 		{
 			fb_assert(link);
+		}
+
+		void remove()
+		{
+			InstanceList::remove();
 		}
 
 		void dtor()

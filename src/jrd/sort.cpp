@@ -388,7 +388,7 @@ void Sort::put(thread_db* tdbb, ULONG** record_address)
 		if ((UCHAR*) record < m_memory + m_longs ||
 			(UCHAR*) NEXT_RECORD(record) <= (UCHAR*) (m_next_pointer + 1))
 		{
-			putRun();
+			putRun(tdbb);
 			while (true)
 			{
 				run_control* run = m_runs;
@@ -456,7 +456,7 @@ void Sort::sort(thread_db* tdbb)
 		// and we're ready for output.
 		if (!m_runs)
 		{
-			sort();
+			sortBuffer(tdbb);
 			m_next_pointer = m_first_pointer + 1;
 			m_flags |= scb_sorted;
 			return;
@@ -464,7 +464,7 @@ void Sort::sort(thread_db* tdbb)
 
 		// Write the last records as a run_control
 
-		putRun();
+		putRun(tdbb);
 
 		CHECK_FILE(NULL);
 
@@ -1895,7 +1895,7 @@ ULONG Sort::order()
 }
 
 
-void Sort::orderAndSave()
+void Sort::orderAndSave(thread_db* tdbb)
 {
 /**************************************
  *
@@ -1907,6 +1907,8 @@ void Sort::orderAndSave()
  * scratch file as one big chunk
  *
  **************************************/
+	EngineCheckout(tdbb, FB_FUNCTION);
+
 	run_control* run = m_runs;
 	run->run_records = 0;
 
@@ -1954,7 +1956,7 @@ void Sort::orderAndSave()
 }
 
 
-void Sort::putRun()
+void Sort::putRun(thread_db* tdbb)
 {
 /**************************************
  *
@@ -1982,16 +1984,16 @@ void Sort::putRun()
 	// Do the in-core sort. The first phase a duplicate handling we be performed
 	// in "sort".
 
-	sort();
+	sortBuffer(tdbb);
 
 	// Re-arrange records in physical order so they can be dumped in a single write
 	// operation
 
-	orderAndSave();
+	orderAndSave(tdbb);
 }
 
 
-void Sort::sort()
+void Sort::sortBuffer(thread_db* tdbb)
 {
 /**************************************
  *
@@ -2001,6 +2003,7 @@ void Sort::sort()
  * been requested, detect and handle them.
  *
  **************************************/
+	EngineCheckout(tdbb, FB_FUNCTION);
 
 	// First, insert a pointer to the high key
 

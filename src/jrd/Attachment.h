@@ -42,6 +42,7 @@
 #include "../common/ThreadStart.h"
 
 #include "../jrd/EngineInterface.h"
+#include "../jrd/sbm.h"
 
 namespace EDS {
 	class Connection;
@@ -143,6 +144,29 @@ const ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 
 class Attachment;
 struct bid;
+
+
+class ActiveSnapshots
+{
+public:
+	explicit ActiveSnapshots(Firebird::MemoryPool& p);
+
+	// Returns snapshot number given version belongs to.
+	// It is not needed to maintain two versions for the same snapshot, so the latter
+	// version can be garbage-collected.
+	//
+	// Function returns CN_ACTIVE if version was committed after we obtained
+	// our list of snapshots. It means GC is not possible for this version.
+	CommitNumber getSnapshotForVersion(CommitNumber version_cn);
+
+private:
+	UInt32Bitmap m_snapshots;		// List of active snapshots as of the moment of time
+	CommitNumber m_lastCommit;		// CN_ACTIVE here means object is not populated
+	ULONG m_releaseCount;			// Release event counter when list was last updated
+	ULONG m_slots_used;				// Snapshot slots used when list was last updated
+
+	friend class TipCache;
+};
 
 
 //
@@ -282,6 +306,7 @@ public:
 	jrd_tra*	att_transactions;			// Transactions belonging to attachment
 	jrd_tra*	att_dbkey_trans;			// transaction to control db-key scope
 	TraNumber	att_oldest_snapshot;		// GTT's record versions older than this can be garbage-collected
+	ActiveSnapshots att_active_snapshots;	// List of currently active snapshots for GC purposes
 
 private:
 	jrd_tra*	att_sys_transaction;		// system transaction
@@ -332,6 +357,7 @@ public:
 	ThreadId att_purge_tid;					// ID of thread running purge_attachment()
 
 	EDS::Connection* att_ext_connection;	// external connection executed by this attachment
+	EDS::Connection* att_ext_parent;		// external connection, parent of this attachment
 	ULONG att_ext_call_depth;				// external connection call depth, 0 for user attachment
 	TraceManager* att_trace_manager;		// Trace API manager
 
@@ -406,6 +432,9 @@ public:
 	void storeBinaryBlob(thread_db* tdbb, jrd_tra* transaction, bid* blobId,
 		const Firebird::ByteChunk& chunk);
 
+	void releaseGTTs(thread_db* tdbb);
+	void resetSession(thread_db* tdbb, jrd_tra** traHandle);
+
 	void signalCancel();
 	void signalShutdown(ISC_STATUS code);
 
@@ -456,6 +485,17 @@ public:
 	// returns time when idle timer will be expired, if set
 	bool getIdleTimerTimestamp(Firebird::TimeStamp& ts) const;
 
+	// batches control
+	void registerBatch(JBatch* b)
+	{
+		att_batches.add(b);
+	}
+
+	void deregisterBatch(JBatch* b)
+	{
+		att_batches.findAndRemove(b);
+	}
+
 private:
 	Attachment(MemoryPool* pool, Database* dbb);
 	~Attachment();
@@ -491,6 +531,8 @@ private:
 	unsigned int att_idle_timeout;		// seconds
 	unsigned int att_stmt_timeout;		// milliseconds
 	Firebird::RefPtr<IdleTimer> att_idle_timer;
+
+	Firebird::Array<JBatch*> att_batches;
 };
 
 

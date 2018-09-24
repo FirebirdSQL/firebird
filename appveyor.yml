@@ -1,0 +1,28 @@
+image:
+  - Visual Studio 2015
+  - Visual Studio 2017
+
+platform:
+  - x64
+  - x86
+
+shallow_clone: true
+
+install:
+  - for /r %%i in (*.bat) do unix2dos "%%i"
+  - if "%PLATFORM%" == "x64" set FB_PROCESSOR_ARCHITECTURE=AMD64
+  - if "%PLATFORM%" == "x64" set FB_OUTPUT_SUFFIX=x64
+  - if "%PLATFORM%" == "x86" set FB_PROCESSOR_ARCHITECTURE=x86
+  - if "%PLATFORM%" == "x86" set FB_OUTPUT_SUFFIX=win32
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%" == "Visual Studio 2017" call "%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Community\Common7\Tools\VsDevCmd.bat"
+  - cd builds\win32
+  - run_all.bat JUSTBUILD
+
+artifacts:
+  - path: output_$(FB_OUTPUT_SUFFIX)
+    name: output
+    type: zip
+
+build: off
+test: off
+deploy: off

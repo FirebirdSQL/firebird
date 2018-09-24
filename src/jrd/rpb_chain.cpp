@@ -25,11 +25,11 @@
 
 using namespace Jrd;
 
-#ifdef DEBUG_GDS_ALLOC
+#ifdef DEV_BUILD
 #define ExecAssert(x) fb_assert(x)
-#else  //DEBUG_GDS_ALLOC
+#else  // DEV_BUILD
 #define ExecAssert(x) x
-#endif //DEBUG_GDS_ALLOC
+#endif // DEV_BUILD
 
 // rpb_chain.h includes req.h => struct record_param.
 

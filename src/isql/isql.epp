@@ -317,7 +317,6 @@ IsqlGlobals::IsqlGlobals()
 
 	df16 = Firebird::UtilInterfacePtr()->getDecFloat16(&statusWrapper);
 	df34 = Firebird::UtilInterfacePtr()->getDecFloat34(&statusWrapper);
-	dfix = Firebird::UtilInterfacePtr()->getDecFixed(&statusWrapper);
 }
 
 // I s q l G l o b a l s : : p r i n t f
@@ -2286,7 +2285,6 @@ static processing_state add_row(TEXT* tabname)
 				double* dvalue;
 				FB_DEC16* d64value;
 				FB_DEC34* d128value;
-				FB_DEC_FIXED* dfixvalue;
 				UCHAR* boolean;
 				ISC_QUAD* blobid;
 				vary* avary;
@@ -2364,28 +2362,12 @@ static processing_state add_row(TEXT* tabname)
 					}
 					break;
 
+				case SQL_DEC_FIXED:
 				case SQL_DEC34:
 					d128value = (FB_DEC34*) datap;
 					if (isqlGlob.df34)
 						isqlGlob.df34->fromString(fbStatus, lastInputLine, d128value);
 					if ((!isqlGlob.df34) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
-					{
-						STDERROUT("Input parsing problem");
-						done = true;
-					}
-					break;
-
-				case SQL_DEC_FIXED:
-					scale = msg->getScale(fbStatus, i);
-					if (ISQL_errmsg(fbStatus))
-						return (SKIP);
-
-					dfixvalue = (FB_DEC_FIXED*) datap;
-
-					if (isqlGlob.dfix)
-						isqlGlob.dfix->fromString(fbStatus, lastInputLine, scale, dfixvalue);
-
-					if ((!isqlGlob.dfix) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
 						done = true;
@@ -3083,7 +3065,6 @@ static processing_state bulk_insert_hack(const char* command)
 				tm times;
 				FB_DEC16* d64value;
 				FB_DEC34* d128value;
-				FB_DEC_FIXED* dfixvalue;
 				// Initialize the time structure.
 				memset(&times, 0, sizeof(times));
 				char msec_str[5] = "";
@@ -3155,26 +3136,11 @@ static processing_state bulk_insert_hack(const char* command)
 					break;
 
 				case SQL_DEC34:
+				case SQL_DEC_FIXED:
 					d128value = (FB_DEC34*) datap;
 					if (isqlGlob.df34)
 						isqlGlob.df34->fromString(fbStatus, get_numeric_value(lastPos).c_str(), d128value);
 					if ((!isqlGlob.df34) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
-					{
-						STDERROUT("Input parsing problem");
-						done = true;
-					}
-					break;
-
-				case SQL_DEC_FIXED:
-					scale = message->getScale(fbStatus, i);
-					if (ISQL_errmsg(fbStatus))
-						return (SKIP);
-
-					dfixvalue = (FB_DEC_FIXED*) datap;
-					if (isqlGlob.dfix)
-						isqlGlob.dfix->fromString(fbStatus, get_numeric_value(lastPos).c_str(), scale, dfixvalue);
-
-					if ((!isqlGlob.dfix) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
 						done = true;
@@ -3563,7 +3529,7 @@ static bool check_date(const tm& times)
 		return false;
 	if (m < 1 || m > 12)
 		return false;
-	const bool leap = y % 4 == 0 && y % 100 != 0 || y % 400 == 0;
+	const bool leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
 	const int days[] = {0, 31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 	if (d < 1 || d > days[m])
 		return false;
@@ -5301,7 +5267,7 @@ static processing_state get_statement(Firebird::string& statement,
 	TEXT con_prompt[MSG_LENGTH];
 	IUTILS_msg_get(CON_PROMPT, con_prompt);
 
-	if (Interactive && !Input_file || setValues.Echo) {
+	if ((Interactive && !Input_file) || setValues.Echo) {
 		ISQL_prompt(statement_prompt);
 	}
 
@@ -5368,7 +5334,7 @@ static processing_state get_statement(Firebird::string& statement,
 
 			Filelist->removeIntoIfp();
 
-			if (Interactive && !Input_file || setValues.Echo)
+			if ((Interactive && !Input_file) || setValues.Echo)
 				ISQL_prompt(statement_prompt);
 
 			// CVC: Let's detect if we went back to the first level.
@@ -5399,7 +5365,7 @@ static processing_state get_statement(Firebird::string& statement,
 			}
 
 			// If in a comment, keep reading
-			if (Interactive && !Input_file || setValues.Echo)
+			if ((Interactive && !Input_file) || setValues.Echo)
 			{
 				if (state == in_block_comment)
 				{
@@ -6255,15 +6221,15 @@ static processing_state newdb(TEXT* dbname,
 	}
 
     FB_SIZE_T l;
-	if (l = fb_strlen(local_usr)) {
+	if ((l = fb_strlen(local_usr))) {
 		dpb.insertString(isc_dpb_user_name, local_usr, l);
 	}
 
-	if (l = fb_strlen(local_psw)) {
+	if ((l = fb_strlen(local_psw))) {
 		dpb.insertString(isc_dpb_password, local_psw, l);
 	}
 
-	if (l = fb_strlen(local_sql_role))
+	if ((l = fb_strlen(local_sql_role)))
 	{
 		dpb.insertInt(isc_dpb_sql_dialect, isqlGlob.SQL_dialect);
 		dpb.insertString(isc_dpb_sql_role_name, local_sql_role, l);
@@ -6895,6 +6861,8 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 							IUTILS_msg_get(EMPTY_PASS, errbuf, SafeArg() << swarg_str);
 							// empty password file @1
 							break;
+						default:
+							break;
 						}
 						STDERROUT(errbuf);
 						ret = ps_ERR;
@@ -7338,30 +7306,12 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			break;
 
 		case SQL_DEC34:
+		case SQL_DEC_FIXED:
 			{
 				char decStr[Firebird::IDecFloat34::STRING_SIZE];
 				if (isqlGlob.df34)
 				{
 					isqlGlob.df34->toString(fbStatus, var->value.asDec34, sizeof(decStr), decStr);
-					if (ISQL_errmsg(fbStatus))
-						strcpy(decStr, convErr);
-				}
-				else
-					strcpy(decStr, convErr);
-
-				if (setValues.List)
-					isqlGlob.printf("%*.*s%s", sizeof(decStr) - 1, sizeof(decStr) - 1, decStr, NEWLINE);
-				else
-					sprintf(p, "%*.*s ", sizeof(decStr) - 1, sizeof(decStr) - 1, decStr);
-			}
-			break;
-
-		case SQL_DEC_FIXED:
-			{
-				char decStr[Firebird::IDecFixed::STRING_SIZE];
-				if (isqlGlob.dfix)
-				{
-					isqlGlob.dfix->toString(fbStatus, var->value.asDecFixed, dscale, sizeof(decStr), decStr);
 					if (ISQL_errmsg(fbStatus))
 						strcpy(decStr, convErr);
 				}
@@ -8154,11 +8104,9 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 		case SQL_DEC16:
 			disp_length = Firebird::IDecFloat16::STRING_SIZE - 1;
 			break;
+		case SQL_DEC_FIXED:
 		case SQL_DEC34:
 			disp_length = Firebird::IDecFloat34::STRING_SIZE - 1;
-			break;
-		case SQL_DEC_FIXED:
-			disp_length = Firebird::IDecFixed::STRING_SIZE - 1;
 			break;
 		case SQL_TEXT:
 			alignment = 1;
@@ -8618,8 +8566,8 @@ static processing_state process_statement(const TEXT* str2)
 			// command-line ISQL only.
 
 			if (printHead &&
-				(Pagelength && (lines % Pagelength == 0) ||
-				 !Pagelength && !lines) )
+				((Pagelength && (lines % Pagelength == 0)) ||
+				 (!Pagelength && !lines)))
 			{
 				isqlGlob.printf("%s%s%s%s%s",
 								NEWLINE,

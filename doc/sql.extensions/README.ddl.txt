@@ -555,6 +555,7 @@ USE_GRANTED_BY_CLAUSE			Use GRANTED BY in GRANT and REVOKE operators
 GRANT_REVOKE_ON_ANY_OBJECT		GRANT and REVOKE rights on any object in database
 GRANT_REVOKE_ANY_DDL_RIGHT		GRANT and REVOKE any DDL rights
 CREATE_PRIVILEGED_ROLES			Use SET SYSTEM PRIVILEGES in roles
+MODIFY_EXT_CONN_POOL			Manage properties of pool of external connections
 
 
 22) New grantee type in GRANT and REVOKE operators - SYSTEM PRIVILEGE.

@@ -197,7 +197,7 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 		}
 
 		if (!impure->vlu_desc.dsc_address)
-			ERR_post(Arg::Gds(isc_read_only_field));
+			ERR_post(Arg::Gds(isc_read_only_field) << "<unknown>");
 
 		return &impure->vlu_desc;
 	}

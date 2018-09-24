@@ -851,7 +851,10 @@ namespace
 
 						Self::validate(tdbb, transaction, work, validBlr);
 					}
+					return true;
 
+				case 6:
+					Self::checkOutParamDependencies(tdbb, work, transaction);
 					break;
 			}
 
@@ -1028,6 +1031,7 @@ namespace
 		static Routine* lookupBlobId(thread_db* tdbb, DeferredWork* work, bid& blobId, bool compile);
 		static void validate(thread_db* tdbb, jrd_tra* transaction, DeferredWork* work,
 			SSHORT validBlr);
+		static void checkOutParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction);
 	};
 
 	class ProcedureManager : public RoutineManager<ProcedureManager, jrd_prc, obj_procedure,
@@ -1047,6 +1051,7 @@ namespace
 		static Routine* lookupBlobId(thread_db* tdbb, DeferredWork* work, bid& blobId, bool compile);
 		static void validate(thread_db* tdbb, jrd_tra* transaction, DeferredWork* work,
 			SSHORT validBlr);
+		static void checkOutParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction);
 	};
 
 	// These methods cannot be defined inline, because GPRE generates wrong code.
@@ -1091,6 +1096,11 @@ namespace
 		END_FOR
 	}
 
+	void FunctionManager::checkOutParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction)
+	{
+		// Do nothing, as function output is unnamed.
+	}
+
 	Routine* ProcedureManager::lookupBlobId(thread_db* tdbb, DeferredWork* work, bid& blobId,
 		bool compile)
 	{
@@ -1129,6 +1139,51 @@ namespace
 			END_MODIFY
 		}
 		END_FOR
+	}
+
+	void ProcedureManager::checkOutParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction)
+	{
+		Jrd::Attachment* attachment = tdbb->getAttachment();
+		AutoCacheRequest handle(tdbb, irq_out_proc_param_dep, IRQ_REQUESTS);
+		ObjectsArray<string> names;
+		int depCount = 0;
+
+		FOR (REQUEST_HANDLE handle)
+			DEP IN RDB$DEPENDENCIES
+			WITH DEP.RDB$DEPENDED_ON_NAME EQ work->dfw_name.c_str() AND
+				 DEP.RDB$PACKAGE_NAME EQUIV NULLIF(work->dfw_package.c_str(), '') AND
+				 DEP.RDB$DEPENDED_ON_TYPE = obj_procedure AND
+				 NOT DEP.RDB$FIELD_NAME MISSING AND
+				 NOT ANY PP IN RDB$PROCEDURE_PARAMETERS
+						 WITH PP.RDB$PROCEDURE_NAME EQ DEP.RDB$DEPENDED_ON_NAME AND
+							  PP.RDB$PACKAGE_NAME EQUIV DEP.RDB$PACKAGE_NAME AND
+							  PP.RDB$PARAMETER_NAME EQ DEP.RDB$FIELD_NAME AND
+							  PP.RDB$PARAMETER_TYPE EQ 1
+		{
+			// If the found object is also being deleted, there's no dependency
+
+			if (!find_depend_in_dfw(tdbb, DEP.RDB$DEPENDENT_NAME, DEP.RDB$DEPENDENT_TYPE, 0, transaction))
+			{
+				string& name = names.add();
+				name.printf("%s.%s", work->dfw_name.c_str(), DEP.RDB$FIELD_NAME);
+
+				++depCount;
+			}
+		}
+		END_FOR
+
+		if (names.hasData())
+		{
+			Arg::StatusVector status;
+			status << Arg::Gds(isc_no_meta_update) << Arg::Gds(isc_no_delete);
+
+			for (auto& name : names)
+				status << Arg::Gds(isc_parameter_name) << Arg::Str(name);
+
+			status << Arg::Gds(isc_dependency) << Arg::Num(depCount);
+
+			ERR_post(status);
+		}
 	}
 } // namespace
 

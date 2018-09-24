@@ -265,7 +265,8 @@ enum tra_iso_mode_t {
 	iso_mode_consistency = 0,
 	iso_mode_concurrency = 1,
 	iso_mode_rc_version = 2,
-	iso_mode_rc_no_version = 3
+	iso_mode_rc_no_version = 3,
+	iso_mode_rc_read_consistency = 4
 };
 
 // statistics groups

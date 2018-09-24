@@ -1,0 +1,84 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="..\decBasic.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\decCommon.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\decContext.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\decDouble.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\decimal32.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\decimal64.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\decimal128.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\decNumber.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\decPacked.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\decSingle.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\decQuad.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\decContext.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\decDouble.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\decDPD.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\decimal32.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\decimal64.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\decimal128.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\decNumber.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\decNumberLocal.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\decPacked.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\decQuad.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\decSingle.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\readme.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source files">
+      <UniqueIdentifier>{638ba91b-1def-4094-a692-752b2ce6f461}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header files">
+      <UniqueIdentifier>{ffbb5d93-e379-40ba-ab58-c62e9e20c810}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

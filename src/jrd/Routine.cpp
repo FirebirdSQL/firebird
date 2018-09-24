@@ -35,7 +35,7 @@ namespace Jrd {
 
 
 // Create a MsgMetadata from a parameters array.
-MsgMetadata* Routine::createMetadata(const Array<NestConst<Parameter> >& parameters)
+MsgMetadata* Routine::createMetadata(const Array<NestConst<Parameter> >& parameters, bool isExtern)
 {
 	RefPtr<MsgMetadata> metadata(FB_NEW MsgMetadata);
 
@@ -43,7 +43,10 @@ MsgMetadata* Routine::createMetadata(const Array<NestConst<Parameter> >& paramet
 		 i != parameters.end();
 		 ++i)
 	{
-		metadata->addItem((*i)->prm_name, (*i)->prm_nullable, (*i)->prm_desc);
+		dsc d((*i)->prm_desc);
+		if (isExtern && d.dsc_dtype == dtype_dec_fixed)
+			d.dsc_dtype = dtype_dec128;
+		metadata->addItem((*i)->prm_name, (*i)->prm_nullable, d);
 	}
 
 	metadata->makeOffsets();

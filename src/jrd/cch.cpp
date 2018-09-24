@@ -268,12 +268,39 @@ int CCH_down_grade_dbb(void* ast_object)
 			SyncLockGuard bcbSync(&bcb->bcb_syncObject, SYNC_EXCLUSIVE, "CCH_down_grade_dbb");
 			bcb->bcb_flags &= ~BCB_exclusive;
 
-			if (bcb->bcb_count)
+			bool done = (bcb->bcb_count == 0);
+			while (!done)
 			{
+				done = true;
+				const bcb_repeat* const head = bcb->bcb_rpt;
 				const bcb_repeat* tail = bcb->bcb_rpt;
 				fb_assert(tail);			// once I've got here with NULL. AP.
+
 				for (const bcb_repeat* const end = tail + bcb->bcb_count; tail < end; ++tail)
-					PAGE_LOCK_ASSERT(tdbb, bcb, tail->bcb_bdb->bdb_lock);
+				{
+					BufferDesc* bdb = tail->bcb_bdb;
+
+					// Acquire EX latch to avoid races with LCK_release (called by CCH_release)
+					// or LCK_lock (by lock_buffer) in main thread. Take extra care to avoid
+					// deadlock with CCH_handoff. See CORE-5436.
+
+					Sync sync(&bdb->bdb_syncPage, FB_FUNCTION);
+
+					while (!sync.lockConditional(SYNC_EXCLUSIVE))
+					{
+						SyncUnlockGuard bcbUnlock(bcbSync);
+						Thread::sleep(1);
+					}
+
+					if (head != bcb->bcb_rpt)
+					{
+						// expand_buffers or CCH_fini was called, consider to start all over again
+						done = (bcb->bcb_count == 0);
+						break;
+					}
+
+					PAGE_LOCK_ASSERT(tdbb, bcb, bdb->bdb_lock);
+				}
 			}
 		}
 
@@ -3754,7 +3781,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 		Sync lruSync(&bcb->bcb_syncLRU, "get_buffer");
 		lruSync.lock(SYNC_EXCLUSIVE);
 
-		if (bcb->bcb_lru_chain)
+		if (bcb->bcb_lru_chain.load() != NULL)
 			requeueRecentlyUsed(bcb);
 
 		for (que_inst = bcb->bcb_in_use.que_backward;
@@ -5013,7 +5040,7 @@ void recentlyUsed(BufferDesc* bdb)
 	for (;;)
 	{
 		bdb->bdb_lru_chain = bcb->bcb_lru_chain;
-		if (bcb->bcb_lru_chain.compareExchange(bdb->bdb_lru_chain, bdb))
+		if (bcb->bcb_lru_chain.compare_exchange_strong(bdb->bdb_lru_chain, bdb))
 			break;
 	}
 }
@@ -5021,14 +5048,14 @@ void recentlyUsed(BufferDesc* bdb)
 
 void requeueRecentlyUsed(BufferControl* bcb)
 {
-	volatile BufferDesc* chain = NULL;
+	BufferDesc* chain = NULL;
 
 	// Let's pick up the LRU pending chain, if any
 
 	for (;;)
 	{
 		chain = bcb->bcb_lru_chain;
-		if (bcb->bcb_lru_chain.compareExchange((BufferDesc*) chain, NULL))
+		if (bcb->bcb_lru_chain.compare_exchange_strong(chain, NULL))
 			break;
 	}
 
@@ -5040,18 +5067,18 @@ void requeueRecentlyUsed(BufferControl* bcb)
 	BufferDesc* reversed = NULL;
 	BufferDesc* bdb;
 
-	while ( (bdb = (BufferDesc*) chain) )
+	while ((bdb = chain) != NULL)
 	{
 		chain = bdb->bdb_lru_chain;
 		bdb->bdb_lru_chain = reversed;
 		reversed = bdb;
 	}
 
-	while ( (bdb = reversed) )
+	while ((bdb = reversed) != NULL)
 	{
 		reversed = bdb->bdb_lru_chain;
-		QUE_DELETE (bdb->bdb_in_use);
-		QUE_INSERT (bcb->bcb_in_use, bdb->bdb_in_use);
+		QUE_DELETE(bdb->bdb_in_use);
+		QUE_INSERT(bcb->bcb_in_use, bdb->bdb_in_use);
 
 		bdb->bdb_flags &= ~BDB_lru_chained;
 		bdb->bdb_lru_chain = NULL;

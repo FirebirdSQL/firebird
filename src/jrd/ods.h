@@ -33,8 +33,10 @@
 #ifndef JRD_ODS_H
 #define JRD_ODS_H
 
+#ifndef ODS_TESTING
 #include "../jrd/RecordNumber.h"
 #include "../common/classes/fb_string.h"
+#endif	//ODS_TESTING
 
 // This macro enables the ability of the engine to connect to databases
 // from ODS 8 up to the latest.  If this macro is undefined, the engine
@@ -316,7 +318,9 @@ struct index_root_page
 	USHORT irt_count;				// Number of indices
 	struct irt_repeat
 	{
+#ifndef ODS_TESTING
 	private:
+#endif	//ODS_TESTING
 		ULONG irt_root;				// page number of index root if irt_in_progress is NOT set, or
 									// highest 32 bit of transaction if irt_in_progress is set
 		ULONG irt_transaction;		// transaction in progress (lowest 32 bits)
@@ -325,6 +329,7 @@ struct index_root_page
 		UCHAR irt_keys;				// number of keys in index
 		UCHAR irt_flags;
 
+#ifndef ODS_TESTING
 		ULONG getRoot() const;
 		void setRoot(ULONG root_page);
 
@@ -332,6 +337,7 @@ struct index_root_page
 		void setTransaction(TraNumber traNumber);
 
 		bool isUsed() const;
+#endif	//ODS_TESTING
 	} irt_rpt[1];
 };
 
@@ -352,6 +358,7 @@ const USHORT irt_foreign		= 8;
 const USHORT irt_primary		= 16;
 const USHORT irt_expression		= 32;
 
+#ifndef ODS_TESTING
 inline ULONG index_root_page::irt_repeat::getRoot() const
 {
 	return (irt_flags & irt_in_progress) ? 0 : irt_root;
@@ -379,6 +386,7 @@ inline bool index_root_page::irt_repeat::isUsed() const
 {
 	return (irt_flags & irt_in_progress) || (irt_root != 0);
 }
+#endif	//ODS_TESTING
 
 
 const int STUFF_COUNT		= 4;
@@ -567,6 +575,7 @@ struct generator_page
 {
 	pag gpg_header;
 	ULONG gpg_sequence;			// Sequence number
+	ULONG gpg_dummy1;			// Alignment enforced
 	SINT64 gpg_values[1];		// Generator vector
 };
 
@@ -631,9 +640,11 @@ struct blh
 	ULONG blh_length;			// Total length of data
 	USHORT blh_sub_type;		// Blob sub-type
 	UCHAR blh_charset;			// Blob charset (since ODS 11.1)
+#ifndef ODS_TESTING
 #ifdef CHECK_BLOB_FIELD_ACCESS_FOR_SELECT
 	USHORT blh_fld_id;			// Field ID
 #endif
+#endif //ODS_TESTING
 	UCHAR blh_unused;
 	ULONG blh_page[1];			// Page vector for blob pages
 };
@@ -705,10 +716,13 @@ inline int IAD_LEN(int count)
 #define IAD_LEN(count)	(sizeof (Ods::InternalArrayDesc) + \
 	(count ? count - 1: count) * sizeof (Ods::InternalArrayDesc::iad_repeat))
 
+#ifndef ODS_TESTING
 Firebird::string pagtype(UCHAR type);
+#endif	//ODS_TESTING
 
 } //namespace Ods
 
+#ifndef ODS_TESTING
 // alignment for raw page access
 const USHORT PAGE_ALIGNMENT = 1024;
 
@@ -720,5 +734,6 @@ const int MAX_TABLE_VERSIONS = 255;
 
 // max number of view formats (aka versions), limited by "SSHORT RDB$FORMAT"
 const int MAX_VIEW_VERSIONS = MAX_SSHORT;
+#endif	//ODS_TESTING
 
 #endif // JRD_ODS_H
