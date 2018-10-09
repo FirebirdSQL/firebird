@@ -639,7 +639,7 @@ set(gpre_boot_src
 if (NOT CMAKE_CROSSCOMPILING)
 
 add_executable              (gpre_boot ${gpre_boot_src} ${VERSION_RC})
-target_link_libraries       (gpre_boot gpre_common common ${LIB_iconv} ${LIB_Ws2_32})
+target_link_libraries       (gpre_boot gpre_common common ${LIB_iconv} ${LIB_Ws2_32} ${LIB_dl})
 set_output_directory        (gpre_boot . CURRENT_DIR)
 project_group               (gpre_boot Boot)
 
