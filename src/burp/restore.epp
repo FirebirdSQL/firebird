@@ -2927,7 +2927,7 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 	data.lstr_address = NULL;
 	ULONG old_length = 0;
 
-	ULONG records = 0;
+	FB_UINT64 records = 0;
 	rec_type record;
 	bool resync = false;
 
@@ -9480,7 +9480,7 @@ rec_type ignore_data(BurpGlobals* tdgbl, burp_rel* relation)
  *	Ignore data records for a relation.
  *
  **************************************/
-	ULONG records = 0;
+	FB_UINT64 records = 0;
 	rec_type record;
 
 	while (true)

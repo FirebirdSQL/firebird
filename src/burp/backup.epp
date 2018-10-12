@@ -1748,7 +1748,7 @@ void put_data(burp_rel* relation)
 	else
 		xdr_buffer.lstr_address = NULL;
 
-	ULONG records = 0;
+	FB_UINT64 records = 0;
 	while (true)
 	{
 		if (isc_receive(status_vector, &request, 0, length, buffer, 0))
