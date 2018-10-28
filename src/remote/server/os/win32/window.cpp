@@ -22,6 +22,7 @@
 #include <shellapi.h>
 #include <prsht.h>
 #include <dbt.h>
+#include <time.h>
 
 #include "../jrd/license.h"
 #include "../common/file_params.h"
@@ -375,6 +376,10 @@ LRESULT CALLBACK WindowFunc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		}
 
 		PostQuitMessage(0);
+		break;
+
+	case WM_TIMECHANGE:
+		_tzset();
 		break;
 
 	default:

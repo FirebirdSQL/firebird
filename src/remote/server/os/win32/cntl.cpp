@@ -23,6 +23,7 @@
 
 #include "firebird.h"
 #include <stdio.h>
+#include <time.h>
 #include "../remote/remote.h"
 #include "../common/ThreadStart.h"
 #include "../utilities/install/install_nt.h"
@@ -38,7 +39,7 @@
 
 const unsigned int SHUTDOWN_TIMEOUT = 10 * 1000;	// 10 seconds
 
-static void WINAPI control_thread(DWORD);
+static DWORD WINAPI control_thread(DWORD, DWORD, LPVOID, LPVOID);
 
 static USHORT report_status(DWORD, DWORD, DWORD, DWORD);
 
@@ -79,7 +80,7 @@ void WINAPI CNTL_main_thread( DWORD /*argc*/, char* /*argv*/[])
  * Functional description
  *
  **************************************/
-	service_handle = RegisterServiceCtrlHandler(service_name->c_str(), control_thread);
+	service_handle = RegisterServiceCtrlHandlerEx(service_name->c_str(), control_thread, NULL);
 	if (!service_handle)
 		return;
 
@@ -157,7 +158,7 @@ void CNTL_shutdown_service( const TEXT* message)
 }
 
 
-static void WINAPI control_thread( DWORD action)
+static DWORD WINAPI control_thread( DWORD action, DWORD, LPVOID, LPVOID)
 {
 /**************************************
  *
@@ -179,7 +180,7 @@ static void WINAPI control_thread( DWORD action)
 		if (hMutex)
 			ReleaseMutex(hMutex);
 		SetEvent(stop_event_handle);
-		return;
+		return NO_ERROR;
 
 	case SERVICE_CONTROL_INTERROGATE:
 		break;
@@ -195,11 +196,16 @@ static void WINAPI control_thread( DWORD action)
 		}
 		break;
 
-	default:
+	case SERVICE_CONTROL_TIMECHANGE:
+		// Refresh RTL static variables
+		_tzset();
 		break;
+
+	default:
+		return ERROR_CALL_NOT_IMPLEMENTED;
 	}
 
-	report_status(state, NO_ERROR, 0, 0);
+	return NO_ERROR;
 }
 
 static USHORT report_status(DWORD state, DWORD exit_code, DWORD checkpoint, DWORD hint)
@@ -221,7 +227,7 @@ static USHORT report_status(DWORD state, DWORD exit_code, DWORD checkpoint, DWOR
 	if (state == SERVICE_START_PENDING)
 		status.dwControlsAccepted = 0;
 	else
-		status.dwControlsAccepted = SERVICE_ACCEPT_STOP;
+		status.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_TIMECHANGE;
 
 	status.dwCurrentState = state;
 	status.dwWin32ExitCode = exit_code;
