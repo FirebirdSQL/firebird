@@ -195,6 +195,7 @@ private:
 	void register_service(Firebird::ITraceServiceConnection* service);
 
 	bool checkServiceFilter(Firebird::ITraceServiceConnection* service, bool started);
+	void checkErrno(const char* operation);
 
 	// Write message to text log file
 	void logRecord(const char* action);

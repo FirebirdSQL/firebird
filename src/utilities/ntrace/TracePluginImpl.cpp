@@ -236,7 +236,10 @@ void TracePluginImpl::logRecord(const char* action)
 	// TODO: implement adjusting of line breaks
 	// line.adjustLineBreaks();
 
-	logWriter->write(record.c_str(), record.length());
+	FB_SIZE_T written = logWriter->write(record.c_str(), record.length());
+
+	if (written != record.length())
+		checkErrno("write");
 
 	record = "";
 }
@@ -1904,6 +1907,24 @@ bool TracePluginImpl::checkServiceFilter(ITraceServiceConnection* service, bool 
 	}
 
 	return enabled;
+}
+
+
+void TracePluginImpl::checkErrno(const char* operation)
+{
+	if (errno == 0)
+		return;
+
+	const char* strErr;
+#ifdef WIN_NT
+	strErr = strerror(errno);
+#else
+	char buff[256];
+	strerror_r(errno, buff, sizeof(buff));
+	strErr = buff;
+#endif
+	fatal_exception::raiseFmt("TracePluginImpl: operation \"%s\" failed on file \"%s\". Error is : %s",
+		operation, config.log_filename.c_str(), strErr);
 }
 
 
