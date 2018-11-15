@@ -640,6 +640,9 @@ public:
 					&authPort->port_srv_auth_block->authBlockWriter);
 			authPort->port_srv_auth_block->setPluginName(authItr->name());
 
+			if (forceNext)
+				flags = NO_FLAGS;
+
 			cstring* s;
 
 			switch (authResult)
