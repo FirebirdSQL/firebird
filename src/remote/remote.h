@@ -677,14 +677,11 @@ typedef Firebird::Array<rem_que_packet> PacketQueue;
 class ServerAuthBase
 {
 public:
-	enum AuthenticateFlags {
-		NO_FLAGS =			0x0,
-		CONT_AUTH =			0x1,
-		USE_COND_ACCEPT =	0x2
-	};
+	static const unsigned AUTH_CONTINUE		= 0x01;
+	static const unsigned AUTH_COND_ACCEPT	= 0x02;
 
 	virtual ~ServerAuthBase();
-	virtual bool authenticate(PACKET* send, AuthenticateFlags flags = NO_FLAGS) = 0;
+	virtual bool authenticate(PACKET* send, unsigned flags = 0) = 0;
 };
 
 class ServerCallbackBase

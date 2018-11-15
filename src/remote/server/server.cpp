@@ -581,7 +581,7 @@ public:
 	~ServerAuth()
 	{ }
 
-	bool authenticate(PACKET* send, AuthenticateFlags flags)
+	bool authenticate(PACKET* send, unsigned flags)
 	{
 #ifdef DEV_BUILD
 		if (++hopsCount > 10)
@@ -632,13 +632,16 @@ public:
 			}
 
 			// if we asked for more data but received nothing switch to next plugin
-			const bool forceNext = (flags & CONT_AUTH) && (!authPort->port_srv_auth_block->hasDataForPlugin());
+			const bool forceNext = (flags & AUTH_CONTINUE) && (!authPort->port_srv_auth_block->hasDataForPlugin());
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: ServerAuth calls plug %s\n",
 				forceNext ? "forced-NEXT" : authItr->name()));
 			int authResult = forceNext ? IAuth::AUTH_CONTINUE :
 				authServer->authenticate(&st, authPort->port_srv_auth_block,
 					&authPort->port_srv_auth_block->authBlockWriter);
 			authPort->port_srv_auth_block->setPluginName(authItr->name());
+
+			if (forceNext)
+				flags &= ~AUTH_CONTINUE;
 
 			cstring* s;
 
@@ -670,7 +673,7 @@ public:
 
 				if (authPort->port_protocol >= PROTOCOL_VERSION13)
 				{
-					if (flags & USE_COND_ACCEPT)
+					if (flags & AUTH_COND_ACCEPT)
 					{
 						HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: send op_cond_accept\n"));
 						send->p_operation = op_cond_accept;
@@ -1904,7 +1907,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 		{
 			ConnectAuth* cnctAuth = FB_NEW ConnectAuth(port, id);
 			port->port_srv_auth = cnctAuth;
-			if (port->port_srv_auth->authenticate(send, ServerAuth::USE_COND_ACCEPT))
+			if (port->port_srv_auth->authenticate(send, ServerAuth::AUTH_COND_ACCEPT))
 			{
 				delete port->port_srv_auth;
 				port->port_srv_auth = NULL;
@@ -4953,7 +4956,7 @@ static bool continue_authentication(rem_port* port, PACKET* send, PACKET* receiv
 				port->port_srv_auth_block->setDataForPlugin(&receive->p_auth_cont);
 			}
 
-			if (sa->authenticate(send, ServerAuth::CONT_AUTH))
+			if (sa->authenticate(send, ServerAuth::AUTH_CONTINUE))
 			{
 				delete sa;
 				port->port_srv_auth = NULL;
