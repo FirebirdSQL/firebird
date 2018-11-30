@@ -102,5 +102,6 @@ SINT64 CVT_get_int64(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction)
 SQUAD CVT_get_quad(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
 void CVT_string_to_datetime(const dsc*, ISC_TIMESTAMP_TZ*, bool*, const Firebird::EXPECT_DATETIME,
 	bool, Firebird::Callbacks*);
+const UCHAR* CVT_get_bytes(const dsc*, unsigned&);
 
 #endif //COMMON_CVT_H

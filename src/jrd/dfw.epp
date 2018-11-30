@@ -994,7 +994,7 @@ namespace
 					Jrd::ContextPoolHolder context(tdbb, new_pool);
 
 					const Firebird::MetaName depName(work->dfw_package.isEmpty() ?
-						work->dfw_name : work->dfw_package);
+						Firebird::MetaName(work->dfw_name) : work->dfw_package);
 					MET_get_dependencies(tdbb, NULL, NULL, 0, NULL, &blobId,
 						(compile ? &statement : NULL),
 						NULL, depName,

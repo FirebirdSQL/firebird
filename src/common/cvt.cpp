@@ -3050,6 +3050,47 @@ DecimalFixed CVT_get_dec_fixed(const dsc* desc, SSHORT scale, DecimalStatus decS
 }
 
 
+const UCHAR* CVT_get_bytes(const dsc* desc, unsigned& size)
+{
+/**************************************
+ *
+ *      C V T _ g e t _ b y t e s
+ *
+ **************************************
+ *
+ * Functional description
+ *      Return raw data of descriptor.
+ *
+ **************************************/
+	if (!desc)
+	{
+		size = 0;
+		return nullptr;
+	}
+
+	switch (desc->dsc_dtype)
+	{
+		case dtype_varying:
+			{
+				vary* v = (vary*)(desc->dsc_address);
+				size = v->vary_length;
+				return (const UCHAR*)v->vary_string;
+			}
+
+		case dtype_cstring:
+			size = strlen((const char*)desc->dsc_address);
+			return desc->dsc_address;
+
+		default:
+			size = desc->dsc_length;
+			return desc->dsc_address;
+			break;
+	}
+
+	return nullptr;	// compiler warning silencer
+}
+
+
 SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************

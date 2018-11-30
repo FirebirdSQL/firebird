@@ -174,7 +174,7 @@ void MOV_get_metaname(Jrd::thread_db* tdbb, const dsc* desc, MetaName& name)
 
 	const USHORT length = CVT_get_string_ptr(desc, &ttype, &ptr, NULL, 0, tdbb->getAttachment()->att_dec_status);
 
-	fb_assert(length && ptr);
+	fb_assert(ptr);
 	fb_assert(length <= MAX_SQL_IDENTIFIER_LEN);
 	fb_assert(ttype == ttype_ascii || ttype == ttype_metadata);
 

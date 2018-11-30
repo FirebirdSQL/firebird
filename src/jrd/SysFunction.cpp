@@ -25,6 +25,7 @@
  *  Contributor(s): ______________________________________.
  *    Oleg Loa <loa@mail.ru>
  *    Alexey Karyakin <aleksey.karyakin@mail.ru>
+ *	  Alexander Peshkov <peshkoff@mail.ru>
  *
  */
 
@@ -56,7 +57,15 @@
 #include "../jrd/Collation.h"
 #include "../common/classes/FpeControl.h"
 #include "../jrd/extds/ExtDS.h"
+
 #include <math.h>
+
+#ifndef WIN_NT
+#define LTC_PTHREAD
+#endif
+#define USE_LTM
+#define LTM_DESC
+#include <tomcrypt.h>
 
 using namespace Firebird;
 using namespace Jrd;
@@ -179,6 +188,11 @@ void setParamsAsciiVal(DataTypeUtilBase* dataTypeUtil, const SysFunction* functi
 void setParamsCharToUuid(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsDateAdd(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsDateDiff(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
+void setParamsEncrypt(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args);
+void setParamsRsaEncrypt(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args);
+void setParamsRsaPublic(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args);
+void setParamsRsaSign(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args);
+void setParamsRsaVerify(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args);
 void setParamsFirstLastDay(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsGetSetContext(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsOverlay(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
@@ -195,6 +209,7 @@ void makeInt64Result(DataTypeUtilBase* dataTypeUtil, const SysFunction* function
 void makeLongResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 ///void makeLongStringOrBlobResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeShortResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeBoolResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 
 // specific make functions
 void makeAbs(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
@@ -203,6 +218,10 @@ void makeBin(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* r
 void makeBinShift(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeCeilFloor(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeDateAdd(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeEncrypt(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeDecrypt(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeRsaEncrypt(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeRsaDecrypt(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeFirstLastDayResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeGetSetContext(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeGetTranCN(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
@@ -215,6 +234,9 @@ void makePi(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* re
 void makeReplace(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeReverse(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeRound(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeRsaPrivate(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeRsaPublic(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeRsaSign(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeTrunc(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeUuid(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeUuidToChar(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
@@ -233,6 +255,14 @@ dsc* evlCeil(thread_db* tdbb, const SysFunction* function, const NestValueArray&
 dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlDecrypt(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlEncrypt(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlRsaDecrypt(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlRsaEncrypt(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlRsaPrivate(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlRsaPublic(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlRsaSign(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlRsaVerify(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlExp(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlFirstLastDay(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlFloor(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
@@ -352,6 +382,17 @@ void add10msec(ISC_TIMESTAMP* v, SINT64 msec, SINT64 multiplier)
 double fbcot(double value) throw()
 {
 	return 1.0 / tan(value);
+}
+
+
+void tomCheck(int err, const char* text)
+{
+	if (err == CRYPT_OK)
+		return;
+
+	string buf;
+	buf.printf("LibTomCrypt error %s: %s", text, error_to_string(err));
+	ERR_post(Arg::Gds(isc_random) << buf);
 }
 
 
@@ -546,6 +587,110 @@ void setParamsDateDiff(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc
 		else if (args[2]->isUnknown())
 			*args[2] = *args[1];
 	}
+}
+
+
+const unsigned CRYPT_ARG_VALUE = 0;
+const unsigned CRYPT_ARG_ALGORITHM = 1;
+const unsigned CRYPT_ARG_MODE = 2;
+const unsigned CRYPT_ARG_KEY = 3;
+const unsigned CRYPT_ARG_IV = 4;
+const unsigned CRYPT_ARG_CTRTYPE = 5;
+const unsigned CRYPT_ARG_COUNTER = 6;
+const unsigned CRYPT_ARG_MAX = 7;
+
+void setParamsEncrypt(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	fb_assert(argsCount == CRYPT_ARG_MAX);
+
+	if (!args[CRYPT_ARG_VALUE]->isBlob())
+		args[CRYPT_ARG_VALUE]->makeVarying(args[CRYPT_ARG_VALUE]->getStringLength(), ttype_binary);
+
+	fb_assert(args[CRYPT_ARG_ALGORITHM]->dsc_address && args[CRYPT_ARG_ALGORITHM]->isText());
+
+	args[CRYPT_ARG_KEY]->makeVarying(args[CRYPT_ARG_KEY]->getStringLength(), ttype_binary);
+
+	if (args[CRYPT_ARG_IV]->dsc_length)
+		args[CRYPT_ARG_IV]->makeVarying(args[CRYPT_ARG_IV]->getStringLength(), ttype_binary);
+
+	if (args[CRYPT_ARG_CTRTYPE]->dsc_length)
+		args[CRYPT_ARG_CTRTYPE]->makeVarying(args[CRYPT_ARG_CTRTYPE]->getStringLength(), ttype_ascii);
+
+	if (args[CRYPT_ARG_COUNTER]->dsc_length)
+		args[CRYPT_ARG_COUNTER]->makeInt64(0);
+}
+
+
+const unsigned RSA_CRYPT_ARG_VALUE = 0;
+const unsigned RSA_CRYPT_ARG_KEY = 1;
+const unsigned RSA_CRYPT_ARG_LPARAM = 2;
+const unsigned RSA_CRYPT_ARG_HASH = 3;
+const unsigned RSA_CRYPT_ARG_MAX = 4;
+
+void setParamsRsaEncrypt(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	fb_assert(argsCount == RSA_CRYPT_ARG_MAX);
+
+	args[RSA_CRYPT_ARG_VALUE]->makeVarying(args[RSA_CRYPT_ARG_VALUE]->getStringLength(), ttype_binary);
+	args[RSA_CRYPT_ARG_KEY]->makeVarying(args[RSA_CRYPT_ARG_KEY]->getStringLength(), ttype_binary);
+
+	if (args[RSA_CRYPT_ARG_LPARAM]->dsc_length)
+		args[RSA_CRYPT_ARG_LPARAM]->makeVarying(args[RSA_CRYPT_ARG_LPARAM]->getStringLength(), ttype_binary);
+
+	if (args[RSA_CRYPT_ARG_HASH]->dsc_length)
+		args[RSA_CRYPT_ARG_HASH]->makeVarying(args[RSA_CRYPT_ARG_HASH]->getStringLength(), ttype_binary);
+}
+
+
+const unsigned RSA_SIGN_ARG_VALUE = 0;
+const unsigned RSA_SIGN_ARG_KEY = 1;
+const unsigned RSA_SIGN_ARG_HASH = 2;
+const unsigned RSA_SIGN_ARG_SALTLEN = 3;
+const unsigned RSA_SIGN_ARG_MAX = 4;
+
+void setParamsRsaSign(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	fb_assert(argsCount == RSA_SIGN_ARG_MAX);
+
+	args[RSA_SIGN_ARG_VALUE]->makeVarying(args[RSA_SIGN_ARG_VALUE]->getStringLength(), ttype_binary);
+	args[RSA_SIGN_ARG_KEY]->makeVarying(args[RSA_SIGN_ARG_KEY]->getStringLength(), ttype_binary);
+
+	if (args[RSA_SIGN_ARG_HASH]->dsc_length)
+		args[RSA_SIGN_ARG_HASH]->makeVarying(args[RSA_SIGN_ARG_HASH]->getStringLength(), ttype_binary);
+
+	if (args[RSA_SIGN_ARG_SALTLEN]->dsc_length)
+		args[RSA_SIGN_ARG_SALTLEN]->makeShort(0);
+}
+
+
+const unsigned RSA_VERIFY_ARG_VALUE = 0;
+const unsigned RSA_VERIFY_ARG_SIGNATURE = 1;
+const unsigned RSA_VERIFY_ARG_KEY = 2;
+const unsigned RSA_VERIFY_ARG_HASH = 3;
+const unsigned RSA_VERIFY_ARG_SALTLEN = 4;
+const unsigned RSA_VERIFY_ARG_MAX = 5;
+
+void setParamsRsaVerify(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	fb_assert(argsCount == RSA_VERIFY_ARG_MAX);
+
+	args[RSA_VERIFY_ARG_VALUE]->makeVarying(args[RSA_VERIFY_ARG_VALUE]->getStringLength(), ttype_binary);
+	args[RSA_VERIFY_ARG_KEY]->makeVarying(args[RSA_VERIFY_ARG_KEY]->getStringLength(), ttype_binary);
+	args[RSA_VERIFY_ARG_SIGNATURE]->makeVarying(args[RSA_VERIFY_ARG_SIGNATURE]->getStringLength(), ttype_binary);
+
+	if (args[RSA_VERIFY_ARG_HASH]->dsc_length)
+		args[RSA_VERIFY_ARG_HASH]->makeVarying(args[RSA_VERIFY_ARG_HASH]->getStringLength(), ttype_binary);
+
+	if (args[RSA_VERIFY_ARG_SALTLEN]->dsc_length)
+		args[RSA_VERIFY_ARG_SALTLEN]->makeShort(0);
+}
+
+
+void setParamsRsaPublic(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	fb_assert(argsCount == 1);
+
+	args[0]->makeVarying(args[0]->getStringLength(), ttype_binary);
 }
 
 
@@ -773,6 +918,46 @@ void makeShortResult(DataTypeUtilBase*, const SysFunction*, dsc* result,
 		return;
 
 	result->setNullable(isNullable);
+}
+
+
+void makeBoolResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* function,
+	dsc* result, int argsCount, const dsc** args)
+{
+	result->makeBoolean();
+}
+
+
+void makeVarBinary(dsc* result, int argsCount, const dsc** args, unsigned length)
+{
+	result->makeVarying(length, ttype_binary);
+
+	bool isNullable;
+	if (initResult(result, argsCount > 2 ? 2 : argsCount, args, &isNullable))
+		return;
+
+	result->setNullable(isNullable);
+}
+
+
+void makeRsaPrivate(DataTypeUtilBase* dataTypeUtil, const SysFunction* function,
+	dsc* result, int argsCount, const dsc** args)
+{
+	makeVarBinary(result, argsCount, args, 16 * 1024);
+}
+
+
+void makeRsaPublic(DataTypeUtilBase* dataTypeUtil, const SysFunction* function,
+	dsc* result, int argsCount, const dsc** args)
+{
+	makeVarBinary(result, argsCount, args, 8 * 1024);
+}
+
+
+void makeRsaSign(DataTypeUtilBase* dataTypeUtil, const SysFunction* function,
+	dsc* result, int argsCount, const dsc** args)
+{
+	makeVarBinary(result, argsCount, args, 256);
 }
 
 
@@ -1021,6 +1206,7 @@ void makeGetTranCN(DataTypeUtilBase* /*dataTypeUtil*/, const SysFunction* /*func
 	result->setNullable(true);
 }
 
+
 void makeHash(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result,
 	int argsCount, const dsc** args)
 {
@@ -1039,6 +1225,52 @@ void makeHash(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* 
 		result->makeVarying(HashAlgorithmDescriptor::find(algorithmName.c_str())->length, ttype_binary);
 		result->setNullable(args[0]->isNullable());
 	}
+}
+
+
+void makeEncrypt(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result,
+	int argsCount, const dsc** args)
+{
+	fb_assert(argsCount == CRYPT_ARG_MAX);
+
+	if (args[0]->isBlob())
+		result->makeBlob(0, ttype_binary); 
+	else
+		result->makeVarying(args[0]->getStringLength(), ttype_binary);
+	result->setNullable(args[0]->isNullable());
+}
+
+
+void makeDecrypt(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result,
+	int argsCount, const dsc** args)
+{
+	fb_assert(argsCount == CRYPT_ARG_MAX);
+
+	if (args[0]->isBlob())
+		result->makeBlob(0, ttype_none); 
+	else
+		result->makeVarying(args[0]->getStringLength(), ttype_none);
+	result->setNullable(args[0]->isNullable());
+}
+
+
+void makeRsaEncrypt(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result,
+	int argsCount, const dsc** args)
+{
+	fb_assert(argsCount == RSA_CRYPT_ARG_MAX);
+
+	result->makeVarying(256, ttype_binary);
+	result->setNullable(args[0]->isNullable());
+}
+
+
+void makeRsaDecrypt(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result,
+	int argsCount, const dsc** args)
+{
+	fb_assert(argsCount == RSA_CRYPT_ARG_MAX);
+
+	result->makeVarying(255, ttype_none);
+	result->setNullable(args[0]->isNullable());
 }
 
 
@@ -2125,6 +2357,829 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	}
 
 	return &impure->vlu_desc;
+}
+
+void raise(const char* x)
+{
+	(Arg::Gds(isc_random) << x).raise();
+}
+
+
+// Prepare tomcrypt library
+
+class TomcryptInitializer
+{
+public:
+	explicit TomcryptInitializer(MemoryPool&)
+	{
+		ltc_mp = ltm_desc;
+
+		registerCipher(aes_desc);
+		registerCipher(anubis_desc);
+		registerCipher(blowfish_desc);
+		registerCipher(khazad_desc);
+		registerCipher(rc5_desc);
+		registerCipher(rc6_desc);
+		registerCipher(saferp_desc);
+		registerCipher(twofish_desc);
+		registerCipher(xtea_desc);
+
+		registerHash(md5_desc);
+		registerHash(sha1_desc);
+		registerHash(sha256_desc);
+		registerHash(sha512_desc);
+	}
+
+private:
+	template <typename T>
+	void registerCipher(T& desc)
+	{
+		if (register_cipher(&desc) == -1)
+			raise("Unexpected error registering cipher - probably bad tomcrypt library");
+	}
+
+	template <typename T>
+	void registerHash(T& desc)
+	{
+		if (register_hash(&desc) == -1)
+			raise("Unexpected error registering hash - probably bad tomcrypt library");
+	}
+};
+
+InitInstance<TomcryptInitializer> tomcryptInitializer;
+
+
+class PseudoRandom
+{
+public:
+	explicit PseudoRandom(MemoryPool&)
+	{
+		// register yarrow
+		index = register_prng(&yarrow_desc);
+		if (index == -1)
+			ERR_post(Arg::Gds(isc_random) << "Error registering PRNG yarrow");
+
+		// setup the PRNG
+		tomCheck(yarrow_start(&state), "starting PRNG yarrow");
+		tomCheck(rng_make_prng(64, index, &state, NULL), "setting up PRNG yarrow");
+	}
+
+	~PseudoRandom()
+	{
+		yarrow_done(&state);
+	}
+
+	prng_state* getState()
+	{
+		return &state;
+	}
+
+	int getIndex()
+	{
+		return index;
+	}
+
+private:
+	int index;
+	prng_state state;
+};
+
+InitInstance<PseudoRandom> prng;
+
+
+// Data exchanger between tommath and firebird
+
+class DataPipe
+{
+public:
+	DataPipe(thread_db* t, const dsc* desc, impure_value* i)
+		: tdbb(t),
+		  impure(i),
+		  blobMode(desc->isBlob()),
+		  completed(false),
+		  ptr(nullptr),
+		  len(0),
+		  blob(nullptr),
+		  newBlob(nullptr)
+	{
+		if (!blobMode)
+		{
+			if (!desc->isText())
+				raise("Wrong data type for first argument");
+			ptr = CVT_get_bytes(desc, len);
+		}
+		else
+		{
+			blobDesc.makeBlob(0, ttype_none);
+			blobDesc.dsc_address = (UCHAR*) &impure->vlu_misc.vlu_bid;
+
+			try
+			{
+				const UCHAR bpb[] = {isc_bpb_version1, isc_bpb_type, 1, isc_bpb_type_stream};
+				newBlob = blb::create2(tdbb, tdbb->getRequest()->req_transaction, &impure->vlu_misc.vlu_bid,
+					sizeof(bpb), bpb);
+				blob = blb::open2(tdbb, tdbb->getRequest()->req_transaction, reinterpret_cast<bid*>(desc->dsc_address),
+					sizeof(bpb), bpb);
+
+				ptr = inBuf.getBuffer(BLOB_STEP);
+				len = blob->BLB_get_data(tdbb, inBuf.begin(), inBuf.getCount(), false);
+			}
+			catch(...)
+			{
+				closeBlobs();
+			}
+		}
+	}
+
+	~DataPipe()
+	{
+		closeBlobs();
+
+		if (!completed)
+		{
+			dsc result;
+			result.makeText(0, ttype_none, outBuf.begin());
+			EVL_make_value(tdbb, &result, impure);
+			impure->vlu_desc.setNull();
+		}
+	}
+
+	const UCHAR* from()
+	{
+		return ptr;
+	}
+
+	UCHAR* to()
+	{
+		return outBuf.getBuffer(length());
+	}
+
+	unsigned length()
+	{
+		return len;
+	}
+
+	bool hasData()
+	{
+		return len > 0;
+	}
+
+	void next()
+	{
+		if (hasData())
+		{
+			impure->vlu_desc.clear();
+			if (!blobMode)
+			{
+				dsc result;
+				result.makeText(outBuf.getCount(), ttype_binary, outBuf.begin());
+				EVL_make_value(tdbb, &result, impure);
+
+				len = 0;
+				completed = true;
+			}
+			else
+			{
+				newBlob->BLB_put_data(tdbb, outBuf.begin(), outBuf.getCount());
+
+				len = blob->BLB_get_data(tdbb, inBuf.begin(), inBuf.getCount(), false);
+				if (!len)
+				{
+					closeBlobs();
+					EVL_make_value(tdbb, &blobDesc, impure);
+					completed = true;
+				}
+			}
+		}
+	}
+
+private:
+	const FB_SIZE_T BLOB_STEP = 1024;
+
+	thread_db* tdbb;
+	UCharBuffer inBuf, outBuf;
+	impure_value* impure;
+	bool blobMode, completed;
+	const UCHAR* ptr;
+	unsigned len;
+	dsc blobDesc;
+	blb* blob;
+	blb* newBlob;
+
+	void closeBlobs()
+	{
+		if (newBlob)
+		{
+			newBlob->BLB_close(tdbb);
+			newBlob = nullptr;
+		}
+		if (blob)
+		{
+			blob->BLB_close(tdbb);
+			blob = nullptr;
+		}
+	}
+};
+
+
+// Lists of constant parameter values
+
+class CodeValue
+{
+public:
+	unsigned code;
+	const char* value;
+};
+
+CodeValue* find(CodeValue* array, MetaName& name)
+{
+	for (; array->value; ++array)
+	{
+		if (name == array->value)
+			return array;
+	}
+
+	return nullptr;
+}
+
+
+dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
+	impure_value* impure, bool encryptFlag)
+{
+	tomcryptInitializer();
+
+	fb_assert(args.getCount() == CRYPT_ARG_MAX);
+
+	jrd_req* request = tdbb->getRequest();
+
+	// parse args and check correctness
+	const dsc* dscs[CRYPT_ARG_MAX];
+	for (unsigned i = 0; i < CRYPT_ARG_MAX; ++i)
+		dscs[i] = EVL_expr(tdbb, request, args[i]);
+
+	MetaName algorithmName, modeName, counterType;
+	MOV_get_metaname(tdbb, dscs[CRYPT_ARG_ALGORITHM], algorithmName);
+
+	const unsigned ALG_RC4 = 1;
+	const unsigned ALG_CHACHA = 2;
+	const unsigned ALG_SOBER = 3;
+	static CodeValue algorithms[] = {
+		{ ALG_RC4, "RC4" },
+		{ ALG_CHACHA, "CHACHA20" },
+		{ ALG_SOBER, "SOBER128" },
+		{ 0, nullptr }
+	};
+
+	CodeValue* a = nullptr;
+	string aName(algorithmName);
+	aName.lower();
+	int cipher = find_cipher(aName.c_str());
+	if (cipher < 0)
+	{
+		a = find(algorithms, algorithmName);
+		if (!a)
+		{
+			string error = "Unknown crypt algorithm ";
+			error += algorithmName.c_str();
+			raise(error.c_str());
+		}
+	}
+
+	const unsigned MODE_ECB = 1;
+	const unsigned MODE_CBC = 2;
+	const unsigned MODE_CTR = 3;
+	const unsigned MODE_CFB = 4;
+	const unsigned MODE_OFB = 5;
+	static CodeValue modes[] = {
+		{ MODE_ECB, "ECB" },
+		{ MODE_CBC, "CBC" },
+		{ MODE_CTR, "CTR" },
+		{ MODE_CFB, "CFB" },
+		{ MODE_OFB, "OFB" },
+		{ 0, nullptr }
+	};
+
+	CodeValue* m = nullptr;
+	MOV_get_metaname(tdbb, dscs[CRYPT_ARG_MODE], modeName);
+	if (cipher >= 0)
+	{
+		if (!modeName.hasData())
+			raise("Should specify MODE parameter for symmetric algorithm");
+		
+		m = find(modes, modeName);
+		if (!m)
+			raise("Unknown symmetric crypt mode");
+	}
+	else if (modeName.hasData())
+		raise("Mode parameter makes no sense for chosen algorithm");
+
+	unsigned len;
+	const void* data = CVT_get_bytes(dscs[CRYPT_ARG_KEY], len);
+	UCharBuffer key;
+	memcpy(key.getBuffer(len), data, len);
+
+	UCharBuffer iv;
+	data = CVT_get_bytes(dscs[CRYPT_ARG_IV], len);
+	if ((m && (m->code != MODE_ECB)) || (a && (a->code != ALG_RC4)))	// all other need IV
+	{
+		if (!len)
+			raise("Should specify initialization vector for chosen algorithm and/or mode");
+		memcpy(iv.getBuffer(len), data, len);
+	}
+	else if (len)
+		raise("Initialization vector parameter makes no sense for chosen algorithm and/or mode");
+
+	const unsigned CTR_32 = 1;
+	const unsigned CTR_64 = 2;
+	const unsigned CTR_LITTLE_ENDIAN = 3;
+	const unsigned CTR_BIG_ENDIAN = 4;
+
+	static CodeValue counterTypes[] = {
+		{ CTR_LITTLE_ENDIAN, "CTR_LITTLE_ENDIAN" },
+		{ CTR_BIG_ENDIAN, "CTR_BIG_ENDIAN" },
+		{ 0, nullptr }
+	};
+
+	CodeValue *c = nullptr;
+	MOV_get_metaname(tdbb, dscs[CRYPT_ARG_CTRTYPE], counterType);
+	if (m && (m->code == MODE_CTR))
+	{
+		if (counterType.hasData())
+		{
+			c = find(counterTypes, counterType);
+			if (!c)
+				raise("Invalid counter type @1");	// counterType
+		}
+		else
+			c = &counterTypes[CTR_LITTLE_ENDIAN];
+	}
+	else if (counterType.hasData())
+			raise("Counter endianess parameter is not used in Mode @1 (m->name)");
+
+	FB_UINT64 ctrVal = 0;
+	if ((m && (m->code == MODE_CTR)) || (a && (a->code == ALG_CHACHA)))
+	{
+		if (dscs[CRYPT_ARG_COUNTER]->dsc_length)
+		{
+			ctrVal = MOV_get_int64(tdbb, dscs[CRYPT_ARG_COUNTER], 0);
+			if (m && ctrVal > key.getCount())
+				raise("Too big value @1, maximum @2 can be used");
+		}
+	}
+	else if (dscs[CRYPT_ARG_COUNTER]->dsc_length)
+			raise("@1 (counter length/value) parameter is not used in @1 (a ? a->name : 'Mode' m->name)");
+
+	// Run selected algorithm
+	DataPipe dp(tdbb, dscs[CRYPT_ARG_VALUE], impure);
+	if (m)
+	{
+		unsigned blockLen = cipher_descriptor[cipher].block_length;
+		if (iv.hasData() && iv.getCount() != blockLen)
+			raise("Invalid IV length @2, need @1");  // block_length, iv.getCount
+
+		switch(m->code)
+		{
+		case MODE_ECB:
+			{
+				symmetric_ECB ecb;
+				tomCheck(ecb_start(cipher, key.begin(), key.getCount(), 0, &ecb), "initializing ECB mode");
+
+				while (dp.hasData())
+				{
+					if (encryptFlag)
+						tomCheck(ecb_encrypt(dp.from(), dp.to(), dp.length(), &ecb), "encrypting in ECB mode");
+					else
+						tomCheck(ecb_decrypt(dp.from(), dp.to(), dp.length(), &ecb), "decrypting in ECB mode");
+					dp.next();
+				}
+				ecb_done(&ecb);
+			}
+			break;
+
+		case MODE_CBC:
+			{
+				symmetric_CBC cbc;
+				tomCheck(cbc_start(cipher, iv.begin(), key.begin(), key.getCount(), 0, &cbc), "initializing CBC mode");
+
+				while (dp.hasData())
+				{
+					if (encryptFlag)
+						tomCheck(cbc_encrypt(dp.from(), dp.to(), dp.length(), &cbc), "encrypting in CBC mode");
+					else
+						tomCheck(cbc_decrypt(dp.from(), dp.to(), dp.length(), &cbc), "decrypting in CBC mode");
+					dp.next();
+				}
+				cbc_done(&cbc);
+			}
+			break;
+
+		case MODE_CFB:
+			{
+				symmetric_CFB cfb;
+				tomCheck(cfb_start(cipher, iv.begin(), key.begin(), key.getCount(), 0, &cfb), "initializing CFB mode");
+
+				while (dp.hasData())
+				{
+					if (encryptFlag)
+						tomCheck(cfb_encrypt(dp.from(), dp.to(), dp.length(), &cfb), "encrypting in CFB mode");
+					else
+						tomCheck(cfb_decrypt(dp.from(), dp.to(), dp.length(), &cfb), "decrypting in CFB mode");
+					dp.next();
+				}
+				cfb_done(&cfb);
+			}
+			break;
+
+		case MODE_OFB:
+			{
+				symmetric_OFB ofb;
+				tomCheck(ofb_start(cipher, iv.begin(), key.begin(), key.getCount(), 0, &ofb), "initializing OFB mode");
+
+				while (dp.hasData())
+				{
+					if (encryptFlag)
+						tomCheck(ofb_encrypt(dp.from(), dp.to(), dp.length(), &ofb), "encrypting in OFB mode");
+					else
+						tomCheck(ofb_decrypt(dp.from(), dp.to(), dp.length(), &ofb), "decrypting in OFB mode");
+					dp.next();
+				}
+				ofb_done(&ofb);
+			}
+			break;
+
+		case MODE_CTR:
+			{
+				symmetric_CTR ctr;
+				tomCheck(ctr_start(cipher, iv.begin(), key.begin(), key.getCount(), 0,
+					(c->code == CTR_LITTLE_ENDIAN ? CTR_COUNTER_LITTLE_ENDIAN : CTR_COUNTER_BIG_ENDIAN) | ctrVal,
+					&ctr), "initializing CTR mode");
+
+				while (dp.hasData())
+				{
+					if (encryptFlag)
+						tomCheck(ctr_encrypt(dp.from(), dp.to(), dp.length(), &ctr), "encrypting in CTR mode");
+					else
+						tomCheck(ctr_decrypt(dp.from(), dp.to(), dp.length(), &ctr), "decrypting in CTR mode");
+					dp.next();
+				}
+				ctr_done(&ctr);
+			}
+			break;
+		}
+	}
+	else
+	{
+		fb_assert(a);
+		switch(a->code)
+		{
+		case ALG_RC4:
+			{
+				rc4_state rc4;
+				tomCheck(rc4_stream_setup(&rc4, key.begin(), key.getCount()), "initializing RC4");
+
+				while (dp.hasData())
+				{
+					tomCheck(rc4_stream_crypt(&rc4, dp.from(), dp.length(), dp.to()),
+						encryptFlag ? "encrypting RC4" : "decrypting RC4");
+					dp.next();
+				}
+				rc4_stream_done(&rc4);
+			}
+			break;
+
+		case ALG_CHACHA:
+			{
+				chacha_state chacha;
+				tomCheck(chacha_setup(&chacha, key.begin(), key.getCount(), 20), "initializing CHACHA#20");
+				switch(iv.getCount())
+				{
+				case 12:
+					tomCheck(chacha_ivctr32(&chacha, iv.begin(), iv.getCount(), ctrVal), "setting IV for CHACHA#20");
+					break;
+				case 8:
+					tomCheck(chacha_ivctr64(&chacha, iv.begin(), iv.getCount(), ctrVal), "setting IV for CHACHA#20");
+					break;
+				default:
+					raise("Invalid IV length @2, need 8 or 12");  // iv.getCount
+					break;
+				}
+
+				while (dp.hasData())
+				{
+					tomCheck(chacha_crypt(&chacha, dp.from(), dp.length(), dp.to()),
+						encryptFlag ? "encrypting CHACHA#20" : "decrypting CHACHA#20");
+					dp.next();
+				}
+				chacha_done(&chacha);
+			}
+			break;
+
+		case ALG_SOBER:
+			{
+				sober128_state sober128;
+				tomCheck(sober128_stream_setup(&sober128, key.begin(), key.getCount()), "initializing SOBER-128");
+				tomCheck(sober128_stream_setiv(&sober128, iv.begin(), iv.getCount()), "setting IV for SOBER-128");
+
+				while (dp.hasData())
+				{
+					tomCheck(sober128_stream_crypt(&sober128, dp.from(), dp.length(), dp.to()),
+						encryptFlag ? "encrypting SOBER-128" : "decrypting SOBER-128");
+					dp.next();
+				}
+				sober128_stream_done(&sober128);
+			}
+			break;
+		}
+	}
+
+	return &impure->vlu_desc;
+}
+
+dsc* evlEncrypt(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
+	impure_value* impure)
+{
+	return evlEncryptDecrypt(tdbb, function, args, impure, true);
+}
+
+dsc* evlDecrypt(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
+	impure_value* impure)
+{
+	return evlEncryptDecrypt(tdbb, function, args, impure, false);
+}
+
+
+dsc* evlRsaEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
+	impure_value* impure, bool encryptFlag)
+{
+	tomcryptInitializer();
+
+	fb_assert(args.getCount() == RSA_CRYPT_ARG_MAX);
+
+	jrd_req* request = tdbb->getRequest();
+
+	// parse args and check correctness
+	const dsc* dscs[RSA_CRYPT_ARG_MAX];
+	for (unsigned i = 0; i < RSA_CRYPT_ARG_MAX; ++i)
+		dscs[i] = EVL_expr(tdbb, request, args[i]);
+
+	MetaName hashName;
+	if (dscs[RSA_CRYPT_ARG_HASH])
+		MOV_get_metaname(tdbb, dscs[RSA_CRYPT_ARG_HASH], hashName);
+	if (!hashName.hasData())
+		hashName = "SHA256";
+	string aName(hashName);
+	aName.lower();
+	int hash = find_hash(aName.c_str());
+	if (hash < 0)
+	{
+		string error = "Unknown hash algorithm ";
+		error += hashName.c_str();
+		raise(error.c_str());
+	}
+
+	unsigned len;
+	const UCHAR* data = CVT_get_bytes(dscs[RSA_CRYPT_ARG_VALUE], len);
+	if (!data)
+		return nullptr;
+
+	unsigned keyLen;
+	const UCHAR* key = CVT_get_bytes(dscs[RSA_CRYPT_ARG_KEY], keyLen);
+	if (!key)
+		return nullptr;
+
+	unsigned paramLen;
+	const UCHAR* lParam = CVT_get_bytes(dscs[RSA_CRYPT_ARG_LPARAM], paramLen);
+	if (!paramLen)
+		lParam = nullptr;
+
+	// Run tomcrypt functions
+	rsa_key rsaKey;
+	tomCheck(rsa_import(key, keyLen, &rsaKey), "importing RSA key");
+
+	unsigned long outlen = encryptFlag ? 256 : 190;
+	UCharBuffer outBuf;
+	int stat = 0;
+	int cryptRc = encryptFlag ? rsa_encrypt_key(data, len, outBuf.getBuffer(outlen), &outlen, lParam, paramLen,
+			prng().getState(), prng().getIndex(), hash, &rsaKey) :
+		rsa_decrypt_key(data, len, outBuf.getBuffer(outlen), &outlen, lParam, paramLen, hash, &stat, &rsaKey);
+	rsa_free(&rsaKey);
+	tomCheck(cryptRc, encryptFlag ? "RSA-encrypting" : "RSA-decrypting");
+	if ((!encryptFlag) && (!stat))
+		ERR_post(Arg::Gds(isc_random) << "Invalid OAEP packet");
+
+	dsc result;
+	result.makeText(outlen, ttype_binary, outBuf.begin());
+	EVL_make_value(tdbb, &result, impure);
+	return &impure->vlu_desc;
+}
+
+dsc* evlRsaDecrypt(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure)
+{
+	return evlRsaEncryptDecrypt(tdbb, function, args, impure, false);
+}
+
+dsc* evlRsaEncrypt(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure)
+{
+	return evlRsaEncryptDecrypt(tdbb, function, args, impure, true);
+}
+
+dsc* evlRsaPrivate(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure)
+{
+	tomcryptInitializer();
+
+	fb_assert(args.getCount() == 1);
+
+	jrd_req* request = tdbb->getRequest();
+
+	const dsc* value = EVL_expr(tdbb, request, args[0]);
+	if (request->req_flags & req_null)	// return NULL if value is NULL
+		return NULL;
+
+	const SLONG length = MOV_get_long(tdbb, value, 0);
+	if (length < 1 || length > 1024)
+		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+
+	rsa_key rsaKey;
+	tomCheck(rsa_make_key(prng().getState(), prng().getIndex(), length, 65537, &rsaKey),
+		"making RSA key");
+
+	unsigned long outlen = length * 16;
+	UCharBuffer key;
+	int cryptRc = rsa_export(key.getBuffer(outlen), &outlen, PK_PRIVATE, &rsaKey);
+	rsa_free(&rsaKey);
+	tomCheck(cryptRc, "exporting private RSA key");
+
+	dsc result;
+	result.makeText(outlen, ttype_binary, key.begin());
+	EVL_make_value(tdbb, &result, impure);
+	return &impure->vlu_desc;
+}
+
+dsc* evlRsaPublic(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure)
+{
+	tomcryptInitializer();
+
+	fb_assert(args.getCount() == 1);
+
+	jrd_req* request = tdbb->getRequest();
+
+	const dsc* value = EVL_expr(tdbb, request, args[0]);
+	if (request->req_flags & req_null)	// return NULL if value is NULL
+		return NULL;
+
+	unsigned len;
+	const UCHAR* data = CVT_get_bytes(value, len);
+	rsa_key rsaKey;
+	tomCheck(rsa_import(data, len, &rsaKey), "importing RSA key");
+
+	unsigned long outlen = len;
+	UCharBuffer key;
+	int cryptRc = rsa_export(key.getBuffer(outlen), &outlen, PK_PUBLIC, &rsaKey);
+	rsa_free(&rsaKey);
+	tomCheck(cryptRc, "exporting private RSA key");
+
+	dsc result;
+	result.makeText(outlen, ttype_binary, key.begin());
+	EVL_make_value(tdbb, &result, impure);
+	return &impure->vlu_desc;
+}
+
+
+dsc* evlRsaSign(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure)
+{
+	tomcryptInitializer();
+
+	fb_assert(args.getCount() == RSA_SIGN_ARG_MAX);
+
+	jrd_req* request = tdbb->getRequest();
+
+	// parse args and check correctness
+	const dsc* dscs[RSA_SIGN_ARG_MAX];
+	for (unsigned i = 0; i < RSA_SIGN_ARG_MAX; ++i)
+		dscs[i] = EVL_expr(tdbb, request, args[i]);
+
+	MetaName hashName;
+	if (dscs[RSA_SIGN_ARG_HASH])
+		MOV_get_metaname(tdbb, dscs[RSA_SIGN_ARG_HASH], hashName);
+	if (!hashName.hasData())
+		hashName = "SHA256";
+	string aName(hashName);
+	aName.lower();
+	int hash = find_hash(aName.c_str());
+	if (hash < 0)
+	{
+		string error = "Unknown hash algorithm ";
+		error += hashName.c_str();
+		raise(error.c_str());
+	}
+
+	unsigned len;
+	const UCHAR* data = CVT_get_bytes(dscs[RSA_SIGN_ARG_VALUE], len);
+	if (!data)
+		return nullptr;
+
+	SLONG saltLength = 8;
+	if (dscs[RSA_SIGN_ARG_SALTLEN]->dsc_length)
+	{
+		saltLength = MOV_get_long(tdbb, dscs[RSA_SIGN_ARG_SALTLEN], 0);
+		if (saltLength < 0 || saltLength > 32)
+			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+	}
+
+	unsigned keyLen;
+	const UCHAR* key = CVT_get_bytes(dscs[RSA_SIGN_ARG_KEY], keyLen);
+	if (!key)
+		return nullptr;
+	rsa_key rsaKey;
+	tomCheck(rsa_import(key, keyLen, &rsaKey), "importing RSA key");
+
+	unsigned long signLen = 1024;
+	UCharBuffer sign;
+	int cryptRc = rsa_sign_hash(data, len, sign.getBuffer(signLen), &signLen,
+		prng().getState(), prng().getIndex(), hash, saltLength, &rsaKey);
+	rsa_free(&rsaKey);
+	tomCheck(cryptRc, "RSA-signing data");
+
+	dsc result;
+	result.makeText(signLen, ttype_binary, sign.begin());
+	EVL_make_value(tdbb, &result, impure);
+	return &impure->vlu_desc;
+}
+
+
+dsc* boolResult(thread_db* tdbb, impure_value* impure, bool value)
+{
+	dsc result;
+	FB_BOOLEAN rc = value ? FB_TRUE : FB_FALSE;
+	result.makeBoolean(&rc);
+
+	EVL_make_value(tdbb, &result, impure);
+	return &impure->vlu_desc;
+}
+
+
+dsc* evlRsaVerify(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure)
+{
+	tomcryptInitializer();
+
+	fb_assert(args.getCount() == RSA_VERIFY_ARG_MAX);
+
+	jrd_req* request = tdbb->getRequest();
+
+	// parse args and check correctness
+	const dsc* dscs[RSA_VERIFY_ARG_MAX];
+	for (unsigned i = 0; i < RSA_VERIFY_ARG_MAX; ++i)
+		dscs[i] = EVL_expr(tdbb, request, args[i]);
+
+	MetaName hashName;
+	if (dscs[RSA_VERIFY_ARG_HASH])
+		MOV_get_metaname(tdbb, dscs[RSA_VERIFY_ARG_HASH], hashName);
+	if (!hashName.hasData())
+		hashName = "SHA256";
+	string aName(hashName);
+	aName.lower();
+	int hash = find_hash(aName.c_str());
+	if (hash < 0)
+	{
+		string error = "Unknown hash algorithm ";
+		error += hashName.c_str();
+		raise(error.c_str());
+	}
+
+	unsigned len;
+	const UCHAR* data = CVT_get_bytes(dscs[RSA_VERIFY_ARG_VALUE], len);
+	if (!data)
+		return nullptr;
+
+	unsigned signLen;
+	const UCHAR* sign = CVT_get_bytes(dscs[RSA_VERIFY_ARG_SIGNATURE], signLen);
+	if (!sign)
+		return boolResult(tdbb, impure, false);
+
+	SLONG saltLength = 8;
+	if (dscs[RSA_VERIFY_ARG_SALTLEN]->dsc_length)
+	{
+		saltLength = MOV_get_long(tdbb, dscs[RSA_VERIFY_ARG_SALTLEN], 0);
+		if (saltLength < 0 || saltLength > 32)
+			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+	}
+
+	unsigned keyLen;
+	const UCHAR* key = CVT_get_bytes(dscs[RSA_VERIFY_ARG_KEY], keyLen);
+	if (!key)
+		return boolResult(tdbb, impure, false);
+	rsa_key rsaKey;
+	tomCheck(rsa_import(key, keyLen, &rsaKey), "importing RSA key");
+
+	int state = 0;
+	int cryptRc = rsa_verify_hash(sign, signLen, data, len, hash, saltLength, &state, &rsaKey);
+	rsa_free(&rsaKey);
+	if (cryptRc != CRYPT_INVALID_PACKET)
+		tomCheck(cryptRc, "verifying RSA-signed data");
+	else
+		state = 0;
+
+	return boolResult(tdbb, impure, state);
 }
 
 
@@ -4647,6 +5702,14 @@ const SysFunction SysFunction::functions[] =
 		{"COT", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCot},
 		{"DATEADD", 3, 3, setParamsDateAdd, makeDateAdd, evlDateAdd, NULL},
 		{"DATEDIFF", 3, 3, setParamsDateDiff, makeInt64Result, evlDateDiff, NULL},
+		{"DECRYPT", 7, 7, setParamsEncrypt, makeDecrypt, evlDecrypt, NULL},
+		{"ENCRYPT", 7, 7, setParamsEncrypt, makeEncrypt, evlEncrypt, NULL},
+		{"RSA_DECRYPT", 4, 4, setParamsRsaEncrypt, makeRsaDecrypt, evlRsaDecrypt, NULL},
+		{"RSA_ENCRYPT", 4, 4, setParamsRsaEncrypt, makeRsaEncrypt, evlRsaEncrypt, NULL},
+		{"RSA_PRIVATE", 1, 1, setParamsInteger, makeRsaPrivate, evlRsaPrivate, NULL},
+		{"RSA_PUBLIC", 1, 1, setParamsRsaPublic, makeRsaPublic, evlRsaPublic, NULL},
+		{"RSA_SIGN", 4, 4, setParamsRsaSign, makeRsaSign, evlRsaSign, NULL},
+		{"RSA_VERIFY", 5, 5, setParamsRsaVerify, makeBoolResult, evlRsaVerify, NULL},
 		{"EXP", 1, 1, setParamsDblDec, makeDblDecResult, evlExp, NULL},
 		{"FIRST_DAY", 2, 2, setParamsFirstLastDay, makeFirstLastDayResult, evlFirstLastDay, (void*) funFirstDay},
 		{"FLOOR", 1, 1, setParamsDblDec, makeCeilFloor, evlFloor, NULL},

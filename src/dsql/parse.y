@@ -596,19 +596,26 @@ using namespace Firebird;
 %token <metaNamePtr> BIND
 %token <metaNamePtr> COMPARE_DECFLOAT
 %token <metaNamePtr> CUME_DIST
+%token <metaNamePtr> COUNTER
+%token <metaNamePtr> CTR_BIG_ENDIAN
+%token <metaNamePtr> CTR_LENGTH
+%token <metaNamePtr> CTR_LITTLE_ENDIAN
 %token <metaNamePtr> DECFLOAT
 %token <metaNamePtr> DEFINER
 %token <metaNamePtr> EXCLUDE
 %token <metaNamePtr> FIRST_DAY
 %token <metaNamePtr> FOLLOWING
 %token <metaNamePtr> IDLE
+%token <metaNamePtr> IV
 %token <metaNamePtr> INVOKER
 %token <metaNamePtr> LAST_DAY
 %token <metaNamePtr> LEGACY
 %token <metaNamePtr> LOCAL
 %token <metaNamePtr> LOCALTIME
 %token <metaNamePtr> LOCALTIMESTAMP
+%token <metaNamePtr> LPARAM
 %token <metaNamePtr> MESSAGE
+%token <metaNamePtr> MODE
 %token <metaNamePtr> NATIVE
 %token <metaNamePtr> NORMALIZE_DECFLOAT
 %token <metaNamePtr> NTILE
@@ -623,6 +630,14 @@ using namespace Firebird;
 %token <metaNamePtr> RDB_ROLE_IN_USE
 %token <metaNamePtr> RDB_SYSTEM_PRIVILEGE
 %token <metaNamePtr> RESET
+%token <metaNamePtr> RSA_DECRYPT
+%token <metaNamePtr> RSA_ENCRYPT
+%token <metaNamePtr> RSA_PRIVATE
+%token <metaNamePtr> RSA_PUBLIC
+%token <metaNamePtr> RSA_SIGN
+%token <metaNamePtr> RSA_VERIFY
+%token <metaNamePtr> SALT_LENGTH
+%token <metaNamePtr> SIGNATURE
 %token <metaNamePtr> SECURITY
 %token <metaNamePtr> SESSION
 %token <metaNamePtr> SQL
@@ -7906,6 +7921,8 @@ system_function_std_syntax
 	| RIGHT
 	| ROUND
 	| RPAD
+	| RSA_PRIVATE
+	| RSA_PUBLIC
 	| SIGN
 	| SIN
 	| SINH
@@ -7944,6 +7961,14 @@ system_function_special_syntax
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>(MAKE_const_slong($3))->add($5)->add($7));
+			$$->dsqlSpecialSyntax = true;
+		}
+	| encrypt_decrypt '(' value USING valid_symbol_name opt_mode KEY value opt_iv opt_counter_type opt_counter ')'
+		{
+			$$ = newNode<SysFuncCallNode>(*$1,
+				newNode<ValueListNode>($3)->add(MAKE_str_constant(newIntlString($5->c_str()), CS_ASCII))->
+					add(MAKE_str_constant(newIntlString($6->c_str()), CS_ASCII))->add($8)->add($9)->
+					add(MAKE_str_constant(newIntlString($10->c_str()), CS_ASCII))->add($11));
 			$$->dsqlSpecialSyntax = true;
 		}
 	| FIRST_DAY '(' of_first_last_day_part FROM value ')'
@@ -7985,11 +8010,108 @@ system_function_special_syntax
 		}
 	| POSITION '(' value_list_opt  ')'
 		{ $$ = newNode<SysFuncCallNode>(*$1, $3); }
+	| rsa_encrypt_decrypt '(' value KEY value opt_lparam opt_hash ')'
+		{
+			$$ = newNode<SysFuncCallNode>(*$1,
+				newNode<ValueListNode>($3)->add($5)->add($6)->
+					add(MAKE_str_constant(newIntlString($7->c_str()), CS_ASCII)));
+			$$->dsqlSpecialSyntax = true;
+		}
+	| RSA_SIGN '(' value KEY value opt_hash opt_saltlen ')'
+		{
+			$$ = newNode<SysFuncCallNode>(*$1,
+				newNode<ValueListNode>($3)->add($5)->
+					add(MAKE_str_constant(newIntlString($6->c_str()), CS_ASCII))->add($7));
+			$$->dsqlSpecialSyntax = true;
+		}
+	| RSA_VERIFY'(' value SIGNATURE value KEY value opt_hash opt_saltlen ')'
+		{
+			$$ = newNode<SysFuncCallNode>(*$1,
+				newNode<ValueListNode>($3)->add($5)->add($7)->
+					add(MAKE_str_constant(newIntlString($8->c_str()), CS_ASCII))->add($9));
+			$$->dsqlSpecialSyntax = true;
+		}
 	| RDB_SYSTEM_PRIVILEGE '(' valid_symbol_name ')'
 		{
 			ValueExprNode* v = MAKE_system_privilege($3->c_str());
 			$$ = newNode<SysFuncCallNode>(*$1, newNode<ValueListNode>(v));
 		}
+	;
+
+%type <metaNamePtr> rsa_encrypt_decrypt
+rsa_encrypt_decrypt
+	: RSA_DECRYPT | RSA_ENCRYPT
+	;
+
+%type <valueExprNode> opt_lparam
+opt_lparam
+	: LPARAM value
+		{ $$ = $2; }
+	| /* nothing */
+		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
+	;
+
+%type <metaNamePtr> opt_hash
+opt_hash
+	: HASH valid_symbol_name
+		{ $$ = $2; }
+	| /* nothing */
+		{ $$ = newNode<MetaName>(""); }
+	;
+
+%type <valueExprNode> opt_saltlen
+opt_saltlen
+	: SALT_LENGTH value
+		{ $$ = $2; }
+	| /* nothing */
+		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
+	;
+
+%type <metaNamePtr> opt_mode
+opt_mode
+	: MODE valid_symbol_name
+		{ $$ = $2; }
+	| /* nothing */
+		{ $$ = newNode<MetaName>(""); }
+	;
+
+%type <valueExprNode> opt_iv
+opt_iv
+	: IV value
+		{ $$ = $2; }
+	| /* nothing */
+		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
+	;
+
+%type <metaNamePtr> opt_counter_type
+opt_counter_type
+	: counter_type
+		{ $$ = $1; }
+	| /* nothing */
+		{ $$ = newNode<MetaName>(""); }
+	;
+
+%type <metaNamePtr> counter_type
+counter_type
+	: CTR_BIG_ENDIAN | CTR_LITTLE_ENDIAN
+	;
+
+%type <valueExprNode> opt_counter
+opt_counter
+	: counter_name value
+		{ $$ = $2; }
+	| /* nothing */
+		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
+	;
+
+%type <metaNamePtr> counter_name
+counter_name
+	: COUNTER | CTR_LENGTH
+	;
+
+%type <metaNamePtr> encrypt_decrypt
+encrypt_decrypt
+	: ENCRYPT | DECRYPT
 	;
 
 %type <blrOp> of_first_last_day_part
@@ -8682,6 +8804,21 @@ non_reserved_word
 	| TOTALORDER
 	| TRAPS
 	| ZONE
+	| MODE				// crypt functions
+	| IV
+	| COUNTER
+	| CTR_BIG_ENDIAN
+	| CTR_LITTLE_ENDIAN
+	| CTR_LENGTH
+	| LPARAM
+	| RSA_DECRYPT
+	| RSA_ENCRYPT
+	| RSA_PRIVATE
+	| RSA_PUBLIC
+	| RSA_SIGN
+	| RSA_VERIFY
+	| SALT_LENGTH
+	| SIGNATURE
 	;
 
 %%
