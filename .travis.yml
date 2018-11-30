@@ -21,7 +21,7 @@ install:
   # svn co http://svn.code.sf.net/p/firebird/code/qa/fbt-repository/trunk/ fbtest/fbt
 
 script:
-  - ./autogen.sh --enable-binreloc --prefix=/opt/firebird
+  - ./autogen.sh --enable-binreloc --with-builtin-tomcrypt --prefix=/opt/firebird
   - make -j4
   - make dist
   - tar xzvf gen/Firebird-[0-9]*.tar.gz
