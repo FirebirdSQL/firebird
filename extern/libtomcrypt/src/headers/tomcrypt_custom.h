@@ -116,6 +116,12 @@
 #define LTC_NO_PROTOTYPES
 #endif
 
+#ifdef WIN32
+#define LTC_CRIT_SECT
+#define USE_LTM
+#define LTM_DESC
+#endif // WIN32
+
 /* shortcut to disable automatic inclusion */
 #if defined LTC_NOTHING && !defined LTC_EASY
   #define LTC_NO_CIPHERS
@@ -613,6 +619,26 @@
 #define LTC_MUTEX_LOCK(x)     LTC_ARGCHK(pthread_mutex_lock(x) == 0);
 #define LTC_MUTEX_UNLOCK(x)   LTC_ARGCHK(pthread_mutex_unlock(x) == 0);
 #define LTC_MUTEX_DESTROY(x)  LTC_ARGCHK(pthread_mutex_destroy(x) == 0);
+
+#elif defined(LTC_CRIT_SECT)
+
+#include <Windows.h>
+
+struct AutoInitCriticalSection
+{
+	CRITICAL_SECTION cs;
+	LONG volatile flag;
+};
+
+void condInitCritSect(struct AutoInitCriticalSection* gcs);
+
+#define LTC_MUTEX_GLOBAL(x)   struct AutoInitCriticalSection x;
+#define LTC_MUTEX_PROTO(x)    extern struct AutoInitCriticalSection x;
+#define LTC_MUTEX_TYPE(x)     struct AutoInitCriticalSection x;
+#define LTC_MUTEX_INIT(x)     InitializeCriticalSection(&((x)->cs)); (x)->flag = 2;
+#define LTC_MUTEX_LOCK(x)     condInitCritSect(x); EnterCriticalSection(&((x)->cs));
+#define LTC_MUTEX_UNLOCK(x)   LeaveCriticalSection(&((x)->cs));
+#define LTC_MUTEX_DESTROY(x)  DeleteCriticalSection(&((x)->cs));
 
 #else
 

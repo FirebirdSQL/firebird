@@ -508,6 +508,23 @@ const ltc_math_descriptor ltm_desc = {
 
 #endif
 
+#ifdef LTC_CRIT_SECT
+
+void condInitCritSect(struct AutoInitCriticalSection* critSect)
+{
+	if (critSect->flag > 1)
+		return;
+	if (InterlockedCompareExchange(&critSect->flag, 1, 0) == 0)
+	{
+		LTC_MUTEX_INIT(critSect)
+		return;
+	}
+	while(critSect->flag < 2)
+		SleepEx(0, FALSE);
+}
+
+#endif
+
 /* ref:         $Format:%D$ */
 /* git commit:  $Format:%H$ */
 /* commit time: $Format:%ai$ */
