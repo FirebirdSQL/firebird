@@ -14,6 +14,8 @@
 # make -f makefile.shared PREFIX=/opt/libtom install
 #
 
+CFLAGS += -DLTC_PTHREAD -DUSE_LTM -DLTM_DESC -pthread
+
 PLATFORM := $(shell uname | sed -e 's/_.*//')
 
 ifndef LIBTOOL
