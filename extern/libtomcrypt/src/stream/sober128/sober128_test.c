@@ -9,7 +9,7 @@
 
 #include "tomcrypt.h"
 
-#ifdef LTC_SOBER128
+#ifdef LTC_SOBER128_STREAM
 
 int sober128_stream_test(void)
 {

@@ -14,7 +14,7 @@
  Based on s128fast.c reference code supplied by Greg Rose of QUALCOMM.
 */
 
-#ifdef LTC_SOBER128
+#ifdef LTC_SOBER128_STREAM
 
 #define __LTC_SOBER128TAB_C__
 #include "sober128tab.c"
