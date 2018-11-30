@@ -10,6 +10,62 @@
 #ifndef TOMCRYPT_CUSTOM_H_
 #define TOMCRYPT_CUSTOM_H_
 
+
+/*** Firebird customizations - begin ***/
+
+#define LTC_NO_CIPHERS
+#define LTC_RIJNDAEL
+#define LTC_ANUBIS
+#define LTC_BLOWFISH
+#define LTC_KHAZAD
+#define LTC_RC5
+#define LTC_RC6
+#define LTC_SAFERP
+#define LTC_TWOFISH
+#define LTC_XTEA
+
+#define LTC_CHACHA
+#define LTC_RC4_STREAM
+#define LTC_SOBER128_STREAM
+
+#define LTC_NO_HASHES
+#define LTC_MD5
+#define LTC_SHA1
+#define LTC_SHA256
+#define LTC_SHA512
+#define LTC_HASH_HELPERS
+
+#define LTC_NO_MODES
+#define LTC_CBC_MODE
+#define LTC_CFB_MODE
+#define LTC_CTR_MODE
+#define LTC_ECB_MODE
+#define LTC_OFB_MODE
+
+#define LTC_NO_MACS
+#define LTC_HMAC
+
+#define LTC_NO_PRNGS
+#define LTC_YARROW
+#define LTC_RNG_MAKE_PRNG
+#define LTC_RNG_GET_BYTES
+
+#define LTC_NO_PK
+#define LTC_MRSA
+
+#define LTC_NO_PKCS
+#define LTC_PKCS_1
+#define LTC_DER
+
+#define LTC_NO_CURVES
+
+#if defined(_MSC_VER)
+#define LTC_NO_PROTOTYPES
+#endif
+
+/*** Firebird customizations - end ***/
+
+
 /* macros for various libc functions you can change for embedded targets */
 #ifndef XMALLOC
 #define XMALLOC  malloc
