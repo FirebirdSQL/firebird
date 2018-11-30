@@ -264,7 +264,7 @@ TOMMATH_VER=0
 TOMCRYPT=$(ROOT)/extern/libtomcrypt
 TOMCRYPT_INC=$(TOMCRYPT)/src/headers
 TOMCRYPT_SO=$(TOMCRYPT)/.libs/libtomcrypt.so
-TOMCRYPT_VER=0
+TOMCRYPT_VER=1
 
 # LINKER OPTIONS
 #
