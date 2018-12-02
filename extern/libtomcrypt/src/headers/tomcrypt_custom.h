@@ -118,8 +118,12 @@
 
 #ifdef WIN32
 #define LTC_CRIT_SECT
+#ifndef USE_LTM
 #define USE_LTM
+#endif
+#ifndef LTM_DESC
 #define LTM_DESC
+#endif
 #endif // WIN32
 
 /* shortcut to disable automatic inclusion */
