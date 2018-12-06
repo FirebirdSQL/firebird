@@ -581,7 +581,7 @@ createLinksForBackCompatibility() {
 
 createLinksInSystemLib() {
 	LibDir=`CorrectLibDir @libdir@`
-	tommath=libtommath.@SHRLIB_EXT@
+	libtom='libtom*.@SHRLIB_EXT@*'
 	tomdir=@FB_LIBDIR@/.tm
     origDirLinksInSystemLib=`pwd`
 
@@ -596,15 +596,12 @@ createLinksInSystemLib() {
 
 	if [ -d $tomdir ]; then
 		cd $tomdir
-		Libraries=""
-		if [ ! -f $LibDir/$tommath ]; then
-			Libraries=`echo ${tommath}*`
-		fi
+		Libraries=`echo ${libtom}`
 
 		cd /
 		for l in $Libraries
 		do
-			safeLink @FB_LIBDIR@/.tm/$l .$LibDir/$l ${MANIFEST_TXT}
+			[ -f .$LibDir/$l ] || safeLink @FB_LIBDIR@/.tm/$l .$LibDir/$l ${MANIFEST_TXT}
 		done
 	fi
 
