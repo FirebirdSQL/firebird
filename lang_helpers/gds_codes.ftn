@@ -1820,6 +1820,98 @@ C --
       PARAMETER (GDS__vld_plugins                      = 335545203)
       INTEGER*4 GDS__db_crypt_key                    
       PARAMETER (GDS__db_crypt_key                     = 335545204)
+      INTEGER*4 GDS__no_keyholder_plugin             
+      PARAMETER (GDS__no_keyholder_plugin              = 335545205)
+      INTEGER*4 GDS__ses_reset_err                   
+      PARAMETER (GDS__ses_reset_err                    = 335545206)
+      INTEGER*4 GDS__ses_reset_open_trans            
+      PARAMETER (GDS__ses_reset_open_trans             = 335545207)
+      INTEGER*4 GDS__ses_reset_warn                  
+      PARAMETER (GDS__ses_reset_warn                   = 335545208)
+      INTEGER*4 GDS__ses_reset_tran_rollback         
+      PARAMETER (GDS__ses_reset_tran_rollback          = 335545209)
+      INTEGER*4 GDS__plugin_name                     
+      PARAMETER (GDS__plugin_name                      = 335545210)
+      INTEGER*4 GDS__parameter_name                  
+      PARAMETER (GDS__parameter_name                   = 335545211)
+      INTEGER*4 GDS__file_starting_page_err          
+      PARAMETER (GDS__file_starting_page_err           = 335545212)
+      INTEGER*4 GDS__invalid_timezone_offset         
+      PARAMETER (GDS__invalid_timezone_offset          = 335545213)
+      INTEGER*4 GDS__invalid_timezone_region         
+      PARAMETER (GDS__invalid_timezone_region          = 335545214)
+      INTEGER*4 GDS__invalid_timezone_id             
+      PARAMETER (GDS__invalid_timezone_id              = 335545215)
+      INTEGER*4 GDS__tom_decode64len                 
+      PARAMETER (GDS__tom_decode64len                  = 335545216)
+      INTEGER*4 GDS__tom_strblob                     
+      PARAMETER (GDS__tom_strblob                      = 335545217)
+      INTEGER*4 GDS__tom_reg                         
+      PARAMETER (GDS__tom_reg                          = 335545218)
+      INTEGER*4 GDS__tom_algorithm                   
+      PARAMETER (GDS__tom_algorithm                    = 335545219)
+      INTEGER*4 GDS__tom_mode_miss                   
+      PARAMETER (GDS__tom_mode_miss                    = 335545220)
+      INTEGER*4 GDS__tom_mode_bad                    
+      PARAMETER (GDS__tom_mode_bad                     = 335545221)
+      INTEGER*4 GDS__tom_no_mode                     
+      PARAMETER (GDS__tom_no_mode                      = 335545222)
+      INTEGER*4 GDS__tom_iv_miss                     
+      PARAMETER (GDS__tom_iv_miss                      = 335545223)
+      INTEGER*4 GDS__tom_no_iv                       
+      PARAMETER (GDS__tom_no_iv                        = 335545224)
+      INTEGER*4 GDS__tom_ctrtype_bad                 
+      PARAMETER (GDS__tom_ctrtype_bad                  = 335545225)
+      INTEGER*4 GDS__tom_no_ctrtype                  
+      PARAMETER (GDS__tom_no_ctrtype                   = 335545226)
+      INTEGER*4 GDS__tom_ctr_big                     
+      PARAMETER (GDS__tom_ctr_big                      = 335545227)
+      INTEGER*4 GDS__tom_no_ctr                      
+      PARAMETER (GDS__tom_no_ctr                       = 335545228)
+      INTEGER*4 GDS__tom_iv_length                   
+      PARAMETER (GDS__tom_iv_length                    = 335545229)
+      INTEGER*4 GDS__tom_error                       
+      PARAMETER (GDS__tom_error                        = 335545230)
+      INTEGER*4 GDS__tom_yarrow_start                
+      PARAMETER (GDS__tom_yarrow_start                 = 335545231)
+      INTEGER*4 GDS__tom_yarrow_setup                
+      PARAMETER (GDS__tom_yarrow_setup                 = 335545232)
+      INTEGER*4 GDS__tom_init_mode                   
+      PARAMETER (GDS__tom_init_mode                    = 335545233)
+      INTEGER*4 GDS__tom_crypt_mode                  
+      PARAMETER (GDS__tom_crypt_mode                   = 335545234)
+      INTEGER*4 GDS__tom_decrypt_mode                
+      PARAMETER (GDS__tom_decrypt_mode                 = 335545235)
+      INTEGER*4 GDS__tom_init_cip                    
+      PARAMETER (GDS__tom_init_cip                     = 335545236)
+      INTEGER*4 GDS__tom_crypt_cip                   
+      PARAMETER (GDS__tom_crypt_cip                    = 335545237)
+      INTEGER*4 GDS__tom_decrypt_cip                 
+      PARAMETER (GDS__tom_decrypt_cip                  = 335545238)
+      INTEGER*4 GDS__tom_setup_cip                   
+      PARAMETER (GDS__tom_setup_cip                    = 335545239)
+      INTEGER*4 GDS__tom_setup_chacha                
+      PARAMETER (GDS__tom_setup_chacha                 = 335545240)
+      INTEGER*4 GDS__tom_encode                      
+      PARAMETER (GDS__tom_encode                       = 335545241)
+      INTEGER*4 GDS__tom_decode                      
+      PARAMETER (GDS__tom_decode                       = 335545242)
+      INTEGER*4 GDS__tom_rsa_import                  
+      PARAMETER (GDS__tom_rsa_import                   = 335545243)
+      INTEGER*4 GDS__tom_oaep                        
+      PARAMETER (GDS__tom_oaep                         = 335545244)
+      INTEGER*4 GDS__tom_hash_bad                    
+      PARAMETER (GDS__tom_hash_bad                     = 335545245)
+      INTEGER*4 GDS__tom_rsa_make                    
+      PARAMETER (GDS__tom_rsa_make                     = 335545246)
+      INTEGER*4 GDS__tom_rsa_export                  
+      PARAMETER (GDS__tom_rsa_export                   = 335545247)
+      INTEGER*4 GDS__tom_rsa_sign                    
+      PARAMETER (GDS__tom_rsa_sign                     = 335545248)
+      INTEGER*4 GDS__tom_rsa_verify                  
+      PARAMETER (GDS__tom_rsa_verify                   = 335545249)
+      INTEGER*4 GDS__tom_chacha_key                  
+      PARAMETER (GDS__tom_chacha_key                   = 335545250)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 

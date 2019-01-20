@@ -221,7 +221,9 @@ checkLibrary() {
 checkLibraries() {
 	if [ "@TOMMATH_BUILD@" != "Y" ]
 	then
+		fixTommath=
 		checkLibrary tommath
+		haveLibrary libtommath.so.0 || [ "$fixTommath" ] && $fixTommath
 	fi
 
 	if [ "@TOMCRYPT_BUILD@" != "Y" ]
@@ -239,7 +241,7 @@ checkLibraries() {
 grepProcess() {
 	processList=$1
 	eol=\$
-	ps $psOptions | egrep "\<($processList)($eol|[[:space:]])" | grep -v grep
+	ps $psOptions | egrep "\<($processList)($eol|[[:space:]])" | grep -v grep | grep -v -w '\-path'
 }
 
 
@@ -581,7 +583,7 @@ createLinksForBackCompatibility() {
 
 createLinksInSystemLib() {
 	LibDir=`CorrectLibDir @libdir@`
-	tommath=libtommath.@SHRLIB_EXT@
+	libtom='libtom*.@SHRLIB_EXT@*'
 	tomdir=@FB_LIBDIR@/.tm
     origDirLinksInSystemLib=`pwd`
 
@@ -596,15 +598,12 @@ createLinksInSystemLib() {
 
 	if [ -d $tomdir ]; then
 		cd $tomdir
-		Libraries=""
-		if [ ! -f $LibDir/$tommath ]; then
-			Libraries=`echo ${tommath}*`
-		fi
+		Libraries=`echo ${libtom}`
 
 		cd /
 		for l in $Libraries
 		do
-			safeLink @FB_LIBDIR@/.tm/$l .$LibDir/$l ${MANIFEST_TXT}
+			[ -f .$LibDir/$l ] || safeLink @FB_LIBDIR@/.tm/$l .$LibDir/$l ${MANIFEST_TXT}
 		done
 	fi
 

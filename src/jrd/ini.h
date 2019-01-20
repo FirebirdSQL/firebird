@@ -65,8 +65,9 @@ static const TEXT* const names[] =
 //******************************
 // fields.h
 //******************************
-const USHORT BLOB_SIZE		= 8;
-const USHORT TIMESTAMP_SIZE	= 8;
+const USHORT BLOB_SIZE			= 8;
+const USHORT TIMESTAMP_SIZE		= 8;
+const USHORT TIMESTAMP_TZ_SIZE	= 12;
 
 // Pick up global ids
 

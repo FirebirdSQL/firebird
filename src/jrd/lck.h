@@ -26,6 +26,8 @@
 
 //#define DEBUG_LCK
 
+#include "../lock/lock_proto.h"
+
 #ifdef DEBUG_LCK
 #include "../common/classes/SyncObject.h"
 #endif
@@ -63,9 +65,8 @@ enum lck_t {
 	LCK_tt_exist,				// TextType existence lock
 	LCK_cancel,					// Cancellation lock
 	LCK_btr_dont_gc,			// Prevent removal of b-tree page from index
-	LCK_shared_counter,			// Database-wide shared counter
-	LCK_tra_pc,					// Precommitted transaction lock
 	LCK_rel_gc,					// Allow garbage collection for relation
+	LCK_tpc_block,				// TPC memory block file existence lock
 	LCK_fun_exist,				// Function existence lock
 	LCK_rel_rescan,				// Relation forced rescan lock
 	LCK_crypt,					// Crypt lock for single crypt thread
@@ -131,7 +132,7 @@ public:
 public:
 	UCHAR lck_logical;				// Logical lock level
 	UCHAR lck_physical;				// Physical lock level
-	SINT64 lck_data;				// Data associated with a lock
+	LOCK_DATA_T lck_data;			// Data associated with a lock
 
 private:
 

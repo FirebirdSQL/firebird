@@ -138,6 +138,9 @@ const int SQL_FLD_SECCLASS_PREFIX_LEN		= 9;
 const char* const GEN_SECCLASS_PREFIX		= "GEN$";
 const int GEN_SECCLASS_PREFIX_LEN			= 4;
 
+const char* const PROCEDURES_GENERATOR = "RDB$PROCEDURES";
+const char* const FUNCTIONS_GENERATOR = "RDB$FUNCTIONS";
+
 // Automatically created check constraints for unnamed PRIMARY and UNIQUE declarations.
 const char* const IMPLICIT_INTEGRITY_PREFIX = "INTEG_";
 const int IMPLICIT_INTEGRITY_PREFIX_LEN = 6;
@@ -265,7 +268,8 @@ enum tra_iso_mode_t {
 	iso_mode_consistency = 0,
 	iso_mode_concurrency = 1,
 	iso_mode_rc_version = 2,
-	iso_mode_rc_no_version = 3
+	iso_mode_rc_no_version = 3,
+	iso_mode_rc_read_consistency = 4
 };
 
 // statistics groups

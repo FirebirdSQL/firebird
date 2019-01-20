@@ -28,6 +28,7 @@
 #define CLASSES_ARRAY_H
 
 #include "../common/gdsassert.h"
+#include <initializer_list>
 #include <string.h>
 #include "../common/classes/vector.h"
 #include "../common/classes/alloc.h"
@@ -113,6 +114,13 @@ public:
 		: Storage(), count(0), capacity(this->getStorageSize()), data(this->getStorage())
 	{
 		copyFrom(source);
+	}
+
+	Array(MemoryPool& p, std::initializer_list<T> items)
+		: Storage(p), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+	{
+		for (auto& item : items)
+			add(item);
 	}
 
 	~Array()
@@ -410,6 +418,18 @@ public:
 				return true;
 			}
 		}
+		return false;
+	}
+
+	bool findAndRemove(const T& item)
+	{
+		size_type pos;
+		if (find(item, pos))
+		{
+			remove(pos);
+			return true;
+		}
+
 		return false;
 	}
 

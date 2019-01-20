@@ -103,6 +103,8 @@ void INT_CXX_action( const act* action, int column)
 	case ACT_s_start:
 		begin(column);
 		align(column);
+	default:
+		break;
 	}
 
 	switch (action->act_type)

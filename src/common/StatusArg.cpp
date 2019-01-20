@@ -53,7 +53,7 @@ namespace Firebird {
 
 namespace Arg {
 
-Base::Base(ISC_STATUS k, ISC_STATUS c) throw(Firebird::BadAlloc) :
+Base::Base(ISC_STATUS k, ISC_STATUS c) :
 	implementation(FB_NEW_POOL(*getDefaultMemoryPool()) ImplBase(k, c))
 {
 }
@@ -94,28 +94,28 @@ StatusVector::ImplStatusVector::ImplStatusVector(const Exception& ex) throw()
 	assign(ex);
 }
 
-StatusVector::StatusVector(ISC_STATUS k, ISC_STATUS c) throw(Firebird::BadAlloc) :
+StatusVector::StatusVector(ISC_STATUS k, ISC_STATUS c) :
 	Base(FB_NEW_POOL(*getDefaultMemoryPool()) ImplStatusVector(k, c))
 {
 	operator<<(*(static_cast<Base*>(this)));
 }
 
-StatusVector::StatusVector(const ISC_STATUS* s) throw(Firebird::BadAlloc) :
+StatusVector::StatusVector(const ISC_STATUS* s) :
 	Base(FB_NEW_POOL(*getDefaultMemoryPool()) ImplStatusVector(s))
 {
 }
 
-StatusVector::StatusVector(const IStatus* s) throw(Firebird::BadAlloc) :
+StatusVector::StatusVector(const IStatus* s) :
 	Base(FB_NEW_POOL(*getDefaultMemoryPool()) ImplStatusVector(s))
 {
 }
 
-StatusVector::StatusVector(const Exception& ex) throw(Firebird::BadAlloc) :
+StatusVector::StatusVector(const Exception& ex) :
 	Base(FB_NEW_POOL(*getDefaultMemoryPool()) ImplStatusVector(ex))
 {
 }
 
-StatusVector::StatusVector() throw(Firebird::BadAlloc) :
+StatusVector::StatusVector() :
 	Base(FB_NEW_POOL(*getDefaultMemoryPool()) ImplStatusVector(0, 0))
 {
 }
@@ -295,6 +295,32 @@ void StatusVector::ImplStatusVector::copyTo(IStatus* dest) const throw()
 		}
 		else
 			dest->setErrors2(len, v);
+	}
+}
+
+void StatusVector::ImplStatusVector::appendTo(IStatus* dest) const throw()
+{
+	if (hasData())
+	{
+		ImplStatusVector tmpVector(dest);
+		ImplStatusVector newVector(getKind(), getCode());
+
+		if (newVector.appendErrors(&tmpVector))
+		{
+			if (newVector.appendErrors(this))
+			{
+				if (newVector.appendWarnings(&tmpVector))
+					newVector.appendWarnings(this);
+			}
+		}
+
+		// take special care about strings safety
+		// that's why tmpStatus is needed here
+		AutoPtr<IStatus, SimpleDispose> tmpStatus(dest->clone());
+		newVector.copyTo(tmpStatus);
+
+		dest->setErrors(tmpStatus->getErrors());
+		dest->setWarnings(tmpStatus->getWarnings());
 	}
 }
 

@@ -347,7 +347,7 @@ bool ISC_analyze_nfs(tstring& expanded_filename, tstring& node_name)
 
 
 bool ISC_analyze_protocol(const char* protocol, tstring& expanded_name, tstring& node_name,
-						  const char* separator)
+						  const char* separator, bool need_file)
 {
 /**************************************
  *
@@ -367,6 +367,7 @@ bool ISC_analyze_protocol(const char* protocol, tstring& expanded_name, tstring&
 	if (expanded_name.find(prefix) != 0)
 		return false;
 
+	PathName savedName = expanded_name;
 	expanded_name.erase(0, prefix.length());
 
 	if (separator) // this implies node name is expected!
@@ -374,7 +375,7 @@ bool ISC_analyze_protocol(const char* protocol, tstring& expanded_name, tstring&
 		size p = expanded_name.find_first_of('/');
 		if (p != 0 && p != npos)
 		{
-			node_name = expanded_name.substr(0, p);
+			node_name = p == npos ? expanded_name : expanded_name.substr(0, p);
 			expanded_name.erase(0, node_name.length() + 1);
 
 			if (node_name[0] == '[')
@@ -390,6 +391,12 @@ bool ISC_analyze_protocol(const char* protocol, tstring& expanded_name, tstring&
 			if (p != npos)
 				node_name[p] = *separator;
 		}
+	}
+
+	if (need_file && !expanded_name.hasData())
+	{
+		expanded_name = savedName;
+		return false;
 	}
 
 	return true;
@@ -447,7 +454,7 @@ bool ISC_analyze_pclan(tstring& expanded_name, tstring& node_name)
 #endif	// WIN_NT
 
 
-bool ISC_analyze_tcp(tstring& file_name, tstring& node_name)
+bool ISC_analyze_tcp(tstring& file_name, tstring& node_name, bool need_file)
 {
 /**************************************
  *
@@ -482,7 +489,7 @@ bool ISC_analyze_tcp(tstring& file_name, tstring& node_name)
 	else
 		p = file_name.find(INET_FLAG);
 
-	if (p == npos || p == 0 || p == file_name.length() - 1)
+	if (p == npos || p == 0 || (need_file && (p == file_name.length() - 1)))
 		return false;
 
 	node_name = file_name.substr(0, p);

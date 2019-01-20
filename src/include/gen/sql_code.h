@@ -905,6 +905,52 @@ static const struct {
 	{335545202, -901}, /* 882 hdr_overflow */
 	{335545203, -901}, /* 883 vld_plugins */
 	{335545204, -902}, /* 884 db_crypt_key */
+	{335545205, -104}, /* 885 no_keyholder_plugin */
+	{335545206, -901}, /* 886 ses_reset_err */
+	{335545207, -901}, /* 887 ses_reset_open_trans */
+	{335545208, -901}, /* 888 ses_reset_warn */
+	{335545209, -901}, /* 889 ses_reset_tran_rollback */
+	{335545210, -901}, /* 890 plugin_name */
+	{335545211, -901}, /* 891 parameter_name */
+	{335545212, -901}, /* 892 file_starting_page_err */
+	{335545213, -901}, /* 893 invalid_timezone_offset */
+	{335545214, -901}, /* 894 invalid_timezone_region */
+	{335545215, -901}, /* 895 invalid_timezone_id */
+	{335545216, -901}, /* 896 tom_decode64len */
+	{335545217, -901}, /* 897 tom_strblob */
+	{335545218, -901}, /* 898 tom_reg */
+	{335545219, -901}, /* 899 tom_algorithm */
+	{335545220, -901}, /* 900 tom_mode_miss */
+	{335545221, -901}, /* 901 tom_mode_bad */
+	{335545222, -901}, /* 902 tom_no_mode */
+	{335545223, -901}, /* 903 tom_iv_miss */
+	{335545224, -901}, /* 904 tom_no_iv */
+	{335545225, -901}, /* 905 tom_ctrtype_bad */
+	{335545226, -901}, /* 906 tom_no_ctrtype */
+	{335545227, -901}, /* 907 tom_ctr_big */
+	{335545228, -901}, /* 908 tom_no_ctr */
+	{335545229, -901}, /* 909 tom_iv_length */
+	{335545230, -901}, /* 910 tom_error */
+	{335545231, -901}, /* 911 tom_yarrow_start */
+	{335545232, -901}, /* 912 tom_yarrow_setup */
+	{335545233, -901}, /* 913 tom_init_mode */
+	{335545234, -901}, /* 914 tom_crypt_mode */
+	{335545235, -901}, /* 915 tom_decrypt_mode */
+	{335545236, -901}, /* 916 tom_init_cip */
+	{335545237, -901}, /* 917 tom_crypt_cip */
+	{335545238, -901}, /* 918 tom_decrypt_cip */
+	{335545239, -901}, /* 919 tom_setup_cip */
+	{335545240, -901}, /* 920 tom_setup_chacha */
+	{335545241, -901}, /* 921 tom_encode */
+	{335545242, -901}, /* 922 tom_decode */
+	{335545243, -901}, /* 923 tom_rsa_import */
+	{335545244, -901}, /* 924 tom_oaep */
+	{335545245, -901}, /* 925 tom_hash_bad */
+	{335545246, -901}, /* 926 tom_rsa_make */
+	{335545247, -901}, /* 927 tom_rsa_export */
+	{335545248, -901}, /* 928 tom_rsa_sign */
+	{335545249, -901}, /* 929 tom_rsa_verify */
+	{335545250, -901}, /* 930 tom_chacha_key */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */

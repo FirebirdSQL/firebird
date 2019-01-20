@@ -656,7 +656,7 @@ private:
 	// prepare completion interface
 	AutoPtr<BatchCompletionState, SimpleDispose> completionState
 		(FB_NEW BatchCompletionState(m_flags & (1 << IBatch::TAG_RECORD_COUNTS), m_detailed));
-	AutoSetRestore<bool> batchFlag(&req->req_batch, true);
+	AutoSetRestore<bool> batchFlag(&req->req_batch_mode, true);
 	const dsql_msg* message = m_request->getStatement()->getSendMsg();
 	bool startRequest = true;
 

@@ -304,6 +304,7 @@ public:
 	ULONG getCurrentPage() const;
 	UCHAR getCurrentState() const;
 	const char* getKeyName() const;
+	const char* getPluginName() const;
 
 private:
 	enum IoResult {SUCCESS_ALL, FAILED_CRYPT, FAILED_IO};
@@ -383,7 +384,7 @@ private:
 	void checkDigitalSignature(thread_db* tdbb, const class Header& hdr);
 
 	BarSync sync;
-	Firebird::MetaName keyName;
+	Firebird::MetaName keyName, pluginName;
 	ULONG currentPage;
 	Firebird::Mutex pluginLoadMtx, cryptThreadMtx, holdersMutex;
 	AttVector keyProviders, keyConsumers;

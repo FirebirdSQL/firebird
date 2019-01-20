@@ -245,5 +245,8 @@ static const struct
 	{"default", relation_field},
 	{"store3", store3},
 	{"modulo", two},
+	{"local_timestamp", byte_line},
+	{"local_time", byte_line},
+	{"at", verb_byte_verb},
 	{0, 0}
 };

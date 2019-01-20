@@ -77,6 +77,7 @@ Monitoring tables
           2: merge
       - MON$CRYPT_PAGE (number of page being encrypted)
       - MON$OWNER (database owner name)
+      - MON$SEC_DATABASE (security database)
 
     MON$ATTACHMENTS (connected attachments)
       - MON$ATTACHMENT_ID (attachment ID)
@@ -103,6 +104,11 @@ Monitoring tables
       - MON$SYSTEM_FLAG  (system flag)
           0: user attachment
           1: system attachment
+      - MON$IDLE_TIMEOUT (connection-level idle timeout)
+      - MON$IDLE_TIMER (idle timer expiration time)
+      - MON$STATEMENT_TIMEOUT (statement timeout)
+      - MON$WIRE_COMPRESSED (wire compression enabled/disabled)
+      - MON$WIRE_ENCRYPTED (wire encryption enabled/disabled)
 
     MON$TRANSACTIONS (started transactions)
       - MON$TRANSACTION_ID (transaction ID)
@@ -119,6 +125,7 @@ Monitoring tables
           1: concurrency
           2: read committed record version
           3: read committed no record version
+		  4: read committed read consistency
       - MON$LOCK_TIMEOUT (lock timeout)
           -1: infinite wait
           0: no wait
@@ -138,6 +145,9 @@ Monitoring tables
       - MON$TIMESTAMP (statement start date/time)
       - MON$SQL_TEXT (statement text, if appropriate)
       - MON$STAT_ID (statistics ID)
+      - MON$EXPLAINED_PLAN (explained query plan)
+      - MON$STATEMENT_TIMEOUT (statement timeout)
+      - MON$STATEMENT_TIMER (statement timer expiration time)
 
     MON$CALL_STACK (call stack of active PSQL requests)
       - MON$CALL_ID (call ID)
@@ -180,6 +190,13 @@ Monitoring tables
       - MON$RECORD_BACKOUTS (number of backed out records)
       - MON$RECORD_PURGES (number of purged records)
       - MON$RECORD_EXPUNGES (number of expunged records)
+      - MON$RECORD_LOCKS (number of explicit record-level locks)
+      - MON$RECORD_WAITS (number of waits on conflicting records)
+      - MON$RECORD_CONFLICTS (number of record-level conflicts reported)
+      - MON$BACKVERSION_READS (number of backversions read while chasing version chains)
+      - MON$FRAGMENT_READS (number of fragments read while composing full records)
+      - MON$RECORD_RPT_READS (number of records read repeatedly, i.e. re-fetched after reading)
+      - MON$RECORD_IMGC (number of records affected by the intermediate garbage collection)
 
     MON$MEMORY_USAGE (current memory usage)
       - MON$STAT_ID (statistics ID)
@@ -199,6 +216,17 @@ Monitoring tables
       - MON$TRANSACTION_ID (transaction ID)
       - MON$VARIABLE_NAME (name of context variable)
       - MON$VARIABLE_VALUE (value of context variable)
+
+    MON$TABLE_STATS (per table record-level statistics)
+      - MON$STAT_ID (statistics ID)
+      - MON$STAT_GROUP (statistics group)
+          0: database
+          1: attachment
+          2: transaction
+          3: statement
+          4: call
+      - MON$TABLE_NAME (table name)
+      - MON$RECORD_STAT_ID (record-level statistics ID, refers to MON$RECORD_STATS)
 
   Notes:
     1) Textual descriptions of all "state" and "mode" values can be found

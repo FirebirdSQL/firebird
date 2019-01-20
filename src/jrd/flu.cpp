@@ -249,7 +249,7 @@ namespace Jrd
 															 Arg::Str(initialModule));
 			}
 
-			ModuleLoader::Module* mlm = ModuleLoader::loadModule(fixedModule);
+			ModuleLoader::Module* mlm = ModuleLoader::loadModule(NULL, fixedModule);
 			if (mlm)
 			{
 				im = FB_NEW_POOL(*getDefaultMemoryPool())

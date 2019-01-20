@@ -55,6 +55,14 @@ typedef unsigned int	FB_API_HANDLE;
 typedef void*		FB_API_HANDLE;
 #endif
 
+typedef FB_API_HANDLE isc_att_handle;
+typedef FB_API_HANDLE isc_blob_handle;
+typedef FB_API_HANDLE isc_db_handle;
+typedef FB_API_HANDLE isc_req_handle;
+typedef FB_API_HANDLE isc_stmt_handle;
+typedef FB_API_HANDLE isc_svc_handle;
+typedef FB_API_HANDLE isc_tr_handle;
+
 /******************************************************************/
 /* Sizes of memory blocks                                         */
 /******************************************************************/
@@ -142,16 +150,27 @@ typedef unsigned long long int	ISC_UINT64;
 /* Time & Date support                                             */
 /*******************************************************************/
 
-#ifndef ISC_TIMESTAMP_DEFINED
 typedef int			ISC_DATE;
+
 typedef unsigned int	ISC_TIME;
+
+typedef struct
+{
+	ISC_TIME utc_time;
+	ISC_USHORT time_zone;
+} ISC_TIME_TZ;
+
 typedef struct
 {
 	ISC_DATE timestamp_date;
 	ISC_TIME timestamp_time;
 } ISC_TIMESTAMP;
-#define ISC_TIMESTAMP_DEFINED
-#endif	/* ISC_TIMESTAMP_DEFINED */
+
+typedef struct
+{
+	ISC_TIMESTAMP utc_timestamp;
+	ISC_USHORT time_zone;
+} ISC_TIMESTAMP_TZ;
 
 /*******************************************************************/
 /* Blob Id support                                                 */
@@ -178,12 +197,7 @@ struct FB_DEC34_t {
 	ISC_UINT64 fb_data[2];
 };
 
-struct FB_DEC_FIXED_t {
-	ISC_UINT64 fb_data[2];
-};
-
 typedef struct FB_DEC16_t FB_DEC16;
 typedef struct FB_DEC34_t FB_DEC34;
-typedef struct FB_DEC_FIXED_t FB_DEC_FIXED;
 
 #endif /* INCLUDE_TYPES_PUB_H */

@@ -725,6 +725,11 @@ static void disconnect(rem_port* port)
  *
  **************************************/
 
+	if (port->port_state == rem_port::DISCONNECTED)
+		return;
+
+	port->port_state = rem_port::DISCONNECTED;
+
 	if (port->port_async)
 	{
 		disconnect(port->port_async);
@@ -995,7 +1000,8 @@ static bool wnet_error(rem_port* port,
  **************************************/
 	if (status)
 	{
-		if (port->port_state != rem_port::BROKEN) {
+		if (port->port_state == rem_port::PENDING)
+		{
 			gds__log("WNET/wnet_error: %s errno = %d", function, status);
 		}
 

@@ -75,9 +75,10 @@ public:
 	typedef pthread_t Handle;
 #endif
 
-	static void	start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle = NULL);
+	static ThreadId	start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle = NULL);
 	static void waitForCompletion(Handle& handle);
 	static void kill(Handle& handle);
+	static bool isCurrent(const ThreadId threadId);
 
 	static ThreadId getId();
 

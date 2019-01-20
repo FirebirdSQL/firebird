@@ -388,7 +388,8 @@ int main(int argc, char* argv[])
 	TEXT spare_file_name[MAXPATHLEN];
 	if (gpreGlob.sw_language == lang_undef)
 		for (const ext_table_t* ext_tab = dml_ext_table;
-			gpreGlob.sw_language = ext_tab->ext_language; ext_tab++)
+			 (gpreGlob.sw_language = ext_tab->ext_language);
+			 ext_tab++)
 		{
 			strcpy(spare_file_name, file_name);
 			if (!file_rename(spare_file_name, ext_tab->in, NULL))
@@ -400,7 +401,8 @@ int main(int argc, char* argv[])
 
 	if (gpreGlob.sw_language == lang_undef)
 		for (const ext_table_t* ext_tab = dml_ext_table;
-			gpreGlob.sw_language = ext_tab->ext_language; ext_tab++)
+			 (gpreGlob.sw_language = ext_tab->ext_language);
+			 ext_tab++)
 		{
 			strcpy(spare_file_name, file_name);
 			if (file_rename(spare_file_name, ext_tab->in, NULL) &&
@@ -799,7 +801,7 @@ int main(int argc, char* argv[])
 		{
 			out_file_name = spare_out_file_name;
 			strcpy(spare_out_file_name, file_name);
-			if (renamed = file_rename(spare_out_file_name, out_src_ext_tab->in, out_src_ext_tab->out))
+			if ((renamed = file_rename(spare_out_file_name, out_src_ext_tab->in, out_src_ext_tab->out)))
 			{
 				explicitt = false;
 			}
@@ -842,7 +844,7 @@ int main(int argc, char* argv[])
 
 	try {
 		SLONG end_position = 0;
-		while (end_position = compile_module(end_position, filename_array[3]))
+		while ((end_position = compile_module(end_position, filename_array[3])))
 			; // empty loop body
 	}	// try
 	catch (const Firebird::Exception&) {}  // fall through to the cleanup code
@@ -2483,7 +2485,9 @@ static void pass2( SLONG start_position)
 	SLONG column = 0;
 
 	SSHORT comment_start_len = static_cast<SSHORT>(strlen(comment_start));
+#if defined(GPRE_COBOL)
 	SSHORT to_skip = 0;
+#endif
 
 	// Dump text until the start of the next action, then process the action.
 
@@ -2550,7 +2554,9 @@ static void pass2( SLONG start_position)
 				{
 					fputc('\n', gpreGlob.out_file);
 					fputs(comment_start, gpreGlob.out_file);
+#if defined(GPRE_COBOL)
 					to_skip = (column < 7) ? comment_start_len - column : 0;
+#endif
 					column = 0;
 				}
 				break;
@@ -2595,7 +2601,9 @@ static void pass2( SLONG start_position)
 						(gpreGlob.sw_language == lang_cobol))
 					{
 						fputs(comment_start, gpreGlob.out_file);
+#if defined(GPRE_COBOL)
 						to_skip = (column < 7) ? comment_start_len - column : 0;
+#endif
 						column = 0;
 					}
 				}
@@ -2633,7 +2641,9 @@ static void pass2( SLONG start_position)
 		if (sw_lines)
 			line_pending = true;
 		column = 0;
+#if defined(GPRE_COBOL)
 		to_skip = 0;
+#endif
 	}
 
 	// We're out of actions -- dump the remaining text to the output stream.

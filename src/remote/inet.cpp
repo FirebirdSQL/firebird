@@ -1324,6 +1324,11 @@ static rem_port* alloc_port(rem_port* const parent, const USHORT flags)
 			INET_initialized = true;
 
 			// This should go AFTER 'INET_initialized = true' to avoid recursion
+			// That order of statements at the first glance appears to be possible cause of races:
+			// Someone may pass the if (!INET_initialized) with INET_initialized == true,
+			// but inet_async_receive still being NULL. Luckily it's not so awful actually.
+			// Async receive is used only by network server and there is no way for it
+			// to allocate secondary ports until completion of master port init.
 			inet_async_receive = alloc_port(0);
 			inet_async_receive->port_flags |= PORT_server;
 		}
@@ -1627,7 +1632,7 @@ static THREAD_ENTRY_DECLARE waitThread(THREAD_ENTRY_PARAM)
 }
 #endif // !defined(WIN_NT)
 
-static void disconnect(rem_port* const port)
+static void disconnect(rem_port* port)
 {
 /**************************************
  *
@@ -1661,6 +1666,9 @@ static void disconnect(rem_port* const port)
 	}
 
 	MutexLockGuard guard(port_mutex, FB_FUNCTION);
+	if (port->port_state == rem_port::DISCONNECTED)
+		return;
+
 	port->port_state = rem_port::DISCONNECTED;
 	port->port_flags &= ~PORT_connecting;
 
@@ -1695,7 +1703,10 @@ static void disconnect(rem_port* const port)
 		SOCLOSE(port->port_channel);
 	}
 
-	port->release();
+	if (port->port_thread_guard && port->port_events_thread && !Thread::isCurrent(port->port_events_threadId))
+		port->port_thread_guard->setWait(port->port_events_thread);
+	else
+		port->release();
 
 #ifdef DEBUG
 	if (INET_trace & TRACE_summary)
@@ -1976,7 +1987,7 @@ static bool select_multi(rem_port* main_port, UCHAR* buffer, SSHORT bufsize, SSH
 		{
 			if (INET_shutting_down)
 			{
-				if (main_port->port_state != rem_port::BROKEN)
+				if (main_port->port_state == rem_port::PENDING)
 				{
 					main_port->port_state = rem_port::BROKEN;
 
@@ -2533,7 +2544,7 @@ static void inet_error(bool releasePort, rem_port* port, const TEXT* function, I
  **************************************/
 	if (status)
 	{
-		if (port->port_state != rem_port::BROKEN)
+		if (port->port_state == rem_port::PENDING)
 		{
 			string err;
 			err.printf("INET/inet_error: %s errno = %d", function, status);

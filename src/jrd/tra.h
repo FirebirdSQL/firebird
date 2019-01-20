@@ -62,6 +62,7 @@ class ArrayField;
 class Attachment;
 class DeferredWork;
 class DeferredJob;
+class TimeZoneSnapshot;
 class UserManagement;
 class MappingList;
 class DbCreatorsList;
@@ -103,6 +104,7 @@ struct BlobIndex
 };
 
 typedef Firebird::BePlusTree<BlobIndex, ULONG, MemoryPool, BlobIndex> BlobIndexTree;
+typedef Firebird::BePlusTree<bid, bid, MemoryPool> FetchedBlobIdTree;
 
 // Transaction block
 
@@ -167,16 +169,18 @@ public:
 		tra_memory_stats(parent_stats),
 		tra_blobs_tree(p),
 		tra_blobs(outer ? outer->tra_blobs : &tra_blobs_tree),
+		tra_fetched_blobs(p),
 		tra_arrays(NULL),
 		tra_deferred_job(NULL),
 		tra_resources(*p),
 		tra_context_vars(*p),
 		tra_lock_timeout(DEFAULT_LOCK_TIMEOUT),
-		tra_timestamp(Firebird::TimeStamp::getCurrentTimeStamp()),
+		tra_timestamp(Firebird::TimeZoneUtil::getCurrentSystemTimeStamp()),
 		tra_stats(*p),
 		tra_open_cursors(*p),
 		tra_outer(outer),
-		tra_transactions(*p),
+		tra_snapshot_handle(0),
+		tra_snapshot_number(0),
 		tra_sorts(*p),
 		tra_public_interface(NULL),
 		tra_gen_ids(NULL),
@@ -184,6 +188,7 @@ public:
 		tra_blob_space(NULL),
 		tra_undo_space(NULL),
 		tra_undo_records(*p),
+		tra_timezone_snapshot(NULL),
 		tra_user_management(NULL),
 		tra_sec_db_context(NULL),
 		tra_mapping_list(NULL),
@@ -257,6 +262,7 @@ public:
 	Firebird::MemoryStats	tra_memory_stats;
 	BlobIndexTree tra_blobs_tree;		// list of active blobs
 	BlobIndexTree* tra_blobs;			// pointer to actual list of active blobs
+	FetchedBlobIdTree tra_fetched_blobs;	// list of fetched blobs
 	ArrayField*	tra_arrays;				// Linked list of active arrays
 	Lock*		tra_lock;				// lock for transaction
 	Lock*		tra_alter_db_lock;		// lock for ALTER DATABASE statement(s)
@@ -274,7 +280,7 @@ public:
 	UCHAR tra_callback_count;			// callback count for 'execute statement'
 	SSHORT tra_lock_timeout;			// in seconds, -1 means infinite, 0 means NOWAIT
 	ULONG tra_next_blob_id;     		// ID of the previous blob or array created in this transaction
-	const Firebird::TimeStamp tra_timestamp; // transaction start time
+	const ISC_TIMESTAMP_TZ tra_timestamp;	// transaction start time
 	jrd_req* tra_requests;				// Doubly linked list of requests active in this transaction
 	MonitoringSnapshot* tra_mon_snapshot;	// Database state snapshot (for monitoring purposes)
 	RuntimeStatistics tra_stats;
@@ -282,7 +288,8 @@ public:
 	bool tra_in_use;					// transaction in use (can't be committed or rolled back)
 	jrd_tra* const tra_outer;			// outer transaction of an autonomous transaction
 	CallerName tra_caller_name;			// caller object name
-	Firebird::Array<UCHAR> tra_transactions;
+	SnapshotHandle tra_snapshot_handle;
+	CommitNumber tra_snapshot_number;
 	SortOwner tra_sorts;
 
 	EDS::Transaction *tra_ext_common;
@@ -296,6 +303,7 @@ private:
 	TempSpace* tra_undo_space;	// undo log storage
 
 	UndoRecordList tra_undo_records;	// temporary records used for the undo purposes
+	TimeZoneSnapshot* tra_timezone_snapshot;
 	UserManagement* tra_user_management;
 	SecDbContext* tra_sec_db_context;
 	MappingList* tra_mapping_list;
@@ -363,6 +371,7 @@ public:
 	void linkToAttachment(Attachment* attachment);
 	static void tra_abort(const char* reason);
 
+	TimeZoneSnapshot* getTimeZoneSnapshot(thread_db* tdbb);
 	UserManagement* getUserManagement();
 	SecDbContext* getSecDbContext();
 	SecDbContext* setSecDbContext(Firebird::IAttachment* att, Firebird::ITransaction* tra);
@@ -375,7 +384,7 @@ public:
 	void rollbackToSavepoint(thread_db* tdbb, SavNumber number);
 	void rollforwardSavepoint(thread_db* tdbb);
 	DbCreatorsList* getDbCreatorsList();
-	void checkBlob(thread_db* tdbb, const bid* blob_id);
+	void checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool punt);
 
 	GenIdCache* getGenIdCache()
 	{
@@ -409,10 +418,11 @@ const ULONG TRA_restart_requests	= 0x4000L;	// restart all requests in attachmen
 const ULONG TRA_no_auto_undo		= 0x8000L;	// don't start a savepoint in TRA_start
 const ULONG TRA_precommitted		= 0x10000L;	// transaction committed at startup
 const ULONG TRA_own_interface		= 0x20000L;	// tra_interface was created for internal needs
+const ULONG TRA_read_consistency	= 0x40000L; // ensure read consistency in this transaction
 
 // flags derived from TPB, see also transaction_options() at tra.cpp
 const ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |
-	TRA_autocommit | TRA_rec_version | TRA_no_auto_undo | TRA_restart_requests);
+	TRA_autocommit | TRA_rec_version | TRA_read_consistency | TRA_no_auto_undo | TRA_restart_requests);
 
 const int TRA_MASK				= 3;
 //const int TRA_BITS_PER_TRANS	= 2;

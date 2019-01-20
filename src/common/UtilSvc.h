@@ -30,6 +30,8 @@
 #ifndef FB_UTILFACE
 #define FB_UTILFACE
 
+#include "firebird/Interface.h"
+
 #include "../common/classes/alloc.h"
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
@@ -74,6 +76,7 @@ public:
 	virtual bool finished() = 0;
 	virtual unsigned int getAuthBlock(const unsigned char** bytes) = 0;
 	virtual bool utf8FileNames() = 0;
+	virtual Firebird::ICryptKeyCallback* getCryptCallback() = 0;
 
 	void setDataMode(bool value)
 	{

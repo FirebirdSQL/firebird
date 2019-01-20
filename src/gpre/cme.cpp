@@ -441,6 +441,9 @@ void CME_expr(gpre_nod* node, gpre_req* request)
 		request->add_long(1);
 		CME_expr(node->nod_arg[2], request);
 		return;
+
+	default:
+		break;
 	}
 
 	const op_table* nod2blr_operator;
@@ -486,6 +489,9 @@ void CME_expr(gpre_nod* node, gpre_req* request)
 		CME_rse(node->nod_arg[0], request);
 		CME_expr(node->nod_arg[1], request);
 		CME_expr(node->nod_arg[2], request);
+
+	default:
+		break;
 	}
 }
 
@@ -1156,7 +1162,7 @@ void CME_relation(gpre_ctx* context, gpre_req* request)
 		}
 		request->add_byte(context->ctx_internal);
 	}
-	else if (procedure = context->ctx_procedure)
+	else if ((procedure = context->ctx_procedure))
 	{
 		if (gpreGlob.sw_ids)
 		{
@@ -1219,7 +1225,7 @@ void CME_rse(gpre_rse* selection, gpre_req* request)
 			cmp_map(sub_rse->rse_map, request);
 		}
 	}
-	else if (sub_rse = selection->rse_aggregate)
+	else if ((sub_rse = selection->rse_aggregate))
 	{
 		request->add_byte(1);
 		request->add_byte(blr_aggregate);
@@ -1288,7 +1294,7 @@ void CME_rse(gpre_rse* selection, gpre_req* request)
 		}
 	}
 
-	if (temp = selection->rse_reduced)
+	if ((temp = selection->rse_reduced))
 	{
 		request->add_byte(blr_project);
 		request->add_byte(temp->nod_count);
@@ -1297,7 +1303,7 @@ void CME_rse(gpre_rse* selection, gpre_req* request)
 			CME_expr(*ptr++, request);
 	}
 
-	if (temp = selection->rse_plan)
+	if ((temp = selection->rse_plan))
 	{
 		request->add_byte(blr_plan);
 		cmp_plan(temp, request);
@@ -1764,6 +1770,9 @@ static void cmp_plan(const gpre_nod* plan_expression, gpre_req* request)
 				}
 				break;
 			}
+
+		default:
+			break;
 		}
 	}
 }
@@ -2148,6 +2157,9 @@ static void get_dtype_of_case(const gpre_nod* node, gpre_fld* f)
 		}
 		get_dtype_of_list(args, f);
 		MSC_free(args);
+		break;
+
+	default:
 		break;
 	}
 }

@@ -43,6 +43,8 @@
 #include "../jrd/mov_proto.h"
 #include "../jrd/par_proto.h"
 #include "../jrd/Function.h"
+#include "../jrd/TimeZone.h"
+#include "../jrd/SystemPackages.h"
 #include "../common/isc_proto.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/fb_string.h"
@@ -602,8 +604,8 @@ ExtEngineManager::ExternalContextImpl::ExternalContextImpl(thread_db* tdbb,
 
 	internalAttachment->getStable()->addRef();
 
-	externalAttachment = MasterInterfacePtr()->registerAttachment(JProvider::getInstance(),
-		internalAttachment->getInterface());
+	externalAttachment = MasterInterfacePtr()->registerAttachment
+		(AutoPlugin<JProvider>(JProvider::getInstance()), internalAttachment->getInterface());
 }
 
 ExtEngineManager::ExternalContextImpl::~ExternalContextImpl()
@@ -1016,8 +1018,114 @@ unloaded only on program exit, causing at that moment AV if this code is active:
 //---------------------
 
 
+namespace
+{
+	class SystemEngine : public StdPlugin<IExternalEngineImpl<SystemEngine, ThrowStatusExceptionWrapper> >
+	{
+	public:
+		explicit SystemEngine()
+		{
+		}
+
+		int release() override
+		{
+			if (--refCounter == 0)
+			{
+				delete this;
+				return 0;
+			}
+
+			return 1;
+		}
+
+	public:
+		void open(ThrowStatusExceptionWrapper* status, IExternalContext* context,
+			char* name, unsigned nameSize) override
+		{
+		}
+
+		void openAttachment(ThrowStatusExceptionWrapper* status, IExternalContext* context) override
+		{
+		}
+
+		void closeAttachment(ThrowStatusExceptionWrapper* status, IExternalContext* context) override
+		{
+		}
+
+		IExternalFunction* makeFunction(ThrowStatusExceptionWrapper* status, IExternalContext* context,
+			IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder) override
+		{
+			const char* packageName = metadata->getPackage(status);
+			const char* routineName = metadata->getName(status);
+
+			for (auto& package : SystemPackage::get())
+			{
+				if (strcmp(package.name, packageName) == 0)
+				{
+					for (auto& routine : package.functions)
+					{
+						if (strcmp(routine.name, routineName) == 0)
+							return routine.factory(status, context, metadata, inBuilder, outBuilder);
+					}
+				}
+			}
+
+			fb_assert(false);
+			return nullptr;
+		}
+
+		IExternalProcedure* makeProcedure(ThrowStatusExceptionWrapper* status, IExternalContext* context,
+			IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder) override
+		{
+			const char* packageName = metadata->getPackage(status);
+			const char* routineName = metadata->getName(status);
+
+			for (auto& package : SystemPackage::get())
+			{
+				if (strcmp(package.name, packageName) == 0)
+				{
+					for (auto& routine : package.procedures)
+					{
+						if (strcmp(routine.name, routineName) == 0)
+							return routine.factory(status, context, metadata, inBuilder, outBuilder);
+					}
+				}
+			}
+
+			fb_assert(false);
+			return nullptr;
+		}
+
+		IExternalTrigger* makeTrigger(ThrowStatusExceptionWrapper* status, IExternalContext* context,
+			IRoutineMetadata* metadata, IMetadataBuilder* fieldsBuilder) override
+		{
+			fb_assert(false);
+			return nullptr;
+		}
+
+	public:
+		static SystemEngine* INSTANCE;
+	};
+
+	SystemEngine* SystemEngine::INSTANCE = nullptr;
+}
+
+
+//---------------------
+
+
 void ExtEngineManager::initialize()
 {
+	SystemEngine::INSTANCE = FB_NEW SystemEngine();
+}
+
+
+ExtEngineManager::ExtEngineManager(MemoryPool& p)
+	: PermanentStorage(p),
+	  engines(p),
+	  enginesAttachments(p)
+{
+	engines.put("SYSTEM", SystemEngine::INSTANCE);
 }
 
 
@@ -1076,8 +1184,8 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 	metadata->name = udf->getName().identifier;
 	metadata->entryPoint = entryPointTrimmed;
 	metadata->body = body;
-	metadata->inputParameters = Routine::createMetadata(udf->getInputFields());
-	metadata->outputParameters = Routine::createMetadata(udf->getOutputFields());
+	metadata->inputParameters = Routine::createMetadata(udf->getInputFields(), true);
+	metadata->outputParameters = Routine::createMetadata(udf->getOutputFields(), true);
 
 	FbLocalStatus status;
 
@@ -1200,8 +1308,8 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 	metadata->name = prc->getName().identifier;
 	metadata->entryPoint = entryPointTrimmed;
 	metadata->body = body;
-	metadata->inputParameters = Routine::createMetadata(prc->getInputFields());
-	metadata->outputParameters = Routine::createMetadata(prc->getOutputFields());
+	metadata->inputParameters = Routine::createMetadata(prc->getInputFields(), true);
+	metadata->outputParameters = Routine::createMetadata(prc->getOutputFields(), true);
 
 	FbLocalStatus status;
 
@@ -1346,7 +1454,13 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 		{
 			jrd_fld* field = (*relation->rel_fields)[i];
 			if (field)
-				fieldsMsg->addItem(field->fld_name, !field->fld_not_null, relFormat->fmt_desc[i]);
+			{
+				dsc d(relFormat->fmt_desc[i]);
+				if (d.dsc_dtype == dtype_dec_fixed)
+					d.dsc_dtype = dtype_dec128;
+
+				fieldsMsg->addItem(field->fld_name, !field->fld_not_null, d);
+			}
 		}
 	}
 

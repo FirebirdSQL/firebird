@@ -1491,6 +1491,58 @@ public:
 };
 
 
+class SessionManagementWrapperNode : public TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_SESSION_MANAGEMENT_WRAPPER>
+{
+public:
+	explicit SessionManagementWrapperNode(MemoryPool& pool, SessionManagementNode* aWrapped,
+				const Firebird::string& aText)
+		: TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_SESSION_MANAGEMENT_WRAPPER>(pool),
+		  wrapped(aWrapped),
+		  text(pool, aText)
+	{
+	}
+
+public:
+	virtual SessionManagementWrapperNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
+	{
+		Node::dsqlPass(dsqlScratch);
+
+		// Save and reset the statement type, as SessionManagementNode sets it to TYPE_SESSION_MANAGEMENT but
+		// we are a DML statement.
+		DsqlCompiledStatement::Type statementType = dsqlScratch->getStatement()->getType();
+		wrapped->dsqlPass(dsqlScratch);
+		dsqlScratch->getStatement()->setType(statementType);
+
+		return this;
+	}
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	{
+		DsqlOnlyStmtNode::internalPrint(printer);
+
+		NODE_PRINT(printer, wrapped);
+		NODE_PRINT(printer, text);
+
+		return "SessionManagementWrapperNode";
+	}
+
+	virtual void genBlr(DsqlCompilerScratch* dsqlScratch)
+	{
+		dsqlScratch->appendUChar(blr_exec_sql);
+		dsqlScratch->appendUChar(blr_literal);
+		dsqlScratch->appendUChar(blr_text2);
+		dsqlScratch->appendUShort(CS_METADATA);
+		dsqlScratch->appendUShort((USHORT) text.length());
+		dsqlScratch->appendBytes((const UCHAR*) text.c_str(), text.length());
+	}
+
+public:
+	SessionManagementNode* wrapped;
+	const Firebird::string text;
+};
+
+
 class SetTransactionNode : public TransactionNode
 {
 public:
@@ -1513,7 +1565,8 @@ public:
 		ISO_LEVEL_CONCURRENCY,
 		ISO_LEVEL_CONSISTENCY,
 		ISO_LEVEL_READ_COMMITTED_REC_VERSION,
-		ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION
+		ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION,
+		ISO_LEVEL_READ_COMMITTED_READ_CONSISTENCY
 	};
 
 	static const unsigned LOCK_MODE_SHARED 		= 0x1;
@@ -1569,6 +1622,26 @@ public:
 };
 
 
+class SessionResetNode : public SessionManagementNode
+{
+public:
+	explicit SessionResetNode(MemoryPool& pool)
+		: SessionManagementNode(pool)
+	{
+	}
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	{
+		SessionManagementNode::internalPrint(printer);
+
+		return "SessionResetNode";
+	}
+
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+};
+
+
 class SetRoleNode : public SessionManagementNode
 {
 public:
@@ -1597,7 +1670,7 @@ public:
 		return "SetRoleNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request) const;
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
 
 public:
 	bool trusted;
@@ -1614,7 +1687,7 @@ public:
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void execute(thread_db* tdbb, dsql_req* request) const;
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
 
 private:
 	Type m_type;
@@ -1622,10 +1695,10 @@ private:
 };
 
 
-class SetRoundNode : public SessionManagementNode
+class SetDecFloatRoundNode : public SessionManagementNode
 {
 public:
-	SetRoundNode(MemoryPool& pool, Firebird::MetaName* name);
+	SetDecFloatRoundNode(MemoryPool& pool, Firebird::MetaName* name);
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const
@@ -1634,20 +1707,20 @@ public:
 
 		NODE_PRINT(printer, rndMode);
 
-		return "SetRoundNode";
+		return "SetDecFloatRoundNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request) const;
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
 
 public:
 	USHORT rndMode;
 };
 
 
-class SetTrapsNode : public SessionManagementNode
+class SetDecFloatTrapsNode : public SessionManagementNode
 {
 public:
-	SetTrapsNode(MemoryPool& pool)
+	SetDecFloatTrapsNode(MemoryPool& pool)
 		: SessionManagementNode(pool),
 		  traps(0u)
 	{
@@ -1660,10 +1733,10 @@ public:
 
 		NODE_PRINT(printer, traps);
 
-		return "SetTrapsNode";
+		return "SetDecFloatTrapsNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request) const;
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
 
 	void trap(Firebird::MetaName* name);
 
@@ -1672,10 +1745,10 @@ public:
 };
 
 
-class SetBindNode : public SessionManagementNode
+class SetDecFloatBindNode : public SessionManagementNode
 {
 public:
-	SetBindNode(MemoryPool& pool)
+	SetDecFloatBindNode(MemoryPool& pool)
 		: SessionManagementNode(pool)
 	{
 	}
@@ -1688,13 +1761,75 @@ public:
 		NODE_PRINT(printer, bind.bind);
 		NODE_PRINT(printer, bind.numScale);
 
-		return "SetBindNode";
+		return "SetDecFloatBindNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request) const;
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
 
 public:
 	Firebird::DecimalBinding bind;
+};
+
+
+class SetTimeZoneNode : public SessionManagementNode
+{
+public:
+	explicit SetTimeZoneNode(MemoryPool& pool, const Firebird::string& aStr)
+		: SessionManagementNode(pool),
+		  str(pool, aStr),
+		  local(false)
+	{
+	}
+
+	explicit SetTimeZoneNode(MemoryPool& pool)
+		: SessionManagementNode(pool),
+		  str(pool),
+		  local(true)
+	{
+	}
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	{
+		SessionManagementNode::internalPrint(printer);
+
+		NODE_PRINT(printer, str);
+		NODE_PRINT(printer, local);
+
+		return "SetTimeZoneNode";
+	}
+
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+
+public:
+	Firebird::string str;
+	bool local;
+};
+
+
+class SetTimeZoneBindNode : public SessionManagementNode
+{
+public:
+	SetTimeZoneBindNode(MemoryPool& pool, Firebird::TimeZoneUtil::Bind aBind)
+		: SessionManagementNode(pool),
+		  bind(aBind)
+	{
+	}
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	{
+		SessionManagementNode::internalPrint(printer);
+
+		NODE_PRINT(printer, bind);
+
+		return "SetTimeZoneBindNode";
+	}
+
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+
+public:
+	Firebird::TimeZoneUtil::Bind bind;
 };
 
 

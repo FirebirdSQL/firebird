@@ -136,9 +136,9 @@ public:
 } // anonymous namespace
 
 
-static int ISQL_vax_integer(const UCHAR* bytes, USHORT length)
+static SINT64 ISQL_vax_integer(const UCHAR* bytes, USHORT length)
 {
-	return isc_vax_integer((const char*)bytes, length);
+	return isc_portable_integer(bytes, length);
 }
 
 
@@ -403,7 +403,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 	SCHAR* info = info_buf;
 	for (const UCHAR* d = buffer; *d != isc_info_end;)
 	{
-		SLONG value_out = 0;
+		SINT64 value_out = 0;
 		const UCHAR item = *d++;
 		const int length = ISQL_vax_integer(d, 2);
 		d += 2;
@@ -420,7 +420,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 
 		case isc_info_page_size:
 			value_out = ISQL_vax_integer(d, length);
-			sprintf(info, "PAGE_SIZE %" SLONGFORMAT"%s", value_out, separator);
+			sprintf(info, "PAGE_SIZE %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_db_size_in_pages:
@@ -431,7 +431,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				sprintf(info, "%s%s", msg, separator);
 			}
 			else
-				sprintf(info, "Number of DB pages allocated = %" SLONGFORMAT"%s", value_out, separator);
+				sprintf(info, "Number of DB pages allocated = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case fb_info_pages_used:
@@ -442,7 +442,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				sprintf(info, "%s%s", msg, separator);
 			}
 			else
-				sprintf(info, "Number of DB pages used = %" SLONGFORMAT"%s", value_out, separator);
+				sprintf(info, "Number of DB pages used = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case fb_info_pages_free:
@@ -453,7 +453,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				sprintf(info, "%s%s", msg, separator);
 			}
 			else
-				sprintf(info, "Number of DB pages free = %" SLONGFORMAT"%s", value_out, separator);
+				sprintf(info, "Number of DB pages free = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case fb_info_crypt_state:
@@ -495,7 +495,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				sprintf(info, "%s%s", msg, separator);
 			}
 			else
-				sprintf(info, "Sweep interval = %" SLONGFORMAT"%s", value_out, separator);
+				sprintf(info, "Sweep interval = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_forced_writes:
@@ -505,22 +505,22 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 
 		case isc_info_oldest_transaction :
 			value_out = ISQL_vax_integer (d, length);
-			sprintf(info, "Transaction - oldest = %" SLONGFORMAT"%s", value_out, separator);
+			sprintf(info, "Transaction - oldest = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_oldest_active :
 			value_out = ISQL_vax_integer (d, length);
-			sprintf(info, "Transaction - oldest active = %" SLONGFORMAT"%s", value_out, separator);
+			sprintf(info, "Transaction - oldest active = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_oldest_snapshot :
 			value_out = ISQL_vax_integer (d, length);
-			sprintf(info, "Transaction - oldest snapshot = %" SLONGFORMAT"%s", value_out, separator);
+			sprintf(info, "Transaction - oldest snapshot = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_next_transaction :
 			value_out = ISQL_vax_integer (d, length);
-			sprintf (info, "Transaction - Next = %" SLONGFORMAT"%s", value_out, separator);
+			sprintf (info, "Transaction - Next = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_base_level:
@@ -531,7 +531,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				sprintf(info, "%s%s", msg, separator);
 			}
 			else
-				sprintf(info, "Base level = %" SLONGFORMAT"%s", value_out, separator);
+				sprintf(info, "Base level = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_limbo:
@@ -542,7 +542,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				sprintf(info, "%s%s", msg, separator);
 			}
 			else
-				sprintf(info, "Transaction in limbo = %" SLONGFORMAT"%s", value_out, separator);
+				sprintf(info, "Transaction in limbo = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_ods_version:
@@ -550,7 +550,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			break;
 		case isc_info_ods_minor_version:
 			value_out = ISQL_vax_integer(d, length);
-			sprintf(info, "ODS = %" SLONGFORMAT".%" SLONGFORMAT"%s",
+			sprintf(info, "ODS = %" SLONGFORMAT".%" SQUADFORMAT"%s",
 					(SLONG) isqlGlob.major_ods, value_out, separator);
 			break;
 
@@ -2951,8 +2951,8 @@ static processing_state show_collations(const SCHAR* object, SSHORT sys_flag, co
 		fb_utils::exact_name(CL.RDB$COLLATION_NAME);
 
 		if ((!*object &&
-			 (!CL.RDB$SYSTEM_FLAG.NULL && CL.RDB$SYSTEM_FLAG != 0 && sys_flag != 0 ||
-			  !(!CL.RDB$SYSTEM_FLAG.NULL && CL.RDB$SYSTEM_FLAG != 0) && sys_flag != 1)) ||
+			 ((!CL.RDB$SYSTEM_FLAG.NULL && CL.RDB$SYSTEM_FLAG != 0 && sys_flag != 0) ||
+			  (!(!CL.RDB$SYSTEM_FLAG.NULL && CL.RDB$SYSTEM_FLAG != 0) && sys_flag != 1))) ||
 			strcmp(CL.RDB$COLLATION_NAME, object) == 0)
 		{
 			if (!found)
@@ -3676,7 +3676,7 @@ static processing_state show_dependencies(const char* object, int obj_type)
 	END_ERROR;
 
 	bool missing3 = true;
-	if (obj_type == obj_relation && is_table || obj_type == obj_view && !is_table)
+	if ((obj_type == obj_relation && is_table) || (obj_type == obj_view && !is_table))
 	{
 		FOR RFR IN RDB$RELATION_FIELDS
 			CROSS FLD IN RDB$FIELDS
@@ -5722,7 +5722,7 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 				isqlGlob.printf("External file: %s%s", REL.RDB$EXTERNAL_FILE, NEWLINE);
 		}
 		first = false;
-		if (isView && REL.RDB$VIEW_BLR.NULL || !isView && !REL.RDB$VIEW_BLR.NULL)
+		if ((isView && REL.RDB$VIEW_BLR.NULL) || (!isView && !REL.RDB$VIEW_BLR.NULL))
 			first = true;
 	END_FOR
 	ON_ERROR
@@ -5962,8 +5962,8 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 			WITH IDX.RDB$INDEX_NAME = RELC1.RDB$INDEX_NAME
 				// Yes, the same RDB$... naming convention is used for both domains and indices.
 				const bool explicit_index =
-					(isPK && !fb_utils::implicit_pk(IDX.RDB$INDEX_NAME) ||
-					isUK && !fb_utils::implicit_domain(RELC1.RDB$INDEX_NAME)) &&
+					((isPK && !fb_utils::implicit_pk(IDX.RDB$INDEX_NAME)) ||
+					(isUK && !fb_utils::implicit_domain(RELC1.RDB$INDEX_NAME))) &&
 				    strcmp(RELC1.RDB$CONSTRAINT_NAME, RELC1.RDB$INDEX_NAME);
 				const bool descending_index = !IDX.RDB$INDEX_TYPE.NULL && IDX.RDB$INDEX_TYPE == 1;
 				if (explicit_index || descending_index)

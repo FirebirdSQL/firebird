@@ -70,6 +70,8 @@
 #define blr_dec64			(unsigned char)24
 #define blr_dec128			(unsigned char)25
 #define blr_dec_fixed		(unsigned char)26
+#define blr_sql_time_tz		(unsigned char)28
+#define blr_timestamp_tz	(unsigned char)29
 
 // first sub parameter for blr_domain_name[2]
 #define blr_domain_type_of	(unsigned char)0
@@ -281,6 +283,8 @@
 #define blr_extract_yearday		(unsigned char)7
 #define blr_extract_millisecond	(unsigned char)8
 #define blr_extract_week		(unsigned char)9
+#define blr_extract_timezone_hour	(unsigned char)10
+#define blr_extract_timezone_minute	(unsigned char)11
 
 #define blr_current_date	(unsigned char)160
 #define blr_current_timestamp	(unsigned char)161
@@ -427,6 +431,15 @@
 #define blr_default					(unsigned char) 212
 #define blr_store3					(unsigned char) 213
 
-#define blr_modulo		(unsigned char)214
+#define blr_local_timestamp			(unsigned char) 214
+#define blr_local_time				(unsigned char) 215
+
+#define blr_at						(unsigned char) 216
+
+#define blr_modulo						(unsigned char) 217
+
+// subcodes of blr_at
+#define blr_at_local				(unsigned char) 0
+#define blr_at_zone					(unsigned char) 1
 
 #endif // JRD_BLR_H

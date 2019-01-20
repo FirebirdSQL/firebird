@@ -58,6 +58,10 @@ class NoThrowTimeStamp
 public:
 	static const ISC_DATE MIN_DATE = -678575;	// 01.01.0001
 	static const ISC_DATE MAX_DATE = 2973483;	// 31.12.9999
+	static const ISC_DATE UNIX_DATE = 40587;	// 01.01.1970
+
+	static const SINT64 SECONDS_PER_DAY = 24 * 60 * 60;
+	static const SINT64 ISC_TICKS_PER_DAY = SECONDS_PER_DAY * ISC_TIME_SECONDS_PRECISION;
 
 private:
 	static const ISC_DATE BAD_DATE = MAX_SLONG;

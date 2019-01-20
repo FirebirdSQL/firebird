@@ -28,6 +28,7 @@
 #include "../dsql/Visitors.h"
 #include "../common/classes/array.h"
 #include "../common/classes/NestConst.h"
+#include <functional>
 
 namespace Jrd {
 
@@ -303,7 +304,7 @@ public:
 		return this;
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request) const = 0;
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const = 0;
 };
 
 
@@ -472,6 +473,7 @@ public:
 		TYPE_ALIAS,
 		TYPE_ARITHMETIC,
 		TYPE_ARRAY,
+		TYPE_AT,
 		TYPE_BOOL_AS_VALUE,
 		TYPE_CAST,
 		TYPE_COALESCE,
@@ -492,6 +494,8 @@ public:
 		TYPE_GEN_ID,
 		TYPE_INTERNAL_INFO,
 		TYPE_LITERAL,
+		TYPE_LOCAL_TIME,
+		TYPE_LOCAL_TIMESTAMP,
 		TYPE_MAP,
 		TYPE_NEGATE,
 		TYPE_NULL,
@@ -821,7 +825,7 @@ public:
 	}
 
 	virtual bool setParameterType(DsqlCompilerScratch* /*dsqlScratch*/,
-		const dsc* /*desc*/, bool /*forceVarChar*/)
+		std::function<void (dsc*)> /*makeDesc*/, bool /*forceVarChar*/)
 	{
 		return false;
 	}
@@ -1434,6 +1438,7 @@ public:
 		TYPE_SAVEPOINT,
 		TYPE_SAVEPOINT_ENCLOSE,
 		TYPE_SELECT,
+		TYPE_SESSION_MANAGEMENT_WRAPPER,
 		TYPE_SET_GENERATOR,
 		TYPE_STALL,
 		TYPE_STORE,

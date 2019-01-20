@@ -84,7 +84,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -96,18 +96,20 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 	// add and add2 are used in somewhat obscure way in aggregation.
-	static dsc* add(const dsc* desc, impure_value* value, const ValueExprNode* node, const UCHAR blrOp);
-	static dsc* add2(const dsc* desc, impure_value* value, const ValueExprNode* node, const UCHAR blrOp);
+	static dsc* add(thread_db* tdbb, const dsc* desc, impure_value* value, const ValueExprNode* node,
+		const UCHAR blrOp);
+	static dsc* add2(thread_db* tdbb, const dsc* desc, impure_value* value, const ValueExprNode* node,
+		const UCHAR blrOp);
 
 private:
 	dsc* multiply(const dsc* desc, impure_value* value) const;
 	dsc* multiply2(const dsc* desc, impure_value* value) const;
 	dsc* divide2(const dsc* desc, impure_value* value) const;
 	dsc* modulo2(const dsc* desc, impure_value* value) const;
-	dsc* addDateTime(const dsc* desc, impure_value* value) const;
+	dsc* addDateTime(thread_db* tdbb, const dsc* desc, impure_value* value) const;
 	dsc* addSqlDate(const dsc* desc, impure_value* value) const;
-	dsc* addSqlTime(const dsc* desc, impure_value* value) const;
-	dsc* addTimeStamp(const dsc* desc, impure_value* value) const;
+	dsc* addSqlTime(thread_db* tdbb, const dsc* desc, impure_value* value) const;
+	dsc* addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value* value) const;
 
 private:
 	void makeDialect1(dsc* desc, dsc& desc1, dsc& desc2);
@@ -172,6 +174,39 @@ public:
 };
 
 
+class AtNode : public TypedNode<ValueExprNode, ExprNode::TYPE_AT>
+{
+public:
+	AtNode(MemoryPool& pool, ValueExprNode* aDateTimeArg = NULL, ValueExprNode* aZoneArg = NULL);
+
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	{
+		ValueExprNode::getChildren(holder, dsql);
+		holder.add(dateTimeArg);
+		holder.add(zoneArg);
+	}
+
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
+	virtual void setParameterName(dsql_par* parameter) const;
+	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
+	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+
+	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
+	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
+
+public:
+	NestConst<ValueExprNode> dateTimeArg;
+	NestConst<ValueExprNode> zoneArg;
+};
+
+
 class BoolAsValueNode : public TypedNode<ValueExprNode, ExprNode::TYPE_BOOL_AS_VALUE>
 {
 public:
@@ -222,7 +257,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -265,7 +300,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -364,7 +399,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -530,7 +565,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -560,7 +595,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -690,7 +725,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -800,7 +835,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -874,7 +909,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -1043,6 +1078,60 @@ public:
 };
 
 
+class LocalTimeNode : public TypedNode<ValueExprNode, ExprNode::TYPE_LOCAL_TIME>
+{
+public:
+	LocalTimeNode(MemoryPool& pool, unsigned aPrecision)
+		: TypedNode<ValueExprNode, ExprNode::TYPE_LOCAL_TIME>(pool),
+		  precision(aPrecision)
+	{
+	}
+
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
+	virtual void setParameterName(dsql_par* parameter) const;
+	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+
+	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
+	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
+
+public:
+	unsigned precision;
+};
+
+
+class LocalTimeStampNode : public TypedNode<ValueExprNode, ExprNode::TYPE_LOCAL_TIMESTAMP>
+{
+public:
+	LocalTimeStampNode(MemoryPool& pool, unsigned aPrecision)
+		: TypedNode<ValueExprNode, ExprNode::TYPE_LOCAL_TIMESTAMP>(pool),
+		  precision(aPrecision)
+	{
+	}
+
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
+	virtual void setParameterName(dsql_par* parameter) const;
+	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+
+	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
+	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
+
+public:
+	unsigned precision;
+};
+
+
 class NegateNode : public TypedNode<ValueExprNode, ExprNode::TYPE_NEGATE>
 {
 public:
@@ -1060,7 +1149,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -1170,12 +1259,7 @@ public:
 				doDsqlPass(dsqlScratch, value));
 
 			if (node->value)
-			{
-				dsc desc;
-				desc.makeLong(0);
-
-				node->value->setParameterType(dsqlScratch, &desc, false);
-			}
+				node->value->setParameterType(dsqlScratch, [] (dsc* desc) { desc->makeLong(0); }, false);
 
 			return node;
 		}
@@ -1440,7 +1524,7 @@ public:
 	}
 
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
@@ -1673,7 +1757,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -1707,7 +1791,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -1804,7 +1888,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -1844,7 +1928,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -1916,7 +2000,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
@@ -2006,7 +2090,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 

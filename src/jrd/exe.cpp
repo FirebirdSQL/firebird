@@ -372,6 +372,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 					break;
 
 				case dtype_sql_time:
+				case dtype_sql_time_tz:
 					if (!Firebird::TimeStamp::isValidTime(*(GDS_TIME*) from_desc->dsc_address))
 					{
 						ERR_post(Arg::Gds(isc_time_range_exceeded));
@@ -379,6 +380,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 					break;
 
 				case dtype_timestamp:
+				case dtype_timestamp_tz:
 					if (!Firebird::TimeStamp::isValidTimeStamp(*(GDS_TIMESTAMP*) from_desc->dsc_address))
 					{
 						ERR_post(Arg::Gds(isc_datetime_range_exceeded));
@@ -705,6 +707,10 @@ void EXE_receive(thread_db* tdbb,
 						current->bli_request = NULL;
 					}
 				}
+				else
+				{
+					transaction->checkBlob(tdbb, id, NULL, false);
+				}
 			}
 		}
 	}
@@ -884,7 +890,7 @@ void EXE_start(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
 	request->req_records_affected.clear();
 
 	// Store request start time for timestamp work
-	request->req_timestamp.validate();
+	TimeZoneUtil::validateGmtTimeStamp(request->req_gmt_timestamp);
 
 	// Set all invariants to not computed.
 	const ULONG* const* ptr, * const* end;
@@ -897,6 +903,8 @@ void EXE_start(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
 
 	request->req_src_line = 0;
 	request->req_src_column = 0;
+
+	TRA_setup_request_snapshot(tdbb, request);
 
 	execute_looper(tdbb, request, transaction,
 				   request->getStatement()->topNode,
@@ -970,11 +978,12 @@ void EXE_unwind(thread_db* tdbb, jrd_req* request)
 		fb_assert(!request->req_proc_sav_point);
 	}
 
+	TRA_release_request_snapshot(tdbb, request);
 	TRA_detach_request(request);
 
 	request->req_flags &= ~(req_active | req_proc_fetch | req_reserved);
 	request->req_flags |= req_abort | req_stall;
-	request->req_timestamp.invalidate();
+	request->req_gmt_timestamp.invalidate();
 	request->req_caller = NULL;
 	request->req_proc_inputs = NULL;
 	request->req_proc_caller = NULL;
@@ -1094,8 +1103,12 @@ void EXE_execute_triggers(thread_db* tdbb,
 		null_rec->nullify();
 	}
 
-	const Firebird::TimeStamp timestamp =
-		request ? request->req_timestamp : Firebird::TimeStamp::getCurrentTimeStamp();
+	TimeStamp timestamp;
+
+	if (request)
+		timestamp = request->req_gmt_timestamp;
+	else
+		TimeZoneUtil::validateGmtTimeStamp(timestamp);
 
 	jrd_req* trigger = NULL;
 
@@ -1141,7 +1154,7 @@ void EXE_execute_triggers(thread_db* tdbb,
 				}
 			}
 
-			trigger->req_timestamp = timestamp;
+			trigger->req_gmt_timestamp = timestamp;
 			trigger->req_trigger_action = trigger_action;
 
 			TraceTrigExecute trace(tdbb, trigger, which_trig);
@@ -1363,8 +1376,9 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 				(*ptr)->close(tdbb);
 		}
 
+		TRA_release_request_snapshot(tdbb, request);
 		request->req_flags &= ~(req_active | req_reserved);
-		request->req_timestamp.invalidate();
+		request->req_gmt_timestamp.invalidate();
 		release_blobs(tdbb, request);
 	}
 

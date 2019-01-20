@@ -52,6 +52,39 @@ namespace Jrd
 		return pageSpace->onRawDevice();
 	}
 
+	AttNumber Database::generateAttachmentId()
+	{
+		fb_assert(dbb_tip_cache);
+		return dbb_tip_cache->generateAttachmentId();
+	}
+
+	TraNumber Database::generateTransactionId()
+	{
+		fb_assert(dbb_tip_cache);
+		return dbb_tip_cache->generateTransactionId();
+	}
+
+	/***
+	void Database::assignLatestTransactionId(TraNumber number)
+	{
+		fb_assert(dbb_tip_cache);
+		dbb_tip_cache->assignLatestTransactionId(number);
+	}
+	***/
+
+	void Database::assignLatestAttachmentId(AttNumber number)
+	{
+		if (dbb_tip_cache)
+			dbb_tip_cache->assignLatestAttachmentId(number);
+	}
+
+	StmtNumber Database::generateStatementId()
+	{
+		if (!dbb_tip_cache)
+			return 0;
+		return dbb_tip_cache->generateStatementId();
+	}
+
 	string Database::getUniqueFileId() const
 	{
 		const PageSpace* const pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
@@ -93,11 +126,10 @@ namespace Jrd
 				MemoryPool::deletePool(dbb_pools[i]);
 		}
 
+		delete dbb_tip_cache;
 		delete dbb_monitoring_data;
 		delete dbb_backup_manager;
 		delete dbb_crypto_manager;
-		delete dbb_tip_cache;
-
 		fb_assert(!locked());
 		// This line decrements the usage counter and may cause the destructor to be called.
 		// It should happen with the dbb_sync unlocked.
@@ -242,52 +274,6 @@ namespace Jrd
 		sync.lock(SYNC_EXCLUSIVE);
 		if (!dbb_modules.exist(module))
 			dbb_modules.add(module);
-	}
-
-	void Database::SharedCounter::shutdown(thread_db* tdbb)
-	{
-		for (size_t i = 0; i < TOTAL_ITEMS; i++)
-		{
-			if (m_counters[i].lock)
-				LCK_release(tdbb, m_counters[i].lock);
-		}
-	}
-
-	SINT64 Database::SharedCounter::generate(thread_db* tdbb, ULONG space, ULONG prefetch)
-	{
-		fb_assert(space < TOTAL_ITEMS);
-		ValueCache* const counter = &m_counters[space];
-
-		Database* const dbb = tdbb->getDatabase();
-		SyncLockGuard guard(&dbb->dbb_sh_counter_sync, SYNC_EXCLUSIVE, "Database::SharedCounter::generate");
-
-		SINT64 result = ++counter->curVal;
-
-		if (!m_localOnly && result > counter->maxVal)
-		{
-			if (!counter->lock)
-			{
-				counter->lock =
-					FB_NEW_RPT(*dbb->dbb_permanent, 0) Lock(tdbb, sizeof(SLONG), LCK_shared_counter);
-				counter->lock->setKey(space);
-				LCK_lock(tdbb, counter->lock, LCK_PW, LCK_WAIT);
-			}
-			else
-				LCK_convert(tdbb, counter->lock, LCK_PW, LCK_WAIT);
-
-			result = LCK_read_data(tdbb, counter->lock);
-
-			// zero IDs are somewhat special, so let's better skip them
-			if (!result)
-				result = 1;
-
-			counter->curVal = result;
-			counter->maxVal = result + prefetch - 1;
-			LCK_write_data(tdbb, counter->lock, counter->maxVal + 1);
-			LCK_convert(tdbb, counter->lock, LCK_SR, LCK_WAIT);
-		}
-
-		return result;
 	}
 
 	void Database::Linger::handler()

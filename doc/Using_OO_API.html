@@ -3,27 +3,16 @@
 <head>
 	<meta http-equiv="content-type" content="text/html; charset=utf-8"/>
 	<title></title>
-	<meta name="generator" content="LibreOffice 5.2.7.2 (Linux)"/>
+	<meta name="generator" content="LibreOffice 6.0.6.2 (Linux)"/>
 	<meta name="author" content="alex "/>
-	<meta name="created" content="00:00:00"/>
-	<meta name="changed" content="2017-10-19T18:08:13.851823604"/>
+	<meta name="created" content="2013-05-31T00:00:00.010003100"/>
+	<meta name="changed" content="2018-12-10T17:39:15.976002774"/>
 	<meta name="created" content="00:00:00">
-	<meta name="changed" content="2017-10-12T20:21:46.080329427">
 	<meta name="created" content="00:00:00">
-	<meta name="changed" content="2017-10-10T12:13:42.449014488">
 	<meta name="created" content="00:00:00">
-	<meta name="changed" content="2017-07-27T13:17:58.205479048">
 	<meta name="created" content="00:00:00">
-	<meta name="changed" content="2017-07-26T10:39:38.045248271">
-	<meta name="changed" content="2017-10-16T18:57:56.725603578"/>
 	<meta name="created" content="00:00:00">
-	<meta name="changed" content="2017-02-02T17:00:07.121995034">
-	<meta name="created" content="2013-05-31T00:00:00.010003100">
-	<meta name="changed" content="2017-01-31T17:08:57.272616325">
-	<meta name="CHANGEDBY" content="Alex Peshkoff">
-	<meta name="CHANGEDBY" content="Alex Peshkoff">
-	<meta name="CHANGEDBY" content="Alex Peshkoff">
-	<meta name="CHANGEDBY" content="Alex Peshkoff">
+	<meta name="created" content="00:00:00">
 	<style type="text/css">
 		@page { size: 21.59cm 27.94cm; margin: 2.01cm }
 		h1 { color: #000000 }
@@ -44,10 +33,9 @@ independent</b></font> – <font size="4" style="font-size: 14pt">that
 means that to define/use them one need not use language specific
 constructions like </font><font size="4" style="font-size: 14pt"><i>class</i></font>
 <font size="4" style="font-size: 14pt">in C++, interface may be
-defined using any language </font><font size="4" style="font-size: 14pt">able
-to call functions using C calling conventions and </font><font size="4" style="font-size: 14pt">having
-concepts of array and pointer to procedure/function. Next interfaces
-are </font><span style="font-variant: normal"><font size="4" style="font-size: 14pt"><span style="font-style: normal"><b>versioned</b></span></font></span>
+defined using any language able to call functions using C calling
+conventions and having concepts of array and pointer to
+procedure/function. Next interfaces are </font><span style="font-variant: normal"><font size="4" style="font-size: 14pt"><span style="font-style: normal"><b>versioned</b></span></font></span>
 – <font size="4" style="font-size: 14pt">i.e. we support different
 versions of same interface. Binary layout of interfaces is designed
 to support that features very efficient (there is no need in
@@ -1111,7 +1099,7 @@ alignment = batch-&gt;getBlobAlignment(&amp;status);</i></font></p>
 <p style="font-variant: normal; font-style: normal"><font size="4" style="font-size: 14pt">It’s
 supposed that all components of blob stream in a batch should be
 aligned at least at alignment boundary, including size of stream
-potions passed to addBlobStream() which should be a multiple of this
+portions passed to addBlobStream() which should be a multiple of this
 alignment. Header contains 3 fields – 8-byte blob ID (must be
 non-zero), 4-byte total blob size and 4 byte BPB size. Total blob
 size includes BPB inside, i.e. one will always find next blob in the
@@ -1157,6 +1145,17 @@ correct (from batch POV) ID to msg-&gt;desc.</font></p>
 <font size="4" style="font-size: 14pt">Almost all mentioned methods
 are used in 11.batch.cpp – please use it to see an alive sample of
 batching in firebird.</font></p>
+<p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
+<br/>
+
+</p>
+<p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
+<font size="4" style="font-size: 14pt">Two words about access to
+batches from ISC API - one can execute prepared ISC statement in
+batch mode. Main support for it is present in Util interface, namely
+getTransactionByHandle &amp; getStatementByHandle methods, which make
+it possible to access appropriate interfaces identical to existing
+ISC handles. An example of it is present in 12.batch_isc.cpp.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
@@ -1326,13 +1325,12 @@ implementation into dynamic library (.dll in windows or .so in linux)
 later referenced as </font><font size="4" style="font-size: 14pt"><i>plugin
 module</i></font> <font size="4" style="font-size: 14pt">or just
 </font><font size="4" style="font-size: 14pt"><i>module</i></font><font size="4" style="font-size: 14pt">.
-In most cases single plugin is place</font><font size="4" style="font-size: 14pt">d</font><font size="4" style="font-size: 14pt">
-in</font><font size="4" style="font-size: 14pt">to</font><font size="4" style="font-size: 14pt">
-dynamic library but in common case </font><font size="4" style="font-size: 14pt">multiple
-plugins may coexist in single dynamic library</font><font size="4" style="font-size: 14pt">.
-One of that interfaces – <a href="#PluginModule">IPluginModule</a>
-– is module-wide (as more or less clear from it's name), others are
-per plugin. Also each plugin module should contain special exported
+In most cases single plugin is placed</font> <font size="4" style="font-size: 14pt">into</font>
+<font size="4" style="font-size: 14pt">dynamic library but in common
+case multiple plugins may coexist in single dynamic library. One of
+that interfaces – <a href="#PluginModule">IPluginModule</a> – is
+module-wide (as more or less clear from it's name), others are per
+plugin. Also each plugin module should contain special exported
 entrypoint firebird_plugin() which name is defined in include file
 firebird/Interfaces.h as FB_PLUGIN_ENTRY_POINT.</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">In
@@ -1844,17 +1842,15 @@ parameters in single statement execution.</font></p>
 	<li/>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	addBlob(StatusType* status, unsigned</font> <font size="4" style="font-size: 14pt">length,
-	const void* inBuffer, ISC_QUAD* blobId, </font><font size="4" style="font-size: 14pt">unsigned
-	bpbLength, const unsigned char* bpb</font><font size="4" style="font-size: 14pt">)
-	– adds single blob having length bytes from inBuffer to the batch,
-	blob identifier is located at blobId address. </font><font size="4" style="font-size: 14pt">If
-	blob should be created with non-default parameters BPB may be passed
-	(format matches one used in <a href="#Attachment">Attachment</a>::createBlob).</font><font size="4" style="font-size: 14pt">Total
-	size of inline blobs that can be added to the batch </font><font size="4" style="font-size: 14pt">(including
+	const void* inBuffer, ISC_QUAD* blobId, unsigned bpbLength, const
+	unsigned char* bpb) – adds single blob having length bytes from
+	inBuffer to the batch, blob identifier is located at blobId address.
+	If blob should be created with non-default parameters BPB may be
+	passed (format matches one used in <a href="#Attachment">Attachment</a>::createBlob).Total
+	size of inline blobs that can be added to the batch (including
 	optional BPBs, blob headers, segment sizes and taking into an
-	accoount alignment) </font><font size="4" style="font-size: 14pt">is
-	limited by BUFFER_BYTES_SIZE <a href="#Batch_PB">parameter</a> of
-	batch creation (affects all blob-oriented methods except
+	accoount alignment) is limited by BUFFER_BYTES_SIZE <a href="#Batch_PB">parameter</a>
+	of batch creation (affects all blob-oriented methods except
 	registerBlob()). </font>
 	</p>
 	<li/>
@@ -2159,14 +2155,36 @@ sub-entries) in firebird configuration file:</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<p style="margin-bottom: 0cm"><br/>
-
-</p>
-<p style="margin-bottom: 0cm"><a name="Dtc"></a><font size="4" style="font-size: 14pt">Dtc
-interface – distributed transactions coordinator. Used to start
-distributed (working with 2 or more attachments) transaction. Unlike
-pre-FB3 approach where distributed transaction must be started in
-this way from the most beginning FB3's distributed transactions
+<p style="margin-bottom: 0cm"><a name="DecFloat16"></a><a name="DecFloat34"></a>
+<font size="4" style="font-size: 14pt">DecFloat16 / DecFloat34 –
+interfaces that help to work with DECFLOAT (16 &amp; 34 respectively)
+datatypes. They have almost same set of methods with FB_DEC16
+parameter replaced by FB_DEC34 for DecFloat34:</font></p>
+<ol>
+	<li/>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
+	toBcd(const FB_DEC16* from, int* sign, unsigned char* bcd, int* exp)
+	– convert decimal float value to BCD.</font></p>
+	<li/>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
+	toString(StatusType* status, const FB_DEC16* from, unsigned
+	bufferLength, char* buffer) – convert decimal float value to
+	string.</font></p>
+	<li/>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
+	fromBcd(int sign, const unsigned char* bcd, int exp, FB_DEC16* to) –
+	make decimal float value from BCD.</font></p>
+	<li/>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
+	fromString(StatusType* status, const char* from, FB_DEC16* to) –
+	make decimal float value from string.</font></p>
+	<p style="margin-bottom: 0cm"></p>
+</ol>
+<p style="margin-bottom: 0cm"><a name="Dtc"></a><font size="4" style="font-size: 14pt"><font color="#000000">Dtc
+</font>interface – distributed transactions coordinator. Used to
+start distributed (working with 2 or more attachments) transaction.
+Unlike pre-FB3 approach where distributed transaction must be started
+in this way from the most beginning FB3's distributed transactions
 coordinator makes it also possible to join already started
 transactions into single distributed transaction.</font></p>
 <ol>
@@ -2381,7 +2399,7 @@ with execution of SQL statements.</font></p>
 	<li/>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">unsigned
 	getMessageLength(StatusType* status) - returns length of message
-	buffer (use it to allocate memory for the buffer).</font></font></p>
+	buffer (use it to allocate memory for the buffer).</font></p>
 	<li/>
 <p><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt"><span style="background: #ffffff">unsigned
 	getAlignment(StatusType* status) – returns alignment required for
@@ -2780,7 +2798,7 @@ interface – replaces (partially) isc_stmt_handle.</font></p>
 	outMetadata, void* outBuffer) – executes any SQL statement except
 	returning multiple rows of data. Partial analogue of
 	isc_dsql_execute2() - in and out XSLQDAs replaced with input and
-	output messages with appropriate buffers.</font></font></p>
+	output messages with appropriate buffers.</font></p>
 	<li/>
 <p style="margin-bottom: 0cm"><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">IResultSet*
 	openCursor(StatusType* status, ITransaction* transaction,
@@ -3122,18 +3140,60 @@ interface – various helper methods required here or there.</font></p>
 	getClientVersion() – returns integer, containing major version in
 	byte 0 and minor version in byte 1.</font></p>
 	<li/>
-<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IXpbBuilder*
+<p style="margin-bottom: 0cm"><font color="#000000"><font size="4" style="font-size: 14pt">IXpbBuilder*
 	getXpbBuilder(StatusType* status, unsigned kind, const unsigned
 	char* buf, unsigned len) – returns <a href="#XpbBuilder">XpbBuilder</a>
 	interface. Valid <a href="#Valid builder types">kinds</a> are
-	enumerated in <a href="#XpbBuilder">XpbBuilder</a>.</font></p>
+	enumerated in <a href="#XpbBuilder">XpbBuilder</a>.</font></font></p>
 	<li/>
-<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">unsigned
+<p style="margin-bottom: 0cm"><font color="#000000"><font size="4" style="font-size: 14pt">unsigned
 	setOffsets(StatusType* status, IMessageMetadata* metadata,
 	IOffsetsCallback* callback) – sets valid offsets in
 	<a href="#MessageMetadata">MessageMetadata</a>. Performs calls to
 	callback in <a href="#OffsetsCallback">OffsetsCallback</a> for each
-	field/parameter.</font></p>
+	field/parameter.</font></font></p>
+	<li/>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IDecFloat16*
+	getDecFloat16(StatusType* status) – access <a href="#DecFloat16">DecFloat16</a>
+	interface.</font></p>
+	<li/>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IDecFloat34*
+	getDecFloat34(StatusType* status) – access <a href="#DecFloat34">DecFloat34</a>
+	interface.</font></p>
+	<li/>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">ITransaction*
+	getTransactionByHandle(StatusType* status, isc_tr_handle* hndlPtr) –
+	access <a href="#Transaction">Transaction</a> interface by ISC API
+	hndl.</font></p>
+	<li/>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IStatement*
+	getStatementByHandle(StatusType* status, isc_stmt_handle* hndlPtr) –
+	access <a href="#Statement">Statement</a> interface by ISC API hndl.</font></p>
+	<li/>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
+	decodeTimeTz(StatusType* status, const ISC_TIME_TZ* timeTz,
+	unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned*</font></p>
+	<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">fractions,
+	unsigned timeZoneBufferLength, char* <span style="text-decoration: none">timeZoneBuffer</span>)
+	– decode time taking time zone into an account.</font></p>
+	<li/>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
+	decodeTimeStampTz(StatusType* status, const ISC_TIMESTAMP_TZ*
+	timeStampTz, unsigned* year, unsigned* month, unsigned* day,
+	unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned*
+	fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) -
+	decode timestamp taking time zone into an account.</font></p>
+	<li/>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
+	encodeTimeTz(StatusType* status, ISC_TIME_TZ* timeTz, unsigned
+	hours, unsigned minutes, unsigned seconds, unsigned fractions, const
+	char* timeZone) – encode time taking time zone into an account.</font></p>
+	<li/>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
+	encodeTimeStampTz(StatusType* status, ISC_TIMESTAMP_TZ* timeStampTz,
+	unsigned year, unsigned month, unsigned day, unsigned hours,
+	unsigned minutes, unsigned seconds, unsigned fractions, const char*
+	timeZone) – encode timestamp taking time zone into an account.</font></p>
 </ol>
 <p style="margin-bottom: 0cm"><br/>
 
@@ -3771,7 +3831,8 @@ interface is main interface of database crypt key holder plugin.</font></p>
 	interface (if provided by user with <a href="#Provider">Provider</a>::setDbCryptCallback()
 	call). This call is always performed at database attach moment, and
 	some holders may reject attachment if satisfactory key was not
-	provided.</font></p>
+	provided. Return value of 0 means that key holder can not provide a
+	key to crypt plugin, non-zero – can.</font></p>
 	<li/>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">ICryptKeyCallback*
 	keyHandle(StatusType* status, const char* keyName) – is intended
@@ -3787,12 +3848,12 @@ interface is main interface of database crypt key holder plugin.</font></p>
 	<li/>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">FB_BOOLEAN
 	useOnlyOwnKeys(StatusType* status) – informs firebird engine
-	whether a key, provided by key holder, can be used in other attachments.
-	Makes sense only for SuperServer – only it can share database crypt keys
-	between attachments. Returning FB_TRUE from this method enforces
-	firebird to make sure that this particular key holder (and therefore
-	in turn attachment related to it) provides correct crypt key for
-	any other attachment to this database.</font></p>
+	whether a key, provided by key holder, can be used in other
+	attachments. Makes sense only for SuperServer – only it can share
+	database crypt keys between attachments. Returning FB_TRUE from this
+	method enforces firebird to make sure that this particular key
+	holder (and therefore in turn attachment related to it) provides
+	correct crypt key for any other attachment to this database.</font></p>
 	<li/>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">ICryptKeyCallback*
 	chainHandle(StatusType* status) – support of a chain of key

@@ -69,17 +69,6 @@ namespace {
 	const UCHAR CRYPT_INIT = LCK_EX;
 
 	const int MAX_PLUGIN_NAME_LEN = 31;
-
-	template <typename P>
-	class ReleasePlugin
-	{
-	public:
-		static void clear(P* ptr)
-		{
-			if (ptr)
-				PluginManagerInterfacePtr()->releasePlugin(ptr);
-		}
-	};
 }
 
 
@@ -276,6 +265,7 @@ namespace Jrd {
 		: PermanentStorage(*tdbb->getDatabase()->dbb_permanent),
 		  sync(this),
 		  keyName(getPool()),
+		  pluginName(getPool()),
 		  keyProviders(getPool()),
 		  keyConsumers(getPool()),
 		  hash(getPool()),
@@ -377,6 +367,7 @@ namespace Jrd {
 				keyName = "";
 
 			loadPlugin(tdbb, hdr->hdr_crypt_plugin);
+			pluginName = hdr->hdr_crypt_plugin;
 
 			string valid;
 			calcValidation(valid, cryptPlugin);
@@ -406,7 +397,7 @@ namespace Jrd {
 		}
 	}
 
-	void CryptoManager::loadPlugin(thread_db* tdbb, const char* pluginName)
+	void CryptoManager::loadPlugin(thread_db* tdbb, const char* plugName)
 	{
 		if (cryptPlugin)
 		{
@@ -419,10 +410,10 @@ namespace Jrd {
 			return;
 		}
 
-		AutoPtr<Factory> cryptControl(FB_NEW Factory(IPluginManager::TYPE_DB_CRYPT, dbb.dbb_config, pluginName));
+		AutoPtr<Factory> cryptControl(FB_NEW Factory(IPluginManager::TYPE_DB_CRYPT, dbb.dbb_config, plugName));
 		if (!cryptControl->hasData())
 		{
-			(Arg::Gds(isc_no_crypt_plugin) << pluginName).raise();
+			(Arg::Gds(isc_no_crypt_plugin) << plugName).raise();
 		}
 
 		// do not assign cryptPlugin directly before key init complete
@@ -431,6 +422,8 @@ namespace Jrd {
 
 		bool fLoad = false, fTry = false;
 		bool holderLess = false;
+		FbLocalStatus errorVector;
+		Arg::Gds(isc_db_crypt_key).copyTo(&errorVector);
 		for (GetPlugins<IKeyHolderPlugin> keyControl(IPluginManager::TYPE_KEY_HOLDER, dbb.dbb_config);
 			keyControl.hasData(); keyControl.next())
 		{
@@ -454,6 +447,11 @@ namespace Jrd {
 				fLoad = true;
 				break;
 			}
+			else
+			{
+				(Arg::Gds(isc_plugin_name) << keyControl.name() <<
+					Arg::StatusVector(&st)).appendTo(&errorVector);
+			}
 		}
 
 		if (!fTry)
@@ -465,13 +463,19 @@ namespace Jrd {
 				holderLess = true;
 				fLoad = true;
 			}
+			else
+			{
+				(Arg::Gds(isc_plugin_name) << plugName <<
+					Arg::StatusVector(&status)).appendTo(&errorVector);
+			}
 		}
 
 		if (!fLoad)
-			Arg::Gds(isc_db_crypt_key).raise();
+			errorVector.raise();
 
 		cryptPlugin = p;
 		cryptPlugin->addRef();
+		pluginName = plugName;
 
 		// remove old factory if present
 		delete checkFactory;
@@ -736,7 +740,7 @@ namespace Jrd {
 				continue;
 
 			// validate a key
-			AutoPtr<IDbCryptPlugin, ReleasePlugin> crypt(checkFactory->makeInstance());
+			AutoPlugin<IDbCryptPlugin> crypt(checkFactory->makeInstance());
 			setDbInfo(crypt);
 			crypt->setKey(&st, 1, &keyHolder, keyName.c_str());
 
@@ -955,7 +959,11 @@ namespace Jrd {
 
 				if (!down)
 				{
-					RefPtr<JAttachment> jAtt(REF_NO_INCR, dbb.dbb_provider->attachDatabase(&status_vector,
+					AutoPlugin<JProvider> jInstance(JProvider::getInstance());
+					jInstance->setDbCryptCallback(&status_vector, dbb.dbb_callback);
+					check(&status_vector);
+
+					RefPtr<JAttachment> jAtt(REF_NO_INCR, jInstance->attachDatabase(&status_vector,
 						dbb.dbb_database_name.c_str(), writer.getBufferLength(), writer.getBuffer()));
 					check(&status_vector);
 
@@ -1135,7 +1143,7 @@ namespace Jrd {
 			}
 
 			// Slow IO - we need exclusive lock on crypto manager.
-			// That may happen only when another process changed DB encyption.
+			// That may happen only when another process changed DB encryption.
 			BarSync::LockGuard lockGuard(tdbb, sync);
 			lockGuard.lock();
 			for (SINT64 previous = slowIO; ; previous = slowIO)
@@ -1331,6 +1339,11 @@ namespace Jrd {
 	const char* CryptoManager::getKeyName() const
 	{
 		return keyName.c_str();
+	}
+
+	const char* CryptoManager::getPluginName() const
+	{
+		return pluginName.c_str();
 	}
 
 	void CryptoManager::addClumplet(string& signature, ClumpletReader& block, UCHAR tag)

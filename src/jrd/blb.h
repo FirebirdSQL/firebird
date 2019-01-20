@@ -33,6 +33,7 @@
 #include "../jrd/EngineInterface.h"
 #include "../common/classes/array.h"
 #include "../common/classes/File.h"
+#include "../common/classes/auto.h"
 
 #include "firebird/Interface.h"
 #include "../common/classes/ImplementHelper.h"
@@ -97,6 +98,7 @@ public:
 	// end inline
 
 	void	BLB_cancel(thread_db* tdbb);
+	void	BLB_cancel();
 	void	BLB_check_well_formed(thread_db*, const dsc* desc);
 	bool	BLB_close(thread_db*);
 	static blb*	create(thread_db*, jrd_tra*, bid*);
@@ -244,5 +246,18 @@ inline USHORT blb::getMaxSegment() const
 
 
 } //namespace Jrd
+
+
+namespace Firebird {
+
+template <>
+inline void SimpleDelete<Jrd::blb>::clear(Jrd::blb* b)
+{
+	if (b)
+		b->BLB_cancel();
+}
+
+} //namespace Firebird
+
 
 #endif // JRD_BLB_H

@@ -37,19 +37,47 @@
 #include "../jrd/ext_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/met_proto.h"
+#include "../jrd/scl_proto.h"
 #include "../jrd/tra_proto.h"
+#include "../jrd/tpc_proto.h"
 
 #include "../jrd/extds/ExtDS.h"
 
 #include "../common/classes/fb_string.h"
 #include "../common/classes/MetaName.h"
 #include "../common/StatusArg.h"
+#include "../common/TimeZoneUtil.h"
 #include "../common/isc_proto.h"
 #include "../common/classes/RefMutex.h"
 
 
 using namespace Jrd;
 using namespace Firebird;
+
+/// class ActiveSnapshots
+
+ActiveSnapshots::ActiveSnapshots(Firebird::MemoryPool& p) :
+	m_snapshots(p),
+	m_lastCommit(CN_ACTIVE),
+	m_releaseCount(0),
+	m_slots_used(0)
+{
+}
+
+
+CommitNumber ActiveSnapshots::getSnapshotForVersion(CommitNumber version_cn)
+{
+	if (version_cn > m_lastCommit)
+		return CN_ACTIVE;
+
+	if (m_snapshots.locate(locGreatEqual, version_cn))
+		return m_snapshots.current();
+
+	return m_lastCommit;
+}
+
+
+/// class Attachment
 
 
 // static method
@@ -176,6 +204,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 	: att_pool(pool),
 	  att_memory_stats(&dbb->dbb_memory_stats),
 	  att_database(dbb),
+	  att_active_snapshots(*pool),
 	  att_requests(*pool),
 	  att_lock_owner_id(Database::getLockOwnerId()),
 	  att_backup_state_counter(0),
@@ -183,7 +212,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 	  att_base_stats(*pool),
 	  att_working_directory(*pool),
 	  att_filename(*pool),
-	  att_timestamp(Firebird::TimeStamp::getCurrentTimeStamp()),
+	  att_timestamp(TimeZoneUtil::getCurrentSystemTimeStamp()),
 	  att_context_vars(*pool),
 	  ddlTriggersContext(*pool),
 	  att_network_protocol(*pool),
@@ -196,19 +225,25 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 	  att_dsql_cache(*pool),
 	  att_udf_pointers(*pool),
 	  att_ext_connection(NULL),
+	  att_ext_parent(NULL),
 	  att_ext_call_depth(0),
 	  att_trace_manager(FB_NEW_POOL(*att_pool) TraceManager(this)),
+	  att_timezone_bind(TimeZoneUtil::BIND_NATIVE),
+	  att_original_timezone(TimeZoneUtil::getSystemTimeZone()),
+	  att_current_timezone(att_original_timezone),
 	  att_utility(UTIL_NONE),
 	  att_procedures(*pool),
 	  att_functions(*pool),
 	  att_internal(*pool),
 	  att_dyn_req(*pool),
-	  att_dec_status(FB_DEC_Errors),
+	  att_dec_status(DecimalStatus::DEFAULT),
+	  att_dec_binding(DecimalBinding::DEFAULT),
 	  att_charsets(*pool),
 	  att_charset_ids(*pool),
 	  att_pools(*pool),
 	  att_idle_timeout(0),
-	  att_stmt_timeout(0)
+	  att_stmt_timeout(0),
+	  att_batches(*pool)
 {
 	att_internal.grow(irq_MAX);
 	att_dyn_req.grow(drq_MAX);
@@ -218,6 +253,9 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 Jrd::Attachment::~Attachment()
 {
 	delete att_trace_manager;
+
+	for (unsigned n = 0; n < att_batches.getCount(); ++n)
+		att_batches[n]->resetHandle();
 
 	while (att_pools.hasData())
 		deletePool(att_pools.pop());
@@ -361,6 +399,123 @@ void Jrd::Attachment::storeBinaryBlob(thread_db* tdbb, jrd_tra* transaction,
 	}
 
 	blob->BLB_close(tdbb);
+}
+
+void Jrd::Attachment::releaseGTTs(thread_db* tdbb)
+{
+	if (!att_relations)
+		return;
+
+	for (FB_SIZE_T i = 1; i < att_relations->count(); i++)
+	{
+		jrd_rel* relation = (*att_relations)[i];
+		if (relation && (relation->rel_flags & REL_temp_conn) &&
+			!(relation->rel_flags & (REL_deleted | REL_deleting)))
+		{
+			relation->delPages(tdbb);
+		}
+	}
+}
+
+void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
+{
+	jrd_tra* oldTran = traHandle ? *traHandle : nullptr;
+	if (att_transactions)
+	{
+		int n = 0;
+		bool err = false;
+		for (const jrd_tra* tra = att_transactions; tra; tra = tra->tra_next)
+		{
+			n++;
+			if (tra != oldTran && !(tra->tra_flags & TRA_prepared))
+				err = true;
+		}
+
+		// Cannot reset user session
+		// There are open transactions (@1 active)
+		if (err)
+		{
+			ERR_post(Arg::Gds(isc_ses_reset_err) <<
+				Arg::Gds(isc_ses_reset_open_trans) << Arg::Num(n));
+		}
+	}
+
+	// TODO: trigger before reset
+
+	ULONG oldFlags = 0;
+	SSHORT oldTimeout = 0;
+	if (oldTran)
+	{
+		oldFlags = oldTran->tra_flags;
+		oldTimeout = oldTran->tra_lock_timeout;
+
+		try
+		{
+			// It will also run run ON TRANSACTION ROLLBACK triggers
+			JRD_rollback_transaction(tdbb, oldTran);
+			*traHandle = nullptr;
+		}
+		catch (const Exception& ex)
+		{
+			Arg::StatusVector error;
+			error.assign(ex);
+			error.prepend(Arg::Gds(isc_ses_reset_err));
+			error.raise();
+		}
+
+		// Session was reset with warning(s)
+		// Transaction is rolled back due to session reset, all changes are lost
+		if (oldFlags & TRA_write)
+		{
+			ERR_post_warning(Arg::Warning(isc_ses_reset_warn) <<
+				Arg::Gds(isc_ses_reset_tran_rollback));
+		}
+	}
+
+	// reset DecFloat
+	att_dec_status = DecimalStatus::DEFAULT;
+	att_dec_binding = DecimalBinding::DEFAULT;
+
+	// reset time zone
+	att_timezone_bind = TimeZoneUtil::BIND_NATIVE;
+	att_current_timezone = att_original_timezone;
+
+	// reset timeouts
+	setIdleTimeout(0);
+	setStatementTimeout(0);
+
+	// reset context variables
+	att_context_vars.clear();
+
+	// reset role
+	if (att_user->resetRole())
+		SCL_release_all(att_security_classes);
+
+	// reset GTT's
+	releaseGTTs(tdbb);
+
+	if (oldTran)
+	{
+		try
+		{
+			jrd_tra* newTran = TRA_start(tdbb, oldFlags, oldTimeout);
+
+			// run ON TRANSACTION START triggers
+			JRD_run_trans_start_triggers(tdbb, newTran);
+
+			tdbb->setTransaction(newTran);
+			*traHandle = newTran;
+		}
+		catch (const Exception& ex)
+		{
+			Arg::StatusVector error;
+			error.assign(ex);
+			error.prepend(Arg::Gds(isc_ses_reset_err));
+			error.raise();
+		}
+	}
+
+	// TODO: trigger after reset
 }
 
 
@@ -797,20 +952,19 @@ void Attachment::setupIdleTimer(bool clear)
 	}
 }
 
-bool Attachment::getIdleTimerTimestamp(TimeStamp& ts) const
+bool Attachment::getIdleTimerTimestamp(ISC_TIMESTAMP_TZ& ts) const
 {
 	if (!att_idle_timer)
 		return false;
 
-	time_t value = att_idle_timer->getExpiryTime();
+	SINT64 value = att_idle_timer->getExpiryTime();
 	if (!value)
 		return false;
 
-	struct tm* times = localtime(&value);
-	if (!times)
-		return false;
+	ts.utc_timestamp.timestamp_date = value / TimeStamp::ISC_TICKS_PER_DAY;
+	ts.utc_timestamp.timestamp_time = value % TimeStamp::ISC_TICKS_PER_DAY;
+	ts.time_zone = TimeZoneUtil::GMT_ZONE;
 
-	ts = TimeStamp::encode_timestamp(times);
 	return true;
 }
 
@@ -836,10 +990,14 @@ void Attachment::IdleTimer::handler()
 		return;
 
 	// If timer was reset to fire later, restart ITimer
-	time_t curTime = time(NULL);
-	if (curTime < m_expTime)
+
+	const ISC_TIMESTAMP currentTimeGmt = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
+	const SINT64 curTime = currentTimeGmt.timestamp_date * TimeStamp::ISC_TICKS_PER_DAY +
+		(SINT64) currentTimeGmt.timestamp_time;
+
+	if (curTime + ISC_TIME_SECONDS_PRECISION < m_expTime)
 	{
-		reset(m_expTime - curTime);
+		reset((m_expTime - curTime) / ISC_TIME_SECONDS_PRECISION);
 		return;
 	}
 
@@ -863,6 +1021,8 @@ void Attachment::IdleTimer::reset(unsigned int timeout)
 {
 	// Start timer if necessary. If timer was already started, don't restart
 	// (or stop) it - handler() will take care about it.
+	// Take into account that timeout is in seconds while m_expTime is in ISC ticks
+	// and ITimerControl works with microseconds.
 
 	if (!timeout)
 	{
@@ -870,8 +1030,11 @@ void Attachment::IdleTimer::reset(unsigned int timeout)
 		return;
 	}
 
-	const time_t curTime = time(NULL);
-	m_expTime = curTime + timeout;
+	const ISC_TIMESTAMP currentTimeGmt = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
+	const SINT64 curTime = currentTimeGmt.timestamp_date * TimeStamp::ISC_TICKS_PER_DAY +
+		(SINT64) currentTimeGmt.timestamp_time;
+
+	m_expTime = curTime + timeout * ISC_TIME_SECONDS_PRECISION;
 
 	FbLocalStatus s;
 	ITimerControl* timerCtrl = Firebird::TimerInterfacePtr();
@@ -886,7 +1049,8 @@ void Attachment::IdleTimer::reset(unsigned int timeout)
 		m_fireTime = 0;
 	}
 
-	timerCtrl->start(&s, this, (m_expTime - curTime) * 1000 * 1000);
+	// Convert ISC ticks into microseconds
+	timerCtrl->start(&s, this, (m_expTime - curTime) * (1000 * 1000 / ISC_TIME_SECONDS_PRECISION));
 	check(&s);
 	m_fireTime = m_expTime;
 }

@@ -24,8 +24,6 @@
 #ifndef BURP_MISC_PROTO_H
 #define BURP_MISC_PROTO_H
 
-UCHAR*	MISC_alloc_burp(ULONG);
-void	MISC_free_burp(void*);
 void	MISC_release_request_silent(Firebird::IRequest*& req_handle);
 int		MISC_symbol_length(const TEXT*, ULONG);
 void	MISC_terminate(const TEXT*, TEXT*, ULONG, ULONG);

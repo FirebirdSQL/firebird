@@ -905,6 +905,52 @@ static const struct {
 	{335545202, "54000"}, // 882 hdr_overflow
 	{335545203, "28000"}, // 883 vld_plugins
 	{335545204, "08004"}, // 884 db_crypt_key
+	{335545205, "HY024"}, // 885 no_keyholder_plugin
+	{335545206, "01002"}, // 886 ses_reset_err
+	{335545207, "25S02"}, // 887 ses_reset_open_trans
+	{335545208, "01000"}, // 888 ses_reset_warn
+	{335545209, "01102"}, // 889 ses_reset_tran_rollback
+	{335545210, "00000"}, // 890 plugin_name
+	{335545211, "42000"}, // 891 parameter_name
+	{335545212, "HY000"}, // 892 file_starting_page_err
+	{335545213, "22009"}, // 893 invalid_timezone_offset
+	{335545214, "22009"}, // 894 invalid_timezone_region
+	{335545215, "22009"}, // 895 invalid_timezone_id
+	{335545216, "22023"}, // 896 tom_decode64len
+	{335545217, "22023"}, // 897 tom_strblob
+	{335545218, "22023"}, // 898 tom_reg
+	{335545219, "22023"}, // 899 tom_algorithm
+	{335545220, "22023"}, // 900 tom_mode_miss
+	{335545221, "22023"}, // 901 tom_mode_bad
+	{335545222, "22023"}, // 902 tom_no_mode
+	{335545223, "22023"}, // 903 tom_iv_miss
+	{335545224, "22023"}, // 904 tom_no_iv
+	{335545225, "22023"}, // 905 tom_ctrtype_bad
+	{335545226, "22023"}, // 906 tom_no_ctrtype
+	{335545227, "22023"}, // 907 tom_ctr_big
+	{335545228, "22023"}, // 908 tom_no_ctr
+	{335545229, "22023"}, // 909 tom_iv_length
+	{335545230, "22000"}, // 910 tom_error
+	{335545231, "22023"}, // 911 tom_yarrow_start
+	{335545232, "22023"}, // 912 tom_yarrow_setup
+	{335545233, "22023"}, // 913 tom_init_mode
+	{335545234, "22023"}, // 914 tom_crypt_mode
+	{335545235, "22023"}, // 915 tom_decrypt_mode
+	{335545236, "22023"}, // 916 tom_init_cip
+	{335545237, "22023"}, // 917 tom_crypt_cip
+	{335545238, "22023"}, // 918 tom_decrypt_cip
+	{335545239, "22023"}, // 919 tom_setup_cip
+	{335545240, "22023"}, // 920 tom_setup_chacha
+	{335545241, "22023"}, // 921 tom_encode
+	{335545242, "22023"}, // 922 tom_decode
+	{335545243, "22023"}, // 923 tom_rsa_import
+	{335545244, "22023"}, // 924 tom_oaep
+	{335545245, "22023"}, // 925 tom_hash_bad
+	{335545246, "22023"}, // 926 tom_rsa_make
+	{335545247, "22023"}, // 927 tom_rsa_export
+	{335545248, "22023"}, // 928 tom_rsa_sign
+	{335545249, "22023"}, // 929 tom_rsa_verify
+	{335545250, "22023"}, // 930 tom_chacha_key
 	{335740929, "00000"}, //   1 gfix_db_name
 	{335740930, "00000"}, //   2 gfix_invalid_sw
 	{335740932, "00000"}, //   4 gfix_incmp_sw

@@ -59,6 +59,7 @@
 #include "../jrd/PreparedStatement.h"
 #include "../jrd/constants.h"
 #include "../jrd/grant_proto.h"
+#include "../jrd/SystemPackages.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -80,6 +81,7 @@ static void store_global_field(thread_db*, const gfld*, AutoRequest&, const Meta
 static void store_intlnames(thread_db*, const MetaName&);
 static void store_message(thread_db*, const trigger_msg*, AutoRequest&);
 static void store_relation_field(thread_db*, const int*, const int*, int, AutoRequest&);
+static void store_packages(thread_db* tdbb, const MetaName& owner);
 static void store_trigger(thread_db*, const jrd_trg*, AutoRequest&);
 static void store_admin_grant(thread_db*, const char* grantee, USHORT grantee_type,
     const char* object, USHORT object_type, const char* prvl, USHORT option = 0, bool dflt = false);
@@ -246,6 +248,7 @@ void INI_format(const char* owner, const char* charset)
  **************************************/
 	thread_db* tdbb = JRD_get_thread_data();
 	Jrd::Attachment* attachment = tdbb->getAttachment();
+	Database* const dbb = tdbb->getDatabase();
 
 	fb_assert(owner && owner[0]);
 
@@ -397,6 +400,8 @@ void INI_format(const char* owner, const char* charset)
 	// Adjust the value of the hidden generator RDB$GENERATORS
 	DPM_gen_id(tdbb, 0, true, FB_NELEM(generators) - 1);
 
+	store_packages(tdbb, ownerName);
+
 	const size_t ownerNameLength = ownerName.length();
 	fb_assert(ownerNameLength <= MAX_UCHAR);
 
@@ -455,6 +460,14 @@ void INI_format(const char* owner, const char* charset)
 		 ++collation)
 	{
 		add_security_to_sys_obj(tdbb, ownerName, obj_collation, collation->name, length, buffer);
+	}
+
+	for (auto& systemPackage : SystemPackage::get())
+	{
+		if (systemPackage.odsVersion > ENCODE_ODS(dbb->dbb_ods_version, dbb->dbb_minor_version))
+			continue;
+
+		add_security_to_sys_obj(tdbb, ownerName, obj_package_header, systemPackage.name, length, buffer);
 	}
 
 	// Add default DDL security
@@ -810,7 +823,7 @@ void INI_init_dsql(thread_db* tdbb, dsql_dbb* database)
 			}
 
 			if (DTYPE_IS_TEXT(gfield->gfld_dtype))
-				get_charset_by_text_type(field->charSetId, gfield->gfld_sub_type);
+				get_charset_by_text_type(field->charSetId.value, gfield->gfld_sub_type);
 
 			if (gfield->gfld_nullable)
 				field->flags |= FLD_nullable;
@@ -1174,6 +1187,18 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 		}
 		END_FOR
 	}
+	else if (obj_type == obj_package_header)
+	{
+		FOR(REQUEST_HANDLE handle) PKG IN RDB$PACKAGES
+			WITH PKG.RDB$PACKAGE_NAME EQ obj_name.c_str()
+		{
+			MODIFY PKG USING
+				PKG.RDB$SECURITY_CLASS.NULL = FALSE;
+				PAD(security_class.c_str(), PKG.RDB$SECURITY_CLASS);
+			END_MODIFY
+		}
+		END_FOR
+	}
 	else if (obj_type == obj_database)
 	{
 		FOR(REQUEST_HANDLE handle) DB IN RDB$DATABASE
@@ -1185,6 +1210,8 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 		}
 		END_FOR
 	}
+	else
+		fb_assert(false);
 
 	handle.reset();
 
@@ -1374,6 +1401,10 @@ static void store_global_field(thread_db* tdbb, const gfld* gfield, AutoRequest&
 		{
 		case dtype_timestamp:
 			X.RDB$FIELD_TYPE = (int) blr_timestamp;
+			break;
+
+		case dtype_timestamp_tz:
+			X.RDB$FIELD_TYPE = (int) blr_timestamp_tz;
 			break;
 
 		case dtype_sql_time:
@@ -1617,6 +1648,143 @@ static void store_relation_field(thread_db*		tdbb,
 		X.RDB$UPDATE_FLAG = fld[RFLD_F_UPDATE];
 	}
 	END_STORE
+}
+
+
+// Store system packages.
+static void store_packages(thread_db* tdbb, const MetaName& owner)
+{
+	SET_TDBB(tdbb);
+	Jrd::Attachment* attachment = tdbb->getAttachment();
+	Database* const dbb = tdbb->getDatabase();
+	const USHORT majorVersion = dbb->dbb_ods_version;
+	const USHORT minorVersion = dbb->dbb_minor_version;
+
+	AutoRequest packageHandle, procedureHandle, procedureParameterHandle;
+	AutoRequest functionHandle, functionReturnHandle, functionArgumentHandle;
+	SLONG procGen = MET_lookup_generator(tdbb, PROCEDURES_GENERATOR);
+	SLONG funcGen = MET_lookup_generator(tdbb, FUNCTIONS_GENERATOR);
+
+	for (auto& systemPackage : SystemPackage::get())
+	{
+		if (systemPackage.odsVersion > ENCODE_ODS(majorVersion, minorVersion))
+			continue;
+
+		STORE (REQUEST_HANDLE packageHandle) PKG IN RDB$PACKAGES
+		{
+			PAD(systemPackage.name, PKG.RDB$PACKAGE_NAME);
+
+			PAD(owner.c_str(), PKG.RDB$OWNER_NAME);
+			PKG.RDB$SYSTEM_FLAG = RDB_system;
+			PKG.RDB$VALID_BODY_FLAG = TRUE;
+		}
+		END_STORE
+
+		for (auto& procedure : systemPackage.procedures)
+		{
+			STORE (REQUEST_HANDLE procedureHandle) PRC IN RDB$PROCEDURES
+			{
+				PAD(systemPackage.name, PRC.RDB$PACKAGE_NAME);
+				PAD(procedure.name, PRC.RDB$PROCEDURE_NAME);
+
+				PAD(owner.c_str(), PRC.RDB$OWNER_NAME);
+				PRC.RDB$SYSTEM_FLAG = RDB_system;
+
+				PRC.RDB$PROCEDURE_ID = DPM_gen_id(tdbb, procGen, false, 1);
+
+				PRC.RDB$PROCEDURE_INPUTS = (SSHORT) procedure.inputParameters.getCount();
+				PRC.RDB$PROCEDURE_OUTPUTS = (SSHORT) procedure.outputParameters.getCount();
+				PRC.RDB$PROCEDURE_TYPE = (SSHORT) procedure.type;
+				PRC.RDB$PRIVATE_FLAG = FALSE;
+				PRC.RDB$VALID_BLR = TRUE;
+				PAD("SYSTEM", PRC.RDB$ENGINE_NAME);
+			}
+			END_STORE
+
+			for (SSHORT parameterType = 0; parameterType <= 1; ++parameterType)
+			{
+				SSHORT paramNumber = -1;
+
+				for (auto& parameter : parameterType == 0 ? procedure.inputParameters : procedure.outputParameters)
+				{
+					++paramNumber;
+
+					STORE (REQUEST_HANDLE procedureParameterHandle) PP IN RDB$PROCEDURE_PARAMETERS
+					{
+						PAD(systemPackage.name, PP.RDB$PACKAGE_NAME);
+						PAD(procedure.name, PP.RDB$PROCEDURE_NAME);
+						PAD(parameter.name, PP.RDB$PARAMETER_NAME);
+
+						PP.RDB$SYSTEM_FLAG = RDB_system;
+
+						PP.RDB$PARAMETER_NUMBER = paramNumber;
+						PP.RDB$PARAMETER_TYPE = parameterType;
+						PP.RDB$PARAMETER_MECHANISM = (SSHORT) prm_mech_normal;
+						PP.RDB$NULL_FLAG = !parameter.nullable;
+
+						PAD(names[gfields[parameter.fieldId].gfld_name], PP.RDB$FIELD_SOURCE);
+					}
+					END_STORE
+				}
+			}
+		}
+
+		for (auto& function : systemPackage.functions)
+		{
+			STORE (REQUEST_HANDLE functionHandle) FUN IN RDB$FUNCTIONS
+			{
+				PAD(systemPackage.name, FUN.RDB$PACKAGE_NAME);
+				PAD(function.name, FUN.RDB$FUNCTION_NAME);
+
+				PAD(owner.c_str(), FUN.RDB$OWNER_NAME);
+				FUN.RDB$SYSTEM_FLAG = RDB_system;
+
+				FUN.RDB$FUNCTION_ID = DPM_gen_id(tdbb, funcGen, false, 1);
+
+				FUN.RDB$RETURN_ARGUMENT = 0;
+				FUN.RDB$PRIVATE_FLAG = FALSE;
+				FUN.RDB$VALID_BLR = TRUE;
+				PAD("SYSTEM", FUN.RDB$ENGINE_NAME);
+			}
+			END_STORE
+
+			SSHORT paramNumber = 0;
+
+			STORE (REQUEST_HANDLE functionReturnHandle) ARG IN RDB$FUNCTION_ARGUMENTS
+			{
+				PAD(systemPackage.name, ARG.RDB$PACKAGE_NAME);
+				PAD(function.name, ARG.RDB$FUNCTION_NAME);
+
+				ARG.RDB$SYSTEM_FLAG = RDB_system;
+
+				ARG.RDB$ARGUMENT_POSITION = paramNumber;
+				ARG.RDB$NULL_FLAG = !function.returnType.nullable;
+
+				PAD(names[gfields[function.returnType.fieldId].gfld_name], ARG.RDB$FIELD_SOURCE);
+			}
+			END_STORE
+
+			for (auto& parameter : function.parameters)
+			{
+				++paramNumber;
+
+				STORE (REQUEST_HANDLE functionArgumentHandle) ARG IN RDB$FUNCTION_ARGUMENTS
+				{
+					PAD(systemPackage.name, ARG.RDB$PACKAGE_NAME);
+					PAD(function.name, ARG.RDB$FUNCTION_NAME);
+					PAD(parameter.name, ARG.RDB$ARGUMENT_NAME);
+
+					ARG.RDB$SYSTEM_FLAG = RDB_system;
+
+					ARG.RDB$ARGUMENT_POSITION = paramNumber;
+					ARG.RDB$NULL_FLAG = !parameter.nullable;
+
+					PAD(names[gfields[parameter.fieldId].gfld_name], ARG.RDB$FIELD_SOURCE);
+				}
+				END_STORE
+			}
+		}
+	}
 }
 
 

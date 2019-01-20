@@ -33,7 +33,9 @@ void		CVT_double_to_date(double, SLONG[2]);
 UCHAR		CVT_get_numeric(const UCHAR*, const USHORT, SSHORT*, void*);
 GDS_DATE	CVT_get_sql_date(const dsc*);
 GDS_TIME	CVT_get_sql_time(const dsc*);
+ISC_TIME_TZ	CVT_get_sql_time_tz(const dsc*);
 GDS_TIMESTAMP CVT_get_timestamp(const dsc*);
+ISC_TIMESTAMP_TZ CVT_get_timestamp_tz(const dsc*);
 
 namespace Jrd
 {
@@ -57,7 +59,9 @@ namespace Jrd
 		virtual void validateData(CharSet* toCharset, SLONG length, const UCHAR* q);
 		virtual void validateLength(CharSet* toCharset, SLONG toLength, const UCHAR* start,
 			const USHORT to_size);
-		virtual SLONG getCurDate();
+		virtual SLONG getLocalDate();
+		virtual ISC_TIMESTAMP getCurrentGmtTimeStamp();
+		virtual USHORT getSessionTimeZone();
 		virtual void isVersion4(bool& v4);
 
 	public:

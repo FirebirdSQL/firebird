@@ -448,6 +448,8 @@ using namespace Firebird;
 %token <metaNamePtr> ASIN
 %token <metaNamePtr> ATAN
 %token <metaNamePtr> ATAN2
+%token <metaNamePtr> BASE64_DECODE
+%token <metaNamePtr> BASE64_ENCODE
 %token <metaNamePtr> BIN_AND
 %token <metaNamePtr> BIN_OR
 %token <metaNamePtr> BIN_SHL
@@ -458,6 +460,7 @@ using namespace Firebird;
 %token <metaNamePtr> COS
 %token <metaNamePtr> COSH
 %token <metaNamePtr> COT
+%token <metaNamePtr> CRC32
 %token <metaNamePtr> DATEADD
 %token <metaNamePtr> DATEDIFF
 %token <metaNamePtr> DECODE
@@ -595,6 +598,11 @@ using namespace Firebird;
 %token <metaNamePtr> BINARY
 %token <metaNamePtr> BIND
 %token <metaNamePtr> COMPARE_DECFLOAT
+%token <metaNamePtr> CONSISTENCY
+%token <metaNamePtr> COUNTER
+%token <metaNamePtr> CTR_BIG_ENDIAN
+%token <metaNamePtr> CTR_LENGTH
+%token <metaNamePtr> CTR_LITTLE_ENDIAN
 %token <metaNamePtr> CUME_DIST
 %token <metaNamePtr> DECFLOAT
 %token <metaNamePtr> DEFINER
@@ -603,8 +611,15 @@ using namespace Firebird;
 %token <metaNamePtr> FOLLOWING
 %token <metaNamePtr> IDLE
 %token <metaNamePtr> INVOKER
+%token <metaNamePtr> IV
 %token <metaNamePtr> LAST_DAY
+%token <metaNamePtr> LEGACY
+%token <metaNamePtr> LOCAL
+%token <metaNamePtr> LOCALTIME
+%token <metaNamePtr> LOCALTIMESTAMP
+%token <metaNamePtr> LPARAM
 %token <metaNamePtr> MESSAGE
+%token <metaNamePtr> MODE
 %token <metaNamePtr> NATIVE
 %token <metaNamePtr> NORMALIZE_DECFLOAT
 %token <metaNamePtr> NTILE
@@ -616,18 +631,39 @@ using namespace Firebird;
 %token <metaNamePtr> QUANTIZE
 %token <metaNamePtr> RANGE
 %token <metaNamePtr> RDB_ERROR
+%token <metaNamePtr> RDB_GET_TRANSACTION_CN
 %token <metaNamePtr> RDB_ROLE_IN_USE
 %token <metaNamePtr> RDB_SYSTEM_PRIVILEGE
+%token <metaNamePtr> RESET
+%token <metaNamePtr> RSA_DECRYPT
+%token <metaNamePtr> RSA_ENCRYPT
+%token <metaNamePtr> RSA_PRIVATE
+%token <metaNamePtr> RSA_PUBLIC
+%token <metaNamePtr> RSA_SIGN
+%token <metaNamePtr> RSA_VERIFY
+%token <metaNamePtr> SALT_LENGTH
 %token <metaNamePtr> SECURITY
 %token <metaNamePtr> SESSION
+%token <metaNamePtr> SIGNATURE
 %token <metaNamePtr> SQL
 %token <metaNamePtr> SYSTEM
 %token <metaNamePtr> TIES
+%token <metaNamePtr> TIMEZONE_HOUR
+%token <metaNamePtr> TIMEZONE_MINUTE
 %token <metaNamePtr> TOTALORDER
 %token <metaNamePtr> TRAPS
 %token <metaNamePtr> UNBOUNDED
 %token <metaNamePtr> VARBINARY
 %token <metaNamePtr> WINDOW
+%token <metaNamePtr> WITHOUT
+%token <metaNamePtr> ZONE
+
+// external connections pool management
+%token <metaNamePtr> CONNECTIONS
+%token <metaNamePtr> POOL
+%token <metaNamePtr> LIFETIME
+%token <metaNamePtr> CLEAR
+%token <metaNamePtr> OLDEST
 
 // precedence declarations for expression evaluation
 
@@ -641,6 +677,7 @@ using namespace Firebird;
 %left	UMINUS UPLUS
 %left	CONCATENATE
 %left	COLLATE
+%left	AT
 
 // Fix the dangling IF-THEN-ELSE problem
 %nonassoc THEN
@@ -774,9 +811,10 @@ using namespace Firebird;
 	Jrd::SetRoleNode* setRoleNode;
 	Jrd::SetSessionNode* setSessionNode;
 	Jrd::CreateAlterRoleNode* createAlterRoleNode;
-	Jrd::SetRoundNode* setRoundNode;
-	Jrd::SetTrapsNode* setTrapsNode;
-	Jrd::SetBindNode* setBindNode;
+	Jrd::SetDecFloatRoundNode* setDecFloatRoundNode;
+	Jrd::SetDecFloatTrapsNode* setDecFloatTrapsNode;
+	Jrd::SetDecFloatBindNode* setDecFloatBindNode;
+	Jrd::SessionResetNode* sessionResetNode;
 }
 
 %include types.y
@@ -834,11 +872,14 @@ tra_statement
 
 %type <mngNode> mng_statement
 mng_statement
-	: set_round									{ $$ = $1; }
-	| set_traps									{ $$ = $1; }
-	| set_bind									{ $$ = $1; }
+	: set_decfloat_round						{ $$ = $1; }
+	| set_decfloat_traps						{ $$ = $1; }
+	| set_decfloat_bind							{ $$ = $1; }
 	| session_statement							{ $$ = $1; }
 	| set_role									{ $$ = $1; }
+	| session_reset								{ $$ = $1; }
+	| set_time_zone								{ $$ = $1; }
+	| set_time_zone_bind						{ $$ = $1; }
 	;
 
 
@@ -1968,6 +2009,29 @@ alter_charset_clause
 	: symbol_character_set_name SET DEFAULT COLLATION symbol_collation_name
 		{ $$ = newNode<AlterCharSetNode>(*$1, *$5); }
 	;
+
+//
+%type <ddlNode> alter_eds_conn_pool_clause
+alter_eds_conn_pool_clause
+	: SET SIZE unsigned_short_integer
+		{ $$ = newNode<AlterEDSPoolSetNode>(AlterEDSPoolSetNode::POOL_SIZE, $3); }
+	| SET LIFETIME unsigned_short_integer eds_pool_lifetime_mult
+		{ $$ = newNode<AlterEDSPoolSetNode>(AlterEDSPoolSetNode::POOL_LIFETIME, $3 * $4); }
+	| CLEAR sql_string
+		{ $$ = newNode<AlterEDSPoolClearNode>(AlterEDSPoolClearNode::POOL_DB, $2->getString()); }
+	| CLEAR ALL
+		{ $$ = newNode<AlterEDSPoolClearNode>(AlterEDSPoolClearNode::POOL_ALL); }
+	| CLEAR OLDEST
+		{ $$ = newNode<AlterEDSPoolClearNode>(AlterEDSPoolClearNode::POOL_OLDEST); }
+	;
+
+%type <intVal> eds_pool_lifetime_mult
+eds_pool_lifetime_mult
+	: HOUR		{ $$ = 3600; }
+	| MINUTE	{ $$ = 60; }
+	| SECOND	{ $$ = 1; }
+	;
+
 
 // CREATE DATABASE
 // ASF: CREATE DATABASE command is divided in three pieces: name, initial options and
@@ -3111,6 +3175,7 @@ simple_proc_statement
 	| SUSPEND			{ $$ = newNode<SuspendNode>(); }
 	| EXIT				{ $$ = newNode<ExitNode>(); }
 	| RETURN value		{ $$ = newNode<ReturnNode>($2); }
+	| mng_statement		{ $$ = newNode<SessionManagementWrapperNode>($1, makeParseStr(YYPOSNARG(1), YYPOSNARG(1))); }
 	;
 
 %type <stmtNode> assignment_statement
@@ -3870,6 +3935,7 @@ alter_clause
 	| SEQUENCE alter_sequence_clause		{ $$ = $2; }
 	| MAPPING alter_map_clause(false)		{ $$ = $2; }
 	| GLOBAL MAPPING alter_map_clause(true)	{ $$ = $3; }
+	| EXTERNAL CONNECTIONS POOL alter_eds_conn_pool_clause	{ $$ = $4; }
 	;
 
 %type <alterDomainNode> alter_domain
@@ -4135,8 +4201,15 @@ keyword_or_column
 	| UPDATING
 	| VAR_SAMP
 	| VAR_POP
-	| UNBOUNDED				// added in FB 4.0
+	| DECFLOAT				// added in FB 4.0
+	| LOCAL
+	| LOCALTIME
+	| LOCALTIMESTAMP
+	| TIMEZONE_HOUR
+	| TIMEZONE_MINUTE
+	| UNBOUNDED
 	| WINDOW
+	| WITHOUT
 	;
 
 col_opt
@@ -4584,7 +4657,7 @@ non_charset_simple_type
 				$$->length = sizeof(ULONG);
 			}
 		}
-	| TIME
+	| TIME without_time_zone_opt
 		{
 			$$ = newNode<dsql_fld>();
 
@@ -4603,11 +4676,36 @@ non_charset_simple_type
 			$$->dtype = dtype_sql_time;
 			$$->length = sizeof(SLONG);
 		}
-	| TIMESTAMP
+	| TIME WITH TIME ZONE
+		{
+			$$ = newNode<dsql_fld>();
+
+			if (client_dialect < SQL_DIALECT_V6_TRANSITION)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_sql_dialect_datatype_unsupport) << Arg::Num(client_dialect) <<
+																		  Arg::Str("TIME"));
+			}
+			if (db_dialect < SQL_DIALECT_V6_TRANSITION)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_sql_db_dialect_dtype_unsupport) << Arg::Num(db_dialect) <<
+																		  Arg::Str("TIME"));
+			}
+			$$->dtype = dtype_sql_time_tz;
+			$$->length = sizeof(ISC_TIME_TZ);
+		}
+	| TIMESTAMP without_time_zone_opt
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_timestamp;
 			$$->length = sizeof(GDS_TIMESTAMP);
+		}
+	| TIMESTAMP WITH TIME ZONE
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_timestamp_tz;
+			$$->length = sizeof(ISC_TIMESTAMP_TZ);
 		}
 	| BOOLEAN
 		{
@@ -4620,6 +4718,11 @@ non_charset_simple_type
 integer_keyword
 	: INTEGER
 	| INT
+	;
+
+without_time_zone_opt
+	: // nothing
+	| WITHOUT TIME ZONE
 	;
 
 
@@ -4799,15 +4902,17 @@ varbinary_character_keyword
 
 %type <legacyField> decfloat_type
 decfloat_type
-	: DECFLOAT '(' signed_long_integer ')'
+	: DECFLOAT precision_opt_nz
 		{
-			if ($3 != 16 && $3 != 34)
-				yyabandon(YYPOSNARG(3), -842, isc_decprecision_err);	// DecFloat precision must be 16 or 34.
+			SLONG precision = $2;
+
+			if (precision != 0 && precision != 16 && precision != 34)
+				yyabandon(YYPOSNARG(2), -842, isc_decprecision_err);	// DecFloat precision must be 16 or 34.
 
 			$$ = newNode<dsql_fld>();
-			$$->precision = $3;
-			$$->dtype = $3 == 16 ? dtype_dec64 : dtype_dec128;
-			$$->length = $3 == 16 ? sizeof(Decimal64) : sizeof(Decimal128);
+			$$->precision = precision == 0 ? 34 : (USHORT) precision;
+			$$->dtype = precision == 16 ? dtype_dec64 : dtype_dec128;
+			$$->length = precision == 16 ? sizeof(Decimal64) : sizeof(Decimal128);
 		}
 	;
 
@@ -5009,6 +5114,12 @@ precision_opt
 	| '(' nonneg_short_integer ')'	{ $$ = $2; }
 	;
 
+// alternative to precision_opt that does not allow zero
+%type <int32Val> precision_opt_nz
+precision_opt_nz
+	: /* nothing */				{ $$ = 0; }
+	| '(' pos_short_integer ')'	{ $$ = $2; }
+	;
 
 // transaction statements
 
@@ -5099,6 +5210,12 @@ set_transaction
 			{ $$ = $3; }
 	;
 
+%type <sessionResetNode> session_reset
+session_reset
+	: ALTER SESSION RESET
+		{ $$ = newNode<SessionResetNode>(); }
+	;
+
 %type <setRoleNode> set_role
 set_role
 	: SET ROLE valid_symbol_name
@@ -5107,66 +5224,66 @@ set_role
 		{ $$ = newNode<SetRoleNode>(); }
 	;
 
-%type <setRoundNode> set_round
-set_round
+%type <setDecFloatRoundNode> set_decfloat_round
+set_decfloat_round
 	: SET DECFLOAT ROUND valid_symbol_name
-		{ $$ = newNode<SetRoundNode>($4); }
+		{ $$ = newNode<SetDecFloatRoundNode>($4); }
 	;
 
-%type <setTrapsNode> set_traps
-set_traps
+%type <setDecFloatTrapsNode> set_decfloat_traps
+set_decfloat_traps
 	: SET DECFLOAT TRAPS TO
-			{ $$ = newNode<SetTrapsNode>(); }
-		traps_list_opt($5)
+			{ $$ = newNode<SetDecFloatTrapsNode>(); }
+		decfloat_traps_list_opt($5)
 			{ $$ = $5; }
 	;
 
-%type <setBindNode> set_bind
-set_bind
+%type <setDecFloatBindNode> set_decfloat_bind
+set_decfloat_bind
 	: SET DECFLOAT BIND
-			{ $$ = newNode<SetBindNode>(); }
-		bind_clause($4)
+			{ $$ = newNode<SetDecFloatBindNode>(); }
+		decfloat_bind_clause($4)
 			{ $$ = $4; }
 	;
 
-%type traps_list_opt(<setTrapsNode>)
-traps_list_opt($setTrapsNode)
+%type decfloat_traps_list_opt(<setDecFloatTrapsNode>)
+decfloat_traps_list_opt($setDecFloatTrapsNode)
 	: // nothing
-	| traps_list($setTrapsNode)
+	| decfloat_traps_list($setDecFloatTrapsNode)
 	;
 
-%type traps_list(<setTrapsNode>)
-traps_list($setTrapsNode)
-	: trap($setTrapsNode)
-	| traps_list ',' trap($setTrapsNode)
+%type decfloat_traps_list(<setDecFloatTrapsNode>)
+decfloat_traps_list($setDecFloatTrapsNode)
+	: decfloat_trap($setDecFloatTrapsNode)
+	| decfloat_traps_list ',' decfloat_trap($setDecFloatTrapsNode)
 	;
 
-%type trap(<setTrapsNode>)
-trap($setTrapsNode)
+%type decfloat_trap(<setDecFloatTrapsNode>)
+decfloat_trap($setDecFloatTrapsNode)
 	: valid_symbol_name
-		{ $setTrapsNode->trap($1); }
+		{ $setDecFloatTrapsNode->trap($1); }
 	;
 
-%type bind_clause(<setBindNode>)
-bind_clause($setBindNode)
+%type decfloat_bind_clause(<setDecFloatBindNode>)
+decfloat_bind_clause($setDecFloatBindNode)
 	: NATIVE
 		// do nothing
 	| character_keyword
-		{ $setBindNode->bind.bind = DecimalBinding::DEC_TEXT; }
+		{ $setDecFloatBindNode->bind.bind = DecimalBinding::DEC_TEXT; }
 	| DOUBLE PRECISION
-		{ $setBindNode->bind.bind = DecimalBinding::DEC_DOUBLE; }
-	| BIGINT scale_clause($setBindNode)
-		{ $setBindNode->bind.bind = DecimalBinding::DEC_NUMERIC; }
+		{ $setDecFloatBindNode->bind.bind = DecimalBinding::DEC_DOUBLE; }
+	| BIGINT decfloat_scale_clause($setDecFloatBindNode)
+		{ $setDecFloatBindNode->bind.bind = DecimalBinding::DEC_NUMERIC; }
 	;
 
-%type scale_clause(<setBindNode>)
-scale_clause($setBindNode)
+%type decfloat_scale_clause(<setDecFloatBindNode>)
+decfloat_scale_clause($setDecFloatBindNode)
 	: // nothing
 	| ',' signed_long_integer
 		{
 			if ($2 > 18 || $2 < 0)
 				yyabandon(YYPOSNARG(2), -842, isc_scale_nogt);	// Scale must be between 0 and precision
-			$setBindNode->bind.numScale = -$2;
+			$setDecFloatBindNode->bind.numScale = -$2;
 		}
 
 %type <setSessionNode> session_statement
@@ -5192,6 +5309,28 @@ timepart_ses_stmt_tout
 	| MINUTE		{ $$ = blr_extract_minute; }
 	| SECOND		{ $$ = blr_extract_second; }
 	| MILLISECOND	{ $$ = blr_extract_millisecond; }
+	;
+
+%type <mngNode> set_time_zone
+set_time_zone
+	: SET TIME ZONE set_time_zone_option	{ $$ = $4; }
+	;
+
+%type <mngNode> set_time_zone_option
+set_time_zone_option
+	: sql_string	{ $$ = newNode<SetTimeZoneNode>($1->getString()); }
+	| LOCAL			{ $$ = newNode<SetTimeZoneNode>(); }
+	;
+
+%type <mngNode> set_time_zone_bind
+set_time_zone_bind
+	: SET TIME ZONE BIND set_time_zone_bind_option	{ $$ = $5; }
+	;
+
+%type <mngNode> set_time_zone_bind_option
+set_time_zone_bind_option
+	: LEGACY	{ $$ = newNode<SetTimeZoneBindNode>(TimeZoneUtil::BIND_LEGACY); }
+	| NATIVE	{ $$ = newNode<SetTimeZoneBindNode>(TimeZoneUtil::BIND_NATIVE); }
 	;
 
 %type tran_option_list_opt(<setTransactionNode>)
@@ -5261,9 +5400,10 @@ snap_shot
 
 %type <uintVal>	version_mode
 version_mode
-	: /* nothing */	{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION; }
-	| VERSION		{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_REC_VERSION; }
-	| NO VERSION	{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION; }
+	: /* nothing */		{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION; }
+	| VERSION			{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_REC_VERSION; }
+	| NO VERSION		{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION; }
+	| READ CONSISTENCY	{ $$ = SetTransactionNode::ISO_LEVEL_READ_COMMITTED_READ_CONSISTENCY; }
 	;
 
 %type <uintVal> lock_type
@@ -6352,23 +6492,17 @@ update_or_insert_matching_opt($fieldArray)
 returning_clause
 	: /* nothing */
 		{ $$ = NULL; }
-	| RETURNING value_opt_alias_list
+	| RETURNING select_list
 		{
 			$$ = FB_NEW_POOL(getPool()) ReturningClause(getPool());
 			$$->first = $2;
 		}
-	| RETURNING value_opt_alias_list INTO variable_list
+	| RETURNING select_list INTO variable_list
 		{
 			$$ = FB_NEW_POOL(getPool()) ReturningClause(getPool());
 			$$->first = $2;
 			$$->second = $4;
 		}
-	;
-
-%type <valueListNode> value_opt_alias_list
-value_opt_alias_list
-	: value_opt_alias							{ $$ = newNode<ValueListNode>($1); }
-	| value_opt_alias_list ',' value_opt_alias	{ $$ = $1->add($3); }
 	;
 
 %type <metaNamePtr> cursor_clause
@@ -6543,13 +6677,13 @@ boolean_value_expression
 		{ $$ = $2; }
 	| value IS boolean_literal
 		{
-			ComparativeBoolNode* node = newNode<ComparativeBoolNode>(blr_eql, $1, $3);
+			ComparativeBoolNode* node = newNode<ComparativeBoolNode>(blr_equiv, $1, $3);
 			node->dsqlCheckBoolean = true;
 			$$ = node;
 		}
 	| value IS NOT boolean_literal
 		{
-			ComparativeBoolNode* node = newNode<ComparativeBoolNode>(blr_eql, $1, $4);
+			ComparativeBoolNode* node = newNode<ComparativeBoolNode>(blr_equiv, $1, $4);
 			node->dsqlCheckBoolean = true;
 			$$ = newNode<NotBoolNode>(node);
 		}
@@ -6968,7 +7102,7 @@ map_from_symbol_name
 
 %type <intlStringPtr> map_logoninfo
 map_logoninfo
-	: STRING
+	: sql_string
 	| valid_symbol_name		{ $$ = newNode<IntlString>($1->c_str()); }
 	;
 
@@ -7046,7 +7180,7 @@ value_special
 %type <valueExprNode> value_primary
 value_primary
 	: nonparenthesized_value
-	| '(' value_primary ')'	{ $$ = $2; }
+	| '(' value_primary ')'				{ $$ = $2; }
 	;
 
 // Matches definition of <simple value specification> in SQL standard
@@ -7084,6 +7218,10 @@ nonparenthesized_value
 		{ $$ = newNode<ConcatenateNode>($1, $3); }
 	| value_special COLLATE symbol_collation_name
 		{ $$ = newNode<CollateNode>($1, *$3); }
+	| value_special AT LOCAL %prec AT
+		{ $$ = newNode<AtNode>($1, nullptr); }
+	| value_special AT TIME ZONE value_special %prec AT
+		{ $$ = newNode<AtNode>($1, $5); }
 	| value_special '-' value_special
 		{ $$ = newNode<ArithmeticNode>(blr_subtract, (client_dialect < SQL_DIALECT_V6_TRANSITION), $1, $3); }
 	| value_special '*' value_special
@@ -7138,6 +7276,24 @@ datetime_value_expression
 
 			$$ = newNode<CurrentDateNode>();
 		}
+	| LOCALTIME time_precision_opt
+		{
+			if (client_dialect < SQL_DIALECT_V6_TRANSITION)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_sql_dialect_datatype_unsupport) << Arg::Num(client_dialect) <<
+						  												  Arg::Str("TIME"));
+			}
+
+			if (db_dialect < SQL_DIALECT_V6_TRANSITION)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_sql_db_dialect_dtype_unsupport) << Arg::Num(db_dialect) <<
+						  												  Arg::Str("TIME"));
+			}
+
+			$$ = newNode<LocalTimeNode>($2);
+		}
 	| CURRENT_TIME time_precision_opt
 		{
 			if (client_dialect < SQL_DIALECT_V6_TRANSITION)
@@ -7156,6 +7312,8 @@ datetime_value_expression
 
 			$$ = newNode<CurrentTimeNode>($2);
 		}
+	| LOCALTIMESTAMP timestamp_precision_opt
+		{ $$ = newNode<LocalTimeStampNode>($2); }
 	| CURRENT_TIMESTAMP timestamp_precision_opt
 		{ $$ = newNode<CurrentTimeStampNode>($2); }
 	;
@@ -7427,6 +7585,23 @@ non_aggregate_function
 
 %type <aggNode> aggregate_function
 aggregate_function
+	: aggregate_function_prefix
+	| aggregate_function_prefix FILTER '(' WHERE search_condition ')'
+		{
+			$$ = $1;
+
+			if ($$->aggInfo.blr == blr_agg_count2 && !$$->arg)	// count(*)
+				$$->arg = newNode<ValueIfNode>($5, MAKE_const_slong(1), newNode<NullNode>());
+			else
+			{
+				fb_assert($$->arg);
+				$$->arg = newNode<ValueIfNode>($5, $$->arg, newNode<NullNode>());
+			}
+		}
+	;
+
+%type <aggNode> aggregate_function_prefix
+aggregate_function_prefix
 	: COUNT '(' '*' ')'
 		{ $$ = newNode<CountAggNode>(false, (client_dialect < SQL_DIALECT_V6_TRANSITION)); }
 	| COUNT '(' all_noise value ')'
@@ -7711,6 +7886,8 @@ system_function_std_syntax
 	| ATAN
 	| ATAN2
 	| ATANH
+	| BASE64_DECODE
+	| BASE64_ENCODE
 	| BIN_AND
 	| BIN_NOT
 	| BIN_OR
@@ -7722,6 +7899,7 @@ system_function_std_syntax
 	| COS
 	| COSH
 	| COT
+	| CRC32
 	| EXP
 	| FLOOR
 	| GEN_UUID
@@ -7737,6 +7915,7 @@ system_function_std_syntax
 	| POWER
 	| RAND
 	| RDB_GET_CONTEXT
+	| RDB_GET_TRANSACTION_CN
 	| RDB_ROLE_IN_USE
 	| RDB_SET_CONTEXT
 	| REPLACE
@@ -7744,6 +7923,8 @@ system_function_std_syntax
 	| RIGHT
 	| ROUND
 	| RPAD
+	| RSA_PRIVATE
+	| RSA_PUBLIC
 	| SIGN
 	| SIN
 	| SINH
@@ -7782,6 +7963,14 @@ system_function_special_syntax
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>(MAKE_const_slong($3))->add($5)->add($7));
+			$$->dsqlSpecialSyntax = true;
+		}
+	| encrypt_decrypt '(' value USING valid_symbol_name crypt_opt_mode KEY value crypt_opt_iv crypt_opt_counter_type crypt_opt_counter ')'
+		{
+			$$ = newNode<SysFuncCallNode>(*$1,
+				newNode<ValueListNode>($3)->add(MAKE_str_constant(newIntlString($5->c_str()), CS_ASCII))->
+					add(MAKE_str_constant(newIntlString($6->c_str()), CS_ASCII))->add($8)->add($9)->
+					add(MAKE_str_constant(newIntlString($10->c_str()), CS_ASCII))->add($11));
 			$$->dsqlSpecialSyntax = true;
 		}
 	| FIRST_DAY '(' of_first_last_day_part FROM value ')'
@@ -7823,11 +8012,108 @@ system_function_special_syntax
 		}
 	| POSITION '(' value_list_opt  ')'
 		{ $$ = newNode<SysFuncCallNode>(*$1, $3); }
+	| rsa_encrypt_decrypt '(' value KEY value crypt_opt_lparam crypt_opt_hash ')'
+		{
+			$$ = newNode<SysFuncCallNode>(*$1,
+				newNode<ValueListNode>($3)->add($5)->add($6)->
+					add(MAKE_str_constant(newIntlString($7->c_str()), CS_ASCII)));
+			$$->dsqlSpecialSyntax = true;
+		}
+	| RSA_SIGN '(' value KEY value crypt_opt_hash crypt_opt_saltlen ')'
+		{
+			$$ = newNode<SysFuncCallNode>(*$1,
+				newNode<ValueListNode>($3)->add($5)->
+					add(MAKE_str_constant(newIntlString($6->c_str()), CS_ASCII))->add($7));
+			$$->dsqlSpecialSyntax = true;
+		}
+	| RSA_VERIFY'(' value SIGNATURE value KEY value crypt_opt_hash crypt_opt_saltlen ')'
+		{
+			$$ = newNode<SysFuncCallNode>(*$1,
+				newNode<ValueListNode>($3)->add($5)->add($7)->
+					add(MAKE_str_constant(newIntlString($8->c_str()), CS_ASCII))->add($9));
+			$$->dsqlSpecialSyntax = true;
+		}
 	| RDB_SYSTEM_PRIVILEGE '(' valid_symbol_name ')'
 		{
 			ValueExprNode* v = MAKE_system_privilege($3->c_str());
 			$$ = newNode<SysFuncCallNode>(*$1, newNode<ValueListNode>(v));
 		}
+	;
+
+%type <metaNamePtr> rsa_encrypt_decrypt
+rsa_encrypt_decrypt
+	: RSA_DECRYPT | RSA_ENCRYPT
+	;
+
+%type <valueExprNode> crypt_opt_lparam
+crypt_opt_lparam
+	: // nothing
+		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
+	| LPARAM value
+		{ $$ = $2; }
+	;
+
+%type <metaNamePtr> crypt_opt_hash
+crypt_opt_hash
+	: // nothing
+		{ $$ = newNode<MetaName>(""); }
+	| HASH valid_symbol_name
+		{ $$ = $2; }
+	;
+
+%type <valueExprNode> crypt_opt_saltlen
+crypt_opt_saltlen
+	: // nothing
+		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
+	| SALT_LENGTH value
+		{ $$ = $2; }
+	;
+
+%type <metaNamePtr> crypt_opt_mode
+crypt_opt_mode
+	: // nothing
+		{ $$ = newNode<MetaName>(""); }
+	| MODE valid_symbol_name
+		{ $$ = $2; }
+	;
+
+%type <valueExprNode> crypt_opt_iv
+crypt_opt_iv
+	: // nothing
+		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
+	| IV value
+		{ $$ = $2; }
+	;
+
+%type <metaNamePtr> crypt_opt_counter_type
+crypt_opt_counter_type
+	: // nothing
+		{ $$ = newNode<MetaName>(""); }
+	| crypt_counter_type
+		{ $$ = $1; }
+	;
+
+%type <metaNamePtr> crypt_counter_type
+crypt_counter_type
+	: CTR_BIG_ENDIAN | CTR_LITTLE_ENDIAN
+	;
+
+%type <valueExprNode> crypt_opt_counter
+crypt_opt_counter
+	: // nothing
+		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
+	| crypt_counter_name value
+		{ $$ = $2; }
+	;
+
+%type <metaNamePtr> crypt_counter_name
+crypt_counter_name
+	: COUNTER | CTR_LENGTH
+	;
+
+%type <metaNamePtr> encrypt_decrypt
+encrypt_decrypt
+	: ENCRYPT | DECRYPT
 	;
 
 %type <blrOp> of_first_last_day_part
@@ -8084,6 +8370,8 @@ timestamp_part
 	| MINUTE		{ $$ = blr_extract_minute; }
 	| SECOND		{ $$ = blr_extract_second; }
 	| MILLISECOND	{ $$ = blr_extract_millisecond; }
+	| TIMEZONE_HOUR	{ $$ = blr_extract_timezone_hour; }
+	| TIMEZONE_MINUTE	{ $$ = blr_extract_timezone_minute; }
 	| WEEK			{ $$ = blr_extract_week; }
 	| WEEKDAY		{ $$ = blr_extract_weekday; }
 	| YEARDAY		{ $$ = blr_extract_yearday; }
@@ -8481,35 +8769,61 @@ non_reserved_word
 	| SERVERWIDE
 	| INCREMENT
 	| TRUSTED
-	| BIND					// added in FB 4.0
+	| BASE64_DECODE		// added in FB 4.0
+	| BASE64_ENCODE
+	| BIND
+	| CLEAR
+	| COUNTER
 	| COMPARE_DECFLOAT
+	| CONNECTIONS
+	| CONSISTENCY
+	| CRC32
+	| CTR_BIG_ENDIAN
+	| CTR_LENGTH
+	| CTR_LITTLE_ENDIAN
 	| CUME_DIST
-	| DECFLOAT
 	| DEFINER
 	| EXCLUDE
 	| FIRST_DAY
 	| FOLLOWING
 	| IDLE
 	| INVOKER
+	| IV
 	| LAST_DAY
+	| LEGACY
+	| LIFETIME
+	| LPARAM
 	| MESSAGE
+	| MODE
 	| NATIVE
 	| NORMALIZE_DECFLOAT
 	| NTILE
+	| OLDEST
 	| OTHERS
 	| OVERRIDING
 	| PERCENT_RANK
+	| POOL
 	| PRECEDING
 	| PRIVILEGE
 	| QUANTIZE
 	| RANGE
+	| RESET
+	| RSA_DECRYPT
+	| RSA_ENCRYPT
+	| RSA_PRIVATE
+	| RSA_PUBLIC
+	| RSA_SIGN
+	| RSA_VERIFY
+	| SALT_LENGTH
 	| SECURITY
 	| SESSION
+	| SIGNATURE
 	| SQL
 	| SYSTEM
 	| TIES
 	| TOTALORDER
 	| TRAPS
+	| ZONE
 	;
 
 %%

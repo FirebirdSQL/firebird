@@ -300,6 +300,8 @@ public:
 					key++;
 					lt = locGreatEqual;
 					break;
+				default:
+					break;
 			}
 
 			// Look up a bucket for our key
@@ -396,6 +398,9 @@ public:
 					// Bucket must contain one bit at least
 					fb_assert(false);
 				}
+
+				default:
+					break;
 			}
 			fb_assert(false); // Invalid constant is used ?
 			return false;

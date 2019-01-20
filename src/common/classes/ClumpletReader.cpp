@@ -334,7 +334,9 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_res_fix_fss_metadata:
 			case isc_spb_bkp_stat:
 			case isc_spb_bkp_skip_data:
-			//case isc_spb_res_skip_data:	// same value
+			case isc_spb_bkp_keyholder:
+			case isc_spb_bkp_keyname:
+			case isc_spb_bkp_crypt:
 				return StringSpb;
 			case isc_spb_bkp_factor:
 			case isc_spb_bkp_length:
@@ -866,6 +868,12 @@ const ClumpletReader::KindList ClumpletReader::spbList[] = {
 
 AuthReader::AuthReader(const AuthBlock& authBlock)
 	: ClumpletReader(ClumpletReader::WideUnTagged, authBlock.begin(), authBlock.getCount())
+{
+	rewind();
+}
+
+AuthReader::AuthReader(MemoryPool& pool, const AuthBlock& authBlock)
+	: ClumpletReader(pool, ClumpletReader::WideUnTagged, authBlock.begin(), authBlock.getCount())
 {
 	rewind();
 }

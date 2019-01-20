@@ -101,7 +101,7 @@ public:
 				"msvcr110.dll",
 #elif _MSC_VER == 1800
 					"msvcr120.dll",
-#elif _MSC_VER >= 1900 && _MSC_VER <= 1912
+#elif _MSC_VER >= 1900 && _MSC_VER < 1920
 					"vcruntime140.dll",
 #else
                     #error Specify CRT DLL name here !
@@ -191,7 +191,7 @@ void ModuleLoader::doctorModuleExtension(PathName& name)
 	name += ".dll";
 }
 
-ModuleLoader::Module* ModuleLoader::loadModule(const PathName& modPath)
+ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const PathName& modPath)
 {
 	ContextActivator ctx;
 
@@ -213,6 +213,13 @@ ModuleLoader::Module* ModuleLoader::loadModule(const PathName& modPath)
 
 	if (!module)
 		module = LoadLibraryEx(modPath.c_str(), 0, LOAD_WITH_ALTERED_SEARCH_PATH);
+
+	if (!module && status)
+	{
+		status[0] = isc_arg_win32;
+		status[1] = GetLastError();
+		status[2] = isc_arg_end;
+	}
 
 	// Restore old mode in case we are embedded into user application
 	SetErrorMode(oldErrorMode);

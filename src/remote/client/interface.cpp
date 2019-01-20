@@ -64,6 +64,7 @@
 #include "firebird/Interface.h"
 #include "../common/StatementMetadata.h"
 #include "../common/IntlParametersBlock.h"
+#include "../common/status.h"
 
 #include "../auth/SecurityDatabase/LegacyClient.h"
 #include "../auth/SecureRemotePassword/client/SrpClient.h"
@@ -1003,9 +1004,10 @@ static void authReceiveResponse(bool havePacket, ClntAuthBlock& authItr, rem_por
 
 static AtomicCounter remote_event_id;
 
-static const unsigned ANALYZE_UV =			0x01;
+static const unsigned ANALYZE_USER_VFY =	0x01;
 static const unsigned ANALYZE_LOOPBACK =	0x02;
 static const unsigned ANALYZE_MOUNTS =		0x04;
+static const unsigned ANALYZE_EMP_NAME =	0x08;
 
 inline static void reset(IStatus* status) throw()
 {
@@ -1053,7 +1055,7 @@ IAttachment* RProvider::attach(CheckStatusWrapper* status, const char* filename,
 		unsigned flags = ANALYZE_MOUNTS;
 
 		if (get_new_dpb(newDpb, dpbParam))
-			flags |= ANALYZE_UV;
+			flags |= ANALYZE_USER_VFY;
 
 		if (loopback)
 			flags |= ANALYZE_LOOPBACK;
@@ -1675,7 +1677,7 @@ Firebird::IAttachment* RProvider::create(CheckStatusWrapper* status, const char*
 		unsigned flags = ANALYZE_MOUNTS;
 
 		if (get_new_dpb(newDpb, dpbParam))
-			flags |= ANALYZE_UV;
+			flags |= ANALYZE_USER_VFY;
 
 		if (loopback)
 			flags |= ANALYZE_LOOPBACK;
@@ -1859,7 +1861,7 @@ void Attachment::freeClientData(CheckStatusWrapper* status, bool force)
 	{
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
-		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+		RemotePortGuard portGuard(port, FB_FUNCTION);
 
 		try
 		{
@@ -1954,7 +1956,7 @@ void Attachment::dropDatabase(CheckStatusWrapper* status)
 
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
-		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+		RemotePortGuard portGuard(port, FB_FUNCTION);
 
 		try
 		{
@@ -4974,15 +4976,6 @@ void Attachment::putSlice(CheckStatusWrapper* status, ITransaction* apiTra, ISC_
 }
 
 
-namespace {
-	void portEventsShutdown(rem_port* port)
-	{
-		if (port->port_events_thread)
-			Thread::waitForCompletion(port->port_events_thread);
-	}
-}
-
-
 Firebird::IEvents* Attachment::queEvents(CheckStatusWrapper* status, Firebird::IEventCallback* callback,
 									 unsigned int length, const unsigned char* events)
 {
@@ -5022,11 +5015,11 @@ Firebird::IEvents* Attachment::queEvents(CheckStatusWrapper* status, Firebird::I
 			receive_response(status, rdb, packet);
 			port->connect(packet);
 
-			Thread::start(event_thread, port->port_async, THREAD_high,
-						  &port->port_async->port_events_thread);
-			port->port_async->port_events_shutdown = portEventsShutdown;
+			rem_port* port_async = port->port_async;
+			port_async->port_events_threadId =
+				Thread::start(event_thread, port_async, THREAD_high, &port_async->port_events_thread);
 
-			port->port_async->port_context = rdb;
+			port_async->port_context = rdb;
 		}
 
 		// Add event block to port's list of active remote events
@@ -5663,10 +5656,12 @@ Firebird::IService* RProvider::attachSvc(CheckStatusWrapper* status, const char*
 		unsigned flags = 0;
 
 		if (user_verification)
-			flags |= ANALYZE_UV;
+			flags |= ANALYZE_USER_VFY;
 
 		if (loopback)
 			flags |= ANALYZE_LOOPBACK;
+
+		flags |= ANALYZE_EMP_NAME;
 
 		PathName refDbName;
 		if (newSpb.find(isc_spb_expected_db))
@@ -5754,7 +5749,7 @@ void Service::freeClientData(CheckStatusWrapper* status, bool force)
 
 		CHECK_HANDLE(rdb, isc_bad_svc_handle);
 		rem_port* port = rdb->rdb_port;
-		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+		RemotePortGuard portGuard(port, FB_FUNCTION);
 
 		try
 		{
@@ -6437,6 +6432,11 @@ static void secureAuthentication(ClntAuthBlock& cBlock, rem_port* port)
 		if (st.getState() & Firebird::IStatus::STATE_ERRORS)
 			status_exception::raise(&st);
 	}
+	else
+	{
+		// try to start crypt
+		cBlock.tryNewKeys(port);
+	}
 }
 
 
@@ -6468,10 +6468,12 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 	cBlock.loadClnt(pb, &parSet);
 	authenticateStep0(cBlock);
 
+	bool needFile = !(flags & ANALYZE_EMP_NAME);
+
 #ifdef WIN_NT
-	if (ISC_analyze_protocol(PROTOCOL_XNET, attach_name, node_name, NULL))
-		port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_UV, cBlock.getConfig(), ref_db_name);
-	else if (ISC_analyze_protocol(PROTOCOL_WNET, attach_name, node_name, WNET_SEPARATOR) ||
+	if (ISC_analyze_protocol(PROTOCOL_XNET, attach_name, node_name, NULL, needFile))
+		port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_USER_VFY, cBlock.getConfig(), ref_db_name);
+	else if (ISC_analyze_protocol(PROTOCOL_WNET, attach_name, node_name, WNET_SEPARATOR, needFile) ||
 		ISC_analyze_pclan(attach_name, node_name))
 	{
 		if (node_name.isEmpty())
@@ -6482,20 +6484,20 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 			ISC_utf8ToSystem(node_name);
 		}
 
-		port = WNET_analyze(&cBlock, attach_name, node_name.c_str(), flags & ANALYZE_UV,
+		port = WNET_analyze(&cBlock, attach_name, node_name.c_str(), flags & ANALYZE_USER_VFY,
 			cBlock.getConfig(), ref_db_name);
 	}
 	else
 #endif
 
-	if (ISC_analyze_protocol(PROTOCOL_INET4, attach_name, node_name, INET_SEPARATOR))
+	if (ISC_analyze_protocol(PROTOCOL_INET4, attach_name, node_name, INET_SEPARATOR, needFile))
 		inet_af = AF_INET;
-	else if (ISC_analyze_protocol(PROTOCOL_INET6, attach_name, node_name, INET_SEPARATOR))
+	else if (ISC_analyze_protocol(PROTOCOL_INET6, attach_name, node_name, INET_SEPARATOR, needFile))
 		inet_af = AF_INET6;
 
 	if (inet_af != AF_UNSPEC ||
-		ISC_analyze_protocol(PROTOCOL_INET, attach_name, node_name, INET_SEPARATOR) ||
-		ISC_analyze_tcp(attach_name, node_name))
+		ISC_analyze_protocol(PROTOCOL_INET, attach_name, node_name, INET_SEPARATOR, needFile) ||
+		ISC_analyze_tcp(attach_name, node_name, needFile))
 	{
 		if (node_name.isEmpty())
 			node_name = INET_LOCALHOST;
@@ -6505,7 +6507,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 			ISC_utf8ToSystem(node_name);
 		}
 
-		port = INET_analyze(&cBlock, attach_name, node_name.c_str(), flags & ANALYZE_UV, pb,
+		port = INET_analyze(&cBlock, attach_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
 			cBlock.getConfig(), ref_db_name, cryptCb, inet_af);
 	}
 
@@ -6524,7 +6526,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 				ISC_unescape(node_name);
 				ISC_utf8ToSystem(node_name);
 
-				port = WNET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_UV,
+				port = WNET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_USER_VFY,
 					cBlock.getConfig(), ref_db_name);
 			}
 		}
@@ -6539,7 +6541,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 				ISC_unescape(node_name);
 				ISC_utf8ToSystem(node_name);
 
-				port = INET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_UV, pb,
+				port = INET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
 					cBlock.getConfig(), ref_db_name, cryptCb);
 			}
 		}
@@ -6556,19 +6558,19 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 #ifdef WIN_NT
 			if (!port)
 			{
-				port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_UV,
+				port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_USER_VFY,
 					cBlock.getConfig(), ref_db_name);
 			}
 
 			if (!port)
 			{
-				port = WNET_analyze(&cBlock, attach_name, WNET_LOCALHOST, flags & ANALYZE_UV,
+				port = WNET_analyze(&cBlock, attach_name, WNET_LOCALHOST, flags & ANALYZE_USER_VFY,
 					cBlock.getConfig(), ref_db_name);
 			}
 #endif
 			if (!port)
 			{
-				port = INET_analyze(&cBlock, attach_name, INET_LOCALHOST, flags & ANALYZE_UV, pb,
+				port = INET_analyze(&cBlock, attach_name, INET_LOCALHOST, flags & ANALYZE_USER_VFY, pb,
 					cBlock.getConfig(), ref_db_name, cryptCb);
 			}
 		}
@@ -8493,18 +8495,99 @@ static void cleanDpb(Firebird::ClumpletWriter& dpb, const ParametersSet* tags)
 
 } //namespace Remote
 
+
+RmtAuthBlock::RmtAuthBlock(const Firebird::AuthReader::AuthBlock& aBlock)
+	: rdr(*getDefaultMemoryPool(), aBlock), info(*getDefaultMemoryPool())
+{
+	FbLocalStatus st;
+	first(&st);
+	check(&st);
+}
+
+const char* RmtAuthBlock::getType()
+{
+	return info.type.nullStr();
+}
+
+const char* RmtAuthBlock::getName()
+{
+	return info.name.nullStr();
+}
+
+const char* RmtAuthBlock::getPlugin()
+{
+	return info.plugin.nullStr();
+}
+
+const char* RmtAuthBlock::getSecurityDb()
+{
+	return info.secDb.nullStr();
+}
+
+const char* RmtAuthBlock::getOriginalPlugin()
+{
+	return info.origPlug.nullStr();
+}
+
+FB_BOOLEAN RmtAuthBlock::next(Firebird::CheckStatusWrapper* status)
+{
+	try
+	{
+		rdr.moveNext();
+		return loadInfo();
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+	return FB_FALSE;
+}
+
+FB_BOOLEAN RmtAuthBlock::first(Firebird::CheckStatusWrapper* status)
+{
+	try
+	{
+		rdr.rewind();
+		return loadInfo();
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+	return FB_FALSE;
+}
+
+FB_BOOLEAN RmtAuthBlock::loadInfo()
+{
+	if (rdr.isEof())
+		return FB_FALSE;
+	rdr.getInfo(info);
+	return FB_TRUE;
+}
+
+
 ClntAuthBlock::ClntAuthBlock(const Firebird::PathName* fileName, Firebird::ClumpletReader* dpb,
 							 const ParametersSet* tags)
 	: pluginList(getPool()), serverPluginList(getPool()),
 	  cliUserName(getPool()), cliPassword(getPool()), cliOrigUserName(getPool()),
 	  dataForPlugin(getPool()), dataFromPlugin(getPool()),
-	  cryptKeys(getPool()), dpbConfig(getPool()),
-	  hasCryptKey(false), plugins(IPluginManager::TYPE_AUTH_CLIENT),
-	  authComplete(false), firstTime(true)
+	  cryptKeys(getPool()), dpbConfig(getPool()), dpbPlugins(getPool()),
+	  plugins(IPluginManager::TYPE_AUTH_CLIENT), authComplete(false), firstTime(true)
 {
-	if (dpb && tags && dpb->find(tags->config_text))
+	if (dpb && tags)
 	{
-		dpb->getString(dpbConfig);
+		if (dpb->find(tags->config_text))
+			dpb->getString(dpbConfig);
+
+		if (dpb->find(tags->plugin_list))
+			dpb->getPath(dpbPlugins);
+
+		if (dpb->find(tags->auth_block))
+		{
+			AuthReader::AuthBlock plain;
+			plain.add(dpb->getBytes(), dpb->getClumpLength());
+			remAuthBlock.reset(FB_NEW RmtAuthBlock(plain));
+		}
 	}
 	resetClnt(fileName);
 }
@@ -8529,10 +8612,11 @@ void ClntAuthBlock::extractDataFromPluginTo(Firebird::ClumpletWriter& dpb,
 		if (firstTime)
 		{
 			fb_assert(tags->plugin_name && tags->plugin_list);
+
 			if (pluginName.hasData())
-			{
 				dpb.insertPath(tags->plugin_name, pluginName);
-			}
+
+			dpb.deleteWithTag(tags->plugin_list);
 			dpb.insertPath(tags->plugin_list, pluginList);
 			firstTime = false;
 			HANDSHAKE_DEBUG(fprintf(stderr,
@@ -8594,7 +8678,6 @@ void ClntAuthBlock::loadClnt(Firebird::ClumpletWriter& dpb, const ParametersSet*
 		}
 		else if (t == tags->encrypt_key)
 		{
-			hasCryptKey = true;
 			HANDSHAKE_DEBUG(fprintf(stderr,
 				"Cli: loadClnt: PB contains crypt key\n"));
 		}
@@ -8647,6 +8730,11 @@ const char* ClntAuthBlock::getLogin()
 const char* ClntAuthBlock::getPassword()
 {
 	return cliPassword.nullStr();
+}
+
+IAuthBlock* ClntAuthBlock::getAuthBlock(CheckStatusWrapper* status)
+{
+	return remAuthBlock;
 }
 
 const unsigned char* ClntAuthBlock::getData(unsigned int* length)

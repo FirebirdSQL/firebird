@@ -281,7 +281,7 @@ USHORT PAG_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start)
 #ifdef SUPPORT_RAW_DEVICES
 	// The following lines (taken from PAG_format_header) are needed to identify
 	// this file in raw_devices_validate_database as a valid database attachment.
-	*(ISC_TIMESTAMP*) header->hdr_creation_date = TimeStamp::getCurrentTimeStamp().value();
+	*(ISC_TIMESTAMP*) header->hdr_creation_date = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
 	// should we include milliseconds or not?
 	//TimeStamp::round_time(header->hdr_creation_date->timestamp_time, 0);
 
@@ -644,8 +644,8 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, int cntAlloc, bool aligned)
 
 #ifdef VIO_DEBUG
 				VIO_trace(DEBUG_WRITES_INFO,
-					"\tPAG_allocate:  allocated page %" SLONGFORMAT"\n",
-							i + sequence * pageMgr.pagesPerPIP);
+					"PAG_allocate:  allocated page %" SLONGFORMAT"\n",
+					i + sequence * pageMgr.pagesPerPIP);
 #endif
 			}
 
@@ -715,8 +715,8 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, int cntAlloc, bool aligned)
 
 #ifdef VIO_DEBUG
 				VIO_trace(DEBUG_WRITES_INFO,
-					"\tPAG_allocate:  allocated page %" SLONGFORMAT"\n",
-							bit + sequence * pageMgr.pagesPerPIP);
+					"PAG_allocate:  allocated page %" SLONGFORMAT"\n",
+					bit + sequence * pageMgr.pagesPerPIP);
 #endif
 			}
 
@@ -863,17 +863,17 @@ AttNumber PAG_attachment_id(thread_db* tdbb)
 	// Get new attachment id
 
 	if (dbb->readOnly())
-		attachment->att_attachment_id = dbb->dbb_attachment_id + dbb->generateAttachmentId(tdbb);
+		attachment->att_attachment_id = dbb->generateAttachmentId();
 	else
 	{
 		window.win_page = HEADER_PAGE_NUMBER;
 		header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 		CCH_MARK(tdbb, &window);
-		const AttNumber att_id =
-			((AttNumber) header->hdr_att_high << BITS_PER_LONG | header->hdr_attachment_id) + 1;
+
+		const AttNumber att_id = Ods::getAttID(header) + 1;
 		attachment->att_attachment_id = att_id;
-		header->hdr_att_high = att_id >> BITS_PER_LONG;
-		header->hdr_attachment_id = (ULONG) (att_id & MAX_ULONG);
+		Ods::writeAttID(header, att_id);
+		dbb->assignLatestAttachmentId(attachment->att_attachment_id);
 
 		CCH_RELEASE(tdbb, &window);
 	}
@@ -953,7 +953,7 @@ void PAG_format_header(thread_db* tdbb)
 	WIN window(HEADER_PAGE_NUMBER);
 	header_page* header = (header_page*) CCH_fake(tdbb, &window, 1);
 	header->hdr_header.pag_scn = 0;
-	*(ISC_TIMESTAMP*) header->hdr_creation_date = TimeStamp::getCurrentTimeStamp().value();
+	*(ISC_TIMESTAMP*) header->hdr_creation_date = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
 	// should we include milliseconds or not?
 	//TimeStamp::round_time(header->hdr_creation_date->timestamp_time, 0);
 	header->hdr_header.pag_type = pag_header;
@@ -1131,13 +1131,8 @@ void PAG_header(thread_db* tdbb, bool info)
 	RelationPages* relPages = relation->getBasePages();
 	if (!relPages->rel_pages)
 	{
-		// 21-Dec-2003 Nickolay Samofatov
-		// No need to re-set first page for RDB$PAGES relation since
+		// NS: There's no need to reassign first page for RDB$PAGES relation since
 		// current code cannot change its location after database creation.
-		// Currently, this change only affects isc_database_info call,
-		// the only call which may call PAG_header multiple times.
-		// In fact, this isc_database_info behavior seems dangerous to me,
-		// but let somebody else fix that problem, I just fix the memory leak.
 		vcl* vector = vcl::newVector(*relation->rel_pool, 1);
 		relPages->rel_pages = vector;
 		(*vector)[0] = header->hdr_PAGES;
@@ -1155,7 +1150,8 @@ void PAG_header(thread_db* tdbb, bool info)
 		dbb->dbb_oldest_snapshot = oldest_snapshot;
 
 	dbb->dbb_attachment_id = header->hdr_attachment_id;
-	dbb->dbb_creation_date = *(ISC_TIMESTAMP*) header->hdr_creation_date;
+	dbb->dbb_creation_date.utc_timestamp = *(ISC_TIMESTAMP*) header->hdr_creation_date;
+	dbb->dbb_creation_date.time_zone = TimeZoneUtil::GMT_ZONE;
 
 	if (header->hdr_flags & hdr_read_only)
 	{
@@ -1264,7 +1260,7 @@ void PAG_header_init(thread_db* tdbb)
 
 	const USHORT ods_version = header->hdr_ods_version & ~ODS_FIREBIRD_FLAG;
 
-	if (!Ods::isSupported(header->hdr_ods_version, header->hdr_ods_minor))
+	if (!Ods::isSupported(header))
 	{
 		ERR_post(Arg::Gds(isc_wrong_ods) << Arg::Str(attachment->att_filename) <<
 											Arg::Num(ods_version) <<
@@ -1559,11 +1555,19 @@ void PAG_release_pages(thread_db* tdbb, USHORT pageSpaceID, int cntRelease,
 	page_inv_page* pages = NULL;
 	ULONG sequence = 0;
 
+#ifdef VIO_DEBUG
+	string dbg = "PAG_release_pages:  about to release pages: ";
+#endif
+
 	for (int i = 0; i < cntRelease; i++)
 	{
 #ifdef VIO_DEBUG
-		VIO_trace(DEBUG_WRITES_INFO,
-			"\tPAG_release_pages:  about to release page %" SLONGFORMAT"\n", pgNums[i]);
+		if (i > 0)
+			dbg.append(", ");
+
+		char num[16];
+		_ltoa_s(pgNums[i], num, sizeof(num), 10);
+		dbg.append(num);
 #endif
 
 		const ULONG seq = pgNums[i] / pageMgr.pagesPerPIP;
@@ -1597,6 +1601,10 @@ void PAG_release_pages(thread_db* tdbb, USHORT pageSpaceID, int cntRelease,
 		}
 		pages->pip_min = MIN(pages->pip_min, relative_bit);
 	}
+
+#ifdef VIO_DEBUG
+	VIO_trace(DEBUG_WRITES_INFO, "%s\n", dbg.c_str());
+#endif
 
 	pageSpace->pipHighWater.exchangeLower(sequence);
 
@@ -1717,6 +1725,13 @@ void PAG_set_db_readonly(thread_db* tdbb, bool flag)
 		// for WRITE operations
 		header->hdr_flags &= ~hdr_read_only;
 		dbb->dbb_flags &= ~DBB_read_only;
+
+		// Take into account current attachment ID, else next attachment
+		// (cache writer, for examle) will get the same att ID and wait
+		// for att lock indefinitely.
+		Attachment* att = tdbb->getAttachment();
+		if (att->att_attachment_id)
+			Ods::writeAttID(header, att->att_attachment_id);
 
 		// This is necessary as dbb's Next could be less than OAT.
 		// And this is safe as we currently in exclusive attachment and

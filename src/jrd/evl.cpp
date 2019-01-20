@@ -197,7 +197,7 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 		}
 
 		if (!impure->vlu_desc.dsc_address)
-			ERR_post(Arg::Gds(isc_read_only_field));
+			ERR_post(Arg::Gds(isc_read_only_field) << "<unknown>");
 
 		return &impure->vlu_desc;
 	}
@@ -413,8 +413,6 @@ void EVL_make_value(thread_db* tdbb, const dsc* desc, impure_value* value, Memor
 
 	case dtype_long:
 	case dtype_real:
-	case dtype_sql_time:
-	case dtype_sql_date:
 		value->vlu_misc.vlu_long = *((SLONG*) from.dsc_address);
 		return;
 
@@ -438,7 +436,26 @@ void EVL_make_value(thread_db* tdbb, const dsc* desc, impure_value* value, Memor
 		value->vlu_misc.vlu_dec_fixed = *((DecimalFixed*) from.dsc_address);
 		return;
 
+	case dtype_sql_time:
+		value->vlu_misc.vlu_sql_time = *(GDS_TIME*) from.dsc_address;
+		return;
+
+	case dtype_sql_time_tz:
+		value->vlu_misc.vlu_sql_time_tz = *(ISC_TIME_TZ*) from.dsc_address;
+		return;
+
+	case dtype_sql_date:
+		value->vlu_misc.vlu_sql_date = *(GDS_DATE*) from.dsc_address;
+		return;
+
 	case dtype_timestamp:
+		value->vlu_misc.vlu_timestamp = *(GDS_TIMESTAMP*) from.dsc_address;
+		return;
+
+	case dtype_timestamp_tz:
+		value->vlu_misc.vlu_timestamp_tz = *(ISC_TIMESTAMP_TZ*) from.dsc_address;
+		return;
+
 	case dtype_quad:
 		value->vlu_misc.vlu_dbkey[0] = ((SLONG*) from.dsc_address)[0];
 		value->vlu_misc.vlu_dbkey[1] = ((SLONG*) from.dsc_address)[1];

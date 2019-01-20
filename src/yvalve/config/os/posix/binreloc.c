@@ -216,7 +216,7 @@ _br_find_exe_for_symbol (const void *symbol, BrInitError *error)
 			break;
 
 		/* Sanity check. */
-		if (strstr (line, " r-xp ") == NULL || strchr (line, '/') == NULL)
+		if ( !(strstr(line, " r-xp ") || strstr(line, " r--p ")) || strchr (line, '/') == NULL)
 			continue;
 
 		/* Parse line. */

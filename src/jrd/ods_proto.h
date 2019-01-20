@@ -25,7 +25,7 @@
 
 namespace Ods {
 
-	bool isSupported(USHORT, USHORT);
+	bool isSupported(const header_page* hdr);
 
 	// NS: ODS code logic should never depend on host platform pointer size.
 	// this is why data type for these things is ULONG (32-bit unsigned integer)
@@ -51,6 +51,9 @@ namespace Ods {
 
 	TraNumber getTraNum(const void* ptr);
 	void writeTraNum(void* ptr, TraNumber number, FB_SIZE_T header_size);
+
+	AttNumber getAttID(const header_page* page);
+	void writeAttID(header_page* page, AttNumber number);
 
 } // namespace
 

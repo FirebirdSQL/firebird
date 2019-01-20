@@ -385,7 +385,7 @@ public:
 	unsigned int timeToExpire() const;
 
 	// evaluate expire timestamp using start timestamp
-	bool getExpireTimestamp(const ISC_TIMESTAMP start, ISC_TIMESTAMP& exp) const;
+	bool getExpireTimestamp(const ISC_TIMESTAMP_TZ start, ISC_TIMESTAMP_TZ& exp) const;
 
 	// set timeout value in milliseconds and secondary error code
 	void setup(unsigned int value, ISC_STATUS error)
@@ -429,7 +429,7 @@ public:
 	unsigned int timeToExpire() const;
 
 	// evaluate expire timestamp using start timestamp
-	bool getExpireTimestamp(const ISC_TIMESTAMP start, ISC_TIMESTAMP& exp) const;
+	bool getExpireTimestamp(const ISC_TIMESTAMP_TZ start, ISC_TIMESTAMP_TZ& exp) const;
 
 	// set timeout value in milliseconds and secondary error code
 	void setup(unsigned int value, ISC_STATUS error)

@@ -65,6 +65,11 @@ public:
 		return threadDataType;
 	}
 
+	ThreadData* getPriorContext() const
+	{
+		return threadDataPriorContext;
+	}
+
 	static ThreadData*	getSpecific();
 	void			putSpecific();
 	static void		restoreSpecific();

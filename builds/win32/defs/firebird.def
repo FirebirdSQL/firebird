@@ -167,7 +167,7 @@ EXPORTS
 	isc_open_blob	@144
 	isc_open_blob2	@145
 	isc_put_segment	@152
-	
+
 	; Database functions
 
 	isc_attach_database	@103
@@ -357,8 +357,8 @@ EXPORTS
 	fb_get_transaction_handle
 	fb_database_crypt_callback
 
-	gds__trace                                                                                                                                     
-	gds__trace_raw                                                                                                                                 
+	gds__trace
+	gds__trace_raw
 	gds__trace_printer
 	gds__parse_bpb2
 

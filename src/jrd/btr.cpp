@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "memory_routines.h"
+#include "../common/TimeZoneUtil.h"
 #include "../common/classes/vector.h"
 #include "../common/classes/VaryStr.h"
 #include <stdio.h>
@@ -569,8 +570,10 @@ DSC* BTR_eval_expression(thread_db* tdbb, index_desc* idx, Record* record, bool&
 	{
 		Jrd::ContextPoolHolder context(tdbb, expr_request->req_pool);
 
-		expr_request->req_timestamp = org_request ?
-			org_request->req_timestamp : TimeStamp::getCurrentTimeStamp();
+		if (org_request)
+			expr_request->req_gmt_timestamp = org_request->req_gmt_timestamp;
+		else
+			TimeZoneUtil::validateGmtTimeStamp(expr_request->req_gmt_timestamp);
 
 		if (!(result = EVL_expr(tdbb, expr_request, idx->idx_expression)))
 			result = &idx->idx_expression_desc;
@@ -584,7 +587,8 @@ DSC* BTR_eval_expression(thread_db* tdbb, index_desc* idx, Record* record, bool&
 
 		expr_request->req_caller = NULL;
 		expr_request->req_flags &= ~req_in_use;
-		expr_request->req_timestamp.invalidate();
+		expr_request->req_attachment = NULL;
+		expr_request->req_gmt_timestamp.invalidate();
 
 		throw;
 	}
@@ -594,7 +598,8 @@ DSC* BTR_eval_expression(thread_db* tdbb, index_desc* idx, Record* record, bool&
 
 	expr_request->req_caller = NULL;
 	expr_request->req_flags &= ~req_in_use;
-	expr_request->req_timestamp.invalidate();
+	expr_request->req_attachment = NULL;
+	expr_request->req_gmt_timestamp.invalidate();
 
 	return result;
 }
@@ -1378,6 +1383,7 @@ USHORT BTR_key_length(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
 			break;
 
 		case idx_sql_time:
+		case idx_sql_time_tz:
 			length = sizeof(ULONG);
 			break;
 
@@ -1386,6 +1392,7 @@ USHORT BTR_key_length(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
 			break;
 
 		case idx_timestamp:
+		case idx_timestamp_tz:
 			length = sizeof(SINT64);
 			break;
 
@@ -1439,12 +1446,14 @@ USHORT BTR_key_length(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
 			length = sizeof(double);
 			break;
 		case idx_sql_time:
+		case idx_sql_time_tz:
 			length = sizeof(ULONG);
 			break;
 		case idx_sql_date:
 			length = sizeof(ULONG);
 			break;
 		case idx_timestamp:
+		case idx_timestamp_tz:
 			length = sizeof(SINT64);
 			break;
 		case idx_numeric2:
@@ -2562,9 +2571,8 @@ static void compress(thread_db* tdbb,
 	{
 		GDS_TIMESTAMP timestamp;
 		timestamp = MOV_get_timestamp(desc);
-		const ULONG SECONDS_PER_DAY	= 24 * 60 * 60;
 		temp.temp_sint64 = ((SINT64) (timestamp.timestamp_date) *
-			(SINT64) (SECONDS_PER_DAY * ISC_TIME_SECONDS_PRECISION)) +
+			(SINT64) (NoThrowTimeStamp::SECONDS_PER_DAY * ISC_TIME_SECONDS_PRECISION)) +
 			(SINT64) (timestamp.timestamp_time);
 		temp_copy_length = sizeof(SINT64);
 
@@ -2574,7 +2582,22 @@ static void compress(thread_db* tdbb,
 				   ((const ULONG*) desc->dsc_address)[1]);
 		fprintf(stderr, "TIMESTAMP2: %20" QUADFORMAT "d ", temp.temp_sint64);
 #endif
+	}
+	else if (itype == idx_timestamp_tz)
+	{
+		ISC_TIMESTAMP_TZ timeStampTz;
+		timeStampTz = MOV_get_timestamp_tz(desc);
+		temp.temp_sint64 = ((SINT64) (timeStampTz.utc_timestamp.timestamp_date) *
+			(SINT64) (NoThrowTimeStamp::SECONDS_PER_DAY * ISC_TIME_SECONDS_PRECISION)) +
+			(SINT64) (timeStampTz.utc_timestamp.timestamp_time);
+		temp_copy_length = sizeof(SINT64);
 
+#ifdef DEBUG_INDEXKEY
+		fprintf(stderr, "TIMESTAMP2: %d:%u ",
+				   ((const SLONG*) desc->dsc_address)[0],
+				   ((const ULONG*) desc->dsc_address)[1]);
+		fprintf(stderr, "TIMESTAMP2: %20" QUADFORMAT "d ", temp.temp_sint64);
+#endif
 	}
 	else if (itype == idx_sql_date)
 	{
@@ -2595,7 +2618,16 @@ static void compress(thread_db* tdbb,
 #ifdef DEBUG_INDEXKEY
 		fprintf(stderr, "TIME %u ", temp.temp_ulong);
 #endif
+	}
+	else if (itype == idx_sql_time_tz)
+	{
+		temp.temp_ulong = MOV_get_sql_time_tz(desc).utc_time;
+		temp_copy_length = sizeof(ULONG);
+		temp_is_negative = false;
 
+#ifdef DEBUG_INDEXKEY
+		fprintf(stderr, "TIME TZ %u ", temp.temp_ulong);
+#endif
 	}
 	else if (desc->dsc_dtype == dtype_timestamp)
 	{
@@ -2609,7 +2641,21 @@ static void compress(thread_db* tdbb,
 #ifdef DEBUG_INDEXKEY
 		fprintf(stderr, "TIMESTAMP1 special %lg ", temp.temp_double);
 #endif
+	}
+	else if (desc->dsc_dtype == dtype_timestamp_tz)
+	{
+		ISC_TIMESTAMP_TZ timestampTz = MOV_get_timestamp_tz(desc);
+		ISC_TIMESTAMP* timestamp = (ISC_TIMESTAMP*) &timestampTz;
 
+		dsc descTimestamp;
+		descTimestamp.makeTimestamp(timestamp);
+
+		temp.temp_double = MOV_date_to_double(&descTimestamp);
+		temp_is_negative = (temp.temp_double < 0);
+
+#ifdef DEBUG_INDEXKEY
+		fprintf(stderr, "TIMESTAMP1 special %lg ", temp.temp_double);
+#endif
 	}
 	else if (itype == idx_boolean)
 	{
@@ -5948,7 +5994,7 @@ string print_key(thread_db* tdbb, jrd_rel* relation, index_desc* idx, Record* re
 		MET_scan_relation(tdbb, relation);
 	}
 
-	const int MAX_KEY_STRING_LEN = 250;
+	const FB_SIZE_T MAX_KEY_STRING_LEN = 250;
 	string key, value;
 
 	try

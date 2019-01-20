@@ -176,13 +176,16 @@ static const struct ini_idx_t indices[] =
 		SEGMENT(f_coll_id, idx_numeric),		// collation id
 		SEGMENT(f_coll_cs_id, idx_numeric)		// character set id
 	}},
-	// define index RDB$INDEX_27 for RDB$DEPENDENCIES RDB$DEPENDENT_NAME;
-	INDEX(27, rel_dpds, 0, 1)
-		SEGMENT(f_dpd_name, idx_metadata)		// dependent name
+	// define index RDB$INDEX_27 for RDB$DEPENDENCIES RDB$DEPENDENT_NAME, RDB$DEPENDENT_TYPE;
+	INDEX(27, rel_dpds, 0, 2)
+		SEGMENT(f_dpd_name, idx_metadata),		// dependent name
+		SEGMENT(f_dpd_type, idx_numeric)		// dependent type
 	}},
-	// define index RDB$INDEX_28 for RDB$DEPENDENCIES RDB$DEPENDED_ON_NAME;
-	INDEX(28, rel_dpds, 0, 1)
-		SEGMENT(f_dpd_o_name, idx_metadata)		// dependent on name
+	// define index RDB$INDEX_28 for RDB$DEPENDENCIES RDB$DEPENDED_ON_NAME, RDB$DEPENDED_ON_TYPE, RDB$FIELD_NAME;
+	INDEX(28, rel_dpds, 0, 3)
+		SEGMENT(f_dpd_o_name, idx_metadata),	// dependent on name
+		SEGMENT(f_dpd_o_type, idx_numeric),		// dependent on type
+		SEGMENT(f_dpd_f_name, idx_metadata)		// field name
 	}},
 	// define index RDB$INDEX_29 for RDB$USER_PRIVILEGES RDB$RELATION_NAME;
 	INDEX(29, rel_priv, 0, 1)

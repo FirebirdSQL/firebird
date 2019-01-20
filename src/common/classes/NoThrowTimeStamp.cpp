@@ -34,6 +34,10 @@
 #include <sys/timeb.h>
 #endif
 
+#ifdef WIN_NT
+#include <windows.h>
+#endif
+
 #include "../common/classes/NoThrowTimeStamp.h"
 
 namespace Firebird {
@@ -53,8 +57,29 @@ NoThrowTimeStamp NoThrowTimeStamp::getCurrentTimeStamp(const char** error) throw
 	// is going to to be somewhere in range between 1 ms (like on UNIX/Risc)
 	// and 53 ms (such as Win9X)
 
-	time_t seconds; // UTC time
 	int milliseconds;
+
+#ifdef WIN_NT
+	FILETIME ftUtc, ftLocal;
+	SYSTEMTIME stLocal;
+
+	GetSystemTimeAsFileTime(&ftUtc);
+	if (!FileTimeToLocalFileTime(&ftUtc, &ftLocal))
+	{
+		if (error)
+			*error = "FileTimeToLocalFileTime";
+		return result;
+	}
+	if (!FileTimeToSystemTime(&ftLocal, &stLocal))
+	{
+		if (error)
+			*error = "FileTimeToSystemTime";
+		return result;
+	}
+
+	milliseconds = stLocal.wMilliseconds;
+#else
+	time_t seconds; // UTC time
 
 #ifdef HAVE_GETTIMEOFDAY
 	struct timeval tp;
@@ -67,6 +92,7 @@ NoThrowTimeStamp NoThrowTimeStamp::getCurrentTimeStamp(const char** error) throw
 	seconds = time_buffer.time;
 	milliseconds = time_buffer.millitm;
 #endif
+#endif // WIN_NT
 
 	// NS: Current FB behavior of using server time zone is not appropriate for
 	// distributed applications. We should be storing UTC times everywhere and
@@ -78,28 +104,43 @@ NoThrowTimeStamp NoThrowTimeStamp::getCurrentTimeStamp(const char** error) throw
 
 	const int fractions = milliseconds * ISC_TIME_SECONDS_PRECISION / 1000;
 
+#ifdef WIN_NT
+	// Manually convert SYSTEMTIME to "struct tm" used below
+
+	struct tm times, *ptimes = &times;
+
+	times.tm_sec = stLocal.wSecond;			// seconds after the minute - [0,59]
+	times.tm_min = stLocal.wMinute;			// minutes after the hour - [0,59]
+	times.tm_hour = stLocal.wHour;			// hours since midnight - [0,23]
+	times.tm_mday = stLocal.wDay;			// day of the month - [1,31]
+	times.tm_mon = stLocal.wMonth - 1;		// months since January - [0,11]
+	times.tm_year = stLocal.wYear - 1900;	// years since 1900
+	times.tm_wday = stLocal.wDayOfWeek;		// days since Sunday - [0,6]
+
+	// --- no used for encoding below
+	times.tm_yday = 0;						// days since January 1 - [0,365]
+	times.tm_isdst = -1;					// daylight savings time flag
+#else
 #ifdef HAVE_LOCALTIME_R
-	struct tm times;
+	struct tm times, *ptimes = &times;
 	if (!localtime_r(&seconds, &times))
 	{
 		if (error)
 			*error = "localtime_r";
 		return result;
 	}
-
-	result.encode(&times, fractions);
 #else
-	struct tm *times = localtime(&seconds);
-	if (!times)
+	struct tm *ptimes = localtime(&seconds);
+	if (!ptimes)
 	{
 		if (error)
 			*error = "localtime";
 		return result;
 	}
-
-	result.encode(times, fractions);
 #endif
+#endif // WIN_NT
 
+	result.encode(ptimes, fractions);
 	return result;
 }
 

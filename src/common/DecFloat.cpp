@@ -31,6 +31,9 @@
 
 #include "StatusArg.h"
 #include "gen/iberror.h"
+#include "status.h"
+
+#include <limits>
 
 extern "C"
 {
@@ -44,6 +47,9 @@ extern "C"
 #include <float.h>
 
 using namespace Firebird;
+
+const DecimalStatus DecimalStatus::DEFAULT(FB_DEC_Errors);
+const DecimalBinding DecimalBinding::DEFAULT;
 
 namespace {
 
@@ -359,7 +365,9 @@ Decimal64 Decimal64::floor(DecimalStatus decSt) const
 
 int Decimal64::compare(DecimalStatus decSt, Decimal64 tgt) const
 {
-	DecimalContext context(this, decSt);
+	DecimalStatus cmpStatus(decSt);
+	cmpStatus.decExtFlag &= ~DEC_IEEE_754_Invalid_operation;
+	DecimalContext context(this, cmpStatus);
 	decDouble r;
 	decDoubleCompare(&r, &dec, &tgt.dec, &context);
 	return decDoubleToInt32(&r, &context, DEC_ROUND_HALF_UP);
@@ -608,9 +616,27 @@ void DecimalFixed::exactInt(DecimalStatus decSt, int scale)
 {
 	setScale(decSt, -scale);
 
-	DecimalContext context(this, decSt);
-	decQuadToIntegralExact(&dec, &dec, &context);
-	decQuadQuantize(&dec, &dec, &c1.dec, &context);
+	try
+	{
+		DecimalContext context(this, decSt);
+		decQuadToIntegralExact(&dec, &dec, &context);
+		decQuadQuantize(&dec, &dec, &c1.dec, &context);
+	}
+	catch (const Exception& ex)
+	{
+		FbLocalStatus st;
+		ex.stuffException(&st);
+
+		switch (st->getErrors()[1])
+		{
+		case isc_decfloat_invalid_operation:
+			(Arg::Gds(isc_decfloat_invalid_operation) <<
+			 Arg::Gds(isc_numeric_out_of_range)).raise();
+			break;
+		}
+
+		throw;
+	}
 }
 
 Decimal128 Decimal128::operator=(Decimal64 d64)
@@ -685,21 +711,26 @@ double Decimal128Base::toDouble(DecimalStatus decSt) const
 {
 	DecimalContext context(this, decSt);
 
-	if (compare(decSt, dmin) < 0 || compare(decSt, dmax) > 0)
+	if (compare(decSt, dmin) < 0)
+	{
 		decContextSetStatus(&context, DEC_Overflow);
-	else if ((!decQuadIsZero(&dec)) && compare(decSt, dzlw) > 0 && compare(decSt, dzup) < 0)
+		return std::numeric_limits<double>::has_infinity ? -std::numeric_limits<double>::infinity() : 0.0;
+	}
+	if (compare(decSt, dmax) > 0)
+	{
+		decContextSetStatus(&context, DEC_Overflow);
+		return std::numeric_limits<double>::has_infinity ? std::numeric_limits<double>::infinity() : 0.0;
+	}
+
+	if ((!decQuadIsZero(&dec)) && compare(decSt, dzlw) > 0 && compare(decSt, dzup) < 0)
 	{
 		decContextSetStatus(&context, DEC_Underflow);
 		return 0.0;
 	}
-	else
-	{
-		char s[IDecFloat34::STRING_SIZE];
-		decQuadToString(&dec, s);
-		return atof(s);
-	}
 
-	return 0.0;
+	char s[IDecFloat34::STRING_SIZE];
+	decQuadToString(&dec, s);
+	return atof(s);
 }
 
 SINT64 Decimal128::toInt64(DecimalStatus decSt, int scale) const

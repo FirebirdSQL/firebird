@@ -79,7 +79,6 @@ class ExternalFileDirectoryList;
 class MonitoringData;
 class GarbageCollector;
 class CryptoManager;
-class JProvider;
 
 // general purpose vector
 template <class T, BlockType TYPE = type_vec>
@@ -236,44 +235,6 @@ const ULONG DBB_shutdown_single		= 0x100L;	// Database is in single-user mainten
 class Database : public pool_alloc<type_dbb>
 {
 public:
-	class SharedCounter
-	{
-		static const ULONG DEFAULT_CACHE_SIZE = 100;
-
-		struct ValueCache
-		{
-			Lock* lock;						// lock which holds shared counter value
-			SINT64 curVal;					// current value of shared counter lock
-			SINT64 maxVal;					// maximum cached value of shared counter lock
-		};
-
-	public:
-		enum
-		{
-			ATTACHMENT_ID_SPACE = 0,
-			TRANSACTION_ID_SPACE = 1,
-			STATEMENT_ID_SPACE = 2,
-			TOTAL_ITEMS = 3
-		};
-
-		explicit SharedCounter(bool localOnly)
-			: m_localOnly(localOnly)
-		{}
-
-		~SharedCounter()
-		{
-			for (size_t i = 0; i < TOTAL_ITEMS; i++)
-				delete m_counters[i].lock;
-		}
-
-		SINT64 generate(thread_db* tdbb, ULONG space, ULONG prefetch = DEFAULT_CACHE_SIZE);
-		void shutdown(thread_db* tdbb);
-
-	private:
-		ValueCache m_counters[TOTAL_ITEMS];
-		bool m_localOnly;
-	};
-
 	class ExistenceRefMutex : public Firebird::RefCounted
 	{
 	public:
@@ -331,13 +292,12 @@ public:
 		bool active;
 	};
 
-	static Database* create(Firebird::IPluginConfig* pConf, JProvider* provider, bool shared)
+	static Database* create(Firebird::IPluginConfig* pConf, bool shared)
 	{
 		Firebird::MemoryStats temp_stats;
 		MemoryPool* const pool = MemoryPool::createPool(NULL, temp_stats);
 		Database* const dbb = FB_NEW_POOL(*pool) Database(pool, pConf, shared);
 		pool->setStatsGroup(dbb->dbb_memory_stats);
-		dbb->dbb_provider = provider;
 		return dbb;
 	}
 
@@ -376,7 +336,7 @@ public:
 	LockManager*	dbb_lock_mgr;
 	EventManager*	dbb_event_mgr;
 
-	JProvider*	dbb_provider;			// Provider that owns this database block
+	Firebird::ICryptKeyCallback*	dbb_callback;	// Parent's crypt callback
 	Database*	dbb_next;				// Next database block in system
 	Attachment* dbb_attachments;		// Active attachments
 	Attachment* dbb_sys_attachments;	// System attachments
@@ -463,21 +423,17 @@ public:
 	time_t last_flushed_write;			// last flushed write time
 
 	TipCache*		dbb_tip_cache;		// cache of latest known state of all transactions in system
-	TransactionsVector*	dbb_pc_transactions;				// active precommitted transactions
-	Firebird::SyncObject dbb_pc_sync;						// guard access to dbb_pc_transactions
 	BackupManager*	dbb_backup_manager;						// physical backup manager
-	Firebird::TimeStamp dbb_creation_date; 					// creation date
+	ISC_TIMESTAMP_TZ dbb_creation_date; 					// creation timestamp in GMT
 	ExternalFileDirectoryList* dbb_external_file_directory_list;
 	Firebird::RefPtr<const Config> dbb_config;
 
-	SharedCounter dbb_shared_counter;
 	CryptoManager* dbb_crypto_manager;
 	Firebird::RefPtr<ExistenceRefMutex> dbb_init_fini;
 	Firebird::RefPtr<Linger> dbb_linger_timer;
 	unsigned dbb_linger_seconds;
 	time_t dbb_linger_end;
 	Firebird::RefPtr<Firebird::IPluginConfig> dbb_plugin_config;
-	Nullable<bool> dbb_ss_definer;	// default sql security value
 
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;
@@ -525,9 +481,8 @@ private:
 		dbb_stats(*p),
 		dbb_lock_owner_id(getLockOwnerId()),
 		dbb_tip_cache(NULL),
-		dbb_creation_date(Firebird::TimeStamp::getCurrentTimeStamp()),
+		dbb_creation_date(Firebird::TimeZoneUtil::getCurrentGmtTimeStamp()),
 		dbb_external_file_directory_list(NULL),
-		dbb_shared_counter(shared),
 		dbb_init_fini(FB_NEW_POOL(*getDefaultMemoryPool()) ExistenceRefMutex()),
 		dbb_linger_seconds(0),
 		dbb_linger_end(0),
@@ -539,20 +494,11 @@ private:
 	~Database();
 
 public:
-	AttNumber generateAttachmentId(thread_db* tdbb)
-	{
-		return dbb_shared_counter.generate(tdbb, SharedCounter::ATTACHMENT_ID_SPACE, 1);
-	}
-
-	TraNumber generateTransactionId(thread_db* tdbb)
-	{
-		return dbb_shared_counter.generate(tdbb, SharedCounter::TRANSACTION_ID_SPACE, 1);
-	}
-
-	StmtNumber generateStatementId(thread_db* tdbb)
-	{
-		return dbb_shared_counter.generate(tdbb, SharedCounter::STATEMENT_ID_SPACE);
-	}
+	AttNumber generateAttachmentId();
+	TraNumber generateTransactionId();
+	StmtNumber generateStatementId();
+	// void assignLatestTransactionId(TraNumber number);
+	void assignLatestAttachmentId(AttNumber number);
 
 	USHORT getMaxIndexKeyLength() const
 	{

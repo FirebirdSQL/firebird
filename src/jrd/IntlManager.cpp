@@ -471,15 +471,16 @@ bool IntlManager::initialize()
 					ModuleLoader::Module* mod = NULL;
 					bool exists = modules->exist(filename);
 
+					ISC_STATUS_ARRAY status;
 					if (!exists)
 					{
-						mod = ModuleLoader::loadModule(filename);
+						mod = ModuleLoader::loadModule(status, filename);
 						if (!mod)
 						{
 							ModuleLoader::doctorModuleExtension(filename);
 							exists = modules->exist(filename);
 							if (!exists)
-								mod = ModuleLoader::loadModule(filename);
+								mod = ModuleLoader::loadModule(status, filename);
 						}
 					}
 
@@ -512,8 +513,8 @@ bool IntlManager::initialize()
 						}
 						else
 						{
-							gds__log((string("Can't load INTL module '") +
-								filename.c_str() + "'").c_str());
+							iscLogStatus((string("Can't load INTL module '") +
+								filename.c_str() + "'").c_str(), status);
 							ok = false;
 						}
 					}

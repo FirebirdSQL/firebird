@@ -43,6 +43,7 @@
 #include "gen/iberror.h"
 
 #include "../common/gdsassert.h"
+#include "../common/TimeZoneUtil.h"
 #include "../common/classes/timestamp.h"
 #include "../common/cvt.h"
 #include "../jrd/intl.h"
@@ -128,18 +129,10 @@ using namespace Firebird;
 // AP,2012: Looks like there is no need making len zero, but I keep old define for a reference.
 // {if (len) {memcpy(to, from, len); from += len; to += len; len = 0;} }
 
-enum EXPECT_DATETIME
-{
-	expect_timestamp,
-	expect_sql_date,
-	expect_sql_time
-};
-
 static void datetime_to_text(const dsc*, dsc*, Callbacks*);
 static void float_to_text(const dsc*, dsc*, Callbacks*);
 static void decimal_float_to_text(const dsc*, dsc*, DecimalStatus, Callbacks*);
 static void integer_to_text(const dsc*, dsc*, Callbacks*);
-static void string_to_datetime(const dsc*, GDS_TIMESTAMP*, const EXPECT_DATETIME, ErrorFunction);
 static SINT64 hex_to_value(const char*& string, const char* end);
 static void localError(const Firebird::Arg::StatusVector&);
 
@@ -485,9 +478,9 @@ static void integer_to_text(const dsc* from, dsc* to, Callbacks* cb)
 }
 
 
-static void string_to_datetime(const dsc* desc,
-							   GDS_TIMESTAMP* date,
-							   const EXPECT_DATETIME expect_type, ErrorFunction err)
+void CVT_string_to_datetime(const dsc* desc,
+							   ISC_TIMESTAMP_TZ* date, bool* timezone_present,
+							   const EXPECT_DATETIME expect_type, bool allow_special, Callbacks* cb)
 {
 /**************************************
  *
@@ -555,11 +548,11 @@ static void string_to_datetime(const dsc* desc,
 	unsigned int position_month = 1;
 	unsigned int position_day = 2;
 	bool have_english_month = false;
-	bool dot_separator_seen = false;
+	char date_sep = '\0';
 	VaryStr<100> buffer;			// arbitrarily large
 
 	const char* p = NULL;
-	const USHORT length = CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), 0, err);
+	const USHORT length = CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), 0, cb->err);
 
 	const char* const end = p + length;
 
@@ -568,15 +561,18 @@ static void string_to_datetime(const dsc* desc,
 	memset(components, 0, sizeof(components));
 	memset(description, 0, sizeof(description));
 
+	if (timezone_present)
+		*timezone_present = false;
+
 	// Parse components
 	// The 7 components are Year, Month, Day, Hours, Minutes, Seconds, Thou
 	// The first 3 can be in any order
 
-	const int start_component = (expect_type == expect_sql_time) ? 3 : 0;
+	const int start_component = (expect_type == expect_sql_time || expect_type == expect_sql_time_tz) ? 3 : 0;
 	int i;
+
 	for (i = start_component; i < 7; i++)
 	{
-
 		// Skip leading blanks.  If we run out of characters, we're done
 		// with parse.
 
@@ -599,7 +595,8 @@ static void string_to_datetime(const dsc* desc,
 			}
 			description[i] = precision;
 		}
-		else if (LETTER7(c) && !have_english_month)
+		// Month names are only allowed in first 2 positions
+		else if (LETTER7(c) && !have_english_month && i < 2)
 		{
 			TEXT temp[sizeof(YESTERDAY) + 1];
 
@@ -617,15 +614,14 @@ static void string_to_datetime(const dsc* desc,
 			// Insist on at least 3 characters for month names
 			if (t - temp < 3)
 			{
-				CVT_conversion_error(desc, err);
+				CVT_conversion_error(desc, cb->err);
 				return;
 			}
 
 			const TEXT* const* month_ptr = FB_LONG_MONTHS_UPPER;
 			while (true)
 			{
-				// Month names are only allowed in first 2 positions
-				if (*month_ptr && i < 2)
+				if (*month_ptr)
 				{
 					t = temp;
 					const TEXT* m = *month_ptr++;
@@ -642,38 +638,57 @@ static void string_to_datetime(const dsc* desc,
 					// it's not a month name, so it's either a magic word or
 					// a non-date string.  If there are more characters, it's bad
 
+					if (!allow_special || i != 0)
+						CVT_conversion_error(desc, cb->err);
+
 					description[i] = SPECIAL;
 
 					while (++p < end)
 					{
 						if (*p != ' ' && *p != '\t' && *p != '\0')
-							CVT_conversion_error(desc, err);
+							CVT_conversion_error(desc, cb->err);
 					}
 
 					// fetch the current datetime
-					*date = Firebird::TimeStamp::getCurrentTimeStamp().value();
+					*(ISC_TIMESTAMP*) date = Firebird::TimeStamp::getCurrentTimeStamp().value();
+
+					if (expect_type == expect_sql_time_tz || expect_type == expect_timestamp_tz)
+						date->time_zone = cb->getSessionTimeZone();
 
 					if (strcmp(temp, NOW) == 0)
-						return;
-					if (expect_type == expect_sql_time)
 					{
-						CVT_conversion_error(desc, err);
+						if (expect_type == expect_sql_time_tz || expect_type == expect_timestamp_tz)
+							TimeZoneUtil::localTimeStampToUtc(*date);
 						return;
 					}
-					date->timestamp_time = 0;
+
+					if (expect_type == expect_sql_time || expect_type == expect_sql_time_tz)
+					{
+						CVT_conversion_error(desc, cb->err);
+						return;
+					}
+
+					date->utc_timestamp.timestamp_time = 0;
+
+					if (expect_type == expect_sql_time_tz || expect_type == expect_timestamp_tz)
+						TimeZoneUtil::localTimeStampToUtc(*date);
+
 					if (strcmp(temp, TODAY) == 0)
 						return;
+
 					if (strcmp(temp, TOMORROW) == 0)
 					{
-						date->timestamp_date++;
+						date->utc_timestamp.timestamp_date++;
 						return;
 					}
+
 					if (strcmp(temp, YESTERDAY) == 0)
 					{
-						date->timestamp_date--;
+						date->utc_timestamp.timestamp_date--;
 						return;
 					}
-					CVT_conversion_error(desc, err);
+
+					CVT_conversion_error(desc, cb->err);
 					return;
 				}
 			}
@@ -684,9 +699,12 @@ static void string_to_datetime(const dsc* desc,
 		}
 		else
 		{
-			// Not a digit and not a letter - must be punctuation
-			CVT_conversion_error(desc, err);
-			return;
+			if (expect_type == expect_sql_date || i != 3)
+				CVT_conversion_error(desc, cb->err);
+
+			// May be a timezone after a date when expecting a timestamp.
+			--i;
+			break;
 		}
 
 		components[i] = n;
@@ -699,49 +717,100 @@ static void string_to_datetime(const dsc* desc,
 			break;
 
 		// Grab a separator character
-		if (*p == '/' || *p == '-' || *p == ',' || *p == ':')
+		if (i <= 1)
 		{
-			p++;
+			if (date_sep == '\0' || *p == date_sep)
+			{
+				date_sep = *p;
+
+				if (*p == '/' || *p == '-')
+				{
+					p++;
+					continue;
+				}
+				else if (*p == '.')
+				{
+					p++;
+					continue;
+				}
+			}
+		}
+		else if (i == 2)
 			continue;
-		}
-		if (*p == '.')
+		else if (i >= 3 && i <= 5)
 		{
-			if (i <= 1)
-				dot_separator_seen = true;
-			p++;
-			//continue;
+			if (*p == ':')
+			{
+				p++;
+				continue;
+			}
+			else if (*p == '.')
+			{
+				p++;
+				i = 6 - 1;
+				continue;
+			}
+			else
+			{
+				i = 7;
+				break;
+			}
 		}
+		else if (i == 6)
+			break;
+
+		CVT_conversion_error(desc, cb->err);
+		return;
 	}
 
 	// User must provide at least 2 components
 	if (i - start_component < 1)
 	{
-		CVT_conversion_error(desc, err);
+		CVT_conversion_error(desc, cb->err);
 		return;
 	}
 
 	// Dates cannot have a Time portion
 	if (expect_type == expect_sql_date && i > 2)
 	{
-		CVT_conversion_error(desc, err);
+		CVT_conversion_error(desc, cb->err);
 		return;
 	}
 
-	// We won't allow random trash after the recognized string
-	while (p < end)
+	USHORT sessionTimeZone = cb->getSessionTimeZone();
+	USHORT zone = sessionTimeZone;
+
+	if (expect_type != expect_sql_date)
 	{
-		if (*p != ' ' && *p != '\t' && *p != '\0')
+		while (p < end && (*p == ' ' || *p == '\t'))
+			p++;
+
+		if (p < end)
 		{
-			CVT_conversion_error(desc, err);
-			return;
+			zone = TimeZoneUtil::parse(p, strlen(p));
+
+			if (timezone_present)
+				*timezone_present = true;
 		}
-		++p;
+	}
+	else
+	{
+		// We won't allow random trash after the recognized string
+		while (p < end)
+		{
+			if (*p != ' ' && *p != '\t' && *p != '\0')
+			{
+				CVT_conversion_error(desc, cb->err);
+				return;
+			}
+			++p;
+		}
 	}
 
 	tm times;
 	memset(&times, 0, sizeof(times));
 
-	if (expect_type != expect_sql_time)
+	if (expect_type != expect_sql_time && expect_type != expect_sql_time_tz)
 	{
 		// Figure out what format the user typed the date in
 
@@ -766,7 +835,7 @@ static void string_to_datetime(const dsc* desc,
 			position_month = 1;
 			position_day = 0;
 		}
-		else if (dot_separator_seen)
+		else if (date_sep == '.')
 		{
 			// A period as a separator implies DD.MM.YYYY
 			position_year = 2;
@@ -788,7 +857,7 @@ static void string_to_datetime(const dsc* desc,
 			description[position_month] > 2 || description[position_month] == 0 ||
 			description[position_day] > 2 || description[position_day] <= 0)
 		{
-			CVT_conversion_error(desc, err);
+			CVT_conversion_error(desc, cb->err);
 			return;
 		}
 
@@ -821,12 +890,13 @@ static void string_to_datetime(const dsc* desc,
 	}
 	else
 	{
-		// The date portion isn't needed for time - but to
-		// keep the conversion in/out of isc_time clean lets
-		// initialize it properly anyway
-		times.tm_year = 0;
-		times.tm_mon = 0;
-		times.tm_mday = 1;
+		// Fetch current date
+		tm times2;
+		Firebird::TimeStamp::getCurrentTimeStamp().decode(&times2);
+
+		times.tm_year = times2.tm_year;
+		times.tm_mon = times2.tm_mon;
+		times.tm_mday = times2.tm_mday;
 	}
 
 	// Handle time values out of range - note possibility of 60 for
@@ -840,7 +910,7 @@ static void string_to_datetime(const dsc* desc,
 			description[5] > 2 ||
 			description[6] > -ISC_TIME_SECONDS_PRECISION_SCALE))
 	{
-		CVT_conversion_error(desc, err);
+		CVT_conversion_error(desc, cb->err);
 	}
 
 	// convert day/month/year to Julian and validate result
@@ -853,21 +923,23 @@ static void string_to_datetime(const dsc* desc,
 		switch (expect_type)
 		{
 			case expect_sql_date:
-				err(Arg::Gds(isc_date_range_exceeded));
+				cb->err(Arg::Gds(isc_date_range_exceeded));
 				break;
 			case expect_sql_time:
-				err(Arg::Gds(isc_time_range_exceeded));
+			case expect_sql_time_tz:
+				cb->err(Arg::Gds(isc_time_range_exceeded));
 				break;
 			case expect_timestamp:
-				err(Arg::Gds(isc_datetime_range_exceeded));
+			case expect_timestamp_tz:
+				cb->err(Arg::Gds(isc_datetime_range_exceeded));
 				break;
 			default: // this should never happen!
-				CVT_conversion_error(desc, err);
+				CVT_conversion_error(desc, cb->err);
 				break;
 		}
 	}
 
-	if (expect_type != expect_sql_time)
+	if (expect_type != expect_sql_time && expect_type != expect_sql_time_tz)
 	{
 		tm times2;
 		ts.decode(&times2);
@@ -879,17 +951,34 @@ static void string_to_datetime(const dsc* desc,
 			times.tm_min != times2.tm_min ||
 			times.tm_sec != times2.tm_sec)
 		{
-			CVT_conversion_error(desc, err);
+			CVT_conversion_error(desc, cb->err);
 		}
 	}
 
-	*date = ts.value();
+	*(ISC_TIMESTAMP*) date = ts.value();
 
 	// Convert fraction of seconds
 	while (description[6]++ < -ISC_TIME_SECONDS_PRECISION_SCALE)
 		components[6] *= 10;
 
-	date->timestamp_time += components[6];
+	date->utc_timestamp.timestamp_time += components[6];
+	date->time_zone = zone;
+
+	if (expect_type == expect_sql_time_tz || expect_type == expect_timestamp_tz || zone != sessionTimeZone)
+		TimeZoneUtil::localTimeStampToUtc(*date);
+
+	if (zone != sessionTimeZone)
+	{
+		if (expect_type == expect_sql_time)
+		{
+			ISC_TIME_TZ timeTz;
+			timeTz.utc_time = date->utc_timestamp.timestamp_time;
+			timeTz.time_zone = zone;
+			date->utc_timestamp.timestamp_time = TimeZoneUtil::timeTzToTime(timeTz, sessionTimeZone, cb);
+		}
+		else if (expect_type == expect_timestamp)
+			*(ISC_TIMESTAMP*) date = TimeZoneUtil::timeStampTzToTimeStamp(*date, sessionTimeZone);
+	}
 }
 
 
@@ -1355,8 +1444,10 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 		return value;
 
 	case dtype_timestamp:
+	case dtype_timestamp_tz:
 	case dtype_sql_date:
 	case dtype_sql_time:
+	case dtype_sql_time_tz:
 	case dtype_blob:
 	case dtype_array:
 	case dtype_dbkey:
@@ -1448,9 +1539,9 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		case dtype_cstring:
 		case dtype_text:
 			{
-				GDS_TIMESTAMP date;
-				string_to_datetime(from, &date, expect_timestamp, cb->err);
-				*((GDS_TIMESTAMP *) to->dsc_address) = date;
+				ISC_TIMESTAMP_TZ date;
+				CVT_string_to_datetime(from, &date, NULL, expect_timestamp, true, cb);
+				*((GDS_TIMESTAMP*) to->dsc_address) = *(GDS_TIMESTAMP*) &date;
 			}
 			return;
 
@@ -1462,7 +1553,68 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		case dtype_sql_time:
 			((GDS_TIMESTAMP*) (to->dsc_address))->timestamp_date = 0;
 			((GDS_TIMESTAMP*) (to->dsc_address))->timestamp_time = *(GDS_TIME*) from->dsc_address;
-			((GDS_TIMESTAMP*) (to->dsc_address))->timestamp_date = cb->getCurDate();
+			((GDS_TIMESTAMP*) (to->dsc_address))->timestamp_date = cb->getLocalDate();
+			return;
+
+		case dtype_sql_time_tz:
+			*(ISC_TIMESTAMP*) to->dsc_address =
+				TimeZoneUtil::cvtTimeTzToTimeStamp(*(ISC_TIME_TZ*) from->dsc_address, cb);
+			return;
+
+		case dtype_timestamp_tz:
+			*(ISC_TIMESTAMP*) to->dsc_address =
+				TimeZoneUtil::cvtTimeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb);
+			return;
+
+		default:
+			fb_assert(false);		// Fall into ...
+		case dtype_short:
+		case dtype_long:
+		case dtype_int64:
+		case dtype_dbkey:
+		case dtype_quad:
+		case dtype_real:
+		case dtype_double:
+		case dtype_boolean:
+		case dtype_dec64:
+		case dtype_dec128:
+		case dtype_dec_fixed:
+			CVT_conversion_error(from, cb->err);
+			break;
+		}
+		break;
+
+	case dtype_timestamp_tz:
+		switch (from->dsc_dtype)
+		{
+		case dtype_varying:
+		case dtype_cstring:
+		case dtype_text:
+			{
+				ISC_TIMESTAMP_TZ date;
+				CVT_string_to_datetime(from, &date, NULL, expect_timestamp_tz, true, cb);
+				*((ISC_TIMESTAMP_TZ*) to->dsc_address) = date;
+			}
+			return;
+
+		case dtype_sql_time:
+			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
+				TimeZoneUtil::cvtTimeToTimeStampTz(*(ISC_TIME*) from->dsc_address, cb);
+			return;
+
+		case dtype_sql_time_tz:
+			*((ISC_TIMESTAMP_TZ*) to->dsc_address) =
+				TimeZoneUtil::cvtTimeTzToTimeStampTz(*(ISC_TIME_TZ*) from->dsc_address, cb);
+			return;
+
+		case dtype_sql_date:
+			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
+				TimeZoneUtil::cvtDateToTimeStampTz(*(GDS_DATE*) from->dsc_address, cb);
+			return;
+
+		case dtype_timestamp:
+			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
+				TimeZoneUtil::cvtTimeStampToTimeStampTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
 			return;
 
 		default:
@@ -1490,9 +1642,9 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		case dtype_cstring:
 		case dtype_text:
 			{
-				GDS_TIMESTAMP date;
-				string_to_datetime(from, &date, expect_sql_date, cb->err);
-				*((GDS_DATE *) to->dsc_address) = date.timestamp_date;
+				ISC_TIMESTAMP_TZ date;
+				CVT_string_to_datetime(from, &date, NULL, expect_sql_date, true, cb);
+				*((GDS_DATE*) to->dsc_address) = date.utc_timestamp.timestamp_date;
 			}
 			return;
 
@@ -1500,9 +1652,15 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			*((GDS_DATE *) to->dsc_address) = ((GDS_TIMESTAMP *) from->dsc_address)->timestamp_date;
 			return;
 
+		case dtype_timestamp_tz:
+			*(GDS_DATE*) to->dsc_address =
+				TimeZoneUtil::cvtTimeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb).timestamp_date;
+			return;
+
 		default:
 			fb_assert(false);		// Fall into ...
 		case dtype_sql_time:
+		case dtype_sql_time_tz:
 		case dtype_short:
 		case dtype_long:
 		case dtype_int64:
@@ -1526,14 +1684,70 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		case dtype_cstring:
 		case dtype_text:
 			{
-				GDS_TIMESTAMP date;
-				string_to_datetime(from, &date, expect_sql_time, cb->err);
-				*((GDS_TIME *) to->dsc_address) = date.timestamp_time;
+				ISC_TIMESTAMP_TZ date;
+				CVT_string_to_datetime(from, &date, NULL, expect_sql_time, true, cb);
+				*((GDS_TIME *) to->dsc_address) = date.utc_timestamp.timestamp_time;
 			}
+			return;
+
+		case dtype_sql_time_tz:
+			*(ISC_TIME*) to->dsc_address = TimeZoneUtil::cvtTimeTzToTime(*(ISC_TIME_TZ*) from->dsc_address, cb);
 			return;
 
 		case dtype_timestamp:
 			*((GDS_TIME *) to->dsc_address) = ((GDS_TIMESTAMP *) from->dsc_address)->timestamp_time;
+			return;
+
+		case dtype_timestamp_tz:
+			*(GDS_TIME*) to->dsc_address =
+				TimeZoneUtil::cvtTimeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb).timestamp_time;
+			return;
+
+		default:
+			fb_assert(false);		// Fall into ...
+		case dtype_sql_date:
+		case dtype_short:
+		case dtype_long:
+		case dtype_int64:
+		case dtype_dbkey:
+		case dtype_quad:
+		case dtype_real:
+		case dtype_double:
+		case dtype_boolean:
+		case dtype_dec64:
+		case dtype_dec128:
+		case dtype_dec_fixed:
+			CVT_conversion_error(from, cb->err);
+			break;
+		}
+		break;
+
+	case dtype_sql_time_tz:
+		switch (from->dsc_dtype)
+		{
+		case dtype_varying:
+		case dtype_cstring:
+		case dtype_text:
+			{
+				ISC_TIMESTAMP_TZ date;
+				CVT_string_to_datetime(from, &date, NULL, expect_sql_time_tz, true, cb);
+				((ISC_TIME_TZ*) to->dsc_address)->utc_time = date.utc_timestamp.timestamp_time;
+				((ISC_TIME_TZ*) to->dsc_address)->time_zone = date.time_zone;
+			}
+			return;
+
+		case dtype_sql_time:
+			*(ISC_TIME_TZ*) to->dsc_address = TimeZoneUtil::cvtTimeToTimeTz(*(ISC_TIME*) from->dsc_address, cb);
+			return;
+
+		case dtype_timestamp:
+			*(ISC_TIME_TZ*) to->dsc_address =
+				TimeZoneUtil::cvtTimeStampToTimeTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
+			return;
+
+		case dtype_timestamp_tz:
+			*(ISC_TIME_TZ*) to->dsc_address =
+				TimeZoneUtil::cvtTimeStampTzToTimeTz(*(ISC_TIMESTAMP_TZ*) from->dsc_address);
 			return;
 
 		default:
@@ -1745,7 +1959,9 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 		case dtype_sql_date:
 		case dtype_sql_time:
+		case dtype_sql_time_tz:
 		case dtype_timestamp:
+		case dtype_timestamp_tz:
 			datetime_to_text(from, to, cb);
 			return;
 
@@ -1996,12 +2212,18 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 	memset(&times, 0, sizeof(struct tm));
 
 	int	fractions = 0;
+	USHORT timezone;
 
 	switch (from->dsc_dtype)
 	{
 	case dtype_sql_time:
-		Firebird::TimeStamp::decode_time(*(GDS_TIME *) from->dsc_address,
-										 &times.tm_hour, &times.tm_min, &times.tm_sec, &fractions);
+		Firebird::TimeStamp::decode_time(*(GDS_TIME*) from->dsc_address,
+			&times.tm_hour, &times.tm_min, &times.tm_sec, &fractions);
+		break;
+
+	case dtype_sql_time_tz:
+		TimeZoneUtil::decodeTime(*(ISC_TIME_TZ*) from->dsc_address, cb, &times, &fractions);
+		timezone = ((ISC_TIME_TZ*) from->dsc_address)->time_zone;
 		break;
 
 	case dtype_sql_date:
@@ -2010,8 +2232,13 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 
 	case dtype_timestamp:
 		cb->isVersion4(version4); // Used in the conversion to text some lines below.
-		Firebird::TimeStamp::decode_timestamp(*(GDS_TIMESTAMP *) from->dsc_address,
-											  &times, &fractions);
+		Firebird::TimeStamp::decode_timestamp(*(GDS_TIMESTAMP*) from->dsc_address, &times, &fractions);
+		break;
+
+	case dtype_timestamp_tz:
+		cb->isVersion4(version4); // Used in the conversion to text some lines below.
+		TimeZoneUtil::decodeTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, &times, &fractions);
+		timezone = ((ISC_TIMESTAMP_TZ*) from->dsc_address)->time_zone;
 		break;
 
 	default:
@@ -2022,12 +2249,13 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 
 	// Decode the timestamp into human readable terms
 
-	TEXT temp[30];			// yyyy-mm-dd hh:mm:ss.tttt OR dd-MMM-yyyy hh:mm:ss.tttt
+	// yyyy-mm-dd hh:mm:ss.tttt +th:tm OR dd-MMM-yyyy hh:mm:ss.tttt +th:tm
+	TEXT temp[27 + TimeZoneUtil::MAX_LEN];
 	TEXT* p = temp;
 
 	// Make a textual date for data types that include it
 
-	if (from->dsc_dtype != dtype_sql_time)
+	if (from->dsc_dtype != dtype_sql_time && from->dsc_dtype != dtype_sql_time_tz)
 	{
 		if (from->dsc_dtype == dtype_sql_date || !version4)
 		{
@@ -2041,20 +2269,21 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 					times.tm_mday,
 					FB_LONG_MONTHS_UPPER[times.tm_mon], times.tm_year + 1900);
 		}
+
 		while (*p)
 			p++;
 	}
 
 	// Put in a space to separate date & time components
 
-	if (from->dsc_dtype == dtype_timestamp && !version4)
+	if ((from->dsc_dtype == dtype_timestamp || from->dsc_dtype == dtype_timestamp_tz) && !version4)
 		*p++ = ' ';
 
 	// Add the time part for data types that include it
 
 	if (from->dsc_dtype != dtype_sql_date)
 	{
-		if (from->dsc_dtype == dtype_sql_time || !version4)
+		if (from->dsc_dtype == dtype_sql_time || from->dsc_dtype == dtype_sql_time_tz || !version4)
 		{
 			sprintf(p, "%2.2d:%2.2d:%2.2d.%4.4d",
 					times.tm_hour, times.tm_min, times.tm_sec, fractions);
@@ -2065,19 +2294,27 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 			sprintf(p, " %d:%.2d:%.2d.%.4d",
 					times.tm_hour, times.tm_min, times.tm_sec, fractions);
 		}
+
 		while (*p)
 			p++;
+	}
+
+	if (from->dsc_dtype == dtype_sql_time_tz || from->dsc_dtype == dtype_timestamp_tz)
+	{
+		*p++ = ' ';
+		p += TimeZoneUtil::format(p, sizeof(temp) - (p - temp), timezone);
 	}
 
 	// Move the text version of the date/time value into the destination
 
 	dsc desc;
 	MOVE_CLEAR(&desc, sizeof(desc));
-	desc.dsc_address = (UCHAR *) temp;
+	desc.dsc_address = (UCHAR*) temp;
 	desc.dsc_dtype = dtype_text;
 	desc.dsc_ttype() = ttype_ascii;
 	desc.dsc_length = (p - temp);
-	if (from->dsc_dtype == dtype_timestamp && version4)
+
+	if ((from->dsc_dtype == dtype_timestamp || from->dsc_dtype == dtype_timestamp_tz) && version4)
 	{
 		// Prior to BLR Version5, when a timestamp is converted to a string it
 		// is silently truncated if the destination string is not large enough
@@ -2815,6 +3052,46 @@ DecimalFixed CVT_get_dec_fixed(const dsc* desc, SSHORT scale, DecimalStatus decS
 }
 
 
+const UCHAR* CVT_get_bytes(const dsc* desc, unsigned& size)
+{
+/**************************************
+ *
+ *      C V T _ g e t _ b y t e s
+ *
+ **************************************
+ *
+ * Functional description
+ *      Return raw data of descriptor.
+ *
+ **************************************/
+	if (!desc)
+	{
+		size = 0;
+		return nullptr;
+	}
+
+	switch (desc->dsc_dtype)
+	{
+		case dtype_varying:
+			{
+				vary* v = (vary*) desc->dsc_address;
+				size = v->vary_length;
+				return (const UCHAR*) v->vary_string;
+			}
+
+		case dtype_cstring:
+			size = strlen((const char*) desc->dsc_address);
+			return desc->dsc_address;
+
+		default:
+			size = desc->dsc_length;
+			return desc->dsc_address;
+	}
+
+	return nullptr;	// compiler warning silencer
+}
+
+
 SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************
@@ -3018,7 +3295,9 @@ SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFu
 	case dtype_blob:
 	case dtype_sql_date:
 	case dtype_sql_time:
+	case dtype_sql_time_tz:
 	case dtype_timestamp:
+	case dtype_timestamp_tz:
 	case dtype_array:
 	case dtype_dbkey:
 	case dtype_boolean:
@@ -3139,9 +3418,11 @@ namespace
 		virtual void validateData(Jrd::CharSet* toCharset, SLONG length, const UCHAR* q);
 		virtual void validateLength(Jrd::CharSet* toCharset, SLONG toLength, const UCHAR* start,
 			const USHORT to_size);
-		virtual SLONG getCurDate();
+		virtual SLONG getLocalDate();
+		virtual ISC_TIMESTAMP getCurrentGmtTimeStamp();
+		virtual USHORT getSessionTimeZone();
 		virtual void isVersion4(bool& v4);
-	};
+	} commonCallbacks(status_exception::raise);
 
 	bool CommonCallbacks::transliterate(const dsc*, dsc* to, CHARSET_ID& charset2)
 	{
@@ -3167,9 +3448,19 @@ namespace
 		return INTL_TTYPE(d);
 	}
 
-	SLONG CommonCallbacks::getCurDate()
+	SLONG CommonCallbacks::getLocalDate()
 	{
 		return TimeStamp::getCurrentTimeStamp().value().timestamp_date;
+	}
+
+	ISC_TIMESTAMP CommonCallbacks::getCurrentGmtTimeStamp()
+	{
+		return TimeZoneUtil::timeStampTzToTimeStamp(TimeZoneUtil::getCurrentSystemTimeStamp(), TimeZoneUtil::GMT_ZONE);
+	}
+
+	USHORT CommonCallbacks::getSessionTimeZone()
+	{
+		return TimeZoneUtil::getSystemTimeZone();
 	}
 
 	void CommonCallbacks::isVersion4(bool& /*v4*/)
@@ -3177,6 +3468,9 @@ namespace
 	}
 }	// namespace
 
+namespace Firebird {
+	Callbacks* CVT_commonCallbacks  = &commonCallbacks;
+}
 
 USHORT CVT_get_string_ptr(const dsc* desc, USHORT* ttype, UCHAR** address,
 						  vary* temp, USHORT length, DecimalStatus decSt, ErrorFunction err)

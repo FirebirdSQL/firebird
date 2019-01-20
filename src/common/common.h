@@ -139,6 +139,10 @@
 #define FB_CPU CpuArm64
 #endif /* ARM64 */
 
+#ifdef RISCV64
+#define FB_CPU CpuRiscV64
+#endif /* RISCV64 */
+
 #ifdef sparc
 #define FB_CPU CpuUltraSparc
 #define RISC_ALIGNMENT
@@ -661,17 +665,6 @@ extern "C" int remove(const char* path);
 #endif
 
 /* data type definitions */
-
-#ifndef ISC_TIMESTAMP_DEFINED
-typedef SLONG ISC_DATE;
-typedef ULONG ISC_TIME;
-struct ISC_TIMESTAMP
-{
-	ISC_DATE timestamp_date;
-	ISC_TIME timestamp_time;
-};
-#define ISC_TIMESTAMP_DEFINED
-#endif	/* ISC_TIMESTAMP_DEFINED */
 
 #define GDS_DATE	ISC_DATE
 #define GDS_TIME	ISC_TIME

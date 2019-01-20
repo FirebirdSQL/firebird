@@ -673,15 +673,15 @@ void AvgAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 	}
 }
 
-void AvgAggNode::aggPass(thread_db* /*tdbb*/, jrd_req* request, dsc* desc) const
+void AvgAggNode::aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	++impure->vlux_count;
 
 	if (dialect1)
-		ArithmeticNode::add(desc, impure, this, blr_add);
+		ArithmeticNode::add(tdbb, desc, impure, this, blr_add);
 	else
-		ArithmeticNode::add2(desc, impure, this, blr_add);
+		ArithmeticNode::add2(tdbb, desc, impure, this, blr_add);
 }
 
 dsc* AvgAggNode::aggExecute(thread_db* tdbb, jrd_req* request) const
@@ -756,10 +756,10 @@ void ListAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 }
 
 bool ListAggNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
-	const dsc* desc, bool forceVarChar)
+	std::function<void (dsc*)> makeDesc, bool forceVarChar)
 {
-	return PASS1_set_parameter_type(dsqlScratch, arg, desc, forceVarChar) |
-		PASS1_set_parameter_type(dsqlScratch, delimiter, desc, forceVarChar);
+	return PASS1_set_parameter_type(dsqlScratch, arg, makeDesc, forceVarChar) |
+		PASS1_set_parameter_type(dsqlScratch, delimiter, makeDesc, forceVarChar);
 }
 
 void ListAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
@@ -867,10 +867,9 @@ AggNode* ListAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 
 	CharSet* charSet = INTL_charset_lookup(tdbb, argDesc.getCharSet());
 
-	dsc desc;
-	desc.makeText(charSet->maxBytesPerChar(), argDesc.getCharSet());
-
-	node->setParameterType(dsqlScratch, &desc, false);
+	node->setParameterType(dsqlScratch,
+		[&] (dsc* desc) { desc->makeText(charSet->maxBytesPerChar(), argDesc.getCharSet()); },
+		false);
 
 	return node;
 }
@@ -1197,15 +1196,15 @@ void SumAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 	}
 }
 
-void SumAggNode::aggPass(thread_db* /*tdbb*/, jrd_req* request, dsc* desc) const
+void SumAggNode::aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	++impure->vlux_count;
 
 	if (dialect1)
-		ArithmeticNode::add(desc, impure, this, blr_add);
+		ArithmeticNode::add(tdbb, desc, impure, this, blr_add);
 	else
-		ArithmeticNode::add2(desc, impure, this, blr_add);
+		ArithmeticNode::add2(tdbb, desc, impure, this, blr_add);
 }
 
 dsc* SumAggNode::aggExecute(thread_db* /*tdbb*/, jrd_req* request) const

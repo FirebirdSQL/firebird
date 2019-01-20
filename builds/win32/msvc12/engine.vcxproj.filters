@@ -354,9 +354,6 @@
     <ClCompile Include="..\..\..\src\jrd\svc.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\jrd\svc_tab.cpp">
-      <Filter>JRD files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\SysFunction.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
@@ -464,6 +461,12 @@
     </ClCompile>
     <ClCompile Include="..\..\..\src\dsql\DsqlBatch.cpp">
       <Filter>DSQL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\SystemPackages.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\TimeZone.cpp">
+      <Filter>JRD files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -926,9 +929,6 @@
     <ClInclude Include="..\..\..\src\jrd\svc.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\jrd\svc_tab.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\svc_undoc.h">
       <Filter>Header files</Filter>
     </ClInclude>
@@ -993,6 +993,12 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\dsql\DsqlBatch.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\SystemPackages.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\TimeZone.h">
       <Filter>Header files</Filter>
     </ClInclude>
   </ItemGroup>

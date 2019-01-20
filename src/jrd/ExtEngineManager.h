@@ -294,13 +294,7 @@ public:
 	};
 
 public:
-	explicit ExtEngineManager(MemoryPool& p)
-		: PermanentStorage(p),
-		  engines(p),
-		  enginesAttachments(p)
-	{
-	}
-
+	explicit ExtEngineManager(MemoryPool& p);
 	~ExtEngineManager();
 
 public:

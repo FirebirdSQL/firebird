@@ -241,6 +241,14 @@ bool_t xdr_datum( XDR* xdrs, const dsc* desc, UCHAR* buffer)
 			return FALSE;
 		break;
 
+	case dtype_sql_time_tz:
+		fb_assert(desc->dsc_length >= sizeof(SLONG) + sizeof(SSHORT));
+		if (!xdr_long(xdrs, reinterpret_cast<SLONG*>(p)))
+			return FALSE;
+		if (!xdr_short(xdrs, reinterpret_cast<SSHORT*>(p + sizeof(SLONG))))
+			return FALSE;
+		break;
+
 	case dtype_real:
 		fb_assert(desc->dsc_length >= sizeof(float));
 		if (!xdr_float(xdrs, reinterpret_cast<float*>(p)))
@@ -271,6 +279,16 @@ bool_t xdr_datum( XDR* xdrs, const dsc* desc, UCHAR* buffer)
 		if (!xdr_long(xdrs, &((SLONG*) p)[0]))
 			return FALSE;
 		if (!xdr_long(xdrs, &((SLONG*) p)[1]))
+			return FALSE;
+		break;
+
+	case dtype_timestamp_tz:
+		fb_assert(desc->dsc_length >= 2 * sizeof(SLONG) + 1);
+		if (!xdr_long(xdrs, &((SLONG*) p)[0]))
+			return FALSE;
+		if (!xdr_long(xdrs, &((SLONG*) p)[1]))
+			return FALSE;
+		if (!xdr_short(xdrs, reinterpret_cast<SSHORT*>(p + 2 * sizeof(SLONG))))
 			return FALSE;
 		break;
 

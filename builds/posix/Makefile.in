@@ -204,10 +204,10 @@ $(TOMCRYPT_LIB):	$(TOM_Objs)
 	$(STATICLIB_LINK) $@ $^
 
 #___________________________________________________________________________
-# main build target for both debug abd release builds
+# main build target for both debug and release builds
 #
 
-.PHONY:	cross1 cross2 boot yvalve engine fbintl gpre utilities plugins rest codes ids examples cross_rest
+.PHONY:	cross1 cross2 boot yvalve engine fbintl gpre utilities plugins rest codes ids examples cross_rest preliminaryCheck
 
 master_process:
 	ln -sf $(SRC_ROOT)/include/gen/autoconfig.auto $(SRC_ROOT)/include/gen/autoconfig.h
@@ -215,6 +215,7 @@ master_process:
 	$(MAKE) export_lists
 	$(MAKE) external
 	$(MAKE) updateCloopInterfaces
+	$(MAKE) preliminaryCheck
 	$(MAKE) boot
 	$(MAKE) yvalve
 ifeq ($(IsDeveloper), Y)
@@ -284,6 +285,26 @@ cross2:
 	$(MAKE) plugins
 	$(MAKE) -f Makefile.plugins_examples
 	$(MAKE) cross_rest
+
+
+#___________________________________________________________________________
+# preliminary checks - make sure platform is OK to build FB
+#
+
+STD_SIZES:=$(SRC_ROOT)/misc/ods.txt
+RUN_SIZES:=$(GEN_ROOT)/ods.txt
+ODS_H:=$(SRC_ROOT)/jrd/ods.h
+ODS_AWK:=$(SRC_ROOT)/misc/ods.awk
+ODS_TEST_CPP:=$(GEN_ROOT)/odstest.cpp
+ODS_TEST:=$(GEN_ROOT)/odstest$(EXEC_EXT)
+
+preliminaryCheck:	$(STD_SIZES) $(RUN_SIZES)
+	diff -u $^
+
+$(RUN_SIZES): $(ODS_H) $(ODS_AWK)
+	awk -f $(ODS_AWK) <$(ODS_H) >$(ODS_TEST_CPP)
+	$(CXX) -o $(ODS_TEST) $(WCXXFLAGS) $(ODS_TEST_CPP)
+	$(ODS_TEST) >$(RUN_SIZES)
 
 #___________________________________________________________________________
 # static library - various common code, used in different FB projects

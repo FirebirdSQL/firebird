@@ -42,6 +42,7 @@ void PASS1_check_unique_fields_names(Jrd::StrArray& names, const Jrd::CompoundSt
 Jrd::BoolExprNode* PASS1_compose(Jrd::BoolExprNode*, Jrd::BoolExprNode*, UCHAR);
 Jrd::DeclareCursorNode* PASS1_cursor_name(Jrd::DsqlCompilerScratch*, const Firebird::MetaName&, USHORT, bool);
 Jrd::RseNode* PASS1_derived_table(Jrd::DsqlCompilerScratch*, Jrd::SelectExprNode*, const char*, bool);
+Jrd::ValueListNode* PASS1_expand_select_list(Jrd::DsqlCompilerScratch*, Jrd::ValueListNode*, Jrd::RecSourceListNode*);
 void PASS1_expand_select_node(Jrd::DsqlCompilerScratch*, Jrd::ExprNode*, Jrd::ValueListNode*, bool);
 void PASS1_field_unknown(const TEXT*, const TEXT*, const Jrd::ExprNode*);
 void PASS1_limit(Jrd::DsqlCompilerScratch*, NestConst<Jrd::ValueExprNode>,
@@ -54,8 +55,8 @@ Jrd::DsqlMapNode* PASS1_post_map(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*,
 	Jrd::WindowClause*);
 Jrd::RecordSourceNode* PASS1_relation(Jrd::DsqlCompilerScratch*, Jrd::RecordSourceNode*);
 Jrd::RseNode* PASS1_rse(Jrd::DsqlCompilerScratch*, Jrd::SelectExprNode*, bool);
-bool PASS1_set_parameter_type(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, const dsc*, bool);
-bool PASS1_set_parameter_type(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, Jrd::ValueExprNode*, bool);
+bool PASS1_set_parameter_type(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, std::function<void (dsc*)>, bool);
+bool PASS1_set_parameter_type(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, NestConst<Jrd::ValueExprNode>, bool);
 Jrd::ValueListNode* PASS1_sort(Jrd::DsqlCompilerScratch*, Jrd::ValueListNode*, Jrd::ValueListNode*);
 
 #endif // DSQL_PASS1_PROTO_H

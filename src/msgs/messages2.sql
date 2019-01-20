@@ -63,7 +63,7 @@ to gds_$compile_request matches the BLR string.  If you
 receive this error while using GDML or SQL, please submit
 a bug report.', 'The actual length of a buffer does not correspond to what
 the request language says it should be.');
-('read_only_field', NULL, NULL, NULL, 0, 39, NULL, 'attempted update of read-only column', 'If the read-only field is in a system relation, change your
+('read_only_field', NULL, NULL, NULL, 0, 39, NULL, 'attempted update of read-only column @1', 'If the read-only field is in a system relation, change your
 program.  If the field is a COMPUTED field, you have to
 change the source fields to change its value.  If the field
 takes part in a view, update it in its source relations.', 'Your program tried to change the value of a read-only
@@ -592,7 +592,7 @@ without specifying a character set.', NULL);
 ('optimizer_between_err', 'decompose', 'OPT.C', NULL, 0, 493, NULL, 'Unsupported field type specified in BETWEEN predicate.', NULL, NULL);
 ('service_not_supported', 'SVC_attach', 'svc.c', NULL, 0, 494, NULL, 'Services functionality will be supported in a later version  of the product', NULL, NULL);
 ('generator_name', 'check_dependencies', 'dfw.e', NULL, 0, 495, NULL, 'GENERATOR @1', NULL, NULL);
-('udf_name', 'check_dependencies', 'dfw.e', NULL, 0, 496, NULL, 'UDF @1', NULL, NULL);
+('udf_name', 'check_dependencies', 'dfw.e', NULL, 0, 496, NULL, 'Function @1', NULL, NULL);
 ('bad_limit_param', 'RSE_open', 'rse.c', NULL, 0, 497, NULL, 'Invalid parameter to FETCH or FIRST. Only integers >= 0 are allowed.', NULL, NULL);
 ('bad_skip_param', 'RSE_open', 'rse.c', NULL, 0, 498, NULL, 'Invalid parameter to OFFSET or SKIP. Only integers >= 0 are allowed.', NULL, NULL);
 ('io_32bit_exceeded_err', 'seek_file', 'unix.c', NULL, 0, 499, NULL, 'File exceeded maximum size of 2GB.  Add another database file or use a 64 bit I/O version of Firebird.', NULL, NULL);
@@ -896,7 +896,7 @@ Data source : @4', NULL, NULL)
 ('login_error', NULL, 'server.cpp', NULL, 0, 786, NULL, 'Error occurred during login, please check server firebird.log for details', NULL, NULL);
 ('already_opened', 'lockDatabaseFile', 'unix.cpp', NULL, 0, 787, NULL, 'Database already opened with engine instance, incompatible with current', NULL, NULL);
 ('bad_crypt_key', NULL, 'CryptoManager.cpp', NULL, 0, 788, NULL, 'Invalid crypt key @1', NULL, NULL);
-('encrypt_error', NULL, 'CryptoManager.cpp', NULL, 0, 789, NULL, 'Page requires encyption but crypt plugin is missing', NULL, NULL);
+('encrypt_error', NULL, 'CryptoManager.cpp', NULL, 0, 789, NULL, 'Page requires encryption but crypt plugin is missing', NULL, NULL);
 ('max_idx_depth', NULL, 'btr.cpp', NULL, 0, 790, NULL, 'Maximum index depth (@1 levels) is reached', NULL, NULL);
 ('wrong_prvlg', 'SCL_convert_privilege', 'scl.epp', NULL, 0, 791, NULL, 'System privilege @1 does not exist', NULL, NULL);
 ('miss_prvlg', 'validateAccess', 'jrd.cpp', NULL, 0, 792, NULL, 'System privilege @1 is missing', NULL, NULL);
@@ -992,6 +992,52 @@ Data source : @4', NULL, NULL)
 ('hdr_overflow', NULL, 'CryptoManager.cpp', NULL, 0, 882, NULL, 'Header page overflow - too many clumplets on it', NULL, NULL);
 ('vld_plugins', NULL, 'ValidatePassword.cpp', NULL, 0, 883, NULL, 'No matching client/server authentication plugins configured for execute statement in embedded datasource', NULL, NULL);
 ('db_crypt_key', NULL, 'CryptoManager.cpp', NULL, 0, 884, NULL, 'Missing database encryption key for your attachment', NULL, NULL);
+('no_keyholder_plugin', NULL, 'mvol.cpp', NULL, 0, 885, NULL, 'Key holder plugin @1 failed to load', NULL, NULL);
+('ses_reset_err', NULL, 'Attachment.cpp', NULL, 0, 886, NULL, 'Cannot reset user session', NULL, NULL);
+('ses_reset_open_trans', NULL, 'Attachment.cpp', NULL, 0, 887, NULL, 'There are open transactions (@1 active)', NULL, NULL);
+('ses_reset_warn', NULL, 'Attachment.cpp', NULL, 0, 888, NULL, 'Session was reset with warning(s)', NULL, NULL);
+('ses_reset_tran_rollback', NULL, 'Attachment.cpp', NULL, 0, 889, NULL, 'Transaction is rolled back due to session reset, all changes are lost', NULL, NULL);
+('plugin_name', NULL, 'CryptoManager.cpp', NULL, 0, 890, NULL, 'Plugin @1:', NULL, NULL);
+('parameter_name', 'ProcedureManager::checkDependencies', 'dfw.e', NULL, 0, 891, NULL, 'PARAMETER @1', NULL, NULL);
+('file_starting_page_err', 'add_file', 'dfw.epp', NULL, 0, 892, NULL, 'Starting page number for file @1 must be @2 or greater', NULL, NULL);
+('invalid_timezone_offset', NULL, 'TimeZoneUtil.cpp', NULL, 0, 893, NULL, 'Invalid time zone offset: @1 - must be between -14:00 and +14:00', NULL, NULL);
+('invalid_timezone_region', NULL, 'TimeZoneUtil.cpp', NULL, 0, 894, NULL, 'Invalid time zone region: @1', NULL, NULL);
+('invalid_timezone_id', NULL, 'TimeZoneUtil.cpp', NULL, 0, 895, NULL, 'Invalid time zone ID: @1', NULL, NULL);
+('tom_decode64len', NULL, 'SysFunction.cpp', NULL, 0, 896, NULL, 'Wrong base64 text length @1, should be multiple of 4', NULL, NULL);
+('tom_strblob', NULL, 'SysFunction.cpp', NULL, 0, 897, NULL, 'Invalid first parameter datatype - need string or blob', NULL, NULL);
+('tom_reg', NULL, 'SysFunction.cpp', NULL, 0, 898, NULL, 'Error registering @1 - probably bad tomcrypt library', NULL, NULL);
+('tom_algorithm', NULL, 'SysFunction.cpp', NULL, 0, 899, NULL, 'Unknown crypt algorithm @1 in USING clause', NULL, NULL);
+('tom_mode_miss', NULL, 'SysFunction.cpp', NULL, 0, 900, NULL, 'Should specify mode parameter for symmetric cipher', NULL, NULL);
+('tom_mode_bad', NULL, 'SysFunction.cpp', NULL, 0, 901, NULL, 'Unknown symmetric crypt mode specified', NULL, NULL);
+('tom_no_mode', NULL, 'SysFunction.cpp', NULL, 0, 902, NULL, 'Mode parameter makes no sense for chosen cipher', NULL, NULL);
+('tom_iv_miss', NULL, 'SysFunction.cpp', NULL, 0, 903, NULL, 'Should specify initialization vector (IV) for chosen cipher and/or mode', NULL, NULL);
+('tom_no_iv', NULL, 'SysFunction.cpp', NULL, 0, 904, NULL, 'Initialization vector (IV) makes no sense for chosen cipher and/or mode', NULL, NULL);
+('tom_ctrtype_bad', NULL, 'SysFunction.cpp', NULL, 0, 905, NULL, 'Invalid counter endianess @1', NULL, NULL);
+('tom_no_ctrtype', NULL, 'SysFunction.cpp', NULL, 0, 906, NULL, 'Counter endianess parameter is not used in mode @1', NULL, NULL);
+('tom_ctr_big', NULL, 'SysFunction.cpp', NULL, 0, 907, NULL, 'Too big counter value @1, maximum @2 can be used', NULL, NULL);
+('tom_no_ctr', NULL, 'SysFunction.cpp', NULL, 0, 908, NULL, 'Counter length/value parameter is not used with @1 @2', NULL, NULL);
+('tom_iv_length', NULL, 'SysFunction.cpp', NULL, 0, 909, NULL, 'Invalid initialization vector (IV) length @1, need @2', NULL, NULL);
+('tom_error', NULL, 'SysFunction.cpp', NULL, 0, 910, NULL, 'TomCrypt library error: @1', NULL, NULL);
+('tom_yarrow_start', NULL, 'SysFunction.cpp', NULL, 0, 911, NULL, 'Starting PRNG yarrow', NULL, NULL);
+('tom_yarrow_setup', NULL, 'SysFunction.cpp', NULL, 0, 912, NULL, 'Setting up PRNG yarrow', NULL, NULL);
+('tom_init_mode', NULL, 'SysFunction.cpp', NULL, 0, 913, NULL, 'Initializing @1 mode', NULL, NULL);
+('tom_crypt_mode', NULL, 'SysFunction.cpp', NULL, 0, 914, NULL, 'Encrypting in @1 mode', NULL, NULL);
+('tom_decrypt_mode', NULL, 'SysFunction.cpp', NULL, 0, 915, NULL, 'Decrypting in @1 mode', NULL, NULL);
+('tom_init_cip', NULL, 'SysFunction.cpp', NULL, 0, 916, NULL, 'Initializing cipher @1', NULL, NULL);
+('tom_crypt_cip', NULL, 'SysFunction.cpp', NULL, 0, 917, NULL, 'Encrypting using cipher @1', NULL, NULL);
+('tom_decrypt_cip', NULL, 'SysFunction.cpp', NULL, 0, 918, NULL, 'Decrypting using cipher @1', NULL, NULL);
+('tom_setup_cip', NULL, 'SysFunction.cpp', NULL, 0, 919, NULL, 'Setting initialization vector (IV) for @1', NULL, NULL);
+('tom_setup_chacha', NULL, 'SysFunction.cpp', NULL, 0, 920, NULL, 'Invalid initialization vector (IV) length @1, need  8 or 12', NULL, NULL);
+('tom_encode', NULL, 'SysFunction.cpp', NULL, 0, 921, NULL, 'Encoding @1', NULL, NULL);
+('tom_decode', NULL, 'SysFunction.cpp', NULL, 0, 922, NULL, 'Decoding @1', NULL, NULL);
+('tom_rsa_import', NULL, 'SysFunction.cpp', NULL, 0, 923, NULL, 'Importing RSA key', NULL, NULL);
+('tom_oaep', NULL, 'SysFunction.cpp', NULL, 0, 924, NULL, 'Invalid OAEP packet', NULL, NULL);
+('tom_hash_bad', NULL, 'SysFunction.cpp', NULL, 0, 925, NULL, 'Unknown hash algorithm @1', NULL, NULL);
+('tom_rsa_make', NULL, 'SysFunction.cpp', NULL, 0, 926, NULL, 'Making RSA key', NULL, NULL);
+('tom_rsa_export', NULL, 'SysFunction.cpp', NULL, 0, 927, NULL, 'Exporting @1 RSA key', NULL, NULL);
+('tom_rsa_sign', NULL, 'SysFunction.cpp', NULL, 0, 928, NULL, 'RSA-signing data', NULL, NULL);
+('tom_rsa_verify', NULL, 'SysFunction.cpp', NULL, 0, 929, NULL, 'Verifying RSA-signed data', NULL, NULL);
+('tom_chacha_key', NULL, 'SysFunction.cpp', NULL, 0, 930, NULL, 'Invalid key length @1, need 16 or 32', NULL, NULL);
 -- QLI
 (NULL, NULL, NULL, NULL, 1, 0, NULL, 'expected type', NULL, NULL);
 (NULL, NULL, NULL, NULL, 1, 1, NULL, 'bad block type', NULL, NULL);
@@ -2076,6 +2122,15 @@ COMMIT WORK;
 ('dyn_incompat_alter_database', 'AlterDatabaseNode::execute', 'DdlNodes.epp', NULL, 8, 298, NULL, 'Incompatible ALTER DATABASE clauses: ''@1'' and ''@2''', NULL, NULL);
 (NULL, 'checkGrantorCanGrantObject', 'DdlNodes.epp', NULL, 8, 299, NULL, 'no @1 privilege with grant option on DDL @2', NULL, NULL);
 (NULL, 'checkGrantorCanGrantObject', 'DdlNodes.epp', NULL, 8, 300, NULL, 'no @1 privilege with grant option on object @2', NULL, NULL);
+(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 301, NULL, 'Function @1 does not exist', NULL, NULL);
+(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 302, NULL, 'Procedure @1 does not exist', NULL, NULL);
+(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 303, NULL, 'Package @1 does not exist', NULL, NULL);
+(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 304, NULL, 'Trigger @1 does not exist', NULL, NULL);
+(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 305, NULL, 'View @1 does not exist', NULL, NULL);
+(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 306, NULL, 'Table @1 does not exist', NULL, NULL);
+(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 307, NULL, 'Exception @1 does not exist', NULL, NULL);
+(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 308, NULL, 'Generator/Sequence @1 does not exist', NULL, NULL);
+(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 309, NULL, 'Field @1 of table @2 does not exist', NULL, NULL);
 COMMIT WORK;
 -- TEST
 (NULL, 'main', 'test.c', NULL, 11, 0, NULL, 'This is a modified text message', NULL, NULL);
@@ -2464,6 +2519,21 @@ ERROR: Backup incomplete', NULL, NULL);
 (NULL, 'api_gbak/gbak', 'burp.cpp', NULL, 12, 369, NULL, 'total statistics', NULL, NULL);
 (NULL, 'get_blob', 'restore.epp', NULL, 12, 370, NULL, 'could not append BLOB data to batch', NULL, NULL);
 (NULL, 'get_data', 'restore.epp', NULL, 12, 371, NULL, 'could not start batch when restoring table @1, trying old way', NULL, NULL);
+(NULL, 'burp_usage', 'burp.cpp', NULL, 12, 372, NULL, '    @1KEYNAME              name of a key to be used for encryption', NULL, NULL);
+(NULL, 'burp_usage', 'burp.cpp', NULL, 12, 373, NULL, '    @1CRYPT                crypt plugin name', NULL, NULL);
+(NULL, 'burp_usage', 'burp.cpp', NULL, 12, 374, NULL, '    @1ZIP                  backup file is in zip compressed format', NULL, NULL);
+(NULL, 'gbak', 'burp.cpp', NULL, 12, 375, NULL, 'Keyname parameter missing', NULL, NULL);
+(NULL, 'gbak', 'burp.cpp', NULL, 12, 376, NULL, 'Key holder parameter missing but backup file is encrypted', NULL, NULL);
+(NULL, 'gbak', 'mvol.cpp', NULL, 12, 377, NULL, 'CryptPlugin parameter missing', NULL, NULL);
+(NULL, 'gbak', 'burp.cpp', NULL, 12, 378, NULL, 'Unknown crypt plugin name - use -CRYPT switch', NULL, NULL);
+(NULL, NULL, 'mvol.cpp', NULL, 12, 379, NULL, 'Inflate error @1', NULL, NULL);
+(NULL, NULL, 'mvol.cpp', NULL, 12, 380, NULL, 'Deflate error @1', NULL, NULL);
+(NULL, 'gbak', 'burp.cpp', NULL, 12, 381, NULL, 'Key holder parameter missing', NULL, NULL);
+(NULL, 'burp_usage', 'burp.cpp', NULL, 12, 382, NULL, '    @1KEYHOLDER            name of a key holder plugin', NULL, NULL);
+(NULL, NULL, 'mvol.cpp', NULL, 12, 383, NULL, 'Decompression stream init error @1', NULL, NULL);
+(NULL, NULL, 'mvol.cpp', NULL, 12, 384, NULL, 'Compression stream init error @1', NULL, NULL);
+(NULL, NULL, 'restore.epp', NULL, 12, 385, NULL, 'Invalid reply from getInfo() when waiting for DB encryption', NULL, NULL);
+(NULL, NULL, 'restore.epp', NULL, 12, 386, NULL, 'Problems with just created database encryption', NULL, NULL);
 -- SQLERR
 (NULL, NULL, NULL, NULL, 13, 1, NULL, 'Firebird error', NULL, NULL);
 (NULL, NULL, NULL, NULL, 13, 74, NULL, 'Rollback not performed', NULL, NULL);
@@ -2924,6 +2994,7 @@ COMMIT WORK;
 (NULL, 'CMP_get_desc', 'cmp.cpp', NULL, 15, 306, NULL, 'Found array data type with more than 16 dimensions', NULL, NULL);
 -- Do not change the arguments of the previous JRD_BUGCHK messages.
 -- Write the new JRD_BUGCHK messages here.
+(NULL, 'get_header', 'dpm.epp', NULL, 15, 307, NULL, 'RDB$PAGES written by non-system transaction, DB appears to be damaged', NULL, NULL);
 -- ISQL
 ('GEN_ERR', 'errmsg', 'isql.e', NULL, 17, 0, NULL, 'Statement failed, SQLSTATE = @1', NULL, NULL);
 ('USAGE', 'ISQL_main', 'isql.epp', NULL, 17, 1, NULL, 'usage:    isql [options] [<database>]', NULL, NULL);
@@ -3335,6 +3406,7 @@ Analyzing database pages ...', NULL, NULL);
 (NULL, 'main', 'dba.epp', NULL, 21, 58, NULL, 'Other pages: total @1, ENCRYPTED @2 (DB problem!), non-crypted @3', NULL, NULL)
 (NULL, 'main', 'dba.epp', NULL, 21, 59, NULL, 'Gstat execution time @1', NULL, NULL)
 (NULL, 'main', 'dba.epp', NULL, 21, 60, NULL, 'Gstat completion time @1', NULL, NULL)
+(NULL, 'lastUsedPage', 'dba.epp', NULL, 21, 61, NULL, '    Expected page inventory page @1', NULL, NULL);
 -- FBSVCMGR
 -- All messages use the new format.
 ('fbsvcmgr_bad_am', 'putAccessMode', 'fbsvcmgr.cpp', NULL, 22, 1, NULL, 'Wrong value for access mode', NULL, NULL);

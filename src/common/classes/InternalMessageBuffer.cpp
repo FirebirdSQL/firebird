@@ -150,6 +150,11 @@ MetadataFromBlr::MetadataFromBlr(unsigned aBlrLength, const unsigned char* aBlr,
 			item->length = sizeof(SLONG) * 2;
 			break;
 
+		case blr_timestamp_tz:
+			item->type = SQL_TIMESTAMP_TZ;
+			item->length = sizeof(ISC_TIMESTAMP_TZ);
+			break;
+
 		case blr_sql_date:
 			item->type = SQL_TYPE_DATE;
 			item->length = sizeof(SLONG);
@@ -158,6 +163,11 @@ MetadataFromBlr::MetadataFromBlr(unsigned aBlrLength, const unsigned char* aBlr,
 		case blr_sql_time:
 			item->type = SQL_TYPE_TIME;
 			item->length = sizeof(SLONG);
+			break;
+
+		case blr_sql_time_tz:
+			item->type = SQL_TIME_TZ;
+			item->length = sizeof(ISC_TIME_TZ);
 			break;
 
 		case blr_blob2:

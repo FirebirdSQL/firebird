@@ -510,7 +510,7 @@ InversionCandidate* OptimizerRetrieval::generateInversion()
 		}
 
 		if (sort)
-			analyzeNavigation();
+			analyzeNavigation(inversions);
 
 #ifdef OPT_DEBUG_RETRIEVAL
 		// Debug
@@ -609,21 +609,23 @@ IndexTableScan* OptimizerRetrieval::getNavigation()
 	if (!navigationCandidate)
 		return NULL;
 
+	IndexScratch* const scratch = navigationCandidate->scratch;
+
 	// Looks like we can do a navigational walk.  Flag that
 	// we have used this index for navigation, and allocate
 	// a navigational rsb for it.
-	navigationCandidate->idx->idx_runtime_flags |= idx_navigate;
+	scratch->idx->idx_runtime_flags |= idx_navigate;
 
 	const USHORT key_length =
-		ROUNDUP(BTR_key_length(tdbb, relation, navigationCandidate->idx), sizeof(SLONG));
+		ROUNDUP(BTR_key_length(tdbb, relation, scratch->idx), sizeof(SLONG));
 
-	InversionNode* const index_node = makeIndexScanNode(navigationCandidate);
+	InversionNode* const index_node = makeIndexScanNode(scratch);
 
 	return FB_NEW_POOL(*tdbb->getDefaultPool())
 		IndexTableScan(csb, getAlias(), stream, relation, index_node, key_length);
 }
 
-void OptimizerRetrieval::analyzeNavigation()
+void OptimizerRetrieval::analyzeNavigation(const InversionCandidateList& inversions)
 {
 /**************************************
  *
@@ -800,36 +802,152 @@ void OptimizerRetrieval::analyzeNavigation()
 		if (!usableIndex)
 			continue;
 
+		// Lookup the inversion candidate matching our navigational index
+
+		InversionCandidate* candidate = NULL;
+
+		for (InversionCandidate* const* iter = inversions.begin();
+			iter != inversions.end(); ++iter)
+		{
+			if ((*iter)->scratch == indexScratch)
+			{
+				candidate = *iter;
+				break;
+			}
+		}
+
+		if (candidate && !optimizer->optimizeFirstRows)
+		{
+			// Check whether the navigational index has any matches shared with other inversion
+			// candidates. If so, compare inversions and decide whether navigation is acceptable.
+
+			for (const InversionCandidate* const* iter = inversions.begin();
+				iter != inversions.end(); ++iter)
+			{
+				const InversionCandidate* const otherCandidate = *iter;
+
+				if (otherCandidate != candidate)
+				{
+					for (BoolExprNode* const* iter2 = otherCandidate->matches.begin();
+						iter2 != otherCandidate->matches.end(); ++iter2)
+					{
+						if (candidate->matches.exist(*iter2))
+						{
+							usableIndex = betterInversion(candidate, otherCandidate);
+							break;
+						}
+					}
+				}
+
+				if (!usableIndex)
+					break;
+			}
+		}
+
+		if (!usableIndex)
+			continue;
+
 		// Looks like we can do a navigational walk. Remember this candidate
 		// and compare it against other possible candidates.
 
-		if (!navigationCandidate)
-			navigationCandidate = indexScratch;
-		else
+		if (!candidate)
 		{
-			int count1 = MAX(indexScratch->lowerCount, indexScratch->upperCount);
-			int count2 = MAX(navigationCandidate->lowerCount, navigationCandidate->upperCount);
+			// If no inversion candidate is found, create a fake one representing full index scan
 
-			if (count1 > count2)
-				navigationCandidate = indexScratch;
-			else if (count1 == count2)
+			candidate = FB_NEW_POOL(pool) InversionCandidate(pool);
+			candidate->cost = indexScratch->cardinality;
+			candidate->indexes = 1;
+			candidate->scratch = indexScratch;
+			candidate->nonFullMatchedSegments = (int) indexScratch->segments.getCount();
+		}
+
+		if (!navigationCandidate)
+			navigationCandidate = candidate;
+		else if (betterInversion(candidate, navigationCandidate))
+			navigationCandidate = candidate;
+	}
+}
+
+bool OptimizerRetrieval::betterInversion(const InversionCandidate* inv1, const InversionCandidate* inv2) const
+{
+	// Return true if inversion1 is *better* than inversion2.
+	// It's mostly about the retrieval cost, but other aspects are also taken into account.
+
+	if (inv1->unique && !inv2->unique)
+	{
+		// A unique full equal match is better than anything else.
+		return true;
+	}
+
+	if (inv1->unique == inv2->unique)
+	{
+		if (inv1->dependencies > inv2->dependencies)
+		{
+			// Index used for a relationship must be always prefered to
+			// the filtering ones, otherwise the nested loop join has
+			// no chances to be better than a sort merge.
+			// An alternative (simplified) condition might be:
+			//   currentInv->dependencies > 0
+			//   && bestCandidate->dependencies == 0
+			// but so far I tend to think that the current one is better.
+			return true;
+		}
+
+		if (inv1->dependencies == inv2->dependencies)
+		{
+			const double cardinality =
+				MAX(csb->csb_rpt[stream].csb_cardinality, MINIMUM_CARDINALITY);
+
+			const double cost1 =
+				inv1->cost + (inv1->selectivity * cardinality);
+			const double cost2 =
+				inv2->cost + (inv2->selectivity * cardinality);
+
+			// Do we have very similar costs?
+			double diffCost = 0;
+			if (!cost1 && !cost2)
 			{
-				count1 = (int) indexScratch->segments.getCount();
-				count2 = (int) navigationCandidate->segments.getCount();
-
-				if (count1 < count2)
-					navigationCandidate = indexScratch;
-				else if (count1 == count2)
-				{
-					count1 = BTR_key_length(tdbb, relation, indexScratch->idx);
-					count2 = BTR_key_length(tdbb, relation, navigationCandidate->idx);
-
-					if (count1 < count2)
-						navigationCandidate = indexScratch;
-				}
+				// Two zero costs should be handled as being the same
+				// (other comparison criteria should be applied, see below).
+				diffCost = 1;
 			}
+			else if (cost1)
+			{
+				// Calculate the difference
+				diffCost = cost2 / cost1;
+			}
+
+			if ((diffCost >= 0.98) && (diffCost <= 1.02))
+			{
+				// If the "same" costs then compare with the nr of unmatched segments,
+				// how many indexes and matched segments. First compare number of indexes.
+				int compareSelectivity = (inv1->indexes - inv2->indexes);
+
+				if (compareSelectivity == 0)
+				{
+					// For the same number of indexes compare number of matched segments.
+					// Note the inverted condition: the more matched segments the better.
+					compareSelectivity =
+						(inv2->matchedSegments - inv1->matchedSegments);
+
+					if (compareSelectivity == 0)
+					{
+						// For the same number of matched segments
+						// compare ones that aren't full matched
+						compareSelectivity =
+							(inv1->nonFullMatchedSegments - inv2->nonFullMatchedSegments);
+					}
+				}
+
+				if (compareSelectivity < 0)
+					return true;
+			}
+			else if (cost1 < cost2)
+				return true;
 		}
 	}
+
+	return false;
 }
 
 void OptimizerRetrieval::getInversionCandidates(InversionCandidateList* inversions,
@@ -1259,57 +1377,41 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 	// Force to always choose at least one index
 	bool firstCandidate = true;
 
-	FB_SIZE_T i = 0;
 	InversionCandidate* invCandidate = NULL;
-	InversionCandidate** inversion = inversions->begin();
-	for (i = 0; i < inversions->getCount(); i++)
+
+	for (InversionCandidate** iter = inversions->begin();
+		iter != inversions->end(); ++iter)
 	{
-		inversion[i]->used = false;
-		const IndexScratch* const indexScratch = inversion[i]->scratch;
+		InversionCandidate* const inversion = *iter;
+
+		inversion->used = (inversion == navigationCandidate);
+
+		const IndexScratch* const indexScratch = inversion->scratch;
 
 		if (indexScratch &&
-			(indexScratch == navigationCandidate ||
-				(indexScratch->idx->idx_runtime_flags & idx_plan_dont_use)))
+			(indexScratch->idx->idx_runtime_flags & idx_plan_dont_use))
 		{
-			inversion[i]->used = true;
+			inversion->used = true;
 		}
 	}
 
 	// The matches returned in this inversion are always sorted.
-	SortedArray<BoolExprNode*> matches, navigationMatches;
+	SortedArray<BoolExprNode*> matches;
 
 	if (navigationCandidate)
 	{
-		const int matchedSegments =
-			MAX(navigationCandidate->lowerCount, navigationCandidate->upperCount);
+		matches.join(navigationCandidate->matches);
 
-		fb_assert(matchedSegments <= (int) navigationCandidate->segments.getCount());
+		// Reset the selectivity/cost prerequisites to account the navigational candidate
+		totalSelectivity = navigationCandidate->selectivity;
+		totalIndexCost = navigationCandidate->cost;
+		previousTotalCost = totalIndexCost + totalSelectivity * streamCardinality;
 
-		for (int segno = 0; segno < matchedSegments; segno++)
-		{
-			const IndexScratchSegment* const segment = navigationCandidate->segments[segno];
-
-			for (FB_SIZE_T j = 0; j < segment->matches.getCount(); j++)
-			{
-				if (!navigationMatches.exist(segment->matches[j]))
-					navigationMatches.add(segment->matches[j]);
-			}
-		}
-
-		matches.join(navigationMatches);
-
-		// If the navigational candidate includes any matching segments,
-		// reset the selectivity/cost prerequisites to account these matches
-		if (matchedSegments)
-		{
-			totalSelectivity = navigationCandidate->selectivity;
-			totalIndexCost = DEFAULT_INDEX_COST + totalSelectivity * navigationCandidate->cardinality;
-			previousTotalCost = totalIndexCost + totalSelectivity * streamCardinality;
+		if (navigationCandidate->matchedSegments)
 			firstCandidate = false;
-		}
 	}
 
-	for (i = 0; i < inversions->getCount(); i++)
+	for (FB_SIZE_T i = 0; i < inversions->getCount(); i++)
 	{
 		// Initialize vars before walking through candidates
 		InversionCandidate* bestCandidate = NULL;
@@ -1317,13 +1419,12 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 
 		for (FB_SIZE_T currentPosition = 0; currentPosition < inversions->getCount(); ++currentPosition)
 		{
-			InversionCandidate* currentInv = inversion[currentPosition];
+			InversionCandidate* currentInv = (*inversions)[currentPosition];
 			if (!currentInv->used)
 			{
 				// If this is a unique full equal matched inversion we're done, so
 				// we can make the inversion and return it.
-				if (currentInv->unique && currentInv->dependencies && !currentInv->condition &&
-					currentInv->scratch != navigationCandidate)
+				if (currentInv->unique && currentInv->dependencies && !currentInv->condition)
 				{
 					if (!invCandidate)
 						invCandidate = FB_NEW_POOL(pool) InversionCandidate(pool);
@@ -1368,8 +1469,13 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 					if (matches.exist(currentInv->matches[k]))
 					{
 						anyMatchAlreadyUsed = true;
-						if (navigationMatches.exist(currentInv->matches[k]))
+
+						if (navigationCandidate &&
+							navigationCandidate->matches.exist(currentInv->matches[k]))
+						{
 							matchUsedByNavigation = true;
+						}
+
 						break;
 					}
 				}
@@ -1377,8 +1483,10 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 				if (anyMatchAlreadyUsed && !customPlan)
 				{
 					currentInv->used = true;
+
 					if (matchUsedByNavigation)
 						continue;
+
 					// If a match on this index was already used by another
 					// index, add also the other matches from this index.
 					for (FB_SIZE_T j = 0; j < currentInv->matches.getCount(); j++)
@@ -1386,6 +1494,7 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 						if (!matches.exist(currentInv->matches[j]))
 							matches.add(currentInv->matches[j]);
 					}
+
 					// Restart loop, because other indexes could also be excluded now.
 					restartLoop = true;
 					break;
@@ -1413,79 +1522,8 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 						break;
 					}
 
-					if (currentInv->unique && !bestCandidate->unique)
-					{
-						// A unique full equal match is better than anything else.
+					if (betterInversion(currentInv, bestCandidate))
 						bestCandidate = currentInv;
-					}
-					else if (currentInv->unique == bestCandidate->unique)
-					{
-						if (currentInv->dependencies > bestCandidate->dependencies)
-						{
-							// Index used for a relationship must be always prefered to
-							// the filtering ones, otherwise the nested loop join has
-							// no chances to be better than a sort merge.
-							// An alternative (simplified) condition might be:
-							//   currentInv->dependencies > 0
-							//   && bestCandidate->dependencies == 0
-							// but so far I tend to think that the current one is better.
-							bestCandidate = currentInv;
-						}
-						else if (currentInv->dependencies == bestCandidate->dependencies)
-						{
-
-							const double bestCandidateCost =
-								bestCandidate->cost + (bestCandidate->selectivity * streamCardinality);
-							const double currentCandidateCost =
-								currentInv->cost + (currentInv->selectivity * streamCardinality);
-
-							// Do we have very similar costs?
-							double diffCost = currentCandidateCost;
-							if (!diffCost && !bestCandidateCost)
-							{
-								// Two zero costs should be handled as being the same
-								// (other comparison criteria should be applied, see below).
-								diffCost = 1;
-							}
-							else if (diffCost)
-							{
-								// Calculate the difference.
-								diffCost = bestCandidateCost / diffCost;
-							}
-							else {
-								diffCost = 0;
-							}
-
-							if ((diffCost >= 0.98) && (diffCost <= 1.02))
-							{
-								// If the "same" costs then compare with the nr of unmatched segments,
-								// how many indexes and matched segments. First compare number of indexes.
-								int compareSelectivity = (currentInv->indexes - bestCandidate->indexes);
-								if (compareSelectivity == 0)
-								{
-									// For the same number of indexes compare number of matched segments.
-									// Note the inverted condition: the more matched segments the better.
-									compareSelectivity =
-										(bestCandidate->matchedSegments - currentInv->matchedSegments);
-									if (compareSelectivity == 0)
-									{
-										// For the same number of matched segments
-										// compare ones that aren't full matched
-										compareSelectivity =
-											(currentInv->nonFullMatchedSegments - bestCandidate->nonFullMatchedSegments);
-									}
-								}
-								if (compareSelectivity < 0) {
-									bestCandidate = currentInv;
-								}
-							}
-							else if (currentCandidateCost < bestCandidateCost)
-							{
-								// How lower the cost the better.
-								bestCandidate = currentInv;
-							}
-						}
-					}
 				}
 			}
 		}
@@ -1637,19 +1675,20 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 
 	// If we have no index used for filtering, but there's a navigational walk,
 	// set up the inversion candidate appropriately.
+
 	if (navigationCandidate)
 	{
 		if (!invCandidate)
 			invCandidate = FB_NEW_POOL(pool) InversionCandidate(pool);
 
+		invCandidate->unique = navigationCandidate->unique;
 		invCandidate->selectivity *= navigationCandidate->selectivity;
-		invCandidate->cost += DEFAULT_INDEX_COST +
-			navigationCandidate->cardinality * navigationCandidate->selectivity;
+		invCandidate->cost += navigationCandidate->cost;
 		++invCandidate->indexes;
 		invCandidate->navigated = true;
 	}
 
-	if (invCandidate && matches.getCount())
+	if (invCandidate)
 		invCandidate->matches.join(matches);
 
 	return invCandidate;

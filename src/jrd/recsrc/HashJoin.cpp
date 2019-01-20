@@ -475,6 +475,8 @@ ULONG HashJoin::computeHash(thread_db* tdbb,
 						    const SubStream& sub,
 							UCHAR* keyBuffer) const
 {
+	memset(keyBuffer, 0, sub.totalKeyLength);
+
 	UCHAR* keyPtr = keyBuffer;
 
 	for (FB_SIZE_T i = 0; i < sub.keys->getCount(); i++)
@@ -508,10 +510,6 @@ ULONG HashJoin::computeHash(thread_db* tdbb,
 				fb_assert(keyLength == desc->dsc_length);
 				memcpy(keyPtr, desc->dsc_address, keyLength);
 			}
-		}
-		else
-		{
-			memset(keyPtr, 0, keyLength);
 		}
 
 		keyPtr += keyLength;

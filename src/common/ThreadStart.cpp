@@ -86,11 +86,17 @@ extern "C"
 THREAD_ENTRY_DECLARE threadStart(THREAD_ENTRY_PARAM arg)
 {
 	fb_assert(arg);
-	Firebird::ThreadSync thread("threadStart");
+	Firebird::ThreadSync* thread = FB_NEW Firebird::ThreadSync("threadStart");
+
 	MemoryPool::setContextPool(getDefaultMemoryPool());
 	ThreadArgs localArgs(*static_cast<ThreadArgs*>(arg));
 	delete static_cast<ThreadArgs*>(arg);
 	localArgs.run();
+
+	// Check if ThreadSync still exists before deleting
+	thread = Firebird::ThreadSync::findThread();
+	delete thread;
+
 	return 0;
 }
 
@@ -98,7 +104,7 @@ THREAD_ENTRY_DECLARE threadStart(THREAD_ENTRY_PARAM arg)
 
 #ifdef USE_POSIX_THREADS
 #define START_THREAD
-void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
+ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
 {
 /**************************************
  *
@@ -180,6 +186,8 @@ void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handl
 #endif
 		*p_handle = thread;
 	}
+
+	return getId();
 }
 
 void Thread::waitForCompletion(Handle& thread)
@@ -206,6 +214,11 @@ ThreadId Thread::getId()
 #else
 	return pthread_self();
 #endif
+}
+
+bool Thread::isCurrent(const ThreadId threadId)
+{
+	return getId() == threadId;
 }
 
 void Thread::sleep(unsigned milliseconds)
@@ -252,7 +265,7 @@ void Thread::yield()
 
 #ifdef WIN_NT
 #define START_THREAD
-void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
+ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
 {
 /**************************************
  *
@@ -316,6 +329,8 @@ void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handl
 	{
 		CloseHandle(handle);
 	}
+
+	return thread_id;
 }
 
 void Thread::waitForCompletion(Handle& handle)
@@ -342,6 +357,11 @@ ThreadId Thread::getId()
 	return GetCurrentThreadId();
 }
 
+bool Thread::isCurrent(const ThreadId threadId)
+{
+	return GetCurrentThreadId() == threadId;
+}
+
 void Thread::sleep(unsigned milliseconds)
 {
 	SleepEx(milliseconds, FALSE);
@@ -356,7 +376,7 @@ void Thread::yield()
 
 
 #ifndef START_THREAD
-void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
+ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
 {
 /**************************************
  *
@@ -368,7 +388,8 @@ void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handl
  *	Wrong attempt to start a new thread.
  *
  **************************************/
-
+	fb_assert(false);
+	return 0;
 }
 
 void Thread::waitForCompletion(Handle&)

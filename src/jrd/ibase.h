@@ -66,17 +66,10 @@
 
 #include "types_pub.h"
 
-/********************************/
-/* Firebird Handle Definitions */
-/********************************/
+/***********************/
+/* Firebird misc types */
+/***********************/
 
-typedef FB_API_HANDLE isc_att_handle;
-typedef FB_API_HANDLE isc_blob_handle;
-typedef FB_API_HANDLE isc_db_handle;
-typedef FB_API_HANDLE isc_req_handle;
-typedef FB_API_HANDLE isc_stmt_handle;
-typedef FB_API_HANDLE isc_svc_handle;
-typedef FB_API_HANDLE isc_tr_handle;
 typedef void (* isc_callback) ();
 typedef ISC_LONG isc_resv_handle;
 

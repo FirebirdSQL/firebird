@@ -19,6 +19,9 @@
 	FB_DEC34 = array [1..2] of Int64;
 	FB_DEC_FIXED = array [1..2] of Int64;
 
+    isc_tr_handle = ^integer32;
+    isc_stmt_handle = ^integer32;
+
 	ntrace_relation_t = Integer;
 	TraceCounts = Record
 		trc_relation_id		: ntrace_relation_t;

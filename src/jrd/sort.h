@@ -143,11 +143,14 @@ const int SKD_sql_date		= 14;
 const int SKD_int64			= 15;
 const int SKD_dec64			= 16;
 const int SKD_dec128		= 17;
+const int SKD_sql_time_tz	= 18;
+const int SKD_timestamp_tz	= 19;
 
 // skd_flags
 const UCHAR SKD_ascending		= 0;	// default initializer
 const UCHAR SKD_descending		= 1;
 const UCHAR SKD_binary			= 2;
+const UCHAR SKD_separate_data	= 4;
 
 // Sort key definition block
 
@@ -276,15 +279,15 @@ private:
 	void allocateBuffer(MemoryPool&);
 	void releaseBuffer();
 
-	void diddleKey(UCHAR*, bool);
+	void diddleKey(UCHAR*, bool, bool);
 	sort_record* getMerge(merge_control*);
 	ULONG allocate(ULONG, ULONG, bool);
 	void init();
 	void mergeRuns(USHORT);
 	ULONG order();
-	void orderAndSave();
-	void putRun();
-	void sort();
+	void orderAndSave(Jrd::thread_db*);
+	void putRun(Jrd::thread_db*);
+	void sortBuffer(Jrd::thread_db*);
 	void sortRunsBySeek(int);
 
 #ifdef DEV_BUILD

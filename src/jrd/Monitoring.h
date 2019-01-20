@@ -56,6 +56,7 @@ public:
 		VALUE_TABLE_ID,
 		VALUE_INTEGER,
 		VALUE_TIMESTAMP,
+		VALUE_TIMESTAMP_TZ,
 		VALUE_STRING,
 		VALUE_BOOLEAN
 	};
@@ -140,6 +141,11 @@ public:
 		void storeTimestamp(int field_id, const ISC_TIMESTAMP& value)
 		{
 			storeField(field_id, VALUE_TIMESTAMP, sizeof(ISC_TIMESTAMP), &value);
+		}
+
+		void storeTimestampTz(int field_id, const ISC_TIMESTAMP_TZ& value)
+		{
+			storeField(field_id, VALUE_TIMESTAMP_TZ, sizeof(ISC_TIMESTAMP_TZ), &value);
 		}
 
 		void storeString(int field_id, const Firebird::string& value)

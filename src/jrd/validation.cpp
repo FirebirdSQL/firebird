@@ -732,7 +732,7 @@ static int validate(Firebird::UtilSvc* svc)
 		dpb.insertPath(isc_dpb_org_filename, dbName);
 
 	FbLocalStatus status;
-	RefPtr<JProvider> jProv(JProvider::getInstance());
+	AutoPlugin<JProvider> jProv(JProvider::getInstance());
 	RefPtr<JAttachment> jAtt;
 	jAtt.assignRefNoIncr(jProv->attachDatabase(&status, expandedFilename.c_str(), dpb.getBufferLength(), dpb.getBuffer()));
 
@@ -824,7 +824,7 @@ const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 	{true, isc_info_ppage_errors,	"Pointer page {sequence %" ULONGFORMAT"} lost"},
 	{true, isc_info_ppage_errors,	"Pointer page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} inconsistent"},
 	{true, isc_info_record_errors,	"Record %" SQUADFORMAT" is marked as damaged"},
-	{true, isc_info_record_errors,	"Record %" SQUADFORMAT" has bad transaction %" ULONGFORMAT},	// 15
+	{true, isc_info_record_errors,	"Record %" SQUADFORMAT" has bad transaction %" SQUADFORMAT},	// 15
 	{true, isc_info_record_errors,	"Fragmented record %" SQUADFORMAT" is corrupt"},
 	{true, isc_info_record_errors,	"Record %" SQUADFORMAT" is wrong length"},
 	{true, isc_info_ipage_errors,	"Missing index root page"},
@@ -1618,7 +1618,7 @@ void Validation::walk_database()
 	WIN window(DB_PAGE_SPACE, -1);
 	header_page* page = 0;
 	fetch_page(true, HEADER_PAGE, pag_header, &window, &page);
-	vdr_max_transaction = page->hdr_next_transaction;
+ 	TraNumber next = vdr_max_transaction = Ods::getNT(page);
 
 	if (vdr_flags & VDR_online) {
 		release_page(&window);
@@ -1629,7 +1629,7 @@ void Validation::walk_database()
 		walk_header(page->hdr_next_page);
 		walk_pip();
 		walk_scns();
-		walk_tip(page->hdr_next_transaction);
+		walk_tip(next);
 		walk_generators();
 	}
 
@@ -2716,6 +2716,11 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		p = (SCHAR*) fragment->rhdf_data;
 		end = p + length - offsetof(rhdf, rhdf_data[0]);
 	}
+	else if (header->rhd_flags & rhd_long_tranum)
+	{
+		p = (SCHAR*) ((rhde*) header)->rhde_data;
+		end = p + length - offsetof(rhde, rhde_data[0]);
+	}
 	else
 	{
 		p = (SCHAR*) header->rhd_data;
@@ -2772,6 +2777,11 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		{
 			p = (SCHAR*) fragment->rhdf_data;
 			end = p + line->dpg_length - offsetof(rhdf, rhdf_data[0]);
+		}
+		else if (fragment->rhdf_flags & rhd_long_tranum)
+		{
+			p = (SCHAR*) ((rhde*) fragment)->rhde_data;
+			end = p + line->dpg_length - offsetof(rhde, rhde_data[0]);
 		}
 		else
 		{
@@ -3013,7 +3023,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 		WIN window(DB_PAGE_SPACE, -1);
 		header_page* page = NULL;
 		fetch_page(false, (SLONG) HEADER_PAGE, pag_header, &window, &page);
-		vdr_max_transaction = page->hdr_next_transaction;
+		vdr_max_transaction = Ods::getNT(page);
 		release_page(&window);
 	}
 

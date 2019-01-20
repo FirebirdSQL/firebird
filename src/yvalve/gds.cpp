@@ -47,6 +47,7 @@
 #include "../yvalve/gds_proto.h"
 #include "../common/os/path_utils.h"
 #include "../common/dsc.h"
+#include "../common/TimeZoneUtil.h"
 #include "../jrd/constants.h"
 #include "../jrd/status.h"
 #include "../common/os/os_utils.h"
@@ -133,6 +134,7 @@ const SLONG GENERIC_SQLCODE		= -999;
 #include "../common/classes/MsgPrint.h"
 
 using Firebird::TimeStamp;
+using Firebird::TimeZoneUtil;
 using Firebird::BlrReader;
 
 // This structure is used to parse the firebird.msg file.
@@ -275,6 +277,7 @@ static const UCHAR
 	byte_verb_verb[] = { op_byte, op_line, op_verb, op_verb, 0},
 	byte_literal[] = { op_byte, op_literal, op_line, 0},
 	byte_byte_verb[] = { op_byte, op_byte, op_line, op_verb, 0},
+	verb_byte_verb[] = { op_verb, op_byte, op_line, op_verb, 0},
 	parm[]		= { op_byte, op_word, op_line, 0},	// also field id
 
 	parm2[]		= { op_byte, op_word, op_word, op_line, 0},
@@ -2948,9 +2951,19 @@ static int blr_print_dtype(gds_ctl* control)
 		length = 8;
 		break;
 
+	case blr_timestamp_tz:
+		string = "timestamp_tz";
+		length = 10;
+		break;
+
 	case blr_sql_time:
 		string = "sql_time";
 		length = 4;
+		break;
+
+	case blr_sql_time_tz:
+		string = "sql_time_tz";
+		length = 6;
 		break;
 
 	case blr_sql_date:
@@ -2964,10 +2977,11 @@ static int blr_print_dtype(gds_ctl* control)
 		break;
 
 	case blr_double:
+	case blr_dec128:
 		{
-			string = "double";
+			string = dtype == blr_double ? "double" : "dec128";
 
-			// for double literal, return the length of the numeric string
+			// for double/dec_128 literal, return the length of the numeric string
 			const UCHAR* pos = control->ctl_blr_reader.getPos();
 			const UCHAR v1 = control->ctl_blr_reader.getByte();
 			const UCHAR v2 = control->ctl_blr_reader.getByte();
@@ -3013,6 +3027,16 @@ static int blr_print_dtype(gds_ctl* control)
 	case blr_bool:
 		string = "bool";
 		length = 1;
+		break;
+
+	case blr_dec64:
+		string = "dec64";
+		length = sizeof(Firebird::Decimal64);
+		break;
+
+	case blr_dec_fixed:
+		string = "dec_fixed";
+		length = sizeof(Firebird::DecimalFixed);
 		break;
 
 	case blr_domain_name:
@@ -3076,6 +3100,7 @@ static int blr_print_dtype(gds_ctl* control)
 	case blr_long:
 	case blr_quad:
 	case blr_int64:
+	case blr_dec_fixed:
 		blr_print_byte(control);
 		break;
 

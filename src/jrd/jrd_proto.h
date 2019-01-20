@@ -66,6 +66,7 @@ void JRD_commit_transaction(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
 void JRD_commit_retaining(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
 void JRD_rollback_transaction(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
 void JRD_rollback_retaining(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
+void JRD_run_trans_start_triggers(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
 void JRD_send(Jrd::thread_db* tdbb, Jrd::jrd_req* request, USHORT msg_type, ULONG msg_length,
 	const void* msg);
 void JRD_start_and_send(Jrd::thread_db* tdbb, Jrd::jrd_req* request, Jrd::jrd_tra* transaction,

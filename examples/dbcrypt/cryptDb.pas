@@ -47,6 +47,7 @@ Type
 
     // TPluginModule implementation
     procedure doClean; override;
+	procedure threadDetach; override;
   end;
 
   TMyCrypt = class(IDbCryptPluginImpl)
@@ -71,6 +72,7 @@ Type
     procedure setKey(status: IStatus; length: Cardinal; sources: IKeyHolderPluginPtr; keyName: PAnsiChar); override;
     procedure encrypt(status: IStatus; length: Cardinal; src, dst: Pointer); override;
     procedure decrypt(status: IStatus; length: Cardinal; src, dst: Pointer); override;
+    procedure setInfo(status: IStatus; info: IDbCryptInfo); override;
 
   private
     procedure pxor(length: Cardinal; mem: Pointer);
@@ -112,6 +114,10 @@ end;
 procedure TMyPluginModule.doClean;
 begin
   FRegistered := False;
+end;
+
+procedure TMyPluginModule.threadDetach; 
+begin
 end;
 
 procedure TMyPluginModule.registerMe;
@@ -177,6 +183,13 @@ end;
 function TMyCrypt.getOwner: IReferenceCounted;
 begin
   Result := FOwner;
+end;
+
+procedure TMyCrypt.setInfo(status: IStatus; info: IDbCryptInfo);
+begin
+  status.init;
+
+  // do nothing in this trivial sample
 end;
 
 procedure TMyCrypt.decrypt(status: IStatus; length: Cardinal; src, dst: Pointer);

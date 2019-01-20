@@ -51,6 +51,7 @@
 #include "../dsql/StmtNodes.h"
 #include "../jrd/license.h"
 #include "../jrd/cch_proto.h"
+#include "../jrd/cvt_proto.h"
 #include "../jrd/inf_proto.h"
 #include "../common/isc_proto.h"
 #include "../jrd/opt_proto.h"
@@ -487,11 +488,21 @@ void INF_database_info(thread_db* tdbb,
 
 		case isc_info_creation_date:
 			{
-				const ISC_TIMESTAMP ts = dbb->dbb_creation_date.value();
+				const ISC_TIMESTAMP ts = TimeZoneUtil::cvtTimeStampTzToTimeStamp(
+					dbb->dbb_creation_date, &EngineCallbacks::instance);
+
 				length = INF_convert(ts.timestamp_date, p);
 				p += length;
 				length += INF_convert(ts.timestamp_time, p);
 			}
+			break;
+
+		case fb_info_creation_timestamp_tz:
+			length = INF_convert(dbb->dbb_creation_date.utc_timestamp.timestamp_date, p);
+			p += length;
+			length += INF_convert(dbb->dbb_creation_date.utc_timestamp.timestamp_time, p);
+			p += length;
+			length += INF_convert(dbb->dbb_creation_date.time_zone, p);
 			break;
 
 		case isc_info_no_reserve:
@@ -770,9 +781,28 @@ void INF_database_info(thread_db* tdbb,
 			break;
 
 		case fb_info_crypt_key:
-			if (tdbb->getAttachment()->locksmith(tdbb, GET_DBCRYPT_KEY_NAME))
+			if (tdbb->getAttachment()->locksmith(tdbb, GET_DBCRYPT_INFO))
 			{
 				const char* key = dbb->dbb_crypto_manager->getKeyName();
+				if (!(info = INF_put_item(item, static_cast<USHORT>(strlen(key)), key, info, end)))
+				{
+					if (transaction)
+						TRA_commit(tdbb, transaction, false);
+
+					return;
+				}
+				continue;
+			}
+
+			buffer[0] = item;
+			item = isc_info_error;
+			length = 1 + INF_convert(isc_adm_task_denied, buffer + 1);
+			break;
+
+		case fb_info_crypt_plugin:
+			if (tdbb->getAttachment()->locksmith(tdbb, GET_DBCRYPT_INFO))
+			{
+				const char* key = dbb->dbb_crypto_manager->getPluginName();
 				if (!(info = INF_put_item(item, static_cast<USHORT>(strlen(key)), key, info, end)))
 				{
 					if (transaction)
@@ -1095,7 +1125,9 @@ void INF_transaction_info(const jrd_tra* transaction,
 			if (transaction->tra_flags & TRA_read_committed)
 			{
 				*p++ = isc_info_tra_read_committed;
-				if (transaction->tra_flags & TRA_rec_version)
+				if (transaction->tra_flags & TRA_read_consistency)
+					*p++ = isc_info_tra_read_consistency;
+				else if (transaction->tra_flags & TRA_rec_version)
 					*p++ = isc_info_tra_rec_version;
 				else
 					*p++ = isc_info_tra_no_rec_version;

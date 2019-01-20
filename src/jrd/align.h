@@ -72,7 +72,9 @@ static const USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
 	dtype_dec128,				/* blr_dec128 == 25 */
 	dtype_dec_fixed,			/* blr_dec_fixed == 26 */
 	dtype_double,				/* blr_double == 27 */
-	0, 0, 0, 0, 0, 0, 0,
+	dtype_sql_time_tz,			/* blr_sql_time_tz == 28 */
+	dtype_timestamp_tz,			/* blr_timestamp_tz == 29 */
+	0, 0, 0, 0, 0,
 	dtype_timestamp,			/* blr_timestamp == 35 */
 	0,
 	dtype_varying,				/* blr_varying == 37 */
@@ -109,7 +111,9 @@ static const USHORT type_alignments[DTYPE_TYPE_MAX] =
 	sizeof(UCHAR),				/* dtype_boolean */
 	sizeof(Firebird::Decimal64),/* dtype_dec64 */
 	sizeof(Firebird::Decimal64),/* dtype_dec128 */
-	sizeof(Firebird::Decimal64)	/* dtype_dec_fixed */
+	sizeof(Firebird::Decimal64),/* dtype_dec_fixed */
+	sizeof(GDS_TIME),			/* dtype_sql_time_tz */
+	sizeof(GDS_DATE)			/* dtype_timestamp_tz */
 };
 
 static const USHORT type_lengths[DTYPE_TYPE_MAX] =
@@ -138,7 +142,9 @@ static const USHORT type_lengths[DTYPE_TYPE_MAX] =
 	sizeof(UCHAR),				/* dtype_boolean */
 	sizeof(Firebird::Decimal64),/* dtype_dec64 */
 	sizeof(Firebird::Decimal128),/*dtype_dec128 */
-	sizeof(Firebird::DecimalFixed)	/*	dtype_dec_fixed */
+	sizeof(Firebird::DecimalFixed),	/*	dtype_dec_fixed */
+	sizeof(ISC_TIME_TZ),			/* dtype_sql_time_tz */
+	sizeof(ISC_TIMESTAMP_TZ)		/* dtype_timestamp_tz */
 };
 
 
@@ -170,7 +176,9 @@ static const USHORT type_significant_bits[DTYPE_TYPE_MAX] =
 	0,							// dtype_boolean
 	0,							// dtype_dec64
 	0,							// dtype_dec128
-	0							// dtype_dec_fixed
+	0,							// dtype_dec_fixed
+	0,							// dtype_sql_time_tz
+	0							// dtype_timestamp_tz
 };
 
 #endif /* JRD_ALIGN_H */

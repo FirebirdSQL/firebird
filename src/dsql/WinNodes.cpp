@@ -871,9 +871,9 @@ AggNode* NTileWinNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 	NTileWinNode* node = FB_NEW_POOL(dsqlScratch->getPool()) NTileWinNode(dsqlScratch->getPool(),
 		doDsqlPass(dsqlScratch, arg));
 
-	dsc argDesc;
-	argDesc.makeInt64(0);
-	PASS1_set_parameter_type(dsqlScratch, node->arg, &argDesc, false);
+	PASS1_set_parameter_type(dsqlScratch, node->arg,
+		[&] (dsc* desc) { desc->makeInt64(0); },
+		false);
 
 	return node;
 }

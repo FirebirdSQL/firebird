@@ -204,11 +204,8 @@ static void internal_post(const Arg::StatusVector& v)
 		final << v;
 	}
 
-	// keep existing warnings
-	final << Arg::StatusVector(status_vector->getWarnings());
-
 	// save & punt
-	final.copyTo(status_vector);
+	status_vector->setErrors2(final.length(), final.value());
 	ERRD_punt();
 }
 

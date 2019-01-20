@@ -340,6 +340,12 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			align = type_alignments[dtype_timestamp];
 			break;
 
+		case blr_timestamp_tz:
+			desc->dsc_dtype = dtype_timestamp_tz;
+			desc->dsc_length = sizeof(ISC_TIMESTAMP_TZ);
+			align = type_alignments[dtype_timestamp_tz];
+			break;
+
 		case blr_sql_date:
 			desc->dsc_dtype = dtype_sql_date;
 			desc->dsc_length = sizeof(SLONG);
@@ -350,6 +356,12 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			desc->dsc_dtype = dtype_sql_time;
 			desc->dsc_length = sizeof(ULONG);
 			align = type_alignments[dtype_sql_time];
+			break;
+
+		case blr_sql_time_tz:
+			desc->dsc_dtype = dtype_sql_time_tz;
+			desc->dsc_length = sizeof(ISC_TIME_TZ);
+			align = type_alignments[dtype_sql_time_tz];
 			break;
 
 		case blr_bool:

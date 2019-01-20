@@ -102,8 +102,8 @@ GLOB_OPTIONS:=
 
 #____________________________________________________________________________
 
-# Firebird needs no RTTI
-RTTI_FLAG:= -fno-rtti
+# Global c++ flags: firebird needs no RTTI, choose build standard
+PLUSPLUS_FLAGS:= -fno-rtti -std=c++11
 
 # If this is defined then we use special rules useful for developers only
 IsDeveloper = @DEVEL_FLG@
@@ -172,8 +172,8 @@ CC =	@CC@
 CXX =	@CXX@
 LD =	@CXX@
 
-CFLAGS =	@CFLAGS@
-CXXFLAGS =	@CXXFLAGS@
+AC_CFLAGS = @CFLAGS@
+AC_CXXFLAGS = @CXXFLAGS@
 
 # LINKER COMMANDS
 
@@ -264,7 +264,7 @@ TOMMATH_VER=0
 TOMCRYPT=$(ROOT)/extern/libtomcrypt
 TOMCRYPT_INC=$(TOMCRYPT)/src/headers
 TOMCRYPT_SO=$(TOMCRYPT)/.libs/libtomcrypt.so
-TOMCRYPT_VER=0
+TOMCRYPT_VER=1
 
 # LINKER OPTIONS
 #

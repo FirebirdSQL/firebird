@@ -60,6 +60,7 @@
 #include "../burp/OdsDetection.h"
 #include "../auth/trusted/AuthSspi.h"
 #include "../common/dsc_proto.h"
+#include "../common/ThreadStart.h"
 
 using MsgFormat::SafeArg;
 using Firebird::FbLocalStatus;
@@ -104,7 +105,7 @@ enum scan_attr_t
 void	add_access_dpb(BurpGlobals* tdgbl, Firebird::ClumpletWriter& dpb);
 void	add_files(BurpGlobals* tdgbl, const char*);
 void	bad_attribute(scan_attr_t, att_type, USHORT);
-void	create_database(BurpGlobals* tdgbl, const TEXT*);
+void	create_database(BurpGlobals* tdgbl, Firebird::IProvider*, const TEXT*);
 void	decompress(BurpGlobals* tdgbl, UCHAR*, ULONG);
 void	eat_blob(BurpGlobals* tdgbl);
 void	eat_text(BurpGlobals* tdgbl);
@@ -163,7 +164,7 @@ void	realign(BurpGlobals* tdgbl, UCHAR*, const burp_rel*);
 #ifdef sparc
 USHORT	recompute_length(BurpGlobals* tdgbl, burp_rel*);
 #endif
-bool	restore(BurpGlobals* tdgbl, const TEXT*, const TEXT*);
+bool	restore(BurpGlobals* tdgbl, Firebird::IProvider*, const TEXT*, const TEXT*);
 void	restore_security_class(BurpGlobals* tdgbl, const TEXT*, const TEXT*);
 USHORT	get_view_base_relation_count(BurpGlobals* tdgbl, const TEXT*, USHORT, bool* error);
 void	store_blr_gen_id(BurpGlobals* tdgbl, const TEXT* gen_name, SINT64 value, SINT64 initial_value,
@@ -184,13 +185,9 @@ const SSHORT old_sparcs[] =
     {0, 0, 0, 2, 0, 0, 0, 0, 2, 4, 4, 4, 8, 8, 0, 0, 8, 8, 8};
 #endif
 
-//MVOL_read returns int
-static inline int get(BurpGlobals* tdgbl)
+static inline UCHAR get(BurpGlobals* tdgbl)
 {
-	if (--(tdgbl->io_cnt) >= 0)
-		return *(tdgbl->io_ptr)++;
-
-	return MVOL_read(&tdgbl->io_cnt, &tdgbl->io_ptr);
+	return tdgbl->get();
 }
 
 static inline FB_BOOLEAN get_boolean(BurpGlobals* tdgbl)
@@ -283,22 +280,11 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 	Firebird::IRequest* req_handle5 = nullptr;
 	BASED_ON RDB$INDICES.RDB$INDEX_NAME index_name;
 
+	Firebird::DispatcherPtr provider;
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-
-	tdgbl->io_ptr = NULL;
-	tdgbl->io_cnt = 0;
-
-	tdgbl->relations = NULL;
-	tdgbl->packages = NULL;
-	tdgbl->procedures = NULL;
-	tdgbl->miss_privs = NULL;
-	tdgbl->RESTORE_format = 0;
-	tdgbl->runtimeODS = 0;
-	tdgbl->global_trans = 0;
-
 	tdgbl->gbl_sw_transportable = tdgbl->gbl_sw_compress = false;
 
-	if (!restore(tdgbl, file_name, database_name))
+	if (!restore(tdgbl, provider, file_name, database_name))
 		return FINI_ERROR;
 
 	BURP_verbose (76);
@@ -357,6 +343,20 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 			END_ERROR
 		}
 	END_ERROR;
+
+	if (tdgbl->global_trans)
+	{
+		BURP_verbose (68);
+		// msg 68 committing meta data
+		EXEC SQL COMMIT TRANSACTION tdgbl->global_trans;
+		if (gds_status->hasData())
+			general_on_error ();
+		// Check to see if there is a warning
+		if (gds_status->getState() & Firebird::IStatus::STATE_WARNINGS)
+		{
+			BURP_print_warning(gds_status);
+		}
+	}
 
 	// Activate the indices for foreign keys and do another commit
 	if (!tdgbl->gbl_sw_deactivate_indexes)
@@ -481,20 +481,6 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 		END_ERROR;
 	}
 
-	if (tdgbl->global_trans)
-	{
-		BURP_verbose (68);
-		// msg 68 committing meta data
-		EXEC SQL COMMIT TRANSACTION tdgbl->global_trans;
-		if (gds_status->hasData())
-			general_on_error ();
-		// Check to see if there is a warning
-		if (gds_status->getState() & Firebird::IStatus::STATE_WARNINGS)
-		{
-			BURP_print_warning(gds_status);
-		}
-	}
-
 	EXEC SQL SET TRANSACTION ISOLATION LEVEL READ COMMITTED NO_AUTO_UNDO;
 	if (gds_status->hasData())
 		EXEC SQL SET TRANSACTION;
@@ -580,7 +566,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 	// set forced writes to the value which was in the header
 	dpb.insertByte(isc_dpb_force_write, tdgbl->hdr_forced_writes ? 1 : 0);
 
-	Firebird::IAttachment* db_handle = Firebird::DispatcherPtr()->attachDatabase(&tdgbl->status_vector, database_name,
+	Firebird::IAttachment* db_handle = provider->attachDatabase(&tdgbl->status_vector, database_name,
 		dpb.getBufferLength(), dpb.getBuffer());
 	if (tdgbl->status_vector->hasData())
 		general_on_error();
@@ -608,7 +594,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 
 		dpb.insertByte(isc_dpb_set_db_readonly, 1);
 
-		db_handle = Firebird::DispatcherPtr()->attachDatabase(&tdgbl->status_vector, database_name,
+		db_handle = provider->attachDatabase(&tdgbl->status_vector, database_name,
 			dpb.getBufferLength(), dpb.getBuffer());
 		if (tdgbl->status_vector->hasData())
 			general_on_error();
@@ -807,9 +793,32 @@ private:
 	unsigned* version;
 };
 
+class EngineVersion :
+	public Firebird::AutoIface<Firebird::IVersionCallbackImpl<EngineVersion, Firebird::CheckStatusWrapper> >
+{
+public:
+	EngineVersion(char* v)
+		: version(v)
+	{
+		version[0] = 0;
+	}
+
+	// IVersionCallback implementation
+	void callback(Firebird::CheckStatusWrapper*, const char* text)
+	{
+		if (!version[0])
+			strcpy(version, text);
+	}
+
+private:
+	char* version;
+};
+
 } // anonymous namespace
 
-void create_database(BurpGlobals* tdgbl, const TEXT* file_name)
+
+
+void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file_name)
 {
 /**************************************
  *
@@ -835,6 +844,8 @@ void create_database(BurpGlobals* tdgbl, const TEXT* file_name)
 	bool forced_writes = true; // turned on by default
 	ULONG page_buffers = 0;
 	USHORT SQL_dialect = 0;
+
+	tdgbl->gbl_database_file_name = file_name;
 
 	att_type attribute;
 	rec_type record;
@@ -974,7 +985,9 @@ void create_database(BurpGlobals* tdgbl, const TEXT* file_name)
 
 	// start database up shut down,
 	// use single-user mode to avoid conflicts during restore process
-	dpb.insertByte(isc_dpb_shutdown, isc_dpb_shut_attachment | isc_dpb_shut_single);
+	// when crypt thread to run use multi-DBO mode
+	dpb.insertByte(isc_dpb_shutdown,
+		tdgbl->gbl_sw_keyholder ? isc_dpb_shut_multi : isc_dpb_shut_attachment | isc_dpb_shut_single);
 	dpb.insertInt(isc_dpb_shutdown_delay, 0);
 	dpb.insertInt(isc_dpb_overwrite, tdgbl->gbl_sw_overwrite);
 
@@ -988,8 +1001,19 @@ void create_database(BurpGlobals* tdgbl, const TEXT* file_name)
 			fb_strlen(tdgbl->gbl_sw_fix_fss_metadata));
 	}
 
-	DB = Firebird::DispatcherPtr()->createDatabase(&status_vector, file_name,
-							dpb.getBufferLength(), dpb.getBuffer());
+	// provide crypt key(s) for engine
+
+	if (tdgbl->gbl_sw_keyholder)
+	{
+		provider->setDbCryptCallback(&status_vector, MVOL_get_crypt(tdgbl));
+		if (!status_vector.isSuccess())
+		{
+			BURP_print_status(true, &status_vector);
+			BURP_exit_local(FINI_ERROR, tdgbl);
+		}
+	}
+
+	DB = provider->createDatabase(&status_vector, file_name, dpb.getBufferLength(), dpb.getBuffer());
 	if (status_vector->hasData())
 	{
 		BURP_error_redirect(&status_vector, 33, SafeArg() << file_name);
@@ -1017,6 +1041,107 @@ void create_database(BurpGlobals* tdgbl, const TEXT* file_name)
 
 	BURP_verbose (74, SafeArg() << file_name << page_size);
 	// msg 74 created database %s, page_size %ld bytes
+
+	if (tdgbl->gbl_sw_keyholder)
+	{
+		// check server version
+		char buf[256];
+		EngineVersion ev(buf);
+		Firebird::UtilInterfacePtr()->getFbVersion(&status_vector, DB, &ev);
+
+		const char* ptr = strstr(buf, "version \"");
+		int v = 0;
+		int c = 1;
+		if (ptr)
+		{
+			while (ptr && *ptr)
+			{
+				if (*ptr >='0' && *ptr <= '9')
+				{
+					v *= 100;
+					v += atoi(ptr);
+
+					if (c >= 3)
+					{
+						if (v < 30004)
+							ptr = NULL;
+						break;
+					}
+
+					++c;
+					ptr = strchr(ptr, '.');
+				}
+				else
+					++ptr;
+			}
+		}
+
+		if (!(ptr && *ptr))
+		{
+			Firebird::string x;
+			x.printf("Undefined or too small server version: %s, need at least 3.0.4", buf);
+			(Firebird::Arg::Gds(isc_random) << x).raise();
+		}
+
+		EXEC SQL SET TRANSACTION;
+		if (gds_status->hasData())
+			general_on_error ();
+
+		if (!tdgbl->gbl_sw_crypt)
+		{
+			BURP_error(true, 378);
+			// Unknown crypt plugin name - use -CRYPT switch
+		}
+
+		Firebird::string sql;
+		sql.printf("ALTER DATABASE ENCRYPT WITH \"%s\"", tdgbl->gbl_sw_crypt);
+		if (tdgbl->gbl_sw_keyname)
+		{
+			sql += " KEY ";
+			sql += tdgbl->gbl_sw_keyname;
+		}
+
+		tdgbl->db_handle->execute(gds_status, tdgbl->tr_handle, sql.length(), sql.c_str(), 3,
+			nullptr, nullptr, nullptr, nullptr);
+
+		if (gds_status->hasData())
+			general_on_error ();
+
+		COMMIT
+		ON_ERROR
+			general_on_error ();
+		END_ERROR;
+
+		UCHAR buffer[100];
+		UCHAR item = fb_info_crypt_state;
+		bool complete = false;
+
+		for (int i = 0; i < 100; ++i)
+		{
+			Thread::sleep(100);
+
+			tdgbl->db_handle->getInfo(gds_status, sizeof(item), &item, sizeof(buffer), buffer);
+			if (gds_status->hasData())
+				general_on_error ();
+
+			const UCHAR* d = buffer;
+			if (*d++ != fb_info_crypt_state)
+				BURP_error(385, true);
+
+			const int length = gds__vax_integer(d, 2);
+			d += 2;
+
+			const int value = gds__vax_integer(d, length);
+			if (value & fb_info_crypt_encrypted && !(value & fb_info_crypt_process))
+			{
+				complete = true;
+				break;
+			}
+		}
+
+		if (!complete)
+			BURP_error(386, true);
+	}
 }
 
 void decompress(BurpGlobals* tdgbl, UCHAR* buffer, ULONG length)
@@ -2863,7 +2988,7 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
  *	Write data records for a relation.
  *
  **************************************/
-	ULONG records = 0;
+	FB_UINT64 records = 0;
 	rec_type record;
 	burp_fld* field;
 
@@ -3037,7 +3162,7 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 		pb->insertInt(&tdgbl->throwStatus, Firebird::IBatch::TAG_DETAILED_ERRORS, GBAK_BATCH_STEP);
 		pb->insertInt(&tdgbl->throwStatus, Firebird::IBatch::TAG_BUFFER_BYTES_SIZE, 0);
 
-		Firebird::RefPtr<Firebird::IBatch> batch(DB->
+		Firebird::RefPtr<Firebird::IBatch> batch(Firebird::REF_NO_INCR, DB->
 			createBatch(fbStatus, gds_trans, sqlStatement.length(), sqlStatement.c_str(), tdgbl->gbl_dialect,
 				meta, pb->getBufferLength(&tdgbl->throwStatus), pb->getBuffer(&tdgbl->throwStatus)));
 		if (fbStatus->hasData())
@@ -3209,7 +3334,7 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 				}
 				else
 				{
-					if (tdgbl->gbl_sw_incremental)
+					if (tdgbl->gbl_sw_incremental && isc_sqlcode(status_vector.getErrors()) != -902)
 					{
 						BURP_print (false, 114, relation->rel_name);
 						// msg 114 restore failed for record in relation %s
@@ -3461,7 +3586,9 @@ rec_type get_data_old(BurpGlobals* tdgbl, burp_rel* relation)
 		case blr_float:
 		case blr_double:
 		case blr_timestamp:
+		case blr_timestamp_tz:
 		case blr_sql_time:
+		case blr_sql_time_tz:
 		case blr_sql_date:
 		case blr_dec64:
 		case blr_dec128:
@@ -3581,7 +3708,7 @@ rec_type get_data_old(BurpGlobals* tdgbl, burp_rel* relation)
 	data.lstr_address = NULL;
 	ULONG old_length = 0;
 
-	ULONG records = 0;
+	FB_UINT64 records = 0;
 	rec_type record;
 	bool resync = false;
 
@@ -3714,7 +3841,7 @@ rec_type get_data_old(BurpGlobals* tdgbl, burp_rel* relation)
 			}
 			else
 			{
-				if (tdgbl->gbl_sw_incremental)
+				if (tdgbl->gbl_sw_incremental && isc_sqlcode(status_vector->getErrors()) != -902)
 				{
 					BURP_print (false, 114, relation->rel_name);
 					// msg 114 restore failed for record in relation %s
@@ -6910,9 +7037,10 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
  *
  **************************************/
 	BASED_ON RDB$INDICES.RDB$INDEX_NAME index_name;
-	att_type	attribute;
-	bool		foreign_index = false;
-	scan_attr_t		scan_next_attr;
+	att_type attribute;
+	bool foreign_index = false;
+	bool expr_index = false;
+	scan_attr_t scan_next_attr;
 
 	SSHORT count = 0, segments = 0;
 
@@ -6962,7 +7090,7 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 				}
 				else
 				{
-					if (!X.RDB$INDEX_INACTIVE && foreign_index)
+					if (!X.RDB$INDEX_INACTIVE && (foreign_index || expr_index))
 						X.RDB$INDEX_INACTIVE = DEFERRED_ACTIVE;
 				}
 				if (tdgbl->gbl_sw_deactivate_indexes)
@@ -7002,6 +7130,12 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 				break;
 
 			case att_index_expression_blr:
+				expr_index = true;
+				// Defer expression index activation
+				if (!X.RDB$INDEX_INACTIVE)
+					X.RDB$INDEX_INACTIVE = DEFERRED_ACTIVE;
+				if (tdgbl->gbl_sw_deactivate_indexes)
+					X.RDB$INDEX_INACTIVE = TRUE;
 				X.RDB$EXPRESSION_BLR.NULL = FALSE;
 				get_blr_blob (tdgbl, X.RDB$EXPRESSION_BLR, false);
 				break;
@@ -9188,7 +9322,7 @@ bool get_trigger(BurpGlobals* tdgbl)
 				switch (attribute)
 				{
 				case att_trig_type:
-					X.RDB$TRIGGER_TYPE = (USHORT) get_int32(tdgbl);
+					X.RDB$TRIGGER_TYPE = get_int32(tdgbl);
 					break;
 
 				case att_trig_type2:
@@ -10185,7 +10319,7 @@ rec_type ignore_data(BurpGlobals* tdgbl, burp_rel* relation)
  *	Ignore data records for a relation.
  *
  **************************************/
-	ULONG records = 0;
+	FB_UINT64 records = 0;
 	rec_type record;
 
 	while (true)
@@ -10348,7 +10482,7 @@ USHORT recompute_length(BurpGlobals* tdgbl, burp_rel* relation)
 }
 #endif
 
-bool restore(BurpGlobals* tdgbl, const TEXT* file_name, const TEXT* database_name)
+bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file_name, const TEXT* database_name)
 {
 /**************************************
  *
@@ -10363,7 +10497,7 @@ bool restore(BurpGlobals* tdgbl, const TEXT* file_name, const TEXT* database_nam
 
 	// Read burp record first
 
-	MVOL_init_read (file_name, &tdgbl->RESTORE_format, &tdgbl->io_cnt, &tdgbl->io_ptr);
+	MVOL_init_read (file_name, &tdgbl->RESTORE_format);
 
 	if (tdgbl->gbl_sw_transportable)
 		BURP_verbose (133);
@@ -10383,7 +10517,7 @@ bool restore(BurpGlobals* tdgbl, const TEXT* file_name, const TEXT* database_nam
 
 	BURP_verbose(349, SafeArg() << tdgbl->RESTORE_format); // backup version is @1
 
-	create_database(tdgbl, database_name);
+	create_database(tdgbl, provider, database_name);
 
 	EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
 	if (gds_status->hasData())
@@ -11190,6 +11324,7 @@ void update_global_field(BurpGlobals* tdgbl)
 		ON_ERROR
 			general_on_error ();
 		END_ERROR;
+
 		gfld* n_gfield = gfield->gfld_next;
 		BURP_free (gfield);
 		gfield = n_gfield;

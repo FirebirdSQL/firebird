@@ -29,7 +29,7 @@ public:
 	explicit RemoteGroup(Firebird::MemoryPool&)
 		: prime(primeStr), generator(genStr), k()
 	{
-		Auth::Sha1 hash;
+		Auth::SecureHash<Firebird::Sha1> hash;
 
 		hash.processInt(prime);
 		if (prime.length() > generator.length())
@@ -58,6 +58,13 @@ public:
 InitInstance<RemoteGroup> RemoteGroup::group;
 
 const char* RemotePassword::plugName = "Srp";
+
+string RemotePassword::pluginName(unsigned bits)
+{
+	string plg;
+	plg.printf("%s%u", plugName, bits);
+	return plg;
+}
 
 RemotePassword::RemotePassword()
 	: group(RemoteGroup::getGroup())
@@ -188,24 +195,17 @@ BigInteger RemotePassword::clientProof(const char* account, const char* salt, co
 	hash.process(account);
 	hash.getInt(n2);
 
-	hash.reset();
-	hash.processInt(n1);				// H(prime) ^ H(g)
-	hash.processInt(n2);				// H(I)
-	hash.process(salt);					// s
-	hash.processInt(clientPublicKey);	// A
-	hash.processInt(serverPublicKey);	// B
-	hash.process(sessionKey);			// K
-
-	BigInteger rc;
-	hash.getInt(rc);
-	return rc;
+	return makeProof(n1, n2, salt, sessionKey);
 }
+
+RemotePassword::~RemotePassword()
+{ }
 
 #if SRP_DEBUG > 0
 void dumpIt(const char* name, const Firebird::UCharBuffer& data)
 {
 	fprintf(stderr, "%s\n", name);
-	for (size_t x=0; x<data.getCount(); ++x)
+	for (size_t x = 0; x<data.getCount(); ++x)
 		fprintf(stderr, "%02x ", data[x]);
 	fprintf(stderr, "\n");
 }

@@ -296,7 +296,7 @@ public:
 		const bool at_begin = (m_begin == m_curr);
 		m_curr++;
 
-		while (Marker::isMarked(m_curr) && m_curr < m_end)
+		while (m_curr < m_end && Marker::isMarked(m_curr))
 			m_curr++;
 
 		if (m_curr == m_end)

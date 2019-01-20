@@ -987,7 +987,8 @@ void ClntAuthBlock::resetClnt(const Firebird::PathName* fileName, const CSTRING*
 	firstTime = true;
 
 	clntConfig = REMOTE_get_config(fileName, &dpbConfig);
-	pluginList = clntConfig->getPlugins(Firebird::IPluginManager::TYPE_AUTH_CLIENT);
+	pluginList = dpbPlugins.hasData() ? dpbPlugins :
+		clntConfig->getPlugins(Firebird::IPluginManager::TYPE_AUTH_CLIENT);
 
 	Firebird::PathName final;
 	if (serverPluginList.hasData())
@@ -1323,69 +1324,11 @@ void rem_port::versionInfo(Firebird::string& version) const
 
 
 #ifdef WIRE_COMPRESS_SUPPORT
-namespace {
-	class ZLib
-	{
-	public:
-		explicit ZLib(Firebird::MemoryPool&)
-		{
-#ifdef WIN_NT
-			const char* name = "zlib1.dll";
-#else
-			const char* name = "libz." SHRLIB_EXT ".1";
-#endif
-			z.reset(ModuleLoader::fixAndLoadModule(name));
-			if (z)
-				symbols();
-		}
-
-		int ZEXPORT (*deflateInit_)(z_stream* strm, int level, const char *version, int stream_size);
-		int ZEXPORT (*inflateInit_)(z_stream* strm, const char *version, int stream_size);
-		int ZEXPORT (*deflate)(z_stream* strm, int flush);
-		int ZEXPORT (*inflate)(z_stream* strm, int flush);
-		void ZEXPORT (*deflateEnd)(z_stream* strm);
-		void ZEXPORT (*inflateEnd)(z_stream* strm);
-
-		operator bool() { return z.hasData(); }
-		bool operator!() { return !z.hasData(); }
-
-	private:
-		Firebird::AutoPtr<ModuleLoader::Module> z;
-
-		void symbols()
-		{
-#define FB_ZSYMB(A) z->findSymbol(STRINGIZE(A), A); if (!A) { z.reset(NULL); return; }
-			FB_ZSYMB(deflateInit_)
-			FB_ZSYMB(inflateInit_)
-			FB_ZSYMB(deflate)
-			FB_ZSYMB(inflate)
-			FB_ZSYMB(deflateEnd)
-			FB_ZSYMB(inflateEnd)
-#undef FB_ZSYMB
-		}
-	};
-
-	Firebird::InitInstance<ZLib> zlib;
-
-	void* allocFunc(void*, uInt items, uInt size)
-	{
-		return MemoryPool::globalAlloc(items * size ALLOC_ARGS);
-	}
-
-	void freeFunc(void*, void* address)
-	{
-		MemoryPool::globalFree(address);
-	}
-}
+static Firebird::InitInstance<Firebird::ZLib> zlib;
 #endif // WIRE_COMPRESS_SUPPORT
 
 rem_port::~rem_port()
 {
-	if (port_events_shutdown)
-	{
-		port_events_shutdown(this);
-	}
-
 	delete port_srv_auth;
 	delete port_srv_auth_block;
 	delete port_version;
@@ -1585,16 +1528,16 @@ void rem_port::initCompression()
 #ifdef WIRE_COMPRESS_SUPPORT
 	if (port_protocol >= PROTOCOL_VERSION13 && !port_compressed && zlib())
 	{
-		port_send_stream.zalloc = allocFunc;
-		port_send_stream.zfree = freeFunc;
+		port_send_stream.zalloc = Firebird::ZLib::allocFunc;
+		port_send_stream.zfree = Firebird::ZLib::freeFunc;
 		port_send_stream.opaque = Z_NULL;
 		int ret = zlib().deflateInit(&port_send_stream, Z_DEFAULT_COMPRESSION);
 		if (ret != Z_OK)
 			(Firebird::Arg::Gds(isc_deflate_init) << Firebird::Arg::Num(ret)).raise();
 		port_send_stream.next_out = NULL;
 
-		port_recv_stream.zalloc = allocFunc;
-		port_recv_stream.zfree = freeFunc;
+		port_recv_stream.zalloc = Firebird::ZLib::allocFunc;
+		port_recv_stream.zfree = Firebird::ZLib::freeFunc;
 		port_recv_stream.opaque = Z_NULL;
 		port_recv_stream.avail_in = 0;
 		port_recv_stream.next_in = Z_NULL;

@@ -27,13 +27,13 @@
 #include <stdio.h>
 
 
-main(int ac, char** av)
+int main(int ac, char** av)
 {
 	int mode = ac < 2 ? 0 : ((*av[1]) - '0');
 
-	int cur = 24;
+	int cur = 32;
 	int prev = 0;
-	const int dstep = 8;
+	const int dstep = 16;
 	int limit = 1024;
 	int slot = 0;
 
@@ -55,4 +55,6 @@ main(int ac, char** av)
 
 	if (mode == 1)
 		printf ("\t%d, // %d\n", cur, slot);
+
+	return 0;
 }

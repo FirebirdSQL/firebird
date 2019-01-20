@@ -98,6 +98,7 @@ public:
 		KEY_DEFAULT_DB_CACHE_PAGES,
 		KEY_CONNECTION_TIMEOUT,
 		KEY_DUMMY_PACKET_INTERVAL,
+		KEY_DEFAULT_TIME_ZONE,
 		KEY_LOCK_MEM_SIZE,
 		KEY_LOCK_HASH_SLOTS,
 		KEY_LOCK_ACQUIRE_SPINS,
@@ -146,6 +147,12 @@ public:
 		KEY_STMT_TIMEOUT,
 		KEY_CONN_IDLE_TIMEOUT,
 		KEY_CLIENT_BATCH_BUFFER,
+		KEY_OUTPUT_REDIRECTION_FILE,
+		KEY_EXT_CONN_POOL_SIZE,
+		KEY_EXT_CONN_POOL_LIFETIME,
+		KEY_SNAPSHOTS_MEM_SIZE,
+		KEY_TIP_CACHE_BLOCK_SIZE,
+		KEY_READ_CONSISTENCY,
 		MAX_CONFIG_KEY		// keep it last
 	};
 
@@ -257,6 +264,8 @@ public:
 	// Dummy packet interval
 	int getDummyPacketInterval() const;
 
+	static const char* getDefaultTimeZone();
+
 	// Lock manager memory size
 	int getLockMemSize() const;
 
@@ -362,6 +371,18 @@ public:
 	unsigned int getConnIdleTimeout() const;
 
 	unsigned int getClientBatchBuffer() const;
+
+	static const char* getOutputRedirectionFile();
+
+	static int getExtConnPoolSize();
+
+	static int getExtConnPoolLifeTime();
+
+	ULONG getSnapshotsMemSize() const;
+
+	ULONG getTipCacheBlockSize() const;
+
+	bool getReadConsistency() const;
 };
 
 // Implementation of interface to access master configuration file

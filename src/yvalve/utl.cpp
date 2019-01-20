@@ -56,8 +56,10 @@
 #include "../yvalve/YObjects.h"
 #include "../yvalve/why_proto.h"
 #include "../yvalve/prepa_proto.h"
+#include "../yvalve/PluginManager.h"
 #include "../jrd/constants.h"
 #include "../jrd/build_no.h"
+#include "../common/TimeZoneUtil.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/MetaName.h"
@@ -664,6 +666,109 @@ void UtilInterface::decodeTime(ISC_TIME time,
 		*fractions = time % ISC_TIME_SECONDS_PRECISION;
 }
 
+void UtilInterface::decodeTimeTz(CheckStatusWrapper* status, const ISC_TIME_TZ* timeTz,
+	unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions,
+	unsigned timeZoneBufferLength, char* timeZoneBuffer)
+{
+	try
+	{
+		tm times;
+		int intFractions;
+		TimeZoneUtil::decodeTime(*timeTz, CVT_commonCallbacks, &times, &intFractions);
+
+		if (hours)
+			*hours = times.tm_hour;
+
+		if (minutes)
+			*minutes = times.tm_min;
+
+		if (seconds)
+			*seconds = times.tm_sec;
+
+		if (fractions)
+			*fractions = (unsigned) intFractions;
+
+		if (timeZoneBuffer)
+			TimeZoneUtil::format(timeZoneBuffer, timeZoneBufferLength, timeTz->time_zone);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
+void UtilInterface::encodeTimeTz(CheckStatusWrapper* status, ISC_TIME_TZ* timeTz,
+	unsigned hours, unsigned minutes, unsigned seconds, unsigned fractions, const char* timeZone)
+{
+	try
+	{
+		timeTz->utc_time = encodeTime(hours, minutes, seconds, fractions);
+		timeTz->time_zone = TimeZoneUtil::parse(timeZone, strlen(timeZone));
+		TimeZoneUtil::localTimeToUtc(*timeTz, CVT_commonCallbacks);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
+void UtilInterface::decodeTimeStampTz(CheckStatusWrapper* status, const ISC_TIMESTAMP_TZ* timeStampTz,
+	unsigned* year, unsigned* month, unsigned* day, unsigned* hours, unsigned* minutes, unsigned* seconds,
+	unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer)
+{
+	try
+	{
+		tm times;
+		int intFractions;
+		TimeZoneUtil::decodeTimeStamp(*timeStampTz, &times, &intFractions);
+
+		if (year)
+			*year = times.tm_year + 1900;
+
+		if (month)
+			*month = times.tm_mon + 1;
+
+		if (day)
+			*day = times.tm_mday;
+
+		if (hours)
+			*hours = times.tm_hour;
+
+		if (minutes)
+			*minutes = times.tm_min;
+
+		if (seconds)
+			*seconds = times.tm_sec;
+
+		if (fractions)
+			*fractions = (unsigned) intFractions;
+
+		if (timeZoneBuffer)
+			TimeZoneUtil::format(timeZoneBuffer, timeZoneBufferLength, timeStampTz->time_zone);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
+void UtilInterface::encodeTimeStampTz(CheckStatusWrapper* status, ISC_TIMESTAMP_TZ* timeStampTz,
+	unsigned year, unsigned month, unsigned day, unsigned hours, unsigned minutes, unsigned seconds,
+	unsigned fractions, const char* timeZone)
+{
+	try
+	{
+		timeStampTz->utc_timestamp.timestamp_date = encodeDate(year, month, day);
+		timeStampTz->utc_timestamp.timestamp_time = encodeTime(hours, minutes, seconds, fractions);
+		timeStampTz->time_zone = TimeZoneUtil::parse(timeZone, strlen(timeZone));
+		TimeZoneUtil::localTimeStampToUtc(*timeStampTz);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
 ISC_DATE UtilInterface::encodeDate(unsigned year, unsigned month, unsigned day)
 {
 	tm times;
@@ -1187,56 +1292,6 @@ IDecFloat34* UtilInterface::getDecFloat34(CheckStatusWrapper* status)
 	return &decFloat34;
 }
 
-class DecFixed FB_FINAL : public AutoIface<IDecFixedImpl<DecFixed, CheckStatusWrapper> >
-{
-public:
-	// IDecFixed implementation
-	void toBcd(const FB_DEC_FIXED* from, int* sign, unsigned char* bcd)
-	{
-		int exp = 0;
-		*sign = decQuadToBCD(reinterpret_cast<const decQuad*>(from), &exp, bcd);
-		fb_assert(exp == 0);
-	}
-
-	void toString(CheckStatusWrapper* status, const FB_DEC_FIXED* from, int scale, unsigned bufSize, char* buffer)
-	{
-		try
-		{
-			DecimalStatus decSt(FB_DEC_Errors);
-			reinterpret_cast<const DecimalFixed*>(from)->toString(decSt, scale, bufSize, buffer);
-		}
-		catch (const Exception& ex)
-		{
-			ex.stuffException(status);
-		}
-	}
-
-	void fromBcd(int sign, const unsigned char* bcd, FB_DEC_FIXED* to)
-	{
-		decQuadFromBCD(reinterpret_cast<decQuad*>(to), 0, bcd, sign ? DECFLOAT_Sign : 0);
-	}
-
-	void fromString(CheckStatusWrapper* status, const char* from, int scale, FB_DEC_FIXED* to)
-	{
-		try
-		{
-			DecimalStatus decSt(FB_DEC_Errors);
-			DecimalFixed* val = reinterpret_cast<DecimalFixed*>(to);
-			val->set(from, scale, decSt);
-		}
-		catch (const Exception& ex)
-		{
-			ex.stuffException(status);
-		}
-	}
-};
-
-IDecFixed* UtilInterface::getDecFixed(CheckStatusWrapper* /*status*/)
-{
-	static DecFixed decFixed;
-	return &decFixed;
-}
-
 unsigned UtilInterface::setOffsets(CheckStatusWrapper* status, IMessageMetadata* metadata,
 	IOffsetsCallback* callback)
 {
@@ -1270,103 +1325,6 @@ unsigned UtilInterface::setOffsets(CheckStatusWrapper* status, IMessageMetadata*
 	}
 
 	return 0;
-}
-
-// Deal with events
-class EventBlock FB_FINAL : public DisposeIface<IEventBlockImpl<EventBlock, CheckStatusWrapper> >
-{
-public:
-	EventBlock(const char** events)
-		: values(getPool()), buffer(getPool()), counters(getPool())
-	{
-		if (!events[0])
-		{
-			(Arg::Gds(isc_random) << "No events passed as an argument"
-				<< Arg::SqlState("HY024")).raise();
-				// HY024: Invalid attribute value
-		}
-
-		unsigned num = 0;
-		values.push(EPB_version1);
-
-		for (const char** e = events; *e; ++e)
-		{
-			++num;
-
-			string ev(*e);
-			ev.rtrim();
-
-			if (ev.length() > 255)
-			{
-				(Arg::Gds(isc_random) << ("Too long event name: " + ev)
-					<< Arg::SqlState("HY024")).raise();
-					// HY024: Invalid attribute value
-			}
-			values.push(ev.length());
-			values.push(reinterpret_cast<const unsigned char*>(ev.begin()), ev.length());
-			values.push(0);
-			values.push(0);
-			values.push(0);
-			values.push(0);
-		}
-
-		// allocate memory for various buffers
-		buffer.getBuffer(values.getCount());
-		counters.getBuffer(num);
-	}
-
-	unsigned getLength()
-	{
-		return values.getCount();
-	}
-
-	unsigned char* getValues()
-	{
-		return values.begin();
-	}
-
-	unsigned char* getBuffer()
-	{
-		return buffer.begin();
-	}
-
-	unsigned getCount()
-	{
-		return counters.getCount();
-	}
-
-	unsigned* getCounters()
-	{
-		return (unsigned*) counters.begin();
-	}
-
-	void counts()
-	{
-		isc_event_counts(counters.begin(), values.getCount(), values.begin(), buffer.begin());
-	}
-
-	void dispose()
-	{
-		delete this;
-	}
-
-private:
-	UCharBuffer values;
-	UCharBuffer buffer;
-	HalfStaticArray<ULONG, 16> counters;
-};
-
-IEventBlock* UtilInterface::createEventBlock(CheckStatusWrapper* status, const char** events)
-{
-	try
-	{
-		return FB_NEW EventBlock(events);
-	}
-	catch (const Exception& ex)
-	{
-		ex.stuffException(status);
-		return NULL;
-	}
 }
 
 } // namespace Why
@@ -3222,6 +3180,7 @@ void ThreadCleanup::initThreadCleanup()
 void ThreadCleanup::finiThreadCleanup()
 {
 	pthread_setspecific(key, NULL);
+	PluginManager::threadDetach();
 }
 
 
@@ -3254,6 +3213,7 @@ void ThreadCleanup::initThreadCleanup()
 
 void ThreadCleanup::finiThreadCleanup()
 {
+	PluginManager::threadDetach();
 }
 #endif // #ifdef WIN_NT
 

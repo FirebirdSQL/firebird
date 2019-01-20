@@ -91,8 +91,12 @@ const int IN_SW_BURP_FETCHPASS			= 45;	// fetch default password from file to us
 const int IN_SW_BURP_VERBINT			= 46;	// verbose but with specific interval
 const int IN_SW_BURP_STATS				= 47;	// print statistics
 
+const int IN_SW_BURP_ZIP				= 48;	// backup file in .zip format
+const int IN_SW_BURP_KEYHOLD			= 49;	// name of KeyHolder plugin
+const int IN_SW_BURP_KEYNAME			= 50;	// name of crypt key
+const int IN_SW_BURP_CRYPT				= 51;	// name of crypt plugin
+
 /**************************************************************************/
-	// used 0BCDEFGILMNOPRSTUVYZ	available AHJQWX
 
 static const char* const BURP_SW_MODE_RO = "READ_ONLY";
 static const char* const BURP_SW_MODE_RW = "READ_WRITE";
@@ -111,6 +115,8 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 				// msg 73: @1CREATE_DATABASE create database from backup file
 	{IN_SW_BURP_CO,   isc_spb_bkp_convert,		"CONVERT",			0, 0, 0, false, true,	254,	2, NULL, boBackup},
 				// msg 254: @1CO(NVERT)  backup external files as tables
+	{IN_SW_BURP_CRYPT,	isc_spb_bkp_crypt,		"CRYPT", 			0, 0, 0, false, false,	373,	3, NULL, boGeneral},
+				// msg 373:@1CRY(PT) plugin name
 	{IN_SW_BURP_E,	  isc_spb_bkp_expand,		"EXPAND",			0, 0, 0, false, true,	97, 	1, NULL, boBackup},
 				// msg 97: @1EXPAND no data compression
 	{IN_SW_BURP_FA,   isc_spb_bkp_factor,		"FACTOR",			0, 0, 0, false, false,	181,	2, NULL, boBackup},
@@ -125,10 +131,14 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 				// msg 303: @1FIX_FSS_METADATA	   fix malformed UNICODE_FSS metadata
 	{IN_SW_BURP_G,	  isc_spb_bkp_no_garbage_collect, "GARBAGE_COLLECT", 0, 0, 0, false, true,	177, 1, NULL, boBackup},
 				// msg 177:@1GARBAGE_COLLECT inhibit garbage collection
-	{IN_SW_BURP_I,	  isc_spb_res_deactivate_idx, "INACTIVE",		0, 0, 0, false, true,	78, 	1, NULL, boRestore},
+	{IN_SW_BURP_I,	  isc_spb_res_deactivate_idx,	"INACTIVE",		0, 0, 0, false, true,	78, 	1, NULL, boRestore},
 				// msg 78:@1INACTIVE deactivate indexes during restore
-	{IN_SW_BURP_IG,   isc_spb_bkp_ignore_checksums,   "IGNORE", 	0, 0, 0, false, true,	178,	2, NULL, boBackup},
+	{IN_SW_BURP_IG,   isc_spb_bkp_ignore_checksums,	"IGNORE", 		0, 0, 0, false, true,	178,	2, NULL, boBackup},
 				// msg 178:@1IGNORE ignore bad checksums
+	{IN_SW_BURP_KEYHOLD,	isc_spb_bkp_keyholder,	"KEYHOLDER", 	0, 0, 0, false, false,	382,	4, NULL, boGeneral},
+				// msg 382:@1KEYHOLDER name of a key holder plugin
+	{IN_SW_BURP_KEYNAME,	isc_spb_bkp_keyname,	"KEYNAME", 		0, 0, 0, false, false,	372,	4, NULL, boGeneral},
+				// msg 372:@1KEYNAME name of a key to be used for encryption
 	{IN_SW_BURP_K,	  isc_spb_res_no_shadow,	"KILL", 			0, 0, 0, false, true,	172,	1, NULL, boRestore},
 				// msg 172:@1KILL restore without creating shadows
 	{IN_SW_BURP_L,	  isc_spb_bkp_ignore_limbo, "LIMBO",			0, 0, 0, false, true,	98, 	1, NULL, boBackup},
@@ -167,13 +177,13 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 				// msg 355: @1SKIP_DATA skip data for table
 	{IN_SW_BURP_STATS, isc_spb_bkp_stat,		"STATISTICS",		0, 0, 0, false, false,	361,	2, NULL, boGeneral},
 				// msg 361: @1ST(ATISTICS) TDRW    show statistics:
-	{-1,				0,							" ",				0, 0, 0, false, false,	362,	0, NULL, boGeneral},
+	{-1,				0,							" ",			0, 0, 0, false, false,	362,	0, NULL, boGeneral},
 				// msg 362: T                  time from start
-	{-1,				0,							" ",				0, 0, 0, false, false,	363,	0, NULL, boGeneral},
+	{-1,				0,							" ",			0, 0, 0, false, false,	363,	0, NULL, boGeneral},
 				// msg 363: D                  delta time
-	{-1,				0,							" ",				0, 0, 0, false, false,	364,	0, NULL, boGeneral},
+	{-1,				0,							" ",			0, 0, 0, false, false,	364,	0, NULL, boGeneral},
 				// msg 364: R                  page reads
-	{-1,				0,							" ",				0, 0, 0, false, false,	365,	0, NULL, boGeneral},
+	{-1,				0,							" ",			0, 0, 0, false, false,	365,	0, NULL, boGeneral},
 				// msg 365: W                  page writes
 	{IN_SW_BURP_T,	  0,						"TRANSPORTABLE",	0, 0, 0, false, false,	175,	1, NULL, boBackup},
 				// msg 175: @1TRANSPORTABLE transportable backup -- data in XDR format
@@ -197,6 +207,8 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 				// msg 109: @1Y redirect/suppress output (file path or OUTPUT_SUPPRESS)
 	{IN_SW_BURP_Z,	  0,						"Z",				0, 0, 0, false, false,	104,	1, NULL, boGeneral},
 				// msg 104: @1Z print version number
+	{IN_SW_BURP_ZIP,  isc_spb_bkp_zip,			"ZIP",				0, 0, 0, false, true,	374,	3, NULL, boBackup},
+				// msg 104: @1ZIP backup file is in zip compressed format
 /**************************************************************************/
 // The next two 'virtual' switches are hidden from user and are needed
 // for services API

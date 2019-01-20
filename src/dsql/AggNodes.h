@@ -86,7 +86,7 @@ public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		const dsc* desc, bool forceVarChar);
+		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 

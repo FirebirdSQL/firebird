@@ -313,7 +313,7 @@ public:
 	typedef void VoidNoParam();
 
 	explicit UnloadDetectorHelper(MemoryPool&)
-		: cleanup(NULL), flagOsUnload(false)
+		: cleanup(NULL), thdDetach(NULL), flagOsUnload(false)
 	{ }
 
 	void registerMe()
@@ -348,6 +348,11 @@ public:
 		cleanup = function;
 	}
 
+	void setThreadDetach(VoidNoParam* function)
+	{
+		thdDetach = function;
+	}
+
 	void doClean()
 	{
 		flagOsUnload = false;
@@ -359,8 +364,15 @@ public:
 		}
 	}
 
+	void threadDetach()
+	{
+		if (thdDetach)
+			thdDetach();
+	}
+
 private:
 	VoidNoParam* cleanup;
+	VoidNoParam* thdDetach;
 	bool flagOsUnload;
 };
 

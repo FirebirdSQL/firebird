@@ -53,7 +53,6 @@ namespace Firebird
 	class IBatchCompletionState;
 	class IRequest;
 	class IEvents;
-	class IEventBlock;
 	class IAttachment;
 	class IService;
 	class IProvider;
@@ -72,6 +71,7 @@ namespace Firebird
 	class IListUsers;
 	class ILogonInfo;
 	class IManagement;
+	class IAuthBlock;
 	class IWireCryptPlugin;
 	class ICryptKeyCallback;
 	class IKeyHolderPlugin;
@@ -115,7 +115,6 @@ namespace Firebird
 	class IUdrPlugin;
 	class IDecFloat16;
 	class IDecFloat34;
-	class IDecFixed;
 
 	// Interfaces declarations
 
@@ -737,6 +736,7 @@ namespace Firebird
 		struct VTable : public IVersioned::VTable
 		{
 			void (CLOOP_CARG *doClean)(IPluginModule* self) throw();
+			void (CLOOP_CARG *threadDetach)(IPluginModule* self) throw();
 		};
 
 	protected:
@@ -750,11 +750,20 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 2;
+		static const unsigned VERSION = 3;
 
 		void doClean()
 		{
 			static_cast<VTable*>(this->cloopVTable)->doClean(this);
+		}
+
+		void threadDetach()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return;
+			}
+			static_cast<VTable*>(this->cloopVTable)->threadDetach(this);
 		}
 	};
 
@@ -2032,68 +2041,6 @@ namespace Firebird
 		}
 	};
 
-	class IEventBlock : public IDisposable
-	{
-	public:
-		struct VTable : public IDisposable::VTable
-		{
-			unsigned (CLOOP_CARG *getLength)(IEventBlock* self) throw();
-			unsigned char* (CLOOP_CARG *getValues)(IEventBlock* self) throw();
-			unsigned char* (CLOOP_CARG *getBuffer)(IEventBlock* self) throw();
-			unsigned (CLOOP_CARG *getCount)(IEventBlock* self) throw();
-			unsigned* (CLOOP_CARG *getCounters)(IEventBlock* self) throw();
-			void (CLOOP_CARG *counts)(IEventBlock* self) throw();
-		};
-
-	protected:
-		IEventBlock(DoNotInherit)
-			: IDisposable(DoNotInherit())
-		{
-		}
-
-		~IEventBlock()
-		{
-		}
-
-	public:
-		static const unsigned VERSION = 3;
-
-		unsigned getLength()
-		{
-			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getLength(this);
-			return ret;
-		}
-
-		unsigned char* getValues()
-		{
-			unsigned char* ret = static_cast<VTable*>(this->cloopVTable)->getValues(this);
-			return ret;
-		}
-
-		unsigned char* getBuffer()
-		{
-			unsigned char* ret = static_cast<VTable*>(this->cloopVTable)->getBuffer(this);
-			return ret;
-		}
-
-		unsigned getCount()
-		{
-			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getCount(this);
-			return ret;
-		}
-
-		unsigned* getCounters()
-		{
-			unsigned* ret = static_cast<VTable*>(this->cloopVTable)->getCounters(this);
-			return ret;
-		}
-
-		void counts()
-		{
-			static_cast<VTable*>(this->cloopVTable)->counts(this);
-		}
-	};
-
 	class IAttachment : public IReferenceCounted
 	{
 	public:
@@ -2675,6 +2622,7 @@ namespace Firebird
 			const unsigned char* (CLOOP_CARG *getData)(IClientBlock* self, unsigned* length) throw();
 			void (CLOOP_CARG *putData)(IClientBlock* self, IStatus* status, unsigned length, const void* data) throw();
 			ICryptKey* (CLOOP_CARG *newKey)(IClientBlock* self, IStatus* status) throw();
+			IAuthBlock* (CLOOP_CARG *getAuthBlock)(IClientBlock* self, IStatus* status) throw();
 		};
 
 	protected:
@@ -2688,7 +2636,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 3;
+		static const unsigned VERSION = 4;
 
 		const char* getLogin()
 		{
@@ -2719,6 +2667,20 @@ namespace Firebird
 		{
 			StatusType::clearException(status);
 			ICryptKey* ret = static_cast<VTable*>(this->cloopVTable)->newKey(this, status);
+			StatusType::checkException(status);
+			return ret;
+		}
+
+		template <typename StatusType> IAuthBlock* getAuthBlock(StatusType* status)
+		{
+			if (cloopVTable->version < 4)
+			{
+				StatusType::setVersionError(status, "IClientBlock", cloopVTable->version, 4);
+				StatusType::checkException(status);
+				return 0;
+			}
+			StatusType::clearException(status);
+			IAuthBlock* ret = static_cast<VTable*>(this->cloopVTable)->getAuthBlock(this, status);
 			StatusType::checkException(status);
 			return ret;
 		}
@@ -3155,6 +3117,80 @@ namespace Firebird
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->rollback(this, status);
 			StatusType::checkException(status);
+		}
+	};
+
+	class IAuthBlock : public IVersioned
+	{
+	public:
+		struct VTable : public IVersioned::VTable
+		{
+			const char* (CLOOP_CARG *getType)(IAuthBlock* self) throw();
+			const char* (CLOOP_CARG *getName)(IAuthBlock* self) throw();
+			const char* (CLOOP_CARG *getPlugin)(IAuthBlock* self) throw();
+			const char* (CLOOP_CARG *getSecurityDb)(IAuthBlock* self) throw();
+			const char* (CLOOP_CARG *getOriginalPlugin)(IAuthBlock* self) throw();
+			FB_BOOLEAN (CLOOP_CARG *next)(IAuthBlock* self, IStatus* status) throw();
+			FB_BOOLEAN (CLOOP_CARG *first)(IAuthBlock* self, IStatus* status) throw();
+		};
+
+	protected:
+		IAuthBlock(DoNotInherit)
+			: IVersioned(DoNotInherit())
+		{
+		}
+
+		~IAuthBlock()
+		{
+		}
+
+	public:
+		static const unsigned VERSION = 2;
+
+		const char* getType()
+		{
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getType(this);
+			return ret;
+		}
+
+		const char* getName()
+		{
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getName(this);
+			return ret;
+		}
+
+		const char* getPlugin()
+		{
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getPlugin(this);
+			return ret;
+		}
+
+		const char* getSecurityDb()
+		{
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getSecurityDb(this);
+			return ret;
+		}
+
+		const char* getOriginalPlugin()
+		{
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getOriginalPlugin(this);
+			return ret;
+		}
+
+		template <typename StatusType> FB_BOOLEAN next(StatusType* status)
+		{
+			StatusType::clearException(status);
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->next(this, status);
+			StatusType::checkException(status);
+			return ret;
+		}
+
+		template <typename StatusType> FB_BOOLEAN first(StatusType* status)
+		{
+			StatusType::clearException(status);
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->first(this, status);
+			StatusType::checkException(status);
+			return ret;
 		}
 	};
 
@@ -3935,10 +3971,14 @@ namespace Firebird
 			unsigned (CLOOP_CARG *getClientVersion)(IUtil* self) throw();
 			IXpbBuilder* (CLOOP_CARG *getXpbBuilder)(IUtil* self, IStatus* status, unsigned kind, const unsigned char* buf, unsigned len) throw();
 			unsigned (CLOOP_CARG *setOffsets)(IUtil* self, IStatus* status, IMessageMetadata* metadata, IOffsetsCallback* callback) throw();
-			IEventBlock* (CLOOP_CARG *createEventBlock)(IUtil* self, IStatus* status, const char** events) throw();
 			IDecFloat16* (CLOOP_CARG *getDecFloat16)(IUtil* self, IStatus* status) throw();
 			IDecFloat34* (CLOOP_CARG *getDecFloat34)(IUtil* self, IStatus* status) throw();
-			IDecFixed* (CLOOP_CARG *getDecFixed)(IUtil* self, IStatus* status) throw();
+			ITransaction* (CLOOP_CARG *getTransactionByHandle)(IUtil* self, IStatus* status, isc_tr_handle* hndlPtr) throw();
+			IStatement* (CLOOP_CARG *getStatementByHandle)(IUtil* self, IStatus* status, isc_stmt_handle* hndlPtr) throw();
+			void (CLOOP_CARG *decodeTimeTz)(IUtil* self, IStatus* status, const ISC_TIME_TZ* timeTz, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) throw();
+			void (CLOOP_CARG *decodeTimeStampTz)(IUtil* self, IStatus* status, const ISC_TIMESTAMP_TZ* timeStampTz, unsigned* year, unsigned* month, unsigned* day, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) throw();
+			void (CLOOP_CARG *encodeTimeTz)(IUtil* self, IStatus* status, ISC_TIME_TZ* timeTz, unsigned hours, unsigned minutes, unsigned seconds, unsigned fractions, const char* timeZone) throw();
+			void (CLOOP_CARG *encodeTimeStampTz)(IUtil* self, IStatus* status, ISC_TIMESTAMP_TZ* timeStampTz, unsigned year, unsigned month, unsigned day, unsigned hours, unsigned minutes, unsigned seconds, unsigned fractions, const char* timeZone) throw();
 		};
 
 	protected:
@@ -4040,20 +4080,6 @@ namespace Firebird
 			return ret;
 		}
 
-		template <typename StatusType> IEventBlock* createEventBlock(StatusType* status, const char** events)
-		{
-			if (cloopVTable->version < 3)
-			{
-				StatusType::setVersionError(status, "IUtil", cloopVTable->version, 3);
-				StatusType::checkException(status);
-				return 0;
-			}
-			StatusType::clearException(status);
-			IEventBlock* ret = static_cast<VTable*>(this->cloopVTable)->createEventBlock(this, status, events);
-			StatusType::checkException(status);
-			return ret;
-		}
-
 		template <typename StatusType> IDecFloat16* getDecFloat16(StatusType* status)
 		{
 			if (cloopVTable->version < 3)
@@ -4082,7 +4108,7 @@ namespace Firebird
 			return ret;
 		}
 
-		template <typename StatusType> IDecFixed* getDecFixed(StatusType* status)
+		template <typename StatusType> ITransaction* getTransactionByHandle(StatusType* status, isc_tr_handle* hndlPtr)
 		{
 			if (cloopVTable->version < 3)
 			{
@@ -4091,9 +4117,75 @@ namespace Firebird
 				return 0;
 			}
 			StatusType::clearException(status);
-			IDecFixed* ret = static_cast<VTable*>(this->cloopVTable)->getDecFixed(this, status);
+			ITransaction* ret = static_cast<VTable*>(this->cloopVTable)->getTransactionByHandle(this, status, hndlPtr);
 			StatusType::checkException(status);
 			return ret;
+		}
+
+		template <typename StatusType> IStatement* getStatementByHandle(StatusType* status, isc_stmt_handle* hndlPtr)
+		{
+			if (cloopVTable->version < 3)
+			{
+				StatusType::setVersionError(status, "IUtil", cloopVTable->version, 3);
+				StatusType::checkException(status);
+				return 0;
+			}
+			StatusType::clearException(status);
+			IStatement* ret = static_cast<VTable*>(this->cloopVTable)->getStatementByHandle(this, status, hndlPtr);
+			StatusType::checkException(status);
+			return ret;
+		}
+
+		template <typename StatusType> void decodeTimeTz(StatusType* status, const ISC_TIME_TZ* timeTz, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer)
+		{
+			if (cloopVTable->version < 3)
+			{
+				StatusType::setVersionError(status, "IUtil", cloopVTable->version, 3);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->decodeTimeTz(this, status, timeTz, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void decodeTimeStampTz(StatusType* status, const ISC_TIMESTAMP_TZ* timeStampTz, unsigned* year, unsigned* month, unsigned* day, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer)
+		{
+			if (cloopVTable->version < 3)
+			{
+				StatusType::setVersionError(status, "IUtil", cloopVTable->version, 3);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->decodeTimeStampTz(this, status, timeStampTz, year, month, day, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void encodeTimeTz(StatusType* status, ISC_TIME_TZ* timeTz, unsigned hours, unsigned minutes, unsigned seconds, unsigned fractions, const char* timeZone)
+		{
+			if (cloopVTable->version < 3)
+			{
+				StatusType::setVersionError(status, "IUtil", cloopVTable->version, 3);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->encodeTimeTz(this, status, timeTz, hours, minutes, seconds, fractions, timeZone);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void encodeTimeStampTz(StatusType* status, ISC_TIMESTAMP_TZ* timeStampTz, unsigned year, unsigned month, unsigned day, unsigned hours, unsigned minutes, unsigned seconds, unsigned fractions, const char* timeZone)
+		{
+			if (cloopVTable->version < 3)
+			{
+				StatusType::setVersionError(status, "IUtil", cloopVTable->version, 3);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->encodeTimeStampTz(this, status, timeStampTz, year, month, day, hours, minutes, seconds, fractions, timeZone);
+			StatusType::checkException(status);
 		}
 	};
 
@@ -4476,6 +4568,7 @@ namespace Firebird
 		static const unsigned ISOLATION_CONCURRENCY = 2;
 		static const unsigned ISOLATION_READ_COMMITTED_RECVER = 3;
 		static const unsigned ISOLATION_READ_COMMITTED_NORECVER = 4;
+		static const unsigned ISOLATION_READ_COMMITTED_READ_CONSISTENCY = 5;
 
 		ISC_INT64 getTransactionID()
 		{
@@ -5672,58 +5765,6 @@ namespace Firebird
 		{
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->fromString(this, status, from, to);
-			StatusType::checkException(status);
-		}
-	};
-
-	class IDecFixed : public IVersioned
-	{
-	public:
-		struct VTable : public IVersioned::VTable
-		{
-			void (CLOOP_CARG *toBcd)(IDecFixed* self, const FB_DEC_FIXED* from, int* sign, unsigned char* bcd) throw();
-			void (CLOOP_CARG *toString)(IDecFixed* self, IStatus* status, const FB_DEC_FIXED* from, int scale, unsigned bufferLength, char* buffer) throw();
-			void (CLOOP_CARG *fromBcd)(IDecFixed* self, int sign, const unsigned char* bcd, FB_DEC_FIXED* to) throw();
-			void (CLOOP_CARG *fromString)(IDecFixed* self, IStatus* status, const char* from, int scale, FB_DEC_FIXED* to) throw();
-		};
-
-	protected:
-		IDecFixed(DoNotInherit)
-			: IVersioned(DoNotInherit())
-		{
-		}
-
-		~IDecFixed()
-		{
-		}
-
-	public:
-		static const unsigned VERSION = 2;
-
-		static const unsigned BCD_SIZE = 34;
-		static const unsigned STRING_SIZE = 41;
-
-		void toBcd(const FB_DEC_FIXED* from, int* sign, unsigned char* bcd)
-		{
-			static_cast<VTable*>(this->cloopVTable)->toBcd(this, from, sign, bcd);
-		}
-
-		template <typename StatusType> void toString(StatusType* status, const FB_DEC_FIXED* from, int scale, unsigned bufferLength, char* buffer)
-		{
-			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->toString(this, status, from, scale, bufferLength, buffer);
-			StatusType::checkException(status);
-		}
-
-		void fromBcd(int sign, const unsigned char* bcd, FB_DEC_FIXED* to)
-		{
-			static_cast<VTable*>(this->cloopVTable)->fromBcd(this, sign, bcd, to);
-		}
-
-		template <typename StatusType> void fromString(StatusType* status, const char* from, int scale, FB_DEC_FIXED* to)
-		{
-			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->fromString(this, status, from, scale, to);
 			StatusType::checkException(status);
 		}
 	};
@@ -7072,6 +7113,7 @@ namespace Firebird
 				{
 					this->version = Base::VERSION;
 					this->doClean = &Name::cloopdoCleanDispatcher;
+					this->threadDetach = &Name::cloopthreadDetachDispatcher;
 				}
 			} vTable;
 
@@ -7083,6 +7125,18 @@ namespace Firebird
 			try
 			{
 				static_cast<Name*>(self)->Name::doClean();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopthreadDetachDispatcher(IPluginModule* self) throw()
+		{
+			try
+			{
+				static_cast<Name*>(self)->Name::threadDetach();
 			}
 			catch (...)
 			{
@@ -7105,6 +7159,7 @@ namespace Firebird
 		}
 
 		virtual void doClean() = 0;
+		virtual void threadDetach() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -9626,143 +9681,6 @@ namespace Firebird
 	};
 
 	template <typename Name, typename StatusType, typename Base>
-	class IEventBlockBaseImpl : public Base
-	{
-	public:
-		typedef IEventBlock Declaration;
-
-		IEventBlockBaseImpl(DoNotInherit = DoNotInherit())
-		{
-			static struct VTableImpl : Base::VTable
-			{
-				VTableImpl()
-				{
-					this->version = Base::VERSION;
-					this->dispose = &Name::cloopdisposeDispatcher;
-					this->getLength = &Name::cloopgetLengthDispatcher;
-					this->getValues = &Name::cloopgetValuesDispatcher;
-					this->getBuffer = &Name::cloopgetBufferDispatcher;
-					this->getCount = &Name::cloopgetCountDispatcher;
-					this->getCounters = &Name::cloopgetCountersDispatcher;
-					this->counts = &Name::cloopcountsDispatcher;
-				}
-			} vTable;
-
-			this->cloopVTable = &vTable;
-		}
-
-		static unsigned CLOOP_CARG cloopgetLengthDispatcher(IEventBlock* self) throw()
-		{
-			try
-			{
-				return static_cast<Name*>(self)->Name::getLength();
-			}
-			catch (...)
-			{
-				StatusType::catchException(0);
-				return static_cast<unsigned>(0);
-			}
-		}
-
-		static unsigned char* CLOOP_CARG cloopgetValuesDispatcher(IEventBlock* self) throw()
-		{
-			try
-			{
-				return static_cast<Name*>(self)->Name::getValues();
-			}
-			catch (...)
-			{
-				StatusType::catchException(0);
-				return static_cast<unsigned char*>(0);
-			}
-		}
-
-		static unsigned char* CLOOP_CARG cloopgetBufferDispatcher(IEventBlock* self) throw()
-		{
-			try
-			{
-				return static_cast<Name*>(self)->Name::getBuffer();
-			}
-			catch (...)
-			{
-				StatusType::catchException(0);
-				return static_cast<unsigned char*>(0);
-			}
-		}
-
-		static unsigned CLOOP_CARG cloopgetCountDispatcher(IEventBlock* self) throw()
-		{
-			try
-			{
-				return static_cast<Name*>(self)->Name::getCount();
-			}
-			catch (...)
-			{
-				StatusType::catchException(0);
-				return static_cast<unsigned>(0);
-			}
-		}
-
-		static unsigned* CLOOP_CARG cloopgetCountersDispatcher(IEventBlock* self) throw()
-		{
-			try
-			{
-				return static_cast<Name*>(self)->Name::getCounters();
-			}
-			catch (...)
-			{
-				StatusType::catchException(0);
-				return static_cast<unsigned*>(0);
-			}
-		}
-
-		static void CLOOP_CARG cloopcountsDispatcher(IEventBlock* self) throw()
-		{
-			try
-			{
-				static_cast<Name*>(self)->Name::counts();
-			}
-			catch (...)
-			{
-				StatusType::catchException(0);
-			}
-		}
-
-		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) throw()
-		{
-			try
-			{
-				static_cast<Name*>(self)->Name::dispose();
-			}
-			catch (...)
-			{
-				StatusType::catchException(0);
-			}
-		}
-	};
-
-	template <typename Name, typename StatusType, typename Base = IDisposableImpl<Name, StatusType, Inherit<IVersionedImpl<Name, StatusType, Inherit<IEventBlock> > > > >
-	class IEventBlockImpl : public IEventBlockBaseImpl<Name, StatusType, Base>
-	{
-	protected:
-		IEventBlockImpl(DoNotInherit = DoNotInherit())
-		{
-		}
-
-	public:
-		virtual ~IEventBlockImpl()
-		{
-		}
-
-		virtual unsigned getLength() = 0;
-		virtual unsigned char* getValues() = 0;
-		virtual unsigned char* getBuffer() = 0;
-		virtual unsigned getCount() = 0;
-		virtual unsigned* getCounters() = 0;
-		virtual void counts() = 0;
-	};
-
-	template <typename Name, typename StatusType, typename Base>
 	class IAttachmentBaseImpl : public Base
 	{
 	public:
@@ -10957,6 +10875,7 @@ namespace Firebird
 					this->getData = &Name::cloopgetDataDispatcher;
 					this->putData = &Name::cloopputDataDispatcher;
 					this->newKey = &Name::cloopnewKeyDispatcher;
+					this->getAuthBlock = &Name::cloopgetAuthBlockDispatcher;
 				}
 			} vTable;
 
@@ -11031,6 +10950,21 @@ namespace Firebird
 			}
 		}
 
+		static IAuthBlock* CLOOP_CARG cloopgetAuthBlockDispatcher(IClientBlock* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::getAuthBlock(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<IAuthBlock*>(0);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) throw()
 		{
 			try
@@ -11075,6 +11009,7 @@ namespace Firebird
 		virtual const unsigned char* getData(unsigned* length) = 0;
 		virtual void putData(StatusType* status, unsigned length, const void* data) = 0;
 		virtual ICryptKey* newKey(StatusType* status) = 0;
+		virtual IAuthBlock* getAuthBlock(StatusType* status) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -12118,6 +12053,150 @@ namespace Firebird
 		virtual int execute(StatusType* status, IUser* user, IListUsers* callback) = 0;
 		virtual void commit(StatusType* status) = 0;
 		virtual void rollback(StatusType* status) = 0;
+	};
+
+	template <typename Name, typename StatusType, typename Base>
+	class IAuthBlockBaseImpl : public Base
+	{
+	public:
+		typedef IAuthBlock Declaration;
+
+		IAuthBlockBaseImpl(DoNotInherit = DoNotInherit())
+		{
+			static struct VTableImpl : Base::VTable
+			{
+				VTableImpl()
+				{
+					this->version = Base::VERSION;
+					this->getType = &Name::cloopgetTypeDispatcher;
+					this->getName = &Name::cloopgetNameDispatcher;
+					this->getPlugin = &Name::cloopgetPluginDispatcher;
+					this->getSecurityDb = &Name::cloopgetSecurityDbDispatcher;
+					this->getOriginalPlugin = &Name::cloopgetOriginalPluginDispatcher;
+					this->next = &Name::cloopnextDispatcher;
+					this->first = &Name::cloopfirstDispatcher;
+				}
+			} vTable;
+
+			this->cloopVTable = &vTable;
+		}
+
+		static const char* CLOOP_CARG cloopgetTypeDispatcher(IAuthBlock* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getType();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetNameDispatcher(IAuthBlock* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getName();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetPluginDispatcher(IAuthBlock* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPlugin();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetSecurityDbDispatcher(IAuthBlock* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getSecurityDb();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetOriginalPluginDispatcher(IAuthBlock* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getOriginalPlugin();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopnextDispatcher(IAuthBlock* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::next(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopfirstDispatcher(IAuthBlock* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::first(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+	};
+
+	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<IAuthBlock> > >
+	class IAuthBlockImpl : public IAuthBlockBaseImpl<Name, StatusType, Base>
+	{
+	protected:
+		IAuthBlockImpl(DoNotInherit = DoNotInherit())
+		{
+		}
+
+	public:
+		virtual ~IAuthBlockImpl()
+		{
+		}
+
+		virtual const char* getType() = 0;
+		virtual const char* getName() = 0;
+		virtual const char* getPlugin() = 0;
+		virtual const char* getSecurityDb() = 0;
+		virtual const char* getOriginalPlugin() = 0;
+		virtual FB_BOOLEAN next(StatusType* status) = 0;
+		virtual FB_BOOLEAN first(StatusType* status) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -13806,10 +13885,14 @@ namespace Firebird
 					this->getClientVersion = &Name::cloopgetClientVersionDispatcher;
 					this->getXpbBuilder = &Name::cloopgetXpbBuilderDispatcher;
 					this->setOffsets = &Name::cloopsetOffsetsDispatcher;
-					this->createEventBlock = &Name::cloopcreateEventBlockDispatcher;
 					this->getDecFloat16 = &Name::cloopgetDecFloat16Dispatcher;
 					this->getDecFloat34 = &Name::cloopgetDecFloat34Dispatcher;
-					this->getDecFixed = &Name::cloopgetDecFixedDispatcher;
+					this->getTransactionByHandle = &Name::cloopgetTransactionByHandleDispatcher;
+					this->getStatementByHandle = &Name::cloopgetStatementByHandleDispatcher;
+					this->decodeTimeTz = &Name::cloopdecodeTimeTzDispatcher;
+					this->decodeTimeStampTz = &Name::cloopdecodeTimeStampTzDispatcher;
+					this->encodeTimeTz = &Name::cloopencodeTimeTzDispatcher;
+					this->encodeTimeStampTz = &Name::cloopencodeTimeStampTzDispatcher;
 				}
 			} vTable;
 
@@ -13993,21 +14076,6 @@ namespace Firebird
 			}
 		}
 
-		static IEventBlock* CLOOP_CARG cloopcreateEventBlockDispatcher(IUtil* self, IStatus* status, const char** events) throw()
-		{
-			StatusType status2(status);
-
-			try
-			{
-				return static_cast<Name*>(self)->Name::createEventBlock(&status2, events);
-			}
-			catch (...)
-			{
-				StatusType::catchException(&status2);
-				return static_cast<IEventBlock*>(0);
-			}
-		}
-
 		static IDecFloat16* CLOOP_CARG cloopgetDecFloat16Dispatcher(IUtil* self, IStatus* status) throw()
 		{
 			StatusType status2(status);
@@ -14038,18 +14106,89 @@ namespace Firebird
 			}
 		}
 
-		static IDecFixed* CLOOP_CARG cloopgetDecFixedDispatcher(IUtil* self, IStatus* status) throw()
+		static ITransaction* CLOOP_CARG cloopgetTransactionByHandleDispatcher(IUtil* self, IStatus* status, isc_tr_handle* hndlPtr) throw()
 		{
 			StatusType status2(status);
 
 			try
 			{
-				return static_cast<Name*>(self)->Name::getDecFixed(&status2);
+				return static_cast<Name*>(self)->Name::getTransactionByHandle(&status2, hndlPtr);
 			}
 			catch (...)
 			{
 				StatusType::catchException(&status2);
-				return static_cast<IDecFixed*>(0);
+				return static_cast<ITransaction*>(0);
+			}
+		}
+
+		static IStatement* CLOOP_CARG cloopgetStatementByHandleDispatcher(IUtil* self, IStatus* status, isc_stmt_handle* hndlPtr) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::getStatementByHandle(&status2, hndlPtr);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<IStatement*>(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopdecodeTimeTzDispatcher(IUtil* self, IStatus* status, const ISC_TIME_TZ* timeTz, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::decodeTimeTz(&status2, timeTz, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopdecodeTimeStampTzDispatcher(IUtil* self, IStatus* status, const ISC_TIMESTAMP_TZ* timeStampTz, unsigned* year, unsigned* month, unsigned* day, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::decodeTimeStampTz(&status2, timeStampTz, year, month, day, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopencodeTimeTzDispatcher(IUtil* self, IStatus* status, ISC_TIME_TZ* timeTz, unsigned hours, unsigned minutes, unsigned seconds, unsigned fractions, const char* timeZone) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::encodeTimeTz(&status2, timeTz, hours, minutes, seconds, fractions, timeZone);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopencodeTimeStampTzDispatcher(IUtil* self, IStatus* status, ISC_TIMESTAMP_TZ* timeStampTz, unsigned year, unsigned month, unsigned day, unsigned hours, unsigned minutes, unsigned seconds, unsigned fractions, const char* timeZone) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::encodeTimeStampTz(&status2, timeStampTz, year, month, day, hours, minutes, seconds, fractions, timeZone);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
 			}
 		}
 	};
@@ -14080,10 +14219,14 @@ namespace Firebird
 		virtual unsigned getClientVersion() = 0;
 		virtual IXpbBuilder* getXpbBuilder(StatusType* status, unsigned kind, const unsigned char* buf, unsigned len) = 0;
 		virtual unsigned setOffsets(StatusType* status, IMessageMetadata* metadata, IOffsetsCallback* callback) = 0;
-		virtual IEventBlock* createEventBlock(StatusType* status, const char** events) = 0;
 		virtual IDecFloat16* getDecFloat16(StatusType* status) = 0;
 		virtual IDecFloat34* getDecFloat34(StatusType* status) = 0;
-		virtual IDecFixed* getDecFixed(StatusType* status) = 0;
+		virtual ITransaction* getTransactionByHandle(StatusType* status, isc_tr_handle* hndlPtr) = 0;
+		virtual IStatement* getStatementByHandle(StatusType* status, isc_stmt_handle* hndlPtr) = 0;
+		virtual void decodeTimeTz(StatusType* status, const ISC_TIME_TZ* timeTz, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) = 0;
+		virtual void decodeTimeStampTz(StatusType* status, const ISC_TIMESTAMP_TZ* timeStampTz, unsigned* year, unsigned* month, unsigned* day, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) = 0;
+		virtual void encodeTimeTz(StatusType* status, ISC_TIME_TZ* timeTz, unsigned hours, unsigned minutes, unsigned seconds, unsigned fractions, const char* timeZone) = 0;
+		virtual void encodeTimeStampTz(StatusType* status, ISC_TIMESTAMP_TZ* timeStampTz, unsigned year, unsigned month, unsigned day, unsigned hours, unsigned minutes, unsigned seconds, unsigned fractions, const char* timeZone) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -17480,101 +17623,6 @@ namespace Firebird
 		virtual void toString(StatusType* status, const FB_DEC34* from, unsigned bufferLength, char* buffer) = 0;
 		virtual void fromBcd(int sign, const unsigned char* bcd, int exp, FB_DEC34* to) = 0;
 		virtual void fromString(StatusType* status, const char* from, FB_DEC34* to) = 0;
-	};
-
-	template <typename Name, typename StatusType, typename Base>
-	class IDecFixedBaseImpl : public Base
-	{
-	public:
-		typedef IDecFixed Declaration;
-
-		IDecFixedBaseImpl(DoNotInherit = DoNotInherit())
-		{
-			static struct VTableImpl : Base::VTable
-			{
-				VTableImpl()
-				{
-					this->version = Base::VERSION;
-					this->toBcd = &Name::clooptoBcdDispatcher;
-					this->toString = &Name::clooptoStringDispatcher;
-					this->fromBcd = &Name::cloopfromBcdDispatcher;
-					this->fromString = &Name::cloopfromStringDispatcher;
-				}
-			} vTable;
-
-			this->cloopVTable = &vTable;
-		}
-
-		static void CLOOP_CARG clooptoBcdDispatcher(IDecFixed* self, const FB_DEC_FIXED* from, int* sign, unsigned char* bcd) throw()
-		{
-			try
-			{
-				static_cast<Name*>(self)->Name::toBcd(from, sign, bcd);
-			}
-			catch (...)
-			{
-				StatusType::catchException(0);
-			}
-		}
-
-		static void CLOOP_CARG clooptoStringDispatcher(IDecFixed* self, IStatus* status, const FB_DEC_FIXED* from, int scale, unsigned bufferLength, char* buffer) throw()
-		{
-			StatusType status2(status);
-
-			try
-			{
-				static_cast<Name*>(self)->Name::toString(&status2, from, scale, bufferLength, buffer);
-			}
-			catch (...)
-			{
-				StatusType::catchException(&status2);
-			}
-		}
-
-		static void CLOOP_CARG cloopfromBcdDispatcher(IDecFixed* self, int sign, const unsigned char* bcd, FB_DEC_FIXED* to) throw()
-		{
-			try
-			{
-				static_cast<Name*>(self)->Name::fromBcd(sign, bcd, to);
-			}
-			catch (...)
-			{
-				StatusType::catchException(0);
-			}
-		}
-
-		static void CLOOP_CARG cloopfromStringDispatcher(IDecFixed* self, IStatus* status, const char* from, int scale, FB_DEC_FIXED* to) throw()
-		{
-			StatusType status2(status);
-
-			try
-			{
-				static_cast<Name*>(self)->Name::fromString(&status2, from, scale, to);
-			}
-			catch (...)
-			{
-				StatusType::catchException(&status2);
-			}
-		}
-	};
-
-	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<IDecFixed> > >
-	class IDecFixedImpl : public IDecFixedBaseImpl<Name, StatusType, Base>
-	{
-	protected:
-		IDecFixedImpl(DoNotInherit = DoNotInherit())
-		{
-		}
-
-	public:
-		virtual ~IDecFixedImpl()
-		{
-		}
-
-		virtual void toBcd(const FB_DEC_FIXED* from, int* sign, unsigned char* bcd) = 0;
-		virtual void toString(StatusType* status, const FB_DEC_FIXED* from, int scale, unsigned bufferLength, char* buffer) = 0;
-		virtual void fromBcd(int sign, const unsigned char* bcd, FB_DEC_FIXED* to) = 0;
-		virtual void fromString(StatusType* status, const char* from, int scale, FB_DEC_FIXED* to) = 0;
 	};
 };
 

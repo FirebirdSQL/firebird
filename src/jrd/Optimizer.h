@@ -185,7 +185,8 @@ public:
 	IndexTableScan* getNavigation();
 
 protected:
-	void analyzeNavigation();
+	void analyzeNavigation(const InversionCandidateList& inversions);
+	bool betterInversion(const InversionCandidate* inv1, const InversionCandidate* inv2) const;
 	InversionNode* composeInversion(InversionNode* node1, InversionNode* node2,
 		InversionNode::Type node_type) const;
 	const Firebird::string& getAlias();
@@ -227,7 +228,7 @@ public:
 	bool outerFlag;
 	bool createIndexScanNodes;
 	bool setConjunctionsMatched;
-	IndexScratch* navigationCandidate;
+	InversionCandidate* navigationCandidate;
 };
 
 class IndexRelationship

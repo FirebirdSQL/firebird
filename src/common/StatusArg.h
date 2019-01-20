@@ -73,6 +73,7 @@ protected:
 		virtual void assign(const Exception& ex) throw() { }
 		virtual ISC_STATUS copyTo(ISC_STATUS*) const throw() { return 0; }
 		virtual void copyTo(IStatus*) const throw() { }
+		virtual void appendTo(IStatus*) const throw() { }
 
 		virtual void shiftLeft(const Base&) throw() { }
 		virtual void shiftLeft(const Warning&) throw() { }
@@ -86,7 +87,7 @@ protected:
 		virtual ~ImplBase() { }
 	};
 
-	Base(ISC_STATUS k, ISC_STATUS c) throw(Firebird::BadAlloc);
+	Base(ISC_STATUS k, ISC_STATUS c);
 	explicit Base(ImplBase* i) throw() : implementation(i) { }
 	~Base() throw() { delete implementation; }
 
@@ -123,6 +124,7 @@ protected:
 		virtual void assign(const Exception& ex) throw();
 		virtual ISC_STATUS copyTo(ISC_STATUS* dest) const throw();
 		virtual void copyTo(IStatus* dest) const throw();
+		virtual void appendTo(IStatus* dest) const throw();
 		virtual void shiftLeft(const Base& arg) throw();
 		virtual void shiftLeft(const Warning& arg) throw();
 		virtual void shiftLeft(const char* text) throw();
@@ -142,13 +144,13 @@ protected:
 		explicit ImplStatusVector(const Exception& ex) throw();
 	};
 
-	StatusVector(ISC_STATUS k, ISC_STATUS v) throw(Firebird::BadAlloc);
+	StatusVector(ISC_STATUS k, ISC_STATUS v);
 
 public:
-	explicit StatusVector(const ISC_STATUS* s) throw(Firebird::BadAlloc);
-	explicit StatusVector(const IStatus* s) throw(Firebird::BadAlloc);
-	explicit StatusVector(const Exception& ex) throw(Firebird::BadAlloc);
-	StatusVector() throw(Firebird::BadAlloc);
+	explicit StatusVector(const ISC_STATUS* s);
+	explicit StatusVector(const IStatus* s);
+	explicit StatusVector(const Exception& ex);
+	StatusVector();
 	~StatusVector() { }
 
 	const ISC_STATUS* value() const throw() { return implementation->value(); }
@@ -164,6 +166,7 @@ public:
 	void raise() const;
 	ISC_STATUS copyTo(ISC_STATUS* dest) const throw() { return implementation->copyTo(dest); }
 	void copyTo(IStatus* dest) const throw() { implementation->copyTo(dest); }
+	void appendTo(IStatus* dest) const throw() { implementation->appendTo(dest); }
 
 	// generic argument insert
 	StatusVector& operator<<(const Base& arg) throw()

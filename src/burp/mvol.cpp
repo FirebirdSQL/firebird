@@ -42,6 +42,7 @@
 #include "../burp/burp.h"
 #include "../burp/burp_proto.h"
 #include "../burp/mvol_proto.h"
+#include "../burp/split/spit.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/gdsassert.h"
 #include "../common/os/os_utils.h"
@@ -56,10 +57,18 @@
 #include <unistd.h>
 #endif
 
+#include "../common/os/guid.h"
+#include "../common/classes/ImplementHelper.h"
+#include "../common/classes/GetPlugins.h"
+#include "../common/classes/auto.h"
 #include "../common/classes/SafeArg.h"
+#include "../common/StatusHolder.h"
+#include "../common/db_alias.h"
+#include "../common/status.h"
+#include "../common/classes/zip.h"
 
 using MsgFormat::SafeArg;
-
+using Firebird::FbLocalStatus;
 
 const int open_mask	= 0666;
 
@@ -71,12 +80,22 @@ const char* TERM_INPUT	= "/dev/tty";
 const char* TERM_OUTPUT	= "/dev/tty";
 #endif
 
-const int MAX_HEADER_SIZE	= 512;
+static int	 mvol_read(int*, UCHAR**);
+static FB_UINT64 mvol_fini_read(BurpGlobals*);
+static void	 mvol_init_read(BurpGlobals*, const char*, USHORT*, int*, UCHAR**);
+static UCHAR mvol_write(const UCHAR, int*, UCHAR**);
+static const UCHAR*	mvol_write_block(BurpGlobals*, const UCHAR*, ULONG);
+static FB_UINT64 mvol_fini_write(BurpGlobals*, int*, UCHAR**);
+static void	 mvol_init_write(BurpGlobals*, const char*, int*, UCHAR**);
+static void	 brio_fini(BurpGlobals*);
+
+static const int MAX_HEADER_SIZE		= 512;
+static const int ZC_BUFSIZE				= IO_BUFFER_SIZE;
 
 static inline int get(BurpGlobals* tdgbl)
 {
 	if (tdgbl->mvol_io_cnt <= 0)
-		MVOL_read(NULL, NULL);
+		mvol_read(NULL, NULL);
 	return (--tdgbl->mvol_io_cnt >= 0 ? *tdgbl->mvol_io_ptr++ : 255);
 }
 
@@ -92,6 +111,9 @@ static UCHAR debug_on = 0;		// able to turn this on in debug mode
 
 const int burp_msg_fac = 12;
 
+#ifdef HAVE_ZLIB_H
+static Firebird::InitInstance<Firebird::ZLib> zlib;
+#endif // HAVE_ZLIB_H
 
 static void  bad_attribute(int, USHORT);
 static void  file_not_empty();
@@ -103,7 +125,444 @@ static void  put_numeric(SCHAR, int);
 static bool  read_header(DESC, ULONG*, USHORT*, bool);
 static bool  write_header(DESC, ULONG, bool);
 static DESC	 next_volume(DESC, ULONG, bool);
-static void	 mvol_read(int*, UCHAR**);
+static void	 os_read(int*, UCHAR**);
+static void	 crypt_write_block(BurpGlobals*, const UCHAR*, FB_SIZE_T, bool);
+static ULONG crypt_read_block(BurpGlobals*, UCHAR*, FB_SIZE_T);
+static void	 zip_write_block(BurpGlobals*, const UCHAR*, FB_SIZE_T, bool);
+static ULONG unzip_read_block(BurpGlobals*, UCHAR*, FB_SIZE_T);
+
+// Portion of data passed to crypt plugin
+const ULONG CRYPT_STEP = 256;
+
+class DbInfo FB_FINAL : public Firebird::RefCntIface<Firebird::IDbCryptInfoImpl<DbInfo, Firebird::CheckStatusWrapper> >
+{
+public:
+	DbInfo(BurpGlobals* bg)
+		: tdgbl(bg)
+	{ }
+
+	// IDbCryptInfo implementation
+	const char* getDatabaseFullPath(Firebird::CheckStatusWrapper*)
+	{
+		return tdgbl->gbl_database_file_name;
+	}
+
+	int release()
+	{
+		if (--refCounter != 0)
+			return 1;
+
+		delete this;
+		return 0;
+	}
+
+private:
+	BurpGlobals* tdgbl;
+};
+
+
+struct BurpCrypt
+{
+	BurpCrypt()
+		 : crypt_plugin(NULL), db_info(NULL), holder_plugin(NULL), crypt_callback(NULL)
+	{ }
+
+	~BurpCrypt()
+	{
+		if (crypt_plugin)
+			Firebird::PluginManagerInterfacePtr()->releasePlugin(crypt_plugin);
+		if (holder_plugin)
+			Firebird::PluginManagerInterfacePtr()->releasePlugin(holder_plugin);
+	}
+
+	Firebird::IDbCryptPlugin* crypt_plugin;
+	Firebird::RefPtr<DbInfo> db_info;
+	Firebird::IKeyHolderPlugin* holder_plugin;
+	Firebird::ICryptKeyCallback* crypt_callback;
+};
+
+
+//____________________________________________________________
+//
+//
+static void calc_hash(Firebird::string& valid, Firebird::IDbCryptPlugin* plugin)
+{
+	// crypt verifier
+	const char* sample = "0123456789ABCDEF";
+	char result[16];
+	FbLocalStatus sv;
+
+	plugin->encrypt(&sv, sizeof(result), sample, result);
+	check(&sv);
+
+	// calculate its hash
+	const Firebird::string verifier(result, sizeof(result));
+	Firebird::Sha1::hashBased64(valid, verifier);
+}
+
+//____________________________________________________________
+//
+//
+static Firebird::IKeyHolderPlugin* mvol_get_holder(BurpGlobals* tdgbl, Firebird::RefPtr<const Config>& config)
+{
+	fb_assert(tdgbl->gbl_sw_keyholder);
+
+	if (!tdgbl->gbl_crypt)
+	{
+		Firebird::GetPlugins<Firebird::IKeyHolderPlugin>
+			keyControl(Firebird::IPluginManager::TYPE_KEY_HOLDER, config, tdgbl->gbl_sw_keyholder);
+		if (!keyControl.hasData())
+			(Firebird::Arg::Gds(isc_no_keyholder_plugin) << tdgbl->gbl_sw_keyholder).raise();
+
+		BurpCrypt* g = tdgbl->gbl_crypt = FB_NEW_POOL(tdgbl->getPool()) BurpCrypt;
+		g->holder_plugin = keyControl.plugin();
+		g->holder_plugin->addRef();
+
+		// Also do not forget about keys from services manager
+		Firebird::ICryptKeyCallback* cb = tdgbl->uSvc->getCryptCallback();
+		if (cb)
+			g->holder_plugin->keyCallback(&tdgbl->throwStatus, cb);
+	}
+
+	return tdgbl->gbl_crypt->holder_plugin;
+}
+
+//____________________________________________________________
+//
+//
+Firebird::ICryptKeyCallback* MVOL_get_crypt(BurpGlobals* tdgbl)
+{
+	fb_assert(tdgbl->gbl_sw_keyholder);
+
+	if (!tdgbl->gbl_crypt)
+	{
+		// Get per-DB config
+		Firebird::PathName dummy;
+		Firebird::RefPtr<const Config> config;
+		expandDatabaseName(tdgbl->gbl_database_file_name, dummy, &config);
+
+		mvol_get_holder(tdgbl, config);
+	}
+
+	BurpCrypt* g = tdgbl->gbl_crypt;
+	if (!g->crypt_callback)
+	{
+		FbLocalStatus status;
+
+		g->crypt_callback = g->holder_plugin->chainHandle(&status);
+		check(&status);
+	}
+
+	return g->crypt_callback;
+}
+
+//____________________________________________________________
+//
+//
+static void start_crypt(BurpGlobals* tdgbl)
+{
+	fb_assert(tdgbl->gbl_sw_keyholder);
+	if (tdgbl->gbl_crypt && tdgbl->gbl_crypt->crypt_plugin)
+		return;
+
+	FbLocalStatus status;
+
+	// Get per-DB config
+	Firebird::PathName dummy;
+	Firebird::RefPtr<const Config> config;
+	expandDatabaseName(tdgbl->gbl_database_file_name, dummy, &config);
+
+	// Prepare key holders
+	Firebird::IKeyHolderPlugin* keyHolder = mvol_get_holder(tdgbl, config);
+
+	// Load crypt plugin
+	if (!tdgbl->mvol_crypt)
+		tdgbl->mvol_crypt = tdgbl->gbl_sw_crypt;
+	if (!tdgbl->mvol_crypt)
+		BURP_error(378, true);
+
+	Firebird::GetPlugins<Firebird::IDbCryptPlugin>
+		cryptControl(Firebird::IPluginManager::TYPE_DB_CRYPT, config, tdgbl->mvol_crypt);
+	if (!cryptControl.hasData())
+		(Firebird::Arg::Gds(isc_no_crypt_plugin) << tdgbl->mvol_crypt).raise();
+
+	Firebird::RefPtr<DbInfo> dbInfo(FB_NEW DbInfo(tdgbl));
+	Firebird::IDbCryptPlugin* p = cryptControl.plugin();
+	p->setInfo(&status, dbInfo);
+	if (!status.isSuccess())
+	{
+		const ISC_STATUS* v = status->getErrors();
+		if (v[0] == isc_arg_gds && v[1] != isc_arg_end && v[1] != isc_interface_version_too_old)
+			Firebird::status_exception::raise(&status);
+	}
+
+	// Initialize key in crypt plugin
+	p->setKey(&status, 1, &keyHolder, tdgbl->mvol_keyname);
+	check(&status);
+
+	// Validate hash
+	if (tdgbl->gbl_key_hash[0])
+	{
+		Firebird::string hash;
+		calc_hash(hash, p);
+		if (hash != tdgbl->gbl_key_hash)
+			(Firebird::Arg::Gds(isc_bad_crypt_key) << tdgbl->mvol_keyname).raise();
+	}
+
+	// crypt plugin is ready
+	BurpCrypt* g = tdgbl->gbl_crypt;
+	g->db_info.moveFrom(dbInfo);
+	g->crypt_plugin = p;
+	p->addRef();
+}
+
+//____________________________________________________________
+//
+//
+static void crypt_write_block(BurpGlobals* tdgbl, const UCHAR* buffer, FB_SIZE_T buffer_length, bool flash)
+{
+	if (!(tdgbl->gbl_sw_keyholder))
+	{
+		mvol_write_block(tdgbl, buffer, buffer_length);
+		return;
+	}
+
+	start_crypt(tdgbl);
+	fb_assert(tdgbl->gbl_crypt);
+
+	while (buffer_length)
+	{
+		ULONG step = MIN(buffer_length + tdgbl->gbl_crypt_left, ZC_BUFSIZE);
+		fb_assert(CRYPT_STEP < ZC_BUFSIZE);
+
+		ULONG move = step - tdgbl->gbl_crypt_left;
+		memcpy(tdgbl->gbl_crypt_buffer + tdgbl->gbl_crypt_left, buffer, move);
+		buffer_length -= move;
+		buffer += move;
+
+		tdgbl->gbl_crypt_left = step % CRYPT_STEP;
+		step -= tdgbl->gbl_crypt_left;
+
+		if (flash && buffer_length == 0 && tdgbl->gbl_crypt_left)
+		{
+			step += CRYPT_STEP;
+			tdgbl->gbl_crypt_left = 0;
+		}
+
+		FbLocalStatus status;
+
+		for (ULONG offset = 0; offset < step; offset += CRYPT_STEP)
+		{
+			UCHAR* b = &tdgbl->gbl_crypt_buffer[offset];
+			tdgbl->gbl_crypt->crypt_plugin->encrypt(&status, CRYPT_STEP, b, b);
+			check(&status);
+		}
+
+		mvol_write_block(tdgbl, tdgbl->gbl_crypt_buffer, step);
+		memmove(tdgbl->gbl_crypt_buffer, &tdgbl->gbl_crypt_buffer[step], tdgbl->gbl_crypt_left);
+	}
+}
+
+
+//____________________________________________________________
+//
+//
+static ULONG crypt_read_block(BurpGlobals* tdgbl, UCHAR* buffer, FB_SIZE_T buffer_length)
+{
+	ULONG& length = tdgbl->gbl_crypt_left;
+
+	while (length < (tdgbl->gbl_key_hash[0] ? CRYPT_STEP : 1))
+	{
+		// free bytes in gbl_crypt_buffer
+		ULONG count = ZC_BUFSIZE - length;
+		UCHAR* endPtr = &tdgbl->gbl_crypt_buffer[length];
+
+		// If IO buffer empty, reload it
+		if (tdgbl->blk_io_cnt <= 0)
+		{
+			*endPtr++ = mvol_read(&tdgbl->blk_io_cnt, &tdgbl->blk_io_ptr);
+			--count;
+			++length;
+		}
+
+		// Copy data from the IO buffer
+		const ULONG n = MIN(count, (ULONG) tdgbl->blk_io_cnt);
+		memcpy(endPtr, tdgbl->blk_io_ptr, n);
+		endPtr += n;
+		length += n;
+
+		// Move IO pointer
+		tdgbl->blk_io_cnt -= n;
+		tdgbl->blk_io_ptr += n;
+	}
+
+	UCHAR* ptr = tdgbl->gbl_crypt_buffer;
+	buffer_length = MIN(length, buffer_length);
+
+	if (!tdgbl->gbl_key_hash[0])
+	{
+		memcpy(buffer, ptr, buffer_length);
+	}
+	else
+	{
+		start_crypt(tdgbl);
+		fb_assert(tdgbl->gbl_crypt);
+
+		ULONG left = buffer_length % CRYPT_STEP;
+		buffer_length -= left;
+
+		FbLocalStatus status;
+
+		for (ULONG offset = 0; offset < buffer_length; offset += CRYPT_STEP)
+		{
+			tdgbl->gbl_crypt->crypt_plugin->decrypt(&status, CRYPT_STEP, &ptr[offset], &buffer[offset]);
+			check(&status);
+		}
+	}
+
+	// Some data may stay in gbl_crypt_buffer for next time
+	length -= buffer_length;
+	memmove(ptr, ptr + buffer_length, length);
+
+	return buffer_length;
+}
+
+
+//____________________________________________________________
+//
+//
+
+static ULONG unzip_read_block(BurpGlobals* tdgbl, UCHAR* buffer, FB_SIZE_T buffer_length)
+{
+	if (!tdgbl->gbl_sw_zip)
+	{
+		return crypt_read_block(tdgbl, buffer, buffer_length);
+	}
+
+#ifdef HAVE_ZLIB_H
+	z_stream& strm = tdgbl->gbl_stream;
+	strm.avail_out = buffer_length;
+	strm.next_out = buffer;
+
+	for (;;)
+	{
+		if (strm.avail_in)
+		{
+#ifdef COMPRESS_DEBUG
+			fprintf(stderr, "Data to inflate %d port %p\n", strm.avail_in, port);
+#if COMPRESS_DEBUG > 1
+			for (unsigned n = 0; n < strm.avail_in; ++n) fprintf(stderr, "%02x ", strm.next_in[n]);
+			fprintf(stderr, "\n");
+#endif
+#endif
+			ULONG wasAvail = strm.avail_out;
+			int ret = zlib().inflate(&strm, Z_NO_FLUSH);
+			if (ret == Z_DATA_ERROR && wasAvail != strm.avail_out)
+				ret = Z_OK;
+
+			if (ret != Z_OK)
+			{
+#ifdef COMPRESS_DEBUG
+				fprintf(stderr, "Inflate error %d\n", ret);
+#endif
+				BURP_error(379, true, SafeArg() << ret);
+			}
+#ifdef COMPRESS_DEBUG
+			fprintf(stderr, "Inflated data %d\n", buffer_length - strm.avail_out);
+#if COMPRESS_DEBUG > 1
+			for (unsigned n = 0; n < buffer_length - strm.avail_out; ++n) fprintf(stderr, "%02x ", buffer[n]);
+			fprintf(stderr, "\n");
+#endif
+#endif
+			if (strm.next_out != buffer)
+				break;
+
+			UCHAR* compressed = tdgbl->gbl_decompress;
+			if (strm.next_in != compressed)
+			{
+				memmove(compressed, strm.next_in, strm.avail_in);
+				strm.next_in = compressed;
+			}
+		}
+		else
+			strm.next_in = tdgbl->gbl_decompress;
+
+		ULONG l = ZC_BUFSIZE - strm.avail_in;
+		l = crypt_read_block(tdgbl, strm.next_in, l);
+		strm.avail_in += l;
+	}
+
+	return buffer_length - strm.avail_out;
+#else
+	(Firebird::Arg::Gds(isc_random) << "No inflate support").raise();
+#endif
+}
+
+static void zip_write_block(BurpGlobals* tdgbl, const UCHAR* buffer, FB_SIZE_T buffer_length, bool flash)
+{
+	if (!tdgbl->gbl_sw_zip)
+	{
+		crypt_write_block(tdgbl, buffer, buffer_length, flash);
+		return;
+	}
+
+#ifdef HAVE_ZLIB_H
+	z_stream& strm = tdgbl->gbl_stream;
+	strm.avail_in = buffer_length;
+	strm.next_in = (Bytef*)buffer;
+	UCHAR* compressed = tdgbl->gbl_decompress;
+
+	if (!strm.next_out)
+	{
+		strm.avail_out = ZC_BUFSIZE;
+		strm.next_out = (Bytef*)compressed;
+	}
+
+	bool expectMoreOut = flash;
+
+	while (strm.avail_in || expectMoreOut)
+	{
+#ifdef COMPRESS_DEBUG
+		fprintf(stderr, "Data to deflate %d port %p\n", strm.avail_in, port);
+#if COMPRESS_DEBUG>1
+		for (unsigned n = 0; n < strm.avail_in; ++n) fprintf(stderr, "%02x ", strm.next_in[n]);
+		fprintf(stderr, "\n");
+#endif
+#endif
+		int ret = zlib().deflate(&strm, flash ? Z_FULL_FLUSH : Z_NO_FLUSH);
+		if (ret == Z_BUF_ERROR)
+			ret = 0;
+		if (ret != 0)
+		{
+#ifdef COMPRESS_DEBUG
+			fprintf(stderr, "Deflate error %d\n", ret);
+#endif
+			BURP_error(380, true, SafeArg() << ret);
+		}
+
+#ifdef COMPRESS_DEBUG
+		fprintf(stderr, "Deflated data %d\n", ZC_BUFSIZE - strm.avail_out);
+#if COMPRESS_DEBUG>1
+		for (unsigned n = 0; n < port->port_buff_size - strm.avail_out; ++n)
+			fprintf(stderr, "%02x ", compressed[n]);
+		fprintf(stderr, "\n");
+#endif
+#endif
+
+		expectMoreOut = !strm.avail_out;
+		if ((ZC_BUFSIZE != strm.avail_out) && (flash || !strm.avail_out))
+		{
+			crypt_write_block(tdgbl, compressed, ZC_BUFSIZE - strm.avail_out, flash);
+
+			strm.avail_out = ZC_BUFSIZE;
+			strm.next_out = (Bytef*)compressed;
+		}
+	}
+#else
+	(Firebird::Arg::Gds(isc_random) << "No deflate support").raise();
+#endif
+}
+
 
 
 //____________________________________________________________
@@ -113,6 +572,20 @@ FB_UINT64 MVOL_fini_read()
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
+#ifdef HAVE_ZLIB_H
+	if (tdgbl->gbl_sw_zip)
+	{
+		zlib().inflateEnd(&tdgbl->gbl_stream);
+	}
+#endif
+
+	brio_fini(tdgbl);
+
+	return mvol_fini_read(tdgbl);
+}
+
+FB_UINT64 mvol_fini_read(BurpGlobals* tdgbl)
+{
 	if (!tdgbl->stdIoMode)
 	{
 		close_platf(tdgbl->file_desc);
@@ -129,8 +602,8 @@ FB_UINT64 MVOL_fini_read()
 	tdgbl->file_desc = INVALID_HANDLE_VALUE;
 	BURP_free(tdgbl->mvol_io_buffer);
 	tdgbl->mvol_io_buffer = NULL;
-	tdgbl->io_cnt = 0;
-	tdgbl->io_ptr = NULL;
+	tdgbl->blk_io_cnt = 0;
+	tdgbl->blk_io_ptr = NULL;
 	return tdgbl->mvol_cumul_count;
 }
 
@@ -138,11 +611,27 @@ FB_UINT64 MVOL_fini_read()
 //____________________________________________________________
 //
 //
-FB_UINT64 MVOL_fini_write(int* io_cnt, UCHAR** io_ptr)
+FB_UINT64 MVOL_fini_write()
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
-	MVOL_write(rec_end, io_cnt, io_ptr);
+	zip_write_block(tdgbl, tdgbl->gbl_compress_buffer, tdgbl->gbl_io_ptr - tdgbl->gbl_compress_buffer, true);
+
+#ifdef HAVE_ZLIB_H
+	if (tdgbl->gbl_sw_zip)
+	{
+		zlib().deflateEnd(&tdgbl->gbl_stream);
+	}
+#endif
+
+	brio_fini(tdgbl);
+
+	return mvol_fini_write(tdgbl, &tdgbl->blk_io_cnt, &tdgbl->blk_io_ptr);
+}
+
+FB_UINT64 mvol_fini_write(BurpGlobals* tdgbl, int* io_cnt, UCHAR** io_ptr)
+{
+	mvol_write(rec_end, io_cnt, io_ptr);
 	flush_platf(tdgbl->file_desc);
 
 	if (!tdgbl->stdIoMode)
@@ -161,8 +650,9 @@ FB_UINT64 MVOL_fini_write(int* io_cnt, UCHAR** io_ptr)
 	BURP_free(tdgbl->mvol_io_header);
 	tdgbl->mvol_io_header = NULL;
 	tdgbl->mvol_io_buffer = NULL;
-	tdgbl->io_cnt = 0;
-	tdgbl->io_ptr = NULL;
+	tdgbl->blk_io_cnt = 0;
+	tdgbl->blk_io_ptr = NULL;
+
 	return tdgbl->mvol_cumul_count;
 }
 
@@ -175,6 +665,33 @@ void MVOL_init(ULONG io_buf_size)
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	tdgbl->mvol_io_buffer_size = io_buf_size;
+
+	tdgbl->gbl_compress_buffer = FB_NEW_POOL(tdgbl->getPool()) UCHAR[ZC_BUFSIZE];
+	tdgbl->gbl_crypt_buffer = FB_NEW_POOL(tdgbl->getPool()) UCHAR[ZC_BUFSIZE];
+	tdgbl->gbl_decompress = FB_NEW_POOL(tdgbl->getPool()) UCHAR[ZC_BUFSIZE];
+}
+
+
+static void brio_fini(BurpGlobals* tdgbl)
+{
+	delete[] tdgbl->gbl_compress_buffer;
+	tdgbl->gbl_compress_buffer = NULL;
+
+	delete[] tdgbl->gbl_crypt_buffer;
+	tdgbl->gbl_crypt_buffer = NULL;
+
+	delete[] tdgbl->gbl_decompress;
+	tdgbl->gbl_decompress = NULL;;
+}
+
+
+static void checkCompression()
+{
+	if (!zlib())
+	{
+		(Firebird::Arg::Gds(isc_random) << "Compession support library not loaded" <<
+		 Firebird::Arg::StatusVector(zlib().status)).raise();
+	}
 }
 
 
@@ -182,10 +699,35 @@ void MVOL_init(ULONG io_buf_size)
 //
 // Read init record from backup file
 //
-void MVOL_init_read(const char* file_name, USHORT* format, int* cnt, UCHAR** ptr)
+void MVOL_init_read(const char* file_name, USHORT* format)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
+	mvol_init_read(tdgbl, file_name, format, &tdgbl->blk_io_cnt, &tdgbl->blk_io_ptr);
+
+	tdgbl->gbl_io_cnt = 0;
+	tdgbl->gbl_io_ptr = NULL;
+
+	if (tdgbl->gbl_sw_zip)
+	{
+		z_stream& strm = tdgbl->gbl_stream;
+
+		strm.zalloc = Firebird::ZLib::allocFunc;
+		strm.zfree = Firebird::ZLib::freeFunc;
+		strm.opaque = Z_NULL;
+		strm.avail_in = 0;
+		strm.next_in = Z_NULL;
+		checkCompression();
+		int ret = zlib().inflateInit(&strm);
+		if (ret != Z_OK)
+		{
+			BURP_error(383, true, SafeArg() << ret);
+		}
+	}
+}
+
+void mvol_init_read(BurpGlobals* tdgbl, const char* file_name, USHORT* format, int* cnt, UCHAR** ptr)
+{
 	tdgbl->mvol_volume_count = 1;
 	tdgbl->mvol_empty_file = true;
 
@@ -225,10 +767,32 @@ void MVOL_init_read(const char* file_name, USHORT* format, int* cnt, UCHAR** ptr
 //
 // Write init record to the backup file
 //
-void MVOL_init_write(const char* file_name, int* cnt, UCHAR** ptr)
+void MVOL_init_write(const char* file_name)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
+	mvol_init_write(tdgbl, file_name, &tdgbl->blk_io_cnt, &tdgbl->blk_io_ptr);
+
+	tdgbl->gbl_io_cnt = ZC_BUFSIZE;
+	tdgbl->gbl_io_ptr = tdgbl->gbl_compress_buffer;
+
+	if (tdgbl->gbl_sw_zip)
+	{
+		z_stream& strm = tdgbl->gbl_stream;
+
+		strm.zalloc = Firebird::ZLib::allocFunc;
+		strm.zfree = Firebird::ZLib::freeFunc;
+		strm.opaque = Z_NULL;
+		checkCompression();
+		int ret = zlib().deflateInit(&strm, Z_DEFAULT_COMPRESSION);
+		if (ret != Z_OK)
+			BURP_error(384, true, SafeArg() << ret);
+		strm.next_out = Z_NULL;
+	}
+}
+
+void mvol_init_write(BurpGlobals* tdgbl, const char* file_name, int* cnt, UCHAR** ptr)
+{
 	tdgbl->mvol_volume_count = 1;
 	tdgbl->mvol_empty_file = true;
 
@@ -268,7 +832,14 @@ void MVOL_init_write(const char* file_name, int* cnt, UCHAR** ptr)
 //
 // Read a buffer's worth of data. (common)
 //
-int MVOL_read(int* cnt, UCHAR** ptr)
+void MVOL_read(BurpGlobals* tdgbl)
+{
+	// Setup our pointer
+	tdgbl->gbl_io_ptr = tdgbl->gbl_compress_buffer;
+	tdgbl->gbl_io_cnt = unzip_read_block(tdgbl, tdgbl->gbl_io_ptr, ZC_BUFSIZE);
+}
+
+int mvol_read(int* cnt, UCHAR** ptr)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -285,7 +856,7 @@ int MVOL_read(int* cnt, UCHAR** ptr)
 	}
 	else
 	{
-		mvol_read(cnt, ptr);
+		os_read(cnt, ptr);
 	}
 
 	tdgbl->mvol_cumul_count += tdgbl->mvol_io_cnt;
@@ -305,7 +876,7 @@ int MVOL_read(int* cnt, UCHAR** ptr)
 //
 // Read a buffer's worth of data. (non-WIN_NT)
 //
-static void mvol_read(int* cnt, UCHAR** ptr)
+static void os_read(int* cnt, UCHAR** ptr)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -348,11 +919,11 @@ static void mvol_read(int* cnt, UCHAR** ptr)
 //
 // Read a buffer's worth of data. (WIN_NT)
 //
-static void mvol_read(int* cnt, UCHAR** ptr)
+static void os_read(int* cnt, UCHAR** ptr)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
-	fb_assert(tdgbl->io_cnt <= 0);
+	fb_assert(tdgbl->blk_io_cnt <= 0);
 
 	for (;;)
 	{
@@ -391,35 +962,26 @@ static void mvol_read(int* cnt, UCHAR** ptr)
 //
 UCHAR* MVOL_read_block(BurpGlobals* tdgbl, UCHAR* ptr, ULONG count)
 {
-	// To handle tape drives & Multi-volume boundaries, use the normal
-	// read function, instead of doing a more optimal bulk read.
-
-
 	while (count)
 	{
 		// If buffer empty, reload it
-		if (tdgbl->io_cnt <= 0)
-		{
-			*ptr++ = MVOL_read(&tdgbl->io_cnt, &tdgbl->io_ptr);
+		if (tdgbl->gbl_io_cnt <= 0)
+			MVOL_read(tdgbl);
 
-			// One byte was "read" by MVOL_read
-			count--;
-		}
-
-		const ULONG n = MIN(count, (ULONG) tdgbl->io_cnt);
+		const ULONG n = MIN(count, (ULONG) tdgbl->gbl_io_cnt);
 
 		// Copy data from the IO buffer
 
-		memcpy(ptr, tdgbl->io_ptr, n);
+		memcpy(ptr, tdgbl->gbl_io_ptr, n);
 		ptr += n;
 
 		// Skip ahead in current buffer
 
 		count -= n;
-		tdgbl->io_cnt -= n;
-		tdgbl->io_ptr += n;
-
+		tdgbl->gbl_io_cnt -= n;
+		tdgbl->gbl_io_ptr += n;
 	}
+
 	return ptr;
 }
 
@@ -438,21 +1000,18 @@ void MVOL_skip_block( BurpGlobals* tdgbl, ULONG count)
 	while (count)
 	{
 		// If buffer empty, reload it
-		if (tdgbl->io_cnt <= 0)
+		if (tdgbl->gbl_io_cnt <= 0)
 		{
-			MVOL_read(&tdgbl->io_cnt, &tdgbl->io_ptr);
-
-			// One byte was "read" by MVOL_read
-			count--;
+			MVOL_read(tdgbl);
 		}
 
-		const ULONG n = MIN(count, (ULONG) tdgbl->io_cnt);
+		const ULONG n = MIN(count, (ULONG) tdgbl->gbl_io_cnt);
 
 		// Skip ahead in current buffer
 
 		count -= n;
-		tdgbl->io_cnt -= n;
-		tdgbl->io_ptr += n;
+		tdgbl->gbl_io_cnt -= n;
+		tdgbl->gbl_io_ptr += n;
 	}
 }
 
@@ -463,7 +1022,7 @@ void MVOL_skip_block( BurpGlobals* tdgbl, ULONG count)
 // detect if it's a tape, rewind if so
 // and set the buffer size
 //
-DESC MVOL_open(const char* name, ULONG mode, ULONG create)
+DESC NT_tape_open(const char* name, ULONG mode, ULONG create)
 {
 	HANDLE handle;
 	TAPE_GET_MEDIA_PARAMETERS param;
@@ -526,7 +1085,18 @@ DESC MVOL_open(const char* name, ULONG mode, ULONG create)
 //
 // Write a buffer's worth of data.
 //
-UCHAR MVOL_write(const UCHAR c, int* io_cnt, UCHAR** io_ptr)
+void MVOL_write(BurpGlobals* tdgbl)
+{
+	fb_assert(tdgbl->gbl_io_ptr >= tdgbl->gbl_compress_buffer);
+	fb_assert(tdgbl->gbl_io_ptr <= tdgbl->gbl_compress_buffer + ZC_BUFSIZE);
+
+	zip_write_block(tdgbl, tdgbl->gbl_compress_buffer, tdgbl->gbl_io_ptr - tdgbl->gbl_compress_buffer, false);
+
+	tdgbl->gbl_io_cnt = ZC_BUFSIZE;
+	tdgbl->gbl_io_ptr = tdgbl->gbl_compress_buffer;
+}
+
+UCHAR mvol_write(const UCHAR c, int* io_cnt, UCHAR** io_ptr)
 {
 	const UCHAR* ptr;
 	ULONG cnt = 0;
@@ -747,32 +1317,60 @@ UCHAR MVOL_write(const UCHAR c, int* io_cnt, UCHAR** io_ptr)
 //
 const UCHAR* MVOL_write_block(BurpGlobals* tdgbl, const UCHAR* ptr, ULONG count)
 {
+	while (count)
+	{
+		// If buffer full, write it
+		if (tdgbl->gbl_io_cnt <= 0)
+		{
+			zip_write_block(tdgbl, tdgbl->gbl_compress_buffer, tdgbl->gbl_io_ptr - tdgbl->gbl_compress_buffer, false);
+
+			tdgbl->gbl_io_ptr = tdgbl->gbl_compress_buffer;
+			tdgbl->gbl_io_cnt = ZC_BUFSIZE;
+		}
+
+		const ULONG n = MIN(count, (ULONG) tdgbl->gbl_io_cnt);
+
+		// Copy data to the IO buffer
+		memcpy(tdgbl->gbl_io_ptr, ptr, n);
+		ptr += n;
+		count -= n;
+
+		// Skip ahead in current buffer
+		tdgbl->gbl_io_cnt -= n;
+		tdgbl->gbl_io_ptr += n;
+	}
+
+	return ptr;
+}
+
+const UCHAR* mvol_write_block(BurpGlobals* tdgbl, const UCHAR* ptr, ULONG count)
+{
 	// To handle tape drives & Multi-volume boundaries, use the normal
 	// write function, instead of doing a more optimal bulk write.
 
 	while (count)
 	{
 		// If buffer full, dump it
-		if (tdgbl->io_cnt <= 0)
+		if (tdgbl->blk_io_cnt <= 0)
 		{
-			MVOL_write(*ptr++, &tdgbl->io_cnt, &tdgbl->io_ptr);
+			mvol_write(*ptr++, &tdgbl->blk_io_cnt, &tdgbl->blk_io_ptr);
 
-			// One byte was written by MVOL_write
+			// One byte was written by mvol_write
 			count--;
 		}
 
-		const ULONG n = MIN(count, (ULONG) tdgbl->io_cnt);
+		const ULONG n = MIN(count, (ULONG) tdgbl->blk_io_cnt);
 
 		// Copy data to the IO buffer
 
-		memcpy(tdgbl->io_ptr, ptr, n);
+		memcpy(tdgbl->blk_io_ptr, ptr, n);
 		ptr += n;
 
 		// Skip ahead in current buffer
 
 		count -= n;
-		tdgbl->io_cnt -= n;
-		tdgbl->io_ptr += n;
+		tdgbl->blk_io_cnt -= n;
+		tdgbl->blk_io_ptr += n;
 
 	}
 	return ptr;
@@ -914,7 +1512,7 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 		prompt_for_name(new_file, sizeof(new_file));
 
 #ifdef WIN_NT
-		new_desc = MVOL_open(new_file, mode, OPEN_ALWAYS);
+		new_desc = NT_tape_open(new_file, mode, OPEN_ALWAYS);
 		if (new_desc == INVALID_HANDLE_VALUE)
 #else
 		new_desc = os_utils::open(new_file, mode, open_mask);
@@ -1228,16 +1826,12 @@ static bool read_header(DESC handle, ULONG* buffer_size, USHORT* format, bool in
 				}
 			}
 			*p = 0;
-			if (!init_flag && strcmp(buffer, tdgbl->gbl_database_file_name))
+			if (!init_flag && strcmp(buffer, tdgbl->mvol_db_name_buffer))
 			{
-				BURP_msg_get(231, msg, SafeArg() << tdgbl->gbl_database_file_name << buffer);
+				BURP_msg_get(231, msg, SafeArg() << tdgbl->mvol_db_name_buffer << buffer);
 				// Expected backup database %s, found %s\n
 				printf("%s", msg);
 				return false;
-			}
-			if (init_flag)
-			{
-				tdgbl->gbl_database_file_name = tdgbl->mvol_db_name_buffer;
 			}
 			break;
 
@@ -1266,6 +1860,90 @@ static bool read_header(DESC handle, ULONG* buffer_size, USHORT* format, bool in
 				printf("%s", msg);
 				return false;
 			}
+			break;
+
+		case att_backup_keyname:
+			l = get(tdgbl);
+			p = tdgbl->mvol_keyname_buffer;
+			maxlen = sizeof(tdgbl->mvol_keyname_buffer) - 1;
+
+			if (l)
+			{
+				do {
+					*p++ = get(tdgbl);
+				} while (--l && --maxlen);
+
+				// Discard elements that don't fit in the buffer, possible corrupt backup
+				if (l > 0 && !maxlen)
+				{
+					while (l--)
+						get(tdgbl);
+				}
+			}
+
+			*p = 0;
+			tdgbl->mvol_keyname = tdgbl->mvol_keyname_buffer;
+
+			if (!tdgbl->gbl_sw_keyname)
+				tdgbl->gbl_sw_keyname = tdgbl->mvol_keyname;
+
+			break;
+
+		case att_backup_crypt:
+			l = get(tdgbl);
+			p = tdgbl->mvol_crypt_buffer;
+			maxlen = sizeof(tdgbl->mvol_crypt_buffer) - 1;
+
+			if (l)
+			{
+				do {
+					*p++ = get(tdgbl);
+				} while (--l && --maxlen);
+
+				// Discard elements that don't fit in the buffer, possible corrupt backup
+				if (l > 0 && !maxlen)
+				{
+					while (l--)
+						get(tdgbl);
+				}
+			}
+
+			*p = 0;
+			tdgbl->mvol_crypt = tdgbl->mvol_crypt_buffer;
+
+			if (!tdgbl->gbl_sw_crypt)
+				tdgbl->gbl_sw_crypt = tdgbl->mvol_crypt;
+
+			break;
+
+		case att_backup_zip:
+			if (get_numeric())
+				tdgbl->gbl_sw_zip = true;
+			break;
+
+		case att_backup_hash:
+			if (!tdgbl->gbl_sw_keyholder)
+				BURP_error(376, true);
+
+			l = get(tdgbl);
+			p = tdgbl->gbl_key_hash;
+			maxlen = sizeof(tdgbl->gbl_key_hash) - 1;
+
+			if (l)
+			{
+				do {
+					*p++ = get(tdgbl);
+				} while (--l && --maxlen);
+
+				// Discard elements that don't fit in the buffer, possible corrupt backup
+				if (l > 0 && !maxlen)
+				{
+					while (l--)
+						get(tdgbl);
+				}
+			}
+
+			*p = 0;
 			break;
 
 		default:
@@ -1297,13 +1975,38 @@ static bool write_header(DESC handle, ULONG backup_buffer_size, bool full_buffer
 		if (tdgbl->gbl_sw_transportable)
 			put_numeric(att_backup_transportable, 1);
 
+		if (tdgbl->gbl_sw_zip)
+			put_numeric(att_backup_zip, 1);
+
 		put_numeric(att_backup_blksize, backup_buffer_size);
 
 		tdgbl->mvol_io_volume = tdgbl->mvol_io_ptr + 2;
 		put_numeric(att_backup_volume, tdgbl->mvol_volume_count);
 
+		if (tdgbl->gbl_sw_keyname)
+		{
+			tdgbl->mvol_keyname = tdgbl->gbl_sw_keyname;
+			put_asciz(att_backup_keyname, tdgbl->mvol_keyname);
+		}
+
+		if (tdgbl->gbl_sw_crypt)
+		{
+			tdgbl->mvol_crypt = tdgbl->gbl_sw_crypt;
+			put_asciz(att_backup_crypt, tdgbl->mvol_crypt);
+		}
+
 		put_asciz(att_backup_file, tdgbl->gbl_database_file_name);
 		put_asciz(att_backup_date, tdgbl->gbl_backup_start_time);
+
+		if (tdgbl->gbl_sw_keyholder)
+		{
+			start_crypt(tdgbl);
+			fb_assert(tdgbl->gbl_crypt && tdgbl->gbl_crypt->crypt_plugin);
+			Firebird::string hash;
+			calc_hash(hash, tdgbl->gbl_crypt->crypt_plugin);
+			put_asciz(att_backup_hash, hash.c_str());
+		}
+
 		put(tdgbl, att_end);
 
 		tdgbl->mvol_io_data = tdgbl->mvol_io_ptr;

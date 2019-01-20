@@ -40,8 +40,10 @@
 #include "../common/classes/stack.h"
 #include "../common/classes/timestamp.h"
 #include "../common/ThreadStart.h"
+#include "../common/TimeZoneUtil.h"
 
 #include "../jrd/EngineInterface.h"
+#include "../jrd/sbm.h"
 
 namespace EDS {
 	class Connection;
@@ -143,6 +145,29 @@ const ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 
 class Attachment;
 struct bid;
+
+
+class ActiveSnapshots
+{
+public:
+	explicit ActiveSnapshots(Firebird::MemoryPool& p);
+
+	// Returns snapshot number given version belongs to.
+	// It is not needed to maintain two versions for the same snapshot, so the latter
+	// version can be garbage-collected.
+	//
+	// Function returns CN_ACTIVE if version was committed after we obtained
+	// our list of snapshots. It means GC is not possible for this version.
+	CommitNumber getSnapshotForVersion(CommitNumber version_cn);
+
+private:
+	UInt32Bitmap m_snapshots;		// List of active snapshots as of the moment of time
+	CommitNumber m_lastCommit;		// CN_ACTIVE here means object is not populated
+	ULONG m_releaseCount;			// Release event counter when list was last updated
+	ULONG m_slots_used;				// Snapshot slots used when list was last updated
+
+	friend class TipCache;
+};
 
 
 //
@@ -282,6 +307,7 @@ public:
 	jrd_tra*	att_transactions;			// Transactions belonging to attachment
 	jrd_tra*	att_dbkey_trans;			// transaction to control db-key scope
 	TraNumber	att_oldest_snapshot;		// GTT's record versions older than this can be garbage-collected
+	ActiveSnapshots att_active_snapshots;	// List of currently active snapshots for GC purposes
 
 private:
 	jrd_tra*	att_sys_transaction;		// system transaction
@@ -310,7 +336,7 @@ public:
 	Validation*	att_validation;
 	Firebird::PathName	att_working_directory;	// Current working directory is cached
 	Firebird::PathName	att_filename;			// alias used to attach the database
-	const Firebird::TimeStamp	att_timestamp;	// Connection date and time
+	const ISC_TIMESTAMP_TZ	att_timestamp;	// Connection date and time
 	Firebird::StringMap att_context_vars;	// Context variables for the connection
 	Firebird::Stack<DdlTriggerContext*> ddlTriggersContext;	// Context variables for DDL trigger event
 	Firebird::string att_network_protocol;	// Network protocol used by client for connection
@@ -332,8 +358,13 @@ public:
 	ThreadId att_purge_tid;					// ID of thread running purge_attachment()
 
 	EDS::Connection* att_ext_connection;	// external connection executed by this attachment
+	EDS::Connection* att_ext_parent;		// external connection, parent of this attachment
 	ULONG att_ext_call_depth;				// external connection call depth, 0 for user attachment
 	TraceManager* att_trace_manager;		// Trace API manager
+
+	Firebird::TimeZoneUtil::Bind att_timezone_bind;
+	USHORT att_original_timezone;
+	USHORT att_current_timezone;
 
 	enum UtilType { UTIL_NONE, UTIL_GBAK, UTIL_GFIX, UTIL_GSTAT };
 
@@ -406,6 +437,9 @@ public:
 	void storeBinaryBlob(thread_db* tdbb, jrd_tra* transaction, bid* blobId,
 		const Firebird::ByteChunk& chunk);
 
+	void releaseGTTs(thread_db* tdbb);
+	void resetSession(thread_db* tdbb, jrd_tra** traHandle);
+
 	void signalCancel();
 	void signalShutdown(ISC_STATUS code);
 
@@ -454,7 +488,18 @@ public:
 	void setupIdleTimer(bool clear);
 
 	// returns time when idle timer will be expired, if set
-	bool getIdleTimerTimestamp(Firebird::TimeStamp& ts) const;
+	bool getIdleTimerTimestamp(ISC_TIMESTAMP_TZ& ts) const;
+
+	// batches control
+	void registerBatch(JBatch* b)
+	{
+		att_batches.add(b);
+	}
+
+	void deregisterBatch(JBatch* b)
+	{
+		att_batches.findAndRemove(b);
+	}
 
 private:
 	Attachment(MemoryPool* pool, Database* dbb);
@@ -477,20 +522,22 @@ private:
 		// Set timeout, seconds
 		void reset(unsigned int timeout);
 
-		time_t getExpiryTime() const
+		SINT64 getExpiryTime() const
 		{
 			return m_expTime;
 		}
 
 	private:
 		Firebird::RefPtr<JAttachment> m_attachment;
-		time_t m_fireTime;		// when ITimer will fire, could be less than m_expTime
-		time_t m_expTime;		// when actual idle timeout will expire
+		SINT64 m_fireTime;		// when ITimer will fire, could be less than m_expTime
+		SINT64 m_expTime;		// when actual idle timeout will expire
 	};
 
 	unsigned int att_idle_timeout;		// seconds
 	unsigned int att_stmt_timeout;		// milliseconds
 	Firebird::RefPtr<IdleTimer> att_idle_timer;
+
+	Firebird::Array<JBatch*> att_batches;
 };
 
 

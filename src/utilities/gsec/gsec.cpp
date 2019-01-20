@@ -409,7 +409,7 @@ int gsec(Firebird::UtilSvc* uSvc)
 	user_data->database.set(&statusWrapper, databaseName.c_str());
 	check(&statusWrapper);
 
-	Firebird::RefPtr<Firebird::IManagement> manager;
+	Firebird::AutoPlugin<Firebird::IManagement> manager;
 	ISC_STATUS_ARRAY status;
 
 	if (!useServices)
@@ -472,7 +472,7 @@ int gsec(Firebird::UtilSvc* uSvc)
 			try
 			{
 				Get getPlugin(pseudoConfig);
-				manager = getPlugin.plugin();
+				manager.reset(getPlugin.plugin());
 				if (!manager)
 				{
 					GSEC_error_redirect(Firebird::Arg::Gds(isc_user_manager).value(), GsecMsg15);
@@ -481,6 +481,8 @@ int gsec(Firebird::UtilSvc* uSvc)
 				GsecInfo info(user_data->dba.get(), user_data->role.get(),
 							  network_protocol.c_str(), remote_address.c_str(), &user_data->authenticationBlock);
 				manager->start(&statusManager, &info);
+				check(&statusManager);
+				manager->addRef();
 			}
 			catch (const Firebird::Exception& ex)
 			{

@@ -5,5 +5,3 @@ WARN_FLAGS=-Wall -Wno-switch -Wno-parentheses -Wno-unknown-pragmas -Wno-unused-v
 PROD_FLAGS=$(COMMON_FLAGS) $(OPTIMIZE_FLAGS)
 #DEV_FLAGS=-DUSE_VALGRIND -p $(COMMON_FLAGS) $(WARN_FLAGS)
 DEV_FLAGS=-p $(COMMON_FLAGS) $(WARN_FLAGS)
-
-CXXFLAGS := $(CXXFLAGS) -std=c++11

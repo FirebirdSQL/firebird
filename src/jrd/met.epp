@@ -2496,6 +2496,8 @@ SLONG MET_lookup_index_name(thread_db* tdbb,
 	{
 		if (X.RDB$INDEX_INACTIVE == 0)
 			*status = MET_object_active;
+		else if (X.RDB$INDEX_INACTIVE == 3)
+			*status = MET_object_deferred_active;
 		else
 			*status = MET_object_inactive;
 
@@ -3512,12 +3514,12 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 			else
 			{
 				RefPtr<MsgMetadata> inputMetadata(REF_NO_INCR,
-					Routine::createMetadata(procedure->getInputFields()));
+					Routine::createMetadata(procedure->getInputFields(), false));
 				procedure->setInputFormat(
 					Routine::createFormat(procedure->getPool(), inputMetadata, false));
 
 				RefPtr<MsgMetadata> outputMetadata(REF_NO_INCR,
-					Routine::createMetadata(procedure->getOutputFields()));
+					Routine::createMetadata(procedure->getOutputFields(), false));
 				procedure->setOutputFormat(
 					Routine::createFormat(procedure->getPool(), outputMetadata, true));
 

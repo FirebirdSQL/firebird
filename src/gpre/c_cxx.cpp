@@ -243,6 +243,9 @@ void C_CXX_action(const act* action, int column)
 	case ACT_update:
 	case ACT_statistics:
 		begin(column);
+
+	default:
+		break;
 	}
 
 	switch (action->act_type)
@@ -658,7 +661,7 @@ static void asgn_to( const act* action, ref* reference, int column)
 
 			// Pick up NULL value if one is there
 
-			if (reference = reference->ref_null)
+			if ((reference = reference->ref_null))
 			{
 				align(column);
 				fprintf(gpreGlob.out_file, "%s = %s;", reference->ref_value,
@@ -687,7 +690,7 @@ static void asgn_to( const act* action, ref* reference, int column)
 
 	// Pick up NULL value if one is there
 
-	if (reference = reference->ref_null)
+	if ((reference = reference->ref_null))
 	{
 		align(column);
 		fprintf(gpreGlob.out_file, "%s = %s;", reference->ref_value, gen_name(s, reference, true));
@@ -1049,7 +1052,7 @@ static void gen_blob_open( const act* action, USHORT column)
 		fprintf(gpreGlob.out_file, "%s = %s;", s, reference->ref_value);
 	}
 
-	if (args.pat_value1 = blob->blb_bpb_length)
+	if ((args.pat_value1 = blob->blb_bpb_length))
 		PATTERN_expand(column, pattern1, &args);
 	else
 		PATTERN_expand(column, pattern2, &args);
@@ -2824,63 +2827,62 @@ static void gen_request(const gpre_req* request)
 		printa(0, "static %sshort\n   isc_%dl = %d;",
 			   (request->req_flags & REQ_extend_dpb) ? "" : CONST_STR,
 			   request->req_ident, request->req_length);
-		printa(0, "static %sunsigned char\n   isc_%d [] = {", CONST_STR, request->req_ident);
 
 		const TEXT* string_type = "blr";
-		if (gpreGlob.sw_raw)
-		{
-			gen_raw(request->req_blr, request->req_length);
+		bool is_blr = true;
 
-			switch (request->req_type)
-			{
+		switch (request->req_type)
+		{
 			case REQ_create_database:
 			case REQ_ready:
 				string_type = "dpb";
+				is_blr = false;
 				break;
 
 			case REQ_ddl:
 				string_type = "dyn";
-				break;
-			case REQ_slice:
-				string_type = "sdl";
+				is_blr = false;
 				break;
 
-			default:
-				string_type = "blr";
-			}
+			case REQ_slice:
+				string_type = "sdl";
+				is_blr = false;
+				break;
+		}
+
+		if (is_blr)
+			printa(0, "static %sunsigned char\n   isc_%d [] = {", CONST_STR, request->req_ident);
+		else
+			printa(0, "static %schar\n   isc_%d [] = {", CONST_STR, request->req_ident);
+
+		if (gpreGlob.sw_raw)
+		{
+			gen_raw(request->req_blr, request->req_length);
 		}
 		else
 			switch (request->req_type)
 			{
 			case REQ_create_database:
 			case REQ_ready:
-				string_type = "dpb";
 				if (PRETTY_print_cdb(request->req_blr, gen_blr, 0, 0))
-				{
 					CPR_error("internal error during parameter generation");
-				}
 				break;
 
 			case REQ_ddl:
-				string_type = "dyn";
 				if (PRETTY_print_dyn(request->req_blr, gen_blr, 0, 0))
-				{
 					CPR_error("internal error during dynamic DDL generation");
-				}
 				break;
+
 			case REQ_slice:
-				string_type = "sdl";
 				if (PRETTY_print_sdl(request->req_blr, gen_blr, 0, 0))
-				{
 					CPR_error("internal error during SDL generation");
-				}
 				break;
 
 			default:
-				string_type = "blr";
 				if (fb_print_blr(request->req_blr, request->req_length, gen_blr, 0, 0))
 					CPR_error("internal error during BLR generation");
 			}
+
 		printa(INDENT, "};\t/* end of %s string for request isc_%d */\n",
 			   string_type, request->req_ident);
 	}
@@ -3835,7 +3837,7 @@ static void make_ready(const gpre_dbb* db,
 
 	// generate the attach database itself
 
-	const TEXT* dpb_size_ptr = "0";
+	const TEXT* dpb_size_ptr = "(short) 0";
 	const TEXT* dpb_ptr = "(char*) 0";
 
 	align(column);

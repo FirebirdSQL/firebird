@@ -87,7 +87,9 @@ struct impure_value
 		Firebird::Decimal128 vlu_dec128;
 		Firebird::DecimalFixed vlu_dec_fixed;
 		GDS_TIMESTAMP vlu_timestamp;
+		ISC_TIMESTAMP_TZ vlu_timestamp_tz;
 		GDS_TIME vlu_sql_time;
+		ISC_TIME_TZ vlu_sql_time_tz;
 		GDS_DATE vlu_sql_date;
 		bid vlu_bid;
 

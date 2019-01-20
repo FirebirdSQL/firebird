@@ -213,7 +213,6 @@ public:
 		  segLength(0),
 		  precision(0),
 		  charLength(0),
-		  charSetId(0),
 		  collationId(0),
 		  textType(0),
 		  fullDomain(false),
@@ -274,7 +273,7 @@ public:
 	USHORT segLength;					// Segment length for blobs
 	USHORT precision;					// Precision for exact numeric types
 	USHORT charLength;					// Length of field in characters
-	SSHORT charSetId;
+	Nullable<SSHORT> charSetId;
 	SSHORT collationId;
 	SSHORT textType;
 	bool fullDomain;					// Domain name without TYPE OF prefix

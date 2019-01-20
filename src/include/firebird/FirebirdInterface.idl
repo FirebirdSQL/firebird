@@ -29,9 +29,12 @@
 typedef ISC_DATE;
 typedef ISC_QUAD;
 typedef ISC_TIME;
+typedef ISC_TIME_TZ;
+typedef ISC_TIMESTAMP_TZ;
 typedef FB_DEC16;
 typedef FB_DEC34;
-typedef FB_DEC_FIXED;
+typedef isc_tr_handle;
+typedef isc_stmt_handle;
 
 // Versioned interface - base for all FB interfaces
 interface Versioned
@@ -214,6 +217,10 @@ interface PluginFactory : Versioned
 interface PluginModule : Versioned
 {
 	void doClean();
+
+version:		// 3.0.3 => 3.0.4
+	// Used to release resources allocated per-thread
+	void threadDetach();
 }
 
 // Interface to deal with plugins here and there, returned by master interface
@@ -532,16 +539,6 @@ interface Events : ReferenceCounted
 	void cancel(Status status);
 }
 
-interface EventBlock : Disposable
-{
-	uint getLength();
-	uchar* getValues();
-	uchar* getBuffer();
-	uint getCount();
-	uint* getCounters();
-	void counts();
-}
-
 interface Attachment : ReferenceCounted
 {
 	void getInfo(Status status,
@@ -681,6 +678,8 @@ interface ClientBlock : ReferenceCounted
 	const uchar* getData(uint* length);
 	void putData(Status status, uint length, const void* data);
 	CryptKey newKey(Status status);
+version:	// 3.0 => 4.0
+	AuthBlock getAuthBlock(Status status);
 }
 
 // server part of authentication plugin
@@ -767,6 +766,17 @@ interface Management : PluginBase
 	int execute(Status status, User user, ListUsers callback);
 	void commit(Status status);
 	void rollback(Status status);
+}
+
+interface AuthBlock : Versioned
+{
+	const string getType();
+	const string getName();
+	const string getPlugin();
+	const string getSecurityDb();
+	const string getOriginalPlugin();
+	boolean next(Status status);
+	boolean first(Status status);
 }
 
 
@@ -1059,10 +1069,18 @@ interface Util : Versioned
 	uint setOffsets(Status status, MessageMetadata metadata, OffsetsCallback callback);
 
 version:	// 3.0 => 4.0
-	EventBlock createEventBlock(Status status, const string* events);
 	DecFloat16 getDecFloat16(Status status);
 	DecFloat34 getDecFloat34(Status status);
-	DecFixed getDecFixed(Status status);
+	Transaction getTransactionByHandle(Status status, isc_tr_handle* hndlPtr);
+	Statement getStatementByHandle(Status status, isc_stmt_handle* hndlPtr);
+	void decodeTimeTz(Status status, const ISC_TIME_TZ* timeTz, uint* hours, uint* minutes, uint* seconds,
+		uint* fractions, uint timeZoneBufferLength, string timeZoneBuffer);
+	void decodeTimeStampTz(Status status, const ISC_TIMESTAMP_TZ* timeStampTz, uint* year, uint* month, uint* day,
+		uint* hours, uint* minutes, uint* seconds, uint* fractions, uint timeZoneBufferLength, string timeZoneBuffer);
+	void encodeTimeTz(Status status, ISC_TIME_TZ* timeTz, uint hours, uint minutes, uint seconds,
+		uint fractions, const string timeZone);
+	void encodeTimeStampTz(Status status, ISC_TIMESTAMP_TZ* timeStampTz, uint year, uint month, uint day,
+		uint hours, uint minutes, uint seconds, uint fractions, const string timeZone);
 }
 
 interface OffsetsCallback : Versioned
@@ -1144,6 +1162,7 @@ interface TraceTransaction : Versioned
 	const uint ISOLATION_CONCURRENCY = 2;
 	const uint ISOLATION_READ_COMMITTED_RECVER = 3;
 	const uint ISOLATION_READ_COMMITTED_NORECVER = 4;
+	const uint ISOLATION_READ_COMMITTED_READ_CONSISTENCY = 5;
 
 	int64 getTransactionID();
 	boolean getReadOnly();
@@ -1467,14 +1486,4 @@ interface DecFloat34 : Versioned
 	void toString(Status status, const FB_DEC34* from, uint bufferLength, string buffer);
 	void fromBcd(int sign, const uchar* bcd, int exp, FB_DEC34* to);
 	void fromString(Status status, const string from, FB_DEC34* to);
-}
-
-interface DecFixed : Versioned
-{
-	const uint BCD_SIZE = 34;
-	const uint STRING_SIZE = 41;	// may include exponent not more than 3 digits
-	void toBcd(const FB_DEC_FIXED* from, int* sign, uchar* bcd);
-	void toString(Status status, const FB_DEC_FIXED* from, int scale, uint bufferLength, string buffer);
-	void fromBcd(int sign, const uchar* bcd, FB_DEC_FIXED* to);
-	void fromString(Status status, const string from, int scale, FB_DEC_FIXED* to);
 }

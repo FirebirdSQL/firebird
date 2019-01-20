@@ -27,7 +27,7 @@ employee = $(dir_sampleDb)/employee.fdb
 security.db = $(dir_secDb)/security4.fdb
 {
 	RemoteAccess = false
-	DefaultDbCachePages = 50
+	DefaultDbCachePages = 256
 }
 
 #

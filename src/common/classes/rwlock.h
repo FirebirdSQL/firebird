@@ -208,39 +208,41 @@ private:
 
 	void init()
 	{
+		int code;
 #if defined(LINUX) && !defined(USE_VALGRIND) && defined(HAVE_PTHREAD_RWLOCKATTR_SETKIND_NP)
 		pthread_rwlockattr_t attr;
-		if (pthread_rwlockattr_init(&attr))
-			system_call_failed::raise("pthread_rwlockattr_init");
+		if (code = pthread_rwlockattr_init(&attr))
+			system_call_failed::raise("pthread_rwlockattr_init", code);
 		// Do not worry if target misses support for this option
 		pthread_rwlockattr_setkind_np(&attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
-		if (pthread_rwlock_init(&lock, NULL))
-			system_call_failed::raise("pthread_rwlock_init");
-		if (pthread_rwlockattr_destroy(&attr))
-			system_call_failed::raise("pthread_rwlockattr_destroy");
+		if (code = pthread_rwlock_init(&lock, NULL))
+			system_call_failed::raise("pthread_rwlock_init", code);
+		if (code = pthread_rwlockattr_destroy(&attr))
+			system_call_failed::raise("pthread_rwlockattr_destroy", code);
 #else
-		if (pthread_rwlock_init(&lock, NULL))
-			system_call_failed::raise("pthread_rwlock_init");
+		if (code = pthread_rwlock_init(&lock, NULL))
+			system_call_failed::raise("pthread_rwlock_init", code);
 #endif
 	}
 
 public:
 	RWLock() { init(); }
 	explicit RWLock(class MemoryPool&) { init(); }
+
 	~RWLock()
 	{
 #ifdef DEV_BUILD
 		fb_assert(lockCounter.value() == 0);
 #endif
 
-		if (pthread_rwlock_destroy(&lock))
-			system_call_failed::raise("pthread_rwlock_destroy");
+		if (const int code = pthread_rwlock_destroy(&lock))
+			system_call_failed::raise("pthread_rwlock_destroy", code);
 	}
 
 	void beginRead(const char* aReason)
 	{
-		if (pthread_rwlock_rdlock(&lock))
-			system_call_failed::raise("pthread_rwlock_rdlock");
+		if (const int code = pthread_rwlock_rdlock(&lock))
+			system_call_failed::raise("pthread_rwlock_rdlock", code);
 
 #ifdef DEV_BUILD
 		++lockCounter;
@@ -254,7 +256,7 @@ public:
 		if (code == EBUSY)
 			return false;
 		if (code)
-			system_call_failed::raise("pthread_rwlock_tryrdlock");
+			system_call_failed::raise("pthread_rwlock_tryrdlock", code);
 
 #ifdef DEV_BUILD
 		++lockCounter;
@@ -270,8 +272,8 @@ public:
 			fb_assert(false);
 #endif
 
-		if (pthread_rwlock_unlock(&lock))
-			system_call_failed::raise("pthread_rwlock_unlock");
+		if (const int code = pthread_rwlock_unlock(&lock))
+			system_call_failed::raise("pthread_rwlock_unlock", code);
 	}
 
 	bool tryBeginWrite(const char* aReason)
@@ -280,7 +282,7 @@ public:
 		if (code == EBUSY)
 			return false;
 		if (code)
-			system_call_failed::raise("pthread_rwlock_trywrlock");
+			system_call_failed::raise("pthread_rwlock_trywrlock", code);
 
 #ifdef DEV_BUILD
 		++lockCounter;
@@ -291,8 +293,8 @@ public:
 
 	void beginWrite(const char* aReason)
 	{
-		if (pthread_rwlock_wrlock(&lock))
-			system_call_failed::raise("pthread_rwlock_wrlock");
+		if (const int code = pthread_rwlock_wrlock(&lock))
+			system_call_failed::raise("pthread_rwlock_wrlock", code);
 
 #ifdef DEV_BUILD
 		++lockCounter;
@@ -307,8 +309,8 @@ public:
 			fb_assert(false);
 #endif
 
-		if (pthread_rwlock_unlock(&lock))
-			system_call_failed::raise("pthread_rwlock_unlock");
+		if (const int code = pthread_rwlock_unlock(&lock))
+			system_call_failed::raise("pthread_rwlock_unlock", code);
 	}
 };
 

@@ -19,7 +19,6 @@
  */
 
 #include "firebird.h"
-#include <initializer_list>
 #include "../jrd/align.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/DataTypeUtil.h"
@@ -1355,7 +1354,9 @@ void AggregateSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (dsqlWindow)
 	{
-		fb_assert(dsqlContext->ctx_win_maps.hasData());
+		// There may be unused named windows.
+		//fb_assert(dsqlContext->ctx_win_maps.hasData());
+
 		dsqlScratch->appendUChar(dsqlContext->ctx_win_maps.getCount());	// number of windows
 
 		for (Array<WindowMap*>::iterator i = dsqlContext->ctx_win_maps.begin();

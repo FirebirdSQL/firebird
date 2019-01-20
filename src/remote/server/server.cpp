@@ -145,9 +145,15 @@ public:
 	{
 		if (replyLength > wakeLength)
 			replyLength = wakeLength;
-		memcpy(replyData, wakeData, replyLength);
 
-		wake = true;
+		if (wakeData)
+		{
+			memcpy(replyData, wakeData, replyLength);
+			wake = true;
+		}
+		else
+			stop();
+
 		sem.release();
 	}
 
@@ -198,7 +204,7 @@ public:
 		loadClientKey();
 		unsigned rc = keyCallback ?
 			keyCallback->callback(dataLength, data, bufferLength, buffer) :
-			// use legacy behavior if holders to do wish to accept keys from client
+			// use legacy behavior if holders do wish to accept keys from client
 			networkCallback.callback(dataLength, data, bufferLength, buffer);
 
 		return rc;
@@ -219,15 +225,23 @@ public:
 			CheckStatusWrapper st(&ls);
 
 			networkCallback.wake = false;
-			if (keyPlugin->keyCallback(&st, &networkCallback) && networkCallback.wake)
+			bool callbackResult = keyPlugin->keyCallback(&st, &networkCallback);
+			if (st.getErrors()[1] != isc_wish_list)
+				check(&st);
+			if (callbackResult && networkCallback.wake)
 			{
 				// current holder has a key and it seems to be from the client
 				keyHolder = keyPlugin;
 				keyHolder->addRef();
 				keyCallback = keyHolder->chainHandle(&st);
 
-				if (st.isEmpty() && keyCallback)
-					break;
+				if (st.isEmpty())
+				{
+					if (keyCallback)
+						break;
+				}
+				else if (st.getErrors()[1] != isc_wish_list)
+					check(&st);
 			}
 		}
 	}
@@ -395,13 +409,14 @@ public:
 GlobalPtr<FailedLogins> usernameFailedLogins;
 GlobalPtr<FailedLogins> remoteFailedLogins;
 bool server_shutdown = false;
+bool engine_shutdown = false;
 
 void loginFail(const string& login, const string& remId)
 {
 	// do not remove variables - both functions should be called
 	bool f1 = usernameFailedLogins->loginFail(login);
 	bool f2 = remoteFailedLogins->loginFail(remId);
-	if ((f1 || f2) && !server_shutdown)
+	if ((f1 || f2) && !engine_shutdown)
 	{
 		// Ahh, someone is too active today
 		Thread::sleep(FAILURE_DELAY * 1000);
@@ -566,7 +581,7 @@ public:
 	~ServerAuth()
 	{ }
 
-	bool authenticate(PACKET* send, AuthenticateFlags flags)
+	bool authenticate(PACKET* send, unsigned flags)
 	{
 #ifdef DEV_BUILD
 		if (++hopsCount > 10)
@@ -617,13 +632,16 @@ public:
 			}
 
 			// if we asked for more data but received nothing switch to next plugin
-			const bool forceNext = (flags & CONT_AUTH) && (!authPort->port_srv_auth_block->hasDataForPlugin());
+			const bool forceNext = (flags & AUTH_CONTINUE) && (!authPort->port_srv_auth_block->hasDataForPlugin());
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: ServerAuth calls plug %s\n",
 				forceNext ? "forced-NEXT" : authItr->name()));
 			int authResult = forceNext ? IAuth::AUTH_CONTINUE :
 				authServer->authenticate(&st, authPort->port_srv_auth_block,
 					&authPort->port_srv_auth_block->authBlockWriter);
 			authPort->port_srv_auth_block->setPluginName(authItr->name());
+
+			if (forceNext)
+				flags &= ~AUTH_CONTINUE;
 
 			cstring* s;
 
@@ -655,7 +673,7 @@ public:
 
 				if (authPort->port_protocol >= PROTOCOL_VERSION13)
 				{
-					if (flags & USE_COND_ACCEPT)
+					if (flags & AUTH_COND_ACCEPT)
 					{
 						HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: send op_cond_accept\n"));
 						send->p_operation = op_cond_accept;
@@ -1099,6 +1117,7 @@ static void		send_error(rem_port* port, PACKET* apacket, ISC_STATUS errcode);
 static void		send_error(rem_port* port, PACKET* apacket, const Firebird::Arg::StatusVector&);
 static void		set_server(rem_port*, USHORT);
 static int		shut_server(const int, const int, void*);
+static int		pre_shutdown(const int, const int, void*);
 static THREAD_ENTRY_DECLARE loopThread(THREAD_ENTRY_PARAM);
 static void		zap_packet(PACKET*, bool);
 
@@ -1147,6 +1166,7 @@ private:
 	Worker* m_prev;
 	Semaphore m_sem;
 	bool	m_active;
+	bool	m_going;		// thread was timedout and going to be deleted
 #ifdef DEV_BUILD
 	ThreadId	m_tid;
 #endif
@@ -1160,6 +1180,7 @@ private:
 	static GlobalPtr<Mutex> m_mutex;
 	static int m_cntAll;
 	static int m_cntIdle;
+	static int m_cntGoing;
 	static bool shutting_down;
 };
 
@@ -1168,6 +1189,7 @@ Worker* Worker::m_idleWorkers = NULL;
 GlobalPtr<Mutex> Worker::m_mutex;
 int Worker::m_cntAll = 0;
 int Worker::m_cntIdle = 0;
+int Worker::m_cntGoing = 0;
 bool Worker::shutting_down = false;
 
 
@@ -1594,6 +1616,9 @@ void SRVR_multi_thread( rem_port* main_port, USHORT flags)
 					else
 					{
 						request->req_receive.p_operation = ok ? op_dummy : op_exit;
+
+						if (port->port_server_crypt_callback)
+							port->port_server_crypt_callback->wakeup(0, NULL);
 					}
 
 					request->req_port = port;
@@ -1770,13 +1795,8 @@ public:
 static void setErrorStatus(IStatus* status)
 {
 	Arg::Gds loginError(isc_login);
-#ifndef DEV_BUILD
-	if (status->getErrors()[1] == isc_missing_data_structures)
-#endif
-	{
-		loginError << Arg::StatusVector(status->getErrors());
-	}
-	status->setErrors(loginError.value());
+	if (!(status->getState() & IStatus::STATE_ERRORS))
+		status->setErrors(loginError.value());
 }
 
 static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
@@ -1887,7 +1907,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 		{
 			ConnectAuth* cnctAuth = FB_NEW ConnectAuth(port, id);
 			port->port_srv_auth = cnctAuth;
-			if (port->port_srv_auth->authenticate(send, ServerAuth::USE_COND_ACCEPT))
+			if (port->port_srv_auth->authenticate(send, ServerAuth::AUTH_COND_ACCEPT))
 			{
 				delete port->port_srv_auth;
 				port->port_srv_auth = NULL;
@@ -1995,12 +2015,27 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 		}
 	}
 
+
 	// Send off out gracious acceptance or flag rejection
 	if (!accepted)
 	{
 		HANDSHAKE_DEBUG(fprintf(stderr, "!accepted, sending reject\n"));
 		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
-			port->send_response(send, 0, 0, &status, false);
+		{
+			if (status.getErrors()[1] != isc_missing_data_structures)
+			{
+				iscLogStatus("Authentication error", &status);
+				Arg::Gds loginError(isc_login_error);
+#ifdef DEV_BUILD
+				loginError << Arg::StatusVector(&status);
+#endif
+				LocalStatus tmp;
+				loginError.copyTo(&tmp);
+				port->send_response(send, 0, 0, &tmp, false);
+			}
+			else
+				port->send_response(send, 0, 0, &status, false);
+		}
 		else
 			port->send(send);
 		return false;
@@ -2562,15 +2597,25 @@ static void cancel_operation(rem_port* port, USHORT kind)
  *	able to be canceled.
  *
  **************************************/
-	Rdb* rdb;
-	if ((port->port_flags & (PORT_async | PORT_disconnect)) || !(rdb = port->port_context))
+	if ((port->port_flags & (PORT_async | PORT_disconnect)) || !(port->port_context))
 		return;
 
-	if (rdb->rdb_iface)
+	ServAttachment iface;
+	{
+		RefMutexGuard portGuard(*port->port_cancel_sync, FB_FUNCTION);
+
+		Rdb* rdb;
+		if ((port->port_flags & PORT_disconnect) || !(rdb = port->port_context))
+			return;
+
+		iface = rdb->rdb_iface;
+	}
+
+	if (iface)
 	{
 		LocalStatus ls;
 		CheckStatusWrapper status_vector(&ls);
-		rdb->rdb_iface->cancelOperation(&status_vector, kind);
+		iface->cancelOperation(&status_vector, kind);
 	}
 }
 
@@ -2861,7 +2906,11 @@ void rem_port::disconnect(PACKET* sendL, PACKET* receiveL)
 		}
 
 		rdb->rdb_iface->detach(&status_vector);
-		rdb->rdb_iface = NULL;
+
+		{	// scope
+			RefMutexGuard portGuard(*port_cancel_sync, FB_FUNCTION);
+			rdb->rdb_iface = NULL;
+		}
 
 		while (rdb->rdb_events)
 			release_event(rdb->rdb_events);
@@ -2945,8 +2994,13 @@ void rem_port::drop_database(P_RLSE* /*release*/, PACKET* sendL)
 		return;
 	}
 
-	rdb->rdb_iface = NULL;
+	{	// scope
+		RefMutexGuard portGuard(*port_cancel_sync, FB_FUNCTION);
+		rdb->rdb_iface = NULL;
+	}
+
 	port_flags |= PORT_detached;
+
 	if (port_async)
 		port_async->port_flags |= PORT_detached;
 
@@ -3036,7 +3090,10 @@ ISC_STATUS rem_port::end_database(P_RLSE* /*release*/, PACKET* sendL)
 			release_event(rdb->rdb_events);
 	}
 
-	rdb->rdb_iface = NULL;
+	{	// scope
+		RefMutexGuard portGuard(*port_cancel_sync, FB_FUNCTION);
+		rdb->rdb_iface = NULL;
+	}
 
 	while (rdb->rdb_requests)
 		release_request(rdb->rdb_requests, true);
@@ -3104,7 +3161,12 @@ ISC_STATUS rem_port::end_statement(P_SQLFREE* free_stmt, PACKET* sendL)
 
 	if (free_stmt->p_sqlfree_option & (DSQL_drop | DSQL_unprepare | DSQL_close))
 	{
-		if (statement->rsr_cursor)
+		if (statement->rsr_batch)
+		{
+			statement->rsr_batch->release();
+			statement->rsr_batch = NULL;
+		}
+		else if (statement->rsr_cursor)
 		{
 			statement->rsr_cursor->close(&status_vector);
 			if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
@@ -3628,7 +3690,7 @@ ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* send
 	if (transaction)
 		tra = transaction->rtr_iface;
 
-	if (statement->rsr_cursor)
+	if (statement->rsr_cursor || statement->rsr_batch)
 	{
 		 Arg::Gds(isc_dsql_cursor_open_err).raise();
 	}
@@ -4897,7 +4959,7 @@ static bool continue_authentication(rem_port* port, PACKET* send, PACKET* receiv
 				port->port_srv_auth_block->setDataForPlugin(&receive->p_auth_cont);
 			}
 
-			if (sa->authenticate(send, ServerAuth::CONT_AUTH))
+			if (sa->authenticate(send, ServerAuth::AUTH_CONTINUE))
 			{
 				delete sa;
 				port->port_srv_auth = NULL;
@@ -5390,6 +5452,12 @@ static void release_statement( Rsr** statement)
 			transaction->rtr_cursors.remove(pos);
 		else
 			fb_assert(false);
+	}
+
+	if ((*statement)->rsr_batch)
+	{
+		(*statement)->rsr_batch->release();
+		(*statement)->rsr_batch = NULL;
 	}
 
 	delete (*statement)->rsr_select_format;
@@ -5976,7 +6044,7 @@ void rem_port::start_crypt(P_CRYPT * crypt, PACKET* sendL)
 	catch (const Exception& ex)
 	{
 		iscLogException("start_crypt:", ex);
-		disconnect();
+		disconnect(NULL, NULL);
 	}
 }
 
@@ -6008,6 +6076,7 @@ void set_server(rem_port* port, USHORT flags)
 	{
 		servers = server = FB_NEW srvr(servers, port, flags);
 		fb_shutdown_callback(0, shut_server, fb_shut_postproviders, 0);
+		fb_shutdown_callback(0, pre_shutdown, fb_shut_preproviders, 0);
 	}
 
 	port->port_server = server;
@@ -6297,7 +6366,7 @@ static THREAD_ENTRY_DECLARE loopThread(THREAD_ENTRY_PARAM)
 					if (!port)
 					{
 						server_req_t* next;
-						while (next = request->req_chain)
+						while ((next = request->req_chain))
 						{
 							request->req_chain = next->req_chain;
 							free_request(next);
@@ -6393,7 +6462,9 @@ SSHORT rem_port::asyncReceive(PACKET* asyncPacket, const UCHAR* buffer, SSHORT d
 		return 0;
 	}
 
-	switch (xdr_peek_long(&port_async_receive->port_receive, buffer, dataSize))
+	SLONG original_op = xdr_peek_long(&port_async_receive->port_receive, buffer, dataSize);
+
+	switch (original_op)
 	{
 	case op_cancel:
 	case op_abort_aux_connection:
@@ -6427,13 +6498,15 @@ SSHORT rem_port::asyncReceive(PACKET* asyncPacket, const UCHAR* buffer, SSHORT d
 		break;
 	case op_abort_aux_connection:
 		if (port_async && (port_async->port_flags & PORT_connecting))
-		{
 			port_async->abort_aux_connection();
-		}
 		break;
 	case op_crypt_key_callback:
 		port_server_crypt_callback->wakeup(asyncPacket->p_cc.p_cc_data.cstr_length,
 			asyncPacket->p_cc.p_cc_data.cstr_address);
+		break;
+	case op_partial:
+		if (original_op == op_crypt_key_callback)
+			port_server_crypt_callback->wakeup(0, NULL);
 		break;
 	default:
 		fb_assert(false);
@@ -6522,6 +6595,7 @@ static void zap_packet(PACKET* packet, bool new_packet)
 Worker::Worker()
 {
 	m_active = false;
+	m_going = false;
 	m_next = m_prev = NULL;
 #ifdef DEV_BUILD
 	m_tid = getThreadId();
@@ -6536,6 +6610,8 @@ Worker::~Worker()
 	MutexLockGuard guard(m_mutex, FB_FUNCTION);
 	remove();
 	--m_cntAll;
+	if (m_going)
+		--m_cntGoing;
 }
 
 
@@ -6548,7 +6624,14 @@ bool Worker::wait(int timeout)
 	if (m_sem.tryEnter(0))
 		return true;
 
+	// don't exit last worker until server shutdown
+	if ((m_cntAll - m_cntGoing == 1) && !isShuttingDown())
+		return true;
+
 	remove();
+	m_going = true;
+	m_cntGoing++;
+
 	return false;
 }
 
@@ -6591,10 +6674,10 @@ bool Worker::wakeUp()
 		return true;
 	}
 
-	if (m_cntAll >= ports_active + ports_pending)
+	if (m_cntAll - m_cntGoing >= ports_active + ports_pending)
 		return true;
 
-	return (m_cntAll >= MAX_THREADS);
+	return (m_cntAll - m_cntGoing >= MAX_THREADS);
 }
 
 void Worker::wakeUpAll()
@@ -6701,6 +6784,12 @@ void Worker::shutdown()
 static int shut_server(const int, const int, void*)
 {
 	server_shutdown = true;
+	return 0;
+}
+
+static int pre_shutdown(const int, const int, void*)
+{
+	engine_shutdown = true;
 	return 0;
 }
 

@@ -55,6 +55,8 @@ struct DecimalStatus
 		: decExtFlag(exc), roundingMode(DEC_ROUND_HALF_UP)
 	{ }
 
+	static const DecimalStatus DEFAULT;
+
 	USHORT decExtFlag, roundingMode;
 };
 
@@ -64,11 +66,14 @@ struct DecimalBinding
 		: bind(DEC_NATIVE), numScale(0)
 	{ }
 
+	static const DecimalBinding DEFAULT;
+
 	enum Bind { DEC_NATIVE, DEC_TEXT, DEC_DOUBLE, DEC_NUMERIC };
 
 	Bind bind;
 	SCHAR numScale;
 };
+
 
 class DecimalFixed;
 
@@ -132,6 +137,8 @@ public:
 	UCHAR* getBytes();
 	int compare(DecimalStatus decSt, Decimal128Base tgt) const;
 
+	void setScale(DecimalStatus decSt, int scale);
+
 	bool isInf() const;
 	bool isNan() const;
 	int sign() const;
@@ -146,8 +153,6 @@ public:
 #endif
 
 private:
-	void setScale(DecimalStatus decSt, int scale);
-
 	decQuad dec;
 };
 

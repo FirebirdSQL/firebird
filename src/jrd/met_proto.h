@@ -51,6 +51,7 @@ namespace Jrd
 	enum IndexStatus
 	{
 		MET_object_active,
+		MET_object_deferred_active,
 		MET_object_inactive,
 		MET_object_unknown
 	};

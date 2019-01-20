@@ -145,6 +145,7 @@ public:
 	virtual bool finished() { return false; }
 	virtual void initStatus() { }
 	virtual bool utf8FileNames() { return false; }
+	virtual Firebird::ICryptKeyCallback* getCryptCallback() { return NULL; }
 };
 
 

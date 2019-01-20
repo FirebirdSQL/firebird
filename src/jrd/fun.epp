@@ -105,7 +105,7 @@ namespace
 	{
 		ModuleLoader::doctorModuleExtension(libName);
 
-		ModuleLoader::Module* module = ModuleLoader::loadModule(libName);
+		ModuleLoader::Module* module = ModuleLoader::loadModule(NULL, libName);
 		if (!module)
 		{
 			message.printf("%s library has not been found", libName.c_str());
@@ -845,11 +845,22 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 	blob_stack.close();
 
 	} // try
+	catch (const status_exception& ex)
+	{
+		while (array_stack.hasData())
+			delete[] array_stack.pop();
+
+		Arg::StatusVector v(ex);
+		string msg = "UDF: ";
+		msg += function->getName().toString();
+		v << Arg::Gds(isc_random) << msg;
+
+		v.raise();
+	}
 	catch (const Exception&)
 	{
-		while (array_stack.hasData()) {
+		while (array_stack.hasData())
 			delete[] array_stack.pop();
-		}
 
 		throw;
 	}
@@ -1087,10 +1098,10 @@ static void invoke(thread_db* tdbb,
 	if (function->fun_return_arg)
 	{
 		CALL_UDF<void>(tdbb, function->fun_entrypoint, args);
-		result_is_null = return_ptr->prm_fun_mechanism == FUN_descriptor &&
-			(value->vlu_desc.dsc_flags & DSC_null) ||
-			return_ptr->prm_fun_mechanism == FUN_blob_struct && return_blob_struct &&
-			!return_blob_struct->blob_handle;
+		result_is_null =
+			(return_ptr->prm_fun_mechanism == FUN_descriptor && (value->vlu_desc.dsc_flags & DSC_null)) ||
+			(return_ptr->prm_fun_mechanism == FUN_blob_struct && return_blob_struct &&
+				!return_blob_struct->blob_handle);
 	}
 	else if (return_ptr->prm_fun_mechanism == FUN_value)
 	{

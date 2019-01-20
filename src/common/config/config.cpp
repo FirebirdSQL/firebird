@@ -36,6 +36,16 @@
 #include <stdlib.h>
 #endif
 
+// NS 2014-07-23 FIXME: Rework error handling
+// 1. We shall not silently truncate upper bits of integer values read from configuration files.
+// 2. Invalid configuration file values that we ignored shall leave trace in firebird.log
+//    to avoid user confusion.
+// 3. Incorrect syntax for parameter values shall not be ignored silently
+// 4. Integer overflow during parsing of parameter value shall not be ignored silently
+//
+// Currently user can only guess which parameter values have been applied by the engine
+// and which were ignored. Or resort to reading source code and using debugger to find out.
+
 namespace {
 
 /******************************************************************************
@@ -141,6 +151,7 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,		"DefaultDbCachePages",		(ConfigValue) -1},			// pages
 	{TYPE_INTEGER,		"ConnectionTimeout",		(ConfigValue) 180},			// seconds
 	{TYPE_INTEGER,		"DummyPacketInterval",		(ConfigValue) 0},			// seconds
+	{TYPE_STRING,		"DefaultTimeZone",			(ConfigValue) ""},
 	{TYPE_INTEGER,		"LockMemSize",				(ConfigValue) 1048576},		// bytes
 	{TYPE_INTEGER,		"LockHashSlots",			(ConfigValue) 8191},		// slots
 	{TYPE_INTEGER,		"LockAcquireSpins",			(ConfigValue) 0},
@@ -181,11 +192,11 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,		"MaxUserTraceLogSize",		(ConfigValue) 10},		// maximum size of user session trace log
 	{TYPE_INTEGER,		"FileSystemCacheSize",		(ConfigValue) 0},		// percent
 	{TYPE_STRING,		"Providers",				(ConfigValue) "Remote, " CURRENT_ENGINE ", Loopback"},
-	{TYPE_STRING,		"AuthServer",				(ConfigValue) "Srp"},
+	{TYPE_STRING,		"AuthServer",				(ConfigValue) "Srp256"},
 #ifdef WIN_NT
-	{TYPE_STRING,		"AuthClient",				(ConfigValue) "Srp, Win_Sspi, Legacy_Auth"},
+	{TYPE_STRING,		"AuthClient",				(ConfigValue) "Srp256, Srp, Win_Sspi, Legacy_Auth"},
 #else
-	{TYPE_STRING,		"AuthClient",				(ConfigValue) "Srp, Legacy_Auth"},
+	{TYPE_STRING,		"AuthClient",				(ConfigValue) "Srp256, Srp, Legacy_Auth"},
 #endif
 	{TYPE_STRING,		"UserManager",				(ConfigValue) "Srp"},
 	{TYPE_STRING,		"TracePlugin",				(ConfigValue) "fbtrace"},
@@ -202,7 +213,21 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_BOOLEAN,		"AllowEncryptedSecurityDatabase", (ConfigValue) false},
 	{TYPE_INTEGER,		"StatementTimeout",			(ConfigValue) 0},
 	{TYPE_INTEGER,		"ConnectionIdleTimeout",	(ConfigValue) 0},
-	{TYPE_INTEGER,		"ClientBatchBuffer",		(ConfigValue) (128 * 1024)}
+	{TYPE_INTEGER,		"ClientBatchBuffer",		(ConfigValue) (128 * 1024)},
+#ifdef DEV_BUILD
+	{TYPE_STRING,		"OutputRedirectionFile", 	(ConfigValue) "-"},
+#else
+#ifdef WIN_NT
+	{TYPE_STRING,		"OutputRedirectionFile", 	(ConfigValue) "nul"},
+#else
+	{TYPE_STRING,		"OutputRedirectionFile", 	(ConfigValue) "/dev/null"},
+#endif
+#endif
+	{TYPE_INTEGER,		"ExtConnPoolSize",			(ConfigValue) 0},
+	{TYPE_INTEGER,		"ExtConnPoolLifeTime",		(ConfigValue) 7200},
+	{TYPE_INTEGER,		"SnapshotsMemSize",			(ConfigValue) 65536}, // bytes
+	{TYPE_INTEGER,		"TipCacheBlockSize",		(ConfigValue) 4194304}, // bytes
+	{TYPE_BOOLEAN,		"ReadConsistency",			(ConfigValue) true}
 };
 
 /******************************************************************************
@@ -493,6 +518,11 @@ int Config::getDummyPacketInterval() const
 	return get<int>(KEY_DUMMY_PACKET_INTERVAL);
 }
 
+const char* Config::getDefaultTimeZone()
+{
+	return getDefaultConfig()->get<const char*>(KEY_DEFAULT_TIME_ZONE);
+}
+
 int Config::getLockMemSize() const
 {
 	int size = get<int>(KEY_LOCK_MEM_SIZE);
@@ -711,6 +741,26 @@ int Config::getServerMode()
 	return rc;
 }
 
+ULONG Config::getSnapshotsMemSize() const
+{
+	SINT64 rc = get<SINT64>(KEY_SNAPSHOTS_MEM_SIZE);
+	if (rc <= 0 || rc > MAX_ULONG)
+	{
+		rc = 65536;
+	}
+	return rc;
+}
+
+ULONG Config::getTipCacheBlockSize() const
+{
+	SINT64 rc = get<SINT64>(KEY_TIP_CACHE_BLOCK_SIZE);
+	if (rc <= 0 || rc > MAX_ULONG)
+	{
+		rc = 4194304;
+	}
+	return rc;
+}
+
 const char* Config::getPlugins(unsigned int type) const
 {
 	switch (type)
@@ -839,3 +889,23 @@ unsigned int Config::getClientBatchBuffer() const
 	return get<unsigned int>(KEY_CLIENT_BATCH_BUFFER);
 }
 
+const char* Config::getOutputRedirectionFile()
+{
+	const char* file = (const char*) (getDefaultConfig()->values[KEY_OUTPUT_REDIRECTION_FILE]);
+	return file;
+}
+
+int Config::getExtConnPoolSize()
+{
+	return getDefaultConfig()->get<int>(KEY_EXT_CONN_POOL_SIZE);
+}
+
+int Config::getExtConnPoolLifeTime()
+{
+	return getDefaultConfig()->get<int>(KEY_EXT_CONN_POOL_LIFETIME);
+}
+
+bool Config::getReadConsistency() const
+{
+	return get<bool>(KEY_READ_CONSISTENCY);
+}

@@ -106,7 +106,7 @@ void ProcedureScan::open(thread_db* tdbb) const
 
 	try
 	{
-		proc_request->req_timestamp = request->req_timestamp;
+		proc_request->req_gmt_timestamp = request->req_gmt_timestamp;
 
 		TraceProcExecute trace(tdbb, proc_request, request, m_targetList);
 

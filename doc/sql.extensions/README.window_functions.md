@@ -354,6 +354,8 @@ Some window functions discard frames. `ROW_NUMBER`, `LAG` and `LEAD` always work
 
 To avoid write repetitive or confusing expressions, windows can be named in a query with the `WINDOW` clause. A named window can be used in `OVER` to reference a window definition and can also be used as a base window of another named or inline (`OVER`) window. A window with frame (`ROWS` or `RANGE` clauses) can't be used as base window (but can be used with `OVER <window name>`). And a window with a base window can't have `PARTITION BY` nor can override `ORDER BY` of a base window.
 
+In a query with multiple `SELECT` and `WINDOW` clauses (for example, with subqueries), the window name scope is bound only to its query context, that is, a window name from an inner or outer context could not be used in another context. As such, the same window name definition could be used at different contexts.
+
 Example query with named windows:
 
 ```sql

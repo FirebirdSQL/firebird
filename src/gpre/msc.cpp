@@ -264,7 +264,7 @@ void MSC_init()
 	free_lls = NULL;
 
     gpre_space* stuff;
-	while (stuff = space)
+	while ((stuff = space))
 	{
 		space = space->spc_next;
 		gds__free(stuff);

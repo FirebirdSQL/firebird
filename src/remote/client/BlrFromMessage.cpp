@@ -158,9 +158,19 @@ void BlrFromMessage::buildBlr(IMessageMetadata* metadata)
 				dtype = dtype_sql_time;
 				break;
 
+			case SQL_TIME_TZ:
+				appendUChar(blr_sql_time_tz);
+				dtype = dtype_sql_time_tz;
+				break;
+
 			case SQL_TIMESTAMP:
 				appendUChar(blr_timestamp);
 				dtype = dtype_timestamp;
+				break;
+
+			case SQL_TIMESTAMP_TZ:
+				appendUChar(blr_timestamp_tz);
+				dtype = dtype_timestamp_tz;
 				break;
 
 			case SQL_BLOB:

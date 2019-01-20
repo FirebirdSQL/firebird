@@ -101,6 +101,11 @@ public:
 		return &dummyCryptKey;
 	}
 
+	Firebird::IAuthBlock* getAuthBlock(Firebird::CheckStatusWrapper*)
+	{
+		return nullptr;
+	}
+
 private:
 	const string& login;
 	const string& password;

@@ -37,7 +37,7 @@
 
 namespace Firebird {
 
-unsigned makeDynamicStrings(unsigned length, ISC_STATUS* const dst, const ISC_STATUS* const src) throw(BadAlloc)
+unsigned makeDynamicStrings(unsigned length, ISC_STATUS* const dst, const ISC_STATUS* const src)
 {
 	const ISC_STATUS* end = &src[length];
 

@@ -42,6 +42,7 @@
 #include "gen/iberror.h"
 #include "../jrd/intl.h"
 #include "../common/gdsassert.h"
+#include "../common/TimeZoneUtil.h"
 #include "../jrd/cvt_proto.h"
 #include "../common/dsc_proto.h"
 #include "../jrd/err_proto.h"
@@ -354,6 +355,31 @@ GDS_TIME CVT_get_sql_time(const dsc* desc)
 }
 
 
+ISC_TIME_TZ CVT_get_sql_time_tz(const dsc* desc)
+{
+/**************************************
+ *
+ *      C V T _ g e t _ s q l _ t i m e _ t z
+ *
+ **************************************
+ *
+ * Functional description
+ *      Convert something arbitrary to a SQL time with time zone value
+ *
+ **************************************/
+	if (desc->dsc_dtype == dtype_sql_time_tz)
+		return *((ISC_TIME_TZ*) desc->dsc_address);
+
+	DSC temp_desc;
+	ISC_TIME_TZ value;
+	memset(&temp_desc, 0, sizeof(temp_desc));
+	temp_desc.dsc_dtype = dtype_sql_time_tz;
+	temp_desc.dsc_address = (UCHAR*) &value;
+	CVT_move(desc, &temp_desc, 0);
+	return value;
+}
+
+
 GDS_TIMESTAMP CVT_get_timestamp(const dsc* desc)
 {
 /**************************************
@@ -374,6 +400,31 @@ GDS_TIMESTAMP CVT_get_timestamp(const dsc* desc)
 	memset(&temp_desc, 0, sizeof(temp_desc));
 	temp_desc.dsc_dtype = dtype_timestamp;
 	temp_desc.dsc_address = (UCHAR *) &value;
+	CVT_move(desc, &temp_desc, 0);
+	return value;
+}
+
+
+ISC_TIMESTAMP_TZ CVT_get_timestamp_tz(const dsc* desc)
+{
+/**************************************
+ *
+ *      C V T _ g e t _ t i m e s t a m p _ t z
+ *
+ **************************************
+ *
+ * Functional description
+ *      Convert something arbitrary to a SQL timestamp with time zone
+ *
+ **************************************/
+	if (desc->dsc_dtype == dtype_timestamp_tz)
+		return *((ISC_TIMESTAMP_TZ*) desc->dsc_address);
+
+	DSC temp_desc;
+	ISC_TIMESTAMP_TZ value;
+	memset(&temp_desc, 0, sizeof(temp_desc));
+	temp_desc.dsc_dtype = dtype_timestamp_tz;
+	temp_desc.dsc_address = (UCHAR*) &value;
 	CVT_move(desc, &temp_desc, 0);
 	return value;
 }
@@ -456,17 +507,43 @@ CHARSET_ID EngineCallbacks::getChid(const dsc* to)
 }
 
 
-SLONG EngineCallbacks::getCurDate()
+SLONG EngineCallbacks::getLocalDate()
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
 	if (tdbb && (tdbb->getType() == ThreadData::tddDBB) && tdbb->getRequest())
 	{
-		fb_assert(!tdbb->getRequest()->req_timestamp.isEmpty());
-		return tdbb->getRequest()->req_timestamp.value().timestamp_date;
+		fb_assert(!tdbb->getRequest()->req_gmt_timestamp.isEmpty());
+		return tdbb->getRequest()->getLocalTimeStamp().value().timestamp_date;
 	}
 
-	return Firebird::TimeStamp::getCurrentTimeStamp().value().timestamp_date;
+	return TimeZoneUtil::timeStampTzToTimeStamp(
+		TimeZoneUtil::getCurrentSystemTimeStamp(), getSessionTimeZone()).timestamp_date;
+}
+
+
+ISC_TIMESTAMP EngineCallbacks::getCurrentGmtTimeStamp()
+{
+	thread_db* tdbb = JRD_get_thread_data();
+
+	if (tdbb && (tdbb->getType() == ThreadData::tddDBB) && tdbb->getRequest())
+	{
+		fb_assert(!tdbb->getRequest()->req_gmt_timestamp.isEmpty());
+		return tdbb->getRequest()->req_gmt_timestamp.value();
+	}
+
+	return TimeZoneUtil::timeStampTzToTimeStamp(TimeZoneUtil::getCurrentSystemTimeStamp(), TimeZoneUtil::GMT_ZONE);
+}
+
+
+USHORT EngineCallbacks::getSessionTimeZone()
+{
+	thread_db* tdbb = JRD_get_thread_data();
+
+	if (tdbb && (tdbb->getType() == ThreadData::tddDBB) && tdbb->getAttachment())
+		return tdbb->getAttachment()->att_current_timezone;
+
+	return TimeZoneUtil::GMT_ZONE;
 }
 
 

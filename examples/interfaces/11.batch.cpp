@@ -4,7 +4,8 @@
  *	DESCRIPTION:	A trivial sample of using Batch interface.
  *
  *					Example for the following interfaces:
- *					IBatch - interface to work with FB pipes
+ *					IBatch - interface to work with FB batches
+ *					IBatchCompletionState - contains result of batch execution
  *
  *	c++ 11.batch.cpp -lfbclient
  *
@@ -417,6 +418,22 @@ int main()
 
 		batch->addBlobStream(&status, stream - streamStart, streamStart);
 
+		// Continue last blob
+		stream = streamStart;
+		ISC_QUAD nullId = {0,0};
+		unsigned* size = putBlobHdr(stream, blobAlign, &nullId, 0, NULL);
+
+		const char* d4 = " 444444444444444444444444";
+		unsigned ld4 = strlen(d4);
+
+		memcpy(stream, d4, ld4);
+		*size += ld4;
+		stream += ld4;
+		stream = align(stream, blobAlign);
+
+		stream = align(stream, blobAlign);
+		batch->addBlobStream(&status, stream - streamStart, streamStart);
+
 		// Put segmented Blob in the stream
 
 		// add message
@@ -434,7 +451,7 @@ int main()
 
 		// make stream
 		stream = streamStart;
-		unsigned* size = putBlobHdr(stream, blobAlign, &vSeg, pb->getBufferLength(&status), pb->getBuffer(&status));
+		size = putBlobHdr(stream, blobAlign, &vSeg, pb->getBufferLength(&status), pb->getBuffer(&status));
 		*size += putSegment(stream, d1);
 		*size += putSegment(stream, "\n");
 		*size += putSegment(stream, d2);

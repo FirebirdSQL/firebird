@@ -200,3 +200,10 @@
 	FIELD(fld_idle_timer	, nam_idle_timer	, dtype_timestamp, TIMESTAMP_SIZE			, 0							, NULL		, true)
 	FIELD(fld_stmt_timeout	, nam_stmt_timeout	, dtype_long	, sizeof(SLONG)				, 0							, NULL		, false)
 	FIELD(fld_stmt_timer	, nam_stmt_timer	, dtype_timestamp, TIMESTAMP_SIZE			, 0							, NULL		, true)
+
+	FIELD(fld_tz_id			, nam_tz_id			, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true)
+	FIELD(fld_tz_name		, nam_tz_name		, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true)
+	FIELD(fld_tz_offset		, nam_tz_offset		, dtype_short	, sizeof(SSHORT)			, 0							, NULL		, true)
+	FIELD(fld_timestamp_tz	, nam_timestamp_tz	, dtype_timestamp_tz, TIMESTAMP_TZ_SIZE		, 0							, NULL		, true)
+
+	FIELD(fld_tz_db_version	, nam_tz_db_version	, dtype_varying	, 10						, dsc_text_type_ascii		, NULL		, true)

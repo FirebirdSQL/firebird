@@ -521,8 +521,8 @@
 	const USHORT  f_mon_att_idle_timeout = 20;
 	const USHORT  f_mon_att_idle_timer = 21;
 	const USHORT  f_mon_att_stmt_timeout = 22;
-	const USHORT  f_mon_att_conn_compressed = 23;
-	const USHORT  f_mon_att_conn_encrypted = 24;
+	const USHORT  f_mon_att_wire_compressed = 23;
+	const USHORT  f_mon_att_wire_encrypted = 24;
 
 
 // Relation 35 (MON$TRANSACTIONS)
@@ -598,6 +598,7 @@
 	const USHORT  f_mon_rec_bkver_reads = 13;
 	const USHORT  f_mon_rec_frg_reads = 14;
 	const USHORT  f_mon_rec_rpt_reads = 15;
+	const USHORT  f_mon_rec_imgc = 16;
 
 
 // Relation 40 (MON$CONTEXT_VARIABLES)
@@ -695,5 +696,11 @@
 	const USHORT  f_mon_tab_stat_group = 1;
 	const USHORT  f_mon_tab_name = 2;
 	const USHORT  f_mon_tab_rec_stat_id = 3;
+
+
+// Relation 50 (RDB$TIME_ZONES)
+
+	const USHORT  f_tz_id = 0;
+	const USHORT  f_tz_name = 1;
 
 

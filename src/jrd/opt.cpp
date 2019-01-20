@@ -78,6 +78,7 @@
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/VirtualTable.h"
 #include "../jrd/Monitoring.h"
+#include "../jrd/TimeZone.h"
 #include "../jrd/UserManagement.h"
 #include "../common/classes/array.h"
 #include "../common/classes/objects_array.h"
@@ -397,7 +398,9 @@ static const UCHAR sort_dtypes[] =
 	SKD_bytes,					// dtype_boolean
 	SKD_dec64,					// dtype_dec64
 	SKD_dec128,					// dtype_dec128
-	SKD_dec128					// dtype_dec_fixed
+	SKD_dec128,					// dtype_dec_fixed
+	SKD_sql_time_tz,			// dtype_sql_time_tz
+	SKD_timestamp_tz			// dtype_timestamp_tz
 };
 
 
@@ -969,7 +972,7 @@ static void check_indices(const CompilerScratch::csb_repeat* csb_tail)
 	// if there were no indices fetched at all but the
 	// user specified some, error out using the first index specified
 
-	if (!csb_tail->csb_indices && plan->accessType)
+	if (!csb_tail->csb_indices && plan->accessType && !tdbb->getAttachment()->isGbak())
 	{
 		// index %s cannot be used in the specified plan
 		ERR_post(Arg::Gds(isc_index_unused) << plan->accessType->items[0].indexName);
@@ -2263,6 +2266,10 @@ static RecordSource* gen_retrieval(thread_db*     tdbb,
 			rsb = FB_NEW_POOL(*tdbb->getDefaultPool()) DbCreatorsScan(csb, alias, stream, relation);
 			break;
 
+		case rel_time_zones:
+			rsb = FB_NEW_POOL(*tdbb->getDefaultPool()) TimeZonesTableScan(csb, alias, stream, relation);
+			break;
+
 		default:
 			rsb = FB_NEW_POOL(*tdbb->getDefaultPool()) MonitoringTableScan(csb, alias, stream, relation);
 			break;
@@ -2459,7 +2466,8 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 
 						// International type text has a computed key
 						// Different decimal float values sometimes have same keys
-						if (IS_INTL_DATA(desc) || desc->isDecFloat())
+						// ASF: Date/time with time zones too.
+						if (IS_INTL_DATA(desc) || desc->isDecFloat() || desc->isDateTimeTz())
 							break;
 
 						--items;
@@ -2552,6 +2560,9 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 			if (desc->dsc_ttype() == ttype_binary)
 				sort_key->skd_flags |= SKD_binary;
 		}
+
+		if (IS_INTL_DATA(desc) || desc->isDecFloat() || desc->isDateTimeTz())
+			sort_key->skd_flags |= SKD_separate_data;
 
 		map_item->clear();
 		map_item->node = node;
@@ -3549,11 +3560,11 @@ static void set_position(const SortNode* from_clause, SortNode* to_clause, const
 		for (const NestConst<ValueExprNode>* const to_end = to_ptr + count;
 			 to_ptr != to_end; ++to_ptr)
 		{
-			const FieldNode* fromField = nodeAs<FieldNode>(*from_ptr);
-			const FieldNode* toField = nodeAs<FieldNode>(*to_ptr);
+			const FieldNode* const fromField = nodeAs<FieldNode>(*from_ptr);
+			const FieldNode* const toField = nodeAs<FieldNode>(*to_ptr);
 
 			if ((map && map_equal(*to_ptr, *from_ptr, map)) ||
-				(!map &&
+				(!map && fromField && toField &&
 					fromField->fieldStream == toField->fieldStream &&
 					fromField->fieldId == toField->fieldId))
 			{

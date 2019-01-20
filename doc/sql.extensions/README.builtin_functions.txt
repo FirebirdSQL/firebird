@@ -12,6 +12,7 @@ Authors:
     Oleg Loa <loa@mail.ru>
     Alexey Karyakin <aleksey.karyakin@mail.ru>
     Claudio Valderrama C. <cvalde at usa.net>
+    Alexander Peshkov <peshkoff@mail.ru>
 
 
 ---
@@ -174,6 +175,21 @@ Format:
 
 Example:
     select atanh(x) from y;
+
+
+-----------------------------
+BASE64_ENCODE / BASE64_DECODE
+-----------------------------
+
+Function:
+	Encodes / decodes input data to / from BASE64 representation. Works with character strings and blobs.
+
+Format:
+	BASE64_ENCODE( <binary data> )
+	BASE64_DECODE( <base64 data> )
+
+Example:
+	select base64_encode(public_key) from clients;
 
 
 -------
@@ -345,6 +361,20 @@ Example:
     select cot(x) from y;
 
 
+-----
+CRC32
+-----
+
+Function:
+	Returns CRC-32 with the polynomial 0x04C11DB7. Accepts argument of any type.
+
+Format:
+	CRC32( <any value> )
+
+Example:
+	select crc32(job_title) from job;
+
+
 -------
 DATEADD
 -------
@@ -413,6 +443,40 @@ Format:
 
 Example:
 	select decode(state, 0, 'deleted', 1, 'active', 'unknown') from things;
+
+
+-------------------
+ENCRYPT and DECRYPT
+-------------------
+
+Function:
+    Encrypts/decrypts data using symmetric cipher.
+
+Format:
+    {ENCRYPT | DECRYPT} ( <string | blob> USING <algorithm> [MODE <mode>] KEY <string>
+    	[IV <string>] [<endianness>] [CTR_LENGTH <smallint>] [COUNTER <bigint>])
+
+    algorithm ::= { block_cipher | stream_cipher }
+    block_cipher ::= { AES | ANUBIS | BLOWFISH | KHAZAD | RC5 | RC6 | SAFER+ | TWOFISH | XTEA }
+    stream_cipher ::= { CHACHA20 | RC4 | SOBER128 }
+    mode ::= { CBC | CFB | CTR | ECB | OFB }
+    endianness ::= { CTR_BIG_ENDIAN | CTR_LITTLE_ENDIAN }
+
+Important:
+    - Mode should be specified for block ciphers.
+    - Initialization vector (IV) should be specified for block ciphers in all modes except ECB and
+      all stream ciphers except RC4.
+    - Endianness may be specified only in CTR mode, default is little endian counter.
+    - Counter length (CTR_LENGTH, bytes) may be specified only in CTR mode, default is the size of IV.
+    - Initial counter value (COUNTER) may be specified only for CHACHA20 cipher, default is 0.
+	- Sizes of data strings passed to this functions are according to selected algorithm and mode
+	  requirements.
+	- Functions return BLOB when first argument is blob and varbinary for all text types.
+
+Example:
+    select encrypt('897897' using sober128 key 'AbcdAbcdAbcdAbcd' iv '01234567') from rdb$database;
+    select decrypt(x'0154090759DF' using sober128 key 'AbcdAbcdAbcdAbcd' iv '01234567') from rdb$database;
+    select decrypt(secret_field using aes mode ofb key '0123456701234567' iv init_vector) from secure_table;
 
 
 ---
@@ -733,6 +797,39 @@ Example:
     select * from x order by rand();
 
 
+----------------------
+RDB$GET_TRANSACTION_CN
+----------------------
+
+(FB4 extension)
+Function:
+    Returns commit number of given transaction. Result type is BIGINT.
+
+	Note, engine internally uses unsigned 8-byte integer for commit numbers,
+	and unsigned 6-byte integer for transaction numbers. Thus, despite of
+	SQL language have no unsigned integers and RDB$GET_TRANSACTION_CN returns
+	signed BIGINT, it is impossible to see negative commit numbers except of
+	few special values used for non-committed transactions.
+	Summary, numbers returned by RDB$GET_TRANSACTION_CN could have values below:
+
+	-2 - transaction is dead (rolled back)
+	-1 - transaction is in limbo
+	 0 - transaction is active,
+	 1 - transaction committed before database started or less than database
+		 Oldest Interesting Transaction
+	>1 - transaction committed after database started
+	NULL - given transaction number is NULL or greater than database Next Transaction
+
+	See also README.read_consistency.md
+
+Format:
+    RDB$GET_TRANSACTION_CN( <transaction number> )
+
+Examples:
+	select rdb$get_transaction_cn(current_transaction) from rdb$database;
+	select rdb$get_transaction_cn(123) from rdb$database;
+
+
 --------------------
 RDB$SYSTEM_PRIVILEGE
 --------------------
@@ -837,6 +934,119 @@ Notes:
 
 Example:
     select rpad(x, 10) from y;
+
+
+-----------
+RSA_PRIVATE
+-----------
+
+Function:
+    Returns RSA private key of specified length (in bytes) in PKCS#1 format as VARBINARY string.
+
+Format:
+    RSA_PRIVATE ( <smallint> )
+
+Example:
+    select rdb$set_context('USER_SESSION', 'private_key', rsa_private(256)) from rdb$database;
+
+
+----------
+RSA_PUBLIC
+----------
+
+Function:
+    Returns RSA public key for specified RSA private key, all keys are in PKCS#1 format.
+
+Format:
+    RSA_PUBLIC ( <private key> )
+
+Example:
+    (tip - start running samples one by one from RSA_PRIVATE function)
+    select rdb$set_context('USER_SESSION', 'public_key',
+        rsa_public(rdb$get_context('USER_SESSION', 'private_key'))) from rdb$database;
+
+
+-----------
+RSA_ENCRYPT
+-----------
+
+Function:
+    Pads data using OAEP padding and encrypts using RSA public key. Normally used to encrypt
+    short symmetric keys which are then used in block ciphers to encrypt a message.
+
+Format:
+    RSA_ENCRYPT ( <string> KEY <public key> [LPARAM <string>] [HASH <hash>] )
+        KEY should be a value, returhed by RSA_PUBLIC function.
+        LPARAM is an additional system specific tag that can be applied to identify which
+            system encoded the message. Default value is NULL.
+        hash ::= { MD5 | SHA1 | SHA256 | SHA512 } Default is SHA256.
+
+Example:
+    (tip - start running samples one by one from RSA_PRIVATE function)
+    select rdb$set_context('USER_SESSION', 'msg', rsa_encrypt('Some message'
+        key rdb$get_context('USER_SESSION', 'public_key'))) from rdb$database;
+
+
+-----------
+RSA_DECRYPT
+-----------
+
+Function:
+    Decrypts using RSA private key and OAEP de-pads the resulting data.
+
+Format:
+    RSA_DECRYPT ( <string> KEY <private key> [LPARAM <string>] [HASH <hash>] )
+        KEY should be a value, returhed by RSA_PRIVATE function.
+        LPARAM is the same variable passed to RSA_ENCRYPT. If it does not match
+          what was used during encoding this function will not decrypt the packet.
+        hash ::= { MD5 | SHA1 | SHA256 | SHA512 } Default is SHA256.
+
+Example:
+    (tip - start running samples one by one from RSA_PRIVATE function)
+    select rsa_decrypt(rdb$get_context('USER_SESSION', 'msg')
+        key rdb$get_context('USER_SESSION', 'private_key')) from rdb$database;
+
+
+--------
+RSA_SIGN
+--------
+
+Function:
+    Performs PSS encoding of message digest to be signed and signs using RSA private key.
+
+Format:
+    RSA_SIGN ( <string> KEY <private key> [HASH <hash>] [SALT_LENGTH <smallint>] )
+        KEY should be a value, returhed by RSA_PRIVATE function.
+        hash ::= { MD5 | SHA1 | SHA256 | SHA512 } Default is SHA256.
+        SALT_LENGTH indicates the length of the desired salt, and should typically be small.
+            A good value is between 8 and 16.
+
+Example:
+    (tip - start running samples one by one from RSA_PRIVATE function)
+    select rdb$set_context('USER_SESSION', 'msg', rsa_sign(hash('Test message' using sha256)
+        key rdb$get_context('USER_SESSION', 'private_key'))) from rdb$database;
+
+
+----------
+RSA_VERIFY
+----------
+
+Function:
+    Performs PSS encoding of message digest to be signed and verifies it's digital signature
+        using RSA public key.
+
+Format:
+    RSA_VERIFY ( <string> SIGNATURE <string> KEY <public key> [HASH <hash>] [SALT_LENGTH <smallint>] )
+        SIGNATURE should be a value, returhed by RSA_SIGN function.
+        KEY should be a value, returhed by RSA_PUBLIC function.
+        hash ::= { MD5 | SHA1 | SHA256 | SHA512 } Default is SHA256.
+        SALT_LENGTH indicates the length of the desired salt, and should typically be small.
+            A good value is between 8 and 16.
+
+Example:
+    (tip - start running samples one by one from RSA_PRIVATE function)
+    select rsa_verify(hash('Test message' using sha256) signature rdb$get_context('USER_SESSION', 'msg')
+        key rdb$get_context('USER_SESSION', 'public_key')) from rdb$database;
 
 
 ----

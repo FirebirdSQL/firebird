@@ -42,12 +42,25 @@ namespace EDS {
 class Manager;
 class Provider;
 class Connection;
+class ConnectionsPool;
 class Transaction;
 class Statement;
 class Blob;
 
-enum TraModes {traReadCommited, traReadCommitedRecVersions, traConcurrency, traConsistency};
-enum TraScope {traNotSet = 0, traAutonomous, traCommon, traTwoPhase};
+enum TraModes {
+	traReadCommited,
+	traReadCommitedRecVersions,
+	traReadCommitedReadConsistency,
+	traConcurrency,
+	traConsistency
+};
+
+enum TraScope {
+	traNotSet = 0,
+	traAutonomous,
+	traCommon,
+	traTwoPhase
+};
 
 // Known built-in provider's names
 extern const char* FIREBIRD_PROVIDER_NAME;
@@ -67,8 +80,11 @@ public:
 		const Firebird::string& dataSource, const Firebird::string& user,
 		const Firebird::string& pwd, const Firebird::string& role, TraScope tra_scope);
 
-	// Notify providers when some jrd attachment is about to be released
-	static void jrdAttachmentEnd(Jrd::thread_db* tdbb, Jrd::Attachment* att);
+	static ConnectionsPool* getConnPool() { return m_connPool; }
+
+	// Release bound external connections when some jrd attachment is about to be released
+	static void jrdAttachmentEnd(Jrd::thread_db* tdbb, Jrd::Attachment* att, bool forced);
+
 	static int shutdown();
 
 private:
@@ -76,10 +92,11 @@ private:
 	static Firebird::Mutex m_mutex;
 	static Provider* m_providers;
 	static volatile bool m_initialized;
+	static ConnectionsPool* m_connPool;
 };
 
 
-// manages connections\connection pool
+// manages connections
 
 class Provider : public Firebird::GlobalStorage
 {
@@ -88,18 +105,25 @@ class Provider : public Firebird::GlobalStorage
 
 public:
 	explicit Provider(const char* prvName);
-	virtual ~Provider();
 
-	// return existing or create new Connection
-	virtual Connection* getConnection(Jrd::thread_db* tdbb, const Firebird::PathName& dbName,
-		const Firebird::string& user, const Firebird::string& pwd, const Firebird::string& role,
+	// create new Connection
+	virtual Connection* createConnection(Jrd::thread_db* tdbb,
+		const Firebird::PathName& dbName, Firebird::ClumpletReader& dpb,
 		TraScope tra_scope);
 
-	// Connection gets unused, release it into pool or delete it completely
+	// bind connection to the current attachment
+	void bindConnection(Jrd::thread_db* tdbb, Connection* conn);
+
+	// get available connection already bound to the current attachment
+	Connection* getBoundConnection(Jrd::thread_db* tdbb,
+		const Firebird::PathName& dbName, Firebird::ClumpletReader& dpb,
+		TraScope tra_scope);
+
+	// Connection gets unused, release it into pool or delete it immediately
 	virtual void releaseConnection(Jrd::thread_db* tdbb, Connection& conn, bool inPool = true);
 
-	// Notify provider when some jrd attachment is about to be released
-	virtual void jrdAttachmentEnd(Jrd::thread_db* tdbb, Jrd::Attachment* att) = 0;
+	// release connections bound to the attachment
+	virtual void jrdAttachmentEnd(Jrd::thread_db* tdbb, Jrd::Attachment* att, bool forced);
 
 	// cancel execution of every connection
 	void cancelConnections();
@@ -120,8 +144,13 @@ public:
 	}
 
 protected:
+	virtual ~Provider();
 	void clearConnections(Jrd::thread_db* tdbb);
 	virtual Connection* doCreateConnection() = 0;
+
+	void generateDPB(Jrd::thread_db* tdbb, Firebird::ClumpletWriter& dpb,
+		const Firebird::string& user, const Firebird::string& pwd,
+		const Firebird::string& role) const;
 
 	// Protection against simultaneous attach database calls. Not sure we still
 	// need it, but i believe it will not harm
@@ -130,7 +159,39 @@ protected:
 	Firebird::string m_name;
 	Provider* m_next;
 
-	Firebird::Array<Connection*> m_connections;
+	class AttToConn
+	{
+	public:
+		Jrd::Attachment* m_att;
+		Connection* m_conn;
+
+		AttToConn()
+			: m_att(NULL),
+			  m_conn(NULL)
+		{}
+
+		AttToConn(Jrd::Attachment* att, Connection* conn)
+			: m_att(att),
+			  m_conn(conn)
+		{}
+
+		static const AttToConn& generate(const void*, const AttToConn& item)
+		{
+			return item;
+		}
+
+		static bool greaterThan(const AttToConn& i1, const AttToConn& i2)
+		{
+			return (i1.m_att > i2.m_att) ||
+				(i1.m_att == i2.m_att && i1.m_conn > i2.m_conn);
+		}
+	};
+
+	typedef Firebird::BePlusTree<AttToConn, AttToConn, Firebird::MemoryPool,
+								 AttToConn, AttToConn>
+		AttToConnMap;
+
+	AttToConnMap m_connections;
 	int m_flags;
 };
 
@@ -141,26 +202,241 @@ const int prvNamedParams	= 0x0004;	// supports named parameters
 const int prvTrustedAuth	= 0x0008;	// supports trusted authentication
 
 
+class ConnectionsPool
+{
+public:
+	ConnectionsPool(Firebird::MemoryPool& pool);
+	~ConnectionsPool();
+
+	// find and return cached connection or NULL
+	Connection* getConnection(Jrd::thread_db* tdbb, Provider* prv, ULONG hash, const Firebird::PathName& dbName,
+		Firebird::ClumpletReader& dpb);
+
+	// put unused connection into pool or destroy it
+	void putConnection(Jrd::thread_db* tdbb, Connection* conn);
+
+	// assotiate new active connection with pool
+	void addConnection(Jrd::thread_db* tdbb, Connection* conn, ULONG hash);
+
+	// clear connection relation with pool
+	void delConnection(Jrd::thread_db* tdbb, Connection* conn, bool destroy);
+
+	ULONG getIdleCount() const { return m_idleArray.getCount(); }
+	ULONG getAllCount() const { return m_allCount; } ;
+
+	ULONG getMaxCount() const { return m_maxCount; }
+	void setMaxCount(ULONG val);
+
+	ULONG getLifeTime() const	{ return m_lifeTime; }
+	void setLifeTime(ULONG val);
+
+	// delete idle connections: all or older than lifetime
+	void clearIdle(Jrd::thread_db* tdbb, bool all);
+
+	// delete all idle connections, remove from pool all active connections
+	void clear(Jrd::thread_db* tdbb);
+
+	// return time when oldest idle connection should be released, or zero
+	time_t getIdleExpireTime();
+
+	// verify bound connection internals
+	static bool checkBoundConnection(Jrd::thread_db* tdbb, Connection* conn);
+
+public:
+	// this class is embedded into Connection but managed by ConnectionsPool
+	class Data
+	{
+	public:
+		// constructor for embedded into Connection instance
+		explicit Data(Connection* conn)
+		{
+			clear();
+			m_conn = conn;
+		}
+
+		ConnectionsPool* getConnPool() const { return m_connPool; }
+
+		static const Data& generate(const Data* item)
+		{
+			return *item;
+		}
+
+		static bool greaterThan(const Data& i1, const Data& i2)
+		{
+			if (i1.m_hash == i2.m_hash)
+			{
+				if (i1.m_lastUsed == i2.m_lastUsed)
+					return &i1 > &i2;
+
+				return (i1.m_lastUsed < i2.m_lastUsed);
+			}
+
+			return (i1.m_hash > i2.m_hash);
+		}
+
+	private:
+		friend class ConnectionsPool;
+
+		ConnectionsPool* m_connPool;
+		Connection* m_conn;
+		ULONG m_hash;
+		time_t m_lastUsed;
+
+		// placement in connections list
+		Data* m_next;
+		Data* m_prev;
+
+		Data(const Data&);
+		Data& operator=(const Data&);
+
+		// create instance used to search for recently used connection by hash
+		explicit Data(ULONG hash)
+		{
+			clear();
+			m_conn = NULL;
+			m_hash = hash;
+			m_lastUsed = MAX_SINT64;
+		}
+
+		void clear()
+		{
+			m_connPool = NULL;
+			// m_conn = NULL;
+			m_hash = 0;
+			m_lastUsed = 0;
+			m_next = m_prev = NULL;
+		}
+
+		void setConnPool(ConnectionsPool *connPool)
+		{
+			fb_assert(!connPool || !m_connPool);
+			m_connPool = connPool;
+		}
+
+		Firebird::string print();
+		int verify(ConnectionsPool *connPool, bool active);
+	};
+
+private:
+	class IdleTimer FB_FINAL :
+		public Firebird::RefCntIface<Firebird::ITimerImpl<IdleTimer, Firebird::CheckStatusWrapper> >
+	{
+	public:
+		explicit IdleTimer(ConnectionsPool& connPool)
+			: m_connPool(connPool),
+			  m_time(0)
+		{}
+
+		// ITimer implementation
+		void handler();
+		int release();
+
+		void start();
+		void stop();
+
+	private:
+		ConnectionsPool& m_connPool;
+		Firebird::Mutex m_mutex;
+		time_t m_time;					// time when timer should fire, or zero
+	};
+
+	void addToList(Data** head, Data* item)
+	{
+		fb_assert(item->m_next == NULL);
+		fb_assert(item->m_prev == NULL);
+		fb_assert(head == (item->m_lastUsed ? &m_idleList : &m_activeList));
+
+		if (*head)
+		{
+			item->m_next = (*head);
+			item->m_prev = (*head)->m_prev;
+
+			item->m_next->m_prev = item;
+			item->m_prev->m_next = item;
+		}
+		else
+		{
+			item->m_next = item;
+			item->m_prev = item;
+		}
+
+		*head = item;
+	}
+
+	void removeFromList(Data** head, Data* item)
+	{
+		if (!item->m_next)
+			return;
+
+		fb_assert(head == (item->m_lastUsed ? &m_idleList : &m_activeList));
+
+		if (item->m_next != item)
+		{
+			item->m_next->m_prev = item->m_prev;
+			item->m_prev->m_next = item->m_next;
+			if (*head == item)
+				*head = item->m_next;
+		}
+		else
+		{
+			fb_assert((*head) == item);
+			*head = NULL;
+		}
+
+		item->m_next = item->m_prev = NULL;
+	}
+
+	void removeFromPool(Data* item, FB_SIZE_T pos);
+	Data* removeOldest();
+
+	void printPool(Firebird::string& s);
+	bool verifyPool();
+
+	// Array of Data*, sorted by [hash, lastUsed desc]
+	typedef Firebird::SortedArray<Data*, Firebird::EmptyStorage<Data*>, Data, Data, Data>
+		IdleArray;
+
+	Firebird::MemoryPool& m_pool;
+	Firebird::Mutex m_mutex;
+	IdleArray m_idleArray;
+	Data* m_idleList;
+	Data* m_activeList;
+	ULONG m_allCount;
+	ULONG m_maxCount;
+	ULONG m_lifeTime;	// How long idle connection should wait before destroying, seconds
+	Firebird::RefPtr<IdleTimer> m_timer;
+};
+
+
 class Connection : public Firebird::PermanentStorage
 {
 protected:
 	friend class EngineCallbackGuard;
 	friend class Provider;
 
+	// only Provider could create, setup and delete Connections
+
 	explicit Connection(Provider& prov);
 	virtual ~Connection();
 
-public:
 	static void deleteConnection(Jrd::thread_db* tdbb, Connection* conn);
+	void setup(const Firebird::PathName& dbName, const Firebird::ClumpletReader& dpb);
 
+	void setBoundAtt(Jrd::Attachment* att) { m_boundAtt = att; }
+
+public:
 	Provider* getProvider() { return &m_provider; }
 
-	virtual void attach(Jrd::thread_db* tdbb, const Firebird::PathName& dbName,
-		const Firebird::MetaName& user, const Firebird::string& pwd,
-		const Firebird::MetaName& role) = 0;
+	Jrd::Attachment* getBoundAtt() const { return m_boundAtt; }
+
+	ConnectionsPool* getConnPool() { return m_poolData.getConnPool(); }
+	ConnectionsPool::Data* getPoolData() { return &m_poolData; }
+
+	virtual void attach(Jrd::thread_db* tdbb) = 0;
 	virtual void detach(Jrd::thread_db* tdbb);
 
 	virtual bool cancelExecution(bool forced) = 0;
+	virtual bool resetSession() = 0;
 
 	int getSqlDialect() const { return m_sqlDialect; }
 
@@ -171,10 +447,13 @@ public:
 	virtual bool isAvailable(Jrd::thread_db* tdbb, TraScope traScope) const = 0;
 
 	virtual bool isConnected() const = 0;
+	virtual bool validate(Jrd::thread_db* tdbb) = 0;
 
-	virtual bool isSameDatabase(Jrd::thread_db* tdbb, const Firebird::PathName& dbName,
-		const Firebird::MetaName& user, const Firebird::string& pwd,
-		const Firebird::MetaName& role) const;
+	virtual bool isSameDatabase(const Firebird::PathName& dbName,
+		Firebird::ClumpletReader& dpb) const;
+
+	// only Internal provider is able to create "current" connections
+	virtual bool isCurrent() const { return false; }
 
 	bool isBroken() const
 	{
@@ -213,10 +492,6 @@ public:
 	virtual Blob* createBlob() = 0;
 
 protected:
-	void generateDPB(Jrd::thread_db* tdbb, Firebird::ClumpletWriter& dpb,
-		const Firebird::MetaName& user, const Firebird::string& pwd,
-		const Firebird::MetaName& role) const;
-
 	virtual Transaction* doCreateTransaction() = 0;
 	virtual Statement* doCreateStatement() = 0;
 
@@ -230,13 +505,14 @@ protected:
 
 	Provider& m_provider;
 	Firebird::PathName m_dbName;
-	Firebird::ClumpletWriter m_dpb;
+	Firebird::UCharBuffer m_dpb;
+	Jrd::Attachment* m_boundAtt;
 
 	Firebird::Array<Transaction*> m_transactions;
 	Firebird::Array<Statement*> m_statements;
 	Statement* m_freeStatements;
 
-	const Jrd::Attachment* m_boundAtt;
+	ConnectionsPool::Data m_poolData;
 
 	static const int MAX_CACHED_STMTS = 16;
 	int	m_used_stmts;

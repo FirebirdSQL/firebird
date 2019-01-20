@@ -564,7 +564,7 @@ void locate(RefPtr<Mapping::Cache>& cache, const NoCaseString& alias, const NoCa
 class Found
 {
 public:
-	enum What {FND_NOTHING, FND_SEC, FND_DB};
+	enum What {FND_NOTHING, FND_PLUG, FND_SEC, FND_DB};
 
 	Found()
 		: found(FND_NOTHING)
@@ -572,8 +572,13 @@ public:
 
 	void set(What find, const AuthReader::Info& val)
 	{
+		fb_assert(find != FND_NOTHING);
+
+		if (val.plugin.hasData())
+			find = FND_PLUG;
 		if (find == found && value != val.name)
 			Arg::Gds(isc_map_undefined).raise();
+
 		if (find > found)
 		{
 			found = find;
@@ -730,20 +735,23 @@ public:
 
 			SLONG value = sharedMemory->eventClear(&current->callbackEvent);
 			p->flags |= MappingHeader::FLAG_DELIVER;
+
 			if (sharedMemory->eventPost(&p->notifyEvent) != FB_SUCCESS)
 			{
 				(Arg::Gds(isc_map_event) << "POST").raise();
 			}
+
 			while (sharedMemory->eventWait(&current->callbackEvent, value, 10000) != FB_SUCCESS)
 			{
 				if (!ISC_check_process_existence(p->id))
 				{
 					p->flags &= ~MappingHeader::FLAG_ACTIVE;
-					sharedMemory->eventFini(&sMem->process[process].notifyEvent);
-					sharedMemory->eventFini(&sMem->process[process].callbackEvent);
+					sharedMemory->eventFini(&p->notifyEvent);
+					sharedMemory->eventFini(&p->callbackEvent);
 					break;
 				}
 			}
+
 			MAP_DEBUG(fprintf(stderr, "Notified pid %d about reset map %s\n", p->id, sMem->databaseForReset));
 		}
 	}
@@ -979,15 +987,21 @@ public:
 	bool getPrivileges(const PathName& db, const string& name, const string* sqlRole,
 		const string& trusted_role, UserId::Privileges& system_privileges)
 	{
-		DbCache* c;
-		return databases.get(db, c) && c->getPrivileges(name, sqlRole, trusted_role, system_privileges);
+		AutoPtr<DbCache>* c = databases.get(db);
+		return c && (*c)->getPrivileges(name, sqlRole, trusted_role, system_privileges);
 	}
 
 	void populate(const PathName& db, Mapping::DbHandle& iDb, const string& name, const string* sqlRole,
 		const string& trusted_role)
 	{
-		DbCache* c;
-		if (!databases.get(db, c))
+		AutoPtr<DbCache>* ptr = databases.get(db);
+		DbCache* c = nullptr;
+		if (ptr)
+		{
+			c = ptr->get();
+			fb_assert(c);
+		}
+		else
 		{
 			c = FB_NEW_POOL(getPool()) DbCache(getPool());
 			*(databases.put(db)) = c;
@@ -999,9 +1013,9 @@ public:
 
 	void invalidate(const PathName& db)
 	{
-		DbCache* c;
-		if (databases.get(db, c))
-			c->invalidate();
+		AutoPtr<DbCache>* c = databases.get(db);
+		if (c)
+			(*c)->invalidate();
 	}
 
 private:
@@ -1194,7 +1208,7 @@ private:
 	};
 
 	SyncObject sync;
-	GenericMap<Pair<Left<PathName, DbCache*> > > databases;
+	GenericMap<Pair<Left<PathName, AutoPtr<DbCache> > > > databases;
 };
 
 InitInstance<SysPrivCache> spCache;
@@ -1310,17 +1324,23 @@ void Mapping::setInternalFlags()
 	if (!securityAlias)
 		internalFlags |= FLAG_SEC;
 
-	// detect presence of this databases mapping in authBlock
+	// detect presence of non-plugin databases mapping in authBlock
 	// in that case mapUser was already invoked for it
 	if (authBlock)
 	{
 		AuthReader::Info info;
 		for (AuthReader rdr(*authBlock); rdr.getInfo(info); rdr.moveNext())
 		{
-			if (mainDb && info.secDb == mainDb)
-				internalFlags |= FLAG_DB;
-			if (securityAlias && info.secDb == secExpanded.c_str())
-				internalFlags |= FLAG_SEC;
+			MAP_DEBUG(fprintf(stderr, "info.plugin=%s info.secDb=%s db=%s securityDb=%s\n",
+				info.plugin.c_str(), info.secDb.c_str(), mainDb ? mainDb : "NULL", secExpanded.c_str()));
+
+			if (info.plugin.isEmpty())
+			{
+				if (mainDb && info.secDb == mainDb)
+					internalFlags |= FLAG_DB;
+				if (securityAlias && info.secDb == secExpanded.c_str())
+					internalFlags |= FLAG_SEC;
+			}
 		}
 	}
 }

@@ -83,7 +83,7 @@ namespace Jrd
 		static const USHORT MAX_ALTER_COUNT = 64;	// Number of times an in-cache routine can be altered
 
 		static Firebird::MsgMetadata* createMetadata(
-			const Firebird::Array<NestConst<Parameter> >& parameters);
+			const Firebird::Array<NestConst<Parameter> >& parameters, bool isExtern);
 		static Format* createFormat(MemoryPool& pool, Firebird::IMessageMetadata* params, bool addEof);
 
 	public:

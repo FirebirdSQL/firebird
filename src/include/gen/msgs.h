@@ -59,7 +59,7 @@ static const struct {
 	{335544356, "metadata is obsolete"},		/* obsolete_metadata */
 	{335544357, "cannot disconnect database with open transactions (@1 active)"},		/* open_trans */
 	{335544358, "message length error (encountered @1, expected @2)"},		/* port_len */
-	{335544359, "attempted update of read-only column"},		/* read_only_field */
+	{335544359, "attempted update of read-only column @1"},		/* read_only_field */
 	{335544360, "attempted update of read-only table"},		/* read_only_rel */
 	{335544361, "attempted update during read-only transaction"},		/* read_only_trans */
 	{335544362, "cannot update read-only view @1"},		/* read_only_view */
@@ -517,7 +517,7 @@ static const struct {
 	{335544813, "Unsupported field type specified in BETWEEN predicate."},		/* optimizer_between_err */
 	{335544814, "Services functionality will be supported in a later version  of the product"},		/* service_not_supported */
 	{335544815, "GENERATOR @1"},		/* generator_name */
-	{335544816, "UDF @1"},		/* udf_name */
+	{335544816, "Function @1"},		/* udf_name */
 	{335544817, "Invalid parameter to FETCH or FIRST. Only integers >= 0 are allowed."},		/* bad_limit_param */
 	{335544818, "Invalid parameter to OFFSET or SKIP. Only integers >= 0 are allowed."},		/* bad_skip_param */
 	{335544819, "File exceeded maximum size of 2GB.  Add another database file or use a 64 bit I/O version of Firebird."},		/* io_32bit_exceeded_err */
@@ -813,7 +813,7 @@ Data source : @4"},		/* eds_statement */
 	{335545106, "Error occurred during login, please check server firebird.log for details"},		/* login_error */
 	{335545107, "Database already opened with engine instance, incompatible with current"},		/* already_opened */
 	{335545108, "Invalid crypt key @1"},		/* bad_crypt_key */
-	{335545109, "Page requires encyption but crypt plugin is missing"},		/* encrypt_error */
+	{335545109, "Page requires encryption but crypt plugin is missing"},		/* encrypt_error */
 	{335545110, "Maximum index depth (@1 levels) is reached"},		/* max_idx_depth */
 	{335545111, "System privilege @1 does not exist"},		/* wrong_prvlg */
 	{335545112, "System privilege @1 is missing"},		/* miss_prvlg */
@@ -909,6 +909,52 @@ Data source : @4"},		/* eds_statement */
 	{335545202, "Header page overflow - too many clumplets on it"},		/* hdr_overflow */
 	{335545203, "No matching client/server authentication plugins configured for execute statement in embedded datasource"},		/* vld_plugins */
 	{335545204, "Missing database encryption key for your attachment"},		/* db_crypt_key */
+	{335545205, "Key holder plugin @1 failed to load"},		/* no_keyholder_plugin */
+	{335545206, "Cannot reset user session"},		/* ses_reset_err */
+	{335545207, "There are open transactions (@1 active)"},		/* ses_reset_open_trans */
+	{335545208, "Session was reset with warning(s)"},		/* ses_reset_warn */
+	{335545209, "Transaction is rolled back due to session reset, all changes are lost"},		/* ses_reset_tran_rollback */
+	{335545210, "Plugin @1:"},		/* plugin_name */
+	{335545211, "PARAMETER @1"},		/* parameter_name */
+	{335545212, "Starting page number for file @1 must be @2 or greater"},		/* file_starting_page_err */
+	{335545213, "Invalid time zone offset: @1 - must be between -14:00 and +14:00"},		/* invalid_timezone_offset */
+	{335545214, "Invalid time zone region: @1"},		/* invalid_timezone_region */
+	{335545215, "Invalid time zone ID: @1"},		/* invalid_timezone_id */
+	{335545216, "Wrong base64 text length @1, should be multiple of 4"},		/* tom_decode64len */
+	{335545217, "Invalid first parameter datatype - need string or blob"},		/* tom_strblob */
+	{335545218, "Error registering @1 - probably bad tomcrypt library"},		/* tom_reg */
+	{335545219, "Unknown crypt algorithm @1 in USING clause"},		/* tom_algorithm */
+	{335545220, "Should specify mode parameter for symmetric cipher"},		/* tom_mode_miss */
+	{335545221, "Unknown symmetric crypt mode specified"},		/* tom_mode_bad */
+	{335545222, "Mode parameter makes no sense for chosen cipher"},		/* tom_no_mode */
+	{335545223, "Should specify initialization vector (IV) for chosen cipher and/or mode"},		/* tom_iv_miss */
+	{335545224, "Initialization vector (IV) makes no sense for chosen cipher and/or mode"},		/* tom_no_iv */
+	{335545225, "Invalid counter endianess @1"},		/* tom_ctrtype_bad */
+	{335545226, "Counter endianess parameter is not used in mode @1"},		/* tom_no_ctrtype */
+	{335545227, "Too big counter value @1, maximum @2 can be used"},		/* tom_ctr_big */
+	{335545228, "Counter length/value parameter is not used with @1 @2"},		/* tom_no_ctr */
+	{335545229, "Invalid initialization vector (IV) length @1, need @2"},		/* tom_iv_length */
+	{335545230, "TomCrypt library error: @1"},		/* tom_error */
+	{335545231, "Starting PRNG yarrow"},		/* tom_yarrow_start */
+	{335545232, "Setting up PRNG yarrow"},		/* tom_yarrow_setup */
+	{335545233, "Initializing @1 mode"},		/* tom_init_mode */
+	{335545234, "Encrypting in @1 mode"},		/* tom_crypt_mode */
+	{335545235, "Decrypting in @1 mode"},		/* tom_decrypt_mode */
+	{335545236, "Initializing cipher @1"},		/* tom_init_cip */
+	{335545237, "Encrypting using cipher @1"},		/* tom_crypt_cip */
+	{335545238, "Decrypting using cipher @1"},		/* tom_decrypt_cip */
+	{335545239, "Setting initialization vector (IV) for @1"},		/* tom_setup_cip */
+	{335545240, "Invalid initialization vector (IV) length @1, need  8 or 12"},		/* tom_setup_chacha */
+	{335545241, "Encoding @1"},		/* tom_encode */
+	{335545242, "Decoding @1"},		/* tom_decode */
+	{335545243, "Importing RSA key"},		/* tom_rsa_import */
+	{335545244, "Invalid OAEP packet"},		/* tom_oaep */
+	{335545245, "Unknown hash algorithm @1"},		/* tom_hash_bad */
+	{335545246, "Making RSA key"},		/* tom_rsa_make */
+	{335545247, "Exporting @1 RSA key"},		/* tom_rsa_export */
+	{335545248, "RSA-signing data"},		/* tom_rsa_sign */
+	{335545249, "Verifying RSA-signed data"},		/* tom_rsa_verify */
+	{335545250, "Invalid key length @1, need 16 or 32"},		/* tom_chacha_key */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */

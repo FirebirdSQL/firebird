@@ -2,19 +2,19 @@
 
 using namespace Auth;
 
-int main(int argc, char** argv)
+template<class SHA>void runTest(int argc, char** argv)
 {
 	Firebird::string salt;
 #if SRP_DEBUG > 1
-	BigInteger s("02E268803000000079A478A700000002D1A6979000000026E1601C000000054F");
+	Firebird::BigInteger s("02E268803000000079A478A700000002D1A6979000000026E1601C000000054F");
 #else
-	BigInteger s;
+	Firebird::BigInteger s;
 	s.random(128);
 #endif
 	s.getText(salt);
 
-	RemotePassword* server = FB_NEW RemotePassword();
-	RemotePassword* client = FB_NEW RemotePassword();
+	RemotePassword* server = FB_NEW RemotePasswordImpl<SHA>();
+	RemotePassword* client = FB_NEW RemotePasswordImpl<SHA>();
 
 	const char* account = "SYSDBA";
 	const char* password = "masterkey";
@@ -37,8 +37,20 @@ int main(int argc, char** argv)
 	client->clientSessionKey(key1, account, salt.c_str(), argc > 1 ? argv[1] : password, serverPubKey.c_str());
 	server->serverSessionKey(key2, clientPubKey.c_str(), verifier);
 
-	BigInteger cProof = client->clientProof(account, salt.c_str(), key1);
-	BigInteger sProof = server->clientProof(account, salt.c_str(), key2);
+	Firebird::BigInteger cProof = client->clientProof(account, salt.c_str(), key1);
+	Firebird::BigInteger sProof = server->clientProof(account, salt.c_str(), key2);
 
+	printf("Proof length = %d\n",cProof.length());
 	printf("%s\n", cProof == sProof ? "OK" : "differ");
+
 }
+
+int main(int argc, char** argv)
+{
+	runTest<Firebird::Sha1>(argc,argv);
+	runTest<Firebird::sha224>(argc,argv);
+	runTest<Firebird::sha256>(argc,argv);
+	runTest<Firebird::sha384>(argc,argv);
+	runTest<Firebird::sha512>(argc,argv);
+}
+

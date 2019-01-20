@@ -42,7 +42,7 @@ inline bool DTYPE_IS_TEXT(UCHAR d)
 
 inline bool DTYPE_IS_DATE(UCHAR t)
 {
-	return t >= dtype_sql_date && t <= dtype_timestamp;
+	return (t >= dtype_sql_date && t <= dtype_timestamp) || t == dtype_sql_time_tz || t == dtype_timestamp_tz;
 }
 
 // DTYPE_IS_BLOB includes both BLOB and ARRAY since array's are implemented over blobs.
@@ -158,7 +158,28 @@ typedef struct dsc
 
 	bool isDateTime() const
 	{
-		return dsc_dtype >= dtype_sql_date && dsc_dtype <= dtype_timestamp;
+		return (dsc_dtype >= dtype_sql_date && dsc_dtype <= dtype_timestamp) ||
+			dsc_dtype == dtype_sql_time_tz || dsc_dtype == dtype_timestamp_tz;
+	}
+
+	bool isDateTimeTz() const
+	{
+		return dsc_dtype == dtype_sql_time_tz || dsc_dtype == dtype_timestamp_tz;
+	}
+
+	bool isDate() const
+	{
+		return dsc_dtype == dtype_sql_date;
+	}
+
+	bool isTime() const
+	{
+		return dsc_dtype == dtype_sql_time || dsc_dtype == dtype_sql_time_tz;
+	}
+
+	bool isTimeStamp() const
+	{
+		return dsc_dtype == dtype_timestamp || dsc_dtype == dtype_timestamp_tz;
 	}
 
 	bool isDecFloat() const
@@ -173,7 +194,7 @@ typedef struct dsc
 
 	bool isDecOrInt() const
 	{
-		return isDecFloat() || isExact();
+		return isDecFloat() || isDecFixed() || isExact();
 	}
 
 	bool isApprox() const
@@ -373,11 +394,29 @@ typedef struct dsc
 		dsc_address = (UCHAR*) address;
 	}
 
+	void makeTimeTz(ISC_TIME_TZ* address = NULL)
+	{
+		clear();
+		dsc_dtype = dtype_sql_time_tz;
+		dsc_length = sizeof(ISC_TIME_TZ);
+		dsc_scale = 0;
+		dsc_address = (UCHAR*) address;
+	}
+
 	void makeTimestamp(GDS_TIMESTAMP* address = NULL)
 	{
 		clear();
 		dsc_dtype = dtype_timestamp;
 		dsc_length = sizeof(GDS_TIMESTAMP);
+		dsc_scale = 0;
+		dsc_address = (UCHAR*) address;
+	}
+
+	void makeTimestampTz(ISC_TIMESTAMP_TZ* address = NULL)
+	{
+		clear();
+		dsc_dtype = dtype_timestamp_tz;
+		dsc_length = sizeof(ISC_TIMESTAMP_TZ);
 		dsc_scale = 0;
 		dsc_address = (UCHAR*) address;
 	}

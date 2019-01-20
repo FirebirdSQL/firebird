@@ -55,7 +55,10 @@ GRANT TINS TO US2;
 Use RDB$ROLE_IN_USE function to check if privileges of specified role are currently available to the current user.
 
 Syntax:
-RDB$ROLE_IN_USE(role_name varchar(32)) RETURNS BOOLEAN
+RDB$ROLE_IN_USE(role_name varchar(N)) RETURNS BOOLEAN
 
+Pay attention - role name should be entered exactly as it's returned by CURRENT_ROLE, function is case-sensitive!
+
+Sample:
 To get a list of currently active roles you can run:
 SELECT * FROM RDB$ROLES WHERE RDB$ROLE_IN_USE(RDB$ROLE_NAME)

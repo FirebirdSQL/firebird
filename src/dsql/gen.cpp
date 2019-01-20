@@ -222,6 +222,26 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 				break;
 			}
 		}
+		else if (parameter->par_desc.isDateTimeTz())
+		{
+			switch (tdbb->getAttachment()->att_timezone_bind)
+			{
+				case TimeZoneUtil::BIND_LEGACY:
+					if (parameter->par_desc.isTime())
+						parameter->par_desc.makeTime();
+					else if (parameter->par_desc.isTimeStamp())
+						parameter->par_desc.makeTimestamp();
+					else
+						fb_assert(false);
+					break;
+
+				case TimeZoneUtil::BIND_NATIVE:
+					break;
+
+				default:
+					fb_assert(false);
+			}
+		}
 
 		if (parameter->par_desc.dsc_dtype == dtype_text && parameter->par_index != 0)
 		{
@@ -408,8 +428,16 @@ void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool tex
 		dsqlScratch->appendUChar(blr_sql_time);
 		break;
 
+	case dtype_sql_time_tz:
+		dsqlScratch->appendUChar(blr_sql_time_tz);
+		break;
+
 	case dtype_timestamp:
 		dsqlScratch->appendUChar(blr_timestamp);
+		break;
+
+	case dtype_timestamp_tz:
+		dsqlScratch->appendUChar(blr_timestamp_tz);
 		break;
 
 	case dtype_array:

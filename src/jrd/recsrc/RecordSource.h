@@ -675,7 +675,7 @@ namespace Jrd
 
 		struct DummyAdjustFunctor
 		{
-			void operator ()(impure_value* target)
+			void operator ()(thread_db* /*tdbb*/, impure_value* /*target*/)
 			{
 			}
 		};
@@ -736,7 +736,7 @@ namespace Jrd
 				else
 				{
 					EVL_make_value(tdbb, desc, target);
-					adjustFunctor(target);
+					adjustFunctor(tdbb, target);
 				}
 			}
 		}
@@ -779,9 +779,9 @@ namespace Jrd
 				{
 				}
 
-				void operator ()(impure_value* target)
+				void operator ()(thread_db* tdbb, impure_value* target)
 				{
-					ArithmeticNode::add2(offsetDesc, target, arithNode, arithNode->blrOp);
+					ArithmeticNode::add2(tdbb, offsetDesc, target, arithNode, arithNode->blrOp);
 				}
 
 				const ArithmeticNode* arithNode;
