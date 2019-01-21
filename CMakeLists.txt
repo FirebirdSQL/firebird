@@ -184,7 +184,7 @@ if (WIN32)
         set(disable_msvc_warnings "/wd4996")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP ${disable_msvc_warnings}")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP ${disable_msvc_warnings}")
-        
+
         if (MSVC_STATIC_RUNTIME)
             set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
             set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
@@ -269,7 +269,7 @@ if (WIN32)
     endif()
 endif()
 
-if (UNIX)    
+if (UNIX)
     file(GLOB vers_src "${CMAKE_SOURCE_DIR}/builds/posix/*.vers")
     foreach(f ${vers_src})
         get_filename_component(name ${f} NAME)
@@ -352,7 +352,7 @@ list(FILTER libtomcrypt_src EXCLUDE REGEX ".*whirltab.c")
 list(FILTER libtomcrypt_src EXCLUDE REGEX ".*sober128tab.c")
 
 add_library                 (libtomcrypt ${libtomcrypt_src})
-target_compile_definitions  (libtomcrypt PRIVATE LTC_NO_ROLC)
+target_compile_definitions  (libtomcrypt PRIVATE LTC_NO_ROLC LTC_SOURCE)
 project_group               (libtomcrypt Extern)
 
 
