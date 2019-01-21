@@ -42,7 +42,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/fb_pair.h"
 #include "../common/classes/MetaName.h"
-#include "../../jrd/SimilarToMatcher.h"
+#include "../jrd/SimilarToMatcher.h"
 #include "../common/status.h"
 #include "../common/sha.h"
 #include "../common/classes/ImplementHelper.h"
