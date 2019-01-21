@@ -9592,7 +9592,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, jrd_req* request) const
 				if (!blobId->isEmpty())
 				{
 					if (!request->hasInternalStatement())
-						tdbb->getTransaction()->checkBlob(tdbb, blobId, NULL, true);
+						tdbb->getTransaction()->checkBlob(tdbb, blobId, NULL, false);
 
 					if (desc->getCharSet() != CS_NONE && desc->getCharSet() != CS_BINARY)
 					{
