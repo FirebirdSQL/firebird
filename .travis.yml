@@ -14,6 +14,7 @@ branches:
 addons:
   apt:
     packages:
+    - libtool-bin
     - libtommath0
     - libtommath-dev
     - libicu-dev
