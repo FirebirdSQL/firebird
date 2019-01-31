@@ -22,14 +22,8 @@ addons:
 
 script:
   - ./autogen.sh --enable-binreloc --with-builtin-tomcrypt --prefix=/opt/firebird
-  - make -j4
-  - make dist
-  - tar xzvf gen/Firebird-[0-9]*.tar.gz
-  - (cd Firebird-[0-9]*; sudo ./install.sh -silent)
-  - sudo usermod -a -G firebird travis
-  # sg firebird -c "/opt/firebird/bin/gsec -user sysdba -add sysdba -pw masterkey"
-  # ./travis.sh dummy_output &
-  # ./travis.sh skip_tests
-  # sleep 3
-  # cd fbtest/fbt
-  # sg firebird -c "python ../fbtest.py -d `pwd`/tmp -b /opt/firebird/bin -v -x -k ../../skip.txt"
+  - make
+  # make dist
+  # tar xzvf gen/Firebird-[0-9]*.tar.gz
+  # (cd Firebird-[0-9]*; sudo ./install.sh -silent)
+  # sudo usermod -a -G firebird travis
