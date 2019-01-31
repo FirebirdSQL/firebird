@@ -16,13 +16,11 @@ addons:
     packages:
     - libtommath0
     - libtommath-dev
-    - libtomcrypt0
-    - libtomcrypt-dev
     - libicu-dev
     - zlib1g-dev
 
 script:
-  - ./autogen.sh --enable-binreloc --prefix=/opt/firebird
+  - ./autogen.sh --enable-binreloc --with-builtin-tomcrypt --prefix=/opt/firebird
   - make
   - make dist
   - tar xzvf gen/Firebird-[0-9]*.tar.gz
