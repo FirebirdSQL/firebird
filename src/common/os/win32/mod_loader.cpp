@@ -183,12 +183,17 @@ bool ModuleLoader::isLoadableModule(const PathName& module)
 	return hMod != 0;
 }
 
-void ModuleLoader::doctorModuleExtension(PathName& name)
+bool ModuleLoader::doctorModuleExtension(PathName& name, int& step)
 {
+	if (step++ > 0)
+		return false;
+
+	// Step 0: append missing extension
 	const PathName::size_type pos = name.rfind(".dll");
 	if (pos != PathName::npos && pos == name.length() - 4)
-		return;
+		return false;
 	name += ".dll";
+	return true;
 }
 
 ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const PathName& modPath)
