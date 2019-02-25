@@ -22,11 +22,11 @@
 
 @echo.
 @echo Building %FB_OBJ_DIR%
-@call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\FirebirdExamples empbuild_%FB_TARGET_PLATFORM%.log empbuild
+@call compile.bat builds\win32\%VS_VER%\FirebirdExamples empbuild_%FB_TARGET_PLATFORM%.log empbuild
 @if defined FB2_INTLEMP (
-  @call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\FirebirdExamples intlbuild_%FB_TARGET_PLATFORM%.log intlbuild
+  @call compile.bat builds\win32\%VS_VER%\FirebirdExamples intlbuild_%FB_TARGET_PLATFORM%.log intlbuild
 )
-@call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\FirebirdExamples udrcpp_example_%FB_TARGET_PLATFORM%.log udrcpp_example
+@call compile.bat builds\win32\%VS_VER%\FirebirdExamples udrcpp_example_%FB_TARGET_PLATFORM%.log udrcpp_example
 if errorlevel 1 (
     @call :ERROR building udrcpp example failed - see make_examples_%FB_TARGET_PLATFORM%.log for details
     @goto :EOF
@@ -47,7 +47,7 @@ if errorlevel 1 (
 
 @echo.
 :: Here we must use cd because isql does not have an option to set a base directory
-@cd %FB_GEN_DIR%\examples
+@cd "%FB_LONG_ROOT_PATH%\gen\examples"
 @echo   Creating empbuild.fdb...
 @echo.
 @del empbuild.fdb 2> nul
@@ -62,7 +62,7 @@ if defined FB2_INTLEMP (
 @%FB_BIN_DIR%\isql -i intlbld.sql
 )
 
-@cd %FB_ROOT_PATH%\builds\win32
+@cd "%FB_LONG_ROOT_PATH%\builds\win32"
 @echo.
 @echo path = %FB_GEN_DB_DIR%\examples
 @echo   Preprocessing empbuild.e...
@@ -139,7 +139,7 @@ if defined FB2_INTLEMP (
 :: the employee database.
 @set FIREBIRD=%FB_BIN_DIR%
 
-@cd %FB_GEN_DIR%\examples
+@cd "%FB_LONG_ROOT_PATH%\gen\examples"
 @del %FB_GEN_DIR%\examples\employee.fdb 2>nul
 @%FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\empbuild\empbuild.exe %FB_GEN_DB_DIR%/examples/employee.fdb
 if errorlevel 44 (call :ERROR empbuild.exe failed - see empbuild_%FB_TARGET_PLATFORM%.log for details & goto :EOF)
@@ -153,7 +153,7 @@ if errorlevel 44 (call :ERROR empbuild.exe failed - see empbuild_%FB_TARGET_PLAT
 )
 @set FIREBIRD=
 @set PATH=%FB_SAVE_PATH%
-@cd %FB_ROOT_PATH%\builds\win32
+@cd "%FB_LONG_ROOT_PATH%\builds\win32"
 
 @goto :EOF
 

@@ -1,5 +1,6 @@
 :: This batch file sets the environment values
 :: FB_ROOT_PATH dos format path of the main directory
+:: FB_LONG_ROOT_PATH long format path of the main directory
 :: FB_DB_PATH unix format path of the main directory
 :: (This is used by gpre and preprocess.bat)
 :: VS_VER VisualStudio version (msvc10|msvc12|msvc14)
@@ -18,32 +19,29 @@ if NOT DEFINED FB_PROCESSOR_ARCHITECTURE (
 set FB_PROCESSOR_ARCHITECTURE=%PROCESSOR_ARCHITECTURE%
 )
 
-::===============================
-::Set up the compiler environment
-
-:: To disable some particular MSVC build, slightly alter the env var names in "if" conditions below
+::=================
+:SET_MSVC_VER
 
 if DEFINED VS150COMNTOOLS (
-@devenv /? >nul 2>nul
-@if errorlevel 9009 (call "%VS150COMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS150COMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
+@set MSVC_VERSION=15
 ) else (
 if DEFINED VS140COMNTOOLS (
-@devenv /? >nul 2>nul
-@if errorlevel 9009 (call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
+@set MSVC_VERSION=14
 ) else (
 if DEFINED VS120COMNTOOLS (
-@devenv /? >nul 2>nul
-@if errorlevel 9009 (call "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
+@set MSVC_VERSION=12
 ) else (
 if DEFINED VS100COMNTOOLS (
-@devenv /? >nul 2>nul
-@if errorlevel 9009 (call "%VS100COMNTOOLS%\..\..\VC\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS100COMNTOOLS%\..\..\VC\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
+@set MSVC_VERSION=10
 ) else (
 @goto :HELP
 )
 )
 )
 )
+
+set VS_VER=msvc%MSVC_VERSION%
+
 @echo.
 
 
@@ -53,32 +51,13 @@ if DEFINED VS100COMNTOOLS (
 @SET SERVER_NAME=localhost
 
 @cd ..\..
+@for /f "delims=" %%a in ('@cd') do (set FB_LONG_ROOT_PATH=%%a)
 @for /f "delims=" %%a in ('@cd') do (set FB_ROOT_PATH=%%~sa)
 @cd %~dp0
 @for /f "tokens=*" %%a in ('@echo %FB_ROOT_PATH:\=/%') do (set FB_DB_PATH=%%a)
 
+
 ::=================
-:SET_MSVC_VER
-
-@if "%VS_VER_EXPRESS%" == "" (
-  @vcexpress /? >nul 2>nul
-  @if not errorlevel 9009 (
-    @if DEFINED VS100COMNTOOLS ((set MSVC_VERSION=10) & (set VS_VER=msvc10))
-
-    set VS_VER_EXPRESS=1
-    goto :SET_FB_TARGET_PLATFORM
-  )
-
-  @set VS_VER_EXPRESS=
-)
-
-@for /f "delims=." %%a in ('@devenv /?') do (
-  @for /f "tokens=6" %%b in ("%%a") do ((set MSVC_VERSION=%%b) & (set VS_VER=msvc%%b) & (goto :SET_FB_TARGET_PLATFORM))
-)
-
-@if not defined MSVC_VERSION goto :HELP
-
-
 :SET_FB_TARGET_PLATFORM
 @set FB_TARGET_PLATFORM=Win32
 @if "%FB_PROCESSOR_ARCHITECTURE%"=="x86" (set FB_TARGET_PLATFORM=Win32)

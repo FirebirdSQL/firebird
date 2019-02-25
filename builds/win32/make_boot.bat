@@ -115,7 +115,7 @@ if "%ERRLEV%"=="1" goto :END
 :btyacc
 @echo.
 @echo Building btyacc (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\FirebirdBoot btyacc_%FB_TARGET_PLATFORM%.log btyacc
+@call compile.bat builds\win32\%VS_VER%\FirebirdBoot btyacc_%FB_TARGET_PLATFORM%.log btyacc
 if errorlevel 1 call :boot2 btyacc
 goto :EOF
 
@@ -127,18 +127,18 @@ goto :EOF
 @echo.
 @call set_build_target.bat %* RELEASE
 @echo Building LibTomMath (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtommath
+@call compile.bat extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtommath
 if errorlevel 1 call :boot2 libtommath_%FB_OBJ_DIR%
 @echo Building LibTomCrypt (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtomcrypt
+@call compile.bat extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtomcrypt
 if errorlevel 1 call :boot2 libtomcrypt_%FB_OBJ_DIR%
 
 @call set_build_target.bat %* DEBUG
 @echo Building LibTomMath (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtommath
+@call compile.bat extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtommath
 if errorlevel 1 call :boot2 libtommath_%FB_OBJ_DIR%
 @echo Building LibTomCrypt (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtomcrypt
+@call compile.bat extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtomcrypt
 if errorlevel 1 call :boot2 libtomcrypt_%FB_OBJ_DIR%
 
 @call set_build_target.bat %*
@@ -150,11 +150,11 @@ goto :EOF
 @echo.
 @call set_build_target.bat %* RELEASE
 @echo Building decNumber (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\extern\decNumber\msvc\decNumber_MSVC%MSVC_VERSION% decNumber_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log decNumber
+@call compile.bat extern\decNumber\msvc\decNumber_MSVC%MSVC_VERSION% decNumber_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log decNumber
 if errorlevel 1 call :boot2 decNumber_%FB_OBJ_DIR%
 @call set_build_target.bat %* DEBUG
 @echo Building decNumber (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\extern\decNumber\msvc\decNumber_MSVC%MSVC_VERSION% decNumber_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log decNumber
+@call compile.bat extern\decNumber\msvc\decNumber_MSVC%MSVC_VERSION% decNumber_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log decNumber
 if errorlevel 1 call :boot2 decNumber_%FB_OBJ_DIR%
 @call set_build_target.bat %*
 goto :EOF
@@ -176,7 +176,7 @@ goto :EOF
 :gpre_boot
 @echo.
 @echo Building gpre_boot (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\FirebirdBoot gpre_boot_%FB_TARGET_PLATFORM%.log gpre_boot
+@call compile.bat builds\win32\%VS_VER%\FirebirdBoot gpre_boot_%FB_TARGET_PLATFORM%.log gpre_boot
 if errorlevel 1 call :boot2 gpre_boot
 goto :EOF
 
@@ -185,8 +185,8 @@ goto :EOF
 :engine
 @echo.
 @echo Building engine (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\Firebird engine_%FB_TARGET_PLATFORM%.log engine
-@call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\Firebird engine_%FB_TARGET_PLATFORM%.log ib_util
+@call compile.bat builds\win32\%VS_VER%\Firebird engine_%FB_TARGET_PLATFORM%.log engine
+@call compile.bat builds\win32\%VS_VER%\Firebird engine_%FB_TARGET_PLATFORM%.log ib_util
 if errorlevel 1 call :boot2 engine
 @goto :EOF
 
@@ -195,7 +195,7 @@ if errorlevel 1 call :boot2 engine
 :gbak
 @echo.
 @echo Building gbak (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\Firebird gbak_%FB_TARGET_PLATFORM%.log gbak
+@call compile.bat builds\win32\%VS_VER%\Firebird gbak_%FB_TARGET_PLATFORM%.log gbak
 if errorlevel 1 call :boot2 gbak
 @goto :EOF
 
@@ -204,7 +204,7 @@ if errorlevel 1 call :boot2 gbak
 :gpre
 @echo.
 @echo Building gpre (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\Firebird gpre_%FB_TARGET_PLATFORM%.log gpre
+@call compile.bat builds\win32\%VS_VER%\Firebird gpre_%FB_TARGET_PLATFORM%.log gpre
 if errorlevel 1 call :boot2 gpre
 @goto :EOF
 
@@ -213,7 +213,7 @@ if errorlevel 1 call :boot2 gpre
 :isql
 @echo.
 @echo Building isql (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\Firebird isql_%FB_TARGET_PLATFORM%.log isql
+@call compile.bat builds\win32\%VS_VER%\Firebird isql_%FB_TARGET_PLATFORM%.log isql
 if errorlevel 1 call :boot2 isql
 @goto :EOF
 
@@ -232,7 +232,7 @@ goto :EOF
 :msgs
 @echo.
 @echo Building build_msg (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\FirebirdBoot build_msg_%FB_TARGET_PLATFORM%.log build_msg
+@call compile.bat builds\win32\%VS_VER%\FirebirdBoot build_msg_%FB_TARGET_PLATFORM%.log build_msg
 if errorlevel 1 goto :msgs2
 @goto :EOF
 :msgs2
@@ -247,7 +247,7 @@ goto :EOF
 :codes
 @echo.
 @echo Building codes (%FB_OBJ_DIR%)...
-@call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\FirebirdBoot codes_%FB_TARGET_PLATFORM%.log codes
+@call compile.bat builds\win32\%VS_VER%\FirebirdBoot codes_%FB_TARGET_PLATFORM%.log codes
 if errorlevel 1 goto :codes2
 @goto :EOF
 :codes2

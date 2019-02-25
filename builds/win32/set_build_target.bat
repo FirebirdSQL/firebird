@@ -1,13 +1,13 @@
 @echo off
 set FB_DBG=
 set FB_OBJ_DIR=release
-set FB_CLEAN=/build
+set FB_CLEAN=
 set FB_ICU=
 set FB_VC_CRT_ARCH=%FB_PROCESSOR_ARCHITECTURE%
 
 for %%v in ( %* )  do (
   ( if /I "%%v"=="DEBUG" ( (set FB_DBG=TRUE) && (set FB_OBJ_DIR=debug) ) )
-  ( if /I "%%v"=="CLEAN" (set FB_CLEAN=/rebuild) )
+  ( if /I "%%v"=="CLEAN" (set FB_CLEAN=:rebuild) )
   ( if /I "%%v"=="ICU" ( (set FB_ICU=1) && (set FB_DBG=) ) )
   ( if /I "%%v"=="RELEASE" ( (set FB_DBG=) && (set FB_OBJ_DIR=release) ) )
 )

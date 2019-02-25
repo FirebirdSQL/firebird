@@ -18,7 +18,7 @@ set ERRLEV=0
 
 @echo Building %FB_OBJ_DIR%
 
-call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\Firebird make_all_%FB_TARGET_PLATFORM%.log
+call compile.bat builds\win32\%VS_VER%\Firebird make_all_%FB_TARGET_PLATFORM%.log
 if errorlevel 1 call :ERROR build failed - see make_all_%FB_TARGET_PLATFORM%.log for details
 
 @if "%ERRLEV%"=="1" (
