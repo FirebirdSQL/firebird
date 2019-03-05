@@ -3141,6 +3141,8 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, jrd_req* request) cons
 				Arg::Str(procedure->getName().identifier) << Arg::Str(procedure->getName().package));
 	}
 
+	AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, procedure->invoker);
+
 	ULONG inMsgLength = 0;
 	UCHAR* inMsg = NULL;
 

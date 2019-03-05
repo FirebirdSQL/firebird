@@ -3325,6 +3325,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 			}
 
 			procedure->setId(P.RDB$PROCEDURE_ID);
+			Nullable<bool> ssDefiner;
 
 			if (!P.RDB$SECURITY_CLASS.NULL)
 				procedure->setSecurityName(P.RDB$SECURITY_CLASS);
@@ -3340,20 +3341,24 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 						procedure->setSecurityName(PKG.RDB$SECURITY_CLASS);
 
 					if (!PKG.RDB$SQL_SECURITY.NULL)
-						procedure->ssDefiner = (bool) PKG.RDB$SQL_SECURITY;
+						ssDefiner = (bool) PKG.RDB$SQL_SECURITY;
 				}
 				END_FOR
 			}
 
-			if (!procedure->ssDefiner.specified)
+			if (!ssDefiner.specified)
 			{
 				if (!P.RDB$SQL_SECURITY.NULL)
-					procedure->ssDefiner = (bool) P.RDB$SQL_SECURITY;
+					ssDefiner = (bool) P.RDB$SQL_SECURITY;
 				else
-					procedure->ssDefiner = MET_get_ss_definer(tdbb);
+					ssDefiner = MET_get_ss_definer(tdbb);
 			}
 
 			procedure->owner = P.RDB$OWNER_NAME;
+
+			if (ssDefiner.orElse(false))
+				procedure->invoker = attachment->getUserId(procedure->owner);
+
 			procedure->setImplemented(true);
 			procedure->getInputFields().resize(P.RDB$PROCEDURE_INPUTS);
 			procedure->getOutputFields().resize(P.RDB$PROCEDURE_OUTPUTS);

@@ -38,6 +38,7 @@ namespace Jrd
 	class Lock;
 	class Format;
 	class Parameter;
+	class UserId;
 
 	class Routine : public Firebird::PermanentStorage
 	{
@@ -60,7 +61,8 @@ namespace Jrd
 			  useCount(0),
 			  intUseCount(0),
 			  alterCount(0),
-			  existenceLock(NULL)
+			  existenceLock(NULL),
+			  invoker(NULL)
 		{
 		}
 
@@ -180,8 +182,8 @@ namespace Jrd
 		USHORT alterCount;		// No. of times the routine was altered
 		Lock* existenceLock;	// existence lock, if any
 
-		Nullable<bool> ssDefiner;	// true ? SQL DEFINER : SQL INVOKER
 		Firebird::MetaName owner;
+		Jrd::UserId* invoker;		// Invoker ID
 	};
 }
 

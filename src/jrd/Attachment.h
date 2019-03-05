@@ -359,6 +359,9 @@ public:
 	Database*	att_database;				// Parent database block
 	Attachment*	att_next;					// Next attachment to database
 	UserId*		att_user;					// User identification
+	UserId*		att_ss_user;				// User identification for SQL SECURITY actual user
+	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
+		Firebird::MetaName, UserId*> > > att_user_ids;	// set of used UserIds
 	jrd_tra*	att_transactions;			// Transactions belonging to attachment
 	jrd_tra*	att_dbkey_trans;			// transaction to control db-key scope
 	TraNumber	att_oldest_snapshot;		// GTT's record versions older than this can be garbage-collected
@@ -566,6 +569,8 @@ public:
 		att_batches.findAndRemove(b);
 	}
 
+	UserId* getUserId(const Firebird::MetaName &userName);
+
 private:
 	Attachment(MemoryPool* pool, Database* dbb);
 	~Attachment();
@@ -608,7 +613,8 @@ private:
 
 inline bool Attachment::locksmith(thread_db* tdbb, SystemPrivilege sp) const
 {
-	return att_user && att_user->locksmith(tdbb, sp);
+	return att_user && att_user->locksmith(tdbb, sp) ||
+			att_ss_user && att_ss_user->locksmith(tdbb, sp);
 }
 
 inline jrd_tra* Attachment::getSysTransaction()

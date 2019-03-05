@@ -252,6 +252,7 @@ struct ExternalAccess
 	USHORT exa_fun_id;
 	USHORT exa_rel_id;
 	USHORT exa_view_id;
+	Firebird::MetaName user;		// User which touch the recources.
 
 	// Procedure
 	ExternalAccess(exa_act action, USHORT id) :
@@ -279,6 +280,8 @@ struct ExternalAccess
 			return i1.exa_rel_id > i2.exa_rel_id;
 		if (i1.exa_view_id != i2.exa_view_id)
 			return i1.exa_view_id > i2.exa_view_id;
+		if (i1.user != i2.user)
+			return i1.user > i2.user;
 		return false; // Equal
 	}
 };

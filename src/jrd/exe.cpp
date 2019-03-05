@@ -1158,7 +1158,12 @@ void EXE_execute_triggers(thread_db* tdbb,
 
 			TraceTrigExecute trace(tdbb, trigger, which_trig);
 
-			EXE_start(tdbb, trigger, transaction);
+			{	// Scope to replace att_ss_user
+				const JrdStatement* s = trigger->getStatement();
+				AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, s->triggerInvoker);
+
+				EXE_start(tdbb, trigger, transaction);
+			}
 
 			const bool ok = (trigger->req_operation != jrd_req::req_unwind);
 			trace.finish(ok ? ITracePlugin::RESULT_SUCCESS : ITracePlugin::RESULT_FAILED);

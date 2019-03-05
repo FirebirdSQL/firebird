@@ -915,8 +915,8 @@ void Trigger::compile(thread_db* tdbb)
 		}
 
 		statement->triggerName = name;
-		if (ssDefiner.specified && ssDefiner.value)
-			statement->triggerOwner = owner;
+		if (ssDefiner.orElse(false))
+			statement->triggerInvoker = att->getUserId(owner);
 
 		if (sys_trigger)
 			statement->flags |= JrdStatement::FLAG_SYS_TRIGGER;
