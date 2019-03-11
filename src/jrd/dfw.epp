@@ -3845,7 +3845,7 @@ static void setupSpecificCollationAttributes(thread_db* tdbb, jrd_tra* transacti
 
 	SET_TDBB(tdbb);
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
-	AutoRequest handle;
+	AutoCacheRequest handle(tdbb, drq_m_coll_attrs, DYN_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
 		COLL IN RDB$COLLATIONS

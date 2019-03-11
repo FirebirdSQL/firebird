@@ -269,7 +269,7 @@ bool ExprNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other
 
 	for (const auto& i : thisHolder.refs)
 	{
-		if (!*i != !**j || !PASS1_node_match(dsqlScratch, i->getExpr(), (*j)->getExpr(), ignoreMapCast))
+		if (!i != !*j || !PASS1_node_match(dsqlScratch, i.getExpr(), j->getExpr(), ignoreMapCast))
 			return false;
 
 		++j;
@@ -297,10 +297,10 @@ bool ExprNode::sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreSt
 
 	for (const auto& i : thisHolder.refs)
 	{
-		if (!*i && !**j)
+		if (!i && !*j)
 			continue;
 
-		if (!*i || !**j || !i->getExpr()->sameAs(csb, (*j)->getExpr(), ignoreStreams))
+		if (!i || !*j || !i.getExpr()->sameAs(csb, j->getExpr(), ignoreStreams))
 			return false;
 
 		++j;
@@ -314,9 +314,9 @@ bool ExprNode::possiblyUnknown(OptimizerBlk* opt)
 	NodeRefsHolder holder(opt->getPool());
 	getChildren(holder, false);
 
-	for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
+	for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
 	{
-		if (**i && (*i)->getExpr()->possiblyUnknown(opt))
+		if (*i && i->getExpr()->possiblyUnknown(opt))
 			return true;
 	}
 
@@ -328,9 +328,9 @@ bool ExprNode::unmappable(CompilerScratch* csb, const MapNode* mapNode, StreamTy
 	NodeRefsHolder holder(csb->csb_pool);
 	getChildren(holder, false);
 
-	for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
+	for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
 	{
-		if (**i && !(*i)->getExpr()->unmappable(csb, mapNode, shellStream))
+		if (*i && !i->getExpr()->unmappable(csb, mapNode, shellStream))
 			return false;
 	}
 
@@ -342,10 +342,10 @@ void ExprNode::collectStreams(CompilerScratch* csb, SortedStreamList& streamList
 	NodeRefsHolder holder(csb->csb_pool);
 	getChildren(holder, false);
 
-	for (const NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
+	for (const NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
 	{
-		if (**i)
-			(*i)->getExpr()->collectStreams(csb, streamList);
+		if (*i)
+			i->getExpr()->collectStreams(csb, streamList);
 	}
 }
 
@@ -357,7 +357,7 @@ bool ExprNode::computable(CompilerScratch* csb, StreamType stream,
 
 	for (auto& i : holder.refs)
 	{
-		if (*i && !i->getExpr()->computable(csb, stream, allowOnlyCurrentStream))
+		if (i && !i.getExpr()->computable(csb, stream, allowOnlyCurrentStream))
 			return false;
 	}
 
@@ -371,8 +371,8 @@ void ExprNode::findDependentFromStreams(const OptimizerRetrieval* optRet, Sorted
 
 	for (auto& i : holder.refs)
 	{
-		if (*i)
-			i->getExpr()->findDependentFromStreams(optRet, streamList);
+		if (i)
+			i.getExpr()->findDependentFromStreams(optRet, streamList);
 	}
 }
 
@@ -383,8 +383,8 @@ ExprNode* ExprNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	for (auto& i : holder.refs)
 	{
-		if (*i)
-			i->pass1(tdbb, csb);
+		if (i)
+			i.pass1(tdbb, csb);
 	}
 
 	return this;
@@ -397,8 +397,8 @@ ExprNode* ExprNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	for (auto& i : holder.refs)
 	{
-		if (*i)
-			i->pass2(tdbb, csb);
+		if (i)
+			i.pass2(tdbb, csb);
 	}
 
 	return this;
@@ -9052,7 +9052,7 @@ bool OverNode::dsqlAggregateFinder(AggregateFinder& visitor)
 		aggExpr->getChildren(holder, true);
 
 		for (auto& child : holder.refs)
-			aggregate |= visitor.visit(child->getExpr());
+			aggregate |= visitor.visit(child.getExpr());
 	}
 	else
 		aggregate |= visitor.visit(aggExpr);
@@ -9117,7 +9117,7 @@ ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	for (auto& child : holder.refs)
 	{
 		if (Aggregate2Finder::find(visitor.getPool(), visitor.context->ctx_scope_level, FIELD_MATCH_TYPE_EQUAL,
-				true, child->getExpr()))
+				true, child.getExpr()))
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 					  Arg::Gds(isc_dsql_agg_nested_err));
@@ -9138,7 +9138,7 @@ ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 			aggNode->getChildren(holder, true);
 
 			for (auto& child : holder.refs)
-				child->remap(visitor);
+				child.remap(visitor);
 
 			doDsqlFieldRemapper(visitor, window);
 		}

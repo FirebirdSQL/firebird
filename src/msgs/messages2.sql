@@ -1040,6 +1040,7 @@ Data source : @4', NULL, NULL)
 ('tom_chacha_key', NULL, 'SysFunction.cpp', NULL, 0, 930, NULL, 'Invalid key length @1, need 16 or 32', NULL, NULL);
 ('bad_repl_handle', NULL, 'jrd.cpp', NULL, 0, 931, NULL, 'invalid replicator handle', NULL, NULL);
 ('tra_snapshot_does_not_exist', NULL, 'tpc.cpp', NULL, 0, 932, NULL, 'Transaction''s base snapshot number does not exist', NULL, NULL);
+('eds_input_prm_not_used', NULL, 'ExtDS.cpp', NULL, 0, 933, NULL, 'Input parameter ''@1'' is not used in SQL query text', NULL, NULL)
 -- QLI
 (NULL, NULL, NULL, NULL, 1, 0, NULL, 'expected type', NULL, NULL);
 (NULL, NULL, NULL, NULL, 1, 1, NULL, 'bad block type', NULL, NULL);

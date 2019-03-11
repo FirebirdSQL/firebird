@@ -1911,6 +1911,8 @@ const
 	gds_bad_repl_handle                  = 335545251;
 	isc_tra_snapshot_does_not_exist      = 335545252;
 	gds_tra_snapshot_does_not_exist      = 335545252;
+	isc_eds_input_prm_not_used           = 335545253;
+	gds_eds_input_prm_not_used           = 335545253;
 	isc_gfix_db_name                     = 335740929;
 	gds_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;

@@ -1916,6 +1916,8 @@ C --
       PARAMETER (GDS__bad_repl_handle                  = 335545251)
       INTEGER*4 GDS__tra_snapshot_does_not_exist     
       PARAMETER (GDS__tra_snapshot_does_not_exist      = 335545252)
+      INTEGER*4 GDS__eds_input_prm_not_used          
+      PARAMETER (GDS__eds_input_prm_not_used           = 335545253)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 

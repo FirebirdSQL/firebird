@@ -324,27 +324,35 @@ void AssignmentNode::validateTarget(CompilerScratch* csb, const ValueExprNode* t
 	if ((fieldNode = nodeAs<FieldNode>(target)))
 	{
 		CompilerScratch::csb_repeat* tail = &csb->csb_rpt[fieldNode->fieldStream];
-		jrd_fld* field = MET_get_field(tail->csb_relation, fieldNode->fieldId);
-		string fieldName(field ? field->fld_name.c_str() : "<unknown>");
 
-		if (field && tail->csb_relation)
-			fieldName = string(tail->csb_relation->rel_name.c_str()) + "." + fieldName;
+		bool error = false;
 
 		// Assignments to the OLD context are prohibited for all trigger types.
 		if ((tail->csb_flags & csb_trigger) && fieldNode->fieldStream == OLD_CONTEXT_VALUE)
-			ERR_post(Arg::Gds(isc_read_only_field) << fieldName.c_str());
+			error = true;
 
 		// Assignments to the NEW context are prohibited for post-action triggers.
-		if ((tail->csb_flags & csb_trigger) && fieldNode->fieldStream == NEW_CONTEXT_VALUE &&
+		else if ((tail->csb_flags & csb_trigger) && fieldNode->fieldStream == NEW_CONTEXT_VALUE &&
 			(csb->csb_g_flags & csb_post_trigger))
 		{
-			ERR_post(Arg::Gds(isc_read_only_field) << fieldName.c_str());
+			error = true;
 		}
 
 		// Assignment to cursor fields are always prohibited.
 		// But we cannot detect FOR cursors here. They are treated in dsqlPass.
-		if (fieldNode->cursorNumber.specified)
+		else if (fieldNode->cursorNumber.specified)
+			error = true;
+
+		if (error)
+		{
+			jrd_fld* field = MET_get_field(tail->csb_relation, fieldNode->fieldId);
+			string fieldName(field ? field->fld_name.c_str() : "<unknown>");
+
+			if (field && tail->csb_relation)
+				fieldName = string(tail->csb_relation->rel_name.c_str()) + "." + fieldName;
+
 			ERR_post(Arg::Gds(isc_read_only_field) << fieldName.c_str());
+		}
 	}
 	else if (!(nodeIs<ParameterNode>(target) || nodeIs<VariableNode>(target) || nodeIs<NullNode>(target)))
 		ERR_post(Arg::Gds(isc_read_only_field) << "<unknown>");
@@ -3369,6 +3377,19 @@ DmlNode* ExecStatementNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 						node->outputs = PAR_args(tdbb, csb, outputs, outputs);
 						break;
 
+					case blr_exec_stmt_in_excess:
+					{
+						MemoryPool& pool = csb->csb_pool;
+						node->excessInputs = FB_NEW_POOL(pool) EDS::ParamNumbers(pool);
+						const USHORT count = csb->csb_blr_reader.getWord();
+						for (FB_SIZE_T i = 0; i < count; i++)
+						{
+							const USHORT n = csb->csb_blr_reader.getWord();
+							node->excessInputs->add(n);
+						}
+						break;
+					}
+
 					case blr_end:
 						break;
 
@@ -3397,6 +3418,7 @@ StmtNode* ExecStatementNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->sql = doDsqlPass(dsqlScratch, sql);
 	node->inputs = doDsqlPass(dsqlScratch, inputs);
 	node->inputNames = inputNames;
+	node->excessInputs = excessInputs;
 
 	// Check params names uniqueness, if present.
 
@@ -3565,7 +3587,7 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 				dsqlScratch->appendUChar(blr_exec_stmt_in_params);
 
 			NestConst<ValueExprNode>* ptr = inputs->items.begin();
-			MetaName* const* name = inputNames ? inputNames->begin() : NULL;
+			const MetaName* const* name = inputNames ? inputNames->begin() : NULL;
 
 			for (const NestConst<ValueExprNode>* end = inputs->items.end(); ptr != end; ++ptr, ++name)
 			{
@@ -3573,6 +3595,15 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 					dsqlScratch->appendNullString((*name)->c_str());
 
 				GEN_expr(dsqlScratch, *ptr);
+			}
+
+			if (excessInputs)
+			{
+				dsqlScratch->appendUChar(blr_exec_stmt_in_excess);
+				dsqlScratch->appendUShort(excessInputs->getCount());
+
+				for (FB_SIZE_T i = 0; i < excessInputs->getCount(); i++)
+					dsqlScratch->appendUShort((*excessInputs)[i]);
 			}
 		}
 
@@ -3678,9 +3709,9 @@ const StmtNode* ExecStatementNode::execute(thread_db* tdbb, jrd_req* request, Ex
 			stmt->setTimeout(tdbb, timer->timeToExpire());
 
 		if (stmt->isSelectable())
-			stmt->open(tdbb, tran, inpNames, inputs, !innerStmt);
+			stmt->open(tdbb, tran, inpNames, inputs, excessInputs, !innerStmt);
 		else
-			stmt->execute(tdbb, tran, inpNames, inputs, outputs);
+			stmt->execute(tdbb, tran, inpNames, inputs, excessInputs, outputs);
 
 		request->req_operation = jrd_req::req_return;
 	}  // jrd_req::req_evaluate
@@ -9406,7 +9437,7 @@ static void dsqlSetParameterName(DsqlCompilerScratch* dsqlScratch, ExprNode* exp
 			exprNode->getChildren(holder, true);
 
 			for (auto ref : holder.refs)
-				dsqlSetParameterName(dsqlScratch, ref->getExpr(), fld_node, relation);
+				dsqlSetParameterName(dsqlScratch, ref.getExpr(), fld_node, relation);
 
 			break;
 		}

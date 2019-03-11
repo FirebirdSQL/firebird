@@ -988,6 +988,7 @@ const ISC_STATUS isc_tom_rsa_verify                   = 335545249L;
 const ISC_STATUS isc_tom_chacha_key                   = 335545250L;
 const ISC_STATUS isc_bad_repl_handle                  = 335545251L;
 const ISC_STATUS isc_tra_snapshot_does_not_exist      = 335545252L;
+const ISC_STATUS isc_eds_input_prm_not_used           = 335545253L;
 const ISC_STATUS isc_gfix_db_name                     = 335740929L;
 const ISC_STATUS isc_gfix_invalid_sw                  = 335740930L;
 const ISC_STATUS isc_gfix_incmp_sw                    = 335740932L;
@@ -1462,7 +1463,7 @@ const ISC_STATUS isc_trace_switch_user_only           = 337182757L;
 const ISC_STATUS isc_trace_switch_param_miss          = 337182758L;
 const ISC_STATUS isc_trace_param_act_notcompat        = 337182759L;
 const ISC_STATUS isc_trace_mandatory_switch_miss      = 337182760L;
-const ISC_STATUS isc_err_max                          = 1406;
+const ISC_STATUS isc_err_max                          = 1407;
 
 #else /* c definitions */
 
@@ -2420,6 +2421,7 @@ const ISC_STATUS isc_err_max                          = 1406;
 #define isc_tom_chacha_key                   335545250L
 #define isc_bad_repl_handle                  335545251L
 #define isc_tra_snapshot_does_not_exist      335545252L
+#define isc_eds_input_prm_not_used           335545253L
 #define isc_gfix_db_name                     335740929L
 #define isc_gfix_invalid_sw                  335740930L
 #define isc_gfix_incmp_sw                    335740932L
@@ -2894,7 +2896,7 @@ const ISC_STATUS isc_err_max                          = 1406;
 #define isc_trace_switch_param_miss          337182758L
 #define isc_trace_param_act_notcompat        337182759L
 #define isc_trace_mandatory_switch_miss      337182760L
-#define isc_err_max                          1406
+#define isc_err_max                          1407
 
 #endif
 

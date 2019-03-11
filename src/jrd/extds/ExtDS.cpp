@@ -1772,7 +1772,7 @@ void Statement::setTimeout(thread_db* tdbb, unsigned int timeout)
 }
 
 void Statement::execute(thread_db* tdbb, Transaction* tran,
-	const MetaName* const* in_names, const ValueListNode* in_params,
+	const MetaName* const* in_names, const ValueListNode* in_params, const ParamNumbers* in_excess, 
 	const ValueListNode* out_params)
 {
 	fb_assert(isAllocated() && !m_stmt_selectable);
@@ -1781,13 +1781,14 @@ void Statement::execute(thread_db* tdbb, Transaction* tran,
 
 	m_transaction = tran;
 
-	setInParams(tdbb, in_names, in_params);
+	setInParams(tdbb, in_names, in_params, in_excess);
 	doExecute(tdbb);
 	getOutParams(tdbb, out_params);
 }
 
 void Statement::open(thread_db* tdbb, Transaction* tran,
-	const MetaName* const* in_names, const ValueListNode* in_params, bool singleton)
+	const MetaName* const* in_names, const ValueListNode* in_params, const ParamNumbers* in_excess, 
+	bool singleton)
 {
 	fb_assert(isAllocated() && m_stmt_selectable);
 	fb_assert(!m_error);
@@ -1796,7 +1797,7 @@ void Statement::open(thread_db* tdbb, Transaction* tran,
 	m_singleton = singleton;
 	m_transaction = tran;
 
-	setInParams(tdbb, in_names, in_params);
+	setInParams(tdbb, in_names, in_params, in_excess);
 	doOpen(tdbb);
 
 	m_active = true;
@@ -2105,18 +2106,13 @@ void Statement::preprocess(const string& sql, string& ret)
 					ident.upper();
 
 				FB_SIZE_T n = 0;
-				for (; n < m_sqlParamNames.getCount(); n++)
+				if (!m_sqlParamNames.find(ident.c_str(), n))
 				{
-					if ((*m_sqlParamNames[n]) == ident)
-						break;
+					MetaName* pName = FB_NEW_POOL(getPool()) MetaName(getPool(), ident);
+					n = m_sqlParamNames.add(*pName);
 				}
 
-				if (n >= m_sqlParamNames.getCount())
-				{
-					n = m_sqlParamNames.getCount();
-					m_sqlParamNames.add(FB_NEW_POOL(getPool()) MetaName(getPool(), ident));
-				}
-				m_sqlParamsMap.add(m_sqlParamNames[n]);
+				m_sqlParamsMap.add(&m_sqlParamNames[n]);
 			}
 			else
 			{
@@ -2169,27 +2165,44 @@ void Statement::preprocess(const string& sql, string& ret)
 }
 
 void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
-	const ValueListNode* params)
+	const ValueListNode* params, const ParamNumbers* in_excess)
 {
 	const FB_SIZE_T count = params ? params->items.getCount() : 0;
+	const FB_SIZE_T excCount = in_excess ? in_excess->getCount() : 0;
+	const FB_SIZE_T sqlCount = m_sqlParamNames.getCount();
 
-	m_error = (names && (m_sqlParamNames.getCount() != count || count == 0)) ||
-		(!names && m_sqlParamNames.getCount());
+	// OK : count - excCount <= sqlCount <= count
 
-	if (m_error)
+	// Check if all passed named parameters, not marked as excess, are present in query text
+	if (names && count > 0 && excCount != count)
 	{
-		// Input parameters mismatch
-		status_exception::raise(Arg::Gds(isc_eds_input_prm_mismatch));
+		for (unsigned n = 0, e = 0; n < count; n++)
+		{
+			// values in in_excess array are ordered
+			if (e < excCount && (*in_excess)[e] == n)
+			{
+				e++;
+				continue;
+			}
+
+			const MetaName* name = names[n];
+			if (!m_sqlParamNames.exist(*name))
+			{
+				m_error = true;
+				// Input parameter ''@1'' is not used in SQL query text
+				status_exception::raise(Arg::Gds(isc_eds_input_prm_not_used) << Arg::Str(*name));
+			}
+		}
 	}
 
-	if (m_sqlParamNames.getCount())
+	if (sqlCount || names && count > 0)
 	{
-		const unsigned int sqlCount = m_sqlParamsMap.getCount();
+		const unsigned int mapCount = m_sqlParamsMap.getCount();
 		// Here NestConst plays against its objective. It temporary unconstifies the values.
 		Array<NestConst<ValueExprNode> > sqlParamsArray(getPool(), 16);
-		NestConst<ValueExprNode>* sqlParams = sqlParamsArray.getBuffer(sqlCount);
+		NestConst<ValueExprNode>* sqlParams = sqlParamsArray.getBuffer(mapCount);
 
-		for (unsigned int sqlNum = 0; sqlNum < sqlCount; sqlNum++)
+		for (unsigned int sqlNum = 0; sqlNum < mapCount; sqlNum++)
 		{
 			const MetaName* sqlName = m_sqlParamsMap[sqlNum];
 
@@ -2202,6 +2215,7 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 
 			if (num == count)
 			{
+				m_error = true;
 				// Input parameter ''@1'' have no value set
 				status_exception::raise(Arg::Gds(isc_eds_input_prm_not_set) << Arg::Str(*sqlName));
 			}
@@ -2209,7 +2223,7 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 			sqlParams[sqlNum] = params->items[num];
 		}
 
-		doSetInParams(tdbb, sqlCount, m_sqlParamsMap.begin(), sqlParams);
+		doSetInParams(tdbb, mapCount, m_sqlParamsMap.begin(), sqlParams);
 	}
 	else
 		doSetInParams(tdbb, count, names, (params ? params->items.begin() : NULL));
@@ -2426,13 +2440,6 @@ void Statement::putExtBlob(thread_db* tdbb, dsc& src, dsc& dst)
 
 void Statement::clearNames()
 {
-	MetaName** s = m_sqlParamNames.begin(), **end = m_sqlParamNames.end();
-	for (; s < end; s++)
-	{
-		delete *s;
-		*s = NULL;
-	}
-
 	m_sqlParamNames.clear();
 	m_sqlParamsMap.clear();
 }

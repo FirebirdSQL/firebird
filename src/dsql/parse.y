@@ -606,6 +606,7 @@ using namespace Firebird;
 %token <metaNamePtr> CUME_DIST
 %token <metaNamePtr> DECFLOAT
 %token <metaNamePtr> DEFINER
+%token <metaNamePtr> EXCESS
 %token <metaNamePtr> EXCLUDE
 %token <metaNamePtr> FIRST_DAY
 %token <metaNamePtr> FOLLOWING
@@ -623,6 +624,7 @@ using namespace Firebird;
 %token <metaNamePtr> NATIVE
 %token <metaNamePtr> NORMALIZE_DECFLOAT
 %token <metaNamePtr> NTILE
+%token <metaNamePtr> NUMBER
 %token <metaNamePtr> OTHERS
 %token <metaNamePtr> OVERRIDING
 %token <metaNamePtr> PERCENT_RANK
@@ -3318,6 +3320,23 @@ named_param($execStatementNode)
 				$execStatementNode->inputs = newNode<ValueListNode>($3);
 			else
 				$execStatementNode->inputs->add($3);
+		}
+	| EXCESS symbol_variable_name BIND_PARAM value
+		{
+			if (!$execStatementNode->inputNames)
+				$execStatementNode->inputNames = FB_NEW_POOL(getPool()) EDS::ParamNames(getPool());
+
+			if (!$execStatementNode->excessInputs)
+				$execStatementNode->excessInputs = FB_NEW_POOL(getPool()) EDS::ParamNumbers(getPool());
+
+			$execStatementNode->excessInputs->add($execStatementNode->inputNames->getCount());
+
+			$execStatementNode->inputNames->add($2);
+
+			if (!$execStatementNode->inputs)
+				$execStatementNode->inputs = newNode<ValueListNode>($4);
+			else
+				$execStatementNode->inputs->add($4);
 		}
 	;
 
@@ -8795,6 +8814,7 @@ non_reserved_word
 	| CTR_LITTLE_ENDIAN
 	| CUME_DIST
 	| DEFINER
+	| EXCESS
 	| EXCLUDE
 	| FIRST_DAY
 	| FOLLOWING

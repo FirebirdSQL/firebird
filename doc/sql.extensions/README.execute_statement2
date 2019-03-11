@@ -42,11 +42,13 @@ Syntax and notes :
 		| <input_parameters>, <named_parameter>
 		
 	<named_parameter> ::= 
-		  <parameter name> := <expression>
+		  [EXCESS] <parameter name> := <expression>
 
 	Syntax above introduced new parameter value binding operator ":=" to avoid 
-	clashes with future boolean expressions.
-	This syntax may be changed in release version.
+	clashes with boolean expressions.
+	Optional "EXCESS" mark indicates that given parameter allows to be not 
+	mentioned at query text. Note, all non-excess input parameters must be used 
+	by a query.
 
 - if ON EXTERNAL DATA SOURCE clause is omitted then
 	a) statement will be executed against current (local) database
@@ -258,4 +260,33 @@ BEGIN
     INTO :A, :B, :C;
 
   SUSPEND;
+END
+
+
+4. Using EXCESS input parameters
+
+CREATE PROCEDURE P_EXCESS (A_ID INT, A_TRAN INT = NULL, A_CONN INT = NULL)
+  RETURNS (ID INT, TRAN INT, CONN INT)
+AS
+DECLARE S VARCHAR(255);
+DECLARE W VARCHAR(255) = '';
+BEGIN
+  S = 'SELECT * FROM TTT WHERE ID = :ID';
+
+  IF (A_TRAN IS NOT NULL)
+  THEN W = W || ' AND TRAN = :a';
+
+  IF (A_CONN IS NOT NULL)
+  THEN W = W || ' AND CONN = :b';
+
+  IF (W <> '')
+  THEN S = S || W;
+
+  -- could raise error if TRAN or CONN is null
+  -- FOR EXECUTE STATEMENT (:S) (a := :A_TRAN, b := A_CONN, id := A_ID)
+
+  -- OK in all cases
+  FOR EXECUTE STATEMENT (:S) (EXCESS a := :A_TRAN, EXCESS b := A_CONN, id := A_ID)
+      INTO :ID, :TRAN, :CONN
+      DO SUSPEND;
 END

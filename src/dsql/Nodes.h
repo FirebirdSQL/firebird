@@ -29,6 +29,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/NestConst.h"
 #include <functional>
+#include <type_traits>
 
 namespace Jrd {
 
@@ -399,8 +400,21 @@ template <typename To, typename From> static bool nodeIs(const NestConst<From>& 
 class NodeRef
 {
 public:
-	virtual ~NodeRef()
+	NodeRef()
+		: ptr(NULL)
 	{
+	}
+
+	template <typename T>
+	explicit NodeRef(const NestConst<T>& node)
+		: ptr(NULL)
+	{
+		static_assert(std::is_base_of<ExprNode, T>::value, "T must be derived from ExprNode");
+
+		T** aPtr = const_cast<T**> (node.getAddress());
+		ptr = reinterpret_cast<ExprNode**> (aPtr);
+
+		fb_assert(ptr);
 	}
 
 	bool operator !() const
@@ -413,36 +427,30 @@ public:
 		return getExpr() != NULL;
 	}
 
-	virtual ExprNode* getExpr() = 0;
-	virtual const ExprNode* getExpr() const = 0;
+	ExprNode* getExpr()
+	{
+		return *ptr;
+	}
 
-	virtual void remap(FieldRemapper& visitor) = 0;
-	virtual void pass1(thread_db* tdbb, CompilerScratch* csb) = 0;
+	const ExprNode* getExpr() const
+	{
+		return *ptr;
+	}
+
+	void remap(FieldRemapper& visitor);
+
+	void pass1(thread_db* tdbb, CompilerScratch* csb)
+	{
+		DmlNode::doPass1(tdbb, csb, ptr);
+	}
+
 	void pass2(thread_db* tdbb, CompilerScratch* csb);
 
 protected:
-	virtual void internalPass2(thread_db* tdbb, CompilerScratch* csb) = 0;
-};
-
-template <typename T> class NodeRefImpl : public NodeRef
-{
-public:
-	explicit NodeRefImpl(T** aPtr)
-		: ptr(aPtr)
-	{
-		fb_assert(aPtr);
-	}
-
-	virtual ExprNode* getExpr();
-	virtual const ExprNode* getExpr() const;
-	virtual void remap(FieldRemapper& visitor);
-	virtual void pass1(thread_db* tdbb, CompilerScratch* csb);
-
-protected:
-	virtual inline void internalPass2(thread_db* tdbb, CompilerScratch* csb);
+	void internalPass2(thread_db* tdbb, CompilerScratch* csb);
 
 private:
-	T** ptr;
+	ExprNode** ptr;
 };
 
 class NodeRefsHolder : public Firebird::PermanentStorage
@@ -456,15 +464,16 @@ public:
 
 	~NodeRefsHolder()
 	{
-		for (auto& ref : refs)
-			delete ref;
+	}
+
+
+	template <typename T> void add(const NestConst<T>& node)
+	{
+		refs.add(NodeRef(node));
 	}
 
 public:
-	template <typename T> void add(const NestConst<T>& node);
-
-public:
-	Firebird::HalfStaticArray<NodeRef*, 8> refs;
+	Firebird::HalfStaticArray<NodeRef, 8> refs;
 };
 
 
@@ -591,8 +600,8 @@ public:
 		NodeRefsHolder holder(visitor.getPool());
 		getChildren(holder, true);
 
-		for (NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
-			ret |= visitor.visit((*i)->getExpr());
+		for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
+			ret |= visitor.visit(i->getExpr());
 
 		return ret;
 	}
@@ -604,8 +613,8 @@ public:
 		NodeRefsHolder holder(visitor.getPool());
 		getChildren(holder, true);
 
-		for (NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
-			ret |= visitor.visit((*i)->getExpr());
+		for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
+			ret |= visitor.visit(i->getExpr());
 
 		return ret;
 	}
@@ -617,8 +626,8 @@ public:
 		NodeRefsHolder holder(visitor.getPool());
 		getChildren(holder, true);
 
-		for (NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
-			ret |= visitor.visit((*i)->getExpr());
+		for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
+			ret |= visitor.visit(i->getExpr());
 
 		return ret;
 	}
@@ -630,8 +639,8 @@ public:
 		NodeRefsHolder holder(visitor.dsqlScratch->getPool());
 		getChildren(holder, true);
 
-		for (NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
-			ret |= visitor.visit((*i)->getExpr());
+		for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
+			ret |= visitor.visit(i->getExpr());
 
 		return ret;
 	}
@@ -643,8 +652,8 @@ public:
 		NodeRefsHolder holder(visitor.getPool());
 		getChildren(holder, true);
 
-		for (NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
-			ret |= visitor.visit((*i)->getExpr());
+		for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
+			ret |= visitor.visit(i->getExpr());
 
 		return ret;
 	}
@@ -654,8 +663,8 @@ public:
 		NodeRefsHolder holder(visitor.getPool());
 		getChildren(holder, true);
 
-		for (NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
-			(*i)->remap(visitor);
+		for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
+			i->remap(visitor);
 
 		return this;
 	}
@@ -721,42 +730,15 @@ public:
 };
 
 
-template <typename T>
-inline ExprNode* NodeRefImpl<T>::getExpr()
-{
-	return *ptr;
-}
-
-template <typename T>
-inline const ExprNode* NodeRefImpl<T>::getExpr() const
-{
-	return *ptr;
-}
-
-template <typename T>
-inline void NodeRefImpl<T>::remap(FieldRemapper& visitor)
+inline void NodeRef::remap(FieldRemapper& visitor)
 {
 	if (*ptr)
 		*ptr = (*ptr)->dsqlFieldRemapper(visitor);
 }
 
-template <typename T>
-inline void NodeRefImpl<T>::pass1(thread_db* tdbb, CompilerScratch* csb)
-{
-	DmlNode::doPass1(tdbb, csb, ptr);
-}
-
-template <typename T>
-inline void NodeRefImpl<T>::internalPass2(thread_db* tdbb, CompilerScratch* csb)
+inline void NodeRef::internalPass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	ExprNode::doPass2(tdbb, csb, ptr);
-}
-
-
-template <typename T>
-inline void NodeRefsHolder::add(const NestConst<T>& node)
-{
-	refs.add(FB_NEW_POOL(getPool()) NodeRefImpl<T>(const_cast<T**>(node.getAddress())));
 }
 
 

@@ -151,8 +151,8 @@ bool AggNode::dsqlAggregateFinder(AggregateFinder& visitor)
 		NodeRefsHolder holder(visitor.getPool());
 		getChildren(holder, true);
 
-		for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
-			visitor.visit((*i)->getExpr());
+		for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
+			visitor.visit(i->getExpr());
 
 		localDeepestLevel = visitor.deepestLevel;
 	}
@@ -183,8 +183,8 @@ bool AggNode::dsqlAggregateFinder(AggregateFinder& visitor)
 		NodeRefsHolder holder(visitor.getPool());
 		getChildren(holder, true);
 
-		for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
-			aggregate |= visitor.visit((*i)->getExpr());
+		for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
+			aggregate |= visitor.visit(i->getExpr());
 	}
 
 	return aggregate;
@@ -201,8 +201,8 @@ bool AggNode::dsqlAggregate2Finder(Aggregate2Finder& visitor)
 	NodeRefsHolder holder(visitor.getPool());
 	getChildren(holder, true);
 
-	for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
-		found |= fieldFinder.visit((*i)->getExpr());
+	for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
+		found |= fieldFinder.visit(i->getExpr());
 
 	if (!fieldFinder.getField())
 	{
@@ -248,14 +248,14 @@ bool AggNode::dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor)
 		NodeRefsHolder holder(visitor.dsqlScratch->getPool());
 		getChildren(holder, true);
 
-		for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
+		for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
 		{
 			// If there's another aggregate with the same scope_level or
 			// an higher one then it's a invalid aggregate, because
 			// aggregate-functions from the same context can't
 			// be part of each other.
 			if (Aggregate2Finder::find(visitor.dsqlScratch->getPool(), visitor.context->ctx_scope_level,
-					FIELD_MATCH_TYPE_EQUAL, false, (*i)->getExpr()))
+					FIELD_MATCH_TYPE_EQUAL, false, i->getExpr()))
 			{
 				// Nested aggregate functions are not allowed
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
@@ -287,8 +287,8 @@ ValueExprNode* AggNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	NodeRefsHolder holder(visitor.getPool());
 	getChildren(holder, true);
 
-	for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
-		(*i)->remap(visitor);
+	for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
+		i->remap(visitor);
 
 	return this;
 }
@@ -326,19 +326,19 @@ void AggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 		unsigned count = 0;
 
-		for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
+		for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
 		{
-			if (**i)
+			if (*i)
 				++count;
 		}
 
 		dsqlScratch->appendUChar(UCHAR(count));
 	}
 
-	for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
+	for (NodeRef* i = holder.refs.begin(); i != holder.refs.end(); ++i)
 	{
-		if (**i)
-			GEN_expr(dsqlScratch, (*i)->getExpr());
+		if (*i)
+			GEN_expr(dsqlScratch, i->getExpr());
 	}
 }
 
