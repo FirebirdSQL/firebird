@@ -335,7 +335,7 @@ const char
 	CURRENT_ROLE_NAME[] = "CURRENT_ROLE",
 	SESSION_IDLE_TIMEOUT[] = "SESSION_IDLE_TIMEOUT",
 	STATEMENT_TIMEOUT[] = "STATEMENT_TIMEOUT",
-	EFFICIENT_USER_NAME[] = "EFFICIENT_USER",
+	EFFECTIVE_USER_NAME[] = "EFFECTIVE_USER",
 	// SYSTEM namespace: transaction wise items
 	TRANSACTION_ID_NAME[] = "TRANSACTION_ID",
 	ISOLATION_LEVEL_NAME[] = "ISOLATION_LEVEL",
@@ -3977,7 +3977,7 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 			resultStr.printf("%d", EDS::Manager::getConnPool()->getLifeTime());
 		else if (nameStr == REPLICATION_SEQ_NAME)
 			resultStr.printf("%" UQUADFORMAT, dbb->getReplSequence(tdbb));
-		else if (nameStr == EFFICIENT_USER_NAME)
+		else if (nameStr == EFFECTIVE_USER_NAME)
 		{
 			MetaName user;
 			if (attachment->att_ss_user)

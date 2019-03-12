@@ -1160,7 +1160,8 @@ void EXE_execute_triggers(thread_db* tdbb,
 
 			{	// Scope to replace att_ss_user
 				const JrdStatement* s = trigger->getStatement();
-				AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, s->triggerInvoker);
+				UserId* invoker = s->triggerInvoker ? s->triggerInvoker : tdbb->getAttachment()->att_ss_user;
+				AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);
 
 				EXE_start(tdbb, trigger, transaction);
 			}
