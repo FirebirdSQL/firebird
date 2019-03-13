@@ -76,8 +76,8 @@ static SecurityClass::flags_t compute_access(thread_db* tdbb, const SecurityClas
 static SecurityClass::flags_t get_sys_privileges(thread_db* tdbb);
 static SecurityClass::flags_t walk_acl(thread_db* tdbb, const Acl&, const MetaName&,
 	SLONG, const Firebird::MetaName&);
-static void raiseError(SecurityClass::flags_t mask, SLONG type, const Firebird::MetaName& name,
-	const Firebird::MetaName& r_name);
+static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, SLONG type, const Firebird::MetaName& name,
+	const Firebird::MetaName& r_name, const MetaName &invoker);
 
 
 namespace
@@ -176,8 +176,8 @@ namespace
 } // anonymous namespace
 
 
-static void raiseError(SecurityClass::flags_t mask, SLONG type, const Firebird::MetaName& name,
-	const Firebird::MetaName& r_name)
+static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, SLONG type, const Firebird::MetaName& name,
+	const Firebird::MetaName& r_name, const Firebird::MetaName& invoker)
 {
 	const P_NAMES* names;
 	for (names = p_names; names->p_names_priv; names++)
@@ -190,9 +190,16 @@ static void raiseError(SecurityClass::flags_t mask, SLONG type, const Firebird::
 	const Firebird::string fullName = r_name.hasData() ?
 		r_name.c_str() + Firebird::string(".") + name.c_str() : name.c_str();
 
-	ERR_post(Arg::Gds(isc_no_priv) << Arg::Str(names->p_names_string) <<
-									  Arg::Str(typeAsStr) <<
-									  Arg::Str(fullName));
+	Arg::StatusVector status;
+	status << Arg::Gds(isc_no_priv) << Arg::Str(names->p_names_string) <<
+			  Arg::Str(typeAsStr) <<
+			  Arg::Str(fullName);
+	if (invoker.hasData())
+	{
+		status << Arg::Gds(isc_effective_user) << Arg::Str(invoker);
+	}
+	ERR_post(status);
+
 }
 
 
@@ -231,9 +238,15 @@ void SCL_check_access(thread_db* tdbb,
 
 	if (s_class && (s_class->scl_flags & SCL_corrupt))
 	{
-		ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("(ACL unrecognized)") <<
+		Arg::StatusVector status;
+		status << Arg::Gds(isc_no_priv) << Arg::Str("(ACL unrecognized)") <<
 										  Arg::Str("security_class") <<
-										  Arg::Str(s_class->scl_name));
+										  Arg::Str(s_class->scl_name);
+		if (userName.hasData())
+		{
+			status << Arg::Gds(isc_effective_user) << Arg::Str(userName);
+		}
+		ERR_post(status);
 	}
 
 	// Make fast check first
@@ -263,7 +276,7 @@ void SCL_check_access(thread_db* tdbb,
 		return;
 	}
 
-	raiseError(mask, type, name, r_name);
+	raiseError(tdbb, mask, type, name, r_name, userName);
 }
 
 
@@ -568,7 +581,7 @@ void SCL_check_index(thread_db* tdbb, const Firebird::MetaName& index_name, UCHA
 	{
 		// Someone is going to reference system table in FK
 		// Usually it's not good idea
-		raiseError(mask, SCL_object_table, reln_name, "");
+		raiseError(tdbb, mask, SCL_object_table, reln_name, "", NULL);
 	}
 
 	// Check if the relation exists. It may not have been created yet.
@@ -791,7 +804,7 @@ void SCL_check_relation(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fla
 		{
 			// Someone is going to modify system table layout
 			// Usually it's not good idea
-			raiseError(mask, SCL_object_table, name, "");
+			raiseError(tdbb, mask, SCL_object_table, name, "", NULL);
 		}
 
         if (!REL.RDB$SECURITY_CLASS.NULL)

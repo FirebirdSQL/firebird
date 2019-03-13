@@ -958,6 +958,7 @@ Data source : @4"},		/* eds_statement */
 	{335545251, "invalid replicator handle"},		/* bad_repl_handle */
 	{335545252, "Transaction's base snapshot number does not exist"},		/* tra_snapshot_does_not_exist */
 	{335545253, "Input parameter '@1' is not used in SQL query text"},		/* eds_input_prm_not_used */
+	{335545254, "Effective user is @1"},		/* effective_user */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */
