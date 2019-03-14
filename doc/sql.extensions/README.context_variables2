@@ -98,6 +98,9 @@ Usage:
    CURRENT_USER                 | Current user for the connection. Returned value is the
                                 | same as of CURRENT_USER pseudo-variable
                                 |
+   EFFECTIVE_USER               | Effective user for now. It indicates privileges of
+                                | which user is currently used to execute function, procedure, trigger.
+                                |
    CURRENT_ROLE                 | Current role for the connection. Returned value is the
                                 | same as of CURRENT_ROLE pseudo-variable
                                 |
