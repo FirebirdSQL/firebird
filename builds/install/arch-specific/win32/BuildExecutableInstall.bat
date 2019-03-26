@@ -59,7 +59,7 @@ for %%v in ( %* )  do (
   ( if /I "%%v"=="ZIP" (set FBBUILD_ZIP_PACK=1) )
   ( if /I "%%v"=="ISX" (set FBBUILD_ISX_PACK=1) )
   ( if /I "%%v"=="ALL" ( (set FBBUILD_ZIP_PACK=1) & (set FBBUILD_ISX_PACK=1) ) )
-)  
+)
 
 :: Now check whether we are debugging the InnoSetup script
 
@@ -122,13 +122,17 @@ if %FBBUILD_ISX_PACK% EQU 1 (
   if NOT DEFINED INNO5_SETUP_PATH (
     call :ERROR INNO5_SETUP_PATH variable not defined
     @goto :EOF
-  ) else (@echo     o Inno Setup found at %INNO5_SETUP_PATH%.)
+  ) else (
+   @echo     o Inno Setup found at %INNO5_SETUP_PATH%.
+   )
 )
 
 if not defined WIX (
     call :ERROR WIX not defined. WiX is needed to build the MSI kits of the CRT runtimes.
     @goto :EOF
-) else (@echo     o WiX found at "%WIX%".)
+) else (
+ @echo     o WiX found at "%WIX%".
+)
 
 if not DEFINED FB_EXTERNAL_DOCS (
  @echo.
@@ -179,7 +183,6 @@ set FBBUILD_FILE_ID=%FBBUILD_PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%_%FB_TA
 
 ::@echo s/-2.0.0-/-%FBBUILD_PRODUCT_VER_STRING%-/ > %temp%.\b$3.txt
 @echo s/define release/define %FBBUILD_BUILDTYPE%/ > %temp%.\b$3.txt
-@echo s/define msvc_version 8/define msvc_version %MSVC_VERSION%/ >> %temp%.\b$3.txt
 @echo s/define no_pdb/define %FBBUILD_SHIP_PDB%/ >> %temp%.\b$3.txt
 ::@echo s/define package_number=\"0\"/define package_number=\"%FBBUILD_PACKAGE_NUMBER%\"/ >> %temp%.\b$3.txt
 @echo s/define iss_release/define %ISS_BUILD_TYPE%/ >> %temp%.\b$3.txt
@@ -203,21 +206,23 @@ set FBBUILD_FB_LAST_VER=%FBBUILD_FB30_CUR_VER%
 set FBBUILD_FB15_CUR_VER=1.5.6
 set FBBUILD_FB20_CUR_VER=2.0.7
 set FBBUILD_FB21_CUR_VER=2.1.7
-set FBBUILD_FB25_CUR_VER=2.5.7
-set FBBUILD_FB30_CUR_VER=3.0.2
+set FBBUILD_FB25_CUR_VER=2.5.8
+set FBBUILD_FB30_CUR_VER=3.0.4
 
 :: Now fix up the major.minor version strings in the readme files.
 :: We place output in %FB_GEN_DIR%\readmes
 @if not exist %FB_GEN_DIR%\readmes (@mkdir %FB_GEN_DIR%\readmes)
 @for %%d in (ba cz de es fr hu it pl pt ru si ) do (
-  @if not exist %FB_GEN_DIR%\readmes\%%d (@mkdir %FB_GEN_DIR%\readmes\%%d)
+  @if not exist %FB_GEN_DIR%\readmes\%%d (
+    @mkdir %FB_GEN_DIR%\readmes\%%d
+  )
 )
 
 @echo s/\$MAJOR/%FB_MAJOR_VER%/g >  %temp%.\b$4.txt
 @echo s/\$MINOR/%FB_MINOR_VER%/g >> %temp%.\b$4.txt
 @echo s/\$RELEASE/%FB_REV_NO%/g  >> %temp%.\b$4.txt
-@echo   %FBBUILD_PROD_STATUS% release. Copying Readme_%FBBUILD_PROD_STATUS%.txt Readme.txt 
-@copy Readme_%FBBUILD_PROD_STATUS%.txt Readme.txt 
+@echo   %FBBUILD_PROD_STATUS% release. Copying Readme_%FBBUILD_PROD_STATUS%.txt Readme.txt
+@copy Readme_%FBBUILD_PROD_STATUS%.txt Readme.txt
 @for %%f in (Readme.txt installation_readme.txt After_Installation.url) do (
 	@echo   Processing version strings in %%f
 	@sed -f  %temp%.\b$4.txt %%f > %FB_GEN_DIR%\readmes\%%f
@@ -243,18 +248,35 @@ del %temp%.\b$?.txt
 :: system dll's we need
 :: MSVC should be installed with redistributable packages.
 ::=====================
+
+:: We are forced to set this because the runtime library now (MSVC15)
+:: has a different version to the compiler. And sometimes they use 141
+:: and sometimes 140.
+if %MSVC_VERSION% EQU 15 (
+  @set MSVC_RUNTIME_MAJOR_VERSION=14
+  @set MSVC_RUNTIME_MINOR_VERSION_0=0
+  @set MSVC_RUNTIME_MINOR_VERSION_1=1
+
+) else (
+  @set MSVC_RUNTIME_VERSION=%MSVC_VERSION%0
+)
+
+
 @echo   Copying MSVC runtime libraries...
-if not exist %FB_OUTPUT_DIR%\system32 (mkdir %FB_OUTPUT_DIR%\system32)
-@for %%f in ( msvcp%MSVC_VERSION%?.dll msvcr%MSVC_VERSION%?.dll  ) do ( 
-if exist "%VCINSTALLDIR%\redist\%PROCESSOR_ARCHITECTURE%\Microsoft.VC%MSVC_VERSION%0.CRT\%%f" (
-copy  "%VCINSTALLDIR%\redist\%PROCESSOR_ARCHITECTURE%\Microsoft.VC%MSVC_VERSION%0.CRT\%%f" %FB_OUTPUT_DIR%\ 
+@if not exist %FB_OUTPUT_DIR%\system32 (
+  @mkdir %FB_OUTPUT_DIR%\system32
 )
+for %%f in ( msvcp%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_0%.dll vcruntime%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_0%.dll  ) do (
+    echo Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_1%.CRT\%%f"
+    copy  "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_1%.CRT\%%f" %FB_OUTPUT_DIR%\
+    if %ERRORLEVEL% GEQ 1 (
+       call :ERROR Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_1%.CRT\%%f" failed with error %ERRORLEVEL% ) && (goto :EOF)
+    )
 )
-@if %errorlevel% GEQ 1 ( (call :ERROR Copying MSVC runtime library failed with error %errorlevel% ) && (goto :EOF))
 
 @implib.exe | findstr "Borland" > nul
 @if errorlevel 0 (
-if "%PROCESSOR_ARCHITECTURE%"=="x86" (
+if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
   @echo   Generating fbclient_bor.lib
   @implib %FB_OUTPUT_DIR%\lib\fbclient_bor.lib %FB_OUTPUT_DIR%\fbclient.dll > nul
 )
@@ -286,6 +308,7 @@ if "%PROCESSOR_ARCHITECTURE%"=="x86" (
   call :ERROR COPY of main documentation tree failed with error %ERRORLEVEL%
   goto :EOF
 )
+
 
 :: Various upgrade scripts and docs
 mkdir %FB_OUTPUT_DIR%\misc\upgrade\security 2>nul
@@ -383,15 +406,18 @@ for /R %FB_OUTPUT_DIR%\doc %%v in (.) do (
 :: Generate runtimes as an MSI file.
 :: This requires WiX 3.0 to be installed
 ::============
-:: This is only relevent if we are shipping packages built with Visual Studio 2010 (MSVC10)
-:: for Firebird 3.0 there are no plans to ship official builds with other MSVC runtimes. But we could.
-if %MSVC_VERSION% EQU 12 (
-if not exist %FB_OUTPUT_DIR%\system32\vccrt%MSVC_VERSION%_%FB_TARGET_PLATFORM%.msi (
+if %MSVC_VERSION% EQU 15 (
+  if not exist %FB_OUTPUT_DIR%\system32\vccrt%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_1%_%FB_TARGET_PLATFORM%.msi (
     "%WIX%\bin\candle.exe" -v -sw1091 %FB_ROOT_PATH%\builds\win32\msvc%MSVC_VERSION%\VCCRT_%FB_TARGET_PLATFORM%.wxs -out %FB_GEN_DIR%\vccrt_%FB_TARGET_PLATFORM%.wixobj
-    "%WIX%\bin\light.exe" -sw1076 %FB_GEN_DIR%\vccrt_%FB_TARGET_PLATFORM%.wixobj -out %FB_OUTPUT_DIR%\system32\vccrt%MSVC_VERSION%_%FB_TARGET_PLATFORM%.msi
-) else (
-    @echo   Using an existing build of %FB_OUTPUT_DIR%\system32\vccrt%MSVC_VERSION%_%FB_TARGET_PLATFORM%.msi
-)
+    @if %ERRORLEVEL% GEQ 1 (
+        ( call :ERROR Could not generate wixobj for MSVC Runtime MSI ) & (goto :EOF)
+    ) else (
+        "%WIX%\bin\light.exe" -sw1076 %FB_GEN_DIR%\vccrt_%FB_TARGET_PLATFORM%.wixobj -out %FB_OUTPUT_DIR%\system32\vccrt%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_1%_%FB_TARGET_PLATFORM%.msi
+        @if %ERRORLEVEL% GEQ 1 ( (call :ERROR Could not generate MSVCC Runtime MSI ) & (goto :EOF))
+    )
+  ) else (
+    @echo   Using an existing build of %FB_OUTPUT_DIR%\system32\vccrt%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_1%_%FB_TARGET_PLATFORM%.msi
+  )
 )
 
 ::End of BUILD_CRT_MSI
@@ -498,7 +524,7 @@ copy %FB_ROOT_PATH%\builds\install\misc\databases.conf.in %FB_OUTPUT_DIR%\databa
 
 
 :SET_CRLF
-:: Get a list of all files in the tree make sure 
+:: Get a list of all files in the tree make sure
 :: that and they all have windows EOL
 ::===============================================
 for /F %%W in ( 'dir %FB_OUTPUT_DIR% /b /a-d /s' ) do (
@@ -527,7 +553,7 @@ if not exist %FBBUILD_ZIP_PACK_ROOT% @mkdir %FBBUILD_ZIP_PACK_ROOT% 2>nul
 @xcopy /Y /E /S %FB_OUTPUT_DIR% %FBBUILD_ZIP_PACK_ROOT% > nul
 
 @echo   - Add examples to zip tree
-@xcopy /Y /E /S %FB_OUTPUT_DIR%\examples\*.* %FBBUILD_ZIP_PACK_ROOT%\examples > nul 
+@xcopy /Y /E /S %FB_OUTPUT_DIR%\examples\*.* %FBBUILD_ZIP_PACK_ROOT%\examples > nul
 ::@if %FB2_EXAMPLES% equ 1 for %%v in (examples examples\api examples\build_win32 examples\dbcrypt examples\empbuild examples\include examples\interfaces examples\package examples\stat examples\udf examples\udr ) do (
 ::    @mkdir %FBBUILD_ZIP_PACK_ROOT%\%%v 2>nul
 ::    dir %FB_OUTPUT_DIR%\%%v\*.* > nul 2>nul
@@ -537,7 +563,7 @@ if not exist %FBBUILD_ZIP_PACK_ROOT% @mkdir %FBBUILD_ZIP_PACK_ROOT% 2>nul
 
 @echo   - Now remove stuff from zip tree that is not needed...
 setlocal
-set FB_RM_FILE_LIST=doc\installation_readme.txt system32\vccrt%MSVC_VERSION%_%FB_TARGET_PLATFORM%.wixpdb icudt52l_empty.dat 
+set FB_RM_FILE_LIST=doc\installation_readme.txt system32\vccrt%MSVC_VERSION%_%FB_TARGET_PLATFORM%.wixpdb icudt52l_empty.dat
 for %%v in ( %FB_RM_FILE_LIST% ) do (
   @del %FBBUILD_ZIP_PACK_ROOT%\%%v > nul 2>&1
 )
@@ -551,7 +577,7 @@ if not "%FBBUILD_SHIP_PDB%"=="ship_pdb" (
   @del /q %FBBUILD_ZIP_PACK_ROOT%\*.pdb > nul 2>&1
 )
 
-rmdir /s /q %FBBUILD_ZIP_PACK_ROOT%\examples\build_unix 
+rmdir /s /q %FBBUILD_ZIP_PACK_ROOT%\examples\build_unix
 
 :: Don't grab old install notes for zip pack - document needs a complete re-write.
 ::@copy %FB_ROOT_PATH%\doc\install_win32.txt %FBBUILD_ZIP_PACK_ROOT%\doc\README_installation.txt > nul
@@ -696,7 +722,7 @@ if NOT DEFINED GNU_TOOLCHAIN (
 :: errorlevel gets reset automatically so capture it before we lose it.
 set ERRLEV=%errorlevel%
 @echo.
-@echo   Error %ERRLEV% in BuildExecutableInstall 
+@echo   Error %ERRLEV% in BuildExecutableInstall
 @echo     %*
 @echo.
 ::End of ERROR

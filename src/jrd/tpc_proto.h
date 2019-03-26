@@ -118,9 +118,9 @@ public:
 	void updateOldestTransaction(thread_db* tdbb, TraNumber oldest, TraNumber oldestSnapshot);
 
 	// Create snapshot. The snapshot shall use only versions committed
-	// before commitNumber_out. Snapshots inhibit GC to some extent.
+	// before commitNumber (the latest CN when it's 0). Snapshots inhibit GC to some extent.
 	// When snapshot is no longer needed you call endSnapshot.
-	SnapshotHandle beginSnapshot(thread_db* tdbb, AttNumber attachmentId, CommitNumber *commitNumber_out);
+	SnapshotHandle beginSnapshot(thread_db* tdbb, AttNumber attachmentId, CommitNumber& commitNumber);
 
 	// Deallocate snapshot.
 	void endSnapshot(thread_db* tdbb, SnapshotHandle handle, AttNumber attachmentId);

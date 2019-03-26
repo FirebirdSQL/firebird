@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?><Include xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <Product Id="$(var.PRODUCT_ID)"
+    Name="MSI to redistribute MS VS2017 CRT libraries for $(var.CPUArch)"
+	Language="1033"
+	Version="$(var.MS_CRT_VER)"
+	Manufacturer="$(var.MANUFACTURER)"
+	UpgradeCode="$(var.UPGRADE_CODE)"
+	>
+
+  <Package Id="$(var.PACKAGE_ID)"
+		Description="$(var.DESCRIPTION)"
+		Comments="$(var.COMMENTS)"
+		Manufacturer="$(var.MANUFACTURER)"
+		InstallerVersion="405"
+		Compressed="yes"
+		Platform="$(var.CPUArch)"
+	/>
+
+    <Media Id="1" Cabinet="VCCRT.cab" EmbedCab="yes"
+	/>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Merge Id="CRT" Language="0" SourceFile="$(var.MSMDIR)\$(var.MSM)" DiskId="1"  />
+    </Directory>
+
+    <Feature Id="CRT_WinSXS" Title="CRT WinSXS" Level="1">
+      <MergeRef Id="CRT" />
+    </Feature>
+
+    <InstallExecuteSequence>
+      <RemoveRegistryValues />
+      <RemoveFiles />
+      <InstallFiles />
+      <WriteRegistryValues />
+    </InstallExecuteSequence>
+
+  </Product>
+
+</Include>

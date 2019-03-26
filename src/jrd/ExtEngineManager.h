@@ -40,6 +40,7 @@ namespace Jrd {
 
 class thread_db;
 class jrd_prc;
+class jrd_req;
 class jrd_tra;
 class Attachment;
 class CompilerScratch;
@@ -47,6 +48,8 @@ class Database;
 class Format;
 class Trigger;
 class Function;
+class DeclareVariableNode;
+class StmtNode;
 class ValueExprNode;
 struct impure_value;
 struct record_param;
@@ -272,17 +275,22 @@ public:
 	class Trigger
 	{
 	public:
-		Trigger(thread_db* tdbb, MemoryPool& pool, ExtEngineManager* aExtManager,
+		Trigger(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, ExtEngineManager* aExtManager,
 			Firebird::IExternalEngine* aEngine, RoutineMetadata* aMetadata,
 			Firebird::IExternalTrigger* aTrigger, const Jrd::Trigger* aTrg);
 		~Trigger();
 
-		void execute(thread_db* tdbb, unsigned action,
+		void execute(thread_db* tdbb, jrd_req* request, unsigned action,
 			record_param* oldRpb, record_param* newRpb) const;
 
 	private:
-		void setValues(thread_db* tdbb, Firebird::Array<UCHAR>& msgBuffer, record_param* rpb) const;
+		void setupComputedFields(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb);
+		void setValues(thread_db* tdbb, jrd_req* request, Firebird::Array<UCHAR>& msgBuffer, record_param* rpb) const;
 
+	public:
+		Firebird::Array<NestConst<StmtNode>> computedStatements;
+
+	private:
 		ExtEngineManager* extManager;
 		Firebird::IExternalEngine* engine;
 		Firebird::AutoPtr<RoutineMetadata> metadata;
@@ -290,7 +298,9 @@ public:
 		Firebird::IExternalTrigger* trigger;
 		const Jrd::Trigger* trg;
 		Firebird::Array<USHORT> fieldsPos;
+		Firebird::Array<const DeclareVariableNode*> varDecls;
 		Database* database;
+		USHORT computedCount;
 	};
 
 public:

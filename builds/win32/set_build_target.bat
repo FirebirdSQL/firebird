@@ -12,10 +12,24 @@ for %%v in ( %* )  do (
   ( if /I "%%v"=="RELEASE" ( (set FB_DBG=) && (set FB_OBJ_DIR=release) ) )
 )
 
-set FB_OBJ_DIR=%FB_TARGET_PLATFORM%\%FB_OBJ_DIR%
-if %MSVC_VERSION% GEQ 10 ( if %FB_VC_CRT_ARCH% == AMD64 ( set FB_VC_CRT_ARCH=x64))
+if %FB_VC_CRT_ARCH% == AMD64 ( set FB_VC_CRT_ARCH=x64)
 
-@set FB_BIN_DIR=%FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird\
+if defined VS150COMNTOOLS (
+  if exist "%VS150COMNTOOLS%\..\..\VC\redist\MSVC" (
+    for /D %%d in ( "%VS150COMNTOOLS%\..\..\VC\redist\MSVC\*" ) do (
+      set FB_VC_CRT_VER=MSVC\%%~nxd
+    )
+  )
+)
+
+if defined FB_VC_CRT_VER (
+  set FB_VC_CRT_DIR=%FB_VC_CRT_VER%\%FB_VC_CRT_ARCH%
+) else (
+  set FB_VC_CRT_DIR=%FB_VC_CRT_ARCH%
+)
+
+set FB_OBJ_DIR=%FB_TARGET_PLATFORM%\%FB_OBJ_DIR%
+set FB_BIN_DIR=%FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird\
 
 @echo    Executed %0
 @echo.

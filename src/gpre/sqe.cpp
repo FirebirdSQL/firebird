@@ -515,7 +515,7 @@ gpre_nod* SQE_field(gpre_req* request, bool aster_ok)
 				if (!(reference->ref_field =
 					MET_context_field(context, gpreGlob.token_global.tok_string)))
 				{
-					sprintf(s, "column \"%s\" not in context", gpreGlob.token_global.tok_string);
+					fb_utils::snprintf(s, sizeof(s), "column \"%s\" not in context", gpreGlob.token_global.tok_string);
 					PAR_error(s);
 				}
 				if (SQL_DIALECT_V5 == gpreGlob.sw_sql_dialect)
@@ -1349,7 +1349,7 @@ static gpre_nod* explode_asterisk( gpre_nod* fields, int n, gpre_rse* selection)
 			fields = merge_fields(fields, MET_fields(context), n, true);
 		else
 		{
-			sprintf(s, "columns \"%s.*\" cannot be resolved", q_token->tok_string);
+			fb_utils::snprintf(s, sizeof(s), "columns \"%s.*\" cannot be resolved", q_token->tok_string);
 			PAR_error(s);
 		}
 	}
@@ -3215,7 +3215,7 @@ static gpre_nod* par_udf( gpre_req* request)
 				{
 					// udf was found in more than one database
 					SCHAR s[ERROR_LENGTH];
-					sprintf(s, "UDF %s is ambiguous", gpreGlob.token_global.tok_string);
+					fb_utils::snprintf(s, sizeof(s), "UDF %s is ambiguous", gpreGlob.token_global.tok_string);
 					PAR_error(s);
 				}
 				else

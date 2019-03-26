@@ -43,6 +43,9 @@
 
 #include "../jrd/extds/ExtDS.h"
 
+#include "../jrd/replication/Applier.h"
+#include "../jrd/replication/Manager.h"
+
 #include "../common/classes/fb_string.h"
 #include "../common/classes/MetaName.h"
 #include "../common/StatusArg.h"
@@ -204,6 +207,8 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 	: att_pool(pool),
 	  att_memory_stats(&dbb->dbb_memory_stats),
 	  att_database(dbb),
+	  att_ss_user(NULL),
+	  att_user_ids(*pool),
 	  att_active_snapshots(*pool),
 	  att_requests(*pool),
 	  att_lock_owner_id(Database::getLockOwnerId()),
@@ -234,6 +239,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 	  att_utility(UTIL_NONE),
 	  att_procedures(*pool),
 	  att_functions(*pool),
+	  att_generators(*pool),
 	  att_internal(*pool),
 	  att_dyn_req(*pool),
 	  att_dec_status(DecimalStatus::DEFAULT),
@@ -256,6 +262,20 @@ Jrd::Attachment::~Attachment()
 
 	for (unsigned n = 0; n < att_batches.getCount(); ++n)
 		att_batches[n]->resetHandle();
+
+	for (Function** iter = att_functions.begin(); iter < att_functions.end(); ++iter)
+	{
+		Function* const function = *iter;
+		if (function)
+			delete function;
+	}
+
+	for (jrd_prc** iter = att_procedures.begin(); iter < att_procedures.end(); ++iter)
+	{
+		jrd_prc* const procedure = *iter;
+		if (procedure)
+			delete procedure;
+	}
 
 	while (att_pools.hasData())
 		deletePool(att_pools.pop());
@@ -966,6 +986,18 @@ bool Attachment::getIdleTimerTimestamp(ISC_TIMESTAMP_TZ& ts) const
 	ts.time_zone = TimeZoneUtil::GMT_ZONE;
 
 	return true;
+}
+
+UserId* Attachment::getUserId(const MetaName& userName)
+{
+	UserId* result = NULL;
+	if (!att_user_ids.get(userName, result))
+	{
+		result = FB_NEW_POOL(*att_pool) UserId(*att_pool);
+		result->setUserName(userName);
+		att_user_ids.put(userName, result);
+	}
+	return result;
 }
 
 /// Attachment::IdleTimer

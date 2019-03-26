@@ -49,6 +49,11 @@ namespace EDS {
 	class Connection;
 }
 
+namespace Replication
+{
+	class TableMatcher;
+}
+
 class CharSetContainer;
 
 namespace Jrd
@@ -84,6 +89,7 @@ namespace Jrd
 	class Function;
 	class JrdStatement;
 	class Validation;
+	class Applier;
 
 struct DSqlCacheItem
 {
@@ -294,6 +300,55 @@ public:
 		Firebird::RefPtr<StableAttachmentPart> jStable;
 	};
 
+	class GeneratorFinder
+	{
+	public:
+		explicit GeneratorFinder(MemoryPool& pool)
+			: m_objects(pool)
+		{}
+
+		void store(SLONG id, const Firebird::MetaName& name)
+		{
+			fb_assert(id >= 0);
+			fb_assert(name.hasData());
+
+			if (id < (int) m_objects.getCount())
+			{
+				fb_assert(m_objects[id].isEmpty());
+				m_objects[id] = name;
+			}
+			else
+			{
+				m_objects.resize(id + 1);
+				m_objects[id] = name;
+			}
+		}
+
+		bool lookup(SLONG id, Firebird::MetaName& name)
+		{
+			if (id < (int) m_objects.getCount())
+			{
+				name = m_objects[id];
+				return true;
+			}
+
+			return false;
+		}
+
+		SLONG lookup(const Firebird::MetaName& name)
+		{
+			FB_SIZE_T pos;
+
+			if (m_objects.find(name, pos))
+				return (SLONG) pos;
+
+			return -1;
+		}
+
+	private:
+		Firebird::Array<Firebird::MetaName> m_objects;
+	};
+
 public:
 	static Attachment* create(Database* dbb);
 	static void destroy(Attachment* const attachment);
@@ -304,6 +359,9 @@ public:
 	Database*	att_database;				// Parent database block
 	Attachment*	att_next;					// Next attachment to database
 	UserId*		att_user;					// User identification
+	UserId*		att_ss_user;				// User identification for SQL SECURITY actual user
+	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
+		Firebird::MetaName, UserId*> > > att_user_ids;	// set of used UserIds
 	jrd_tra*	att_transactions;			// Transactions belonging to attachment
 	jrd_tra*	att_dbkey_trans;			// transaction to control db-key scope
 	TraNumber	att_oldest_snapshot;		// GTT's record versions older than this can be garbage-collected
@@ -366,6 +424,10 @@ public:
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
 
+	Firebird::IReplicatedSession* att_replicator;
+	Firebird::AutoPtr<Replication::TableMatcher> att_repl_matcher;
+	Firebird::AutoPtr<Applier> att_repl_applier;
+
 	enum UtilType { UTIL_NONE, UTIL_GBAK, UTIL_GFIX, UTIL_GSTAT };
 
 	UtilType att_utility;
@@ -377,6 +439,7 @@ public:
 	TrigVector*						att_triggers[DB_TRIGGER_MAX];
 	TrigVector*						att_ddl_triggers;
 	Firebird::Array<Function*>		att_functions;			// User defined functions
+	GeneratorFinder					att_generators;
 
 	Firebird::Array<JrdStatement*>	att_internal;			// internal statements
 	Firebird::Array<JrdStatement*>	att_dyn_req;			// internal dyn statements
@@ -413,6 +476,11 @@ public:
 	bool locksmith(thread_db* tdbb, SystemPrivilege sp) const;
 	jrd_tra* getSysTransaction();
 	void setSysTransaction(jrd_tra* trans);	// used only by TRA_init
+
+	bool isSystem() const
+	{
+		return (att_flags & ATT_system);
+	}
 
 	bool isGbak() const;
 	bool isRWGbak() const;
@@ -501,6 +569,8 @@ public:
 		att_batches.findAndRemove(b);
 	}
 
+	UserId* getUserId(const Firebird::MetaName &userName);
+
 private:
 	Attachment(MemoryPool* pool, Database* dbb);
 	~Attachment();
@@ -543,7 +613,8 @@ private:
 
 inline bool Attachment::locksmith(thread_db* tdbb, SystemPrivilege sp) const
 {
-	return att_user && att_user->locksmith(tdbb, sp);
+	return att_user && att_user->locksmith(tdbb, sp) ||
+			att_ss_user && att_ss_user->locksmith(tdbb, sp);
 }
 
 inline jrd_tra* Attachment::getSysTransaction()

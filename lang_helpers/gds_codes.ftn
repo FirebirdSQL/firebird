@@ -1912,6 +1912,14 @@ C --
       PARAMETER (GDS__tom_rsa_verify                   = 335545249)
       INTEGER*4 GDS__tom_chacha_key                  
       PARAMETER (GDS__tom_chacha_key                   = 335545250)
+      INTEGER*4 GDS__bad_repl_handle                 
+      PARAMETER (GDS__bad_repl_handle                  = 335545251)
+      INTEGER*4 GDS__tra_snapshot_does_not_exist     
+      PARAMETER (GDS__tra_snapshot_does_not_exist      = 335545252)
+      INTEGER*4 GDS__eds_input_prm_not_used          
+      PARAMETER (GDS__eds_input_prm_not_used           = 335545253)
+      INTEGER*4 GDS__effective_user                  
+      PARAMETER (GDS__effective_user                   = 335545254)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 
@@ -2198,8 +2206,32 @@ C --
       PARAMETER (GDS__dyn_cant_use_in_foreignkey       = 336068897)
       INTEGER*4 GDS__dyn_defvaldecl_package_func     
       PARAMETER (GDS__dyn_defvaldecl_package_func      = 336068898)
+      INTEGER*4 GDS__dyn_cyclic_role                 
+      PARAMETER (GDS__dyn_cyclic_role                  = 336068900)
       INTEGER*4 GDS__dyn_cant_use_zero_inc_ident     
       PARAMETER (GDS__dyn_cant_use_zero_inc_ident      = 336068904)
+      INTEGER*4 GDS__dyn_no_ddl_grant_opt_priv       
+      PARAMETER (GDS__dyn_no_ddl_grant_opt_priv        = 336068907)
+      INTEGER*4 GDS__dyn_no_grant_opt_priv           
+      PARAMETER (GDS__dyn_no_grant_opt_priv            = 336068908)
+      INTEGER*4 GDS__dyn_func_not_exist              
+      PARAMETER (GDS__dyn_func_not_exist               = 336068909)
+      INTEGER*4 GDS__dyn_proc_not_exist              
+      PARAMETER (GDS__dyn_proc_not_exist               = 336068910)
+      INTEGER*4 GDS__dyn_pack_not_exist              
+      PARAMETER (GDS__dyn_pack_not_exist               = 336068911)
+      INTEGER*4 GDS__dyn_trig_not_exist              
+      PARAMETER (GDS__dyn_trig_not_exist               = 336068912)
+      INTEGER*4 GDS__dyn_view_not_exist              
+      PARAMETER (GDS__dyn_view_not_exist               = 336068913)
+      INTEGER*4 GDS__dyn_rel_not_exist               
+      PARAMETER (GDS__dyn_rel_not_exist                = 336068914)
+      INTEGER*4 GDS__dyn_exc_not_exist               
+      PARAMETER (GDS__dyn_exc_not_exist                = 336068915)
+      INTEGER*4 GDS__dyn_gen_not_exist               
+      PARAMETER (GDS__dyn_gen_not_exist                = 336068916)
+      INTEGER*4 GDS__dyn_fld_not_exist               
+      PARAMETER (GDS__dyn_fld_not_exist                = 336068917)
       INTEGER*4 GDS__gbak_unknown_switch             
       PARAMETER (GDS__gbak_unknown_switch              = 336330753)
       INTEGER*4 GDS__gbak_page_size_missing          

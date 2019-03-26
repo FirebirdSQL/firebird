@@ -98,7 +98,12 @@ FB_UDR_BEGIN_FUNCTION(UC_div)
 			if (in->n2)
 				out->result = div(in->n1, in->n2).quot;
 			else
+			{
 				out->result = std::numeric_limits<double>::infinity();
+				ISC_STATUS_ARRAY statusVector = {isc_arg_gds, isc_arith_except,
+					isc_arg_gds, isc_exception_integer_divide_by_zero, isc_arg_end};
+				FbException::check(isc_exception_integer_divide_by_zero, status, statusVector);
+			}
 		}
 	}
 FB_UDR_END_FUNCTION
@@ -139,7 +144,7 @@ FB_UDR_END_FUNCTION
 namespace
 {
 	enum day_format {day_short, day_long};
-	const FB_SIZE_T day_len[] = {4, 14};
+	const FB_SIZE_T day_len[] = {13, 53};
 	const char* day_fmtstr[] = {"%a", "%A"};
 
 	void decode_timestamp(IUtil* u, const FbTimestamp* from, tm* to, unsigned* fractions)
@@ -207,7 +212,7 @@ namespace
 /***
 create function dow (
     val timestamp
-) returns varchar(14) collate none
+) returns varchar(53) character set utf8
     external name 'udf_compat!UC_dow'
     engine udr;
 ***/
@@ -217,7 +222,7 @@ FB_UDR_BEGIN_FUNCTION(UC_dow)
 	);
 
 	FB_UDR_MESSAGE(OutMessage,
-		(FB_VARCHAR(14), result)
+		(FB_VARCHAR(53), result)
 	);
 
 	FB_UDR_EXECUTE_FUNCTION
@@ -231,7 +236,7 @@ FB_UDR_END_FUNCTION
 /***
 create function sdow (
     val timestamp
-) returns varchar(4) collate none
+) returns varchar(13) character set utf8
     external name 'udf_compat!UC_sdow'
     engine udr;
 ***/
@@ -241,7 +246,7 @@ FB_UDR_BEGIN_FUNCTION(UC_sdow)
 	);
 
 	FB_UDR_MESSAGE(OutMessage,
-		(FB_VARCHAR(4), result)
+		(FB_VARCHAR(13), result)
 	);
 
 	FB_UDR_EXECUTE_FUNCTION

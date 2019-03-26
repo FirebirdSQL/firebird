@@ -394,6 +394,25 @@ public:
 };
 
 
+class YReplicator FB_FINAL :
+	public YHelper<YReplicator, Firebird::IReplicatorImpl<YReplicator, Firebird::CheckStatusWrapper> >
+{
+public:
+	static const ISC_STATUS ERROR_CODE = isc_bad_repl_handle;
+
+	YReplicator(YAttachment* anAttachment, Firebird::IReplicator* aNext);
+
+	void destroy(unsigned dstrFlags);
+
+	// IReplicator implementation
+	void process(Firebird::CheckStatusWrapper* status, unsigned length, const unsigned char* data);
+	void close(Firebird::CheckStatusWrapper* status);
+
+public:
+	AtomicAttPtr attachment;
+};
+
+
 class YMetadata
 {
 public:
@@ -541,6 +560,7 @@ public:
 	YBatch* createBatch(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction,
 		unsigned stmtLength, const char* sqlStmt, unsigned dialect,
 		Firebird::IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par);
+	YReplicator* createReplicator(Firebird::CheckStatusWrapper* status);
 
 public:
 	Firebird::IProvider* provider;

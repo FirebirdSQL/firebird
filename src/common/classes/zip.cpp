@@ -35,9 +35,9 @@ using namespace Firebird;
 ZLib::ZLib(Firebird::MemoryPool&)
 {
 #ifdef WIN_NT
-	const char* name = "zlib1.dll";
+	Firebird::PathName name("zlib1.dll");
 #else
-	const char* name = "libz." SHRLIB_EXT ".1";
+	Firebird::PathName name("libz." SHRLIB_EXT ".1");
 #endif
 	z.reset(ModuleLoader::fixAndLoadModule(status, name));
 	if (z)

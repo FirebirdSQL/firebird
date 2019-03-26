@@ -261,6 +261,19 @@ public:
 			usr_granted_roles = ui.usr_granted_roles;
 	}
 
+	UserId(Firebird::MemoryPool& p)
+		: usr_user_name(p),
+		  usr_sql_role_name(p),
+		  usr_granted_roles(p),
+		  usr_trusted_role(p),
+		  usr_init_role(p),
+		  usr_project_name(p),
+		  usr_org_name(p),
+		  usr_auth_method(p),
+		  usr_auth_block(p)
+	{
+	}
+
 	UserId(const UserId& ui)
 		: usr_user_name(ui.usr_user_name),
 		  usr_sql_role_name(ui.usr_sql_role_name),

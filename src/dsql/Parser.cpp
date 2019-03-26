@@ -600,7 +600,7 @@ int Parser::yylexAux()
 	 *
 	 * This code recognizes the following token types:
 	 *
-	 * NUMBER: string of digits which fits into a 32-bit integer
+	 * NUMBER32BIT: string of digits which fits into a 32-bit integer
 	 *
 	 * NUMBER64BIT: string of digits whose value might fit into an SINT64,
 	 *   depending on whether or not there is a preceding '-', which is to
@@ -792,7 +792,7 @@ int Parser::yylexAux()
 	// by a set of nibbles, using 0-9, a-f, or A-F.  Odd numbers
 	// of nibbles assume a leading '0'.  The result is converted
 	// to an integer, and the result returned to the caller.  The
-	// token is identified as a NUMBER if it's a 32-bit or less
+	// token is identified as a NUMBER32BIT if it's a 32-bit or less
 	// value, or a NUMBER64INT if it requires a 64-bit number.
 	if (c == '0' && lex.ptr + 1 < lex.end && (*lex.ptr == 'x' || *lex.ptr == 'X') &&
 		(classes(lex.ptr[1]) & CHR_HEX))
@@ -833,7 +833,7 @@ int Parser::yylexAux()
 		}
 
 		// we have a valid hex token. Now give it back, either as
-		// an NUMBER or NUMBER64BIT.
+		// an NUMBER32BIT or NUMBER64BIT.
 		if (!hexerror)
 		{
 			// if charlen > 8 (something like FFFF FFFF 0, w/o the spaces)
@@ -888,7 +888,7 @@ int Parser::yylexAux()
 			}
 			else
 			{
-				// we have an integer value. we'll return NUMBER.
+				// we have an integer value. we'll return NUMBER32BIT.
 				// but we have to make a number value to be compatible
 				// with existing code.
 
@@ -933,7 +933,7 @@ int Parser::yylexAux()
 				}
 
 				yylval.int32Val = (SLONG) value;
-				return TOK_NUMBER;
+				return TOK_NUMBER32BIT;
 			} // integer value
 		}  // if (!hexerror)...
 
@@ -1111,7 +1111,7 @@ int Parser::yylexAux()
 				{
 					yylval.int32Val = (SLONG) number;
 					//printf ("parse.y %p %d\n", yylval.legacyStr, number);
-					return TOK_NUMBER;
+					return TOK_NUMBER32BIT;
 				}
 				else
 				{

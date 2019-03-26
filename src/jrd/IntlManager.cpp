@@ -474,13 +474,16 @@ bool IntlManager::initialize()
 					ISC_STATUS_ARRAY status;
 					if (!exists)
 					{
-						mod = ModuleLoader::loadModule(status, filename);
-						if (!mod)
+						mod = ModuleLoader::fixAndLoadModule(status, filename);
+						if (mod)
 						{
-							ModuleLoader::doctorModuleExtension(filename);
 							exists = modules->exist(filename);
-							if (!exists)
-								mod = ModuleLoader::loadModule(status, filename);
+							if (exists)
+							{
+								// Module was already loaded, forget it
+								delete mod;
+								mod = nullptr;
+							}
 						}
 					}
 
@@ -507,6 +510,7 @@ bool IntlManager::initialize()
 									filename.c_str(), version);
 								gds__log(err_msg.c_str());
 								ok = false;
+								// Shouldn't mod be deleted here? It looks like a leak.
 							}
 							else
 								modules->put(filename, mod);

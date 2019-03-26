@@ -1143,8 +1143,8 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 	}
 
 	// Try "favorite" (distributed on windows) version first
-	const int favMaj = 5;
-	const int favMin = 2;
+	const int favMaj = 63;
+	const int favMin = 1;
 	try
 	{
 		if ((convIcu = ImplementConversionICU::create(favMaj, favMin)))

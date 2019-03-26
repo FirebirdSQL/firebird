@@ -29,6 +29,12 @@
 #include <assert.h>
 #include <string.h>
 
+#if defined(__linux__) && defined(__i386__)
+#define FB__INT64_ALIGNAS alignas(8)
+#else
+#define FB__INT64_ALIGNAS
+#endif
+
 #define FB_MESSAGE(name, statusType, fields)	\
 	FB__MESSAGE_I(name, statusType, 2, FB_BOOST_PP_CAT(FB__MESSAGE_X fields, 0), )
 
@@ -195,14 +201,14 @@
 
 #define FB__TYPE_FB_SCALED_SMALLINT(x)			ISC_SHORT
 #define FB__TYPE_FB_SCALED_INTEGER(x)			ISC_LONG
-#define FB__TYPE_FB_SCALED_BIGINT(x)			ISC_INT64
+#define FB__TYPE_FB_SCALED_BIGINT(x)			FB__INT64_ALIGNAS ISC_INT64
 #define FB__TYPE_FB_SMALLINT					ISC_SHORT
 #define FB__TYPE_FB_INTEGER						ISC_LONG
-#define FB__TYPE_FB_BIGINT						ISC_INT64
+#define FB__TYPE_FB_BIGINT						FB__INT64_ALIGNAS ISC_INT64
 #define FB__TYPE_FB_FLOAT						float
 #define FB__TYPE_FB_DOUBLE						double
-#define FB__TYPE_FB_DECFLOAT16					FB_DEC16
-#define FB__TYPE_FB_DECFLOAT34					FB_DEC34
+#define FB__TYPE_FB_DECFLOAT16					FB__INT64_ALIGNAS FB_DEC16
+#define FB__TYPE_FB_DECFLOAT34					FB__INT64_ALIGNAS FB_DEC34
 #define FB__TYPE_FB_BLOB						ISC_QUAD
 #define FB__TYPE_FB_BOOLEAN						ISC_UCHAR
 #define FB__TYPE_FB_DATE						::Firebird::FbDate

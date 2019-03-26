@@ -64,6 +64,12 @@ public:
 		appendUShort(val >> 16);
 	}
 
+	void appendUInt64(FB_UINT64 val)
+	{
+		appendULong(val);
+		appendULong(val >> 32);
+	}
+
 	void appendUCharRepeated(UCHAR byte, int count)
 	{
 		for (int i = 0; i < count; ++i)

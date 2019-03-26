@@ -328,6 +328,8 @@ public:
 		return fb_utils::genUniqueId();
 	}
 
+	Firebird::Guid dbb_guid;			// database GUID
+
 	Firebird::SyncObject	dbb_sync;
 	Firebird::SyncObject	dbb_sys_attach;		// synchronize operations with dbb_sys_attachments
 
@@ -435,6 +437,9 @@ public:
 	time_t dbb_linger_end;
 	Firebird::RefPtr<Firebird::IPluginConfig> dbb_plugin_config;
 
+	FB_UINT64 dbb_repl_sequence;	// replication sequence
+	ReplicaMode dbb_replica_mode;	// replica access mode
+
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;
 
@@ -462,6 +467,16 @@ public:
 
 	void registerModule(Module&);
 
+	bool isReplica() const
+	{
+		return (dbb_replica_mode != REPLICA_NONE);
+	}
+
+	bool isReplica(ReplicaMode mode) const
+	{
+		return (dbb_replica_mode == mode);
+	}
+
 private:
 	Database(MemoryPool* p, Firebird::IPluginConfig* pConf, bool shared)
 	:	dbb_permanent(p),
@@ -486,7 +501,9 @@ private:
 		dbb_init_fini(FB_NEW_POOL(*getDefaultMemoryPool()) ExistenceRefMutex()),
 		dbb_linger_seconds(0),
 		dbb_linger_end(0),
-		dbb_plugin_config(pConf)
+		dbb_plugin_config(pConf),
+		dbb_repl_sequence(0),
+		dbb_replica_mode(REPLICA_NONE)
 	{
 		dbb_pools.add(p);
 	}
@@ -519,6 +536,10 @@ public:
 
 	static void garbage_collector(Database* dbb);
 	void exceptionHandler(const Firebird::Exception& ex, ThreadFinishSync<Database*>::ThreadRoutine* routine);
+
+	void ensureGuid(thread_db* tdbb);
+	FB_UINT64 getReplSequence(thread_db* tdbb);
+	void setReplSequence(thread_db* tdbb, FB_UINT64 sequence);
 
 private:
 	//static int blockingAstSharedCounter(void*);

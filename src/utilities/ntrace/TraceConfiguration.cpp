@@ -142,7 +142,10 @@ void TraceCfgReader::readConfig()
 		}
 		else if (isDatabase && !m_databaseName.empty())
 		{
-			if (m_databaseName == pattern.c_str())
+			PathName noQuotePattern = pattern.ToPathName();
+			noQuotePattern.alltrim(" '\'");
+
+			if (m_databaseName == noQuotePattern)
 				match = exactMatch = true;
 			else
 			{
@@ -280,6 +283,10 @@ ULONG TraceCfgReader::parseUInteger(const ConfigFile::Parameter* el) const
 void TraceCfgReader::expandPattern(const ConfigFile::Parameter* el, PathName& valueToExpand)
 {
 	valueToExpand = el->value.ToPathName();
+
+	// strip quotes around value, if any
+	valueToExpand.alltrim(" '\"");
+
 	PathName::size_type pos = 0;
 	while (pos < valueToExpand.length())
 	{

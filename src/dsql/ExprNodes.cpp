@@ -185,35 +185,6 @@ static void setParameterInfo(dsql_par* parameter, const dsql_ctx* context);
 //--------------------
 
 
-void NodeRef::pass2(thread_db* tdbb, CompilerScratch* csb)
-{
-	internalPass2(tdbb, csb);
-
-	ExprNode* node = getExpr();
-
-	// Bind values of invariant nodes to top-level RSE (if present)
-	if (node && (node->nodFlags & ExprNode::FLAG_INVARIANT))
-	{
-		if (csb->csb_current_nodes.hasData())
-		{
-			RseNode* topRseNode = nodeAs<RseNode>(csb->csb_current_nodes[0]);
-			fb_assert(topRseNode);
-
-			if (!topRseNode->rse_invariants)
-			{
-				topRseNode->rse_invariants =
-					FB_NEW_POOL(*tdbb->getDefaultPool()) VarInvariantArray(*tdbb->getDefaultPool());
-			}
-
-			topRseNode->rse_invariants->add(node->impureOffset);
-		}
-	}
-}
-
-
-//--------------------
-
-
 void Printable::print(NodePrinter& printer) const
 {
 	NodePrinter subPrinter(printer.getIndent() + 1);
@@ -267,9 +238,9 @@ bool ExprNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other
 
 	const auto* j = otherHolder.refs.begin();
 
-	for (const auto& i : thisHolder.refs)
+	for (const auto i : thisHolder.refs)
 	{
-		if (!*i != !**j || !PASS1_node_match(dsqlScratch, i->getExpr(), (*j)->getExpr(), ignoreMapCast))
+		if (!*i != !**j || !PASS1_node_match(dsqlScratch, *i, **j, ignoreMapCast))
 			return false;
 
 		++j;
@@ -295,12 +266,12 @@ bool ExprNode::sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreSt
 
 	const auto* j = otherHolder.refs.begin();
 
-	for (const auto& i : thisHolder.refs)
+	for (const auto i : thisHolder.refs)
 	{
 		if (!*i && !**j)
 			continue;
 
-		if (!*i || !**j || !i->getExpr()->sameAs(csb, (*j)->getExpr(), ignoreStreams))
+		if (!*i || !**j || !(*i)->sameAs(csb, **j, ignoreStreams))
 			return false;
 
 		++j;
@@ -314,9 +285,9 @@ bool ExprNode::possiblyUnknown(OptimizerBlk* opt)
 	NodeRefsHolder holder(opt->getPool());
 	getChildren(holder, false);
 
-	for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
+	for (auto i : holder.refs)
 	{
-		if (**i && (*i)->getExpr()->possiblyUnknown(opt))
+		if (*i && (*i)->possiblyUnknown(opt))
 			return true;
 	}
 
@@ -328,9 +299,9 @@ bool ExprNode::unmappable(CompilerScratch* csb, const MapNode* mapNode, StreamTy
 	NodeRefsHolder holder(csb->csb_pool);
 	getChildren(holder, false);
 
-	for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
+	for (auto i : holder.refs)
 	{
-		if (**i && !(*i)->getExpr()->unmappable(csb, mapNode, shellStream))
+		if (*i && !(*i)->unmappable(csb, mapNode, shellStream))
 			return false;
 	}
 
@@ -342,10 +313,10 @@ void ExprNode::collectStreams(CompilerScratch* csb, SortedStreamList& streamList
 	NodeRefsHolder holder(csb->csb_pool);
 	getChildren(holder, false);
 
-	for (const NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
+	for (auto i : holder.refs)
 	{
-		if (**i)
-			(*i)->getExpr()->collectStreams(csb, streamList);
+		if (*i)
+			(*i)->collectStreams(csb, streamList);
 	}
 }
 
@@ -355,9 +326,9 @@ bool ExprNode::computable(CompilerScratch* csb, StreamType stream,
 	NodeRefsHolder holder(csb->csb_pool);
 	getChildren(holder, false);
 
-	for (auto& i : holder.refs)
+	for (auto i : holder.refs)
 	{
-		if (*i && !i->getExpr()->computable(csb, stream, allowOnlyCurrentStream))
+		if (*i && !(*i)->computable(csb, stream, allowOnlyCurrentStream))
 			return false;
 	}
 
@@ -369,10 +340,10 @@ void ExprNode::findDependentFromStreams(const OptimizerRetrieval* optRet, Sorted
 	NodeRefsHolder holder(optRet->getPool());
 	getChildren(holder, false);
 
-	for (auto& i : holder.refs)
+	for (auto i : holder.refs)
 	{
 		if (*i)
-			i->getExpr()->findDependentFromStreams(optRet, streamList);
+			(*i)->findDependentFromStreams(optRet, streamList);
 	}
 }
 
@@ -381,10 +352,10 @@ ExprNode* ExprNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	NodeRefsHolder holder(csb->csb_pool);
 	getChildren(holder, false);
 
-	for (auto& i : holder.refs)
+	for (auto i : holder.refs)
 	{
 		if (*i)
-			i->pass1(tdbb, csb);
+			doPass1(tdbb, csb, i);
 	}
 
 	return this;
@@ -395,10 +366,32 @@ ExprNode* ExprNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	NodeRefsHolder holder(csb->csb_pool);
 	getChildren(holder, false);
 
-	for (auto& i : holder.refs)
+	for (auto i : holder.refs)
 	{
-		if (*i)
-			i->pass2(tdbb, csb);
+		if (!*i)
+			continue;
+
+		doPass2(tdbb, csb, i);
+
+		ExprNode* node = *i;
+
+		// Bind values of invariant nodes to top-level RSE (if present)
+		if (node && (node->nodFlags & ExprNode::FLAG_INVARIANT))
+		{
+			if (csb->csb_current_nodes.hasData())
+			{
+				RseNode* topRseNode = nodeAs<RseNode>(csb->csb_current_nodes[0]);
+				fb_assert(topRseNode);
+
+				if (!topRseNode->rse_invariants)
+				{
+					topRseNode->rse_invariants =
+						FB_NEW_POOL(*tdbb->getDefaultPool()) VarInvariantArray(*tdbb->getDefaultPool());
+				}
+
+				topRseNode->rse_invariants->add(node->impureOffset);
+			}
+		}
 	}
 
 	return this;
@@ -9260,8 +9253,8 @@ bool OverNode::dsqlAggregateFinder(AggregateFinder& visitor)
 		NodeRefsHolder holder(visitor.getPool());
 		aggExpr->getChildren(holder, true);
 
-		for (auto& child : holder.refs)
-			aggregate |= visitor.visit(child->getExpr());
+		for (auto child : holder.refs)
+			aggregate |= visitor.visit(*child);
 	}
 	else
 		aggregate |= visitor.visit(aggExpr);
@@ -9323,10 +9316,10 @@ ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	NodeRefsHolder holder(visitor.getPool());
 	aggNode->getChildren(holder, true);
 
-	for (auto& child : holder.refs)
+	for (auto child : holder.refs)
 	{
 		if (Aggregate2Finder::find(visitor.getPool(), visitor.context->ctx_scope_level, FIELD_MATCH_TYPE_EQUAL,
-				true, child->getExpr()))
+				true, *child))
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 					  Arg::Gds(isc_dsql_agg_nested_err));
@@ -9346,8 +9339,11 @@ ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 			NodeRefsHolder holder(visitor.getPool());
 			aggNode->getChildren(holder, true);
 
-			for (auto& child : holder.refs)
-				child->remap(visitor);
+			for (auto child : holder.refs)
+			{
+				if (*child)
+					*child = (*child)->dsqlFieldRemapper(visitor);
+			}
 
 			doDsqlFieldRemapper(visitor, window);
 		}
@@ -9801,7 +9797,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, jrd_req* request) const
 				if (!blobId->isEmpty())
 				{
 					if (!request->hasInternalStatement())
-						tdbb->getTransaction()->checkBlob(tdbb, blobId, NULL, true);
+						tdbb->getTransaction()->checkBlob(tdbb, blobId, NULL, false);
 
 					if (desc->getCharSet() != CS_NONE && desc->getCharSet() != CS_BINARY)
 					{
@@ -10723,7 +10719,7 @@ dsc* StrCaseNode::execute(thread_db* tdbb, jrd_req* request) const
 	else
 	{
 		UCHAR* ptr;
-		VaryStr<32> temp;
+		VaryStr<TEMP_STR_LENGTH> temp;
 		USHORT ttype;
 
 		dsc desc;
@@ -10953,7 +10949,7 @@ dsc* StrLenNode::execute(thread_db* tdbb, jrd_req* request) const
 		return &impure->vlu_desc;
 	}
 
-	VaryStr<32> temp;
+	VaryStr<TEMP_STR_LENGTH> temp;
 	USHORT ttype;
 	UCHAR* p;
 
@@ -11788,7 +11784,7 @@ dsc* SubstringNode::perform(thread_db* tdbb, impure_value* impure, const dsc* va
 		//		- The types that can cause an error() issued inside the low level MOV/CVT
 		//		routines because the "temp" is not enough are blob and array but at this time
 		//		they aren't accepted, so they will cause error() to be called anyway.
-		VaryStr<32> temp;
+		VaryStr<TEMP_STR_LENGTH> temp;
 		USHORT ttype;
 		desc.dsc_length = MOV_get_string_ptr(tdbb, valueDsc, &ttype, &desc.dsc_address,
 			&temp, sizeof(temp));

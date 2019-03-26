@@ -394,6 +394,7 @@ enum info_db_provider
 #define isc_info_tra_access					9
 #define isc_info_tra_lock_timeout			10
 #define fb_info_tra_dbpath					11
+#define fb_info_tra_snapshot_number			12
 
 // isc_info_tra_isolation responses
 #define isc_info_tra_consistency		1

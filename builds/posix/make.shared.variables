@@ -54,7 +54,8 @@ AllObjects += $(YValve_Objects)
 
 # Remote
 Remote_Common:= $(call dirObjects,remote) $(call dirObjects,auth/SecureRemotePassword)
-Remote_Server:= $(call dirObjects,remote/server) $(call dirObjects,auth/SecureRemotePassword/server)
+Remote_Server:= $(call dirObjects,remote/server) $(call dirObjects,auth/SecureRemotePassword/server) \
+				$(call makeObjects,jrd/replication,Config.cpp Utils.cpp)
 Remote_Client:= $(call dirObjects,remote/client) $(call dirObjects,auth/SecureRemotePassword/client) \
 				$(call makeObjects,auth/SecurityDatabase,LegacyClient.cpp) \
 				$(call dirObjects,plugins/crypt/arc4)
@@ -66,7 +67,7 @@ AllObjects += $(Remote_Common) $(Remote_Server) $(Remote_Client)
 
 # Engine
 Engine_Objects:= $(call dirObjects,jrd) $(call dirObjects,dsql) $(call dirObjects,jrd/extds) \
-				 $(call dirObjects,jrd/recsrc) $(call dirObjects,jrd/trace) \
+				 $(call dirObjects,jrd/recsrc) $(call dirObjects,jrd/replication) $(call dirObjects,jrd/trace) \
 				 $(call makeObjects,lock,lock.cpp)
 
 AllObjects += $(Engine_Objects)

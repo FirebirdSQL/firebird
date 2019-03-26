@@ -1101,6 +1101,16 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 			return P_TRUE(xdrs, p);
 		}
 
+	case op_repl_data:
+		{
+			P_REPLICATE* repl = &p->p_replicate;
+			MAP(xdr_short, reinterpret_cast<SSHORT&>(repl->p_repl_database));
+			MAP(xdr_cstring_const, repl->p_repl_data);
+			DEBUG_PRINTSIZE(xdrs, p->p_operation);
+
+			return P_TRUE(xdrs, p);
+		}
+
 	///case op_insert:
 	default:
 #ifdef DEV_BUILD

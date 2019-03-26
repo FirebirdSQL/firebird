@@ -188,6 +188,7 @@ void PPG_print_header(const header_page* header, ULONG page,
 				uSvc->printf(false, ", ");
 			uSvc->printf(false, "read only");
 		}
+
 		if (flags & hdr_backup_mask)
 		{
 			if (flag_count++)
@@ -204,6 +205,24 @@ void PPG_print_header(const header_page* header, ULONG page,
 				uSvc->printf(false, "wrong backup state %d", flags & hdr_backup_mask);
 			}
 		}
+
+		if (flags & hdr_replica_mask)
+		{
+			if (flag_count++)
+				uSvc->printf(false, ", ");
+			switch (flags & hdr_replica_mask)
+			{
+			case Ods::hdr_replica_read_only:
+				uSvc->printf(false, "read-only replica");
+				break;
+			case Ods::hdr_replica_read_write:
+				uSvc->printf(false, "read-write replica");
+				break;
+			default:
+				uSvc->printf(false, "wrong replica state %d", flags & hdr_replica_mask);
+			}
+		}
+
 		uSvc->printf(false, "\n");
 	}
 
@@ -265,6 +284,22 @@ void PPG_print_header(const header_page* header, ULONG page,
 		case HDR_crypt_checksum:
 			uSvc->printf(false, "\tCrypt checksum:\t%*.*s\n", p[1], p[1], p + 2);
 			break;
+
+		case HDR_db_guid:
+		{
+			char buff[Firebird::GUID_BUFF_SIZE];
+			Firebird::GuidToString(buff, reinterpret_cast<const Guid*>(p + 2));
+			uSvc->printf(false, "\tDatabase GUID:\t%s\n", buff);
+			break;
+		}
+
+		case HDR_repl_seq:
+		{
+			FB_UINT64 sequence;
+			memcpy(&sequence, p + 2, sizeof(sequence));
+			uSvc->printf(false, "\tReplication sequence:\t%" UQUADFORMAT"\n", sequence);
+			break;
+		}
 
 		default:
 			if (*p > HDR_max)

@@ -59,9 +59,9 @@ public:
 private:
 	static void verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation, TrigVector* triggers,
 		Firebird::MetaName userName);
-	static void triggersExternalAccess(thread_db* tdbb, ExternalAccessList& list, TrigVector* tvec);
+	static void triggersExternalAccess(thread_db* tdbb, ExternalAccessList& list, TrigVector* tvec, const Firebird::MetaName &user);
 
-	void buildExternalAccess(thread_db* tdbb, ExternalAccessList& list);
+	void buildExternalAccess(thread_db* tdbb, ExternalAccessList& list, const Firebird::MetaName& user);
 
 public:
 	MemoryPool* pool;
@@ -76,7 +76,7 @@ public:
 	const jrd_prc* procedure;			// procedure, if any
 	const Function* function;			// function, if any
 	Firebird::MetaName triggerName;		// name of request (trigger), if any
-	Firebird::MetaName triggerOwner;	// user name if trigger run with SQL SECURITY DEFINER
+	Jrd::UserId* triggerInvoker;		// user name if trigger run with SQL SECURITY DEFINER
 	JrdStatement* parentStatement;		// Sub routine's parent statement
 	Firebird::Array<JrdStatement*> subStatements;	// Array of subroutines' statements
 	const StmtNode* topNode;			// top of execution tree

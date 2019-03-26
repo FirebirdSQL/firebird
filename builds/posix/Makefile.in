@@ -708,12 +708,18 @@ install install-embedded silent_install package packages dist:
 #
 .PHONY: clean clean_objects clean_dependancies clean_extern_objects clean_build \
 		clean_gpre_gen clean_icu clean_dbs clean_examples clean_makefiles \
-		clean_editline clean_all clean_decfloat
+		clean_editline clean_all clean_decfloat clean_vers clean_misc
 
 
 clean: clean_objects clean_dependancies clean_extern_objects clean_build \
 		clean_yacc_gen clean_gpre_gen clean_dbs clean_examples clean_tommath \
-		clean_tomcrypt clean_decfloat
+		clean_tomcrypt clean_decfloat clean_vers clean_misc
+
+clean_vers:
+	$(RM) *.vers
+
+clean_misc:
+	$(RM) makeHeader ods.txt odstest* security.tmp test.header.txt 
 
 ifeq ($(EDITLINE_FLG),Y)
 ifeq ($(STD_EDITLINE),false)
@@ -794,7 +800,7 @@ clean_gpre_gen:
 	-$(RM) -f `find $(TMP_ROOT)/ -type f -name '*.cpp' -print`
 
 clean_yacc_gen:
-	$(RM) $(ROOT)/src/dsql/parse.cpp $(ROOT)/src/dsql/dsql.tab.h
+	$(RM) $(ROOT)/src/dsql/parse.cpp $(ROOT)/src/dsql/dsql.tab.h types.y y.*
 
 #___________________________________________________________________________
 # Extra platform specific targets

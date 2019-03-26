@@ -321,6 +321,9 @@ static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
 	else if (switches & sw_set_db_dialect) {
 		dpb.insertInt(isc_dpb_set_db_sql_dialect, tdgbl->ALICE_data.ua_db_SQL_dialect);
 	}
+	else if (switches & sw_replica) {
+		dpb.insertByte(isc_dpb_set_db_replica, tdgbl->ALICE_data.ua_replica_mode);
+	}
 
 	if (switches & sw_nolinger)
 		dpb.insertTag(isc_dpb_nolinger);

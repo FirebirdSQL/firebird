@@ -82,6 +82,7 @@
 #include "../common/file_params.h"
 #include "../remote/inet_proto.h"
 #include "../remote/server/serve_proto.h"
+#include "../remote/server/ReplServer.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/fb_string.h"
@@ -466,6 +467,17 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		} // end scope
 
 		fb_shutdown_callback(NULL, closePort, fb_shut_exit, port);
+
+		Firebird::LocalStatus localStatus;
+		Firebird::CheckStatusWrapper statusWrapper(&localStatus);
+
+		if (!REPL_server(&statusWrapper, false, &serverClosing))
+		{
+			const char* errorMsg = "Replication server initialization error";
+			gds__log_status(errorMsg, localStatus.getErrors());
+			Firebird::Syslog::Record(Firebird::Syslog::Error, errorMsg);
+			exit(STARTUP_ERROR);
+		}
 
 		SRVR_multi_thread(port, INET_SERVER_flag);
 

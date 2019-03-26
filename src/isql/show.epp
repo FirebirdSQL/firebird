@@ -361,7 +361,7 @@ void SHOW_comments(bool force)
 	if (isqlGlob.major_ods >= ODS_VERSION11 || force)
 	{
 		char banner[BUFFER_LENGTH128];
-		sprintf(banner, "%s/* Comments for database objects. */%s", NEWLINE, NEWLINE);
+		fb_utils::snprintf(banner, sizeof(banner), "%s/* Comments for database objects. */%s", NEWLINE, NEWLINE);
 		show_comments(cmmExtract, banner);
 	}
 }
@@ -1069,7 +1069,8 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				if (!PRV.RDB$FIELD_NAME.NULL && PRV.RDB$FIELD_NAME[0] == 'D')
 					default_option = " DEFAULT";
 
-				sprintf(Print_buffer, "GRANT%s %s TO %s%s%s%s%s", default_option, SQL_identifier,
+				fb_utils::snprintf(Print_buffer, sizeof(Print_buffer), "GRANT%s %s TO %s%s%s%s%s",
+						default_option, SQL_identifier,
 						user_string, with_option, granted_by(buf_grantor, PRV.RDB$GRANTOR, PRV.RDB$GRANTOR.NULL),
 						terminator, NEWLINE);
 
@@ -4631,7 +4632,7 @@ static processing_state show_generators(const SCHAR* object)
 				strcpy(gen_name, GEN.RDB$GENERATOR_NAME);
 			}
 
-			sprintf (query, genIdStr, gen_name);
+			fb_utils::snprintf(query, sizeof(query), genIdStr, gen_name);
 
 			DB->execute(fbStatus, fbTrans, 0, query, isqlGlob.SQL_dialect,
 				NULL, NULL, outMetadata, outBuffer);

@@ -51,6 +51,7 @@ namespace Firebird
 	class IStatement;
 	class IBatch;
 	class IBatchCompletionState;
+	class IReplicator;
 	class IRequest;
 	class IEvents;
 	class IAttachment;
@@ -115,6 +116,10 @@ namespace Firebird
 	class IUdrPlugin;
 	class IDecFloat16;
 	class IDecFloat34;
+	class IReplicatedRecord;
+	class IReplicatedBlob;
+	class IReplicatedTransaction;
+	class IReplicatedSession;
 
 	// Interfaces declarations
 
@@ -1935,6 +1940,43 @@ namespace Firebird
 		}
 	};
 
+	class IReplicator : public IReferenceCounted
+	{
+	public:
+		struct VTable : public IReferenceCounted::VTable
+		{
+			void (CLOOP_CARG *process)(IReplicator* self, IStatus* status, unsigned length, const unsigned char* data) throw();
+			void (CLOOP_CARG *close)(IReplicator* self, IStatus* status) throw();
+		};
+
+	protected:
+		IReplicator(DoNotInherit)
+			: IReferenceCounted(DoNotInherit())
+		{
+		}
+
+		~IReplicator()
+		{
+		}
+
+	public:
+		static const unsigned VERSION = 3;
+
+		template <typename StatusType> void process(StatusType* status, unsigned length, const unsigned char* data)
+		{
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->process(this, status, length, data);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void close(StatusType* status)
+		{
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->close(this, status);
+			StatusType::checkException(status);
+		}
+	};
+
 	class IRequest : public IReferenceCounted
 	{
 	public:
@@ -2069,6 +2111,7 @@ namespace Firebird
 			unsigned (CLOOP_CARG *getStatementTimeout)(IAttachment* self, IStatus* status) throw();
 			void (CLOOP_CARG *setStatementTimeout)(IAttachment* self, IStatus* status, unsigned timeOut) throw();
 			IBatch* (CLOOP_CARG *createBatch)(IAttachment* self, IStatus* status, ITransaction* transaction, unsigned stmtLength, const char* sqlStmt, unsigned dialect, IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) throw();
+			IReplicator* (CLOOP_CARG *createReplicator)(IAttachment* self, IStatus* status) throw();
 		};
 
 	protected:
@@ -2284,6 +2327,20 @@ namespace Firebird
 			}
 			StatusType::clearException(status);
 			IBatch* ret = static_cast<VTable*>(this->cloopVTable)->createBatch(this, status, transaction, stmtLength, sqlStmt, dialect, inMetadata, parLength, par);
+			StatusType::checkException(status);
+			return ret;
+		}
+
+		template <typename StatusType> IReplicator* createReplicator(StatusType* status)
+		{
+			if (cloopVTable->version < 4)
+			{
+				StatusType::setVersionError(status, "IAttachment", cloopVTable->version, 4);
+				StatusType::checkException(status);
+				return 0;
+			}
+			StatusType::clearException(status);
+			IReplicator* ret = static_cast<VTable*>(this->cloopVTable)->createReplicator(this, status);
 			StatusType::checkException(status);
 			return ret;
 		}
@@ -5172,6 +5229,7 @@ namespace Firebird
 		struct VTable : public IReferenceCounted::VTable
 		{
 			unsigned (CLOOP_CARG *write)(ITraceLogWriter* self, const void* buf, unsigned size) throw();
+			unsigned (CLOOP_CARG *write_s)(ITraceLogWriter* self, IStatus* status, const void* buf, unsigned size) throw();
 		};
 
 	protected:
@@ -5185,11 +5243,25 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 3;
+		static const unsigned VERSION = 4;
 
 		unsigned write(const void* buf, unsigned size)
 		{
 			unsigned ret = static_cast<VTable*>(this->cloopVTable)->write(this, buf, size);
+			return ret;
+		}
+
+		template <typename StatusType> unsigned write_s(StatusType* status, const void* buf, unsigned size)
+		{
+			if (cloopVTable->version < 4)
+			{
+				StatusType::setVersionError(status, "ITraceLogWriter", cloopVTable->version, 4);
+				StatusType::checkException(status);
+				return 0;
+			}
+			StatusType::clearException(status);
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->write_s(this, status, buf, size);
+			StatusType::checkException(status);
 			return ret;
 		}
 	};
@@ -5766,6 +5838,230 @@ namespace Firebird
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->fromString(this, status, from, to);
 			StatusType::checkException(status);
+		}
+	};
+
+	class IReplicatedRecord : public IVersioned
+	{
+	public:
+		struct VTable : public IVersioned::VTable
+		{
+			unsigned (CLOOP_CARG *getRawLength)(IReplicatedRecord* self) throw();
+			const unsigned char* (CLOOP_CARG *getRawData)(IReplicatedRecord* self) throw();
+		};
+
+	protected:
+		IReplicatedRecord(DoNotInherit)
+			: IVersioned(DoNotInherit())
+		{
+		}
+
+		~IReplicatedRecord()
+		{
+		}
+
+	public:
+		static const unsigned VERSION = 2;
+
+		unsigned getRawLength()
+		{
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getRawLength(this);
+			return ret;
+		}
+
+		const unsigned char* getRawData()
+		{
+			const unsigned char* ret = static_cast<VTable*>(this->cloopVTable)->getRawData(this);
+			return ret;
+		}
+	};
+
+	class IReplicatedBlob : public IVersioned
+	{
+	public:
+		struct VTable : public IVersioned::VTable
+		{
+			unsigned (CLOOP_CARG *getLength)(IReplicatedBlob* self) throw();
+			FB_BOOLEAN (CLOOP_CARG *isEof)(IReplicatedBlob* self) throw();
+			unsigned (CLOOP_CARG *getSegment)(IReplicatedBlob* self, unsigned length, unsigned char* buffer) throw();
+		};
+
+	protected:
+		IReplicatedBlob(DoNotInherit)
+			: IVersioned(DoNotInherit())
+		{
+		}
+
+		~IReplicatedBlob()
+		{
+		}
+
+	public:
+		static const unsigned VERSION = 2;
+
+		unsigned getLength()
+		{
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getLength(this);
+			return ret;
+		}
+
+		FB_BOOLEAN isEof()
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->isEof(this);
+			return ret;
+		}
+
+		unsigned getSegment(unsigned length, unsigned char* buffer)
+		{
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getSegment(this, length, buffer);
+			return ret;
+		}
+	};
+
+	class IReplicatedTransaction : public IDisposable
+	{
+	public:
+		struct VTable : public IDisposable::VTable
+		{
+			FB_BOOLEAN (CLOOP_CARG *prepare)(IReplicatedTransaction* self) throw();
+			FB_BOOLEAN (CLOOP_CARG *commit)(IReplicatedTransaction* self) throw();
+			FB_BOOLEAN (CLOOP_CARG *rollback)(IReplicatedTransaction* self) throw();
+			FB_BOOLEAN (CLOOP_CARG *startSavepoint)(IReplicatedTransaction* self) throw();
+			FB_BOOLEAN (CLOOP_CARG *releaseSavepoint)(IReplicatedTransaction* self) throw();
+			FB_BOOLEAN (CLOOP_CARG *rollbackSavepoint)(IReplicatedTransaction* self) throw();
+			FB_BOOLEAN (CLOOP_CARG *insertRecord)(IReplicatedTransaction* self, const char* name, IReplicatedRecord* record) throw();
+			FB_BOOLEAN (CLOOP_CARG *updateRecord)(IReplicatedTransaction* self, const char* name, IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord) throw();
+			FB_BOOLEAN (CLOOP_CARG *deleteRecord)(IReplicatedTransaction* self, const char* name, IReplicatedRecord* record) throw();
+			FB_BOOLEAN (CLOOP_CARG *storeBlob)(IReplicatedTransaction* self, ISC_QUAD blobId, IReplicatedBlob* blob) throw();
+			FB_BOOLEAN (CLOOP_CARG *executeSql)(IReplicatedTransaction* self, const char* sql) throw();
+		};
+
+	protected:
+		IReplicatedTransaction(DoNotInherit)
+			: IDisposable(DoNotInherit())
+		{
+		}
+
+		~IReplicatedTransaction()
+		{
+		}
+
+	public:
+		static const unsigned VERSION = 3;
+
+		FB_BOOLEAN prepare()
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->prepare(this);
+			return ret;
+		}
+
+		FB_BOOLEAN commit()
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->commit(this);
+			return ret;
+		}
+
+		FB_BOOLEAN rollback()
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->rollback(this);
+			return ret;
+		}
+
+		FB_BOOLEAN startSavepoint()
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->startSavepoint(this);
+			return ret;
+		}
+
+		FB_BOOLEAN releaseSavepoint()
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->releaseSavepoint(this);
+			return ret;
+		}
+
+		FB_BOOLEAN rollbackSavepoint()
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->rollbackSavepoint(this);
+			return ret;
+		}
+
+		FB_BOOLEAN insertRecord(const char* name, IReplicatedRecord* record)
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->insertRecord(this, name, record);
+			return ret;
+		}
+
+		FB_BOOLEAN updateRecord(const char* name, IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord)
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->updateRecord(this, name, orgRecord, newRecord);
+			return ret;
+		}
+
+		FB_BOOLEAN deleteRecord(const char* name, IReplicatedRecord* record)
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->deleteRecord(this, name, record);
+			return ret;
+		}
+
+		FB_BOOLEAN storeBlob(ISC_QUAD blobId, IReplicatedBlob* blob)
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->storeBlob(this, blobId, blob);
+			return ret;
+		}
+
+		FB_BOOLEAN executeSql(const char* sql)
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->executeSql(this, sql);
+			return ret;
+		}
+	};
+
+	class IReplicatedSession : public IDisposable
+	{
+	public:
+		struct VTable : public IDisposable::VTable
+		{
+			IStatus* (CLOOP_CARG *getStatus)(IReplicatedSession* self) throw();
+			IReplicatedTransaction* (CLOOP_CARG *startTransaction)(IReplicatedSession* self, ISC_INT64 number) throw();
+			FB_BOOLEAN (CLOOP_CARG *cleanupTransaction)(IReplicatedSession* self, ISC_INT64 number) throw();
+			FB_BOOLEAN (CLOOP_CARG *setSequence)(IReplicatedSession* self, const char* name, ISC_INT64 value) throw();
+		};
+
+	protected:
+		IReplicatedSession(DoNotInherit)
+			: IDisposable(DoNotInherit())
+		{
+		}
+
+		~IReplicatedSession()
+		{
+		}
+
+	public:
+		static const unsigned VERSION = 3;
+
+		IStatus* getStatus()
+		{
+			IStatus* ret = static_cast<VTable*>(this->cloopVTable)->getStatus(this);
+			return ret;
+		}
+
+		IReplicatedTransaction* startTransaction(ISC_INT64 number)
+		{
+			IReplicatedTransaction* ret = static_cast<VTable*>(this->cloopVTable)->startTransaction(this, number);
+			return ret;
+		}
+
+		FB_BOOLEAN cleanupTransaction(ISC_INT64 number)
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->cleanupTransaction(this, number);
+			return ret;
+		}
+
+		FB_BOOLEAN setSequence(const char* name, ISC_INT64 value)
+		{
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->setSequence(this, name, value);
+			return ret;
 		}
 	};
 
@@ -9429,6 +9725,100 @@ namespace Firebird
 	};
 
 	template <typename Name, typename StatusType, typename Base>
+	class IReplicatorBaseImpl : public Base
+	{
+	public:
+		typedef IReplicator Declaration;
+
+		IReplicatorBaseImpl(DoNotInherit = DoNotInherit())
+		{
+			static struct VTableImpl : Base::VTable
+			{
+				VTableImpl()
+				{
+					this->version = Base::VERSION;
+					this->addRef = &Name::cloopaddRefDispatcher;
+					this->release = &Name::cloopreleaseDispatcher;
+					this->process = &Name::cloopprocessDispatcher;
+					this->close = &Name::cloopcloseDispatcher;
+				}
+			} vTable;
+
+			this->cloopVTable = &vTable;
+		}
+
+		static void CLOOP_CARG cloopprocessDispatcher(IReplicator* self, IStatus* status, unsigned length, const unsigned char* data) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::process(&status2, length, data);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopcloseDispatcher(IReplicator* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::close(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) throw()
+		{
+			try
+			{
+				static_cast<Name*>(self)->Name::addRef();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+			}
+		}
+
+		static int CLOOP_CARG cloopreleaseDispatcher(IReferenceCounted* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::release();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<int>(0);
+			}
+		}
+	};
+
+	template <typename Name, typename StatusType, typename Base = IReferenceCountedImpl<Name, StatusType, Inherit<IVersionedImpl<Name, StatusType, Inherit<IReplicator> > > > >
+	class IReplicatorImpl : public IReplicatorBaseImpl<Name, StatusType, Base>
+	{
+	protected:
+		IReplicatorImpl(DoNotInherit = DoNotInherit())
+		{
+		}
+
+	public:
+		virtual ~IReplicatorImpl()
+		{
+		}
+
+		virtual void process(StatusType* status, unsigned length, const unsigned char* data) = 0;
+		virtual void close(StatusType* status) = 0;
+	};
+
+	template <typename Name, typename StatusType, typename Base>
 	class IRequestBaseImpl : public Base
 	{
 	public:
@@ -9718,6 +10108,7 @@ namespace Firebird
 					this->getStatementTimeout = &Name::cloopgetStatementTimeoutDispatcher;
 					this->setStatementTimeout = &Name::cloopsetStatementTimeoutDispatcher;
 					this->createBatch = &Name::cloopcreateBatchDispatcher;
+					this->createReplicator = &Name::cloopcreateReplicatorDispatcher;
 				}
 			} vTable;
 
@@ -10059,6 +10450,21 @@ namespace Firebird
 			}
 		}
 
+		static IReplicator* CLOOP_CARG cloopcreateReplicatorDispatcher(IAttachment* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::createReplicator(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<IReplicator*>(0);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) throw()
 		{
 			try
@@ -10121,6 +10527,7 @@ namespace Firebird
 		virtual unsigned getStatementTimeout(StatusType* status) = 0;
 		virtual void setStatementTimeout(StatusType* status, unsigned timeOut) = 0;
 		virtual IBatch* createBatch(StatusType* status, ITransaction* transaction, unsigned stmtLength, const char* sqlStmt, unsigned dialect, IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) = 0;
+		virtual IReplicator* createReplicator(StatusType* status) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -16395,6 +16802,7 @@ namespace Firebird
 					this->addRef = &Name::cloopaddRefDispatcher;
 					this->release = &Name::cloopreleaseDispatcher;
 					this->write = &Name::cloopwriteDispatcher;
+					this->write_s = &Name::cloopwrite_sDispatcher;
 				}
 			} vTable;
 
@@ -16410,6 +16818,21 @@ namespace Firebird
 			catch (...)
 			{
 				StatusType::catchException(0);
+				return static_cast<unsigned>(0);
+			}
+		}
+
+		static unsigned CLOOP_CARG cloopwrite_sDispatcher(ITraceLogWriter* self, IStatus* status, const void* buf, unsigned size) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::write_s(&status2, buf, size);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
 				return static_cast<unsigned>(0);
 			}
 		}
@@ -16454,6 +16877,7 @@ namespace Firebird
 		}
 
 		virtual unsigned write(const void* buf, unsigned size) = 0;
+		virtual unsigned write_s(StatusType* status, const void* buf, unsigned size) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -17623,6 +18047,472 @@ namespace Firebird
 		virtual void toString(StatusType* status, const FB_DEC34* from, unsigned bufferLength, char* buffer) = 0;
 		virtual void fromBcd(int sign, const unsigned char* bcd, int exp, FB_DEC34* to) = 0;
 		virtual void fromString(StatusType* status, const char* from, FB_DEC34* to) = 0;
+	};
+
+	template <typename Name, typename StatusType, typename Base>
+	class IReplicatedRecordBaseImpl : public Base
+	{
+	public:
+		typedef IReplicatedRecord Declaration;
+
+		IReplicatedRecordBaseImpl(DoNotInherit = DoNotInherit())
+		{
+			static struct VTableImpl : Base::VTable
+			{
+				VTableImpl()
+				{
+					this->version = Base::VERSION;
+					this->getRawLength = &Name::cloopgetRawLengthDispatcher;
+					this->getRawData = &Name::cloopgetRawDataDispatcher;
+				}
+			} vTable;
+
+			this->cloopVTable = &vTable;
+		}
+
+		static unsigned CLOOP_CARG cloopgetRawLengthDispatcher(IReplicatedRecord* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getRawLength();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<unsigned>(0);
+			}
+		}
+
+		static const unsigned char* CLOOP_CARG cloopgetRawDataDispatcher(IReplicatedRecord* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getRawData();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const unsigned char*>(0);
+			}
+		}
+	};
+
+	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<IReplicatedRecord> > >
+	class IReplicatedRecordImpl : public IReplicatedRecordBaseImpl<Name, StatusType, Base>
+	{
+	protected:
+		IReplicatedRecordImpl(DoNotInherit = DoNotInherit())
+		{
+		}
+
+	public:
+		virtual ~IReplicatedRecordImpl()
+		{
+		}
+
+		virtual unsigned getRawLength() = 0;
+		virtual const unsigned char* getRawData() = 0;
+	};
+
+	template <typename Name, typename StatusType, typename Base>
+	class IReplicatedBlobBaseImpl : public Base
+	{
+	public:
+		typedef IReplicatedBlob Declaration;
+
+		IReplicatedBlobBaseImpl(DoNotInherit = DoNotInherit())
+		{
+			static struct VTableImpl : Base::VTable
+			{
+				VTableImpl()
+				{
+					this->version = Base::VERSION;
+					this->getLength = &Name::cloopgetLengthDispatcher;
+					this->isEof = &Name::cloopisEofDispatcher;
+					this->getSegment = &Name::cloopgetSegmentDispatcher;
+				}
+			} vTable;
+
+			this->cloopVTable = &vTable;
+		}
+
+		static unsigned CLOOP_CARG cloopgetLengthDispatcher(IReplicatedBlob* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getLength();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<unsigned>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopisEofDispatcher(IReplicatedBlob* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::isEof();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static unsigned CLOOP_CARG cloopgetSegmentDispatcher(IReplicatedBlob* self, unsigned length, unsigned char* buffer) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getSegment(length, buffer);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<unsigned>(0);
+			}
+		}
+	};
+
+	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<IReplicatedBlob> > >
+	class IReplicatedBlobImpl : public IReplicatedBlobBaseImpl<Name, StatusType, Base>
+	{
+	protected:
+		IReplicatedBlobImpl(DoNotInherit = DoNotInherit())
+		{
+		}
+
+	public:
+		virtual ~IReplicatedBlobImpl()
+		{
+		}
+
+		virtual unsigned getLength() = 0;
+		virtual FB_BOOLEAN isEof() = 0;
+		virtual unsigned getSegment(unsigned length, unsigned char* buffer) = 0;
+	};
+
+	template <typename Name, typename StatusType, typename Base>
+	class IReplicatedTransactionBaseImpl : public Base
+	{
+	public:
+		typedef IReplicatedTransaction Declaration;
+
+		IReplicatedTransactionBaseImpl(DoNotInherit = DoNotInherit())
+		{
+			static struct VTableImpl : Base::VTable
+			{
+				VTableImpl()
+				{
+					this->version = Base::VERSION;
+					this->dispose = &Name::cloopdisposeDispatcher;
+					this->prepare = &Name::cloopprepareDispatcher;
+					this->commit = &Name::cloopcommitDispatcher;
+					this->rollback = &Name::clooprollbackDispatcher;
+					this->startSavepoint = &Name::cloopstartSavepointDispatcher;
+					this->releaseSavepoint = &Name::cloopreleaseSavepointDispatcher;
+					this->rollbackSavepoint = &Name::clooprollbackSavepointDispatcher;
+					this->insertRecord = &Name::cloopinsertRecordDispatcher;
+					this->updateRecord = &Name::cloopupdateRecordDispatcher;
+					this->deleteRecord = &Name::cloopdeleteRecordDispatcher;
+					this->storeBlob = &Name::cloopstoreBlobDispatcher;
+					this->executeSql = &Name::cloopexecuteSqlDispatcher;
+				}
+			} vTable;
+
+			this->cloopVTable = &vTable;
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopprepareDispatcher(IReplicatedTransaction* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::prepare();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopcommitDispatcher(IReplicatedTransaction* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::commit();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG clooprollbackDispatcher(IReplicatedTransaction* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::rollback();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopstartSavepointDispatcher(IReplicatedTransaction* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::startSavepoint();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopreleaseSavepointDispatcher(IReplicatedTransaction* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::releaseSavepoint();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG clooprollbackSavepointDispatcher(IReplicatedTransaction* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::rollbackSavepoint();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopinsertRecordDispatcher(IReplicatedTransaction* self, const char* name, IReplicatedRecord* record) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::insertRecord(name, record);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopupdateRecordDispatcher(IReplicatedTransaction* self, const char* name, IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::updateRecord(name, orgRecord, newRecord);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopdeleteRecordDispatcher(IReplicatedTransaction* self, const char* name, IReplicatedRecord* record) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::deleteRecord(name, record);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopstoreBlobDispatcher(IReplicatedTransaction* self, ISC_QUAD blobId, IReplicatedBlob* blob) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::storeBlob(blobId, blob);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopexecuteSqlDispatcher(IReplicatedTransaction* self, const char* sql) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::executeSql(sql);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) throw()
+		{
+			try
+			{
+				static_cast<Name*>(self)->Name::dispose();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+			}
+		}
+	};
+
+	template <typename Name, typename StatusType, typename Base = IDisposableImpl<Name, StatusType, Inherit<IVersionedImpl<Name, StatusType, Inherit<IReplicatedTransaction> > > > >
+	class IReplicatedTransactionImpl : public IReplicatedTransactionBaseImpl<Name, StatusType, Base>
+	{
+	protected:
+		IReplicatedTransactionImpl(DoNotInherit = DoNotInherit())
+		{
+		}
+
+	public:
+		virtual ~IReplicatedTransactionImpl()
+		{
+		}
+
+		virtual FB_BOOLEAN prepare() = 0;
+		virtual FB_BOOLEAN commit() = 0;
+		virtual FB_BOOLEAN rollback() = 0;
+		virtual FB_BOOLEAN startSavepoint() = 0;
+		virtual FB_BOOLEAN releaseSavepoint() = 0;
+		virtual FB_BOOLEAN rollbackSavepoint() = 0;
+		virtual FB_BOOLEAN insertRecord(const char* name, IReplicatedRecord* record) = 0;
+		virtual FB_BOOLEAN updateRecord(const char* name, IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord) = 0;
+		virtual FB_BOOLEAN deleteRecord(const char* name, IReplicatedRecord* record) = 0;
+		virtual FB_BOOLEAN storeBlob(ISC_QUAD blobId, IReplicatedBlob* blob) = 0;
+		virtual FB_BOOLEAN executeSql(const char* sql) = 0;
+	};
+
+	template <typename Name, typename StatusType, typename Base>
+	class IReplicatedSessionBaseImpl : public Base
+	{
+	public:
+		typedef IReplicatedSession Declaration;
+
+		IReplicatedSessionBaseImpl(DoNotInherit = DoNotInherit())
+		{
+			static struct VTableImpl : Base::VTable
+			{
+				VTableImpl()
+				{
+					this->version = Base::VERSION;
+					this->dispose = &Name::cloopdisposeDispatcher;
+					this->getStatus = &Name::cloopgetStatusDispatcher;
+					this->startTransaction = &Name::cloopstartTransactionDispatcher;
+					this->cleanupTransaction = &Name::cloopcleanupTransactionDispatcher;
+					this->setSequence = &Name::cloopsetSequenceDispatcher;
+				}
+			} vTable;
+
+			this->cloopVTable = &vTable;
+		}
+
+		static IStatus* CLOOP_CARG cloopgetStatusDispatcher(IReplicatedSession* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getStatus();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IStatus*>(0);
+			}
+		}
+
+		static IReplicatedTransaction* CLOOP_CARG cloopstartTransactionDispatcher(IReplicatedSession* self, ISC_INT64 number) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::startTransaction(number);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IReplicatedTransaction*>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopcleanupTransactionDispatcher(IReplicatedSession* self, ISC_INT64 number) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::cleanupTransaction(number);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopsetSequenceDispatcher(IReplicatedSession* self, const char* name, ISC_INT64 value) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::setSequence(name, value);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) throw()
+		{
+			try
+			{
+				static_cast<Name*>(self)->Name::dispose();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+			}
+		}
+	};
+
+	template <typename Name, typename StatusType, typename Base = IDisposableImpl<Name, StatusType, Inherit<IVersionedImpl<Name, StatusType, Inherit<IReplicatedSession> > > > >
+	class IReplicatedSessionImpl : public IReplicatedSessionBaseImpl<Name, StatusType, Base>
+	{
+	protected:
+		IReplicatedSessionImpl(DoNotInherit = DoNotInherit())
+		{
+		}
+
+	public:
+		virtual ~IReplicatedSessionImpl()
+		{
+		}
+
+		virtual IStatus* getStatus() = 0;
+		virtual IReplicatedTransaction* startTransaction(ISC_INT64 number) = 0;
+		virtual FB_BOOLEAN cleanupTransaction(ISC_INT64 number) = 0;
+		virtual FB_BOOLEAN setSequence(const char* name, ISC_INT64 value) = 0;
 	};
 };
 

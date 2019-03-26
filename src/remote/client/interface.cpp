@@ -522,6 +522,39 @@ int Batch::release()
 	return 0;
 }
 
+class Replicator FB_FINAL : public RefCntIface<IReplicatorImpl<Replicator, CheckStatusWrapper> >
+{
+public:
+	// IReplicator implementation
+	int release();
+	void process(CheckStatusWrapper* status, unsigned length, const unsigned char* data);
+	void close(CheckStatusWrapper* status);
+
+	explicit Replicator(Attachment* att) : attachment(att)
+	{}
+
+private:
+	void freeClientData(CheckStatusWrapper* status, bool force = false);
+
+	Attachment* attachment;
+};
+
+int Replicator::release()
+{
+	if (--refCounter != 0)
+		return 1;
+
+	if (attachment)
+	{
+		LocalStatus ls;
+		CheckStatusWrapper status(&ls);
+		freeClientData(&status, true);
+	}
+	delete this;
+
+	return 0;
+}
+
 class Statement FB_FINAL : public RefCntIface<IStatementImpl<Statement, CheckStatusWrapper> >
 {
 public:
@@ -771,9 +804,11 @@ public:
 		unsigned stmtLength, const char* sqlStmt, unsigned dialect,
 		IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par);
 
+	Replicator* createReplicator(Firebird::CheckStatusWrapper* status);
+
 public:
 	Attachment(Rdb* handle, const PathName& path)
-		: rdb(handle), dbPath(getPool(), path)
+		: replicator(nullptr), rdb(handle), dbPath(getPool(), path)
 	{ }
 
 	Rdb* getRdb()
@@ -789,6 +824,8 @@ public:
 	Rtr* remoteTransaction(ITransaction* apiTra);
 	Transaction* remoteTransactionInterface(ITransaction* apiTra);
 	Statement* createStatement(CheckStatusWrapper* status, unsigned dialect);
+
+	Replicator* replicator;
 
 private:
 	void execWithCheck(CheckStatusWrapper* status, const string& stmt);
@@ -2767,6 +2804,129 @@ void Batch::releaseStatement()
 	}
 
 	stmt = NULL;
+}
+
+
+Replicator* Attachment::createReplicator(CheckStatusWrapper* status)
+{
+/**************************************
+ *
+ *	c r e a t e R e p l i c a t o r
+ *
+ **************************************
+ *
+ * Functional description
+ *	Create data replication interface.
+ *
+ **************************************/
+
+	try
+	{
+		reset(status);
+
+		// Check and validate handles, etc.
+		CHECK_HANDLE(rdb, isc_bad_db_handle);
+		rem_port* port = rdb->rdb_port;
+
+		if (port->port_protocol < PROTOCOL_VERSION16)
+			unsupported();
+
+		if (!replicator)
+			replicator = FB_NEW Replicator(this);
+
+		replicator->addRef();
+		return replicator;
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+
+	return NULL;
+}
+
+
+void Replicator::process(CheckStatusWrapper* status, unsigned length, const unsigned char* data)
+{
+	try
+	{
+		reset(status);
+
+		Rdb* rdb = attachment->getRdb();
+		CHECK_HANDLE(rdb, isc_bad_db_handle);
+		rem_port* port = rdb->rdb_port;
+
+		if (port->port_protocol < PROTOCOL_VERSION16)
+			unsupported();
+
+		// Validate data length
+		CHECK_LENGTH(port, length);
+
+		PACKET* packet = &rdb->rdb_packet;
+		packet->p_operation = op_repl_data;
+		P_REPLICATE* repl = &packet->p_replicate;
+		repl->p_repl_database = rdb->rdb_id;
+		repl->p_repl_data.cstr_length = length;
+		repl->p_repl_data.cstr_address = data;
+
+		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+
+		send_and_receive(status, rdb, packet);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
+
+void Replicator::close(CheckStatusWrapper* status)
+{
+	reset(status);
+	freeClientData(status);
+}
+
+
+void Replicator::freeClientData(CheckStatusWrapper* status, bool force)
+{
+	try
+	{
+		reset(status);
+
+		if (attachment && attachment->replicator)
+		{
+			Rdb* rdb = attachment->getRdb();
+			CHECK_HANDLE(rdb, isc_bad_db_handle);
+			rem_port* port = rdb->rdb_port;
+
+			if (port->port_protocol < PROTOCOL_VERSION16)
+				unsupported();
+
+			PACKET* packet = &rdb->rdb_packet;
+			packet->p_operation = op_repl_data;
+			P_REPLICATE* repl = &packet->p_replicate;
+			repl->p_repl_database = rdb->rdb_id;
+			repl->p_repl_data.cstr_length = 0;
+
+			RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+
+			try
+			{
+				send_and_receive(status, rdb, packet);
+			}
+			catch (const Exception&)
+			{
+				if (!force)
+					throw;
+			}
+
+			attachment->replicator = NULL;
+		}
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
 }
 
 

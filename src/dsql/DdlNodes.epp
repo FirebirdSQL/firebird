@@ -10255,7 +10255,7 @@ void DropShadowNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScratch
 	{
 		if (nodelete)
 		{
-			AutoSetRestoreFlag<USHORT> noDfw(&tdbb->tdbb_flags, TDBB_dont_post_dfw, true);
+			AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, TDBB_dont_post_dfw, true);
 			MODIFY FIL USING
 				FIL.RDB$FILE_FLAGS |= FILE_nodelete;
 			END_MODIFY
@@ -11734,7 +11734,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 	char priv[2];
 	priv[1] = '\0';
 
-	AutoSetRestoreFlag<USHORT> trDdl(&tdbb->tdbb_flags, TDBB_trusted_ddl, true);
+	AutoSetRestoreFlag<ULONG> trustedDdlFlag(&tdbb->tdbb_flags, TDBB_trusted_ddl, true);
 
 	if (isGrant)
 	{

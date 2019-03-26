@@ -955,6 +955,10 @@ Data source : @4"},		/* eds_statement */
 	{335545248, "RSA-signing data"},		/* tom_rsa_sign */
 	{335545249, "Verifying RSA-signed data"},		/* tom_rsa_verify */
 	{335545250, "Invalid key length @1, need 16 or 32"},		/* tom_chacha_key */
+	{335545251, "invalid replicator handle"},		/* bad_repl_handle */
+	{335545252, "Transaction's base snapshot number does not exist"},		/* tra_snapshot_does_not_exist */
+	{335545253, "Input parameter '@1' is not used in SQL query text"},		/* eds_input_prm_not_used */
+	{335545254, "Effective user is @1"},		/* effective_user */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */
@@ -1098,7 +1102,19 @@ Data source : @4"},		/* eds_statement */
 	{336068896, "INCREMENT BY 0 is an illegal option for sequence @1"},		/* dyn_cant_use_zero_increment */
 	{336068897, "Can't use @1 in FOREIGN KEY constraint"},		/* dyn_cant_use_in_foreignkey */
 	{336068898, "Default values for parameters are not allowed in the definition of a previously declared packaged function @1.@2"},		/* dyn_defvaldecl_package_func */
+	{336068900, "role @1 can not be granted to role @2"},		/* dyn_cyclic_role */
 	{336068904, "INCREMENT BY 0 is an illegal option for identity column @1 of table @2"},		/* dyn_cant_use_zero_inc_ident */
+	{336068907, "no @1 privilege with grant option on DDL @2"},		/* dyn_no_ddl_grant_opt_priv */
+	{336068908, "no @1 privilege with grant option on object @2"},		/* dyn_no_grant_opt_priv */
+	{336068909, "Function @1 does not exist"},		/* dyn_func_not_exist */
+	{336068910, "Procedure @1 does not exist"},		/* dyn_proc_not_exist */
+	{336068911, "Package @1 does not exist"},		/* dyn_pack_not_exist */
+	{336068912, "Trigger @1 does not exist"},		/* dyn_trig_not_exist */
+	{336068913, "View @1 does not exist"},		/* dyn_view_not_exist */
+	{336068914, "Table @1 does not exist"},		/* dyn_rel_not_exist */
+	{336068915, "Exception @1 does not exist"},		/* dyn_exc_not_exist */
+	{336068916, "Generator/Sequence @1 does not exist"},		/* dyn_gen_not_exist */
+	{336068917, "Field @1 of table @2 does not exist"},		/* dyn_fld_not_exist */
 	{336330753, "found unknown switch"},		/* gbak_unknown_switch */
 	{336330754, "page size parameter missing"},		/* gbak_page_size_missing */
 	{336330755, "Page size specified (@1) greater than limit (32768 bytes)"},		/* gbak_page_size_toobig */

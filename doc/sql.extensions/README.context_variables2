@@ -28,7 +28,7 @@ Declared as:
 
 Usage:
 
-  RDB$SET_CONTEXT and RDB$GET_CONTEXT set and retrieve current value for the 
+  RDB$SET_CONTEXT and RDB$GET_CONTEXT set and retrieve current value for the
   context variables. Namespace name identifies a group of context variables with
   similar properties. Access rules such as the fact if variables may be read and
   written to and by whom are determined by namespace which they belong to.
@@ -44,71 +44,89 @@ Usage:
 
   Currently, there is a fixed number of pre-defined namespaces you may use.
 
-  USER_SESSION namespace offers access to session-specific user-defined 
+  USER_SESSION namespace offers access to session-specific user-defined
   variables. You can define and set value for variable with any name in this
   context. USER_TRANSACTION namespace offers the same possibilities for
   individual transactions.
 
   SYSTEM namespace provides read-only access to the following variables.
 
-   Variable name        Value
+   Variable name                  Value
   ------------------------------------------------------------------------------
-   NETWORK_PROTOCOL | The network protocol used by client to connect. Currently
-                    | used values: "TCPv4", "TCPv6", "WNET", "XNET" and NULL
-                    |
-   WIRE_COMPRESSED  | Compression status of current connection. 
-                    | If connection is compressed - returns "TRUE", if it is 
-                    | not compressed - returns "FALSE". 
-                    | If connection is embedded - returns NULL.
-                    |
-   WIRE_ENCRYPTED   | Encryption status of current connection. 
-                    | Value is the same as for compression status above.
-                    |
-   CLIENT_ADDRESS   | The wire protocol address and port number of remote client
-                    | represented as string. Value is IP address concatenated with
-                    | port number using the '/' separator character. Value is
-                    | returned for TCPv4 and TCPv6 protocols only, for all other
-                    | protocols NULL is returned
-                    |
-   CLIENT_HOST      | The wire protocol host name of remote client. Value is
-                    | returned for all supported protocols
-                    |
-   CLIENT_PID       | Process ID of remote client application
-                    |
-   CLIENT_PROCESS   | Process name of remote client application
-                    |
-   DB_NAME          | Canonical name of current database. It is either alias
-                    | name if connectivity via file names is not allowed or
-                    | fully expanded database file name otherwise.
-                    |
-   ISOLATION_LEVEL  | Isolation level for current transaction. Returned values
-                    | are "READ COMMITTED", "CONSISTENCY", "SNAPSHOT"
-                    |
-   TRANSACTION_ID   | Numeric ID for current transaction. Returned value is the
-                    | same as of CURRENT_TRANSACTION pseudo-variable
-                    |
-   LOCK_TIMEOUT     | Lock timeout value specified for current transaction
-                    |
-   READ_ONLY        | Returns "TRUE" if current transaction is read-only and 
-                    | "FALSE" otherwise
-                    |
-   SESSION_ID       | Numeric ID for current session. Returned value is the
-                    | same as of CURRENT_CONNECTION pseudo-variable
-                    |
-   CURRENT_USER     | Current user for the connection. Returned value is the
-                    | same as of CURRENT_USER pseudo-variable
-                    |
-   CURRENT_ROLE     | Current role for the connection. Returned value is the
-                    | same as of CURRENT_ROLE pseudo-variable
-                    |
-   ENGINE_VERSION   | Engine version number, e.g. "2.1.0" (since V2.1)
-                    |
-   GLOBAL_CN        | Most current value of global Commit Number counter
-                    |
-   SNAPSHOT_CN      | Value of Commit Number of currently database snapshot: either
-                    | transaction level (for SNAPSHOT or CONSISTENCY transaction),
-                    | or request level (for READ COMMITTED READ CONSISTENCY 
-                    | transaction). NULL, if snapshot is not exist.
+   NETWORK_PROTOCOL	            | The network protocol used by client to connect. Currently
+                                | used values: "TCPv4", "TCPv6", "WNET", "XNET" and NULL
+                                |
+   WIRE_COMPRESSED              | Compression status of current connection.
+                                | If connection is compressed - returns "TRUE", if it is
+                                | not compressed - returns "FALSE".
+                                | If connection is embedded - returns NULL.
+                                |
+   WIRE_ENCRYPTED               | Encryption status of current connection.
+                                | Value is the same as for compression status above.
+                                |
+   CLIENT_ADDRESS               | The wire protocol address and port number of remote client
+                                | represented as string. Value is IP address concatenated with
+                                | port number using the '/' separator character. Value is
+                                | returned for TCPv4 and TCPv6 protocols only, for all other
+                                | protocols NULL is returned
+                                |
+   CLIENT_HOST                  | The wire protocol host name of remote client. Value is
+                                | returned for all supported protocols
+                                |
+   CLIENT_PID                   | Process ID of remote client application
+                                |
+   CLIENT_PROCESS               | Process name of remote client application
+                                |
+   DB_NAME                      | Canonical name of current database. It is either alias
+                                | name if connectivity via file names is not allowed or
+                                | fully expanded database file name otherwise.
+                                |
+   ISOLATION_LEVEL              | Isolation level for current transaction. Returned values
+                                | are "READ COMMITTED", "CONSISTENCY", "SNAPSHOT"
+                                |
+   TRANSACTION_ID               | Numeric ID for current transaction. Returned value is the
+                                | same as of CURRENT_TRANSACTION pseudo-variable
+                                |
+   LOCK_TIMEOUT                 | Lock timeout value specified for current transaction
+                                |
+   READ_ONLY                    | Returns "TRUE" if current transaction is read-only and
+                                | "FALSE" otherwise
+                                |
+   SESSION_ID                   | Numeric ID for current session. Returned value is the
+                                | same as of CURRENT_CONNECTION pseudo-variable
+                                |
+   CURRENT_USER                 | Current user for the connection. Returned value is the
+                                | same as of CURRENT_USER pseudo-variable
+                                |
+   EFFECTIVE_USER               | Effective user for now. It indicates privileges of
+                                | which user is currently used to execute function, procedure, trigger.
+                                |
+   CURRENT_ROLE                 | Current role for the connection. Returned value is the
+                                | same as of CURRENT_ROLE pseudo-variable
+                                |
+   ENGINE_VERSION               | Engine version number, e.g. "2.1.0" (since V2.1)
+                                |
+   GLOBAL_CN                    | Most current value of global Commit Number counter
+                                |
+   SNAPSHOT_NUMBER              | Value of Snapshot Number of currently database snapshot: either
+                                | transaction level (for SNAPSHOT or CONSISTENCY transaction),
+                                | or request level (for READ COMMITTED READ CONSISTENCY
+                                | transaction). NULL, if snapshot is not exist.
+                                |
+   SESSION_IDLE_TIMEOUT         | Current value of idle connection timeout
+                                |
+   STATEMENT_TIMEOUT            | Current value of statement execution timeout
+                                |
+   REPLICATION_SEQUENCE         | Current replication sequence (number of the latest segment
+                                | written to the replication journal)
+                                |
+   EXT_CONN_POOL_SIZE           | Pool size (number of connections inside the pool)
+                                |
+   EXT_CONN_POOL_IDLE_COUNT     | Count of currently inactive connections in the pool
+                                |
+   EXT_CONN_POOL_ACTIVE_COUNT   | Count of active connections, associated with pool
+                                |
+   EXT_CONN_POOL_LIFETIME       | Idle connection lifetime, in seconds
 
 Notes:
    To prevent DoS attacks against Firebird Server you are not allowed to have
@@ -130,7 +148,7 @@ create table journal (
 );
 
 CREATE TRIGGER UI_JOURNAL FOR JOURNAL BEFORE INSERT OR UPDATE
-as 
+as
 begin
   new.jrn_lastuser = rdb$get_context('USER_TRANSACTION', 'User_ID');
   new.jrn_lastaddr = rdb$get_context('SYSTEM', 'CLIENT_ADDRESS');

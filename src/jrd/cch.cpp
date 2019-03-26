@@ -2897,6 +2897,8 @@ void BufferControl::cache_writer(BufferControl* bcb)
 			PAG_attachment_id(tdbb);
 			TRA_init(attachment);
 
+			Monitoring::publishAttachment(tdbb);
+
 			sAtt->initDone();
 
 			bcb->bcb_flags |= BCB_cache_writer;

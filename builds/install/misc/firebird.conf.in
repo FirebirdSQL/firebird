@@ -769,6 +769,14 @@
 #TcpNoNagle = 1
 
 #
+# Either enables or disables the "TCP Loopback Fast Path" feature (SIO_LOOPBACK_FAST_PATH).
+# Applies to Windows (version 8/2012 or higher) only.
+#
+# Type: Boolean, default 1 (true)
+#
+#TcpLoopbackFastPath = 1
+
+#
 # Allows setting of IPV6_V6ONLY socket option. If enabled, IPv6 sockets
 # allow only IPv6 communication and separate sockets must be used for
 # IPv4 and IPv6. Default is false.

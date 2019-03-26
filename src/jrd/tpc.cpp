@@ -759,8 +759,7 @@ void TipCache::remapSnapshots(bool sync)
 }
 
 
-
-SnapshotHandle TipCache::beginSnapshot(thread_db* tdbb, AttNumber attachmentId, CommitNumber *commitNumber_out)
+SnapshotHandle TipCache::beginSnapshot(thread_db* tdbb, AttNumber attachmentId, CommitNumber& commitNumber)
 {
 	// Can only be called on initialized TipCache
 	fb_assert(m_tpcHeader);
@@ -772,16 +771,38 @@ SnapshotHandle TipCache::beginSnapshot(thread_db* tdbb, AttNumber attachmentId, 
 	// Remap snapshot list if it has been grown by someone else
 	remapSnapshots(false);
 
+	if (commitNumber != 0)
+	{
+		SnapshotList* snapshots = m_snapshots->getHeader();
+		ULONG slotsUsed = snapshots->slots_used.load(std::memory_order_relaxed);
+		bool found = false;
+
+		for (SnapshotHandle slotNumber = 0; slotNumber < slotsUsed; ++slotNumber)
+		{
+			if (snapshots->slots[slotNumber].attachment_id.load(std::memory_order_relaxed) != 0 &&
+				snapshots->slots[slotNumber].snapshot.load(std::memory_order_relaxed) == commitNumber)
+			{
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+			ERR_post(Arg::Gds(isc_tra_snapshot_does_not_exist));
+	}
+
 	SnapshotHandle slotNumber = allocateSnapshotSlot();
 
 	// Note, that allocateSnapshotSlot might remap memory and thus invalidate pointers
 	SnapshotList* snapshots = m_snapshots->getHeader();
 
 	// Store snapshot commit number and return handle
-	SnapshotData *slot = snapshots->slots + slotNumber;
+	SnapshotData* slot = snapshots->slots + slotNumber;
 
-	*commitNumber_out = m_tpcHeader->getHeader()->latest_commit_number.load(std::memory_order_acquire);
-	slot->snapshot.store(*commitNumber_out, std::memory_order_release);
+	if (commitNumber == 0)
+		commitNumber = m_tpcHeader->getHeader()->latest_commit_number.load(std::memory_order_acquire);
+
+	slot->snapshot.store(commitNumber, std::memory_order_release);
 
 	// Only assign attachment_id after we completed all other work
 	slot->attachment_id.store(attachmentId, std::memory_order_release);

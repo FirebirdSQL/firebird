@@ -296,6 +296,14 @@ _br_find_exe_for_symbol (const void *symbol, BrInitError *error)
 
 static char *exe = (char *) NULL;
 
+static void br_exit(void)
+{
+	if (exe)
+	{
+		free(exe);
+		exe = (char *) NULL;
+	}
+}
 
 /** Initialize the BinReloc library (for applications).
  *
@@ -314,7 +322,10 @@ static char *exe = (char *) NULL;
 int
 br_init (BrInitError *error)
 {
+	int was = exe == NULL ? 0 : 1;
 	exe = _br_find_exe (error);
+	if (exe && !was)
+		atexit(br_exit);
 	return exe != NULL;
 }
 
@@ -336,7 +347,10 @@ br_init (BrInitError *error)
 int
 br_init_lib (BrInitError *error)
 {
+	int was = exe == NULL ? 0 : 1;
 	exe = _br_find_exe_for_symbol ((const void *) "", error);
+	if (exe && !was)
+		atexit(br_exit);
 	return exe != NULL;
 }
 

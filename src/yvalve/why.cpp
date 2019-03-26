@@ -5018,6 +5018,49 @@ void YBatch::cancel(CheckStatusWrapper* status)
 //-------------------------------------
 
 
+YReplicator::YReplicator(YAttachment* anAttachment, IReplicator* aNext)
+	: YHelper(aNext),
+	  attachment(anAttachment)
+{ }
+
+
+void YReplicator::destroy(unsigned dstrFlags)
+{
+	destroy2(dstrFlags);
+}
+
+
+void YReplicator::process(CheckStatusWrapper* status, unsigned length, const unsigned char* data)
+{
+	try
+	{
+		YEntry<YReplicator> entry(status, this);
+		entry.next()->process(status, length, data);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
+void YReplicator::close(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YReplicator> entry(status, this);
+		entry.next()->close(status);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
+//-------------------------------------
+
+
 YTransaction::YTransaction(YAttachment* aAttachment, ITransaction* aNext)
 	: YHelper(aNext),
 	  attachment(aAttachment),
@@ -5934,6 +5977,32 @@ YBatch* YAttachment::createBatch(CheckStatusWrapper* status, ITransaction* trans
 		YBatch*	newBatch = FB_NEW YBatch(this, batch);
 		newBatch->addRef();
 		return newBatch;
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+
+	return NULL;
+}
+
+
+YReplicator* YAttachment::createReplicator(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+
+		IReplicator* replicator = entry.next()->createReplicator(status);
+
+		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		{
+			return NULL;
+		}
+
+		YReplicator* newReplicator = FB_NEW YReplicator(this, replicator);
+		newReplicator->addRef();
+		return newReplicator;
 	}
 	catch (const Exception& e)
 	{

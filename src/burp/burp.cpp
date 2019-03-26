@@ -1702,22 +1702,39 @@ void BURP_verbose(USHORT number, const SafeArg& arg)
  **************************************
  *
  * Functional description
- *	Calls BURP_print for displaying a formatted error message
- *	but only for verbose output.  If not verbose then calls
- *	user defined yielding function.
+ *	Calls BURP_message for displaying a message for verbose output.
+ *	If not verbose then calls yielding function.
  *
  **************************************/
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	if (tdgbl->gbl_sw_verbose)
-	{
-		tdgbl->print_stats_header();
-		BURP_msg_partial(false, 169);	// msg 169: gbak:
-		tdgbl->print_stats(number);
-		BURP_msg_put(false, number, arg);
-	}
+		BURP_message(number, arg, true);
 	else
 		burp_output(false, "%s", "");
+}
+
+
+void BURP_message(USHORT number, const MsgFormat::SafeArg& arg, bool totals)
+{
+/**************************************
+ *
+ *	B U R P _ m e s s a g e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Calls BURP_msg for formatting & displaying a message.
+ *
+ **************************************/
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	if (totals)
+		tdgbl->print_stats_header();
+	BURP_msg_partial(false, 169);	// msg 169: gbak:
+	if (totals)
+		tdgbl->print_stats(number);
+	BURP_msg_put(false, number, arg);
 }
 
 
@@ -1730,22 +1747,10 @@ void BURP_verbose(USHORT number, const char* str)
  **************************************
  *
  * Functional description
- *	Calls BURP_print for displaying a formatted error message
- *	but only for verbose output.  If not verbose then calls
- *	user defined yieding function.
+ *	Shortcut for text argument
  *
  **************************************/
-	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-
-	if (tdgbl->gbl_sw_verbose)
-	{
-		tdgbl->print_stats_header();
-		BURP_msg_partial(false, 169);	// msg 169: gbak:
-		tdgbl->print_stats(number);
-		BURP_msg_put(false, number, SafeArg() << str);
-	}
-	else
-		burp_output(false, "%s", "");
+	BURP_verbose(number, SafeArg() << str);
 }
 
 

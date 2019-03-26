@@ -70,6 +70,16 @@ namespace Jrd
 		virtual bool checkCache(thread_db* tdbb) const;
 		virtual void clearCache(thread_db* tdbb);
 
+		virtual ~Function()
+		{
+			delete fun_external;
+		}
+
+		virtual void releaseExternal()
+		{
+			delete fun_external;
+			fun_external = NULL;
+		}
 	public:
 		int (*fun_entrypoint)();				// function entrypoint
 		USHORT fun_inputs;						// input arguments

@@ -442,10 +442,12 @@ const UCHAR HDR_last_page			= 3;	// Last logical page number of file
 const UCHAR HDR_sweep_interval		= 4;	// Transactions between sweeps
 const UCHAR HDR_crypt_checksum		= 5;	// Checksum of critical crypt parameters
 const UCHAR HDR_difference_file		= 6;	// Delta file that is used during backup lock
-const UCHAR HDR_backup_guid			= 7;	// UID generated on each switch into backup mode
+const UCHAR HDR_backup_guid			= 7;	// GUID generated on each switch into backup mode
 const UCHAR HDR_crypt_key			= 8;	// Name of a key used to crypt database
 const UCHAR HDR_crypt_hash			= 9;	// Validator of key correctness
-const UCHAR HDR_max					= 10;	// Maximum HDR_clump value
+const UCHAR HDR_db_guid				= 10;	// Database GUID
+const UCHAR HDR_repl_seq			= 11;	// Replication changelog sequence
+const UCHAR HDR_max					= 11;	// Maximum HDR_clump value
 
 // Header page flags
 
@@ -456,8 +458,10 @@ const USHORT hdr_no_reserve			= 0x8;		// 8	don't reserve space for versions
 const USHORT hdr_SQL_dialect_3		= 0x10;		// 16	database SQL dialect 3
 const USHORT hdr_read_only			= 0x20;		// 32	Database is ReadOnly. If not set, DB is RW
 const USHORT hdr_encrypted			= 0x40;		// 64	Database is encrypted
+
 const USHORT hdr_backup_mask		= 0xC00;
 const USHORT hdr_shutdown_mask		= 0x1080;
+const USHORT hdr_replica_mask		= 0x6000;
 
 // Values for backup mask
 const USHORT hdr_nbak_normal		= 0x000;	// Normal mode. Changes are simply written to main files
@@ -470,6 +474,11 @@ const USHORT hdr_shutdown_none		= 0x0;
 const USHORT hdr_shutdown_multi		= 0x80;
 const USHORT hdr_shutdown_full		= 0x1000;
 const USHORT hdr_shutdown_single	= 0x1080;
+
+// Values for replica mask
+const USHORT hdr_replica_none		= 0x0000;
+const USHORT hdr_replica_read_only	= 0x2000;
+const USHORT hdr_replica_read_write	= 0x4000;
 
 
 // Page Inventory Page

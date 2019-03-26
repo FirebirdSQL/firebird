@@ -103,9 +103,9 @@ namespace
 
 	bool tryLibrary(PathName libName, string& message)
 	{
-		ModuleLoader::doctorModuleExtension(libName);
+		PathName modName(libName);
 
-		ModuleLoader::Module* module = ModuleLoader::loadModule(NULL, libName);
+		ModuleLoader::Module* module = ModuleLoader::fixAndLoadModule(NULL, modName);
 		if (!module)
 		{
 			message.printf("%s library has not been found", libName.c_str());
@@ -115,7 +115,8 @@ namespace
 		void (*ibUtilUnit)(void* (*)(long));
 		if (!module->findSymbol("ib_util_init", ibUtilUnit))
 		{
-			message.printf("ib_util_init not found in %s", libName.c_str());
+			// in the case of missing symbol it is better to know an exact library name
+			message.printf("ib_util_init not found in %s", modName.c_str());
 			delete module;
 			return false;
 		}

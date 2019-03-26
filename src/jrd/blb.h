@@ -73,7 +73,7 @@ public:
 	{
 	}
 
-	jrd_rel*	blb_relation;		// Relation, if known
+	jrd_rel* blb_relation;			// Relation, if known
 	JBlob* blb_interface;
 
 	ULONG blb_length;				// Total length of data sans segments

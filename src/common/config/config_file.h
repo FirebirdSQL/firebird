@@ -56,6 +56,7 @@ public:
 	static const USHORT ERROR_WHEN_MISS	= 0x02;
 	static const USHORT NATIVE_ORDER	= 0x04;
 	static const USHORT NO_COMMENTS		= 0x08;
+	static const USHORT CUSTOM_MACROS	= 0x10;
 
 	// enum to distinguish ctors
 	enum UseText {USE_TEXT};

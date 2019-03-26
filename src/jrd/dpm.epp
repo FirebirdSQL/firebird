@@ -61,6 +61,7 @@
 #include "../jrd/mov_proto.h"
 #include "../jrd/ods_proto.h"
 #include "../jrd/pag_proto.h"
+#include "../jrd/replication/Publisher.h"
 #include "../common/StatusArg.h"
 
 DATABASE DB = FILENAME "ODS.RDB";
@@ -1365,7 +1366,10 @@ SINT64 DPM_gen_id(thread_db* tdbb, SLONG generator, bool initialize, SINT64 val)
 	window.win_page = (*vector)[sequence];
 	window.win_flags = 0;
 
-	const SSHORT lock_mode = dbb->readOnly() ? LCK_read : LCK_write;
+	const bool isReadOnly = dbb->readOnly() ||
+		(dbb->isReplica(REPLICA_READ_ONLY) && !(tdbb->tdbb_flags & TDBB_replicator));
+
+	const SSHORT lock_mode = isReadOnly ? LCK_read : LCK_write;
 	generator_page* const page = (generator_page*) CCH_FETCH(tdbb, &window, lock_mode, pag_ids);
 
 	/*  If we are in ODS >= 10, then we have a pointer to an int64 value in the
@@ -1377,28 +1381,39 @@ SINT64 DPM_gen_id(thread_db* tdbb, SLONG generator, bool initialize, SINT64 val)
 	 */
 	SINT64* const ptr = ((SINT64*) (page->gpg_values)) + offset;
 
-	if (val || initialize)
+	if (!val && !initialize) // read-only case: zero increment
 	{
-		if (dbb->readOnly())
-		{
-			CCH_RELEASE(tdbb, &window);
-			ERR_post(Arg::Gds(isc_read_only_database));
-		}
-
-		CCH_MARK_SYSTEM(tdbb, &window);
-
-		if (initialize)
-			*ptr = val;
-		else
-			*ptr += val;
-
-		if (transaction)
-			transaction->tra_flags |= TRA_write;
+		const SINT64 value = *ptr;
+		CCH_RELEASE(tdbb, &window);
+		return value;
 	}
+
+	if (dbb->readOnly())
+	{
+		CCH_RELEASE(tdbb, &window);
+		ERR_post(Arg::Gds(isc_read_only_database));
+	}
+	else if (isReadOnly)
+	{
+		CCH_RELEASE(tdbb, &window);
+		ERR_post(Arg::Gds(isc_read_only_trans));
+	}
+
+	CCH_MARK_SYSTEM(tdbb, &window);
+
+	if (initialize)
+		*ptr = val;
+	else
+		*ptr += val;
 
 	const SINT64 value = *ptr;
 
 	CCH_RELEASE(tdbb, &window);
+
+	if (transaction)
+		transaction->tra_flags |= TRA_write;
+
+	REPL_gen_id(tdbb, generator, value);
 
 	return value;
 }

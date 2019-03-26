@@ -163,13 +163,13 @@ static const bool compatibility[LCK_max][LCK_max] =
 
 namespace Jrd {
 
-Firebird::GlobalPtr<LockManager::DbLockMgrMap> LockManager::g_lmMap;
-Firebird::GlobalPtr<Firebird::Mutex> LockManager::g_mapMutex;
+GlobalPtr<LockManager::DbLockMgrMap> LockManager::g_lmMap;
+GlobalPtr<Mutex> LockManager::g_mapMutex;
 
 
-LockManager* LockManager::create(const Firebird::string& id, RefPtr<const Config> conf)
+LockManager* LockManager::create(const string& id, RefPtr<const Config> conf)
 {
-	Firebird::MutexLockGuard guard(g_mapMutex, FB_FUNCTION);
+	MutexLockGuard guard(g_mapMutex, FB_FUNCTION);
 
 	LockManager* lockMgr = NULL;
 	if (!g_lmMap->get(id, lockMgr))
@@ -193,9 +193,9 @@ void LockManager::destroy(LockManager* lockMgr)
 {
 	if (lockMgr)
 	{
-		const Firebird::string id = lockMgr->m_dbId;
+		const string id = lockMgr->m_dbId;
 
-		Firebird::MutexLockGuard guard(g_mapMutex, FB_FUNCTION);
+		MutexLockGuard guard(g_mapMutex, FB_FUNCTION);
 
 		if (!lockMgr->release())
 		{
@@ -208,7 +208,7 @@ void LockManager::destroy(LockManager* lockMgr)
 }
 
 
-LockManager::LockManager(const Firebird::string& id, RefPtr<const Config> conf)
+LockManager::LockManager(const string& id, RefPtr<const Config> conf)
 	: PID(getpid()),
 	  m_bugcheck(false),
 	  m_sharedFileCreated(false),
@@ -281,7 +281,7 @@ LockManager::~LockManager()
 
 		if (m_sharedMemory->getHeader() && SRQ_EMPTY(m_sharedMemory->getHeader()->lhb_processes))
 		{
-			Firebird::PathName name;
+			PathName name;
 			get_shared_file_name(name);
 			m_sharedMemory->removeMapFile();
 #ifdef USE_SHMEM_EXT
@@ -338,7 +338,7 @@ void* LockManager::ABS_PTR(SRQ_PTR item)
 
 bool LockManager::attach_shared_file(CheckStatusWrapper* statusVector)
 {
-	Firebird::PathName name;
+	PathName name;
 	get_shared_file_name(name);
 
 	try
@@ -381,12 +381,12 @@ void LockManager::detach_shared_file(CheckStatusWrapper* statusVector)
 }
 
 
-void LockManager::get_shared_file_name(Firebird::PathName& name, ULONG extent) const
+void LockManager::get_shared_file_name(PathName& name, ULONG extent) const
 {
 	name.printf(LOCK_FILE, m_dbId.c_str());
 	if (extent)
 	{
-		Firebird::PathName ename;
+		PathName ename;
 		ename.printf("%s.ext%d", name.c_str(), extent);
 		name = ename;
 	}
@@ -1198,7 +1198,7 @@ void LockManager::acquire_shmem(SRQ_PTR owner_offset)
 #ifdef HAVE_OBJECT_MAP
 		const ULONG new_length = m_sharedMemory->getHeader()->lhb_length;
 
-		Firebird::WriteLockGuard guard(m_remapSync, FB_FUNCTION);
+		WriteLockGuard guard(m_remapSync, FB_FUNCTION);
 		// Post remapping notifications
 		remap_local_owners();
 		// Remap the shared memory region
@@ -1253,7 +1253,7 @@ void LockManager::Extent::mutexBug(int, const char*)
 
 bool LockManager::createExtent(CheckStatusWrapper* statusVector)
 {
-	Firebird::PathName name;
+	PathName name;
 	get_shared_file_name(name, (ULONG) m_extents.getCount());
 
 	Extent& extent = m_extents.add();
@@ -1305,7 +1305,7 @@ UCHAR* LockManager::alloc(USHORT size, CheckStatusWrapper* statusVector)
 		}
 		else
 #elif (defined HAVE_OBJECT_MAP)
-		Firebird::WriteLockGuard guard(m_remapSync, FB_FUNCTION);
+		WriteLockGuard guard(m_remapSync, FB_FUNCTION);
 		// Post remapping notifications
 		remap_local_owners();
 		// Remap the shared memory region
@@ -1544,14 +1544,14 @@ void LockManager::blocking_action_thread()
 			m_sharedMemory->eventWait(&m_process->prc_blocking, value, 0);
 		}
 	}
-	catch (const Firebird::Exception& x)
+	catch (const Exception& x)
 	{
 		iscLogException("Error in blocking action thread\n", x);
 	}
 }
 
 
-void LockManager::exceptionHandler(const Firebird::Exception& ex,
+void LockManager::exceptionHandler(const Exception& ex,
 	ThreadFinishSync<LockManager*>::ThreadRoutine* /*routine*/)
 {
 /**************************************
@@ -2680,7 +2680,7 @@ void LockManager::post_blockage(thread_db* tdbb, lrq* request, lbl* lock)
 	ASSERT_ACQUIRED;
 	CHECK(request->lrq_flags & LRQ_pending);
 
-	Firebird::HalfStaticArray<SRQ_PTR, 16> blocking_owners;
+	HalfStaticArray<SRQ_PTR, 16> blocking_owners;
 
 	SRQ lock_srq;
 	SRQ_LOOP(lock->lbl_requests, lock_srq)
@@ -2721,7 +2721,7 @@ void LockManager::post_blockage(thread_db* tdbb, lrq* request, lbl* lock)
 			break;
 	}
 
-	Firebird::HalfStaticArray<SRQ_PTR, 16> dead_processes;
+	HalfStaticArray<SRQ_PTR, 16> dead_processes;
 
 	for (SRQ_PTR* iter = blocking_owners.begin(); iter != blocking_owners.end(); ++iter)
 	{
@@ -3874,7 +3874,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 				LockTableCheckout checkout(this, FB_FUNCTION);
 
 				{ // scope
-					Firebird::ReadLockGuard guard(m_remapSync, FB_FUNCTION);
+					ReadLockGuard guard(m_remapSync, FB_FUNCTION);
 					owner = (own*) SRQ_ABS_PTR(owner_offset);
 					++m_waitingOwners;
 				}

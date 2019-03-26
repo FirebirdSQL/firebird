@@ -20,6 +20,7 @@
  * All Rights Reserved.
  * Contributor(s): ______________________________________.
  */
+
 #ifndef JRD_TRIG_H
 #define JRD_TRIG_H
 
@@ -35,7 +36,7 @@ namespace Jrd {
 
 struct jrd_trg
 {
-	const SCHAR*	trg_name;
+	const char*		trg_name;
 	UCHAR			trg_relation;
 	UCHAR			trg_type;
 	USHORT			trg_length;
@@ -48,9 +49,9 @@ struct jrd_trg
 
 struct trigger_msg
 {
-	const SCHAR*	trigmsg_name;
+	const char*		trigmsg_name;
 	USHORT			trigmsg_number;
-	const SCHAR*	trigmsg_text;
+	const char*		trigmsg_text;
 	USHORT			trg_ods_version;
 };
 
@@ -58,9 +59,9 @@ struct trigger_msg
 
 struct gen
 {
-	const SCHAR*	gen_name;
+	const char*		gen_name;
 	USHORT			gen_id;
-	const char*     gen_description;
+	const char*		gen_description;
 };
 
 } //namespace Jrd
@@ -80,7 +81,7 @@ static const Jrd::gen generators[] =
 	{ "RDB$BACKUP_HISTORY", 9, "Nbackup technology" },
 	{ FUNCTIONS_GENERATOR, 10, "Function ID" },
 	{ "RDB$GENERATOR_NAME", 11, "Implicit generator name" },
-	{ 0, 0, NULL }
+	{ nullptr, 0, nullptr }
 };
 
 

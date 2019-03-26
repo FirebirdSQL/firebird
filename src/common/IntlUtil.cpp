@@ -794,7 +794,7 @@ static USHORT unicodeStrToKey(texttype* tt, USHORT srcLen, const UCHAR* src,
 
 		return impl->collation->stringToKey(utf16Len, (USHORT*)utf16Str.begin(), dstLen, dst, keyType);
 	}
-	catch (BadAlloc)
+	catch (const BadAlloc&)
 	{
 		fb_assert(false);
 		return INTL_BAD_KEY_LENGTH;
@@ -859,7 +859,7 @@ static SSHORT unicodeCompare(texttype* tt, ULONG len1, const UCHAR* str1,
 		return impl->collation->compare(utf16Len1, (USHORT*)utf16Str1.begin(),
 			utf16Len2, (USHORT*)utf16Str2.begin(), errorFlag);
 	}
-	catch (BadAlloc)
+	catch (const BadAlloc&)
 	{
 		fb_assert(false);
 		return 0;
@@ -902,7 +902,7 @@ static ULONG unicodeCanonical(texttype* tt, ULONG srcLen, const UCHAR* src, ULON
 			utf16Len, Firebird::Aligner<USHORT>(utf16Str.begin(), utf16Len),
 			dstLen, Firebird::OutAligner<ULONG>(dst, dstLen), NULL);
 	}
-	catch (BadAlloc)
+	catch (const BadAlloc&)
 	{
 		fb_assert(false);
 		return INTL_BAD_KEY_LENGTH;

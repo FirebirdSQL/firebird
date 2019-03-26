@@ -286,7 +286,7 @@ gpre_fld* EXP_field(gpre_ctx** rcontext)
 	if (!field)
 	{
 		TEXT s[ERROR_LENGTH];
-		sprintf(s, "field \"%s\" is not defined in relation %s",
+		fb_utils::snprintf(s, sizeof(s), "field \"%s\" is not defined in relation %s",
 				gpreGlob.token_global.tok_string, relation->rel_symbol->sym_string);
 		PAR_error(s);
 	}
@@ -677,7 +677,7 @@ gpre_rel* EXP_relation()
 				else
 				{
 					TEXT s[ERROR_LENGTH];
-					sprintf(s, "relation %s is ambiguous", gpreGlob.token_global.tok_string);
+					fb_utils::snprintf(s, sizeof(s), "relation %s is ambiguous", gpreGlob.token_global.tok_string);
 					PAR_get_token();
 					PAR_error(s);
 				}
@@ -1381,7 +1381,7 @@ static gpre_nod* par_over( gpre_ctx* context)
 		gpre_nod* field1 = lookup_field(context);
 		if (!field1)
 		{
-			sprintf(s, "OVER field %s undefined", gpreGlob.token_global.tok_string);
+			fb_utils::snprintf(s, sizeof(s), "OVER field %s undefined", gpreGlob.token_global.tok_string);
 			PAR_error(s);
 		}
 		gpre_nod* field2 = NULL;
@@ -1392,7 +1392,7 @@ static gpre_nod* par_over( gpre_ctx* context)
 		}
 		if (!field2)
 		{
-			sprintf(s, "OVER field %s undefined", gpreGlob.token_global.tok_string);
+			fb_utils::snprintf(s, sizeof(s), "OVER field %s undefined", gpreGlob.token_global.tok_string);
 			PAR_error(s);
 		}
 		boolean = make_and(boolean, MSC_binary(nod_eq, field1, field2));

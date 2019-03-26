@@ -933,17 +933,20 @@ namespace
 		PathName fixedModuleName(info.curModule);
 		ISC_STATUS_ARRAY statusArray;
 
-		ModuleLoader::Module* module = ModuleLoader::loadModule(statusArray, fixedModuleName);
+		ModuleLoader::Module* module = nullptr;
+		int step = 0;
+		bool bad = false;
 
-		if (!module && !ModuleLoader::isLoadableModule(fixedModuleName))
+		do
 		{
-			ModuleLoader::doctorModuleExtension(fixedModuleName);
 			module = ModuleLoader::loadModule(statusArray, fixedModuleName);
-		}
+		} while (module == nullptr && // break on success
+				 !(bad = ModuleLoader::isLoadableModule(fixedModuleName)) && // Break if module is found but is bad
+				 ModuleLoader::doctorModuleExtension(fixedModuleName, step)); // Break if no further modifications of name is available
 
 		if (!module)
 		{
-			if (ModuleLoader::isLoadableModule(fixedModuleName))
+			if (bad)
 			{
 				loadError(Arg::Gds(isc_pman_module_bad) << fixedModuleName <<
 					Arg::StatusVector(statusArray));

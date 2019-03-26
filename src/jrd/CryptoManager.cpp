@@ -920,16 +920,22 @@ namespace Jrd {
 			// Establish temp context
 			// Needed to take crypt thread lock
 			UserId user;
-			user.setUserName("(Crypt thread)");
+			user.setUserName("Database Crypter");
 
 			Jrd::Attachment* const attachment = Jrd::Attachment::create(&dbb);
 			RefPtr<SysStableAttachment> sAtt(FB_NEW SysStableAttachment(attachment));
 			attachment->setStable(sAtt);
 			attachment->att_filename = dbb.dbb_filename;
 			attachment->att_user = &user;
+
 			BackgroundContextHolder tempDbb(&dbb, attachment, &status_vector, FB_FUNCTION);
 
 			LCK_init(tempDbb, LCK_OWNER_attachment);
+			PAG_header(tempDbb, true);
+			PAG_attachment_id(tempDbb);
+
+			Monitoring::publishAttachment(tempDbb);
+
 			sAtt->initDone();
 
 			// Take exclusive threadLock

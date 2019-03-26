@@ -28,7 +28,6 @@ fb_install_prefix=@prefix@
 fb_bindir=@FB_BINDIR@
 fb_libdir=@FB_LIBDIR@
 fb_incdir=@FB_INCDIR@
-fb_udfdir=@FB_UDFDIR@
 fb_sbindir=@FB_SBINDIR@
 fb_confdir=@FB_CONFDIR@
 fb_docdir=@FB_DOCDIR@
@@ -96,7 +95,6 @@ while test $# -gt 0
         --libs) echo $fb_libs ;;
         --embedlibs) echo $fb_libs ;;
         --bindir) echo $fb_bindir ;;
-        --udfdir) echo $fb_udfdir ;;
         --sbindir) echo $fb_sbindir ;;
         --confdir) echo $fb_confdir ;;
         --docdir) echo $fb_docdir ;;

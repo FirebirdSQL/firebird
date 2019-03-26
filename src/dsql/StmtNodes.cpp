@@ -36,6 +36,7 @@
 #include "../jrd/extds/ExtDS.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/recsrc/Cursor.h"
+#include "../jrd/replication/Publisher.h"
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "../jrd/cmp_proto.h"
@@ -323,27 +324,35 @@ void AssignmentNode::validateTarget(CompilerScratch* csb, const ValueExprNode* t
 	if ((fieldNode = nodeAs<FieldNode>(target)))
 	{
 		CompilerScratch::csb_repeat* tail = &csb->csb_rpt[fieldNode->fieldStream];
-		jrd_fld* field = MET_get_field(tail->csb_relation, fieldNode->fieldId);
-		string fieldName(field ? field->fld_name.c_str() : "<unknown>");
 
-		if (field && tail->csb_relation)
-			fieldName = string(tail->csb_relation->rel_name.c_str()) + "." + fieldName;
+		bool error = false;
 
 		// Assignments to the OLD context are prohibited for all trigger types.
 		if ((tail->csb_flags & csb_trigger) && fieldNode->fieldStream == OLD_CONTEXT_VALUE)
-			ERR_post(Arg::Gds(isc_read_only_field) << fieldName.c_str());
+			error = true;
 
 		// Assignments to the NEW context are prohibited for post-action triggers.
-		if ((tail->csb_flags & csb_trigger) && fieldNode->fieldStream == NEW_CONTEXT_VALUE &&
+		else if ((tail->csb_flags & csb_trigger) && fieldNode->fieldStream == NEW_CONTEXT_VALUE &&
 			(csb->csb_g_flags & csb_post_trigger))
 		{
-			ERR_post(Arg::Gds(isc_read_only_field) << fieldName.c_str());
+			error = true;
 		}
 
 		// Assignment to cursor fields are always prohibited.
 		// But we cannot detect FOR cursors here. They are treated in dsqlPass.
-		if (fieldNode->cursorNumber.specified)
+		else if (fieldNode->cursorNumber.specified)
+			error = true;
+
+		if (error)
+		{
+			jrd_fld* field = MET_get_field(tail->csb_relation, fieldNode->fieldId);
+			string fieldName(field ? field->fld_name.c_str() : "<unknown>");
+
+			if (field && tail->csb_relation)
+				fieldName = string(tail->csb_relation->rel_name.c_str()) + "." + fieldName;
+
 			ERR_post(Arg::Gds(isc_read_only_field) << fieldName.c_str());
+		}
 	}
 	else if (!(nodeIs<ParameterNode>(target) || nodeIs<VariableNode>(target) || nodeIs<NullNode>(target)))
 		ERR_post(Arg::Gds(isc_read_only_field) << "<unknown>");
@@ -2628,7 +2637,10 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, jrd_req* request, WhichTrigger
 	else if (relation->isVirtual())
 		VirtualTable::erase(tdbb, rpb);
 	else if (!relation->rel_view_rse)
+	{
 		VIO_erase(tdbb, rpb, transaction);
+		REPL_erase(tdbb, rpb, transaction);
+	}
 
 	// Handle post operation trigger.
 	if (relation->rel_post_erase && whichTrig != PRE_TRIG)
@@ -3137,6 +3149,9 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, jrd_req* request) cons
 				Arg::Str(procedure->getName().identifier) << Arg::Str(procedure->getName().package));
 	}
 
+	UserId* invoker = procedure->invoker ? procedure->invoker : tdbb->getAttachment()->att_ss_user;
+	AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);
+
 	ULONG inMsgLength = 0;
 	UCHAR* inMsg = NULL;
 
@@ -3363,6 +3378,19 @@ DmlNode* ExecStatementNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 						node->outputs = PAR_args(tdbb, csb, outputs, outputs);
 						break;
 
+					case blr_exec_stmt_in_excess:
+					{
+						MemoryPool& pool = csb->csb_pool;
+						node->excessInputs = FB_NEW_POOL(pool) EDS::ParamNumbers(pool);
+						const USHORT count = csb->csb_blr_reader.getWord();
+						for (FB_SIZE_T i = 0; i < count; i++)
+						{
+							const USHORT n = csb->csb_blr_reader.getWord();
+							node->excessInputs->add(n);
+						}
+						break;
+					}
+
 					case blr_end:
 						break;
 
@@ -3391,6 +3419,7 @@ StmtNode* ExecStatementNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->sql = doDsqlPass(dsqlScratch, sql);
 	node->inputs = doDsqlPass(dsqlScratch, inputs);
 	node->inputNames = inputNames;
+	node->excessInputs = excessInputs;
 
 	// Check params names uniqueness, if present.
 
@@ -3559,7 +3588,7 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 				dsqlScratch->appendUChar(blr_exec_stmt_in_params);
 
 			NestConst<ValueExprNode>* ptr = inputs->items.begin();
-			MetaName* const* name = inputNames ? inputNames->begin() : NULL;
+			const MetaName* const* name = inputNames ? inputNames->begin() : NULL;
 
 			for (const NestConst<ValueExprNode>* end = inputs->items.end(); ptr != end; ++ptr, ++name)
 			{
@@ -3567,6 +3596,15 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 					dsqlScratch->appendNullString((*name)->c_str());
 
 				GEN_expr(dsqlScratch, *ptr);
+			}
+
+			if (excessInputs)
+			{
+				dsqlScratch->appendUChar(blr_exec_stmt_in_excess);
+				dsqlScratch->appendUShort(excessInputs->getCount());
+
+				for (FB_SIZE_T i = 0; i < excessInputs->getCount(); i++)
+					dsqlScratch->appendUShort((*excessInputs)[i]);
 			}
 		}
 
@@ -3672,9 +3710,9 @@ const StmtNode* ExecStatementNode::execute(thread_db* tdbb, jrd_req* request, Ex
 			stmt->setTimeout(tdbb, timer->timeToExpire());
 
 		if (stmt->isSelectable())
-			stmt->open(tdbb, tran, inpNames, inputs, !innerStmt);
+			stmt->open(tdbb, tran, inpNames, inputs, excessInputs, !innerStmt);
 		else
-			stmt->execute(tdbb, tran, inpNames, inputs, outputs);
+			stmt->execute(tdbb, tran, inpNames, inputs, excessInputs, outputs);
 
 		request->req_operation = jrd_req::req_return;
 	}  // jrd_req::req_evaluate
@@ -6408,6 +6446,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, jrd_req* request, WhichTrigg
 				{
 					VIO_modify(tdbb, orgRpb, newRpb, transaction);
 					IDX_modify(tdbb, orgRpb, newRpb, transaction);
+					REPL_modify(tdbb, orgRpb, newRpb, transaction);
 				}
 
 				newRpb->rpb_number = orgRpb->rpb_number;
@@ -7291,6 +7330,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, jrd_req* request, WhichTrigger
 				{
 					VIO_store(tdbb, rpb, transaction);
 					IDX_store(tdbb, rpb, transaction);
+					REPL_store(tdbb, rpb, transaction);
 				}
 
 				rpb->rpb_number.setValid(true);
@@ -8184,6 +8224,14 @@ SetTransactionNode* SetTransactionNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 
 	for (RestrictionOption** i = reserveList.begin(); i != reserveList.end(); ++i)
 		genTableLock(dsqlScratch, **i, lockLevel);
+
+	if (atSnapshotNumber.specified)
+	{
+		dsqlScratch->appendUChar(isc_tpb_at_snapshot_number);
+		static_assert(sizeof(CommitNumber) == sizeof(FB_UINT64), "sizeof(CommitNumber) == sizeof(FB_UINT64)");
+		dsqlScratch->appendUChar(sizeof(CommitNumber));
+		dsqlScratch->appendUInt64(atSnapshotNumber.value);
+	}
 
 	if (dsqlScratch->getBlrData().getCount() > 1)	// 1 -> isc_tpb_version1
 		tpb.add(dsqlScratch->getBlrData().begin(), dsqlScratch->getBlrData().getCount());
@@ -9390,7 +9438,7 @@ static void dsqlSetParameterName(DsqlCompilerScratch* dsqlScratch, ExprNode* exp
 			exprNode->getChildren(holder, true);
 
 			for (auto ref : holder.refs)
-				dsqlSetParameterName(dsqlScratch, ref->getExpr(), fld_node, relation);
+				dsqlSetParameterName(dsqlScratch, *ref, fld_node, relation);
 
 			break;
 		}
@@ -9854,7 +9902,7 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 		{
 			// Validation error -- report result
 			const char* value;
-			VaryStr<128> temp;
+			VaryStr<TEMP_STR_LENGTH> temp;
 
 			const dsc* desc = EVL_expr(tdbb, request, i->value);
 			const USHORT length = (desc && !(request->req_flags & req_null)) ?

@@ -549,7 +549,7 @@ void CVT_string_to_datetime(const dsc* desc,
 	unsigned int position_day = 2;
 	bool have_english_month = false;
 	char date_sep = '\0';
-	VaryStr<100> buffer;			// arbitrarily large
+	VaryStr<TEMP_STR_LENGTH> buffer;			// arbitrarily large
 
 	const char* p = NULL;
 	const USHORT length = CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), 0, cb->err);
@@ -1186,7 +1186,7 @@ bool CVT_get_boolean(const dsc* desc, ErrorFunction err)
 		case dtype_cstring:
 		case dtype_text:
 		{
-			VaryStr<100> buffer;	// arbitrarily large
+			VaryStr<TEMP_STR_LENGTH> buffer;	// arbitrarily large
 			const char* p = NULL;
 			int len = CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), 0, err);
 
@@ -1282,7 +1282,7 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 	case dtype_cstring:
 	case dtype_text:
 		{
-			VaryStr<50> buffer;	// must hold ascii of largest double
+			VaryStr<TEMP_STR_LENGTH> buffer;	// must hold ascii of largest double
 			const char* p;
 
 			const USHORT length =
@@ -2160,7 +2160,7 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
 		try
 	    {
 			const char* p;
-			VaryStr<128> s;
+			VaryStr<TEMP_STR_LENGTH> s;
 			const USHORT length =
 				CVT_make_string(desc, ttype_ascii, &p, &s, sizeof(s), 0, localError);
 			message.assign(p, length);

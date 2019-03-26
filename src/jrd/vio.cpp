@@ -719,7 +719,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 		rpb->rpb_f_page, rpb->rpb_f_line);
 #endif
 
-	CommitNumber current_snapshot_number, prev_snapshot_number = 0;
+	CommitNumber current_snapshot_number;
 	bool int_gc_done = (attachment->att_flags & ATT_no_cleanup);
 
 	int state = TRA_snapshot_state(tdbb, transaction, rpb->rpb_transaction_nr, &current_snapshot_number);
@@ -800,7 +800,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 		// Worry about intermediate GC if necessary
 		if (!int_gc_done &&
-			(//(prev_snapshot_number && prev_snapshot_number == current_snapshot_number) ||
+			(
 			 ((tdbb->tdbb_flags & TDBB_sweeper) && state == tra_committed &&
 				rpb->rpb_b_page != 0 && rpb->rpb_transaction_nr >= oldest_snapshot)))
 		{
@@ -819,8 +819,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				continue;
 			}
 		}
-
-		prev_snapshot_number = current_snapshot_number;
 
 		if (state == tra_committed)
 			state = check_precommitted(transaction, rpb);
@@ -887,7 +885,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				if (!DPM_get(tdbb, rpb, LCK_read))
 					return false;
 
-				prev_snapshot_number = 0;
 				state = TRA_snapshot_state(tdbb, transaction, rpb->rpb_transaction_nr, &current_snapshot_number);
 				continue;
 			}
@@ -940,7 +937,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 					{
 						if (!DPM_get(tdbb, rpb, LCK_read))
 							return false;
-						prev_snapshot_number = 0;
 						break;
 					}
 
@@ -953,7 +949,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 						if (!DPM_get(tdbb, rpb, LCK_read))
 							return false;
-						prev_snapshot_number = 0;
 						break;
 					}
 
@@ -976,7 +971,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				{
 					if (!DPM_get(tdbb, rpb, LCK_read))
 						return false;
-					prev_snapshot_number = 0;
 				}
 
 				++backversions;
@@ -988,8 +982,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 			if (!DPM_get(tdbb, rpb, LCK_read))
 				return false;
-
-			prev_snapshot_number = 0;
 
 			}	// scope
 			break;
@@ -1048,7 +1040,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				{
 					if (!DPM_get(tdbb, rpb, LCK_read))
 						return false;
-					prev_snapshot_number = 0;
 				}
 
 				++backversions;
@@ -1073,7 +1064,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 						// Things have changed, start all over again.
 						if (!DPM_get(tdbb, rpb, LCK_read))
 							return false;	// entire record disappeared
-						prev_snapshot_number = 0;
 						break;	// start from the primary version again
 					}
 				}
@@ -1086,7 +1076,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 						// Things have changed, start all over again.
 						if (!DPM_get(tdbb, rpb, LCK_read))
 							return false;	// entire record disappeared
-						prev_snapshot_number = 0;
 						break;	// start from the primary version again
 					}
 
@@ -1095,7 +1084,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 						CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 						if (!DPM_get(tdbb, rpb, LCK_read))
 							return false;
-						prev_snapshot_number = 0;
 						break;
 					}
 
@@ -1115,7 +1103,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 					{
 						if (!DPM_get(tdbb, rpb, LCK_read))
 							return false;
-						prev_snapshot_number = 0;
 					}
 
 					++backversions;
@@ -1241,7 +1228,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 			// Go back to be primary record version and chase versions all over again.
 			if (!DPM_get(tdbb, rpb, LCK_read))
 				return false;
-			prev_snapshot_number = 0;
 		} // switch (state)
 
 		state = TRA_snapshot_state(tdbb, transaction, rpb->rpb_transaction_nr, &current_snapshot_number);
@@ -4755,6 +4741,8 @@ void Database::garbage_collector(Database* dbb)
 			PAG_header(tdbb, true);
 			PAG_attachment_id(tdbb);
 			TRA_init(attachment);
+
+			Monitoring::publishAttachment(tdbb);
 
 			dbb->dbb_garbage_collector = gc;
 

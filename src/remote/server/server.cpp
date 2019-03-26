@@ -3621,6 +3621,36 @@ void rem_port::batch_rls(P_BATCH_FREE* batch, PACKET* sendL)
 }
 
 
+void rem_port::replicate(P_REPLICATE* repl, PACKET* sendL)
+{
+	LocalStatus ls;
+	CheckStatusWrapper status_vector(&ls);
+
+	Rdb* rdb = this->port_context;
+	if (bad_db(&status_vector, rdb))
+	{
+		this->send_response(sendL, 0, 0, &status_vector, false);
+		return;
+	}
+
+	if (!this->port_replicator)
+		this->port_replicator = rdb->rdb_iface->createReplicator(&status_vector);
+
+	if (repl->p_repl_data.cstr_length)
+	{
+		this->port_replicator->process(&status_vector,
+			repl->p_repl_data.cstr_length, repl->p_repl_data.cstr_address);
+	}
+	else
+	{
+		this->port_replicator->close(&status_vector);
+		this->port_replicator = NULL;
+	}
+
+	this->send_response(sendL, 0, 0, &status_vector, false);
+}
+
+
 ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* sendL)
 {
 /*****************************************
@@ -4862,6 +4892,11 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 
 		case op_batch_set_bpb:
 			port->batch_bpb(&receive->p_batch_setbpb, sendL);
+			break;
+
+		case op_repl_data:
+			port->replicate(&receive->p_replicate, sendL);
+			break;
 
 		///case op_insert:
 		default:

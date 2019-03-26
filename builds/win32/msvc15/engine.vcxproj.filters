@@ -40,6 +40,9 @@
     <Filter Include="DSQL\preprocesed">
       <UniqueIdentifier>{f8ad7750-3087-4a0c-9679-a44b5d0f38dd}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Replication">
+      <UniqueIdentifier>{686cba10-1e4f-44f7-b044-972ef8327197}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jrd\recsrc\WindowedStream.cpp">
@@ -467,6 +470,27 @@
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\SystemPackages.cpp">
       <Filter>JRD files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\replication\Applier.cpp">
+      <Filter>Replication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\replication\ChangeLog.cpp">
+      <Filter>Replication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\replication\Config.cpp">
+      <Filter>Replication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\replication\Manager.cpp">
+      <Filter>Replication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\replication\Publisher.cpp">
+      <Filter>Replication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\replication\Replicator.cpp">
+      <Filter>Replication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\replication\Utils.cpp">
+      <Filter>Replication</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

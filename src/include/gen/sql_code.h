@@ -951,6 +951,10 @@ static const struct {
 	{335545248, -901}, /* 928 tom_rsa_sign */
 	{335545249, -901}, /* 929 tom_rsa_verify */
 	{335545250, -901}, /* 930 tom_chacha_key */
+	{335545251, -901}, /* 931 bad_repl_handle */
+	{335545252, -901}, /* 932 tra_snapshot_does_not_exist */
+	{335545253, -901}, /* 933 eds_input_prm_not_used */
+	{335545254, -551}, /* 934 effective_user */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */
@@ -1094,7 +1098,19 @@ static const struct {
 	{336068896, -901}, /* 288 dyn_cant_use_zero_increment */
 	{336068897, -901}, /* 289 dyn_cant_use_in_foreignkey */
 	{336068898, -901}, /* 290 dyn_defvaldecl_package_func */
+	{336068900, -901}, /* 292 dyn_cyclic_role */
 	{336068904, -901}, /* 296 dyn_cant_use_zero_inc_ident */
+	{336068907, -901}, /* 299 dyn_no_ddl_grant_opt_priv */
+	{336068908, -901}, /* 300 dyn_no_grant_opt_priv */
+	{336068909, -901}, /* 301 dyn_func_not_exist */
+	{336068910, -901}, /* 302 dyn_proc_not_exist */
+	{336068911, -901}, /* 303 dyn_pack_not_exist */
+	{336068912, -901}, /* 304 dyn_trig_not_exist */
+	{336068913, -901}, /* 305 dyn_view_not_exist */
+	{336068914, -901}, /* 306 dyn_rel_not_exist */
+	{336068915, -901}, /* 307 dyn_exc_not_exist */
+	{336068916, -901}, /* 308 dyn_gen_not_exist */
+	{336068917, -901}, /* 309 dyn_fld_not_exist */
 	{336330753, -901}, /*   1 gbak_unknown_switch */
 	{336330754, -901}, /*   2 gbak_page_size_missing */
 	{336330755, -901}, /*   3 gbak_page_size_toobig */

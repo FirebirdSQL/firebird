@@ -129,6 +129,13 @@
     <ClCompile Include="..\..\..\src\jrd\recsrc\Union.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\VirtualTableScan.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\WindowedStream.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Applier.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\ChangeLog.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Config.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Manager.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Publisher.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Replicator.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Utils.cpp" />
     <ClCompile Include="..\..\..\src\jrd\Relation.cpp" />
     <ClCompile Include="..\..\..\src\jrd\ResultSet.cpp" />
     <ClCompile Include="..\..\..\src\jrd\rlck.cpp" />

@@ -116,11 +116,12 @@ o Pokud Firebird běží jako aplikace (místo jako
   musíte vymazat ručně.
 
 o Odinstalace v instalační složce zanechá
-  čtyri soubory:
+  šest souborů:
 
   - databases.conf
   - firebird.conf
   - fbtrace.conf
+  - replication.conf
   - firebird.log
   - security3.fdb
 

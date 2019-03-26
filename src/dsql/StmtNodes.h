@@ -687,7 +687,8 @@ public:
 		  outputs(NULL),
 		  useCallerPrivs(false),
 		  traScope(EDS::traNotSet),	// not defined
-		  inputNames(NULL)
+		  inputNames(NULL),
+		  excessInputs(NULL)
 	{
 	}
 
@@ -721,6 +722,7 @@ public:
 	bool useCallerPrivs;
 	EDS::TraScope traScope;
 	EDS::ParamNames* inputNames;
+	EDS::ParamNumbers* excessInputs;
 };
 
 
@@ -1619,6 +1621,7 @@ public:
 	Nullable<USHORT> lockTimeout;
 	Firebird::Array<RestrictionOption*> reserveList;
 	Firebird::UCharBuffer tpb;
+	Nullable<CommitNumber> atSnapshotNumber;
 };
 
 

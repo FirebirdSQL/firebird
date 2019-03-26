@@ -25,6 +25,7 @@
 
 #include "../../common/classes/fb_string.h"
 #include "../../common/classes/array.h"
+#include "../../common/classes/objects_array.h"
 #include "../../common/classes/ClumpletWriter.h"
 #include "../../common/classes/locks.h"
 #include "../../common/utils_proto.h"
@@ -573,7 +574,8 @@ protected:
 };
 
 
-typedef Firebird::Array<Firebird::MetaName*> ParamNames;
+typedef Firebird::Array<const Firebird::MetaName*> ParamNames;
+typedef Firebird::Array<USHORT> ParamNumbers;
 
 class Statement : public Firebird::PermanentStorage
 {
@@ -597,9 +599,10 @@ public:
 	void setTimeout(Jrd::thread_db* tdbb, unsigned int timeout);
 	void execute(Jrd::thread_db* tdbb, Transaction* tran,
 		const Firebird::MetaName* const* in_names, const Jrd::ValueListNode* in_params,
-		const Jrd::ValueListNode* out_params);
+		const ParamNumbers* in_excess, const Jrd::ValueListNode* out_params);
 	void open(Jrd::thread_db* tdbb, Transaction* tran,
-		const Firebird::MetaName* const* in_names, const Jrd::ValueListNode* in_params, bool singleton);
+		const Firebird::MetaName* const* in_names, const Jrd::ValueListNode* in_params, 
+		const ParamNumbers* in_excess, bool singleton);
 	bool fetch(Jrd::thread_db* tdbb, const Jrd::ValueListNode* out_params);
 	void close(Jrd::thread_db* tdbb, bool invalidTran = false);
 	void deallocate(Jrd::thread_db* tdbb);
@@ -636,7 +639,7 @@ protected:
 	virtual void doClose(Jrd::thread_db* tdbb, bool drop) = 0;
 
 	void setInParams(Jrd::thread_db* tdbb, const Firebird::MetaName* const* names,
-		const Jrd::ValueListNode* params);
+		const Jrd::ValueListNode* params, const ParamNumbers* in_excess);
 	virtual void getOutParams(Jrd::thread_db* tdbb, const Jrd::ValueListNode* params);
 
 	virtual void doSetInParams(Jrd::thread_db* tdbb, unsigned int count,
@@ -689,7 +692,7 @@ protected:
 	Jrd::jrd_req* m_preparedByReq;
 
 	// set in preprocess
-	ParamNames m_sqlParamNames;
+	Firebird::SortedObjectsArray<const Firebird::MetaName> m_sqlParamNames;
 	ParamNames m_sqlParamsMap;
 
 	// set in prepare()

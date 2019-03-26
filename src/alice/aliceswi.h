@@ -64,6 +64,7 @@ const SINT64 sw_fetch_password	= QUADCONST(0x0000000800000000);
 const SINT64 sw_nolinger		= QUADCONST(0x0000001000000000);
 const SINT64 sw_icu				= QUADCONST(0x0000002000000000);
 const SINT64 sw_role			= QUADCONST(0x0000004000000000);
+const SINT64 sw_replica			= QUADCONST(0x0000008000000000);
 
 
 enum alice_switches
@@ -119,7 +120,8 @@ enum alice_switches
 	IN_SW_ALICE_FETCH_PASSWORD		=	46,
 	IN_SW_ALICE_NOLINGER			=	47,
 	IN_SW_ALICE_ICU					=	48,
-	IN_SW_ALICE_ROLE				=	49
+	IN_SW_ALICE_ROLE				=	49,
+	IN_SW_ALICE_REPLICA				=	50
 };
 
 static const char* const ALICE_SW_ASYNC	= "ASYNC";
@@ -212,6 +214,9 @@ static const Switches::in_sw_tab_t alice_in_sw_table[] =
 	// msg 43: \t-quit_log\tquit logging for replay utility
 */
 #endif
+	{IN_SW_ALICE_REPLICA, 0, "REPLICA", sw_replica,
+		0, ~(sw_replica | sw_user | sw_password | sw_nolinger | sw_role), false, false, 134, 2, NULL},
+	// msg 134: -replica access mode <none / read_only / read_write>
 	{IN_SW_ALICE_ROLE, 0, "ROLE", sw_role,
 		0, 0, false, false, 132, 4, NULL},
 	// msg 132: -role set SQL role name

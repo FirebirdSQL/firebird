@@ -448,6 +448,22 @@ int alice(Firebird::UtilSvc* uSvc)
 			}
 		}
 
+		if (table->in_sw_value & sw_replica)
+		{
+			if (--argc <= 0)
+				ALICE_error(135);	// msg 135: replica mode (none / read_only / read_write) required
+
+			ALICE_upper_case(*argv++, string, sizeof(string));
+
+			if (!strcmp(string, "NONE"))
+				tdgbl->ALICE_data.ua_replica_mode = REPL_NONE;
+			else if (!strcmp(string, ALICE_SW_MODE_RO))
+				tdgbl->ALICE_data.ua_replica_mode = REPL_READ_ONLY;
+			else if (!strcmp(string, ALICE_SW_MODE_RW))
+				tdgbl->ALICE_data.ua_replica_mode = REPL_READ_WRITE;
+			else
+				ALICE_error(135);	// msg 135: replica mode (none / read_only / read_write) required
+		}
 	}
 
 	// put this here since to put it above overly complicates the parsing.

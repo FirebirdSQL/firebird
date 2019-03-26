@@ -480,7 +480,7 @@ void EVL_make_value(thread_db* tdbb, const dsc* desc, impure_value* value, Memor
 		break;
 	}
 
-	VaryStr<128> temp;
+	VaryStr<TEMP_STR_LENGTH> temp;
 	UCHAR* address;
 	USHORT ttype;
 
@@ -550,7 +550,7 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 		err = true;
 
 	const char* value = NULL_STRING_MARK;
-	VaryStr<128> temp;
+	VaryStr<TEMP_STR_LENGTH> temp;
 
 	MapFieldInfo::ValueType fieldInfo;
 	if (!err && itemInfo->fullDomain &&

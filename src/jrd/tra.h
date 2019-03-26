@@ -144,6 +144,8 @@ struct CallerName
 	Firebird::MetaName userName;
 };
 
+typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, ULONG> > > ReplBlobMap;
+
 const int DEFAULT_LOCK_TIMEOUT = -1; // infinite
 const char* const TRA_BLOB_SPACE = "fb_blob_";
 const char* const TRA_UNDO_SPACE = "fb_undo_";
@@ -170,6 +172,7 @@ public:
 		tra_blobs_tree(p),
 		tra_blobs(outer ? outer->tra_blobs : &tra_blobs_tree),
 		tra_fetched_blobs(p),
+		tra_repl_blobs(*p),
 		tra_arrays(NULL),
 		tra_deferred_job(NULL),
 		tra_resources(*p),
@@ -184,6 +187,7 @@ public:
 		tra_sorts(*p),
 		tra_public_interface(NULL),
 		tra_gen_ids(NULL),
+		tra_replicator(NULL),
 		tra_interface(NULL),
 		tra_blob_space(NULL),
 		tra_undo_space(NULL),
@@ -263,6 +267,7 @@ public:
 	BlobIndexTree tra_blobs_tree;		// list of active blobs
 	BlobIndexTree* tra_blobs;			// pointer to actual list of active blobs
 	FetchedBlobIdTree tra_fetched_blobs;	// list of fetched blobs
+	ReplBlobMap tra_repl_blobs;			// map of blob IDs replicated in this transaction
 	ArrayField*	tra_arrays;				// Linked list of active arrays
 	Lock*		tra_lock;				// lock for transaction
 	Lock*		tra_alter_db_lock;		// lock for ALTER DATABASE statement(s)
@@ -296,6 +301,7 @@ public:
 	//Transaction *tra_ext_two_phase;
 	Firebird::ITransaction* tra_public_interface;
 	GenIdCache* tra_gen_ids;
+	Firebird::IReplicatedTransaction* tra_replicator;
 
 private:
 	JTransaction* tra_interface;

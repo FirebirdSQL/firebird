@@ -124,6 +124,7 @@
 #define isc_dpb_reset_icu				  89
 #define isc_dpb_map_attach                90
 #define isc_dpb_session_time_zone         91
+#define isc_dpb_set_db_replica            92
 
 /**************************************************/
 /* clumplet tags used inside isc_dpb_address_path */
@@ -243,6 +244,7 @@
 #define isc_tpb_no_auto_undo              20
 #define isc_tpb_lock_timeout              21
 #define isc_tpb_read_consistency          22
+#define isc_tpb_at_snapshot_number        23
 
 
 /************************/

@@ -1042,6 +1042,8 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	Firebird::ICryptKeyCallback* port_client_crypt_callback;	// client callback to transfer database crypt key
 	ServerCallbackBase* port_server_crypt_callback;			// server callback to transfer database crypt key
 
+	Firebird::RefPtr<Firebird::IReplicator> port_replicator;
+
 	UCharArrayAutoPtr	port_buffer;
 
 	FB_UINT64 port_snd_packets;
@@ -1084,7 +1086,7 @@ public:
 		port_srv_auth(NULL), port_srv_auth_block(NULL),
 		port_crypt_keys(getPool()), port_crypt_complete(false), port_crypt_level(WIRECRYPT_REQUIRED),
 		port_known_server_keys(getPool()), port_crypt_plugin(NULL),
-		port_client_crypt_callback(NULL), port_server_crypt_callback(NULL),
+		port_client_crypt_callback(NULL), port_server_crypt_callback(NULL), port_replicator(NULL),
 		port_buffer(FB_NEW_POOL(getPool()) UCHAR[rpt]),
 		port_snd_packets(0), port_rcv_packets(0), port_snd_bytes(0), port_rcv_bytes(0)
 	{
@@ -1286,6 +1288,7 @@ public:
 	void		batch_exec(P_BATCH_EXEC*, PACKET*);
 	void		batch_rls(P_BATCH_FREE*, PACKET*);
 	void		batch_bpb(P_BATCH_SETBPB*, PACKET*);
+	void		replicate(P_REPLICATE*, PACKET*);
 
 	Firebird::string getRemoteId() const;
 	void auxAcceptError(PACKET* packet);

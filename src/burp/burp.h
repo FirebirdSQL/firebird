@@ -42,7 +42,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/fb_pair.h"
 #include "../common/classes/MetaName.h"
-#include "../../jrd/SimilarToMatcher.h"
+#include "../jrd/SimilarToMatcher.h"
 #include "../common/status.h"
 #include "../common/sha.h"
 #include "../common/classes/ImplementHelper.h"
@@ -1122,6 +1122,7 @@ public:
 	Firebird::IRequest*	handles_get_trigger_message_req_handle2;
 	Firebird::IRequest*	handles_get_trigger_old_req_handle1;
 	Firebird::IRequest*	handles_get_trigger_req_handle1;
+	Firebird::IRequest*	handles_get_trigger_req_handle2;
 	Firebird::IRequest*	handles_get_type_req_handle1;
 	Firebird::IRequest*	handles_get_user_privilege_req_handle1;
 	Firebird::IRequest*	handles_get_view_req_handle1;

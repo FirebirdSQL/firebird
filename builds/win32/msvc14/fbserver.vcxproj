@@ -218,6 +218,9 @@
     <ClCompile Include="..\..\..\src\remote\server\os\win32\srvr_w32.cpp" />
     <ClCompile Include="..\..\..\src\remote\server\os\win32\window.cpp" />
     <ClCompile Include="..\..\..\src\remote\server\server.cpp" />
+    <ClCompile Include="..\..\..\src\remote\server\ReplServer.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Config.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\src\remote\server\os\win32\caution.ico" />

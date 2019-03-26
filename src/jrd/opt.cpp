@@ -260,24 +260,45 @@ namespace
 
 				while (rivers.hasData())
 				{
-					for (River** iter = rivers.begin(); iter < rivers.end(); iter++)
+					const auto orgCount = rsbs.getCount();
+
+					for (auto& subRiver : rivers)
 					{
-						River* const sub_river = *iter;
-						RecordSource* const sub_rsb = sub_river->getRecordSource();
+						const auto subRsb = subRiver->getRecordSource();
+						fb_assert(!rsbs.exist(subRsb));
 
-						fb_assert(!rsbs.exist(sub_rsb));
+						subRiver->activate(csb);
 
-						sub_river->activate(csb);
-
-						if (sub_river->isComputable(csb))
+						if (subRiver->isComputable(csb))
 						{
-							rsbs.add(sub_rsb);
-							rivers.remove(iter);
+							rsbs.add(subRsb);
+							rivers.remove(&subRiver);
 							break;
 						}
 
-						sub_river->deactivate(csb);
+						subRiver->deactivate(csb);
 					}
+
+					if (rsbs.getCount() == orgCount)
+						break;
+				}
+
+				if (rivers.hasData())
+				{
+					// Ideally, we should never get here. But just in case it happened, handle it.
+
+					fb_assert(false);
+
+					for (auto& subRiver : rivers)
+					{
+						const auto subRsb = subRiver->getRecordSource();
+						fb_assert(!rsbs.exist(subRsb));
+
+						const auto pos = &subRiver - rivers.begin();
+						rsbs.insert(pos, subRsb);
+					}
+
+					rivers.clear();
 				}
 
 				m_rsb = FB_NEW_POOL(csb->csb_pool) NestedLoopJoin(csb, rsbs.getCount(), rsbs.begin());

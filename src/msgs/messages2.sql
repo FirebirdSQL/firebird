@@ -1038,6 +1038,10 @@ Data source : @4', NULL, NULL)
 ('tom_rsa_sign', NULL, 'SysFunction.cpp', NULL, 0, 928, NULL, 'RSA-signing data', NULL, NULL);
 ('tom_rsa_verify', NULL, 'SysFunction.cpp', NULL, 0, 929, NULL, 'Verifying RSA-signed data', NULL, NULL);
 ('tom_chacha_key', NULL, 'SysFunction.cpp', NULL, 0, 930, NULL, 'Invalid key length @1, need 16 or 32', NULL, NULL);
+('bad_repl_handle', NULL, 'jrd.cpp', NULL, 0, 931, NULL, 'invalid replicator handle', NULL, NULL);
+('tra_snapshot_does_not_exist', NULL, 'tpc.cpp', NULL, 0, 932, NULL, 'Transaction''s base snapshot number does not exist', NULL, NULL);
+('eds_input_prm_not_used', NULL, 'ExtDS.cpp', NULL, 0, 933, NULL, 'Input parameter ''@1'' is not used in SQL query text', NULL, NULL);
+('effective_user', NULL, NULL, NULL, 0, 934, NULL, 'Effective user is @1', NULL, NULL);
 -- QLI
 (NULL, NULL, NULL, NULL, 1, 0, NULL, 'expected type', NULL, NULL);
 (NULL, NULL, NULL, NULL, 1, 1, NULL, 'bad block type', NULL, NULL);
@@ -1784,6 +1788,8 @@ COMMIT WORK;
 ('gfix_opt_icu', 'ALICE_gfix', 'alice.c', NULL, 3, 131, NULL, '   -icu                 fix database to be usable with present ICU version', NULL, NULL);
 ('gfix_opt_role', 'ALICE_gfix', 'alice.c', NULL, 3, 132, NULL, '   -role                set SQL role name', NULL, NULL);
 ('gfix_role_req', 'ALICE_gfix', 'alice.c', NULL, 3, 133, NULL, 'SQL role name required', NULL, NULL);
+('gfix_opt_repl', 'ALICE_gfix', 'alice.c', NULL, 3, 134, NULL, '   -repl(ica)           replica mode <none / read_only / read_write>', NULL, NULL);
+('gfix_repl_mode_req', 'ALICE_gfix', 'alice.c', NULL, 3, 135, NULL, 'replica mode (none / read_only / read_write) required', NULL, NULL);
 -- DSQL
 ('dsql_dbkey_from_non_table', 'MAKE_desc', 'make.c', NULL, 7, 2, NULL, 'Cannot SELECT RDB$DB_KEY from a stored procedure.', NULL, NULL);
 ('dsql_transitional_numeric', 'dsql_yyparse', 'parse.y', NULL, 7, 3, NULL, 'Precision 10 to 18 changed from DOUBLE PRECISION in SQL dialect 1 to 64-bit scaled integer in SQL dialect 3', NULL, NULL);
@@ -2120,17 +2126,17 @@ COMMIT WORK;
 ('dyn_cant_use_zero_inc_ident', NULL, 'DdlNodes.epp', NULL, 8, 296, NULL, 'INCREMENT BY 0 is an illegal option for identity column @1 of table @2', NULL, NULL);
 ('dyn_concur_alter_database', 'AlterDatabaseNode::execute', 'DdlNodes.epp', NULL, 8, 297, NULL, 'Concurrent ALTER DATABASE is not supported', NULL, NULL);
 ('dyn_incompat_alter_database', 'AlterDatabaseNode::execute', 'DdlNodes.epp', NULL, 8, 298, NULL, 'Incompatible ALTER DATABASE clauses: ''@1'' and ''@2''', NULL, NULL);
-(NULL, 'checkGrantorCanGrantObject', 'DdlNodes.epp', NULL, 8, 299, NULL, 'no @1 privilege with grant option on DDL @2', NULL, NULL);
-(NULL, 'checkGrantorCanGrantObject', 'DdlNodes.epp', NULL, 8, 300, NULL, 'no @1 privilege with grant option on object @2', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 301, NULL, 'Function @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 302, NULL, 'Procedure @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 303, NULL, 'Package @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 304, NULL, 'Trigger @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 305, NULL, 'View @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 306, NULL, 'Table @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 307, NULL, 'Exception @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 308, NULL, 'Generator/Sequence @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 309, NULL, 'Field @1 of table @2 does not exist', NULL, NULL);
+('dyn_no_ddl_grant_opt_priv', 'checkGrantorCanGrantObject', 'DdlNodes.epp', NULL, 8, 299, NULL, 'no @1 privilege with grant option on DDL @2', NULL, NULL);
+('dyn_no_grant_opt_priv', 'checkGrantorCanGrantObject', 'DdlNodes.epp', NULL, 8, 300, NULL, 'no @1 privilege with grant option on object @2', NULL, NULL);
+('dyn_func_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 301, NULL, 'Function @1 does not exist', NULL, NULL);
+('dyn_proc_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 302, NULL, 'Procedure @1 does not exist', NULL, NULL);
+('dyn_pack_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 303, NULL, 'Package @1 does not exist', NULL, NULL);
+('dyn_trig_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 304, NULL, 'Trigger @1 does not exist', NULL, NULL);
+('dyn_view_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 305, NULL, 'View @1 does not exist', NULL, NULL);
+('dyn_rel_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 306, NULL, 'Table @1 does not exist', NULL, NULL);
+('dyn_exc_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 307, NULL, 'Exception @1 does not exist', NULL, NULL);
+('dyn_gen_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 308, NULL, 'Generator/Sequence @1 does not exist', NULL, NULL);
+('dyn_fld_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 309, NULL, 'Field @1 of table @2 does not exist', NULL, NULL);
 COMMIT WORK;
 -- TEST
 (NULL, 'main', 'test.c', NULL, 11, 0, NULL, 'This is a modified text message', NULL, NULL);
@@ -2534,6 +2540,7 @@ ERROR: Backup incomplete', NULL, NULL);
 (NULL, NULL, 'mvol.cpp', NULL, 12, 384, NULL, 'Compression stream init error @1', NULL, NULL);
 (NULL, NULL, 'restore.epp', NULL, 12, 385, NULL, 'Invalid reply from getInfo() when waiting for DB encryption', NULL, NULL);
 (NULL, NULL, 'restore.epp', NULL, 12, 386, NULL, 'Problems with just created database encryption', NULL, NULL);
+(NULL, 'get_trigger', 'restore.epp', NULL, 12, 387, NULL, 'Skipped trigger @1 on system table @2', NULL, NULL);
 -- SQLERR
 (NULL, NULL, NULL, NULL, 13, 1, NULL, 'Firebird error', NULL, NULL);
 (NULL, NULL, NULL, NULL, 13, 74, NULL, 'Rollback not performed', NULL, NULL);

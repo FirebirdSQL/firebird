@@ -11,6 +11,9 @@
     <Filter Include="Remote server">
       <UniqueIdentifier>{6e27505b-0eda-4a76-8bfd-6f4e74348cb8}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Replication">
+      <UniqueIdentifier>{5b3183b0-e185-4c7e-8e41-3f163a40880d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\remote\server\os\win32\window.cpp">
@@ -33,6 +36,15 @@
     </ClCompile>
     <ClCompile Include="..\..\..\src\auth\SecureRemotePassword\server\SrpServer.cpp">
       <Filter>AUTH files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\replication\Utils.cpp">
+      <Filter>Replication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\replication\Config.cpp">
+      <Filter>Replication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\remote\server\ReplServer.cpp">
+      <Filter>Replication</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

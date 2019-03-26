@@ -52,11 +52,6 @@ namespace Jrd {
 // Bug 10061, bsriram - 19-Apr-1999
 static const int MAX_MEMBER_LIST = 1500;
 
-static const int TEMP_LENGTH = 128;
-
-
-//--------------------
-
 
 //--------------------
 
@@ -888,7 +883,7 @@ bool ComparativeBoolNode::stringBoolean(thread_db* tdbb, jrd_req* request, dsc* 
 		case blr_like:
 		case blr_similar:
 		{
-			VaryStr<TEMP_LENGTH> temp3;
+			VaryStr<TEMP_STR_LENGTH> temp3;
 			const UCHAR* escape_str = NULL;
 			USHORT escape_length = 0;
 
@@ -1100,7 +1095,7 @@ bool ComparativeBoolNode::stringFunction(thread_db* tdbb, jrd_req* request,
 	// Handle LIKE and SIMILAR
 	if (blrOp == blr_like || blrOp == blr_similar)
 	{
-		VaryStr<TEMP_LENGTH> temp3;
+		VaryStr<TEMP_STR_LENGTH> temp3;
 		const UCHAR* escape_str = NULL;
 		USHORT escape_length = 0;
 		// ensure 3rd argument (escape char) is in operation text type

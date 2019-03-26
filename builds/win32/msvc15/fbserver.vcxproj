@@ -20,7 +20,7 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{23EC8DAA-6718-4EF3-979F-89F611C7D504}</ProjectGuid>
-    <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -219,6 +219,9 @@
     <ClCompile Include="..\..\..\src\remote\server\os\win32\srvr_w32.cpp" />
     <ClCompile Include="..\..\..\src\remote\server\os\win32\window.cpp" />
     <ClCompile Include="..\..\..\src\remote\server\server.cpp" />
+    <ClCompile Include="..\..\..\src\remote\server\ReplServer.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Config.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\src\remote\server\os\win32\caution.ico" />

@@ -639,9 +639,8 @@ void EXE_receive(thread_db* tdbb,
 
 	jrd_tra* transaction = request->req_transaction;
 
-	if (!(request->req_flags & req_active)) {
+	if (!(request->req_flags & req_active))
 		ERR_post(Arg::Gds(isc_req_sync));
-	}
 
 	const SavNumber mergeSavNumber = transaction->tra_save_point ?
 		transaction->tra_save_point->getNumber() : 0;
@@ -1159,7 +1158,13 @@ void EXE_execute_triggers(thread_db* tdbb,
 
 			TraceTrigExecute trace(tdbb, trigger, which_trig);
 
-			EXE_start(tdbb, trigger, transaction);
+			{	// Scope to replace att_ss_user
+				const JrdStatement* s = trigger->getStatement();
+				UserId* invoker = s->triggerInvoker ? s->triggerInvoker : tdbb->getAttachment()->att_ss_user;
+				AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);
+
+				EXE_start(tdbb, trigger, transaction);
+			}
 
 			const bool ok = (trigger->req_operation != jrd_req::req_unwind);
 			trace.finish(ok ? ITracePlugin::RESULT_SUCCESS : ITracePlugin::RESULT_FAILED);

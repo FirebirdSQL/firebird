@@ -71,6 +71,9 @@ public:
 		bool getFirst() { return m_Accessor.getFirst(); }
 		bool getNext() { return m_Accessor.getNext(); }
 
+		bool locate(const KeyType& key) { return m_Accessor.locate(key); }
+		bool fastRemove() { return m_Accessor.fastRemove(); }
+
 	private:
 		Accessor(const Accessor&);
 		Accessor& operator=(const Accessor&);
@@ -87,6 +90,8 @@ public:
 
 		bool getFirst() { return m_Accessor.getFirst(); }
 		bool getNext() { return m_Accessor.getNext(); }
+
+		ValueType* locate(const KeyType& key) { return m_Accessor.locate(key); }
 
 	private:
 		ConstAccessor(const ConstAccessor&);

@@ -335,7 +335,7 @@ using namespace Firebird;
 %token <stringPtr> FLOAT_NUMBER DECIMAL_NUMBER LIMIT64_INT
 %token <lim64ptr> LIMIT64_NUMBER
 %token <metaNamePtr> SYMBOL
-%token <int32Val> NUMBER
+%token <int32Val> NUMBER32BIT
 
 %token <intlStringPtr> STRING
 %token <metaNamePtr> INTRODUCER
@@ -606,6 +606,7 @@ using namespace Firebird;
 %token <metaNamePtr> CUME_DIST
 %token <metaNamePtr> DECFLOAT
 %token <metaNamePtr> DEFINER
+%token <metaNamePtr> EXCESS
 %token <metaNamePtr> EXCLUDE
 %token <metaNamePtr> FIRST_DAY
 %token <metaNamePtr> FOLLOWING
@@ -623,6 +624,7 @@ using namespace Firebird;
 %token <metaNamePtr> NATIVE
 %token <metaNamePtr> NORMALIZE_DECFLOAT
 %token <metaNamePtr> NTILE
+%token <metaNamePtr> NUMBER
 %token <metaNamePtr> OTHERS
 %token <metaNamePtr> OVERRIDING
 %token <metaNamePtr> PERCENT_RANK
@@ -3319,6 +3321,23 @@ named_param($execStatementNode)
 			else
 				$execStatementNode->inputs->add($3);
 		}
+	| EXCESS symbol_variable_name BIND_PARAM value
+		{
+			if (!$execStatementNode->inputNames)
+				$execStatementNode->inputNames = FB_NEW_POOL(getPool()) EDS::ParamNames(getPool());
+
+			if (!$execStatementNode->excessInputs)
+				$execStatementNode->excessInputs = FB_NEW_POOL(getPool()) EDS::ParamNumbers(getPool());
+
+			$execStatementNode->excessInputs->add($execStatementNode->inputNames->getCount());
+
+			$execStatementNode->inputNames->add($2);
+
+			if (!$execStatementNode->inputs)
+				$execStatementNode->inputs = newNode<ValueListNode>($4);
+			else
+				$execStatementNode->inputs->add($4);
+		}
 	;
 
 %type not_named_params_list(<execStatementNode>)
@@ -5358,7 +5377,7 @@ tran_option($setTransactionNode)
 	| NO WAIT
 		{ setClause($setTransactionNode->wait, "[NO] WAIT", false); }
 	// isolation mode
-	| isolation_mode
+	| isolation_mode($setTransactionNode)
 		{ setClause($setTransactionNode->isoLevel, "ISOLATION LEVEL", $1); }
 	// misc options
 	| NO AUTO UNDO
@@ -5378,24 +5397,38 @@ tran_option($setTransactionNode)
 		restr_list($setTransactionNode)
 	;
 
-%type <uintVal>	isolation_mode
-isolation_mode
-	: ISOLATION LEVEL iso_mode	{ $$ = $3;}
+%type <uintVal>	isolation_mode(<setTransactionNode>)
+isolation_mode($setTransactionNode)
+	: ISOLATION LEVEL iso_mode($setTransactionNode)	{ $$ = $3;}
 	| iso_mode
 	;
 
-%type <uintVal>	iso_mode
-iso_mode
-	: snap_shot
+%type <uintVal>	iso_mode(<setTransactionNode>)
+iso_mode($setTransactionNode)
+	: snap_shot($setTransactionNode)	{ $$ = $1; }
 	| READ UNCOMMITTED version_mode		{ $$ = $3; }
 	| READ COMMITTED version_mode		{ $$ = $3; }
 	;
 
-%type <uintVal>	snap_shot
-snap_shot
-	: SNAPSHOT					{ $$ = SetTransactionNode::ISO_LEVEL_CONCURRENCY; }
-	| SNAPSHOT TABLE			{ $$ = SetTransactionNode::ISO_LEVEL_CONSISTENCY; }
-	| SNAPSHOT TABLE STABILITY	{ $$ = SetTransactionNode::ISO_LEVEL_CONSISTENCY; }
+%type <uintVal>	snap_shot(<setTransactionNode>)
+snap_shot($setTransactionNode)
+	: SNAPSHOT
+		{ $$ = SetTransactionNode::ISO_LEVEL_CONCURRENCY; }
+	| SNAPSHOT AT NUMBER snapshot_number
+		{
+			setClause($setTransactionNode->atSnapshotNumber, "SNAPSHOT AT NUMBER", (CommitNumber) $4);
+			$$ = SetTransactionNode::ISO_LEVEL_CONCURRENCY;
+		}
+	| SNAPSHOT TABLE
+		{ $$ = SetTransactionNode::ISO_LEVEL_CONSISTENCY; }
+	| SNAPSHOT TABLE STABILITY
+		{ $$ = SetTransactionNode::ISO_LEVEL_CONSISTENCY; }
+	;
+
+%type <int64Val> snapshot_number
+snapshot_number
+	: NUMBER32BIT	{ $$ = $1; }
+	| NUMBER64BIT	{ $$ = $1.number; }
 	;
 
 %type <uintVal>	version_mode
@@ -7373,7 +7406,7 @@ u_numeric_constant
 
 %type <valueExprNode> ul_numeric_constant
 ul_numeric_constant
-	: NUMBER
+	: NUMBER32BIT
 		{ $$ = MAKE_const_slong($1); }
 	| FLOAT_NUMBER
 		{ $$ = MAKE_constant($1->c_str(), CONSTANT_DOUBLE); }
@@ -7513,7 +7546,7 @@ signed_short_integer
 
 %type <int32Val> nonneg_short_integer
 nonneg_short_integer
-	: NUMBER
+	: NUMBER32BIT
 		{
 			if ($1 > SHRT_POS_MAX)
 				yyabandon(YYPOSNARG(1), -842, isc_expec_short);	// Short integer expected
@@ -7524,7 +7557,7 @@ nonneg_short_integer
 
 %type <int32Val> neg_short_integer
 neg_short_integer
-	: NUMBER
+	: NUMBER32BIT
 		{
 			if ($1 > SHRT_NEG_MAX)
 				yyabandon(YYPOSNARG(1), -842, isc_expec_short);	// Short integer expected
@@ -7546,7 +7579,7 @@ pos_short_integer
 
 %type <int32Val> unsigned_short_integer
 unsigned_short_integer
-	: NUMBER
+	: NUMBER32BIT
 		{
 			if ($1 > SHRT_UNSIGNED_MAX)
 				yyabandon(YYPOSNARG(1), -842, isc_expec_ushort);	// Unsigned short integer expected
@@ -7563,7 +7596,7 @@ signed_long_integer
 
 %type <int32Val> long_integer
 long_integer
-	: NUMBER	{ $$ = $1;}
+	: NUMBER32BIT	{ $$ = $1;}
 	;
 
 
@@ -8783,6 +8816,7 @@ non_reserved_word
 	| CTR_LITTLE_ENDIAN
 	| CUME_DIST
 	| DEFINER
+	| EXCESS
 	| EXCLUDE
 	| FIRST_DAY
 	| FOLLOWING
@@ -8798,6 +8832,7 @@ non_reserved_word
 	| NATIVE
 	| NORMALIZE_DECFLOAT
 	| NTILE
+	| NUMBER
 	| OLDEST
 	| OTHERS
 	| OVERRIDING

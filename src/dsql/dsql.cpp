@@ -64,6 +64,7 @@
 #include "../jrd/opt_proto.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/recsrc/RecordSource.h"
+#include "../jrd/replication/Publisher.h"
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceDSQLHelpers.h"
 #include "../common/classes/init.h"
@@ -878,7 +879,12 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 
 		try
 		{
+			AutoSetRestoreFlag<ULONG> execDdl(&tdbb->tdbb_flags, TDBB_repl_sql, true);
+
 			node->executeDdl(tdbb, internalScratch, req_transaction);
+
+			if (node->mustBeReplicated())
+				REPL_exec_sql(tdbb, req_transaction, *getStatement()->getSqlText());
 		}
 		catch (status_exception& ex)
 		{

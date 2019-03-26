@@ -54,7 +54,7 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	  accessList(*p),
 	  resources(*p),
 	  triggerName(*p),
-	  triggerOwner(*p),
+	  triggerInvoker(NULL),
 	  parentStatement(NULL),
 	  subStatements(*p),
 	  fors(*p),
@@ -68,7 +68,7 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 		makeSubRoutines(tdbb, this, csb, csb->subProcedures);
 		makeSubRoutines(tdbb, this, csb, csb->subFunctions);
 
-		topNode = (csb->csb_node->getKind() == DmlNode::KIND_STATEMENT) ?
+		topNode = (csb->csb_node && csb->csb_node->getKind() == DmlNode::KIND_STATEMENT) ?
 			static_cast<StmtNode*>(csb->csb_node) : NULL;
 
 		accessList = csb->csb_access;
@@ -234,10 +234,13 @@ JrdStatement* JrdStatement::makeStatement(thread_db* tdbb, CompilerScratch* csb,
 			DmlNode::doPass1(tdbb, csb, fieldInfo.validationExpr.getAddress());
 		}
 
-		if (csb->csb_node->getKind() == DmlNode::KIND_STATEMENT)
-			StmtNode::doPass2(tdbb, csb, reinterpret_cast<StmtNode**>(&csb->csb_node), NULL);
-		else
-			ExprNode::doPass2(tdbb, csb, &csb->csb_node);
+		if (csb->csb_node)
+		{
+			if (csb->csb_node->getKind() == DmlNode::KIND_STATEMENT)
+				StmtNode::doPass2(tdbb, csb, reinterpret_cast<StmtNode**>(&csb->csb_node), NULL);
+			else
+				ExprNode::doPass2(tdbb, csb, &csb->csb_node);
+		}
 
 		// Compile (pass2) domains DEFAULT and constraints
 		for (bool found = accessor.getFirst(); found; found = accessor.getNext())
@@ -399,7 +402,8 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 	SET_TDBB(tdbb);
 
 	ExternalAccessList external;
-	buildExternalAccess(tdbb, external);
+	const MetaName defaultUser;
+	buildExternalAccess(tdbb, external, defaultUser);
 
 	for (ExternalAccess* item = external.begin(); item != external.end(); ++item)
 	{
@@ -437,7 +441,7 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 			if (!relation)
 				continue;
 
-			MetaName userName;
+			MetaName userName = item->user;
 			if (item->exa_view_id)
 			{
 				jrd_rel* view = MET_lookup_relation_id(tdbb, item->exa_view_id, false);
@@ -476,7 +480,7 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 		{
 			const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());
 
-			MetaName userName;
+			MetaName userName = item->user;
 
 			if (access->acc_ss_rel_id)
 			{
@@ -484,9 +488,6 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 				if (view && (view->rel_flags & REL_sql_relation))
 					userName = view->rel_owner_name;
 			}
-
-			if (userName.isEmpty() && routine->ssDefiner.specified && routine->ssDefiner.value && routine->owner.hasData())
-				userName = routine->owner;
 
 			if (routine->getName().package.isEmpty())
 			{
@@ -692,7 +693,7 @@ void JrdStatement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 
 // Invoke buildExternalAccess for triggers in vector
 inline void JrdStatement::triggersExternalAccess(thread_db* tdbb, ExternalAccessList& list,
-	TrigVector* tvec)
+	TrigVector* tvec, const MetaName& user)
 {
 	if (!tvec)
 		return;
@@ -703,34 +704,39 @@ inline void JrdStatement::triggersExternalAccess(thread_db* tdbb, ExternalAccess
 		t.compile(tdbb);
 
 		if (t.statement)
-			t.statement->buildExternalAccess(tdbb, list);
+		{
+			const MetaName& userName = (t.ssDefiner.specified && t.ssDefiner.value) ? t.owner : user;
+			t.statement->buildExternalAccess(tdbb, list, userName);
+		}
 	}
 }
 
 // Recursively walk external dependencies (procedures, triggers) for request to assemble full
 // list of requests it depends on.
-void JrdStatement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list)
+void JrdStatement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list, const MetaName &user)
 {
 	for (ExternalAccess* item = externalList.begin(); item != externalList.end(); ++item)
 	{
 		FB_SIZE_T i;
-		if (list.find(*item, i))
-			continue;
-
-		list.insert(i, *item);
 
 		// Add externals recursively
 		if (item->exa_action == ExternalAccess::exa_procedure)
 		{
 			jrd_prc* const procedure = MET_lookup_procedure_id(tdbb, item->exa_prc_id, false, false, 0);
 			if (procedure && procedure->getStatement())
-				procedure->getStatement()->buildExternalAccess(tdbb, list);
+			{
+				item->user = procedure->invoker ? procedure->invoker->getUserName() : user;
+				procedure->getStatement()->buildExternalAccess(tdbb, list, item->user);
+			}
 		}
 		else if (item->exa_action == ExternalAccess::exa_function)
 		{
 			Function* const function = Function::lookup(tdbb, item->exa_fun_id, false, false, 0);
 			if (function && function->getStatement())
-				function->getStatement()->buildExternalAccess(tdbb, list);
+			{
+				item->user = function->invoker ? function->invoker->getUserName() : user;
+				function->getStatement()->buildExternalAccess(tdbb, list, item->user);
+			}
 		}
 		else
 		{
@@ -759,9 +765,13 @@ void JrdStatement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list
 					continue; // should never happen, silence the compiler
 			}
 
-			triggersExternalAccess(tdbb, list, vec1);
-			triggersExternalAccess(tdbb, list, vec2);
+			item->user = relation->rel_ss_definer.orElse(false) ? relation->rel_owner_name : user;
+			triggersExternalAccess(tdbb, list, vec1, item->user);
+			triggersExternalAccess(tdbb, list, vec2, item->user);
 		}
+
+		if (!list.find(*item, i))
+			list.insert(i, *item);
 	}
 }
 

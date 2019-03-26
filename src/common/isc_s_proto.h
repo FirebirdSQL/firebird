@@ -358,6 +358,7 @@ public:
 		SRAM_TPC_HEADER = 0xF9,
 		SRAM_TPC_BLOCK = 0xF8,
 		SRAM_TPC_SNAPSHOTS = 0xF7,
+		SRAM_CHANGELOG_STATE = 0xF6
 	};
 
 protected:

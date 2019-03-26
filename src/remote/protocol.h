@@ -285,6 +285,9 @@ enum P_OP
 	op_batch_blob_stream	= 105,
 	op_batch_set_bpb		= 106,
 
+	op_repl_data			= 107,
+	op_repl_req				= 108,
+
 	op_max
 };
 
@@ -711,6 +714,15 @@ typedef struct p_batch_setbpb
 } P_BATCH_SETBPB;
 
 
+// Replication support
+
+typedef struct p_replicate
+{
+     OBJCT			p_repl_database;	// database object id
+     CSTRING_CONST	p_repl_data;		// replication data
+} P_REPLICATE;
+
+
 // Generalize packet (sic!)
 
 typedef struct packet
@@ -762,6 +774,7 @@ typedef struct packet
 	P_BATCH_BLOB p_batch_blob;	// BLOB stream portion in batch
 	P_BATCH_REGBLOB p_batch_regblob;	// Register already existing BLOB in batch
 	P_BATCH_SETBPB p_batch_setbpb;		// Set default BPB for batch
+	P_REPLICATE p_replicate;	// replicate
 
 public:
 	packet()

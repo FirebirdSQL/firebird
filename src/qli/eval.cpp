@@ -40,6 +40,7 @@
 #include "../common/classes/UserBlob.h"
 #include "../common/classes/VaryStr.h"
 #include "../common/gdsassert.h"
+#include "../jrd/constants.h"
 
 
 static SLONG execute_any(qli_nod*);
@@ -58,7 +59,6 @@ static int sleuth_merge(const UCHAR*, const UCHAR*, const UCHAR* const, UCHAR* c
 static bool string_boolean(qli_nod*);
 static bool string_function(qli_nod*, SSHORT, const TEXT*, SSHORT, const TEXT*);
 
-const int TEMP_LENGTH =	128;
 const USHORT SLEUTH_insensitive	= 1;
 //#define COND_UPPER(c)		((flags & SLEUTH_insensitive) ? UPPER(c) : c)
 inline UCHAR cond_upper(const UCHAR c, const USHORT flags)
@@ -758,16 +758,16 @@ static DSC *execute_prompt( qli_nod* node)
 		if (node->nod_arg[e_prm_prompt])
 		{
 			if (reprompt)
-				sprintf(string, "\07%s %s: ", prompt[0], (TEXT*) node->nod_arg[e_prm_prompt]);
+				fb_utils::snprintf(string, sizeof(string), "\07%s %s: ", prompt[0], (TEXT*) node->nod_arg[e_prm_prompt]);
 			else
-				sprintf(string, "%s %s: ", prompt[1], (TEXT*) node->nod_arg[e_prm_prompt]);
+				fb_utils::snprintf(string, sizeof(string), "%s %s: ", prompt[1], (TEXT*) node->nod_arg[e_prm_prompt]);
 		}
 		else
 		{
 			if (reprompt)
-				sprintf(string, "\07%s: ", prompt[0]);	// Msg497 Re-enter
+				fb_utils::snprintf(string, sizeof(string), "\07%s: ", prompt[0]);	// Msg497 Re-enter
 			else
-				sprintf(string, "%s: ", prompt[1]);	// Msg498 Enter
+				fb_utils::snprintf(string, sizeof(string), "%s: ", prompt[1]);	// Msg498 Enter
 		}
 
 		if (!LEX_get_line(string, value, length))
@@ -970,15 +970,15 @@ static bool sleuth( qli_nod* node, const dsc* desc1, const dsc* desc2, const dsc
 
 	// Get operator definition string (control string)
 
-	Firebird::VaryStr<TEMP_LENGTH> temp1;
+	Firebird::VaryStr<TEMP_STR_LENGTH> temp1;
 	const TEXT* p1;
-	SSHORT l1 = MOVQ_get_string(desc3, &p1, &temp1, TEMP_LENGTH);
+	SSHORT l1 = MOVQ_get_string(desc3, &p1, &temp1, TEMP_STR_LENGTH);
 
 	// Get address and length of search string
 
-	Firebird::VaryStr<TEMP_LENGTH> temp2;
+	Firebird::VaryStr<TEMP_STR_LENGTH> temp2;
 	const TEXT* p2;
-	SSHORT l2 = MOVQ_get_string(desc2, &p2, &temp2, TEMP_LENGTH);
+	SSHORT l2 = MOVQ_get_string(desc2, &p2, &temp2, TEMP_STR_LENGTH);
 
 	// Merge search and control strings
 
@@ -989,7 +989,7 @@ static bool sleuth( qli_nod* node, const dsc* desc1, const dsc* desc2, const dsc
 
 	if (desc1->dsc_dtype != dtype_blob)
 	{
-		l1 = MOVQ_get_string(desc1, &p1, &temp1, TEMP_LENGTH);
+		l1 = MOVQ_get_string(desc1, &p1, &temp1, TEMP_STR_LENGTH);
 		return sleuth_check(0, (const UCHAR*) p1, (const UCHAR*) (p1 + l1), control, control + l2);
 	}
 
@@ -1320,16 +1320,16 @@ static bool string_boolean( qli_nod* node)
 	// Get address and length of strings
 
 	const TEXT* p2;
-	Firebird::VaryStr<TEMP_LENGTH> temp2;
-	SSHORT l2 = MOVQ_get_string(desc2, &p2, &temp2, TEMP_LENGTH);
+	Firebird::VaryStr<TEMP_STR_LENGTH> temp2;
+	SSHORT l2 = MOVQ_get_string(desc2, &p2, &temp2, TEMP_STR_LENGTH);
 
 	// If source is not a blob, do a simple search
 
 	if (desc1->dsc_dtype != dtype_blob)
 	{
-		Firebird::VaryStr<TEMP_LENGTH> temp1;
+		Firebird::VaryStr<TEMP_STR_LENGTH> temp1;
 		const TEXT* p1;
-		SSHORT l1 = MOVQ_get_string(desc1, &p1, &temp1, TEMP_LENGTH);
+		SSHORT l1 = MOVQ_get_string(desc1, &p1, &temp1, TEMP_STR_LENGTH);
 		return string_function(node, l1, p1, l2, p2);
 	}
 

@@ -60,7 +60,7 @@ Synchronize::Synchronize()
 #ifdef WIN_NT
 	evnt = CreateEvent(NULL, false, false, NULL);
 #else
-	int ret = pthread_mutex_init(&mutex, NULL);
+	pthread_mutex_init(&mutex, NULL);
 	pthread_cond_init(&condition, NULL);
 #endif
 }
@@ -70,8 +70,8 @@ Synchronize::~Synchronize()
 #ifdef WIN_NT
 	CloseHandle(evnt);
 #else
-	int ret = pthread_mutex_destroy(&mutex);
-	ret = pthread_cond_destroy(&condition);
+	pthread_mutex_destroy(&mutex);
+	pthread_cond_destroy(&condition);
 #endif
 }
 

@@ -120,7 +120,7 @@
 
 
 ;------If necessary we can turn off i18n by uncommenting this undefine
-;------In general this is a good idea for alpha and beta releases. 
+;------In general this is a good idea for alpha and beta releases.
 #undef  i18n
 
 ;----- If we are debugging the script (and not executed from command prompt)
@@ -173,6 +173,44 @@
 #endif
 #endif
 
+#if Len(GetEnv("MSVC_VERSION")) > 0
+#define msvc_version GetEnv("MSVC_VERSION")
+#else
+#define msvc_version 15
+#pragma warning "msvc version is not defined. Forcing default value."
+#endif
+
+#if Len(GetEnv("MSVC_RUNTIME_MAJOR_VERSION")) > 0
+#define msvc_runtime_major_version GetEnv("MSVC_RUNTIME_MAJOR_VERSION")
+#else
+#define msvc_runtime_major_version 14
+#pragma warning "msvc runtime major version was not defined. Forcing default value."
+#endif
+
+#if Len(GetEnv("MSVC_RUNTIME_MINOR_VERSION_0")) > 0
+#define msvc_runtime_minor_version_0 GetEnv("MSVC_RUNTIME_MINOR_VERSION_0")
+#else
+#define msvc_runtime_minor_version_0 0
+#pragma warning "msvc runtime minor version 0 was not defined. Forcing default value."
+#endif
+
+;if we are running msvc15 then we sometimes need to look for 140 and sometimes for 141
+; the rule until MS changes it again is that 141 is always used, except for the filename
+; of the vcruntime and msvcp dll's.
+#if msvc_version = 15
+#if Len(GetEnv("MSVC_RUNTIME_MINOR_VERSION_1")) > 0
+#define msvc_runtime_minor_version_1 GetEnv("MSVC_RUNTIME_MINOR_VERSION_1")
+#else
+#define msvc_runtime_minor_version_1 1
+#pragma warning "msvc runtime minor version 1 was not defined. Forcing default value."
+#endif
+#endif
+
+#if Int(msvc_version,15) < 15
+#define msvcr_filename = "msvcr"
+#else
+#define msvcr_filename = "vcruntime"
+#endif
 
 #if BuildNumber == "0"
 #define MyAppVerString MajorVer + "." + MinorVer + "." + PointRelease
@@ -192,7 +230,7 @@
 ;If we are still under development we can ignore some missing files.
 #if GetEnv("FBBUILD_PROD_STATUS") == "DEV"
 #define SkipFileIfDevStatus " skipifsourcedoesntexist "
-#else 
+#else
 #define SkipFileIfDevStatus " "
 #endif
 
@@ -201,7 +239,6 @@
 #if PlatformTarget == "x64"
 #define WOW64Dir="output_win32"
 #endif
-#define msvc_version 12
 
 ;BaseVer should be used for all MajorVer.MinorVer installs.
 ;This allows us to upgrade silently from MajorVer.MinorVer.m to MajorVer.MinorVer.n
@@ -353,7 +390,7 @@ Name: ru; MessagesFile: compiler:Languages\Russian.isl; InfoBeforeFile: {#GenDir
 #endif
 
 #ifdef iss_debug
-; *** Note - this comment section needs revision or deletion. 
+; *** Note - this comment section needs revision or deletion.
 ; It is only applicable to the ansi installer, which is no longer
 ; supported for Firebird 3
 ; By default, the languages available at runtime depend on the user's
@@ -396,10 +433,11 @@ Name: EnableLegacyClientAuth; Description: {cm:EnableLegacyClientAuth}; Componen
 
 
 [Run]
-#if msvc_version >= 10
-Filename: msiexec.exe; Parameters: "/qn /i ""{tmp}\vccrt{#msvc_version}_Win32.msi"" /L*v ""{tmp}\vccrt{#msvc_version}_Win32.log"" "; StatusMsg: "Installing MSVC 32-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
+; due to the changes required to support MSVC15 support for earlier versions is now broken.
+#if Int(msvc_runtime_major_version,14) >= 14
+Filename: msiexec.exe; Parameters: "/qn /i ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.log"" "; StatusMsg: "Installing MSVC 32-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
 #if PlatformTarget == "x64"
-Filename: msiexec.exe; Parameters: "/qn /i ""{tmp}\vccrt{#msvc_version}_x64.msi"" /L*v ""{tmp}\vccrt{#msvc_version}_x64.log"" ";  StatusMsg: "Installing MSVC 64-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
+Filename: msiexec.exe; Parameters: "/qn /i ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.log"" ";  StatusMsg: "Installing MSVC 64-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
 #endif
 #endif
 
@@ -437,7 +475,7 @@ Root: HKLM; Subkey: "SOFTWARE\FirebirdSQL"; ValueType: none; Flags: deletekey;
 
 [Icons]
 Name: {group}\Firebird Server; Filename: {app}\firebird.exe; Parameters: {code:StartAppParams}; Flags: runminimized; MinVersion: 4.0,4.0;  Check: InstallServerIcon; IconIndex: 0; Components: ServerComponent; Comment: Run Firebird Server (without guardian)
-Name: {group}\Firebird Guardian; Filename: {app}\fbguard.exe; Parameters: {code:StartAppParams}; Flags: runminimized; MinVersion: 4.0,4.0;  Check: InstallGuardianIcon; IconIndex: 1; Components: ServerComponent; Comment: Run Firebird Server (with guardian); 
+Name: {group}\Firebird Guardian; Filename: {app}\fbguard.exe; Parameters: {code:StartAppParams}; Flags: runminimized; MinVersion: 4.0,4.0;  Check: InstallGuardianIcon; IconIndex: 1; Components: ServerComponent; Comment: Run Firebird Server (with guardian);
 Name: {group}\Firebird ISQL Tool; Filename: {app}\isql.exe; Parameters: -z; WorkingDir: {app}; MinVersion: 4.0,4.0;  Comment: {cm:RunISQL}
 Name: {group}\Firebird {#FB_cur_ver} Release Notes; Filename: {app}\doc\Firebird_v{#FB_cur_ver}.ReleaseNotes.pdf; MinVersion: 4.0,4.0; Comment: {#MyAppName} {cm:ReleaseNotes}
 ;Name: {group}\Firebird {#GroupnameVer} Quick Start Guide; Filename: {app}\doc\Firebird-{#MajorVer}-QuickStart.pdf; MinVersion: 4.0,4.0; Comment: {#MyAppName} {#FB_cur_ver}
@@ -478,6 +516,8 @@ Source: {#FilesDir}\firebird.conf; DestDir: {app}; DestName: firebird.conf; Comp
 Source: {#FilesDir}\fbtrace.conf; DestDir: {app}; DestName: fbtrace.conf.default; Components: ServerComponent;
 Source: {#FilesDir}\fbtrace.conf; DestDir: {app}; DestName: fbtrace.conf; Components: ServerComponent; Flags: uninsneveruninstall onlyifdoesntexist; check: NofbtraceConfExists;
 Source: {#FilesDir}\databases.conf; DestDir: {app}; Components: ClientComponent; Flags: uninsneveruninstall onlyifdoesntexist
+Source: {#FilesDir}\replication.conf; DestDir: {app}; DestName: replication.conf.default; Components: ServerComponent;
+Source: {#FilesDir}\replication.conf; DestDir: {app}; Components: ServerComponent; Flags: uninsneveruninstall onlyifdoesntexist; check: NoReplicationConfExists;
 Source: {#FilesDir}\security4.fdb; DestDir: {app}; Destname: security4.fdb.empty; Components: ServerComponent;
 Source: {#FilesDir}\security4.fdb; DestDir: {app}; Components: ServerComponent; Flags: uninsneveruninstall onlyifdoesntexist
 Source: {#FilesDir}\firebird.msg; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
@@ -518,25 +558,24 @@ Source: {#FilesDir}\zlib1.dll; DestDir: {app}; Components: ServerComponent; Flag
 ;Rules for installation of MS runtimes are simplified with MSVC10
 ;We just install the runtimes into the install dir.
 
-#if msvc_version >= 10
-Source: {#FilesDir}\msvcr{#msvc_version}?.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile;
-Source: {#FilesDir}\msvcp{#msvc_version}?.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile;
+#if Int(msvc_runtime_major_version,14) >= 14
+Source: {#FilesDir}\{#msvcr_filename}{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile;
+Source: {#FilesDir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile;
 #if PlatformTarget == "x64"
 ;If we are installing on x64 we need some 32-bit libraries for compatibility with 32-bit applications
-Source: {#WOW64Dir}\msvcr{#msvc_version}?.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile;
-Source: {#WOW64Dir}\msvcp{#msvc_version}?.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile;
+Source: {#WOW64Dir}\{#msvcr_filename}{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile;
+Source: {#WOW64Dir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile;
 #endif
-#endif  /* if msvc_version >= 10 */
+#endif  /* #if Int(msvc_runtime_major_version,14) >= 10 */
 
-#if msvc_version >= 10
-;Try to install CRT libraries to <sys> via msi, _IF_ msvc_version is 10 or later.
+#if msvc_runtime_major_version = 14
 #if PlatformTarget == "x64"
 ;MinVersion 0,5.0 means no version of Win9x and at least Win2k if NT O/S
 ;In addition, O/S must have Windows Installer 3.0.
-Source: {#FilesDir}\system32\vccrt{#msvc_version}_x64.msi; DestDir: {tmp};  Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
-Source: {#WOW64Dir}\system32\vccrt{#msvc_version}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
+Source: {#FilesDir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.msi; DestDir: {tmp};  Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
+Source: {#WOW64Dir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
 #else
-Source: {#FilesDir}\system32\vccrt{#msvc_version}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
+Source: {#FilesDir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
 #endif
 #endif
 
@@ -555,10 +594,12 @@ Source: {#FilesDir}\lib\*.*; DestDir: {app}\lib; Components: DevAdminComponent; 
 #if PlatformTarget == "x64"
 Source: {#WOW64Dir}\lib\*.lib; DestDir: {app}\WOW64\lib; Components: DevAdminComponent; Flags: ignoreversion
 #endif
-Source: {#FilesDir}\UDF\ib_udf.dll; DestDir: {app}\UDF; Components: ServerComponent; Flags: sharedfile ignoreversion;
-Source: {#FilesDir}\UDF\fbudf.dll; DestDir: {app}\UDF; Components: ServerComponent; Flags: sharedfile ignoreversion;
-Source: {#FilesDir}\UDF\*.sql; DestDir: {app}\UDF; Components: ServerComponent; Flags: ignoreversion;
-Source: {#FilesDir}\UDF\*.txt; DestDir: {app}\UDF; Components: ServerComponent; Flags: ignoreversion;
+
+;deprecated in FB4.0
+;Source: {#FilesDir}\UDF\ib_udf.dll; DestDir: {app}\UDF; Components: ServerComponent; Flags: sharedfile ignoreversion;
+;Source: {#FilesDir}\UDF\fbudf.dll; DestDir: {app}\UDF; Components: ServerComponent; Flags: sharedfile ignoreversion;
+;Source: {#FilesDir}\UDF\*.sql; DestDir: {app}\UDF; Components: ServerComponent; Flags: ignoreversion;
+;Source: {#FilesDir}\UDF\*.txt; DestDir: {app}\UDF; Components: ServerComponent; Flags: ignoreversion;
 
 Source: {#FilesDir}\plugins.conf; DestDir: {app}; Components: ServerComponent; Flags: ignoreversion;
 Source: {#FilesDir}\plugins\*.dll; DestDir: {app}\plugins; Components: ServerComponent; Flags: ignoreversion;
@@ -836,7 +877,7 @@ begin
   if IsComponentSelected('ServerComponent') and ( IsTaskSelected('UseSuperServerTask\UseGuardianTask')
       or ( IsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) ) then
     SvcParams := ServerType + SvcParams +  ' -guardian ';
-  
+
   InstanceName := ServiceName('We currently do not support or test for a different instance name');
 
   SvcParams := SvcParams + InstanceName;
@@ -898,8 +939,8 @@ end;
 function InstallServerIcon(): Boolean;
 begin
   result := false;
-  if IsTaskSelected('UseApplicationTask') and 
-    IsComponentSelected('ServerComponent') and 
+  if IsTaskSelected('UseApplicationTask') and
+    IsComponentSelected('ServerComponent') and
       not ( IsTaskSelected('UseSuperServerTask\UseGuardianTask') or
             IsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) then
       result := true;
@@ -907,7 +948,7 @@ end;
 
 function StartApp(Default: String): String;
 begin
-  if IsComponentSelected('ServerComponent') and ( 
+  if IsComponentSelected('ServerComponent') and (
       IsTaskSelected('UseSuperServerTask\UseGuardianTask') or
       IsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) then
     Result := GetAppPath+'\fbguard.exe'
@@ -946,8 +987,8 @@ end;
 
 
 procedure UpdateFirebirdConf;
-// Update firebird conf. 
-// If user has deselected the guardian we should update firebird.conf accordingly. 
+// Update firebird conf.
+// If user has deselected the guardian we should update firebird.conf accordingly.
 // We also test if user has asked for classic or super server
 // If EnableLegacyClientAuth has ben selected we update the file.......
 // Otherwise we leave the file unchanged.
@@ -957,15 +998,15 @@ begin
   //firebird.conf exists. If it doesn't then we don't care.
   if FileExists(GetAppPath+'\firebird.conf') then begin
 
-    if (IsComponentSelected('ServerComponent') ) then begin 
+    if (IsComponentSelected('ServerComponent') ) then begin
 
-// Setting GuardianOption to 0 makes no sense. If the user deploys the guardian 
-// there is an expectation that it will restart the server in the event of a crash. 
+// Setting GuardianOption to 0 makes no sense. If the user deploys the guardian
+// there is an expectation that it will restart the server in the event of a crash.
 // Otherwise, why start firebird with the guardian?
 //      if not ( IsTaskSelected('UseSuperServerTask\UseGuardianTask') or  IsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) then
 //				ReplaceLine(GetAppPath+'\firebird.conf','GuardianOption','GuardianOption = 0','#');
 
-      // These attempts to modify firebird.conf may not survice repeated installs.  
+      // These attempts to modify firebird.conf may not survice repeated installs.
 
 			if IsTaskSelected('UseClassicServerTask') then
 				ReplaceLine(GetAppPath+'\firebird.conf','ServerMode = ','ServerMode = Classic','#');
@@ -983,8 +1024,8 @@ begin
 				ReplaceLine(GetAppPath+'\firebird.conf','WireCrypt = ','WireCrypt = enabled','#');
       end;
 
-		end;	
-			
+		end;
+
   end;
 end;
 
@@ -1022,9 +1063,9 @@ end;
 
 procedure CurPageChanged(CurPage: Integer);
 // These are the predefined page IDs of the Wizard form as of InnoSetup 5.5.6
-// wpWelcome, wpLicense, wpPassword, wpInfoBefore, wpUserInfo, 
-// wpSelectDir, wpSelectComponents, wpSelectProgramGroup, wpSelectTasks, 
-// wpReady, wpPreparing, wpInstalling, wpInfoAfter, wpFinished 
+// wpWelcome, wpLicense, wpPassword, wpInfoBefore, wpUserInfo,
+// wpSelectDir, wpSelectComponents, wpSelectProgramGroup, wpSelectTasks,
+// wpReady, wpPreparing, wpInstalling, wpInfoAfter, wpFinished
 begin
   case CurPage of
     wpWelcome:      ResizeWizardForm(True); //There was a bug: every time when "go back" pressed the form was resized!
@@ -1035,7 +1076,7 @@ end;
 
 
 procedure CurStepChanged(CurStep: TSetupStep);
-// currently just three steps - ssInstall, ssPostInstall, ssDone 
+// currently just three steps - ssInstall, ssPostInstall, ssDone
 var
   AppStr: String;
   ReadMeFileStr: String;
@@ -1054,6 +1095,7 @@ begin
       IncrementSharedCount(Is64BitInstallMode, GetAppPath+'\databases.conf', false);
       IncrementSharedCount(Is64BitInstallMode, GetAppPath+'\fbtrace.conf', false);
       IncrementSharedCount(Is64BitInstallMode, GetAppPath+'\security4.fdb', false);
+      IncrementSharedCount(Is64BitInstallMode, GetAppPath+'\replication.conf', false);
 
 			InitSecurityDB;
 
@@ -1061,7 +1103,7 @@ begin
       UpdateFirebirdConf;
       RemoveSavedConfIfNoDiff;
 
-				
+
       end;
 
     ssDone: begin
@@ -1131,6 +1173,16 @@ begin
   Result := not fileexists(GetAppPath+'\fbtrace.conf');
 end;
 
+function ReplicationConfExists: boolean;
+begin
+  Result := fileexists(GetAppPath+'\replication.conf');
+end;
+
+function NoReplicationConfExists: boolean;
+begin
+  Result := not fileexists(GetAppPath+'\replication.conf');
+end;
+
 function InitializeUninstall: Boolean;
 var
   CommandLine: String;
@@ -1170,17 +1222,18 @@ begin
           aStringList.add(appPath+'\fbtrace.conf');
           aStringList.add(appPath+'\security4.fdb');
           aStringList.add(appPath+'\security4.fdb.old');
+          aStringList.add(appPath+'\replication.conf');
 
           for count := 0 to aStringList.count - 1 do begin
       // We are manually handling the share count of these files, so we must
       // a) Decrement shared count of each one and
       // b) If Decrement reaches 0 (ie, function returns true) then we
             //    delete the file.
-            // c) We arbitrarily break after 100 loops. Typically the shared count should only be 
+            // c) We arbitrarily break after 100 loops. Typically the shared count should only be
             //    in single digits anyway but we don't want to risk the test entering an endless loop.
             i := 0;
-            while not DecrementSharedCount(Is64BitInstallMode, aStringList[ count ] ) 
-            do 
+            while not DecrementSharedCount(Is64BitInstallMode, aStringList[ count ] )
+            do
               if i = 100 then break else inc(i);
 
             res := DeleteFile( aStringList[ count ] );
@@ -1205,7 +1258,7 @@ begin
       Result := True
     else if not ConfigureAuthentication then
       Result := True
-    else 
+    else
       Result := False;
 end;
 
@@ -1228,6 +1281,6 @@ begin
     end;
   end;
 end;
-	
+
 begin
 end.

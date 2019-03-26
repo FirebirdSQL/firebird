@@ -321,6 +321,7 @@ const char
 	EXT_CONN_POOL_IDLE[] = "EXT_CONN_POOL_IDLE_COUNT",
 	EXT_CONN_POOL_ACTIVE[] = "EXT_CONN_POOL_ACTIVE_COUNT",
 	EXT_CONN_POOL_LIFETIME[] = "EXT_CONN_POOL_LIFETIME",
+	REPLICATION_SEQ_NAME[] = "REPLICATION_SEQUENCE",
 	// SYSTEM namespace: connection wise items
 	SESSION_ID_NAME[] = "SESSION_ID",
 	NETWORK_PROTOCOL_NAME[] = "NETWORK_PROTOCOL",
@@ -334,12 +335,13 @@ const char
 	CURRENT_ROLE_NAME[] = "CURRENT_ROLE",
 	SESSION_IDLE_TIMEOUT[] = "SESSION_IDLE_TIMEOUT",
 	STATEMENT_TIMEOUT[] = "STATEMENT_TIMEOUT",
+	EFFECTIVE_USER_NAME[] = "EFFECTIVE_USER",
 	// SYSTEM namespace: transaction wise items
 	TRANSACTION_ID_NAME[] = "TRANSACTION_ID",
 	ISOLATION_LEVEL_NAME[] = "ISOLATION_LEVEL",
 	LOCK_TIMEOUT_NAME[] = "LOCK_TIMEOUT",
 	READ_ONLY_NAME[] = "READ_ONLY",
-	SNAPSHOT_CN_NAME[] = "SNAPSHOT_CN",
+	SNAPSHOT_NUMBER_NAME[] = "SNAPSHOT_NUMBER",
 	// DDL_TRIGGER namespace
 	DDL_EVENT_NAME[] = "DDL_EVENT",
 	EVENT_TYPE_NAME[] = "EVENT_TYPE",
@@ -3946,7 +3948,7 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 			resultStr = (transaction->tra_flags & TRA_readonly) ? TRUE_VALUE : FALSE_VALUE;
 		else if (nameStr == GLOBAL_CN_NAME)
 			resultStr.printf("%" SQUADFORMAT, dbb->dbb_tip_cache->getGlobalCommitNumber());
-		else if (nameStr == SNAPSHOT_CN_NAME)
+		else if (nameStr == SNAPSHOT_NUMBER_NAME)
 		{
 			if (!(transaction->tra_flags & TRA_read_committed))
 				resultStr.printf("%" SQUADFORMAT, transaction->tra_snapshot_number);
@@ -3973,6 +3975,20 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 		}
 		else if (nameStr == EXT_CONN_POOL_LIFETIME)
 			resultStr.printf("%d", EDS::Manager::getConnPool()->getLifeTime());
+		else if (nameStr == REPLICATION_SEQ_NAME)
+			resultStr.printf("%" UQUADFORMAT, dbb->getReplSequence(tdbb));
+		else if (nameStr == EFFECTIVE_USER_NAME)
+		{
+			MetaName user;
+			if (attachment->att_ss_user)
+				user = attachment->att_ss_user->getUserName();
+			else if (attachment->att_user)
+				user = attachment->att_user->getUserName();
+
+			if (user.isEmpty())
+				return NULL;
+			resultStr = user.c_str();
+		}
 		else
 		{
 			// "Context variable %s is not found in namespace %s"

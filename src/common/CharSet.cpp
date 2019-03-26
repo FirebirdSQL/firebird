@@ -207,7 +207,7 @@ ULONG MultiByteCharSet::substring(const ULONG srcLen, const UCHAR* src, const UL
 			return 0;
 
 		// convert to UTF16
-		HalfStaticArray<UCHAR, BUFFER_SMALL> str;
+		HalfStaticArray<UCHAR, BUFFER_MEDIUM> str;
 		ULONG unilength = getConvToUnicode().convertLength(srcLen);
 
 		// ASF: We should pass badInputPos to convert for it not throw in the case
@@ -220,7 +220,7 @@ ULONG MultiByteCharSet::substring(const ULONG srcLen, const UCHAR* src, const UL
 			OutAligner<USHORT>(str.getBuffer(unilength), unilength), &badInputPos);
 
 		// generate substring of UTF16
-		HalfStaticArray<UCHAR, BUFFER_SMALL> substr;
+		HalfStaticArray<UCHAR, BUFFER_MEDIUM> substr;
 		unilength = UnicodeUtil::utf16Substring(unilength, Aligner<USHORT>(str.begin(), unilength),
 			unilength, OutAligner<USHORT>(substr.getBuffer(unilength), unilength), startPos, len);
 
@@ -248,6 +248,55 @@ CharSet* CharSet::createInstance(MemoryPool& pool, USHORT id, charset* cs)
 		return FB_NEW_POOL(pool) MultiByteCharSet(id, cs);
 
 	return FB_NEW_POOL(pool) FixedWidthCharSet(id, cs);
+}
+
+
+ULONG CharSet::removeTrailingSpaces(ULONG srcLen, const UCHAR* src) const
+{
+	const unsigned spaceLen = getSpaceLength();
+	const UCHAR* p = src + srcLen - spaceLen;
+	const UCHAR* const q = getSpace();
+
+	switch (spaceLen)
+	{
+	case 1:
+		while (p >= src && *p == *q)
+			p -= spaceLen;
+		break;
+
+	case 2:
+		while (p >= src && p[0] == q[0] && p[1] == q[1])
+			p -= spaceLen;
+		break;
+
+	case 3:
+		while (p >= src && p[0] == q[0] && p[1] == q[1] && p[2] == q[2])
+			p -= spaceLen;
+		break;
+
+	case 4:
+		while (p >= src && p[0] == q[0] && p[1] == q[1] && p[2] == q[2] && p[3] == q[3])
+			p -= spaceLen;
+		break;
+
+	default:
+		while (p >= src)
+		{
+			unsigned i = 0;
+			for (; i < spaceLen; i++)
+				if (p[i] != q[i])
+					break;
+
+			if (i != spaceLen)
+				break;
+
+			p -= spaceLen;
+		}
+		break;
+	}
+
+	p += spaceLen;
+	return p - src;
 }
 
 

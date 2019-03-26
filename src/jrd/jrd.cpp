@@ -118,6 +118,8 @@
 #include "../common/config/config.h"
 #include "../common/config/dir_list.h"
 #include "../common/db_alias.h"
+#include "../jrd/replication/Publisher.h"
+#include "../jrd/replication/Applier.h"
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceObjects.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
@@ -677,6 +679,14 @@ namespace
 		validateHandle(tdbb, batch->getAttachment());
 	}
 
+	inline void validateHandle(thread_db* tdbb, JReplicator* const replicator)
+	{
+		if (!replicator)
+			status_exception::raise(Arg::Gds(isc_bad_repl_handle));
+
+		validateHandle(tdbb, replicator->getAttachment()->getHandle());
+	}
+
 	class AttachmentHolder
 	{
 	public:
@@ -905,8 +915,8 @@ void Trigger::compile(thread_db* tdbb)
 		}
 
 		statement->triggerName = name;
-		if (ssDefiner.specified && ssDefiner.value)
-			statement->triggerOwner = owner;
+		if (ssDefiner.orElse(false))
+			statement->triggerInvoker = att->getUserId(owner);
 
 		if (sys_trigger)
 			statement->flags |= JrdStatement::FLAG_SYS_TRIGGER;
@@ -980,6 +990,8 @@ public:
 	bool	dpb_reset_icu;
 	bool	dpb_map_attach;
 	ULONG	dpb_remote_flags;
+	ReplicaMode	dpb_replica_mode;
+	bool	dpb_set_db_replica;
 
 	// here begin compound objects
 	// for constructor to work properly dpb_user_name
@@ -1094,9 +1106,9 @@ static JAttachment*	initAttachment(thread_db*, const PathName&, const PathName&,
 	const DatabaseOptions&, RefMutexUnlock&, IPluginConfig*, JProvider*);
 static JAttachment*	create_attachment(const PathName&, Database*, const DatabaseOptions&, bool newDb);
 static void		prepare_tra(thread_db*, jrd_tra*, USHORT, const UCHAR*);
+static void		release_attachment(thread_db*, Attachment*);
 static void		start_transaction(thread_db* tdbb, bool transliterate, jrd_tra** tra_handle,
 	Jrd::Attachment* attachment, unsigned int tpb_length, const UCHAR* tpb);
-static void		release_attachment(thread_db*, Jrd::Attachment*);
 static void		rollback(thread_db*, jrd_tra*, const bool);
 static void		purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsigned flags = 0);
 static void		getUserInfo(UserId&, const DatabaseOptions&, const char*,
@@ -1662,8 +1674,10 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 			PAG_attachment_id(tdbb);
 
+			bool cleanupTransactions = false;
+
 			if (!options.dpb_verify && CCH_exclusive(tdbb, LCK_PW, LCK_NO_WAIT, NULL))
-				TRA_cleanup(tdbb);
+				cleanupTransactions = TRA_cleanup(tdbb);
 
 			if (invalid_client_SQL_dialect)
 			{
@@ -1724,6 +1738,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 			userId.makeRoleName(options.dpb_sql_dialect);
 			UserId::sclInit(tdbb, false, userId);
+
+			Monitoring::publishAttachment(tdbb);
 
 			// This pair (SHUT_database/SHUT_online) checks itself for valid user name
 			if (options.dpb_shutdown)
@@ -1874,7 +1890,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			if (options.dpb_sweep_interval > -1)
 			{
 				validateAccess(tdbb, attachment, CHANGE_HEADER_SETTINGS);
-				PAG_sweep_interval(tdbb, options.dpb_sweep_interval);
+				PAG_set_sweep_interval(tdbb, options.dpb_sweep_interval);
 				dbb->dbb_sweep_interval = options.dpb_sweep_interval;
 			}
 
@@ -1916,10 +1932,24 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				dbb->dbb_linger_seconds = 0;
 			}
 
+			if (options.dpb_set_db_replica)
+			{
+				validateAccess(tdbb, attachment, CHANGE_HEADER_SETTINGS);
+				if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, NULL))
+				{
+					ERR_post(Arg::Gds(isc_lock_timeout) <<
+							 Arg::Gds(isc_obj_in_use) << Arg::Str(org_filename));
+				}
+				PAG_set_db_replica(tdbb, options.dpb_replica_mode);
+				dbb->dbb_linger_seconds = 0;
+			}
+
 			CCH_init2(tdbb);
 			VIO_init(tdbb);
 
 			CCH_release_exclusive(tdbb);
+
+			REPL_attach(tdbb, cleanupTransactions);
 
 			attachment->att_trace_manager->activate();
 			if (attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_ATTACH))
@@ -1932,9 +1962,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			// Recover database after crash during backup difference file merge
 			dbb->dbb_backup_manager->endBackup(tdbb, true); // true = do recovery
 
-			if (options.dpb_sweep & isc_dpb_records) {
+			if (options.dpb_sweep & isc_dpb_records)
 				TRA_sweep(tdbb);
-			}
 
 			dbb->dbb_crypto_manager->startCryptThread(tdbb);
 
@@ -2675,7 +2704,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				// try to create with overwrite = false
 				pageSpace->file = PIO_create(tdbb, expanded_name, false, false);
 			}
-			catch (status_exception)
+			catch (const status_exception&)
 			{
 				if (options.dpb_overwrite)
 				{
@@ -2809,7 +2838,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 			if (options.dpb_sweep_interval > -1)
 			{
-				PAG_sweep_interval(tdbb, options.dpb_sweep_interval);
+				PAG_set_sweep_interval(tdbb, options.dpb_sweep_interval);
 				dbb->dbb_sweep_interval = options.dpb_sweep_interval;
 			}
 
@@ -2835,7 +2864,20 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				PAG_set_db_readonly(tdbb, options.dpb_db_readonly);
 			}
 
+			if (options.dpb_set_db_replica)
+			{
+				if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, &dbbGuard))
+				{
+					ERR_post(Arg::Gds(isc_lock_timeout) <<
+							 Arg::Gds(isc_obj_in_use) << Arg::Str(org_filename));
+				}
+
+				PAG_set_db_replica(tdbb, options.dpb_replica_mode);
+			}
+
 			PAG_attachment_id(tdbb);
+
+			Monitoring::publishAttachment(tdbb);
 
 			CCH_release_exclusive(tdbb);
 
@@ -4874,6 +4916,40 @@ IBatch* JAttachment::createBatch(CheckStatusWrapper* status, ITransaction* trans
 }
 
 
+IReplicator* JAttachment::createReplicator(CheckStatusWrapper* user_status)
+{
+	JReplicator* jr = NULL;
+
+	try
+	{
+		EngineContextHolder tdbb(user_status, this, FB_FUNCTION);
+		check_database(tdbb);
+
+		try
+		{
+			const auto att = tdbb->getAttachment();
+
+			if (!att->att_repl_applier)
+				att->att_repl_applier = Applier::create(tdbb);
+
+			jr = FB_NEW JReplicator(getStable());
+			jr->addRef();
+		}
+		catch (const Exception& ex)
+		{
+			transliterateException(tdbb, ex, user_status, "JResultSet::fetchNext");
+		}
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(user_status);
+	}
+
+	successful_completion(user_status);
+	return jr;
+}
+
+
 int JResultSet::fetchNext(CheckStatusWrapper* user_status, void* buffer)
 {
 	try
@@ -5952,6 +6028,116 @@ void JBatch::cancel(CheckStatusWrapper* status)
 }
 
 
+JReplicator::JReplicator(StableAttachmentPart* sa)
+	: sAtt(sa)
+{ }
+
+
+int JReplicator::release()
+{
+	if (--refCounter != 0)
+		return 1;
+
+	LocalStatus status;
+	CheckStatusWrapper statusWrapper(&status);
+
+	freeEngineData(&statusWrapper);
+
+	delete this;
+	return 0;
+}
+
+
+void JReplicator::freeEngineData(Firebird::CheckStatusWrapper* user_status)
+{
+	try
+	{
+		EngineContextHolder tdbb(user_status, this, FB_FUNCTION);
+		check_database(tdbb);
+
+		try
+		{
+			const auto att = sAtt->getHandle();
+			if (att)
+				att->att_repl_applier.reset();
+		}
+		catch (const Exception& ex)
+		{
+			transliterateException(tdbb, ex, user_status, FB_FUNCTION);
+			return;
+		}
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(user_status);
+		return;
+	}
+
+	successful_completion(user_status);
+}
+
+
+void JReplicator::process(CheckStatusWrapper* status, unsigned length, const UCHAR* data)
+{
+	try
+	{
+		EngineContextHolder tdbb(status, this, FB_FUNCTION);
+		check_database(tdbb);
+
+		try
+		{
+			const auto att = sAtt->getHandle();
+			att->att_repl_applier->process(tdbb, length, data);
+		}
+		catch (const Exception& ex)
+		{
+			transliterateException(tdbb, ex, status, "JReplicator::process");
+			return;
+		}
+
+		trace_warning(tdbb, status, "JBatch::add");
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+		return;
+	}
+
+	successful_completion(status);
+}
+
+
+void JReplicator::close(CheckStatusWrapper* status)
+{
+	try
+	{
+		EngineContextHolder tdbb(status, this, FB_FUNCTION);
+		check_database(tdbb);
+
+		try
+		{
+			const auto att = sAtt->getHandle();
+			att->att_repl_applier->shutdown(tdbb);
+			att->att_repl_applier.reset();
+		}
+		catch (const Exception& ex)
+		{
+			transliterateException(tdbb, ex, status, "JReplicator::close");
+			return;
+		}
+
+		trace_warning(tdbb, status, "JBatch::add");
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+		return;
+	}
+
+	successful_completion(status);
+}
+
+
 void JAttachment::ping(CheckStatusWrapper* user_status)
 {
 /**************************************
@@ -6648,6 +6834,11 @@ void DatabaseOptions::get(const UCHAR* dpb, USHORT dpb_length, bool& invalid_cli
 			rdr.getString(dpb_session_tz);
 			break;
 
+		case isc_dpb_set_db_replica:
+			dpb_set_db_replica = true;
+			dpb_replica_mode = (ReplicaMode) rdr.getInt();
+			break;
+
 		default:
 			break;
 		}
@@ -6998,7 +7189,7 @@ static void prepare_tra(thread_db* tdbb, jrd_tra* transaction, USHORT length, co
 }
 
 
-static void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
+void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 {
 /**************************************
  *
@@ -7017,6 +7208,12 @@ static void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 
 	if (!attachment)
 		return;
+
+	if (attachment->att_replicator)
+		attachment->att_replicator->dispose();
+
+	if (attachment->att_repl_applier)
+		attachment->att_repl_applier->shutdown(tdbb);
 
 	if (dbb->dbb_crypto_manager)
 		dbb->dbb_crypto_manager->detach(tdbb, attachment);
@@ -8346,13 +8543,11 @@ ISC_STATUS thread_db::checkCancelState(ISC_STATUS* secondary)
 		{
 			if (database->dbb_ast_flags & DBB_shutdown)
 				return isc_shutdown;
-			else if (!(tdbb_flags & TDBB_shutdown_manager))
-			{
-				if (secondary)
-					*secondary = attachment->getStable() ? attachment->getStable()->getShutError() : 0;
 
-				return isc_att_shutdown;
-			}
+			if (secondary)
+				*secondary = attachment->getStable() ? attachment->getStable()->getShutError() : 0;
+
+			return isc_att_shutdown;
 		}
 
 		// If a cancel has been raised, defer its acknowledgement
@@ -9053,8 +9248,6 @@ void TrigVector::release(thread_db* tdbb) const
 			JrdStatement* stmt = t->statement;
 			if (stmt)
 				stmt->release(tdbb);
-
-			delete t->extTrigger;
 		}
 
 		delete this;

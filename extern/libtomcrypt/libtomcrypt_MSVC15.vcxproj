@@ -22,6 +22,7 @@
     <ProjectName>libtomcrypt</ProjectName>
     <ProjectGuid>{E3802982-DCB6-4D85-A2BD-6B08F0657E79}</ProjectGuid>
     <RootNamespace>libtomcrypt</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">

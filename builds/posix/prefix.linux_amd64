@@ -20,7 +20,7 @@
 
 COMMON_FLAGS=-ggdb -DFB_SEND_FLAGS=MSG_NOSIGNAL -DLINUX -DAMD64 -pipe -MMD -fPIC -fmessage-length=0
 OPTIMIZE_FLAGS=-O3 -fno-omit-frame-pointer
-WARN_FLAGS=-Wall -Wno-switch -Wno-parentheses -Wno-unknown-pragmas -Wno-unused-variable -Wno-invalid-offsetof -Wno-narrowing -Wno-unused-local-typedefs
+WARN_FLAGS=-Wall -Wno-switch -Wno-parentheses -Wno-unknown-pragmas -Wno-unused-variable -Wno-invalid-offsetof -Wno-narrowing -Wno-unused-local-typedefs -Wno-class-memaccess
 
 PROD_FLAGS=$(COMMON_FLAGS) $(OPTIMIZE_FLAGS)
 #DEV_FLAGS=-DUSE_VALGRIND $(COMMON_FLAGS) $(WARN_FLAGS) -fmax-errors=8

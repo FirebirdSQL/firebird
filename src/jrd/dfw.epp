@@ -1497,8 +1497,9 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 	{
 		more = false;
 		try {
-			tdbb->tdbb_flags |= (TDBB_dont_post_dfw | TDBB_use_db_page_space |
+			const auto flags = (TDBB_dont_post_dfw | TDBB_use_db_page_space |
 				(phase == 0 ? TDBB_dfw_cleanup : 0));
+			AutoSetRestoreFlag<ULONG> dfwFlags(&tdbb->tdbb_flags, flags, true);
 
 			for (const deferred_task* task = task_table; task->task_type != dfw_null; ++task)
 			{
@@ -1519,8 +1520,6 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 				}
 			}
 
-			tdbb->tdbb_flags &= ~(TDBB_dont_post_dfw | TDBB_use_db_page_space | TDBB_dfw_cleanup);
-
 			if (!phase)
 			{
 				fb_utils::copyStatus(tdbb->tdbb_status_vector, &err_status);
@@ -1531,8 +1530,6 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 		}
 		catch (const Firebird::Exception& ex)
 		{
-			tdbb->tdbb_flags &= ~(TDBB_dont_post_dfw | TDBB_use_db_page_space | TDBB_dfw_cleanup);
-
 			// Do any necessary cleanup
 			if (!phase)
 			{
@@ -3848,7 +3845,7 @@ static void setupSpecificCollationAttributes(thread_db* tdbb, jrd_tra* transacti
 
 	SET_TDBB(tdbb);
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
-	AutoRequest handle;
+	AutoCacheRequest handle(tdbb, drq_m_coll_attrs, DYN_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
 		COLL IN RDB$COLLATIONS

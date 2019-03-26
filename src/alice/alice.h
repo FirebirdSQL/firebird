@@ -65,6 +65,12 @@ enum alice_shut_mode {
 	SHUT_FULL = 4
 };
 
+enum alice_repl_mode {
+	REPL_NONE = 0,
+	REPL_READ_ONLY = 1,
+	REPL_READ_WRITE = 2
+};
+
 struct user_action
 {
 	ULONG ua_switches;
@@ -86,6 +92,7 @@ struct user_action
 	//TEXT ua_log_file[MAXPATHLEN];
 	USHORT ua_db_SQL_dialect;
 	alice_shut_mode ua_shutdown_mode;
+	alice_repl_mode ua_replica_mode;
 };
 
 

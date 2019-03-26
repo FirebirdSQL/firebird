@@ -82,6 +82,7 @@ private:
 		void start(const char* fName);
 		void stop();
 		int release();
+
 	private:
 		const char* fileName;
 	};

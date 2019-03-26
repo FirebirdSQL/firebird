@@ -69,19 +69,35 @@ bool ModuleLoader::isLoadableModule(const Firebird::PathName& module)
 	return true;
 }
 
-void ModuleLoader::doctorModuleExtension(Firebird::PathName& name)
+bool ModuleLoader::doctorModuleExtension(Firebird::PathName& name, int& step)
 {
-	Firebird::PathName::size_type pos = name.rfind('/');
-	pos = (pos == Firebird::PathName::npos) ? 0 : pos + 1;
-	if (name.find("lib", pos) != pos)
-	{
-		name.insert(pos, "lib");
-	}
+	if (name.isEmpty())
+		return false;
 
-	pos = name.rfind(".dylib");
-	if (pos == name.length() - 6)
-		return;
-	name += ".dylib";
+	switch (step++)
+	{
+	case 0: // Step 0: append missing extension
+		{
+			Firebird::PathName::size_type pos = name.rfind(".dylib");
+			if (pos != name.length() - 6)
+			{
+				name += ".dylib";
+				return true;
+			}
+			step++; // instead of break
+		}
+	case 1: // Step 1: insert missing prefix
+		{
+			Firebird::PathName::size_type pos = name.rfind('/');
+			pos = (pos == Firebird::PathName::npos) ? 0 : pos + 1;
+			if (name.find("lib", pos) != pos)
+			{
+				name.insert(pos, "lib");
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 #ifdef DEV_BUILD

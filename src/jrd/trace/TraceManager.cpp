@@ -243,18 +243,22 @@ void TraceManager::update_session(const TraceSession& session)
 
 	// if this session is not from administrator, it may trace connections
 	// only created by the same user
-	if (!(session.ses_flags & trs_admin))
+	if (!(session.ses_flags & (trs_admin | trs_system)))
 	{
+		const char* curr_user = nullptr;
+		string s_user = session.ses_user;
+		string t_role;
+		UserId::Privileges priv;
+		ULONG mapResult = 0;
+
 		if (attachment)
 		{
 			if ((!attachment->att_user) || (attachment->att_flags & ATT_mapping))
 				return;
 
-			string s_user = session.ses_user;
-			string t_role;
-			UserId::Privileges priv;
-			ULONG mapResult;
+			curr_user = attachment->att_user->getUserName().c_str();
 
+			if (session.ses_auth.hasData())
 			{ // scope
 				AutoSetRestoreFlag<ULONG> autoRestore(&attachment->att_flags, ATT_mapping, true);
 
@@ -269,25 +273,10 @@ void TraceManager::update_session(const TraceSession& session)
 					attachment->getInterface());
 				mapResult = mapping.mapUser(s_user, t_role);
 			}
-
-			if (session.ses_auth.hasData())
-			{
-				if (mapResult & Mapping::MAP_ERROR_NOT_THROWN)
-					return;		// Error in mapUser() means missing context
-
-				t_role.upper();
-			}
-
-			if (s_user != DBA_USER_NAME && t_role != ADMIN_ROLE &&
-				attachment->att_user->getUserName() != s_user && (!priv.test(TRACE_ANY_ATTACHMENT)))
-			{
-				return;
-			}
 		}
 		else if (service)
 		{
-			string s_user = session.ses_user;
-			string t_role;
+			curr_user = service->getUserName().c_str();
 
 			if (session.ses_auth.hasData())
 			{
@@ -296,26 +285,31 @@ void TraceManager::update_session(const TraceSession& session)
 				expandDatabaseName(service->getExpectedDb(), dummy, &config);
 
 				Mapping mapping(Mapping::MAP_NO_FLAGS, service->getCryptCallback());
+				mapping.needSystemPrivileges(priv);
 				mapping.setAuthBlock(session.ses_auth);
 				mapping.setErrorMessagesContextName("services manager");
 				mapping.setSqlRole(session.ses_role);
 				mapping.setSecurityDbAlias(config->getSecurityDatabase(), nullptr);
 
-				if (mapping.mapUser(s_user, t_role) & Mapping::MAP_ERROR_NOT_THROWN)
-				{
-					// Error in mapUser() means missing context, therefore...
-					return;
-				}
-
-				t_role.upper();
+				mapResult = mapping.mapUser(s_user, t_role);
 			}
-
-			if (s_user != DBA_USER_NAME && t_role != ADMIN_ROLE && service->getUserName() != s_user)
-				return;
 		}
 		else
 		{
 			// failed attachment attempts traced by admin trace only
+			return;
+		}
+
+		if (mapResult & Mapping::MAP_ERROR_NOT_THROWN)
+		{
+			// Error in mapUser() means missing context, therefore...
+			return;
+		}
+
+		t_role.upper();
+		if (s_user != DBA_USER_NAME && t_role != ADMIN_ROLE &&
+			s_user != curr_user && (!priv.test(TRACE_ANY_ATTACHMENT)))
+		{
 			return;
 		}
 	}

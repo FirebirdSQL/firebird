@@ -236,7 +236,15 @@ void TracePluginImpl::logRecord(const char* action)
 	// TODO: implement adjusting of line breaks
 	// line.adjustLineBreaks();
 
-	logWriter->write(record.c_str(), record.length());
+	LocalStatus ls;
+	CheckStatusWrapper status(&ls);
+
+	logWriter->write_s(&status, record.c_str(), record.length());
+
+	if (ls.getState() & IStatus::STATE_ERRORS && ls.getErrors()[1] == isc_interface_version_too_old)
+		logWriter->write(record.c_str(), record.length());
+	else
+		check(&status);
 
 	record = "";
 }
