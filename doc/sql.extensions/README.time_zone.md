@@ -8,6 +8,8 @@ The session time zone, as the name implies, can be a different one for each data
 
 It can then be changed with `SET TIME ZONE` statement to a given time zone or reset to its original value with `SET TIME ZONE LOCAL`.
 
+The original time zone value is initially defined equal to the current time zone in session initialization and cannot be changed manually. But the original time zone is internally changed when a routine (function, procedure or trigger) is called to the value of the current time zone and restored to its previous value at routine exit. That means that a routine that changes the current time zone and later run `SET TIME ZONE LOCAL` will restore the current time zone to its initially received value.
+
 A time zone may be a string with a time zone region (for example, `America/Sao_Paulo`) or a hours:minutes displacement (for example, `-03:00`) from GMT.
 
 A time/timestamp with time zone is considered equal to another time/timestamp with time zone if their conversion to UTC are equal, for example, `time '10:00 -02' = time '09:00 -03'`, since both are the same as `time '12:00 GMT'`. This is also valid in the context of `UNIQUE` constraints and for sorting purposes.

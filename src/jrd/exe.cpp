@@ -1163,6 +1163,10 @@ void EXE_execute_triggers(thread_db* tdbb,
 				UserId* invoker = s->triggerInvoker ? s->triggerInvoker : tdbb->getAttachment()->att_ss_user;
 				AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);
 
+				AutoSetRestore<USHORT> autoOriginalTimeZone(
+					&tdbb->getAttachment()->att_original_timezone,
+					tdbb->getAttachment()->att_current_timezone);
+
 				EXE_start(tdbb, trigger, transaction);
 			}
 

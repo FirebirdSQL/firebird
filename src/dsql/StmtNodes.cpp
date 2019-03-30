@@ -3203,6 +3203,10 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, jrd_req* request) cons
 
 	try
 	{
+		AutoSetRestore<USHORT> autoOriginalTimeZone(
+			&tdbb->getAttachment()->att_original_timezone,
+			tdbb->getAttachment()->att_current_timezone);
+
 		procRequest->req_gmt_timestamp = request->req_gmt_timestamp;
 
 		EXE_start(tdbb, procRequest, transaction);

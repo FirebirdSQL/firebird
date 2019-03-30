@@ -110,6 +110,10 @@ void ProcedureScan::open(thread_db* tdbb) const
 
 		TraceProcExecute trace(tdbb, proc_request, request, m_targetList);
 
+		AutoSetRestore<USHORT> autoOriginalTimeZone(
+			&tdbb->getAttachment()->att_original_timezone,
+			tdbb->getAttachment()->att_current_timezone);
+
 		EXE_start(tdbb, proc_request, request->req_transaction);
 
 		if (iml)
@@ -183,6 +187,10 @@ bool ProcedureScan::getRecord(thread_db* tdbb) const
 	jrd_req* const proc_request = impure->irsb_req_handle;
 
 	TraceProcFetch trace(tdbb, proc_request);
+
+	AutoSetRestore<USHORT> autoOriginalTimeZone(
+		&tdbb->getAttachment()->att_original_timezone,
+		tdbb->getAttachment()->att_current_timezone);
 
 	try
 	{
