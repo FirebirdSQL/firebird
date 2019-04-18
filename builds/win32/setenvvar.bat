@@ -72,8 +72,9 @@ if DEFINED VS100COMNTOOLS (
   @set VS_VER_EXPRESS=
 )
 
-@for /f "delims=." %%a in ('@devenv /?') do (
-  @for /f "tokens=6" %%b in ("%%a") do ((set MSVC_VERSION=%%b) & (set VS_VER=msvc%%b) & (goto :SET_FB_TARGET_PLATFORM))
+for /F "tokens=1 delims=. " %%a in ("%VisualStudioVersion%") do (
+	set MSVC_VERSION=%%a
+	set VS_VER=msvc%%a
 )
 
 @if not defined MSVC_VERSION goto :HELP
