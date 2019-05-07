@@ -260,6 +260,13 @@ if (WIN32)
         execute_process(COMMAND ${ICU_EXTRACT})
     endif()
 
+	# determine icu version
+	foreach(v RANGE 63 83)
+		if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extern/icu/icudt${v}l.dat)
+			set(ICU_VERSION ${v} CACHE STRING "ICU version")
+		endif()
+	endforeach()
+
     # zlib
     if (NOT ZLIB_EXTRACT)
         message(STATUS "Extracting pre-built zlib")
