@@ -21,11 +21,11 @@
  */
 
 #include "firebird.h"
-#include "consts_pub.h"
+#include "firebird/impl/consts_pub.h"
 #include "iberror.h"
-#include "inf_pub.h"
+#include "firebird/impl/inf_pub.h"
 #include "../jrd/ExtEngineManager.h"
-#include "../dsql/sqlda_pub.h"
+#include "firebird/impl/sqlda_pub.h"
 #include "../common/dsc.h"
 #include "../jrd/align.h"
 #include "../jrd/jrd.h"

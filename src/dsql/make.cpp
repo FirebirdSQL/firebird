@@ -39,7 +39,7 @@
 #include "../dsql/dsql.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/ExprNodes.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/intl.h"
 #include "../jrd/constants.h"
 #include "../jrd/align.h"

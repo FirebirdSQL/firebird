@@ -545,7 +545,7 @@ VI. ADDITIONAL NOTES
 #include <stdarg.h>
 #include "../jrd/jrd.h"
 #include "../jrd/pag.h"
-#include "../jrd/inf_pub.h"
+#include "firebird/impl/inf_pub.h"
 #include "../jrd/val.h"
 #include "../jrd/btr.h"
 #include "../jrd/btn.h"

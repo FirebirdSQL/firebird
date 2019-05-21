@@ -80,7 +80,7 @@
 #include "../jrd/intl_classes.h"
 #include "../jrd/rse.h"
 #include "../jrd/sort.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/tra.h"
 #include "../common/gdsassert.h"
 #include "../common/classes/auto.h"

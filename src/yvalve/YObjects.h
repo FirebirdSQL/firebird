@@ -236,7 +236,7 @@ public:
 	YRequest(YAttachment* aAttachment, Firebird::IRequest* aNext);
 
 	void destroy(unsigned dstrFlags);
-	FB_API_HANDLE& getHandle();
+	isc_req_handle& getHandle();
 
 	// IRequest implementation
 	void receive(Firebird::CheckStatusWrapper* status, int level, unsigned int msgType,
@@ -253,7 +253,7 @@ public:
 
 public:
 	AtomicAttPtr attachment;
-	FB_API_HANDLE* userHandle;
+	isc_req_handle* userHandle;
 };
 
 class YTransaction FB_FINAL :
@@ -265,7 +265,7 @@ public:
 	YTransaction(YAttachment* aAttachment, Firebird::ITransaction* aNext);
 
 	void destroy(unsigned dstrFlags);
-	FB_API_HANDLE& getHandle();
+	isc_tr_handle& getHandle();
 
 	// ITransaction implementation
 	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength,
@@ -318,7 +318,7 @@ public:
 	YBlob(YAttachment* aAttachment, YTransaction* aTransaction, Firebird::IBlob* aNext);
 
 	void destroy(unsigned dstrFlags);
-	FB_API_HANDLE& getHandle();
+	isc_blob_handle& getHandle();
 
 	// IBlob implementation
 	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength,
@@ -502,7 +502,7 @@ public:
 
 	void destroy(unsigned dstrFlags);
 	void shutdown();
-	FB_API_HANDLE& getHandle();
+	isc_db_handle& getHandle();
 
 	// IAttachment implementation
 	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength,
@@ -548,7 +548,7 @@ public:
 	void addCleanupHandler(Firebird::CheckStatusWrapper* status, CleanupCallback* callback);
 	YTransaction* getTransaction(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* tra);
 	void getNextTransaction(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* tra, NextTransaction& next);
-	void execute(Firebird::CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
+	void execute(Firebird::CheckStatusWrapper* status, isc_tr_handle* traHandle,
 		unsigned int stmtLength, const char* sqlStmt, unsigned int dialect,
 		Firebird::IMessageMetadata* inMetadata, void* inBuffer,
 		Firebird::IMessageMetadata* outMetadata, void* outBuffer);
@@ -587,7 +587,7 @@ public:
 
 	void shutdown();
 	void destroy(unsigned dstrFlags);
-	FB_API_HANDLE& getHandle();
+	isc_svc_handle& getHandle();
 
 	// IService implementation
 	void detach(Firebird::CheckStatusWrapper* status);

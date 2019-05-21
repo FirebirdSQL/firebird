@@ -22,7 +22,7 @@
 #include "../dsql/AggNodes.h"
 #include "../dsql/ExprNodes.h"
 #include "../jrd/jrd.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/btr.h"
 #include "../jrd/exe.h"
 #include "../jrd/tra.h"

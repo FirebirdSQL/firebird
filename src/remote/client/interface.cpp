@@ -43,7 +43,7 @@
 #include <sys/param.h>
 #endif
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../common/ThreadStart.h"
 #include "../jrd/license.h"
 #include "../remote/inet_proto.h"

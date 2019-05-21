@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "../remote/remote.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
 #include "../utilities/install/install_nt.h"
 

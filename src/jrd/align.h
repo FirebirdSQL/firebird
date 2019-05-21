@@ -33,7 +33,7 @@ Maximum alignments for corresponding data types are defined in dsc.h
 */
 
 #include "../common/DecFloat.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 
 /*  The following macro must be defined as the highest-numericly-valued
  *  blr which describes a datatype: arrays are sized based on this value.

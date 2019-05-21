@@ -38,7 +38,7 @@
 #include <fcntl.h>
 #include "../jrd/ibsetjmp.h"
 #include "../common/classes/timestamp.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/ods.h"
 #include "../jrd/btn.h"
 #include "../jrd/license.h"

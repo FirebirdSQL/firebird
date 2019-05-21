@@ -26,7 +26,7 @@
 #include "firebird.h"
 #include <stdio.h>
 #include "../../../remote/remote.h"
-#include "../../../jrd/ibase.h"
+#include "ibase.h"
 #include "../../../remote/os/win32/xnet.h"
 #include "../../../utilities/install/install_nt.h"
 #include "../../../remote/proto_proto.h"

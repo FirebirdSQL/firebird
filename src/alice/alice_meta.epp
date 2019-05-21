@@ -29,7 +29,7 @@
 
 #include "firebird.h"
 #include <stdio.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../alice/alice.h"
 #include "../alice/alice_meta.h"
 #include "../yvalve/gds_proto.h"

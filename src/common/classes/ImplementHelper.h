@@ -37,7 +37,7 @@
 #include "../common/classes/auto.h"
 #include "../common/classes/RefCounted.h"
 #include "../common/StatusArg.h"
-#include "consts_pub.h"
+#include "firebird/impl/consts_pub.h"
 #ifdef DEV_BUILD
 #include <stdio.h>
 #endif

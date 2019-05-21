@@ -32,7 +32,7 @@
 #include "firebird/Interface.h"
 #include "../auth/SecureRemotePassword/srp.h"
 #include "../jrd/constants.h"
-#include "../jrd/inf_pub.h"
+#include "firebird/impl/inf_pub.h"
 #include "../utilities/gsec/gsec.h"
 #include "../auth/SecureRemotePassword/Message.h"
 #include "../common/classes/auto.h"

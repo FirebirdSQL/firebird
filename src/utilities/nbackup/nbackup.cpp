@@ -40,7 +40,7 @@
 #include "../yvalve/gds_proto.h"
 #include "../common/os/path_utils.h"
 #include "../common/os/guid.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/array.h"
 #include "../common/classes/ClumpletWriter.h"

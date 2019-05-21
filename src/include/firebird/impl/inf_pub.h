@@ -23,8 +23,8 @@
  * 2001.07.28: John Bellardo: Added isc_info_rsb_skip to support LIMIT.
  */
 
-#ifndef JRD_INF_PUB_H
-#define JRD_INF_PUB_H
+#ifndef FIREBIRD_IMPL_INF_PUB_H
+#define FIREBIRD_IMPL_INF_PUB_H
 
 /* Common, structural codes */
 /****************************/
@@ -462,5 +462,4 @@ enum info_db_provider
 #define isc_info_sql_stmt_set_generator   13
 #define isc_info_sql_stmt_savepoint       14
 
-#endif /* JRD_INF_PUB_H */
-
+#endif /* FIREBIRD_IMPL_INF_PUB_H */

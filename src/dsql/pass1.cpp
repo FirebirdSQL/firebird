@@ -141,13 +141,13 @@
 #include "firebird.h"
 #include <string.h>
 #include <stdio.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../dsql/dsql.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/BoolNodes.h"
 #include "../dsql/ExprNodes.h"
 #include "../jrd/intl.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/jrd.h"
 #include "../jrd/constants.h"
 #include "../jrd/intl_classes.h"

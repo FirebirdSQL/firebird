@@ -24,7 +24,7 @@
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/align.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/tra.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/recsrc/Cursor.h"

@@ -22,7 +22,7 @@
  */
 
 #include "UserBlob.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/gds_proto.h"
 
 static const USHORT SEGMENT_LIMIT = 65535;

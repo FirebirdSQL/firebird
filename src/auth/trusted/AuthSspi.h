@@ -39,7 +39,7 @@
 #include <../common/classes/fb_string.h>
 #include <../common/classes/array.h>
 #include "../common/classes/ImplementHelper.h"
-#include <../jrd/ibase.h>
+#include <ibase.h>
 #include "firebird/Interface.h"
 #include "../common/classes/objects_array.h"
 

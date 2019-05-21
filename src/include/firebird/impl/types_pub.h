@@ -24,8 +24,8 @@
  *  Contributor(s): ______________________________________.
  */
 
-#ifndef INCLUDE_TYPES_PUB_H
-#define INCLUDE_TYPES_PUB_H
+#ifndef FIREBIRD_IMPL_TYPES_PUB_H
+#define FIREBIRD_IMPL_TYPES_PUB_H
 
 #include <stddef.h>
 
@@ -200,4 +200,4 @@ struct FB_DEC34_t {
 typedef struct FB_DEC16_t FB_DEC16;
 typedef struct FB_DEC34_t FB_DEC34;
 
-#endif /* INCLUDE_TYPES_PUB_H */
+#endif /* FIREBIRD_IMPL_TYPES_PUB_H */

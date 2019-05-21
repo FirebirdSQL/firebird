@@ -32,7 +32,7 @@
 #include "../common/isc_proto.h"
 #include "../jrd/jrd_proto.h"
 #include "../common/classes/init.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
 #include <windows.h>
 

@@ -27,7 +27,7 @@
 
 #include "firebird.h"
 #include "../auth/AuthDbg.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../common/StatusHolder.h"
 
 #ifdef AUTH_DEBUG

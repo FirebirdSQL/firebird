@@ -28,7 +28,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "../common/classes/timestamp.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/ods.h"
 #include "../jrd/ods_proto.h"
 #include "../common/os/guid.h"

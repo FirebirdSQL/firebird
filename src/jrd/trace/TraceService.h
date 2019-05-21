@@ -28,7 +28,7 @@
 #define JRD_TRACESERVICE_H
 
 #include "firebird.h"
-#include "consts_pub.h"
+#include "firebird/impl/consts_pub.h"
 #include "fb_exception.h"
 #include "iberror.h"
 #include "../../common/classes/fb_string.h"

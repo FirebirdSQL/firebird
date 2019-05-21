@@ -64,7 +64,7 @@
 
 #include <stdio.h>
 #include "dyn_consts.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/constants.h"
 #include "../common/utils_proto.h"
 
@@ -87,7 +87,7 @@ const int MAX_DATABASES = 32;
 const int MAX_EVENT_SIZE = 16; // event names use 15 chars from old docs.
 
 // Values for SQL dialects.
-#include "../dsql/sqlda_pub.h"
+#include "firebird/impl/sqlda_pub.h"
 
 // Language options
 

@@ -30,7 +30,7 @@
 #include "firebird.h"
 #include <stdio.h>
 #include <stdarg.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../gpre/gpre.h"
 #include "../gpre/gpre_proto.h"
 #include "../gpre/lang_proto.h"

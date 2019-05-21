@@ -28,7 +28,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdarg.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/msg_encode.h"
 #include "../common/isc_f_proto.h"

@@ -21,7 +21,7 @@
  */
 
 #include "firebird.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "firebird/Interface.h"
 #include "../common/classes/alloc.h"
 #include "../common/classes/array.h"

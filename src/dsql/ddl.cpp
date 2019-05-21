@@ -76,7 +76,7 @@
 #include "../common/classes/MetaName.h"
 #include "../dsql/dsql.h"
 #include "../dsql/ExprNodes.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/Attachment.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/intl.h"

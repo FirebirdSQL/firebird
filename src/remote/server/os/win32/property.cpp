@@ -46,7 +46,7 @@
 #include "../../remote/server/os/win32/window_proto.h"
 #include "../../remote/server/os/win32/chop_proto.h"
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
 #include "../common/StatusHolder.h"
 

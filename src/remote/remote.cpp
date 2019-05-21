@@ -24,7 +24,7 @@
 #include "firebird.h"
 #include <string.h>
 #include <stdlib.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../remote/remote.h"
 #include "../common/file_params.h"
 #include "../common/gdsassert.h"

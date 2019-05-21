@@ -24,7 +24,7 @@
 
 #include "firebird.h"
 #include "BlobWrapper.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "firebird/Interface.h"
 
 static const USHORT SEGMENT_LIMIT = 65535;

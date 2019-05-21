@@ -24,7 +24,7 @@
 #define DSQL_STMT_NODES_H
 
 #include "../common/classes/MetaName.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/Function.h"
 #include "../jrd/extds/ExtDS.h"
 #include "../dsql/Nodes.h"

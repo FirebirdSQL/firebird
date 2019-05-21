@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef INCLUDE_CONSTS_PUB_H
-#define INCLUDE_CONSTS_PUB_H
+#ifndef FIREBIRD_IMPL_CONSTS_PUB_H
+#define FIREBIRD_IMPL_CONSTS_PUB_H
 
 /**********************************/
 /* Database parameter block stuff */
@@ -737,4 +737,4 @@
 #define fb_dbg_arg_input			0
 #define fb_dbg_arg_output			1
 
-#endif // ifndef INCLUDE_CONSTS_PUB_H
+#endif // ifndef FIREBIRD_IMPL_CONSTS_PUB_H

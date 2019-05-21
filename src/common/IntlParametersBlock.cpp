@@ -29,7 +29,7 @@
 #include "firebird.h"
 #include "../common/IntlParametersBlock.h"
 
-#include "consts_pub.h"
+#include "firebird/impl/consts_pub.h"
 #include "../common/isc_f_proto.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/UtilSvc.h"

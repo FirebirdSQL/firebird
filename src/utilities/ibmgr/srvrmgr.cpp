@@ -36,7 +36,7 @@
 #endif
 
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/gdsassert.h"
 #include "../jrd/svc_undoc.h"

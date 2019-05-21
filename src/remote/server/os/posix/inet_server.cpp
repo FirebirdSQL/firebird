@@ -36,7 +36,7 @@
 #include <errno.h>
 #include "../common/isc_proto.h"
 #include "../common/os/divorce.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../common/classes/init.h"
 #include "../common/config/config.h"
 #include "../common/os/fbsyslog.h"
@@ -75,7 +75,7 @@
 #endif
 
 #include <errno.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
 #include "../remote/remote.h"
 #include "../jrd/license.h"

@@ -33,7 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../gpre/gpre.h"
 #include "../gpre/pat.h"
 #include "../gpre/msc_proto.h"

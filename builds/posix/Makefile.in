@@ -646,31 +646,17 @@ NEW_INCLUDES_SRC = $(shell find $(SRC_ROOT)/include/firebird -type f)
 NEW_INCLUDES_DEST = $(patsubst $(SRC_ROOT)/include/firebird/%, $(INCLUDE_DEST)/firebird/%, $(NEW_INCLUDES_SRC))
 
 include_generic: $(INCLUDE_DEST)/ib_util.h  \
-                 $(INCLUDE_DEST)/ibase.h	\
                  $(NEW_INCLUDES_DEST)
 
 # ib_util.h actually is a marker for a number of headers
-
-# All these files are #included in ibase.h. Here we cat them all together
-# and remove the embedded #includes to make it simpler for external usage.
-
-IBASE_ExtraFiles = include/types_pub.h include/consts_pub.h dsql/sqlda_pub.h common/dsc_pub.h jrd/ibase.h jrd/inf_pub.h jrd/blr.h include/gen/iberror.h
-SRC_IBASE_ExtraFiles = $(addprefix $(SRC_ROOT)/, $(IBASE_ExtraFiles))
-MAKE_HEADER_Src = $(addprefix $(SRC_ROOT)/, misc/makeHeader.cpp)
-MAKE_HEADER_Bin = ./makeHeader
-
-$(INCLUDE_DEST)/ibase.h: $(SRC_IBASE_ExtraFiles)
-	$(STATICEXE_LINK) -o $(MAKE_HEADER_Bin) $(MAKE_HEADER_Src)
-	$(CP) $^ .
-	$(MAKE_HEADER_Bin) <ibase.h >$@
-	$(RM) -f ibase.h
 
 # Copy all the other headers to the distribution directory. We use
 # ib_util.h as the marker for all the files.
 
 OtherDistribHeaders = extlib/ib_util.h \
                       yvalve/perf.h  \
-                      include/gen/iberror.h
+                      include/gen/iberror.h \
+					  include/ibase.h
 
 SRC_OtherDistribHeaders = $(addprefix $(SRC_ROOT)/, $(OtherDistribHeaders))
 
@@ -719,7 +705,7 @@ clean_vers:
 	$(RM) *.vers
 
 clean_misc:
-	$(RM) makeHeader ods.txt odstest* security.tmp test.header.txt 
+	$(RM) ods.txt odstest* security.tmp test.header.txt
 
 ifeq ($(EDITLINE_FLG),Y)
 ifeq ($(STD_EDITLINE),false)

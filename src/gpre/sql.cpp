@@ -31,7 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../gpre/gpre.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/intl.h"
 #include "../jrd/constants.h"
 #include "../gpre/cme_proto.h"

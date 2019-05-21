@@ -28,7 +28,7 @@
 #include "../dsql/BoolNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/align.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/tra.h"
 #include "../jrd/Function.h"
 #include "../jrd/SysFunction.h"

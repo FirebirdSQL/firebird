@@ -27,8 +27,8 @@
 #ifndef JRD_DSC_H
 #define JRD_DSC_H
 
-#include "../common/dsc_pub.h"
-#include "consts_pub.h"
+#include "firebird/impl/dsc_pub.h"
+#include "firebird/impl/consts_pub.h"
 #include "../jrd/ods.h"
 #include "../intl/charsets.h"
 #include "../common/DecFloat.h"

@@ -36,7 +36,7 @@
 #include "../common/classes/init.h"
 
 #include <stdarg.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/gds_proto.h"
 #include "../yvalve/utl_proto.h"
 #include "../yvalve/why_proto.h"
@@ -418,7 +418,7 @@ ISC_STATUS API_ROUTINE gds__get_slice(ISC_STATUS* status_vector,
 									  void* slice, SLONG* return_length)
 {
 	return isc_get_slice(status_vector, db_handle, tra_handle, array_id,
-						 sdl_length, sdl, parameters_leng, parameters,
+						 sdl_length, reinterpret_cast<const UCHAR*>(sdl), parameters_leng, parameters,
 						 slice_length, (SCHAR *) slice, return_length);
 }
 

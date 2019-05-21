@@ -72,7 +72,7 @@
 #include "../jrd/intl.h"
 #include "../jrd/sbm.h"
 #include "../jrd/blb.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/blb_proto.h"

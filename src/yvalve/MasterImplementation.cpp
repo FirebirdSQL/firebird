@@ -44,7 +44,7 @@
 #include "../common/ThreadStart.h"
 #include "../common/utils_proto.h"
 #include "../common/dllinst.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/utl_proto.h"
 
 using namespace Firebird;

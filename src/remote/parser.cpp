@@ -25,7 +25,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../remote/remote.h"
 #include "../jrd/align.h"
 #include "../common/gdsassert.h"

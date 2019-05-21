@@ -100,7 +100,7 @@ enum literal_string_type
 #if defined(WIN_NT)
 #include <windows.h>
 #endif
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../isql/isql.h"
 #include "../yvalve/perf.h"
 #include "../jrd/license.h"

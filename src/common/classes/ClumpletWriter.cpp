@@ -32,8 +32,7 @@
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/MetaName.h"
 #include "fb_exception.h"
-
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
 namespace Firebird {
 

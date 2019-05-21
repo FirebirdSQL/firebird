@@ -48,7 +48,7 @@
 #include <stdarg.h>
 #include "../common/gdsassert.h"
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/msg.h"
 #include "../jrd/event.h"
 #include "../yvalve/gds_proto.h"

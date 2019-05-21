@@ -40,7 +40,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/license.h"
 #include "../alice/alice.h"
 #include "../alice/exe_proto.h"

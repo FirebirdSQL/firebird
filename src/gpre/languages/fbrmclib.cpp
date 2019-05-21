@@ -46,7 +46,7 @@
 #include "autoconfig.h"
 #endif
 #include "fb_types.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
 
 // Firebird transaction existence block (as defined in why.cpp)
@@ -939,12 +939,12 @@ EXPORT RM_ENTRY(rmc_get_slice)
 				  (isc_db_handle *)arg_vector[1].a_address,
 				  (isc_tr_handle *)arg_vector[2].a_address,
 				  (ISC_QUAD *)arg_vector[3].a_address,
-				  (short)*CobolToShort(&arg_vector[4]),
-				  (char *)CobolToString(&arg_vector[5]),
-				  (short)*CobolToShort(&arg_vector[6]),
+				  *CobolToShort(&arg_vector[4]),
+				  (ISC_UCHAR *)CobolToString(&arg_vector[5]),
+				  *CobolToShort(&arg_vector[6]),
 				  (ISC_LONG *)CobolToInt(&arg_vector[7]),
 				  *CobolToInt(&arg_vector[8]),
-				  (void *)arg_vector[9].a_address,
+				  (ISC_LONG *)arg_vector[9].a_address,
 				  p1);
 	IntToCobol(&arg_vector[11], (ISC_UINT64)p1);
 	StatusToCobol(&arg_vector[0], stat);

@@ -23,8 +23,8 @@
  *             compatible with the HP Compiler
  */
 
-#ifndef JRD_DSC_PUB_H
-#define JRD_DSC_PUB_H
+#ifndef FIREBIRD_IMPL_DSC_PUB_H
+#define FIREBIRD_IMPL_DSC_PUB_H
 
 
 /*
@@ -71,4 +71,4 @@
 #define ISC_TIME_SECONDS_PRECISION		10000
 #define ISC_TIME_SECONDS_PRECISION_SCALE	(-4)
 
-#endif /* JRD_DSC_PUB_H */
+#endif /* FIREBIRD_IMPL_DSC_PUB_H */

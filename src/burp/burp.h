@@ -30,7 +30,7 @@
 #define BURP_BURP_H
 
 #include <stdio.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "firebird/Interface.h"
 #include "firebird/Message.h"
 #include "../common/dsc.h"

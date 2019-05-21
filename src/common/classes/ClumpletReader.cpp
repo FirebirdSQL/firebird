@@ -32,7 +32,7 @@
 #include "../common/classes/MetaName.h"
 #include "fb_exception.h"
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "firebird/Interface.h"
 
 #ifdef DEBUG_CLUMPLETS

@@ -41,7 +41,7 @@
 #include <errno.h>
 
 #include "gen/iberror.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/scl.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/isc_proto.h"

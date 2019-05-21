@@ -19,7 +19,7 @@
 #include "firebird.h"
 #include <stdio.h>
 #include <string.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/svc_undoc.h"
 #include "../common/stuff.h"
 #include "../common/utils_proto.h"

@@ -36,7 +36,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../alice/alice.h"
 #include "../alice/alice_proto.h"
 #include "../common/classes/Switches.h"

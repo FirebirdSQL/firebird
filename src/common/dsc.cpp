@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include "../common/dsc.h"
 #include "../common/TimeZoneUtil.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/intl.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/gdsassert.h"

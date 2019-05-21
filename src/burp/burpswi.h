@@ -28,7 +28,7 @@
 #define BURP_BURPSWI_H
 
 #include "../jrd/constants.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
 /* Local copies of global variables.  They will be copied into
    a data structure. */

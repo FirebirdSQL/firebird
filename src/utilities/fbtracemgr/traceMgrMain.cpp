@@ -34,7 +34,7 @@
 #include "../../common/utils_proto.h"
 #include "../../common/os/os_utils.h"
 #include "../../jrd/trace/TraceService.h"
-#include "../../jrd/ibase.h"
+#include "../ibase.h"
 
 #ifdef HAVE_LOCALE_H
 #include <locale.h>

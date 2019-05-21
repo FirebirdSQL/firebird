@@ -24,7 +24,7 @@
 #include "firebird.h"
 #include <stdio.h>
 #include <string.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../qli/dtr.h"
 #include "../qli/exe.h"
 #include "../qli/parse.h"

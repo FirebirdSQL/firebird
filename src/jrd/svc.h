@@ -27,7 +27,7 @@
 #include <stdio.h>
 
 #include "fb_blk.h"
-#include "consts_pub.h"
+#include "firebird/impl/consts_pub.h"
 
 #include "../jrd/svc_undoc.h"
 #include "../common/ThreadStart.h"
@@ -201,7 +201,7 @@ public:		// external interface with service
 		return svc_sql_role;
 	}
 
-	// return true if user have admin privileges in security database used 
+	// return true if user have admin privileges in security database used
 	// for service user authentication
 	bool getUserAdminFlag() const;
 

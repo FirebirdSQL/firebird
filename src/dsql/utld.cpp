@@ -35,7 +35,7 @@
 #include <string.h>
 #include "../dsql/dsql.h"
 #include "../dsql/sqlda.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/align.h"
 #include "../jrd/constants.h"
 #include "../dsql/utld_proto.h"

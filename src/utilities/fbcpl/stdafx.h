@@ -50,7 +50,7 @@
 #include "fb_pthread.h"
 #endif
 
-#include "../../jrd/ibase.h"
+#include "../ibase.h"
 
 //{{AFX_INSERT_LOCATION}}
 // Microsoft Visual C++ will insert additional declarations immediately before the previous line.

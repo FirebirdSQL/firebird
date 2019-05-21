@@ -83,7 +83,7 @@
 
 #include "gen/iberror.h"
 #include "../dsql/dsql.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/flags.h"
 #include "../jrd/jrd.h"
 #include "../jrd/DataTypeUtil.h"

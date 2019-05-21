@@ -42,7 +42,7 @@
 #include "../dsql/StmtNodes.h"
 #include "../dsql/DSqlDataTypeUtil.h"
 #include "../jrd/RecordSourceNodes.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/align.h"
 #include "../jrd/constants.h"
 #include "../jrd/intl.h"

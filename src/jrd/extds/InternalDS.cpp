@@ -30,7 +30,7 @@
 #include "../tra.h"
 #include "../common/dsc.h"
 #include "../../dsql/dsql.h"
-#include "../../dsql/sqlda_pub.h"
+#include "../firebird/impl/sqlda_pub.h"
 
 #include "../blb_proto.h"
 #include "../evl_proto.h"

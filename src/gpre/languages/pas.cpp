@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../gpre/gpre.h"
 #include "../gpre/pat.h"
 #include "../gpre/cmp_proto.h"

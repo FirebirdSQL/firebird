@@ -25,7 +25,7 @@
  */
 
 #include "firebird.h"
-#include "consts_pub.h"
+#include "firebird/impl/consts_pub.h"
 #include "fb_exception.h"
 #include "iberror.h"
 #include "../../common/classes/fb_string.h"
@@ -359,7 +359,7 @@ bool TraceSvcJrd::checkPrivileges(TraceSession& session)
 	if (m_admin || m_user.hasData() && (m_user == session.ses_user))
 		return true;
 
-	// Other session is fully authorized - try to map our auth info using other's 
+	// Other session is fully authorized - try to map our auth info using other's
 	// security database
 	if (session.ses_auth.hasData())
 	{
@@ -370,7 +370,7 @@ bool TraceSvcJrd::checkPrivileges(TraceSession& session)
 
 			PathName dummy;
 			RefPtr<const Config> config;
-			expandDatabaseName(info.secDb.hasData() ? 
+			expandDatabaseName(info.secDb.hasData() ?
 				info.secDb.ToPathName() : m_svc.getExpectedDb(), dummy, &config);
 
 			Mapping mapping(Mapping::MAP_NO_FLAGS, m_svc.getCryptCallback());

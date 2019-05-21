@@ -23,7 +23,7 @@
 
 #include "firebird.h"
 #include <string.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../remote/remote.h"
 #include "../remote/merge_proto.h"
 #include "../yvalve/gds_proto.h"

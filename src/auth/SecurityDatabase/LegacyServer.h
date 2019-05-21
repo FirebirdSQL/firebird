@@ -27,7 +27,7 @@
 #ifndef AUTH_LEGACY_SERVER_H
 #define AUTH_LEGACY_SERVER_H
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../common/utils_proto.h"
 #include "../common/sha.h"
 #include "gen/iberror.h"

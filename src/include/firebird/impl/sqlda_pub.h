@@ -21,8 +21,8 @@
  * Contributor(s): ______________________________________.
  */
 
-#ifndef DSQL_SQLDA_PUB_H
-#define DSQL_SQLDA_PUB_H
+#ifndef FIREBIRD_IMPL_SQLDA_PUB_H
+#define FIREBIRD_IMPL_SQLDA_PUB_H
 
 /* Definitions for DSQL free_statement routine */
 
@@ -104,5 +104,4 @@ typedef struct
 										   numeric type */
 #define SQL_DIALECT_CURRENT		SQL_DIALECT_V6	/* latest IB DIALECT */
 
-#endif /* DSQL_SQLDA_PUB_H */
-
+#endif /* FIREBIRD_IMPL_SQLDA_PUB_H */

@@ -24,7 +24,7 @@
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/jrd.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../dsql/ddl_proto.h"
 #include "../dsql/errd_proto.h"

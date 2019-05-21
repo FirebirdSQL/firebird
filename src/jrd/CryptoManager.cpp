@@ -43,7 +43,7 @@
 #include "../jrd/cch_proto.h"
 #include "../jrd/lck_proto.h"
 #include "../jrd/pag_proto.h"
-#include "../jrd/inf_pub.h"
+#include "firebird/impl/inf_pub.h"
 #include "../jrd/Monitoring.h"
 #include "../jrd/os/pio_proto.h"
 #include "../common/isc_proto.h"

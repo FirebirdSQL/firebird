@@ -30,8 +30,8 @@
  * Adriano dos Santos Fernandes
  */
 
-#ifndef JRD_BLR_H
-#define JRD_BLR_H
+#ifndef FIREBIRD_IMPL_BLR_H
+#define FIREBIRD_IMPL_BLR_H
 
 #define BLR_WORD(x)	UCHAR(x), UCHAR((x) >> 8)
 
@@ -441,4 +441,4 @@
 #define blr_at_local				(unsigned char) 0
 #define blr_at_zone					(unsigned char) 1
 
-#endif // JRD_BLR_H
+#endif // FIREBIRD_IMPL_BLR_H

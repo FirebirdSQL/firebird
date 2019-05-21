@@ -46,7 +46,7 @@
 #include <math.h>
 #include <ctype.h>				// isdigit
 #include "../jrd/constants.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/intlobj_new.h"
 #include "../isql/isql.h"

@@ -27,7 +27,7 @@
 #include "../jrd/blb.h"
 #include "../jrd/req.h"
 #include "../jrd/ini.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/btr_proto.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/cmp_proto.h"
@@ -41,7 +41,7 @@
 #include "../jrd/tra_proto.h"
 #include "../jrd/vio_proto.h"
 #include "../dsql/dsql_proto.h"
-#include "../dsql/sqlda_pub.h"
+#include "firebird/impl/sqlda_pub.h"
 
 #include "Applier.h"
 #include "Protocol.h"

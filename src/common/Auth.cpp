@@ -27,7 +27,7 @@
 
 #include "firebird.h"
 #include "../common/Auth.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../common/classes/ImplementHelper.h"
 #include "../common/utils_proto.h"
 #include "../common/db_alias.h"

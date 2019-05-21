@@ -26,7 +26,7 @@
 #include <string.h>
 #include "../qli/dtr.h"
 #include "../qli/exe.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../qli/compile.h"
 #include "../qli/report.h"
 #include "../qli/format.h"

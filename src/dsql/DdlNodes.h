@@ -23,7 +23,7 @@
 #ifndef DSQL_DDL_NODES_H
 #define DSQL_DDL_NODES_H
 
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/dyn.h"
 #include "../common/msg_encode.h"
 #include "../dsql/make_proto.h"

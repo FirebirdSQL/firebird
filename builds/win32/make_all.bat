@@ -84,26 +84,7 @@ findstr /V "@UDF_COMMENT@" %FB_ROOT_PATH%\builds\install\misc\firebird.conf.in >
 @copy %FB_ROOT_PATH%\doc\README.* %FB_OUTPUT_DIR%\doc >nul
 @copy %FB_ROOT_PATH%\doc\sql.extensions\README.* %FB_OUTPUT_DIR%\doc\sql.extensions >nul
 
-:: HEADERS
-:: Don't use this ibase.h unless you have to - we build it better in BuildExecutableInstall.bat
-:: This variation doesn't clean up the license templates, and processes the component files in
-:: a different order to that used in the production version. However, this version doesn't
-:: have a dependancy upon sed while the production one does.
-echo #pragma message("Non-production version of ibase.h.") > %FB_OUTPUT_DIR%\include\ibase.tmp
-echo #pragma message("Using raw, unprocessed concatenation of header files.") >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\misc\ibase_header.txt >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\include\types_pub.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\common\dsc_pub.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\dsql\sqlda_pub.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\jrd\ibase.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\jrd\inf_pub.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\include\consts_pub.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\jrd\blr.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\include\gen\iberror.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-sed -f %FB_ROOT_PATH%\src\misc\headers.sed < %FB_OUTPUT_DIR%\include\ibase.tmp > %FB_OUTPUT_DIR%\include\ibase.h
-del %FB_OUTPUT_DIR%\include\ibase.tmp > nul
-
-:: Additional headers
+:: Headers
 copy %FB_ROOT_PATH%\src\extlib\ib_util.h %FB_OUTPUT_DIR%\include > nul
 copy %FB_ROOT_PATH%\src\jrd\perf.h %FB_OUTPUT_DIR%\include >nul
 copy %FB_ROOT_PATH%\src\include\gen\iberror.h %FB_OUTPUT_DIR%\include > nul

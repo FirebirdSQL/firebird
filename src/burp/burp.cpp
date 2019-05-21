@@ -36,7 +36,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include <stdarg.h>
 #include "../jrd/ibsetjmp.h"
 #include "../common/msg_encode.h"

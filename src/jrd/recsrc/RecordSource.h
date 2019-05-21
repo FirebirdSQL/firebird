@@ -29,7 +29,7 @@
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/req.h"
 #include "../jrd/rse.h"
-#include "../jrd/inf_pub.h"
+#include "firebird/impl/inf_pub.h"
 #include "../jrd/evl_proto.h"
 
 namespace Jrd

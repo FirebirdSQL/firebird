@@ -25,7 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../qli/dtr.h"
 #include "../qli/parse.h"
 #include "../qli/compile.h"

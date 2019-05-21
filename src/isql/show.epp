@@ -41,7 +41,7 @@
 #include <string.h>
 
 #include "../yvalve/gds_proto.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../isql/isql.h"
 #include "../jrd/intl.h"
 #include "../common/intlobj_new.h"

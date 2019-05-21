@@ -425,39 +425,6 @@ if %MSVC_VERSION% EQU 15 (
 @goto :EOF
 
 
-:IBASE_H
-:: Concatenate header files into ibase.h
-::======================================
-:: o This section of code takes several header files, strips license
-::   boiler plates and comments and inserts them into ibase.h for
-::   distribution. The only drawback is that it strips all the comments.
-:: o No error checking is done.
-:: o Take note that different versions of sed use different
-::   string delimiters. The firebird_tools version uses double quotes - ".
-::   The cygwin one probably uses single quotes.
-:: o The script 'strip_comments.sed' is taken from
-::      http://sed.sourceforge.net/grabbag/scripts/testo.htm
-
-setlocal
-set OUTPATH=%FB_OUTPUT_DIR%\include
-copy %FB_ROOT_PATH%\src\jrd\ibase.h %OUTPATH%\ibase.h > nul
-for %%v in ( %FB_ROOT_PATH%\src\include\types_pub.h %FB_ROOT_PATH%\src\include\consts_pub.h %FB_ROOT_PATH%\src\dsql\sqlda_pub.h %FB_ROOT_PATH%\src\common\dsc_pub.h %FB_ROOT_PATH%\src\jrd\inf_pub.h %FB_ROOT_PATH%\src\jrd\blr.h ) do (
-  del %OUTPATH%\%%~nxv 2> nul
-  copy %%v %OUTPATH%\%%~nxv > nul
-  sed -n -f strip_comments.sed %OUTPATH%\%%~nxv > %OUTPATH%\%%~nv.more || call :ERROR Stripping comments from %%v failed.
-
-  more /s %OUTPATH%\%%~nv.more > %OUTPATH%\%%~nv.sed
-)
-move /y %OUTPATH%\ibase.h %OUTPATH%\ibase.sed
-sed -e "/#include \"types_pub\.h\"/r %OUTPATH%\types_pub.sed" -e "/#include \"types_pub\.h\"/d" -e "/#include \"consts_pub\.h\"/r %OUTPATH%\consts_pub.sed" -e "/#include \"consts_pub\.h\"/d" -e "/#include \"..\/common\/dsc_pub\.h\"/r %OUTPATH%\dsc_pub.sed" -e "/#include \"..\/common\/dsc_pub\.h\"/d" -e "/#include \"..\/dsql\/sqlda_pub\.h\"/r %OUTPATH%\sqlda_pub.sed" -e "/#include \"..\/dsql\/sqlda_pub\.h\"/d" -e "/#include \"blr\.h\"/r %OUTPATH%\blr.sed" -e "/#include \"blr\.h\"/d" -e "/#include \"..\/jrd\/inf_pub\.h\"/r %OUTPATH%\inf_pub.sed" -e "/#include \"..\/jrd\/inf_pub\.h\"/d" %OUTPATH%\ibase.sed > %OUTPATH%\ibase.h
-del %OUTPATH%\ibase.sed %OUTPATH%\types_pub.* %OUTPATH%\consts_pub.* %OUTPATH%\sqlda_pub.* %OUTPATH%\dsc_pub.* %OUTPATH%\inf_pub.* %OUTPATH%\blr.*
-endlocal
-
-::End of IBASE_H
-::--------------
-@goto :EOF
-
-
 :INCLUDE_DIR
 :: Prepare other files needed for deployment to /include dir
 setlocal
@@ -790,10 +757,6 @@ if defined WIX (
 @(@call :BUILD_CRT_MSI ) || (@echo Error calling BUILD_CRT_MSI && @goto :END)
 @echo.
 )
-
-@echo   Concatenating header files for ibase.h
-@(@call :IBASE_H ) || (@echo Error calling IBASE_H && @goto :END)
-@echo.
 
 @echo   Prepare include directory
 @(@call :INCLUDE_DIR ) || (@echo Error calling INCLUDE_DIR && @goto :END)

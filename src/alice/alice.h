@@ -26,7 +26,7 @@
 
 #include <stdio.h>
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../common/ThreadData.h"
 #include "../include/fb_blk.h"
 #include "../common/classes/alloc.h"

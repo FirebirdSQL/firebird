@@ -25,7 +25,7 @@
 #include "../jrd/ods.h"
 #include "../jrd/req.h"
 #include "../jrd/tra.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/trig.h"
 #include "../jrd/Database.h"
 #include "../jrd/blb_proto.h"

@@ -94,9 +94,9 @@
 #include "gen/sql_code.h"
 #include "gen/sql_state.h"
 #include "gen/iberror.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../yvalve/msg.h"
 #include "../common/isc_proto.h"
 #include "../common/os/isc_i_proto.h"

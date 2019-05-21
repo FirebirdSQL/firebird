@@ -31,7 +31,7 @@
 //#include <windows.h>
 //#endif
 #include <ctype.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "isql.h"
 #include "../common/classes/MsgPrint.h"
 #include <stdarg.h>

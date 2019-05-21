@@ -25,7 +25,7 @@
 #ifndef QLI_QLISWI_H
 #define QLI_QLISWI_H
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/constants.h"
 
 enum qli_switches

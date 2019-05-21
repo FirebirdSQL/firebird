@@ -31,7 +31,7 @@
 #include "firebird.h"
 #include <stdio.h>
 #include <string.h>
-#include "../jrd/ibase.h"			// fb_shutdown_callback() is used from it
+#include "ibase.h"			// fb_shutdown_callback() is used from it
 #include "../common/gdsassert.h"
 #ifdef UNIX
 #include "../common/file_params.h"
@@ -54,7 +54,7 @@
 #endif
 #include "../common/isc_proto.h"
 #include "../jrd/constants.h"
-#include "../jrd/inf_pub.h"
+#include "firebird/impl/inf_pub.h"
 #include "../common/classes/init.h"
 #include "../common/classes/semaphore.h"
 #include "../common/classes/ClumpletWriter.h"

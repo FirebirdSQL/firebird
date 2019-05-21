@@ -24,7 +24,7 @@
 #include "firebird.h"
 #include <stdio.h>
 #include <string.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/gds_proto.h"
 
 static const SCHAR recv_items[] = { isc_info_svc_to_eof };

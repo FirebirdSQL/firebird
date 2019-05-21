@@ -23,7 +23,7 @@
 #ifndef DSQL_EXPR_NODES_H
 #define DSQL_EXPR_NODES_H
 
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/NodePrinter.h"
 #include "../dsql/pass1_proto.h"

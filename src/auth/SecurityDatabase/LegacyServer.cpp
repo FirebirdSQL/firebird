@@ -27,7 +27,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../auth/SecurityDatabase/LegacyServer.h"
 #include "../auth/SecurityDatabase/LegacyHash.h"
 #include "../common/enc_proto.h"

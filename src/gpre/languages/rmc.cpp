@@ -28,7 +28,7 @@
 #include "firebird.h"
 #include <stdio.h>
 #include <stdarg.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/gds_proto.h"
 #include "../gpre/gpre.h"
 #include "../gpre/pat.h"
