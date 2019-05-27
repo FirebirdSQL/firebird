@@ -5991,12 +5991,222 @@ dsc* evlSystemPrivilege(thread_db* tdbb, const SysFunction*, const NestValueArra
 	return &impure->vlu_desc;
 }
 
+unsigned int  getBIN_BIT(UCHAR *value, UCHAR *bit_nr)
+{
+	unsigned int result, c, i;
+	c = *value;
+	i = *bit_nr;
+	result = (c >> i) & 1;
+	return result;
+}
+
+unsigned int  getBIN_BIT1(UCHAR *value, UINT bit_nr)
+{
+	unsigned int result, c, i;
+	c = *value;
+	i = bit_nr;
+	result = (c >> i) & 1;
+	return result;
+}
+
+void makeBIN_BIT(DataTypeUtilBase*, const SysFunction* function, dsc* result,
+	int argsCount, const dsc** args)
+{
+	fb_assert(argsCount == function->minArgCount);
+
+	if (argsCount > 0 && args[0]->isNull())
+		result->makeInt64(0);
+	else
+		result->makeInt64(0);
+
+	if (argsCount > 0 && args[0]->isNullable())
+		result->setNullable(true);
+}
+
+dsc* evlBIN_BIT(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
+	impure_value* impure)
+{
+	fb_assert(args.getCount() == 2);
+	jrd_req* request = tdbb->getRequest();
+	const dsc* value = EVL_expr(tdbb, request, args[0]);
+	const dsc* value1 = EVL_expr(tdbb, request, args[1]);
+	UINT bit = getBIN_BIT(value->dsc_address, value1->dsc_address);
+
+	impure->vlu_misc.vlu_int64 = bit;
+	impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);
+	return &impure->vlu_desc;
+}
+
+void makeBIN_BIT_STR(DataTypeUtilBase*, const SysFunction* function, dsc* result,
+	int argsCount, const dsc** args)
+{
+	(argsCount == function->minArgCount);
+
+	const dsc* value = args[0];
+
+	if (value->isNull())
+	{
+		result->makeNullString();
+		return;
+	}
+	result->makeText(10, ttype_ascii);
+	result->setNullable(value->isNullable());
+}
+
+dsc* evlBIN_BIT_STR(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
+	impure_value* impure)
+{
+	fb_assert(args.getCount() == 4);
+	jrd_req* request = tdbb->getRequest();
+	const dsc* value = EVL_expr(tdbb, request, args[0]);
+	const dsc* value1 = EVL_expr(tdbb, request, args[1]);
+	const dsc* value2 = EVL_expr(tdbb, request, args[2]);
+	const dsc* value3 = EVL_expr(tdbb, request, args[3]);
+	UINT bit = getBIN_BIT(value->dsc_address, value1->dsc_address);
+
+	dsc result;
+	if (bit == 1)
+	{
+		result.makeText(value2->dsc_length, ttype_ascii, value2->dsc_address);
+	}
+	else
+	{
+		result.makeText(value3->dsc_length, ttype_ascii, value3->dsc_address);
+	}
+	EVL_make_value(tdbb, &result, impure);
+	return &impure->vlu_desc;
+}
+
+void makeBIN_TO_STR(DataTypeUtilBase*, const SysFunction* function, dsc* result,
+	int argsCount, const dsc** args)
+{
+	(argsCount == function->minArgCount);
+
+	const dsc* value = args[0];
+
+	if (value->isNull())
+	{
+		result->makeNullString();
+		return;
+	}
+	result->makeText(32, ttype_ascii);
+	result->setNullable(value->isNullable());
+}
+
+dsc* evlBIN_TO_STR(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
+	impure_value* impure)
+{
+	fb_assert(args.getCount() == 2);
+	jrd_req* request = tdbb->getRequest();
+	const dsc* value = EVL_expr(tdbb, request, args[0]);
+	const dsc* value1 = EVL_expr(tdbb, request, args[1]);
+	UCHAR *bit_count = value1->dsc_address;
+	USHORT bc = *bit_count;
+	UCHAR *res = new UCHAR[bc];
+	int j = 0;
+	for (int i = bc - 1; i >= 0; i--)
+	{
+		UINT bit = getBIN_BIT1(value->dsc_address, i);
+		res[j] = bit + '0';
+		j++;
+	}
+	res[bc] = '\0';
+	dsc result;
+
+
+	result.makeText(bc, ttype_ascii, &res[0]);
+	EVL_make_value(tdbb, &result, impure);
+	return &impure->vlu_desc;
+}
+
+
+void makeBIN_TO_STR_LIST(DataTypeUtilBase*, const SysFunction* function, dsc* result,
+	int argsCount, const dsc** args)
+{
+	(argsCount == function->minArgCount);
+
+	const dsc* value = args[0];
+
+	if (value->isNull())
+	{
+		result->makeNullString();
+		return;
+	}
+	result->makeText(32, ttype_ascii);
+	result->setNullable(value->isNullable());
+}
+
+dsc* evlBIN_TO_STR_LIST(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
+	impure_value* impure)
+{
+	fb_assert(args.getCount() == 4);
+	jrd_req* request = tdbb->getRequest();
+	const dsc* value = EVL_expr(tdbb, request, args[0]);
+	const dsc* value1 = EVL_expr(tdbb, request, args[1]);
+	const dsc* value2 = EVL_expr(tdbb, request, args[2]);
+	const dsc* value3 = EVL_expr(tdbb, request, args[3]);
+	UCHAR *bit_count = value1->dsc_address;
+	USHORT bc = *bit_count;
+	UCHAR *res = new UCHAR[bc];
+	int j = 0;
+	for (int i = bc - 1; i >= 0; i--)
+	{
+		UINT bit = getBIN_BIT1(value->dsc_address, i);
+		res[j] = bit + '0';
+		j++;
+	}
+	res[bc] = '\0';
+	UCHAR *bit_value_list = value2->dsc_address;
+	UCHAR *sep = value3->dsc_address;
+	USHORT count = value2->dsc_length;
+	UCHAR *resu = new UCHAR[count];
+	resu[0] = '\0';
+	int count_bit = bc - 1;
+	int count_char = -1;
+	int end_char = 0; 
+	int end_string = 0; 
+	while (count_bit >= 0)
+	{
+		count_char++;
+		end_char = count_char;
+		int c = 0; 
+		while (bit_value_list[count_char] != sep[0] && bit_value_list[count_char] != '\0')
+		{
+			c++;
+			count_char++;
+		}
+		if (res[count_bit] == '1')
+		{
+			for (int i = 0; i < c; i++)
+			{
+				resu[i + end_string] = bit_value_list[i + end_char];
+			}
+			end_string = end_string + c;
+			resu[end_string] = sep[0];
+			end_string++;
+		}
+		count_bit--;
+	}
+	resu[end_string - 1] = '\0';
+	dsc result;
+
+
+	result.makeText(32, ttype_ascii, (UCHAR *)resu);
+	EVL_make_value(tdbb, &result, impure);
+	return &impure->vlu_desc;
+}
+
+
 } // anonymous namespace
 
 
 
 const SysFunction SysFunction::functions[] =
 	{
+		{ "BIN_TO_STR_LIST", 4, 4, NULL, makeBIN_TO_STR_LIST, evlBIN_TO_STR_LIST, NULL },
+		{ "BIN_TO_STR", 2, 2, NULL, makeBIN_TO_STR, evlBIN_TO_STR, NULL },
+		{ "BIN_BIT_STR", 4, 4, NULL, makeBIN_BIT_STR, evlBIN_BIT_STR, NULL },
+		{ "BIN_BIT", 2, 2, NULL, makeBIN_BIT, evlBIN_TO_STR, NULL },
 		{"ABS", 1, 1, setParamsDblDec, makeAbs, evlAbs, NULL},
 		{"ACOS", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAcos},
 		{"ACOSH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAcosh},
