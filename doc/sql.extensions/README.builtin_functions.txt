@@ -207,6 +207,34 @@ Example:
 
 
 -------
+BIN_BIT
+-------
+
+Function:
+    Returns the specified bit of a number
+
+Format:
+    BIN_BIT(<value>, <bit_nr>) 
+
+Example:
+    select bin_bit(19, 2)  from x;
+
+
+-------
+BIN_BIT_STR
+-------
+
+Function:
+    Returns BIT_SET_VALUE if the specified number bit is 1, returns BiT_NOT_SET_VALUE if the specified number bit is 0
+
+Format:
+    BIN_BIT_STR(<value>, <bit_nr>, <bit_set_value>, <bit_not_set_value>) 
+
+Example:
+    select bin_bit_str(19, 2, 'YES', 'NO')  from x;
+
+
+-------
 BIN_NOT
 -------
 
@@ -260,6 +288,34 @@ Format:
 
 Example:
     select bin_shr(flags1, 1) from x;
+
+
+-------
+BIN_TO_STR
+-------
+
+Function:
+    Returns the specified number of bits of a number
+
+Format:
+    BIN_TO_STR(<value>, <bit_count>) 
+
+Example:
+    select bin_to_str(19, 5)  from x;
+
+
+-------
+BIN_TO_STR_LIST
+-------
+
+Function:
+    Returns the elements of the list corresponding to 1 in the specified bits of the number
+
+Format:
+    BIN_TO_STR_LIST(<value>, <bit_count>, <bit_value_list>, <out_list_separator>) 
+
+Example:
+    select bin_to_str_list(19, 5, 'DELIVERED;RECIVED;CHECKED;POSTED;CREATED', ',')  from x;
 
 
 -------
