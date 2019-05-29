@@ -102,7 +102,7 @@ API_PAS_FILE=$(SRC_ROOT)/include/gen/Firebird.pas
 PAS_ROOT=$(SRC_ROOT)/misc/pascal
 PASCAL_SOURCES=$(wildcard $(PAS_ROOT)/*)
 TMP_FUNCS=$(TMP_ROOT)/func.pas
-XPB_CONSTS=$(SRC_ROOT)/include/consts_pub.h
+XPB_CONSTS=$(SRC_ROOT)/include/firebird/impl/consts_pub.h
 ERR_CONSTS=$(ROOT)/lang_helpers/gds_codes.pas
 
 updateCloopInterfaces : $(API_H_FILE) $(API_PAS_FILE)
