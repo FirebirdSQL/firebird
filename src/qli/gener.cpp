@@ -884,6 +884,10 @@ static void gen_expression(qli_nod* node, qli_req* request)
 		operatr = blr_divide;
 		break;
 
+	case nod_modulo:
+		operatr = blr_modulo;
+		break;
+
 	case nod_negate:
 		operatr = blr_negate;
 		break;

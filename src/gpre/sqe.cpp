@@ -945,6 +945,7 @@ bool SQE_resolve(gpre_nod** node_ptr, gpre_req* request, gpre_rse* selection)
 	case nod_minus:
 	case nod_times:
 	case nod_divide:
+	case nod_modulo:
 	case nod_negate:
 	case nod_and:
 	case nod_or:
@@ -1435,6 +1436,7 @@ static gpre_fld* get_ref( gpre_nod* expr)
 	case nod_minus:
 	case nod_times:
 	case nod_divide:
+	case nod_modulo:
 	case nod_negate:
 	case nod_upcase:
 	case nod_lowcase:
@@ -2160,7 +2162,7 @@ static nod_t par_join_type()
 
 //____________________________________________________________
 //
-//		Parse either of the high precedence operators * and /.
+//		Parse either of the high precedence operators *,/ and %.
 //
 
 static gpre_nod* par_multiply(gpre_req* request, bool aster_ok, USHORT* paren_count, bool* bool_flag)
@@ -2180,6 +2182,8 @@ static gpre_nod* par_multiply(gpre_req* request, bool aster_ok, USHORT* paren_co
 			nod_type = nod_times;
 		else if (MSC_match(KW_SLASH))
 			nod_type = nod_divide;
+		else if (MSC_match(KW_PERCENT))
+			nod_type = nod_modulo;
 		else
 			return node;
 
@@ -3536,6 +3540,7 @@ static gpre_nod* post_fields( gpre_nod* node, map* to_map)
 	case nod_minus:
 	case nod_times:
 	case nod_divide:
+	case nod_modulo:
 	case nod_negate:
 		{
 			gpre_nod** ptr = node->nod_arg;
@@ -3872,6 +3877,7 @@ static void set_ref( gpre_nod* expr, gpre_fld* field_ref)
 	case nod_minus:
 	case nod_times:
 	case nod_divide:
+	case nod_modulo:
 	case nod_negate:
 	case nod_upcase:
 	case nod_lowcase:
@@ -4005,6 +4011,7 @@ static bool validate_references(const gpre_nod* fields, const gpre_nod* group_by
 		case nod_times:
 		case nod_negate:
 		case nod_divide:
+		case nod_modulo:
 		case nod_and:
 		case nod_like:
 		case nod_missing:

@@ -71,6 +71,9 @@ public:
 			case blr_divide:
 				return "divide";
 
+			case blr_modulo:
+				return "modulo";
+
 			default:
 				fb_assert(false);
 				return NULL;
@@ -102,6 +105,7 @@ private:
 	dsc* multiply(const dsc* desc, impure_value* value) const;
 	dsc* multiply2(const dsc* desc, impure_value* value) const;
 	dsc* divide2(const dsc* desc, impure_value* value) const;
+	dsc* modulo2(const dsc* desc, impure_value* value) const;
 	dsc* addDateTime(thread_db* tdbb, const dsc* desc, impure_value* value) const;
 	dsc* addSqlDate(const dsc* desc, impure_value* value) const;
 	dsc* addSqlTime(thread_db* tdbb, const dsc* desc, impure_value* value) const;

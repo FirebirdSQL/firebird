@@ -445,6 +445,7 @@ static RegisterNode<ArithmeticNode> regArithmeticNodeAdd(blr_add);
 static RegisterNode<ArithmeticNode> regArithmeticNodeSubtract(blr_subtract);
 static RegisterNode<ArithmeticNode> regArithmeticNodeMultiply(blr_multiply);
 static RegisterNode<ArithmeticNode> regArithmeticNodeDivide(blr_divide);
+static RegisterNode<ArithmeticNode> regArithmeticNodeModulo(blr_modulo);
 
 ArithmeticNode::ArithmeticNode(MemoryPool& pool, UCHAR aBlrOp, bool aDialect1,
 			ValueExprNode* aArg1, ValueExprNode* aArg2)
@@ -852,6 +853,42 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 			desc->dsc_scale = 0;
 			desc->dsc_flags = (desc1.dsc_flags | desc2.dsc_flags) & DSC_nullable;
 			break;
+
+		case blr_modulo:
+			// Arrays and blobs can never partipate in modulo
+			if (DTYPE_IS_BLOB(desc1.dsc_dtype) || DTYPE_IS_BLOB(desc2.dsc_dtype))
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+						  Arg::Gds(isc_dsql_no_blob_array));
+			}
+
+			dtype1 = desc1.dsc_dtype;
+			if (dtype_int64 == dtype1 || DTYPE_IS_TEXT(dtype1))
+				dtype1 = dtype_double;
+
+			dtype2 = desc2.dsc_dtype;
+			if (dtype_int64 == dtype2 || DTYPE_IS_TEXT(dtype2))
+				dtype2 = dtype_double;
+
+			dtype = MAX(dtype1, dtype2);
+
+			if (DTYPE_IS_DECFLOAT(dtype))
+			{
+				setDecDesc(desc, desc1, desc2, SCALE_SUM);
+				break;
+			}
+
+			if (!DTYPE_IS_NUMERIC(dtype))
+			{
+				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+						  Arg::Gds(isc_dsql_mustuse_numeric_div_dial1));
+			}
+
+			desc->dsc_dtype = dtype_double;
+			desc->dsc_length = sizeof(double);
+			desc->dsc_scale = 0;
+			desc->dsc_flags = (desc1.dsc_flags | desc2.dsc_flags) & DSC_nullable;
+			break;
 	}
 }
 
@@ -1143,6 +1180,39 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 					ERRD_post(Arg::Gds(isc_expression_eval_err) <<
 							  Arg::Gds(isc_dsql_invalid_type_div_dial3));
 			}
+
+			break;
+
+		case blr_modulo:
+			// In Dialect 2 or 3, strings can never partipate in modulo
+			// (use a specific cast instead)
+			if (DTYPE_IS_TEXT(desc1.dsc_dtype) || DTYPE_IS_TEXT(desc2.dsc_dtype))
+			{
+				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+						  Arg::Gds(isc_dsql_nostring_div_dial3));
+			}
+
+			// Arrays and blobs can never partipate in modulo
+			if (DTYPE_IS_BLOB(desc1.dsc_dtype) || DTYPE_IS_BLOB(desc2.dsc_dtype))
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+						  Arg::Gds(isc_dsql_no_blob_array));
+			}
+
+			switch (desc1.dsc_dtype)
+			{
+		        case dtype_short:
+		        case dtype_long:
+		        case dtype_int64:
+		            *desc = desc1;
+		            desc->dsc_scale = 0;
+		            break;
+		        default:
+		            desc->makeInt64(0);
+		            break;
+			}
+
+			desc->dsc_flags = (desc1.dsc_flags | desc2.dsc_flags) & DSC_nullable;
 
 			break;
 	}
@@ -1438,6 +1508,14 @@ void ArithmeticNode::getDescDialect1(thread_db* /*tdbb*/, dsc* desc, dsc& desc1,
 			desc->dsc_sub_type = 0;
 			desc->dsc_flags = 0;
 			return;
+
+		case blr_modulo:
+			desc->dsc_dtype = DEFAULT_DOUBLE;
+			desc->dsc_length = sizeof(double);
+			desc->dsc_scale = 0;
+			desc->dsc_sub_type = 0;
+			desc->dsc_flags = 0;
+			return;
 	}
 
 	if (dtype == dtype_quad)
@@ -1660,6 +1738,7 @@ void ArithmeticNode::getDescDialect3(thread_db* /*tdbb*/, dsc* desc, dsc& desc1,
 
 		case blr_multiply:
 		case blr_divide:
+		case blr_modulo:
 			dtype = DSC_multiply_result[desc1.dsc_dtype][desc2.dsc_dtype];
 
 			switch (dtype)
@@ -1831,6 +1910,31 @@ dsc* ArithmeticNode::execute(thread_db* tdbb, jrd_req* request) const
 				return &impure->vlu_desc;
 			}
 
+			case blr_modulo:
+			{
+				const double divisor = MOV_get_double(tdbb, desc2);
+
+				if (divisor == 0)
+				{
+					ERR_post(Arg::Gds(isc_arith_except) <<
+							 Arg::Gds(isc_exception_float_divide_by_zero));
+				}
+
+				impure->vlu_misc.vlu_double = fmod(MOV_get_double(tdbb, desc1), divisor);
+
+				if (isinf(impure->vlu_misc.vlu_double))
+				{
+					ERR_post(Arg::Gds(isc_arith_except) <<
+							 Arg::Gds(isc_exception_float_overflow));
+				}
+
+				impure->vlu_desc.dsc_dtype = DEFAULT_DOUBLE;
+				impure->vlu_desc.dsc_length = sizeof(double);
+				impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
+
+				return &impure->vlu_desc;
+			}
+
 			case blr_multiply:
 				return multiply(desc2, impure);
 		}
@@ -1848,6 +1952,8 @@ dsc* ArithmeticNode::execute(thread_db* tdbb, jrd_req* request) const
 
 			case blr_divide:
 				return divide2(desc2, impure);
+			case blr_modulo:
+				return modulo2(desc2, impure);
 		}
 	}
 
@@ -2476,6 +2582,108 @@ dsc* ArithmeticNode::divide2(const dsc* desc, impure_value* value) const
 	{
 		ERR_post(Arg::Gds(isc_arith_except) <<
 				 Arg::Gds(isc_numeric_out_of_range));
+	}
+
+	return &value->vlu_desc;
+}
+
+dsc* ArithmeticNode::modulo2(const dsc* desc, impure_value* value) const
+{
+	thread_db* tdbb = JRD_get_thread_data();
+	DEV_BLKCHK(node, type_nod);
+
+	// Handle decimal arithmetic
+
+	if (nodFlags & FLAG_DECFLOAT)
+	{
+		const Decimal128 d1 = MOV_get_dec128(tdbb, desc);
+		const Decimal128 d2 = MOV_get_dec128(tdbb, &value->vlu_desc);
+
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		value->vlu_misc.vlu_dec128 = d2.mod(decSt, d1);
+
+		value->vlu_desc.dsc_dtype = dtype_dec128;
+		value->vlu_desc.dsc_length = sizeof(Decimal128);
+		value->vlu_desc.dsc_scale = 0;
+		value->vlu_desc.dsc_sub_type = 0;
+		value->vlu_desc.dsc_address = (UCHAR*) &value->vlu_misc.vlu_dec128;
+
+		return &value->vlu_desc;
+	}
+
+	if (nodFlags & FLAG_DECFIXED)
+	{
+		const SSHORT scale = NUMERIC_SCALE(*desc);
+		const DecimalFixed d2 = MOV_get_dec_fixed(tdbb, desc, scale);
+		const DecimalFixed d1 = MOV_get_dec_fixed(tdbb, &value->vlu_desc, nodScale - scale);
+
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		value->vlu_misc.vlu_dec_fixed = d1.mod(decSt, d2);
+
+		value->vlu_desc.dsc_dtype = dtype_dec_fixed;
+		value->vlu_desc.dsc_length = sizeof(DecimalFixed);
+		value->vlu_desc.dsc_scale = nodScale;
+		value->vlu_desc.dsc_sub_type = 0;
+		value->vlu_desc.dsc_address = (UCHAR*) &value->vlu_misc.vlu_dec_fixed;
+
+		return &value->vlu_desc;
+	}
+
+	// Handle floating arithmetic
+
+	if (nodFlags & FLAG_DOUBLE)
+	{
+		const double d2 = MOV_get_double(tdbb, desc);
+		if (d2 == 0.0)
+		{
+			ERR_post(Arg::Gds(isc_arith_except) <<
+					 Arg::Gds(isc_exception_float_divide_by_zero));
+		}
+		const double d1 = MOV_get_double(tdbb, &value->vlu_desc);
+		value->vlu_misc.vlu_double = fmod(d1, d2);
+		if (isinf(value->vlu_misc.vlu_double))
+		{
+			ERR_post(Arg::Gds(isc_arith_except) <<
+					 Arg::Gds(isc_exception_float_overflow));
+		}
+		value->vlu_desc.dsc_dtype = DEFAULT_DOUBLE;
+		value->vlu_desc.dsc_length = sizeof(double);
+		value->vlu_desc.dsc_scale = 0;
+		value->vlu_desc.dsc_address = (UCHAR*) &value->vlu_misc.vlu_double;
+		return &value->vlu_desc;
+	}
+
+	// Everything else defaults to int64
+
+	SINT64 i2 = MOV_get_int64(tdbb, desc, desc->dsc_scale);
+	if (i2 == 0)
+	{
+		ERR_post(Arg::Gds(isc_arith_except) <<
+				 Arg::Gds(isc_exception_integer_divide_by_zero));
+	}
+
+	SINT64 i1 = MOV_get_int64(tdbb, &value->vlu_desc, nodScale - desc->dsc_scale);
+
+	const SINT64 result = i1 % i2;
+
+	switch (value->vlu_desc.dsc_dtype)
+	{
+		case dtype_short:
+			value->vlu_misc.vlu_short = (SSHORT) result;
+			break;
+
+		case dtype_long:
+			value->vlu_misc.vlu_long = (SLONG) result;
+			break;
+
+		case dtype_int64:
+			value->vlu_misc.vlu_int64 = result;
+			break;
+
+		default:
+			value->vlu_misc.vlu_int64 = result;
+			value->vlu_desc.makeInt64(0, &value->vlu_misc.vlu_int64);
+			break;
 	}
 
 	return &value->vlu_desc;
@@ -8540,7 +8748,8 @@ void NegateNode::setParameterName(dsql_par* parameter) const
 			/*arithmeticNode->blrOp == blr_add ||
 			arithmeticNode->blrOp == blr_subtract ||*/
 			arithmeticNode->blrOp == blr_multiply ||
-			arithmeticNode->blrOp == blr_divide))
+			arithmeticNode->blrOp == blr_divide ||
+			arithmeticNode->blrOp == blr_modulo))
 		{
 			parameter->par_name = parameter->par_alias = arithmeticNode->label.c_str();
 		}

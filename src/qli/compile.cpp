@@ -597,6 +597,7 @@ static qli_nod* compile_expression( qli_nod* node, qli_req* request, bool intern
 	case nod_subtract:
 	case nod_multiply:
 	case nod_divide:
+	case nod_modulo:
 	case nod_negate:
 	case nod_concatenate:
 	case nod_substr:
@@ -1714,6 +1715,7 @@ static bool computable( qli_nod* node, qli_req* request)
 	case nod_subtract:
 	case nod_multiply:
 	case nod_divide:
+	case nod_modulo:
 	case nod_negate:
 	case nod_concatenate:
 	case nod_function:
@@ -1928,6 +1930,11 @@ static void make_descriptor( qli_nod* node, dsc* desc)
 		return;
 
 	case nod_divide:
+		desc->dsc_dtype = dtype_double;
+		desc->dsc_length = sizeof(double);
+		return;
+
+	case nod_modulo:
 		desc->dsc_dtype = dtype_double;
 		desc->dsc_length = sizeof(double);
 		return;

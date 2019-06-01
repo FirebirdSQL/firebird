@@ -437,6 +437,8 @@
 
 #define blr_at						(unsigned char) 216
 
+#define blr_modulo						(unsigned char) 217
+
 // subcodes of blr_at
 #define blr_at_local				(unsigned char) 0
 #define blr_at_zone					(unsigned char) 1

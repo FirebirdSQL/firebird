@@ -101,6 +101,7 @@ const op_table operators[] =
 	{ nod_minus		, blr_subtract },
 	{ nod_times		, blr_multiply },
 	{ nod_divide		, blr_divide },
+	{ nod_modulo		, blr_modulo },
 	{ nod_negate		, blr_negate },
 	{ nod_null		, blr_null },
 	{ nod_user_name	, blr_user_name },
@@ -848,6 +849,7 @@ void CME_get_dtype(const gpre_nod* node, gpre_fld* f)
 		return;
 
 	case nod_divide:
+	case nod_modulo:
 		CME_get_dtype(node->nod_arg[0], &field1);
 		CME_get_dtype(node->nod_arg[1], &field2);
 		if (gpreGlob.sw_sql_dialect == SQL_DIALECT_V5)

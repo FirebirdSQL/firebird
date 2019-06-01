@@ -102,6 +102,7 @@ const int op_element	= 9;
 const int op_loop		= 10;
 const int op_exit		= 11;
 const int op_scalar		= 12;
+const int op_modulo		= 13;
 
 /*
    The structure for a loop is:
@@ -414,6 +415,14 @@ static const UCHAR* compile(const UCHAR* sdl, sdl_arg* arg)
 		STUFF(sdl_operator, arg);
 		return p;
 
+	case isc_sdl_modulo:
+		if (!sdl_operator)
+			sdl_operator = op_modulo;
+		COMPILE(p, arg);
+		COMPILE(p, arg);
+		STUFF(sdl_operator, arg);
+		return p;
+
 	case isc_sdl_scalar:
 		op = *p++;
 		count = *p++;
@@ -543,6 +552,11 @@ static bool execute(sdl_arg* arg)
 		case op_divide:
 			value = *stack_ptr++;
 			*stack_ptr /= value;
+			break;
+
+		case op_modulo:
+			value = *stack_ptr++;
+			*stack_ptr %= value;
 			break;
 
 		case op_goto:
@@ -703,6 +717,7 @@ static const UCHAR* get_range(const UCHAR* sdl, array_range* arg,
 	case isc_sdl_subtract:
 	case isc_sdl_multiply:
 	case isc_sdl_divide:
+	case isc_sdl_modulo:
 		if (!(p = get_range(p, arg, &min1, &max1)))
 			return NULL;
 		if (!(p = get_range(p, arg, &min2, &max2)))
@@ -725,6 +740,7 @@ static const UCHAR* get_range(const UCHAR* sdl, array_range* arg,
 			break;
 
 		case isc_sdl_divide:
+		case isc_sdl_modulo:
 			return NULL;
 		}
 		return p;

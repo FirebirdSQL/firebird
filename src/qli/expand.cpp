@@ -914,6 +914,7 @@ static qli_nod* expand_expression( qli_syntax* input, qli_lls* stack)
 	case nod_subtract:
 	case nod_multiply:
 	case nod_divide:
+	case nod_modulo:
 	case nod_negate:
 	case nod_concatenate:
 	case nod_substr:
@@ -2397,6 +2398,7 @@ static bool global_agg( const qli_syntax* item, const qli_syntax* group_list)
 	case nod_subtract:
 	case nod_multiply:
 	case nod_divide:
+	case nod_modulo:
 	case nod_negate:
 	case nod_concatenate:
 	case nod_substr:
@@ -2473,6 +2475,7 @@ static bool invalid_nod_field( const qli_nod* node, const qli_nod* list)
 			case nod_subtract:
 			case nod_multiply:
 			case nod_divide:
+			case nod_modulo:
 			case nod_negate:
 			case nod_concatenate:
 			case nod_substr:
@@ -2561,6 +2564,7 @@ static bool invalid_syn_field( const qli_syntax* syn_node, const qli_syntax* lis
 			case nod_subtract:
 			case nod_multiply:
 			case nod_divide:
+			case nod_modulo:
 			case nod_negate:
 			case nod_concatenate:
 			case nod_substr:
