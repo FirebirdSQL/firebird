@@ -469,6 +469,10 @@ using namespace Firebird;
 %token <metaNamePtr> GENERATED
 %token <metaNamePtr> GLOBAL
 %token <metaNamePtr> HASH
+%token <metaNamePtr> BIN_BIT
+%token <metaNamePtr> BIN_BIT_STR
+%token <metaNamePtr> BIN_TO_STR
+%token <metaNamePtr> BIN_TO_STR_LIST
 %token <metaNamePtr> INSENSITIVE
 %token <metaNamePtr> LIST
 %token <metaNamePtr> LN
@@ -7935,6 +7939,10 @@ system_function_std_syntax
 	| COSH
 	| COT
 	| CRC32
+	| BIN_BIT
+	| BIN_BIT_STR
+	| BIN_TO_STR
+	| BIN_TO_STR_LIST
 	| EXP
 	| FLOOR
 	| GEN_UUID
@@ -8658,6 +8666,10 @@ non_reserved_word
 	| GEN_UUID
 	| GENERATED
 	| HASH
+	| BIN_BIT
+	| BIN_BIT_STR
+	| BIN_TO_STR
+	| BIN_TO_STR_LIST
 	| LIST
 	| LN
 	| LOG
