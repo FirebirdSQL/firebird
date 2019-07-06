@@ -6632,7 +6632,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 
 #ifdef WIN_NT
 	if (ISC_analyze_protocol(PROTOCOL_XNET, attach_name, node_name, NULL, needFile))
-		port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_USER_VFY, cBlock.getConfig(), ref_db_name);
+		port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_USER_VFY, cBlock.getConfig(), ref_db_name, cryptCb);
 	else if (ISC_analyze_protocol(PROTOCOL_WNET, attach_name, node_name, WNET_SEPARATOR, needFile) ||
 		ISC_analyze_pclan(attach_name, node_name))
 	{
@@ -6719,7 +6719,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 			if (!port)
 			{
 				port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_USER_VFY,
-					cBlock.getConfig(), ref_db_name);
+					cBlock.getConfig(), ref_db_name, cryptCb);
 			}
 
 			if (!port)

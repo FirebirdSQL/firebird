@@ -33,7 +33,7 @@
 #endif
 
 rem_port* XNET_analyze(ClntAuthBlock*, const Firebird::PathName&, bool, Firebird::RefPtr<const Config>*,
-	const Firebird::PathName*);
+	const Firebird::PathName*, Firebird::ICryptKeyCallback* cryptCb);
 rem_port* XNET_connect(struct packet*, USHORT, Firebird::RefPtr<const Config>*);
 rem_port* XNET_reconnect(ULONG);
 

@@ -239,7 +239,8 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 					   const PathName& file_name,
 					   bool uv_flag,
 					   RefPtr<const Config>* config,
-					   const Firebird::PathName* ref_db_name)
+					   const Firebird::PathName* ref_db_name,
+					   Firebird::ICryptKeyCallback* cryptCb)
 {
 /**************************************
  *
@@ -335,48 +336,91 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 	port->port_context = rdb;
 	port->receive(packet);
 
-	P_ACPT* accept = NULL;
-	switch (packet->p_operation)
-	{
-	case op_accept_data:
-	case op_cond_accept:
-		accept = &packet->p_acpd;
-		if (cBlock)
-		{
-			cBlock->storeDataForPlugin(packet->p_acpd.p_acpt_data.cstr_length,
-									   packet->p_acpd.p_acpt_data.cstr_address);
-			cBlock->authComplete = packet->p_acpd.p_acpt_authenticated;
-			cBlock->resetClnt(&packet->p_acpd.p_acpt_keys);
-		}
-		break;
+	P_ACPT* accept;
 
-	case op_accept:
-		if (cBlock)
+	for (;;) {
+		accept = NULL;
+		switch (packet->p_operation)
 		{
-			cBlock->resetClnt();
-		}
-		accept = &packet->p_acpt;
-		break;
+		case op_accept_data:
+		case op_cond_accept:
+			accept = &packet->p_acpd;
+			if (cBlock)
+			{	
+				cBlock->storeDataForPlugin(packet->p_acpd.p_acpt_data.cstr_length,
+					packet->p_acpd.p_acpt_data.cstr_address);
+				cBlock->authComplete = packet->p_acpd.p_acpt_authenticated;
+				cBlock->resetClnt(&packet->p_acpd.p_acpt_keys);
+			}
+			break;
 
-	case op_response:
-		try
-		{
-			Firebird::LocalStatus warning;		// Ignore connect warnings for a while
-			REMOTE_check_response(&warning, rdb, packet);
-		}
-		catch (const Firebird::Exception&)
-		{
+		case op_accept:
+			if (cBlock)
+			{
+			    cBlock->resetClnt();
+			}
+			accept = &packet->p_acpt;
+			break;
+
+		case op_crypt_key_callback:
+			try
+			{
+				UCharBuffer buf;
+				P_CRYPT_CALLBACK* cc = &packet->p_cc;
+
+				if (cryptCb)
+				{
+					if (cc->p_cc_reply <= 0)
+					{
+						cc->p_cc_reply = 1;
+					}
+					UCHAR* reply = buf.getBuffer(cc->p_cc_reply);
+					unsigned l = cryptCb->callback(cc->p_cc_data.cstr_length,
+						cc->p_cc_data.cstr_address, cc->p_cc_reply, reply);
+
+					REMOTE_free_packet(port, packet, true);
+					cc->p_cc_data.cstr_length = l;
+					cc->p_cc_data.cstr_address = reply;
+				}
+				else
+				{
+					REMOTE_free_packet(port, packet, true);
+					cc->p_cc_data.cstr_length = 0;
+				}
+
+				packet->p_operation = op_crypt_key_callback;
+				cc->p_cc_reply = 0;
+				port->send(packet);
+				port->receive(packet);
+				continue;
+			}
+			catch (const Exception&)
+			{
+				disconnect(port);
+				delete rdb;
+				throw;
+			}
+
+		case op_response:
+			try
+			{
+				Firebird::LocalStatus warning;		// Ignore connect warnings for a while
+				REMOTE_check_response(&warning, rdb, packet);
+			}
+			catch (const Firebird::Exception&)
+			{
+				disconnect(port);
+				delete rdb;
+				throw;
+			}
+			// fall through - response is not a required accept
+
+		default:
 			disconnect(port);
 			delete rdb;
-			throw;
+			Arg::Gds(isc_connect_reject).raise();
+			break;
 		}
-		// fall through - response is not a required accept
-
-	default:
-		disconnect(port);
-		delete rdb;
-		Arg::Gds(isc_connect_reject).raise();
-		break;
 	}
 
 	fb_assert(accept);
