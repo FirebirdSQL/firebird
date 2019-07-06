@@ -421,6 +421,8 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 			Arg::Gds(isc_connect_reject).raise();
 			break;
 		}
+
+		break;	// Always leave for() loop here
 	}
 
 	fb_assert(accept);
