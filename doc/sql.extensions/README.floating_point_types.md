@@ -15,14 +15,14 @@ available with the following SQL standard type names:
 - `FLOAT` - 32 bit single precision
 - `FLOAT(p)` where `p` is the precision of the significand in binary digits _(2, 3)_
 	- 1 <= `p` <= 24 - 32 bit single precision (synonym for `FLOAT`)
-	- 25 <= `p` <= 53 - 64 bit single precision (synonym for `DOUBLE PRECISION`)
-- `DOUBLE PRECISION` - 64 bit single precision
+	- 25 <= `p` <= 53 - 64 bit double precision (synonym for `DOUBLE PRECISION`)
+- `DOUBLE PRECISION` - 64 bit double precision
 
 In addition the following non-standard type names are supported:
 
 - `LONG FLOAT` - 64 bit double precision (synonym for `DOUBLE PRECISION`)
 - `LONG FLOAT(p)` where `p` is the precision of the significand in binary digits _(4, 5)_
-	- 1 <= `p` <= 53 - 64 bit single precision (synonym for `DOUBLE PRECISION`)
+	- 1 <= `p` <= 53 - 64 bit double precision (synonym for `DOUBLE PRECISION`)
 
 These non-standard type names are deprecated and they may be removed in a future 
 version.
