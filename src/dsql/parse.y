@@ -5146,13 +5146,7 @@ float_type
 		}
 	;
 
-%type <int32Val> precision_opt
-precision_opt
-	: /* nothing */					{ $$ = 0; }
-	| '(' nonneg_short_integer ')'	{ $$ = $2; }
-	;
-
-// alternative to precision_opt that does not allow zero
+// optional precision that does not allow zero
 %type <int32Val> precision_opt_nz
 precision_opt_nz
 	: /* nothing */				{ $$ = 0; }
