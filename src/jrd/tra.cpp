@@ -3857,7 +3857,7 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, bool punt)
 				{
 					ThreadStatusGuard status_vector(tdbb);
 
-					SCL_check_access(tdbb, s_class, 0, NULL, NULL, SCL_read, object_table, false,
+					SCL_check_access(tdbb, s_class, 0, NULL, NULL, SCL_read, object_table,
 						blb_relation->rel_name);
 					s_class->scl_blb_access = SecurityClass::BA_SUCCESS;
 				}
