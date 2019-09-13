@@ -1749,10 +1749,10 @@ public:
 };
 
 
-class SetDecFloatBindNode : public SessionManagementNode
+class SetHighPrecBindNode : public SessionManagementNode
 {
 public:
-	SetDecFloatBindNode(MemoryPool& pool, bool isInt128)
+	SetHighPrecBindNode(MemoryPool& pool, bool isInt128)
 		: SessionManagementNode(pool),
 		  bind(Firebird::NumericBinding::NUM_NATIVE),
 		  bindInt128(isInt128)
@@ -1767,7 +1767,7 @@ public:
 		NODE_PRINT(printer, bind.bind);
 		NODE_PRINT(printer, bind.numScale);
 
-		return "SetDecFloatBindNode";
+		return "SetHighPrecBindNode";
 	}
 
 	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;

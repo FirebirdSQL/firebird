@@ -817,7 +817,7 @@ using namespace Firebird;
 	Jrd::CreateAlterRoleNode* createAlterRoleNode;
 	Jrd::SetDecFloatRoundNode* setDecFloatRoundNode;
 	Jrd::SetDecFloatTrapsNode* setDecFloatTrapsNode;
-	Jrd::SetDecFloatBindNode* setDecFloatBindNode;
+	Jrd::SetHighPrecBindNode* setHighPrecBindNode;
 	Jrd::SessionResetNode* sessionResetNode;
 }
 
@@ -5262,10 +5262,10 @@ set_decfloat_traps
 			{ $$ = $5; }
 	;
 
-%type <setDecFloatBindNode> set_decfloat_bind
+%type <setHighPrecBindNode> set_decfloat_bind
 set_decfloat_bind
 	: SET bind_to_type BIND
-			{ $$ = newNode<SetDecFloatBindNode>($2); }
+			{ $$ = newNode<SetHighPrecBindNode>($2); }
 		decfloat_bind_clause($4)
 			{ $$ = $4; }
 	;
@@ -5294,26 +5294,26 @@ decfloat_trap($setDecFloatTrapsNode)
 		{ $setDecFloatTrapsNode->trap($1); }
 	;
 
-%type decfloat_bind_clause(<setDecFloatBindNode>)
-decfloat_bind_clause($setDecFloatBindNode)
+%type decfloat_bind_clause(<setHighPrecBindNode>)
+decfloat_bind_clause($setHighPrecBindNode)
 	: NATIVE
 		// do nothing
 	| character_keyword
-		{ $setDecFloatBindNode->bind.bind = NumericBinding::NUM_TEXT; }
+		{ $setHighPrecBindNode->bind.bind = NumericBinding::NUM_TEXT; }
 	| DOUBLE PRECISION
-		{ $setDecFloatBindNode->bind.bind = NumericBinding::NUM_DOUBLE; }
-	| BIGINT decfloat_scale_clause($setDecFloatBindNode)
-		{ $setDecFloatBindNode->bind.bind = NumericBinding::NUM_INT64; }
+		{ $setHighPrecBindNode->bind.bind = NumericBinding::NUM_DOUBLE; }
+	| BIGINT decfloat_scale_clause($setHighPrecBindNode)
+		{ $setHighPrecBindNode->bind.bind = NumericBinding::NUM_INT64; }
 	;
 
-%type decfloat_scale_clause(<setDecFloatBindNode>)
-decfloat_scale_clause($setDecFloatBindNode)
+%type decfloat_scale_clause(<setHighPrecBindNode>)
+decfloat_scale_clause($setHighPrecBindNode)
 	: // nothing
 	| ',' signed_long_integer
 		{
 			if ($2 > NumericBinding::MAX_SCALE || $2 < 0)
 				yyabandon(YYPOSNARG(2), -842, isc_scale_nogt);	// Scale must be between 0 and precision
-			$setDecFloatBindNode->bind.numScale = -$2;
+			$setHighPrecBindNode->bind.numScale = -$2;
 		}
 
 %type <setSessionNode> session_statement

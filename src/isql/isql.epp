@@ -8914,7 +8914,7 @@ static const char* sqltype_to_string(unsigned sqltype)
 	case SQL_DEC34:
 		return "DECFLOAT(34)";
 	case SQL_INT128:
-		return "INT128";
+		return "NUMERIC(38)";
 	case SQL_D_FLOAT:
 		return "D_FLOAT";
 	case SQL_TIMESTAMP:

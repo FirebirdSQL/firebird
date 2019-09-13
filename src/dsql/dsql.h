@@ -257,7 +257,7 @@ public:
 				break;
 
 			case dtype_int128:
-				precision = 37;
+				precision = 38;
 				break;
 
 			default:

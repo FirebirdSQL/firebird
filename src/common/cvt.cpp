@@ -3154,7 +3154,7 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
  *
  **************************************/
 	VaryStr<1024> buffer;			// represents unreasonably long decfloat literal in ASCII
-	Int128 dfix;
+	Int128 int128;
 	Decimal128 tmp;
 	double d, eps;
 
@@ -3175,19 +3175,19 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 		switch (desc->dsc_dtype)
 		{
 		case dtype_short:
-			dfix.set(SLONG(*(SSHORT*) p), scale);
+			int128.set(SLONG(*(SSHORT*) p), scale);
 			break;
 
 		case dtype_long:
-			dfix.set(*(SLONG*) p, scale);
+			int128.set(*(SLONG*) p, scale);
 			break;
 
 		case dtype_quad:
-			dfix.set(CVT_get_int64(desc, 0, decSt, err), scale);
+			int128.set(CVT_get_int64(desc, 0, decSt, err), scale);
 			break;
 
 		case dtype_int64:
-			dfix.set(*(SINT64*) p, scale);
+			int128.set(*(SINT64*) p, scale);
 			break;
 
 		case dtype_varying:
@@ -3196,8 +3196,8 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 			{
 				USHORT length =
 					CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
-				scale -= CVT_decompose(p, length, &dfix, err);
-				dfix.setScale(scale);
+				scale -= CVT_decompose(p, length, &int128, err);
+				int128.setScale(scale);
 			}
 			break;
 
@@ -3246,7 +3246,7 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 			if (d < I128_MIN_dbl || I128_MAX_dbl < d)
 				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 
-			dfix.set(d);
+			int128.set(d);
 			break;
 
 		case dtype_dec64:
@@ -3270,12 +3270,12 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 			if (tmp.compare(decSt, I128_MIN_dcft) < 0 || I128_MAX_dcft.compare(decSt, tmp) < 0)
 				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 
-			dfix.set(decSt, tmp);
+			int128.set(decSt, tmp);
 			break;
 
 		case dtype_int128:
-			dfix = *((Int128*) p);
-			dfix.setScale(scale);
+			int128 = *((Int128*) p);
+			int128.setScale(scale);
 			break;
 
 		default:
@@ -3291,7 +3291,7 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 		err(v);
 	}
 
-	return dfix;
+	return int128;
 }
 
 

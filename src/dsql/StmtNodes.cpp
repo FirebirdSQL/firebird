@@ -8360,7 +8360,7 @@ void SetDecFloatTrapsNode::execute(thread_db* tdbb, dsql_req* /*request*/, jrd_t
 //--------------------
 
 
-void SetDecFloatBindNode::execute(thread_db* tdbb, dsql_req* /*request*/, jrd_tra** /*traHandle*/) const
+void SetHighPrecBindNode::execute(thread_db* tdbb, dsql_req* /*request*/, jrd_tra** /*traHandle*/) const
 {
 	SET_TDBB(tdbb);
 	Attachment* const attachment = tdbb->getAttachment();

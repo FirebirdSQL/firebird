@@ -231,7 +231,7 @@ Enhancement in precision of calculations with NUMERIC/DECIMAL (FB 4.0)
 	binary representation), CHAR/CHARACTER (use ASCII string), DOUBLE PRECISION (use
 	8-byte FP representation - same as used for DOUBLE PRECISION fields) or BIGINT
 	with possible comma-separated SCALE clause (i.e. 'BIGINT, 3'). Various bindings
-	are useful if one plans to use DECFLOAT values with some old client not supporting
+	are useful if one plans to use 128-bit integers with some old client not supporting
 	native format. One can choose between strings (ideal precision, but poor support
 	for further processing), floating point values (ideal support for further processing
 	but poor precision) or scaled integers (good support for further processing and

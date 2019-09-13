@@ -1570,9 +1570,6 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 			if (field)
 			{
 				dsc d(relFormat->fmt_desc[i]);
-				if (d.dsc_dtype == dtype_int128)
-					d.dsc_dtype = dtype_dec128;
-
 				fieldsMsg->addItem(field->fld_name, !field->fld_not_null, d);
 			}
 		}
