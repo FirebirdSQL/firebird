@@ -3588,9 +3588,8 @@ ValueExprNode* CoalesceNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	node->make(dsqlScratch, &node->nodDesc);	// Set descriptor for output node.
 
-	node->setParameterType(dsqlScratch,
-		[&] (dsc* desc) { *desc = node->nodDesc; },
-		false);
+	for (auto& item : node->args->items)
+		PASS1_set_parameter_type(dsqlScratch, item, node, false);
 
 	return node;
 }
@@ -3603,12 +3602,7 @@ void CoalesceNode::setParameterName(dsql_par* parameter) const
 bool CoalesceNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 	std::function<void (dsc*)> makeDesc, bool /*forceVarChar*/)
 {
-	bool ret = false;
-
-	for (auto& item : args->items)
-		ret |= PASS1_set_parameter_type(dsqlScratch, item, makeDesc, false);
-
-	return ret;
+	return false;
 }
 
 void CoalesceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
@@ -11876,7 +11870,7 @@ dsc* SubstringSimilarNode::execute(thread_db* tdbb, jrd_req* request) const
 			delete impure->vlu_misc.vlu_invariant;
 
 			impure->vlu_misc.vlu_invariant = evaluator = collation->createSubstringSimilarMatcher(
-				*tdbb->getDefaultPool(), patternStr, patternLen, escapeStr, escapeLen);
+				tdbb, *tdbb->getDefaultPool(), patternStr, patternLen, escapeStr, escapeLen);
 
 			impure->vlu_flags |= VLU_computed;
 		}
@@ -11888,7 +11882,7 @@ dsc* SubstringSimilarNode::execute(thread_db* tdbb, jrd_req* request) const
 	}
 	else
 	{
-		autoEvaluator = evaluator = collation->createSubstringSimilarMatcher(*tdbb->getDefaultPool(),
+		autoEvaluator = evaluator = collation->createSubstringSimilarMatcher(tdbb, *tdbb->getDefaultPool(),
 			patternStr, patternLen, escapeStr, escapeLen);
 	}
 

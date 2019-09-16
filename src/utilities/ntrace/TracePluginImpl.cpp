@@ -99,7 +99,6 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 	transactions(getDefaultMemoryPool()),
 	statements(getDefaultMemoryPool()),
 	services(getDefaultMemoryPool()),
-	unicodeCollation(*getDefaultMemoryPool()),
 	include_codes(*getDefaultMemoryPool()),
 	exclude_codes(*getDefaultMemoryPool())
 {
@@ -124,8 +123,6 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 		logWriter->addRef();
 	}
 
-	Jrd::TextType* textType = unicodeCollation.getTextType();
-
 	// Compile filtering regular expressions
 	const char* str = NULL;
 	try
@@ -136,9 +133,10 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 			string filter(config.include_filter);
 			ISC_systemToUtf8(filter);
 
-			include_matcher = FB_NEW TraceSimilarToMatcher(
-				*getDefaultMemoryPool(), textType, (const UCHAR*) filter.c_str(),
-				filter.length(), '\\', true);
+			include_matcher = FB_NEW SimilarToRegex(
+				*getDefaultMemoryPool(), SimilarToRegex::FLAG_CASE_INSENSITIVE,
+				filter.c_str(), filter.length(),
+				"\\", 1);
 		}
 
 		if (config.exclude_filter.hasData())
@@ -147,9 +145,10 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 			string filter(config.exclude_filter);
 			ISC_systemToUtf8(filter);
 
-			exclude_matcher = FB_NEW TraceSimilarToMatcher(
-				*getDefaultMemoryPool(), textType, (const UCHAR*) filter.c_str(),
-				filter.length(), '\\', true);
+			exclude_matcher = FB_NEW SimilarToRegex(
+				*getDefaultMemoryPool(), SimilarToRegex::FLAG_CASE_INSENSITIVE,
+				filter.c_str(), filter.length(),
+				"\\", 1);
 		}
 	}
 	catch (const Exception&)
@@ -1545,18 +1544,10 @@ void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
 		return;
 
 	if (config.include_filter.hasData())
-	{
-		include_matcher->reset();
-		include_matcher->process((const UCHAR*) sql, sql_length);
-		need_statement = include_matcher->result();
-	}
+		need_statement = include_matcher->matches(sql, sql_length);
 
 	if (need_statement && config.exclude_filter.hasData())
-	{
-		exclude_matcher->reset();
-		exclude_matcher->process((const UCHAR*) sql, sql_length);
-		need_statement = !exclude_matcher->result();
-	}
+		need_statement = !exclude_matcher->matches(sql, sql_length);
 
 	if (need_statement)
 	{
@@ -1948,18 +1939,10 @@ bool TracePluginImpl::checkServiceFilter(ITraceServiceConnection* service, bool 
 	bool enabled = true;
 
 	if (config.include_filter.hasData())
-	{
-		include_matcher->reset();
-		include_matcher->process((const UCHAR*) svcName, svcNameLen);
-		enabled = include_matcher->result();
-	}
+		enabled = include_matcher->matches(svcName, svcNameLen);
 
 	if (enabled && config.exclude_filter.hasData())
-	{
-		exclude_matcher->reset();
-		exclude_matcher->process((const UCHAR*) svcName, svcNameLen);
-		enabled = !exclude_matcher->result();
-	}
+		enabled = !exclude_matcher->matches(svcName, svcNameLen);
 
 	if (data) {
 		data->enabled = enabled;

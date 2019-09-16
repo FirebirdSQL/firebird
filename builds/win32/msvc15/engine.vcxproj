@@ -317,7 +317,6 @@
     <ClInclude Include="..\..\..\src\jrd\sdw.h" />
     <ClInclude Include="..\..\..\src\jrd\sdw_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\shut_proto.h" />
-    <ClInclude Include="..\..\..\src\jrd\SimilarToMatcher.h" />
     <ClInclude Include="..\..\..\src\jrd\sort.h" />
     <ClInclude Include="..\..\..\src\jrd\sqz.h" />
     <ClInclude Include="..\..\..\src\jrd\status.h" />

@@ -654,6 +654,7 @@ bool IntlManager::lookupCollation(const string& collationName,
 							  attributes, specificAttributes, specificAttributesLen, ignoreAttributes,
 							  collationExternalInfo.configInfo.c_str()))
 		{
+			tt->texttype_flags = attributes;
 			return true;
 		}
 	}

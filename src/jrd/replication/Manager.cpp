@@ -50,48 +50,21 @@ TableMatcher::TableMatcher(MemoryPool& pool,
 						   const string& excludeFilter)
 	: m_tables(pool)
 {
-	m_cs = FB_NEW_POOL(pool) charset;
-	m_tt = FB_NEW_POOL(pool) texttype;
-
-	IntlUtil::initUtf8Charset(m_cs);
-
-	string collAttributes("ICU-VERSION=");
-	collAttributes += Jrd::UnicodeUtil::getDefaultIcuVersion();
-	IntlUtil::setupIcuAttributes(m_cs, collAttributes, "", collAttributes);
-
-	UCharBuffer collAttributesBuffer;
-	collAttributesBuffer.push(reinterpret_cast<const UCHAR*>(collAttributes.c_str()),
-							  collAttributes.length());
-
-	if (!IntlUtil::initUnicodeCollation(m_tt, m_cs, "UNICODE", 0, collAttributesBuffer, ""))
-		raiseError("Cannot initialize UNICODE collation");
-
-	m_charSet = CharSet::createInstance(pool, 0, m_cs);
-	m_textType = FB_NEW_POOL(pool) TextType(0, m_tt, m_charSet);
-
 	if (includeFilter.hasData())
 	{
-		m_includeMatcher.reset(FB_NEW_POOL(pool) SimilarMatcher(
-			pool, m_textType,
-			(const UCHAR*) includeFilter.c_str(),
-			includeFilter.length(),
-			'\\', true));
+		m_includeMatcher.reset(FB_NEW_POOL(pool) SimilarToRegex(
+			pool, SimilarToRegex::FLAG_CASE_INSENSITIVE,
+			includeFilter.c_str(), includeFilter.length(),
+			"\\", 1));
 	}
 
 	if (excludeFilter.hasData())
 	{
-		m_excludeMatcher.reset(FB_NEW_POOL(pool) SimilarMatcher(
-			pool, m_textType,
-			(const UCHAR*) excludeFilter.c_str(),
-			excludeFilter.length(),
-			'\\', true));
+		m_excludeMatcher.reset(FB_NEW_POOL(pool) SimilarToRegex(
+			pool, SimilarToRegex::FLAG_CASE_INSENSITIVE,
+			excludeFilter.c_str(), excludeFilter.length(),
+			"\\", 1));
 	}
-}
-
-TableMatcher::~TableMatcher()
-{
-	if (m_tt && m_tt->texttype_fn_destroy)
-		m_tt->texttype_fn_destroy(m_tt);
 }
 
 bool TableMatcher::matchTable(const MetaName& tableName)
@@ -104,18 +77,10 @@ bool TableMatcher::matchTable(const MetaName& tableName)
 			enabled = true;
 
 			if (m_includeMatcher)
-			{
-				m_includeMatcher->reset();
-				m_includeMatcher->process((const UCHAR*) tableName.c_str(), tableName.length());
-				enabled = m_includeMatcher->result();
-			}
+				enabled = m_includeMatcher->matches(tableName.c_str(), tableName.length());
 
 			if (enabled && m_excludeMatcher)
-			{
-				m_excludeMatcher->reset();
-				m_excludeMatcher->process((const UCHAR*) tableName.c_str(), tableName.length());
-				enabled = !m_excludeMatcher->result();
-			}
+				enabled = !m_excludeMatcher->matches(tableName.c_str(), tableName.length());
 
 			m_tables.put(tableName, enabled);
 		}

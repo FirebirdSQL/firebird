@@ -603,6 +603,12 @@ public:
 		return att_user;
 	}
 
+	UserId* getEffectiveUserId()
+	{
+		if (att_ss_user)
+			return att_ss_user;
+		return att_user;
+	}
 
 private:
 	Attachment(MemoryPool* pool, Database* dbb, const InitialOptions* initialOptions);
@@ -647,8 +653,8 @@ private:
 
 inline bool Attachment::locksmith(thread_db* tdbb, SystemPrivilege sp) const
 {
-	return att_user && att_user->locksmith(tdbb, sp) ||
-			att_ss_user && att_ss_user->locksmith(tdbb, sp);
+	return (att_user && att_user->locksmith(tdbb, sp)) ||
+			(att_ss_user && att_ss_user->locksmith(tdbb, sp));
 }
 
 inline jrd_tra* Attachment::getSysTransaction()

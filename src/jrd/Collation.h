@@ -66,12 +66,12 @@ public:
 	virtual PatternMatcher* createLikeMatcher(MemoryPool& pool, const UCHAR* p, SLONG pl,
 		const UCHAR* escape, SLONG escapeLen) = 0;
 
-	virtual bool similarTo(MemoryPool& pool, const UCHAR* s, SLONG sl, const UCHAR* p, SLONG pl,
+	virtual bool similarTo(thread_db* tdbb, MemoryPool& pool, const UCHAR* s, SLONG sl, const UCHAR* p, SLONG pl,
 		const UCHAR* escape, SLONG escapeLen) = 0;
-	virtual PatternMatcher* createSimilarToMatcher(MemoryPool& pool, const UCHAR* p, SLONG pl,
+	virtual PatternMatcher* createSimilarToMatcher(thread_db* tdbb, MemoryPool& pool, const UCHAR* p, SLONG pl,
 		const UCHAR* escape, SLONG escapeLen) = 0;
 
-	virtual BaseSubstringSimilarMatcher* createSubstringSimilarMatcher(MemoryPool& pool,
+	virtual BaseSubstringSimilarMatcher* createSubstringSimilarMatcher(thread_db* tdbb, MemoryPool& pool,
 		const UCHAR* p, SLONG pl, const UCHAR* escape, SLONG escapeLen) = 0;
 
 	virtual bool contains(MemoryPool& pool, const UCHAR* s, SLONG sl, const UCHAR* p, SLONG pl) = 0;

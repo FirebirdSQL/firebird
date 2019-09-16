@@ -3835,6 +3835,7 @@ static act* act_open_blob( act_t act_op, gpre_sym* symbol)
 		{
 			blob->blb_const_from_type = PAR_blob_subtype(request->req_database);
 			if (gpreGlob.token_global.tok_keyword == KW_CHAR)
+			{
 				if (blob->blb_const_from_type == isc_blob_text)
 				{
 					blob->blb_from_charset = par_char_set();
@@ -3845,25 +3846,34 @@ static act* act_open_blob( act_t act_op, gpre_sym* symbol)
 				}
 				else
 					PAR_error("Only text BLOBS can specify CHARACTER SET");
+			}
 			else if (blob->blb_const_from_type == isc_blob_text)
+			{
 				if (act_op == ACT_blob_create)
 					blob->blb_from_charset = CS_dynamic;
 				else
 					blob->blb_from_charset = field->fld_charset_id;
+			}
 		}
 		else
 		{
 			blob->blb_const_from_type = field->fld_sub_type;
 			if (blob->blb_const_from_type == isc_blob_text)
+			{
 				if (act_op == ACT_blob_create)
 					blob->blb_from_charset = CS_dynamic;
 				else
 					blob->blb_from_charset = field->fld_charset_id;
+			}
 		}
+
 		if (!MSC_match(KW_TO))
 			CPR_s_error("TO");
+
 		blob->blb_const_to_type = PAR_blob_subtype(request->req_database);
+
 		if (gpreGlob.token_global.tok_keyword == KW_CHAR)
+		{
 			if (blob->blb_const_to_type == isc_blob_text)
 			{
 				blob->blb_to_charset = par_char_set();
@@ -3874,11 +3884,14 @@ static act* act_open_blob( act_t act_op, gpre_sym* symbol)
 			}
 			else
 				PAR_error("Only text BLOBS can specify CHARACTER SET");
+		}
 		else if (blob->blb_const_to_type == isc_blob_text)
+		{
 			if (act_op == ACT_blob_create)
 				blob->blb_to_charset = field->fld_charset_id;
 			else
 				blob->blb_to_charset = CS_dynamic;
+		}
 	}
 	else
 	{
@@ -4037,7 +4050,7 @@ static act* act_procedure()
 		do {
 			ref* reference = (ref*) SQE_variable(request, false, NULL, NULL);
 			*ref_ptr = reference;
-			if (reference->ref_field = field)
+			if ((reference->ref_field = field))
 				field = field->fld_next;
 			ref_ptr = &reference->ref_next;
 			outputs++;

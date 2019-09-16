@@ -1490,7 +1490,7 @@ void API_ROUTINE_VARARG isc_expand_dpb(SCHAR** dpb, SSHORT* dpb_size, ...)
 
 	va_start(args, dpb_size);
 
-	while (type = va_arg(args, int))
+	while ((type = va_arg(args, int)))
 	{
 		switch (type)
 		{
@@ -1561,7 +1561,7 @@ void API_ROUTINE_VARARG isc_expand_dpb(SCHAR** dpb, SSHORT* dpb_size, ...)
 
 	va_start(args, dpb_size);
 
-	while (type = va_arg(args, int))
+	while ((type = va_arg(args, int)))
 	{
 		switch (type)
 		{
@@ -3018,7 +3018,7 @@ static void isc_expand_dpb_internal(const UCHAR** dpb, SSHORT* dpb_size, ...)
 
 	va_start(args, dpb_size);
 
-	while (type = va_arg(args, int))
+	while ((type = va_arg(args, int)))
 	{
 		switch (type)
 		{
@@ -3087,7 +3087,7 @@ static void isc_expand_dpb_internal(const UCHAR** dpb, SSHORT* dpb_size, ...)
 
 	va_start(args, dpb_size);
 
-	while (type = va_arg(args, int))
+	while ((type = va_arg(args, int)))
 	{
 		switch (type)
 		{

@@ -1031,6 +1031,37 @@ INTL_BOOL UnicodeUtil::utf32WellFormed(ULONG len, const ULONG* str, ULONG* offen
 	return true;	// well-formed
 }
 
+void UnicodeUtil::utf8Normalize(UCharBuffer& data)
+{
+	ICU* icu = loadICU("", "");
+
+	HalfStaticArray<USHORT, BUFFER_MEDIUM> utf16Buffer(data.getCount());
+	USHORT errCode;
+	ULONG errPosition;
+	ULONG utf16BufferLen = utf8ToUtf16(data.getCount(), data.begin(), data.getCount() * sizeof(USHORT),
+		utf16Buffer.getBuffer(data.getCount()), &errCode, &errPosition);
+
+	UTransliterator* trans = icu->getCiAiTransliterator();
+
+	if (trans)
+	{
+		const int32_t capacity = utf16Buffer.getCount() * sizeof(USHORT);
+		int32_t len = utf16BufferLen / sizeof(USHORT);
+		int32_t limit = len;
+
+		UErrorCode errorCode = U_ZERO_ERROR;
+		icu->utransTransUChars(trans, reinterpret_cast<UChar*>(utf16Buffer.begin()),
+			&len, capacity, 0, &limit, &errorCode);
+		icu->releaseCiAiTransliterator(trans);
+
+		len = utf16ToUtf8(utf16BufferLen, utf16Buffer.begin(),
+			len * 4, data.getBuffer(len * 4, false),
+			&errCode, &errPosition);
+
+		data.shrink(len);
+	}
+}
+
 UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& configInfo)
 {
 	ObjectsArray<string> versions;

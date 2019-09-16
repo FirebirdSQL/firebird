@@ -3020,7 +3020,7 @@ static gpre_rse* par_select( gpre_req* request, gpre_rse* union_rse)
 		resolve_fields(rse_skip, select);
 	select->rse_sqlskip = rse_skip;
 
-	if (select->rse_into = into_list)
+	if ((select->rse_into = into_list))
 		select->rse_flags |= RSE_singleton;
 
 	if (union_rse && s_list->nod_count != union_rse->rse_fields->nod_count)
@@ -3686,10 +3686,12 @@ static gpre_fld* resolve(gpre_nod* node,
 	if (rs_stream)
 	{
 		for (SSHORT i = 0; i < rs_stream->rse_count; i++)
-			if (field = resolve(node, rs_stream->rse_context[i], found_context, slice_action))
+		{
+			if ((field = resolve(node, rs_stream->rse_context[i], found_context, slice_action)))
 			{
 				return field;
 			}
+		}
 
 		return NULL;
 	}
@@ -3819,7 +3821,7 @@ static gpre_ctx* resolve_asterisk( const tok* q_token, gpre_rse* selection)
 		gpre_rse* rs_stream = context->ctx_stream;
 		if (rs_stream)
 		{
-			if (context = resolve_asterisk(q_token, rs_stream))
+			if ((context = resolve_asterisk(q_token, rs_stream)))
 				return context;
 			continue;
 		}

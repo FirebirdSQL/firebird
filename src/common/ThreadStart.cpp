@@ -122,12 +122,12 @@ ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, H
 	int state;
 
 #if defined (LINUX) || defined (FREEBSD)
-	if (state = pthread_create(&thread, NULL, THREAD_ENTRYPOINT, THREAD_ARG))
+	if ((state = pthread_create(&thread, NULL, THREAD_ENTRYPOINT, THREAD_ARG)))
 		Firebird::system_call_failed::raise("pthread_create", state);
 
 	if (!p_handle)
 	{
-		if (state = pthread_detach(thread))
+		if ((state = pthread_detach(thread)))
 			Firebird::system_call_failed::raise("pthread_detach", state);
 	}
 #else

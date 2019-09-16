@@ -196,3 +196,8 @@ TYPE("ROLE", 1, nam_map_to_type)
 #define SYSTEM_PRIVILEGE(p) TYPE(STRINGIZE(p), int(Jrd::p), nam_system_privileges)
 #include "SystemPrivileges.h"
 #undef SYSTEM_PRIVILEGE
+
+TYPE("NOT ENCRYPTED", 0, nam_mon_crypt_state)
+TYPE("ENCRYPTED", 1, nam_mon_crypt_state)
+TYPE("DECRYPT IN PROGRESS", 2, nam_mon_crypt_state)
+TYPE("ENCRYPT IN PROGRESS", 3, nam_mon_crypt_state)

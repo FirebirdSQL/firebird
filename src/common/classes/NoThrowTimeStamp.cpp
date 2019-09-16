@@ -162,7 +162,7 @@ int NoThrowTimeStamp::yday(const struct tm* times) throw()
 	if (month < 2)
 		return day;
 
-	if (year % 4 == 0 && year % 100 != 0 || year % 400 == 0)
+	if ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0)
 		--day;
 	else
 		day -= 2;

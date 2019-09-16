@@ -30,9 +30,6 @@
     <ClCompile Include="..\..\..\src\utilities\ntrace\TracePluginImpl.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\utilities\ntrace\TraceUnicodeUtils.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\utilities\ntrace\paramtable.h">
@@ -48,9 +45,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\utilities\ntrace\TracePluginImpl.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\utilities\ntrace\TraceUnicodeUtils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

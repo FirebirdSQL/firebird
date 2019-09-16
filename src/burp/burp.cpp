@@ -2542,15 +2542,11 @@ void BurpGlobals::setupSkipData(const Firebird::string& regexp)
 				ISC_systemToUtf8(filter);
 
 			BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-			if (!unicodeCollation)
-				unicodeCollation = FB_NEW_POOL(tdgbl->getPool()) UnicodeCollationHolder(tdgbl->getPool());
 
-			Jrd::TextType* const textType = unicodeCollation->getTextType();
-
-			skipDataMatcher.reset(FB_NEW_POOL(tdgbl->getPool())
-				Firebird::SimilarToMatcher<UCHAR, Jrd::UpcaseConverter<> >
-				(tdgbl->getPool(), textType, (const UCHAR*) filter.c_str(),
-				filter.length(), '\\', true));
+			skipDataMatcher.reset(FB_NEW_POOL(tdgbl->getPool()) Firebird::SimilarToRegex(
+				tdgbl->getPool(), Firebird::SimilarToRegex::FLAG_CASE_INSENSITIVE,
+				filter.c_str(), filter.length(),
+				"\\", 1));
 		}
 	}
 	catch (const Firebird::Exception&)
@@ -2571,18 +2567,12 @@ Firebird::string BurpGlobals::toSystem(const Firebird::PathName& from)
 bool BurpGlobals::skipRelation(const char* name)
 {
 	if (gbl_sw_meta)
-	{
 		return true;
-	}
 
 	if (!skipDataMatcher)
-	{
 		return false;
-	}
 
-	skipDataMatcher->reset();
-	skipDataMatcher->process(reinterpret_cast<const UCHAR*>(name), static_cast<SLONG>(strlen(name)));
-	return skipDataMatcher->result();
+	return skipDataMatcher->matches(name, strlen(name));
 }
 
 void BurpGlobals::read_stats(SINT64* stats)
@@ -2701,39 +2691,6 @@ void BurpGlobals::print_stats_header()
 	}
 
 	burp_output(false, "\n");
-}
-
-UnicodeCollationHolder::UnicodeCollationHolder(MemoryPool& pool)
-{
-	cs = FB_NEW_POOL(pool) charset;
-	tt = FB_NEW_POOL(pool) texttype;
-
-	Firebird::IntlUtil::initUtf8Charset(cs);
-
-	Firebird::string collAttributes("ICU-VERSION=");
-	collAttributes += Jrd::UnicodeUtil::getDefaultIcuVersion();
-	Firebird::IntlUtil::setupIcuAttributes(cs, collAttributes, "", collAttributes);
-
-	Firebird::UCharBuffer collAttributesBuffer;
-	collAttributesBuffer.push(reinterpret_cast<const UCHAR*>(collAttributes.c_str()),
-		collAttributes.length());
-
-	if (!Firebird::IntlUtil::initUnicodeCollation(tt, cs, "UNICODE", 0, collAttributesBuffer, Firebird::string()))
-		Firebird::fatal_exception::raiseFmt("cannot initialize UNICODE collation to use in gbak");
-
-	charSet = Jrd::CharSet::createInstance(pool, 0, cs);
-	textType = FB_NEW_POOL(pool) Jrd::TextType(0, tt, charSet);
-}
-
-UnicodeCollationHolder::~UnicodeCollationHolder()
-{
-	fb_assert(tt->texttype_fn_destroy);
-
-	if (tt->texttype_fn_destroy)
-		tt->texttype_fn_destroy(tt);
-
-	// cs should be deleted by texttype_fn_destroy call above
-	delete tt;
 }
 
 void BURP_makeSymbol(BurpGlobals* tdgbl, Firebird::string& name)		// add double quotes to string

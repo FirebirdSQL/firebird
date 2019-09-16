@@ -108,6 +108,27 @@ static const struct ops
 		{ NL, "" }
 	};
 
+//____________________________________________________________
+//
+//		Align output to a specific column for output.  If the
+//		column is negative, don't do anything.
+//
+
+static int align(char* p, int column)
+{
+	if (column < 0)
+		return 0;
+
+	char* const begin = p;
+
+	for (int i = column / 8; i; --i)
+		*p++ = '\t';
+
+	for (int i = column % 8; i; --i)
+		*p++ = ' ';
+
+	return p - begin;
+}
 
 //____________________________________________________________
 //
@@ -156,8 +177,7 @@ void PATTERN_expand( USHORT column, const TEXT* pattern, PAT* args)
 	TEXT* p = buffer;
 	*p++ = '\n';
 	bool sw_gen = true;
-	for (USHORT n = column; n; --n)
-		*p++ = ' ';
+	p += align(p, column);
 
 	SSHORT value;				// value needs to be signed since some of the
 								// values printed out are signed.
@@ -171,8 +191,7 @@ void PATTERN_expand( USHORT column, const TEXT* pattern, PAT* args)
 			{
 				*p++ = c;
 				if ((c == '\n') && (*pattern))
-					for (USHORT n = column; n; --n)
-						*p++ = ' ';
+					p += align(p, column);
 			}
 			continue;
 		}

@@ -145,6 +145,12 @@ int DebugClient::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IC
 {
 	try
 	{
+		if (cb->getLogin())
+		{
+			// user specified login - we should not continue with trusted-like auth
+			return AUTH_CONTINUE;
+		}
+
 		if (str != "HAND")
 		{
 			str = "HAND";

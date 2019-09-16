@@ -5,7 +5,6 @@ output_x64/
 m4/
 autom4te.cache/
 builds/install_images
-Makefile
 aclocal.m4
 *.patch
 *.diff
@@ -19,3 +18,4 @@ libtool
 src/dsql/parse.cpp
 .vscode/.browse.VC.db
 extern/decNumber/libdecFloat*.a
+/Makefile

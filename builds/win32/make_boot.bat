@@ -44,6 +44,9 @@ if "%ERRLEV%"=="1" goto :END
 if "%FB_TARGET_PLATFORM%"=="x64" call :ttmath
 if "%ERRLEV%"=="1" goto :END
 
+call :re2
+if "%ERRLEV%"=="1" goto :END
+
 call :zlib
 if "%ERRLEV%"=="1" goto :END
 
@@ -177,6 +180,19 @@ if errorlevel 1 call :boot2 ttmath_%FB_OBJ_DIR%
 @ml64.exe /c /Zi /Fo %FB_TEMP_DIR%\..\%FB_OBJ_DIR%\common\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
 if errorlevel 1 call :boot2 ttmath_%FB_OBJ_DIR%
 @call set_build_target.bat %*
+goto :EOF
+
+::===================
+:: BUILD re2
+:re2
+@echo.
+@echo Building re2...
+@mkdir %FB_ROOT_PATH%\extern\re2\builds\%FB_TARGET_PLATFORM% 2>nul
+@pushd %FB_ROOT_PATH%\extern\re2\builds\%FB_TARGET_PLATFORM%
+@cmake -G "Visual Studio %MSVC_VERSION%" -A %FB_TARGET_PLATFORM% -S %FB_ROOT_PATH%\extern\re2 
+@cmake --build %FB_ROOT_PATH%\extern\re2\builds\%FB_TARGET_PLATFORM% --target ALL_BUILD --config Release > re2_Release_%FB_TARGET_PLATFORM%.log
+@cmake --build %FB_ROOT_PATH%\extern\re2\builds\%FB_TARGET_PLATFORM% --target ALL_BUILD --config Debug > re2_Debug_%FB_TARGET_PLATFORM%.log
+@popd
 goto :EOF
 
 ::===================

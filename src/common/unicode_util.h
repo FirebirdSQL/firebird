@@ -177,6 +177,8 @@ public:
 	static INTL_BOOL utf16WellFormed(ULONG len, const USHORT* str, ULONG* offending_position);
 	static INTL_BOOL utf32WellFormed(ULONG len, const ULONG* str, ULONG* offending_position);
 
+	static void utf8Normalize(Firebird::UCharBuffer& data);
+
 	static ConversionICU& getConversionICU();
 	static ICU* loadICU(const Firebird::string& icuVersion, const Firebird::string& configInfo);
 	static bool getCollVersion(const Firebird::string& icuVersion,

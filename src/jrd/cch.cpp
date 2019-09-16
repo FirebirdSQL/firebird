@@ -1130,8 +1130,8 @@ void CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number)
 
 	const Jrd::Attachment* att = tdbb->getAttachment();
 	const bool dontFlush = (dbb->dbb_flags & DBB_creating) ||
-		(dbb->dbb_ast_flags & DBB_shutdown_single) &&
-		att && (att->att_flags & (ATT_creator | ATT_system));
+		((dbb->dbb_ast_flags & DBB_shutdown_single) &&
+			att && (att->att_flags & (ATT_creator | ATT_system)));
 
 	if (!(main_file->fil_flags & FIL_force_write) && (max_num || max_time) && !dontFlush)
 	{

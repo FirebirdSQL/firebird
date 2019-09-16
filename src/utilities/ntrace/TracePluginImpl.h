@@ -32,11 +32,7 @@
 #include "firebird.h"
 #include "../../jrd/ntrace.h"
 #include "TracePluginConfig.h"
-#include "TraceUnicodeUtils.h"
-#include "../../jrd/intl_classes.h"
-#include "../../jrd/evl_string.h"
-#include "../../common/TextType.h"
-#include "../../jrd/SimilarToMatcher.h"
+#include "../../common/SimilarToRegex.h"
 #include "../../common/classes/rwlock.h"
 #include "../../common/classes/GenericMap.h"
 #include "../../common/classes/locks.h"
@@ -168,10 +164,7 @@ private:
 	// Lock for log rotation
 	Firebird::RWLock renameLock;
 
-	UnicodeCollationHolder unicodeCollation;
-	typedef Firebird::SimilarToMatcher<ULONG, Jrd::UpcaseConverter<Jrd::CanonicalConverter<> > >
-		TraceSimilarToMatcher;
-	Firebird::AutoPtr<TraceSimilarToMatcher> include_matcher, exclude_matcher;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> include_matcher, exclude_matcher;
 
 	// Filters for gds error codes
 	typedef Firebird::SortedArray<ISC_STATUS> GdsCodesArray;

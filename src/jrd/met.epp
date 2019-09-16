@@ -1039,7 +1039,7 @@ DeferredWork* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const dsc
 		X IN RDB$RELATION_FIELDS WITH
 			X.RDB$FIELD_SOURCE EQ field_source->dsc_address
 	{
-		relation_name.makeText(sizeof(X.RDB$RELATION_NAME), CS_METADATA,
+		relation_name.makeText(sizeof(X.RDB$RELATION_NAME) - 1, CS_METADATA,
 			(UCHAR*) X.RDB$RELATION_NAME);
 		SCL_check_relation(tdbb, &relation_name, SCL_alter);
 		dw = DFW_post_work(transaction, dfw_update_format, &relation_name, 0);

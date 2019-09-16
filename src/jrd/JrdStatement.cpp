@@ -478,8 +478,6 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 			 access != routine->getStatement()->accessList.end();
 			 ++access)
 		{
-			const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());
-
 			MetaName userName = item->user;
 
 			if (access->acc_ss_rel_id)
@@ -489,17 +487,21 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 					userName = view->rel_owner_name;
 			}
 
+			Attachment* attachment = tdbb->getAttachment();
+			UserId* effectiveUser = userName.hasData() ? attachment->getUserId(userName) : attachment->att_ss_user;
+			AutoSetRestore<UserId*> userIdHolder(&attachment->att_ss_user, effectiveUser);
+
+			const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());
+
 			if (routine->getName().package.isEmpty())
 			{
-				SCL_check_access(tdbb, sec_class, userName, aclType,
-					routine->getName().identifier, access->acc_mask, access->acc_type,
-					true, access->acc_name, access->acc_r_name);
+				SCL_check_access(tdbb, sec_class, aclType, routine->getName().identifier,
+							access->acc_mask, access->acc_type, true, access->acc_name, access->acc_r_name);
 			}
 			else
 			{
-				SCL_check_access(tdbb, sec_class, userName, id_package,
-					routine->getName().package, access->acc_mask, access->acc_type,
-					true, access->acc_name, access->acc_r_name);
+				SCL_check_access(tdbb, sec_class, id_package, routine->getName().package,
+							access->acc_mask, access->acc_type, true, access->acc_name, access->acc_r_name);
 			}
 		}
 	}
@@ -514,8 +516,6 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 
 	for (const AccessItem* access = accessList.begin(); access != accessList.end(); ++access)
 	{
-		const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());
-
 		MetaName objName;
 		SLONG objType = 0;
 
@@ -548,7 +548,6 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 			userName = transaction->tra_caller_name.userName;
 		}
 
-
 		if (access->acc_ss_rel_id)
 		{
 			const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_ss_rel_id, false);
@@ -556,7 +555,13 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 				userName = view->rel_owner_name;
 		}
 
-		SCL_check_access(tdbb, sec_class, userName, objType, objName,
+		Attachment* attachment = tdbb->getAttachment();
+		UserId* effectiveUser = userName.hasData() ? attachment->getUserId(userName) : attachment->att_ss_user;
+		AutoSetRestore<UserId*> userIdHolder(&attachment->att_ss_user, effectiveUser);
+
+		const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());
+
+		SCL_check_access(tdbb, sec_class, objType, objName,
 			access->acc_mask, access->acc_type, true, access->acc_name, access->acc_r_name);
 	}
 }
@@ -683,9 +688,13 @@ void JrdStatement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 			else if (t.ssDefiner.specified && t.ssDefiner.value)
 				userName = t.owner;
 
+			Attachment* attachment = tdbb->getAttachment();
+			UserId* effectiveUser = userName.hasData() ? attachment->getUserId(userName) : attachment->att_ss_user;
+			AutoSetRestore<UserId*> userIdHolder(&attachment->att_ss_user, effectiveUser);
+
 			const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());
-			SCL_check_access(tdbb, sec_class, userName, id_trigger,
-				t.statement->triggerName, access->acc_mask,
+
+			SCL_check_access(tdbb, sec_class, id_trigger, t.statement->triggerName, access->acc_mask,
 				access->acc_type, true, access->acc_name, access->acc_r_name);
 		}
 	}

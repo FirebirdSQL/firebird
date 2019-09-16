@@ -37,7 +37,7 @@ bool BlobWrapper::open(IAttachment* db, ITransaction* trans, ISC_QUAD& blobid,
 	if (m_direction != dir_none)
 		return false;
 
-	if (bpb_len > 0 && !bpb || blobIsNull(blobid))
+	if ((bpb_len > 0 && !bpb) || blobIsNull(blobid))
 		return false;
 
 	m_blob = db->openBlob(m_status, trans, &blobid, bpb_len, bpb);

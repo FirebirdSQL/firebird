@@ -48,7 +48,7 @@ bool UserBlob::open(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid,
 	if (m_direction != dir_none)
 		return false;
 
-	if (bpb_len > 0 && !bpb || blobIsNull(blobid))
+	if ((bpb_len > 0 && !bpb) || blobIsNull(blobid))
 		return false;
 
 	if (!isc_open_blob2(m_status, &db, &trans, &m_blob, &blobid, bpb_len, bpb))

@@ -147,6 +147,9 @@ external:
 	$(MAKE) -C $(ROOT)/extern/decNumber
 	ln -sf $(ROOT)/extern/decNumber/libdecFloat.a $(LIB)
 
+	CXXFLAGS="-O3 -g -fPIC" $(MAKE) -C $(ROOT)/extern/re2
+	ln -sf $(ROOT)/extern/re2/obj/libre2.a $(LIB)
+
 ifeq ($(TOMMATH_BUILD_FLG),Y)
 	CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/libtommath -f makefile.shared GCC=$(GCC)
 	ln -sf $(TOMMATH_SO).$(TOMMATH_VER) $(LIB)

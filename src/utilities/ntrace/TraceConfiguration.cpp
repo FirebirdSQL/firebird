@@ -26,9 +26,7 @@
  */
 
 #include "TraceConfiguration.h"
-#include "TraceUnicodeUtils.h"
-#include "../../jrd/evl_string.h"
-#include "../../jrd/SimilarToMatcher.h"
+#include "../../common/SimilarToRegex.h"
 #include "../../common/isc_f_proto.h"
 
 using namespace Firebird;
@@ -66,26 +64,6 @@ void TraceCfgReader::readTraceConfiguration(const char* text,
 		found = true; \
 	}
 
-
-namespace
-{
-	template <typename PrevConverter = Jrd::NullStrConverter>
-	class SystemToUtf8Converter : public PrevConverter
-	{
-	public:
-		SystemToUtf8Converter(MemoryPool& pool, Jrd::TextType* obj, const UCHAR*& str, SLONG& len)
-			: PrevConverter(pool, obj, str, len)
-		{
-			buffer.assign(reinterpret_cast<const char*>(str), len);
-			ISC_systemToUtf8(buffer);
-			str = reinterpret_cast<const UCHAR*>(buffer.c_str());
-			len = buffer.length();
-		}
-
-	private:
-		string buffer;
-	};
-}
 
 #define ERROR_PREFIX "error while parsing trace configuration\n\t"
 
@@ -156,31 +134,28 @@ void TraceCfgReader::readConfig()
 				try
 				{
 #ifdef WIN_NT	// !CASE_SENSITIVITY
-					typedef Jrd::UpcaseConverter<SystemToUtf8Converter<> > SimilarConverter;
+					const unsigned regexFlags = SimilarToRegex::FLAG_CASE_INSENSITIVE;
 #else
-					typedef SystemToUtf8Converter<> SimilarConverter;
+					const unsigned regexFlags = 0;
 #endif
+					string utf8Pattern = pattern;
+					ISC_systemToUtf8(utf8Pattern);
 
-					UnicodeCollationHolder unicodeCollation(*getDefaultMemoryPool());
-					Jrd::TextType* textType = unicodeCollation.getTextType();
-
-					SimilarToMatcher<ULONG, Jrd::CanonicalConverter<SimilarConverter> > matcher(
-						*getDefaultMemoryPool(), textType, (const UCHAR*) pattern.c_str(),
-						pattern.length(), '\\', true);
+					SimilarToRegex matcher(*getDefaultMemoryPool(), regexFlags,
+						utf8Pattern.c_str(), utf8Pattern.length(), "\\", 1);
 
 					regExpOk = true;
 
-					matcher.process((const UCHAR*) m_databaseName.c_str(), m_databaseName.length());
-					if (matcher.result())
-					{
-						for (unsigned i = 0;
-							 i <= matcher.getNumBranches() && i < FB_NELEM(m_subpatterns); ++i)
-						{
-							unsigned start, length;
-							matcher.getBranchInfo(i, &start, &length);
+					PathName utf8DatabaseName = m_databaseName;
+					ISC_systemToUtf8(utf8DatabaseName);
+					Array<SimilarToRegex::MatchPos> matchPosArray;
 
-							m_subpatterns[i].start = start;
-							m_subpatterns[i].end = start + length;
+					if (matcher.matches(utf8DatabaseName.c_str(), utf8DatabaseName.length(), &matchPosArray))
+					{
+						for (unsigned i = 0; i < matchPosArray.getCount() && i < FB_NELEM(m_subpatterns); ++i)
+						{
+							m_subpatterns[i].start = matchPosArray[i].start;
+							m_subpatterns[i].end = matchPosArray[i].start + matchPosArray[i].length;
 						}
 
 						match = exactMatch = true;

@@ -480,6 +480,12 @@ int WinSspiClient::authenticate(Firebird::CheckStatusWrapper* status,
 {
 	try
 	{
+		if (cBlock->getLogin())
+		{
+			// user specified login - we should not continue with trusted-like auth
+			return AUTH_CONTINUE;
+		}
+
 		sspiData.clear();
 		unsigned int length;
 		const unsigned char* bytes = cBlock->getData(&length);

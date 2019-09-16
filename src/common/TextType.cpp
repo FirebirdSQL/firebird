@@ -169,33 +169,6 @@ TextType::TextType(TTYPE_ID _type, texttype *_tt, CharSet* _cs)
 			memset(&canonicalChars[conversions[i].ch], 0, sizeof(ULONG));
 		}
 	}
-
-	struct Conversion2
-	{
-		const char* str;
-		UCHAR* buffer;
-	};
-
-	const Conversion2 conversions2[] =
-	{
-		{"0123456789", reinterpret_cast<UCHAR*>(canonicalNumbers)},
-		{"abcdefghijklmnopqrstuvwxyz", reinterpret_cast<UCHAR*>(canonicalLowerLetters)},
-		{"ABCDEFGHIJKLMNOPQRSTUVWXYZ", reinterpret_cast<UCHAR*>(canonicalUpperLetters)},
-		{" \t\v\r\n\f", reinterpret_cast<UCHAR*>(canonicalWhiteSpaces)}
-	};
-
-	for (int i = 0; i < FB_NELEM(conversions2); i++)
-	{
-		UCHAR temp[sizeof(ULONG)];
-
-		for (const char* p = conversions2[i].str; *p; ++p)
-		{
-			USHORT code = static_cast<USHORT>(*p);
-			ULONG length = getCharSet()->getConvFromUnicode().convert(sizeof(code), &code, sizeof(temp), temp);
-			const size_t pos = (p - conversions2[i].str) * getCanonicalWidth();
-			canonical(length, temp, sizeof(ULONG), &conversions2[i].buffer[pos]);
-		}
-	}
 }
 
 

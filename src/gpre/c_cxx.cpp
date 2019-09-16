@@ -1215,9 +1215,16 @@ static void gen_compile( const act* action, int column)
 
 	PATTERN_expand((USHORT) column, pattern2, &args);
 
+	column += INDENT;
+	begin(column);
+
 	args.pat_condition = !(request->req_flags & REQ_exp_hand);
 	args.pat_value1 = request->req_length;
-	PATTERN_expand((USHORT) (column + INDENT), pattern1, &args);
+	PATTERN_expand((USHORT) column, pattern1, &args);
+
+	set_sqlcode(action, column);
+	endp(column);
+	column -= INDENT;
 
 	// If blobs are present, zero out all of the blob handles.  After this
 	// point, the handles are the user's responsibility

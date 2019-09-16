@@ -1996,7 +1996,7 @@ static bool select_multi(rem_port* main_port, UCHAR* buffer, SSHORT bufsize, SSH
 					SOCLOSE(main_port->port_handle);
 				}
 			}
-			else if (port = select_accept(main_port))
+			else if ((port = select_accept(main_port)))
 			{
 				if (!REMOTE_inflate(port, packet_receive, buffer, bufsize, length))
 				{

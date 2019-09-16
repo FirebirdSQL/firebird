@@ -228,6 +228,9 @@
     <ClCompile Include="..\..\..\src\common\sha2\sha2.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\SimilarToRegex.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\TimeZoneUtil.cpp">
       <Filter>common</Filter>
     </ClCompile>
@@ -567,6 +570,9 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\sha2\sha2.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\SimilarToRegex.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\TimeZones.h">

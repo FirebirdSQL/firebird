@@ -90,6 +90,7 @@ Note:
 <left paren>, <right paren>, <vertical bar>, <circumflex>, <minus sign>, <plus sign>, <asterisk>,
 <underscore>, <percent>, <question mark>, <left brace> or <escape character>.
 
+3) Since FB 4 the repeat factor low/high values could not be greater than 1000.
 
 Syntax description and examples:
 
@@ -174,7 +175,7 @@ Matches a character not identical to one of <character enumeration>:
 
 Matches a character identical to one of <character enumeration include> but not identical to one
 of <character enumeration exclude>:
-<left bracket> <character enumeration include>... <circumflex> <character enumeration exclude>... 
+<left bracket> <character enumeration include>... <circumflex> <character enumeration exclude>...
     '3' SIMILAR TO '[[:DIGIT:]^3]'    -- false
     '4' SIMILAR TO '[[:DIGIT:]^3]'    -- true
 
@@ -220,3 +221,36 @@ insert into department values ('600', 'Engineering', '(408) 555-123');	-- check 
 select * from department
     where phone not similar to '\([0-9]{3}\) 555\-%' escape '\';
 
+
+Appendice:
+
+Since FB 4 SIMILAR TO and SUBSTRING...SIMILAR are implemented using the re2 library,
+which has the following license:
+
+Copyright (c) 2009 The RE2 Authors. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

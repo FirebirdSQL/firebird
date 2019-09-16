@@ -4182,7 +4182,7 @@ static void check_rel_field_class(thread_db* tdbb,
 			// he may have access to relation as whole.
 			try
 			{
-				SCL_check_access(tdbb, s_class, 0, 0, NULL, flags, SCL_object_column, false, "");
+				SCL_check_access(tdbb, s_class, 0, NULL, flags, SCL_object_column, false, "");
 			}
 			catch (const Firebird::Exception&)
 			{

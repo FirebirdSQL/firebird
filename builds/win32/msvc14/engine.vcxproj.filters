@@ -938,9 +938,6 @@
     <ClInclude Include="..\..\..\src\jrd\shut_proto.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\jrd\SimilarToMatcher.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\sort.h">
       <Filter>Header files</Filter>
     </ClInclude>

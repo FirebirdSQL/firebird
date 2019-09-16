@@ -414,7 +414,7 @@ bool Mapping::Cache::populate(IAttachment *att)
 	return false;
 }
 
-void Mapping::Cache::map(bool flagWild, AuthReader::Info& info, AuthWriter& newBlock)
+void Mapping::Cache::map(bool flagWild, ExtInfo& info, AuthWriter& newBlock)
 {
 	if (info.type == TYPE_SEEN)
 		return;
@@ -430,7 +430,7 @@ void Mapping::Cache::map(bool flagWild, AuthReader::Info& info, AuthWriter& newB
 		varUsing(info, from, newBlock);
 }
 
-void Mapping::Cache::search(AuthReader::Info& info, const Map& from, AuthWriter& newBlock,
+void Mapping::Cache::search(ExtInfo& info, const Map& from, AuthWriter& newBlock,
 	const NoCaseString& originalUserName)
 {
 	MAP_DEBUG(fprintf(stderr, "Key = %s\n", from.makeHashKey().c_str()));
@@ -443,21 +443,29 @@ void Mapping::Cache::search(AuthReader::Info& info, const Map& from, AuthWriter&
 		unsigned flagRolUsr = to->toRole ? FLAG_ROLE : FLAG_USER;
 		if (info.found & flagRolUsr)
 			continue;
+
+		const NoCaseString& newName(to->to == "*" ? originalUserName : to->to);
+		NoCaseString& infoName(to->toRole ? info.currentRole : info.currentUser);
 		if (info.current & flagRolUsr)
+		{
+			if (infoName == newName)
+				continue;
 			(Arg::Gds(isc_map_multi) << originalUserName).raise();
+		}
 
 		info.current |= flagRolUsr;
+		infoName = newName;
 
 		AuthReader::Info newInfo;
 		newInfo.type = to->toRole ? NM_ROLE : NM_USER;
-		newInfo.name = to->to == "*" ? originalUserName : to->to;
+		newInfo.name = newName;
         newInfo.secDb = this->name;
         newInfo.origPlug = info.origPlug.hasData() ? info.origPlug : info.plugin;
 		newBlock.add(newInfo);
 	}
 }
 
-void Mapping::Cache::varPlugin(AuthReader::Info& info, Map from, AuthWriter& newBlock)
+void Mapping::Cache::varPlugin(ExtInfo& info, Map from, AuthWriter& newBlock)
 {
 	varDb(info, from, newBlock);
 	if (from.plugin != "*")
@@ -467,7 +475,7 @@ void Mapping::Cache::varPlugin(AuthReader::Info& info, Map from, AuthWriter& new
 	}
 }
 
-void Mapping::Cache::varDb(AuthReader::Info& info, Map from, AuthWriter& newBlock)
+void Mapping::Cache::varDb(ExtInfo& info, Map from, AuthWriter& newBlock)
 {
 	varFrom(info, from, newBlock);
 	if (from.db != "*")
@@ -477,7 +485,7 @@ void Mapping::Cache::varDb(AuthReader::Info& info, Map from, AuthWriter& newBloc
 	}
 }
 
-void Mapping::Cache::varFrom(AuthReader::Info& info, Map from, AuthWriter& newBlock)
+void Mapping::Cache::varFrom(ExtInfo& info, Map from, AuthWriter& newBlock)
 {
 	NoCaseString originalUserName = from.from;
 	search(info, from, newBlock, originalUserName);
@@ -485,7 +493,7 @@ void Mapping::Cache::varFrom(AuthReader::Info& info, Map from, AuthWriter& newBl
 	search(info, from, newBlock, originalUserName);
 }
 
-void Mapping::Cache::varUsing(AuthReader::Info& info, Map from, AuthWriter& newBlock)
+void Mapping::Cache::varUsing(ExtInfo& info, Map from, AuthWriter& newBlock)
 {
 	if (from.usng == 'P')
 	{
@@ -512,7 +520,7 @@ void Mapping::Cache::varUsing(AuthReader::Info& info, Map from, AuthWriter& newB
 		fb_assert(false);
 }
 
-bool Mapping::Cache::map4(bool flagWild, unsigned flagSet, AuthReader& rdr, AuthReader::Info& info, AuthWriter& newBlock)
+bool Mapping::Cache::map4(bool flagWild, unsigned flagSet, AuthReader& rdr, ExtInfo& info, AuthWriter& newBlock)
 {
 	if (!flagSet)
 	{
@@ -1439,7 +1447,7 @@ ULONG Mapping::mapUser(string& name, string& trustedRole)
 	// Map it only when needed
 	if (authBlock && authBlock->hasData() && (dbCache || secCache))
 	{
-		AuthReader::Info info;
+		ExtInfo info;
 
 		// Caches are ready somehow - proceed with analysis
 		AuthReader auth(*authBlock);

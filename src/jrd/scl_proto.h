@@ -33,7 +33,7 @@
 
 struct dsc;
 
-void SCL_check_access(Jrd::thread_db*, const Jrd::SecurityClass*, const Firebird::MetaName& userName,
+void SCL_check_access(Jrd::thread_db*, const Jrd::SecurityClass*,
 					  SLONG, const Firebird::MetaName&,
 					  Jrd::SecurityClass::flags_t, SLONG type, bool recursive, const Firebird::MetaName&,
 					  const Firebird::MetaName& = "");
@@ -54,7 +54,7 @@ bool SCL_check_view(Jrd::thread_db* tdbb, const dsc*, Jrd::SecurityClass::flags_
 void SCL_check_role(Jrd::thread_db* tdbb, const Firebird::MetaName&, Jrd::SecurityClass::flags_t);
 Jrd::SecurityClass* SCL_get_class(Jrd::thread_db*, const TEXT*);
 Jrd::SecurityClass::flags_t SCL_get_mask(Jrd::thread_db* tdbb, const TEXT*, const TEXT*);
-Jrd::SecurityClass* SCL_recompute_class(Jrd::thread_db*, const TEXT*);
+void SCL_clear_classes(Jrd::thread_db*, const TEXT*);
 void SCL_release_all(Jrd::SecurityClassList*&);
 bool SCL_role_granted(Jrd::thread_db* tdbb, const Jrd::UserId& usr, const TEXT* sql_role);
 Jrd::SecurityClass::flags_t SCL_get_object_mask(const int object_type);

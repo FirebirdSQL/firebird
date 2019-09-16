@@ -664,7 +664,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_release(ISC_STATUS* user_status, const SCH
 		// and remove this statement from the local list
 
 		dsql_stmt* p;
-		for (dsql_stmt** stmt_ptr = &statements; p = *stmt_ptr; stmt_ptr = &p->stmt_next)
+		for (dsql_stmt** stmt_ptr = &statements; (p = *stmt_ptr); stmt_ptr = &p->stmt_next)
 		{
 			if (p == statement)
 			{
@@ -1002,7 +1002,7 @@ static void cleanup_database(FB_API_HANDLE* db_handle, void* /*dummy*/)
 	dsql_stmt** stmt_ptr = &statements;
 	dsql_stmt* p;
 
-	while (p = *stmt_ptr)
+	while ((p = *stmt_ptr))
 	{
 		if (p->stmt_db_handle == *db_handle)
 		{
@@ -1023,7 +1023,7 @@ static void cleanup_database(FB_API_HANDLE* db_handle, void* /*dummy*/)
 
 	dsql_dbb* dbb;
 
-	for (dsql_dbb** dbb_ptr = &databases; dbb = *dbb_ptr; dbb_ptr = &dbb->dbb_next)
+	for (dsql_dbb** dbb_ptr = &databases; (dbb = *dbb_ptr); dbb_ptr = &dbb->dbb_next)
 	{
 		if (dbb->dbb_handle == *db_handle)
 		{
@@ -1171,7 +1171,7 @@ static dsql_name* insert_name(const TEXT* symbol_name, dsql_name** list_ptr, dsq
 	name->name_length = l;
 	memcpy(name->name_symbol, symbol_name, l);
 
-	if (name->name_next = *list_ptr)
+	if ((name->name_next = *list_ptr))
 		name->name_next->name_prev = name;
 	*list_ptr = name;
 	name->name_prev = NULL;

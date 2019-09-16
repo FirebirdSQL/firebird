@@ -26,9 +26,9 @@
 
 #include "../common/classes/array.h"
 #include "../common/classes/semaphore.h"
+#include "../common/SimilarToRegex.h"
 #include "../common/os/guid.h"
 #include "../common/isc_s_proto.h"
-#include "../../jrd/SimilarToMatcher.h"
 #include "../../jrd/intl_classes.h"
 
 #include "Config.h"
@@ -38,25 +38,18 @@ namespace Replication
 {
 	class TableMatcher
 	{
-		typedef Jrd::UpcaseConverter<Jrd::NullStrConverter> SimilarConverter;
-		typedef Firebird::SimilarToMatcher<UCHAR, SimilarConverter> SimilarMatcher;
 		typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Firebird::MetaName, bool> > > TablePermissionMap;
 
 	public:
 		TableMatcher(MemoryPool& pool,
 					 const Firebird::string& includeFilter,
 					 const Firebird::string& excludeFilter);
-		~TableMatcher();
 
 		bool matchTable(const Firebird::MetaName& tableName);
 
 	private:
-		charset* m_cs;
-		Firebird::AutoPtr<texttype> m_tt;
-		Firebird::AutoPtr<Jrd::CharSet> m_charSet;
-		Firebird::AutoPtr<Jrd::TextType> m_textType;
-		Firebird::AutoPtr<SimilarMatcher> m_includeMatcher;
-		Firebird::AutoPtr<SimilarMatcher> m_excludeMatcher;
+		Firebird::AutoPtr<Firebird::SimilarToRegex> m_includeMatcher;
+		Firebird::AutoPtr<Firebird::SimilarToRegex> m_excludeMatcher;
 		TablePermissionMap m_tables;
 	};
 

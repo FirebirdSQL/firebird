@@ -3173,13 +3173,13 @@ static bool compute_security(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 		{
 			// Get security class.  This may return NULL if it doesn't exist
 
-			SecurityClass* s_class = SCL_recompute_class(tdbb, work->dfw_name.c_str());
+			SCL_clear_classes(tdbb, work->dfw_name.c_str());
 
 			AutoRequest handle;
 			FOR(REQUEST_HANDLE handle) X IN RDB$DATABASE
 				WITH X.RDB$SECURITY_CLASS EQ work->dfw_name.c_str()
 			{
-				attachment->att_security_class = s_class;
+				attachment->att_security_class = SCL_get_class(tdbb, work->dfw_name.c_str());
 			}
 			END_FOR
 		}

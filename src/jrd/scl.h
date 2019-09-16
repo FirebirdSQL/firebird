@@ -48,23 +48,23 @@ public:
 	typedef ULONG flags_t;
 	enum BlobAccessCheck { BA_UNKNOWN, BA_SUCCESS, BA_FAILURE };
 
-	SecurityClass(Firebird::MemoryPool &pool, const Firebird::MetaName& name)
-		: scl_flags(0), scl_name(pool, name), scl_blb_access(BA_UNKNOWN)
+	SecurityClass(Firebird::MemoryPool &pool, const Firebird::MetaName& name, const Firebird::MetaName& userName)
+		: scl_flags(0), sclClassUser(pool, Firebird::MetaNamePair(name, userName)), scl_blb_access(BA_UNKNOWN)
 	{}
 
 	flags_t scl_flags;			// Access permissions
-	const Firebird::MetaName scl_name;
+	const Firebird::MetaNamePair sclClassUser;
 	BlobAccessCheck scl_blb_access;
 
-	static const Firebird::MetaName& generate(const void*, const SecurityClass* item)
+	static const Firebird::MetaNamePair& generate(const void*, const SecurityClass* item)
 	{
-		return item->scl_name;
+		return item->sclClassUser;
 	}
 };
 
 typedef Firebird::BePlusTree<
 	SecurityClass*,
-	Firebird::MetaName,
+	Firebird::MetaNamePair,
 	Firebird::MemoryPool,
 	SecurityClass
 > SecurityClassList;
@@ -89,17 +89,6 @@ const SecurityClass::flags_t SCL_ACCESS_ANY	= SCL_insert | SCL_update | SCL_dele
 											  SCL_execute | SCL_usage | SCL_SELECT_ANY;
 const SecurityClass::flags_t SCL_MODIFY_ANY	= SCL_create | SCL_alter | SCL_control | SCL_drop;
 
-
-/*
-scl pathcalls
-SCL_check_access => SCL_get_object_mask => SCL_recompute_class => SCL_get_class => compute_access
-				 => compute_access							   => compute_access
-
-SCL_check_database => att_security_class => SCL_get_class => compute_access
-										 => SCL_recompute_class => SCL_get_class => compute_access
-
-compute_access => walk_acl
- */
 
 // information about the user
 

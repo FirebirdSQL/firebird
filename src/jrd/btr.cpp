@@ -730,7 +730,7 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 			node.readNode(pointer, true);
 
 			if ((lower.key_length == node.prefix + node.length) ||
-				(lower.key_length <= node.prefix + node.length) && partLower)
+				((lower.key_length <= node.prefix + node.length) && partLower))
 			{
 				const UCHAR* p = node.data, *q = lower.key_data + node.prefix;
 				const UCHAR* const end = lower.key_data + lower.key_length;
@@ -3106,8 +3106,8 @@ static contents delete_node(thread_db* tdbb, WIN* window, UCHAR* pointer)
 				newJumpNode.length = 0;
 			}
 
-			if (newJumpNode.prefix + newJumpNode.length != newPrefix ||
-				jumpPrev && (newJumpNode.prefix > jumpPrev->prefix + jumpPrev->length))
+			if ((newJumpNode.prefix + newJumpNode.length != newPrefix) ||
+				(jumpPrev && (newJumpNode.prefix > jumpPrev->prefix + jumpPrev->length)))
 			{
 				UCHAR* prevPtr = page->btr_jump_size + page->btr_nodes;
 				if (jumpPrev)

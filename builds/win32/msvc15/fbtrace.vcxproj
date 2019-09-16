@@ -183,7 +183,6 @@
     <ClCompile Include="..\..\..\src\utilities\ntrace\TraceConfiguration.cpp" />
     <ClCompile Include="..\..\..\src\utilities\ntrace\traceplugin.cpp" />
     <ClCompile Include="..\..\..\src\utilities\ntrace\TracePluginImpl.cpp" />
-    <ClCompile Include="..\..\..\src\utilities\ntrace\TraceUnicodeUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\utilities\ntrace\paramtable.h" />
@@ -191,7 +190,6 @@
     <ClInclude Include="..\..\..\src\utilities\ntrace\PluginLogWriter.h" />
     <ClInclude Include="..\..\..\src\utilities\ntrace\TracePluginConfig.h" />
     <ClInclude Include="..\..\..\src\utilities\ntrace\TracePluginImpl.h" />
-    <ClInclude Include="..\..\..\src\utilities\ntrace\TraceUnicodeUtils.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\..\src\jrd\version.rc" />

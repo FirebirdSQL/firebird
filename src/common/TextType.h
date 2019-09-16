@@ -138,47 +138,8 @@ public:
 		return reinterpret_cast<const UCHAR*>(&canonicalChars[ch]);
 	}
 
-	const UCHAR* getCanonicalNumbers(int* count = NULL) const
-	{
-		if (count)
-			*count = 10;
-		return reinterpret_cast<const UCHAR*>(canonicalNumbers);
-	}
-
-	const UCHAR* getCanonicalLowerLetters(int* count = NULL) const
-	{
-		if (count)
-			*count = 26;
-		return reinterpret_cast<const UCHAR*>(canonicalLowerLetters);
-	}
-
-	const UCHAR* getCanonicalUpperLetters(int* count = NULL) const
-	{
-		if (count)
-			*count = 26;
-		return reinterpret_cast<const UCHAR*>(canonicalUpperLetters);
-	}
-
-	const UCHAR* getCanonicalWhiteSpaces(int* count = NULL) const
-	{
-		if (count)
-			*count = 6;
-		return reinterpret_cast<const UCHAR*>(canonicalWhiteSpaces);
-	}
-
-	const UCHAR* getCanonicalSpace(int* count = NULL) const
-	{
-		if (count)
-			*count = 1;
-		return getCanonicalChar(CHAR_SPACE);
-	}
-
 private:
 	ULONG canonicalChars[CHAR_COUNT];
-	ULONG canonicalNumbers[10];
-	ULONG canonicalLowerLetters[26];
-	ULONG canonicalUpperLetters[26];
-	ULONG canonicalWhiteSpaces[6];
 };
 
 }	// namespace Jrd

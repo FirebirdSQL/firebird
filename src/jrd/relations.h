@@ -493,6 +493,7 @@ RELATION(nam_mon_database, rel_mon_database, ODS_11_1, rel_virtual)
 	FIELD(f_mon_db_crypt_page, nam_mon_crypt_page, fld_counter, 0, ODS_12_0)
 	FIELD(f_mon_db_owner, nam_mon_owner, fld_user, 0, ODS_12_0)
 	FIELD(f_mon_db_secdb, nam_mon_secdb, fld_sec_db, 0, ODS_12_0)
+	FIELD(f_mon_db_crypt_state, nam_mon_crypt_state, fld_crypt_state, 0, ODS_13_0)
 END_RELATION
 
 // Relation 34 (MON$ATTACHMENTS)

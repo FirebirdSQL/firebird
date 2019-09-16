@@ -534,10 +534,7 @@ bool XnetClientEndPoint::connect_init()
 		if (!xnet_connect_mutex)
 		{
 			if (ERRNO == ERROR_FILE_NOT_FOUND)
-			{
-				make_obj_name(name_buffer, sizeof(name_buffer), "xnet://%s");
-				(Arg::Gds(isc_network_error) << Arg::Str(name_buffer)).raise();
-			}
+				return false;
 
 			system_error::raise(ERR_STR("OpenMutex"));
 		}
@@ -1123,24 +1120,28 @@ rem_port* XnetClientEndPoint::connect_client(PACKET* packet, const RefPtr<const 
 	{ // xnet_mutex scope
 		MutexLockGuard guard(xnet_mutex, FB_FUNCTION);
 
-		// First, try to connect using default kernel namespace.
-		// This should work on Win9X, NT4 and on later OS when server is running
-		// under restricted account in the same session as the client
-		fb_utils::copy_terminate(xnet_endpoint, conf->getIpcName(), sizeof(xnet_endpoint));
-
-		try
+		if (*xnet_endpoint == 0 || !connect_init())
 		{
-			connect_init();
-		}
-		catch (const Exception&)
-		{
-			// The client may not have permissions to create global objects,
-			// but still be able to connect to a local server that has such permissions.
-			// This is why we try to connect using Global\ namespace unconditionally
-			fb_utils::snprintf(xnet_endpoint, sizeof(xnet_endpoint), "Global\\%s", conf->getIpcName());
+			// First, try to connect using default kernel namespace.
+			// This should work on Win9X, NT4 and on later OS when server is running
+			// under restricted account in the same session as the client
+			fb_utils::copy_terminate(xnet_endpoint, conf->getIpcName(), sizeof(xnet_endpoint));
 
-			if (!connect_init()) {
-				return NULL;
+			if (!connect_init())
+			{
+				// The client may not have permissions to create global objects,
+				// but still be able to connect to a local server that has such permissions.
+				// This is why we try to connect using Global\ namespace unconditionally
+				fb_utils::snprintf(xnet_endpoint, sizeof(xnet_endpoint), "Global\\%s", conf->getIpcName());
+
+				if (!connect_init())
+				{
+					TEXT name_buffer[BUFFER_TINY];
+					make_obj_name(name_buffer, sizeof(name_buffer), "xnet://%s");
+
+					*xnet_endpoint = 0;
+					(Arg::Gds(isc_network_error) << Arg::Str(name_buffer)).raise();
+				}
 			}
 		}
 

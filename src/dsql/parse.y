@@ -5097,11 +5097,19 @@ decimal_keyword
 
 %type <legacyField> float_type
 float_type
-	: FLOAT precision_opt
+	: FLOAT precision_opt_nz
 		{
+		    // Precision is binary digits of the significand: 1-24 for 32 bit single precision, 25-53 for 64 bit double precision
+			// Precision 0 is the 'no precision specified' case, which defaults to 32 bit single precision
+			SLONG precision = $2;
+
+			if (precision != 0 && (precision < 1 || precision > 53))
+				yyabandon(YYPOSNARG(2), -842, Arg::Gds(isc_precision_err2) << Arg::Num(1) << Arg::Num(53));
+																// Precision must be between 1 and 53
+
 			$$ = newNode<dsql_fld>();
 
-			if ($2 > 7)
+			if (precision > 24)
 			{
 				$$->dtype = dtype_double;
 				$$->length = sizeof(double);
@@ -5112,8 +5120,16 @@ float_type
 				$$->length = sizeof(float);
 			}
 		}
-	| LONG FLOAT precision_opt
+	| LONG FLOAT precision_opt_nz
 		{
+			// Precision is binary digits of the significand: 1-53 for 64 bit double precision
+			// Precision 0 is the 'no precision specified case', which defaults to 64 bit double precision
+			SLONG precision = $3;
+
+			if (precision != 0 && (precision < 1 || precision > 53))
+				yyabandon(YYPOSNARG(3), -842, Arg::Gds(isc_precision_err2) << Arg::Num(1) << Arg::Num(53));
+																// Precision must be between 1 and 53
+
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_double;
 			$$->length = sizeof(double);
@@ -5132,13 +5148,7 @@ float_type
 		}
 	;
 
-%type <int32Val> precision_opt
-precision_opt
-	: /* nothing */					{ $$ = 0; }
-	| '(' nonneg_short_integer ')'	{ $$ = $2; }
-	;
-
-// alternative to precision_opt that does not allow zero
+// optional precision that does not allow zero
 %type <int32Val> precision_opt_nz
 precision_opt_nz
 	: /* nothing */				{ $$ = 0; }

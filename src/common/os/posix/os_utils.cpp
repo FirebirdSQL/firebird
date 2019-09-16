@@ -289,8 +289,9 @@ int openCreateSharedFile(const char* pathname, int flags)
 
 	if (rc != 0)
 	{
+		const int e = ERRNO;
 		close(fd);
-		raiseError(ERRNO, pathname);
+		raiseError(e, pathname);
 	}
 
 	if (S_ISLNK(st.st_mode))

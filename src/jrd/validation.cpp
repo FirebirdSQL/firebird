@@ -570,7 +570,6 @@ VI. ADDITIONAL NOTES
 #include "../common/db_alias.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/lck_proto.h"
-#include "../jrd/Collation.h"
 
 #ifdef DEBUG_VAL_VERBOSE
 #include "../jrd/dmp_proto.h"
@@ -592,18 +591,21 @@ static void print_rhd(USHORT, const rhd*);
 #endif
 
 
-static PatternMatcher* createPatternMatcher(thread_db* tdbb, const char* pattern)
+static SimilarToRegex* createPatternMatcher(thread_db* tdbb, const char* pattern)
 {
-	PatternMatcher* matcher = NULL;
+	SimilarToRegex* matcher = NULL;
 	try
 	{
 		if (pattern)
 		{
 			const int len = strlen(pattern);
 
-			Collation* obj = INTL_texttype_lookup(tdbb, CS_UTF8);
-			matcher = obj->createSimilarToMatcher(*tdbb->getDefaultPool(),
-				(const UCHAR*) pattern, len, (UCHAR*) "\\", 1);
+			//// TODO: Should this be different than trace and replication
+			//// and use case sensitive matcher?
+			matcher = FB_NEW_POOL(*tdbb->getDefaultPool()) SimilarToRegex(
+				*tdbb->getDefaultPool(), 0,
+				pattern, len,
+				"\\", 1);
 		}
 	}
 	catch (const Exception& ex)
@@ -870,8 +872,6 @@ Validation::Validation(thread_db* tdbb, UtilSvc* uSvc) :
 	vdr_page_bitmap = NULL;
 
 	vdr_service = uSvc;
-	vdr_tab_incl = vdr_tab_excl = NULL;
-	vdr_idx_incl = vdr_idx_excl = NULL;
 	vdr_lock_tout = -10;
 
 	if (uSvc) {
@@ -882,11 +882,6 @@ Validation::Validation(thread_db* tdbb, UtilSvc* uSvc) :
 
 Validation::~Validation()
 {
-	delete vdr_tab_incl;
-	delete vdr_tab_excl;
-	delete vdr_idx_incl;
-	delete vdr_idx_excl;
-
 	output("Validation finished\n");
 }
 
@@ -1654,22 +1649,14 @@ void Validation::walk_database()
 
 			if (vdr_tab_incl)
 			{
-				vdr_tab_incl->reset();
-				if (!vdr_tab_incl->process((UCHAR*) relation->rel_name.c_str(), relation->rel_name.length()) ||
-					!vdr_tab_incl->result())
-				{
+				if (!vdr_tab_incl->matches(relation->rel_name.c_str(), relation->rel_name.length()))
 					continue;
-				}
 			}
 
 			if (vdr_tab_excl)
 			{
-				vdr_tab_excl->reset();
-				if (!vdr_tab_excl->process((UCHAR*) relation->rel_name.c_str(), relation->rel_name.length()) ||
-					vdr_tab_excl->result())
-				{
+				if (vdr_tab_excl->matches(relation->rel_name.c_str(), relation->rel_name.length()))
 					continue;
-				}
 			}
 
 			// We can't realiable track double allocated page's when validating online.
@@ -3163,15 +3150,13 @@ Validation::RTN Validation::walk_root(jrd_rel* relation)
 
 		if (vdr_idx_incl)
 		{
-			vdr_idx_incl->reset();
-			if (!vdr_idx_incl->process((UCHAR*) index.c_str(), index.length()) || !vdr_idx_incl->result())
+			if (!vdr_idx_incl->matches(relation->rel_name.c_str(), relation->rel_name.length()))
 				continue;
 		}
 
 		if (vdr_idx_excl)
 		{
-			vdr_idx_excl->reset();
-			if (!vdr_idx_excl->process((UCHAR*) index.c_str(), index.length()) || vdr_idx_excl->result())
+			if (vdr_idx_excl->matches(relation->rel_name.c_str(), relation->rel_name.length()))
 				continue;
 		}
 
