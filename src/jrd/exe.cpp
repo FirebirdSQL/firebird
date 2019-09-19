@@ -1654,15 +1654,17 @@ static jrd_req* execute_triggers(thread_db* tdbb,
 	if (!is_db_trigger && (!old_rec || !new_rec))
 	{
 		const Record* record = old_rec ? old_rec : new_rec;
-		fb_assert(record && record->rec_format);
+		record_param* rpb = old_rpb ? old_rpb : new_rpb;
+		fb_assert(record && rpb && rpb->rpb_relation);
+		Format* format = MET_current(tdbb, rpb->rpb_relation);
 		// copy the record
-		null_rec = FB_NEW_RPT(record->rec_pool, record->rec_length) Record(record->rec_pool);
-		null_rec->rec_length = record->rec_length;
-		null_rec->rec_format = record->rec_format;
+		null_rec = FB_NEW_RPT(record->rec_pool, format->fmt_length) Record(record->rec_pool);
+		null_rec->rec_length = format->fmt_length;
+		null_rec->rec_format = format;
 		// zero the record buffer
-		memset(null_rec->rec_data, 0, record->rec_length);
+		memset(null_rec->rec_data, 0, null_rec->rec_length);
 		// initialize all fields to missing
-		const SSHORT n = (record->rec_format->fmt_count + 7) >> 3;
+		const SSHORT n = (null_rec->rec_format->fmt_count + 7) >> 3;
 		memset(null_rec->rec_data, 0xFF, n);
 	}
 
