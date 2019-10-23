@@ -703,6 +703,14 @@ int gbak(Firebird::UtilSvc* uSvc)
 			}
 			tdgbl->setupSkipData(argv[itr]);
 			break;
+		case IN_SW_BURP_INCLUDE_DATA:
+			if (++itr >= argc)
+			{
+				BURP_error(389, true);
+				// missing regular expression to include tables
+			}
+			tdgbl->setupIncludeData(argv[itr]);
+			break;
 		case IN_SW_BURP_ROLE:
 			if (++itr >= argc)
 			{
@@ -2540,6 +2548,38 @@ void BurpGlobals::setupSkipData(const Firebird::string& regexp)
 	}
 }
 
+void BurpGlobals::setupIncludeData(const Firebird::string& regexp)
+{
+	if (includeDataMatcher)
+	{
+		BURP_error(390, true);
+		// msg 390 regular expression to include tables was already set
+	}
+
+	// Compile include relation expressions
+	try
+	{
+		if (regexp.hasData())
+		{
+			Firebird::string filter(regexp);
+			if (!uSvc->utf8FileNames())
+				ISC_systemToUtf8(filter);
+
+			BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+			includeDataMatcher.reset(FB_NEW_POOL(tdgbl->getPool()) Firebird::SimilarToRegex(
+				tdgbl->getPool(), Firebird::SimilarToFlag::CASE_INSENSITIVE,
+				filter.c_str(), filter.length(),
+				"\\", 1));
+		}
+	}
+	catch (const Firebird::Exception&)
+	{
+		Firebird::fatal_exception::raiseFmt(
+			"error while compiling regular expression \"%s\"", regexp.c_str());
+	}
+}
+
 Firebird::string BurpGlobals::toSystem(const Firebird::PathName& from)
 {
 	Firebird::string to = from.ToString();
@@ -2548,15 +2588,35 @@ Firebird::string BurpGlobals::toSystem(const Firebird::PathName& from)
 	return to;
 }
 
+namespace // for local symbols
+{
+	enum Pattern { NOT_SET = 0, MATCH = 1, NOT_MATCH = 2 };
+
+	Pattern checkPattern(Firebird::AutoPtr<Firebird::SimilarToRegex>& matcher,
+					const char* name)
+	{
+		if (!matcher)
+			return NOT_SET;
+
+		return matcher->matches(name, strlen(name))? MATCH : NOT_MATCH;
+	}
+}
+
 bool BurpGlobals::skipRelation(const char* name)
 {
 	if (gbl_sw_meta)
 		return true;
 
-	if (!skipDataMatcher)
-		return false;
+	// Fine-grained table controlling cases when data must be skipped for a table
+	static const bool result[3][3] = {
+		// Include filter
+		//	NS    M      NM           S
+		{ false, false, true}, // NS  k
+		{ true,  true,  true}, // M   i
+		{ false, false, true}  // NM  p
+	};
 
-	return skipDataMatcher->matches(name, strlen(name));
+	return result[checkPattern(skipDataMatcher, name)][checkPattern(includeDataMatcher, name)];
 }
 
 void BurpGlobals::read_stats(SINT64* stats)

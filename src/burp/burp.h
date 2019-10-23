@@ -1139,6 +1139,7 @@ public:
 		ThreadData::restoreSpecific();
 	}
 	void setupSkipData(const Firebird::string& regexp);
+	void setupIncludeData(const Firebird::string& regexp);
 	bool skipRelation(const char* name);
 
 	char veryEnd;
@@ -1155,6 +1156,7 @@ public:
 	bool firstMap;			// this is the first time we entered get_mapping()
 	bool stdIoMode;			// stdin or stdout is used as backup file
 	Firebird::AutoPtr<Firebird::SimilarToRegex> skipDataMatcher;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> includeDataMatcher;
 
 public:
 	Firebird::string toSystem(const Firebird::PathName& from);

@@ -406,6 +406,7 @@
 #define isc_spb_bkp_keyholder			 16
 #define isc_spb_bkp_keyname				 17
 #define isc_spb_bkp_crypt				 18
+#define isc_spb_bkp_include_data         19
 #define isc_spb_bkp_ignore_checksums     0x01
 #define isc_spb_bkp_ignore_limbo         0x02
 #define isc_spb_bkp_metadata_only        0x04
@@ -513,6 +514,7 @@
  *****************************************/
 
 #define isc_spb_res_skip_data			isc_spb_bkp_skip_data
+#define isc_spb_res_include_data		isc_spb_bkp_include_data
 #define isc_spb_res_buffers				9
 #define isc_spb_res_page_size			10
 #define isc_spb_res_length				11

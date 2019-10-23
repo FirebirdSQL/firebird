@@ -96,6 +96,8 @@ const int IN_SW_BURP_KEYHOLD			= 49;	// name of KeyHolder plugin
 const int IN_SW_BURP_KEYNAME			= 50;	// name of crypt key
 const int IN_SW_BURP_CRYPT				= 51;	// name of crypt plugin
 
+const int IN_SW_BURP_INCLUDE_DATA		= 52;	// backup data from tables
+
 /**************************************************************************/
 
 static const char* const BURP_SW_MODE_RO = "READ_ONLY";
@@ -175,6 +177,8 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 				// msg 277: @1SE(RVICE) use services manager
 	{IN_SW_BURP_SKIP_DATA, isc_spb_res_skip_data, "SKIP_DATA",		0, 0, 0, false, false,	355,	6, NULL, boGeneral},
 				// msg 355: @1SKIP_DATA skip data for table
+	{IN_SW_BURP_INCLUDE_DATA, isc_spb_res_include_data, "INCLUDE_DATA",		0, 0, 0, false, false,	388,	7, NULL, boGeneral},
+				// msg 388: @1INCLUDE(_DATA) backup data of table(s)
 	{IN_SW_BURP_STATS, isc_spb_bkp_stat,		"STATISTICS",		0, 0, 0, false, false,	361,	2, NULL, boGeneral},
 				// msg 361: @1ST(ATISTICS) TDRW    show statistics:
 	{-1,				0,							" ",			0, 0, 0, false, false,	362,	0, NULL, boGeneral},
