@@ -32,7 +32,7 @@ goto loop_start
 
 :loop_end
 
-if not exist %output_path% mkdir %output_path%
+if not exist "%output_path%" mkdir "%output_path%"
 msbuild "%FB_LONG_ROOT_PATH%\%solution%.sln" /maxcpucount /p:Configuration=%config% /p:Platform=%FB_TARGET_PLATFORM% %projects% /fileLoggerParameters:LogFile=%output%
 
 endlocal
