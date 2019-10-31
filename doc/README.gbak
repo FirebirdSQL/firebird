@@ -1,4 +1,4 @@
-﻿In Firebird 4.0 a new switch was added to gbak: -INCLUDE(_DATA).
+In Firebird 4.0 a new switch was added to gbak: -INCLUDE(_DATA).
 
 It takes one parameter which is "similar like" pattern matching
 table names in a case-insensitive way.
@@ -15,5 +15,5 @@ a table is following:
 +-----------+------------+------------+------------+
 |  NOT SET  |  included  |  included  |  excluded  |
 |   MATCH   |  excluded  |  excluded  |  excluded  |
-| NOT MATCH |  excluded  |  included  |  excluded  |
+| NOT MATCH |  included  |  included  |  excluded  |
 +-----------+------------+------------+------------+
