@@ -309,13 +309,16 @@ ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, H
 	 * Advanced Windows by Richter pg. # 109. */
 
 	unsigned thread_id;
-	unsigned long real_handle =
-		_beginthreadex(NULL, 0, THREAD_ENTRYPOINT, THREAD_ARG, CREATE_SUSPENDED, &thread_id);
-	if (!real_handle)
+	HANDLE handle =
+		reinterpret_cast<HANDLE>(_beginthreadex(NULL, 0, THREAD_ENTRYPOINT, THREAD_ARG, CREATE_SUSPENDED, &thread_id));
+	if (!handle)
 	{
+		// Though MSDN says that _beginthreadex() returns error in errno,
+		// GetLastError() still works because RTL call no other system
+		// functions after CreateThread() in the case of error.
+		// Watch out if it is ever changed.
 		Firebird::system_call_failed::raise("_beginthreadex", GetLastError());
 	}
-	HANDLE handle = reinterpret_cast<HANDLE>(real_handle);
 
 	SetThreadPriority(handle, priority);
 
