@@ -1014,6 +1014,7 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	rem_str*		port_version;
 	rem_str*		port_host;				// Our name
 	rem_str*		port_connection;		// Name of connection
+	P_ARCH			port_client_arch;
 	Firebird::string port_login;
 	Firebird::string port_user_name;
 	Firebird::string port_peer_name;
@@ -1078,7 +1079,7 @@ public:
 		port_packet_vector(0),
 #endif
 		port_objects(getPool()), port_version(0), port_host(0),
-		port_connection(0), port_login(getPool()),
+		port_connection(0), port_client_arch(arch_generic), port_login(getPool()),
 		port_user_name(getPool()), port_peer_name(getPool()),
 		port_protocol_id(getPool()), port_address(getPool()),
 		port_rpr(0), port_statement(0), port_receive_rmtque(0),

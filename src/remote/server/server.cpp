@@ -1884,6 +1884,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	if (type == ptype_lazy_send)
 		port->port_flags |= PORT_lazy;
 
+	port->port_client_arch = connect->p_cnct_client;
 
 	Firebird::ClumpletReader id(Firebird::ClumpletReader::UnTagged,
 								connect->p_cnct_user_id.cstr_address,
