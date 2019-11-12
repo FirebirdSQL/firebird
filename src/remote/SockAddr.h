@@ -59,6 +59,8 @@ private:
 	void checkAndFixFamily();
 
 public:
+	void convertFromMacOsToPosixWindows();
+	void convertFromPosixWindowsToMacOs();
 	void clear();
 	const SockAddr& operator = (const SockAddr& x);
 
@@ -117,6 +119,44 @@ inline void SockAddr::checkAndFixFamily()
 	default:
 		fb_assert(false);
 		break;
+	}
+}
+
+inline void SockAddr::convertFromMacOsToPosixWindows()
+{
+	struct
+	{
+		uint16_t sa_family;
+		char sa_data[14];
+	} sockAddrPosixWindows;
+
+	if (length() > sizeof(sockAddrPosixWindows))
+		fb_assert(false);
+	else
+	{
+		sockAddrPosixWindows.sa_family = ptr()->sa_family;
+		memcpy(sockAddrPosixWindows.sa_data, ptr()->sa_data, length() - 2);
+		memcpy(ptr(), &sockAddrPosixWindows, length());
+	}
+}
+
+inline void SockAddr::convertFromPosixWindowsToMacOs()
+{
+	struct
+	{
+		uint8_t sa_len;
+		uint8_t sa_family;
+		char sa_data[14];
+	} sockAddrMacOs;
+
+	if (length() > sizeof(sockAddrMacOs))
+		fb_assert(false);
+	else
+	{
+		sockAddrMacOs.sa_len = length();
+		sockAddrMacOs.sa_family = ptr()->sa_family;
+		memcpy(sockAddrMacOs.sa_data, ptr()->sa_data, length() - 2);
+		memcpy(ptr(), &sockAddrMacOs, length());
 	}
 }
 

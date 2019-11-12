@@ -1613,32 +1613,10 @@ static rem_port* aux_request( rem_port* port, PACKET* packet)
 		ARCHITECTURE == arch_darwin_x64 ||
 		ARCHITECTURE == arch_darwin_ppc64;
 
-	struct
-	{
-		uint8_t sa_len;
-		uint8_t sa_family;
-		char sa_data[14];
-	} sockAddrMacOs;
-
-	struct
-	{
-		uint16_t sa_family;
-		char sa_data[14];
-	} sockAddrPosixWindows;
-
-	if (macOsClient && !macOsServer)
-	{
-		sockAddrMacOs.sa_len = port_address.length();
-		sockAddrMacOs.sa_family = port_address.ptr()->sa_family;
-		memcpy(sockAddrMacOs.sa_data, port_address.ptr()->sa_data, port_address.length() - 2);
-		memcpy(port_address.ptr(), &sockAddrMacOs, port_address.length());
-	}
-	else if (!macOsClient && macOsServer)
-	{
-		sockAddrPosixWindows.sa_family = port_address.ptr()->sa_family;
-		memcpy(sockAddrPosixWindows.sa_data, port_address.ptr()->sa_data, port_address.length() - 2);
-		memcpy(port_address.ptr(), &sockAddrPosixWindows, port_address.length());
-	}
+	if (macOsServer && !macOsClient)
+		port_address.convertFromMacOsToPosixWindows();
+	else if (!macOsServer && macOsClient)
+		port_address.convertFromPosixWindowsToMacOs();
 
 	response->p_resp_data.cstr_length = (ULONG) port_address.length();
 	memcpy(response->p_resp_data.cstr_address, port_address.ptr(), port_address.length());
