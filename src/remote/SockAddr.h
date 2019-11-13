@@ -48,10 +48,24 @@
 class SockAddr
 {
 private:
+	struct SockAddrPrefixPosixWindows
+	{
+		uint16_t sa_family;
+	};
+
+	struct SockAddrPrefixMacOs
+	{
+		uint8_t sa_len;
+		uint8_t sa_family;
+	};
+
 	union sa_data {
 		struct sockaddr sock;
 		struct sockaddr_in inet;
 		struct sockaddr_in6 inet6;
+
+		SockAddrPrefixPosixWindows posixWindowsPrefix;
+		SockAddrPrefixMacOs macOsPrefix;
 	} data;
 	socklen_t len;
 	static const unsigned MAX_LEN = sizeof(sa_data);
@@ -124,40 +138,19 @@ inline void SockAddr::checkAndFixFamily()
 
 inline void SockAddr::convertFromMacOsToPosixWindows()
 {
-	struct
-	{
-		uint16_t sa_family;
-		char sa_data[14];
-	} sockAddrPosixWindows;
+	SockAddrPrefixMacOs macOsPrefix;
+	macOsPrefix = data.macOsPrefix;
 
-	if (length() > sizeof(sockAddrPosixWindows))
-		fb_assert(false);
-	else
-	{
-		sockAddrPosixWindows.sa_family = ptr()->sa_family;
-		memcpy(sockAddrPosixWindows.sa_data, ptr()->sa_data, length() - 2);
-		memcpy(ptr(), &sockAddrPosixWindows, length());
-	}
+	data.posixWindowsPrefix.sa_family = macOsPrefix.sa_family;
 }
 
 inline void SockAddr::convertFromPosixWindowsToMacOs()
 {
-	struct
-	{
-		uint8_t sa_len;
-		uint8_t sa_family;
-		char sa_data[14];
-	} sockAddrMacOs;
+	SockAddrPrefixPosixWindows posixWindowsPrefix;
+	posixWindowsPrefix = data.posixWindowsPrefix;
 
-	if (length() > sizeof(sockAddrMacOs))
-		fb_assert(false);
-	else
-	{
-		sockAddrMacOs.sa_len = length();
-		sockAddrMacOs.sa_family = ptr()->sa_family;
-		memcpy(sockAddrMacOs.sa_data, ptr()->sa_data, length() - 2);
-		memcpy(ptr(), &sockAddrMacOs, length());
-	}
+	data.macOsPrefix.sa_family = posixWindowsPrefix.sa_family;
+	data.macOsPrefix.sa_len = length();
 }
 
 
