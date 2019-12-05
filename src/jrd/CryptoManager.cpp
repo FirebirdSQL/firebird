@@ -201,9 +201,10 @@ namespace Jrd {
 			Jrd::BufferDesc bdb(bcb);
 			bdb.bdb_page = Jrd::HEADER_PAGE_NUMBER;
 
-			UCHAR* h = FB_NEW_POOL(*Firebird::MemoryPool::getContextPool()) UCHAR[dbb->dbb_page_size + PAGE_ALIGNMENT];
+			UCHAR* h = FB_NEW_POOL(*Firebird::MemoryPool::getContextPool())
+				UCHAR[dbb->dbb_page_size + dbb->dbb_page_alignment];
 			buffer.reset(h);
-			h = FB_ALIGN(h, PAGE_ALIGNMENT);
+			h = FB_ALIGN(h, dbb->dbb_page_alignment);
 			bdb.bdb_buffer = (Ods::pag*) h;
 
 			Jrd::FbStatusVector* const status = tdbb->tdbb_status_vector;
@@ -1280,7 +1281,7 @@ namespace Jrd {
 	CryptoManager::IoResult CryptoManager::internalWrite(thread_db* tdbb, FbStatusVector* sv,
 		Ods::pag* page, IOCallback* io)
 	{
-		Buffer to;
+		Buffer to(getPool(), dbb.dbb_page_size, dbb.dbb_page_alignment);
 		Ods::pag* dest = page;
 		UCHAR savedFlags = page->pag_flags;
 

@@ -79,12 +79,6 @@
 #define O_LARGEFILE 0
 #endif
 
-// How much we align memory when reading database header.
-// Sector alignment of memory is necessary to use unbuffered IO on Windows.
-// Actually, sectors may be bigger than 1K, but let's be consistent with
-// JRD regarding the matter for the moment.
-const FB_SIZE_T SECTOR_ALIGNMENT = PAGE_ALIGNMENT;
-
 using namespace Firebird;
 
 namespace
@@ -279,7 +273,8 @@ public:
 		username(_username), role(_role), password(_password),
 		run_db_triggers(_run_db_triggers), direct_io(_direct_io),
 		dbase(0), backup(0), decompress(_deco), childId(0), db_size_pages(0),
-		m_odsNumber(0), m_silent(false), m_printed(false)
+		m_odsNumber(0), m_silent(false), m_printed(false),
+		m_page_alignment(_direct_io ? MAX_PAGE_ALIGNMENT : PAGE_ALIGNMENT)
 	{
 		// Recognition of local prefix allows to work with
 		// database using TCP/IP loopback while reading file locally.
@@ -340,6 +335,7 @@ private:
 	USHORT m_odsNumber;
 	bool m_silent;		// are we already handling an exception?
 	bool m_printed;		// pr_error() was called to print status vector
+	USHORT m_page_alignment;
 
 	// IO functions
 	FB_SIZE_T read_file(FILE_HANDLE &file, void *buffer, FB_SIZE_T bufsize);
@@ -1081,12 +1077,12 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		open_database_scan();
 
 		// Read database header
-		char unaligned_header_buffer[SECTOR_ALIGNMENT * 2];
+		Array<char> unaligned_header_buffer;
 
 		Ods::header_page *header = reinterpret_cast<Ods::header_page*>(
-			FB_ALIGN(unaligned_header_buffer, SECTOR_ALIGNMENT));
+			FB_ALIGN(unaligned_header_buffer.getBuffer(m_page_alignment*2), m_page_alignment));
 
-		if (read_file(dbase, header, SECTOR_ALIGNMENT/*sizeof(*header)*/) != SECTOR_ALIGNMENT/*sizeof(*header)*/)
+		if (read_file(dbase, header, m_page_alignment/*sizeof(*header)*/) != m_page_alignment/*sizeof(*header)*/)
 			status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdrdb) << dbname.c_str() << Arg::Num(1));
 
 		if (!Ods::isSupported(header))
@@ -1104,8 +1100,8 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 
 		Array<UCHAR> unaligned_page_buffer;
 		{ // scope
-			UCHAR* buf = unaligned_page_buffer.getBuffer(header->hdr_page_size + SECTOR_ALIGNMENT);
-			page_buff = reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, SECTOR_ALIGNMENT));
+			UCHAR* buf = unaligned_page_buffer.getBuffer(header->hdr_page_size + m_page_alignment);
+			page_buff = reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, m_page_alignment));
 		} // end scope
 
 		ULONG db_size = db_size_pages;
@@ -1176,8 +1172,8 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		Array<UCHAR> unaligned_scns_buffer;
 		Ods::scns_page* scns = NULL, *scns_buf = NULL;
 		{ // scope
-			UCHAR* buf = unaligned_scns_buffer.getBuffer(header->hdr_page_size + SECTOR_ALIGNMENT);
-			scns_buf = reinterpret_cast<Ods::scns_page*>(FB_ALIGN(buf, SECTOR_ALIGNMENT));
+			UCHAR* buf = unaligned_scns_buffer.getBuffer(header->hdr_page_size + m_page_alignment);
+			scns_buf = reinterpret_cast<Ods::scns_page*>(FB_ALIGN(buf, m_page_alignment));
 		}
 
 		while (true)

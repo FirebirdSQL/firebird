@@ -94,7 +94,7 @@ void SDW_add(thread_db* tdbb, const TEXT* file_name, USHORT shadow_number, USHOR
 
 	if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
 	{
-		PIO_force_write(shadow_file, dbb->dbb_flags & DBB_force_write,
+		PIO_force_write(tdbb, shadow_file, dbb->dbb_flags & DBB_force_write,
 			dbb->dbb_flags & DBB_no_fs_cache);
 	}
 
@@ -176,7 +176,7 @@ int SDW_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start, USHORT sha
 
 	if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
 	{
-		PIO_force_write(next, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
+		PIO_force_write(tdbb, next, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
 	}
 
 	// Always write the header page, even for a conditional
@@ -187,10 +187,10 @@ int SDW_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start, USHORT sha
 	// the spare page buffer for raw disk access.
 
 	SCHAR* const spare_buffer =
-		FB_NEW_POOL(*tdbb->getDefaultPool()) char[dbb->dbb_page_size + PAGE_ALIGNMENT];
+		FB_NEW_POOL(*tdbb->getDefaultPool()) char[dbb->dbb_page_size + dbb->dbb_page_alignment];
 	// And why doesn't the code check that the allocation succeeds?
 
-	SCHAR* spare_page = FB_ALIGN(spare_buffer, PAGE_ALIGNMENT);
+	SCHAR* spare_page = FB_ALIGN(spare_buffer, dbb->dbb_page_alignment);
 
 	try {
 
@@ -1000,9 +1000,9 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 	// catch errors: delete the shadow file if missing, and deallocate the spare buffer
 
 	shadow = NULL;
-	SLONG* const spare_buffer =
-		FB_NEW_POOL(*tdbb->getDefaultPool()) SLONG[(dbb->dbb_page_size + PAGE_ALIGNMENT) / sizeof(SLONG)];
-	UCHAR* spare_page = FB_ALIGN((UCHAR*) spare_buffer, PAGE_ALIGNMENT);
+	SLONG* const spare_buffer = FB_NEW_POOL(*tdbb->getDefaultPool())
+		SLONG[(dbb->dbb_page_size + dbb->dbb_page_alignment) / sizeof(SLONG)];
+	UCHAR* spare_page = FB_ALIGN((UCHAR*) spare_buffer, dbb->dbb_page_alignment);
 
 	WIN window(DB_PAGE_SPACE, -1);
 	jrd_file* shadow_file = 0;
@@ -1013,7 +1013,7 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 
 	if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
 	{
-		PIO_force_write(shadow_file, dbb->dbb_flags & DBB_force_write,
+		PIO_force_write(tdbb, shadow_file, dbb->dbb_flags & DBB_force_write,
 			dbb->dbb_flags & DBB_no_fs_cache);
 	}
 

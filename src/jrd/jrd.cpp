@@ -7295,8 +7295,9 @@ static void init_database_lock(thread_db* tdbb)
 			fb_utils::init_status(tdbb->tdbb_status_vector);
 
 			// If we are in a single-threaded maintenance mode then clean up and stop waiting
-			UCHAR spare_memory[RAW_HEADER_SIZE + PAGE_ALIGNMENT];
-			UCHAR* header_page_buffer = FB_ALIGN(spare_memory, PAGE_ALIGNMENT);
+			Array<UCHAR> spare_memory;
+			UCHAR* header_page_buffer = FB_ALIGN(spare_memory.getBuffer(RAW_HEADER_SIZE + dbb->dbb_page_alignment),
+				dbb->dbb_page_alignment);
 			Ods::header_page* const header_page = reinterpret_cast<Ods::header_page*>(header_page_buffer);
 
 			PIO_header(tdbb, header_page_buffer, RAW_HEADER_SIZE);

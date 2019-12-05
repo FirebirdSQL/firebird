@@ -440,6 +440,8 @@ public:
 	FB_UINT64 dbb_repl_sequence;	// replication sequence
 	ReplicaMode dbb_replica_mode;	// replica access mode
 
+	USHORT dbb_page_alignment;
+
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;
 
@@ -503,7 +505,8 @@ private:
 		dbb_linger_end(0),
 		dbb_plugin_config(pConf),
 		dbb_repl_sequence(0),
-		dbb_replica_mode(REPLICA_NONE)
+		dbb_replica_mode(REPLICA_NONE),
+		dbb_page_alignment(PAGE_ALIGNMENT)
 	{
 		dbb_pools.add(p);
 	}

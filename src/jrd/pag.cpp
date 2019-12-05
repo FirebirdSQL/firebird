@@ -266,7 +266,7 @@ USHORT PAG_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start)
 
 	if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
 	{
-		PIO_force_write(next, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
+		PIO_force_write(tdbb, next, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
 	}
 
 	WIN window(DB_PAGE_SPACE, next->fil_min_page);
@@ -1179,13 +1179,13 @@ void PAG_header(thread_db* tdbb, bool info)
 		PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		for (jrd_file* file = pageSpace->file; file; file = file->fil_next)
 		{
-			PIO_force_write(file,
+			PIO_force_write(tdbb, file,
 				forceWrite && !(header->hdr_flags & hdr_read_only),
 				notUseFSCache);
 		}
 
 		if (dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
-			dbb->dbb_backup_manager->setForcedWrites(forceWrite, notUseFSCache);
+			dbb->dbb_backup_manager->setForcedWrites(tdbb, forceWrite, notUseFSCache);
 	}
 
 	if (header->hdr_flags & hdr_no_reserve)
@@ -1253,8 +1253,9 @@ void PAG_header_init(thread_db* tdbb)
 	// and unit of transfer is a multiple of physical disk
 	// sector for raw disk access.
 
-	UCHAR temp_buffer[RAW_HEADER_SIZE + PAGE_ALIGNMENT];
-	UCHAR* const temp_page = FB_ALIGN(temp_buffer, PAGE_ALIGNMENT);
+	Array<UCHAR> temp_buffer;
+	UCHAR* const temp_page = FB_ALIGN(temp_buffer.getBuffer(RAW_HEADER_SIZE + dbb->dbb_page_alignment),
+		dbb->dbb_page_alignment);
 
 	PIO_header(tdbb, temp_page, RAW_HEADER_SIZE);
 	const header_page* header = (header_page*) temp_page;
@@ -1370,7 +1371,7 @@ void PAG_init2(thread_db* tdbb, USHORT shadow_number)
 
 	Array<UCHAR> temp;
 	UCHAR* const temp_page =
-		FB_ALIGN(temp.getBuffer(dbb->dbb_page_size + PAGE_ALIGNMENT), PAGE_ALIGNMENT);
+		FB_ALIGN(temp.getBuffer(dbb->dbb_page_size + dbb->dbb_page_alignment), dbb->dbb_page_alignment);
 
 	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	jrd_file* file = pageSpace->file;
@@ -1488,7 +1489,7 @@ void PAG_init2(thread_db* tdbb, USHORT shadow_number)
 		file = file->fil_next;
 		if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
 		{
-			PIO_force_write(file, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
+			PIO_force_write(tdbb, file, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
 		}
 		file->fil_min_page = last_page + 1;
 		file->fil_sequence = sequence++;
@@ -1685,13 +1686,13 @@ void PAG_set_force_write(thread_db* tdbb, bool flag)
 
 	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	for (jrd_file* file = pageSpace->file; file; file = file->fil_next) {
-		PIO_force_write(file, flag, dbb->dbb_flags & DBB_no_fs_cache);
+		PIO_force_write(tdbb, file, flag, dbb->dbb_flags & DBB_no_fs_cache);
 	}
 
 	for (Shadow* shadow = dbb->dbb_shadow; shadow; shadow = shadow->sdw_next)
 	{
 		for (jrd_file* file = shadow->sdw_file; file; file = file->fil_next) {
-			PIO_force_write(file, flag, dbb->dbb_flags & DBB_no_fs_cache);
+			PIO_force_write(tdbb, file, flag, dbb->dbb_flags & DBB_no_fs_cache);
 		}
 	}
 }
@@ -2583,7 +2584,7 @@ ULONG PAG_page_count(thread_db* tdbb)
 	Database* const dbb = tdbb->getDatabase();
 	Array<UCHAR> temp;
 	page_inv_page* pip = reinterpret_cast<Ods::page_inv_page*>
-		(FB_ALIGN(temp.getBuffer(dbb->dbb_page_size + PAGE_ALIGNMENT), PAGE_ALIGNMENT));
+		(FB_ALIGN(temp.getBuffer(dbb->dbb_page_size + dbb->dbb_page_alignment), dbb->dbb_page_alignment));
 
 	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	fb_assert(pageSpace);

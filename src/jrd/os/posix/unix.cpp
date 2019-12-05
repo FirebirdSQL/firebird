@@ -408,7 +408,7 @@ void PIO_flush(thread_db* tdbb, jrd_file* main_file)
 #define O_DIRECT 0
 #endif
 
-void PIO_force_write(jrd_file* file, const bool forcedWrites, const bool notUseFSCache)
+void PIO_force_write(thread_db* tdbb, jrd_file* file, const bool forcedWrites, const bool notUseFSCache)
 {
 /**************************************
  *
@@ -461,6 +461,8 @@ void PIO_force_write(jrd_file* file, const bool forcedWrites, const bool notUseF
 		file->fil_flags &= ~(FIL_force_write | FIL_no_fs_cache);
 		file->fil_flags |= (forcedWrites ? FIL_force_write : 0) |
 						   (notUseFSCache ? FIL_no_fs_cache : 0);
+		if (notUseFSCache)
+			tdbb->getDatabase()->dbb_page_alignment = MAX_PAGE_ALIGNMENT;
 	}
 #endif
 }
@@ -1184,8 +1186,8 @@ static bool raw_devices_validate_database(int desc, const PathName& file_name)
  *	Checks if the special file contains a valid database
  *
  **************************************/
-	UCHAR header_buffer[RAW_HEADER_SIZE + PAGE_ALIGNMENT];
-	UCHAR* const header = FB_ALIGN(header_buffer, PAGE_ALIGNMENT);
+	UCHAR header_buffer[RAW_HEADER_SIZE + MAX_PAGE_ALIGNMENT];
+	UCHAR* const header = FB_ALIGN(header_buffer, MAX_PAGE_ALIGNMENT);
 	const Ods::header_page* hp = (Ods::header_page*) header;
 	bool retval = false;
 
@@ -1254,8 +1256,8 @@ static bool raw_devices_validate_database(int desc, const PathName& file_name)
 
 static int raw_devices_unlink_database(const PathName& file_name)
 {
-	UCHAR header_buffer[RAW_HEADER_SIZE + PAGE_ALIGNMENT];
-	UCHAR* const header = FB_ALIGN(header_buffer, PAGE_ALIGNMENT);
+	UCHAR header_buffer[RAW_HEADER_SIZE + MAX_PAGE_ALIGNMENT];
+	UCHAR* const header = FB_ALIGN(header_buffer, MAX_PAGE_ALIGNMENT);
 
 	int desc = os_utils::open(file_name.c_str(), O_RDWR | O_BINARY);
 	if (desc < 0)

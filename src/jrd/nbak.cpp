@@ -228,7 +228,7 @@ void BackupManager::openDelta(thread_db* tdbb)
 
 	if (database->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
 	{
-		setForcedWrites(database->dbb_flags & DBB_force_write,
+		setForcedWrites(tdbb, database->dbb_flags & DBB_force_write,
 						database->dbb_flags & DBB_no_fs_cache);
 	}
 }
@@ -296,7 +296,7 @@ void BackupManager::beginBackup(thread_db* tdbb)
 	{ // logical scope
 		if (database->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
 		{
-			setForcedWrites(database->dbb_flags & DBB_force_write,
+			setForcedWrites(tdbb, database->dbb_flags & DBB_force_write,
 							database->dbb_flags & DBB_no_fs_cache);
 		}
 
@@ -889,10 +889,10 @@ void BackupManager::flushDifference(thread_db* tdbb)
 	PIO_flush(tdbb, diff_file);
 }
 
-void BackupManager::setForcedWrites(const bool forceWrite, const bool notUseFSCache)
+void BackupManager::setForcedWrites(thread_db* tdbb, const bool forceWrite, const bool notUseFSCache)
 {
 	if (diff_file)
-		PIO_force_write(diff_file, forceWrite, notUseFSCache);
+		PIO_force_write(tdbb, diff_file, forceWrite, notUseFSCache);
 }
 
 BackupManager::BackupManager(thread_db* tdbb, Database* _database, int ini_state) :
@@ -904,9 +904,9 @@ BackupManager::BackupManager(thread_db* tdbb, Database* _database, int ini_state
 	allocLock(FB_NEW_POOL(*database->dbb_permanent) NBackupAllocLock(tdbb, *database->dbb_permanent, this))
 {
 	// Allocate various database page buffers needed for operation
-	temp_buffers_space = FB_NEW_POOL(*database->dbb_permanent) BYTE[database->dbb_page_size * 3 + PAGE_ALIGNMENT];
+	temp_buffers_space = FB_NEW_POOL(*database->dbb_permanent) BYTE[database->dbb_page_size * 3 + MAX_PAGE_ALIGNMENT];
 	// Align it at sector boundary for faster IO (also guarantees correct alignment for ULONG later)
-	BYTE* temp_buffers = reinterpret_cast<BYTE*>(FB_ALIGN(temp_buffers_space, PAGE_ALIGNMENT));
+	BYTE* temp_buffers = reinterpret_cast<BYTE*>(FB_ALIGN(temp_buffers_space, MAX_PAGE_ALIGNMENT));
 	memset(temp_buffers, 0, database->dbb_page_size * 3);
 
 	backup_state = ini_state;
