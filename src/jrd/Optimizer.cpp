@@ -384,7 +384,8 @@ OptimizerRetrieval::~OptimizerRetrieval()
  * Functional description
  *
  **************************************/
-
+	if (navigationCandidate)
+		delete navigationCandidate;
 	for (FB_SIZE_T i = 0; i < inversionCandidates.getCount(); ++i)
 		delete inversionCandidates[i];
 }
@@ -522,7 +523,8 @@ InversionCandidate* OptimizerRetrieval::generateInversion()
 		// Clean up inversion list
 		InversionCandidate** inversion = inversions.begin();
 		for (FB_SIZE_T i = 0; i < inversions.getCount(); i++)
-			delete inversion[i];
+			if (inversion[i] != navigationCandidate)
+				delete inversion[i];
 	}
 
 	if (!invCandidate)
