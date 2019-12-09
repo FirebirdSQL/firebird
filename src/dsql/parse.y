@@ -817,7 +817,7 @@ using namespace Firebird;
 	Jrd::CreateAlterRoleNode* createAlterRoleNode;
 	Jrd::SetDecFloatRoundNode* setDecFloatRoundNode;
 	Jrd::SetDecFloatTrapsNode* setDecFloatTrapsNode;
-	Jrd::SetHighPrecBindNode* setHighPrecBindNode;
+	Jrd::SetBindNode* setBindNode;
 	Jrd::SessionResetNode* sessionResetNode;
 }
 
@@ -878,12 +878,11 @@ tra_statement
 mng_statement
 	: set_decfloat_round						{ $$ = $1; }
 	| set_decfloat_traps						{ $$ = $1; }
-	| set_decfloat_bind							{ $$ = $1; }
 	| session_statement							{ $$ = $1; }
 	| set_role									{ $$ = $1; }
 	| session_reset								{ $$ = $1; }
 	| set_time_zone								{ $$ = $1; }
-	| set_time_zone_bind						{ $$ = $1; }
+	| set_bind									{ $$ = $1; }
 	;
 
 
@@ -4616,7 +4615,10 @@ simple_type
 		{
 			$$ = $1;
 			if ($2)
+			{
 				$$->charSet = *$2;
+				$$->flags |= FLD_has_chset;
+			}
 		}
 	;
 
@@ -4761,7 +4763,10 @@ blob_type
 			$$->length = sizeof(ISC_QUAD);
 			$$->segLength = $4;
 			if ($5)
+			{
 				$$->charSet = *$5;
+				$$->flags |= FLD_has_chset;
+			}
 		}
 	| BLOB '(' unsigned_short_integer ')'
 		{
@@ -4778,6 +4783,7 @@ blob_type
 			$$->length = sizeof(ISC_QUAD);
 			$$->segLength = (USHORT) $3;
 			$$->subType = (USHORT) $5;
+			$$->flags |= FLD_has_sub;
 		}
 	| BLOB '(' ',' signed_short_integer ')'
 		{
@@ -4786,6 +4792,7 @@ blob_type
 			$$->length = sizeof(ISC_QUAD);
 			$$->segLength = 80;
 			$$->subType = (USHORT) $4;
+			$$->flags |= FLD_has_sub;
 		}
 	;
 
@@ -4800,9 +4807,9 @@ blob_subtype($field)
 	: // nothing
 		{ $field->subType = (USHORT) 0; }
 	| SUB_TYPE signed_short_integer
-		{ $field->subType = (USHORT) $2; }
+		{ $field->subType = (USHORT) $2; $field->flags |= FLD_has_sub; }
 	| SUB_TYPE symbol_blob_subtype_name
-		{ $field->subTypeName = *$2; }
+		{ $field->subTypeName = *$2; $field->flags |= FLD_has_sub; }
 	;
 
 %type <metaNamePtr> charset_clause
@@ -4822,7 +4829,7 @@ national_character_type
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
 			$$->charLength = (USHORT) $3;
-			$$->flags |= FLD_national;
+			$$->flags |= (FLD_national | FLD_has_len);
 		}
 	| national_character_keyword
 		{
@@ -4836,7 +4843,7 @@ national_character_type
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_varying;
 			$$->charLength = (USHORT) $4;
-			$$->flags |= FLD_national;
+			$$->flags |= (FLD_national | FLD_has_len);
 		}
 	;
 
@@ -4851,6 +4858,7 @@ binary_character_type
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
 			$$->subType = fb_text_subtype_binary;
+			$$->flags |= (FLD_has_len | FLD_has_chset);
 		}
 	| binary_character_keyword
 		{
@@ -4861,6 +4869,7 @@ binary_character_type
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
 			$$->subType = fb_text_subtype_binary;
+			$$->flags |= FLD_has_chset;
 		}
 	| varbinary_character_keyword '(' pos_short_integer ')'
 		{
@@ -4871,6 +4880,7 @@ binary_character_type
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
 			$$->subType = fb_text_subtype_binary;
+			$$->flags |= (FLD_has_len | FLD_has_chset);
 		}
 	;
 
@@ -4881,6 +4891,7 @@ character_type
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
 			$$->charLength = (USHORT) $3;
+			$$->flags |= FLD_has_len;
 		}
 	| character_keyword
 		{
@@ -4893,6 +4904,7 @@ character_type
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_varying;
 			$$->charLength = (USHORT) $3;
+			$$->flags |= FLD_has_len;
 		}
 	;
 
@@ -4934,6 +4946,8 @@ decfloat_type
 				yyabandon(YYPOSNARG(2), -842, isc_decprecision_err);	// DecFloat precision must be 16 or 34.
 
 			$$ = newNode<dsql_fld>();
+			if (precision)
+				$$->flags |= FLD_has_len;
 			$$->precision = precision == 0 ? 34 : (USHORT) precision;
 			$$->dtype = precision == 16 ? dtype_dec64 : dtype_dec128;
 			$$->length = precision == 16 ? sizeof(Decimal64) : sizeof(Decimal128);
@@ -4972,6 +4986,7 @@ prec_scale
 	| '(' signed_long_integer ')'
 		{
 			$$ = newNode<dsql_fld>();
+			$$->flags |= FLD_has_len;
 
 			if ($2 < 1 || $2 > 38)
 				yyabandon(YYPOSNARG(2), -842, Arg::Gds(isc_precision_err2) << Arg::Num(1) << Arg::Num(38));
@@ -5028,6 +5043,7 @@ prec_scale
 	| '(' signed_long_integer ',' signed_long_integer ')'
 		{
 			$$ = newNode<dsql_fld>();
+			$$->flags |= (FLD_has_len | FLD_has_scale);
 
 			if ($2 < 1 || $2 > 38)
 				yyabandon(YYPOSNARG(2), -842, Arg::Gds(isc_precision_err2) << Arg::Num(1) << Arg::Num(38));
@@ -5272,18 +5288,47 @@ set_decfloat_traps
 			{ $$ = $5; }
 	;
 
-%type <setHighPrecBindNode> set_decfloat_bind
-set_decfloat_bind
-	: SET bind_to_type BIND
-			{ $$ = newNode<SetHighPrecBindNode>($2); }
-		decfloat_bind_clause($4)
-			{ $$ = $4; }
+%type <setBindNode> set_bind
+set_bind
+	: SET BIND OF set_bind_from set_bind_to
+			{ $$ = newNode<SetBindNode>(); $$->from = $4; $$->to = $5; }
 	;
 
-%type <boolVal> bind_to_type
-bind_to_type
-	: DECFLOAT { $$ = false; }
-	| INT128 { $$ = true; }
+%type <legacyField> set_bind_from
+set_bind_from
+	: bind_type
+	;
+
+%type <legacyField> bind_type
+bind_type
+	: non_array_type
+		{
+			$$ = $1;
+		}
+	| varying_keyword
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = 0;
+		}
+	;
+
+%type <legacyField> set_bind_to
+set_bind_to
+	: TO bind_type
+		{
+			$$ = $2;
+		}
+	| TO LEGACY
+		{
+			$$ = newNode<dsql_fld>();
+			$$->flags = FLD_legacy;
+		}
+	| NATIVE
+		{
+			$$ = newNode<dsql_fld>();
+			$$->flags = FLD_native;
+		}
 	;
 
 %type decfloat_traps_list_opt(<setDecFloatTrapsNode>)
@@ -5303,28 +5348,6 @@ decfloat_trap($setDecFloatTrapsNode)
 	: valid_symbol_name
 		{ $setDecFloatTrapsNode->trap($1); }
 	;
-
-%type decfloat_bind_clause(<setHighPrecBindNode>)
-decfloat_bind_clause($setHighPrecBindNode)
-	: NATIVE
-		// do nothing
-	| character_keyword
-		{ $setHighPrecBindNode->bind.bind = NumericBinding::NUM_TEXT; }
-	| DOUBLE PRECISION
-		{ $setHighPrecBindNode->bind.bind = NumericBinding::NUM_DOUBLE; }
-	| BIGINT decfloat_scale_clause($setHighPrecBindNode)
-		{ $setHighPrecBindNode->bind.bind = NumericBinding::NUM_INT64; }
-	;
-
-%type decfloat_scale_clause(<setHighPrecBindNode>)
-decfloat_scale_clause($setHighPrecBindNode)
-	: // nothing
-	| ',' signed_long_integer
-		{
-			if ($2 > NumericBinding::MAX_SCALE || $2 < 0)
-				yyabandon(YYPOSNARG(2), -842, isc_scale_nogt);	// Scale must be between 0 and precision
-			$setHighPrecBindNode->bind.numScale = -$2;
-		}
 
 %type <setSessionNode> session_statement
 session_statement
@@ -5360,17 +5383,6 @@ set_time_zone
 set_time_zone_option
 	: sql_string	{ $$ = newNode<SetTimeZoneNode>($1->getString()); }
 	| LOCAL			{ $$ = newNode<SetTimeZoneNode>(); }
-	;
-
-%type <mngNode> set_time_zone_bind
-set_time_zone_bind
-	: SET TIME ZONE BIND set_time_zone_bind_option	{ $$ = $5; }
-	;
-
-%type <mngNode> set_time_zone_bind_option
-set_time_zone_bind_option
-	: LEGACY	{ $$ = newNode<SetTimeZoneBindNode>(TimeZoneUtil::BIND_LEGACY); }
-	| NATIVE	{ $$ = newNode<SetTimeZoneBindNode>(TimeZoneUtil::BIND_NATIVE); }
 	;
 
 %type tran_option_list_opt(<setTransactionNode>)

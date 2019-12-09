@@ -1749,13 +1749,13 @@ public:
 };
 
 
-class SetHighPrecBindNode : public SessionManagementNode
+class SetBindNode : public SessionManagementNode
 {
 public:
-	SetHighPrecBindNode(MemoryPool& pool, bool isInt128)
+	SetBindNode(MemoryPool& pool)
 		: SessionManagementNode(pool),
-		  bind(Firebird::NumericBinding::NUM_NATIVE),
-		  bindInt128(isInt128)
+		  from(nullptr),
+		  to(nullptr)
 	{
 	}
 
@@ -1764,17 +1764,18 @@ public:
 	{
 		SessionManagementNode::internalPrint(printer);
 
-		NODE_PRINT(printer, bind.bind);
-		NODE_PRINT(printer, bind.numScale);
+		NODE_PRINT(printer, from);
+		NODE_PRINT(printer, to);
 
-		return "SetHighPrecBindNode";
+		return "SetBindNode";
 	}
 
+	virtual SessionManagementNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
 
 public:
-	Firebird::NumericBinding bind;
-	bool bindInt128;
+	dsql_fld *from;
+	dsql_fld *to;
 };
 
 
@@ -1811,32 +1812,6 @@ public:
 public:
 	Firebird::string str;
 	bool local;
-};
-
-
-class SetTimeZoneBindNode : public SessionManagementNode
-{
-public:
-	SetTimeZoneBindNode(MemoryPool& pool, Firebird::TimeZoneUtil::Bind aBind)
-		: SessionManagementNode(pool),
-		  bind(aBind)
-	{
-	}
-
-public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
-	{
-		SessionManagementNode::internalPrint(printer);
-
-		NODE_PRINT(printer, bind);
-
-		return "SetTimeZoneBindNode";
-	}
-
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
-
-public:
-	Firebird::TimeZoneUtil::Bind bind;
 };
 
 

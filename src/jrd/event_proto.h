@@ -88,9 +88,7 @@ private:
 	void remove_que(srq*);
 	bool request_completed(evt_req*);
 	void watcher_thread();
-	void attach_shared_file();
-	void detach_shared_file();
-	void get_shared_file_name(Firebird::PathName&) const;
+	void init_shared_file();
 
 	static void watcher_thread(EventManager* eventMgr)
 	{

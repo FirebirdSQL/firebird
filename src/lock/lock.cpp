@@ -211,7 +211,6 @@ void LockManager::destroy(LockManager* lockMgr)
 LockManager::LockManager(const string& id, RefPtr<const Config> conf)
 	: PID(getpid()),
 	  m_bugcheck(false),
-	  m_sharedFileCreated(false),
 	  m_process(NULL),
 	  m_processOffset(0),
 	  m_cleanupSync(getPool(), blocking_action_thread, THREAD_high),
@@ -228,7 +227,7 @@ LockManager::LockManager(const string& id, RefPtr<const Config> conf)
 {
 	LocalStatus ls;
 	CheckStatusWrapper localStatus(&ls);
-	if (!attach_shared_file(&localStatus))
+	if (!init_shared_file(&localStatus))
 	{
 		iscLogStatus("LockManager::LockManager()", &localStatus);
 		status_exception::raise(&localStatus);
@@ -293,7 +292,6 @@ LockManager::~LockManager()
 		}
 	}
 
-	detach_shared_file(&localStatus);
 #ifdef USE_SHMEM_EXT
 	for (ULONG i = 1; i < m_extents.getCount(); ++i)
 	{
@@ -336,7 +334,7 @@ void* LockManager::ABS_PTR(SRQ_PTR item)
 #endif //USE_SHMEM_EXT
 
 
-bool LockManager::attach_shared_file(CheckStatusWrapper* statusVector)
+bool LockManager::init_shared_file(CheckStatusWrapper* statusVector)
 {
 	PathName name;
 	get_shared_file_name(name);
@@ -362,22 +360,6 @@ bool LockManager::attach_shared_file(CheckStatusWrapper* statusVector)
 #endif
 
 	return true;
-}
-
-
-void LockManager::detach_shared_file(CheckStatusWrapper* statusVector)
-{
-	if (m_sharedMemory.hasData() && m_sharedMemory->getHeader())
-	{
-		try
-		{
-			delete m_sharedMemory.release();
-		}
-		catch (const Exception& ex)
-		{
-			ex.stuffException(statusVector);
-		}
-	}
 }
 
 
@@ -1127,32 +1109,26 @@ void LockManager::acquire_shmem(SRQ_PTR owner_offset)
 
 	while (SRQ_EMPTY(m_sharedMemory->getHeader()->lhb_processes))
 	{
-		if (!m_sharedFileCreated)
+		if (m_sharedMemory->justCreated())
 		{
-			// Someone is going to delete shared file? Reattach.
-			m_sharedMemory->mutexUnlock();
-			detach_shared_file(&localStatus);
-
-			Thread::yield();
-
-			if (!attach_shared_file(&localStatus))
-				bug(NULL, "ISC_map_file failed (reattach shared file)");
-
-			m_sharedMemory->mutexLock();
-		}
-		else
-		{
-			// complete initialization
-			m_sharedFileCreated = false;
-
 			// no sense thinking about statistics now
 			m_blockage = false;
-
 			break;
 		}
+
+		// Someone is going to delete shared file? Reattach.
+		m_sharedMemory->mutexUnlock();
+		m_sharedMemory.reset();
+
+		Thread::yield();
+
+		if (!init_shared_file(&localStatus))
+			bug(NULL, "ISC_map_file failed (reattach shared file)");
+
+		m_sharedMemory->mutexLock();
 	}
 
-	fb_assert(!m_sharedFileCreated);
+	fb_assert(!m_sharedMemory->justCreated());
 
 	++(m_sharedMemory->getHeader()->lhb_acquires);
 	if (m_blockage)
@@ -2324,8 +2300,6 @@ bool LockManager::initialize(SharedMemoryBase* sm, bool initializeMemory)
  *
  **************************************/
 
-	m_sharedFileCreated = initializeMemory;
-
 	// reset m_sharedMemory in advance to be able to use SRQ_BASE macro
 	m_sharedMemory.reset(reinterpret_cast<SharedMemory<lhb>*>(sm));
 
@@ -2339,9 +2313,7 @@ bool LockManager::initialize(SharedMemoryBase* sm, bool initializeMemory)
 #endif
 
 	if (!initializeMemory)
-	{
 		return true;
-	}
 
 	lhb* hdr = m_sharedMemory->getHeader();
 	memset(hdr, 0, sizeof(lhb));

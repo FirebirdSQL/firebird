@@ -470,8 +470,7 @@ private:
 	void validate_shb(const SRQ_PTR);
 
 	void wait_for_request(thread_db*, lrq*, SSHORT);
-	bool attach_shared_file(Firebird::CheckStatusWrapper*);
-	void detach_shared_file(Firebird::CheckStatusWrapper*);
+	bool init_shared_file(Firebird::CheckStatusWrapper*);
 	void get_shared_file_name(Firebird::PathName&, ULONG extend = 0) const;
 
 	static void blocking_action_thread(LockManager* lockMgr)
@@ -483,7 +482,6 @@ private:
 	void mutexBug(int osErrorCode, const char* text);
 
 	bool m_bugcheck;
-	bool m_sharedFileCreated;
 	prc* m_process;
 	SRQ_PTR m_processOffset;
 

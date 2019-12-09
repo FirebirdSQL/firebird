@@ -429,8 +429,8 @@
 # plugin using SHA-1 for the client proof. This enables backwards compatibility
 # with old Firebird 3 servers but does not comply with NIST security requirements.
 #
-# The default client configuration (AuthClient) also supports the pre-Firebird 3 legacy 
-# authentication protocol (Legacy_Auth). This is again for backwards 
+# The default client configuration (AuthClient) also supports the pre-Firebird 3 legacy
+# authentication protocol (Legacy_Auth). This is again for backwards
 # compatibility but has many known weaknesses and is deprecated for current use.
 #
 # The default Windows client configuration (AuthClient) also includes support for
@@ -657,7 +657,7 @@
 # mode by default. In this mode rec_version/no_rec_version transaction flags have
 # no effect. Setting this parameter to 0 effectively reverts engine to legacy
 # behavior.
-# 
+#
 # CAUTION!
 # There is no guarantee that legacy behavior will be available in future Firebird
 # versions.
@@ -665,6 +665,20 @@
 #	Type: boolean
 #
 #ReadConsistency = 1
+
+# ----------------------------
+# Engine currently provides a number of new datatypes unknown to legacy clients.
+# In order to simplify use of old applications set this parameter to minor FB
+# version datatype compatibility with which you need. Currently two values are
+# supported: 3.0 & 2.5.
+# More precise (including per-session) tuning is possible via SQL and DPB.
+#
+# Per-database configurable.
+#
+#	Type: string
+#
+#DataTypeCompatibility =
+
 
 # ----------------------------
 # Client Connection Settings (Basic)

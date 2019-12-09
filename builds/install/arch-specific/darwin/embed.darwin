@@ -1,61 +1,71 @@
-# Makefile script to generate an embedded Firebird bundle from an existing Framework
+# Makefile script to generate an embedded Firebird Framework from a sucessful Firebird build 
+# To be run from the gen directory of a Firebird Release build
+# Your application needs to be placed in the Resources/app directory.
 
-	FBE=../gen/firebird/Firebird.app
-	BINLOC=../gen/firebird/Firebird.app/Contents/MacOS/firebird/bin
-	LIBLOC=../gen/firebird/Firebird.app/Contents/MacOS/firebird
-	INTLOC=../gen/firebird/Firebird.app/Contents/MacOS/firebird/intl
+	FBE=../gen/Release/frameworks/FirebirdEmbedded.framework
+	BINLOC=../gen/Release/frameworks/FirebirdEmbedded.framework/Versions/A/Resources/bin
+	LIBLOC=../gen/Release/frameworks/FirebirdEmbedded.framework/Versions/A
+	INTLOC=../gen/Release/frameworks/FirebirdEmbedded.framework/Versions/A/Resources/intl
+	PLULOC=../gen/Release/frameworks/FirebirdEmbedded.framework/Versions/A/Resources/plugins
+	UTILOC=../gen/Release/frameworks/FirebirdEmbedded.framework/Versions/A/Libraries
 	OLDPATH=/Library/Frameworks/Firebird.framework/Versions/A/Libraries
 
 all:
-	-$(RM) -rf $(FBE) ../gen/firebird/Firebird.app
-	mkdir -p $(FBE)/Contents
-	mkdir -p $(FBE)/Contents/MacOS
-	mkdir -p $(FBE)/Contents/MacOS/firebird
-	mkdir -p $(FBE)/Contents/Resources
-	mkdir -p $(FBE)/Contents/Frameworks
-	mkdir -p $(FBE)/Contents/Plugins
-	mkdir -p $(FBE)/Contents/SharedSupport
-	mkdir -p $(FBE)/Contents/MacOS/firebird/bin
-	mkdir -p $(FBE)/Contents/MacOS/firebird/intl
 
-	cp ../gen/install/misc/firebird.conf $(FBE)/Contents/MacOS/firebird/firebird.edit
-	cp ../gen/firebird/firebird.msg $(FBE)/Contents/MacOS/firebird/firebird.msg
-	cp ../gen/firebird/lib/libfbembed.dylib $(FBE)/Contents/MacOS/firebird/libfbembed.dylib
-	cp ../gen/firebird/lib/libicudata.dylib $(FBE)/Contents/MacOS/firebird/libicudata.dylib
-	cp ../gen/firebird/lib/libicui18n.dylib $(FBE)/Contents/MacOS/firebird/libicui18n.dylib
-	cp ../gen/firebird/lib/libicuuc.dylib $(FBE)/Contents/MacOS/firebird/libicuuc.dylib
-	cp ../gen/firebird/lib/libib_util.dylib $(FBE)/Contents/MacOS/firebird/libib_util.dylib
-	cp ../gen/firebird/security2.fdb $(FBE)/Contents/MacOS/firebird/security2.fdb
-	cp ../gen/firebird/bin/gbak $(FBE)/Contents/MacOS/firebird/bin/gbak
-	cp ../gen/firebird/bin/isql $(FBE)/Contents/MacOS/firebird/bin/isql
-	cp ../builds/install/misc/fbintl.conf $(FBE)/Contents/MacOS/firebird/intl/fbintl.conf
-	cp ../gen/firebird/intl/libfbintl.dylib $(FBE)/Contents/MacOS/firebird/intl/fbintl.dylib
-	cp ../builds/install/arch-specific/darwin/embed.Info.plist $(FBE)/Contents/Info.plist
+	-$(RM) -rf $(FBE)
+	mkdir -p $(FBE)/Versions/A/Resources
+	mkdir -p $(FBE)/Versions/A/Resources/intl
+	mkdir -p $(FBE)/Versions/A/Resources/plugins
+	mkdir -p $(FBE)/Versions/A/Resources/bin
+	mkdir -p $(FBE)/Versions/A/Resources/app
+	mkdir -p $(FBE)/Versions/A/Headers
+	mkdir -p $(FBE)/Versions/A/Libraries
+	ln -s Versions/Current/Headers $(FBE)/Headers
+	ln -s Versions/Current/Resources $(FBE)/Resources
+	ln -s Versions/Current/Libraries $(FBE)/Libraries
+	ln -s A $(FBE)/Versions/Current
+
+	cp ../gen/Release/firebird/firebird.conf $(FBE)/Versions/A/Resources/firebird.conf
+	cp ../gen/Release/firebird/plugins.conf $(FBE)/Versions/A/Resources/plugins.conf
+	cp ../gen/Release/firebird/firebird.msg $(FBE)/Versions/A/Resources/firebird.msg
+	cp ../gen/Release/firebird/lib/libfbclient.dylib $(FBE)/Versions/A/libfbclient.dylib
+	cp ../gen/Release/firebird/plugins/libEngine12.dylib $(FBE)/Versions/A/Resources/plugins/libEngine12.dylib
+	cp ../gen/Release/firebird/lib/libicudata.dylib $(FBE)/Versions/A/libicudata.dylib
+	cp ../gen/Release/firebird/lib/libicui18n.dylib $(FBE)/Versions/A/libicui18n.dylib
+	cp ../gen/Release/firebird/lib/libicuuc.dylib $(FBE)/Versions/A/libicuuc.dylib
+	cp ../gen/Release/firebird/bin/gbak $(FBE)/Versions/A/Resources/bin/gbak
+	cp ../gen/Release//firebird/bin/isql $(FBE)/Versions/A/Resources/bin/isql
+	cp ../gen/Release/firebird/intl/fbintl.conf $(FBE)/Versions/A/Resources/intl/fbintl.conf
+	cp ../gen/Release/firebird/intl/libfbintl.dylib $(FBE)/Versions/A/Resources/intl/libfbintl.dylib
+	cp ../gen/Release/firebird/lib/libib_util.dylib $(FBE)/Versions/A/Libraries/libib_util.dylib
+
 
 	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Firebird \
-	 ../libfbembed.dylib $(BINLOC)/isql
+	 @loader_path/../../libfbclient.dylib $(BINLOC)/isql
+	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Firebird \
+	 @loader_path/../../libfbclient.dylib $(PLULOC)/libEngine12.dylib
 	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicuuc.dylib \
-	../libicuuc.dylib $(BINLOC)/isql
+	@loader_path/../../libicuuc.dylib $(BINLOC)/isql
 	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicudata.dylib \
-	../libicudata.dylib $(BINLOC)/isql
+	@loader_path/../../libicudata.dylib $(BINLOC)/isql
 	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicui18n.dylib \
-	../libicui18n.dylib $(BINLOC)/isql
+	@loader_path/../../libicui18n.dylib $(BINLOC)/isql
 	
 	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Firebird \
-	 ../libfbembed.dylib $(BINLOC)/gbak
+	@loader_path/../../libfbclient.dylib $(BINLOC)/gbak
 	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicuuc.dylib \
-	../libicuuc.dylib $(BINLOC)/gbak
+	@loader_path/../../libicuuc.dylib $(BINLOC)/gbak
 	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicudata.dylib \
-	../libicudata.dylib $(BINLOC)/gbak
+	@loader_path/../../libicudata.dylib $(BINLOC)/gbak
 	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicui18n.dylib \
-	../libicui18n.dylib $(BINLOC)/gbak
+	@loader_path/../../libicui18n.dylib $(BINLOC)/gbak
 	
 	install_name_tool -change $(OLDPATH)/libicuuc.dylib @loader_path/libicuuc.dylib \
-	$(LIBLOC)/libfbembed.dylib
+	$(LIBLOC)/libfbclient.dylib
 	install_name_tool -change $(OLDPATH)/libicudata.dylib @loader_path/libicudata.dylib \
-	$(LIBLOC)/libfbembed.dylib
+	$(LIBLOC)/libfbclient.dylib
 	install_name_tool -change $(OLDPATH)/libicui18n.dylib @loader_path/libicui18n.dylib \
-	$(LIBLOC)/libfbembed.dylib
+	$(LIBLOC)/libfbclient.dylib
 	install_name_tool -change $(OLDPATH)/libicudata.dylib @loader_path/libicudata.dylib \
 	$(LIBLOC)/libicuuc.dylib
 	install_name_tool -change $(OLDPATH)/libicuuc.dylib @loader_path/libicuuc.dylib \
@@ -63,17 +73,22 @@ all:
 	install_name_tool -change $(OLDPATH)/libicudata.dylib @loader_path/libicudata.dylib \
 	$(LIBLOC)/libicui18n.dylib
 
-	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicuuc.dylib \
-        ../libicuuc.dylib $(INTLOC)/fbintl.dylib
-	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicudata.dylib \
-        ../libicudata.dylib $(INTLOC)/fbintl.dylib
-	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicui18n.dylib \
-        ../libicui18n.dylib $(INTLOC)/fbintl.dylib
+	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Firebird \
+	@loader_path/../../libfbclient.dylib $(INTLOC)/libfbintl.dylib
 
-	install_name_tool -id @rpath/libfbembed.dylib $(LIBLOC)/libfbembed.dylib
+	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicuuc.dylib \
+        @loader_path/../libicuuc.dylib $(INTLOC)/libfbintl.dylib
+	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicudata.dylib \
+        @loader_path/../libicudata.dylib $(INTLOC)/libfbintl.dylib
+	install_name_tool -change /Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicui18n.dylib \
+        @loader_path/../libicui18n.dylib $(INTLOC)/libfbintl.dylib
+
+	install_name_tool -id @rpath/libfbclient.dylib $(LIBLOC)/libfbclient.dylib
 	install_name_tool -id @rpath/libicudata.dylib $(LIBLOC)/libicudata.dylib 
 	install_name_tool -id @rpath/libicui18n.dylib $(LIBLOC)/libicui18n.dylib
 	install_name_tool -id @rpath/libicudata.dylib $(LIBLOC)/libicudata.dylib
 	install_name_tool -id @rpath/libicuuc.dylib $(LIBLOC)/libicuuc.dylib
 	install_name_tool -id @rpath/libicudata.dylib $(LIBLOC)/libicudata.dylib
-	install_name_tool -id @rpath/libib_util.dylib $(LIBLOC)/libib_util.dylib
+	install_name_tool -id @rpath/libib_util.dylib $(UTILOC)/libib_util.dylib
+	install_name_tool -id @rpath/libfbintl.dylib $(INTLOC)/libfbintl.dylib
+	install_name_tool -id @rpath/libEngine12.dylib $(PLULOC)/libEngine12.dylib

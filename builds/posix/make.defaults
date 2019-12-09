@@ -178,9 +178,16 @@ AC_CXXFLAGS = @CXXFLAGS@
 
 # LINKER COMMANDS
 
+# FIXME: -static-libstdc++ in MacOS
+ifeq ($(PLATFORM),DARWIN)
+LIB_LINK = $(CXX) $(GLOB_OPTIONS) $(CXXFLAGS)
+EXE_LINK = $(CXX) $(GLOB_OPTIONS) $(CXXFLAGS)
+else
 LIB_LINK = $(CXX) $(GLOB_OPTIONS) $(CXXFLAGS) -static-libstdc++
-STATICLIB_LINK = $(AR) crus
 EXE_LINK = $(CXX) $(GLOB_OPTIONS) $(CXXFLAGS) -static-libstdc++
+endif
+
+STATICLIB_LINK = $(AR) crus
 STATICEXE_LINK = $(CXX) $(GLOB_OPTIONS) $(CXXFLAGS) -static-libstdc++
 
 LINK_LIBS = @LIBS@ $(DECLIB) $(RE2LIB)
@@ -258,8 +265,12 @@ LIBIBUTIL_SO = $(LIB)/$(IbUtilLibraryName)
 # Own tommath support
 TOMMATH=$(ROOT)/extern/libtommath
 TOMMATH_INC=$(TOMMATH)
-TOMMATH_SO=$(TOMMATH)/.libs/libtommath.so
 TOMMATH_VER=0
+ifeq ($(PLATFORM),DARWIN)
+TOMMATH_SO=$(TOMMATH)/.libs/libtommath.dylib
+else
+TOMMATH_SO=$(TOMMATH)/.libs/libtommath.so
+endif
 
 # Own tomcrypt support
 TOMCRYPT=$(ROOT)/extern/libtomcrypt
@@ -294,7 +305,10 @@ LINK_PLUGIN_SYMBOLS = $(call LIB_LINK_MAPFILE,$(PLUGIN_VERS))
 LINK_EXEC_EXPORT=-rdynamic
 UDR_SUPPORT_LIBS=
 
-LIB_PLATFORM_RPATH = -Wl,-rpath,$(1)
+ifeq ($(PLATFORM),DARWIN)
+    LIB_LINK_RPATH =
+else
+	LIB_PLATFORM_RPATH = -Wl,-rpath,$(1)
 
 ifeq (@USE_RPATH@,1)
     ifeq ($(strip @BINRELOC_CFLAGS@),)
@@ -305,6 +319,16 @@ ifeq (@USE_RPATH@,1)
 else
     LIB_LINK_RPATH =
 endif
+endif
+
+ifeq ($(PLATFORM),DARWIN)
+    LINK_DARWIN_RPATH = -Wl,-rpath,@loader_path/$(1)
+    LIB_LINK_DARWIN_INSTALL_NAME = -install_name @rpath/$(1)
+else
+    LINK_DARWIN_RPATH =
+    LIB_LINK_DARWIN_INSTALL_NAME =
+endif
+
 LIB_PATH_OPTS = $(call LIB_LINK_RPATH,lib) $(call LIB_LINK_RPATH,intl)
 LIB_LINK_SONAME= -Wl,-soname,$(1)
 LIB_LINK_MAPFILE= -Wl,--version-script,$(1)
@@ -317,33 +341,35 @@ FB_DAEMON = $(BIN)/firebird$(EXEC_EXT)
 
 # Per-library link rules
 LINK_UDF = $(LIB_LINK) $(LIB_LINK_OPTIONS) $(call LIB_LINK_SONAME,$(1).$(SHRLIB_EXT)) $(UNDEF_FLAGS)\
- $(call LIB_LINK_RPATH,lib)
+ $(call LIB_LINK_RPATH,lib) $(call LINK_DARWIN_RPATH,..)
 LINK_UDF_LIBS = $(THR_LIBS) -L$(LIB) -lib_util $(SO_LINK_LIBS)
 
 LINK_IB_UTIL = $(LIB_LINK) $(LINK_IBUTIL_SYMBOLS) $(LIB_LINK_OPTIONS) $(UNDEF_FLAGS)\
- $(call LIB_LINK_SONAME,$(IbUtilLibraryName)) $(call LIB_LINK_RPATH,lib)
+ $(call LIB_LINK_SONAME,$(IbUtilLibraryName)) $(call LIB_LINK_RPATH,lib) $(call LINK_DARWIN_RPATH,..)
 LINK_IB_UTIL_LIBS = $(THR_LIBS)
 
 LINK_INTL = $(LIB_LINK) $(LINK_FBINTL_SYMBOLS) $(LIB_LINK_OPTIONS) $(UNDEF_FLAGS)\
- $(call LIB_LINK_SONAME,libfbintl.$(SHRLIB_EXT).1) $(call LIB_LINK_RPATH,lib)
+ $(call LIB_LINK_SONAME,libfbintl.$(SHRLIB_EXT).1) $(call LIB_LINK_RPATH,lib) $(call LINK_DARWIN_RPATH,..)
 LINK_INTL_LIBS = -L$(LIB) $(SO_LINK_LIBS) $(FIREBIRD_LIBRARY_LINK)
 
 LINK_TRACE = $(LIB_LINK) $(LINK_PLUGIN_SYMBOLS) $(LIB_LINK_OPTIONS) $(UNDEF_FLAGS)\
- $(call LIB_LINK_SONAME,$(LIB_PREFIX)fbtrace.$(SHRLIB_EXT).0) $(call LIB_LINK_RPATH,lib)
+ $(call LIB_LINK_SONAME,$(LIB_PREFIX)fbtrace.$(SHRLIB_EXT).0) $(call LIB_LINK_RPATH,lib) $(call LINK_DARWIN_RPATH,..)
 LINK_TRACE_LIBS = -L$(LIB) $(SO_LINK_LIBS)
 
 LINK_FIREBIRD = $(LIB_LINK) $(LINK_FIREBIRD_SYMBOLS) $(LIB_LINK_OPTIONS) $(LIB_FIREBIRD_OPTIONS) $(UNDEF_FLAGS)\
- $(call LIB_LINK_SONAME,$(LibrarySoName)) $(call LIB_LINK_RPATH,lib)
+ $(call LIB_LINK_SONAME,$(LibrarySoName)) $(call LIB_LINK_RPATH,lib) $(call LINK_DARWIN_RPATH,..)
 LINK_FIREBIRD_LIBS = -L$(LIB) $(LIB_GUI) $(SO_LINK_LIBS) $(MATHLIB) $(CRYPTLIB)
 
 LINK_ENGINE = $(LIB_LINK) $(LINK_PLUGIN_SYMBOLS) $(LIB_LINK_OPTIONS) $(LIB_FIREBIRD_OPTIONS) $(UNDEF_FLAGS)\
- $(call LIB_LINK_SONAME,$(EngineSoName)) $(call LIB_LINK_RPATH,lib)
+ $(call LIB_LINK_SONAME,$(EngineSoName)) $(call LIB_LINK_RPATH,lib) $(call LINK_DARWIN_RPATH,..)
 LINK_ENGINE_LIBS = $(LINK_FIREBIRD_LIBS) $(FIREBIRD_LIBRARY_LINK)
 
-LINK_UDRENG = $(LIB_LINK) $(LINK_PLUGIN_SYMBOLS) $(LIB_LINK_OPTIONS) $(call LIB_LINK_RPATH,lib) $(UNDEF_FLAGS)
+LINK_UDRENG = $(LIB_LINK) $(LINK_PLUGIN_SYMBOLS) $(LIB_LINK_OPTIONS) $(call LIB_LINK_RPATH,lib) $(UNDEF_FLAGS)\
+ $(call LINK_DARWIN_RPATH,..)
 LINK_UDRENG_LIBS = -L$(LIB) $(SO_LINK_LIBS)
 
-LINK_PLUGIN = $(LIB_LINK) $(LINK_PLUGIN_SYMBOLS) $(LIB_LINK_OPTIONS) $(call LIB_LINK_RPATH,lib) $(UNDEF_FLAGS)
+LINK_PLUGIN = $(LIB_LINK) $(LINK_PLUGIN_SYMBOLS) $(LIB_LINK_OPTIONS) $(call LIB_LINK_RPATH,lib) $(UNDEF_FLAGS)\
+ $(call LINK_DARWIN_RPATH,..)
 LINK_PLUG_LIBS = -L$(LIB) $(SO_LINK_LIBS)
 
 # Pay attention - we place common library into obj, not lib dir

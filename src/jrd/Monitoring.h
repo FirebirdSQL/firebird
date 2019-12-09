@@ -248,14 +248,14 @@ private:
 };
 
 
-class MonitoringHeader : public Firebird::MemoryHeader
+struct MonitoringHeader : public Firebird::MemoryHeader
 {
-public:
 	ULONG used;
 	ULONG allocated;
 };
 
-class MonitoringData FB_FINAL : public Firebird::IpcObject
+
+class MonitoringData FB_FINAL : public Firebird::PermanentStorage, public Firebird::IpcObject
 {
 	static const USHORT MONITOR_VERSION = 5;
 	static const ULONG DEFAULT_SIZE = 1048576;
@@ -333,6 +333,8 @@ public:
 	bool initialize(Firebird::SharedMemoryBase*, bool);
 	void mutexBug(int osErrorCode, const char* text);
 
+	void initSharedFile();
+
 	void acquire();
 	void release();
 
@@ -350,7 +352,8 @@ private:
 
 	void ensureSpace(ULONG);
 
-	Firebird::AutoPtr<Firebird::SharedMemory<MonitoringHeader> > shared_memory;
+	const Firebird::string m_dbId;
+	Firebird::AutoPtr<Firebird::SharedMemory<MonitoringHeader> > m_sharedMemory;
 };
 
 

@@ -1046,6 +1046,9 @@ Data source : @4', NULL, NULL)
 ('invalid_decfloat_bind', NULL, 'jrd.cpp', NULL, 0, 936, NULL, 'Invalid decfloat bind mode @1', NULL, NULL);
 ('odd_hex_len', NULL, 'SysFunction.cpp', NULL, 0, 937, NULL, 'Invalid hex text length @1, should be multiple of 2', NULL, NULL);
 ('invalid_hex_digit', NULL, 'SysFunction.cpp', NULL, 0, 938, NULL, 'Invalid hex digit @1 at position @2', NULL, NULL);
+('bind_err', NULL, 'jrd.cpp', NULL, 0, 939, NULL, 'Error processing isc_dpb_set_bind clumplet "@1"', NULL, NULL);
+('bind_statement', NULL, 'jrd.cpp', NULL, 0, 940, NULL, 'The following statement failed: @1', NULL, NULL);
+('bind_convert', NULL, 'Coercion.cpp', NULL, 0, 941, NULL, 'Can not convert @1 to @2', NULL, NULL);
 -- QLI
 (NULL, NULL, NULL, NULL, 1, 0, NULL, 'expected type', NULL, NULL);
 (NULL, NULL, NULL, NULL, 1, 1, NULL, 'bad block type', NULL, NULL);

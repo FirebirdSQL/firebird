@@ -66,9 +66,6 @@ using namespace Replication;
 
 namespace
 {
-	const char* SHMEM_FILE = "fb_repl_%s";
-	const ULONG SHMEM_VERSION = 1;
-
 	const unsigned FLUSH_WAIT_INTERVAL = 1; // milliseconds
 
 	const unsigned NO_SPACE_TIMEOUT = 10;	// seconds
@@ -316,15 +313,12 @@ ChangeLog::ChangeLog(MemoryPool& pool,
 					 const FB_UINT64 sequence,
 					 const Replication::Config* config)
 	: PermanentStorage(pool),
-	  m_database(pool, database), m_config(config),
-	  m_segments(pool), m_sequence(sequence), m_shutdown(false)
+	  m_dbId(pool, dbId), m_database(pool, database),
+	  m_config(config), m_segments(pool), m_sequence(sequence), m_shutdown(false)
 {
 	memcpy(&m_guid, &guid, sizeof(Guid));
 
-	PathName filename;
-	filename.printf(SHMEM_FILE, dbId.c_str());
-
-	FB_NEW_POOL(pool) SharedMemory<State>(filename.c_str(), STATE_MAPPING_SIZE, this);
+	initSharedFile();
 
 	{ // scope
 		LockGuard guard(this);
@@ -332,7 +326,7 @@ ChangeLog::ChangeLog(MemoryPool& pool,
 		// If the server crashes while archiving, segments may remain in the ARCH state forever.
 		// This code allows to recover their state and retry archiving them.
 
-		const auto state = m_state->getHeader();
+		const auto state = m_sharedMemory->getHeader();
 
 		if (!state->pidUpper)
 		{
@@ -373,39 +367,60 @@ ChangeLog::~ChangeLog()
 				if (segment->getState() == SEGMENT_STATE_FULL)
 					archiveSegment(segment);
 			}
+
+			m_sharedMemory->removeMapFile();
 		}
 	}
 	catch (const Exception&)
 	{}	// no-op
 
 	clearSegments();
+}
 
-	if (m_state.hasData() && m_state->getHeader())
-		delete m_state.release();
+void ChangeLog::initSharedFile()
+{
+	PathName filename;
+	filename.printf(REPL_FILE, m_dbId.c_str());
+
+	m_sharedMemory.reset(FB_NEW_POOL(getPool())
+		SharedMemory<State>(filename.c_str(), STATE_MAPPING_SIZE, this));
+
+	fb_assert(m_sharedMemory->getHeader()->mhb_type == SharedMemoryBase::SRAM_CHANGELOG_STATE);
+	fb_assert(m_sharedMemory->getHeader()->mhb_header_version == MemoryHeader::HEADER_VERSION);
+	fb_assert(m_sharedMemory->getHeader()->mhb_version == STATE_VERSION);
 }
 
 void ChangeLog::lockState()
 {
-	auto blockage = false;
-
-	if (!m_state->mutexLockCond())
-	{
-		blockage = true;
-		m_state->mutexLock();
-	}
+	m_sharedMemory->mutexLock();
 
 	try
 	{
-		const auto state = m_state->getHeader();
+		while (!m_sharedMemory->getHeader()->pidUpper)
+		{
+			fb_assert(!m_sharedMemory->getHeader()->pidLower);
 
-		state->lockAcquires++;
-		if (blockage)
-			state->lockBlocks++;
+			if (m_sharedMemory->justCreated())
+				break;
+
+			// Someone is going to delete shared file? Reattach.
+			m_sharedMemory->mutexUnlock();
+			m_sharedMemory.reset();
+
+			Thread::yield();
+
+			initSharedFile();
+			m_sharedMemory->mutexLock();
+		}
+
+		fb_assert(!m_sharedMemory->justCreated());
+
+		const auto state = m_sharedMemory->getHeader();
 
 		if (m_segments.isEmpty() || state->segmentCount > m_segments.getCount())
 			initSegments();
 	}
-	catch (Exception&)
+	catch (const Exception&)
 	{
 		unlockState();
 		throw;
@@ -414,14 +429,14 @@ void ChangeLog::lockState()
 
 void ChangeLog::unlockState()
 {
-	m_state->mutexUnlock();
+	m_sharedMemory->mutexUnlock();
 }
 
 void ChangeLog::linkSelf()
 {
 	static const auto process_id = getpid();
 
-	const auto state = m_state->getHeader();
+	const auto state = m_sharedMemory->getHeader();
 
 	fb_assert(state->pidLower <= PID_CAPACITY);
 	fb_assert(state->pidUpper <= PID_CAPACITY);
@@ -471,7 +486,7 @@ bool ChangeLog::unlinkSelf()
 {
 	static const auto process_id = getpid();
 
-	const auto state = m_state->getHeader();
+	const auto state = m_sharedMemory->getHeader();
 
 	fb_assert(state->pidLower <= PID_CAPACITY);
 	fb_assert(state->pidUpper <= PID_CAPACITY);
@@ -508,14 +523,12 @@ bool ChangeLog::unlinkSelf()
 
 bool ChangeLog::initialize(SharedMemoryBase* shmem, bool init)
 {
-	m_state.reset(reinterpret_cast<SharedMemory<State>*>(shmem));
-
 	if (init)
 	{
-		const auto state = m_state->getHeader();
+		const auto state = reinterpret_cast<State*>(shmem->sh_mem_header);
 		memset(state, 0, sizeof(State));
 
-		state->init(SharedMemoryBase::SRAM_CHANGELOG_STATE, SHMEM_VERSION);
+		state->init(SharedMemoryBase::SRAM_CHANGELOG_STATE, STATE_VERSION);
 
 		state->timestamp = time(NULL);
 		state->sequence = m_sequence;
@@ -563,7 +576,8 @@ FB_UINT64 ChangeLog::write(ULONG length, const UCHAR* data, bool sync)
 	if (!segment)
 		raiseError("Out of available space in changelog segments");
 
-	const auto state = m_state->getHeader();
+	const auto state = m_sharedMemory->getHeader();
+
 	if (segment->getLength() == sizeof(SegmentHeader))
 		state->timestamp = time(NULL);
 
@@ -740,7 +754,7 @@ void ChangeLog::switchActiveSegment()
 
 	if (activeSegment)
 	{
-		const auto state = m_state->getHeader();
+		const auto state = m_sharedMemory->getHeader();
 
 		activeSegment->setState(SEGMENT_STATE_FULL);
 		state->flushMark++;
@@ -758,7 +772,7 @@ void ChangeLog::bgArchiver()
 		{
 			LockGuard guard(this);
 
-			const auto state = m_state->getHeader();
+			const auto state = m_sharedMemory->getHeader();
 
 			for (const auto segment : m_segments)
 			{
@@ -804,7 +818,7 @@ void ChangeLog::bgArchiver()
 			m_workingSemaphore.tryEnter(1);
 		}
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		iscLogException("Error in changelog thread", ex);
 	}
@@ -815,7 +829,7 @@ void ChangeLog::bgArchiver()
 	{
 		m_cleanupSemaphore.release();
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		iscLogException("Error while exiting changelog thread", ex);
 	}
@@ -825,7 +839,7 @@ void ChangeLog::initSegments()
 {
 	clearSegments();
 
-	const auto state = m_state->getHeader();
+	const auto state = m_sharedMemory->getHeader();
 
 	for (auto iter = PathUtils::newDirIterator(getPool(), m_config->logDirectory);
 		*iter; ++(*iter))
@@ -857,7 +871,7 @@ void ChangeLog::clearSegments()
 
 ChangeLog::Segment* ChangeLog::createSegment()
 {
-	const auto state = m_state->getHeader();
+	const auto state = m_sharedMemory->getHeader();
 	const auto sequence = ++state->sequence;
 
 	PathName filename;
@@ -903,7 +917,7 @@ ChangeLog::Segment* ChangeLog::reuseSegment(ChangeLog::Segment* segment)
 
 	// Rename the backing file
 
-	const auto state = m_state->getHeader();
+	const auto state = m_sharedMemory->getHeader();
 	const auto sequence = ++state->sequence;
 
 	PathName newname;
@@ -956,7 +970,7 @@ ChangeLog::Segment* ChangeLog::getSegment(ULONG length)
 		}
 	}
 
-	const auto state = m_state->getHeader();
+	const auto state = m_sharedMemory->getHeader();
 
 	if (activeSegment)
 	{

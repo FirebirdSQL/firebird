@@ -132,10 +132,9 @@ EventManager::EventManager(const Firebird::string& id, Firebird::RefPtr<const Co
 	  m_dbId(getPool(), id),
 	  m_config(conf),
 	  m_cleanupSync(getPool(), watcher_thread, THREAD_medium),
-	  m_sharedFileCreated(false),
 	  m_exiting(false)
 {
-	attach_shared_file();
+	init_shared_file();
 }
 
 
@@ -172,15 +171,13 @@ EventManager::~EventManager()
 		m_sharedMemory->removeMapFile();
 	}
 	release_shmem();
-
-	detach_shared_file();
 }
 
 
-void EventManager::attach_shared_file()
+void EventManager::init_shared_file()
 {
 	Firebird::PathName name;
-	get_shared_file_name(name);
+	name.printf(EVENT_FILE, m_dbId.c_str());
 
 	SharedMemory<evh>* tmp = FB_NEW_POOL(*getDefaultMemoryPool())
 		SharedMemory<evh>(name.c_str(), m_config->getEventMemSize(), this);
@@ -190,18 +187,6 @@ void EventManager::attach_shared_file()
 	fb_assert(m_sharedMemory->getHeader()->mhb_type == SharedMemoryBase::SRAM_EVENT_MANAGER);
 	fb_assert(m_sharedMemory->getHeader()->mhb_header_version == MemoryHeader::HEADER_VERSION);
 	fb_assert(m_sharedMemory->getHeader()->mhb_version == EVENT_VERSION);
-}
-
-
-void EventManager::detach_shared_file()
-{
-	delete m_sharedMemory.release();
-}
-
-
-void EventManager::get_shared_file_name(Firebird::PathName& name) const
-{
-	name.printf(EVENT_FILE, m_dbId.c_str());
 }
 
 
@@ -528,26 +513,20 @@ void EventManager::acquire_shmem()
 
 	while (SRQ_EMPTY(m_sharedMemory->getHeader()->evh_processes))
 	{
-		if (! m_sharedFileCreated)
-		{
-			// Someone is going to delete shared file? Reattach.
-			m_sharedMemory->mutexUnlock();
-			detach_shared_file();
-
-			Thread::yield();
-
-			attach_shared_file();
-			m_sharedMemory->mutexLock();
-		}
-		else
-		{
-			// complete initialization
-			m_sharedFileCreated = false;
-
+		if (m_sharedMemory->justCreated())
 			break;
-		}
+
+		// Someone is going to delete shared file? Reattach.
+		m_sharedMemory->mutexUnlock();
+		m_sharedMemory.reset();
+
+		Thread::yield();
+
+		init_shared_file();
+		m_sharedMemory->mutexLock();
 	}
-	fb_assert(!m_sharedFileCreated);
+
+	fb_assert(!m_sharedMemory->justCreated());
 
 	m_sharedMemory->getHeader()->evh_current_process = m_processOffset;
 
@@ -1093,8 +1072,6 @@ bool EventManager::initialize(SharedMemoryBase* sm, bool init)
  *	Initialize global region header.
  *
  **************************************/
-
-	m_sharedFileCreated = init;
 
 	// reset m_sharedMemory in advance to be able to use SRQ_BASE macro
 	m_sharedMemory.reset(reinterpret_cast<SharedMemory<evh>*>(sm));

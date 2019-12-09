@@ -28,6 +28,7 @@
 #include "firebird.h"
 
 #include "../common/os/mod_loader.h"
+#include "../common/os/os_utils.h"
 #include "../../common.h"
 #include <unistd.h>
 #include <sys/types.h>
@@ -42,8 +43,9 @@
 class DlfcnModule : public ModuleLoader::Module
 {
 public:
-	DlfcnModule(void* m)
-		: module(m)
+	DlfcnModule(MemoryPool& pool, const Firebird::PathName& aFileName, void* m)
+		: ModuleLoader::Module(pool, aFileName),
+		  module(m)
 	{}
 
 	~DlfcnModule();
@@ -55,7 +57,7 @@ private:
 
 bool ModuleLoader::isLoadableModule(const Firebird::PathName& module)
 {
-	struct STAT sb;
+	struct stat sb;
 
 	if (-1 == os_utils::stat(module.c_str(), &sb))
 		return false;
@@ -123,7 +125,7 @@ ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const Firebir
 		return 0;
 	}
 
-	return FB_NEW_POOL(*getDefaultMemoryPool()) DlfcnModule(module);
+	return FB_NEW_POOL(*getDefaultMemoryPool()) DlfcnModule(*getDefaultMemoryPool(), modPath, module);
 }
 
 DlfcnModule::~DlfcnModule()

@@ -31,6 +31,7 @@
 namespace Jrd {
 	class dsql_ctx;
 	class dsql_fld;
+	class TypeClause;
 	class dsql_msg;
 	class dsql_par;
 	class dsql_req;
@@ -57,8 +58,8 @@ namespace Jrd {
 	class DsqlDescMaker
 	{
 	public:
-		static void fromElement(dsc*, const dsql_fld*);
-		static void fromField(dsc*, const dsql_fld*);
+		static void fromElement(dsc*, const TypeClause*);
+		static void fromField(dsc*, const TypeClause*);
 		static void fromList(DsqlCompilerScratch*, dsc*,
 			ValueListNode*, const char*, bool = false);
 		static void fromNode(DsqlCompilerScratch*, dsc*,

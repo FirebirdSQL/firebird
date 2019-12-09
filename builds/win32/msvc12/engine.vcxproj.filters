@@ -492,6 +492,9 @@
     <ClCompile Include="..\..\..\src\jrd\replication\Utils.cpp">
       <Filter>Replication</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\Coercion.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\jrd\recsrc\RecordSource.h">
@@ -1023,6 +1026,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\TimeZone.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\Coercion.h">
       <Filter>Header files</Filter>
     </ClInclude>
   </ItemGroup>

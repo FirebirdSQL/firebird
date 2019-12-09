@@ -58,10 +58,8 @@ namespace {
 const char* const inTemplate = "icuin%s.dll";
 const char* const ucTemplate = "icuuc%s.dll";
 #elif defined(DARWIN)
-//const char* const inTemplate = "/Library/Frameworks/Firebird.framework/Versions/A/Libraries/libicui18n.dylib";
-//const char* const ucTemplate = "/Library/Frameworks/Firebird.framework/versions/A/Libraries/libicuuc.dylib";
-const char* const inTemplate = "libicui18n.dylib";
-const char* const ucTemplate = "libicuuc.dylib";
+const char* const inTemplate = "lib/libicui18n.%s.dylib";
+const char* const ucTemplate = "lib/libicuuc.%s.dylib";
 #elif defined(HPUX)
 const char* const inTemplate = "libicui18n.sl.%s";
 const char* const ucTemplate = "libicuuc.sl.%s";
@@ -133,7 +131,7 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 	getEntryPoint("u_init", module, uInit, true);
 	getEntryPoint("u_setDataDirectory", module, uSetDataDirectory, true);
 
-#ifdef WIN_NT
+#if defined(WIN_NT) || defined(DARWIN)
 	if (uSetDataDirectory)
 	{
 		// call uSetDataDirectory only if .dat file is exists at same folder

@@ -471,7 +471,9 @@ Important:
     - Initial counter value (COUNTER) may be specified only for CHACHA20 cipher, default is 0.
 	- Sizes of data strings passed to this functions are according to selected algorithm and mode
 	  requirements.
-	- Functions return BLOB when first argument is blob and varbinary for all text types.
+	- Functions return BLOB when first argument is blob and varbinary for all other types.
+	- Other parameters (except algorithm, mode and endianness) may have any type provided that data size
+	  is appropriate for selected algorithm and mode.
 
 Example:
     select encrypt('897897' using sober128 key 'AbcdAbcdAbcdAbcd' iv '01234567') from rdb$database;

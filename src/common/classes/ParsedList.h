@@ -37,7 +37,7 @@ namespace Firebird {
 class ParsedList : public Firebird::ObjectsArray<Firebird::PathName>
 {
 public:
-	explicit ParsedList(Firebird::PathName list);
+	explicit ParsedList(const Firebird::PathName& list);
 
 	ParsedList()
 	{ }
@@ -45,6 +45,8 @@ public:
 	explicit ParsedList(MemoryPool& p)
 		: Firebird::ObjectsArray<Firebird::PathName>(p)
 	{ }
+
+	ParsedList(const Firebird::PathName& list, const char* delimiters);
 
 	// create plane list from this parsed
 	void makeList(Firebird::PathName& list) const;
@@ -55,6 +57,9 @@ public:
 
 	// get providers list for particular database amd remove "Loopback" provider from it
 	static Firebird::PathName getNonLoopbackProviders(const Firebird::PathName& aliasDb);
+
+private:
+	void parse(Firebird::PathName list, const char* delimiters);
 };
 
 } // namespace Firebird

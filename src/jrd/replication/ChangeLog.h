@@ -69,12 +69,17 @@ namespace Replication
 			ULONG segmentCount;			// number of segments in use
 			ULONG flushMark;			// last flush mark
 			FB_UINT64 sequence;			// sequence number of the last segment
-			FB_UINT64 lockAcquires;		// number of state acquires
-			FB_UINT64 lockBlocks;		// number of blocked state acquires
 			ULONG pidLower;				// Lower boundary mark in the PID array
 			ULONG pidUpper;				// Upper boundary mark in the PID array
 			int pids[1];				// PIDs attached to the state
 		};
+
+		// Shared memory layout format
+		static const USHORT STATE_VERSION = 1;
+		// Mapping size (not extendable for the time being)
+		static const ULONG STATE_MAPPING_SIZE = 64 * 1024;	// 64 KB
+		// Max number of processes accessing the shared state
+		static const ULONG PID_CAPACITY = (STATE_MAPPING_SIZE - offsetof(State, pids)) / sizeof(int); // ~16K
 
 		// RAII helper to lock the shared state
 
@@ -184,11 +189,6 @@ namespace Replication
 	#endif
 		};
 
-		// Mapping size (not extendable for the time being)
-		static const ULONG STATE_MAPPING_SIZE = 64 * 1024;	// 64 KB
-		// Max number of processes accessing the shared state
-		static const ULONG PID_CAPACITY = (STATE_MAPPING_SIZE - offsetof(State, pids)) / sizeof(int); // ~16K
-
 	public:
 		ChangeLog(Firebird::MemoryPool& pool,
 				  const Firebird::string& dbId,
@@ -204,6 +204,8 @@ namespace Replication
 		void bgArchiver();
 
 	private:
+		void initSharedFile();
+
 		void lockState();
 		void unlockState();
 
@@ -230,10 +232,11 @@ namespace Replication
 
 		void switchActiveSegment();
 
+		const Firebird::string m_dbId;
 		const Firebird::PathName m_database;
 		const Config* const m_config;
 		Firebird::Array<Segment*> m_segments;
-		Firebird::AutoPtr<Firebird::SharedMemory<State> > m_state;
+		Firebird::AutoPtr<Firebird::SharedMemory<State> > m_sharedMemory;
 		Firebird::Guid m_guid;
 		const FB_UINT64 m_sequence;
 

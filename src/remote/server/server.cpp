@@ -6035,7 +6035,7 @@ void rem_port::start_crypt(P_CRYPT * crypt, PACKET* sendL)
 		PathName keyName(crypt->p_key.cstr_address, crypt->p_key.cstr_length);
 		for (unsigned k = 0; k < port_crypt_keys.getCount(); ++k)
 		{
-			if (keyName == port_crypt_keys[k]->t)
+			if (keyName == port_crypt_keys[k]->keyName)
 			{
 				key = port_crypt_keys[k];
 				break;
@@ -6085,7 +6085,7 @@ void rem_port::start_crypt(P_CRYPT * crypt, PACKET* sendL)
 		port_crypt_complete = true;
 
 		send_response(sendL, 0, 0, &st, false);
-		WIRECRYPT_DEBUG(fprintf(stderr, "Installed cipher %s\n", cp.name()));
+		WIRECRYPT_DEBUG(fprintf(stderr, "Srv: Installed cipher %s\n", cp.name()));
 	}
 	catch (const Exception& ex)
 	{
@@ -7049,7 +7049,7 @@ bool SrvAuthBlock::extractNewKeys(CSTRING* to, ULONG flags)
 	{
 		for (unsigned n = 0; n < newKeys.getCount(); ++n)
 		{
-			const PathName& t = newKeys[n]->t;
+			const PathName& t = newKeys[n]->keyName;
 			PathName plugins = knownCryptKeyTypes()[t];
 			if (plugins.hasData())
 			{

@@ -31,10 +31,14 @@
 
 using namespace Firebird;
 
-ParsedList::ParsedList(PathName list)
+ParsedList::ParsedList(const PathName& list)
+{
+	parse(list, " \t,;");
+}
+
+void ParsedList::parse(PathName list, const char* sep)
 {
 	list.alltrim(" \t");
-	const char* sep = " \t,;";
 
 	for (;;)
 	{
@@ -52,6 +56,11 @@ ParsedList::ParsedList(PathName list)
 		list = list.substr(p + 1);
 		list.ltrim(sep);
 	}
+}
+
+ParsedList::ParsedList(const PathName& list, const char* delimiters)
+{
+	parse(list, delimiters);
 }
 
 void ParsedList::makeList(PathName& list) const

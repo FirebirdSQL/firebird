@@ -87,7 +87,7 @@ public:
 	//   - tra_limbo -> tra_committed
 	//   - tra_limbo -> tra_dead
 	// All other combinations are expressly forbidden with BUGCHECK error.
-	CommitNumber setState(TraNumber number, SSHORT state);
+	CommitNumber setState(TraNumber number, int state);
 
 	// Compute most current state of a transaction. This is called when we encountered
 	// a record produced by this transaction and need to know what to do with this record.
@@ -197,18 +197,21 @@ private:
 
 	typedef TransactionStatusBlock* PTransactionStatusBlock;
 
+	// Block number storage should match TraNumber to avoid unexpected overflows
+	typedef FB_UINT64 TpcBlockNumber;
+
 	class StatusBlockData
 	{
 	public:
-		StatusBlockData(Jrd::thread_db* tdbb, Jrd::TipCache* tipCache, int blkNumber);
+		StatusBlockData(Jrd::thread_db* tdbb, Jrd::TipCache* tipCache, ULONG blockSize, TpcBlockNumber blkNumber);
 		~StatusBlockData();
 
-		int blockNumber;
+		TpcBlockNumber blockNumber;
 		Firebird::SharedMemory<TransactionStatusBlock>* memory;
 		Lock existenceLock;
 		TipCache* cache;
 
-		inline static int& generate(const void* /*sender*/, StatusBlockData* item)
+		inline static TpcBlockNumber& generate(const void* /*sender*/, StatusBlockData* item)
 		{
 			return item->blockNumber;
 		}
@@ -251,7 +254,6 @@ private:
 	static const ULONG TPC_VERSION = 1;
 	static const int SAFETY_GAP_BLOCKS = 1;
 
-	Database* m_dbb; // final
 	Firebird::SharedMemory<GlobalTpcHeader>* m_tpcHeader; // final
 	Firebird::SharedMemory<SnapshotList>* m_snapshots; // final
 	ULONG m_transactionsPerBlock; // final. When set, we assume TPC has been initialized.
@@ -266,14 +268,14 @@ private:
 
 	Firebird::SyncObject m_sync_status;
 
-	void initTransactionsPerBlock();
+	void initTransactionsPerBlock(ULONG blockSize);
 
 	// Returns block holding transaction state.
 	// Returns NULL if requested block is too old and is no longer cached.
-	TransactionStatusBlock* getTransactionStatusBlock(int blockNumber);
+	TransactionStatusBlock* getTransactionStatusBlock(GlobalTpcHeader* header, TpcBlockNumber blockNumber);
 
 	// Map shared memory for a block
-	TransactionStatusBlock* createTransactionStatusBlock(int blockNumber);
+	TransactionStatusBlock* createTransactionStatusBlock(ULONG blockSize, TpcBlockNumber blockNumber);
 
 	// Release shared memory blocks, if possible.
 	// We utilize one full MemoryBlock as a safety margin to account for possible
@@ -281,9 +283,9 @@ private:
 	void releaseSharedMemory(thread_db *tdbb, TraNumber oldest_old, TraNumber oldest_new);
 
 	// Populate TIP cache from disk
-	void loadInventoryPages(thread_db *tdbb);
+	void loadInventoryPages(thread_db *tdbb, GlobalTpcHeader* header);
 	// Init mapping for existing TIP blocks
-	void mapInventoryPages();
+	void mapInventoryPages(GlobalTpcHeader* header);
 
 	static int tpc_block_blocking_ast(void* arg);
 
@@ -311,7 +313,7 @@ inline TraNumber TPC_find_states(thread_db* tdbb, TraNumber minNumber, TraNumber
 	return tdbb->getDatabase()->dbb_tip_cache->findStates(minNumber, maxNumber, mask, state);
 }
 
-inline void TPC_set_state(thread_db* tdbb, TraNumber number, SSHORT state)
+inline void TPC_set_state(thread_db* tdbb, TraNumber number, int state)
 {
 	tdbb->getDatabase()->dbb_tip_cache->setState(number, state);
 }

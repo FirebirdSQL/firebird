@@ -1,0 +1,134 @@
+#!/bin/sh
+#
+#  The contents of this file are subject to the Initial
+#  Developer's Public License Version 1.0 (the "License");
+#  you may not use this file except in compliance with the
+#  License. You may obtain a copy of the License at
+#  http://www.ibphoenix.com/main.nfs?a=ibphoenix&page=ibp_idpl.
+#
+#  Software distributed under the License is distributed AS IS,
+#  WITHOUT WARRANTY OF ANY KIND, either express or implied.
+#  See the License for the specific language governing rights
+#  and limitations under the License.
+#
+#  The Original Code was created by Paul Beach
+#  based on the original Posix script created by Alex Peshkov
+#  for the Firebird Open Source RDBMS project.
+#
+#  Copyright (c) 2017 Paul Beach <pbeach@ibphoenix.com>
+#                     Alex Peshkov <peshkov@mail.ru>
+#  and all contributors signed below.
+#
+#  All Rights Reserved.
+#  Contributor(s): ______________________________________.
+#
+
+FB_FW=/Library/Frameworks/Firebird.framework
+DAEMONLOC=/Library/LaunchDaemons
+
+#------------------------------------------------------------------------
+# add a line in the (usually) /etc/services or /etc/inetd.conf file
+# Here there are three cases, not found         => add
+#                             found & different => replace
+#                             found & same      => do nothing
+#
+
+replaceLineInFile() {
+   FileName="$1"
+   echo $Filename
+   newLine="$2"
+   oldLine=`grep "$3" $FileName`
+
+   if [ -z "$oldLine" ]
+     then
+       echo "$newLine" >> "$FileName"
+   elif [ "$oldLine" != "$newLine"  ]
+     then
+		MakeTemp
+       grep -v "$oldLine" "$FileName" > "$TmpFile"
+       echo "$newLine" >> $TmpFile
+       cp $TmpFile $FileName
+	rm -f $TmpFile
+       echo "Updated $1"
+   fi
+}
+
+MakeTemp() {
+	TmpFile=`mktemp -q /tmp/firebird_tmp.XXXXXX`
+	if [ $? -ne 0 ]
+	then
+		for n in `seq 1000`
+		do
+			TmpFile=/tmp/firebird_tmp.$n
+			if [ ! -e $TmpFile ]
+			then
+				touch $TmpFile
+				return
+			fi
+		done
+	fi
+}
+
+cat <<EOF
+Firebird 4.x can operate in different server modes. By default it is installed in SuperServer mode with full SMP support. However it can also run in Classic mode.
+SuperServer offers better performance whilst Classic offers better availability.
+This script will allow you to switch between SuperServer and the Classic variant.
+
+Please make sure that you quit and exit all Firebird Applications before continuing
+EOF
+
+read -p  "Option: (Classic|SuperServer) " multianswer
+
+case $multianswer in
+Classic)
+
+# Check mode...
+if [ -f "$FB_FW/Resources/Classic" ]; then
+echo "Note: you are already in Classic mode"
+exit 1
+fi
+
+launchctl unload $DAEMONLOC/org.firebird.gds.plist
+fbconf=$FB_FW/Resources/firebird.conf
+replaceLineInFile $fbconf "ServerMode=Classic" "ServerMode"
+
+if [ -f "$FB_FW/Resources/SuperServer" ]; then
+rm $FB_FW/Resources/SuperServer
+fi
+
+touch $FB_FW/Resources/Classic
+chflags hidden $FB_FW/Resources/Classic
+
+cp $FB_FW/Resources/cs.org.firebird.gds.plist $DAEMONLOC/org.firebird.gds.plist
+launchctl load $DAEMONLOC/org.firebird.gds.plist
+;;
+
+SuperServer)
+
+# Check mode...
+if [ -f "$FB_FW/Resources/SuperServer" ]; then
+echo "Note: you are already in SuperServer mode"
+exit 1
+fi
+
+launchctl unload $DAEMONLOC/org.firebird.gds.plist
+fbconf=$FB_FW/Resources/firebird.conf
+replaceLineInFile $fbconf "ServerMode=Super" "ServerMode"
+
+if [ -f "$FB_FW/Resources/Classic" ]; then
+rm $FB_FW/Resources/Classic
+fi
+
+touch $FB_FW/Resources/SuperServer
+chflags hidden $FB_FW/Resources/SuperServer
+cp $FB_FW/Resources/org.firebird.gds.plist $DAEMONLOC/org.firebird.gds.plist
+launchctl load $DAEMONLOC/org.firebird.gds.plist
+;;
+
+*)
+
+echo "unknown option chosen"
+exit 1
+;;
+
+esac

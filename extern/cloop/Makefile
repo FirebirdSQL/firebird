@@ -35,6 +35,10 @@ ifeq ($(TARGET),release)
 	CXX_FLAGS += -O3
 endif
 
+ifeq ($(shell uname),Darwin)
+CXX_FLAGS += -stdlib=libc++
+endif
+
 ifeq ($(TARGET),debug)
 	FPC_FLAGS += -g
 endif

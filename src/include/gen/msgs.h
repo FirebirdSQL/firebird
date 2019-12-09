@@ -963,6 +963,9 @@ Data source : @4"},		/* eds_statement */
 	{335545256, "Invalid decfloat bind mode @1"},		/* invalid_decfloat_bind */
 	{335545257, "Invalid hex text length @1, should be multiple of 2"},		/* odd_hex_len */
 	{335545258, "Invalid hex digit @1 at position @2"},		/* invalid_hex_digit */
+	{335545259, "Error processing isc_dpb_set_bind clumplet \"@1\""},		/* bind_err */
+	{335545260, "The following statement failed: @1"},		/* bind_statement */
+	{335545261, "Can not convert @1 to @2"},		/* bind_convert */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */

@@ -879,15 +879,25 @@ rem_port* INET_connect(const TEXT* name,
 #endif
 			AI_ADDRCONFIG | (packet ? 0 : AI_PASSIVE);
 
+	struct AutoAddrInfo
+	{
+		~AutoAddrInfo()
+		{
+			if (ptr)
+				freeaddrinfo(ptr);
+		}
+
+		addrinfo* ptr = nullptr;
+	} gai_result;
+
 	const char* host_str = (host.hasData() ? host.c_str() : NULL);
-	struct addrinfo* gai_result;
 	bool retry_gai;
 	int n;
 
 	do
 	{
 		retry_gai = false;
-		n = getaddrinfo(host_str, protocol.c_str(), &gai_hints, &gai_result);
+		n = getaddrinfo(host_str, protocol.c_str(), &gai_hints, &gai_result.ptr);
 
 		if ((n == EAI_FAMILY || (!host_str && n == EAI_NONAME)) &&
 			(gai_hints.ai_family == AF_INET6) && (af != AF_INET6))
@@ -912,7 +922,7 @@ rem_port* INET_connect(const TEXT* name,
 		inet_gen_error(true, port, Arg::Gds(isc_net_lookup_err) << Arg::Gds(isc_host_unknown));
 	}
 
-	for (const addrinfo* pai = gai_result; pai; pai = pai->ai_next)
+	for (const addrinfo* pai = gai_result.ptr; pai; pai = pai->ai_next)
 	{
 		// Allocate a port block and initialize a socket for communications
 		port->port_handle = os_utils::socket(pai->ai_family, pai->ai_socktype, pai->ai_protocol);
@@ -935,30 +945,27 @@ rem_port* INET_connect(const TEXT* name,
 			}
 
 			if (!setNoNagleOption(port))
-			{
 				gds__log("setsockopt: error setting TCP_NODELAY");
-				goto err_close;
-			}
-
-			setFastLoopbackOption(port);
-
-			n = connect(port->port_handle, pai->ai_addr, pai->ai_addrlen);
-			if (n != -1)
+			else
 			{
-				port->port_peer_name = host;
-				get_peer_info(port);
-				if (send_full(port, packet))
-					goto exit_free;
+				setFastLoopbackOption(port);
+
+				n = connect(port->port_handle, pai->ai_addr, pai->ai_addrlen);
+				if (n != -1)
+				{
+					port->port_peer_name = host;
+					get_peer_info(port);
+					if (send_full(port, packet))
+						return port;
+				}
 			}
 		}
 		else
 		{
 			// server
-			port = listener_socket(port, flag, pai);
-			goto exit_free;
+			return listener_socket(port, flag, pai);
 		}
 
-err_close:
 		SOCLOSE(port->port_handle);
 	}
 
@@ -968,8 +975,6 @@ err_close:
 	else
 		inet_error(true, port, "listen", isc_net_connect_listen_err, 0);
 
-exit_free:
-	freeaddrinfo(gai_result);
 	return port;
 }
 

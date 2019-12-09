@@ -295,7 +295,10 @@ void SCL_check_create_access(thread_db* tdbb, int type)
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
 	// Allow the locksmith any access to database
-	if (attachment->locksmith(tdbb, SystemPrivilege::MODIFY_ANY_OBJECT_IN_DATABASE))
+	// TDBB_trusted_ddl flag may be set in CREATE PACKAGE node. I suppose
+	// if user has CREATE PACKAGE privilege we should not require his to have CREATE FUNCTION as well
+	if ((tdbb->tdbb_flags & TDBB_trusted_ddl) ||
+			attachment->locksmith(tdbb, SystemPrivilege::MODIFY_ANY_OBJECT_IN_DATABASE))
 		return;
 
 	const SecurityClass::flags_t obj_mask = SCL_get_object_mask(type);

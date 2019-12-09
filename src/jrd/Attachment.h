@@ -32,6 +32,7 @@
 #include "../jrd/PreparedStatement.h"
 #include "../jrd/RandomGenerator.h"
 #include "../jrd/RuntimeStatistics.h"
+#include "../jrd/Coercion.h"
 
 #include "../common/classes/ByteChunk.h"
 #include "../common/classes/GenericMap.h"
@@ -91,6 +92,7 @@ namespace Jrd
 	class JrdStatement;
 	class Validation;
 	class Applier;
+
 
 struct DSqlCacheItem
 {
@@ -363,28 +365,34 @@ public:
 	class InitialOptions
 	{
 	public:
-		InitialOptions(const DatabaseOptions& options);
-
-		InitialOptions()
+		InitialOptions(MemoryPool& p)
+			: bindings(p)
 		{
 		}
 
 	public:
+		void setInitialOptions(thread_db* tdbb, const DatabaseOptions& options);
 		void resetAttachment(Attachment* attachment) const;
 
+		CoercionArray *getBindings()
+		{
+			return &bindings;
+		}
+
+		const CoercionArray *getBindings() const
+		{
+			return &bindings;
+		}
+
 	private:
-		void setBinding(Firebird::string option, Firebird::NumericBinding& bind);
-
 		Firebird::DecimalStatus decFloatStatus = Firebird::DecimalStatus::DEFAULT;
-		Firebird::NumericBinding decFloatBinding = Firebird::NumericBinding::DEFAULT;
-		Firebird::NumericBinding int128Binding = Firebird::NumericBinding::DEFAULT;
+		CoercionArray bindings;
 
-		Firebird::TimeZoneUtil::Bind timeZoneBind = Firebird::TimeZoneUtil::BIND_NATIVE;
 		USHORT originalTimeZone = Firebird::TimeZoneUtil::GMT_ZONE;
 	};
 
 public:
-	static Attachment* create(Database* dbb, const InitialOptions* initialOptions);
+	static Attachment* create(Database* dbb);
 	static void destroy(Attachment* const attachment);
 
 	MemoryPool* const att_pool;					// Memory pool
@@ -454,7 +462,8 @@ public:
 	ULONG att_ext_call_depth;				// external connection call depth, 0 for user attachment
 	TraceManager* att_trace_manager;		// Trace API manager
 
-	Firebird::TimeZoneUtil::Bind att_timezone_bind;
+	CoercionArray att_bindings;
+	CoercionArray* att_dest_bind;
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
 
@@ -479,8 +488,6 @@ public:
 	Firebird::Array<JrdStatement*>	att_dyn_req;			// internal dyn statements
 	Firebird::ICryptKeyCallback*	att_crypt_callback;		// callback for DB crypt
 	Firebird::DecimalStatus			att_dec_status;			// error handling and rounding
-	Firebird::NumericBinding		att_dec_binding;		// use legacy datatype for DecFloat in outer world
-	Firebird::NumericBinding		att_i128_binding;		// use legacy datatype for INT128 in outer world
 
 	jrd_req* findSystemRequest(thread_db* tdbb, USHORT id, USHORT which);
 
@@ -620,8 +627,15 @@ public:
 		return att_user;
 	}
 
+	void setInitialOptions(thread_db* tdbb, DatabaseOptions& options, bool newDb);
+	const CoercionArray* getInitialBindings() const
+	{
+		return att_initial_options.getBindings();
+	}
+
+
 private:
-	Attachment(MemoryPool* pool, Database* dbb, const InitialOptions* initialOptions);
+	Attachment(MemoryPool* pool, Database* dbb);
 	~Attachment();
 
 	class IdleTimer FB_FINAL :

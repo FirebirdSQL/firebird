@@ -183,6 +183,9 @@ void setParamsInteger(DataTypeUtilBase* dataTypeUtil, const SysFunction* functio
 void setParamsInt64(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsSecondInteger(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 
+// helper functions for setParams
+void setParamVarying(dsc* param, USHORT textType, bool condition = false);
+
 // specific setParams functions
 void setParamsAsciiVal(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsCharToUuid(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
@@ -599,6 +602,18 @@ void setParamsDateDiff(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc
 }
 
 
+void setParamVarying(dsc* param, USHORT textType, bool condition)
+{
+	if (param->isUnknown() || condition)
+	{
+		USHORT l = param->getStringLength();
+		if (param->isUnknown() || l == 0)
+			l = 64;
+		param->makeVarying(l, textType);
+	}
+}
+
+
 const unsigned CRYPT_ARG_VALUE = 0;
 const unsigned CRYPT_ARG_ALGORITHM = 1;
 const unsigned CRYPT_ARG_MODE = 2;
@@ -612,18 +627,10 @@ void setParamsEncrypt(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc*
 {
 	fb_assert(argsCount == CRYPT_ARG_MAX);
 
-	if (!args[CRYPT_ARG_VALUE]->isBlob())
-		args[CRYPT_ARG_VALUE]->makeVarying(args[CRYPT_ARG_VALUE]->getStringLength(), ttype_binary);
-
+	setParamVarying(args[CRYPT_ARG_VALUE], ttype_binary);
 	fb_assert(args[CRYPT_ARG_ALGORITHM]->dsc_address && args[CRYPT_ARG_ALGORITHM]->isText());
-
-	args[CRYPT_ARG_KEY]->makeVarying(args[CRYPT_ARG_KEY]->getStringLength(), ttype_binary);
-
-	if (args[CRYPT_ARG_IV]->dsc_length)
-		args[CRYPT_ARG_IV]->makeVarying(args[CRYPT_ARG_IV]->getStringLength(), ttype_binary);
-
-	if (args[CRYPT_ARG_CTRTYPE]->dsc_length)
-		args[CRYPT_ARG_CTRTYPE]->makeVarying(args[CRYPT_ARG_CTRTYPE]->getStringLength(), ttype_ascii);
+	setParamVarying(args[CRYPT_ARG_KEY], ttype_binary);
+	setParamVarying(args[CRYPT_ARG_CTRTYPE], ttype_ascii, args[CRYPT_ARG_CTRTYPE]->dsc_length > 0);
 
 	if (args[CRYPT_ARG_COUNTER]->dsc_length)
 		args[CRYPT_ARG_COUNTER]->makeInt64(0);
@@ -640,8 +647,8 @@ void setParamsRsaEncrypt(DataTypeUtilBase*, const SysFunction*, int argsCount, d
 {
 	fb_assert(argsCount == RSA_CRYPT_ARG_MAX);
 
-	args[RSA_CRYPT_ARG_VALUE]->makeVarying(args[RSA_CRYPT_ARG_VALUE]->getStringLength(), ttype_binary);
-	args[RSA_CRYPT_ARG_KEY]->makeVarying(args[RSA_CRYPT_ARG_KEY]->getStringLength(), ttype_binary);
+	setParamVarying(args[RSA_CRYPT_ARG_VALUE], ttype_binary);
+	setParamVarying(args[RSA_CRYPT_ARG_KEY], ttype_binary);
 
 	if (args[RSA_CRYPT_ARG_LPARAM]->dsc_length)
 		args[RSA_CRYPT_ARG_LPARAM]->makeVarying(args[RSA_CRYPT_ARG_LPARAM]->getStringLength(), ttype_binary);
@@ -661,8 +668,8 @@ void setParamsRsaSign(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc*
 {
 	fb_assert(argsCount == RSA_SIGN_ARG_MAX);
 
-	args[RSA_SIGN_ARG_VALUE]->makeVarying(args[RSA_SIGN_ARG_VALUE]->getStringLength(), ttype_binary);
-	args[RSA_SIGN_ARG_KEY]->makeVarying(args[RSA_SIGN_ARG_KEY]->getStringLength(), ttype_binary);
+	setParamVarying(args[RSA_SIGN_ARG_VALUE], ttype_binary);
+	setParamVarying(args[RSA_SIGN_ARG_KEY], ttype_binary);
 
 	if (args[RSA_SIGN_ARG_HASH]->dsc_length)
 		args[RSA_SIGN_ARG_HASH]->makeVarying(args[RSA_SIGN_ARG_HASH]->getStringLength(), ttype_binary);
@@ -683,9 +690,9 @@ void setParamsRsaVerify(DataTypeUtilBase*, const SysFunction*, int argsCount, ds
 {
 	fb_assert(argsCount == RSA_VERIFY_ARG_MAX);
 
-	args[RSA_VERIFY_ARG_VALUE]->makeVarying(args[RSA_VERIFY_ARG_VALUE]->getStringLength(), ttype_binary);
-	args[RSA_VERIFY_ARG_KEY]->makeVarying(args[RSA_VERIFY_ARG_KEY]->getStringLength(), ttype_binary);
-	args[RSA_VERIFY_ARG_SIGNATURE]->makeVarying(args[RSA_VERIFY_ARG_SIGNATURE]->getStringLength(), ttype_binary);
+	setParamVarying(args[RSA_VERIFY_ARG_VALUE], ttype_binary);
+	setParamVarying(args[RSA_VERIFY_ARG_KEY], ttype_binary);
+	setParamVarying(args[RSA_VERIFY_ARG_SIGNATURE], ttype_binary);
 
 	if (args[RSA_VERIFY_ARG_HASH]->dsc_length)
 		args[RSA_VERIFY_ARG_HASH]->makeVarying(args[RSA_VERIFY_ARG_HASH]->getStringLength(), ttype_binary);
@@ -699,7 +706,7 @@ void setParamsRsaPublic(DataTypeUtilBase*, const SysFunction*, int argsCount, ds
 {
 	fb_assert(argsCount == 1);
 
-	args[0]->makeVarying(args[0]->getStringLength(), ttype_binary);
+	setParamVarying(args[0], ttype_binary);
 }
 
 
@@ -2547,11 +2554,7 @@ public:
 		  newBlob(nullptr)
 	{
 		if (!blobMode)
-		{
-			if (!desc->isText())
-				status_exception::raise(Arg::Gds(isc_tom_strblob));
 			ptr = CVT_get_bytes(desc, len);
-		}
 		else
 		{
 			blobDesc.makeBlob(0, ttype_none);

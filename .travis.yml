@@ -1,3 +1,11 @@
+matrix:
+  include:
+  - os: osx
+    osx_image: xcode9.2    # macOS 10.12 Sierra
+  - os: osx
+    osx_image: xcode11.2   # macOS 10.14 Mojave
+  - os: linux
+
 language: cpp
 
 notifications:
@@ -6,25 +14,65 @@ notifications:
 sudo: required
 dist: xenial
 
-branches:
-  except:
-    - B2_5_Release
-    - B2_1_Release
-    - B2_0_Release
-    - B1_5_Release
-
-addons:
-  apt:
-    packages:
-    - libtool-bin
-    - libtommath0
-    - libtommath-dev
-    - libicu-dev
-    - zlib1g-dev
+install:
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+      sudo apt-get update
+      sudo apt-get install -y libtool-bin libtommath0 libtommath-dev libicu-dev zlib1g-dev
+    fi
 
 script:
-  - ./autogen.sh --enable-binreloc --with-builtin-tomcrypt --prefix=/opt/firebird
-  - make -j4
-  - make dist
-  - tar xzvf gen/Firebird-[0-9]*.tar.gz
-  - (cd Firebird-[0-9]*; sudo ./install.sh -silent)
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+      ./autogen.sh --enable-binreloc --with-builtin-tomcrypt --prefix=/opt/firebird
+      make -j4
+      make dist
+      tar xzvf gen/Firebird-[0-9]*.tar.gz
+      (cd Firebird-[0-9]*; sudo ./install.sh -silent)
+    fi
+
+    if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      export LIBTOOLIZE=glibtoolize
+      export LIBTOOL=glibtool
+
+      mkdir extern/icu-macos
+      pushd extern/icu-macos
+      curl -OL https://github.com/unicode-org/icu/releases/download/release-63-2/icu4c-63_2-src.tgz
+      curl -OL https://github.com/unicode-org/icu/commit/24aeb9a5a5874f4ce5db912e30670ac3ae236971.patch
+      tar xzf icu4c-63_2-src.tgz
+      ICU_INSTALL_PATH=`pwd`/install
+      cd icu/source
+      patch -p3 < ../../24aeb9a5a5874f4ce5db912e30670ac3ae236971.patch
+      ./runConfigureICU MacOSX --prefix=$ICU_INSTALL_PATH
+      make -j4
+      make install
+      install_name_tool -id @rpath/lib/libicuuc.dylib $ICU_INSTALL_PATH/lib/libicuuc.dylib
+      install_name_tool -id @rpath/lib/libicui18n.dylib $ICU_INSTALL_PATH/lib/libicui18n.dylib
+      install_name_tool -id @rpath/lib/libicudata.dylib $ICU_INSTALL_PATH/lib/libicudata.dylib
+      install_name_tool -change libicudata.63.dylib @loader_path/libicudata.63.dylib $ICU_INSTALL_PATH/lib/libicuuc.63.dylib
+      install_name_tool -change libicudata.63.dylib @loader_path/libicudata.63.dylib $ICU_INSTALL_PATH/lib/libicui18n.63.dylib
+      install_name_tool -change libicuuc.63.dylib @loader_path/libicuuc.63.dylib $ICU_INSTALL_PATH/lib/libicui18n.63.dylib
+      popd
+      mkdir -p gen/Release/firebird/lib
+      mkdir -p gen/Debug/firebird/lib
+      cp $ICU_INSTALL_PATH/lib/libicu{data,i18n,uc}.*dylib gen/Release/firebird/lib/
+      cp $ICU_INSTALL_PATH/lib/libicu{data,i18n,uc}.*dylib gen/Debug/firebird/lib/
+
+      export C_INCLUDE_PATH="$ICU_INSTALL_PATH/include:$C_INCLUDE_PATH"
+      export CPLUS_INCLUDE_PATH="$ICU_INSTALL_PATH/include:$CPLUS_INCLUDE_PATH"
+
+      LIBRARY_PATH="$ICU_INSTALL_PATH/lib:$LIBRARY_PATH" ./autogen.sh --with-builtin-tommath --with-builtin-tomcrypt
+      make -j4
+
+      (cd gen; make -B -f make.platform.postfix ICU_LOC="$ICU_INSTALL_PATH/lib/")
+      (cd gen; make -B -f Makefile.install)
+
+      # Rename directory to make sure the build is relocatable.
+      mv gen gen2
+      sudo installer -pkg gen2/Release/*.pkg -verbose -target /
+
+      export FIREBIRD_LOCK=`pwd`/temp
+      echo "create database 't.fdb'; select '1' from rdb\$database; select _win1252 '2' from rdb\$database; select _utf8 '3' collate unicode from rdb\$database;" | /Library/Frameworks/Firebird.framework/Resources/bin/isql
+
+      echo "create database 'localhost:/tmp/t.fdb' user sysdba password 'masterkey'; select '11' from rdb\$database; select _win1252 '22' from rdb\$database; select _utf8 '33' collate unicode from rdb\$database;" | /Library/Frameworks/Firebird.framework/Resources/bin/isql
+    fi

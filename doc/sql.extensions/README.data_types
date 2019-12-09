@@ -175,21 +175,6 @@ DECFLOAT (FB 4.0)
 				by a comma-separated string with its value (case does not matter; using a single
 				optional space after commas).
 
-			SET DECFLOAT BIND <bind-type> - controls how are DECFLOAT values represented in outer
-				world (i.e. in messages or in XSQLDA). Valid binding types are: NATIVE (use IEEE754
-				binary representation), CHAR/CHARACTER (use ASCII string), DOUBLE PRECISION (use
-				8-byte FP representation - same as used for DOUBLE PRECISION fields) or BIGINT
-				with possible comma-separated SCALE clause (i.e. 'BIGINT, 3'). Various bindings
-				are useful if one plans to use DECFLOAT values with some old client not supporting
-				native format. One can choose between strings (ideal precision, but poor support
-				for further processing), floating point values (ideal support for further processing
-				but poor precision) or scaled integers (good support for further processing and
-				required precision but range of values is very limited). When using in a tool like
-				generic purporse GUI client choice of CHAR binding is OK in most cases. By default
-				NATIVE binding is used.
-				The initial configuration may be specified with DPB isc_dpb_decfloat_bind followed
-				by a string with its value (case does not matter).
-
 	5.	The length of DECFLOAT literals are limited to 1024 characters. For longer values, you will
 			need to use the scientific notation. For example, the 0.0<1020 zeroes>11 cannot be used
 			as a literal, instead you can use the equivalent in scientific notation: 1.1E-1022.
@@ -226,17 +211,3 @@ Enhancement in precision of calculations with NUMERIC/DECIMAL (FB 4.0)
     various math (log, exp, etc.) and aggregate functions using high precision numeric argument is
     DECFLOAT(34).
 
-	SET INT128 BIND <bind-type> - controls how are INT128 values represented in outer
-	world (i.e. in messages or in XSQLDA). Valid binding types are: NATIVE (use 128-bit
-	binary representation), CHAR/CHARACTER (use ASCII string), DOUBLE PRECISION (use
-	8-byte FP representation - same as used for DOUBLE PRECISION fields) or BIGINT
-	with possible comma-separated SCALE clause (i.e. 'BIGINT, 3'). Various bindings
-	are useful if one plans to use 128-bit integers with some old client not supporting
-	native format. One can choose between strings (ideal precision, but poor support
-	for further processing), floating point values (ideal support for further processing
-	but poor precision) or scaled integers (good support for further processing and
-	required precision but range of values is very limited). When using in a tool like
-	generic purporse GUI client choice of CHAR binding is OK in most cases. By default
-	NATIVE binding is used.
-	The initial configuration may be specified with DPB isc_dpb_int128_bind followed
-	by a string with its value (case does not matter).

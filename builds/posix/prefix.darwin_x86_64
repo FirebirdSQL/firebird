@@ -18,7 +18,7 @@
 # 2 Oct 2002, Nickolay Samofatov - Major Cleanup
 #
 # Default build from 10.7 using Clang
-# The following exports assume you are using MacPorts ICU, libtommath 
+# The following exports assume you are using MacPorts ICU, libtommath
 # export CFLAGS='-I/opt/local/include -I/opt/local/include/libtommath'
 # export CXXFLAGS='-I/opt/local/include -I/opt/local/include/libtommath -L/opt/local/lib'
 # export LDFLAGS='-L/opt/local/lib'
@@ -28,14 +28,14 @@ export DYLD_LIBRARY_PATH
 DYLD_FALLBACK_LIBRARY_PATH=/opt/local/lib
 export DYLD_FALLBACK_LIBRARY_PATH
 
-MACOSX_DEPLOYMENT_TARGET=10.7
+MACOSX_DEPLOYMENT_TARGET=10.9
 export MACOSX_DEPLOYMENT_TARGET
 
 PROD_FLAGS=-O1 -DDARWIN -pipe -MMD -fPIC -fno-common -mmacosx-version-min=10.7
 DEV_FLAGS=-ggdb -DDARWIN -pipe -MMD -fPIC -fno-omit-frame-pointer -fno-common -Wall -fno-optimize-sibling-calls -mmacosx-version-min=10.7 -Wno-non-virtual-dtor
-CXXFLAGS:=$(CXXFLAGS) -fvisibility-inlines-hidden -fvisibility=hidden 
+CXXFLAGS:=$(CXXFLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -stdlib=libc++ -msse4
 
-EXE_LINK_OPTIONS:= 
+EXE_LINK_OPTIONS:=
 LD_FLAGS+=-liconv
 FIREBIRD_LIBRARY_LINK+=-liconv
 UNDEF_PLATFORM=

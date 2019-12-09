@@ -163,32 +163,6 @@ set time zone 'America/Sao_Paulo';
 set time zone local;
 ```
 
-### `SET TIME ZONE BIND` statement
-
-Changes the session time zone bind for compatibility with old clients.
-
-The default is `NATIVE`, which means that `TIME WITH TIME ZONE` and `TIMESTAMP WITH TIME ZONE` expressions are returned with they new data types to the client.
-
-Old clients may not understand the new data types, so it's possible to define the bind to `LEGACY` and the expressions will be returned as `TIME WITHOUT TIME ZONE` and `TIMESTAMP WITHOUT TIME ZONE`, with appropriate conversion.
-
-The bind configuration is also applicable to input parameters.
-
-The initial configuration of time zone bind may be specified with DPB `isc_dpb_time_zone_bind` followed by a string with its value (case does not matter).
-
-#### Syntax
-
-```
-SET TIME ZONE BIND { NATIVE | LEGACY }
-```
-
-#### Examples
-
-```
-set time zone bind native;
-
-set time zone bind legacy;
-```
-
 ### `AT` expression
 
 Translates a time/timestamp value to its correspondent value in another time zone.

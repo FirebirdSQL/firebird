@@ -1965,9 +1965,9 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 		if (trunc_flag)
 			FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), length));
 
+		sh_mem_just_created = true;
 		if (callback->initialize(this, true))
 		{
-
 #ifdef HAVE_SHARED_MUTEX_SECTION
 #ifdef USE_SYS5SEMAPHORE
 
@@ -2050,7 +2050,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 #ifdef BUGGY_LINUX_MUTEX
 					&& (state != ENOTSUP || bugFlag)
 #endif
-						 )
+					)
 				{
 					iscLogStatus("Pthread Error", (Arg::Gds(isc_sys_request) <<
 						"pthread_mutex_init" << Arg::Unix(state)).value());
@@ -2089,6 +2089,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	}
 	else
 	{
+		sh_mem_just_created = false;
 		if (callback->initialize(this, false))
 		{
 			if (!mainLock->setlock(&statusVector, FileLock::FLM_SHARED))
@@ -2417,6 +2418,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	sh_mem_hdr_address = header_address;
 	strcpy(sh_mem_name, filename);
 
+	sh_mem_just_created = init_flag;
 	sh_mem_callback->initialize(this, init_flag);
 
 	if (init_flag)

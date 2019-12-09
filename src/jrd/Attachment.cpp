@@ -84,13 +84,13 @@ CommitNumber ActiveSnapshots::getSnapshotForVersion(CommitNumber version_cn)
 
 
 // static method
-Jrd::Attachment* Jrd::Attachment::create(Database* dbb, const InitialOptions* initialOptions)
+Jrd::Attachment* Jrd::Attachment::create(Database* dbb)
 {
 	MemoryPool* const pool = dbb->createPool();
 
 	try
 	{
-		Attachment* const attachment = FB_NEW_POOL(*pool) Attachment(pool, dbb, initialOptions);
+		Attachment* const attachment = FB_NEW_POOL(*pool) Attachment(pool, dbb);
 		pool->setStatsGroup(attachment->att_memory_stats);
 		return attachment;
 	}
@@ -203,7 +203,7 @@ void Jrd::Attachment::backupStateReadUnLock(thread_db* tdbb)
 }
 
 
-Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, const InitialOptions* initialOptions)
+Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 	: att_pool(pool),
 	  att_memory_stats(&dbb->dbb_memory_stats),
 	  att_database(dbb),
@@ -233,7 +233,8 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, const InitialOption
 	  att_ext_parent(NULL),
 	  att_ext_call_depth(0),
 	  att_trace_manager(FB_NEW_POOL(*att_pool) TraceManager(this)),
-	  att_timezone_bind(TimeZoneUtil::BIND_NATIVE),
+	  att_bindings(*pool),
+	  att_dest_bind(&att_bindings),
 	  att_original_timezone(TimeZoneUtil::getSystemTimeZone()),
 	  att_current_timezone(att_original_timezone),
 	  att_utility(UTIL_NONE),
@@ -243,21 +244,16 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, const InitialOption
 	  att_internal(*pool),
 	  att_dyn_req(*pool),
 	  att_dec_status(DecimalStatus::DEFAULT),
-	  att_dec_binding(NumericBinding::DEFAULT),
 	  att_charsets(*pool),
 	  att_charset_ids(*pool),
 	  att_pools(*pool),
 	  att_idle_timeout(0),
 	  att_stmt_timeout(0),
-	  att_batches(*pool)
+	  att_batches(*pool),
+	  att_initial_options(*pool)
 {
 	att_internal.grow(irq_MAX);
 	att_dyn_req.grow(drq_MAX);
-
-	if (initialOptions)
-		att_initial_options = *initialOptions;
-
-	att_initial_options.resetAttachment(this);
 }
 
 
@@ -1089,3 +1085,4 @@ void Attachment::IdleTimer::reset(unsigned int timeout)
 	check(&s);
 	m_fireTime = m_expTime;
 }
+

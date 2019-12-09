@@ -1475,11 +1475,7 @@ void logAndDie(const char* text)
 {
 	gds__log(text);
 	Firebird::Syslog::Record(Firebird::Syslog::Error, text);
-#ifdef WIN_NT
-	exit(3);
-#else
 	abort();
-#endif
 }
 
 UCHAR sqlTypeToDscType(SSHORT sqlType)
@@ -1570,21 +1566,22 @@ unsigned sqlTypeToDsc(unsigned runOffset, unsigned sqlType, unsigned sqlLength,
 	return runOffset + sizeof(SSHORT);
 }
 
+const ISC_STATUS* nextArg(const ISC_STATUS* v) throw()
+{
+	do
+	{
+		v += (v[0] == isc_arg_cstring ? 3 : 2);
+	} while (v[0] != isc_arg_warning && v[0] != isc_arg_gds && v[0] != isc_arg_end);
+
+	return v;
+}
+
 bool containsErrorCode(const ISC_STATUS* v, ISC_STATUS code)
 {
-#ifdef DEV_BUILD
-const ISC_STATUS* const origen = v;
-#endif
-	while (v[0] == isc_arg_gds)
+	for (; v[0] == isc_arg_gds; v = nextArg(v))
 	{
 		if (v[1] == code)
 			return true;
-
-		do
-		{
-			v += (v[0] == isc_arg_cstring ? 3 : 2);
-		} while (v[0] != isc_arg_warning && v[0] != isc_arg_gds && v[0] != isc_arg_end);
-		fb_assert(v - origen < ISC_STATUS_LENGTH);
 	}
 
 	return false;

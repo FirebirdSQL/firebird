@@ -155,6 +155,7 @@ public:
 		KEY_TIP_CACHE_BLOCK_SIZE,
 		KEY_READ_CONSISTENCY,
 		KEY_CLEAR_GTT_RETAINING,
+		KEY_DATA_TYPE_COMPATIBILITY,
 		MAX_CONFIG_KEY		// keep it last
 	};
 
@@ -390,6 +391,8 @@ public:
 	bool getReadConsistency() const;
 
 	bool getClearGTTAtRetaining() const;
+
+	const char* getDataTypeCompatibility() const;
 };
 
 // Implementation of interface to access master configuration file

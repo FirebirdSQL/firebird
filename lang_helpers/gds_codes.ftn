@@ -1928,6 +1928,12 @@ C --
       PARAMETER (GDS__odd_hex_len                      = 335545257)
       INTEGER*4 GDS__invalid_hex_digit               
       PARAMETER (GDS__invalid_hex_digit                = 335545258)
+      INTEGER*4 GDS__bind_err                        
+      PARAMETER (GDS__bind_err                         = 335545259)
+      INTEGER*4 GDS__bind_statement                  
+      PARAMETER (GDS__bind_statement                   = 335545260)
+      INTEGER*4 GDS__bind_convert                    
+      PARAMETER (GDS__bind_convert                     = 335545261)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 

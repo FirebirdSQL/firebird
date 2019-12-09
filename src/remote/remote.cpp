@@ -1192,7 +1192,7 @@ bool rem_port::tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptK
 		return true;
 	}
 
-	if (srvKey.type != cryptKey->t)
+	if (srvKey.type != cryptKey->keyName)
 	{
 		return false;
 	}
@@ -1234,7 +1234,7 @@ bool rem_port::tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptK
 				// therefore sent packet will be not encrypted
 				PACKET crypt;
 				crypt.p_operation = op_crypt;
-				setCStr(crypt.p_crypt.p_key, cryptKey->t.c_str());
+				setCStr(crypt.p_crypt.p_key, cryptKey->keyName.c_str());
 				setCStr(crypt.p_crypt.p_plugin, p.c_str());
 				send(&crypt);
 
@@ -1291,7 +1291,8 @@ Firebird::ICryptKey* SrvAuthBlock::newKey(Firebird::CheckStatusWrapper* status)
 	{
 		InternalCryptKey* k = FB_NEW InternalCryptKey;
 
-		k->t = pluginName.c_str();
+		k->keyName = pluginName.c_str();
+		WIRECRYPT_DEBUG(fprintf(stderr, "Srv: newkey %s\n", k->keyName.c_str());)
 		port->port_crypt_keys.push(k);
 		newKeys.push(k);
 
@@ -1574,7 +1575,7 @@ void InternalCryptKey::setSymmetric(Firebird::CheckStatusWrapper* status, const 
 	try
 	{
 		if (type)
-			t = type;
+			keyName = type;
 		encrypt.set(keyLength, key);
 		decrypt.clear();
 	}
@@ -1591,7 +1592,7 @@ void InternalCryptKey::setAsymmetric(Firebird::CheckStatusWrapper* status, const
 	try
 	{
 		if (type)
-			t = type;
+			keyName = type;
 		encrypt.set(encryptKeyLength, encryptKey);
 		decrypt.set(decryptKeyLength, decryptKey);
 	}

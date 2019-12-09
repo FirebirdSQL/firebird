@@ -335,7 +335,12 @@ private:
 	FILE_HANDLE dbase;
 	FILE_HANDLE backup;
 	string decompress;
+#ifdef WIN_NT
+	HANDLE childId;
+	HANDLE childStdErr;
+#else
 	int childId;
+#endif
 	ULONG db_size_pages;	// In pages
 	USHORT m_odsNumber;
 	bool m_silent;		// are we already handling an exception?
@@ -347,6 +352,7 @@ private:
 	void seek_file(FILE_HANDLE &file, SINT64 pos);
 
 	void pr_error(const ISC_STATUS* status, const char* operation);
+	void print_child_stderr();
 
 	void internal_lock_database();
 	void get_database_size();
@@ -363,6 +369,7 @@ private:
 	void close_database();
 
 	void open_backup_scan();
+	void open_backup_decompress();
 	void create_backup();
 	void close_backup();
 };
@@ -370,28 +377,41 @@ private:
 
 FB_SIZE_T NBackup::read_file(FILE_HANDLE &file, void *buffer, FB_SIZE_T bufsize)
 {
-#ifdef WIN_NT
-	DWORD bytesDone;
-	if (ReadFile(file, buffer, bufsize, &bytesDone, NULL))
-		return bytesDone;
-
-	status_exception::raise(Arg::Gds(isc_nbackup_err_read) <<
-		(&file == &dbase ? dbname.c_str() :
-			&file == &backup ? bakname.c_str() : "unknown") <<
-		Arg::OsError());
-
-	return 0; // silence compiler
-#else
 	FB_SIZE_T rc = 0;
 	while (bufsize)
 	{
+#ifdef WIN_NT
+		// Read child's stderr often to prevent child process hung if it writes
+		// too much data to the pipe and overflow the pipe buffer.
+		const bool checkChild = (childStdErr > 0 && file == backup);
+		if (checkChild)
+			print_child_stderr();
+
+		DWORD res;
+		if (!ReadFile(file, buffer, bufsize, &res, NULL))
+		{
+			const DWORD err = GetLastError();
+			if (checkChild)
+			{
+				print_child_stderr();
+
+				if (err == ERROR_BROKEN_PIPE)
+				{
+					DWORD exitCode;
+					if (GetExitCodeProcess(childId, &exitCode) && (exitCode == 0 || exitCode == STILL_ACTIVE))
+						break;
+				}
+			}
+#else
 		const ssize_t res = read(file, buffer, bufsize);
 		if (res < 0)
 		{
+			const int err = errno;
+#endif
 			status_exception::raise(Arg::Gds(isc_nbackup_err_read) <<
 				(&file == &dbase ? dbname.c_str() :
 					&file == &backup ? bakname.c_str() : "unknown") <<
-				Arg::OsError());
+				Arg::OsError(err));
 		}
 
 		if (!res)
@@ -403,7 +423,6 @@ FB_SIZE_T NBackup::read_file(FILE_HANDLE &file, void *buffer, FB_SIZE_T bufsize)
 	}
 
 	return rc;
-#endif
 
 
 	return 0; // silence compiler
@@ -575,6 +594,12 @@ string NBackup::to_system(const PathName& from)
 
 void NBackup::open_backup_scan()
 {
+	if (decompress.hasData())
+	{
+		open_backup_decompress();
+		return;
+	}
+
 	string nm = to_system(bakname);
 #ifdef WIN_NT
 	backup = CreateFile(nm.c_str(), GENERIC_READ, 0,
@@ -582,9 +607,77 @@ void NBackup::open_backup_scan()
 	if (backup != INVALID_HANDLE_VALUE)
 		return;
 #else
-	if (decompress.hasData())
+	backup = os_utils::open(nm.c_str(), O_RDONLY | O_LARGEFILE);
+	if (backup >= 0)
+		return;
+#endif
+
+	status_exception::raise(Arg::Gds(isc_nbackup_err_openbk) << bakname.c_str() << Arg::OsError());
+}
+
+void NBackup::open_backup_decompress()
+{
+	string command = decompress;
+
+#ifdef WIN_NT
+	const PathName::size_type n = command.find('@');
+
+	if (n != PathName::npos)
 	{
-		string command = decompress;
+		command.replace(n, 1, bakname);
+	}
+	else
+	{
+		command.append(" ");
+		command.append(bakname);
+	}
+
+	SECURITY_ATTRIBUTES sa;
+	sa.bInheritHandle = TRUE;
+	sa.lpSecurityDescriptor = NULL;
+	sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+
+	HANDLE hChildStdOut;
+	if (!CreatePipe(&backup, &hChildStdOut, &sa, 0))
+		system_call_failed::raise("CreatePipe");
+
+	SetHandleInformation(backup, HANDLE_FLAG_INHERIT, 0);
+
+	HANDLE hChildStdErr;
+	if (!CreatePipe(&childStdErr, &hChildStdErr, &sa, 0))
+		system_call_failed::raise("CreatePipe");
+
+	SetHandleInformation(childStdErr, HANDLE_FLAG_INHERIT, 0);
+
+	STARTUPINFO start_crud;
+	memset(&start_crud, 0, sizeof(STARTUPINFO));
+	start_crud.cb = sizeof(STARTUPINFO);
+	start_crud.dwFlags = STARTF_USESTDHANDLES;
+	start_crud.hStdOutput = hChildStdOut;
+	start_crud.hStdError = hChildStdErr;
+
+	PROCESS_INFORMATION pi;
+	if (CreateProcess(NULL, command.begin(), NULL, NULL, TRUE,
+					  NORMAL_PRIORITY_CLASS | DETACHED_PROCESS,
+					  NULL, NULL, &start_crud, &pi))
+	{
+		childId = pi.hProcess;
+		CloseHandle(pi.hThread);
+		CloseHandle(hChildStdOut);
+		CloseHandle(hChildStdErr);
+	}
+	else
+	{
+		const DWORD err = GetLastError();
+
+		CloseHandle(backup);
+		CloseHandle(hChildStdOut);
+		CloseHandle(hChildStdErr);
+
+		// error creating child process
+		system_call_failed::raise("CreateProcess", err);
+	}
+#else
 		const unsigned ARGCOUNT = 20;
 		unsigned narg = 0;
 		char* args[ARGCOUNT + 1];
@@ -657,18 +750,7 @@ void NBackup::open_backup_scan()
 			backup = pfd[0];
 			close(pfd[1]);
 		}
-
-		return;
-	}
-	else
-	{
-		backup = os_utils::open(nm.c_str(), O_RDONLY | O_LARGEFILE);
-		if (backup >= 0)
-			return;
-	}
 #endif
-
-	status_exception::raise(Arg::Gds(isc_nbackup_err_openbk) << bakname.c_str() << Arg::OsError());
 }
 
 void NBackup::create_backup()
@@ -713,6 +795,20 @@ void NBackup::close_backup()
 		return;
 #ifdef WIN_NT
 	CloseHandle(backup);
+	if (childId > 0)
+	{
+		const bool killed = (WaitForSingleObject(childId, 5000) != WAIT_OBJECT_0);
+		if (killed)
+			TerminateProcess(childId, 1);
+
+		print_child_stderr();
+		CloseHandle(childId);
+		CloseHandle(childStdErr);
+		childId = childStdErr = 0;
+
+		if (killed)
+			status_exception::raise(Arg::Gds(isc_random) << "Child process seems hung. Killed");
+	}
 #else
 	close(backup);
 	if (childId > 0)
@@ -762,6 +858,76 @@ void NBackup::pr_error(const ISC_STATUS* status, const char* operation)
 	m_printed = true;
 
 	status_exception::raise(Arg::Gds(isc_nbackup_err_db));
+}
+
+void NBackup::print_child_stderr()
+{
+#ifdef WIN_NT
+	// Read stderr of child process (decompressor) and print it at our stdout.
+	// Prepend each line by prefix DE> to let user distinguish nbackup's output
+	// from decompressor's one.
+
+	const int BUFF_SIZE = 8192;
+	char buff[BUFF_SIZE];
+	const char* end = buff + BUFF_SIZE - 1;
+	static bool atNewLine = true;
+
+	DWORD bytesRead;
+	while (true)
+	{
+		// Check if pipe have data to read. This is necessary to avoid hung if 
+		// pipe is empty. Ignore read error as ReadFile set bytesRead to zero
+		// in this case and it is enough for our usage.
+		const BOOL ret = PeekNamedPipe(childStdErr, NULL, 1, NULL, &bytesRead, NULL);
+		if (ret && bytesRead)
+			ReadFile(childStdErr, buff, end - buff, &bytesRead, NULL);
+		else
+			bytesRead = 0;
+
+		if (bytesRead == 0)
+			break;
+
+		buff[bytesRead] = 0;
+
+		char* p = buff;
+		while (true)
+		{
+			char* pEndL = strchr(p, '\r');
+			if (pEndL)
+			{
+				pEndL++;
+				if (*pEndL == '\n')
+					pEndL++;
+			}
+			else 
+			{
+				pEndL = strchr(p, '\n');
+				if (pEndL)
+					pEndL++;
+			}
+			const bool eol = (pEndL != NULL);
+
+			if (!pEndL)
+				pEndL = buff + bytesRead;
+
+			char ch = *pEndL;
+			*pEndL = 0;
+
+			if (atNewLine)
+				uSvc->printf(false, "DE> %s", p);
+			else
+				uSvc->printf(false, "%s", p);
+
+			*pEndL = ch;
+			atNewLine = eol;
+
+			if (pEndL >= buff + bytesRead)
+				break;
+
+			p = pEndL;
+		}
+	}
+#endif
 }
 
 void NBackup::attach_database()
@@ -1397,13 +1563,13 @@ void NBackup::restore_database(const BackupFiles& files, bool inc_rest)
 	// We set this flag when database file is in inconsistent state
 	bool delete_database = false;
 	const int filecount = files.getCount();
-#ifndef WIN_NT
+
 	if (!inc_rest)
 	{
 		create_database();
 		delete_database = true;
 	}
-#endif
+
 	UCHAR *page_buffer = NULL;
 	try {
 		int curLevel = 0;
@@ -1439,10 +1605,7 @@ void NBackup::restore_database(const BackupFiles& files, bool inc_rest)
 					// Never reaches this point when run as service
 					try {
 						fb_assert(!uSvc->isService());
-#ifdef WIN_NT
-						if (curLevel)
-#endif
-							open_backup_scan();
+						open_backup_scan();
 						break;
 					}
 					catch (const status_exception& e)
@@ -1466,11 +1629,7 @@ void NBackup::restore_database(const BackupFiles& files, bool inc_rest)
 				}
 				if (!inc_rest || curLevel)
 					bakname = files[curLevel - (inc_rest ? 1 : 0)];
-#ifdef WIN_NT
-				if (curLevel)
-#else
 				if (!inc_rest || curLevel)
-#endif
 					open_backup_scan();
 			}
 
@@ -1529,16 +1688,6 @@ void NBackup::restore_database(const BackupFiles& files, bool inc_rest)
 			{
 				if (!inc_rest)
 				{
-#ifdef WIN_NT
-					if (!CopyFile(bakname.c_str(), dbname.c_str(), TRUE))
-					{
-						status_exception::raise(Arg::Gds(isc_nbackup_err_copy) <<
-							dbname.c_str() << bakname.c_str() << Arg::OsError());
-					}
-					checkCtrlC(uSvc);
-					delete_database = true; // database is possibly broken
-					open_database_write();
-#else
 					// Use relatively small buffer to make use of prefetch and lazy flush
 					char buffer[65536];
 					while (true)
@@ -1550,7 +1699,6 @@ void NBackup::restore_database(const BackupFiles& files, bool inc_rest)
 						checkCtrlC(uSvc);
 					}
 					seek_file(dbase, 0);
-#endif
 				}
 				else
 					open_database_write(true);
@@ -1592,10 +1740,7 @@ void NBackup::restore_database(const BackupFiles& files, bool inc_rest)
 				// We are likely to have normal database here
 				delete_database = false;
 			}
-#ifdef WIN_NT
-			if (curLevel)
-#endif
-				close_backup();
+			close_backup();
 			curLevel++;
 		}
 	}

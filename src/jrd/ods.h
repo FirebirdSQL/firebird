@@ -793,6 +793,8 @@ struct blh
 	ULONG blh_length;			// Total length of data
 	USHORT blh_sub_type;		// Blob sub-type
 	UCHAR blh_charset;			// Blob charset (since ODS 11.1)
+// Macro CHECK_BLOB_FIELD_ACCESS_FOR_SELECT is never defined, code under it was left for a case
+// we would like to have that check in a future.
 #ifdef CHECK_BLOB_FIELD_ACCESS_FOR_SELECT
 	USHORT blh_fld_id;			// Field ID
 #endif

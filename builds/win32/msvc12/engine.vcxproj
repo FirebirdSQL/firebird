@@ -60,6 +60,7 @@
     <ClCompile Include="..\..\..\src\jrd\builtin.cpp" />
     <ClCompile Include="..\..\..\src\jrd\cch.cpp" />
     <ClCompile Include="..\..\..\src\jrd\cmp.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\Coercion.cpp" />
     <ClCompile Include="..\..\..\src\jrd\Collation.cpp" />
     <ClCompile Include="..\..\..\src\jrd\CryptoManager.cpp" />
     <ClCompile Include="..\..\..\src\jrd\cvt.cpp" />
@@ -216,6 +217,7 @@
     <ClInclude Include="..\..\..\src\jrd\cch.h" />
     <ClInclude Include="..\..\..\src\jrd\cch_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\cmp_proto.h" />
+    <ClInclude Include="..\..\..\src\jrd\Coercion.h" />
     <ClInclude Include="..\..\..\src\jrd\Collation.h" />
     <ClInclude Include="..\..\..\src\jrd\constants.h" />
     <ClInclude Include="..\..\..\src\jrd\CryptoManager.h" />

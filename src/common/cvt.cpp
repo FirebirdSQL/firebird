@@ -1152,19 +1152,8 @@ SLONG CVT_get_long(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 		}
 		break;
 
-	case dtype_blob:
-	case dtype_sql_date:
-	case dtype_sql_time:
-	case dtype_timestamp:
-	case dtype_array:
-	case dtype_dbkey:
-	case dtype_boolean:
-		CVT_conversion_error(desc, err);
-		break;
-
 	default:
-		fb_assert(false);
-		err(Arg::Gds(isc_badblk));	// internal error
+		CVT_conversion_error(desc, err);
 		break;
 	}
 
@@ -1470,21 +1459,8 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 		}
 		return value;
 
-	case dtype_timestamp:
-	case dtype_timestamp_tz:
-	case dtype_sql_date:
-	case dtype_sql_time:
-	case dtype_sql_time_tz:
-	case dtype_blob:
-	case dtype_array:
-	case dtype_dbkey:
-	case dtype_boolean:
-		CVT_conversion_error(desc, err);
-		break;
-
 	default:
-		fb_assert(false);
-		err(Arg::Gds(isc_badblk));	// internal error
+		CVT_conversion_error(desc, err);
 		break;
 	}
 
@@ -1594,18 +1570,6 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			return;
 
 		default:
-			fb_assert(false);		// Fall into ...
-		case dtype_short:
-		case dtype_long:
-		case dtype_int64:
-		case dtype_dbkey:
-		case dtype_quad:
-		case dtype_real:
-		case dtype_double:
-		case dtype_boolean:
-		case dtype_dec64:
-		case dtype_dec128:
-		case dtype_int128:
 			CVT_conversion_error(from, cb->err);
 			break;
 		}
@@ -1645,18 +1609,6 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			return;
 
 		default:
-			fb_assert(false);		// Fall into ...
-		case dtype_short:
-		case dtype_long:
-		case dtype_int64:
-		case dtype_dbkey:
-		case dtype_quad:
-		case dtype_real:
-		case dtype_double:
-		case dtype_boolean:
-		case dtype_dec64:
-		case dtype_dec128:
-		case dtype_int128:
 			CVT_conversion_error(from, cb->err);
 			break;
 		}
@@ -1685,20 +1637,6 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			return;
 
 		default:
-			fb_assert(false);		// Fall into ...
-		case dtype_sql_time:
-		case dtype_sql_time_tz:
-		case dtype_short:
-		case dtype_long:
-		case dtype_int64:
-		case dtype_dbkey:
-		case dtype_quad:
-		case dtype_real:
-		case dtype_double:
-		case dtype_boolean:
-		case dtype_dec64:
-		case dtype_dec128:
-		case dtype_int128:
 			CVT_conversion_error(from, cb->err);
 			break;
 		}
@@ -1731,19 +1669,6 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			return;
 
 		default:
-			fb_assert(false);		// Fall into ...
-		case dtype_sql_date:
-		case dtype_short:
-		case dtype_long:
-		case dtype_int64:
-		case dtype_dbkey:
-		case dtype_quad:
-		case dtype_real:
-		case dtype_double:
-		case dtype_boolean:
-		case dtype_dec64:
-		case dtype_dec128:
-		case dtype_int128:
 			CVT_conversion_error(from, cb->err);
 			break;
 		}
@@ -1778,19 +1703,6 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			return;
 
 		default:
-			fb_assert(false);		// Fall into ...
-		case dtype_sql_date:
-		case dtype_short:
-		case dtype_long:
-		case dtype_int64:
-		case dtype_dbkey:
-		case dtype_quad:
-		case dtype_real:
-		case dtype_double:
-		case dtype_boolean:
-		case dtype_dec64:
-		case dtype_dec128:
-		case dtype_int128:
 			CVT_conversion_error(from, cb->err);
 			break;
 		}
@@ -1933,16 +1845,21 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 					break;
 
 				case dtype_varying:
-					length = MIN(length, (ULONG(to->dsc_length) - sizeof(USHORT)));
-					cb->validateData(toCharset, length, q);
-					toLength = length;
+					if (to->dsc_length > sizeof(USHORT))
+					{
+						length = MIN(length, (ULONG(to->dsc_length) - sizeof(USHORT)));
+						cb->validateData(toCharset, length, q);
+						toLength = length;
 
-					len -= length;
-					// TMN: Here we should really have the following fb_assert
-					// fb_assert(length <= MAX_USHORT);
-					((vary*) p)->vary_length = (USHORT) length;
-					start = p = reinterpret_cast<UCHAR*>(((vary*) p)->vary_string);
-					CVT_COPY_BUFF(q, p, length);
+						len -= length;
+						// TMN: Here we should really have the following fb_assert
+						// fb_assert(length <= MAX_USHORT);
+						((vary*) p)->vary_length = (USHORT) length;
+						start = p = reinterpret_cast<UCHAR*>(((vary*) p)->vary_string);
+						CVT_COPY_BUFF(q, p, length);
+					}
+					else
+						memset(to->dsc_address, 0, to->dsc_length);		// the best we can do
 					break;
 				}
 
@@ -2126,19 +2043,6 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			return;
 
 		default:
-			fb_assert(false);		// Fall into ...
-		case dtype_sql_date:
-		case dtype_sql_time:
-		case dtype_short:
-		case dtype_long:
-		case dtype_int64:
-		case dtype_dbkey:
-		case dtype_quad:
-		case dtype_real:
-		case dtype_double:
-		case dtype_dec64:
-		case dtype_dec128:
-		case dtype_int128:
 			CVT_conversion_error(from, cb->err);
 			break;
 		}
@@ -2168,6 +2072,12 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
  *
  **************************************/
 	string message;
+
+	if (desc->dsc_dtype >= DTYPE_TYPE_MAX)
+	{
+		fb_assert(false);
+		err(Arg::Gds(isc_badblk));
+	}
 
 	if (desc->dsc_dtype == dtype_blob)
 		message = "BLOB";
@@ -3011,16 +2921,6 @@ Decimal64 CVT_get_dec64(const dsc* desc, DecimalStatus decSt, ErrorFunction err)
 			CVT_make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
 			return d64.set(buffer.vary_string, decSt);
 
-		case dtype_blob:
-		case dtype_sql_date:
-		case dtype_sql_time:
-		case dtype_timestamp:
-		case dtype_array:
-		case dtype_dbkey:
-		case dtype_boolean:
-			CVT_conversion_error(desc, err);
-			break;
-
 		case dtype_real:
 			return d64.set(*((float*) p), decSt);
 
@@ -3037,8 +2937,7 @@ Decimal64 CVT_get_dec64(const dsc* desc, DecimalStatus decSt, ErrorFunction err)
 			return d64.set(*((Int128*) p), decSt, scale);
 
 		default:
-			fb_assert(false);
-			err(Arg::Gds(isc_badblk));	// internal error
+			CVT_conversion_error(desc, err);
 			break;
 		}
 	}
@@ -3098,16 +2997,6 @@ Decimal128 CVT_get_dec128(const dsc* desc, DecimalStatus decSt, ErrorFunction er
 			CVT_make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
 			return d128.set(buffer.vary_string, decSt);
 
-		case dtype_blob:
-		case dtype_sql_date:
-		case dtype_sql_time:
-		case dtype_timestamp:
-		case dtype_array:
-		case dtype_dbkey:
-		case dtype_boolean:
-			CVT_conversion_error(desc, err);
-			break;
-
 		case dtype_real:
 			return d128.set(*((float*) p), decSt);
 
@@ -3124,8 +3013,7 @@ Decimal128 CVT_get_dec128(const dsc* desc, DecimalStatus decSt, ErrorFunction er
 			return d128.set(*((Int128*) p), decSt, scale);
 
 		default:
-			fb_assert(false);
-			err(Arg::Gds(isc_badblk));	// internal error
+			CVT_conversion_error(desc, err);
 			break;
 		}
 	}

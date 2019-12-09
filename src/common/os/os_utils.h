@@ -292,6 +292,7 @@ namespace os_utils
 		return rc;
 	}
 
+#ifdef HAVE_POSIX_FADVISE
 	inline int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	{
 		int rc;
@@ -307,6 +308,12 @@ namespace os_utils
 
 		return rc;
 	}
+#else
+	inline int posix_fadvise(int, off_t, off_t, int)
+	{
+		return 0;
+	}
+#endif
 
 	inline int getrlimit(int resource, struct rlimit* rlim)
 	{

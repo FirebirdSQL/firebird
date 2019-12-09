@@ -1923,6 +1923,12 @@ const
 	gds_odd_hex_len                      = 335545257;
 	isc_invalid_hex_digit                = 335545258;
 	gds_invalid_hex_digit                = 335545258;
+	isc_bind_err                         = 335545259;
+	gds_bind_err                         = 335545259;
+	isc_bind_statement                   = 335545260;
+	gds_bind_statement                   = 335545260;
+	isc_bind_convert                     = 335545261;
+	gds_bind_convert                     = 335545261;
 	isc_gfix_db_name                     = 335740929;
 	gds_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;
