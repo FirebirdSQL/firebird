@@ -27,6 +27,7 @@
 #include "firebird.h"
 
 #include "../common/classes/ImplementHelper.h"
+#include "../common/classes/auto.h"
 #include <tomcrypt.h>
 #include <../common/os/guid.h>
 
@@ -85,12 +86,6 @@ public:
 		: en(NULL), de(NULL), iv(getPool())
 	{ }
 
-	~ChaCha()
-	{
-		delete en;
-		delete de;
-	}
-
 	// ICryptPlugin implementation
 	const char* getKnownTypes(CheckStatusWrapper* status);
 	void setKey(CheckStatusWrapper* status, ICryptKey* key);
@@ -102,8 +97,7 @@ public:
 
 private:
 	Cipher* createCypher(unsigned int l, const void* key);
-	Cipher* en;
-	Cipher* de;
+	AutoPtr<Cipher> en, de;
 	UCharBuffer iv;
 };
 
