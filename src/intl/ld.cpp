@@ -483,7 +483,7 @@ INTL_BOOL FB_DLL_EXPORT LD_lookup_charset(charset* cs, const ASCII* name, const 
 
 		return CSICU_charset_init(cs, name);
 	}
-	catch (Firebird::BadAlloc)
+	catch (const Firebird::BadAlloc&)
 	{
 		fb_assert(false);
 		return false;
@@ -549,7 +549,7 @@ INTL_BOOL FB_DLL_EXPORT LD_lookup_texttype(texttype* tt, const ASCII* texttype_n
 			tt, texttype_name, charset_name, attributes, specific_attributes,
 			specific_attributes_length, configInfo);
 	}
-	catch (Firebird::BadAlloc)
+	catch (const Firebird::BadAlloc&)
 	{
 		fb_assert(false);
 		return false;

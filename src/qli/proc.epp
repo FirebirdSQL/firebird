@@ -27,7 +27,7 @@
 #include "firebird.h"
 #include "dyn_consts.h"
 #include <string.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../qli/dtr.h"
 #include "../qli/parse.h"
 #include "../qli/compile.h"
@@ -489,7 +489,8 @@ int PRO_rename_procedure( qli_dbb* database, const TEXT* old_name, const TEXT* n
 
 	USHORT count = 0;
 	FOR(REQUEST_HANDLE request) X IN DB.QLI$PROCEDURES WITH
-		X.QLI$PROCEDURE_NAME EQ old_name count++;
+		X.QLI$PROCEDURE_NAME EQ old_name
+		count++;
 		MODIFY X USING
 			isc_vtof(new_name, X.QLI$PROCEDURE_NAME, sizeof(X.QLI$PROCEDURE_NAME));
 		END_MODIFY

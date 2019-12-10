@@ -45,13 +45,13 @@
 #include "../common/classes/locks.h"
 #include "../common/classes/init.h"
 #include "../jrd/constants.h"
-#include "../jrd/inf_pub.h"
+#include "firebird/impl/inf_pub.h"
 #include "../jrd/align.h"
 #include "../common/os/path_utils.h"
 #include "../common/os/fbsyslog.h"
 #include "../common/StatusArg.h"
 #include "../common/os/os_utils.h"
-#include "../dsql/sqlda_pub.h"
+#include "firebird/impl/sqlda_pub.h"
 #include "../common/classes/ClumpletReader.h"
 #include "../common/StatusArg.h"
 
@@ -1010,7 +1010,7 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 	char tmp[MAXPATHLEN];
 
 	const char* configDir[] = {
-		FB_BINDIR, FB_SBINDIR, FB_CONFDIR, FB_LIBDIR, FB_INCDIR, FB_DOCDIR, FB_UDFDIR, FB_SAMPLEDIR,
+		FB_BINDIR, FB_SBINDIR, FB_CONFDIR, FB_LIBDIR, FB_INCDIR, FB_DOCDIR, "", FB_SAMPLEDIR,
 		FB_SAMPLEDBDIR, FB_HELPDIR, FB_INTLDIR, FB_MISCDIR, FB_SECDBDIR, FB_MSGDIR, FB_LOGDIR,
 		FB_GUARDDIR, FB_PLUGDIR
 	};
@@ -1475,11 +1475,7 @@ void logAndDie(const char* text)
 {
 	gds__log(text);
 	Firebird::Syslog::Record(Firebird::Syslog::Error, text);
-#ifdef WIN_NT
-	exit(3);
-#else
 	abort();
-#endif
 }
 
 UCHAR sqlTypeToDscType(SSHORT sqlType)
@@ -1522,8 +1518,8 @@ UCHAR sqlTypeToDscType(SSHORT sqlType)
 		return dtype_dec64;
 	case SQL_DEC34:
 		return dtype_dec128;
-	case SQL_DEC_FIXED:
-		return dtype_dec_fixed;
+	case SQL_INT128:
+		return dtype_int128;
 	case SQL_TIME_TZ:
 		return dtype_sql_time_tz;
 	case SQL_TIMESTAMP_TZ:
@@ -1570,21 +1566,22 @@ unsigned sqlTypeToDsc(unsigned runOffset, unsigned sqlType, unsigned sqlLength,
 	return runOffset + sizeof(SSHORT);
 }
 
+const ISC_STATUS* nextArg(const ISC_STATUS* v) throw()
+{
+	do
+	{
+		v += (v[0] == isc_arg_cstring ? 3 : 2);
+	} while (v[0] != isc_arg_warning && v[0] != isc_arg_gds && v[0] != isc_arg_end);
+
+	return v;
+}
+
 bool containsErrorCode(const ISC_STATUS* v, ISC_STATUS code)
 {
-#ifdef DEV_BUILD
-const ISC_STATUS* const origen = v;
-#endif
-	while (v[0] == isc_arg_gds)
+	for (; v[0] == isc_arg_gds; v = nextArg(v))
 	{
 		if (v[1] == code)
 			return true;
-
-		do
-		{
-			v += (v[0] == isc_arg_cstring ? 3 : 2);
-		} while (v[0] != isc_arg_warning && v[0] != isc_arg_gds && v[0] != isc_arg_end);
-		fb_assert(v - origen < ISC_STATUS_LENGTH);
 	}
 
 	return false;
@@ -1649,6 +1646,11 @@ bool isBpbSegmented(unsigned parLength, const unsigned char* par)
 	int type = bpb.getInt();
 
 	return type & isc_bpb_type_stream ? false : true;
+}
+
+FbShutdown::~FbShutdown()
+{
+	fb_shutdown(0, reason);
 }
 
 } // namespace fb_utils

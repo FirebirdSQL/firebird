@@ -61,7 +61,10 @@ PluginLogWriter::PluginLogWriter(const char* fileName, size_t maxSize) :
 	mutexName.append(m_fileName);
 
 	checkMutex("init", ISC_mutex_init(&m_mutex, mutexName.c_str()));
+	Guard guard(this);
 #endif
+
+	reopen();
 }
 
 PluginLogWriter::~PluginLogWriter()
@@ -181,6 +184,20 @@ FB_SIZE_T PluginLogWriter::write(const void* buf, FB_SIZE_T size)
 		checkErrno("write");
 
 	return written;
+}
+
+FB_SIZE_T PluginLogWriter::write_s(CheckStatusWrapper* status, const void* buf, FB_SIZE_T size)
+{
+	try
+	{
+		return write(buf, size);
+	}
+	catch (Exception &ex)
+	{
+		ex.stuffException(status);
+	}
+
+	return 0;
 }
 
 void PluginLogWriter::checkErrno(const char* operation)

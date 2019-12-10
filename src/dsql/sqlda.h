@@ -52,6 +52,6 @@ struct SQLDA
 
 #define SQLDA_LENGTH(n)		(sizeof (SQLDA) + (n - 1) * sizeof (SQLVAR))
 
-#include "../dsql/sqlda_pub.h"
+#include "firebird/impl/sqlda_pub.h"
 
 #endif // DSQL_SQLDA_H

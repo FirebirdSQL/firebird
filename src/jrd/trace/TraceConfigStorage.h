@@ -67,6 +67,9 @@ public:
 	void release();
 
 	void shutdown();
+
+	Firebird::Mutex m_localMutex;
+
 private:
 	void mutexBug(int osErrorCode, const char* text);
 	bool initialize(Firebird::SharedMemoryBase*, bool);
@@ -82,6 +85,7 @@ private:
 		void start(const char* fName);
 		void stop();
 		int release();
+
 	private:
 		const char* fileName;
 	};
@@ -163,12 +167,11 @@ public:
 };
 
 
-
-class StorageGuard
+class StorageGuard : public Firebird::MutexLockGuard
 {
 public:
 	explicit StorageGuard(ConfigStorage* storage) :
-		m_storage(storage)
+		Firebird::MutexLockGuard(storage->m_localMutex, FB_FUNCTION), m_storage(storage)
 	{
 		m_storage->acquire();
 	}

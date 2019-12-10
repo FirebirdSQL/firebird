@@ -27,7 +27,7 @@
 #include "../jrd/req.h"
 #include "../dsql/dsql.h"
 #include "../common/classes/auto.h"
-#include "../dsql/sqlda_pub.h"
+#include "firebird/impl/sqlda_pub.h"
 #include "../dsql/dsql_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/Attachment.h"
@@ -109,10 +109,10 @@ namespace
 				item.length = sizeof(Decimal128);
 				break;
 
-			case dtype_dec_fixed:
-				item.type = SQL_DEC_FIXED;
+			case dtype_int128:
+				item.type = SQL_INT128;
 				item.scale = desc->dsc_scale;
-				item.length = sizeof(DecimalFixed);
+				item.length = sizeof(Int128);
 				break;
 
 			case dtype_sql_date:

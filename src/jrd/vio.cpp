@@ -719,7 +719,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 		rpb->rpb_f_page, rpb->rpb_f_line);
 #endif
 
-	CommitNumber current_snapshot_number, prev_snapshot_number = 0;
+	CommitNumber current_snapshot_number;
 	bool int_gc_done = (attachment->att_flags & ATT_no_cleanup);
 
 	int state = TRA_snapshot_state(tdbb, transaction, rpb->rpb_transaction_nr, &current_snapshot_number);
@@ -800,7 +800,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 		// Worry about intermediate GC if necessary
 		if (!int_gc_done &&
-			(//(prev_snapshot_number && prev_snapshot_number == current_snapshot_number) ||
+			(
 			 ((tdbb->tdbb_flags & TDBB_sweeper) && state == tra_committed &&
 				rpb->rpb_b_page != 0 && rpb->rpb_transaction_nr >= oldest_snapshot)))
 		{
@@ -819,8 +819,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				continue;
 			}
 		}
-
-		prev_snapshot_number = current_snapshot_number;
 
 		if (state == tra_committed)
 			state = check_precommitted(transaction, rpb);
@@ -887,7 +885,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				if (!DPM_get(tdbb, rpb, LCK_read))
 					return false;
 
-				prev_snapshot_number = 0;
 				state = TRA_snapshot_state(tdbb, transaction, rpb->rpb_transaction_nr, &current_snapshot_number);
 				continue;
 			}
@@ -940,7 +937,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 					{
 						if (!DPM_get(tdbb, rpb, LCK_read))
 							return false;
-						prev_snapshot_number = 0;
 						break;
 					}
 
@@ -953,7 +949,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 						if (!DPM_get(tdbb, rpb, LCK_read))
 							return false;
-						prev_snapshot_number = 0;
 						break;
 					}
 
@@ -976,7 +971,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				{
 					if (!DPM_get(tdbb, rpb, LCK_read))
 						return false;
-					prev_snapshot_number = 0;
 				}
 
 				++backversions;
@@ -988,8 +982,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 			if (!DPM_get(tdbb, rpb, LCK_read))
 				return false;
-
-			prev_snapshot_number = 0;
 
 			}	// scope
 			break;
@@ -1048,7 +1040,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				{
 					if (!DPM_get(tdbb, rpb, LCK_read))
 						return false;
-					prev_snapshot_number = 0;
 				}
 
 				++backversions;
@@ -1073,7 +1064,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 						// Things have changed, start all over again.
 						if (!DPM_get(tdbb, rpb, LCK_read))
 							return false;	// entire record disappeared
-						prev_snapshot_number = 0;
 						break;	// start from the primary version again
 					}
 				}
@@ -1086,7 +1076,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 						// Things have changed, start all over again.
 						if (!DPM_get(tdbb, rpb, LCK_read))
 							return false;	// entire record disappeared
-						prev_snapshot_number = 0;
 						break;	// start from the primary version again
 					}
 
@@ -1095,7 +1084,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 						CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 						if (!DPM_get(tdbb, rpb, LCK_read))
 							return false;
-						prev_snapshot_number = 0;
 						break;
 					}
 
@@ -1115,7 +1103,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 					{
 						if (!DPM_get(tdbb, rpb, LCK_read))
 							return false;
-						prev_snapshot_number = 0;
 					}
 
 					++backversions;
@@ -1241,7 +1228,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 			// Go back to be primary record version and chase versions all over again.
 			if (!DPM_get(tdbb, rpb, LCK_read))
 				return false;
-			prev_snapshot_number = 0;
 		} // switch (state)
 
 		state = TRA_snapshot_state(tdbb, transaction, rpb->rpb_transaction_nr, &current_snapshot_number);
@@ -1271,6 +1257,15 @@ void VIO_copy_record(thread_db* tdbb, record_param* org_rpb, record_param* new_r
 	Record* const new_record = new_rpb->rpb_record;
 	fb_assert(org_record && new_record);
 
+	// dimitr:	Clear the req_null flag that may stay active after the last
+	//			boolean evaluation. Here we use only EVL_field() calls that
+	//			do not touch this flag and data copying is done only for
+	//			non-NULL fields, so req_null should never be seen inside blb::move().
+	//			See CORE-6090 for details.
+
+	jrd_req* const request = tdbb->getRequest();
+	request->req_flags &= ~req_null;
+
 	// Copy the original record to the new record. If the format hasn't changed,
 	// this is a simple move. If the format has changed, each field must be
 	// fetched and moved separately, remembering to set the missing flag.
@@ -1289,8 +1284,18 @@ void VIO_copy_record(thread_db* tdbb, record_param* org_rpb, record_param* new_r
 			{
 				if (EVL_field(org_rpb->rpb_relation, org_record, i, &org_desc))
 				{
-					if (DTYPE_IS_BLOB_OR_QUAD(org_desc.dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(new_desc.dsc_dtype))
-						Jrd::blb::move(tdbb, &org_desc, &new_desc, new_rpb, i);
+					// If the source is not a blob or it's a temporary blob,
+					// then we'll need to materialize the resulting blob.
+					// Thus blb::move() is called with rpb and field ID.
+					// See also CORE-5600.
+
+					const bool materialize =
+						(DTYPE_IS_BLOB_OR_QUAD(new_desc.dsc_dtype) &&
+							!(DTYPE_IS_BLOB_OR_QUAD(org_desc.dsc_dtype) &&
+								((bid*) org_desc.dsc_address)->bid_internal.bid_relation_id));
+
+					if (materialize)
+						blb::move(tdbb, &org_desc, &new_desc, new_rpb, i);
 					else
 						MOV_move(tdbb, &org_desc, &new_desc);
 				}
@@ -2541,6 +2546,12 @@ bool VIO_get_current(thread_db* tdbb,
 #endif
 
 		// Get data if there is data.
+
+		if (rpb->rpb_flags & rpb_damaged)
+		{
+			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
+			return false;
+		}
 
 		if (rpb->rpb_flags & rpb_deleted)
 			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
@@ -4177,7 +4188,7 @@ static void check_rel_field_class(thread_db* tdbb,
 			// he may have access to relation as whole.
 			try
 			{
-				SCL_check_access(tdbb, s_class, 0, 0, NULL, flags, SCL_object_column, false, "");
+				SCL_check_access(tdbb, s_class, 0, NULL, flags, SCL_object_column, false, "");
 			}
 			catch (const Firebird::Exception&)
 			{
@@ -4755,6 +4766,8 @@ void Database::garbage_collector(Database* dbb)
 			PAG_header(tdbb, true);
 			PAG_attachment_id(tdbb);
 			TRA_init(attachment);
+
+			Monitoring::publishAttachment(tdbb);
 
 			dbb->dbb_garbage_collector = gc;
 

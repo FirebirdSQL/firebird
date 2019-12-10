@@ -506,6 +506,7 @@ public:
 
 	// TraceLogWriter implementation
 	FB_SIZE_T write(const void* buf, FB_SIZE_T size);
+	FB_SIZE_T write_s(CheckStatusWrapper* status, const void* buf, FB_SIZE_T size);
 
 	int release()
 	{
@@ -557,6 +558,20 @@ FB_SIZE_T TraceLogWriterImpl::write(const void* buf, FB_SIZE_T size)
 
 	// report successful write
 	return size;
+}
+
+FB_SIZE_T TraceLogWriterImpl::write_s(CheckStatusWrapper* status, const void* buf, FB_SIZE_T size)
+{
+	try
+	{
+		return write(buf, size);
+	}
+	catch (Exception &ex)
+	{
+		ex.stuffException(status);
+	}
+
+	return 0;
 }
 
 

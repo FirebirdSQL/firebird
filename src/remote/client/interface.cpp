@@ -43,7 +43,7 @@
 #include <sys/param.h>
 #endif
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../common/ThreadStart.h"
 #include "../jrd/license.h"
 #include "../remote/inet_proto.h"
@@ -522,6 +522,39 @@ int Batch::release()
 	return 0;
 }
 
+class Replicator FB_FINAL : public RefCntIface<IReplicatorImpl<Replicator, CheckStatusWrapper> >
+{
+public:
+	// IReplicator implementation
+	int release();
+	void process(CheckStatusWrapper* status, unsigned length, const unsigned char* data);
+	void close(CheckStatusWrapper* status);
+
+	explicit Replicator(Attachment* att) : attachment(att)
+	{}
+
+private:
+	void freeClientData(CheckStatusWrapper* status, bool force = false);
+
+	Attachment* attachment;
+};
+
+int Replicator::release()
+{
+	if (--refCounter != 0)
+		return 1;
+
+	if (attachment)
+	{
+		LocalStatus ls;
+		CheckStatusWrapper status(&ls);
+		freeClientData(&status, true);
+	}
+	delete this;
+
+	return 0;
+}
+
 class Statement FB_FINAL : public RefCntIface<IStatementImpl<Statement, CheckStatusWrapper> >
 {
 public:
@@ -771,9 +804,11 @@ public:
 		unsigned stmtLength, const char* sqlStmt, unsigned dialect,
 		IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par);
 
+	Replicator* createReplicator(Firebird::CheckStatusWrapper* status);
+
 public:
 	Attachment(Rdb* handle, const PathName& path)
-		: rdb(handle), dbPath(getPool(), path)
+		: replicator(nullptr), rdb(handle), dbPath(getPool(), path)
 	{ }
 
 	Rdb* getRdb()
@@ -789,6 +824,8 @@ public:
 	Rtr* remoteTransaction(ITransaction* apiTra);
 	Transaction* remoteTransactionInterface(ITransaction* apiTra);
 	Statement* createStatement(CheckStatusWrapper* status, unsigned dialect);
+
+	Replicator* replicator;
 
 private:
 	void execWithCheck(CheckStatusWrapper* status, const string& stmt);
@@ -2767,6 +2804,129 @@ void Batch::releaseStatement()
 	}
 
 	stmt = NULL;
+}
+
+
+Replicator* Attachment::createReplicator(CheckStatusWrapper* status)
+{
+/**************************************
+ *
+ *	c r e a t e R e p l i c a t o r
+ *
+ **************************************
+ *
+ * Functional description
+ *	Create data replication interface.
+ *
+ **************************************/
+
+	try
+	{
+		reset(status);
+
+		// Check and validate handles, etc.
+		CHECK_HANDLE(rdb, isc_bad_db_handle);
+		rem_port* port = rdb->rdb_port;
+
+		if (port->port_protocol < PROTOCOL_VERSION16)
+			unsupported();
+
+		if (!replicator)
+			replicator = FB_NEW Replicator(this);
+
+		replicator->addRef();
+		return replicator;
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+
+	return NULL;
+}
+
+
+void Replicator::process(CheckStatusWrapper* status, unsigned length, const unsigned char* data)
+{
+	try
+	{
+		reset(status);
+
+		Rdb* rdb = attachment->getRdb();
+		CHECK_HANDLE(rdb, isc_bad_db_handle);
+		rem_port* port = rdb->rdb_port;
+
+		if (port->port_protocol < PROTOCOL_VERSION16)
+			unsupported();
+
+		// Validate data length
+		CHECK_LENGTH(port, length);
+
+		PACKET* packet = &rdb->rdb_packet;
+		packet->p_operation = op_repl_data;
+		P_REPLICATE* repl = &packet->p_replicate;
+		repl->p_repl_database = rdb->rdb_id;
+		repl->p_repl_data.cstr_length = length;
+		repl->p_repl_data.cstr_address = data;
+
+		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+
+		send_and_receive(status, rdb, packet);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
+
+void Replicator::close(CheckStatusWrapper* status)
+{
+	reset(status);
+	freeClientData(status);
+}
+
+
+void Replicator::freeClientData(CheckStatusWrapper* status, bool force)
+{
+	try
+	{
+		reset(status);
+
+		if (attachment && attachment->replicator)
+		{
+			Rdb* rdb = attachment->getRdb();
+			CHECK_HANDLE(rdb, isc_bad_db_handle);
+			rem_port* port = rdb->rdb_port;
+
+			if (port->port_protocol < PROTOCOL_VERSION16)
+				unsupported();
+
+			PACKET* packet = &rdb->rdb_packet;
+			packet->p_operation = op_repl_data;
+			P_REPLICATE* repl = &packet->p_replicate;
+			repl->p_repl_database = rdb->rdb_id;
+			repl->p_repl_data.cstr_length = 0;
+
+			RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+
+			try
+			{
+				send_and_receive(status, rdb, packet);
+			}
+			catch (const Exception&)
+			{
+				if (!force)
+					throw;
+			}
+
+			attachment->replicator = NULL;
+		}
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
 }
 
 
@@ -6334,7 +6494,7 @@ static void add_other_params(rem_port* port, ClumpletWriter& dpb, const Paramete
 			if (!dpb.find(isc_dpb_utf8_filename))
 				ISC_utf8ToSystem(path);
 
-			dpb.insertPath(par.process_name, path);
+			dpb.insertString(par.process_name, path);
 		}
 	}
 
@@ -6378,7 +6538,7 @@ static void add_working_directory(ClumpletWriter& dpb, const PathName& node_name
 			ISC_utf8ToSystem(cwd);
 	}
 
-	dpb.insertPath(isc_dpb_working_directory, cwd);
+	dpb.insertString(isc_dpb_working_directory, cwd);
 }
 
 
@@ -8497,7 +8657,9 @@ static void cleanDpb(Firebird::ClumpletWriter& dpb, const ParametersSet* tags)
 
 
 RmtAuthBlock::RmtAuthBlock(const Firebird::AuthReader::AuthBlock& aBlock)
-	: rdr(*getDefaultMemoryPool(), aBlock), info(*getDefaultMemoryPool())
+	: buffer(*getDefaultMemoryPool(), aBlock),
+	  rdr(*getDefaultMemoryPool(), buffer),
+	  info(*getDefaultMemoryPool())
 {
 	FbLocalStatus st;
 	first(&st);
@@ -8577,13 +8739,11 @@ ClntAuthBlock::ClntAuthBlock(const Firebird::PathName* fileName, Firebird::Clump
 	if (dpb && tags)
 	{
 		if (dpb->find(tags->config_text))
-		{
 			dpb->getString(dpbConfig);
-		}
+
 		if (dpb->find(tags->plugin_list))
-		{
 			dpb->getPath(dpbPlugins);
-		}
+
 		if (dpb->find(tags->auth_block))
 		{
 			AuthReader::AuthBlock plain;
@@ -8591,7 +8751,8 @@ ClntAuthBlock::ClntAuthBlock(const Firebird::PathName* fileName, Firebird::Clump
 			remAuthBlock.reset(FB_NEW RmtAuthBlock(plain));
 		}
 	}
-	resetClnt(fileName);
+	clntConfig = REMOTE_get_config(fileName, &dpbConfig);
+	resetClnt();
 }
 
 void ClntAuthBlock::resetDataFromPlugin()
@@ -8614,12 +8775,12 @@ void ClntAuthBlock::extractDataFromPluginTo(Firebird::ClumpletWriter& dpb,
 		if (firstTime)
 		{
 			fb_assert(tags->plugin_name && tags->plugin_list);
+
 			if (pluginName.hasData())
-			{
-				dpb.insertPath(tags->plugin_name, pluginName);
-			}
+				dpb.insertString(tags->plugin_name, pluginName);
+
 			dpb.deleteWithTag(tags->plugin_list);
-			dpb.insertPath(tags->plugin_list, pluginList);
+			dpb.insertString(tags->plugin_list, pluginList);
 			firstTime = false;
 			HANDSHAKE_DEBUG(fprintf(stderr,
 				"Cli: extractDataFromPluginTo: first time - added plugName & pluginList\n"));
@@ -8769,8 +8930,7 @@ int ClntAuthBlock::release()
 
 bool ClntAuthBlock::checkPluginName(Firebird::PathName& nameToCheck)
 {
-	Remote::ParsedList parsed;
-	REMOTE_parseList(parsed, pluginList);
+	Firebird::ParsedList parsed(pluginList);
 	for (unsigned i = 0; i < parsed.getCount(); ++i)
 	{
 		if (parsed[i] == nameToCheck)
@@ -8789,7 +8949,8 @@ Firebird::ICryptKey* ClntAuthBlock::newKey(CheckStatusWrapper* status)
 		InternalCryptKey* k = FB_NEW InternalCryptKey;
 
 		fb_assert(plugins.hasData());
-		k->t = plugins.name();
+		k->keyName = plugins.name();
+		WIRECRYPT_DEBUG(fprintf(stderr, "Cli: newkey %s\n", k->keyName.c_str());)
 		cryptKeys.add(k);
 
 		return k;
@@ -8803,7 +8964,7 @@ Firebird::ICryptKey* ClntAuthBlock::newKey(CheckStatusWrapper* status)
 
 void ClntAuthBlock::tryNewKeys(rem_port* port)
 {
-	for (unsigned k = 0; k < cryptKeys.getCount(); ++k)
+	for (unsigned k = cryptKeys.getCount(); k--; )
 	{
 		if (port->tryNewKey(cryptKeys[k]))
 		{

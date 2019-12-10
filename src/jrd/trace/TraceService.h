@@ -28,7 +28,7 @@
 #define JRD_TRACESERVICE_H
 
 #include "firebird.h"
-#include "consts_pub.h"
+#include "firebird/impl/consts_pub.h"
 #include "fb_exception.h"
 #include "iberror.h"
 #include "../../common/classes/fb_string.h"
@@ -49,7 +49,7 @@ class TraceSvcIntf
 {
 public:
 	virtual void setAttachInfo(const string& service_name, const string& user, const string& role,
-		const string& pwd, const AuthReader::AuthBlock& authBlock, bool isAdmin) = 0;
+		const string& pwd, bool trusted) = 0;
 
 	virtual void startSession(TraceSession& session, bool interactive) = 0;
 	virtual void stopSession(ULONG id) = 0;

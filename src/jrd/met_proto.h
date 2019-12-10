@@ -51,6 +51,7 @@ namespace Jrd
 	enum IndexStatus
 	{
 		MET_object_active,
+		MET_object_deferred_active,
 		MET_object_inactive,
 		MET_object_unknown
 	};
@@ -78,8 +79,8 @@ Jrd::DeferredWork*	MET_change_fields(Jrd::thread_db*, Jrd::jrd_tra*, const dsc*)
 Jrd::Format*	MET_current(Jrd::thread_db*, Jrd::jrd_rel*);
 void		MET_delete_dependencies(Jrd::thread_db*, const Firebird::MetaName&, int, Jrd::jrd_tra*);
 void		MET_delete_shadow(Jrd::thread_db*, USHORT);
-bool		MET_dsql_cache_use(Jrd::thread_db* tdbb, int type, const Firebird::MetaName& name, const Firebird::MetaName& package = "");
-void		MET_dsql_cache_release(Jrd::thread_db* tdbb, int type, const Firebird::MetaName& name, const Firebird::MetaName& package = "");
+bool		MET_dsql_cache_use(Jrd::thread_db* tdbb, Jrd::sym_type type, const Firebird::MetaName& name, const Firebird::MetaName& package = "");
+void		MET_dsql_cache_release(Jrd::thread_db* tdbb, Jrd::sym_type type, const Firebird::MetaName& name, const Firebird::MetaName& package = "");
 void		MET_error(const TEXT*, ...);
 Jrd::Format*	MET_format(Jrd::thread_db*, Jrd::jrd_rel*, USHORT);
 bool		MET_get_char_coll_subtype(Jrd::thread_db*, USHORT*, const UCHAR*, USHORT);

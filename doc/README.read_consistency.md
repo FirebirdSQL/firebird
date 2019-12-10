@@ -67,7 +67,7 @@ Commit Number. Whole array is split on blocks of fixed size. Array contains CN's
 transactions between OIT and Next markers, thus new block is allocated when Next moves out of 
 scope of higher block, and old block is released when OIT moves out of lower block.
 
-Block size could be set in firebird.conf using new setting **TpcBlockSize**. Default value is
+Block size could be set in firebird.conf using new setting **TipCacheBlockSize**. Default value is
 4MB and it could keep 512K transactions.
 
 # Statement level read consistency for read-committed transactions

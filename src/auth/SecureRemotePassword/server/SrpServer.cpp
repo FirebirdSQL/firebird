@@ -31,6 +31,7 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../auth/SecureRemotePassword/Message.h"
+#include "../common/classes/ParsedList.h"
 
 #include "../jrd/constants.h"
 
@@ -38,8 +39,7 @@ using namespace Firebird;
 
 namespace {
 
-const unsigned int INIT_KEY = ((~0) - 1);
-unsigned int secDbKey = INIT_KEY;
+GlobalPtr<ConfigKeys> keys;
 
 const unsigned int SZ_LOGIN = 31;
 
@@ -131,11 +131,7 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 
 			// read salt and verifier from database
 			// obviously we need something like attachments cache here
-			if (secDbKey == INIT_KEY)
-			{
-				secDbKey = config->getKey("SecurityDatabase");
-			}
-
+			unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
 			secDbName = config->asString(secDbKey);
 			if (!(secDbName && secDbName[0]))
 			{
@@ -158,7 +154,7 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 				ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 				dpb.insertByte(isc_dpb_sec_attach, TRUE);
 				dpb.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
-				dpb.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
+				dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(secDbName));
 				att = p->attachDatabase(status, secDbName, dpb.getBufferLength(), dpb.getBuffer());
 				check(status);
 				HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: attached sec db %s\n", secDbName));
@@ -201,10 +197,10 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 				check(status);
 				HANDSHAKE_DEBUG(fprintf(stderr, "Srv: SRP1: Executed statement\n"));
 
-				verifier.assign(reinterpret_cast<const UCHAR*>((const char*) verify), RemotePassword::SRP_VERIFIER_SIZE);
+				verifier.assign(reinterpret_cast<const UCHAR*>(verify->data), verify->len);
 				dumpIt("Srv: verifier", verifier);
 				UCharBuffer s;
-				s.assign(reinterpret_cast<const UCHAR*>((const char*) slt), RemotePassword::SRP_SALT_SIZE);
+				s.assign(reinterpret_cast<const UCHAR*>(slt->data), slt->len);
 				BigInteger(s).getText(salt);
 				dumpIt("Srv: salt", salt);
 

@@ -23,7 +23,7 @@
  */
 
 #include "firebird.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
 
 #define PATHSEP(c) ((c) == '\\' || (c) == '/')

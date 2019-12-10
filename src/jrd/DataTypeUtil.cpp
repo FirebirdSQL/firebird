@@ -149,7 +149,16 @@ void DataTypeUtilBase::makeFromList(dsc* result, const char* expressionName, int
 			if (result->isUnknown())
 				*result = *arg;
 			else if (result->dsc_dtype != arg->dsc_dtype)
-				makeBlobOrText(result, arg, true);
+			{
+				UCHAR low = MIN(result->dsc_dtype, arg->dsc_dtype);
+				UCHAR high = MAX(result->dsc_dtype, arg->dsc_dtype);
+				if (low == dtype_sql_time && high == dtype_sql_time_tz)
+					result->dsc_dtype = dtype_sql_time_tz;
+				else if (low == dtype_timestamp && high == dtype_timestamp_tz)
+					result->dsc_dtype = dtype_timestamp_tz;
+				else
+					makeBlobOrText(result, arg, true);
+			}
 		}
 		else if (arg->dsc_dtype == dtype_boolean)
 		{
@@ -296,14 +305,16 @@ void DataTypeUtilBase::makeSubstr(dsc* result, const dsc* value, const dsc* offs
 		result->dsc_dtype = dtype_varying;
 	}
 
-	result->setTextType(value->getTextType());
-	result->setNullable(value->isNullable() || offset->isNullable() || length->isNullable());
+	result->setTextType(value->isText() || value->isBlob() ? value->getTextType() : CS_ASCII);
+	result->setNullable(value->isNullable() ||
+		(offset && offset->isNullable()) ||
+		(length && length->isNullable()));
 
 	if (result->isText())
 	{
 		ULONG len = convertLength(value, result);
 
-		if (length->dsc_address)	// constant
+		if (length && length->dsc_address)	// constant
 		{
 			SLONG constant = CVT_get_long(length, 0, JRD_get_thread_data()->getAttachment()->att_dec_status, ERR_post);
 			fb_assert(constant >= 0);

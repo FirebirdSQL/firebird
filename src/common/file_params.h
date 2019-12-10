@@ -37,11 +37,13 @@
 static const char* const EVENT_FILE		= "fb_event_%s";
 static const char* const LOCK_FILE		= "fb_lock_%s";
 static const char* const MONITOR_FILE	= "fb_monitor_%s";
+static const char* const REPL_FILE 		= "fb_repl_%s";
+static const char* const TPC_HDR_FILE	= "fb_tpc_%s";
+static const char* const TPC_BLOCK_FILE = "fb_tpc_%s_%" UQUADFORMAT;
+static const char* const SNAPSHOTS_FILE	= "fb_snap_%s";
+
 static const char* const TRACE_FILE		= "fb" COMMON_FILE_PREFIX "_trace";
 static const char* const USER_MAP_FILE	= "fb" COMMON_FILE_PREFIX "_user_mapping";
-static const char* const TPC_HDR_FILE	= "fb" COMMON_FILE_PREFIX "_tpc_%s";
-static const char* const TPC_BLOCK_FILE	= "fb" COMMON_FILE_PREFIX "_tpc_%s_%d";
-static const char* const SNAPSHOTS_FILE	= "fb" COMMON_FILE_PREFIX "_snap_%s";
 
 #ifdef UNIX
 static const char* const INIT_FILE		= "fb_init";

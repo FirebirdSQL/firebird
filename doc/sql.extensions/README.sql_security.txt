@@ -24,7 +24,8 @@ By default INVOKER is used to keep backward compatibility. You can change this b
 with SQL STANDARD by using ALTER DATABASE SET DEFAULT SQL SECURITY statement.
 
 If INVOKER is specified a current set of privileges of the current user will be used.
-If DEFINER - a set of privileges of object owner will be used to check an access to database objects used by this object.
+If DEFINER - a set of privileges of object owner will be used to check an access to database objects
+used by this object.
 
 Trigger inherits SQL SECURITY option from TABLE but can overwrite it by explicit specifying. If SQL SECURITY option
 will be changed for table, existing triggers without explicitly specified option will not use new value immediately
@@ -32,6 +33,19 @@ it will take effect next time trigger will be loaded into metadata cache.
 
 For procedures and functions defined in package explicit SQL SECURITY clause is prohibit.
 
+In stored procedures, functions or triggers you may check which user if really effective and which privileges
+are applying to accessed objects by using the system context variable EFFECTIVE_USER from SYSTEM namespace.
+select RDB$GET_CONTEXT('SYSTEM', 'EFFECTIVE_USER') from RDB$DATABASE;
+
+Note: now the same object may be called in different security contexts and requires different privileges.
+For example we have:
+- a stored procedure INV with SQL SECURITY INVOKER which insert records in a table T
+- a stored procedure DEF with SQL SECURITY DEFINER defined by SYSDBA
+
+If a user U calls INV an access to T will require an INSERT privile to be granted to U (and EXECUTE on INV of course).
+In this case U is EFFECTIVE_USER due INV running.
+If user U calls DEF an access to T will require an INSERT privilege to be granted to SYSDBA (end EXECUTE on DEF).
+In this case SYSDBA is EFFECTIVE_USER due INV running as well as due DEF running.
 
 Example 1. It's enough to grant only SELECT privilege to user US for table T.
 In case of INVOKER it will require also EXECUTE for function F.

@@ -176,15 +176,15 @@
 # are stored. Relative paths are treated relative to the root directory 
 # of firebird.
 #
-# Default value 'Restrict UDF' provides the same restrictions
-# as in FB 1.0. To specify access to specific trees, enum all required
-# paths (for Windows this may be something like 'C:\ExternalFunctions',
-# for unix - '/db/extern;/mnt/extern').
+# Since FB4.0 default value is None. Set it to 'Restrict UDF' to have
+# the same restrictions as in previous FB versions. To specify access
+# to specific trees, enum all required paths (for Windows this may be
+# something like 'C:\ExternalFunctions', for unix - '/db/udf;/mnt/udf').
 @UDF_COMMENT@
 # NOTE: THE EXTERNAL FUNCTION ENGINE FEATURE COULD BE USED TO COMPROMISE
 # THE SERVER/HOST AS WELL AS DATABASE SECURITY!!
 #
-# IT IS STRONGLY RECOMMENDED THAT THIS SETTING BE SET TO NONE!
+# IT IS STRONGLY RECOMMENDED THAT THIS SETTING REMAINS NONE!
 #
 # Type: string (special format)
 #
@@ -429,8 +429,8 @@
 # plugin using SHA-1 for the client proof. This enables backwards compatibility
 # with old Firebird 3 servers but does not comply with NIST security requirements.
 #
-# The default client configuration (AuthClient) also supports the pre-Firebird 3 legacy 
-# authentication protocol (Legacy_Auth). This is again for backwards 
+# The default client configuration (AuthClient) also supports the pre-Firebird 3 legacy
+# authentication protocol (Legacy_Auth). This is again for backwards
 # compatibility but has many known weaknesses and is deprecated for current use.
 #
 # The default Windows client configuration (AuthClient) also includes support for
@@ -608,6 +608,26 @@
 
 
 # ----------------------------
+# How COMMIT\ROLLBACK RETAINING handle GLOBAL TEMPORARY TABLE ON COMMIT DELETE ROWS 
+#
+# GLOBAL TEMPORARY TABLE ON COMMIT DELETE ROWS (GTT) data is cleared on "hard"
+# commit (rollback) but should be preserved on commit(rollback) retaining. 
+# Due to bug in initial implementation in Firebird 2.1 that data is not visible
+# for the application. This setting allows to preserve backward compatibility 
+# (i.e. clear GTT data on commit\rollback retaining).
+# Value of 0 makes engine to not clear GTT data on commit\rollback retaining and
+# let application to see it.
+# Default value is 0 (preserve GTT data on commit\rollback retaining).
+# Note: this setting is expected to be removed at Firebird 5.
+#
+# Per-database configurable.
+#
+# Type: boolean
+#
+#ClearGTTAtRetaining = 0
+
+
+# ----------------------------
 # Relaxing relation alias checking rules in SQL
 #
 # Since Firebird 2.0, strict alias checking rules were implemented in the SQL
@@ -637,7 +657,7 @@
 # mode by default. In this mode rec_version/no_rec_version transaction flags have
 # no effect. Setting this parameter to 0 effectively reverts engine to legacy
 # behavior.
-# 
+#
 # CAUTION!
 # There is no guarantee that legacy behavior will be available in future Firebird
 # versions.
@@ -645,6 +665,20 @@
 #	Type: boolean
 #
 #ReadConsistency = 1
+
+# ----------------------------
+# Engine currently provides a number of new datatypes unknown to legacy clients.
+# In order to simplify use of old applications set this parameter to minor FB
+# version datatype compatibility with which you need. Currently two values are
+# supported: 3.0 & 2.5.
+# More precise (including per-session) tuning is possible via SQL and DPB.
+#
+# Per-database configurable.
+#
+#	Type: string
+#
+#DataTypeCompatibility =
+
 
 # ----------------------------
 # Client Connection Settings (Basic)
@@ -706,6 +740,17 @@
 #
 #DummyPacketInterval = 0
 
+#
+# Default session or client time zone.
+#
+# If empty, the default is the OS time zone.
+# When set in the server, it defines the default session time zone for attachments.
+# When set in the client, it defines the default time zone used with client-side API functions.
+#
+# Type: string
+#
+#DefaultTimeZone =
+
 
 # ----------------------------
 # TCP Protocol Settings
@@ -756,6 +801,14 @@
 # Type: boolean
 #
 #TcpNoNagle = 1
+
+#
+# Either enables or disables the "TCP Loopback Fast Path" feature (SIO_LOOPBACK_FAST_PATH).
+# Applies to Windows (version 8/2012 or higher) only.
+#
+# Type: Boolean, default 1 (true)
+#
+#TcpLoopbackFastPath = 1
 
 #
 # Allows setting of IPV6_V6ONLY socket option. If enabled, IPv6 sockets
@@ -858,7 +911,7 @@
 #
 # Type: integer
 #
-#TpcBlockSize = 4M
+#TipCacheBlockSize = 4M
 
 
 # ----------------------------

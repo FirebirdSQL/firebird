@@ -27,7 +27,7 @@
 
 #include "firebird.h"
 #include "../common/Auth.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../common/classes/ImplementHelper.h"
 #include "../common/utils_proto.h"
 #include "../common/db_alias.h"
@@ -119,7 +119,7 @@ void WriterImplementation::setDb(Firebird::CheckStatusWrapper* st, const char* v
 		{
 			PathName target;
 			expandDatabaseName(value, target, NULL);
-			current.insertPath(AuthReader::AUTH_SECURE_DB, target);
+			current.insertString(AuthReader::AUTH_SECURE_DB, target);
 		}
 	}
 	catch (const Firebird::Exception& ex)

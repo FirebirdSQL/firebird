@@ -72,6 +72,10 @@ else
   GCC=gcc
 endif
 
+ifeq ($(TOMMATH_BUILD_FLG),Y)
+TOM2TOM_FLAGS=-I../libtommath
+endif
+
 .PHONY:	master_process cross_process firebird Debug Release external
 
 all:	firebird
@@ -102,7 +106,7 @@ API_PAS_FILE=$(SRC_ROOT)/include/gen/Firebird.pas
 PAS_ROOT=$(SRC_ROOT)/misc/pascal
 PASCAL_SOURCES=$(wildcard $(PAS_ROOT)/*)
 TMP_FUNCS=$(TMP_ROOT)/func.pas
-XPB_CONSTS=$(SRC_ROOT)/include/consts_pub.h
+XPB_CONSTS=$(SRC_ROOT)/include/firebird/impl/consts_pub.h
 ERR_CONSTS=$(ROOT)/lang_helpers/gds_codes.pas
 
 updateCloopInterfaces : $(API_H_FILE) $(API_PAS_FILE)
@@ -143,16 +147,31 @@ external:
 	$(MAKE) -C $(ROOT)/extern/decNumber
 	ln -sf $(ROOT)/extern/decNumber/libdecFloat.a $(LIB)
 
+	CXXFLAGS="-O3 -g -fPIC" $(MAKE) -C $(ROOT)/extern/re2
+	ln -sf $(ROOT)/extern/re2/obj/libre2.a $(LIB)
+
 ifeq ($(TOMMATH_BUILD_FLG),Y)
 	CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/libtommath -f makefile.shared GCC=$(GCC)
+
+ifeq ($(PLATFORM),DARWIN)
+	install_name_tool -id "@rpath/lib/libtommath.dylib" $(TOMMATH)/.libs/libtommath.0.dylib
+	cp $(TOMMATH)/.libs/libtommath.0.dylib $(LIB)/libtommath.dylib
+else
 	ln -sf $(TOMMATH_SO).$(TOMMATH_VER) $(LIB)
 	ln -sf $(TOMMATH_SO) $(LIB)
 endif
+endif
 
 ifeq ($(TOMCRYPT_BUILD_FLG),Y)
-	CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/libtomcrypt -f makefile.shared GCC=$(GCC)
+	CFLAGS="$(CFLAGS) $(TOM2TOM_FLAGS)" $(MAKE) -C $(ROOT)/extern/libtomcrypt -f makefile.shared GCC=$(GCC)
+
+ifeq ($(PLATFORM),DARWIN)
+	install_name_tool -id "@rpath/lib/libtomcrypt.dylib" $(TOMCRYPT)/.libs/libtomcrypt.1.dylib
+	cp $(TOMCRYPT)/.libs/libtomcrypt.1.dylib $(LIB)/libtomcrypt.dylib
+else
 	ln -sf $(TOMCRYPT_SO).$(TOMCRYPT_VER) $(LIB)
 	ln -sf $(TOMCRYPT_SO) $(LIB)
+endif
 endif
 
 ifeq ($(STD_EDITLINE),false)
@@ -345,7 +364,7 @@ endif
 
 # remote redirector is statically linked in main FB library
 $(LIBFIREBIRD_FULLNAME):	$(YValve_Objects) $(Remote_Client_Objects) $(COMMON_LIB)
-	$(LINK_FIREBIRD) -o $@ $^ $(LINK_FIREBIRD_LIBS)
+	$(LINK_FIREBIRD) -o $@ $^ $(LINK_FIREBIRD_LIBS) $(call LIB_LINK_DARWIN_INSTALL_NAME,lib/libfbclient.$(SHRLIB_EXT))
 
 
 #___________________________________________________________________________
@@ -355,7 +374,7 @@ $(LIBFIREBIRD_FULLNAME):	$(YValve_Objects) $(Remote_Client_Objects) $(COMMON_LIB
 engine: $(ENGINE_SONAME)
 
 $(ENGINE_SONAME):	$(Engine_Objects) $(SVC_Objects) $(COMMON_LIB)
-	$(LINK_ENGINE) -o $@ $^ $(LINK_ENGINE_LIBS)
+	$(LINK_ENGINE) -o $@ $^ $(LINK_ENGINE_LIBS) $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/$(EngineSoName))
 
 
 #___________________________________________________________________________
@@ -365,7 +384,7 @@ $(ENGINE_SONAME):	$(Engine_Objects) $(SVC_Objects) $(COMMON_LIB)
 fbintl: $(LIBFBINTL_SO)
 
 $(LIBFBINTL_SO):	$(INTL_Objects) $(COMMON_LIB)
-	$(LINK_INTL) -o $@ $^ $(LINK_INTL_LIBS)
+	$(LINK_INTL) -o $@ $^ $(LINK_INTL_LIBS) $(call LIB_LINK_DARWIN_INSTALL_NAME,intl/libfbintl.$(SHRLIB_EXT))
 
 
 #___________________________________________________________________________
@@ -378,7 +397,7 @@ $(LIBFBINTL_SO):	$(INTL_Objects) $(COMMON_LIB)
 gpre: $(GPRE) databases
 
 $(GPRE):	$(GPRE_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 HELP_FDB = $(FIREBIRD)/help/help.fdb
 SECURITY_FDB = $(FIREBIRD)/security4.fdb
@@ -437,7 +456,7 @@ udfsupport:
 ibutil: $(LIBIBUTIL_SO)
 
 $(LIBIBUTIL_SO): $(UTIL_Objects)
-	$(LINK_IB_UTIL) -o $@ $^ $(LINK_IB_UTIL_LIBS)
+	$(LINK_IB_UTIL) -o $@ $^ $(LINK_IB_UTIL_LIBS) $(call LIB_LINK_DARWIN_INSTALL_NAME,lib/libib_util.$(SHRLIB_EXT))
 
 
 #___________________________________________________________________________
@@ -452,62 +471,62 @@ utilities: firebird_server fb_lock_print fbguard fbsvcmgr fbtracemgr gbak gfix g
 firebird_server:	$(FB_DAEMON)
 
 $(FB_DAEMON):	$(Remote_Server_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 fb_lock_print:	$(LOCKPRINT)
 
 $(LOCKPRINT):	$(LOCKPRINT_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 fbguard:		$(FBGUARD)
 
 $(FBGUARD):		$(FBGUARD_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 fbsvcmgr:		$(FBSVCMGR)
 
 $(FBSVCMGR):	$(FBSVCMGR_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 fbtracemgr:		$(FBTRACEMGR)
 
 $(FBTRACEMGR):	$(FBTRACEMGR_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 gbak:			$(GBAK)
 
 $(GBAK):		$(GBAK_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 gsplit:			$(GSPLIT)
 
 $(GSPLIT):		$(GSPLIT_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 gfix:			$(GFIX)
 
 $(GFIX):		$(GFIX_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 gsec:			$(GSEC)
 
 $(GSEC):		$(GSEC_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 gstat:			$(GSTAT)
 
 $(GSTAT):		$(GSTAT_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 isql:			$(ISQL)
 
 $(ISQL):		$(ISQL_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LIBEDITLINE) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LIBEDITLINE) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 nbackup:		$(NBACKUP)
 
 $(NBACKUP):		$(NBACKUP_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 
 #___________________________________________________________________________
@@ -538,12 +557,14 @@ $(PLUGINS)/udr_engine.conf: $(ROOT)/src/plugins/udr_engine/udr_engine.conf
 	cp $^ $@
 
 $(UDR_PLUGIN):	$(UDRENG_Objects) $(COMMON_LIB)
-	$(LINK_UDRENG) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_UDRENG_LIBS) $(FIREBIRD_LIBRARY_LINK)
+	$(LINK_UDRENG) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_UDRENG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
+ $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libudr_engine.$(SHRLIB_EXT))
 
 legacy_user_management:	$(LEGACY_USER_MANAGER)
 
 $(LEGACY_USER_MANAGER):	$(LEGACY_USERS_MANAGE_Objects) $(COMMON_LIB)
-	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)
+	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
+ $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libLegacy_UserManager.$(SHRLIB_EXT))
 
 chacha:	$(CHACHA)
 
@@ -553,22 +574,25 @@ $(CHACHA):	$(Chacha_Objects) $(COMMON_LIB)
 legacy_auth_server:	$(LEGACY_AUTH_SERVER)
 
 $(LEGACY_AUTH_SERVER):	$(LEGACY_AUTH_SERVER_Objects) $(COMMON_LIB)
-	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)
+	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
+ $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libLegacy_Auth.$(SHRLIB_EXT))
 
 trace:	$(FBTRACE)
 
 $(FBTRACE):	$(FBTRACE_UTIL_Objects) $(COMMON_LIB)
-	$(LINK_TRACE) -o $@ $^ $(FIREBIRD_LIBRARY_LINK) $(LINK_TRACE_LIBS)
+	$(LINK_TRACE) -o $@ $^ $(FIREBIRD_LIBRARY_LINK) $(LINK_TRACE_LIBS) $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libfbtrace.$(SHRLIB_EXT))
 
 auth_debug:	$(AUTH_DEBUGGER)
 
 $(AUTH_DEBUGGER):	$(AUTH_DEBUGGER_Objects) $(COMMON_LIB)
-	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)
+	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
+ $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libAuth_Debug.$(SHRLIB_EXT))
 
 srp_user_management: $(SRP_USER_MANAGER)
 
 $(SRP_USER_MANAGER):	$(SRP_USERS_MANAGE_Objects) $(COMMON_LIB)
-	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)
+	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
+ $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libSrp.$(SHRLIB_EXT))
 
 udf_compat:	$(UDF_BACKWARD_COMPATIBILITY) $(COMPAT_SQL)
 
@@ -595,7 +619,7 @@ gen_codes:	$(CODES) msg.timestamp
 	$(CODES) $(SRC_ROOT)/include/gen $(LNG_ROOT)
 
 $(CODES):	$(CODES_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 $(IDS):		$(SRC_ROOT)/misc/ids.m $(SRC_ROOT)/jrd/relations.h
 	m4 $< > $@
@@ -619,7 +643,7 @@ cross_rest:	qli gbak_files
 qli:		$(QLI)
 
 $(QLI):		$(QLI_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 examples: include_generic
 	$(MAKE) -f Makefile.examples -C $(GEN_ROOT)/examples/
@@ -632,7 +656,7 @@ $(FIREBIRD_MSG):	$(BUILD_FILE) msg.timestamp
 	$(CHMOD_6) $@
 
 $(BUILD_FILE):	$(BUILD_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $(LSB_UNDEF) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $(LSB_UNDEF) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 gbak_files: $(GBAK_FILES)
 
@@ -652,31 +676,17 @@ NEW_INCLUDES_SRC = $(shell find $(SRC_ROOT)/include/firebird -type f)
 NEW_INCLUDES_DEST = $(patsubst $(SRC_ROOT)/include/firebird/%, $(INCLUDE_DEST)/firebird/%, $(NEW_INCLUDES_SRC))
 
 include_generic: $(INCLUDE_DEST)/ib_util.h  \
-                 $(INCLUDE_DEST)/ibase.h	\
                  $(NEW_INCLUDES_DEST)
 
 # ib_util.h actually is a marker for a number of headers
-
-# All these files are #included in ibase.h. Here we cat them all together
-# and remove the embedded #includes to make it simpler for external usage.
-
-IBASE_ExtraFiles = include/types_pub.h include/consts_pub.h dsql/sqlda_pub.h common/dsc_pub.h jrd/ibase.h jrd/inf_pub.h jrd/blr.h include/gen/iberror.h
-SRC_IBASE_ExtraFiles = $(addprefix $(SRC_ROOT)/, $(IBASE_ExtraFiles))
-MAKE_HEADER_Src = $(addprefix $(SRC_ROOT)/, misc/makeHeader.cpp)
-MAKE_HEADER_Bin = ./makeHeader
-
-$(INCLUDE_DEST)/ibase.h: $(SRC_IBASE_ExtraFiles)
-	$(STATICEXE_LINK) -o $(MAKE_HEADER_Bin) $(MAKE_HEADER_Src)
-	$(CP) $^ .
-	$(MAKE_HEADER_Bin) <ibase.h >$@
-	$(RM) -f ibase.h
 
 # Copy all the other headers to the distribution directory. We use
 # ib_util.h as the marker for all the files.
 
 OtherDistribHeaders = extlib/ib_util.h \
                       yvalve/perf.h  \
-                      include/gen/iberror.h
+                      include/gen/iberror.h \
+					  include/ibase.h
 
 SRC_OtherDistribHeaders = $(addprefix $(SRC_ROOT)/, $(OtherDistribHeaders))
 
@@ -714,12 +724,18 @@ install install-embedded silent_install package packages dist:
 #
 .PHONY: clean clean_objects clean_dependancies clean_extern_objects clean_build \
 		clean_gpre_gen clean_icu clean_dbs clean_examples clean_makefiles \
-		clean_editline clean_all clean_decfloat
+		clean_editline clean_all clean_decfloat clean_vers clean_misc
 
 
 clean: clean_objects clean_dependancies clean_extern_objects clean_build \
 		clean_yacc_gen clean_gpre_gen clean_dbs clean_examples clean_tommath \
-		clean_tomcrypt clean_decfloat
+		clean_tomcrypt clean_decfloat clean_vers clean_misc
+
+clean_vers:
+	$(RM) *.vers
+
+clean_misc:
+	$(RM) ods.txt odstest* security.tmp test.header.txt $(API_PAS_FILE)
 
 ifeq ($(EDITLINE_FLG),Y)
 ifeq ($(STD_EDITLINE),false)
@@ -800,7 +816,7 @@ clean_gpre_gen:
 	-$(RM) -f `find $(TMP_ROOT)/ -type f -name '*.cpp' -print`
 
 clean_yacc_gen:
-	$(RM) $(ROOT)/src/dsql/parse.cpp $(ROOT)/src/dsql/dsql.tab.h
+	$(RM) $(ROOT)/src/dsql/parse.cpp $(ROOT)/src/dsql/dsql.tab.h types.y y.*
 
 #___________________________________________________________________________
 # Extra platform specific targets

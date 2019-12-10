@@ -27,7 +27,7 @@
 #include <errno.h>
 #include <string.h>
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/jrd.h"
 #include "../jrd/jrd_time.h"
 #include "../jrd/pag.h"

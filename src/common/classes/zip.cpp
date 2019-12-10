@@ -35,9 +35,9 @@ using namespace Firebird;
 ZLib::ZLib(Firebird::MemoryPool&)
 {
 #ifdef WIN_NT
-	const char* name = "zlib1.dll";
+	Firebird::PathName name("zlib1.dll");
 #else
-	const char* name = "libz." SHRLIB_EXT ".1";
+	Firebird::PathName name("libz." SHRLIB_EXT ".1");
 #endif
 	z.reset(ModuleLoader::fixAndLoadModule(status, name));
 	if (z)
@@ -46,7 +46,7 @@ ZLib::ZLib(Firebird::MemoryPool&)
 
 void ZLib::symbols()
 {
-#define FB_ZSYMB(A) z->findSymbol(STRINGIZE(A), A); if (!A) { z.reset(NULL); return; }
+#define FB_ZSYMB(A) z->findSymbol(status, STRINGIZE(A), A); if (!A) { z.reset(NULL); return; }
 	FB_ZSYMB(deflateInit_)
 	FB_ZSYMB(inflateInit_)
 	FB_ZSYMB(deflate)

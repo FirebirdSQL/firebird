@@ -24,7 +24,7 @@
 #include "../dsql/BoolNodes.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/btr.h"
 #include "../jrd/dyn.h"
 #include "../jrd/flags.h"
@@ -356,7 +356,7 @@ void defineComputed(DsqlCompilerScratch* dsqlScratch, RelationSourceNode* relati
 	// Try to calculate size of the computed field. The calculated size
 	// may be ignored, but it will catch self references.
 	dsc desc;
-	MAKE_desc(dsqlScratch, &desc, input);
+	DsqlDescMaker::fromNode(dsqlScratch, &desc, input);
 
 	// Generate the blr expression.
 
@@ -1716,9 +1716,12 @@ bool CreateAlterFunctionNode::checkPermission(thread_db* tdbb, jrd_tra* transact
 	dsc dscName;
 	dscName.makeText(name.length(), CS_METADATA, (UCHAR*) name.c_str());
 	if (alter)
-		SCL_check_function(tdbb, &dscName, SCL_alter);
-	else
-		SCL_check_create_access(tdbb, SCL_object_function);
+	{
+		if (SCL_check_function(tdbb, &dscName, SCL_alter) || !create)
+			return true;
+	}
+
+	SCL_check_create_access(tdbb, SCL_object_function);
 	return true;
 }
 
@@ -2726,9 +2729,12 @@ bool CreateAlterProcedureNode::checkPermission(thread_db* tdbb, jrd_tra* transac
 	dsc dscName;
 	dscName.makeText(name.length(), CS_METADATA, (UCHAR*) name.c_str());
 	if (alter)
-		SCL_check_procedure(tdbb, &dscName, SCL_alter);
-	else
-		SCL_check_create_access(tdbb, SCL_object_procedure);
+	{
+		if (SCL_check_procedure(tdbb, &dscName, SCL_alter) || !create)
+			return true;
+	}
+
+	SCL_check_create_access(tdbb, SCL_object_procedure);
 	return true;
 }
 
@@ -4485,7 +4491,7 @@ void AlterDomainNode::checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld)
 		case blr_float:
 		case blr_dec64:
 		case blr_dec128:
-		case blr_dec_fixed:
+		case blr_int128:
 			// Cannot convert column %s from character to non-character data.
 			errorCode = isc_dyn_dtype_conv_invalid;
 			break;
@@ -4607,7 +4613,7 @@ void AlterDomainNode::checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld)
 	case blr_float:
 	case blr_dec64:
 	case blr_dec128:
-	case blr_dec_fixed:
+	case blr_int128:
 		switch (newFld.dyn_dtype)
 		{
 		case blr_blob:
@@ -4735,7 +4741,7 @@ void AlterDomainNode::checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld)
 			case blr_double:
 			case blr_dec64:
 			case blr_dec128:
-			case blr_dec_fixed:
+			case blr_int128:
 				break;
 
 			default:
@@ -4745,13 +4751,13 @@ void AlterDomainNode::checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld)
 			}
 			break;
 
-		case blr_dec_fixed:
+		case blr_int128:
 			switch (origFld.dyn_dtype)
 			{
 			case blr_short:
 			case blr_long:
 			case blr_int64:
-			case blr_dec_fixed:
+			case blr_int128:
 				break;
 
 			default:
@@ -5461,9 +5467,12 @@ string CreateAlterExceptionNode::internalPrint(NodePrinter& printer) const
 bool CreateAlterExceptionNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
 	if (alter)
-		SCL_check_exception(tdbb, name, SCL_alter);
-	else
-		SCL_check_create_access(tdbb, SCL_object_exception);
+	{
+		if (SCL_check_exception(tdbb, name, SCL_alter) || !create)
+			return true;
+	}
+
+	SCL_check_create_access(tdbb, SCL_object_exception);
 	return true;
 }
 
@@ -5677,9 +5686,12 @@ string CreateAlterSequenceNode::internalPrint(NodePrinter& printer) const
 bool CreateAlterSequenceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
 	if (alter)
-		SCL_check_generator(tdbb, name, SCL_alter);
-	else
-		SCL_check_create_access(tdbb, SCL_object_generator);
+	{
+		if (SCL_check_generator(tdbb, name, SCL_alter) || !create)
+			return true;
+	}
+
+	SCL_check_create_access(tdbb, SCL_object_generator);
 	return true;
 }
 
@@ -8151,7 +8163,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					if (clause->computed && field->dtype == dtype_unknown)
 					{
 						dsc desc;
-						MAKE_desc(dsqlScratch, &desc, clause->computed->value);
+						DsqlDescMaker::fromNode(dsqlScratch, &desc, clause->computed->value);
 
 						field->dtype = desc.dsc_dtype;
 						field->length = desc.dsc_length;
@@ -8610,9 +8622,12 @@ bool CreateAlterViewNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 	dsc dscName;
 	dscName.makeText(name.length(), CS_METADATA, (UCHAR*) name.c_str());
 	if (alter)
-		SCL_check_view(tdbb, &dscName, SCL_alter);
-	else
-		SCL_check_create_access(tdbb, SCL_object_view);
+	{
+		if (SCL_check_view(tdbb, &dscName, SCL_alter) || !create)
+			return true;
+	}
+
+	SCL_check_create_access(tdbb, SCL_object_view);
 	return true;
 }
 
@@ -9010,7 +9025,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 			// Get the type of the expression.
 			dsc desc;
-			MAKE_desc(dsqlScratch, &desc, fieldNode);
+			DsqlDescMaker::fromNode(dsqlScratch, &desc, fieldNode);
 
 			dsql_fld newField(*tdbb->getDefaultPool());
 			newField.dtype = desc.dsc_dtype;
@@ -10255,7 +10270,7 @@ void DropShadowNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScratch
 	{
 		if (nodelete)
 		{
-			AutoSetRestoreFlag<USHORT> noDfw(&tdbb->tdbb_flags, TDBB_dont_post_dfw, true);
+			AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, TDBB_dont_post_dfw, true);
 			MODIFY FIL USING
 				FIL.RDB$FILE_FLAGS |= FILE_nodelete;
 			END_MODIFY
@@ -10467,12 +10482,14 @@ void MappingNode::addItem(string& ddl, const char* text, char quote)
 {
 	ddl += quote;
 	char c;
+
 	while ((c = *text++))
 	{
 		ddl += c;
 		if (c == quote)
 			ddl += c;
 	}
+
 	ddl += quote;
 }
 
@@ -11106,6 +11123,7 @@ string DropUserNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, plugin);
+	NODE_PRINT(printer, silent);
 
 	return "DropUserNode";
 }
@@ -11132,6 +11150,7 @@ void DropUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 	userData->user.set(&statusWrapper, text.c_str());
 	userData->user.setEntered(&statusWrapper, 1);
 	userData->plugin = plugin;
+	userData->silent = silent;
 	check(&statusWrapper);
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_DROP_USER,
@@ -11414,7 +11433,7 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const MetaNa
 				X IN RDB$RELATIONS
 				WITH X.RDB$RELATION_NAME EQ name.c_str()
 			{
-				rc =  (type != obj_view) || (X.RDB$RELATION_TYPE == rel_view);
+				rc = (type != obj_view) || !X.RDB$VIEW_BLR.NULL;
 			}
 			END_FOR
 			break;
@@ -11674,7 +11693,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 			(Arg::PrivateDyn(295) << DBA_USER_NAME << owner).raise();
 	}
 
-	MetaName currentUser(attachment->att_user->getUserName());
+	MetaName currentUser(attachment->getEffectiveUserId()->getUserName());
 	MetaName grantorRevoker(grantor ? *grantor : currentUser);
 
 	if (!isGrant && !privs)	// REVOKE ALL ON ALL
@@ -11732,7 +11751,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 	char priv[2];
 	priv[1] = '\0';
 
-	AutoSetRestoreFlag<USHORT> trDdl(&tdbb->tdbb_flags, TDBB_trusted_ddl, true);
+	AutoSetRestoreFlag<ULONG> trustedDdlFlag(&tdbb->tdbb_flags, TDBB_trusted_ddl, true);
 
 	if (isGrant)
 	{

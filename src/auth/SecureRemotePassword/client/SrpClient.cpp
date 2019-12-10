@@ -149,7 +149,7 @@ int SrpClient::authenticate(CheckStatusWrapper* status, IClientBlock* cb)
 
 		BigInteger cProof = client->clientProof(cb->getLogin(), salt.c_str(), sessionKey);
 		cProof.getText(data);
-		dumpIt("Clnt: Client Proof",cProof);
+		dumpIt("Clnt: Client Proof", cProof);
 
 		cb->putData(status, data.length(), data.c_str());
 		if (status->getState() & IStatus::STATE_ERRORS)

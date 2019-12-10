@@ -36,7 +36,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../alice/alice.h"
 #include "../alice/alice_proto.h"
 #include "../common/classes/Switches.h"
@@ -320,6 +320,9 @@ static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
 	}
 	else if (switches & sw_set_db_dialect) {
 		dpb.insertInt(isc_dpb_set_db_sql_dialect, tdgbl->ALICE_data.ua_db_SQL_dialect);
+	}
+	else if (switches & sw_replica) {
+		dpb.insertByte(isc_dpb_set_db_replica, tdgbl->ALICE_data.ua_replica_mode);
 	}
 
 	if (switches & sw_nolinger)

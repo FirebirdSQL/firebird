@@ -36,7 +36,7 @@
     <ClCompile Include="..\..\..\src\yvalve\gds.cpp">
       <Filter>source</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\yvalve\keywords.cpp">
+    <ClCompile Include="..\..\..\src\yvalve\keywordsStub.cpp">
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\yvalve\perf.cpp">
@@ -101,7 +101,7 @@
     <ClInclude Include="..\..\..\src\yvalve\gds_proto.h">
       <Filter>headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\yvalve\keywords.h">
+    <ClInclude Include="..\..\..\src\yvalve\keywordsStub.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\yvalve\perf.h">

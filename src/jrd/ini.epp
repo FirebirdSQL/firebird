@@ -71,10 +71,11 @@ const int FB_MAX_ACL_SIZE	= 4096;
 
 
 static void add_index_set(thread_db*);
-static void add_security_to_sys_obj(thread_db*, const MetaName&, USHORT, const MetaName&,
-	USHORT = 0, const UCHAR* = NULL);
-static void add_security_class(thread_db* tdbb, const MetaName& class_name, USHORT acl_length, const UCHAR* acl);
-static void add_security_to_sys_rel(thread_db*, const MetaName&,
+static void add_security_to_sys_obj(thread_db*, AutoRequest&, AutoRequest&, AutoRequest&, 
+	const MetaName&, USHORT, const MetaName&, USHORT = 0, const UCHAR* = NULL);
+static void add_security_class(thread_db* tdbb, AutoRequest&, const MetaName& class_name, 
+	USHORT acl_length, const UCHAR* acl);
+static void add_security_to_sys_rel(thread_db*, AutoRequest&, AutoRequest&, AutoRequest&, const MetaName&,
 	const TEXT*, const USHORT, const UCHAR*);
 static void store_generator(thread_db*, const gen*, AutoRequest&, const MetaName&);
 static void store_global_field(thread_db*, const gfld*, AutoRequest&, const MetaName&);
@@ -436,38 +437,48 @@ void INI_format(const char* owner, const char* charset)
 
 	USHORT length = acl - buffer;
 
-	for (const gfld* gfield = gfields; gfield->gfld_name; gfield++)
-	{
-		add_security_to_sys_obj(tdbb, ownerName, obj_field,
-			names[(USHORT) gfield->gfld_name], length, buffer);
-	}
+	AutoRequest reqAddSC;
 
-	for (const gen* generator = generators; generator->gen_name; generator++)
-	{
-		add_security_to_sys_obj(tdbb, ownerName, obj_generator,
-			generator->gen_name, length, buffer);
-	}
+	{ // scope
+		AutoRequest reqModObjSC, reqInsUserPriv;
 
-	for (const IntlManager::CharSetDefinition* charset = IntlManager::defaultCharSets;
-		 charset->name;
-		 ++charset)
-	{
-		add_security_to_sys_obj(tdbb, ownerName, obj_charset, charset->name, length, buffer);
-	}
+		for (const gfld* gfield = gfields; gfield->gfld_name; gfield++)
+		{
+			add_security_to_sys_obj(tdbb, reqAddSC, reqModObjSC, reqInsUserPriv, ownerName, obj_field,
+				names[(USHORT)gfield->gfld_name], length, buffer);
+		}
 
-	for (const IntlManager::CollationDefinition* collation = IntlManager::defaultCollations;
-		 collation->name;
-		 ++collation)
-	{
-		add_security_to_sys_obj(tdbb, ownerName, obj_collation, collation->name, length, buffer);
-	}
+		reqModObjSC.reset();
+		for (const gen* generator = generators; generator->gen_name; generator++)
+		{
+			add_security_to_sys_obj(tdbb, reqAddSC, reqModObjSC, reqInsUserPriv, ownerName, obj_generator,
+				generator->gen_name, length, buffer);
+		}
 
-	for (auto& systemPackage : SystemPackage::get())
-	{
-		if (systemPackage.odsVersion > ENCODE_ODS(dbb->dbb_ods_version, dbb->dbb_minor_version))
-			continue;
+		reqModObjSC.reset();
+		for (const IntlManager::CharSetDefinition* charset = IntlManager::defaultCharSets;
+			charset->name;
+			++charset)
+		{
+			add_security_to_sys_obj(tdbb, reqAddSC, reqModObjSC, reqInsUserPriv, ownerName, obj_charset, charset->name, length, buffer);
+		}
 
-		add_security_to_sys_obj(tdbb, ownerName, obj_package_header, systemPackage.name, length, buffer);
+		reqModObjSC.reset();
+		for (const IntlManager::CollationDefinition* collation = IntlManager::defaultCollations;
+			collation->name;
+			++collation)
+		{
+			add_security_to_sys_obj(tdbb, reqAddSC, reqModObjSC, reqInsUserPriv, ownerName, obj_collation, collation->name, length, buffer);
+		}
+
+		reqModObjSC.reset();
+		for (auto& systemPackage : SystemPackage::get())
+		{
+			if (systemPackage.odsVersion > ENCODE_ODS(dbb->dbb_ods_version, dbb->dbb_minor_version))
+				continue;
+
+			add_security_to_sys_obj(tdbb, reqAddSC, reqModObjSC, reqInsUserPriv, ownerName, obj_package_header, systemPackage.name, length, buffer);
+		}
 	}
 
 	// Add default DDL security
@@ -502,11 +513,15 @@ void INI_format(const char* owner, const char* charset)
 
 	for (int ddl_obj = obj_database + 1; ddl_obj < obj_type_MAX; ++ddl_obj)
 	{
-		add_security_class(tdbb, get_object_name(ddl_obj), length, buffer);
+		add_security_class(tdbb, reqAddSC, get_object_name(ddl_obj), length, buffer);
 	}
 
-	add_security_to_sys_obj(tdbb, ownerName, obj_database, "", length, buffer);
+	{ // scope
+		AutoRequest reqModObjSC, reqInsUserPriv;
 
+		add_security_to_sys_obj(tdbb, reqAddSC, reqModObjSC, reqInsUserPriv, ownerName, obj_database,
+			"", length, buffer);
+	}
 	// Add security on system tables
 
 	const UCHAR REL_OWNER_ACL[] =
@@ -538,12 +553,15 @@ void INI_format(const char* owner, const char* charset)
 
 	length = acl - buffer;
 
-	for (const int* relfld = relfields; relfld[RFLD_R_NAME]; relfld = fld + 1)
-	{
-		for (rdbFieldId = 0, fld = relfld + RFLD_RPT; fld[RFLD_F_NAME]; fld += RFLD_F_LENGTH)
-			++rdbFieldId;
+	{ // scope
+		AutoRequest reqModObjSC, reqInsUserPriv;
+		for (const int* relfld = relfields; relfld[RFLD_R_NAME]; relfld = fld + 1)
+		{
+			for (rdbFieldId = 0, fld = relfld + RFLD_RPT; fld[RFLD_F_NAME]; fld += RFLD_F_LENGTH)
+				++rdbFieldId;
 
-		add_security_to_sys_rel(tdbb, ownerName, names[relfld[RFLD_R_NAME]], length, buffer);
+			add_security_to_sys_rel(tdbb, reqAddSC, reqModObjSC, reqInsUserPriv, ownerName, names[relfld[RFLD_R_NAME]], length, buffer);
+		}
 	}
 
 	// store system-defined triggers
@@ -974,6 +992,9 @@ static void add_index_set(thread_db* tdbb)
 // be passed to this function, only to be converted to UCHAR* to be passed
 // to BLB_put_segment. Therefore, "acl" was changed to UCHAR* as param.
 static void add_security_to_sys_rel(thread_db*	tdbb,
+									AutoRequest& reqAddSC,
+									AutoRequest& reqModObjSC,
+									AutoRequest& reqInsUserPriv,
 									const Firebird::MetaName&	user_name,
 									const TEXT*	rel_name,
 									const USHORT	acl_length,
@@ -998,43 +1019,17 @@ static void add_security_to_sys_rel(thread_db*	tdbb,
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 
-	bid blob_id_1;
-	attachment->storeBinaryBlob(tdbb, attachment->getSysTransaction(), &blob_id_1,
-		ByteChunk(acl, acl_length));
-
-	bid blob_id_2;
-	attachment->storeBinaryBlob(tdbb, attachment->getSysTransaction(), &blob_id_2,
-		ByteChunk(acl, acl_length));
-
 	security_class.printf("%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
 						  DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
 
 	default_class.printf("%s%" SQUADFORMAT, DEFAULT_CLASS,
 						 DPM_gen_id(tdbb, MET_lookup_generator(tdbb, DEFAULT_CLASS), false, 1));
 
-	AutoRequest handle1;
 
-	STORE(REQUEST_HANDLE handle1)
-		CLS IN RDB$SECURITY_CLASSES
-	{
-		PAD(security_class.c_str(), CLS.RDB$SECURITY_CLASS);
-		CLS.RDB$ACL = blob_id_1;
-	}
-	END_STORE
+	add_security_class(tdbb, reqAddSC, security_class, acl_length, acl);
+	add_security_class(tdbb, reqAddSC, default_class, acl_length, acl);
 
-	handle1.reset();
-
-	STORE(REQUEST_HANDLE handle1)
-		CLS IN RDB$SECURITY_CLASSES
-	{
-		PAD(default_class.c_str(), CLS.RDB$SECURITY_CLASS);
-		CLS.RDB$ACL = blob_id_2;
-	}
-	END_STORE
-
-	handle1.reset();
-
-	FOR(REQUEST_HANDLE handle1) REL IN RDB$RELATIONS
+	FOR(REQUEST_HANDLE reqModObjSC) REL IN RDB$RELATIONS
 		WITH REL.RDB$RELATION_NAME EQ rel_name
 	{
 		MODIFY REL USING
@@ -1047,11 +1042,9 @@ static void add_security_to_sys_rel(thread_db*	tdbb,
 	}
 	END_FOR
 
-	handle1.reset();
-
 	for (int cnt = 0; cnt < 6; cnt++)
 	{
-		STORE(REQUEST_HANDLE handle1) PRIV IN RDB$USER_PRIVILEGES
+		STORE(REQUEST_HANDLE reqInsUserPriv) PRIV IN RDB$USER_PRIVILEGES
 			switch (cnt)
 			{
 			case 0:
@@ -1098,6 +1091,9 @@ static void add_security_to_sys_rel(thread_db*	tdbb,
 
 // Add security to system objects.
 static void add_security_to_sys_obj(thread_db* tdbb,
+									AutoRequest& reqAddSC, 
+									AutoRequest& reqModObjSC, 
+									AutoRequest& reqInsUserPriv,
 									const MetaName& user_name,
 									USHORT obj_type,
 									const MetaName& obj_name,
@@ -1107,29 +1103,15 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 	SET_TDBB(tdbb);
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
-	bid blob_id;
-	attachment->storeBinaryBlob(tdbb, attachment->getSysTransaction(), &blob_id,
-								ByteChunk(acl, acl_length));
-
 	Firebird::MetaName security_class;
 	security_class.printf("%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
 		DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
 
-	AutoRequest handle;
-
-	STORE(REQUEST_HANDLE handle)
-		CLS IN RDB$SECURITY_CLASSES
-	{
-		PAD(security_class.c_str(), CLS.RDB$SECURITY_CLASS);
-		CLS.RDB$ACL = blob_id;
-	}
-	END_STORE
-
-	handle.reset();
+	add_security_class(tdbb, reqAddSC, security_class, acl_length, acl);
 
 	if (obj_type == obj_field)
 	{
-		FOR(REQUEST_HANDLE handle) FLD IN RDB$FIELDS
+		FOR(REQUEST_HANDLE reqModObjSC) FLD IN RDB$FIELDS
 			WITH FLD.RDB$FIELD_NAME EQ obj_name.c_str()
 		{
 			MODIFY FLD USING
@@ -1141,7 +1123,7 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 	}
 	else if (obj_type == obj_charset)
 	{
-		FOR(REQUEST_HANDLE handle) CS IN RDB$CHARACTER_SETS
+		FOR(REQUEST_HANDLE reqModObjSC) CS IN RDB$CHARACTER_SETS
 			WITH CS.RDB$CHARACTER_SET_NAME EQ obj_name.c_str()
 		{
 			MODIFY CS USING
@@ -1153,7 +1135,7 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 	}
 	else if (obj_type == obj_collation)
 	{
-		FOR(REQUEST_HANDLE handle) COLL IN RDB$COLLATIONS
+		FOR(REQUEST_HANDLE reqModObjSC) COLL IN RDB$COLLATIONS
 			WITH COLL.RDB$COLLATION_NAME EQ obj_name.c_str()
 		{
 			MODIFY COLL USING
@@ -1165,7 +1147,7 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 	}
 	else if (obj_type == obj_exception)
 	{
-		FOR(REQUEST_HANDLE handle) XCP IN RDB$EXCEPTIONS
+		FOR(REQUEST_HANDLE reqModObjSC) XCP IN RDB$EXCEPTIONS
 			WITH XCP.RDB$EXCEPTION_NAME EQ obj_name.c_str()
 		{
 			MODIFY XCP USING
@@ -1177,7 +1159,7 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 	}
 	else if (obj_type == obj_generator)
 	{
-		FOR(REQUEST_HANDLE handle) GEN IN RDB$GENERATORS
+		FOR(REQUEST_HANDLE reqModObjSC) GEN IN RDB$GENERATORS
 			WITH GEN.RDB$GENERATOR_NAME EQ obj_name.c_str()
 		{
 			MODIFY GEN USING
@@ -1189,7 +1171,7 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 	}
 	else if (obj_type == obj_package_header)
 	{
-		FOR(REQUEST_HANDLE handle) PKG IN RDB$PACKAGES
+		FOR(REQUEST_HANDLE reqModObjSC) PKG IN RDB$PACKAGES
 			WITH PKG.RDB$PACKAGE_NAME EQ obj_name.c_str()
 		{
 			MODIFY PKG USING
@@ -1201,7 +1183,7 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 	}
 	else if (obj_type == obj_database)
 	{
-		FOR(REQUEST_HANDLE handle) DB IN RDB$DATABASE
+		FOR(REQUEST_HANDLE reqModObjSC) DB IN RDB$DATABASE
 		{
 			MODIFY DB USING
 				DB.RDB$SECURITY_CLASS.NULL = FALSE;
@@ -1213,11 +1195,9 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 	else
 		fb_assert(false);
 
-	handle.reset();
-
 	for (const char* p = USAGE_PRIVILEGES; *p; ++p)
 	{
-		STORE(REQUEST_HANDLE handle) PRIV IN RDB$USER_PRIVILEGES
+		STORE(REQUEST_HANDLE reqInsUserPriv) PRIV IN RDB$USER_PRIVILEGES
 			PAD(user_name.c_str(), PRIV.RDB$USER);
 			PAD(obj_name.c_str(), PRIV.RDB$RELATION_NAME);
 			PRIV.RDB$PRIVILEGE[0] = *p;
@@ -1293,7 +1273,7 @@ static void store_admin_role(thread_db* tdbb, const MetaName& roleName, MetaName
 
 
 // Add security class.
-static void add_security_class(thread_db* tdbb, const MetaName& class_name, USHORT acl_length, const UCHAR* acl)
+static void add_security_class(thread_db* tdbb, AutoRequest& handle, const MetaName& class_name, USHORT acl_length, const UCHAR* acl)
 {
 	SET_TDBB(tdbb);
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
@@ -1301,8 +1281,6 @@ static void add_security_class(thread_db* tdbb, const MetaName& class_name, USHO
 	bid blob_id;
 	attachment->storeBinaryBlob(tdbb, attachment->getSysTransaction(), &blob_id,
 		ByteChunk(acl, acl_length));
-
-	AutoRequest handle;
 
 	STORE(REQUEST_HANDLE handle)
 		CLS IN RDB$SECURITY_CLASSES

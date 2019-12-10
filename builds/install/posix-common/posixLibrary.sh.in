@@ -221,7 +221,9 @@ checkLibrary() {
 checkLibraries() {
 	if [ "@TOMMATH_BUILD@" != "Y" ]
 	then
+		fixTommath=
 		checkLibrary tommath
+		haveLibrary libtommath.so.0 || [ "$fixTommath" ] && $fixTommath
 	fi
 
 	if [ "@TOMCRYPT_BUILD@" != "Y" ]
@@ -823,7 +825,7 @@ removeEmptyDirs() {
     while [ "$dirContentChanged" ]; do
         dirContentChanged=''
 
-		for rootDir in @FB_BINDIR@ @FB_SBINDIR@ @FB_LIBDIR@ @FB_INCDIR@ @FB_DOCDIR@ @FB_UDFDIR@ @FB_SAMPLEDIR@ @FB_SAMPLEDBDIR@ \
+		for rootDir in @FB_BINDIR@ @FB_SBINDIR@ @FB_LIBDIR@ @FB_INCDIR@ @FB_DOCDIR@ @FB_SAMPLEDIR@ @FB_SAMPLEDBDIR@ \
 					   @FB_HELPDIR@ @FB_INTLDIR@ @FB_MISCDIR@ @FB_SECDBDIR@ @FB_MSGDIR@ @FB_LOGDIR@ @FB_GUARDDIR@ @FB_PLUGDIR@ \
 					   @FB_CONFDIR@; do
 
@@ -871,7 +873,7 @@ MakeFileFirebirdWritable() {
 fixFilePermissions() {
 	# First of all set owneship of all files to root
 	# Build list of interesting directories all over the FS
-	dirs="@FB_BINDIR@ @FB_SBINDIR@ @FB_CONFDIR@ @FB_LIBDIR@ @FB_INCDIR@/firebird @FB_DOCDIR@/sql.extensions @FB_UDFDIR@ \
+	dirs="@FB_BINDIR@ @FB_SBINDIR@ @FB_CONFDIR@ @FB_LIBDIR@ @FB_INCDIR@/firebird @FB_DOCDIR@/sql.extensions \
 		@FB_SAMPLEDIR@ @FB_SAMPLEDBDIR@ @FB_HELPDIR@ @FB_INTLDIR@ @FB_MISCDIR@ @FB_SECDBDIR@ @FB_MSGDIR@ @FB_LOGDIR@ \
 		@FB_GUARDDIR@ @FB_PLUGDIR@"
 	dirs2=`for i in $dirs; do echo $i; done|sort|uniq`
@@ -929,6 +931,8 @@ fixFilePermissions() {
 	cd @FB_LOGDIR@
     touch firebird.log
     MakeFileFirebirdWritable firebird.log
+    touch replication.log
+    MakeFileFirebirdWritable replication.log
 
     # Security database
 	cd @FB_SECDBDIR@

@@ -29,8 +29,9 @@
 
 bool_t	xdr_datum(XDR*, const dsc*, UCHAR*);
 bool_t	xdr_double(XDR*, double*);
-bool_t	xdr_dec64(XDR*,  Firebird::Decimal64*);
-bool_t	xdr_dec128(XDR*,  Firebird::Decimal128*);
+bool_t	xdr_dec64(XDR*, Firebird::Decimal64*);
+bool_t	xdr_dec128(XDR*, Firebird::Decimal128*);
+bool_t	xdr_int128(XDR*, Firebird::Int128*);
 bool_t	xdr_enum(XDR*, xdr_op*);
 bool_t	xdr_float(XDR*, float*);
 bool_t	xdr_int(XDR*, int*);

@@ -27,7 +27,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../auth/SecurityDatabase/LegacyServer.h"
 #include "../auth/SecurityDatabase/LegacyHash.h"
 #include "../common/enc_proto.h"
@@ -40,6 +40,7 @@
 #include "../common/classes/objects_array.h"
 #include "../common/classes/init.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../common/classes/ParsedList.h"
 #include "firebird/Interface.h"
 
 #include "../remote/remot_proto.h"
@@ -292,8 +293,8 @@ void SecurityDatabase::prepare()
 	// Attach as SYSDBA
 	dpb.insertString(isc_dpb_trusted_auth, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
 
-	// Do not use other providers except current engine
-	dpb.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
+	// Do not use loopback provider
+	dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(secureDbName));
 
 	isc_db_handle tempHandle = 0;
 	isc_attach_database(status, 0, secureDbName, &tempHandle,
@@ -470,8 +471,7 @@ int SecurityDatabase::shutdown()
 	return FB_SUCCESS;
 }
 
-const static unsigned int INIT_KEY = ((~0) - 1);
-static unsigned int secDbKey = INIT_KEY;
+static Firebird::GlobalPtr<Firebird::ConfigKeys> keys;
 
 int SecurityDatabaseServer::authenticate(Firebird::CheckStatusWrapper* status, IServerBlock* sBlock,
 	IWriter* writerInterface)
@@ -487,10 +487,7 @@ int SecurityDatabaseServer::authenticate(Firebird::CheckStatusWrapper* status, I
 			RefPtr<IFirebirdConf> config(REF_NO_INCR, iParameter->getFirebirdConf(&s));
 			check(&s);
 
-			if (secDbKey == INIT_KEY)
-			{
-				secDbKey = config->getKey("SecurityDatabase");
-			}
+			unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
 			const char* tmp = config->asString(secDbKey);
 			if (!tmp)
 			{

@@ -223,6 +223,34 @@ private:
 	void freeEngineData(Firebird::CheckStatusWrapper* status);
 };
 
+class JReplicator FB_FINAL :
+	public Firebird::RefCntIface<Firebird::IReplicatorImpl<JReplicator, Firebird::CheckStatusWrapper> >
+{
+public:
+	// IReplicator implementation
+	int release();
+	void process(Firebird::CheckStatusWrapper* status, unsigned length, const unsigned char* data);
+	void close(Firebird::CheckStatusWrapper* status);
+
+public:
+	JReplicator(StableAttachmentPart* sa);
+
+	StableAttachmentPart* getAttachment()
+	{
+		return sAtt;
+	}
+
+	JReplicator* getHandle() throw()
+	{
+		return this;
+	}
+
+private:
+	Firebird::RefPtr<StableAttachmentPart> sAtt;
+
+	void freeEngineData(Firebird::CheckStatusWrapper* status);
+};
+
 class JStatement FB_FINAL :
 	public Firebird::RefCntIface<Firebird::IStatementImpl<JStatement, Firebird::CheckStatusWrapper> >
 {
@@ -399,6 +427,7 @@ public:
 	Firebird::IBatch* createBatch(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction,
 		unsigned stmtLength, const char* sqlStmt, unsigned dialect,
 		Firebird::IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par);
+	Firebird::IReplicator* createReplicator(Firebird::CheckStatusWrapper* status);
 
 public:
 	explicit JAttachment(StableAttachmentPart* js);

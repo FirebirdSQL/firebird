@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../gpre/gpre.h"
 #include "../gpre/pat.h"
 #include "../gpre/cmp_proto.h"
@@ -998,11 +998,18 @@ static void gen_compile( const act* action, int column)
 	else
 		printa(column, "if %s = nil then", request->req_handle);
 
-	align(column + INDENT);
+	column += INDENT;
+	begin(column);
+
+	align(column);
 	fprintf(gpreGlob.out_file, "GDS__COMPILE_REQUEST%s (%s, %s, %s, %d, gds__%d);\n",
 			   (request->req_flags & REQ_exp_hand) ? "" : "2",
 			   status_vector(action), symbol->sym_string, request->req_handle,
 			   request->req_length, request->req_ident);
+
+	set_sqlcode(action, column);
+	ends(column);
+	column -= INDENT;
 
 	// If blobs are present, zero out all of the blob handles.  After this
 	// point, the handles are the user's responsibility

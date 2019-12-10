@@ -24,7 +24,7 @@
 #ifndef UTILITIES_GSEC_CALL_SERVICE_H
 #define UTILITIES_GSEC_CALL_SERVICE_H
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../utilities/gsec/gsec.h"
 #include "../common/security.h"
 

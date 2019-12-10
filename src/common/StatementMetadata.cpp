@@ -26,10 +26,10 @@
 #include "../common/StatementMetadata.h"
 #include "memory_routines.h"
 #include "../common/StatusHolder.h"
-#include "../jrd/inf_pub.h"
+#include "firebird/impl/inf_pub.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/utils_proto.h"
-#include "../dsql/sqlda_pub.h"
+#include "firebird/impl/sqlda_pub.h"
 
 namespace Firebird {
 

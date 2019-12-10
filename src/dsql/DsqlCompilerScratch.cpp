@@ -24,7 +24,7 @@
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/jrd.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../dsql/ddl_proto.h"
 #include "../dsql/errd_proto.h"
@@ -306,7 +306,7 @@ void DsqlCompilerScratch::putLocalVariables(CompoundStmtNode* parameters, USHORT
 
 			// Some field attributes are calculated inside putLocalVariable(), so we reinitialize
 			// the descriptor.
-			MAKE_desc_from_field(&variable->desc, field);
+			DsqlDescMaker::fromField(&variable->desc, field);
 
 			++locals;
 		}
@@ -425,7 +425,7 @@ dsql_var* DsqlCompilerScratch::makeVariable(dsql_fld* field, const char* name,
 	dsqlVar->field = field;
 
 	if (field)
-		MAKE_desc_from_field(&dsqlVar->desc, field);
+		DsqlDescMaker::fromField(&dsqlVar->desc, field);
 
 	if (type == dsql_var::TYPE_HIDDEN)
 		hiddenVariables.push(dsqlVar);
@@ -601,6 +601,7 @@ void DsqlCompilerScratch::clearCTEs()
 	flags &= ~DsqlCompilerScratch::FLAG_RECURSIVE_CTE;
 	ctes.clear();
 	cteAliases.clear();
+	currCteAlias = NULL;
 }
 
 // Look for unused CTEs and issue a warning about its presence. Also, make DSQL

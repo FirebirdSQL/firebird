@@ -35,7 +35,7 @@
 #include "firebird.h"
 #include <string.h>
 #include "../dsql/dsql.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/align.h"
 #include "../jrd/intl.h"
 #include "../jrd/irq.h"
@@ -637,9 +637,13 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 		if (MET_dsql_cache_use(tdbb, SYM_udf, metaName.identifier, metaName.package))
 			userFunc->udf_flags |= UDF_dropped;
-
-		return userFunc;
 	}
+
+	if (userFunc && (userFunc->udf_flags & UDF_dropped))
+		userFunc = nullptr;
+
+	if (userFunc)
+		return userFunc;
 
 	// Now see if it is in the database
 
@@ -995,9 +999,13 @@ dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 
 		if (MET_dsql_cache_use(tdbb, SYM_procedure, metaName.identifier, metaName.package))
 			procedure->prc_flags |= PRC_dropped;
-
-		return procedure;
 	}
+
+	if (procedure && (procedure->prc_flags & PRC_dropped))
+		procedure = nullptr;
+
+	if (procedure)
+		return procedure;
 
 	// now see if it is in the database
 

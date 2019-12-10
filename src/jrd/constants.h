@@ -57,6 +57,8 @@ const ULONG MAX_VARY_COLUMN_SIZE = MAX_COLUMN_SIZE - sizeof(USHORT);
 
 const ULONG MAX_STR_SIZE = 65535;
 
+const int TEMP_STR_LENGTH = 128;
+
 // Metadata constants
 
 // When changing these constants, change MaxIdentifierByteLength and MaxIdentifierCharLength in
@@ -294,6 +296,12 @@ enum InfoType
 	INFO_TYPE_EXCEPTION = 8,
 	INFO_TYPE_ERROR_MSG = 9,
 	MAX_INFO_TYPE
+};
+
+enum ReplicaMode {
+	REPLICA_NONE = 0,
+	REPLICA_READ_ONLY = 1,
+	REPLICA_READ_WRITE = 2
 };
 
 enum TriggerType {

@@ -221,6 +221,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 				(X.RDB$PACKAGE_NAME.NULL ? NULL : X.RDB$PACKAGE_NAME)));
 
 			function->owner = X.RDB$OWNER_NAME;
+			Nullable<bool> ssDefiner;
 
 			if (!X.RDB$SECURITY_CLASS.NULL)
 			{
@@ -241,18 +242,21 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 
 					// SQL SECURITY of function must be the same if it's defined in package
 					if (!PKG.RDB$SQL_SECURITY.NULL)
-						function->ssDefiner = (bool) PKG.RDB$SQL_SECURITY;
+						ssDefiner = (bool) PKG.RDB$SQL_SECURITY;
 
 				END_FOR
 			}
 
-			if (!function->ssDefiner.specified)
+			if (!ssDefiner.specified)
 			{
 				if (!X.RDB$SQL_SECURITY.NULL)
-					function->ssDefiner = (bool) X.RDB$SQL_SECURITY;
+					ssDefiner = (bool) X.RDB$SQL_SECURITY;
 				else
-					function->ssDefiner = MET_get_ss_definer(tdbb);
+					ssDefiner = MET_get_ss_definer(tdbb);
 			}
+
+			if (ssDefiner.orElse(false))
+				function->invoker = attachment->getUserId(function->owner);
 
 			size_t count = 0;
 			ULONG length = 0;

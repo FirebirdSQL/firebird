@@ -124,6 +124,7 @@ Only meaningful for Windows SS on SMP systems.
 OldParameterOrdering       boolean  default false
 TcpRemoteBufferSize        integer  default 8192 (bytes)
 TcpNoNagle                 boolean  default false
+TcpLoopbackFastPath        boolean  default true
 IpcMapSize                 integer  default 4096 (bytes)
 DefaultDbCachePages        integer  default SS: 2048. CS: 75
 ConnectionTimeout          integer  default 180 (seconds)

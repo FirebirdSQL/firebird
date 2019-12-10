@@ -85,7 +85,7 @@ const BYTE CVT2_compare_priority[] =
 	9,	// dtype_long
 	// Move quad up by one to make room for int64 at its proper place in the table.
 	11,	// dtype_quad
-	// Also leave space for dec_fixed, dec64 and dec 128.
+	// Also leave space for int128, dec64 and dec 128.
 	15,	// dtype_real
 	16,	// dtype_double
 	17,	// dtype_d_float
@@ -99,8 +99,8 @@ const BYTE CVT2_compare_priority[] =
 	10,	// dtype_int64 - goes right after long
 	25,	// dtype_dbkey - compares with nothing except itself
 	26,	// dtype_boolean - compares with nothing except itself
-	12,	// dtype_dec_fixed - go after quad
-	13,	// dec64 - go after dtype_dec_fixed
+	12,	// dtype_int128 - go after quad
+	13,	// dec64 - go after dtype_int128
 	14,	// dec128 - go after dec64 and before real
 	20,	// dtype_sql_time_tz - go after dtype_sql_time
 	22	// dtype_timestamp_tz - go after dtype_timestamp
@@ -305,8 +305,8 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 		case dtype_dec128:
 			return ((Decimal128*) p1)->compare(decSt, *(Decimal128*) p2);
 
-		case dtype_dec_fixed:
-			return ((DecimalFixed*) p1)->compare(decSt, *(DecimalFixed*) p2);
+		case dtype_int128:
+			return ((Int128*) p1)->compare(*(Int128*) p2);
 
 		case dtype_boolean:
 			return *p1 == *p2 ? 0 : *p1 < *p2 ? -1 : 1;
@@ -564,7 +564,7 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 			return temp1.compare(decSt, temp2);
 		}
 
-	case dtype_dec_fixed:
+	case dtype_int128:
 		{
 			SSHORT scale;
 			if (arg2->dsc_dtype > dtype_varying)
@@ -572,9 +572,9 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 			else
 				scale = arg1->dsc_scale;
 
-			const DecimalFixed temp1 = CVT_get_dec_fixed(arg1, scale, decSt, ERR_post);
-			const DecimalFixed temp2 = CVT_get_dec_fixed(arg2, scale, decSt, ERR_post);
-			return temp1.compare(decSt, temp2);
+			const Int128 temp1 = CVT_get_int128(arg1, scale, decSt, ERR_post);
+			const Int128 temp2 = CVT_get_int128(arg2, scale, decSt, ERR_post);
+			return temp1.compare(temp2);
 		}
 
 	case dtype_blob:

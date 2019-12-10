@@ -41,7 +41,7 @@
 #include <string.h>
 
 #include "../yvalve/gds_proto.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../isql/isql.h"
 #include "../jrd/intl.h"
 #include "../common/intlobj_new.h"
@@ -113,7 +113,7 @@ static processing_state show_users12();
 
 const char* const spaces = "                                ";
 static TEXT Print_buffer[512];
-static TEXT SQL_identifier[BUFFER_LENGTH128];
+static TEXT SQL_identifier[BUFFER_LENGTH256];
 static bool reReadDbOwner = true;
 
 
@@ -361,7 +361,7 @@ void SHOW_comments(bool force)
 	if (isqlGlob.major_ods >= ODS_VERSION11 || force)
 	{
 		char banner[BUFFER_LENGTH128];
-		sprintf(banner, "%s/* Comments for database objects. */%s", NEWLINE, NEWLINE);
+		fb_utils::snprintf(banner, sizeof(banner), "%s/* Comments for database objects. */%s", NEWLINE, NEWLINE);
 		show_comments(cmmExtract, banner);
 	}
 }
@@ -748,8 +748,8 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	BASED_ON RDB$USER_PRIVILEGES.RDB$GRANTOR prev_grantor;
 	BASED_ON RDB$USER_PRIVILEGES.RDB$OBJECT_TYPE prev_object_type;
 	SCHAR buf_grantor[sizeof(prev_grantor) + 20];
-	SCHAR user_string[QUOTEDLENGTH + 20];
-	SCHAR obj_string[QUOTEDLENGTH + 20];
+	SCHAR user_string[QUOTED_NAME_SIZE + 20];
+	SCHAR obj_string[QUOTED_NAME_SIZE + 20];
 	bool first = true;
 
 	if (!*object)
@@ -764,7 +764,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	prev_user_type = -1;
 	prev_object_type = -1;
 	char priv_string[MAX_PRIV_LIST] = "";
-	char col_string[BUFFER_LENGTH128] = "";
+	char col_string[BUFFER_LENGTH256] = "";
 	char with_option[19] = "";
 	USHORT priv_flags = 0;
 	SSHORT prev_field_null = -1;
@@ -1029,7 +1029,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	}
 
 	// No procedure called "object" was found, try role "object"
-	SCHAR role_name[BUFFER_LENGTH128];
+	SCHAR role_name[BUFFER_LENGTH256];
 
 	if (obj_type == obj_sql_role || obj_type == 255)
 	{
@@ -1069,7 +1069,8 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				if (!PRV.RDB$FIELD_NAME.NULL && PRV.RDB$FIELD_NAME[0] == 'D')
 					default_option = " DEFAULT";
 
-				sprintf(Print_buffer, "GRANT%s %s TO %s%s%s%s%s", default_option, SQL_identifier,
+				fb_utils::snprintf(Print_buffer, sizeof(Print_buffer), "GRANT%s %s TO %s%s%s%s%s",
+						default_option, SQL_identifier,
 						user_string, with_option, granted_by(buf_grantor, PRV.RDB$GRANTOR, PRV.RDB$GRANTOR.NULL),
 						terminator, NEWLINE);
 
@@ -1834,7 +1835,7 @@ void SHOW_grant_roles2 (const SCHAR* terminator,
  *	All membership privilege may have the with_admin or/and default options set.
  *
  **************************************/
-	TEXT SQL_identifier2[BUFFER_LENGTH128];
+	TEXT SQL_identifier2[BUFFER_LENGTH256];
 	BASED_ON RDB$USER_PRIVILEGES.RDB$GRANTOR dummy;	// used to declare buf_grantor
 	FB_UNUSED_VAR(dummy); // Silence compiler warning about unused variable
 	SCHAR buf_grantor[sizeof(dummy) + 20];
@@ -2098,7 +2099,7 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 	if (ret == ps_ERR || handled)
 		return ret;
 
-	TEXT SQL_id_for_grant[BUFFER_LENGTH128];
+	TEXT SQL_id_for_grant[BUFFER_LENGTH256];
 	int key = 0;
 
 	switch (showoptions.getCommand(cmd[1]))
@@ -2858,7 +2859,7 @@ static void show_charsets(const SCHAR* relation_name, const SCHAR* field_name,
 		END_ERROR;
 	}
 
-	TEXT char_sets[86];			// CHARACTER SET <name31> COLLATE <name31>
+	TEXT char_sets[CHARSET_COLLATE_SIZE];
 	char_sets[0] = 0;
 	if ((char_set_id != default_char_set_id) || collation)
 	{
@@ -3039,8 +3040,8 @@ static void show_comment(const char* objtype, char* packageName, char* name1, ch
 	if (name2)
 		fb_utils::exact_name(name2);
 
-	char packageNameBuffer[BUFFER_LENGTH128];
-	char SQL_identifier2[BUFFER_LENGTH128];
+	char packageNameBuffer[BUFFER_LENGTH256];
+	char SQL_identifier2[BUFFER_LENGTH256];
 
 	if (escape_quotes && isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
 	{
@@ -4323,8 +4324,8 @@ static processing_state show_func(const SCHAR* funcname)
 				prm_default_source = ARG.RDB$DEFAULT_SOURCE;
 			}
 
-			char relationName[BUFFER_LENGTH128] = "";
-			char relationField[BUFFER_LENGTH128] = "";
+			char relationName[BUFFER_LENGTH256] = "";
+			char relationField[BUFFER_LENGTH256] = "";
 
 			if (!ARG.RDB$RELATION_NAME.NULL)
 			{
@@ -4400,7 +4401,7 @@ static processing_state show_func(const SCHAR* funcname)
 
 				const SSHORT default_charset = ISQL_get_default_char_set_id();
 
-				TEXT charset_collation[86];		// CHARACTER SET <name31> COLLATE <name31>
+				TEXT charset_collation[CHARSET_COLLATE_SIZE];
 				charset_collation[0] = 0;
 
 				if ((charset != default_charset) || collation)
@@ -4586,7 +4587,7 @@ static processing_state show_generators(const SCHAR* object)
  **************************************/
 	bool found = false;
 	const char genIdStr[] = "SELECT GEN_ID(%s, 0) FROM RDB$DATABASE";
-	TEXT query[sizeof(genIdStr) + QUOTEDLENGTH], gen_name[QUOTEDLENGTH];
+	TEXT query[sizeof(genIdStr) + QUOTED_NAME_SIZE], gen_name[QUOTED_NAME_SIZE];
 
 	Firebird::RefPtr<Firebird::IMetadataBuilder>
 		mb(Firebird::REF_NO_INCR, fbMaster->getMetadataBuilder(fbStatus, 1));
@@ -4631,7 +4632,7 @@ static processing_state show_generators(const SCHAR* object)
 				strcpy(gen_name, GEN.RDB$GENERATOR_NAME);
 			}
 
-			sprintf (query, genIdStr, gen_name);
+			fb_utils::snprintf(query, sizeof(query), genIdStr, gen_name);
 
 			DB->execute(fbStatus, fbTrans, 0, query, isqlGlob.SQL_dialect,
 				NULL, NULL, outMetadata, outBuffer);
@@ -4887,7 +4888,7 @@ static processing_state show_packages(const SCHAR* package_name)
 static void printIdent(bool quote, char* ident, const char* format = NULL)
 {
 	fb_utils::exact_name(ident);
-	char quotedIdent[BUFFER_LENGTH128];
+	char quotedIdent[BUFFER_LENGTH256];
 	if (quote && isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
 	{
 		IUTILS_copy_SQL_id(ident, quotedIdent, DBL_QUOTE);
@@ -5204,8 +5205,8 @@ static processing_state show_proc(const SCHAR* procname)
 			if (!prm_collation_null)
 				collation = PRM.RDB$COLLATION_ID;
 
-			char relationName[BUFFER_LENGTH128] = "";
-			char relationField[BUFFER_LENGTH128] = "";
+			char relationName[BUFFER_LENGTH256] = "";
+			char relationField[BUFFER_LENGTH256] = "";
 
 			if (!PRM.RDB$RELATION_NAME.NULL)
 			{
@@ -5276,7 +5277,7 @@ static processing_state show_proc(const SCHAR* procname)
 
 				const SSHORT default_charset = ISQL_get_default_char_set_id();
 
-				TEXT charset_collation[86];		// CHARACTER SET <name31> COLLATE <name31>
+				TEXT charset_collation[CHARSET_COLLATE_SIZE];
 				charset_collation[0] = 0;
 
 				if ((charset != default_charset) || collation)
@@ -5425,7 +5426,7 @@ static processing_state show_role(const SCHAR* object, bool system, const char* 
 	}
 
 	// show role with role supplied, display users and other roles granted this role
-	SCHAR role_name[BUFFER_LENGTH128];
+	SCHAR role_name[BUFFER_LENGTH256];
 	bool first = true;
 
 	FOR FIRST 1 R IN RDB$ROLES WITH R.RDB$ROLE_NAME EQ object

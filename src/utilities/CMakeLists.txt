@@ -46,7 +46,6 @@ set(fbtrace_src
     ntrace/TraceConfiguration.cpp
     ntrace/traceplugin.cpp
     ntrace/TracePluginImpl.cpp
-    ntrace/TraceUnicodeUtils.cpp
 
     ntrace/os/platform.h
 )
@@ -70,11 +69,11 @@ if (WIN32)
     set(instreg_src
         install/install_reg.cpp
         install/registry.cpp
-        
+
         install/registry.h
         install/regis_proto.h
     )
-    add_executable              (instreg ${instreg_src} ${VERSION_RC})    
+    add_executable              (instreg ${instreg_src} ${VERSION_RC})
 
     ###########################################################################
     # EXECUTABLE instsvc
@@ -86,7 +85,7 @@ if (WIN32)
         install/servi_proto.h
     )
     add_executable              (instsvc ${instsvc_src} ${VERSION_RC})
-    target_link_libraries       (instsvc common yvalve)    
+    target_link_libraries       (instsvc common yvalve)
 
     ###########################################################################
     # EXECUTABLE instclient

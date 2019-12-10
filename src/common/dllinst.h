@@ -47,7 +47,7 @@ public:
 		hModule = NULL;
 		m_shutFlag = pShutFlag;
 
-		const BOOL ret = GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, 
+		const BOOL ret = GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
 			(LPCSTR) thdFunc, &hModule);
 	}
 

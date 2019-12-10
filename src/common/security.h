@@ -160,7 +160,7 @@ class UserData :
 {
 public:
 	UserData()
-		: op(0), trustedAuth(0), authenticationBlock(*getDefaultMemoryPool())
+		: op(0), trustedAuth(0), silent(false), authenticationBlock(*getDefaultMemoryPool())
 	{ }
 
 	// IUser implementation
@@ -219,6 +219,7 @@ public:
 
 	unsigned int op;
 	int trustedAuth;
+	bool silent;
 	CharField user, pass, first, last, middle, com, attr;
 	IntField adm, act;
 	CharField database, dba, dbaPassword, role;
@@ -264,13 +265,6 @@ public:
 };
 
 int setGsecCode(int code, unsigned int operation);
-
-// tools to operate lists of security-related plugins
-typedef Firebird::ObjectsArray<Firebird::PathName> ParsedList;
-void parseList(ParsedList& parsed, Firebird::PathName list);
-void makeList(Firebird::PathName& list, const ParsedList& parsed);
-void mergeLists(Firebird::PathName& list, const Firebird::PathName& serverList,
-	const Firebird::PathName& clientList);
 
 } // namespace Auth
 

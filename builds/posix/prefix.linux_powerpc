@@ -21,5 +21,3 @@
 PROD_FLAGS=-ggdb -fno-omit-frame-pointer -fsigned-char -DLINUX -pipe -MMD -fPIC -fmessage-length=0 -DLINUX -DPowerPC -DPPC -O3
 DEV_FLAGS=-ggdb -O0 -DLINUX -pipe -MMD -p -fPIC -Wall -Wno-switch -Wno-parentheses -Wno-unknown-pragmas -Wno-unused-variable -fmessage-length=0 -fsigned-char -DLINUX -DPowerPC -DPPC -Wno-non-virtual-dtor
 #DEV_FLAGS=-DUSE_VALGRIND -ggdb -O0 -DLINUX -pipe -MMD -p -fPIC -Wall -Wno-switch -Wno-parentheses -Wno-unknown-pragmas -Wno-unused-variable -fmessage-length=0 -DLINUX -DPowerPC -DPPC -Wno-non-virtual-dtor
-
-CXXFLAGS := $(CXXFLAGS) -std=c++11

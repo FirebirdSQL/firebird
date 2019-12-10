@@ -25,13 +25,13 @@
 #include "firebird.h"
 
 #include "iutils_proto.h"
-#include "../yvalve/keywords.h"
+#include "../yvalve/keywordsStub.h"
 #include "../yvalve/gds_proto.h"
 //#if defined(WIN_NT)
 //#include <windows.h>
 //#endif
 #include <ctype.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "isql.h"
 #include "../common/classes/MsgPrint.h"
 #include <stdarg.h>

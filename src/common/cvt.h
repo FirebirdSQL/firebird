@@ -61,7 +61,7 @@ public:
 	virtual void validateLength(Jrd::CharSet* toCharset, SLONG toLength, const UCHAR* start,
 		const USHORT to_size) = 0;
 	virtual SLONG getLocalDate() = 0;
-	virtual ISC_TIMESTAMP getCurrentTimeStampUtc() = 0;
+	virtual ISC_TIMESTAMP getCurrentGmtTimeStamp() = 0;
 	virtual USHORT getSessionTimeZone() = 0;
 	virtual void isVersion4(bool& v4) = 0;
 
@@ -80,7 +80,9 @@ enum EXPECT_DATETIME
 	expect_sql_time_tz
 };
 
-}
+class Int128;
+
+} // namespace Firebird
 
 
 void CVT_conversion_error(const dsc*, ErrorFunction);
@@ -90,12 +92,14 @@ bool CVT_get_boolean(const dsc*, ErrorFunction);
 double CVT_get_double(const dsc*, Firebird::DecimalStatus, ErrorFunction, bool* getNumericOverflow = nullptr);
 Firebird::Decimal64 CVT_get_dec64(const dsc*, Firebird::DecimalStatus, ErrorFunction);
 Firebird::Decimal128 CVT_get_dec128(const dsc*, Firebird::DecimalStatus, ErrorFunction);
-Firebird::DecimalFixed CVT_get_dec_fixed(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
+Firebird::Int128 CVT_get_int128(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
 USHORT CVT_make_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
 void CVT_make_null_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
 void CVT_move_common(const dsc*, dsc*, Firebird::DecimalStatus, Firebird::Callbacks*);
 void CVT_move(const dsc*, dsc*, Firebird::DecimalStatus, ErrorFunction);
-SSHORT CVT_decompose(const char*, USHORT, SSHORT, SLONG*, ErrorFunction);
+SSHORT CVT_decompose(const char*, USHORT, SLONG*, ErrorFunction);
+SSHORT CVT_decompose(const char*, USHORT, SINT64*, ErrorFunction);
+SSHORT CVT_decompose(const char*, USHORT, Firebird::Int128*, ErrorFunction);
 USHORT CVT_get_string_ptr(const dsc*, USHORT*, UCHAR**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
 USHORT CVT_get_string_ptr_common(const dsc*, USHORT*, UCHAR**, vary*, USHORT, Firebird::DecimalStatus, Firebird::Callbacks*);
 SINT64 CVT_get_int64(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);

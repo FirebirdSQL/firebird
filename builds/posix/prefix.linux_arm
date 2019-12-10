@@ -24,5 +24,3 @@ COMMON_FLAGS=-DLINUX -DARM -pipe -MMD -fPIC -fsigned-char -fmessage-length=0 -DF
 
 PROD_FLAGS=$(COMMON_FLAGS) -O3
 DEV_FLAGS=$(COMMON_FLAGS) -p -ggdb -Wall -Wno-non-virtual-dtor
-
-CXXFLAGS := $(CXXFLAGS) -std=c++11

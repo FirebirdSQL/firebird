@@ -124,12 +124,13 @@ o Si Firebird est exécuté comme application (et non
   Vous devrez alors supprimer les fichiers restant
   manuellement.
 
-o La désinstallation laisse cinq fichiers dans le
+o La désinstallation laisse six fichiers dans le
   répertoire d'installation:
 
   - aliases.conf
   - firebird.conf
   - fbtrace.conf
+  - replication.conf
   - firebird.log
   - security4.fdb
 

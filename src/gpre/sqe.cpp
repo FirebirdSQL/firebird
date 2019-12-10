@@ -515,7 +515,7 @@ gpre_nod* SQE_field(gpre_req* request, bool aster_ok)
 				if (!(reference->ref_field =
 					MET_context_field(context, gpreGlob.token_global.tok_string)))
 				{
-					sprintf(s, "column \"%s\" not in context", gpreGlob.token_global.tok_string);
+					fb_utils::snprintf(s, sizeof(s), "column \"%s\" not in context", gpreGlob.token_global.tok_string);
 					PAR_error(s);
 				}
 				if (SQL_DIALECT_V5 == gpreGlob.sw_sql_dialect)
@@ -1348,7 +1348,7 @@ static gpre_nod* explode_asterisk( gpre_nod* fields, int n, gpre_rse* selection)
 			fields = merge_fields(fields, MET_fields(context), n, true);
 		else
 		{
-			sprintf(s, "columns \"%s.*\" cannot be resolved", q_token->tok_string);
+			fb_utils::snprintf(s, sizeof(s), "columns \"%s.*\" cannot be resolved", q_token->tok_string);
 			PAR_error(s);
 		}
 	}
@@ -3020,7 +3020,7 @@ static gpre_rse* par_select( gpre_req* request, gpre_rse* union_rse)
 		resolve_fields(rse_skip, select);
 	select->rse_sqlskip = rse_skip;
 
-	if (select->rse_into = into_list)
+	if ((select->rse_into = into_list))
 		select->rse_flags |= RSE_singleton;
 
 	if (union_rse && s_list->nod_count != union_rse->rse_fields->nod_count)
@@ -3211,7 +3211,7 @@ static gpre_nod* par_udf( gpre_req* request)
 				{
 					// udf was found in more than one database
 					SCHAR s[ERROR_LENGTH];
-					sprintf(s, "UDF %s is ambiguous", gpreGlob.token_global.tok_string);
+					fb_utils::snprintf(s, sizeof(s), "UDF %s is ambiguous", gpreGlob.token_global.tok_string);
 					PAR_error(s);
 				}
 				else
@@ -3686,10 +3686,12 @@ static gpre_fld* resolve(gpre_nod* node,
 	if (rs_stream)
 	{
 		for (SSHORT i = 0; i < rs_stream->rse_count; i++)
-			if (field = resolve(node, rs_stream->rse_context[i], found_context, slice_action))
+		{
+			if ((field = resolve(node, rs_stream->rse_context[i], found_context, slice_action)))
 			{
 				return field;
 			}
+		}
 
 		return NULL;
 	}
@@ -3819,7 +3821,7 @@ static gpre_ctx* resolve_asterisk( const tok* q_token, gpre_rse* selection)
 		gpre_rse* rs_stream = context->ctx_stream;
 		if (rs_stream)
 		{
-			if (context = resolve_asterisk(q_token, rs_stream))
+			if ((context = resolve_asterisk(q_token, rs_stream)))
 				return context;
 			continue;
 		}

@@ -58,7 +58,7 @@ using namespace Firebird;
 
 namespace Jrd {
 
-static const FB_UINT64 TOUCH_INTERVAL = 60 * 60;      // in seconds, one hour should be enough
+static const FB_UINT64 TOUCH_INTERVAL = 60 * 60;	// in seconds, one hour should be enough
 
 void checkFileError(const char* filename, const char* operation, ISC_STATUS iscError)
 {
@@ -143,6 +143,8 @@ void ConfigStorage::shutdown()
 {
 	if (!m_timer)
 		return;
+
+	MutexLockGuard localGuard(m_localMutex, FB_FUNCTION);
 
 	m_timer->stop();
 	m_timer = NULL;
@@ -235,15 +237,7 @@ void ConfigStorage::checkFile()
 			PathName configFileName(Config::getAuditTraceConfigFile());
 
 			// remove quotes around path if present
-			{ // scope
-				const FB_SIZE_T pathLen = configFileName.length();
-				if (pathLen > 1 && configFileName[0] == '"' &&
-					configFileName[pathLen - 1] == '"')
-				{
-					configFileName.erase(0, 1);
-					configFileName.erase(pathLen - 2, 1);
-				}
-			}
+			configFileName.alltrim(" '\"");
 
 			if (configFileName.empty())
 				return;
@@ -298,6 +292,9 @@ void ConfigStorage::checkFile()
 
 void ConfigStorage::acquire()
 {
+	if (!m_sharedMemory)
+		(Arg::Gds(isc_random) << "Trace shared memory can not be accessed").raise();
+
 	fb_assert(m_recursive >= 0);
 	const ThreadId currTID = getThreadId();
 
@@ -317,6 +314,8 @@ void ConfigStorage::acquire()
 
 void ConfigStorage::release()
 {
+	fb_assert(m_sharedMemory);
+
 	fb_assert(m_recursive > 0);
 	fb_assert(m_mutexTID == getThreadId());
 
@@ -604,15 +603,25 @@ bool ConfigStorage::getItemLength(ITEM& tag, ULONG& len)
 
 void ConfigStorage::TouchFile::handler()
 {
-	os_utils::touchFile(fileName);
-	FbLocalStatus s;
-	TimerInterfacePtr()->start(&s, this, TOUCH_INTERVAL * 1000 * 1000);
-	// ignore error in handler
+	try
+	{
+		if (!os_utils::touchFile(fileName))
+			system_call_failed::raise("utime");
+
+		FbLocalStatus s;
+		TimerInterfacePtr()->start(&s, this, TOUCH_INTERVAL * 1000 * 1000);
+		s.check();
+	}
+	catch (const Exception& e)
+	{
+		iscLogException("TouchFile failed", e);
+	}
 }
 
 void ConfigStorage::TouchFile::start(const char* fName)
 {
 	fileName = fName;
+
 	FbLocalStatus s;
 	TimerInterfacePtr()->start(&s, this, TOUCH_INTERVAL * 1000 * 1000);
 	check(&s);

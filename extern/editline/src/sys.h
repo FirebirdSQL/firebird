@@ -90,6 +90,15 @@ typedef void	*ioctl_t;
 #endif
 
 #include <stdio.h>
+#include <string.h>
+
+#ifdef strlcat
+#define HAVE_STRLCAT 1
+#endif
+
+#ifdef strlcpy
+#define HAVE_STRLCPY 1
+#endif
 
 #ifndef HAVE_STRLCAT
 #define	strlcat libedit_strlcat

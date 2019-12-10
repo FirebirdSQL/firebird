@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<installer-gui-script minSpecVersion="1">
+    <title>Firebird Database Server</title>
+    <welcome file="Welcome.txt" mime-type="text/plain"/>
+    <license file="License.txt" mime-type="text/plain"/>
+    <readme file="Readme.txt" mime-type="text/plain"/>
+    <pkg-ref id="com.firebirdsql.Firebird"/>
+    <options customize="never" require-scripts="false"/>
+    <choices-outline>
+        <line choice="default">
+            <line choice="com.firebirdsql.Firebird"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="com.firebirdsql.Firebird" visible="false">
+        <pkg-ref id="com.firebirdsql.Firebird"/>
+    </choice>
+    <pkg-ref id="com.firebirdsql.Firebird" version="4.0.0" onConclusion="none">Firebird.pkg</pkg-ref>
+</installer-gui-script>

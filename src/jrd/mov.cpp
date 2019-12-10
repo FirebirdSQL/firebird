@@ -450,42 +450,6 @@ void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to)
 }
 
 
-void MOV_move_ext(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to, bool toExtern)
-{
-/**************************************
- *
- *	M O V _ m o v e _ e x t
- *
- **************************************
- *
- * Functional description
- *	Move data to/from outer world.
- *
- **************************************/
-
-	MOV_move(tdbb, from, to);
-
-	switch (to->dsc_dtype)
-	{
-	case dtype_dec_fixed:
-		if (toExtern)
-		{
-			((Decimal128*) to->dsc_address)->setScale(tdbb->getAttachment()->att_dec_status,
-				to->dsc_scale);
-		}
-		else
-		{
-			((DecimalFixed*) to->dsc_address)->exactInt(tdbb->getAttachment()->att_dec_status,
-				to->dsc_scale);
-		}
-		break;
-
-	default:
-		break;
-	}
-}
-
-
 Decimal64 MOV_get_dec64(Jrd::thread_db* tdbb, const dsc* desc)
 {
 /**************************************
@@ -510,7 +474,7 @@ Decimal128 MOV_get_dec128(Jrd::thread_db* tdbb, const dsc* desc)
 }
 
 
-DecimalFixed MOV_get_dec_fixed(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
+Int128 MOV_get_int128(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
 {
 /**************************************
  *
@@ -518,7 +482,7 @@ DecimalFixed MOV_get_dec_fixed(Jrd::thread_db* tdbb, const dsc* desc, SSHORT sca
  *
  **************************************/
 
-	return CVT_get_dec_fixed(desc, scale, tdbb->getAttachment()->att_dec_status, ERR_post);
+	return CVT_get_int128(desc, scale, tdbb->getAttachment()->att_dec_status, ERR_post);
 }
 
 

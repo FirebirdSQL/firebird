@@ -150,7 +150,7 @@ bool AuthSspi::checkAdminPrivilege()
 	// Query actual group information
 	Array<char> buffer;
 	TOKEN_GROUPS *ptg = (TOKEN_GROUPS *)buffer.getBuffer(token_len);
-	if (! GetTokenInformation(spc.AccessToken, TokenGroups, ptg, token_len, &token_len))
+	if (!GetTokenInformation(spc.AccessToken, TokenGroups, ptg, token_len, &token_len))
 		return false;
 
 	// Create a System Identifier for the Admin group.
@@ -313,10 +313,10 @@ bool AuthSspi::accept(AuthSspi::DataHolder& data)
 			fFreeContextBuffer(name.sUserName);
 			wheel = checkAdminPrivilege();
 		}
+
 		if (fQueryContextAttributes(&ctxtHndl, SECPKG_ATTR_SESSION_KEY, &key) == SEC_E_OK)
-		{
 			sessionKey.assign(key.SessionKey, key.SessionKeyLength);
-		}
+
 		fDeleteSecurityContext(&ctxtHndl);
 		hasContext = false;
 		break;
@@ -405,21 +405,27 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 				writerInterface->add(status, FB_DOMAIN_ANY_RID_ADMINS);
 				if (status->getState() & IStatus::STATE_ERRORS)
 					return AUTH_FAILED;
+
 				writerInterface->setType(status, FB_PREDEFINED_GROUP);
+
 				if (status->getState() & IStatus::STATE_ERRORS)
 					return AUTH_FAILED;
 			}
 
 			// walk groups to which login belongs and list them using writerInterface
 			Firebird::string grName;
+
 			for (unsigned n = 0; n < grNames.getCount(); ++n)
 			{
 				grName = grNames[n];
 				ISC_systemToUtf8(grName);
 				writerInterface->add(status, grName.c_str());
+
 				if (status->getState() & IStatus::STATE_ERRORS)
 					return AUTH_FAILED;
+
 				writerInterface->setType(status, "Group");
+
 				if (status->getState() & IStatus::STATE_ERRORS)
 					return AUTH_FAILED;
 			}
@@ -429,9 +435,12 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 			if (key)
 			{
 				ICryptKey* cKey = sBlock->newKey(status);
+
 				if (status->getState() & IStatus::STATE_ERRORS)
 					return AUTH_FAILED;
+
 				cKey->setSymmetric(status, "Symmetric", key->getCount(), key->begin());
+
 				if (status->getState() & IStatus::STATE_ERRORS)
 					return AUTH_FAILED;
 			}
@@ -471,6 +480,12 @@ int WinSspiClient::authenticate(Firebird::CheckStatusWrapper* status,
 {
 	try
 	{
+		if (cBlock->getLogin())
+		{
+			// user specified login - we should not continue with trusted-like auth
+			return AUTH_CONTINUE;
+		}
+
 		sspiData.clear();
 		unsigned int length;
 		const unsigned char* bytes = cBlock->getData(&length);
@@ -485,12 +500,16 @@ int WinSspiClient::authenticate(Firebird::CheckStatusWrapper* status,
 
 		// set wire crypt key
 		const UCharBuffer* key = sspi.getKey();
+
 		if (key && !keySet)
 		{
 			ICryptKey* cKey = cBlock->newKey(status);
+
 			if (status->getState() & IStatus::STATE_ERRORS)
 				return AUTH_FAILED;
+
 			cKey->setSymmetric(status, "Symmetric", key->getCount(), key->begin());
+
 			if (status->getState() & IStatus::STATE_ERRORS)
 				return AUTH_FAILED;
 

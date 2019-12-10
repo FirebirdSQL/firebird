@@ -226,7 +226,6 @@ int main()
 		if (isc_dsql_free_statement(st, &stmt, DSQL_unprepare))
 			raiseError(status, st);
 
-
 		//
 		printf("\nPart 2. BLOB created using isc_create_blob.\n");
 		//

@@ -106,9 +106,13 @@ void ProcedureScan::open(thread_db* tdbb) const
 
 	try
 	{
-		proc_request->req_timestamp_utc = request->req_timestamp_utc;
+		proc_request->req_gmt_timestamp = request->req_gmt_timestamp;
 
 		TraceProcExecute trace(tdbb, proc_request, request, m_targetList);
+
+		AutoSetRestore<USHORT> autoOriginalTimeZone(
+			&tdbb->getAttachment()->att_original_timezone,
+			tdbb->getAttachment()->att_current_timezone);
 
 		EXE_start(tdbb, proc_request, request->req_transaction);
 
@@ -158,6 +162,9 @@ bool ProcedureScan::getRecord(thread_db* tdbb) const
 	if (--tdbb->tdbb_quantum < 0)
 		JRD_reschedule(tdbb, 0, true);
 
+	UserId* invoker = m_procedure->invoker ? m_procedure->invoker : tdbb->getAttachment()->att_ss_user;
+	AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);
+
 	jrd_req* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -180,6 +187,10 @@ bool ProcedureScan::getRecord(thread_db* tdbb) const
 	jrd_req* const proc_request = impure->irsb_req_handle;
 
 	TraceProcFetch trace(tdbb, proc_request);
+
+	AutoSetRestore<USHORT> autoOriginalTimeZone(
+		&tdbb->getAttachment()->att_original_timezone,
+		tdbb->getAttachment()->att_current_timezone);
 
 	try
 	{

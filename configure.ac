@@ -97,6 +97,7 @@ case "$build" in
     SHRLIB_EXT=dylib
     CPU_TYPE=x86_64
     EXPORT_SYMBOLS_STYLE=darwin
+    RAW_DEVICES_FLG=N
     ;;
 
   i*86-*-darwin*)
@@ -670,7 +671,6 @@ XE_CONF_DIR(fbconf, [config files DIR (PREFIX)], FB_CONFDIR)
 XE_CONF_DIR(fblib, [object code libraries DIR (PREFIX/lib)], FB_LIBDIR, /lib)
 XE_CONF_DIR(fbinclude, [C/C++ header files DIR (PREFIX/include)], FB_INCDIR, /include)
 XE_CONF_DIR(fbdoc, [documentation root DIR (PREFIX/doc)], FB_DOCDIR, /doc)
-XE_CONF_DIR(fbudf, [UDF DIR (PREFIX/UDF)], FB_UDFDIR, /UDF)
 XE_CONF_DIR(fbsample, [examples DIR (PREFIX/examples)], FB_SAMPLEDIR, /examples)
 XE_CONF_DIR(fbsample-db, [examples database DIR (PREFIX/examples/empbuild)], FB_SAMPLEDBDIR, /examples/empbuild)
 XE_CONF_DIR(fbhelp, [QLI help DIR (PREFIX/help)], FB_HELPDIR, /help)
@@ -752,7 +752,6 @@ AC_CHECK_HEADERS(errno.h)
 AC_CHECK_HEADERS(fcntl.h)
 AC_CHECK_HEADERS(grp.h)
 AC_CHECK_HEADERS(pwd.h)
-AC_CHECK_HEADERS(libio.h)
 AC_CHECK_HEADERS(locale.h)
 AC_CHECK_HEADERS(math.h)
 AC_CHECK_HEADERS(pthread.h)
@@ -795,8 +794,8 @@ AC_CHECK_HEADERS(float.h)
 AC_CHECK_HEADERS(poll.h)
 AC_CHECK_HEADERS(langinfo.h)
 AC_CHECK_HEADERS(iconv.h)
-AC_CHECK_HEADERS(libio.h)
 AC_CHECK_HEADERS(linux/falloc.h)
+AC_CHECK_HEADERS(utime.h)
 
 AC_CHECK_HEADERS(socket.h sys/socket.h sys/sockio.h winsock2.h)
 AC_CHECK_DECLS(SOCK_CLOEXEC,,,[[
@@ -1017,6 +1016,7 @@ fi
 dnl Some OS place iconv() support in separate library
 if test "$ac_cv_header_iconv_h" = "yes"; then
 AC_SEARCH_LIBS(iconv_open, iconv)
+AC_SEARCH_LIBS(libiconv_open, iconv)
 fi
 
 dnl HPUX has a bug in .h files. To detect it we need C++ here.
@@ -1256,6 +1256,7 @@ gen/$fb_tgt/firebird/databases.conf:builds/install/misc/databases.conf.in
 gen/$fb_tgt/firebird/fbtrace.conf:src/utilities/ntrace/fbtrace.conf
 gen/$fb_tgt/firebird/intl/fbintl.conf:builds/install/misc/fbintl.conf
 gen/$fb_tgt/firebird/plugins.conf:builds/install/misc/plugins.conf
+gen/$fb_tgt/firebird/replication.conf:builds/install/misc/replication.conf
 ])
 done
 
@@ -1371,11 +1372,6 @@ fi
 AC_SUBST(POSTFIX_INCLUDE)
 
 UDF_COMMENT="#"
-if test -n "${with_fbudf}"; then
-	UDF_COMMENT="#
-#  #  For this build Restrict UDF means Restrict ${with_fbudf}
-#"
-fi
 AC_SUBST(UDF_COMMENT)
 
 AC_CONFIG_FILES(

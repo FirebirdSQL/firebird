@@ -25,5 +25,3 @@
 
 PROD_FLAGS=-O3 -DLINUX -DPPC64 -pipe -p -MMD -fPIC -fsigned-char -fmessage-length=0
 DEV_FLAGS=-ggdb -DLINUX -DPPC64 -pipe -p -MMD -fPIC -Wall -fsigned-char -fmessage-length=0 -Wno-non-virtual-dtor
-
-CXXFLAGS := $(CXXFLAGS) -std=c++11

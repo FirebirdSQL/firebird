@@ -30,7 +30,7 @@
  */
 
 #include "firebird.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/intl.h"
 #include "../yvalve/blob_proto.h"
 #include "../common/StatusArg.h"

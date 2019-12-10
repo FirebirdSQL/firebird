@@ -344,6 +344,20 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 		}
 	END_ERROR;
 
+	if (tdgbl->global_trans)
+	{
+		BURP_verbose (68);
+		// msg 68 committing meta data
+		EXEC SQL COMMIT TRANSACTION tdgbl->global_trans;
+		if (gds_status->hasData())
+			general_on_error ();
+		// Check to see if there is a warning
+		if (gds_status->getState() & Firebird::IStatus::STATE_WARNINGS)
+		{
+			BURP_print_warning(gds_status);
+		}
+	}
+
 	// Activate the indices for foreign keys and do another commit
 	if (!tdgbl->gbl_sw_deactivate_indexes)
 	{
@@ -465,20 +479,6 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 		ON_ERROR
 			general_on_error ();
 		END_ERROR;
-	}
-
-	if (tdgbl->global_trans)
-	{
-		BURP_verbose (68);
-		// msg 68 committing meta data
-		EXEC SQL COMMIT TRANSACTION tdgbl->global_trans;
-		if (gds_status->hasData())
-			general_on_error ();
-		// Check to see if there is a warning
-		if (gds_status->getState() & Firebird::IStatus::STATE_WARNINGS)
-		{
-			BURP_print_warning(gds_status);
-		}
 	}
 
 	EXEC SQL SET TRANSACTION ISOLATION LEVEL READ COMMITTED NO_AUTO_UNDO;
@@ -653,7 +653,7 @@ void add_files(BurpGlobals* tdgbl, const char* file_name)
 
 	// store the RDB$FILES records
 
-	FB_UINT64 start = FB_CONST64(201); // Magic number, can be taken from some constant?
+	FB_UINT64 start = FB_CONST64(256); // Magic number, can be taken from some constant?
 	SLONG count = 0;
 	const char* prev_file_name = NULL;
 
@@ -1094,14 +1094,15 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 		}
 
 		Firebird::string sql;
-		sql.printf("ALTER DATABASE ENCRYPT WITH \"%s\"", tdgbl->gbl_sw_crypt);
-		if (tdgbl->gbl_sw_keyname)
+		const char* dQuote = SQL_dialect >= SQL_DIALECT_V6 ? "\"" : "";
+		sql.printf("ALTER DATABASE ENCRYPT WITH %s%s%s", dQuote, tdgbl->gbl_sw_crypt, dQuote);
+		if (tdgbl->gbl_sw_keyname && tdgbl->gbl_sw_keyname[0])
 		{
 			sql += " KEY ";
 			sql += tdgbl->gbl_sw_keyname;
 		}
 
-		tdgbl->db_handle->execute(gds_status, tdgbl->tr_handle, sql.length(), sql.c_str(), 3,
+		tdgbl->db_handle->execute(gds_status, tdgbl->tr_handle, sql.length(), sql.c_str(), SQL_dialect,
 			nullptr, nullptr, nullptr, nullptr);
 
 		if (gds_status->hasData())
@@ -3578,7 +3579,7 @@ rec_type get_data_old(BurpGlobals* tdgbl, burp_rel* relation)
 		case blr_long:
 		case blr_quad:
 		case blr_int64:
-		case blr_dec_fixed:
+		case blr_int128:
 			add_byte(blr, field->fld_type);
 			add_byte(blr, field->fld_scale);
 			break;
@@ -7037,9 +7038,10 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
  *
  **************************************/
 	BASED_ON RDB$INDICES.RDB$INDEX_NAME index_name;
-	att_type	attribute;
-	bool		foreign_index = false;
-	scan_attr_t		scan_next_attr;
+	att_type attribute;
+	bool foreign_index = false;
+	bool expr_index = false;
+	scan_attr_t scan_next_attr;
 
 	SSHORT count = 0, segments = 0;
 
@@ -7089,7 +7091,7 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 				}
 				else
 				{
-					if (!X.RDB$INDEX_INACTIVE && foreign_index)
+					if (!X.RDB$INDEX_INACTIVE && (foreign_index || expr_index))
 						X.RDB$INDEX_INACTIVE = DEFERRED_ACTIVE;
 				}
 				if (tdgbl->gbl_sw_deactivate_indexes)
@@ -7129,6 +7131,12 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 				break;
 
 			case att_index_expression_blr:
+				expr_index = true;
+				// Defer expression index activation
+				if (!X.RDB$INDEX_INACTIVE)
+					X.RDB$INDEX_INACTIVE = DEFERRED_ACTIVE;
+				if (tdgbl->gbl_sw_deactivate_indexes)
+					X.RDB$INDEX_INACTIVE = TRUE;
 				X.RDB$EXPRESSION_BLR.NULL = FALSE;
 				get_blr_blob (tdgbl, X.RDB$EXPRESSION_BLR, false);
 				break;
@@ -9284,9 +9292,11 @@ bool get_trigger(BurpGlobals* tdgbl)
  *	Get a trigger definition in rdb$triggers.
  *
  **************************************/
-	att_type	attribute;
+	att_type attribute;
 	BASED_ON RDB$TRIGGERS.RDB$TRIGGER_NAME name;
-	scan_attr_t		scan_next_attr;
+	BASED_ON RDB$TRIGGERS.RDB$RELATION_NAME relName;
+	scan_attr_t scan_next_attr;
+	bool skipTrig = false;
 
 	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
@@ -9355,6 +9365,16 @@ bool get_trigger(BurpGlobals* tdgbl)
 				case att_trig_relation_name:
 					X.RDB$RELATION_NAME.NULL = FALSE;
 					GET_TEXT(X.RDB$RELATION_NAME);
+					strcpy (relName, X.RDB$RELATION_NAME);
+
+					// Check for trigger on system relation
+					FOR (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_trigger_req_handle2)
+						Y IN RDB$RELATIONS
+						WITH Y.RDB$RELATION_NAME EQ relName
+						 AND Y.RDB$SYSTEM_FLAG EQ 1
+
+						skipTrig = true;
+					END_FOR;
 					break;
 
 				case att_trig_sequence:
@@ -9436,6 +9456,14 @@ bool get_trigger(BurpGlobals* tdgbl)
 					break;
 				}
 			}
+
+			// Skip trigger on system relation
+			if (skipTrig)
+			{
+				BURP_message(387, SafeArg() << name << relName);
+				return true;
+			}
+
 		END_STORE;
 		ON_ERROR
 			general_on_error ();
@@ -9494,6 +9522,16 @@ bool get_trigger(BurpGlobals* tdgbl)
 				case att_trig_relation_name:
 					X.RDB$RELATION_NAME.NULL = FALSE;
 					GET_TEXT(X.RDB$RELATION_NAME);
+					strcpy (relName, X.RDB$RELATION_NAME);
+
+					// Check for trigger on system relation
+					FOR (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_trigger_req_handle2)
+						Y IN RDB$RELATIONS
+						WITH Y.RDB$RELATION_NAME EQ relName
+						 AND Y.RDB$SYSTEM_FLAG EQ 1
+
+						skipTrig = true;
+					END_FOR;
 					break;
 
 				case att_trig_sequence:
@@ -9561,6 +9599,14 @@ bool get_trigger(BurpGlobals* tdgbl)
 					break;
 				}
 			}
+
+			// Skip trigger on system relation
+			if (skipTrig)
+			{
+				BURP_message(387, SafeArg() << name << relName);
+				return true;
+			}
+
 		END_STORE;
 		ON_ERROR
 			general_on_error ();
@@ -11317,6 +11363,7 @@ void update_global_field(BurpGlobals* tdgbl)
 		ON_ERROR
 			general_on_error ();
 		END_ERROR;
+
 		gfld* n_gfield = gfield->gfld_next;
 		BURP_free (gfield);
 		gfield = n_gfield;

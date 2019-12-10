@@ -48,10 +48,24 @@
 class SockAddr
 {
 private:
+	struct SockAddrPrefixPosixWindows
+	{
+		uint16_t sa_family;
+	};
+
+	struct SockAddrPrefixMacOs
+	{
+		uint8_t sa_len;
+		uint8_t sa_family;
+	};
+
 	union sa_data {
 		struct sockaddr sock;
 		struct sockaddr_in inet;
 		struct sockaddr_in6 inet6;
+
+		SockAddrPrefixPosixWindows posixWindowsPrefix;
+		SockAddrPrefixMacOs macOsPrefix;
 	} data;
 	socklen_t len;
 	static const unsigned MAX_LEN = sizeof(sa_data);
@@ -59,6 +73,8 @@ private:
 	void checkAndFixFamily();
 
 public:
+	void convertFromMacOsToPosixWindows();
+	void convertFromPosixWindowsToMacOs();
 	void clear();
 	const SockAddr& operator = (const SockAddr& x);
 
@@ -118,6 +134,23 @@ inline void SockAddr::checkAndFixFamily()
 		fb_assert(false);
 		break;
 	}
+}
+
+inline void SockAddr::convertFromMacOsToPosixWindows()
+{
+	SockAddrPrefixMacOs macOsPrefix;
+	macOsPrefix = data.macOsPrefix;
+
+	data.posixWindowsPrefix.sa_family = macOsPrefix.sa_family;
+}
+
+inline void SockAddr::convertFromPosixWindowsToMacOs()
+{
+	SockAddrPrefixPosixWindows posixWindowsPrefix;
+	posixWindowsPrefix = data.posixWindowsPrefix;
+
+	data.macOsPrefix.sa_family = posixWindowsPrefix.sa_family;
+	data.macOsPrefix.sa_len = length();
 }
 
 

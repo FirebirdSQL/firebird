@@ -1,0 +1,56 @@
+*****************************************************************
+What to do when after restoring 3.0 database in FB4 you get:
+"function XXX is not defined" errors?
+*****************************************************************
+
+UDFs (implemented in dynamic libraries and defined in database using
+statement DECLARE FUNCTION functions) are deprecated in FB4. That means
+that UdfAccess parameter in firebird.conf defaults to 'None' instead
+'Restrict UDF' and no UDF libraries are distributed with firebird.
+But you can implement your own dynamic library (or use one from
+previous FB version), tune configuration and work with deprecated
+functions format. Certainly this is not recommended solution - you
+should better switch to use of UDR or PSQL functions, and in order
+to simplify that a little script replacing functions distributed with
+previous FB versions is present.
+
+First of all take into an account that most of ib_udf/fbudf functions
+were already replaced with builtin functions in prior versions (like
+trigonometric, logarithmic and exponential functions). A lot of others
+have direct replacement with builtin functions (like invl with
+coalesce). But replacing them in real database during (and together
+with) firebird upgrade is hardly good idea therefore this script
+which converts UDFs to exact PSQL/UDR replacement is provided.
+
+In a case when you get warnings like:
+gbak: WARNING:function UDF_FRAC is not defined
+gbak: WARNING:    module name or entrypoint could not be found
+
+First of all check - is mentioned function (UDF_FRAC in this example)
+from the list of distributed with previous FB version functions:
+ADDDAY                                      ADDDAY2
+ADDHOUR                                     ADDMILLISECOND
+ADDMINUTE                                   ADDMONTH
+ADDSECOND                                   ADDWEEK
+ADDYEAR                                     DIV
+DNULLIF                                     DNVL
+DOW                                         DPOWER
+GETEXACTTIMESTAMP                           GETEXACTTIMESTAMPUTC
+I64NULLIF                                   I64NVL
+I64ROUND                                    I64TRUNCATE
+INULLIF                                     INVL
+ISLEAPYEAR                                  LTRIM
+ROUND                                       RTRIM
+SDOW                                        SNULLIF
+SNVL                                        SRIGHT
+STRING2BLOB                                 STRLEN
+SUBSTR                                      SUBSTRLEN
+TRUNCATE                                    UDF_FRAC
+
+If yes this script will help you quickly solve that problem. Just run it:
+  isql -user sysdba -pas masterkey -i udf_replace.sql {your-database}
+and UDFs distributed in ib_udf and fbudf will be replaced with appropriate
+modern functions.
+
+WARNING: Script has nothing to do with THIRD-PARTY libraries!!!
+

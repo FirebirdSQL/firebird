@@ -553,6 +553,7 @@ static lck_owner_t get_owner_type(enum lck_t lock_type)
 	case LCK_sweep:
 	case LCK_crypt:
 	case LCK_crypt_status:
+	case LCK_tpc_init:
 	case LCK_tpc_block:
 		owner_type = LCK_OWNER_database;
 		break;

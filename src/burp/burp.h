@@ -30,7 +30,7 @@
 #define BURP_BURP_H
 
 #include <stdio.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "firebird/Interface.h"
 #include "firebird/Message.h"
 #include "../common/dsc.h"
@@ -42,7 +42,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/fb_pair.h"
 #include "../common/classes/MetaName.h"
-#include "../../jrd/SimilarToMatcher.h"
+#include "../common/SimilarToRegex.h"
 #include "../common/status.h"
 #include "../common/sha.h"
 #include "../common/classes/ImplementHelper.h"
@@ -894,26 +894,6 @@ static const char HDR_SPLIT_TAG6[]	= "InterBase/gbak,   ";
 const FB_UINT64 MIN_SPLIT_SIZE	= FB_CONST64(2048);		// bytes
 
 
-// Copy&paste from TraceUnicodeUtils.h - fixme !!!!!!!!
-class UnicodeCollationHolder
-{
-private:
-	charset* cs;
-	texttype* tt;
-	Firebird::AutoPtr<Jrd::CharSet> charSet;
-	Firebird::AutoPtr<Jrd::TextType> textType;
-
-public:
-	explicit UnicodeCollationHolder(Firebird::MemoryPool& pool);
-	~UnicodeCollationHolder();
-
-	Jrd::TextType* getTextType()
-	{
-		return textType;
-	}
-};
-
-
 // Global switches and data
 
 struct BurpCrypt;
@@ -1122,6 +1102,7 @@ public:
 	Firebird::IRequest*	handles_get_trigger_message_req_handle2;
 	Firebird::IRequest*	handles_get_trigger_old_req_handle1;
 	Firebird::IRequest*	handles_get_trigger_req_handle1;
+	Firebird::IRequest*	handles_get_trigger_req_handle2;
 	Firebird::IRequest*	handles_get_type_req_handle1;
 	Firebird::IRequest*	handles_get_user_privilege_req_handle1;
 	Firebird::IRequest*	handles_get_view_req_handle1;
@@ -1158,6 +1139,7 @@ public:
 		ThreadData::restoreSpecific();
 	}
 	void setupSkipData(const Firebird::string& regexp);
+	void setupIncludeData(const Firebird::string& regexp);
 	bool skipRelation(const char* name);
 
 	char veryEnd;
@@ -1173,8 +1155,8 @@ public:
 	bool flag_on_line;		// indicates whether we will bring the database on-line
 	bool firstMap;			// this is the first time we entered get_mapping()
 	bool stdIoMode;			// stdin or stdout is used as backup file
-	Firebird::AutoPtr<UnicodeCollationHolder> unicodeCollation;
-	Firebird::AutoPtr<Firebird::SimilarToMatcher<UCHAR, Jrd::UpcaseConverter<> > > skipDataMatcher;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> skipDataMatcher;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> includeDataMatcher;
 
 public:
 	Firebird::string toSystem(const Firebird::PathName& from);

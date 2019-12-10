@@ -38,7 +38,7 @@
 # endif
 #endif
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/gds_proto.h"
 
 DATABASE DB = "msg.fdb";

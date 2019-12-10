@@ -29,10 +29,12 @@
 typedef ISC_DATE;
 typedef ISC_QUAD;
 typedef ISC_TIME;
+typedef ISC_TIMESTAMP;
 typedef ISC_TIME_TZ;
 typedef ISC_TIMESTAMP_TZ;
 typedef FB_DEC16;
 typedef FB_DEC34;
+typedef FB_I128;
 typedef isc_tr_handle;
 typedef isc_stmt_handle;
 
@@ -186,6 +188,7 @@ interface FirebirdConf : ReferenceCounted
 	// Get integer key by it's name
 	// Value ~0 means name is invalid
 	// Keys are stable: one can use once obtained key in other instances of this interface
+	// provided they have same minor version (upper 16 bits match with getVersion())
 	uint getKey(const string name);
 	// Use to access integer values
 	int64 asInteger(uint key);
@@ -193,6 +196,10 @@ interface FirebirdConf : ReferenceCounted
 	const string asString(uint key);
 	// Use to access boolean values
 	boolean asBoolean(uint key);
+version:		// 3.0 => 4.0
+	// Use to access version of configuration manager serving this interface
+	// Format: major byte, minor byte, buildno 2-byte
+	uint getVersion(Status status);
 }
 
 // This interface is passed to plugin's factory as it's single parameter
@@ -517,6 +524,23 @@ interface Pipe : ReferenceCounted
 	void close(Status status);
 }
 */
+/*
+interface ReplicationBatch : Versioned
+{
+	void process(Status status, ReplicationSession replicator);
+	const string getDatabaseID();
+	uint64 getTransactionID();
+	ISC_TIMESTAMP getTimestamp();
+}
+*/
+interface Replicator : ReferenceCounted
+{
+/*
+	void process(Status status, ReplicationBatch batch);
+*/
+	void process(Status status, uint length, const uchar* data);
+	void close(Status status);
+} 
 
 interface Request : ReferenceCounted
 {
@@ -537,16 +561,6 @@ interface Request : ReferenceCounted
 interface Events : ReferenceCounted
 {
 	void cancel(Status status);
-}
-
-interface EventBlock : Disposable
-{
-	uint getLength();
-	uchar* getValues();
-	uchar* getBuffer();
-	uint getCount();
-	uint* getCounters();
-	void counts();
 }
 
 interface Attachment : ReferenceCounted
@@ -612,6 +626,8 @@ version:	// 3.0 => 4.0
 		Transaction transaction, MessageMetadata inMetadata, void* inBuffer,
 		MessageMetadata outMetadata, uint parLength, const uchar* par);
 	*/
+
+	Replicator createReplicator(Status status);
 }
 
 interface Service : ReferenceCounted
@@ -653,7 +669,7 @@ interface Dtc : Versioned
 }
 
 
-//Interfaces, used by authentication plugins
+// Interfaces, used by authentication plugins
 
 interface Auth : PluginBase
 {
@@ -1082,8 +1098,7 @@ interface Util : Versioned
 	XpbBuilder getXpbBuilder(Status status, uint kind, const uchar* buf, uint len);
 	uint setOffsets(Status status, MessageMetadata metadata, OffsetsCallback callback);
 
-version:	// 3.0 => 4.0
-	EventBlock createEventBlock(Status status, const string* events);
+version:	// 3.0 => 4.0 Alpha1
 	DecFloat16 getDecFloat16(Status status);
 	DecFloat34 getDecFloat34(Status status);
 	Transaction getTransactionByHandle(Status status, isc_tr_handle* hndlPtr);
@@ -1096,6 +1111,9 @@ version:	// 3.0 => 4.0
 		uint fractions, const string timeZone);
 	void encodeTimeStampTz(Status status, ISC_TIMESTAMP_TZ* timeStampTz, uint year, uint month, uint day,
 		uint hours, uint minutes, uint seconds, uint fractions, const string timeZone);
+
+version:	// 4.0 Beta1 => 4.0 Beta2
+	Int128 getInt128(Status status);
 }
 
 interface OffsetsCallback : Versioned
@@ -1290,6 +1308,8 @@ interface TraceSweepInfo : Versioned
 interface TraceLogWriter : ReferenceCounted
 {
 	uint write(const void* buf, uint size);
+version: // 3.0.4 -> 3.0.5
+	uint write_s(Status status, const void* buf, uint size);
 }
 
 interface TraceInitInfo : Versioned
@@ -1501,4 +1521,61 @@ interface DecFloat34 : Versioned
 	void toString(Status status, const FB_DEC34* from, uint bufferLength, string buffer);
 	void fromBcd(int sign, const uchar* bcd, int exp, FB_DEC34* to);
 	void fromString(Status status, const string from, FB_DEC34* to);
+}
+
+interface Int128 : Versioned
+{
+	// - 170141183460469231731687303715884105728 e - 128 \0
+	// 1 + 39 +							1 + 1 + 3 + 1 = 46
+	const uint STRING_SIZE = 46;	// includes terminating \0
+	void toString(Status status, const FB_I128* from, int scale, uint bufferLength, string buffer);
+	void fromString(Status status, int scale, const string from, FB_I128* to);
+}
+
+// Replication interfaces
+
+interface ReplicatedRecord : Versioned
+{
+	uint getRawLength();
+	const uchar* getRawData();
+}
+
+interface ReplicatedBlob : Versioned
+{
+	uint getLength();
+	boolean isEof();
+	uint getSegment(uint length, uchar* buffer);
+}
+
+interface ReplicatedTransaction : Disposable
+{
+	boolean prepare();
+	boolean commit();
+	boolean rollback();
+
+	boolean startSavepoint();
+	boolean releaseSavepoint();
+	boolean rollbackSavepoint();
+
+	boolean insertRecord(const string name,
+					  	 ReplicatedRecord record);
+	boolean updateRecord(const string name,
+					  	 ReplicatedRecord orgRecord,
+					  	 ReplicatedRecord newRecord);
+	boolean deleteRecord(const string name,
+					  	 ReplicatedRecord record);
+
+	boolean storeBlob(ISC_QUAD blobId, ReplicatedBlob blob);
+
+	boolean executeSql(const string sql);
+}
+
+interface ReplicatedSession : Disposable
+{
+	Status getStatus();
+
+	ReplicatedTransaction startTransaction(int64 number);
+	boolean cleanupTransaction(int64 number);
+
+	boolean setSequence(const string name, int64 value);
 }

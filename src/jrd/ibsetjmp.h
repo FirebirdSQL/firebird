@@ -42,7 +42,7 @@
 					ISC_STATUS __isc_error_code; \
 					if (!Config::getBugcheckAbort()) \
 					{ \
-						if (sig = sigsetjmp(sigenv, 1)) \
+						if ((sig = sigsetjmp(sigenv, 1))) \
 							ISC_exception_post(sig, err, __isc_error_code); \
 						Firebird::syncSignalsSet(&sigenv); \
 					}

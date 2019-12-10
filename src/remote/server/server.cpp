@@ -31,7 +31,7 @@
 #include "firebird.h"
 #include <stdio.h>
 #include <string.h>
-#include "../jrd/ibase.h"			// fb_shutdown_callback() is used from it
+#include "ibase.h"			// fb_shutdown_callback() is used from it
 #include "../common/gdsassert.h"
 #ifdef UNIX
 #include "../common/file_params.h"
@@ -54,7 +54,7 @@
 #endif
 #include "../common/isc_proto.h"
 #include "../jrd/constants.h"
-#include "../jrd/inf_pub.h"
+#include "firebird/impl/inf_pub.h"
 #include "../common/classes/init.h"
 #include "../common/classes/semaphore.h"
 #include "../common/classes/ClumpletWriter.h"
@@ -74,6 +74,7 @@
 #include "../common/enc_proto.h"
 #include "../common/classes/InternalMessageBuffer.h"
 #include "../common/os/os_utils.h"
+#include "../common/security.h"
 
 using namespace Firebird;
 
@@ -1076,7 +1077,7 @@ private:
 
 		void value(PathName& to) const
 		{
-			REMOTE_makeList(to, plugins);
+			plugins.makeList(to);
 		}
 
 	private:
@@ -1097,8 +1098,8 @@ public:
 			const char* list = cpItr.plugin()->getKnownTypes(&st);
 			check(&st);
 			fb_assert(list);
-			Remote::ParsedList newTypes;
-			REMOTE_parseList(newTypes, PathName(list));
+			PathName tmp(list);
+			ParsedList newTypes(tmp);
 
 			PathName plugin(cpItr.name());
 			for (unsigned i = 0; i < newTypes.getCount(); ++i)
@@ -1969,6 +1970,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	if (type == ptype_lazy_send)
 		port->port_flags |= PORT_lazy;
 
+	port->port_client_arch = connect->p_cnct_client;
 
 	Firebird::ClumpletReader id(Firebird::ClumpletReader::UnTagged,
 								connect->p_cnct_user_id.cstr_address,
@@ -2080,6 +2082,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 						}
 						port->port_srv_auth_block->setPluginName(plugins->name());
 						port->port_srv_auth_block->extractPluginName(&send->p_acpd.p_acpt_plugin);
+						returnData = true;
 						break;
 
 					case IAuth::AUTH_MORE_DATA:
@@ -2992,7 +2995,8 @@ void rem_port::disconnect(PACKET* sendL, PACKET* receiveL)
 		}
 
 		rdb->rdb_iface->detach(&status_vector);
-		{
+
+		{	// scope
 			RefMutexGuard portGuard(*port_cancel_sync, FB_FUNCTION);
 			rdb->rdb_iface = NULL;
 		}
@@ -3079,11 +3083,13 @@ void rem_port::drop_database(P_RLSE* /*release*/, PACKET* sendL)
 		return;
 	}
 
-	{
+	{	// scope
 		RefMutexGuard portGuard(*port_cancel_sync, FB_FUNCTION);
 		rdb->rdb_iface = NULL;
 	}
+
 	port_flags |= PORT_detached;
+
 	if (port_async)
 		port_async->port_flags |= PORT_detached;
 
@@ -3173,7 +3179,7 @@ ISC_STATUS rem_port::end_database(P_RLSE* /*release*/, PACKET* sendL)
 			release_event(rdb->rdb_events);
 	}
 
-	{
+	{	// scope
 		RefMutexGuard portGuard(*port_cancel_sync, FB_FUNCTION);
 		rdb->rdb_iface = NULL;
 	}
@@ -3704,6 +3710,36 @@ void rem_port::batch_rls(P_BATCH_FREE* batch, PACKET* sendL)
 }
 
 
+void rem_port::replicate(P_REPLICATE* repl, PACKET* sendL)
+{
+	LocalStatus ls;
+	CheckStatusWrapper status_vector(&ls);
+
+	Rdb* rdb = this->port_context;
+	if (bad_db(&status_vector, rdb))
+	{
+		this->send_response(sendL, 0, 0, &status_vector, false);
+		return;
+	}
+
+	if (!this->port_replicator)
+		this->port_replicator = rdb->rdb_iface->createReplicator(&status_vector);
+
+	if (repl->p_repl_data.cstr_length)
+	{
+		this->port_replicator->process(&status_vector,
+			repl->p_repl_data.cstr_length, repl->p_repl_data.cstr_address);
+	}
+	else
+	{
+		this->port_replicator->close(&status_vector);
+		this->port_replicator = NULL;
+	}
+
+	this->send_response(sendL, 0, 0, &status_vector, false);
+}
+
+
 ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* sendL)
 {
 /*****************************************
@@ -3787,7 +3823,17 @@ ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* send
 	check(&status_vector);
 
 	statement->rsr_iface->setTimeout(&status_vector, sqldata->p_sqldata_timeout);
-	check(&status_vector);
+	if ((status_vector.getState() & IStatus::STATE_ERRORS) &&
+		(status_vector.getErrors()[1] == isc_interface_version_too_old))
+	{
+		if (sqldata->p_sqldata_timeout)
+		{
+			(Arg::Gds(isc_wish_list) <<
+			 Arg::Gds(isc_random) << "Timeouts not supported by selected on server provider").raise();
+		}
+	}
+	else
+		check(&status_vector);
 
 	if ((flags & IStatement::FLAG_HAS_CURSOR) && (out_msg_length == 0))
 	{
@@ -4945,6 +4991,11 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 
 		case op_batch_set_bpb:
 			port->batch_bpb(&receive->p_batch_setbpb, sendL);
+			break;
+
+		case op_repl_data:
+			port->replicate(&receive->p_replicate, sendL);
+			break;
 
 		///case op_insert:
 		default:
@@ -6070,7 +6121,7 @@ void rem_port::start_crypt(P_CRYPT * crypt, PACKET* sendL)
 		PathName keyName(crypt->p_key.cstr_address, crypt->p_key.cstr_length);
 		for (unsigned k = 0; k < port_crypt_keys.getCount(); ++k)
 		{
-			if (keyName == port_crypt_keys[k]->t)
+			if (keyName == port_crypt_keys[k]->keyName)
 			{
 				key = port_crypt_keys[k];
 				break;
@@ -6084,9 +6135,7 @@ void rem_port::start_crypt(P_CRYPT * crypt, PACKET* sendL)
 
 		PathName plugName(crypt->p_plugin.cstr_address, crypt->p_plugin.cstr_length);
 		// Check it's availability
-		Remote::ParsedList plugins;
-
-		REMOTE_parseList(plugins, Config::getDefaultConfig()->getPlugins(
+		ParsedList plugins(Config::getDefaultConfig()->getPlugins(
 			IPluginManager::TYPE_WIRE_CRYPT));
 
 		bool found = false;
@@ -6117,7 +6166,7 @@ void rem_port::start_crypt(P_CRYPT * crypt, PACKET* sendL)
 		if (specificData)
 		{
 			cp.plugin()->setSpecificData(&st, keyName.c_str(), specificData->getCount(), specificData->begin());
-			checkExcept(&st, isc_wish_list);
+			check(&st, isc_wish_list);
 		}
 		cp.plugin()->setKey(&st, key);
 		check(&st);
@@ -6128,7 +6177,7 @@ void rem_port::start_crypt(P_CRYPT * crypt, PACKET* sendL)
 		port_crypt_complete = true;
 
 		send_response(sendL, 0, 0, &st, false);
-		WIRECRYPT_DEBUG(fprintf(stderr, "Installed cipher %s\n", cp.name()));
+		WIRECRYPT_DEBUG(fprintf(stderr, "Srv: Installed cipher %s\n", cp.name()));
 	}
 	catch (const Exception& ex)
 	{
@@ -6764,6 +6813,7 @@ bool Worker::wait(int timeout)
 	remove();
 	m_going = true;
 	m_cntGoing++;
+
 	return false;
 }
 
@@ -7052,13 +7102,10 @@ void SrvAuthBlock::createPluginsItr()
 		return;
 	}
 
-	Remote::ParsedList fromClient;
-	REMOTE_parseList(fromClient, pluginList);
+	ParsedList fromClient(pluginList);
+	ParsedList onServer(port->getPortConfig()->getPlugins(IPluginManager::TYPE_AUTH_SERVER));
+	ParsedList final;
 
-	Remote::ParsedList onServer;
-	REMOTE_parseList(onServer, port->getPortConfig()->getPlugins(IPluginManager::TYPE_AUTH_SERVER));
-
-	Remote::ParsedList final;
 	for (unsigned s = 0; s < onServer.getCount(); ++s)
 	{
 		// do not expect too long lists, therefore use double loop
@@ -7110,7 +7157,7 @@ void SrvAuthBlock::createPluginsItr()
 		final.push(onServer[onServer.getCount() - 1]);
 	}
 
-	REMOTE_makeList(pluginList, final);
+	final.makeList(pluginList);
 
 	RefPtr<const Config> portConf(port->getPortConfig());
 	plugins = FB_NEW AuthServerPlugins(IPluginManager::TYPE_AUTH_SERVER, portConf, pluginList.c_str());
@@ -7138,7 +7185,7 @@ bool SrvAuthBlock::extractNewKeys(CSTRING* to, ULONG flags)
 	{
 		for (unsigned n = 0; n < newKeys.getCount(); ++n)
 		{
-			const PathName& t = newKeys[n]->t;
+			const PathName& t = newKeys[n]->keyName;
 			PathName plugins = knownCryptKeyTypes()[t];
 			if (plugins.hasData())
 			{
@@ -7156,7 +7203,7 @@ bool SrvAuthBlock::extractNewKeys(CSTRING* to, ULONG flags)
 						CheckStatusWrapper st(&ls);
 						unsigned l;
 						const unsigned char* d = cp.plugin()->getSpecificData(&st, t.c_str(), &l);
-						checkExcept(&st, isc_wish_list);
+						check(&st, isc_wish_list);
 						if (d)
 						{
 							port->addSpecificData(t, plugin, l, d);
@@ -7172,7 +7219,7 @@ bool SrvAuthBlock::extractNewKeys(CSTRING* to, ULONG flags)
 
 		if ((flags & EXTRACT_PLUGINS_LIST) && (dataFromPlugin.getCount() == 0))
 		{
-			lastExtractedKeys.insertPath(TAG_KNOWN_PLUGINS, pluginList);
+			lastExtractedKeys.insertString(TAG_KNOWN_PLUGINS, pluginList);
 		}
 	}
 

@@ -21,7 +21,7 @@
  */
 
 #include "firebird.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "firebird/Interface.h"
 #include "../common/classes/alloc.h"
 #include "../common/classes/array.h"
@@ -567,29 +567,23 @@ UdrPluginImpl* Engine::loadModule(ThrowStatusWrapper* status, IRoutineMetadata* 
 		PathName path;
 		PathUtils::concatPath(path, *i, *moduleName);
 
-		static ISC_STATUS_ARRAY statusArray = {
+		ISC_STATUS_ARRAY statusArray = {
 			isc_arg_gds, isc_random,
 			isc_arg_string, (ISC_STATUS) "UDR module not loaded",
 			isc_arg_end
 		};
-		const unsigned ARG_END = 4;
+		const unsigned ARG_TEXT = 3;	// Keep both in sync
+		const unsigned ARG_END = 4;		// with status initializer!
 
 		ModuleLoader::Module* module = ModuleLoader::fixAndLoadModule(&statusArray[ARG_END], path);
 		if (!module)
 			throw FbException(status, statusArray);
 
 		FB_BOOLEAN* (*entryPoint)(IStatus*, FB_BOOLEAN*, IUdrPlugin*);
+		statusArray[ARG_TEXT] = (ISC_STATUS) "UDR plugin entry point not found";
 
-		if (!module->findSymbol(STRINGIZE(FB_UDR_PLUGIN_ENTRY_POINT), entryPoint))
-		{
-			static const ISC_STATUS statusVector[] = {
-				isc_arg_gds, isc_random,
-				isc_arg_string, (ISC_STATUS) "UDR plugin entry point not found",
-				isc_arg_end
-			};
-
-			throw FbException(status, statusVector);
-		}
+		if (!module->findSymbol(&statusArray[ARG_END], STRINGIZE(FB_UDR_PLUGIN_ENTRY_POINT), entryPoint))
+			throw FbException(status, statusArray);
 
 		UdrPluginImpl* udrPlugin = FB_NEW UdrPluginImpl(*moduleName, module);
 		udrPlugin->theirUnloadFlag = entryPoint(status, &udrPlugin->myUnloadFlag, udrPlugin);

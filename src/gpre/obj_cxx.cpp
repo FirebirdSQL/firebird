@@ -33,7 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../gpre/gpre.h"
 #include "../gpre/pat.h"
 #include "../gpre/msc_proto.h"
@@ -138,11 +138,7 @@ static const char* const NULL_STRING	= "NULL";
 static const char* const NULL_STATUS	= "NULL";
 static const char* const NULL_SQLDA		= "NULL";
 
-#ifdef DARWIN
-static const char* const GDS_INCLUDE	= "<Firebird/ibase.h>";
-#else
 static const char* const GDS_INCLUDE	= "<ibase.h>";
-#endif
 
 static const char* const DCL_LONG	= "ISC_LONG";
 static const char* const DCL_QUAD	= "ISC_QUAD";

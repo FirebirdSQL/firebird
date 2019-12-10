@@ -27,8 +27,9 @@
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/align.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/tra.h"
+#include "../jrd/Coercion.h"
 #include "../jrd/Function.h"
 #include "../jrd/Optimizer.h"
 #include "../jrd/RecordSourceNodes.h"
@@ -36,6 +37,7 @@
 #include "../jrd/extds/ExtDS.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/recsrc/Cursor.h"
+#include "../jrd/replication/Publisher.h"
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "../jrd/cmp_proto.h"
@@ -65,7 +67,8 @@ using namespace Jrd;
 
 namespace Jrd {
 
-template <typename T> static void dsqlExplodeFields(dsql_rel* relation, Array<NestConst<T> >& fields);
+template <typename T> static void dsqlExplodeFields(dsql_rel* relation, Array<NestConst<T> >& fields,
+	bool includeComputed);
 static dsql_par* dsqlFindDbKey(const dsql_req*, const RelationSourceNode*);
 static dsql_par* dsqlFindRecordVersion(const dsql_req*, const RelationSourceNode*);
 static const dsql_msg* dsqlGenDmlHeader(DsqlCompilerScratch*, RseNode*);
@@ -133,13 +136,16 @@ namespace
 		// Play with contexts for RETURNING purposes.
 		// Its assumed that oldContext is already on the stack.
 		// Changes oldContext name to "OLD".
-		ReturningProcessor(DsqlCompilerScratch* aScratch, dsql_ctx* aOldContext, dsql_ctx* modContext)
+		ReturningProcessor(DsqlCompilerScratch* aScratch, dsql_ctx* aOldContext, dsql_ctx* modContext,
+				ReturningClause* aNode)
 			: scratch(aScratch),
 			  oldContext(aOldContext),
+			  node(aNode),
 			  oldAlias(oldContext->ctx_alias),
 			  oldInternalAlias(oldContext->ctx_internal_alias),
 			  autoFlags(&oldContext->ctx_flags, oldContext->ctx_flags | CTX_system | CTX_returning),
-			  autoScopeLevel(&aScratch->scopeLevel, aScratch->scopeLevel + 1)
+			  autoScopeLevel(&aScratch->scopeLevel, aScratch->scopeLevel + 1),
+			  autoNodeFirst(node ? &node->first : &temp, node ? node->first : temp)
 		{
 			// Clone the modify/old context and push with name "NEW" in a greater scope level.
 
@@ -171,6 +177,8 @@ namespace
 			newContext->ctx_flags |= CTX_returning;
 			newContext->ctx_scope_level = scratch->scopeLevel;
 			scratch->context->push(newContext);
+
+			explode(scratch, oldContext->ctx_relation, node);
 		}
 
 		~ReturningProcessor()
@@ -184,9 +192,28 @@ namespace
 		}
 
 		// Process the RETURNING clause.
-		StmtNode* process(ReturningClause* node, StmtNode* stmtNode)
+		StmtNode* process(StmtNode* stmtNode)
 		{
 			return dsqlProcessReturning(scratch, node, stmtNode);
+		}
+
+		// Explode RETURNING * and RETURNING alias.* fields.
+		static void explode(DsqlCompilerScratch* scratch, dsql_rel* relation, ReturningClause* node)
+		{
+			if (!node)
+				return;
+
+			if (!node->first)
+			{
+				// Process RETURNING *
+				node->first = FB_NEW_POOL(scratch->getPool()) ValueListNode(scratch->getPool(), 0u);
+				dsqlExplodeFields(relation, node->first->items, true);
+			}
+			else
+			{
+				// Process alias.* items.
+				node->first = PASS1_expand_select_list(scratch, node->first, nullptr);
+			}
 		}
 
 		// Clone a RETURNING node without create duplicate parameters.
@@ -222,9 +249,12 @@ namespace
 	private:
 		DsqlCompilerScratch* scratch;
 		dsql_ctx* oldContext;
+		ReturningClause* node;
 		string oldAlias, oldInternalAlias;
 		AutoSetRestore<USHORT> autoFlags;
 		AutoSetRestore<USHORT> autoScopeLevel;
+		NestConst<ValueListNode> temp;
+		AutoSetRestore<NestConst<ValueListNode> > autoNodeFirst;
 	};
 
 	class SavepointChangeMarker : public Savepoint::ChangeMarker
@@ -295,27 +325,35 @@ void AssignmentNode::validateTarget(CompilerScratch* csb, const ValueExprNode* t
 	if ((fieldNode = nodeAs<FieldNode>(target)))
 	{
 		CompilerScratch::csb_repeat* tail = &csb->csb_rpt[fieldNode->fieldStream];
-		jrd_fld* field = MET_get_field(tail->csb_relation, fieldNode->fieldId);
-		string fieldName(field ? field->fld_name.c_str() : "<unknown>");
 
-		if (field && tail->csb_relation)
-			fieldName = string(tail->csb_relation->rel_name.c_str()) + "." + fieldName;
+		bool error = false;
 
 		// Assignments to the OLD context are prohibited for all trigger types.
 		if ((tail->csb_flags & csb_trigger) && fieldNode->fieldStream == OLD_CONTEXT_VALUE)
-			ERR_post(Arg::Gds(isc_read_only_field) << fieldName.c_str());
+			error = true;
 
 		// Assignments to the NEW context are prohibited for post-action triggers.
-		if ((tail->csb_flags & csb_trigger) && fieldNode->fieldStream == NEW_CONTEXT_VALUE &&
+		else if ((tail->csb_flags & csb_trigger) && fieldNode->fieldStream == NEW_CONTEXT_VALUE &&
 			(csb->csb_g_flags & csb_post_trigger))
 		{
-			ERR_post(Arg::Gds(isc_read_only_field) << fieldName.c_str());
+			error = true;
 		}
 
 		// Assignment to cursor fields are always prohibited.
 		// But we cannot detect FOR cursors here. They are treated in dsqlPass.
-		if (fieldNode->cursorNumber.specified)
+		else if (fieldNode->cursorNumber.specified)
+			error = true;
+
+		if (error)
+		{
+			jrd_fld* field = MET_get_field(tail->csb_relation, fieldNode->fieldId);
+			string fieldName(field ? field->fld_name.c_str() : "<unknown>");
+
+			if (field && tail->csb_relation)
+				fieldName = string(tail->csb_relation->rel_name.c_str()) + "." + fieldName;
+
 			ERR_post(Arg::Gds(isc_read_only_field) << fieldName.c_str());
+		}
 	}
 	else if (!(nodeIs<ParameterNode>(target) || nodeIs<VariableNode>(target) || nodeIs<NullNode>(target)))
 		ERR_post(Arg::Gds(isc_read_only_field) << "<unknown>");
@@ -461,7 +499,12 @@ AssignmentNode* AssignmentNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 		}
 	}
 
-	ExprNode::doPass2(tdbb, csb, asgnFrom.getAddress());
+	{ // scope
+		dsc desc;
+		asgnTo->getDesc(tdbb, csb, &desc);
+		AutoSetRestore<dsc*> dataType(&csb->csb_preferredDesc, &desc);
+		ExprNode::doPass2(tdbb, csb, asgnFrom.getAddress());
+	}
 	ExprNode::doPass2(tdbb, csb, asgnTo.getAddress());
 	ExprNode::doPass2(tdbb, csb, missing.getAddress());
 	ExprNode::doPass2(tdbb, csb, missing2.getAddress());
@@ -2252,6 +2295,8 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->context->push(node->dsqlContext);
 		++dsqlScratch->scopeLevel;
 
+		ReturningProcessor::explode(dsqlScratch, node->dsqlContext->ctx_relation, dsqlReturning);
+
 		node->statement = dsqlProcessReturning(dsqlScratch, dsqlReturning, statement);
 
 		--dsqlScratch->scopeLevel;
@@ -2294,6 +2339,8 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	node->dsqlRse = rse;
 	node->dsqlRelation = nodeAs<RelationSourceNode>(rse->dsqlStreams->items[0]);
+
+	ReturningProcessor::explode(dsqlScratch, node->dsqlRelation->dsqlContext->ctx_relation, dsqlReturning);
 
 	node->statement = dsqlProcessReturning(dsqlScratch, dsqlReturning, statement);
 
@@ -2596,7 +2643,10 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, jrd_req* request, WhichTrigger
 	else if (relation->isVirtual())
 		VirtualTable::erase(tdbb, rpb);
 	else if (!relation->rel_view_rse)
+	{
 		VIO_erase(tdbb, rpb, transaction);
+		REPL_erase(tdbb, rpb, transaction);
+	}
 
 	// Handle post operation trigger.
 	if (relation->rel_post_erase && whichTrig != PRE_TRIG)
@@ -2896,7 +2946,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		{
 			DEV_BLKCHK(field, dsql_type_fld);
 			DEV_BLKCHK(*ptr, dsql_type_nod);
-			MAKE_desc_from_field(&desc_node, field);
+			DsqlDescMaker::fromField(&desc_node, field);
 			PASS1_set_parameter_type(dsqlScratch, *ptr,
 				[&] (dsc* desc) { *desc = desc_node; },
 				false);
@@ -2962,7 +3012,7 @@ ValueListNode* ExecProcedureNode::explodeOutputs(DsqlCompilerScratch* dsqlScratc
 			dsqlScratch->getStatement()->getReceiveMsg(), true, true, 0, NULL);
 		paramNode->dsqlParameterIndex = parameter->par_index;
 
-		MAKE_desc_from_field(&parameter->par_desc, field);
+		DsqlDescMaker::fromField(&parameter->par_desc, field);
 		parameter->par_name = parameter->par_alias = field->fld_name.c_str();
 		parameter->par_rel_name = procedure->prc_name.identifier.c_str();
 		parameter->par_owner_name = procedure->prc_owner.c_str();
@@ -3105,6 +3155,9 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, jrd_req* request) cons
 				Arg::Str(procedure->getName().identifier) << Arg::Str(procedure->getName().package));
 	}
 
+	UserId* invoker = procedure->invoker ? procedure->invoker : tdbb->getAttachment()->att_ss_user;
+	AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);
+
 	ULONG inMsgLength = 0;
 	UCHAR* inMsg = NULL;
 
@@ -3156,7 +3209,11 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, jrd_req* request) cons
 
 	try
 	{
-		procRequest->req_timestamp_utc = request->req_timestamp_utc;
+		AutoSetRestore<USHORT> autoOriginalTimeZone(
+			&tdbb->getAttachment()->att_original_timezone,
+			tdbb->getAttachment()->att_current_timezone);
+
+		procRequest->req_gmt_timestamp = request->req_gmt_timestamp;
 
 		EXE_start(tdbb, procRequest, transaction);
 
@@ -3331,6 +3388,19 @@ DmlNode* ExecStatementNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 						node->outputs = PAR_args(tdbb, csb, outputs, outputs);
 						break;
 
+					case blr_exec_stmt_in_excess:
+					{
+						MemoryPool& pool = csb->csb_pool;
+						node->excessInputs = FB_NEW_POOL(pool) EDS::ParamNumbers(pool);
+						const USHORT count = csb->csb_blr_reader.getWord();
+						for (FB_SIZE_T i = 0; i < count; i++)
+						{
+							const USHORT n = csb->csb_blr_reader.getWord();
+							node->excessInputs->add(n);
+						}
+						break;
+					}
+
 					case blr_end:
 						break;
 
@@ -3359,6 +3429,7 @@ StmtNode* ExecStatementNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->sql = doDsqlPass(dsqlScratch, sql);
 	node->inputs = doDsqlPass(dsqlScratch, inputs);
 	node->inputNames = inputNames;
+	node->excessInputs = excessInputs;
 
 	// Check params names uniqueness, if present.
 
@@ -3527,7 +3598,7 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 				dsqlScratch->appendUChar(blr_exec_stmt_in_params);
 
 			NestConst<ValueExprNode>* ptr = inputs->items.begin();
-			MetaName* const* name = inputNames ? inputNames->begin() : NULL;
+			const MetaName* const* name = inputNames ? inputNames->begin() : NULL;
 
 			for (const NestConst<ValueExprNode>* end = inputs->items.end(); ptr != end; ++ptr, ++name)
 			{
@@ -3535,6 +3606,15 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 					dsqlScratch->appendNullString((*name)->c_str());
 
 				GEN_expr(dsqlScratch, *ptr);
+			}
+
+			if (excessInputs)
+			{
+				dsqlScratch->appendUChar(blr_exec_stmt_in_excess);
+				dsqlScratch->appendUShort(excessInputs->getCount());
+
+				for (FB_SIZE_T i = 0; i < excessInputs->getCount(); i++)
+					dsqlScratch->appendUShort((*excessInputs)[i]);
 			}
 		}
 
@@ -3640,9 +3720,9 @@ const StmtNode* ExecStatementNode::execute(thread_db* tdbb, jrd_req* request, Ex
 			stmt->setTimeout(tdbb, timer->timeToExpire());
 
 		if (stmt->isSelectable())
-			stmt->open(tdbb, tran, inpNames, inputs, !innerStmt);
+			stmt->open(tdbb, tran, inpNames, inputs, excessInputs, !innerStmt);
 		else
-			stmt->execute(tdbb, tran, inpNames, inputs, outputs);
+			stmt->execute(tdbb, tran, inpNames, inputs, excessInputs, outputs);
 
 		request->req_operation = jrd_req::req_return;
 	}  // jrd_req::req_evaluate
@@ -4156,7 +4236,7 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			dsc desc_node;
 
 			newParam->type->flags |= FLD_nullable;
-			MAKE_desc_from_field(&desc_node, newParam->type);
+			DsqlDescMaker::fromField(&desc_node, newParam->type);
 			PASS1_set_parameter_type(dsqlScratch, temp,
 				[&] (dsc* desc) { *desc = desc_node; },
 				false);
@@ -4283,8 +4363,7 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		dsql_par* param = MAKE_parameter(statement->getReceiveMsg(), true, true,
 			(i - dsqlScratch->outputVariables.begin()) + 1, varNode);
 		param->par_node = varNode;
-		MAKE_desc(dsqlScratch, &param->par_desc, varNode);
-		param->par_desc.dsc_flags |= DSC_nullable;
+		DsqlDescMaker::fromNode(dsqlScratch, &param->par_desc, varNode, true);
 	}
 
 	// Set up parameter to handle EOF
@@ -5440,8 +5519,6 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 			if (returning)
 			{
-				StmtNode* updRet = ReturningProcessor::clone(dsqlScratch, returning, processedRet);
-
 				// Repush the source contexts.
 				++dsqlScratch->scopeLevel;	// Go to the same level of source and target contexts.
 
@@ -5452,8 +5529,11 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 				modContext->ctx_scope_level = oldContext->ctx_scope_level;
 
-				processedRet = modify->statement2 = ReturningProcessor(
-					dsqlScratch, oldContext, modContext).process(returning, updRet);
+				{	// scope
+					ReturningProcessor returningProcessor(dsqlScratch, oldContext, modContext, returning);
+					StmtNode* updRet = ReturningProcessor::clone(dsqlScratch, returning, processedRet);
+					processedRet = modify->statement2 = returningProcessor.process(updRet);
+				}
 
 				if (!nullRet)
 					nullRet = dsqlNullifyReturning(dsqlScratch, modify, false);
@@ -5506,10 +5586,11 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 			if (returning)
 			{
-				StmtNode* delRet = ReturningProcessor::clone(dsqlScratch, returning, processedRet);
-
-				processedRet = erase->statement = ReturningProcessor(
-					dsqlScratch, context, NULL).process(returning, delRet);
+				{	// scope
+					ReturningProcessor returningProcessor(dsqlScratch, context, NULL, returning);
+					StmtNode* delRet = ReturningProcessor::clone(dsqlScratch, returning, processedRet);
+					processedRet = erase->statement = returningProcessor.process(delRet);
+				}
 
 				if (!nullRet)
 					nullRet = dsqlNullifyReturning(dsqlScratch, erase, false);
@@ -5569,16 +5650,17 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		if (returning)
 		{
-			StmtNode* insRet = ReturningProcessor::clone(dsqlScratch, returning, processedRet);
-
 			dsql_ctx* const oldContext = dsqlGetContext(target);
 			dsqlScratch->context->push(oldContext);
 
 			dsql_ctx* context = dsqlGetContext(store->dsqlRelation);
 			context->ctx_scope_level = oldContext->ctx_scope_level;
 
-			processedRet = store->statement2 = ReturningProcessor(
-				dsqlScratch, oldContext, context).process(returning, insRet);
+			{	// scope
+				ReturningProcessor returningProcessor(dsqlScratch, oldContext, context, returning);
+				StmtNode* insRet = ReturningProcessor::clone(dsqlScratch, returning, processedRet);
+				processedRet = store->statement2 = returningProcessor.process(insRet);
+			}
 
 			if (!nullRet)
 				nullRet = dsqlNullifyReturning(dsqlScratch, store, false);
@@ -5911,8 +5993,14 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 		dsqlScratch->context->push(oldContext);	// process old context values
 		++dsqlScratch->scopeLevel;
 
-		node->statement2 = ReturningProcessor(dsqlScratch, oldContext, modContext).process(
-			dsqlReturning, statement2);
+		{	// scope
+			ReturningProcessor returningProcessor(dsqlScratch, oldContext, modContext, dsqlReturning);
+
+			if (updateOrInsert)
+				statement2 = ReturningProcessor::clone(dsqlScratch, dsqlReturning, statement2);
+
+			node->statement2 = returningProcessor.process(statement2);
+		}
 
 		--dsqlScratch->scopeLevel;
 		dsqlScratch->context->pop();
@@ -5987,8 +6075,12 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 
 	if (dsqlReturning || statement2)
 	{
-		node->statement2 = ReturningProcessor(dsqlScratch, old_context, mod_context).process(
-			dsqlReturning, statement2);
+		ReturningProcessor returningProcessor(dsqlScratch, old_context, mod_context, dsqlReturning);
+
+		if (updateOrInsert)
+			statement2 = ReturningProcessor::clone(dsqlScratch, dsqlReturning, statement2);
+
+		node->statement2 = returningProcessor.process(statement2);
 	}
 
 	node->dsqlRse = rse;
@@ -6363,6 +6455,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, jrd_req* request, WhichTrigg
 				{
 					VIO_modify(tdbb, orgRpb, newRpb, transaction);
 					IDX_modify(tdbb, orgRpb, newRpb, transaction);
+					REPL_modify(tdbb, orgRpb, newRpb, transaction);
 				}
 
 				newRpb->rpb_number = orgRpb->rpb_number;
@@ -6783,7 +6876,7 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 	}
 	else
 	{
-		dsqlExplodeFields(relation, fields);
+		dsqlExplodeFields(relation, fields, false);
 
 		for (NestConst<ValueExprNode>* i = fields.begin(); i != fields.end(); ++i)
 			*i = doDsqlPass(dsqlScratch, *i, false);
@@ -6851,6 +6944,12 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 		new_context->ctx_flags |= CTX_system | CTX_returning;
 		dsqlScratch->context->push(new_context);
 	}
+
+	NestConst<ValueListNode> temp;
+	AutoSetRestore<NestConst<ValueListNode> > autoNodeFirst(
+		dsqlReturning ? &dsqlReturning->first : &temp, dsqlReturning ? dsqlReturning->first : temp);
+
+	ReturningProcessor::explode(dsqlScratch, relation, dsqlReturning);
 
 	node->statement2 = dsqlProcessReturning(dsqlScratch, dsqlReturning, statement2);
 
@@ -7240,6 +7339,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, jrd_req* request, WhichTrigger
 				{
 					VIO_store(tdbb, rpb, transaction);
 					IDX_store(tdbb, rpb, transaction);
+					REPL_store(tdbb, rpb, transaction);
 				}
 
 				rpb->rpb_number.setValid(true);
@@ -7517,7 +7617,7 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		dsql_par* parameter = MAKE_parameter(statement->getReceiveMsg(), true, true, 0, *ptr);
 		parameter->par_node = *ptr;
-		MAKE_desc(dsqlScratch, &parameter->par_desc, *ptr);
+		DsqlDescMaker::fromNode(dsqlScratch, &parameter->par_desc, *ptr);
 	}
 
 	// Set up parameter to handle EOF.
@@ -8134,6 +8234,14 @@ SetTransactionNode* SetTransactionNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	for (RestrictionOption** i = reserveList.begin(); i != reserveList.end(); ++i)
 		genTableLock(dsqlScratch, **i, lockLevel);
 
+	if (atSnapshotNumber.specified)
+	{
+		dsqlScratch->appendUChar(isc_tpb_at_snapshot_number);
+		static_assert(sizeof(CommitNumber) == sizeof(FB_UINT64), "sizeof(CommitNumber) == sizeof(FB_UINT64)");
+		dsqlScratch->appendUChar(sizeof(CommitNumber));
+		dsqlScratch->appendUInt64(atSnapshotNumber.value);
+	}
+
 	if (dsqlScratch->getBlrData().getCount() > 1)	// 1 -> isc_tpb_version1
 		tpb.add(dsqlScratch->getBlrData().begin(), dsqlScratch->getBlrData().getCount());
 
@@ -8212,75 +8320,13 @@ void SetRoleNode::execute(thread_db* tdbb, dsql_req* request, jrd_tra** /*traHan
 //--------------------
 
 
-namespace
-{
-
-struct TextCode
-{
-	const char* name;
-	USHORT val;
-};
-
-//#define FB_TEXTCODE(x) { STRINGIZE(x), x }
-#define FB_TEXTCODE(x) { #x, x }
-
-const TextCode roundModes[] = {
-	FB_TEXTCODE(DEC_ROUND_CEILING),
-	FB_TEXTCODE(DEC_ROUND_UP),
-	FB_TEXTCODE(DEC_ROUND_HALF_UP),
-	FB_TEXTCODE(DEC_ROUND_HALF_EVEN),
-	FB_TEXTCODE(DEC_ROUND_HALF_DOWN),
-	FB_TEXTCODE(DEC_ROUND_DOWN),
-	FB_TEXTCODE(DEC_ROUND_FLOOR),
-	{ "DEC_ROUND_REROUND", DEC_ROUND_05UP },
-	{ NULL, 0 }
-};
-
-//DEC_ROUND_
-//0123456789
-const unsigned FB_RMODE_OFFSET = 10;
-
-const TextCode ieeeTraps[] = {
-	FB_TEXTCODE(DEC_IEEE_754_Division_by_zero),
-	FB_TEXTCODE(DEC_IEEE_754_Inexact),
-	FB_TEXTCODE(DEC_IEEE_754_Invalid_operation),
-	FB_TEXTCODE(DEC_IEEE_754_Overflow),
-	FB_TEXTCODE(DEC_IEEE_754_Underflow),
-	{ NULL, 0 }
-};
-
-//DEC_IEEE_754_
-//0123456789012
-const unsigned FB_TRAPS_OFFSET = 13;
-
-#undef FB_TEXTCODE
-
-const TextCode* getCodeByText(const MetaName& text, const TextCode* textCode, unsigned offset)
-{
-	NoCaseString name(text.c_str(), text.length());
-
-	for (const TextCode* tc = textCode; tc->name; ++tc)
-	{
-		if (name == &tc->name[offset])
-			return tc;
-	}
-
-	return nullptr;
-}
-
-}
-
-
-//--------------------
-
-
 SetDecFloatRoundNode::SetDecFloatRoundNode(MemoryPool& pool, Firebird::MetaName* name)
 	: SessionManagementNode(pool)
 {
 	fb_assert(name);
-	const TextCode* mode = getCodeByText(*name, roundModes, FB_RMODE_OFFSET);
+	const DecFloatConstant* mode = DecFloatConstant::getByText(*name, FB_DEC_RoundModes, FB_DEC_RMODE_OFFSET);
 	if (!mode)
-		(Arg::Gds(isc_decfloat_round) << *name).raise();
+		(Arg::Gds(isc_invalid_decfloat_round) << *name).raise();
 	rndMode = mode->val;
 }
 
@@ -8298,9 +8344,9 @@ void SetDecFloatRoundNode::execute(thread_db* tdbb, dsql_req* /*request*/, jrd_t
 void SetDecFloatTrapsNode::trap(Firebird::MetaName* name)
 {
 	fb_assert(name);
-	const TextCode* trap = getCodeByText(*name, ieeeTraps, FB_TRAPS_OFFSET);
+	const DecFloatConstant* trap = DecFloatConstant::getByText(*name, FB_DEC_IeeeTraps, FB_DEC_TRAPS_OFFSET);
 	if (!trap)
-		(Arg::Gds(isc_decfloat_trap) << *name).raise();
+		(Arg::Gds(isc_invalid_decfloat_trap) << *name).raise();
 	traps |= trap->val;
 }
 
@@ -8315,11 +8361,28 @@ void SetDecFloatTrapsNode::execute(thread_db* tdbb, dsql_req* /*request*/, jrd_t
 //--------------------
 
 
-void SetDecFloatBindNode::execute(thread_db* tdbb, dsql_req* /*request*/, jrd_tra** /*traHandle*/) const
+SessionManagementNode* SetBindNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	static const USHORT NON_FIELD_MASK = FLD_legacy | FLD_native;
+
+	from->resolve(dsqlScratch);
+	if (!(to->flags & NON_FIELD_MASK))
+		to->resolve(dsqlScratch);
+
+	return SessionManagementNode::dsqlPass(dsqlScratch);
+}
+
+
+void SetBindNode::execute(thread_db* tdbb, dsql_req* /*request*/, jrd_tra** /*traHandle*/) const
 {
 	SET_TDBB(tdbb);
+
+	fb_assert(from);
+	fb_assert(to);
+
 	Attachment* const attachment = tdbb->getAttachment();
-	attachment->att_dec_binding = bind;
+	CoercionArray* coercions = attachment->att_dest_bind;
+	coercions->setRule(from, to);
 }
 
 
@@ -8408,17 +8471,6 @@ void SetTimeZoneNode::execute(thread_db* tdbb, dsql_req* request, jrd_tra** /*tr
 //--------------------
 
 
-void SetTimeZoneBindNode::execute(thread_db* tdbb, dsql_req* /*request*/, jrd_tra** /*traHandle*/) const
-{
-	SET_TDBB(tdbb);
-	Attachment* const attachment = tdbb->getAttachment();
-	attachment->att_timezone_bind = bind;
-}
-
-
-//--------------------
-
-
 StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	thread_db* tdbb = JRD_get_thread_data(); // necessary?
@@ -8450,7 +8502,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	// If a field list isn't present, build one using the same rules of INSERT INTO table VALUES ...
 	if (fieldsCopy.isEmpty())
-		dsqlExplodeFields(ctxRelation, fieldsCopy);
+		dsqlExplodeFields(ctxRelation, fieldsCopy, false);
 
 	// Maintain a pair of view's field name / base field name.
 	MetaNamePairMap view_fields;
@@ -8593,8 +8645,8 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (returning)
 	{
 		update->dsqlRseFlags = RecordSourceNode::DFLAG_SINGLETON;
-		update->statement2 = ReturningProcessor::clone(
-			dsqlScratch, returning, insert->statement2);
+		update->dsqlReturning = returning;
+		update->statement2 = insert->statement2;
 	}
 
 	update = nodeAs<ModifyNode>(update->internalDsqlPass(dsqlScratch, true));
@@ -8655,7 +8707,7 @@ void UpdateOrInsertNode::genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
 
 // Generate a field list that correspond to table fields.
 template <typename T>
-static void dsqlExplodeFields(dsql_rel* relation, Array<NestConst<T> >& fields)
+static void dsqlExplodeFields(dsql_rel* relation, Array<NestConst<T> >& fields, bool includeComputed)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 	MemoryPool& pool = *tdbb->getDefaultPool();
@@ -8664,7 +8716,7 @@ static void dsqlExplodeFields(dsql_rel* relation, Array<NestConst<T> >& fields)
 	{
 		// CVC: Ann Harrison requested to skip COMPUTED fields in INSERT w/o field list.
 		// ASF: But not for views - CORE-5454
-		if (!(relation->rel_flags & REL_view) && (field->flags & FLD_computed))
+		if (!includeComputed && !(relation->rel_flags & REL_view) && (field->flags & FLD_computed))
 			continue;
 
 		FieldNode* fieldNode = FB_NEW_POOL(pool) FieldNode(pool);
@@ -9114,7 +9166,7 @@ static VariableNode* dsqlPassHiddenVariable(DsqlCompilerScratch* dsqlScratch, Va
 	varNode->dsqlVar = dsqlScratch->makeVariable(NULL, "", dsql_var::TYPE_HIDDEN,
 		0, 0, dsqlScratch->hiddenVarsNumber++);
 
-	MAKE_desc(dsqlScratch, &varNode->dsqlVar->desc, expr);
+	DsqlDescMaker::fromNode(dsqlScratch, &varNode->dsqlVar->desc, expr);
 	varNode->nodDesc = varNode->dsqlVar->desc;
 
 	return varNode;
@@ -9280,8 +9332,7 @@ static StmtNode* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, Returnin
 			dsql_par* parameter = MAKE_parameter(dsqlScratch->getStatement()->getReceiveMsg(),
 				true, true, 0, *src);
 			parameter->par_node = *src;
-			MAKE_desc(dsqlScratch, &parameter->par_desc, *src);
-			parameter->par_desc.dsc_flags |= DSC_nullable;
+			DsqlDescMaker::fromNode(dsqlScratch, &parameter->par_desc, *src, true);
 
 			ParameterNode* paramNode = FB_NEW_POOL(*tdbb->getDefaultPool()) ParameterNode(
 				*tdbb->getDefaultPool());
@@ -9339,7 +9390,7 @@ static void dsqlSetParameterName(DsqlCompilerScratch* dsqlScratch, ExprNode* exp
 			exprNode->getChildren(holder, true);
 
 			for (auto ref : holder.refs)
-				dsqlSetParameterName(dsqlScratch, ref->getExpr(), fld_node, relation);
+				dsqlSetParameterName(dsqlScratch, *ref, fld_node, relation);
 
 			break;
 		}
@@ -9803,7 +9854,7 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 		{
 			// Validation error -- report result
 			const char* value;
-			VaryStr<128> temp;
+			VaryStr<TEMP_STR_LENGTH> temp;
 
 			const dsc* desc = EVL_expr(tdbb, request, i->value);
 			const USHORT length = (desc && !(request->req_flags & req_null)) ?

@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "../remote/remote.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
 #include "../utilities/install/install_nt.h"
 
@@ -215,14 +215,14 @@ rem_port* WNET_analyze(ClntAuthBlock* cBlock,
 									   packet->p_acpd.p_acpt_data.cstr_address);
 			cBlock->authComplete = packet->p_acpd.p_acpt_authenticated;
 			port->addServerKeys(&packet->p_acpd.p_acpt_keys);
-			cBlock->resetClnt(&file_name, &packet->p_acpd.p_acpt_keys);
+			cBlock->resetClnt(&packet->p_acpd.p_acpt_keys);
 		}
 		break;
 
 	case op_accept:
 		if (cBlock)
 		{
-			cBlock->resetClnt(&file_name);
+			cBlock->resetClnt();
 		}
 		accept = &packet->p_acpt;
 		break;

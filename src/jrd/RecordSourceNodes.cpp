@@ -1354,7 +1354,9 @@ void AggregateSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (dsqlWindow)
 	{
-		fb_assert(dsqlContext->ctx_win_maps.hasData());
+		// There may be unused named windows.
+		//fb_assert(dsqlContext->ctx_win_maps.hasData());
+
 		dsqlScratch->appendUChar(dsqlContext->ctx_win_maps.getCount());	// number of windows
 
 		for (Array<WindowMap*>::iterator i = dsqlContext->ctx_win_maps.begin();
@@ -3315,8 +3317,8 @@ bool RseNode::computable(CompilerScratch* csb, StreamType stream,
 	if (rse_first && !rse_first->computable(csb, stream, allowOnlyCurrentStream))
 		return false;
 
-    if (rse_skip && !rse_skip->computable(csb, stream, allowOnlyCurrentStream))
-        return false;
+	if (rse_skip && !rse_skip->computable(csb, stream, allowOnlyCurrentStream))
+		return false;
 
 	const NestConst<RecordSourceNode>* const end = rse_relations.end();
 	NestConst<RecordSourceNode>* ptr;
@@ -3351,8 +3353,8 @@ void RseNode::findDependentFromStreams(const OptimizerRetrieval* optRet,
 	if (rse_first)
 		rse_first->findDependentFromStreams(optRet, streamList);
 
-    if (rse_skip)
-        rse_skip->findDependentFromStreams(optRet, streamList);
+	if (rse_skip)
+		rse_skip->findDependentFromStreams(optRet, streamList);
 
 	if (rse_boolean)
 		rse_boolean->findDependentFromStreams(optRet, streamList);

@@ -1,24 +1,11 @@
-icu.exe is a self-extract pre-built (by us) IBM ICU 52.1 library.
+icu.exe is a self-extract pre-built (by us) IBM ICU 63.1 library.
 
 The sources was downloaded from http://site.icu-project.org/download.
 
-Two customized data files was created using the tool at http://apps.icu-project.org/datacustom/ICUData52.html.
+The simple fix for bug ICU-20302 (Windows 7: timezone detection on Windows 
+is broken) is applyed, see:
 
-One was created empty and saved to icudt52l_empty.dat. This file is used when building ICU, to
-make icudt a little stub. The file was saved in ICU sources directory at <icu>\source\data\in
-with name icudt52l.dat, before start ICU building process.
+https://unicode-org.atlassian.net/browse/ICU-20302
+https://github.com/unicode-org/icu/pull/315
 
-The other is the data file we use in runtime. It was created selecting the options:
-- Charset Mapping Tables:
-    gb18030
-    ibm-1386_P100-2001
-    ibm-942_P12A-1999
-    ibm-943_P130-1999
-    ibm-943_P15A-2003
-    icu-internal-25546
-    windows-874-2000
-    windows-936-2000
-
-- Collators: all
-
-- Base data: all
+The build was done using VS 2017 (15.9).

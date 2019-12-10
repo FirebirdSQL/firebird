@@ -87,7 +87,7 @@ protected:
 		virtual ~ImplBase() { }
 	};
 
-	Base(ISC_STATUS k, ISC_STATUS c) throw(Firebird::BadAlloc);
+	Base(ISC_STATUS k, ISC_STATUS c);
 	explicit Base(ImplBase* i) throw() : implementation(i) { }
 	~Base() throw() { delete implementation; }
 
@@ -144,13 +144,13 @@ protected:
 		explicit ImplStatusVector(const Exception& ex) throw();
 	};
 
-	StatusVector(ISC_STATUS k, ISC_STATUS v) throw(Firebird::BadAlloc);
+	StatusVector(ISC_STATUS k, ISC_STATUS v);
 
 public:
-	explicit StatusVector(const ISC_STATUS* s) throw(Firebird::BadAlloc);
-	explicit StatusVector(const IStatus* s) throw(Firebird::BadAlloc);
-	explicit StatusVector(const Exception& ex) throw(Firebird::BadAlloc);
-	StatusVector() throw(Firebird::BadAlloc);
+	explicit StatusVector(const ISC_STATUS* s);
+	explicit StatusVector(const IStatus* s);
+	explicit StatusVector(const Exception& ex);
+	StatusVector();
 	~StatusVector() { }
 
 	const ISC_STATUS* value() const throw() { return implementation->value(); }

@@ -556,6 +556,9 @@ protected:
 
 	virtual ~IscTransaction() {}
 
+	virtual void generateTPB(Jrd::thread_db* tdbb, Firebird::ClumpletWriter& tpb,
+		TraModes traMode, bool readOnly, bool wait, int lockTimeout) const;
+
 	virtual void doStart(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, Firebird::ClumpletWriter& tpb);
 	virtual void doPrepare(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, int info_len, const char* info);
 	virtual void doCommit(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, bool retain);

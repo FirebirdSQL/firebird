@@ -35,6 +35,7 @@
 #include <string.h>
 
 #include "classes/fb_string.h"
+#include "classes/MetaName.h"
 
 extern "C"
 {
@@ -44,6 +45,59 @@ extern "C"
 
 namespace Firebird {
 
+struct DecFloatConstant
+{
+	const char* name;
+	USHORT val;
+
+	static const DecFloatConstant* getByText(const MetaName& text, const DecFloatConstant* constants, unsigned offset)
+	{
+		NoCaseString name(text.c_str(), text.length());
+
+		for (const DecFloatConstant* dfConst = constants; dfConst->name; ++dfConst)
+		{
+			if (name == &dfConst->name[offset])
+				return dfConst;
+		}
+
+		return nullptr;
+	}
+};
+
+//#define FB_DECLOAT_CONST(x) { STRINGIZE(x), x }
+#define FB_DECLOAT_CONST(x) { #x, x }
+
+const DecFloatConstant FB_DEC_RoundModes[] = {
+	FB_DECLOAT_CONST(DEC_ROUND_CEILING),
+	FB_DECLOAT_CONST(DEC_ROUND_UP),
+	FB_DECLOAT_CONST(DEC_ROUND_HALF_UP),
+	FB_DECLOAT_CONST(DEC_ROUND_HALF_EVEN),
+	FB_DECLOAT_CONST(DEC_ROUND_HALF_DOWN),
+	FB_DECLOAT_CONST(DEC_ROUND_DOWN),
+	FB_DECLOAT_CONST(DEC_ROUND_FLOOR),
+	{ "DEC_ROUND_REROUND", DEC_ROUND_05UP },
+	{ NULL, 0 }
+};
+
+//DEC_ROUND_
+//0123456789
+const unsigned FB_DEC_RMODE_OFFSET = 10;
+
+const DecFloatConstant FB_DEC_IeeeTraps[] = {
+	FB_DECLOAT_CONST(DEC_IEEE_754_Division_by_zero),
+	FB_DECLOAT_CONST(DEC_IEEE_754_Inexact),
+	FB_DECLOAT_CONST(DEC_IEEE_754_Invalid_operation),
+	FB_DECLOAT_CONST(DEC_IEEE_754_Overflow),
+	FB_DECLOAT_CONST(DEC_IEEE_754_Underflow),
+	{ NULL, 0 }
+};
+
+//DEC_IEEE_754_
+//0123456789012
+const unsigned FB_DEC_TRAPS_OFFSET = 13;
+
+#undef FB_DECLOAT_CONST
+
 static const USHORT FB_DEC_Errors =
 	DEC_IEEE_754_Division_by_zero |
 	DEC_IEEE_754_Invalid_operation |
@@ -52,36 +106,48 @@ static const USHORT FB_DEC_Errors =
 struct DecimalStatus
 {
 	DecimalStatus(USHORT exc)
-		: decExtFlag(exc), roundingMode(DEC_ROUND_HALF_UP)
-	{ }
+		: decExtFlag(exc),
+		  roundingMode(DEC_ROUND_HALF_UP)
+	{}
 
 	static const DecimalStatus DEFAULT;
 
 	USHORT decExtFlag, roundingMode;
 };
 
-struct DecimalBinding
+struct NumericBinding
 {
-	DecimalBinding()
-		: bind(DEC_NATIVE), numScale(0)
-	{ }
+	enum Bind
+	{
+		NUM_NATIVE,
+		NUM_TEXT,
+		NUM_DOUBLE,
+		NUM_INT64
+	};
 
-	static const DecimalBinding DEFAULT;
+	NumericBinding()
+		: bind(NUM_NATIVE),
+		  numScale(0)
+	{}
 
-	enum Bind { DEC_NATIVE, DEC_TEXT, DEC_DOUBLE, DEC_NUMERIC };
+	NumericBinding(Bind aBind, SCHAR aNumScale = 0)
+		: bind(aBind),
+		  numScale(aNumScale)
+	{}
+
+	static const NumericBinding DEFAULT;
+	static const SCHAR MAX_SCALE = 18;
 
 	Bind bind;
 	SCHAR numScale;
 };
 
 
-class DecimalFixed;
+class Int128;
 
 class Decimal64
 {
 	friend class Decimal128;
-	friend class DecimalFixed;
-	friend class Decimal128Base;
 
 public:
 #if SIZEOF_LONG < 8
@@ -91,7 +157,7 @@ public:
 	Decimal64 set(SINT64 value, DecimalStatus decSt, int scale);
 	Decimal64 set(const char* value, DecimalStatus decSt);
 	Decimal64 set(double value, DecimalStatus decSt);
-	Decimal64 set(DecimalFixed value, DecimalStatus decSt, int scale);
+	Decimal64 set(Int128 value, DecimalStatus decSt, int scale);
 
 	UCHAR* getBytes();
 	Decimal64 abs() const;
@@ -125,38 +191,7 @@ private:
 	decDouble dec;
 };
 
-class Decimal128Base
-{
-	friend class Decimal128;
-	friend class DecimalFixed;
-
-public:
-	double toDouble(DecimalStatus decSt) const;
-	Decimal64 toDecimal64(DecimalStatus decSt) const;
-
-	UCHAR* getBytes();
-	int compare(DecimalStatus decSt, Decimal128Base tgt) const;
-
-	void setScale(DecimalStatus decSt, int scale);
-
-	bool isInf() const;
-	bool isNan() const;
-	int sign() const;
-
-	void makeKey(ULONG* key) const;
-	void grabKey(ULONG* key);
-	static ULONG getIndexKeyLength();
-	ULONG makeIndexKey(vary* buf);
-
-#ifdef DEV_BUILD
-	int show();
-#endif
-
-private:
-	decQuad dec;
-};
-
-class Decimal128 : public Decimal128Base
+class Decimal128
 {
 	friend class Decimal64;
 
@@ -169,7 +204,7 @@ public:
 	Decimal128 set(SINT64 value, DecimalStatus decSt, int scale);
 	Decimal128 set(const char* value, DecimalStatus decSt);
 	Decimal128 set(double value, DecimalStatus decSt);
-	Decimal128 set(DecimalFixed value, DecimalStatus decSt, int scale);
+	Decimal128 set(Int128 value, DecimalStatus decSt, int scale);
 
 	Decimal128 operator=(Decimal64 d64);
 
@@ -197,12 +232,37 @@ public:
 	short totalOrder(Decimal128 op2) const;
 	short decCompare(Decimal128 op2) const;
 
-private:
-	Decimal128 operator=(Decimal128Base d128b)
+	double toDouble(DecimalStatus decSt) const;
+	Decimal64 toDecimal64(DecimalStatus decSt) const;
+
+	UCHAR* getBytes();
+	int compare(DecimalStatus decSt, Decimal128 tgt) const;
+
+	void setScale(DecimalStatus decSt, int scale);
+
+	bool isInf() const;
+	bool isNan() const;
+	int sign() const;
+
+	void makeKey(ULONG* key) const;
+	void grabKey(ULONG* key);
+	static ULONG getIndexKeyLength();
+	ULONG makeIndexKey(vary* buf);
+
+#ifdef DEV_BUILD
+	int show();
+#endif
+
+	struct BCD
 	{
-		memcpy(&dec, &d128b.dec, sizeof(dec));
-		return *this;
-	}
+		int sign, exp;
+		unsigned char bcd[DECQUAD_Pmax];
+	};
+
+	void getBcd(BCD* bcd) const;
+
+private:
+	decQuad dec;
 };
 
 class CDecimal128 : public Decimal128
@@ -222,45 +282,11 @@ public:
 	{
 		set(value, DecimalStatus(0), 0);
 	}
-};
 
-class DecimalFixed : public Decimal128Base
-{
-public:
-#if SIZEOF_LONG < 8
-	DecimalFixed set(int value)
+	CDecimal128(const char* value, DecimalStatus decSt)
 	{
-		return set(SLONG(value));
+		set(value, decSt);
 	}
-#endif
-	DecimalFixed set(SLONG value);
-	DecimalFixed set(SINT64 value);
-	DecimalFixed set(const char* value, int scale, DecimalStatus decSt);
-	DecimalFixed set(double value, int scale, DecimalStatus decSt);
-
-	int toInteger(DecimalStatus decSt) const;
-	SINT64 toInt64(DecimalStatus decSt) const;
-	void toString(DecimalStatus decSt, int scale, unsigned length, char* to) const;
-	void toString(DecimalStatus decSt, int scale, string& to) const;
-
-	DecimalFixed abs() const;
-	DecimalFixed neg() const;
-	DecimalFixed add(DecimalStatus decSt, DecimalFixed op2) const;
-	DecimalFixed sub(DecimalStatus decSt, DecimalFixed op2) const;
-	DecimalFixed mul(DecimalStatus decSt, DecimalFixed op2) const;
-	DecimalFixed div(DecimalStatus decSt, DecimalFixed op2, int scale) const;
-	DecimalFixed mod(DecimalStatus decSt, DecimalFixed op2) const;
-
-	DecimalFixed operator=(Decimal128Base d128b)
-	{
-		memcpy(&dec, &d128b.dec, sizeof(dec));
-		return *this;
-	}
-
-	void exactInt(DecimalStatus decSt, int scale);	// rescale & make it integer after conversions
-
-private:
-	Decimal128 scaled128(DecimalStatus decSt, int scale) const;
 };
 
 } // namespace Firebird

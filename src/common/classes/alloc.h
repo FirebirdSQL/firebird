@@ -76,6 +76,16 @@
 #define FB_NOTHROW throw()
 #endif
 
+#ifdef DEBUG_GDS_ALLOC
+#define FB_NEW new(__FILE__, __LINE__)
+#define FB_NEW_POOL(pool) new(pool, __FILE__, __LINE__)
+#define FB_NEW_RPT(pool, count) new(pool, count, __FILE__, __LINE__)
+#else // DEBUG_GDS_ALLOC
+#define FB_NEW new
+#define FB_NEW_POOL(pool) new(pool)
+#define FB_NEW_RPT(pool, count) new(pool, count)
+#endif // DEBUG_GDS_ALLOC
+
 namespace Firebird {
 
 // Alignment for all memory blocks
@@ -239,6 +249,54 @@ public:
 	// The same routine, but more easily callable from the debugger
 	void print_contents(const char* filename, unsigned flags = 0, const char* filter_path = 0) FB_NOTHROW;
 
+public:
+	struct Finalizer
+	{
+		virtual ~Finalizer()
+		{
+		}
+
+		virtual void finalize() = 0;
+
+		Finalizer* prev = nullptr;
+		Finalizer* next = nullptr;
+	};
+
+	template <typename T> Finalizer* registerFinalizer(void (*func)(T*), T* object)
+	{
+		struct FinalizerImpl : Finalizer
+		{
+			FinalizerImpl(void (*aFunc)(T*), T* aObject)
+				: func(aFunc),
+				  object(aObject)
+			{
+			}
+
+			void finalize() override
+			{
+				func(object);
+			}
+
+			void (*func)(T*);
+			T* object;
+		};
+
+		fb_assert(func);
+		FinalizerImpl* finalizer = FB_NEW_POOL(*this) FinalizerImpl(func, object);
+
+		internalRegisterFinalizer(finalizer);
+
+		return finalizer;
+	}
+
+	void unregisterFinalizer(Finalizer*& finalizer);
+
+private:
+	void internalRegisterFinalizer(Finalizer* entry);
+
+private:
+	Finalizer* finalizers = nullptr;
+
 	friend class MemPool;
 };
 
@@ -356,13 +414,6 @@ inline void operator delete[](void* mem) FB_NOTHROW
 #pragma clang diagnostic pop
 #endif
 
-#define FB_NEW new(__FILE__, __LINE__)
-#define FB_NEW_POOL(pool) new(pool, __FILE__, __LINE__)
-#define FB_NEW_RPT(pool, count) new(pool, count, __FILE__, __LINE__)
-#else // DEBUG_GDS_ALLOC
-#define FB_NEW new
-#define FB_NEW_POOL(pool) new(pool)
-#define FB_NEW_RPT(pool, count) new(pool, count)
 #endif // DEBUG_GDS_ALLOC
 
 #ifndef USE_SYSTEM_NEW

@@ -170,8 +170,12 @@ ULONG CAN_encode_decode(burp_rel* relation, lstring* buffer, UCHAR* data, bool d
 			break;
 
 		case dtype_dec128:
-		case dtype_dec_fixed:
 			if (!xdr_dec128(xdrs, (Firebird::Decimal128*) p))
+				return FALSE;
+			break;
+
+		case dtype_int128:
+			if (!xdr_int128(xdrs, (Firebird::Int128*) p))
 				return FALSE;
 			break;
 

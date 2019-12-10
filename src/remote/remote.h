@@ -700,7 +700,7 @@ class InternalCryptKey FB_FINAL :
 {
 public:
 	InternalCryptKey()
-		: t(getPool())
+		: keyName(getPool())
 	{ }
 
 	// ICryptKey implementation
@@ -735,7 +735,7 @@ public:
 	};
 
 	Key encrypt, decrypt;
-	Firebird::PathName t;
+	Firebird::PathName keyName;
 };
 
 
@@ -812,6 +812,7 @@ public:
 	FB_BOOLEAN first(Firebird::CheckStatusWrapper* status);
 
 private:
+	Firebird::AuthReader::AuthBlock buffer;
 	Firebird::AuthReader rdr;
 	Firebird::AuthReader::Info info;
 
@@ -856,7 +857,7 @@ public:
 	void extractDataFromPluginTo(P_AUTH_CONT* to);
 	void loadClnt(Firebird::ClumpletWriter& dpb, const ParametersSet*);
 	void extractDataFromPluginTo(Firebird::ClumpletWriter& user_id);
-	void resetClnt(const Firebird::PathName* fileName, const CSTRING* listStr = NULL);
+	void resetClnt(const CSTRING* listStr = NULL);
 	bool checkPluginName(Firebird::PathName& nameToCheck);
 	Firebird::PathName getPluginName();
 	void tryNewKeys(rem_port*);
@@ -1039,6 +1040,7 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	rem_str*		port_version;
 	rem_str*		port_host;				// Our name
 	rem_str*		port_connection;		// Name of connection
+	P_ARCH			port_client_arch;
 	Firebird::string port_login;
 	Firebird::string port_user_name;
 	Firebird::string port_peer_name;
@@ -1067,6 +1069,8 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	Firebird::IWireCryptPlugin* port_crypt_plugin;		// plugin used by port, when not NULL - crypts wire data
 	Firebird::ICryptKeyCallback* port_client_crypt_callback;	// client callback to transfer database crypt key
 	ServerCallbackBase* port_server_crypt_callback;			// server callback to transfer database crypt key
+
+	Firebird::RefPtr<Firebird::IReplicator> port_replicator;
 
 	UCharArrayAutoPtr	port_buffer;
 
@@ -1101,7 +1105,7 @@ public:
 		port_packet_vector(0),
 #endif
 		port_objects(getPool()), port_version(0), port_host(0),
-		port_connection(0), port_login(getPool()),
+		port_connection(0), port_client_arch(arch_generic), port_login(getPool()),
 		port_user_name(getPool()), port_peer_name(getPool()),
 		port_protocol_id(getPool()), port_address(getPool()),
 		port_rpr(0), port_statement(0), port_receive_rmtque(0),
@@ -1110,7 +1114,7 @@ public:
 		port_srv_auth(NULL), port_srv_auth_block(NULL),
 		port_crypt_keys(getPool()), port_crypt_complete(false), port_crypt_level(WIRECRYPT_REQUIRED),
 		port_known_server_keys(getPool()), port_crypt_plugin(NULL),
-		port_client_crypt_callback(NULL), port_server_crypt_callback(NULL),
+		port_client_crypt_callback(NULL), port_server_crypt_callback(NULL), port_replicator(NULL),
 		port_buffer(FB_NEW_POOL(getPool()) UCHAR[rpt]),
 		port_snd_packets(0), port_rcv_packets(0), port_snd_bytes(0), port_rcv_bytes(0)
 	{
@@ -1312,6 +1316,7 @@ public:
 	void		batch_exec(P_BATCH_EXEC*, PACKET*);
 	void		batch_rls(P_BATCH_FREE*, PACKET*);
 	void		batch_bpb(P_BATCH_SETBPB*, PACKET*);
+	void		replicate(P_REPLICATE*, PACKET*);
 
 	Firebird::string getRemoteId() const;
 	void auxAcceptError(PACKET* packet);

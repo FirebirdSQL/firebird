@@ -195,7 +195,7 @@ BigInteger RemotePassword::clientProof(const char* account, const char* salt, co
 	hash.process(account);
 	hash.getInt(n2);
 
-	return MakeProof(n1, n2, salt, sessionKey);
+	return makeProof(n1, n2, salt, sessionKey);
 }
 
 RemotePassword::~RemotePassword()

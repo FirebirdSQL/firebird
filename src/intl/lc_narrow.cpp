@@ -767,7 +767,7 @@ ULONG LC_NARROW_canonical(texttype* obj, ULONG srcLen, const UCHAR* src, ULONG d
 
 		if ((impl->texttype_flags & (TEXTTYPE_secondary_insensitive | TEXTTYPE_tertiary_insensitive)) == 0)
 		{
-			put(dst, (USHORT) ((primary << 8) | (coll->Secondary << 4) | coll->Tertiary));
+			put(dst, (USHORT) ((primary << 8) | (coll->Secondary << SortOrderTblEntrySecondaryBits) | coll->Tertiary));
 		}
 		else if ((impl->texttype_flags & TEXTTYPE_secondary_insensitive) == 0)
 		{

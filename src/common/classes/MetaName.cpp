@@ -77,6 +77,10 @@ namespace Firebird {
 		fb_assert(s);
 		if (l > MAX_SQL_IDENTIFIER_LEN)
 		{
+#ifdef DEV_BUILD
+			for (FB_SIZE_T i = MAX_SQL_IDENTIFIER_LEN; i < l; ++i)
+				fb_assert(s[i] == '\0' || s[i] == ' ');
+#endif
 			l = MAX_SQL_IDENTIFIER_LEN;
 		}
 		while (l)

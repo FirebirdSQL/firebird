@@ -32,9 +32,11 @@
 #include "../jrd/PreparedStatement.h"
 #include "../jrd/RandomGenerator.h"
 #include "../jrd/RuntimeStatistics.h"
+#include "../jrd/Coercion.h"
 
 #include "../common/classes/ByteChunk.h"
 #include "../common/classes/GenericMap.h"
+#include "../common/classes/QualifiedName.h"
 #include "../common/classes/SyncObject.h"
 #include "../common/classes/array.h"
 #include "../common/classes/stack.h"
@@ -47,6 +49,11 @@
 
 namespace EDS {
 	class Connection;
+}
+
+namespace Replication
+{
+	class TableMatcher;
 }
 
 class CharSetContainer;
@@ -84,15 +91,26 @@ namespace Jrd
 	class Function;
 	class JrdStatement;
 	class Validation;
+	class Applier;
+
 
 struct DSqlCacheItem
 {
+	DSqlCacheItem(MemoryPool& pool)
+		: key(pool),
+		  obsoleteMap(pool),
+		  lock(nullptr),
+		  locked(false)
+	{
+	}
+
+	Firebird::string key;
+	Firebird::GenericMap<Firebird::Pair<Firebird::Left<Firebird::QualifiedName, bool> > > obsoleteMap;
 	Lock* lock;
 	bool locked;
-	bool obsolete;
 };
 
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<
+typedef Firebird::GenericMap<Firebird::Pair<Firebird::Full<
 	Firebird::string, DSqlCacheItem> > > DSqlCache;
 
 
@@ -144,6 +162,7 @@ const ULONG ATT_crypt_thread		= 0x80000L; // Attachment from crypt thread
 const ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 
 class Attachment;
+class DatabaseOptions;
 struct bid;
 
 
@@ -161,7 +180,7 @@ public:
 	CommitNumber getSnapshotForVersion(CommitNumber version_cn);
 
 private:
-	UInt32Bitmap m_snapshots;		// List of active snapshots as of the moment of time
+	Firebird::SparseBitmap<CommitNumber> m_snapshots;		// List of active snapshots as of the moment of time
 	CommitNumber m_lastCommit;		// CN_ACTIVE here means object is not populated
 	ULONG m_releaseCount;			// Release event counter when list was last updated
 	ULONG m_slots_used;				// Snapshot slots used when list was last updated
@@ -294,6 +313,84 @@ public:
 		Firebird::RefPtr<StableAttachmentPart> jStable;
 	};
 
+	class GeneratorFinder
+	{
+	public:
+		explicit GeneratorFinder(MemoryPool& pool)
+			: m_objects(pool)
+		{}
+
+		void store(SLONG id, const Firebird::MetaName& name)
+		{
+			fb_assert(id >= 0);
+			fb_assert(name.hasData());
+
+			if (id < (int) m_objects.getCount())
+			{
+				fb_assert(m_objects[id].isEmpty());
+				m_objects[id] = name;
+			}
+			else
+			{
+				m_objects.resize(id + 1);
+				m_objects[id] = name;
+			}
+		}
+
+		bool lookup(SLONG id, Firebird::MetaName& name)
+		{
+			if (id < (int) m_objects.getCount())
+			{
+				name = m_objects[id];
+				return true;
+			}
+
+			return false;
+		}
+
+		SLONG lookup(const Firebird::MetaName& name)
+		{
+			FB_SIZE_T pos;
+
+			if (m_objects.find(name, pos))
+				return (SLONG) pos;
+
+			return -1;
+		}
+
+	private:
+		Firebird::Array<Firebird::MetaName> m_objects;
+	};
+
+	class InitialOptions
+	{
+	public:
+		InitialOptions(MemoryPool& p)
+			: bindings(p)
+		{
+		}
+
+	public:
+		void setInitialOptions(thread_db* tdbb, const DatabaseOptions& options);
+		void resetAttachment(Attachment* attachment) const;
+
+		CoercionArray *getBindings()
+		{
+			return &bindings;
+		}
+
+		const CoercionArray *getBindings() const
+		{
+			return &bindings;
+		}
+
+	private:
+		Firebird::DecimalStatus decFloatStatus = Firebird::DecimalStatus::DEFAULT;
+		CoercionArray bindings;
+
+		USHORT originalTimeZone = Firebird::TimeZoneUtil::GMT_ZONE;
+	};
+
 public:
 	static Attachment* create(Database* dbb);
 	static void destroy(Attachment* const attachment);
@@ -304,6 +401,9 @@ public:
 	Database*	att_database;				// Parent database block
 	Attachment*	att_next;					// Next attachment to database
 	UserId*		att_user;					// User identification
+	UserId*		att_ss_user;				// User identification for SQL SECURITY actual user
+	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
+		Firebird::MetaName, UserId*> > > att_user_ids;	// set of used UserIds
 	jrd_tra*	att_transactions;			// Transactions belonging to attachment
 	jrd_tra*	att_dbkey_trans;			// transaction to control db-key scope
 	TraNumber	att_oldest_snapshot;		// GTT's record versions older than this can be garbage-collected
@@ -336,7 +436,7 @@ public:
 	Validation*	att_validation;
 	Firebird::PathName	att_working_directory;	// Current working directory is cached
 	Firebird::PathName	att_filename;			// alias used to attach the database
-	const Firebird::TimeStamp	att_timestamp;	// Connection date and time
+	const ISC_TIMESTAMP_TZ	att_timestamp;	// Connection date and time
 	Firebird::StringMap att_context_vars;	// Context variables for the connection
 	Firebird::Stack<DdlTriggerContext*> ddlTriggersContext;	// Context variables for DDL trigger event
 	Firebird::string att_network_protocol;	// Network protocol used by client for connection
@@ -362,9 +462,14 @@ public:
 	ULONG att_ext_call_depth;				// external connection call depth, 0 for user attachment
 	TraceManager* att_trace_manager;		// Trace API manager
 
-	Firebird::TimeZoneUtil::Bind att_timezone_bind;
+	CoercionArray att_bindings;
+	CoercionArray* att_dest_bind;
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
+
+	Firebird::IReplicatedSession* att_replicator;
+	Firebird::AutoPtr<Replication::TableMatcher> att_repl_matcher;
+	Firebird::AutoPtr<Applier> att_repl_applier;
 
 	enum UtilType { UTIL_NONE, UTIL_GBAK, UTIL_GFIX, UTIL_GSTAT };
 
@@ -377,12 +482,12 @@ public:
 	TrigVector*						att_triggers[DB_TRIGGER_MAX];
 	TrigVector*						att_ddl_triggers;
 	Firebird::Array<Function*>		att_functions;			// User defined functions
+	GeneratorFinder					att_generators;
 
 	Firebird::Array<JrdStatement*>	att_internal;			// internal statements
 	Firebird::Array<JrdStatement*>	att_dyn_req;			// internal dyn statements
 	Firebird::ICryptKeyCallback*	att_crypt_callback;		// callback for DB crypt
 	Firebird::DecimalStatus			att_dec_status;			// error handling and rounding
-	Firebird::DecimalBinding		att_dec_binding;		// use legacy datatype for DecFloat in outer world
 
 	jrd_req* findSystemRequest(thread_db* tdbb, USHORT id, USHORT which);
 
@@ -413,6 +518,11 @@ public:
 	bool locksmith(thread_db* tdbb, SystemPrivilege sp) const;
 	jrd_tra* getSysTransaction();
 	void setSysTransaction(jrd_tra* trans);	// used only by TRA_init
+
+	bool isSystem() const
+	{
+		return (att_flags & ATT_system);
+	}
 
 	bool isGbak() const;
 	bool isRWGbak() const;
@@ -488,7 +598,7 @@ public:
 	void setupIdleTimer(bool clear);
 
 	// returns time when idle timer will be expired, if set
-	bool getIdleTimerTimestamp(Firebird::TimeStamp& ts) const;
+	bool getIdleTimerTimestamp(ISC_TIMESTAMP_TZ& ts) const;
 
 	// batches control
 	void registerBatch(JBatch* b)
@@ -500,6 +610,29 @@ public:
 	{
 		att_batches.findAndRemove(b);
 	}
+
+	UserId* getUserId(const Firebird::MetaName &userName);
+
+	const UserId* getEffectiveUserId() const
+	{
+		if (att_ss_user)
+			return att_ss_user;
+		return att_user;
+	}
+
+	UserId* getEffectiveUserId()
+	{
+		if (att_ss_user)
+			return att_ss_user;
+		return att_user;
+	}
+
+	void setInitialOptions(thread_db* tdbb, DatabaseOptions& options, bool newDb);
+	const CoercionArray* getInitialBindings() const
+	{
+		return att_initial_options.getBindings();
+	}
+
 
 private:
 	Attachment(MemoryPool* pool, Database* dbb);
@@ -522,15 +655,15 @@ private:
 		// Set timeout, seconds
 		void reset(unsigned int timeout);
 
-		time_t getExpiryTime() const
+		SINT64 getExpiryTime() const
 		{
 			return m_expTime;
 		}
 
 	private:
 		Firebird::RefPtr<JAttachment> m_attachment;
-		time_t m_fireTime;		// when ITimer will fire, could be less than m_expTime
-		time_t m_expTime;		// when actual idle timeout will expire
+		SINT64 m_fireTime;		// when ITimer will fire, could be less than m_expTime
+		SINT64 m_expTime;		// when actual idle timeout will expire
 	};
 
 	unsigned int att_idle_timeout;		// seconds
@@ -538,12 +671,14 @@ private:
 	Firebird::RefPtr<IdleTimer> att_idle_timer;
 
 	Firebird::Array<JBatch*> att_batches;
+	InitialOptions att_initial_options;		// Initial session options
 };
 
 
 inline bool Attachment::locksmith(thread_db* tdbb, SystemPrivilege sp) const
 {
-	return att_user && att_user->locksmith(tdbb, sp);
+	return (att_user && att_user->locksmith(tdbb, sp)) ||
+			(att_ss_user && att_ss_user->locksmith(tdbb, sp));
 }
 
 inline jrd_tra* Attachment::getSysTransaction()

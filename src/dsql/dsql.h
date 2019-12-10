@@ -256,8 +256,8 @@ public:
 				precision = 18;
 				break;
 
-			case dtype_dec_fixed:
-				precision = 34;
+			case dtype_int128:
+				precision = 38;
 				break;
 
 			default:
@@ -325,7 +325,13 @@ enum fld_flags_vals {
 	FLD_computed	= 1,
 	FLD_national	= 2, // field uses NATIONAL character set
 	FLD_nullable	= 4,
-	FLD_system		= 8
+	FLD_system		= 8,
+	FLD_has_len		= 16,
+	FLD_has_chset	= 32,
+	FLD_has_scale	= 64,
+	FLD_legacy		= 128,
+	FLD_native		= 256,
+	FLD_has_sub		= 512
 };
 
 //! Stored Procedure block

@@ -30,7 +30,7 @@
 #include "firebird.h"
 #include <stdio.h>
 #include <limits.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/perf.h"
 #include "../yvalve/gds_proto.h"
 #include "../yvalve/perf_proto.h"

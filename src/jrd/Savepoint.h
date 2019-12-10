@@ -114,6 +114,7 @@ namespace Jrd
 		// Savepoint flags
 		static const USHORT SAV_root		= 1;	// transaction-level savepoint
 		static const USHORT SAV_force_dfw	= 2;	// DFW is present even if savepoint is empty
+		static const USHORT SAV_replicated	= 4;	// savepoint has already been replicated
 
 	public:
 		explicit Savepoint(jrd_tra* transaction)
@@ -189,6 +190,11 @@ namespace Jrd
 			return (m_flags & SAV_root);
 		}
 
+		bool isReplicated() const
+		{
+			return (m_flags & SAV_replicated);
+		}
+
 		bool isChanging() const
 		{
 			return (m_count != 0);
@@ -202,6 +208,11 @@ namespace Jrd
 		void forceDeferredWork()
 		{
 			m_flags |= SAV_force_dfw;
+		}
+
+		void markAsReplicated()
+		{
+			m_flags |= SAV_replicated;
 		}
 
 		Savepoint* moveToStack(Savepoint*& target)

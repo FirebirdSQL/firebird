@@ -20,7 +20,7 @@
  */
 
 #include "firebird.h"
-#include "consts_pub.h"
+#include "firebird/impl/consts_pub.h"
 #include "dyn_consts.h"
 #include "gen/iberror.h"
 #include "../jrd/jrd.h"
@@ -28,7 +28,7 @@
 #include "../dsql/BlrDebugWriter.h"
 #include "../dsql/StmtNodes.h"
 #include "../dsql/dsql.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/DebugInterface.h"
 #include "../dsql/errd_proto.h"
 

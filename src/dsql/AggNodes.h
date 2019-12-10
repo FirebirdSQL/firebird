@@ -23,7 +23,7 @@
 #ifndef DSQL_AGG_NODES_H
 #define DSQL_AGG_NODES_H
 
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/NodePrinter.h"
 

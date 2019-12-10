@@ -17,7 +17,7 @@
  * Contributor(s): ______________________________________.
  */
 #include "firebird.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
 DATABASE DB = "msg.fdb";
 

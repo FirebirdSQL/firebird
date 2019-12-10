@@ -23,7 +23,7 @@
 #ifndef DSQL_DDL_NODES_H
 #define DSQL_DDL_NODES_H
 
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/dyn.h"
 #include "../common/msg_encode.h"
 #include "../dsql/make_proto.h"
@@ -1947,6 +1947,11 @@ public:
 	virtual bool checkPermission(thread_db* tdbb, jrd_tra* transaction);
 	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
+	virtual bool mustBeReplicated() const
+	{
+		return false;
+	}
+
 protected:
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
 	{
@@ -1976,6 +1981,11 @@ public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual bool checkPermission(thread_db* tdbb, jrd_tra* transaction);
 	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+
+	virtual bool mustBeReplicated() const
+	{
+		return false;
+	}
 
 protected:
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
@@ -2159,6 +2169,11 @@ public:
 	virtual bool checkPermission(thread_db* tdbb, jrd_tra* transaction);
 	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
+	virtual bool mustBeReplicated() const
+	{
+		return false;
+	}
+
 protected:
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
 	{
@@ -2210,7 +2225,8 @@ public:
 	DropUserNode(MemoryPool& p, const Firebird::MetaName& aName, const Firebird::MetaName* aPlugin = NULL)
 		: UserNode(p),
 		  name(p, upper(aName)),
-		  plugin(p)
+		  plugin(p),
+		  silent(false)
 	{
 		if (aPlugin)
 			plugin = *aPlugin;
@@ -2221,6 +2237,11 @@ public:
 	virtual bool checkPermission(thread_db* tdbb, jrd_tra* transaction);
 	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
+	virtual bool mustBeReplicated() const
+	{
+		return false;
+	}
+
 protected:
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
 	{
@@ -2230,7 +2251,22 @@ protected:
 public:
 	const Firebird::MetaName name;
 	Firebird::MetaName plugin;
+	bool silent;
 };
+
+
+template <>
+inline RecreateNode<CreateAlterUserNode, DropUserNode, isc_dsql_recreate_user_failed>::
+	RecreateNode(MemoryPool& p, CreateAlterUserNode* aCreateNode)
+		: DdlNode(p),
+		  createNode(aCreateNode),
+		  dropNode(p, createNode->name, createNode->plugin)
+	{
+		dropNode.silent = true;
+	}
+
+typedef RecreateNode<CreateAlterUserNode, DropUserNode, isc_dsql_recreate_user_failed>
+	RecreateUserNode;
 
 
 typedef Firebird::Pair<Firebird::NonPooled<char, ValueListNode*> > PrivilegeClause;
@@ -2375,6 +2411,11 @@ public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual bool checkPermission(thread_db* tdbb, jrd_tra* transaction);
 	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+
+	virtual bool mustBeReplicated() const
+	{
+		return false;
+	}
 
 protected:
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)

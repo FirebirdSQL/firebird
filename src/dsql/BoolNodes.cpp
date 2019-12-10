@@ -24,7 +24,7 @@
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/align.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/tra.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/recsrc/Cursor.h"
@@ -51,11 +51,6 @@ namespace Jrd {
 // Maximum members in "IN" list. For eg. SELECT * FROM T WHERE F IN (1, 2, 3, ...)
 // Bug 10061, bsriram - 19-Apr-1999
 static const int MAX_MEMBER_LIST = 1500;
-
-static const int TEMP_LENGTH = 128;
-
-
-//--------------------
 
 
 //--------------------
@@ -414,7 +409,7 @@ BoolExprNode* ComparativeBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (dsqlCheckBoolean)
 	{
 		dsc desc;
-		MAKE_desc(dsqlScratch, &desc, node->arg1);
+		DsqlDescMaker::fromNode(dsqlScratch, &desc, node->arg1);
 
 		if (desc.dsc_dtype != dtype_boolean && desc.dsc_dtype != dtype_unknown && !desc.isNull())
 		{
@@ -888,7 +883,7 @@ bool ComparativeBoolNode::stringBoolean(thread_db* tdbb, jrd_req* request, dsc* 
 		case blr_like:
 		case blr_similar:
 		{
-			VaryStr<TEMP_LENGTH> temp3;
+			VaryStr<TEMP_STR_LENGTH> temp3;
 			const UCHAR* escape_str = NULL;
 			USHORT escape_length = 0;
 
@@ -950,7 +945,7 @@ bool ComparativeBoolNode::stringBoolean(thread_db* tdbb, jrd_req* request, dsc* 
 					else	// nod_similar
 					{
 						impure->vlu_misc.vlu_invariant = evaluator = obj->createSimilarToMatcher(
-							*tdbb->getDefaultPool(), p2, l2, escape_str, escape_length);
+							tdbb, *tdbb->getDefaultPool(), p2, l2, escape_str, escape_length);
 					}
 				}
 				else
@@ -966,7 +961,7 @@ bool ComparativeBoolNode::stringBoolean(thread_db* tdbb, jrd_req* request, dsc* 
 			}
 			else	// nod_similar
 			{
-				evaluator = obj->createSimilarToMatcher(*tdbb->getDefaultPool(),
+				evaluator = obj->createSimilarToMatcher(tdbb, *tdbb->getDefaultPool(),
 					p2, l2, escape_str, escape_length);
 			}
 
@@ -1100,7 +1095,7 @@ bool ComparativeBoolNode::stringFunction(thread_db* tdbb, jrd_req* request,
 	// Handle LIKE and SIMILAR
 	if (blrOp == blr_like || blrOp == blr_similar)
 	{
-		VaryStr<TEMP_LENGTH> temp3;
+		VaryStr<TEMP_STR_LENGTH> temp3;
 		const UCHAR* escape_str = NULL;
 		USHORT escape_length = 0;
 		// ensure 3rd argument (escape char) is in operation text type
@@ -1157,7 +1152,7 @@ bool ComparativeBoolNode::stringFunction(thread_db* tdbb, jrd_req* request,
 				else	// nod_similar
 				{
 					impure->vlu_misc.vlu_invariant = evaluator = obj->createSimilarToMatcher(
-						*tdbb->getDefaultPool(), p2, l2, escape_str, escape_length);
+						tdbb, *tdbb->getDefaultPool(), p2, l2, escape_str, escape_length);
 				}
 			}
 			else
@@ -1175,7 +1170,7 @@ bool ComparativeBoolNode::stringFunction(thread_db* tdbb, jrd_req* request,
 			return obj->like(*tdbb->getDefaultPool(), p1, l1, p2, l2, escape_str, escape_length);
 
 		// nod_similar
-		return obj->similarTo(*tdbb->getDefaultPool(), p1, l1, p2, l2, escape_str, escape_length);
+		return obj->similarTo(tdbb, *tdbb->getDefaultPool(), p1, l1, p2, l2, escape_str, escape_length);
 	}
 
 	// Handle MATCHES
@@ -1340,7 +1335,7 @@ BoolExprNode* MissingBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	PASS1_set_parameter_type(dsqlScratch, node->arg, std::function<void (dsc*)>(nullptr), false);
 
 	dsc desc;
-	MAKE_desc(dsqlScratch, &desc, node->arg);
+	DsqlDescMaker::fromNode(dsqlScratch, &desc, node->arg);
 
 	if (dsqlUnknown && desc.dsc_dtype != dtype_boolean && !desc.isNull())
 	{

@@ -17,7 +17,7 @@
 # 2 Oct 2002, Nickolay Samofatov - Major Cleanup
 # Wed Jan 28 2009 Alex Peshkov - moved common part of prefix.darwin* to separate file
 
-# Options 
+# Options
 #FirebirdInstallPrefix=
 LIB_BUNDLE_OPTIONS=$(LD_FLAGS) -bundle -flat_namespace -undefined suppress
 LIB_LINK_OPTIONS=$(LD_FLAGS) -dynamiclib -flat_namespace
@@ -29,19 +29,6 @@ LIB_LINK_MAPFILE=-Wl,-exported_symbols_list,$(1)
 
 PLATFORM_PATH=os/darwin
 PLATFORM_FALLBACK=os/posix
-
-# Per-library link rules
-LINK_UDF = $(LIB_LINK) $(LIB_BUNDLE_OPTIONS) -L$(LIB)
-LINK_UDF_LIBS = -lm $(THR_FLAGS) $(THR_LIBS)
-
-LINK_IB_UTIL = $(LIB_LINK) $(LINK_IBUTIL_SYMBOLS) $(LIB_LINK_OPTIONS) $(LIB_LINK_RPATH) $(LINK_LIB_SONAME)
-
-LINK_INTL = $(LIB_LINK) $(LINK_FBINTL_SYMBOLS) $(LIB_LINK_OPTIONS) $(LIB_LINK_SONAME)
-
-LINK_TRACE = $(LIB_LINK) $(LINK_PLUGIN_SYMBOLS) $(LIB_LINK_OPTIONS) $(LIB_LINK_SONAME)
-
-LINK_CLIENT = $(LIB_LINK) $(LINK_FIREBIRD_CLIENT_SYMBOLS) $(LIB_LINK_OPTIONS) $(LIB_LINK_IMPLIB)\
- $(LIB_CLIENT_LINK_OPTIONS) $(LIB_LINK_SONAME)
 
 STATIC_CXX_SUPPORT = -lsupc++ $(GCCS) -lgcc_eh -lSystem
 

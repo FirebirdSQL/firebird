@@ -373,4 +373,10 @@ typedef ULONG (*pfn_INTL_setup_attributes) (
 #define INTL_VERSION_ENTRYPOINT				LD_version
 #define INTL_SETUP_ATTRIBUTES_ENTRYPOINT	LD_setup_attributes
 
+// Make ICU happy with old compilers (not supporting C++11 noexcept),
+// see extern/icu/include/unicode/platform.h
+#ifndef HAS_NOEXCEPT
+#define U_NOEXCEPT
+#endif
+
 #endif /* JRD_INTLOBJ_NEW_H */

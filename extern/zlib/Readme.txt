@@ -4,12 +4,20 @@ architectures.
 
 The source code of zlib library was downloaded from 
 
-  http://zlib.net/zlib128.zip
+  http://zlib.net/zlib1211.zip
 
-It was built with MSVC10 compilers using commands specified at win32/Makefile.msc:
+It was built with MSVC17 compilers using commands specified at win32/Makefile.msc:
 
 win32: 
-nmake -f win32/Makefile.msc LOC="-DASMV -DASMINF" OBJA="inffas32.obj match686.obj"
+nmake -f win32/Makefile.msc 
 
 x64:
-nmake -f win32/Makefile.msc AS=ml64 LOC="-DASMV -DASMINF -I." OBJA="inffasx64.obj gvmat64.obj inffas8664.obj"
+nmake -f win32/Makefile.msc 
+
+Note, ASM files is not uses in build as it was not updated for a long time, not
+officially supported and 32-bit build crashes in simplest test, see:
+
+https://github.com/madler/zlib/issues/41
+https://github.com/madler/zlib/issues/200
+https://github.com/madler/zlib/issues/223
+https://github.com/madler/zlib/issues/249

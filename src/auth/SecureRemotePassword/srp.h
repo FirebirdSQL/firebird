@@ -86,7 +86,7 @@ private:
 	Firebird::BigInteger	scramble;
 
 protected:
-    virtual Firebird::BigInteger MakeProof(const Firebird::BigInteger n1, const Firebird::BigInteger n2,
+    virtual Firebird::BigInteger makeProof(const Firebird::BigInteger n1, const Firebird::BigInteger n2,
                 const char* salt, const Firebird::UCharBuffer& sessionKey) = 0;
 
 public:
@@ -127,7 +127,7 @@ public:
 template <class SHA> class RemotePasswordImpl : public RemotePassword
 {
 protected:
-	Firebird::BigInteger MakeProof(const Firebird::BigInteger n1, const Firebird::BigInteger n2,
+	Firebird::BigInteger makeProof(const Firebird::BigInteger n1, const Firebird::BigInteger n2,
                 const char* salt, const Firebird::UCharBuffer& sessionKey)
     {
 		Auth::SecureHash<SHA> digest;

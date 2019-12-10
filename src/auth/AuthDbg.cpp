@@ -27,7 +27,7 @@
 
 #include "firebird.h"
 #include "../auth/AuthDbg.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../common/StatusHolder.h"
 
 #ifdef AUTH_DEBUG
@@ -145,6 +145,12 @@ int DebugClient::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IC
 {
 	try
 	{
+		if (cb->getLogin())
+		{
+			// user specified login - we should not continue with trusted-like auth
+			return AUTH_CONTINUE;
+		}
+
 		if (str != "HAND")
 		{
 			str = "HAND";

@@ -9,7 +9,7 @@
 #include "../common/classes/alloc.h"
 #include "../common/StatusHolder.h"
 #include "../common/classes/ImplementHelper.h"
-#include "../dsql/sqlda_pub.h"
+#include "firebird/impl/sqlda_pub.h"
 
 #else // INTERNAL_FIREBIRD
 

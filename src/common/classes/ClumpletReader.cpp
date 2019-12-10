@@ -32,7 +32,7 @@
 #include "../common/classes/MetaName.h"
 #include "fb_exception.h"
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "firebird/Interface.h"
 
 #ifdef DEBUG_CLUMPLETS
@@ -292,6 +292,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
         case isc_tpb_lock_write:
         case isc_tpb_lock_read:
 		case isc_tpb_lock_timeout:
+		case isc_tpb_at_snapshot_number:
 			return TraditionalDpb;
 		}
 		return SingleTpb;
@@ -334,6 +335,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_res_fix_fss_metadata:
 			case isc_spb_bkp_stat:
 			case isc_spb_bkp_skip_data:
+			case isc_spb_bkp_include_data:
 			case isc_spb_bkp_keyholder:
 			case isc_spb_bkp_keyname:
 			case isc_spb_bkp_crypt:

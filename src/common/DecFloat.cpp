@@ -28,10 +28,13 @@
 
 #include "firebird.h"
 #include "DecFloat.h"
+#include "Int128.h"
 
 #include "StatusArg.h"
 #include "gen/iberror.h"
 #include "status.h"
+
+#include <limits>
 
 extern "C"
 {
@@ -47,7 +50,7 @@ extern "C"
 using namespace Firebird;
 
 const DecimalStatus DecimalStatus::DEFAULT(FB_DEC_Errors);
-const DecimalBinding DecimalBinding::DEFAULT;
+const NumericBinding NumericBinding::DEFAULT;
 
 namespace {
 
@@ -75,7 +78,7 @@ public:
 		init(DEC_INIT_DECIMAL64);
 	}
 
-	DecimalContext(const Decimal128Base*, DecimalStatus ds)
+	DecimalContext(const Decimal128*, DecimalStatus ds)
 		: decSt(ds)
 	{
 		init(DEC_INIT_DECIMAL128);
@@ -120,8 +123,11 @@ private:
 	}
 };
 
+const CDecimal128 pow2_32("4294967296", DecimalStatus(0));
+const CDecimal128 pow2_64("18446744073709551616", DecimalStatus(0));
 const CDecimal128 dmax(DBL_MAX, DecimalStatus(0)), dmin(-DBL_MAX, DecimalStatus(0));
 const CDecimal128 dzup(DBL_MIN, DecimalStatus(0)), dzlw(-DBL_MIN, DecimalStatus(0));
+// be careful with order of initialization: pow2_32 is used in i64max constructor
 const CDecimal128 i64max(MAX_SINT64, DecimalStatus(0)), i64min(MIN_SINT64, DecimalStatus(0));
 const CDecimal128 c1(1);
 
@@ -263,7 +269,7 @@ Decimal64 Decimal64::set(SLONG value, DecimalStatus decSt, int scale)
 	return *this;
 }
 
-Decimal64 Decimal64::set(DecimalFixed value, DecimalStatus decSt, int scale)
+Decimal64 Decimal64::set(Int128 value, DecimalStatus decSt, int scale)
 {
 	Decimal128 tmp;
 	tmp.set(value, decSt, scale);
@@ -516,11 +522,21 @@ Decimal128 Decimal128::set(SLONG value, DecimalStatus decSt, int scale)
 	return *this;
 }
 
-Decimal128 Decimal128::set(DecimalFixed value, DecimalStatus decSt, int scale)
+Decimal128 Decimal128::set(Int128 value, DecimalStatus decSt, int scale)
 {
-	*this = value;
-	setScale(decSt, -scale);
+	unsigned dwords[4];
+	value.getTable32(dwords);
 
+	DecimalContext context(this, decSt);
+	decQuadFromInt32(&dec, dwords[3]);
+	for (int i = 3; i--; )
+	{
+		decQuad dw;
+		decQuadFromUInt32(&dw, dwords[i]);
+		decQuadFMA(&dec, &dec, &pow2_32.dec, &dw, &context);
+	}
+
+	setScale(decSt, -scale);
 	return *this;
 }
 
@@ -531,13 +547,10 @@ Decimal128 Decimal128::set(SINT64 value, DecimalStatus decSt, int scale)
 		unsigned low = value & 0xFFFFFFFF;
 
 		DecimalContext context(this, decSt);
-		decQuad pow2_32;
-		decQuadFromString(&pow2_32, "4294967296", &context);
-
 		decQuad up, down;
 		decQuadFromInt32(&up, high);
 		decQuadFromUInt32(&down, low);
-		decQuadFMA(&dec, &up, &pow2_32, &down, &context);
+		decQuadFMA(&dec, &up, &pow2_32.dec, &down, &context);
 	}
 
 	setScale(decSt, -scale);
@@ -563,80 +576,6 @@ Decimal128 Decimal128::set(double value, DecimalStatus decSt)
 	return *this;
 }
 
-DecimalFixed DecimalFixed::set(SLONG value)
-{
-	decQuadFromInt32(&dec, value);
-	return *this;
-}
-
-DecimalFixed DecimalFixed::set(SINT64 value)
-{
-	int high = value >> 32;
-	unsigned low = value & 0xFFFFFFFF;
-
-	DecimalContext context(this, DecimalStatus(0));
-	decQuad pow2_32;
-	decQuadFromString(&pow2_32, "4294967296", &context);
-
-	decQuad up, down;
-	decQuadFromInt32(&up, high);
-	decQuadFromUInt32(&down, low);
-	decQuadFMA(&dec, &up, &pow2_32, &down, &context);
-
-	return *this;
-}
-
-DecimalFixed DecimalFixed::set(const char* value, int scale, DecimalStatus decSt)
-{
-	{	// scope for 'context'
-		DecimalContext context(this, decSt);
-		decQuadFromString(&dec, value, &context);
-	}
-
-	exactInt(decSt, scale);
-	return *this;
-}
-
-DecimalFixed DecimalFixed::set(double value, int scale, DecimalStatus decSt)
-{
-	char s[50];
-	sprintf(s, "%18.016e", value);
-	{	// scope for 'context'
-		DecimalContext context(this, decSt);
-		decQuadFromString(&dec, s, &context);
-	}
-
-	exactInt(decSt, scale);
-	return *this;
-}
-
-void DecimalFixed::exactInt(DecimalStatus decSt, int scale)
-{
-	setScale(decSt, -scale);
-
-	try
-	{
-		DecimalContext context(this, decSt);
-		decQuadToIntegralExact(&dec, &dec, &context);
-		decQuadQuantize(&dec, &dec, &c1.dec, &context);
-	}
-	catch (const Exception& ex)
-	{
-		FbLocalStatus st;
-		ex.stuffException(&st);
-
-		switch (st->getErrors()[1])
-		{
-		case isc_decfloat_invalid_operation:
-			(Arg::Gds(isc_decfloat_invalid_operation) <<
-			 Arg::Gds(isc_numeric_out_of_range)).raise();
-			break;
-		}
-
-		throw;
-	}
-}
-
 Decimal128 Decimal128::operator=(Decimal64 d64)
 {
 	decDoubleToWider(&d64.dec, &dec);
@@ -650,13 +589,6 @@ int Decimal128::toInteger(DecimalStatus decSt, int scale) const
 	DecimalContext context(this, decSt);
 	enum rounding rMode = decContextGetRounding(&context);
 	return decQuadToInt32(&tmp.dec, &context, rMode);
-}
-
-int DecimalFixed::toInteger(DecimalStatus decSt) const
-{
-	DecimalContext context(this, decSt);
-	enum rounding rMode = decContextGetRounding(&context);
-	return decQuadToInt32(&dec, &context, rMode);
 }
 
 void Decimal128::toString(DecimalStatus decSt, unsigned length, char* to) const
@@ -688,42 +620,30 @@ void Decimal128::toString(string& to) const
 	to.recalculate_length();
 }
 
-Decimal128 DecimalFixed::scaled128(DecimalStatus decSt, int scale) const
-{
-	Decimal128 tmp;
-	tmp.set(*this, decSt, -scale);
-	return tmp;
-}
-
-void DecimalFixed::toString(DecimalStatus decSt, int scale, unsigned length, char* to) const
-{
-	scaled128(decSt, scale).toString(decSt, length, to);
-}
-
-void DecimalFixed::toString(DecimalStatus decSt, int scale, string& to) const
-{
-	scaled128(decSt, scale).toString(to);
-}
-
-double Decimal128Base::toDouble(DecimalStatus decSt) const
+double Decimal128::toDouble(DecimalStatus decSt) const
 {
 	DecimalContext context(this, decSt);
 
-	if (compare(decSt, dmin) < 0 || compare(decSt, dmax) > 0)
+	if (compare(decSt, dmin) < 0)
+	{
 		decContextSetStatus(&context, DEC_Overflow);
-	else if ((!decQuadIsZero(&dec)) && compare(decSt, dzlw) > 0 && compare(decSt, dzup) < 0)
+		return std::numeric_limits<double>::has_infinity ? -std::numeric_limits<double>::infinity() : 0.0;
+	}
+	if (compare(decSt, dmax) > 0)
+	{
+		decContextSetStatus(&context, DEC_Overflow);
+		return std::numeric_limits<double>::has_infinity ? std::numeric_limits<double>::infinity() : 0.0;
+	}
+
+	if ((!decQuadIsZero(&dec)) && compare(decSt, dzlw) > 0 && compare(decSt, dzup) < 0)
 	{
 		decContextSetStatus(&context, DEC_Underflow);
 		return 0.0;
 	}
-	else
-	{
-		char s[IDecFloat34::STRING_SIZE];
-		decQuadToString(&dec, s);
-		return atof(s);
-	}
 
-	return 0.0;
+	char s[IDecFloat34::STRING_SIZE];
+	decQuadToString(&dec, s);
+	return atof(s);
 }
 
 SINT64 Decimal128::toInt64(DecimalStatus decSt, int scale) const
@@ -757,37 +677,12 @@ SINT64 Decimal128::toInt64(DecimalStatus decSt, int scale) const
 	return rc;
 }
 
-SINT64 DecimalFixed::toInt64(DecimalStatus decSt) const
-{
-	if (compare(decSt, i64min) < 0 || compare(decSt, i64max) > 0)
-	{
-		DecimalContext context(this, decSt);
-		decContextSetStatus(&context, DEC_Invalid_operation);
-		return 0;	// in case of no trap on invalid operation
-	}
-
-	unsigned char coeff[DECQUAD_Pmax];
-	int sign = decQuadGetCoefficient(&dec, coeff);
-	SINT64 rc = 0;
-
-	for (int i = 0; i < DECQUAD_Pmax; ++i)
-	{
-		rc *= 10;
-		if (sign)
-			rc -= coeff[i];
-		else
-			rc += coeff[i];
-	}
-
-	return rc;
-}
-
-UCHAR* Decimal128Base::getBytes()
+UCHAR* Decimal128::getBytes()
 {
 	return dec.bytes;
 }
 
-Decimal64 Decimal128Base::toDecimal64(DecimalStatus decSt) const
+Decimal64 Decimal128::toDecimal64(DecimalStatus decSt) const
 {
 	Decimal64 rc;
 	DecimalContext context(this, decSt);
@@ -795,7 +690,7 @@ Decimal64 Decimal128Base::toDecimal64(DecimalStatus decSt) const
 	return rc;
 }
 
-void Decimal128Base::setScale(DecimalStatus decSt, int scale)
+void Decimal128::setScale(DecimalStatus decSt, int scale)
 {
 	if (scale)
 	{
@@ -805,7 +700,7 @@ void Decimal128Base::setScale(DecimalStatus decSt, int scale)
 	}
 }
 
-int Decimal128Base::compare(DecimalStatus decSt, Decimal128Base tgt) const
+int Decimal128::compare(DecimalStatus decSt, Decimal128 tgt) const
 {
 	DecimalContext context(this, decSt);
 	decQuad r;
@@ -813,7 +708,7 @@ int Decimal128Base::compare(DecimalStatus decSt, Decimal128Base tgt) const
 	return decQuadToInt32(&r, &context, DEC_ROUND_HALF_UP);
 }
 
-bool Decimal128Base::isInf() const
+bool Decimal128::isInf() const
 {
 	switch(decQuadClass(&dec))
 	{
@@ -825,7 +720,7 @@ bool Decimal128Base::isInf() const
 	return false;
 }
 
-bool Decimal128Base::isNan() const
+bool Decimal128::isNan() const
 {
 	switch(decQuadClass(&dec))
 	{
@@ -837,7 +732,7 @@ bool Decimal128Base::isNan() const
 	return false;
 }
 
-int Decimal128Base::sign() const
+int Decimal128::sign() const
 {
 	if (decQuadIsZero(&dec))
 		return 0;
@@ -863,7 +758,7 @@ Decimal128 Decimal128::floor(DecimalStatus decSt) const
 }
 
 #ifdef DEV_BUILD
-int Decimal128Base::show()
+int Decimal128::show()
 {
 	decQuadShow(&dec, "");
 	return 0;
@@ -908,76 +803,11 @@ Decimal128 Decimal128::mul(DecimalStatus decSt, Decimal128 op2) const
 	return rc;
 }
 
-DecimalFixed DecimalFixed::abs() const
-{
-	DecimalFixed rc;
-	decQuadCopyAbs(&rc.dec, &dec);
-	return rc;
-}
-
-DecimalFixed DecimalFixed::neg() const
-{
-	DecimalFixed rc;
-	decQuadCopyNegate(&rc.dec, &dec);
-	return rc;
-}
-
-DecimalFixed DecimalFixed::add(DecimalStatus decSt, DecimalFixed op2) const
-{
-	DecimalContext context(this, decSt);
-	DecimalFixed rc;
-	decQuadAdd(&rc.dec, &dec, &op2.dec, &context);
-	context.checkForExceptions();
-	decQuadQuantize(&rc.dec, &rc.dec, &c1.dec, &context);
-	return rc;
-}
-
-DecimalFixed DecimalFixed::sub(DecimalStatus decSt, DecimalFixed op2) const
-{
-	DecimalContext context(this, decSt);
-	DecimalFixed rc;
-	decQuadSubtract(&rc.dec, &dec, &op2.dec, &context);
-	context.checkForExceptions();
-	decQuadQuantize(&rc.dec, &rc.dec, &c1.dec, &context);
-	return rc;
-}
-
-DecimalFixed DecimalFixed::mul(DecimalStatus decSt, DecimalFixed op2) const
-{
-	DecimalContext context(this, decSt);
-	DecimalFixed rc;
-	decQuadMultiply(&rc.dec, &dec, &op2.dec, &context);
-	context.checkForExceptions();
-	decQuadQuantize(&rc.dec, &rc.dec, &c1.dec, &context);
-	return rc;
-}
-
 Decimal128 Decimal128::div(DecimalStatus decSt, Decimal128 op2) const
 {
 	DecimalContext context(this, decSt);
 	Decimal128 rc;
 	decQuadDivide(&rc.dec, &dec, &op2.dec, &context);
-	return rc;
-}
-
-DecimalFixed DecimalFixed::div(DecimalStatus decSt, DecimalFixed op2, int scale) const
-{
-	DecimalContext context(this, decSt);
-	DecimalFixed rc;
-
-	// first divide with full decfloat precision
-	decQuadDivide(&rc.dec, &dec, &op2.dec, &context);
-
-	// next re-scale & int-ize
-	rc.exactInt(decSt, scale);
-	return rc;
-}
-
-DecimalFixed DecimalFixed::mod(DecimalStatus decSt, DecimalFixed op2) const
-{
-	DecimalContext context(this, decSt);
-	DecimalFixed rc;
-	decQuadRemainder(&rc.dec, &dec, &op2.dec, &context);
 	return rc;
 }
 
@@ -1042,7 +872,7 @@ Decimal128 Decimal128::log10(DecimalStatus decSt) const
 	return rc;
 }
 
-void Decimal128Base::makeKey(ULONG* key) const
+void Decimal128::makeKey(ULONG* key) const
 {
 	unsigned char coeff[DECQUAD_Pmax];
 	int sign = decQuadGetCoefficient(&dec, coeff);
@@ -1051,7 +881,7 @@ void Decimal128Base::makeKey(ULONG* key) const
 	make(key, DECQUAD_Pmax, DECQUAD_Bias, sizeof(dec), coeff, sign, exp);
 }
 
-void Decimal128Base::grabKey(ULONG* key)
+void Decimal128::grabKey(ULONG* key)
 {
 	int exp, sign;
 	unsigned char bcd[DECQUAD_Pmax];
@@ -1061,12 +891,12 @@ void Decimal128Base::grabKey(ULONG* key)
 	decQuadFromBCD(&dec, exp, bcd, sign);
 }
 
-ULONG Decimal128Base::getIndexKeyLength()
+ULONG Decimal128::getIndexKeyLength()
 {
 	return 17;
 }
 
-ULONG Decimal128Base::makeIndexKey(vary* buf)
+ULONG Decimal128::makeIndexKey(vary* buf)
 {
 	unsigned char coeff[DECQUAD_Pmax + 2];
 	int sign = decQuadGetCoefficient(&dec, coeff);
@@ -1198,6 +1028,11 @@ short Decimal128::decCompare(Decimal128 op2) const
 
 	// warning silencer
 	return 3;
+}
+
+void Decimal128::getBcd(BCD* bcd) const
+{
+	bcd->sign = decQuadToBCD(&dec, &bcd->exp, bcd->bcd);
 }
 
 } // namespace Firebird

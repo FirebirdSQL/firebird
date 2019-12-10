@@ -10,7 +10,7 @@
     <ClCompile>
       <AdditionalOptions>/EHsc- %(AdditionalOptions)</AdditionalOptions>
       <OmitFramePointers>true</OmitFramePointers>
-      <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;../../../extern/libtomcrypt/src/headers;../../../extern/libtommath;../../../extern/icu/include;../../../extern/zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;../../../extern/libtomcrypt/src/headers;../../../extern/libtommath;../../../extern/icu/include;../../../extern/zlib;../../../extern/re2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>
       </ExceptionHandling>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>

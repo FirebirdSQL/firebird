@@ -25,6 +25,7 @@
 
 #include "../../common/classes/fb_string.h"
 #include "../../common/classes/array.h"
+#include "../../common/classes/objects_array.h"
 #include "../../common/classes/ClumpletWriter.h"
 #include "../../common/classes/locks.h"
 #include "../../common/utils_proto.h"
@@ -436,6 +437,8 @@ public:
 	virtual void detach(Jrd::thread_db* tdbb);
 
 	virtual bool cancelExecution(bool forced) = 0;
+
+	// Try to reset connection, return true if it can be pooled
 	virtual bool resetSession() = 0;
 
 	int getSqlDialect() const { return m_sqlDialect; }
@@ -491,6 +494,13 @@ public:
 
 	virtual Blob* createBlob() = 0;
 
+	// Test specified flags, return true if all bits present
+	bool testFeature(ULONG value) const { return m_features & value; }
+	// Set specified flags, return new value
+	ULONG setFeature(ULONG value) { return m_features |= value; }
+	// Clear specified flags, return new value
+	ULONG clearFeature(ULONG value) { return m_features &= ~value; }
+
 protected:
 	virtual Transaction* doCreateTransaction() = 0;
 	virtual Statement* doCreateStatement() = 0;
@@ -521,8 +531,16 @@ protected:
 	int m_sqlDialect;	// must be filled in attach call
 	bool m_wrapErrors;
 	bool m_broken;
+	ULONG m_features;	// bitmask
 };
 
+// Connection features flags
+const ULONG conFtrSessionReset		= 0x01;		// supports ALTER SESSION RESET
+const ULONG conFtrReadConsistency	= 0x02;		// supports READ COMMITTED READ CONSISTENCY
+const ULONG conFtrStatementTimeout	= 0x04;		// supports statements timeout
+
+// Features of Firebird 4
+const ULONG conFtrFB4 = conFtrSessionReset | conFtrReadConsistency | conFtrStatementTimeout;
 
 class Transaction : public Firebird::PermanentStorage
 {
@@ -573,7 +591,8 @@ protected:
 };
 
 
-typedef Firebird::Array<Firebird::MetaName*> ParamNames;
+typedef Firebird::Array<const Firebird::MetaName*> ParamNames;
+typedef Firebird::Array<USHORT> ParamNumbers;
 
 class Statement : public Firebird::PermanentStorage
 {
@@ -597,9 +616,10 @@ public:
 	void setTimeout(Jrd::thread_db* tdbb, unsigned int timeout);
 	void execute(Jrd::thread_db* tdbb, Transaction* tran,
 		const Firebird::MetaName* const* in_names, const Jrd::ValueListNode* in_params,
-		const Jrd::ValueListNode* out_params);
+		const ParamNumbers* in_excess, const Jrd::ValueListNode* out_params);
 	void open(Jrd::thread_db* tdbb, Transaction* tran,
-		const Firebird::MetaName* const* in_names, const Jrd::ValueListNode* in_params, bool singleton);
+		const Firebird::MetaName* const* in_names, const Jrd::ValueListNode* in_params, 
+		const ParamNumbers* in_excess, bool singleton);
 	bool fetch(Jrd::thread_db* tdbb, const Jrd::ValueListNode* out_params);
 	void close(Jrd::thread_db* tdbb, bool invalidTran = false);
 	void deallocate(Jrd::thread_db* tdbb);
@@ -636,7 +656,7 @@ protected:
 	virtual void doClose(Jrd::thread_db* tdbb, bool drop) = 0;
 
 	void setInParams(Jrd::thread_db* tdbb, const Firebird::MetaName* const* names,
-		const Jrd::ValueListNode* params);
+		const Jrd::ValueListNode* params, const ParamNumbers* in_excess);
 	virtual void getOutParams(Jrd::thread_db* tdbb, const Jrd::ValueListNode* params);
 
 	virtual void doSetInParams(Jrd::thread_db* tdbb, unsigned int count,
@@ -689,7 +709,7 @@ protected:
 	Jrd::jrd_req* m_preparedByReq;
 
 	// set in preprocess
-	ParamNames m_sqlParamNames;
+	Firebird::SortedObjectsArray<const Firebird::MetaName> m_sqlParamNames;
 	ParamNames m_sqlParamsMap;
 
 	// set in prepare()

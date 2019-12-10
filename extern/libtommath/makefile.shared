@@ -10,16 +10,20 @@ ifndef GCC
 GCC=gcc
 endif
 
-CC = libtool --mode=compile --tag=CC $(GCC)
+ifndef LIBTOOL
+LIBTOOL=libtool
+endif
+
+CC = $(LIBTOOL) --mode=compile --tag=CC $(GCC)
 
 CFLAGS  +=  -I./ -Wall -W -Wshadow -Wsign-compare
 
 ifndef IGNORE_SPEED
 
-#for speed 
+#for speed
 CFLAGS += -O3 -funroll-loops
 
-#for size 
+#for size
 #CFLAGS += -Os
 
 #x86 optimizations [should be valid for any GCC install though]
@@ -90,22 +94,20 @@ bn_mp_to_signed_bin_n.o bn_mp_to_unsigned_bin_n.o
 objs: $(OBJECTS)
 
 $(LIBNAME):  $(OBJECTS)
-	$(GCC) -shared -fPIC -DPIC $(CFLAGS) $(addprefix .libs/, $(OBJECTS)) -Wl,-soname -Wl,$(LIBNAME_SO_0) -o .libs/$(LIBNAME_SO_0).$(VERSION_SO)
-	ln -sf $(LIBNAME_SO_0).$(VERSION_SO) .libs/$(LIBNAME_SO_0)
-	ln -sf $(LIBNAME_SO_0).$(VERSION_SO) .libs/$(LIBNAME_SO)
+	$(LIBTOOL) --mode=link --tag=CC gcc *.lo -o $(LIBNAME) -rpath $(LIBPATH) -version-info $(VERSION)
 
 install: $(LIBNAME)
 	install -d -g $(GROUP) -o $(USER) $(DESTDIR)$(LIBPATH)
-	libtool --mode=install install -c $(LIBNAME) $(DESTDIR)$(LIBPATH)/$(LIBNAME)
+	$(LIBTOOL) --mode=install install -c $(LIBNAME) $(DESTDIR)$(LIBPATH)/$(LIBNAME)
 	install -d -g $(GROUP) -o $(USER) $(DESTDIR)$(INCPATH)
 	install -g $(GROUP) -o $(USER) $(HEADERS) $(DESTDIR)$(INCPATH)
 
 test: $(LIBNAME) demo/demo.o
 	$(GCC) $(CFLAGS) -c demo/demo.c -o demo/demo.o
-	libtool --mode=link $(GCC) -o test demo/demo.o $(LIBNAME_S)
-	
-mtest: test	
+	$(LIBTOOL) --mode=link $(GCC) -o test demo/demo.o $(LIBNAME_S)
+
+mtest: test
 	cd mtest ; $(GCC) $(CFLAGS) mtest.c -o mtest
-        
+
 timing: $(LIBNAME)
 	$(GCC) $(CFLAGS) -DTIMER demo/timing.c $(LIBNAME_S) -o ltmtest

@@ -223,19 +223,20 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 			// tricky: the value doesn't always become negative after an
 			// overflow!
 
-			if (value >= NUMERIC_LIMIT)
+			if (!over)
 			{
-				// possibility of an overflow
-				if ((value > NUMERIC_LIMIT) || (*p > '8' && sign == -1) || (*p > '7' && sign != -1))
+				if (value >= NUMERIC_LIMIT)
 				{
-					over = true;
-					break;
+					// possibility of an overflow
+					if ((value > NUMERIC_LIMIT) || (*p > '8' && sign == -1) || (*p > '7' && sign != -1))
+						over = true;
 				}
+
+				// Force the subtraction to be performed before the addition,
+				// thus preventing a possible signed arithmetic overflow.
+				value = value * 10 + (*p - '0');
 			}
 
-			// Force the subtraction to be performed before the addition,
-			// thus preventing a possible signed arithmetic overflow.
-			value = value * 10 + (*p - '0');
 			if (fraction)
 				--local_scale;
 		}
@@ -262,6 +263,8 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 	if ((local_scale > MAX_SCHAR) || (local_scale < MIN_SCHAR))
 		over = true;
 
+	*scale = local_scale;
+
 	if ((!over) && ((p < end) ||		// there is an exponent
 		((value < 0) && (sign != -1)))) // MAX_SINT64+1 wrapped around
 	{
@@ -277,8 +280,6 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 		*(Decimal128*) ptr = CVT_get_dec128(&desc, tdbb->getAttachment()->att_dec_status, ERR_post);
 		return dtype_dec128;
 	}
-
-	*scale = local_scale;
 
 	// The literal has already been converted to a 64-bit integer: return
 	// a long if the value fits into a long, else return an int64.
@@ -513,26 +514,26 @@ SLONG EngineCallbacks::getLocalDate()
 
 	if (tdbb && (tdbb->getType() == ThreadData::tddDBB) && tdbb->getRequest())
 	{
-		fb_assert(!tdbb->getRequest()->req_timestamp_utc.isEmpty());
+		fb_assert(!tdbb->getRequest()->req_gmt_timestamp.isEmpty());
 		return tdbb->getRequest()->getLocalTimeStamp().value().timestamp_date;
 	}
 
 	return TimeZoneUtil::timeStampTzToTimeStamp(
-		TimeZoneUtil::getCurrentTimeStampUtc(), getSessionTimeZone()).timestamp_date;
+		TimeZoneUtil::getCurrentSystemTimeStamp(), getSessionTimeZone()).timestamp_date;
 }
 
 
-ISC_TIMESTAMP EngineCallbacks::getCurrentTimeStampUtc()
+ISC_TIMESTAMP EngineCallbacks::getCurrentGmtTimeStamp()
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
 	if (tdbb && (tdbb->getType() == ThreadData::tddDBB) && tdbb->getRequest())
 	{
-		fb_assert(!tdbb->getRequest()->req_timestamp_utc.isEmpty());
-		return tdbb->getRequest()->req_timestamp_utc.value();
+		fb_assert(!tdbb->getRequest()->req_gmt_timestamp.isEmpty());
+		return tdbb->getRequest()->req_gmt_timestamp.value();
 	}
 
-	return TimeZoneUtil::timeStampTzToTimeStamp(TimeZoneUtil::getCurrentTimeStampUtc(), TimeZoneUtil::GMT_ZONE);
+	return TimeZoneUtil::timeStampTzToTimeStamp(TimeZoneUtil::getCurrentSystemTimeStamp(), TimeZoneUtil::GMT_ZONE);
 }
 
 

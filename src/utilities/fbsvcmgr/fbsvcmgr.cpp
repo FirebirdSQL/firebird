@@ -36,7 +36,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../yvalve/gds_proto.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/timestamp.h"
 #include "../common/utils_proto.h"
@@ -404,6 +404,7 @@ const SvcSwitches backupOptions[] =
 	{"bkp_no_triggers", putOption, 0, isc_spb_bkp_no_triggers, 0},
 	{"verbint", putIntArgument, 0, isc_spb_verbint, 0},
 	{"bkp_skip_data", putStringArgument, 0, isc_spb_bkp_skip_data, 0},
+	{"bkp_include_data", putStringArgument, 0, isc_spb_bkp_include_data, 0},
 	{"bkp_stat", putStringArgument, 0, isc_spb_bkp_stat, 0 },
 	{"bkp_keyholder", putStringArgument, 0, isc_spb_bkp_keyholder, 0 },
 	{"bkp_keyname", putStringArgument, 0, isc_spb_bkp_keyname, 0 },
@@ -433,6 +434,7 @@ const SvcSwitches restoreOptions[] =
 	{"res_metadata_only", putOption, 0, isc_spb_res_metadata_only, 0},
 	{"verbint", putIntArgument, 0, isc_spb_verbint, 0},
 	{"res_skip_data", putStringArgument, 0, isc_spb_res_skip_data, 0},
+	{"res_include_data", putStringArgument, 0, isc_spb_res_include_data, 0},
 	{"res_stat", putStringArgument, 0, isc_spb_res_stat, 0 },
 	{"res_keyholder", putStringArgument, 0, isc_spb_res_keyholder, 0 },
 	{"res_keyname", putStringArgument, 0, isc_spb_res_keyname, 0 },
@@ -1060,9 +1062,9 @@ void testSvc(isc_svc_handle* h, ClumpletWriter& spb, const SvcSwitches* sw)
 						static_cast<USHORT>(spb.getBufferLength()),
 						reinterpret_cast<const char*>(spb.getBuffer())))
 					{
-						isc_print_status(status);
-						isc_service_detach(status, h);
-						exit(1);
+						ISC_STATUS_ARRAY local;
+						isc_service_detach(local, h);
+						Firebird::status_exception::raise(status);
 					}
 					spb.clear();
 				}
@@ -1079,10 +1081,7 @@ void testServices()
 {
 	FILE* f = fopen(fileTest, "w");
 	if (!f)
-	{
-		perror(fileTest);
-		exit(1);
-	}
+		Firebird::system_call_failed::raise(fileTest);
 
 	fputs(fileTest, f);
 	fclose(f);
@@ -1098,8 +1097,7 @@ void testServices()
 				static_cast<USHORT>(spbAtt.getBufferLength()),
 				reinterpret_cast<const char*>(spbAtt.getBuffer())))
 	{
-		isc_print_status(status);
-		exit(1);
+		Firebird::status_exception::raise(status);
 	}
 
 	ClumpletWriter spbStart(ClumpletWriter::SpbStart,  1024 * 1024);
@@ -1136,12 +1134,6 @@ void usage(bool listSwitches)
 }
 
 
-static void atexit_fb_shutdown()
-{
-	fb_shutdown(0, fb_shutrsn_app_stopped);
-}
-
-
 // simple main function
 
 int main(int ac, char** av)
@@ -1157,26 +1149,26 @@ int main(int ac, char** av)
 		return 1;
 	}
 
+	try {
 #ifdef DEV_BUILD
-	if (ac == 2 && strcmp(av[1], "-@") == 0)
-	{
-		testServices();
-		return 0;
-	}
+		if (ac == 2 && strcmp(av[1], "-@") == 0)
+		{
+			testServices();
+			return 0;
+		}
 #endif
 
-	if (ac == 2 && (strcmp(av[1], "-z") == 0 || strcmp(av[1], "-Z") == 0))
-	{
-		printMessage(51, SafeArg() << FB_VERSION);
-		return 0;
-	}
+		if (ac == 2 && (strcmp(av[1], "-z") == 0 || strcmp(av[1], "-Z") == 0))
+		{
+			printMessage(51, SafeArg() << FB_VERSION);
+			return 0;
+		}
 
-	os_utils::CtrlCHandler ctrlCHandler;
-	atexit(&atexit_fb_shutdown);
+		os_utils::CtrlCHandler ctrlCHandler;
+		fb_utils::FbShutdown appShutdown(fb_shutrsn_app_stopped);
 
-	ISC_STATUS_ARRAY status;
+		ISC_STATUS_ARRAY status;
 
-	try {
 		const int maxbuf = 16384;
 		av++;
 

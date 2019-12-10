@@ -60,7 +60,7 @@ const USHORT blr_dtypes[] = {
 	blr_bool,					// dtype_boolean
 	blr_dec64,					// dtype_dec64
 	blr_dec128,					// dtype_dec128
-	blr_dec_fixed,				// dtype_dec_fixed
+	blr_int128,					// dtype_int128
 	blr_sql_time_tz,			// dtype_sql_time_tz
 	blr_timestamp_tz			// dtype_timestamp_tz
 };

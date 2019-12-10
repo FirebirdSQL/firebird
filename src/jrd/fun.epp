@@ -103,9 +103,9 @@ namespace
 
 	bool tryLibrary(PathName libName, string& message)
 	{
-		ModuleLoader::doctorModuleExtension(libName);
+		PathName modName(libName);
 
-		ModuleLoader::Module* module = ModuleLoader::loadModule(NULL, libName);
+		ModuleLoader::Module* module = ModuleLoader::fixAndLoadModule(NULL, modName);
 		if (!module)
 		{
 			message.printf("%s library has not been found", libName.c_str());
@@ -113,9 +113,10 @@ namespace
 		}
 
 		void (*ibUtilUnit)(void* (*)(long));
-		if (!module->findSymbol("ib_util_init", ibUtilUnit))
+		if (!module->findSymbol(NULL, "ib_util_init", ibUtilUnit))
 		{
-			message.printf("ib_util_init not found in %s", libName.c_str());
+			// in the case of missing symbol it is better to know an exact library name
+			message.printf("ib_util_init not found in %s", modName.c_str());
 			delete module;
 			return false;
 		}
@@ -605,7 +606,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 				break;
 
 			case dtype_dec128:
-			case dtype_dec_fixed:
+			case dtype_int128:
 				{
 					const Decimal128 d = MOV_get_dec128(tdbb, input);
 					if (parameter->prm_fun_mechanism == FUN_value)
@@ -813,21 +814,6 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 									Arg::Str(function->getName().toString()));
 			}
 			else if (value->vlu_misc.vlu_dec128.isNan())
-			{
-				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_udf_fp_nan) <<
-									Arg::Str(function->getName().toString()));
-			}
-			break;
-
-		case dtype_dec_fixed:
-			if (value->vlu_misc.vlu_dec_fixed.isInf())
-			{
-				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_udf_fp_overflow) <<
-									Arg::Str(function->getName().toString()));
-			}
-			else if (value->vlu_misc.vlu_dec_fixed.isNan())
 			{
 				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_udf_fp_nan) <<
@@ -1147,8 +1133,8 @@ static void invoke(thread_db* tdbb,
 			value->vlu_misc.vlu_dec128 = CALL_UDF<Decimal128>(tdbb, function->fun_entrypoint, args);
 			break;
 
-		case dtype_dec_fixed:
-			value->vlu_misc.vlu_dec_fixed = CALL_UDF<DecimalFixed>(tdbb, function->fun_entrypoint, args);
+		case dtype_int128:
+			value->vlu_misc.vlu_int128 = CALL_UDF<Int128>(tdbb, function->fun_entrypoint, args);
 			break;
 
 		case dtype_timestamp:

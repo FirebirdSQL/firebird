@@ -48,7 +48,7 @@
 #include <stdarg.h>
 #include "../common/gdsassert.h"
 
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/msg.h"
 #include "../jrd/event.h"
 #include "../yvalve/gds_proto.h"
@@ -674,7 +674,8 @@ void UtilInterface::decodeTimeTz(CheckStatusWrapper* status, const ISC_TIME_TZ* 
 	{
 		tm times;
 		int intFractions;
-		TimeZoneUtil::decodeTime(*timeTz, CVT_commonCallbacks, &times, &intFractions);
+		bool tzLookup = TimeZoneUtil::decodeTime(*timeTz, timeZoneBuffer != nullptr, CVT_commonCallbacks,
+			&times, &intFractions);
 
 		if (hours)
 			*hours = times.tm_hour;
@@ -689,7 +690,12 @@ void UtilInterface::decodeTimeTz(CheckStatusWrapper* status, const ISC_TIME_TZ* 
 			*fractions = (unsigned) intFractions;
 
 		if (timeZoneBuffer)
-			TimeZoneUtil::format(timeZoneBuffer, timeZoneBufferLength, timeTz->time_zone);
+		{
+			if (tzLookup)
+				TimeZoneUtil::format(timeZoneBuffer, timeZoneBufferLength, timeTz->time_zone);
+			else
+				strncpy(timeZoneBuffer, TimeZoneUtil::GMT_FALLBACK, timeZoneBufferLength);
+		}
 	}
 	catch (const Exception& ex)
 	{
@@ -720,7 +726,7 @@ void UtilInterface::decodeTimeStampTz(CheckStatusWrapper* status, const ISC_TIME
 	{
 		tm times;
 		int intFractions;
-		TimeZoneUtil::decodeTimeStamp(*timeStampTz, &times, &intFractions);
+		bool tzLookup = TimeZoneUtil::decodeTimeStamp(*timeStampTz, timeZoneBuffer != nullptr, &times, &intFractions);
 
 		if (year)
 			*year = times.tm_year + 1900;
@@ -744,7 +750,12 @@ void UtilInterface::decodeTimeStampTz(CheckStatusWrapper* status, const ISC_TIME
 			*fractions = (unsigned) intFractions;
 
 		if (timeZoneBuffer)
-			TimeZoneUtil::format(timeZoneBuffer, timeZoneBufferLength, timeStampTz->time_zone);
+		{
+			if (tzLookup)
+				TimeZoneUtil::format(timeZoneBuffer, timeZoneBufferLength, timeStampTz->time_zone);
+			else
+				strncpy(timeZoneBuffer, TimeZoneUtil::GMT_FALLBACK, timeZoneBufferLength);
+		}
 	}
 	catch (const Exception& ex)
 	{
@@ -1292,6 +1303,49 @@ IDecFloat34* UtilInterface::getDecFloat34(CheckStatusWrapper* status)
 	return &decFloat34;
 }
 
+class IfaceInt128 FB_FINAL : public AutoIface<IInt128Impl<IfaceInt128, CheckStatusWrapper> >
+{
+public:
+	// IInt128 implementation
+	void toString(CheckStatusWrapper* status, const FB_I128* from, int scale, unsigned bufSize, char* buffer)
+	{
+		try
+		{
+			const Int128* i128 = (Int128*)from;
+			i128->toString(scale, bufSize, buffer);
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
+	}
+
+	void fromString(CheckStatusWrapper* status, int scale, const char* from, FB_I128* to)
+	{
+		try
+		{
+			Int128* i128 = (Int128*)to;
+			scale -= CVT_decompose(from, static_cast<USHORT>(strlen(from)), i128, errorFunction);
+			i128->setScale(scale);
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
+	}
+
+	static void errorFunction(const Arg::StatusVector& v)
+	{
+		v.raise();
+	}
+};
+
+IInt128* UtilInterface::getInt128(CheckStatusWrapper* status)
+{
+	static IfaceInt128 ifaceInt128;
+	return &ifaceInt128;
+}
+
 unsigned UtilInterface::setOffsets(CheckStatusWrapper* status, IMessageMetadata* metadata,
 	IOffsetsCallback* callback)
 {
@@ -1325,103 +1379,6 @@ unsigned UtilInterface::setOffsets(CheckStatusWrapper* status, IMessageMetadata*
 	}
 
 	return 0;
-}
-
-// Deal with events
-class EventBlock FB_FINAL : public DisposeIface<IEventBlockImpl<EventBlock, CheckStatusWrapper> >
-{
-public:
-	EventBlock(const char** events)
-		: values(getPool()), buffer(getPool()), counters(getPool())
-	{
-		if (!events[0])
-		{
-			(Arg::Gds(isc_random) << "No events passed as an argument"
-				<< Arg::SqlState("HY024")).raise();
-				// HY024: Invalid attribute value
-		}
-
-		unsigned num = 0;
-		values.push(EPB_version1);
-
-		for (const char** e = events; *e; ++e)
-		{
-			++num;
-
-			string ev(*e);
-			ev.rtrim();
-
-			if (ev.length() > 255)
-			{
-				(Arg::Gds(isc_random) << ("Too long event name: " + ev)
-					<< Arg::SqlState("HY024")).raise();
-					// HY024: Invalid attribute value
-			}
-			values.push(ev.length());
-			values.push(reinterpret_cast<const unsigned char*>(ev.begin()), ev.length());
-			values.push(0);
-			values.push(0);
-			values.push(0);
-			values.push(0);
-		}
-
-		// allocate memory for various buffers
-		buffer.getBuffer(values.getCount());
-		counters.getBuffer(num);
-	}
-
-	unsigned getLength()
-	{
-		return values.getCount();
-	}
-
-	unsigned char* getValues()
-	{
-		return values.begin();
-	}
-
-	unsigned char* getBuffer()
-	{
-		return buffer.begin();
-	}
-
-	unsigned getCount()
-	{
-		return counters.getCount();
-	}
-
-	unsigned* getCounters()
-	{
-		return (unsigned*) counters.begin();
-	}
-
-	void counts()
-	{
-		isc_event_counts(counters.begin(), values.getCount(), values.begin(), buffer.begin());
-	}
-
-	void dispose()
-	{
-		delete this;
-	}
-
-private:
-	UCharBuffer values;
-	UCharBuffer buffer;
-	HalfStaticArray<ULONG, 16> counters;
-};
-
-IEventBlock* UtilInterface::createEventBlock(CheckStatusWrapper* status, const char** events)
-{
-	try
-	{
-		return FB_NEW EventBlock(events);
-	}
-	catch (const Exception& ex)
-	{
-		ex.stuffException(status);
-		return NULL;
-	}
 }
 
 } // namespace Why
@@ -1533,7 +1490,7 @@ void API_ROUTINE_VARARG isc_expand_dpb(SCHAR** dpb, SSHORT* dpb_size, ...)
 
 	va_start(args, dpb_size);
 
-	while (type = va_arg(args, int))
+	while ((type = va_arg(args, int)))
 	{
 		switch (type)
 		{
@@ -1604,7 +1561,7 @@ void API_ROUTINE_VARARG isc_expand_dpb(SCHAR** dpb, SSHORT* dpb_size, ...)
 
 	va_start(args, dpb_size);
 
-	while (type = va_arg(args, int))
+	while ((type = va_arg(args, int)))
 	{
 		switch (type)
 		{
@@ -3061,7 +3018,7 @@ static void isc_expand_dpb_internal(const UCHAR** dpb, SSHORT* dpb_size, ...)
 
 	va_start(args, dpb_size);
 
-	while (type = va_arg(args, int))
+	while ((type = va_arg(args, int)))
 	{
 		switch (type)
 		{
@@ -3130,7 +3087,7 @@ static void isc_expand_dpb_internal(const UCHAR** dpb, SSHORT* dpb_size, ...)
 
 	va_start(args, dpb_size);
 
-	while (type = va_arg(args, int))
+	while ((type = va_arg(args, int)))
 	{
 		switch (type)
 		{

@@ -33,6 +33,7 @@
 #include "../jrd/Database.h"
 #include "../jrd/nbak.h"
 #include "../jrd/tra.h"
+#include "../jrd/pag_proto.h"
 #include "../jrd/tpc_proto.h"
 #include "../jrd/lck_proto.h"
 #include "../jrd/CryptoManager.h"
@@ -318,6 +319,36 @@ namespace Jrd
 	{
 		dbb = NULL;
 		reset();
+	}
+
+	void Database::ensureGuid(thread_db* tdbb)
+	{
+		if (readOnly())
+			return;
+
+		if (!dbb_guid.alignment) // hackery way to check whether it was loaded
+		{
+			GenerateGuid(&dbb_guid);
+			PAG_set_db_guid(tdbb, dbb_guid);
+		}
+	}
+
+	FB_UINT64 Database::getReplSequence(thread_db* tdbb)
+	{
+		USHORT length = sizeof(FB_UINT64);
+		if (!PAG_get_clump(tdbb, Ods::HDR_repl_seq, &length, (UCHAR*) &dbb_repl_sequence))
+			return 0;
+
+		return dbb_repl_sequence;
+	}
+
+	void Database::setReplSequence(thread_db* tdbb, FB_UINT64 sequence)
+	{
+		if (dbb_repl_sequence != sequence)
+		{
+			PAG_set_repl_sequence(tdbb, sequence);
+			dbb_repl_sequence = sequence;
+		}
 	}
 
 } // namespace

@@ -33,11 +33,11 @@ using namespace Firebird;
 
 
 // Move (and possible convert) something to something else.
-void MOVD_move(thread_db* tdbb, dsc* from, dsc* to, bool toExternal)
+void MOVD_move(thread_db* tdbb, dsc* from, dsc* to)
 {
 	try
 	{
-		MOV_move_ext(tdbb, from, to, toExternal);
+		MOV_move(tdbb, from, to);
 	}
 	catch (const status_exception& ex)
 	{

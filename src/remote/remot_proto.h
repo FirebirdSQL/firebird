@@ -27,18 +27,13 @@
 #include "../common/classes/fb_string.h"
 #include "../common/config/config.h"
 #include "../common/classes/RefCounted.h"
-#include "../common/security.h"
+#include "../common/classes/ParsedList.h"
 #include "../common/xdr.h"
 #include "../remote/protocol.h"
 
 namespace Firebird
 {
 	class ClumpletReader;
-}
-
-namespace Remote
-{
-	typedef Auth::ParsedList ParsedList;
 }
 
 struct rem_port;
@@ -66,16 +61,6 @@ Firebird::RefPtr<const Config> REMOTE_get_config(const Firebird::PathName* dbNam
 void		REMOTE_check_response(Firebird::IStatus* warning, Rdb* rdb, PACKET* packet, bool checkKeys = false);
 bool		REMOTE_inflate(rem_port*, PacketReceive*, UCHAR*, SSHORT, SSHORT*);
 bool		REMOTE_deflate(XDR*, ProtoWrite*, PacketSend*, bool flash);
-
-static inline void REMOTE_parseList(Remote::ParsedList& parsed, const Firebird::PathName& list)
-{
-	Auth::parseList(parsed, list);
-}
-
-static inline void REMOTE_makeList(Firebird::PathName& list, const Remote::ParsedList& parsed)
-{
-	Auth::makeList(list, parsed);
-}
 
 extern signed char wcCompatible[3][3];
 

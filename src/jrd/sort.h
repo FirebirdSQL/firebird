@@ -145,6 +145,7 @@ const int SKD_dec64			= 16;
 const int SKD_dec128		= 17;
 const int SKD_sql_time_tz	= 18;
 const int SKD_timestamp_tz	= 19;
+const int SKD_int128		= 20;
 
 // skd_flags
 const UCHAR SKD_ascending		= 0;	// default initializer
@@ -279,7 +280,7 @@ private:
 	void allocateBuffer(MemoryPool&);
 	void releaseBuffer();
 
-	void diddleKey(UCHAR*, bool);
+	void diddleKey(UCHAR*, bool, bool);
 	sort_record* getMerge(merge_control*);
 	ULONG allocate(ULONG, ULONG, bool);
 	void init();

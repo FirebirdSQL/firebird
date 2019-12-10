@@ -246,6 +246,12 @@ public:
   		return count++;
 	}
 
+	T& add()
+	{
+		ensureCapacity(count + 1);
+		return *new(&data[count++]) T();	// initialize new empty data member
+	}
+
 	void add(const T* items, const size_type itemsCount)
 	{
 		fb_assert(count <= FB_MAX_SIZEOF - itemsCount);

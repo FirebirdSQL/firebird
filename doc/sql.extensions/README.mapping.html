@@ -6,7 +6,7 @@
 	<meta name="generator" content="LibreOffice 6.0.6.2 (Linux)"/>
 	<meta name="author" content="irina "/>
 	<meta name="created" content="2014-03-25T00:00:00.010305100"/>
-	<meta name="changed" content="2018-10-22T20:04:57.156407239"/>
+	<meta name="changed" content="2018-12-07T20:15:37.805856298"/>
 	<style type="text/css">
 		@page { margin: 2.01cm }
 		p { margin-bottom: 0.2cm }
@@ -276,8 +276,8 @@ GUEST;</font></p>
 <p lang="en-US" style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Map
 windows group to trusted firebird role:</font></p>
 <p lang="en-US" style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">CREATE
-MAPPING WINGROUP1 USING PLUGIN WIN_SSPI FROM GROUP GROUP_NAME TO
-ROLE ROLE_NAME;</font></p>
+MAPPING WINGROUP1 USING PLUGIN WIN_SSPI FROM GROUP GROUP_NAME TO ROLE
+ROLE_NAME;</font></p>
 <p lang="en-US" style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Here
 we expect that some windows users may belong to group GROUP_NAME. If
 needed name of the group may be given in long form, i.e.
@@ -298,6 +298,29 @@ as security database. If you plan to use other database as security
 one (using for example your own provider) please create in it table
 RDB$AUTH_MAPPING with structure repeating one in firebird 3 database,
 public read access and SYSDBA-only write access.</font></p>
+<p lang="en-US" style="margin-bottom: 0cm"><br/>
+
+</p>
+<p lang="en-US" style="margin-bottom: 0cm"><br/>
+
+</p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><span lang="en-US">Tip:</span></font></p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><span lang="en-US">It’s
+relatively easy to accidentally make a database remotely inaccessible
+using CREATE MAPPING statement. For example: </span></font>
+</p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><span lang="en-US">CREATE
+MAPPING BREAK_DB_1 USING * FROM ANY USER TO ROLE ROLE1;</span></font></p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><span lang="en-US">CREATE
+MAPPING BREAK_DB_2 USING * FROM ANY USER TO ROLE ROLE2;</span></font></p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><span lang="en-US">This
+will disallow any user (including SYSDBA) to connect. Luckily
+mappings are not processed when database is used in embedded mode,
+i.e. in such a case one should attach to database using embedded
+access and fix bad mappings.</span></font></p>
+<p style="margin-bottom: 0cm"><br/>
+
+</p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>

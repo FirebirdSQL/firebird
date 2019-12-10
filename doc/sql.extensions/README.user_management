@@ -13,6 +13,7 @@ Syntax is:
    ALTER USER name [ SET ] [ options ] [ TAGS ( tag [, tag [, tag ...]] ) ]
    ALTER CURRENT USER [ SET ] [ options ] [ TAGS ( tag [, tag [, tag ...]] ) ]
    CREATE OR ALTER USER name [ SET ] [ options ] [ TAGS ( tag [, tag [, tag ...]] ) ]
+   RECREATE USER name [ options ] [ TAGS ( tag [, tag [, tag ...]] ) ]
    DROP USER name [ USING PLUGIN name ];
 
 where OPTIONS is a list of following options:
@@ -38,10 +39,10 @@ Makes it possible to add, modify and delete users in security database using SQL
 Firebird since version 3.0 supports multiple security databases. gsec utility and services API
 do not support it and use of them to manage users is deprecated.
 
-CREATE and DROP clauses are available only for SYSDBA (or other user, granted RDB$ADMIN role in
-security database). Ordinary user can ALTER his own password, wide names and tags. Attempt to modify
-another user will fail. Also will fail an attempt to make yourself inactive or active. In order to
-avoid typing your name each time simplified form ALTER CURRENT USER is present.
+CREATE and DROP clauses are available only for SYSDBA (or other user, having USER_MANAGEMENT
+privilege in security database). Ordinary user can ALTER his own password, wide names and tags.
+Attempt to modify another user will fail. Also will fail an attempt to make yourself inactive or
+active. In order to avoid typing your name each time simplified form ALTER CURRENT USER is present.
 
 At least one of PASSWORD, FIRSTNAME, MIDDLENAME, LASTNAME, ACTIVE, INACTIVE or TAGS must be present
 in ALTER USER statement. Also notice that PASSWORD clause is required when creating new user.

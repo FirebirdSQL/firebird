@@ -67,6 +67,11 @@ database of course). This is much quicker than traditional row by row delete +
 garbage collection of deleted record versions. DELETE triggers are not fired in 
 this case.
 
+  Note, COMMIT\ROLLBACK RETAINING preserves data of GTT with ON COMMIT DELETE ROWS.
+Due to bug in Firebird 2.x that data was not visible to the user application.
+It is fixed in Firebird 3. See also description of ClearGTTAtRetaining setting at 
+firebird.conf.
+
 	Data and index pages of all of the GTTs instances are placed in separate temporary 
 files. Each connection has its own temporary file created when this connection 
 first referenced some GTT. Also these temporary files are always opened with "Forced 

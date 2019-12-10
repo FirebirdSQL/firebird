@@ -35,7 +35,7 @@
 #include <firebird/Message.h>
 
 static IMaster* master = fb_get_master_interface();
-static IDecFloat16* idf = NULL;
+static IDecFloat16* idf16 = NULL;
 
 int main()
 {
@@ -55,7 +55,7 @@ int main()
 
 	try
 	{
-		idf = master->getUtilInterface()->getDecFloat16(&status);
+		idf16 = master->getUtilInterface()->getDecFloat16(&status);
 
 		att = prov->attachDatabase(&status, dbName, 0, NULL);
 		tra = att->startTransaction(&status, 0, NULL);
@@ -97,13 +97,14 @@ int main()
 		{
 			unsigned lRelName = output->relationNameNull ? 0 : output->relationName.length;
 			unsigned lDesc = output->descriptionNull ? 0 : output->description.length;
-			char t[IDecFloat16::STRING_SIZE];
-			idf->toStr(&output->df16, t);
+			char t16[IDecFloat16::STRING_SIZE];
+			idf16->toString(&status, &output->df16, sizeof(t16), t16);
 
 			printf("%4d %*.*s%c%*.*s (%s)\n", output->relationId,
 				lRelName, lRelName, output->relationName.str,
 				lDesc ? '/' : ' ',
-				lDesc, lDesc, output->description.str, t);
+				lDesc, lDesc, output->description.str,
+				t16);
 		}
 
 		rs->close(&status);

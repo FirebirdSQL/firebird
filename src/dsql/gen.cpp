@@ -42,7 +42,7 @@
 #include "../dsql/StmtNodes.h"
 #include "../dsql/DSqlDataTypeUtil.h"
 #include "../jrd/RecordSourceNodes.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/align.h"
 #include "../jrd/constants.h"
 #include "../jrd/intl.h"
@@ -130,7 +130,7 @@ void GEN_expr(DsqlCompilerScratch* dsqlScratch, ExprNode* node)
 		(compatDialectVerb = node->getCompatDialectVerb()))
 	{
 		dsc desc;
-		MAKE_desc(dsqlScratch, &desc, static_cast<ValueExprNode*>(node));
+		DsqlDescMaker::fromNode(dsqlScratch, &desc, static_cast<ValueExprNode*>(node));
 
 		if (desc.dsc_dtype == dtype_int64)
 		{
@@ -202,45 +202,6 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 		{
 			if (fromCharSet != toCharSet)
 				parameter->par_desc.setTextType(toCharSet);
-		}
-		else if (parameter->par_desc.isDecFloat())
-		{
-			const DecimalBinding& b = tdbb->getAttachment()->att_dec_binding;
-			switch (b.bind)
-			{
-			case DecimalBinding::DEC_NATIVE:
-				break;
-			case DecimalBinding::DEC_TEXT:
-				parameter->par_desc.makeText((parameter->par_desc.dsc_dtype == dtype_dec64 ?
-					IDecFloat16::STRING_SIZE : IDecFloat34::STRING_SIZE) - 1, ttype_ascii);
-				break;
-			case DecimalBinding::DEC_DOUBLE:
-				parameter->par_desc.makeDouble();
-				break;
-			case DecimalBinding::DEC_NUMERIC:
-				parameter->par_desc.makeInt64(b.numScale);
-				break;
-			}
-		}
-		else if (parameter->par_desc.isDateTimeTz())
-		{
-			switch (tdbb->getAttachment()->att_timezone_bind)
-			{
-				case TimeZoneUtil::BIND_LEGACY:
-					if (parameter->par_desc.isTime())
-						parameter->par_desc.makeTime();
-					else if (parameter->par_desc.isTimeStamp())
-						parameter->par_desc.makeTimestamp();
-					else
-						fb_assert(false);
-					break;
-
-				case TimeZoneUtil::BIND_NATIVE:
-					break;
-
-				default:
-					fb_assert(false);
-			}
 		}
 
 		if (parameter->par_desc.dsc_dtype == dtype_text && parameter->par_index != 0)
@@ -415,8 +376,8 @@ void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool tex
 		dsqlScratch->appendUChar(blr_dec128);
 		break;
 
-	case dtype_dec_fixed:
-		dsqlScratch->appendUChar(blr_dec_fixed);
+	case dtype_int128:
+		dsqlScratch->appendUChar(blr_int128);
 		dsqlScratch->appendUChar(desc->dsc_scale);
 		break;
 

@@ -28,6 +28,7 @@
 #include "fb_types.h"
 
 #include "../common/classes/array.h"
+#include "../common/SimilarToRegex.h"
 #include "../jrd/ods.h"
 #include "../jrd/cch.h"
 #include "../jrd/sbm.h"
@@ -150,10 +151,10 @@ private:
 	ULONG vdr_err_counts[VAL_MAX_ERROR];
 
 	Firebird::UtilSvc* vdr_service;
-	PatternMatcher* vdr_tab_incl;
-	PatternMatcher* vdr_tab_excl;
-	PatternMatcher* vdr_idx_incl;
-	PatternMatcher* vdr_idx_excl;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_tab_incl;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_tab_excl;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_idx_incl;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_idx_excl;
 	int vdr_lock_tout;
 	void checkDPinPP(jrd_rel *relation, SLONG page_number);
 	void checkDPinPIP(jrd_rel *relation, SLONG page_number);

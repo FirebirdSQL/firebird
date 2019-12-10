@@ -90,6 +90,7 @@
 #include "../jrd/PreparedStatement.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/DebugInterface.h"
+#include "../common/classes/Hash.h"
 #include "../common/classes/MsgPrint.h"
 #include "../jrd/Function.h"
 
@@ -107,7 +108,7 @@ using namespace Jrd;
 using namespace Firebird;
 
 static int blocking_ast_dsql_cache(void* ast_object);
-static DSqlCacheItem* get_dsql_cache_item(thread_db* tdbb, int type, const QualifiedName& name);
+static DSqlCacheItem* get_dsql_cache_item(thread_db* tdbb, sym_type type, const QualifiedName& name);
 static int blocking_ast_procedure(void*);
 static int blocking_ast_relation(void*);
 static int partners_ast_relation(void*);
@@ -1039,7 +1040,7 @@ DeferredWork* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const dsc
 		X IN RDB$RELATION_FIELDS WITH
 			X.RDB$FIELD_SOURCE EQ field_source->dsc_address
 	{
-		relation_name.makeText(sizeof(X.RDB$RELATION_NAME), CS_METADATA,
+		relation_name.makeText(sizeof(X.RDB$RELATION_NAME) - 1, CS_METADATA,
 			(UCHAR*) X.RDB$RELATION_NAME);
 		SCL_check_relation(tdbb, &relation_name, SCL_alter);
 		dw = DFW_post_work(transaction, dfw_update_format, &relation_name, 0);
@@ -1353,11 +1354,13 @@ void MET_delete_shadow(thread_db* tdbb, USHORT shadow_number)
 }
 
 
-bool MET_dsql_cache_use(thread_db* tdbb, int type, const MetaName& name, const MetaName& package)
+bool MET_dsql_cache_use(thread_db* tdbb, sym_type type, const MetaName& name, const MetaName& package)
 {
-	DSqlCacheItem* item = get_dsql_cache_item(tdbb, type, QualifiedName(name, package));
+	const QualifiedName qualifiedName(name, package);
+	DSqlCacheItem* item = get_dsql_cache_item(tdbb, type, qualifiedName);
 
-	const bool obsolete = item->obsolete;
+	bool obsolete = false;
+	item->obsoleteMap.get(qualifiedName, obsolete);
 
 	if (!item->locked)
 	{
@@ -1366,30 +1369,33 @@ bool MET_dsql_cache_use(thread_db* tdbb, int type, const MetaName& name, const M
 		item->locked = true;
 	}
 
-	item->obsolete = false;
+	item->obsoleteMap.put(qualifiedName, false);
 
 	return obsolete;
 }
 
 
-void MET_dsql_cache_release(thread_db* tdbb, int type, const MetaName& name, const MetaName& package)
+void MET_dsql_cache_release(thread_db* tdbb, sym_type type, const MetaName& name, const MetaName& package)
 {
-	DSqlCacheItem* item = get_dsql_cache_item(tdbb, type, QualifiedName(name, package));
+	const QualifiedName qualifiedName(name, package);
+	DSqlCacheItem* item = get_dsql_cache_item(tdbb, type, qualifiedName);
 
-	// release lock
+	// release the shared lock
 	LCK_release(tdbb, item->lock);
 
 	// notify others through AST to mark as obsolete
-	const USHORT key_length = item->lock->lck_length;
-	AutoPtr<Lock> temp_lock(FB_NEW_RPT(*tdbb->getDefaultPool(), key_length)
-		Lock(tdbb, key_length, LCK_dsql_cache));
-	memcpy(temp_lock->getKeyPtr(), item->lock->getKeyPtr(), key_length);
+	AutoPtr<Lock> tempExLock(FB_NEW_RPT(*tdbb->getDefaultPool(), item->key.length())
+		Lock(tdbb, item->key.length(), LCK_dsql_cache));
+	memcpy(tempExLock->getKeyPtr(), item->key.c_str(), item->key.length());
 
-	if (LCK_lock(tdbb, temp_lock, LCK_EX, LCK_WAIT))
-		LCK_release(tdbb, temp_lock);
+	if (LCK_lock(tdbb, tempExLock, LCK_EX, LCK_WAIT))
+		LCK_release(tdbb, tempExLock);
 
 	item->locked = false;
-	item->obsolete = false;
+
+	GenericMap<Pair<Left<QualifiedName, bool> > >::Accessor accessor(&item->obsoleteMap);
+	for (bool found = accessor.getFirst(); found; found = accessor.getNext())
+		accessor.current()->second = accessor.current()->first != qualifiedName;
 }
 
 
@@ -2496,6 +2502,8 @@ SLONG MET_lookup_index_name(thread_db* tdbb,
 	{
 		if (X.RDB$INDEX_INACTIVE == 0)
 			*status = MET_object_active;
+		else if (X.RDB$INDEX_INACTIVE == 3)
+			*status = MET_object_deferred_active;
 		else
 			*status = MET_object_inactive;
 
@@ -3323,6 +3331,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 			}
 
 			procedure->setId(P.RDB$PROCEDURE_ID);
+			Nullable<bool> ssDefiner;
 
 			if (!P.RDB$SECURITY_CLASS.NULL)
 				procedure->setSecurityName(P.RDB$SECURITY_CLASS);
@@ -3338,20 +3347,24 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 						procedure->setSecurityName(PKG.RDB$SECURITY_CLASS);
 
 					if (!PKG.RDB$SQL_SECURITY.NULL)
-						procedure->ssDefiner = (bool) PKG.RDB$SQL_SECURITY;
+						ssDefiner = (bool) PKG.RDB$SQL_SECURITY;
 				}
 				END_FOR
 			}
 
-			if (!procedure->ssDefiner.specified)
+			if (!ssDefiner.specified)
 			{
 				if (!P.RDB$SQL_SECURITY.NULL)
-					procedure->ssDefiner = (bool) P.RDB$SQL_SECURITY;
+					ssDefiner = (bool) P.RDB$SQL_SECURITY;
 				else
-					procedure->ssDefiner = MET_get_ss_definer(tdbb);
+					ssDefiner = MET_get_ss_definer(tdbb);
 			}
 
 			procedure->owner = P.RDB$OWNER_NAME;
+
+			if (ssDefiner.orElse(false))
+				procedure->invoker = attachment->getUserId(procedure->owner);
+
 			procedure->setImplemented(true);
 			procedure->getInputFields().resize(P.RDB$PROCEDURE_INPUTS);
 			procedure->getOutputFields().resize(P.RDB$PROCEDURE_OUTPUTS);
@@ -4245,7 +4258,10 @@ static int blocking_ast_dsql_cache(void* ast_object)
 
 		AsyncContextHolder tdbb(dbb, FB_FUNCTION, item->lock);
 
-		item->obsolete = true;
+		GenericMap<Pair<Left<QualifiedName, bool> > >::Accessor accessor(&item->obsoleteMap);
+		for (bool found = accessor.getFirst(); found; found = accessor.getNext())
+			accessor.current()->second = true;
+
 		item->locked = false;
 		LCK_release(tdbb, item->lock);
 	}
@@ -4256,33 +4272,43 @@ static int blocking_ast_dsql_cache(void* ast_object)
 }
 
 
-static DSqlCacheItem* get_dsql_cache_item(thread_db* tdbb, int type, const QualifiedName& name)
+static DSqlCacheItem* get_dsql_cache_item(thread_db* tdbb, sym_type type, const QualifiedName& name)
 {
 	Database* dbb = tdbb->getDatabase();
 	Attachment* attachment = tdbb->getAttachment();
 
-	string key((char*) &type, sizeof(type));
-	int len = name.identifier.length();
+	fb_assert((int) type <= MAX_UCHAR);
+	UCHAR ucharType = (UCHAR) type;
+
+	string key("0");	// name (not hash)
+	key.append((char*) &ucharType, 1);
+
+	USHORT len = (USHORT) name.identifier.length();
 	key.append((char*) &len, sizeof(len));
 	key.append(name.identifier.c_str(), len);
 
-	len = name.package.length();
+	len = (USHORT) name.package.length();
 	key.append((char*) &len, sizeof(len));
 	key.append(name.package.c_str(), len);
+
+	if (key.length() > MAX_UCHAR)
+	{
+		FB_SIZE_T hash = DefaultHash<char>::hash(key.c_str(), key.length(), sizeof(FB_SIZE_T));
+		key = "1";	// hash
+		key.append((char*) &ucharType, 1);
+		key.append((char*) &hash, sizeof(hash));
+	}
 
 	DSqlCacheItem* item = attachment->att_dsql_cache.put(key);
 	if (item)
 	{
-		item->obsolete = false;
-		item->locked = false;
+		item->key = key;
 		item->lock = FB_NEW_RPT(*attachment->att_pool, key.length())
 			Lock(tdbb, key.length(), LCK_dsql_cache, item, blocking_ast_dsql_cache);
 		memcpy(item->lock->getKeyPtr(), key.c_str(), key.length());
 	}
 	else
-	{
 		item = attachment->att_dsql_cache.get(key);
-	}
 
 	return item;
 }
@@ -4981,6 +5007,8 @@ void scan_partners(thread_db* tdbb, jrd_rel* relation)
 			RC.RDB$CONSTRAINT_TYPE EQ FOREIGN_KEY AND
 			IDX.RDB$RELATION_NAME EQ relation->rel_name.c_str() AND
 			IND.RDB$INDEX_NAME EQ IDX.RDB$FOREIGN_KEY AND
+			IDX.RDB$INDEX_ID > 0 AND
+			IND.RDB$INDEX_ID > 0 AND
 			IND.RDB$UNIQUE_FLAG = 1
 	{
 		//// ASF: Hack fix for CORE-4304, until nasty interactions between dfw and met are not resolved.
@@ -5039,6 +5067,8 @@ void scan_partners(thread_db* tdbb, jrd_rel* relation)
 		IDX IN RDB$INDICES CROSS
 			IND IN RDB$INDICES WITH
 			IDX.RDB$UNIQUE_FLAG = 1 AND
+			IDX.RDB$INDEX_ID > 0 AND
+			IND.RDB$INDEX_ID > 0 AND
 			IDX.RDB$RELATION_NAME EQ relation->rel_name.c_str() AND
 			IND.RDB$FOREIGN_KEY EQ IDX.RDB$INDEX_NAME
 	{

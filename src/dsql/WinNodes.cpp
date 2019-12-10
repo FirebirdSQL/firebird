@@ -411,8 +411,7 @@ string FirstValueWinNode::internalPrint(NodePrinter& printer) const
 
 void FirstValueWinNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 {
-	MAKE_desc(dsqlScratch, desc, arg);
-	desc->setNullable(true);
+	DsqlDescMaker::fromNode(dsqlScratch, desc, arg, true);
 }
 
 void FirstValueWinNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
@@ -475,8 +474,7 @@ string LastValueWinNode::internalPrint(NodePrinter& printer) const
 
 void LastValueWinNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 {
-	MAKE_desc(dsqlScratch, desc, arg);
-	desc->setNullable(true);
+	DsqlDescMaker::fromNode(dsqlScratch, desc, arg, true);
 }
 
 void LastValueWinNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
@@ -548,8 +546,7 @@ string NthValueWinNode::internalPrint(NodePrinter& printer) const
 
 void NthValueWinNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 {
-	MAKE_desc(dsqlScratch, desc, arg);
-	desc->setNullable(true);
+	DsqlDescMaker::fromNode(dsqlScratch, desc, arg, true);
 }
 
 void NthValueWinNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
@@ -648,8 +645,7 @@ string LagLeadWinNode::internalPrint(NodePrinter& printer) const
 
 void LagLeadWinNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 {
-	MAKE_desc(dsqlScratch, desc, arg);
-	desc->setNullable(true);
+	DsqlDescMaker::fromNode(dsqlScratch, desc, arg, true);
 }
 
 void LagLeadWinNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
@@ -778,7 +774,7 @@ string NTileWinNode::internalPrint(NodePrinter& printer) const
 void NTileWinNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 {
 	dsc argDesc;
-	MAKE_desc(dsqlScratch, &argDesc, arg);
+	DsqlDescMaker::fromNode(dsqlScratch, &argDesc, arg);
 
 	if (!argDesc.isExact() || argDesc.dsc_scale != 0)
 	{

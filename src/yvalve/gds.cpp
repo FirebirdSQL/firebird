@@ -60,6 +60,7 @@
 #include "../common/classes/TempFile.h"
 #include "../common/utils_proto.h"
 #include "../common/ThreadStart.h"
+#include "../common/Int128.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -94,9 +95,9 @@
 #include "gen/sql_code.h"
 #include "gen/sql_state.h"
 #include "gen/iberror.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../yvalve/msg.h"
 #include "../common/isc_proto.h"
 #include "../common/os/isc_i_proto.h"
@@ -3034,9 +3035,9 @@ static int blr_print_dtype(gds_ctl* control)
 		length = sizeof(Firebird::Decimal64);
 		break;
 
-	case blr_dec_fixed:
-		string = "dec_fixed";
-		length = sizeof(Firebird::DecimalFixed);
+	case blr_int128:
+		string = "int128";
+		length = sizeof(Firebird::Int128);
 		break;
 
 	case blr_domain_name:
@@ -3100,7 +3101,7 @@ static int blr_print_dtype(gds_ctl* control)
 	case blr_long:
 	case blr_quad:
 	case blr_int64:
-	case blr_dec_fixed:
+	case blr_int128:
 		blr_print_byte(control);
 		break;
 

@@ -8,20 +8,20 @@ BIGINT (FB 1.5)
 
   Function:
     SQL99-compliant exact numeric type.
-	
+
   Author:
     Dmitry Yemanov <yemanov@yandex.ru>
-	
+
   Syntax rules:
     BIGINT
-	
+
   Storage:
     64-bit, signed
-	
+
   Example(s):
     1. DECLARE VARIABLE VAR1 BIGINT;
     2. CREATE TABLE TABLE1 (FIELD1 BIGINT);
-	
+
   Note(s):
     1. Available in Dialect 3 only.
     2. Quote from the SQL-99 specification:
@@ -145,7 +145,7 @@ DECFLOAT (FB 4.0)
     		COMPARE_DECFLOAT(2.17, 2.170) returns 2, not 0.
     	- NORMALIZE_DECFLOAT - has single DECFLOAT argument returned in it's simplest form.	That
     		means that for any nonzero value trailing zero are removed with appropriate correction
-    		of an exponent. For example NORMALIZE_DECFLOAT(12.00) returns 12 and 
+    		of an exponent. For example NORMALIZE_DECFLOAT(12.00) returns 12 and
     		NORMALIZE_DECFLOAT(120) returns 1.2E+2.
     	- QUANTIZE - has two DECFLOAT arguments. The returned value is first argument scaled using
     		second value as a pattern. For example QUANTIZE(1234, 9.999) returns 1234.000.
@@ -164,24 +164,16 @@ DECFLOAT (FB 4.0)
 				last digit in the result to be even), HALF_DOWN (to nearest, if equidistant - down),
 				DOWN (towards 0), FLOOR (towards -infinity), REROUND (up if digit to be rounded is
 				0 or 5, down in other cases). HALF_UP rounding is used by default.
+				The initial configuration may be specified with DPB isc_dpb_decfloat_round followed
+				by a string with its value (case does not matter).
 
 			SET DECFLOAT TRAPS TO <comma-separated traps list - may be empty> - controls which
 				exceptional conditions cause a trap. Valid traps are: Division_by_zero, Inexact,
 				Invalid_operation, Overflow and Underflow. By default traps are set to:
 				Division_by_zero, Invalid_operation, Overflow.
-
-			SET DECFLOAT BIND <bind-type> - controls how are DECFLOAT values represented in outer
-				world (i.e. in messages or in XSQLDA). Valid binding types are: NATIVE (use IEEE754
-				binary representation), CHAR/CHARACTER (use ASCII string), DOUBLE PRECISION (use
-				8-byte FP representation - same as used for DOUBLE PRECISION fields) or BIGINT
-				with possible comma-separated SCALE clause (i.e. 'BIGINT, 3'). Various bindings
-				are useful if one plans to use DECFLOAT values with some old client not supporting
-				native format. One can choose between strings (ideal precision, but poor support
-				for further processing), floating point values (ideal support for further processing
-				but poor precision) or scaled integers (good support for further processing and
-				required precision but range of values is very limited). When using in a tool like
-				generic purporse GUI client choice of CHAR binding is OK in most cases. By default
-				NATIVE binding is used.
+				The initial configuration may be specified with DPB isc_dpb_decfloat_traps followed
+				by a comma-separated string with its value (case does not matter; using a single
+				optional space after commas).
 
 	5.	The length of DECFLOAT literals are limited to 1024 characters. For longer values, you will
 			need to use the scientific notation. For example, the 0.0<1020 zeroes>11 cannot be used
@@ -193,7 +185,7 @@ Enhancement in precision of calculations with NUMERIC/DECIMAL (FB 4.0)
 --------------
 
   Function:
-    Maximum precision of NUMERIC and DECIMAL data types is increased to 34 digits.
+    Maximum precision of NUMERIC and DECIMAL data types is increased to 38 digits.
 
   Author:
     Alex Peshkoff <peshkoff@mail.ru>
@@ -201,20 +193,21 @@ Enhancement in precision of calculations with NUMERIC/DECIMAL (FB 4.0)
   Syntax rules:
     NUMERIC ( P {, N} )
     DECIMAL ( P {, N} )
-		where P is precision (P <= 34, was limited prior with 18 digits) and N is optional number
+		where P is precision (P <= 38, was limited prior with 18 digits) and N is optional number
 		of digits after decimal separator (as before).
 
   Storage:
-    128-bit, format according to IEEE 754.
+    128-bit signed integer.
 
   Example(s):
     1. DECLARE VARIABLE VAR1 DECIMAL(25);
-    2. CREATE TABLE TABLE1 (FIELD1 NUMERIC(34, 17));
+    2. CREATE TABLE TABLE1 (FIELD1 NUMERIC(38, 19));
 
   Note(s):
     Numerics with precision less than 19 digits use SMALLINT, INTEGER, BIGINT or DOUBLE PRECISION
     as base datatype depending upon number of digits and dialect. When precision is between 19 and
-    34 digits DECFLOAT(34) is used for it. Actual precision is always increased to 34 digits. For
-    complex calculations such digits are casted (internally, in trivial way) to DECFLOAT(34) and
-    the result of various math (log, exp, etc.) and aggregate functions using high precision
-    numeric argument is DECFLOAT(34).
+    38 digits 128-bit integer is used for it. Actual precision is always increased to 38 digits.
+    For complex calculations such digits are casted (internally) to DECFLOAT(34) and the result of
+    various math (log, exp, etc.) and aggregate functions using high precision numeric argument is
+    DECFLOAT(34).
+

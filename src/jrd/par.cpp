@@ -405,9 +405,9 @@ USHORT PAR_datatype(BlrReader& blrReader, dsc* desc)
 			desc->dsc_length = sizeof(Decimal128);
 			break;
 
-		case blr_dec_fixed:
-			desc->dsc_dtype = dtype_dec_fixed;
-			desc->dsc_length = sizeof(DecimalFixed);
+		case blr_int128:
+			desc->dsc_dtype = dtype_int128;
+			desc->dsc_length = sizeof(Int128);
 			desc->dsc_scale = (int) blrReader.getByte();
 			break;
 
@@ -994,6 +994,8 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 
 		node_type = (USHORT) csb->csb_blr_reader.getByte();
 
+		const bool isGbak = tdbb->getAttachment()->isGbak();
+
 		switch (node_type)
 		{
 		case blr_navigational:
@@ -1012,7 +1014,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 
 				if (idx_status == MET_object_unknown || idx_status == MET_object_inactive)
 				{
-					if (tdbb->getAttachment()->isGbak())
+					if (isGbak)
 					{
 						PAR_warning(Arg::Warning(isc_indexname) << Arg::Str(name) <<
 																   Arg::Str(relation->rel_name));
@@ -1020,7 +1022,15 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 					else
 					{
 						PAR_error(csb, Arg::Gds(isc_indexname) << Arg::Str(name) <<
-															  Arg::Str(relation->rel_name));
+															  	  Arg::Str(relation->rel_name));
+					}
+				}
+				else if (idx_status == MET_object_deferred_active)
+				{
+					if (!isGbak)
+					{
+						PAR_error(csb, Arg::Gds(isc_indexname) << Arg::Str(name) <<
+																  Arg::Str(relation->rel_name));
 					}
 				}
 
@@ -1070,7 +1080,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 
 					if (idx_status == MET_object_unknown || idx_status == MET_object_inactive)
 					{
-						if (tdbb->getAttachment()->isGbak())
+						if (isGbak)
 						{
 							PAR_warning(Arg::Warning(isc_indexname) << Arg::Str(name) <<
 																	   Arg::Str(relation->rel_name));
@@ -1078,7 +1088,15 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 						else
 						{
 							PAR_error(csb, Arg::Gds(isc_indexname) << Arg::Str(name) <<
-																  Arg::Str(relation->rel_name));
+																  	  Arg::Str(relation->rel_name));
+						}
+					}
+					else if (idx_status == MET_object_deferred_active)
+					{
+						if (!isGbak)
+						{
+							PAR_error(csb, Arg::Gds(isc_indexname) << Arg::Str(name) <<
+																	  Arg::Str(relation->rel_name));
 						}
 					}
 

@@ -1,3 +1,5 @@
+TARGET ?= Release
+
 # EKU: taken from Makefile.in.firebird
 ROOT=..
 
@@ -18,10 +20,10 @@ FB_REV_NO:=$(shell cpp -DDARWIN -I. ../builds/install/arch-specific/darwin/revno
 FB_BUILD_NO:=$(shell cpp -DDARWIN -I. ../builds/install/arch-specific/darwin/buildno.c | tail -2 | sed -e 's/" "//g' -e 's/"//g')
 FB_PLATFORM:=$(CpuType)
 
-package packages dist: package_@FIREBIRD_ARCH_TYPE@
+package: package_firebird
 
-package_classic package_embedded: INST_NM=FirebirdCS-$(FB_MAJOR_VERS).$(FB_MINOR_VERS).$(FB_REV_NO)-$(FB_BUILD_NO)-$(FB_PLATFORM)
-package_classic package_embedded:
+package_firebird: INST_NM=Firebird-$(FB_MAJOR_VERS).$(FB_MINOR_VERS).$(FB_REV_NO)-$(FB_BUILD_NO)-$(FB_PLATFORM)
+package_firebird:
 	sed -e 's/_FB_BUILD_SUFFIX_/$(FB_VER_SUFFIX)/g' \
 			-e 's/_SMFB_BUILD_SUFFIX_/$(FB_VER_SUFFIX_SM)/g' \
 			-e 's/_MFB_BUILD_SUFFIX_/$(FB_VER_SUFFIX_M)/g' \
@@ -29,7 +31,7 @@ package_classic package_embedded:
 			-e 's/_MINOR_VERS_/$(FB_MINOR_VERS)/g' \
 			-e 's/_REV_NO_/$(FB_REV_NO)/g' \
 			../builds/install/arch-specific/darwin/Info.plist \
-			> $(ROOT)/gen/firebird/frameworks/FirebirdCS.framework/Resources/Info.plist
+			> $(ROOT)/gen/$(TARGET)/frameworks/Firebird4.framework/Resources/Info.plist
 	sed -e 's/_FB_BUILD_SUFFIX_/$(FB_VER_SUFFIX)/g' \
 			-e 's/_SMFB_BUILD_SUFFIX_/$(FB_VER_SUFFIX_SM)/g' \
 			-e 's/_MFB_BUILD_SUFFIX_/$(FB_VER_SUFFIX_M)/g' \
@@ -37,99 +39,40 @@ package_classic package_embedded:
 			-e 's/_MINOR_VERS_/$(FB_MINOR_VERS)/g' \
 			-e 's/_REV_NO_/$(FB_REV_NO)/g' \
 			../builds/install/arch-specific/darwin/Description.plist \
-			> $(ROOT)/gen/firebird/frameworks/FirebirdCS.framework/Resources/Description.plist
-	
-	rm -fr $(ROOT)/gen/firebird/scripts
-	mkdir $(ROOT)/gen/firebird/scripts
-	cp ../builds/install/arch-specific/darwin/install-script \
-			$(ROOT)/gen/firebird/scripts/postinstall
-	cp ../builds/install/arch-specific/darwin/preupgrade-script \
-			$(ROOT)/gen/firebird/scripts/preinstall
-	chmod u+x $(ROOT)/gen/firebird/scripts/postinstall
-	chmod u+x $(ROOT)/gen/firebird/scripts/preinstall
-	
-	rm -fr $(ROOT)/gen/firebird/resources
-	mkdir $(ROOT)/gen/firebird/resources
-	cp ../builds/install/arch-specific/darwin/Welcome.txt \
-			$(ROOT)/gen/firebird/resources/Welcome.txt
-	cp ../builds/install/arch-specific/darwin/License.txt \
-			$(ROOT)/gen/firebird/resources/License.txt
-	cp ../builds/install/arch-specific/darwin/DistributionCS.xml \
-			$(ROOT)/gen/firebird/DistributionCS.xml 
+			> $(ROOT)/gen/$(TARGET)/frameworks/Firebird4.framework/Resources/Description.plist
 
-	rm -fr firebird/packages
-	mkdir firebird/packages
-	pkgbuild --root $(ROOT)/gen/firebird/frameworks/FirebirdCS.framework \
+	rm -fr $(ROOT)/gen/$(TARGET)/scripts
+	mkdir $(ROOT)/gen/$(TARGET)/scripts
+	cp ../builds/install/arch-specific/darwin/install-script \
+			$(ROOT)/gen/$(TARGET)/scripts/postinstall
+	cp ../builds/install/arch-specific/darwin/preupgrade-script \
+			$(ROOT)/gen/$(TARGET)/scripts/preinstall
+	chmod u+x $(ROOT)/gen/$(TARGET)/scripts/postinstall
+	chmod u+x $(ROOT)/gen/$(TARGET)/scripts/preinstall
+
+	rm -fr $(ROOT)/gen/$(TARGET)/resources
+	mkdir $(ROOT)/gen/$(TARGET)/resources
+	cp ../builds/install/arch-specific/darwin/Welcome.txt \
+			$(ROOT)/gen/$(TARGET)/resources/Welcome.txt
+	cp ../builds/install/arch-specific/darwin/Readme.txt \
+			$(ROOT)/gen/$(TARGET)/resources/Readme.txt
+	cp ../builds/install/arch-specific/darwin/License.txt \
+			$(ROOT)/gen/$(TARGET)/resources/License.txt
+	cp ../builds/install/arch-specific/darwin/Distribution.xml \
+			$(ROOT)/gen/$(TARGET)/Distribution.xml
+
+	rm -fr $(TARGET)/packages
+	mkdir $(TARGET)/packages
+	pkgbuild --root $(ROOT)/gen/$(TARGET)/frameworks/Firebird4.framework \
 			--identifier com.firebirdsql.Firebird \
 			--install-location /Library/Frameworks/Firebird.framework \
-			--scripts $(ROOT)/gen/firebird/scripts \
-			firebird/packages/FirebirdCS.pkg
+			--scripts $(ROOT)/gen/$(TARGET)/scripts \
+			$(TARGET)/packages/Firebird.pkg
 
-	productbuild --distribution firebird/DistributionCS.xml \
-			--resources firebird/resources \
-			--package-path firebird/packages \
-			firebird/$(INST_NM).pkg
+	productbuild --distribution $(TARGET)/Distribution.xml \
+			--resources $(TARGET)/resources \
+			--package-path $(TARGET)/packages \
+			$(TARGET)/$(INST_NM).pkg
 
-package_super package_server: INST_NM=FirebirdSS-$(FB_MAJOR_VERS).$(FB_MINOR_VERS).$(FB_REV_NO)-$(FB_BUILD_NO)-$(FB_PLATFORM)
-package_super package_server:
-	sed -e 's/_FB_BUILD_SUFFIX_/$(FB_VER_SUFFIX)/g' \
-			-e 's/_SMFB_BUILD_SUFFIX_/$(FB_VER_SUFFIX_SM)/g' \
-			-e 's/_MFB_BUILD_SUFFIX_/$(FB_VER_SUFFIX_M)/g' \
-			-e 's/_MAJOR_VERS_/$(FB_MAJOR_VERS)/g' \
-			-e 's/_MINOR_VERS_/$(FB_MINOR_VERS)/g' \
-			-e 's/_REV_NO_/$(FB_REV_NO)/g' \
-			../builds/install/arch-specific/darwin/Info.plist \
-			> $(ROOT)/gen/firebird/frameworks/FirebirdSS.framework/Resources/Info.plist
-	sed -e 's/_FB_BUILD_SUFFIX_/$(FB_VER_SUFFIX)/g' \
-			-e 's/_SMFB_BUILD_SUFFIX_/$(FB_VER_SUFFIX_SM)/g' \
-			-e 's/_MFB_BUILD_SUFFIX_/$(FB_VER_SUFFIX_M)/g' \
-			-e 's/_MAJOR_VERS_/$(FB_MAJOR_VERS)/g' \
-			-e 's/_MINOR_VERS_/$(FB_MINOR_VERS)/g' \
-			-e 's/_REV_NO_/$(FB_REV_NO)/g' \
-			../builds/install/arch-specific/darwin/Description.plist \
-			> $(ROOT)/gen/firebird/frameworks/FirebirdSS.framework/Resources/Description.plist
 
-	rm -fr $(ROOT)/gen/firebird/scripts
-	mkdir $(ROOT)/gen/firebird/scripts
-	cp ../builds/install/arch-specific/darwin/install-script \
-			$(ROOT)/gen/firebird/scripts/postinstall
-	cp ../builds/install/arch-specific/darwin/preupgrade-script \
-			$(ROOT)/gen/firebird/scripts/preinstall
-	chmod u+x $(ROOT)/gen/firebird/scripts/postinstall
-	chmod u+x $(ROOT)/gen/firebird/scripts/preinstall
-
-	rm -fr $(ROOT)/gen/firebird/resources
-	mkdir $(ROOT)/gen/firebird/resources
-	cp ../builds/install/arch-specific/darwin/Welcome.txt \
-			$(ROOT)/gen/firebird/resources/Welcome.txt
-	cp ../builds/install/arch-specific/darwin/License.txt \
-			$(ROOT)/gen/firebird/resources/License.txt
-	cp ../builds/install/arch-specific/darwin/DistributionSS.xml \
-			$(ROOT)/gen/firebird/DistributionSS.xml 
-
-	rm -fr firebird/packages
-	mkdir firebird/packages
-	pkgbuild --root $(ROOT)/gen/firebird/frameworks/FirebirdSS.framework \
-			--identifier com.firebirdsql.Firebird \
-			--install-location /Library/Frameworks/Firebird.framework \
-			--scripts $(ROOT)/gen/firebird/scripts \
-			firebird/packages/FirebirdSS.pkg
-
-	productbuild --distribution firebird/DistributionSS.xml \
-			--resources firebird/resources \
-			--package-path firebird/packages \
-			firebird/$(INST_NM).pkg
-
-#	rm firebird/firebirdSS.pkg
-
-install: install_@FIREBIRD_ARCH_TYPE@ 
-
-	
-install_super:
-	sudo installer -verbose -dumplog -pkg \
-			firebird/FirebirdSS-$(FB_MAJOR_VERS).$(FB_MINOR_VERS).$(FB_REV_NO)-$(FB_BUILD_NO)-$(FB_PLATFORM).pkg -target /
-
-install_classic:
-	sudo installer -verbose -dumplog -pkg \
-			firebird/FirebirdCS-$(FB_MAJOR_VERS).$(FB_MINOR_VERS).$(FB_REV_NO)-$(FB_BUILD_NO)-$(FB_PLATFORM).pkg -target /
 

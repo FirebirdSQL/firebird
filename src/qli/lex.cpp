@@ -31,7 +31,7 @@
 #include <stdlib.h>
 #include "../qli/dtr.h"
 #include "../qli/parse.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../qli/all_proto.h"
 #include "../qli/err_proto.h"
 #include "../qli/hsh_proto.h"

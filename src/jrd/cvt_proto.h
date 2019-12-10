@@ -60,7 +60,7 @@ namespace Jrd
 		virtual void validateLength(CharSet* toCharset, SLONG toLength, const UCHAR* start,
 			const USHORT to_size);
 		virtual SLONG getLocalDate();
-		virtual ISC_TIMESTAMP getCurrentTimeStampUtc();
+		virtual ISC_TIMESTAMP getCurrentGmtTimeStamp();
 		virtual USHORT getSessionTimeZone();
 		virtual void isVersion4(bool& v4);
 

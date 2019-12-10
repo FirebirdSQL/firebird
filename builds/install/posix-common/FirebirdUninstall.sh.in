@@ -61,7 +61,7 @@ if [ -f @FB_SECDBDIR@/$SecurityDatabase ]; then
 	chmod 0600 /tmp/$SecurityDatabase
 fi
 
-for i in @FB_GUARDDIR@/fb_guard @FB_LOGDIR@/firebird.log @FB_CONFDIR@/SYSDBA.password; do
+for i in @FB_GUARDDIR@/fb_guard @FB_LOGDIR@/firebird.log @FB_LOGDIR@/replication.log @FB_CONFDIR@/SYSDBA.password; do
 	if [ -f $i ]; then
 		rm -f $i
 	fi

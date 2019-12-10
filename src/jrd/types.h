@@ -45,6 +45,7 @@ TYPE("DECFLOAT(16)", blr_dec64, nam_f_type)
 TYPE("DECFLOAT(34)", blr_dec128, nam_f_type)
 TYPE("TIMESTAMP WITH TIMEZONE", blr_timestamp_tz, nam_f_type)
 TYPE("TIME WITH TIMEZONE", blr_sql_time_tz, nam_f_type)
+TYPE("INT128", blr_int128, nam_f_type)
 
 TYPE("BINARY", 0, nam_f_sub_type)
 TYPE("TEXT", 1, nam_f_sub_type)
@@ -196,3 +197,8 @@ TYPE("ROLE", 1, nam_map_to_type)
 #define SYSTEM_PRIVILEGE(p) TYPE(STRINGIZE(p), int(Jrd::p), nam_system_privileges)
 #include "SystemPrivileges.h"
 #undef SYSTEM_PRIVILEGE
+
+TYPE("NOT ENCRYPTED", 0, nam_mon_crypt_state)
+TYPE("ENCRYPTED", 1, nam_mon_crypt_state)
+TYPE("DECRYPT IN PROGRESS", 2, nam_mon_crypt_state)
+TYPE("ENCRYPT IN PROGRESS", 3, nam_mon_crypt_state)

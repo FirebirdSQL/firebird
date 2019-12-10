@@ -391,7 +391,8 @@ Savepoint* Savepoint::rollback(thread_db* tdbb, Savepoint* prior)
 		DFW_delete_deferred(m_transaction, m_number);
 		m_flags &= ~SAV_force_dfw;
 
-		tdbb->tdbb_flags |= TDBB_verb_cleanup;
+		AutoSetRestoreFlag<ULONG> verbCleanupFlag(&tdbb->tdbb_flags, TDBB_verb_cleanup, true);
+
 		tdbb->setTransaction(m_transaction);
 
 		while (m_actions)
@@ -406,13 +407,11 @@ Savepoint* Savepoint::rollback(thread_db* tdbb, Savepoint* prior)
 		}
 
 		tdbb->setTransaction(old_tran);
-		tdbb->tdbb_flags &= ~TDBB_verb_cleanup;
 	}
 	catch (const Exception& ex)
 	{
 		Arg::StatusVector error(ex);
 		tdbb->setTransaction(old_tran);
-		tdbb->tdbb_flags &= ~TDBB_verb_cleanup;
 		m_transaction->tra_flags |= TRA_invalidated;
 		error.prepend(Arg::Gds(isc_savepoint_backout_err));
 		error.raise();

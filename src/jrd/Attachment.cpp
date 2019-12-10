@@ -43,6 +43,9 @@
 
 #include "../jrd/extds/ExtDS.h"
 
+#include "../jrd/replication/Applier.h"
+#include "../jrd/replication/Manager.h"
+
 #include "../common/classes/fb_string.h"
 #include "../common/classes/MetaName.h"
 #include "../common/StatusArg.h"
@@ -204,6 +207,8 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 	: att_pool(pool),
 	  att_memory_stats(&dbb->dbb_memory_stats),
 	  att_database(dbb),
+	  att_ss_user(NULL),
+	  att_user_ids(*pool),
 	  att_active_snapshots(*pool),
 	  att_requests(*pool),
 	  att_lock_owner_id(Database::getLockOwnerId()),
@@ -212,7 +217,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 	  att_base_stats(*pool),
 	  att_working_directory(*pool),
 	  att_filename(*pool),
-	  att_timestamp(Firebird::TimeStamp::getCurrentTimeStamp()),
+	  att_timestamp(TimeZoneUtil::getCurrentSystemTimeStamp()),
 	  att_context_vars(*pool),
 	  ddlTriggersContext(*pool),
 	  att_network_protocol(*pool),
@@ -228,22 +233,24 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 	  att_ext_parent(NULL),
 	  att_ext_call_depth(0),
 	  att_trace_manager(FB_NEW_POOL(*att_pool) TraceManager(this)),
-	  att_timezone_bind(TimeZoneUtil::BIND_NATIVE),
+	  att_bindings(*pool),
+	  att_dest_bind(&att_bindings),
 	  att_original_timezone(TimeZoneUtil::getSystemTimeZone()),
 	  att_current_timezone(att_original_timezone),
 	  att_utility(UTIL_NONE),
 	  att_procedures(*pool),
 	  att_functions(*pool),
+	  att_generators(*pool),
 	  att_internal(*pool),
 	  att_dyn_req(*pool),
 	  att_dec_status(DecimalStatus::DEFAULT),
-	  att_dec_binding(DecimalBinding::DEFAULT),
 	  att_charsets(*pool),
 	  att_charset_ids(*pool),
 	  att_pools(*pool),
 	  att_idle_timeout(0),
 	  att_stmt_timeout(0),
-	  att_batches(*pool)
+	  att_batches(*pool),
+	  att_initial_options(*pool)
 {
 	att_internal.grow(irq_MAX);
 	att_dyn_req.grow(drq_MAX);
@@ -256,6 +263,20 @@ Jrd::Attachment::~Attachment()
 
 	for (unsigned n = 0; n < att_batches.getCount(); ++n)
 		att_batches[n]->resetHandle();
+
+	for (Function** iter = att_functions.begin(); iter < att_functions.end(); ++iter)
+	{
+		Function* const function = *iter;
+		if (function)
+			delete function;
+	}
+
+	for (jrd_prc** iter = att_procedures.begin(); iter < att_procedures.end(); ++iter)
+	{
+		jrd_prc* const procedure = *iter;
+		if (procedure)
+			delete procedure;
+	}
 
 	while (att_pools.hasData())
 		deletePool(att_pools.pop());
@@ -472,13 +493,7 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 		}
 	}
 
-	// reset DecFloat
-	att_dec_status = DecimalStatus::DEFAULT;
-	att_dec_binding = DecimalBinding::DEFAULT;
-
-	// reset time zone
-	att_timezone_bind = TimeZoneUtil::BIND_NATIVE;
-	att_current_timezone = att_original_timezone;
+	att_initial_options.resetAttachment(this);
 
 	// reset timeouts
 	setIdleTimeout(0);
@@ -952,21 +967,36 @@ void Attachment::setupIdleTimer(bool clear)
 	}
 }
 
-bool Attachment::getIdleTimerTimestamp(TimeStamp& ts) const
+bool Attachment::getIdleTimerTimestamp(ISC_TIMESTAMP_TZ& ts) const
 {
 	if (!att_idle_timer)
 		return false;
 
-	time_t value = att_idle_timer->getExpiryTime();
+	SINT64 value = att_idle_timer->getExpiryTime();
 	if (!value)
 		return false;
 
-	struct tm* times = localtime(&value);
-	if (!times)
-		return false;
+	ts.utc_timestamp.timestamp_date = value / TimeStamp::ISC_TICKS_PER_DAY;
+	ts.utc_timestamp.timestamp_time = value % TimeStamp::ISC_TICKS_PER_DAY;
+	ts.time_zone = TimeZoneUtil::GMT_ZONE;
 
-	ts = TimeStamp::encode_timestamp(times);
 	return true;
+}
+
+UserId* Attachment::getUserId(const MetaName& userName)
+{
+	// It's necessary to keep specified sql role of user
+	if (att_user && att_user->getUserName() == userName)
+		return att_user;
+
+	UserId* result = NULL;
+	if (!att_user_ids.get(userName, result))
+	{
+		result = FB_NEW_POOL(*att_pool) UserId(*att_pool);
+		result->setUserName(userName);
+		att_user_ids.put(userName, result);
+	}
+	return result;
 }
 
 /// Attachment::IdleTimer
@@ -991,10 +1021,14 @@ void Attachment::IdleTimer::handler()
 		return;
 
 	// If timer was reset to fire later, restart ITimer
-	time_t curTime = time(NULL);
-	if (curTime < m_expTime)
+
+	const ISC_TIMESTAMP currentTimeGmt = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
+	const SINT64 curTime = currentTimeGmt.timestamp_date * TimeStamp::ISC_TICKS_PER_DAY +
+		(SINT64) currentTimeGmt.timestamp_time;
+
+	if (curTime + ISC_TIME_SECONDS_PRECISION < m_expTime)
 	{
-		reset(m_expTime - curTime);
+		reset((m_expTime - curTime) / ISC_TIME_SECONDS_PRECISION);
 		return;
 	}
 
@@ -1018,6 +1052,8 @@ void Attachment::IdleTimer::reset(unsigned int timeout)
 {
 	// Start timer if necessary. If timer was already started, don't restart
 	// (or stop) it - handler() will take care about it.
+	// Take into account that timeout is in seconds while m_expTime is in ISC ticks
+	// and ITimerControl works with microseconds.
 
 	if (!timeout)
 	{
@@ -1025,8 +1061,11 @@ void Attachment::IdleTimer::reset(unsigned int timeout)
 		return;
 	}
 
-	const time_t curTime = time(NULL);
-	m_expTime = curTime + timeout;
+	const ISC_TIMESTAMP currentTimeGmt = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
+	const SINT64 curTime = currentTimeGmt.timestamp_date * TimeStamp::ISC_TICKS_PER_DAY +
+		(SINT64) currentTimeGmt.timestamp_time;
+
+	m_expTime = curTime + timeout * ISC_TIME_SECONDS_PRECISION;
 
 	FbLocalStatus s;
 	ITimerControl* timerCtrl = Firebird::TimerInterfacePtr();
@@ -1041,7 +1080,9 @@ void Attachment::IdleTimer::reset(unsigned int timeout)
 		m_fireTime = 0;
 	}
 
-	timerCtrl->start(&s, this, (m_expTime - curTime) * 1000 * 1000);
+	// Convert ISC ticks into microseconds
+	timerCtrl->start(&s, this, (m_expTime - curTime) * (1000 * 1000 / ISC_TIME_SECONDS_PRECISION));
 	check(&s);
 	m_fireTime = m_expTime;
 }
+

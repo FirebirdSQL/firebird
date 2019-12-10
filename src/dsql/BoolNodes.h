@@ -23,7 +23,7 @@
 #ifndef DSQL_BOOL_NODES_H
 #define DSQL_BOOL_NODES_H
 
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../dsql/Nodes.h"
 
 namespace Jrd {

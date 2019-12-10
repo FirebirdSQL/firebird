@@ -29,7 +29,7 @@
 #include "firebird.h"
 #include <stdlib.h>
 #include <string.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../gpre/gpre.h"
 #include "../jrd/intl.h"
 #include "../intl/charsets.h"

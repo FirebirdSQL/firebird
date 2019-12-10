@@ -29,6 +29,7 @@
 #include "firebird.h"
 #include "../common/classes/fb_tls.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../common/status.h"
 
 namespace
 {
@@ -64,6 +65,23 @@ IMaster* CachedMasterInterface::getMasterInterface()
 		cached = fb_get_master_interface();
 	}
 	return cached;
+}
+
+unsigned int ConfigKeys::getKey(IFirebirdConf* config, const char* keyName)
+{
+	FbLocalStatus status;
+	unsigned int version = config->getVersion(&status) & 0xFFFF0000;
+	for (const_iterator itr = this->begin(); itr != this->end(); ++itr)
+	{
+		if (((*itr) & 0xFFFF0000) == version)
+			return *itr;
+	}
+
+	unsigned int secDbKey = config->getKey(keyName);
+	if (secDbKey != INVALID_KEY)
+		this->push(secDbKey);
+
+	return secDbKey;
 }
 
 

@@ -60,11 +60,11 @@ public:
 			If the symbol can't be found or doesn't exist the function returns
 			NULL.
 		**/
-		virtual void* findSymbol(const Firebird::string&) = 0;
+		virtual void* findSymbol(ISC_STATUS*, const Firebird::string&) = 0;
 
-		template <typename T> T& findSymbol(const Firebird::string& symbol, T& ptr)
+		template <typename T> T& findSymbol(ISC_STATUS* status, const Firebird::string& symbol, T& ptr)
 		{
-			return (ptr = (T)(findSymbol(symbol)));
+			return (ptr = (T)(findSymbol(status, symbol)));
 		}
 
 		/// Destructor
@@ -99,23 +99,29 @@ public:
 	/** doctorModuleExtension modifies the given path name to add the platform
 		specific module extention.  This allows the user to provide the root name
 		of the file, and the code to append the correct extention regardless of the
-		host operating system.  This function is typically called after a failed attempt
+		host operating system. This process can take several iterations before final
+		form of name is reached.
+		This function is typically called after a failed attempt
 		to load the module without the extention.
+		Initialize step to zero before use.
+		Return false if no name modification can be done anymore.
 	**/
-	static void doctorModuleExtension(Firebird::PathName&);
+	static bool doctorModuleExtension(Firebird::PathName& name, int& step);
 
 	/** Almost like loadModule(), but in case of failure invokes doctorModuleExtension()
 		and retries.
+		On success modName is set to really found module name.
 	**/
-	static Module* fixAndLoadModule(ISC_STATUS* status, const Firebird::PathName& modName)
+	static Module* fixAndLoadModule(ISC_STATUS* status, Firebird::PathName& modName)
 	{
-		Module* mod = loadModule(NULL, modName);
-		if (!mod)
+		Module* mod = nullptr;
+		int step = 0;
+
+		do
 		{
-			Firebird::PathName fixed(modName);
-			doctorModuleExtension(fixed);
-			mod = loadModule(status, fixed);
-		}
+			mod = loadModule(status, modName);
+		} while (mod == nullptr && doctorModuleExtension(modName, step));
+
 		return mod;
 	}
 

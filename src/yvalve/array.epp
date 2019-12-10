@@ -35,7 +35,7 @@
 #include "firebird.h"
 #include <string.h>
 #include <stdarg.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/array_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/StatusArg.h"
@@ -134,7 +134,7 @@ ISC_STATUS API_ROUTINE isc_array_get_slice(ISC_STATUS* status,
 	// SD: I do not complain but in ibase.h sdl is a plain char in functions'
 	// declaration while it is UCHAR in the functions' implementations. Damned legacy!
 	isc_get_slice(status, db_handle, trans_handle, array_id,
-				  sdl_length, reinterpret_cast<const char*>(sdl),
+				  sdl_length, sdl,
 				  0, NULL, *slice_length, array, slice_length);
 
 	if (sdl != sdl_buffer)

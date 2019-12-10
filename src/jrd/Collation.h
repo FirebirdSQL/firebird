@@ -41,11 +41,11 @@ class BaseSubstringSimilarMatcher;
 class Collation : public TextType
 {
 public:
-	static Collation* createInstance(MemoryPool& pool, TTYPE_ID id, texttype* tt, CharSet* cs);
+	static Collation* createInstance(MemoryPool& pool, TTYPE_ID id, texttype* tt, USHORT attributes, CharSet* cs);
 
 protected:
-	Collation(TTYPE_ID id, texttype *a_tt, CharSet* a_cs)
-		: TextType(id, a_tt, a_cs),
+	Collation(TTYPE_ID id, texttype *a_tt, USHORT a_attributes, CharSet* a_cs)
+		: TextType(id, a_tt, a_attributes, a_cs),
 		  useCount(0),
 		  existenceLock(NULL),
 		  obsolete(false)
@@ -66,12 +66,12 @@ public:
 	virtual PatternMatcher* createLikeMatcher(MemoryPool& pool, const UCHAR* p, SLONG pl,
 		const UCHAR* escape, SLONG escapeLen) = 0;
 
-	virtual bool similarTo(MemoryPool& pool, const UCHAR* s, SLONG sl, const UCHAR* p, SLONG pl,
+	virtual bool similarTo(thread_db* tdbb, MemoryPool& pool, const UCHAR* s, SLONG sl, const UCHAR* p, SLONG pl,
 		const UCHAR* escape, SLONG escapeLen) = 0;
-	virtual PatternMatcher* createSimilarToMatcher(MemoryPool& pool, const UCHAR* p, SLONG pl,
+	virtual PatternMatcher* createSimilarToMatcher(thread_db* tdbb, MemoryPool& pool, const UCHAR* p, SLONG pl,
 		const UCHAR* escape, SLONG escapeLen) = 0;
 
-	virtual BaseSubstringSimilarMatcher* createSubstringSimilarMatcher(MemoryPool& pool,
+	virtual BaseSubstringSimilarMatcher* createSubstringSimilarMatcher(thread_db* tdbb, MemoryPool& pool,
 		const UCHAR* p, SLONG pl, const UCHAR* escape, SLONG escapeLen) = 0;
 
 	virtual bool contains(MemoryPool& pool, const UCHAR* s, SLONG sl, const UCHAR* p, SLONG pl) = 0;

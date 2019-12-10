@@ -806,6 +806,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 				mapping.needAuthBlock(svc_auth_block);
 
 				mapping.setAuthBlock(svc_auth_block);
+				mapping.setSqlRole(svc_sql_role);
 				mapping.setErrorMessagesContextName("services manager");
 				mapping.setSecurityDbAlias(config->getSecurityDatabase(), nullptr);
 
@@ -3216,4 +3217,9 @@ const char* Service::getServiceMgr() const
 const char* Service::getServiceName() const
 {
 	return svc_service_run ? svc_service_run->serv_name : NULL;
+}
+
+bool Service::getUserAdminFlag() const
+{
+	return (svc_user_flag & SVC_user_dba);
 }

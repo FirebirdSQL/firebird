@@ -236,7 +236,7 @@ public:
 	YRequest(YAttachment* aAttachment, Firebird::IRequest* aNext);
 
 	void destroy(unsigned dstrFlags);
-	FB_API_HANDLE& getHandle();
+	isc_req_handle& getHandle();
 
 	// IRequest implementation
 	void receive(Firebird::CheckStatusWrapper* status, int level, unsigned int msgType,
@@ -253,7 +253,7 @@ public:
 
 public:
 	AtomicAttPtr attachment;
-	FB_API_HANDLE* userHandle;
+	isc_req_handle* userHandle;
 };
 
 class YTransaction FB_FINAL :
@@ -265,7 +265,7 @@ public:
 	YTransaction(YAttachment* aAttachment, Firebird::ITransaction* aNext);
 
 	void destroy(unsigned dstrFlags);
-	FB_API_HANDLE& getHandle();
+	isc_tr_handle& getHandle();
 
 	// ITransaction implementation
 	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength,
@@ -318,7 +318,7 @@ public:
 	YBlob(YAttachment* aAttachment, YTransaction* aTransaction, Firebird::IBlob* aNext);
 
 	void destroy(unsigned dstrFlags);
-	FB_API_HANDLE& getHandle();
+	isc_blob_handle& getHandle();
 
 	// IBlob implementation
 	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength,
@@ -388,6 +388,25 @@ public:
 	Firebird::IBatchCompletionState* execute(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction);
 	void cancel(Firebird::CheckStatusWrapper* status);
 	void setDefaultBpb(Firebird::CheckStatusWrapper* status, unsigned parLength, const unsigned char* par);
+
+public:
+	AtomicAttPtr attachment;
+};
+
+
+class YReplicator FB_FINAL :
+	public YHelper<YReplicator, Firebird::IReplicatorImpl<YReplicator, Firebird::CheckStatusWrapper> >
+{
+public:
+	static const ISC_STATUS ERROR_CODE = isc_bad_repl_handle;
+
+	YReplicator(YAttachment* anAttachment, Firebird::IReplicator* aNext);
+
+	void destroy(unsigned dstrFlags);
+
+	// IReplicator implementation
+	void process(Firebird::CheckStatusWrapper* status, unsigned length, const unsigned char* data);
+	void close(Firebird::CheckStatusWrapper* status);
 
 public:
 	AtomicAttPtr attachment;
@@ -483,7 +502,7 @@ public:
 
 	void destroy(unsigned dstrFlags);
 	void shutdown();
-	FB_API_HANDLE& getHandle();
+	isc_db_handle& getHandle();
 
 	// IAttachment implementation
 	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength,
@@ -529,7 +548,7 @@ public:
 	void addCleanupHandler(Firebird::CheckStatusWrapper* status, CleanupCallback* callback);
 	YTransaction* getTransaction(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* tra);
 	void getNextTransaction(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* tra, NextTransaction& next);
-	void execute(Firebird::CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
+	void execute(Firebird::CheckStatusWrapper* status, isc_tr_handle* traHandle,
 		unsigned int stmtLength, const char* sqlStmt, unsigned int dialect,
 		Firebird::IMessageMetadata* inMetadata, void* inBuffer,
 		Firebird::IMessageMetadata* outMetadata, void* outBuffer);
@@ -541,6 +560,7 @@ public:
 	YBatch* createBatch(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction,
 		unsigned stmtLength, const char* sqlStmt, unsigned dialect,
 		Firebird::IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par);
+	YReplicator* createReplicator(Firebird::CheckStatusWrapper* status);
 
 public:
 	Firebird::IProvider* provider;
@@ -567,7 +587,7 @@ public:
 
 	void shutdown();
 	void destroy(unsigned dstrFlags);
-	FB_API_HANDLE& getHandle();
+	isc_svc_handle& getHandle();
 
 	// IService implementation
 	void detach(Firebird::CheckStatusWrapper* status);
@@ -651,7 +671,6 @@ public:
 		unsigned kind, const unsigned char* buf, unsigned len);
 	unsigned setOffsets(Firebird::CheckStatusWrapper* status, Firebird::IMessageMetadata* metadata,
 		Firebird::IOffsetsCallback* callback);
-	Firebird::IEventBlock* createEventBlock(Firebird::CheckStatusWrapper* status, const char** events);
 	Firebird::IDecFloat16* getDecFloat16(Firebird::CheckStatusWrapper* status);
 	Firebird::IDecFloat34* getDecFloat34(Firebird::CheckStatusWrapper* status);
 	Firebird::ITransaction* getTransactionByHandle(Firebird::CheckStatusWrapper* status, isc_tr_handle* hndlPtr);
@@ -667,6 +686,7 @@ public:
 	void encodeTimeStampTz(Firebird::CheckStatusWrapper* status, ISC_TIMESTAMP_TZ* timeStampTz,
 		unsigned year, unsigned month, unsigned day,
 		unsigned hours, unsigned minutes, unsigned seconds, unsigned fractions, const char* timeZone);
+	Firebird::IInt128* getInt128(Firebird::CheckStatusWrapper* status);
 };
 
 }	// namespace Why

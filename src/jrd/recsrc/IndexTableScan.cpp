@@ -49,7 +49,10 @@ IndexTableScan::IndexTableScan(CompilerScratch* csb, const string& alias,
 {
 	fb_assert(m_index);
 
-	FB_SIZE_T size = sizeof(Impure) + 2u * m_length;
+	// Reserve one excess byte for the upper key - in case when length of 
+	// upper key at retrieval is greater than declared index key length.
+	// See also comments at openStream().
+	FB_SIZE_T size = sizeof(Impure) + 2u * m_length + 1u;
 	size = FB_ALIGN(size, FB_ALIGNMENT);
 	m_offset = size;
 	size += sizeof(index_desc);
@@ -507,8 +510,11 @@ UCHAR* IndexTableScan::openStream(thread_db* tdbb, Impure* impure, win* window) 
 	temporary_key* limit_ptr = NULL;
 	if (retrieval->irb_upper_count)
 	{
-		impure->irsb_nav_upper_length = upper.key_length;
-		memcpy(impure->irsb_nav_data + m_length, upper.key_data, upper.key_length);
+		// If upper key length is greater than declared key length, we need 
+		// one "excess" byte for correct comparison. Without it there could 
+		// be false equality hits.
+		impure->irsb_nav_upper_length = MIN(m_length + 1, upper.key_length);
+		memcpy(impure->irsb_nav_data + m_length, upper.key_data, impure->irsb_nav_upper_length);
 	}
 
 	if (retrieval->irb_lower_count)
@@ -581,6 +587,7 @@ void IndexTableScan::setPosition(thread_db* tdbb,
 	impure->irsb_nav_number = rpb->rpb_number;
 
 	// save the current key value
+	fb_assert(key.key_length <= m_length);
 	impure->irsb_nav_length = key.key_length;
 	memcpy(impure->irsb_nav_data, key.key_data, key.key_length);
 

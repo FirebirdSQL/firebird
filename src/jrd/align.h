@@ -33,7 +33,8 @@ Maximum alignments for corresponding data types are defined in dsc.h
 */
 
 #include "../common/DecFloat.h"
-#include "../jrd/blr.h"
+#include "../common/Int128.h"
+#include "firebird/impl/blr.h"
 
 /*  The following macro must be defined as the highest-numericly-valued
  *  blr which describes a datatype: arrays are sized based on this value.
@@ -70,7 +71,7 @@ static const USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
 	dtype_boolean,				// blr_bool == 23
 	dtype_dec64,				/* blr_dec64 == 24 */
 	dtype_dec128,				/* blr_dec128 == 25 */
-	dtype_dec_fixed,			/* blr_dec_fixed == 26 */
+	dtype_int128,			/* blr_int128 == 26 */
 	dtype_double,				/* blr_double == 27 */
 	dtype_sql_time_tz,			/* blr_sql_time_tz == 28 */
 	dtype_timestamp_tz,			/* blr_timestamp_tz == 29 */
@@ -111,7 +112,7 @@ static const USHORT type_alignments[DTYPE_TYPE_MAX] =
 	sizeof(UCHAR),				/* dtype_boolean */
 	sizeof(Firebird::Decimal64),/* dtype_dec64 */
 	sizeof(Firebird::Decimal64),/* dtype_dec128 */
-	sizeof(Firebird::Decimal64),/* dtype_dec_fixed */
+	sizeof(Firebird::Decimal64),/* dtype_int128 */
 	sizeof(GDS_TIME),			/* dtype_sql_time_tz */
 	sizeof(GDS_DATE)			/* dtype_timestamp_tz */
 };
@@ -142,7 +143,7 @@ static const USHORT type_lengths[DTYPE_TYPE_MAX] =
 	sizeof(UCHAR),				/* dtype_boolean */
 	sizeof(Firebird::Decimal64),/* dtype_dec64 */
 	sizeof(Firebird::Decimal128),/*dtype_dec128 */
-	sizeof(Firebird::DecimalFixed),	/*	dtype_dec_fixed */
+	sizeof(Firebird::Int128),	/*	dtype_int128 */
 	sizeof(ISC_TIME_TZ),			/* dtype_sql_time_tz */
 	sizeof(ISC_TIMESTAMP_TZ)		/* dtype_timestamp_tz */
 };
@@ -176,7 +177,7 @@ static const USHORT type_significant_bits[DTYPE_TYPE_MAX] =
 	0,							// dtype_boolean
 	0,							// dtype_dec64
 	0,							// dtype_dec128
-	0,							// dtype_dec_fixed
+	0,							// dtype_int128
 	0,							// dtype_sql_time_tz
 	0							// dtype_timestamp_tz
 };

@@ -462,6 +462,7 @@ file(GLOB engine_src
     "jrd/*.cpp"
     "jrd/extds/*.cpp"
     "jrd/recsrc/*.cpp"
+    "jrd/replication/*.cpp"
     "jrd/trace/*.cpp"
     "jrd/os/${OS_DIR}/*.cpp"
 )
@@ -828,12 +829,10 @@ if (WIN32)
         TARGET boot_isql
         POST_BUILD
         #
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/icudt52l.dat ${output_dir}/icudt52l.dat
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/icudt52l_empty.dat ${output_dir}/icudt52l_empty.dat
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/icudt${ICU_VERSION}l.dat ${output_dir}/icudt${ICU_VERSION}l.dat
         #
         # one copy to boot directory
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/icudt52l.dat $<TARGET_FILE_DIR:boot_isql>/icudt52l.dat
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/icudt52l_empty.dat $<TARGET_FILE_DIR:boot_isql>/icudt52l_empty.dat
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/icudt${ICU_VERSION}l.dat $<TARGET_FILE_DIR:boot_isql>/icudt${ICU_VERSION}l.dat
     )
 
     string(FIND "${CMAKE_EXE_LINKER_FLAGS}" "/machine:x64" arch)
@@ -846,17 +845,17 @@ if (WIN32)
         TARGET boot_isql
         POST_BUILD
         # icu
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/${arch}/Release/bin/icudt52.dll ${output_dir}/icudt52.dll
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/${arch}/Release/bin/icuin52.dll ${output_dir}/icuin52.dll
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/${arch}/Release/bin/icuuc52.dll ${output_dir}/icuuc52.dll
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/${arch}/Release/bin/icudt${ICU_VERSION}.dll ${output_dir}/icudt${ICU_VERSION}.dll
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/${arch}/Release/bin/icuin${ICU_VERSION}.dll ${output_dir}/icuin${ICU_VERSION}.dll
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/${arch}/Release/bin/icuuc${ICU_VERSION}.dll ${output_dir}/icuuc${ICU_VERSION}.dll
         # zlib
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/zlib/${arch}/zlib1.dll ${output_dir}/zlib1.dll
         #
         # one copy to boot directory
         # icu
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/${arch}/Release/bin/icudt52.dll $<TARGET_FILE_DIR:boot_isql>/icudt52.dll
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/${arch}/Release/bin/icuin52.dll $<TARGET_FILE_DIR:boot_isql>/icuin52.dll
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/${arch}/Release/bin/icuuc52.dll $<TARGET_FILE_DIR:boot_isql>/icuuc52.dll
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/${arch}/Release/bin/icudt${ICU_VERSION}.dll $<TARGET_FILE_DIR:boot_isql>/icudt${ICU_VERSION}.dll
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/${arch}/Release/bin/icuin${ICU_VERSION}.dll $<TARGET_FILE_DIR:boot_isql>/icuin${ICU_VERSION}.dll
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/icu/${arch}/Release/bin/icuuc${ICU_VERSION}.dll $<TARGET_FILE_DIR:boot_isql>/icuuc${ICU_VERSION}.dll
         # zlib
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/extern/zlib/${arch}/zlib1.dll $<TARGET_FILE_DIR:boot_isql>/zlib1.dll
     )
@@ -984,9 +983,8 @@ if (WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${fbclient_lib_src} ${output_dir}/lib/${fbclient_lib_dst}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ib_util_lib_src} ${output_dir}/lib/${ib_util_lib_dst}
         # installers
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/arch-specific/win32/install_classic.bat ${output_dir}/install_classic.bat
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/arch-specific/win32/install_super.bat ${output_dir}/install_super.bat
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/arch-specific/win32/uninstall.bat ${output_dir}/uninstall.bat
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/arch-specific/win32/install_service.bat ${output_dir}/install_service.bat
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/arch-specific/win32/uninstall_service.bat ${output_dir}/uninstall_service.bat
         # examples
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples/build_unix ${output_dir}/examples/build_unix
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples/build_win32 ${output_dir}/examples/build_win32

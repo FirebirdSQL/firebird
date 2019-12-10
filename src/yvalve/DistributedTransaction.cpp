@@ -32,7 +32,7 @@
 
 #include "../yvalve/MasterImplementation.h"
 #include "../common/classes/rwlock.h"
-#include "../jrd/inf_pub.h"
+#include "firebird/impl/inf_pub.h"
 #include "../common/isc_proto.h"
 #include "../jrd/acl.h"
 

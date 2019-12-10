@@ -83,13 +83,12 @@
 
 #include "gen/iberror.h"
 #include "../dsql/dsql.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/flags.h"
 #include "../jrd/jrd.h"
 #include "../jrd/DataTypeUtil.h"
 #include "../dsql/errd_proto.h"
 #include "../dsql/make_proto.h"
-#include "../yvalve/keywords.h"
 #include "../yvalve/gds_proto.h"
 #include "../jrd/err_proto.h"
 #include "../common/intlobj_new.h"
@@ -332,10 +331,10 @@ using namespace Firebird;
 %token <metaNamePtr> WORK
 %token <metaNamePtr> WRITE
 
-%token <stringPtr> FLOAT_NUMBER DECIMAL_NUMBER LIMIT64_INT
-%token <lim64ptr> LIMIT64_NUMBER
+%token <stringPtr> FLOAT_NUMBER DECIMAL_NUMBER
+%token <lim64ptr> LIMIT64_NUMBER LIMIT64_INT NUM128
 %token <metaNamePtr> SYMBOL
-%token <int32Val> NUMBER
+%token <int32Val> NUMBER32BIT
 
 %token <intlStringPtr> STRING
 %token <metaNamePtr> INTRODUCER
@@ -458,6 +457,7 @@ using namespace Firebird;
 %token <metaNamePtr> COS
 %token <metaNamePtr> COSH
 %token <metaNamePtr> COT
+%token <metaNamePtr> CRC32
 %token <metaNamePtr> DATEADD
 %token <metaNamePtr> DATEDIFF
 %token <metaNamePtr> DECODE
@@ -592,22 +592,29 @@ using namespace Firebird;
 
 // tokens added for Firebird 4.0
 
+%token <metaNamePtr> BASE64_DECODE
+%token <metaNamePtr> BASE64_ENCODE
 %token <metaNamePtr> BINARY
 %token <metaNamePtr> BIND
 %token <metaNamePtr> COMPARE_DECFLOAT
-%token <metaNamePtr> CUME_DIST
+%token <metaNamePtr> CONSISTENCY
 %token <metaNamePtr> COUNTER
 %token <metaNamePtr> CTR_BIG_ENDIAN
 %token <metaNamePtr> CTR_LENGTH
 %token <metaNamePtr> CTR_LITTLE_ENDIAN
+%token <metaNamePtr> CUME_DIST
 %token <metaNamePtr> DECFLOAT
 %token <metaNamePtr> DEFINER
+%token <metaNamePtr> EXCESS
 %token <metaNamePtr> EXCLUDE
 %token <metaNamePtr> FIRST_DAY
 %token <metaNamePtr> FOLLOWING
+%token <metaNamePtr> HEX_DECODE
+%token <metaNamePtr> HEX_ENCODE
 %token <metaNamePtr> IDLE
-%token <metaNamePtr> IV
 %token <metaNamePtr> INVOKER
+%token <metaNamePtr> INT128
+%token <metaNamePtr> IV
 %token <metaNamePtr> LAST_DAY
 %token <metaNamePtr> LEGACY
 %token <metaNamePtr> LOCAL
@@ -619,6 +626,7 @@ using namespace Firebird;
 %token <metaNamePtr> NATIVE
 %token <metaNamePtr> NORMALIZE_DECFLOAT
 %token <metaNamePtr> NTILE
+%token <metaNamePtr> NUMBER
 %token <metaNamePtr> OTHERS
 %token <metaNamePtr> OVERRIDING
 %token <metaNamePtr> PERCENT_RANK
@@ -627,6 +635,7 @@ using namespace Firebird;
 %token <metaNamePtr> QUANTIZE
 %token <metaNamePtr> RANGE
 %token <metaNamePtr> RDB_ERROR
+%token <metaNamePtr> RDB_GET_TRANSACTION_CN
 %token <metaNamePtr> RDB_ROLE_IN_USE
 %token <metaNamePtr> RDB_SYSTEM_PRIVILEGE
 %token <metaNamePtr> RESET
@@ -637,9 +646,9 @@ using namespace Firebird;
 %token <metaNamePtr> RSA_SIGN
 %token <metaNamePtr> RSA_VERIFY
 %token <metaNamePtr> SALT_LENGTH
-%token <metaNamePtr> SIGNATURE
 %token <metaNamePtr> SECURITY
 %token <metaNamePtr> SESSION
+%token <metaNamePtr> SIGNATURE
 %token <metaNamePtr> SQL
 %token <metaNamePtr> SYSTEM
 %token <metaNamePtr> TIES
@@ -652,8 +661,6 @@ using namespace Firebird;
 %token <metaNamePtr> WINDOW
 %token <metaNamePtr> WITHOUT
 %token <metaNamePtr> ZONE
-%token <metaNamePtr> CONSISTENCY
-%token <metaNamePtr> RDB_GET_TRANSACTION_CN
 
 // external connections pool management
 %token <metaNamePtr> CONNECTIONS
@@ -810,7 +817,7 @@ using namespace Firebird;
 	Jrd::CreateAlterRoleNode* createAlterRoleNode;
 	Jrd::SetDecFloatRoundNode* setDecFloatRoundNode;
 	Jrd::SetDecFloatTrapsNode* setDecFloatTrapsNode;
-	Jrd::SetDecFloatBindNode* setDecFloatBindNode;
+	Jrd::SetBindNode* setBindNode;
 	Jrd::SessionResetNode* sessionResetNode;
 }
 
@@ -871,12 +878,11 @@ tra_statement
 mng_statement
 	: set_decfloat_round						{ $$ = $1; }
 	| set_decfloat_traps						{ $$ = $1; }
-	| set_decfloat_bind							{ $$ = $1; }
 	| session_statement							{ $$ = $1; }
 	| set_role									{ $$ = $1; }
 	| session_reset								{ $$ = $1; }
 	| set_time_zone								{ $$ = $1; }
-	| set_time_zone_bind						{ $$ = $1; }
+	| set_bind									{ $$ = $1; }
 	;
 
 
@@ -1531,6 +1537,8 @@ recreate_clause
 		{ $$ = newNode<RecreateSequenceNode>($2); }
 	| SEQUENCE generator_clause
 		{ $$ = newNode<RecreateSequenceNode>($2); }
+	| USER create_user_clause
+		{ $$ = newNode<RecreateUserNode>($2); }
 	;
 
 %type <ddlNode> create_or_alter
@@ -3144,9 +3152,9 @@ proc_statements
 
 %type <stmtNode> proc_statement
 proc_statement
-	: simple_proc_statement ';'
+	: simple_proc_statement ';' [YYVALID;]
 		{ $$ = newNode<LineColumnNode>(YYPOSNARG(1).firstLine, YYPOSNARG(1).firstColumn, $1); }
-	| complex_proc_statement
+	| complex_proc_statement [YYVALID;]
 		{ $$ = newNode<LineColumnNode>(YYPOSNARG(1).firstLine, YYPOSNARG(1).firstColumn, $1); }
 	;
 
@@ -3315,6 +3323,23 @@ named_param($execStatementNode)
 				$execStatementNode->inputs = newNode<ValueListNode>($3);
 			else
 				$execStatementNode->inputs->add($3);
+		}
+	| EXCESS symbol_variable_name BIND_PARAM value
+		{
+			if (!$execStatementNode->inputNames)
+				$execStatementNode->inputNames = FB_NEW_POOL(getPool()) EDS::ParamNames(getPool());
+
+			if (!$execStatementNode->excessInputs)
+				$execStatementNode->excessInputs = FB_NEW_POOL(getPool()) EDS::ParamNumbers(getPool());
+
+			$execStatementNode->excessInputs->add($execStatementNode->inputNames->getCount());
+
+			$execStatementNode->inputNames->add($2);
+
+			if (!$execStatementNode->inputs)
+				$execStatementNode->inputs = newNode<ValueListNode>($4);
+			else
+				$execStatementNode->inputs->add($4);
 		}
 	;
 
@@ -4199,6 +4224,7 @@ keyword_or_column
 	| VAR_SAMP
 	| VAR_POP
 	| DECFLOAT				// added in FB 4.0
+	| INT128
 	| LOCAL
 	| LOCALTIME
 	| LOCALTIMESTAMP
@@ -4589,7 +4615,10 @@ simple_type
 		{
 			$$ = $1;
 			if ($2)
+			{
 				$$->charSet = *$2;
+				$$->flags |= FLD_has_chset;
+			}
 		}
 	;
 
@@ -4734,7 +4763,10 @@ blob_type
 			$$->length = sizeof(ISC_QUAD);
 			$$->segLength = $4;
 			if ($5)
+			{
 				$$->charSet = *$5;
+				$$->flags |= FLD_has_chset;
+			}
 		}
 	| BLOB '(' unsigned_short_integer ')'
 		{
@@ -4751,6 +4783,7 @@ blob_type
 			$$->length = sizeof(ISC_QUAD);
 			$$->segLength = (USHORT) $3;
 			$$->subType = (USHORT) $5;
+			$$->flags |= FLD_has_sub;
 		}
 	| BLOB '(' ',' signed_short_integer ')'
 		{
@@ -4759,6 +4792,7 @@ blob_type
 			$$->length = sizeof(ISC_QUAD);
 			$$->segLength = 80;
 			$$->subType = (USHORT) $4;
+			$$->flags |= FLD_has_sub;
 		}
 	;
 
@@ -4773,9 +4807,9 @@ blob_subtype($field)
 	: // nothing
 		{ $field->subType = (USHORT) 0; }
 	| SUB_TYPE signed_short_integer
-		{ $field->subType = (USHORT) $2; }
+		{ $field->subType = (USHORT) $2; $field->flags |= FLD_has_sub; }
 	| SUB_TYPE symbol_blob_subtype_name
-		{ $field->subTypeName = *$2; }
+		{ $field->subTypeName = *$2; $field->flags |= FLD_has_sub; }
 	;
 
 %type <metaNamePtr> charset_clause
@@ -4795,7 +4829,7 @@ national_character_type
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
 			$$->charLength = (USHORT) $3;
-			$$->flags |= FLD_national;
+			$$->flags |= (FLD_national | FLD_has_len);
 		}
 	| national_character_keyword
 		{
@@ -4809,7 +4843,7 @@ national_character_type
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_varying;
 			$$->charLength = (USHORT) $4;
-			$$->flags |= FLD_national;
+			$$->flags |= (FLD_national | FLD_has_len);
 		}
 	;
 
@@ -4824,6 +4858,7 @@ binary_character_type
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
 			$$->subType = fb_text_subtype_binary;
+			$$->flags |= (FLD_has_len | FLD_has_chset);
 		}
 	| binary_character_keyword
 		{
@@ -4834,6 +4869,7 @@ binary_character_type
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
 			$$->subType = fb_text_subtype_binary;
+			$$->flags |= FLD_has_chset;
 		}
 	| varbinary_character_keyword '(' pos_short_integer ')'
 		{
@@ -4844,6 +4880,7 @@ binary_character_type
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
 			$$->subType = fb_text_subtype_binary;
+			$$->flags |= (FLD_has_len | FLD_has_chset);
 		}
 	;
 
@@ -4854,6 +4891,7 @@ character_type
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
 			$$->charLength = (USHORT) $3;
+			$$->flags |= FLD_has_len;
 		}
 	| character_keyword
 		{
@@ -4866,6 +4904,7 @@ character_type
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_varying;
 			$$->charLength = (USHORT) $3;
+			$$->flags |= FLD_has_len;
 		}
 	;
 
@@ -4907,6 +4946,8 @@ decfloat_type
 				yyabandon(YYPOSNARG(2), -842, isc_decprecision_err);	// DecFloat precision must be 16 or 34.
 
 			$$ = newNode<dsql_fld>();
+			if (precision)
+				$$->flags |= FLD_has_len;
 			$$->precision = precision == 0 ? 34 : (USHORT) precision;
 			$$->dtype = precision == 16 ? dtype_dec64 : dtype_dec128;
 			$$->length = precision == 16 ? sizeof(Decimal64) : sizeof(Decimal128);
@@ -4945,15 +4986,16 @@ prec_scale
 	| '(' signed_long_integer ')'
 		{
 			$$ = newNode<dsql_fld>();
+			$$->flags |= FLD_has_len;
 
-			if ($2 < 1 || $2 > 34)
-				yyabandon(YYPOSNARG(2), -842, Arg::Gds(isc_precision_err2) << Arg::Num(1) << Arg::Num(34));
-																// Precision must be between 1 and 34
+			if ($2 < 1 || $2 > 38)
+				yyabandon(YYPOSNARG(2), -842, Arg::Gds(isc_precision_err2) << Arg::Num(1) << Arg::Num(38));
+																// Precision must be between 1 and 38
 
 			if ($2 > 18)
 			{
-				$$->dtype = dtype_dec_fixed;
-				$$->length = sizeof(DecimalFixed);
+				$$->dtype = dtype_int128;
+				$$->length = sizeof(Int128);
 			}
 			else if ($2 > 9)
 			{
@@ -5001,18 +5043,19 @@ prec_scale
 	| '(' signed_long_integer ',' signed_long_integer ')'
 		{
 			$$ = newNode<dsql_fld>();
+			$$->flags |= (FLD_has_len | FLD_has_scale);
 
-			if ($2 < 1 || $2 > 34)
-				yyabandon(YYPOSNARG(2), -842, Arg::Gds(isc_precision_err2) << Arg::Num(1) << Arg::Num(34));
-																// Precision must be between 1 and 34
+			if ($2 < 1 || $2 > 38)
+				yyabandon(YYPOSNARG(2), -842, Arg::Gds(isc_precision_err2) << Arg::Num(1) << Arg::Num(38));
+																// Precision must be between 1 and 38
 
 			if ($4 > $2 || $4 < 0)
 				yyabandon(YYPOSNARG(4), -842, isc_scale_nogt);	// Scale must be between 0 and precision
 
 			if ($2 > 18)
 			{
-				$$->dtype = dtype_dec_fixed;
-				$$->length = sizeof(DecimalFixed);
+				$$->dtype = dtype_int128;
+				$$->length = sizeof(Int128);
 			}
 			else if ($2 > 9)
 			{
@@ -5070,11 +5113,19 @@ decimal_keyword
 
 %type <legacyField> float_type
 float_type
-	: FLOAT precision_opt
+	: FLOAT precision_opt_nz
 		{
+		    // Precision is binary digits of the significand: 1-24 for 32 bit single precision, 25-53 for 64 bit double precision
+			// Precision 0 is the 'no precision specified' case, which defaults to 32 bit single precision
+			SLONG precision = $2;
+
+			if (precision != 0 && (precision < 1 || precision > 53))
+				yyabandon(YYPOSNARG(2), -842, Arg::Gds(isc_precision_err2) << Arg::Num(1) << Arg::Num(53));
+																// Precision must be between 1 and 53
+
 			$$ = newNode<dsql_fld>();
 
-			if ($2 > 7)
+			if (precision > 24)
 			{
 				$$->dtype = dtype_double;
 				$$->length = sizeof(double);
@@ -5085,8 +5136,16 @@ float_type
 				$$->length = sizeof(float);
 			}
 		}
-	| LONG FLOAT precision_opt
+	| LONG FLOAT precision_opt_nz
 		{
+			// Precision is binary digits of the significand: 1-53 for 64 bit double precision
+			// Precision 0 is the 'no precision specified case', which defaults to 64 bit double precision
+			SLONG precision = $3;
+
+			if (precision != 0 && (precision < 1 || precision > 53))
+				yyabandon(YYPOSNARG(3), -842, Arg::Gds(isc_precision_err2) << Arg::Num(1) << Arg::Num(53));
+																// Precision must be between 1 and 53
+
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_double;
 			$$->length = sizeof(double);
@@ -5105,13 +5164,7 @@ float_type
 		}
 	;
 
-%type <int32Val> precision_opt
-precision_opt
-	: /* nothing */					{ $$ = 0; }
-	| '(' nonneg_short_integer ')'	{ $$ = $2; }
-	;
-
-// alternative to precision_opt that does not allow zero
+// optional precision that does not allow zero
 %type <int32Val> precision_opt_nz
 precision_opt_nz
 	: /* nothing */				{ $$ = 0; }
@@ -5235,12 +5288,47 @@ set_decfloat_traps
 			{ $$ = $5; }
 	;
 
-%type <setDecFloatBindNode> set_decfloat_bind
-set_decfloat_bind
-	: SET DECFLOAT BIND
-			{ $$ = newNode<SetDecFloatBindNode>(); }
-		bind_clause($4)
-			{ $$ = $4; }
+%type <setBindNode> set_bind
+set_bind
+	: SET BIND OF set_bind_from set_bind_to
+			{ $$ = newNode<SetBindNode>(); $$->from = $4; $$->to = $5; }
+	;
+
+%type <legacyField> set_bind_from
+set_bind_from
+	: bind_type
+	;
+
+%type <legacyField> bind_type
+bind_type
+	: non_array_type
+		{
+			$$ = $1;
+		}
+	| varying_keyword
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = 0;
+		}
+	;
+
+%type <legacyField> set_bind_to
+set_bind_to
+	: TO bind_type
+		{
+			$$ = $2;
+		}
+	| TO LEGACY
+		{
+			$$ = newNode<dsql_fld>();
+			$$->flags = FLD_legacy;
+		}
+	| NATIVE
+		{
+			$$ = newNode<dsql_fld>();
+			$$->flags = FLD_native;
+		}
 	;
 
 %type decfloat_traps_list_opt(<setDecFloatTrapsNode>)
@@ -5260,28 +5348,6 @@ decfloat_trap($setDecFloatTrapsNode)
 	: valid_symbol_name
 		{ $setDecFloatTrapsNode->trap($1); }
 	;
-
-%type bind_clause(<setDecFloatBindNode>)
-bind_clause($setDecFloatBindNode)
-	: NATIVE
-		// do nothing
-	| character_keyword
-		{ $setDecFloatBindNode->bind.bind = DecimalBinding::DEC_TEXT; }
-	| DOUBLE PRECISION
-		{ $setDecFloatBindNode->bind.bind = DecimalBinding::DEC_DOUBLE; }
-	| BIGINT decfloat_scale_clause($setDecFloatBindNode)
-		{ $setDecFloatBindNode->bind.bind = DecimalBinding::DEC_NUMERIC; }
-	;
-
-%type decfloat_scale_clause(<setDecFloatBindNode>)
-decfloat_scale_clause($setDecFloatBindNode)
-	: // nothing
-	| ',' signed_long_integer
-		{
-			if ($2 > 18 || $2 < 0)
-				yyabandon(YYPOSNARG(2), -842, isc_scale_nogt);	// Scale must be between 0 and precision
-			$setDecFloatBindNode->bind.numScale = -$2;
-		}
 
 %type <setSessionNode> session_statement
 session_statement
@@ -5319,17 +5385,6 @@ set_time_zone_option
 	| LOCAL			{ $$ = newNode<SetTimeZoneNode>(); }
 	;
 
-%type <mngNode> set_time_zone_bind
-set_time_zone_bind
-	: SET TIME ZONE BIND set_time_zone_bind_option	{ $$ = $5; }
-	;
-
-%type <mngNode> set_time_zone_bind_option
-set_time_zone_bind_option
-	: LEGACY	{ $$ = newNode<SetTimeZoneBindNode>(TimeZoneUtil::BIND_LEGACY); }
-	| NATIVE	{ $$ = newNode<SetTimeZoneBindNode>(TimeZoneUtil::BIND_NATIVE); }
-	;
-
 %type tran_option_list_opt(<setTransactionNode>)
 tran_option_list_opt($setTransactionNode)
 	: // nothing
@@ -5355,7 +5410,7 @@ tran_option($setTransactionNode)
 	| NO WAIT
 		{ setClause($setTransactionNode->wait, "[NO] WAIT", false); }
 	// isolation mode
-	| isolation_mode
+	| isolation_mode($setTransactionNode)
 		{ setClause($setTransactionNode->isoLevel, "ISOLATION LEVEL", $1); }
 	// misc options
 	| NO AUTO UNDO
@@ -5375,24 +5430,38 @@ tran_option($setTransactionNode)
 		restr_list($setTransactionNode)
 	;
 
-%type <uintVal>	isolation_mode
-isolation_mode
-	: ISOLATION LEVEL iso_mode	{ $$ = $3;}
+%type <uintVal>	isolation_mode(<setTransactionNode>)
+isolation_mode($setTransactionNode)
+	: ISOLATION LEVEL iso_mode($setTransactionNode)	{ $$ = $3;}
 	| iso_mode
 	;
 
-%type <uintVal>	iso_mode
-iso_mode
-	: snap_shot
+%type <uintVal>	iso_mode(<setTransactionNode>)
+iso_mode($setTransactionNode)
+	: snap_shot($setTransactionNode)	{ $$ = $1; }
 	| READ UNCOMMITTED version_mode		{ $$ = $3; }
 	| READ COMMITTED version_mode		{ $$ = $3; }
 	;
 
-%type <uintVal>	snap_shot
-snap_shot
-	: SNAPSHOT					{ $$ = SetTransactionNode::ISO_LEVEL_CONCURRENCY; }
-	| SNAPSHOT TABLE			{ $$ = SetTransactionNode::ISO_LEVEL_CONSISTENCY; }
-	| SNAPSHOT TABLE STABILITY	{ $$ = SetTransactionNode::ISO_LEVEL_CONSISTENCY; }
+%type <uintVal>	snap_shot(<setTransactionNode>)
+snap_shot($setTransactionNode)
+	: SNAPSHOT
+		{ $$ = SetTransactionNode::ISO_LEVEL_CONCURRENCY; }
+	| SNAPSHOT AT NUMBER snapshot_number
+		{
+			setClause($setTransactionNode->atSnapshotNumber, "SNAPSHOT AT NUMBER", (CommitNumber) $4);
+			$$ = SetTransactionNode::ISO_LEVEL_CONCURRENCY;
+		}
+	| SNAPSHOT TABLE
+		{ $$ = SetTransactionNode::ISO_LEVEL_CONSISTENCY; }
+	| SNAPSHOT TABLE STABILITY
+		{ $$ = SetTransactionNode::ISO_LEVEL_CONSISTENCY; }
+	;
+
+%type <int64Val> snapshot_number
+snapshot_number
+	: NUMBER32BIT	{ $$ = $1; }
+	| NUMBER64BIT	{ $$ = $1.number; }
 	;
 
 %type <uintVal>	version_mode
@@ -6489,23 +6558,17 @@ update_or_insert_matching_opt($fieldArray)
 returning_clause
 	: /* nothing */
 		{ $$ = NULL; }
-	| RETURNING value_opt_alias_list
+	| RETURNING select_list
 		{
 			$$ = FB_NEW_POOL(getPool()) ReturningClause(getPool());
 			$$->first = $2;
 		}
-	| RETURNING value_opt_alias_list INTO variable_list
+	| RETURNING select_list INTO variable_list
 		{
 			$$ = FB_NEW_POOL(getPool()) ReturningClause(getPool());
 			$$->first = $2;
 			$$->second = $4;
 		}
-	;
-
-%type <valueListNode> value_opt_alias_list
-value_opt_alias_list
-	: value_opt_alias							{ $$ = newNode<ValueListNode>($1); }
-	| value_opt_alias_list ',' value_opt_alias	{ $$ = $1->add($3); }
 	;
 
 %type <metaNamePtr> cursor_clause
@@ -6680,13 +6743,13 @@ boolean_value_expression
 		{ $$ = $2; }
 	| value IS boolean_literal
 		{
-			ComparativeBoolNode* node = newNode<ComparativeBoolNode>(blr_eql, $1, $3);
+			ComparativeBoolNode* node = newNode<ComparativeBoolNode>(blr_equiv, $1, $3);
 			node->dsqlCheckBoolean = true;
 			$$ = node;
 		}
 	| value IS NOT boolean_literal
 		{
-			ComparativeBoolNode* node = newNode<ComparativeBoolNode>(blr_eql, $1, $4);
+			ComparativeBoolNode* node = newNode<ComparativeBoolNode>(blr_equiv, $1, $4);
 			node->dsqlCheckBoolean = true;
 			$$ = newNode<NotBoolNode>(node);
 		}
@@ -7183,7 +7246,7 @@ value_special
 %type <valueExprNode> value_primary
 value_primary
 	: nonparenthesized_value
-	| '(' value_primary ')'							{ $$ = $2; }
+	| '(' value_primary ')'				{ $$ = $2; }
 	;
 
 // Matches definition of <simple value specification> in SQL standard
@@ -7367,14 +7430,16 @@ u_numeric_constant
 	: ul_numeric_constant
 		{ $$ = $1; }
 	| LIMIT64_NUMBER
-		{ $$ = MAKE_constant($1->c_str(), CONSTANT_DECIMAL); }
+		{ $$ = MAKE_constant($1->c_str(), CONSTANT_NUM128, $1->getScale()); }
 	| LIMIT64_INT
-		{ $$ = MAKE_constant($1->c_str(), CONSTANT_DECIMAL); }
+		{ $$ = MAKE_constant($1->c_str(), CONSTANT_NUM128); }
+	| NUM128
+		{ $$ = MAKE_constant($1->c_str(), CONSTANT_NUM128, $1->getScale()); }
 	;
 
 %type <valueExprNode> ul_numeric_constant
 ul_numeric_constant
-	: NUMBER
+	: NUMBER32BIT
 		{ $$ = MAKE_const_slong($1); }
 	| FLOAT_NUMBER
 		{ $$ = MAKE_constant($1->c_str(), CONSTANT_DOUBLE); }
@@ -7514,7 +7579,7 @@ signed_short_integer
 
 %type <int32Val> nonneg_short_integer
 nonneg_short_integer
-	: NUMBER
+	: NUMBER32BIT
 		{
 			if ($1 > SHRT_POS_MAX)
 				yyabandon(YYPOSNARG(1), -842, isc_expec_short);	// Short integer expected
@@ -7525,7 +7590,7 @@ nonneg_short_integer
 
 %type <int32Val> neg_short_integer
 neg_short_integer
-	: NUMBER
+	: NUMBER32BIT
 		{
 			if ($1 > SHRT_NEG_MAX)
 				yyabandon(YYPOSNARG(1), -842, isc_expec_short);	// Short integer expected
@@ -7547,7 +7612,7 @@ pos_short_integer
 
 %type <int32Val> unsigned_short_integer
 unsigned_short_integer
-	: NUMBER
+	: NUMBER32BIT
 		{
 			if ($1 > SHRT_UNSIGNED_MAX)
 				yyabandon(YYPOSNARG(1), -842, isc_expec_ushort);	// Unsigned short integer expected
@@ -7564,7 +7629,7 @@ signed_long_integer
 
 %type <int32Val> long_integer
 long_integer
-	: NUMBER	{ $$ = $1;}
+	: NUMBER32BIT	{ $$ = $1;}
 	;
 
 
@@ -7887,6 +7952,8 @@ system_function_std_syntax
 	| ATAN
 	| ATAN2
 	| ATANH
+	| BASE64_DECODE
+	| BASE64_ENCODE
 	| BIN_AND
 	| BIN_NOT
 	| BIN_OR
@@ -7898,9 +7965,12 @@ system_function_std_syntax
 	| COS
 	| COSH
 	| COT
+	| CRC32
 	| EXP
 	| FLOOR
 	| GEN_UUID
+	| HEX_DECODE
+	| HEX_ENCODE
 	| LEFT
 	| LN
 	| LOG
@@ -7963,7 +8033,7 @@ system_function_special_syntax
 				newNode<ValueListNode>(MAKE_const_slong($3))->add($5)->add($7));
 			$$->dsqlSpecialSyntax = true;
 		}
-	| encrypt_decrypt '(' value USING valid_symbol_name opt_mode KEY value opt_iv opt_counter_type opt_counter ')'
+	| encrypt_decrypt '(' value USING valid_symbol_name crypt_opt_mode KEY value crypt_opt_iv crypt_opt_counter_type crypt_opt_counter ')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add(MAKE_str_constant(newIntlString($5->c_str()), CS_ASCII))->
@@ -8010,21 +8080,21 @@ system_function_special_syntax
 		}
 	| POSITION '(' value_list_opt  ')'
 		{ $$ = newNode<SysFuncCallNode>(*$1, $3); }
-	| rsa_encrypt_decrypt '(' value KEY value opt_lparam opt_hash ')'
+	| rsa_encrypt_decrypt '(' value KEY value crypt_opt_lparam crypt_opt_hash ')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add($5)->add($6)->
 					add(MAKE_str_constant(newIntlString($7->c_str()), CS_ASCII)));
 			$$->dsqlSpecialSyntax = true;
 		}
-	| RSA_SIGN '(' value KEY value opt_hash opt_saltlen ')'
+	| RSA_SIGN '(' value KEY value crypt_opt_hash crypt_opt_saltlen ')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add($5)->
 					add(MAKE_str_constant(newIntlString($6->c_str()), CS_ASCII))->add($7));
 			$$->dsqlSpecialSyntax = true;
 		}
-	| RSA_VERIFY'(' value SIGNATURE value KEY value opt_hash opt_saltlen ')'
+	| RSA_VERIFY'(' value SIGNATURE value KEY value crypt_opt_hash crypt_opt_saltlen ')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add($5)->add($7)->
@@ -8043,69 +8113,69 @@ rsa_encrypt_decrypt
 	: RSA_DECRYPT | RSA_ENCRYPT
 	;
 
-%type <valueExprNode> opt_lparam
-opt_lparam
-	: LPARAM value
-		{ $$ = $2; }
-	| /* nothing */
+%type <valueExprNode> crypt_opt_lparam
+crypt_opt_lparam
+	: // nothing
 		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
+	| LPARAM value
+		{ $$ = $2; }
 	;
 
-%type <metaNamePtr> opt_hash
-opt_hash
-	: HASH valid_symbol_name
-		{ $$ = $2; }
-	| /* nothing */
+%type <metaNamePtr> crypt_opt_hash
+crypt_opt_hash
+	: // nothing
 		{ $$ = newNode<MetaName>(""); }
+	| HASH valid_symbol_name
+		{ $$ = $2; }
 	;
 
-%type <valueExprNode> opt_saltlen
-opt_saltlen
-	: SALT_LENGTH value
-		{ $$ = $2; }
-	| /* nothing */
+%type <valueExprNode> crypt_opt_saltlen
+crypt_opt_saltlen
+	: // nothing
 		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
+	| SALT_LENGTH value
+		{ $$ = $2; }
 	;
 
-%type <metaNamePtr> opt_mode
-opt_mode
-	: MODE valid_symbol_name
-		{ $$ = $2; }
-	| /* nothing */
+%type <metaNamePtr> crypt_opt_mode
+crypt_opt_mode
+	: // nothing
 		{ $$ = newNode<MetaName>(""); }
-	;
-
-%type <valueExprNode> opt_iv
-opt_iv
-	: IV value
+	| MODE valid_symbol_name
 		{ $$ = $2; }
-	| /* nothing */
-		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
 	;
 
-%type <metaNamePtr> opt_counter_type
-opt_counter_type
-	: counter_type
+%type <valueExprNode> crypt_opt_iv
+crypt_opt_iv
+	: // nothing
+		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
+	| IV value
+		{ $$ = $2; }
+	;
+
+%type <metaNamePtr> crypt_opt_counter_type
+crypt_opt_counter_type
+	: // nothing
+		{ $$ = newNode<MetaName>(""); }
+	| crypt_counter_type
 		{ $$ = $1; }
-	| /* nothing */
-		{ $$ = newNode<MetaName>(""); }
 	;
 
-%type <metaNamePtr> counter_type
-counter_type
+%type <metaNamePtr> crypt_counter_type
+crypt_counter_type
 	: CTR_BIG_ENDIAN | CTR_LITTLE_ENDIAN
 	;
 
-%type <valueExprNode> opt_counter
-opt_counter
-	: counter_name value
-		{ $$ = $2; }
-	| /* nothing */
+%type <valueExprNode> crypt_opt_counter
+crypt_opt_counter
+	: // nothing
 		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
+	| crypt_counter_name value
+		{ $$ = $2; }
 	;
 
-%type <metaNamePtr> counter_name
-counter_name
+%type <metaNamePtr> crypt_counter_name
+crypt_counter_name
 	: COUNTER | CTR_LENGTH
 	;
 
@@ -8767,25 +8837,39 @@ non_reserved_word
 	| SERVERWIDE
 	| INCREMENT
 	| TRUSTED
-	| BIND					// added in FB 4.0
+	| BASE64_DECODE		// added in FB 4.0
+	| BASE64_ENCODE
+	| BIND
 	| CLEAR
+	| COUNTER
 	| COMPARE_DECFLOAT
 	| CONNECTIONS
 	| CONSISTENCY
+	| CRC32
+	| CTR_BIG_ENDIAN
+	| CTR_LENGTH
+	| CTR_LITTLE_ENDIAN
 	| CUME_DIST
 	| DEFINER
+	| EXCESS
 	| EXCLUDE
 	| FIRST_DAY
 	| FOLLOWING
+	| HEX_DECODE
+	| HEX_ENCODE
 	| IDLE
 	| INVOKER
+	| IV
 	| LAST_DAY
 	| LEGACY
 	| LIFETIME
+	| LPARAM
 	| MESSAGE
+	| MODE
 	| NATIVE
 	| NORMALIZE_DECFLOAT
 	| NTILE
+	| NUMBER
 	| OLDEST
 	| OTHERS
 	| OVERRIDING
@@ -8796,21 +8880,6 @@ non_reserved_word
 	| QUANTIZE
 	| RANGE
 	| RESET
-	| SECURITY
-	| SESSION
-	| SQL
-	| SYSTEM
-	| TIES
-	| TOTALORDER
-	| TRAPS
-	| ZONE
-	| MODE				// crypt functions
-	| IV
-	| COUNTER
-	| CTR_BIG_ENDIAN
-	| CTR_LITTLE_ENDIAN
-	| CTR_LENGTH
-	| LPARAM
 	| RSA_DECRYPT
 	| RSA_ENCRYPT
 	| RSA_PRIVATE
@@ -8818,7 +8887,15 @@ non_reserved_word
 	| RSA_SIGN
 	| RSA_VERIFY
 	| SALT_LENGTH
+	| SECURITY
+	| SESSION
 	| SIGNATURE
+	| SQL
+	| SYSTEM
+	| TIES
+	| TOTALORDER
+	| TRAPS
+	| ZONE
 	;
 
 %%

@@ -42,7 +42,7 @@
 #ifdef HAVE_PWD_H
 #include <pwd.h>
 #endif
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../utilities/ibmgr/ibmgr.h"
 #include "../utilities/ibmgr/ibmgrswi.h"
 #include "../jrd/license.h"

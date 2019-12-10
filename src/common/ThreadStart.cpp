@@ -122,12 +122,12 @@ ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, H
 	int state;
 
 #if defined (LINUX) || defined (FREEBSD)
-	if (state = pthread_create(&thread, NULL, THREAD_ENTRYPOINT, THREAD_ARG))
+	if ((state = pthread_create(&thread, NULL, THREAD_ENTRYPOINT, THREAD_ARG)))
 		Firebird::system_call_failed::raise("pthread_create", state);
 
 	if (!p_handle)
 	{
-		if (state = pthread_detach(thread))
+		if ((state = pthread_detach(thread)))
 			Firebird::system_call_failed::raise("pthread_detach", state);
 	}
 #else
@@ -309,13 +309,16 @@ ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, H
 	 * Advanced Windows by Richter pg. # 109. */
 
 	unsigned thread_id;
-	unsigned long real_handle =
-		_beginthreadex(NULL, 0, THREAD_ENTRYPOINT, THREAD_ARG, CREATE_SUSPENDED, &thread_id);
-	if (!real_handle)
+	HANDLE handle =
+		reinterpret_cast<HANDLE>(_beginthreadex(NULL, 0, THREAD_ENTRYPOINT, THREAD_ARG, CREATE_SUSPENDED, &thread_id));
+	if (!handle)
 	{
+		// Though MSDN says that _beginthreadex() returns error in errno,
+		// GetLastError() still works because RTL call no other system
+		// functions after CreateThread() in the case of error.
+		// Watch out if it is ever changed.
 		Firebird::system_call_failed::raise("_beginthreadex", GetLastError());
 	}
-	HANDLE handle = reinterpret_cast<HANDLE>(real_handle);
 
 	SetThreadPriority(handle, priority);
 

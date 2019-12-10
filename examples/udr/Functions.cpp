@@ -156,7 +156,7 @@ FB_UDR_END_FUNCTION
 /***
 create function mult (
     a decfloat(34) not null,
-    b decimal(34,6) not null
+    b decfloat(34) not null
 ) returns decfloat(34) not null
     external name 'udrcpp_example!mult'
     engine udr;

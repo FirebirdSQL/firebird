@@ -85,6 +85,11 @@ public:
 		return identifier == m.identifier && package == m.package;
 	}
 
+	bool operator !=(const QualifiedName& m) const
+	{
+		return !(identifier == m.identifier && package == m.package);
+	}
+
 public:
 	string toString() const
 	{

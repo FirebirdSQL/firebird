@@ -341,7 +341,7 @@ void Sort::get(thread_db* tdbb, ULONG** record_address)
 
 		if (record)
 		{
-			diddleKey((UCHAR*) record->sort_record_key, false);
+			diddleKey((UCHAR*) record->sort_record_key, false, false);
 		}
 	}
 	catch (const BadAlloc&)
@@ -379,7 +379,7 @@ void Sort::put(thread_db* tdbb, ULONG** record_address)
 
 		if (record != (SR*) m_end_memory)
 		{
-			diddleKey((UCHAR*) (record->sr_sort_record.sort_record_key), true);
+			diddleKey((UCHAR*) (record->sr_sort_record.sort_record_key), true, false);
 		}
 
 		// If there isn't room for the record, sort and write the run.
@@ -450,7 +450,7 @@ void Sort::sort(thread_db* tdbb)
 	{
 		if (m_last_record != (SR*) m_end_memory)
 		{
-			diddleKey((UCHAR*) KEYOF(m_last_record), true);
+			diddleKey((UCHAR*) KEYOF(m_last_record), true, false);
 		}
 
 		// If there aren't any runs, things fit nicely in memory. Just sort the mess
@@ -698,7 +698,7 @@ void Sort::releaseBuffer()
 
 
 #ifdef WORDS_BIGENDIAN
-void Sort::diddleKey(UCHAR* record, bool direction)
+void Sort::diddleKey(UCHAR* record, bool direction, bool duplicateHandling)
 {
 /**************************************
  *
@@ -804,6 +804,7 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 		case SKD_timestamp:
 		case SKD_sql_date:
 		case SKD_int64:
+		case SKD_int128:
 			*p ^= 1 << 7;
 			break;
 
@@ -818,7 +819,7 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 			break;
 
 		case SKD_dec64:
-			if (direction)
+			if (direction && !duplicateHandling)
 			{
 				((Decimal64*) p)->makeKey(lwp);
 				*p ^= 1 << 7;
@@ -842,7 +843,7 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 
 		case SKD_dec128:
 			fb_assert(false);		// diddleKey for Dec64/128 not tested on bigendians!
-			if (direction)
+			if (direction && !duplicateHandling)
 			{
 				((Decimal128*) p)->makeKey(lwp);
 				*p ^= 1 << 7;
@@ -897,7 +898,7 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 
 
 #else
-void Sort::diddleKey(UCHAR* record, bool direction)
+void Sort::diddleKey(UCHAR* record, bool direction, bool duplicateHandling)
 {
 /**************************************
  *
@@ -1005,7 +1006,7 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 				}
 			}
 
-			if (direction || !(key->skd_flags & SKD_separate_data))
+			if ((direction && !duplicateHandling) || !(key->skd_flags & SKD_separate_data))
 			{
 				longs = n >> SHIFTLONG;
 				while (--longs >= 0)
@@ -1045,6 +1046,24 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 
 			if (direction)
 				SWAP_LONGS(lwp[0], lwp[1], lw);
+			break;
+
+		case SKD_int128:
+			// INT128 fits in four long, and hence two swaps should happen
+			// here for the right order comparison using DO_32_COMPARE
+			if (!direction)
+			{
+				SWAP_LONGS(lwp[0], lwp[3], lw);
+				SWAP_LONGS(lwp[1], lwp[2], lw);
+			}
+
+			p[15] ^= 1 << 7;
+
+			if (direction)
+			{
+				SWAP_LONGS(lwp[0], lwp[3], lw);
+				SWAP_LONGS(lwp[1], lwp[2], lw);
+			}
 			break;
 
 #ifdef IEEE
@@ -1114,7 +1133,7 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 #endif // IEEE
 
 		case SKD_dec64:
-			if (direction)
+			if (direction && !duplicateHandling)
 			{
 				((Decimal64*) p)->makeKey(lwp);
 				p[3] ^= 1 << 7;
@@ -1137,7 +1156,7 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 			break;
 
 		case SKD_dec128:
-			if (direction)
+			if (direction && !duplicateHandling)
 			{
 				((Decimal128*) p)->makeKey(lwp);
 				p[3] ^= 1 << 7;
@@ -1320,19 +1339,20 @@ sort_record* Sort::getMerge(merge_control* merge)
 
 		if (l == 0 && m_dup_callback)
 		{
-			diddleKey((UCHAR*) merge->mrg_record_a, false);
-			diddleKey((UCHAR*) merge->mrg_record_b, false);
+			diddleKey((UCHAR*) merge->mrg_record_a, false, true);
+			diddleKey((UCHAR*) merge->mrg_record_b, false, true);
 
 			if ((*m_dup_callback) ((const UCHAR*) merge->mrg_record_a,
 										  (const UCHAR*) merge->mrg_record_b,
 										  m_dup_callback_arg))
 			{
 				merge->mrg_record_a = NULL;
-				diddleKey((UCHAR*) merge->mrg_record_b, true);
+				diddleKey((UCHAR*) merge->mrg_record_b, true, true);
 				continue;
 			}
-			diddleKey((UCHAR*) merge->mrg_record_a, true);
-			diddleKey((UCHAR*) merge->mrg_record_b, true);
+
+			diddleKey((UCHAR*) merge->mrg_record_a, true, true);
+			diddleKey((UCHAR*) merge->mrg_record_b, true, true);
 		}
 
 		if (l == 0)
@@ -2103,8 +2123,8 @@ void Sort::sortBuffer(thread_db* tdbb)
 		DO_32_COMPARE(p, q, l);
 		if (l == 0)
 		{
-			diddleKey((UCHAR*) *i, false);
-			diddleKey((UCHAR*) *j, false);
+			diddleKey((UCHAR*) *i, false, true);
+			diddleKey((UCHAR*) *j, false, true);
 
 			if ((*m_dup_callback) ((const UCHAR*) *i, (const UCHAR*) *j, m_dup_callback_arg))
 			{
@@ -2113,10 +2133,10 @@ void Sort::sortBuffer(thread_db* tdbb)
 			}
 			else
 			{
-				diddleKey((UCHAR*) *i, true);
+				diddleKey((UCHAR*) *i, true, true);
 			}
 
-			diddleKey((UCHAR*) *j, true);
+			diddleKey((UCHAR*) *j, true, true);
 		}
 	}
 }

@@ -76,7 +76,7 @@ typedef ULONG ISC_ULONG;
 typedef SINT64 ISC_INT64;
 typedef FB_UINT64 ISC_UINT64;
 
-#include "types_pub.h"
+#include "firebird/impl/types_pub.h"
 
 typedef ISC_QUAD SQUAD;
 

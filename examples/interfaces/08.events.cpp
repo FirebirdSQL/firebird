@@ -5,7 +5,6 @@
  *
  *					Example for the following interfaces:
  *					IEvents - returned by queEvents(), used to cancel events monitoring
- *					IEventBlock - creates and handles various blocks needed to que events
  *					IEventCallback - it's callback is invoked when event happens
  *
  * The contents of this file are subject to the Mozilla Public License Version
@@ -47,13 +46,11 @@ namespace
 			  attachment(aAttachment),
 			  counter(0),
 			  status(master->getStatus()),
-			  eventBlock(NULL),
 			  events(NULL),
 			  first(true)
 		{
-			const char* names[] = {name, NULL};
-			eventBlock = master->getUtilInterface()->createEventBlock(&status, names);
-			events = attachment->queEvents(&status, this, eventBlock->getLength(), eventBlock->getValues());
+			eveLen = isc_event_block(&eveBuffer, &eveResult, 1, name);
+			events = attachment->queEvents(&status, this, eveLen, eveBuffer);
 		}
 
 		void process(int pass)
@@ -61,16 +58,15 @@ namespace
 			if (!events)
 				return;
 
-			unsigned tot = 0;
+			ISC_ULONG tot = 0;
 			if (counter)
 			{
-				eventBlock->counts();
-				tot = eventBlock->getCounters()[0];
+				isc_event_counts(&tot, eveLen, eveBuffer, eveResult);
 
 				events->release();
 				events = NULL;
 				counter = 0;
-				events = attachment->queEvents(&status, this, eventBlock->getLength(), eventBlock->getValues());
+				events = attachment->queEvents(&status, this, eveLen, eveBuffer);
 			}
 
 			if (tot && !first)
@@ -84,7 +80,7 @@ namespace
 		// IEventCallback implementation
 		void eventCallbackFunction(unsigned int length, const ISC_UCHAR* data)
 		{
-			memcpy(eventBlock->getBuffer(), data, length);
+			memcpy(eveResult, data, length);
 			++counter;
 			if (!first)
 				printf("AST called\n");
@@ -112,7 +108,10 @@ namespace
 		{
 			if (events)
 				events->release();
-			eventBlock->dispose();
+			if (eveBuffer)
+				isc_free((char*) eveBuffer);
+			if (eveResult)
+				isc_free((char*) eveResult);
 			status.dispose();
 		}
 
@@ -120,8 +119,10 @@ namespace
 		IAttachment* attachment;
 		volatile int counter;
 		ThrowStatusWrapper status;
-		IEventBlock* eventBlock;
 		IEvents* events;
+		unsigned char* eveBuffer;
+		unsigned char* eveResult;
+		unsigned eveLen;
 		bool first;
 	};
 }

@@ -141,13 +141,13 @@
 #include "firebird.h"
 #include <string.h>
 #include <stdio.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../dsql/dsql.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/BoolNodes.h"
 #include "../dsql/ExprNodes.h"
 #include "../jrd/intl.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../jrd/jrd.h"
 #include "../jrd/constants.h"
 #include "../jrd/intl_classes.h"
@@ -179,7 +179,6 @@ using namespace Firebird;
 
 static string pass1_alias_concat(const string&, const string&);
 static void pass1_expand_contexts(DsqlContextStack& contexts, dsql_ctx* context);
-static ValueListNode* pass1_expand_select_list(DsqlCompilerScratch*, ValueListNode*, RecSourceListNode*);
 static ValueListNode* pass1_group_by_list(DsqlCompilerScratch*, ValueListNode*, ValueListNode*);
 static ValueExprNode* pass1_make_derived_field(thread_db*, DsqlCompilerScratch*, ValueExprNode*);
 static RseNode* pass1_rse(DsqlCompilerScratch*, RecordSourceNode*, ValueListNode*, RowsClause*, bool, USHORT);
@@ -557,7 +556,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 				 ++input, field = field->fld_next)
 			{
 				DEV_BLKCHK(field, dsql_type_fld);
-				MAKE_desc_from_field(&desc_node, field);
+				DsqlDescMaker::fromField(&desc_node, field);
 				PASS1_set_parameter_type(dsqlScratch, *input,
 					[&] (dsc* desc) { *desc = desc_node; },
 					false);
@@ -1143,7 +1142,7 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 		for (FB_SIZE_T count = 0; count < input->columns->getCount(); ++count)
 		{
 			ValueExprNode* select_item = rse->dsqlSelectList->items[count];
-			MAKE_desc(dsqlScratch, &select_item->nodDesc, select_item);
+			DsqlDescMaker::fromNode(dsqlScratch, &select_item->nodDesc, select_item);
 
 			// Make new derived field node.
 
@@ -1165,7 +1164,7 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 			// Auto-create dummy column name for pass1_any()
 			if (ignoreColumnChecks && !nodeIs<DerivedFieldNode>(select_item))
 			{
-				MAKE_desc(dsqlScratch, &select_item->nodDesc, select_item);
+				DsqlDescMaker::fromNode(dsqlScratch, &select_item->nodDesc, select_item);
 
 				// Construct dummy fieldname
 				char fieldname[25];
@@ -1233,13 +1232,14 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 		dsqlScratch->recursiveCtx = context;
 		dsqlScratch->context = &temp;
 
-		const string* const* saveCteAlias = dsqlScratch->currCteAlias;
+		const string* const saveCteAlias =
+			dsqlScratch->currCteAlias ? *dsqlScratch->currCteAlias : NULL;
 		dsqlScratch->resetCTEAlias(alias);
 
 		rse = PASS1_rse(dsqlScratch, input, updateLock);
 
 		if (saveCteAlias)
-			dsqlScratch->resetCTEAlias(**saveCteAlias);
+			dsqlScratch->resetCTEAlias(*saveCteAlias);
 		dsqlScratch->recursiveCtx = saveRecursiveCtx;
 
 		// Finish off by cleaning up contexts and put them into derivedContext
@@ -1288,17 +1288,16 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 
 /**
 
- 	pass1_expand_select_list
+	PASS1_expand_select_list
 
-    @brief	Expand asterisk nodes into fields.
+	@brief	Expand asterisk nodes into fields.
 
-
-    @param dsqlScratch
-    @param list
-    @param streams
+	@param dsqlScratch
+	@param list
+	@param streams
 
  **/
-static ValueListNode* pass1_expand_select_list(DsqlCompilerScratch* dsqlScratch, ValueListNode* list,
+ValueListNode* PASS1_expand_select_list(DsqlCompilerScratch* dsqlScratch, ValueListNode* list,
 	RecSourceListNode* streams)
 {
 	thread_db* tdbb = JRD_get_thread_data();
@@ -1399,15 +1398,24 @@ void PASS1_expand_select_node(DsqlCompilerScratch* dsqlScratch, ExprNode* node, 
 
 		if (context->ctx_relation)
 		{
+			thread_db* const tdbb = JRD_get_thread_data();
+
 			for (dsql_fld* field = context->ctx_relation->rel_fields; field; field = field->fld_next)
 			{
 				DEV_BLKCHK(field, dsql_type_fld);
 
 				NestConst<ValueExprNode> select_item = NULL;
+
 				if (!hide_using || context->getImplicitJoinField(field->fld_name, select_item))
 				{
 					if (!select_item)
-						select_item = MAKE_field(context, field, NULL);
+					{
+						if (context->ctx_flags & CTX_null)
+							select_item = FB_NEW_POOL(*tdbb->getDefaultPool()) NullNode(*tdbb->getDefaultPool());
+						else
+							select_item = MAKE_field(context, field, NULL);
+					}
+
 					list->add(select_item);
 				}
 			}
@@ -1892,7 +1900,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 	ValueListNode* selectList = inputRse->dsqlSelectList;
 	// First expand select list, this will expand nodes with asterisk.
 	++dsqlScratch->inSelectList;
-	selectList = pass1_expand_select_list(dsqlScratch, selectList, rse->dsqlStreams);
+	selectList = PASS1_expand_select_list(dsqlScratch, selectList, rse->dsqlStreams);
 
 	if ((flags & RecordSourceNode::DFLAG_VALUE) &&
 		(!selectList || selectList->items.getCount() > 1))
@@ -2517,7 +2525,7 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 		for (FB_SIZE_T i = 0; i < unionSource->dsqlClauses->items.getCount(); ++i)
 		{
 			ValueListNode* nod1 = nodeAs<RseNode>(unionSource->dsqlClauses->items[i])->dsqlSelectList;
-			MAKE_desc(dsqlScratch, &nod1->items[j]->nodDesc, nod1->items[j]);
+			DsqlDescMaker::fromNode(dsqlScratch, &nod1->items[j]->nodDesc, nod1->items[j]);
 			tmp_list->items[i] = nod1->items[j];
 
 			// We look only at the items->nod_arg[] when creating the
@@ -2533,7 +2541,7 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 		}
 
 		dsc desc;
-		MAKE_desc_from_list(dsqlScratch, &desc, tmp_list, "UNION");
+		DsqlDescMaker::fromList(dsqlScratch, &desc, tmp_list, "UNION");
 		// Only mark upper node as a NULL node when all sub-nodes are NULL
 		items->items[j]->nodDesc.dsc_flags &= ~DSC_null;
 		items->items[j]->nodDesc.dsc_flags |= (desc.dsc_flags & DSC_null);
@@ -2703,7 +2711,7 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 			else
 			{
 				ValueExprNode* select_item = list->items[position];
-				MAKE_desc(dsqlScratch, &select_item->nodDesc, select_item);
+				DsqlDescMaker::fromNode(dsqlScratch, &select_item->nodDesc, select_item);
 
 				if (select_item->nodDesc.dsc_dtype != desc.dsc_dtype ||
 					select_item->nodDesc.dsc_length != desc.dsc_length ||
@@ -2719,17 +2727,21 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 
 					// Pick a existing cast if available else make a new one.
 					if ((aliasNode = nodeAs<DsqlAliasNode>(select_item)) &&
-						aliasNode->value && (castNode = nodeAs<CastNode>(aliasNode->value)))
+						aliasNode->value &&
+						(castNode = nodeAs<CastNode>(aliasNode->value)))
 					{
 					}
 					else if ((derivedField = nodeAs<DerivedFieldNode>(select_item)) &&
 						(castNode = nodeAs<CastNode>(derivedField->value)))
 					{
 					}
-					else if ((castNode = nodeAs<CastNode>(select_item)))
-					{
-					}
 					else
+						castNode = nodeAs<CastNode>(select_item);
+
+					if (castNode && !DSC_EQUIV(&castNode->nodDesc, &desc, false))
+						castNode = NULL;
+
+					if (!castNode)
 					{
 						castNode = FB_NEW_POOL(*tdbb->getDefaultPool()) CastNode(
 							*tdbb->getDefaultPool());
@@ -2894,7 +2906,7 @@ DsqlMapNode* PASS1_post_map(DsqlCompilerScratch* dsqlScratch, ValueExprNode* nod
 		map->map_window = windowMap;
 	}
 
-	MAKE_desc(dsqlScratch, &node->nodDesc, node);
+	DsqlDescMaker::fromNode(dsqlScratch, &node->nodDesc, node);
 
 	return FB_NEW_POOL(*tdbb->getDefaultPool()) DsqlMapNode(*tdbb->getDefaultPool(), context, map);
 }
@@ -2953,7 +2965,7 @@ bool PASS1_set_parameter_type(DsqlCompilerScratch* dsqlScratch, ValueExprNode* i
 
 	auto makeDesc = [&] (dsc* desc)
 		{
-			MAKE_desc(dsqlScratch, &node->nodDesc, node);
+			DsqlDescMaker::fromNode(dsqlScratch, &node->nodDesc, node);
 			*desc = node->nodDesc;
 		};
 

@@ -44,7 +44,7 @@
 #include "../common/ThreadStart.h"
 #include "../common/utils_proto.h"
 #include "../common/dllinst.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../yvalve/utl_proto.h"
 
 using namespace Firebird;
@@ -349,19 +349,15 @@ public:
 			timerHolder.init();
 
 			TimerEntry* curTimer = getTimer(timer);
-			if (!curTimer)
-			{
-				TimerEntry newTimer;
-
-				newTimer.timer = timer;
-				newTimer.fireTime = curTime() + microSeconds;
-				timerQueue->add(newTimer);
-				timer->addRef();
-			}
+			if (curTimer)
+				timerQueue->remove(curTimer);
 			else
-			{
-				curTimer->fireTime = curTime() + microSeconds;
-			}
+				timer->addRef();
+
+			TimerEntry newTimer;
+			newTimer.timer = timer;
+			newTimer.fireTime = curTime() + microSeconds;
+			timerQueue->add(newTimer);
 
 			timerWakeup->release();
 		}

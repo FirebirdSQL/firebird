@@ -1,3 +1,4 @@
+Makefile
 src/*.o
 src/*.d
 src/*.a

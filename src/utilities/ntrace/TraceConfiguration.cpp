@@ -26,9 +26,7 @@
  */
 
 #include "TraceConfiguration.h"
-#include "TraceUnicodeUtils.h"
-#include "../../jrd/evl_string.h"
-#include "../../jrd/SimilarToMatcher.h"
+#include "../../common/SimilarToRegex.h"
 #include "../../common/isc_f_proto.h"
 
 using namespace Firebird;
@@ -67,26 +65,6 @@ void TraceCfgReader::readTraceConfiguration(const char* text,
 	}
 
 
-namespace
-{
-	template <typename PrevConverter = Jrd::NullStrConverter>
-	class SystemToUtf8Converter : public PrevConverter
-	{
-	public:
-		SystemToUtf8Converter(MemoryPool& pool, Jrd::TextType* obj, const UCHAR*& str, SLONG& len)
-			: PrevConverter(pool, obj, str, len)
-		{
-			buffer.assign(reinterpret_cast<const char*>(str), len);
-			ISC_systemToUtf8(buffer);
-			str = reinterpret_cast<const UCHAR*>(buffer.c_str());
-			len = buffer.length();
-		}
-
-	private:
-		string buffer;
-	};
-}
-
 #define ERROR_PREFIX "error while parsing trace configuration\n\t"
 
 void TraceCfgReader::readConfig()
@@ -109,7 +87,10 @@ void TraceCfgReader::readConfig()
 
 		const bool isDatabase = (section->name == "database");
 		if (!isDatabase && section->name != "services")
-			continue;
+			//continue;
+			fatal_exception::raiseFmt(ERROR_PREFIX
+				"line %d: wrong section header, \"database\" or \"service\" is expected",
+				section->line);
 
 		const ConfigFile::String pattern = section->value;
 		bool match = false;
@@ -142,7 +123,10 @@ void TraceCfgReader::readConfig()
 		}
 		else if (isDatabase && !m_databaseName.empty())
 		{
-			if (m_databaseName == pattern.c_str())
+			PathName noQuotePattern = pattern.ToPathName();
+			noQuotePattern.alltrim(" '\'");
+
+			if (m_databaseName == noQuotePattern)
 				match = exactMatch = true;
 			else
 			{
@@ -150,31 +134,28 @@ void TraceCfgReader::readConfig()
 				try
 				{
 #ifdef WIN_NT	// !CASE_SENSITIVITY
-					typedef Jrd::UpcaseConverter<SystemToUtf8Converter<> > SimilarConverter;
+					const unsigned regexFlags = SimilarToFlag::CASE_INSENSITIVE;
 #else
-					typedef SystemToUtf8Converter<> SimilarConverter;
+					const unsigned regexFlags = 0;
 #endif
+					string utf8Pattern = pattern;
+					ISC_systemToUtf8(utf8Pattern);
 
-					UnicodeCollationHolder unicodeCollation(*getDefaultMemoryPool());
-					Jrd::TextType* textType = unicodeCollation.getTextType();
-
-					SimilarToMatcher<ULONG, Jrd::CanonicalConverter<SimilarConverter> > matcher(
-						*getDefaultMemoryPool(), textType, (const UCHAR*) pattern.c_str(),
-						pattern.length(), '\\', true);
+					SimilarToRegex matcher(*getDefaultMemoryPool(), regexFlags,
+						utf8Pattern.c_str(), utf8Pattern.length(), "\\", 1);
 
 					regExpOk = true;
 
-					matcher.process((const UCHAR*) m_databaseName.c_str(), m_databaseName.length());
-					if (matcher.result())
-					{
-						for (unsigned i = 0;
-							 i <= matcher.getNumBranches() && i < FB_NELEM(m_subpatterns); ++i)
-						{
-							unsigned start, length;
-							matcher.getBranchInfo(i, &start, &length);
+					PathName utf8DatabaseName = m_databaseName;
+					ISC_systemToUtf8(utf8DatabaseName);
+					Array<SimilarToRegex::MatchPos> matchPosArray;
 
-							m_subpatterns[i].start = start;
-							m_subpatterns[i].end = start + length;
+					if (matcher.matches(utf8DatabaseName.c_str(), utf8DatabaseName.length(), &matchPosArray))
+					{
+						for (unsigned i = 0; i < matchPosArray.getCount() && i < FB_NELEM(m_subpatterns); ++i)
+						{
+							m_subpatterns[i].start = matchPosArray[i].start;
+							m_subpatterns[i].end = matchPosArray[i].start + matchPosArray[i].length;
 						}
 
 						match = exactMatch = true;
@@ -280,6 +261,10 @@ ULONG TraceCfgReader::parseUInteger(const ConfigFile::Parameter* el) const
 void TraceCfgReader::expandPattern(const ConfigFile::Parameter* el, PathName& valueToExpand)
 {
 	valueToExpand = el->value.ToPathName();
+
+	// strip quotes around value, if any
+	valueToExpand.alltrim(" '\"");
+
 	PathName::size_type pos = 0;
 	while (pos < valueToExpand.length())
 	{

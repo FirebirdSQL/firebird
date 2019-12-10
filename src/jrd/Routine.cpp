@@ -44,7 +44,7 @@ MsgMetadata* Routine::createMetadata(const Array<NestConst<Parameter> >& paramet
 		 ++i)
 	{
 		dsc d((*i)->prm_desc);
-		if (isExtern && d.dsc_dtype == dtype_dec_fixed)
+		if (isExtern && d.dsc_dtype == dtype_int128)
 			d.dsc_dtype = dtype_dec128;
 		metadata->addItem((*i)->prm_name, (*i)->prm_nullable, d);
 	}
@@ -322,6 +322,7 @@ void Routine::remove(thread_db* tdbb)
 		setSecurityName("");
 		setId(0);
 		setDefaultCount(0);
+		releaseExternal();
 	}
 }
 

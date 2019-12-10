@@ -1302,7 +1302,7 @@ USHORT DFW_assign_index_type(thread_db* tdbb, const Firebird::MetaName& name, SS
 		return idx_boolean;
 	case dtype_dec64:
 	case dtype_dec128:
-	case dtype_dec_fixed:
+	case dtype_int128:
 		return idx_decimal;
 	default:
 		return idx_numeric;
@@ -1497,8 +1497,9 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 	{
 		more = false;
 		try {
-			tdbb->tdbb_flags |= (TDBB_dont_post_dfw | TDBB_use_db_page_space |
+			const auto flags = (TDBB_dont_post_dfw | TDBB_use_db_page_space |
 				(phase == 0 ? TDBB_dfw_cleanup : 0));
+			AutoSetRestoreFlag<ULONG> dfwFlags(&tdbb->tdbb_flags, flags, true);
 
 			for (const deferred_task* task = task_table; task->task_type != dfw_null; ++task)
 			{
@@ -1519,8 +1520,6 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 				}
 			}
 
-			tdbb->tdbb_flags &= ~(TDBB_dont_post_dfw | TDBB_use_db_page_space | TDBB_dfw_cleanup);
-
 			if (!phase)
 			{
 				fb_utils::copyStatus(tdbb->tdbb_status_vector, &err_status);
@@ -1531,8 +1530,6 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 		}
 		catch (const Firebird::Exception& ex)
 		{
-			tdbb->tdbb_flags &= ~(TDBB_dont_post_dfw | TDBB_use_db_page_space | TDBB_dfw_cleanup);
-
 			// Do any necessary cleanup
 			if (!phase)
 			{
@@ -3076,6 +3073,34 @@ static void cleanup_index_creation(thread_db* tdbb, DeferredWork* work, jrd_tra*
 					IDXN.RDB$INDEX_ID.NULL = TRUE;
 				END_MODIFY
 			}
+
+			if (!IDXN.RDB$FOREIGN_KEY.NULL)
+			{
+				index_desc idx;
+				idx.idx_id = idx_invalid;
+				idx.idx_flags = idx_foreign;
+
+				jrd_rel* partner_relation = NULL;
+				if (MET_lookup_partner(tdbb, relation, &idx, work->dfw_name.c_str()))
+				{
+					partner_relation = MET_lookup_relation_id(tdbb, idx.idx_primary_relation, true);
+				}
+
+				if (partner_relation)
+				{
+					// signal to other processes about new constraint
+					relation->rel_flags |= REL_check_partners;
+					LCK_lock(tdbb, relation->rel_partners_lock, LCK_EX, LCK_WAIT);
+					LCK_release(tdbb, relation->rel_partners_lock);
+
+					if (relation != partner_relation)
+					{
+						partner_relation->rel_flags |= REL_check_partners;
+						LCK_lock(tdbb, partner_relation->rel_partners_lock, LCK_EX, LCK_WAIT);
+						LCK_release(tdbb, partner_relation->rel_partners_lock);
+					}
+				}
+			}
 		}
 	}
 	END_FOR
@@ -3148,13 +3173,13 @@ static bool compute_security(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 		{
 			// Get security class.  This may return NULL if it doesn't exist
 
-			SecurityClass* s_class = SCL_recompute_class(tdbb, work->dfw_name.c_str());
+			SCL_clear_classes(tdbb, work->dfw_name.c_str());
 
 			AutoRequest handle;
 			FOR(REQUEST_HANDLE handle) X IN RDB$DATABASE
 				WITH X.RDB$SECURITY_CLASS EQ work->dfw_name.c_str()
 			{
-				attachment->att_security_class = s_class;
+				attachment->att_security_class = SCL_get_class(tdbb, work->dfw_name.c_str());
 			}
 			END_FOR
 		}
@@ -3848,7 +3873,7 @@ static void setupSpecificCollationAttributes(thread_db* tdbb, jrd_tra* transacti
 
 	SET_TDBB(tdbb);
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
-	AutoRequest handle;
+	AutoCacheRequest handle(tdbb, drq_m_coll_attrs, DYN_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
 		COLL IN RDB$COLLATIONS
@@ -5888,7 +5913,7 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 							AutoSetRestore2<jrd_req*, thread_db> autoRequest(tdbb,
 								&thread_db::getRequest, &thread_db::setRequest, defaultRequest);
 
-							TimeZoneUtil::validateTimeStampUtc(defaultRequest->req_timestamp_utc);
+							TimeZoneUtil::validateGmtTimeStamp(defaultRequest->req_gmt_timestamp);
 
 							TRA_attach_request(transaction, defaultRequest);
 							dsc* result = EVL_expr(tdbb, defaultRequest, defaultNode);

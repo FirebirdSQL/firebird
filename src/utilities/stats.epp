@@ -22,7 +22,7 @@
  */
 
 #include "firebird.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
 DATABASE DB = "yachts.lnk";
 

@@ -95,9 +95,11 @@ public:
 		KEY_CPU_AFFINITY_MASK,
 		KEY_TCP_REMOTE_BUFFER_SIZE,
 		KEY_TCP_NO_NAGLE,
+		KEY_TCP_LOOPBACK_FAST_PATH,
 		KEY_DEFAULT_DB_CACHE_PAGES,
 		KEY_CONNECTION_TIMEOUT,
 		KEY_DUMMY_PACKET_INTERVAL,
+		KEY_DEFAULT_TIME_ZONE,
 		KEY_LOCK_MEM_SIZE,
 		KEY_LOCK_HASH_SLOTS,
 		KEY_LOCK_ACQUIRE_SPINS,
@@ -150,8 +152,10 @@ public:
 		KEY_EXT_CONN_POOL_SIZE,
 		KEY_EXT_CONN_POOL_LIFETIME,
 		KEY_SNAPSHOTS_MEM_SIZE,
-		KEY_TPC_BLOCK_SIZE,
+		KEY_TIP_CACHE_BLOCK_SIZE,
 		KEY_READ_CONSISTENCY,
+		KEY_CLEAR_GTT_RETAINING,
+		KEY_DATA_TYPE_COMPATIBILITY,
 		MAX_CONFIG_KEY		// keep it last
 	};
 
@@ -251,6 +255,9 @@ public:
 	// Disable Nagle algorithm
 	bool getTcpNoNagle() const;
 
+	// Enable or disable the TCP Loopback Fast Path option
+	bool getTcpLoopbackFastPath() const;
+
 	// Let IPv6 socket accept only IPv6 packets
 	bool getIPv6V6Only() const;
 
@@ -262,6 +269,8 @@ public:
 
 	// Dummy packet interval
 	int getDummyPacketInterval() const;
+
+	static const char* getDefaultTimeZone();
 
 	// Lock manager memory size
 	int getLockMemSize() const;
@@ -377,9 +386,13 @@ public:
 
 	ULONG getSnapshotsMemSize() const;
 
-	ULONG getTpcBlockSize() const;
+	ULONG getTipCacheBlockSize() const;
 
 	bool getReadConsistency() const;
+
+	bool getClearGTTAtRetaining() const;
+
+	const char* getDataTypeCompatibility() const;
 };
 
 // Implementation of interface to access master configuration file
@@ -396,6 +409,7 @@ public:
 	SINT64 asInteger(unsigned int key);
 	const char* asString(unsigned int key);
 	FB_BOOLEAN asBoolean(unsigned int key);
+	unsigned int getVersion(Firebird::CheckStatusWrapper* status);
 
 	int release();
 

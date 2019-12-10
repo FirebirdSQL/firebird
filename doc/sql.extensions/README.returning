@@ -52,6 +52,7 @@ RETURNING clause
     7. In MERGE WHEN MATCHED UPDATE and MERGE WHEN NOT MATCHED statements, unqualified or qualified
        by table name/alias fields are resolved to NEW. In MERGE WHEN MATCHED DELETE they are
        resolved to OLD.
+    8. Since v4 it's possible to use * and alias.*, as well OLD.* and NEW.* where applicable.
 
   Limitations:
     1. The modify statement (INSERT, UPDATE, DELETE, MERGE) should operate in no more than one record

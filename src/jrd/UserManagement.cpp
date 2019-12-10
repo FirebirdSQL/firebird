@@ -362,7 +362,7 @@ void UserManagement::execute(USHORT id)
 
 		OldAttributes oldAttributes;
 		int ret = manager->execute(&statusWrapper, &cmd, &oldAttributes);
-		if (ret == 0 || status.getErrors()[1] != isc_missing_data_structures)
+		if ((ret == 0 || status.getErrors()[1] != isc_missing_data_structures) && (!command->silent))
 			checkSecurityResult(ret, &status, command->userName()->get(), command->operation());
 		else
 			statusWrapper.init();
@@ -456,7 +456,8 @@ void UserManagement::execute(USHORT id)
 	}
 
 	int errcode = manager->execute(&statusWrapper, command, NULL);
-	checkSecurityResult(errcode, &status, command->userName()->get(), command->operation());
+	if (!command->silent)
+		checkSecurityResult(errcode, &status, command->userName()->get(), command->operation());
 
 	delete commands[id];
 	commands[id] = NULL;

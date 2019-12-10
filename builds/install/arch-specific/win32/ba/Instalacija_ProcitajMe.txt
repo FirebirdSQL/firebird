@@ -120,12 +120,13 @@ o Ako je Firebird pokrenut kao aplikacija (umjesto kao
  deinstalacija ce zavrsiti s greskom.
  Moracete izbrisati ostatke rucno.
 
-o Deinstalacija ostavlja 5 datoteka u install
+o Deinstalacija ostavlja 6 datoteka u install
   direktoriju:
 
   - databases.conf
   - firebird.conf
   - fbtrace.conf
+  - replication.conf
   - firebird.log
   - security4.fdb
 

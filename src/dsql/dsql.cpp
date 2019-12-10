@@ -37,7 +37,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../dsql/dsql.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/align.h"
 #include "../jrd/intl.h"
 #include "../common/intlobj_new.h"
@@ -64,6 +64,7 @@
 #include "../jrd/opt_proto.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/recsrc/RecordSource.h"
+#include "../jrd/replication/Publisher.h"
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceDSQLHelpers.h"
 #include "../common/classes/init.h"
@@ -878,7 +879,12 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 
 		try
 		{
+			AutoSetRestoreFlag<ULONG> execDdl(&tdbb->tdbb_flags, TDBB_repl_sql, true);
+
 			node->executeDdl(tdbb, internalScratch, req_transaction);
+
+			if (node->mustBeReplicated())
+				REPL_exec_sql(tdbb, req_transaction, *getStatement()->getSqlText());
 		}
 		catch (status_exception& ex)
 		{
@@ -1142,7 +1148,7 @@ void dsql_req::mapInOut(thread_db* tdbb, bool toExternal, const dsql_msg* messag
 				desc.dsc_address = dsql_msg_buf + (IPTR) desc.dsc_address;
 
 				if (notNull)
-					MOVD_move(tdbb, &parDesc, &desc, toExternal);
+					MOVD_move(tdbb, &parDesc, &desc);
 				else
 					memset(desc.dsc_address, 0, desc.dsc_length);
 			}
@@ -1150,7 +1156,7 @@ void dsql_req::mapInOut(thread_db* tdbb, bool toExternal, const dsql_msg* messag
 			{
 				// Safe cast because desc is used as source only.
 				desc.dsc_address = const_cast<UCHAR*>(in_dsql_msg_buf) + (IPTR) desc.dsc_address;
-				MOVD_move(tdbb, &desc, &parDesc, toExternal);
+				MOVD_move(tdbb, &desc, &parDesc);
 			}
 			else
 				memset(parDesc.dsc_address, 0, parDesc.dsc_length);
@@ -1185,7 +1191,7 @@ void dsql_req::mapInOut(thread_db* tdbb, bool toExternal, const dsql_msg* messag
 		dsc desc = parameter->par_desc;
 		desc.dsc_address = msgBuffer + (IPTR) desc.dsc_address;
 
-		MOVD_move(tdbb, &parentDesc, &desc, false);
+		MOVD_move(tdbb, &parentDesc, &desc);
 
 		dsql_par* null_ind = parameter->par_null;
 		if (null_ind != NULL)
@@ -1215,7 +1221,7 @@ void dsql_req::mapInOut(thread_db* tdbb, bool toExternal, const dsql_msg* messag
 		dsc desc = parameter->par_desc;
 		desc.dsc_address = msgBuffer + (IPTR) desc.dsc_address;
 
-		MOVD_move(tdbb, &parentDesc, &desc, false);
+		MOVD_move(tdbb, &parentDesc, &desc);
 
 		dsql_par* null_ind = parameter->par_null;
 		if (null_ind != NULL)
@@ -1410,6 +1416,9 @@ static dsql_req* prepareStatement(thread_db* tdbb, dsql_dbb* database, jrd_tra* 
 		DsqlCompiledStatement* statement = FB_NEW_POOL(*statementPool) DsqlCompiledStatement(*statementPool);
 
 		scratchPool = database->createPool();
+
+		if (!transaction)		// Useful for session management statements
+			transaction = database->dbb_attachment->getSysTransaction();
 
 		DsqlCompilerScratch* scratch = FB_NEW_POOL(*scratchPool) DsqlCompilerScratch(*scratchPool, database,
 			transaction, statement);
@@ -2166,21 +2175,36 @@ static UCHAR* var_info(const dsql_msg* message,
 
 		if (param->par_index >= first_index)
 		{
+			dsc desc = param->par_desc;
+
+			// Scan sources of coercion rules in reverse order to observe
+			// 'last entered in use' rule. Start with dynamic binding rules ...
+			if (!attachment->att_bindings.coerce(&desc))
+			{
+				// next - given in DPB ...
+				if (!attachment->getInitialBindings()->coerce(&desc))
+				{
+					Database* dbb = tdbb->getDatabase();
+					// and finally - rules from .conf files.
+					dbb->getBindings()->coerce(&desc, dbb->dbb_compatibility_index);
+				}
+			}
+
 			SLONG sql_len, sql_sub_type, sql_scale, sql_type;
-			param->par_desc.getSqlInfo(&sql_len, &sql_sub_type, &sql_scale, &sql_type);
+			desc.getSqlInfo(&sql_len, &sql_sub_type, &sql_scale, &sql_type);
 
 			if (input_message &&
-				(param->par_desc.dsc_dtype == dtype_text || param->par_is_text) &&
-				(param->par_desc.dsc_flags & DSC_null))
+				(desc.dsc_dtype == dtype_text || param->par_is_text) &&
+				(desc.dsc_flags & DSC_null))
 			{
 				sql_type = SQL_NULL;
 				sql_len = 0;
 				sql_sub_type = 0;
 			}
-			else if (param->par_desc.dsc_dtype == dtype_varying && param->par_is_text)
+			else if (desc.dsc_dtype == dtype_varying && param->par_is_text)
 				sql_type = SQL_TEXT;
 
-			if (sql_type && (param->par_desc.dsc_flags & DSC_nullable))
+			if (sql_type && (desc.dsc_flags & DSC_nullable))
 				sql_type |= 0x1;
 
 			for (const UCHAR* describe = items; describe < end_describe;)

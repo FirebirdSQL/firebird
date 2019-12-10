@@ -290,12 +290,12 @@ public:
 		{}
 
 	public:
-		bool operator==(const Iterator& other)
+		bool operator==(const Iterator& other) const
 		{
 			return (m_counts == other.m_counts);
 		}
 
-		bool operator!=(const Iterator& other)
+		bool operator!=(const Iterator& other) const
 		{
 			return (m_counts != other.m_counts);
 		}

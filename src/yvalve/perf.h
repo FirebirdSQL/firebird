@@ -31,9 +31,7 @@
 #ifndef JRD_PERF_H
 #define JRD_PERF_H
 
-#ifdef HAVE_LIBIO_H
-#include <libio.h>
-#endif
+#include <stdio.h>
 
 #ifdef HAVE_TIMES
 #include <sys/types.h>

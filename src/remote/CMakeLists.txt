@@ -46,6 +46,7 @@ add_src_win32(fbserver_src
     server/os/win32/server.ico
     server/os/win32/caution.ico
     server/os/win32/window.rc
+    server/ReplServer.cpp
     server/server.cpp
 )
 add_src_unix(fbserver_src
@@ -61,5 +62,5 @@ add_src_unix(fbserver_src
 )
 
 add_executable              (fbserver WIN32 ${fbserver_src})
-target_link_libraries       (fbserver remote common yvalve ${LIB_comctl32})
+target_link_libraries       (fbserver remote common yvalve engine_common ${LIB_comctl32})
 set_target_properties       (fbserver PROPERTIES OUTPUT_NAME firebird)

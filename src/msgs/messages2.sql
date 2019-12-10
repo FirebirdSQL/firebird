@@ -941,8 +941,8 @@ Data source : @4', NULL, NULL)
 ('subproc_not_impl', NULL, 'StmtNodes.cpp', NULL, 0, 831, NULL, 'Sub-procedure @1 was declared but not implemented', NULL, NULL);
 ('sysf_invalid_hash_algorithm', NULL, 'SysFunction.cpp', NULL, 0, 832, NULL, 'Invalid HASH algorithm @1', NULL, NULL);
 ('expression_eval_index', NULL, 'btr.cpp', NULL, 0, 833, NULL, 'Expression evaluation error for index "@1" on table "@2"', NULL, NULL);
-('decfloat_trap', NULL, 'StmtNodes.cpp', NULL, 0, 834, NULL, 'Invalid decfloat trap state @1', NULL, NULL);
-('decfloat_round', NULL, 'StmtNodes.cpp', NULL, 0, 835, NULL, 'Invalid decfloat rounding mode @1', NULL, NULL);
+('invalid_decfloat_trap', NULL, 'StmtNodes.cpp', NULL, 0, 834, NULL, 'Invalid decfloat trap state @1', NULL, NULL);
+('invalid_decfloat_round', NULL, 'StmtNodes.cpp', NULL, 0, 835, NULL, 'Invalid decfloat rounding mode @1', NULL, NULL);
 ('sysf_invalid_first_last_part', 'evlFirstLastDay', 'SysFunction.cpp', NULL, 0, 836, NULL, 'Invalid part @1 to calculate the @1 of a DATE/TIMESTAMP', NULL, NULL)
 ('sysf_invalid_date_timestamp', 'evlFirstLastDay', 'SysFunction.cpp', NULL, 0, 837, NULL, 'Expected DATE/TIMESTAMP value in @1', NULL, NULL)
 ('precision_err2', NULL, 'dsql parse.y', NULL, 0, 838, NULL, 'Precision must be from @1 to @2', NULL, NULL);
@@ -1000,6 +1000,55 @@ Data source : @4', NULL, NULL)
 ('plugin_name', NULL, 'CryptoManager.cpp', NULL, 0, 890, NULL, 'Plugin @1:', NULL, NULL);
 ('parameter_name', 'ProcedureManager::checkDependencies', 'dfw.e', NULL, 0, 891, NULL, 'PARAMETER @1', NULL, NULL);
 ('file_starting_page_err', 'add_file', 'dfw.epp', NULL, 0, 892, NULL, 'Starting page number for file @1 must be @2 or greater', NULL, NULL);
+('invalid_timezone_offset', NULL, 'TimeZoneUtil.cpp', NULL, 0, 893, NULL, 'Invalid time zone offset: @1 - must be between -14:00 and +14:00', NULL, NULL);
+('invalid_timezone_region', NULL, 'TimeZoneUtil.cpp', NULL, 0, 894, NULL, 'Invalid time zone region: @1', NULL, NULL);
+('invalid_timezone_id', NULL, 'TimeZoneUtil.cpp', NULL, 0, 895, NULL, 'Invalid time zone ID: @1', NULL, NULL);
+('tom_decode64len', NULL, 'SysFunction.cpp', NULL, 0, 896, NULL, 'Wrong base64 text length @1, should be multiple of 4', NULL, NULL);
+('tom_strblob', NULL, 'SysFunction.cpp', NULL, 0, 897, NULL, 'Invalid first parameter datatype - need string or blob', NULL, NULL);
+('tom_reg', NULL, 'SysFunction.cpp', NULL, 0, 898, NULL, 'Error registering @1 - probably bad tomcrypt library', NULL, NULL);
+('tom_algorithm', NULL, 'SysFunction.cpp', NULL, 0, 899, NULL, 'Unknown crypt algorithm @1 in USING clause', NULL, NULL);
+('tom_mode_miss', NULL, 'SysFunction.cpp', NULL, 0, 900, NULL, 'Should specify mode parameter for symmetric cipher', NULL, NULL);
+('tom_mode_bad', NULL, 'SysFunction.cpp', NULL, 0, 901, NULL, 'Unknown symmetric crypt mode specified', NULL, NULL);
+('tom_no_mode', NULL, 'SysFunction.cpp', NULL, 0, 902, NULL, 'Mode parameter makes no sense for chosen cipher', NULL, NULL);
+('tom_iv_miss', NULL, 'SysFunction.cpp', NULL, 0, 903, NULL, 'Should specify initialization vector (IV) for chosen cipher and/or mode', NULL, NULL);
+('tom_no_iv', NULL, 'SysFunction.cpp', NULL, 0, 904, NULL, 'Initialization vector (IV) makes no sense for chosen cipher and/or mode', NULL, NULL);
+('tom_ctrtype_bad', NULL, 'SysFunction.cpp', NULL, 0, 905, NULL, 'Invalid counter endianess @1', NULL, NULL);
+('tom_no_ctrtype', NULL, 'SysFunction.cpp', NULL, 0, 906, NULL, 'Counter endianess parameter is not used in mode @1', NULL, NULL);
+('tom_ctr_big', NULL, 'SysFunction.cpp', NULL, 0, 907, NULL, 'Too big counter value @1, maximum @2 can be used', NULL, NULL);
+('tom_no_ctr', NULL, 'SysFunction.cpp', NULL, 0, 908, NULL, 'Counter length/value parameter is not used with @1 @2', NULL, NULL);
+('tom_iv_length', NULL, 'SysFunction.cpp', NULL, 0, 909, NULL, 'Invalid initialization vector (IV) length @1, need @2', NULL, NULL);
+('tom_error', NULL, 'SysFunction.cpp', NULL, 0, 910, NULL, 'TomCrypt library error: @1', NULL, NULL);
+('tom_yarrow_start', NULL, 'SysFunction.cpp', NULL, 0, 911, NULL, 'Starting PRNG yarrow', NULL, NULL);
+('tom_yarrow_setup', NULL, 'SysFunction.cpp', NULL, 0, 912, NULL, 'Setting up PRNG yarrow', NULL, NULL);
+('tom_init_mode', NULL, 'SysFunction.cpp', NULL, 0, 913, NULL, 'Initializing @1 mode', NULL, NULL);
+('tom_crypt_mode', NULL, 'SysFunction.cpp', NULL, 0, 914, NULL, 'Encrypting in @1 mode', NULL, NULL);
+('tom_decrypt_mode', NULL, 'SysFunction.cpp', NULL, 0, 915, NULL, 'Decrypting in @1 mode', NULL, NULL);
+('tom_init_cip', NULL, 'SysFunction.cpp', NULL, 0, 916, NULL, 'Initializing cipher @1', NULL, NULL);
+('tom_crypt_cip', NULL, 'SysFunction.cpp', NULL, 0, 917, NULL, 'Encrypting using cipher @1', NULL, NULL);
+('tom_decrypt_cip', NULL, 'SysFunction.cpp', NULL, 0, 918, NULL, 'Decrypting using cipher @1', NULL, NULL);
+('tom_setup_cip', NULL, 'SysFunction.cpp', NULL, 0, 919, NULL, 'Setting initialization vector (IV) for @1', NULL, NULL);
+('tom_setup_chacha', NULL, 'SysFunction.cpp', NULL, 0, 920, NULL, 'Invalid initialization vector (IV) length @1, need  8 or 12', NULL, NULL);
+('tom_encode', NULL, 'SysFunction.cpp', NULL, 0, 921, NULL, 'Encoding @1', NULL, NULL);
+('tom_decode', NULL, 'SysFunction.cpp', NULL, 0, 922, NULL, 'Decoding @1', NULL, NULL);
+('tom_rsa_import', NULL, 'SysFunction.cpp', NULL, 0, 923, NULL, 'Importing RSA key', NULL, NULL);
+('tom_oaep', NULL, 'SysFunction.cpp', NULL, 0, 924, NULL, 'Invalid OAEP packet', NULL, NULL);
+('tom_hash_bad', NULL, 'SysFunction.cpp', NULL, 0, 925, NULL, 'Unknown hash algorithm @1', NULL, NULL);
+('tom_rsa_make', NULL, 'SysFunction.cpp', NULL, 0, 926, NULL, 'Making RSA key', NULL, NULL);
+('tom_rsa_export', NULL, 'SysFunction.cpp', NULL, 0, 927, NULL, 'Exporting @1 RSA key', NULL, NULL);
+('tom_rsa_sign', NULL, 'SysFunction.cpp', NULL, 0, 928, NULL, 'RSA-signing data', NULL, NULL);
+('tom_rsa_verify', NULL, 'SysFunction.cpp', NULL, 0, 929, NULL, 'Verifying RSA-signed data', NULL, NULL);
+('tom_chacha_key', NULL, 'SysFunction.cpp', NULL, 0, 930, NULL, 'Invalid key length @1, need 16 or 32', NULL, NULL);
+('bad_repl_handle', NULL, 'jrd.cpp', NULL, 0, 931, NULL, 'invalid replicator handle', NULL, NULL);
+('tra_snapshot_does_not_exist', NULL, 'tpc.cpp', NULL, 0, 932, NULL, 'Transaction''s base snapshot number does not exist', NULL, NULL);
+('eds_input_prm_not_used', NULL, 'ExtDS.cpp', NULL, 0, 933, NULL, 'Input parameter ''@1'' is not used in SQL query text', NULL, NULL);
+('effective_user', NULL, NULL, NULL, 0, 934, NULL, 'Effective user is @1', NULL, NULL);
+('invalid_time_zone_bind', NULL, 'jrd.cpp', NULL, 0, 935, NULL, 'Invalid time zone bind mode @1', NULL, NULL);
+('invalid_decfloat_bind', NULL, 'jrd.cpp', NULL, 0, 936, NULL, 'Invalid decfloat bind mode @1', NULL, NULL);
+('odd_hex_len', NULL, 'SysFunction.cpp', NULL, 0, 937, NULL, 'Invalid hex text length @1, should be multiple of 2', NULL, NULL);
+('invalid_hex_digit', NULL, 'SysFunction.cpp', NULL, 0, 938, NULL, 'Invalid hex digit @1 at position @2', NULL, NULL);
+('bind_err', NULL, 'jrd.cpp', NULL, 0, 939, NULL, 'Error processing isc_dpb_set_bind clumplet "@1"', NULL, NULL);
+('bind_statement', NULL, 'jrd.cpp', NULL, 0, 940, NULL, 'The following statement failed: @1', NULL, NULL);
+('bind_convert', NULL, 'Coercion.cpp', NULL, 0, 941, NULL, 'Can not convert @1 to @2', NULL, NULL);
 -- QLI
 (NULL, NULL, NULL, NULL, 1, 0, NULL, 'expected type', NULL, NULL);
 (NULL, NULL, NULL, NULL, 1, 1, NULL, 'bad block type', NULL, NULL);
@@ -1746,6 +1795,8 @@ COMMIT WORK;
 ('gfix_opt_icu', 'ALICE_gfix', 'alice.c', NULL, 3, 131, NULL, '   -icu                 fix database to be usable with present ICU version', NULL, NULL);
 ('gfix_opt_role', 'ALICE_gfix', 'alice.c', NULL, 3, 132, NULL, '   -role                set SQL role name', NULL, NULL);
 ('gfix_role_req', 'ALICE_gfix', 'alice.c', NULL, 3, 133, NULL, 'SQL role name required', NULL, NULL);
+('gfix_opt_repl', 'ALICE_gfix', 'alice.c', NULL, 3, 134, NULL, '   -repl(ica)           replica mode <none / read_only / read_write>', NULL, NULL);
+('gfix_repl_mode_req', 'ALICE_gfix', 'alice.c', NULL, 3, 135, NULL, 'replica mode (none / read_only / read_write) required', NULL, NULL);
 -- DSQL
 ('dsql_dbkey_from_non_table', 'MAKE_desc', 'make.c', NULL, 7, 2, NULL, 'Cannot SELECT RDB$DB_KEY from a stored procedure.', NULL, NULL);
 ('dsql_transitional_numeric', 'dsql_yyparse', 'parse.y', NULL, 7, 3, NULL, 'Precision 10 to 18 changed from DOUBLE PRECISION in SQL dialect 1 to 64-bit scaled integer in SQL dialect 3', NULL, NULL);
@@ -2082,17 +2133,17 @@ COMMIT WORK;
 ('dyn_cant_use_zero_inc_ident', NULL, 'DdlNodes.epp', NULL, 8, 296, NULL, 'INCREMENT BY 0 is an illegal option for identity column @1 of table @2', NULL, NULL);
 ('dyn_concur_alter_database', 'AlterDatabaseNode::execute', 'DdlNodes.epp', NULL, 8, 297, NULL, 'Concurrent ALTER DATABASE is not supported', NULL, NULL);
 ('dyn_incompat_alter_database', 'AlterDatabaseNode::execute', 'DdlNodes.epp', NULL, 8, 298, NULL, 'Incompatible ALTER DATABASE clauses: ''@1'' and ''@2''', NULL, NULL);
-(NULL, 'checkGrantorCanGrantObject', 'DdlNodes.epp', NULL, 8, 299, NULL, 'no @1 privilege with grant option on DDL @2', NULL, NULL);
-(NULL, 'checkGrantorCanGrantObject', 'DdlNodes.epp', NULL, 8, 300, NULL, 'no @1 privilege with grant option on object @2', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 301, NULL, 'Function @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 302, NULL, 'Procedure @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 303, NULL, 'Package @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 304, NULL, 'Trigger @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 305, NULL, 'View @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 306, NULL, 'Table @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 307, NULL, 'Exception @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 308, NULL, 'Generator/Sequence @1 does not exist', NULL, NULL);
-(NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 309, NULL, 'Field @1 of table @2 does not exist', NULL, NULL);
+('dyn_no_ddl_grant_opt_priv', 'checkGrantorCanGrantObject', 'DdlNodes.epp', NULL, 8, 299, NULL, 'no @1 privilege with grant option on DDL @2', NULL, NULL);
+('dyn_no_grant_opt_priv', 'checkGrantorCanGrantObject', 'DdlNodes.epp', NULL, 8, 300, NULL, 'no @1 privilege with grant option on object @2', NULL, NULL);
+('dyn_func_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 301, NULL, 'Function @1 does not exist', NULL, NULL);
+('dyn_proc_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 302, NULL, 'Procedure @1 does not exist', NULL, NULL);
+('dyn_pack_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 303, NULL, 'Package @1 does not exist', NULL, NULL);
+('dyn_trig_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 304, NULL, 'Trigger @1 does not exist', NULL, NULL);
+('dyn_view_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 305, NULL, 'View @1 does not exist', NULL, NULL);
+('dyn_rel_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 306, NULL, 'Table @1 does not exist', NULL, NULL);
+('dyn_exc_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 307, NULL, 'Exception @1 does not exist', NULL, NULL);
+('dyn_gen_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 308, NULL, 'Generator/Sequence @1 does not exist', NULL, NULL);
+('dyn_fld_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 309, NULL, 'Field @1 of table @2 does not exist', NULL, NULL);
 COMMIT WORK;
 -- TEST
 (NULL, 'main', 'test.c', NULL, 11, 0, NULL, 'This is a modified text message', NULL, NULL);
@@ -2496,6 +2547,10 @@ ERROR: Backup incomplete', NULL, NULL);
 (NULL, NULL, 'mvol.cpp', NULL, 12, 384, NULL, 'Compression stream init error @1', NULL, NULL);
 (NULL, NULL, 'restore.epp', NULL, 12, 385, NULL, 'Invalid reply from getInfo() when waiting for DB encryption', NULL, NULL);
 (NULL, NULL, 'restore.epp', NULL, 12, 386, NULL, 'Problems with just created database encryption', NULL, NULL);
+(NULL, 'get_trigger', 'restore.epp', NULL, 12, 387, NULL, 'Skipped trigger @1 on system table @2', NULL, NULL);
+(NULL, 'burp_usage', 'burp.c', NULL, 12, 388, NULL, '    @1INCLUDE(_DATA)       backup data of table(s)', NULL, NULL);
+(NULL, NULL, 'burp.cpp', NULL, 12, 389, NULL, 'missing regular expression to include tables', NULL, NULL);
+(NULL, NULL, 'burp.cpp', NULL, 12, 390, NULL, 'regular expression to include tables was already set', NULL, NULL);
 -- SQLERR
 (NULL, NULL, NULL, NULL, 13, 1, NULL, 'Firebird error', NULL, NULL);
 (NULL, NULL, NULL, NULL, 13, 74, NULL, 'Rollback not performed', NULL, NULL);
@@ -2785,6 +2840,7 @@ ERROR: Backup incomplete', NULL, NULL);
 ('dsql_string_byte_length', NULL, 'Parser.cpp', NULL, 13, 1043, NULL, 'String literal with @1 bytes exceeds the maximum length of @2 bytes', NULL, NULL);
 ('dsql_string_char_length', NULL, 'Parser.cpp', NULL, 13, 1044, NULL, 'String literal with @1 characters exceeds the maximum length of @2 characters for the @3 character set', NULL, NULL);
 ('dsql_max_nesting', NULL, 'StmtNodes.cpp', NULL, 13, 1045, NULL, 'Too many BEGIN...END nesting. Maximum level is @1', NULL, NULL);
+('dsql_recreate_user_failed', 'getMainErrorCode', 'DdlNodes.h', NULL, 13, 1046, NULL, 'RECREATE USER @1 failed', NULL, NULL);
 -- SQLWARN
 (NULL, NULL, NULL, NULL, 14, 100, NULL, 'Row not found for fetch, update or delete, or the result of a query is an empty table.', NULL, NULL);
 (NULL, NULL, NULL, NULL, 14, 101, NULL, 'segment buffer length shorter than expected', NULL, NULL);
@@ -3194,6 +3250,7 @@ Fetches = !', NULL, NULL);
 ('DATABASE_NOT_CRYPTED', 'SHOW_dbb_parameters', 'show.epp', NULL, 17, 193, NULL, 'Database not encrypted', NULL, NULL);
 ('DATABASE_CRYPT_PROCESS', 'SHOW_dbb_parameters', 'show.epp', NULL, 17, 194, NULL, 'crypt thread not complete', NULL, NULL);
 ('MSG_ROLES', 'SHOW_metadata', 'show.epp', NULL, 17, 195, NULL, 'Roles:', NULL, NULL);
+('NO_TIMEOUTS', 'process_statement', 'isql.epp', NULL, 17, 196, NULL, 'Timeouts are not supported by server', NULL, NULL);
 -- GSEC
 ('GsecMsg1', 'get_line', 'gsec.e', NULL, 18, 1, NULL, 'GSEC>', NULL, NULL);
 ('GsecMsg2', 'printhelp', 'gsec.e', 'This message is used in the Help display. It should be the same as number 1 (but in lower case).', 18, 2, NULL, 'gsec', NULL, NULL);
@@ -3369,6 +3426,7 @@ Analyzing database pages ...', NULL, NULL);
 (NULL, 'main', 'dba.epp', NULL, 21, 59, NULL, 'Gstat execution time @1', NULL, NULL)
 (NULL, 'main', 'dba.epp', NULL, 21, 60, NULL, 'Gstat completion time @1', NULL, NULL)
 (NULL, 'lastUsedPage', 'dba.epp', NULL, 21, 61, NULL, '    Expected page inventory page @1', NULL, NULL);
+(NULL, 'main', 'dba.epp', NULL, 21, 62, NULL, 'Generator pages: total @1, encrypted @2, non-crypted @3', NULL, NULL)
 -- FBSVCMGR
 -- All messages use the new format.
 ('fbsvcmgr_bad_am', 'putAccessMode', 'fbsvcmgr.cpp', NULL, 22, 1, NULL, 'Wrong value for access mode', NULL, NULL);

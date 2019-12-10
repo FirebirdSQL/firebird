@@ -29,7 +29,7 @@
 #include "../qli/compile.h"
 #include "../qli/exe.h"
 #include "../jrd/flags.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../qli/reqs.h"
 #include "../qli/all_proto.h"
 #include "../qli/err_proto.h"

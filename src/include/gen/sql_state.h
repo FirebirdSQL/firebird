@@ -854,8 +854,8 @@ static const struct {
 	{335545151, "42000"}, // 831 subproc_not_impl
 	{335545152, "42000"}, // 832 sysf_invalid_hash_algorithm
 	{335545153, "42000"}, // 833 expression_eval_index
-	{335545154, "42000"}, // 834 decfloat_trap
-	{335545155, "42000"}, // 835 decfloat_round
+	{335545154, "42000"}, // 834 invalid_decfloat_trap
+	{335545155, "42000"}, // 835 invalid_decfloat_round
 	{335545156, "42000"}, // 836 sysf_invalid_first_last_part
 	{335545157, "42000"}, // 837 sysf_invalid_date_timestamp
 	{335545158, "HY104"}, // 838 precision_err2
@@ -913,6 +913,55 @@ static const struct {
 	{335545210, "00000"}, // 890 plugin_name
 	{335545211, "42000"}, // 891 parameter_name
 	{335545212, "HY000"}, // 892 file_starting_page_err
+	{335545213, "22009"}, // 893 invalid_timezone_offset
+	{335545214, "22009"}, // 894 invalid_timezone_region
+	{335545215, "22009"}, // 895 invalid_timezone_id
+	{335545216, "22023"}, // 896 tom_decode64len
+	{335545217, "22023"}, // 897 tom_strblob
+	{335545218, "22023"}, // 898 tom_reg
+	{335545219, "22023"}, // 899 tom_algorithm
+	{335545220, "22023"}, // 900 tom_mode_miss
+	{335545221, "22023"}, // 901 tom_mode_bad
+	{335545222, "22023"}, // 902 tom_no_mode
+	{335545223, "22023"}, // 903 tom_iv_miss
+	{335545224, "22023"}, // 904 tom_no_iv
+	{335545225, "22023"}, // 905 tom_ctrtype_bad
+	{335545226, "22023"}, // 906 tom_no_ctrtype
+	{335545227, "22023"}, // 907 tom_ctr_big
+	{335545228, "22023"}, // 908 tom_no_ctr
+	{335545229, "22023"}, // 909 tom_iv_length
+	{335545230, "22000"}, // 910 tom_error
+	{335545231, "22023"}, // 911 tom_yarrow_start
+	{335545232, "22023"}, // 912 tom_yarrow_setup
+	{335545233, "22023"}, // 913 tom_init_mode
+	{335545234, "22023"}, // 914 tom_crypt_mode
+	{335545235, "22023"}, // 915 tom_decrypt_mode
+	{335545236, "22023"}, // 916 tom_init_cip
+	{335545237, "22023"}, // 917 tom_crypt_cip
+	{335545238, "22023"}, // 918 tom_decrypt_cip
+	{335545239, "22023"}, // 919 tom_setup_cip
+	{335545240, "22023"}, // 920 tom_setup_chacha
+	{335545241, "22023"}, // 921 tom_encode
+	{335545242, "22023"}, // 922 tom_decode
+	{335545243, "22023"}, // 923 tom_rsa_import
+	{335545244, "22023"}, // 924 tom_oaep
+	{335545245, "22023"}, // 925 tom_hash_bad
+	{335545246, "22023"}, // 926 tom_rsa_make
+	{335545247, "22023"}, // 927 tom_rsa_export
+	{335545248, "22023"}, // 928 tom_rsa_sign
+	{335545249, "22023"}, // 929 tom_rsa_verify
+	{335545250, "22023"}, // 930 tom_chacha_key
+	{335545251, "08003"}, // 931 bad_repl_handle
+	{335545252, "0B000"}, // 932 tra_snapshot_does_not_exist
+	{335545253, "42000"}, // 933 eds_input_prm_not_used
+	{335545254, "28000"}, // 934 effective_user
+	{335545255, "42000"}, // 935 invalid_time_zone_bind
+	{335545256, "42000"}, // 936 invalid_decfloat_bind
+	{335545257, "22023"}, // 937 odd_hex_len
+	{335545258, "22023"}, // 938 invalid_hex_digit
+	{335545259, "08004"}, // 939 bind_err
+	{335545260, "08004"}, // 940 bind_statement
+	{335545261, "22000"}, // 941 bind_convert
 	{335740929, "00000"}, //   1 gfix_db_name
 	{335740930, "00000"}, //   2 gfix_invalid_sw
 	{335740932, "00000"}, //   4 gfix_incmp_sw
@@ -1056,7 +1105,19 @@ static const struct {
 	{336068896, "42000"}, // 288 dyn_cant_use_zero_increment
 	{336068897, "42000"}, // 289 dyn_cant_use_in_foreignkey
 	{336068898, "42000"}, // 290 dyn_defvaldecl_package_func
+	{336068900, "42000"}, // 292 dyn_cyclic_role
 	{336068904, "42000"}, // 296 dyn_cant_use_zero_inc_ident
+	{336068907, "42000"}, // 299 dyn_no_ddl_grant_opt_priv
+	{336068908, "42000"}, // 300 dyn_no_grant_opt_priv
+	{336068909, "42000"}, // 301 dyn_func_not_exist
+	{336068910, "42000"}, // 302 dyn_proc_not_exist
+	{336068911, "42000"}, // 303 dyn_pack_not_exist
+	{336068912, "42000"}, // 304 dyn_trig_not_exist
+	{336068913, "42000"}, // 305 dyn_view_not_exist
+	{336068914, "42000"}, // 306 dyn_rel_not_exist
+	{336068915, "42000"}, // 307 dyn_exc_not_exist
+	{336068916, "42000"}, // 308 dyn_gen_not_exist
+	{336068917, "42000"}, // 309 dyn_fld_not_exist
 	{336330753, "00000"}, //   1 gbak_unknown_switch
 	{336330754, "00000"}, //   2 gbak_page_size_missing
 	{336330755, "00000"}, //   3 gbak_page_size_toobig
@@ -1284,6 +1345,7 @@ static const struct {
 	{336397331, "42000"}, // 1043 dsql_string_byte_length
 	{336397332, "42000"}, // 1044 dsql_string_char_length
 	{336397333, "07002"}, // 1045 dsql_max_nesting
+	{336397334, "42000"}, // 1046 dsql_recreate_user_failed
 	{336723983, "00000"}, //  15 gsec_cant_open_db
 	{336723984, "00000"}, //  16 gsec_switches_error
 	{336723985, "00000"}, //  17 gsec_no_op_spec

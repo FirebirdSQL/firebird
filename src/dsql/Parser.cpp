@@ -27,7 +27,7 @@
 #include "../dsql/chars.h"
 #include "../jrd/jrd.h"
 #include "../jrd/DataTypeUtil.h"
-#include "../yvalve/keywords.h"
+#include "../common/keywords.h"
 #include "../jrd/intl_proto.h"
 
 #ifdef HAVE_FLOAT_H
@@ -60,7 +60,7 @@ namespace
 		explicit KeywordsMap(MemoryPool& pool)
 			: GenericMap<Pair<Left<MetaName, Keyword> > >(pool)
 		{
-			for (const TOK* token = KEYWORD_getTokens(); token->tok_string; ++token)
+			for (const TOK* token = keywordGetTokens(); token->tok_string; ++token)
 			{
 				MetaName* str = FB_NEW_POOL(pool) MetaName(token->tok_string);
 				put(*str, Keyword(token->tok_ident, str));
@@ -600,7 +600,7 @@ int Parser::yylexAux()
 	 *
 	 * This code recognizes the following token types:
 	 *
-	 * NUMBER: string of digits which fits into a 32-bit integer
+	 * NUMBER32BIT: string of digits which fits into a 32-bit integer
 	 *
 	 * NUMBER64BIT: string of digits whose value might fit into an SINT64,
 	 *   depending on whether or not there is a preceding '-', which is to
@@ -792,7 +792,7 @@ int Parser::yylexAux()
 	// by a set of nibbles, using 0-9, a-f, or A-F.  Odd numbers
 	// of nibbles assume a leading '0'.  The result is converted
 	// to an integer, and the result returned to the caller.  The
-	// token is identified as a NUMBER if it's a 32-bit or less
+	// token is identified as a NUMBER32BIT if it's a 32-bit or less
 	// value, or a NUMBER64INT if it requires a 64-bit number.
 	if (c == '0' && lex.ptr + 1 < lex.end && (*lex.ptr == 'x' || *lex.ptr == 'X') &&
 		(classes(lex.ptr[1]) & CHR_HEX))
@@ -833,7 +833,7 @@ int Parser::yylexAux()
 		}
 
 		// we have a valid hex token. Now give it back, either as
-		// an NUMBER or NUMBER64BIT.
+		// an NUMBER32BIT or NUMBER64BIT.
 		if (!hexerror)
 		{
 			// if charlen > 8 (something like FFFF FFFF 0, w/o the spaces)
@@ -888,7 +888,7 @@ int Parser::yylexAux()
 			}
 			else
 			{
-				// we have an integer value. we'll return NUMBER.
+				// we have an integer value. we'll return NUMBER32BIT.
 				// but we have to make a number value to be compatible
 				// with existing code.
 
@@ -933,7 +933,7 @@ int Parser::yylexAux()
 				}
 
 				yylval.int32Val = (SLONG) value;
-				return TOK_NUMBER;
+				return TOK_NUMBER32BIT;
 			} // integer value
 		}  // if (!hexerror)...
 
@@ -958,7 +958,9 @@ int Parser::yylexAux()
 		bool have_exp_digit = false;	// digit ... [eE] ... digit
 		bool have_overflow = false;		// value of digits > MAX_SINT64
 		bool positive_overflow = false;	// number is exactly (MAX_SINT64 + 1)
+		bool have_128_over = false;		// value of digits > MAX_INT128
 		FB_UINT64 number = 0;
+		Int128 num128;
 		int expVal = 0;
 		FB_UINT64 limit_by_10 = MAX_SINT64 / 10;
 		int scale = 0;
@@ -1029,16 +1031,31 @@ int Parser::yylexAux()
 						if ((number > limit_by_10) || (c >= '8'))
 						{
 							have_overflow = true;
+							fb_assert(number <= MAX_SINT64);
+							num128.set((SINT64)number, 0);
 							if ((number == limit_by_10) && (c == '8'))
 								positive_overflow = true;
 						}
 					}
 				}
 				else
+				{
 					positive_overflow = false;
+					if (!have_128_over)
+					{
+						static const CInt128 MAX_BY10(MAX_Int128 / 10);
+						if ((num128 >= MAX_BY10) && ((num128 > MAX_BY10) || (c >= '8')))
+							have_128_over = true;
+					}
+				}
 
 				if (!have_overflow)
 					number = number * 10 + (c - '0');
+				else if (!have_128_over)
+				{
+					num128 *= 10;
+					num128 += (c - '0');
+				}
 
 				if (have_decimal)
 					--scale;
@@ -1064,6 +1081,7 @@ int Parser::yylexAux()
 			{
 				have_overflow = true;
 				positive_overflow = false;
+				have_128_over = true;
 			}
 
 			// check for a more complex overflow case
@@ -1075,35 +1093,48 @@ int Parser::yylexAux()
 				{
 					have_overflow = true;
 					positive_overflow = false;
+					have_128_over = true;
 				}
 			}
 
-			// Should we use floating point type?
-			if (have_exp_digit || have_overflow || positive_overflow)
+			// Special case - on the boarder of positive number
+			if (positive_overflow)
 			{
-				if (positive_overflow && scale)
-				{
-					yylval.lim64ptr = newLim64String(
-						Firebird::string(lex.last_token, lex.ptr - lex.last_token), scale);
-					lex.last_token_bk = lex.last_token;
-					lex.line_start_bk = lex.line_start;
-					lex.lines_bk = lex.lines;
+				yylval.lim64ptr = newLim64String(
+					Firebird::string(lex.last_token, lex.ptr - lex.last_token), scale);
+				lex.last_token_bk = lex.last_token;
+				lex.line_start_bk = lex.line_start;
+				lex.lines_bk = lex.lines;
 
-					return TOK_LIMIT64_NUMBER;
-				}
+				return scale ? TOK_LIMIT64_NUMBER : TOK_LIMIT64_INT;
+			}
 
+			// Should we use floating point type?
+			if (have_exp_digit || have_128_over)
+			{
 				yylval.stringPtr = newString(
 					Firebird::string(lex.last_token, lex.ptr - lex.last_token));
 				lex.last_token_bk = lex.last_token;
 				lex.line_start_bk = lex.line_start;
 				lex.lines_bk = lex.lines;
 
-				return positive_overflow ? TOK_LIMIT64_INT : have_overflow ? TOK_DECIMAL_NUMBER : TOK_FLOAT_NUMBER;
+				return have_overflow ? TOK_DECIMAL_NUMBER : TOK_FLOAT_NUMBER;
+			}
+
+			// May be 128-bit integer?
+			if (have_overflow)
+			{
+				yylval.lim64ptr = newLim64String(
+					Firebird::string(lex.last_token, lex.ptr - lex.last_token), scale);
+				lex.last_token_bk = lex.last_token;
+				lex.line_start_bk = lex.line_start;
+				lex.lines_bk = lex.lines;
+
+				return TOK_NUM128;
 			}
 
 			if (!have_exp)
 			{
-
 				// We should return some kind (scaled-) integer type
 				// except perhaps in dialect 1.
 
@@ -1111,7 +1142,7 @@ int Parser::yylexAux()
 				{
 					yylval.int32Val = (SLONG) number;
 					//printf ("parse.y %p %d\n", yylval.legacyStr, number);
-					return TOK_NUMBER;
+					return TOK_NUMBER32BIT;
 				}
 				else
 				{

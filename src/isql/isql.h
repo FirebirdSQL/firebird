@@ -34,6 +34,7 @@
 #define ISQL_ISQL_H
 
 #include "../jrd/flags.h"
+#include "../jrd/constants.h"
 #include <stdlib.h>
 #include <firebird/Interface.h>
 
@@ -86,9 +87,16 @@ enum LegacyTables
 	ALL_objects
 };
 
-const size_t WORDLENGTH				= 32;
-// The worst case of a quoted identifier is 31 * 2 => 62 + 2 DQUOTES + TERM => 65.
-const size_t QUOTEDLENGTH			= 65;
+const size_t QUOTED_NAME_SIZE		= MAX_SQL_IDENTIFIER_SIZE + 2 /* quotes */;
+
+const size_t CHARSET_COLLATE_SIZE	=
+	(MAX_SQL_IDENTIFIER_LEN + 2 /* quotes */) * 2 +	// charset and collate names
+	14 +	// CHARACTER SET
+	9 +		// NOT NULL
+	8 +		// COLLATE
+	30 +	// extra space
+	1;		// null terminator
+
 static const char* const DEFTERM	= ";";
 static const char* const DEFCHARSET	= "NONE";
 const unsigned NULL_DISP_LEN		= 6;
@@ -267,6 +275,7 @@ const int DATABASE_CRYPTED			= 192;		// DB encrypted
 const int DATABASE_NOT_CRYPTED		= 193;		// DB not encrypted
 const int DATABASE_CRYPT_PROCESS	= 194;		// crypt thread not complete
 const int MSG_ROLES					= 195;		// Roles:
+const int NO_TIMEOUTS				= 196;		// Timeouts are not supported by server
 
 
 // Initialize types
@@ -274,7 +283,7 @@ const int MSG_ROLES					= 195;		// Roles:
 struct sqltypes
 {
 	int type;
-	SCHAR type_name[WORDLENGTH];
+	SCHAR type_name[QUOTED_NAME_SIZE];
 };
 
 //
@@ -297,7 +306,6 @@ const int BIGINT		= 16;
 const int BOOLEAN_TYPE	= 23;
 const int DEC64_TYPE	= 24;
 const int DEC128_TYPE	= 25;
-const int DEC_FIXED_TYPE = 26;
 
 static const sqltypes Column_types[] = {
 	{SMALLINT, "SMALLINT"},		// keyword
@@ -317,7 +325,7 @@ static const sqltypes Column_types[] = {
 	{BOOLEAN_TYPE, "BOOLEAN"},	// keyword
 	{DEC64_TYPE, "DECFLOAT(16)"},
 	{DEC128_TYPE, "DECFLOAT(34)"},
-	{DEC_FIXED_TYPE, "<Should not be shown>"},
+	{blr_int128, "INT64"},
 	{blr_sql_time_tz, "TIME WITH TIME ZONE"},		// keyword
 	{blr_timestamp_tz, "TIMESTAMP WITH TIME ZONE"},	// keyword
 	{0, ""}
@@ -408,6 +416,7 @@ public:
 	USHORT att_charset;
 	Firebird::IDecFloat16* df16;
 	Firebird::IDecFloat34* df34;
+	Firebird::IInt128* i128;
 	void printf(const char* buffer, ...);
 	void prints(const char* buffer);
 
@@ -469,6 +478,7 @@ struct IsqlVar
 		char* asChar;
 		FB_DEC16* asDec16;
 		FB_DEC34* asDec34;
+		FB_I128* asInt128;
 		void* setPtr;
 	};
 	TypeMix value;

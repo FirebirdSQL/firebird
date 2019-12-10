@@ -36,7 +36,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include <stdarg.h>
 #include "../jrd/ibsetjmp.h"
 #include "../common/msg_encode.h"
@@ -116,6 +116,8 @@ static int svc_api_gbak(Firebird::UtilSvc*, const Switches& switches);
 static void burp_output(bool err, const SCHAR*, ...) ATTRIBUTE_FORMAT(2,3);
 static void burp_usage(const Switches& switches);
 static Switches::in_sw_tab_t* findSwitchOrThrow(Firebird::UtilSvc*, Switches& switches, Firebird::string& sw);
+static void processFetchPass(const SCHAR*& password, int& itr, const int argc, Firebird::UtilSvc::ArgvType& argv);
+
 
 // fil.fil_length is FB_UINT64
 const ULONG KBYTE	= 1024;
@@ -182,6 +184,7 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
  *
  **********************************************/
     Firebird::string usr, pswd, service;
+    const SCHAR* pswd2 = NULL;
 	bool flag_restore = false;
 	bool flag_verbose = false;
 #ifdef TRUSTED_AUTH
@@ -235,6 +238,7 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 					break;
 				case IN_SW_BURP_PASS:			// default password
 					pswd = argv[itr];
+					pswd2 = pswd.nullStr();
 					uSvc->hidePasswd(argv, itr);
 					break;
 				case IN_SW_BURP_SE:				// service name
@@ -243,6 +247,12 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 				}
 				argv[itr] = 0;
 			}
+			break;
+		case IN_SW_BURP_FETCHPASS:
+			argv[itr] = 0;
+			processFetchPass(pswd2, itr, argc, argv);
+			pswd = pswd2;
+			argv[itr] = 0;
 			break;
 		case IN_SW_BURP_V:				// verify actions
 			if (flag_verbint)
@@ -675,33 +685,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 			tdgbl->gbl_sw_password = argv[itr];
 			break;
 		case IN_SW_BURP_FETCHPASS:
-			if (++itr >= argc)
-			{
-				BURP_error(189, true);
-				// password parameter missing
-			}
-			if (tdgbl->gbl_sw_password)
-			{
-				BURP_error(307, true);
-				// too many passwords provided
-			}
-			switch (fb_utils::fetchPassword(argv[itr], tdgbl->gbl_sw_password))
-			{
-			case fb_utils::FETCH_PASS_OK:
-				break;
-			case fb_utils::FETCH_PASS_FILE_OPEN_ERROR:
-				BURP_error(308, true, MsgFormat::SafeArg() << argv[itr] << errno);
-				// error @2 opening password file @1
-				break;
-			case fb_utils::FETCH_PASS_FILE_READ_ERROR:
-				BURP_error(309, true, MsgFormat::SafeArg() << argv[itr] << errno);
-				// error @2 reading password file @1
-				break;
-			case fb_utils::FETCH_PASS_FILE_EMPTY:
-				BURP_error(310, true, MsgFormat::SafeArg() << argv[itr]);
-				// password file @1 is empty
-				break;
-			}
+			processFetchPass(tdgbl->gbl_sw_password, itr, argc, argv);
 			break;
 		case IN_SW_BURP_USER:
 			if (++itr >= argc)
@@ -718,6 +702,14 @@ int gbak(Firebird::UtilSvc* uSvc)
 				// missing regular expression to skip tables
 			}
 			tdgbl->setupSkipData(argv[itr]);
+			break;
+		case IN_SW_BURP_INCLUDE_DATA:
+			if (++itr >= argc)
+			{
+				BURP_error(389, true);
+				// missing regular expression to include tables
+			}
+			tdgbl->setupIncludeData(argv[itr]);
 			break;
 		case IN_SW_BURP_ROLE:
 			if (++itr >= argc)
@@ -1702,22 +1694,39 @@ void BURP_verbose(USHORT number, const SafeArg& arg)
  **************************************
  *
  * Functional description
- *	Calls BURP_print for displaying a formatted error message
- *	but only for verbose output.  If not verbose then calls
- *	user defined yielding function.
+ *	Calls BURP_message for displaying a message for verbose output.
+ *	If not verbose then calls yielding function.
  *
  **************************************/
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	if (tdgbl->gbl_sw_verbose)
-	{
-		tdgbl->print_stats_header();
-		BURP_msg_partial(false, 169);	// msg 169: gbak:
-		tdgbl->print_stats(number);
-		BURP_msg_put(false, number, arg);
-	}
+		BURP_message(number, arg, true);
 	else
 		burp_output(false, "%s", "");
+}
+
+
+void BURP_message(USHORT number, const MsgFormat::SafeArg& arg, bool totals)
+{
+/**************************************
+ *
+ *	B U R P _ m e s s a g e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Calls BURP_msg for formatting & displaying a message.
+ *
+ **************************************/
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	if (totals)
+		tdgbl->print_stats_header();
+	BURP_msg_partial(false, 169);	// msg 169: gbak:
+	if (totals)
+		tdgbl->print_stats(number);
+	BURP_msg_put(false, number, arg);
 }
 
 
@@ -1730,22 +1739,10 @@ void BURP_verbose(USHORT number, const char* str)
  **************************************
  *
  * Functional description
- *	Calls BURP_print for displaying a formatted error message
- *	but only for verbose output.  If not verbose then calls
- *	user defined yieding function.
+ *	Shortcut for text argument
  *
  **************************************/
-	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-
-	if (tdgbl->gbl_sw_verbose)
-	{
-		tdgbl->print_stats_header();
-		BURP_msg_partial(false, 169);	// msg 169: gbak:
-		tdgbl->print_stats(number);
-		BURP_msg_put(false, number, SafeArg() << str);
-	}
-	else
-		burp_output(false, "%s", "");
+	BURP_verbose(number, SafeArg() << str);
 }
 
 
@@ -2537,15 +2534,43 @@ void BurpGlobals::setupSkipData(const Firebird::string& regexp)
 				ISC_systemToUtf8(filter);
 
 			BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-			if (!unicodeCollation)
-				unicodeCollation = FB_NEW_POOL(tdgbl->getPool()) UnicodeCollationHolder(tdgbl->getPool());
 
-			Jrd::TextType* const textType = unicodeCollation->getTextType();
+			skipDataMatcher.reset(FB_NEW_POOL(tdgbl->getPool()) Firebird::SimilarToRegex(
+				tdgbl->getPool(), Firebird::SimilarToFlag::CASE_INSENSITIVE,
+				filter.c_str(), filter.length(),
+				"\\", 1));
+		}
+	}
+	catch (const Firebird::Exception&)
+	{
+		Firebird::fatal_exception::raiseFmt(
+			"error while compiling regular expression \"%s\"", regexp.c_str());
+	}
+}
 
-			skipDataMatcher.reset(FB_NEW_POOL(tdgbl->getPool())
-				Firebird::SimilarToMatcher<UCHAR, Jrd::UpcaseConverter<> >
-				(tdgbl->getPool(), textType, (const UCHAR*) filter.c_str(),
-				filter.length(), '\\', true));
+void BurpGlobals::setupIncludeData(const Firebird::string& regexp)
+{
+	if (includeDataMatcher)
+	{
+		BURP_error(390, true);
+		// msg 390 regular expression to include tables was already set
+	}
+
+	// Compile include relation expressions
+	try
+	{
+		if (regexp.hasData())
+		{
+			Firebird::string filter(regexp);
+			if (!uSvc->utf8FileNames())
+				ISC_systemToUtf8(filter);
+
+			BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+			includeDataMatcher.reset(FB_NEW_POOL(tdgbl->getPool()) Firebird::SimilarToRegex(
+				tdgbl->getPool(), Firebird::SimilarToFlag::CASE_INSENSITIVE,
+				filter.c_str(), filter.length(),
+				"\\", 1));
 		}
 	}
 	catch (const Firebird::Exception&)
@@ -2563,21 +2588,35 @@ Firebird::string BurpGlobals::toSystem(const Firebird::PathName& from)
 	return to;
 }
 
+namespace // for local symbols
+{
+	enum Pattern { NOT_SET = 0, MATCH = 1, NOT_MATCH = 2 };
+
+	Pattern checkPattern(Firebird::AutoPtr<Firebird::SimilarToRegex>& matcher,
+					const char* name)
+	{
+		if (!matcher)
+			return NOT_SET;
+
+		return matcher->matches(name, strlen(name))? MATCH : NOT_MATCH;
+	}
+}
+
 bool BurpGlobals::skipRelation(const char* name)
 {
 	if (gbl_sw_meta)
-	{
 		return true;
-	}
 
-	if (!skipDataMatcher)
-	{
-		return false;
-	}
+	// Fine-grained table controlling cases when data must be skipped for a table
+	static const bool result[3][3] = {
+		// Include filter
+		//	NS    M      NM           S
+		{ false, false, true}, // NS  k
+		{ true,  true,  true}, // M   i
+		{ false, false, true}  // NM  p
+	};
 
-	skipDataMatcher->reset();
-	skipDataMatcher->process(reinterpret_cast<const UCHAR*>(name), static_cast<SLONG>(strlen(name)));
-	return skipDataMatcher->result();
+	return result[checkPattern(skipDataMatcher, name)][checkPattern(includeDataMatcher, name)];
 }
 
 void BurpGlobals::read_stats(SINT64* stats)
@@ -2698,39 +2737,6 @@ void BurpGlobals::print_stats_header()
 	burp_output(false, "\n");
 }
 
-UnicodeCollationHolder::UnicodeCollationHolder(MemoryPool& pool)
-{
-	cs = FB_NEW_POOL(pool) charset;
-	tt = FB_NEW_POOL(pool) texttype;
-
-	Firebird::IntlUtil::initUtf8Charset(cs);
-
-	Firebird::string collAttributes("ICU-VERSION=");
-	collAttributes += Jrd::UnicodeUtil::getDefaultIcuVersion();
-	Firebird::IntlUtil::setupIcuAttributes(cs, collAttributes, "", collAttributes);
-
-	Firebird::UCharBuffer collAttributesBuffer;
-	collAttributesBuffer.push(reinterpret_cast<const UCHAR*>(collAttributes.c_str()),
-		collAttributes.length());
-
-	if (!Firebird::IntlUtil::initUnicodeCollation(tt, cs, "UNICODE", 0, collAttributesBuffer, Firebird::string()))
-		Firebird::fatal_exception::raiseFmt("cannot initialize UNICODE collation to use in gbak");
-
-	charSet = Jrd::CharSet::createInstance(pool, 0, cs);
-	textType = FB_NEW_POOL(pool) Jrd::TextType(0, tt, charSet);
-}
-
-UnicodeCollationHolder::~UnicodeCollationHolder()
-{
-	fb_assert(tt->texttype_fn_destroy);
-
-	if (tt->texttype_fn_destroy)
-		tt->texttype_fn_destroy(tt);
-
-	// cs should be deleted by texttype_fn_destroy call above
-	delete tt;
-}
-
 void BURP_makeSymbol(BurpGlobals* tdgbl, Firebird::string& name)		// add double quotes to string
 {
 	if (tdgbl->gbl_dialect < SQL_DIALECT_V6)
@@ -2747,4 +2753,36 @@ void BURP_makeSymbol(BurpGlobals* tdgbl, Firebird::string& name)		// add double 
 	}
 	name.insert(0u, 1, dq);
 	name += dq;
+}
+
+static void processFetchPass(const SCHAR*& password, int& itr, const int argc, Firebird::UtilSvc::ArgvType& argv)
+{
+	if (++itr >= argc)
+	{
+		BURP_error(189, true);
+		// password parameter missing
+	}
+	if (password)
+	{
+		BURP_error(307, true);
+		// too many passwords provided
+	}
+
+	switch (fb_utils::fetchPassword(argv[itr], password))
+	{
+	case fb_utils::FETCH_PASS_OK:
+		break;
+	case fb_utils::FETCH_PASS_FILE_OPEN_ERROR:
+		BURP_error(308, true, MsgFormat::SafeArg() << argv[itr] << errno);
+		// error @2 opening password file @1
+		break;
+	case fb_utils::FETCH_PASS_FILE_READ_ERROR:
+		BURP_error(309, true, MsgFormat::SafeArg() << argv[itr] << errno);
+		// error @2 reading password file @1
+		break;
+	case fb_utils::FETCH_PASS_FILE_EMPTY:
+		BURP_error(310, true, MsgFormat::SafeArg() << argv[itr]);
+		// password file @1 is empty
+		break;
+	}
 }

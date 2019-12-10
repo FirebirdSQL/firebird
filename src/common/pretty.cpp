@@ -31,7 +31,7 @@
 #include "dyn_consts.h"
 #include <stdio.h>
 #include <stdarg.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../jrd/constants.h"
 #include "../common/prett_proto.h"
 #include "../yvalve/gds_proto.h"

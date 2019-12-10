@@ -45,7 +45,7 @@
 #include <setjmp.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../gpre/gpre.h"
 #include "../gpre/cmp_proto.h"
 #include "../gpre/exp_proto.h"
@@ -2275,7 +2275,7 @@ static act* par_modify()
 	if (!symbol || symbol->sym_type != SYM_context)
 	{
 		SCHAR s[ERROR_LENGTH];
-		sprintf(s, "%s is not a valid context variable", gpreGlob.token_global.tok_string);
+		fb_utils::snprintf(s, sizeof(s), "%s is not a valid context variable", gpreGlob.token_global.tok_string);
 		PAR_error(s);
 	}
 

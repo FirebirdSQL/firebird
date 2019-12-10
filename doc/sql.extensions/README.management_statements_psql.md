@@ -8,14 +8,13 @@ As many applications depends that some management statements be issued on the co
 
 The management statements part of this improvement are:
 - `ALTER SESSION RESET`
+- `SET BIND OF ... TO`
 - `SET DECFLOAT ROUND`
 - `SET DECFLOAT TRAPS TO`
-- `SET DECFLOAT BIND`
 - `SET ROLE`
 - `SET SESSION IDLE TIMEOUT`
 - `SET STATEMENT TIMEOUT`
 - `SET TIME ZONE`
-- `SET TIME ZONE BIND`
 - `SET TRUSTED ROLE`
 
 ## Examples
@@ -24,7 +23,7 @@ The management statements part of this improvement are:
 create or alter trigger on_connect on connect
 as
 begin
-    set decfloat bind double precision;
+    set bind of decfloat to double precision;
     set time zone 'America/Sao_Paulo';
 end
 ```

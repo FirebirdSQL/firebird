@@ -101,6 +101,7 @@
 #include "../remote/server/os/win32/cntl_proto.h"
 #include "../remote/inet_proto.h"
 #include "../remote/server/serve_proto.h"
+#include "../remote/server/ReplServer.h"
 #include "../remote/server/os/win32/window_proto.h"
 #include "../remote/os/win32/wnet_proto.h"
 #include "../remote/server/os/win32/window.rh"
@@ -110,6 +111,7 @@
 #include "firebird/Interface.h"
 #include "../common/classes/ImplementHelper.h"
 #include "../common/os/os_utils.h"
+#include "../common/status.h"
 #include "../auth/trusted/AuthSspi.h"
 #include "../auth/SecurityDatabase/LegacyServer.h"
 #include "../auth/SecureRemotePassword/server/SrpServer.h"
@@ -555,6 +557,7 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
  *
  **************************************/
 	ThreadCounter counter;
+	FbLocalStatus localStatus;
 
 	if (server_flag & SRVR_inet)
 	{
@@ -567,6 +570,7 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 			iscLogException("INET: can't start listener thread", ex);
 		}
 	}
+
 	if (server_flag & SRVR_wnet)
 	{
 		try
@@ -578,6 +582,7 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 			iscLogException("WNET: can't start listener thread", ex);
 		}
 	}
+
 	if (server_flag & SRVR_xnet)
 	{
 		try
@@ -589,6 +594,9 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 			iscLogException("XNET: can't start listener thread", ex);
 		}
 	}
+
+	REPL_server(&localStatus, false, &server_shutdown);
+
 	return 0;
 }
 

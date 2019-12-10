@@ -119,12 +119,13 @@ o If Firebird is running as an application (instead of
   uninstall the uninstall will complete with errors.
   You will have to delete the remnants by hand.
 
-o Uninstallation leaves five files in the install
+o Uninstallation leaves six files in the install
   directory:
 
   - databases.conf
   - firebird.conf
   - fbtrace.conf
+  - replication.conf
   - firebird.log
   - security4.fdb
 

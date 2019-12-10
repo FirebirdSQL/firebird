@@ -32,7 +32,7 @@
 #include "TracePluginImpl.h"
 #include "PluginLogWriter.h"
 #include "os/platform.h"
-#include "consts_pub.h"
+#include "firebird/impl/consts_pub.h"
 #include "codetext.h"
 #include "../../common/isc_f_proto.h"
 #include "../../jrd/RuntimeStatistics.h"
@@ -42,8 +42,8 @@
 #include "../../jrd/svc_undoc.h"
 #include "../../jrd/constants.h"
 #include "../../common/os/path_utils.h"
-#include "../../jrd/inf_pub.h"
-#include "../../dsql/sqlda_pub.h"
+#include "firebird/impl/inf_pub.h"
+#include "firebird/impl/sqlda_pub.h"
 #include "../../common/classes/ImplementHelper.h"
 #include "../../common/SimpleStatusVector.h"
 #include "../../jrd/status.h"
@@ -99,7 +99,6 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 	transactions(getDefaultMemoryPool()),
 	statements(getDefaultMemoryPool()),
 	services(getDefaultMemoryPool()),
-	unicodeCollation(*getDefaultMemoryPool()),
 	include_codes(*getDefaultMemoryPool()),
 	exclude_codes(*getDefaultMemoryPool())
 {
@@ -124,8 +123,6 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 		logWriter->addRef();
 	}
 
-	Jrd::TextType* textType = unicodeCollation.getTextType();
-
 	// Compile filtering regular expressions
 	const char* str = NULL;
 	try
@@ -136,9 +133,10 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 			string filter(config.include_filter);
 			ISC_systemToUtf8(filter);
 
-			include_matcher = FB_NEW TraceSimilarToMatcher(
-				*getDefaultMemoryPool(), textType, (const UCHAR*) filter.c_str(),
-				filter.length(), '\\', true);
+			include_matcher = FB_NEW SimilarToRegex(
+				*getDefaultMemoryPool(), SimilarToFlag::CASE_INSENSITIVE,
+				filter.c_str(), filter.length(),
+				"\\", 1);
 		}
 
 		if (config.exclude_filter.hasData())
@@ -147,9 +145,10 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 			string filter(config.exclude_filter);
 			ISC_systemToUtf8(filter);
 
-			exclude_matcher = FB_NEW TraceSimilarToMatcher(
-				*getDefaultMemoryPool(), textType, (const UCHAR*) filter.c_str(),
-				filter.length(), '\\', true);
+			exclude_matcher = FB_NEW SimilarToRegex(
+				*getDefaultMemoryPool(), SimilarToFlag::CASE_INSENSITIVE,
+				filter.c_str(), filter.length(),
+				"\\", 1);
 		}
 	}
 	catch (const Exception&)
@@ -236,7 +235,15 @@ void TracePluginImpl::logRecord(const char* action)
 	// TODO: implement adjusting of line breaks
 	// line.adjustLineBreaks();
 
-	logWriter->write(record.c_str(), record.length());
+	LocalStatus ls;
+	CheckStatusWrapper status(&ls);
+
+	logWriter->write_s(&status, record.c_str(), record.length());
+
+	if (ls.getState() & IStatus::STATE_ERRORS && ls.getErrors()[1] == isc_interface_version_too_old)
+		logWriter->write(record.c_str(), record.length());
+	else
+		check(&status);
 
 	record = "";
 }
@@ -755,7 +762,7 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 			case dtype_dec128:
 				paramtype = "decfloat(34)";
 				break;
-			case dtype_dec_fixed:
+			case dtype_int128:
 				paramtype = "decimal";
 				break;
 
@@ -880,11 +887,10 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 					((Decimal128*) parameters->dsc_address)->toString(paramvalue);
 					break;
 
-				case dtype_dec_fixed:
+				case dtype_int128:
 					try
 					{
-						DecimalStatus decSt(FB_DEC_Errors);
-						((DecimalFixed*) parameters->dsc_address)->toString(decSt, parameters->dsc_scale, paramvalue);
+						((Int128*) parameters->dsc_address)->toString(parameters->dsc_scale, paramvalue);
 					}
 					catch (const Exception& ex)
 					{
@@ -1538,18 +1544,10 @@ void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
 		return;
 
 	if (config.include_filter.hasData())
-	{
-		include_matcher->reset();
-		include_matcher->process((const UCHAR*) sql, sql_length);
-		need_statement = include_matcher->result();
-	}
+		need_statement = include_matcher->matches(sql, sql_length);
 
 	if (need_statement && config.exclude_filter.hasData())
-	{
-		exclude_matcher->reset();
-		exclude_matcher->process((const UCHAR*) sql, sql_length);
-		need_statement = !exclude_matcher->result();
-	}
+		need_statement = !exclude_matcher->matches(sql, sql_length);
 
 	if (need_statement)
 	{
@@ -1941,18 +1939,10 @@ bool TracePluginImpl::checkServiceFilter(ITraceServiceConnection* service, bool 
 	bool enabled = true;
 
 	if (config.include_filter.hasData())
-	{
-		include_matcher->reset();
-		include_matcher->process((const UCHAR*) svcName, svcNameLen);
-		enabled = include_matcher->result();
-	}
+		enabled = include_matcher->matches(svcName, svcNameLen);
 
 	if (enabled && config.exclude_filter.hasData())
-	{
-		exclude_matcher->reset();
-		exclude_matcher->process((const UCHAR*) svcName, svcNameLen);
-		enabled = !exclude_matcher->result();
-	}
+		enabled = !exclude_matcher->matches(svcName, svcNameLen);
 
 	if (data) {
 		data->enabled = enabled;

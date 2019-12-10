@@ -207,3 +207,5 @@
 	FIELD(fld_timestamp_tz	, nam_timestamp_tz	, dtype_timestamp_tz, TIMESTAMP_TZ_SIZE		, 0							, NULL		, true)
 
 	FIELD(fld_tz_db_version	, nam_tz_db_version	, dtype_varying	, 10						, dsc_text_type_ascii		, NULL		, true)
+
+	FIELD(fld_crypt_state	, nam_crypt_state	, dtype_short	, sizeof(SSHORT)			, 0							, NULL		, true)

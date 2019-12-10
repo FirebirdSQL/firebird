@@ -32,10 +32,11 @@
 #include "firebird/Interface.h"
 #include "../auth/SecureRemotePassword/srp.h"
 #include "../jrd/constants.h"
-#include "../jrd/inf_pub.h"
+#include "firebird/impl/inf_pub.h"
 #include "../utilities/gsec/gsec.h"
 #include "../auth/SecureRemotePassword/Message.h"
 #include "../common/classes/auto.h"
+#include "../common/classes/ParsedList.h"
 
 #ifndef FB_EXPORTED
 #if defined(DARWIN)
@@ -47,14 +48,13 @@
 
 namespace {
 
-const unsigned int INIT_KEY = ((~0) - 1);
-unsigned int secDbKey = INIT_KEY;
-
 const unsigned int SZ_LOGIN = 31;
 const unsigned int SZ_NAME = 31;
 typedef Field<Varying> Varfield;
 typedef Field<ISC_QUAD> Blob;
 typedef Field<FB_BOOLEAN> Boolean;
+
+Firebird::GlobalPtr<Firebird::ConfigKeys> keys;
 
 } // anonymous namespace
 
@@ -220,12 +220,8 @@ public:
 				(Firebird::Arg::Gds(isc_random) << "Database is already attached in SRP").raise();
 			}
 
-			if (secDbKey == INIT_KEY)
-			{
-				secDbKey = config->getKey("SecurityDatabase");
-			}
+			unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
 			const char* secDbName = config->asString(secDbKey);
-
 			if (!(secDbName && secDbName[0]))
 			{
 				Firebird::Arg::Gds(isc_secdb_name).raise();
@@ -233,7 +229,7 @@ public:
 
 			Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 			dpb.insertByte(isc_dpb_sec_attach, TRUE);
-			dpb.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
+			dpb.insertString(isc_dpb_config, Firebird::ParsedList::getNonLoopbackProviders(secDbName));
 
 			unsigned int authBlockSize;
 			const unsigned char* authBlock = logonInfo->authBlock(&authBlockSize);

@@ -858,8 +858,8 @@ Data source : @4"},		/* eds_statement */
 	{335545151, "Sub-procedure @1 was declared but not implemented"},		/* subproc_not_impl */
 	{335545152, "Invalid HASH algorithm @1"},		/* sysf_invalid_hash_algorithm */
 	{335545153, "Expression evaluation error for index \"@1\" on table \"@2\""},		/* expression_eval_index */
-	{335545154, "Invalid decfloat trap state @1"},		/* decfloat_trap */
-	{335545155, "Invalid decfloat rounding mode @1"},		/* decfloat_round */
+	{335545154, "Invalid decfloat trap state @1"},		/* invalid_decfloat_trap */
+	{335545155, "Invalid decfloat rounding mode @1"},		/* invalid_decfloat_round */
 	{335545156, "Invalid part @1 to calculate the @1 of a DATE/TIMESTAMP"},		/* sysf_invalid_first_last_part */
 	{335545157, "Expected DATE/TIMESTAMP value in @1"},		/* sysf_invalid_date_timestamp */
 	{335545158, "Precision must be from @1 to @2"},		/* precision_err2 */
@@ -917,6 +917,55 @@ Data source : @4"},		/* eds_statement */
 	{335545210, "Plugin @1:"},		/* plugin_name */
 	{335545211, "PARAMETER @1"},		/* parameter_name */
 	{335545212, "Starting page number for file @1 must be @2 or greater"},		/* file_starting_page_err */
+	{335545213, "Invalid time zone offset: @1 - must be between -14:00 and +14:00"},		/* invalid_timezone_offset */
+	{335545214, "Invalid time zone region: @1"},		/* invalid_timezone_region */
+	{335545215, "Invalid time zone ID: @1"},		/* invalid_timezone_id */
+	{335545216, "Wrong base64 text length @1, should be multiple of 4"},		/* tom_decode64len */
+	{335545217, "Invalid first parameter datatype - need string or blob"},		/* tom_strblob */
+	{335545218, "Error registering @1 - probably bad tomcrypt library"},		/* tom_reg */
+	{335545219, "Unknown crypt algorithm @1 in USING clause"},		/* tom_algorithm */
+	{335545220, "Should specify mode parameter for symmetric cipher"},		/* tom_mode_miss */
+	{335545221, "Unknown symmetric crypt mode specified"},		/* tom_mode_bad */
+	{335545222, "Mode parameter makes no sense for chosen cipher"},		/* tom_no_mode */
+	{335545223, "Should specify initialization vector (IV) for chosen cipher and/or mode"},		/* tom_iv_miss */
+	{335545224, "Initialization vector (IV) makes no sense for chosen cipher and/or mode"},		/* tom_no_iv */
+	{335545225, "Invalid counter endianess @1"},		/* tom_ctrtype_bad */
+	{335545226, "Counter endianess parameter is not used in mode @1"},		/* tom_no_ctrtype */
+	{335545227, "Too big counter value @1, maximum @2 can be used"},		/* tom_ctr_big */
+	{335545228, "Counter length/value parameter is not used with @1 @2"},		/* tom_no_ctr */
+	{335545229, "Invalid initialization vector (IV) length @1, need @2"},		/* tom_iv_length */
+	{335545230, "TomCrypt library error: @1"},		/* tom_error */
+	{335545231, "Starting PRNG yarrow"},		/* tom_yarrow_start */
+	{335545232, "Setting up PRNG yarrow"},		/* tom_yarrow_setup */
+	{335545233, "Initializing @1 mode"},		/* tom_init_mode */
+	{335545234, "Encrypting in @1 mode"},		/* tom_crypt_mode */
+	{335545235, "Decrypting in @1 mode"},		/* tom_decrypt_mode */
+	{335545236, "Initializing cipher @1"},		/* tom_init_cip */
+	{335545237, "Encrypting using cipher @1"},		/* tom_crypt_cip */
+	{335545238, "Decrypting using cipher @1"},		/* tom_decrypt_cip */
+	{335545239, "Setting initialization vector (IV) for @1"},		/* tom_setup_cip */
+	{335545240, "Invalid initialization vector (IV) length @1, need  8 or 12"},		/* tom_setup_chacha */
+	{335545241, "Encoding @1"},		/* tom_encode */
+	{335545242, "Decoding @1"},		/* tom_decode */
+	{335545243, "Importing RSA key"},		/* tom_rsa_import */
+	{335545244, "Invalid OAEP packet"},		/* tom_oaep */
+	{335545245, "Unknown hash algorithm @1"},		/* tom_hash_bad */
+	{335545246, "Making RSA key"},		/* tom_rsa_make */
+	{335545247, "Exporting @1 RSA key"},		/* tom_rsa_export */
+	{335545248, "RSA-signing data"},		/* tom_rsa_sign */
+	{335545249, "Verifying RSA-signed data"},		/* tom_rsa_verify */
+	{335545250, "Invalid key length @1, need 16 or 32"},		/* tom_chacha_key */
+	{335545251, "invalid replicator handle"},		/* bad_repl_handle */
+	{335545252, "Transaction's base snapshot number does not exist"},		/* tra_snapshot_does_not_exist */
+	{335545253, "Input parameter '@1' is not used in SQL query text"},		/* eds_input_prm_not_used */
+	{335545254, "Effective user is @1"},		/* effective_user */
+	{335545255, "Invalid time zone bind mode @1"},		/* invalid_time_zone_bind */
+	{335545256, "Invalid decfloat bind mode @1"},		/* invalid_decfloat_bind */
+	{335545257, "Invalid hex text length @1, should be multiple of 2"},		/* odd_hex_len */
+	{335545258, "Invalid hex digit @1 at position @2"},		/* invalid_hex_digit */
+	{335545259, "Error processing isc_dpb_set_bind clumplet \"@1\""},		/* bind_err */
+	{335545260, "The following statement failed: @1"},		/* bind_statement */
+	{335545261, "Can not convert @1 to @2"},		/* bind_convert */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */
@@ -1060,7 +1109,19 @@ Data source : @4"},		/* eds_statement */
 	{336068896, "INCREMENT BY 0 is an illegal option for sequence @1"},		/* dyn_cant_use_zero_increment */
 	{336068897, "Can't use @1 in FOREIGN KEY constraint"},		/* dyn_cant_use_in_foreignkey */
 	{336068898, "Default values for parameters are not allowed in the definition of a previously declared packaged function @1.@2"},		/* dyn_defvaldecl_package_func */
+	{336068900, "role @1 can not be granted to role @2"},		/* dyn_cyclic_role */
 	{336068904, "INCREMENT BY 0 is an illegal option for identity column @1 of table @2"},		/* dyn_cant_use_zero_inc_ident */
+	{336068907, "no @1 privilege with grant option on DDL @2"},		/* dyn_no_ddl_grant_opt_priv */
+	{336068908, "no @1 privilege with grant option on object @2"},		/* dyn_no_grant_opt_priv */
+	{336068909, "Function @1 does not exist"},		/* dyn_func_not_exist */
+	{336068910, "Procedure @1 does not exist"},		/* dyn_proc_not_exist */
+	{336068911, "Package @1 does not exist"},		/* dyn_pack_not_exist */
+	{336068912, "Trigger @1 does not exist"},		/* dyn_trig_not_exist */
+	{336068913, "View @1 does not exist"},		/* dyn_view_not_exist */
+	{336068914, "Table @1 does not exist"},		/* dyn_rel_not_exist */
+	{336068915, "Exception @1 does not exist"},		/* dyn_exc_not_exist */
+	{336068916, "Generator/Sequence @1 does not exist"},		/* dyn_gen_not_exist */
+	{336068917, "Field @1 of table @2 does not exist"},		/* dyn_fld_not_exist */
 	{336330753, "found unknown switch"},		/* gbak_unknown_switch */
 	{336330754, "page size parameter missing"},		/* gbak_page_size_missing */
 	{336330755, "Page size specified (@1) greater than limit (32768 bytes)"},		/* gbak_page_size_toobig */
@@ -1288,6 +1349,7 @@ Data source : @4"},		/* eds_statement */
 	{336397331, "String literal with @1 bytes exceeds the maximum length of @2 bytes"},		/* dsql_string_byte_length */
 	{336397332, "String literal with @1 characters exceeds the maximum length of @2 characters for the @3 character set"},		/* dsql_string_char_length */
 	{336397333, "Too many BEGIN...END nesting. Maximum level is @1"},		/* dsql_max_nesting */
+	{336397334, "RECREATE USER @1 failed"},		/* dsql_recreate_user_failed */
 	{336723983, "unable to open database"},		/* gsec_cant_open_db */
 	{336723984, "error in switch specifications"},		/* gsec_switches_error */
 	{336723985, "no operation specified"},		/* gsec_no_op_spec */

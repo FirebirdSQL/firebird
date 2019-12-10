@@ -334,11 +334,21 @@ public:
 	{
 		try
 		{
-			lock->leave();
+			if (lock)
+				lock->leave();
 		}
 		catch (const Exception&)
 		{
 			DtorException::devHalt();
+		}
+	}
+
+	void release()
+	{
+		if (lock)
+		{
+			lock->leave();
+			lock = NULL;
 		}
 	}
 

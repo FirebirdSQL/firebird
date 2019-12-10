@@ -118,6 +118,8 @@
 #include "../common/config/config.h"
 #include "../common/config/dir_list.h"
 #include "../common/db_alias.h"
+#include "../jrd/replication/Publisher.h"
+#include "../jrd/replication/Applier.h"
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceObjects.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
@@ -125,6 +127,7 @@
 #include "../common/classes/fb_tls.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/RefMutex.h"
+#include "../common/classes/ParsedList.h"
 #include "../common/utils_proto.h"
 #include "../jrd/DebugInterface.h"
 #include "../jrd/CryptoManager.h"
@@ -677,6 +680,14 @@ namespace
 		validateHandle(tdbb, batch->getAttachment());
 	}
 
+	inline void validateHandle(thread_db* tdbb, JReplicator* const replicator)
+	{
+		if (!replicator)
+			status_exception::raise(Arg::Gds(isc_bad_repl_handle));
+
+		validateHandle(tdbb, replicator->getAttachment()->getHandle());
+	}
+
 	class AttachmentHolder
 	{
 	public:
@@ -905,8 +916,8 @@ void Trigger::compile(thread_db* tdbb)
 		}
 
 		statement->triggerName = name;
-		if (ssDefiner.specified && ssDefiner.value)
-			statement->triggerOwner = owner;
+		if (ssDefiner.orElse(false))
+			statement->triggerInvoker = att->getUserId(owner);
 
 		if (sys_trigger)
 			statement->flags |= JrdStatement::FLAG_SYS_TRIGGER;
@@ -933,117 +944,305 @@ void Trigger::release(thread_db* tdbb)
 	statement = NULL;
 }
 
-// Option block for database parameter block
 
-class DatabaseOptions
+namespace
 {
-public:
-	USHORT	dpb_wal_action;
-	SLONG	dpb_sweep_interval;
-	ULONG	dpb_page_buffers;
-	bool	dpb_set_page_buffers;
-	ULONG	dpb_buffers;
-	USHORT	dpb_verify;
-	USHORT	dpb_sweep;
-	USHORT	dpb_dbkey_scope;
-	USHORT	dpb_page_size;
-	bool	dpb_activate_shadow;
-	bool	dpb_delete_shadow;
-	bool	dpb_no_garbage;
-	USHORT	dpb_shutdown;
-	SSHORT	dpb_shutdown_delay;
-	USHORT	dpb_online;
-	bool	dpb_force_write;
-	bool	dpb_set_force_write;
-	bool	dpb_no_reserve;
-	bool	dpb_set_no_reserve;
-	SSHORT	dpb_interp;
-	bool	dpb_single_user;
-	bool	dpb_overwrite;
-	bool	dpb_sec_attach;
-	bool	dpb_disable_wal;
-	SLONG	dpb_connect_timeout;
-	SLONG	dpb_dummy_packet_interval;
-	bool	dpb_db_readonly;
-	bool	dpb_set_db_readonly;
-	bool	dpb_gfix_attach;
-	bool	dpb_gstat_attach;
-	USHORT	dpb_sql_dialect;
-	USHORT	dpb_set_db_sql_dialect;
-	SLONG	dpb_remote_pid;
-	bool	dpb_no_db_triggers;
-	bool	dpb_gbak_attach;
-	bool	dpb_utf8_filename;
-	ULONG	dpb_ext_call_depth;
-	ULONG	dpb_flags;			// to OR'd with dbb_flags
-	bool	dpb_nolinger;
-	bool	dpb_reset_icu;
-	bool	dpb_map_attach;
-	ULONG	dpb_remote_flags;
-
-	// here begin compound objects
-	// for constructor to work properly dpb_user_name
-	// MUST be FIRST
-	string	dpb_user_name;
-	AuthReader::AuthBlock	dpb_auth_block;
-	string	dpb_role_name;
-	string	dpb_journal;
-	string	dpb_lc_ctype;
-	PathName	dpb_working_directory;
-	string	dpb_set_db_charset;
-	string	dpb_network_protocol;
-	string	dpb_remote_address;
-	string	dpb_remote_host;
-	string	dpb_remote_os_user;
-	string	dpb_client_version;
-	string	dpb_remote_protocol;
-	string	dpb_trusted_login;
-	PathName	dpb_remote_process;
-	PathName	dpb_org_filename;
-	string	dpb_config;
-	string	dpb_session_tz;
-
-public:
-	static const ULONG DPB_FLAGS_MASK = DBB_damaged;
-
-	DatabaseOptions()
+	class DatabaseBindings : public CoercionArray
 	{
-		memset(this, 0,
-			reinterpret_cast<char*>(&this->dpb_user_name) - reinterpret_cast<char*>(this));
-	}
-
-	void get(const UCHAR*, USHORT, bool&);
-
-	void setBuffers(RefPtr<const Config> config)
-	{
-		if (dpb_buffers == 0)
+	public:
+		DatabaseBindings(MemoryPool& p)
+			: CoercionArray(p)
 		{
-			dpb_buffers = config->getDefaultDbCachePages();
+			// FB 2.5
+			versions[0].ind = getCount();
+			versions[0].txt = "2.5";
 
-			if (dpb_buffers < MIN_PAGE_BUFFERS)
-				dpb_buffers = MIN_PAGE_BUFFERS;
-			if (dpb_buffers > MAX_PAGE_BUFFERS)
-				dpb_buffers = MAX_PAGE_BUFFERS;
+			// bool compatibility
+			add().makeLegacy()->makeBoolean();
+
+			// FB 3.0
+			versions[1].ind = getCount();
+			versions[1].txt = "3.0";
+
+			// decfloat compatibility
+			add().makeLegacy()->makeDecimal128();
+
+			// int128 compatibility
+			add().makeLegacy()->makeInt128(0);
+
+			// TZ compatibility
+			add().makeLegacy()->makeTimestampTz();
+			add().makeLegacy()->makeTimeTz();
 		}
+
+		unsigned getCompatibilityIndex(const char* txt)
+		{
+			if (txt)
+			{
+				for (unsigned i = 0; i < FB_NELEM(versions); ++i)
+				{
+					if (strcmp(txt, versions[i].txt) == 0)
+						return i;
+				}
+			}
+
+			return ~0U;
+		}
+
+	private:
+		struct Version
+		{
+			unsigned ind;
+			const char* txt;
+		};
+		Version versions[2];
+	};
+
+	InitInstance<DatabaseBindings> databaseBindings;
+}
+
+
+namespace Jrd
+{
+	// Option block for database parameter block
+
+	class DatabaseOptions
+	{
+	public:
+		USHORT	dpb_wal_action;
+		SLONG	dpb_sweep_interval;
+		ULONG	dpb_page_buffers;
+		bool	dpb_set_page_buffers;
+		ULONG	dpb_buffers;
+		USHORT	dpb_verify;
+		USHORT	dpb_sweep;
+		USHORT	dpb_dbkey_scope;
+		USHORT	dpb_page_size;
+		bool	dpb_activate_shadow;
+		bool	dpb_delete_shadow;
+		bool	dpb_no_garbage;
+		USHORT	dpb_shutdown;
+		SSHORT	dpb_shutdown_delay;
+		USHORT	dpb_online;
+		bool	dpb_force_write;
+		bool	dpb_set_force_write;
+		bool	dpb_no_reserve;
+		bool	dpb_set_no_reserve;
+		SSHORT	dpb_interp;
+		bool	dpb_single_user;
+		bool	dpb_overwrite;
+		bool	dpb_sec_attach;
+		bool	dpb_disable_wal;
+		SLONG	dpb_connect_timeout;
+		SLONG	dpb_dummy_packet_interval;
+		bool	dpb_db_readonly;
+		bool	dpb_set_db_readonly;
+		bool	dpb_gfix_attach;
+		bool	dpb_gstat_attach;
+		USHORT	dpb_sql_dialect;
+		USHORT	dpb_set_db_sql_dialect;
+		SLONG	dpb_remote_pid;
+		bool	dpb_no_db_triggers;
+		bool	dpb_gbak_attach;
+		bool	dpb_utf8_filename;
+		ULONG	dpb_ext_call_depth;
+		ULONG	dpb_flags;			// to OR'd with dbb_flags
+		bool	dpb_nolinger;
+		bool	dpb_reset_icu;
+		bool	dpb_map_attach;
+		ULONG	dpb_remote_flags;
+		ReplicaMode	dpb_replica_mode;
+		bool	dpb_set_db_replica;
+
+		// here begin compound objects
+		// for constructor to work properly dpb_user_name
+		// MUST be FIRST
+		string	dpb_user_name;
+		AuthReader::AuthBlock	dpb_auth_block;
+		string	dpb_role_name;
+		string	dpb_journal;
+		string	dpb_lc_ctype;
+		PathName	dpb_working_directory;
+		string	dpb_set_db_charset;
+		string	dpb_network_protocol;
+		string	dpb_remote_address;
+		string	dpb_remote_host;
+		string	dpb_remote_os_user;
+		string	dpb_client_version;
+		string	dpb_remote_protocol;
+		string	dpb_trusted_login;
+		PathName	dpb_remote_process;
+		PathName	dpb_org_filename;
+		string	dpb_config;
+		string	dpb_session_tz;
+		PathName	dpb_set_bind;
+		string	dpb_decfloat_round;
+		string	dpb_decfloat_traps;
+
+	public:
+		static const ULONG DPB_FLAGS_MASK = DBB_damaged;
+
+		DatabaseOptions()
+		{
+			memset(this, 0, reinterpret_cast<char*>(&this->dpb_user_name) - reinterpret_cast<char*>(this));
+		}
+
+		void get(const UCHAR*, USHORT, bool&);
+
+		void setBuffers(RefPtr<const Config> config)
+		{
+			if (dpb_buffers == 0)
+			{
+				dpb_buffers = config->getDefaultDbCachePages();
+
+				if (dpb_buffers < MIN_PAGE_BUFFERS)
+					dpb_buffers = MIN_PAGE_BUFFERS;
+				if (dpb_buffers > MAX_PAGE_BUFFERS)
+					dpb_buffers = MAX_PAGE_BUFFERS;
+			}
+		}
+
+	private:
+		void getPath(ClumpletReader& reader, PathName& s)
+		{
+			reader.getPath(s);
+			if (!dpb_utf8_filename)
+				ISC_systemToUtf8(s);
+			ISC_unescape(s);
+		}
+
+		void getString(ClumpletReader& reader, string& s)
+		{
+			reader.getString(s);
+			if (!dpb_utf8_filename)
+				ISC_systemToUtf8(s);
+			ISC_unescape(s);
+		}
+	};
+
+	const CoercionArray* Database::getBindings() const
+	{
+		return &(databaseBindings());
 	}
 
-private:
-	void getPath(ClumpletReader& reader, PathName& s)
+	void Attachment::setInitialOptions(thread_db* tdbb, DatabaseOptions& options, bool newDb)
 	{
-		reader.getPath(s);
-		if (!dpb_utf8_filename)
-			ISC_systemToUtf8(s);
-		ISC_unescape(s);
+		if (newDb)
+		{
+			Database* dbb = tdbb->getDatabase();
+			const char* dataTypeCompatibility = dbb->dbb_config->getDataTypeCompatibility();
+			dbb->dbb_compatibility_index = databaseBindings().getCompatibilityIndex(dataTypeCompatibility);
+		}
+
+		att_initial_options.setInitialOptions(tdbb, options);
+		att_initial_options.resetAttachment(this);
 	}
 
-	void getString(ClumpletReader& reader, string& s)
+
+	void Attachment::InitialOptions::setInitialOptions(thread_db* tdbb, const DatabaseOptions& options)
 	{
-		reader.getString(s);
-		if (!dpb_utf8_filename)
-			ISC_systemToUtf8(s);
-		ISC_unescape(s);
+		if (options.dpb_set_bind.hasData())
+		{
+			ParsedList rules(options.dpb_set_bind, ";");
+			Attachment* att = tdbb->getAttachment();
+			AutoSetRestore<CoercionArray*> defSet(&att->att_dest_bind, getBindings());
+
+			for (unsigned i = 0; i < rules.getCount(); ++i)
+			{
+				rules[i].insert(0, "SET BIND OF ");
+
+				try
+				{
+					AutoPreparedStatement ps(att->prepareStatement(tdbb, nullptr, rules[i].ToString()));
+					ps->execute(tdbb, nullptr);
+				}
+				catch (const Exception& ex)
+				{
+					FbLocalStatus status;
+					ex.stuffException(&status);
+
+					// strip spam messages
+					const ISC_STATUS* v = status->getErrors();
+					for (; v[0] == isc_arg_gds; v = fb_utils::nextArg(v))
+					{
+						if (v[1] != isc_dsql_error && v[1] != isc_sqlerr)
+							break;
+					}
+
+					// build and throw new vector
+					Arg::Gds newErr(isc_bind_err);
+					newErr << options.dpb_set_bind <<
+						Arg::Gds(isc_bind_statement) << rules[i];
+					newErr << Arg::StatusVector(v);
+					newErr.raise();
+				}
+			}
+		}
+
+		if (options.dpb_decfloat_round.hasData())
+		{
+			const DecFloatConstant* dfConst = DecFloatConstant::getByText(
+				options.dpb_decfloat_round.c_str(), FB_DEC_RoundModes, FB_DEC_RMODE_OFFSET);
+
+			if (!dfConst)
+				(Arg::Gds(isc_invalid_decfloat_round) << options.dpb_decfloat_round).raise();
+
+			decFloatStatus.roundingMode = dfConst->val;
+		}
+
+		if (options.dpb_decfloat_traps.hasData())
+		{
+			FB_SIZE_T pos = -1;
+			USHORT traps = 0;
+
+			do {
+				FB_SIZE_T start = pos + 1;
+				pos = options.dpb_decfloat_traps.find(',', start);
+
+				const auto trap = options.dpb_decfloat_traps.substr(start,
+					(pos == string::npos ? pos : pos - start));
+
+				const DecFloatConstant* dfConst = DecFloatConstant::getByText(
+					trap.c_str(), FB_DEC_IeeeTraps, FB_DEC_TRAPS_OFFSET);
+
+				if (!dfConst)
+					(Arg::Gds(isc_invalid_decfloat_trap) << trap).raise();
+
+				traps |= dfConst->val;
+
+				if (pos != string::npos)
+				{
+					const char* p = &options.dpb_decfloat_traps[pos + 1];
+
+					while (*p == ' ')
+					{
+						++p;
+						++pos;
+					}
+				}
+
+			} while (pos != string::npos);
+
+			decFloatStatus.decExtFlag = traps;
+		}
+
+		originalTimeZone = options.dpb_session_tz.isEmpty() ?
+			TimeZoneUtil::getSystemTimeZone() :
+			TimeZoneUtil::parse(options.dpb_session_tz.c_str(), options.dpb_session_tz.length());
 	}
-};
+
+	void Attachment::InitialOptions::resetAttachment(Attachment* attachment) const
+	{
+		// reset DecFloat options
+		attachment->att_dec_status = decFloatStatus;
+
+		// reset time zone options
+		attachment->att_current_timezone = attachment->att_original_timezone = originalTimeZone;
+
+		// reset bindings
+		attachment->att_bindings.clear();
+	}
+}	// namespace Jrd
 
 /// trace manager support
 
@@ -1089,15 +1288,14 @@ namespace {
 }
 static VdnResult	verifyDatabaseName(const PathName&, FbStatusVector*, bool);
 
-static void		unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* userStatus,
-	Jrd::Attachment* attachment, Database* dbb, bool internalFlag);
+static void		unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* userStatus, bool internalFlag);
 static JAttachment*	initAttachment(thread_db*, const PathName&, const PathName&, RefPtr<const Config>, bool,
 	const DatabaseOptions&, RefMutexUnlock&, IPluginConfig*, JProvider*);
 static JAttachment*	create_attachment(const PathName&, Database*, const DatabaseOptions&, bool newDb);
 static void		prepare_tra(thread_db*, jrd_tra*, USHORT, const UCHAR*);
+static void		release_attachment(thread_db*, Attachment*);
 static void		start_transaction(thread_db* tdbb, bool transliterate, jrd_tra** tra_handle,
 	Jrd::Attachment* attachment, unsigned int tpb_length, const UCHAR* tpb);
-static void		release_attachment(thread_db*, Jrd::Attachment*);
 static void		rollback(thread_db*, jrd_tra*, const bool);
 static void		purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsigned flags = 0);
 static void		getUserInfo(UserId&, const DatabaseOptions&, const char*,
@@ -1542,9 +1740,11 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 			TRA_init(attachment);
 
+			bool newDb = false;
 			if (dbb->dbb_flags & DBB_new)
 			{
 				// If we're a not a secondary attachment, initialize some stuff
+				newDb = true;
 
 				// NS: Use alias as database ID only if accessing database using file name is not possible.
 				//
@@ -1663,8 +1863,10 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 			PAG_attachment_id(tdbb);
 
+			bool cleanupTransactions = false;
+
 			if (!options.dpb_verify && CCH_exclusive(tdbb, LCK_PW, LCK_NO_WAIT, NULL))
-				TRA_cleanup(tdbb);
+				cleanupTransactions = TRA_cleanup(tdbb);
 
 			if (invalid_client_SQL_dialect)
 			{
@@ -1725,6 +1927,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 			userId.makeRoleName(options.dpb_sql_dialect);
 			UserId::sclInit(tdbb, false, userId);
+
+			Monitoring::publishAttachment(tdbb);
 
 			// This pair (SHUT_database/SHUT_online) checks itself for valid user name
 			if (options.dpb_shutdown)
@@ -1875,7 +2079,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			if (options.dpb_sweep_interval > -1)
 			{
 				validateAccess(tdbb, attachment, CHANGE_HEADER_SETTINGS);
-				PAG_sweep_interval(tdbb, options.dpb_sweep_interval);
+				PAG_set_sweep_interval(tdbb, options.dpb_sweep_interval);
 				dbb->dbb_sweep_interval = options.dpb_sweep_interval;
 			}
 
@@ -1917,10 +2121,25 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				dbb->dbb_linger_seconds = 0;
 			}
 
+			if (options.dpb_set_db_replica)
+			{
+				validateAccess(tdbb, attachment, CHANGE_HEADER_SETTINGS);
+				if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, NULL))
+				{
+					ERR_post(Arg::Gds(isc_lock_timeout) <<
+							 Arg::Gds(isc_obj_in_use) << Arg::Str(org_filename));
+				}
+				PAG_set_db_replica(tdbb, options.dpb_replica_mode);
+				dbb->dbb_linger_seconds = 0;
+			}
+
 			CCH_init2(tdbb);
 			VIO_init(tdbb);
+			attachment->setInitialOptions(tdbb, options, newDb);
 
 			CCH_release_exclusive(tdbb);
+
+			REPL_attach(tdbb, cleanupTransactions);
 
 			attachment->att_trace_manager->activate();
 			if (attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_ATTACH))
@@ -1933,9 +2152,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			// Recover database after crash during backup difference file merge
 			dbb->dbb_backup_manager->endBackup(tdbb, true); // true = do recovery
 
-			if (options.dpb_sweep & isc_dpb_records) {
+			if (options.dpb_sweep & isc_dpb_records)
 				TRA_sweep(tdbb);
-			}
 
 			dbb->dbb_crypto_manager->startCryptThread(tdbb);
 
@@ -2011,7 +2229,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			}
 
 			mapping.clearMainHandle();
-			unwindAttach(tdbb, ex, user_status, attachment, dbb, existingId);
+			unwindAttach(tdbb, ex, user_status, existingId);
 		}
 	}
 	catch (const Exception& ex)
@@ -2676,7 +2894,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				// try to create with overwrite = false
 				pageSpace->file = PIO_create(tdbb, expanded_name, false, false);
 			}
-			catch (status_exception)
+			catch (const status_exception&)
 			{
 				if (options.dpb_overwrite)
 				{
@@ -2810,7 +3028,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 			if (options.dpb_sweep_interval > -1)
 			{
-				PAG_sweep_interval(tdbb, options.dpb_sweep_interval);
+				PAG_set_sweep_interval(tdbb, options.dpb_sweep_interval);
 				dbb->dbb_sweep_interval = options.dpb_sweep_interval;
 			}
 
@@ -2836,7 +3054,22 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				PAG_set_db_readonly(tdbb, options.dpb_db_readonly);
 			}
 
+			if (options.dpb_set_db_replica)
+			{
+				if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, &dbbGuard))
+				{
+					ERR_post(Arg::Gds(isc_lock_timeout) <<
+							 Arg::Gds(isc_obj_in_use) << Arg::Str(org_filename));
+				}
+
+				PAG_set_db_replica(tdbb, options.dpb_replica_mode);
+			}
+
 			PAG_attachment_id(tdbb);
+
+			Monitoring::publishAttachment(tdbb);
+
+			attachment->setInitialOptions(tdbb, options, true);
 
 			CCH_release_exclusive(tdbb);
 
@@ -2887,7 +3120,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				filename, options, true, user_status);
 
 			mapping.clearMainHandle();
-			unwindAttach(tdbb, ex, user_status, attachment, dbb, false);
+			unwindAttach(tdbb, ex, user_status, false);
 		}
 	}
 	catch (const Exception& ex)
@@ -4875,6 +5108,40 @@ IBatch* JAttachment::createBatch(CheckStatusWrapper* status, ITransaction* trans
 }
 
 
+IReplicator* JAttachment::createReplicator(CheckStatusWrapper* user_status)
+{
+	JReplicator* jr = NULL;
+
+	try
+	{
+		EngineContextHolder tdbb(user_status, this, FB_FUNCTION);
+		check_database(tdbb);
+
+		try
+		{
+			const auto att = tdbb->getAttachment();
+
+			if (!att->att_repl_applier)
+				att->att_repl_applier = Applier::create(tdbb);
+
+			jr = FB_NEW JReplicator(getStable());
+			jr->addRef();
+		}
+		catch (const Exception& ex)
+		{
+			transliterateException(tdbb, ex, user_status, "JResultSet::fetchNext");
+		}
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(user_status);
+	}
+
+	successful_completion(user_status);
+	return jr;
+}
+
+
 int JResultSet::fetchNext(CheckStatusWrapper* user_status, void* buffer)
 {
 	try
@@ -5953,6 +6220,116 @@ void JBatch::cancel(CheckStatusWrapper* status)
 }
 
 
+JReplicator::JReplicator(StableAttachmentPart* sa)
+	: sAtt(sa)
+{ }
+
+
+int JReplicator::release()
+{
+	if (--refCounter != 0)
+		return 1;
+
+	LocalStatus status;
+	CheckStatusWrapper statusWrapper(&status);
+
+	freeEngineData(&statusWrapper);
+
+	delete this;
+	return 0;
+}
+
+
+void JReplicator::freeEngineData(Firebird::CheckStatusWrapper* user_status)
+{
+	try
+	{
+		EngineContextHolder tdbb(user_status, this, FB_FUNCTION);
+		check_database(tdbb);
+
+		try
+		{
+			const auto att = sAtt->getHandle();
+			if (att)
+				att->att_repl_applier.reset();
+		}
+		catch (const Exception& ex)
+		{
+			transliterateException(tdbb, ex, user_status, FB_FUNCTION);
+			return;
+		}
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(user_status);
+		return;
+	}
+
+	successful_completion(user_status);
+}
+
+
+void JReplicator::process(CheckStatusWrapper* status, unsigned length, const UCHAR* data)
+{
+	try
+	{
+		EngineContextHolder tdbb(status, this, FB_FUNCTION);
+		check_database(tdbb);
+
+		try
+		{
+			const auto att = sAtt->getHandle();
+			att->att_repl_applier->process(tdbb, length, data);
+		}
+		catch (const Exception& ex)
+		{
+			transliterateException(tdbb, ex, status, "JReplicator::process");
+			return;
+		}
+
+		trace_warning(tdbb, status, "JBatch::add");
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+		return;
+	}
+
+	successful_completion(status);
+}
+
+
+void JReplicator::close(CheckStatusWrapper* status)
+{
+	try
+	{
+		EngineContextHolder tdbb(status, this, FB_FUNCTION);
+		check_database(tdbb);
+
+		try
+		{
+			const auto att = sAtt->getHandle();
+			att->att_repl_applier->shutdown(tdbb);
+			att->att_repl_applier.reset();
+		}
+		catch (const Exception& ex)
+		{
+			transliterateException(tdbb, ex, status, "JReplicator::close");
+			return;
+		}
+
+		trace_warning(tdbb, status, "JBatch::add");
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+		return;
+	}
+
+	successful_completion(status);
+}
+
+
 void JAttachment::ping(CheckStatusWrapper* user_status)
 {
 /**************************************
@@ -6649,6 +7026,23 @@ void DatabaseOptions::get(const UCHAR* dpb, USHORT dpb_length, bool& invalid_cli
 			rdr.getString(dpb_session_tz);
 			break;
 
+		case isc_dpb_set_db_replica:
+			dpb_set_db_replica = true;
+			dpb_replica_mode = (ReplicaMode) rdr.getInt();
+			break;
+
+		case isc_dpb_set_bind:
+			rdr.getPath(dpb_set_bind);
+			break;
+
+		case isc_dpb_decfloat_round:
+			rdr.getString(dpb_decfloat_round);
+			break;
+
+		case isc_dpb_decfloat_traps:
+			rdr.getString(dpb_decfloat_traps);
+			break;
+
 		default:
 			break;
 		}
@@ -6866,7 +7260,7 @@ static JAttachment* create_attachment(const PathName& alias_name,
 	RefDeb(DEB_AR_JATT, "jrd/create_attachment()");
 	fb_assert(dbb->locked());
 
-	Jrd::Attachment* attachment = NULL;
+	Attachment* attachment = NULL;
 	{ // scope
 		MutexLockGuard guard(newAttachmentMutex, FB_FUNCTION);
 		if (engineShutdown)
@@ -6874,7 +7268,7 @@ static JAttachment* create_attachment(const PathName& alias_name,
 			status_exception::raise(Arg::Gds(isc_att_shutdown));
 		}
 
-		attachment = Jrd::Attachment::create(dbb);
+		attachment = Attachment::create(dbb);
 		attachment->att_next = dbb->dbb_attachments;
 		dbb->dbb_attachments = attachment;
 	}
@@ -6999,7 +7393,7 @@ static void prepare_tra(thread_db* tdbb, jrd_tra* transaction, USHORT length, co
 }
 
 
-static void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
+void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 {
 /**************************************
  *
@@ -7018,6 +7412,12 @@ static void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 
 	if (!attachment)
 		return;
+
+	if (attachment->att_replicator)
+		attachment->att_replicator->dispose();
+
+	if (attachment->att_repl_applier)
+		attachment->att_repl_applier->shutdown(tdbb);
 
 	if (dbb->dbb_crypto_manager)
 		dbb->dbb_crypto_manager->detach(tdbb, attachment);
@@ -7941,8 +8341,7 @@ static void getUserInfo(UserId& user, const DatabaseOptions& options, const char
 	}
 }
 
-static void unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* userStatus,
-	Jrd::Attachment* attachment, Database* dbb, bool internalFlag)
+static void unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* userStatus, bool internalFlag)
 {
 	RefDeb(DEB_RLS_JATT, "unwindAttach");
 	RefDeb(DEB_AR_JATT, "unwindAttach");
@@ -7950,10 +8349,14 @@ static void unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* u
 
 	try
 	{
+		const auto dbb = tdbb->getDatabase();
+
 		if (dbb)
 		{
 			fb_assert(!dbb->locked());
 			ThreadStatusGuard temp_status(tdbb);
+
+			const auto attachment = tdbb->getAttachment();
 
 			if (attachment)
 			{
@@ -8184,18 +8587,18 @@ unsigned int TimeoutTimer::timeToExpire() const
 	return r > 0 ? r : 0;
 }
 
-bool TimeoutTimer::getExpireTimestamp(const ISC_TIMESTAMP start, ISC_TIMESTAMP& exp) const
+bool TimeoutTimer::getExpireTimestamp(const ISC_TIMESTAMP_TZ start, ISC_TIMESTAMP_TZ& exp) const
 {
 	if (!m_started || m_expired)
 		return false;
 
-	static const SINT64 ISC_TICKS_PER_DAY = 24 * 60 * 60 * ISC_TIME_SECONDS_PRECISION;
-
-	SINT64 ticks = start.timestamp_date * ISC_TICKS_PER_DAY + start.timestamp_time;
+	SINT64 ticks = start.utc_timestamp.timestamp_date * TimeStamp::ISC_TICKS_PER_DAY +
+		start.utc_timestamp.timestamp_time;
 	ticks += m_value * ISC_TIME_SECONDS_PRECISION / 1000;
 
-	exp.timestamp_date = ticks / ISC_TICKS_PER_DAY;
-	exp.timestamp_time = ticks % ISC_TICKS_PER_DAY;
+	exp.utc_timestamp.timestamp_date = ticks / TimeStamp::ISC_TICKS_PER_DAY;
+	exp.utc_timestamp.timestamp_time = ticks % TimeStamp::ISC_TICKS_PER_DAY;
+	exp.time_zone = start.time_zone;
 
 	return true;
 }
@@ -8256,18 +8659,18 @@ unsigned int TimeoutTimer::timeToExpire() const
 	return r > 0 ? r : 0;
 }
 
-bool TimeoutTimer::getExpireTimestamp(const ISC_TIMESTAMP start, ISC_TIMESTAMP& exp) const
+bool TimeoutTimer::getExpireTimestamp(const ISC_TIMESTAMP_TZ start, ISC_TIMESTAMP_TZ& exp) const
 {
 	if (!m_start)
 		return false;
 
-	static const SINT64 ISC_TICKS_PER_DAY = 24 * 60 * 60 * ISC_TIME_SECONDS_PRECISION;
-
-	SINT64 ticks = start.timestamp_date * ISC_TICKS_PER_DAY + start.timestamp_time;
+	SINT64 ticks = start.utc_timestamp.timestamp_date * TimeStamp::ISC_TICKS_PER_DAY +
+		start.utc_timestamp.timestamp_time;
 	ticks += m_value * ISC_TIME_SECONDS_PRECISION / 1000;
 
-	exp.timestamp_date = ticks / ISC_TICKS_PER_DAY;
-	exp.timestamp_time = ticks % ISC_TICKS_PER_DAY;
+	exp.utc_timestamp.timestamp_date = ticks / TimeStamp::ISC_TICKS_PER_DAY;
+	exp.utc_timestamp.timestamp_time = ticks % TimeStamp::ISC_TICKS_PER_DAY;
+	exp.time_zone = start.time_zone;
 
 	return true;
 }
@@ -8344,13 +8747,11 @@ ISC_STATUS thread_db::checkCancelState(ISC_STATUS* secondary)
 		{
 			if (database->dbb_ast_flags & DBB_shutdown)
 				return isc_shutdown;
-			else if (!(tdbb_flags & TDBB_shutdown_manager))
-			{
-				if (secondary)
-					*secondary = attachment->getStable() ? attachment->getStable()->getShutError() : 0;
 
-				return isc_att_shutdown;
-			}
+			if (secondary)
+				*secondary = attachment->getStable() ? attachment->getStable()->getShutError() : 0;
+
+			return isc_att_shutdown;
 		}
 
 		// If a cancel has been raised, defer its acknowledgement
@@ -9051,8 +9452,6 @@ void TrigVector::release(thread_db* tdbb) const
 			JrdStatement* stmt = t->statement;
 			if (stmt)
 				stmt->release(tdbb);
-
-			delete t->extTrigger;
 		}
 
 		delete this;

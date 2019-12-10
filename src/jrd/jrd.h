@@ -170,6 +170,11 @@ public:
 		  extBody(p),
 		  extTrigger(NULL)
 	{}
+
+	virtual ~Trigger()
+	{
+		delete extTrigger;
+	}
 };
 
 
@@ -253,8 +258,19 @@ public:
 		prc_record_format = NULL;
 	}
 
+	virtual ~jrd_prc()
+	{
+		delete prc_external;
+	}
+
 	virtual bool checkCache(thread_db* tdbb) const;
 	virtual void clearCache(thread_db* tdbb);
+
+	virtual void releaseExternal()
+	{
+		delete prc_external;
+		prc_external = NULL;
+	}
 };
 
 
@@ -385,7 +401,7 @@ public:
 	unsigned int timeToExpire() const;
 
 	// evaluate expire timestamp using start timestamp
-	bool getExpireTimestamp(const ISC_TIMESTAMP start, ISC_TIMESTAMP& exp) const;
+	bool getExpireTimestamp(const ISC_TIMESTAMP_TZ start, ISC_TIMESTAMP_TZ& exp) const;
 
 	// set timeout value in milliseconds and secondary error code
 	void setup(unsigned int value, ISC_STATUS error)
@@ -429,7 +445,7 @@ public:
 	unsigned int timeToExpire() const;
 
 	// evaluate expire timestamp using start timestamp
-	bool getExpireTimestamp(const ISC_TIMESTAMP start, ISC_TIMESTAMP& exp) const;
+	bool getExpireTimestamp(const ISC_TIMESTAMP_TZ start, ISC_TIMESTAMP_TZ& exp) const;
 
 	// set timeout value in milliseconds and secondary error code
 	void setup(unsigned int value, ISC_STATUS error)
@@ -458,21 +474,22 @@ private:
 
 // tdbb_flags
 
-const USHORT TDBB_sweeper				= 1;		// Thread sweeper or garbage collector
-const USHORT TDBB_no_cache_unwind		= 2;		// Don't unwind page buffer cache
-const USHORT TDBB_backup_write_locked	= 4;    	// BackupManager has write lock on LCK_backup_database
-const USHORT TDBB_stack_trace_done		= 8;		// PSQL stack trace is added into status-vector
-const USHORT TDBB_shutdown_manager		= 16;		// Server shutdown thread
-const USHORT TDBB_dont_post_dfw			= 32;		// dont post DFW tasks as deferred work is performed now
-const USHORT TDBB_sys_error				= 64;		// error shouldn't be handled by the looper
-const USHORT TDBB_verb_cleanup			= 128;		// verb cleanup is in progress
-const USHORT TDBB_use_db_page_space		= 256;		// use database (not temporary) page space in GTT operations
-const USHORT TDBB_detaching				= 512;		// detach is in progress
-const USHORT TDBB_wait_cancel_disable	= 1024;		// don't cancel current waiting operation
-const USHORT TDBB_cache_unwound			= 2048;		// page cache was unwound
-const USHORT TDBB_trusted_ddl			= 4096;		// skip DDL permission checks. Set after DDL permission check and clear after DDL execution
-const USHORT TDBB_reset_stack			= 8192;		// stack should be reset after stack overflow exception
-const USHORT TDBB_dfw_cleanup			= 16384;	// DFW cleanup phase is active
+const ULONG TDBB_sweeper				= 1;		// Thread sweeper or garbage collector
+const ULONG TDBB_no_cache_unwind		= 2;		// Don't unwind page buffer cache
+const ULONG TDBB_backup_write_locked	= 4;    	// BackupManager has write lock on LCK_backup_database
+const ULONG TDBB_stack_trace_done		= 8;		// PSQL stack trace is added into status-vector
+const ULONG TDBB_dont_post_dfw			= 16;		// dont post DFW tasks as deferred work is performed now
+const ULONG TDBB_sys_error				= 32;		// error shouldn't be handled by the looper
+const ULONG TDBB_verb_cleanup			= 64;		// verb cleanup is in progress
+const ULONG TDBB_use_db_page_space		= 128;		// use database (not temporary) page space in GTT operations
+const ULONG TDBB_detaching				= 256;		// detach is in progress
+const ULONG TDBB_wait_cancel_disable	= 512;		// don't cancel current waiting operation
+const ULONG TDBB_cache_unwound			= 1024;		// page cache was unwound
+const ULONG TDBB_trusted_ddl			= 2048;		// skip DDL permission checks. Set after DDL permission check and clear after DDL execution
+const ULONG TDBB_reset_stack			= 4096;		// stack should be reset after stack overflow exception
+const ULONG TDBB_dfw_cleanup			= 8192;		// DFW cleanup phase is active
+const ULONG TDBB_repl_sql				= 16384;	// SQL statement is being replicated
+const ULONG TDBB_replicator				= 32768;	// Replicator
 
 class thread_db : public Firebird::ThreadData
 {
@@ -521,8 +538,8 @@ public:
 	}
 
 	FbStatusVector*	tdbb_status_vector;
-	SSHORT		tdbb_quantum;		// Cycles remaining until voluntary schedule
-	USHORT		tdbb_flags;
+	SLONG		tdbb_quantum;		// Cycles remaining until voluntary schedule
+	ULONG		tdbb_flags;
 
 	TraNumber	tdbb_temp_traid;	// current temporary table scope
 

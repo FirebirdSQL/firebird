@@ -283,10 +283,14 @@ bool CreateAlterPackageNode::checkPermission(thread_db* tdbb, jrd_tra* transacti
 {
 	dsc dscName;
 	dscName.makeText(name.length(), CS_METADATA, (UCHAR*) name.c_str());
+
 	if (alter)
-		SCL_check_package(tdbb, &dscName, SCL_alter);
-	else
-		SCL_check_create_access(tdbb, SCL_object_package);
+	{
+		if (SCL_check_package(tdbb, &dscName, SCL_alter) || !create)
+			return true;
+	}
+
+	SCL_check_create_access(tdbb, SCL_object_package);
 	return true;
 }
 

@@ -33,7 +33,7 @@ namespace Jrd {
 }
 
 bool	TRA_active_transactions(Jrd::thread_db* tdbb, Jrd::Database*);
-void	TRA_cleanup(Jrd::thread_db*);
+bool	TRA_cleanup(Jrd::thread_db*);
 void	TRA_commit(Jrd::thread_db* tdbb, Jrd::jrd_tra*, const bool);
 void	TRA_extend_tip(Jrd::thread_db* tdbb, ULONG /*, struct Jrd::win* */);
 int		TRA_fetch_state(Jrd::thread_db* tdbb, TraNumber number);

@@ -234,6 +234,15 @@
     <ClCompile Include="..\..\..\src\common\TimeZoneUtil.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\ParsedList.cpp">
+      <Filter>classes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\common\keywords.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\common\Int128.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\common\xdr_proto.h">
@@ -560,6 +569,9 @@
     <ClInclude Include="..\..\..\src\common\sha2\sha2.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\keywords.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\zip.h">
       <Filter>headers</Filter>
     </ClInclude>
@@ -567,6 +579,12 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\TimeZoneUtil.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\ParsedList.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\Int128.h">
       <Filter>headers</Filter>
     </ClInclude>
   </ItemGroup>

@@ -31,6 +31,7 @@
 #include "../yvalve/gds_proto.h"
 #include "../common/gdsassert.h"
 #include "../common/DecFloat.h"
+#include "../common/Int128.h"
 
 inline UCHAR* XDR_ALLOC(ULONG size)
 {
@@ -268,9 +269,14 @@ bool_t xdr_datum( XDR* xdrs, const dsc* desc, UCHAR* buffer)
 		break;
 
 	case dtype_dec128:
-	case dtype_dec_fixed:
 		fb_assert(desc->dsc_length >= sizeof(Firebird::Decimal128));
 		if (!xdr_dec128(xdrs, reinterpret_cast<Firebird::Decimal128*>(p)))
+			return FALSE;
+		break;
+
+	case dtype_int128:
+		fb_assert(desc->dsc_length >= sizeof(Firebird::Int128));
+		if (!xdr_int128(xdrs, reinterpret_cast<Firebird::Int128*>(p)))
 			return FALSE;
 		break;
 
@@ -369,6 +375,19 @@ bool_t xdr_dec64(XDR* xdrs, Firebird::Decimal64* ip)
 
 
 bool_t xdr_dec128(XDR* xdrs, Firebird::Decimal128* ip)
+{
+	UCHAR* bytes = ip->getBytes();
+
+#ifndef WORDS_BIGENDIAN
+	return xdr_hyper(xdrs, &bytes[8]) && xdr_hyper(xdrs, &bytes[0]);
+#else
+	fb_assert(false);			// Dec64/128 XDR not tested on bigendians!
+	return xdr_hyper(xdrs, &bytes[0]) && xdr_hyper(xdrs, &bytes[8]);
+#endif
+}
+
+
+bool_t xdr_int128(XDR* xdrs, Firebird::Int128* ip)
 {
 	UCHAR* bytes = ip->getBytes();
 

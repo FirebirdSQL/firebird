@@ -150,6 +150,7 @@ Parameters specific to Firebird uninstalls
     firebird.log
     security3.fdb
     fbtrace.conf
+    replication.conf
 
   The assumption is that these files will be useful to users
   re-installing or upgrading Firebird. Starting with Firebird 2.1

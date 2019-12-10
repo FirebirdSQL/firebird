@@ -27,7 +27,7 @@
  *
  */
 
-#define FB_COMPILING_WHY_CPP
+//#define FB_COMPILING_WHY_CPP
 
 #include "firebird.h"
 #include "firebird/Interface.h"
@@ -36,7 +36,7 @@
 #include "gen/msg_facs.h"
 #include "../yvalve/YObjects.h"
 #include "../dsql/sqlda.h"
-#include "../dsql/sqlda_pub.h"
+#include "firebird/impl/sqlda_pub.h"
 #include "../common/gdsassert.h"
 #include "../common/db_alias.h"
 #include "../common/StatementMetadata.h"
@@ -68,9 +68,9 @@
 #include "../yvalve/PluginManager.h"
 #include "../jrd/acl.h"
 #include "../jrd/align.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../common/msg_encode.h"
-#include "../jrd/inf_pub.h"
+#include "firebird/impl/inf_pub.h"
 
 #ifdef HAVE_SIGNAL_H
 #include <signal.h>
@@ -87,8 +87,8 @@ static void nullCheck(const FB_API_HANDLE* ptr, ISC_STATUS code);
 static void badSqldaVersion(const short version);
 static int sqldaTruncateString(char* buffer, FB_SIZE_T size, const char* s);
 static void sqldaDescribeParameters(XSQLDA* sqlda, IMessageMetadata* parameters);
-static ISC_STATUS openOrCreateBlob(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, FB_API_HANDLE* blobHandle, ISC_QUAD* blobId,
+static ISC_STATUS openOrCreateBlob(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, isc_blob_handle* blobHandle, ISC_QUAD* blobId,
 	USHORT bpbLength, const UCHAR* bpb, bool createFlag);
 
 
@@ -655,13 +655,13 @@ int SQLDAMetadata::detach()
 
 
 GlobalPtr<RWLock> handleMappingLock;
-GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, YService*> > > > services;
-GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, YAttachment*> > > > attachments;
+GlobalPtr<GenericMap<Pair<NonPooled<isc_svc_handle, YService*> > > > services;
+GlobalPtr<GenericMap<Pair<NonPooled<isc_db_handle, YAttachment*> > > > attachments;
 GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, YEvents*> > > > events;
-GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, YTransaction*> > > > transactions;
-GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, IscStatement*> > > > statements;
-GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, YRequest*> > > > requests;
-GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, YBlob*> > > > blobs;
+GlobalPtr<GenericMap<Pair<NonPooled<isc_tr_handle, YTransaction*> > > > transactions;
+GlobalPtr<GenericMap<Pair<NonPooled<isc_stmt_handle, IscStatement*> > > > statements;
+GlobalPtr<GenericMap<Pair<NonPooled<isc_req_handle, YRequest*> > > > requests;
+GlobalPtr<GenericMap<Pair<NonPooled<isc_blob_handle, YBlob*> > > > blobs;
 
 bool shutdownStarted = false;
 
@@ -1125,23 +1125,22 @@ namespace Why
 
 	static AtomicCounter dispCounter;
 
+	enum CHECK_ENTRY { CHECK_NONE, CHECK_ALL, CHECK_WARN_ZERO_HANDLE };
+
 	template <typename Y>
 	class YEntry : public FpeControl	//// TODO: move FpeControl to the engine
 	{
 	public:
-		YEntry(CheckStatusWrapper* aStatus, Y* object, int checkAttachment = 1)
+		YEntry(CheckStatusWrapper* aStatus, Y* object, CHECK_ENTRY checkAttachment = CHECK_ALL)
 			: ref(object->attachment.get()), nextRef(NULL)
 		{
 			aStatus->init();
 			init(object->next);
 
-			if (checkAttachment && !(nextRef.hasData()))
-			{
-				fini();
-				Arg::Gds(Y::ERROR_CODE).raise();
-			}
+			if (checkAttachment != CHECK_NONE && !(nextRef.hasData()))
+				nextIsEmpty(aStatus, checkAttachment);
 
-			if (checkAttachment && ref && ref->savedStatus.getError())
+			if (checkAttachment != CHECK_NONE && ref && ref->savedStatus.getError())
 			{
 				const IStatus* err = ref->savedStatus.value();
 				fini();
@@ -1202,6 +1201,17 @@ namespace Why
 	private:
 		YEntry(const YEntry&);	// prohibit copy constructor
 
+		void nextIsEmpty(CheckStatusWrapper* aStatus, CHECK_ENTRY check)
+		{
+			if (check == CHECK_WARN_ZERO_HANDLE)
+				Arg::Warning(Y::ERROR_CODE).appendTo(aStatus);
+			else
+			{
+				fini();
+				Arg::Gds(Y::ERROR_CODE).raise();
+			}
+		}
+
 	private:
 		RefPtr<typename Y::YRef> ref;
 		RefPtr<typename Y::NextInterface> nextRef;
@@ -1223,16 +1233,16 @@ namespace Why
 
 		~IscStatement() override;
 
-		FB_API_HANDLE& getHandle();
+		isc_stmt_handle& getHandle();
 		void destroy(unsigned);
 
-		void openCursor(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
+		void openCursor(CheckStatusWrapper* status, isc_tr_handle* traHandle,
 			IMessageMetadata* inMetadata, UCHAR* buffer, IMessageMetadata* outMetadata);
 
 		void closeCursor(CheckStatusWrapper* status, bool raise);
 		void closeStatement(CheckStatusWrapper* status);
 
-		void execute(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
+		void execute(CheckStatusWrapper* status, isc_tr_handle* traHandle,
 			IMessageMetadata* inMetadata, UCHAR* inBuffer, IMessageMetadata* outMetadata, UCHAR* outBuffer);
 
 		FB_BOOLEAN fetch(CheckStatusWrapper* status, IMessageMetadata* outMetadata, UCHAR* outBuffer);
@@ -1265,24 +1275,21 @@ namespace Why
 		AtomicAttPtr attachment;
 		string cursorName;
 		YStatement* statement;
-		FB_API_HANDLE* userHandle;
+		isc_stmt_handle* userHandle;
 		bool pseudoOpened, delayedFormat;
 	};
 
 	template <>
-	YEntry<YAttachment>::YEntry(CheckStatusWrapper* aStatus, YAttachment* aAttachment, int checkAttachment)
+	YEntry<YAttachment>::YEntry(CheckStatusWrapper* aStatus, YAttachment* aAttachment, CHECK_ENTRY checkAttachment)
 		: ref(aAttachment), nextRef(NULL)
 	{
 		aStatus->init();
 		init(aAttachment->next);
 
-		if (checkAttachment && !(nextRef.hasData()))
-		{
-			fini();
-			Arg::Gds(YAttachment::ERROR_CODE).raise();
-		}
+		if (checkAttachment != CHECK_NONE && !(nextRef.hasData()))
+			nextIsEmpty(aStatus, checkAttachment);
 
-		if (checkAttachment && aAttachment->savedStatus.getError())
+		if (checkAttachment != CHECK_NONE && aAttachment->savedStatus.getError())
 		{
 			fini();
 			status_exception::raise(aAttachment->savedStatus.value());
@@ -1290,18 +1297,14 @@ namespace Why
 	}
 
 	template <>
-	YEntry<YService>::YEntry(CheckStatusWrapper* aStatus, YService* aService, int checkService)
+	YEntry<YService>::YEntry(CheckStatusWrapper* aStatus, YService* aService, CHECK_ENTRY checkService)
 		: ref(aService), nextRef(NULL)
 	{
 		aStatus->init();
 		init(aService->next);
 
-		if (checkService && !nextRef.hasData())
-		{
-			fini();
-			Arg::Gds(YService::ERROR_CODE).raise();
-		}
-
+		if (checkService != CHECK_NONE && !nextRef.hasData())
+			nextIsEmpty(aStatus, checkService);
 	}
 
 	class DispatcherEntry : public FpeControl	//// TODO: move FpeControl to the engine
@@ -1341,7 +1344,7 @@ namespace Why
 
 struct TEB
 {
-	FB_API_HANDLE* teb_database;
+	isc_db_handle* teb_database;
 	int teb_tpb_length;
 	const UCHAR* teb_tpb;
 };
@@ -1460,8 +1463,8 @@ static void sqldaDescribeParameters(XSQLDA* sqlda, IMessageMetadata* parameters)
 }
 
 // Open or create an existing blob (extended edition).
-static ISC_STATUS openOrCreateBlob(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, FB_API_HANDLE* blobHandle, ISC_QUAD* blobId,
+static ISC_STATUS openOrCreateBlob(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, isc_blob_handle* blobHandle, ISC_QUAD* blobId,
 	USHORT bpbLength, const UCHAR* bpb, bool createFlag)
 {
 	StatusVector status(userStatus);
@@ -1518,7 +1521,7 @@ ISC_STATUS API_ROUTINE fb_database_crypt_callback(ISC_STATUS* userStatus, void* 
 //-------------------------------------
 
 
-Firebird::IAttachment* handleToIAttachment(Firebird::CheckStatusWrapper* status, FB_API_HANDLE* handle)
+Firebird::IAttachment* handleToIAttachment(Firebird::CheckStatusWrapper* status, isc_db_handle* handle)
 {
 	try
 	{
@@ -1535,7 +1538,7 @@ Firebird::IAttachment* handleToIAttachment(Firebird::CheckStatusWrapper* status,
 }
 
 
-Firebird::ITransaction* handleToITransaction(Firebird::CheckStatusWrapper* status, FB_API_HANDLE* handle)
+Firebird::ITransaction* handleToITransaction(Firebird::CheckStatusWrapper* status, isc_tr_handle* handle)
 {
 	try
 	{
@@ -1557,7 +1560,7 @@ Firebird::ITransaction* handleToITransaction(Firebird::CheckStatusWrapper* statu
 
 // Attach a database through the first subsystem that recognizes it.
 ISC_STATUS API_ROUTINE isc_attach_database(ISC_STATUS* userStatus, SSHORT fileLength,
-	const TEXT* filename, FB_API_HANDLE* publicHandle, SSHORT dpbLength, const SCHAR* dpb)
+	const TEXT* filename, isc_db_handle* publicHandle, SSHORT dpbLength, const SCHAR* dpb)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -1594,7 +1597,7 @@ ISC_STATUS API_ROUTINE isc_attach_database(ISC_STATUS* userStatus, SSHORT fileLe
 
 
 // Provide information on blob object.
-ISC_STATUS API_ROUTINE isc_blob_info(ISC_STATUS* userStatus, FB_API_HANDLE* blobHandle,
+ISC_STATUS API_ROUTINE isc_blob_info(ISC_STATUS* userStatus, isc_blob_handle* blobHandle,
 	SSHORT itemLength, const SCHAR* items, SSHORT bufferLength, SCHAR* buffer)
 {
 	StatusVector status(userStatus);
@@ -1617,7 +1620,7 @@ ISC_STATUS API_ROUTINE isc_blob_info(ISC_STATUS* userStatus, FB_API_HANDLE* blob
 
 
 // Abort a partially completed blob.
-ISC_STATUS API_ROUTINE isc_cancel_blob(ISC_STATUS* userStatus, FB_API_HANDLE* blobHandle)
+ISC_STATUS API_ROUTINE isc_cancel_blob(ISC_STATUS* userStatus, isc_blob_handle* blobHandle)
 {
 	if (!*blobHandle)
 	{
@@ -1649,7 +1652,7 @@ ISC_STATUS API_ROUTINE isc_cancel_blob(ISC_STATUS* userStatus, FB_API_HANDLE* bl
 
 
 // Try to cancel an event.
-ISC_STATUS API_ROUTINE isc_cancel_events(ISC_STATUS* userStatus, FB_API_HANDLE* handle, SLONG* id)
+ISC_STATUS API_ROUTINE isc_cancel_events(ISC_STATUS* userStatus, isc_db_handle* handle, SLONG* id)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -1692,7 +1695,7 @@ ISC_STATUS API_ROUTINE isc_cancel_events(ISC_STATUS* userStatus, FB_API_HANDLE* 
 
 
 // Try to cancel an operation.
-ISC_STATUS API_ROUTINE fb_cancel_operation(ISC_STATUS* userStatus, FB_API_HANDLE* handle,
+ISC_STATUS API_ROUTINE fb_cancel_operation(ISC_STATUS* userStatus, isc_db_handle* handle,
 	USHORT option)
 {
 	StatusVector status(userStatus);
@@ -1713,7 +1716,7 @@ ISC_STATUS API_ROUTINE fb_cancel_operation(ISC_STATUS* userStatus, FB_API_HANDLE
 
 
 // Close a blob opened either for reading or writing (creation).
-ISC_STATUS API_ROUTINE isc_close_blob(ISC_STATUS* userStatus, FB_API_HANDLE* blobHandle)
+ISC_STATUS API_ROUTINE isc_close_blob(ISC_STATUS* userStatus, isc_blob_handle* blobHandle)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -1737,7 +1740,7 @@ ISC_STATUS API_ROUTINE isc_close_blob(ISC_STATUS* userStatus, FB_API_HANDLE* blo
 
 
 // Commit a transaction.
-ISC_STATUS API_ROUTINE isc_commit_transaction(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle)
+ISC_STATUS API_ROUTINE isc_commit_transaction(ISC_STATUS* userStatus, isc_tr_handle* traHandle)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -1762,7 +1765,7 @@ ISC_STATUS API_ROUTINE isc_commit_transaction(ISC_STATUS* userStatus, FB_API_HAN
 // Do a commit retaining.
 // N.B., the transaction cleanup handlers are NOT called here since, conceptually, the transaction
 // is still running.
-ISC_STATUS API_ROUTINE isc_commit_retaining(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle)
+ISC_STATUS API_ROUTINE isc_commit_retaining(ISC_STATUS* userStatus, isc_tr_handle* traHandle)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -1781,8 +1784,8 @@ ISC_STATUS API_ROUTINE isc_commit_retaining(ISC_STATUS* userStatus, FB_API_HANDL
 }
 
 
-ISC_STATUS API_ROUTINE isc_compile_request(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* reqHandle, USHORT blrLength, const SCHAR* blr)
+ISC_STATUS API_ROUTINE isc_compile_request(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_req_handle* reqHandle, ISC_USHORT blrLength, const ISC_SCHAR* blr)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -1819,8 +1822,8 @@ ISC_STATUS API_ROUTINE isc_compile_request(ISC_STATUS* userStatus, FB_API_HANDLE
 }
 
 
-ISC_STATUS API_ROUTINE isc_compile_request2(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* reqHandle, USHORT blrLength, const SCHAR* blr)
+ISC_STATUS API_ROUTINE isc_compile_request2(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_req_handle* reqHandle, USHORT blrLength, const SCHAR* blr)
 {
 	ISC_STATUS rc = isc_compile_request(userStatus, dbHandle, reqHandle, blrLength, blr);
 	if (rc)
@@ -1848,26 +1851,26 @@ ISC_STATUS API_ROUTINE isc_compile_request2(ISC_STATUS* userStatus, FB_API_HANDL
 
 
 // Open an existing blob.
-ISC_STATUS API_ROUTINE isc_create_blob(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, FB_API_HANDLE* blobHandle, ISC_QUAD* blobId)
+ISC_STATUS API_ROUTINE isc_create_blob(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, isc_blob_handle* blobHandle, ISC_QUAD* blobId)
 {
 	return openOrCreateBlob(userStatus, dbHandle, traHandle, blobHandle, blobId, 0, NULL, true);
 }
 
 
 // Create a new blob.
-ISC_STATUS API_ROUTINE isc_create_blob2(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, FB_API_HANDLE* blobHandle, ISC_QUAD* blobId,
-	SSHORT bpbLength, const UCHAR* bpb)
+ISC_STATUS API_ROUTINE isc_create_blob2(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, isc_blob_handle* blobHandle, ISC_QUAD* blobId,
+	SSHORT bpbLength, const SCHAR* bpb)
 {
 	return openOrCreateBlob(userStatus, dbHandle, traHandle, blobHandle, blobId,
-		bpbLength, bpb, true);
+		bpbLength, reinterpret_cast<const UCHAR*>(bpb), true);
 }
 
 
 // Create a nice, squeaky clean database, uncorrupted by user data.
 ISC_STATUS API_ROUTINE isc_create_database(ISC_STATUS* userStatus, USHORT fileLength,
-	const TEXT* filename, FB_API_HANDLE* publicHandle, SSHORT dpbLength, const UCHAR* dpb,
+	const TEXT* filename, isc_db_handle* publicHandle, USHORT dpbLength, const SCHAR* dpb,
 	USHORT /*db_type*/)
 {
 	StatusVector status(userStatus);
@@ -1888,11 +1891,11 @@ ISC_STATUS API_ROUTINE isc_create_database(ISC_STATUS* userStatus, USHORT fileLe
 		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
 			return status[1];
 
-		ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE, dpb, dpbLength);
+		ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE, reinterpret_cast<const UCHAR*>(dpb), dpbLength);
 		if (!newDpb.find(isc_dpb_sql_dialect))
 		{
 			newDpb.insertInt(isc_dpb_sql_dialect, 1);	// legacy behavior in legacy interface
-			dpb = newDpb.getBuffer();
+			dpb = reinterpret_cast<const SCHAR*>(newDpb.getBuffer());
 			dpbLength = newDpb.getBufferLength();
 		}
 
@@ -1913,7 +1916,7 @@ ISC_STATUS API_ROUTINE isc_create_database(ISC_STATUS* userStatus, USHORT fileLe
 
 
 // Register an attachment specific cleanup handler.
-ISC_STATUS API_ROUTINE isc_database_cleanup(ISC_STATUS* userStatus, FB_API_HANDLE* handle,
+ISC_STATUS API_ROUTINE isc_database_cleanup(ISC_STATUS* userStatus, isc_db_handle* handle,
 	AttachmentCleanupRoutine* routine, void* arg)
 {
 	StatusVector status(userStatus);
@@ -1941,7 +1944,7 @@ ISC_STATUS API_ROUTINE isc_database_cleanup(ISC_STATUS* userStatus, FB_API_HANDL
 
 
 // Provide information on database object.
-ISC_STATUS API_ROUTINE isc_database_info(ISC_STATUS* userStatus, FB_API_HANDLE* handle,
+ISC_STATUS API_ROUTINE isc_database_info(ISC_STATUS* userStatus, isc_db_handle* handle,
 	SSHORT itemLength, const SCHAR* items, SSHORT bufferLength, SCHAR* buffer)
 {
 	StatusVector status(userStatus);
@@ -1963,8 +1966,8 @@ ISC_STATUS API_ROUTINE isc_database_info(ISC_STATUS* userStatus, FB_API_HANDLE* 
 
 
 // Do meta-data update.
-ISC_STATUS API_ROUTINE isc_ddl(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, SSHORT length, const UCHAR* dyn)
+ISC_STATUS API_ROUTINE isc_ddl(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, SSHORT length, const SCHAR* dyn)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -1974,7 +1977,7 @@ ISC_STATUS API_ROUTINE isc_ddl(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
 		RefPtr<YAttachment> attachment(translateHandle(attachments, dbHandle));
 		RefPtr<YTransaction> transaction(translateHandle(transactions, traHandle));
 
-		attachment->executeDyn(&statusWrapper, transaction, length, dyn);
+		attachment->executeDyn(&statusWrapper, transaction, length, reinterpret_cast<const UCHAR*>(dyn));
 	}
 	catch (const Exception& e)
 	{
@@ -1986,7 +1989,7 @@ ISC_STATUS API_ROUTINE isc_ddl(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
 
 
 // Close down an attachment.
-ISC_STATUS API_ROUTINE isc_detach_database(ISC_STATUS* userStatus, FB_API_HANDLE* handle)
+ISC_STATUS API_ROUTINE isc_detach_database(ISC_STATUS* userStatus, isc_db_handle* handle)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -2017,7 +2020,7 @@ int API_ROUTINE gds__disable_subsystem(TEXT* /*subsystem*/)
 
 
 // Close down a database and then purge it.
-ISC_STATUS API_ROUTINE isc_drop_database(ISC_STATUS* userStatus, FB_API_HANDLE* handle)
+ISC_STATUS API_ROUTINE isc_drop_database(ISC_STATUS* userStatus, isc_db_handle* handle)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -2042,16 +2045,16 @@ ISC_STATUS API_ROUTINE isc_drop_database(ISC_STATUS* userStatus, FB_API_HANDLE* 
 }
 
 
-ISC_STATUS API_ROUTINE isc_dsql_alloc_statement(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* stmtHandle)
+ISC_STATUS API_ROUTINE isc_dsql_alloc_statement(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_stmt_handle* stmtHandle)
 {
 	return isc_dsql_allocate_statement(userStatus, dbHandle, stmtHandle);
 }
 
 
 // Allocate a statement handle.
-ISC_STATUS API_ROUTINE isc_dsql_alloc_statement2(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* stmtHandle)
+ISC_STATUS API_ROUTINE isc_dsql_alloc_statement2(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_stmt_handle* stmtHandle)
 {
 	ISC_STATUS rc = isc_dsql_alloc_statement(userStatus, dbHandle, stmtHandle);
 	if (rc)
@@ -2079,8 +2082,8 @@ ISC_STATUS API_ROUTINE isc_dsql_alloc_statement2(ISC_STATUS* userStatus, FB_API_
 
 
 // Allocate a statement handle.
-ISC_STATUS API_ROUTINE isc_dsql_allocate_statement(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* stmtHandle)
+ISC_STATUS API_ROUTINE isc_dsql_allocate_statement(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_stmt_handle* stmtHandle)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -2112,7 +2115,7 @@ ISC_STATUS API_ROUTINE isc_dsql_allocate_statement(ISC_STATUS* userStatus, FB_AP
 
 
 // Describe output parameters (columns) for a prepared statement.
-ISC_STATUS API_ROUTINE isc_dsql_describe(ISC_STATUS* userStatus, FB_API_HANDLE* stmtHandle,
+ISC_STATUS API_ROUTINE isc_dsql_describe(ISC_STATUS* userStatus, isc_stmt_handle* stmtHandle,
 	USHORT /*dialect*/, XSQLDA* sqlda)
 {
 	StatusVector status(userStatus);
@@ -2140,7 +2143,7 @@ ISC_STATUS API_ROUTINE isc_dsql_describe(ISC_STATUS* userStatus, FB_API_HANDLE* 
 
 
 // Describe input parameters for a prepared statement.
-ISC_STATUS API_ROUTINE isc_dsql_describe_bind(ISC_STATUS* userStatus, FB_API_HANDLE* stmtHandle,
+ISC_STATUS API_ROUTINE isc_dsql_describe_bind(ISC_STATUS* userStatus, isc_stmt_handle* stmtHandle,
 	USHORT /*dialect*/, XSQLDA* sqlda)
 {
 	StatusVector status(userStatus);
@@ -2168,16 +2171,16 @@ ISC_STATUS API_ROUTINE isc_dsql_describe_bind(ISC_STATUS* userStatus, FB_API_HAN
 
 
 // Execute a non-SELECT dynamic SQL statement.
-ISC_STATUS API_ROUTINE isc_dsql_execute(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle,
-	FB_API_HANDLE* stmtHandle, USHORT dialect, const XSQLDA* sqlda)
+ISC_STATUS API_ROUTINE isc_dsql_execute(ISC_STATUS* userStatus, isc_tr_handle* traHandle,
+	isc_stmt_handle* stmtHandle, USHORT dialect, const XSQLDA* sqlda)
 {
 	return isc_dsql_execute2(userStatus, traHandle, stmtHandle, dialect, sqlda, NULL);
 }
 
 
 // Execute a non-SELECT dynamic SQL statement.
-ISC_STATUS API_ROUTINE isc_dsql_execute2(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle,
-	FB_API_HANDLE* stmtHandle, USHORT dialect, const XSQLDA* inSqlda, const XSQLDA* outSqlda)
+ISC_STATUS API_ROUTINE isc_dsql_execute2(ISC_STATUS* userStatus, isc_tr_handle* traHandle,
+	isc_stmt_handle* stmtHandle, USHORT dialect, const XSQLDA* inSqlda, const XSQLDA* outSqlda)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -2231,8 +2234,8 @@ ISC_STATUS API_ROUTINE isc_dsql_execute2(ISC_STATUS* userStatus, FB_API_HANDLE* 
 
 
 // Execute a non-SELECT dynamic SQL statement.
-ISC_STATUS API_ROUTINE isc_dsql_execute_m(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle,
-	FB_API_HANDLE* stmtHandle, USHORT blrLength, const SCHAR* blr,
+ISC_STATUS API_ROUTINE isc_dsql_execute_m(ISC_STATUS* userStatus, isc_tr_handle* traHandle,
+	isc_stmt_handle* stmtHandle, USHORT blrLength, const SCHAR* blr,
 	USHORT msgType, USHORT msgLength, SCHAR* msg)
 {
 	return isc_dsql_execute2_m(userStatus, traHandle, stmtHandle, blrLength, blr,
@@ -2241,8 +2244,8 @@ ISC_STATUS API_ROUTINE isc_dsql_execute_m(ISC_STATUS* userStatus, FB_API_HANDLE*
 
 
 // Execute a non-SELECT dynamic SQL statement.
-ISC_STATUS API_ROUTINE isc_dsql_execute2_m(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle,
-	FB_API_HANDLE* stmtHandle, USHORT inBlrLength, const SCHAR* inBlr, USHORT inMsgType,
+ISC_STATUS API_ROUTINE isc_dsql_execute2_m(ISC_STATUS* userStatus, isc_tr_handle* traHandle,
+	isc_stmt_handle* stmtHandle, USHORT inBlrLength, const SCHAR* inBlr, USHORT inMsgType,
 	USHORT inMsgLength, const SCHAR* inMsg, USHORT outBlrLength,
 	SCHAR* outBlr, USHORT /*outMsgType*/, USHORT outMsgLength, SCHAR* outMsg)
 {
@@ -2261,8 +2264,8 @@ ISC_STATUS API_ROUTINE isc_dsql_execute2_m(ISC_STATUS* userStatus, FB_API_HANDLE
 
 		statement->checkPrepared();
 
-		InternalMessageBuffer inMsgBuffer(inBlrLength, (const UCHAR*)inBlr, inMsgLength, (UCHAR*)inMsg);
-		InternalMessageBuffer outMsgBuffer(outBlrLength, (const UCHAR*)outBlr, outMsgLength, (UCHAR*)outMsg);
+		InternalMessageBuffer inMsgBuffer(inBlrLength, (const UCHAR*) inBlr, inMsgLength, (UCHAR*) inMsg);
+		InternalMessageBuffer outMsgBuffer(outBlrLength, (const UCHAR*) outBlr, outMsgLength, (UCHAR*) outMsg);
 
 		const unsigned flags = statement->statement->getFlags(&statusWrapper);
 		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
@@ -2290,8 +2293,8 @@ ISC_STATUS API_ROUTINE isc_dsql_execute2_m(ISC_STATUS* userStatus, FB_API_HANDLE
 
 
 // Is this really API function? Where is it declared?
-ISC_STATUS API_ROUTINE isc_dsql_exec_immediate(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
+ISC_STATUS API_ROUTINE isc_dsql_exec_immediate(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
 	const XSQLDA* sqlda)
 {
 	return isc_dsql_execute_immediate(userStatus, dbHandle, traHandle, stmtLength, sqlStmt,
@@ -2300,8 +2303,8 @@ ISC_STATUS API_ROUTINE isc_dsql_exec_immediate(ISC_STATUS* userStatus, FB_API_HA
 
 
 // Prepare a statement for execution.
-ISC_STATUS API_ROUTINE isc_dsql_execute_immediate(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
+ISC_STATUS API_ROUTINE isc_dsql_execute_immediate(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
 	const XSQLDA* sqlda)
 {
 	return isc_dsql_exec_immed2(userStatus, dbHandle, traHandle, stmtLength, sqlStmt,
@@ -2310,8 +2313,8 @@ ISC_STATUS API_ROUTINE isc_dsql_execute_immediate(ISC_STATUS* userStatus, FB_API
 
 
 // Prepare a statement for execution.
-ISC_STATUS API_ROUTINE isc_dsql_exec_immed2(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
+ISC_STATUS API_ROUTINE isc_dsql_exec_immed2(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
 	const XSQLDA* inSqlda, const XSQLDA* outSqlda)
 {
 	StatusVector status(userStatus);
@@ -2362,8 +2365,8 @@ ISC_STATUS API_ROUTINE isc_dsql_exec_immed2(ISC_STATUS* userStatus, FB_API_HANDL
 
 
 // Is this really API function? Where is it declared?
-ISC_STATUS API_ROUTINE isc_dsql_exec_immediate_m(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
+ISC_STATUS API_ROUTINE isc_dsql_exec_immediate_m(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
 	USHORT blrLength, USHORT msgType, USHORT msgLength, SCHAR* blr, SCHAR* msg)
 {
 	return isc_dsql_execute_immediate_m(userStatus, dbHandle, traHandle, stmtLength, sqlStmt,
@@ -2372,8 +2375,8 @@ ISC_STATUS API_ROUTINE isc_dsql_exec_immediate_m(ISC_STATUS* userStatus, FB_API_
 
 
 // Prepare a statement for execution.
-ISC_STATUS API_ROUTINE isc_dsql_execute_immediate_m(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
+ISC_STATUS API_ROUTINE isc_dsql_execute_immediate_m(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
 	USHORT blrLength, SCHAR* blr, USHORT msgType, USHORT msgLength, SCHAR* msg)
 {
 	return isc_dsql_exec_immed2_m(userStatus, dbHandle, traHandle, stmtLength, sqlStmt, dialect,
@@ -2382,8 +2385,8 @@ ISC_STATUS API_ROUTINE isc_dsql_execute_immediate_m(ISC_STATUS* userStatus, FB_A
 
 
 // Prepare a statement for execution.
-ISC_STATUS API_ROUTINE isc_dsql_exec_immed2_m(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
+ISC_STATUS API_ROUTINE isc_dsql_exec_immed2_m(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
 	USHORT inBlrLength, SCHAR* inBlr, USHORT inMsgType, USHORT inMsgLength, const SCHAR* inMsg,
 	USHORT outBlrLength, SCHAR* outBlr, USHORT outMsgType, USHORT outMsgLength, SCHAR* outMsg)
 {
@@ -2409,8 +2412,8 @@ ISC_STATUS API_ROUTINE isc_dsql_exec_immed2_m(ISC_STATUS* userStatus, FB_API_HAN
 
 
 // Execute statement immediately.
-ISC_STATUS API_ROUTINE isc_dsql_exec_immed3_m(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
+ISC_STATUS API_ROUTINE isc_dsql_exec_immed3_m(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
 	USHORT inBlrLength, const SCHAR* inBlr, USHORT inMsgType, USHORT inMsgLength, const SCHAR* inMsg,
 	USHORT outBlrLength, SCHAR* outBlr, USHORT /*outMsgType*/, USHORT outMsgLength, SCHAR* outMsg)
 {
@@ -2439,7 +2442,7 @@ ISC_STATUS API_ROUTINE isc_dsql_exec_immed3_m(ISC_STATUS* userStatus, FB_API_HAN
 }
 
 // Fetch next record from a dynamic SQL cursor
-ISC_STATUS API_ROUTINE isc_dsql_fetch(ISC_STATUS* userStatus, FB_API_HANDLE* stmtHandle,
+ISC_STATUS API_ROUTINE isc_dsql_fetch(ISC_STATUS* userStatus, isc_stmt_handle* stmtHandle,
 	USHORT dialect, const XSQLDA* sqlda)
 {
 	StatusVector status(userStatus);
@@ -2469,7 +2472,7 @@ ISC_STATUS API_ROUTINE isc_dsql_fetch(ISC_STATUS* userStatus, FB_API_HANDLE* stm
 
 
 // Fetch next record from a dynamic SQL cursor
-ISC_STATUS API_ROUTINE isc_dsql_fetch_m(ISC_STATUS* userStatus, FB_API_HANDLE* stmtHandle,
+ISC_STATUS API_ROUTINE isc_dsql_fetch_m(ISC_STATUS* userStatus, isc_stmt_handle* stmtHandle,
 	USHORT blrLength, SCHAR* blr, USHORT /*msgType*/, USHORT msgLength, SCHAR* msg)
 {
 	StatusVector status(userStatus);
@@ -2503,7 +2506,7 @@ ISC_STATUS API_ROUTINE isc_dsql_fetch_m(ISC_STATUS* userStatus, FB_API_HANDLE* s
 
 
 // Release request for an sql statement
-ISC_STATUS API_ROUTINE isc_dsql_free_statement(ISC_STATUS* userStatus, FB_API_HANDLE* stmtHandle,
+ISC_STATUS API_ROUTINE isc_dsql_free_statement(ISC_STATUS* userStatus, isc_stmt_handle* stmtHandle,
 	USHORT option)
 {
 	StatusVector status(userStatus);
@@ -2546,7 +2549,7 @@ ISC_STATUS API_ROUTINE isc_dsql_free_statement(ISC_STATUS* userStatus, FB_API_HA
 
 
 // Insert a BLOB into a dynamic SQL cursor. (deprecated)
-ISC_STATUS API_ROUTINE isc_dsql_insert(ISC_STATUS* userStatus, FB_API_HANDLE* /*stmtHandle*/,
+ISC_STATUS API_ROUTINE isc_dsql_insert(ISC_STATUS* userStatus, isc_stmt_handle* /*stmtHandle*/,
 	USHORT /*dialect*/, XSQLDA* /*sqlda*/)
 {
 	(Arg::Gds(isc_feature_removed) << Arg::Str("isc_dsql_insert")).copyTo(userStatus);
@@ -2555,7 +2558,7 @@ ISC_STATUS API_ROUTINE isc_dsql_insert(ISC_STATUS* userStatus, FB_API_HANDLE* /*
 
 
 // Insert a BLOB into a dynamic SQL cursor. (deprecated)
-ISC_STATUS API_ROUTINE isc_dsql_insert_m(ISC_STATUS* userStatus, FB_API_HANDLE* /*stmtHandle*/,
+ISC_STATUS API_ROUTINE isc_dsql_insert_m(ISC_STATUS* userStatus, isc_stmt_handle* /*stmtHandle*/,
 	USHORT /*blrLength*/, const SCHAR* /*blr*/,
 	USHORT /*msgType*/, USHORT /*msgLength*/, const SCHAR* /*msg*/)
 {
@@ -2565,8 +2568,8 @@ ISC_STATUS API_ROUTINE isc_dsql_insert_m(ISC_STATUS* userStatus, FB_API_HANDLE* 
 
 
 // Prepare a statement for execution.
-ISC_STATUS API_ROUTINE isc_dsql_prepare(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle,
-	FB_API_HANDLE* stmtHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
+ISC_STATUS API_ROUTINE isc_dsql_prepare(ISC_STATUS* userStatus, isc_tr_handle* traHandle,
+	isc_stmt_handle* stmtHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
 	XSQLDA* sqlda)
 {
 	StatusVector status(userStatus);
@@ -2614,8 +2617,8 @@ ISC_STATUS API_ROUTINE isc_dsql_prepare(ISC_STATUS* userStatus, FB_API_HANDLE* t
 
 
 // Prepare a statement for execution.
-ISC_STATUS API_ROUTINE isc_dsql_prepare_m(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle,
-	FB_API_HANDLE* stmtHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
+ISC_STATUS API_ROUTINE isc_dsql_prepare_m(ISC_STATUS* userStatus, isc_tr_handle* traHandle,
+	isc_stmt_handle* stmtHandle, USHORT stmtLength, const SCHAR* sqlStmt, USHORT dialect,
 	USHORT itemLength, const SCHAR* items, USHORT bufferLength, SCHAR* buffer)
 {
 	StatusVector status(userStatus);
@@ -2664,7 +2667,7 @@ ISC_STATUS API_ROUTINE isc_dsql_prepare_m(ISC_STATUS* userStatus, FB_API_HANDLE*
 
 
 // Set a cursor name for a dynamic request.
-ISC_STATUS API_ROUTINE isc_dsql_set_cursor_name(ISC_STATUS* userStatus, FB_API_HANDLE* stmtHandle,
+ISC_STATUS API_ROUTINE isc_dsql_set_cursor_name(ISC_STATUS* userStatus, isc_stmt_handle* stmtHandle,
 	const SCHAR* cursorName, USHORT /*cursorType*/)
 {
 	StatusVector status(userStatus);
@@ -2694,7 +2697,7 @@ ISC_STATUS API_ROUTINE isc_dsql_set_cursor_name(ISC_STATUS* userStatus, FB_API_H
 
 
 // Set statement timeout.
-ISC_STATUS API_ROUTINE fb_dsql_set_timeout(ISC_STATUS* userStatus, FB_API_HANDLE* stmtHandle,
+ISC_STATUS API_ROUTINE fb_dsql_set_timeout(ISC_STATUS* userStatus, isc_stmt_handle* stmtHandle,
 	ULONG timeout)
 {
 	StatusVector status(userStatus);
@@ -2717,7 +2720,7 @@ ISC_STATUS API_ROUTINE fb_dsql_set_timeout(ISC_STATUS* userStatus, FB_API_HANDLE
 
 
 // Get interface by legacy handle
-/*ISC_STATUS API_ROUTINE fb_get_statement_interface(ISC_STATUS* userStatus, FB_API_HANDLE* stmtHandle,
+/*ISC_STATUS API_ROUTINE fb_get_statement_interface(ISC_STATUS* userStatus, isc_stmt_handle* stmtHandle,
 	void** stmtIface)
 {
 	StatusVector status(userStatus);
@@ -2743,7 +2746,7 @@ ISC_STATUS API_ROUTINE fb_dsql_set_timeout(ISC_STATUS* userStatus, FB_API_HANDLE
 */
 
 // Provide information on sql statement.
-ISC_STATUS API_ROUTINE isc_dsql_sql_info(ISC_STATUS* userStatus, FB_API_HANDLE* stmtHandle,
+ISC_STATUS API_ROUTINE isc_dsql_sql_info(ISC_STATUS* userStatus, isc_stmt_handle* stmtHandle,
 	SSHORT itemLength, const SCHAR* items, SSHORT bufferLength, SCHAR* buffer)
 {
 	StatusVector status(userStatus);
@@ -2816,7 +2819,7 @@ namespace
 }
 
 // Que request for event notification.
-ISC_STATUS API_ROUTINE isc_wait_for_event(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
+ISC_STATUS API_ROUTINE isc_wait_for_event(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
 	USHORT length, const UCHAR* eventsData, UCHAR* buffer)
 {
 	StatusVector status(userStatus);
@@ -2915,7 +2918,7 @@ namespace
 }
 
 // Que request for event notification.
-ISC_STATUS API_ROUTINE isc_que_events(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle, SLONG* id,
+ISC_STATUS API_ROUTINE isc_que_events(ISC_STATUS* userStatus, isc_db_handle* dbHandle, SLONG* id,
 	USHORT length, const UCHAR* eventsData, FPTR_EVENT_CALLBACK ast, void* arg)
 {
 	StatusVector status(userStatus);
@@ -2953,8 +2956,8 @@ ISC_STATUS API_ROUTINE isc_que_events(ISC_STATUS* userStatus, FB_API_HANDLE* dbH
 
 
 // Get a segment from a blob opened for reading.
-ISC_STATUS API_ROUTINE isc_get_segment(ISC_STATUS* userStatus, FB_API_HANDLE* blobHandle,
-	USHORT* returnLength, USHORT bufferLength, UCHAR* buffer)
+ISC_STATUS API_ROUTINE isc_get_segment(ISC_STATUS* userStatus, isc_blob_handle* blobHandle,
+	USHORT* returnLength, USHORT bufferLength, SCHAR* buffer)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -2963,7 +2966,7 @@ ISC_STATUS API_ROUTINE isc_get_segment(ISC_STATUS* userStatus, FB_API_HANDLE* bl
 	{
 		RefPtr<YBlob> blob(translateHandle(blobs, blobHandle));
 		unsigned int length;
-		int cc = blob->getSegment(&statusWrapper, bufferLength, buffer, &length);
+		int cc = blob->getSegment(&statusWrapper, bufferLength, reinterpret_cast<UCHAR*>(buffer), &length);
 
 		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
 			*returnLength = length;
@@ -2989,9 +2992,9 @@ ISC_STATUS API_ROUTINE isc_get_segment(ISC_STATUS* userStatus, FB_API_HANDLE* bl
 
 
 // Snatch a slice of an array.
-ISC_STATUS API_ROUTINE isc_get_slice(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, ISC_QUAD* arrayId, USHORT sdlLength, const UCHAR* sdl,
-	USHORT paramLength, const UCHAR* param, SLONG sliceLength, UCHAR* slice, SLONG* returnLength)
+ISC_STATUS API_ROUTINE isc_get_slice(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, ISC_QUAD* arrayId, USHORT sdlLength, const UCHAR* sdl,
+	USHORT paramLength, const SLONG* param, SLONG sliceLength, void* slice, SLONG* returnLength)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3002,7 +3005,7 @@ ISC_STATUS API_ROUTINE isc_get_slice(ISC_STATUS* userStatus, FB_API_HANDLE* dbHa
 		RefPtr<YTransaction> transaction(translateHandle(transactions, traHandle));
 
 		int length = attachment->getSlice(&statusWrapper, transaction, arrayId, sdlLength, sdl,
-			paramLength, param, sliceLength, slice);
+			paramLength, reinterpret_cast<const UCHAR*>(param), sliceLength, reinterpret_cast<UCHAR*>(slice));
 
 		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS) && returnLength)
 			*returnLength = length;
@@ -3017,7 +3020,7 @@ ISC_STATUS API_ROUTINE isc_get_slice(ISC_STATUS* userStatus, FB_API_HANDLE* dbHa
 
 
 // Clean up a dangling transaction handle.
-ISC_STATUS API_ROUTINE fb_disconnect_transaction(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle)
+ISC_STATUS API_ROUTINE fb_disconnect_transaction(ISC_STATUS* userStatus, isc_tr_handle* traHandle)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3040,17 +3043,17 @@ ISC_STATUS API_ROUTINE fb_disconnect_transaction(ISC_STATUS* userStatus, FB_API_
 
 
 // Open an existing blob.
-ISC_STATUS API_ROUTINE isc_open_blob(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, FB_API_HANDLE* blobHandle, ISC_QUAD* blobId)
+ISC_STATUS API_ROUTINE isc_open_blob(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, isc_blob_handle* blobHandle, ISC_QUAD* blobId)
 {
 	return openOrCreateBlob(userStatus, dbHandle, traHandle, blobHandle, blobId, 0, 0, false);
 }
 
 
 // Open an existing blob (extended edition).
-ISC_STATUS API_ROUTINE isc_open_blob2(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, FB_API_HANDLE* blobHandle, ISC_QUAD* blobId,
-	SSHORT bpbLength, const UCHAR* bpb)
+ISC_STATUS API_ROUTINE isc_open_blob2(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, isc_blob_handle* blobHandle, ISC_QUAD* blobId,
+	ISC_USHORT bpbLength, const UCHAR* bpb)
 {
 	return openOrCreateBlob(userStatus, dbHandle, traHandle, blobHandle, blobId,
 		bpbLength, bpb, false);
@@ -3058,14 +3061,14 @@ ISC_STATUS API_ROUTINE isc_open_blob2(ISC_STATUS* userStatus, FB_API_HANDLE* dbH
 
 
 // Prepare a transaction for commit. First phase of a two phase commit.
-ISC_STATUS API_ROUTINE isc_prepare_transaction(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle)
+ISC_STATUS API_ROUTINE isc_prepare_transaction(ISC_STATUS* userStatus, isc_tr_handle* traHandle)
 {
 	return isc_prepare_transaction2(userStatus, traHandle, 0, NULL);
 }
 
 
 // Prepare a transaction for commit. First phase of a two phase commit.
-ISC_STATUS API_ROUTINE isc_prepare_transaction2(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle,
+ISC_STATUS API_ROUTINE isc_prepare_transaction2(ISC_STATUS* userStatus, isc_tr_handle* traHandle,
 	USHORT msgLength, const UCHAR* msg)
 {
 	StatusVector status(userStatus);
@@ -3086,8 +3089,8 @@ ISC_STATUS API_ROUTINE isc_prepare_transaction2(ISC_STATUS* userStatus, FB_API_H
 
 
 // Put a segment in a blob opened for writing (creation).
-ISC_STATUS API_ROUTINE isc_put_segment(ISC_STATUS* userStatus, FB_API_HANDLE* blobHandle,
-	USHORT bufferLength, const UCHAR* buffer)
+ISC_STATUS API_ROUTINE isc_put_segment(ISC_STATUS* userStatus, isc_blob_handle* blobHandle,
+	USHORT bufferLength, const SCHAR* buffer)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3095,7 +3098,7 @@ ISC_STATUS API_ROUTINE isc_put_segment(ISC_STATUS* userStatus, FB_API_HANDLE* bl
 	try
 	{
 		RefPtr<YBlob> blob(translateHandle(blobs, blobHandle));
-		blob->putSegment(&statusWrapper, bufferLength, buffer);
+		blob->putSegment(&statusWrapper, bufferLength, reinterpret_cast<const UCHAR*>(buffer));
 	}
 	catch (const Exception& e)
 	{
@@ -3107,9 +3110,9 @@ ISC_STATUS API_ROUTINE isc_put_segment(ISC_STATUS* userStatus, FB_API_HANDLE* bl
 
 
 // Put a slice in an array.
-ISC_STATUS API_ROUTINE isc_put_slice(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, ISC_QUAD* arrayId, USHORT sdlLength, const UCHAR* sdl,
-	USHORT paramLength, const SLONG* param, SLONG sliceLength, UCHAR* slice)
+ISC_STATUS API_ROUTINE isc_put_slice(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, ISC_QUAD* arrayId, USHORT sdlLength, const SCHAR* sdl,
+	USHORT paramLength, const SLONG* param, SLONG sliceLength, void* slice)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3119,8 +3122,8 @@ ISC_STATUS API_ROUTINE isc_put_slice(ISC_STATUS* userStatus, FB_API_HANDLE* dbHa
 		RefPtr<YAttachment> attachment(translateHandle(attachments, dbHandle));
 		RefPtr<YTransaction> transaction(translateHandle(transactions, traHandle));
 
-		attachment->putSlice(&statusWrapper, transaction, arrayId, sdlLength, sdl,
-			paramLength, reinterpret_cast<const UCHAR*>(param), sliceLength, slice);
+		attachment->putSlice(&statusWrapper, transaction, arrayId, sdlLength, reinterpret_cast<const UCHAR*>(sdl),
+			paramLength, reinterpret_cast<const UCHAR*>(param), sliceLength, static_cast<UCHAR*>(slice));
 	}
 	catch (const Exception& e)
 	{
@@ -3132,8 +3135,8 @@ ISC_STATUS API_ROUTINE isc_put_slice(ISC_STATUS* userStatus, FB_API_HANDLE* dbHa
 
 
 // Send a record to the host program.
-ISC_STATUS API_ROUTINE isc_receive(ISC_STATUS* userStatus, FB_API_HANDLE* reqHandle, USHORT msgType,
-	USHORT msgLength, SCHAR* msg, SSHORT level)
+ISC_STATUS API_ROUTINE isc_receive(ISC_STATUS* userStatus, isc_req_handle* reqHandle, USHORT msgType,
+	USHORT msgLength, void* msg, SSHORT level)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3153,8 +3156,8 @@ ISC_STATUS API_ROUTINE isc_receive(ISC_STATUS* userStatus, FB_API_HANDLE* reqHan
 
 
 // Connect to a transaction in limbo.
-ISC_STATUS API_ROUTINE isc_reconnect_transaction(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, SSHORT length, const UCHAR* id)
+ISC_STATUS API_ROUTINE isc_reconnect_transaction(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, USHORT length, const SCHAR* id)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3165,7 +3168,8 @@ ISC_STATUS API_ROUTINE isc_reconnect_transaction(ISC_STATUS* userStatus, FB_API_
 
 		RefPtr<YAttachment> attachment(translateHandle(attachments, dbHandle));
 
-		YTransaction* transaction = attachment->reconnectTransaction(&statusWrapper, length, id);
+		YTransaction* transaction = attachment->reconnectTransaction(&statusWrapper, length,
+			reinterpret_cast<const UCHAR*>(id));
 
 		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
 			status_exception::raise(status);
@@ -3182,7 +3186,7 @@ ISC_STATUS API_ROUTINE isc_reconnect_transaction(ISC_STATUS* userStatus, FB_API_
 
 
 // Release a request.
-ISC_STATUS API_ROUTINE isc_release_request(ISC_STATUS* userStatus, FB_API_HANDLE* reqHandle)
+ISC_STATUS API_ROUTINE isc_release_request(ISC_STATUS* userStatus, isc_req_handle* reqHandle)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3205,7 +3209,7 @@ ISC_STATUS API_ROUTINE isc_release_request(ISC_STATUS* userStatus, FB_API_HANDLE
 
 
 // Provide information on blob object.
-ISC_STATUS API_ROUTINE isc_request_info(ISC_STATUS* userStatus, FB_API_HANDLE* reqHandle,
+ISC_STATUS API_ROUTINE isc_request_info(ISC_STATUS* userStatus, isc_req_handle* reqHandle,
 	SSHORT level, SSHORT itemLength, const SCHAR* items, SSHORT bufferLength, SCHAR* buffer)
 {
 	StatusVector status(userStatus);
@@ -3247,7 +3251,7 @@ SLONG API_ROUTINE isc_reset_fpe(USHORT /*fpe_status*/)
 
 
 // Abort a transaction, but keep all cursors open.
-ISC_STATUS API_ROUTINE isc_rollback_retaining(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle)
+ISC_STATUS API_ROUTINE isc_rollback_retaining(ISC_STATUS* userStatus, isc_tr_handle* traHandle)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3267,7 +3271,7 @@ ISC_STATUS API_ROUTINE isc_rollback_retaining(ISC_STATUS* userStatus, FB_API_HAN
 
 
 // Abort a transaction.
-ISC_STATUS API_ROUTINE isc_rollback_transaction(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle)
+ISC_STATUS API_ROUTINE isc_rollback_transaction(ISC_STATUS* userStatus, isc_tr_handle* traHandle)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3290,7 +3294,7 @@ ISC_STATUS API_ROUTINE isc_rollback_transaction(ISC_STATUS* userStatus, FB_API_H
 
 
 // Seek a blob.
-ISC_STATUS API_ROUTINE isc_seek_blob(ISC_STATUS* userStatus, FB_API_HANDLE* blobHandle,
+ISC_STATUS API_ROUTINE isc_seek_blob(ISC_STATUS* userStatus, isc_blob_handle* blobHandle,
 	SSHORT mode, SLONG offset, SLONG* result)
 {
 	StatusVector status(userStatus);
@@ -3314,8 +3318,8 @@ ISC_STATUS API_ROUTINE isc_seek_blob(ISC_STATUS* userStatus, FB_API_HANDLE* blob
 
 
 // Get a record from the host program.
-ISC_STATUS API_ROUTINE isc_send(ISC_STATUS* userStatus, FB_API_HANDLE* reqHandle, USHORT msgType,
-	USHORT msgLength, const SCHAR* msg, SSHORT level)
+ISC_STATUS API_ROUTINE isc_send(ISC_STATUS* userStatus, isc_req_handle* reqHandle, USHORT msgType,
+	USHORT msgLength, const void* msg, SSHORT level)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3324,7 +3328,7 @@ ISC_STATUS API_ROUTINE isc_send(ISC_STATUS* userStatus, FB_API_HANDLE* reqHandle
 	{
 		RefPtr<YRequest> request(translateHandle(requests, reqHandle));
 		request->send(&statusWrapper, level, msgType,
-			msgLength, reinterpret_cast<const UCHAR*>(msg));
+			msgLength, static_cast<const UCHAR*>(msg));
 	}
 	catch (const Exception& e)
 	{
@@ -3337,7 +3341,7 @@ ISC_STATUS API_ROUTINE isc_send(ISC_STATUS* userStatus, FB_API_HANDLE* reqHandle
 
 // Attach a service through the first subsystem that recognizes it.
 ISC_STATUS API_ROUTINE isc_service_attach(ISC_STATUS* userStatus, USHORT serviceLength,
-	const TEXT* serviceName, FB_API_HANDLE* publicHandle, USHORT spbLength, const SCHAR* spb)
+	const TEXT* serviceName, isc_svc_handle* publicHandle, USHORT spbLength, const SCHAR* spb)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3382,7 +3386,7 @@ ISC_STATUS API_ROUTINE isc_service_attach(ISC_STATUS* userStatus, USHORT service
 
 
 // Close down a service.
-ISC_STATUS API_ROUTINE isc_service_detach(ISC_STATUS* userStatus, FB_API_HANDLE* handle)
+ISC_STATUS API_ROUTINE isc_service_detach(ISC_STATUS* userStatus, isc_svc_handle* handle)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3408,8 +3412,8 @@ ISC_STATUS API_ROUTINE isc_service_detach(ISC_STATUS* userStatus, FB_API_HANDLE*
 // NOTE: The parameter RESERVED must not be used for any purpose as there are networking issues
 // involved (as with any handle that goes over the network). This parameter will be implemented at
 // a later date.
-ISC_STATUS API_ROUTINE isc_service_query(ISC_STATUS* userStatus, FB_API_HANDLE* handle,
-	ULONG* /*reserved*/, USHORT sendItemLength, const SCHAR* sendItems, USHORT recvItemLength,
+ISC_STATUS API_ROUTINE isc_service_query(ISC_STATUS* userStatus, isc_svc_handle* handle,
+	isc_resv_handle* /*reserved*/, USHORT sendItemLength, const SCHAR* sendItems, USHORT recvItemLength,
 	const SCHAR* recvItems, USHORT bufferLength, SCHAR* buffer)
 {
 	StatusVector status(userStatus);
@@ -3436,8 +3440,8 @@ ISC_STATUS API_ROUTINE isc_service_query(ISC_STATUS* userStatus, FB_API_HANDLE* 
 // NOTE: The parameter RESERVED must not be used for any purpose as there are networking issues
 // involved (as with any handle that goes over the network). This parameter will be implemented at
 // a later date.
-ISC_STATUS API_ROUTINE isc_service_start(ISC_STATUS* userStatus, FB_API_HANDLE* handle,
-	ULONG* /*reserved*/, USHORT spbLength, const SCHAR* spb)
+ISC_STATUS API_ROUTINE isc_service_start(ISC_STATUS* userStatus, isc_svc_handle* handle,
+	isc_resv_handle* /*reserved*/, USHORT spbLength, const SCHAR* spb)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3457,8 +3461,8 @@ ISC_STATUS API_ROUTINE isc_service_start(ISC_STATUS* userStatus, FB_API_HANDLE* 
 
 
 // Get a record from the host program.
-ISC_STATUS API_ROUTINE isc_start_and_send(ISC_STATUS* userStatus, FB_API_HANDLE* reqHandle,
-	FB_API_HANDLE* traHandle, USHORT msgType, USHORT msgLength, const SCHAR* msg, SSHORT level)
+ISC_STATUS API_ROUTINE isc_start_and_send(ISC_STATUS* userStatus, isc_req_handle* reqHandle,
+	isc_tr_handle* traHandle, USHORT msgType, USHORT msgLength, const void* msg, SSHORT level)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3481,8 +3485,8 @@ ISC_STATUS API_ROUTINE isc_start_and_send(ISC_STATUS* userStatus, FB_API_HANDLE*
 
 
 // Get a record from the host program.
-ISC_STATUS API_ROUTINE isc_start_request(ISC_STATUS* userStatus, FB_API_HANDLE* reqHandle,
-	FB_API_HANDLE* traHandle, SSHORT level)
+ISC_STATUS API_ROUTINE isc_start_request(ISC_STATUS* userStatus, isc_req_handle* reqHandle,
+	isc_tr_handle* traHandle, SSHORT level)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3504,7 +3508,7 @@ ISC_STATUS API_ROUTINE isc_start_request(ISC_STATUS* userStatus, FB_API_HANDLE* 
 
 
 // Start a transaction.
-ISC_STATUS API_ROUTINE isc_start_multiple(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle,
+ISC_STATUS API_ROUTINE isc_start_multiple(ISC_STATUS* userStatus, isc_tr_handle* traHandle,
 	SSHORT count, void* vec)
 {
 	StatusVector status(userStatus);
@@ -3572,7 +3576,7 @@ ISC_STATUS API_ROUTINE isc_start_multiple(ISC_STATUS* userStatus, FB_API_HANDLE*
 
 // Start a transaction..
 ISC_STATUS API_ROUTINE_VARARG isc_start_transaction(ISC_STATUS* userStatus,
-	FB_API_HANDLE* traHandle, SSHORT count, ...)
+	isc_tr_handle* traHandle, SSHORT count, ...)
 {
 	try
 	{
@@ -3585,7 +3589,7 @@ ISC_STATUS API_ROUTINE_VARARG isc_start_transaction(ISC_STATUS* userStatus,
 
 		for (TEB* teb_iter = teb; teb_iter < end; teb_iter++)
 		{
-			teb_iter->teb_database = va_arg(ptr, FB_API_HANDLE*);
+			teb_iter->teb_database = va_arg(ptr, isc_db_handle*);
 			teb_iter->teb_tpb_length = va_arg(ptr, int);
 			teb_iter->teb_tpb = va_arg(ptr, UCHAR *);
 		}
@@ -3606,8 +3610,8 @@ ISC_STATUS API_ROUTINE_VARARG isc_start_transaction(ISC_STATUS* userStatus,
 
 
 // Execute a procedure.
-ISC_STATUS API_ROUTINE isc_transact_request(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
-	FB_API_HANDLE* traHandle, USHORT blrLength, SCHAR* blr, USHORT inMsgLength, SCHAR* inMsg,
+ISC_STATUS API_ROUTINE isc_transact_request(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
+	isc_tr_handle* traHandle, USHORT blrLength, SCHAR* blr, USHORT inMsgLength, SCHAR* inMsg,
 	USHORT outMsgLength, SCHAR* outMsg)
 {
 	StatusVector status(userStatus);
@@ -3633,7 +3637,7 @@ ISC_STATUS API_ROUTINE isc_transact_request(ISC_STATUS* userStatus, FB_API_HANDL
 
 
 // Register a transaction specific cleanup handler.
-ISC_STATUS API_ROUTINE gds__transaction_cleanup(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle,
+ISC_STATUS API_ROUTINE gds__transaction_cleanup(ISC_STATUS* userStatus, isc_tr_handle* traHandle,
 	TransactionCleanupRoutine* routine, void* arg)
 {
 	StatusVector status(userStatus);
@@ -3661,8 +3665,8 @@ ISC_STATUS API_ROUTINE gds__transaction_cleanup(ISC_STATUS* userStatus, FB_API_H
 
 
 // Provide information on transaction object.
-ISC_STATUS API_ROUTINE isc_transaction_info(ISC_STATUS* userStatus, FB_API_HANDLE* traHandle,
-	SSHORT itemLength, const SCHAR* items, SSHORT bufferLength, UCHAR* buffer)
+ISC_STATUS API_ROUTINE isc_transaction_info(ISC_STATUS* userStatus, isc_tr_handle* traHandle,
+	SSHORT itemLength, const SCHAR* items, SSHORT bufferLength, SCHAR* buffer)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3684,7 +3688,7 @@ ISC_STATUS API_ROUTINE isc_transaction_info(ISC_STATUS* userStatus, FB_API_HANDL
 
 
 // Unwind a running request. This is potentially nasty since it can be called asynchronously.
-ISC_STATUS API_ROUTINE isc_unwind_request(ISC_STATUS* userStatus, FB_API_HANDLE* reqHandle,
+ISC_STATUS API_ROUTINE isc_unwind_request(ISC_STATUS* userStatus, isc_req_handle* reqHandle,
 	SSHORT level)
 {
 	StatusVector status(userStatus);
@@ -3738,7 +3742,7 @@ ISC_STATUS API_ROUTINE fb_shutdown_callback(ISC_STATUS* userStatus, FB_SHUTDOWN_
 
 
 // Check the attachment handle for persistent errors.
-ISC_STATUS API_ROUTINE fb_ping(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle)
+ISC_STATUS API_ROUTINE fb_ping(ISC_STATUS* userStatus, isc_db_handle* dbHandle)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -3758,7 +3762,7 @@ ISC_STATUS API_ROUTINE fb_ping(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle)
 
 
 // Get the legacy handle of a database.
-ISC_STATUS API_ROUTINE fb_get_database_handle(ISC_STATUS* userStatus, FB_API_HANDLE* handle,
+ISC_STATUS API_ROUTINE fb_get_database_handle(ISC_STATUS* userStatus, isc_db_handle* handle,
 	void* obj)
 {
 	StatusVector status(userStatus);
@@ -3783,7 +3787,7 @@ ISC_STATUS API_ROUTINE fb_get_database_handle(ISC_STATUS* userStatus, FB_API_HAN
 
 
 // Get the legacy handle of a transaction.
-ISC_STATUS API_ROUTINE fb_get_transaction_handle(ISC_STATUS* userStatus, FB_API_HANDLE* handle,
+ISC_STATUS API_ROUTINE fb_get_transaction_handle(ISC_STATUS* userStatus, isc_tr_handle* handle,
 	void* obj)
 {
 	StatusVector status(userStatus);
@@ -3880,9 +3884,10 @@ void YEvents::cancel(CheckStatusWrapper* status)
 
 	try
 	{
-		YEntry<YEvents> entry(status, this);
+		YEntry<YEvents> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		entry.next()->cancel(status);
+		if (entry.next())
+			entry.next()->cancel(status);
 
 		if (status->getErrors()[1] == isc_att_shutdown)
 			status->init();
@@ -3908,7 +3913,7 @@ YRequest::YRequest(YAttachment* aAttachment, IRequest* aNext)
 	attachment.get()->childRequests.add(this);
 }
 
-FB_API_HANDLE& YRequest::getHandle()
+isc_req_handle& YRequest::getHandle()
 {
 	if (!handle)
 		makeHandle(&requests, this, handle);
@@ -4024,9 +4029,10 @@ void YRequest::free(CheckStatusWrapper* status)
 {
 	try
 	{
-		YEntry<YRequest> entry(status, this);
+		YEntry<YRequest> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		entry.next()->free(status);
+		if (entry.next())
+			entry.next()->free(status);
 
 		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
 			destroy(DF_RELEASE);
@@ -4050,7 +4056,7 @@ YBlob::YBlob(YAttachment* aAttachment, YTransaction* aTransaction, IBlob* aNext)
 	aTransaction->childBlobs.add(this);
 }
 
-FB_API_HANDLE& YBlob::getHandle()
+isc_blob_handle& YBlob::getHandle()
 {
 	if (!handle)
 		makeHandle(&blobs, this, handle);
@@ -4118,9 +4124,10 @@ void YBlob::cancel(CheckStatusWrapper* status)
 {
 	try
 	{
-		YEntry<YBlob> entry(status, this);
+		YEntry<YBlob> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		entry.next()->cancel(status);
+		if (entry.next())
+			entry.next()->cancel(status);
 
 		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
 			destroy(DF_RELEASE);
@@ -4135,9 +4142,10 @@ void YBlob::close(CheckStatusWrapper* status)
 {
 	try
 	{
-		YEntry<YBlob> entry(status, this);
+		YEntry<YBlob> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		entry.next()->close(status);
+		if (entry.next())
+			entry.next()->close(status);
 
 		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
 			destroy(DF_RELEASE);
@@ -4413,15 +4421,13 @@ void YStatement::free(CheckStatusWrapper* status)
 {
 	try
 	{
-		YEntry<YStatement> entry(status, this);
+		YEntry<YStatement> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		entry.next()->free(status);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
-		{
-			return;
-		}
+		if (entry.next())
+			entry.next()->free(status);
 
-		destroy(DF_RELEASE);
+		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
+			destroy(DF_RELEASE);
 	}
 	catch (const Exception& e)
 	{
@@ -4476,14 +4482,14 @@ void IscStatement::destroy(unsigned)
 	release();
 }
 
-FB_API_HANDLE& IscStatement::getHandle()
+isc_stmt_handle& IscStatement::getHandle()
 {
 	if (!handle)
 		makeHandle(&statements, this, handle);
 	return handle;
 }
 
-void IscStatement::openCursor(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
+void IscStatement::openCursor(CheckStatusWrapper* status, isc_tr_handle* traHandle,
 	IMessageMetadata* inMetadata, UCHAR* buffer, IMessageMetadata* outMetadata)
 {
 	checkCursorClosed();
@@ -4531,7 +4537,7 @@ void IscStatement::closeStatement(CheckStatusWrapper* status)
 	}
 }
 
-void IscStatement::execute(CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
+void IscStatement::execute(CheckStatusWrapper* status, isc_tr_handle* traHandle,
 	IMessageMetadata* inMetadata, UCHAR* inBuffer, IMessageMetadata* outMetadata,
 	UCHAR* outBuffer)
 {
@@ -4643,7 +4649,7 @@ void YResultSet::destroy(unsigned dstrFlags)
 	if (statement)
 	{
 		MutexLockGuard guard(statement->statementMutex, FB_FUNCTION);
-		fb_assert(statement->cursor == this);
+		fb_assert(!statement->cursor || statement->cursor == this);
 		statement->cursor = NULL;
 	}
 
@@ -4830,9 +4836,10 @@ void YResultSet::close(CheckStatusWrapper* status)
 {
 	try
 	{
-		YEntry<YResultSet> entry(status, this);
+		YEntry<YResultSet> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		entry.next()->close(status);
+		if (entry.next())
+			entry.next()->close(status);
 
 		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
 			destroy(DF_RELEASE);
@@ -5018,6 +5025,49 @@ void YBatch::cancel(CheckStatusWrapper* status)
 //-------------------------------------
 
 
+YReplicator::YReplicator(YAttachment* anAttachment, IReplicator* aNext)
+	: YHelper(aNext),
+	  attachment(anAttachment)
+{ }
+
+
+void YReplicator::destroy(unsigned dstrFlags)
+{
+	destroy2(dstrFlags);
+}
+
+
+void YReplicator::process(CheckStatusWrapper* status, unsigned length, const unsigned char* data)
+{
+	try
+	{
+		YEntry<YReplicator> entry(status, this);
+		entry.next()->process(status, length, data);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
+void YReplicator::close(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YReplicator> entry(status, this);
+		entry.next()->close(status);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
+//-------------------------------------
+
+
 YTransaction::YTransaction(YAttachment* aAttachment, ITransaction* aNext)
 	: YHelper(aNext),
 	  attachment(aAttachment),
@@ -5029,8 +5079,10 @@ YTransaction::YTransaction(YAttachment* aAttachment, ITransaction* aNext)
 		aAttachment->childTransactions.add(this);
 }
 
-FB_API_HANDLE& YTransaction::getHandle()
+isc_tr_handle& YTransaction::getHandle()
 {
+	// Not assigning handle in ctor is essential for correct operation
+	// of YTransaction::destroy - change it when changing handle behavior.
 	if (!handle)
 		makeHandle(&transactions, this, handle);
 	return handle;
@@ -5047,8 +5099,12 @@ void YTransaction::destroy(unsigned dstrFlags)
 
 	cleanupHandlers.clear();
 
+	// If handle is not null then application works with ISC API and
+	// can't release cursors by itself. See also CORE-6067.
+	const bool releaseCursors = handle;
+
 	childBlobs.destroy(dstrFlags & ~DF_RELEASE);
-	childCursors.destroy(dstrFlags & ~DF_RELEASE);
+	childCursors.destroy(releaseCursors ? dstrFlags : dstrFlags & ~DF_RELEASE);
 
 	YAttachment* att = attachment.release();
 	if (att)
@@ -5129,9 +5185,10 @@ void YTransaction::rollback(CheckStatusWrapper* status)
 {
 	try
 	{
-		YEntry<YTransaction> entry(status, this);
+		YEntry<YTransaction> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		entry.next()->rollback(status);
+		if (entry.next())
+			entry.next()->rollback(status);
 		if (isNetworkError(status))
 			status->init();
 
@@ -5293,7 +5350,7 @@ YAttachment::YAttachment(IProvider* aProvider, IAttachment* aNext, const PathNam
 	makeHandle(&attachments, this, handle);
 }
 
-FB_API_HANDLE& YAttachment::getHandle()
+isc_db_handle& YAttachment::getHandle()
 {
 	fb_assert(handle);
 	return handle;
@@ -5670,7 +5727,7 @@ ITransaction* YAttachment::execute(CheckStatusWrapper* status, ITransaction* tra
 }
 
 
-void YAttachment::execute(Firebird::CheckStatusWrapper* status, FB_API_HANDLE* traHandle,
+void YAttachment::execute(Firebird::CheckStatusWrapper* status, isc_tr_handle* traHandle,
 		unsigned int stmtLength, const char* sqlStmt, unsigned int dialect,
 		Firebird::IMessageMetadata* inMetadata, void* inBuffer,
 		Firebird::IMessageMetadata* outMetadata, void* outBuffer)
@@ -5774,7 +5831,7 @@ void YAttachment::detach(CheckStatusWrapper* status)
 {
 	try
 	{
-		YEntry<YAttachment> entry(status, this, 0);
+		YEntry<YAttachment> entry(status, this, CHECK_NONE);
 
 		if (entry.next())
 			entry.next()->detach(status);
@@ -5944,6 +6001,32 @@ YBatch* YAttachment::createBatch(CheckStatusWrapper* status, ITransaction* trans
 }
 
 
+YReplicator* YAttachment::createReplicator(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+
+		IReplicator* replicator = entry.next()->createReplicator(status);
+
+		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		{
+			return NULL;
+		}
+
+		YReplicator* newReplicator = FB_NEW YReplicator(this, replicator);
+		newReplicator->addRef();
+		return newReplicator;
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+
+	return NULL;
+}
+
+
 //-------------------------------------
 
 
@@ -5956,7 +6039,7 @@ YService::YService(IProvider* aProvider, IService* aNext, bool utf8)
 	makeHandle(&services, this, handle);
 }
 
-FB_API_HANDLE& YService::getHandle()
+isc_svc_handle& YService::getHandle()
 {
 	fb_assert(handle);
 	return handle;
@@ -5971,10 +6054,7 @@ YService::~YService()
 void YService::destroy(unsigned dstrFlags)
 {
 	removeHandle(&services, handle);
-
-	next = NULL;
-	if (dstrFlags & DF_RELEASE)
-		release();
+	destroy2(dstrFlags);
 }
 
 void YService::shutdown()
@@ -5991,7 +6071,7 @@ void YService::detach(CheckStatusWrapper* status)
 {
 	try
 	{
-		YEntry<YService> entry(status, this, 1);
+		YEntry<YService> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
 		if (entry.next())
 			entry.next()->detach(status);
@@ -6109,7 +6189,7 @@ YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* st
 
 		// Add original filename to DPB
 		if (orgFilename != expandedFilename && !newDpb.find(isc_dpb_org_filename))
-			newDpb.insertPath(isc_dpb_org_filename, orgFilename);
+			newDpb.insertString(isc_dpb_org_filename, orgFilename);
 
 		StatusVector temp(NULL);
 		CheckStatusWrapper tempCheckStatusWrapper(&temp);
@@ -6162,6 +6242,7 @@ YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* st
 			case isc_io_error:
 			case isc_lock_dir_access:
 			case isc_no_priv:
+			case isc_wrong_ods:
 				currentStatus = &tempCheckStatusWrapper;
 				// fall down...
 			case isc_unavailable:
@@ -6371,7 +6452,7 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 			Stack<YService*, 64> svcStack;
 			{
 				WriteLockGuard sync(handleMappingLock, FB_FUNCTION);
-				GenericMap<Pair<NonPooled<FB_API_HANDLE, YService*> > >::Accessor accessor(&services);
+				GenericMap<Pair<NonPooled<isc_svc_handle, YService*> > >::Accessor accessor(&services);
 
 				if (accessor.getFirst())
 				{
@@ -6402,7 +6483,7 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 			Stack<YAttachment*, 64> attStack;
 			{
 				WriteLockGuard sync(handleMappingLock, FB_FUNCTION);
-				GenericMap<Pair<NonPooled<FB_API_HANDLE, YAttachment*> > >::Accessor accessor(&attachments);
+				GenericMap<Pair<NonPooled<isc_db_handle, YAttachment*> > >::Accessor accessor(&attachments);
 
 				if (accessor.getFirst())
 				{

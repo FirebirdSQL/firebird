@@ -23,11 +23,11 @@ FB_RES="$FB_FW/Versions/A/Resources"
 # Now create the firebird group
 echo "Create the Firebird group 10.7+"
 if dscl localhost -read /Local/Default/Groups/firebird 2&>1 /dev/null; then
-	echo "Group Found" 
+	echo "Group Found"
 else
 gid=501
-dscl localhost -search /Local/Default/Groups PrimaryGroupID $gid | grep $gid 
-while [ "$?" = "0" ]; do 
+dscl localhost -search /Local/Default/Groups PrimaryGroupID $gid | grep $gid
+while [ "$?" = "0" ]; do
 	let "gid =$gid+1"
 	dscl localhost -search /Local/Default/Groups PrimaryGroupID $gid | grep $gid
 done
@@ -44,10 +44,10 @@ if dscl localhost -read /Local/Default/Users/firebird 2&>1 /dev/null; then
 	echo "User Found"
 else
 ugid=501
-dscl localhost -search /Local/Default/Users UniqueID $ugid | grep $ugid 
-while [ "$?" = "0" ]; do 
+dscl localhost -search /Local/Default/Users UniqueID $ugid | grep $ugid
+while [ "$?" = "0" ]; do
 	let "ugid=$ugid+1"
-	dscl localhost -search /Local/Default/Users UniqueID $ugid | grep $ugid 
+	dscl localhost -search /Local/Default/Users UniqueID $ugid | grep $ugid
 done
 echo "create the firebird user 10.7+"
 	dscl localhost -create /Local/Default/Users/firebird
@@ -55,7 +55,7 @@ echo "create the firebird user 10.7+"
 	dscl localhost -create /Local/Default/Users/firebird Password "*"
 	dscl localhost -create /Local/Default/Users/firebird UserShell /bin/tcsh
 	dscl localhost -create /Local/Default/Users/firebird RecordName firebird
-	dscl localhost -create /Local/Default/Users/firebird PrimaryGroupID $gid 
+	dscl localhost -create /Local/Default/Users/firebird PrimaryGroupID $gid
 	dscl localhost -create /Local/Default/Users/firebird UniqueID $ugid
 	dscl localhost -create /Local/Default/Users/firebird RealName "Firebird Database"
 fi
@@ -72,17 +72,9 @@ chown -R firebird:firebird "$FB_FW"
 
 # set the permissions correctly
 echo "Set the permissions correctly"
-if [ -f "$FB_FW/Versions/A/Resources/.SuperServer" ]; then
-    chmod 777 "$FB_FW/Resources/English.lproj/var"
-    chmod 600 "$FB_FW/Resources/English.lproj/var/security2.fdb"
-    chmod 444 "$FB_FW/Resources/English.lproj/var/help/help.fdb"
-else
-    chmod 777 "$FB_FW/Resources/English.lproj/var"
-    chmod 660 "$FB_FW/Resources/English.lproj/var/security2.fdb"
-    chmod 444 "$FB_FW/Resources/English.lproj/var/help/help.fdb"
-    chmod a+s "$FB_FW/Resources/bin/fb_inet_server"
-fi
-
+    chmod 777 "$FB_FW/Resources/"
+    chmod 660 "$FB_FW/Resources/security4.fdb"
+    chmod 444 "$FB_FW/Resources/help/help.fdb"
 
 # Remove all older traces of Classic first
 echo "Remove all older traces of Classic first"
@@ -100,26 +92,16 @@ if [ -f /etc/xinetd.d/firebird ]; then
 	HUPNEEDED='y'
 fi
 
-# Make sure hosts.equiv files are set correctly
-echo "Make sure hosts.equiv files are set correctly"
-
-cp /etc/hosts.equiv /etc/hosts.equiv.fbsave
-if grep -x "localhost" /etc/hosts.equiv > /dev/null; then                
-	echo -n
-else     
-    echo "localhost" >> /etc/hosts.equiv                
-fi    
-if grep -x "localhost.localdomain" /etc/hosts.equiv > /dev/null; then    
-	echo -n
-else     
-    echo "localhost.localdomain" >> /etc/hosts.equiv    
-fi    
-
+# Install the saved security2 database, if any
+echo "Install the saved security2 database"
+if test -f /tmp/fb-security-database-update2fdb; then
+	mv -f /tmp/fb-security-database-update2.fdb "$FB_RES/security2.fdb"
+fi
 # Install the saved security database, if any
 echo "Install the saved security database"
-if test -f /tmp/fb-security-database-update2.fdb; then
-	mv -f /tmp/fb-security-database-update2.fdb "$FB_RES/English.lproj/var/security2.fdb"
-	rm -f /tmp/fb-security-database-update2.fdb
+if test -f /tmp/fb-security-database-update4.fdb; then
+	mv -f /tmp/fb-security-database-update4.fdb "$FB_RES/security4.fdb"
+	rm -f /tmp/fb-security-database-update4.fdb
 fi
 
 #Install the saved aliases.conf, if any
@@ -128,21 +110,35 @@ if test -f /tmp/fb-aliases.conf; then
 	mv -f /tmp/fb-aliases.conf "$FB_RES/English.lproj/var/aliases.conf"
 fi
 
+#Install the saved databases.conf, if any
+echo "Install the saved databases.conf file"
+if test -f /tmp/fb-databases.conf; then
+	mv -f /tmp/fb-databases.conf "$FB_RES/databases.conf"
+fi
+
 #Install the saved UDF libraries, if any
 echo "Install the saved UDF libraries"
-cp /tmp/UDF_Save/*.* $FB_RES/English.lproj/var/UDF/
+cp /tmp/UDF_Save/*.* $FB_RES/UDF/
 
 rm -fr /tmp/UDF_save
 
-#If classic, add libfbclient to dynamic loader search path
-echo "Add libfbclient to dynamic loader search path"
-if [ ! -f "$FB_FW/Versions/A/Resources/.SuperServer" ]; then
-	ln -s "$FB_FW/Libraries/libfbclient.dylib" /usr/local/lib/libfbclient.dylib
+# Test for saved security database
+if test -f "$FB_FW/Versions/A/Resources/security2.fdb"; then
+echo "Legacy 2.x Security database has been preserved"
 fi
 
-# And last but not least, start the Servers
-echo "Start the Servers via launchctl"
+if test -f "$FB_FW/Versions/A/Resources/security4.fdb"; then
+echo "Security database has been preserved"
+fi
+
+# Initilise the security database with default user
+echo "Add SYSDBA and password"
+$FB_FW/Versions/A/Resources/bin/gsec -add sysdba -pw masterkey -user sysdba
+rm -fr /tmp/firebird
+
+# And last but not least, start the Server
+echo "Start the Server via launchctl"
 
 cp $FB_FW/Resources/org.firebird.gds.plist /Library/LaunchDaemons/org.firebird.gds.plist
-launchctl load /Library/LaunchDaemons/org.firebird.gds.plist	
+launchctl load /Library/LaunchDaemons/org.firebird.gds.plist
 

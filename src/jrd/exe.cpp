@@ -72,7 +72,7 @@
 #include "../jrd/intl.h"
 #include "../jrd/sbm.h"
 #include "../jrd/blb.h"
-#include "../jrd/blr.h"
+#include "firebird/impl/blr.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/blb_proto.h"
@@ -395,7 +395,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 		if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
 		{
 			// ASF: Don't let MOV_move call blb::move because MOV
-			// will not pass the destination field to blb::_move.
+			// will not pass the destination field to blb::move.
 
 			record_param* rpb = NULL;
 			USHORT fieldId = 0;
@@ -639,9 +639,8 @@ void EXE_receive(thread_db* tdbb,
 
 	jrd_tra* transaction = request->req_transaction;
 
-	if (!(request->req_flags & req_active)) {
+	if (!(request->req_flags & req_active))
 		ERR_post(Arg::Gds(isc_req_sync));
-	}
 
 	const SavNumber mergeSavNumber = transaction->tra_save_point ?
 		transaction->tra_save_point->getNumber() : 0;
@@ -890,7 +889,7 @@ void EXE_start(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
 	request->req_records_affected.clear();
 
 	// Store request start time for timestamp work
-	TimeZoneUtil::validateTimeStampUtc(request->req_timestamp_utc);
+	TimeZoneUtil::validateGmtTimeStamp(request->req_gmt_timestamp);
 
 	// Set all invariants to not computed.
 	const ULONG* const* ptr, * const* end;
@@ -983,7 +982,7 @@ void EXE_unwind(thread_db* tdbb, jrd_req* request)
 
 	request->req_flags &= ~(req_active | req_proc_fetch | req_reserved);
 	request->req_flags |= req_abort | req_stall;
-	request->req_timestamp_utc.invalidate();
+	request->req_gmt_timestamp.invalidate();
 	request->req_caller = NULL;
 	request->req_proc_inputs = NULL;
 	request->req_proc_caller = NULL;
@@ -1094,11 +1093,11 @@ void EXE_execute_triggers(thread_db* tdbb,
 
 	if (!is_db_trigger && (!old_rec || !new_rec))
 	{
-		const Record* const record = old_rec ? old_rec : new_rec;
-		fb_assert(record && record->getFormat());
+		record_param* rpb = old_rpb ? old_rpb : new_rpb;
+		fb_assert(rpb && rpb->rpb_relation);
 		// copy the record
 		MemoryPool& pool = *tdbb->getDefaultPool();
-		null_rec = FB_NEW_POOL(pool) Record(pool, record->getFormat());
+		null_rec = FB_NEW_POOL(pool) Record(pool, MET_current(tdbb, rpb->rpb_relation));
 		// initialize all fields to missing
 		null_rec->nullify();
 	}
@@ -1106,9 +1105,9 @@ void EXE_execute_triggers(thread_db* tdbb,
 	TimeStamp timestamp;
 
 	if (request)
-		timestamp = request->req_timestamp_utc;
+		timestamp = request->req_gmt_timestamp;
 	else
-		TimeZoneUtil::validateTimeStampUtc(timestamp);
+		TimeZoneUtil::validateGmtTimeStamp(timestamp);
 
 	jrd_req* trigger = NULL;
 
@@ -1154,12 +1153,22 @@ void EXE_execute_triggers(thread_db* tdbb,
 				}
 			}
 
-			trigger->req_timestamp_utc = timestamp;
+			trigger->req_gmt_timestamp = timestamp;
 			trigger->req_trigger_action = trigger_action;
 
 			TraceTrigExecute trace(tdbb, trigger, which_trig);
 
-			EXE_start(tdbb, trigger, transaction);
+			{	// Scope to replace att_ss_user
+				const JrdStatement* s = trigger->getStatement();
+				UserId* invoker = s->triggerInvoker ? s->triggerInvoker : tdbb->getAttachment()->att_ss_user;
+				AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);
+
+				AutoSetRestore<USHORT> autoOriginalTimeZone(
+					&tdbb->getAttachment()->att_original_timezone,
+					tdbb->getAttachment()->att_current_timezone);
+
+				EXE_start(tdbb, trigger, transaction);
+			}
 
 			const bool ok = (trigger->req_operation != jrd_req::req_unwind);
 			trace.finish(ok ? ITracePlugin::RESULT_SUCCESS : ITracePlugin::RESULT_FAILED);
@@ -1378,7 +1387,7 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 
 		TRA_release_request_snapshot(tdbb, request);
 		request->req_flags &= ~(req_active | req_reserved);
-		request->req_timestamp_utc.invalidate();
+		request->req_gmt_timestamp.invalidate();
 		release_blobs(tdbb, request);
 	}
 

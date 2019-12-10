@@ -48,8 +48,8 @@ $(OBJ)/dsql/parse.cpp $(SRC_ROOT)/include/gen/parse.h: $(SRC_ROOT)/dsql/parse.y 
 	($(BTYACC) -l -d -S $(SRC_ROOT)/dsql/btyacc_fb.ske $(GEN_ROOT)/y.y; echo $$? > $(GEN_ROOT)/y.status) 2>&1 | tee $(GEN_ROOT)/y.txt
 	(exit `cat $(GEN_ROOT)/y.status`)
 	sed -n -e "s/.*btyacc: \(.*conflicts.*\)/\1/p" $(GEN_ROOT)/y.txt > $(SRC_ROOT)/dsql/parse-conflicts.txt
-	sed -i 's/#define \([A-Z].*\)/#define TOK_\1/' $(GEN_ROOT)/y_tab.h
-	sed -i 's/#define TOK_YY\(.*\)/#define YY\1/' $(GEN_ROOT)/y_tab.h
+	sed -i -e 's/#define \([A-Z].*\)/#define TOK_\1/' $(GEN_ROOT)/y_tab.h
+	sed -i -e 's/#define TOK_YY\(.*\)/#define YY\1/' $(GEN_ROOT)/y_tab.h
 	$(MV) $(GEN_ROOT)/y_tab.h $(SRC_ROOT)/include/gen/parse.h
 	$(MV) $(GEN_ROOT)/y_tab.c $(OBJ)/dsql/parse.cpp
 	touch $(OBJ)/dsql/parse.cpp
@@ -66,7 +66,7 @@ $(SRC_ROOT)/gpre/gpre_meta.cpp:  $(SRC_ROOT)/gpre/gpre_meta.epp
 #$(SRC_ROOT)/qli/help.cpp:        help.fdb
 
 # Explicit dependence on generated header (parser)
-$(OBJ)/dsql/Parser.o $(OBJ)/yvalve/keywords.o $(OBJ)/dsql/dsql.o:	$(SRC_ROOT)/include/gen/parse.h
+$(OBJ)/dsql/Parser.o $(OBJ)/common/keywords.o $(OBJ)/dsql/dsql.o:	$(SRC_ROOT)/include/gen/parse.h
 
 # Special cases for building cpp from epp
 $(OBJ)/dsql/metd.cpp: $(SRC_ROOT)/dsql/metd.epp

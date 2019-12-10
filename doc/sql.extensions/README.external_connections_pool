@@ -15,7 +15,9 @@ How pool works:
   active transactions), it is reset and placed into idle list (on successful 
   reset) or closed (if reset failed).
   Connection is reset using ALTER SESSION RESET statement. It is considered 
-  successful if no error occurs.
+  successful if no error occurs. Note, if external data source not supported
+  ALTER SESSION RESET statement - it is not considered as error and such
+  connection will be placed into pool.
 - if the pool has reached max. size, the oldest idle connection is closed
 - when engine ask to create a new external connection, the pool first looks 
   for candidate at the idle list. The search is based on 4 parameters:

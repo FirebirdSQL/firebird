@@ -32,8 +32,7 @@
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/MetaName.h"
 #include "fb_exception.h"
-
-#include "../jrd/ibase.h"
+#include "ibase.h"
 
 namespace Firebird {
 
@@ -246,7 +245,7 @@ void ClumpletWriter::insertTimeStamp(UCHAR tag, const ISC_TIMESTAMP value)
 	insertBytesLengthCheck(tag, bytes, sizeof(bytes));
 }
 
-void ClumpletWriter::insertString(UCHAR tag, const string& str)
+void ClumpletWriter::insertString(UCHAR tag, const AbstractString& str)
 {
 	insertString(tag, str.c_str(), str.length());
 }
@@ -269,11 +268,6 @@ void ClumpletWriter::insertString(UCHAR tag, const char* str, FB_SIZE_T length)
 void ClumpletWriter::insertData(UCHAR tag, const UCharBuffer& data)
 {
 	insertBytesLengthCheck(tag, data.begin(), data.getCount());
-}
-
-void ClumpletWriter::insertPath(UCHAR tag, const PathName& str)
-{
-	insertString(tag, str.c_str(), str.length());
 }
 
 void ClumpletWriter::insertBytes(UCHAR tag, const void* bytes, FB_SIZE_T length)

@@ -98,6 +98,11 @@ private:
 	const Firebird::string* sqlRole;
 
 public:
+	struct ExtInfo : public Firebird::AuthReader::Info
+	{
+		Firebird::NoCaseString currentRole, currentUser;
+	};
+
 	class DbHandle : public Firebird::RefPtr<Firebird::IAttachment>
 	{
 	public:
@@ -136,15 +141,15 @@ public:
 		~Cache();
 
 		bool populate(Firebird::IAttachment *att);
-		void map(bool flagWild, Firebird::AuthReader::Info& info, AuthWriter& newBlock);
-		void search(Firebird::AuthReader::Info& info, const Map& from, AuthWriter& newBlock,
+		void map(bool flagWild, ExtInfo& info, AuthWriter& newBlock);
+		void search(ExtInfo& info, const Map& from, AuthWriter& newBlock,
 			const Firebird::NoCaseString& originalUserName);
-		void varPlugin(Firebird::AuthReader::Info& info, Map from, AuthWriter& newBlock);
-		void varDb(Firebird::AuthReader::Info& info, Map from, AuthWriter& newBlock);
-		void varFrom(Firebird::AuthReader::Info& info, Map from, AuthWriter& newBlock);
-		void varUsing(Firebird::AuthReader::Info& info, Map from, AuthWriter& newBlock);
+		void varPlugin(ExtInfo& info, Map from, AuthWriter& newBlock);
+		void varDb(ExtInfo& info, Map from, AuthWriter& newBlock);
+		void varFrom(ExtInfo& info, Map from, AuthWriter& newBlock);
+		void varUsing(ExtInfo& info, Map from, AuthWriter& newBlock);
 		bool map4(bool flagWild, unsigned flagSet, Firebird::AuthReader& rdr,
-			Firebird::AuthReader::Info& info, AuthWriter& newBlock);
+			ExtInfo& info, AuthWriter& newBlock);
 		static void eraseEntry(Map* m);
 
 	public:

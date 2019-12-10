@@ -18,7 +18,7 @@ set ERRLEV=0
 
 @echo Building %FB_OBJ_DIR%
 
-call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\Firebird make_all_%FB_TARGET_PLATFORM%.log
+call compile.bat builds\win32\%VS_VER%\Firebird make_all_%FB_TARGET_PLATFORM%.log
 if errorlevel 1 call :ERROR build failed - see make_all_%FB_TARGET_PLATFORM%.log for details
 
 @if "%ERRLEV%"=="1" (
@@ -67,6 +67,7 @@ findstr /V "@UDF_COMMENT@" %FB_ROOT_PATH%\builds\install\misc\firebird.conf.in >
 @copy %FB_ROOT_PATH%\builds\install\misc\databases.conf.in %FB_OUTPUT_DIR%\databases.conf >nul
 @copy %FB_ROOT_PATH%\builds\install\misc\fbintl.conf %FB_OUTPUT_DIR%\intl >nul
 @copy %FB_ROOT_PATH%\builds\install\misc\plugins.conf %FB_OUTPUT_DIR% >nul
+@copy %FB_ROOT_PATH%\builds\install\misc\replication.conf %FB_OUTPUT_DIR% >nul
 @copy %FB_ROOT_PATH%\src\utilities\ntrace\fbtrace.conf %FB_OUTPUT_DIR% >nul
 @copy %FB_ROOT_PATH%\src\plugins\udr_engine\udr_engine.conf %FB_OUTPUT_DIR%\plugins\udr_engine.conf >nul
 @copy %FB_ROOT_PATH%\builds\install\misc\IPLicense.txt %FB_OUTPUT_DIR% >nul
@@ -83,32 +84,14 @@ findstr /V "@UDF_COMMENT@" %FB_ROOT_PATH%\builds\install\misc\firebird.conf.in >
 @copy %FB_ROOT_PATH%\doc\README.* %FB_OUTPUT_DIR%\doc >nul
 @copy %FB_ROOT_PATH%\doc\sql.extensions\README.* %FB_OUTPUT_DIR%\doc\sql.extensions >nul
 
-:: HEADERS
-:: Don't use this ibase.h unless you have to - we build it better in BuildExecutableInstall.bat
-:: This variation doesn't clean up the license templates, and processes the component files in
-:: a different order to that used in the production version. However, this version doesn't
-:: have a dependancy upon sed while the production one does.
-echo #pragma message("Non-production version of ibase.h.") > %FB_OUTPUT_DIR%\include\ibase.tmp
-echo #pragma message("Using raw, unprocessed concatenation of header files.") >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\misc\ibase_header.txt >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\include\types_pub.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\common\dsc_pub.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\dsql\sqlda_pub.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\jrd\ibase.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\jrd\inf_pub.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\include\consts_pub.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\jrd\blr.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-type %FB_ROOT_PATH%\src\include\gen\iberror.h >> %FB_OUTPUT_DIR%\include\ibase.tmp
-sed -f %FB_ROOT_PATH%\src\misc\headers.sed < %FB_OUTPUT_DIR%\include\ibase.tmp > %FB_OUTPUT_DIR%\include\ibase.h
-del %FB_OUTPUT_DIR%\include\ibase.tmp > nul
-
-:: Additional headers
+:: Headers
 copy %FB_ROOT_PATH%\src\extlib\ib_util.h %FB_OUTPUT_DIR%\include > nul
 copy %FB_ROOT_PATH%\src\jrd\perf.h %FB_OUTPUT_DIR%\include >nul
+copy %FB_ROOT_PATH%\src\include\ibase.h %FB_OUTPUT_DIR%\include > nul
 copy %FB_ROOT_PATH%\src\include\gen\iberror.h %FB_OUTPUT_DIR%\include > nul
 
 :: New API headers
-copy %FB_ROOT_PATH%\src\include\firebird\*.h %FB_OUTPUT_DIR%\include\firebird > nul
+xcopy %FB_ROOT_PATH%\src\include\firebird %FB_OUTPUT_DIR%\include\firebird /e > nul
 
 :: UDR
 copy %FB_ROOT_PATH%\src\extlib\*.sql %FB_OUTPUT_DIR%\plugins\udr > nul
@@ -118,28 +101,21 @@ copy %FB_ROOT_PATH%\src\extlib\*.sql %FB_OUTPUT_DIR%\plugins\udr > nul
 @copy %FB_INSTALL_SCRIPTS%\uninstall_service.bat %FB_OUTPUT_DIR% >nul
 
 :: MSVC runtime
-if %MSVC_VERSION% == 14 (
-@copy "%VS140COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC140.CRT\vcruntime140.dll" %FB_OUTPUT_DIR% >nul
-@copy "%VS140COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC140.CRT\msvcp140.dll" %FB_OUTPUT_DIR% >nul
+if defined VS150COMNTOOLS (
+@copy "%VS150COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_DIR%\Microsoft.VC141.CRT\vcruntime140.dll" %FB_OUTPUT_DIR% >nul
+@copy "%VS150COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_DIR%\Microsoft.VC141.CRT\msvcp140.dll" %FB_OUTPUT_DIR% >nul
 ) else (
-if %MSVC_VERSION% == 12 (
-@copy "%VS120COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC120.CRT\msvcr120.dll" %FB_OUTPUT_DIR% >nul
-@copy "%VS120COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC120.CRT\msvcp120.dll" %FB_OUTPUT_DIR% >nul
+if defined VS140COMNTOOLS (
+@copy "%VS140COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_DIR%\Microsoft.VC140.CRT\vcruntime140.dll" %FB_OUTPUT_DIR% >nul
+@copy "%VS140COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_DIR%\Microsoft.VC140.CRT\msvcp140.dll" %FB_OUTPUT_DIR% >nul
 ) else (
-if %MSVC_VERSION% == 10 (
-@copy "%VS100COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC100.CRT\msvcr100.dll" %FB_OUTPUT_DIR% >nul
-@copy "%VS100COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC100.CRT\msvcp100.dll" %FB_OUTPUT_DIR% >nul
+if defined VS120COMNTOOLS (
+@copy "%VS120COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_DIR%\Microsoft.VC120.CRT\msvcr120.dll" %FB_OUTPUT_DIR% >nul
+@copy "%VS120COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_DIR%\Microsoft.VC120.CRT\msvcp120.dll" %FB_OUTPUT_DIR% >nul
 ) else (
-if %MSVC_VERSION% == 9 (
-@copy "%VS90COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC90.CRT\msvcr90.dll" %FB_OUTPUT_DIR% >nul
-@copy "%VS90COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC90.CRT\msvcp90.dll" %FB_OUTPUT_DIR% >nul
-@copy "%VS90COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC90.CRT\Microsoft.VC90.CRT.manifest" %FB_OUTPUT_DIR% >nul
-) else (
-if %MSVC_VERSION% == 8 (
-@copy "%VS80COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC80.CRT\msvcr80.dll" %FB_OUTPUT_DIR% >nul
-@copy "%VS80COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC80.CRT\msvcp80.dll" %FB_OUTPUT_DIR% >nul
-@copy "%VS80COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_ARCH%\Microsoft.VC80.CRT\Microsoft.VC80.CRT.manifest" %FB_OUTPUT_DIR% >nul
-)
+if defined VS100COMNTOOLS (
+@copy "%VS100COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_DIR%\Microsoft.VC100.CRT\msvcr100.dll" %FB_OUTPUT_DIR% >nul
+@copy "%VS100COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_DIR%\Microsoft.VC100.CRT\msvcp100.dll" %FB_OUTPUT_DIR% >nul
 )
 )
 )

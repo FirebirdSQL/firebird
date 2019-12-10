@@ -330,6 +330,7 @@ Firebird 4.0
     NATIVE *
     NORMALIZE_DECFLOAT *
     NTILE (1)
+    NUMBER
     OTHERS
     OVERRIDING
     PERCENT_RANK (1)

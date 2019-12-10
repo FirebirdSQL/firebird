@@ -75,7 +75,12 @@ Monitoring tables
           0: normal
           1: stalled
           2: merge
-      - MON$CRYPT_PAGE (number of page being encrypted)
+      - MON$CRYPT_STATE (current encryption state)
+          0: not encrypted
+          1: encrypted
+          2: decrypt in progress
+          3: encrypt in progress
+      - MON$CRYPT_PAGE (number of page being encrypted / decrypted)
       - MON$OWNER (database owner name)
       - MON$SEC_DATABASE (security database)
 

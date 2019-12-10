@@ -183,7 +183,15 @@ superSrv() {
 
 registerSuperServer() {
 	installSystemdCtrlFiles
-	superSrv enable && return 0
+
+	if [ "${fb_install_prefix}" = "${default_prefix}" ]
+	then
+		superSrv enable && return 0
+		return 1
+	fi
+
+	systemdPresent && return 0
+	return 1
 }
 
 unregisterSuperServer() {
@@ -498,17 +506,43 @@ CorrectLibDir() {
 
 
 #------------------------------------------------------------------------
+# Validate library name
+
+checkLibName() {
+	libName=${1}
+	grepFlag=-v
+	[ "@CPU_TYPE@" = "amd64" ] && grepFlag=
+	ldconfig -p | grep -w "$libName" | grep $grepFlag 'x86-64'
+}
+
+
+#------------------------------------------------------------------------
 # Checks for presence of libName in OS
 
 haveLibrary() {
 	libName=${1}
 	[ -z "$libName" ] && return 1
 
-	ldconfig -p | grep -w "$libName" >/dev/null 2>/dev/null && return 0
+	fixTommath=fixTomMath
+
+	checkLibName "$libName" >/dev/null 2>/dev/null && return 0
 
 	libName="lib${libName}"
-	ldconfig -p | grep -w "$libName" >/dev/null 2>/dev/null
+	checkLibName "$libName" >/dev/null 2>/dev/null
+
 	return $?
+}
+
+
+#------------------------------------------------------------------------
+# Fix .so version of libtommath
+
+fixTomMath() {
+	tm1=`checkLibName libtommath.so.1 | awk '{print $4}'`
+	[ -z "$tm1" ] && return
+	tm0=`dirname $tm1`/`basename $tm1 .1`.0
+	[ -e "$tm0" ] && return
+	ln -s $tm1 $tm0
 }
 
 

@@ -25,7 +25,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../remote/remote.h"
 #include "../jrd/align.h"
 #include "../common/gdsassert.h"
@@ -300,11 +300,11 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			align = type_alignments[dtype_dec128];
 			break;
 
-		case blr_dec_fixed:
-			desc->dsc_dtype = dtype_dec_fixed;
-			desc->dsc_length = sizeof(DecimalFixed);
+		case blr_int128:
+			desc->dsc_dtype = dtype_int128;
+			desc->dsc_length = sizeof(Int128);
 			desc->dsc_scale = *blr++;
-			align = type_alignments[dtype_dec_fixed];
+			align = type_alignments[dtype_int128];
 			break;
 
 		// this case cannot occur as switch paramater is char and blr_blob

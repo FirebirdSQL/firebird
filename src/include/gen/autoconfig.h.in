@@ -161,9 +161,6 @@
 /* security database DIR (PREFIX) */
 #define FB_SECDBDIR "@FB_SECDBDIR@"
 
-/* UDF DIR (PREFIX/UDF) */
-#define FB_UDFDIR "@FB_UDFDIR@"
-
 
 /******************************************************************************
  *

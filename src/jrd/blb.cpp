@@ -2969,3 +2969,8 @@ void blb::storeToPage(USHORT* length, Firebird::Array<UCHAR>& buffer, const UCHA
 		}
 	}
 }
+
+void blb::BLB_cancel()
+{
+	BLB_cancel(JRD_get_thread_data());
+}

@@ -216,6 +216,7 @@ public:
 	void addCTEAlias(const Firebird::string& alias)
 	{
 		thread_db* tdbb = JRD_get_thread_data();
+		fb_assert(currCteAlias == NULL);
 		cteAliases.add(FB_NEW_POOL(*tdbb->getDefaultPool()) Firebird::string(*tdbb->getDefaultPool(), alias));
 	}
 

@@ -215,14 +215,15 @@
 //-----------------------------------------------------------------
 */
 
-struct SortOrderTblEntry {
+static const unsigned SortOrderTblEntrySecondaryBits = 5;
 
+struct SortOrderTblEntry {
+	// It's important that Secondary + Tertiary fits in a byte.
 	UINT16 Primary:8;
-	UINT16 Secondary:4;
-	UINT16 Tertiary:2;
+	UINT16 Secondary:5;	// SortOrderTblEntrySecondaryBits
+	UINT16 Tertiary:3;
 	UINT16 IsExpand:1;
 	UINT16 IsCompress:1;
-
 };
 
 /*

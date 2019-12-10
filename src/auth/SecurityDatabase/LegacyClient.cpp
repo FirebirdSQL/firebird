@@ -26,7 +26,7 @@
  *
  */
 #include "firebird.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../auth/SecurityDatabase/LegacyClient.h"
 #include "../auth/SecurityDatabase/LegacyHash.h"
 #include "../common/enc_proto.h"

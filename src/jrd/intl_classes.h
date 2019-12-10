@@ -87,23 +87,12 @@ public:
 	UpcaseConverter(MemoryPool& pool, TextType* obj, const UCHAR*& str, SLONG& len)
 		: PrevConverter(pool, obj, str, len)
 	{
-		if (len > (int) sizeof(tempBuffer))
-			out_str = FB_NEW_POOL(pool) UCHAR[len];
-		else
-			out_str = tempBuffer;
-		obj->str_to_upper(len, str, len, out_str);
-		str = out_str;
-	}
-
-	~UpcaseConverter()
-	{
-		if (out_str != tempBuffer)
-			delete[] out_str;
+		obj->str_to_upper(len, str, len, tempBuffer.getBuffer(len, false));
+		str = tempBuffer.begin();
 	}
 
 private:
-	UCHAR tempBuffer[100];
-	UCHAR* out_str;
+	Firebird::UCharBuffer tempBuffer;
 };
 
 template <typename PrevConverter = NullStrConverter>
@@ -115,29 +104,17 @@ public:
 	{
 		const SLONG out_len = len / obj->getCharSet()->minBytesPerChar() * obj->getCanonicalWidth();
 
-		if (out_len > (int) sizeof(tempBuffer))
-			out_str = FB_NEW_POOL(pool) UCHAR[out_len];
-		else
-			out_str = tempBuffer;
-
 		if (str)
 		{
-			len = obj->canonical(len, str, out_len, out_str) * obj->getCanonicalWidth();
-			str = out_str;
+			len = obj->canonical(len, str, out_len, tempBuffer.getBuffer(out_len, false)) * obj->getCanonicalWidth();
+			str = tempBuffer.begin();
 		}
 		else
 			len = 0;
 	}
 
-	~CanonicalConverter()
-	{
-		if (out_str != tempBuffer)
-			delete[] out_str;
-	}
-
 private:
-	UCHAR tempBuffer[100];
-	UCHAR* out_str;
+	Firebird::UCharBuffer tempBuffer;
 };
 
 } // namespace Jrd

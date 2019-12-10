@@ -40,6 +40,7 @@ enum LockState {
 	lsError
 };
 
+void		CCH_clean_page(Jrd::thread_db*, Jrd::PageNumber);
 int			CCH_down_grade_dbb(void*);
 bool		CCH_exclusive(Jrd::thread_db*, USHORT, SSHORT, Firebird::Sync*);
 bool		CCH_exclusive_attachment(Jrd::thread_db*, USHORT, SSHORT, Firebird::Sync*);

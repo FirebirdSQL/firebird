@@ -38,7 +38,7 @@
 #include "../qli/compile.h"
 #include "../yvalve/perf.h"
 #include "../jrd/license.h"
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../qli/exe.h"
 #include "../qli/all_proto.h"
 #include "../qli/compi_proto.h"

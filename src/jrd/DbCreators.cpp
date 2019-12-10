@@ -43,6 +43,7 @@
 #include "../common/isc_proto.h"
 #include "../common/ThreadStart.h"
 #include "../common/db_alias.h"
+#include "../common/classes/ParsedList.h"
 
 #include "../jrd/DbCreators.h"
 #include "../jrd/tra.h"
@@ -73,7 +74,7 @@ bool openDb(const char* securityDb, RefPtr<IAttachment>& att, RefPtr<ITransactio
 	ClumpletWriter embeddedAttach(ClumpletWriter::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
 	embeddedAttach.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
 	embeddedAttach.insertByte(isc_dpb_sec_attach, TRUE);
-	embeddedAttach.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
+	embeddedAttach.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(securityDb));
 	embeddedAttach.insertByte(isc_dpb_no_db_triggers, TRUE);
 
 	FbLocalStatus st;

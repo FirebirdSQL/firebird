@@ -66,6 +66,7 @@ enum lck_t {
 	LCK_cancel,					// Cancellation lock
 	LCK_btr_dont_gc,			// Prevent removal of b-tree page from index
 	LCK_rel_gc,					// Allow garbage collection for relation
+	LCK_tpc_init,				// TPC initializer lock
 	LCK_tpc_block,				// TPC memory block file existence lock
 	LCK_fun_exist,				// Function existence lock
 	LCK_rel_rescan,				// Relation forced rescan lock

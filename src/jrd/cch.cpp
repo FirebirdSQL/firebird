@@ -138,6 +138,7 @@ static LatchState latch_buffer(thread_db*, Sync&, BufferDesc*, const PageNumber,
 static LockState lock_buffer(thread_db*, BufferDesc*, const SSHORT, const SCHAR);
 static ULONG memory_init(thread_db*, BufferControl*, SLONG);
 static void page_validation_error(thread_db*, win*, SSHORT);
+static void purgePrecedence(BufferControl*, BufferDesc*);
 static SSHORT related(BufferDesc*, const BufferDesc*, SSHORT, const ULONG);
 static bool writeable(BufferDesc*);
 static bool is_writeable(BufferDesc*, const ULONG);
@@ -202,6 +203,82 @@ const PageNumber FREE_PAGE(DB_PAGE_SPACE, -1);
 const int PRE_SEARCH_LIMIT	= 256;
 const int PRE_EXISTS		= -1;
 const int PRE_UNKNOWN		= -2;
+
+
+void CCH_clean_page(thread_db* tdbb, PageNumber page)
+{
+/**************************************
+ *  C C H _ c l e a n _ p a g e
+ **************************************
+ *
+ * Functional description
+ *  Clear dirty status and dependencies. Buffer must be unused.
+ *  If buffer with given page number is not found - it is OK, do nothing.
+ *  Used to remove dirty pages from cache after releasing temporary objects.
+ *
+ **************************************/
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+
+	fb_assert(page.getPageNum() > 0);
+	fb_assert(page.isTemporary());
+	if (!page.isTemporary())
+		return;
+
+	BufferControl* bcb = dbb->dbb_bcb;
+	BufferDesc* bdb = NULL;
+	{
+		Sync bcbSync(&bcb->bcb_syncObject, "CCH_clean_page");
+		bcbSync.lock(SYNC_SHARED);
+
+		bdb = find_buffer(bcb, page, false);
+		if (!bdb)
+			return;
+
+		fb_assert(bdb->bdb_use_count == 0);
+		if (!bdb->addRefConditional(tdbb, SYNC_EXCLUSIVE))
+			return;
+	}
+
+	// temporary pages should have no precedence relationship
+	if (!QUE_EMPTY(bdb->bdb_higher))
+		purgePrecedence(bcb, bdb);
+
+	fb_assert(QUE_EMPTY(bdb->bdb_higher));
+	fb_assert(QUE_EMPTY(bdb->bdb_lower));
+
+	if (!QUE_EMPTY(bdb->bdb_lower) || !QUE_EMPTY(bdb->bdb_higher))
+	{
+		bdb->release(tdbb, true);
+		return;
+	}
+
+	if (bdb->bdb_flags & (BDB_dirty | BDB_db_dirty))
+	{
+		bdb->bdb_difference_page = 0;
+		bdb->bdb_transactions = 0;
+		bdb->bdb_mark_transaction = 0;
+
+		if (!(bdb->bdb_bcb->bcb_flags & BCB_keep_pages))
+			removeDirty(dbb->dbb_bcb, bdb);
+
+		bdb->bdb_flags &= ~(BDB_must_write | BDB_system_dirty | BDB_db_dirty);
+		clear_dirty_flag_and_nbak_state(tdbb, bdb);
+	}
+
+	{
+		Sync lruSync(&bcb->bcb_syncLRU, "CCH_release");
+		lruSync.lock(SYNC_EXCLUSIVE);
+
+		if (bdb->bdb_flags & BDB_lru_chained)
+			requeueRecentlyUsed(bcb);
+
+		QUE_DELETE(bdb->bdb_in_use);
+		QUE_APPEND(bcb->bcb_in_use, bdb->bdb_in_use);
+	}
+
+	bdb->release(tdbb, true);
+}
 
 
 int CCH_down_grade_dbb(void* ast_object)
@@ -1053,8 +1130,8 @@ void CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number)
 
 	const Jrd::Attachment* att = tdbb->getAttachment();
 	const bool dontFlush = (dbb->dbb_flags & DBB_creating) ||
-		(dbb->dbb_ast_flags & DBB_shutdown_single) &&
-		att && (att->att_flags & (ATT_creator | ATT_system));
+		((dbb->dbb_ast_flags & DBB_shutdown_single) &&
+			att && (att->att_flags & (ATT_creator | ATT_system)));
 
 	if (!(main_file->fil_flags & FIL_force_write) && (max_num || max_time) && !dontFlush)
 	{
@@ -2732,7 +2809,7 @@ void BufferControl::cache_reader(BufferControl* bcb)
 
 	// Dummy attachment needed for lock owner identification.
 	tdbb->setDatabase(dbb);
-	Jrd::Attachment* const attachment = Attachment::create(dbb);
+	Jrd::Attachment* const attachment = Attachment::create(dbb, nullptr);
 	tdbb->setAttachment(attachment);
 	attachment->att_filename = dbb->dbb_filename;
 	Jrd::ContextPoolHolder context(tdbb, bcb->bcb_bufferpool);
@@ -2896,6 +2973,8 @@ void BufferControl::cache_writer(BufferControl* bcb)
 			PAG_header(tdbb, true);
 			PAG_attachment_id(tdbb);
 			TRA_init(attachment);
+
+			Monitoring::publishAttachment(tdbb);
 
 			sAtt->initDone();
 
@@ -5080,8 +5159,8 @@ void requeueRecentlyUsed(BufferControl* bcb)
 		QUE_DELETE(bdb->bdb_in_use);
 		QUE_INSERT(bcb->bcb_in_use, bdb->bdb_in_use);
 
-		bdb->bdb_flags &= ~BDB_lru_chained;
 		bdb->bdb_lru_chain = NULL;
+		bdb->bdb_flags &= ~BDB_lru_chained;
 	}
 
 	chain = bcb->bcb_lru_chain;

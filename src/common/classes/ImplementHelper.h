@@ -37,7 +37,7 @@
 #include "../common/classes/auto.h"
 #include "../common/classes/RefCounted.h"
 #include "../common/StatusArg.h"
-#include "consts_pub.h"
+#include "firebird/impl/consts_pub.h"
 #ifdef DEV_BUILD
 #include <stdio.h>
 #endif
@@ -380,17 +380,7 @@ typedef GlobalPtr<UnloadDetectorHelper, InstanceControl::PRIORITY_DETECT_UNLOAD>
 UnloadDetectorHelper* getUnloadDetector();
 
 // Generic status checker
-inline void check(IStatus* status)
-{
-	if (status->getState() & IStatus::STATE_ERRORS)
-	{
-		status_exception::raise(status);
-	}
-}
-
-
-// Generic status checker
-inline void checkExcept(IStatus* status, ISC_STATUS exclude)
+inline void check(IStatus* status, ISC_STATUS exclude = 0)
 {
 	if (status->getState() & IStatus::STATE_ERRORS)
 	{
@@ -399,6 +389,18 @@ inline void checkExcept(IStatus* status, ISC_STATUS exclude)
 	}
 }
 
+// Config keys cache
+class ConfigKeys : private HalfStaticArray<unsigned int, 8>
+{
+public:
+	ConfigKeys(MemoryPool& p)
+		: HalfStaticArray<unsigned int, 8>(p)
+	{ }
+
+	const static unsigned int INVALID_KEY = ~0u;
+
+	unsigned int getKey(IFirebirdConf* config, const char* keyName);
+};
 
 // debugger for reference counters
 

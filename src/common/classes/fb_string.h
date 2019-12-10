@@ -504,7 +504,10 @@ namespace Firebird
 			memset(baseInsert(p0, n), c, n);
 			return *this;
 		}
-		// iterator insert(iterator it, char_type c);	// what to return here?
+		void insert(iterator it, char_type c)
+		{
+			insert(it - c_str(), 1, c);
+		}
 		void insert(iterator it, size_type n, char_type c)
 		{
 			insert(it - c_str(), n, c);
@@ -517,6 +520,11 @@ namespace Firebird
 		AbstractString& erase(size_type p0 = 0, size_type n = npos) throw()
 		{
 			baseErase(p0, n);
+			return *this;
+		}
+		AbstractString& clear() throw()
+		{
+			erase();
 			return *this;
 		}
 		iterator erase(iterator it) throw()

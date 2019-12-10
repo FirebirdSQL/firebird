@@ -281,7 +281,7 @@ USHORT PAG_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start)
 #ifdef SUPPORT_RAW_DEVICES
 	// The following lines (taken from PAG_format_header) are needed to identify
 	// this file in raw_devices_validate_database as a valid database attachment.
-	*(ISC_TIMESTAMP*) header->hdr_creation_date = TimeStamp::getCurrentTimeStamp().value();
+	*(ISC_TIMESTAMP*) header->hdr_creation_date = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
 	// should we include milliseconds or not?
 	//TimeStamp::round_time(header->hdr_creation_date->timestamp_time, 0);
 
@@ -879,7 +879,6 @@ AttNumber PAG_attachment_id(thread_db* tdbb)
 	}
 
 	attachment->initLocks(tdbb);
-	Monitoring::publishAttachment(tdbb);
 
 	return attachment->att_attachment_id;
 }
@@ -953,7 +952,7 @@ void PAG_format_header(thread_db* tdbb)
 	WIN window(HEADER_PAGE_NUMBER);
 	header_page* header = (header_page*) CCH_fake(tdbb, &window, 1);
 	header->hdr_header.pag_scn = 0;
-	*(ISC_TIMESTAMP*) header->hdr_creation_date = TimeStamp::getCurrentTimeStamp().value();
+	*(ISC_TIMESTAMP*) header->hdr_creation_date = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
 	// should we include milliseconds or not?
 	//TimeStamp::round_time(header->hdr_creation_date->timestamp_time, 0);
 	header->hdr_header.pag_type = pag_header;
@@ -1031,8 +1030,7 @@ void PAG_format_pip(thread_db* tdbb, PageSpace& pageSpace)
 }
 
 
-#ifdef NOT_USED_OR_REPLACED
-bool PAG_get_clump(thread_db* tdbb, SLONG page_num, USHORT type, USHORT* inout_len, UCHAR* entry)
+bool PAG_get_clump(thread_db* tdbb, USHORT type, USHORT* inout_len, UCHAR* entry)
 {
 /***********************************************
  *
@@ -1041,7 +1039,7 @@ bool PAG_get_clump(thread_db* tdbb, SLONG page_num, USHORT type, USHORT* inout_l
  ***********************************************
  *
  * Functional description
- *	Find 'type' clump in page_num
+ *	Find 'type' clump
  *		true  - Found it
  *		false - Not present
  *	RETURNS
@@ -1051,11 +1049,7 @@ bool PAG_get_clump(thread_db* tdbb, SLONG page_num, USHORT type, USHORT* inout_l
  **************************************/
 	SET_TDBB(tdbb);
 
-	WIN window(DB_PAGE_SPACE, page_num);
-
-	if (page_num != HEADER_PAGE)
-		ERR_post(Arg::Gds(isc_page_type_err));
-
+	WIN window(DB_PAGE_SPACE, HEADER_PAGE);
 	pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_header);
 
 	UCHAR* entry_p;
@@ -1083,7 +1077,6 @@ bool PAG_get_clump(thread_db* tdbb, SLONG page_num, USHORT type, USHORT* inout_l
 
 	return true;
 }
-#endif
 
 
 void PAG_header(thread_db* tdbb, bool info)
@@ -1150,7 +1143,8 @@ void PAG_header(thread_db* tdbb, bool info)
 		dbb->dbb_oldest_snapshot = oldest_snapshot;
 
 	dbb->dbb_attachment_id = header->hdr_attachment_id;
-	dbb->dbb_creation_date = *(ISC_TIMESTAMP*) header->hdr_creation_date;
+	dbb->dbb_creation_date.utc_timestamp = *(ISC_TIMESTAMP*) header->hdr_creation_date;
+	dbb->dbb_creation_date.time_zone = TimeZoneUtil::GMT_ZONE;
 
 	if (header->hdr_flags & hdr_read_only)
 	{
@@ -1205,6 +1199,17 @@ void PAG_header(thread_db* tdbb, bool info)
 			dbb->dbb_ast_flags |= DBB_shutdown_full;
 		else if (sd_flags == hdr_shutdown_single)
 			dbb->dbb_ast_flags |= DBB_shutdown_single;
+	}
+
+	const USHORT replica_mode = header->hdr_flags & hdr_replica_mask;
+	if (replica_mode)
+	{
+		if (replica_mode == hdr_replica_read_only)
+			dbb->dbb_replica_mode = REPLICA_READ_ONLY;
+		else if (replica_mode == hdr_replica_read_write)
+			dbb->dbb_replica_mode = REPLICA_READ_WRITE;
+		else
+			fb_assert(false);
 	}
 
 	}	// try
@@ -1437,9 +1442,15 @@ void PAG_init2(thread_db* tdbb, USHORT shadow_number)
 					break;
 
 				case HDR_sweep_interval:
-					// CVC: Let's copy it always.
-					//if (!dbb->readOnly())
-						memcpy(&dbb->dbb_sweep_interval, p + 2, sizeof(SLONG));
+					memcpy(&dbb->dbb_sweep_interval, p + 2, sizeof(SLONG));
+					break;
+
+				case HDR_db_guid:
+					memcpy(&dbb->dbb_guid, p + 2, sizeof(Guid));
+					break;
+
+				case HDR_repl_seq:
+					memcpy(&dbb->dbb_repl_sequence, p + 2, sizeof(FB_UINT64));
 					break;
 				}
 			}
@@ -1610,7 +1621,31 @@ void PAG_release_pages(thread_db* tdbb, USHORT pageSpaceID, int cntRelease,
 	if (pages->pip_extent < pageMgr.pagesPerPIP)
 		pageSpace->pipWithExtent.exchangeLower(sequence);
 
+	if (pageSpace->isTemporary())
+	{
+		for (int i = 0; i < cntRelease; i++)
+			CCH_clean_page(tdbb, PageNumber(pageSpaceID, pgNums[i]));
+	}
+
 	CCH_RELEASE(tdbb, &pip_window);
+}
+
+
+void PAG_set_db_guid(thread_db* tdbb, const Guid& guid)
+{
+/**************************************
+ *
+ *	P A G _ s e t _ d b _ g u i d
+ *
+ **************************************
+ *
+ * Functional description
+ *	Set sweep interval.
+ *
+ **************************************/
+
+ 	SET_TDBB(tdbb);
+	add_clump(tdbb, HDR_db_guid, sizeof(Guid), (UCHAR*) &guid, CLUMP_REPLACE);
 }
 
 
@@ -1753,6 +1788,54 @@ void PAG_set_db_readonly(thread_db* tdbb, bool flag)
 }
 
 
+void PAG_set_db_replica(thread_db* tdbb, ReplicaMode mode)
+{
+/*********************************************
+ *
+ *	P A G _ s e t _ d b _ r e p l i c a
+ *
+ *********************************************
+ *
+ * Functional description
+ *	Set replica mode (none, read-only, read-write)
+ *
+ *********************************************/
+	SET_TDBB(tdbb);
+	const auto dbb = tdbb->getDatabase();
+
+	err_post_if_database_is_readonly(dbb);
+
+	WIN window(HEADER_PAGE_NUMBER);
+	const auto header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+
+	CCH_MARK_MUST_WRITE(tdbb, &window);
+
+	header->hdr_flags &= ~(hdr_replica_read_only | hdr_replica_read_write);
+	fb_assert((header->hdr_flags & hdr_replica_mask) == hdr_replica_none);
+
+	switch (mode)
+	{
+	case REPLICA_NONE:
+		break;
+
+	case REPLICA_READ_ONLY:
+		header->hdr_flags |= hdr_replica_read_only;
+		break;
+
+	case REPLICA_READ_WRITE:
+		header->hdr_flags |= hdr_replica_read_write;
+		break;
+
+	default:
+		fb_assert(false);
+	}
+
+	CCH_RELEASE(tdbb, &window);
+
+	dbb->dbb_replica_mode = mode;
+}
+
+
 void PAG_set_db_SQL_dialect(thread_db* tdbb, SSHORT flag)
 {
 /*********************************************
@@ -1767,6 +1850,8 @@ void PAG_set_db_SQL_dialect(thread_db* tdbb, SSHORT flag)
  *********************************************/
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
+
+	err_post_if_database_is_readonly(dbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
 	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
@@ -1833,11 +1918,29 @@ void PAG_set_page_buffers(thread_db* tdbb, ULONG buffers)
 }
 
 
-void PAG_sweep_interval(thread_db* tdbb, SLONG interval)
+void PAG_set_repl_sequence(thread_db* tdbb, FB_UINT64 sequence)
 {
 /**************************************
  *
- *	P A G _ s w e e p _ i n t e r v a l
+ *	P A G _ s e t _ r e p l _ s e q u e n c e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Set replication sequence.
+ *
+ **************************************/
+
+ 	SET_TDBB(tdbb);
+	add_clump(tdbb, HDR_repl_seq, sizeof(FB_UINT64), (UCHAR*) &sequence, CLUMP_REPLACE);
+}
+
+
+void PAG_set_sweep_interval(thread_db* tdbb, SLONG interval)
+{
+/**************************************
+ *
+ *	P A G _ s e t _ s w e e p _ i n t e r v a l
  *
  **************************************
  *

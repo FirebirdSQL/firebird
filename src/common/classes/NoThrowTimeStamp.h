@@ -27,7 +27,7 @@
 #ifndef CLASSES_NOTHROW_TIMESTAMP_H
 #define CLASSES_NOTHROW_TIMESTAMP_H
 
-#include "../common/dsc_pub.h"
+#include "firebird/impl/dsc_pub.h"
 
 // struct tm declaration
 #if defined(TIME_WITH_SYS_TIME)

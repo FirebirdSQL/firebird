@@ -61,6 +61,7 @@
 #include "../jrd/RuntimeStatistics.h"
 #include "../jrd/event_proto.h"
 #include "../jrd/ExtEngineManager.h"
+#include "../jrd/Coercion.h"
 #include "../lock/lock_proto.h"
 #include "../common/config/config.h"
 #include "../common/classes/SyncObject.h"
@@ -328,6 +329,8 @@ public:
 		return fb_utils::genUniqueId();
 	}
 
+	Firebird::Guid dbb_guid;			// database GUID
+
 	Firebird::SyncObject	dbb_sync;
 	Firebird::SyncObject	dbb_sys_attach;		// synchronize operations with dbb_sys_attachments
 
@@ -424,7 +427,7 @@ public:
 
 	TipCache*		dbb_tip_cache;		// cache of latest known state of all transactions in system
 	BackupManager*	dbb_backup_manager;						// physical backup manager
-	Firebird::TimeStamp dbb_creation_date; 					// creation date
+	ISC_TIMESTAMP_TZ dbb_creation_date; 					// creation timestamp in GMT
 	ExternalFileDirectoryList* dbb_external_file_directory_list;
 	Firebird::RefPtr<const Config> dbb_config;
 
@@ -434,6 +437,10 @@ public:
 	unsigned dbb_linger_seconds;
 	time_t dbb_linger_end;
 	Firebird::RefPtr<Firebird::IPluginConfig> dbb_plugin_config;
+
+	FB_UINT64 dbb_repl_sequence;		// replication sequence
+	ReplicaMode dbb_replica_mode;		// replica access mode
+	unsigned dbb_compatibility_index;	// datatype backward compatibility level
 
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;
@@ -462,6 +469,16 @@ public:
 
 	void registerModule(Module&);
 
+	bool isReplica() const
+	{
+		return (dbb_replica_mode != REPLICA_NONE);
+	}
+
+	bool isReplica(ReplicaMode mode) const
+	{
+		return (dbb_replica_mode == mode);
+	}
+
 private:
 	Database(MemoryPool* p, Firebird::IPluginConfig* pConf, bool shared)
 	:	dbb_permanent(p),
@@ -481,12 +498,15 @@ private:
 		dbb_stats(*p),
 		dbb_lock_owner_id(getLockOwnerId()),
 		dbb_tip_cache(NULL),
-		dbb_creation_date(Firebird::TimeStamp::getCurrentTimeStamp()),
+		dbb_creation_date(Firebird::TimeZoneUtil::getCurrentGmtTimeStamp()),
 		dbb_external_file_directory_list(NULL),
 		dbb_init_fini(FB_NEW_POOL(*getDefaultMemoryPool()) ExistenceRefMutex()),
 		dbb_linger_seconds(0),
 		dbb_linger_end(0),
-		dbb_plugin_config(pConf)
+		dbb_plugin_config(pConf),
+		dbb_repl_sequence(0),
+		dbb_replica_mode(REPLICA_NONE),
+		dbb_compatibility_index(~0U)
 	{
 		dbb_pools.add(p);
 	}
@@ -519,6 +539,12 @@ public:
 
 	static void garbage_collector(Database* dbb);
 	void exceptionHandler(const Firebird::Exception& ex, ThreadFinishSync<Database*>::ThreadRoutine* routine);
+
+	void ensureGuid(thread_db* tdbb);
+	FB_UINT64 getReplSequence(thread_db* tdbb);
+	void setReplSequence(thread_db* tdbb, FB_UINT64 sequence);
+
+	const CoercionArray *getBindings() const;
 
 private:
 	//static int blockingAstSharedCounter(void*);

@@ -45,7 +45,6 @@
 
 #include "firebird.h"
 #include <stdio.h>
-#include "../yvalve/keywords.h"
 #include "../jrd/intl.h"
 #include <stdlib.h>
 #include <stdarg.h>
@@ -100,7 +99,7 @@ enum literal_string_type
 #if defined(WIN_NT)
 #include <windows.h>
 #endif
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../isql/isql.h"
 #include "../yvalve/perf.h"
 #include "../jrd/license.h"
@@ -321,6 +320,7 @@ IsqlGlobals::IsqlGlobals()
 
 	df16 = Firebird::UtilInterfacePtr()->getDecFloat16(&statusWrapper);
 	df34 = Firebird::UtilInterfacePtr()->getDecFloat34(&statusWrapper);
+	i128 = Firebird::UtilInterfacePtr()->getInt128(&statusWrapper);
 }
 
 // I s q l G l o b a l s : : p r i n t f
@@ -643,7 +643,7 @@ int ISQL_main(int argc, char* argv[])
 #endif
 	atexit(&atexit_fb_shutdown);
 
-	TEXT tabname[WORDLENGTH];
+	TEXT tabname[MAX_SQL_IDENTIFIER_SIZE];
 	tabname[0] = '\0';
 
 	// Initialize globals
@@ -1250,8 +1250,8 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation, bool collate_
 			fb_utils::exact_name(COL.RDB$COLLATION_NAME);
 			fb_utils::exact_name(CST.RDB$DEFAULT_COLLATE_NAME);
 
-			char charSetName[QUOTEDLENGTH];
-			char collateName[QUOTEDLENGTH];
+			char charSetName[QUOTED_NAME_SIZE];
+			char collateName[QUOTED_NAME_SIZE];
 
 			if (quote && isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
 			{
@@ -1441,7 +1441,7 @@ SLONG ISQL_get_index_segments(TEXT* segs,
  *	returns the list of columns in an index.
  *
  **************************************/
-	TEXT SQL_identifier[BUFFER_LENGTH128];
+	TEXT SQL_identifier[BUFFER_LENGTH256];
 
 	*segs = '\0';
 
@@ -1839,7 +1839,7 @@ bool ISQL_printNumericType(const char* fieldName, const int fieldType, const int
 	case INTEGER:
 	case BIGINT:
 	case DOUBLE_PRECISION:
-	case DEC_FIXED_TYPE:
+	case blr_int128:
 		// Handle Integral subtypes NUMERIC and DECIMAL
 		// We are ODS >= 10 and could be any Dialect
 
@@ -1873,8 +1873,8 @@ bool ISQL_printNumericType(const char* fieldName, const int fieldType, const int
 				case DOUBLE_PRECISION:
 					isqlGlob.printf("NUMERIC(15, %d)", -fieldScale);
 					break;
-				case DEC_FIXED_TYPE:
-					isqlGlob.printf("NUMERIC(34, %d)", -fieldScale);
+				case blr_int128:
+					isqlGlob.printf("NUMERIC(38, %d)", -fieldScale);
 					break;
 				}
 			}
@@ -2073,7 +2073,7 @@ static processing_state add_row(TEXT* tabname)
 		return FAIL;
 	}
 
-	chop_at(tabname, QUOTEDLENGTH);
+	chop_at(tabname, QUOTED_NAME_SIZE);
 	if (tabname[0] != DBL_QUOTE)
 		IUTILS_make_upper(tabname);
 
@@ -2121,7 +2121,7 @@ static processing_state add_row(TEXT* tabname)
 
 	unsigned i_cols = 0;
 	{ // scope
-		char fldfixed[QUOTEDLENGTH];
+		char fldfixed[QUOTED_NAME_SIZE];
 		int i = 0;
 		for (unsigned i = 0; i < n_cols; ++i)
 		{
@@ -2289,6 +2289,7 @@ static processing_state add_row(TEXT* tabname)
 				double* dvalue;
 				FB_DEC16* d64value;
 				FB_DEC34* d128value;
+				FB_I128* i128value;
 				UCHAR* boolean;
 				ISC_QUAD* blobid;
 				vary* avary;
@@ -2362,11 +2363,27 @@ static processing_state add_row(TEXT* tabname)
 					if ((!isqlGlob.df16) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
+						ISQL_errmsg(fbStatus);
 						done = true;
 					}
 					break;
 
-				case SQL_DEC_FIXED:
+				case SQL_INT128:
+					scale = msg->getScale(fbStatus, i);
+					if (ISQL_errmsg(fbStatus))
+						return (SKIP);
+
+					i128value = (FB_I128*) datap;
+					if (isqlGlob.i128)
+						isqlGlob.i128->fromString(fbStatus, scale, lastInputLine, i128value);
+					if ((!isqlGlob.i128) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+					{
+						STDERROUT("Input parsing problem");
+						ISQL_errmsg(fbStatus);
+						done = true;
+					}
+					break;
+
 				case SQL_DEC34:
 					d128value = (FB_DEC34*) datap;
 					if (isqlGlob.df34)
@@ -2374,6 +2391,7 @@ static processing_state add_row(TEXT* tabname)
 					if ((!isqlGlob.df34) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
+						ISQL_errmsg(fbStatus);
 						done = true;
 					}
 					break;
@@ -3069,6 +3087,7 @@ static processing_state bulk_insert_hack(const char* command)
 				tm times;
 				FB_DEC16* d64value;
 				FB_DEC34* d128value;
+				FB_I128* i128value;
 				// Initialize the time structure.
 				memset(&times, 0, sizeof(times));
 				char msec_str[5] = "";
@@ -3135,18 +3154,38 @@ static processing_state bulk_insert_hack(const char* command)
 					if ((!isqlGlob.df16) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
+						ISQL_errmsg(fbStatus);
 						done = true;
 					}
 					break;
 
 				case SQL_DEC34:
-				case SQL_DEC_FIXED:
 					d128value = (FB_DEC34*) datap;
 					if (isqlGlob.df34)
 						isqlGlob.df34->fromString(fbStatus, get_numeric_value(lastPos).c_str(), d128value);
 					if ((!isqlGlob.df34) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
+						ISQL_errmsg(fbStatus);
+						done = true;
+					}
+					break;
+
+				case SQL_INT128:
+					scale = message->getScale(fbStatus, i);
+					if (ISQL_errmsg(fbStatus))
+						return (SKIP);
+
+					i128value = (FB_I128*) datap;
+					if (isqlGlob.i128)
+					{
+						isqlGlob.i128->fromString(fbStatus, scale,
+							get_numeric_value(lastPos).c_str(), i128value);
+					}
+					if ((!isqlGlob.i128) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+					{
+						STDERROUT("Input parsing problem");
+						ISQL_errmsg(fbStatus);
 						done = true;
 					}
 					break;
@@ -3666,12 +3705,12 @@ static processing_state copy_table(TEXT* source,
 		return END;
 	}
 
-	chop_at(source, QUOTEDLENGTH);
+	chop_at(source, QUOTED_NAME_SIZE);
 	if (source[0] != DBL_QUOTE)
 		IUTILS_make_upper(source);
 	/*
-	chop_at(source_tbl, WORDLENGTH);
-	TEXT source[QUOTEDLENGTH];
+	chop_at(source_tbl, MAX_SQL_IDENTIFIER_SIZE);
+	TEXT source[QUOTED_NAME_SIZE];
 	bool delimited_yes = source_tbl[0] == DBL_QUOTE;
 	if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION && delimited_yes) {
 		IUTILS_copy_SQL_id(source_tbl, source, DBL_QUOTE);
@@ -3683,12 +3722,12 @@ static processing_state copy_table(TEXT* source,
 	}
 	*/
 
-	chop_at(destination, QUOTEDLENGTH);
+	chop_at(destination, QUOTED_NAME_SIZE);
 	if (destination[0] != DBL_QUOTE)
 		IUTILS_make_upper(destination);
 	/*
-	chop_at(destination_tbl, WORDLENGTH);
-	TEXT destination[QUOTEDLENGTH];
+	chop_at(destination_tbl, MAX_SQL_IDENTIFIER_SIZE);
+	TEXT destination[QUOTED_NAME_SIZE];
 	delimited_yes = destination_tbl[0] == DBL_QUOTE;
 	if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION && delimited_yes) {
 		IUTILS_copy_SQL_id(destination_tbl, destination, DBL_QUOTE);
@@ -6183,8 +6222,8 @@ static processing_state newdb(TEXT* dbname,
 	strcpy(dbname, save_database);
 	ISQL_FREE(save_database);
 
-	TEXT local_psw[BUFFER_LENGTH128];
-	TEXT local_usr[BUFFER_LENGTH128];
+	TEXT local_psw[BUFFER_LENGTH256];
+	TEXT local_usr[BUFFER_LENGTH256];
 	TEXT local_sql_role[BUFFER_LENGTH256];
 
 	// global user and passwords are set only if they are not originally set
@@ -6482,10 +6521,10 @@ static processing_state newsize(const TEXT* colname, const TEXT* sizestr)
  *	Add a column name and print width to collist
  *
  **************************************/
-	if (!*colname || (strlen(colname) >= QUOTEDLENGTH))
+	if (!*colname || (strlen(colname) >= QUOTED_NAME_SIZE))
 		return ps_ERR;
 
-	char buf[QUOTEDLENGTH];
+	char buf[QUOTED_NAME_SIZE];
 	if (colname[0] == DBL_QUOTE)
 	{
 		strcpy(buf, colname);
@@ -6982,7 +7021,7 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 #ifdef DEV_BUILD
 				// If there is a table name, it follows
 				if (istable && (++i < argc) && (s = argv[i]) && *s)
-					fb_utils::copy_terminate(tabname, s, WORDLENGTH);
+					fb_utils::copy_terminate(tabname, s, MAX_SQL_IDENTIFIER_SIZE);
 #endif
 			}
 		}
@@ -7313,7 +7352,6 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			break;
 
 		case SQL_DEC34:
-		case SQL_DEC_FIXED:
 			{
 				char decStr[Firebird::IDecFloat34::STRING_SIZE];
 				if (isqlGlob.df34)
@@ -7326,9 +7364,34 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					strcpy(decStr, convErr);
 
 				if (setValues.List)
-					isqlGlob.printf("%*.*s%s", sizeof(decStr) - 1, sizeof(decStr) - 1, decStr, NEWLINE);
+				{
+					isqlGlob.printf("%*.*s%s", int(sizeof(decStr) - 1), int(sizeof(decStr) - 1),
+						decStr, NEWLINE);
+				}
 				else
-					sprintf(p, "%*.*s ", sizeof(decStr) - 1, sizeof(decStr) - 1, decStr);
+					sprintf(p, "%*.*s ", int(sizeof(decStr) - 1), int(sizeof(decStr) - 1), decStr);
+			}
+			break;
+
+		case SQL_INT128:
+			{
+				char intStr[Firebird::IInt128::STRING_SIZE];
+				if (isqlGlob.i128)
+				{
+					isqlGlob.i128->toString(fbStatus, var->value.asInt128, dscale, sizeof(intStr), intStr);
+					if (ISQL_errmsg(fbStatus))
+						strcpy(intStr, convErr);
+				}
+				else
+					strcpy(intStr, convErr);
+
+				if (setValues.List)
+				{
+					isqlGlob.printf("%*.*s%s", int(sizeof(intStr) - 1), int(sizeof(intStr) - 1),
+						intStr, NEWLINE);
+				}
+				else
+					sprintf(p, "%*.*s ", int(sizeof(intStr) - 1), int(sizeof(intStr) - 1), intStr);
 			}
 			break;
 
@@ -8170,7 +8233,9 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 		case SQL_DEC16:
 			disp_length = Firebird::IDecFloat16::STRING_SIZE - 1;
 			break;
-		case SQL_DEC_FIXED:
+		case SQL_INT128:
+			disp_length = Firebird::IInt128::STRING_SIZE - 1;
+			break;
 		case SQL_DEC34:
 			disp_length = Firebird::IDecFloat34::STRING_SIZE - 1;
 			break;
@@ -8238,6 +8303,8 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 			if (charSet == CS_UTF8)
 				disp_length *= 4;
 		}
+		else if (isqlGlob.att_charset == CS_UTF8)
+			disp_length = MAX(disp_length, namelength * 4);
 
 		// The total line length
 		linelength += disp_length + 1;
@@ -8348,8 +8415,26 @@ static processing_state process_statement(const TEXT* str2)
 	ISQL_warning(fbStatus);
 
 	global_Stmt->setTimeout(fbStatus, setValues.StmtTimeout);
-	if (ISQL_errmsg(fbStatus))
-		setValues.StmtTimeout = 0;
+	if (failed())
+	{
+		if (fbStatus->getErrors()[1] == isc_interface_version_too_old)
+		{
+			if (setValues.StmtTimeout)
+			{
+				setValues.StmtTimeout = 0;
+
+				TEXT msg[MSG_LENGTH];
+				IUTILS_msg_get(NO_TIMEOUTS, msg);
+				// Timeouts are not supported by server
+				isqlGlob.printf("%s%s", msg, NEWLINE);
+			}
+		}
+		else
+		{
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		}
+	}
 
 	// Find out what kind of statement this is
 	const unsigned statement_type = global_Stmt->getType(fbStatus);
@@ -8830,8 +8915,8 @@ static const char* sqltype_to_string(unsigned sqltype)
 		return "DECFLOAT(16)";
 	case SQL_DEC34:
 		return "DECFLOAT(34)";
-	case SQL_DEC_FIXED:
-		return "DECIMAL FIXED";
+	case SQL_INT128:
+		return "NUMERIC(38)";
 	case SQL_D_FLOAT:
 		return "D_FLOAT";
 	case SQL_TIMESTAMP:

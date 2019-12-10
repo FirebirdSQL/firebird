@@ -101,7 +101,7 @@ public:
 				"msvcr110.dll",
 #elif _MSC_VER == 1800
 					"msvcr120.dll",
-#elif _MSC_VER >= 1900 && _MSC_VER < 1920
+#elif _MSC_VER >= 1900 && _MSC_VER < 1930
 					"vcruntime140.dll",
 #else
                     #error Specify CRT DLL name here !
@@ -164,7 +164,7 @@ public:
 
 	~Win32Module();
 
-	void *findSymbol(const string&);
+	void *findSymbol(ISC_STATUS* status, const string&);
 
 private:
 	const HMODULE module;
@@ -183,12 +183,17 @@ bool ModuleLoader::isLoadableModule(const PathName& module)
 	return hMod != 0;
 }
 
-void ModuleLoader::doctorModuleExtension(PathName& name)
+bool ModuleLoader::doctorModuleExtension(PathName& name, int& step)
 {
+	if (step++ > 0)
+		return false;
+
+	// Step 0: append missing extension
 	const PathName::size_type pos = name.rfind(".dll");
 	if (pos != PathName::npos && pos == name.length() - 4)
-		return;
+		return false;
 	name += ".dll";
+	return true;
 }
 
 ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const PathName& modPath)
@@ -241,7 +246,7 @@ Win32Module::~Win32Module()
 		FreeLibrary(module);
 }
 
-void* Win32Module::findSymbol(const string& symName)
+void* Win32Module::findSymbol(ISC_STATUS* status, const string& symName)
 {
 	FARPROC result = GetProcAddress(module, symName.c_str());
 	if (!result)
@@ -249,5 +254,13 @@ void* Win32Module::findSymbol(const string& symName)
 		string newSym = '_' + symName;
 		result = GetProcAddress(module, newSym.c_str());
 	}
+
+	if (!result && status)
+	{
+		status[0] = isc_arg_win32;
+		status[1] = GetLastError();
+		status[2] = isc_arg_end;
+	}
+
 	return (void*) result;
 }

@@ -27,7 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include "../jrd/ibase.h"
+#include "ibase.h"
 #include "../auth/SecurityDatabase/LegacyHash.h"
 #include "../common/enc_proto.h"
 #include "../yvalve/gds_proto.h"
@@ -41,6 +41,8 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/StatusHolder.h"
+#include "../common/security.h"
+#include "../common/classes/ParsedList.h"
 #include "firebird/Interface.h"
 
 // Here we use version-independent symbolic link (or copy) of actual database
@@ -98,8 +100,7 @@ static bool grantRevokeAdmin(ISC_STATUS* isc_status, FB_API_HANDLE database, FB_
 }
 
 
-const static unsigned int INIT_KEY = ((~0) - 1);
-static unsigned int secDbKey = INIT_KEY;
+static Firebird::GlobalPtr<Firebird::ConfigKeys> keys;
 
 namespace Auth {
 
@@ -118,12 +119,8 @@ void SecurityDatabaseManagement::start(Firebird::CheckStatusWrapper* st, Firebir
 	{
 		st->init();
 
-		if (secDbKey == INIT_KEY)
-		{
-			secDbKey = config->getKey("SecurityDatabase");
-		}
+		unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
 		const char* secDbName = config->asString(secDbKey);
-
 		if (!(secDbName && secDbName[0]))
 		{
 			Firebird::Arg::Gds(isc_secdb_name).raise();
@@ -131,7 +128,7 @@ void SecurityDatabaseManagement::start(Firebird::CheckStatusWrapper* st, Firebir
 
 		Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 		dpb.insertByte(isc_dpb_sec_attach, TRUE);
-		dpb.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
+		dpb.insertString(isc_dpb_config, Firebird::ParsedList::getNonLoopbackProviders(secDbName));
 
 		unsigned int authBlockSize;
 		const unsigned char* authBlock = logonInfo->authBlock(&authBlockSize);

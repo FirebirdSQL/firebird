@@ -31,7 +31,7 @@
     <ClCompile Include="..\..\..\src\yvalve\config\os\win32\config_root.cpp" />
     <ClCompile Include="..\..\..\src\yvalve\DistributedTransaction.cpp" />
     <ClCompile Include="..\..\..\src\yvalve\gds.cpp" />
-    <ClCompile Include="..\..\..\src\yvalve\keywords.cpp" />
+    <ClCompile Include="..\..\..\src\yvalve\keywordsStub.cpp" />
     <ClCompile Include="..\..\..\src\yvalve\MasterImplementation.cpp" />
     <ClCompile Include="..\..\..\src\yvalve\perf.cpp" />
     <ClCompile Include="..\..\..\src\yvalve\PluginManager.cpp" />
@@ -50,7 +50,7 @@
     <ClInclude Include="..\..\..\src\yvalve\array_proto.h" />
     <ClInclude Include="..\..\..\src\yvalve\blob_proto.h" />
     <ClInclude Include="..\..\..\src\yvalve\gds_proto.h" />
-    <ClInclude Include="..\..\..\src\yvalve\keywords.h" />
+    <ClInclude Include="..\..\..\src\yvalve\keywordsStub.h" />
     <ClInclude Include="..\..\..\src\yvalve\perf.h" />
     <ClInclude Include="..\..\..\src\yvalve\perf_proto.h" />
     <ClInclude Include="..\..\..\src\yvalve\PluginManager.h" />

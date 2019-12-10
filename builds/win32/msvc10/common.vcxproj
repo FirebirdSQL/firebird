@@ -39,6 +39,7 @@
     <ClCompile Include="..\..\..\src\common\classes\MetaName.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\MsgPrint.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\NoThrowTimeStamp.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\ParsedList.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\SafeArg.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\semaphore.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\Switches.cpp" />
@@ -71,11 +72,13 @@
     <ClCompile Include="..\..\..\src\common\DynamicStrings.cpp" />
     <ClCompile Include="..\..\..\src\common\enc.cpp" />
     <ClCompile Include="..\..\..\src\common\fb_exception.cpp" />
+    <ClCompile Include="..\..\..\src\common\Int128.cpp" />
     <ClCompile Include="..\..\..\src\common\IntlParametersBlock.cpp" />
     <ClCompile Include="..\..\..\src\common\IntlUtil.cpp" />
     <ClCompile Include="..\..\..\src\common\isc.cpp" />
     <ClCompile Include="..\..\..\src\common\isc_file.cpp" />
     <ClCompile Include="..\..\..\src\common\isc_sync.cpp" />
+    <ClCompile Include="..\..\..\src\common\keywords.cpp" />
     <ClCompile Include="..\..\..\src\common\MsgMetadata.cpp" />
     <ClCompile Include="..\..\..\src\common\os\win32\fbsyslog.cpp" />
     <ClCompile Include="..\..\..\src\common\os\win32\guid.cpp" />
@@ -95,6 +98,7 @@
     <ClCompile Include="..\..\..\src\common\TextType.cpp" />
     <ClCompile Include="..\..\..\src\common\ThreadData.cpp" />
     <ClCompile Include="..\..\..\src\common\ThreadStart.cpp" />
+    <ClCompile Include="..\..\..\src\common\TimeZoneUtil.cpp" />
     <ClCompile Include="..\..\..\src\common\Tokens.cpp" />
     <ClCompile Include="..\..\..\src\common\unicode_util.cpp" />
     <ClCompile Include="..\..\..\src\common\utils.cpp" />
@@ -139,6 +143,7 @@
     <ClInclude Include="..\..\..\src\common\classes\NoThrowTimeStamp.h" />
     <ClInclude Include="..\..\..\src\common\classes\Nullable.h" />
     <ClInclude Include="..\..\..\src\common\classes\objects_array.h" />
+    <ClInclude Include="..\..\..\src\common\classes\ParsedList.h" />
     <ClInclude Include="..\..\..\src\common\classes\QualifiedName.h" />
     <ClInclude Include="..\..\..\src\common\classes\RefCounted.h" />
     <ClInclude Include="..\..\..\src\common\classes\RefMutex.h" />
@@ -176,12 +181,14 @@
     <ClInclude Include="..\..\..\src\common\enc_proto.h" />
     <ClInclude Include="..\..\..\src\common\file_params.h" />
     <ClInclude Include="..\..\..\src\common\gdsassert.h" />
+    <ClInclude Include="..\..\..\src\common\Int128.h" />
     <ClInclude Include="..\..\..\src\common\intlobj_new.h" />
     <ClInclude Include="..\..\..\src\common\IntlParametersBlock.h" />
     <ClInclude Include="..\..\..\src\common\IntlUtil.h" />
     <ClInclude Include="..\..\..\src\common\isc_f_proto.h" />
     <ClInclude Include="..\..\..\src\common\isc_proto.h" />
     <ClInclude Include="..\..\..\src\common\isc_s_proto.h" />
+    <ClInclude Include="..\..\..\src\common\keywords.h" />
     <ClInclude Include="..\..\..\src\common\MsgMetadata.h" />
     <ClInclude Include="..\..\..\src\common\os\divorce.h" />
     <ClInclude Include="..\..\..\src\common\os\fbsyslog.h" />
@@ -205,6 +212,8 @@
     <ClInclude Include="..\..\..\src\common\TextType.h" />
     <ClInclude Include="..\..\..\src\common\ThreadData.h" />
     <ClInclude Include="..\..\..\src\common\ThreadStart.h" />
+    <ClInclude Include="..\..\..\src\common\TimeZones.h" />
+    <ClInclude Include="..\..\..\src\common\TimeZoneUtil.h" />
     <ClInclude Include="..\..\..\src\common\Tokens.h" />
     <ClInclude Include="..\..\..\src\common\unicode_util.h" />
     <ClInclude Include="..\..\..\src\common\UtilSvc.h" />
@@ -328,7 +337,7 @@
       <Culture>0x041d</Culture>
     </ResourceCompile>
     <Lib>
-      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;$(TargetDir)\ttmathuint_x86_64_msvc.obj;%(AdditionalDependencies)</AdditionalDependencies>
     </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -346,7 +355,7 @@
       <Culture>0x041d</Culture>
     </ResourceCompile>
     <Lib>
-      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;$(TargetDir)\ttmathuint_x86_64_msvc.obj;%(AdditionalDependencies)</AdditionalDependencies>
     </Lib>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

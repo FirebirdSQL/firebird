@@ -101,7 +101,7 @@ Firebird::ITracePlugin* TraceFactoryImpl::trace_create(Firebird::CheckStatusWrap
 		{
 			const char* strEx = TracePluginImpl::marshal_exception(ex);
 			Firebird::string err;
-			if (dbname)
+			if (dbname && dbname[0])
 				err.printf("Error creating trace session for database \"%s\":\n%s\n", dbname, strEx);
 			else
 				err.printf("Error creating trace session for service manager attachment:\n%s\n", strEx);

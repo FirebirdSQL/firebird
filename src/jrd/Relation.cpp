@@ -196,6 +196,26 @@ bool jrd_rel::delPages(thread_db* tdbb, TraNumber tran, RelationPages* aPages)
 	return true;
 }
 
+void jrd_rel::retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNumber)
+{
+	fb_assert(rel_flags & REL_temp_tran);
+	fb_assert(oldNumber != 0);
+	fb_assert(newNumber != 0);
+
+	SINT64 inst_id = oldNumber;
+	FB_SIZE_T pos;
+	if (!rel_pages_inst->find(oldNumber, pos))
+		return;
+
+	RelationPages* pages = (*rel_pages_inst)[pos];
+	fb_assert(pages->rel_instance_id == oldNumber);
+
+	rel_pages_inst->remove(pos);
+
+	pages->rel_instance_id = newNumber;
+	rel_pages_inst->add(pages);
+}
+
 void jrd_rel::getRelLockKey(thread_db* tdbb, UCHAR* key)
 {
 	const ULONG val = rel_id;

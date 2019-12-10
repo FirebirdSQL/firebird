@@ -31,6 +31,7 @@
 #include "../jrd/constants.h"
 #include "firebird/Interface.h"
 #include "../common/db_alias.h"
+#include "../jrd/build_no.h"
 
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
@@ -148,9 +149,11 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,		"CpuAffinityMask",			(ConfigValue) 0},
 	{TYPE_INTEGER,		"TcpRemoteBufferSize",		(ConfigValue) 8192},		// bytes
 	{TYPE_BOOLEAN,		"TcpNoNagle",				(ConfigValue) true},
+	{TYPE_BOOLEAN,		"TcpLoopbackFastPath",      (ConfigValue) true},
 	{TYPE_INTEGER,		"DefaultDbCachePages",		(ConfigValue) -1},			// pages
 	{TYPE_INTEGER,		"ConnectionTimeout",		(ConfigValue) 180},			// seconds
 	{TYPE_INTEGER,		"DummyPacketInterval",		(ConfigValue) 0},			// seconds
+	{TYPE_STRING,		"DefaultTimeZone",			(ConfigValue) ""},
 	{TYPE_INTEGER,		"LockMemSize",				(ConfigValue) 1048576},		// bytes
 	{TYPE_INTEGER,		"LockHashSlots",			(ConfigValue) 8191},		// slots
 	{TYPE_INTEGER,		"LockAcquireSpins",			(ConfigValue) 0},
@@ -172,7 +175,6 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_STRING,		"RemoteBindAddress",		(ConfigValue) 0},
 	{TYPE_STRING,		"ExternalFileAccess",		(ConfigValue) "None"},	// location(s) of external files for tables
 	{TYPE_STRING,		"DatabaseAccess",			(ConfigValue) "Full"},	// location(s) of databases
-#define UDF_DEFAULT_RESTRICT_VALUE "Restrict UDF"								// use it to substitute FB_UDFDIR value
 	{TYPE_STRING,		"UdfAccess",				(ConfigValue) "None"},	// location(s) of UDFs
 	{TYPE_STRING,		"TempDirectories",			(ConfigValue) 0},
 #ifdef DEV_BUILD
@@ -199,7 +201,7 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 #endif
 	{TYPE_STRING,		"UserManager",				(ConfigValue) "Srp"},
 	{TYPE_STRING,		"TracePlugin",				(ConfigValue) "fbtrace"},
-	{TYPE_STRING,		"SecurityDatabase",			(ConfigValue) "$(dir_secDb)/security4.fdb"},	// security database name
+	{TYPE_STRING,		"SecurityDatabase",			(ConfigValue) "security.db"},	// sec/db alias - rely on databases.conf
 	{TYPE_STRING,		"ServerMode",				(ConfigValue) "Super"},
 	{TYPE_STRING,		"WireCrypt",				(ConfigValue) NULL},
 	{TYPE_STRING,		"WireCryptPlugin",			(ConfigValue) "Arc4"},
@@ -225,8 +227,10 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,		"ExtConnPoolSize",			(ConfigValue) 0},
 	{TYPE_INTEGER,		"ExtConnPoolLifeTime",		(ConfigValue) 7200},
 	{TYPE_INTEGER,		"SnapshotsMemSize",			(ConfigValue) 65536}, // bytes
-	{TYPE_INTEGER,		"TpcBlockSize",				(ConfigValue) 4194304}, // bytes
-	{TYPE_BOOLEAN,		"ReadConsistency",			(ConfigValue) true}
+	{TYPE_INTEGER,		"TipCacheBlockSize",		(ConfigValue) 4194304}, // bytes
+	{TYPE_BOOLEAN,		"ReadConsistency",			(ConfigValue) true},
+	{TYPE_BOOLEAN,		"ClearGTTAtRetaining",		(ConfigValue) false},
+	{TYPE_STRING,		"DataTypeCompatibility",	(ConfigValue) NULL}
 };
 
 /******************************************************************************
@@ -492,6 +496,11 @@ bool Config::getTcpNoNagle() const
 	return get<bool>(KEY_TCP_NO_NAGLE);
 }
 
+bool Config::getTcpLoopbackFastPath() const
+{
+	return get<bool>(KEY_TCP_LOOPBACK_FAST_PATH);
+}
+
 bool Config::getIPv6V6Only() const
 {
 	return get<bool>(KEY_IPV6_V6ONLY);
@@ -515,6 +524,11 @@ int Config::getConnectionTimeout() const
 int Config::getDummyPacketInterval() const
 {
 	return get<int>(KEY_DUMMY_PACKET_INTERVAL);
+}
+
+const char* Config::getDefaultTimeZone()
+{
+	return getDefaultConfig()->get<const char*>(KEY_DEFAULT_TIME_ZONE);
 }
 
 int Config::getLockMemSize() const
@@ -602,34 +616,7 @@ const char *Config::getDatabaseAccess()
 
 const char *Config::getUdfAccess()
 {
-	static Firebird::GlobalPtr<Firebird::Mutex> udfMutex;
-	static Firebird::GlobalPtr<Firebird::string> udfValue;
-	static const char* volatile value = 0;
-
-	if (value)
-	{
-		return value;
-	}
-
-	Firebird::MutexLockGuard guard(udfMutex, "Config::getUdfAccess");
-
-	if (value)
-	{
-		return value;
-	}
-
-	const char* v = (const char*) getDefaultConfig()->values[KEY_UDF_ACCESS];
-	if (CASE_SENSITIVITY ? (! strcmp(v, UDF_DEFAULT_RESTRICT_VALUE) && FB_UDFDIR[0]) :
-						   (! fb_utils::stricmp(v, UDF_DEFAULT_RESTRICT_VALUE) && FB_UDFDIR[0]))
-	{
-		udfValue->printf("Restrict %s", FB_UDFDIR);
-		value = udfValue->c_str();
-	}
-	else
-	{
-		value = v;
-	}
-	return value;
+	return (const char*) getDefaultConfig()->values[KEY_UDF_ACCESS];
 }
 
 const char *Config::getTempDirectories()
@@ -745,9 +732,9 @@ ULONG Config::getSnapshotsMemSize() const
 	return rc;
 }
 
-ULONG Config::getTpcBlockSize() const
+ULONG Config::getTipCacheBlockSize() const
 {
-	SINT64 rc = get<SINT64>(KEY_TPC_BLOCK_SIZE);
+	SINT64 rc = get<SINT64>(KEY_TIP_CACHE_BLOCK_SIZE);
 	if (rc <= 0 || rc > MAX_ULONG)
 	{
 		rc = 4194304;
@@ -779,23 +766,58 @@ const char* Config::getPlugins(unsigned int type) const
 	return NULL;		// compiler warning silencer
 }
 
+
+// array format: major, minor, release, build
+static unsigned short fileVerNumber[4] = {FILE_VER_NUMBER};
+
+static inline unsigned int getPartialVersion()
+{
+			// major				   // minor
+	return (fileVerNumber[0] << 24) | (fileVerNumber[1] << 16);
+}
+
+static inline unsigned int getFullVersion()
+{
+								 // build_no
+	return getPartialVersion() | fileVerNumber[3];
+}
+
+static unsigned int PARTIAL_MASK = 0xFFFF0000;
+static unsigned int KEY_MASK = 0xFFFF;
+
+static inline void checkKey(unsigned int& key)
+{
+	if ((key & PARTIAL_MASK) != getPartialVersion())
+		key = KEY_MASK;
+	else
+		key &= KEY_MASK;
+}
+
+unsigned int FirebirdConf::getVersion(Firebird::CheckStatusWrapper* status)
+{
+	return getFullVersion();
+}
+
 unsigned int FirebirdConf::getKey(const char* name)
 {
-	return Config::getKeyByName(name);
+	return Config::getKeyByName(name) | getPartialVersion();
 }
 
 ISC_INT64 FirebirdConf::asInteger(unsigned int key)
 {
+	checkKey(key);
 	return config->getInt(key);
 }
 
 const char* FirebirdConf::asString(unsigned int key)
 {
+	checkKey(key);
 	return config->getString(key);
 }
 
 FB_BOOLEAN FirebirdConf::asBoolean(unsigned int key)
 {
+	checkKey(key);
 	return config->getBoolean(key);
 }
 
@@ -809,6 +831,7 @@ int FirebirdConf::release()
 
 	return 1;
 }
+
 
 const char* Config::getSecurityDatabase() const
 {
@@ -902,4 +925,14 @@ int Config::getExtConnPoolLifeTime()
 bool Config::getReadConsistency() const
 {
 	return get<bool>(KEY_READ_CONSISTENCY);
+}
+
+bool Config::getClearGTTAtRetaining() const
+{
+	return get<bool>(KEY_CLEAR_GTT_RETAINING);
+}
+
+const char* Config::getDataTypeCompatibility() const
+{
+	return get<const char*>(KEY_DATA_TYPE_COMPATIBILITY);
 }

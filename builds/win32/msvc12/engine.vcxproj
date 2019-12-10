@@ -60,6 +60,7 @@
     <ClCompile Include="..\..\..\src\jrd\builtin.cpp" />
     <ClCompile Include="..\..\..\src\jrd\cch.cpp" />
     <ClCompile Include="..\..\..\src\jrd\cmp.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\Coercion.cpp" />
     <ClCompile Include="..\..\..\src\jrd\Collation.cpp" />
     <ClCompile Include="..\..\..\src\jrd\CryptoManager.cpp" />
     <ClCompile Include="..\..\..\src\jrd\cvt.cpp" />
@@ -129,6 +130,13 @@
     <ClCompile Include="..\..\..\src\jrd\recsrc\Union.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\VirtualTableScan.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\WindowedStream.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Applier.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\ChangeLog.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Config.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Manager.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Publisher.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Replicator.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\replication\Utils.cpp" />
     <ClCompile Include="..\..\..\src\jrd\Relation.cpp" />
     <ClCompile Include="..\..\..\src\jrd\ResultSet.cpp" />
     <ClCompile Include="..\..\..\src\jrd\rlck.cpp" />
@@ -209,6 +217,7 @@
     <ClInclude Include="..\..\..\src\jrd\cch.h" />
     <ClInclude Include="..\..\..\src\jrd\cch_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\cmp_proto.h" />
+    <ClInclude Include="..\..\..\src\jrd\Coercion.h" />
     <ClInclude Include="..\..\..\src\jrd\Collation.h" />
     <ClInclude Include="..\..\..\src\jrd\constants.h" />
     <ClInclude Include="..\..\..\src\jrd\CryptoManager.h" />

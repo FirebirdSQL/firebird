@@ -50,5 +50,6 @@ void	BURP_print_status(bool err, Firebird::IStatus* status);
 void	BURP_print_warning(Firebird::IStatus* status);
 void	BURP_verbose(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
 void	BURP_verbose(USHORT, const char* str);
+void	BURP_message(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg(), bool totals = false);
 
 #endif	//  BURP_BURP_PROTO_H

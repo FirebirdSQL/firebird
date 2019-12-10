@@ -260,24 +260,45 @@ namespace
 
 				while (rivers.hasData())
 				{
-					for (River** iter = rivers.begin(); iter < rivers.end(); iter++)
+					const auto orgCount = rsbs.getCount();
+
+					for (auto& subRiver : rivers)
 					{
-						River* const sub_river = *iter;
-						RecordSource* const sub_rsb = sub_river->getRecordSource();
+						const auto subRsb = subRiver->getRecordSource();
+						fb_assert(!rsbs.exist(subRsb));
 
-						fb_assert(!rsbs.exist(sub_rsb));
+						subRiver->activate(csb);
 
-						sub_river->activate(csb);
-
-						if (sub_river->isComputable(csb))
+						if (subRiver->isComputable(csb))
 						{
-							rsbs.add(sub_rsb);
-							rivers.remove(iter);
+							rsbs.add(subRsb);
+							rivers.remove(&subRiver);
 							break;
 						}
 
-						sub_river->deactivate(csb);
+						subRiver->deactivate(csb);
 					}
+
+					if (rsbs.getCount() == orgCount)
+						break;
+				}
+
+				if (rivers.hasData())
+				{
+					// Ideally, we should never get here. But just in case it happened, handle it.
+
+					fb_assert(false);
+
+					for (auto& subRiver : rivers)
+					{
+						const auto subRsb = subRiver->getRecordSource();
+						fb_assert(!rsbs.exist(subRsb));
+
+						const auto pos = &subRiver - rivers.begin();
+						rsbs.insert(pos, subRsb);
+					}
+
+					rivers.clear();
 				}
 
 				m_rsb = FB_NEW_POOL(csb->csb_pool) NestedLoopJoin(csb, rsbs.getCount(), rsbs.begin());
@@ -398,7 +419,7 @@ static const UCHAR sort_dtypes[] =
 	SKD_bytes,					// dtype_boolean
 	SKD_dec64,					// dtype_dec64
 	SKD_dec128,					// dtype_dec128
-	SKD_dec128,					// dtype_dec_fixed
+	SKD_int128,					// dtype_int128
 	SKD_sql_time_tz,			// dtype_sql_time_tz
 	SKD_timestamp_tz			// dtype_timestamp_tz
 };
@@ -972,7 +993,7 @@ static void check_indices(const CompilerScratch::csb_repeat* csb_tail)
 	// if there were no indices fetched at all but the
 	// user specified some, error out using the first index specified
 
-	if (!csb_tail->csb_indices && plan->accessType)
+	if (!csb_tail->csb_indices && plan->accessType && !tdbb->getAttachment()->isGbak())
 	{
 		// index %s cannot be used in the specified plan
 		ERR_post(Arg::Gds(isc_index_unused) << plan->accessType->items[0].indexName);
@@ -2292,8 +2313,7 @@ static RecordSource* gen_retrieval(thread_db*     tdbb,
 			// inside OptimizerRetrieval::matchOnIndexes()
 
 			if (inversion && condition &&
-				(!condition->computable(csb, INVALID_STREAM, false) ||
-				condition->findStream(csb, stream)))
+				!condition->computable(csb, stream, false))
 			{
 				fb_assert(false);
 				inversion = NULL;
