@@ -1082,7 +1082,7 @@ private:
 
 	private:
 		PathName keyType;
-		Remote::ParsedList plugins;
+		ParsedList plugins;
 		FB_UINT64 hasSpecificData;
 		static const FB_UINT64 one = 1u;
 	};
@@ -7189,8 +7189,8 @@ bool SrvAuthBlock::extractNewKeys(CSTRING* to, ULONG flags)
 			PathName plugins = knownCryptKeyTypes()[t];
 			if (plugins.hasData())
 			{
-				lastExtractedKeys.insertPath(TAG_KEY_TYPE, t);
-				lastExtractedKeys.insertPath(TAG_KEY_PLUGINS, plugins);
+				lastExtractedKeys.insertString(TAG_KEY_TYPE, t);
+				lastExtractedKeys.insertString(TAG_KEY_PLUGINS, plugins);
 
 				for (CryptKeyTypeManager::SpecificPlugins sp(knownCryptKeyTypes().getSpecific(t)); sp.hasData(); sp.next())
 				{
@@ -7210,7 +7210,7 @@ bool SrvAuthBlock::extractNewKeys(CSTRING* to, ULONG flags)
 
 							plugin += '\0';
 							plugin.append(reinterpret_cast<const char*>(d), l);
-							lastExtractedKeys.insertPath(TAG_PLUGIN_SPECIFIC, plugin);
+							lastExtractedKeys.insertString(TAG_PLUGIN_SPECIFIC, plugin);
 						}
 					}
 				}
