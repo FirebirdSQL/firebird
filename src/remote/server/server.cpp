@@ -7192,6 +7192,9 @@ bool SrvAuthBlock::extractNewKeys(CSTRING* to, ULONG flags)
 				lastExtractedKeys.insertString(TAG_KEY_TYPE, t);
 				lastExtractedKeys.insertString(TAG_KEY_PLUGINS, plugins);
 
+				if (port->port_protocol < PROTOCOL_VERSION16)
+					continue;
+
 				for (CryptKeyTypeManager::SpecificPlugins sp(knownCryptKeyTypes().getSpecific(t)); sp.hasData(); sp.next())
 				{
 					PathName plugin = sp.get();
