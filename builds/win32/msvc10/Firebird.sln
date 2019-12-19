@@ -79,6 +79,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "legacy_auth", "legacy_auth.
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "udf_compat", "udf_compat.vcxproj", "{6794EB8C-6425-422D-A3B0-14EED54C0E98}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "chacha", "chacha.vcxproj", "{F2E1A852-5A4B-4162-9DA8-0363805FCFD0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -353,6 +355,14 @@ Global
 		{6794EB8C-6425-422D-A3B0-14EED54C0E98}.Release|Win32.Build.0 = Release|Win32
 		{6794EB8C-6425-422D-A3B0-14EED54C0E98}.Release|x64.ActiveCfg = Release|x64
 		{6794EB8C-6425-422D-A3B0-14EED54C0E98}.Release|x64.Build.0 = Release|x64
+		{F2E1A852-5A4B-4162-9DA8-0363805FCFD0}.Debug|Win32.ActiveCfg = Debug|Win32
+		{F2E1A852-5A4B-4162-9DA8-0363805FCFD0}.Debug|Win32.Build.0 = Debug|Win32
+		{F2E1A852-5A4B-4162-9DA8-0363805FCFD0}.Debug|x64.ActiveCfg = Debug|x64
+		{F2E1A852-5A4B-4162-9DA8-0363805FCFD0}.Debug|x64.Build.0 = Debug|x64
+		{F2E1A852-5A4B-4162-9DA8-0363805FCFD0}.Release|Win32.ActiveCfg = Release|Win32
+		{F2E1A852-5A4B-4162-9DA8-0363805FCFD0}.Release|Win32.Build.0 = Release|Win32
+		{F2E1A852-5A4B-4162-9DA8-0363805FCFD0}.Release|x64.ActiveCfg = Release|x64
+		{F2E1A852-5A4B-4162-9DA8-0363805FCFD0}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
