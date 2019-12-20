@@ -67,10 +67,6 @@
       <BrowseInformation>true</BrowseInformation>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
     </ClCompile>
-    <ResourceCompile>
-      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <Culture>0x041d</Culture>
-    </ResourceCompile>
     <Link>
       <AdditionalOptions>/MACHINE:I386 /SECTION:.edata,RD %(AdditionalOptions)</AdditionalOptions>
       <AdditionalDependencies>comctl32.lib;ws2_32.lib;mpr.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -78,6 +74,7 @@
       <RandomizedBaseAddress>false</RandomizedBaseAddress>
       <DataExecutionPrevention>
       </DataExecutionPrevention>
+      <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -94,10 +91,6 @@
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;CLIENT;SUPERCLIENT;I386;_X86_=1;WIN32;_X86_;GDS32_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <BrowseInformation>true</BrowseInformation>
     </ClCompile>
-    <ResourceCompile>
-      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <Culture>0x041d</Culture>
-    </ResourceCompile>
     <Link>
       <AdditionalOptions>/MACHINE:I386 /SECTION:.edata,RD %(AdditionalOptions)</AdditionalOptions>
       <AdditionalDependencies>comctl32.lib;ws2_32.lib;mpr.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -106,6 +99,7 @@
       <DataExecutionPrevention>
       </DataExecutionPrevention>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

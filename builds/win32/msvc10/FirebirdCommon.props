@@ -37,5 +37,8 @@
     <Bscmake>
       <OutputFile>$(IntDir)$(TargetName).bsc</OutputFile>
     </Bscmake>
+    <ResourceCompile>
+      <PreprocessorDefinitions>RC_ARH_$(Platform);RC_TARGET_$(TargetName);RC_TARGET_NAME=$(TargetName);RC_TARGET_FILENAME=$(TargetFileName);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
   </ItemDefinitionGroup>
 </Project>
