@@ -174,10 +174,6 @@
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;SUPERSERVER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <ResourceCompile>
-      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <Culture>0x041d</Culture>
-    </ResourceCompile>
     <Link>
       <ModuleDefinitionFile>..\defs\firebird.def</ModuleDefinitionFile>
       <AdditionalDependencies>ws2_32.lib;mpr.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -192,10 +188,6 @@
       </PrecompiledHeader>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
     </ClCompile>
-    <ResourceCompile>
-      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <Culture>0x041d</Culture>
-    </ResourceCompile>
     <Link>
       <ModuleDefinitionFile>..\defs\firebird.def</ModuleDefinitionFile>
       <AdditionalDependencies>ws2_32.lib;mpr.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -213,10 +205,6 @@
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;SUPERSERVER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <ResourceCompile>
-      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <Culture>0x041d</Culture>
-    </ResourceCompile>
     <Link>
       <ModuleDefinitionFile>..\defs\firebird.def</ModuleDefinitionFile>
       <AdditionalDependencies>ws2_32.lib;mpr.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -233,10 +221,6 @@
       <PrecompiledHeader>
       </PrecompiledHeader>
     </ClCompile>
-    <ResourceCompile>
-      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <Culture>0x041d</Culture>
-    </ResourceCompile>
     <Link>
       <ModuleDefinitionFile>..\defs\firebird.def</ModuleDefinitionFile>
       <AdditionalDependencies>ws2_32.lib;mpr.lib;%(AdditionalDependencies)</AdditionalDependencies>
