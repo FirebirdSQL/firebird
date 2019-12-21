@@ -109,21 +109,38 @@ bool VirtualTableScan::lockRecord(thread_db* /*tdbb*/) const
 	return false; // compiler silencer
 }
 
-void VirtualTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void VirtualTableScan::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	if (detailed)
+	switch (plan_format)
 	{
-		plan += printIndent(++level) + "Table " +
-			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan";
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+		case isc_info_sql_plan_format_plain:
+			{
+				if (!level)
+					plan += "(";
 
-		plan += printName(tdbb, m_alias, false) + " NATURAL";
+				plan += printName(tdbb, m_alias, false) + " NATURAL";
 
-		if (!level)
-			plan += ")";
+				if (!level)
+					plan += ")";		
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			plan += printIndent(++level, plan_format) + "Table " +
+				printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan";
+			break;
+			
+		case isc_info_sql_plan_format_explain_xml:
+			{
+				const string l_alias = printName(tdbb, m_alias, false);
+				plan += printIndent(level, plan_format) + "<Node operation=\"Full Scan\">" +
+					printIndent(++level, plan_format) + "<Table alias=\"" + escapeXml(l_alias) + "\">" +
+					escapeXml(printName(tdbb, m_relation->rel_name.c_str(), false)) + "</Table>" +					
+					printIndent(level, plan_format) + "</Node>";
+				break;
+			}
+			
+		default:
+			fb_assert(false);			
 	}
 }

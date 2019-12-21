@@ -111,27 +111,46 @@ bool ConditionalStream::lockRecord(thread_db* tdbb) const
 	return impure->irsb_next->lockRecord(tdbb);
 }
 
-void ConditionalStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void ConditionalStream::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	if (detailed)
+	switch (plan_format)
 	{
-		plan += printIndent(++level) + "Condition";
-		m_first->print(tdbb, plan, true, level);
-		m_second->print(tdbb, plan, true, level);
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+		case isc_info_sql_plan_format_plain:
+			{
+				if (!level)
+					plan += "(";
 
-		m_first->print(tdbb, plan, false, level + 1);
+				m_first->print(tdbb, request, plan, plan_format, level + 1);
+				plan += ", ";
+				m_second->print(tdbb, request, plan, plan_format, level + 1);
 
-		plan += ", ";
-
-		m_second->print(tdbb, plan, false, level + 1);
-
-		if (!level)
-			plan += ")";
+				if (!level)
+					plan += ")";
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			{
+				plan += printIndent(++level, plan_format) + "Condition";
+				
+				m_first->print(tdbb, request, plan, plan_format, level);
+				m_second->print(tdbb, request, plan, plan_format, level);
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_xml:
+			{
+				plan += printIndent(++level, plan_format) + "<Node operation=\"Condition\">";
+				
+				m_first->print(tdbb, request, plan, plan_format, level);
+				m_second->print(tdbb, request, plan, plan_format, level);
+				
+				plan += printIndent(level, plan_format) + "</Node>";
+				break;
+			}
+			
+		default:
+			fb_assert(false);			
 	}
 }
 

@@ -37,6 +37,7 @@ typedef FB_DEC34;
 typedef FB_I128;
 typedef isc_tr_handle;
 typedef isc_stmt_handle;
+typedef isc_info_sql_plan_format;
 
 // Versioned interface - base for all FB interfaces
 interface Versioned
@@ -431,11 +432,12 @@ interface Statement : ReferenceCounted
 	const uint PREPARE_PREFETCH_DETAILED_PLAN		= 0x10;
 	const uint PREPARE_PREFETCH_AFFECTED_RECORDS	= 0x20;	// not used yet
 	const uint PREPARE_PREFETCH_FLAGS				= 0x40;
+	const uint PREPARE_PREFETCH_DETAILED_PLAN_XML	= 0x80;
 	const uint PREPARE_PREFETCH_METADATA =
 		PREPARE_PREFETCH_TYPE | PREPARE_PREFETCH_FLAGS |
 		PREPARE_PREFETCH_INPUT_PARAMETERS | PREPARE_PREFETCH_OUTPUT_PARAMETERS;
 	const uint PREPARE_PREFETCH_ALL =
-		PREPARE_PREFETCH_METADATA | PREPARE_PREFETCH_LEGACY_PLAN | PREPARE_PREFETCH_DETAILED_PLAN |
+		PREPARE_PREFETCH_METADATA | PREPARE_PREFETCH_LEGACY_PLAN | PREPARE_PREFETCH_DETAILED_PLAN | PREPARE_PREFETCH_DETAILED_PLAN_XML |
 		PREPARE_PREFETCH_AFFECTED_RECORDS;
 
 	// Statement flags.
@@ -473,6 +475,8 @@ version:	// 3.0 => 4.0
 	Pipe createPipe(Status status, Transaction transaction, MessageMetadata inMetadata,
 		void* inBuffer, MessageMetadata outMetadata, uint parLength, const uchar* par);
 	*/
+	
+	const string getFormattedPlan(Status status, isc_info_sql_plan_format plan_format);
 }
 
 interface Batch : ReferenceCounted
@@ -1222,6 +1226,9 @@ interface TraceSQLStatement : TraceStatement
 	TraceParams getInputs();
 	const string getTextUTF8();
 	const string getExplainedPlan();
+	
+version:
+	const string getFormattedPlan();
 }
 
 interface TraceBLRStatement : TraceStatement

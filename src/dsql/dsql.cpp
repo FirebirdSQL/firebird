@@ -2023,9 +2023,29 @@ static void sql_info(thread_db* tdbb,
 
 		case isc_info_sql_get_plan:
 		case isc_info_sql_explain_plan:
-			{
-				const bool detailed = (item == isc_info_sql_explain_plan);
-				string plan = OPT_get_plan(tdbb, request->req_request, detailed);
+		case isc_info_sql_explain_plan_xml:
+			{    
+				isc_info_sql_plan_format plan_format;
+				
+				switch (item)
+				{
+					case isc_info_sql_get_plan:
+						plan_format = isc_info_sql_plan_format_plain;
+						break;
+						
+					case isc_info_sql_explain_plan:
+						plan_format = isc_info_sql_plan_format_explain_legacy;
+						break;
+						
+					case isc_info_sql_explain_plan_xml:
+						plan_format = isc_info_sql_plan_format_explain_xml;
+						break;	
+					
+					default:
+						fb_assert(false);
+				}
+
+				string plan = OPT_get_plan(tdbb, request->req_request, request->statement, plan_format);
 
 				if (plan.hasData())
 				{

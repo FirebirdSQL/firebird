@@ -4249,11 +4249,16 @@ unsigned YStatement::getFlags(CheckStatusWrapper* status)
 
 const char* YStatement::getPlan(CheckStatusWrapper* status, FB_BOOLEAN detailed)
 {
+	return getFormattedPlan(status, detailed ? isc_info_sql_plan_format_explain_legacy : isc_info_sql_plan_format_plain);
+}
+
+const char* YStatement::getFormattedPlan(CheckStatusWrapper* status, isc_info_sql_plan_format plan_format)
+{
 	try
 	{
 		YEntry<YStatement> entry(status, this);
 
-		return entry.next()->getPlan(status, detailed);
+		return entry.next()->getPlan(status, plan_format);
 	}
 	catch (const Exception& e)
 	{

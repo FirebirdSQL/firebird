@@ -565,6 +565,7 @@ public:
 						 unsigned int bufferLength, unsigned char* buffer);
 	unsigned getType(CheckStatusWrapper* status);
 	const char* getPlan(CheckStatusWrapper* status, FB_BOOLEAN detailed);
+	const char* getFormattedPlan(CheckStatusWrapper* status, isc_info_sql_plan_format plan_format);
 	Firebird::IMessageMetadata* getInputMetadata(CheckStatusWrapper* status);
 	Firebird::IMessageMetadata* getOutputMetadata(CheckStatusWrapper* status);
 	ISC_UINT64 getAffectedRecords(CheckStatusWrapper* status);
@@ -3862,6 +3863,11 @@ unsigned Statement::getFlags(CheckStatusWrapper* status)
 
 const char* Statement::getPlan(CheckStatusWrapper* status, FB_BOOLEAN detailed)
 {
+	return getFormattedPlan(status, detailed ? isc_info_sql_plan_format_explain_legacy : isc_info_sql_plan_format_plain);
+}
+
+const char* Statement::getFormattedPlan(CheckStatusWrapper* status, isc_info_sql_plan_format plan_format)
+{
 	try
 	{
 		reset(status);
@@ -3875,7 +3881,7 @@ const char* Statement::getPlan(CheckStatusWrapper* status, FB_BOOLEAN detailed)
 
 		statement->raiseException();
 
-		return metadata.getPlan(detailed);
+		return metadata.getPlan(plan_format);
 	}
 	catch (const Exception& ex)
 	{
@@ -3884,7 +3890,6 @@ const char* Statement::getPlan(CheckStatusWrapper* status, FB_BOOLEAN detailed)
 
 	return NULL;
 }
-
 
 IMessageMetadata* Statement::getInputMetadata(CheckStatusWrapper* status)
 {

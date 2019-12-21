@@ -143,12 +143,29 @@ bool SingularStream::lockRecord(thread_db* tdbb) const
 	return m_next->lockRecord(tdbb);
 }
 
-void SingularStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void SingularStream::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	if (detailed)
-		plan += printIndent(++level) + "Singularity Check";
+	switch (plan_format)
+	{
+		case isc_info_sql_plan_format_plain:
+			break;
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			plan += printIndent(++level, plan_format) + "Singularity Check";
+			break;
+			
+		case isc_info_sql_plan_format_explain_xml:
+			plan += printIndent(++level, plan_format) + "<Node operation=\"Singularity Check\">";
+			break;
+			
+		default:
+			fb_assert(false);			
+	}
 
-	m_next->print(tdbb, plan, detailed, level);
+	m_next->print(tdbb, request, plan, plan_format, level);
+	
+	if (plan_format == isc_info_sql_plan_format_explain_xml)
+		plan += printIndent(level, plan_format) + "</Node>";
 }
 
 void SingularStream::markRecursive()

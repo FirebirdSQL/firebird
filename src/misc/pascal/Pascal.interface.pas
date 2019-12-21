@@ -21,6 +21,7 @@
 
     isc_tr_handle = ^integer32;
     isc_stmt_handle = ^integer32;
+	isc_info_sql_plan_format = (isc_info_sql_plan_format_plain = 1,	isc_info_sql_plan_format_explain_legacy = 2, isc_info_sql_plan_format_explain_xml = 3);
 
 	ntrace_relation_t = Integer;
 	TraceCounts = Record

@@ -194,22 +194,29 @@ const char* TraceSQLStatementImpl::getTextUTF8()
 
 const char* TraceSQLStatementImpl::getPlan()
 {
-	fillPlan(false);
+	fillPlan(isc_info_sql_plan_format_plain);
 	return m_plan.c_str();
 }
 
 const char* TraceSQLStatementImpl::getExplainedPlan()
 {
-	fillPlan(true);
+	fillPlan(isc_info_sql_plan_format_explain_legacy);
 	return m_plan.c_str();
 }
 
-void TraceSQLStatementImpl::fillPlan(bool explained)
+const char* TraceSQLStatementImpl::getFormattedPlan(isc_info_sql_plan_format plan_format)
 {
+	fillPlan(plan_format);
+	return m_plan.c_str();
+}
+
+void TraceSQLStatementImpl::fillPlan(isc_info_sql_plan_format plan_format)
+{
+	const bool explained = (plan_format == isc_info_sql_plan_format_plain) ? false : true;
 	if (m_plan.isEmpty() || m_planExplained != explained)
 	{
 		m_planExplained = explained;
-		m_plan = OPT_get_plan(JRD_get_thread_data(), m_stmt->req_request, m_planExplained);
+		m_plan = OPT_get_plan(JRD_get_thread_data(), m_stmt->req_request, m_stmt->getStatement(), plan_format);
 	}
 }
 

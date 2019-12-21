@@ -240,22 +240,37 @@ bool ProcedureScan::lockRecord(thread_db* /*tdbb*/) const
 	return false; // compiler silencer
 }
 
-void ProcedureScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void ProcedureScan::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	if (detailed)
+	switch (plan_format)
 	{
-		plan += printIndent(++level) + "Procedure " +
-			printName(tdbb, m_procedure->getName().toString(), m_alias) + " Scan";
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+		case isc_info_sql_plan_format_plain:
+			{
+				if (!level)
+					plan += "(";
 
-		plan += printName(tdbb, m_alias, false) + " NATURAL";
+				plan += printName(tdbb, m_alias, false) + " NATURAL";
 
-		if (!level)
-			plan += ")";
+				if (!level)
+					plan += ")";
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_legacy:			
+			plan += printIndent(++level, plan_format) + "Procedure " +
+				printName(tdbb, m_procedure->getName().toString(), m_alias) + " Scan";
+			break;
+			
+			
+		case isc_info_sql_plan_format_explain_xml:	
+			plan += printIndent(++level, plan_format) + "<Procedure>" +
+				escapeXml(printName(tdbb, m_procedure->getName().toString(), m_alias)) + "</Procedure>" +
+				printIndent(++level, plan_format) + "<Node operation=\"Scan\">" +
+				printIndent(level, plan_format) + "</Node>";
+			break;
+			
+		default:
+			fb_assert(false);			
 	}
 }
 

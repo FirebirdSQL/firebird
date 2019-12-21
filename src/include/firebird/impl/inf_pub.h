@@ -293,6 +293,12 @@ enum info_db_provider
 	isc_info_db_code_last_value   /* Leave this LAST! */
 };
 
+enum isc_info_sql_plan_format
+{
+	isc_info_sql_plan_format_plain = 1,
+	isc_info_sql_plan_format_explain_legacy = 2,
+	isc_info_sql_plan_format_explain_xml = 3
+};
 
 /*****************************/
 /* Request information items */
@@ -442,6 +448,7 @@ enum info_db_provider
 #define isc_info_sql_stmt_timeout_user	28
 #define isc_info_sql_stmt_timeout_run	29
 #define isc_info_sql_stmt_blob_align	30
+#define isc_info_sql_explain_plan_xml	31
 
 /*********************************/
 /* SQL information return values */

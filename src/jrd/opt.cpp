@@ -425,7 +425,345 @@ static const UCHAR sort_dtypes[] =
 };
 
 
-string OPT_get_plan(thread_db* tdbb, const jrd_req* request, bool detailed)
+void get_plan_statistics_physical_IO(const RuntimeStatistics& statistics, isc_info_sql_plan_format plan_format, string& plan, int level)
+{
+/**************************************
+*
+*	get_plan_statistics_physical_IO
+*
+**************************************
+*
+* Functional description
+*	Helper function for get_plan_statistics
+*
+**************************************/
+
+	switch (plan_format)
+	{
+		case isc_info_sql_plan_format_plain:
+			break;
+
+		case isc_info_sql_plan_format_explain_legacy:
+			break;
+
+		case isc_info_sql_plan_format_explain_xml:
+		{
+			string s;
+
+			plan += RecordSource::printIndent(level++, plan_format) + "<PhysicalIO>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::PAGE_READS));
+			plan += RecordSource::printIndent(level, plan_format) + "<PageReads>" + s + "</PageReads>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::PAGE_WRITES));
+			plan += RecordSource::printIndent(level, plan_format) + "<PageWrites>" + s + "</PageWrites>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::PAGE_FETCHES));
+			plan += RecordSource::printIndent(level, plan_format) + "<PageFetches>" + s + "</PageFetches>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::PAGE_MARKS));
+			plan += RecordSource::printIndent(level, plan_format) + "<PageMarks>" + s + "</PageMarks>";
+
+			plan += RecordSource::printIndent(--level, plan_format) + "</PhysicalIO>";
+
+			break;
+		}
+
+		default:
+			fb_assert(false);
+	}
+}
+
+
+void get_plan_statistics_logical_IO(const RuntimeStatistics& statistics, isc_info_sql_plan_format plan_format, string& plan, int level)
+{
+/**************************************
+*
+*	get_plan_statistics_logical_IO
+*
+**************************************
+*
+* Functional description
+*	Helper function for get_plan_statistics
+*
+**************************************/
+
+	switch (plan_format)
+	{
+		case isc_info_sql_plan_format_plain:
+			break;
+
+		case isc_info_sql_plan_format_explain_legacy:
+			break;
+
+		case isc_info_sql_plan_format_explain_xml:
+		{
+			string s;
+
+			plan += RecordSource::printIndent(level++, plan_format) + "<LogicalIO>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_SEQ_READS));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordSeqReads>" + s + "</RecordSeqReads>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_IDX_READS));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordIdxReads>" + s + "</RecordIdxReads>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_INSERTS));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordInserts>" + s + "</RecordInserts>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_UPDATES));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordUpdates>" + s + "</RecordUpdates>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_DELETES));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordDeletes>" + s + "</RecordDeletes>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_BACKOUTS));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordBackouts>" + s + "</RecordBackouts>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_PURGES));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordPurges>" + s + "</RecordPurges>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_EXPUNGES));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordExpurges>" + s + "</RecordExpurges>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_LOCKS));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordLocks>" + s + "</RecordLocks>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_WAITS));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordWaits>" + s + "</RecordWaits>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_CONFLICTS));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordConflicts>" + s + "</RecordConflicts>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_BACKVERSION_READS));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordBackversionReads>" + s + "</RecordBackversionReads>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_FRAGMENT_READS));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordFragmentReads>" + s + "</RecordFragmentReads>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_RPT_READS));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordRptReads>" + s + "</RecordRptReads>";
+
+			s.printf("%" ULONGFORMAT, statistics.getValue(RuntimeStatistics::RECORD_IMGC));
+			plan += RecordSource::printIndent(level, plan_format) + "<RecordImgc>" + s + "</RecordImgc>";
+
+			plan += RecordSource::printIndent(--level, plan_format) + "</LogicalIO>";
+
+			break;
+		}
+
+		default:
+			fb_assert(false);
+	}
+}
+
+
+void get_plan_statistics_table_logical_IO(const RuntimeStatistics::Iterator& statistics, isc_info_sql_plan_format plan_format, string& plan, int level)
+{
+/**************************************
+*
+*	get_plan_statistics_table_logical_IO
+*
+**************************************
+*
+* Functional description
+*	Helper function for get_plan_statistics
+*
+**************************************/
+
+	switch (plan_format)
+	{
+	case isc_info_sql_plan_format_plain:
+		break;
+
+	case isc_info_sql_plan_format_explain_legacy:
+		break;
+
+	case isc_info_sql_plan_format_explain_xml:
+	{
+		string s;
+
+		plan += RecordSource::printIndent(level++, plan_format) + "<LogicalIO>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_SEQ_READS));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordSeqReads>" + s + "</RecordSeqReads>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_IDX_READS));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordIdxReads>" + s + "</RecordIdxReads>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_INSERTS));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordInserts>" + s + "</RecordInserts>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_UPDATES));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordUpdates>" + s + "</RecordUpdates>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_DELETES));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordDeletes>" + s + "</RecordDeletes>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_BACKOUTS));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordBackouts>" + s + "</RecordBackouts>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_PURGES));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordPurges>" + s + "</RecordPurges>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_EXPUNGES));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordExpurges>" + s + "</RecordExpurges>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_LOCKS));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordLocks>" + s + "</RecordLocks>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_WAITS));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordWaits>" + s + "</RecordWaits>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_CONFLICTS));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordConflicts>" + s + "</RecordConflicts>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_BACKVERSION_READS));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordBackversionReads>" + s + "</RecordBackversionReads>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_FRAGMENT_READS));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordFragmentReads>" + s + "</RecordFragmentReads>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_RPT_READS));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordRptReads>" + s + "</RecordRptReads>";
+
+		s.printf("%" ULONGFORMAT, (*statistics).getCounter(RuntimeStatistics::RECORD_IMGC));
+		plan += RecordSource::printIndent(level, plan_format) + "<RecordImgc>" + s + "</RecordImgc>";
+
+		plan += RecordSource::printIndent(--level, plan_format) + "</LogicalIO>";
+
+		break;
+	}
+
+	default:
+		fb_assert(false);
+	}
+}
+
+
+void get_plan_statistics_memory(const MemoryStats& statistics, isc_info_sql_plan_format plan_format, string& plan, int level)
+{
+/**************************************
+*
+*	get_plan_statistics_memory
+*
+**************************************
+*
+* Functional description
+*	Helper function for get_plan_statistics
+*
+**************************************/
+	switch (plan_format)
+	{
+		case isc_info_sql_plan_format_plain:
+			break;
+
+		case isc_info_sql_plan_format_explain_legacy:
+			break;
+
+		case isc_info_sql_plan_format_explain_xml:
+		{
+			string s;
+
+			plan += RecordSource::printIndent(level++, plan_format) + "<Memory>";
+
+			s.printf("%" ULONGFORMAT, statistics.getCurrentUsage());
+			plan += RecordSource::printIndent(level, plan_format) + "<CurrentUsage>" + s + "</CurrentUsage>";
+
+			s.printf("%" ULONGFORMAT, statistics.getCurrentMapping());
+			plan += RecordSource::printIndent(level, plan_format) + "<CurrentMapping>" + s + "</CurrentMapping>";
+
+			s.printf("%" ULONGFORMAT, statistics.getMaximumUsage());
+			plan += RecordSource::printIndent(level, plan_format) + "<MaximumUsage>" + s + "</MaximumUsage>";
+
+			s.printf("%" ULONGFORMAT, statistics.getMaximumMapping());
+			plan += RecordSource::printIndent(level, plan_format) + "<MaximumMapping>" + s + "</MaximumMapping>";
+
+			plan += RecordSource::printIndent(--level, plan_format) + "</Memory>";
+
+			break;
+		}
+
+		default:
+			fb_assert(false);
+	}
+}
+
+
+void get_plan_statistics(thread_db* tdbb, jrd_req* request, isc_info_sql_plan_format plan_format, string& plan, int level,
+	bool memory_stats, bool physical_io, bool logical_io, bool table_stats)
+{
+/**************************************
+ *
+ *	get_plan_statistics
+ *
+ **************************************
+ *
+ * Functional description
+ *	Store statistics info into formatted textual plan.
+ *
+ **************************************/
+	switch (plan_format)
+	{
+		case isc_info_sql_plan_format_plain:
+			break;
+
+		case isc_info_sql_plan_format_explain_legacy:
+			break;
+
+		case isc_info_sql_plan_format_explain_xml:
+		{			
+			//request->adjustCallerStats();
+			const RuntimeStatistics& statistics = request->req_stats; //used currently only in xml plan then declared here
+
+			if (memory_stats || physical_io || logical_io || table_stats)
+			{
+				
+				plan += RecordSource::printIndent(level, plan_format) + "<Statistics>";
+
+				//  memory usage
+				if (memory_stats)
+					get_plan_statistics_memory(request->req_memory_stats, plan_format, plan, level + 1);
+
+				// physical I/O statistics
+				if (physical_io)
+					get_plan_statistics_physical_IO(statistics, plan_format, plan, level + 1);
+
+				// logical I/O statistics (global)
+				if (logical_io)
+					get_plan_statistics_logical_IO(statistics, plan_format, plan, level + 1);
+
+				// logical I/O statistics (table wise)
+				if (table_stats)
+				{
+					plan += RecordSource::printIndent(level + 1, plan_format) + "<TableStats>";
+
+					for (RuntimeStatistics::Iterator iter = statistics.begin(); iter != statistics.end(); ++iter)
+					{
+						jrd_rel* relation = MET_relation(tdbb, (*iter).getRelationId());
+
+						plan += RecordSource::printIndent(level + 2, plan_format) + "<StatTable name=\"" + relation->rel_name.c_str() + "\">";
+
+						// logical I/O statistics (global)
+						get_plan_statistics_table_logical_IO(iter, plan_format, plan, level + 3);
+
+						plan += RecordSource::printIndent(level + 2, plan_format) + "</StatTable>";
+					}
+
+					plan += RecordSource::printIndent(level + 1, plan_format) + "</TableStats>";
+				}
+				
+				plan += RecordSource::printIndent(level, plan_format) + "</Statistics>";
+			}
+			break;
+		}
+
+		default:
+			fb_assert(false);
+	}	
+}
+
+string OPT_get_plan(thread_db* tdbb, jrd_req* request, const DsqlCompiledStatement* statement, isc_info_sql_plan_format plan_format)
 {
 /**************************************
  *
@@ -442,11 +780,108 @@ string OPT_get_plan(thread_db* tdbb, const jrd_req* request, bool detailed)
 	if (request)
 	{
 		const Array<const RecordSource*>& fors = request->getStatement()->fors;
+		int level = 0;
+
+		switch (plan_format)
+		{
+			case isc_info_sql_plan_format_plain:
+				break;
+
+			case isc_info_sql_plan_format_explain_legacy:
+				break;
+
+			case isc_info_sql_plan_format_explain_xml:
+			{
+				string extras;
+				if (statement)
+				{
+					string statementType;
+					switch (statement->getType())
+					{
+					case DsqlCompiledStatement::TYPE_DDL:
+						statementType += "DDL";
+						break;
+
+					case DsqlCompiledStatement::TYPE_DELETE:
+						statementType += "Delete";
+						break;
+
+					case DsqlCompiledStatement::TYPE_EXEC_BLOCK:
+						statementType += "ExecuteBlock";
+						break;
+
+					case DsqlCompiledStatement::TYPE_EXEC_PROCEDURE:
+						statementType += "ExecuteProcedure";
+						break;
+
+					case DsqlCompiledStatement::TYPE_INSERT:
+						statementType += "Insert";
+						break;
+
+					case DsqlCompiledStatement::TYPE_SELECT:
+						statementType += "Select";
+						break;
+
+					case DsqlCompiledStatement::TYPE_UPDATE:
+						statementType += "Update";
+						break;
+					}
+
+					if (statementType != "")
+						extras += " statementType=\"" + statementType + "\"";
+				}
+
+				plan += "\n<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
+				plan += "\n<Statements xmlns=\"https://www.firebirdsql.org/2019/ExecutionPlan\"" + extras + ">";
+
+				//only avaiable when called from Monitoring.cpp
+				if (!statement)
+					get_plan_statistics(tdbb, request, plan_format, plan, level + 1, true, true, true, true);
+				break;
+			}
+
+			default:
+				fb_assert(false);
+		}
 
 		for (FB_SIZE_T i = 0; i < fors.getCount(); i++)
 		{
-			plan += detailed ? "\nSelect Expression" : "\nPLAN ";
-			fors[i]->print(tdbb, plan, detailed, 0);
+			switch (plan_format)
+			{
+				case isc_info_sql_plan_format_plain:
+					plan += "\nPLAN ";
+					break;
+					
+				case isc_info_sql_plan_format_explain_legacy:
+					plan += "\nSelect Expression";
+					break;
+					
+				case isc_info_sql_plan_format_explain_xml:
+					plan += "\n\t<Statement>"; 
+					level = 1;
+					break;
+				
+				default:
+					fb_assert(false);								
+			}
+			fors[i]->print(tdbb, request, plan, plan_format, level);
+			if (plan_format == isc_info_sql_plan_format_explain_xml)
+				plan += "\n\t</Statement>";
+		}
+		switch (plan_format)
+		{
+			case isc_info_sql_plan_format_plain:
+				break;
+
+			case isc_info_sql_plan_format_explain_legacy:
+				break;
+
+			case isc_info_sql_plan_format_explain_xml:
+				plan += "\n</Statements>";
+				break;
+
+			default:
+				fb_assert(false);
 		}
 	}
 

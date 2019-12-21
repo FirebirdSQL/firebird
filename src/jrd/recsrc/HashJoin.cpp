@@ -410,31 +410,53 @@ bool HashJoin::lockRecord(thread_db* /*tdbb*/) const
 	return false; // compiler silencer
 }
 
-void HashJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void HashJoin::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	if (detailed)
+	switch (plan_format)
 	{
-		plan += printIndent(++level) + "Hash Join (inner)";
-
-		m_leader.source->print(tdbb, plan, true, level);
-
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-			m_args[i].source->print(tdbb, plan, true, level);
-	}
-	else
-	{
-		level++;
-		plan += "HASH (";
-		m_leader.source->print(tdbb, plan, false, level);
-		plan += ", ";
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		{
-			if (i)
+		case isc_info_sql_plan_format_plain:
+			{
+				level++;
+				plan += "HASH (";
+				m_leader.source->print(tdbb, request, plan, plan_format, level);
 				plan += ", ";
+				for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+				{
+					if (i)
+						plan += ", ";
 
-			m_args[i].source->print(tdbb, plan, false, level);
-		}
-		plan += ")";
+					m_args[i].source->print(tdbb, request, plan, plan_format, level);
+				}
+				plan += ")";		
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			{
+				plan += printIndent(++level, plan_format) + "Hash Join (inner)";
+
+				m_leader.source->print(tdbb, request, plan, plan_format, level);
+
+				for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+					m_args[i].source->print(tdbb, request, plan, plan_format, level);
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_xml:
+			{
+				plan += printIndent(++level, plan_format) + "<Node operation=\"Hash Join\" joinType=\"Inner\">";
+
+				m_leader.source->print(tdbb, request, plan, plan_format, level);
+
+				for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+					m_args[i].source->print(tdbb, request, plan, plan_format, level);
+
+				plan += printIndent(level, plan_format) + "</Node>";
+				break;
+			}
+			
+		default:
+			fb_assert(false);
 	}
 }
 

@@ -68,6 +68,7 @@ public:
 	unsigned getType();
 	unsigned getFlags();
 	const char* getPlan(bool detailed);
+	
 	IMessageMetadata* getInputMetadata();
 	IMessageMetadata* getOutputMetadata();
 	ISC_UINT64 getAffectedRecords();
@@ -76,6 +77,7 @@ public:
 	void parse(unsigned bufferLength, const UCHAR* buffer);
 	void getAndParse(unsigned itemsLength, const UCHAR* items, unsigned bufferLength, UCHAR* buffer);
 	bool fillFromCache(unsigned itemsLength, const UCHAR* items, unsigned bufferLength, UCHAR* buffer);
+	const char* getFormattedPlan(isc_info_sql_plan_format plan_format);
 
 private:
 	void fetchParameters(UCHAR code, Parameters* parameters);

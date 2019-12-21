@@ -113,12 +113,40 @@ bool FirstRowsStream::lockRecord(thread_db* tdbb) const
 	return m_next->lockRecord(tdbb);
 }
 
-void FirstRowsStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void FirstRowsStream::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	if (detailed)
-		plan += printIndent(++level) + "First N Records";
+	switch (plan_format)
+	{
+		case isc_info_sql_plan_format_plain:
+			break;
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			plan += printIndent(++level, plan_format) + "First N Records";
+			break;
+			
+		case isc_info_sql_plan_format_explain_xml:
+			{
+				string extras;
 
-	m_next->print(tdbb, plan, detailed, level);
+				if (m_value->type == ExprNode::TYPE_LITERAL)
+				{
+					const dsc* desc = EVL_expr(tdbb, request, m_value);
+					const SINT64 value = (desc && !(request->req_flags & req_null)) ? MOV_get_int64(tdbb, desc, 0) : 0;
+					extras.printf(" limitRows=\"%" ULONGFORMAT"\"", value);
+				}				
+				
+				plan += printIndent(++level, plan_format) + "<Node operation=\"First N Records\"" + extras + ">";
+				break;
+			}
+			
+		default:
+			fb_assert(false);			
+	}
+
+	m_next->print(tdbb, request, plan, plan_format, level);
+	
+	if (plan_format == isc_info_sql_plan_format_explain_xml)
+		plan += printIndent(level, plan_format) + "</Node>";
 }
 
 void FirstRowsStream::markRecursive()

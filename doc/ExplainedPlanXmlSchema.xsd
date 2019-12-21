@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" targetNamespace="https://www.firebirdsql.org/2019/ExecutionPlan" xmlns:e="https://www.firebirdsql.org/2019/ExecutionPlan">
+	<xs:element name="Statements">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="e:Statistics" minOccurs="0" maxOccurs="1"/>
+				<xs:element ref="e:Statement" minOccurs="0" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute name="statementType">
+				<xs:simpleType>
+				  <xs:restriction base="xs:string">
+					<xs:enumeration value="Select"/>
+					<xs:enumeration value="Update"/>
+					<xs:enumeration value="Delete"/>
+					<xs:enumeration value="Insert"/>
+					<xs:enumeration value="ExecuteBlock"/>
+					<xs:enumeration value="ExecuteProcedure"/>
+					<xs:enumeration value="DDL"/>
+				  </xs:restriction>
+				</xs:simpleType>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element> 
+	<xs:element name="Statistics">
+		<xs:complexType>
+		  <xs:sequence>
+			<xs:element ref="e:Memory"/>
+			<xs:element ref="e:PhysicalIO"/>
+			<xs:element ref="e:LogicalIO"/>
+			<xs:element ref="e:TableStats"/>
+		  </xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Memory">
+		<xs:complexType>
+		  <xs:sequence>
+			<xs:element ref="e:CurrentUsage"/>
+			<xs:element ref="e:CurrentMapping"/>
+			<xs:element ref="e:MaximumUsage"/>
+			<xs:element ref="e:MaximumMapping"/>
+		  </xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="CurrentUsage" type="xs:integer"/>
+	<xs:element name="CurrentMapping" type="xs:integer"/>
+	<xs:element name="MaximumUsage" type="xs:integer"/>
+	<xs:element name="MaximumMapping" type="xs:integer"/>  
+	<xs:element name="PhysicalIO">
+	<xs:complexType>
+		<xs:sequence>
+			<xs:element ref="e:PageReads"/>
+			<xs:element ref="e:PageWrites"/>
+			<xs:element ref="e:PageFetches"/>
+			<xs:element ref="e:PageMarks"/>
+		</xs:sequence>
+	</xs:complexType>
+	</xs:element>
+	<xs:element name="PageReads" type="xs:integer"/>
+	<xs:element name="PageWrites" type="xs:integer"/>
+	<xs:element name="PageFetches" type="xs:integer"/>
+	<xs:element name="PageMarks" type="xs:integer"/>
+	<xs:element name="TableStats">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="e:StatTable" minOccurs="1" maxOccurs="unbounded"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="StatTable">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="e:LogicalIO"/>
+			</xs:sequence>
+			<xs:attribute name="name" use="required" type="xs:string"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="LogicalIO">
+		<xs:complexType>
+			<xs:sequence minOccurs="0">
+				<xs:element ref="e:RecordSeqReads"/>
+				<xs:element ref="e:RecordIdxReads"/>
+				<xs:element ref="e:RecordInserts"/>
+				<xs:element ref="e:RecordUpdates"/>
+				<xs:element ref="e:RecordDeletes"/>
+				<xs:element ref="e:RecordBackouts"/>
+				<xs:element ref="e:RecordPurges"/>
+				<xs:element ref="e:RecordExpurges"/>
+				<xs:element ref="e:RecordLocks"/>
+				<xs:element ref="e:RecordWaits"/>
+				<xs:element ref="e:RecordConflicts"/>
+				<xs:element ref="e:RecordBackversionReads"/>
+				<xs:element ref="e:RecordFragmentReads"/>
+				<xs:element ref="e:RecordRptReads"/>
+				<xs:element ref="e:RecordImgc"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="RecordSeqReads" type="xs:integer"/>
+	<xs:element name="RecordIdxReads" type="xs:integer"/>
+	<xs:element name="RecordInserts" type="xs:integer"/>
+	<xs:element name="RecordUpdates" type="xs:integer"/>
+	<xs:element name="RecordDeletes" type="xs:integer"/>
+	<xs:element name="RecordBackouts" type="xs:integer"/>
+	<xs:element name="RecordPurges" type="xs:integer"/>
+	<xs:element name="RecordExpurges" type="xs:integer"/>
+	<xs:element name="RecordLocks" type="xs:integer"/>
+	<xs:element name="RecordWaits" type="xs:integer"/>
+	<xs:element name="RecordConflicts" type="xs:integer"/>
+	<xs:element name="RecordBackversionReads" type="xs:integer"/>
+	<xs:element name="RecordFragmentReads" type="xs:integer"/>
+	<xs:element name="RecordRptReads" type="xs:integer"/>
+	<xs:element name="RecordImgc" type="xs:integer"/>  
+	<xs:element name="Statement">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="e:Node"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Node">
+		<xs:complexType>
+			<xs:sequence minOccurs="0" maxOccurs="unbounded">
+				<xs:choice maxOccurs="unbounded">
+					<xs:element ref="e:Node"/>
+					<xs:element ref="e:Table"/>
+					<xs:element ref="e:Index"/>
+					<xs:element ref="e:Scan"/>
+					<xs:choice minOccurs="0">
+						<xs:element ref="e:Bounds"/>
+						<xs:element ref="e:Match"/>
+					</xs:choice>
+				</xs:choice>				
+			</xs:sequence>
+			<xs:attribute name="joinType">
+				<xs:simpleType>
+					<xs:restriction base="xs:NCName">
+						<xs:enumeration value="Inner" />
+						<xs:enumeration value="Outer" />
+						<xs:enumeration value="Semi" />
+						<xs:enumeration value="Anti" />
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:attribute>
+			<xs:attribute name="keyLength" type="xs:integer"/>
+			<xs:attribute name="operation" use="required">
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:enumeration value="Aggregate" />
+						<xs:enumeration value="Bitmap" />
+						<xs:enumeration value="Bitmap And" />
+						<xs:enumeration value="Bitmap Or" />
+						<xs:enumeration value="Condition" />
+						<xs:enumeration value="Filter" />
+						<xs:enumeration value="First N Records" />
+						<xs:enumeration value="Full Join" />
+						<xs:enumeration value="Full Scan" />
+						<xs:enumeration value="Hash Join" />
+						<xs:enumeration value="Materialize" />
+						<xs:enumeration value="Merge Join" />
+						<xs:enumeration value="Nested Loop Join" />
+						<xs:enumeration value="Record Buffer" />
+						<xs:enumeration value="Recursion" />
+						<xs:enumeration value="Scan" />
+						<xs:enumeration value="Singularity Check" />
+						<xs:enumeration value="Skip N Records" />
+						<xs:enumeration value="Sort" />
+						<xs:enumeration value="Union" />
+						<xs:enumeration value="Unique Sort" />
+						<xs:enumeration value="Window" />
+						<xs:enumeration value="Write Lock" />
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:attribute>
+			<xs:attribute name="recordLength" type="xs:integer"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Table">
+		<xs:complexType>
+			<xs:simpleContent>
+				<xs:extension base="xs:string">
+					<xs:attribute name="access"/>
+					<xs:attribute name="alias" type="xs:anyURI"/>
+				</xs:extension>
+			</xs:simpleContent>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Index" type="xs:string"/>
+	<xs:element name="Scan" type="xs:string"/>
+	<xs:element name="Bounds">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="e:LowerBound"/>
+				<xs:element ref="e:UpperBound"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="LowerBound" type="xs:string"/>
+	<xs:element name="UpperBound" type="xs:string"/>
+	<xs:element name="Match" type="xs:string"/>
+</xs:schema>

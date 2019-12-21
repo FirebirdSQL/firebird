@@ -279,7 +279,8 @@ public:
 	void setTimeout(Firebird::CheckStatusWrapper* status, unsigned int timeOut);
 	JBatch* createBatch(Firebird::CheckStatusWrapper* status, Firebird::IMessageMetadata* inMetadata,
 		unsigned parLength, const unsigned char* par);
-
+	const char* getFormattedPlan(Firebird::CheckStatusWrapper* status, isc_info_sql_plan_format plan_format);
+	
 public:
 	JStatement(dsql_req* handle, StableAttachmentPart* sa, Firebird::Array<UCHAR>& meta);
 

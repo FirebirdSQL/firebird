@@ -85,6 +85,9 @@ unsigned StatementMetadata::buildInfoItems(Array<UCHAR>& items, unsigned flags)
 
 	if (flags & IStatement::PREPARE_PREFETCH_DETAILED_PLAN)
 		items.add(isc_info_sql_explain_plan);
+	
+	if (flags & IStatement::PREPARE_PREFETCH_DETAILED_PLAN_XML)
+		items.add(isc_info_sql_explain_plan_xml);	
 
 	return INFO_BUFFER_SIZE;
 }
@@ -115,6 +118,10 @@ unsigned StatementMetadata::buildInfoFlags(unsigned itemsLength, const UCHAR* it
 			case isc_info_sql_explain_plan:
 				flags |= IStatement::PREPARE_PREFETCH_DETAILED_PLAN;
 				break;
+				
+			case isc_info_sql_explain_plan_xml:
+				flags |= IStatement::PREPARE_PREFETCH_DETAILED_PLAN_XML;
+				break;	
 
 			case isc_info_sql_select:
 				flags |= IStatement::PREPARE_PREFETCH_OUTPUT_PARAMETERS;
@@ -163,11 +170,35 @@ unsigned StatementMetadata::getFlags()
 // Get statement plan.
 const char* StatementMetadata::getPlan(bool detailed)
 {
-	string* plan = detailed ? &detailedPlan : &legacyPlan;
+	return getFormattedPlan(detailed ? isc_info_sql_plan_format_explain_legacy : isc_info_sql_plan_format_plain);
+}
+
+// Get statement plan.
+const char* StatementMetadata::getFormattedPlan(isc_info_sql_plan_format plan_format)
+{
+	string* plan;
+
+	switch (plan_format)
+	{
+		case isc_info_sql_plan_format_plain:
+			plan = &legacyPlan;
+			break;
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			plan = &detailedPlan;
+			break;
+			
+		case isc_info_sql_plan_format_explain_xml:
+			plan = &detailedPlan;
+			break;
+			
+		default:
+			fb_assert(false);			
+	}
 
 	if (plan->isEmpty())
-	{
-		UCHAR info[] = {UCHAR(detailed ? isc_info_sql_explain_plan : isc_info_sql_get_plan)};
+	{		
+		UCHAR info[] = {UCHAR(plan_format == isc_info_sql_plan_format_plain ? isc_info_sql_explain_plan : (plan_format == isc_info_sql_plan_format_explain_legacy ? isc_info_sql_explain_plan : isc_info_sql_explain_plan_xml))};
 		UCHAR result[INFO_BUFFER_SIZE];
 
 		getAndParse(sizeof(info), info, sizeof(result), result);
@@ -257,7 +288,7 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 			case isc_info_sql_get_plan:
 			case isc_info_sql_explain_plan:
 			{
-				string* plan = (c == isc_info_sql_explain_plan ? &detailedPlan : &legacyPlan);
+				string* plan = (c == isc_info_sql_get_plan ? &legacyPlan : &detailedPlan);
 				getStringInfo(&buffer, plan);
 				break;
 			}

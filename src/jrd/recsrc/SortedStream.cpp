@@ -112,26 +112,50 @@ bool SortedStream::lockRecord(thread_db* tdbb) const
 	return m_next->lockRecord(tdbb);
 }
 
-void SortedStream::print(thread_db* tdbb, string& plan,
-						 bool detailed, unsigned level) const
+void SortedStream::print(thread_db* tdbb, jrd_req* request, string& plan,
+						 isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	if (detailed)
+	switch (plan_format)
 	{
-		string extras;
-		extras.printf(" (record length: %" ULONGFORMAT", key length: %" ULONGFORMAT")",
-					  m_map->length, m_map->keyLength);
+		case isc_info_sql_plan_format_plain:
+			{
+				level++;
+				plan += "SORT (";
+				m_next->print(tdbb, request, plan, plan_format, level);
+				plan += ")";		
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			{
+				string extras;
+				extras.printf(" (record length: %" ULONGFORMAT", key length: %" ULONGFORMAT")",
+							  m_map->length, m_map->keyLength);
 
-		plan += printIndent(++level) +
-			((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
+				plan += printIndent(++level, plan_format) +
+					((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
 
-		m_next->print(tdbb, plan, true, level);
-	}
-	else
-	{
-		level++;
-		plan += "SORT (";
-		m_next->print(tdbb, plan, false, level);
-		plan += ")";
+				m_next->print(tdbb, request, plan, plan_format, level);
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_xml:
+			{
+				string extras;
+				extras.printf(" recordLength=\"%" ULONGFORMAT"\" keyLength=\"%" ULONGFORMAT"\"",
+							  m_map->length, m_map->keyLength);
+
+				plan += printIndent(++level, plan_format) +
+					"<Node operation=\"" +  ((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + "\"" + extras + ">";
+
+				m_next->print(tdbb, request, plan, plan_format, level);
+
+				plan += printIndent(level, plan_format) + "</Node>";
+				break;
+			}
+			
+		default:
+			fb_assert(false);			
 	}
 }
 

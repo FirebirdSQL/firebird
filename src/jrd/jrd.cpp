@@ -5551,6 +5551,11 @@ unsigned JStatement::getFlags(CheckStatusWrapper* userStatus)
 
 const char* JStatement::getPlan(CheckStatusWrapper* userStatus, FB_BOOLEAN detailed)
 {
+	return getFormattedPlan(userStatus, detailed ? isc_info_sql_plan_format_explain_legacy : isc_info_sql_plan_format_plain);
+}
+
+const char* JStatement::getFormattedPlan(CheckStatusWrapper* userStatus, isc_info_sql_plan_format plan_format)
+{
 	const char* ret = NULL;
 
 	try
@@ -5560,14 +5565,14 @@ const char* JStatement::getPlan(CheckStatusWrapper* userStatus, FB_BOOLEAN detai
 
 		try
 		{
-			ret = metadata.getPlan(detailed);
+			ret = metadata.getFormattedPlan(plan_format);
 		}
 		catch (const Exception& ex)
 		{
-			transliterateException(tdbb, ex, userStatus, "JStatement::getPlan");
+			transliterateException(tdbb, ex, userStatus, "JStatement::getFormattedPlan");
 			return ret;
 		}
-		trace_warning(tdbb, userStatus, "JStatement::getPlan");
+		trace_warning(tdbb, userStatus, "JStatement::getFormattedPlan");
 	}
 	catch (const Exception& ex)
 	{

@@ -244,27 +244,48 @@ bool RecursiveStream::lockRecord(thread_db* /*tdbb*/) const
 	return false; // compiler silencer
 }
 
-void RecursiveStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void RecursiveStream::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	if (detailed)
+	switch (plan_format)
 	{
-		plan += printIndent(++level) + "Recursion";
-		m_root->print(tdbb, plan, true, level);
-		m_inner->print(tdbb, plan, true, level);
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+		case isc_info_sql_plan_format_plain:
+			{
+				if (!level)
+					plan += "(";
 
-		m_root->print(tdbb, plan, false, level + 1);
+				m_root->print(tdbb, request, plan, plan_format, level + 1);
 
-		plan += ", ";
+				plan += ", ";
 
-		m_inner->print(tdbb, plan, false, level + 1);
+				m_inner->print(tdbb, request, plan, plan_format, level + 1);
 
-		if (!level)
-			plan += ")";
+				if (!level)
+					plan += ")";		
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			{
+				plan += printIndent(++level, plan_format) + "Recursion";
+				
+				m_root->print(tdbb, request, plan, plan_format, level);
+				m_inner->print(tdbb, request, plan, plan_format, level);
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_xml:
+			{
+				plan += printIndent(++level, plan_format) + "<Node operation=\"Recursion\">";
+				
+				m_root->print(tdbb, request, plan, plan_format, level);
+				m_inner->print(tdbb, request, plan, plan_format, level);
+
+				plan += printIndent(level, plan_format) + "</Node>";
+				break;
+			}
+			
+		default:
+			fb_assert(false);			
 	}
 }
 

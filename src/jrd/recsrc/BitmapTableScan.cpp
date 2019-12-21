@@ -122,27 +122,46 @@ bool BitmapTableScan::getRecord(thread_db* tdbb) const
 	return false;
 }
 
-void BitmapTableScan::print(thread_db* tdbb, string& plan,
-							bool detailed, unsigned level) const
+void BitmapTableScan::print(thread_db* tdbb, jrd_req* request, string& plan,
+							isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	if (detailed)
+	switch (plan_format)
 	{
-		plan += printIndent(++level) + "Table " +
-			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+		case isc_info_sql_plan_format_plain:
+			{
+				if (!level)
+					plan += "(";
 
-		printInversion(tdbb, m_inversion, plan, true, level);
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+				plan += printName(tdbb, m_alias, false) + " INDEX (";
+				string indices;
+				printInversion(tdbb, m_inversion, indices, plan_format, level);
+				plan += indices + ")";
 
-		plan += printName(tdbb, m_alias, false) + " INDEX (";
-		string indices;
-		printInversion(tdbb, m_inversion, indices, false, level);
-		plan += indices + ")";
+				if (!level)
+					plan += ")";
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			{
+				plan += printIndent(++level, plan_format) + "Table " +
+					printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
 
-		if (!level)
-			plan += ")";
+				printInversion(tdbb, m_inversion, plan, plan_format, level);
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_xml:
+			{
+				const string l_alias = printName(tdbb, m_alias, false);
+				plan += printIndent(++level, plan_format) + "<Table alias=\"" + escapeXml(l_alias) + "\" access=\"By ID\">" +
+					escapeXml(printName(tdbb, m_relation->rel_name.c_str(), false)) + "</Table>";
+
+				printInversion(tdbb, m_inversion, plan, plan_format, --level);
+				break;	
+			}
+			
+		default:
+			fb_assert(false);
 	}
 }

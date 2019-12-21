@@ -307,17 +307,39 @@ bool BufferedStream::lockRecord(thread_db* tdbb) const
 	return m_next->lockRecord(tdbb);
 }
 
-void BufferedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void BufferedStream::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	if (detailed)
+	switch (plan_format)
 	{
-		string extras;
-		extras.printf(" (record length: %" ULONGFORMAT")", m_format->fmt_length);
+		case isc_info_sql_plan_format_plain:
+			break;
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			{
+				string extras;
+				extras.printf(" (record length: %" ULONGFORMAT")", m_format->fmt_length);
 
-		plan += printIndent(++level) + "Record Buffer" + extras;
+				plan += printIndent(++level, plan_format) + "Record Buffer" + extras;
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_xml:
+			{
+				string extras;
+				extras.printf(" recordLength=\"%" ULONGFORMAT"\"", m_format->fmt_length);
+	 
+				plan += printIndent(++level, plan_format) + "<Node operation=\"Record Buffer\"" + extras + ">";
+				break;
+			}
+			
+		default:
+			fb_assert(false);						
 	}
 
-	m_next->print(tdbb, plan, detailed, level);
+	m_next->print(tdbb, request, plan, plan_format, level);
+	
+	if (plan_format == isc_info_sql_plan_format_explain_xml)
+		plan += printIndent(level, plan_format) + "</Node>";
 }
 
 void BufferedStream::markRecursive()

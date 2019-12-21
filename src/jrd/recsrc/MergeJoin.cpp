@@ -337,27 +337,47 @@ bool MergeJoin::lockRecord(thread_db* /*tdbb*/) const
 	return false; // compiler silencer
 }
 
-void MergeJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void MergeJoin::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	if (detailed)
+	switch (plan_format)
 	{
-		plan += printIndent(++level) + "Merge Join (inner)";
+		case isc_info_sql_plan_format_plain:
+			{
+				level++;
+				plan += "MERGE (";
+				for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+				{
+					if (i)
+						plan += ", ";
 
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-			m_args[i]->print(tdbb, plan, true, level);
-	}
-	else
-	{
-		level++;
-		plan += "MERGE (";
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		{
-			if (i)
-				plan += ", ";
+					m_args[i]->print(tdbb, request, plan, plan_format, level);
+				}
+				plan += ")";		
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			{
+				plan += printIndent(++level, plan_format) + "Merge Join (inner)";
 
-			m_args[i]->print(tdbb, plan, false, level);
-		}
-		plan += ")";
+				for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+					m_args[i]->print(tdbb, request, plan, plan_format, level);
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_xml:
+			{
+				plan += printIndent(++level, plan_format) + "<Node operation=\"Merge Join\" joinType=\"Inner\">";
+
+				for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+					m_args[i]->print(tdbb, request, plan, plan_format, level);
+
+				plan += printIndent(level, plan_format) + "</Node>";
+				break;
+			}
+			
+		default:
+			fb_assert(false);			
 	}
 }
 

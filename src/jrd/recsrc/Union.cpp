@@ -165,30 +165,50 @@ bool Union::lockRecord(thread_db* tdbb) const
 	return m_args[impure->irsb_count]->lockRecord(tdbb);
 }
 
-void Union::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void Union::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	if (detailed)
+	switch (plan_format)
 	{
-		plan += printIndent(++level) + (m_args.getCount() == 1 ? "Materialize" : "Union");
+		case isc_info_sql_plan_format_plain:
+			{
+				if (!level)
+					plan += "(";
 
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-			m_args[i]->print(tdbb, plan, true, level);
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+				for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+				{
+					if (i)
+						plan += ", ";
 
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		{
-			if (i)
-				plan += ", ";
+					m_args[i]->print(tdbb, request, plan, plan_format, level + 1);
+				}
 
-			m_args[i]->print(tdbb, plan, false, level + 1);
-		}
+				if (!level)
+					plan += ")";		
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			{
+				plan += printIndent(++level, plan_format) + (m_args.getCount() == 1 ? "Materialize" : "Union");
 
-		if (!level)
-			plan += ")";
+				for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+					m_args[i]->print(tdbb, request, plan, plan_format, level);
+				break;
+			}
+			
+		case isc_info_sql_plan_format_explain_xml:
+			{
+				plan += printIndent(++level, plan_format) + "<Node operation=\"" + (m_args.getCount() == 1 ? "Materialize" : "Union") + "\">";
+
+				for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+					m_args[i]->print(tdbb, request, plan, plan_format, level);
+
+				plan += printIndent(level, plan_format) + "</Node>";
+				break;
+			}
+			
+		default:
+			fb_assert(false);			
 	}
 }
 

@@ -57,7 +57,7 @@ namespace
 		bool refetchRecord(thread_db* tdbb) const;
 		bool lockRecord(thread_db* tdbb) const;
 
-		void print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsigned level) const;
+		void print(thread_db* tdbb, jrd_req* request, Firebird::string& plan, isc_info_sql_plan_format plan_format, unsigned level) const;
 
 		void markRecursive();
 		void invalidateRecords(jrd_req* request) const;
@@ -142,9 +142,9 @@ namespace
 		return m_next->lockRecord(tdbb);
 	}
 
-	void BufferedStreamWindow::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+	void BufferedStreamWindow::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 	{
-		m_next->print(tdbb, plan, detailed, level);
+		m_next->print(tdbb, request, plan, plan_format, level);
 	}
 
 	void BufferedStreamWindow::markRecursive()
@@ -388,9 +388,9 @@ bool WindowedStream::lockRecord(thread_db* /*tdbb*/) const
 	return false; // compiler silencer
 }
 
-void WindowedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void WindowedStream::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 {
-	m_joinedStream->print(tdbb, plan, detailed, level);
+	m_joinedStream->print(tdbb, request, plan, plan_format, level);
 }
 
 void WindowedStream::markRecursive()
@@ -880,13 +880,30 @@ bool WindowedStream::WindowStream::getRecord(thread_db* tdbb) const
 	return true;
 }
 
-void WindowedStream::WindowStream::print(thread_db* tdbb, string& plan, bool detailed,
+void WindowedStream::WindowStream::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format,
 	unsigned level) const
 {
-	if (detailed)
-		plan += printIndent(++level) + "Window";
+	switch (plan_format)
+	{
+		case isc_info_sql_plan_format_plain:
+			break;
+			
+		case isc_info_sql_plan_format_explain_legacy:
+			plan += printIndent(++level, plan_format) + "Window";
+			break;
+			
+		case isc_info_sql_plan_format_explain_xml:
+			{
+				plan += printIndent(++level, plan_format) + "<Node operation=\"Window\">" +
+					printIndent(++level, plan_format) + "</Node>";
+				break;
+			}
+			
+		default:
+			fb_assert(false);			
+	}
 
-	m_next->print(tdbb, plan, detailed, level);
+	m_next->print(tdbb, request, plan, plan_format, level);
 }
 
 void WindowedStream::WindowStream::findUsedStreams(StreamList& streams, bool expandAll) const

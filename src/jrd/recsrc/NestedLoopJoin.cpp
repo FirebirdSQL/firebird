@@ -197,51 +197,93 @@ bool NestedLoopJoin::lockRecord(thread_db* /*tdbb*/) const
 	return false; // compiler silencer
 }
 
-void NestedLoopJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void NestedLoopJoin::print(thread_db* tdbb, jrd_req* request, string& plan, isc_info_sql_plan_format plan_format, unsigned level) const
 {
 	if (m_args.hasData())
 	{
-		if (detailed)
+		switch (plan_format)
 		{
-			plan += printIndent(++level) + "Nested Loop Join ";
+			case isc_info_sql_plan_format_plain:
+				{
+					level++;
+					plan += "JOIN (";
+					for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+					{
+						if (i)
+							plan += ", ";
 
-			switch (m_joinType)
-			{
-				case INNER_JOIN:
-					plan += "(inner)";
+						m_args[i]->print(tdbb, request, plan, plan_format, level);
+					}
+					plan += ")";
 					break;
+				}
+				
+			case isc_info_sql_plan_format_explain_legacy:
+				{
+					plan += printIndent(++level, plan_format) + "Nested Loop Join ";
 
-				case OUTER_JOIN:
-					plan += "(outer)";
+					switch (m_joinType)
+					{
+						case INNER_JOIN:
+							plan += "(inner)";
+							break;
+
+						case OUTER_JOIN:
+							plan += "(outer)";
+							break;
+
+						case SEMI_JOIN:
+							plan += "(semi)";
+							break;
+
+						case ANTI_JOIN:
+							plan += "(anti)";
+							break;
+
+						default:
+							fb_assert(false);
+					}
+
+					for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+						m_args[i]->print(tdbb, request, plan, plan_format, level);
 					break;
+				}
+				
+			case isc_info_sql_plan_format_explain_xml:
+				{
+					plan += printIndent(++level, plan_format) + "<Node operation=\"Nested Loop Join\" joinType=\"";
+					
+					switch (m_joinType)
+					{
+						case INNER_JOIN:
+							plan += "Inner";
+							break;
 
-				case SEMI_JOIN:
-					plan += "(semi)";
+						case OUTER_JOIN:
+							plan += "Outer";
+							break;
+
+						case SEMI_JOIN:
+							plan += "Semi";
+							break;
+
+						case ANTI_JOIN:
+							plan += "Anti";
+							break;
+
+						default:
+							fb_assert(false);
+					}
+					
+					plan += "\">";
+					for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+						m_args[i]->print(tdbb, request, plan, plan_format, level);
+					plan += printIndent(level, plan_format) + "</Node>";
 					break;
+				}
 
-				case ANTI_JOIN:
-					plan += "(anti)";
-					break;
-
-				default:
-					fb_assert(false);
-			}
-
-			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-				m_args[i]->print(tdbb, plan, true, level);
-		}
-		else
-		{
-			level++;
-			plan += "JOIN (";
-			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-			{
-				if (i)
-					plan += ", ";
-
-				m_args[i]->print(tdbb, plan, false, level);
-			}
-			plan += ")";
+			default:
+				fb_assert(false);				
 		}
 	}
 }

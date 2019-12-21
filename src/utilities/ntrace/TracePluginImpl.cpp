@@ -1575,7 +1575,7 @@ void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
 		*stmt_data.description += temp;
 
 		const char* access_path = config.print_plan ?
-			(config.explain_plan ? statement->getExplainedPlan() : statement->getPlan())
+			(config.explain_plan ? statement->getFormattedPlan(isc_info_sql_plan_format_explain_legacy) : (config.explain_plan_xml ? statement->getFormattedPlan(isc_info_sql_plan_format_explain_xml) : statement->getFormattedPlan(isc_info_sql_plan_format_plain)))
 			: NULL;
 
 		if (access_path && *access_path)
