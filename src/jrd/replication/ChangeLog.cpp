@@ -392,6 +392,7 @@ void ChangeLog::initSharedFile()
 
 void ChangeLog::lockState()
 {
+	m_localMutex.enter(FB_FUNCTION);
 	m_sharedMemory->mutexLock();
 
 	try
@@ -430,6 +431,7 @@ void ChangeLog::lockState()
 void ChangeLog::unlockState()
 {
 	m_sharedMemory->mutexUnlock();
+	m_localMutex.leave();
 }
 
 void ChangeLog::linkSelf()

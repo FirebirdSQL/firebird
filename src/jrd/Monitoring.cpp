@@ -167,6 +167,7 @@ void MonitoringData::initSharedFile()
 
 void MonitoringData::acquire()
 {
+	m_localMutex.enter(FB_FUNCTION);
 	m_sharedMemory->mutexLock();
 
 	while (m_sharedMemory->getHeader()->used == alignOffset(sizeof(Header)))
@@ -192,11 +193,11 @@ void MonitoringData::acquire()
 		FbLocalStatus statusVector;
 		if (!m_sharedMemory->remapFile(&statusVector, m_sharedMemory->getHeader()->allocated, false))
 		{
-			m_sharedMemory->mutexUnlock();
+			release();
 			status_exception::raise(&statusVector);
 		}
 #else
-		m_sharedMemory->mutexUnlock();
+		release();
 		status_exception::raise(Arg::Gds(isc_montabexh));
 #endif
 	}
@@ -206,6 +207,7 @@ void MonitoringData::acquire()
 void MonitoringData::release()
 {
 	m_sharedMemory->mutexUnlock();
+	m_localMutex.leave();
 }
 
 
@@ -912,14 +914,17 @@ void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Atta
 	record.reset(rel_mon_attachments);
 
 	int temp = mon_state_idle;
-
-	for (const jrd_tra* transaction_itr = attachment->att_transactions;
-		 transaction_itr; transaction_itr = transaction_itr->tra_next)
+	for (const jrd_tra* transaction = attachment->att_transactions;
+		 transaction; transaction = transaction->tra_next)
 	{
-		if (transaction_itr->tra_requests)
+		for (const jrd_req* request = transaction->tra_requests;
+			request; request = request->req_tra_next)
 		{
-			temp = mon_state_active;
-			break;
+			if (request->req_transaction && (request->req_flags & req_active))
+			{
+				temp = mon_state_active;
+				break;
+			}
 		}
 	}
 
@@ -1013,14 +1018,22 @@ void Monitoring::putTransaction(SnapshotData::DumpRecord& record, const jrd_tra*
 
 	record.reset(rel_mon_transactions);
 
-	int temp;
+	int temp = mon_state_idle;
+	for (const jrd_req* request = transaction->tra_requests;
+		request; request = request->req_tra_next)
+	{
+		if (request->req_transaction && (request->req_flags & req_active))
+		{
+			temp = mon_state_active;
+			break;
+		}
+	}
 
 	// transaction id
 	record.storeInteger(f_mon_tra_id, transaction->tra_number);
 	// attachment id
 	record.storeInteger(f_mon_tra_att_id, transaction->tra_attachment->att_attachment_id);
 	// state
-	temp = transaction->tra_requests ? mon_state_active : mon_state_idle;
 	record.storeInteger(f_mon_tra_state, temp);
 	// timestamp
 	record.storeTimestampTz(f_mon_tra_timestamp, transaction->tra_timestamp);

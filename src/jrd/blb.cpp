@@ -625,6 +625,9 @@ USHORT blb::BLB_get_segment(thread_db* tdbb, void* segment, USHORT buffer_length
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
 
+	if (blb_flags & BLB_temporary)
+		ERR_post(Arg::Gds(isc_cannot_read_new_blob));
+
 	if (--tdbb->tdbb_quantum < 0)
 		JRD_reschedule(tdbb, 0, true);
 
@@ -1541,7 +1544,7 @@ void blb::BLB_put_segment(thread_db* tdbb, const void* seg, USHORT segment_lengt
 	// Make sure blob is a temporary blob.  If not, complain bitterly.
 
 	if (!(blb_flags & BLB_temporary))
-		IBERROR(195);			// msg 195 cannot update old blob
+		ERR_post(Arg::Gds(isc_cannot_update_old_blob));
 
 	if (blb_filter)
 	{

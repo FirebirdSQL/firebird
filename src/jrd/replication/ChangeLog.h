@@ -237,6 +237,7 @@ namespace Replication
 		const Config* const m_config;
 		Firebird::Array<Segment*> m_segments;
 		Firebird::AutoPtr<Firebird::SharedMemory<State> > m_sharedMemory;
+		Firebird::Mutex m_localMutex;
 		Firebird::Guid m_guid;
 		const FB_UINT64 m_sequence;
 

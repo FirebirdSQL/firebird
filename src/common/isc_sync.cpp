@@ -2358,6 +2358,8 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	else
 		length = header_address[0];
 
+	fb_assert(length);
+
 	// Create the real file mapping object.
 
 	TEXT mapping_name[64]; // enough for int32 as text
@@ -2405,12 +2407,6 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 
 	sh_mem_header = (MemoryHeader*) address;
 	sh_mem_length_mapped = length;
-
-	if (!sh_mem_length_mapped)
-	{
-		(Arg::Gds(isc_random) << "sh_mem_length_mapped is 0").raise();
-	}
-
 	sh_mem_handle = file_handle;
 	sh_mem_object = file_obj;
 	sh_mem_interest = event_handle;
@@ -2432,6 +2428,12 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 		SetEvent(event_handle);
 		if (err)
 		{
+			UnmapViewOfFile(address);
+			CloseHandle(file_obj);
+			UnmapViewOfFile(header_address);
+			CloseHandle(header_obj);
+			CloseHandle(event_handle);
+			CloseHandle(file_handle);
 			system_call_failed::raise("FlushViewOfFile", err);
 		}
 	}

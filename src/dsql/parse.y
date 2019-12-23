@@ -5290,8 +5290,8 @@ set_decfloat_traps
 
 %type <setBindNode> set_bind
 set_bind
-	: SET BIND OF set_bind_from set_bind_to
-			{ $$ = newNode<SetBindNode>(); $$->from = $4; $$->to = $5; }
+	: SET BIND OF set_bind_from TO set_bind_to
+			{ $$ = newNode<SetBindNode>(); $$->from = $4; $$->to = $6; }
 	;
 
 %type <legacyField> set_bind_from
@@ -5315,11 +5315,11 @@ bind_type
 
 %type <legacyField> set_bind_to
 set_bind_to
-	: TO bind_type
+	: bind_type
 		{
-			$$ = $2;
+			$$ = $1;
 		}
-	| TO LEGACY
+	| LEGACY
 		{
 			$$ = newNode<dsql_fld>();
 			$$->flags = FLD_legacy;

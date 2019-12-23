@@ -248,6 +248,10 @@ bool CoercionRule::coerce(dsc* d) const
 	if (toMask & FLD_has_sub)
 		d->setBlobSubType(toDsc.getBlobSubType());
 
+	// varchar
+	if (d->dsc_dtype == dtype_varying)
+		d->dsc_length += sizeof(USHORT);
+
 	return true;
 }
 

@@ -818,11 +818,15 @@ void OptimizerRetrieval::analyzeNavigation(const InversionCandidateList& inversi
 			}
 		}
 
-		if (candidate && !optimizer->optimizeFirstRows)
-		{
-			// Check whether the navigational index has any matches shared with other inversion
-			// candidates. If so, compare inversions and decide whether navigation is acceptable.
+		// Check whether the navigational index has any matches shared with other inversion
+		// candidates. If so, compare inversions and decide whether navigation is acceptable.
+		// However, if the user-specified access plan mentions this index,
+		// then don't consider any (possibly better) alternatives.
+		// Another exception is when the FIRST ROWS optimization strategy is applied.
 
+		if (candidate && !optimizer->optimizeFirstRows &&
+			!(indexScratch->idx->idx_runtime_flags & idx_plan_navigate))
+		{
 			for (const InversionCandidate* const* iter = inversions.begin();
 				iter != inversions.end(); ++iter)
 			{
@@ -835,7 +839,7 @@ void OptimizerRetrieval::analyzeNavigation(const InversionCandidateList& inversi
 					{
 						if (candidate->matches.exist(*iter2))
 						{
-							usableIndex = betterInversion(candidate, otherCandidate);
+							usableIndex = betterInversion(candidate, otherCandidate, true);
 							break;
 						}
 					}
@@ -863,14 +867,17 @@ void OptimizerRetrieval::analyzeNavigation(const InversionCandidateList& inversi
 			candidate->nonFullMatchedSegments = (int) indexScratch->segments.getCount();
 		}
 
-		if (!navigationCandidate)
+		if (!navigationCandidate ||
+			betterInversion(candidate, navigationCandidate, false))
+		{
 			navigationCandidate = candidate;
-		else if (betterInversion(candidate, navigationCandidate))
-			navigationCandidate = candidate;
+		}
 	}
 }
 
-bool OptimizerRetrieval::betterInversion(const InversionCandidate* inv1, const InversionCandidate* inv2) const
+bool OptimizerRetrieval::betterInversion(const InversionCandidate* inv1,
+										 const InversionCandidate* inv2,
+										 bool ignoreUnmatched) const
 {
 	// Return true if inversion1 is *better* than inversion2.
 	// It's mostly about the retrieval cost, but other aspects are also taken into account.
@@ -932,7 +939,7 @@ bool OptimizerRetrieval::betterInversion(const InversionCandidate* inv1, const I
 					compareSelectivity =
 						(inv2->matchedSegments - inv1->matchedSegments);
 
-					if (compareSelectivity == 0)
+					if (compareSelectivity == 0 && !ignoreUnmatched)
 					{
 						// For the same number of matched segments
 						// compare ones that aren't full matched
@@ -1385,13 +1392,15 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 		iter != inversions->end(); ++iter)
 	{
 		InversionCandidate* const inversion = *iter;
-
-		inversion->used = (inversion == navigationCandidate);
-
 		const IndexScratch* const indexScratch = inversion->scratch;
 
-		if (indexScratch &&
-			(indexScratch->idx->idx_runtime_flags & idx_plan_dont_use))
+		// If the explicit plan doesn't mention this index, fake it as used
+		// thus excluding it from the cost-based algorithm. Otherwise,
+		// given this index is suitable for navigation, also mark it as used.
+
+		if ((indexScratch &&
+			(indexScratch->idx->idx_runtime_flags & idx_plan_dont_use)) ||
+			(!customPlan && inversion == navigationCandidate))
 		{
 			inversion->used = true;
 		}
@@ -1524,7 +1533,7 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 						break;
 					}
 
-					if (betterInversion(currentInv, bestCandidate))
+					if (betterInversion(currentInv, bestCandidate, false))
 						bestCandidate = currentInv;
 				}
 			}

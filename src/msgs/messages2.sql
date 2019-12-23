@@ -1049,6 +1049,8 @@ Data source : @4', NULL, NULL)
 ('bind_err', NULL, 'jrd.cpp', NULL, 0, 939, NULL, 'Error processing isc_dpb_set_bind clumplet "@1"', NULL, NULL);
 ('bind_statement', NULL, 'jrd.cpp', NULL, 0, 940, NULL, 'The following statement failed: @1', NULL, NULL);
 ('bind_convert', NULL, 'Coercion.cpp', NULL, 0, 941, NULL, 'Can not convert @1 to @2', NULL, NULL);
+('cannot_update_old_blob', 'BLB_put_segment', 'blb.cpp', NULL, 0, 942, NULL, 'cannot update old BLOB', NULL, NULL);
+('cannot_read_new_blob', 'BLB_get_segment', 'blb.cpp', NULL, 0, 943, NULL, 'cannot read from new BLOB', NULL, NULL);
 -- QLI
 (NULL, NULL, NULL, NULL, 1, 0, NULL, 'expected type', NULL, NULL);
 (NULL, NULL, NULL, NULL, 1, 1, NULL, 'bad block type', NULL, NULL);
@@ -2763,7 +2765,7 @@ ERROR: Backup incomplete', NULL, NULL);
 ('dsql_nostring_neg_dial3',  'MAKE_desc', 'make.cpp', NULL, 13, 967, NULL, 'Strings cannot be negated (applied the minus operator) in dialect 3', NULL, NULL)
 ('dsql_invalid_type_neg', 'MAKE_desc', 'make.cpp', NULL, 13, 968, NULL, 'Invalid data type for negation (minus operator)', NULL, NULL)
 -- End of extras for isc_expression_eval_err
-('dsql_max_distinct_items', 'pass1_rse_impl', 'pass1.cpp', NULL, 13, 969, NULL, 'Cannot have more than 255 items in DISTINCT list', NULL, NULL);
+('dsql_max_distinct_items', 'pass1_rse_impl', 'pass1.cpp', NULL, 13, 969, NULL, 'Cannot have more than 255 items in DISTINCT / UNION DISTINCT list', NULL, NULL);
 ('dsql_alter_charset_failed', 'getMainErrorCode', 'DdlNodes.h', NULL, 13, 970, NULL, 'ALTER CHARACTER SET @1 failed', NULL, NULL);
 ('dsql_comment_on_failed', 'getMainErrorCode', 'DdlNodes.h', NULL, 13, 971, NULL, 'COMMENT ON @1 failed', NULL, NULL);
 ('dsql_create_func_failed', 'getMainErrorCode', 'DdlNodes.h', NULL, 13, 972, NULL, 'CREATE FUNCTION @1 failed', NULL, NULL);
@@ -3462,16 +3464,16 @@ Analyzing database pages ...', NULL, NULL);
 (NULL, 'usage', 'fbsvcmgr.cpp', NULL, 22, 31, NULL, '  (will list header info in database employee on local machine)', NULL, NULL);
 (NULL, 'usage', 'fbsvcmgr.cpp', NULL, 22, 32, NULL, 'fbsvcmgr yourserver:service_mgr user sysdba password masterkey info_server_version info_svr_db_info', NULL, NULL);
 (NULL, 'usage', 'fbsvcmgr.cpp', NULL, 22, 33, NULL, '  (will show firebird version and databases usage on yourserver)', NULL, NULL);
-(NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 34, NULL, 'Transaction @1 is in limbo', NULL, NULL);
-(NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 35, NULL, 'Multidatabase transaction @1 is in limbo', NULL, NULL);
-(NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 36, NULL, 'Host Site: @1', NULL, NULL);
-(NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 37, NULL, 'Transaction @1', NULL, NULL);
+(NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 34, NULL, 'Transaction in limbo', NULL, NULL);
+(NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 35, NULL, 'Multidatabase transaction in limbo', NULL, NULL);
+(NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 36, NULL, 'Host Site', NULL, NULL);
+(NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 37, NULL, 'Transaction', NULL, NULL);
 (NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 38, NULL, 'has been prepared', NULL, NULL);
 (NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 39, NULL, 'has been committed', NULL, NULL);
 (NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 40, NULL, 'has been rolled back', NULL, NULL);
 (NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 41, NULL, 'is not available', NULL, NULL);
-(NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 42, NULL, 'Remote Site: @1', NULL, NULL);
-(NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 43, NULL, 'Database Path: @1', NULL, NULL);
+(NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 42, NULL, 'Remote Site', NULL, NULL);
+(NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 43, NULL, 'Database Path', NULL, NULL);
 (NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 44, NULL, 'Automated recovery would commit this transaction', NULL, NULL);
 (NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 45, NULL, 'Automated recovery would rollback this transaction', NULL, NULL);
 (NULL, 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 46, NULL, 'No idea should it be commited or rolled back', NULL, NULL);
@@ -3486,6 +3488,9 @@ Analyzing database pages ...', NULL, NULL);
 (NULL, 'usage', 'fbsvcmgr.cpp', NULL, 22, 55, NULL, 'Information requests:', NULL, NULL);
 (NULL, 'usage', 'fbsvcmgr.cpp', NULL, 22, 56, NULL, 'Actions:', NULL, NULL);
 (NULL, 'printCapabilities', 'fbsvcmgr.cpp', NULL, 22, 57, NULL, 'Server capabilities:', NULL, NULL);
+('fbsvcmgr_info_limbo', 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 58, NULL, 'Unknown tag (@1) in isc_info_svc_limbo_trans block after isc_svc_query()', NULL, NULL);
+('fbsvcmgr_limbo_state', 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 59, NULL, 'Unknown tag (@1) in isc_spb_tra_state block after isc_svc_query()', NULL, NULL);
+('fbsvcmgr_limbo_advise', 'printInfo', 'fbsvcmgr.cpp', NULL, 22, 60, NULL, 'Unknown tag (@1) in isc_spb_tra_advise block after isc_svc_query()', NULL, NULL);
 -- UTL (messages common for many utilities)
 -- All messages use the new format.
 ('utl_trusted_switch', 'checkService', 'UtilSvc.cpp', NULL, 23, 1, NULL, 'Switches trusted_user and trusted_role are not supported from command line', NULL, NULL);

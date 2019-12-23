@@ -2598,10 +2598,10 @@ static void gen_procedure( const act* action, int column)
 	const TEXT* pattern;
 	if (in_port && in_port->por_length)
 		pattern =
-			"isc_transact_request (%V1, %RF%DH%RE, %RF%RT%RE, sizeof(%RI), %RI, (short) %PL, (char*) %RF%PI%RE, (short) %QL, (char*) %RF%QI%RE);";
+			"isc_transact_request (%V1, %RF%DH%RE, %RF%RT%RE, (unsigned short) sizeof(%RI), (char*) %RI, (unsigned short) %PL, (char*) %RF%PI%RE, (unsigned short) %QL, (char*) %RF%QI%RE);";
 	else
 		pattern =
-			"isc_transact_request (%V1, %RF%DH%RE, %RF%RT%RE, sizeof(%RI), %RI, 0, 0, (short) %QL, (char*) %RF%QI%RE);";
+			"isc_transact_request (%V1, %RF%DH%RE, %RF%RT%RE, (unsigned short) sizeof(%RI), (char*) %RI, 0, 0, (unsigned short) %QL, (char*) %RF%QI%RE);";
 
 	// Get database attach and transaction started
 

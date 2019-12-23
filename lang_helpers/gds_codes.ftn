@@ -1934,6 +1934,10 @@ C --
       PARAMETER (GDS__bind_statement                   = 335545260)
       INTEGER*4 GDS__bind_convert                    
       PARAMETER (GDS__bind_convert                     = 335545261)
+      INTEGER*4 GDS__cannot_update_old_blob          
+      PARAMETER (GDS__cannot_update_old_blob           = 335545262)
+      INTEGER*4 GDS__cannot_read_new_blob            
+      PARAMETER (GDS__cannot_read_new_blob             = 335545263)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 
@@ -2802,6 +2806,12 @@ C --
       PARAMETER (GDS__fbsvcmgr_fp_empty                = 336986162)
       INTEGER*4 GDS__fbsvcmgr_bad_arg                
       PARAMETER (GDS__fbsvcmgr_bad_arg                 = 336986164)
+      INTEGER*4 GDS__fbsvcmgr_info_limbo             
+      PARAMETER (GDS__fbsvcmgr_info_limbo              = 336986170)
+      INTEGER*4 GDS__fbsvcmgr_limbo_state            
+      PARAMETER (GDS__fbsvcmgr_limbo_state             = 336986171)
+      INTEGER*4 GDS__fbsvcmgr_limbo_advise           
+      PARAMETER (GDS__fbsvcmgr_limbo_advise            = 336986172)
       INTEGER*4 GDS__utl_trusted_switch              
       PARAMETER (GDS__utl_trusted_switch               = 337051649)
       INTEGER*4 GDS__nbackup_missing_param           

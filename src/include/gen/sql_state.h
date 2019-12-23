@@ -962,6 +962,8 @@ static const struct {
 	{335545259, "08004"}, // 939 bind_err
 	{335545260, "08004"}, // 940 bind_statement
 	{335545261, "22000"}, // 941 bind_convert
+	{335545262, "42000"}, // 942 cannot_update_old_blob
+	{335545263, "42000"}, // 943 cannot_read_new_blob
 	{335740929, "00000"}, //   1 gfix_db_name
 	{335740930, "00000"}, //   2 gfix_invalid_sw
 	{335740932, "00000"}, //   4 gfix_incmp_sw
@@ -1396,6 +1398,9 @@ static const struct {
 	{336986161, "00000"}, //  49 fbsvcmgr_fp_read
 	{336986162, "00000"}, //  50 fbsvcmgr_fp_empty
 	{336986164, "00000"}, //  52 fbsvcmgr_bad_arg
+	{336986170, "00000"}, //  58 fbsvcmgr_info_limbo
+	{336986171, "00000"}, //  59 fbsvcmgr_limbo_state
+	{336986172, "00000"}, //  60 fbsvcmgr_limbo_advise
 	{337051649, "00000"}, //   1 utl_trusted_switch
 	{337117213, "00000"}, //  29 nbackup_missing_param
 	{337117214, "00000"}, //  30 nbackup_allowed_switches

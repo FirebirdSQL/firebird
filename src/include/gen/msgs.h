@@ -966,6 +966,8 @@ Data source : @4"},		/* eds_statement */
 	{335545259, "Error processing isc_dpb_set_bind clumplet \"@1\""},		/* bind_err */
 	{335545260, "The following statement failed: @1"},		/* bind_statement */
 	{335545261, "Can not convert @1 to @2"},		/* bind_convert */
+	{335545262, "cannot update old BLOB"},		/* cannot_update_old_blob */
+	{335545263, "cannot read from new BLOB"},		/* cannot_read_new_blob */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */
@@ -1272,7 +1274,7 @@ Data source : @4"},		/* eds_statement */
 	{336397254, "Invalid data type for division in dialect 3"},		/* dsql_invalid_type_div_dial3 */
 	{336397255, "Strings cannot be negated (applied the minus operator) in dialect 3"},		/* dsql_nostring_neg_dial3 */
 	{336397256, "Invalid data type for negation (minus operator)"},		/* dsql_invalid_type_neg */
-	{336397257, "Cannot have more than 255 items in DISTINCT list"},		/* dsql_max_distinct_items */
+	{336397257, "Cannot have more than 255 items in DISTINCT / UNION DISTINCT list"},		/* dsql_max_distinct_items */
 	{336397258, "ALTER CHARACTER SET @1 failed"},		/* dsql_alter_charset_failed */
 	{336397259, "COMMENT ON @1 failed"},		/* dsql_comment_on_failed */
 	{336397260, "CREATE FUNCTION @1 failed"},		/* dsql_create_func_failed */
@@ -1400,6 +1402,9 @@ Data source : @4"},		/* eds_statement */
 	{336986161, "could not read file @1"},		/* fbsvcmgr_fp_read */
 	{336986162, "empty file @1"},		/* fbsvcmgr_fp_empty */
 	{336986164, "Invalid or missing parameter for switch @1"},		/* fbsvcmgr_bad_arg */
+	{336986170, "Unknown tag (@1) in isc_info_svc_limbo_trans block after isc_svc_query()"},		/* fbsvcmgr_info_limbo */
+	{336986171, "Unknown tag (@1) in isc_spb_tra_state block after isc_svc_query()"},		/* fbsvcmgr_limbo_state */
+	{336986172, "Unknown tag (@1) in isc_spb_tra_advise block after isc_svc_query()"},		/* fbsvcmgr_limbo_advise */
 	{337051649, "Switches trusted_user and trusted_role are not supported from command line"},		/* utl_trusted_switch */
 	{337117213, "Missing parameter for switch @1"},		/* nbackup_missing_param */
 	{337117214, "Only one of -LOCK, -UNLOCK, -FIXUP, -BACKUP or -RESTORE should be specified"},		/* nbackup_allowed_switches */

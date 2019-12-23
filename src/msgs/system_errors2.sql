@@ -948,6 +948,8 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (-902, '08', '004', 0, 939, 'bind_err', NULL, NULL)
 (-902, '08', '004', 0, 940, 'bind_statement', NULL, NULL)
 (-901, '22', '000', 0, 941, 'bind_convert', NULL, NULL)
+(-402, '42', '000', 0, 942, 'cannot_update_old_blob', NULL, NULL)
+(-402, '42', '000', 0, 943, 'cannot_read_new_blob', NULL, NULL)
 -- GFIX
 (-901, '00', '000', 3, 1, 'gfix_db_name', NULL, NULL)
 (-901, '00', '000', 3, 2, 'gfix_invalid_sw', NULL, NULL)
@@ -1393,6 +1395,9 @@ COMMIT WORK;
 (-901, '00', '000', 22, 49, 'fbsvcmgr_fp_read', NULL, NULL)
 (-901, '00', '000', 22, 50, 'fbsvcmgr_fp_empty', NULL, NULL)
 (-901, '00', '000', 22, 52, 'fbsvcmgr_bad_arg', NULL, NULL)
+(-901, '00', '000', 22, 58, 'fbsvcmgr_info_limbo', NULL, NULL)
+(-901, '00', '000', 22, 59, 'fbsvcmgr_limbo_state', NULL, NULL)
+(-901, '00', '000', 22, 60, 'fbsvcmgr_limbo_advise', NULL, NULL)
 -- UTILITIES
 (-901, '00', '000', 23, 1, 'utl_trusted_switch', NULL, NULL)
 -- NBACKUP

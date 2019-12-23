@@ -1929,6 +1929,10 @@ const
 	gds_bind_statement                   = 335545260;
 	isc_bind_convert                     = 335545261;
 	gds_bind_convert                     = 335545261;
+	isc_cannot_update_old_blob           = 335545262;
+	gds_cannot_update_old_blob           = 335545262;
+	isc_cannot_read_new_blob             = 335545263;
+	gds_cannot_read_new_blob             = 335545263;
 	isc_gfix_db_name                     = 335740929;
 	gds_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;
@@ -2797,6 +2801,12 @@ const
 	gds_fbsvcmgr_fp_empty                = 336986162;
 	isc_fbsvcmgr_bad_arg                 = 336986164;
 	gds_fbsvcmgr_bad_arg                 = 336986164;
+	isc_fbsvcmgr_info_limbo              = 336986170;
+	gds_fbsvcmgr_info_limbo              = 336986170;
+	isc_fbsvcmgr_limbo_state             = 336986171;
+	gds_fbsvcmgr_limbo_state             = 336986171;
+	isc_fbsvcmgr_limbo_advise            = 336986172;
+	gds_fbsvcmgr_limbo_advise            = 336986172;
 	isc_utl_trusted_switch               = 337051649;
 	gds_utl_trusted_switch               = 337051649;
 	isc_nbackup_missing_param            = 337117213;

@@ -186,7 +186,8 @@ public:
 
 protected:
 	void analyzeNavigation(const InversionCandidateList& inversions);
-	bool betterInversion(const InversionCandidate* inv1, const InversionCandidate* inv2) const;
+	bool betterInversion(const InversionCandidate* inv1, const InversionCandidate* inv2,
+		bool ignoreUnmatched) const;
 	InversionNode* composeInversion(InversionNode* node1, InversionNode* node2,
 		InversionNode::Type node_type) const;
 	const Firebird::string& getAlias();

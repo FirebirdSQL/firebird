@@ -2058,7 +2058,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 		// sort, group and distinct have the same limit for now
 		if (selectList->items.getCount() > MAX_SORT_ITEMS)
 		{
-			// Cannot have more than 255 items in DISTINCT list.
+			// Cannot have more than 255 items in DISTINCT / UNION DISTINCT list.
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 					  Arg::Gds(isc_dsql_command_err) <<
 					  Arg::Gds(isc_dsql_max_distinct_items));
@@ -2487,6 +2487,14 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 
 	// generate the list of fields to select.
 	ValueListNode* items = nodeAs<RseNode>(unionSource->dsqlClauses->items[0])->dsqlSelectList;
+
+	if (!input->dsqlAll && items->items.getCount() > MAX_SORT_ITEMS)
+	{
+		// Cannot have more than 255 items in DISTINCT / UNION DISTINCT list.
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					Arg::Gds(isc_dsql_command_err) <<
+					Arg::Gds(isc_dsql_max_distinct_items));
+	}
 
 	// loop through the list nodes, checking to be sure that they have the
 	// same number of items
