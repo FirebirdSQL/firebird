@@ -36,7 +36,7 @@ BEGIN
     BEGIN
       VALUE "Comments", "This product created by the Firebird - All Copyright (c) retained by the individual contributors - original code Copyright (c) 2000 Inprise Corporation and predecessors.\0"
       VALUE "CompanyName", "Firebird Project\0"
-      VALUE "FileDescription", "Firebird " VER_FILEDESC ". " VER_ARCH " " VER_DBG " build"
+      VALUE "FileDescription", "Firebird " VER_FILEDESC ". (" VER_ARCH VER_DBG ")"
       VALUE "FileVersion", FILE_VER_STRING
       VALUE "InternalName", STRINGIZE(RC_TARGET_NAME)
       VALUE "OriginalFilename", STRINGIZE(RC_TARGET_FILENAME)

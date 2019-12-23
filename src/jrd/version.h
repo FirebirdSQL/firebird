@@ -37,19 +37,19 @@
 #define VER_FILEDESC "Guardian"
 
 #elif defined RC_TARGET_fbrmclib
-#define VER_FILEDESC "RM/COBOL client interface"
+#define VER_FILEDESC "RM/COBOL Helper library"
 
 #elif defined RC_TARGET_firebird
-#define VER_FILEDESC "Server main executable"
+#define VER_FILEDESC "Server executable"
 
 #elif defined RC_TARGET_fbsvcmgr
-#define VER_FILEDESC "Service Manager"
+#define VER_FILEDESC "Services Management tool"
 
 #elif defined RC_TARGET_fbtrace
 #define VER_FILEDESC "Trace plugin"
 
 #elif defined RC_TARGET_fbtracemgr
-#define VER_FILEDESC "Trace Manager"
+#define VER_FILEDESC "Trace Management tool"
 
 #elif defined RC_TARGET_gbak
 #define VER_FILEDESC "Gbak tool"
@@ -70,7 +70,7 @@
 #define VER_FILEDESC "Gstat tool"
 
 #elif defined RC_TARGET_ib_util
-#define VER_FILEDESC "UDF support library"
+#define VER_FILEDESC "UDF Helper library"
 
 #elif defined RC_TARGET_instclient
 #define VER_FILEDESC "Install Client tool"
@@ -94,7 +94,7 @@
 #define VER_FILEDESC "Legacy User Manager plugin"
 
 #elif defined RC_TARGET_nbackup
-#define VER_FILEDESC "Physical Backup Manager"
+#define VER_FILEDESC "Physical Backup Management tool"
 
 #elif defined RC_TARGET_qli
 #define VER_FILEDESC "QLI tool"
@@ -112,13 +112,13 @@
 #define VER_FILEDESC "Client library"
 
 #elif defined RC_TARGET_build_msg
-#define VER_FILEDESC "Build Message file tool"
+#define VER_FILEDESC "Build Message File tool"
 
 #elif defined RC_TARGET_codes
 #define VER_FILEDESC "Generate Error Codes tool"
 
 #elif defined RC_TARGET_gpre_boot
-#define VER_FILEDESC "Gpre boot tool"
+#define VER_FILEDESC "Bootstrap Gpre tool"
 
 #elif defined RC_TARGET_udrcpp_example
 #define VER_FILEDESC "UDR C++ example"
@@ -136,9 +136,9 @@
 
 
 #ifdef NDEBUG
-#define VER_DBG "release"
+#define VER_DBG
 #else
-#define VER_DBG "debug"
+#define VER_DBG " debug"
 #endif
 
 
