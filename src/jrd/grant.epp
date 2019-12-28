@@ -777,6 +777,8 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 		desc.dsc_address = (UCHAR *) relation_name;
 		desc.dsc_length = strlen(relation_name);
 		DFW_post_work(transaction, dfw_update_format, &desc, 0);
+
+		DFW_post_work(transaction, dfw_clear_met_cache, NULL, 0);
 	}
 
 	return aggregate_public;
