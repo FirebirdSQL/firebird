@@ -4,11 +4,6 @@
 :: FB_DB_PATH unix format path of the main directory
 :: (This is used by gpre and preprocess.bat)
 :: VS_VER VisualStudio version (msvc10|msvc12|msvc14)
-:: SERVER_NAME server needed to connect to firebird (could include port)
-::   Example : localhost/3051
-:: (Note - SERVER_NAME is almost deprecated - it is only used by
-::   make_examples.bat
-::
 
 @echo off
 
@@ -47,8 +42,6 @@ set VS_VER=msvc%MSVC_VERSION%
 
 ::=================
 :SET_DB_DIR
-
-@SET SERVER_NAME=localhost
 
 @cd ..\..
 @for /f "delims=" %%a in ('@cd') do (set FB_LONG_ROOT_PATH=%%a)
@@ -108,7 +101,6 @@ if defined VS_VER_EXPRESS (
 @echo    msvc_version=%MSVC_VERSION%
 @echo    db_path=%FB_DB_PATH%
 @echo    root_path=%FB_ROOT_PATH%
-@echo    server_name=%SERVER_NAME%
 @echo.
 @echo    (End of %0)
 @echo.

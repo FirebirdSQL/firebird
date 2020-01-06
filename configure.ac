@@ -1371,9 +1371,6 @@ else
 fi
 AC_SUBST(POSTFIX_INCLUDE)
 
-UDF_COMMENT="#"
-AC_SUBST(UDF_COMMENT)
-
 AC_CONFIG_FILES(
 gen/make.rules:${MAKE_SRC_DIR}/make.rules
 gen/make.defaults:${MAKE_SRC_DIR}/make.defaults

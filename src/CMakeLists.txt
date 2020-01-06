@@ -909,7 +909,7 @@ add_custom_target(copy_files
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${GENERATED_DIR}/security.fdb ${output_dir}/security4.fdb
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${GENERATED_DIR}/help.fdb ${output_dir}/help/help.fdb
     # configs, text files
-    COMMAND sed "/@UDF_COMMENT@/d" < ${CMAKE_SOURCE_DIR}/builds/install/misc/firebird.conf.in > ${output_dir}/firebird.conf
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/misc/firebird.conf.in ${output_dir}/firebird.conf
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/misc/databases.conf.in ${output_dir}/databases.conf
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/misc/fbintl.conf ${output_dir}/intl/fbintl.conf
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/builds/install/misc/plugins.conf ${output_dir}/plugins.conf

@@ -180,7 +180,7 @@
 # the same restrictions as in previous FB versions. To specify access
 # to specific trees, enum all required paths (for Windows this may be
 # something like 'C:\ExternalFunctions', for unix - '/db/udf;/mnt/udf').
-@UDF_COMMENT@
+#
 # NOTE: THE EXTERNAL FUNCTION ENGINE FEATURE COULD BE USED TO COMPROMISE
 # THE SERVER/HOST AS WELL AS DATABASE SECURITY!!
 #

@@ -1,5 +1,4 @@
-::@echo off
-
+@echo off
 
 :: Set env vars
 @call setenvvar.bat
@@ -38,8 +37,9 @@ if errorlevel 1 (
 @call :MOVE2
 @goto :EOF
 
-::===========
+
 :BUILD_EMPBUILD
+::===========
 @echo.
 @echo Building empbuild.fdb
 @copy /y %FB_ROOT_PATH%\examples\empbuild\*.sql   %FB_GEN_DIR%\examples\ > nul
@@ -47,7 +47,7 @@ if errorlevel 1 (
 
 @echo.
 :: Here we must use cd because isql does not have an option to set a base directory
-@cd "%FB_LONG_ROOT_PATH%\gen\examples"
+@pushd "%FB_LONG_ROOT_PATH%\gen\examples"
 @echo   Creating empbuild.fdb...
 @echo.
 @del empbuild.fdb 2> nul
@@ -62,7 +62,8 @@ if defined FB2_INTLEMP (
 @%FB_BIN_DIR%\isql -i intlbld.sql
 )
 
-@cd "%FB_LONG_ROOT_PATH%\builds\win32"
+@popd
+
 @echo.
 @echo path = %FB_GEN_DB_DIR%\examples
 @echo   Preprocessing empbuild.e...
@@ -75,17 +76,18 @@ if defined FB2_INTLEMP (
 @%FB_BIN_DIR%\gpre.exe -r -m -n -z %FB_ROOT_PATH%\examples\empbuild\intlbld.e %FB_GEN_DIR%\examples\intlbld.c -b %FB_GEN_DB_DIR%/examples/
 )
 
+::End of BUILD_EMPBUILD
+::---------------------
 @goto :EOF
 
 
-::===========
 :MOVE
+::===========
 @echo.
 @rmdir /q /s %FB_OUTPUT_DIR%\examples 2>nul
 @mkdir %FB_OUTPUT_DIR%\examples
 @mkdir %FB_OUTPUT_DIR%\examples\api
 @mkdir %FB_OUTPUT_DIR%\examples\dbcrypt
-@mkdir %FB_OUTPUT_DIR%\examples\build_unix
 @mkdir %FB_OUTPUT_DIR%\examples\build_win32
 @mkdir %FB_OUTPUT_DIR%\examples\empbuild
 @mkdir %FB_OUTPUT_DIR%\examples\include
@@ -97,23 +99,20 @@ if defined FB2_INTLEMP (
 @mkdir %FB_OUTPUT_DIR%\plugins\udr 2>nul
 
 @echo Moving files to output directory
-@copy %FB_ROOT_PATH%\examples\* %FB_OUTPUT_DIR%\examples > nul
-@ren %FB_OUTPUT_DIR%\examples\readme readme.txt > nul
-@copy %FB_ROOT_PATH%\examples\api\* %FB_OUTPUT_DIR%\examples\api > nul
-@copy %FB_ROOT_PATH%\examples\dbcrypt\* %FB_OUTPUT_DIR%\examples\dbcrypt > nul
-@copy %FB_ROOT_PATH%\examples\build_unix\* %FB_OUTPUT_DIR%\examples\build_unix > nul
-@copy %FB_ROOT_PATH%\examples\build_win32\* %FB_OUTPUT_DIR%\examples\build_win32 > nul
+copy %FB_ROOT_PATH%\examples\* %FB_OUTPUT_DIR%\examples > nul
+ren %FB_OUTPUT_DIR%\examples\readme readme.txt > nul
+copy %FB_ROOT_PATH%\examples\api\* %FB_OUTPUT_DIR%\examples\api > nul
+copy %FB_ROOT_PATH%\examples\dbcrypt\* %FB_OUTPUT_DIR%\examples\dbcrypt > nul
+copy %FB_ROOT_PATH%\examples\build_win32\* %FB_OUTPUT_DIR%\examples\build_win32 > nul
 :: @copy %FB_ROOT_PATH%\examples\empbuild\* %FB_OUTPUT_DIR%\examples\empbuild > nul
-@copy %FB_ROOT_PATH%\examples\empbuild\employe2.sql %FB_OUTPUT_DIR%\examples\empbuild > nul
-@copy %FB_ROOT_PATH%\examples\include\* %FB_OUTPUT_DIR%\examples\include > nul
-@copy %FB_ROOT_PATH%\examples\interfaces\* %FB_OUTPUT_DIR%\examples\interfaces > nul
-@copy %FB_ROOT_PATH%\examples\package\* %FB_OUTPUT_DIR%\examples\package > nul
-@copy %FB_ROOT_PATH%\examples\stat\* %FB_OUTPUT_DIR%\examples\stat > nul
-@copy %FB_ROOT_PATH%\examples\udf\* %FB_OUTPUT_DIR%\examples\udf > nul
-@copy %FB_ROOT_PATH%\examples\udr\* %FB_OUTPUT_DIR%\examples\udr > nul
-@copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird\plugins\udr\*.dll %FB_OUTPUT_DIR%\plugins\udr >nul
-@copy %FB_ROOT_PATH%\src\extlib\ib_udf* %FB_OUTPUT_DIR%\examples\udf > nul
-@copy %FB_ROOT_PATH%\src\extlib\fbudf\* %FB_OUTPUT_DIR%\examples\udf > nul
+copy %FB_ROOT_PATH%\examples\empbuild\employe2.sql %FB_OUTPUT_DIR%\examples\empbuild > nul
+copy %FB_ROOT_PATH%\examples\include\* %FB_OUTPUT_DIR%\examples\include > nul
+copy %FB_ROOT_PATH%\examples\interfaces\* %FB_OUTPUT_DIR%\examples\interfaces > nul
+copy %FB_ROOT_PATH%\examples\package\* %FB_OUTPUT_DIR%\examples\package > nul
+copy %FB_ROOT_PATH%\examples\stat\* %FB_OUTPUT_DIR%\examples\stat > nul
+copy %FB_ROOT_PATH%\examples\udf\* %FB_OUTPUT_DIR%\examples\udf > nul
+copy %FB_ROOT_PATH%\examples\udr\* %FB_OUTPUT_DIR%\examples\udr > nul
+copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird\plugins\udr\*.dll %FB_OUTPUT_DIR%\plugins\udr >nul
 
 ::@copy %FB_GEN_DIR%\examples\empbuild.c %FB_OUTPUT_DIR%\examples\empbuild\ > nul
 ::@copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\examples\empbuild.exe %FB_GEN_DIR%\examples\empbuild.exe > nul
@@ -124,37 +123,50 @@ if defined FB2_INTLEMP (
 ::@copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\examples\intlbuild.exe %FB_GEN_DIR%\examples\intlbuild.exe > nul
 ::)
 ::)
+
+::End of MOVE
+::-----------
 @goto :EOF
 
+:BUILD_EMPLOYEE
 ::===========
 :: only to test if it works
-:BUILD_EMPLOYEE
+
 @echo.
 @echo Building employee.fdb
-:: Here we must use cd because isql does not have an option to set a base directory
-:: and empbuild.exe uses isql
-@set FB_SAVE_PATH=%PATH%
-@set PATH=%FB_BIN_DIR%;%PATH%
+
+:: Do no mess with global variables
+setlocal
+
 :: This allows us to use the new engine in embedded mode to build
 :: the employee database.
 @set FIREBIRD=%FB_BIN_DIR%
+@set PATH=%FB_BIN_DIR%;%PATH%
 
-@cd "%FB_LONG_ROOT_PATH%\gen\examples"
-@del %FB_GEN_DIR%\examples\employee.fdb 2>nul
-@%FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\empbuild\empbuild.exe %FB_GEN_DB_DIR%/examples/employee.fdb
-if errorlevel 44 (call :ERROR empbuild.exe failed - see empbuild_%FB_TARGET_PLATFORM%.log for details & goto :EOF)
+:: Here we must use cd because isql does not have an option to set a base directory
+:: and empbuild.exe uses isql
+:: BEWARE: It will run without error if you have FB client from previous version
+::         installed in System32 and server run but created database will have
+::         wrong ODS.
+@pushd "%FB_GEN_DIR%\examples"
+if exist employee.fdb del employee.fdb
+
+%FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\empbuild\empbuild.exe %FB_GEN_DB_DIR%/examples/employee.fdb
+if errorlevel 44 (call :ERROR empbuild.exe failed - see empbuild_%FB_TARGET_PLATFORM%.log for details )
 
 @if defined FB2_INTLEMP (
 @echo Building intlemp.fdb
   @del %FB_GEN_DIR%\examples\intlemp.fdb 2>nul
   @del isql.tmp 2>nul
-  @echo s;intlemp.fdb;%SERVER_NAME%:%FB_GEN_DIR%\examples\intlemp.fdb;g > isql.tmp
+  @echo s;intlemp.fdb;%FB_GEN_DIR%\examples\intlemp.fdb;g > isql.tmp
   @%FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\intlbuild\intlbuild.exe %FB_GEN_DB_DIR%/examples/intlemp.fdb
 )
-@set FIREBIRD=
-@set PATH=%FB_SAVE_PATH%
-@cd "%FB_LONG_ROOT_PATH%\builds\win32"
 
+@popd
+endlocal
+
+::End of BUILD_EMPLOYEE
+::---------------------
 @goto :EOF
 
 ::==============
@@ -182,8 +194,8 @@ if defined FB2_INTLEMP (
 @echo   Error  - %*
 @echo.
 set ERRLEV=1
-cancel_script > nul 2>&1
+
+exit /b 1
+
 ::End of ERROR
 ::------------
-@goto :EOF
-

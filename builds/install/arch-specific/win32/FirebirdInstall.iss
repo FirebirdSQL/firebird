@@ -49,29 +49,45 @@
 #define FirebirdURL MyAppURL
 #define UninstallBinary "{app}\firebird.exe"
 
+#define Root GetEnv("FB_ROOT_PATH")
+#if Root == ""
+;We are not run from batch file, let's set some sane defaults
+#define Root = "..\..\..\.."
+;Assume iss debug as well
+#define iss_debug
+#else
+
+#endif
+
+#if GetEnv("FB2_ISS_DEBUG") == "1"
+#define iss_debug
+#endif
+
+#if GetEnv("FBBUILD_SHIP_PDB") == "ship_pdb"
+#define ship_pdb
+#endif
+
+;Get version information from build_no.h
+#include Root + "\gen\jrd\build_no.h"
+
 ;Hard code some defaults to aid debugging and running script standalone.
 ;In practice, these values are set in the environment and we use the env vars.
-#define MajorVer "4"
-#define MinorVer "0"
-#define PointRelease "0"
-#define BuildNumber "0"
+#define PackageNumber GetEnv("FBBUILD_PACKAGE_NUMBER")
+#if PackageNumber == ""
 #define PackageNumber "0"
-#define FilenameSuffix ""
-
+#endif
+#define FilenameSuffix GetEnv("FBBUILD_FILENAME_SUFFIX")
+#if FilenameSuffix != "" && pos('_',FilenameSuffix) == 0
+#define FilenameSuffix "_" + FilenameSuffix
+#endif
 
 ;-------Start of Innosetup script debug flags section
 
-; if iss_release is undefined then iss_debug is set
+; if iss_debug is undefined then iss_release is set
 ; Setting iss_release implies that the defines for files,
 ; examples and compression are set. If debug is set then this
 ; section controls the settings of files, examples
 ; and compression.
-
-; A dynamically generated sed script sets the appropriate define
-; See BuildExecutableInstall.bat for more details.
-
-
-;#define iss_debug
 
 #ifndef iss_debug
 #define iss_release
@@ -80,10 +96,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 #ifdef iss_release
 #define files
+#if GetEnv("FB2_EXAMPLES") != "0"
 #define examples
+#endif
 #define compression
-#else
-#define iss_debug
+#define i18n
 #endif
 ;--------------------
 
@@ -107,71 +124,7 @@
 
 ;-------end of Innosetup script debug flags section
 
-
 ;-------Start of Innosetup script
-
-
-;---- These three defines need a bit of tidying up in the near future,
-;     but for now they must stay, as the BuildExecutableInstall.bat
-;     uses them.
-#define release
-#define no_pdb
-#define i18n
-
-
-;------If necessary we can turn off i18n by uncommenting this undefine
-;------In general this is a good idea for alpha and beta releases.
-#undef  i18n
-
-;----- If we are debugging the script (and not executed from command prompt)
-;----- there is no guarantee that the environment variable exists. However an
-;----- expression such as #define FB_MAJOR_VER GetEnv("FB_MAJOR_VER") will
-;----- 'define' the macro anyway so we need to test for a valid env var before
-;----- we define our macro.
-#if Len(GetEnv("FB_MAJOR_VER")) > 0
-#define FB_MAJOR_VER GetEnv("FB_MAJOR_VER")
-#endif
-#ifdef FB_MAJOR_VER
-#define MajorVer FB_MAJOR_VER
-#endif
-
-#if Len(GetEnv("FB_MINOR_VER")) > 0
-#define FB_MINOR_VER GetEnv("FB_MINOR_VER")
-#endif
-#ifdef FB_MINOR_VER
-#define MinorVer FB_MINOR_VER
-#endif
-
-#if Len(GetEnv("FB_REV_NO")) > 0
-#define FB_REV_NO GetEnv("FB_REV_NO")
-#endif
-#ifdef FB_REV_NO
-#define PointRelease FB_REV_NO
-#endif
-
-#if Len(GetEnv("FB_BUILD_NO")) > 0
-#define FB_BUILD_NO GetEnv("FB_BUILD_NO")
-#endif
-#ifdef FB_BUILD_NO
-#define BuildNumber FB_BUILD_NO
-#endif
-
-#if Len(GetEnv("FBBUILD_PACKAGE_NUMBER")) > 0
-#define FBBUILD_PACKAGE_NUMBER GetEnv("FBBUILD_PACKAGE_NUMBER")
-#endif
-#ifdef FBBUILD_PACKAGE_NUMBER
-#define PackageNumber FBBUILD_PACKAGE_NUMBER
-#endif
-
-#if Len(GetEnv("FBBUILD_FILENAME_SUFFIX")) > 0
-#define FBBUILD_FILENAME_SUFFIX GetEnv("FBBUILD_FILENAME_SUFFIX")
-#endif
-#ifdef FBBUILD_FILENAME_SUFFIX
-#define FilenameSuffix FBBUILD_FILENAME_SUFFIX
-#if pos('_',FilenameSuffix) == 0
-#define FilenameSuffix "_" + FilenameSuffix
-#endif
-#endif
 
 #if Len(GetEnv("MSVC_VERSION")) > 0
 #define msvc_version GetEnv("MSVC_VERSION")
@@ -212,10 +165,10 @@
 #define msvcr_filename = "vcruntime"
 #endif
 
-#if BuildNumber == "0"
-#define MyAppVerString MajorVer + "." + MinorVer + "." + PointRelease
+#if FB_BUILD_NO == "0"
+#define MyAppVerString FB_MAJOR_VER + "." + FB_MINOR_VER + "." + FB_REV_NO
 #else
-#define MyAppVerString MajorVer + "." + MinorVer + "." + PointRelease + "." + BuildNumber
+#define MyAppVerString FB_MAJOR_VER + "." + FB_MINOR_VER + "." + FB_REV_NO + "." + FB_BUILD_NO
 #endif
 #define MyAppVerName MyAppName + " " + MyAppVerString
 
@@ -224,11 +177,16 @@
 #define PlatformTarget GetEnv("FB_TARGET_PLATFORM")
 #endif
 #if PlatformTarget == ""
+;Assume native platform
+#if IsWin64
+#define PlatformTarget "x64"
+#else
 #define PlatformTarget "win32"
 #endif
+#endif
 
+#if FB_BUILD_TYPE == "T"
 ;If we are still under development we can ignore some missing files.
-#if GetEnv("FBBUILD_PROD_STATUS") == "DEV"
 #define SkipFileIfDevStatus " skipifsourcedoesntexist "
 #else
 #define SkipFileIfDevStatus " "
@@ -240,21 +198,12 @@
 #define WOW64Dir="output_win32"
 #endif
 
-;BaseVer should be used for all MajorVer.MinorVer installs.
-;This allows us to upgrade silently from MajorVer.MinorVer.m to MajorVer.MinorVer.n
-#define BaseVer MajorVer + "_" + MinorVer
-#define AppVer MajorVer + "_" + MinorVer
-#define GroupnameVer MajorVer + "." + MinorVer
-
-;These variables are set in BuildExecutableInstall
-#define FB15_cur_ver GetEnv("FBBUILD_FB15_CUR_VER")
-#define FB20_cur_ver GetEnv("FBBUILD_FB20_CUR_VER")
-#define FB21_cur_ver GetEnv("FBBUILD_FB21_CUR_VER")
-#define FB25_cur_ver GetEnv("FBBUILD_FB25_CUR_VER")
-#define FB30_cur_ver GetEnv("FBBUILD_FB30_CUR_VER")
-#define FB40_cur_ver GetEnv("FBBUILD_FB40_CUR_VER")
-#define FB_cur_ver FB40_cur_ver
-#define FB_last_ver FB30_cur_ver
+;BaseVer should be used for all FB_MAJOR_VER.FB_MINOR_VER installs.
+;This allows us to upgrade silently from FB_MAJOR_VER.FB_MINOR_VER.m to FB_MAJOR_VER.FB_MINOR_VER.n
+#define BaseVer FB_MAJOR_VER + "_" + FB_MINOR_VER
+#define AppVer FB_MAJOR_VER + "_" + FB_MINOR_VER
+#define GroupnameVer FB_MAJOR_VER + "." + FB_MINOR_VER
+#define FB_cur_ver FB_MAJOR_VER + "." + FB_MINOR_VER + "." + FB_REV_NO
 
 ; We can save space by shipping a pdb package that just includes
 ; the pdb files. It would then upgrade an existing installation,
@@ -276,7 +225,7 @@
 #else
 #define pdb_str=""
 #endif
-#ifdef debug
+#if GetEnv("FBBUILD_BUILDTYPE") == "debug"
 #define debug_str="_debug"
 #else
 #define debug_str=""
@@ -300,7 +249,7 @@ AppUpdatesURL={#MyAppURL}
 AppVersion={#MyAppVerString}
 VersionInfoVersion={#MyAppVerString}
 
-SourceDir=..\..\..\..\
+SourceDir={#Root}
 OutputBaseFilename={#MyAppName}-{#MyAppVerString}_{#PackageNumber}_{#PlatformTarget}{#debug_str}{#pdb_str}{#FilenameSuffix}
 ;OutputManifestFile={#MyAppName}-{#MyAppVerString}_{#PackageNumber}_{#PlatformTarget}{#debug_str}{#pdb_str}{#FilenameSuffix}_Setup-Manifest.txt
 OutputDir=builds\install_images
@@ -342,7 +291,7 @@ SetupLogging=yes
 #endif
 
 [Languages]
-Name: en; MessagesFile: compiler:Default.isl; InfoBeforeFile: {#GenDir}\installation_readme.txt; InfoAfterFile: {#GenDir}\readme.txt;
+Name: en; MessagesFile: compiler:Default.isl; InfoBeforeFile: {#GenDir}\installation_readme.txt; InfoAfterFile: {#GenDir}\Readme.txt;
 #ifdef i18n
 Name: ba; MessagesFile: compiler:Languages\Bosnian.isl; InfoBeforeFile: {#GenDir}\ba\Instalacija_ProcitajMe.txt; InfoAfterFile: {#GenDir}\ba\ProcitajMe.txt;
 Name: cz; MessagesFile: compiler:Languages\Czech.isl; InfoBeforeFile: {#GenDir}\cz\instalace_ctime.txt; InfoAfterFile: {#GenDir}\cz\ctime.txt;
@@ -387,21 +336,6 @@ Name: ru; MessagesFile: compiler:Languages\Russian.isl; InfoBeforeFile: {#GenDir
 ;#include "pt\custom_messages_pt.inc"
 #include "ru\custom_messages_ru.inc"
 ;#include "si\custom_messages_si.inc"
-#endif
-
-#ifdef iss_debug
-; *** Note - this comment section needs revision or deletion.
-; It is only applicable to the ansi installer, which is no longer
-; supported for Firebird 3
-; By default, the languages available at runtime depend on the user's
-; code page. A user with the Western European code page set will not
-; even see that we support installation with the czech language
-; for example.
-; It can be useful when debugging to force the display of all available
-; languages by setting LanguageCodePage to 0. Of course, if the langauge
-; is not supported by the user's current code page it will be unusable.
-[LangOptions]
-LanguageCodePage=0
 #endif
 
 [Types]
@@ -478,7 +412,7 @@ Name: {group}\Firebird Server; Filename: {app}\firebird.exe; Parameters: {code:S
 Name: {group}\Firebird Guardian; Filename: {app}\fbguard.exe; Parameters: {code:StartAppParams}; Flags: runminimized; MinVersion: 4.0,4.0;  Check: InstallGuardianIcon; IconIndex: 1; Components: ServerComponent; Comment: Run Firebird Server (with guardian);
 Name: {group}\Firebird ISQL Tool; Filename: {app}\isql.exe; Parameters: -z; WorkingDir: {app}; MinVersion: 4.0,4.0;  Comment: {cm:RunISQL}
 Name: {group}\Firebird {#FB_cur_ver} Release Notes; Filename: {app}\doc\Firebird_v{#FB_cur_ver}.ReleaseNotes.pdf; MinVersion: 4.0,4.0; Comment: {#MyAppName} {cm:ReleaseNotes}
-;Name: {group}\Firebird {#GroupnameVer} Quick Start Guide; Filename: {app}\doc\Firebird-{#MajorVer}-QuickStart.pdf; MinVersion: 4.0,4.0; Comment: {#MyAppName} {#FB_cur_ver}
+;Name: {group}\Firebird {#GroupnameVer} Quick Start Guide; Filename: {app}\doc\Firebird-{#FB_MAJOR_VER}-QuickStart.pdf; MinVersion: 4.0,4.0; Comment: {#MyAppName} {#FB_cur_ver}
 Name: "{group}\After Installation"; Filename: "{app}\doc\After_Installation.url"; Comment: "New User? Here's a quick guide to what you should do next."
 Name: "{group}\Firebird Web-site"; Filename: "{app}\doc\firebirdsql.org.url"
 ;Always install the original english version
@@ -493,7 +427,7 @@ Name: {group}\{cm:Uninstall,{#FB_cur_ver}}; Filename: {uninstallexe}; Comment: U
 #ifdef files
 Source: {#LicensesDir}\IPLicense.txt; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion;
 Source: {#LicensesDir}\IDPLicense.txt; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
-Source: {#ScriptsDir}\After_Installation.url; DestDir: {app}\doc; Components: ServerComponent DevAdminComponent; Flags: sharedfile ignoreversion
+Source: {#file "After_Installation.url"}; DestDir: {app}\doc; DestName: "After_Installation.url"; Components: ServerComponent DevAdminComponent; Flags: sharedfile ignoreversion
 Source: {#ScriptsDir}\firebirdsql.org.url; DestDir: {app}\doc; Components: ServerComponent DevAdminComponent; Flags: sharedfile ignoreversion
 ;Always install the original english version
 Source: {#GenDir}\readme.txt; DestDir: {app}; Components: DevAdminComponent; Flags: ignoreversion;
@@ -543,8 +477,8 @@ Source: {#FilesDir}\fbsvcmgr.exe; DestDir: {app}; Components: DevAdminComponent;
 Source: {#FilesDir}\fbtracemgr.exe; DestDir: {app}; Components: DevAdminComponent; Flags: ignoreversion
 Source: {#FilesDir}\fbclient.dll; DestDir: {app}; Components: ClientComponent; Flags: overwritereadonly sharedfile promptifolder
 #if PlatformTarget == "x64"
-Source: {#WOW64Dir}\fbclient.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: overwritereadonly sharedfile promptifolder
-Source: {#WOW64Dir}\instclient.exe; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile ignoreversion
+Source: {#WOW64Dir}\fbclient.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: overwritereadonly sharedfile promptifolder {#SkipFileIfDevStatus}
+Source: {#WOW64Dir}\instclient.exe; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile ignoreversion {#SkipFileIfDevStatus}
 #endif
 Source: {#FilesDir}\icuuc??.dll; DestDir: {app}; Components: ServerComponent; Flags: sharedfile ignoreversion
 Source: {#FilesDir}\icuin??.dll; DestDir: {app}; Components: ServerComponent; Flags: sharedfile ignoreversion
@@ -563,8 +497,8 @@ Source: {#FilesDir}\{#msvcr_filename}{#msvc_runtime_major_version}{#msvc_runtime
 Source: {#FilesDir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile;
 #if PlatformTarget == "x64"
 ;If we are installing on x64 we need some 32-bit libraries for compatibility with 32-bit applications
-Source: {#WOW64Dir}\{#msvcr_filename}{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile;
-Source: {#WOW64Dir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile;
+Source: {#WOW64Dir}\{#msvcr_filename}{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile {#SkipFileIfDevStatus};
+Source: {#WOW64Dir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile {#SkipFileIfDevStatus};
 #endif
 #endif  /* #if Int(msvc_runtime_major_version,14) >= 10 */
 
@@ -572,10 +506,10 @@ Source: {#WOW64Dir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_versi
 #if PlatformTarget == "x64"
 ;MinVersion 0,5.0 means no version of Win9x and at least Win2k if NT O/S
 ;In addition, O/S must have Windows Installer 3.0.
-Source: {#FilesDir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.msi; DestDir: {tmp};  Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
-Source: {#WOW64Dir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
+Source: {#FilesDir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.msi; DestDir: {tmp};  Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent; Flags: {#SkipFileIfDevStatus}
+Source: {#WOW64Dir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent; Flags: {#SkipFileIfDevStatus}
 #else
-Source: {#FilesDir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
+Source: {#FilesDir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent; Flags: {#SkipFileIfDevStatus}
 #endif
 #endif
 
@@ -592,7 +526,7 @@ Source: {#FilesDir}\intl\fbintl.dll; DestDir: {app}\intl; Components: ServerComp
 Source: {#FilesDir}\intl\fbintl.conf; DestDir: {app}\intl; Components: ServerComponent; Flags: onlyifdoesntexist
 Source: {#FilesDir}\lib\*.*; DestDir: {app}\lib; Components: DevAdminComponent; Flags: ignoreversion;
 #if PlatformTarget == "x64"
-Source: {#WOW64Dir}\lib\*.lib; DestDir: {app}\WOW64\lib; Components: DevAdminComponent; Flags: ignoreversion
+Source: {#WOW64Dir}\lib\*.lib; DestDir: {app}\WOW64\lib; Components: DevAdminComponent; Flags: ignoreversion {#SkipFileIfDevStatus}
 #endif
 
 ;deprecated in FB4.0
@@ -832,7 +766,7 @@ begin
       InstallRootDir := Default;                                   // but the user has changed the default
 
     if (( InstallRootDir = '') and
-        ( FirebirdVer[0] = {#MajorVer} ) and ( FirebirdVer[1] = {#MinorVer} ) ) then   // Firebird 2.n is installed
+        ( FirebirdVer[0] = {#FB_MAJOR_VER} ) and ( FirebirdVer[1] = {#FB_MINOR_VER} ) ) then   // Firebird 2.n is installed
       InstallRootDir := FirebirdRootDir;                            // but the user has changed the default
 
     // if we haven't found anything then try the FIREBIRD env var

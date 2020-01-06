@@ -9,7 +9,7 @@ documentatation i18n should be available separately. I18n is a
 good thing, but bloating the installer with large amounts of translated
 documentation is not desirable. 
 
-The current version of InnoSetup used by Firebird $MAJOR.$MINOR - 5.5.8 - provides 
+The current version of InnoSetup used by Firebird - 5.5.8 - provides 
 generic support for the following languages:
 
 	BrazilianPortuguese, Catalan, Corsican, Czech, Danish, Dutch, Finnish, French,

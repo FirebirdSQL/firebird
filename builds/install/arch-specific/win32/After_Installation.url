@@ -1,2 +1,2 @@
 [InternetShortcut]
-URL=http://www.firebirdsql.org/afterinstall/$MAJOR$MINOR$RELEASE
+URL=http://www.firebirdsql.org/afterinstall/{#FB_MAJOR_VER}{#FB_MINOR_VER}{#FB_REV_NO}
