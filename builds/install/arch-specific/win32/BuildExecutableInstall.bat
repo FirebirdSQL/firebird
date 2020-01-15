@@ -406,7 +406,7 @@ endlocal
 :: Generate sample databases file
 ::===============================
 @echo   Creating sample databases.conf
-copy %FB_ROOT_PATH%\builds\install\misc\databases.conf.in %FB_OUTPUT_DIR%\databases.conf > nul
+copy %FB_ROOT_PATH%\builds\install\misc\databases.conf %FB_OUTPUT_DIR%\databases.conf > nul
 
 ::End of DB_CONF
 ::-----------------

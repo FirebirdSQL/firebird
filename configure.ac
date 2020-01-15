@@ -1251,8 +1251,8 @@ dnl common files for all posix hosts
 dnl TODO: fix "arch-specific/linux/" paths for common posix scripts with SVN
 for fb_tgt in $FB_TARGETS; do
 AC_CONFIG_FILES([
-gen/$fb_tgt/firebird/firebird.conf:builds/install/misc/firebird.conf.in
-gen/$fb_tgt/firebird/databases.conf:builds/install/misc/databases.conf.in
+gen/$fb_tgt/firebird/firebird.conf:builds/install/misc/firebird.conf
+gen/$fb_tgt/firebird/databases.conf:builds/install/misc/databases.conf
 gen/$fb_tgt/firebird/fbtrace.conf:src/utilities/ntrace/fbtrace.conf
 gen/$fb_tgt/firebird/intl/fbintl.conf:builds/install/misc/fbintl.conf
 gen/$fb_tgt/firebird/plugins.conf:builds/install/misc/plugins.conf

@@ -75,7 +75,7 @@ if "%ERRLEV%"=="1" goto :END
 call :isql
 if "%ERRLEV%"=="1" goto :END
 
-@copy %FB_ROOT_PATH%\builds\install\misc\firebird.conf.in %FB_BIN_DIR%\firebird.conf
+@copy %FB_ROOT_PATH%\builds\install\misc\firebird.conf %FB_BIN_DIR%\firebird.conf
 
 :: Copy ICU and zlib both to Debug and Release configurations
 

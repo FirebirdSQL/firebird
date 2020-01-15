@@ -62,7 +62,7 @@ const int TEMP_STR_LENGTH = 128;
 // Metadata constants
 
 // When changing these constants, change MaxIdentifierByteLength and MaxIdentifierCharLength in
-// firebird.conf.in too.
+// firebird.conf too.
 const unsigned METADATA_IDENTIFIER_CHAR_LEN	= 63;
 const unsigned METADATA_BYTES_PER_CHAR		= 4;
 

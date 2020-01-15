@@ -18,7 +18,7 @@ d none @prefix@ 0751 firebird firebird
 
 v CONFIG.prsv @prefix@/security2.fdb=$SRCDIR/security2.fdb  0660 firebird firebird
 v CONFIG.prsv @prefix@/firebird.conf=$SRCDIR/misc/firebird.conf  0444 firebird firebird
-v CONFIG.prsv @prefix@/databases.conf=$SRCDIR/../../builds/install/misc/databases.conf.in  0444 firebird firebird
+v CONFIG.prsv @prefix@/databases.conf=$SRCDIR/../../builds/install/misc/databases.conf  0444 firebird firebird
 v CONFIG.prsv @prefix@/intl/fbintl.conf=$SRCDIR/misc/fbintl.conf 0644 firebird firebird
 f none @prefix@/CHANGELOG.md=$SRCDIR/../../CHANGELOG.md 0644 firebird firebird
 f none @prefix@/README.md=$SRCDIR/../../README.md 0644 firebird firebird
