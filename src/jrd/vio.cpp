@@ -873,9 +873,13 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				{
 					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
 
+					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+					string trans_num_str;
+					trans_num_str.printf("%" UQUADFORMAT, rpb->rpb_transaction_nr);
+
 					ERR_post(Arg::Gds(isc_deadlock) <<
 							 Arg::Gds(isc_read_conflict) <<
-							 Arg::Gds(isc_concurrent_transaction) << Arg::Num(rpb->rpb_transaction_nr));
+							 Arg::Gds(isc_concurrent_transaction) << Arg::Str(trans_num_str));
 				}
 
 				// refetch the record and try again.  The active transaction
@@ -998,7 +1002,11 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 			if (!(transaction->tra_flags & TRA_ignore_limbo))
 			{
 				CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
-				ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Num(rpb->rpb_transaction_nr));
+
+				// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+				string trans_num_str;
+				trans_num_str.printf("%" UQUADFORMAT, rpb->rpb_transaction_nr);
+				ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Str(trans_num_str));
 			}
 
 		case tra_active:
@@ -1853,9 +1861,13 @@ void VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		PageStack stack;
 		if (prepare_update(tdbb, transaction, tid_fetch, rpb, &temp, 0, stack, false))
 		{
+			// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+			string trans_num_str;
+			trans_num_str.printf("%" UQUADFORMAT, rpb->rpb_transaction_nr);
+
 			ERR_post(Arg::Gds(isc_deadlock) <<
 					 Arg::Gds(isc_update_conflict) <<
-					 Arg::Gds(isc_concurrent_transaction) << Arg::Num(rpb->rpb_transaction_nr));
+					 Arg::Gds(isc_concurrent_transaction) << Arg::Str(trans_num_str));
 		}
 
 		// Old record was restored and re-fetched for write.  Now replace it.
@@ -2603,7 +2615,12 @@ bool VIO_get_current(thread_db* tdbb,
 
 		case tra_limbo:
 			if (!(transaction->tra_flags & TRA_ignore_limbo))
-				ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Num(rpb->rpb_transaction_nr));
+			{
+				// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+				string trans_num_str;
+				trans_num_str.printf("%" UQUADFORMAT, rpb->rpb_transaction_nr);
+				ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Str(trans_num_str));
+			}
 			// fall thru
 
 		case tra_active:
@@ -3142,9 +3159,13 @@ void VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	if (prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb, &temp, new_rpb,
 					   stack, false))
 	{
+		// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+		string trans_num_str;
+		trans_num_str.printf("%" UQUADFORMAT, org_rpb->rpb_transaction_nr);
+
 		ERR_post(Arg::Gds(isc_deadlock) <<
 				 Arg::Gds(isc_update_conflict) <<
-				 Arg::Gds(isc_concurrent_transaction) << Arg::Num(org_rpb->rpb_transaction_nr));
+				 Arg::Gds(isc_concurrent_transaction) << Arg::Str(trans_num_str));
 	}
 
 	IDX_modify_flag_uk_modified(tdbb, org_rpb, new_rpb, transaction);
@@ -3379,9 +3400,13 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 	{
 		tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, rpb->rpb_relation->rel_id);
 
+		// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+		string trans_num_str;
+		trans_num_str.printf("%" UQUADFORMAT, rpb->rpb_transaction_nr);
+
 		ERR_post(Arg::Gds(isc_deadlock) <<
 				 Arg::Gds(isc_update_conflict) <<
-				 Arg::Gds(isc_concurrent_transaction) << Arg::Num(rpb->rpb_transaction_nr));
+				 Arg::Gds(isc_concurrent_transaction) << Arg::Str(trans_num_str));
 	}
 
 	return true;
@@ -3996,12 +4021,19 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 			org_rpb->rpb_runtime_flags |= RPB_refetch;
 			return false;
 		case PREPARE_LOCKERR:
-			// We got some kind of locking error (deadlock, timeout or lock_conflict)
-			// Error details should be stuffed into status vector at this point
-			// hvlad: we have no details as TRA_wait has already cleared the status vector
-			ERR_post(Arg::Gds(isc_deadlock) <<
-					 Arg::Gds(isc_update_conflict) <<
-					 Arg::Gds(isc_concurrent_transaction) << Arg::Num(org_rpb->rpb_transaction_nr));
+			{
+				// We got some kind of locking error (deadlock, timeout or lock_conflict)
+				// Error details should be stuffed into status vector at this point
+				// hvlad: we have no details as TRA_wait has already cleared the status vector
+
+				// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+				string trans_num_str;
+				trans_num_str.printf("%" UQUADFORMAT, org_rpb->rpb_transaction_nr);
+
+				ERR_post(Arg::Gds(isc_deadlock) <<
+						 Arg::Gds(isc_update_conflict) <<
+						 Arg::Gds(isc_concurrent_transaction) << Arg::Str(trans_num_str));
+			}
 	}
 
 	// Old record was restored and re-fetched for write.  Now replace it.
@@ -5695,13 +5727,22 @@ static int prepare_update(	thread_db*		tdbb,
 				{
 					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
 
+					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+					string trans_num_str;
+					trans_num_str.printf("%" UQUADFORMAT, update_conflict_trans);
+
 					ERR_post(Arg::Gds(isc_update_conflict) <<
-							 Arg::Gds(isc_concurrent_transaction) << Arg::Num(update_conflict_trans));
+							 Arg::Gds(isc_concurrent_transaction) << Arg::Str(trans_num_str));
 				}
 
 			case tra_limbo:
 				if (!(transaction->tra_flags & TRA_ignore_limbo))
-					ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Num(rpb->rpb_transaction_nr));
+				{
+					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+					string trans_num_str;
+					trans_num_str.printf("%" UQUADFORMAT, rpb->rpb_transaction_nr);
+					ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Str(trans_num_str));
+				}
 				// fall thru
 
 			case tra_active:

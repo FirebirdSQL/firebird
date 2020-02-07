@@ -12427,9 +12427,14 @@ void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 			// msg 297: Concurrent ALTER DATABASE is not supported
 			Arg::PrivateDyn status(297);
+			string trans_num_str;
 
 			if (conflict_trans)
-				status << Arg::Gds(isc_concurrent_transaction) << Arg::Num(conflict_trans);
+			{
+				// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+				trans_num_str.printf("%" UQUADFORMAT, conflict_trans);
+				status << Arg::Gds(isc_concurrent_transaction) << Arg::Str(trans_num_str);
+			}
 
 			status_exception::raise(status);
 		}
