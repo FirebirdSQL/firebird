@@ -888,7 +888,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 					// Cannot use Arg::Num here because transaction number is 64-bit signed integer
 					string trans_num_str;
-					trans_num_str.printf("%lld", rpb->rpb_transaction_nr);
+					trans_num_str.printf("%" SQUADFORMAT, rpb->rpb_transaction_nr);
 
 					ERR_post(Arg::Gds(isc_deadlock) <<
 							 Arg::Gds(isc_read_conflict) <<
@@ -1019,7 +1019,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 				// Cannot use Arg::Num here because transaction number is 64-bit signed integer
 				string trans_num_str;
-				trans_num_str.printf("%lld", rpb->rpb_transaction_nr);
+				trans_num_str.printf("%" SQUADFORMAT, rpb->rpb_transaction_nr);
 				ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Str(trans_num_str));
 			}
 
@@ -1924,7 +1924,7 @@ void VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		{
 			// Cannot use Arg::Num here because transaction number is 64-bit signed integer
 			string trans_num_str;
-			trans_num_str.printf("%lld", rpb->rpb_transaction_nr);
+			trans_num_str.printf("%" SQUADFORMAT, rpb->rpb_transaction_nr);
 
 			ERR_post(Arg::Gds(isc_deadlock) <<
 					 Arg::Gds(isc_update_conflict) <<
@@ -2388,7 +2388,7 @@ bool VIO_get_current(thread_db* tdbb,
 			{
 				// Cannot use Arg::Num here because transaction number is 64-bit signed integer
 				string trans_num_str;
-				trans_num_str.printf("%lld", rpb->rpb_transaction_nr);
+				trans_num_str.printf("%" SQUADFORMAT, rpb->rpb_transaction_nr);
 				ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Str(trans_num_str));
 			}
 			// fall thru
@@ -2992,7 +2992,7 @@ void VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	{
 		// Cannot use Arg::Num here because transaction number is 64-bit signed integer
 		string trans_num_str;
-		trans_num_str.printf("%lld", org_rpb->rpb_transaction_nr);
+		trans_num_str.printf("%" SQUADFORMAT, org_rpb->rpb_transaction_nr);
 
 		ERR_post(Arg::Gds(isc_deadlock) <<
 				 Arg::Gds(isc_update_conflict) <<
@@ -3220,7 +3220,7 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 
 		// Cannot use Arg::Num here because transaction number is 64-bit signed integer
 		string trans_num_str;
-		trans_num_str.printf("%lld", rpb->rpb_transaction_nr);
+		trans_num_str.printf("%" SQUADFORMAT, rpb->rpb_transaction_nr);
 
 		ERR_post(Arg::Gds(isc_deadlock) <<
 				 Arg::Gds(isc_update_conflict) <<
@@ -4196,7 +4196,7 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 
 				// Cannot use Arg::Num here because transaction number is 64-bit signed integer
 				string trans_num_str;
-				trans_num_str.printf("%lld", org_rpb->rpb_transaction_nr);
+				trans_num_str.printf("%" SQUADFORMAT, org_rpb->rpb_transaction_nr);
 
 				ERR_post(Arg::Gds(isc_deadlock) <<
 						 Arg::Gds(isc_update_conflict) <<
@@ -5890,7 +5890,7 @@ static int prepare_update(	thread_db*		tdbb,
 
 					// Cannot use Arg::Num here because transaction number is 64-bit signed integer
 					string trans_num_str;
-					trans_num_str.printf("%lld", update_conflict_trans);
+					trans_num_str.printf("%" SQUADFORMAT, update_conflict_trans);
 
 					ERR_post(Arg::Gds(isc_deadlock) <<
 							 Arg::Gds(isc_update_conflict) <<
@@ -5903,7 +5903,7 @@ static int prepare_update(	thread_db*		tdbb,
 				{
 					// Cannot use Arg::Num here because transaction number is 64-bit signed integer
 					string trans_num_str;
-					trans_num_str.printf("%lld", rpb->rpb_transaction_nr);
+					trans_num_str.printf("%" SQUADFORMAT, rpb->rpb_transaction_nr);
 					ERR_post(Arg::Gds(isc_trainlim) << Arg::Gds(isc_rec_in_limbo) << Arg::Str(trans_num_str));
 				}
 

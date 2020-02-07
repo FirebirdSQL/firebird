@@ -1137,7 +1137,7 @@ jrd_tra* TRA_reconnect(thread_db* tdbb, const UCHAR* id, USHORT length)
 
 		// Cannot use Arg::Num here because transaction number is 64-bit signed integer
 		string trans_num_str;
-		trans_num_str.printf("%lld", number);
+		trans_num_str.printf("%" SQUADFORMAT, number);
 
 		ERR_post(Arg::Gds(isc_no_recon) <<
 				 Arg::Gds(isc_tra_state) << Arg::Str(trans_num_str) << Arg::Str(text));
