@@ -34,8 +34,9 @@
 #include "../common/StatusArg.h"
 #include "../common/classes/array.h"
 
-#ifdef WIN_NT
 #include <sys/stat.h>
+
+#ifdef WIN_NT
 
 #define mode_t int
 #define DEFAULT_OPEN_MODE (_S_IREAD | _S_IWRITE)
