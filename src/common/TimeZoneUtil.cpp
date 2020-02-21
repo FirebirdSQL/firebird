@@ -648,6 +648,10 @@ bool TimeZoneUtil::decodeTime(const ISC_TIME_TZ& timeTz, bool gmtFallback, SLONG
 
 	try
 	{
+#ifdef DEV_BUILD
+		if (gmtFallback && getenv("MISSING_ICU_EMULATION"))
+			(Arg::Gds(isc_random) << "Emulating missing ICU").raise();
+#endif
 		timeStampTz = cvtTimeTzToTimeStampTz(timeTz, cb);
 	}
 	catch (const Exception&)
@@ -685,6 +689,10 @@ bool TimeZoneUtil::decodeTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, bool gmt
 
 		try
 		{
+#ifdef DEV_BUILD
+			if (gmtFallback && getenv("MISSING_ICU_EMULATION"))
+				(Arg::Gds(isc_random) << "Emulating missing ICU").raise();
+#endif
 			Jrd::UnicodeUtil::ConversionICU& icuLib = Jrd::UnicodeUtil::getConversionICU();
 
 			UCalendar* icuCalendar = icuLib.ucalOpen(
