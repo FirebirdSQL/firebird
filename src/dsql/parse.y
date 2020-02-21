@@ -5327,27 +5327,21 @@ set_bind_to
 			$$ = newNode<dsql_fld>();
 			$$->flags = FLD_extended;
 		}
-	| EXTENDED TIME with_time_zone_opt
+	| EXTENDED TIME WITH TIME ZONE
 		{
 			$$ = newNode<dsql_fld>();
-
 			checkTimeDialect();
 			$$->dtype = dtype_ex_time_tz;
 			$$->length = sizeof(ISC_TIME_TZ_EX);
 			$$->flags |= FLD_has_len;
 		}
-	| EXTENDED TIMESTAMP with_time_zone_opt
+	| EXTENDED TIMESTAMP WITH TIME ZONE
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_ex_timestamp_tz;
 			$$->length = sizeof(ISC_TIMESTAMP_TZ_EX);
 			$$->flags |= FLD_has_len;
 		}
-	;
-
-with_time_zone_opt
-	: // nothing
-	| WITH TIME ZONE
 	;
 
 
