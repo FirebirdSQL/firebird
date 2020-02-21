@@ -4687,6 +4687,7 @@ non_charset_simple_type
 				$$->dtype = dtype_sql_date;
 				$$->length = sizeof(ULONG);
 			}
+			$$->flags |= FLD_has_len;
 		}
 	| TIME without_time_zone_opt
 		{
@@ -4695,6 +4696,7 @@ non_charset_simple_type
 			checkTimeDialect();
 			$$->dtype = dtype_sql_time;
 			$$->length = sizeof(SLONG);
+			$$->flags |= FLD_has_len;
 		}
 	| TIME WITH TIME ZONE
 		{
@@ -4703,18 +4705,21 @@ non_charset_simple_type
 			checkTimeDialect();
 			$$->dtype = dtype_sql_time_tz;
 			$$->length = sizeof(ISC_TIME_TZ);
+			$$->flags |= FLD_has_len;
 		}
 	| TIMESTAMP without_time_zone_opt
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_timestamp;
 			$$->length = sizeof(GDS_TIMESTAMP);
+			$$->flags |= FLD_has_len;
 		}
 	| TIMESTAMP WITH TIME ZONE
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_timestamp_tz;
 			$$->length = sizeof(ISC_TIMESTAMP_TZ);
+			$$->flags |= FLD_has_len;
 		}
 	| BOOLEAN
 		{
@@ -5282,14 +5287,17 @@ set_bind
 %type <legacyField> set_bind_from
 set_bind_from
 	: bind_type
+	| TIME ZONE
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_timestamp_tz;
+			$$->length = 0;
+		}
 	;
 
 %type <legacyField> bind_type
 bind_type
 	: non_array_type
-		{
-			$$ = $1;
-		}
 	| varying_keyword
 		{
 			$$ = newNode<dsql_fld>();
@@ -5314,6 +5322,11 @@ set_bind_to
 			$$ = newNode<dsql_fld>();
 			$$->flags = FLD_native;
 		}
+	| EXTENDED
+		{
+			$$ = newNode<dsql_fld>();
+			$$->flags = FLD_extended;
+		}
 	| EXTENDED TIME with_time_zone_opt
 		{
 			$$ = newNode<dsql_fld>();
@@ -5321,12 +5334,14 @@ set_bind_to
 			checkTimeDialect();
 			$$->dtype = dtype_ex_time_tz;
 			$$->length = sizeof(ISC_TIME_TZ_EX);
+			$$->flags |= FLD_has_len;
 		}
 	| EXTENDED TIMESTAMP with_time_zone_opt
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_ex_timestamp_tz;
 			$$->length = sizeof(ISC_TIMESTAMP_TZ_EX);
+			$$->flags |= FLD_has_len;
 		}
 	;
 

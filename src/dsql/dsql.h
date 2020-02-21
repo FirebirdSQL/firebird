@@ -322,16 +322,17 @@ public:
 // values used in fld_flags
 
 enum fld_flags_vals {
-	FLD_computed	= 1,
-	FLD_national	= 2, // field uses NATIONAL character set
-	FLD_nullable	= 4,
-	FLD_system		= 8,
-	FLD_has_len		= 16,
-	FLD_has_chset	= 32,
-	FLD_has_scale	= 64,
-	FLD_legacy		= 128,
-	FLD_native		= 256,
-	FLD_has_sub		= 512
+	FLD_computed	= 0x1,
+	FLD_national	= 0x2, // field uses NATIONAL character set
+	FLD_nullable	= 0x4,
+	FLD_system		= 0x8,
+	FLD_has_len		= 0x10,
+	FLD_has_chset	= 0x20,
+	FLD_has_scale	= 0x40,
+	FLD_has_sub		= 0x80,
+	FLD_legacy		= 0x100,
+	FLD_native		= 0x200,
+	FLD_extended	= 0x400
 };
 
 //! Stored Procedure block

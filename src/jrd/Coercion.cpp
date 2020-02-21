@@ -37,7 +37,7 @@ using namespace Jrd;
 using namespace Firebird;
 
 static const USHORT FROM_MASK = FLD_has_len | FLD_has_chset | FLD_has_scale | FLD_has_sub;
-static const USHORT TO_MASK = FLD_has_len | FLD_has_chset | FLD_has_scale | FLD_legacy | FLD_native | FLD_has_sub;
+static const USHORT TO_MASK = FLD_has_len | FLD_has_chset | FLD_has_scale | FLD_legacy | FLD_native | FLD_has_sub | FLD_extended;
 
 bool CoercionArray::coerce(dsc* d, unsigned startItem) const
 {
@@ -87,6 +87,14 @@ void CoercionRule::setRule(const TypeClause* from, const TypeClause *to)
 	// No checks for special case
 	if (toMask & (FLD_native | FLD_legacy))
 		return;
+
+	// Extending timezone info
+	if (toMask & FLD_extended)
+	{
+		if (fromDsc.isDateTimeTz())
+			return;
+		raiseError();
+	}
 
 	// Exceptions - enable blob2blob & blob2string casts
 	if ((toDsc.dsc_dtype == dtype_blob && fromDsc.isText()) ||
@@ -154,7 +162,7 @@ bool CoercionRule::match(const dsc* d) const
 		{
 		case dtype_dec64:
 		case dtype_dec128:
-			if (d->dsc_dtype == dtype_dec64 || d->dsc_dtype == dtype_dec128)
+			if (DTYPE_IS_DECFLOAT(d->dsc_dtype))
 				return true;
 			break;
 
@@ -163,6 +171,12 @@ bool CoercionRule::match(const dsc* d) const
 		case dtype_int64:
 		case dtype_int128:
 			if (d->isExact() && (fromMask & FLD_has_sub) && (d->dsc_sub_type != dsc_num_type_none))
+				return true;
+			break;
+
+		case dtype_timestamp_tz:
+		case dtype_sql_time_tz:
+			if (d->isDateTimeTz())
 				return true;
 			break;
 		}
@@ -198,19 +212,19 @@ bool CoercionRule::coerce(dsc* d) const
 		case dtype_dec64:
 		case dtype_dec128:
 			d->dsc_dtype = dtype_double;
-			d->dsc_length = 8;
+			d->dsc_length = sizeof(double);
 			break;
 		case dtype_sql_time_tz:
 			d->dsc_dtype = dtype_sql_time;
-			d->dsc_length = 4;
+			d->dsc_length = sizeof(ISC_TIME);
 			break;
 		case dtype_timestamp_tz:
 			d->dsc_dtype = dtype_timestamp;
-			d->dsc_length = 8;
+			d->dsc_length = sizeof(ISC_TIMESTAMP);
 			break;
 		case dtype_int128:
 			d->dsc_dtype = dtype_int64;
-			d->dsc_length = 8;
+			d->dsc_length = sizeof(SINT64);
 			break;
 		case dtype_boolean:
 			d->dsc_dtype = dtype_text;
@@ -224,7 +238,30 @@ bool CoercionRule::coerce(dsc* d) const
 		return found;
 	}
 
-	// Final pass - order is important
+	// extending time zone
+	if (toMask & FLD_extended)
+	{
+		bool found = true;
+
+		switch(d->dsc_dtype)
+		{
+		case dtype_timestamp_tz:
+			d->dsc_dtype = dtype_ex_timestamp_tz;
+			d->dsc_length = sizeof(ISC_TIMESTAMP_TZ_EX);
+			break;
+		case dtype_sql_time_tz:
+			d->dsc_dtype = dtype_ex_time_tz;
+			d->dsc_length = sizeof(ISC_TIME_TZ_EX);
+			break;
+		default:
+			found = false;
+			break;
+		}
+
+		return found;
+	}
+
+	// final pass - order is important
 
 	// length
 	if (toMask & FLD_has_len)
