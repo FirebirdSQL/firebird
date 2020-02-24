@@ -1,20 +1,41 @@
 # Time Zone support (FB 4.0)
 
-Time zone support consists of `TIME WITH TIME ZONE` and `TIMESTAMP WITH TIME ZONE` data types, expressions and statements to work with time zones and conversion between data types without/with time zones.
+Time zone support consists of `TIME WITH TIME ZONE` and `TIMESTAMP WITH TIME ZONE` data types,
+expressions and statements to work with time zones and conversion between data types without/with time zones.
 
-The first important thing to understand is that `TIME WITHOUT TIME ZONE`, `TIMESTAMP WITHOUT TIME ZONE` and `DATE` data types are defined to use the session time zone when converting from or to a `TIME WITH TIME ZONE` or `TIMESTAMP WITH TIME ZONE`. `TIME` and `TIMESTAMP` are synonymous to theirs respectively `WITHOUT TIME ZONE` data types.
+The first important thing to understand is that `TIME WITHOUT TIME ZONE`, `TIMESTAMP WITHOUT TIME ZONE` and `DATE`
+data types are defined to use the session time zone when converting from or to a `TIME WITH TIME ZONE` or `TIMESTAMP WITH TIME ZONE`.
+`TIME` and `TIMESTAMP` are synonymous to theirs respectively `WITHOUT TIME ZONE` data types.
 
-The session time zone, as the name implies, can be a different one for each database attachment. It can be set with the isc_dpb_session_time_zone DPB, and if not, it starts by default defined to be the `firebird.conf` parameter `DefaultTimeZone` or the same time zone used by the Firebird OS process when the parameter is not defined. A change in `DefaultTimeZone` configuration or the OS time zone does not changes the default of a running Firebird process.
+The session time zone, as the name implies, can be a different one for each database attachment.
+It can be set with the isc_dpb_session_time_zone DPB, and if not, it starts by default defined to be the
+`firebird.conf` parameter `DefaultTimeZone` or the same time zone used by the Firebird OS process when the parameter is not defined.
+A change in `DefaultTimeZone` configuration or the OS time zone does not changes the default of a running Firebird process.
 
 It can then be changed with `SET TIME ZONE` statement to a given time zone or reset to its original value with `SET TIME ZONE LOCAL`.
 
-The original time zone value is initially defined equal to the current time zone in session initialization and cannot be changed manually. But the original time zone is internally changed when a routine (function, procedure or trigger) is called to the value of the current time zone and restored to its previous value at routine exit. That means that a routine that changes the current time zone and later run `SET TIME ZONE LOCAL` will restore the current time zone to its initially received value.
+The original time zone value is initially defined equal to the current time zone in session initialization and cannot
+be changed manually. But the original time zone is internally changed when a routine (function, procedure or trigger)
+is called to the value of the current time zone and restored to its previous value at routine exit. That means that
+a routine that changes the current time zone and later run `SET TIME ZONE LOCAL` will restore the current time zone
+to its initially received value.
 
-A time zone may be a string with a time zone region (for example, `America/Sao_Paulo`) or a hours:minutes displacement (for example, `-03:00`) from GMT.
+A time zone may be a string with a time zone region (for example, `America/Sao_Paulo`) or a hours:minutes displacement
+(for example, `-03:00`) from GMT.
 
-A time/timestamp with time zone is considered equal to another time/timestamp with time zone if their conversion to UTC are equal, for example, `time '10:00 -02' = time '09:00 -03'`, since both are the same as `time '12:00 GMT'`. This is also valid in the context of `UNIQUE` constraints and for sorting purposes.
+A time/timestamp with time zone is considered equal to another time/timestamp with time zone if their conversion to UTC
+are equal, for example, `time '10:00 -02' = time '09:00 -03'`, since both are the same as `time '12:00 GMT'`.
+This is also valid in the context of `UNIQUE` constraints and for sorting purposes.
 
-Some timestamps does not exist (DST starting) or repeats twice (DST ending). For the first case, when DST starts in America/New_York, 2:30 AM on March 12, 2017 does not exist and is interpreted as 2:30 AM UTC-05 (equivalent to 3:30 AM UTC-04). For the second case, when DST ends in America/New_York, 1:30 AM on November 5, 2017 repeats twice and is interpreted as 1:30 AM UTC-04 instead of 1:30 AM UTC-05.
+Some timestamps does not exist (DST starting) or repeats twice (DST ending). For the first case, when DST starts
+in America/New_York, 2:30 AM on March 12, 2017 does not exist and is interpreted as 2:30 AM UTC-05 (equivalent to
+3:30 AM UTC-04). For the second case, when DST ends in America/New_York, 1:30 AM on November 5, 2017 repeats twice and
+is interpreted as 1:30 AM UTC-04 instead of 1:30 AM UTC-05.
+
+`EXTENDED TIME/TIMESTAMP WITH TIME ZONE` are intended for use only when communicating with a cliens,
+they solve a problem of representing correct time on clients missing ICU library. One can't use extended
+datatypes in tables, procedures, etc. The only way to use that datatypes is datatype coercion including
+SET BIND statement (see [README.set_bind](./README.set_bind.md) for further details).
 
 
 ## Data types
@@ -23,18 +44,25 @@ Some timestamps does not exist (DST starting) or repeats twice (DST ending). For
 TIME [ { WITH | WITHOUT } TIME ZONE ]
 
 TIMESTAMP [ { WITH | WITHOUT } TIME ZONE ]
+
+EXTENDED { TIME | TIMESTAMP } WITH TIME ZONE
 ```
 
 ### Storage
 
-TIME/TIMESTAMP WITH TIME ZONE has respectively the same storage of TIME/TIMESTAMP WITHOUT TIME ZONE plus 2 bytes for the time zone identifier or displacement.
+TIME/TIMESTAMP WITH TIME ZONE has respectively the same storage of TIME/TIMESTAMP WITHOUT TIME ZONE
+plus 2 bytes for the time zone identifier or displacement.
 
 The time/timestamp parts are stored in UTC (translated from the informed time zone).
 
-Time zone identifiers (from regions) are put directly in the time_zone field. They start from 65535 (which is the GMT code) and are decreasing as new time zones were/are added.
+Time zone identifiers (from regions) are put directly in the time_zone field.
+They start from 65535 (which is the GMT code) and are decreasing as new time zones were/are added.
 
-Time zone displacements (+/- HH:MM) are encoded with `(sign * (HH * 60 + MM)) + 1439`. For example, a `00:00` displacement is encoded as `(1 * (0 * 60 + 0)) + 1439 = 1439` and `-02:00` as `(-1 * (2 * 60 + 0)) + 1439 = 1319`.
+Time zone displacements (+/- HH:MM) are encoded with `(sign * (HH * 60 + MM)) + 1439`.
+For example, a `00:00` displacement is encoded as `(1 * (0 * 60 + 0)) + 1439 = 1439` and `-02:00` as `(-1 * (2 * 60 + 0)) + 1439 = 1319`.
 
+EXTENDED TIME/TIMESTAMP WITH TIME ZONE have additionally more 2 bytes always containing absolute
+time zone offset in minutes.
 ### API structs
 
 ```
@@ -48,6 +76,20 @@ struct ISC_TIMESTAMP_TZ
 {
     ISC_TIMESTAMP utc_timestamp;
     ISC_USHORT time_zone;
+};
+
+struct ISC_TIME_TZ_EX
+{
+    ISC_TIME utc_time;
+    ISC_USHORT time_zone;
+    ISC_SHORT ext_offset;
+};
+
+struct ISC_TIMESTAMP_TZ_EX
+{
+    ISC_TIMESTAMP utc_timestamp;
+    ISC_USHORT time_zone;
+    ISC_SHORT ext_offset;
 };
 ```
 
@@ -101,9 +143,41 @@ void encodeTimeStampTz(
     uint fractions,
     const string timeZone
 );
+
+void decodeTimeTzEx(
+    Status status,
+    const ISC_TIME_TZ_EX* timeTzEx,
+    uint* hours,
+    uint* minutes,
+    uint* seconds,
+    uint* fractions,
+    uint timeZoneBufferLength,
+    string timeZoneBuffer
+);
+
+void decodeTimeStampTzEx(
+    Status status,
+    const ISC_TIMESTAMP_TZ_EX* timeStampTzEx,
+    uint* year,
+    uint* month,
+    uint* day,
+    uint* hours,
+    uint* minutes,
+    uint* seconds,
+    uint* fractions,
+    uint timeZoneBufferLength,
+    string timeZoneBuffer
+);
+
 ```
 
-When `decodeTimeTz` / `decodeTimeStampTz` is called with non-null `timeZoneBuffer` and ICU could not be loaded in the client, `timeZoneBuffer` returns the string `GMT*` and the others fields receives the timestamp GMT values.
+When `decodeTimeTz` / `decodeTimeStampTz` is called with non-null `timeZoneBuffer` and ICU
+could not be loaded in the client, `timeZoneBuffer` returns the string `GMT*` and the others fields
+receives the timestamp GMT values.
+
+When `decodeTimeTzEx` / `decodeTimeStampTzEx` is called with non-null `timeZoneBuffer` and ICU
+could not be loaded in the client, `timeZoneBuffer` returns the string `+/-HH:MM` and the other
+fields are set using specified `ext_offset`.
 
 ## Time zone string syntax
 

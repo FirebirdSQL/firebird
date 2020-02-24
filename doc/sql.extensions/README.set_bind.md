@@ -11,8 +11,7 @@
 ### Syntax is:
 
 ```sql
-SET BIND OF type-from TO { type-to | LEGACY };
-SET BIND OF type NATIVE;
+SET BIND OF { type-from | TIME ZONE } TO { type-to | LEGACY | EXTENDED | NATIVE };
 ```
 
 ### Description:
@@ -21,9 +20,11 @@ Makes it possible to define rules of describing types of returned to the client 
 `type-from` is replaced with `type-to`, automatic data coercion takes place.
 
 When incomplete type definition is used (i.e. `CHAR` instead `CHAR(n)`) in left part of `SET BIND` coercion
-will take place for all `CHAR` columns, not only default `CHAR(1)`.
+will take place for all `CHAR` columns, not only default `CHAR(1)`. Special incomplete type `TIME ZONE`
+stands for all types (namely TIME & TIMESTAMP) WITH TIME ZONE.
 When incomplete type definiton is used in right side of the statement (TO part) firebird engine will define missing
 details about that type automatically based on source column.
+
 From this statement POV there is no difference between NUMERIC and DECIMAL datatypes. Changing bind of any NUMERIC
 does not affect appropriate underlying integer type. On contrary, changing bind of integer datatype also affects
 appropriate NUMERICs.
@@ -39,6 +40,10 @@ legacy datatypes:
 | NUMERIC(38)              | NUMERIC(18)                 |
 | TIME WITH TIME ZONE      | TIME WITHOUT TIME ZONE      |
 | TIMESTAMP WITH TIME ZONE | TIMESTAMP WITHOUT TIME ZONE |
+
+Using `EXTENDED` in the `TO` part directs firebird engine to use extended form of `FROM` datatype.
+Currently it works only for TIME/TIMESTAMP WITH TIME ZONE - they are coerced to EXTENDED TIME/TIMESTAMP WITH TIME ZONE
+appropriately.
 
 Setting `NATIVE` means `type` will be used as if there were no previous rules for it.
 
@@ -99,4 +104,23 @@ SELECT CAST('123.45' AS DECFLOAT(34)) FROM RDB$DATABASE;	--text
 CAST
 ==========================================
 123.45
+```
+
+In a case of missing ICU on client:
+```sql
+SELECT CURRENT_TIMESTAMP FROM RDB$DATABASE;
+```
+```
+                                        CURRENT_TIMESTAMP
+=========================================================
+2020-02-21 16:26:48.0230 GMT*
+```
+```sql
+SET BIND OF TIME ZONE TO EXTENDED;
+SELECT CURRENT_TIMESTAMP FROM RDB$DATABASE;
+```
+```
+                                        CURRENT_TIMESTAMP
+=========================================================
+2020-02-21 19:26:55.6820 +03:00
 ```
