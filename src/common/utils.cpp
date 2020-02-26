@@ -1151,7 +1151,7 @@ unsigned int copyStatus(ISC_STATUS* const to, const unsigned int space,
 		{
 			break;
 		}
-		i += (from[i] == isc_arg_cstring ? 3 : 2);
+		i += nextArg(from[i]);
 		if (i > space - 1)
 		{
 			break;
@@ -1224,7 +1224,7 @@ void setIStatus(Firebird::CheckStatusWrapper* to, const ISC_STATUS* from) throw(
 				to->setWarnings(w);
 				break;
 			}
-			w += (*w == isc_arg_cstring ? 3 : 2);
+			w += nextArg(*w);
 		}
 		to->setErrors2(w - from, from);
 	}
@@ -1243,7 +1243,7 @@ unsigned int statusLength(const ISC_STATUS* const status) throw()
 		{
 			return l;
 		}
-		l += (status[l] == isc_arg_cstring ? 3 : 2);
+		l += nextArg(status[l]);
 	}
 }
 
@@ -1259,18 +1259,14 @@ bool cmpStatus(unsigned int len, const ISC_STATUS* a, const ISC_STATUS* b) throw
 		if (i == len - 1 && *op1 == isc_arg_end)
 			break;
 
-		i += (*op1 == isc_arg_cstring ? 3 : 2);
+		i += nextArg(*op1);
 		if (i > len)		// arg does not fit
 			return false;
 
 		unsigned l1, l2;
 		const char *s1, *s2;
-		switch (*op1)
+		if (isStr(*op1))
 		{
-		case isc_arg_cstring:
-		case isc_arg_string:
-		case isc_arg_interpreted:
-		case isc_arg_sql_state:
 			if (*op1 == isc_arg_cstring)
 			{
 				l1 = op1[1];
@@ -1290,13 +1286,9 @@ bool cmpStatus(unsigned int len, const ISC_STATUS* a, const ISC_STATUS* b) throw
 				return false;
 			if (memcmp(s1, s2, l1) != 0)
 				return false;
-			break;
-
-		default:
-			if (op1[1] != op2[1])
-				return false;
-			break;
 		}
+		else if (op1[1] != op2[1])
+			return false;
 	}
 
 	return true;
@@ -1314,19 +1306,15 @@ unsigned int subStatus(const ISC_STATUS* in, unsigned int cin,
 			if (*op1 != *op2)
 				goto miss;
 
-			i += (*op1 == isc_arg_cstring ? 3 : 2);
+			i += nextArg(*op1);
 			if (i > csub)		// arg does not fit
 				goto miss;
 
-			unsigned l1, l2;
-			const char *s1, *s2;
 
-			switch (*op1)
+			if (isStr(*op1))
 			{
-			case isc_arg_cstring:
-			case isc_arg_string:
-			case isc_arg_interpreted:
-			case isc_arg_sql_state:
+				unsigned l1, l2;
+				const char *s1, *s2;
 				if (*op1 == isc_arg_cstring)
 				{
 					l1 = op1[1];
@@ -1346,19 +1334,14 @@ unsigned int subStatus(const ISC_STATUS* in, unsigned int cin,
 					goto miss;
 				if (memcmp(s1, s2, l1) != 0)
 					goto miss;
-				break;
-
-			default:
-				if (op1[1] != op2[1])
-					goto miss;
-				break;
 			}
-
+			else if (op1[1] != op2[1])
+				goto miss;
 		}
 
 		return pos;
 
-miss:	pos += (in[pos] == isc_arg_cstring ? 3 : 2);
+miss:	pos += nextArg(in[pos]);
 	}
 
 	return ~0u;
@@ -1596,11 +1579,11 @@ unsigned sqlTypeToDsc(unsigned runOffset, unsigned sqlType, unsigned sqlLength,
 	return runOffset + sizeof(SSHORT);
 }
 
-const ISC_STATUS* nextArg(const ISC_STATUS* v) throw()
+const ISC_STATUS* nextCode(const ISC_STATUS* v) throw()
 {
 	do
 	{
-		v += (v[0] == isc_arg_cstring ? 3 : 2);
+		v += nextArg(v[0]);
 	} while (v[0] != isc_arg_warning && v[0] != isc_arg_gds && v[0] != isc_arg_end);
 
 	return v;
@@ -1608,7 +1591,7 @@ const ISC_STATUS* nextArg(const ISC_STATUS* v) throw()
 
 bool containsErrorCode(const ISC_STATUS* v, ISC_STATUS code)
 {
-	for (; v[0] == isc_arg_gds; v = nextArg(v))
+	for (; v[0] == isc_arg_gds; v = nextCode(v))
 	{
 		if (v[1] == code)
 			return true;

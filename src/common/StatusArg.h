@@ -32,6 +32,7 @@
 #include "fb_exception.h"
 #include "firebird/Interface.h"
 #include "../common/SimpleStatusVector.h"
+#include "../common/classes/fb_string.h"
 
 namespace Firebird {
 
@@ -107,10 +108,17 @@ protected:
 		StaticStatusVector m_status_vector;
 		unsigned int m_warning;
 
+		string m_strings;
+
+		void putStrArg(unsigned startWith);
+		void setStrPointers(const char* oldBase);
+
 		bool appendErrors(const ImplBase* const v) throw();
 		bool appendWarnings(const ImplBase* const v) throw();
 		bool append(const ISC_STATUS* const from, const unsigned int count) throw();
 		void append(const ISC_STATUS* const from) throw();
+
+		ImplStatusVector& operator=(const ImplStatusVector& src);
 
 	public:
 		virtual const ISC_STATUS* value() const throw() { return m_status_vector.begin(); }
@@ -134,7 +142,8 @@ protected:
 
 		ImplStatusVector(ISC_STATUS k, ISC_STATUS c) throw()
 			: ImplBase(k, c),
-			  m_status_vector(*getDefaultMemoryPool())
+			  m_status_vector(*getDefaultMemoryPool()),
+			  m_strings(*getDefaultMemoryPool())
 		{
 			clear();
 		}

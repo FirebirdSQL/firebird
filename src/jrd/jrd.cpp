@@ -1164,7 +1164,7 @@ namespace Jrd
 
 					// strip spam messages
 					const ISC_STATUS* v = status->getErrors();
-					for (; v[0] == isc_arg_gds; v = fb_utils::nextArg(v))
+					for (; v[0] == isc_arg_gds; v = fb_utils::nextCode(v))
 					{
 						if (v[1] != isc_dsql_error && v[1] != isc_sqlerr)
 							break;

@@ -153,7 +153,26 @@ namespace fb_utils
 	unsigned int subStatus(const ISC_STATUS* in, unsigned int cin,
 						   const ISC_STATUS* sub, unsigned int csub) throw();
 	bool cmpStatus(unsigned int len, const ISC_STATUS* a, const ISC_STATUS* b) throw();
-	const ISC_STATUS* nextArg(const ISC_STATUS* v) throw();
+	const ISC_STATUS* nextCode(const ISC_STATUS* v) throw();
+
+	inline unsigned nextArg(const ISC_STATUS v) throw()
+	{
+		return v == isc_arg_cstring ? 3 : 2;
+	}
+
+	inline bool isStr(const ISC_STATUS v) throw()
+	{
+		switch (v)
+		{
+		case isc_arg_cstring:
+		case isc_arg_string:
+		case isc_arg_interpreted:
+		case isc_arg_sql_state:
+			return true;
+		}
+
+		return false;
+	}
 
 	// Check does vector contain particular code or not
 	bool containsErrorCode(const ISC_STATUS* v, ISC_STATUS code);

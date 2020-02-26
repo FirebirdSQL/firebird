@@ -30,7 +30,6 @@
 #include "../common/StatusArg.h"
 #include "../common/utils_proto.h"
 
-#include "../common/classes/fb_string.h"
 #include "../common/classes/MetaName.h"
 #include "../common/classes/alloc.h"
 #include "fb_exception.h"
@@ -60,7 +59,8 @@ Base::Base(ISC_STATUS k, ISC_STATUS c) :
 
 StatusVector::ImplStatusVector::ImplStatusVector(const ISC_STATUS* s) throw()
 	: Base::ImplBase(0, 0),
-	  m_status_vector(*getDefaultMemoryPool())
+	  m_status_vector(*getDefaultMemoryPool()),
+	  m_strings(*getDefaultMemoryPool())
 {
 	fb_assert(s);
 
@@ -73,7 +73,8 @@ StatusVector::ImplStatusVector::ImplStatusVector(const ISC_STATUS* s) throw()
 
 StatusVector::ImplStatusVector::ImplStatusVector(const IStatus* s) throw()
 	: Base::ImplBase(0, 0),
-	  m_status_vector(*getDefaultMemoryPool())
+	  m_status_vector(*getDefaultMemoryPool()),
+	  m_strings(*getDefaultMemoryPool())
 {
 	fb_assert(s);
 
@@ -87,7 +88,8 @@ StatusVector::ImplStatusVector::ImplStatusVector(const IStatus* s) throw()
 
 StatusVector::ImplStatusVector::ImplStatusVector(const Exception& ex) throw()
 	: Base::ImplBase(0, 0),
-	  m_status_vector(*getDefaultMemoryPool())
+	  m_status_vector(*getDefaultMemoryPool()),
+	  m_strings(*getDefaultMemoryPool())
 {
 	clear();
 
@@ -125,6 +127,7 @@ void StatusVector::ImplStatusVector::clear() throw()
 	m_warning = 0;
 	m_status_vector.clear();
 	m_status_vector.push(isc_arg_end);
+	m_strings.erase();
 }
 
 bool StatusVector::ImplStatusVector::compare(const StatusVector& v) const throw()
@@ -142,6 +145,52 @@ void StatusVector::ImplStatusVector::assign(const Exception& ex) throw()
 {
 	clear();
 	ex.stuffException(m_status_vector);
+	putStrArg(0);
+}
+
+void StatusVector::ImplStatusVector::putStrArg(unsigned startWith)
+{
+	for (ISC_STATUS* arg = m_status_vector.begin() + startWith; *arg != isc_arg_end; arg += fb_utils::nextArg(*arg))
+	{
+		if (!fb_utils::isStr(*arg))
+			continue;
+
+		const char** ptr = reinterpret_cast<const char**>(&arg[fb_utils::nextArg(*arg) - 1]);
+		unsigned pos = m_strings.length();
+		const char* oldBase = m_strings.c_str();
+
+		if (*arg == isc_arg_cstring)
+		{
+			m_strings.append(*ptr, arg[1]);
+			m_strings.append(1, '\0');
+		}
+		else
+			 m_strings.append(*ptr, strlen(*ptr) + 1);
+
+		*ptr = &m_strings[pos];
+		setStrPointers(oldBase);
+	}
+}
+
+void StatusVector::ImplStatusVector::setStrPointers(const char* oldBase)
+{
+	const char* const newBase = m_strings.c_str();
+	if (newBase == oldBase)
+		return;
+
+	const char* const newEnd = &newBase[m_strings.length()];
+
+	for (ISC_STATUS* arg = m_status_vector.begin(); *arg != isc_arg_end; arg += fb_utils::nextArg(*arg))
+	{
+		if (!fb_utils::isStr(*arg))
+			continue;
+
+		const char** ptr = reinterpret_cast<const char**>(&arg[fb_utils::nextArg(*arg) - 1]);
+		if (newBase <= *ptr && *ptr < newEnd)
+			break;
+
+		*ptr = &newBase[*ptr - oldBase];
+	}
 }
 
 void StatusVector::ImplStatusVector::append(const StatusVector& v) throw()
@@ -176,6 +225,16 @@ void StatusVector::ImplStatusVector::prepend(const StatusVector& v) throw()
 	*this = newVector;
 }
 
+StatusVector::ImplStatusVector& StatusVector::ImplStatusVector::operator=(const StatusVector::ImplStatusVector& src)
+{
+	m_status_vector = src.m_status_vector;
+	m_warning = src.m_warning;
+	m_strings = src.m_strings;
+	setStrPointers(src.m_strings.c_str());
+
+	return *this;
+}
+
 bool StatusVector::ImplStatusVector::appendErrors(const ImplBase* const v) throw()
 {
 	return append(v->value(), v->firstWarning() ? v->firstWarning() : v->length());
@@ -201,6 +260,7 @@ bool StatusVector::ImplStatusVector::append(const ISC_STATUS* const from, const 
 		fb_utils::copyStatus(&s[lenBefore], count + 1, from, count);
 	if (copied < count)
 		m_status_vector.shrink(lenBefore + copied + 1);
+	putStrArg(lenBefore);
 
 	if (!m_warning)
 	{
@@ -229,6 +289,8 @@ void StatusVector::ImplStatusVector::shiftLeft(const Base& arg) throw()
 	m_status_vector[length()] = arg.getKind();
 	m_status_vector.push(arg.getCode());
 	m_status_vector.push(isc_arg_end);
+
+	putStrArg(length() - 2);
 }
 
 void StatusVector::ImplStatusVector::shiftLeft(const Warning& arg) throw()
