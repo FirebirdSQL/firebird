@@ -178,7 +178,7 @@ void StatusVector::ImplStatusVector::setStrPointers(const char* oldBase)
 	if (newBase == oldBase)
 		return;
 
-	const char* const newEnd = &newBase[m_strings.length()];
+	const char* const newEnd = m_strings.end();
 
 	for (ISC_STATUS* arg = m_status_vector.begin(); *arg != isc_arg_end; arg += fb_utils::nextArg(*arg))
 	{
@@ -186,7 +186,7 @@ void StatusVector::ImplStatusVector::setStrPointers(const char* oldBase)
 			continue;
 
 		const char** ptr = reinterpret_cast<const char**>(&arg[fb_utils::nextArg(*arg) - 1]);
-		if (newBase <= *ptr && *ptr < newEnd)
+		if (*ptr >= newBase && *ptr < newEnd)
 			break;
 
 		*ptr = &newBase[*ptr - oldBase];
