@@ -161,7 +161,7 @@ void StatusVector::ImplStatusVector::putStrArg(unsigned startWith)
 
 		if (*arg == isc_arg_cstring)
 		{
-			m_strings.grow(arg[1] + 1);
+			m_strings.reserve(m_strings.length() + arg[1] + 1);
 			m_strings.append(*ptr, arg[1]);
 			m_strings.append(1, '\0');
 		}
