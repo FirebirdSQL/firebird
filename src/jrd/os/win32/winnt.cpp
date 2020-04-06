@@ -345,7 +345,7 @@ void PIO_flush(thread_db* tdbb, jrd_file* main_file)
 }
 
 
-void PIO_force_write(jrd_file* file, const bool forceWrite, const bool notUseFSCache)
+void PIO_force_write(thread_db* tdbb, jrd_file* file, const bool forceWrite, const bool notUseFSCache)
 {
 /**************************************
  *
@@ -393,6 +393,7 @@ void PIO_force_write(jrd_file* file, const bool forceWrite, const bool notUseFSC
 		}
 		if (notUseFSCache) {
 			file->fil_flags |= FIL_no_fs_cache;
+			tdbb->getDatabase()->dbb_page_alignment = MAX_PAGE_ALIGNMENT;
 		}
 		else {
 			file->fil_flags &= ~FIL_no_fs_cache;

@@ -313,18 +313,24 @@ private:
 	class Buffer
 	{
 	public:
+		Buffer(Firebird::MemoryPool& pool, USHORT page_size, USHORT page_alignment)
+			: alignment(page_alignment),
+			  buf(pool, page_size + page_alignment - 1)
+		{ }
+			
 		operator Ods::pag*()
 		{
-			return reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, PAGE_ALIGNMENT));
+			return reinterpret_cast<Ods::pag*>(FB_ALIGN(buf.begin(), alignment));
 		}
 
 		Ods::pag* operator->()
 		{
-			return reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, PAGE_ALIGNMENT));
+			return reinterpret_cast<Ods::pag*>(FB_ALIGN(buf.begin(), alignment));
 		}
 
 	private:
-		char buf[MAX_PAGE_SIZE + PAGE_ALIGNMENT - 1];
+		USHORT alignment;
+		Firebird::HalfStaticArray<char, MAX_PAGE_SIZE> buf;
 	};
 
 	class DbInfo;

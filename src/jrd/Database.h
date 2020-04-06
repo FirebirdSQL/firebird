@@ -471,6 +471,7 @@ public:
 	unsigned dbb_linger_seconds;
 	time_t dbb_linger_end;
 	Firebird::RefPtr<Firebird::IPluginConfig> dbb_plugin_config;
+	USHORT dbb_page_alignment;
 
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;
@@ -524,7 +525,8 @@ private:
 		dbb_init_fini(FB_NEW_POOL(*getDefaultMemoryPool()) ExistenceRefMutex()),
 		dbb_linger_seconds(0),
 		dbb_linger_end(0),
-		dbb_plugin_config(pConf)
+		dbb_plugin_config(pConf),
+		dbb_page_alignment(PAGE_ALIGNMENT)
 	{
 		dbb_pools.add(p);
 	}

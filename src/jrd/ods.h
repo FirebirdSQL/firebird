@@ -717,6 +717,7 @@ Firebird::string pagtype(UCHAR type);
 
 // alignment for raw page access
 const USHORT PAGE_ALIGNMENT = 1024;
+const USHORT MAX_PAGE_ALIGNMENT = 4096;
 
 // size of raw I/O operation for header page
 const USHORT RAW_HEADER_SIZE = 1024;	// ROUNDUP(HDR_SIZE, PAGE_ALIGNMENT);
