@@ -104,6 +104,28 @@ Config::Config()
 	sourceGuid.alignment = 0;
 }
 
+Config::Config(const Config& other)
+	: dbName(getPool(), other.dbName),
+	  bufferSize(other.bufferSize),
+	  includeFilter(getPool(), other.includeFilter),
+	  excludeFilter(getPool(), other.excludeFilter),
+	  logSegmentSize(other.logSegmentSize),
+	  logSegmentCount(other.logSegmentCount),
+	  logDirectory(getPool(), other.logDirectory),
+	  logFilePrefix(getPool(), other.logFilePrefix),
+	  logGroupFlushDelay(other.logGroupFlushDelay),
+	  logArchiveDirectory(getPool(), other.logArchiveDirectory),
+	  logArchiveCommand(getPool(), other.logArchiveCommand),
+	  logArchiveTimeout(other.logArchiveTimeout),
+	  syncReplicas(getPool(), other.syncReplicas),
+	  logSourceDirectory(getPool(), other.logSourceDirectory),
+	  verboseLogging(other.verboseLogging),
+	  applyIdleTimeout(other.applyIdleTimeout),
+	  applyErrorTimeout(other.applyErrorTimeout)
+{
+	sourceGuid.alignment = 0;
+}
+
 // This routine is used to match the database on the master side.
 // Therefore it checks only the necessary settings.
 
@@ -147,66 +169,69 @@ Config* Config::get(const PathName& lookupName)
 			exactMatch = true;
 		}
 
-		const ConfigFile::Parameters& elements = section.sub->getParameters();
-		for (const auto& el : elements)
+		if (section.sub)
 		{
-			const string key(el.name.c_str());
-			string value(el.value);
+			const ConfigFile::Parameters& elements = section.sub->getParameters();
+			for (const auto& el : elements)
+			{
+				const string key(el.name.c_str());
+				string value(el.value);
 
-			if (value.isEmpty())
-				continue;
+				if (value.isEmpty())
+					continue;
 
-			if (key == "sync_replica")
-			{
-				config->syncReplicas.add(value);
-			}
-			else if (key == "buffer_size")
-			{
-				parseLong(value, config->bufferSize);
-			}
-			else if (key == "include_filter")
-			{
-				ISC_systemToUtf8(value);
-				config->includeFilter = value;
-			}
-			else if (key == "exclude_filter")
-			{
-				ISC_systemToUtf8(value);
-				config->excludeFilter = value;
-			}
-			else if (key == "log_segment_size")
-			{
-				parseLong(value, config->logSegmentSize);
-			}
-			else if (key == "log_segment_count")
-			{
-				parseLong(value, config->logSegmentCount);
-			}
-			else if (key == "log_directory")
-			{
-				config->logDirectory = value.c_str();
-				PathUtils::ensureSeparator(config->logDirectory);
-			}
-			else if (key == "log_file_prefix")
-			{
-				config->logFilePrefix = value.c_str();
-			}
-			else if (key == "log_group_flush_delay")
-			{
-				parseLong(value, config->logGroupFlushDelay);
-			}
-			else if (key == "log_archive_directory")
-			{
-				config->logArchiveDirectory = value.c_str();
-				PathUtils::ensureSeparator(config->logArchiveDirectory);
-			}
-			else if (key == "log_archive_command")
-			{
-				config->logArchiveCommand = value.c_str();
-			}
-			else if (key == "log_archive_timeout")
-			{
-				parseLong(value, config->logArchiveTimeout);
+				if (key == "sync_replica")
+				{
+					config->syncReplicas.add(value);
+				}
+				else if (key == "buffer_size")
+				{
+					parseLong(value, config->bufferSize);
+				}
+				else if (key == "include_filter")
+				{
+					ISC_systemToUtf8(value);
+					config->includeFilter = value;
+				}
+				else if (key == "exclude_filter")
+				{
+					ISC_systemToUtf8(value);
+					config->excludeFilter = value;
+				}
+				else if (key == "log_segment_size")
+				{
+					parseLong(value, config->logSegmentSize);
+				}
+				else if (key == "log_segment_count")
+				{
+					parseLong(value, config->logSegmentCount);
+				}
+				else if (key == "log_directory")
+				{
+					config->logDirectory = value.c_str();
+					PathUtils::ensureSeparator(config->logDirectory);
+				}
+				else if (key == "log_file_prefix")
+				{
+					config->logFilePrefix = value.c_str();
+				}
+				else if (key == "log_group_flush_delay")
+				{
+					parseLong(value, config->logGroupFlushDelay);
+				}
+				else if (key == "log_archive_directory")
+				{
+					config->logArchiveDirectory = value.c_str();
+					PathUtils::ensureSeparator(config->logArchiveDirectory);
+				}
+				else if (key == "log_archive_command")
+				{
+					config->logArchiveCommand = value.c_str();
+				}
+				else if (key == "log_archive_timeout")
+				{
+					parseLong(value, config->logArchiveTimeout);
+				}
 			}
 		}
 
@@ -245,6 +270,8 @@ void Config::enumerate(Firebird::Array<Config*>& replicas)
 
 	ConfigFile cfgFile(filename, ConfigFile::HAS_SUB_CONF | ConfigFile::NATIVE_ORDER | ConfigFile::CUSTOM_MACROS);
 
+	AutoPtr<Config> defConfig(FB_NEW Config);
+
 	bool defaultFound = false, exactMatch = false;
 	const ConfigFile::Parameters& params = cfgFile.getParameters();
 	for (const auto& section : params)
@@ -254,37 +281,44 @@ void Config::enumerate(Firebird::Array<Config*>& replicas)
 
 		PathName dbName(section.value.c_str());
 
-		AutoPtr<Config> config(FB_NEW Config);
+		AutoPtr<Config> dbConfig;
+		if (!dbName.isEmpty())
+			dbConfig = FB_NEW Config(*defConfig);
 
-		const ConfigFile::Parameters& elements = section.sub->getParameters();
-		for (const auto& el : elements)
+		Config* const config = dbName.isEmpty() ? defConfig : dbConfig;
+
+		if (section.sub)
 		{
-			const string key(el.name.c_str());
-			string value(el.value);
+			const ConfigFile::Parameters& elements = section.sub->getParameters();
+			for (const auto& el : elements)
+			{
+				const string key(el.name.c_str());
+				string value(el.value);
 
-			if (value.isEmpty())
-				continue;
+				if (value.isEmpty())
+					continue;
 
-			if (key == "log_source_directory")
-			{
-				config->logSourceDirectory = value.c_str();
-				PathUtils::ensureSeparator(config->logSourceDirectory);
-			}
-			else if (key == "source_guid")
-			{
-				StringToGuid(&config->sourceGuid, value.c_str());
-			}
-			else if (key == "verbose_logging")
-			{
-				parseBoolean(value, config->verboseLogging);
-			}
-			else if (key == "apply_idle_timeout")
-			{
-				parseLong(value, config->applyIdleTimeout);
-			}
-			else if (key == "apply_error_timeout")
-			{
-				parseLong(value, config->applyErrorTimeout);
+				if (key == "log_source_directory")
+				{
+					config->logSourceDirectory = value.c_str();
+					PathUtils::ensureSeparator(config->logSourceDirectory);
+				}
+				else if (key == "source_guid")
+				{
+					StringToGuid(&config->sourceGuid, value.c_str());
+				}
+				else if (key == "verbose_logging")
+				{
+					parseBoolean(value, config->verboseLogging);
+				}
+				else if (key == "apply_idle_timeout")
+				{
+					parseLong(value, config->applyIdleTimeout);
+				}
+				else if (key == "apply_error_timeout")
+				{
+					parseLong(value, config->applyErrorTimeout);
+				}
 			}
 		}
 
@@ -305,7 +339,8 @@ void Config::enumerate(Firebird::Array<Config*>& replicas)
 			ISC_expand_filename(dbName, true);
 
 			config->dbName = dbName;
-			replicas.add(config.release());
+			replicas.add(dbConfig.release());
 		}
 	}
+
 }

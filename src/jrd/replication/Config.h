@@ -34,6 +34,7 @@ namespace Replication
 	struct Config : public Firebird::GlobalStorage
 	{
 		Config();
+		Config(const Config& other);
 
 		static Config* get(const Firebird::PathName& dbName);
 		static void enumerate(Firebird::Array<Config*>& replicas);
