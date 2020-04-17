@@ -1198,7 +1198,8 @@ public:
 			  fieldSource(p),
 			  identitySequence(p),
 			  defaultSource(p),
-			  baseField(p)
+			  baseField(p),
+			  tableSpace(p)
 		{
 		}
 
@@ -1218,6 +1219,7 @@ public:
 		Firebird::ByteChunk defaultValue;
 		Nullable<USHORT> viewContext;
 		Firebird::MetaName baseField;
+		Firebird::MetaName tableSpace;
 	};
 
 	struct IndexConstraintClause
@@ -1310,7 +1312,8 @@ public:
 			TYPE_ALTER_COL_TYPE,
 			TYPE_DROP_COLUMN,
 			TYPE_DROP_CONSTRAINT,
-			TYPE_ALTER_SQL_SECURITY
+			TYPE_ALTER_SQL_SECURITY,
+			TYPE_ALTER_TABLESPACE
 		};
 
 		explicit Clause(MemoryPool& p, Type aType)
@@ -1508,6 +1511,16 @@ public:
 		Nullable<bool> ssDefiner;
 	};
 
+	struct AlterTableSpaceClause : public Clause
+	{
+		explicit AlterTableSpaceClause(MemoryPool& p)
+			: Clause(p, TYPE_ALTER_TABLESPACE)
+		{
+		}
+
+		Firebird::MetaName name;
+	};
+
 	RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode);
 
 	static void deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
@@ -1556,6 +1569,7 @@ public:
 	Firebird::MetaName name;
 	Firebird::Array<NestConst<Clause> > clauses;
 	Nullable<bool> ssDefiner;
+	Firebird::MetaName tableSpace;
 };
 
 
@@ -1733,6 +1747,7 @@ public:
 		bid expressionSource;
 		Firebird::MetaName refRelation;
 		Firebird::ObjectsArray<Firebird::MetaName> refColumns;
+		Firebird::MetaName tableSpace;
 	};
 
 public:
@@ -1769,16 +1784,19 @@ public:
 	NestConst<RelationSourceNode> relation;
 	NestConst<ValueListNode> columns;
 	NestConst<ValueSourceClause> computed;
+	Firebird::MetaName tableSpace;
 };
 
 
 class AlterIndexNode : public DdlNode
 {
 public:
-	AlterIndexNode(MemoryPool& p, const Firebird::MetaName& aName, bool aActive)
+	enum OP {OP_ACTIVE, OP_INACTIVE, OP_ALTER_TABLESPACE, OP_DROP_TABLESPACE};
+
+	AlterIndexNode(MemoryPool& p, const Firebird::MetaName& aName, OP aOp)
 		: DdlNode(p),
 		  name(p, aName),
-		  active(aActive)
+		  op(aOp)
 	{
 	}
 
@@ -1795,7 +1813,8 @@ protected:
 
 public:
 	Firebird::MetaName name;
-	bool active;
+	OP op;
+	Firebird::MetaName tableSpace;
 };
 
 

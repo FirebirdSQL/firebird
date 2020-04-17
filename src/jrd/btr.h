@@ -67,6 +67,7 @@ struct index_desc
 	ValueExprNode* idx_expression;			// node tree for indexed expresssion
 	dsc		idx_expression_desc;			// descriptor for expression result
 	JrdStatement* idx_expression_statement;	// stored statement for expression evaluation
+	USHORT	idx_pg_space_id;				// PageSpace of index pages
 	// This structure should exactly match IRTD structure for current ODS
 	struct idx_repeat
 	{
@@ -290,7 +291,7 @@ private:
 	bool isLocationDefined;
 };
 
-
 } //namespace Jrd
+
 
 #endif // JRD_BTR_H

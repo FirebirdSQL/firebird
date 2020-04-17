@@ -113,6 +113,8 @@ static void updateRdbFields(const TypeClause* type,
 	SSHORT& collationIdNull, SSHORT& collationId,
 	SSHORT& segmentLengthNull, SSHORT& segmentLength);
 
+static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const MetaName& name, int type);
+
 static const char* const CHECK_CONSTRAINT_EXCEPTION = "check_constraint";
 
 DATABASE DB = STATIC "ODS.RDB";
@@ -6016,7 +6018,8 @@ RelationNode::RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode)
 	: DdlNode(p),
 	  dsqlNode(aDsqlNode),
 	  name(p, dsqlNode->dsqlName),
-	  clauses(p)
+	  clauses(p),
+	  tableSpace(p)
 {
 }
 
@@ -6115,6 +6118,7 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 		RFR.RDB$VIEW_CONTEXT.NULL = TRUE;
 		RFR.RDB$BASE_FIELD.NULL = TRUE;
 		///RFR.RDB$UPDATE_FLAG.NULL = TRUE;
+		RFR.RDB$TABLESPACE_NAME.NULL = TRUE;
 
 		if (collationId.specified)
 		{
@@ -6182,6 +6186,14 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 
 			DYN_UTIL_find_field_source(tdbb, transaction, relationName, viewContext.value,
 				baseField.c_str(), RFR.RDB$FIELD_SOURCE);
+		}
+
+		if (tableSpace.hasData())
+		{
+			if (!checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
+				status_exception::raise(Arg::PrivateDyn(310) << tableSpace.c_str());	//Tablespace @1 not found
+			RFR.RDB$TABLESPACE_NAME.NULL = FALSE;
+			strcpy(RFR.RDB$TABLESPACE_NAME, tableSpace.c_str());
 		}
 	}
 	END_STORE
@@ -6500,6 +6512,9 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 		if (clause->collate.hasData())
 			fieldDefinition.collationId = field->collationId;
+
+		if (field->fld_ts_name.hasData())
+			fieldDefinition.tableSpace = field->fld_ts_name;
 
 		fieldDefinition.store(tdbb, transaction);
 
@@ -7427,6 +7442,16 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		REL.RDB$VIEW_SOURCE.NULL = TRUE;
 		REL.RDB$EXTERNAL_FILE.NULL = TRUE;
 
+		if (!tableSpace.isEmpty())
+		{
+			if (!checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
+				status_exception::raise(Arg::PrivateDyn(310) << tableSpace.c_str());	//Tablespace @1 not found
+			REL.RDB$TABLESPACE_NAME.NULL = FALSE;
+			strcpy(REL.RDB$TABLESPACE_NAME, tableSpace.c_str());
+		}
+		else
+			REL.RDB$TABLESPACE_NAME.NULL = TRUE;
+
 		if (externalFile)
 		{
 			if (externalFile->length() >= sizeof(REL.RDB$EXTERNAL_FILE))
@@ -7779,6 +7804,57 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 							}
 							else
 								REL.RDB$SQL_SECURITY.NULL = TRUE;
+						}
+						END_MODIFY
+					}
+					END_FOR
+
+					break;
+				}
+
+				case Clause::TYPE_ALTER_TABLESPACE:
+				{
+					AutoRequest request;
+
+					FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+						REL IN RDB$RELATIONS
+						WITH REL.RDB$RELATION_NAME EQ name.c_str()
+					{
+						// RS: We need to have relation in the cache with current pageSpaceId
+						// to copy data from it. So check it in assert.
+						jrd_rel* rel = MET_lookup_relation_id(tdbb, REL.RDB$RELATION_ID, false);
+						fb_assert(rel);
+
+						if (rel->isTemporary())
+						{
+							// msg 311: "Cannot alter tablespace for temporary table @1"
+							status_exception::raise(Arg::PrivateDyn(311) << name);
+						}
+
+						const MetaName& tableSpaceName =
+								static_cast<const AlterTableSpaceClause*>(i->getObject())->name;
+
+						// Check if we are try to change tablespace name to the already set
+						if ( (REL.RDB$TABLESPACE_NAME.NULL && tableSpaceName.isEmpty()) ||
+							 (!REL.RDB$TABLESPACE_NAME.NULL && (tableSpaceName == REL.RDB$TABLESPACE_NAME) ) )
+						{
+							break;
+						}
+
+						MODIFY REL
+						{
+
+							if (tableSpaceName.hasData())
+							{
+								REL.RDB$TABLESPACE_NAME.NULL = FALSE;
+								strcpy(REL.RDB$TABLESPACE_NAME, tableSpaceName.c_str());
+							}
+							else
+							{
+								REL.RDB$TABLESPACE_NAME.NULL = TRUE;
+								REL.RDB$TABLESPACE_NAME[0] = 0;
+							}
+							DFW_post_work(transaction, dfw_move_relation, name.c_str(), REL.RDB$RELATION_ID);
 						}
 						END_MODIFY
 					}
@@ -8378,6 +8454,15 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 				Arg::Gds(isc_dsql_command_err) <<
 				Arg::Gds(isc_dsql_table_not_found) << name);
 		}
+	}
+
+	if (!view)
+	{
+		RelationPages* relPages = rel_drop->getBasePages();
+		if (!relPages->rel_pages || (relPages->rel_pages->count() == 0))
+			DPM_scan_pages(tdbb, pag_pointer, rel_drop->rel_id);
+		if (!relPages->rel_index_root)
+			DPM_scan_pages(tdbb, pag_root, rel_drop->rel_id);
 	}
 
 	const int ddlTriggerAction = (view ? DDL_TRIGGER_DROP_VIEW : DDL_TRIGGER_DROP_TABLE);
@@ -9414,6 +9499,9 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 		IDX.RDB$RELATION_NAME.NULL = FALSE;
 		IDX.RDB$SYSTEM_FLAG = 0;
 		IDX.RDB$SYSTEM_FLAG.NULL = FALSE; // Probably redundant.
+		IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
+
+		MetaName relationTablespace;
 
 		// Check if the table is actually a view.
 
@@ -9428,6 +9516,8 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 				// msg 181: "attempt to index a view"
 				status_exception::raise(Arg::PrivateDyn(181));
 			}
+			if (!VREL.RDB$TABLESPACE_NAME.NULL)
+				relationTablespace = VREL.RDB$TABLESPACE_NAME;
 		}
 		END_FOR
 
@@ -9447,6 +9537,22 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 		{
 			IDX.RDB$INDEX_TYPE.NULL = FALSE;
 			IDX.RDB$INDEX_TYPE = SSHORT(definition.descending.value);
+		}
+
+		if (definition.tableSpace.hasData())
+		{
+			if (!checkObjectExist(tdbb, transaction, definition.tableSpace, obj_tablespaces))
+				status_exception::raise(Arg::PrivateDyn(310) << definition.tableSpace.c_str());	//Tablespace @1 not found
+			strcpy(IDX.RDB$TABLESPACE_NAME, definition.tableSpace.c_str());
+		}
+		else
+		{
+			/**
+			 * if tablespace for the index is not defined we use relation tablespace.
+			 * It's necessary to write it explicitly since later we can move relation
+			 * into another tablespace.
+			*/
+			strcpy(IDX.RDB$TABLESPACE_NAME, relationTablespace.c_str());
 		}
 
 		request2.reset(tdbb, drq_l_lfield, DYN_REQUESTS);
@@ -9784,6 +9890,8 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		attachment->storeBinaryBlob(tdbb, transaction, &definition.expressionBlr, computedValue);
 	}
 
+	definition.tableSpace = tableSpace;
+
 	store(tdbb, transaction, name, definition);
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_INDEX,
@@ -9801,7 +9909,8 @@ string AlterIndexNode::internalPrint(NodePrinter& printer) const
 	DdlNode::internalPrint(printer);
 
 	NODE_PRINT(printer, name);
-	NODE_PRINT(printer, active);
+	NODE_PRINT(printer, op);
+	NODE_PRINT(printer, tableSpace);
 
 	return "AlterIndexNode";
 }
@@ -9834,10 +9943,30 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_INDEX,
 			name, NULL);
 
-		MODIFY IDX
-			IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
-			IDX.RDB$INDEX_INACTIVE = active ? FALSE : TRUE;
-		END_MODIFY
+		if (op == OP_ACTIVE || op == OP_INACTIVE)
+		{
+			MODIFY IDX
+				IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
+				IDX.RDB$INDEX_INACTIVE = (op == OP_ACTIVE) ? FALSE : TRUE;
+			END_MODIFY
+		}
+		else
+		{
+			fb_assert(op == OP_ALTER_TABLESPACE || op == OP_DROP_TABLESPACE);
+			MODIFY IDX
+				if (op == OP_ALTER_TABLESPACE)
+				{
+					IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
+					strcpy(IDX.RDB$TABLESPACE_NAME, tableSpace.c_str());
+				}
+				else
+				{
+					fb_assert(op == OP_DROP_TABLESPACE);
+					IDX.RDB$TABLESPACE_NAME.NULL = TRUE;
+					IDX.RDB$TABLESPACE_NAME[0] = 0;
+				}
+			END_MODIFY
+		}
 	}
 	END_FOR
 
@@ -11414,6 +11543,18 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const MetaNa
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 				X IN RDB$GENERATORS
 				WITH X.RDB$GENERATOR_NAME EQ name.c_str()
+			{
+				rc = true;
+			}
+			END_FOR
+			break;
+		}
+		case obj_tablespaces:
+		{
+			AutoCacheRequest request(tdbb, drq_tablespace_exist, DYN_REQUESTS);
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				X IN RDB$TABLESPACES
+				WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
 			{
 				rc = true;
 			}

@@ -979,6 +979,7 @@ static void add_index_set(thread_db* tdbb)
 
 			idx.idx_count = index->ini_idx_segment_count;
 			idx.idx_flags = index->ini_idx_flags;
+			idx.idx_pg_space_id = DB_PAGE_SPACE;
 			SelectivityList selectivity(*tdbb->getDefaultPool());
 
 			IDX_create_index(tdbb, relation, &idx, indexName.c_str(), NULL,

@@ -973,6 +973,8 @@ Data source : @4"},		/* eds_statement */
 	{335545266, "String truncated warning due to the following reason"},		/* truncate_warn */
 	{335545267, "Monitoring data does not fit into the field"},		/* truncate_monitor */
 	{335545268, "Engine data does not fit into return value of system function"},		/* truncate_context */
+	{335545269, "Tablespace \"@1\" creation error. File \"@2\" exists."},		/* ts_file_exists */
+	{335545270, "TABLESPACE @1"},		/* tablespace_name */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */
@@ -1129,6 +1131,8 @@ Data source : @4"},		/* eds_statement */
 	{336068915, "Exception @1 does not exist"},		/* dyn_exc_not_exist */
 	{336068916, "Generator/Sequence @1 does not exist"},		/* dyn_gen_not_exist */
 	{336068917, "Field @1 of table @2 does not exist"},		/* dyn_fld_not_exist */
+	{336068918, "Tablespace @1 not found"},		/* dyn_ts_not_found */
+	{336068919, "Cannot alter tablespace for temporary table @1"},		/* dyn_cant_alter_ts */
 	{336330753, "found unknown switch"},		/* gbak_unknown_switch */
 	{336330754, "page size parameter missing"},		/* gbak_page_size_missing */
 	{336330755, "Page size specified (@1) greater than limit (32768 bytes)"},		/* gbak_page_size_toobig */
@@ -1357,6 +1361,11 @@ Data source : @4"},		/* eds_statement */
 	{336397332, "String literal with @1 characters exceeds the maximum length of @2 characters for the @3 character set"},		/* dsql_string_char_length */
 	{336397333, "Too many BEGIN...END nesting. Maximum level is @1"},		/* dsql_max_nesting */
 	{336397334, "RECREATE USER @1 failed"},		/* dsql_recreate_user_failed */
+	{336397335, "CREATE TABLESPACE @1 failed"},		/* dsql_create_ts_failed */
+	{336397336, "ALTER TABLESPACE @1 failed"},		/* dsql_alter_ts_failed */
+	{336397337, "CREATE OR ALTER TABLESPACE @1 failed"},		/* dsql_create_alter_ts_failed */
+	{336397338, "DROP TABLESPACE @1 failed"},		/* dsql_drop_ts_failed */
+	{336397339, "RECREATE TABLESPACE @1 failed"},		/* dsql_recreate_ts_failed */
 	{336723983, "unable to open database"},		/* gsec_cant_open_db */
 	{336723984, "error in switch specifications"},		/* gsec_switches_error */
 	{336723985, "no operation specified"},		/* gsec_no_op_spec */

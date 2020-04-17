@@ -178,7 +178,21 @@ enum irq_type_t
 	irq_c_relation3,		// lookup relation in phase 0 to cleanup
 	irq_linger,				// get database linger value
 	irq_dbb_ss_definer,		// get database sql security value
+	irq_find_rel_ts,		// find tablespace options for relation
+	irq_find_idx_ts,		// find tablespace options for index
+	irq_find_ts,			// find tablespace options by name
 	irq_out_proc_param_dep,	// check output procedure parameter dependency
+	irq_list_ts_files,		// list tablespace files
+	irq_find_ts_dfw,		// find tablespace options by name in dfw
+	irq_find_ts_dfw0,		// find tablespace options by name in dfw for cleanup
+	irq_ts_find_rel_dfw,	// find relation of tablespace in dfw for check
+	irq_ts_drop_rel_dfw,	// find relation of tablespace in dfw for drop
+	irq_ts_find_idx_dfw,	// find index of tablespace in dfw for check
+	irq_ts_drop_idx_dfw,	// find index of tablespace in dfw for drop
+	irq_scan_ts,			// scn tablespaces
+	irq_ts_security,		// verify security for tablespace
+	irq_r_pages2,
+	irq_s_first_pp,
 
 	irq_MAX
 };

@@ -404,6 +404,7 @@ const SLONG SCL_object_domain		= obj_domains;
 const SLONG SCL_object_view			= obj_views;
 const SLONG SCL_object_role			= obj_roles;
 const SLONG SCL_object_filter		= obj_filters;
+const SLONG SCL_object_tablespace	= obj_tablespaces;
 // Please keep it with code more than other objects
 // - relations and procedures should be sorted before columns.
 const SLONG SCL_object_column		= obj_type_MAX + 1;

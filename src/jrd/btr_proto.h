@@ -32,7 +32,7 @@
 USHORT	BTR_all(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::IndexDescAlloc**, Jrd::RelationPages*);
 void	BTR_complement_key(Jrd::temporary_key*);
 void	BTR_create(Jrd::thread_db*, Jrd::IndexCreation&, Jrd::SelectivityList&);
-bool	BTR_delete_index(Jrd::thread_db*, Jrd::win*, USHORT);
+bool	BTR_delete_index(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::win*, USHORT);
 bool	BTR_description(Jrd::thread_db*, Jrd::jrd_rel*, Ods::index_root_page*, Jrd::index_desc*, USHORT);
 DSC*	BTR_eval_expression(Jrd::thread_db*, Jrd::index_desc*, Jrd::Record*, bool&);
 void	BTR_evaluate(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::RecordBitmap**, Jrd::RecordBitmap*);
@@ -53,5 +53,7 @@ void	BTR_remove(Jrd::thread_db*, Jrd::win*, Jrd::index_insertion*);
 void	BTR_reserve_slot(Jrd::thread_db*, Jrd::IndexCreation&);
 void	BTR_selectivity(Jrd::thread_db*, Jrd::jrd_rel*, USHORT, Jrd::SelectivityList&);
 bool	BTR_types_comparable(const dsc& target, const dsc& source);
+bool BTR_move_index(Jrd::thread_db*, Jrd::jrd_rel*, SLONG, USHORT, Jrd::PageNumber&);
+
 
 #endif // JRD_BTR_PROTO_H

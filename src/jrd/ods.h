@@ -182,16 +182,17 @@ const USHORT USER_DEF_REL_INIT_ID		= 128;	// ODS >= 9
 // Page types
 
 const SCHAR pag_undefined		= 0;
-const SCHAR pag_header			= 1;		// Database header page
-const SCHAR pag_pages			= 2;		// Page inventory page
-const SCHAR pag_transactions	= 3;		// Transaction inventory page
-const SCHAR pag_pointer			= 4;		// Pointer page
-const SCHAR pag_data			= 5;		// Data page
-const SCHAR pag_root			= 6;		// Index root page
-const SCHAR pag_index			= 7;		// Index (B-tree) page
-const SCHAR pag_blob			= 8;		// Blob data page
-const SCHAR pag_ids				= 9;		// Gen-ids
-const SCHAR pag_scns			= 10;		// SCN's inventory page
+const SCHAR pag_header			= 1;		// Database header page (only in DB_PAGE_SPACE)
+const SCHAR pag_pages			= 2;		// Page inventory page (per tablespace)
+const SCHAR pag_transactions	= 3;		// Transaction inventory page (only in DB_PAGE_SPACE)
+const SCHAR pag_pointer			= 4;		// Pointer page (in tablespace of relation)
+const SCHAR pag_data			= 5;		// Data page (in tablespace of relation)
+const SCHAR pag_root			= 6;		// Index root page (in tablespace of relation)
+const SCHAR pag_index			= 7;		// Index (B-tree) page (in tablespace of relation by default
+											// or in its own one)
+const SCHAR pag_blob			= 8;		// Blob data page (in relation tablespace or temp pagespace)
+const SCHAR pag_ids				= 9;		// Gen-ids (only in DB_PAGE_SPACE)
+const SCHAR pag_scns			= 10;		// SCN's inventory page (per tablespace)
 const SCHAR pag_max				= 10;		// Max page type
 
 // Pre-defined page numbers
@@ -359,6 +360,7 @@ struct index_root_page
 	{
 	private:
 		friend struct index_root_page; // to allow offset check for private members
+		USHORT irt_page_space_id;	// page space of index root
 		ULONG irt_root;				// page number of index root if irt_in_progress is NOT set, or
 									// highest 32 bit of transaction if irt_in_progress is set
 		ULONG irt_transaction;		// transaction in progress (lowest 32 bits)
@@ -367,8 +369,9 @@ struct index_root_page
 		UCHAR irt_keys;				// number of keys in index
 		UCHAR irt_flags;
 
-		ULONG getRoot() const;
-		void setRoot(ULONG root_page);
+		USHORT getRootPageSpaceId() const;
+		ULONG getRootPage() const;
+		void setRoot(USHORT pageSpaceId, ULONG page);
 
 		TraNumber getTransaction() const;
 		void setTransaction(TraNumber traNumber);
@@ -377,15 +380,16 @@ struct index_root_page
 
 	} irt_rpt[1];
 
-	static_assert(sizeof(struct irt_repeat) == 12, "struct irt_repeat size mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_root) == 0, "irt_root offset mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_transaction) == 4, "irt_transaction offset mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_desc) == 8, "irt_desc offset mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_keys) == 10, "irt_keys offset mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_flags) == 11, "irt_flags offset mismatch");
+	static_assert(sizeof(struct irt_repeat) == 16, "struct irt_repeat size mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_page_space_id) == 0, "irt_page_space_id offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_root) == 4, "irt_root offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_transaction) == 8, "irt_transaction offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_desc) == 12, "irt_desc offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_keys) == 14, "irt_keys offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_flags) == 15, "irt_flags offset mismatch");
 };
 
-static_assert(sizeof(struct index_root_page) == 32, "struct index_root_page size mismatch");
+static_assert(sizeof(struct index_root_page) == 36, "struct index_root_page size mismatch");
 static_assert(offsetof(struct index_root_page, irt_header) == 0, "irt_header offset mismatch");
 static_assert(offsetof(struct index_root_page, irt_relation) == 16, "irt_relation offset mismatch");
 static_assert(offsetof(struct index_root_page, irt_count) == 18, "irt_count offset mismatch");
@@ -413,14 +417,20 @@ const USHORT irt_foreign		= 8;
 const USHORT irt_primary		= 16;
 const USHORT irt_expression		= 32;
 
-inline ULONG index_root_page::irt_repeat::getRoot() const
+inline USHORT index_root_page::irt_repeat::getRootPageSpaceId() const
+{
+	return irt_page_space_id;
+}
+
+inline ULONG index_root_page::irt_repeat::getRootPage() const
 {
 	return (irt_flags & irt_in_progress) ? 0 : irt_root;
 }
 
-inline void index_root_page::irt_repeat::setRoot(ULONG root_page)
+inline void index_root_page::irt_repeat::setRoot(USHORT pageSpaceId, ULONG page)
 {
-	irt_root = root_page;
+	irt_page_space_id = pageSpaceId;
+	irt_root = page;
 	irt_flags &= ~irt_in_progress;
 }
 

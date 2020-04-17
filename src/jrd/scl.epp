@@ -890,6 +890,44 @@ void SCL_check_role(thread_db* tdbb, const Firebird::MetaName& name, SecurityCla
 	SCL_check_access(tdbb, s_class, 0, NULL, mask, SCL_object_role, false, name);
 }
 
+
+void SCL_check_tablespace(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t mask)
+{
+/**************************************
+ *
+ *	S C L _ c h e c k _ t a b l e s p a c e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Given a tablespace name, check for a set of privileges.
+ *
+ **************************************/
+	SET_TDBB(tdbb);
+
+	// Get the name in CSTRING format, ending on NULL or SPACE
+	fb_assert(dsc_name->dsc_dtype == dtype_text);
+	const Firebird::MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
+		dsc_name->dsc_length);
+
+	Jrd::Attachment* const attachment = tdbb->getAttachment();
+
+	const SecurityClass* s_class = NULL;
+	AutoCacheRequest request(tdbb, irq_ts_security, IRQ_REQUESTS);
+
+	FOR (REQUEST_HANDLE request)
+		X IN RDB$TABLESPACES
+		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
+	{
+		if (!X.RDB$SECURITY_CLASS.NULL)
+			s_class = SCL_get_class(tdbb, X.RDB$SECURITY_CLASS);
+	}
+	END_FOR
+
+	SCL_check_access(tdbb, s_class, 0, name, mask, SCL_object_tablespace, false, name);
+}
+
+
 SecurityClass* SCL_get_class(thread_db* tdbb, const TEXT* par_string)
 {
 /**************************************

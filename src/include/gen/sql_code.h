@@ -969,6 +969,8 @@ static const struct {
 	{335545266,  304}, /* 946 truncate_warn */
 	{335545267,  304}, /* 947 truncate_monitor */
 	{335545268,  304}, /* 948 truncate_context */
+	{335545269, -902}, /* 949 ts_file_exists */
+	{335545270, -901}, /* 950 tablespace_name */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */
@@ -1125,6 +1127,8 @@ static const struct {
 	{336068915, -901}, /* 307 dyn_exc_not_exist */
 	{336068916, -901}, /* 308 dyn_gen_not_exist */
 	{336068917, -901}, /* 309 dyn_fld_not_exist */
+	{336068918, -901}, /* 310 dyn_ts_not_found */
+	{336068919, -901}, /* 311 dyn_cant_alter_ts */
 	{336330753, -901}, /*   1 gbak_unknown_switch */
 	{336330754, -901}, /*   2 gbak_page_size_missing */
 	{336330755, -901}, /*   3 gbak_page_size_toobig */
@@ -1353,6 +1357,11 @@ static const struct {
 	{336397332, -901}, /* 1044 dsql_string_char_length */
 	{336397333, -901}, /* 1045 dsql_max_nesting */
 	{336397334, -901}, /* 1046 dsql_recreate_user_failed */
+	{336397335, -901}, /* 1047 dsql_create_ts_failed */
+	{336397336, -901}, /* 1048 dsql_alter_ts_failed */
+	{336397337, -901}, /* 1049 dsql_create_alter_ts_failed */
+	{336397338, -901}, /* 1050 dsql_drop_ts_failed */
+	{336397339, -901}, /* 1051 dsql_recreate_ts_failed */
 	{336723983, -901}, /*  15 gsec_cant_open_db */
 	{336723984, -901}, /*  16 gsec_switches_error */
 	{336723985, -901}, /*  17 gsec_no_op_spec */

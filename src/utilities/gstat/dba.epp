@@ -1557,7 +1557,7 @@ static void analyze_index( const dba_rel* relation, dba_idx* index)
 
 	SLONG page;
 	if (index_root->irt_count <= index->idx_id ||
-		!(page = index_root->irt_rpt[index->idx_id].getRoot()))
+		!(page = index_root->irt_rpt[index->idx_id].getRootPage()))
 	{
 		return;
 	}

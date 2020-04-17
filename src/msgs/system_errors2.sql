@@ -955,6 +955,8 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (304, '01', '004', 0, 946, 'truncate_warn', NULL, NULL)
 (304, '01', '004', 0, 947, 'truncate_monitor', NULL, NULL)
 (304, '01', '004', 0, 948, 'truncate_context', NULL, NULL)
+(-902, '08', '001', 0, 949, 'ts_file_exists', NULL, NULL)
+(-901, '42', '000', 0, 950, 'tablespace_name', NULL, NULL)
 -- GFIX
 (-901, '00', '000', 3, 1, 'gfix_db_name', NULL, NULL)
 (-901, '00', '000', 3, 2, 'gfix_invalid_sw', NULL, NULL)
@@ -1114,6 +1116,8 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (-901, '42', '000', 8, 307, 'dyn_exc_not_exist', NULL, NULL)
 (-901, '42', '000', 8, 308, 'dyn_gen_not_exist', NULL, NULL)
 (-901, '42', '000', 8, 309, 'dyn_fld_not_exist', NULL, NULL)
+(-901, '42', '000', 8, 310, 'dyn_ts_not_found', NULL, NULL)
+(-901, '42', '000', 8, 311, 'dyn_cant_alter_ts', NULL, NULL)
 --  GBAK
 (-901, '00', '000', 12, 1, 'gbak_unknown_switch', NULL, NULL)
 (-901, '00', '000', 12, 2, 'gbak_page_size_missing', NULL, NULL)
@@ -1347,6 +1351,11 @@ COMMIT WORK;
 (-901, '42', '000', 13, 1044, 'dsql_string_char_length', NULL, NULL)
 (-901, '07', '002', 13, 1045, 'dsql_max_nesting', NULL, NULL)
 (-901, '42', '000', 13, 1046, 'dsql_recreate_user_failed', NULL, NULL);
+(-901, '42', '000', 13, 1047, 'dsql_create_ts_failed', NULL, NULL);
+(-901, '42', '000', 13, 1048, 'dsql_alter_ts_failed', NULL, NULL);
+(-901, '42', '000', 13, 1049, 'dsql_create_alter_ts_failed', NULL, NULL);
+(-901, '42', '000', 13, 1050, 'dsql_drop_ts_failed', NULL, NULL);
+(-901, '42', '000', 13, 1051, 'dsql_recreate_ts_failed', NULL, NULL);
 -- GSEC
 (-901, '00', '000', 18, 15, 'gsec_cant_open_db', NULL, NULL)
 (-901, '00', '000', 18, 16, 'gsec_switches_error', NULL, NULL)

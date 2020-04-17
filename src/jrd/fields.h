@@ -210,3 +210,9 @@
 
 	FIELD(fld_crypt_state	, nam_crypt_state	, dtype_short	, sizeof(SSHORT)			, 0							, NULL		, true)
 	FIELD(fld_remote_crypt	, nam_wire_crypt_plugin, dtype_varying, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true)
+
+	FIELD(fld_ts_id			, nam_ts_id			, dtype_short	, sizeof(SSHORT)			, 0							, NULL		, false)
+	FIELD(fld_ts_name		, nam_ts_name		, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true)
+
+	FIELD(fld_pp_number		, nam_pp_number		, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true)
+	FIELD(fld_idx_number	, nam_idx_number	, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true)

@@ -1314,7 +1314,7 @@ void CCH_get_related(thread_db* tdbb, PageNumber page, PagesArray &lowPages)
 }
 
 
-pag* CCH_handoff(thread_db*	tdbb, WIN* window, ULONG page, int lock, SCHAR page_type,
+pag* CCH_handoff(thread_db*	tdbb, WIN* window, PageNumber pageNumber, int lock, SCHAR page_type,
 	int wait, const bool release_tail)
 {
 /**************************************
@@ -1348,8 +1348,9 @@ pag* CCH_handoff(thread_db*	tdbb, WIN* window, ULONG page, int lock, SCHAR page_
 
 	SET_TDBB(tdbb);
 
-	CCH_TRACE(("HANDOFF %d:%06d->%06d, %s",
-		window->win_page.getPageSpaceID(), window->win_page.getPageNum(), page, (lock >= LCK_write) ? "EX" : "SH"));
+	CCH_TRACE(("HANDOFF %d:%06d->%d:%06d, %s",
+		window->win_page.getPageSpaceID(), window->win_page.getPageNum(),
+		pageNumber.getPageSpaceID(), pageNumber.getPageNum(), (lock >= LCK_write) ? "EX" : "SH"));
 
 	BufferDesc *bdb = window->win_bdb;
 
@@ -1363,7 +1364,7 @@ pag* CCH_handoff(thread_db*	tdbb, WIN* window, ULONG page, int lock, SCHAR page_
 	// If the 'from-page' and 'to-page' of the handoff are the
 	// same and the latch requested is shared then downgrade it.
 
-	if ((window->win_page.getPageNum() == page) && (lock == LCK_read))
+	if ((window->win_page == pageNumber) && (lock == LCK_read))
 	{
 		if (bdb->ourExclusiveLock())
 			bdb->downgrade(SYNC_SHARED);
@@ -1372,7 +1373,7 @@ pag* CCH_handoff(thread_db*	tdbb, WIN* window, ULONG page, int lock, SCHAR page_
 	}
 
 	WIN temp = *window;
-	window->win_page = PageNumber(window->win_page.getPageSpaceID(), page);
+	window->win_page = pageNumber;
 
 	// This prevents a deadlock with the precedence queue, as shown by
 	// mwrite mwrite1 2 mwrite2 2 test.fdb
@@ -3114,7 +3115,9 @@ static void check_precedence(thread_db* tdbb, WIN* window, PageNumber page)
 
 	// If this is really a transaction id, sort things out
 
-	switch(page.getPageSpaceID())
+	const USHORT pageSpaceId = page.getPageSpaceID();
+
+	switch(pageSpaceId)
 	{
 		case DB_PAGE_SPACE:
 			break;
@@ -3126,6 +3129,8 @@ static void check_precedence(thread_db* tdbb, WIN* window, PageNumber page)
 			break;
 
 		default:
+			if ((pageSpaceId > DB_PAGE_SPACE) && (pageSpaceId < TRANS_PAGE_SPACE))
+				break;	// tablespace
 			fb_assert(false);
 			return;
 	}

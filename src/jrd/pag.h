@@ -62,7 +62,8 @@ class PageControl : public pool_alloc<type_pgc>
 // INVALID_PAGE_SPACE is to ???
 const USHORT INVALID_PAGE_SPACE	= 0;
 const USHORT DB_PAGE_SPACE		= 1;
-const USHORT TRANS_PAGE_SPACE	= 255;
+// .. here all tablespace IDs. Keep TRANS_PAGE_SPACE right after DB_PAGE_SPACE
+const USHORT TRANS_PAGE_SPACE	= 255;	// is not used for tablespace id
 const USHORT TEMP_PAGE_SPACE	= 256;
 
 const USHORT PAGES_IN_EXTENT	= 8;
@@ -133,8 +134,7 @@ public:
 	bool extend(thread_db*, const ULONG, const bool);
 
 	// get SCN's page number
-	ULONG getSCNPageNum(ULONG sequence);
-	static ULONG getSCNPageNum(const Database* dbb, ULONG sequence);
+	ULONG getSCNPageNum(ULONG sequence) const;
 
 	// is pagespace on raw device
 	bool onRawDevice() const;
@@ -174,6 +174,8 @@ public:
 
 	void initTempPageSpace(thread_db* tdbb);
 	USHORT getTempPageSpaceID(thread_db* tdbb);
+
+	void allocTableSpace(thread_db* tdbb, USHORT tableSpaceID, bool create, const Firebird::PathName& fileName);
 
 	void closeAll();
 

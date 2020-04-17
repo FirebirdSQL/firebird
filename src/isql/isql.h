@@ -277,6 +277,10 @@ const int DATABASE_CRYPT_PROCESS	= 194;		// crypt thread not complete
 const int MSG_ROLES					= 195;		// Roles:
 const int NO_TIMEOUTS				= 196;		// Timeouts are not supported by server
 
+//TODO: Fix message numbers here and in messages2.sql
+const int NO_TABLESPACE				= 1022;		// There is no tablespace @1 in this database
+const int NO_TABLESPACES			= 1023;		// There are no tablespaces in this database
+const int MSG_TABLESPACES			= 1024;		// Tablespaces:
 
 // Initialize types
 

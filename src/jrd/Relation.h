@@ -278,6 +278,16 @@ public:
 		return &rel_pages_base;
 	}
 
+	RelationPages* getReplacedPages()
+	{
+		return rel_replaced_pages;
+	}
+
+	void setReplacedPages(RelationPages* pages)
+	{
+		rel_replaced_pages = pages;
+	}
+
 	bool	delPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
 	void	retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNumber);
 
@@ -324,6 +334,7 @@ private:
 	RelationPagesInstances* rel_pages_inst;
 	RelationPages			rel_pages_base;
 	RelationPages*			rel_pages_free;
+	RelationPages*			rel_replaced_pages;
 
 	RelationPages* getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages);
 
@@ -337,6 +348,8 @@ public:
 
 	void downgradeGCLock(thread_db* tdbb);
 	bool acquireGCLock(thread_db* tdbb, int wait);
+
+	void setPageSpace(USHORT pageSpaceId);
 
 	// This guard is used by regular code to prevent online validation while
 	// dead- or back- versions is removed from disk.

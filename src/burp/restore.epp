@@ -139,6 +139,7 @@ void	get_misc_blob(BurpGlobals* tdgbl, ISC_QUAD&, bool);
 SLONG	get_int32(BurpGlobals* tdgbl);
 SINT64  get_int64(BurpGlobals* tdgbl);
 bool	get_package(BurpGlobals* tdgbl);
+bool	get_tablespace(BurpGlobals* tdgbl);
 bool	get_procedure(BurpGlobals* tdgbl);
 bool	get_procedure_prm (BurpGlobals* tdgbl, GDS_NAME, GDS_NAME);
 bool	get_ref_constraint(BurpGlobals* tdgbl);
@@ -4317,6 +4318,7 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 			// ODS 12
 			X.RDB$GENERATOR_NAME.NULL = TRUE;
 			X.RDB$IDENTITY_TYPE.NULL = TRUE;
+			X.RDB$TABLESPACE_NAME.NULL = TRUE;
 
 			skip_init(&scan_next_attr);
 			while (get_attribute(&attribute, tdgbl) != att_end)
@@ -4483,6 +4485,11 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 				case att_field_identity_type:
 					X.RDB$IDENTITY_TYPE.NULL = FALSE;
 					X.RDB$IDENTITY_TYPE = (SSHORT) get_int32(tdgbl);
+					break;
+
+				case att_field_tablespace_name:
+					GET_TEXT(X.RDB$TABLESPACE_NAME);
+					X.RDB$TABLESPACE_NAME.NULL = FALSE;
 					break;
 
 				default:
@@ -7070,6 +7077,7 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 		X.RDB$EXPRESSION_BLR.NULL = TRUE;
 		X.RDB$SYSTEM_FLAG = 0;
 		X.RDB$SYSTEM_FLAG.NULL = FALSE;
+		X.RDB$TABLESPACE_NAME.NULL = TRUE;
 
 		skip_init(&scan_next_attr);
 		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
@@ -7160,6 +7168,11 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 					X.RDB$INDEX_INACTIVE = TRUE;
 				X.RDB$FOREIGN_KEY.NULL = FALSE;
 				GET_TEXT(X.RDB$FOREIGN_KEY);
+				break;
+
+			case att_index_tablespace_name:
+				GET_TEXT(X.RDB$TABLESPACE_NAME);
+				X.RDB$TABLESPACE_NAME.NULL = FALSE;
 				break;
 
 			default:
@@ -7396,6 +7409,108 @@ bool get_package(BurpGlobals* tdgbl)
 				break;
 			}
 		}
+	}
+	END_STORE
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	return true;
+}
+
+bool get_tablespace(BurpGlobals* tdgbl)
+{
+/**************************************
+ *
+ *	g e t _ t a b l e s p a c e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Reconstruct a tablespace.
+ *
+ **************************************/
+	att_type attribute;
+	TEXT temp[GDS_NAME_LEN];
+	SSHORT len;
+	scan_attr_t scan_next_attr;
+
+	// TODO: Fix format version for the current version after merge.
+	// Check other places of RDB$TABLESPACE_NAME usage
+	if (tdgbl->RESTORE_format < 11)
+		return false;
+
+//	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+
+	STORE (REQUEST_HANDLE tdgbl->handles_get_ts_req_handle1)
+		X IN RDB$TABLESPACES
+	{
+		X.RDB$TABLESPACE_NAME.NULL = TRUE;
+		X.RDB$SECURITY_CLASS.NULL = TRUE;
+		X.RDB$SYSTEM_FLAG = 0;
+		X.RDB$SYSTEM_FLAG.NULL = FALSE;
+		X.RDB$DESCRIPTION.NULL = TRUE;
+		X.RDB$OWNER_NAME.NULL = TRUE;
+		X.RDB$FILE_NAME.NULL = TRUE;
+		X.RDB$OFFLINE.NULL = TRUE;
+		X.RDB$READ_ONLY.NULL = TRUE;
+
+		skip_init(&scan_next_attr);
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+			case att_ts_name:
+				len = GET_TEXT(X.RDB$TABLESPACE_NAME);
+				X.RDB$TABLESPACE_NAME.NULL = FALSE;
+				MISC_terminate(X.RDB$TABLESPACE_NAME, temp, len, sizeof(temp));
+				BURP_verbose(398, temp);	// msg 398 restoring tablespace %s
+				break;
+
+			case att_ts_security_class:
+				GET_TEXT(X.RDB$SECURITY_CLASS);
+				fix_security_class_name(tdgbl, X.RDB$SECURITY_CLASS, false);
+				X.RDB$SECURITY_CLASS.NULL = FALSE;
+				break;
+
+			case att_ts_description:
+				get_source_blob(tdgbl, X.RDB$DESCRIPTION, true);
+				X.RDB$DESCRIPTION.NULL = FALSE;
+				break;
+
+			case att_ts_owner_name:
+				GET_TEXT(X.RDB$OWNER_NAME);
+				X.RDB$OWNER_NAME.NULL = FALSE;
+				break;
+
+			case att_ts_file:
+				GET_TEXT(X.RDB$FILE_NAME);
+				X.RDB$FILE_NAME.NULL = FALSE;
+				break;
+
+			case att_ts_offline:
+				X.RDB$OFFLINE = (USHORT) get_int32(tdgbl);
+				X.RDB$OFFLINE.NULL = FALSE;
+				break;
+
+			case att_ts_readonly:
+				X.RDB$READ_ONLY = (USHORT) get_int32(tdgbl);
+				X.RDB$READ_ONLY.NULL = FALSE;
+				break;
+
+			default:
+				bad_attribute(scan_next_attr, attribute, 399);	// msg 399 tablespace
+				break;
+			}
+		}
+
+		Firebird::string newFile;
+		if (tdgbl->tablespace_mapping.get(X.RDB$TABLESPACE_NAME, newFile))
+		{
+			X.RDB$FILE_NAME.NULL = FALSE;
+			strcpy(X.RDB$FILE_NAME, newFile.c_str());
+		}
+
 	}
 	END_STORE
 	ON_ERROR
@@ -8106,6 +8221,10 @@ bool get_relation(BurpGlobals* tdgbl)
 	ext_file_name[0] = '\0';
 	bool		ext_file_name_null = true;
 
+	BASED_ON RDB$RELATIONS.RDB$TABLESPACE_NAME tableSpace;
+	tableSpace[0] = '\0';
+	bool tableSpaceNull = true;
+
 	// Before starting to restore relations, commit everything that was restored
 	// prior to this point. This ensures that no pending error can later affect
 	// other metadata being restored.
@@ -8236,6 +8355,11 @@ bool get_relation(BurpGlobals* tdgbl)
 			sql_security = get_boolean(tdgbl);
 			break;
 
+		case att_relation_tablespace_name:
+			tableSpaceNull = false;
+			GET_TEXT(tableSpace);
+			break;
+
 		default:
 			bad_attribute(scan_next_attr, attribute, 111);
 			// msg 111 table
@@ -8267,6 +8391,7 @@ bool get_relation(BurpGlobals* tdgbl)
 			X.RDB$EXTERNAL_FILE.NULL = ext_file_name_null;
 			X.RDB$RELATION_TYPE.NULL = FALSE;
 			X.RDB$SQL_SECURITY.NULL = sql_security_null;
+			X.RDB$TABLESPACE_NAME.NULL = tableSpaceNull;
 
 			X.RDB$SYSTEM_FLAG = (USHORT) sys_flag;
 			X.RDB$FLAGS = (USHORT) rel_flags;
@@ -8281,6 +8406,7 @@ bool get_relation(BurpGlobals* tdgbl)
 
 			X.RDB$RELATION_TYPE = (USHORT) type;
 			X.RDB$SQL_SECURITY = (FB_BOOLEAN) sql_security;
+			strcpy(X.RDB$TABLESPACE_NAME, tableSpace);
 
 		END_STORE;
 		ON_ERROR
@@ -10965,6 +11091,12 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 		case rec_package:
 			if (!get_package(tdgbl))
+				return false;
+			flag = true;
+			break;
+
+		case rec_tablespace:
+			if (!get_tablespace(tdgbl))
 				return false;
 			flag = true;
 			break;

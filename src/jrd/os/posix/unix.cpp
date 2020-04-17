@@ -1173,6 +1173,17 @@ bool PIO_on_raw_device(const PathName& file_name)
 }
 
 
+bool PIO_file_exists(const Firebird::PathName& fileName)
+{
+	const int fd = openFile(fileName.c_str(), false, false, true);
+	if (fd == -1)
+		return false;
+
+	close(fd);
+	return true;
+}
+
+
 static bool raw_devices_validate_database(int desc, const PathName& file_name)
 {
 /**************************************

@@ -295,6 +295,16 @@ static const struct ini_idx_t indices[] =
 	INDEX(54, rel_backup_history, idx_unique, 1)
 		SEGMENT(f_backup_guid, idx_string)		// backup guid
 	}},
+	// define index RDB$INDEX_55 for RDB$TABLESPACES unique RDB$TABALESPACE_NAME;
+	INDEX(55, rel_tablespaces, idx_unique, 1)
+		SEGMENT(f_ts_name, idx_metadata)		// tablespace name
+	}},
+	//	define index RDB$INDEX_52 for RDB$PAGES RDB$PAGE_TYPE, RDB$RELATION_ID, RDB$PAGE_SEQUENCE;
+	INDEX(56, rel_pages, 0, 3)
+		SEGMENT(f_pag_type, idx_numeric),	// page type
+		SEGMENT(f_pag_id, idx_numeric),		// relation id
+		SEGMENT(f_pag_seq, idx_numeric)		// page sequence
+	}}
 };
 
 #define SYSTEM_INDEX_COUNT FB_NELEM(indices)

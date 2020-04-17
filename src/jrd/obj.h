@@ -48,8 +48,9 @@ const int obj_collation			= 17;
 const int obj_package_header	= 18;
 const int obj_package_body		= 19;
 const int obj_privilege			= 20;
+const int obj_tablespace		= 21;
 
-const int obj_last_non_ddl		= 20;	// keep in sync!!!
+const int obj_last_non_ddl		= 21;	// keep in sync!!!
 
 // objects types for ddl operations
 const int obj_database			= obj_last_non_ddl + 1;
@@ -65,8 +66,9 @@ const int obj_roles				= obj_last_non_ddl + 10;
 const int obj_charsets			= obj_last_non_ddl + 11;
 const int obj_collations		= obj_last_non_ddl + 12;
 const int obj_filters			= obj_last_non_ddl + 13;
+const int obj_tablespaces		= obj_last_non_ddl + 14;
 
-const int obj_type_MAX			= obj_last_non_ddl + 14;	// keep this last!
+const int obj_type_MAX			= obj_last_non_ddl + 15;	// keep this last!
 
 // used in the parser only / no relation with obj_type_MAX (should be greater)
 const int obj_user_or_role		= 100;
@@ -103,6 +105,8 @@ inline const char* get_object_name(int object_type)
 			return "SQL$CHARSETS";
 		case obj_collations:
 			return "SQL$COLLATIONS";
+		case obj_tablespaces:
+			return "SQL$TABLESPACES";
 		default:
 			return "";
 	}

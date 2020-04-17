@@ -36,6 +36,7 @@
 #include "../jrd/met_proto.h"
 #include "../jrd/scl_proto.h"
 #include "../jrd/Collation.h"
+#include "../jrd/Tablespace.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -85,6 +86,8 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 		// a little complicated since relation locks MUST be taken before
 		// index locks.
 
+		USHORT usedTablespaces[TRANS_PAGE_SPACE] = {0};
+
 		for (Resource* resource = resources.begin(); resource != resources.end(); ++resource)
 		{
 			switch (resource->rsc_type)
@@ -93,6 +96,7 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 				{
 					jrd_rel* relation = resource->rsc_rel;
 					MET_post_existence(tdbb, relation);
+					usedTablespaces[relation->getBasePages()->rel_pg_space_id]++;
 					break;
 				}
 
@@ -107,6 +111,8 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 							LCK_lock(tdbb, index->idl_lock, LCK_SR, LCK_WAIT);
 						}
 					}
+					const USHORT pageSpaceId = MET_index_pagespace(tdbb, relation, resource->rsc_id);
+					usedTablespaces[pageSpaceId]++;
 					break;
 				}
 
@@ -138,6 +144,15 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 					BUGCHECK(219);		// msg 219 request of unknown resource
 			}
 		}
+
+		// Now let's lock all used tablespaces
+		for (USHORT i = DB_PAGE_SPACE + 1; i < TRANS_PAGE_SPACE; i++)
+			if (usedTablespaces[i] > 0)
+			{
+				// Tablespace is locking after the use in relation and indices.
+				// Should we check it here again?
+				tdbb->getAttachment()->getTablespace(i)->addRef(tdbb);
+			}
 
 		// make a vector of all used RSEs
 		fors = csb->csb_fors;
@@ -581,6 +596,8 @@ void JrdStatement::release(thread_db* tdbb)
 
 	// Release existence locks on references.
 
+	USHORT usedTablespaces[TRANS_PAGE_SPACE] = {0};
+
 	for (Resource* resource = resources.begin(); resource != resources.end(); ++resource)
 	{
 		switch (resource->rsc_type)
@@ -589,6 +606,7 @@ void JrdStatement::release(thread_db* tdbb)
 			{
 				jrd_rel* relation = resource->rsc_rel;
 				MET_release_existence(tdbb, relation);
+				usedTablespaces[relation->getBasePages()->rel_pg_space_id]++;
 				break;
 			}
 
@@ -602,6 +620,8 @@ void JrdStatement::release(thread_db* tdbb)
 					if (!index->idl_count)
 						LCK_release(tdbb, index->idl_lock);
 				}
+				const USHORT pageSpaceId = MET_index_pagespace(tdbb, relation, resource->rsc_id);
+				usedTablespaces[pageSpaceId]++;
 				break;
 			}
 
@@ -622,6 +642,15 @@ void JrdStatement::release(thread_db* tdbb)
 				break;
 		}
 	}
+
+	// Now let's release all used tablespaces
+	for (USHORT i = DB_PAGE_SPACE + 1; i < TRANS_PAGE_SPACE; i++)
+		if (usedTablespaces[i] > 0)
+		{
+			// Tablespace is locking after the use in relation and indices.
+			// Should we check it here again?
+			tdbb->getAttachment()->getTablespace(i)->release(tdbb);
+		}
 
 	for (jrd_req** instance = requests.begin(); instance != requests.end(); ++instance)
 		EXE_release(tdbb, *instance);

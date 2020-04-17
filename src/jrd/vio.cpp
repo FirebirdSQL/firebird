@@ -84,6 +84,7 @@
 #include "../jrd/tpc_proto.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/vio_proto.h"
+#include "../jrd/os/pio_proto.h"
 #include "../jrd/dyn_ut_proto.h"
 #include "../jrd/Function.h"
 #include "../common/StatusArg.h"
@@ -169,7 +170,7 @@ static void protect_system_table_delupd(thread_db* tdbb, const jrd_rel* relation
 static void purge(thread_db*, record_param*);
 static void replace_record(thread_db*, record_param*, PageStack*, const jrd_tra*);
 static void refresh_fk_fields(thread_db*, Record*, record_param*, record_param*);
-static SSHORT set_metadata_id(thread_db*, Record*, USHORT, drq_type_t, const char*);
+static SSHORT set_metadata_id(thread_db*, Record*, USHORT, drq_type_t, const char*, SLONG shift = 0);
 static void set_nbackup_id(thread_db*, Record*, USHORT, drq_type_t, const char*);
 static void set_owner_name(thread_db*, Record*, USHORT);
 static bool set_security_class(thread_db*, Record*, USHORT);
@@ -1858,6 +1859,15 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			DFW_post_work(transaction, dfw_grant, &desc, id);
 			break;
 
+		case rel_tablespaces:
+		{
+			protect_system_table_delupd(tdbb, relation, "DELETE");
+			if (EVL_field(0, rpb->rpb_record, f_ts_name, &desc))
+				SCL_check_tablespace(tdbb, &desc, SCL_drop);
+			break;
+		}
+
+
 		default:    // Shut up compiler warnings
 			break;
 		}
@@ -3072,15 +3082,24 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			{
 				EVL_field(0, new_rpb->rpb_record, f_idx_name, &desc1);
 
-				if (EVL_field(0, new_rpb->rpb_record, f_idx_exp_blr, &desc2))
+				if (!dfw_should_know(tdbb, org_rpb, new_rpb, f_idx_ts_name, true))
 				{
-					DFW_post_work(transaction, dfw_create_expression_index,
-								  &desc1, tdbb->getDatabase()->dbb_max_idx);
+					// Only tablespace name was changed. Move index data by pages
+					DFW_post_work(transaction, dfw_move_index, &desc1,
+								  tdbb->getDatabase()->dbb_max_idx);
 				}
 				else
 				{
-					DFW_post_work(transaction, dfw_create_index, &desc1,
-								  tdbb->getDatabase()->dbb_max_idx);
+					if (EVL_field(0, new_rpb->rpb_record, f_idx_exp_blr, &desc2))
+					{
+						DFW_post_work(transaction, dfw_create_expression_index,
+									  &desc1, tdbb->getDatabase()->dbb_max_idx);
+					}
+					else
+					{
+						DFW_post_work(transaction, dfw_create_index, &desc1,
+									  tdbb->getDatabase()->dbb_max_idx);
+					}
 				}
 			}
 			break;
@@ -3442,7 +3461,6 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 	return true;
 }
 
-
 void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 {
 /**************************************
@@ -3784,6 +3802,31 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			set_nbackup_id(tdbb, rpb->rpb_record,
 							f_backup_id, drq_g_nxt_nbakhist_id, "RDB$BACKUP_HISTORY");
 			break;
+
+		case rel_tablespaces:
+		{
+			protect_system_table_insert(tdbb, request, relation);
+			EVL_field(0, rpb->rpb_record, f_ts_name, &desc);
+			EVL_field(0, rpb->rpb_record, f_ts_file, &desc2);
+
+			// File with tablespace should not exist. Check it in DFW is silent and cause to
+			// clean up of existing files at phase 0. Early checking preserve existing files.
+			const PathName fileName = MOV_make_string2(tdbb, &desc2, ttype_metadata).ToPathName();
+			if (PIO_file_exists(fileName))
+			{
+				string tableSpace = MOV_make_string2(tdbb, &desc, ttype_metadata);
+				tableSpace.trim();
+				ERR_post(Arg::Gds(isc_ts_file_exists) << Arg::Str(tableSpace) << Arg::Str(fileName));
+			}
+
+			object_id = set_metadata_id(tdbb, rpb->rpb_record,
+										f_ts_id, drq_g_nxt_ts_id, "RDB$TABLESPACES", 1);
+			DFW_post_work(transaction, dfw_create_tablespace, &desc, object_id);
+			set_owner_name(tdbb, rpb->rpb_record, f_ts_owner);
+			if (set_security_class(tdbb, rpb->rpb_record, f_ts_class))
+				DFW_post_work(transaction, dfw_grant, &desc, obj_tablespace);
+			break;
+		}
 
 		default:    // Shut up compiler warnings
 			break;
@@ -6111,7 +6154,7 @@ static void refresh_fk_fields(thread_db* tdbb, Record* old_rec, record_param* cu
 
 
 static SSHORT set_metadata_id(thread_db* tdbb, Record* record, USHORT field_id, drq_type_t dyn_id,
-	const char* name)
+	const char* name, SLONG shift)
 {
 /**************************************
  *
@@ -6129,7 +6172,7 @@ static SSHORT set_metadata_id(thread_db* tdbb, Record* record, USHORT field_id, 
 	if (EVL_field(0, record, field_id, &desc1))
 		return MOV_get_long(tdbb, &desc1, 0);
 
-	SSHORT value = (SSHORT) DYN_UTIL_gen_unique_id(tdbb, dyn_id, name);
+	SSHORT value = (SSHORT) DYN_UTIL_gen_unique_id(tdbb, dyn_id, name) + shift;
 	dsc desc2;
 	desc2.makeShort(0, &value);
 	MOV_move(tdbb, &desc2, &desc1);

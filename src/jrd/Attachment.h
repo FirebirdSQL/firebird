@@ -91,6 +91,7 @@ namespace Jrd
 	class Function;
 	class JrdStatement;
 	class Validation;
+	class Tablespace;
 	class Applier;
 
 
@@ -412,6 +413,7 @@ public:
 private:
 	jrd_tra*	att_sys_transaction;		// system transaction
 	StableAttachmentPart* att_stable;
+	Firebird::Array<Tablespace*>	att_tablespaces;	// Tablespaces cache ([0] element is DB_PAGE_SPACE)
 
 public:
 	Firebird::SortedArray<jrd_req*> att_requests;	// Requests belonging to attachment
@@ -610,6 +612,23 @@ public:
 	void deregisterBatch(JBatch* b)
 	{
 		att_batches.findAndRemove(b);
+	}
+
+	Tablespace* getTablespace(USHORT id)
+	{
+		return att_tablespaces[id - 1];
+	}
+
+	void setTablespace(USHORT id, Tablespace* value)
+	{
+		if (id > att_tablespaces.getCount())
+			att_tablespaces.grow(id);
+		att_tablespaces[id - 1] = value;
+	}
+
+	USHORT getTablespaceCount() const
+	{
+		return att_tablespaces.getCount();
 	}
 
 	UserId* getUserId(const Firebird::MetaName &userName);

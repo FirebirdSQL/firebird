@@ -100,12 +100,13 @@ static processing_state show_sys_functions(const char* msg);
 static processing_state show_func_legacy(const SCHAR*);
 static processing_state show_func(const SCHAR*);
 static processing_state show_generators(const SCHAR*);
-static void show_index(SCHAR*, SCHAR*, const SSHORT, const SSHORT, const SSHORT);
+static void show_index(SCHAR*, SCHAR*, const SSHORT, const SSHORT, const SSHORT, SCHAR*);
 static processing_state show_indices(const SCHAR* const*);
 static processing_state show_proc(const SCHAR*);
 static processing_state show_packages(const SCHAR* package_name);
 static processing_state show_role(const SCHAR*, bool, const char* msg = NULL);
 static processing_state show_secclass(const char* object, const char* opt);
+static processing_state show_tablespaces(const SCHAR*);
 static processing_state show_table(const SCHAR*, bool);
 static processing_state show_trigger(const SCHAR*, bool, bool);
 static processing_state show_users();
@@ -1744,6 +1745,10 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				case obj_filters:
 					strcpy(obj_string, "FILTER");
 					break;
+
+				case obj_tablespaces:
+					strcpy(obj_string, "TABLESPACE");
+					break;
 				}
 
 				if (PRV.RDB$GRANT_OPTION)
@@ -1997,7 +2002,7 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 			role, table, view, system, index, domain, exception,
 			filter, function, generator, grant, procedure, trigger,
 			check, database, comment, dependency, collation, security_class,
-			users, package, schema, map, wrong
+			users, package, schema, map, tablespace, wrong
 		};
 		ShowOptions(const optionsMap* inmap, size_t insize, int wrongval)
 			: OptionsBase(inmap, insize, wrongval)
@@ -2054,7 +2059,8 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 		{ShowOptions::users, "USERS", 0},
 		{ShowOptions::package, "PACKAGES", 4},
 		{ShowOptions::schema, "SCHEMAS", 4},
-		{ShowOptions::map, "MAPPING", 3}
+		{ShowOptions::map, "MAPPING", 3},
+		{ShowOptions::tablespace, "TABLESPACES", 0 }
 	};
 
 	const ShowOptions showoptions(options, FB_NELEM(options), ShowOptions::wrong);
@@ -2650,6 +2656,25 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 				key = NO_PACKAGE;
 			else
 				key = NO_PACKAGES;
+		}
+		break;
+
+	case ShowOptions::tablespace:
+		if (*cmd[2] == '"')
+		{
+			remove_delimited_double_quotes(lcmd[2]);
+			ret = show_tablespaces(lcmd[2]);
+		}
+		else
+			ret = show_tablespaces(cmd[2]);
+
+		switch (ret) {
+			case OBJECT_NOT_FOUND:
+				if (*cmd[2])
+					key = NO_TABLESPACE;
+				else
+					key = NO_TABLESPACES;
+				break;
 		}
 		break;
 
@@ -4683,7 +4708,8 @@ static void show_index(SCHAR* relation_name,
 					   SCHAR* index_name,
 					   const SSHORT unique_flag,
 					   const SSHORT index_type,
-					   const SSHORT inactive)
+					   const SSHORT inactive,
+					   SCHAR* tablespace_name)
 {
 /**************************************
  *
@@ -4706,6 +4732,13 @@ static void show_index(SCHAR* relation_name,
 	isqlGlob.printf("%s%s%s INDEX ON %s", index_name,
 			(unique_flag ? " UNIQUE" : ""),
 			(index_type == 1 ? " DESCENDING" : ""), relation_name);
+
+	if (tablespace_name)
+	{
+		fb_utils::exact_name(tablespace_name);
+		if (tablespace_name[0])
+			isqlGlob.printf(" TABLESPACE %s", tablespace_name);
+	}
 
 	// Get column names
 
@@ -4751,7 +4784,8 @@ static processing_state show_indices(const SCHAR* const* cmd)
 				IDX1.RDB$INDEX_INACTIVE = 0;
 
 			show_index (IDX1.RDB$RELATION_NAME, IDX1.RDB$INDEX_NAME,
-						IDX1.RDB$UNIQUE_FLAG, IDX1.RDB$INDEX_TYPE, IDX1.RDB$INDEX_INACTIVE);
+						IDX1.RDB$UNIQUE_FLAG, IDX1.RDB$INDEX_TYPE, IDX1.RDB$INDEX_INACTIVE,
+						IDX1.RDB$TABLESPACE_NAME);
 
 			if (!IDX1.RDB$EXPRESSION_BLR.NULL)
 			{
@@ -4782,7 +4816,8 @@ static processing_state show_indices(const SCHAR* const* cmd)
 			first = false;
 
 			show_index (IDX2.RDB$RELATION_NAME, IDX2.RDB$INDEX_NAME,
-						IDX2.RDB$UNIQUE_FLAG, IDX2.RDB$INDEX_TYPE, IDX2.RDB$INDEX_INACTIVE);
+						IDX2.RDB$UNIQUE_FLAG, IDX2.RDB$INDEX_TYPE, IDX2.RDB$INDEX_INACTIVE,
+						IDX2.RDB$TABLESPACE_NAME);
 
 			if (!IDX2.RDB$EXPRESSION_BLR.NULL)
 			{
@@ -4886,6 +4921,80 @@ static processing_state show_packages(const SCHAR* package_name)
 
 	if (first)
 		return (OBJECT_NOT_FOUND);
+
+	return (SKIP);
+}
+
+
+static processing_state show_tablespaces(const SCHAR* tablespace_name)
+{
+/*************************************
+*
+*	s h o w _ t a b l e s p a c e s
+*
+**************************************
+*
+* Functional description
+*	Show all tablespaces or the named tablespace
+************************************/
+	if (isqlGlob.major_ods < ODS_VERSION12)	//TODO: fix ODS version
+		return OBJECT_NOT_FOUND;
+
+	bool first = true;
+
+	if (!*tablespace_name)
+	{
+		//  List all tablespace names in columns
+		FOR X IN RDB$TABLESPACES WITH
+			(X.RDB$SYSTEM_FLAG NE 1 OR X.RDB$SYSTEM_FLAG MISSING)
+			SORTED BY X.RDB$TABLESPACE_NAME
+		{
+			first = false;
+			isqlGlob.printf("%s%s", fb_utils::exact_name(X.RDB$TABLESPACE_NAME), NEWLINE);
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR;
+		if (!first)
+			isqlGlob.printf(NEWLINE);
+	}
+	else
+	{
+		// List named tablespace
+
+		FOR X IN RDB$TABLESPACES WITH
+			X.RDB$TABLESPACE_NAME EQ tablespace_name
+
+			first = false;
+			// Print the name of the package
+			fb_utils::exact_name(X.RDB$TABLESPACE_NAME);
+			isqlGlob.printf("%s", X.RDB$TABLESPACE_NAME);
+
+			if (!X.RDB$FILE_NAME.NULL)
+			{
+				fb_utils::exact_name(X.RDB$FILE_NAME);
+				isqlGlob.printf(" FILE %s", X.RDB$FILE_NAME);
+			}
+
+			const char* offline = X.RDB$OFFLINE.NULL || !X.RDB$OFFLINE ? "ONLINE" : "OFFLINE";
+			isqlGlob.printf(" %s", offline);
+
+			const char* readonly = X.RDB$READ_ONLY.NULL || !X.RDB$READ_ONLY ? "READ WRITE" : "READ ONLY";
+			isqlGlob.printf(" %s", readonly);
+
+			isqlGlob.printf(NEWLINE);
+
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR;
+	}
+
+	if (first)
+		return OBJECT_NOT_FOUND;
 
 	return (SKIP);
 }
@@ -5727,6 +5836,12 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 
 			if (!REL.RDB$EXTERNAL_FILE.NULL)
 				isqlGlob.printf("External file: %s%s", REL.RDB$EXTERNAL_FILE, NEWLINE);
+
+			if (!REL.RDB$TABLESPACE_NAME.NULL)
+			{
+				fb_utils::exact_name(REL.RDB$TABLESPACE_NAME);
+				isqlGlob.printf("TABLESPACE: %s%s", REL.RDB$TABLESPACE_NAME, NEWLINE);
+			}
 		}
 		first = false;
 		if ((isView && REL.RDB$VIEW_BLR.NULL) || (!isView && !REL.RDB$VIEW_BLR.NULL))

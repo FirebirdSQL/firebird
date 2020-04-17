@@ -1948,6 +1948,10 @@ C --
       PARAMETER (GDS__truncate_monitor                 = 335545267)
       INTEGER*4 GDS__truncate_context                
       PARAMETER (GDS__truncate_context                 = 335545268)
+      INTEGER*4 GDS__ts_file_exists                  
+      PARAMETER (GDS__ts_file_exists                   = 335545269)
+      INTEGER*4 GDS__tablespace_name                 
+      PARAMETER (GDS__tablespace_name                  = 335545270)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 
@@ -2260,6 +2264,10 @@ C --
       PARAMETER (GDS__dyn_gen_not_exist                = 336068916)
       INTEGER*4 GDS__dyn_fld_not_exist               
       PARAMETER (GDS__dyn_fld_not_exist                = 336068917)
+      INTEGER*4 GDS__dyn_ts_not_found                
+      PARAMETER (GDS__dyn_ts_not_found                 = 336068918)
+      INTEGER*4 GDS__dyn_cant_alter_ts               
+      PARAMETER (GDS__dyn_cant_alter_ts                = 336068919)
       INTEGER*4 GDS__gbak_unknown_switch             
       PARAMETER (GDS__gbak_unknown_switch              = 336330753)
       INTEGER*4 GDS__gbak_page_size_missing          
@@ -2716,6 +2724,16 @@ C --
       PARAMETER (GDS__dsql_max_nesting                 = 336397333)
       INTEGER*4 GDS__dsql_recreate_user_failed       
       PARAMETER (GDS__dsql_recreate_user_failed        = 336397334)
+      INTEGER*4 GDS__dsql_create_ts_failed           
+      PARAMETER (GDS__dsql_create_ts_failed            = 336397335)
+      INTEGER*4 GDS__dsql_alter_ts_failed            
+      PARAMETER (GDS__dsql_alter_ts_failed             = 336397336)
+      INTEGER*4 GDS__dsql_create_alter_ts_failed     
+      PARAMETER (GDS__dsql_create_alter_ts_failed      = 336397337)
+      INTEGER*4 GDS__dsql_drop_ts_failed             
+      PARAMETER (GDS__dsql_drop_ts_failed              = 336397338)
+      INTEGER*4 GDS__dsql_recreate_ts_failed         
+      PARAMETER (GDS__dsql_recreate_ts_failed          = 336397339)
       INTEGER*4 GDS__gsec_cant_open_db               
       PARAMETER (GDS__gsec_cant_open_db                = 336723983)
       INTEGER*4 GDS__gsec_switches_error             

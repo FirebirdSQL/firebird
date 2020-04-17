@@ -94,6 +94,7 @@ static void list_package_headers();
 static void list_procedure_bodies();
 static void list_procedure_headers();
 static void list_views();
+static void list_tablespaces();
 
 static const char* const Procterm = "^";	// TXNN: script use only
 
@@ -177,6 +178,7 @@ int EXTRACT_ddl(LegacyTables flag, const SCHAR* tabname)
 		list_collations();
 		list_generators();
 		list_domains(default_char_set_id);
+		list_tablespaces();
 		list_all_tables(flag, default_char_set_id);
 		list_functions_legacy();
 		list_functions_ods12_headers();
@@ -303,6 +305,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 	SCHAR char_sets[CHARSET_COLLATE_SIZE];
 	rel_t rel_type = rel_persistent;
 	char ss[28] = "";
+	Firebird::string tableSpaceName;
 
 	// Query to obtain relation detail information
 
@@ -349,6 +352,13 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			}
 			else
 				isqlGlob.printf("%s ", new_name ? new_name : relation_name);
+
+			if (!REL.RDB$TABLESPACE_NAME.NULL)
+			{
+				fb_utils::exact_name(REL.RDB$TABLESPACE_NAME);
+				IUTILS_copy_SQL_id (REL.RDB$TABLESPACE_NAME, SQL_identifier, DBL_QUOTE);
+				tableSpaceName.printf(" TABLESPACE %s", SQL_identifier);
+			}
 
 			if (!REL.RDB$SQL_SECURITY.NULL)
 			{
@@ -594,9 +604,9 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 	const char* opt_delim = *gtt_scope && *ss ? ", " : "";
 
 	if (*gtt_scope || *ss)
-		isqlGlob.printf(")%s%s%s%s", NEWLINE, gtt_scope, opt_delim , ss);
+		isqlGlob.printf(")%s %s%s%s%s", tableSpaceName.c_str(), NEWLINE, gtt_scope, opt_delim , ss);
 	else
-		isqlGlob.printf(")");
+		isqlGlob.printf(")%s", tableSpaceName.c_str());
 
 	isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
 	return FINI_OK;
@@ -1420,7 +1430,8 @@ static processing_state list_all_grants2(bool show_role_list, const SCHAR* termi
 static void print_proc_prefix(int obj_type, bool headerOnly)
 {
 	if (obj_type == obj_procedure || obj_type == obj_udf ||
-		obj_type == obj_package_header || obj_type == obj_package_body)
+		obj_type == obj_package_header || obj_type == obj_package_body ||
+		obj_type == obj_tablespace)
 	{
 		isqlGlob.printf("%sCOMMIT WORK%s%s", NEWLINE, isqlGlob.global_Term, NEWLINE);
 	}
@@ -1447,6 +1458,9 @@ static void print_proc_prefix(int obj_type, bool headerOnly)
 		break;
 	case obj_package_body:
 		legend = "Package bodies";
+		break;
+	case obj_tablespace:
+		legend = "Tablespaces";
 		break;
 	}
 	if (legend)
@@ -3352,12 +3366,19 @@ static void list_indexes()
 			isqlGlob.printf(" COMPUTED BY ");
 			if (!IDX.RDB$EXPRESSION_SOURCE.NULL)
 				SHOW_print_metadata_text_blob (isqlGlob.Out, &IDX.RDB$EXPRESSION_SOURCE);
-			isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
 		}
 		else if (ISQL_get_index_segments (collist, sizeof(collist), IDX.RDB$INDEX_NAME, true))
 		{
-			isqlGlob.printf(" (%s)%s%s", collist, isqlGlob.global_Term, NEWLINE);
+			isqlGlob.printf(" (%s)", collist);
 		}
+
+		if (!IDX.RDB$TABLESPACE_NAME.NULL)
+		{
+			fb_utils::exact_name(IDX.RDB$TABLESPACE_NAME);
+			isqlGlob.printf(" TABLESPACE %s", IDX.RDB$TABLESPACE_NAME);
+		}
+
+		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
 
 	END_FOR
 	ON_ERROR
@@ -3567,6 +3588,64 @@ static void list_views()
 			SHOW_print_metadata_text_blob (isqlGlob.Out, &REL.RDB$VIEW_SOURCE);
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
+
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR;
+}
+
+static void list_tablespaces()
+{
+/**************************************
+ *
+ *	l i s t _ t a b l e s p a c e s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Show tablespaces
+ *	Use a SQL query to get the info and print it.
+ *
+ **************************************/
+
+ 	if (isqlGlob.major_ods < ODS_VERSION13)
+ 		return;
+
+ 	bool first = true;
+
+	FOR X IN RDB$TABLESPACES WITH
+		(X.RDB$SYSTEM_FLAG NE 1 OR X.RDB$SYSTEM_FLAG MISSING)
+		SORTED BY X.RDB$TABLESPACE_NAME
+
+		if (first)
+		{
+			isqlGlob.printf("%s/*  Tablespaces */%s", NEWLINE, NEWLINE);
+			first = false;
+		}
+
+		fb_utils::exact_name(X.RDB$TABLESPACE_NAME);
+		fb_utils::exact_name(X.RDB$FILE_NAME);
+		fb_utils::exact_name(X.RDB$OWNER_NAME);
+
+		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
+			IUTILS_copy_SQL_id (X.RDB$TABLESPACE_NAME, SQL_identifier, DBL_QUOTE);
+		else
+			strcpy(SQL_identifier, X.RDB$TABLESPACE_NAME);
+
+		isqlGlob.printf("%s/* Tablespace: %s, Owner: %s */%s",
+				 NEWLINE,
+				 X.RDB$TABLESPACE_NAME,
+				 X.RDB$OWNER_NAME,
+				 NEWLINE);
+
+		const char* offline = X.RDB$OFFLINE.NULL || !X.RDB$OFFLINE ? "ONLINE" : "OFFLINE";
+		const char* readonly = X.RDB$READ_ONLY.NULL || !X.RDB$READ_ONLY ? "READ WRITE" : "READ ONLY";
+
+		isqlGlob.printf("CREATE TABLESPACE %s FILE '%s' %s %s", SQL_identifier, X.RDB$FILE_NAME, offline, readonly);
+
+		isqlGlob.printf("%s%s", Procterm, NEWLINE);
 
 	END_FOR
 	ON_ERROR

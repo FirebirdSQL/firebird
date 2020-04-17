@@ -52,6 +52,7 @@ void SCL_check_filter(Jrd::thread_db* tdbb, const Firebird::MetaName &name, Jrd:
 void SCL_check_relation(Jrd::thread_db* tdbb, const dsc*, Jrd::SecurityClass::flags_t, bool protectSys = true);
 bool SCL_check_view(Jrd::thread_db* tdbb, const dsc*, Jrd::SecurityClass::flags_t);
 void SCL_check_role(Jrd::thread_db* tdbb, const Firebird::MetaName&, Jrd::SecurityClass::flags_t);
+void SCL_check_tablespace(Jrd::thread_db* tdbb, const dsc*, Jrd::SecurityClass::flags_t);
 Jrd::SecurityClass* SCL_get_class(Jrd::thread_db*, const TEXT*);
 Jrd::SecurityClass::flags_t SCL_get_mask(Jrd::thread_db* tdbb, const TEXT*, const TEXT*);
 void SCL_clear_classes(Jrd::thread_db*, const TEXT*);

@@ -22,6 +22,7 @@
     <ClCompile Include="..\..\..\gen\dsql\DdlNodes.cpp" />
     <ClCompile Include="..\..\..\gen\dsql\metd.cpp" />
     <ClCompile Include="..\..\..\gen\dsql\PackageNodes.cpp" />
+	<ClCompile Include="..\..\..\gen\dsql\TablespaceNodes.cpp" />
     <ClCompile Include="..\..\..\gen\jrd\dfw.cpp" />
     <ClCompile Include="..\..\..\gen\jrd\dpm.cpp" />
     <ClCompile Include="..\..\..\gen\jrd\dyn_util.cpp" />
@@ -151,6 +152,7 @@
     <ClCompile Include="..\..\..\src\jrd\svc.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SysFunction.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SystemPackages.cpp" />
+	<ClCompile Include="..\..\..\src\jrd\Tablespace.cpp" />
     <ClCompile Include="..\..\..\src\jrd\TempSpace.cpp" />
     <ClCompile Include="..\..\..\src\jrd\TimeZone.cpp" />
     <ClCompile Include="..\..\..\src\jrd\tpc.cpp" />
@@ -353,6 +355,7 @@
     <None Include="..\..\..\src\dsql\DdlNodes.epp" />
     <None Include="..\..\..\src\dsql\metd.epp" />
     <None Include="..\..\..\src\dsql\PackageNodes.epp" />
+	<None Include="..\..\..\src\dsql\TablespaceNodes.epp" />
     <None Include="..\..\..\src\dsql\parse.y">
       <FileType>Document</FileType>
     </None>

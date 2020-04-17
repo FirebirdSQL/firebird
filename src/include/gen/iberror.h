@@ -1004,6 +1004,8 @@ const ISC_STATUS isc_suspend_without_returns          = 335545265L;
 const ISC_STATUS isc_truncate_warn                    = 335545266L;
 const ISC_STATUS isc_truncate_monitor                 = 335545267L;
 const ISC_STATUS isc_truncate_context                 = 335545268L;
+const ISC_STATUS isc_ts_file_exists                   = 335545269L;
+const ISC_STATUS isc_tablespace_name                  = 335545270L;
 const ISC_STATUS isc_gfix_db_name                     = 335740929L;
 const ISC_STATUS isc_gfix_invalid_sw                  = 335740930L;
 const ISC_STATUS isc_gfix_incmp_sw                    = 335740932L;
@@ -1160,6 +1162,8 @@ const ISC_STATUS isc_dyn_rel_not_exist                = 336068914L;
 const ISC_STATUS isc_dyn_exc_not_exist                = 336068915L;
 const ISC_STATUS isc_dyn_gen_not_exist                = 336068916L;
 const ISC_STATUS isc_dyn_fld_not_exist                = 336068917L;
+const ISC_STATUS isc_dyn_ts_not_found                 = 336068918L;
+const ISC_STATUS isc_dyn_cant_alter_ts                = 336068919L;
 const ISC_STATUS isc_gbak_unknown_switch              = 336330753L;
 const ISC_STATUS isc_gbak_page_size_missing           = 336330754L;
 const ISC_STATUS isc_gbak_page_size_toobig            = 336330755L;
@@ -1388,6 +1392,11 @@ const ISC_STATUS isc_dsql_string_byte_length          = 336397331L;
 const ISC_STATUS isc_dsql_string_char_length          = 336397332L;
 const ISC_STATUS isc_dsql_max_nesting                 = 336397333L;
 const ISC_STATUS isc_dsql_recreate_user_failed        = 336397334L;
+const ISC_STATUS isc_dsql_create_ts_failed            = 336397335L;
+const ISC_STATUS isc_dsql_alter_ts_failed             = 336397336L;
+const ISC_STATUS isc_dsql_create_alter_ts_failed      = 336397337L;
+const ISC_STATUS isc_dsql_drop_ts_failed              = 336397338L;
+const ISC_STATUS isc_dsql_recreate_ts_failed          = 336397339L;
 const ISC_STATUS isc_gsec_cant_open_db                = 336723983L;
 const ISC_STATUS isc_gsec_switches_error              = 336723984L;
 const ISC_STATUS isc_gsec_no_op_spec                  = 336723985L;
@@ -1494,7 +1503,7 @@ const ISC_STATUS isc_trace_switch_user_only           = 337182757L;
 const ISC_STATUS isc_trace_switch_param_miss          = 337182758L;
 const ISC_STATUS isc_trace_param_act_notcompat        = 337182759L;
 const ISC_STATUS isc_trace_mandatory_switch_miss      = 337182760L;
-const ISC_STATUS isc_err_max                          = 1438;
+const ISC_STATUS isc_err_max                          = 1447;
 
 #else /* c definitions */
 
@@ -2468,6 +2477,8 @@ const ISC_STATUS isc_err_max                          = 1438;
 #define isc_truncate_warn                    335545266L
 #define isc_truncate_monitor                 335545267L
 #define isc_truncate_context                 335545268L
+#define isc_ts_file_exists                   335545269L
+#define isc_tablespace_name                  335545270L
 #define isc_gfix_db_name                     335740929L
 #define isc_gfix_invalid_sw                  335740930L
 #define isc_gfix_incmp_sw                    335740932L
@@ -2624,6 +2635,8 @@ const ISC_STATUS isc_err_max                          = 1438;
 #define isc_dyn_exc_not_exist                336068915L
 #define isc_dyn_gen_not_exist                336068916L
 #define isc_dyn_fld_not_exist                336068917L
+#define isc_dyn_ts_not_found                 336068918L
+#define isc_dyn_cant_alter_ts                336068919L
 #define isc_gbak_unknown_switch              336330753L
 #define isc_gbak_page_size_missing           336330754L
 #define isc_gbak_page_size_toobig            336330755L
@@ -2852,6 +2865,11 @@ const ISC_STATUS isc_err_max                          = 1438;
 #define isc_dsql_string_char_length          336397332L
 #define isc_dsql_max_nesting                 336397333L
 #define isc_dsql_recreate_user_failed        336397334L
+#define isc_dsql_create_ts_failed            336397335L
+#define isc_dsql_alter_ts_failed             336397336L
+#define isc_dsql_create_alter_ts_failed      336397337L
+#define isc_dsql_drop_ts_failed              336397338L
+#define isc_dsql_recreate_ts_failed          336397339L
 #define isc_gsec_cant_open_db                336723983L
 #define isc_gsec_switches_error              336723984L
 #define isc_gsec_no_op_spec                  336723985L
@@ -2958,7 +2976,7 @@ const ISC_STATUS isc_err_max                          = 1438;
 #define isc_trace_switch_param_miss          337182758L
 #define isc_trace_param_act_notcompat        337182759L
 #define isc_trace_mandatory_switch_miss      337182760L
-#define isc_err_max                          1438
+#define isc_err_max                          1447
 
 #endif
 

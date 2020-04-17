@@ -1050,6 +1050,13 @@ int gbak(Firebird::UtilSvc* uSvc)
 			tdgbl->gbl_sw_transportable = true;
 			transportableMentioned = true;
 			break;
+		case IN_SW_BURP_TS_MAPPING_FILE:
+			if (++itr >= argc)
+			{
+				BURP_error(401, true);	// msg 401 tablespace mapping file parameter missing
+			}
+			tdgbl->loadMapping(argv[itr], tdgbl->tablespace_mapping, false);
+			break;
 		}
 	}						// for
 
@@ -2804,6 +2811,52 @@ void BurpGlobals::print_stats_header()
 
 	burp_output(false, "\n");
 }
+
+
+void BurpGlobals::loadMapping(const char* mapping_file, StringMap& map, bool caseSensitive)
+{
+	FILE* f = os_utils::fopen(mapping_file, fopen_read_type);
+	if (!f)
+	{
+		BURP_error(402, true, SafeArg() << mapping_file);	// msg 402 cannot open mapping file @1
+	}
+
+	//Read lines from file, split by space and add to mapping
+	map.clear();
+	bool end = false;
+	do
+	{
+		Firebird::string line;
+		char buffer[MAX_USHORT];
+
+		if (fgets(buffer, sizeof(buffer), f) != NULL)
+		{
+			size_t lineSize = strlen(buffer);
+			if (buffer[lineSize - 1] == '\n')
+				buffer[--lineSize] = '\0';
+			const char* ch = strchr(buffer, ' ');
+			if (!ch)
+				continue;
+			Firebird::string func(buffer, ch - buffer);
+			Firebird::string args(ch + 1, lineSize - func.size() - 1);
+			func.trim();
+			args.trim();
+			if (!func.empty() && !args.empty())
+			{
+				if (!caseSensitive)
+					func.upper();
+				map.put(func, args);
+			}
+		}
+		else
+		{
+			end = true;
+		}
+	} while (!end);
+
+	fclose(f);
+}
+
 
 void BURP_makeSymbol(BurpGlobals* tdgbl, Firebird::string& name)		// add double quotes to string
 {

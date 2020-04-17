@@ -297,7 +297,8 @@ public:
 		  fld_relation(NULL),
 		  fld_procedure(NULL),
 		  fld_id(0),
-		  fld_name(p)
+		  fld_name(p),
+		  fld_ts_name(p)
 	{
 	}
 
@@ -312,7 +313,8 @@ public:
 	dsql_rel*	fld_relation;			// Parent relation
 	dsql_prc*	fld_procedure;			// Parent procedure
 	USHORT		fld_id;					// Field in in database
-	Firebird::MetaName fld_name;
+	Firebird::MetaName	fld_name;
+	Firebird::MetaName	fld_ts_name;			// Tablespace name for BLOB field
 };
 
 // values used in fld_flags

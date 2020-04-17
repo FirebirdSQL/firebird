@@ -97,6 +97,7 @@ const int IN_SW_BURP_KEYNAME			= 50;	// name of crypt key
 const int IN_SW_BURP_CRYPT				= 51;	// name of crypt plugin
 
 const int IN_SW_BURP_INCLUDE_DATA		= 52;	// backup data from tables
+const int IN_SW_BURP_TS_MAPPING_FILE	= 53;   // mapping file for tablespaces
 
 /**************************************************************************/
 
@@ -220,6 +221,7 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 	{IN_SW_BURP_HIDDEN_RDONLY,	isc_spb_res_am_readonly,	"MODE READ_ONLY",	0, 0, 0, false, false,	0, 14, NULL, boRestore},
 	{IN_SW_BURP_HIDDEN_RDWRITE, isc_spb_res_am_readwrite,	"MODE READ_WRITE",	0, 0, 0, false, false,	0, 15, NULL, boRestore},
 /**************************************************************************/
+	{IN_SW_BURP_TS_MAPPING_FILE,	0,	"TABLESPACE_MAPPING_FILE",	0, 0, 0, false, false,	1014, 14, NULL, boRestore},	//TODO: Check message no (1014)
 	{IN_SW_BURP_0,		 0, NULL,			0, 0, 0, false, false,	0, 0, NULL, boGeneral}
 };
 

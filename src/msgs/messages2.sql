@@ -1056,6 +1056,8 @@ Data source : @4', NULL, NULL)
 ('truncate_warn', NULL, 'cvt.cpp', NULL, 0, 946, NULL, 'String truncated warning due to the following reason', NULL, NULL);
 ('truncate_monitor', NULL, 'Monitoring.cpp', NULL, 0, 947, NULL, 'Monitoring data does not fit into the field', NULL, NULL);
 ('truncate_context', NULL, 'SysFunction.cpp', NULL, 0, 948, NULL, 'Engine data does not fit into return value of system function', NULL, NULL);
+('ts_file_exists', NULL, NULL, NULL, 0, 949, NULL, 'Tablespace "@1" creation error. File "@2" exists.', NULL, NULL);    --//TODO: fix error refs
+('tablespace_name', 'handleDependencies', 'TablespaceNodes.epp', NULL, 0, 950, NULL, 'TABLESPACE @1', NULL, NULL);      --//TODO: fix error refs
 -- QLI
 (NULL, NULL, NULL, NULL, 1, 0, NULL, 'expected type', NULL, NULL);
 (NULL, NULL, NULL, NULL, 1, 1, NULL, 'bad block type', NULL, NULL);
@@ -2151,6 +2153,8 @@ COMMIT WORK;
 ('dyn_exc_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 307, NULL, 'Exception @1 does not exist', NULL, NULL);
 ('dyn_gen_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 308, NULL, 'Generator/Sequence @1 does not exist', NULL, NULL);
 ('dyn_fld_not_exist', 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 309, NULL, 'Field @1 of table @2 does not exist', NULL, NULL);
+('dyn_ts_not_found', NULL, 'DdlNodes.epp/TablespaceNodes.epp', NULL, 8, 310, NULL, 'Tablespace @1 not found', NULL, NULL);
+('dyn_cant_alter_ts', NULL, 'DdlNodes.epp', NULL, 8, 311, NULL, 'Cannot alter tablespace for temporary table @1', NULL, NULL);
 COMMIT WORK;
 -- TEST
 (NULL, 'main', 'test.c', NULL, 11, 0, NULL, 'This is a modified text message', NULL, NULL);
@@ -2563,6 +2567,13 @@ ERROR: Backup incomplete', NULL, NULL);
 (NULL, 'get_db_creators', 'restore.epp', NULL, 12, 393, NULL, '    restoring database create grant for @1', NULL, NULL);
 (NULL, 'get_db_creators', 'restore.epp', NULL, 12, 394, NULL, 'restoring database create grants', NULL, NULL);
 (NULL, 'get_db_creators', 'restore.epp', NULL, 12, 395, NULL, 'database create grant', NULL, NULL);
+(NULL, 'BACKUP_backup', 'backup.epp', NULL, 12, 396, NULL, 'writing tablespaces', NULL, NULL);
+(NULL, 'write_tablespaces', 'backup.epp', NULL, 12, 397, NULL, 'writing tablespace @1', NULL, NULL);
+(NULL, 'get_tablespace', 'restore.epp', NULL, 12, 398, NULL, 'restoring tablespace @1', NULL, NULL);
+(NULL, 'get_tablespace', 'restore.epp', NULL, 12, 399, NULL, 'tablespace', NULL, NULL);
+(NULL, 'burp_usage', 'burp.c', NULL, 12, 400, NULL, '    @1TABLESPACE_MAP(PING_FILE) <mapping file>        mapping file for tablespaces', NULL, NULL);
+(NULL, 'main()', 'burp.c', NULL, 12, 401, NULL, 'tablespace mapping file parameter missing', NULL, NULL);
+(NULL, NULL, 'burp.c', NULL, 12, 402, NULL, 'cannot open mapping file "@1"', NULL, NULL);
 -- SQLERR
 (NULL, NULL, NULL, NULL, 13, 1, NULL, 'Firebird error', NULL, NULL);
 (NULL, NULL, NULL, NULL, 13, 74, NULL, 'Rollback not performed', NULL, NULL);
@@ -2853,6 +2864,11 @@ ERROR: Backup incomplete', NULL, NULL);
 ('dsql_string_char_length', NULL, 'Parser.cpp', NULL, 13, 1044, NULL, 'String literal with @1 characters exceeds the maximum length of @2 characters for the @3 character set', NULL, NULL);
 ('dsql_max_nesting', NULL, 'StmtNodes.cpp', NULL, 13, 1045, NULL, 'Too many BEGIN...END nesting. Maximum level is @1', NULL, NULL);
 ('dsql_recreate_user_failed', 'getMainErrorCode', 'DdlNodes.h', NULL, 13, 1046, NULL, 'RECREATE USER @1 failed', NULL, NULL);
+('dsql_create_ts_failed', 'getMainErrorCode', 'TablespaceNodes.h', NULL, 13, 1047, NULL, 'CREATE TABLESPACE @1 failed', NULL, NULL);
+('dsql_alter_ts_failed', 'getMainErrorCode', 'TablespaceNodes.h', NULL, 13, 1048, NULL, 'ALTER TABLESPACE @1 failed', NULL, NULL);
+('dsql_create_alter_ts_failed', 'getMainErrorCode', 'TablespaceNodes.h', NULL, 13, 1049, NULL, 'CREATE OR ALTER TABLESPACE @1 failed', NULL, NULL);
+('dsql_drop_ts_failed', 'getMainErrorCode', 'TablespaceNodes.h', NULL, 13, 1050, NULL, 'DROP TABLESPACE @1 failed', NULL, NULL);
+('dsql_recreate_ts_failed', 'getMainErrorCode', 'TablespaceNodes.h', NULL, 13, 1051, NULL, 'RECREATE TABLESPACE @1 failed', NULL, NULL);
 -- SQLWARN
 (NULL, NULL, NULL, NULL, 14, 100, NULL, 'Row not found for fetch, update or delete, or the result of a query is an empty table.', NULL, NULL);
 (NULL, NULL, NULL, NULL, 14, 101, NULL, 'segment buffer length shorter than expected', NULL, NULL);
@@ -3250,12 +3266,12 @@ Elapsed time = ~ sec
 Reads = !
 Writes = !
 Fetches = !', NULL, NULL);
-('NO_MAP', 'SHOW_metadata', 'show.epp', NULL, 17, 184, NULL, 'There is no mapping @1 in this database', NULL, NULL)
-('NO_MAPS', 'SHOW_metadata', 'show.epp', NULL, 17, 185, NULL, 'There are no mappings in this database', NULL, NULL)
-('INVALID_TERM_CHARS', 'frontend_set', 'isql.epp', NULL, 17, 186, NULL, 'Invalid characters for SET TERMINATOR are @1', NULL, NULL)
-('REC_DISPLAYCOUNT', 'process_statement', 'isql.epp', NULL, 17, 187, NULL, 'Records displayed: @1', NULL, NULL)
-('COLUMNS_HIDDEN', 'process_statement', 'isql.epp', NULL, 17, 188, NULL, 'Full NULL columns hidden due to RecordBuff: @1', NULL, NULL)
-('HLP_SETRECORDBUF', 'help', 'isql.epp', NULL, 17, 189, NULL, '    SET RECORDBuf          -- toggle limited buffering and trimming of columns', NULL, NULL)
+('NO_MAP', 'SHOW_metadata', 'show.epp', NULL, 17, 184, NULL, 'There is no mapping @1 in this database', NULL, NULL);
+('NO_MAPS', 'SHOW_metadata', 'show.epp', NULL, 17, 185, NULL, 'There are no mappings in this database', NULL, NULL);
+('INVALID_TERM_CHARS', 'frontend_set', 'isql.epp', NULL, 17, 186, NULL, 'Invalid characters for SET TERMINATOR are @1', NULL, NULL);
+('REC_DISPLAYCOUNT', 'process_statement', 'isql.epp', NULL, 17, 187, NULL, 'Records displayed: @1', NULL, NULL);
+('COLUMNS_HIDDEN', 'process_statement', 'isql.epp', NULL, 17, 188, NULL, 'Full NULL columns hidden due to RecordBuff: @1', NULL, NULL);
+('HLP_SETRECORDBUF', 'help', 'isql.epp', NULL, 17, 189, NULL, '    SET RECORDBuf          -- toggle limited buffering and trimming of columns', NULL, NULL);
 ('NUMBER_USED_PAGES', 'SHOW_dbb_parameters', 'show.epp', NULL, 17, 190, NULL, 'Number of DB pages used = @1', NULL, NULL);
 ('NUMBER_FREE_PAGES', 'SHOW_dbb_parameters', 'show.epp', NULL, 17, 191, NULL, 'Number of DB pages free = @1', NULL, NULL);
 ('DATABASE_CRYPTED', 'SHOW_dbb_parameters', 'show.epp', NULL, 17, 192, NULL, 'Database encrypted', NULL, NULL);
@@ -3263,6 +3279,9 @@ Fetches = !', NULL, NULL);
 ('DATABASE_CRYPT_PROCESS', 'SHOW_dbb_parameters', 'show.epp', NULL, 17, 194, NULL, 'crypt thread not complete', NULL, NULL);
 ('MSG_ROLES', 'SHOW_metadata', 'show.epp', NULL, 17, 195, NULL, 'Roles:', NULL, NULL);
 ('NO_TIMEOUTS', 'process_statement', 'isql.epp', NULL, 17, 196, NULL, 'Timeouts are not supported by server', NULL, NULL);
+('NO_TABLESPACE', 'SHOW_metadata', 'show.epp', NULL, 17, 197, NULL, 'There is no tablespace @1 in this database', NULL, NULL);
+('NO_TABLESPACES', 'SHOW_metadata', 'show.epp', NULL, 17, 198, NULL, 'There are no tablespaces in this database', NULL, NULL);
+('MSG_TABLESPACES', 'SHOW_metadata', 'show.e', NULL, 17, 199, NULL, 'Tablespaces:', NULL, NULL);
 -- GSEC
 ('GsecMsg1', 'get_line', 'gsec.e', NULL, 18, 1, NULL, 'GSEC>', NULL, NULL);
 ('GsecMsg2', 'printhelp', 'gsec.e', 'This message is used in the Help display. It should be the same as number 1 (but in lower case).', 18, 2, NULL, 'gsec', NULL, NULL);

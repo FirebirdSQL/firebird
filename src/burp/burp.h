@@ -46,6 +46,7 @@
 #include "../common/status.h"
 #include "../common/sha.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../common/classes/GenericMap.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -115,7 +116,8 @@ enum rec_type {
 	rec_sql_roles,			// SQL roles
 	rec_mapping,			// Mapping of security names
 	rec_package,			// Package
-	rec_db_creator			// Database creator
+	rec_db_creator,			// Database creator
+	rec_tablespace			// Tablespace
 };
 
 
@@ -272,6 +274,7 @@ enum att_type {
 	att_relation_ext_file_name, // name of file for external tables
 	att_relation_type,
 	att_relation_sql_security,
+	att_relation_tablespace_name,
 
 	// Field attributes (used for both global and local fields)
 
@@ -332,6 +335,9 @@ enum att_type {
 	att_field_generator_name,
 	att_field_identity_type,
 
+	//TODO: FB???.???, ODS???_???
+	att_field_tablespace_name,
+
 	// Index attributes
 
 	att_index_name = SERIES,
@@ -345,6 +351,7 @@ enum att_type {
 	att_index_description2,
 	att_index_expression_source,
 	att_index_expression_blr,
+	att_index_tablespace_name,
 
 	// Data record
 
@@ -630,7 +637,16 @@ enum att_type {
 
 	// Database creators
 	att_dbc_user = SERIES,
-	att_dbc_type
+	att_dbc_type,
+
+	// Tablespace attributes
+	att_ts_name = SERIES,
+	att_ts_security_class,
+	att_ts_description,
+	att_ts_owner_name,
+	att_ts_file,
+	att_ts_offline,
+	att_ts_readonly
 };
 
 
@@ -702,6 +718,7 @@ struct burp_fld
 	SSHORT		fld_collation_id;
 	RCRD_OFFSET	fld_sql;
 	RCRD_OFFSET	fld_null;
+	TEXT		fld_tablespace[GDS_NAME_LEN];
 };
 
 enum fld_flags_vals {
@@ -938,7 +955,8 @@ public:
 		  verboseInterval(10000),
 		  flag_on_line(true),
 		  firstMap(true),
-		  stdIoMode(false)
+		  stdIoMode(false),
+		  tablespace_mapping(*getDefaultMemoryPool())
 	{
 		// this is VERY dirty hack to keep current (pre-FB2) behaviour
 		memset (&gbl_database_file_name, 0,
@@ -1112,6 +1130,7 @@ public:
 	Firebird::IRequest*	handles_get_type_req_handle1;
 	Firebird::IRequest*	handles_get_user_privilege_req_handle1;
 	Firebird::IRequest*	handles_get_view_req_handle1;
+	Firebird::IRequest*	handles_get_ts_req_handle1;
 
 	// The handles_put.. are for backup.
 	Firebird::IRequest*	handles_put_index_req_handle1;
@@ -1132,6 +1151,9 @@ public:
 	bool			hdr_forced_writes;
 	TEXT			database_security_class[GDS_NAME_LEN]; // To save database security class for deferred update
 
+	typedef Firebird::GenericMap<Firebird::Pair<
+		Firebird::Full<Firebird::string, Firebird::string> > > StringMap;
+
 	static inline BurpGlobals* getSpecific()
 	{
 		return (BurpGlobals*) ThreadData::getSpecific();
@@ -1147,6 +1169,7 @@ public:
 	void setupSkipData(const Firebird::string& regexp);
 	void setupIncludeData(const Firebird::string& regexp);
 	bool skipRelation(const char* name);
+	void loadMapping(const char* mapping_file, StringMap& map, bool caseSensitive = true);
 
 	char veryEnd;
 	//starting after this members must be initialized in constructor explicitly
@@ -1164,6 +1187,7 @@ public:
 	bool stdIoMode;			// stdin or stdout is used as backup file
 	Firebird::AutoPtr<Firebird::SimilarToRegex> skipDataMatcher;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> includeDataMatcher;
+	StringMap tablespace_mapping;	// Will be used to overwrite filename of tablespace with given name
 
 public:
 	Firebird::string toSystem(const Firebird::PathName& from);

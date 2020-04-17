@@ -31,6 +31,7 @@
 #include "../jrd/PreparedStatement.h"
 #include "../jrd/tra.h"
 #include "../jrd/intl.h"
+#include "../jrd/Tablespace.h"
 
 #include "../jrd/blb_proto.h"
 #include "../jrd/exe_proto.h"
@@ -210,6 +211,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 	  att_ss_user(NULL),
 	  att_user_ids(*pool),
 	  att_active_snapshots(*pool),
+	  att_tablespaces(*pool),
 	  att_requests(*pool),
 	  att_lock_owner_id(Database::getLockOwnerId()),
 	  att_backup_state_counter(0),
@@ -255,6 +257,10 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 {
 	att_internal.grow(irq_MAX);
 	att_dyn_req.grow(drq_MAX);
+
+	Tablespace* dbTableSpace = FB_NEW_POOL(*pool) Tablespace(*pool);
+	dbTableSpace->id = DB_PAGE_SPACE;
+	att_tablespaces.add(dbTableSpace);
 }
 
 
@@ -692,6 +698,19 @@ void Jrd::Attachment::releaseLocks(thread_db* tdbb)
 						LCK_release(tdbb, index->idb_lock);
 				}
 			}
+		}
+	}
+
+	// Release all tablespace existence locks that might have been taken
+
+	for (Tablespace** iter = att_tablespaces.begin(); iter < att_tablespaces.end(); ++iter)
+	{
+		Tablespace* const tablespace = *iter;
+
+		if (tablespace && tablespace->existenceLock)
+		{
+			LCK_release(tdbb, tablespace->existenceLock);
+			tablespace->useCount = 0;
 		}
 	}
 

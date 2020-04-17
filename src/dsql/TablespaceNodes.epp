@@ -1,0 +1,290 @@
+/*
+ *  The contents of this file are subject to the Initial
+ *  Developer's Public License Version 1.0 (the "License");
+ *  you may not use this file except in compliance with the
+ *  License. You may obtain a copy of the License at
+ *  http://www.ibphoenix.com/main.nfs?a=ibphoenix&page=ibp_idpl.
+ *
+ *  Software distributed under the License is distributed AS IS,
+ *  WITHOUT WARRANTY OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing rights
+ *  and limitations under the License.
+ *
+ *  The Original Code was created by Roman Simakov
+ *  for the RedDatabase project.
+ *
+ *  Copyright (c) 2018 <roman.simakov@red-soft.ru>
+ *  and all contributors signed below.
+ *
+ *  All Rights Reserved.
+ *  Contributor(s): ______________________________________.
+ */
+
+#include "firebird.h"
+#include "../dsql/TablespaceNodes.h"
+#include "../jrd/dyn.h"
+#include "../jrd/intl.h"
+#include "../jrd/jrd.h"
+#include "../jrd/tra.h"
+#include "../jrd/dfw_proto.h"
+#include "../jrd/exe_proto.h"
+#include "../jrd/met_proto.h"
+#include "../jrd/vio_proto.h"
+#include "../dsql/make_proto.h"
+#include "../dsql/pass1_proto.h"
+#include "../common/StatusArg.h"
+#include "../jrd/Attachment.h"
+#include "../jrd/scl_proto.h"
+#include "../jrd/dyn_ut_proto.h"
+#include "../jrd/pag_proto.h"
+
+
+using namespace Firebird;
+
+namespace Jrd {
+
+using namespace Firebird;
+
+DATABASE DB = STATIC "ODS.RDB";
+
+
+//----------------------
+
+string CreateAlterTablespaceNode::internalPrint(NodePrinter& printer) const
+{
+	DdlNode::internalPrint(printer);
+
+	NODE_PRINT(printer, name);
+	NODE_PRINT(printer, create);
+	NODE_PRINT(printer, alter);
+	NODE_PRINT(printer, offline);
+	NODE_PRINT(printer, readonly);
+
+	return "CreateAlterTablespaceNode";
+}
+
+
+void CreateAlterTablespaceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+{
+	dsc dscName;
+	dscName.makeText(name.length(), ttype_metadata, (UCHAR*) name.c_str());
+	if (alter)
+		SCL_check_tablespace(tdbb, &dscName, SCL_alter);
+	else
+		SCL_check_create_access(tdbb, SCL_object_tablespace);
+}
+
+
+void CreateAlterTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	fb_assert(create || alter);
+
+	// run all statements under savepoint control
+	AutoSavePoint savePoint(tdbb, transaction);
+
+	if (alter)
+	{
+		if (!executeAlter(tdbb, dsqlScratch, transaction))
+		{
+			if (create)	// create or alter
+				executeCreate(tdbb, dsqlScratch, transaction);
+			else
+			{
+				status_exception::raise(
+					Arg::Gds(isc_no_meta_update) <<
+					Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(name));
+			}
+		}
+	}
+	else
+		executeCreate(tdbb, dsqlScratch, transaction);
+
+	savePoint.release();	// everything is ok
+}
+
+
+void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	Attachment* attachment = transaction->getAttachment();
+	Database* dbb = tdbb->getDatabase();
+
+	const MetaName& userName = attachment->att_user->getUserName();
+
+	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+		DDL_TRIGGER_CREATE_TABLESPACE, name, NULL);
+
+	AutoCacheRequest requestHandle(tdbb, drq_s_tablespace, DYN_REQUESTS);
+
+	int faults = 0;
+	SINT64 id = INVALID_PAGE_SPACE;
+
+	while (true)
+	{
+		try
+		{
+			id = DYN_UTIL_gen_unique_id(tdbb, drq_g_nxt_ts_id, "RDB$TABLESPACES") + 1;	// +1 to skip DB_PAGE_SPACE
+			id %= TRANS_PAGE_SPACE;
+
+			if (!id)
+				continue;
+
+			STORE (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				X IN RDB$TABLESPACES USING
+			{
+				X.RDB$TABLESPACE_ID = id;
+				strcpy(X.RDB$TABLESPACE_NAME, name.c_str());
+				X.RDB$SYSTEM_FLAG = 0;
+
+				X.RDB$OWNER_NAME.NULL = FALSE;
+				strcpy(X.RDB$OWNER_NAME, userName.c_str());
+
+				X.RDB$FILE_NAME.NULL = FALSE;
+				strcpy(X.RDB$FILE_NAME, fileName.c_str());
+
+				X.RDB$OFFLINE.NULL = FALSE;
+				X.RDB$OFFLINE = offline;
+
+				X.RDB$READ_ONLY.NULL = FALSE;
+				X.RDB$READ_ONLY = readonly;
+			}
+			END_STORE
+
+			break;
+		}
+		catch (const status_exception& ex)
+		{
+			if (ex.value()[1] != isc_unique_key_violation)
+				throw;
+
+			if (++faults >= TRANS_PAGE_SPACE)
+				throw;
+
+			fb_utils::init_status(tdbb->tdbb_status_vector);
+		}
+	}
+
+	dbb->dbb_page_manager.allocTableSpace(tdbb, id, true, PathName(fileName.c_str()));
+
+// RS: Not sure TS should have SECURITY CLASS. It's not DB SCHEMA. Only DDL privileges for managing it.
+//	storePrivileges(tdbb, transaction, name, obj_tablespaces, EXEC_PRIVILEGES);
+//	owner = userName;
+
+	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_TABLESPACE,
+		name, NULL);
+}
+
+
+bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	Attachment* attachment = transaction->getAttachment();
+	AutoCacheRequest requestHandle(tdbb, drq_m_tablespace, DYN_REQUESTS);
+	bool modified = false;
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		X IN RDB$TABLESPACES
+		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
+	{
+		modified = true;
+
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+			DDL_TRIGGER_ALTER_TABLESPACE, name, NULL);
+
+		MODIFY X
+			if (fileName.hasData())
+			{
+				fb_assert(X.RDB$FILE_NAME.NULL == FALSE);
+				strcpy(X.RDB$FILE_NAME, fileName.c_str());
+			}
+
+			X.RDB$OFFLINE.NULL = FALSE;
+			X.RDB$OFFLINE = offline;
+
+			X.RDB$READ_ONLY.NULL = FALSE;
+			X.RDB$READ_ONLY = readonly;
+		END_MODIFY
+	}
+	END_FOR
+
+	if (modified)
+	{
+		executeDdlTrigger(tdbb, dsqlScratch, transaction,
+			DTW_AFTER, DDL_TRIGGER_ALTER_TABLESPACE, name, NULL);
+	}
+
+	return modified;
+}
+
+
+//----------------------
+
+
+string DropTablespaceNode::internalPrint(NodePrinter& printer) const
+{
+	DdlNode::internalPrint(printer);
+
+	NODE_PRINT(printer, name);
+	NODE_PRINT(printer, silent);
+
+	return "DropTablespaceNode";
+}
+
+
+void DropTablespaceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+{
+	dsc dscName;
+	dscName.makeText(name.length(), ttype_metadata, (UCHAR*) name.c_str());
+	SCL_check_tablespace(tdbb, &dscName, SCL_drop);
+}
+
+void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	// run all statements under savepoint control
+	AutoSavePoint savePoint(tdbb, transaction);
+
+	bool found = false;
+	USHORT tableSpaceId = 0;
+	AutoCacheRequest requestHandle(tdbb, drq_e_tablespace, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		X IN RDB$TABLESPACES
+		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
+	{
+		found = true;
+		tableSpaceId = X.RDB$TABLESPACE_ID;
+
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+			DDL_TRIGGER_DROP_TABLESPACE, name, NULL);
+
+		ERASE X;
+
+		if (!X.RDB$SECURITY_CLASS.NULL)
+			deleteSecurityClass(tdbb, transaction, X.RDB$SECURITY_CLASS);
+
+		DFW_post_work(transaction, dropDependencies ? dfw_drop_tablespace_dependencies
+													: dfw_check_tablespace_dependencies,
+					  name.c_str(), tableSpaceId);
+	}
+	END_FOR
+
+	if (!found && !silent)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_no_meta_update) <<
+			Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(name));
+	}
+
+	if (found)
+	{
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_TABLESPACE,
+			name, NULL);
+	}
+
+	savePoint.release();	// everything is ok
+}
+
+
+}	// namespace Jrd

@@ -1531,8 +1531,9 @@ void PAG_release_page(thread_db* tdbb, const PageNumber& number, const PageNumbe
  *
  **************************************/
 
-	fb_assert(number.getPageSpaceID() == prior_page.getPageSpaceID() ||
-			  prior_page == ZERO_PAGE_NUMBER);
+	// RS: When index is on another tablespace this maybe wrong assert if prior is IRP
+//	fb_assert(number.getPageSpaceID() == prior_page.getPageSpaceID() ||
+//			  prior_page == ZERO_PAGE_NUMBER);
 
 	const ULONG pgNum = number.getPageNum();
 	PAG_release_pages(tdbb, number.getPageSpaceID(), 1, &pgNum, prior_page.getPageNum());
@@ -2442,7 +2443,7 @@ bool PageSpace::extend(thread_db* tdbb, const ULONG pageNum, const bool forceSiz
 	return true;
 }
 
-ULONG PageSpace::getSCNPageNum(ULONG sequence)
+ULONG PageSpace::getSCNPageNum(ULONG sequence) const
 {
 /**************************************
  *
@@ -2458,12 +2459,6 @@ ULONG PageSpace::getSCNPageNum(ULONG sequence)
 		return scnFirst;
 	}
 	return sequence * dbb->dbb_page_manager.pagesPerSCN;
-}
-
-ULONG PageSpace::getSCNPageNum(const Database* dbb, ULONG sequence)
-{
-	PageSpace* pgSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-	return pgSpace->getSCNPageNum(sequence);
 }
 
 PageSpace* PageManager::addPageSpace(const USHORT pageSpaceID)
@@ -2566,6 +2561,40 @@ USHORT PageManager::getTempPageSpaceID(thread_db* tdbb)
 	}
 	return tempPageSpaceID;
 }
+
+
+void PageManager::allocTableSpace(thread_db* tdbb, USHORT tableSpaceID, bool create, const PathName& fileName)
+{
+	/***
+	 * NOTE: PageSpaceId of Tablespaces is equal to tablespace id
+	 */
+	fb_assert((tableSpaceID > DB_PAGE_SPACE) && (tableSpaceID < TRANS_PAGE_SPACE));
+
+	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(tableSpaceID);
+	if (!pageSpace)
+	{
+		Firebird::MutexLockGuard guard(initTmpMtx, FB_FUNCTION);
+		// Double check if someone concurrently have added the tablespaceid
+		if (pageSpace = dbb->dbb_page_manager.findPageSpace(tableSpaceID))
+			return;
+		pageSpace = dbb->dbb_page_manager.addPageSpace(tableSpaceID);
+		if (create)
+		{
+			pageSpace->file = PIO_create(tdbb, fileName, false, false);
+			PAG_format_pip(tdbb, *pageSpace);
+		}
+		else
+		{
+			pageSpace->file = PIO_open(tdbb, fileName, fileName);
+			pageSpace->pipFirst = FIRST_PIP_PAGE;
+			pageSpace->scnFirst = FIRST_SCN_PAGE;
+		}
+		if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
+			PIO_force_write(pageSpace->file, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
+
+	}
+}
+
 
 ULONG PAG_page_count(thread_db* tdbb)
 {

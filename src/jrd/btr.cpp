@@ -192,11 +192,14 @@ static void compress(thread_db*, const dsc*, temporary_key*, USHORT, bool, bool,
 static USHORT compress_root(thread_db*, index_root_page*);
 static void copy_key(const temporary_key*, temporary_key*);
 static contents delete_node(thread_db*, WIN*, UCHAR*);
-static void delete_tree(thread_db*, USHORT, USHORT, PageNumber, PageNumber);
 static DSC* eval(thread_db*, const ValueExprNode*, DSC*, bool*);
-static ULONG fast_load(thread_db*, IndexCreation&, SelectivityList&);
 
-static index_root_page* fetch_root(thread_db*, WIN*, const jrd_rel*, const RelationPages*);
+void delete_tree(thread_db* tdbb, USHORT, USHORT, PageNumber, PageNumber);	//RS: Should it become a part of BTR_proto.h?
+
+template<typename RS>
+static ULONG fast_load(thread_db*, IndexCreation&, SelectivityList&, RS *scb);
+
+static index_root_page* fetch_root(thread_db*, WIN*, const jrd_rel*, const RelationPages*, bool = false);
 static UCHAR* find_node_start_point(btree_page*, temporary_key*, UCHAR*, USHORT*,
 									bool, bool, bool = false, RecordNumber = NO_VALUE);
 
@@ -421,7 +424,7 @@ void BTR_create(thread_db* tdbb,
 	index_desc* const idx = creation.index;
 
 	// Now that the index id has been checked out, create the index.
-	idx->idx_root = fast_load(tdbb, creation, selectivity);
+	idx->idx_root = fast_load<Sort>(tdbb, creation, selectivity, creation.sort);
 
 	// Index is created.  Go back to the index root page and update it to
 	// point to the index.
@@ -429,14 +432,14 @@ void BTR_create(thread_db* tdbb,
 	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
 	index_root_page* const root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_root);
 	CCH_MARK(tdbb, &window);
-	root->irt_rpt[idx->idx_id].setRoot(idx->idx_root);
+	root->irt_rpt[idx->idx_id].setRoot(idx->idx_pg_space_id, idx->idx_root);
 	update_selectivity(root, idx->idx_id, selectivity);
 
 	CCH_RELEASE(tdbb, &window);
 }
 
 
-bool BTR_delete_index(thread_db* tdbb, WIN* window, USHORT id)
+bool BTR_delete_index(thread_db* tdbb, Jrd::jrd_rel* relation, WIN* window, USHORT id)
 {
 /**************************************
  *
@@ -463,11 +466,12 @@ bool BTR_delete_index(thread_db* tdbb, WIN* window, USHORT id)
 	{
 		index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
 		CCH_MARK(tdbb, window);
-		const PageNumber next(window->win_page.getPageSpaceID(), irt_desc->getRoot());
-		tree_exists = (irt_desc->getRoot() != 0);
+		// next is on index page space!!!
+		const PageNumber next(irt_desc->getRootPageSpaceId(), irt_desc->getRootPage());
+		tree_exists = (irt_desc->getRootPage() != 0);
 
 		// remove the pointer to the top-level index page before we delete it
-		irt_desc->setRoot(0);
+		irt_desc->setRoot(0, 0);
 		irt_desc->irt_flags = 0;
 		const PageNumber prior = window->win_page;
 		const USHORT relation_id = root->irt_relation;
@@ -501,11 +505,12 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 
 	const index_root_page::irt_repeat* irt_desc = &root->irt_rpt[id];
 
-	if (irt_desc->getRoot() == 0)
+	if (irt_desc->getRootPage() == 0)
 		return false;
 
 	idx->idx_id = id;
-	idx->idx_root = irt_desc->getRoot();
+	idx->idx_pg_space_id = irt_desc->getRootPageSpaceId();
+	idx->idx_root = irt_desc->getRootPage();
 	idx->idx_count = irt_desc->irt_keys;
 	idx->idx_flags = irt_desc->irt_flags;
 	idx->idx_runtime_flags = 0;
@@ -693,6 +698,7 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 
 	index_desc idx;
 	RelationPages* relPages = retrieval->irb_relation->getPages(tdbb);
+	// In BTR_find_page pagespace can be changed to index's one
 	WIN window(relPages->rel_pg_space_id, -1);
 	temporary_key lower, upper;
 	lower.key_flags = 0;
@@ -918,7 +924,9 @@ btree_page* BTR_find_page(thread_db* tdbb,
 	}
 
 	RelationPages* relPages = retrieval->irb_relation->getPages(tdbb);
-	fb_assert(window->win_page.getPageSpaceID() == relPages->rel_pg_space_id);
+	// Now it's possible that win may have index page space
+	// and we need to change page space for fetching index root page
+	window->win_page.setPageSpaceID(relPages->rel_pg_space_id);
 
 	window->win_page = relPages->rel_index_root;
 	index_root_page* rpage = (index_root_page*) CCH_FETCH(tdbb, window, LCK_read, pag_root);
@@ -929,7 +937,7 @@ btree_page* BTR_find_page(thread_db* tdbb,
 		IBERROR(260);	// msg 260 index unexpectedly deleted
 	}
 
-	btree_page* page = (btree_page*) CCH_HANDOFF(tdbb, window, idx->idx_root, LCK_read, pag_index);
+	btree_page* page = (btree_page*) CCH_HANDOFF(tdbb, window, PageNumber(idx->idx_pg_space_id, idx->idx_root), LCK_read, pag_index);
 
 	// If there is a starting descriptor, search down index to starting position.
 	// This may involve sibling buckets if splits are in progress.  If there
@@ -1005,8 +1013,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 	SET_TDBB(tdbb);
 
 	index_desc* idx = insertion->iib_descriptor;
-	RelationPages* relPages = insertion->iib_relation->getPages(tdbb);
-	WIN window(relPages->rel_pg_space_id, idx->idx_root);
+	WIN window(idx->idx_pg_space_id, idx->idx_root);
 	btree_page* bucket = (btree_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_index);
 	UCHAR root_level = bucket->btr_level;
 
@@ -1033,7 +1040,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 	// update the index root page.  Oh boy.
 	index_root_page* root = (index_root_page*) CCH_FETCH(tdbb, root_window, LCK_write, pag_root);
 
-	window.win_page = root->irt_rpt[idx->idx_id].getRoot();
+	window.win_page = root->irt_rpt[idx->idx_id].getRootPage();
 	bucket = (btree_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_index);
 
 	if (window.win_page.getPageNum() != idx->idx_root)
@@ -1083,7 +1090,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 			BUGCHECK(204);	// msg 204 index inconsistent
 		}
 
-		window.win_page = root->irt_rpt[idx->idx_id].getRoot();
+		window.win_page = root->irt_rpt[idx->idx_id].getRootPage();
 		bucket = (btree_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_index);
 		key = ret_key;
 	}
@@ -1093,7 +1100,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 	// so go ahead and mark it as garbage-collectable now.
 	lock.enablePageGC(tdbb);
 
-	WIN new_window(relPages->rel_pg_space_id, split_page);
+	WIN new_window(idx->idx_pg_space_id, split_page);
 	btree_page* new_bucket = (btree_page*) CCH_FETCH(tdbb, &new_window, LCK_read, pag_index);
 
 	if (bucket->btr_level != new_bucket->btr_level)
@@ -1166,7 +1173,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 	CCH_RELEASE(tdbb, &new_window);
 	CCH_precedence(tdbb, root_window, new_window.win_page);
 	CCH_MARK(tdbb, root_window);
-	root->irt_rpt[idx->idx_id].setRoot(new_window.win_page.getPageNum());
+	root->irt_rpt[idx->idx_id].setRoot(new_window.win_page.getPageSpaceID(), new_window.win_page.getPageNum());
 	CCH_RELEASE(tdbb, root_window);
 }
 
@@ -1792,7 +1799,7 @@ bool BTR_next_index(thread_db* tdbb, jrd_rel* relation, jrd_tra* transaction, in
 				irt_desc = root->irt_rpt + id;
 
 				if (irt_desc->getTransaction() == trans)
-					BTR_delete_index(tdbb, window, id);
+					BTR_delete_index(tdbb, relation, window, id);
 				else
 					CCH_RELEASE(tdbb, window);
 
@@ -1829,8 +1836,7 @@ void BTR_remove(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 
 	//const Database* dbb = tdbb->getDatabase();
 	index_desc* idx = insertion->iib_descriptor;
-	RelationPages* relPages = insertion->iib_relation->getPages(tdbb);
-	WIN window(relPages->rel_pg_space_id, idx->idx_root);
+	WIN window(idx->idx_pg_space_id, idx->idx_root);
 	btree_page* page = (btree_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_index);
 
 	// If the page is level 0, re-fetch it for write
@@ -1876,7 +1882,7 @@ void BTR_remove(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 		}
 
 		CCH_MARK(tdbb, root_window);
-		root->irt_rpt[idx->idx_id].setRoot(number);
+		root->irt_rpt[idx->idx_id].setRoot(idx->idx_pg_space_id, number);
 
 		// release the pages, and place the page formerly at the top level
 		// on the free list, making sure the root page is written out first
@@ -2050,18 +2056,26 @@ void BTR_selectivity(thread_db* tdbb, jrd_rel* relation, USHORT id, SelectivityL
 		return;
 
 	ULONG page;
-	if (id >= root->irt_count || !(page = root->irt_rpt[id].getRoot()))
+	if (id >= root->irt_count || !(page = root->irt_rpt[id].getRootPage()))
 	{
 		CCH_RELEASE(tdbb, &window);
 		return;
 	}
+
+	index_desc idx;
+	if (!BTR_description(tdbb, relation, root, &idx, id))
+	{
+		CCH_RELEASE(tdbb, &window);
+		return;
+	}
+
 
 	const bool descending = (root->irt_rpt[id].irt_flags & irt_descending);
 	const ULONG segments = root->irt_rpt[id].irt_keys;
 
 	window.win_flags = WIN_large_scan;
 	window.win_scans = 1;
-	btree_page* bucket = (btree_page*) CCH_HANDOFF(tdbb, &window, page, LCK_read, pag_index);
+	btree_page* bucket = (btree_page*) CCH_HANDOFF(tdbb, &window, PageNumber(idx.idx_pg_space_id, page), LCK_read, pag_index);
 
 	// go down the left side of the index to leaf level
 	UCHAR* pointer = bucket->btr_nodes + bucket->btr_jump_size;
@@ -2272,6 +2286,143 @@ bool BTR_types_comparable(const dsc& target, const dsc& source)
 		return DTYPE_IS_TEXT(source.dsc_dtype) || source.dsc_dtype == dtype_boolean;
 
 	return false;
+}
+
+class IndexNodes
+{
+public:
+	IndexNodes(Jrd::thread_db* tdbb, const IndexCreation& creation, WIN* window):
+		window(window), key_length(creation.key_length)
+	{
+		recordData.resize(key_length + sizeof(index_sort_record));
+		isr = reinterpret_cast<index_sort_record*>(&recordData[key_length]);
+		btree_page* bucket = (btree_page*)window->win_buffer;
+		pointer = bucket->btr_nodes + bucket->btr_jump_size;
+		end = (UCHAR*) bucket + bucket->btr_length;
+		nullIndLen = !(creation.index->idx_flags & idx_descending) && (creation.index->idx_count == 1) ? 1 : 0;
+	}
+
+	void get(Jrd::thread_db* tdbb, ULONG** record)
+	{
+		pointer = node.readNode(pointer, true);
+		// Check if pointer is still valid
+		if (pointer > end)
+			BUGCHECK(204);	// msg 204 index inconsistent
+
+		if (node.isEndBucket)
+		{
+			btree_page* bucket = (btree_page*)window->win_buffer;
+			if (!bucket->btr_sibling)
+			{
+				*record = 0;
+				return;
+			}
+			bucket = (btree_page*)CCH_HANDOFF(tdbb, window, bucket->btr_sibling, LCK_read, pag_index);
+			pointer = bucket->btr_nodes + bucket->btr_jump_size;
+			end = (UCHAR*) bucket + bucket->btr_length;
+			pointer = node.readNode(pointer, true);
+			// Check if pointer is still valid
+			if (pointer > end)
+				BUGCHECK(204);	// msg 204 index inconsistent
+		}
+
+		if (!node.isEndLevel)
+		{
+			memcpy(&recordData[node.prefix] + nullIndLen, node.data, node.length);
+			isr->isr_record_number = node.recordNumber.getValue();
+			isr->isr_key_length = node.length + node.prefix;
+			*record = reinterpret_cast<ULONG*>(&recordData[0]);
+		}
+		else
+			*record = 0;
+	}
+
+private:
+	WIN* window;
+	UCHAR* pointer;
+	UCHAR* end;
+	USHORT key_length;
+	IndexNode node;
+	Array<UCHAR> recordData;
+	index_sort_record* isr;
+	int nullIndLen;
+};
+
+bool BTR_move_index(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, SLONG indexId, USHORT pageSpaceId, PageNumber& oldRootPage)
+{
+/**************************************
+ *
+ *	B T R _ m o v e _ i n d e x
+ *
+ **************************************
+ *
+ * Functional description
+ *	Move index pages from its tablespace to new one.
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+
+	bool result = false;
+
+	 // Lets start copy index pages
+	WIN rootWindow(INVALID_PAGE_SPACE, -1);
+	index_root_page* root = fetch_root(tdbb, &rootWindow, relation, relation->getPages(tdbb), true);
+
+	index_desc idx;
+	if (BTR_description(tdbb, relation, root, &idx, indexId))
+	{
+		oldRootPage = PageNumber(idx.idx_pg_space_id, idx.idx_root);
+
+		// Set page space id of the new tablespace
+		idx.idx_pg_space_id = pageSpaceId;
+
+		IndexCreation creation;
+		creation.index = &idx;
+		creation.relation = relation;
+		//creation.sort is unused in this fast_load call
+		//creation.transaction is unused in this fast_load call
+
+		const int nullIndLen = !(idx.idx_flags & idx_descending) && (idx.idx_count == 1) ? 1 : 0;
+		creation.key_length = ROUNDUP(BTR_key_length(tdbb, relation, &idx) + nullIndLen, sizeof(SINT64));;
+
+		// Fall down to level 0
+		WIN window(oldRootPage);
+		btree_page* page = (btree_page*)CCH_FETCH(tdbb, &window, LCK_read, pag_index);
+		IndexNode node;
+		while (page->btr_level > 0)
+		{
+			UCHAR* pointer;
+			const UCHAR* const endPointer = (UCHAR*) page + page->btr_length;
+			pointer = page->btr_nodes + page->btr_jump_size;
+			pointer = node.readNode(pointer, false);
+
+			// Check if pointer is still valid
+			if (pointer > endPointer)
+				BUGCHECK(204);	// msg 204 index inconsistent
+
+			page = (btree_page*) CCH_HANDOFF(tdbb, &window, node.pageNumber, LCK_read, pag_index);
+		}
+
+		IndexNodes indexNodes(tdbb, creation, &window);
+
+		SelectivityList selectivity;
+
+		const ULONG newRootPage = fast_load<IndexNodes>(tdbb, creation, selectivity, &indexNodes);
+
+		CCH_RELEASE(tdbb, &window);
+
+		CCH_MARK(tdbb, &rootWindow);
+		root->irt_rpt[indexId].setRoot(pageSpaceId, newRootPage);
+		CCH_RELEASE(tdbb, &rootWindow);
+
+		result = true;
+	}
+	else
+		CCH_RELEASE(tdbb, &rootWindow);
+
+	return result;
 }
 
 
@@ -2875,7 +3026,7 @@ static USHORT compress_root(thread_db* tdbb, index_root_page* page)
 	for (const index_root_page::irt_repeat* const end = root_idx + page->irt_count;
 		 root_idx < end; root_idx++)
 	{
-		if (root_idx->getRoot())
+		if (root_idx->getRootPage())
 		{
 			const USHORT len = root_idx->irt_keys * sizeof(irtd);
 			p -= len;
@@ -3200,7 +3351,7 @@ static contents delete_node(thread_db* tdbb, WIN* window, UCHAR* pointer)
 }
 
 
-static void delete_tree(thread_db* tdbb,
+void delete_tree(thread_db* tdbb,
 						USHORT rel_id, USHORT idx_id, PageNumber next, PageNumber prior)
 {
 /**************************************
@@ -3303,10 +3454,10 @@ static DSC* eval(thread_db* tdbb, const ValueExprNode* node, DSC* temp, bool* is
 	return temp;
 }
 
-
+template<typename RS>
 static ULONG fast_load(thread_db* tdbb,
 					   IndexCreation& creation,
-					   SelectivityList& selectivity)
+					   SelectivityList& selectivity, RS* scb)
 {
 /**************************************
  *
@@ -3331,9 +3482,8 @@ static ULONG fast_load(thread_db* tdbb,
 	jrd_rel* const relation = creation.relation;
 	index_desc* const idx = creation.index;
 	const USHORT key_length = creation.key_length;
-	Sort* const scb = creation.sort;
 
-	const USHORT pageSpaceID = relation->getPages(tdbb)->rel_pg_space_id;
+	const USHORT pageSpaceID = idx->idx_pg_space_id;
 
 	// leaf-page and pointer-page size limits, we always need to
 	// leave room for the END_LEVEL node.
@@ -4087,7 +4237,7 @@ static ULONG fast_load(thread_db* tdbb,
 
 
 static index_root_page* fetch_root(thread_db* tdbb, WIN* window, const jrd_rel* relation,
-								   const RelationPages* relPages)
+								   const RelationPages* relPages, bool writeLock)
 {
 /**************************************
  *
@@ -4103,20 +4253,21 @@ static index_root_page* fetch_root(thread_db* tdbb, WIN* window, const jrd_rel* 
  **************************************/
 	SET_TDBB(tdbb);
 
-	if ((window->win_page = relPages->rel_index_root) == 0)
+	if (!relPages->rel_index_root)
 	{
-		if (relation->rel_id == 0)
-			return NULL;
+//		if (relation->rel_id == 0)
+//			return NULL;
 
-		DPM_scan_pages(tdbb);
+		DPM_scan_pages(tdbb, pag_root, relation->rel_id);
 
 		if (!relPages->rel_index_root)
 			return NULL;
 
-		window->win_page = relPages->rel_index_root;
 	}
 
-	return (index_root_page*) CCH_FETCH(tdbb, window, LCK_read, pag_root);
+	window->win_page = PageNumber(relPages->rel_pg_space_id, relPages->rel_index_root);
+
+	return (index_root_page*) CCH_FETCH(tdbb, window, writeLock ? LCK_write : LCK_read, pag_root);
 }
 
 
