@@ -6,6 +6,7 @@ on:
 
 jobs:
   tzdata-update:
+    if: github.repository == 'FirebirdSQL/firebird'
     runs-on: ubuntu-latest
 
     steps:
