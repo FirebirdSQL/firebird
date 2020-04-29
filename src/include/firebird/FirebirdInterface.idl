@@ -309,7 +309,8 @@ interface ConfigManager : Versioned
 	const uint DIR_LOG = 14;
 	const uint DIR_GUARD = 15;
 	const uint DIR_PLUGINS = 16;
-	const uint DIR_COUNT = 17;	// keep in sync
+	const uint DIR_TZDATA = 17;
+	const uint DIR_COUNT = 18;	// keep in sync
 
 	const string getDirectory(uint code);
 	FirebirdConf getFirebirdConf();
@@ -551,7 +552,7 @@ interface Replicator : ReferenceCounted
 */
 	void process(Status status, uint length, const uchar* data);
 	void close(Status status);
-} 
+}
 
 interface Request : ReferenceCounted
 {

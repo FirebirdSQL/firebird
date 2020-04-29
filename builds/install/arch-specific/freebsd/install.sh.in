@@ -28,7 +28,7 @@ fb_install_prefix=@prefix@
 # Script to copy install files from the build/transport area
 
 
-# This script builds an image of the installed system into 
+# This script builds an image of the installed system into
 # the gen/buildroot directory.
 
 if [ "`whoami`" != "root" ]; then
@@ -137,7 +137,8 @@ copyFiles() {
 
 	#directories
     makeDirs "@FB_BINDIR@ @FB_SBINDIR@ @FB_CONFDIR@ @FB_LIBDIR@ @FB_INCDIR@ @FB_DOCDIR@/sql.extensions @FB_SAMPLEDIR@ \
-			  @FB_SAMPLEDBDIR@ @FB_HELPDIR@ @FB_INTLDIR@ @FB_MISCDIR@ @FB_SECDBDIR@ @FB_MSGDIR@ @FB_LOGDIR@ @FB_GUARDDIR@ @FB_PLUGDIR@"
+			  @FB_SAMPLEDBDIR@ @FB_HELPDIR@ @FB_INTLDIR@ @FB_MISCDIR@ @FB_SECDBDIR@ @FB_MSGDIR@ @FB_LOGDIR@ \
+			  @FB_GUARDDIR@ @FB_PLUGDIR@ @FB_TZDATADIR@"
 
 	for i in metadata security; do
 		makeDirs @FB_MISCDIR@/upgrade/$i
@@ -147,18 +148,18 @@ copyFiles() {
     makeDirs /usr/include
 
 	#bin
-    cp $BuiltFBDir/bin/gbak ${TargetDir}@FB_BINDIR@/gbak 
-    cp $BuiltFBDir/bin/gdef ${TargetDir}@FB_BINDIR@/gdef 
-    cp $BuiltFBDir/bin/gfix ${TargetDir}@FB_BINDIR@/gfix 
-    cp $BuiltFBDir/bin/gpre ${TargetDir}@FB_BINDIR@/gpre 
-    cp $BuiltFBDir/bin/gsec ${TargetDir}@FB_BINDIR@/gsec 
-    cp $BuiltFBDir/bin/nbackup ${TargetDir}@FB_BINDIR@/nbackup 
+    cp $BuiltFBDir/bin/gbak ${TargetDir}@FB_BINDIR@/gbak
+    cp $BuiltFBDir/bin/gdef ${TargetDir}@FB_BINDIR@/gdef
+    cp $BuiltFBDir/bin/gfix ${TargetDir}@FB_BINDIR@/gfix
+    cp $BuiltFBDir/bin/gpre ${TargetDir}@FB_BINDIR@/gpre
+    cp $BuiltFBDir/bin/gsec ${TargetDir}@FB_BINDIR@/gsec
+    cp $BuiltFBDir/bin/nbackup ${TargetDir}@FB_BINDIR@/nbackup
     copyIfExists $BuiltFBDir/bin/gsplit ${TargetDir}@FB_BINDIR@
-    cp $BuiltFBDir/bin/gstat ${TargetDir}@FB_BINDIR@/gstat 
+    cp $BuiltFBDir/bin/gstat ${TargetDir}@FB_BINDIR@/gstat
     copyIfExists $BuiltFBDir/bin/fbsvcmgr ${TargetDir}@FB_BINDIR@
     copyIfExists $BuiltFBDir/bin/fbtracemgr ${TargetDir}@FB_BINDIR@
-    cp $BuiltFBDir/bin/isql ${TargetDir}@FB_BINDIR@/isql 
-    cp $BuiltFBDir/bin/qli ${TargetDir}@FB_BINDIR@/qli 
+    cp $BuiltFBDir/bin/isql ${TargetDir}@FB_BINDIR@/isql
+    cp $BuiltFBDir/bin/qli ${TargetDir}@FB_BINDIR@/qli
 
 	chown root:wheel ${TargetDir}@FB_BINDIR@/*
 	chmod 0755 ${TargetDir}@FB_BINDIR@/*
@@ -224,7 +225,7 @@ copyFiles() {
 
 	chown root:wheel ${TargetDir}@FB_HELPDIR@/*.fdb
 	chmod 0444 ${TargetDir}@FB_HELPDIR@/*.fdb
-	
+
 	#message file
     cp $BuiltFBDir/*.msg ${TargetDir}@FB_MSGDIR@
 
@@ -254,6 +255,10 @@ copyFiles() {
 
 	chown root:wheel ${TargetDir}@FB_PLUGDIR@/*.so*
 	chmod 0755 ${TargetDir}@FB_PLUGDIR@/*.so*
+
+	makeDirs ${TargetDir}@FB_TZDATADIR@
+	cp $BuiltFBDir/tzdata/*.res ${TargetDir}@FB_TZDATADIR@
+	chmod 0444 ${TargetDir}@FB_TZDATADIR@/*.res
 
 	#intl
     cp $BuiltFBDir/intl/libfbintl.so ${TargetDir}@FB_INTLDIR@/fbintl
@@ -304,7 +309,7 @@ copyFiles() {
     cd $origDir
     linkFiles "@FB_LIBDIR@" "$Libraries" "${TargetDir}@libdir@" "${TargetDir}@FB_LIBDIR@"
 
-# link include files to /usr/include 
+# link include files to /usr/include
 	linkFiles "@FB_INCDIR@" "iberror.h ibase.h ib_util.h" "${TargetDir}/usr/include" "${TargetDir}@FB_INCDIR@"
 
 }
@@ -335,9 +340,9 @@ MakeFileFirebirdWritable() {
 
 #------------------------------------------------------------------------
 #  fixFilePermissions
-#  Change the permissions to restrict access to server programs to 
-#  firebird group only.  This is MUCH better from a safety point of 
-#  view than installing as root user, even if it requires a little 
+#  Change the permissions to restrict access to server programs to
+#  firebird group only.  This is MUCH better from a safety point of
+#  view than installing as root user, even if it requires a little
 #  more work.
 
 fixFilePermissions() {
@@ -353,7 +358,7 @@ fixFilePermissions() {
 	cd @FB_LOGDIR@
     touch firebird.log
     MakeFileFirebirdWritable firebird.log
-    
+
     # Security database
 	cd @FB_SECDBDIR@
     MakeFileFirebirdWritable $SecurityDatabase

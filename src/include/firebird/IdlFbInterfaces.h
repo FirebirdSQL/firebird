@@ -958,7 +958,8 @@ namespace Firebird
 		static const unsigned DIR_LOG = 14;
 		static const unsigned DIR_GUARD = 15;
 		static const unsigned DIR_PLUGINS = 16;
-		static const unsigned DIR_COUNT = 17;
+		static const unsigned DIR_TZDATA = 17;
+		static const unsigned DIR_COUNT = 18;
 
 		const char* getDirectory(unsigned code)
 		{

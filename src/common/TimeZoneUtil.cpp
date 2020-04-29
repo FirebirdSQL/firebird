@@ -196,10 +196,18 @@ InitInstance<PathName> TimeZoneUtil::tzDataPath;
 void TimeZoneUtil::initTimeZoneEnv()
 {
 	PathName path;
-	PathUtils::concatPath(path, Config::getRootDirectory(), "tzdata");
 
-	if (fb_utils::setenv("ICU_TIMEZONE_FILES_DIR", path.c_str(), false))
-		tzDataPath() = path;
+	// Could not call fb_utils::getPrefix here.
+	if (FB_TZDATADIR[0])
+		path = FB_TZDATADIR;
+	else
+		PathUtils::concatPath(path, Config::getRootDirectory(), "tzdata");
+
+	const static char* const ICU_TIMEZONE_FILES_DIR = "ICU_TIMEZONE_FILES_DIR";
+
+	// Do not update ICU_TIMEZONE_FILES_DIR if it's already set.
+	fb_utils::setenv(ICU_TIMEZONE_FILES_DIR, path.c_str(), false);
+	fb_utils::readenv(ICU_TIMEZONE_FILES_DIR, tzDataPath());
 }
 
 const PathName& TimeZoneUtil::getTzDataPath()

@@ -156,7 +156,7 @@ copyFiles() {
 	#directories
     makeDirs "@FB_BINDIR@ @FB_SBINDIR@ @FB_CONFDIR@ @FB_LIBDIR@ @FB_INCDIR@/firebird @FB_DOCDIR@/sql.extensions \
     		  @FB_SAMPLEDIR@ @FB_SAMPLEDBDIR@ @FB_HELPDIR@ @FB_INTLDIR@ @FB_MISCDIR@ @FB_SECDBDIR@ @FB_MSGDIR@ @FB_LOGDIR@ \
-    		  @FB_GUARDDIR@ @FB_PLUGDIR@"
+    		  @FB_GUARDDIR@ @FB_PLUGDIR@ @FB_TZDATADIR@"
 
 	for i in udf; do
 		makeDirs @FB_MISCDIR@/upgrade/$i
@@ -260,6 +260,10 @@ copyFiles() {
 	for file in `find ${TargetDir}@FB_PLUGDIR@ -name '*.so*' -print`; do
 		chmod 0755 ${file}
 	done
+
+	makeDirs ${TargetDir}@FB_TZDATADIR@
+	cp $BuiltFBDir/tzdata/*.res ${TargetDir}@FB_TZDATADIR@
+	chmod 0444 ${TargetDir}@FB_TZDATADIR@/*.res
 
 	#intl
     cp $BuiltFBDir/intl/libfbintl.so ${TargetDir}@FB_INTLDIR@/fbintl

@@ -682,6 +682,7 @@ XE_CONF_DIR(fblog, [log files DIR (PREFIX)], FB_LOGDIR)
 XE_CONF_FILE(fblogfilename, [log file name within log dir (firebird.log)], FB_LOGFILENAME, firebird.log)
 XE_CONF_DIR(fbglock, [guardian lock DIR (PREFIX)], FB_GUARDDIR)
 XE_CONF_DIR(fbplugins, [plugins DIR (PREFIX)], FB_PLUGDIR, /plugins)
+XE_CONF_DIR(fbtzdata, [tzdata DIR (PREFIX/tzdata)], FB_TZDATADIR, /tzdata)
 AC_SUBST(CHANGE_PATH_SUPPORT)
 
 dnl gpre built-in language support (C/C++ are mandatory)
