@@ -123,6 +123,7 @@ namespace
 	const char* const object_str_view		= "VIEW";
 	const char* const object_str_role		= "ROLE";
 	const char* const object_str_filter		= "FILTER";
+	const char* const object_str_tablespace	= "TABLESPACE";
 
 
 	struct SecObjectNamePriority
@@ -148,6 +149,7 @@ namespace
 		{object_str_view, SCL_object_view},
 		{object_str_role, SCL_object_role},
 		{object_str_filter, SCL_object_filter},
+		{object_str_tablespace, SCL_object_tablespace},
 		{"", 0}
 	};
 
@@ -1875,4 +1877,3 @@ static bool check_object(thread_db* tdbb,
 	}
 	return found;
 }
-

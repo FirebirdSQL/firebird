@@ -146,6 +146,7 @@ Nullable<bool>	MET_get_ss_definer(Jrd::thread_db*);
 
 USHORT MET_rel_pagespace(Jrd::thread_db* tdbb, USHORT rel_id);
 USHORT MET_index_pagespace(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, USHORT idx_id);
+Jrd::Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id);
 Jrd::Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const Jrd::MetaName& tableSpaceName);
 void MET_ts_files(Jrd::thread_db* tdbb, Firebird::ObjectsArray<Firebird::PathName> &files);
 void MET_scan_tablespaces(Jrd::thread_db*);

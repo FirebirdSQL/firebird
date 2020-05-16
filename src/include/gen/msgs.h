@@ -979,6 +979,7 @@ Data source : @4"},		/* eds_statement */
 	{335545272, "Reset of user session failed. Connection is shut down."},		/* ses_reset_failed */
 	{335545273, "Tablespace \"@1\" creation error. File \"@2\" exists."},		/* ts_file_exists */
 	{335545274, "TABLESPACE @1"},		/* tablespace_name */
+	{335545275, "Tablespace \"@1\" alteration error. File \"@2\" does not exists."},		/* ts_file_not_exists */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */

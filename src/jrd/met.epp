@@ -5587,6 +5587,83 @@ USHORT MET_index_pagespace(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, USHORT 
 	return pageSpaceId;
 }
 
+Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id)
+{
+/**************************************
+ *
+ *	M E T _ t a b l e s p a c e _ i d
+ *
+ **************************************
+ *
+ * Functional description
+ *      Find tablespace by its id in attach cache first of all.
+ *      If it's not found alloc pagespace, get exist tablespace lock and
+ *      add it in attachment cache.
+ *
+ *      Return a pointer to the tablespace.
+ *
+ **************************************/
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+	CHECK_DBB(dbb);
+
+    // Check that pageSpaceId has reasonable value
+    fb_assert( (id > DB_PAGE_SPACE) && (id < TRANS_PAGE_SPACE) );
+
+    Attachment* attachment = tdbb->getAttachment();
+
+    const USHORT tsCount = attachment->getTablespaceCount();
+
+    // tablespace id is started from 1
+    if (id <= tsCount)
+	{
+        Tablespace* ts = attachment->getTablespace(id);
+        if (ts)
+        {
+            fb_assert(ts->id == id);
+			return ts;
+        }
+	}
+
+	// Now we need to find tablespace in system table
+    AutoCacheRequest request(tdbb, irq_find_ts_id, IRQ_REQUESTS);
+
+    MetaName tableSpaceName;
+	PathName file;
+	bool found = false;
+
+    FOR(REQUEST_HANDLE request)
+		TS IN RDB$TABLESPACES
+        WITH TS.RDB$TABLESPACE_ID EQ id
+    {
+        found = true;
+        tableSpaceName = TS.RDB$TABLESPACE_NAME;
+        file = TS.RDB$FILE_NAME;
+	}
+	END_FOR
+
+	if (!found)
+		status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpaceName));
+
+	// Check that pageSpaceId is either new or is not set (else it should be found in att_tablespaces above)
+    fb_assert( (id >= tsCount + 1) || !attachment->getTablespace(id));
+
+    dbb->dbb_page_manager.allocTableSpace(tdbb, id, false, file);
+
+	Tablespace* tableSpace = FB_NEW_POOL(*attachment->att_pool) Tablespace(*attachment->att_pool);
+    tableSpace->id = id;
+	tableSpace->name = tableSpaceName;
+
+	Lock* lock = FB_NEW_RPT(*attachment->att_pool, 0)
+		Lock(tdbb, sizeof(SLONG), LCK_tablespace_exist, tableSpace);
+	tableSpace->existenceLock = lock;
+	lock->setKey(tableSpace->id);
+    attachment->setTablespace(id, tableSpace);
+
+	return tableSpace;
+}
+
+
 Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
 {
 /**************************************
@@ -5603,63 +5680,64 @@ Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
  *      Return a pointer to the tablespace.
  *
  **************************************/
-	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
+    SET_TDBB(tdbb);
+    Database* dbb = tdbb->getDatabase();
+    CHECK_DBB(dbb);
 
-	Attachment* attachment = tdbb->getAttachment();
-	if (tableSpaceName.isEmpty())
-		return attachment->getTablespace(DB_PAGE_SPACE);
+    Attachment* attachment = tdbb->getAttachment();
+    if (tableSpaceName.isEmpty())
+        return attachment->getTablespace(DB_PAGE_SPACE);
 
-	const USHORT tsCount = attachment->getTablespaceCount();
+    const USHORT tsCount = attachment->getTablespaceCount();
 
-	for (USHORT i = 2; i <= tsCount; i++)
-	{
-		Tablespace* ts = attachment->getTablespace(i);
-		if (ts && (ts->name == tableSpaceName) )
-			return ts;
-	}
+    for (USHORT i = 2; i <= tsCount; i++)
+    {
+        Tablespace* ts = attachment->getTablespace(i);
+        if (ts && (ts->name == tableSpaceName) )
+            return ts;
+    }
 
-	// Now we need to find tablespace in system table
-	AutoCacheRequest request(tdbb, irq_find_ts, IRQ_REQUESTS);
+    // Now we need to find tablespace in system table
+    AutoCacheRequest request(tdbb, irq_find_ts, IRQ_REQUESTS);
 
-	USHORT pageSpaceId;
-	PathName file;
-	bool found = false;
+    USHORT pageSpaceId;
+    PathName file;
+    bool found = false;
 
-	FOR(REQUEST_HANDLE request)
-		TS IN RDB$TABLESPACES
-		WITH TS.RDB$TABLESPACE_NAME EQ tableSpaceName.c_str()
-	{
-		found = true;
-		pageSpaceId = TS.RDB$TABLESPACE_ID;
-		file = TS.RDB$FILE_NAME;
-	}
-	END_FOR
+    FOR(REQUEST_HANDLE request)
+        TS IN RDB$TABLESPACES
+        WITH TS.RDB$TABLESPACE_NAME EQ tableSpaceName.c_str()
+    {
+        found = true;
+        pageSpaceId = TS.RDB$TABLESPACE_ID;
+        file = TS.RDB$FILE_NAME;
+    }
+    END_FOR
 
-	if (!found)
-		status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpaceName));
+    if (!found)
+        status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpaceName));
 
-	// Check that pageSpaceId has reasonable value
-	fb_assert( (pageSpaceId > DB_PAGE_SPACE) && (pageSpaceId < TRANS_PAGE_SPACE) );
+    // Check that pageSpaceId has reasonable value
+    fb_assert( (pageSpaceId > DB_PAGE_SPACE) && (pageSpaceId < TRANS_PAGE_SPACE) );
 
-	// Check that pageSpaceId is either new or is not set (else it should be found in att_tablespaces above)
-	fb_assert( (pageSpaceId >= tsCount + 1) || !attachment->getTablespace(pageSpaceId));
+    // Check that pageSpaceId is either new or is not set (else it should be found in att_tablespaces above)
+    fb_assert( (pageSpaceId >= tsCount + 1) || !attachment->getTablespace(pageSpaceId));
 
-	dbb->dbb_page_manager.allocTableSpace(tdbb, pageSpaceId, false, file);
+    dbb->dbb_page_manager.allocTableSpace(tdbb, pageSpaceId, false, file);
 
-	Tablespace* tableSpace = FB_NEW_POOL(*attachment->att_pool) Tablespace(*attachment->att_pool);
-	tableSpace->id = pageSpaceId;
-	tableSpace->name = tableSpaceName;
+    Tablespace* tableSpace = FB_NEW_POOL(*attachment->att_pool) Tablespace(*attachment->att_pool);
+    tableSpace->id = pageSpaceId;
+    tableSpace->name = tableSpaceName;
 
-	Lock* lock = FB_NEW_RPT(*attachment->att_pool, 0)
-		Lock(tdbb, sizeof(SLONG), LCK_tablespace_exist, tableSpace);
-	tableSpace->existenceLock = lock;
-	lock->setKey(tableSpace->id);
-	attachment->setTablespace(pageSpaceId, tableSpace);
+    Lock* lock = FB_NEW_RPT(*attachment->att_pool, 0)
+        Lock(tdbb, sizeof(SLONG), LCK_tablespace_exist, tableSpace);
+    tableSpace->existenceLock = lock;
+    lock->setKey(tableSpace->id);
+    attachment->setTablespace(pageSpaceId, tableSpace);
 
-	return tableSpace;
+    return tableSpace;
 }
+
 
 void MET_ts_files(Jrd::thread_db* tdbb, ObjectsArray<PathName>& files)
 {

@@ -491,8 +491,7 @@ static bool clear_cache(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool change_repl_state(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
 static bool create_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
-static bool check_tablespace_dependencies(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
-static bool drop_tablespace_dependencies(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool drop_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool move_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool move_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
@@ -1246,8 +1245,7 @@ static const deferred_task task_table[] =
 	{ dfw_change_repl_state, change_repl_state },
 
 	{ dfw_create_tablespace, create_tablespace },
-	{ dfw_check_tablespace_dependencies, check_tablespace_dependencies },
-	{ dfw_drop_tablespace_dependencies, drop_tablespace_dependencies },
+	{ dfw_drop_tablespace, drop_tablespace },
 	{ dfw_move_relation, move_relation },
 	{ dfw_move_index, move_index },
 
@@ -1577,6 +1575,7 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 		case dfw_delete_shadow:
 		case dfw_clear_datapages:
 		case dfw_clear_indexpages:
+		case dfw_drop_tablespace:
 			break;
 
 		default:
@@ -1635,6 +1634,7 @@ void DFW_perform_post_commit_work(thread_db* tdbb, jrd_tra* transaction)
 
 			pending_events = true;
 			break;
+		case dfw_drop_tablespace:
 		case dfw_delete_shadow:
 			if (work->dfw_name.hasData())
 				unlink(work->dfw_name.c_str());
@@ -6518,16 +6518,16 @@ static bool create_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 }
 
 
-static bool check_tablespace_dependencies(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+static bool drop_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
 {
 /**************************************
  *
- *	c h e c k _ t a b l e s p a c e _ d e p e n d e n c i e s
+ *	d r o p _ t a b l e s p a c e
  *
  **************************************
  *
  * Functional description
- *	Check tablespace dependencies before drop
+ *	Drop tablespace and its file at post commit stage
  *
  **************************************/
 
@@ -6535,122 +6535,30 @@ static bool check_tablespace_dependencies(thread_db* tdbb, SSHORT phase, Deferre
 	Database* dbb = tdbb->getDatabase();
 	Attachment* attachment = tdbb->getAttachment();
 
-	switch (phase)
-	{
-	case 1:
-		{
-			SLONG total = 0;
+    Tablespace* tablespace = MET_tablespace_id(tdbb, work->dfw_id);
 
-			{	// Find all indices
-				AutoCacheRequest requestHandle(tdbb, irq_ts_find_idx_dfw, DYN_REQUESTS);
-
-				FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
-					X IN RDB$INDICES
-					WITH X.RDB$TABLESPACE_NAME EQ work->dfw_name.c_str()
-				{
-					total++;
-				}
-				END_FOR
-			}
-
-			{	// Find all tables
-				AutoCacheRequest requestHandle(tdbb, irq_ts_find_rel_dfw, DYN_REQUESTS);
-
-				FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
-					X IN RDB$RELATIONS
-					WITH X.RDB$TABLESPACE_NAME EQ work->dfw_name.c_str()
-				{
-					total++;
-				}
-				END_FOR
-			}
-
-			if (total)
-			{
-				status_exception::raise(Arg::Gds(isc_no_meta_update) <<
-						Arg::Gds(isc_no_delete) <<						// Msg353: can not delete
-						Arg::Gds(isc_tablespace_name) << Arg::Str(work->dfw_name) <<
-						Arg::Gds(isc_dependency) << Arg::Num(total));	// Msg310: there are %ld dependencies
-			}
-		}
-		return true;
-
-	case 2:
-	case 3:
-	case 4:
-		break;
-	}
-
-	return false;
-}
-
-
-static bool drop_tablespace_dependencies(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
-{
-/**************************************
- *
- *	d r o p _ t a b l e s p a c e _ d e p e n d e n c i e s
- *
- **************************************
- *
- * Functional description
- *	Drop tablespace dependencies
- *
- **************************************/
-
-	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	Attachment* attachment = tdbb->getAttachment();
+    // We assume the tablespace must exists if dfw with has added
+	fb_assert(tablespace);
 
 	switch (phase)
 	{
 	case 0:
-		if (work->dfw_id <= attachment->getTablespaceCount())
-		{
-			Tablespace* tablespace = attachment->getTablespace(work->dfw_id);
-			if ( tablespace->existenceLock && tablespace->isUsed() )
-				LCK_convert(tdbb, tablespace->existenceLock, LCK_SR, transaction->getLockWait());
-		}
+	    if ( tablespace->existenceLock && tablespace->isUsed() )
+		        LCK_convert(tdbb, tablespace->existenceLock, LCK_SR, transaction->getLockWait());
 		return false;
 
 	case 1:
 		{
-			// Make sure nobady uses tablespace
-			if (work->dfw_id <= attachment->getTablespaceCount())
+		    // Make sure that nobody uses the tablespace
+			if ( tablespace->isUsed() ||	// RS: if isUsed maybe I must try to convert SR to EX?
+			    (tablespace->existenceLock &&
+				!LCK_lock(tdbb, tablespace->existenceLock, LCK_EX, transaction->getLockWait()) )
+			   )
 			{
-				Tablespace* tablespace = attachment->getTablespace(work->dfw_id);
-				if ( (tablespace && tablespace->isUsed()) ||	// RS: if isUsed maybe I must try to convert SR to EX?
-					(tablespace->existenceLock &&
-					!LCK_lock(tdbb, tablespace->existenceLock, LCK_EX, transaction->getLockWait()) )
-					)
-				{
-					raiseObjectInUseError("TABLESPACE", work->dfw_name);
-				}
+			    raiseObjectInUseError("TABLESPACE", tablespace->name.c_str());
 			}
-
-			{ // Find all indices
-				AutoCacheRequest requestHandle(tdbb, irq_ts_drop_idx_dfw, DYN_REQUESTS);
-
-				FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
-					X IN RDB$INDICES
-					WITH X.RDB$TABLESPACE_NAME EQ work->dfw_name.c_str()
-				{
-					ERASE X;
-				}
-				END_FOR
-			}
-
-			{ // Find all tables
-				AutoCacheRequest requestHandle(tdbb, irq_ts_drop_rel_dfw, DYN_REQUESTS);
-
-				FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
-					X IN RDB$RELATIONS
-					WITH X.RDB$TABLESPACE_NAME EQ work->dfw_name.c_str()
-				{
-					ERASE X;
-				}
-				END_FOR
-			}
+			// Probably here we need to remove the cache tablespace from attachment. Need to think...
+			// Also it's necessary to close open file descriptor of the tablespace
 		}
 		return true;
 
@@ -6658,12 +6566,8 @@ static bool drop_tablespace_dependencies(thread_db* tdbb, SSHORT phase, Deferred
 	case 3:
 		return true;
 	case 4:
-		if (work->dfw_id <= attachment->getTablespaceCount())
-		{
-			Tablespace* tablespace = attachment->getTablespace(work->dfw_id);
-			if (tablespace->existenceLock)
-				LCK_release(tdbb, tablespace->existenceLock);
-		}
+	    if (tablespace->existenceLock)
+		    LCK_release(tdbb, tablespace->existenceLock);
 
 		break;
 	}

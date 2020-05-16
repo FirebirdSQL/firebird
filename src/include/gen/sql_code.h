@@ -975,6 +975,7 @@ static const struct {
 	{335545272, -902}, /* 952 ses_reset_failed */
 	{335545273, -902}, /* 953 ts_file_exists */
 	{335545274, -901}, /* 954 tablespace_name */
+	{335545275, -902}, /* 955 ts_file_not_exists */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */

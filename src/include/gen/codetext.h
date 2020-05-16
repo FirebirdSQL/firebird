@@ -976,6 +976,7 @@ static const struct {
 	{"ses_reset_failed", 335545272},
 	{"ts_file_exists", 335545273},
 	{"tablespace_name", 335545274},
+	{"ts_file_not_exists", 335545275},
 	{"gfix_db_name", 335740929},
 	{"gfix_invalid_sw", 335740930},
 	{"gfix_incmp_sw", 335740932},

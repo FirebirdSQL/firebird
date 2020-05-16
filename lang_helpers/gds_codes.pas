@@ -1955,6 +1955,8 @@ const
 	gds_ts_file_exists                   = 335545273;
 	isc_tablespace_name                  = 335545274;
 	gds_tablespace_name                  = 335545274;
+	isc_ts_file_not_exists               = 335545275;
+	gds_ts_file_not_exists               = 335545275;
 	isc_gfix_db_name                     = 335740929;
 	gds_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;

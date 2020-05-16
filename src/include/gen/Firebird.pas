@@ -5063,6 +5063,7 @@ const
 	isc_ses_reset_failed                 = 335545272;
 	isc_ts_file_exists                   = 335545273;
 	isc_tablespace_name                  = 335545274;
+	isc_ts_file_not_exists               = 335545275;
 	isc_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;
 	isc_gfix_incmp_sw                    = 335740932;

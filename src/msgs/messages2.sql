@@ -1060,8 +1060,9 @@ Data source : @4', NULL, NULL)
 ('wrong_page', 'get_header', 'dpm.epp', NULL, 0, 950, NULL, 'RDB$PAGES written by non-system transaction, DB appears to be damaged', NULL, NULL);
 ('repl_error', 'checkStatus', 'Publisher.cpp', NULL, 0, 951, NULL, 'Replication error', NULL, NULL);
 ('ses_reset_failed', NULL, 'Attachment.cpp', NULL, 0, 952, NULL, 'Reset of user session failed. Connection is shut down.', NULL, NULL);
-('ts_file_exists', NULL, NULL, NULL, 0, 953, NULL, 'Tablespace "@1" creation error. File "@2" exists.', NULL, NULL);    --//TODO: fix error refs
-('tablespace_name', 'handleDependencies', 'TablespaceNodes.epp', NULL, 0, 954, NULL, 'TABLESPACE @1', NULL, NULL);      --//TODO: fix error refs
+('ts_file_exists', NULL, NULL, NULL, 0, 953, NULL, 'Tablespace "@1" creation error. File "@2" exists.', NULL, NULL);
+('tablespace_name', 'handleDependencies', 'TablespaceNodes.epp', NULL, 0, 954, NULL, 'TABLESPACE @1', NULL, NULL);
+('ts_file_not_exists', NULL, NULL, NULL, 0, 955, NULL, 'Tablespace "@1" alteration error. File "@2" does not exists.', NULL, NULL);
 -- QLI
 (NULL, NULL, NULL, NULL, 1, 0, NULL, 'expected type', NULL, NULL);
 (NULL, NULL, NULL, NULL, 1, 1, NULL, 'bad block type', NULL, NULL);

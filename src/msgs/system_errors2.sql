@@ -961,6 +961,7 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (-902, '08', '003', 0, 952, 'ses_reset_failed', NULL, NULL)
 (-902, '08', '001', 0, 953, 'ts_file_exists', NULL, NULL)
 (-901, '42', '000', 0, 954, 'tablespace_name', NULL, NULL)
+(-902, '08', '001', 0, 955, 'ts_file_not_exists', NULL, NULL)
 -- GFIX
 (-901, '00', '000', 3, 1, 'gfix_db_name', NULL, NULL)
 (-901, '00', '000', 3, 2, 'gfix_invalid_sw', NULL, NULL)

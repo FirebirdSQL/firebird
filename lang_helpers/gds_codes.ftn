@@ -1960,6 +1960,8 @@ C --
       PARAMETER (GDS__ts_file_exists                   = 335545273)
       INTEGER*4 GDS__tablespace_name                 
       PARAMETER (GDS__tablespace_name                  = 335545274)
+      INTEGER*4 GDS__ts_file_not_exists              
+      PARAMETER (GDS__ts_file_not_exists               = 335545275)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 
