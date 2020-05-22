@@ -36,7 +36,7 @@
     <ClCompile Include="..\..\..\src\common\classes\init.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\InternalMessageBuffer.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\locks.cpp" />
-    <ClCompile Include="..\..\..\src\common\classes\MetaName.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\MetaString.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\MsgPrint.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\NoThrowTimeStamp.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\ParsedList.cpp" />
@@ -134,7 +134,7 @@
     <ClInclude Include="..\..\..\src\common\classes\init.h" />
     <ClInclude Include="..\..\..\src\common\classes\InternalMessageBuffer.h" />
     <ClInclude Include="..\..\..\src\common\classes\locks.h" />
-    <ClInclude Include="..\..\..\src\common\classes\MetaName.h" />
+    <ClInclude Include="..\..\..\src\common\classes\MetaString.h" />
     <ClInclude Include="..\..\..\src\common\classes\MsgPrint.h" />
     <ClInclude Include="..\..\..\src\common\classes\NestConst.h" />
     <ClInclude Include="..\..\..\src\common\classes\NoThrowTimeStamp.h" />

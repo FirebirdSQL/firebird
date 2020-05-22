@@ -120,7 +120,7 @@
     <ClCompile Include="..\..\..\src\common\classes\locks.cpp">
       <Filter>classes</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\common\classes\MetaName.cpp">
+    <ClCompile Include="..\..\..\src\common\classes\MetaString.cpp">
       <Filter>classes</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\common\classes\MsgPrint.cpp">
@@ -419,7 +419,7 @@
     <ClInclude Include="..\..\..\src\common\classes\locks.h">
       <Filter>headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\common\classes\MetaName.h">
+    <ClInclude Include="..\..\..\src\common\classes\MetaString.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\MsgPrint.h">

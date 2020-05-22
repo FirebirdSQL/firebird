@@ -92,6 +92,7 @@
     <ClCompile Include="..\..\..\src\jrd\JrdStatement.cpp" />
     <ClCompile Include="..\..\..\src\jrd\lck.cpp" />
     <ClCompile Include="..\..\..\src\jrd\Mapping.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\MetaName.cpp" />
     <ClCompile Include="..\..\..\src\jrd\Monitoring.cpp" />
     <ClCompile Include="..\..\..\src\jrd\mov.cpp" />
     <ClCompile Include="..\..\..\src\jrd\nbak.cpp" />
@@ -279,6 +280,7 @@
     <ClInclude Include="..\..\..\src\jrd\license.h" />
     <ClInclude Include="..\..\..\src\jrd\lls.h" />
     <ClInclude Include="..\..\..\src\jrd\Mapping.h" />
+    <ClInclude Include="..\..\..\src\jrd\MetaName.h" />
     <ClInclude Include="..\..\..\src\jrd\Monitoring.h" />
     <ClInclude Include="..\..\..\src\jrd\met.h" />
     <ClInclude Include="..\..\..\src\jrd\met_proto.h" />
@@ -297,6 +299,7 @@
     <ClInclude Include="..\..\..\src\jrd\pag_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\par_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\PreparedStatement.h" />
+    <ClInclude Include="..\..\..\src\jrd\QualifiedName.h" />
     <ClInclude Include="..\..\..\src\jrd\que.h" />
     <ClInclude Include="..\..\..\src\jrd\RandomGenerator.h" />
     <ClInclude Include="..\..\..\src\jrd\RecordBuffer.h" />
