@@ -38,14 +38,14 @@ namespace Replication
 {
 	class TableMatcher
 	{
-		typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Firebird::MetaName, bool> > > TablePermissionMap;
+		typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Jrd::MetaName, bool> > > TablePermissionMap;
 
 	public:
 		TableMatcher(MemoryPool& pool,
 					 const Firebird::string& includeFilter,
 					 const Firebird::string& excludeFilter);
 
-		bool matchTable(const Firebird::MetaName& tableName);
+		bool matchTable(const Jrd::MetaName& tableName);
 
 	private:
 		Firebird::AutoPtr<Firebird::SimilarToRegex> m_includeMatcher;

@@ -782,7 +782,7 @@ void Applier::executeSql(thread_db* tdbb,
 		(dbb->dbb_flags & DBB_DB_SQL_dialect_3) ? SQL_DIALECT_V6 : SQL_DIALECT_V5;
 
 	UserId user(*attachment->att_user);
-	user.setUserName(owner);
+	user.setUserName(StrWrapper(owner));
 
 	AutoSetRestore<SSHORT> autoCharset(&attachment->att_charset, charset);
 	AutoSetRestore<UserId*> autoOwner(&attachment->att_user, &user);

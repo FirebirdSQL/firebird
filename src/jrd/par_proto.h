@@ -53,13 +53,13 @@ Jrd::BoolExprNode* PAR_validation_blr(Jrd::thread_db*, Jrd::jrd_rel*, const UCHA
 	ULONG blr_length, Jrd::CompilerScratch*, Jrd::CompilerScratch**, USHORT);
 StreamType		PAR_context(Jrd::CompilerScratch*, SSHORT*);
 void			PAR_dependency(Jrd::thread_db* tdbb, Jrd::CompilerScratch* csb, StreamType stream,
-	SSHORT id, const Firebird::MetaName& field_name);
+	SSHORT id, const Jrd::MetaName& field_name);
 USHORT			PAR_datatype(Firebird::BlrReader&, dsc*);
 USHORT			PAR_desc(Jrd::thread_db*, Jrd::CompilerScratch*, dsc*, Jrd::ItemInfo* = NULL);
 void			PAR_error(Jrd::CompilerScratch*, const Firebird::Arg::StatusVector&, bool isSyntaxError = true);
-SSHORT			PAR_find_proc_field(const Jrd::jrd_prc*, const Firebird::MetaName&);
+SSHORT			PAR_find_proc_field(const Jrd::jrd_prc*, const Jrd::MetaName&);
 Jrd::ValueExprNode* PAR_gen_field(Jrd::thread_db* tdbb, StreamType stream, USHORT id, bool byId = false);
-Jrd::ValueExprNode* PAR_make_field(Jrd::thread_db*, Jrd::CompilerScratch*, USHORT, const Firebird::MetaName&);
+Jrd::ValueExprNode* PAR_make_field(Jrd::thread_db*, Jrd::CompilerScratch*, USHORT, const Jrd::MetaName&);
 Jrd::CompoundStmtNode*	PAR_make_list(Jrd::thread_db*, Jrd::StmtNodeStack&);
 ULONG			PAR_marks(Jrd::CompilerScratch*);
 Jrd::CompilerScratch*	PAR_parse(Jrd::thread_db*, const UCHAR* blr, ULONG blr_length,

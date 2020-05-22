@@ -35,7 +35,7 @@
 #include "../jrd/blb.h"
 #include "../jrd/Relation.h"
 #include "../common/classes/array.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/NestConst.h"
 
 #include "gen/iberror.h"
@@ -187,9 +187,9 @@ typedef Firebird::SortedArray<Resource, Firebird::EmptyStorage<Resource>,
 
 struct AccessItem
 {
-	Firebird::MetaName		acc_security_name;
+	Jrd::MetaName		acc_security_name;
 	SLONG					acc_ss_rel_id;	// Relation Id which owner will be used to check permissions
-	Firebird::MetaName		acc_name, acc_r_name;
+	Jrd::MetaName		acc_name, acc_r_name;
 	SLONG					acc_type;
 	SecurityClass::flags_t	acc_mask;
 
@@ -224,9 +224,9 @@ struct AccessItem
 		return false; // Equal
 	}
 
-	AccessItem(const Firebird::MetaName& security_name, SLONG view_id,
-		const Firebird::MetaName& name, SLONG type,
-		SecurityClass::flags_t mask, const Firebird::MetaName& relName)
+	AccessItem(const Jrd::MetaName& security_name, SLONG view_id,
+		const Jrd::MetaName& name, SLONG type,
+		SecurityClass::flags_t mask, const Jrd::MetaName& relName)
 		: acc_security_name(security_name), acc_ss_rel_id(view_id), acc_name(name),
 			acc_r_name(relName), acc_type(type), acc_mask(mask)
 	{}
@@ -251,7 +251,7 @@ struct ExternalAccess
 	USHORT exa_fun_id;
 	USHORT exa_rel_id;
 	USHORT exa_view_id;
-	Firebird::MetaName user;		// User which touch the recources.
+	Jrd::MetaName user;		// User which touch the recources.
 
 	// Procedure
 	ExternalAccess(exa_act action, USHORT id) :
@@ -391,14 +391,14 @@ public:
 	}
 
 public:
-	Firebird::MetaName name;
-	Firebird::MetaNamePair field;
+	Jrd::MetaName name;
+	Jrd::MetaNamePair field;
 	bool nullable;
 	bool explicitCollation;
 	bool fullDomain;
 };
 
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Firebird::MetaNamePair, FieldInfo> > >
+typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Jrd::MetaNamePair, FieldInfo> > >
 	MapFieldInfo;
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::Right<Item, ItemInfo> > > MapItemInfo;
 
@@ -422,11 +422,11 @@ public:
 			jrd_rel* relation;
 			const Function* function;
 			const jrd_prc* procedure;
-			const Firebird::MetaName* name;
+			const Jrd::MetaName* name;
 			SLONG number;
 		};
 
-		const Firebird::MetaName* subName;
+		const Jrd::MetaName* subName;
 		SLONG subNumber;
 	};
 
@@ -528,7 +528,7 @@ public:
 	// Map of message number to field number to pad for external routines.
 	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, USHORT> > > csb_message_pad;
 
-	Firebird::MetaName	csb_domain_validation;	// Parsing domain constraint in PSQL
+	Jrd::MetaName	csb_domain_validation;	// Parsing domain constraint in PSQL
 
 	// used in cmp.cpp/pass1
 	jrd_rel*	csb_view;
@@ -539,8 +539,8 @@ public:
 	bool		csb_validate_expr;
 	bool		csb_returning_expr;
 
-	Firebird::GenericMap<Firebird::Left<Firebird::MetaName, DeclareSubFuncNode*> > subFunctions;
-	Firebird::GenericMap<Firebird::Left<Firebird::MetaName, DeclareSubProcNode*> > subProcedures;
+	Firebird::GenericMap<Firebird::Left<Jrd::MetaName, DeclareSubFuncNode*> > subFunctions;
+	Firebird::GenericMap<Firebird::Left<Jrd::MetaName, DeclareSubProcNode*> > subProcedures;
 
 	ForNode*	csb_currentForNode;
 	StmtNode*	csb_currentDMLNode;		// could be StoreNode or ModifyNode

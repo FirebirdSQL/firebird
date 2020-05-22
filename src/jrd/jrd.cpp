@@ -894,7 +894,7 @@ void Trigger::compile(thread_db* tdbb)
 			}
 			else
 			{
-				dbb->dbb_extManager.makeTrigger(tdbb, csb, this, engine, entryPoint, extBody.c_str(),
+				dbb->dbb_extManager->makeTrigger(tdbb, csb, this, engine, entryPoint, extBody.c_str(),
 					(relation ?
 						(type & 1 ? IExternalTrigger::TYPE_BEFORE : IExternalTrigger::TYPE_AFTER) :
 						IExternalTrigger::TYPE_DATABASE));
@@ -3356,7 +3356,7 @@ void JAttachment::dropDatabase(CheckStatusWrapper* user_status)
 							 Arg::Gds(isc_obj_in_use) << Arg::Str("DATABASE"));
 				}
 
-				// dbb->dbb_extManager.closeAttachment(tdbb, attachment);
+				// dbb->dbb_extManager->closeAttachment(tdbb, attachment);
 				// To be reviewed by Adriano - it will be anyway called in release_attachment
 
 				// Forced release of all transactions
@@ -7237,6 +7237,9 @@ static JAttachment* initAttachment(thread_db* tdbb, const PathName& expanded_nam
 		dbbGuard.lock(SYNC_EXCLUSIVE);
 
 		tdbb->setDatabase(dbb);
+		// now it's time to create DB objects that need MetaName
+		dbb->dbb_extManager = FB_NEW_POOL(*dbb->dbb_permanent) ExtEngineManager(*dbb->dbb_permanent);
+
 		jAtt = create_attachment(alias_name, dbb, options, !attach_flag);
 		tdbb->setAttachment(jAtt->getHandle());
 	} // end scope
@@ -7461,7 +7464,7 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 
 	Monitoring::cleanupAttachment(tdbb);
 
-	dbb->dbb_extManager.closeAttachment(tdbb, attachment);
+	dbb->dbb_extManager->closeAttachment(tdbb, attachment);
 
 	if (dbb->dbb_config->getServerMode() == MODE_SUPER)
 		attachment->releaseGTTs(tdbb);

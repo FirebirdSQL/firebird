@@ -254,9 +254,9 @@ private:
 	void yyabandon(const Position& position, SLONG, ISC_STATUS);
 	void yyabandon(const Position& position, SLONG, const Firebird::Arg::StatusVector& status);
 
-	Firebird::MetaName optName(Firebird::MetaName* name)
+	Jrd::MetaName optName(Jrd::MetaName* name)
 	{
-		return (name ? *name : Firebird::MetaName());
+		return (name ? *name : Jrd::MetaName());
 	}
 
 	void transformString(const char* start, unsigned length, Firebird::string& dest);
@@ -337,7 +337,7 @@ private:
 		return clause != 0;
 	}
 
-	bool isDuplicateClause(const Firebird::MetaName& clause)
+	bool isDuplicateClause(const Jrd::MetaName& clause)
 	{
 		return clause.hasData();
 	}

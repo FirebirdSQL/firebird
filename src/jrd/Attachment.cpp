@@ -47,7 +47,7 @@
 #include "../jrd/replication/Manager.h"
 
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/StatusArg.h"
 #include "../common/TimeZoneUtil.h"
 #include "../common/isc_proto.h"
@@ -990,7 +990,7 @@ bool Attachment::getIdleTimerTimestamp(ISC_TIMESTAMP_TZ& ts) const
 	return true;
 }
 
-UserId* Attachment::getUserId(const MetaName& userName)
+UserId* Attachment::getUserId(const MetaString& userName)
 {
 	// It's necessary to keep specified sql role of user
 	if (att_user && att_user->getUserName() == userName)
@@ -1004,6 +1004,11 @@ UserId* Attachment::getUserId(const MetaName& userName)
 		att_user_ids.put(userName, result);
 	}
 	return result;
+}
+
+UserId* Attachment::getUserId(const MetaName& userName)
+{
+	return getUserId(MetaString(userName.c_str()));
 }
 
 /// Attachment::IdleTimer

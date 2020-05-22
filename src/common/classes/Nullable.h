@@ -25,7 +25,7 @@
 
 #include "firebird.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/constants.h"
 
 
 // Auxiliary template to build an empty value.

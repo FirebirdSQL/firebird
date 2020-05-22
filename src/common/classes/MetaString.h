@@ -1,6 +1,6 @@
 /*
  *	PROGRAM:	Client/Server Common Code
- *	MODULE:		MetaName.h
+ *	MODULE:		MetaString.h
  *	DESCRIPTION:	metadata name holder
  *
  *  The contents of this file are subject to the Initial
@@ -26,8 +26,8 @@
  *
  */
 
-#ifndef METANAME_H
-#define METANAME_H
+#ifndef METASTRING_H
+#define METASTRING_H
 
 #include "../common/classes/fb_string.h"
 #include "../common/classes/fb_pair.h"
@@ -39,7 +39,23 @@
 
 namespace Firebird {
 
-class MetaName
+class StrWrapper
+{
+public:
+	explicit StrWrapper(const char* s)
+		: str(s)
+	{ }
+
+	const char* c_str() const
+	{
+		return str;
+	}
+
+private:
+	const char* str;
+};
+
+class MetaString
 {
 private:
 	char data[MAX_SQL_IDENTIFIER_SIZE];
@@ -49,7 +65,7 @@ private:
 	{
 		memset(data, 0, MAX_SQL_IDENTIFIER_SIZE);
 	}
-	MetaName& set(const MetaName& m)
+	MetaString& set(const MetaString& m)
 	{
 		memcpy(data, m.data, MAX_SQL_IDENTIFIER_SIZE);
 		count = m.count;
@@ -57,22 +73,23 @@ private:
 	}
 
 public:
-	MetaName() { init(); count = 0; }
-	MetaName(const char* s) { assign(s); }
-	MetaName(const char* s, FB_SIZE_T l) { assign(s, l); }
-	MetaName(const MetaName& m) { set(m); }
-	MetaName(const AbstractString& s) { assign(s.c_str(), s.length()); }
-	explicit MetaName(MemoryPool&) { init(); count = 0; }
-	MetaName(MemoryPool&, const char* s) { assign(s); }
-	MetaName(MemoryPool&, const char* s, FB_SIZE_T l) { assign(s, l); }
-	MetaName(MemoryPool&, const MetaName& m) { set(m); }
-	MetaName(MemoryPool&, const AbstractString& s) { assign(s.c_str(), s.length()); }
+	MetaString() { init(); count = 0; }
+	MetaString(const char* s) { assign(s); }
+	MetaString(const StrWrapper& s);
+	MetaString(const char* s, FB_SIZE_T l) { assign(s, l); }
+	MetaString(const MetaString& m) { set(m); }
+	MetaString(const AbstractString& s) { assign(s.c_str(), s.length()); }
+	explicit MetaString(MemoryPool&) { init(); count = 0; }
+	MetaString(MemoryPool&, const char* s) { assign(s); }
+	MetaString(MemoryPool&, const char* s, FB_SIZE_T l) { assign(s, l); }
+	MetaString(MemoryPool&, const MetaString& m) { set(m); }
+	MetaString(MemoryPool&, const AbstractString& s) { assign(s.c_str(), s.length()); }
 
-	MetaName& assign(const char* s, FB_SIZE_T l);
-	MetaName& assign(const char* s) { return assign(s, s ? fb_strlen(s) : 0); }
-	MetaName& operator=(const char* s) { return assign(s); }
-	MetaName& operator=(const AbstractString& s) { return assign(s.c_str(), s.length()); }
-	MetaName& operator=(const MetaName& m) { return set(m); }
+	MetaString& assign(const char* s, FB_SIZE_T l);
+	MetaString& assign(const char* s) { return assign(s, s ? fb_strlen(s) : 0); }
+	MetaString& operator=(const char* s) { return assign(s); }
+	MetaString& operator=(const AbstractString& s) { return assign(s.c_str(), s.length()); }
+	MetaString& operator=(const MetaString& m) { return set(m); }
 	char* getBuffer(const FB_SIZE_T l);
 
 	FB_SIZE_T length() const { return count; }
@@ -90,28 +107,28 @@ public:
 	int compare(const char* s, FB_SIZE_T l) const;
 	int compare(const char* s) const { return compare(s, s ? fb_strlen(s) : 0); }
 	int compare(const AbstractString& s) const { return compare(s.c_str(), s.length()); }
-	int compare(const MetaName& m) const { return memcmp(data, m.data, MAX_SQL_IDENTIFIER_SIZE); }
+	int compare(const MetaString& m) const { return memcmp(data, m.data, MAX_SQL_IDENTIFIER_SIZE); }
 
 	bool operator==(const char* s) const { return compare(s) == 0; }
 	bool operator!=(const char* s) const { return compare(s) != 0; }
 	bool operator==(const AbstractString& s) const { return compare(s) == 0; }
 	bool operator!=(const AbstractString& s) const { return compare(s) != 0; }
-	bool operator==(const MetaName& m) const { return compare(m) == 0; }
-	bool operator!=(const MetaName& m) const { return compare(m) != 0; }
-	bool operator<=(const MetaName& m) const { return compare(m) <= 0; }
-	bool operator>=(const MetaName& m) const { return compare(m) >= 0; }
-	bool operator< (const MetaName& m) const { return compare(m) <  0; }
-	bool operator> (const MetaName& m) const { return compare(m) >  0; }
+	bool operator==(const MetaString& m) const { return compare(m) == 0; }
+	bool operator!=(const MetaString& m) const { return compare(m) != 0; }
+	bool operator<=(const MetaString& m) const { return compare(m) <= 0; }
+	bool operator>=(const MetaString& m) const { return compare(m) >= 0; }
+	bool operator< (const MetaString& m) const { return compare(m) <  0; }
+	bool operator> (const MetaString& m) const { return compare(m) >  0; }
 
 	void printf(const char*, ...);
 	FB_SIZE_T copyTo(char* to, FB_SIZE_T toSize) const;
+
+	operator StrWrapper() const { return StrWrapper(c_str()); }
 
 protected:
 	static void adjustLength(const char* const s, FB_SIZE_T& l);
 };
 
-typedef Pair<Full<MetaName, MetaName> > MetaNamePair;
-
 } // namespace Firebird
 
-#endif // METANAME_H
+#endif // METASTRING_H

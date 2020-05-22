@@ -732,7 +732,7 @@ ExtEngineManager::Function::~Function()
 void ExtEngineManager::Function::execute(thread_db* tdbb, UCHAR* inMsg, UCHAR* outMsg) const
 {
 	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine);
-	const MetaName& userName = udf->invoker ? udf->invoker->getUserName() : "";
+	const MetaString& userName = udf->invoker ? udf->invoker->getUserName() : "";
 	ContextManager<IExternalFunction> ctxManager(tdbb, attInfo, function,
 		(udf->getName().package.isEmpty() ?
 			CallerName(obj_udf, udf->getName().identifier, userName) :
@@ -786,7 +786,7 @@ ExtEngineManager::ResultSet::ResultSet(thread_db* tdbb, UCHAR* inMsg, UCHAR* out
 	  firstFetch(true)
 {
 	attInfo = procedure->extManager->getEngineAttachment(tdbb, procedure->engine);
-	const MetaName& userName = procedure->prc->invoker ? procedure->prc->invoker->getUserName() : "";
+	const MetaString& userName = procedure->prc->invoker ? procedure->prc->invoker->getUserName() : "";
 	ContextManager<IExternalProcedure> ctxManager(tdbb, attInfo, procedure->procedure,
 		(procedure->prc->getName().package.isEmpty() ?
 			CallerName(obj_procedure, procedure->prc->getName().identifier, userName) :
@@ -820,7 +820,7 @@ bool ExtEngineManager::ResultSet::fetch(thread_db* tdbb)
 	if (!resultSet)
 		return wasFirstFetch;
 
-	const MetaName& userName = procedure->prc->invoker ? procedure->prc->invoker->getUserName() : "";
+	const MetaString& userName = procedure->prc->invoker ? procedure->prc->invoker->getUserName() : "";
 	ContextManager<IExternalProcedure> ctxManager(tdbb, attInfo, charSet,
 		(procedure->prc->getName().package.isEmpty() ?
 			CallerName(obj_procedure, procedure->prc->getName().identifier, userName) :
@@ -901,7 +901,7 @@ void ExtEngineManager::Trigger::execute(thread_db* tdbb, jrd_req* request, unsig
 	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine);
 	const Nullable<bool>& ssDefiner = trg->ssDefiner.specified ? trg->ssDefiner :
 		(trg->relation && trg->relation->rel_ss_definer.specified ? trg->relation->rel_ss_definer : Nullable<bool>() );
-	const MetaName& userName = ssDefiner.specified && ssDefiner.value ? trg->relation->rel_owner_name : "";
+	const MetaString& userName = ssDefiner.specified && ssDefiner.value ? trg->relation->rel_owner_name.c_str() : "";
 	ContextManager<IExternalTrigger> ctxManager(tdbb, attInfo, trigger,
 		CallerName(obj_trigger, trg->name, userName));
 
@@ -1275,7 +1275,7 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 	entryPointTrimmed.trim();
 
 	EngineAttachmentInfo* attInfo = getEngineAttachment(tdbb, engine);
-	const MetaName& userName = udf->invoker ? udf->invoker->getUserName() : "";
+	const MetaString& userName = udf->invoker ? udf->invoker->getUserName() : "";
 	ContextManager<IExternalFunction> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
 		(udf->getName().package.isEmpty() ?
 			CallerName(obj_udf, udf->getName().identifier, userName) :
@@ -1399,7 +1399,7 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 	entryPointTrimmed.trim();
 
 	EngineAttachmentInfo* attInfo = getEngineAttachment(tdbb, engine);
-	const MetaName& userName = prc->invoker ? prc->invoker->getUserName() : "";
+	const MetaString& userName = prc->invoker ? prc->invoker->getUserName() : "";
 	ContextManager<IExternalProcedure> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
 		(prc->getName().package.isEmpty() ?
 			CallerName(obj_procedure, prc->getName().identifier, userName) :
@@ -1531,7 +1531,7 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 	entryPointTrimmed.trim();
 
 	EngineAttachmentInfo* attInfo = getEngineAttachment(tdbb, engine);
-	const MetaName& userName = trg->ssDefiner.specified && trg->ssDefiner.value ? trg->owner : "";
+	const MetaString& userName = trg->ssDefiner.specified && trg->ssDefiner.value ? trg->owner.c_str() : "";
 	ContextManager<IExternalTrigger> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
 		CallerName(obj_trigger, trg->name, userName));
 

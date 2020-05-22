@@ -660,7 +660,7 @@ void DsqlCompilerScratch::checkUnusedCTEs()
 	}
 }
 
-DeclareSubFuncNode* DsqlCompilerScratch::getSubFunction(const Firebird::MetaName& name)
+DeclareSubFuncNode* DsqlCompilerScratch::getSubFunction(const Jrd::MetaName& name)
 {
 	DeclareSubFuncNode* subFunc = NULL;
 	subFunctions.get(name, subFunc);
@@ -682,7 +682,7 @@ void DsqlCompilerScratch::putSubFunction(DeclareSubFuncNode* subFunc, bool repla
 	subFunctions.put(subFunc->name, subFunc);
 }
 
-DeclareSubProcNode* DsqlCompilerScratch::getSubProcedure(const Firebird::MetaName& name)
+DeclareSubProcNode* DsqlCompilerScratch::getSubProcedure(const Jrd::MetaName& name)
 {
 	DeclareSubProcNode* subProc = NULL;
 	subProcedures.get(name, subProc);

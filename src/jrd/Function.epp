@@ -429,7 +429,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 						else
 							body.getBuffer(1)[0] = 0;
 
-						dbb->dbb_extManager.makeFunction(tdbb, csb, function, X.RDB$ENGINE_NAME,
+						dbb->dbb_extManager->makeFunction(tdbb, csb, function, X.RDB$ENGINE_NAME,
 							(X.RDB$ENTRYPOINT.NULL ? "" : X.RDB$ENTRYPOINT), (char*) body.begin());
 
 						if (!function->fun_external)

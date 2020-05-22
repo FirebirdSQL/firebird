@@ -35,7 +35,7 @@
 #include "../common/classes/init.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/classes/SyncObject.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/isc_s_proto.h"
 #include "../common/isc_proto.h"
 #include "../common/ThreadStart.h"

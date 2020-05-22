@@ -31,7 +31,7 @@ namespace Jrd
 	enum dfw_t;
 }
 
-USHORT DFW_assign_index_type(Jrd::thread_db*, const Firebird::MetaName&, SSHORT, SSHORT);
+USHORT DFW_assign_index_type(Jrd::thread_db*, const Jrd::MetaName&, SSHORT, SSHORT);
 void DFW_delete_deferred(Jrd::jrd_tra*, SavNumber);
 Firebird::SortedArray<int>& DFW_get_ids(Jrd::DeferredWork* work);
 void DFW_merge_work(Jrd::jrd_tra*, SavNumber, SavNumber);
@@ -40,9 +40,9 @@ void DFW_perform_work(Jrd::thread_db*, Jrd::jrd_tra*);
 void DFW_perform_post_commit_work(Jrd::jrd_tra*);
 Jrd::DeferredWork* DFW_post_system_work(Jrd::thread_db*, Jrd::dfw_t, const dsc*, USHORT);
 Jrd::DeferredWork* DFW_post_work(Jrd::jrd_tra*, Jrd::dfw_t, const dsc*, USHORT,
-	const Firebird::MetaName& package = NULL);
+	const Jrd::MetaName& package = NULL);
 Jrd::DeferredWork* DFW_post_work(Jrd::jrd_tra*, Jrd::dfw_t, const Firebird::string&, USHORT,
-	const Firebird::MetaName& package = NULL);
+	const Jrd::MetaName& package = NULL);
 Jrd::DeferredWork* DFW_post_work_arg(Jrd::jrd_tra*, Jrd::DeferredWork*, const dsc*, USHORT);
 Jrd::DeferredWork* DFW_post_work_arg(Jrd::jrd_tra*, Jrd::DeferredWork*, const dsc*, USHORT, Jrd::dfw_t);
 void DFW_update_index(const TEXT*, USHORT, const Jrd::SelectivityList&, Jrd::jrd_tra*);

@@ -2473,7 +2473,7 @@ bool get_character_set(BurpGlobals* tdgbl)
 					!X.RDB$CHARACTER_SET_NAME.NULL)
 				{
 					tdgbl->defaultCollations.add(
-						Firebird::Pair<Firebird::NonPooled<Firebird::MetaName, Firebird::MetaName> >(
+						Firebird::Pair<Firebird::NonPooled<Firebird::MetaString, Firebird::MetaString> >(
 							X.RDB$CHARACTER_SET_NAME, X.RDB$DEFAULT_COLLATE_NAME));
 					throw AbortException();	// prevent the STORE
 				}
@@ -2572,7 +2572,7 @@ bool get_character_set(BurpGlobals* tdgbl)
 					!X.RDB$CHARACTER_SET_NAME.NULL)
 				{
 					tdgbl->defaultCollations.add(
-						Firebird::Pair<Firebird::NonPooled<Firebird::MetaName, Firebird::MetaName> >(
+						Firebird::Pair<Firebird::NonPooled<Firebird::MetaString, Firebird::MetaString> >(
 							X.RDB$CHARACTER_SET_NAME, X.RDB$DEFAULT_COLLATE_NAME));
 					throw AbortException();	// prevent the STORE
 				}

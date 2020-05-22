@@ -590,7 +590,7 @@ protected:
 	virtual void doClose(Jrd::thread_db* tdbb, bool drop);
 
 	virtual void doSetInParams(Jrd::thread_db* tdbb, unsigned int count,
-		const Firebird::MetaName* const* names, const NestConst<Jrd::ValueExprNode>* params);
+		const Jrd::MetaName* const* names, const NestConst<Jrd::ValueExprNode>* params);
 
 	IscTransaction* getIscTransaction() { return (IscTransaction*) m_transaction; }
 

@@ -39,6 +39,8 @@ const FB_SIZE_T MAX_DPB_SIZE = 1024 * 1024;
 
 namespace Firebird {
 
+class StrWrapper;
+
 // At the moment you can only declare it on stack, permanent objects are not allowed
 class ClumpletWriter : public ClumpletReader
 {
@@ -73,7 +75,7 @@ public:
 	void insertBigInt(UCHAR tag, const SINT64 value);
 	void insertBytes(UCHAR tag, const void* bytes, FB_SIZE_T length);
 	void insertString(UCHAR tag, const AbstractString& str);
-	void insertString(UCHAR tag, const MetaName& str);
+	void insertString(UCHAR tag, const StrWrapper& str);
 	void insertString(UCHAR tag, const char* str);
 	void insertString(UCHAR tag, const char* str, FB_SIZE_T length);
 	void insertData(UCHAR tag, const UCharBuffer& data);

@@ -31,8 +31,8 @@
 
 #include "../include/fb_blk.h"
 #include "../common/classes/array.h"
-#include "../common/classes/MetaName.h"
-#include "../common/classes/QualifiedName.h"
+#include "../jrd/MetaName.h"
+#include "../jrd/QualifiedName.h"
 
 #include "../jrd/RecordNumber.h"
 #include "../common/dsc.h"

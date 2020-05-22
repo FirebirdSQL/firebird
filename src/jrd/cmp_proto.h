@@ -46,9 +46,9 @@ ULONG CMP_impure(Jrd::CompilerScratch*, ULONG);
 Jrd::jrd_req* CMP_make_request(Jrd::thread_db*, Jrd::CompilerScratch*, bool);
 Jrd::ItemInfo* CMP_pass2_validation(Jrd::thread_db*, Jrd::CompilerScratch*, const Jrd::Item&);
 
-void CMP_post_access(Jrd::thread_db*, Jrd::CompilerScratch*, const Firebird::MetaName&, SLONG ssRelationId,
-					 Jrd::SecurityClass::flags_t, SLONG type_name, const Firebird::MetaName&,
-					 const Firebird::MetaName& = "");
+void CMP_post_access(Jrd::thread_db*, Jrd::CompilerScratch*, const Jrd::MetaName&, SLONG ssRelationId,
+					 Jrd::SecurityClass::flags_t, SLONG type_name, const Jrd::MetaName&,
+					 const Jrd::MetaName& = "");
 
 void CMP_post_procedure_access(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::jrd_prc*);
 void CMP_post_resource(Jrd::ResourceList*, void*, Jrd::Resource::rsc_s, USHORT);

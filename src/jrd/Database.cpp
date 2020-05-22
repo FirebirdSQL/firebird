@@ -40,6 +40,7 @@
 #include "../jrd/CryptoManager.h"
 #include "../jrd/os/pio_proto.h"
 #include "../common/os/os_utils.h"
+//#include "../dsql/Parser.h"
 
 // Thread data block
 #include "../common/ThreadData.h"

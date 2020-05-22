@@ -492,7 +492,7 @@ static bool change_repl_state(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 	jrd_tra* transaction);
 static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
-	const Firebird::MetaName& fieldName);
+	const Jrd::MetaName& fieldName);
 static void check_dependencies(thread_db*, const TEXT*, const TEXT*, const TEXT*, int, jrd_tra*);
 static void check_filename(const Firebird::string&, bool);
 static void cleanup_index_creation(thread_db*, DeferredWork*, jrd_tra*);
@@ -992,8 +992,8 @@ namespace
 				{
 					Jrd::ContextPoolHolder context(tdbb, new_pool);
 
-					const Firebird::MetaName depName(work->dfw_package.isEmpty() ?
-						Firebird::MetaName(work->dfw_name) : work->dfw_package);
+					const Jrd::MetaName depName(work->dfw_package.isEmpty() ?
+						Jrd::MetaName(work->dfw_name) : work->dfw_package);
 					MET_get_dependencies(tdbb, NULL, NULL, 0, NULL, &blobId,
 						(compile ? &statement : NULL),
 						NULL, depName,
@@ -1239,7 +1239,7 @@ static const deferred_task task_table[] =
 };
 
 
-USHORT DFW_assign_index_type(thread_db* tdbb, const Firebird::MetaName& name, SSHORT field_type,
+USHORT DFW_assign_index_type(thread_db* tdbb, const Jrd::MetaName& name, SSHORT field_type,
 	SSHORT ttype)
 {
 /**************************************
@@ -2834,7 +2834,7 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 
 
 static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
-	const Firebird::MetaName& fieldName)
+	const Jrd::MetaName& fieldName)
 {
 /**************************************
  *
@@ -2849,8 +2849,8 @@ static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
 	SET_TDBB(tdbb);
 
 	bool err = false;
-	Firebird::SortedObjectsArray<Firebird::MetaName> sortedNames(*tdbb->getDefaultPool());
-	Firebird::ObjectsArray<Firebird::MetaName> names;
+	Firebird::SortedObjectsArray<Jrd::MetaName> sortedNames(*tdbb->getDefaultPool());
+	Firebird::ObjectsArray<Jrd::MetaName> names;
 
 	sortedNames.add(fieldName);
 	names.add(fieldName);
@@ -2868,7 +2868,7 @@ static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
 				RFL.RDB$RELATION_NAME = DEP.RDB$DEPENDED_ON_NAME AND
 				RFL.RDB$FIELD_NAME = DEP.RDB$FIELD_NAME
 		{
-			Firebird::MetaName fieldSource(RFL.RDB$FIELD_SOURCE);
+			Jrd::MetaName fieldSource(RFL.RDB$FIELD_SOURCE);
 
 			if (fieldName == fieldSource)
 			{
@@ -3540,7 +3540,7 @@ static bool create_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 			if (!partner_relation)
 			{
-				Firebird::MetaName constraint_name;
+				Jrd::MetaName constraint_name;
 				MET_lookup_cnstrt_for_index(tdbb, constraint_name, work->dfw_name);
 				ERR_post(Arg::Gds(isc_partner_idx_not_found) << Arg::Str(constraint_name));
 			}
@@ -3977,7 +3977,7 @@ void DFW_reset_icu(thread_db* tdbb)
 		transaction = TRA_start(tdbb, 0, 0);
 		tdbb->setTransaction(transaction);
 
-		SortedArray<Firebird::MetaName> indices;
+		SortedArray<Jrd::MetaName> indices;
 		ProtectRelations tables(tdbb, transaction);
 
 		// Get list of affected indices & tables
@@ -4043,7 +4043,7 @@ void DFW_reset_icu(thread_db* tdbb)
 			AutoResultSet rs(ps->executeQuery(tdbb, transaction));
 			while(rs->fetch(tdbb))
 			{
-				Firebird::MetaName collName(rs->getMetaName(tdbb, 1));
+				Jrd::MetaName collName(rs->getMetaName(tdbb, 1));
 				const USHORT charSetId(rs->getSmallInt(tdbb, 2));
 
 				setupSpecificCollationAttributes(tdbb, transaction, charSetId, collName.c_str());
@@ -4052,7 +4052,7 @@ void DFW_reset_icu(thread_db* tdbb)
 
 		// Reactivate indices
 		{	// scope
-			for (Firebird::MetaName* idx = indices.begin(); idx != indices.end(); ++idx)
+			for (Jrd::MetaName* idx = indices.begin(); idx != indices.end(); ++idx)
 			{
 				AutoRequest request;
 
@@ -4246,7 +4246,7 @@ static bool create_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 	{
 	case 1:
 		{
-			const Firebird::MetaName depName(work->dfw_name);
+			const Jrd::MetaName depName(work->dfw_name);
 			AutoRequest handle;
 			bid validation;
 			validation.clear();
@@ -4373,7 +4373,7 @@ static bool modify_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 	{
 	case 1:
 		{
-			const Firebird::MetaName depName(work->dfw_name);
+			const Jrd::MetaName depName(work->dfw_name);
 			AutoRequest handle;
 
 			// If a domain is being changed to NOT NULL, schedule validation of involved relations.
@@ -4997,7 +4997,7 @@ static bool delete_rfr(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
  **************************************/
 	int rel_exists, field_count;
 	AutoRequest handle;
-	Firebird::MetaName f;
+	Jrd::MetaName f;
 	jrd_rel* relation;
 
 	SET_TDBB(tdbb);
@@ -5440,7 +5440,7 @@ static void get_trigger_dependencies(DeferredWork* work, bool compile, jrd_tra* 
 			par_flags = 0;
 
 		Jrd::ContextPoolHolder context(tdbb, new_pool);
-		const Firebird::MetaName depName(work->dfw_name);
+		const Jrd::MetaName depName(work->dfw_name);
 		MET_get_dependencies(tdbb, relation, NULL, 0, NULL, &blob_id, (compile ? &statement : NULL),
 							 NULL, depName, obj_trigger, par_flags, transaction);
 
@@ -6166,7 +6166,7 @@ static bool modify_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 			const DeferredWork* arg = work->findArg(dfw_arg_check_blr);
 			if (arg)
 			{
-				const Firebird::MetaName relation_name(arg->dfw_name);
+				const Jrd::MetaName relation_name(arg->dfw_name);
 				SSHORT valid_blr = FALSE;
 
 				try

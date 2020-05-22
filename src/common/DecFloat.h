@@ -35,7 +35,6 @@
 #include <string.h>
 
 #include "classes/fb_string.h"
-#include "classes/MetaName.h"
 
 extern "C"
 {
@@ -50,9 +49,9 @@ struct DecFloatConstant
 	const char* name;
 	USHORT val;
 
-	static const DecFloatConstant* getByText(const MetaName& text, const DecFloatConstant* constants, unsigned offset)
+	static const DecFloatConstant* getByText(const char* text, const DecFloatConstant* constants, unsigned offset)
 	{
-		NoCaseString name(text.c_str(), text.length());
+		NoCaseString name(text);
 
 		for (const DecFloatConstant* dfConst = constants; dfConst->name; ++dfConst)
 		{

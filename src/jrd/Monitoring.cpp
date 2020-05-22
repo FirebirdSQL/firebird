@@ -1344,7 +1344,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment)
 	attachment->mergeStats();
 
 	const AttNumber att_id = attachment->att_attachment_id;
-	const MetaName& user_name = attachment->att_user->getUserName();
+	const MetaString& user_name = attachment->att_user->getUserName();
 
 	fb_assert(dbb->dbb_monitoring_data);
 

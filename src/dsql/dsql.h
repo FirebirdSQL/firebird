@@ -36,7 +36,7 @@
 
 #include "../common/classes/array.h"
 #include "../common/classes/GenericMap.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/stack.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/NestConst.h"
@@ -95,18 +95,14 @@ namespace Jrd
 	class dsql_map;
 	class dsql_intlsym;
 	class TimeoutTimer;
+	class MetaName;
 
 	typedef Firebird::Stack<dsql_ctx*> DsqlContextStack;
 
-	typedef Firebird::Pair<Firebird::Left<Firebird::MetaName, NestConst<Jrd::WindowClause> > >
+	typedef Firebird::Pair<Firebird::Left<Jrd::MetaName, NestConst<Jrd::WindowClause> > >
 		NamedWindowClause;
 
 	typedef Firebird::ObjectsArray<NamedWindowClause> NamedWindowsClause;
-}
-
-namespace Firebird
-{
-	class MetaName;
 }
 
 //======================================================================
@@ -126,15 +122,15 @@ class dsql_dbb : public pool_alloc<dsql_type_dbb>
 {
 public:
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Firebird::MetaName, class dsql_rel*> > > dbb_relations;			// known relations in database
+		Jrd::MetaName, class dsql_rel*> > > dbb_relations;			// known relations in database
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Firebird::QualifiedName, class dsql_prc*> > > dbb_procedures;	// known procedures in database
+		Jrd::QualifiedName, class dsql_prc*> > > dbb_procedures;	// known procedures in database
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Firebird::QualifiedName, class dsql_udf*> > > dbb_functions;	// known functions in database
+		Jrd::QualifiedName, class dsql_udf*> > > dbb_functions;	// known functions in database
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Firebird::MetaName, class dsql_intlsym*> > > dbb_charsets;		// known charsets in database
+		Jrd::MetaName, class dsql_intlsym*> > > dbb_charsets;		// known charsets in database
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Firebird::MetaName, class dsql_intlsym*> > > dbb_collations;	// known collations in database
+		Jrd::MetaName, class dsql_intlsym*> > > dbb_collations;	// known collations in database
 	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<
 		SSHORT, dsql_intlsym*> > > dbb_charsets_by_id;	// charsets sorted by charset_id
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
@@ -142,7 +138,7 @@ public:
 
 	MemoryPool&		dbb_pool;			// The current pool for the dbb
 	Attachment*		dbb_attachment;
-	Firebird::MetaName dbb_dfl_charset;
+	Jrd::MetaName dbb_dfl_charset;
 	bool			dbb_no_charset;
 
 	explicit dsql_dbb(MemoryPool& p)
@@ -182,8 +178,8 @@ public:
 
 	class dsql_fld*	rel_fields;		// Field block
 	//dsql_rel*	rel_base_relation;	// base relation for an updatable view
-	Firebird::MetaName rel_name;	// Name of relation
-	Firebird::MetaName rel_owner;	// Owner of relation
+	Jrd::MetaName rel_name;	// Name of relation
+	Jrd::MetaName rel_owner;	// Owner of relation
 	USHORT		rel_id;				// Relation id
 	USHORT		rel_dbkey_length;
 	USHORT		rel_flags;
@@ -201,7 +197,7 @@ enum rel_flags_vals {
 class TypeClause
 {
 public:
-	TypeClause(MemoryPool& pool, const Firebird::MetaName& aCollate)
+	TypeClause(MemoryPool& pool, const Jrd::MetaName& aCollate)
 		: dtype(dtype_unknown),
 		  length(0),
 		  scale(0),
@@ -274,12 +270,12 @@ public:
 	SSHORT textType;
 	bool fullDomain;					// Domain name without TYPE OF prefix
 	bool notNull;						// NOT NULL was explicit specified
-	Firebird::MetaName fieldSource;
-	Firebird::MetaName typeOfTable;		// TYPE OF table name
-	Firebird::MetaName typeOfName;		// TYPE OF
-	Firebird::MetaName collate;
-	Firebird::MetaName charSet;		// empty means not specified
-	Firebird::MetaName subTypeName;	// Subtype name for later resolution
+	Jrd::MetaName fieldSource;
+	Jrd::MetaName typeOfTable;		// TYPE OF table name
+	Jrd::MetaName typeOfName;		// TYPE OF
+	Jrd::MetaName collate;
+	Jrd::MetaName charSet;		// empty means not specified
+	Jrd::MetaName subTypeName;	// Subtype name for later resolution
 	USHORT flags;
 	USHORT elementDtype;			// Data type of array element
 	USHORT elementLength;			// Length of array element
@@ -312,7 +308,7 @@ public:
 	dsql_rel*	fld_relation;			// Parent relation
 	dsql_prc*	fld_procedure;			// Parent procedure
 	USHORT		fld_id;					// Field in in database
-	Firebird::MetaName fld_name;
+	Jrd::MetaName fld_name;
 };
 
 // values used in fld_flags
@@ -343,8 +339,8 @@ public:
 
 	dsql_fld*	prc_inputs;		// Input parameters
 	dsql_fld*	prc_outputs;	// Output parameters
-	Firebird::QualifiedName prc_name;	// Name of procedure
-	Firebird::MetaName prc_owner;	// Owner of procedure
+	Jrd::QualifiedName prc_name;	// Name of procedure
+	Jrd::MetaName prc_owner;	// Owner of procedure
 	SSHORT		prc_in_count;
 	SSHORT		prc_def_count;	// number of inputs with default values
 	SSHORT		prc_out_count;
@@ -377,7 +373,7 @@ public:
 	SSHORT		udf_character_set_id;
 	//USHORT		udf_character_length;
     USHORT      udf_flags;
-	Firebird::QualifiedName udf_name;
+	Jrd::QualifiedName udf_name;
 	Firebird::Array<dsc> udf_arguments;
 	bool		udf_private;	// Packaged private function
 	SSHORT		udf_def_count;	// number of inputs with default values
@@ -439,7 +435,7 @@ public:
 	{
 	}
 
-	Firebird::MetaName intlsym_name;
+	Jrd::MetaName intlsym_name;
 	USHORT		intlsym_type;		// what type of name
 	USHORT		intlsym_flags;
 	SSHORT		intlsym_ttype;		// id of implementation
@@ -815,7 +811,7 @@ public:
 	DsqlContextStack	ctx_main_derived_contexts;	// contexts used for blr_derived_expr
 	DsqlContextStack	ctx_childs_derived_table;	// Childs derived table context
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Firebird::MetaName, ImplicitJoin*> > > ctx_imp_join;	// Map of USING fieldname to ImplicitJoin
+		Jrd::MetaName, ImplicitJoin*> > > ctx_imp_join;	// Map of USING fieldname to ImplicitJoin
 	Firebird::Array<WindowMap*> ctx_win_maps;	// Maps for window functions
 	Firebird::GenericMap<NamedWindowClause> ctx_named_windows;
 
@@ -851,7 +847,7 @@ public:
 		return "";
 	}
 
-	bool getImplicitJoinField(const Firebird::MetaName& name, NestConst<ValueExprNode>& node);
+	bool getImplicitJoinField(const Jrd::MetaName& name, NestConst<ValueExprNode>& node);
 	WindowMap* getWindowMap(DsqlCompilerScratch* dsqlScratch, WindowClause* windowNode);
 };
 
@@ -927,13 +923,13 @@ public:
 	dsql_msg*	par_message;		// Parent message
 	dsql_par*	par_null;			// Null parameter, if used
 	ValueExprNode* par_node;					// Associated value node, if any
-	Firebird::MetaName par_dbkey_relname;		// Context of internally requested dbkey
-	Firebird::MetaName par_rec_version_relname;	// Context of internally requested rec. version
-	Firebird::MetaName par_name;				// Parameter name, if any
-	Firebird::MetaName par_rel_name;			// Relation name, if any
-	Firebird::MetaName par_owner_name;			// Owner name, if any
-	Firebird::MetaName par_rel_alias;			// Relation alias, if any
-	Firebird::MetaName par_alias;				// Alias, if any
+	Jrd::MetaName par_dbkey_relname;		// Context of internally requested dbkey
+	Jrd::MetaName par_rec_version_relname;	// Context of internally requested rec. version
+	Jrd::MetaName par_name;				// Parameter name, if any
+	Jrd::MetaName par_rel_name;			// Relation name, if any
+	Jrd::MetaName par_owner_name;			// Owner name, if any
+	Jrd::MetaName par_rel_alias;			// Relation alias, if any
+	Jrd::MetaName par_alias;				// Alias, if any
 	dsc			par_desc;			// Field data type
 	USHORT		par_parameter;		// BLR parameter number
 	USHORT		par_index;			// Index into SQLDA, if appropriate
@@ -959,12 +955,12 @@ class IntlString
 {
 public:
 	IntlString(Firebird::MemoryPool& p, const Firebird::string& str,
-		const Firebird::MetaName& cs = NULL)
+		const Jrd::MetaName& cs = NULL)
 		: charset(p, cs),
 		  s(p, str)
 	{ }
 
-	explicit IntlString(const Firebird::string& str, const Firebird::MetaName& cs = NULL)
+	explicit IntlString(const Firebird::string& str, const Jrd::MetaName& cs = NULL)
 		: charset(cs),
 		  s(str)
 	{ }
@@ -981,12 +977,12 @@ public:
 
 	Firebird::string toUtf8(DsqlCompilerScratch*) const;
 
-	const Firebird::MetaName& getCharSet() const
+	const Jrd::MetaName& getCharSet() const
 	{
 		return charset;
 	}
 
-	void setCharSet(const Firebird::MetaName& value)
+	void setCharSet(const Jrd::MetaName& value)
 	{
 		charset = value;
 	}
@@ -1007,7 +1003,7 @@ public:
 	}
 
 private:
-	Firebird::MetaName charset;
+	Jrd::MetaName charset;
 	Firebird::string s;
 };
 
@@ -1093,13 +1089,13 @@ struct SignatureParameter
 
 	SSHORT type;
 	SSHORT number;
-	Firebird::MetaName name;
-	Firebird::MetaName fieldSource;
-	Firebird::MetaName fieldName;
-	Firebird::MetaName relationName;
-	Firebird::MetaName charSetName;
-	Firebird::MetaName collationName;
-	Firebird::MetaName subTypeName;
+	Jrd::MetaName name;
+	Jrd::MetaName fieldSource;
+	Jrd::MetaName fieldName;
+	Jrd::MetaName relationName;
+	Jrd::MetaName charSetName;
+	Jrd::MetaName collationName;
+	Jrd::MetaName subTypeName;
 	Nullable<SSHORT> collationId;
 	Nullable<SSHORT> nullFlag;
 	SSHORT mechanism;
@@ -1157,7 +1153,7 @@ struct Signature
 {
 	const static unsigned FLAG_DETERMINISTIC = 0x01;
 
-	Signature(MemoryPool& p, const Firebird::MetaName& aName)
+	Signature(MemoryPool& p, const Jrd::MetaName& aName)
 		: name(p, aName),
 		  parameters(p),
 		  flags(0),
@@ -1165,7 +1161,7 @@ struct Signature
 	{
 	}
 
-	explicit Signature(const Firebird::MetaName& aName)
+	explicit Signature(const Jrd::MetaName& aName)
 		: name(aName),
 		  parameters(*getDefaultMemoryPool()),
 		  flags(0),
@@ -1222,7 +1218,7 @@ struct Signature
 		return !(*this == o);
 	}
 
-	Firebird::MetaName name;
+	Jrd::MetaName name;
 	Firebird::SortedObjectsArray<SignatureParameter> parameters;
 	unsigned flags;
 	bool defined;

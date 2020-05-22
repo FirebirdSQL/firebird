@@ -25,7 +25,7 @@
 #include "firebird.h"
 #include "../common/MsgMetadata.h"
 #include "../common/utils_proto.h"
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
 #include "../common/StatusHolder.h"
 #include "../jrd/align.h"
 
@@ -335,7 +335,7 @@ void MetadataBuilder::indexError(unsigned index, const char* functionName)
 
 
 // Add an item based on a descriptor.
-void MsgMetadata::addItem(const MetaName& name, bool nullable, const dsc& desc)
+void MsgMetadata::addItem(const StrWrapper& name, bool nullable, const dsc& desc)
 {
 	Item& item = items.add();
 	item.field = name.c_str();

@@ -40,10 +40,8 @@ using namespace Firebird;
 using namespace Jrd;
 
 
-namespace
+namespace Jrd
 {
-	const int HASH_SIZE = 1021;
-
 	struct Keyword
 	{
 		Keyword(int aKeyword, MetaName* aStr)
@@ -75,7 +73,28 @@ namespace
 		}
 	};
 
-	GlobalPtr<KeywordsMap> keywordsMap;
+	KeywordsMap* KeywordsMapAllocator::create()
+	{
+		thread_db* tdbb = JRD_get_thread_data();
+		fb_assert(tdbb);
+		Database* dbb = tdbb->getDatabase();
+		fb_assert(dbb);
+
+		return FB_NEW_POOL(*dbb->dbb_permanent) KeywordsMap(*dbb->dbb_permanent);
+	}
+
+	void KeywordsMapAllocator::destroy(KeywordsMap* inst)
+	{
+		delete inst;
+	}
+}
+
+namespace
+{
+	const Keyword* getKeyword(Database* dbb, const MetaName& str)
+	{
+		return dbb->dbb_keywords_map().get(str);
+	}
 }
 
 
@@ -1218,7 +1237,7 @@ int Parser::yylexAux()
 			yyabandon(yyposn, -104, isc_dyn_name_longer);
 
 		const MetaName str(string, p - string);
-		const Keyword* const keyVer = keywordsMap->get(str);
+		const Keyword* const keyVer = getKeyword(dbb, str);
 
 		if (keyVer && (keyVer->keyword != TOK_COMMENT || lex.prev_keyword == -1))
 		{
@@ -1241,7 +1260,7 @@ int Parser::yylexAux()
 	if (lex.last_token + 1 < lex.end && !isspace(UCHAR(lex.last_token[1])))
 	{
 		const MetaName str(lex.last_token, 2);
-		const Keyword* const keyVer = keywordsMap->get(str);
+		const Keyword* const keyVer = getKeyword(dbb, str);
 
 		if (keyVer)
 		{

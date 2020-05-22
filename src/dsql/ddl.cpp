@@ -73,7 +73,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "../jrd/SysFunction.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../dsql/dsql.h"
 #include "../dsql/ExprNodes.h"
 #include "ibase.h"

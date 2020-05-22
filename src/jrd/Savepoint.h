@@ -21,7 +21,7 @@
 #define JRD_SAVEPOINT_H
 
 #include "../common/classes/File.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../jrd/Record.h"
 #include "../jrd/RecordNumber.h"
 
@@ -171,12 +171,12 @@ namespace Jrd
 			return m_number;
 		}
 
-		const Firebird::MetaName& getName() const
+		const Jrd::MetaName& getName() const
 		{
 			return m_name;
 		}
 
-		void setName(const Firebird::MetaName& name)
+		void setName(const Jrd::MetaName& name)
 		{
 			m_name = name;
 		}
@@ -316,7 +316,7 @@ namespace Jrd
 		SavNumber m_number;				// savepoint number
 		USHORT m_flags;					// misc flags
 		USHORT m_count;					// active verb count
-		Firebird::MetaName m_name; 		// savepoint name
+		Jrd::MetaName m_name; 		// savepoint name
 		Savepoint* m_next;				// next savepoint in the list
 
 

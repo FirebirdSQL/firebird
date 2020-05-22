@@ -175,11 +175,11 @@ static void splitDataSourceName(thread_db* tdbb, const string& dataSource,
 static bool isCurrentAccount(UserId* currUserID,
 	const MetaName& user, const string& pwd, const MetaName& role)
 {
-	const MetaName& attUser = currUserID->getUserName();
-	const MetaName& attRole = currUserID->getSqlRole();
+	const MetaString& attUser = currUserID->getUserName();
+	const MetaString& attRole = currUserID->getSqlRole();
 
-	return ((user.isEmpty() || user == attUser) && pwd.isEmpty() &&
-			(role.isEmpty() || role == attRole));
+	return ((user.isEmpty() || user == attUser.c_str()) && pwd.isEmpty() &&
+			(role.isEmpty() || role == attRole.c_str()));
 }
 
 Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,

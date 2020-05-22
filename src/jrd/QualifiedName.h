@@ -24,13 +24,13 @@
  *  Contributor(s): ______________________________________.
  */
 
-#ifndef COMMON_QUALIFIEDNAME_H
-#define COMMON_QUALIFIEDNAME_H
+#ifndef JRD_QUALIFIEDNAME_H
+#define JRD_QUALIFIEDNAME_H
 
 #include "MetaName.h"
-#include "array.h"
+#include "../common/classes/array.h"
 
-namespace Firebird {
+namespace Jrd {
 
 class QualifiedName
 {
@@ -91,9 +91,9 @@ public:
 	}
 
 public:
-	string toString() const
+	Firebird::string toString() const
 	{
-		string s;
+		Firebird::string s;
 		if (package.hasData())
 		{
 			s = package.c_str();
@@ -108,6 +108,6 @@ public:
 	MetaName package;
 };
 
-} // namespace Firebird
+} // namespace Jrd
 
-#endif // COMMON_QUALIFIEDNAME_H
+#endif // JRD_QUALIFIEDNAME_H

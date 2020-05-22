@@ -116,7 +116,7 @@ void TraceSvcJrd::startSession(TraceSession& session, bool interactive)
 
 		session.ses_auth = m_authBlock;
 		session.ses_user = m_user.hasData() ? m_user : m_svc.getUserName();
-		MetaName role = m_role.hasData() ? m_role : m_svc.getRoleName();
+		MetaString role = m_role.hasData() ? m_role : m_svc.getRoleName();
 		UserId::makeRoleName(role, SQL_DIALECT_V6);
 		session.ses_role = role.c_str();
 

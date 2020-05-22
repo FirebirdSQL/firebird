@@ -285,10 +285,10 @@ bool InternalConnection::isSameDatabase(const PathName& dbName, ClumpletReader& 
 	if (m_isCurrent)
 	{
 		const Attachment* att = m_attachment->getHandle();
-		const MetaName& attUser = att->att_user->getUserName();
-		const MetaName& attRole = att->att_user->getSqlRole();
+		const MetaString& attUser = att->att_user->getUserName();
+		const MetaString& attRole = att->att_user->getSqlRole();
 
-		MetaName str;
+		MetaString str;
 
 		if (dpb.find(isc_dpb_user_name))
 		{
@@ -470,7 +470,7 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 			else if (statement && (routine = statement->getRoutine()) &&
 				routine->getName().identifier.hasData())
 			{
-				const MetaName& userName = routine->invoker ? routine->invoker->getUserName() : "";
+				const MetaString& userName = routine->invoker ? routine->invoker->getUserName() : "";
 				if (routine->getName().package.isEmpty())
 				{
 					tran->getHandle()->tra_caller_name = CallerName(routine->getObjectType(),

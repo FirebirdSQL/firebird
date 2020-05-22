@@ -158,7 +158,7 @@ SINT64 MOV_get_int64(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
 }
 
 
-void MOV_get_metaname(Jrd::thread_db* tdbb, const dsc* desc, MetaName& name)
+void MOV_get_metaname(Jrd::thread_db* tdbb, const dsc* desc, Jrd::MetaName& name)
 {
 /**************************************
  *

@@ -44,7 +44,8 @@
 
 #include "../common/classes/fb_atomic.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
+#include "../common/classes/auto.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/array.h"
 #include "../common/classes/Hash.h"
 #include "../common/classes/objects_array.h"
@@ -82,6 +83,15 @@ class ExternalFileDirectoryList;
 class MonitoringData;
 class GarbageCollector;
 class CryptoManager;
+class KeywordsMap;
+
+// allocator for keywords table
+class KeywordsMapAllocator
+{
+public:
+	static KeywordsMap* create();
+	static void destroy(KeywordsMap* inst);
+};
 
 // general purpose vector
 template <class T, BlockType TYPE = type_vec>
@@ -442,7 +452,7 @@ private:
 	DatabaseModules	dbb_modules;		// external function/filter modules
 
 public:
-	ExtEngineManager dbb_extManager;	// external engine manager
+	Firebird::AutoPtr<ExtEngineManager>	dbb_extManager;	// external engine manager
 
 	Firebird::SyncObject	dbb_flush_count_mutex;
 	Firebird::RWLock		dbb_ast_lock;		// avoids delivering AST to going away database
@@ -465,7 +475,7 @@ public:
 #ifdef HAVE_ID_BY_NAME
 	Firebird::UCharBuffer dbb_id;
 #endif
-	Firebird::MetaName dbb_owner;		// database owner
+	Jrd::MetaName dbb_owner;		// database owner
 
 	Firebird::SyncObject			dbb_pools_sync;
 	Firebird::Array<MemoryPool*>	dbb_pools;		// pools
@@ -521,6 +531,8 @@ public:
 	ReplicaMode dbb_replica_mode;		// replica access mode
 
 	unsigned dbb_compatibility_index;	// datatype backward compatibility level
+	Dictionary dbb_dic;					// metanames dictionary
+	Firebird::InitInstance<KeywordsMap, KeywordsMapAllocator, Firebird::TraditionalDelete> dbb_keywords_map;
 
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;
@@ -565,7 +577,7 @@ private:
 		dbb_page_manager(this, *p),
 		dbb_file_id(*p),
 		dbb_modules(*p),
-		dbb_extManager(*p),
+		dbb_extManager(nullptr),
 		dbb_flags(shared ? DBB_shared : 0),
 		dbb_filename(*p),
 		dbb_database_name(*p),
@@ -587,7 +599,8 @@ private:
 		dbb_plugin_config(pConf),
 		dbb_repl_sequence(0),
 		dbb_replica_mode(REPLICA_NONE),
-		dbb_compatibility_index(~0U)
+		dbb_compatibility_index(~0U),
+		dbb_dic(*p)
 	{
 		dbb_pools.add(p);
 	}

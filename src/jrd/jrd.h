@@ -41,7 +41,7 @@
 
 #include "../common/classes/fb_atomic.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/NestConst.h"
 #include "../common/classes/array.h"
 #include "../common/classes/objects_array.h"
@@ -150,13 +150,13 @@ public:
 	FB_UINT64	type;						// Trigger type
 	USHORT		flags;						// Flags as they are in RDB$TRIGGERS table
 	jrd_rel*	relation;					// Trigger parent relation
-	Firebird::MetaName	name;				// Trigger name
-	Firebird::MetaName	engine;				// External engine name
+	Jrd::MetaName	name;				// Trigger name
+	Jrd::MetaName	engine;				// External engine name
 	Firebird::string	entryPoint;			// External trigger entrypoint
 	Firebird::string	extBody;			// External trigger body
 	ExtEngineManager::Trigger* extTrigger;	// External trigger
 	Nullable<bool> ssDefiner;
-	Firebird::MetaName	owner;				// Owner for SQL SECURITY
+	Jrd::MetaName	owner;				// Owner for SQL SECURITY
 
 	void compile(thread_db*);				// Ensure that trigger is compiled
 	void release(thread_db*);				// Try to free trigger request
@@ -284,8 +284,8 @@ public:
 	NestConst<ValueExprNode>	prm_default_value;
 	bool		prm_nullable;
 	prm_mech_t	prm_mechanism;
-	Firebird::MetaName prm_name;			// asciiz name
-	Firebird::MetaName prm_field_source;
+	Jrd::MetaName prm_name;			// asciiz name
+	Jrd::MetaName prm_field_source;
 	FUN_T		prm_fun_mechanism;
 
 public:

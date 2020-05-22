@@ -35,7 +35,7 @@
 #include "../common/classes/fb_string.h"
 #include "../common/classes/objects_array.h"
 #include "../common/classes/condition.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/GetPlugins.h"
 #include "../common/ThreadStart.h"
 #include "../jrd/ods.h"
@@ -277,8 +277,8 @@ public:
 
 	void shutdown(thread_db* tdbb);
 
-	void prepareChangeCryptState(thread_db* tdbb, const Firebird::MetaName& plugName,
-		const Firebird::MetaName& key);
+	void prepareChangeCryptState(thread_db* tdbb, const Jrd::MetaName& plugName,
+		const Jrd::MetaName& key);
 	void changeCryptState(thread_db* tdbb, const Firebird::string& plugName);
 	void attach(thread_db* tdbb, Attachment* att);
 	void detach(thread_db* tdbb, Attachment* att);
@@ -384,7 +384,7 @@ private:
 	void checkDigitalSignature(thread_db* tdbb, const class Header& hdr);
 
 	BarSync sync;
-	Firebird::MetaName keyName, pluginName;
+	Jrd::MetaName keyName, pluginName;
 	ULONG currentPage;
 	Firebird::Mutex pluginLoadMtx, cryptThreadMtx, holdersMutex;
 	AttVector keyProviders, keyConsumers;

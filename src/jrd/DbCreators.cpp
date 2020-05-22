@@ -38,7 +38,7 @@
 #include "../common/classes/GenericMap.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/classes/SyncObject.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/isc_s_proto.h"
 #include "../common/isc_proto.h"
 #include "../common/ThreadStart.h"
@@ -104,8 +104,8 @@ bool openDb(const char* securityDb, RefPtr<IAttachment>& att, RefPtr<ITransactio
 
 namespace Jrd {
 
-bool checkCreateDatabaseGrant(const MetaName& userName, const MetaName& trustedRole,
-	const MetaName& sqlRole, const char* securityDb)
+bool checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trustedRole,
+	const MetaString& sqlRole, const char* securityDb)
 {
 	if (userName == DBA_USER_NAME)
 		return true;
@@ -115,7 +115,7 @@ bool checkCreateDatabaseGrant(const MetaName& userName, const MetaName& trustedR
 	bool hasDb = openDb(securityDb, att, tra);
 
 	FbLocalStatus st;
-	MetaName role(sqlRole);
+	MetaString role(sqlRole);
 	if (hasDb && role.hasData())
 	{
 		const UCHAR info[] = { isc_info_db_sql_dialect, isc_info_end };

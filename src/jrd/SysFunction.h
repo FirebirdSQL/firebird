@@ -31,7 +31,7 @@
 #ifndef JRD_SYSFUNCTION_H
 #define JRD_SYSFUNCTION_H
 
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../jrd/DataTypeUtil.h"
 #include "../dsql/Nodes.h"
 #include "../common/dsc.h"
@@ -51,7 +51,7 @@ public:
 	typedef dsc* (*EvlFunc)(Jrd::thread_db*, const SysFunction* function,
 		const Jrd::NestValueArray&, Jrd::impure_value*);
 
-	const Firebird::MetaName name;
+	const char* name;
 	int minArgCount;
 	int maxArgCount;	// -1 for no limit
 	SetParamsFunc setParamsFunc;
@@ -59,7 +59,7 @@ public:
 	EvlFunc evlFunc;
 	void* misc;
 
-	static const SysFunction* lookup(const Firebird::MetaName& name);
+	static const SysFunction* lookup(const Jrd::MetaName& name);
 
 	void checkArgsMismatch(int count) const;
 

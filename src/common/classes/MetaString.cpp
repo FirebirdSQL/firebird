@@ -1,6 +1,6 @@
 /*
  *	PROGRAM:	Client/Server Common Code
- *	MODULE:		MetaName.cpp
+ *	MODULE:		MetaString.cpp
  *	DESCRIPTION:	metadata name holder
  *
  *  The contents of this file are subject to the Initial
@@ -30,11 +30,11 @@
 
 #include <stdarg.h>
 
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
 
 namespace Firebird {
 
-	MetaName& MetaName::assign(const char* s, FB_SIZE_T l)
+	MetaString& MetaString::assign(const char* s, FB_SIZE_T l)
 	{
 		init();
 		if (s)
@@ -49,7 +49,7 @@ namespace Firebird {
 		return *this;
 	}
 
-	char* MetaName::getBuffer(const FB_SIZE_T l)
+	char* MetaString::getBuffer(const FB_SIZE_T l)
 	{
 		fb_assert (l < MAX_SQL_IDENTIFIER_SIZE);
 		init();
@@ -57,7 +57,7 @@ namespace Firebird {
 		return data;
 	}
 
-	int MetaName::compare(const char* s, FB_SIZE_T l) const
+	int MetaString::compare(const char* s, FB_SIZE_T l) const
 	{
 		if (s)
 		{
@@ -72,7 +72,7 @@ namespace Firebird {
 		return length() - l;
 	}
 
-	void MetaName::adjustLength(const char* const s, FB_SIZE_T& l)
+	void MetaString::adjustLength(const char* const s, FB_SIZE_T& l)
 	{
 		fb_assert(s);
 		if (l > MAX_SQL_IDENTIFIER_LEN)
@@ -93,7 +93,7 @@ namespace Firebird {
 		}
 	}
 
-	void MetaName::printf(const char* format, ...)
+	void MetaString::printf(const char* format, ...)
 	{
 		init();
 		va_list params;
@@ -108,7 +108,7 @@ namespace Firebird {
 		va_end(params);
 	}
 
-	FB_SIZE_T MetaName::copyTo(char* to, FB_SIZE_T toSize) const
+	FB_SIZE_T MetaString::copyTo(char* to, FB_SIZE_T toSize) const
 	{
 		fb_assert(to);
 		fb_assert(toSize);
@@ -119,6 +119,11 @@ namespace Firebird {
 		memcpy(to, c_str(), toSize);
 		to[toSize] = 0;
 		return toSize;
+	}
+
+	MetaString::MetaString(const StrWrapper& s)
+	{
+		assign(s.c_str());
 	}
 
 } // namespace Firebird

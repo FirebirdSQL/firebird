@@ -283,7 +283,7 @@ public:
 	}
 
 public:
-	void addItem(const MetaName& name, bool nullable, const dsc& desc);
+	void addItem(const StrWrapper& name, bool nullable, const dsc& desc);
 	unsigned makeOffsets();
 
 private:

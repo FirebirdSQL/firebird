@@ -26,19 +26,19 @@
 #define JRD_DYN_UT_PROTO_H
 
 void	DYN_UTIL_store_check_constraints(Jrd::thread_db*, Jrd::jrd_tra*,
-			const Firebird::MetaName&, const Firebird::MetaName&);
+			const Jrd::MetaName&, const Jrd::MetaName&);
 bool	DYN_UTIL_find_field_source(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction,
-			const Firebird::MetaName& view_name, USHORT context, const TEXT* local_name,
+			const Jrd::MetaName& view_name, USHORT context, const TEXT* local_name,
 			TEXT* output_field_name);
-void	DYN_UTIL_generate_generator_name(Jrd::thread_db*, Firebird::MetaName&);
-void	DYN_UTIL_generate_trigger_name(Jrd::thread_db*, Jrd::jrd_tra*, Firebird::MetaName&);
-void	DYN_UTIL_generate_index_name(Jrd::thread_db*, Jrd::jrd_tra*, Firebird::MetaName&, UCHAR);
-void	DYN_UTIL_generate_field_position(Jrd::thread_db*, const Firebird::MetaName&, SLONG*);
+void	DYN_UTIL_generate_generator_name(Jrd::thread_db*, Jrd::MetaName&);
+void	DYN_UTIL_generate_trigger_name(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::MetaName&);
+void	DYN_UTIL_generate_index_name(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::MetaName&, UCHAR);
+void	DYN_UTIL_generate_field_position(Jrd::thread_db*, const Jrd::MetaName&, SLONG*);
 void	DYN_UTIL_generate_field_name(Jrd::thread_db*, TEXT*);
-void	DYN_UTIL_generate_field_name(Jrd::thread_db*, Firebird::MetaName&);
-void	DYN_UTIL_generate_constraint_name(Jrd::thread_db*, Firebird::MetaName&);
+void	DYN_UTIL_generate_field_name(Jrd::thread_db*, Jrd::MetaName&);
+void	DYN_UTIL_generate_constraint_name(Jrd::thread_db*, Jrd::MetaName&);
 void	DYN_UTIL_check_unique_name(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction,
-								   const Firebird::MetaName& object_name, int object_type);
+								   const Jrd::MetaName& object_name, int object_type);
 SINT64	DYN_UTIL_gen_unique_id(Jrd::thread_db*, SSHORT, const char*);
 
 #endif // JRD_DYN_UT_PROTO_H

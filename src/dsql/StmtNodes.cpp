@@ -8473,11 +8473,11 @@ void SetRoleNode::execute(thread_db* tdbb, dsql_req* request, jrd_tra** /*traHan
 //--------------------
 
 
-SetDecFloatRoundNode::SetDecFloatRoundNode(MemoryPool& pool, Firebird::MetaName* name)
+SetDecFloatRoundNode::SetDecFloatRoundNode(MemoryPool& pool, Jrd::MetaName* name)
 	: SessionManagementNode(pool)
 {
 	fb_assert(name);
-	const DecFloatConstant* mode = DecFloatConstant::getByText(*name, FB_DEC_RoundModes, FB_DEC_RMODE_OFFSET);
+	const DecFloatConstant* mode = DecFloatConstant::getByText(name->c_str(), FB_DEC_RoundModes, FB_DEC_RMODE_OFFSET);
 	if (!mode)
 		(Arg::Gds(isc_invalid_decfloat_round) << *name).raise();
 	rndMode = mode->val;
@@ -8494,10 +8494,10 @@ void SetDecFloatRoundNode::execute(thread_db* tdbb, dsql_req* /*request*/, jrd_t
 //--------------------
 
 
-void SetDecFloatTrapsNode::trap(Firebird::MetaName* name)
+void SetDecFloatTrapsNode::trap(Jrd::MetaName* name)
 {
 	fb_assert(name);
-	const DecFloatConstant* trap = DecFloatConstant::getByText(*name, FB_DEC_IeeeTraps, FB_DEC_TRAPS_OFFSET);
+	const DecFloatConstant* trap = DecFloatConstant::getByText(name->c_str(), FB_DEC_IeeeTraps, FB_DEC_TRAPS_OFFSET);
 	if (!trap)
 		(Arg::Gds(isc_invalid_decfloat_trap) << *name).raise();
 	traps |= trap->val;

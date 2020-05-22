@@ -591,7 +591,7 @@ protected:
 };
 
 
-typedef Firebird::Array<const Firebird::MetaName*> ParamNames;
+typedef Firebird::Array<const Jrd::MetaName*> ParamNames;
 typedef Firebird::Array<USHORT> ParamNumbers;
 
 class Statement : public Firebird::PermanentStorage
@@ -615,10 +615,10 @@ public:
 	void prepare(Jrd::thread_db* tdbb, Transaction* tran, const Firebird::string& sql, bool named);
 	void setTimeout(Jrd::thread_db* tdbb, unsigned int timeout);
 	void execute(Jrd::thread_db* tdbb, Transaction* tran,
-		const Firebird::MetaName* const* in_names, const Jrd::ValueListNode* in_params,
+		const Jrd::MetaName* const* in_names, const Jrd::ValueListNode* in_params,
 		const ParamNumbers* in_excess, const Jrd::ValueListNode* out_params);
 	void open(Jrd::thread_db* tdbb, Transaction* tran,
-		const Firebird::MetaName* const* in_names, const Jrd::ValueListNode* in_params, 
+		const Jrd::MetaName* const* in_names, const Jrd::ValueListNode* in_params, 
 		const ParamNumbers* in_excess, bool singleton);
 	bool fetch(Jrd::thread_db* tdbb, const Jrd::ValueListNode* out_params);
 	void close(Jrd::thread_db* tdbb, bool invalidTran = false);
@@ -655,12 +655,12 @@ protected:
 	virtual bool doFetch(Jrd::thread_db* tdbb) = 0;
 	virtual void doClose(Jrd::thread_db* tdbb, bool drop) = 0;
 
-	void setInParams(Jrd::thread_db* tdbb, const Firebird::MetaName* const* names,
+	void setInParams(Jrd::thread_db* tdbb, const Jrd::MetaName* const* names,
 		const Jrd::ValueListNode* params, const ParamNumbers* in_excess);
 	virtual void getOutParams(Jrd::thread_db* tdbb, const Jrd::ValueListNode* params);
 
 	virtual void doSetInParams(Jrd::thread_db* tdbb, unsigned int count,
-		const Firebird::MetaName* const* names, const NestConst<Jrd::ValueExprNode>* params);
+		const Jrd::MetaName* const* names, const NestConst<Jrd::ValueExprNode>* params);
 
 	virtual void putExtBlob(Jrd::thread_db* tdbb, dsc& src, dsc& dst);
 	virtual void getExtBlob(Jrd::thread_db* tdbb, const dsc& src, dsc& dst);
@@ -709,7 +709,7 @@ protected:
 	Jrd::jrd_req* m_preparedByReq;
 
 	// set in preprocess
-	Firebird::SortedObjectsArray<const Firebird::MetaName> m_sqlParamNames;
+	Firebird::SortedObjectsArray<const Jrd::MetaName> m_sqlParamNames;
 	ParamNames m_sqlParamsMap;
 
 	// set in prepare()

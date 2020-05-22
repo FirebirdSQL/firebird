@@ -37,7 +37,7 @@ void	MOV_double_to_date(double, SLONG[2]);
 bool	MOV_get_boolean(const dsc*);
 double	MOV_get_double(Jrd::thread_db*, const dsc*);
 SLONG	MOV_get_long(Jrd::thread_db*, const dsc*, SSHORT);
-void	MOV_get_metaname(Jrd::thread_db*, const dsc*, Firebird::MetaName&);
+void	MOV_get_metaname(Jrd::thread_db*, const dsc*, Jrd::MetaName&);
 SQUAD	MOV_get_quad(Jrd::thread_db*, const dsc*, SSHORT);
 SINT64	MOV_get_int64(Jrd::thread_db*, const dsc*, SSHORT);
 int		MOV_get_string_ptr(Jrd::thread_db*, const dsc*, USHORT*, UCHAR**, vary*, USHORT);

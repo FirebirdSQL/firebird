@@ -35,7 +35,7 @@ using namespace Replication;
 Replicator::Replicator(MemoryPool& pool,
 					   Manager* manager,
 					   const Guid& guid,
-					   const MetaName& user,
+					   const MetaString& user,
 					   bool cleanupTransactions)
 	: PermanentStorage(pool),
 	  m_manager(manager),
@@ -463,7 +463,7 @@ bool Replicator::executeSqlIntl(Transaction* transaction,
 		}
 
 		txnData.putString(sql);
-		txnData.putMetaName(m_user);
+		txnData.putMetaName(StrWrapper(m_user));
 
 		if (txnData.getSize() > m_config->bufferSize)
 			flush(txnData, FLUSH_OVERFLOW);

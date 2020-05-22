@@ -30,7 +30,7 @@
 #include "firebird.h"
 
 #include "../common/classes/ClumpletWriter.h"
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
 #include "fb_exception.h"
 #include "ibase.h"
 
@@ -250,9 +250,9 @@ void ClumpletWriter::insertString(UCHAR tag, const AbstractString& str)
 	insertString(tag, str.c_str(), str.length());
 }
 
-void ClumpletWriter::insertString(UCHAR tag, const MetaName& str)
+void ClumpletWriter::insertString(UCHAR tag, const StrWrapper& str)
 {
-	insertString(tag, str.c_str(), str.length());
+	insertString(tag, str.c_str(), strlen(str.c_str()));
 }
 
 void ClumpletWriter::insertString(UCHAR tag, const char* str)

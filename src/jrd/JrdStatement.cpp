@@ -734,7 +734,7 @@ void JrdStatement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list
 			jrd_prc* const procedure = MET_lookup_procedure_id(tdbb, item->exa_prc_id, false, false, 0);
 			if (procedure && procedure->getStatement())
 			{
-				item->user = procedure->invoker ? procedure->invoker->getUserName() : user;
+				item->user = procedure->invoker ? MetaName(procedure->invoker->getUserName().c_str()) : user;
 				if (list.find(*item, i))
 					continue;
 				list.insert(i, *item);
@@ -746,7 +746,7 @@ void JrdStatement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list
 			Function* const function = Function::lookup(tdbb, item->exa_fun_id, false, false, 0);
 			if (function && function->getStatement())
 			{
-				item->user = function->invoker ? function->invoker->getUserName() : user;
+				item->user = function->invoker ? MetaName(function->invoker->getUserName().c_str()) : user;
 				if (list.find(*item, i))
 					continue;
 				list.insert(i, *item);

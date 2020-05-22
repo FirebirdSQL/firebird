@@ -26,7 +26,7 @@
 
 #include "fb_exception.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/StatusArg.h"
 #include "../jrd/status.h"
 

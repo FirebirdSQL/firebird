@@ -57,7 +57,7 @@ public:
 	}
 
 	const Firebird::string vcx_context_name;
-	const Firebird::MetaName vcx_relation_name;
+	const Jrd::MetaName vcx_relation_name;
 	const USHORT vcx_context;
 	const ViewContextType vcx_type;
 };
@@ -229,9 +229,9 @@ public:
 	ULONG			rel_flags;
 	Format*			rel_current_format;	// Current record format
 
-	Firebird::MetaName	rel_name;		// ascii relation name
-	Firebird::MetaName	rel_owner_name;	// ascii owner
-	Firebird::MetaName	rel_security_name;	// security class name for relation
+	Jrd::MetaName	rel_name;		// ascii relation name
+	Jrd::MetaName	rel_owner_name;	// ascii owner
+	Jrd::MetaName	rel_security_name;	// security class name for relation
 
 	vec<Format*>*	rel_formats;		// Known record formats
 	vec<jrd_fld*>*	rel_fields;			// vector of field blocks
@@ -482,10 +482,10 @@ public:
 	ValueExprNode*	fld_source;			// source for view fields
 	ValueExprNode*	fld_default_value;	// default value, if any
 	ArrayField*	fld_array;			// array description, if array
-	Firebird::MetaName	fld_name;	// Field name
-	Firebird::MetaName	fld_security_name;	// security class name for field
-	Firebird::MetaName	fld_generator_name;	// identity generator name
-	Firebird::MetaNamePair	fld_source_rel_field;	// Relation/field source name
+	Jrd::MetaName	fld_name;	// Field name
+	Jrd::MetaName	fld_security_name;	// security class name for field
+	Jrd::MetaName	fld_generator_name;	// identity generator name
+	Jrd::MetaNamePair	fld_source_rel_field;	// Relation/field source name
 	Nullable<IdentityType> fld_identity_type;
 
 public:

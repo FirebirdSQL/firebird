@@ -28,7 +28,7 @@
 
 #include "firebird.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
 
 #include <ctype.h>
 #include <stdarg.h>
@@ -96,11 +96,12 @@ namespace Firebird
 		memcpy(stringBuffer, v.c_str(), v.length());
 	}
 
-	AbstractString::AbstractString(const size_type limit, const MetaName& v)
+	AbstractString::AbstractString(const size_type limit, const StrWrapper& v)
 		: max_length(static_cast<internal_size_type>(limit))
 	{
-		initialize(v.length());
-		memcpy(stringBuffer, v.c_str(), v.length());
+		FB_SIZE_T l = strlen(v.c_str());
+		initialize(l);
+		memcpy(stringBuffer, v.c_str(), l);
 	}
 
 	AbstractString::AbstractString(const size_type limit, const size_type sizeL, const void* dataL)

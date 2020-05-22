@@ -36,7 +36,7 @@
 
 #include "../common/classes/ByteChunk.h"
 #include "../common/classes/GenericMap.h"
-#include "../common/classes/QualifiedName.h"
+#include "../jrd/QualifiedName.h"
 #include "../common/classes/SyncObject.h"
 #include "../common/classes/array.h"
 #include "../common/classes/stack.h"
@@ -105,7 +105,7 @@ struct DSqlCacheItem
 	}
 
 	Firebird::string key;
-	Firebird::GenericMap<Firebird::Pair<Firebird::Left<Firebird::QualifiedName, bool> > > obsoleteMap;
+	Firebird::GenericMap<Firebird::Pair<Firebird::Left<Jrd::QualifiedName, bool> > > obsoleteMap;
 	Lock* lock;
 	bool locked;
 };
@@ -128,9 +128,9 @@ struct DdlTriggerContext
 
 	Firebird::string eventType;
 	Firebird::string objectType;
-	Firebird::MetaName objectName;
-	Firebird::MetaName oldObjectName;
-	Firebird::MetaName newObjectName;
+	Jrd::MetaName objectName;
+	Jrd::MetaName oldObjectName;
+	Jrd::MetaName newObjectName;
 	Firebird::string sqlText;
 };
 
@@ -321,7 +321,7 @@ public:
 			: m_objects(pool)
 		{}
 
-		void store(SLONG id, const Firebird::MetaName& name)
+		void store(SLONG id, const Jrd::MetaName& name)
 		{
 			fb_assert(id >= 0);
 			fb_assert(name.hasData());
@@ -338,7 +338,7 @@ public:
 			}
 		}
 
-		bool lookup(SLONG id, Firebird::MetaName& name)
+		bool lookup(SLONG id, Jrd::MetaName& name)
 		{
 			if (id < (int) m_objects.getCount())
 			{
@@ -349,7 +349,7 @@ public:
 			return false;
 		}
 
-		SLONG lookup(const Firebird::MetaName& name)
+		SLONG lookup(const Jrd::MetaName& name)
 		{
 			FB_SIZE_T pos;
 
@@ -360,7 +360,7 @@ public:
 		}
 
 	private:
-		Firebird::Array<Firebird::MetaName> m_objects;
+		Firebird::Array<Jrd::MetaName> m_objects;
 	};
 
 	class InitialOptions
@@ -404,7 +404,7 @@ public:
 	UserId*		att_user;					// User identification
 	UserId*		att_ss_user;				// User identification for SQL SECURITY actual user
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Firebird::MetaName, UserId*> > > att_user_ids;	// set of used UserIds
+		Firebird::MetaString, UserId*> > > att_user_ids;	// set of used UserIds
 	jrd_tra*	att_transactions;			// Transactions belonging to attachment
 	jrd_tra*	att_dbkey_trans;			// transaction to control db-key scope
 	TraNumber	att_oldest_snapshot;		// GTT's record versions older than this can be garbage-collected
@@ -495,7 +495,7 @@ public:
 
 	Firebird::Array<CharSetContainer*>	att_charsets;		// intl character set descriptions
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Firebird::MetaName, USHORT> > > att_charset_ids;	// Character set ids
+		Jrd::MetaName, USHORT> > > att_charset_ids;	// Character set ids
 
 	void releaseIntlObjects(thread_db* tdbb);			// defined in intl.cpp
 	void destroyIntlObjects(thread_db* tdbb);			// defined in intl.cpp
@@ -539,8 +539,8 @@ public:
 	PreparedStatement* prepareUserStatement(thread_db* tdbb, jrd_tra* transaction,
 		const Firebird::string& text, Firebird::MemoryPool* pool = NULL);
 
-	Firebird::MetaName nameToMetaCharSet(thread_db* tdbb, const Firebird::MetaName& name);
-	Firebird::MetaName nameToUserCharSet(thread_db* tdbb, const Firebird::MetaName& name);
+	Jrd::MetaName nameToMetaCharSet(thread_db* tdbb, const Jrd::MetaName& name);
+	Jrd::MetaName nameToUserCharSet(thread_db* tdbb, const Jrd::MetaName& name);
 	Firebird::string stringToMetaCharSet(thread_db* tdbb, const Firebird::string& str,
 		const char* charSet = NULL);
 	Firebird::string stringToUserCharSet(thread_db* tdbb, const Firebird::string& str);
@@ -614,7 +614,8 @@ public:
 		att_batches.findAndRemove(b);
 	}
 
-	UserId* getUserId(const Firebird::MetaName &userName);
+	UserId* getUserId(const Firebird::MetaString& userName);
+	UserId* getUserId(const MetaName& userName);
 
 	const UserId* getEffectiveUserId() const
 	{

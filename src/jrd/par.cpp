@@ -821,7 +821,7 @@ void PAR_error(CompilerScratch* csb, const Arg::StatusVector& v, bool isSyntaxEr
 
 
 // Look for named field in procedure output fields.
-SSHORT PAR_find_proc_field(const jrd_prc* procedure, const Firebird::MetaName& name)
+SSHORT PAR_find_proc_field(const jrd_prc* procedure, const Jrd::MetaName& name)
 {
 	const Array<NestConst<Parameter> >& list = procedure->getOutputFields();
 

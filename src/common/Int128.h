@@ -35,7 +35,6 @@
 #include <string.h>
 
 #include "classes/fb_string.h"
-#include "classes/MetaName.h"
 
 #include "../../extern/ttmath/ttmath.h"
 

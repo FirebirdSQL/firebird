@@ -1760,7 +1760,7 @@ jrd_fld* MET_get_field(const jrd_rel* relation, USHORT id)
 }
 
 
-bool MET_get_repl_state(Jrd::thread_db* tdbb, const Firebird::MetaName& name)
+bool MET_get_repl_state(Jrd::thread_db* tdbb, const Jrd::MetaName& name)
 {
 /**************************************
  *
@@ -3542,7 +3542,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 						else
 							body.getBuffer(1)[0] = '\0';
 
-						dbb->dbb_extManager.makeProcedure(tdbb, csb, procedure, P.RDB$ENGINE_NAME,
+						dbb->dbb_extManager->makeProcedure(tdbb, csb, procedure, P.RDB$ENGINE_NAME,
 							(P.RDB$ENTRYPOINT.NULL ? "" : P.RDB$ENTRYPOINT), body.begin());
 					}
 					else

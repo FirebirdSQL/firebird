@@ -29,7 +29,6 @@
 #include "firebird.h"
 
 #include "../common/classes/ClumpletReader.h"
-#include "../common/classes/MetaName.h"
 #include "fb_exception.h"
 
 #include "ibase.h"
@@ -856,14 +855,6 @@ string& ClumpletReader::getString(string& str) const
 	{
 		invalid_structure("string length doesn't match with clumplet", str.length() + 1);
 	}
-	return str;
-}
-
-MetaName& ClumpletReader::getString(MetaName& str) const
-{
-	const UCHAR* ptr = getBytes();
-	const FB_SIZE_T length = getClumpLength();
-	str.assign(reinterpret_cast<const char*>(ptr), length);
 	return str;
 }
 
