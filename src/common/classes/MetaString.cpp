@@ -34,96 +34,96 @@
 
 namespace Firebird {
 
-	MetaString& MetaString::assign(const char* s, FB_SIZE_T l)
+MetaString& MetaString::assign(const char* s, FB_SIZE_T l)
+{
+	init();
+	if (s)
 	{
-		init();
-		if (s)
-		{
-			adjustLength(s, l);
-			count = l;
-			memcpy(data, s, l);
-		}
-		else {
-			count = 0;
-		}
-		return *this;
-	}
-
-	char* MetaString::getBuffer(const FB_SIZE_T l)
-	{
-		fb_assert (l < MAX_SQL_IDENTIFIER_SIZE);
-		init();
+		adjustLength(s, l);
 		count = l;
-		return data;
+		memcpy(data, s, l);
 	}
+	else {
+		count = 0;
+	}
+	return *this;
+}
 
-	int MetaString::compare(const char* s, FB_SIZE_T l) const
+char* MetaString::getBuffer(const FB_SIZE_T l)
+{
+	fb_assert (l < MAX_SQL_IDENTIFIER_SIZE);
+	init();
+	count = l;
+	return data;
+}
+
+int MetaString::compare(const char* s, FB_SIZE_T l) const
+{
+	if (s)
 	{
-		if (s)
+		adjustLength(s, l);
+		FB_SIZE_T x = length() < l ? length() : l;
+		int rc = memcmp(c_str(), s, x);
+		if (rc)
 		{
-			adjustLength(s, l);
-			FB_SIZE_T x = length() < l ? length() : l;
-			int rc = memcmp(c_str(), s, x);
-			if (rc)
-			{
-				return rc;
-			}
+			return rc;
 		}
-		return length() - l;
 	}
+	return length() - l;
+}
 
-	void MetaString::adjustLength(const char* const s, FB_SIZE_T& l)
+void MetaString::adjustLength(const char* const s, FB_SIZE_T& l)
+{
+	fb_assert(s);
+	if (l > MAX_SQL_IDENTIFIER_LEN)
 	{
-		fb_assert(s);
-		if (l > MAX_SQL_IDENTIFIER_LEN)
-		{
 #ifdef DEV_BUILD
-			for (FB_SIZE_T i = MAX_SQL_IDENTIFIER_LEN; i < l; ++i)
-				fb_assert(s[i] == '\0' || s[i] == ' ');
+		for (FB_SIZE_T i = MAX_SQL_IDENTIFIER_LEN; i < l; ++i)
+			fb_assert(s[i] == '\0' || s[i] == ' ');
 #endif
-			l = MAX_SQL_IDENTIFIER_LEN;
-		}
-		while (l)
-		{
-			if (s[l - 1] != ' ')
-			{
-				break;
-			}
-			--l;
-		}
+		l = MAX_SQL_IDENTIFIER_LEN;
 	}
-
-	void MetaString::printf(const char* format, ...)
+	while (l)
 	{
-		init();
-		va_list params;
-		va_start(params, format);
-		int l = VSNPRINTF(data, MAX_SQL_IDENTIFIER_LEN, format, params);
-		if (l < 0 || FB_SIZE_T(l) > MAX_SQL_IDENTIFIER_LEN)
+		if (s[l - 1] != ' ')
 		{
-			l = MAX_SQL_IDENTIFIER_LEN;
+			break;
 		}
-		data[l] = 0;
-		count = l;
-		va_end(params);
+		--l;
 	}
+}
 
-	FB_SIZE_T MetaString::copyTo(char* to, FB_SIZE_T toSize) const
+void MetaString::printf(const char* format, ...)
+{
+	init();
+	va_list params;
+	va_start(params, format);
+	int l = VSNPRINTF(data, MAX_SQL_IDENTIFIER_LEN, format, params);
+	if (l < 0 || FB_SIZE_T(l) > MAX_SQL_IDENTIFIER_LEN)
 	{
-		fb_assert(to);
-		fb_assert(toSize);
-		if (--toSize > length())
-		{
-			toSize = length();
-		}
-		memcpy(to, c_str(), toSize);
-		to[toSize] = 0;
-		return toSize;
+		l = MAX_SQL_IDENTIFIER_LEN;
 	}
+	data[l] = 0;
+	count = l;
+	va_end(params);
+}
 
-	MetaString::MetaString(const StrWrapper& s)
+FB_SIZE_T MetaString::copyTo(char* to, FB_SIZE_T toSize) const
+{
+	fb_assert(to);
+	fb_assert(toSize);
+	if (--toSize > length())
 	{
-		assign(s.c_str());
+		toSize = length();
 	}
+	memcpy(to, c_str(), toSize);
+	to[toSize] = 0;
+	return toSize;
+}
+
+MetaString::MetaString(const StrWrapper& s)
+{
+	assign(s.c_str());
+}
 
 } // namespace Firebird
