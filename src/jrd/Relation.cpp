@@ -129,7 +129,7 @@ RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool a
 		const index_desc* const end = indices->items + idx_count;
 		for (index_desc* idx = indices->items; idx < end; idx++)
 		{
-			Jrd::MetaName idx_name;
+			MetaName idx_name;
 			MET_lookup_index(tdbb, idx_name, this->rel_name, idx->idx_id + 1);
 
 			idx->idx_root = 0;

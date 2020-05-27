@@ -181,10 +181,10 @@ public:
 	}
 
 	static bool deleteSecurityClass(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& secClass);
+		const MetaName& secClass);
 
 	static void storePrivileges(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& name, int type, const char* privileges);
+		const MetaName& name, int type, const char* privileges);
 
 public:
 	// Check permission on DDL operation. Return true if everything is OK.
@@ -215,11 +215,11 @@ public:
 	enum DdlTriggerWhen { DTW_BEFORE, DTW_AFTER };
 
 	static void executeDdlTrigger(thread_db* tdbb, jrd_tra* transaction,
-		DdlTriggerWhen when, int action, const Jrd::MetaName& objectName,
-		const Jrd::MetaName& oldNewObjectName, const Firebird::string& sqlText);
+		DdlTriggerWhen when, int action, const MetaName& objectName,
+		const MetaName& oldNewObjectName, const Firebird::string& sqlText);
 
 protected:
-	typedef Firebird::Pair<Firebird::Left<Jrd::MetaName, bid> > MetaNameBidPair;
+	typedef Firebird::Pair<Firebird::Left<MetaName, bid> > MetaNameBidPair;
 	typedef Firebird::GenericMap<MetaNameBidPair> MetaNameBidMap;
 
 	// Return exception code based on combination of create and alter clauses.
@@ -240,9 +240,9 @@ protected:
 	}
 
 	void executeDdlTrigger(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-		DdlTriggerWhen when, int action, const Jrd::MetaName& objectName,
-		const Jrd::MetaName& oldNewObjectName);
-	void storeGlobalField(thread_db* tdbb, jrd_tra* transaction, Jrd::MetaName& name,
+		DdlTriggerWhen when, int action, const MetaName& objectName,
+		const MetaName& oldNewObjectName);
+	void storeGlobalField(thread_db* tdbb, jrd_tra* transaction, MetaName& name,
 		const TypeClause* field,
 		const Firebird::string& computedSource = "",
 		const BlrDebugWriter::BlrData& computedValue = BlrDebugWriter::BlrData());
@@ -1611,7 +1611,7 @@ public:
 class GeneratorItem : public Printable
 {
 public:
-	GeneratorItem(Firebird::MemoryPool& pool, const Jrd::MetaName& name)
+	GeneratorItem(Firebird::MemoryPool& pool, const MetaName& name)
 		: id(0), name(pool, name), secName(pool)
 	{}
 
@@ -1628,8 +1628,8 @@ public:
 
 public:
 	SLONG id;
-	Jrd::MetaName name;
-	Jrd::MetaName secName;
+	MetaName name;
+	MetaName secName;
 };
 
 typedef Firebird::Array<StreamType> StreamMap;

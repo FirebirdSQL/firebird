@@ -100,8 +100,8 @@ namespace Jrd
 		const Jrd::QualifiedName& getName() const { return name; }
 		void setName(const Jrd::QualifiedName& value) { name = value; }
 
-		const Jrd::MetaName& getSecurityName() const { return securityName; }
-		void setSecurityName(const Jrd::MetaName& value) { securityName = value; }
+		const MetaName& getSecurityName() const { return securityName; }
+		void setSecurityName(const MetaName& value) { securityName = value; }
 
 		/*const*/ JrdStatement* getStatement() const { return statement; }
 		void setStatement(JrdStatement* value) { statement = value; }
@@ -161,7 +161,7 @@ namespace Jrd
 	private:
 		USHORT id;							// routine ID
 		Jrd::QualifiedName name;		// routine name
-		Jrd::MetaName securityName;	// security class name
+		MetaName securityName;	// security class name
 		JrdStatement* statement;			// compiled routine statement
 		bool subRoutine;					// Is this a subroutine?
 		bool implemented;					// Is the packaged routine missing the body/entrypoint?
@@ -182,7 +182,7 @@ namespace Jrd
 		USHORT alterCount;		// No. of times the routine was altered
 		Lock* existenceLock;	// existence lock, if any
 
-		Jrd::MetaName owner;
+		MetaName owner;
 		Jrd::UserId* invoker;		// Invoker ID
 	};
 }

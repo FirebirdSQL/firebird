@@ -1760,7 +1760,7 @@ jrd_fld* MET_get_field(const jrd_rel* relation, USHORT id)
 }
 
 
-bool MET_get_repl_state(Jrd::thread_db* tdbb, const Jrd::MetaName& name)
+bool MET_get_repl_state(Jrd::thread_db* tdbb, const MetaName& name)
 {
 /**************************************
  *

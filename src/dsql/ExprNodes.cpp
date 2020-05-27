@@ -3716,7 +3716,7 @@ dsc* CoalesceNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-CollateNode::CollateNode(MemoryPool& pool, ValueExprNode* aArg, const Jrd::MetaName& aCollation)
+CollateNode::CollateNode(MemoryPool& pool, ValueExprNode* aArg, const MetaName& aCollation)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_COLLATE>(pool),
 	  arg(aArg),
 	  collation(pool, aCollation)
@@ -4828,8 +4828,8 @@ dsc* DecodeNode::execute(thread_db* tdbb, jrd_req* request) const
 
 static RegisterNode<DefaultNode> regDefaultNode(blr_default);
 
-DefaultNode::DefaultNode(MemoryPool& pool, const Jrd::MetaName& aRelationName,
-		const Jrd::MetaName& aFieldName)
+DefaultNode::DefaultNode(MemoryPool& pool, const MetaName& aRelationName,
+		const MetaName& aFieldName)
 	: DsqlNode<DefaultNode, ExprNode::TYPE_DEFAULT>(pool),
 	  relationName(aRelationName),
 	  fieldName(aFieldName),
@@ -6846,7 +6846,7 @@ static RegisterNode<GenIdNode> regGenIdNode(blr_gen_id);
 static RegisterNode<GenIdNode> regGenIdNode2(blr_gen_id2);
 
 GenIdNode::GenIdNode(MemoryPool& pool, bool aDialect1,
-					 const Jrd::MetaName& name,
+					 const MetaName& name,
 					 ValueExprNode* aArg,
 					 bool aImplicit, bool aIdentity)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_GEN_ID>(pool),

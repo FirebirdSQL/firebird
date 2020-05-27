@@ -124,14 +124,14 @@ private:
 		}
 
 	public:
-		Jrd::MetaName package;
-		Jrd::MetaName name;
+		MetaName package;
+		MetaName name;
 		Firebird::string entryPoint;
 		Firebird::string body;
 		Firebird::RefPtr<Firebird::IMessageMetadata> inputParameters;
 		Firebird::RefPtr<Firebird::IMessageMetadata> outputParameters;
 		Firebird::RefPtr<Firebird::IMessageMetadata> triggerFields;
-		Jrd::MetaName triggerTable;
+		MetaName triggerTable;
 		unsigned triggerType;
 
 	private:
@@ -173,7 +173,7 @@ private:
 		Firebird::IAttachment* externalAttachment;
 		Firebird::ITransaction* externalTransaction;
 		Firebird::GenericMap<Firebird::NonPooled<int, void*> > miscInfo;
-		Jrd::MetaName clientCharSet;
+		MetaName clientCharSet;
 	};
 
 	struct EngineAttachment
@@ -314,20 +314,20 @@ public:
 	void closeAttachment(thread_db* tdbb, Attachment* attachment);
 
 	void makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::Function* udf,
-		const Jrd::MetaName& engine, const Firebird::string& entryPoint,
+		const MetaName& engine, const Firebird::string& entryPoint,
 		const Firebird::string& body);
 	void makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_prc* prc,
-		const Jrd::MetaName& engine, const Firebird::string& entryPoint,
+		const MetaName& engine, const Firebird::string& entryPoint,
 		const Firebird::string& body);
 	void makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::Trigger* trg,
-		const Jrd::MetaName& engine, const Firebird::string& entryPoint,
+		const MetaName& engine, const Firebird::string& entryPoint,
 		const Firebird::string& body, unsigned type);
 
 private:
 	Firebird::IExternalEngine* getEngine(thread_db* tdbb,
-		const Jrd::MetaName& name);
+		const MetaName& name);
 	EngineAttachmentInfo* getEngineAttachment(thread_db* tdbb,
-		const Jrd::MetaName& name);
+		const MetaName& name);
 	EngineAttachmentInfo* getEngineAttachment(thread_db* tdbb,
 		Firebird::IExternalEngine* engine, bool closing = false);
 	void setupAdminCharSet(thread_db* tdbb, Firebird::IExternalEngine* engine,
@@ -335,7 +335,7 @@ private:
 
 private:
 	typedef Firebird::GenericMap<Firebird::Pair<
-		Firebird::Left<Jrd::MetaName, Firebird::IExternalEngine*> > > EnginesMap;
+		Firebird::Left<MetaName, Firebird::IExternalEngine*> > > EnginesMap;
 	typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<
 		EngineAttachment, EngineAttachmentInfo*> >, EngineAttachment> EnginesAttachmentsMap;
 

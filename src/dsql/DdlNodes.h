@@ -155,7 +155,7 @@ public:
 
 public:
 	Firebird::string name;
-	Jrd::MetaName engine;
+	MetaName engine;
 	Firebird::string udfModule;
 };
 
@@ -163,14 +163,14 @@ public:
 class ParameterClause : public Printable
 {
 public:
-	ParameterClause(MemoryPool& pool, dsql_fld* field, const Jrd::MetaName& aCollate,
+	ParameterClause(MemoryPool& pool, dsql_fld* field, const MetaName& aCollate,
 		ValueSourceClause* aDefaultClause = NULL, ValueExprNode* aParameterExpr = NULL);
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	NestConst<dsql_fld> type;
 	NestConst<ValueSourceClause> defaultClause;
 	NestConst<ValueExprNode> parameterExpr;
@@ -193,7 +193,7 @@ struct CollectedParameter
 };
 
 typedef Firebird::GenericMap<
-			Firebird::Pair<Firebird::Left<Jrd::MetaName, CollectedParameter> > >
+			Firebird::Pair<Firebird::Left<MetaName, CollectedParameter> > >
 	CollectedParameterMap;
 
 
@@ -271,8 +271,8 @@ protected:
 class AlterCharSetNode : public DdlNode
 {
 public:
-	AlterCharSetNode(MemoryPool& pool, const Jrd::MetaName& aCharSet,
-				const Jrd::MetaName& aDefaultCollation)
+	AlterCharSetNode(MemoryPool& pool, const MetaName& aCharSet,
+				const MetaName& aDefaultCollation)
 		: DdlNode(pool),
 		  charSet(pool, aCharSet),
 		  defaultCollation(pool, aDefaultCollation)
@@ -291,8 +291,8 @@ protected:
 	}
 
 private:
-	Jrd::MetaName charSet;
-	Jrd::MetaName defaultCollation;
+	MetaName charSet;
+	MetaName defaultCollation;
 };
 
 
@@ -369,7 +369,7 @@ class CommentOnNode : public DdlNode
 {
 public:
 	CommentOnNode(MemoryPool& pool, int aObjType,
-				const Jrd::QualifiedName& aObjName, const Jrd::MetaName& aSubName,
+				const Jrd::QualifiedName& aObjName, const MetaName& aSubName,
 				const Firebird::string aText)
 		: DdlNode(pool),
 		  objType(aObjType),
@@ -399,7 +399,7 @@ protected:
 private:
 	int objType;
 	Jrd::QualifiedName objName;
-	Jrd::MetaName subName;
+	MetaName subName;
 	Firebird::string text, str;
 };
 
@@ -407,7 +407,7 @@ private:
 class CreateAlterFunctionNode : public DdlNode
 {
 public:
-	CreateAlterFunctionNode(MemoryPool& pool, const Jrd::MetaName& aName)
+	CreateAlterFunctionNode(MemoryPool& pool, const MetaName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  create(true),
@@ -462,7 +462,7 @@ private:
 	void collectParameters(thread_db* tdbb, jrd_tra* transaction, CollectedParameterMap& items);
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool create;
 	bool alter;
 	NestConst<ExternalClause> external;
@@ -474,8 +474,8 @@ public:
 	NestConst<StmtNode> body;
 	bool compiled;
 	bool invalid;
-	Jrd::MetaName package;
-	Jrd::MetaName packageOwner;
+	MetaName package;
+	MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
 	SLONG udfReturnPos;
@@ -486,7 +486,7 @@ public:
 class AlterExternalFunctionNode : public DdlNode
 {
 public:
-	AlterExternalFunctionNode(MemoryPool& p, const Jrd::MetaName& aName)
+	AlterExternalFunctionNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName),
 		  clauses(p)
@@ -505,7 +505,7 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	ExternalClause clauses;
 };
 
@@ -513,7 +513,7 @@ public:
 class DropFunctionNode : public DdlNode
 {
 public:
-	DropFunctionNode(MemoryPool& pool, const Jrd::MetaName& aName)
+	DropFunctionNode(MemoryPool& pool, const MetaName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  silent(false),
@@ -523,7 +523,7 @@ public:
 
 public:
 	static void dropArguments(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& functionName, const Jrd::MetaName& packageName);
+		const MetaName& functionName, const MetaName& packageName);
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -538,9 +538,9 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool silent;
-	Jrd::MetaName package;
+	MetaName package;
 };
 
 
@@ -551,7 +551,7 @@ typedef RecreateNode<CreateAlterFunctionNode, DropFunctionNode, isc_dsql_recreat
 class CreateAlterProcedureNode : public DdlNode
 {
 public:
-	CreateAlterProcedureNode(MemoryPool& pool, const Jrd::MetaName& aName)
+	CreateAlterProcedureNode(MemoryPool& pool, const MetaName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  create(true),
@@ -598,7 +598,7 @@ private:
 	void collectParameters(thread_db* tdbb, jrd_tra* transaction, CollectedParameterMap& items);
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool create;
 	bool alter;
 	NestConst<ExternalClause> external;
@@ -609,8 +609,8 @@ public:
 	NestConst<StmtNode> body;
 	bool compiled;
 	bool invalid;
-	Jrd::MetaName package;
-	Jrd::MetaName packageOwner;
+	MetaName package;
+	MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
 	Nullable<bool> ssDefiner;
@@ -620,7 +620,7 @@ public:
 class DropProcedureNode : public DdlNode
 {
 public:
-	DropProcedureNode(MemoryPool& pool, const Jrd::MetaName& aName)
+	DropProcedureNode(MemoryPool& pool, const MetaName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  silent(false),
@@ -630,7 +630,7 @@ public:
 
 public:
 	static void dropParameters(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& procedureName, const Jrd::MetaName& packageName);
+		const MetaName& procedureName, const MetaName& packageName);
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -645,9 +645,9 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool silent;
-	Jrd::MetaName package;
+	MetaName package;
 };
 
 
@@ -694,8 +694,8 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
-	Jrd::MetaName relationName;
+	MetaName name;
+	MetaName relationName;
 	Nullable<FB_UINT64> type;
 	Nullable<bool> active;
 	Nullable<int> position;
@@ -712,7 +712,7 @@ public:
 class CreateAlterTriggerNode : public DdlNode, public TriggerDefinition
 {
 public:
-	CreateAlterTriggerNode(MemoryPool& p, const Jrd::MetaName& aName)
+	CreateAlterTriggerNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  TriggerDefinition(p),
 		  create(true),
@@ -792,7 +792,7 @@ public:
 class DropTriggerNode : public DdlNode
 {
 public:
-	DropTriggerNode(MemoryPool& p, const Jrd::MetaName& aName)
+	DropTriggerNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName),
 		  silent(false)
@@ -812,7 +812,7 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool silent;
 };
 
@@ -824,8 +824,8 @@ typedef RecreateNode<CreateAlterTriggerNode, DropTriggerNode, isc_dsql_recreate_
 class CreateCollationNode : public DdlNode
 {
 public:
-	CreateCollationNode(MemoryPool& p, const Jrd::MetaName& aName,
-				const Jrd::MetaName& aForCharSet)
+	CreateCollationNode(MemoryPool& p, const MetaName& aName,
+				const MetaName& aForCharSet)
 		: DdlNode(p),
 		  name(p, aName),
 		  forCharSet(p, aForCharSet),
@@ -876,9 +876,9 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
-	Jrd::MetaName forCharSet;
-	Jrd::MetaName fromName;
+	MetaName name;
+	MetaName forCharSet;
+	MetaName fromName;
 	Firebird::string fromExternal;
 	Firebird::UCharBuffer specificAttributes;
 
@@ -893,7 +893,7 @@ private:
 class DropCollationNode : public DdlNode
 {
 public:
-	DropCollationNode(MemoryPool& p, const Jrd::MetaName& aName)
+	DropCollationNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName)
 	{
@@ -911,7 +911,7 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 };
 
 
@@ -947,7 +947,7 @@ public:
 class AlterDomainNode : public DdlNode
 {
 public:
-	AlterDomainNode(MemoryPool& p, const Jrd::MetaName& aName)
+	AlterDomainNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName),
 		  dropConstraint(false),
@@ -963,8 +963,8 @@ public:
 	static ULONG checkUpdateNumericType(const dyn_fld& origFld, const dyn_fld& newFld);
 	static void getDomainType(thread_db* tdbb, jrd_tra* transaction, dyn_fld& dynFld);
 	static void modifyLocalFieldIndex(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& relationName, const Jrd::MetaName& fieldName,
-		const Jrd::MetaName& newFieldName);
+		const MetaName& relationName, const MetaName& fieldName,
+		const MetaName& newFieldName);
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
@@ -980,12 +980,12 @@ private:
 	void rename(thread_db* tdbb, jrd_tra* transaction, SSHORT dimensions);
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool dropConstraint;
 	bool dropDefault;
 	NestConst<BoolSourceClause> setConstraint;
 	NestConst<ValueSourceClause> setDefault;
-	Jrd::MetaName renameTo;
+	MetaName renameTo;
 	Firebird::AutoPtr<dsql_fld> type;
 	Nullable<bool> notNullFlag;	// true = NOT NULL / false = NULL
 };
@@ -994,14 +994,14 @@ public:
 class DropDomainNode : public DdlNode
 {
 public:
-	DropDomainNode(MemoryPool& p, const Jrd::MetaName& aName)
+	DropDomainNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName)
 	{
 	}
 
 	static bool deleteDimensionRecords(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& name);
+		const MetaName& name);
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -1018,14 +1018,14 @@ private:
 	void check(thread_db* tdbb, jrd_tra* transaction);
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 };
 
 
 class CreateAlterExceptionNode : public DdlNode
 {
 public:
-	CreateAlterExceptionNode(MemoryPool& p, const Jrd::MetaName& aName,
+	CreateAlterExceptionNode(MemoryPool& p, const MetaName& aName,
 				const Firebird::string& aMessage)
 		: DdlNode(p),
 		  name(p, aName),
@@ -1055,7 +1055,7 @@ private:
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	Firebird::string message;
 	bool create;
 	bool alter;
@@ -1065,7 +1065,7 @@ public:
 class DropExceptionNode : public DdlNode
 {
 public:
-	DropExceptionNode(MemoryPool& p, const Jrd::MetaName& aName)
+	DropExceptionNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName),
 		  silent(false)
@@ -1084,7 +1084,7 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool silent;
 };
 
@@ -1096,7 +1096,7 @@ typedef RecreateNode<CreateAlterExceptionNode, DropExceptionNode, isc_dsql_recre
 class CreateAlterSequenceNode : public DdlNode
 {
 public:
-	CreateAlterSequenceNode(MemoryPool& pool, const Jrd::MetaName& aName)
+	CreateAlterSequenceNode(MemoryPool& pool, const MetaName& aName)
 		: DdlNode(pool),
 		  create(true),
 		  alter(false),
@@ -1119,7 +1119,7 @@ public:
 		value.specified = false;
 	}
 
-	static SSHORT store(thread_db* tdbb, jrd_tra* transaction, const Jrd::MetaName& name,
+	static SSHORT store(thread_db* tdbb, jrd_tra* transaction, const MetaName& name,
 		fb_sysflag sysFlag, SINT64 value, SLONG step);
 
 public:
@@ -1146,7 +1146,7 @@ public:
 	bool alter;
 	bool legacy;
 	bool restartSpecified;
-	const Jrd::MetaName name;
+	const MetaName name;
 	BaseNullable<SINT64> value;
 	Nullable<SLONG> step;
 };
@@ -1155,7 +1155,7 @@ public:
 class DropSequenceNode : public DdlNode
 {
 public:
-	DropSequenceNode(MemoryPool& pool, const Jrd::MetaName& aName)
+	DropSequenceNode(MemoryPool& pool, const MetaName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  silent(false)
@@ -1163,7 +1163,7 @@ public:
 	}
 
 	static void deleteIdentity(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& name);
+		const MetaName& name);
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -1177,7 +1177,7 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool silent;
 };
 
@@ -1206,10 +1206,10 @@ public:
 		void store(thread_db* tdbb, jrd_tra* transaction);
 
 	public:
-		Jrd::MetaName name;
-		Jrd::MetaName relationName;
-		Jrd::MetaName fieldSource;
-		Jrd::MetaName identitySequence;
+		MetaName name;
+		MetaName relationName;
+		MetaName fieldSource;
+		MetaName identitySequence;
 		Nullable<IdentityType> identityType;
 		Nullable<USHORT> collationId;
 		Nullable<bool> notNullFlag;	// true = NOT NULL / false = NULL
@@ -1217,7 +1217,7 @@ public:
 		Firebird::string defaultSource;
 		Firebird::ByteChunk defaultValue;
 		Nullable<USHORT> viewContext;
-		Jrd::MetaName baseField;
+		MetaName baseField;
 	};
 
 	struct IndexConstraintClause
@@ -1228,7 +1228,7 @@ public:
 		{
 		}
 
-		Jrd::MetaName name;
+		MetaName name;
 		bool descending;
 	};
 
@@ -1277,10 +1277,10 @@ public:
 		}
 
 		Constraint::Type type;
-		Firebird::ObjectsArray<Jrd::MetaName> columns;
+		Firebird::ObjectsArray<MetaName> columns;
 		NestConst<IndexConstraintClause> index;
-		Jrd::MetaName refRelation;
-		Firebird::ObjectsArray<Jrd::MetaName> refColumns;
+		MetaName refRelation;
+		Firebird::ObjectsArray<MetaName> refColumns;
 		const char* refUpdateAction;
 		const char* refDeleteAction;
 		Firebird::ObjectsArray<TriggerDefinition> triggers;
@@ -1294,7 +1294,7 @@ public:
 		{
 		}
 
-		Jrd::MetaName name;
+		MetaName name;
 		Firebird::AutoPtr<Constraint> create;
 	};
 
@@ -1363,12 +1363,12 @@ public:
 		{
 		}
 
-		Jrd::MetaName name;
+		MetaName name;
 		ConstraintType constraintType;
-		Firebird::ObjectsArray<Jrd::MetaName> columns;
+		Firebird::ObjectsArray<MetaName> columns;
 		NestConst<IndexConstraintClause> index;
-		Jrd::MetaName refRelation;
-		Firebird::ObjectsArray<Jrd::MetaName> refColumns;
+		MetaName refRelation;
+		Firebird::ObjectsArray<MetaName> refColumns;
 		NestConst<RefActionClause> refAction;
 		NestConst<BoolSourceClause> check;
 	};
@@ -1409,7 +1409,7 @@ public:
 		dsql_fld* field;
 		NestConst<ValueSourceClause> defaultValue;
 		Firebird::ObjectsArray<AddConstraintClause> constraints;
-		Jrd::MetaName collate;
+		MetaName collate;
 		NestConst<ValueSourceClause> computed;
 		NestConst<IdentityOptions> identityOptions;
 		bool notNullSpecified;
@@ -1424,8 +1424,8 @@ public:
 		{
 		}
 
-		Jrd::MetaName fromName;
-		Jrd::MetaName toName;
+		MetaName fromName;
+		MetaName toName;
 	};
 
 	struct AlterColNullClause : public Clause
@@ -1437,7 +1437,7 @@ public:
 		{
 		}
 
-		Jrd::MetaName name;
+		MetaName name;
 		bool notNullFlag;
 	};
 
@@ -1450,7 +1450,7 @@ public:
 		{
 		}
 
-		Jrd::MetaName name;
+		MetaName name;
 		SSHORT newPos;
 	};
 
@@ -1484,7 +1484,7 @@ public:
 		{
 		}
 
-		Jrd::MetaName name;
+		MetaName name;
 		bool cascade;
 	};
 
@@ -1496,18 +1496,18 @@ public:
 		{
 		}
 
-		Jrd::MetaName name;
+		MetaName name;
 	};
 
 	RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode);
 
 	static void deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& relationName, const Jrd::MetaName& fieldName);
+		const MetaName& relationName, const MetaName& fieldName);
 
 	static void addToPublication(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& tableName, const Jrd::MetaName& pubTame);
+		const MetaName& tableName, const MetaName& pubTame);
 	static void dropFromPublication(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& tableName, const Jrd::MetaName& pubTame);
+		const MetaName& tableName, const MetaName& pubTame);
 
 protected:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const
@@ -1523,14 +1523,14 @@ protected:
 
 	void defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		AddColumnClause* clause, SSHORT position,
-		const Firebird::ObjectsArray<Jrd::MetaName>* pkcols);
+		const Firebird::ObjectsArray<MetaName>* pkcols);
 	bool defineDefault(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		ValueSourceClause* clause, Firebird::string& source, BlrDebugWriter::BlrData& value);
 	void makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		AddConstraintClause* clause, Firebird::ObjectsArray<CreateDropConstraint>& constraints,
 		bool* notNull = NULL);
 	void defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-		Jrd::MetaName& constraintName, Constraint& constraint);
+		MetaName& constraintName, Constraint& constraint);
 	void defineCheckConstraint(DsqlCompilerScratch* dsqlScratch, Constraint& constraint,
 		BoolSourceClause* clause);
 	void defineCheckConstraintTrigger(DsqlCompilerScratch* dsqlScratch, Constraint& constraint,
@@ -1549,7 +1549,7 @@ protected:
 
 public:
 	NestConst<RelationSourceNode> dsqlNode;
-	Jrd::MetaName name;
+	MetaName name;
 	Firebird::Array<NestConst<Clause> > clauses;
 	Nullable<bool> ssDefiner;
 	Nullable<bool> replicationState;
@@ -1579,7 +1579,7 @@ protected:
 	}
 
 private:
-	const Firebird::ObjectsArray<Jrd::MetaName>* findPkColumns();
+	const Firebird::ObjectsArray<MetaName>* findPkColumns();
 
 public:
 	const Firebird::string* externalFile;
@@ -1617,7 +1617,7 @@ private:
 class DropRelationNode : public DdlNode
 {
 public:
-	DropRelationNode(MemoryPool& p, const Jrd::MetaName& aName, bool aView = false)
+	DropRelationNode(MemoryPool& p, const MetaName& aName, bool aView = false)
 		: DdlNode(p),
 		  name(p, aName),
 		  view(aView),
@@ -1626,7 +1626,7 @@ public:
 	}
 
 	static void deleteGlobalField(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& globalName);
+		const MetaName& globalName);
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -1640,7 +1640,7 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool view;
 	bool silent;
 };
@@ -1720,20 +1720,20 @@ public:
 			expressionSource.clear();
 		}
 
-		Jrd::MetaName relation;
-		Firebird::ObjectsArray<Jrd::MetaName> columns;
+		MetaName relation;
+		Firebird::ObjectsArray<MetaName> columns;
 		Nullable<bool> unique;
 		Nullable<bool> descending;
 		Nullable<bool> inactive;
 		SSHORT type;
 		bid expressionBlr;
 		bid expressionSource;
-		Jrd::MetaName refRelation;
-		Firebird::ObjectsArray<Jrd::MetaName> refColumns;
+		MetaName refRelation;
+		Firebird::ObjectsArray<MetaName> refColumns;
 	};
 
 public:
-	CreateIndexNode(MemoryPool& p, const Jrd::MetaName& aName)
+	CreateIndexNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName),
 		  unique(false),
@@ -1745,8 +1745,8 @@ public:
 	}
 
 public:
-	static void store(thread_db* tdbb, jrd_tra* transaction, Jrd::MetaName& name,
-		const Definition& definition, Jrd::MetaName* referredIndexName = NULL);
+	static void store(thread_db* tdbb, jrd_tra* transaction, MetaName& name,
+		const Definition& definition, MetaName* referredIndexName = NULL);
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -1760,7 +1760,7 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool unique;
 	bool descending;
 	NestConst<RelationSourceNode> relation;
@@ -1772,7 +1772,7 @@ public:
 class AlterIndexNode : public DdlNode
 {
 public:
-	AlterIndexNode(MemoryPool& p, const Jrd::MetaName& aName, bool aActive)
+	AlterIndexNode(MemoryPool& p, const MetaName& aName, bool aActive)
 		: DdlNode(p),
 		  name(p, aName),
 		  active(aActive)
@@ -1791,7 +1791,7 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool active;
 };
 
@@ -1799,7 +1799,7 @@ public:
 class SetStatisticsNode : public DdlNode
 {
 public:
-	SetStatisticsNode(MemoryPool& p, const Jrd::MetaName& aName)
+	SetStatisticsNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName)
 	{
@@ -1818,21 +1818,21 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 };
 
 
 class DropIndexNode : public DdlNode
 {
 public:
-	DropIndexNode(MemoryPool& p, const Jrd::MetaName& aName)
+	DropIndexNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName)
 	{
 	}
 
 	static bool deleteSegmentRecords(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& name);
+		const MetaName& name);
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -1846,7 +1846,7 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 };
 
 
@@ -1856,7 +1856,7 @@ public:
 	class NameNumber : public Printable
 	{
 	public:
-		NameNumber(MemoryPool& p, const Jrd::MetaName& aName)
+		NameNumber(MemoryPool& p, const MetaName& aName)
 			: name(p, aName),
 			  number(0)
 		{
@@ -1878,12 +1878,12 @@ public:
 		}
 
 	public:
-		Jrd::MetaName name;
+		MetaName name;
 		SSHORT number;
 	};
 
 public:
-	CreateFilterNode(MemoryPool& p, const Jrd::MetaName& aName)
+	CreateFilterNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName),
 		  inputFilter(NULL),
@@ -1905,7 +1905,7 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	NestConst<NameNumber> inputFilter;
 	NestConst<NameNumber> outputFilter;
 	Firebird::string entryPoint;
@@ -1916,7 +1916,7 @@ public:
 class DropFilterNode : public DdlNode
 {
 public:
-	DropFilterNode(MemoryPool& p, const Jrd::MetaName& aName)
+	DropFilterNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName)
 	{
@@ -1934,7 +1934,7 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 };
 
 
@@ -2017,13 +2017,13 @@ public:
 
 protected:
 	static USHORT convertPrivilegeFromString(thread_db* tdbb, jrd_tra* transaction,
-		Jrd::MetaName privilege);
+		MetaName privilege);
 };
 
 class CreateAlterRoleNode : public PrivilegesNode
 {
 public:
-	CreateAlterRoleNode(MemoryPool& p, const Jrd::MetaName& aName)
+	CreateAlterRoleNode(MemoryPool& p, const MetaName& aName)
 		: PrivilegesNode(p),
 		  name(p, aName),
 		  createFlag(false),
@@ -2048,17 +2048,17 @@ private:
 	bool isItUserName(thread_db* tdbb, jrd_tra* transaction);
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool createFlag, sysPrivDrop;
 
-	void addPrivilege(const Jrd::MetaName* privName)
+	void addPrivilege(const MetaName* privName)
 	{
 		fb_assert(privName);
 		privileges.push(*privName);
 	}
 
 private:
-	Firebird::HalfStaticArray<Jrd::MetaName, 4> privileges;
+	Firebird::HalfStaticArray<MetaName, 4> privileges;
 };
 
 
@@ -2067,7 +2067,7 @@ class MappingNode : public DdlNode, private ExecInSecurityDb
 public:
 	enum OP {MAP_ADD, MAP_MOD, MAP_RPL, MAP_DROP};
 
-	MappingNode(MemoryPool& p, OP o, const Jrd::MetaName& nm)
+	MappingNode(MemoryPool& p, OP o, const MetaName& nm)
 		: DdlNode(p),
 		  name(p, nm),
 		  fromUtf8(p),
@@ -2103,13 +2103,13 @@ private:
 	void addItem(Firebird::string& ddl, const char* text, char quote = '"');
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	Firebird::string fromUtf8;
-	Jrd::MetaName* plugin;
-	Jrd::MetaName* db;
-	Jrd::MetaName* fromType;
+	MetaName* plugin;
+	MetaName* db;
+	MetaName* fromType;
 	IntlString* from;
-	Jrd::MetaName* to;
+	MetaName* to;
 	OP op;
 	char mode;	// * - any source, P - plugin, M - mapping, S - any serverwide plugin
 	bool global;
@@ -2120,7 +2120,7 @@ public:
 class DropRoleNode : public DdlNode
 {
 public:
-	DropRoleNode(MemoryPool& p, const Jrd::MetaName& aName)
+	DropRoleNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName)
 	{
@@ -2138,7 +2138,7 @@ protected:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 };
 
 
@@ -2150,7 +2150,7 @@ public:
 	{ }
 
 protected:
-	Jrd::MetaName upper(const Jrd::MetaName& str);
+	MetaName upper(const MetaName& str);
 };
 
 
@@ -2159,7 +2159,7 @@ class CreateAlterUserNode : public UserNode
 public:
 	enum Mode {USER_ADD, USER_MOD, USER_RPL};
 
-	CreateAlterUserNode(MemoryPool& p, Mode md, const Jrd::MetaName& aName)
+	CreateAlterUserNode(MemoryPool& p, Mode md, const MetaName& aName)
 		: UserNode(p),
 		  properties(p),
 		  name(p, upper(aName)),
@@ -2197,23 +2197,23 @@ public:
 			: value(p)
 		{ }
 
-		Jrd::MetaName property;
+		MetaName property;
 		Firebird::string value;
 	};
 
 	Firebird::ObjectsArray<Property> properties;
-	const Jrd::MetaName name;
+	const MetaName name;
 	Firebird::string* password;
 	Firebird::string* firstName;
 	Firebird::string* middleName;
 	Firebird::string* lastName;
-	Jrd::MetaName* plugin;
+	MetaName* plugin;
 	Firebird::string* comment;
 	Nullable<bool> adminRole;
 	Nullable<bool> active;
 	Mode mode;
 
-	void addProperty(Jrd::MetaName* pr, Firebird::string* val = NULL)
+	void addProperty(MetaName* pr, Firebird::string* val = NULL)
 	{
 		fb_assert(pr);
 
@@ -2230,7 +2230,7 @@ public:
 class DropUserNode : public UserNode
 {
 public:
-	DropUserNode(MemoryPool& p, const Jrd::MetaName& aName, const Jrd::MetaName* aPlugin = NULL)
+	DropUserNode(MemoryPool& p, const MetaName& aName, const MetaName* aPlugin = NULL)
 		: UserNode(p),
 		  name(p, upper(aName)),
 		  plugin(p),
@@ -2257,8 +2257,8 @@ protected:
 	}
 
 public:
-	const Jrd::MetaName name;
-	Jrd::MetaName plugin;
+	const MetaName name;
+	MetaName plugin;
 	bool silent;
 };
 
@@ -2278,7 +2278,7 @@ typedef RecreateNode<CreateAlterUserNode, DropUserNode, isc_dsql_recreate_user_f
 
 
 typedef Firebird::Pair<Firebird::NonPooled<char, ValueListNode*> > PrivilegeClause;
-typedef Firebird::Pair<Firebird::NonPooled<SSHORT, Jrd::MetaName> > GranteeClause;
+typedef Firebird::Pair<Firebird::NonPooled<SSHORT, MetaName> > GranteeClause;
 
 class GrantRevokeNode : public PrivilegesNode, private ExecInSecurityDb
 {
@@ -2314,22 +2314,22 @@ protected:
 private:
 	void modifyPrivileges(thread_db* tdbb, jrd_tra* transaction, SSHORT option, const GranteeClause* user);
 	void grantRevoke(thread_db* tdbb, jrd_tra* transaction, const GranteeClause* object,
-		const GranteeClause* userNod, const char* privs, Jrd::MetaName field, int options);
+		const GranteeClause* userNod, const char* privs, MetaName field, int options);
 	static void checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* transaction, const char* grantor,
-		const char* privilege, const Jrd::MetaName& relationName,
-		const Jrd::MetaName& fieldName, bool topLevel);
+		const char* privilege, const MetaName& relationName,
+		const MetaName& fieldName, bool topLevel);
 	static void checkGrantorCanGrantRole(thread_db* tdbb, jrd_tra* transaction,
-			const Jrd::MetaName& grantor, const Jrd::MetaName& roleName);
+			const MetaName& grantor, const MetaName& roleName);
 	static void checkGrantorCanGrantDdl(thread_db* tdbb, jrd_tra* transaction,
-			const Jrd::MetaName& grantor, const char* privilege, const Jrd::MetaName& objName);
+			const MetaName& grantor, const char* privilege, const MetaName& objName);
 	static void checkGrantorCanGrantObject(thread_db* tdbb, jrd_tra* transaction, const char* grantor,
-		const char* privilege, const Jrd::MetaName& objName, SSHORT objType);
+		const char* privilege, const MetaName& objName, SSHORT objType);
 	static void storePrivilege(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& object, const Jrd::MetaName& user,
-		const Jrd::MetaName& field, const TEXT* privilege, SSHORT userType,
-		SSHORT objType, int option, const Jrd::MetaName& grantor);
+		const MetaName& object, const MetaName& user,
+		const MetaName& field, const TEXT* privilege, SSHORT userType,
+		SSHORT objType, int option, const MetaName& grantor);
 	static void setFieldClassName(thread_db* tdbb, jrd_tra* transaction,
-		const Jrd::MetaName& relation, const Jrd::MetaName& field);
+		const MetaName& relation, const MetaName& field);
 
 	// Diagnostics print helper.
 	static const char* privilegeName(char symbol)
@@ -2356,14 +2356,14 @@ private:
 
 	struct CreateDbJob
 	{
-		CreateDbJob(SSHORT a_userType, const Jrd::MetaName& a_user)
+		CreateDbJob(SSHORT a_userType, const MetaName& a_user)
 			: allOnAll(false), grantErased(false), badGrantor(false),
 			  userType(a_userType), user(a_user)
 		{ }
 
 		bool allOnAll, grantErased, badGrantor;
 		SSHORT userType;
-		Jrd::MetaName user, revoker;
+		MetaName user, revoker;
 	};
 	Firebird::Array<CreateDbJob> createDbJobs;
 
@@ -2375,7 +2375,7 @@ public:
 	NestConst<GranteeClause> object;
 	Firebird::Array<GranteeClause> users;
 	bool grantAdminOption;
-	NestConst<Jrd::MetaName> grantor;
+	NestConst<MetaName> grantor;
 	// ddl rights
 	bool isDdl;
 };
@@ -2446,13 +2446,13 @@ public:
 	SLONG createLength, linger;
 	unsigned clauses;
 	Firebird::string differenceFile;
-	Jrd::MetaName setDefaultCharSet;
-	Jrd::MetaName setDefaultCollation;
+	MetaName setDefaultCharSet;
+	MetaName setDefaultCollation;
 	Firebird::Array<NestConst<DbFileClause> > files;
-	Jrd::MetaName cryptPlugin;
-	Jrd::MetaName keyName;
+	MetaName cryptPlugin;
+	MetaName keyName;
 	Nullable<bool> ssDefiner;
-	Firebird::Array<Jrd::MetaName> pubTables;
+	Firebird::Array<MetaName> pubTables;
 };
 
 

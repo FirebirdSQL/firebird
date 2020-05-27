@@ -150,13 +150,13 @@ public:
 	FB_UINT64	type;						// Trigger type
 	USHORT		flags;						// Flags as they are in RDB$TRIGGERS table
 	jrd_rel*	relation;					// Trigger parent relation
-	Jrd::MetaName	name;				// Trigger name
-	Jrd::MetaName	engine;				// External engine name
+	MetaName	name;				// Trigger name
+	MetaName	engine;				// External engine name
 	Firebird::string	entryPoint;			// External trigger entrypoint
 	Firebird::string	extBody;			// External trigger body
 	ExtEngineManager::Trigger* extTrigger;	// External trigger
 	Nullable<bool> ssDefiner;
-	Jrd::MetaName	owner;				// Owner for SQL SECURITY
+	MetaName	owner;				// Owner for SQL SECURITY
 
 	void compile(thread_db*);				// Ensure that trigger is compiled
 	void release(thread_db*);				// Try to free trigger request
@@ -284,8 +284,8 @@ public:
 	NestConst<ValueExprNode>	prm_default_value;
 	bool		prm_nullable;
 	prm_mech_t	prm_mechanism;
-	Jrd::MetaName prm_name;			// asciiz name
-	Jrd::MetaName prm_field_source;
+	MetaName prm_name;			// asciiz name
+	MetaName prm_field_source;
 	FUN_T		prm_fun_mechanism;
 
 public:

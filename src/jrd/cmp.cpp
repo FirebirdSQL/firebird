@@ -355,12 +355,12 @@ ULONG CMP_impure(CompilerScratch* csb, ULONG size)
 
 void CMP_post_access(thread_db* tdbb,
 					 CompilerScratch* csb,
-					 const Jrd::MetaName& security_name,
+					 const MetaName& security_name,
 					 SLONG ssRelationId,			// SQL SECURITY relation in which context permissions should be check
 					 SecurityClass::flags_t mask,
 					 SLONG type_name,
-					 const Jrd::MetaName& name,
-					 const Jrd::MetaName& r_name)
+					 const MetaName& name,
+					 const MetaName& r_name)
 {
 /**************************************
  *

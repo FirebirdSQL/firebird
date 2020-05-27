@@ -6221,7 +6221,7 @@ static void set_owner_name(thread_db* tdbb, Record* record, USHORT field_id)
 		const Jrd::UserId* const user = tdbb->getAttachment()->att_user;
 		if (user)
 		{
-			const Jrd::MetaName name(user->getUserName());
+			const MetaName name(user->getUserName());
 			dsc desc2;
 			desc2.makeText((USHORT) name.length(), CS_METADATA, (UCHAR*) name.c_str());
 			MOV_move(tdbb, &desc2, &desc1);
@@ -6248,7 +6248,7 @@ static bool set_security_class(thread_db* tdbb, Record* record, USHORT field_id)
 	if (!EVL_field(0, record, field_id, &desc1))
 	{
 		const SINT64 value = DYN_UTIL_gen_unique_id(tdbb, drq_g_nxt_sec_id, SQL_SECCLASS_GENERATOR);
-		Jrd::MetaName name;
+		MetaName name;
 		name.printf("%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX, value);
 		dsc desc2;
 		desc2.makeText((USHORT) name.length(), CS_ASCII, (UCHAR*) name.c_str());

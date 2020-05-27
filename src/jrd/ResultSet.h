@@ -107,7 +107,7 @@ public:
 	}
 
 	Firebird::string getString(thread_db* tdbb, unsigned param);
-	Jrd::MetaName getMetaName(thread_db* tdbb, unsigned param);
+	MetaName getMetaName(thread_db* tdbb, unsigned param);
 	Firebird::MetaString getMetaString(thread_db* tdbb, unsigned param);
 
 private:

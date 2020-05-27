@@ -475,7 +475,7 @@ public:
 #ifdef HAVE_ID_BY_NAME
 	Firebird::UCharBuffer dbb_id;
 #endif
-	Jrd::MetaName dbb_owner;		// database owner
+	MetaName dbb_owner;		// database owner
 
 	Firebird::SyncObject			dbb_pools_sync;
 	Firebird::Array<MemoryPool*>	dbb_pools;		// pools

@@ -10356,7 +10356,7 @@ void DropShadowNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScratch
 //----------------------
 
 
-USHORT PrivilegesNode::convertPrivilegeFromString(thread_db* tdbb, jrd_tra* transaction, Jrd::MetaName privilege)
+USHORT PrivilegesNode::convertPrivilegeFromString(thread_db* tdbb, jrd_tra* transaction, MetaName privilege)
 {
 	string priv(privilege.c_str());
 	priv.upper();
@@ -11004,7 +11004,7 @@ void DropRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 //----------------------
 
 
-Jrd::MetaName UserNode::upper(const Jrd::MetaName& str)
+MetaName UserNode::upper(const MetaName& str)
 {
 	return str;
 }
@@ -11746,7 +11746,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 
 	if (grantor && !attachment->locksmith(tdbb, USE_GRANTED_BY_CLAUSE))
 	{
-		const Jrd::MetaName& owner(tdbb->getDatabase()->dbb_owner);
+		const MetaName& owner(tdbb->getDatabase()->dbb_owner);
 
 		if (owner == DBA_USER_NAME)
 			(Arg::PrivateDyn(252) << DBA_USER_NAME).raise();
@@ -12359,7 +12359,7 @@ void GrantRevokeNode::checkGrantorCanGrantDdl(thread_db* tdbb, jrd_tra* transact
 
 // Check if the grantor has grant option on generator privilege
 void GrantRevokeNode::checkGrantorCanGrantObject(thread_db* tdbb, jrd_tra* transaction, const char* grantor,
-		const char* privilege, const Jrd::MetaName& objName, SSHORT objType)
+		const char* privilege, const MetaName& objName, SSHORT objType)
 {
 	const Attachment* attachment = tdbb->getAttachment();
 

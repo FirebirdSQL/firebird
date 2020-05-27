@@ -946,7 +946,7 @@ static void add_index_set(thread_db* tdbb)
 		const ini_idx_t* index = &indices[n];
 		jrd_rel* relation = MET_relation(tdbb, index->ini_idx_relid);
 
-		Jrd::MetaName indexName;
+		MetaName indexName;
 		indexName.printf("RDB$INDEX_%d", index->ini_idx_index_id);
 
 		STORE(REQUEST_HANDLE handle1) X IN RDB$INDICES
@@ -1016,7 +1016,7 @@ static void add_security_to_sys_rel(thread_db*	tdbb,
 									AutoRequest& reqAddSC,
 									AutoRequest& reqModObjSC,
 									AutoRequest& reqInsUserPriv,
-									const Jrd::MetaName&	user_name,
+									const MetaName&	user_name,
 									const TEXT*	rel_name,
 									const USHORT	acl_length,
 									const UCHAR*	acl)
@@ -1035,7 +1035,7 @@ static void add_security_to_sys_rel(thread_db*	tdbb,
  *      privilege.
  *
  **************************************/
-	Jrd::MetaName security_class, default_class;
+	MetaName security_class, default_class;
 
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
@@ -1124,7 +1124,7 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 	SET_TDBB(tdbb);
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
-	Jrd::MetaName security_class;
+	MetaName security_class;
 	security_class.printf("%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
 		DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
 

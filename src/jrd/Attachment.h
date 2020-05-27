@@ -128,9 +128,9 @@ struct DdlTriggerContext
 
 	Firebird::string eventType;
 	Firebird::string objectType;
-	Jrd::MetaName objectName;
-	Jrd::MetaName oldObjectName;
-	Jrd::MetaName newObjectName;
+	MetaName objectName;
+	MetaName oldObjectName;
+	MetaName newObjectName;
 	Firebird::string sqlText;
 };
 
@@ -321,7 +321,7 @@ public:
 			: m_objects(pool)
 		{}
 
-		void store(SLONG id, const Jrd::MetaName& name)
+		void store(SLONG id, const MetaName& name)
 		{
 			fb_assert(id >= 0);
 			fb_assert(name.hasData());
@@ -338,7 +338,7 @@ public:
 			}
 		}
 
-		bool lookup(SLONG id, Jrd::MetaName& name)
+		bool lookup(SLONG id, MetaName& name)
 		{
 			if (id < (int) m_objects.getCount())
 			{
@@ -349,7 +349,7 @@ public:
 			return false;
 		}
 
-		SLONG lookup(const Jrd::MetaName& name)
+		SLONG lookup(const MetaName& name)
 		{
 			FB_SIZE_T pos;
 
@@ -360,7 +360,7 @@ public:
 		}
 
 	private:
-		Firebird::Array<Jrd::MetaName> m_objects;
+		Firebird::Array<MetaName> m_objects;
 	};
 
 	class InitialOptions
@@ -495,7 +495,7 @@ public:
 
 	Firebird::Array<CharSetContainer*>	att_charsets;		// intl character set descriptions
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Jrd::MetaName, USHORT> > > att_charset_ids;	// Character set ids
+		MetaName, USHORT> > > att_charset_ids;	// Character set ids
 
 	void releaseIntlObjects(thread_db* tdbb);			// defined in intl.cpp
 	void destroyIntlObjects(thread_db* tdbb);			// defined in intl.cpp
@@ -539,8 +539,8 @@ public:
 	PreparedStatement* prepareUserStatement(thread_db* tdbb, jrd_tra* transaction,
 		const Firebird::string& text, Firebird::MemoryPool* pool = NULL);
 
-	Jrd::MetaName nameToMetaCharSet(thread_db* tdbb, const Jrd::MetaName& name);
-	Jrd::MetaName nameToUserCharSet(thread_db* tdbb, const Jrd::MetaName& name);
+	MetaName nameToMetaCharSet(thread_db* tdbb, const MetaName& name);
+	MetaName nameToUserCharSet(thread_db* tdbb, const MetaName& name);
 	Firebird::string stringToMetaCharSet(thread_db* tdbb, const Firebird::string& str,
 		const char* charSet = NULL);
 	Firebird::string stringToUserCharSet(thread_db* tdbb, const Firebird::string& str);

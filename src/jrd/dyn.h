@@ -53,9 +53,9 @@ public:
 	SSHORT dyn_collation;
 	SSHORT dyn_charset;
 	SSHORT dyn_sub_type;
-	Jrd::MetaName dyn_fld_source;
-	Jrd::MetaName dyn_rel_name;
-	Jrd::MetaName dyn_fld_name;
+	MetaName dyn_fld_source;
+	MetaName dyn_rel_name;
+	MetaName dyn_fld_name;
     USHORT dyn_charbytelen; // Used to check modify operations on string types.
     const UCHAR* dyn_default_src;
     const UCHAR* dyn_default_val;

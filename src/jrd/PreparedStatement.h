@@ -164,7 +164,7 @@ public:
 		static Type getType(SINT64)								{ return TYPE_SINT64; }
 		static Type getType(double)								{ return TYPE_DOUBLE; }
 		static Type getType(const Firebird::AbstractString&)	{ return TYPE_STRING; }
-		static Type getType(const Jrd::MetaName&)				{ return TYPE_METANAME; }
+		static Type getType(const MetaName&)				{ return TYPE_METANAME; }
 		static Type getType(const Firebird::MetaString&)		{ return TYPE_METASTRING; }
 
 		void addInput(Type type, const void* address, Firebird::Array<InputSlot>& slots)
@@ -236,7 +236,7 @@ public:
 	}
 
 	// Escape a metadata name accordingly to SQL rules.
-	static Firebird::string escapeName(const Jrd::MetaName& s)
+	static Firebird::string escapeName(const MetaName& s)
 	{
 		Firebird::string ret;
 
@@ -334,7 +334,7 @@ public:
 		setDesc(tdbb, param, desc);
 	}
 
-	void setMetaName(thread_db* tdbb, unsigned param, const Jrd::MetaName& value)
+	void setMetaName(thread_db* tdbb, unsigned param, const MetaName& value)
 	{
 		fb_assert(param > 0);
 

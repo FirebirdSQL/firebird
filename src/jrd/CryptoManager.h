@@ -277,8 +277,8 @@ public:
 
 	void shutdown(thread_db* tdbb);
 
-	void prepareChangeCryptState(thread_db* tdbb, const Jrd::MetaName& plugName,
-		const Jrd::MetaName& key);
+	void prepareChangeCryptState(thread_db* tdbb, const MetaName& plugName,
+		const MetaName& key);
 	void changeCryptState(thread_db* tdbb, const Firebird::string& plugName);
 	void attach(thread_db* tdbb, Attachment* att);
 	void detach(thread_db* tdbb, Attachment* att);
@@ -384,7 +384,7 @@ private:
 	void checkDigitalSignature(thread_db* tdbb, const class Header& hdr);
 
 	BarSync sync;
-	Jrd::MetaName keyName, pluginName;
+	MetaName keyName, pluginName;
 	ULONG currentPage;
 	Firebird::Mutex pluginLoadMtx, cryptThreadMtx, holdersMutex;
 	AttVector keyProviders, keyConsumers;

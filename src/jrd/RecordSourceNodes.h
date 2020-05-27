@@ -146,7 +146,7 @@ public:
 
 		SLONG relationId;
 		SLONG indexId;
-		Jrd::MetaName indexName;
+		MetaName indexName;
 	};
 
 	struct AccessType
@@ -192,7 +192,7 @@ public:
 private:
 	dsql_ctx* dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch);
 	static dsql_ctx* dsqlPassAlias(DsqlCompilerScratch* dsqlScratch, DsqlContextStack& stack,
-		const Jrd::MetaName& alias);
+		const MetaName& alias);
 
 public:
 	Type const type;
@@ -200,7 +200,7 @@ public:
 	RelationSourceNode* relationNode;
 	Firebird::Array<NestConst<PlanNode> > subNodes;
 	RecordSourceNode* dsqlRecordSourceNode;
-	Firebird::ObjectsArray<Jrd::MetaName>* dsqlNames;
+	Firebird::ObjectsArray<MetaName>* dsqlNames;
 };
 
 class InversionNode
@@ -286,7 +286,7 @@ public:
 class RelationSourceNode : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RELATION>
 {
 public:
-	explicit RelationSourceNode(MemoryPool& pool, const Jrd::MetaName& aDsqlName = NULL)
+	explicit RelationSourceNode(MemoryPool& pool, const MetaName& aDsqlName = NULL)
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RELATION>(pool),
 		  dsqlName(pool, aDsqlName),
 		  alias(pool),
@@ -349,7 +349,7 @@ public:
 	virtual RecordSource* compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream);
 
 public:
-	Jrd::MetaName dsqlName;
+	MetaName dsqlName;
 	Firebird::string alias;	// SQL alias for the relation
 	jrd_rel* relation;
 	SSHORT context;			// user-specified context number for the relation reference
@@ -879,7 +879,7 @@ public:
 	NestConst<RowsClause> rowsClause;
 	NestConst<WithClause> withClause;
 	Firebird::string alias;
-	Firebird::ObjectsArray<Jrd::MetaName>* columns;
+	Firebird::ObjectsArray<MetaName>* columns;
 };
 
 

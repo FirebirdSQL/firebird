@@ -70,15 +70,15 @@ DATABASE DB = FILENAME "ODS.RDB";
 
 static bool check_number(const UCHAR*, USHORT);
 static bool check_user_group(thread_db* tdbb, const UCHAR*, USHORT);
-static bool check_string(const UCHAR*, const Jrd::MetaName&);
-static SecurityClass::flags_t compute_access(thread_db* tdbb, const SecurityClass*,	SLONG, const Jrd::MetaName&);
+static bool check_string(const UCHAR*, const MetaName&);
+static SecurityClass::flags_t compute_access(thread_db* tdbb, const SecurityClass*,	SLONG, const MetaName&);
 static SecurityClass::flags_t get_sys_privileges(thread_db* tdbb);
 static SecurityClass::flags_t walk_acl(thread_db* tdbb, const Acl&, const MetaName&,
-	SLONG, const Jrd::MetaName&);
-static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, SLONG type, const Jrd::MetaName& name,
-	const Jrd::MetaName& r_name, const MetaName &invoker);
+	SLONG, const MetaName&);
+static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, SLONG type, const MetaName& name,
+	const MetaName& r_name, const MetaName &invoker);
 static bool check_object(thread_db* tdbb, bool found, const SecurityClass* s_class, SLONG obj_type,
-	const Jrd::MetaName& obj_name, SecurityClass::flags_t mask, SLONG type, const Jrd::MetaName& name);
+	const MetaName& obj_name, SecurityClass::flags_t mask, SLONG type, const MetaName& name);
 
 
 namespace
@@ -177,8 +177,8 @@ namespace
 } // anonymous namespace
 
 
-static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, SLONG type, const Jrd::MetaName& name,
-	const Jrd::MetaName& r_name, const Jrd::MetaName& invoker)
+static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, SLONG type, const MetaName& name,
+	const MetaName& r_name, const MetaName& invoker)
 {
 	const P_NAMES* names;
 	for (names = p_names; names->p_names_priv; names++)
@@ -208,12 +208,12 @@ static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, SLONG type,
 void SCL_check_access(thread_db* tdbb,
 					  const SecurityClass* s_class,
 					  SLONG obj_type,
-					  const Jrd::MetaName& obj_name,
+					  const MetaName& obj_name,
 					  SecurityClass::flags_t mask,
 					  SLONG type,
 					  bool recursive,
-					  const Jrd::MetaName& name,
-					  const Jrd::MetaName& r_name)
+					  const MetaName& name,
+					  const MetaName& r_name)
 {
 /**************************************
  *
@@ -499,7 +499,7 @@ bool SCL_check_generator(thread_db* tdbb, const MetaName& name, SecurityClass::f
 }
 
 
-void SCL_check_index(thread_db* tdbb, const Jrd::MetaName& index_name, UCHAR index_id,
+void SCL_check_index(thread_db* tdbb, const MetaName& index_name, UCHAR index_id,
 	SecurityClass::flags_t mask)
 {
 /******************************************************
@@ -531,9 +531,9 @@ void SCL_check_index(thread_db* tdbb, const Jrd::MetaName& index_name, UCHAR ind
         return;
     }
 
-    Jrd::MetaName reln_name, aux_idx_name;
-    const Jrd::MetaName* idx_name_ptr = &index_name;
-	const Jrd::MetaName* relation_name_ptr = &index_name;
+    MetaName reln_name, aux_idx_name;
+    const MetaName* idx_name_ptr = &index_name;
+	const MetaName* relation_name_ptr = &index_name;
 
 	AutoRequest request;
 	int systemFlag = 0;
@@ -635,7 +635,7 @@ bool SCL_check_package(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flag
 
 	// Get the name in CSTRING format, ending on NULL or SPACE
 	fb_assert(dsc_name->dsc_dtype == dtype_text);
-	const Jrd::MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
+	const MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
 		dsc_name->dsc_length);
 
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
@@ -676,7 +676,7 @@ bool SCL_check_procedure(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fl
 
 	// Get the name in CSTRING format, ending on NULL or SPACE
 	fb_assert(dsc_name->dsc_dtype == dtype_text);
-	const Jrd::MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
+	const MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
 							dsc_name->dsc_length);
 
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
@@ -718,7 +718,7 @@ bool SCL_check_function(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fla
 
 	// Get the name in CSTRING format, ending on NULL or SPACE
 	fb_assert(dsc_name->dsc_dtype == dtype_text);
-	const Jrd::MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
+	const MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
 							dsc_name->dsc_length);
 
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
@@ -795,7 +795,7 @@ void SCL_check_relation(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fla
 
 	// Get the name in CSTRING format, ending on NULL or SPACE
 	fb_assert(dsc_name->dsc_dtype == dtype_text);
-	const Jrd::MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
+	const MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
 								  dsc_name->dsc_length);
 
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
@@ -839,7 +839,7 @@ bool SCL_check_view(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t
 
 	// Get the name in CSTRING format, ending on NULL or SPACE
 	fb_assert(dsc_name->dsc_dtype == dtype_text);
-	const Jrd::MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
+	const MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
 								  dsc_name->dsc_length);
 
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
@@ -860,7 +860,7 @@ bool SCL_check_view(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t
 	return check_object(tdbb, found, s_class, 0, NULL, mask, SCL_object_view, name);
 }
 
-void SCL_check_role(thread_db* tdbb, const Jrd::MetaName& name, SecurityClass::flags_t mask)
+void SCL_check_role(thread_db* tdbb, const MetaName& name, SecurityClass::flags_t mask)
 {
 /**************************************
  *
@@ -910,18 +910,18 @@ SecurityClass* SCL_get_class(thread_db* tdbb, const TEXT* par_string)
 	if (!par_string)
 		return NULL;
 
-	Jrd::MetaName string(par_string);
+	MetaName string(par_string);
 	if (string.isEmpty())
 		return NULL;
 
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
 	const UserId* effectiveUserId = attachment->getEffectiveUserId();
-	Jrd::MetaName userName;
+	MetaName userName;
 	if (effectiveUserId)
 		userName= effectiveUserId->getUserName();
 
-	Jrd::MetaNamePair key(string, userName);
+	MetaNamePair key(string, userName);
 	// Look for the class already known
 
 	SecurityClassList* list = attachment->att_security_classes;
@@ -1247,7 +1247,7 @@ void SCL_clear_classes(thread_db* tdbb, const TEXT* string)
 	if (!list)
 		return;
 
-	Jrd::MetaNamePair key(string, NULL);
+	MetaNamePair key(string, NULL);
 	if (!list->locate(Firebird::locGreatEqual, key))
 		return;
 
@@ -1410,7 +1410,7 @@ static bool check_user_group(thread_db* tdbb, const UCHAR* acl, USHORT number)
 }
 
 
-static bool check_string(const UCHAR* acl, const Jrd::MetaName& string)
+static bool check_string(const UCHAR* acl, const MetaName& string)
 {
 /**************************************
  *
@@ -1431,7 +1431,7 @@ static bool check_string(const UCHAR* acl, const Jrd::MetaName& string)
 	return (string.compare(ptr, length) != 0);
 }
 
-static void get_string(const UCHAR* acl, Jrd::MetaName& string)
+static void get_string(const UCHAR* acl, MetaName& string)
 {
 /**************************************
  *
@@ -1482,7 +1482,7 @@ static SecurityClass::flags_t get_sys_privileges(thread_db* tdbb)
 static SecurityClass::flags_t compute_access(thread_db* tdbb,
 											 const SecurityClass* s_class,
 											 SLONG obj_type,
-											 const Jrd::MetaName& obj_name)
+											 const MetaName& obj_name)
 {
 /**************************************
  *
@@ -1546,7 +1546,7 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 									   const Acl& acl,
 									   const MetaName& userName,
 									   SLONG obj_type,
-									   const Jrd::MetaName& obj_name)
+									   const MetaName& obj_name)
 {
 /**************************************
  *
@@ -1613,7 +1613,7 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 
 				case id_sql_role:
 				{
-					Jrd::MetaName role_name;
+					MetaName role_name;
 					get_string(a, role_name);
 					if (!user.roleInUse(tdbb, role_name))
 						hit = false;
@@ -1825,10 +1825,10 @@ static bool check_object(thread_db* tdbb,
 						 bool found,
 						 const SecurityClass* s_class,
 						 SLONG obj_type,
-						 const Jrd::MetaName& obj_name,
+						 const MetaName& obj_name,
 						 SecurityClass::flags_t mask,
 						 SLONG type,
-						 const Jrd::MetaName& name)
+						 const MetaName& name)
 {
 	if (s_class)
 	{

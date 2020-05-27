@@ -171,12 +171,12 @@ namespace Jrd
 			return m_number;
 		}
 
-		const Jrd::MetaName& getName() const
+		const MetaName& getName() const
 		{
 			return m_name;
 		}
 
-		void setName(const Jrd::MetaName& name)
+		void setName(const MetaName& name)
 		{
 			m_name = name;
 		}
@@ -316,7 +316,7 @@ namespace Jrd
 		SavNumber m_number;				// savepoint number
 		USHORT m_flags;					// misc flags
 		USHORT m_count;					// active verb count
-		Jrd::MetaName m_name; 		// savepoint name
+		MetaName m_name; 		// savepoint name
 		Savepoint* m_next;				// next savepoint in the list
 
 

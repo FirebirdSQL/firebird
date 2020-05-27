@@ -187,9 +187,9 @@ typedef Firebird::SortedArray<Resource, Firebird::EmptyStorage<Resource>,
 
 struct AccessItem
 {
-	Jrd::MetaName		acc_security_name;
+	MetaName		acc_security_name;
 	SLONG					acc_ss_rel_id;	// Relation Id which owner will be used to check permissions
-	Jrd::MetaName		acc_name, acc_r_name;
+	MetaName		acc_name, acc_r_name;
 	SLONG					acc_type;
 	SecurityClass::flags_t	acc_mask;
 
@@ -224,9 +224,9 @@ struct AccessItem
 		return false; // Equal
 	}
 
-	AccessItem(const Jrd::MetaName& security_name, SLONG view_id,
-		const Jrd::MetaName& name, SLONG type,
-		SecurityClass::flags_t mask, const Jrd::MetaName& relName)
+	AccessItem(const MetaName& security_name, SLONG view_id,
+		const MetaName& name, SLONG type,
+		SecurityClass::flags_t mask, const MetaName& relName)
 		: acc_security_name(security_name), acc_ss_rel_id(view_id), acc_name(name),
 			acc_r_name(relName), acc_type(type), acc_mask(mask)
 	{}
@@ -251,7 +251,7 @@ struct ExternalAccess
 	USHORT exa_fun_id;
 	USHORT exa_rel_id;
 	USHORT exa_view_id;
-	Jrd::MetaName user;		// User which touch the recources.
+	MetaName user;		// User which touch the recources.
 
 	// Procedure
 	ExternalAccess(exa_act action, USHORT id) :
@@ -391,14 +391,14 @@ public:
 	}
 
 public:
-	Jrd::MetaName name;
-	Jrd::MetaNamePair field;
+	MetaName name;
+	MetaNamePair field;
 	bool nullable;
 	bool explicitCollation;
 	bool fullDomain;
 };
 
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Jrd::MetaNamePair, FieldInfo> > >
+typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<MetaNamePair, FieldInfo> > >
 	MapFieldInfo;
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::Right<Item, ItemInfo> > > MapItemInfo;
 
@@ -422,11 +422,11 @@ public:
 			jrd_rel* relation;
 			const Function* function;
 			const jrd_prc* procedure;
-			const Jrd::MetaName* name;
+			const MetaName* name;
 			SLONG number;
 		};
 
-		const Jrd::MetaName* subName;
+		const MetaName* subName;
 		SLONG subNumber;
 	};
 
@@ -528,7 +528,7 @@ public:
 	// Map of message number to field number to pad for external routines.
 	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, USHORT> > > csb_message_pad;
 
-	Jrd::MetaName	csb_domain_validation;	// Parsing domain constraint in PSQL
+	MetaName	csb_domain_validation;	// Parsing domain constraint in PSQL
 
 	// used in cmp.cpp/pass1
 	jrd_rel*	csb_view;
@@ -539,8 +539,8 @@ public:
 	bool		csb_validate_expr;
 	bool		csb_returning_expr;
 
-	Firebird::GenericMap<Firebird::Left<Jrd::MetaName, DeclareSubFuncNode*> > subFunctions;
-	Firebird::GenericMap<Firebird::Left<Jrd::MetaName, DeclareSubProcNode*> > subProcedures;
+	Firebird::GenericMap<Firebird::Left<MetaName, DeclareSubFuncNode*> > subFunctions;
+	Firebird::GenericMap<Firebird::Left<MetaName, DeclareSubProcNode*> > subProcedures;
 
 	ForNode*	csb_currentForNode;
 	StmtNode*	csb_currentDMLNode;		// could be StoreNode or ModifyNode

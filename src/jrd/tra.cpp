@@ -3072,8 +3072,8 @@ static void transaction_options(thread_db* tdbb,
 							 										 Arg::Str(option_name));
 				}
 
-				const Jrd::MetaName orgName(reinterpret_cast<const char*>(tpb), len);
-				const Jrd::MetaName metaName = attachment->nameToMetaCharSet(tdbb, orgName);
+				const MetaName orgName(reinterpret_cast<const char*>(tpb), len);
+				const MetaName metaName = attachment->nameToMetaCharSet(tdbb, orgName);
 
 				tpb += len;
 				jrd_rel* relation = MET_lookup_relation(tdbb, metaName);

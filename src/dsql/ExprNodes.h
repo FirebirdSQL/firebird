@@ -266,7 +266,7 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	Jrd::MetaName dsqlAlias;
+	MetaName dsqlAlias;
 	dsql_fld* dsqlField;
 	dsc castDesc;
 	NestConst<ValueExprNode> source;
@@ -318,7 +318,7 @@ public:
 class CollateNode : public TypedNode<ValueExprNode, ExprNode::TYPE_COLLATE>
 {
 public:
-	CollateNode(MemoryPool& pool, ValueExprNode* aArg, const Jrd::MetaName& aCollation);
+	CollateNode(MemoryPool& pool, ValueExprNode* aArg, const MetaName& aCollation);
 
 	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
 	{
@@ -332,7 +332,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 
 	static ValueExprNode* pass1Collate(DsqlCompilerScratch* dsqlScratch, ValueExprNode* input,
-		const Jrd::MetaName& collation);
+		const MetaName& collation);
 
 	// This class is used only in the parser. It turns in a CastNode in dsqlPass.
 
@@ -373,7 +373,7 @@ private:
 
 public:
 	NestConst<ValueExprNode> arg;
-	Jrd::MetaName collation;
+	MetaName collation;
 };
 
 
@@ -581,8 +581,8 @@ public:
 class DefaultNode : public DsqlNode<DefaultNode, ExprNode::TYPE_DEFAULT>
 {
 public:
-	explicit DefaultNode(MemoryPool& pool, const Jrd::MetaName& aRelationName,
-		const Jrd::MetaName& aFieldName);
+	explicit DefaultNode(MemoryPool& pool, const MetaName& aRelationName,
+		const MetaName& aFieldName);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 	static ValueExprNode* createFromField(thread_db* tdbb, CompilerScratch* csb, StreamType* map, jrd_fld* fld);
@@ -600,8 +600,8 @@ public:
 	virtual ValueExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 
 public:
-	const Jrd::MetaName relationName;
-	const Jrd::MetaName fieldName;
+	const MetaName relationName;
+	const MetaName fieldName;
 
 private:
 	jrd_fld* field;
@@ -794,11 +794,11 @@ public:
 
 private:
 	static dsql_fld* resolveContext(DsqlCompilerScratch* dsqlScratch,
-		const Jrd::MetaName& qualifier, dsql_ctx* context, bool resolveByAlias);
+		const MetaName& qualifier, dsql_ctx* context, bool resolveByAlias);
 
 public:
-	Jrd::MetaName dsqlQualifier;
-	Jrd::MetaName dsqlName;
+	MetaName dsqlQualifier;
+	MetaName dsqlName;
 	dsql_ctx* const dsqlContext;
 	dsql_fld* const dsqlField;
 	NestConst<ValueListNode> dsqlIndices;
@@ -815,7 +815,7 @@ class GenIdNode : public TypedNode<ValueExprNode, ExprNode::TYPE_GEN_ID>
 {
 public:
 	GenIdNode(MemoryPool& pool, bool aDialect1,
-			  const Jrd::MetaName& name,
+			  const MetaName& name,
 			  ValueExprNode* aArg,
 			  bool aImplicit, bool aIdentity);
 
@@ -941,7 +941,7 @@ public:
 class DsqlAliasNode : public TypedNode<ValueExprNode, ExprNode::TYPE_ALIAS>
 {
 public:
-	DsqlAliasNode(MemoryPool& pool, const Jrd::MetaName& aName, ValueExprNode* aValue)
+	DsqlAliasNode(MemoryPool& pool, const MetaName& aName, ValueExprNode* aValue)
 		: TypedNode<ValueExprNode, ExprNode::TYPE_ALIAS>(pool),
 		  name(aName),
 		  value(aValue),
@@ -980,7 +980,7 @@ public:
 	}
 
 public:
-	const Jrd::MetaName name;
+	const MetaName name;
 	NestConst<ValueExprNode> value;
 	NestConst<ImplicitJoin> implicitJoin;
 };
@@ -1032,7 +1032,7 @@ public:
 class DerivedFieldNode : public TypedNode<ValueExprNode, ExprNode::TYPE_DERIVED_FIELD>
 {
 public:
-	DerivedFieldNode(MemoryPool& pool, const Jrd::MetaName& aName, USHORT aScope,
+	DerivedFieldNode(MemoryPool& pool, const MetaName& aName, USHORT aScope,
 		ValueExprNode* aValue);
 
 	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
@@ -1075,7 +1075,7 @@ public:
 	}
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	USHORT scope;
 	NestConst<ValueExprNode> value;
 	dsql_ctx* context;
@@ -1381,7 +1381,7 @@ public:
 
 public:
 	explicit WindowClause(MemoryPool& pool,
-			const Jrd::MetaName* aName = NULL,
+			const MetaName* aName = NULL,
 			ValueListNode* aPartition = NULL,
 			ValueListNode* aOrder = NULL,
 			FrameExtent* aFrameExtent = NULL,
@@ -1447,7 +1447,7 @@ public:
 	}
 
 public:
-	const Jrd::MetaName* name;
+	const MetaName* name;
 	NestConst<ValueListNode> partition;
 	NestConst<ValueListNode> order;
 	NestConst<FrameExtent> extent;
@@ -1459,7 +1459,7 @@ public:
 class OverNode : public TypedNode<ValueExprNode, ExprNode::TYPE_OVER>
 {
 public:
-	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr, const Jrd::MetaName* aWindowName);
+	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr, const MetaName* aWindowName);
 	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr, WindowClause* aWindow);
 
 	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
@@ -1492,7 +1492,7 @@ public:
 
 public:
 	NestConst<ValueExprNode> aggExpr;
-	const Jrd::MetaName* windowName;
+	const MetaName* windowName;
 	NestConst<WindowClause> window;
 };
 
@@ -1552,7 +1552,7 @@ public:
 class RecordKeyNode : public TypedNode<ValueExprNode, ExprNode::TYPE_RECORD_KEY>
 {
 public:
-	RecordKeyNode(MemoryPool& pool, UCHAR aBlrOp, const Jrd::MetaName& aDsqlQualifier = NULL);
+	RecordKeyNode(MemoryPool& pool, UCHAR aBlrOp, const MetaName& aDsqlQualifier = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
@@ -1620,7 +1620,7 @@ private:
 
 public:
 	const UCHAR blrOp;
-	Jrd::MetaName dsqlQualifier;
+	MetaName dsqlQualifier;
 	NestConst<RecordSourceNode> dsqlRelation;
 	StreamType recStream;
 	bool aggregate;
@@ -1952,7 +1952,7 @@ public:
 class SysFuncCallNode : public TypedNode<ValueExprNode, ExprNode::TYPE_SYSFUNC_CALL>
 {
 public:
-	explicit SysFuncCallNode(MemoryPool& pool, const Jrd::MetaName& aName,
+	explicit SysFuncCallNode(MemoryPool& pool, const MetaName& aName,
 		ValueListNode* aArgs = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
@@ -1977,7 +1977,7 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool dsqlSpecialSyntax;
 	NestConst<ValueListNode> args;
 	const SysFunction* function;
@@ -2136,7 +2136,7 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	Jrd::MetaName dsqlName;
+	MetaName dsqlName;
 	NestConst<dsql_var> dsqlVar;
 	USHORT varId;
 	NestConst<DeclareVariableNode> varDecl;

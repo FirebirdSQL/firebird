@@ -101,7 +101,7 @@ public:
 	// while there are system exceptions with 32 chars. The parser always expects metanames, but
 	// I'm following the legacy code and making this a string.
 	Firebird::string name;
-	Jrd::MetaName secName;
+	MetaName secName;
 };
 
 typedef Firebird::ObjectsArray<ExceptionItem> ExceptionArray;
@@ -330,14 +330,14 @@ public:
 public:
 	UCHAR blrOp;
 	USHORT labelNumber;
-	Jrd::MetaName* dsqlLabelName;
+	MetaName* dsqlLabelName;
 };
 
 
 class CursorStmtNode : public TypedNode<StmtNode, StmtNode::TYPE_CURSOR_STMT>
 {
 public:
-	explicit CursorStmtNode(MemoryPool& pool, UCHAR aCursorOp, const Jrd::MetaName& aDsqlName = "",
+	explicit CursorStmtNode(MemoryPool& pool, UCHAR aCursorOp, const MetaName& aDsqlName = "",
 				ValueListNode* aDsqlIntoStmt = NULL)
 		: TypedNode<StmtNode, StmtNode::TYPE_CURSOR_STMT>(pool),
 		  dsqlName(pool, aDsqlName),
@@ -361,7 +361,7 @@ public:
 	virtual const StmtNode* execute(thread_db* tdbb, jrd_req* request, ExeState* exeState) const;
 
 public:
-	Jrd::MetaName dsqlName;
+	MetaName dsqlName;
 	ValueListNode* dsqlIntoStmt;
 	UCHAR cursorOp;
 	USHORT cursorNumber;
@@ -379,7 +379,7 @@ public:
 	static const USHORT CUR_TYPE_FOR = 2;
 	static const USHORT CUR_TYPE_ALL = (CUR_TYPE_EXPLICIT | CUR_TYPE_FOR);
 
-	explicit DeclareCursorNode(MemoryPool& pool, const Jrd::MetaName& aDsqlName = NULL,
+	explicit DeclareCursorNode(MemoryPool& pool, const MetaName& aDsqlName = NULL,
 				USHORT aDsqlCursorType = CUR_TYPE_NONE)
 		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_CURSOR>(pool),
 		  dsqlCursorType(aDsqlCursorType),
@@ -406,7 +406,7 @@ public:
 public:
 	USHORT dsqlCursorType;
 	bool dsqlScroll;
-	Jrd::MetaName dsqlName;
+	MetaName dsqlName;
 	NestConst<SelectNode> dsqlSelect;
 	NestConst<RseNode> rse;
 	NestConst<ValueListNode> refs;
@@ -418,7 +418,7 @@ public:
 class DeclareSubFuncNode : public TypedNode<StmtNode, StmtNode::TYPE_DECLARE_SUBFUNC>
 {
 public:
-	explicit DeclareSubFuncNode(MemoryPool& pool, const Jrd::MetaName& aName)
+	explicit DeclareSubFuncNode(MemoryPool& pool, const MetaName& aName)
 		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_SUBFUNC>(pool),
 		  name(pool, aName),
 		  dsqlDeterministic(false),
@@ -454,7 +454,7 @@ private:
 		Firebird::Array<NestConst<ParameterClause> >& paramArray);
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	bool dsqlDeterministic;
 	Firebird::Array<NestConst<ParameterClause> > dsqlParameters;
 	Firebird::Array<NestConst<ParameterClause> > dsqlReturns;
@@ -472,7 +472,7 @@ public:
 class DeclareSubProcNode : public TypedNode<StmtNode, StmtNode::TYPE_DECLARE_SUBPROC>
 {
 public:
-	explicit DeclareSubProcNode(MemoryPool& pool, const Jrd::MetaName& aName)
+	explicit DeclareSubProcNode(MemoryPool& pool, const MetaName& aName)
 		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_SUBPROC>(pool),
 		  name(pool, aName),
 		  dsqlParameters(pool),
@@ -507,7 +507,7 @@ private:
 		Firebird::Array<NestConst<ParameterClause> >& paramArray);
 
 public:
-	Jrd::MetaName name;
+	MetaName name;
 	Firebird::Array<NestConst<ParameterClause> > dsqlParameters;
 	Firebird::Array<NestConst<ParameterClause> > dsqlReturns;
 	Signature dsqlSignature;
@@ -591,7 +591,7 @@ public:
 	NestConst<PlanNode> dsqlPlan;
 	NestConst<ValueListNode> dsqlOrder;
 	NestConst<RowsClause> dsqlRows;
-	Jrd::MetaName dsqlCursorName;
+	MetaName dsqlCursorName;
 	NestConst<ReturningClause> dsqlReturning;
 	NestConst<RseNode> dsqlRse;
 	dsql_ctx* dsqlContext;
@@ -714,7 +714,7 @@ private:
 		Firebird::string& str, bool useAttCS = false) const;
 
 public:
-	Jrd::MetaName* dsqlLabelName;
+	MetaName* dsqlLabelName;
 	USHORT dsqlLabelNumber;
 	NestConst<ValueExprNode> sql;
 	NestConst<ValueExprNode> dataSource;
@@ -850,7 +850,7 @@ public:
 class ExceptionNode : public TypedNode<StmtNode, StmtNode::TYPE_EXCEPTION>
 {
 public:
-	ExceptionNode(MemoryPool& pool, const Jrd::MetaName& name,
+	ExceptionNode(MemoryPool& pool, const MetaName& name,
 				ValueExprNode* aMessageExpr = NULL, ValueListNode* aParameters = NULL)
 		: TypedNode<StmtNode, StmtNode::TYPE_EXCEPTION>(pool),
 		  messageExpr(aMessageExpr),
@@ -947,7 +947,7 @@ public:
 	NestConst<SelectNode> dsqlSelect;
 	NestConst<ValueListNode> dsqlInto;
 	DeclareCursorNode* dsqlCursor;
-	Jrd::MetaName* dsqlLabelName;
+	MetaName* dsqlLabelName;
 	USHORT dsqlLabelNumber;
 	bool dsqlForceSingular;
 	NestConst<StmtNode> stall;
@@ -1054,7 +1054,7 @@ public:
 	virtual const StmtNode* execute(thread_db* tdbb, jrd_req* request, ExeState* exeState) const;
 
 public:
-	Jrd::MetaName* dsqlLabelName;
+	MetaName* dsqlLabelName;
 	USHORT dsqlLabelNumber;
 	NestConst<BoolExprNode> dsqlExpr;
 	NestConst<StmtNode> statement;
@@ -1197,7 +1197,7 @@ public:
 	NestConst<PlanNode> dsqlPlan;
 	NestConst<ValueListNode> dsqlOrder;
 	NestConst<RowsClause> dsqlRows;
-	Jrd::MetaName dsqlCursorName;
+	MetaName dsqlCursorName;
 	NestConst<ReturningClause> dsqlReturning;
 	USHORT dsqlRseFlags;
 	NestConst<RecordSourceNode> dsqlRse;
@@ -1349,7 +1349,7 @@ public:
 
 public:
 	Command command;
-	Jrd::MetaName name;
+	MetaName name;
 };
 
 
@@ -1389,7 +1389,7 @@ public:
 class SetGeneratorNode : public TypedNode<StmtNode, StmtNode::TYPE_SET_GENERATOR>
 {
 public:
-	SetGeneratorNode(MemoryPool& pool, const Jrd::MetaName& name, ValueExprNode* aValue = NULL)
+	SetGeneratorNode(MemoryPool& pool, const MetaName& name, ValueExprNode* aValue = NULL)
 		: TypedNode<StmtNode, StmtNode::TYPE_SET_GENERATOR>(pool),
 		  generator(pool, name), value(aValue)
 	{
@@ -1571,7 +1571,7 @@ class SetTransactionNode : public TransactionNode
 public:
 	struct RestrictionOption : Firebird::PermanentStorage
 	{
-		RestrictionOption(MemoryPool& p, Firebird::ObjectsArray<Jrd::MetaName>* aTables,
+		RestrictionOption(MemoryPool& p, Firebird::ObjectsArray<MetaName>* aTables,
 					unsigned aLockMode)
 			: PermanentStorage(p),
 			  tables(aTables),
@@ -1579,7 +1579,7 @@ public:
 		{
 		}
 
-		Firebird::ObjectsArray<Jrd::MetaName>* tables;
+		Firebird::ObjectsArray<MetaName>* tables;
 		unsigned lockMode;
 	};
 
@@ -1676,7 +1676,7 @@ public:
 	{
 	}
 
-	SetRoleNode(MemoryPool& pool, Jrd::MetaName* name)
+	SetRoleNode(MemoryPool& pool, MetaName* name)
 		: SessionManagementNode(pool),
 		  trusted(false),
 		  roleName(pool, *name)
@@ -1698,7 +1698,7 @@ public:
 
 public:
 	bool trusted;
-	Jrd::MetaName roleName;
+	MetaName roleName;
 };
 
 
@@ -1722,7 +1722,7 @@ private:
 class SetDecFloatRoundNode : public SessionManagementNode
 {
 public:
-	SetDecFloatRoundNode(MemoryPool& pool, Jrd::MetaName* name);
+	SetDecFloatRoundNode(MemoryPool& pool, MetaName* name);
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const
@@ -1762,7 +1762,7 @@ public:
 
 	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
 
-	void trap(Jrd::MetaName* name);
+	void trap(MetaName* name);
 
 public:
 	USHORT traps;

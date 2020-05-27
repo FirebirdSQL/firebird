@@ -84,7 +84,7 @@ namespace Jrd
 		}
 
 	public:
-		Jrd::MetaName name;	// optional name for explicit PSQL cursors
+		MetaName name;	// optional name for explicit PSQL cursors
 
 	private:
 		ULONG m_impure;

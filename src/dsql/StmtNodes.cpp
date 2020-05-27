@@ -8473,7 +8473,7 @@ void SetRoleNode::execute(thread_db* tdbb, dsql_req* request, jrd_tra** /*traHan
 //--------------------
 
 
-SetDecFloatRoundNode::SetDecFloatRoundNode(MemoryPool& pool, Jrd::MetaName* name)
+SetDecFloatRoundNode::SetDecFloatRoundNode(MemoryPool& pool, MetaName* name)
 	: SessionManagementNode(pool)
 {
 	fb_assert(name);
@@ -8494,7 +8494,7 @@ void SetDecFloatRoundNode::execute(thread_db* tdbb, dsql_req* /*request*/, jrd_t
 //--------------------
 
 
-void SetDecFloatTrapsNode::trap(Jrd::MetaName* name)
+void SetDecFloatTrapsNode::trap(MetaName* name)
 {
 	fb_assert(name);
 	const DecFloatConstant* trap = DecFloatConstant::getByText(name->c_str(), FB_DEC_IeeeTraps, FB_DEC_TRAPS_OFFSET);

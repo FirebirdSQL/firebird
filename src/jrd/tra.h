@@ -110,7 +110,7 @@ typedef Firebird::BePlusTree<bid, bid, MemoryPool> FetchedBlobIdTree;
 
 struct CallerName
 {
-	CallerName(int aType, const Jrd::MetaName& aName, const Firebird::MetaString& aUserName)
+	CallerName(int aType, const MetaName& aName, const Firebird::MetaString& aUserName)
 		: type(aType),
 		  name(aName),
 		  userName(aUserName)
@@ -140,7 +140,7 @@ struct CallerName
 	}
 
 	int type;
-	Jrd::MetaName name;
+	MetaName name;
 	Firebird::MetaString userName;
 };
 

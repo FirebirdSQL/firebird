@@ -48,15 +48,15 @@ public:
 	typedef ULONG flags_t;
 	enum BlobAccessCheck { BA_UNKNOWN, BA_SUCCESS, BA_FAILURE };
 
-	SecurityClass(Firebird::MemoryPool &pool, const Jrd::MetaName& name, const Jrd::MetaName& userName)
-		: scl_flags(0), sclClassUser(pool, Jrd::MetaNamePair(name, userName)), scl_blb_access(BA_UNKNOWN)
+	SecurityClass(Firebird::MemoryPool &pool, const MetaName& name, const MetaName& userName)
+		: scl_flags(0), sclClassUser(pool, MetaNamePair(name, userName)), scl_blb_access(BA_UNKNOWN)
 	{}
 
 	flags_t scl_flags;			// Access permissions
-	const Jrd::MetaNamePair sclClassUser;
+	const MetaNamePair sclClassUser;
 	BlobAccessCheck scl_blb_access;
 
-	static const Jrd::MetaNamePair& generate(const void*, const SecurityClass* item)
+	static const MetaNamePair& generate(const void*, const SecurityClass* item)
 	{
 		return item->sclClassUser;
 	}
@@ -64,7 +64,7 @@ public:
 
 typedef Firebird::BePlusTree<
 	SecurityClass*,
-	Jrd::MetaNamePair,
+	MetaNamePair,
 	Firebird::MemoryPool,
 	SecurityClass
 > SecurityClassList;
@@ -204,15 +204,15 @@ public:
 
 private:
 /*
-	Jrd::MetaName	usr_user_name;		// User name
-	Jrd::MetaName	usr_sql_role_name;	// Role name
-	mutable Firebird::SortedArray<Jrd::MetaName> usr_granted_roles; // Granted roles list
-	Jrd::MetaName	usr_trusted_role;	// Trusted role if set
-	Jrd::MetaName	usr_init_role;		// Initial role, assigned at sclInit()
+	MetaName	usr_user_name;		// User name
+	MetaName	usr_sql_role_name;	// Role name
+	mutable Firebird::SortedArray<MetaName> usr_granted_roles; // Granted roles list
+	MetaName	usr_trusted_role;	// Trusted role if set
+	MetaName	usr_init_role;		// Initial role, assigned at sclInit()
  */
 	Firebird::MetaString	usr_user_name;		// User name
 	Firebird::MetaString	usr_sql_role_name;	// Role name
-	mutable Firebird::SortedArray<Jrd::MetaName> usr_granted_roles; // Granted roles list
+	mutable Firebird::SortedArray<MetaName> usr_granted_roles; // Granted roles list
 	Firebird::MetaString	usr_trusted_role;	// Trusted role if set
 	Firebird::MetaString	usr_init_role;		// Initial role, assigned at sclInit()
 
@@ -367,7 +367,7 @@ public:
 		return (usr_flags & USR_newrole);
 	}
 
-	bool roleInUse(thread_db* tdbb, const Jrd::MetaName& role) const
+	bool roleInUse(thread_db* tdbb, const MetaName& role) const
 	{
 		if (testFlag(USR_newrole))
 			findGrantedRoles(tdbb);
