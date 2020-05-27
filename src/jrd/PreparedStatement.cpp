@@ -245,6 +245,7 @@ void PreparedStatement::Builder::moveToStatement(thread_db* tdbb, PreparedStatem
 
 			case TYPE_METASTRING:
 				stmt->setMetaString(tdbb, i->number, *(MetaString*) i->address);
+				break;
 
 			default:
 				fb_assert(false);
