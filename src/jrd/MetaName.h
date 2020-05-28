@@ -37,7 +37,7 @@
 
 namespace Firebird {
 
-class StrWrapper;
+class MetaString;
 
 }
 
@@ -101,7 +101,7 @@ public:
 		: word(get(s))
 	{ }
 
-	MetaName(const Firebird::StrWrapper& s);
+	MetaName(const Firebird::MetaString& s);
 
 	MetaName(const char* s, FB_SIZE_T l)
 		: word(get(s, l))
@@ -172,7 +172,7 @@ public:
 		return *this;
 	}
 
-	MetaName& operator=(const Firebird::StrWrapper& s);
+	MetaName& operator=(const Firebird::MetaString& s);
 
 	FB_SIZE_T length() const
 	{
@@ -284,7 +284,7 @@ public:
 
 	void printf(const char*, ...);
 	FB_SIZE_T copyTo(char* to, FB_SIZE_T toSize) const;
-	operator Firebird::StrWrapper() const;
+	operator Firebird::MetaString() const;
 
 protected:
 	static void adjustLength(const char* const s, FB_SIZE_T& l);

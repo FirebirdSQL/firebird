@@ -245,17 +245,12 @@ void ClumpletWriter::insertTimeStamp(UCHAR tag, const ISC_TIMESTAMP value)
 	insertBytesLengthCheck(tag, bytes, sizeof(bytes));
 }
 
-void ClumpletWriter::insertString(UCHAR tag, const AbstractString& str)
-{
-	insertString(tag, str.c_str(), str.length());
-}
-
-void ClumpletWriter::insertString(UCHAR tag, const StrWrapper& str)
-{
-	insertString(tag, str.c_str(), strlen(str.c_str()));
-}
-
 void ClumpletWriter::insertString(UCHAR tag, const char* str)
+{
+	insertString(tag, str, strlen(str));
+}
+
+void ClumpletWriter::insertString(UCHAR tag, char* str)
 {
 	insertString(tag, str, strlen(str));
 }

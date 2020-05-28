@@ -463,7 +463,7 @@ bool Replicator::executeSqlIntl(Transaction* transaction,
 		}
 
 		txnData.putString(sql);
-		txnData.putMetaName(StrWrapper(m_user));
+		txnData.putMetaName(m_user);
 
 		if (txnData.getSize() > m_config->bufferSize)
 			flush(txnData, FLUSH_OVERFLOW);

@@ -312,7 +312,7 @@ void StatusVector::ImplStatusVector::shiftLeft(const AbstractString& text) throw
 	shiftLeft(Str(text));
 }
 
-void StatusVector::ImplStatusVector::shiftLeft(const StrWrapper& text) throw()
+void StatusVector::ImplStatusVector::shiftLeft(const MetaString& text) throw()
 {
 	shiftLeft(Str(text));
 }
@@ -439,7 +439,7 @@ Str::Str(const char* text) throw() :
 Str::Str(const AbstractString& text) throw() :
 	Base(isc_arg_string, (ISC_STATUS)(IPTR) text.c_str()) { }
 
-Str::Str(const StrWrapper& text) throw() :
+Str::Str(const MetaString& text) throw() :
 	Base(isc_arg_string, (ISC_STATUS)(IPTR) text.c_str()) { }
 
 SqlState::SqlState(const char* text) throw() :

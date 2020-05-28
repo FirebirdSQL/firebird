@@ -96,14 +96,6 @@ namespace Firebird
 		memcpy(stringBuffer, v.c_str(), v.length());
 	}
 
-	AbstractString::AbstractString(const size_type limit, const StrWrapper& v)
-		: max_length(static_cast<internal_size_type>(limit))
-	{
-		FB_SIZE_T l = strlen(v.c_str());
-		initialize(l);
-		memcpy(stringBuffer, v.c_str(), l);
-	}
-
 	AbstractString::AbstractString(const size_type limit, const size_type sizeL, const void* dataL)
 		: max_length(static_cast<internal_size_type>(limit))
 	{

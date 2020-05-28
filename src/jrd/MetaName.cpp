@@ -105,19 +105,19 @@ FB_SIZE_T MetaName::copyTo(char* to, FB_SIZE_T toSize) const
 	return toSize;
 }
 
-MetaName::operator Firebird::StrWrapper() const
+MetaName::operator Firebird::MetaString() const
 {
-	return Firebird::StrWrapper(c_str());
+	return Firebird::MetaString(c_str(), length());
 }
 
-MetaName::MetaName(const Firebird::StrWrapper& s)
+MetaName::MetaName(const Firebird::MetaString& s)
 {
-	assign(s.c_str());
+	assign(s.c_str(), s.length());
 }
 
-MetaName& MetaName::operator=(const Firebird::StrWrapper& s)
+MetaName& MetaName::operator=(const Firebird::MetaString& s)
 {
-	return assign(s.c_str());
+	return assign(s.c_str(), s.length());
 }
 
 void MetaName::test()

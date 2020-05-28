@@ -1695,7 +1695,7 @@ void blb::put_slice(thread_db*	tdbb,
 
 	jrd_rel* relation;
 	if (info.sdl_info_relation.length()) {
-		relation = MET_lookup_relation(tdbb, StrWrapper(info.sdl_info_relation));
+		relation = MET_lookup_relation(tdbb, info.sdl_info_relation);
 	}
 	else {
 		relation = MET_relation(tdbb, info.sdl_info_rid);
@@ -1707,7 +1707,7 @@ void blb::put_slice(thread_db*	tdbb,
 
 	SSHORT	n;
 	if (info.sdl_info_field.length()) {
-	    n = MET_lookup_field(tdbb, relation, StrWrapper(info.sdl_info_field));
+	    n = MET_lookup_field(tdbb, relation, info.sdl_info_field);
 	}
 	else {
 		n = info.sdl_info_fid;

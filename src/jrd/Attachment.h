@@ -615,7 +615,6 @@ public:
 	}
 
 	UserId* getUserId(const Firebird::MetaString& userName);
-	UserId* getUserId(const MetaName& userName);
 
 	const UserId* getEffectiveUserId() const
 	{

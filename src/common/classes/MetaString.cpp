@@ -121,9 +121,4 @@ FB_SIZE_T MetaString::copyTo(char* to, FB_SIZE_T toSize) const
 	return toSize;
 }
 
-MetaString::MetaString(const StrWrapper& s)
-{
-	assign(s.c_str());
-}
-
 } // namespace Firebird

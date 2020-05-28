@@ -11124,7 +11124,7 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	setCharField(userData->last, lastName);
 	setCharField(userData->com, comment);
 	if (plugin)
-		userData->plugin = StrWrapper(*plugin);
+		userData->plugin = *plugin;
 
 	if (adminRole.specified)
 	{
@@ -11211,7 +11211,7 @@ void DropUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 	userData->op = Auth::DEL_OPER;
 	userData->user.set(&statusWrapper, text.c_str());
 	userData->user.setEntered(&statusWrapper, 1);
-	userData->plugin = StrWrapper(plugin);
+	userData->plugin = plugin;
 	userData->silent = silent;
 	check(&statusWrapper);
 
@@ -11867,7 +11867,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 				{
 					// Check for blocking cycles of role grants.
 					UserId grantedRoles;
-					grantedRoles.setSqlRole(StrWrapper(objName));
+					grantedRoles.setSqlRole(objName);
 
 					if (grantedRoles.roleInUse(tdbb, user))
 					{

@@ -35,6 +35,7 @@
 namespace Firebird {
 
 class MetadataBuilder;
+class MetaString;
 class StatementMetadata;
 class MetadataFromBlr;
 
@@ -283,7 +284,7 @@ public:
 	}
 
 public:
-	void addItem(const StrWrapper& name, bool nullable, const dsc& desc);
+	void addItem(const MetaString& name, bool nullable, const dsc& desc);
 	unsigned makeOffsets();
 
 private:

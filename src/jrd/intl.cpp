@@ -416,7 +416,7 @@ Collation* CharSetContainer::lookupCollation(thread_db* tdbb, USHORT tt_id)
 		}
 
 		charset_collations[id] = Collation::createInstance(*att->att_pool, tt_id, tt, info.attributes, charset);
-		charset_collations[id]->name = StrWrapper(info.collationName);
+		charset_collations[id]->name = info.collationName;
 
 		// we don't need a lock in the charset
 		if (id != 0)

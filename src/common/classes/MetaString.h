@@ -39,22 +39,6 @@
 
 namespace Firebird {
 
-class StrWrapper
-{
-public:
-	explicit StrWrapper(const char* s)
-		: str(s)
-	{ }
-
-	const char* c_str() const
-	{
-		return str;
-	}
-
-private:
-	const char* str;
-};
-
 class MetaString
 {
 private:
@@ -75,7 +59,6 @@ private:
 public:
 	MetaString() { init(); count = 0; }
 	MetaString(const char* s) { assign(s); }
-	MetaString(const StrWrapper& s);
 	MetaString(const char* s, FB_SIZE_T l) { assign(s, l); }
 	MetaString(const MetaString& m) { set(m); }
 	MetaString(const AbstractString& s) { assign(s.c_str(), s.length()); }
@@ -122,8 +105,6 @@ public:
 
 	void printf(const char*, ...);
 	FB_SIZE_T copyTo(char* to, FB_SIZE_T toSize) const;
-
-	operator StrWrapper() const { return StrWrapper(c_str()); }
 
 protected:
 	static void adjustLength(const char* const s, FB_SIZE_T& l);

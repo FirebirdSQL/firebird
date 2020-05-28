@@ -335,10 +335,10 @@ void MetadataBuilder::indexError(unsigned index, const char* functionName)
 
 
 // Add an item based on a descriptor.
-void MsgMetadata::addItem(const StrWrapper& name, bool nullable, const dsc& desc)
+void MsgMetadata::addItem(const MetaString& name, bool nullable, const dsc& desc)
 {
 	Item& item = items.add();
-	item.field = name.c_str();
+	item.field.assign(name.c_str(), name.length());
 	item.nullable = nullable;
 
 	SLONG sqlLen, sqlSubType, sqlScale, sqlType;

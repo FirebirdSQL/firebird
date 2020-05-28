@@ -1006,11 +1006,6 @@ UserId* Attachment::getUserId(const MetaString& userName)
 	return result;
 }
 
-UserId* Attachment::getUserId(const MetaName& userName)
-{
-	return getUserId(MetaString(userName.c_str()));
-}
-
 /// Attachment::IdleTimer
 
 void Attachment::IdleTimer::handler()

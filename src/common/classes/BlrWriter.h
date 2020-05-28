@@ -108,12 +108,8 @@ public:
 
 	void appendString(UCHAR verb, const char* string, USHORT len);
 
-	void appendString(UCHAR verb, const Firebird::StrWrapper& name)
-	{
-		appendString(verb, name.c_str(), static_cast<USHORT>(strlen(name.c_str())));
-	}
-
-	void appendString(UCHAR verb, const Firebird::string& name)
+	template <class S>
+	void appendString(UCHAR verb, const S& name)
 	{
 		appendString(verb, name.c_str(), static_cast<USHORT>(name.length()));
 	}
