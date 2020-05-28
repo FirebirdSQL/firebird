@@ -53,7 +53,27 @@ public:
 	{
 	public:
 		Word* next;
+
+	private:
 		char text[1];
+
+	public:
+		char* c_str()
+		{
+			return &text[1];
+		}
+
+		const char* c_str() const
+		{
+			return &text[1];
+		}
+
+		FB_SIZE_T length() const
+		{
+			return static_cast<unsigned char>(text[0]);
+		}
+
+		void assign(const char* s, FB_SIZE_T l);
 	};
 
 	Word* get(const char* str, FB_SIZE_T l);
@@ -176,17 +196,17 @@ public:
 
 	FB_SIZE_T length() const
 	{
-		return word ? fb_strlen(word->text) : 0;
+		return word ? word->length() : 0;
 	}
 
 	const char* c_str() const
 	{
-		return word ? word->text : EMPTY;
+		return word ? word->c_str() : EMPTY;
 	}
 
 	const char* nullStr() const
 	{
-		return word ? word->text : nullptr;
+		return word ? word->c_str() : nullptr;
 	}
 
 	bool isEmpty() const
@@ -202,17 +222,17 @@ public:
 	char operator[](unsigned n) const
 	{
 		fb_assert(n < length());
-		return word->text[n];
+		return word->c_str()[n];
 	}
 
 	const char* begin() const
 	{
-		return word ? word->text : EMPTY;
+		return word ? word->c_str() : EMPTY;
 	}
 
 	const char* end() const
 	{
-		return word ? &word->text[length()] : EMPTY;
+		return word ? &word->c_str()[length()] : EMPTY;
 	}
 
 	int compare(const char* s, FB_SIZE_T l) const;

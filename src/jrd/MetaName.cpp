@@ -124,7 +124,7 @@ void MetaName::test()
 {
 #ifdef DEV_BUILD
 	if (word)
-		fb_assert(word == get(word->text));
+		fb_assert(word == get(word->c_str(), word->length()));
 #endif
 }
 
@@ -136,6 +136,14 @@ Dictionary::Dictionary(MemoryPool& p)
 {
 	for (unsigned n = 0; n < HASHSIZE; ++n)
 		hashTable[n].store(nullptr, std::memory_order_relaxed);
+}
+
+void Dictionary::Word::assign(const char* s, FB_SIZE_T l)
+{
+	fb_assert(l < MAX_UCHAR);
+	text[0] = static_cast<unsigned char>(l);
+	memcpy(c_str(), s, l);
+	text[l + 1] = '\0';
 }
 
 Dictionary::Word* MetaName::get(const char* s, FB_SIZE_T l)
@@ -172,7 +180,7 @@ Dictionary::Word* Dictionary::get(const char* s, FB_SIZE_T l)
 		Word* word = hashWord;
 		while (word)
 		{
-			if (memcmp(word->text, s, l) == 0 && word->text[l] == '\0')
+			if (word->length() == l && memcmp(word->c_str(), s, l) == 0)
 				return word;
 			word = word->next;
 		}
@@ -187,8 +195,14 @@ Dictionary::Word* Dictionary::get(const char* s, FB_SIZE_T l)
 				Firebird::MutexEnsureUnlock guard(newSegMutex, FB_FUNCTION);
 				if (guard.tryEnter())
 				{
-					// we need new segment
-					segment = FB_NEW_POOL(getPool()) Segment;
+					// retry allocation to avoid a case when someone already changed segment
+					newWord = segment->getSpace(l);
+
+					// do we really need new segment?
+					if (!newWord)
+						segment = FB_NEW_POOL(getPool()) Segment;
+					else
+						newWord->assign(s, l);
 				}
 				else
 				{
@@ -200,8 +214,7 @@ Dictionary::Word* Dictionary::get(const char* s, FB_SIZE_T l)
 			}
 
 			// fill allocated space
-			memcpy(newWord->text, s, l);
-			newWord->text[l] = '\0';
+			newWord->assign(s, l);
 		}
 
 		// complete operation - try to replace hash pointer
@@ -222,23 +235,22 @@ Dictionary::Segment::Segment()
 Dictionary::Word* Dictionary::Segment::getSpace(FB_SIZE_T l)
 {
 	// calculate aligned length in sizeof(Word*)
-	++l;
+	l += 2;
 	l = 1 + (l / sizeof(Word*)) + (l % sizeof(Word*) ? 1 : 0);
+
+	// get old position value
+	unsigned int oldPos = position.load();
 
 	// restart loop
 	for(;;)
 	{
-		// fix old position value
-		unsigned int oldPos = position.load();
-
 		// calculate and check new position
 		unsigned int newPos = oldPos + l;
 		if (newPos >= BUFFERSIZE)
 			break;
 
 		// try to store it safely in segment header
-		if (position.compare_exchange_weak(oldPos, newPos,
-			std::memory_order_seq_cst, std::memory_order_relaxed))
+		if (position.compare_exchange_strong(oldPos, newPos))
 		{
 			return reinterpret_cast<Word*>(&buffer[oldPos]);
 		}
