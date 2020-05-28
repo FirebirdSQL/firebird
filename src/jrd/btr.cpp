@@ -477,7 +477,8 @@ bool BTR_delete_index(thread_db* tdbb, Jrd::jrd_rel* relation, WIN* window, USHO
 		const USHORT relation_id = root->irt_relation;
 
 		CCH_RELEASE(tdbb, window);
-		delete_tree(tdbb, relation_id, id, next, prior);
+		if (tree_exists)
+			delete_tree(tdbb, relation_id, id, next, prior);
 	}
 
 	return tree_exists;

@@ -168,7 +168,7 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 
 	dbb->dbb_page_manager.allocTableSpace(tdbb, id, true, PathName(fileName.c_str()));
 
-    storePrivileges(tdbb, transaction, name, obj_tablespaces, ALL_PRIVILEGES);
+	storePrivileges(tdbb, transaction, name, obj_tablespaces, ALL_PRIVILEGES);
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_TABLESPACE,
 		name, NULL);
@@ -194,9 +194,9 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 		MODIFY X
 			if (fileName.hasData())
 			{
-                fb_assert(X.RDB$FILE_NAME.NULL == FALSE);
-                if (!PIO_file_exists(fileName.c_str()))
-                    ERR_post(Arg::Gds(isc_ts_file_not_exists) << Arg::Str(name) << Arg::Str(fileName));
+				fb_assert(X.RDB$FILE_NAME.NULL == FALSE);
+				if (!PIO_file_exists(fileName.c_str()))
+					ERR_post(Arg::Gds(isc_ts_file_not_exists) << Arg::Str(name) << Arg::Str(fileName));
 				strcpy(X.RDB$FILE_NAME, fileName.c_str());
 			}
 
@@ -246,7 +246,7 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-    bool found = false;
+	bool found = false;
 	USHORT tableSpaceId = 0;
 	AutoCacheRequest requestHandle(tdbb, drq_e_tablespace, DYN_REQUESTS);
 
@@ -257,8 +257,8 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		found = true;
 		tableSpaceId = X.RDB$TABLESPACE_ID;
 
-        // cache it for DFW stage
-        MET_tablespace_id(tdbb, tableSpaceId);
+		// cache it for DFW stage
+		MET_tablespace_id(tdbb, tableSpaceId);
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 			DDL_TRIGGER_DROP_TABLESPACE, name, NULL);
@@ -268,63 +268,69 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		if (!X.RDB$SECURITY_CLASS.NULL)
 			deleteSecurityClass(tdbb, transaction, X.RDB$SECURITY_CLASS);
 
-        if (dropDependencies)
-            DFW_post_work(transaction, dfw_drop_tablespace, X.RDB$FILE_NAME, tableSpaceId);
+		if (dropDependencies)
+			DFW_post_work(transaction, dfw_drop_tablespace, X.RDB$FILE_NAME, tableSpaceId);
 	}
-    END_FOR
+	END_FOR
 
-    SLONG total = 0;
+	SLONG total = 0;
 
-    // Find all indices
-    requestHandle.reset(tdbb, irq_ts_drop_idx_dfw, DYN_REQUESTS);
+	// Find all indices
+	requestHandle.reset(tdbb, irq_ts_drop_idx_dfw, DYN_REQUESTS);
 
-    FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
-        X IN RDB$INDICES
-        WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
-    {
-        if (dropDependencies)
-        {
-            ERASE X;
-        }
-        else
-        {
-            total++;
-        }
-    }
-    END_FOR
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		X IN RDB$INDICES
+		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
+	{
+		if (dropDependencies)
+		{
+			if (X.RDB$EXPRESSION_BLR.NULL && !DropIndexNode::deleteSegmentRecords(tdbb, transaction, X.RDB$INDEX_NAME))
+			{
+				// msg 50: "No segments found for index"
+				status_exception::raise(Arg::PrivateDyn(50));
+			}
 
-    // Find all tables
-    requestHandle.reset(tdbb, irq_ts_drop_rel_dfw, DYN_REQUESTS);
+			ERASE X;
+		}
+		else
+		{
+			total++;
+		}
+	}
+	END_FOR
 
-    FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
-        X IN RDB$RELATIONS
-        WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
-    {
-        if (dropDependencies)
-        {
-            ERASE X;
-        }
-        else
-        {
-            total++;
-        }
-    }
-    END_FOR
+	// Find all tables
+	requestHandle.reset(tdbb, irq_ts_drop_rel_dfw, DYN_REQUESTS);
 
-    if (!found && !silent)
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		X IN RDB$RELATIONS
+		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
+	{
+		if (dropDependencies)
+		{
+			ERASE X;
+		}
+		else
+		{
+			total++;
+		}
+	}
+	END_FOR
+
+	if (!found && !silent)
 	{
 		status_exception::raise(
 			Arg::Gds(isc_no_meta_update) <<
 			Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(name));
 	}
 
-    if (total)
-    {
-        status_exception::raise(Arg::Gds(isc_no_meta_update) <<
-                Arg::Gds(isc_no_delete) <<						// Msg353: can not delete
-                Arg::Gds(isc_tablespace_name) << Arg::Str(name) <<
-                Arg::Gds(isc_dependency) << Arg::Num(total));	// Msg310: there are %ld dependencies
-    }
+	if (total)
+	{
+		status_exception::raise(Arg::Gds(isc_no_meta_update) <<
+				Arg::Gds(isc_no_delete) <<						// Msg353: can not delete
+				Arg::Gds(isc_tablespace_name) << Arg::Str(name) <<
+				Arg::Gds(isc_dependency) << Arg::Num(total));	// Msg310: there are %ld dependencies
+	}
 
 	if (found)
 	{
