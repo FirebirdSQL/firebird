@@ -1,5 +1,5 @@
 --------------------------------------
-Firebird 4.0 manual installation notes
+Firebird manual installation notes
 --------------------------------------
 
 Contents
@@ -26,11 +26,11 @@ environment by executing the following steps:
     (It is also recommended that the FIREBIRD env var also be used in
     the PATH env var, rather than hard-coding a path.)
 
-  - change the current directory to where v4.0 files are located
+  - change the current directory to where files are located
 
   - Execute install_service.bat
 
-  - optionally, you can copy fbclient.dll to the OS system directory. 
+  - optionally, you can copy fbclient.dll to the OS system directory.
     To do so, use the provided instclient.exe tool.
 
 
@@ -49,7 +49,7 @@ Firebird is run as application by executing it with the -a switch:
 Installation with a different service name
 ------------------------------------------
 
-A feature of Firebird 4.0 is the option to run multiple Firebird services
+A feature of Firebird is the option to run multiple Firebird services
 simultaneously. To do this you need to make appropriate changes to the
 firebird.conf file and then run instsvc with the -name option. For example:
 
@@ -62,49 +62,19 @@ parameter:
 
   install_service.bat secondservice
 
-NOTE: If you are running multiple Firebird services it is essential that you 
+NOTE: If you are running multiple Firebird services it is essential that you
 do not configure the FIREBIRD environment variable at the system level.
+
 
 Initializing the Security Database
 ----------------------------------
-The security database (security4.fdb) has no predefined users. This is intentional.
-You will need to create the user SYSDBA and set up the password for it 
-using SQL CREATE USER command syntax in embedded mode as your first step to getting
-access to databases and utilities.
-
-Initialization is performed in embedded mode using the isql utility. For an embedded connection, an authentication
-password is not required and will be ignored if you provide one. An embedded connection will work fine
-with no login credentials and "log you in" using your host credentials if you omit a user name. However, even
-though the user name is not subject to authentication, creating or modifying anything in the existing security
-database requires that the user be SYSDBA; otherwise, isql will throw a privilege error for the CREATE USER
-request.
-
-The SQL user management commands will work with any open database. Because the sample database employee.fdb 
-is present in your installation and already aliased in databases.conf, it is convenient to use
-it for the user management task.
-
-1. Stop the Firebird server. Firebird 4 caches connections to the security database aggressively. The presence
-   of server connections may prevent isql from establishing an embedded connection.
-2. In a suitable shell, start an isql interactive session, opening the employee database via its alias:
-    > isql -user sysdba employee
-3. Create the SYSDBA user:
-    SQL> create or alter user SYSDBA password 'StrongPassword';
-    SQL> commit;
-    SQL> quit;
-4. To complete the initialization, start the Firebird server again. Now you will be able to perform a network
-   login to databases, including the security database, using the password you assigned to SYSDBA.
-
-An effective password, using the default user manager Srp, can be up to 20 characters, although a password
-of up to 255 characters will be valid.
-
-The initialization can also be scripted using the file input option of isql with the content being same as interactive usage.
-> isql -i init.sql -user sysdba employee
+see README.security_database.txt for instructions.
 
 
 Uninstallation
 --------------
 
-  - To remove FB 4.0 you should run the uninstall_service.bat.
+  - To remove FB you should run the uninstall_service.bat.
 
   - Pass the service name as a parameter if you have installed Firebird to
     use a different service name.
