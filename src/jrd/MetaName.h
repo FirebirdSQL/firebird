@@ -35,6 +35,10 @@
 
 #include <atomic>
 
+// 0 - debugging off, 1 - prints stats with normal setup tables,
+// 2 - special setup tables for often grow operation
+#define GROW_DEBUG 0
+
 namespace Firebird {
 
 class MetaString;
@@ -77,25 +81,49 @@ public:
 	};
 
 	Word* get(const char* str, FB_SIZE_T l);
+	void growHash();
 
 private:
-	static const unsigned HASHSIZE = 10007;
-	std::atomic<Word*> hashTable[HASHSIZE];
+	typedef std::atomic<Word*> TableData;
+
+	class HashTable
+	{
+	public:
+		HashTable(MemoryPool& p, unsigned lvl);
+		Dictionary::TableData* getEntryByHash(const char* s, FB_SIZE_T len);
+		static unsigned getMaxLevel();
+
+		const unsigned level;
+		TableData* table;
+	};
+	std::atomic<HashTable*> hashTable;
+	std::atomic<unsigned> nextLevel;
+
+	bool checkConsistency(HashTable* oldValue);
+	HashTable* waitForMutex(Word** checkWordPtr = nullptr);
 
 	class Segment
 	{
 	public:
 		Segment();
 		Word* getSpace(FB_SIZE_T l);
+		static unsigned getWordCapacity();
 
 	private:
-		static const unsigned BUFFERSIZE = 4096;		// size in sizeof(pointer)
-		void* buffer[BUFFERSIZE];
-		std::atomic<unsigned int> position;
-	};
+		static unsigned getWordLength(FB_SIZE_T len);
 
+#if GROW_DEBUG > 1
+		static const unsigned SEG_BUFFER_SIZE = 256;		// size in sizeof(pointer)
+#else
+		static const unsigned SEG_BUFFER_SIZE = 16384;		// size in sizeof(pointer)
+#endif
+		void* buffer[SEG_BUFFER_SIZE];
+		std::atomic<unsigned> position;
+	};
 	Segment* segment;
-	Firebird::Mutex newSegMutex;
+	unsigned segCount;
+
+	Firebird::Mutex mutex;	// The single mutex to protect dictionary when needed
 };
 
 class MetaName
