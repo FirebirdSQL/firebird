@@ -30,7 +30,7 @@
 #include "../yvalve/why_proto.h"
 
 #include "../common/os/path_utils.h"
-#include "../jrd/err_proto.h"
+#include "../common/StatusArg.h"
 #include "../common/isc_proto.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/init.h"

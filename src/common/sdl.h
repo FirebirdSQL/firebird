@@ -25,6 +25,7 @@
 #define JRD_SDL_H
 
 #include "../common/classes/MetaString.h"
+#include "../common/dsc.h"
 
 struct sdl_info
 {

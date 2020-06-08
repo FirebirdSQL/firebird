@@ -49,8 +49,6 @@ public:
 	UCHAR str_data[2];			// one byte for ALLOC and one for the NULL
 };
 
-const UCHAR DEFAULT_DOUBLE  = dtype_double;
-
 const ULONG MAX_RECORD_SIZE	= 65535;
 
 namespace Jrd {

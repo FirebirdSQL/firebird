@@ -24,12 +24,11 @@
 #include "firebird.h"
 #include <string.h>
 #include "ibase.h"
-#include "../jrd/val.h"
 #include "../common/sdl.h"
 #include "../jrd/intl.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/sdl_proto.h"
-#include "../jrd/err_proto.h"
+#include "../common/StatusArg.h"
 
 const int COMPILE_SIZE	= 256;
 

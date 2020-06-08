@@ -604,4 +604,6 @@ inline SCHAR NUMERIC_SCALE(const dsc desc)
 	return ((DTYPE_IS_TEXT(desc.dsc_dtype)) ? 0 : desc.dsc_scale);
 }
 
+const UCHAR DEFAULT_DOUBLE  = dtype_double;
+
 #endif // JRD_DSC_H
