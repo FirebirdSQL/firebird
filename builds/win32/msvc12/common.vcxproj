@@ -46,6 +46,7 @@
     <ClCompile Include="..\..\..\src\common\classes\Synchronize.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\SyncObject.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\TempFile.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\TimerImpl.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\timestamp.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\TomCryptHash.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\UserBlob.cpp" />
@@ -88,6 +89,7 @@
     <ClCompile Include="..\..\..\src\common\security.cpp" />
     <ClCompile Include="..\..\..\src\common\sha.cpp" />
     <ClCompile Include="..\..\..\src\common\sha2\sha2.cpp" />
+    <ClCompile Include="..\..\..\src\common\SimilarToRegex.cpp" />
     <ClCompile Include="..\..\..\src\common\StatementMetadata.cpp" />
     <ClCompile Include="..\..\..\src\common\StatusArg.cpp" />
     <ClCompile Include="..\..\..\src\common\StatusHolder.cpp" />
@@ -152,6 +154,7 @@
     <ClInclude Include="..\..\..\src\common\classes\Synchronize.h" />
     <ClInclude Include="..\..\..\src\common\classes\SyncObject.h" />
     <ClInclude Include="..\..\..\src\common\classes\TempFile.h" />
+    <ClInclude Include="..\..\..\src\common\classes\TimerImpl.h" />
     <ClInclude Include="..\..\..\src\common\classes\timestamp.h" />
     <ClInclude Include="..\..\..\src\common\classes\tree.h" />
     <ClInclude Include="..\..\..\src\common\classes\UserBlob.h" />
@@ -199,6 +202,7 @@
     <ClInclude Include="..\..\..\src\common\sdl_proto.h" />
     <ClInclude Include="..\..\..\src\common\sha.h" />
     <ClInclude Include="..\..\..\src\common\sha2\sha2.h" />
+    <ClInclude Include="..\..\..\src\common\SimilarToRegex.h" />
     <ClInclude Include="..\..\..\src\common\SimpleStatusVector.h" />
     <ClInclude Include="..\..\..\src\common\StatementMetadata.h" />
     <ClInclude Include="..\..\..\src\common\StatusArg.h" />

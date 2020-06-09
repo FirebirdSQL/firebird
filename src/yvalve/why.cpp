@@ -3810,6 +3810,60 @@ ISC_STATUS API_ROUTINE fb_get_transaction_handle(ISC_STATUS* userStatus, isc_tr_
 }
 
 
+// Get transaction interface by legacy handle
+ISC_STATUS API_ROUTINE fb_get_transaction_interface(ISC_STATUS* userStatus, void* iPtr,
+	isc_tr_handle* hndlPtr)
+{
+	StatusVector status(userStatus);
+	CheckStatusWrapper statusWrapper(&status);
+
+	try
+	{
+		ITransaction** tra = (ITransaction**) iPtr;
+		if (*tra)
+			(Arg::Gds(isc_random) << "Interface must be null").raise();
+
+		RefPtr<YTransaction> transaction(translateHandle(transactions, hndlPtr));
+
+		transaction->addRef();
+		*tra = transaction;
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(&statusWrapper);
+	}
+
+	return status[1];
+}
+
+
+// Get statement interface by legacy handle
+ISC_STATUS API_ROUTINE fb_get_statement_interface(ISC_STATUS* userStatus, void* iPtr,
+	isc_stmt_handle* hndlPtr)
+{
+	StatusVector status(userStatus);
+	CheckStatusWrapper statusWrapper(&status);
+
+	try
+	{
+		IStatement** stmt = (IStatement**) iPtr;
+		if (*stmt)
+			(Arg::Gds(isc_random) << "Interface must be null").raise();
+
+		RefPtr<IscStatement> statement(translateHandle(statements, hndlPtr));
+		statement->checkPrepared(isc_info_unprepared_stmt);
+
+		*stmt = statement->getInterface();
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(&statusWrapper);
+	}
+
+	return status[1];
+}
+
+
 //-------------------------------------
 
 namespace Why {
@@ -6533,41 +6587,6 @@ void Dispatcher::setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallbac
 {
 	status->init();
 	cryptCallback = callback;
-}
-
-ITransaction* UtilInterface::getTransactionByHandle(CheckStatusWrapper* status, isc_tr_handle* hndlPtr)
-{
-	try
-	{
-		RefPtr<YTransaction> transaction(translateHandle(transactions, hndlPtr));
-
-		transaction->addRef();
-		return transaction;
-	}
-	catch (const Exception& e)
-	{
-		e.stuffException(status);
-	}
-
-	return nullptr;
-}
-
-
-IStatement* UtilInterface::getStatementByHandle(Firebird::CheckStatusWrapper* status, isc_stmt_handle* hndlPtr)
-{
-	try
-	{
-		RefPtr<IscStatement> statement(translateHandle(statements, hndlPtr));
-		statement->checkPrepared(isc_info_unprepared_stmt);
-
-		return statement->getInterface();
-	}
-	catch (const Exception& e)
-	{
-		e.stuffException(status);
-	}
-
-	return nullptr;
 }
 
 } // namespace Why

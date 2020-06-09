@@ -140,7 +140,11 @@ Thread::Handle timerThreadHandle = 0;
 FB_BOOLEAN MasterImplementation::getProcessExiting()
 {
 #ifdef WIN_NT
-	if (timerThreadHandle && WaitForSingleObject(timerThreadHandle, 0) != WAIT_TIMEOUT)
+	// Sometime, when user process exits not calling fb_shutdown and timer thread should 
+	// be terminated already, wait for its handle with zero timeout returns WAIT_TIMEOUT.
+	// Usage of small non-zero timeout seems fixed such cases.
+
+	if (timerThreadHandle && WaitForSingleObject(timerThreadHandle, 10) != WAIT_TIMEOUT)
 		return true;
 #endif
 
@@ -190,6 +194,7 @@ void TimerEntry::cleanup()
 		stopTimerThread.setValue(1);
 		timerWakeup->release();
 	}
+
 	timerCleanup->tryEnter(5);
 	Thread::waitForCompletion(timerThreadHandle);
 

@@ -35,6 +35,7 @@ CpuType=@CPU_TYPE@
 
 Version="$BuildVersion-$PackageVersion.$CpuType"
 
+# May be put something to tty
 if [ ! -z "$InteractiveInstall" ]
 then
     cat <<EOF
@@ -47,9 +48,11 @@ EOF
 fi
 
 # Here we are installing from a install tar.gz file
-
 MANIFEST_TXT=`pwd`/manifest.txt
 origDir=`pwd`
+
+# Make sure we are started in correct directory
+runAndCheckExit "test -e ${MANIFEST_TXT}"
 
 # It's good idea not to have running firebird/interbase instances
 checkIfServerRunning

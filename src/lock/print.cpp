@@ -140,15 +140,15 @@ using namespace Firebird;
 
 namespace
 {
-	class sh_mem FB_FINAL : public Firebird::IpcObject
+	class sh_mem FB_FINAL : public IpcObject
 	{
 	public:
 		explicit sh_mem(bool p_consistency, const char* filename)
 		  :	sh_mem_consistency(p_consistency),
-			shared_memory(FB_NEW_POOL(*getDefaultMemoryPool()) Firebird::SharedMemory<lhb>(filename, 0, this))
+			shared_memory(FB_NEW_POOL(*getDefaultMemoryPool()) SharedMemory<lhb>(filename, 0, this))
 		{ }
 
-		bool initialize(Firebird::SharedMemoryBase*, bool)
+		bool initialize(SharedMemoryBase*, bool)
 		{
 			// Initialize a lock table to looking -- i.e. don't do nuthin.
 			return sh_mem_consistency;
@@ -163,7 +163,7 @@ namespace
 		bool sh_mem_consistency;
 
 	public:
-		Firebird::AutoPtr<Firebird::SharedMemory<lhb> > shared_memory;
+		AutoPtr<SharedMemory<lhb> > shared_memory;
 	};
 }
 
@@ -498,7 +498,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 			}
 	}
 
-	Firebird::PathName filename;
+	PathName filename;
 
 	if (db_file && lock_file)
 	{
@@ -507,12 +507,11 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 	}
 	else if (db_file)
 	{
-		Firebird::PathName org_name = db_file;
-		Firebird::PathName db_name;
+		PathName org_name = db_file;
+		PathName db_name;
 		expandDatabaseName(org_name, db_name, NULL);
 
-		// Below code mirrors the one in JRD (PIO modules and Database class).
-		// Maybe it's worth putting it into common, if no better solution is found.
+		UCharBuffer buffer;
 #ifdef WIN_NT
 		const HANDLE h = CreateFile(db_name.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
 									NULL, OPEN_EXISTING, 0, 0);
@@ -521,37 +520,16 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 			FPRINTF(outfile, "Unable to open the database file (%d).\n", GetLastError());
 			return FINI_OK;
 		}
-		BY_HANDLE_FILE_INFORMATION file_info;
-		GetFileInformationByHandle(h, &file_info);
-		const size_t len1 = sizeof(file_info.dwVolumeSerialNumber);
-		const size_t len2 = sizeof(file_info.nFileIndexHigh);
-		const size_t len3 = sizeof(file_info.nFileIndexLow);
-		UCHAR buffer[len1 + len2 + len3], *p = buffer;
-		memcpy(p, &file_info.dwVolumeSerialNumber, len1);
-		p += len1;
-		memcpy(p, &file_info.nFileIndexHigh, len2);
-		p += len2;
-		memcpy(p, &file_info.nFileIndexLow, len3);
+		os_utils::getUniqueFileId(h, buffer);
 		CloseHandle(h);
 #else
-		struct STAT statistics;
-		if (os_utils::stat(db_name.c_str(), &statistics) == -1)
-		{
-			FPRINTF(outfile, "Unable to open the database file.\n");
-			return FINI_OK;
-		}
-		const size_t len1 = sizeof(statistics.st_dev);
-		const size_t len2 = sizeof(statistics.st_ino);
-		UCHAR buffer[len1 + len2], *p = buffer;
-		memcpy(p, &statistics.st_dev, len1);
-		p += len1;
-		memcpy(p, &statistics.st_ino, len2);
+		os_utils::getUniqueFileId(db_name.c_str(), buffer);
 #endif
 
-		Firebird::string file_id;
-		for (size_t i = 0; i < sizeof(buffer); i++)
+		string file_id;
+		for (FB_SIZE_T i = 0; i < buffer.getCount(); i++)
 		{
-			TEXT hex[3];
+			char hex[3];
 			sprintf(hex, "%02x", (int) buffer[i]);
 			file_id.append(hex);
 		}
@@ -569,9 +547,9 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		return FINI_OK;
 	}
 
-	Firebird::AutoPtr<UCHAR, Firebird::ArrayDelete> buffer;
+	AutoPtr<UCHAR, ArrayDelete> buffer;
 	lhb* LOCK_header = NULL;
-	Firebird::AutoPtr<sh_mem> shmem_data;
+	AutoPtr<sh_mem> shmem_data;
 
 	if (db_file)
 	{
@@ -605,7 +583,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		{
 			buffer = FB_NEW UCHAR[extentsCount * extentSize];
 		}
-		catch (const Firebird::BadAlloc&)
+		catch (const BadAlloc&)
 		{
 			FPRINTF(outfile, "Insufficient memory for lock statistics.\n");
 			return FINI_OK;
@@ -615,7 +593,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 
 		for (ULONG extent = 1; extent < extentsCount; ++extent)
 		{
-			Firebird::PathName extName;
+			PathName extName;
 			extName.printf("%s.ext%d", filename.c_str(), extent);
 
 			sh_mem extData(false);
@@ -635,8 +613,8 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		if (LOCK_header->lhb_length > shmem_data->shared_memory->sh_mem_length_mapped)
 		{
 			const ULONG length = LOCK_header->lhb_length;
-			Firebird::LocalStatus ls;
-			Firebird::CheckStatusWrapper statusVector(&ls);
+			LocalStatus ls;
+			CheckStatusWrapper statusVector(&ls);
 
 			shmem_data->shared_memory->remapFile(&statusVector, length, false);
 			LOCK_header = (lhb*)(shmem_data->shared_memory->sh_mem_header);
@@ -655,7 +633,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 			{
 				buffer = FB_NEW UCHAR[LOCK_header->lhb_length];
 			}
-			catch (const Firebird::BadAlloc&)
+			catch (const BadAlloc&)
 			{
 				FPRINTF(outfile, "Insufficient memory for consistent lock statistics.\n");
 				FPRINTF(outfile, "Try omitting the -c switch.\n");
@@ -669,11 +647,11 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 			shmem_data->shared_memory->mutexUnlock();
 		}
 	  }
-	  catch (const Firebird::Exception& ex)
+	  catch (const Exception& ex)
 	  {
 		FPRINTF(outfile, "Unable to access lock table.\n");
 
- 		Firebird::StaticStatusVector st;
+		StaticStatusVector st;
 		ex.stuffException(st);
 		gds__print_status(st.begin());
 
@@ -708,7 +686,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		{
 			buffer = FB_NEW UCHAR[file_stat.st_size];
 		}
-		catch (const Firebird::BadAlloc&)
+		catch (const BadAlloc&)
 		{
 			FPRINTF(outfile, "Insufficient memory to read lock file.\n");
 			return FINI_OK;
@@ -734,7 +712,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		{
 			newBuf = FB_NEW UCHAR[extentsCount * extentSize];
 		}
-		catch (const Firebird::BadAlloc&)
+		catch (const BadAlloc&)
 		{
 			FPRINTF(outfile, "Insufficient memory for lock statistics.\n");
 			return FINI_OK;
@@ -745,7 +723,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 
 		for (ULONG extent = 1; extent < extentsCount; ++extent)
 		{
-			Firebird::PathName extName;
+			PathName extName;
 			extName.printf("%s.ext%d", filename.c_str(), extent);
 
 			const int fd = os_utils::open(extName.c_str(), O_RDONLY | O_BINARY);

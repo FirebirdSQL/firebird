@@ -1,4 +1,4 @@
-# v4.0 Beta 2 (unreleased)
+# v4.0 Beta 2 (14-May-2020)
 
 ## New features
 
@@ -7,11 +7,11 @@
   Contributor(s): Alex Peshkoff
 
 * [CORE-6285](http://tracker.firebirdsql.org/browse/CORE-6285): SQL-level replication management  
-  Reference(s): [/doc/README.replication.md](https://github.com/FirebirdSQL/firebird/raw/master/doc/replication.md), [/doc/sql.extensions/README.ddl.txt](https://github.com/FirebirdSQL/firebird/raw/master/doc/sql.extensions/README.ddl.txt)  
+  Reference(s): [/doc/README.replication.md](https://github.com/FirebirdSQL/firebird/raw/master/doc/README.replication.md), [/doc/sql.extensions/README.ddl.txt](https://github.com/FirebirdSQL/firebird/raw/master/doc/sql.extensions/README.ddl.txt)  
   Contributor(s): Dmitry Yemanov
 
 * [CORE-6109](http://tracker.firebirdsql.org/browse/CORE-6109): Changed FLOAT to a SQL standard compliant FLOAT datatype  
-  Reference(s): [/doc/sql.extensions/README.floating_point_types.md](https://github.com/FirebirdSQL/firebird/raw/master/doc/doc/sql.extensions/README.floating_point_types.md)  
+  Reference(s): [/doc/sql.extensions/README.floating_point_types.md](https://github.com/FirebirdSQL/firebird/raw/master/doc/sql.extensions/README.floating_point_types.md)  
   Contributor(s): Mark Rotteveel
 
 * [CORE-6018](http://tracker.firebirdsql.org/browse/CORE-6018): Make it possible to start multiple transactions (possibly in different attachments) using the same initial transaction snapshot  
@@ -29,7 +29,7 @@
 ## Improvements
 
 * [CORE-6286](http://tracker.firebirdsql.org/browse/CORE-6286): Make usage of TIMESTAMP/TIME WITH TIME ZONE convenient for users when appropriate ICU library is not installed on the client side  
-  Reference(s): [/doc/sql.extensions/README.time_zone.md](https://github.com/FirebirdSQL/firebird/raw/master/doc/sql.extensions/README.README.time_zone.md), [/doc/sql.extensions/README.set_bind.md](https://github.com/FirebirdSQL/firebird/raw/master/doc/sql.extensions/README.README.set_bind.md)   
+  Reference(s): [/doc/sql.extensions/README.time_zone.md](https://github.com/FirebirdSQL/firebird/raw/master/doc/sql.extensions/README.time_zone.md), [/doc/sql.extensions/README.set_bind.md](https://github.com/FirebirdSQL/firebird/raw/master/doc/sql.extensions/README.set_bind.md)   
   Contributor(s): Alex Peshkoff
 
 * [CORE-6279](http://tracker.firebirdsql.org/browse/CORE-6279): Put options in user management statements in any order  
@@ -70,9 +70,6 @@
 * [CORE-6058](http://tracker.firebirdsql.org/browse/CORE-6058): Change behavior of skipped and repeated wall times within time zones  
   Contributor(s): Adriano dos Santos Fernandes
 
-* [CORE-6057](http://tracker.firebirdsql.org/browse/CORE-6057): Bind setting for Firebird 4 extended precision numeric/decimal  
-  Contributor(s): Alex Peshkoff
-
 * [CORE-6049](http://tracker.firebirdsql.org/browse/CORE-6049): Builtin functions converting binary string to hexadecimal representation and vice versa  
   Reference(s): [/doc/sql.extensions/README.builtin_functions.txt](https://github.com/FirebirdSQL/firebird/raw/master/doc/sql.extensions/README.builtin_functions.txt)  
   Contributor(s): Alex Peshkoff
@@ -101,12 +98,17 @@
 * [CORE-4579](http://tracker.firebirdsql.org/browse/CORE-4579): Distribute separate header files instead merged one  
   Contributor(s): Dimitry Sibiryakov
 
-* [CORE-4462](http://tracker.firebirdsql.org/browse/CORE-4462): Make it possible to restore compressed .nbk files without explicitly decompressing them  
+* [CORE-3983](http://tracker.firebirdsql.org/browse/CORE-3983): Ability to authenticate user in "EXECUTE STATEMENT ON EXTERNAL DATA SOURCE" by hash of the current password  
   Contributor(s): Alex Peshkoff
 
 ## Bugfixes
 
+* [CORE-6290](http://tracker.firebirdsql.org/browse/CORE-6290): Hex number used at the end of statement may read invalid memory and produce wrong values or exceptions  
+  Note(s): Backported into v3.0.6  
+  Contributor(s): Adriano dos Santos Fernandes
+
 * [CORE-6283](http://tracker.firebirdsql.org/browse/CORE-6283): isNullable() in message metadata, returned by metadata builder, does not match with datatype set by setType() in metadata builder  
+  Note(s): Backported into v3.0.6  
   Contributor(s): Alex Peshkoff
 
 * [CORE-6282](http://tracker.firebirdsql.org/browse/CORE-6282): Change type of MON$ATTACHMENTS.MON$IDLE\_TIMER and MON$STATEMENTS.MON$STATEMENT\_TIMER to TIMESTAMP WITH TIME ZONE  

@@ -346,7 +346,7 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 			}
 
 			// Check cancellation flags and reset monitoring state if necessary
-			tdbb->checkCancelState(true);
+			tdbb->checkCancelState();
 			Monitoring::checkState(tdbb);
 		}
 

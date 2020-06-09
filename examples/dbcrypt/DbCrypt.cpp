@@ -271,5 +271,5 @@ extern "C" void FB_DLL_EXPORT FB_PLUGIN_ENTRY_POINT(IMaster* master)
 	IPluginManager* pluginManager = master->getPluginManager();
 
 	module.registerMe(pluginManager);
-	pluginManager->registerPluginFactory(IPluginManager::TYPE_DB_CRYPT, "DbCrypt_example", &factory);
+	pluginManager->registerPluginFactory(IPluginManager::TYPE_DB_CRYPT, "fbSampleDbCrypt", &factory);
 }

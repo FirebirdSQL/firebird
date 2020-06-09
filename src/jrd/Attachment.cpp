@@ -260,6 +260,9 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 
 Jrd::Attachment::~Attachment()
 {
+	if (att_idle_timer)
+		att_idle_timer->stop();
+
 	delete att_trace_manager;
 
 	for (unsigned n = 0; n < att_batches.getCount(); ++n)
@@ -564,6 +567,23 @@ void Jrd::Attachment::mergeStats()
 	MutexLockGuard guard(att_database->dbb_stats_mutex, FB_FUNCTION);
 	att_database->dbb_stats.adjust(att_base_stats, att_stats, true);
 	att_base_stats.assign(att_stats);
+}
+
+
+bool Attachment::hasActiveRequests() const
+{
+	for (const jrd_tra* transaction = att_transactions;
+		transaction; transaction = transaction->tra_next)
+	{
+		for (const jrd_req* request = transaction->tra_requests;
+			request; request = request->req_tra_next)
+		{
+			if (request->req_transaction && (request->req_flags & req_active))
+				return true;
+		}
+	}
+
+	return false;
 }
 
 
@@ -944,6 +964,19 @@ void StableAttachmentPart::manualAsyncUnlock(ULONG& flags)
 	}
 }
 
+void StableAttachmentPart::onIdleTimer(TimerImpl*)
+{
+	// Ensure attachment is still alive and still idle
+
+	MutexEnsureUnlock guard(*this->getMutex(), FB_FUNCTION);
+	if (!guard.tryEnter())
+		return;
+
+	Attachment* att = this->getHandle();
+	att->signalShutdown(isc_att_shut_idle);
+	JRD_shutdown_attachment(att);
+}
+
 JAttachment* Attachment::getInterface() throw()
 {
 	return att_stable->getInterface();
@@ -961,7 +994,7 @@ unsigned int Attachment::getActualIdleTimeout() const
 void Attachment::setupIdleTimer(bool clear)
 {
 	unsigned int timeout = clear ? 0 : getActualIdleTimeout();
-	if (!timeout)
+	if (!timeout || hasActiveRequests())
 	{
 		if (att_idle_timer)
 			att_idle_timer->reset(0);
@@ -969,25 +1002,13 @@ void Attachment::setupIdleTimer(bool clear)
 	else
 	{
 		if (!att_idle_timer)
-			att_idle_timer = FB_NEW IdleTimer(getInterface());
+		{
+			att_idle_timer = FB_NEW IdleTimer(getStable());
+			att_idle_timer->setOnTimer(&StableAttachmentPart::onIdleTimer);
+		}
 
 		att_idle_timer->reset(timeout);
 	}
-}
-
-bool Attachment::getIdleTimerTimestamp(ISC_TIMESTAMP_TZ& ts) const
-{
-	if (!att_idle_timer)
-		return false;
-
-	SINT64 value = att_idle_timer->getExpiryTime();
-	if (!value)
-		return false;
-
-	ts.utc_timestamp = TimeStamp::ticksToTimeStamp(value);
-	ts.time_zone = att_timestamp.time_zone;
-
-	return true;
 }
 
 UserId* Attachment::getUserId(const MetaString& userName)
@@ -1004,91 +1025,6 @@ UserId* Attachment::getUserId(const MetaString& userName)
 		att_user_ids.put(userName, result);
 	}
 	return result;
-}
-
-/// Attachment::IdleTimer
-
-void Attachment::IdleTimer::handler()
-{
-	m_fireTime = 0;
-	if (!m_expTime)	// Timer was reset to zero, do nothing
-		return;
-
-	// Ensure attachment is still alive and idle
-
-	StableAttachmentPart* stable = m_attachment->getStable();
-	if (!stable)
-		return;
-
-	MutexEnsureUnlock guard(*stable->getMutex(), FB_FUNCTION);
-	if (!guard.tryEnter())
-		return;
-
-	if (!m_expTime)
-		return;
-
-	// If timer was reset to fire later, restart ITimer
-
-	const ISC_TIMESTAMP currentTimeGmt = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
-	const SINT64 curTime = TimeStamp::timeStampToTicks(currentTimeGmt);
-
-	if (curTime + ISC_TIME_SECONDS_PRECISION < m_expTime)
-	{
-		reset((m_expTime - curTime) / ISC_TIME_SECONDS_PRECISION);
-		return;
-	}
-
-	Attachment* att = stable->getHandle();
-	att->signalShutdown(isc_att_shut_idle);
-	JRD_shutdown_attachment(att);
-}
-
-int Attachment::IdleTimer::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-
-	return 1;
-}
-
-void Attachment::IdleTimer::reset(unsigned int timeout)
-{
-	// Start timer if necessary. If timer was already started, don't restart
-	// (or stop) it - handler() will take care about it.
-	// Take into account that timeout is in seconds while m_expTime is in ISC ticks
-	// and ITimerControl works with microseconds.
-
-	if (!timeout)
-	{
-		m_expTime = 0;
-		return;
-	}
-
-	const ISC_TIMESTAMP currentTimeGmt = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
-	const SINT64 curTime = TimeStamp::timeStampToTicks(currentTimeGmt);
-
-	m_expTime = curTime + timeout * ISC_TIME_SECONDS_PRECISION;
-
-	FbLocalStatus s;
-	ITimerControl* timerCtrl = Firebird::TimerInterfacePtr();
-
-	if (m_fireTime)
-	{
-		if (m_fireTime <= m_expTime)
-			return;
-
-		timerCtrl->stop(&s, this);
-		check(&s);
-		m_fireTime = 0;
-	}
-
-	// Convert ISC ticks into microseconds
-	timerCtrl->start(&s, this, (m_expTime - curTime) * (1000 * 1000 / ISC_TIME_SECONDS_PRECISION));
-	check(&s);
-	m_fireTime = m_expTime;
 }
 
 void Attachment::checkReplSetLock(thread_db* tdbb)

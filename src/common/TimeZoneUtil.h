@@ -52,13 +52,7 @@ class NoThrowTimeStamp;
 class TimeZoneUtil
 {
 public:
-	enum Bind
-	{
-		BIND_LEGACY,
-		BIND_NATIVE
-	};
-
-public:
+	static const ISC_DATE TIME_TZ_BASE_DATE;
 	static const char GMT_FALLBACK[5];	// "GMT*"
 
 	static const USHORT GMT_ZONE = 65535;
@@ -102,17 +96,15 @@ public:
 	static void extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, SSHORT* offset);
 	static void extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, int* sign, unsigned* tzh, unsigned* tzm);
 
-	static ISC_TIME timeTzToTime(const ISC_TIME_TZ& timeTz, USHORT toTimeZone, Callbacks* cb);
-	static ISC_TIMESTAMP timeStampTzToTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, USHORT toTimeZone);
-
-	static void localTimeToUtc(ISC_TIME& time, Callbacks* cb);
-	static void localTimeToUtc(ISC_TIME_TZ& timeTz, Callbacks* cb);
+	static void localTimeToUtc(ISC_TIME& time, ISC_USHORT timeZone);
+	static void localTimeToUtc(ISC_TIME_TZ& timeTz);
 
 	static void localTimeStampToUtc(ISC_TIMESTAMP& timeStamp, Callbacks* cb);
 	static void localTimeStampToUtc(ISC_TIMESTAMP_TZ& timeStampTz);
 
 	static const SLONG NO_OFFSET = MAX_SLONG;
-	static bool decodeTime(const ISC_TIME_TZ& timeTz, bool gmtFallback, SLONG gmtOffset, Callbacks* cb,
+
+	static bool decodeTime(const ISC_TIME_TZ& timeTz, bool gmtFallback, SLONG gmtOffset,
 		struct tm* times, int* fractions = NULL);
 	static bool decodeTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, bool gmtFallback, SLONG gmtOffset,
 		struct tm* times, int* fractions = NULL);
@@ -122,20 +114,22 @@ public:
 
 	static void validateGmtTimeStamp(NoThrowTimeStamp& ts);
 
-	static ISC_TIMESTAMP_TZ cvtTimeToTimeStampTz(const ISC_TIME& time, Callbacks* cb);
-	static ISC_TIME_TZ cvtTimeToTimeTz(const ISC_TIME& time, Callbacks* cb);
+	static ISC_TIME timeTzToTime(const ISC_TIME_TZ& timeTz, Callbacks* cb);
+	static ISC_TIMESTAMP timeStampTzToTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, USHORT toTimeZone);
 
-	static ISC_TIMESTAMP_TZ cvtTimeTzToTimeStampTz(const ISC_TIME_TZ& timeTz, Callbacks* cb);
-	static ISC_TIMESTAMP cvtTimeTzToTimeStamp(const ISC_TIME_TZ& timeTz, Callbacks* cb);
-	static ISC_TIME cvtTimeTzToTime(const ISC_TIME_TZ& timeTz, Callbacks* cb);
+	static ISC_TIMESTAMP_TZ timeToTimeStampTz(const ISC_TIME& time, Callbacks* cb);
+	static ISC_TIME_TZ timeToTimeTz(const ISC_TIME& time, Callbacks* cb);
 
-	static ISC_TIME_TZ cvtTimeStampTzToTimeTz(const ISC_TIMESTAMP_TZ& timeStampTz);
-	static ISC_TIMESTAMP cvtTimeStampTzToTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, Callbacks* cb);
+	static ISC_TIMESTAMP_TZ timeTzToTimeStampTz(const ISC_TIME_TZ& timeTz, Callbacks* cb);
+	static ISC_TIMESTAMP timeTzToTimeStamp(const ISC_TIME_TZ& timeTz, Callbacks* cb);
 
-	static ISC_TIMESTAMP_TZ cvtTimeStampToTimeStampTz(const ISC_TIMESTAMP& timeStamp, Callbacks* cb);
-	static ISC_TIME_TZ cvtTimeStampToTimeTz(const ISC_TIMESTAMP& timeStamp, Callbacks* cb);
+	static ISC_TIME_TZ timeStampTzToTimeTz(const ISC_TIMESTAMP_TZ& timeStampTz);
+	static ISC_TIMESTAMP timeStampTzToTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, Callbacks* cb);
 
-	static ISC_TIMESTAMP_TZ cvtDateToTimeStampTz(const ISC_DATE& date, Callbacks* cb);
+	static ISC_TIMESTAMP_TZ timeStampToTimeStampTz(const ISC_TIMESTAMP& timeStamp, Callbacks* cb);
+	static ISC_TIME_TZ timeStampToTimeTz(const ISC_TIMESTAMP& timeStamp, Callbacks* cb);
+
+	static ISC_TIMESTAMP_TZ dateToTimeStampTz(const ISC_DATE& date, Callbacks* cb);
 };
 
 class TimeZoneRuleIterator

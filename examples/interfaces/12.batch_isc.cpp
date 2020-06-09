@@ -173,7 +173,8 @@ int main()
 			raiseError(status, st);
 
 		// get transaction interface
-		tra = utl->getTransactionByHandle(&status, &tr);
+		if (fb_get_transaction_interface(st, &tra, &tr))
+			raiseError(status, st);
 
 		//
 		printf("\nPart 1. BLOB created using IBlob interface.\n");
@@ -184,7 +185,8 @@ int main()
 		if (isc_dsql_prepare(st, &tr, &stmt, 0, sqlStmt1, 3, NULL))
 			raiseError(status, st);
 		// and get it's interface
-		statemt = utl->getStatementByHandle(&status, &stmt);
+		if (fb_get_statement_interface(st, &statemt, &stmt))
+			raiseError(status, st);
 
 		// Message to store in a table
 		FB_MESSAGE(Msg1, ThrowStatusWrapper,
@@ -235,7 +237,8 @@ int main()
 		if (isc_dsql_prepare(st, &tr, &stmt, 0, sqlStmt2, 3, NULL))
 			raiseError(status, st);
 		// and get it's interface
-		statemt = utl->getStatementByHandle(&status, &stmt);
+		if (fb_get_statement_interface(st, &statemt, &stmt))
+			raiseError(status, st);
 
 		// Message to store in a table
 		FB_MESSAGE(Msg2, ThrowStatusWrapper,

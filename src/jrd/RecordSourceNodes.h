@@ -122,7 +122,7 @@ public:
 class PlanNode : public Firebird::PermanentStorage, public Printable
 {
 public:
-	enum Type
+	enum Type : UCHAR
 	{
 		TYPE_JOIN,
 		TYPE_RETRIEVE
@@ -151,7 +151,7 @@ public:
 
 	struct AccessType
 	{
-		enum Type
+		enum Type : UCHAR
 		{
 			TYPE_SEQUENTIAL,
 			TYPE_NAVIGATIONAL,
@@ -206,7 +206,7 @@ public:
 class InversionNode
 {
 public:
-	enum Type
+	enum Type : UCHAR
 	{
 		TYPE_AND,
 		TYPE_OR,
@@ -216,45 +216,45 @@ public:
 	};
 
 	InversionNode(Type aType, InversionNode* aNode1, InversionNode* aNode2)
-		: type(aType),
-		  impure(0),
+		: impure(0),
+		  id(0),
+		  type(aType),
 		  retrieval(NULL),
 		  node1(aNode1),
 		  node2(aNode2),
-		  value(NULL),
-		  id(0)
+		  value(NULL)
 	{
 	}
 
 	InversionNode(IndexRetrieval* aRetrieval, ULONG anImpure)
-		: type(TYPE_INDEX),
-		  impure(anImpure),
+		: impure(anImpure),
+		  id(0),
+		  type(TYPE_INDEX),
 		  retrieval(aRetrieval),
 		  node1(NULL),
 		  node2(NULL),
-		  value(NULL),
-		  id(0)
+		  value(NULL)
 	{
 	}
 
 	InversionNode(ValueExprNode* aValue, USHORT aId)
-		: type(TYPE_DBKEY),
-		  impure(0),
+		: impure(0),
+		  id(aId),
+		  type(TYPE_DBKEY),
 		  retrieval(NULL),
 		  node1(NULL),
 		  node2(NULL),
-		  value(aValue),
-		  id(aId)
+		  value(aValue)
 	{
 	}
 
-	Type type;
 	ULONG impure;
+	USHORT id;
+	Type type;
 	NestConst<IndexRetrieval> retrieval;
 	NestConst<InversionNode> node1;
 	NestConst<InversionNode> node2;
 	NestConst<ValueExprNode> value;
-	USHORT id;
 };
 
 class DbKeyRangeNode
@@ -291,8 +291,8 @@ public:
 		  dsqlName(pool, aDsqlName),
 		  alias(pool),
 		  relation(NULL),
-		  context(0),
-		  view(NULL)
+		  view(NULL),
+		  context(0)
 	{
 	}
 
@@ -313,7 +313,10 @@ public:
 	virtual RelationSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual void ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const;
 
-	virtual RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb);
+	virtual RecordSourceNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
+	{
+		return this;
+	}
 
 	virtual void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		BoolExprNode** boolean, RecordSourceNodeStack& stack);
@@ -352,10 +355,12 @@ public:
 	MetaName dsqlName;
 	Firebird::string alias;	// SQL alias for the relation
 	jrd_rel* relation;
-	SSHORT context;			// user-specified context number for the relation reference
 
 private:
 	jrd_rel* view;		// parent view for posting access
+
+public:
+	SSHORT context;			// user-specified context number for the relation reference
 };
 
 class ProcedureSourceNode : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_PROCEDURE>
@@ -370,10 +375,10 @@ public:
 		  targetList(NULL),
 		  in_msg(NULL),
 		  procedure(NULL),
-		  isSubRoutine(false),
-		  procedureId(0),
 		  view(NULL),
-		  context(0)
+		  procedureId(0),
+		  context(0),
+		  isSubRoutine(false)
 	{
 	}
 
@@ -452,10 +457,10 @@ private:
 			cache management policies yet, so I leave it for the other day.
 	***/
 	jrd_prc* procedure;
-	bool isSubRoutine;
-	USHORT procedureId;
 	jrd_rel* view;
+	USHORT procedureId;
 	SSHORT context;
+	bool isSubRoutine;
 };
 
 class AggregateSourceNode : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_AGGREGATE_SOURCE>
@@ -465,10 +470,10 @@ public:
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_AGGREGATE_SOURCE>(pool),
 		  dsqlGroup(NULL),
 		  dsqlRse(NULL),
-		  dsqlWindow(false),
 		  group(NULL),
 		  map(NULL),
-		  rse(NULL)
+		  rse(NULL),
+		  dsqlWindow(false)
 	{
 	}
 
@@ -514,12 +519,14 @@ private:
 public:
 	NestConst<ValueListNode> dsqlGroup;
 	NestConst<RseNode> dsqlRse;
-	bool dsqlWindow;
 	NestConst<SortNode> group;
 	NestConst<MapNode> map;
 
 private:
 	NestConst<RseNode> rse;
+
+public:
+	bool dsqlWindow;
 };
 
 class UnionSourceNode : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_UNION>
@@ -527,13 +534,13 @@ class UnionSourceNode : public TypedNode<RecordSourceNode, RecordSourceNode::TYP
 public:
 	explicit UnionSourceNode(MemoryPool& pool)
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_UNION>(pool),
-		  dsqlAll(false),
-		  recursive(false),
 		  dsqlClauses(NULL),
 		  dsqlParentRse(NULL),
 		  clauses(pool),
 		  maps(pool),
-		  mapStream(0)
+		  mapStream(0),
+		  dsqlAll(false),
+		  recursive(false)
 	{
 	}
 
@@ -575,8 +582,6 @@ private:
 		FB_SIZE_T nstreams, BoolExprNodeStack* parentStack, StreamType shellStream);
 
 public:
-	bool dsqlAll;		// UNION ALL
-	bool recursive;		// union node is a recursive union
 	RecSourceListNode* dsqlClauses;
 	RseNode* dsqlParentRse;
 
@@ -584,6 +589,10 @@ private:
 	Firebird::Array<NestConst<RseNode> > clauses;	// RseNode's for union
 	Firebird::Array<NestConst<MapNode> > maps;		// RseNode's maps
 	StreamType mapStream;	// stream for next level record of recursive union
+
+public:
+	bool dsqlAll;		// UNION ALL
+	bool recursive;		// union node is a recursive union
 };
 
 class WindowSourceNode : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_WINDOW>
@@ -658,13 +667,13 @@ private:
 class RseNode : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RSE>
 {
 public:
-	static const unsigned FLAG_VARIANT			= 0x01;	// variant (not invariant?)
-	static const unsigned FLAG_SINGULAR			= 0x02;	// singleton select
-	static const unsigned FLAG_WRITELOCK		= 0x04;	// locked for write
-	static const unsigned FLAG_SCROLLABLE		= 0x08;	// scrollable cursor
-	static const unsigned FLAG_DSQL_COMPARATIVE	= 0x10;	// transformed from DSQL ComparativeBoolNode
-	static const unsigned FLAG_OPT_FIRST_ROWS	= 0x20;	// optimize retrieval for first rows
-	static const unsigned FLAG_LATERAL			= 0x40;	// lateral derived table
+	static const USHORT FLAG_VARIANT			= 0x01;	// variant (not invariant?)
+	static const USHORT FLAG_SINGULAR			= 0x02;	// singleton select
+	static const USHORT FLAG_WRITELOCK			= 0x04;	// locked for write
+	static const USHORT FLAG_SCROLLABLE			= 0x08;	// scrollable cursor
+	static const USHORT FLAG_DSQL_COMPARATIVE	= 0x10;	// transformed from DSQL ComparativeBoolNode
+	static const USHORT FLAG_OPT_FIRST_ROWS		= 0x20;	// optimize retrieval for first rows
+	static const USHORT FLAG_LATERAL			= 0x40;	// lateral derived table
 
 	explicit RseNode(MemoryPool& pool)
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RSE>(pool),
@@ -680,11 +689,11 @@ public:
 		  dsqlNamedWindows(NULL),
 		  dsqlOrder(NULL),
 		  dsqlStreams(NULL),
-		  dsqlExplicitJoin(false),
-		  rse_jointype(0),
 		  rse_invariants(NULL),
 		  rse_relations(pool),
-		  flags(0)
+		  flags(0),
+		  rse_jointype(0),
+		  dsqlExplicitJoin(false)
 	{
 	}
 
@@ -791,8 +800,6 @@ public:
 	NamedWindowsClause* dsqlNamedWindows;
 	NestConst<ValueListNode> dsqlOrder;
 	NestConst<RecSourceListNode> dsqlStreams;
-	bool dsqlExplicitJoin;
-	USHORT rse_jointype;		// inner, left, full
 	NestConst<ValueExprNode> rse_first;
 	NestConst<ValueExprNode> rse_skip;
 	NestConst<BoolExprNode> rse_boolean;
@@ -802,7 +809,9 @@ public:
 	NestConst<PlanNode> rse_plan;		// user-specified access plan
 	NestConst<VarInvariantArray> rse_invariants; // Invariant nodes bound to top-level RSE
 	Firebird::Array<NestConst<RecordSourceNode> > rse_relations;
-	unsigned flags;
+	USHORT flags;
+	USHORT rse_jointype;		// inner, left, full
+	bool dsqlExplicitJoin;
 };
 
 class SelectExprNode : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_SELECT_EXPR>

@@ -44,6 +44,7 @@
 */
 
 #include "firebird.h"
+#include <cmath>
 #include <stdio.h>
 #include "../jrd/intl.h"
 #include <stdlib.h>
@@ -593,7 +594,7 @@ static bool M_Transaction()
 {
 	if (DB && !M__trans && setValues.KeepTranParams)
 	{
-		M__trans = DB->execute(fbStatus, nullptr, 
+		M__trans = DB->execute(fbStatus, nullptr,
 							   TranParams->length(), TranParams->c_str(),
 							   isqlGlob.SQL_dialect, nullptr, nullptr, nullptr, nullptr);
 
@@ -7228,9 +7229,9 @@ static bool checkSpecial(TEXT* const p, const int length, const double value)
  *
  **************************************/
 	const TEXT* t = NULL;
-	if (isnan(value))
+	if (std::isnan(value))
 		t = "NaN";
-	else if (isinf(value))
+	else if (std::isinf(value))
 		t = Firebird::isNegativeInf(value) ? "-Infinity" : "Infinity";
 	else
 		return false;

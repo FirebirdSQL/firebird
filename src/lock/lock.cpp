@@ -1065,6 +1065,10 @@ void LockManager::acquire_shmem(SRQ_PTR owner_offset)
 
 	while (SRQ_EMPTY(m_sharedMemory->getHeader()->lhb_processes))
 	{
+		fb_assert(!m_process);
+		if (m_process)
+			bug(NULL, "Process disappeared in LockManager::acquire_shmem");
+
 		if (m_sharedMemory->justCreated())
 		{
 			// no sense thinking about statistics now
@@ -3868,7 +3872,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 		// if so we mark our own request as rejected
 
 		// !!! this will be changed to have no dependency on thread_db !!!
-		const bool cancelled = (tdbb->checkCancelState() != FB_SUCCESS);
+		const bool cancelled = (tdbb->getCancelState() != FB_SUCCESS);
 
 		if (cancelled || (lck_wait < 0 && lock_timeout <= current_time))
 		{

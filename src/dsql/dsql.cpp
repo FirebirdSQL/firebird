@@ -283,7 +283,7 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 
 	thread_db::TimerGuard timerGuard(tdbb, req_timer, false);
 	if (req_timer && req_timer->expired())
-		tdbb->checkCancelState(true);
+		tdbb->checkCancelState();
 
 	UCHAR* dsqlMsgBuffer = req_msg_buffers[message->msg_buffer_number];
 	if (prefetchedFirstRow)
@@ -853,7 +853,7 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 	thread_db::TimerGuard timerGuard(tdbb, req_timer, !have_cursor);
 
 	if (req_transaction && (req_transaction->tra_flags & TRA_read_consistency) &&
-		statement->getType() != DsqlCompiledStatement::TYPE_SAVEPOINT) 
+		statement->getType() != DsqlCompiledStatement::TYPE_SAVEPOINT)
 	{
 		AutoSavePoint savePoint(tdbb, req_transaction);
 		req_request->req_flags &= ~req_update_conflict;
@@ -862,7 +862,7 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 		while (true)
 		{
 			// Don't set req_restart_ready flas at last attempt to restart request.
-			// It allows to raise update conflict error (if any) as usual and 
+			// It allows to raise update conflict error (if any) as usual and
 			// handle error by PSQL handler.
 			const ULONG flag = (numTries >= MAX_RESTARTS) ? 0 : req_restart_ready;
 			AutoSetRestoreFlag<ULONG> restartReady(&req_request->req_flags, flag, true);
@@ -2156,15 +2156,7 @@ static void sql_info(thread_db* tdbb,
 			{
 				const bool detailed = (item == isc_info_sql_explain_plan);
 				string plan = OPT_get_plan(tdbb, request->req_request, detailed);
-#ifdef DEV_BUILD
-				if (!detailed)
-				{
-					NodePrinter printer;
-					request->req_request->getStatement()->topNode->print(printer);
-					plan += "\n--------\n";
-					plan += printer.getText();
-				}
-#endif
+
 				if (plan.hasData())
 				{
 					// 1-byte item + 2-byte length + isc_info_end/isc_info_truncated == 4

@@ -457,7 +457,7 @@ bool EngineCallbacks::transliterate(const dsc* from, dsc* to, CHARSET_ID& charse
 		(charset2 != ttype_binary) &&
 		(charset1 != ttype_dynamic) && (charset2 != ttype_dynamic))
 	{
-		INTL_convert_string(to, from, err);
+		INTL_convert_string(to, from, this);
 		return true;
 	}
 
@@ -484,13 +484,22 @@ ULONG EngineCallbacks::validateLength(CharSet* toCharSet, ULONG toLength, const 
 {
 	if (toCharSet && toCharSet->isMultiByte())
 	{
-		const ULONG src_len = toCharSet->length(toLength, start, false);
-		const ULONG dest_len  = (ULONG) to_size / toCharSet->maxBytesPerChar();
+		const ULONG srcCharLength = toCharSet->length(toLength, start, true);
+		const ULONG destCharLength  = (ULONG) to_size / toCharSet->maxBytesPerChar();
 
-		if (src_len > dest_len)
+		if (srcCharLength > destCharLength)
 		{
-			err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
-				Arg::Gds(isc_trunc_limits) << Arg::Num(dest_len) << Arg::Num(src_len));
+			const ULONG spaceByteLength = toCharSet->getSpaceLength();
+			const ULONG trimmedByteLength = toCharSet->removeTrailingSpaces(toLength, start);
+			const ULONG trimmedCharLength = srcCharLength - (toLength - trimmedByteLength) / spaceByteLength;
+
+			if (trimmedCharLength <= destCharLength)
+				return trimmedByteLength + (destCharLength - trimmedCharLength) * spaceByteLength;
+			else
+			{
+				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+					Arg::Gds(isc_trunc_limits) << Arg::Num(destCharLength) << Arg::Num(srcCharLength));
+			}
 		}
 	}
 

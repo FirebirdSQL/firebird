@@ -488,7 +488,7 @@ void INF_database_info(thread_db* tdbb,
 
 		case isc_info_creation_date:
 			{
-				const ISC_TIMESTAMP ts = TimeZoneUtil::cvtTimeStampTzToTimeStamp(
+				const ISC_TIMESTAMP ts = TimeZoneUtil::timeStampTzToTimeStamp(
 					dbb->dbb_creation_date, &EngineCallbacks::instance);
 
 				length = INF_convert(ts.timestamp_date, p);
@@ -1028,7 +1028,7 @@ ULONG INF_request_info(const jrd_req* request, const ULONG item_length, const UC
 			}
 			else
 			{
-				const MessageNode* node = StmtNode::as<MessageNode>(request->req_message);
+				const MessageNode* node = nodeAs<MessageNode>(request->req_message);
 
 				if (node)
 				{

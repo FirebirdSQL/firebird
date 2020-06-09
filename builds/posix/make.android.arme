@@ -6,14 +6,45 @@ NDK_ROOT:=$(NDK)
 #NDK_LOG:=1
 include $(NDK)/build/core/init.mk
 
-TOOLCHAIN_DIR:=$(foreach chain, $(NDK_ALL_TOOLCHAINS), $(if $(findstring arm, $(chain)), $(chain), ))
+TOOLCHAIN:=$(foreach chain, $(NDK_ALL_TOOLCHAINS), $(if $(findstring arm, $(chain)), $(chain), ))
 # Filter out clang
-TEMP_LIST_DIR := $(foreach chain, $(TOOLCHAIN_DIR), $(if $(findstring clang, $(chain)), , $(chain)))
-ifdef TEMP_LIST_DIR
-	TOOLCHAIN_DIR := $(TEMP_LIST_DIR)
+TEMP_TC := $(foreach chain, $(TOOLCHAIN), $(if $(findstring clang, $(chain)), , $(chain)))
+ifneq ($(strip $(TEMP_TC)),)
+	TOOLCHAIN := $(TEMP_TC)
 endif
 # use freshmost compiler
-TOOLCHAIN_DIR:=$(lastword $(TOOLCHAIN_DIR))
+TOOLCHAIN:=$(lastword $(TOOLCHAIN))
+
+TOOLCHAIN_ARCH:=
+-include $(NDK)/build/core/toolchains/$(TOOLCHAIN)/config.mk
+-include $(NDK)/build/core/toolchains/$(TOOLCHAIN)/setup.mk
+
+ifeq ($(TOOLCHAIN_ARCH),arm)
+
+TOOL_PATH:=$(NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin
+CROSS_PREFIX:=$(TOOL_PATH)/$(TOOLCHAIN_NAME)-
+
+#Now it's time to decide upon clang/clang++
+space:=
+space+=
+CLANG_NAME:=$(subst -,$(space),$(TOOLCHAIN_NAME))
+CLANG_NAME:=$(foreach part, $(CLANG_NAME), $(if $(and $(findstring arm, $(part)), $(findstring $(part), arm)), armv7a, $(part)))
+CLANG_NAME:=$(strip $(CLANG_NAME))
+CLANG_NAME:=$(subst $(space),-,$(CLANG_NAME))
+CLANG_NUM:=$(shell mi=256; for i in `seq 24 $$mi`; do [ -e $(TOOL_PATH)/$(CLANG_NAME)$$i-clang ] && [ $$i -le $$mi ] && mi=$$i; done; echo $$mi)
+
+CXX:=$(TOOL_PATH)/$(CLANG_NAME)$(CLANG_NUM)-clang++
+CC:=$(TOOL_PATH)/$(CLANG_NAME)$(CLANG_NUM)-clang
+
+#CROSS_FLAGS:=--sysroot=$(NDK)/sysroot \
+#			 -I$(ROOT)/gen/cross \
+#			 -I$(NDK)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1
+
+CROSS_FLAGS:=--sysroot=$(NDK)/toolchains/llvm/prebuilt/linux-x86_64/sysroot \
+			 -I$(ROOT)/gen/cross
+
+else
+#TOOLCHAIN_ARCH
 
 ifeq ($(HOST_TAG64),)
 HOST_TAG64:=linux-x86
@@ -28,6 +59,16 @@ CROSS_PREFIX:=$(NDK)/toolchains/$(TOOLCHAIN_DIR)/prebuilt/$(HOST_TAG64)/bin/arm-
 
 CXX:=$(CROSS_PREFIX)g++
 CC:=$(CROSS_PREFIX)gcc
+
+CROSS_FLAGS=--sysroot=$(CROSS_PLATFORM) \
+			-I$(CROSS_PLATFORM)/usr/include -I$(ROOT)/gen/cross \
+			-I$(NDK)/sources/cxx-stl/gnu-libstdc++/$(NDK_TOOLCHAIN_VERSION)/include \
+			-I$(NDK)/sources/cxx-stl/gnu-libstdc++/$(NDK_TOOLCHAIN_VERSION)/libs/armeabi/include
+
+endif
+#TOOLCHAIN_ARCH
+
+
 AR:=$(CROSS_PREFIX)ar
 AS:=$(CROSS_PREFIX)as
 LD:=$(CROSS_PREFIX)ld
@@ -40,11 +81,6 @@ STRIP:=$(CROSS_PREFIX)strip
 export CXX
 export CC
 export AR
-
-CROSS_FLAGS=--sysroot=$(CROSS_PLATFORM) \
-			-I$(CROSS_PLATFORM)/usr/include -I$(ROOT)/gen/cross \
-			-I$(NDK)/sources/cxx-stl/gnu-libstdc++/$(NDK_TOOLCHAIN_VERSION)/include \
-			-I$(NDK)/sources/cxx-stl/gnu-libstdc++/$(NDK_TOOLCHAIN_VERSION)/libs/armeabi/include
 
 export CROSS_FLAGS
 
@@ -62,8 +98,8 @@ CROSS_CONFIG=android.arme
 
 LDFLAGS += --sysroot=$(CROSS_PLATFORM) -L$(NDK)/sources/cxx-stl/gnu-libstdc++/$(NDK_TOOLCHAIN_VERSION)/libs/armeabi \
 	-L$(NDK)/sources/cxx-stl/gnu-libstdc++/libs/armeabi
-DroidLibs := -lm -ldl -lsupc++ $(DECLIB)
-UDR_SUPPORT_LIBS := -lgnustl_shared
+DroidLibs := -lm -ldl $(DECLIB) $(RE2LIB)
+UDR_SUPPORT_LIBS :=
 
 LINK_LIBS = $(DroidLibs)
 SO_LINK_LIBS = $(DroidLibs)

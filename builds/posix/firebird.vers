@@ -347,7 +347,8 @@ fb_get_master_interface
 
 fb_get_database_handle
 fb_get_transaction_handle
-#fb_get_statement_interface
+fb_get_transaction_interface
+fb_get_statement_interface
 
 fb_database_crypt_callback
 fb_dsql_set_timeout

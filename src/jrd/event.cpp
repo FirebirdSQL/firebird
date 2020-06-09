@@ -463,6 +463,10 @@ void EventManager::acquire_shmem()
 
 	while (SRQ_EMPTY(m_sharedMemory->getHeader()->evh_processes))
 	{
+		fb_assert(!m_process);
+		if (m_process)
+			fb_utils::logAndDie("Process disappeared in EventManager::acquire_shmem");
+
 		if (m_sharedMemory->justCreated())
 			break;
 

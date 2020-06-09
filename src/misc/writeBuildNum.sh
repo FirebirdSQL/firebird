@@ -5,11 +5,11 @@
 
 BuildVersion="$Id: writeBuildNum.sh,v 1.28732 2010/05/29 13:12:08 fsg Exp $"
 
-BuildType=T
+BuildType=V
 MajorVer=4
 MinorVer=0
 RevNo=0
-BuildNum=1920
+BuildNum=2035
 
 NowAt=`pwd`
 cd `dirname $0`
@@ -20,8 +20,8 @@ Root=`dirname $Root`
 
 if [ "$SPECIAL_BUILD_SUFFIX" = "" ]; then
 # Normal builds
-SuffixKind="Beta"
-SuffixVer="2"
+SuffixKind="Release Candidate"
+SuffixVer="1"
 BuildSuffix="Firebird 4.0"
 [ "$SuffixKind" = "" ] || BuildSuffix="$BuildSuffix $SuffixKind"
 [ "$SuffixVer" = "" ] || BuildSuffix="$BuildSuffix $SuffixVer"

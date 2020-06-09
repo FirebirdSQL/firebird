@@ -22,6 +22,7 @@
  */
 
 #include "firebird.h"
+#include <cmath>
 #include <stdio.h>
 #include <string.h>
 
@@ -734,9 +735,9 @@ static void edit_float( const dsc* desc, pics* picture, TEXT** output)
 	// space, print it in f-format; otherwise print it in e-format.
 	// (G-format is untrustworthy.)
 
-	if (isnan(number))
+	if (std::isnan(number))
 		sprintf(temp, "NaN");
-	else if (isinf(number))
+	else if (std::isinf(number))
 		sprintf(temp, "Infinity");
 	else if (picture->pic_exponents)
 	{

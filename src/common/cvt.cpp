@@ -36,13 +36,17 @@
  */
 
 #include "firebird.h"
+#include <cmath>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include "gen/iberror.h"
 
+#include "../jrd/constants.h"
+#include "../common/intlobj_new.h"
 #include "../common/gdsassert.h"
+#include "../common/CharSet.h"
 #include "../common/TimeZoneUtil.h"
 #include "../common/classes/timestamp.h"
 #include "../common/cvt.h"
@@ -623,8 +627,7 @@ void CVT_string_to_datetime(const dsc* desc,
 			}
 			description[i] = precision;
 		}
-		// Month names are only allowed in first 2 positions
-		else if (LETTER7(c) && !have_english_month && i < 2)
+		else if (LETTER7(c) && !have_english_month && i - start_component < 2)
 		{
 			TEXT temp[sizeof(YESTERDAY) + 1];
 
@@ -649,7 +652,8 @@ void CVT_string_to_datetime(const dsc* desc,
 			const TEXT* const* month_ptr = FB_LONG_MONTHS_UPPER;
 			while (true)
 			{
-				if (*month_ptr)
+				// Month names are only allowed in first 2 positions
+				if (*month_ptr && i < 2)
 				{
 					t = temp;
 					const TEXT* m = *month_ptr++;
@@ -666,7 +670,7 @@ void CVT_string_to_datetime(const dsc* desc,
 					// it's not a month name, so it's either a magic word or
 					// a non-date string.  If there are more characters, it's bad
 
-					if (!allow_special || i != 0)
+					if (!allow_special || i != start_component)
 						CVT_conversion_error(desc, cb->err);
 
 					description[i] = SPECIAL;
@@ -920,7 +924,10 @@ void CVT_string_to_datetime(const dsc* desc,
 	{
 		// Fetch current date
 		tm times2;
-		Firebird::TimeStamp::getCurrentTimeStamp().decode(&times2);
+		TimeStamp baseTimeStamp;
+		baseTimeStamp.value().timestamp_date = TimeZoneUtil::TIME_TZ_BASE_DATE;
+		baseTimeStamp.value().timestamp_time = 0;
+		baseTimeStamp.decode(&times2);
 
 		times.tm_year = times2.tm_year;
 		times.tm_mon = times2.tm_mon;
@@ -1002,7 +1009,7 @@ void CVT_string_to_datetime(const dsc* desc,
 			ISC_TIME_TZ timeTz;
 			timeTz.utc_time = date->utc_timestamp.timestamp_time;
 			timeTz.time_zone = zone;
-			date->utc_timestamp.timestamp_time = TimeZoneUtil::timeTzToTime(timeTz, sessionTimeZone, cb);
+			date->utc_timestamp.timestamp_time = TimeZoneUtil::timeTzToTime(timeTz, cb);
 		}
 		else if (expect_type == expect_timestamp)
 			*(ISC_TIMESTAMP*) date = TimeZoneUtil::timeStampTzToTimeStamp(*date, sessionTimeZone);
@@ -1446,7 +1453,7 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 			else if (scale < 0)
 				value *= CVT_power_of_ten(-scale);
 
-			if (isinf(value))
+			if (std::isinf(value))
 			{
 				if (getNumericOverflow)
 				{
@@ -1563,13 +1570,13 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		case dtype_sql_time_tz:
 		case dtype_ex_time_tz:
 			*(ISC_TIMESTAMP*) to->dsc_address =
-				TimeZoneUtil::cvtTimeTzToTimeStamp(*(ISC_TIME_TZ*) from->dsc_address, cb);
+				TimeZoneUtil::timeTzToTimeStamp(*(ISC_TIME_TZ*) from->dsc_address, cb);
 			return;
 
 		case dtype_timestamp_tz:
 		case dtype_ex_timestamp_tz:
 			*(ISC_TIMESTAMP*) to->dsc_address =
-				TimeZoneUtil::cvtTimeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb);
+				TimeZoneUtil::timeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb);
 			return;
 
 		default:
@@ -1588,7 +1595,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 	case dtype_ex_time_tz:
 		d.makeTimeTz((ISC_TIME_TZ*)(to->dsc_address));
 		CVT_move_common(from, &d, decSt, cb);
-		TimeZoneUtil::extractOffset(TimeZoneUtil::cvtTimeTzToTimeStampTz(*(ISC_TIME_TZ*)(to->dsc_address), cb),
+		TimeZoneUtil::extractOffset(TimeZoneUtil::timeTzToTimeStampTz(*(ISC_TIME_TZ*)(to->dsc_address), cb),
 			&((ISC_TIME_TZ_EX*)(to->dsc_address))->ext_offset);
 		return;
 
@@ -1607,13 +1614,13 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 		case dtype_sql_time:
 			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
-				TimeZoneUtil::cvtTimeToTimeStampTz(*(ISC_TIME*) from->dsc_address, cb);
+				TimeZoneUtil::timeToTimeStampTz(*(ISC_TIME*) from->dsc_address, cb);
 			return;
 
 		case dtype_ex_time_tz:
 		case dtype_sql_time_tz:
 			*((ISC_TIMESTAMP_TZ*) to->dsc_address) =
-				TimeZoneUtil::cvtTimeTzToTimeStampTz(*(ISC_TIME_TZ*) from->dsc_address, cb);
+				TimeZoneUtil::timeTzToTimeStampTz(*(ISC_TIME_TZ*) from->dsc_address, cb);
 			return;
 
 		case dtype_ex_timestamp_tz:
@@ -1622,12 +1629,12 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 		case dtype_sql_date:
 			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
-				TimeZoneUtil::cvtDateToTimeStampTz(*(GDS_DATE*) from->dsc_address, cb);
+				TimeZoneUtil::dateToTimeStampTz(*(GDS_DATE*) from->dsc_address, cb);
 			return;
 
 		case dtype_timestamp:
 			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
-				TimeZoneUtil::cvtTimeStampToTimeStampTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
+				TimeZoneUtil::timeStampToTimeStampTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
 			return;
 
 		default:
@@ -1656,7 +1663,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		case dtype_timestamp_tz:
 		case dtype_ex_timestamp_tz:
 			*(GDS_DATE*) to->dsc_address =
-				TimeZoneUtil::cvtTimeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb).timestamp_date;
+				TimeZoneUtil::timeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb).timestamp_date;
 			return;
 
 		default:
@@ -1680,7 +1687,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 		case dtype_sql_time_tz:
 		case dtype_ex_time_tz:
-			*(ISC_TIME*) to->dsc_address = TimeZoneUtil::cvtTimeTzToTime(*(ISC_TIME_TZ*) from->dsc_address, cb);
+			*(ISC_TIME*) to->dsc_address = TimeZoneUtil::timeTzToTime(*(ISC_TIME_TZ*) from->dsc_address, cb);
 			return;
 
 		case dtype_timestamp:
@@ -1690,7 +1697,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		case dtype_timestamp_tz:
 		case dtype_ex_timestamp_tz:
 			*(GDS_TIME*) to->dsc_address =
-				TimeZoneUtil::cvtTimeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb).timestamp_time;
+				TimeZoneUtil::timeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb).timestamp_time;
 			return;
 
 		default:
@@ -1714,18 +1721,18 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			return;
 
 		case dtype_sql_time:
-			*(ISC_TIME_TZ*) to->dsc_address = TimeZoneUtil::cvtTimeToTimeTz(*(ISC_TIME*) from->dsc_address, cb);
+			*(ISC_TIME_TZ*) to->dsc_address = TimeZoneUtil::timeToTimeTz(*(ISC_TIME*) from->dsc_address, cb);
 			return;
 
 		case dtype_timestamp:
 			*(ISC_TIME_TZ*) to->dsc_address =
-				TimeZoneUtil::cvtTimeStampToTimeTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
+				TimeZoneUtil::timeStampToTimeTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
 			return;
 
 		case dtype_timestamp_tz:
 		case dtype_ex_timestamp_tz:
 			*(ISC_TIME_TZ*) to->dsc_address =
-				TimeZoneUtil::cvtTimeStampTzToTimeTz(*(ISC_TIMESTAMP_TZ*) from->dsc_address);
+				TimeZoneUtil::timeStampTzToTimeTz(*(ISC_TIMESTAMP_TZ*) from->dsc_address);
 			return;
 
 		case dtype_ex_time_tz:
@@ -1753,13 +1760,15 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				if (to->dsc_dtype == dtype_varying)
 					ptr += sizeof(USHORT);
 
-				if (len < from->dsc_length)
+				Jrd::CharSet* charSet = cb->getToCharset(to->getCharSet());
+
+				if (len / charSet->maxBytesPerChar() < from->dsc_length)
 				{
 					cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
-						Arg::Gds(isc_trunc_limits) << Arg::Num(len) << Arg::Num(from->dsc_length));
+						Arg::Gds(isc_trunc_limits) << Arg::Num(len / charSet->maxBytesPerChar()) <<
+						Arg::Num(from->dsc_length));
 				}
 
-				Jrd::CharSet* charSet = cb->getToCharset(to->getCharSet());
 				cb->validateData(charSet, from->dsc_length, from->dsc_address);
 
 				memcpy(ptr, from->dsc_address, from->dsc_length);
@@ -2197,7 +2206,7 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 	case dtype_sql_time_tz:
 	case dtype_ex_time_tz:
 		tzLookup = TimeZoneUtil::decodeTime(*(ISC_TIME_TZ*) from->dsc_address,
-			true, TimeZoneUtil::NO_OFFSET, cb, &times, &fractions);
+			true, TimeZoneUtil::NO_OFFSET, &times, &fractions);
 		timezone = ((ISC_TIME_TZ*) from->dsc_address)->time_zone;
 		break;
 

@@ -73,27 +73,29 @@ endif
 
 
 DC_Objects = $(call makeObjects,../examples/dbcrypt,DbCrypt.cpp)
-DC_Plugin = $(call makePluginName,DbCrypt_example)
+DC_Plugin = $(call makePluginName,fbSampleDbCrypt)
 AllObjects += $(DC_Objects)
 
 dc_example: $(DC_Plugin)
 
 $(DC_Plugin):	$(DC_Objects)
 	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)
+	$(CP) $(EXA_ROOT)/dbcrypt/fbSampleDbCrypt.conf $(PLUGINS)
 
 
 KH_Objects = $(call makeObjects,../examples/dbcrypt,CryptKeyHolder.cpp)
-KH_Plugin = $(call makePluginName,CryptKeyHolder_example)
+KH_Plugin = $(call makePluginName,fbSampleKeyHolder)
 AllObjects += $(KH_Objects)
 
 kh_example: $(KH_Plugin)
 
 $(KH_Plugin):	$(KH_Objects)
 	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)
+	$(CP) $(EXA_ROOT)/dbcrypt/fbSampleKeyHolder.conf $(PLUGINS)
 
 
 CA_Objects = $(call makeObjects,../examples/dbcrypt,CryptApplication.cpp)
-CRYPT_APP = $(BIN)/cryptAppSample$(EXEC_EXT)
+CRYPT_APP = $(BIN)/fbSampleDbCryptApp$(EXEC_EXT)
 AllObjects += $(CA_Objects)
 
 crypt_app: $(CRYPT_APP)

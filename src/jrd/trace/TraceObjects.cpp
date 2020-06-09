@@ -505,7 +505,9 @@ public:
 		m_log(getPool(), session.ses_logfile, false),
 		m_sesId(session.ses_id)
 	{
-		m_maxSize = Config::getMaxUserTraceLogSize();
+		string s;
+		s.printf("\n--- Session %d is suspended as its log is full ---\n", session.ses_id);
+		m_log.setFullMsg(s.c_str());
 	}
 
 	// TraceLogWriter implementation
@@ -525,40 +527,31 @@ public:
 private:
 	TraceLog m_log;
 	ULONG m_sesId;
-
-	// Use the same size data type as used in configuration file
-	// to avoid truncation during assignment
-	FB_UINT64 m_maxSize;
 };
 
 FB_SIZE_T TraceLogWriterImpl::write(const void* buf, FB_SIZE_T size)
 {
-	// comparison is in MB
-	if (m_log.getApproxLogSize() <= m_maxSize)
-		return m_log.write(buf, size);
+	const FB_SIZE_T written = m_log.write(buf, size);
+	if (written == size)
+		return size;
+
+	if (!m_log.isFull())
+		return written;
 
 	ConfigStorage* storage = TraceManager::getStorage();
 	StorageGuard guard(storage);
 
 	TraceSession session(*getDefaultMemoryPool());
-	storage->restart();
-	while (storage->getNextSession(session))
+	session.ses_id = m_sesId;
+	if (storage->getSession(session, ConfigStorage::FLAGS))
 	{
-		if (session.ses_id == m_sesId)
-		{
 			if (!(session.ses_flags & trs_log_full))
 			{
 				// suspend session
 				session.ses_flags |= trs_log_full;
-				storage->updateSession(session);
-
-				string s;
-				s.printf("\n--- Session %d is suspended as its log is full ---\n", m_sesId);
-				m_log.write(s.c_str(), s.length());
+			storage->updateFlags(session);
 			}
-			break;
 		}
-	}
 
 	// report successful write
 	return size;

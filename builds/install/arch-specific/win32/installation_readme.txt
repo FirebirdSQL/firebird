@@ -37,20 +37,6 @@ fbclient.dll and gds32.dll are removed from <system32>.
 See the UNINSTALL section below for more info on this.
 
 
-
-Deployment of gds32.dll
------------------------
-
-This compatibility library is no longer deployed into 
-the windows system directory by default. We cannot
-guarantee that the required MSVC runtimes will be 
-available. However it remains an option at install
-time, along with system deployment of fbclient.dll.
-
-Be sure to check that your target system has the 
-appropriate MSVC12 runtimes if you use these options.
-
-
 Installation of the Guardian
 ----------------------------
 
@@ -64,11 +50,10 @@ it is offered but not selected by default.
 Re-installation of Firebird
 ---------------------------
 
-The binary installer does its best to detect and 
-preserve a previous install. If the installer detects 
-firebird.conf or security4.fdb it will not offer the 
-option to install legacy_auth. Neither will it offer 
-the option to set the SYSDBA username and password.
+The binary installer does its best to detect and
+preserve a previous install. If the installer detects
+firebird.conf or security4.fdb it will not offer the
+option to set the SYSDBA username and password.
 
 
 Known installation problems

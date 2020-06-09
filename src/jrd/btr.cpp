@@ -2098,10 +2098,7 @@ void BTR_selectivity(thread_db* tdbb, jrd_rel* relation, USHORT id, SelectivityL
 		while (true)
 		{
 			if (node.isEndBucket || (nodes % 100 == 0))
-			{
-				if (--tdbb->tdbb_quantum < 0)
-					JRD_reschedule(tdbb, 0, true);
-			}
+				JRD_reschedule(tdbb);
 
 			if (node.isEndBucket || node.isEndLevel)
 				break;
@@ -3940,8 +3937,14 @@ static ULONG fast_load(thread_db* tdbb,
 				currLevel->pointer = levelPointer;
 			}
 
-			if (--tdbb->tdbb_quantum < 0)
-				error = JRD_reschedule(tdbb, 0, false);
+			try
+			{
+				JRD_reschedule(tdbb);
+			}
+			catch (const Exception&)
+			{
+				error = true;
+			}
 		}
 
 		// To finish up, put an end of level marker on the last bucket
@@ -6258,8 +6261,7 @@ static contents remove_leaf_node(thread_db* tdbb, index_insertion* insertion, WI
 
 		// Until deletion of duplicate nodes becomes efficient, limit
 		// leaf level traversal by rescheduling.
-		if (--tdbb->tdbb_quantum < 0)
-			JRD_reschedule(tdbb, 0, true);
+		JRD_reschedule(tdbb);
 	}
 
 	// If we've needed to search thru a significant number of pages, warn the
@@ -6291,8 +6293,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
  **************************************/
 	SET_TDBB(tdbb);
 
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	// if the search key is flagged to indicate a multi-segment index
 	// stuff the key to the stuff boundary

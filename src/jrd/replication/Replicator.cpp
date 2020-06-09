@@ -194,7 +194,7 @@ bool Replicator::commitTransaction(Transaction* transaction)
 
 		auto& txnData = transaction->getData();
 
-		for (const auto generator : m_generators)
+		for (const auto& generator : m_generators)
 		{
 			fb_assert(generator.name.hasData());
 

@@ -32,7 +32,12 @@ if errorlevel 1 (
 )
 @call compile.bat examples\extauth\msvc\ExtAuth_%VS_VER% ExtAuth_%FB_TARGET_PLATFORM%.log
 if errorlevel 1 (
-    @call :ERROR building ExtAuth example failed - see ExtAuth_%FB_TARGET_PLATFORM%.log for details
+    @call :ERROR building ExtAuth examples failed - see ExtAuth_%FB_TARGET_PLATFORM%.log for details
+    @goto :EOF
+)
+@call compile.bat examples\dbcrypt\msvc\DbCrypt_%VS_VER% DbCrypt_%FB_TARGET_PLATFORM%.log
+if errorlevel 1 (
+    @call :ERROR building DbCrypt examples failed - see DbCrypt_%FB_TARGET_PLATFORM%.log for details
     @goto :EOF
 )
 
@@ -93,8 +98,11 @@ if defined FB2_INTLEMP (
 @mkdir %FB_OUTPUT_DIR%\examples
 @mkdir %FB_OUTPUT_DIR%\examples\api
 @mkdir %FB_OUTPUT_DIR%\examples\dbcrypt
+@mkdir %FB_OUTPUT_DIR%\examples\dbcrypt\msvc
 @mkdir %FB_OUTPUT_DIR%\examples\build_win32
 @mkdir %FB_OUTPUT_DIR%\examples\empbuild
+@mkdir %FB_OUTPUT_DIR%\examples\extauth
+@mkdir %FB_OUTPUT_DIR%\examples\extauth\msvc
 @mkdir %FB_OUTPUT_DIR%\examples\include
 @mkdir %FB_OUTPUT_DIR%\examples\interfaces
 @mkdir %FB_OUTPUT_DIR%\examples\package
@@ -110,8 +118,12 @@ copy %FB_ROOT_PATH%\examples\* %FB_OUTPUT_DIR%\examples > nul
 ren %FB_OUTPUT_DIR%\examples\readme readme.txt > nul
 copy %FB_ROOT_PATH%\examples\api\* %FB_OUTPUT_DIR%\examples\api > nul
 copy %FB_ROOT_PATH%\examples\dbcrypt\* %FB_OUTPUT_DIR%\examples\dbcrypt > nul
+copy %FB_ROOT_PATH%\examples\dbcrypt\msvc\* %FB_OUTPUT_DIR%\examples\dbcrypt\msvc > nul
+copy %FB_ROOT_PATH%\examples\dbcrypt\*.conf %FB_OUTPUT_DIR%\examples\prebuilt\plugins > nul
 copy %FB_ROOT_PATH%\examples\build_win32\* %FB_OUTPUT_DIR%\examples\build_win32 > nul
 :: @copy %FB_ROOT_PATH%\examples\empbuild\* %FB_OUTPUT_DIR%\examples\empbuild > nul
+@copy %FB_ROOT_PATH%\examples\extauth\* %FB_OUTPUT_DIR%\examples\extauth > nul
+@copy %FB_ROOT_PATH%\examples\extauth\msvc\* %FB_OUTPUT_DIR%\examples\extauth\msvc > nul
 copy %FB_ROOT_PATH%\examples\empbuild\employe2.sql %FB_OUTPUT_DIR%\examples\empbuild > nul
 copy %FB_ROOT_PATH%\examples\include\* %FB_OUTPUT_DIR%\examples\include > nul
 copy %FB_ROOT_PATH%\examples\interfaces\* %FB_OUTPUT_DIR%\examples\interfaces > nul

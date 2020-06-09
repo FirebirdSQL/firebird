@@ -41,6 +41,7 @@ fb_msgdir=@FB_MSGDIR@
 fb_logdir=@FB_LOGDIR@
 fb_glockdir=@FB_GUARDDIR@
 fb_pluginsdir=@FB_PLUGDIR@
+fb_tzdatadir=@FB_TZDATADIR@
 
 fb_cflags="-I$fb_incdir"
 fb_libs="-L$fb_libdir -lfbclient"
@@ -107,6 +108,7 @@ while test $# -gt 0
         --logdir) echo $fb_logdir ;;
         --glockdir) echo $fb_glockdir ;;
         --pluginsdir) echo $fb_pluginsdir ;;
+        --tzdatadir) echo $fb_tzdatadir ;;
         --sampledbdir) echo $fb_sampledbdir ;;
         --version) echo $fb_version ;;
         --help) usage ;;

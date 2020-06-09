@@ -687,11 +687,13 @@ static void brio_fini(BurpGlobals* tdgbl)
 
 static void checkCompression()
 {
+#ifdef HAVE_ZLIB_H
 	if (!zlib())
 	{
 		(Firebird::Arg::Gds(isc_random) << "Compession support library not loaded" <<
 		 Firebird::Arg::StatusVector(zlib().status)).raise();
 	}
+#endif
 }
 
 
@@ -710,6 +712,7 @@ void MVOL_init_read(const char* file_name, USHORT* format)
 
 	if (tdgbl->gbl_sw_zip)
 	{
+#ifdef HAVE_ZLIB_H
 		z_stream& strm = tdgbl->gbl_stream;
 
 		strm.zalloc = Firebird::ZLib::allocFunc;
@@ -720,9 +723,8 @@ void MVOL_init_read(const char* file_name, USHORT* format)
 		checkCompression();
 		int ret = zlib().inflateInit(&strm);
 		if (ret != Z_OK)
-		{
-			BURP_error(383, true, SafeArg() << ret);
-		}
+#endif
+			BURP_error(383, true, SafeArg() << 127);
 	}
 }
 
@@ -776,6 +778,7 @@ void MVOL_init_write(const char* file_name)
 	tdgbl->gbl_io_cnt = ZC_BUFSIZE;
 	tdgbl->gbl_io_ptr = tdgbl->gbl_compress_buffer;
 
+#ifdef HAVE_ZLIB_H
 	if (tdgbl->gbl_sw_zip)
 	{
 		z_stream& strm = tdgbl->gbl_stream;
@@ -789,6 +792,7 @@ void MVOL_init_write(const char* file_name)
 			BURP_error(384, true, SafeArg() << ret);
 		strm.next_out = Z_NULL;
 	}
+#endif
 }
 
 void mvol_init_write(BurpGlobals* tdgbl, const char* file_name, int* cnt, UCHAR** ptr)

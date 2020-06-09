@@ -3894,8 +3894,8 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 			if (rseNode)
 			{
 				fb_assert(rseNode->getKind() == DmlNode::KIND_REC_SOURCE);
-				relation->rel_view_rse = static_cast<RseNode*>(rseNode);
-				fb_assert(relation->rel_view_rse->type == RseNode::TYPE);
+				relation->rel_view_rse = nodeAs<RseNode>(static_cast<RecordSourceNode*>(rseNode));
+				fb_assert(relation->rel_view_rse);
 			}
 			else
 				relation->rel_view_rse = NULL;

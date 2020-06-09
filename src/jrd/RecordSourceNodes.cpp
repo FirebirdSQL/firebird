@@ -665,22 +665,17 @@ RelationSourceNode* RelationSourceNode::copy(thread_db* tdbb, NodeCopier& copier
 void RelationSourceNode::ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const
 {
 	csb->csb_rpt[stream].csb_flags |= csb_no_dbkey;
-}
 
-RecordSourceNode* RelationSourceNode::pass1(thread_db* tdbb, CompilerScratch* csb)
-{
 	const CompilerScratch::csb_repeat* const tail = &csb->csb_rpt[stream];
 	const jrd_rel* const relation = tail->csb_relation;
 
 	if (relation)
 	{
-		SLONG ssRelationIdId = tail->csb_view ? tail->csb_view->rel_id :
+		const SLONG ssRelationId = tail->csb_view ? tail->csb_view->rel_id :
 			view ? view->rel_id : csb->csb_view ? csb->csb_view->rel_id : 0;
-		CMP_post_access(tdbb, csb, relation->rel_security_name, ssRelationIdId,
+		CMP_post_access(tdbb, csb, relation->rel_security_name, ssRelationId,
 			SCL_select, SCL_object_table, relation->rel_name);
 	}
-
-	return this;
 }
 
 void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
@@ -3110,7 +3105,7 @@ void RseNode::planCheck(const CompilerScratch* csb) const
 	{
 		const RecordSourceNode* node = *ptr;
 
-		if (node->type == RelationSourceNode::TYPE)
+		if (nodeIs<RelationSourceNode>(node))
 		{
 			const StreamType stream = node->getStream();
 
@@ -3120,7 +3115,7 @@ void RseNode::planCheck(const CompilerScratch* csb) const
 					Arg::Str(csb->csb_rpt[stream].csb_relation->rel_name));
 			}
 		}
-		else if (node->type == RseNode::TYPE)
+		else if (nodeIs<RseNode>(node))
 			static_cast<const RseNode*>(node)->planCheck(csb);
 	}
 }

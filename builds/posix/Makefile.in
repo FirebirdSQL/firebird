@@ -234,14 +234,31 @@ $(TOMMATH_LIB):	$(TOM_Objs)
 .PHONY:	tomcrypt
 TOMCRYPT_LIB=$(LIB)/libtomcrypt.a
 
-TOM_Src:=hashes/md5.c hashes/sha1.c hashes/sha2/sha256.c hashes/sha2/sha512.c misc/crypt/crypt_argchk.c
-TOM_Src:=$(addprefix ../extern/libtomcrypt/src/, $(TOM_Src))
-
+TOM_Src:=$(shell find ../extern/libtomcrypt/src -name '*.c' -print)
 TOM_Objs=$(call doObjects,$(TOM_Src))
 
 tomcrypt:	$(TOMCRYPT_LIB)
 
 $(TOMCRYPT_LIB):	$(TOM_Objs)
+	-$(RM) $@
+	$(STATICLIB_LINK) $@ $^
+
+#___________________________________________________________________________
+# RE2 - used by cross-builds
+#
+
+.PHONY:	re2
+RE2_LIB:=$(LIB)/libre2.a
+RE2_DIR:=../extern/re2/
+
+RE2_Util:=rune.cc strutil.cc
+RE2_Util:=$(addprefix $(RE2_DIR)util/, $(RE2_Util))
+RE2_Src=$(wildcard $(RE2_DIR)re2/*.cc)
+RE2_Objs=$(call doObjects,$(RE2_Src) $(RE2_Util))
+
+re2:	$(RE2_LIB)
+
+$(RE2_LIB):	$(RE2_Objs)
 	-$(RM) $@
 	$(STATICLIB_LINK) $@ $^
 
@@ -308,6 +325,7 @@ cross2:
 	$(MAKE) prerequisites
 	$(MAKE) tommath
 	$(MAKE) tomcrypt
+	$(MAKE) re2
 	$(MAKE) -C $(ROOT)/extern/decNumber
 	ln -sf $(ROOT)/extern/decNumber/libdecFloat$(CROSS).a $(LIB)
 	$(MAKE) yvalve

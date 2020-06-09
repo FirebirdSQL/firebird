@@ -636,8 +636,7 @@ void EXE_receive(thread_db* tdbb,
 
 	DEV_BLKCHK(request, type_req);
 
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_tra* transaction = request->req_transaction;
 
@@ -668,13 +667,13 @@ void EXE_receive(thread_db* tdbb,
 
 	const JrdStatement* statement = request->getStatement();
 
-	if (StmtNode::is<StallNode>(request->req_message))
+	if (nodeIs<StallNode>(request->req_message))
 		execute_looper(tdbb, request, transaction, request->req_next, jrd_req::req_sync);
 
 	if (!(request->req_flags & req_active) || request->req_operation != jrd_req::req_send)
 		ERR_post(Arg::Gds(isc_req_sync));
 
-	const MessageNode* message = StmtNode::as<MessageNode>(request->req_message);
+	const MessageNode* message = nodeAs<MessageNode>(request->req_message);
 	const Format* format = message->format;
 
 	if (msg != message->messageNumber)
@@ -789,8 +788,7 @@ void EXE_send(thread_db* tdbb, jrd_req* request, USHORT msg, ULONG length, const
 	SET_TDBB(tdbb);
 	DEV_BLKCHK(request, type_req);
 
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	if (!(request->req_flags & req_active))
 		ERR_post(Arg::Gds(isc_req_sync));
@@ -807,9 +805,9 @@ void EXE_send(thread_db* tdbb, jrd_req* request, USHORT msg, ULONG length, const
 
 	const SelectNode* selectNode;
 
-	if (StmtNode::is<MessageNode>(node))
+	if (nodeIs<MessageNode>(node))
 		message = node;
-	else if ((selectNode = StmtNode::as<SelectNode>(node)))
+	else if ((selectNode = nodeAs<SelectNode>(node)))
 	{
 		const NestConst<StmtNode>* ptr = selectNode->statements.begin();
 
@@ -828,9 +826,9 @@ void EXE_send(thread_db* tdbb, jrd_req* request, USHORT msg, ULONG length, const
 	else
 		BUGCHECK(167);	// msg 167 invalid SEND request
 
-	const Format* format = StmtNode::as<MessageNode>(message)->format;
+	const Format* format = nodeAs<MessageNode>(message)->format;
 
-	if (msg != StmtNode::as<MessageNode>(message)->messageNumber)
+	if (msg != nodeAs<MessageNode>(message)->messageNumber)
 		ERR_post(Arg::Gds(isc_req_sync));
 
 	if (length != format->fmt_length)
@@ -1317,8 +1315,7 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 		{
 			if (request->req_operation == jrd_req::req_evaluate)
 			{
-				if (--tdbb->tdbb_quantum < 0)
-					JRD_reschedule(tdbb, 0, true);
+				JRD_reschedule(tdbb);
 
 				if (node->hasLineColumn)
 				{

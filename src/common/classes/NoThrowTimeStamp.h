@@ -165,6 +165,7 @@ public:
 	static void decode_time(ISC_TIME ntime, int* hours, int* minutes, int* seconds, int* fractions = NULL) throw();
 	static void decode_timestamp(const ISC_TIMESTAMP ntimestamp, struct tm* times, int* fractions = NULL) throw();
 
+	static void add10msec(ISC_TIMESTAMP* v, SINT64 msec, SINT64 multiplier);
 	static void round_time(ISC_TIME& ntime, const int precision);
 
 	static inline bool isLeapYear(const int year) throw()

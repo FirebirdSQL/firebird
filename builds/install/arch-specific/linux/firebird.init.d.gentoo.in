@@ -1,5 +1,5 @@
-#!/sbin/runscript
-#Gentoo Linux RC script
+#!/sbin/openrc-run
+#Gentoo Linux OpenRC
 # description: Start/Stop firebird database server
 #
 # This file belongs in /etc/init.d where it will be run
@@ -18,31 +18,18 @@ INSTANCE=default
 FIREBIRD=@FB_CONFDIR@
 
 FBRunUser=firebird
+FBRunGroup=firebird
 
-makeFbDir() {
-	mDir=${1}
-	mode=${2}
-	if [ ! -d $mDir ]; then
-		rm -rf $mDir
-		mkdir $mDir
-		if [ "$mode" ]; then
-			chmod $mode $mDir
-		fi
-	fi
-	chown $FBRunUser:$FBRunUser $mDir
-}
-runDir=/var/run/firebird
-makeFbDir $runDir
-lockDir=/tmp/firebird
-makeFbDir $lockDir 0770
+fbRunDir=/var/run/firebird
+fbLockDir=/tmp/firebird
 
-pidfile="$runDir/$INSTANCE.pid"
+pidfile="$fbRunDir/$INSTANCE.pid"
 FULLNAME="firebird server [$INSTANCE]"
 LD_LIBRARY_PATH=$FIREBIRD/lib:$LD_LIBRARY_PATH
-FB_OPTS="-pidfile $pidfile -daemon -forever"
 
 export FIREBIRD LD_LIBRARY_PATH
 
+# Normally this 3 lines are not needed, keep them just in case of something VERY starnge
 ISC_USER=
 ISC_PASSWORD=
 export ISC_USER ISC_PASSWORD
@@ -52,20 +39,16 @@ if [ ! -x $GUARDIAN ]; then
 	GUARDIAN=@FB_SBINDIR@/fbguard
 fi
 
-start(){
-	ebegin "Starting $FULLNAME"
-	start-stop-daemon --start --pidfile $pidfile --user $FBRunUser --exec $GUARDIAN -- $FB_OPTS
-	eend $?
+command="${GUARDIAN}"
+command_args="-pidfile ${pidfile} -daemon -forever"
+start_stop_daemon_args="-p ${pidfile} -u ${FBRunUser}:${FBRunGroup}"
+
+start_pre() {
+	checkpath -q -d -m 0755 -o ${FBRunUser}:${FBRunGroup} ${fbRunDir} || return 1
+	checkpath -q -d -m 0770 -o ${FBRunUser}:${FBRunGroup} ${fbLockDir} || return 1
 }
 
-stop(){
-	ebegin "Stopping $FULLNAME"
-	start-stop-daemon --stop --pidfile $pidfile
-	eend $?
+depend() {
+	need net
 }
 
-restart(){
-	svc_stop
-	sleep 1
-	svc_start
-}

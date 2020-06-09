@@ -95,7 +95,6 @@ HELP
                 AutoStartTask
                 CopyFbClientToSysTask
                 CopyFbClientAsGds32Task
-                EnableLegacyClientAuth
 
 
   Only the specified tasks (and their children) will be selected; the rest
@@ -167,9 +166,8 @@ they will probably be combined with options such as /SILENT, /LOG,
 1/ Full server install of super server architecture
   o Change SYSDBA password from default masterkey, 
   o deploy gds32 to <SYS>
-  o enable legacy authentication for older clients
 
-    /MERGETASKS="CopyFbClientAsGds32Task,EnableLegacyClientAuth" /SYSDBAPASSWORD="mypassword"
+    /MERGETASKS="CopyFbClientAsGds32Task" /SYSDBAPASSWORD="mypassword"
     
 2/ Deploy Classic Server and keep other default tasks
 

@@ -35,10 +35,13 @@ namespace Jrd {
 
 struct TraceLogHeader : public Firebird::MemoryHeader
 {
-	static const USHORT TRACE_LOG_VERSION = 1;
+	static const USHORT TRACE_LOG_VERSION = 2;
 
-	volatile unsigned int readFileNum;
-	volatile unsigned int writeFileNum;
+	ULONG readPos;
+	ULONG writePos;
+	ULONG maxSize;
+	ULONG allocated;		// zero when reader gone
+	ULONG flags;
 };
 
 class TraceLog : public Firebird::IpcObject
@@ -50,24 +53,27 @@ public:
 	FB_SIZE_T read(void* buf, FB_SIZE_T size);
 	FB_SIZE_T write(const void* buf, FB_SIZE_T size);
 
-	// returns approximate log size in MB
-	ULONG getApproxLogSize() const;
+	bool isFull();		// true if free space left is less than threshold
+	void setFullMsg(const char* str);
 
 private:
+	// flags in header
+	const ULONG FLAG_FULL = 0x0001;		// log is full, set by writer, reset by reader
+	const ULONG FLAG_DONE = 0x0002;		// set when reader is gone
+
 	void mutexBug(int osErrorCode, const char* text);
 	bool initialize(Firebird::SharedMemoryBase*, bool);
 
 	void lock();
 	void unlock();
 
-	int openFile(int fileNum);
-	int removeFile(int fileNum);
+	FB_SIZE_T getUsed();	// available to read
+	FB_SIZE_T getFree(bool useMax);	// available for write
+	void extend(FB_SIZE_T size);
 
 	Firebird::AutoPtr<Firebird::SharedMemory<TraceLogHeader> > m_sharedMemory;
-	Firebird::PathName m_baseFileName;
-	unsigned int m_fileNum;
-	int m_fileHandle;
 	bool m_reader;
+	Firebird::string m_fullMsg;
 
 	class TraceLogGuard
 	{

@@ -96,9 +96,12 @@ $(OBJ)/%.cpp: $(SRC_ROOT)/%.epp
 	$(GPRE_CURRENT) $(GPRE_FLAGS) $(firstword $<) $@
 
 
-.SUFFIXES: .lo .o .cpp .c
+.SUFFIXES: .lo .o .cpp .c .cc
 
 %.o: %.c
+	$(CC) $(WCFLAGS) -c $(firstword $<) -o $@
+
+%.o: %.cc
 	$(CC) $(WCFLAGS) -c $(firstword $<) -o $@
 
 $(OBJ)/%.o: $(SRC_ROOT)/%.c

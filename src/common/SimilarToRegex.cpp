@@ -852,7 +852,7 @@ bool SimilarToRegex::matches(const char* buffer, unsigned bufferLen, Array<Match
 		{
 			matchPosArray->clear();
 
-			for (const auto resSp : resSps)
+			for (const auto& resSp : resSps)
 			{
 				matchPosArray->push(MatchPos{
 					static_cast<unsigned>(resSp.data() - sp.begin()),

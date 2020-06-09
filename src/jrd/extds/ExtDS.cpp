@@ -833,7 +833,7 @@ void ConnectionsPool::removeFromPool(Data* item, FB_SIZE_T pos)
 
 	if (item->m_lastUsed != 0)
 	{
-		if (pos == -1)
+		if (pos == (FB_SIZE_T) -1)
 			m_idleArray.find(*item, pos);
 
 		fb_assert(m_idleArray[pos] == item);
@@ -1357,8 +1357,8 @@ int ConnectionsPool::Data::verify(ConnectionsPool* connPool, bool active)
 
 bool ConnectionsPool::verifyPool()
 {
-	int cntIdle = 0, cntActive = 0;
-	int errs = 0;
+	unsigned cntIdle = 0, cntActive = 0;
+	unsigned errs = 0;
 
 	Data* item = m_idleList;
 	if (item)
@@ -1536,7 +1536,7 @@ void Transaction::start(thread_db* tdbb, TraScope traScope, TraModes traMode,
 	{
 	case traCommon:
 		this->m_nextTran = tran->tra_ext_common;
-		this->m_jrdTran = tran;
+		this->m_jrdTran = tran->getInterface(true);
 		tran->tra_ext_common = this;
 		break;
 
@@ -1638,23 +1638,24 @@ void Transaction::detachFromJrdTran()
 	if (m_scope != traCommon)
 		return;
 
-	fb_assert(m_jrdTran || m_connection.isBroken());
 	if (!m_jrdTran)
 		return;
 
-	Transaction** tran_ptr = &m_jrdTran->tra_ext_common;
-	m_jrdTran = NULL;
-	for (; *tran_ptr; tran_ptr = &(*tran_ptr)->m_nextTran)
+	jrd_tra* transaction = m_jrdTran->getHandle();
+	if (transaction)
 	{
-		if (*tran_ptr == this)
+		Transaction** tran_ptr = &transaction->tra_ext_common;
+		for (; *tran_ptr; tran_ptr = &(*tran_ptr)->m_nextTran)
 		{
-			*tran_ptr = this->m_nextTran;
-			this->m_nextTran = NULL;
-			return;
+			if (*tran_ptr == this)
+			{
+				*tran_ptr = this->m_nextTran;
+				this->m_nextTran = NULL;
+				break;
+			}
 		}
 	}
-
-	fb_assert(false);
+	m_jrdTran = NULL;
 }
 
 void Transaction::jrdTransactionEnd(thread_db* tdbb, jrd_tra* transaction,

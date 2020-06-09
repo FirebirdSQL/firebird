@@ -338,6 +338,7 @@
 #define FB_SAMPLEDIR ""
 #define FB_SBINDIR ""
 #define FB_SECDBDIR ""
+#define FB_TZDATADIR ""
 
 #define FB_LOGFILENAME "firebird.log"
 

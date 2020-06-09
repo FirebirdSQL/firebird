@@ -42,7 +42,7 @@ int main(int ac, char** av)
 		check(NULL, rsa_export(outbuf, &outlen, PK_PRIVATE, &key),
 			"Error exporting private RSA key");
 
-		const char* const file = "ExtAuth.conf";
+		const char* const file = "fbSampleExtAuth.conf";
 		FILE* conf = fopen(file, "w");
 		if (!conf)
 		{

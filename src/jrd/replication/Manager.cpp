@@ -125,7 +125,7 @@ Manager::Manager(const string& dbId,
 	FbLocalStatus localStatus;
 	DispatcherPtr provider;
 
-	for (const auto iter : m_config->syncReplicas)
+	for (const auto& iter : m_config->syncReplicas)
 	{
 		string database = iter;
 		string login, password;

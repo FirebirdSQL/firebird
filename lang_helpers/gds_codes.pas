@@ -1943,6 +1943,8 @@ const
 	gds_truncate_monitor                 = 335545267;
 	isc_truncate_context                 = 335545268;
 	gds_truncate_context                 = 335545268;
+	isc_merge_dup_update                 = 335545269;
+	gds_merge_dup_update                 = 335545269;
 	isc_gfix_db_name                     = 335740929;
 	gds_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;

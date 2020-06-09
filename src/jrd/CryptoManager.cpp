@@ -981,7 +981,7 @@ namespace Jrd {
 					releaseGuard.leave();
 
 					ThreadContextHolder tdbb(att->att_database, att, &status_vector);
-					tdbb->tdbb_quantum = SWEEP_QUANTUM;
+					tdbb->markAsSweeper();
 
 					DatabaseContextHolder dbHolder(tdbb);
 
@@ -1018,10 +1018,7 @@ namespace Jrd {
 							}
 
 							// scheduling
-							if (--tdbb->tdbb_quantum < 0)
-							{
-								JRD_reschedule(tdbb, SWEEP_QUANTUM, true);
-							}
+							JRD_reschedule(tdbb);
 
 							// nbackup state check
 							int bak_state = Ods::hdr_nbak_unknown;

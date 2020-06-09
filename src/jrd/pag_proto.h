@@ -44,7 +44,7 @@ bool	PAG_add_header_entry(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHOR
 //void	PAG_attach_temp_pages(Jrd::thread_db*, USHORT pageSpaceID);
 bool	PAG_replace_entry_first(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
 Ods::pag*	PAG_allocate(Jrd::thread_db* tdbb, Jrd::win*);
-Ods::pag*	PAG_allocate_pages(Jrd::thread_db* tdbb, Jrd::win* window, int cntAlloc, bool aligned);
+Ods::pag*	PAG_allocate_pages(Jrd::thread_db* tdbb, Jrd::win* window, unsigned cntAlloc, bool aligned);
 AttNumber	PAG_attachment_id(Jrd::thread_db*);
 bool	PAG_delete_clump_entry(Jrd::thread_db* tdbb, USHORT);
 void	PAG_format_header(Jrd::thread_db*);

@@ -8700,17 +8700,12 @@ unsigned int TimeoutTimer::timeToExpire() const
 	return r > 0 ? r : 0;
 }
 
-bool TimeoutTimer::getExpireTimestamp(const ISC_TIMESTAMP_TZ start, ISC_TIMESTAMP_TZ& exp) const
+bool TimeoutTimer::getExpireClock(SINT64& clock) const
 {
 	if (!m_start)
 		return false;
 
-	SINT64 ticks = TimeStamp::timeStampToTicks(start.utc_timestamp);
-	ticks += m_value * ISC_TIME_SECONDS_PRECISION / 1000;
-
-	exp.utc_timestamp = TimeStamp::ticksToTimeStamp(ticks);
-	exp.time_zone = start.time_zone;
-
+	clock = m_start + m_value;
 	return true;
 }
 
@@ -8767,7 +8762,7 @@ SSHORT thread_db::getCharSet() const
 	return attachment->att_charset;
 }
 
-ISC_STATUS thread_db::checkCancelState(ISC_STATUS* secondary)
+ISC_STATUS thread_db::getCancelState(ISC_STATUS* secondary)
 {
 	// Test for asynchronous shutdown/cancellation requests.
 	// But do that only if we're neither in the verb cleanup state
@@ -8828,56 +8823,49 @@ ISC_STATUS thread_db::checkCancelState(ISC_STATUS* secondary)
 	return FB_SUCCESS;
 }
 
-bool thread_db::checkCancelState(bool punt)
+void thread_db::checkCancelState()
 {
 	ISC_STATUS secondary = 0;
-	const ISC_STATUS error = checkCancelState(&secondary);
+	const ISC_STATUS error = getCancelState(&secondary);
 
-	if (!error)
-		return false;
+	if (error)
+	{
+		Arg::Gds status(error);
 
-	Arg::Gds status(error);
+		if (error == isc_shutdown)
+			status << Arg::Str(attachment->att_filename);
 
-	if (error == isc_shutdown)
-		status << Arg::Str(attachment->att_filename);
+		if (secondary)
+			status << Arg::Gds(secondary);
 
-	if (secondary)
-		status << Arg::Gds(secondary);
+		if (attachment)
+			attachment->att_flags &= ~ATT_cancel_raise;
 
-	if (attachment)
-		attachment->att_flags &= ~ATT_cancel_raise;
+		tdbb_flags |= TDBB_sys_error;
+		status.copyTo(tdbb_status_vector);
 
-	tdbb_flags |= TDBB_sys_error;
-	status.copyTo(tdbb_status_vector);
-
-	if (punt)
 		CCH_unwind(this, true);
-
-	return true;
+	}
 }
 
-bool thread_db::reschedule(SLONG quantum, bool punt)
+void thread_db::reschedule()
 {
 	// Somebody has kindly offered to relinquish
 	// control so that somebody else may run
 
-	if (checkCancelState(punt))
-		return true;
+	checkCancelState();
 
 	{	// checkout scope
 		EngineCheckout cout(this, FB_FUNCTION);
 		Thread::yield();
 	}
 
-	if (checkCancelState(punt))
-		return true;
+	checkCancelState();
 
 	Monitoring::checkState(this);
 
-	tdbb_quantum = (tdbb_quantum <= 0) ?
-		(quantum ? quantum : QUANTUM) : tdbb_quantum;
-
-	return false;
+	if (tdbb_quantum <= 0)
+		tdbb_quantum = (tdbb_flags & TDBB_sweeper) ? SWEEP_QUANTUM : QUANTUM;
 }
 
 // end thread_db methods

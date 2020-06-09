@@ -38,6 +38,10 @@ using namespace Jrd;
 
 bool jrd_rel::isReplicating(thread_db* tdbb)
 {
+	Database* const dbb = tdbb->getDatabase();
+	if (!dbb->isReplicating(tdbb))
+		return false;
+
 	Attachment* const attachment = tdbb->getAttachment();
 	attachment->checkReplSetLock(tdbb);
 

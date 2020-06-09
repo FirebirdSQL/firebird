@@ -587,7 +587,7 @@ protected:
 	Connection& m_connection;
 	TraScope m_scope;
 	Transaction* m_nextTran;		// next common transaction
-	Jrd::jrd_tra* m_jrdTran;		// parent JRD transaction
+	Firebird::RefPtr<Jrd::JTransaction> m_jrdTran;		// parent JRD transaction
 };
 
 

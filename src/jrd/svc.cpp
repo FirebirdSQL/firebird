@@ -2929,6 +2929,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_res_fix_fss_metadata:
 			case isc_spb_bkp_stat:
 			case isc_spb_bkp_skip_data:
+			case isc_spb_bkp_include_data:
 			case isc_spb_bkp_keyholder:
 			case isc_spb_bkp_keyname:
 			case isc_spb_bkp_crypt:

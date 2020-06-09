@@ -54,7 +54,7 @@ var
 // get a full list of components. 
 procedure SetupWizardFormComponentsArrays;
 var
-  i, len: integer;
+  i: integer;
 begin
 
   SetArrayLength(CompGroup1Array,24);
@@ -210,7 +210,7 @@ procedure EnumerateObjectList;
 //Walk through the components on the InnoSetup install wizard
 var
   Alist: TStringList;
-  i, j: integer;
+  i: integer;
   aComponent: string;
 
 begin
@@ -297,7 +297,7 @@ var
 procedure CreateDebugDlg(aString: String; ADescription: String);
 var
   DebugText: TMemo;
-	DebugDescription: TLabel;
+//	DebugDescription: TLabel;
   OKButton: TButton;
 begin
   DebugDlg := TForm.create(nil);

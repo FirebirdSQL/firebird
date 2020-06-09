@@ -386,7 +386,6 @@ void InternalTransaction::doRollback(FbStatusVector* status, thread_db* tdbb, bo
 	if (m_connection.isBroken())
 	{
 		m_transaction = NULL;
-		m_jrdTran = NULL;
 		return;
 	}
 

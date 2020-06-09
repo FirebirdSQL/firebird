@@ -26,32 +26,55 @@
 
 #include "firebird.h"
 #include "../common/TimeZoneUtil.h"
+#include "../common/TimeZones.h"
 #include "../common/StatusHolder.h"
 #include "../common/classes/rwlock.h"
 #include "../common/classes/timestamp.h"
 #include "../common/classes/GenericMap.h"
 #include "../common/config/config.h"
 #include "../common/os/path_utils.h"
+#include "../common/os/os_utils.h"
 #include "unicode/ucal.h"
-
-#ifdef TZ_UPDATE
-#include "../common/classes/objects_array.h"
-#endif
 
 using namespace Firebird;
 
-//-------------------------------------
-
 namespace
 {
-	struct TimeZoneDesc
+	class TimeZoneDesc
 	{
-		const char* asciiName;
-		const UChar* icuName;
-	};
-}	// namespace
+	public:
+		TimeZoneDesc(MemoryPool& pool)
+			: asciiName(pool),
+			  unicodeName(pool)
+		{
+		}
 
-#include "./TimeZones.h"
+	public:
+		void setName(const char* name)
+		{
+			asciiName = name;
+
+			for (const auto c : asciiName)
+				unicodeName.push(c);
+
+			unicodeName.push(0);
+		}
+
+		const char* getAsciiName() const
+		{
+			return asciiName.c_str();
+		}
+
+		const UChar* getUnicodeName() const
+		{
+			return unicodeName.begin();
+		}
+
+	private:
+		string asciiName;
+		Array<UChar> unicodeName;
+	};
+}
 
 //-------------------------------------
 
@@ -67,21 +90,65 @@ static void skipSpaces(const char*& p, const char* end);
 
 namespace
 {
-	struct TimeZoneStartup
+	class TimeZoneDataPath
 	{
-		TimeZoneStartup(MemoryPool& pool)
-			: nameIdMap(pool)
+	public:
+		TimeZoneDataPath(MemoryPool& pool)
+			: path(pool)
 		{
-#if defined DEV_BUILD && defined TZ_UPDATE
-			tzUpdate();
-#endif
+			PathName temp;
 
-			for (USHORT i = 0; i < FB_NELEM(TIME_ZONE_LIST); ++i)
+			// Could not call fb_utils::getPrefix here.
+			if (FB_TZDATADIR[0])
+				temp = FB_TZDATADIR;
+			else
+				PathUtils::concatPath(temp, Config::getRootDirectory(), "tzdata");
+
+			const static char* const ICU_TIMEZONE_FILES_DIR = "ICU_TIMEZONE_FILES_DIR";
+
+			// Do not update ICU_TIMEZONE_FILES_DIR if it's already set.
+			fb_utils::setenv(ICU_TIMEZONE_FILES_DIR, temp.c_str(), false);
+			fb_utils::readenv(ICU_TIMEZONE_FILES_DIR, path);
+		}
+
+		const PathName& get()
+		{
+			return path;
+		}
+
+	private:
+		PathName path;
+	};
+
+	class TimeZoneStartup
+	{
+	public:
+		TimeZoneStartup(MemoryPool& pool)
+			: timeZoneList(pool),
+			  nameIdMap(pool)
+		{
+			if (!initFromFile())
 			{
-				string s(TIME_ZONE_LIST[i].asciiName);
-				s.upper();
-				nameIdMap.put(s, i);
+				for (USHORT i = 0; i < FB_NELEM(BUILTIN_TIME_ZONE_LIST); ++i)
+				{
+					auto& timeZone = timeZoneList.add();
+					timeZone.setName(BUILTIN_TIME_ZONE_LIST[i]);
+				}
 			}
+
+			unsigned id = 0;
+
+			for (const auto& timeZone : timeZoneList)
+			{
+				string name = timeZone.getAsciiName();
+				name.upper();
+				nameIdMap.put(name, id++);
+			}
+		}
+
+		const ObjectsArray<TimeZoneDesc>& getTimeZoneList()
+		{
+			return timeZoneList;
 		}
 
 		bool getId(string name, USHORT& id)
@@ -98,85 +165,102 @@ namespace
 				return false;
 		}
 
-#if defined DEV_BUILD && defined TZ_UPDATE
-		void tzUpdate()
+	private:
+		bool initFromFile()
 		{
-			SortedObjectsArray<string> currentZones, icuZones;
+			PathName idsPath;
+			PathUtils::concatPath(idsPath, TimeZoneUtil::getTzDataPath(), "ids.dat");
+			const int fileHandle = os_utils::open(idsPath.c_str(), O_RDONLY | O_BINARY, 0);
 
-			for (unsigned i = 0; i < FB_NELEM(TIME_ZONE_LIST); ++i)
-				currentZones.push(TIME_ZONE_LIST[i].asciiName);
+			if (fileHandle == -1)
+				return false;
 
-			Jrd::UnicodeUtil::ConversionICU& icuLib = Jrd::UnicodeUtil::getConversionICU();
-			UErrorCode icuErrorCode = U_ZERO_ERROR;
-
-			UEnumeration* uenum = icuLib.ucalOpenTimeZones(&icuErrorCode);
-			int32_t length;
-
-			while (const UChar* str = icuLib.uenumUnext(uenum, &length, &icuErrorCode))
+			struct STAT stat;
+			if (os_utils::fstat(fileHandle, &stat) != 0)
 			{
-				char buffer[256];
-
-				for (int i = 0; i <= length; ++i)
-					buffer[i] = (char) str[i];
-
-				icuZones.push(buffer);
+				close(fileHandle);
+				return false;
 			}
 
-			icuLib.uenumClose(uenum);
+			Array<UCHAR> buffer(stat.st_size);
+			buffer.resize(stat.st_size);
+			const long bytesRead = read(fileHandle, buffer.begin(), buffer.getCount());
 
-			for (auto const& zone : currentZones)
+			close(fileHandle);
+
+			if (bytesRead != buffer.getCount())
+				return false;
+
+			const UCHAR* p = buffer.begin();
+			const UCHAR* end = buffer.end();
+
+			if (buffer.getCount() > 10)
 			{
-				FB_SIZE_T pos;
+				// file signature
+				if (memcmp(p, "FBTZ", 5) == 0)
+				{
+					p += 5;
+					if (isc_portable_integer(p, 2) == 1)	// file version: must be 1
+					{
+						string databaseVersion;
 
-				if (icuZones.find(zone, pos))
-					icuZones.remove(pos);
-				else
-					printf("--> %s does not exist in ICU.\n", zone.c_str());
+						for (p += 2; p < end && *p; ++p)
+							databaseVersion += *p;
+
+						++p;
+
+						if (end - p >= 2)
+						{
+							unsigned count = isc_portable_integer(p, 2);
+
+							// Our main criteria to choose the file or the builtin data is the count
+							// of entries. TZ database version is the second, as new version could
+							// have the same entries as before.
+
+							if (count < FB_NELEM(BUILTIN_TIME_ZONE_LIST))
+							{
+								gds__log("tzdata ids.dat file is older than builtin time zone list.");
+								return false;
+							}
+							else if (count == FB_NELEM(BUILTIN_TIME_ZONE_LIST) &&
+								databaseVersion <= BUILTIN_TIME_ZONE_VERSION)
+							{
+								return false;
+							}
+
+							for (p += 2; p < end; ++p)
+							{
+								auto& timeZone = timeZoneList.add();
+								string name;
+
+								for (; p < end && *p; ++p)
+									name += *p;
+
+								timeZone.setName(name.c_str());
+
+								if (p >= end)
+								{
+									timeZoneList.clear();
+									break;
+								}
+							}
+
+							if (timeZoneList.getCount() == count)
+								return true;
+						}
+					}
+				}
 			}
 
-			ObjectsArray<string> newZones;
+			gds__log("tzdata ids.dat file is corrupted.");
 
-			for (int i = 0; i < FB_NELEM(TIME_ZONE_LIST); ++i)
-				newZones.push(TIME_ZONE_LIST[i].asciiName);
+			timeZoneList.clear();
 
-			for (auto const& zone : icuZones)
-				newZones.push(zone);
-
-			printf("// The content of this file is generated with help of macro TZ_UPDATE.\n\n");
-
-			int index = 0;
-
-			for (auto const& zone : newZones)
-			{
-				printf("static const UChar TZSTR_%d[] = {", index);
-
-				for (int i = 0; i < zone.length(); ++i)
-					printf("'%c', ", zone[i]);
-
-				printf("'\\0'};\n");
-
-				++index;
-			}
-
-			printf("\n");
-
-			printf("// Do not change order of items in this array! The index corresponds to a TimeZone ID, which must be fixed!\n");
-			printf("static const TimeZoneDesc TIME_ZONE_LIST[] = {");
-
-			index = 0;
-
-			for (auto const& zone : newZones)
-			{
-				printf("%s\n\t{\"%s\", TZSTR_%d}", (index == 0 ? "" : ","), zone.c_str(), index);
-				++index;
-			}
-
-			printf("\n");
-			printf("};\n\n");
+			return false;
 		}
-#endif	// defined DEV_BUILD && defined TZ_UPDATE
 
 	private:
+		ObjectsArray<TimeZoneDesc> timeZoneList;
 		GenericMap<Pair<Left<string, USHORT> > > nameIdMap;
 	};
 }	// namespace
@@ -186,25 +270,23 @@ namespace
 static const UDate MIN_ICU_TIMESTAMP = TimeZoneUtil::timeStampToIcuDate(TimeStamp::MIN_TIMESTAMP);
 static const UDate MAX_ICU_TIMESTAMP = TimeZoneUtil::timeStampToIcuDate(TimeStamp::MAX_TIMESTAMP);
 static const unsigned ONE_DAY = 24 * 60 - 1;	// used for offset encoding
+static InitInstance<TimeZoneDataPath> timeZoneDataPath;
 static InitInstance<TimeZoneStartup> timeZoneStartup;
 
 //-------------------------------------
 
+
+const ISC_DATE TimeZoneUtil::TIME_TZ_BASE_DATE = 58849;	// 2020-01-01
 const char TimeZoneUtil::GMT_FALLBACK[5] = "GMT*";
-InitInstance<PathName> TimeZoneUtil::tzDataPath;
 
 void TimeZoneUtil::initTimeZoneEnv()
 {
-	PathName path;
-	PathUtils::concatPath(path, Config::getRootDirectory(), "tzdata");
-
-	if (fb_utils::setenv("ICU_TIMEZONE_FILES_DIR", path.c_str(), false))
-		tzDataPath() = path;
+	timeZoneDataPath();
 }
 
 const PathName& TimeZoneUtil::getTzDataPath()
 {
-	return tzDataPath();
+	return timeZoneDataPath().get();
 }
 
 // Return the current user's time zone.
@@ -324,8 +406,8 @@ void TimeZoneUtil::getDatabaseVersion(Firebird::string& str)
 
 void TimeZoneUtil::iterateRegions(std::function<void (USHORT, const char*)> func)
 {
-	for (USHORT i = 0; i < FB_NELEM(TIME_ZONE_LIST); ++i)
-		func(MAX_USHORT - i, TIME_ZONE_LIST[i].asciiName);
+	for (USHORT i = 0; i < timeZoneStartup().getTimeZoneList().getCount(); ++i)
+		func(MAX_USHORT - i, timeZoneStartup().getTimeZoneList()[i].getAsciiName());
 }
 
 // Parses a time zone, offset- or region-based.
@@ -444,7 +526,7 @@ unsigned TimeZoneUtil::format(char* buffer, size_t bufferSize, USHORT timeZone, 
 	}
 	else
 	{
-		strncpy(buffer, getDesc(timeZone)->asciiName, bufferSize);
+		strncpy(buffer, getDesc(timeZone)->getAsciiName(), bufferSize);
 
 		p += strlen(buffer);
 	}
@@ -488,7 +570,7 @@ void TimeZoneUtil::extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, SSHORT* of
 		Jrd::UnicodeUtil::ConversionICU& icuLib = Jrd::UnicodeUtil::getConversionICU();
 
 		UCalendar* icuCalendar = icuLib.ucalOpen(
-			getDesc(timeStampTz.time_zone)->icuName, -1, NULL, UCAL_GREGORIAN, &icuErrorCode);
+			getDesc(timeStampTz.time_zone)->getUnicodeName(), -1, NULL, UCAL_GREGORIAN, &icuErrorCode);
 
 		if (!icuCalendar)
 			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
@@ -516,69 +598,41 @@ void TimeZoneUtil::extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, SSHORT* of
 	*offset = displacement;
 }
 
-// Converts a time-tz to a time in a given zone.
-ISC_TIME TimeZoneUtil::timeTzToTime(const ISC_TIME_TZ& timeTz, USHORT toTimeZone, Callbacks* cb)
-{
-	ISC_TIMESTAMP_TZ tempTimeStampTz;
-	tempTimeStampTz.utc_timestamp.timestamp_date = cb->getLocalDate();
-	tempTimeStampTz.utc_timestamp.timestamp_time = 0;
-	tempTimeStampTz.time_zone = cb->getSessionTimeZone();
-	TimeZoneUtil::localTimeStampToUtc(tempTimeStampTz);
-
-	tempTimeStampTz.utc_timestamp.timestamp_time = timeTz.utc_time;
-	tempTimeStampTz.time_zone = timeTz.time_zone;
-
-	return timeStampTzToTimeStamp(tempTimeStampTz, toTimeZone).timestamp_time;
-}
-
-// Converts a timestamp-tz to a timestamp in a given zone.
-ISC_TIMESTAMP TimeZoneUtil::timeStampTzToTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, USHORT toTimeZone)
-{
-	ISC_TIMESTAMP_TZ tempTimeStampTz = timeStampTz;
-	tempTimeStampTz.time_zone = toTimeZone;
-
-	struct tm times;
-	int fractions;
-	decodeTimeStamp(tempTimeStampTz, false, TimeZoneUtil::NO_OFFSET, &times, &fractions);
-
-	return TimeStamp::encode_timestamp(&times, fractions);
-}
-
 // Converts a time from local to UTC.
-void TimeZoneUtil::localTimeToUtc(ISC_TIME& time, Callbacks* cb)
+void TimeZoneUtil::localTimeToUtc(ISC_TIME& time, ISC_USHORT timeZone)
 {
 	ISC_TIME_TZ timeTz;
 	timeTz.utc_time = time;
-	timeTz.time_zone = cb->getSessionTimeZone();
-	localTimeToUtc(timeTz, cb);
+	timeTz.time_zone = timeZone;
+	localTimeToUtc(timeTz);
 
 	time = timeTz.utc_time;
 }
 
 // Converts a time from local to UTC.
-void TimeZoneUtil::localTimeToUtc(ISC_TIME_TZ& timeTz, Callbacks* cb)
+void TimeZoneUtil::localTimeToUtc(ISC_TIME_TZ& timeTz)
 {
-	ISC_TIMESTAMP_TZ tempTimeStampTz;
-	tempTimeStampTz.utc_timestamp.timestamp_date = cb->getCurrentGmtTimeStamp().timestamp_date;
-	tempTimeStampTz.utc_timestamp.timestamp_time = timeTz.utc_time;
-	tempTimeStampTz.time_zone = timeTz.time_zone;
-	localTimeStampToUtc(tempTimeStampTz);
+	ISC_TIMESTAMP_TZ tsTz;
+	tsTz.utc_timestamp.timestamp_date = TIME_TZ_BASE_DATE;
+	tsTz.utc_timestamp.timestamp_time = timeTz.utc_time;
+	tsTz.time_zone = timeTz.time_zone;
+	localTimeStampToUtc(tsTz);
 
-	timeTz.utc_time = tempTimeStampTz.utc_timestamp.timestamp_time;
+	timeTz.utc_time = tsTz.utc_timestamp.timestamp_time;
 }
 
 // Converts a timestamp from its local datetime fields to UTC.
 void TimeZoneUtil::localTimeStampToUtc(ISC_TIMESTAMP& timeStamp, Callbacks* cb)
 {
-	ISC_TIMESTAMP_TZ tempTimeStampTz;
-	tempTimeStampTz.utc_timestamp.timestamp_date = timeStamp.timestamp_date;
-	tempTimeStampTz.utc_timestamp.timestamp_time = timeStamp.timestamp_time;
-	tempTimeStampTz.time_zone = cb->getSessionTimeZone();
+	ISC_TIMESTAMP_TZ tsTz;
+	tsTz.utc_timestamp.timestamp_date = timeStamp.timestamp_date;
+	tsTz.utc_timestamp.timestamp_time = timeStamp.timestamp_time;
+	tsTz.time_zone = cb->getSessionTimeZone();
 
-	localTimeStampToUtc(tempTimeStampTz);
+	localTimeStampToUtc(tsTz);
 
-	timeStamp.timestamp_date = tempTimeStampTz.utc_timestamp.timestamp_date;
-	timeStamp.timestamp_time = tempTimeStampTz.utc_timestamp.timestamp_time;
+	timeStamp.timestamp_date = tsTz.utc_timestamp.timestamp_date;
+	timeStamp.timestamp_time = tsTz.utc_timestamp.timestamp_time;
 }
 
 // Converts a timestamp from its local datetime fields to UTC.
@@ -600,7 +654,7 @@ void TimeZoneUtil::localTimeStampToUtc(ISC_TIMESTAMP_TZ& timeStampTz)
 		Jrd::UnicodeUtil::ConversionICU& icuLib = Jrd::UnicodeUtil::getConversionICU();
 
 		UCalendar* icuCalendar = icuLib.ucalOpen(
-			getDesc(timeStampTz.time_zone)->icuName, -1, NULL, UCAL_GREGORIAN, &icuErrorCode);
+			getDesc(timeStampTz.time_zone)->getUnicodeName(), -1, NULL, UCAL_GREGORIAN, &icuErrorCode);
 
 		if (!icuCalendar)
 			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
@@ -635,35 +689,15 @@ void TimeZoneUtil::localTimeStampToUtc(ISC_TIMESTAMP_TZ& timeStampTz)
 	timeStampTz.utc_timestamp = TimeStamp::ticksToTimeStamp(ticks);
 }
 
-bool TimeZoneUtil::decodeTime(const ISC_TIME_TZ& timeTz, bool gmtFallback, SLONG gmtOffset, Callbacks* cb,
+bool TimeZoneUtil::decodeTime(const ISC_TIME_TZ& timeTz, bool gmtFallback, SLONG gmtOffset,
 	struct tm* times, int* fractions)
 {
-	bool tzLookup = true;
 	ISC_TIMESTAMP_TZ timeStampTz;
+	timeStampTz.utc_timestamp.timestamp_date = TIME_TZ_BASE_DATE;
+	timeStampTz.utc_timestamp.timestamp_time = timeTz.utc_time;
+	timeStampTz.time_zone = timeTz.time_zone;
 
-	try
-	{
-#ifdef DEV_BUILD
-		if (gmtFallback && getenv("MISSING_ICU_EMULATION"))
-			(Arg::Gds(isc_random) << "Emulating missing ICU").raise();
-#endif
-		timeStampTz = cvtTimeTzToTimeStampTz(timeTz, cb);
-	}
-	catch (const Exception&)
-	{
-		if (gmtFallback)
-		{
-			tzLookup = false;
-			timeStampTz.time_zone = displacementToOffsetZone(gmtOffset == TimeZoneUtil::NO_OFFSET ? 0 : gmtOffset);
-			timeStampTz.utc_timestamp = cb->getCurrentGmtTimeStamp();
-			timeStampTz.utc_timestamp.timestamp_time = timeTz.utc_time;
-		}
-		else
-			throw;
-	}
-
-	decodeTimeStamp(timeStampTz, gmtFallback, gmtOffset, times, fractions);
-	return tzLookup;
+	return decodeTimeStamp(timeStampTz, gmtFallback, gmtOffset, times, fractions);
 }
 
 bool TimeZoneUtil::decodeTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, bool gmtFallback, SLONG gmtOffset,
@@ -689,7 +723,7 @@ bool TimeZoneUtil::decodeTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, bool gmt
 			Jrd::UnicodeUtil::ConversionICU& icuLib = Jrd::UnicodeUtil::getConversionICU();
 
 			UCalendar* icuCalendar = icuLib.ucalOpen(
-				getDesc(timeStampTz.time_zone)->icuName, -1, NULL, UCAL_GREGORIAN, &icuErrorCode);
+				getDesc(timeStampTz.time_zone)->getUnicodeName(), -1, NULL, UCAL_GREGORIAN, &icuErrorCode);
 
 			if (!icuCalendar)
 				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
@@ -719,7 +753,7 @@ bool TimeZoneUtil::decodeTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, bool gmt
 				throw;
 
 			icuFail = true;
-			displacement = gmtOffset == TimeZoneUtil::NO_OFFSET ? 0 : gmtOffset;
+			displacement = gmtOffset == NO_OFFSET ? 0 : gmtOffset;
 		}
 	}
 
@@ -821,8 +855,42 @@ void TimeZoneUtil::validateGmtTimeStamp(NoThrowTimeStamp& ts)
 		ts.value() = getCurrentGmtTimeStamp().utc_timestamp;
 }
 
+// Converts a time-tz to a time.
+ISC_TIME TimeZoneUtil::timeTzToTime(const ISC_TIME_TZ& timeTz, Callbacks* cb)
+{
+	ISC_TIMESTAMP_TZ tsTz;
+	tsTz.utc_timestamp.timestamp_date = TIME_TZ_BASE_DATE;
+	tsTz.utc_timestamp.timestamp_time = timeTz.utc_time;
+	tsTz.time_zone = timeTz.time_zone;
+
+	struct tm times;
+	int fractions;
+	decodeTimeStamp(tsTz, false, NO_OFFSET, &times, &fractions);
+
+	tsTz.utc_timestamp.timestamp_date = cb->getLocalDate();
+	tsTz.utc_timestamp.timestamp_time =
+		TimeStamp::encode_time(times.tm_hour, times.tm_min, times.tm_sec, fractions);
+
+	localTimeStampToUtc(tsTz);
+
+	return timeStampTzToTimeStamp(tsTz, cb->getSessionTimeZone()).timestamp_time;
+}
+
+// Converts a timestamp-tz to a timestamp in a given zone.
+ISC_TIMESTAMP TimeZoneUtil::timeStampTzToTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, USHORT toTimeZone)
+{
+	ISC_TIMESTAMP_TZ tsTz = timeStampTz;
+	tsTz.time_zone = toTimeZone;
+
+	struct tm times;
+	int fractions;
+	decodeTimeStamp(tsTz, false, NO_OFFSET, &times, &fractions);
+
+	return TimeStamp::encode_timestamp(&times, fractions);
+}
+
 // Converts a time to timestamp-tz.
-ISC_TIMESTAMP_TZ TimeZoneUtil::cvtTimeToTimeStampTz(const ISC_TIME& time, Callbacks* cb)
+ISC_TIMESTAMP_TZ TimeZoneUtil::timeToTimeStampTz(const ISC_TIME& time, Callbacks* cb)
 {
 	// SQL: source => TIMESTAMP WITHOUT TIME ZONE => TIMESTAMP WITH TIME ZONE
 
@@ -836,66 +904,82 @@ ISC_TIMESTAMP_TZ TimeZoneUtil::cvtTimeToTimeStampTz(const ISC_TIME& time, Callba
 }
 
 // Converts a time to time-tz.
-ISC_TIME_TZ TimeZoneUtil::cvtTimeToTimeTz(const ISC_TIME& time, Callbacks* cb)
+ISC_TIME_TZ TimeZoneUtil::timeToTimeTz(const ISC_TIME& time, Callbacks* cb)
 {
-	ISC_TIMESTAMP_TZ tsTz = cvtTimeToTimeStampTz(time, cb);
+	ISC_TIMESTAMP_TZ tsTz;
+	tsTz.time_zone = cb->getSessionTimeZone();
+	tsTz.utc_timestamp.timestamp_date = TIME_TZ_BASE_DATE;
+	tsTz.utc_timestamp.timestamp_time = time;
+
+	localTimeStampToUtc(tsTz);
 
 	ISC_TIME_TZ timeTz;
-	timeTz.utc_time = tsTz.utc_timestamp.timestamp_time;
 	timeTz.time_zone = tsTz.time_zone;
+	timeTz.utc_time = tsTz.utc_timestamp.timestamp_time;
 
 	return timeTz;
 }
 
 // Converts a time-tz to timestamp-tz.
-ISC_TIMESTAMP_TZ TimeZoneUtil::cvtTimeTzToTimeStampTz(const ISC_TIME_TZ& timeTz, Callbacks* cb)
+ISC_TIMESTAMP_TZ TimeZoneUtil::timeTzToTimeStampTz(const ISC_TIME_TZ& timeTz, Callbacks* cb)
 {
 	// SQL: Copy date fields from CURRENT_DATE and time and time zone fields from the source.
 
+	struct tm localTimes;
+	TimeStamp::decode_date(cb->getLocalDate(), &localTimes);
+
 	ISC_TIMESTAMP_TZ tsTz;
-	tsTz.utc_timestamp.timestamp_date = cb->getLocalDate();
-	tsTz.utc_timestamp.timestamp_time = timeTzToTime(timeTz, cb->getSessionTimeZone(), cb);
-	tsTz.time_zone = cb->getSessionTimeZone();
-	localTimeStampToUtc(tsTz);
 	tsTz.time_zone = timeTz.time_zone;
+	tsTz.utc_timestamp.timestamp_date = TIME_TZ_BASE_DATE;
+	tsTz.utc_timestamp.timestamp_time = timeTz.utc_time;
+
+	struct tm times;
+	int fractions;
+	decodeTimeStamp(tsTz, false, NO_OFFSET, &times, &fractions);
+
+	times.tm_mday = localTimes.tm_mday;
+	times.tm_mon = localTimes.tm_mon;
+	times.tm_year = localTimes.tm_year;
+
+	tsTz.utc_timestamp = TimeStamp::encode_timestamp(&times, fractions);
+	localTimeStampToUtc(tsTz);
 
 	return tsTz;
 }
 
 // Converts a time-tz to timestamp.
-ISC_TIMESTAMP TimeZoneUtil::cvtTimeTzToTimeStamp(const ISC_TIME_TZ& timeTz, Callbacks* cb)
+ISC_TIMESTAMP TimeZoneUtil::timeTzToTimeStamp(const ISC_TIME_TZ& timeTz, Callbacks* cb)
 {
 	// SQL: source => TIMESTAMP WITH TIME ZONE => TIMESTAMP WITHOUT TIME ZONE
 
-	ISC_TIMESTAMP_TZ tsTz = cvtTimeTzToTimeStampTz(timeTz, cb);
+	ISC_TIMESTAMP_TZ tsTz = timeTzToTimeStampTz(timeTz, cb);
 
 	return timeStampTzToTimeStamp(tsTz, cb->getSessionTimeZone());
 }
 
-// Converts a time-tz to time.
-ISC_TIME TimeZoneUtil::cvtTimeTzToTime(const ISC_TIME_TZ& timeTz, Callbacks* cb)
-{
-	return timeTzToTime(timeTz, cb->getSessionTimeZone(), cb);
-}
-
 // Converts a timestamp-tz to timestamp.
-ISC_TIMESTAMP TimeZoneUtil::cvtTimeStampTzToTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, Callbacks* cb)
+ISC_TIMESTAMP TimeZoneUtil::timeStampTzToTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, Callbacks* cb)
 {
 	return timeStampTzToTimeStamp(timeStampTz, cb->getSessionTimeZone());
 }
 
 // Converts a timestamp-tz to time-tz.
-ISC_TIME_TZ TimeZoneUtil::cvtTimeStampTzToTimeTz(const ISC_TIMESTAMP_TZ& timeStampTz)
+ISC_TIME_TZ TimeZoneUtil::timeStampTzToTimeTz(const ISC_TIMESTAMP_TZ& timeStampTz)
 {
+	struct tm times;
+	int fractions;
+	decodeTimeStamp(timeStampTz, false, NO_OFFSET, &times, &fractions);
+
 	ISC_TIME_TZ timeTz;
-	timeTz.utc_time = timeStampTz.utc_timestamp.timestamp_time;
+	timeTz.utc_time = TimeStamp::encode_time(times.tm_hour, times.tm_min, times.tm_sec, fractions);
 	timeTz.time_zone = timeStampTz.time_zone;
+	localTimeToUtc(timeTz);
 
 	return timeTz;
 }
 
 // Converts a timestamp to timestamp-tz.
-ISC_TIMESTAMP_TZ TimeZoneUtil::cvtTimeStampToTimeStampTz(const ISC_TIMESTAMP& timeStamp, Callbacks* cb)
+ISC_TIMESTAMP_TZ TimeZoneUtil::timeStampToTimeStampTz(const ISC_TIMESTAMP& timeStamp, Callbacks* cb)
 {
 	// SQL: Copy time and time zone fields from the source.
 
@@ -909,21 +993,15 @@ ISC_TIMESTAMP_TZ TimeZoneUtil::cvtTimeStampToTimeStampTz(const ISC_TIMESTAMP& ti
 }
 
 // Converts a timestamp to time-tz.
-ISC_TIME_TZ TimeZoneUtil::cvtTimeStampToTimeTz(const ISC_TIMESTAMP& timeStamp, Callbacks* cb)
+ISC_TIME_TZ TimeZoneUtil::timeStampToTimeTz(const ISC_TIMESTAMP& timeStamp, Callbacks* cb)
 {
 	// SQL: source => TIMESTAMP WITH TIME ZONE => TIME WITH TIME ZONE
 
-	ISC_TIMESTAMP_TZ tsTz = cvtTimeStampToTimeStampTz(timeStamp, cb);
-
-	ISC_TIME_TZ timeTz;
-	timeTz.utc_time = tsTz.utc_timestamp.timestamp_time;
-	timeTz.time_zone = tsTz.time_zone;
-
-	return timeTz;
+	return timeStampTzToTimeTz(timeStampToTimeStampTz(timeStamp, cb));
 }
 
 // Converts a date to timestamp-tz.
-ISC_TIMESTAMP_TZ TimeZoneUtil::cvtDateToTimeStampTz(const ISC_DATE& date, Callbacks* cb)
+ISC_TIMESTAMP_TZ TimeZoneUtil::dateToTimeStampTz(const ISC_DATE& date, Callbacks* cb)
 {
 	// SQL: source => TIMESTAMP WITHOUT TIME ZONE => TIMESTAMP WITH TIME ZONE
 
@@ -945,7 +1023,7 @@ TimeZoneRuleIterator::TimeZoneRuleIterator(USHORT aId, ISC_TIMESTAMP_TZ& aFrom, 
 {
 	UErrorCode icuErrorCode = U_ZERO_ERROR;
 
-	icuCalendar = icuLib.ucalOpen(getDesc(id)->icuName, -1, NULL, UCAL_GREGORIAN, &icuErrorCode);
+	icuCalendar = icuLib.ucalOpen(getDesc(id)->getUnicodeName(), -1, NULL, UCAL_GREGORIAN, &icuErrorCode);
 
 	if (!icuCalendar)
 		status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
@@ -1030,8 +1108,8 @@ bool TimeZoneRuleIterator::next()
 
 static const TimeZoneDesc* getDesc(USHORT timeZone)
 {
-	if (MAX_USHORT - timeZone < FB_NELEM(TIME_ZONE_LIST))
-		return &TIME_ZONE_LIST[MAX_USHORT - timeZone];
+	if (MAX_USHORT - timeZone < timeZoneStartup().getTimeZoneList().getCount())
+		return &timeZoneStartup().getTimeZoneList()[MAX_USHORT - timeZone];
 
 	status_exception::raise(Arg::Gds(isc_invalid_timezone_id) << Arg::Num(timeZone));
 	return nullptr;

@@ -969,6 +969,7 @@ static const struct {
 	{335545266, "01004"}, // 946 truncate_warn
 	{335545267, "01004"}, // 947 truncate_monitor
 	{335545268, "01004"}, // 948 truncate_context
+	{335545269, "21000"}, // 949 merge_dup_update
 	{335740929, "00000"}, //   1 gfix_db_name
 	{335740930, "00000"}, //   2 gfix_invalid_sw
 	{335740932, "00000"}, //   4 gfix_incmp_sw

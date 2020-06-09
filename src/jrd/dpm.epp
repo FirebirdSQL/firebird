@@ -667,7 +667,7 @@ ULONG DPM_data_pages(thread_db* tdbb, jrd_rel* relation)
 
 			CCH_RELEASE(tdbb, &window);
 
-			tdbb->checkCancelState(true);
+			tdbb->checkCancelState();
 		}
 
 		CCH_RELEASE(tdbb, &window);
@@ -1888,7 +1888,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 			return false;
 
 		if (sweeper)
-			tdbb->checkCancelState(true);
+			tdbb->checkCancelState();
 	}
 }
 
@@ -2924,7 +2924,7 @@ static void extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window, con
 		CCH_RELEASE(tdbb, &pp_window);
 	}
 
-	int cntAlloc = 1;
+	unsigned cntAlloc = 1;
 	// allocate extent (PAGES_IN_EXTENT contiguous pages) if
 	// - relation already contains at least PAGES_IN_EXTENT pages, and
 	// - first empty slot found is at extent boundary, and
@@ -2935,7 +2935,7 @@ static void extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window, con
 
 		for (USHORT i = 0; i < PAGES_IN_EXTENT; i++)
 		{
-			if(ppage->ppg_page[slot + i] != 0)
+			if (ppage->ppg_page[slot + i] != 0)
 			{
 				cntAlloc = 1;
 				break;
@@ -2956,7 +2956,7 @@ static void extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window, con
 
 	CCH_precedence(tdbb, &pp_window, window->win_page);
 
-	for (int i = 1; i < cntAlloc; i++)
+	for (unsigned i = 1; i < cntAlloc; i++)
 	{
 		window->win_page = firstPage.getPageNum() + i;
 
@@ -2980,7 +2980,7 @@ static void extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window, con
 	if (type != DPM_primary)
 		PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary);
 
-	for (int i = 1; i < cntAlloc; i++)
+	for (unsigned i = 1; i < cntAlloc; i++)
 	{
 		fb_assert(ppage->ppg_page[slot + i] == 0);
 		ppage->ppg_page[slot + i] = firstPage.getPageNum() + i;

@@ -387,7 +387,7 @@ private:
 		SINT64 buckets;
 	};
 
-	USHORT thisImpureOffset;
+	ULONG thisImpureOffset;
 };
 
 

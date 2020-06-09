@@ -755,10 +755,8 @@ static int validate(Firebird::UtilSvc* svc)
 	{
 		// should be EngineContextHolder but it is declared in jrd.cpp
 		BackgroundContextHolder tdbb(dbb, att, &status, FB_FUNCTION);
+
 		att->att_use_count++;
-
-
-		tdbb->tdbb_flags |= TDBB_sweeper;
 
 		val_pool = dbb->createPool();
 		Jrd::ContextPoolHolder context(tdbb, val_pool);
@@ -1027,7 +1025,7 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 		for (USHORT i = 0; i < VAL_MAX_ERROR; i++)
 			vdr_err_counts[i] = 0;
 
-		tdbb->tdbb_flags |= TDBB_sweeper;
+		ThreadSweepGuard sweepGuard(tdbb);
 
 		gds__log("Database: %s\n\tValidation started", fileName.c_str());
 
@@ -1046,8 +1044,6 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 			CCH_flush(tdbb, flushFlags, 0);
 		}
 
-		tdbb->tdbb_flags &= ~TDBB_sweeper;
-
 		cleanup();
 
 		gds__log("Database: %s\n\tValidation finished: %d errors, %d warnings, %d fixed",
@@ -1063,7 +1059,6 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 
 		cleanup();
 		dbb->deletePool(val_pool);
-		tdbb->tdbb_flags &= ~TDBB_sweeper;
 		return false;
 	}
 
@@ -1178,10 +1173,8 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, ULONG page_number,
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	if (--vdr_tdbb->tdbb_quantum < 0)
+	if (JRD_reschedule(vdr_tdbb))
 	{
-		JRD_reschedule(vdr_tdbb, 0, true);
-
 		if (vdr_service && vdr_service->finished())
 		{
 			CCH_unwind(vdr_tdbb, false);
@@ -2841,7 +2834,7 @@ void restoreFlags(UCHAR* byte, UCHAR flags, bool empty)
 		*byte &= ~bit;
 }
 
-void Validation::checkDPinPP(jrd_rel* relation, SLONG page_number)
+void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 {
 	/**************************************
 	*
@@ -2854,7 +2847,7 @@ void Validation::checkDPinPP(jrd_rel* relation, SLONG page_number)
 	WIN window(DB_PAGE_SPACE, page_number);
 	data_page* dpage;
 	fetch_page(false, page_number, pag_data, &window, &dpage);
-	const SLONG sequence = dpage->dpg_sequence;
+	const ULONG sequence = dpage->dpg_sequence;
 	const bool dpEmpty = (dpage->dpg_count == 0);
 	release_page(&window);
 
@@ -2871,7 +2864,7 @@ void Validation::checkDPinPP(jrd_rel* relation, SLONG page_number)
 		if (slot >= ppage->ppg_count)
 		{
 			corrupt(VAL_DATA_PAGE_SLOT_NOT_FOUND, relation, page_number, window.win_page.getPageNum(), slot);
-			if (vdr_flags & VDR_update && slot < dbb->dbb_dp_per_pp)
+			if ((vdr_flags & VDR_update) && slot < dbb->dbb_dp_per_pp)
 			{
 				CCH_MARK(vdr_tdbb, &window);
 				for (USHORT i = ppage->ppg_count; i < slot; i++)
@@ -2894,7 +2887,7 @@ void Validation::checkDPinPP(jrd_rel* relation, SLONG page_number)
 		else if (page_number != ppage->ppg_page[slot])
 		{
 			corrupt(VAL_DATA_PAGE_SLOT_BAD_VAL, relation, page_number, window.win_page.getPageNum(), slot, ppage->ppg_page[slot]);
-			if (vdr_flags & VDR_update && !ppage->ppg_page[slot])
+			if ((vdr_flags & VDR_update) && !ppage->ppg_page[slot])
 			{
 				CCH_MARK(vdr_tdbb, &window);
 				ppage->ppg_page[slot] = page_number;
@@ -2912,7 +2905,7 @@ void Validation::checkDPinPP(jrd_rel* relation, SLONG page_number)
 	release_page(&window);
 }
 
-void Validation::checkDPinPIP(jrd_rel* relation, SLONG page_number)
+void Validation::checkDPinPIP(jrd_rel* relation, ULONG page_number)
 {
 	/**************************************
 	*
@@ -2927,8 +2920,8 @@ void Validation::checkDPinPIP(jrd_rel* relation, SLONG page_number)
 	PageSpace* pageSpace = pageMgr.findPageSpace(DB_PAGE_SPACE);
 	fb_assert(pageSpace);
 
-	const SLONG sequence = page_number / pageMgr.pagesPerPIP;
-	const SLONG relative_bit = page_number % pageMgr.pagesPerPIP;
+	const ULONG sequence = page_number / pageMgr.pagesPerPIP;
+	const ULONG relative_bit = page_number % pageMgr.pagesPerPIP;
 
 	WIN pip_window(DB_PAGE_SPACE, (sequence == 0) ? pageSpace->pipFirst : sequence * pageMgr.pagesPerPIP - 1);
 
@@ -3009,7 +3002,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 
 		WIN window(DB_PAGE_SPACE, -1);
 		header_page* page = NULL;
-		fetch_page(false, (SLONG) HEADER_PAGE, pag_header, &window, &page);
+		fetch_page(false, HEADER_PAGE, pag_header, &window, &page);
 		vdr_max_transaction = Ods::getNT(page);
 		release_page(&window);
 	}

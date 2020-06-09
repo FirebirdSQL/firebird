@@ -354,7 +354,7 @@ bool LCK_convert(thread_db* tdbb, Lock* lock, USHORT level, SSHORT wait)
 		case isc_lock_conflict:
 		case isc_lock_timeout:
 			statusVector.copyTo(tdbb->tdbb_status_vector);
-			tdbb->checkCancelState(true);
+			tdbb->checkCancelState();
 			return false;
 		case isc_lockmanerr:
 			dbb->dbb_flags |= DBB_bugcheck;
@@ -687,7 +687,7 @@ bool LCK_lock(thread_db* tdbb, Lock* lock, USHORT level, SSHORT wait)
 		case isc_lock_conflict:
 		case isc_lock_timeout:
 			statusVector.copyTo(tdbb->tdbb_status_vector);
-			tdbb->checkCancelState(true);
+			tdbb->checkCancelState();
 			return false;
 		case isc_lockmanerr:
 			dbb->dbb_flags |= DBB_bugcheck;

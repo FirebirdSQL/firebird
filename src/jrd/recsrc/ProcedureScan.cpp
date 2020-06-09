@@ -159,8 +159,7 @@ void ProcedureScan::close(thread_db* tdbb) const
 
 bool ProcedureScan::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	UserId* invoker = m_procedure->invoker ? m_procedure->invoker : tdbb->getAttachment()->att_ss_user;
 	AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);

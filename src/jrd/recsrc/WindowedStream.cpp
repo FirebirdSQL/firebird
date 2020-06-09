@@ -362,8 +362,7 @@ void WindowedStream::close(thread_db* tdbb) const
 
 bool WindowedStream::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -545,8 +544,7 @@ void WindowedStream::WindowStream::close(thread_db* tdbb) const
 
 bool WindowedStream::WindowStream::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_req* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];
@@ -1085,7 +1083,7 @@ SlidingWindow::~SlidingWindow()
 // Move in the window without pass partition boundaries.
 bool SlidingWindow::moveWithinPartition(SINT64 delta)
 {
-	const SINT64 newPosition = SINT64(savedPosition) + delta;
+	const auto newPosition = savedPosition + delta;
 
 	if (newPosition < partitionStart || newPosition > partitionEnd)
 		return false;
@@ -1106,7 +1104,7 @@ bool SlidingWindow::moveWithinPartition(SINT64 delta)
 // Move in the window without pass frame boundaries.
 bool SlidingWindow::moveWithinFrame(SINT64 delta)
 {
-	const SINT64 newPosition = SINT64(savedPosition) + delta;
+	const auto newPosition = savedPosition + delta;
 
 	if (newPosition < frameStart || newPosition > frameEnd)
 		return false;

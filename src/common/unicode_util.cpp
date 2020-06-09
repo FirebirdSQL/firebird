@@ -100,7 +100,6 @@ public:
 		}
 		else
 		{
-
 			// ICU has several schemas for entries names
 			const char* patterns[] =
 			{
@@ -343,13 +342,6 @@ private:
 
 		getEntryPoint("ucal_getNow", inModule, ucalGetNow);
 		getEntryPoint("ucal_getTimeZoneTransitionDate", inModule, ucalGetTimeZoneTransitionDate);
-
-#if defined DEV_BUILD && defined TZ_UPDATE
-		getEntryPoint("ucal_openTimeZones", inModule, ucalOpenTimeZones);
-
-		getEntryPoint("uenum_close", inModule, uenumClose);
-		getEntryPoint("uenum_unext", inModule, uenumUnext);
-#endif
 	}
 
 public:

@@ -49,11 +49,11 @@ TOMCRYPT_COMPILE += -Itomcrypt.include
 TOMCRYPT_LINK=-L$(LIB)/.tm
 endif
 
-SIMPLE_KEY_AUTH_NAME=$(LIB_PREFIX)ExtAuth.$(SHRLIB_EXT)
+SIMPLE_KEY_AUTH_NAME=$(LIB_PREFIX)fbSampleExtAuth.$(SHRLIB_EXT)
 BLD_SIMPLE_KEY_AUTH=$(OUT_PLUG)/$(SIMPLE_KEY_AUTH_NAME)
 SIMPLE_KEY_AUTH=$(PLUGINS)/$(SIMPLE_KEY_AUTH_NAME)
 
-KEYGEN_NAME=extauth_keygen
+KEYGEN_NAME=fbSampleExtAuthKeygen
 BLD_KEYGEN=$(OUT_BIN)/$(KEYGEN_NAME)
 KEYGEN=$(BIN)/$(KEYGEN_NAME)
 
@@ -64,8 +64,7 @@ KEY_AUTH_objects=$(INTERMED)/ExtAuth.o
 CXXFLAGS=-std=c++11 -pthread -I$(ROOT)/include -fPIC $(TOMCRYPT_COMPILE)
 LDFLAGS=-pthread -L$(LIB) -Wl,-rpath,'$$ORIGIN/../lib' $(TOMCRYPT_LINK)
 
-LINK=c++
-LINK_LIBS=-lfbclient -ltomcrypt
+LINK_LIBS=-lfbclient -ltomcrypt -ltommath
 
 $(INTERMED)/%.o: ./%.cpp
 	$(CXX) $(CXXFLAGS) -c $(firstword $<) -o $@
@@ -77,12 +76,12 @@ all:		keygen plugin
 keygen:		$(BLD_KEYGEN)
 
 $(BLD_KEYGEN):	$(KEYGEN_objects) $(TCWRAP_objects)
-	$(LINK) $(LDFLAGS) $^ -o $@ $(LINK_LIBS)
+	$(CXX) $(LDFLAGS) $^ -o $@ $(LINK_LIBS)
 
 plugin:		$(BLD_SIMPLE_KEY_AUTH)
 
 $(BLD_SIMPLE_KEY_AUTH):	$(KEY_AUTH_objects) $(TCWRAP_objects)
-	$(LINK) -shared $(LDFLAGS) $^ -o $@ $(LINK_LIBS)
+	$(CXX) -shared $(LDFLAGS) $^ -o $@ $(LINK_LIBS)
 
 clean:
 	rm -f $(INTERMED)/*.o* $(BLD_KEYGEN) $(BLD_SIMPLE_KEY_AUTH)

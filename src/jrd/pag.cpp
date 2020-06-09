@@ -478,7 +478,7 @@ PAG PAG_allocate(thread_db* tdbb, WIN* window)
 }
 
 
-PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, int cntAlloc, bool aligned)
+PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, unsigned cntAlloc, bool aligned)
 {
 /**************************************
  *
@@ -505,9 +505,8 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, int cntAlloc, bool aligned)
 
 	// Find an allocation page with something on it
 
-	int toAlloc = cntAlloc;
 	ULONG sequence = (cntAlloc >= PAGES_IN_EXTENT ? pageSpace->pipWithExtent : pageSpace->pipHighWater);
-	for (; toAlloc > 0; sequence++)
+	for (unsigned toAlloc = cntAlloc; toAlloc; sequence++)
 	{
 		WIN pip_window(pageSpace->pageSpaceID,
 			(sequence == 0) ? pageSpace->pipFirst : sequence * dbb->dbb_page_manager.pagesPerPIP - 1);
@@ -628,7 +627,8 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, int cntAlloc, bool aligned)
 		{
 			fb_assert(lastBit - firstBit + 1 == cntAlloc);
 
-			if (lastBit + 1 > pipUsed) {
+			if (lastBit + 1 > pipUsed)
+			{
 				pipUsed = ensureDiskSpace(tdbb, &pip_window,
 					PageNumber(pageSpace->pageSpaceID, lastBit + sequence * pageMgr.pagesPerPIP),
 					pipUsed);

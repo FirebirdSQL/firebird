@@ -1056,6 +1056,7 @@ Data source : @4', NULL, NULL)
 ('truncate_warn', NULL, 'cvt.cpp', NULL, 0, 946, NULL, 'String truncated warning due to the following reason', NULL, NULL);
 ('truncate_monitor', NULL, 'Monitoring.cpp', NULL, 0, 947, NULL, 'Monitoring data does not fit into the field', NULL, NULL);
 ('truncate_context', NULL, 'SysFunction.cpp', NULL, 0, 948, NULL, 'Engine data does not fit into return value of system function', NULL, NULL);
+('merge_dup_update', NULL, 'StmtNodes.cpp', NULL, 0, 949, NULL, 'Multiple source records cannot match the same target during MERGE', NULL, NULL);
 -- QLI
 (NULL, NULL, NULL, NULL, 1, 0, NULL, 'expected type', NULL, NULL);
 (NULL, NULL, NULL, NULL, 1, 1, NULL, 'bad block type', NULL, NULL);

@@ -1814,7 +1814,7 @@ void TRA_sweep(thread_db* tdbb)
 		// 2) Execution is throttled in JRD_reschedule() by
 		// yielding the processor when our quantum expires.
 
-		tdbb->tdbb_flags |= TDBB_sweeper;
+		ThreadSweepGuard sweepGuard(tdbb);
 
 		TraceSweepEvent traceSweep(tdbb);
 
@@ -1880,7 +1880,6 @@ void TRA_sweep(thread_db* tdbb)
 
 		TRA_commit(tdbb, transaction, false);
 
-		tdbb->tdbb_flags &= ~TDBB_sweeper;
 		tdbb->setTransaction(tdbb_old_trans);
 		dbb->clearSweepFlags(tdbb);
 	}
@@ -1905,7 +1904,6 @@ void TRA_sweep(thread_db* tdbb)
 			}
 		}
 
-		tdbb->tdbb_flags &= ~TDBB_sweeper;
 		tdbb->setTransaction(tdbb_old_trans);
 		dbb->clearSweepFlags(tdbb);
 
@@ -3296,7 +3294,6 @@ static void transaction_options(thread_db* tdbb,
 		}
 	}
 
-
 	if ((transaction->tra_flags & TRA_read_committed) && !(tdbb->tdbb_flags & TDBB_sweeper))
 	{
 		if (tdbb->getDatabase()->dbb_config->getReadConsistency())
@@ -3541,7 +3538,7 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 			!(trans->tra_flags & TRA_read_consistency)) ? number : oldest_active;
 
 		static_assert(sizeof(lock->lck_data) == sizeof(lck_data), "Check lock data type !");
-		if (lock->lck_data != lck_data)
+		if (lock->lck_data != (SINT64) lck_data)
 			LCK_write_data(tdbb, lock, lck_data);
 
 		// Query the minimum lock data for all active transaction locks.

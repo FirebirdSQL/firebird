@@ -122,10 +122,6 @@ static char* fb_prefix_msg = NULL;
 
 #include "gen/msgs.h"
 
-#ifndef O_BINARY
-#define O_BINARY	0
-#endif
-
 const SLONG GENERIC_SQLCODE		= -999;
 
 #include "fb_types.h"
@@ -349,7 +345,8 @@ static const UCHAR
 	window_win[] = { op_byte, op_window_win, 0},
 	relation_field[] = { op_line, op_indent, op_byte, op_literal,
 						 op_line, op_indent, op_byte, op_literal, op_pad, op_line, 0},
-	store3[] = { op_line, op_byte, op_line, op_verb, op_verb, op_verb, 0};
+	store3[] = { op_line, op_byte, op_line, op_verb, op_verb, op_verb, 0},
+	marks[] = { op_byte, op_literal, op_line, op_verb, 0};
 
 
 #include "../jrd/blp.h"

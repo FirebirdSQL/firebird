@@ -56,6 +56,7 @@ framework:
 	cp ../gen/$(TARGET)/firebird/security4.fdb $(FB_FW)/Versions/A/Resources/security4.fdb
 	cp ../gen/$(TARGET)/firebird/firebird.msg $(FB_FW)/Versions/A/Resources/firebird.msg
 	cp -r ../gen/$(TARGET)/firebird/help $(FB_FW)/Versions/A/Resources/help
+	cp -r ../gen/$(TARGET)/firebird/tzdata $(FB_FW)/Versions/A/Resources/tzdata
 	mkdir -p $(FB_FW)/Resources/doc
 	cp -r ../doc $(FB_FW)/Resources
 	mkdir -p $(FB_FW)/Resources/examples

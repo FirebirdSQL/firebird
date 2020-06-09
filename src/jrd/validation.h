@@ -156,8 +156,8 @@ private:
 	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_idx_incl;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_idx_excl;
 	int vdr_lock_tout;
-	void checkDPinPP(jrd_rel *relation, SLONG page_number);
-	void checkDPinPIP(jrd_rel *relation, SLONG page_number);
+	void checkDPinPP(jrd_rel *relation, ULONG page_number);
+	void checkDPinPIP(jrd_rel *relation, ULONG page_number);
 
 public:
 	explicit Validation(thread_db*, Firebird::UtilSvc* uSvc = NULL);

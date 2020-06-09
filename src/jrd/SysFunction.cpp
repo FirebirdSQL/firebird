@@ -59,6 +59,7 @@
 #include "../common/classes/FpeControl.h"
 #include "../jrd/extds/ExtDS.h"
 
+#include <cmath>
 #include <math.h>
 
 #ifndef WIN_NT
@@ -173,7 +174,6 @@ const int oneDay = 86400;
 const unsigned getContextLen = 255;
 
 // auxiliary functions
-void add10msec(ISC_TIMESTAMP* v, SINT64 msec, SINT64 multiplier);
 double fbcot(double value) throw();
 
 // generic setParams functions
@@ -375,29 +375,6 @@ const char
 static const char
 	FALSE_VALUE[] = "FALSE",
 	TRUE_VALUE[] = "TRUE";
-
-
-void add10msec(ISC_TIMESTAMP* v, SINT64 msec, SINT64 multiplier)
-{
-	const SINT64 full = msec * multiplier;
-	const int days = full / (oneDay * ISC_TIME_SECONDS_PRECISION);
-	const int secs = full % (oneDay * ISC_TIME_SECONDS_PRECISION);
-
-	v->timestamp_date += days;
-
-	// Time portion is unsigned, so we avoid unsigned rolling over negative values
-	// that only produce a new unsigned number with the wrong result.
-	if (secs < 0 && ISC_TIME(-secs) > v->timestamp_time)
-	{
-		v->timestamp_date--;
-		v->timestamp_time += (oneDay * ISC_TIME_SECONDS_PRECISION) + secs;
-	}
-	else if ((v->timestamp_time += secs) >= (oneDay * ISC_TIME_SECONDS_PRECISION))
-	{
-		v->timestamp_date++;
-		v->timestamp_time -= (oneDay * ISC_TIME_SECONDS_PRECISION);
-	}
-}
 
 
 double fbcot(double value) throw()
@@ -1825,7 +1802,7 @@ dsc* evlStdMath(thread_db* tdbb, const SysFunction* function, const NestValueArr
 		return NULL;
 	}
 
-	if (isinf(rc))
+	if (std::isinf(rc))
 	{
 		status_exception::raise(Arg::Gds(isc_arith_except) <<
 								Arg::Gds(isc_sysf_fp_overflow) << Arg::Str(function->name));
@@ -2450,7 +2427,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			if (valueDsc->dsc_dtype == dtype_sql_date)
 				timestamp.value().timestamp_date += quantity / 24;
 			else
-				add10msec(&timestamp.value(), quantity, 3600 * ISC_TIME_SECONDS_PRECISION);
+				NoThrowTimeStamp::add10msec(&timestamp.value(), quantity, 3600 * ISC_TIME_SECONDS_PRECISION);
 			break;
 
 		case blr_extract_minute:
@@ -2460,7 +2437,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			if (valueDsc->dsc_dtype == dtype_sql_date)
 				timestamp.value().timestamp_date += quantity / 1440; // 1440 == 24 * 60
 			else
-				add10msec(&timestamp.value(), quantity, 60 * ISC_TIME_SECONDS_PRECISION);
+				NoThrowTimeStamp::add10msec(&timestamp.value(), quantity, 60 * ISC_TIME_SECONDS_PRECISION);
 			break;
 
 		case blr_extract_second:
@@ -2473,7 +2450,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			if (valueDsc->dsc_dtype == dtype_sql_date)
 				timestamp.value().timestamp_date += quantity / oneDay;
 			else
-				add10msec(&timestamp.value(), quantity, ISC_TIME_SECONDS_PRECISION);
+				NoThrowTimeStamp::add10msec(&timestamp.value(), quantity, ISC_TIME_SECONDS_PRECISION);
 			break;
 
 		case blr_extract_millisecond:
@@ -2486,7 +2463,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			if (valueDsc->dsc_dtype == dtype_sql_date)
 				timestamp.value().timestamp_date += quantity / milliPow / (oneDay * 1000);
 			else
-				add10msec(&timestamp.value(), quantity, ISC_TIME_SECONDS_PRECISION / 1000 / milliPow);
+				NoThrowTimeStamp::add10msec(&timestamp.value(), quantity, ISC_TIME_SECONDS_PRECISION / 1000 / milliPow);
 			break;
 
 		default:
@@ -3596,7 +3573,10 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 			timestamp1.value().timestamp_date = 0;
 
 			if (value1Dsc->dsc_dtype == dtype_sql_time && value2Dsc->isDateTimeTz())
-				TimeZoneUtil::localTimeToUtc(timestamp1.value().timestamp_time, &EngineCallbacks::instance);
+			{
+				TimeZoneUtil::localTimeToUtc(timestamp1.value().timestamp_time,
+					EngineCallbacks::instance->getSessionTimeZone());
+			}
 			break;
 
 		case dtype_sql_date:
@@ -3629,7 +3609,10 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 			timestamp2.value().timestamp_date = 0;
 
 			if (value2Dsc->dsc_dtype == dtype_sql_time && value1Dsc->isDateTimeTz())
-				TimeZoneUtil::localTimeToUtc(timestamp2.value().timestamp_time, &EngineCallbacks::instance);
+			{
+				TimeZoneUtil::localTimeToUtc(timestamp2.value().timestamp_time,
+					EngineCallbacks::instance->getSessionTimeZone());
+			}
 			break;
 
 		case dtype_sql_date:
@@ -3817,7 +3800,7 @@ dsc* evlExp(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 		const double rc = exp(MOV_get_double(tdbb, value));
 		if (rc == HUGE_VAL) // unlikely to trap anything
 			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
-		if (isinf(rc))
+		if (std::isinf(rc))
 			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
 
 		impure->vlu_misc.vlu_double = rc;
@@ -5554,7 +5537,7 @@ dsc* evlPower(thread_db* tdbb, const SysFunction* function, const NestValueArray
 		}
 
 		const double rc = pow(v1, v2);
-		if (isinf(rc))
+		if (std::isinf(rc))
 			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
 
 		impure->vlu_misc.vlu_double = rc;

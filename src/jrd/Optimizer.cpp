@@ -1290,7 +1290,7 @@ InversionNode* OptimizerRetrieval::makeIndexScanNode(IndexScratch* indexScratch)
 	{
 		if (segment[i]->scanType == segmentScanMissing)
 		{
-			*lower++ = *upper++ = FB_NEW_POOL(*tdbb->getDefaultPool()) NullNode(*tdbb->getDefaultPool());
+			*lower++ = *upper++ = NullNode::instance();
 			ignoreNullsOnScan = false;
 		}
 		else

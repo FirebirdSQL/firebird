@@ -628,8 +628,7 @@ USHORT blb::BLB_get_segment(thread_db* tdbb, void* segment, USHORT buffer_length
 	if (blb_flags & BLB_temporary)
 		ERR_post(Arg::Gds(isc_cannot_read_new_blob));
 
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	// If we reached end of file, we're still there
 

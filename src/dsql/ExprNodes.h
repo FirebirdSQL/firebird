@@ -26,6 +26,7 @@
 #include "firebird/impl/blr.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/NodePrinter.h"
+#include "../common/classes/init.h"
 #include "../dsql/pass1_proto.h"
 
 class SysFunction;
@@ -115,11 +116,11 @@ private:
 	void getDescDialect3(thread_db* tdbb, dsc* desc, dsc& desc1, dsc& desc2);
 
 public:
-	const UCHAR blrOp;
-	bool dialect1;
 	Firebird::string label;
 	NestConst<ValueExprNode> arg1;
 	NestConst<ValueExprNode> arg2;
+	const UCHAR blrOp;
+	bool dialect1;
 };
 
 
@@ -268,9 +269,9 @@ public:
 public:
 	MetaName dsqlAlias;
 	dsql_fld* dsqlField;
-	dsc castDesc;
 	NestConst<ValueExprNode> source;
 	NestConst<ItemInfo> itemInfo;
+	dsc castDesc;
 	bool artificial;
 };
 
@@ -802,12 +803,12 @@ public:
 	dsql_ctx* const dsqlContext;
 	dsql_fld* const dsqlField;
 	NestConst<ValueListNode> dsqlIndices;
-	const StreamType fieldStream;
 	const Format* format;
+	const StreamType fieldStream;
+	Nullable<USHORT> cursorNumber;
 	const USHORT fieldId;
 	const bool byId;
 	bool dsqlCursorField;
-	Nullable<USHORT> cursorNumber;
 };
 
 
@@ -844,10 +845,10 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	const bool dialect1;
 	GeneratorItem generator;
 	NestConst<ValueExprNode> arg;
 	SLONG step;
+	const bool dialect1;
 
 private:
 	bool sysGen;
@@ -1076,9 +1077,9 @@ public:
 
 public:
 	MetaName name;
-	USHORT scope;
 	NestConst<ValueExprNode> value;
 	dsql_ctx* context;
+	USHORT scope;
 };
 
 
@@ -1169,10 +1170,18 @@ public:
 
 class NullNode : public TypedNode<ValueExprNode, ExprNode::TYPE_NULL>
 {
-public:
+private:
+	friend class Firebird::GlobalPtr<NullNode>;
+
 	explicit NullNode(MemoryPool& pool)
 		: TypedNode<ValueExprNode, ExprNode::TYPE_NULL>(pool)
 	{
+	}
+
+public:
+	static NullNode* instance()
+	{
+		return &INSTANCE;
 	}
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
@@ -1184,15 +1193,17 @@ public:
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
+
+private:
+	static Firebird::GlobalPtr<NullNode> INSTANCE;
 };
 
 
 class OrderNode : public DsqlNode<OrderNode, ExprNode::TYPE_ORDER>
 {
 public:
-	enum NullsPlacement
+	enum NullsPlacement : UCHAR
 	{
 		NULLS_DEFAULT,
 		NULLS_FIRST,
@@ -1539,13 +1550,13 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	USHORT dsqlParameterIndex;
 	dsql_par* dsqlParameter;
 	NestConst<MessageNode> message;
-	USHORT argNumber;
 	NestConst<ValueExprNode> argFlag;
 	NestConst<ValueExprNode> argIndicator;
 	NestConst<ItemInfo> argInfo;
+	USHORT dsqlParameterIndex;
+	USHORT argNumber;
 };
 
 
@@ -1619,10 +1630,10 @@ private:
 	void raiseError(dsql_ctx* context) const;
 
 public:
-	const UCHAR blrOp;
 	MetaName dsqlQualifier;
 	NestConst<RecordSourceNode> dsqlRelation;
 	StreamType recStream;
+	const UCHAR blrOp;
 	bool aggregate;
 };
 
@@ -1861,13 +1872,13 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	const UCHAR blrOp;
-	bool ownSavepoint;
 	NestConst<RecordSourceNode> dsqlRse;
 	NestConst<RseNode> rse;
 	NestConst<ValueExprNode> value1;
 	NestConst<ValueExprNode> value2;
 	NestConst<SubQuery> subQuery;
+	const UCHAR blrOp;
+	bool ownSavepoint;
 };
 
 
@@ -1978,9 +1989,9 @@ public:
 
 public:
 	MetaName name;
-	bool dsqlSpecialSyntax;
 	NestConst<ValueListNode> args;
 	const SysFunction* function;
+	bool dsqlSpecialSyntax;
 };
 
 
@@ -2138,9 +2149,9 @@ public:
 public:
 	MetaName dsqlName;
 	NestConst<dsql_var> dsqlVar;
-	USHORT varId;
 	NestConst<DeclareVariableNode> varDecl;
 	NestConst<ItemInfo> varInfo;
+	USHORT varId;
 };
 
 

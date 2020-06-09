@@ -674,8 +674,7 @@ void decodeTimeTzWithFallback(CheckStatusWrapper* status, const ISC_TIME_TZ* tim
 	{
 		tm times;
 		int intFractions;
-		bool tzLookup = TimeZoneUtil::decodeTime(*timeTz, true, gmtFallback, CVT_commonCallbacks,
-			&times, &intFractions);
+		bool tzLookup = TimeZoneUtil::decodeTime(*timeTz, true, gmtFallback, &times, &intFractions);
 
 		if (hours)
 			*hours = times.tm_hour;
@@ -722,7 +721,7 @@ void UtilInterface::encodeTimeTz(CheckStatusWrapper* status, ISC_TIME_TZ* timeTz
 	{
 		timeTz->utc_time = encodeTime(hours, minutes, seconds, fractions);
 		timeTz->time_zone = TimeZoneUtil::parse(timeZone, strlen(timeZone));
-		TimeZoneUtil::localTimeToUtc(*timeTz, CVT_commonCallbacks);
+		TimeZoneUtil::localTimeToUtc(*timeTz);
 	}
 	catch (const Exception& ex)
 	{

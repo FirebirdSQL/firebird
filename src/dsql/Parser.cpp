@@ -828,14 +828,8 @@ int Parser::yylexAux()
 		// Time to scan the string. Make sure the characters are legal,
 		// and find out how long the hex digit string is.
 
-		for (;;)
+		while (lex.ptr < lex.end)
 		{
-			if (charlen == 0 && lex.ptr >= lex.end)			// Unexpected EOS
-			{
-				hexerror = true;
-				break;
-			}
-
 			c = *lex.ptr;
 
 			if (!(classes(c) & CHR_HEX))	// End of digit string

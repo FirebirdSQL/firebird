@@ -35,6 +35,7 @@
 #include "../../common/isc_s_proto.h"
 #include "../../common/os/path_utils.h"
 #include "../../common/classes/ImplementHelper.h"
+#include "../../common/classes/TimerImpl.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -73,6 +74,11 @@ private:
 	void reopen();
 	void checkErrno(const char* operation);
 
+	// evaluate new value or clear idle timer
+	void setupIdleTimer(bool clear);
+
+	void onIdleTimer(Firebird::TimerImpl*);
+
 	// Windows requires explicit syncronization when few processes appends to the
 	// same file simultaneously, therefore we used our fastMutex for this
 	// purposes. On Posix's platforms we honour O_APPEND flag which works
@@ -105,6 +111,10 @@ private:
 	Firebird::PathName m_fileName;
 	int		 m_fileHandle;
 	size_t	 m_maxSize;
+
+	typedef Firebird::TimerImpl IdleTimer;
+	Firebird::RefPtr<IdleTimer> m_idleTimer;
+	Firebird::Mutex m_idleMutex;
 };
 
 #endif // PLUGINLOGWRITER_H

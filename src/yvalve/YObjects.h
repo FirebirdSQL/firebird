@@ -673,8 +673,6 @@ public:
 		Firebird::IOffsetsCallback* callback);
 	Firebird::IDecFloat16* getDecFloat16(Firebird::CheckStatusWrapper* status);
 	Firebird::IDecFloat34* getDecFloat34(Firebird::CheckStatusWrapper* status);
-	Firebird::ITransaction* getTransactionByHandle(Firebird::CheckStatusWrapper* status, isc_tr_handle* hndlPtr);
-	Firebird::IStatement* getStatementByHandle(Firebird::CheckStatusWrapper* status, isc_stmt_handle* hndlPtr);
 	void decodeTimeTz(Firebird::CheckStatusWrapper* status, const ISC_TIME_TZ* timeTz,
 		unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions,
 		unsigned timeZoneBufferLength, char* timeZoneBuffer);

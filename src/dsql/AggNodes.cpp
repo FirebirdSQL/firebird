@@ -48,7 +48,7 @@ using namespace Jrd;
 namespace Jrd {
 
 
-static RegisterNode<AggNode> regAggNode(blr_agg_function);
+static RegisterNode<AggNode> regAggNode({blr_agg_function});
 
 AggNode::Factory* AggNode::factories = NULL;
 
@@ -898,7 +898,7 @@ AggNode* ListAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 //--------------------
 
 
-static RegisterNode<CountAggNode> regCountAggNodeLegacy(blr_agg_count);
+static RegisterNode<CountAggNode> regCountAggNodeLegacy({blr_agg_count});
 
 static AggNode::Register<CountAggNode> countAggInfo("COUNT", blr_agg_count2, blr_agg_count_distinct);
 

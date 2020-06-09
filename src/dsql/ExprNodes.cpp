@@ -19,6 +19,7 @@
  */
 
 #include "firebird.h"
+#include <cmath>
 #include <math.h>
 #include <ctype.h>
 #include "../common/TimeZoneUtil.h"
@@ -222,7 +223,7 @@ string ExprNode::internalPrint(NodePrinter& printer) const
 
 bool ExprNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
 {
-	if (other->type != type)
+	if (other->getType() != getType())
 		return false;
 
 	NodeRefsHolder thisHolder(dsqlScratch->getPool());
@@ -250,7 +251,7 @@ bool ExprNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other
 
 bool ExprNode::sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const
 {
-	if (other->type != type)
+	if (other->getType() != getType())
 		return false;
 
 	NodeRefsHolder thisHolder(csb->csb_pool);
@@ -440,19 +441,16 @@ Firebird::string RecSourceListNode::internalPrint(NodePrinter& printer) const
 //--------------------
 
 
-static RegisterNode<ArithmeticNode> regArithmeticNodeAdd(blr_add);
-static RegisterNode<ArithmeticNode> regArithmeticNodeSubtract(blr_subtract);
-static RegisterNode<ArithmeticNode> regArithmeticNodeMultiply(blr_multiply);
-static RegisterNode<ArithmeticNode> regArithmeticNodeDivide(blr_divide);
+static RegisterNode<ArithmeticNode> regArithmeticNode({blr_add, blr_subtract, blr_multiply, blr_divide});
 
 ArithmeticNode::ArithmeticNode(MemoryPool& pool, UCHAR aBlrOp, bool aDialect1,
 			ValueExprNode* aArg1, ValueExprNode* aArg2)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_ARITHMETIC>(pool),
-	  blrOp(aBlrOp),
-	  dialect1(aDialect1),
 	  label(pool),
 	  arg1(aArg1),
-	  arg2(aArg2)
+	  arg2(aArg2),
+	  blrOp(aBlrOp),
+	  dialect1(aDialect1)
 {
 	label = getCompatDialectVerb();
 	label.upper();
@@ -542,7 +540,7 @@ UCHAR getFType(const dsc& desc)
 
 enum Scaling { SCALE_MIN, SCALE_SUM };
 
-unsigned setDecDesc(dsc* desc, const dsc& desc1, const dsc& desc2, Scaling sc, SCHAR* nodScale = nullptr)
+USHORT setDecDesc(dsc* desc, const dsc& desc1, const dsc& desc2, Scaling sc, SCHAR* nodScale = nullptr)
 {
 	UCHAR zipType = decimalDescTable[getFType(desc1)][getFType(desc2)];
 	fb_assert(zipType <= DSC_ZTYPE_FIXED);
@@ -1858,7 +1856,7 @@ dsc* ArithmeticNode::execute(thread_db* tdbb, jrd_req* request) const
 
 				impure->vlu_misc.vlu_double = MOV_get_double(tdbb, desc1) / divisor;
 
-				if (isinf(impure->vlu_misc.vlu_double))
+				if (std::isinf(impure->vlu_misc.vlu_double))
 				{
 					ERR_post(Arg::Gds(isc_arith_except) <<
 							 Arg::Gds(isc_exception_float_overflow));
@@ -1949,7 +1947,7 @@ dsc* ArithmeticNode::add(thread_db* tdbb, const dsc* desc, impure_value* value, 
 
 		value->vlu_misc.vlu_double = (blrOp == blr_subtract) ? d2 - d1 : d1 + d2;
 
-		if (isinf(value->vlu_misc.vlu_double))
+		if (std::isinf(value->vlu_misc.vlu_double))
 			ERR_post(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
 
 		result->dsc_dtype = DEFAULT_DOUBLE;
@@ -2046,7 +2044,7 @@ dsc* ArithmeticNode::add2(thread_db* tdbb, const dsc* desc, impure_value* value,
 
 		value->vlu_misc.vlu_double = (blrOp == blr_subtract) ? d2 - d1 : d1 + d2;
 
-		if (isinf(value->vlu_misc.vlu_double))
+		if (std::isinf(value->vlu_misc.vlu_double))
 			ERR_post(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
 
 		result->dsc_dtype = DEFAULT_DOUBLE;
@@ -2149,7 +2147,7 @@ dsc* ArithmeticNode::multiply(const dsc* desc, impure_value* value) const
 		const double d2 = MOV_get_double(tdbb, &value->vlu_desc);
 		value->vlu_misc.vlu_double = d1 * d2;
 
-		if (isinf(value->vlu_misc.vlu_double))
+		if (std::isinf(value->vlu_misc.vlu_double))
 		{
 			ERR_post(Arg::Gds(isc_arith_except) <<
 					 Arg::Gds(isc_exception_float_overflow));
@@ -2262,7 +2260,7 @@ dsc* ArithmeticNode::multiply2(const dsc* desc, impure_value* value) const
 		const double d2 = MOV_get_double(tdbb, &value->vlu_desc);
 		value->vlu_misc.vlu_double = d1 * d2;
 
-		if (isinf(value->vlu_misc.vlu_double))
+		if (std::isinf(value->vlu_misc.vlu_double))
 		{
 			ERR_post(Arg::Gds(isc_arith_except) <<
 					 Arg::Gds(isc_exception_float_overflow));
@@ -2381,7 +2379,7 @@ dsc* ArithmeticNode::divide2(const dsc* desc, impure_value* value) const
 		}
 		const double d1 = MOV_get_double(tdbb, &value->vlu_desc);
 		value->vlu_misc.vlu_double = d1 / d2;
-		if (isinf(value->vlu_misc.vlu_double))
+		if (std::isinf(value->vlu_misc.vlu_double))
 		{
 			ERR_post(Arg::Gds(isc_arith_except) <<
 					 Arg::Gds(isc_exception_float_overflow));
@@ -3045,7 +3043,7 @@ ValueExprNode* ArrayNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-static RegisterNode<AtNode> regAtNode(blr_at);
+static RegisterNode<AtNode> regAtNode({blr_at});
 
 AtNode::AtNode(MemoryPool& pool, ValueExprNode* aDateTimeArg, ValueExprNode* aZoneArg)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_AT>(pool),
@@ -3238,7 +3236,7 @@ dsc* AtNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<BoolAsValueNode> regBoolAsValueNode(blr_bool_as_value);
+static RegisterNode<BoolAsValueNode> regBoolAsValueNode({blr_bool_as_value});
 
 BoolAsValueNode::BoolAsValueNode(MemoryPool& pool, BoolExprNode* aBoolean)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_BOOL_AS_VALUE>(pool),
@@ -3326,7 +3324,7 @@ dsc* BoolAsValueNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<CastNode> regCastNode(blr_cast);
+static RegisterNode<CastNode> regCastNode({blr_cast});
 
 CastNode::CastNode(MemoryPool& pool, ValueExprNode* aSource, dsql_fld* aDsqlField)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_CAST>(pool),
@@ -3601,7 +3599,7 @@ dsc* CastNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<CoalesceNode> regCoalesceNode(blr_coalesce);
+static RegisterNode<CoalesceNode> regCoalesceNode({blr_coalesce});
 
 DmlNode* CoalesceNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
 {
@@ -3694,7 +3692,6 @@ ValueExprNode* CoalesceNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
 
 	return this;
 }
@@ -3801,7 +3798,7 @@ void CollateNode::assignFieldDtypeFromDsc(dsql_fld* field, const dsc* desc)
 //--------------------
 
 
-static RegisterNode<ConcatenateNode> regConcatenateNode(blr_concatenate);
+static RegisterNode<ConcatenateNode> regConcatenateNode({blr_concatenate});
 
 ConcatenateNode::ConcatenateNode(MemoryPool& pool, ValueExprNode* aArg1, ValueExprNode* aArg2)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_CONCATENATE>(pool),
@@ -4072,7 +4069,7 @@ ValueExprNode* ConcatenateNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-static RegisterNode<CurrentDateNode> regCurrentDateNode(blr_current_date);
+static RegisterNode<CurrentDateNode> regCurrentDateNode({blr_current_date});
 
 DmlNode* CurrentDateNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch* /*csb*/,
 								const UCHAR /*blrOp*/)
@@ -4158,8 +4155,7 @@ dsc* CurrentDateNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<CurrentTimeNode> regCurrentTimeNode(blr_current_time);
-static RegisterNode<CurrentTimeNode> regCurrentTimeNode2(blr_current_time2);
+static RegisterNode<CurrentTimeNode> regCurrentTimeNode({blr_current_time, blr_current_time2});
 
 DmlNode* CurrentTimeNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
@@ -4253,15 +4249,18 @@ dsc* CurrentTimeNode::execute(thread_db* tdbb, jrd_req* request) const
 	// Use the request timestamp.
 	fb_assert(!request->req_gmt_timestamp.isEmpty());
 
-	ISC_TIME time = request->req_gmt_timestamp.value().timestamp_time;
-	TimeStamp::round_time(time, precision);
+	ISC_TIMESTAMP_TZ currentTimeStamp;
+	currentTimeStamp.utc_timestamp = request->req_gmt_timestamp.value();
+	currentTimeStamp.time_zone = tdbb->getAttachment()->att_current_timezone;
 
 	impure->vlu_desc.dsc_dtype = dtype_sql_time_tz;
 	impure->vlu_desc.dsc_length = type_lengths[dtype_sql_time_tz];
 	impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc.vlu_sql_time_tz;
 
-	impure->vlu_misc.vlu_sql_time_tz.utc_time = time;
 	impure->vlu_misc.vlu_sql_time_tz.time_zone = tdbb->getAttachment()->att_current_timezone;
+	impure->vlu_misc.vlu_sql_time_tz.utc_time = TimeZoneUtil::timeStampTzToTimeTz(currentTimeStamp).utc_time;
+
+	TimeStamp::round_time(impure->vlu_misc.vlu_sql_time_tz.utc_time, precision);
 
 	return &impure->vlu_desc;
 }
@@ -4270,8 +4269,7 @@ dsc* CurrentTimeNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<CurrentTimeStampNode> regCurrentTimeStampNode(blr_current_timestamp);
-static RegisterNode<CurrentTimeStampNode> regCurrentTimeStampNode2(blr_current_timestamp2);
+static RegisterNode<CurrentTimeStampNode> regCurrentTimeStampNode({blr_current_timestamp, blr_current_timestamp2});
 
 DmlNode* CurrentTimeStampNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch* csb,
 	const UCHAR blrOp)
@@ -4385,7 +4383,7 @@ dsc* CurrentTimeStampNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<CurrentRoleNode> regCurrentRoleNode(blr_current_role);
+static RegisterNode<CurrentRoleNode> regCurrentRoleNode({blr_current_role});
 
 DmlNode* CurrentRoleNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch* /*csb*/,
 								const UCHAR /*blrOp*/)
@@ -4479,7 +4477,7 @@ ValueExprNode* CurrentRoleNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-static RegisterNode<CurrentUserNode> regCurrentUserNode(blr_user_name);
+static RegisterNode<CurrentUserNode> regCurrentUserNode({blr_user_name});
 
 DmlNode* CurrentUserNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch* /*csb*/,
 								const UCHAR /*blrOp*/)
@@ -4572,7 +4570,7 @@ ValueExprNode* CurrentUserNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-static RegisterNode<DecodeNode> regDecodeNode(blr_decode);
+static RegisterNode<DecodeNode> regDecodeNode({blr_decode});
 
 DmlNode* DecodeNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
 {
@@ -4790,7 +4788,6 @@ ValueExprNode* DecodeNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
 
 	return this;
 }
@@ -4826,7 +4823,7 @@ dsc* DecodeNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<DefaultNode> regDefaultNode(blr_default);
+static RegisterNode<DefaultNode> regDefaultNode({blr_default});
 
 DefaultNode::DefaultNode(MemoryPool& pool, const MetaName& aRelationName,
 		const MetaName& aFieldName)
@@ -4883,7 +4880,7 @@ DmlNode* DefaultNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 			}
 		}
 
-		return FB_NEW_POOL(pool) NullNode(pool);
+		return NullNode::instance();
 	}
 }
 
@@ -4915,7 +4912,7 @@ ValueExprNode* DefaultNode::createFromField(thread_db* tdbb, CompilerScratch* cs
 		return NodeCopier(csb->csb_pool, csb, map).copy(tdbb, fld->fld_default_value);
 	}
 	else
-		return FB_NEW_POOL(csb->csb_pool) NullNode(csb->csb_pool);
+		return NullNode::instance();
 }
 
 string DefaultNode::internalPrint(NodePrinter& printer) const
@@ -4979,7 +4976,7 @@ ValueExprNode* DefaultNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 //--------------------
 
 
-static RegisterNode<DerivedExprNode> regDerivedExprNode(blr_derived_expr);
+static RegisterNode<DerivedExprNode> regDerivedExprNode({blr_derived_expr});
 
 DmlNode* DerivedExprNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
 {
@@ -5126,7 +5123,6 @@ ValueExprNode* DerivedExprNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
 
 	// As all streams belongs to the same cursor, we use only the first.
 	cursorNumber = csb->csb_rpt[internalStreamList[0]].csb_cursor_number;
@@ -5215,7 +5211,6 @@ ValueExprNode* DomainValidationNode::pass2(thread_db* tdbb, CompilerScratch* csb
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
 
 	return this;
 }
@@ -5235,7 +5230,7 @@ dsc* DomainValidationNode::execute(thread_db* /*tdbb*/, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<ExtractNode> regExtractNode(blr_extract);
+static RegisterNode<ExtractNode> regExtractNode({blr_extract});
 
 ExtractNode::ExtractNode(MemoryPool& pool, UCHAR aBlrSubOp, ValueExprNode* aArg)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_EXTRACT>(pool),
@@ -5474,7 +5469,7 @@ dsc* ExtractNode::execute(thread_db* tdbb, jrd_req* request) const
 				case blr_extract_second:
 				case blr_extract_millisecond:
 					TimeZoneUtil::decodeTime(*(ISC_TIME_TZ*) value->dsc_address,
-						false, TimeZoneUtil::NO_OFFSET, &EngineCallbacks::instance, &times, &fractions);
+						false, TimeZoneUtil::NO_OFFSET, &times, &fractions);
 					break;
 
 				case blr_extract_timezone_hour:
@@ -5679,8 +5674,7 @@ dsc* ExtractNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<FieldNode> regFieldNodeFid(blr_fid);
-static RegisterNode<FieldNode> regFieldNodeField(blr_field);
+static RegisterNode<FieldNode> regFieldNode({blr_fid, blr_field});
 
 FieldNode::FieldNode(MemoryPool& pool, dsql_ctx* context, dsql_fld* field, ValueListNode* indices)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_FIELD>(pool),
@@ -5689,8 +5683,8 @@ FieldNode::FieldNode(MemoryPool& pool, dsql_ctx* context, dsql_fld* field, Value
 	  dsqlContext(context),
 	  dsqlField(field),
 	  dsqlIndices(indices),
-	  fieldStream(0),
 	  format(NULL),
+	  fieldStream(0),
 	  fieldId(0),
 	  byId(false),
 	  dsqlCursorField(false)
@@ -5704,8 +5698,8 @@ FieldNode::FieldNode(MemoryPool& pool, StreamType stream, USHORT id, bool aById)
 	  dsqlContext(NULL),
 	  dsqlField(NULL),
 	  dsqlIndices(NULL),
-	  fieldStream(stream),
 	  format(NULL),
+	  fieldStream(stream),
 	  fieldId(id),
 	  byId(aById),
 	  dsqlCursorField(false)
@@ -5822,7 +5816,7 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 				else
 				{
 					if (relation->rel_flags & REL_system)
-						return FB_NEW_POOL(pool) NullNode(pool);
+						return NullNode::instance();
 
  					if (tdbb->getAttachment()->isGbak())
 					{
@@ -5865,7 +5859,7 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 				!(*temp_rel->rel_fields)[id])
 			{
 				if (temp_rel->rel_flags & REL_system)
-					return FB_NEW_POOL(pool) NullNode(pool);
+					return NullNode::instance();
 			}
 		}
 	}
@@ -6059,9 +6053,11 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 
 					if ((context->ctx_flags & CTX_view_with_check_store) && !field)
 					{
-						node = FB_NEW_POOL(*tdbb->getDefaultPool()) NullNode(*tdbb->getDefaultPool());
+						node = NullNode::instance();
+						/*** Do not set line/column of shared node.
 						node->line = line;
 						node->column = column;
+						***/
 					}
 					else if (dsqlQualifier.hasData() && !field)
 					{
@@ -6090,14 +6086,17 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 							doDsqlPass(dsqlScratch, dsqlIndices, false) : NULL;
 
 						if (context->ctx_flags & CTX_null)
-							node = FB_NEW_POOL(*tdbb->getDefaultPool()) NullNode(*tdbb->getDefaultPool());
-						else if (field)
-							node = MAKE_field(context, field, indices);
+							node = NullNode::instance();
 						else
-							node = list ? usingField.getObject() : doDsqlPass(dsqlScratch, usingField, false);
+						{
+							if (field)
+								node = MAKE_field(context, field, indices);
+							else
+								node = list ? usingField.getObject() : doDsqlPass(dsqlScratch, usingField, false);
 
-						node->line = line;
-						node->column = column;
+							node->line = line;
+							node->column = column;
+						}
 					}
 				}
 				else if (isDerivedTable)
@@ -6842,18 +6841,17 @@ dsc* FieldNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<GenIdNode> regGenIdNode(blr_gen_id);
-static RegisterNode<GenIdNode> regGenIdNode2(blr_gen_id2);
+static RegisterNode<GenIdNode> regGenIdNode({blr_gen_id, blr_gen_id2});
 
 GenIdNode::GenIdNode(MemoryPool& pool, bool aDialect1,
 					 const MetaName& name,
 					 ValueExprNode* aArg,
 					 bool aImplicit, bool aIdentity)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_GEN_ID>(pool),
-	  dialect1(aDialect1),
 	  generator(pool, name),
 	  arg(aArg),
 	  step(0),
+	  dialect1(aDialect1),
 	  sysGen(false),
 	  implicit(aImplicit),
 	  identity(aIdentity)
@@ -7067,7 +7065,7 @@ dsc* GenIdNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<InternalInfoNode> regInternalInfoNode(blr_internal_info);
+static RegisterNode<InternalInfoNode> regInternalInfoNode({blr_internal_info});
 
 // CVC: If this list changes, gpre will need to be updated
 const InternalInfoNode::InfoAttr InternalInfoNode::INFO_TYPE_ATTRIBUTES[MAX_INFO_TYPE] =
@@ -7342,7 +7340,7 @@ ValueExprNode* InternalInfoNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-static RegisterNode<LiteralNode> regLiteralNode(blr_literal);
+static RegisterNode<LiteralNode> regLiteralNode({blr_literal});
 
 LiteralNode::LiteralNode(MemoryPool& pool)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_LITERAL>(pool),
@@ -7910,13 +7908,12 @@ ValueExprNode* LiteralNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	}
 
 	delete dsqlStr;		// Not needed anymore
-	dsqlStr = 0;
+	dsqlStr = nullptr;
 
 	ValueExprNode::pass2(tdbb, csb);
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
 
 	return this;
 }
@@ -7967,7 +7964,7 @@ void LiteralNode::fixMinSInt64(MemoryPool& pool)
 //--------------------
 
 
-static RegisterNode<LocalTimeNode> regLocalTimeNode(blr_local_time);
+static RegisterNode<LocalTimeNode> regLocalTimeNode({blr_local_time});
 
 DmlNode* LocalTimeNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
@@ -8070,7 +8067,7 @@ dsc* LocalTimeNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<LocalTimeStampNode> regLocalTimeStampNode(blr_local_timestamp);
+static RegisterNode<LocalTimeStampNode> regLocalTimeStampNode({blr_local_timestamp});
 
 DmlNode* LocalTimeStampNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
@@ -8381,9 +8378,9 @@ DerivedFieldNode::DerivedFieldNode(MemoryPool& pool, const MetaName& aName, USHO
 			ValueExprNode* aValue)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_DERIVED_FIELD>(pool),
 	  name(aName),
-	  scope(aScope),
 	  value(aValue),
-	  context(NULL)
+	  context(NULL),
+	  scope(aScope)
 {
 }
 
@@ -8597,7 +8594,7 @@ void DerivedFieldNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 //--------------------
 
 
-static RegisterNode<NegateNode> regNegateNode(blr_negate);
+static RegisterNode<NegateNode> regNegateNode({blr_negate});
 
 NegateNode::NegateNode(MemoryPool& pool, ValueExprNode* aArg)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_NEGATE>(pool),
@@ -8814,12 +8811,14 @@ ValueExprNode* NegateNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-static RegisterNode<NullNode> regNullNode(blr_null);
+static RegisterNode<NullNode> regNullNode({blr_null});
+
+GlobalPtr<NullNode> NullNode::INSTANCE;
 
 DmlNode* NullNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch* /*csb*/,
 	const UCHAR /*blrOp*/)
 {
-	return FB_NEW_POOL(pool) NullNode(pool);
+	return &INSTANCE;
 }
 
 string NullNode::internalPrint(NodePrinter& printer) const
@@ -8866,18 +8865,7 @@ void NullNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* desc)
 
 ValueExprNode* NullNode::copy(thread_db* tdbb, NodeCopier& /*copier*/) const
 {
-	return FB_NEW_POOL(*tdbb->getDefaultPool()) NullNode(*tdbb->getDefaultPool());
-}
-
-ValueExprNode* NullNode::pass2(thread_db* tdbb, CompilerScratch* csb)
-{
-	ValueExprNode::pass2(tdbb, csb);
-
-	dsc desc;
-	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
-
-	return this;
+	return &INSTANCE;
 }
 
 dsc* NullNode::execute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
@@ -9332,19 +9320,17 @@ ValueExprNode* OverNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-static RegisterNode<ParameterNode> regParameterNode(blr_parameter);
-static RegisterNode<ParameterNode> regParameterNode2(blr_parameter2);
-static RegisterNode<ParameterNode> regParameterNode3(blr_parameter3);
+static RegisterNode<ParameterNode> regParameterNode({blr_parameter, blr_parameter2, blr_parameter3});
 
 ParameterNode::ParameterNode(MemoryPool& pool)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_PARAMETER>(pool),
-	  dsqlParameterIndex(0),
 	  dsqlParameter(NULL),
 	  message(NULL),
-	  argNumber(0),
 	  argFlag(NULL),
 	  argIndicator(NULL),
-	  argInfo(NULL)
+	  argInfo(NULL),
+	  dsqlParameterIndex(0),
+	  argNumber(0)
 {
 }
 
@@ -9725,16 +9711,14 @@ dsc* ParameterNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<RecordKeyNode> regRecordKeyNodeDbKey(blr_dbkey);
-static RegisterNode<RecordKeyNode> regRecordKeyNodeRecordVersion(blr_record_version);
-static RegisterNode<RecordKeyNode> regRecordKeyNodeRecordVersion2(blr_record_version2);
+static RegisterNode<RecordKeyNode> regRecordKeyNode({blr_dbkey, blr_record_version, blr_record_version2});
 
 RecordKeyNode::RecordKeyNode(MemoryPool& pool, UCHAR aBlrOp, const MetaName& aDsqlQualifier)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_RECORD_KEY>(pool),
-	  blrOp(aBlrOp),
 	  dsqlQualifier(pool, aDsqlQualifier),
 	  dsqlRelation(NULL),
 	  recStream(0),
+	  blrOp(aBlrOp),
 	  aggregate(false)
 {
 	fb_assert(blrOp == blr_dbkey || blrOp == blr_record_version || blrOp == blr_record_version2);
@@ -9797,7 +9781,7 @@ ValueExprNode* RecordKeyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				raiseError(context);
 
 			if (context->ctx_flags & CTX_null)
-				return FB_NEW_POOL(*tdbb->getDefaultPool()) NullNode(*tdbb->getDefaultPool());
+				return NullNode::instance();
 
 			PASS1_ambiguity_check(dsqlScratch, getAlias(true), contexts);
 
@@ -9835,7 +9819,7 @@ ValueExprNode* RecordKeyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					raiseError(context);
 
 				if (context->ctx_flags & CTX_null)
-					return FB_NEW_POOL(*tdbb->getDefaultPool()) NullNode(*tdbb->getDefaultPool());
+					return NullNode::instance();
 
 				RelationSourceNode* relNode = FB_NEW_POOL(dsqlScratch->getPool()) RelationSourceNode(
 					dsqlScratch->getPool());
@@ -10127,7 +10111,7 @@ ValueExprNode* RecordKeyNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 			eqlNode->arg2 = literal;
 
 			// THEN: NULL
-			valueIfNode->trueValue = FB_NEW_POOL(csb->csb_pool) NullNode(csb->csb_pool);
+			valueIfNode->trueValue = NullNode::instance();
 
 			// ELSE: RDB$DB_KEY
 			valueIfNode->falseValue = node;
@@ -10304,7 +10288,7 @@ void RecordKeyNode::raiseError(dsql_ctx* context) const
 //--------------------
 
 
-static RegisterNode<ScalarNode> regScalarNode1(blr_index);
+static RegisterNode<ScalarNode> regScalarNode({blr_index});
 
 DmlNode* ScalarNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
 {
@@ -10392,7 +10376,7 @@ dsc* ScalarNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<StmtExprNode> regStmtExprNode(blr_stmt_expr);
+static RegisterNode<StmtExprNode> regStmtExprNode({blr_stmt_expr});
 
 DmlNode* StmtExprNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
 {
@@ -10452,8 +10436,7 @@ dsc* StmtExprNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<StrCaseNode> regStrCaseNodeLower(blr_lowcase);
-static RegisterNode<StrCaseNode> regStrCaseNodeUpper(blr_upcase);
+static RegisterNode<StrCaseNode> regStrCaseNode({blr_lowcase, blr_upcase});
 
 StrCaseNode::StrCaseNode(MemoryPool& pool, UCHAR aBlrOp, ValueExprNode* aArg)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_STR_CASE>(pool),
@@ -10646,7 +10629,7 @@ dsc* StrCaseNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<StrLenNode> regStrLenNode(blr_strlen);
+static RegisterNode<StrLenNode> regStrLenNode({blr_strlen});
 
 StrLenNode::StrLenNode(MemoryPool& pool, UCHAR aBlrSubOp, ValueExprNode* aArg)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_STR_LEN>(pool),
@@ -10887,23 +10870,19 @@ dsc* StrLenNode::execute(thread_db* tdbb, jrd_req* request) const
 
 
 // Only blr_via is generated by DSQL.
-static RegisterNode<SubQueryNode> regSubQueryNodeVia(blr_via);
-static RegisterNode<SubQueryNode> regSubQueryNodeFrom(blr_from);
-static RegisterNode<SubQueryNode> regSubQueryNodeAverage(blr_average);
-static RegisterNode<SubQueryNode> regSubQueryNodeCount(blr_count);
-static RegisterNode<SubQueryNode> regSubQueryNodeMaximum(blr_maximum);
-static RegisterNode<SubQueryNode> regSubQueryNodeMinimum(blr_minimum);
-static RegisterNode<SubQueryNode> regSubQueryNodeTotal(blr_total);
+static RegisterNode<SubQueryNode> regSubQueryNode({
+	blr_via, blr_from, blr_average, blr_count, blr_maximum, blr_minimum, blr_total
+});
 
 SubQueryNode::SubQueryNode(MemoryPool& pool, UCHAR aBlrOp, RecordSourceNode* aDsqlRse,
 			ValueExprNode* aValue1, ValueExprNode* aValue2)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_SUBQUERY>(pool),
-	  blrOp(aBlrOp),
-	  ownSavepoint(true),
 	  dsqlRse(aDsqlRse),
 	  value1(aValue1),
 	  value2(aValue2),
-	  subQuery(NULL)
+	  subQuery(NULL),
+	  blrOp(aBlrOp),
+	  ownSavepoint(true)
 {
 }
 
@@ -10972,7 +10951,7 @@ ValueExprNode* SubQueryNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	RseNode* rse = PASS1_rse(dsqlScratch, nodeAs<SelectExprNode>(dsqlRse), false);
 
 	SubQueryNode* node = FB_NEW_POOL(dsqlScratch->getPool()) SubQueryNode(dsqlScratch->getPool(), blrOp, rse,
-		rse->dsqlSelectList->items[0], FB_NEW_POOL(dsqlScratch->getPool()) NullNode(dsqlScratch->getPool()));
+		rse->dsqlSelectList->items[0], NullNode::instance());
 
 	// Finish off by cleaning up contexts.
 	dsqlScratch->context->clear(base);
@@ -11410,7 +11389,7 @@ dsc* SubQueryNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<SubstringNode> regSubstringNode(blr_substring);
+static RegisterNode<SubstringNode> regSubstringNode({blr_substring});
 
 SubstringNode::SubstringNode(MemoryPool& pool, ValueExprNode* aExpr, ValueExprNode* aStart,
 			ValueExprNode* aLength)
@@ -11744,7 +11723,7 @@ dsc* SubstringNode::perform(thread_db* tdbb, impure_value* impure, const dsc* va
 //--------------------
 
 
-static RegisterNode<SubstringSimilarNode> regSubstringSimilarNode(blr_substring_similar);
+static RegisterNode<SubstringSimilarNode> regSubstringSimilarNode({blr_substring_similar});
 
 SubstringSimilarNode::SubstringSimilarNode(MemoryPool& pool, ValueExprNode* aExpr,
 			ValueExprNode* aPattern, ValueExprNode* aEscape)
@@ -11979,14 +11958,14 @@ ValueExprNode* SubstringSimilarNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-static RegisterNode<SysFuncCallNode> regSysFuncCallNode(blr_sys_function);
+static RegisterNode<SysFuncCallNode> regSysFuncCallNode({blr_sys_function});
 
 SysFuncCallNode::SysFuncCallNode(MemoryPool& pool, const MetaName& aName, ValueListNode* aArgs)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_SYSFUNC_CALL>(pool),
 	  name(pool, aName),
-	  dsqlSpecialSyntax(false),
 	  args(aArgs),
-	  function(NULL)
+	  function(NULL),
+	  dsqlSpecialSyntax(false)
 {
 }
 
@@ -12206,7 +12185,7 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-static RegisterNode<TrimNode> regTrimNode(blr_trim);
+static RegisterNode<TrimNode> regTrimNode({blr_trim});
 
 TrimNode::TrimNode(MemoryPool& pool, UCHAR aWhere, ValueExprNode* aValue, ValueExprNode* aTrimChars)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_TRIM>(pool),
@@ -12544,9 +12523,7 @@ dsc* TrimNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<UdfCallNode> regUdfCallNode1(blr_function);
-static RegisterNode<UdfCallNode> regUdfCallNode2(blr_function2);
-static RegisterNode<UdfCallNode> regUdfCallNode3(blr_subfunc);
+static RegisterNode<UdfCallNode> regUdfCallNode({blr_function, blr_function2, blr_subfunc});
 
 UdfCallNode::UdfCallNode(MemoryPool& pool, const QualifiedName& aName, ValueListNode* aArgs)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_UDF_CALL>(pool),
@@ -13072,7 +13049,7 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-static RegisterNode<ValueIfNode> regValueIfNode(blr_value_if);
+static RegisterNode<ValueIfNode> regValueIfNode({blr_value_if});
 
 ValueIfNode::ValueIfNode(MemoryPool& pool, BoolExprNode* aCondition, ValueExprNode* aTrueValue,
 			ValueExprNode* aFalseValue)
@@ -13313,7 +13290,6 @@ ValueExprNode* ValueIfNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
 
 	return this;
 }
@@ -13327,15 +13303,15 @@ dsc* ValueIfNode::execute(thread_db* tdbb, jrd_req* request) const
 //--------------------
 
 
-static RegisterNode<VariableNode> regVariableNode(blr_variable);
+static RegisterNode<VariableNode> regVariableNode({blr_variable});
 
 VariableNode::VariableNode(MemoryPool& pool)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_VARIABLE>(pool),
 	  dsqlName(pool),
 	  dsqlVar(NULL),
-	  varId(0),
 	  varDecl(NULL),
-	  varInfo(NULL)
+	  varInfo(NULL),
+	  varId(0)
 {
 }
 
@@ -13627,4 +13603,5 @@ static void setParameterInfo(dsql_par* parameter, const dsql_ctx* context)
 }
 
 
+static_assert(sizeof(RecordSourceNode) <= 40, "sizeof()");
 }	// namespace Jrd

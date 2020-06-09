@@ -23,9 +23,9 @@
 
 ;   Usage Notes:
 ;
-;   This script has been designed to work with Inno Setup v5.5.8 (unicode
-;   version). It is available as a quick start pack from here:
-;     http://www.jrsoftware.org/isdl.php#qsp
+;   This script has been designed to work with Inno Setup v6.0.4
+;   It is available as a quick start pack from here:
+;     http://www.jrsoftware.org/isdl.php
 ;
 ;
 ;   Known bugs and problems etc etc.
@@ -259,10 +259,13 @@ OutputDir=builds\install_images
 #define GenDir "gen\readmes"
 LicenseFile={#LicensesDir}\IPLicense.txt
 
+WizardStyle=modern
+WizardSizePercent=130,150
+WizardResizable=yes
 WizardImageFile={#ScriptsDir}\firebird_install_logo1.bmp
 WizardSmallImageFile={#ScriptsDir}\firebird_install_logo1.bmp
 
-DefaultDirName={code:ChooseInstallDir|{pf}\Firebird\Firebird_{#AppVer}}
+DefaultDirName={code:ChooseInstallDir|{commonpf}\Firebird\Firebird_{#AppVer}}
 DefaultGroupName=Firebird {#GroupnameVer} ({#PlatformTarget})
 
 UninstallDisplayIcon={code:ChooseUninstallIcon|{#UninstallBinary}}
@@ -272,7 +275,6 @@ Compression=none
 SolidCompression=yes
 #endif
 
-ShowUndisplayableLanguages={#defined iss_debug}
 AllowNoIcons=true
 AlwaysShowComponentsList=true
 PrivilegesRequired=admin
@@ -363,15 +365,14 @@ Name: AutoStartTask; Description: {cm:AutoStartTask}; Components: ServerComponen
 ;Copying of client libs to <sys>
 Name: CopyFbClientToSysTask; Description: {cm:CopyFbClientToSysTask}; Components: ClientComponent; MinVersion: 4,4; Check: ShowCopyFbClientLibTask;
 Name: CopyFbClientAsGds32Task; Description: {cm:CopyFbClientAsGds32Task}; Components: ClientComponent; MinVersion: 4,4; Flags: Unchecked; Check: ShowCopyGds32Task;
-Name: EnableLegacyClientAuth; Description: {cm:EnableLegacyClientAuth}; Components: ClientComponent; MinVersion: 4,4; Flags: Unchecked; Check: ConfigureAuthentication;
 
 
 [Run]
 ; due to the changes required to support MSVC15 support for earlier versions is now broken.
 #if Int(msvc_runtime_major_version,14) >= 14
-Filename: msiexec.exe; Parameters: "/qn /i ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.log"" "; StatusMsg: "Installing MSVC 32-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
+Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.log"" "; StatusMsg: "Installing MSVC 32-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
 #if PlatformTarget == "x64"
-Filename: msiexec.exe; Parameters: "/qn /i ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.log"" ";  StatusMsg: "Installing MSVC 64-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
+Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.log"" ";  StatusMsg: "Installing MSVC 64-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
 #endif
 #endif
 
@@ -538,9 +539,12 @@ Source: {#WOW64Dir}\lib\*.lib; DestDir: {app}\WOW64\lib; Components: DevAdminCom
 Source: {#FilesDir}\plugins.conf; DestDir: {app}; Components: ServerComponent; Flags: ignoreversion;
 Source: {#FilesDir}\plugins\*.dll; DestDir: {app}\plugins; Components: ServerComponent; Flags: ignoreversion;
 Source: {#FilesDir}\plugins\*.conf; DestDir: {app}\plugins; Components: ServerComponent; Flags: ignoreversion;
+Source: {#FilesDir}\plugins\udr\*.*; DestDir: {app}\plugins\udr; Components: ServerComponent; Flags: ignoreversion;
 
 Source: {#FilesDir}\misc\*.*; DestDir: {app}\misc; Components: ServerComponent; Flags: ignoreversion;
 Source: {#FilesDir}\misc\upgrade\security\*.*; DestDir: {app}\misc\upgrade\security; Components: ServerComponent; Flags: ignoreversion;
+
+Source: {#FilesDir}\tzdata\*.*; DestDir: {app}\tzdata; Components: ClientComponent; Flags: ignoreversion;
 
 ;Source: {#FilesDir}\system32\Firebird2Control.cpl; DestDir: {sys}; Components: ServerComponent; MinVersion: 0,4.0; Flags: sharedfile ignoreversion promptifolder restartreplace uninsrestartdelete; Check: InstallCPLApplet
 #endif /* files */
@@ -551,10 +555,16 @@ Source: {#FilesDir}\examples\api\*.*; DestDir: {app}\examples\api; Components: D
 Source: {#FilesDir}\examples\build_win32\*.*; DestDir: {app}\examples\build_win32; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
 ;Source: {#FilesDir}\examples\dyn\*.*; DestDir: {app}\examples\dyn; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
 Source: {#FilesDir}\examples\dbcrypt\*.*; DestDir: {app}\examples\dbcrypt; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
+Source: {#FilesDir}\examples\dbcrypt\msvc\*.*; DestDir: {app}\examples\dbcrypt\msvc; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
 Source: {#FilesDir}\examples\empbuild\*.*; DestDir: {app}\examples\empbuild; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
+Source: {#FilesDir}\examples\extauth\*.*; DestDir: {app}\examples\extauth; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
+Source: {#FilesDir}\examples\extauth\msvc\*.*; DestDir: {app}\examples\extauth\msvc; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
 Source: {#FilesDir}\examples\include\*.*; DestDir: {app}\examples\include; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
 Source: {#FilesDir}\examples\interfaces\*.*; DestDir: {app}\examples\interfaces; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
 Source: {#FilesDir}\examples\package\*.*; DestDir: {app}\examples\package; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
+Source: {#FilesDir}\examples\prebuilt\*.*; DestDir: {app}\examples\prebuilt; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
+Source: {#FilesDir}\examples\prebuilt\bin\*.*; DestDir: {app}\examples\prebuilt\bin; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
+Source: {#FilesDir}\examples\prebuilt\plugins\*.*; DestDir: {app}\examples\prebuilt\plugins; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
 Source: {#FilesDir}\examples\stat\*.*; DestDir: {app}\examples\stat; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
 Source: {#FilesDir}\examples\udf\*.*; DestDir: {app}\examples\udf; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
 Source: {#FilesDir}\examples\udr\*.*; DestDir: {app}\examples\udr; Components: DevAdminComponent;  Flags: ignoreversion {#SkipFileIfDevStatus};
@@ -801,15 +811,15 @@ begin
   ServerType := '';
   SvcParams := '';
 
-  if IsComponentSelected('ServerComponent') and IsTaskSelected('AutoStartTask') then
+  if WizardIsComponentSelected('ServerComponent') and WizardIsTaskSelected('AutoStartTask') then
     SvcParams := ' -auto '
   else
     SvcParams := ' -demand ';
 
   SvcParams := ServerType + SvcParams;
 
-  if IsComponentSelected('ServerComponent') and ( IsTaskSelected('UseSuperServerTask\UseGuardianTask')
-      or ( IsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) ) then
+  if WizardIsComponentSelected('ServerComponent') and ( WizardIsTaskSelected('UseSuperServerTask\UseGuardianTask')
+      or ( WizardIsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) ) then
     SvcParams := ServerType + SvcParams +  ' -guardian ';
 
   InstanceName := ServiceName('We currently do not support or test for a different instance name');
@@ -848,9 +858,6 @@ begin
 	AStringList := TStringList.create;
 	with AStringList do begin
 		Add( 'create user ' + GetAdminUserName + ' password ''' + GetAdminUserPassword + ''' using plugin Srp;' );
-    if IsTaskSelected('EnableLegacyClientAuth') then
-      if ( ( uppercase( GetAdminUserName ) <> 'SYSDBA' ) or ( GetAdminUserPassword <> 'masterkey' ) ) then
-        Add( 'create or alter user ' + GetAdminUserName + ' password ''' + GetAdminUserPassword + ''' using plugin Legacy_UserManager;' );
 		Add( 'commit;' );  //Technically exit implies a commit so this not necessary. OTOH, explicitly committing makes for more readable code.
 		Add( 'exit;' );
 		SaveToFile( Tempdir +'\temp.sql' );
@@ -863,28 +870,28 @@ end;
 function InstallGuardianIcon(): Boolean;
 begin
   result := false;
-  if IsTaskSelected('UseApplicationTask') and
-    IsComponentSelected('ServerComponent') and (
-    IsTaskSelected('UseSuperServerTask\UseGuardianTask') or
-    IsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) then
+  if WizardIsTaskSelected('UseApplicationTask') and
+    WizardIsComponentSelected('ServerComponent') and (
+    WizardIsTaskSelected('UseSuperServerTask\UseGuardianTask') or
+    WizardIsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) then
       result := true;
 end;
 
 function InstallServerIcon(): Boolean;
 begin
   result := false;
-  if IsTaskSelected('UseApplicationTask') and
-    IsComponentSelected('ServerComponent') and
-      not ( IsTaskSelected('UseSuperServerTask\UseGuardianTask') or
-            IsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) then
+  if WizardIsTaskSelected('UseApplicationTask') and
+    WizardIsComponentSelected('ServerComponent') and
+      not ( WizardIsTaskSelected('UseSuperServerTask\UseGuardianTask') or
+            WizardIsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) then
       result := true;
 end;
 
 function StartApp(Default: String): String;
 begin
-  if IsComponentSelected('ServerComponent') and (
-      IsTaskSelected('UseSuperServerTask\UseGuardianTask') or
-      IsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) then
+  if WizardIsComponentSelected('ServerComponent') and (
+      WizardIsTaskSelected('UseSuperServerTask\UseGuardianTask') or
+      WizardIsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) then
     Result := GetAppPath+'\fbguard.exe'
   else
     Result := GetAppPath+'\firebird.exe' ;
@@ -899,8 +906,8 @@ function IsNotAutoStartApp: boolean;
 //Support function to help remove unwanted registry entry.
 begin
   result := true;
-  if ( IsComponentSelected('ServerComponent') and IsTaskSelected('AutoStartTask') ) and
-    ( IsComponentSelected('ServerComponent') and IsTaskSelected('UseApplicationTask') ) then
+  if ( WizardIsComponentSelected('ServerComponent') and WizardIsTaskSelected('AutoStartTask') ) and
+    ( WizardIsComponentSelected('ServerComponent') and WizardIsTaskSelected('UseApplicationTask') ) then
   result := false;
 end;
 
@@ -924,39 +931,30 @@ procedure UpdateFirebirdConf;
 // Update firebird conf.
 // If user has deselected the guardian we should update firebird.conf accordingly.
 // We also test if user has asked for classic or super server
-// If EnableLegacyClientAuth has ben selected we update the file.......
-// Otherwise we leave the file unchanged.
 begin
   //There is no simple, foolproof and futureproof way to check whether
   //we are doing a server install, so the easiest way is to see if a
   //firebird.conf exists. If it doesn't then we don't care.
   if FileExists(GetAppPath+'\firebird.conf') then begin
 
-    if (IsComponentSelected('ServerComponent') ) then begin
+    if (WizardIsComponentSelected('ServerComponent') ) then begin
 
 // Setting GuardianOption to 0 makes no sense. If the user deploys the guardian
 // there is an expectation that it will restart the server in the event of a crash.
 // Otherwise, why start firebird with the guardian?
-//      if not ( IsTaskSelected('UseSuperServerTask\UseGuardianTask') or  IsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) then
+//      if not ( WizardIsTaskSelected('UseSuperServerTask\UseGuardianTask') or  WizardIsTaskSelected('UseSuperClassicTask\UseGuardianTask') ) then
 //				ReplaceLine(GetAppPath+'\firebird.conf','GuardianOption','GuardianOption = 0','#');
 
       // These attempts to modify firebird.conf may not survice repeated installs.
 
-			if IsTaskSelected('UseClassicServerTask') then
+			if WizardIsTaskSelected('UseClassicServerTask') then
 				ReplaceLine(GetAppPath+'\firebird.conf','ServerMode = ','ServerMode = Classic','#');
 
-      if IsTaskSelected('UseSuperClassicTask') then
+      if WizardIsTaskSelected('UseSuperClassicTask') then
 				ReplaceLine(GetAppPath+'\firebird.conf','ServerMode = ','ServerMode = SuperClassic','#');
 
-			if IsTaskSelected('UseSuperServerTask')  then
+			if WizardIsTaskSelected('UseSuperServerTask')  then
 				ReplaceLine(GetAppPath+'\firebird.conf','ServerMode = ','ServerMode = Super','#');
-
-      if IsTaskSelected('EnableLegacyClientAuth') then begin
-				ReplaceLine(GetAppPath+'\firebird.conf','AuthServer = ','AuthServer = Legacy_Auth, Srp, Win_Sspi','#');
-				ReplaceLine(GetAppPath+'\firebird.conf','AuthClient = ','AuthClient = Legacy_Auth, Srp, Win_Sspi','#');
-				ReplaceLine(GetAppPath+'\firebird.conf','UserManager = ','UserManager = Legacy_UserManager, Srp','#');
-				ReplaceLine(GetAppPath+'\firebird.conf','WireCrypt = ','WireCrypt = enabled','#');
-      end;
 
 		end;
 
@@ -1002,7 +1000,6 @@ procedure CurPageChanged(CurPage: Integer);
 // wpReady, wpPreparing, wpInstalling, wpInfoAfter, wpFinished
 begin
   case CurPage of
-    wpWelcome:      ResizeWizardForm(True); //There was a bug: every time when "go back" pressed the form was resized!
     wpInfoBefore:   WizardForm.INFOBEFOREMEMO.font.name:='Courier New';
     wpInfoAfter:    WizardForm.INFOAFTERMEMO.font.name:='Courier New';
   end;
@@ -1043,8 +1040,8 @@ begin
     ssDone: begin
       //If user has chosen to install an app and run it automatically set up the registry accordingly
       //so that the server or guardian starts evertime they login.
-      if (IsComponentSelected('ServerComponent') and IsTaskSelected('AutoStartTask') ) and
-              ( IsComponentSelected('ServerComponent') and IsTaskSelected('UseApplicationTask') ) then begin
+      if (WizardIsComponentSelected('ServerComponent') and WizardIsTaskSelected('AutoStartTask') ) and
+              ( WizardIsComponentSelected('ServerComponent') and WizardIsTaskSelected('UseApplicationTask') ) then begin
         AppStr := StartApp('')+StartAppParams('');
         RegWriteStringValue (HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 'Firebird', AppStr);
       end;

@@ -1136,6 +1136,8 @@ ISC_STATUS ISC_EXPORT fb_ping(ISC_STATUS*, isc_db_handle*);
 
 ISC_STATUS ISC_EXPORT fb_get_database_handle(ISC_STATUS*, isc_db_handle*, void*);
 ISC_STATUS ISC_EXPORT fb_get_transaction_handle(ISC_STATUS*, isc_tr_handle*, void*);
+ISC_STATUS ISC_EXPORT fb_get_transaction_interface(ISC_STATUS*, void*, isc_tr_handle*);
+ISC_STATUS ISC_EXPORT fb_get_statement_interface(ISC_STATUS*, void*, isc_stmt_handle*);
 
 /********************************/
 /* Client information functions */

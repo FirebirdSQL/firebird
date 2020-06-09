@@ -46,6 +46,7 @@
     <ClCompile Include="..\..\..\src\common\classes\Synchronize.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\SyncObject.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\TempFile.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\TimerImpl.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\timestamp.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\TomCryptHash.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\UserBlob.cpp" />
@@ -153,6 +154,7 @@
     <ClInclude Include="..\..\..\src\common\classes\Synchronize.h" />
     <ClInclude Include="..\..\..\src\common\classes\SyncObject.h" />
     <ClInclude Include="..\..\..\src\common\classes\TempFile.h" />
+    <ClInclude Include="..\..\..\src\common\classes\TimerImpl.h" />
     <ClInclude Include="..\..\..\src\common\classes\timestamp.h" />
     <ClInclude Include="..\..\..\src\common\classes\tree.h" />
     <ClInclude Include="..\..\..\src\common\classes\UserBlob.h" />

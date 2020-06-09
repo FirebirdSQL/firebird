@@ -1948,6 +1948,8 @@ C --
       PARAMETER (GDS__truncate_monitor                 = 335545267)
       INTEGER*4 GDS__truncate_context                
       PARAMETER (GDS__truncate_context                 = 335545268)
+      INTEGER*4 GDS__merge_dup_update                
+      PARAMETER (GDS__merge_dup_update                 = 335545269)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 

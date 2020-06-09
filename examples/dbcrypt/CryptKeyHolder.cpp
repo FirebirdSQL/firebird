@@ -286,7 +286,7 @@ extern "C" void FB_DLL_EXPORT FB_PLUGIN_ENTRY_POINT(IMaster* master)
 	IPluginManager* pluginManager = master->getPluginManager();
 
 	module.registerMe(pluginManager);
-	pluginManager->registerPluginFactory(IPluginManager::TYPE_KEY_HOLDER, "CryptKeyHolder_example",
+	pluginManager->registerPluginFactory(IPluginManager::TYPE_KEY_HOLDER, "fbSampleKeyHolder",
 		&factory);
 }
 

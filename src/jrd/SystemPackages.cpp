@@ -54,17 +54,17 @@ namespace
 							prc_selectable,
 							// input parameters
 							{
-								{"TIME_ZONE_NAME", fld_tz_name, false},
-								{"FROM_TIMESTAMP", fld_timestamp_tz, false},
-								{"TO_TIMESTAMP", fld_timestamp_tz, false}
+								{"RDB$TIME_ZONE_NAME", fld_tz_name, false},
+								{"RDB$FROM_TIMESTAMP", fld_timestamp_tz, false},
+								{"RDB$TO_TIMESTAMP", fld_timestamp_tz, false}
 							},
 							// output parameters
 							{
-								{"START_TIMESTAMP", fld_timestamp_tz, false},
-								{"END_TIMESTAMP", fld_timestamp_tz, false},
-								{"ZONE_OFFSET", fld_tz_offset, false},
-								{"DST_OFFSET", fld_tz_offset, false},
-								{"EFFECTIVE_OFFSET", fld_tz_offset, false}
+								{"RDB$START_TIMESTAMP", fld_timestamp_tz, false},
+								{"RDB$END_TIMESTAMP", fld_timestamp_tz, false},
+								{"RDB$ZONE_OFFSET", fld_tz_offset, false},
+								{"RDB$DST_OFFSET", fld_tz_offset, false},
+								{"RDB$EFFECTIVE_OFFSET", fld_tz_offset, false}
 							}
 						)
 					},

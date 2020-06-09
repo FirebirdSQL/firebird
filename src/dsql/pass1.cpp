@@ -806,8 +806,7 @@ bool PASS1_node_match(DsqlCompilerScratch* dsqlScratch, const ExprNode* node1, c
 	DEV_BLKCHK(node1, dsql_type_nod);
 	DEV_BLKCHK(node2, dsql_type_nod);
 
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	if (!node1 && !node2)
 		return true;
@@ -892,7 +891,7 @@ bool PASS1_node_match(DsqlCompilerScratch* dsqlScratch, const ExprNode* node1, c
 			return PASS1_node_match(dsqlScratch, node1, derivedField2->value, ignoreMapCast);
 	}
 
-	return node1->type == node2->type && node1->dsqlMatch(dsqlScratch, node2, ignoreMapCast);
+	return node1->getType() == node2->getType() && node1->dsqlMatch(dsqlScratch, node2, ignoreMapCast);
 }
 
 
@@ -1416,7 +1415,7 @@ void PASS1_expand_select_node(DsqlCompilerScratch* dsqlScratch, ExprNode* node, 
 					if (!select_item)
 					{
 						if (context->ctx_flags & CTX_null)
-							select_item = FB_NEW_POOL(*tdbb->getDefaultPool()) NullNode(*tdbb->getDefaultPool());
+							select_item = NullNode::instance();
 						else
 							select_item = MAKE_field(context, field, NULL);
 					}

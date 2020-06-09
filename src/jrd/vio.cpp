@@ -3932,8 +3932,7 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 					if (relation->rel_flags & REL_deleting)
 						break;
 
-					if (--tdbb->tdbb_quantum < 0)
-						JRD_reschedule(tdbb, SWEEP_QUANTUM, true);
+					JRD_reschedule(tdbb);
 
 					transaction->tra_oldest_active = dbb->dbb_oldest_snapshot;
 					if (TipCache* cache = dbb->dbb_tip_cache)
@@ -4705,8 +4704,7 @@ static void garbage_collect(thread_db* tdbb, record_param* rpb, ULONG prior_page
 		++backversions;
 
 		// Don't monopolize the server while chasing long back version chains.
-		if (--tdbb->tdbb_quantum < 0)
-			JRD_reschedule(tdbb, 0, true);
+		JRD_reschedule(tdbb);
 	}
 
 	IDX_garbage_collect(tdbb, rpb, going, staying);
@@ -4791,8 +4789,7 @@ void Database::garbage_collector(Database* dbb)
 		attachment->att_user = &user;
 
 		BackgroundContextHolder tdbb(dbb, attachment, &status_vector, FB_FUNCTION);
-		tdbb->tdbb_quantum = SWEEP_QUANTUM;
-		tdbb->tdbb_flags = TDBB_sweeper;
+		tdbb->markAsSweeper();
 
 		record_param rpb;
 		rpb.getWindow(tdbb).win_flags = WIN_garbage_collector;
@@ -4930,8 +4927,7 @@ void Database::garbage_collector(Database* dbb)
 									break;
 								}
 
-								if (--tdbb->tdbb_quantum < 0)
-									JRD_reschedule(tdbb, SWEEP_QUANTUM, true);
+								JRD_reschedule(tdbb);
 
 								if (rpb.rpb_number >= last)
 									break;
@@ -4963,7 +4959,7 @@ void Database::garbage_collector(Database* dbb)
 
 				if (found)
 				{
-					JRD_reschedule(tdbb, SWEEP_QUANTUM, true);
+					JRD_reschedule(tdbb, true);
 				}
 				else
 				{
@@ -5272,8 +5268,7 @@ static void list_staying_fast(thread_db* tdbb, record_param* rpb, RecordStack& s
 		***/
 
 		// Don't monopolize the server while chasing long back version chains.
-		if (--tdbb->tdbb_quantum < 0)
-			JRD_reschedule(tdbb, 0, true);
+		JRD_reschedule(tdbb);
 	}
 
 	delete backout_rec;
@@ -5402,8 +5397,7 @@ static void list_staying(thread_db* tdbb, record_param* rpb, RecordStack& stayin
 			++depth;
 
 			// Don't monopolize the server while chasing long back version chains.
-			if (--tdbb->tdbb_quantum < 0)
-				JRD_reschedule(tdbb, 0, true);
+			JRD_reschedule(tdbb);
 		}
 
 		if (timed_out)

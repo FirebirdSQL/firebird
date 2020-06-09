@@ -454,25 +454,34 @@ namespace Jrd
 
 		if (!g_hashTable->remove(m_id))
 			fb_assert(false);
+
+		// these objects should be deleted under g_mutex protection
+		m_lockMgr = nullptr;
+		m_eventMgr = nullptr;
+		m_replMgr = nullptr;
 	}
 
 	LockManager* Database::GlobalObjectHolder::getLockManager()
 	{
-		MutexLockGuard guard(m_mutex, FB_FUNCTION);
-
 		if (!m_lockMgr)
-			m_lockMgr = FB_NEW LockManager(m_id, m_config);
+		{
+			MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
+			if (!m_lockMgr)
+				m_lockMgr = FB_NEW LockManager(m_id, m_config);
+		}
 		return m_lockMgr;
 	}
 
 	EventManager* Database::GlobalObjectHolder::getEventManager()
 	{
-		MutexLockGuard guard(m_mutex, FB_FUNCTION);
-
 		if (!m_eventMgr)
-			m_eventMgr = FB_NEW EventManager(m_id, m_config);
+		{
+			MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
+			if (!m_eventMgr)
+				m_eventMgr = FB_NEW EventManager(m_id, m_config);
+		}
 		return m_eventMgr;
 	}
 
@@ -481,11 +490,13 @@ namespace Jrd
 		if (!m_replConfig)
 			return nullptr;
 
-		MutexLockGuard guard(m_mutex, FB_FUNCTION);
-
 		if (!m_replMgr)
-			m_replMgr = FB_NEW Replication::Manager(m_id, m_replConfig);
+		{
+			MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
+			if (!m_replMgr)
+				m_replMgr = FB_NEW Replication::Manager(m_id, m_replConfig);
+		}
 		return m_replMgr;
 	}
 

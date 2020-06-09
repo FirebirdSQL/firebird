@@ -1522,6 +1522,9 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 	catch (const Exception&)
 	{
 		m_silent = true;
+		close_database();
+		close_backup();
+
 		if (delete_backup)
 			remove(bakname.c_str());
 		if (trans)
@@ -1748,6 +1751,10 @@ void NBackup::restore_database(const BackupFiles& files, bool inc_rest)
 	{
 		m_silent = true;
 		delete[] page_buffer;
+
+		close_database();
+		close_backup();
+
 		if (delete_database)
 			remove(dbname.c_str());
 		throw;

@@ -31,6 +31,7 @@
  */
 
 #include "firebird.h"
+#include <cmath>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -777,13 +778,13 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 		switch (value->vlu_desc.dsc_dtype)
 		{
 		case dtype_double:
-			if (isinf(value->vlu_misc.vlu_double))
+			if (std::isinf(value->vlu_misc.vlu_double))
 			{
 				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_udf_fp_overflow) <<
 									Arg::Str(function->getName().toString()));
 			}
-			else if (isnan(value->vlu_misc.vlu_double))
+			else if (std::isnan(value->vlu_misc.vlu_double))
 			{
 				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_udf_fp_nan) <<

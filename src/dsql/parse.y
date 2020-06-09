@@ -2088,7 +2088,7 @@ db_initial_desc($alterDatabaseNode)
 // With the exception of LENGTH, all clauses here are handled only at the client.
 %type db_initial_option(<alterDatabaseNode>)
 db_initial_option($alterDatabaseNode)
-	: PAGE_SIZE equals pos_short_integer
+	: PAGE_SIZE equals NUMBER32BIT
 	| USER symbol_user_name
 	| USER utf_string
 	| ROLE valid_symbol_name
@@ -4268,14 +4268,17 @@ keyword_or_column
 	| UPDATING
 	| VAR_SAMP
 	| VAR_POP
-	| DECFLOAT				// added in FB 4.0
+	| BINARY				// added in FB 4.0
+	| DECFLOAT
 	| LATERAL
 	| LOCAL
 	| LOCALTIME
 	| LOCALTIMESTAMP
+	| PUBLICATION
 	| TIMEZONE_HOUR
 	| TIMEZONE_MINUTE
 	| UNBOUNDED
+	| VARBINARY
 	| WINDOW
 	| WITHOUT
 	;
@@ -6720,14 +6723,14 @@ exec_function
 	: udf
 		{
 			AssignmentNode* node = newNode<AssignmentNode>();
-			node->asgnTo = newNode<NullNode>();
+			node->asgnTo = NullNode::instance();
 			node->asgnFrom = $1;
 			$$ = node;
 		}
 	| non_aggregate_function
 		{
 			AssignmentNode* node = newNode<AssignmentNode>();
-			node->asgnTo = newNode<NullNode>();
+			node->asgnTo = NullNode::instance();
 			node->asgnFrom = $1;
 			$$ = node;
 		}
@@ -7506,6 +7509,7 @@ constant
 	| '-' ul_numeric_constant	{ $$ = newNode<NegateNode>($2); }
 	| '-' LIMIT64_INT			{ $$ = MAKE_const_sint64(MIN_SINT64, 0); }
 	| '-' LIMIT64_NUMBER		{ $$ = MAKE_const_sint64(MIN_SINT64, $2->getScale()); }
+	| '-' u_constant_128		{ $$ = newNode<NegateNode>($2); }
 	| boolean_literal
 	;
 
@@ -7517,7 +7521,12 @@ u_numeric_constant
 		{ $$ = MAKE_constant($1->c_str(), CONSTANT_NUM128, $1->getScale()); }
 	| LIMIT64_INT
 		{ $$ = MAKE_constant($1->c_str(), CONSTANT_NUM128); }
-	| NUM128
+	| u_constant_128
+	;
+
+%type <valueExprNode> u_constant_128
+u_constant_128
+	: NUM128
 		{ $$ = MAKE_constant($1->c_str(), CONSTANT_NUM128, $1->getScale()); }
 	;
 
@@ -7741,11 +7750,11 @@ aggregate_function
 			$$ = $1;
 
 			if ($$->aggInfo.blr == blr_agg_count2 && !$$->arg)	// count(*)
-				$$->arg = newNode<ValueIfNode>($5, MAKE_const_slong(1), newNode<NullNode>());
+				$$->arg = newNode<ValueIfNode>($5, MAKE_const_slong(1), NullNode::instance());
 			else
 			{
 				fb_assert($$->arg);
-				$$->arg = newNode<ValueIfNode>($5, $$->arg, newNode<NullNode>());
+				$$->arg = newNode<ValueIfNode>($5, $$->arg, NullNode::instance());
 			}
 		}
 	;
@@ -7845,15 +7854,15 @@ window_function
 	| LAG '(' value ',' value ',' value ')'
 		{ $$ = newNode<LagWinNode>($3, $5, $7); }
 	| LAG '(' value ',' value ')'
-		{ $$ = newNode<LagWinNode>($3, $5, newNode<NullNode>()); }
+		{ $$ = newNode<LagWinNode>($3, $5, NullNode::instance()); }
 	| LAG '(' value ')'
-		{ $$ = newNode<LagWinNode>($3, MAKE_const_slong(1), newNode<NullNode>()); }
+		{ $$ = newNode<LagWinNode>($3, MAKE_const_slong(1), NullNode::instance()); }
 	| LEAD '(' value ',' value ',' value ')'
 		{ $$ = newNode<LeadWinNode>($3, $5, $7); }
 	| LEAD '(' value ',' value ')'
-		{ $$ = newNode<LeadWinNode>($3, $5, newNode<NullNode>()); }
+		{ $$ = newNode<LeadWinNode>($3, $5, NullNode::instance()); }
 	| LEAD '(' value ')'
-		{ $$ = newNode<LeadWinNode>($3, MAKE_const_slong(1), newNode<NullNode>()); }
+		{ $$ = newNode<LeadWinNode>($3, MAKE_const_slong(1), NullNode::instance()); }
 	| NTILE '(' ntile_arg ')'
 		{ $$ = newNode<NTileWinNode>($3); }
 	;
@@ -8358,7 +8367,7 @@ case_abbreviation
 	: NULLIF '(' value ',' value ')'
 		{
 			ComparativeBoolNode* condition = newNode<ComparativeBoolNode>(blr_eql, $3, $5);
-			$$ = newNode<ValueIfNode>(condition, newNode<NullNode>(), $3);
+			$$ = newNode<ValueIfNode>(condition, NullNode::instance(), $3);
 		}
 	| IIF '(' search_condition ',' value ',' value ')'
 		{ $$ = newNode<ValueIfNode>($3, $5, $7); }
@@ -8457,10 +8466,10 @@ searched_case
 %type <valueIfNode> searched_when_clause
 searched_when_clause
 	: WHEN search_condition THEN case_result
-		{ $$ = newNode<ValueIfNode>($2, $4, newNode<NullNode>()); }
+		{ $$ = newNode<ValueIfNode>($2, $4, NullNode::instance()); }
 	| searched_when_clause WHEN search_condition THEN case_result
 		{
-			ValueIfNode* cond = newNode<ValueIfNode>($3, $5, newNode<NullNode>());
+			ValueIfNode* cond = newNode<ValueIfNode>($3, $5, NullNode::instance());
 			ValueIfNode* last = $1;
 			ValueIfNode* next;
 
@@ -8543,14 +8552,14 @@ distinct_noise
 %type <valueExprNode> null_value
 null_value
 	: NULL
-		{ $$ = newNode<NullNode>(); }
+		{ $$ = NullNode::instance(); }
 	| UNKNOWN
 		{
 			dsql_fld* field = newNode<dsql_fld>();
 			field->dtype = dtype_boolean;
 			field->length = sizeof(UCHAR);
 
-			CastNode* castNode = newNode<CastNode>(newNode<NullNode>(), field);
+			CastNode* castNode = newNode<CastNode>(NullNode::instance(), field);
 			castNode->dsqlAlias = "CONSTANT";
 			$$ = castNode;
 		}

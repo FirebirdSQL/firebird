@@ -241,33 +241,23 @@ private:
 
 	pollfd* getPollFd(int n)
 	{
-		pollfd* const end = slct_poll.end();
-		for (pollfd* pf = slct_poll.begin(); pf < end; ++pf)
-		{
-			if (n == pf->fd)
-			{
-				return pf;
-			}
-		}
+		FB_SIZE_T pos;
+		if (slct_poll.find(n, pos))
+			return &slct_poll[pos];
 
-		return NULL;
-	}
-
-	static int compare(const void* a, const void* b)
-	{
-		// use C-cast here to be for sure compatible with libc
-		return ((pollfd*) a)->fd - ((pollfd*) b)->fd;
+		return nullptr;
 	}
 #endif
 
 public:
 #ifdef HAVE_POLL
 	Select()
-		: slct_time(0), slct_count(0), slct_poll(*getDefaultMemoryPool())
+		: slct_time(0), slct_count(0), slct_poll(*getDefaultMemoryPool()),
+		  slct_ready(*getDefaultMemoryPool())
 	{ }
 
 	explicit Select(Firebird::MemoryPool& pool)
-		: slct_time(0), slct_count(0), slct_poll(pool)
+		: slct_time(0), slct_count(0), slct_poll(pool), slct_ready(pool)
 	{ }
 #else
 	Select()
@@ -285,6 +275,40 @@ public:
 
 	enum HandleState {SEL_BAD, SEL_DISCONNECTED, SEL_NO_DATA, SEL_READY};
 
+	// set first port to check for readyness
+	void checkStart(RemPortPtr& port)
+	{
+		slct_main = port;
+		slct_port = port;
+	}
+
+	// get port to check for readyness
+	// assume port_mutex is locked
+	HandleState checkNext(RemPortPtr& port)
+	{
+		if (slct_port && slct_port->port_state == rem_port::DISCONNECTED)
+		{
+			// restart from main port
+			slct_port = nullptr;
+			if (slct_main && slct_main->port_state == rem_port::DISCONNECTED)
+				slct_main = nullptr;
+
+			slct_port = slct_main;
+		}
+
+		port = slct_port;
+		if (!slct_port)
+			return SEL_NO_DATA;
+
+#ifdef WIRE_COMPRESS_SUPPORT
+		if (slct_port->port_flags & PORT_z_data)
+			return SEL_READY;
+#endif
+
+		slct_port = slct_port->port_next;
+		return ok(port);
+	}
+
 	HandleState ok(const rem_port* port)
 	{
 #ifdef WIRE_COMPRESS_SUPPORT
@@ -295,9 +319,17 @@ public:
 #if defined(WIN_NT)
 		return FD_ISSET(n, &slct_fdset) ? SEL_READY : SEL_NO_DATA;
 #elif defined(HAVE_POLL)
-		const pollfd* pf = getPollFd(n);
+		pollfd* pf = nullptr;
+		FB_SIZE_T pos;
+		if (slct_ready.find(n, pos))
+			pf = slct_ready[pos];
+
 		if (pf)
-			return pf->events & SEL_CHECK_MASK ? SEL_READY : SEL_NO_DATA;
+		{
+			HandleState ret = pf->events & SEL_CHECK_MASK ? SEL_READY : SEL_NO_DATA;
+			pf->events = 0;		// unset
+			return ret;
+		}
 		return n < 0 ? (port->port_flags & PORT_disconnect ? SEL_DISCONNECTED : SEL_BAD) : SEL_NO_DATA;
 #else
 		if (n < 0 || n >= FD_SETSIZE)
@@ -323,16 +355,18 @@ public:
 	void set(SOCKET handle)
 	{
 #ifdef HAVE_POLL
-		pollfd* pf = getPollFd(handle);
-		if (pf)
+		FB_SIZE_T pos;
+		if (slct_poll.find(handle, pos))
 		{
-			pf->events = SEL_INIT_EVENTS;
-			return;
+			slct_poll[pos].events = SEL_INIT_EVENTS;
 		}
-		pollfd f;
-		f.fd = handle;
-		f.events = SEL_INIT_EVENTS;
-		slct_poll.push(f);
+		else
+		{
+			pollfd f;
+			f.fd = handle;
+			f.events = SEL_INIT_EVENTS;
+			slct_poll.insert(pos, f);
+		}
 #else
 		FD_SET(handle, &slct_fdset);
 #ifdef WIN_NT
@@ -352,11 +386,14 @@ public:
 		slct_width = 0;
 		FD_ZERO(&slct_fdset);
 #endif
+		slct_main = nullptr;
+		slct_port = nullptr;
 	}
 
 	void select(timeval* timeout)
 	{
 #ifdef HAVE_POLL
+		slct_ready.clear();
 		bool hasRequest = false;
 		pollfd* const end = slct_poll.end();
 		for (pollfd* pf = slct_poll.begin(); pf < end; ++pf)
@@ -379,7 +416,11 @@ public:
 		if (slct_count >= 0)	// in case of error return revents may contain something bad
 		{
 			for (pollfd* pf = slct_poll.begin(); pf < end; ++pf)
+			{
 				pf->events = pf->revents;
+				if (pf->revents & SEL_CHECK_MASK)
+					slct_ready.add(pf);
+			}
 		}
 #else
 #ifdef WIN_NT
@@ -400,11 +441,21 @@ public:
 private:
 	int		slct_count;
 #ifdef HAVE_POLL
-	HalfStaticArray<pollfd, 8> slct_poll;
+	class PollToFD
+	{
+	public:
+		static int generate(const pollfd* p) { return p->fd; };
+		static int generate(const pollfd& p) { return p.fd; };
+	};
+
+	SortedArray<pollfd, InlineStorage<pollfd, 8>, int, PollToFD>  slct_poll;
+	SortedArray<pollfd*, InlineStorage<pollfd*, 8>, int, PollToFD>  slct_ready;
 #else
 	int		slct_width;
 	fd_set	slct_fdset;
 #endif
+	RemPortPtr slct_main;	// first port to check for readyness
+	RemPortPtr slct_port;	// next port to check for readyness
 };
 
 static bool		accept_connection(rem_port*, const P_CNCT*);
@@ -2124,11 +2175,11 @@ static void select_port(rem_port* main_port, Select* selct, RemPortPtr& port)
  **************************************/
 
 	MutexLockGuard guard(port_mutex, FB_FUNCTION);
-
-	for (port = main_port; port; port = port->port_next)
+	while (true)
 	{
-		Select::HandleState result = selct->ok(port);
-		selct->unset(port->port_handle);
+		Select::HandleState result = selct->checkNext(port);
+		if (!port)
+			return;
 
 		switch (result)
 		{
@@ -2292,6 +2343,9 @@ static bool select_wait( rem_port* main_port, Select* selct)
 
 			if (selct->getCount() != -1)
 			{
+				RemPortPtr p(main_port);
+				selct->checkStart(p);
+
 				// if selct->slct_count is zero it means that we timed out of
 				// select with nothing to read or accept, so clear the fd_set
 				// bit as this value is undefined on some platforms (eg. HP-UX),

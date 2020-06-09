@@ -283,16 +283,9 @@ installInitdScript() {
 	srcScript=""
 	initScript=
 
-# This is for RH and MDK specific
-
-    if [ -e /etc/rc.d/init.d/functions ]
-    then
-        srcScript=firebird.init.d.mandrake
-        initScript=/etc/rc.d/init.d/${fb_startup_name}
-
 # SuSE specific
 
-    elif [ -r /etc/SuSE-release ]
+    if [ -r /etc/SuSE-release ]
     then
         srcScript=firebird.init.d.suse
         initScript=/etc/init.d/${fb_startup_name}
@@ -330,6 +323,13 @@ EOF
     then
         srcScript=firebird.init.d.gentoo
         initScript=/etc/init.d/${fb_startup_name}
+
+# This is for RH and MDK specific
+
+    elif [ -e /etc/rc.d/init.d/functions ]		# very generic check - may be should go later to avoid fault mandrake detection ???
+    then
+        srcScript=firebird.init.d.mandrake
+        initScript=/etc/rc.d/init.d/${fb_startup_name}
 
 # Generic...
 

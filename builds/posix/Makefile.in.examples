@@ -82,7 +82,7 @@ EMPLOYEE_DB=	$(EXAMPLES_DEST)/employee.fdb
 FINAL_EMPDB=	$(EXAMPLES_FB)/empbuild/employee.fdb
 INTLEMP_DB=	$(EXAMPLES_DEST)/intlemp.fdb
 
-EXTAUTH_PLUGIN=	$(EXAMPLES_FB)/prebuilt/libExtAuth.$(SHRLIB_EXT)
+EXTAUTH_PLUGIN=	$(EXAMPLES_FB)/prebuilt/libfbSampleExtAuth.$(SHRLIB_EXT)
 
 .PHONY: all examples
 
@@ -92,7 +92,7 @@ all: examples
 examples:	$(FINAL_EMPDB) $(EXAMPLES_FB)/README $(EXTAUTH_PLUGIN)
 
 $(EXTAUTH_PLUGIN):	$(EXAMPLES_FB)/extauth/Makefile
-	make -C $(EXAMPLES_FB)/extauth OUT=$(EXAMPLES_FB)/prebuilt INTERMED=$(TMP_ROOT)/examples/extauth
+	$(MAKE) -C $(EXAMPLES_FB)/extauth OUT=$(EXAMPLES_FB)/prebuilt INTERMED=$(TMP_ROOT)/examples/extauth
 
 $(EXAMPLES_FB)/extauth/Makefile:
 ifeq ($(TOMCRYPT_BUILD_FLG),Y)
