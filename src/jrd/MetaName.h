@@ -39,6 +39,17 @@
 // 2 - special setup tables for often grow operation
 #define GROW_DEBUG 0
 
+// 0 - statistics off, 1 - statistics on
+#define DIC_STATS 0
+
+#if DIC_STATS > 0
+#define DIC_STAT_SEGMENT_CALL , retriesSegment
+#define DIC_STAT_SEGMENT_PAR , Dictionary::StatCnt& retries
+#else
+#define DIC_STAT_SEGMENT_CALL
+#define DIC_STAT_SEGMENT_PAR
+#endif
+
 namespace Firebird {
 
 class MetaString;
@@ -52,6 +63,10 @@ class Dictionary : public Firebird::PermanentStorage
 {
 public:
 	Dictionary(MemoryPool& p);
+
+#if DIC_STATS > 0
+	~Dictionary();
+#endif
 
 	class Word
 	{
@@ -83,6 +98,11 @@ public:
 	Word* get(const char* str, FB_SIZE_T l);
 	void growHash();
 
+#if DIC_STATS > 0
+	typedef std::atomic<FB_UINT64> StatCnt;
+	StatCnt words, totLength, lostWords, conflicts, retriesHash, retriesSegment;
+#endif
+
 private:
 	typedef std::atomic<Word*> TableData;
 
@@ -106,7 +126,7 @@ private:
 	{
 	public:
 		Segment();
-		Word* getSpace(FB_SIZE_T l);
+		Word* getSpace(FB_SIZE_T l DIC_STAT_SEGMENT_PAR);
 		static unsigned getWordCapacity();
 
 	private:

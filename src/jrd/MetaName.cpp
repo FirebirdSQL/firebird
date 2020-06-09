@@ -150,11 +150,34 @@ static const unsigned int hashSize[] = { 10007, 100003, 1000003 };
 
 Dictionary::Dictionary(MemoryPool& p)
 	: Firebird::PermanentStorage(p),
+#if DIC_STATS > 0
+	  words(0), totLength(0), lostWords(0), conflicts(0), retriesHash(0), retriesSegment(0),
+#endif
 	  hashTable(FB_NEW_POOL(getPool()) HashTable(getPool(), 0)),
 	  nextLevel(0),
 	  segment(FB_NEW_POOL(getPool()) Segment),
 	  segCount(1)
 { }
+
+#if DIC_STATS > 0
+Dictionary::~Dictionary()
+{
+#define LINESEP "\n\t\t"
+	gds__log("Dictionary statistics:" LINESEP
+				"words %" UQUADFORMAT LINESEP
+				"average length %.02f" LINESEP
+				"hash size at level %u is %u" LINESEP
+				"lost words %" UQUADFORMAT LINESEP
+				"conflicts on mutex %" UQUADFORMAT LINESEP
+				"retries in hash table %" UQUADFORMAT LINESEP
+				"segments total %u" LINESEP
+				"retries in segment %" UQUADFORMAT "\n",
+			words.load(), double(totLength) / words.load(),
+			hashTable.load()->level, hashSize[hashTable.load()->level],
+			lostWords.load(), conflicts.load(),
+			retriesHash.load(), segCount, retriesSegment.load());
+}
+#endif
 
 Dictionary::HashTable::HashTable(MemoryPool& p, unsigned lvl)
 	: level(lvl),
@@ -230,6 +253,11 @@ Dictionary::Word* Dictionary::get(const char* s, FB_SIZE_T len)
 				if (!checkConsistency(t))
 					break;
 
+#if DIC_STATS > 0
+				if (newWord)
+					++lostWords;
+#endif
+
 				return word;
 			}
 			word = word->next;
@@ -249,14 +277,14 @@ Dictionary::Word* Dictionary::get(const char* s, FB_SIZE_T len)
 			}
 
 			// allocate space for new word
-			newWord = segment->getSpace(len);
+			newWord = segment->getSpace(len DIC_STAT_SEGMENT_CALL);
 			if (!newWord)
 			{
 				Firebird::MutexEnsureUnlock guard(mutex, FB_FUNCTION);
 				if (guard.tryEnter())
 				{
 					// retry allocation to avoid a case when someone already changed segment
-					newWord = segment->getSpace(len);
+					newWord = segment->getSpace(len DIC_STAT_SEGMENT_CALL);
 
 					// do we really need new segment?
 					if (!newWord)
@@ -320,8 +348,16 @@ Dictionary::Word* Dictionary::get(const char* s, FB_SIZE_T len)
 				}
 			}
 
+#if DIC_STATS > 0
+			++words;
+			totLength += len;
+#endif
 			return newWord;
 		}
+
+#if DIC_STATS > 0
+		++retriesHash;
+#endif
 	}
 }
 
@@ -377,6 +413,10 @@ Dictionary::HashTable* Dictionary::waitForMutex(Jrd::Dictionary::Word** checkWor
 {
 	Firebird::MutexLockGuard guard(mutex, FB_FUNCTION);
 
+#if DIC_STATS > 0
+	++conflicts;
+#endif
+
 	HashTable* t = hashTable.load();
 	if (!checkWordPtr)
 		return t;
@@ -419,7 +459,7 @@ unsigned Dictionary::Segment::getWordLength(FB_SIZE_T len)
 	return 1 + (len / sizeof(Word*)) + (len % sizeof(Word*) ? 1 : 0);
 }
 
-Dictionary::Word* Dictionary::Segment::getSpace(FB_SIZE_T len)
+Dictionary::Word* Dictionary::Segment::getSpace(FB_SIZE_T len DIC_STAT_SEGMENT_PAR)
 {
 	len = getWordLength(len);
 
@@ -439,6 +479,10 @@ Dictionary::Word* Dictionary::Segment::getSpace(FB_SIZE_T len)
 		{
 			return reinterpret_cast<Word*>(&buffer[oldPos]);
 		}
+
+#if DIC_STATS > 0
+		++retries;
+#endif
 	}
 
 	// Segment out of space
