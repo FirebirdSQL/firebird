@@ -257,6 +257,8 @@ enum drq_type_t
 	drq_l_pub_rel_name,		// lookup relation by name
 	drq_l_pub_all_rels,		// iterate through all user relations
 	drq_e_pub_tab_all,		// erase relation from all publication
+	drq_ts_drop_idx_dfw,	// find index of tablespace in dfw for drop
+	drq_ts_drop_rel_dfw,	// find relation of tablespace in dfw for drop
 
 	drq_MAX
 };

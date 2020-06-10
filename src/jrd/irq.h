@@ -190,10 +190,6 @@ enum irq_type_t
 	irq_list_ts_files,		// list tablespace files
 	irq_find_ts_dfw,		// find tablespace options by name in dfw
 	irq_find_ts_dfw0,		// find tablespace options by name in dfw for cleanup
-	irq_ts_find_rel_dfw,	// find relation of tablespace in dfw for check
-	irq_ts_drop_rel_dfw,	// find relation of tablespace in dfw for drop
-	irq_ts_find_idx_dfw,	// find index of tablespace in dfw for check
-	irq_ts_drop_idx_dfw,	// find index of tablespace in dfw for drop
 	irq_scan_ts,			// scn tablespaces
 	irq_ts_security,		// verify security for tablespace
 	irq_r_pages2,

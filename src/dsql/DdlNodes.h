@@ -1642,6 +1642,8 @@ public:
 	static void deleteGlobalField(thread_db* tdbb, jrd_tra* transaction,
 		const MetaName& globalName);
 
+    static void dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction, bool view, jrd_rel* rel_drop);
+
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);

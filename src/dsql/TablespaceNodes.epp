@@ -276,7 +276,7 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	SLONG total = 0;
 
 	// Find all indices
-	requestHandle.reset(tdbb, irq_ts_drop_idx_dfw, DYN_REQUESTS);
+	requestHandle.reset(tdbb, drq_ts_drop_idx_dfw, DYN_REQUESTS);
 
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 		X IN RDB$INDICES
@@ -300,7 +300,7 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	END_FOR
 
 	// Find all tables
-	requestHandle.reset(tdbb, irq_ts_drop_rel_dfw, DYN_REQUESTS);
+	requestHandle.reset(tdbb, drq_ts_drop_rel_dfw, DYN_REQUESTS);
 
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 		X IN RDB$RELATIONS
@@ -308,7 +308,12 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	{
 		if (dropDependencies)
 		{
-			ERASE X;
+			MetaName relationName(X.RDB$RELATION_NAME);
+			jrd_rel* rel_drop = MET_lookup_relation(tdbb, relationName);
+			if (rel_drop)
+				MET_scan_relation(tdbb, rel_drop);
+
+			DropRelationNode::dropRelation(tdbb, dsqlScratch, transaction, false, rel_drop);
 		}
 		else
 		{

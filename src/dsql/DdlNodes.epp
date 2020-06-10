@@ -8495,6 +8495,217 @@ void DropRelationNode::deleteGlobalField(thread_db* tdbb, jrd_tra* transaction,
 	END_FOR
 }
 
+
+void DropRelationNode::dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction, bool view, jrd_rel* rel_drop)
+{
+    MetaName name(rel_drop->rel_name);
+
+    if (!view)
+    {
+        RelationPages* relPages = rel_drop->getBasePages();
+        if (!relPages->rel_pages || (relPages->rel_pages->count() == 0))
+            DPM_scan_pages(tdbb, pag_pointer, rel_drop->rel_id);
+        if (!relPages->rel_index_root)
+            DPM_scan_pages(tdbb, pag_root, rel_drop->rel_id);
+    }
+
+    const int ddlTriggerAction = (view ? DDL_TRIGGER_DROP_VIEW : DDL_TRIGGER_DROP_TABLE);
+
+    // run all statements under savepoint control
+    AutoSavePoint savePoint(tdbb, transaction);
+
+    AutoCacheRequest request(tdbb, drq_l_relation, DYN_REQUESTS);
+    bool found = false;
+
+    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+        R IN RDB$RELATIONS
+        WITH R.RDB$RELATION_NAME EQ name.c_str()
+    {
+        executeDdlTrigger(tdbb, transaction, DTW_BEFORE, ddlTriggerAction, name, NULL, *dsqlScratch->getStatement()->getSqlText());
+        found = true;
+    }
+    END_FOR
+
+    request.reset(tdbb, drq_e_rel_con2, DYN_REQUESTS);
+
+    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+        CRT IN RDB$RELATION_CONSTRAINTS
+        WITH CRT.RDB$RELATION_NAME EQ name.c_str() AND
+             (CRT.RDB$CONSTRAINT_TYPE EQ PRIMARY_KEY OR
+              CRT.RDB$CONSTRAINT_TYPE EQ UNIQUE_CNSTRT OR
+              CRT.RDB$CONSTRAINT_TYPE EQ FOREIGN_KEY)
+        SORTED BY ASCENDING CRT.RDB$CONSTRAINT_TYPE
+    {
+        ERASE CRT;
+    }
+    END_FOR
+
+    request.reset(tdbb, drq_e_rel_idxs, DYN_REQUESTS);
+
+    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+        IDX IN RDB$INDICES
+        WITH IDX.RDB$RELATION_NAME EQ name.c_str()
+    {
+        DropIndexNode::deleteSegmentRecords(tdbb, transaction, IDX.RDB$INDEX_NAME);
+        ERASE IDX;
+    }
+    END_FOR
+
+    request.reset(tdbb, drq_e_trg_msgs2, DYN_REQUESTS);
+
+    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+        TM IN RDB$TRIGGER_MESSAGES
+        CROSS T IN RDB$TRIGGERS
+        WITH T.RDB$RELATION_NAME EQ name.c_str() AND
+             TM.RDB$TRIGGER_NAME EQ T.RDB$TRIGGER_NAME
+    {
+        ERASE TM;
+    }
+    END_FOR
+
+    // CVC: Moved this block here to avoid SF Bug #1111570.
+    request.reset(tdbb, drq_e_rel_con3, DYN_REQUESTS);
+
+    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+        CRT IN RDB$RELATION_CONSTRAINTS
+        WITH CRT.RDB$RELATION_NAME EQ name.c_str() AND
+             (CRT.RDB$CONSTRAINT_TYPE EQ CHECK_CNSTRT OR
+              CRT.RDB$CONSTRAINT_TYPE EQ NOT_NULL_CNSTRT)
+    {
+        ERASE CRT;
+    }
+    END_FOR
+
+    request.reset(tdbb, drq_e_rel_flds, DYN_REQUESTS);
+
+    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+        RFR IN RDB$RELATION_FIELDS
+        WITH RFR.RDB$RELATION_NAME EQ name.c_str()
+    {
+        if (!RFR.RDB$GENERATOR_NAME.NULL)
+            DropSequenceNode::deleteIdentity(tdbb, transaction, RFR.RDB$GENERATOR_NAME);
+
+        ERASE RFR;
+
+        if (!RFR.RDB$SECURITY_CLASS.NULL &&
+            !strncmp(RFR.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN))
+        {
+            deleteSecurityClass(tdbb, transaction, RFR.RDB$SECURITY_CLASS);
+        }
+
+        deleteGlobalField(tdbb, transaction, RFR.RDB$FIELD_SOURCE);
+    }
+    END_FOR
+
+    request.reset(tdbb, drq_e_view_rels, DYN_REQUESTS);
+
+    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+        VR IN RDB$VIEW_RELATIONS
+        WITH VR.RDB$VIEW_NAME EQ name.c_str()
+    {
+        ERASE VR;
+    }
+    END_FOR
+
+    request.reset(tdbb, drq_e_relation, DYN_REQUESTS);
+
+    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+        R IN RDB$RELATIONS
+        WITH R.RDB$RELATION_NAME EQ name.c_str()
+    {
+        ERASE R;
+
+        if (!R.RDB$SECURITY_CLASS.NULL &&
+            !strncmp(R.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN))
+        {
+            deleteSecurityClass(tdbb, transaction, R.RDB$SECURITY_CLASS);
+        }
+    }
+    END_FOR
+
+    if (!found)
+    {
+        // msg 61: "Relation not found"
+        status_exception::raise(Arg::PrivateDyn(61));
+    }
+
+    // Triggers must be deleted after check constraints
+
+    MetaName triggerName;
+
+    request.reset(tdbb, drq_e_trigger2, DYN_REQUESTS);
+
+    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+        X IN RDB$TRIGGERS
+        WITH X.RDB$RELATION_NAME EQ name.c_str()
+    {
+        triggerName = X.RDB$TRIGGER_NAME;
+        ERASE X;
+
+        AutoCacheRequest request2(tdbb, drq_e_trg_prv, DYN_REQUESTS);
+
+        FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+            PRIV IN RDB$USER_PRIVILEGES
+            WITH PRIV.RDB$USER EQ triggerName.c_str() AND
+                PRIV.RDB$USER_TYPE = obj_trigger AND
+                PRIV.RDB$GRANTOR NOT MISSING
+        {
+            ERASE PRIV;
+        }
+        END_FOR
+    }
+    END_FOR
+
+    request.reset(tdbb, drq_e_usr_prvs, DYN_REQUESTS);
+
+    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+        PRIV IN RDB$USER_PRIVILEGES
+        WITH PRIV.RDB$RELATION_NAME EQ name.c_str() AND
+             PRIV.RDB$OBJECT_TYPE = obj_relation AND
+             PRIV.RDB$GRANTOR NOT MISSING
+    {
+        ERASE PRIV;
+    }
+    END_FOR
+
+    request.reset(tdbb, drq_e_view_prv, DYN_REQUESTS);
+
+    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+        PRIV IN RDB$USER_PRIVILEGES
+        WITH PRIV.RDB$USER EQ name.c_str() AND
+             PRIV.RDB$USER_TYPE = obj_view AND
+             PRIV.RDB$GRANTOR NOT MISSING
+    {
+        ERASE PRIV;
+    }
+    END_FOR
+
+    // Drop table from all publications
+
+    request.reset(tdbb, drq_e_pub_tab_all, DYN_REQUESTS);
+
+    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+        PTAB IN RDB$PUBLICATION_TABLES
+        WITH PTAB.RDB$TABLE_NAME EQ name.c_str()
+    {
+        ERASE PTAB;
+    }
+    END_FOR
+
+    if (found)
+        executeDdlTrigger(tdbb, transaction, DTW_AFTER, ddlTriggerAction, name, NULL, *dsqlScratch->getStatement()->getSqlText());
+    else
+    {
+        // msg 61: "Relation not found"
+        status_exception::raise(Arg::PrivateDyn(61));
+    }
+
+    savePoint.release();	// everything is ok
+
+    METD_drop_relation(transaction, name.c_str());
+    MET_dsql_cache_release(tdbb, SYM_relation, name);
+}
+
 string DropRelationNode::internalPrint(NodePrinter& printer) const
 {
 	DdlNode::internalPrint(printer);
@@ -8531,7 +8742,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	// Check that DROP TABLE is dropping a table and that DROP VIEW is dropping a view.
 	if (view)
 	{
-		if (!relation || (relation && !(relation->rel_flags & REL_view)))
+        if (!relation || !(relation->rel_flags & REL_view))
 		{
 			status_exception::raise(
 				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
@@ -8541,7 +8752,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	}
 	else
 	{
-		if (!relation || (relation && (relation->rel_flags & REL_view)))
+        if (!relation || (relation->rel_flags & REL_view))
 		{
 			status_exception::raise(
 				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
@@ -8550,210 +8761,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		}
 	}
 
-	if (!view)
-	{
-		RelationPages* relPages = rel_drop->getBasePages();
-		if (!relPages->rel_pages || (relPages->rel_pages->count() == 0))
-			DPM_scan_pages(tdbb, pag_pointer, rel_drop->rel_id);
-		if (!relPages->rel_index_root)
-			DPM_scan_pages(tdbb, pag_root, rel_drop->rel_id);
-	}
-
-	const int ddlTriggerAction = (view ? DDL_TRIGGER_DROP_VIEW : DDL_TRIGGER_DROP_TABLE);
-
-	// run all statements under savepoint control
-	AutoSavePoint savePoint(tdbb, transaction);
-
-	AutoCacheRequest request(tdbb, drq_l_relation, DYN_REQUESTS);
-	bool found = false;
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		R IN RDB$RELATIONS
-		WITH R.RDB$RELATION_NAME EQ name.c_str()
-	{
-		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, ddlTriggerAction, name, NULL);
-		found = true;
-	}
-	END_FOR
-
-	request.reset(tdbb, drq_e_rel_con2, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		CRT IN RDB$RELATION_CONSTRAINTS
-		WITH CRT.RDB$RELATION_NAME EQ name.c_str() AND
-			 (CRT.RDB$CONSTRAINT_TYPE EQ PRIMARY_KEY OR
-			  CRT.RDB$CONSTRAINT_TYPE EQ UNIQUE_CNSTRT OR
-			  CRT.RDB$CONSTRAINT_TYPE EQ FOREIGN_KEY)
-		SORTED BY ASCENDING CRT.RDB$CONSTRAINT_TYPE
-	{
-		ERASE CRT;
-	}
-	END_FOR
-
-	request.reset(tdbb, drq_e_rel_idxs, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		IDX IN RDB$INDICES
-		WITH IDX.RDB$RELATION_NAME EQ name.c_str()
-	{
-		DropIndexNode::deleteSegmentRecords(tdbb, transaction, IDX.RDB$INDEX_NAME);
-		ERASE IDX;
-	}
-	END_FOR
-
-	request.reset(tdbb, drq_e_trg_msgs2, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		TM IN RDB$TRIGGER_MESSAGES
-		CROSS T IN RDB$TRIGGERS
-		WITH T.RDB$RELATION_NAME EQ name.c_str() AND
-			 TM.RDB$TRIGGER_NAME EQ T.RDB$TRIGGER_NAME
-	{
-		ERASE TM;
-	}
-	END_FOR
-
-	// CVC: Moved this block here to avoid SF Bug #1111570.
-	request.reset(tdbb, drq_e_rel_con3, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		CRT IN RDB$RELATION_CONSTRAINTS
-		WITH CRT.RDB$RELATION_NAME EQ name.c_str() AND
-			 (CRT.RDB$CONSTRAINT_TYPE EQ CHECK_CNSTRT OR
-			  CRT.RDB$CONSTRAINT_TYPE EQ NOT_NULL_CNSTRT)
-	{
-		ERASE CRT;
-	}
-	END_FOR
-
-	request.reset(tdbb, drq_e_rel_flds, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		RFR IN RDB$RELATION_FIELDS
-		WITH RFR.RDB$RELATION_NAME EQ name.c_str()
-	{
-		if (!RFR.RDB$GENERATOR_NAME.NULL)
-			DropSequenceNode::deleteIdentity(tdbb, transaction, RFR.RDB$GENERATOR_NAME);
-
-		ERASE RFR;
-
-		if (!RFR.RDB$SECURITY_CLASS.NULL &&
-			!strncmp(RFR.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN))
-		{
-			deleteSecurityClass(tdbb, transaction, RFR.RDB$SECURITY_CLASS);
-		}
-
-		deleteGlobalField(tdbb, transaction, RFR.RDB$FIELD_SOURCE);
-	}
-	END_FOR
-
-	request.reset(tdbb, drq_e_view_rels, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		VR IN RDB$VIEW_RELATIONS
-		WITH VR.RDB$VIEW_NAME EQ name.c_str()
-	{
-		ERASE VR;
-	}
-	END_FOR
-
-	request.reset(tdbb, drq_e_relation, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		R IN RDB$RELATIONS
-		WITH R.RDB$RELATION_NAME EQ name.c_str()
-	{
-		ERASE R;
-
-		if (!R.RDB$SECURITY_CLASS.NULL &&
-			!strncmp(R.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN))
-		{
-			deleteSecurityClass(tdbb, transaction, R.RDB$SECURITY_CLASS);
-		}
-	}
-	END_FOR
-
-	if (!found)
-	{
-		// msg 61: "Relation not found"
-		status_exception::raise(Arg::PrivateDyn(61));
-	}
-
-	// Triggers must be deleted after check constraints
-
-	MetaName triggerName;
-
-	request.reset(tdbb, drq_e_trigger2, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		X IN RDB$TRIGGERS
-		WITH X.RDB$RELATION_NAME EQ name.c_str()
-	{
-		triggerName = X.RDB$TRIGGER_NAME;
-		ERASE X;
-
-		AutoCacheRequest request2(tdbb, drq_e_trg_prv, DYN_REQUESTS);
-
-		FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
-			PRIV IN RDB$USER_PRIVILEGES
-			WITH PRIV.RDB$USER EQ triggerName.c_str() AND
-				PRIV.RDB$USER_TYPE = obj_trigger AND
-				PRIV.RDB$GRANTOR NOT MISSING
-		{
-			ERASE PRIV;
-		}
-		END_FOR
-	}
-	END_FOR
-
-	request.reset(tdbb, drq_e_usr_prvs, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		PRIV IN RDB$USER_PRIVILEGES
-		WITH PRIV.RDB$RELATION_NAME EQ name.c_str() AND
-			 PRIV.RDB$OBJECT_TYPE = obj_relation AND
-			 PRIV.RDB$GRANTOR NOT MISSING
-	{
-		ERASE PRIV;
-	}
-	END_FOR
-
-	request.reset(tdbb, drq_e_view_prv, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		PRIV IN RDB$USER_PRIVILEGES
-		WITH PRIV.RDB$USER EQ name.c_str() AND
-			 PRIV.RDB$USER_TYPE = obj_view AND
-			 PRIV.RDB$GRANTOR NOT MISSING
-	{
-		ERASE PRIV;
-	}
-	END_FOR
-
-	// Drop table from all publications
-
-	request.reset(tdbb, drq_e_pub_tab_all, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		PTAB IN RDB$PUBLICATION_TABLES
-		WITH PTAB.RDB$TABLE_NAME EQ name.c_str()
-	{
-		ERASE PTAB;
-	}
-	END_FOR
-
-	if (found)
-		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, ddlTriggerAction, name, NULL);
-	else
-	{
-		// msg 61: "Relation not found"
-		status_exception::raise(Arg::PrivateDyn(61));
-	}
-
-	savePoint.release();	// everything is ok
-
-	METD_drop_relation(transaction, name.c_str());
-	MET_dsql_cache_release(tdbb, SYM_relation, name);
+    dropRelation(tdbb, dsqlScratch, transaction, view, rel_drop);
 }
 
 
