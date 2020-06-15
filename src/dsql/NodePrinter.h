@@ -76,7 +76,7 @@ public:
 		text += ">\n";
 	}
 
-	void print(const Firebird::string& s, const Jrd::QualifiedName& value)
+	void print(const Firebird::string& s, const QualifiedName& value)
 	{
 		printIndent();
 

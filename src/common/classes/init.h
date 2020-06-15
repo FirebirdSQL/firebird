@@ -29,6 +29,7 @@
 
 #include "fb_types.h"
 #include "../common/classes/alloc.h"
+#include <atomic>
 
 namespace Firebird {
 
@@ -166,7 +167,7 @@ template <typename C>
 class InitMutex
 {
 private:
-	volatile bool flag;
+	std::atomic<bool> flag;
 #ifdef DEV_BUILD
 	const char* from;
 #endif
@@ -265,7 +266,7 @@ class InitInstance : private DestroyControl<InitInstance<T, A, DestroyControl> >
 {
 private:
 	T* instance;
-	volatile bool flag;
+	std::atomic<bool> flag;
 	A allocator;
 
 public:

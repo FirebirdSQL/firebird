@@ -30,6 +30,7 @@
 namespace Jrd
 {
 	class ValueListNode;
+	class QualifiedName;
 
 	class Function : public Routine
 	{
@@ -37,7 +38,7 @@ namespace Jrd
 
 	public:
 		static Function* lookup(thread_db* tdbb, USHORT id, bool return_deleted, bool noscan, USHORT flags);
-		static Function* lookup(thread_db* tdbb, const Jrd::QualifiedName& name, bool noscan);
+		static Function* lookup(thread_db* tdbb, const QualifiedName& name, bool noscan);
 
 		void releaseLocks(thread_db* tdbb);
 

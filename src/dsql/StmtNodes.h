@@ -633,7 +633,7 @@ class ExecProcedureNode : public TypedNode<StmtNode, StmtNode::TYPE_EXEC_PROCEDU
 {
 public:
 	explicit ExecProcedureNode(MemoryPool& pool,
-				const Jrd::QualifiedName& aDsqlName = Jrd::QualifiedName(),
+				const QualifiedName& aDsqlName = QualifiedName(),
 				ValueListNode* aInputs = NULL, ValueListNode* aOutputs = NULL)
 		: TypedNode<StmtNode, StmtNode::TYPE_EXEC_PROCEDURE>(pool),
 		  dsqlName(pool, aDsqlName),
@@ -663,7 +663,7 @@ private:
 	void executeProcedure(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	Jrd::QualifiedName dsqlName;
+	QualifiedName dsqlName;
 	dsql_prc* dsqlProcedure;
 	NestConst<ValueListNode> inputSources;
 	NestConst<ValueListNode> inputTargets;

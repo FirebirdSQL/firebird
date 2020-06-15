@@ -1405,7 +1405,7 @@ arg_desc_list($parameters)
 arg_desc($parameters)
 	: udf_data_type param_mechanism
 		{
-			$parameters->add(newNode<ParameterClause>($1, Jrd::MetaName()));
+			$parameters->add(newNode<ParameterClause>($1, MetaName()));
 			$parameters->back()->udfMechanism = $2;
 		}
 	;
@@ -1428,7 +1428,7 @@ return_value1($function)
 return_value($function)
 	: udf_data_type return_mechanism
 		{
-			$function->returnType = newNode<ParameterClause>($1, Jrd::MetaName());
+			$function->returnType = newNode<ParameterClause>($1, MetaName());
 			$function->returnType->udfMechanism = $2;
 		}
 	| PARAMETER pos_short_integer
@@ -1676,7 +1676,7 @@ domain_clause
 			{
 				$3->fld_name = *$1;
 				$<createDomainNode>$ = newNode<CreateDomainNode>(
-					newNode<ParameterClause>($3, Jrd::MetaName(), $4));
+					newNode<ParameterClause>($3, MetaName(), $4));
 			}
 		domain_constraints_opt($5) collate_clause
 			{
@@ -4378,9 +4378,9 @@ alter_role_2X_compatibility
 			MappingNode* mn = newNode<MappingNode>(MappingNode::MAP_RPL, "AutoAdminImplementationMapping");
 			mn->op = $2 ? MappingNode::MAP_RPL : MappingNode::MAP_DROP;
 			mn->from = newNode<IntlString>(FB_DOMAIN_ANY_RID_ADMINS);
-			mn->fromType = newNode<Jrd::MetaName>(FB_PREDEFINED_GROUP);
+			mn->fromType = newNode<MetaName>(FB_PREDEFINED_GROUP);
 			mn->mode = 'P';
-			mn->plugin = newNode<Jrd::MetaName>("Win_Sspi");
+			mn->plugin = newNode<MetaName>("Win_Sspi");
 			mn->role = true;
 			mn->to = $1;
 			mn->validateAdmin();
@@ -5595,13 +5595,13 @@ table_lock
 table_list
 	: symbol_table_name
 		{
-			ObjectsArray<Jrd::MetaName>* node = newNode<ObjectsArray<Jrd::MetaName> >();
+			ObjectsArray<MetaName>* node = newNode<ObjectsArray<MetaName> >();
 			node->add(*$1);
 			$$ = node;
 		}
 	| table_list ',' symbol_table_name
 		{
-			ObjectsArray<Jrd::MetaName>* node = $1;
+			ObjectsArray<MetaName>* node = $1;
 			node->add(*$3);
 			$$ = node;
 		}
@@ -6006,13 +6006,13 @@ derived_column_list
 alias_list
 	: symbol_item_alias_name
 		{
-			ObjectsArray<Jrd::MetaName>* node = newNode<ObjectsArray<Jrd::MetaName> >();
+			ObjectsArray<MetaName>* node = newNode<ObjectsArray<MetaName> >();
 			node->add(*$1);
 			$$ = node;
 		}
 	| alias_list ',' symbol_item_alias_name
 		{
-			ObjectsArray<Jrd::MetaName>* node = $1;
+			ObjectsArray<MetaName>* node = $1;
 			node->add(*$3);
 			$$ = node;
 		}
@@ -6269,13 +6269,13 @@ plan_item
 table_or_alias_list
 	: symbol_table_name
 		{
-			ObjectsArray<Jrd::MetaName>* node = newNode<ObjectsArray<Jrd::MetaName> >();
+			ObjectsArray<MetaName>* node = newNode<ObjectsArray<MetaName> >();
 			node->add(*$1);
 			$$ = node;
 		}
 	| table_or_alias_list symbol_table_name
 		{
-			ObjectsArray<Jrd::MetaName>* node = $1;
+			ObjectsArray<MetaName>* node = $1;
 			node->add(*$2);
 			$$ = node;
 		}
@@ -6669,7 +6669,7 @@ returning_clause
 
 %type <metaNamePtr> cursor_clause
 cursor_clause
-	: WHERE CURRENT OF symbol_cursor_name	{ $$ = newNode<Jrd::MetaName>(*$4); }
+	: WHERE CURRENT OF symbol_cursor_name	{ $$ = newNode<MetaName>(*$4); }
 	;
 
 
@@ -7249,8 +7249,8 @@ map_from($node)
 %type <metaNamePtr> map_from_symbol_name
 map_from_symbol_name
 	: valid_symbol_name
-	| USER					{ $$ = newNode<Jrd::MetaName>("USER"); }
-	| GROUP					{ $$ = newNode<Jrd::MetaName>("GROUP"); }
+	| USER					{ $$ = newNode<MetaName>("USER"); }
+	| GROUP					{ $$ = newNode<MetaName>("GROUP"); }
 	;
 
 %type <intlStringPtr> map_logoninfo
@@ -8218,7 +8218,7 @@ crypt_opt_lparam
 %type <metaNamePtr> crypt_opt_hash
 crypt_opt_hash
 	: // nothing
-		{ $$ = newNode<Jrd::MetaName>(""); }
+		{ $$ = newNode<MetaName>(""); }
 	| HASH valid_symbol_name
 		{ $$ = $2; }
 	;
@@ -8234,7 +8234,7 @@ crypt_opt_saltlen
 %type <metaNamePtr> crypt_opt_mode
 crypt_opt_mode
 	: // nothing
-		{ $$ = newNode<Jrd::MetaName>(""); }
+		{ $$ = newNode<MetaName>(""); }
 	| MODE valid_symbol_name
 		{ $$ = $2; }
 	;
@@ -8250,7 +8250,7 @@ crypt_opt_iv
 %type <metaNamePtr> crypt_opt_counter_type
 crypt_opt_counter_type
 	: // nothing
-		{ $$ = newNode<Jrd::MetaName>(""); }
+		{ $$ = newNode<MetaName>(""); }
 	| crypt_counter_type
 		{ $$ = $1; }
 	;

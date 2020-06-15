@@ -2043,7 +2043,7 @@ private:
 	};
 
 public:
-	explicit UdfCallNode(MemoryPool& pool, const Jrd::QualifiedName& aName,
+	explicit UdfCallNode(MemoryPool& pool, const QualifiedName& aName,
 		ValueListNode* aArgs = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
@@ -2074,7 +2074,7 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	Jrd::QualifiedName name;
+	QualifiedName name;
 	NestConst<ValueListNode> args;
 	NestConst<Function> function;
 

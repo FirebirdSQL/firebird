@@ -367,7 +367,7 @@ class ProcedureSourceNode : public TypedNode<RecordSourceNode, RecordSourceNode:
 {
 public:
 	explicit ProcedureSourceNode(MemoryPool& pool,
-			const Jrd::QualifiedName& aDsqlName = Jrd::QualifiedName())
+			const QualifiedName& aDsqlName = QualifiedName())
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_PROCEDURE>(pool),
 		  dsqlName(pool, aDsqlName),
 		  alias(pool),
@@ -431,7 +431,7 @@ private:
 	ProcedureScan* generate(thread_db* tdbb, OptimizerBlk* opt);
 
 public:
-	Jrd::QualifiedName dsqlName;
+	QualifiedName dsqlName;
 	Firebird::string alias;
 	NestConst<ValueListNode> sourceList;
 	NestConst<ValueListNode> targetList;

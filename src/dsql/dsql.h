@@ -124,9 +124,9 @@ public:
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
 		MetaName, class dsql_rel*> > > dbb_relations;			// known relations in database
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Jrd::QualifiedName, class dsql_prc*> > > dbb_procedures;	// known procedures in database
+		QualifiedName, class dsql_prc*> > > dbb_procedures;	// known procedures in database
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Jrd::QualifiedName, class dsql_udf*> > > dbb_functions;	// known functions in database
+		QualifiedName, class dsql_udf*> > > dbb_functions;	// known functions in database
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
 		MetaName, class dsql_intlsym*> > > dbb_charsets;		// known charsets in database
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
@@ -339,7 +339,7 @@ public:
 
 	dsql_fld*	prc_inputs;		// Input parameters
 	dsql_fld*	prc_outputs;	// Output parameters
-	Jrd::QualifiedName prc_name;	// Name of procedure
+	QualifiedName prc_name;	// Name of procedure
 	MetaName prc_owner;	// Owner of procedure
 	SSHORT		prc_in_count;
 	SSHORT		prc_def_count;	// number of inputs with default values
@@ -373,7 +373,7 @@ public:
 	SSHORT		udf_character_set_id;
 	//USHORT		udf_character_length;
     USHORT      udf_flags;
-	Jrd::QualifiedName udf_name;
+	QualifiedName udf_name;
 	Firebird::Array<dsc> udf_arguments;
 	bool		udf_private;	// Packaged private function
 	SSHORT		udf_def_count;	// number of inputs with default values

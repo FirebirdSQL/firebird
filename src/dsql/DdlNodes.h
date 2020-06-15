@@ -369,7 +369,7 @@ class CommentOnNode : public DdlNode
 {
 public:
 	CommentOnNode(MemoryPool& pool, int aObjType,
-				const Jrd::QualifiedName& aObjName, const MetaName& aSubName,
+				const QualifiedName& aObjName, const MetaName& aSubName,
 				const Firebird::string aText)
 		: DdlNode(pool),
 		  objType(aObjType),
@@ -398,7 +398,7 @@ protected:
 
 private:
 	int objType;
-	Jrd::QualifiedName objName;
+	QualifiedName objName;
 	MetaName subName;
 	Firebird::string text, str;
 };

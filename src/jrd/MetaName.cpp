@@ -195,9 +195,9 @@ unsigned Dictionary::HashTable::getMaxLevel()
 void Dictionary::Word::assign(const char* s, FB_SIZE_T len)
 {
 	fb_assert(len < MAX_UCHAR);
-	text[0] = static_cast<unsigned char>(len);
-	memcpy(c_str(), s, len);
-	text[len + 1] = '\0';
+	textLen = len;
+	memcpy(text, s, len);
+	text[len] = '\0';
 }
 
 Dictionary::Word* MetaName::get(const char* s, FB_SIZE_T len)

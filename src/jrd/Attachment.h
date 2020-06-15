@@ -106,7 +106,7 @@ struct DSqlCacheItem
 	}
 
 	Firebird::string key;
-	Firebird::GenericMap<Firebird::Pair<Firebird::Left<Jrd::QualifiedName, bool> > > obsoleteMap;
+	Firebird::GenericMap<Firebird::Pair<Firebird::Left<QualifiedName, bool> > > obsoleteMap;
 	Lock* lock;
 	bool locked;
 };

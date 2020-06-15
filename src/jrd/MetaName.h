@@ -26,8 +26,8 @@
  *
  */
 
-#ifndef METANAME_H
-#define METANAME_H
+#ifndef JRD_METANAME_H
+#define JRD_METANAME_H
 
 #include "../common/classes/fb_string.h"
 #include "../common/classes/fb_pair.h"
@@ -74,22 +74,18 @@ public:
 		Word* next;
 
 	private:
+		UCHAR textLen;
 		char text[1];
 
 	public:
-		char* c_str()
-		{
-			return &text[1];
-		}
-
 		const char* c_str() const
 		{
-			return &text[1];
+			return text;
 		}
 
 		FB_SIZE_T length() const
 		{
-			return static_cast<unsigned char>(text[0]);
+			return textLen;
 		}
 
 		void assign(const char* s, FB_SIZE_T l);
@@ -297,6 +293,9 @@ public:
 
 	int compare(const MetaName& m) const
 	{
+		if (word == m.word)
+			return 0;
+
 		return compare(m.begin(), m.length());
 	}
 
@@ -362,4 +361,4 @@ typedef Firebird::Pair<Firebird::Full<MetaName, MetaName> > MetaNamePair;
 
 } // namespace Jrd
 
-#endif // METANAME_H
+#endif // JRD_METANAME_H
