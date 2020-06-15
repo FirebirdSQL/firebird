@@ -148,7 +148,7 @@ void IscConnection::attach(thread_db* tdbb)
 	{
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
 
-		const unsigned char info[] = {isc_info_db_sql_dialect, fb_info_provider_features, isc_info_end};
+		const unsigned char info[] = {isc_info_db_sql_dialect, fb_info_features, isc_info_end};
 		m_iscProvider.isc_database_info(&status, &m_handle, sizeof(info), info, sizeof(buff), buff);
 	}
 	if (status->getState() & IStatus::STATE_ERRORS) {
@@ -171,7 +171,7 @@ void IscConnection::attach(thread_db* tdbb)
 				m_sqlDialect = m_iscProvider.isc_vax_integer(p, len);
 				break;
 
-			case fb_info_provider_features:
+			case fb_info_features:
 			    for (int i = 0; i < len; i++)
                 {
                     if (p[i] == 0)
@@ -181,7 +181,7 @@ void IscConnection::attach(thread_db* tdbb)
 
                     if (p[i] < info_provider_features_max)
                     {
-                        setFeature(static_cast<info_provider_features>(p[i]));
+                        setFeature(static_cast<info_features>(p[i]));
                     }
                     // else this provider supports unknown feature, ignore it.
                 }
@@ -192,7 +192,7 @@ void IscConnection::attach(thread_db* tdbb)
                     const ULONG err = m_iscProvider.isc_vax_integer(p + 1, len - 1);
                     if (err == isc_infunk)
                     {
-                        if (*p == fb_info_provider_features)
+                        if (*p == fb_info_features)
                         {
                             // Used provider follow Firebird error reporting conventions but is not aware of
                             // this info item. Assume Firebird 3 or earlier.

@@ -492,11 +492,11 @@ public:
 	virtual Blob* createBlob() = 0;
 
 	// Test specified feature flag
-	bool testFeature(info_provider_features value) const { return m_features[value]; }
+	bool testFeature(info_features value) const { return m_features[value]; }
 	// Set specified flag
-	void setFeature(info_provider_features value) { m_features[value] = true; }
+	void setFeature(info_features value) { m_features[value] = true; }
 	// Clear specified flag
-	void clearFeature(info_provider_features value) { m_features[value] = false; }
+	void clearFeature(info_features value) { m_features[value] = false; }
 
 protected:
 	virtual Transaction* doCreateTransaction() = 0;

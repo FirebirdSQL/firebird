@@ -856,7 +856,7 @@ void INF_database_info(thread_db* tdbb,
 			length = INF_convert(att->getActualIdleTimeout(), buffer);
 			break;
 
-		case fb_info_provider_features:
+		case fb_info_features:
 		    {
                 static const unsigned char features[] = ENGINE_FEATURES;
                 length = sizeof(features);
