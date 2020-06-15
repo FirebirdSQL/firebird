@@ -55,6 +55,7 @@ New items for isc_database_info
 	fb_feature_session_reset - ALTER SESSION RESET is supported
 	fb_feature_read_consistency - read consistency TIL is supported
 	fb_feature_statement_timeout - statement timeout is supported
+	fb_feature_statement_long_life - prepared statements are not dropped on transaction end
 
 
 New items for isc_transaction_info:
