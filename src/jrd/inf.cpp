@@ -226,8 +226,9 @@ void INF_database_info(thread_db* tdbb,
  **************************************/
  	CHECK_INPUT("INF_database_info");
 
+	static const CountsBuffer::size_type bufferLength = BUFFER_SMALL;
 	CountsBuffer counts_buffer;
-	UCHAR* buffer = counts_buffer.getBuffer(BUFFER_SMALL);
+	UCHAR* buffer = counts_buffer.getBuffer(bufferLength, false);
 	USHORT length;
 	ULONG err_val;
 	bool header_refreshed = false;
@@ -859,6 +860,7 @@ void INF_database_info(thread_db* tdbb,
 		    {
                 static const unsigned char features[] = ENGINE_FEATURES;
                 length = sizeof(features);
+                static_assert(bufferLength >= sizeof(features), "BOF");
                 memcpy(buffer, features, length);
                 break;
 		    }
