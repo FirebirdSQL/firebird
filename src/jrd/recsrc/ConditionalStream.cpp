@@ -45,7 +45,7 @@ ConditionalStream::ConditionalStream(CompilerScratch* csb,
 {
 	fb_assert(m_first && m_second && m_boolean);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void ConditionalStream::open(thread_db* tdbb) const

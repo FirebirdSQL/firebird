@@ -45,7 +45,7 @@ ProcedureScan::ProcedureScan(CompilerScratch* csb, const string& alias, StreamTy
 	: RecordStream(csb, stream, procedure->prc_record_format), m_alias(csb->csb_pool, alias),
 	  m_procedure(procedure), m_sourceList(sourceList), m_targetList(targetList), m_message(message)
 {
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 
 	fb_assert(!sourceList == !targetList);
 

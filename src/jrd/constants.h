@@ -466,6 +466,14 @@ const int OPT_STATIC_ITEMS = 64;
 #define CURRENT_ENGINE "Engine13"
 #define EMBEDDED_PROVIDERS "Providers=" CURRENT_ENGINE
 
+// Feature mask for current version of engine provider
+#define ENGINE_FEATURES {fb_feature_multi_statements, \
+						 fb_feature_multi_transactions, \
+						 fb_feature_session_reset, \
+						 fb_feature_read_consistency, \
+						 fb_feature_statement_timeout, \
+						 fb_feature_statement_long_life}
+
 const int WITH_GRANT_OPTION = 1;
 const int WITH_ADMIN_OPTION = 2;
 

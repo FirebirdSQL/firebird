@@ -42,7 +42,7 @@ FullOuterJoin::FullOuterJoin(CompilerScratch* csb, RecordSource* arg1, RecordSou
 {
 	fb_assert(m_arg1 && m_arg2);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void FullOuterJoin::open(thread_db* tdbb) const

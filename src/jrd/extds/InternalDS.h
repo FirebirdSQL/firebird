@@ -34,7 +34,6 @@ public:
 	explicit InternalProvider(const char* prvName) :
 		Provider(prvName)
 	{
-		m_flags = (prvMultyStmts | prvMultyTrans);
 	}
 
 	~InternalProvider()

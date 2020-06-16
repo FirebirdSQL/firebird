@@ -351,7 +351,7 @@ AggNode* AggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value_ex));
+	impureOffset = csb->allocImpure<impure_value_ex>();
 
 	return this;
 }
@@ -653,7 +653,7 @@ AggNode* AvgAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 		nodFlags |= FLAG_DOUBLE;
 
 	// We need a second descriptor in the impure area for AVG.
-	tempImpure = CMP_impure(csb, sizeof(impure_value_ex));
+	tempImpure = csb->allocImpure<impure_value_ex>();
 
 	return this;
 }
@@ -1416,7 +1416,7 @@ AggNode* StdDevAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	AggNode::pass2(tdbb, csb);
 
-	impure2Offset = CMP_impure(csb, sizeof(StdDevImpure));
+	impure2Offset = csb->allocImpure<StdDevImpure>();
 
 	return this;
 }
@@ -1625,7 +1625,7 @@ AggNode* CorrAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	AggNode::pass2(tdbb, csb);
 
-	impure2Offset = CMP_impure(csb, sizeof(CorrImpure));
+	impure2Offset = csb->allocImpure<CorrImpure>();
 
 	return this;
 }
@@ -1901,7 +1901,7 @@ AggNode* RegrAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	AggNode::pass2(tdbb, csb);
 
-	impure2Offset = CMP_impure(csb, sizeof(RegrImpure));
+	impure2Offset = csb->allocImpure<RegrImpure>();
 
 	return this;
 }

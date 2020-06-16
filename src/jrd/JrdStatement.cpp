@@ -45,6 +45,19 @@ template <typename T> static void makeSubRoutines(thread_db* tdbb, JrdStatement*
 	CompilerScratch* csb, T& subs);
 
 
+ULONG CompilerScratch::allocImpure(ULONG align, ULONG size)
+{
+	const ULONG offset = FB_ALIGN(csb_impure, align);
+
+	if (offset + size > JrdStatement::MAX_REQUEST_SIZE)
+		IBERROR(226);	// msg 226: request size limit exceeded
+
+	csb_impure = offset + size;
+
+	return offset;
+}
+
+
 // Start to turn a parsed scratch into a statement. This is completed by makeStatement.
 JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	: pool(p),

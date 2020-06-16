@@ -212,7 +212,7 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 {
 	fb_assert(count >= 2);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 
 	m_leader.source = args[0];
 	m_leader.keys = keys[0];

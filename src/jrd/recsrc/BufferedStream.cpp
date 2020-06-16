@@ -44,7 +44,7 @@ BufferedStream::BufferedStream(CompilerScratch* csb, RecordSource* next)
 {
 	fb_assert(m_next);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 
 	StreamList streams;
 	m_next->findUsedStreams(streams);

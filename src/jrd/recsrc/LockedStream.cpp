@@ -39,7 +39,7 @@ LockedStream::LockedStream(CompilerScratch* csb, RecordSource* next)
 {
 	fb_assert(m_next);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void LockedStream::open(thread_db* tdbb) const

@@ -197,10 +197,7 @@ protected:
 };
 
 // Provider flags
-const int prvMultyStmts		= 0x0001;	// supports many active statements per connection
-const int prvMultyTrans		= 0x0002;	// supports many active transactions per connection
-const int prvNamedParams	= 0x0004;	// supports named parameters
-const int prvTrustedAuth	= 0x0008;	// supports trusted authentication
+const int prvTrustedAuth	= 0x0001;	// supports trusted authentication
 
 
 class ConnectionsPool
@@ -494,12 +491,12 @@ public:
 
 	virtual Blob* createBlob() = 0;
 
-	// Test specified flags, return true if all bits present
-	bool testFeature(ULONG value) const { return m_features & value; }
-	// Set specified flags, return new value
-	ULONG setFeature(ULONG value) { return m_features |= value; }
-	// Clear specified flags, return new value
-	ULONG clearFeature(ULONG value) { return m_features &= ~value; }
+	// Test specified feature flag
+	bool testFeature(info_provider_features value) const { return m_features[value]; }
+	// Set specified flag
+	void setFeature(info_provider_features value) { m_features[value] = true; }
+	// Clear specified flag
+	void clearFeature(info_provider_features value) { m_features[value] = false; }
 
 protected:
 	virtual Transaction* doCreateTransaction() = 0;
@@ -531,16 +528,8 @@ protected:
 	int m_sqlDialect;	// must be filled in attach call
 	bool m_wrapErrors;
 	bool m_broken;
-	ULONG m_features;	// bitmask
+	bool m_features[info_provider_features_max];
 };
-
-// Connection features flags
-const ULONG conFtrSessionReset		= 0x01;		// supports ALTER SESSION RESET
-const ULONG conFtrReadConsistency	= 0x02;		// supports READ COMMITTED READ CONSISTENCY
-const ULONG conFtrStatementTimeout	= 0x04;		// supports statements timeout
-
-// Features of Firebird 4
-const ULONG conFtrFB4 = conFtrSessionReset | conFtrReadConsistency | conFtrStatementTimeout;
 
 class Transaction : public Firebird::PermanentStorage
 {
@@ -618,7 +607,7 @@ public:
 		const Jrd::MetaName* const* in_names, const Jrd::ValueListNode* in_params,
 		const ParamNumbers* in_excess, const Jrd::ValueListNode* out_params);
 	void open(Jrd::thread_db* tdbb, Transaction* tran,
-		const Jrd::MetaName* const* in_names, const Jrd::ValueListNode* in_params, 
+		const Jrd::MetaName* const* in_names, const Jrd::ValueListNode* in_params,
 		const ParamNumbers* in_excess, bool singleton);
 	bool fetch(Jrd::thread_db* tdbb, const Jrd::ValueListNode* out_params);
 	void close(Jrd::thread_db* tdbb, bool invalidTran = false);

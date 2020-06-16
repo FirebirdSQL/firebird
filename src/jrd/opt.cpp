@@ -1969,7 +1969,7 @@ void OPT_gen_aggregate_distincts(thread_db* tdbb, CompilerScratch* csb, MapNode*
 			asb->length += sizeof(ULONG);
 
 			sort_key->skd_flags = SKD_ascending;
-			asb->impure = CMP_impure(csb, sizeof(impure_agg_sort));
+			asb->impure = csb->allocImpure<impure_agg_sort>();
 			asb->desc = *desc;
 
 			aggNode->asb = asb;
@@ -2816,7 +2816,7 @@ static bool gen_equi_join(thread_db* tdbb, OptimizerBlk* opt, RiverList& org_riv
 				CastNode* cast = FB_NEW_POOL(*tdbb->getDefaultPool()) CastNode(*tdbb->getDefaultPool());
 				cast->source = node1;
 				cast->castDesc = result;
-				cast->impureOffset = CMP_impure(csb, sizeof(impure_value));
+				cast->impureOffset = csb->allocImpure<impure_value>();
 				node1 = cast;
 			}
 
@@ -2825,7 +2825,7 @@ static bool gen_equi_join(thread_db* tdbb, OptimizerBlk* opt, RiverList& org_riv
 				CastNode* cast = FB_NEW_POOL(*tdbb->getDefaultPool()) CastNode(*tdbb->getDefaultPool());
 				cast->source = node2;
 				cast->castDesc = result;
-				cast->impureOffset = CMP_impure(csb, sizeof(impure_value));
+				cast->impureOffset = csb->allocImpure<impure_value>();
 				node2 = cast;
 			}
 		}

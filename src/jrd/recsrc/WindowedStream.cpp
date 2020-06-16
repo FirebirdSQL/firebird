@@ -92,7 +92,7 @@ namespace
 	BufferedStreamWindow::BufferedStreamWindow(CompilerScratch* csb, BufferedStream* next)
 		: m_next(next)
 	{
-		m_impure = CMP_impure(csb, sizeof(Impure));
+		m_impure = csb->allocImpure<Impure>();
 	}
 
 	void BufferedStreamWindow::open(thread_db* tdbb) const
@@ -187,7 +187,7 @@ WindowedStream::WindowedStream(thread_db* tdbb, CompilerScratch* csb,
 	: m_next(FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, next)),
 	  m_joinedStream(NULL)
 {
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 
 	// Process the unpartioned and unordered map, if existent.
 

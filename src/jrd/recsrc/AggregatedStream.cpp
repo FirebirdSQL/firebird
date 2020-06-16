@@ -48,7 +48,7 @@ BaseAggWinStream<ThisType, NextType>::BaseAggWinStream(thread_db* tdbb, Compiler
 	  m_oneRowWhenEmpty(oneRowWhenEmpty)
 {
 	fb_assert(m_next);
-	m_impure = CMP_impure(csb, sizeof(typename ThisType::Impure));
+	m_impure = csb->allocImpure<typename ThisType::Impure>();
 }
 
 template <typename ThisType, typename NextType>

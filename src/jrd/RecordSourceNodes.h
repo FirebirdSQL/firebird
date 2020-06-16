@@ -311,12 +311,8 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 
 	virtual RelationSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual void ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const;
 
-	virtual RecordSourceNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
-	{
-		return this;
-	}
+	virtual RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 
 	virtual void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		BoolExprNode** boolean, RecordSourceNodeStack& stack);
@@ -398,10 +394,6 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 
 	virtual ProcedureSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-
-	virtual void ignoreDbKey(thread_db* /*tdbb*/, CompilerScratch* /*csb*/) const
-	{
-	}
 
 	virtual RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 	virtual void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
@@ -491,7 +483,6 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 
 	virtual AggregateSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual void ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const;
 	virtual RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 	virtual void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		BoolExprNode** boolean, RecordSourceNodeStack& stack);
@@ -557,7 +548,6 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 
 	virtual UnionSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual void ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const;
 
 	virtual RecordSourceNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
 	{
@@ -638,7 +628,6 @@ public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 
 	virtual WindowSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual void ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const;
 	virtual RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 	virtual void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		BoolExprNode** boolean, RecordSourceNodeStack& stack);
@@ -760,7 +749,6 @@ public:
 	virtual RseNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 
 	virtual RseNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual void ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const;
 	virtual RseNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 	virtual void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		BoolExprNode** boolean, RecordSourceNodeStack& stack);
@@ -835,11 +823,6 @@ public:
 	{
 		fb_assert(false);
 		return NULL;
-	}
-
-	virtual void ignoreDbKey(thread_db* /*tdbb*/, CompilerScratch* /*csb*/) const
-	{
-		fb_assert(false);
 	}
 
 	virtual RseNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)

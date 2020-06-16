@@ -42,7 +42,7 @@ ExternalTableScan::ExternalTableScan(CompilerScratch* csb, const string& alias,
 									 StreamType stream, jrd_rel* relation)
 	: RecordStream(csb, stream), m_relation(relation), m_alias(csb->csb_pool, alias)
 {
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void ExternalTableScan::open(thread_db* tdbb) const

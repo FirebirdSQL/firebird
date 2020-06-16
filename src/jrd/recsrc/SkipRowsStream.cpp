@@ -41,7 +41,7 @@ SkipRowsStream::SkipRowsStream(CompilerScratch* csb, RecordSource* next, ValueEx
 {
 	fb_assert(m_next && m_value);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void SkipRowsStream::open(thread_db* tdbb) const

@@ -43,7 +43,7 @@ BitmapTableScan::BitmapTableScan(CompilerScratch* csb, const string& alias,
 {
 	fb_assert(m_inversion);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void BitmapTableScan::open(thread_db* tdbb) const

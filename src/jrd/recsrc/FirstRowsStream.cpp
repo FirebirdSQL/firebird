@@ -41,7 +41,7 @@ FirstRowsStream::FirstRowsStream(CompilerScratch* csb, RecordSource* next, Value
 {
 	fb_assert(m_next && m_value);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void FirstRowsStream::open(thread_db* tdbb) const

@@ -186,7 +186,7 @@ public:
 	virtual ISC_STATUS ISC_EXPORT isc_database_info(Jrd::FbStatusVector*,
 										isc_db_handle*,
 										short,
-										const char*,
+										const unsigned char*,
 										short,
 										char*);
 
@@ -497,7 +497,8 @@ public:
 	explicit FBProvider(const char* prvName) :
 		IscProvider(prvName)
 	{
-		m_flags = (prvMultyStmts | prvMultyTrans | prvTrustedAuth);
+	    // Assume that winsspi auth plugin is enabled in configuration
+		m_flags = prvTrustedAuth;
 	}
 
 protected:

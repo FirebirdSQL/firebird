@@ -522,13 +522,13 @@ initialization
 	DisposableImpl_vTable.dispose := @DisposableImpl_disposeDispatcher;
 
 	StatusImpl_vTable := StatusVTable.create;
-	StatusImpl_vTable.version := 3;
+	StatusImpl_vTable.version := 2;
 	StatusImpl_vTable.dispose := @StatusImpl_disposeDispatcher;
 	StatusImpl_vTable.getCode := @StatusImpl_getCodeDispatcher;
 	StatusImpl_vTable.setCode := @StatusImpl_setCodeDispatcher;
 
 	FactoryImpl_vTable := FactoryVTable.create;
-	FactoryImpl_vTable.version := 5;
+	FactoryImpl_vTable.version := 2;
 	FactoryImpl_vTable.dispose := @FactoryImpl_disposeDispatcher;
 	FactoryImpl_vTable.createStatus := @FactoryImpl_createStatusDispatcher;
 	FactoryImpl_vTable.createCalculator := @FactoryImpl_createCalculatorDispatcher;
@@ -536,7 +536,7 @@ initialization
 	FactoryImpl_vTable.createBrokenCalculator := @FactoryImpl_createBrokenCalculatorDispatcher;
 
 	CalculatorImpl_vTable := CalculatorVTable.create;
-	CalculatorImpl_vTable.version := 5;
+	CalculatorImpl_vTable.version := 4;
 	CalculatorImpl_vTable.dispose := @CalculatorImpl_disposeDispatcher;
 	CalculatorImpl_vTable.sum := @CalculatorImpl_sumDispatcher;
 	CalculatorImpl_vTable.getMemory := @CalculatorImpl_getMemoryDispatcher;
@@ -544,7 +544,7 @@ initialization
 	CalculatorImpl_vTable.sumAndStore := @CalculatorImpl_sumAndStoreDispatcher;
 
 	Calculator2Impl_vTable := Calculator2VTable.create;
-	Calculator2Impl_vTable.version := 8;
+	Calculator2Impl_vTable.version := 6;
 	Calculator2Impl_vTable.dispose := @Calculator2Impl_disposeDispatcher;
 	Calculator2Impl_vTable.sum := @Calculator2Impl_sumDispatcher;
 	Calculator2Impl_vTable.getMemory := @Calculator2Impl_getMemoryDispatcher;

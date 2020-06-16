@@ -110,7 +110,7 @@ namespace
 				cast = FB_NEW_POOL(csb->csb_pool) CastNode(csb->csb_pool);
 				cast->source = value;
 				cast->castDesc = desc;
-				cast->impureOffset = CMP_impure(csb, sizeof(impure_value));
+				cast->impureOffset = csb->allocImpure<impure_value>();
 			}
 
 			value = cast;
@@ -140,7 +140,7 @@ namespace
 			FB_NEW_POOL(csb->csb_pool) BoolAsValueNode(csb->csb_pool);
 		newValue->boolean = cmpNode;
 
-		newValue->impureOffset = CMP_impure(csb, sizeof(impure_value));
+		newValue->impureOffset = csb->allocImpure<impure_value>();
 
 		return newValue;
 	}
@@ -1361,7 +1361,7 @@ InversionNode* OptimizerRetrieval::makeIndexScanNode(IndexScratch* indexScratch)
 	// mark the index as utilized for the purposes of this compile
 	idx->idx_runtime_flags |= idx_used;
 
-	const ULONG impure = csb ? CMP_impure(csb, sizeof(impure_inversion)) : 0;
+	const ULONG impure = csb ? csb->allocImpure<impure_inversion>() : 0;
 	return FB_NEW_POOL(pool) InversionNode(retrieval, impure);
 }
 
@@ -2195,7 +2195,7 @@ InversionCandidate* OptimizerRetrieval::matchDbKey(BoolExprNode* boolean) const
 			fb_assert(lower == upper);
 
 			InversionNode* const inversion = FB_NEW_POOL(pool) InversionNode(lower, n);
-			inversion->impure = CMP_impure(csb, sizeof(impure_inversion));
+			inversion->impure = csb->allocImpure<impure_inversion>();
 			invCandidate->inversion = inversion;
 		}
 		else

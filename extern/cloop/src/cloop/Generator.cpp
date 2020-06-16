@@ -1305,7 +1305,7 @@ void PascalGenerator::generate()
 		fprintf(out, "\t%sImpl_vTable := %sVTable.create;\n",
 			escapeName(interface->name, true).c_str(), escapeName(interface->name).c_str());
 		fprintf(out, "\t%sImpl_vTable.version := %d;\n",
-			escapeName(interface->name, true).c_str(), (int) methods.size());
+			escapeName(interface->name, true).c_str(), interface->version);
 
 		for (deque<Method*>::iterator j = methods.begin(); j != methods.end(); ++j)
 		{

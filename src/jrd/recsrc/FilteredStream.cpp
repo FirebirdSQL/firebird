@@ -41,7 +41,7 @@ FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next, BoolExp
 {
 	fb_assert(m_next && m_boolean);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void FilteredStream::open(thread_db* tdbb) const

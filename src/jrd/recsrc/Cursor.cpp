@@ -100,7 +100,7 @@ Cursor::Cursor(CompilerScratch* csb, const RecordSource* rsb,
 {
 	fb_assert(m_top);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void Cursor::open(thread_db* tdbb) const

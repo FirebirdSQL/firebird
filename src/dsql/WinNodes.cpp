@@ -142,7 +142,7 @@ ValueExprNode* RankWinNode::copy(thread_db* tdbb, NodeCopier& /*copier*/) const
 AggNode* RankWinNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	AggNode::pass2(tdbb, csb);
-	tempImpure = CMP_impure(csb, sizeof(impure_value_ex));
+	tempImpure = csb->allocImpure<impure_value_ex>();
 	return this;
 }
 
@@ -218,7 +218,7 @@ ValueExprNode* PercentRankWinNode::copy(thread_db* tdbb, NodeCopier& /*copier*/)
 AggNode* PercentRankWinNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	AggNode::pass2(tdbb, csb);
-	tempImpure = CMP_impure(csb, sizeof(impure_value_ex));
+	tempImpure = csb->allocImpure<impure_value_ex>();
 	return this;
 }
 
@@ -803,7 +803,7 @@ ValueExprNode* NTileWinNode::copy(thread_db* tdbb, NodeCopier& copier) const
 AggNode* NTileWinNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	AggNode::pass2(tdbb, csb);
-	thisImpureOffset = CMP_impure(csb, sizeof(ThisImpure));
+	thisImpureOffset = csb->allocImpure<ThisImpure>();
 	return this;
 }
 

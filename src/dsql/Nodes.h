@@ -916,7 +916,7 @@ public:
 
 		AggNode* newInstance(MemoryPool& pool) const
 		{
-			return FB_NEW T(pool);
+			return FB_NEW_POOL(pool) T(pool);
 		}
 	};
 
@@ -932,7 +932,7 @@ public:
 
 		AggNode* newInstance(MemoryPool& pool) const
 		{
-			return FB_NEW T(pool, type);
+			return FB_NEW_POOL(pool) T(pool, type);
 		}
 
 	public:
@@ -1113,7 +1113,6 @@ public:
 	}
 
 	virtual RecordSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const = 0;
-	virtual void ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const = 0;
 	virtual RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb) = 0;
 	virtual void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		BoolExprNode** boolean, RecordSourceNodeStack& stack) = 0;

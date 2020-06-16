@@ -188,7 +188,10 @@ void InternalConnection::attach(thread_db* tdbb)
 	m_sqlDialect = (attachment->att_database->dbb_flags & DBB_DB_SQL_dialect_3) ?
 					SQL_DIALECT_V6 : SQL_DIALECT_V5;
 
-	m_features = conFtrFB4;
+	memset(m_features, false, sizeof(m_features));
+	static const info_provider_features features[] = ENGINE_FEATURES;
+	for (int i = 0; i < sizeof(features); i++)
+		setFeature(features[i]);
 }
 
 void InternalConnection::doDetach(thread_db* tdbb)

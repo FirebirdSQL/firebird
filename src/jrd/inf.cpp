@@ -855,6 +855,14 @@ void INF_database_info(thread_db* tdbb,
 			length = INF_convert(att->getActualIdleTimeout(), buffer);
 			break;
 
+		case fb_info_provider_features:
+		    {
+                static const unsigned char features[] = ENGINE_FEATURES;
+                length = sizeof(features);
+                memcpy(buffer, features, length);
+                break;
+		    }
+
 		default:
 			buffer[0] = item;
 			item = isc_info_error;

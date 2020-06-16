@@ -41,7 +41,7 @@ Union::Union(CompilerScratch* csb, StreamType stream,
 {
 	fb_assert(argCount);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 
 	m_args.resize(argCount);
 

@@ -44,7 +44,7 @@ FullTableScan::FullTableScan(CompilerScratch* csb, const string& alias,
 	  m_relation(relation),
 	  m_dbkeyRanges(csb->csb_pool, dbkeyRanges)
 {
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void FullTableScan::open(thread_db* tdbb) const

@@ -70,72 +70,60 @@ using namespace Jrd;
 
 namespace
 {
-	// Expand DBKEY for view
-	void expandViewNodes(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
-						 ValueExprNodeStack& stack, UCHAR blrOp)
-	{
-		const CompilerScratch::csb_repeat* const csb_tail = &csb->csb_rpt[stream];
-
-		// If the stream's dbkey should be ignored, do so
-
-		if (csb_tail->csb_flags & csb_no_dbkey)
-			return;
-
-		// If the stream references a view, follow map
-
-		const StreamType* map = csb_tail->csb_map;
-		if (map)
-		{
-			++map;
-
-			while (*map)
-				expandViewNodes(tdbb, csb, *map++, stack, blrOp);
-
-			return;
-		}
-
-		// Relation is primitive - make DBKEY node
-
-		if (csb_tail->csb_relation)
-		{
-			RecordKeyNode* node = FB_NEW_POOL(csb->csb_pool) RecordKeyNode(csb->csb_pool, blrOp);
-			node->recStream = stream;
-			stack.push(node);
-		}
-	}
-
 	// Try to expand the given stream. If it's a view reference, collect its base streams
 	// (the ones directly residing in the FROM clause) and recurse.
-	void expandViewStreams(CompilerScratch* csb, StreamType stream, SortedStreamList& streams)
+	void expandViewStreams(CompilerScratch* csb, StreamType baseStream, SortedStreamList& streams)
 	{
-		const CompilerScratch::csb_repeat* const csb_tail = &csb->csb_rpt[stream];
+		const auto csb_tail = &csb->csb_rpt[baseStream];
 
 		const RseNode* const rse =
 			csb_tail->csb_relation ? csb_tail->csb_relation->rel_view_rse : NULL;
 
-		// If we have a view, collect its base streams and remap/expand them.
+		// If we have a view, collect its base streams and remap/expand them
 
 		if (rse)
 		{
-			const StreamType* const map = csb_tail->csb_map;
+			const auto map = csb_tail->csb_map;
 			fb_assert(map);
 
 			StreamList viewStreams;
 			rse->computeRseStreams(viewStreams);
 
-			for (StreamType* iter = viewStreams.begin(); iter != viewStreams.end(); ++iter)
+			for (auto stream : viewStreams)
 			{
 				// Remap stream and expand it recursively
-				expandViewStreams(csb, map[*iter], streams);
+				expandViewStreams(csb, map[stream], streams);
 			}
 
 			return;
 		}
 
-		// Otherwise, just add the current stream to the list.
+		// Otherwise, just add the current stream to the list
 
-		if (!streams.exist(stream))
-			streams.add(stream);
+		if (!streams.exist(baseStream))
+			streams.add(baseStream);
+	}
+
+	// Expand DBKEY for view
+	void expandViewNodes(CompilerScratch* csb, StreamType baseStream,
+						 ValueExprNodeStack& stack, UCHAR blrOp)
+	{
+		SortedStreamList viewStreams;
+		expandViewStreams(csb, baseStream, viewStreams);
+
+		for (auto stream : viewStreams)
+		{
+			const auto csb_tail = &csb->csb_rpt[stream];
+
+			// If relation is primitive, make DBKEY node
+
+			if (csb_tail->csb_relation)
+			{
+				const auto node = FB_NEW_POOL(csb->csb_pool) RecordKeyNode(csb->csb_pool, blrOp);
+				node->recStream = stream;
+				stack.push(node);
+			}
+		}
 	}
 
 	// Look at all RSEs which are lower in scope than the RSE which this field is
@@ -1805,7 +1793,7 @@ ValueExprNode* ArithmeticNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -3181,7 +3169,7 @@ ValueExprNode* AtNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -3299,7 +3287,7 @@ ValueExprNode* BoolAsValueNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -3518,7 +3506,7 @@ ValueExprNode* CastNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -3890,7 +3878,7 @@ ValueExprNode* ConcatenateNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -4123,7 +4111,7 @@ ValueExprNode* CurrentDateNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -4228,7 +4216,7 @@ ValueExprNode* CurrentTimeNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -4343,7 +4331,7 @@ ValueExprNode* CurrentTimeStampNode::pass2(thread_db* tdbb, CompilerScratch* csb
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -4437,7 +4425,7 @@ ValueExprNode* CurrentRoleNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -4531,7 +4519,7 @@ ValueExprNode* CurrentUserNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -5411,7 +5399,7 @@ ValueExprNode* ExtractNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -6581,7 +6569,7 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	// the nodes in the subtree are involved in a validation
 	// clause only, the subtree is a validate_subtree in our notation.
 
-	SLONG ssRelationId = tail->csb_view ?
+	const SLONG ssRelationId = tail->csb_view ?
 		tail->csb_view->rel_id : (csb->csb_view ? csb->csb_view->rel_id : 0);
 
 	if (tail->csb_flags & csb_modify)
@@ -6771,7 +6759,7 @@ ValueExprNode* FieldNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	if (csb->csb_rpt[fieldStream].csb_relation || csb->csb_rpt[fieldStream].csb_procedure)
 		format = CMP_format(tdbb, csb, fieldStream);
 
-	impureOffset = CMP_impure(csb, sizeof(impure_value_ex));
+	impureOffset = csb->allocImpure<impure_value_ex>();
 	cursorNumber = csb->csb_rpt[fieldStream].csb_cursor_number;
 
 	return this;
@@ -7023,7 +7011,7 @@ ValueExprNode* GenIdNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -7217,7 +7205,7 @@ ValueExprNode* InternalInfoNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -8025,7 +8013,7 @@ ValueExprNode* LocalTimeNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -8128,7 +8116,7 @@ ValueExprNode* LocalTimeStampNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -8735,7 +8723,7 @@ ValueExprNode* NegateNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -9608,7 +9596,11 @@ ValueExprNode* ParameterNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, (nodFlags & FLAG_VALUE) ? sizeof(impure_value_ex) : sizeof(dsc));
+
+	if (nodFlags & FLAG_VALUE)
+		impureOffset = csb->allocImpure<impure_value_ex>();
+	else
+		impureOffset = csb->allocImpure<dsc>();
 
 	return this;
 }
@@ -10025,7 +10017,7 @@ ValueExprNode* RecordKeyNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		return this;
 
 	ValueExprNodeStack stack;
-	expandViewNodes(tdbb, csb, recStream, stack, blrOp);
+	expandViewNodes(csb, recStream, stack, blrOp);
 
 #ifdef CMP_DEBUG
 	csb->dump("expand RecordKeyNode: %d\n", recStream);
@@ -10146,7 +10138,7 @@ ValueExprNode* RecordKeyNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -10333,7 +10325,7 @@ ValueExprNode* ScalarNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -10547,7 +10539,7 @@ ValueExprNode* StrCaseNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -10762,7 +10754,7 @@ ValueExprNode* StrLenNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -11159,7 +11151,6 @@ bool SubQueryNode::sameAs(CompilerScratch* /*csb*/, const ExprNode* /*other*/, b
 
 ValueExprNode* SubQueryNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
-	rse->ignoreDbKey(tdbb, csb);
 	doPass1(tdbb, csb, rse.getAddress());
 
 	csb->csb_current_nodes.push(rse.getObject());
@@ -11187,7 +11178,7 @@ ValueExprNode* SubQueryNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	ValueExprNode::pass2(tdbb, csb);
 
-	impureOffset = CMP_impure(csb, sizeof(impure_value_ex));
+	impureOffset = csb->allocImpure<impure_value_ex>();
 
 	{
 		dsc desc;
@@ -11539,7 +11530,7 @@ ValueExprNode* SubstringNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -11843,7 +11834,7 @@ ValueExprNode* SubstringSimilarNode::pass2(thread_db* tdbb, CompilerScratch* csb
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -12100,7 +12091,7 @@ ValueExprNode* SysFuncCallNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -12356,7 +12347,7 @@ ValueExprNode* TrimNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value));
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
@@ -12771,20 +12762,20 @@ ValueExprNode* UdfCallNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
 
-	impureOffset = CMP_impure(csb, sizeof(Impure));
+	impureOffset = csb->allocImpure<Impure>();
 
 	if (function->isDefined() && !function->fun_entrypoint)
 	{
 		if (function->getInputFormat() && function->getInputFormat()->fmt_count)
 		{
 			fb_assert(function->getInputFormat()->fmt_length);
-			CMP_impure(csb, function->getInputFormat()->fmt_length);
+			csb->allocImpure(FB_ALIGNMENT, function->getInputFormat()->fmt_length);
 		}
 
 		fb_assert(function->getOutputFormat()->fmt_count == 3);
 
 		fb_assert(function->getOutputFormat()->fmt_length);
-		CMP_impure(csb, function->getOutputFormat()->fmt_length);
+		csb->allocImpure(FB_ALIGNMENT, function->getOutputFormat()->fmt_length);
 	}
 
 	return this;
@@ -13438,7 +13429,10 @@ ValueExprNode* VariableNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	ValueExprNode::pass2(tdbb, csb);
 
-	impureOffset = CMP_impure(csb, (nodFlags & FLAG_VALUE) ? sizeof(impure_value_ex) : sizeof(dsc));
+	if (nodFlags & FLAG_VALUE)
+		impureOffset = csb->allocImpure<impure_value_ex>();
+	else
+		impureOffset = csb->allocImpure<dsc>();
 
 	return this;
 }
@@ -13603,5 +13597,4 @@ static void setParameterInfo(dsql_par* parameter, const dsql_ctx* context)
 }
 
 
-static_assert(sizeof(RecordSourceNode) <= 40, "sizeof()");
 }	// namespace Jrd

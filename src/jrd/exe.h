@@ -468,20 +468,21 @@ public:
 		csb_dbg_info = FB_NEW_POOL(p) Firebird::DbgInfo(p);
 	}
 
+	// Implemented in JrdStatement.cpp
+	ULONG allocImpure(ULONG align, ULONG size);
+
+	template <typename T>
+	ULONG allocImpure()
+	{
+		return allocImpure(alignof(T), sizeof(T));
+	}
+
 	StreamType nextStream(bool check = true)
 	{
 		if (csb_n_stream >= MAX_STREAMS && check)
 			ERR_post(Firebird::Arg::Gds(isc_too_many_contexts));
 
 		return csb_n_stream++;
-	}
-
-	void inheritViewFlags(StreamType stream, USHORT flags)
-	{
-		if (csb_view)
-		{
-			csb_rpt[stream].csb_flags |= csb_rpt[csb_view_stream].csb_flags & flags;
-		}
 	}
 
 #ifdef CMP_DEBUG
@@ -538,6 +539,7 @@ public:
 	USHORT		csb_remap_variable;
 	bool		csb_validate_expr;
 	bool		csb_returning_expr;
+	bool		csb_implicit_cursor;
 
 	Firebird::GenericMap<Firebird::Left<MetaName, DeclareSubFuncNode*> > subFunctions;
 	Firebird::GenericMap<Firebird::Left<MetaName, DeclareSubProcNode*> > subProcedures;
@@ -620,7 +622,7 @@ const int csb_active		= 1;		// stream is active
 const int csb_used			= 2;		// context has already been defined (BLR parsing only)
 const int csb_view_update	= 4;		// view update w/wo trigger is in progress
 const int csb_trigger		= 8;		// NEW or OLD context in trigger
-const int csb_no_dbkey		= 16;		// stream doesn't have a dbkey
+//const int csb_no_dbkey		= 16;		// unused
 const int csb_store			= 32;		// we are processing a store statement
 const int csb_modify		= 64;		// we are processing a modify
 const int csb_sub_stream	= 128;		// a sub-stream of the RSE being processed

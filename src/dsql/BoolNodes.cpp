@@ -636,7 +636,7 @@ void ComparativeBoolNode::pass2Boolean2(thread_db* tdbb, CompilerScratch* csb)
 	if (nodFlags & FLAG_INVARIANT)
 	{
 		// This may currently happen for nod_like, nod_contains and nod_similar
-		impureOffset = CMP_impure(csb, sizeof(impure_value));
+		impureOffset = csb->allocImpure<impure_value>();
 	}
 }
 
@@ -1727,13 +1727,8 @@ BoolExprNode* RseBoolNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 				boolean->nodFlags |= FLAG_RESIDUAL | (deoptimize ? FLAG_DEOPTIMIZE : 0);
 			}
 		}
-		// fall into
 
-		case blr_any:
-		case blr_exists:
-		case blr_unique:
-			rse->ignoreDbKey(tdbb, csb);
-			break;
+		break;
 	}
 
 	return BoolExprNode::pass1(tdbb, csb);
@@ -1753,7 +1748,7 @@ void RseBoolNode::pass2Boolean1(thread_db* tdbb, CompilerScratch* csb)
 void RseBoolNode::pass2Boolean2(thread_db* tdbb, CompilerScratch* csb)
 {
 	if (nodFlags & FLAG_INVARIANT)
-		impureOffset = CMP_impure(csb, sizeof(impure_value));
+		impureOffset = csb->allocImpure<impure_value>();
 
 	RecordSource* const rsb = CMP_post_rse(tdbb, csb, rse);
 
@@ -1883,7 +1878,6 @@ BoolExprNode* RseBoolNode::convertNeqAllToNotAny(thread_db* tdbb, CompilerScratc
 	andNode->arg2 = rseBoolNode;
 
 	RseNode* newInnerRse = innerRse->clone(csb->csb_pool);
-	newInnerRse->ignoreDbKey(tdbb, csb);
 
 	rseBoolNode = FB_NEW_POOL(csb->csb_pool) RseBoolNode(csb->csb_pool, blr_any);
 	rseBoolNode->rse = newInnerRse;

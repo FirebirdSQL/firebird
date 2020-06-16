@@ -39,7 +39,7 @@ SingularStream::SingularStream(CompilerScratch* csb, RecordSource* next)
 
 	m_next->findUsedStreams(m_streams);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void SingularStream::open(thread_db* tdbb) const

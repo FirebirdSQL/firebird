@@ -144,16 +144,19 @@ void IscConnection::attach(thread_db* tdbb)
 		}
 	}
 
-	char buff[16];
+	char buff[BUFFER_TINY];
 	{
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
 
-		const char info[] = {isc_info_db_sql_dialect, isc_info_end};
+		const unsigned char info[] = {isc_info_db_sql_dialect, fb_info_provider_features, isc_info_end};
 		m_iscProvider.isc_database_info(&status, &m_handle, sizeof(info), info, sizeof(buff), buff);
 	}
 	if (status->getState() & IStatus::STATE_ERRORS) {
 		raise(&status, tdbb, "isc_database_info");
 	}
+
+	memset(m_features, false, sizeof(m_features));
+	m_sqlDialect = 1;
 
 	const char* p = buff, *end = buff + sizeof(buff);
 	while (p < end)
@@ -168,22 +171,42 @@ void IscConnection::attach(thread_db* tdbb)
 				m_sqlDialect = m_iscProvider.isc_vax_integer(p, len);
 				break;
 
+			case fb_info_provider_features:
+			    for (int i = 0; i < len; i++)
+                {
+                    if (p[i] == 0)
+                    {
+                        ERR_post(Arg::Gds(isc_random) << Arg::Str("Bad provider feature value"));
+                    }
+
+                    if (p[i] < info_provider_features_max)
+                    {
+                        setFeature(static_cast<info_provider_features>(p[i]));
+                    }
+                    // else this provider supports unknown feature, ignore it.
+                }
+				break;
+
 			case isc_info_error:
-				if (*p == isc_info_db_sql_dialect)
-				{
-					const ULONG err = m_iscProvider.isc_vax_integer(p + 1, len - 1);
-					if (err == isc_infunk)
-					{
-						// Remote server don't understand isc_info_db_sql_dialect.
-						// Consider it as pre-IB6 server and use SQL dialect 1 to work with it.
-						m_sqlDialect = 1;
-						break;
-					}
-				}
-				// fall thru
+			    {
+                    const ULONG err = m_iscProvider.isc_vax_integer(p + 1, len - 1);
+                    if (err == isc_infunk)
+                    {
+                        if (*p == fb_info_provider_features)
+                        {
+                            // Used provider follow Firebird error reporting conventions but is not aware of
+                            // this info item. Assume Firebird 3 or earlier.
+                            m_features[fb_feature_multi_statements] = true;
+                            m_features[fb_feature_multi_transactions] = true;
+                            m_features[fb_feature_statement_long_life] = true;
+                        }
+                        break;
+                    }
+                    ERR_post(Arg::Gds(isc_random) << Arg::Str("Unexpected error in isc_database_info"));
+			    }
 
 			case isc_info_truncated:
-				ERR_post(Arg::Gds(isc_random) << Arg::Str("Unexpected error in isc_database_info"));
+				ERR_post(Arg::Gds(isc_random) << Arg::Str("Result truncation in isc_database_info"));
 
 			case isc_info_end:
 				p = end;
@@ -192,7 +215,6 @@ void IscConnection::attach(thread_db* tdbb)
 		p += len;
 	}
 
-	m_features = conFtrFB4;	// Exact feature set will be detected at first usage
 }
 
 void IscConnection::doDetach(thread_db* tdbb)
@@ -240,7 +262,7 @@ bool IscConnection::resetSession()
 	if (!m_handle)
 		return false;
 
-	if (!testFeature(conFtrSessionReset))
+	if (!testFeature(fb_feature_session_reset))
 		return true;
 
 	FbLocalStatus status;
@@ -252,7 +274,7 @@ bool IscConnection::resetSession()
 
 	if (status->getErrors()[1] == isc_dsql_error)
 	{
-		clearFeature(conFtrSessionReset);
+		clearFeature(fb_feature_session_reset);
 		return true;
 	}
 
@@ -267,11 +289,10 @@ bool IscConnection::resetSession()
 //    transactions
 bool IscConnection::isAvailable(thread_db* tdbb, TraScope traScope) const
 {
-	const int flags = m_provider.getFlags();
-	if (m_used_stmts && !(flags & prvMultyStmts))
+	if (m_used_stmts && !testFeature(fb_feature_multi_statements))
 		return false;
 
-	if (m_transactions.getCount() && !(flags & prvMultyTrans) && !findTransaction(tdbb, traScope))
+	if (m_transactions.getCount() && !testFeature(fb_feature_multi_transactions) && !findTransaction(tdbb, traScope))
 	{
 		return false;
 	}
@@ -288,7 +309,7 @@ bool IscConnection::validate(Jrd::thread_db* tdbb)
 
 	EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
 
-	char info[] = {isc_info_attachment_id, isc_info_end};
+	const unsigned char info[] = {isc_info_attachment_id, isc_info_end};
 	char buff[32];
 
 	return m_iscProvider.isc_database_info(&status, &m_handle,
@@ -315,7 +336,7 @@ Statement* IscConnection::doCreateStatement()
 void IscTransaction::generateTPB(thread_db* tdbb, ClumpletWriter& tpb,
 	TraModes traMode, bool readOnly, bool wait, int lockTimeout) const
 {
-	if (traMode == traReadCommitedReadConsistency && !m_connection.testFeature(conFtrReadConsistency))
+	if (traMode == traReadCommitedReadConsistency && !m_connection.testFeature(fb_feature_read_consistency))
 		traMode = traConcurrency;
 
 	Transaction::generateTPB(tdbb, tpb, traMode, readOnly, wait, lockTimeout);
@@ -335,7 +356,7 @@ void IscTransaction::doStart(FbStatusVector* status, thread_db* tdbb, Firebird::
 	if ((status->getState() & IStatus::STATE_ERRORS) &&
 		(status->getErrors()[1] == isc_bad_tpb_form) &&
 		tpb.find(isc_tpb_read_consistency) &&
-		m_connection.testFeature(conFtrReadConsistency))
+		m_connection.testFeature(fb_feature_read_consistency))
 	{
 		tpb.deleteWithTag(isc_tpb_read_committed);
 		tpb.deleteWithTag(isc_tpb_read_consistency);
@@ -348,7 +369,7 @@ void IscTransaction::doStart(FbStatusVector* status, thread_db* tdbb, Firebird::
 		}
 
 		if (!(status->getState() & IStatus::STATE_ERRORS))
-			m_connection.clearFeature(conFtrReadConsistency);
+			m_connection.clearFeature(fb_feature_read_consistency);
 	}
 }
 
@@ -562,7 +583,7 @@ void IscStatement::doPrepare(thread_db* tdbb, const string& sql)
 
 void IscStatement::doSetTimeout(thread_db* tdbb, unsigned int timeout)
 {
-	if (!m_connection.testFeature(conFtrStatementTimeout))
+	if (!m_connection.testFeature(fb_feature_statement_timeout))
 		return;
 
 	FbLocalStatus status;
@@ -578,7 +599,7 @@ void IscStatement::doSetTimeout(thread_db* tdbb, unsigned int timeout)
 		// or loaded client library
 		if (status[0] == isc_arg_gds && (status[1] == isc_wish_list || status[1] == isc_unavailable))
 		{
-			m_connection.clearFeature(conFtrStatementTimeout);
+			m_connection.clearFeature(fb_feature_statement_timeout);
 			return;
 		}
 
@@ -1047,7 +1068,7 @@ ISC_STATUS ISC_EXPORT IscProvider::isc_create_database(FbStatusVector* user_stat
 ISC_STATUS ISC_EXPORT IscProvider::isc_database_info(FbStatusVector* user_status,
 									isc_db_handle* db_handle,
 									short info_len,
-									const char* info,
+									const unsigned char* info,
 									short res_len,
 									char* res)
 {
@@ -1055,7 +1076,7 @@ ISC_STATUS ISC_EXPORT IscProvider::isc_database_info(FbStatusVector* user_status
 		return notImplemented(user_status);
 
 	return (*m_api.database_info) (IscStatus(user_status), db_handle,
-			info_len, info, res_len, res);
+			info_len, reinterpret_cast<const ISC_SCHAR*>(info), res_len, res);
 }
 
 void ISC_EXPORT IscProvider::isc_decode_date(const ISC_QUAD*,

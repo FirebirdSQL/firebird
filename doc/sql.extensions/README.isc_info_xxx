@@ -45,6 +45,17 @@ New items for isc_database_info
 	isc_dpb_addr_flag_conn_encrypted - connection is encrypted;
    fb_info_wire_crypt - name of connection encryption plugin.
 
+6. fb_info_provider_features:
+	return list of features supported by current connection's provider.
+	Each byte in returned array shall be one of following info_provider_features:
+
+	fb_feature_multi_statements - multiple prepared statements in single attachment
+	fb_feature_multi_transactions - multiple concurrent transactions in single attachment
+	fb_feature_named_parameters - query parameters can be named
+	fb_feature_session_reset - ALTER SESSION RESET is supported
+	fb_feature_read_consistency - read consistency TIL is supported
+	fb_feature_statement_timeout - statement timeout is supported
+
 
 New items for isc_transaction_info:
 

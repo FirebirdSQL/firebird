@@ -3040,6 +3040,9 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 
 			if (!slct_count)
 			{
+				if (port->port_protocol == 0)
+					return false;
+
 #ifdef DEBUG
 				if (INET_trace & TRACE_operations)
 				{
@@ -3053,11 +3056,6 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 					return false;
 				}
 				continue;
-			}
-
-			if (!slct_count && port->port_protocol == 0)
-			{
-				return false;
 			}
 		}
 

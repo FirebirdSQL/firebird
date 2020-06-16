@@ -37,7 +37,7 @@ using namespace Jrd;
 NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, FB_SIZE_T count, RecordSource* const* args)
 	: m_joinType(INNER_JOIN), m_args(csb->csb_pool), m_boolean(NULL)
 {
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 
 	m_args.resize(count);
 
@@ -51,7 +51,7 @@ NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, RecordSource* outer, Record
 {
 	fb_assert(outer && inner);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 
 	m_args.add(outer);
 	m_args.add(inner);

@@ -50,7 +50,7 @@ RecursiveStream::RecursiveStream(CompilerScratch* csb, StreamType stream, Stream
 {
 	fb_assert(m_root && m_inner && m_rootMap && m_innerMap);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 	m_saveSize = csb->csb_impure - saveOffset;
 
 	m_innerStreams.resize(streamCount);
