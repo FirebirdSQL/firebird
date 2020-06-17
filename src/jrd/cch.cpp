@@ -3127,8 +3127,8 @@ static void check_precedence(thread_db* tdbb, WIN* window, PageNumber page)
 			break;
 
 		default:
-			if ((pageSpaceId > DB_PAGE_SPACE) && (pageSpaceId < TRANS_PAGE_SPACE))
-				break;	// tablespace
+            if (PageSpace::isTablespace(pageSpaceId))
+                break;
 			fb_assert(false);
 			return;
 	}

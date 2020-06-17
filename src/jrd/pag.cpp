@@ -2487,6 +2487,8 @@ PageSpace* PageManager::findPageSpace(const USHORT pageSpace) const
 		return pageSpaces[pos];
 	}
 
+    if (pageSpace)
+
 	return 0;
 }
 
@@ -2575,7 +2577,7 @@ void PageManager::allocTableSpace(thread_db* tdbb, USHORT tableSpaceID, bool cre
 	/***
 	 * NOTE: PageSpaceId of Tablespaces is equal to tablespace id
 	 */
-	fb_assert((tableSpaceID > DB_PAGE_SPACE) && (tableSpaceID < TRANS_PAGE_SPACE));
+    fb_assert(PageSpace::isTablespace(tableSpaceID));
 
 	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(tableSpaceID);
 	if (!pageSpace)

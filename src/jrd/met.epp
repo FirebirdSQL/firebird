@@ -5608,7 +5608,7 @@ Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id)
 	CHECK_DBB(dbb);
 
     // Check that pageSpaceId has reasonable value
-    fb_assert( (id > DB_PAGE_SPACE) && (id < TRANS_PAGE_SPACE) );
+    fb_assert(PageSpace::isTablespace(id));
 
     Attachment* attachment = tdbb->getAttachment();
 
@@ -5718,7 +5718,7 @@ Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
         status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpaceName));
 
     // Check that pageSpaceId has reasonable value
-    fb_assert( (pageSpaceId > DB_PAGE_SPACE) && (pageSpaceId < TRANS_PAGE_SPACE) );
+    fb_assert(PageSpace::isTablespace(pageSpaceId));
 
     // Check that pageSpaceId is either new or is not set (else it should be found in att_tablespaces above)
     fb_assert( (pageSpaceId >= tsCount + 1) || !attachment->getTablespace(pageSpaceId));

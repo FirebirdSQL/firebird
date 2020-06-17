@@ -109,6 +109,16 @@ public:
 		return isTemporary(pageSpaceID);
 	}
 
+    static inline bool isTablespace(USHORT aPageSpaceID)
+    {
+        return (aPageSpaceID > DB_PAGE_SPACE) && (aPageSpaceID < TRANS_PAGE_SPACE);
+    }
+
+    inline bool isTablespace() const
+    {
+        return isTablespace(pageSpaceID);
+    }
+
 	static inline SLONG generate(const PageSpace* Item)
 	{
 		return Item->pageSpaceID;

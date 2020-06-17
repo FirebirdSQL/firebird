@@ -2747,6 +2747,7 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 			index_desc idx;
 			MemoryPool* new_pool = NULL;
 			MetaName tableSpace;
+			USHORT tableSpaceId = DB_PAGE_SPACE;
 
 			SET_TDBB(tdbb);
 			Database* dbb = tdbb->getDatabase();
@@ -2769,7 +2770,15 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 						relation->rel_name = REL.RDB$RELATION_NAME;
 					}
 
-					if (IDX.RDB$INDEX_ID && IDX.RDB$STATISTICS < 0.0)
+                    if (!IDX.RDB$TABLESPACE_NAME.NULL)
+					    tableSpace = IDX.RDB$TABLESPACE_NAME;
+					else	// By default index data is in tablespace of relation
+					    if (!REL.RDB$TABLESPACE_NAME.NULL)
+						    tableSpace = REL.RDB$TABLESPACE_NAME;
+
+                    tableSpaceId = MET_tablespace(tdbb, tableSpace)->id;
+
+                    if (IDX.RDB$INDEX_ID && IDX.RDB$STATISTICS < 0.0)
 					{
 						SelectivityList selectivity(*tdbb->getDefaultPool());
 						const USHORT localId = IDX.RDB$INDEX_ID - 1;
@@ -2801,9 +2810,6 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 						idx.idx_flags |= idx_unique;
 					if (IDX.RDB$INDEX_TYPE == 1)
 						idx.idx_flags |= idx_descending;
-
-					if (!IDX.RDB$TABLESPACE_NAME.NULL)
-						tableSpace = IDX.RDB$TABLESPACE_NAME;
 
 					CompilerScratch* csb = NULL;
 					// allocate a new pool to contain the expression tree for the expression index
@@ -3390,6 +3396,7 @@ static bool create_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		idx.idx_flags = 0;
 
 		MetaName tableSpace;
+		USHORT tableSpaceId = DB_PAGE_SPACE;
 
 		// Fetch the information necessary to create the index.  On the first
 		// time thru, check to see if the index already exists.  If so, delete
@@ -3415,6 +3422,8 @@ static bool create_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 			else	// By default index data is in tablespace of relation
 				if (!REL.RDB$TABLESPACE_NAME.NULL)
 					tableSpace = REL.RDB$TABLESPACE_NAME;
+
+            tableSpaceId = MET_tablespace(tdbb, tableSpace)->id;
 
 			if (IDX.RDB$INDEX_ID && IDX.RDB$STATISTICS < 0.0)
 			{
@@ -3653,7 +3662,7 @@ static bool create_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 		fb_assert(work->dfw_id <= dbb->dbb_max_idx);
 		idx.idx_id = work->dfw_id;
-		idx.idx_pg_space_id = MET_tablespace(tdbb, tableSpace)->id;
+		idx.idx_pg_space_id = tableSpaceId;
 		SelectivityList selectivity(*tdbb->getDefaultPool());
 		IDX_create_index(tdbb, relation, &idx, work->dfw_name.c_str(),
 						&work->dfw_id, transaction, selectivity);
