@@ -542,6 +542,12 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 		fb_assert(idx->idx_expression != NULL);
 	}
 
+	if (PageSpace::isTablespace(idx->idx_pg_space_id) &&
+			!MET_tablespace_id(tdbb, idx->idx_pg_space_id))
+	{
+		BUGCHECK(307);	// msg 307 Tablespace not found
+	}
+
 	return true;
 }
 
