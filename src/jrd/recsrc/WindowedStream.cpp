@@ -907,7 +907,7 @@ const void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, jrd_req*
 	dsc* desc = EVL_expr(tdbb, request, frame->value);
 	bool error = false;
 
-	if (request->req_flags & req_null)
+	if (!desc)
 		error = true;
 	else
 	{

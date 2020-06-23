@@ -52,7 +52,7 @@ void FirstRowsStream::open(thread_db* tdbb) const
 	impure->irsb_flags = 0;
 
 	const dsc* desc = EVL_expr(tdbb, request, m_value);
-	const SINT64 value = (desc && !(request->req_flags & req_null)) ? MOV_get_int64(tdbb, desc, 0) : 0;
+	const SINT64 value = desc ? MOV_get_int64(tdbb, desc, 0) : 0;
 
     if (value < 0)
 		status_exception::raise(Arg::Gds(isc_bad_limit_param));

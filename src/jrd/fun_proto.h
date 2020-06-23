@@ -36,7 +36,7 @@ public:
 	static bool free(void* ptr);
 };
 
-void FUN_evaluate(Jrd::thread_db*, const Jrd::Function*, const Jrd::NestValueArray&,
+bool FUN_evaluate(Jrd::thread_db*, const Jrd::Function*, const Jrd::NestValueArray&,
 	Jrd::impure_value*, Firebird::Array<UCHAR>& temp);
 
 

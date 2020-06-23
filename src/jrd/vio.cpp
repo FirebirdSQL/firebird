@@ -1261,15 +1261,6 @@ void VIO_copy_record(thread_db* tdbb, record_param* org_rpb, record_param* new_r
 	Record* const new_record = new_rpb->rpb_record;
 	fb_assert(org_record && new_record);
 
-	// dimitr:	Clear the req_null flag that may stay active after the last
-	//			boolean evaluation. Here we use only EVL_field() calls that
-	//			do not touch this flag and data copying is done only for
-	//			non-NULL fields, so req_null should never be seen inside blb::move().
-	//			See CORE-6090 for details.
-
-	jrd_req* const request = tdbb->getRequest();
-	request->req_flags &= ~req_null;
-
 	// Copy the original record to the new record. If the format hasn't changed,
 	// this is a simple move. If the format has changed, each field must be
 	// fetched and moved separately, remembering to set the missing flag.
@@ -1454,7 +1445,7 @@ static bool check_prepare_result(int prepare_result, jrd_tra* transaction, jrd_r
  **************************************
  *
  * Functional description
- *	Called by VIO_modify and VIO_erase. Raise update conflict error if not in 
+ *	Called by VIO_modify and VIO_erase. Raise update conflict error if not in
  *  read consistency transaction or lock error happens or if request is already
  *  in update conflict mode. In latter case set TRA_ex_restart flag to correctly
  *  handle request restart.
@@ -1465,17 +1456,17 @@ static bool check_prepare_result(int prepare_result, jrd_tra* transaction, jrd_r
 
 	jrd_req* top_request = request->req_snapshot.m_owner;
 
-	const bool restart_ready = top_request && 
+	const bool restart_ready = top_request &&
 		(top_request->req_flags & req_restart_ready);
 
 	// Second update conflict when request is already in update conflict mode
-	// means we have some (indirect) UPDATE\DELETE in WHERE clause of primary 
+	// means we have some (indirect) UPDATE\DELETE in WHERE clause of primary
 	// cursor. In this case all we can do is restart whole request immediately.
-	const bool secondary = top_request && 
-		(top_request->req_flags & req_update_conflict) && 
+	const bool secondary = top_request &&
+		(top_request->req_flags & req_update_conflict) &&
 		(prepare_result != PREPARE_LOCKERR);
 
-	if (!(transaction->tra_flags & TRA_read_consistency) || prepare_result == PREPARE_LOCKERR || 
+	if (!(transaction->tra_flags & TRA_read_consistency) || prepare_result == PREPARE_LOCKERR ||
 		secondary || !restart_ready)
 	{
 		if (secondary)
@@ -3197,7 +3188,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	const bool backVersion = (org_rpb->rpb_b_page != 0);
 	record_param temp;
 	PageStack stack;
-	int prepare_result = prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb, 
+	int prepare_result = prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb,
 										&temp, new_rpb, stack, false);
 	if (!check_prepare_result(prepare_result, transaction, tdbb->getRequest(), org_rpb))
 		return false;

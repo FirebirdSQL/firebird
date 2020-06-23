@@ -439,7 +439,7 @@ dsc* FirstValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow
 		return NULL;
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
-	if (!desc || (request->req_flags & req_null))
+	if (!desc)
 		return NULL;
 
 	return desc;
@@ -502,7 +502,7 @@ dsc* LastValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow*
 		return NULL;
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
-	if (!desc || (request->req_flags & req_null))
+	if (!desc)
 		return NULL;
 
 	return desc;
@@ -576,7 +576,7 @@ dsc* NthValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 
 	dsc* desc = EVL_expr(tdbb, request, row);
-	if (!desc || (request->req_flags & req_null))
+	if (!desc)
 		return NULL;
 
 	SINT64 records = MOV_get_int64(tdbb, desc, 0);
@@ -598,7 +598,7 @@ dsc* NthValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* 
 		return NULL;
 
 	desc = EVL_expr(tdbb, request, arg);
-	if (!desc || (request->req_flags & req_null))
+	if (!desc)
 		return NULL;
 
 	return desc;
@@ -661,7 +661,7 @@ void LagLeadWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 dsc* LagLeadWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* window) const
 {
 	dsc* desc = EVL_expr(tdbb, request, rows);
-	if (!desc || (request->req_flags & req_null))
+	if (!desc)
 		return NULL;
 
 	SINT64 records = MOV_get_int64(tdbb, desc, 0);
@@ -674,14 +674,14 @@ dsc* LagLeadWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* w
 	if (!window->moveWithinPartition(records * direction))
 	{
 		desc = EVL_expr(tdbb, request, outExpr);
-		if (!desc || (request->req_flags & req_null))
+		if (!desc)
 			return NULL;
 
 		return desc;
 	}
 
 	desc = EVL_expr(tdbb, request, arg);
-	if (!desc || (request->req_flags & req_null))
+	if (!desc)
 		return NULL;
 
 	return desc;
@@ -819,7 +819,7 @@ void NTileWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
 
-	if (!desc || (request->req_flags & req_null))
+	if (!desc)
 	{
 		status_exception::raise(
 			Arg::Gds(isc_sysf_argnmustbe_positive) <<

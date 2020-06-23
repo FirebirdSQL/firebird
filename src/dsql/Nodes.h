@@ -521,9 +521,8 @@ public:
 	static const USHORT FLAG_INVARIANT	= 0x01;	// Node is recognized as being invariant.
 
 	// Boolean flags.
-	static const USHORT FLAG_DEOPTIMIZE	= 0x02;	// Boolean which requires deoptimization.
-	static const USHORT FLAG_RESIDUAL	= 0x04;	// Boolean which must remain residual.
-	static const USHORT FLAG_ANSI_NOT	= 0x08;	// ANY/ALL predicate is prefixed with a NOT one.
+	static const USHORT FLAG_DEOPTIMIZE	= 0x02;	// Boolean which requires deoptimization - currently never defined.
+	static const USHORT FLAG_RESIDUAL	= 0x04;	// Boolean which must remain residual - currently never defined.
 
 	// Value flags.
 	static const USHORT FLAG_DOUBLE		= 0x10;
@@ -737,7 +736,7 @@ public:
 	}
 
 	virtual BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const = 0;
-	virtual bool execute(thread_db* tdbb, jrd_req* request) const = 0;
+	virtual TriState execute(thread_db* tdbb, jrd_req* request) const = 0;
 };
 
 class ValueExprNode : public ExprNode

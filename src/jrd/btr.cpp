@@ -563,7 +563,6 @@ DSC* BTR_eval_expression(thread_db* tdbb, index_desc* idx, Record* record, bool&
 	expr_request->req_rpb[0].rpb_record = record;
 	expr_request->req_rpb[0].rpb_number.setValue(BOF_NUMBER);
 	expr_request->req_rpb[0].rpb_number.setValid(true);
-	expr_request->req_flags &= ~req_null;
 
 	DSC* result = NULL;
 
@@ -576,10 +575,11 @@ DSC* BTR_eval_expression(thread_db* tdbb, index_desc* idx, Record* record, bool&
 		else
 			TimeZoneUtil::validateGmtTimeStamp(expr_request->req_gmt_timestamp);
 
-		if (!(result = EVL_expr(tdbb, expr_request, idx->idx_expression)))
-			result = &idx->idx_expression_desc;
+		result = EVL_expr(tdbb, expr_request, idx->idx_expression);
+		notNull = result != nullptr;
 
-		notNull = !(expr_request->req_flags & req_null);
+		if (!result)
+			result = &idx->idx_expression_desc;
 	}
 	catch (const Exception&)
 	{
@@ -3284,7 +3284,7 @@ static DSC* eval(thread_db* tdbb, const ValueExprNode* node, DSC* temp, bool* is
 	dsc* desc = EVL_expr(tdbb, request, node);
 	*isNull = false;
 
-	if (desc && !(request->req_flags & req_null))
+	if (desc)
 		return desc;
 
 	*isNull = true;
@@ -3438,9 +3438,9 @@ static ULONG fast_load(thread_db* tdbb,
 
 		// Detect the case when set of duplicate keys contains more then one key
 		// from primary record version. It breaks the unique constraint and must
-		// be rejected. Note, it is not always could be detected while sorting. 
-		// Set to true when primary record version is found in current set of 
-		// duplicate keys.		
+		// be rejected. Note, it is not always could be detected while sorting.
+		// Set to true when primary record version is found in current set of
+		// duplicate keys.
 		bool primarySeen = false;
 
 		while (!error)

@@ -204,7 +204,7 @@ Sort* SortedStream::init(thread_db* tdbb) const
 			if (item->node)
 			{
 				from = EVL_expr(tdbb, request, item->node);
-				if (request->req_flags & req_null)
+				if (!from)
 					flag = true;
 			}
 			else

@@ -1303,7 +1303,7 @@ const StmtNode* CursorStmtNode::execute(thread_db* tdbb, jrd_req* request, ExeSt
 						fb_assert(cursorOp == blr_cursor_fetch_scroll);
 
 						const dsc* desc = EVL_expr(tdbb, request, scrollExpr);
-						const bool unknown = !desc || (request->req_flags & req_null);
+						const bool unknown = !desc;
 						const SINT64 offset = unknown ? 0 : MOV_get_int64(tdbb, desc, 0);
 
 						switch (scrollOp)
@@ -3831,7 +3831,7 @@ void ExecStatementNode::getString(thread_db* tdbb, jrd_req* request, const Value
 	int len = 0;
 	const dsc* dsc = node ? EVL_expr(tdbb, request, node) : NULL;
 
-	if (dsc && !(request->req_flags & req_null))
+	if (dsc)
 	{
 		const Jrd::Attachment* att = tdbb->getAttachment();
 		len = MOV_make_string2(tdbb, dsc, (useAttCS ? att->att_charset : dsc->getTextType()),
@@ -3916,7 +3916,7 @@ const StmtNode* IfNode::execute(thread_db* tdbb, jrd_req* request, ExeState* /*e
 {
 	if (request->req_operation == jrd_req::req_evaluate)
 	{
-		if (condition->execute(tdbb, request))
+		if (condition->execute(tdbb, request) == true)
 		{
 			request->req_operation = jrd_req::req_evaluate;
 			return trueAction;
@@ -4234,7 +4234,7 @@ const StmtNode* InitVariableNode::execute(thread_db* tdbb, jrd_req* request, Exe
 			{
 				dsc* value = EVL_expr(tdbb, request, fieldInfo.defaultValue);
 
-				if (value && !(request->req_flags & req_null))
+				if (value)
 				{
 					toDesc->dsc_flags &= ~DSC_null;
 					MOV_move(tdbb, value, toDesc);
@@ -4719,7 +4719,7 @@ void ExceptionNode::setError(thread_db* tdbb) const
 		// Evaluate exception message and convert it to string.
 		const dsc* const desc = EVL_expr(tdbb, request, messageExpr);
 
-		if (desc && !(request->req_flags & req_null))
+		if (desc)
 		{
 			MoveBuffer temp;
 			UCHAR* string = NULL;
@@ -4789,7 +4789,7 @@ void ExceptionNode::setError(thread_db* tdbb) const
 				{
 					const dsc* value = EVL_expr(tdbb, request, *parameter);
 
-					if (!value || (request->req_flags & req_null))
+					if (!value)
 						paramsStr.push(NULL_STRING_MARK);
 					else
 					{
@@ -10115,17 +10115,17 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 	{
 		jrd_req* request = tdbb->getRequest();
 
-		if (!i->boolean->execute(tdbb, request) && !(request->req_flags & req_null))
+		if (i->boolean->execute(tdbb, request) == false)
 		{
 			// Validation error -- report result
 			const char* value;
 			VaryStr<TEMP_STR_LENGTH> temp;
 
 			const dsc* desc = EVL_expr(tdbb, request, i->value);
-			const USHORT length = (desc && !(request->req_flags & req_null)) ?
+			const USHORT length = desc ?
 				MOV_make_string(tdbb, desc, ttype_dynamic, &value, &temp, sizeof(temp) - 1) : 0;
 
-			if (!desc || (request->req_flags & req_null))
+			if (!desc)
 				value = NULL_STRING_MARK;
 			else if (!length)
 				value = "";

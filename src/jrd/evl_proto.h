@@ -55,16 +55,7 @@ namespace Jrd
 
 		JRD_reschedule(tdbb);
 
-		request->req_flags &= ~req_null;
-
-		dsc* desc = node->execute(tdbb, request);
-
-		if (desc)
-			request->req_flags &= ~req_null;
-		else
-			request->req_flags |= req_null;
-
-		return desc;
+		return node->execute(tdbb, request);
 	}
 }
 

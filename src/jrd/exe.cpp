@@ -234,10 +234,9 @@ void EXE_assignment(thread_db* tdbb, const AssignmentNode* node)
 	jrd_req* request = tdbb->getRequest();
 
 	// Get descriptors of src field/parameter/variable, etc.
-	request->req_flags &= ~req_null;
 	dsc* from_desc = EVL_expr(tdbb, request, node->asgnFrom);
 
-	EXE_assignment(tdbb, node->asgnTo, from_desc, (request->req_flags & req_null),
+	EXE_assignment(tdbb, node->asgnTo, from_desc, !from_desc,
 		node->missing, node->missing2);
 }
 
@@ -248,10 +247,9 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* source, const ValueExp
 	jrd_req* request = tdbb->getRequest();
 
 	// Get descriptors of src field/parameter/variable, etc.
-	request->req_flags &= ~req_null;
 	dsc* from_desc = EVL_expr(tdbb, request, source);
 
-	EXE_assignment(tdbb, target, from_desc, (request->req_flags & req_null), NULL, NULL);
+	EXE_assignment(tdbb, target, from_desc, !from_desc, NULL, NULL);
 }
 
 // Perform an assignment.
@@ -269,8 +267,6 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 
 	// Get descriptor of target field/parameter/variable, etc.
 	DSC* to_desc = EVL_assign_to(tdbb, to);
-
-	request->req_flags &= ~req_null;
 
 	// NS: If we are assigning to NULL, we finished.
 	// This functionality is currently used to allow calling UDF routines

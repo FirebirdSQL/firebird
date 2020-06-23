@@ -483,7 +483,7 @@ ULONG HashJoin::computeHash(thread_db* tdbb,
 		dsc* const desc = EVL_expr(tdbb, request, (*sub.keys)[i]);
 		const USHORT keyLength = sub.keyLengths[i];
 
-		if (desc && !(request->req_flags & req_null))
+		if (desc)
 		{
 			if (desc->isText())
 			{

@@ -327,7 +327,7 @@ int BaseAggWinStream<ThisType, NextType>::lookForChange(thread_db* tdbb, jrd_req
 		dsc* desc = EVL_expr(tdbb, request, from);
 		int n;
 
-		if (request->req_flags & req_null)
+		if (!desc)
 		{
 			if (vtemp->vlu_desc.dsc_address)
 				return -1 * nullsPlacement;

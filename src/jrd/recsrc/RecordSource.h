@@ -73,11 +73,6 @@ namespace Jrd
 		virtual void findUsedStreams(StreamList& streams, bool expandAll = false) const = 0;
 		virtual void nullRecords(thread_db* tdbb) const = 0;
 
-		virtual void setAnyBoolean(BoolExprNode* /*anyBoolean*/, bool /*ansiAny*/, bool /*ansiNot*/)
-		{
-			fb_assert(false);
-		}
-
 		virtual ~RecordSource();
 
 		static bool rejectDuplicate(const UCHAR* /*data1*/, const UCHAR* /*data2*/, void* /*userArg*/)
@@ -418,11 +413,6 @@ namespace Jrd
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
-		void setAnyBoolean(BoolExprNode* anyBoolean, bool ansiAny, bool ansiNot) override
-		{
-			m_next->setAnyBoolean(anyBoolean, ansiAny, ansiNot);
-		}
-
 	private:
 		NestConst<RecordSource> m_next;
 		NestConst<ValueExprNode> const m_value;
@@ -454,11 +444,6 @@ namespace Jrd
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
-		void setAnyBoolean(BoolExprNode* anyBoolean, bool ansiAny, bool ansiNot) override
-		{
-			m_next->setAnyBoolean(anyBoolean, ansiAny, ansiNot);
-		}
-
 	private:
 		NestConst<RecordSource> m_next;
 		NestConst<ValueExprNode> const m_value;
@@ -485,25 +470,9 @@ namespace Jrd
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
-		void setAnyBoolean(BoolExprNode* anyBoolean, bool ansiAny, bool ansiNot) override
-		{
-			fb_assert(!m_anyBoolean);
-			m_anyBoolean = anyBoolean;
-
-			m_ansiAny = ansiAny;
-			m_ansiAll = !ansiAny;
-			m_ansiNot = ansiNot;
-		}
-
 	private:
-		bool evaluateBoolean(thread_db* tdbb) const;
-
 		NestConst<RecordSource> m_next;
 		NestConst<BoolExprNode> const m_boolean;
-		NestConst<BoolExprNode> m_anyBoolean;
-		bool m_ansiAny;
-		bool m_ansiAll;
-		bool m_ansiNot;
 	};
 
 	class SortedStream : public RecordSource
@@ -578,11 +547,6 @@ namespace Jrd
 
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
 		void nullRecords(thread_db* tdbb) const override;
-
-		void setAnyBoolean(BoolExprNode* anyBoolean, bool ansiAny, bool ansiNot) override
-		{
-			m_next->setAnyBoolean(anyBoolean, ansiAny, ansiNot);
-		}
 
 		ULONG getLength() const
 		{
@@ -739,7 +703,7 @@ namespace Jrd
 
 				dsc* desc = EVL_expr(tdbb, request, from);
 
-				if (request->req_flags & req_null)
+				if (!desc)
 					target->vlu_desc.dsc_address = NULL;
 				else
 				{

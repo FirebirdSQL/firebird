@@ -55,7 +55,7 @@ void ConditionalStream::open(thread_db* tdbb) const
 
 	impure->irsb_flags = irsb_open;
 
-	impure->irsb_next = m_boolean->execute(tdbb, request) ? m_first : m_second;
+	impure->irsb_next = m_boolean->execute(tdbb, request) == true ? m_first : m_second;
 	impure->irsb_next->open(tdbb);
 }
 

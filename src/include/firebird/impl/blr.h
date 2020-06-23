@@ -164,7 +164,7 @@
 #define blr_or			(unsigned char)57
 #define blr_and			(unsigned char)58
 #define blr_not			(unsigned char)59
-#define blr_any			(unsigned char)60
+#define blr_any			(unsigned char)60	// SQL exists(subquery)
 #define blr_missing		(unsigned char)61
 #define blr_unique		(unsigned char)62
 #define blr_like		(unsigned char)63
@@ -261,7 +261,7 @@
 #define blr_set_generator       (unsigned char)150
 
 #define blr_ansi_any		(unsigned char)151   /* required for NULL handling */
-#define blr_exists		(unsigned char)152   /* required for NULL handling */
+#define blr_exists		(unsigned char)152		// not generated in Firebird
 
 // unused codes: 153
 

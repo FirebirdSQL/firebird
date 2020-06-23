@@ -395,18 +395,15 @@ int MergeJoin::compare(thread_db* tdbb, const NestValueArray* node1,
 	for (const NestConst<ValueExprNode>* const end = node1->end(); ptr1 != end; ++ptr1, ++ptr2)
 	{
 		const dsc* const desc1 = EVL_expr(tdbb, request, *ptr1);
-		const bool null1 = (request->req_flags & req_null);
-
 		const dsc* const desc2 = EVL_expr(tdbb, request, *ptr2);
-		const bool null2 = (request->req_flags & req_null);
 
-		if (null1 && !null2)
+		if (!desc1 && desc2)
 			return -1;
 
-		if (null2 && !null1)
+		if (!desc2 && desc1)
 			return 1;
 
-		if (!null1 && !null2)
+		if (desc1 && desc2)
 		{
 			const int result = MOV_compare(tdbb, desc1, desc2);
 

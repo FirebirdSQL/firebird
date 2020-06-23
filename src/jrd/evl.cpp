@@ -256,8 +256,7 @@ RecordBitmap** EVL_bitmap(thread_db* tdbb, const InversionNode* node, RecordBitm
 			RecordBitmap::reset(impure->inv_bitmap);
 			const dsc* const desc = EVL_expr(tdbb, request, node->value);
 
-			if (!(tdbb->getRequest()->req_flags & req_null) &&
-				(desc->isText() || desc->isDbKey()))
+			if (desc && (desc->isText() || desc->isDbKey()))
 			{
 				UCHAR* ptr = NULL;
 				const int length = MOV_get_string(tdbb, desc, &ptr, NULL, 0);
@@ -319,8 +318,7 @@ void EVL_dbkey_bounds(thread_db* tdbb, const Array<DbKeyRangeNode*>& ranges,
 		{
 			const auto desc = EVL_expr(tdbb, request, node->lower);
 
-			if (!(request->req_flags & req_null) &&
-				desc && (desc->isText() || desc->isDbKey()))
+			if (desc && (desc->isText() || desc->isDbKey()))
 			{
 				UCHAR* ptr = NULL;
 				const auto length = MOV_get_string(tdbb, desc, &ptr, NULL, 0);
@@ -352,8 +350,7 @@ void EVL_dbkey_bounds(thread_db* tdbb, const Array<DbKeyRangeNode*>& ranges,
 		{
 			const auto desc = EVL_expr(tdbb, request, node->upper);
 
-			if (!(request->req_flags & req_null) &&
-				desc && (desc->isText() || desc->isDbKey()))
+			if (desc && (desc->isText() || desc->isDbKey()))
 			{
 				UCHAR* ptr = NULL;
 				const auto length = MOV_get_string(tdbb, desc, &ptr, NULL, 0);
@@ -654,7 +651,7 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 		request->req_domain_validation = desc;
 		const ULONG flags = request->req_flags;
 
-		if (!fieldInfo.validationExpr->execute(tdbb, request) && !(request->req_flags & req_null))
+		if (fieldInfo.validationExpr->execute(tdbb, request) == false)
 		{
 			const USHORT length = desc_is_null ? 0 :
 				MOV_make_string(tdbb, desc, ttype_dynamic, &value, &temp, sizeof(temp) - 1);

@@ -211,12 +211,7 @@ namespace
 				dsc* defaultDesc = NULL;
 
 				if (defaultValueNode)
-				{
 					defaultDesc = EVL_expr(tdbb, request, defaultValueNode);
-
-					if (request->req_flags & req_null)
-						defaultDesc = NULL;
-				}
 
 				if (defaultDesc)
 				{

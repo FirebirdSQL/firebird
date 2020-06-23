@@ -2257,17 +2257,9 @@ void Statement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaNam
 		{
 			src = EVL_expr(tdbb, request, *jrdVar);
 			paramDescs.put(*jrdVar, src);
-
-			if (src)
-			{
-				if (request->req_flags & req_null)
-					src->setNull();
-				else
-					src->clearNull();
-			}
 		}
 
-		const bool srcNull = !src || src->isNull();
+		const bool srcNull = !src;
 		*((SSHORT*) null.dsc_address) = (srcNull ? -1 : 0);
 
 		if (srcNull) {

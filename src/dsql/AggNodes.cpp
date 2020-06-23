@@ -385,7 +385,7 @@ bool AggNode::aggPass(thread_db* tdbb, jrd_req* request) const
 	if (arg)
 	{
 		desc = EVL_expr(tdbb, request, arg);
-		if (request->req_flags & req_null)
+		if (!desc)
 			return false;
 
 		if (distinct)
@@ -836,7 +836,7 @@ void ListAggNode::aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const
 	{
 		const dsc* const delimiterDesc = EVL_expr(tdbb, request, delimiter);
 
-		if (request->req_flags & req_null)
+		if (!delimiterDesc)
 		{
 			// Mark the result as NULL.
 			impure->vlu_desc.dsc_dtype = 0;
@@ -1663,11 +1663,11 @@ bool CorrAggNode::aggPass(thread_db* tdbb, jrd_req* request) const
 	dsc* desc2 = NULL;
 
 	desc = EVL_expr(tdbb, request, arg);
-	if (request->req_flags & req_null)
+	if (!desc)
 		return false;
 
 	desc2 = EVL_expr(tdbb, request, arg2);
-	if (request->req_flags & req_null)
+	if (!desc2)
 		return false;
 
 	++impure->vlux_count;
@@ -1939,11 +1939,11 @@ bool RegrAggNode::aggPass(thread_db* tdbb, jrd_req* request) const
 	dsc* desc2 = NULL;
 
 	desc = EVL_expr(tdbb, request, arg);
-	if (request->req_flags & req_null)
+	if (!desc)
 		return false;
 
 	desc2 = EVL_expr(tdbb, request, arg2);
-	if (request->req_flags & req_null)
+	if (!desc2)
 		return false;
 
 	++impure->vlux_count;
@@ -2195,11 +2195,11 @@ bool RegrCountAggNode::aggPass(thread_db* tdbb, jrd_req* request) const
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
-	if (request->req_flags & req_null)
+	if (!desc)
 		return false;
 
 	dsc* desc2 = EVL_expr(tdbb, request, arg2);
-	if (request->req_flags & req_null)
+	if (!desc2)
 		return false;
 
 	++impure->vlu_misc.vlu_int64;

@@ -75,6 +75,16 @@ public:
 		return specified && value == o;
 	}
 
+	bool operator !=(const BaseNullable<T>& o) const
+	{
+		return !(*this == o);
+	}
+
+	bool operator !=(const T& o) const
+	{
+		return !(*this == o);
+	}
+
 	void operator =(const T& v)
 	{
 		this->value = v;

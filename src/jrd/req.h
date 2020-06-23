@@ -389,17 +389,16 @@ public:
 const ULONG req_active			= 0x1L;
 const ULONG req_stall			= 0x2L;
 const ULONG req_leave			= 0x4L;
-const ULONG req_null			= 0x8L;
-const ULONG req_abort			= 0x10L;
-const ULONG req_error_handler	= 0x20L;		// looper is called to handle error
-const ULONG req_warning			= 0x40L;
-const ULONG req_in_use			= 0x80L;
-const ULONG req_continue_loop	= 0x100L;		// PSQL continue statement
-const ULONG req_proc_fetch		= 0x200L;		// Fetch from procedure in progress
-const ULONG req_same_tx_upd		= 0x400L;		// record was updated by same transaction
-const ULONG req_reserved		= 0x800L;		// Request reserved for client
-const ULONG req_update_conflict	= 0x1000L;		// We need to restart request due to update conflict
-const ULONG req_restart_ready	= 0x2000L;		// Request is ready to restat in case of update conflict
+const ULONG req_abort			= 0x8L;
+const ULONG req_error_handler	= 0x10L;
+const ULONG req_warning			= 0x20L;		// looper is called to handle error
+const ULONG req_in_use			= 0x40L;
+const ULONG req_continue_loop	= 0x80L;
+const ULONG req_proc_fetch		= 0x100L;		// PSQL continue statement
+const ULONG req_same_tx_upd		= 0x200L;		// Fetch from procedure in progress
+const ULONG req_reserved		= 0x400L;		// record was updated by same transaction
+const ULONG req_update_conflict	= 0x800L;		// Request reserved for client
+const ULONG req_restart_ready	= 0x1000L;		// We need to restart request due to update conflict
 
 
 // Index lock block
