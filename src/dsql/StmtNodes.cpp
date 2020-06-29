@@ -9388,7 +9388,7 @@ static VariableNode* dsqlPassHiddenVariable(DsqlCompilerScratch* dsqlScratch, Va
 		0, 0, dsqlScratch->hiddenVarsNumber++);
 
 	DsqlDescMaker::fromNode(dsqlScratch, &varNode->dsqlVar->desc, expr);
-	varNode->nodDesc = varNode->dsqlVar->desc;
+	varNode->setDsqlDesc(varNode->dsqlVar->desc);
 
 	return varNode;
 }
@@ -9592,7 +9592,7 @@ static void dsqlSetParameterName(DsqlCompilerScratch* dsqlScratch, ExprNode* exp
 	const FieldNode* fieldNode = nodeAs<FieldNode>(fld_node);
 	fb_assert(fieldNode);	// Could it be something else ???
 
-	if (fieldNode->nodDesc.dsc_dtype != dtype_array)
+	if (fieldNode->getDsqlDesc().dsc_dtype != dtype_array)
 		return;
 
 	switch (exprNode->getType())

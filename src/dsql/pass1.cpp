@@ -1066,8 +1066,7 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 		//   the worse thing is that a UNION currently can't be used in
 		//   deciding the JOIN order.
 		bool foundSubSelect = false;
-		RseNode* queryNode = nodeAs<RseNode>(query);
-		if (queryNode)
+		if (auto queryNode = nodeAs<RseNode>(query))
 			foundSubSelect = SubSelectFinder::find(dsqlScratch->getPool(), queryNode->dsqlSelectList);
 
 		if (foundSubSelect)
@@ -1146,13 +1145,13 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 		for (FB_SIZE_T count = 0; count < input->columns->getCount(); ++count)
 		{
 			ValueExprNode* select_item = rse->dsqlSelectList->items[count];
-			DsqlDescMaker::fromNode(dsqlScratch, &select_item->nodDesc, select_item);
+			DsqlDescMaker::fromNode(dsqlScratch, select_item);
 
 			// Make new derived field node.
 
 			DerivedFieldNode* derivedField = FB_NEW_POOL(pool) DerivedFieldNode(pool,
 				(*input->columns)[count], dsqlScratch->scopeLevel, select_item);
-			derivedField->nodDesc = select_item->nodDesc;
+			derivedField->setDsqlDesc(select_item->getDsqlDesc());
 			rse->dsqlSelectList->items[count] = derivedField;
 		}
 	}
@@ -1168,7 +1167,7 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 			// Auto-create dummy column name for pass1_any()
 			if (ignoreColumnChecks && !nodeIs<DerivedFieldNode>(select_item))
 			{
-				DsqlDescMaker::fromNode(dsqlScratch, &select_item->nodDesc, select_item);
+				DsqlDescMaker::fromNode(dsqlScratch, select_item);
 
 				// Construct dummy fieldname
 				char fieldname[25];
@@ -1178,7 +1177,7 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 
 				DerivedFieldNode* derivedField = FB_NEW_POOL(pool) DerivedFieldNode(pool,
 					fieldname, dsqlScratch->scopeLevel, select_item);
-				derivedField->nodDesc = select_item->nodDesc;
+				derivedField->setDsqlDesc(select_item->getDsqlDesc());
 				select_item = derivedField;
 			}
 
@@ -1655,7 +1654,7 @@ static ValueExprNode* pass1_make_derived_field(thread_db* tdbb, DsqlCompilerScra
 		// Create a derived field and ignore alias node.
 		DerivedFieldNode* newField = FB_NEW_POOL(pool) DerivedFieldNode(pool,
 			aliasNode->name, dsqlScratch->scopeLevel, aliasNode->value);
-		newField->nodDesc = aliasNode->value->nodDesc;
+		newField->setDsqlDesc(aliasNode->value->getDsqlDesc());
 		return newField;
 	}
 	else if ((subQueryNode = nodeAs<SubQueryNode>(select_item)))
@@ -1680,7 +1679,7 @@ static ValueExprNode* pass1_make_derived_field(thread_db* tdbb, DsqlCompilerScra
 		{
 			derivedField->value = select_item;
 			derivedField->scope = dsqlScratch->scopeLevel;
-			derived_field->nodDesc = select_item->nodDesc;
+			derivedField->setDsqlDesc(select_item->getDsqlDesc());
 			return derived_field;
 		}
 	}
@@ -1690,7 +1689,7 @@ static ValueExprNode* pass1_make_derived_field(thread_db* tdbb, DsqlCompilerScra
 
 		DerivedFieldNode* newField = FB_NEW_POOL(pool) DerivedFieldNode(pool,
 			fieldNode->dsqlField->fld_name, dsqlScratch->scopeLevel, select_item);
-		newField->nodDesc = fieldNode->nodDesc;
+		newField->setDsqlDesc(fieldNode->getDsqlDesc());
 		return newField;
 	}
 	else if ((derivedField = nodeAs<DerivedFieldNode>(select_item)))
@@ -1699,7 +1698,7 @@ static ValueExprNode* pass1_make_derived_field(thread_db* tdbb, DsqlCompilerScra
 
 		DerivedFieldNode* newField = FB_NEW_POOL(pool) DerivedFieldNode(pool,
 			derivedField->name, dsqlScratch->scopeLevel, select_item);
-		newField->nodDesc = select_item->nodDesc;
+		newField->setDsqlDesc(select_item->getDsqlDesc());
 		return newField;
 	}
 
@@ -1797,10 +1796,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 	thread_db* tdbb = JRD_get_thread_data();
 	MemoryPool& pool = *tdbb->getDefaultPool();
 
-	SelectExprNode* selNode = nodeAs<SelectExprNode>(input);
-	UnionSourceNode* unionNode = nodeAs<UnionSourceNode>(input);
-
-	if (selNode)
+	if (auto selNode = nodeAs<SelectExprNode>(input))
 	{
 		WithClause* withClause = selNode->withClause;
 		try
@@ -1826,7 +1822,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 			throw;
 		}
 	}
-	else if (unionNode)
+	else if (auto unionNode = nodeAs<UnionSourceNode>(input))
 	{
 		fb_assert(unionNode->dsqlClauses->items.hasData());
 		return pass1_union(dsqlScratch, unionNode, order, rows, updateLock, flags);
@@ -2532,31 +2528,21 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 	ValueListNode* tmp_list = FB_NEW_POOL(pool) ValueListNode(
 		pool, unionSource->dsqlClauses->items.getCount());
 
+	Array<dsc> descs(unionSource->dsqlClauses->items.getCount());
+
 	for (FB_SIZE_T j = 0; j < items->items.getCount(); ++j)
 	{
 		for (FB_SIZE_T i = 0; i < unionSource->dsqlClauses->items.getCount(); ++i)
 		{
 			ValueListNode* nod1 = nodeAs<RseNode>(unionSource->dsqlClauses->items[i])->dsqlSelectList;
-			DsqlDescMaker::fromNode(dsqlScratch, &nod1->items[j]->nodDesc, nod1->items[j]);
+			DsqlDescMaker::fromNode(dsqlScratch, nod1->items[j]);
 			tmp_list->items[i] = nod1->items[j];
-
-			// We look only at the items->nod_arg[] when creating the
-			// output descriptors. Make sure that the sub-rses
-			// descriptor flags are copied onto items->nod_arg[]->nodDesc.
-			// Bug 65584.
-			// -Sudesh 07/28/1999.
-			if (i > 0)
-			{
-				if (nod1->items[j]->nodDesc.dsc_flags & DSC_nullable)
-					items->items[j]->nodDesc.dsc_flags |= DSC_nullable;
-			}
 		}
 
 		dsc desc;
 		DsqlDescMaker::fromList(dsqlScratch, &desc, tmp_list, "UNION");
-		// Only mark upper node as a NULL node when all sub-nodes are NULL
-		items->items[j]->nodDesc.dsc_flags &= ~DSC_null;
-		items->items[j]->nodDesc.dsc_flags |= (desc.dsc_flags & DSC_null);
+
+		descs.push(desc);
 
 		pass1_union_auto_cast(dsqlScratch, unionSource->dsqlClauses, desc, j);
 	}
@@ -2583,7 +2569,18 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 			map->map_window = NULL;
 			union_context->ctx_map = map;
 
-		    *ptr = FB_NEW_POOL(pool) DsqlMapNode(pool, union_context, map);
+			auto mapNode = FB_NEW_POOL(pool) DsqlMapNode(pool, union_context, map);
+
+			if (descs[map->map_position].dsc_flags & DSC_nullable)
+				mapNode->setNullable = true;
+
+			if ((items->items[map->map_position]->getDsqlDesc().dsc_flags & DSC_null) &&
+				!(descs[map->map_position].dsc_flags & DSC_null))
+			{
+				mapNode->clearNull = true;
+			}
+
+			*ptr = mapNode;
 		}
 
 		unionRse->dsqlSelectList = union_items;
@@ -2701,13 +2698,15 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 			(unionNode = nodeAs<UnionSourceNode>(rseNode->dsqlStreams->items[0])) &&
 			unionNode->dsqlParentRse == rseNode)
 		{
-			// We're now in a UNION under a UNION so don't change the existing mappings.
+			// We're now in a UNION under a UNION (for example A UNION ALL B UNION C) so don't
+			// change the existing mappings.
 			// Only replace the node where the map points to, because they could be changed.
 			ValueListNode* sub_rse_items =
 				nodeAs<RseNode>(unionNode->dsqlClauses->items[0])->dsqlSelectList;
-			dsql_map* map = nodeAs<DsqlMapNode>(rseNode->dsqlSelectList->items[position])->map;
+			auto mapNode = nodeAs<DsqlMapNode>(rseNode->dsqlSelectList->items[position]);
+			dsql_map* map = mapNode->map;
 			map->map_node = sub_rse_items->items[position];
-			rseNode->dsqlSelectList->items[position]->nodDesc = desc;
+			mapNode->setDsqlDesc(desc);
 		}
 		else
 		{
@@ -2723,12 +2722,12 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 			else
 			{
 				ValueExprNode* select_item = list->items[position];
-				DsqlDescMaker::fromNode(dsqlScratch, &select_item->nodDesc, select_item);
+				DsqlDescMaker::fromNode(dsqlScratch, select_item);
 
-				if (select_item->nodDesc.dsc_dtype != desc.dsc_dtype ||
-					select_item->nodDesc.dsc_length != desc.dsc_length ||
-					select_item->nodDesc.dsc_scale != desc.dsc_scale ||
-					select_item->nodDesc.dsc_sub_type != desc.dsc_sub_type)
+				if (select_item->getDsqlDesc().dsc_dtype != desc.dsc_dtype ||
+					select_item->getDsqlDesc().dsc_length != desc.dsc_length ||
+					select_item->getDsqlDesc().dsc_scale != desc.dsc_scale ||
+					select_item->getDsqlDesc().dsc_sub_type != desc.dsc_sub_type)
 				{
 					// Because this select item has a different descriptor then
 					// our finally descriptor CAST it.
@@ -2750,7 +2749,7 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 					else
 						castNode = nodeAs<CastNode>(select_item);
 
-					if (castNode && !DSC_EQUIV(&castNode->nodDesc, &desc, false))
+					if (castNode && !DSC_EQUIV(&castNode->getDsqlDesc(), &desc, false))
 						castNode = NULL;
 
 					if (!castNode)
@@ -2782,9 +2781,7 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 							name_node = mapNode->map->map_node;
 						}
 
-						const FieldNode* fieldNode;
-
-						if ((fieldNode = nodeAs<FieldNode>(name_node)))
+						if (auto fieldNode = nodeAs<FieldNode>(name_node))
 						{
 							// Create new node for alias and copy fieldname.
 							newAliasNode = FB_NEW_POOL(*tdbb->getDefaultPool()) DsqlAliasNode(
@@ -2823,31 +2820,32 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 
 					// Finally copy the descriptors to the root nodes and swap
 					// the necessary nodes.
-					castNode->nodDesc = desc;
-
-					if (select_item->nodDesc.dsc_flags & DSC_nullable)
-						castNode->nodDesc.dsc_flags |= DSC_nullable;
+					castNode->setDsqlDesc(desc);
 
 					if ((aliasNode = nodeAs<DsqlAliasNode>(select_item)))
 					{
 						aliasNode->value = castNode;
-						aliasNode->value->nodDesc = desc;
-						select_item->nodDesc = desc;
+						aliasNode->setDsqlDesc(desc);
 					}
 					else if ((derivedField = nodeAs<DerivedFieldNode>(select_item)))
 					{
 						derivedField->value = castNode;
-						derivedField->value->nodDesc = desc;
-						select_item->nodDesc = desc;
+						derivedField->setDsqlDesc(desc);
 					}
 					else
 					{
+						if (select_item->getDsqlDesc().dsc_flags & DSC_nullable)
+						{
+							dsc castDesc = castNode->getDsqlDesc();
+							castDesc.dsc_flags |= DSC_nullable;
+							castNode->setDsqlDesc(castDesc);
+						}
+
 						// If a new alias was created for keeping original field-name
 						// make the alias the "top" node.
 						if (newAliasNode)
 						{
 							newAliasNode->value = castNode;
-							newAliasNode->value->nodDesc = castNode->nodDesc;
 							list->items[position] = newAliasNode;
 						}
 						else
@@ -2918,7 +2916,7 @@ DsqlMapNode* PASS1_post_map(DsqlCompilerScratch* dsqlScratch, ValueExprNode* nod
 		map->map_window = windowMap;
 	}
 
-	DsqlDescMaker::fromNode(dsqlScratch, &node->nodDesc, node);
+	DsqlDescMaker::fromNode(dsqlScratch, node);
 
 	return FB_NEW_POOL(*tdbb->getDefaultPool()) DsqlMapNode(*tdbb->getDefaultPool(), context, map);
 }
@@ -2977,8 +2975,8 @@ bool PASS1_set_parameter_type(DsqlCompilerScratch* dsqlScratch, ValueExprNode* i
 
 	auto makeDesc = [&] (dsc* desc)
 		{
-			DsqlDescMaker::fromNode(dsqlScratch, &node->nodDesc, node);
-			*desc = node->nodDesc;
+			DsqlDescMaker::fromNode(dsqlScratch, node);
+			*desc = node->getDsqlDesc();
 		};
 
 	return inNode->setParameterType(dsqlScratch, makeDesc, forceVarchar);

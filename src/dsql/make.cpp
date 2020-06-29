@@ -90,8 +90,8 @@ void DsqlDescMaker::fromList(DsqlCompilerScratch* scratch, dsc* desc,
 
 	while (p != end)
 	{
-		DsqlDescMaker::fromNode(scratch, &(*p)->nodDesc, *p);
-		args.add(&(*p)->nodDesc);
+		DsqlDescMaker::fromNode(scratch, *p);
+		args.add(&(*p)->getDsqlDesc());
 		++p;
 	}
 
@@ -106,12 +106,21 @@ void DsqlDescMaker::fromNode(DsqlCompilerScratch* scratch, dsc* desc,
 	DEV_BLKCHK(node, dsql_type_nod);
 
 	// If we already know the datatype, don't worry about anything.
-	if (node->nodDesc.dsc_dtype)
-		*desc = node->nodDesc;
+	if (node->getDsqlDesc().dsc_dtype)
+		*desc = node->getDsqlDesc();
 	else
 		node->make(scratch, desc);
 
 	desc->dsc_flags |= nullable ? DSC_nullable : 0;
+}
+
+void DsqlDescMaker::fromNode(DsqlCompilerScratch* scratch, ValueExprNode* node)
+{
+	DEV_BLKCHK(node, dsql_type_nod);
+
+	// If we already know the datatype, don't worry about anything.
+	if (!node->getDsqlDesc().dsc_dtype)
+		node->makeDsqlDesc(scratch);
 }
 
 void DsqlDescMaker::composeDesc(dsc* desc,
@@ -374,19 +383,22 @@ FieldNode* MAKE_field(dsql_ctx* context, dsql_fld* field, ValueListNode* indices
 	FieldNode* const node = FB_NEW_POOL(*tdbb->getDefaultPool()) FieldNode(
 		*tdbb->getDefaultPool(), context, field, indices);
 
+	dsc desc;
+
 	if (field->dimensions)
 	{
 		if (indices)
-		{
-			DsqlDescMaker::fromElement(&node->nodDesc, field);
-		}
+			DsqlDescMaker::fromElement(&desc, field);
 		else
 		{
-			node->nodDesc.dsc_dtype = dtype_array;
-			node->nodDesc.dsc_length = sizeof(ISC_QUAD);
-			node->nodDesc.dsc_scale = static_cast<SCHAR>(field->scale);
-			node->nodDesc.dsc_sub_type = field->subType;
+			desc = node->getDsqlDesc();
+			desc.dsc_dtype = dtype_array;
+			desc.dsc_length = sizeof(ISC_QUAD);
+			desc.dsc_scale = static_cast<SCHAR>(field->scale);
+			desc.dsc_sub_type = field->subType;
 		}
+
+		node->setDsqlDesc(desc);
 	}
 	else
 	{
@@ -396,11 +408,16 @@ FieldNode* MAKE_field(dsql_ctx* context, dsql_fld* field, ValueListNode* indices
 					  Arg::Gds(isc_dsql_only_can_subscript_array) << Arg::Str(field->fld_name));
 		}
 
-		DsqlDescMaker::fromField(&node->nodDesc, field);
+		DsqlDescMaker::fromField(&desc, field);
+		node->setDsqlDesc(desc);
 	}
 
 	if ((field->flags & FLD_nullable) || (context->ctx_flags & CTX_outer_join))
-		node->nodDesc.dsc_flags |= DSC_nullable;
+	{
+		desc = node->getDsqlDesc();
+		desc.dsc_flags |= DSC_nullable;
+		node->setDsqlDesc(desc);
+	}
 
 	return node;
 }

@@ -747,7 +747,7 @@ public:
 		: ExprNode(aType, pool),
 		  nodScale(0)
 	{
-		nodDesc.clear();
+		dsqlDesc.clear();
 	}
 
 public:
@@ -756,6 +756,30 @@ public:
 	virtual Kind getKind()
 	{
 		return KIND_VALUE;
+	}
+
+	const dsc& getDsqlDesc() const
+	{
+		return dsqlDesc;
+	}
+
+	void makeDsqlDesc(DsqlCompilerScratch* dsqlScratch)
+	{
+		auto settableDesc = dsqlSetableDesc();
+
+		if (settableDesc)
+			make(dsqlScratch, settableDesc);
+	}
+
+	dsc* dsqlSetableDesc()
+	{
+		return isSharedNode() ? nullptr : &dsqlDesc;
+	}
+
+	// Must be overriden returning true in shared nodes.
+	virtual bool isSharedNode()
+	{
+		return false;
 	}
 
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -799,7 +823,9 @@ public:
 
 public:
 	SCHAR nodScale;
-	dsc nodDesc;
+
+protected:
+	dsc dsqlDesc;
 };
 
 template <typename T, typename ValueExprNode::Type typeConst>

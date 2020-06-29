@@ -394,7 +394,7 @@ string ValueExprNode::internalPrint(NodePrinter& printer) const
 	ExprNode::internalPrint(printer);
 
 	NODE_PRINT(printer, nodScale);
-	NODE_PRINT(printer, nodDesc);
+	NODE_PRINT(printer, getDsqlDesc());
 
 	return "ValueExprNode";
 }
@@ -3390,9 +3390,9 @@ ValueExprNode* CastNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->setParameterType(dsqlScratch, NULL, false);
 
 	DsqlDescMaker::fromField(&node->castDesc, node->dsqlField);
-	DsqlDescMaker::fromNode(dsqlScratch, &node->source->nodDesc, node->source);
+	DsqlDescMaker::fromNode(dsqlScratch, node->source);
 
-	node->castDesc.dsc_flags = node->source->nodDesc.dsc_flags & DSC_nullable;
+	node->castDesc.dsc_flags = node->source->getDsqlDesc().dsc_flags & DSC_nullable;
 
 	return node;
 }
@@ -3628,7 +3628,7 @@ ValueExprNode* CoalesceNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	CoalesceNode* node = FB_NEW_POOL(dsqlScratch->getPool()) CoalesceNode(
 		dsqlScratch->getPool(), doDsqlPass(dsqlScratch, args));
 
-	node->make(dsqlScratch, &node->nodDesc);	// Set descriptor for output node.
+	node->makeDsqlDesc(dsqlScratch);	// Set descriptor for output node.
 
 	for (auto& item : node->args->items)
 		PASS1_set_parameter_type(dsqlScratch, item, node, false);
@@ -3753,12 +3753,12 @@ ValueExprNode* CollateNode::pass1Collate(DsqlCompilerScratch* dsqlScratch, Value
 	dsql_fld* field = FB_NEW_POOL(pool) dsql_fld(pool);
 	CastNode* castNode = FB_NEW_POOL(pool) CastNode(pool, input, field);
 
-	DsqlDescMaker::fromNode(dsqlScratch, &input->nodDesc, input);
+	DsqlDescMaker::fromNode(dsqlScratch, input);
 
-	if (input->nodDesc.dsc_dtype <= dtype_any_text ||
-		(input->nodDesc.dsc_dtype == dtype_blob && input->nodDesc.dsc_sub_type == isc_blob_text))
+	if (input->getDsqlDesc().dsc_dtype <= dtype_any_text ||
+		(input->getDsqlDesc().dsc_dtype == dtype_blob && input->getDsqlDesc().dsc_sub_type == isc_blob_text))
 	{
-		assignFieldDtypeFromDsc(field, &input->nodDesc);
+		assignFieldDtypeFromDsc(field, &input->getDsqlDesc());
 		field->charLength = 0;
 	}
 	else
@@ -4605,10 +4605,10 @@ ValueExprNode* DecodeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		doDsqlPass(dsqlScratch, test), doDsqlPass(dsqlScratch, conditions), doDsqlPass(dsqlScratch, values));
 	node->label = label;
 
-	node->make(dsqlScratch, &node->nodDesc);	// Set descriptor for output node.
+	node->makeDsqlDesc(dsqlScratch);	// Set descriptor for output node.
 
 	node->setParameterType(dsqlScratch,
-		[&] (dsc* desc) { *desc = node->nodDesc; },
+		[&] (dsc* desc) { *desc = node->getDsqlDesc(); },
 		false);
 
 	// Workaround for DECODE/CASE supporting only 255 items - see CORE-5366.
@@ -5270,7 +5270,7 @@ ValueExprNode* ExtractNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	// sure the requested type of information can be extracted.
 
 	ValueExprNode* sub1 = doDsqlPass(dsqlScratch, arg);
-	DsqlDescMaker::fromNode(dsqlScratch, &sub1->nodDesc, sub1);
+	DsqlDescMaker::fromNode(dsqlScratch, sub1);
 
 	switch (blrSubOp)
 	{
@@ -5281,8 +5281,8 @@ ValueExprNode* ExtractNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		case blr_extract_yearday:
 		case blr_extract_week:
 			if (!nodeIs<NullNode>(sub1) &&
-				sub1->nodDesc.dsc_dtype != dtype_sql_date &&
-				!sub1->nodDesc.isTimeStamp())
+				sub1->getDsqlDesc().dsc_dtype != dtype_sql_date &&
+				!sub1->getDsqlDesc().isTimeStamp())
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-105) <<
 						  Arg::Gds(isc_extract_input_mismatch));
@@ -5294,8 +5294,8 @@ ValueExprNode* ExtractNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		case blr_extract_second:
 		case blr_extract_millisecond:
 			if (!nodeIs<NullNode>(sub1) &&
-				!sub1->nodDesc.isTime() &&
-				!sub1->nodDesc.isTimeStamp())
+				!sub1->getDsqlDesc().isTime() &&
+				!sub1->getDsqlDesc().isTimeStamp())
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-105) <<
 						  Arg::Gds(isc_extract_input_mismatch));
@@ -5305,8 +5305,8 @@ ValueExprNode* ExtractNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		case blr_extract_timezone_hour:
 		case blr_extract_timezone_minute:
 			if (!nodeIs<NullNode>(sub1) &&
-				!sub1->nodDesc.isTime() &&
-				!sub1->nodDesc.isTimeStamp())
+				!sub1->getDsqlDesc().isTime() &&
+				!sub1->getDsqlDesc().isTimeStamp())
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-105) <<
 						  Arg::Gds(isc_extract_input_mismatch));
@@ -6408,8 +6408,8 @@ void FieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 void FieldNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 {
-	if (nodDesc.dsc_dtype)
-		*desc = nodDesc;
+	if (getDsqlDesc().dsc_dtype)
+		*desc = getDsqlDesc();
 	else
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-203) <<
@@ -8174,7 +8174,7 @@ ValueExprNode* DsqlAliasNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	DsqlAliasNode* node = FB_NEW_POOL(dsqlScratch->getPool()) DsqlAliasNode(dsqlScratch->getPool(), name,
 		doDsqlPass(dsqlScratch, value));
-	DsqlDescMaker::fromNode(dsqlScratch, &node->value->nodDesc, node->value);
+	DsqlDescMaker::fromNode(dsqlScratch, node->value);
 	return node;
 }
 
@@ -8201,7 +8201,9 @@ void DsqlAliasNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 DsqlMapNode::DsqlMapNode(MemoryPool& pool, dsql_ctx* aContext, dsql_map* aMap)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_MAP>(pool),
 	  context(aContext),
-	  map(aMap)
+	  map(aMap),
+	  setNullable(false),
+	  clearNull(false)
 {
 }
 
@@ -8211,6 +8213,8 @@ string DsqlMapNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, context);
 	NODE_PRINT(printer, map);
+	NODE_PRINT(printer, setNullable);
+	NODE_PRINT(printer, clearNull);
 
 	return "DsqlMapNode";
 }
@@ -8355,8 +8359,11 @@ void DsqlMapNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	DsqlDescMaker::fromNode(dsqlScratch, desc, map->map_node);
 
 	// ASF: We should mark nod_agg_count as nullable when it's in an outer join - CORE-2660.
-	if (context->ctx_flags & CTX_outer_join)
+	if (setNullable || (context->ctx_flags & CTX_outer_join))
 		desc->setNullable(true);
+
+	if (clearNull)
+		desc->clearNull();
 }
 
 bool DsqlMapNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
@@ -12027,8 +12034,8 @@ void SysFuncCallNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 
 	for (auto& arg : args->items)
 	{
-		DsqlDescMaker::fromNode(dsqlScratch, &arg->nodDesc, arg);
-		argsArray.add(&arg->nodDesc);
+		DsqlDescMaker::fromNode(dsqlScratch, arg);
+		argsArray.add(&arg->getDsqlDesc());
 	}
 
 	DSqlDataTypeUtil dataTypeUtil(dsqlScratch);
@@ -12155,12 +12162,24 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		if (node->function->setParamsFunc)
 		{
-			Array<dsc*> argsArray;
+			Array<dsc> tempDescs(node->args->items.getCount());
+			tempDescs.resize(node->args->items.getCount());
+
+			Array<dsc*> argsArray(node->args->items.getCount());
 
 			for (auto& item : node->args->items)
 			{
-				DsqlDescMaker::fromNode(dsqlScratch, &item->nodDesc, item);
-				argsArray.add(&item->nodDesc);
+				DsqlDescMaker::fromNode(dsqlScratch, item);
+
+				auto itemDesc = item->dsqlSetableDesc();
+
+				if (!itemDesc)
+				{
+					tempDescs.push(item->getDsqlDesc());
+					itemDesc = &tempDescs.back();
+				}
+
+				argsArray.add(itemDesc);
 			}
 
 			DSqlDataTypeUtil dataTypeUtil(dsqlScratch);
@@ -12170,7 +12189,7 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			for (auto& item : node->args->items)
 			{
 				PASS1_set_parameter_type(dsqlScratch, item,
-					[&] (dsc* desc) { *desc = item->nodDesc; },
+					[&] (dsc* desc) { *desc = item->getDsqlDesc(); },
 					false);
 			}
 		}
@@ -13258,11 +13277,11 @@ void ValueIfNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 {
 	Array<const dsc*> args;
 
-	DsqlDescMaker::fromNode(dsqlScratch, &trueValue->nodDesc, trueValue);
-	args.add(&trueValue->nodDesc);
+	DsqlDescMaker::fromNode(dsqlScratch, trueValue);
+	args.add(&trueValue->getDsqlDesc());
 
-	DsqlDescMaker::fromNode(dsqlScratch, &falseValue->nodDesc, falseValue);
-	args.add(&falseValue->nodDesc);
+	DsqlDescMaker::fromNode(dsqlScratch, falseValue);
+	args.add(&falseValue->getDsqlDesc());
 
 	DSqlDataTypeUtil(dsqlScratch).makeFromList(desc, "CASE", args.getCount(), args.begin());
 }
