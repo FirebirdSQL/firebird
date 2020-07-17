@@ -2387,6 +2387,8 @@ bool BTR_move_index(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, SLONG indexId,
 		creation.relation = relation;
 		//creation.sort is unused in this fast_load call
 		//creation.transaction is unused in this fast_load call
+		creation.dup_recno = -1;
+		creation.duplicates = 0;
 
 		const int nullIndLen = !(idx.idx_flags & idx_descending) && (idx.idx_count == 1) ? 1 : 0;
 		creation.key_length = ROUNDUP(BTR_key_length(tdbb, relation, &idx) + nullIndLen, sizeof(SINT64));;
