@@ -1195,6 +1195,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 			port->port_handle = s;
 			port->port_server_flags |= SRVR_server;
 			port->port_flags |= PORT_server;
+			Config::reload();
 			return port;
 		}
 

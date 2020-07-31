@@ -80,14 +80,10 @@ public:
 		}
 	}
 
-	/***
-	It was a kind of getting ready for changing config remotely...
-
 	void changeDefaultConfig(Config* newConfig)
 	{
 		defaultConfig = newConfig;
 	}
-	***/
 
 	Firebird::RefPtr<const Config>& getDefaultConfig()
 	{
@@ -307,6 +303,12 @@ void Config::merge(Firebird::RefPtr<const Config>& config, const Firebird::strin
 		ConfigFile txtStream(ConfigFile::USE_TEXT, dpbConfig->c_str());
 		config = FB_NEW Config(txtStream, *(config.hasData() ? config : getDefaultConfig()));
 	}
+}
+
+void Config::reload()
+{
+	ConfigFile file(fb_utils::getPrefix(Firebird::IConfigManager::DIR_CONF, CONFIG_FILE), 0);
+	firebirdConf().changeDefaultConfig(FB_NEW Config(file, *(firebirdConf().getDefaultConfig())));
 }
 
 void Config::loadValues(const ConfigFile& file)

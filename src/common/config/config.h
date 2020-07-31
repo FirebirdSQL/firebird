@@ -218,6 +218,9 @@ public:
 	// Merge config entries from DPB into existing config
 	static void merge(Firebird::RefPtr<const Config>& config, const Firebird::string* dpbConfig);
 
+	// Reload firebird.conf from disk
+	static void reload();
+
 	// reports key to be used by the following functions
 	static unsigned int getKeyByName(ConfigName name);
 	// helpers to build interface for firebird.conf file
