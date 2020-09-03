@@ -956,6 +956,8 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (304, '01', '004', 0, 947, 'truncate_monitor', NULL, NULL)
 (304, '01', '004', 0, 948, 'truncate_context', NULL, NULL)
 (-811, '21', '000', 0, 949, 'merge_dup_update', NULL, NULL)
+(-402, '42', '000', 0, 950, 'invalid_blob_util_handle', NULL, NULL)
+(-402, '42', '000', 0, 951, 'cannot_make_blob_opened_handle', NULL, NULL)
 -- GFIX
 (-901, '00', '000', 3, 1, 'gfix_db_name', NULL, NULL)
 (-901, '00', '000', 3, 2, 'gfix_invalid_sw', NULL, NULL)

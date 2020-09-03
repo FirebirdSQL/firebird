@@ -145,6 +145,7 @@ struct CallerName
 };
 
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, ULONG> > > ReplBlobMap;
+typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SLONG, blb*> > > BlobUtilMap;
 
 const int DEFAULT_LOCK_TIMEOUT = -1; // infinite
 const char* const TRA_BLOB_SPACE = "fb_blob_";
@@ -173,6 +174,7 @@ public:
 		tra_blobs(outer ? outer->tra_blobs : &tra_blobs_tree),
 		tra_fetched_blobs(p),
 		tra_repl_blobs(*p),
+		tra_blob_util_map(*p),
 		tra_arrays(NULL),
 		tra_deferred_job(NULL),
 		tra_resources(*p),
@@ -269,6 +271,7 @@ public:
 	BlobIndexTree* tra_blobs;			// pointer to actual list of active blobs
 	FetchedBlobIdTree tra_fetched_blobs;	// list of fetched blobs
 	ReplBlobMap tra_repl_blobs;			// map of blob IDs replicated in this transaction
+	BlobUtilMap tra_blob_util_map;		// map of blob IDs for RDB$BLOB_UTIL package
 	ArrayField*	tra_arrays;				// Linked list of active arrays
 	Lock*		tra_lock;				// lock for transaction
 	Lock*		tra_alter_db_lock;		// lock for ALTER DATABASE statement(s)
@@ -297,6 +300,7 @@ public:
 	SnapshotHandle tra_snapshot_handle;
 	CommitNumber tra_snapshot_number;
 	SortOwner tra_sorts;
+	SLONG tra_blob_util_next = 1;
 
 	EDS::Transaction *tra_ext_common;
 	//Transaction *tra_ext_two_phase;

@@ -974,6 +974,8 @@ Data source : @4"},		/* eds_statement */
 	{335545267, "Monitoring data does not fit into the field"},		/* truncate_monitor */
 	{335545268, "Engine data does not fit into return value of system function"},		/* truncate_context */
 	{335545269, "Multiple source records cannot match the same target during MERGE"},		/* merge_dup_update */
+	{335545270, "Invalid RDB$BLOB_UTIL handle"},		/* invalid_blob_util_handle */
+	{335545271, "Cannot make a BLOB from an opened RDB$BLOB_UTIL handle"},		/* cannot_make_blob_opened_handle */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */

@@ -213,3 +213,7 @@
 
 	FIELD(fld_pub_name		, nam_pub_name		, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, false)
 	FIELD(fld_file_id		, nam_file_id		, dtype_varying	, 255						, dsc_text_type_ascii		, NULL		, false)
+
+	FIELD(fld_blob			, nam_blob			, dtype_blob	, BLOB_SIZE					, isc_blob_untyped			, NULL		, true)
+	FIELD(fld_varybinary_max, nam_varbinary_max	, dtype_varying	, MAX_VARY_COLUMN_SIZE		, 0							, NULL		, true)
+	FIELD(fld_long_number	, nam_long_number	, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true)

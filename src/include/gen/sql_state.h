@@ -970,6 +970,8 @@ static const struct {
 	{335545267, "01004"}, // 947 truncate_monitor
 	{335545268, "01004"}, // 948 truncate_context
 	{335545269, "21000"}, // 949 merge_dup_update
+	{335545270, "42000"}, // 950 invalid_blob_util_handle
+	{335545271, "42000"}, // 951 cannot_make_blob_opened_handle
 	{335740929, "00000"}, //   1 gfix_db_name
 	{335740930, "00000"}, //   2 gfix_invalid_sw
 	{335740932, "00000"}, //   4 gfix_incmp_sw

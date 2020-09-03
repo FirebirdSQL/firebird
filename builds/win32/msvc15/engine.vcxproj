@@ -55,6 +55,7 @@
     <ClCompile Include="..\..\..\src\jrd\Attachment.cpp" />
     <ClCompile Include="..\..\..\src\jrd\blb.cpp" />
     <ClCompile Include="..\..\..\src\jrd\blob_filter.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\BlobUtil.cpp" />
     <ClCompile Include="..\..\..\src\jrd\btn.cpp" />
     <ClCompile Include="..\..\..\src\jrd\btr.cpp" />
     <ClCompile Include="..\..\..\src\jrd\builtin.cpp" />
@@ -209,6 +210,7 @@
     <ClInclude Include="..\..\..\src\jrd\blb_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\blf_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\blob_filter.h" />
+    <ClInclude Include="..\..\..\src\jrd\BlobUtil.h" />
     <ClInclude Include="..\..\..\src\jrd\blp.h" />
     <ClInclude Include="..\..\..\src\jrd\blr.h" />
     <ClInclude Include="..\..\..\src\jrd\btn.h" />

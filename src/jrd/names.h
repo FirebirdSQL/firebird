@@ -441,3 +441,8 @@ NAME("MON$FILE_ID", nam_mon_file_id)
 NAME("MON$GUID", nam_mon_guid)
 NAME("MON$NEXT_ATTACHMENT", nam_mon_na)
 NAME("MON$NEXT_STATEMENT", nam_mon_ns)
+
+NAME("RDB$BLOB_UTIL_HANDLE", nam_butil_handle)
+NAME("RDB$BLOB", nam_blob)
+NAME("RDB$VARBINARY_MAX", nam_varbinary_max)
+NAME("RDB$LONG_NUMBER", nam_long_number)

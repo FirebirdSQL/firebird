@@ -970,6 +970,8 @@ static const struct {
 	{335545267,  304}, /* 947 truncate_monitor */
 	{335545268,  304}, /* 948 truncate_context */
 	{335545269, -811}, /* 949 merge_dup_update */
+	{335545270, -402}, /* 950 invalid_blob_util_handle */
+	{335545271, -402}, /* 951 cannot_make_blob_opened_handle */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */

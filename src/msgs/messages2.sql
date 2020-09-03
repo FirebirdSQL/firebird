@@ -1057,6 +1057,8 @@ Data source : @4', NULL, NULL)
 ('truncate_monitor', NULL, 'Monitoring.cpp', NULL, 0, 947, NULL, 'Monitoring data does not fit into the field', NULL, NULL);
 ('truncate_context', NULL, 'SysFunction.cpp', NULL, 0, 948, NULL, 'Engine data does not fit into return value of system function', NULL, NULL);
 ('merge_dup_update', NULL, 'StmtNodes.cpp', NULL, 0, 949, NULL, 'Multiple source records cannot match the same target during MERGE', NULL, NULL);
+('invalid_blob_util_handle', NULL, 'BlobUtil.cpp', NULL, 0, 950, NULL, 'Invalid RDB$BLOB_UTIL handle', NULL, NULL);
+('cannot_make_blob_opened_handle', NULL, 'BlobUtil.cpp', NULL, 0, 951, NULL, 'Cannot make a BLOB from an opened RDB$BLOB_UTIL handle', NULL, NULL);
 -- QLI
 (NULL, NULL, NULL, NULL, 1, 0, NULL, 'expected type', NULL, NULL);
 (NULL, NULL, NULL, NULL, 1, 1, NULL, 'bad block type', NULL, NULL);

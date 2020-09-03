@@ -1950,6 +1950,10 @@ C --
       PARAMETER (GDS__truncate_context                 = 335545268)
       INTEGER*4 GDS__merge_dup_update                
       PARAMETER (GDS__merge_dup_update                 = 335545269)
+      INTEGER*4 GDS__invalid_blob_util_handle        
+      PARAMETER (GDS__invalid_blob_util_handle         = 335545270)
+      INTEGER*4 GDS__cannot_make_blob_opened_handle  
+      PARAMETER (GDS__cannot_make_blob_opened_handle   = 335545271)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 
