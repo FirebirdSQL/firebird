@@ -9016,7 +9016,7 @@ static bool stdin_redirected()
 #ifdef WIN_NT
 	HANDLE in = GetStdHandle(STD_INPUT_HANDLE);
 	const DWORD file_type = GetFileType(in);
-	if (file_type == FILE_TYPE_CHAR || file_type == FILE_TYPE_PIPE)
+	if (file_type == FILE_TYPE_CHAR)
 		return false;
 #else
 	if (isatty(fileno(stdin)))
