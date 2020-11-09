@@ -1264,7 +1264,7 @@ void ExtEngineManager::closeAttachment(thread_db* tdbb, Attachment* attachment)
 				// Check whether the engine is used by other attachments. 
 				// If no one uses, release it.
 				bool close = true;
-				ReadLockGuard readGuard(enginesLock, FB_FUNCTION);
+				WriteLockGuard writeGuard(enginesLock, FB_FUNCTION);
 
 				EnginesAttachmentsMap::Accessor ea_accessor(&enginesAttachments);
 				for (bool ea_found = ea_accessor.getFirst(); ea_found; ea_found = ea_accessor.getNext())
@@ -1276,11 +1276,8 @@ void ExtEngineManager::closeAttachment(thread_db* tdbb, Attachment* attachment)
 					}
 				}
 
-				readGuard.release();
-
 				if (close)
-				{
-					WriteLockGuard writeGuard(enginesLock, FB_FUNCTION);					
+				{										
 					if (engines.remove(accessor.current()->first)) // If engine has already been deleted - nothing to do
 						engine->release();
 				}
