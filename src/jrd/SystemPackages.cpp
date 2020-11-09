@@ -23,6 +23,7 @@
 #include "firebird.h"
 #include "../jrd/SystemPackages.h"
 #include "../jrd/TimeZone.h"
+#include "../jrd/Profiler.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -36,6 +37,7 @@ namespace
 			: list(FB_NEW_POOL(pool) ObjectsArray<SystemPackage>(pool))
 		{
 			list->add(TimeZonePackage(pool));
+			list->add(ProfilerPackage(pool));
 		}
 
 		static InitInstance<SystemPackagesInit> INSTANCE;

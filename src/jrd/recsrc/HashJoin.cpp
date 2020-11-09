@@ -208,7 +208,8 @@ private:
 
 HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 				   RecordSource* const* args, NestValueArray* const* keys)
-	: m_args(csb->csb_pool, count - 1)
+	: RecordSource(csb),
+	  m_args(csb->csb_pool, count - 1)
 {
 	fb_assert(count >= 2);
 
@@ -264,7 +265,7 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 	}
 }
 
-void HashJoin::open(thread_db* tdbb) const
+void HashJoin::internalOpen(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -329,7 +330,7 @@ void HashJoin::close(thread_db* tdbb) const
 	}
 }
 
-bool HashJoin::getRecord(thread_db* tdbb) const
+bool HashJoin::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -409,29 +410,40 @@ bool HashJoin::lockRecord(thread_db* /*tdbb*/) const
 	return false; // compiler silencer
 }
 
-void HashJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void HashJoin::getChildren(Array<const RecordSource*>& children) const
+{
+	children.add(m_leader.source);
+
+	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+		children.add(m_args[i].source);
+}
+
+void HashJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 	{
 		plan += printIndent(++level) + "Hash Join (inner)";
 
-		m_leader.source->print(tdbb, plan, true, level);
+		if (recurse)
+		{
+			m_leader.source->print(tdbb, plan, true, level, recurse);
 
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-			m_args[i].source->print(tdbb, plan, true, level);
+			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+				m_args[i].source->print(tdbb, plan, true, level, recurse);
+		}
 	}
 	else
 	{
 		level++;
 		plan += "HASH (";
-		m_leader.source->print(tdbb, plan, false, level);
+		m_leader.source->print(tdbb, plan, false, level, recurse);
 		plan += ", ";
 		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 		{
 			if (i)
 				plan += ", ";
 
-			m_args[i].source->print(tdbb, plan, false, level);
+			m_args[i].source->print(tdbb, plan, false, level, recurse);
 		}
 		plan += ")";
 	}

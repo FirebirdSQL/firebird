@@ -45,7 +45,7 @@ ExternalTableScan::ExternalTableScan(CompilerScratch* csb, const string& alias,
 	m_impure = csb->allocImpure<Impure>();
 }
 
-void ExternalTableScan::open(thread_db* tdbb) const
+void ExternalTableScan::internalOpen(thread_db* tdbb) const
 {
 	Database* const dbb = tdbb->getDatabase();
 	jrd_req* const request = tdbb->getRequest();
@@ -76,7 +76,7 @@ void ExternalTableScan::close(thread_db* tdbb) const
 		impure->irsb_flags &= ~irsb_open;
 }
 
-bool ExternalTableScan::getRecord(thread_db* tdbb) const
+bool ExternalTableScan::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -114,8 +114,12 @@ bool ExternalTableScan::lockRecord(thread_db* tdbb) const
 	return false; // compiler silencer
 }
 
+void ExternalTableScan::getChildren(Array<const RecordSource*>& children) const
+{
+}
+
 void ExternalTableScan::print(thread_db* tdbb, string& plan,
-							  bool detailed, unsigned level) const
+							  bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 	{

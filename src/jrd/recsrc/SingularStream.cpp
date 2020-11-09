@@ -33,7 +33,9 @@ using namespace Jrd;
 // ------------------------------
 
 SingularStream::SingularStream(CompilerScratch* csb, RecordSource* next)
-	: m_next(next), m_streams(csb->csb_pool)
+	: RecordSource(csb),
+	  m_next(next),
+	  m_streams(csb->csb_pool)
 {
 	fb_assert(m_next);
 
@@ -42,7 +44,7 @@ SingularStream::SingularStream(CompilerScratch* csb, RecordSource* next)
 	m_impure = csb->allocImpure<Impure>();
 }
 
-void SingularStream::open(thread_db* tdbb) const
+void SingularStream::internalOpen(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -68,7 +70,7 @@ void SingularStream::close(thread_db* tdbb) const
 	}
 }
 
-bool SingularStream::getRecord(thread_db* tdbb) const
+bool SingularStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -83,53 +85,46 @@ bool SingularStream::getRecord(thread_db* tdbb) const
 
 	if (m_next->getRecord(tdbb))
 	{
-		doGetRecord(tdbb);
+		const FB_SIZE_T streamCount = m_streams.getCount();
+		MemoryPool& pool = *tdbb->getDefaultPool();
+		HalfStaticArray<record_param, 16> rpbs(pool, streamCount);
+
+		for (FB_SIZE_T i = 0; i < streamCount; i++)
+		{
+			rpbs.add(request->req_rpb[m_streams[i]]);
+			record_param& rpb = rpbs.back();
+			Record* const orgRecord = rpb.rpb_record;
+
+			if (orgRecord)
+				rpb.rpb_record = FB_NEW_POOL(pool) Record(pool, orgRecord);
+		}
+
+		if (m_next->getRecord(tdbb))
+			status_exception::raise(Arg::Gds(isc_sing_select_err));
+
+		for (FB_SIZE_T i = 0; i < streamCount; i++)
+		{
+			record_param& rpb = request->req_rpb[m_streams[i]];
+			Record* orgRecord = rpb.rpb_record;
+			rpb = rpbs[i];
+			const AutoPtr<Record> newRecord(rpb.rpb_record);
+
+			if (newRecord)
+			{
+				if (!orgRecord)
+					BUGCHECK(284);	// msg 284 cannot restore singleton select data
+
+				rpb.rpb_record = orgRecord;
+				orgRecord->copyFrom(newRecord);
+			}
+		}
+
+		impure->irsb_flags |= irsb_singular_processed;
+
 		return true;
 	}
 
 	return false;
-}
-
-void SingularStream::doGetRecord(thread_db* tdbb) const
-{
-	jrd_req* const request = tdbb->getRequest();
-	Impure* const impure = request->getImpure<Impure>(m_impure);
-
-	const FB_SIZE_T streamCount = m_streams.getCount();
-	MemoryPool& pool = *tdbb->getDefaultPool();
-	HalfStaticArray<record_param, 16> rpbs(pool, streamCount);
-
-	for (FB_SIZE_T i = 0; i < streamCount; i++)
-	{
-		rpbs.add(request->req_rpb[m_streams[i]]);
-		record_param& rpb = rpbs.back();
-		Record* const orgRecord = rpb.rpb_record;
-
-		if (orgRecord)
-			rpb.rpb_record = FB_NEW_POOL(pool) Record(pool, orgRecord);
-	}
-
-	if (m_next->getRecord(tdbb))
-		status_exception::raise(Arg::Gds(isc_sing_select_err));
-
-	for (FB_SIZE_T i = 0; i < streamCount; i++)
-	{
-		record_param& rpb = request->req_rpb[m_streams[i]];
-		Record* orgRecord = rpb.rpb_record;
-		rpb = rpbs[i];
-		const AutoPtr<Record> newRecord(rpb.rpb_record);
-
-		if (newRecord)
-		{
-			if (!orgRecord)
-				BUGCHECK(284);	// msg 284 cannot restore singleton select data
-
-			rpb.rpb_record = orgRecord;
-			orgRecord->copyFrom(newRecord);
-		}
-	}
-
-	impure->irsb_flags |= irsb_singular_processed;
 }
 
 bool SingularStream::refetchRecord(thread_db* tdbb) const
@@ -142,12 +137,18 @@ bool SingularStream::lockRecord(thread_db* tdbb) const
 	return m_next->lockRecord(tdbb);
 }
 
-void SingularStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void SingularStream::getChildren(Array<const RecordSource*>& children) const
+{
+	children.add(m_next);
+}
+
+void SingularStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 		plan += printIndent(++level) + "Singularity Check";
 
-	m_next->print(tdbb, plan, detailed, level);
+	if (recurse)
+		m_next->print(tdbb, plan, detailed, level, recurse);
 }
 
 void SingularStream::markRecursive()

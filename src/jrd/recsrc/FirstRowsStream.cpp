@@ -37,14 +37,16 @@ using namespace Jrd;
 // --------------------------------
 
 FirstRowsStream::FirstRowsStream(CompilerScratch* csb, RecordSource* next, ValueExprNode* value)
-	: m_next(next), m_value(value)
+	: RecordSource(csb),
+	  m_next(next),
+	  m_value(value)
 {
 	fb_assert(m_next && m_value);
 
 	m_impure = csb->allocImpure<Impure>();
 }
 
-void FirstRowsStream::open(thread_db* tdbb) const
+void FirstRowsStream::internalOpen(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -81,7 +83,7 @@ void FirstRowsStream::close(thread_db* tdbb) const
 	}
 }
 
-bool FirstRowsStream::getRecord(thread_db* tdbb) const
+bool FirstRowsStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -112,12 +114,18 @@ bool FirstRowsStream::lockRecord(thread_db* tdbb) const
 	return m_next->lockRecord(tdbb);
 }
 
-void FirstRowsStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void FirstRowsStream::getChildren(Array<const RecordSource*>& children) const
+{
+	children.add(m_next);
+}
+
+void FirstRowsStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 		plan += printIndent(++level) + "First N Records";
 
-	m_next->print(tdbb, plan, detailed, level);
+	if (recurse)
+		m_next->print(tdbb, plan, detailed, level, recurse);
 }
 
 void FirstRowsStream::markRecursive()

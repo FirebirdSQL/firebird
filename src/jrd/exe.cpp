@@ -111,6 +111,7 @@
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/recsrc/Cursor.h"
 #include "../jrd/Function.h"
+#include "../jrd/Profiler.h"
 
 
 using namespace Jrd;
@@ -881,7 +882,6 @@ void EXE_start(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
 		ERR_post(Arg::Gds(isc_req_no_trans));
 
 	JrdStatement* statement = request->getStatement();
-	const jrd_prc* proc = statement->procedure;
 
 	/* Post resources to transaction block.  In particular, the interest locks
 	on relations/indices are copied to the transaction, which is very
@@ -1320,10 +1320,10 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 		ERR_post(Arg::Gds(isc_req_no_trans));
 
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
+	const auto attachment = tdbb->getAttachment();
 
-	// ASF: It's already a StmtNode, so do not do a virtual call in execution.
-	if (!node)	/// if (!node || node->getKind() != DmlNode::KIND_STATEMENT
+	if (!node)
 		BUGCHECK(147);
 
 	// Save the old pool and request to restore on exit
@@ -1337,7 +1337,10 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 
 	// Execute stuff until we drop
 
-	const JrdStatement* statement = request->getStatement();
+	SINT64 lastPerfCounter = fb_utils::query_performance_counter();
+	const StmtNode* profileNode = nullptr;
+	ULONG lastProfiledLine = node->line;
+	ULONG lastProfiledColumn = node->column;
 
 	while (node && !(request->req_flags & req_stall))
 	{
@@ -1352,6 +1355,27 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 					request->req_src_line = node->line;
 					request->req_src_column = node->column;
 				}
+
+				if (attachment->isProfilerActive() &&
+					!request->hasInternalStatement() &&
+					profileNode &&
+					profileNode->hasLineColumn &&
+					profileNode->isProfileAware() &&
+					(profileNode->line != lastProfiledLine || profileNode->column != lastProfiledColumn))
+				{
+					const SINT64 currentPerfCounter = fb_utils::query_performance_counter();
+
+					attachment->getProfiler(tdbb)->hitLineColumn(request,
+						profileNode->line, profileNode->column,
+						currentPerfCounter - lastPerfCounter);
+
+					lastPerfCounter = currentPerfCounter;
+					lastProfiledLine = profileNode->line;
+					lastProfiledColumn = profileNode->column;
+				}
+
+				if (node->hasLineColumn)
+					profileNode = node;
 			}
 
 			node = node->execute(tdbb, request, &exeState);
@@ -1395,6 +1419,20 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 			}
 		}
 	} // while()
+
+	if (attachment->isProfilerActive() &&
+		!request->hasInternalStatement() &&
+		profileNode &&
+		profileNode->hasLineColumn &&
+		profileNode->isProfileAware() &&
+		(profileNode->line != lastProfiledLine || profileNode->column != lastProfiledColumn))
+	{
+		const SINT64 currentPerfCounter = fb_utils::query_performance_counter();
+
+		attachment->getProfiler(tdbb)->hitLineColumn(request,
+			profileNode->line, profileNode->column,
+			currentPerfCounter - lastPerfCounter);
+	}
 
 	request->adjustCallerStats();
 

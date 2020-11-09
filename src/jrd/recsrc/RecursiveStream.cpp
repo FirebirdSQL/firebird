@@ -66,7 +66,7 @@ RecursiveStream::RecursiveStream(CompilerScratch* csb, StreamType stream, Stream
 	m_inner->markRecursive();
 }
 
-void RecursiveStream::open(thread_db* tdbb) const
+void RecursiveStream::internalOpen(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -115,7 +115,7 @@ void RecursiveStream::close(thread_db* tdbb) const
 	}
 }
 
-bool RecursiveStream::getRecord(thread_db* tdbb) const
+bool RecursiveStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -243,24 +243,34 @@ bool RecursiveStream::lockRecord(thread_db* /*tdbb*/) const
 	return false; // compiler silencer
 }
 
-void RecursiveStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void RecursiveStream::getChildren(Array<const RecordSource*>& children) const
+{
+	children.add(m_root);
+	children.add(m_inner);
+}
+
+void RecursiveStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 	{
 		plan += printIndent(++level) + "Recursion";
-		m_root->print(tdbb, plan, true, level);
-		m_inner->print(tdbb, plan, true, level);
+
+		if (recurse)
+		{
+			m_root->print(tdbb, plan, true, level, recurse);
+			m_inner->print(tdbb, plan, true, level, recurse);
+		}
 	}
 	else
 	{
 		if (!level)
 			plan += "(";
 
-		m_root->print(tdbb, plan, false, level + 1);
+		m_root->print(tdbb, plan, false, level + 1, recurse);
 
 		plan += ", ";
 
-		m_inner->print(tdbb, plan, false, level + 1);
+		m_inner->print(tdbb, plan, false, level + 1, recurse);
 
 		if (!level)
 			plan += ")";

@@ -40,14 +40,16 @@ using namespace Jrd;
 // -----------------------------
 
 SortedStream::SortedStream(CompilerScratch* csb, RecordSource* next, SortMap* map)
-	: m_next(next), m_map(map)
+	: RecordSource(csb),
+	  m_next(next),
+	  m_map(map)
 {
 	fb_assert(m_next && m_map);
 
 	m_impure = csb->allocImpure<Impure>();
 }
 
-void SortedStream::open(thread_db* tdbb) const
+void SortedStream::internalOpen(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -81,7 +83,7 @@ void SortedStream::close(thread_db* tdbb) const
 	}
 }
 
-bool SortedStream::getRecord(thread_db* tdbb) const
+bool SortedStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -111,8 +113,13 @@ bool SortedStream::lockRecord(thread_db* tdbb) const
 	return m_next->lockRecord(tdbb);
 }
 
+void SortedStream::getChildren(Array<const RecordSource*>& children) const
+{
+	children.add(m_next);
+}
+
 void SortedStream::print(thread_db* tdbb, string& plan,
-						 bool detailed, unsigned level) const
+						 bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 	{
@@ -123,13 +130,14 @@ void SortedStream::print(thread_db* tdbb, string& plan,
 		plan += printIndent(++level) +
 			((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
 
-		m_next->print(tdbb, plan, true, level);
+		if (recurse)
+			m_next->print(tdbb, plan, true, level, recurse);
 	}
 	else
 	{
 		level++;
 		plan += "SORT (";
-		m_next->print(tdbb, plan, false, level);
+		m_next->print(tdbb, plan, false, level, recurse);
 		plan += ")";
 	}
 }

@@ -59,7 +59,7 @@ Union::Union(CompilerScratch* csb, StreamType stream,
 		m_streams[i] = streams[i];
 }
 
-void Union::open(thread_db* tdbb) const
+void Union::internalOpen(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -97,7 +97,7 @@ void Union::close(thread_db* tdbb) const
 	}
 }
 
-bool Union::getRecord(thread_db* tdbb) const
+bool Union::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -164,14 +164,23 @@ bool Union::lockRecord(thread_db* tdbb) const
 	return m_args[impure->irsb_count]->lockRecord(tdbb);
 }
 
-void Union::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void Union::getChildren(Array<const RecordSource*>& children) const
+{
+	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+		children.add(m_args[i]);
+}
+
+void Union::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 	{
 		plan += printIndent(++level) + (m_args.getCount() == 1 ? "Materialize" : "Union");
 
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-			m_args[i]->print(tdbb, plan, true, level);
+		if (recurse)
+		{
+			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+				m_args[i]->print(tdbb, plan, true, level, recurse);
+		}
 	}
 	else
 	{
@@ -183,7 +192,7 @@ void Union::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) 
 			if (i)
 				plan += ", ";
 
-			m_args[i]->print(tdbb, plan, false, level + 1);
+			m_args[i]->print(tdbb, plan, false, level + 1, recurse);
 		}
 
 		if (!level)

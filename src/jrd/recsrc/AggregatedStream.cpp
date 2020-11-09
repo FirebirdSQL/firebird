@@ -52,7 +52,7 @@ BaseAggWinStream<ThisType, NextType>::BaseAggWinStream(thread_db* tdbb, Compiler
 }
 
 template <typename ThisType, typename NextType>
-void BaseAggWinStream<ThisType, NextType>::open(thread_db* tdbb) const
+void BaseAggWinStream<ThisType, NextType>::internalOpen(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = getImpure(request);
@@ -367,15 +367,21 @@ AggregatedStream::AggregatedStream(thread_db* tdbb, CompilerScratch* csb, Stream
 	fb_assert(map);
 }
 
-void AggregatedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void AggregatedStream::getChildren(Array<const RecordSource*>& children) const
+{
+	children.add(m_next);
+}
+
+void AggregatedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 		plan += printIndent(++level) + "Aggregate";
 
-	m_next->print(tdbb, plan, detailed, level);
+	if (recurse)
+		m_next->print(tdbb, plan, detailed, level, recurse);
 }
 
-bool AggregatedStream::getRecord(thread_db* tdbb) const
+bool AggregatedStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 

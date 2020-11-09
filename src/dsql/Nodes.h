@@ -1518,6 +1518,11 @@ public:
 		return NULL;
 	}
 
+	virtual bool isProfileAware() const
+	{
+		return true;
+	}
+
 	virtual const StmtNode* execute(thread_db* tdbb, jrd_req* request, ExeState* exeState) const = 0;
 
 public:

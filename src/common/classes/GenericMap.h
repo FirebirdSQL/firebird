@@ -53,6 +53,44 @@ namespace Firebird {
 template <typename KeyValuePair, typename KeyComparator = DefaultComparator<typename KeyValuePair::first_type> >
 class GenericMap : public AutoStorage
 {
+private:
+	template <typename TGenericMap, typename TAccessor, typename TKeyValuePair>
+	class BaseIterator
+	{
+	public:
+		BaseIterator(TGenericMap* map, bool initFinished = false)
+			: accessor(map),
+			  finished(initFinished)
+		{
+			if (!initFinished)
+				finished = !accessor.getFirst();
+		}
+
+	public:
+		bool operator !=(const BaseIterator& o)
+		{
+			return !(
+				(finished && o.finished) ||
+				((!finished && !o.finished && accessor.current() == o.accessor.current())));
+		}
+
+		void operator ++()
+		{
+			fb_assert(!finished);
+			finished = !accessor.getNext();
+		}
+
+		TKeyValuePair& operator *()
+		{
+			fb_assert(!finished);
+			return *accessor.current();
+		}
+
+	private:
+		TAccessor accessor;
+		bool finished;
+	};
+
 public:
 	typedef typename KeyValuePair::first_type KeyType;
 	typedef typename KeyValuePair::second_type ValueType;
@@ -75,9 +113,6 @@ public:
 		bool fastRemove() { return m_Accessor.fastRemove(); }
 
 	private:
-		Accessor(const Accessor&);
-		Accessor& operator=(const Accessor&);
-
 		TreeAccessor m_Accessor;
 	};
 
@@ -94,11 +129,11 @@ public:
 		ValueType* locate(const KeyType& key) { return m_Accessor.locate(key); }
 
 	private:
-		ConstAccessor(const ConstAccessor&);
-		ConstAccessor& operator=(const ConstAccessor&);
-
 		ConstTreeAccessor m_Accessor;
 	};
+
+	using Iterator = BaseIterator<GenericMap, Accessor, KeyValuePair>;
+	using ConstIterator = BaseIterator<const GenericMap, ConstAccessor, const KeyValuePair>;
 
 	friend class Accessor;
 	friend class ConstAccessor;
@@ -254,12 +289,46 @@ public:
 
 	size_t count() const { return mCount; }
 
+	Accessor accessor()
+	{
+		return Accessor(this);
+	}
+
+	ConstAccessor constAccessor() const
+	{
+		return ConstAccessor(this);
+	}
+
+	Iterator begin()
+	{
+		return Iterator(this);
+	}
+
+	ConstIterator begin() const
+	{
+		return ConstIterator(this);
+	}
+
+	Iterator end()
+	{
+		return Iterator(this, true);
+	}
+
+	ConstIterator end() const
+	{
+		return ConstIterator(this, true);
+	}
+
 private:
 	ValuesTree tree;
 	size_t mCount;
 };
 
 typedef GenericMap<Pair<Full<string, string> > > StringMap;
+template <typename T, typename V> using NonPooledMap = GenericMap<Pair<NonPooled<T, V>>>;
+template <typename T, typename V> using LeftPooledMap = GenericMap<Pair<Left<T, V>>>;
+template <typename T, typename V> using RightPooledMap = GenericMap<Pair<Right<T, V>>>;
+template <typename T, typename V> using FullPooledMap = GenericMap<Pair<Full<T, V>>>;
 
 }
 

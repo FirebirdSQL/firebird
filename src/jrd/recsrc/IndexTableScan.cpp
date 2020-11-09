@@ -60,7 +60,7 @@ IndexTableScan::IndexTableScan(CompilerScratch* csb, const string& alias,
 	m_impure = csb->allocImpure(FB_ALIGNMENT, static_cast<ULONG>(size));
 }
 
-void IndexTableScan::open(thread_db* tdbb) const
+void IndexTableScan::internalOpen(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -123,7 +123,7 @@ void IndexTableScan::close(thread_db* tdbb) const
 #endif
 }
 
-bool IndexTableScan::getRecord(thread_db* tdbb) const
+bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -263,7 +263,11 @@ bool IndexTableScan::getRecord(thread_db* tdbb) const
 	return false;
 }
 
-void IndexTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void IndexTableScan::getChildren(Array<const RecordSource*>& children) const
+{
+}
+
+void IndexTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 	{

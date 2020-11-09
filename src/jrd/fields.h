@@ -213,3 +213,10 @@
 
 	FIELD(fld_pub_name		, nam_pub_name		, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, false)
 	FIELD(fld_file_id		, nam_file_id		, dtype_varying	, 255						, dsc_text_type_ascii		, NULL		, false)
+
+	FIELD(fld_request_type	, nam_request_type	, dtype_varying	, 20 * METADATA_BYTES_PER_CHAR, dsc_text_type_metadata	, NULL		, true)
+	FIELD(fld_routine_name	, nam_routine_name	, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true)
+	FIELD(fld_short_description, nam_short_description, dtype_varying, 255 * METADATA_BYTES_PER_CHAR, dsc_text_type_metadata, NULL	, true)
+	FIELD(fld_cursor_id		, nam_cursor_id		, dtype_int64, sizeof(SINT64)				, 0							, NULL		, true)
+
+	FIELD(fld_prof_ses_id	, nam_prof_ses_id	, dtype_int64	, sizeof(SINT64)			, 0							, NULL		, true)

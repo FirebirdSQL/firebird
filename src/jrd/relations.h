@@ -723,3 +723,55 @@ RELATION(nam_pub_tables, rel_pub_tables, ODS_13_0, rel_persistent)
 	FIELD(f_pubtab_pub_name, nam_pub_name, fld_pub_name, 1, ODS_13_0)
 	FIELD(f_pubtab_tab_name, nam_tab_name, fld_r_name, 1, ODS_13_0)
 END_RELATION
+
+//// TODO: Adjust ODS.
+//// FIXME: Nullable fields.
+
+// Relation 53 (RDB$PROFILE_SESSIONS)
+RELATION(nam_prof_ses, rel_prof_sessions, ODS_13_0, rel_virtual)
+	FIELD(f_prof_ses_id, nam_prof_ses_id, fld_prof_ses_id, 0, ODS_13_0)
+	FIELD(f_prof_ses_desc, nam_description, fld_short_description, 0, ODS_13_0)
+	FIELD(f_prof_ses_start_timestamp, nam_start_timestamp, fld_timestamp_tz, 0, ODS_13_0)
+	FIELD(f_prof_ses_finish_timestamp, nam_finish_timestamp, fld_timestamp_tz, 0, ODS_13_0)
+END_RELATION
+
+// Relation 54 (RDB$PROFILE_REQUESTS)
+RELATION(nam_prof_requests, rel_prof_requests, ODS_13_0, rel_virtual)
+	FIELD(f_prof_req_ses_id, nam_prof_ses_id, fld_prof_ses_id, 0, ODS_13_0)
+	FIELD(f_prof_req_req_id, nam_prof_req_id, fld_stmt_id, 0, ODS_13_0)
+	FIELD(f_prof_req_time, nam_time, fld_timestamp_tz, 0, ODS_13_0)
+	FIELD(f_prof_req_type, nam_request_type, fld_request_type, 0, ODS_13_0)
+	FIELD(f_prof_req_pkg_name, nam_pkg_name, fld_pkg_name, 0, ODS_13_0)
+	FIELD(f_prof_req_routine, nam_routine_name, fld_routine_name, 0, ODS_13_0)
+	FIELD(f_prof_req_sql_text, nam_sql_text, fld_source, 0, ODS_13_0)
+END_RELATION
+
+// Relation 55 (RDB$PROFILE_STATS)
+RELATION(nam_prof_stats, rel_prof_stats, ODS_13_0, rel_virtual)
+	FIELD(f_prof_stats_ses_id, nam_prof_ses_id, fld_prof_ses_id, 0, ODS_13_0)
+	FIELD(f_prof_stats_req_id, nam_prof_req_id, fld_stmt_id, 0, ODS_13_0)
+	FIELD(f_prof_stats_line, nam_line, fld_src_info, 0, ODS_13_0)
+	FIELD(f_prof_stats_column, nam_column, fld_src_info, 0, ODS_13_0)
+	FIELD(f_prof_stats_counter, nam_counter, fld_counter, 0, ODS_13_0)
+	FIELD(f_prof_stats_min_time, nam_min_time, fld_counter, 0, ODS_13_0)
+	FIELD(f_prof_stats_max_time, nam_max_time, fld_counter, 0, ODS_13_0)
+	FIELD(f_prof_stats_total_time, nam_total_time, fld_counter, 0, ODS_13_0)
+END_RELATION
+
+// Relation 56 (RDB$PROFILE_RECORD_SOURCE_STATS)
+RELATION(nam_prof_recsrc_stats, rel_prof_recsrc_stats, ODS_13_0, rel_virtual)
+	FIELD(f_prof_recsrc_stats_ses_id, nam_prof_ses_id, fld_prof_ses_id, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_req_id, nam_prof_req_id, fld_stmt_id, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_cursor_id, nam_cursor_id, fld_cursor_id, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_recsrc_id, nam_recsrc_id, fld_cursor_id, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_parent_recsrc_id, nam_parent_recsrc_id, fld_cursor_id, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_access_path, nam_access_path, fld_short_description, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_open_counter, nam_open_counter, fld_counter, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_open_min_time, nam_open_min_time, fld_counter, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_open_max_time, nam_open_max_time, fld_counter, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_open_total_time, nam_open_total_time, fld_counter, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_fetch_counter, nam_fetch_counter, fld_counter, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_fetch_min_time, nam_fetch_min_time, fld_counter, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_fetch_max_time, nam_fetch_max_time, fld_counter, 0, ODS_13_0)
+	FIELD(f_prof_recsrc_stats_fetch_total_time, nam_fetch_total_time, fld_counter, 0, ODS_13_0)
+END_RELATION

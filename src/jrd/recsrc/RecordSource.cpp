@@ -26,6 +26,7 @@
 #include "../jrd/intl.h"
 #include "../jrd/req.h"
 #include "../jrd/rse.h"
+#include "../jrd/Profiler.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/dpm_proto.h"
 #include "../jrd/err_proto.h"
@@ -43,6 +44,53 @@ using namespace Jrd;
 
 // Record source class
 // -------------------
+
+RecordSource::RecordSource(CompilerScratch* csb)
+	: m_impure(0),
+	  m_recSourceProfileId(csb->csb_nextRecSourceProfileId++),
+	  m_recursive(false)
+{
+}
+
+void RecordSource::open(thread_db* tdbb) const
+{
+	const auto attachment = tdbb->getAttachment();
+	const auto request = tdbb->getRequest();
+
+	const SINT64 lastPerfCounter = attachment->isProfilerActive() && !request->hasInternalStatement() ?
+		fb_utils::query_performance_counter() :
+		0;
+
+	internalOpen(tdbb);
+
+	if (lastPerfCounter)
+	{
+		const SINT64 currentPerfCounter = fb_utils::query_performance_counter();
+		attachment->getProfiler(tdbb)->hitRecSourceOpen(
+			request, m_recSourceProfileId, currentPerfCounter - lastPerfCounter);
+	}
+}
+
+bool RecordSource::getRecord(thread_db* tdbb) const
+{
+	const auto attachment = tdbb->getAttachment();
+	const auto request = tdbb->getRequest();
+
+	const SINT64 lastPerfCounter = attachment->isProfilerActive() && !request->hasInternalStatement() ?
+		fb_utils::query_performance_counter() :
+		0;
+
+	const auto ret = internalGetRecord(tdbb);
+
+	if (lastPerfCounter)
+	{
+		const SINT64 currentPerfCounter = fb_utils::query_performance_counter();
+		attachment->getProfiler(tdbb)->hitRecSourceGetRecord(
+			request, m_recSourceProfileId, currentPerfCounter - lastPerfCounter);
+	}
+
+	return ret;
+}
 
 string RecordSource::printName(thread_db* tdbb, const string& name, bool quote)
 {
@@ -200,7 +248,9 @@ RecordSource::~RecordSource()
 // ------------------
 
 RecordStream::RecordStream(CompilerScratch* csb, StreamType stream, const Format* format)
-	: m_stream(stream), m_format(format ? format : csb->csb_rpt[stream].csb_format)
+	: RecordSource(csb),
+	  m_stream(stream),
+	  m_format(format ? format : csb->csb_rpt[stream].csb_format)
 {
 	fb_assert(m_format);
 }

@@ -46,7 +46,7 @@ BitmapTableScan::BitmapTableScan(CompilerScratch* csb, const string& alias,
 	m_impure = csb->allocImpure<Impure>();
 }
 
-void BitmapTableScan::open(thread_db* tdbb) const
+void BitmapTableScan::internalOpen(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -80,7 +80,7 @@ void BitmapTableScan::close(thread_db* tdbb) const
 	}
 }
 
-bool BitmapTableScan::getRecord(thread_db* tdbb) const
+bool BitmapTableScan::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -121,8 +121,12 @@ bool BitmapTableScan::getRecord(thread_db* tdbb) const
 	return false;
 }
 
+void BitmapTableScan::getChildren(Array<const RecordSource*>& children) const
+{
+}
+
 void BitmapTableScan::print(thread_db* tdbb, string& plan,
-							bool detailed, unsigned level) const
+							bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 	{

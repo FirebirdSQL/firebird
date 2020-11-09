@@ -23,6 +23,7 @@
 #include "firebird.h"
 #include "../jrd/jrd.h"
 #include "../jrd/req.h"
+#include "../jrd/Profiler.h"
 #include "../jrd/cmp_proto.h"
 
 #include "RecordSource.h"
@@ -101,11 +102,17 @@ Cursor::Cursor(CompilerScratch* csb, const RecordSource* rsb,
 	fb_assert(m_top);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_profileId = csb->csb_nextCursorProfileId++;
 }
 
 void Cursor::open(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	const auto request = tdbb->getRequest();
+	const auto attachment = tdbb->getAttachment();
+
+	if (attachment->isProfilerActive() && !request->hasInternalStatement())
+		attachment->getProfiler(tdbb)->setupCursor(tdbb, request, this);
+
 	Impure* impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_active = true;
@@ -132,7 +139,12 @@ bool Cursor::fetchNext(thread_db* tdbb) const
 	if (!validate(tdbb))
 		return false;
 
-	jrd_req* const request = tdbb->getRequest();
+	const auto request = tdbb->getRequest();
+	const auto attachment = tdbb->getAttachment();
+
+	if (attachment->isProfilerActive() && !request->hasInternalStatement())
+		attachment->getProfiler(tdbb)->setupCursor(tdbb, request, this);
+
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!impure->irsb_active)
@@ -193,7 +205,12 @@ bool Cursor::fetchPrior(thread_db* tdbb) const
 	if (!validate(tdbb))
 		return false;
 
-	jrd_req* const request = tdbb->getRequest();
+	const auto request = tdbb->getRequest();
+	const auto attachment = tdbb->getAttachment();
+
+	if (attachment->isProfilerActive() && !request->hasInternalStatement())
+		attachment->getProfiler(tdbb)->setupCursor(tdbb, request, this);
+
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!impure->irsb_active)
@@ -266,7 +283,12 @@ bool Cursor::fetchAbsolute(thread_db* tdbb, SINT64 offset) const
 	if (!validate(tdbb))
 		return false;
 
-	jrd_req* const request = tdbb->getRequest();
+	const auto request = tdbb->getRequest();
+	const auto attachment = tdbb->getAttachment();
+
+	if (attachment->isProfilerActive() && !request->hasInternalStatement())
+		attachment->getProfiler(tdbb)->setupCursor(tdbb, request, this);
+
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!impure->irsb_active)
@@ -309,7 +331,12 @@ bool Cursor::fetchRelative(thread_db* tdbb, SINT64 offset) const
 	if (!validate(tdbb))
 		return false;
 
-	jrd_req* const request = tdbb->getRequest();
+	const auto request = tdbb->getRequest();
+	const auto attachment = tdbb->getAttachment();
+
+	if (attachment->isProfilerActive() && !request->hasInternalStatement())
+		attachment->getProfiler(tdbb)->setupCursor(tdbb, request, this);
+
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!impure->irsb_active)

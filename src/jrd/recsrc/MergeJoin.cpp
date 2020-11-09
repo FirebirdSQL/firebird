@@ -38,7 +38,9 @@ static const char* const SCRATCH = "fb_merge_";
 
 MergeJoin::MergeJoin(CompilerScratch* csb, FB_SIZE_T count,
 					 SortedStream* const* args, const NestValueArray* const* keys)
-	: m_args(csb->csb_pool), m_keys(csb->csb_pool)
+	: RecordSource(csb),
+	  m_args(csb->csb_pool),
+	  m_keys(csb->csb_pool)
 {
 	const size_t size = sizeof(struct Impure) + count * sizeof(Impure::irsb_mrg_repeat);
 	m_impure = csb->allocImpure(FB_ALIGNMENT, static_cast<ULONG>(size));
@@ -56,7 +58,7 @@ MergeJoin::MergeJoin(CompilerScratch* csb, FB_SIZE_T count,
 	}
 }
 
-void MergeJoin::open(thread_db* tdbb) const
+void MergeJoin::internalOpen(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -125,7 +127,7 @@ void MergeJoin::close(thread_db* tdbb) const
 	}
 }
 
-bool MergeJoin::getRecord(thread_db* tdbb) const
+bool MergeJoin::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -180,7 +182,7 @@ bool MergeJoin::getRecord(thread_db* tdbb) const
 		{
 			mfb->mfb_current_block = 0;
 			mfb->mfb_equal_records = 0;
-			if ((record = getRecord(tdbb, i)) < 0)
+			if ((record = getRecordByIndex(tdbb, i)) < 0)
 				return false;
 		}
 
@@ -224,7 +226,7 @@ bool MergeJoin::getRecord(thread_db* tdbb) const
 					mfb->mfb_current_block = 0;
 					mfb->mfb_equal_records = 0;
 
-					const SLONG record = getRecord(tdbb, i);
+					const SLONG record = getRecordByIndex(tdbb, i);
 					if (record < 0)
 						return false;
 
@@ -255,7 +257,7 @@ bool MergeJoin::getRecord(thread_db* tdbb) const
 		memcpy(first_data, getData(tdbb, mfb, 0), key_length);
 
 		SLONG record;
-		while ((record = getRecord(tdbb, i)) >= 0)
+		while ((record = getRecordByIndex(tdbb, i)) >= 0)
 		{
 			const UCHAR* p = first_data;
 			const UCHAR* q = getData(tdbb, mfb, record);
@@ -336,14 +338,23 @@ bool MergeJoin::lockRecord(thread_db* /*tdbb*/) const
 	return false; // compiler silencer
 }
 
-void MergeJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void MergeJoin::getChildren(Array<const RecordSource*>& children) const
+{
+	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+		children.add(m_args[i]);
+}
+
+void MergeJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 	{
 		plan += printIndent(++level) + "Merge Join (inner)";
 
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-			m_args[i]->print(tdbb, plan, true, level);
+		if (recurse)
+		{
+			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+				m_args[i]->print(tdbb, plan, true, level, recurse);
+		}
 	}
 	else
 	{
@@ -354,7 +365,7 @@ void MergeJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned lev
 			if (i)
 				plan += ", ";
 
-			m_args[i]->print(tdbb, plan, false, level);
+			m_args[i]->print(tdbb, plan, false, level, recurse);
 		}
 		plan += ")";
 	}
@@ -434,7 +445,7 @@ UCHAR* MergeJoin::getData(thread_db* /*tdbb*/, MergeFile* mfb, SLONG record) con
 	return mfb->mfb_block_data + merge_offset;
 }
 
-SLONG MergeJoin::getRecord(thread_db* tdbb, FB_SIZE_T index) const
+SLONG MergeJoin::getRecordByIndex(thread_db* tdbb, FB_SIZE_T index) const
 {
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);

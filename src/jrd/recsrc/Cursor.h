@@ -78,6 +78,11 @@ namespace Jrd
 
 		void checkState(jrd_req* request) const;
 
+		ULONG getProfileId() const
+		{
+			return m_profileId;
+		}
+
 		const RecordSource* getAccessPath() const
 		{
 			return m_top;
@@ -88,6 +93,7 @@ namespace Jrd
 
 	private:
 		ULONG m_impure;
+		ULONG m_profileId;
 		const RecordSource* const m_top;
 		const VarInvariantArray* const m_invariants;
 		const bool m_scrollable;

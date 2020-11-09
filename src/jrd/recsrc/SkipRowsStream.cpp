@@ -37,14 +37,16 @@ using namespace Jrd;
 // -------------------------------
 
 SkipRowsStream::SkipRowsStream(CompilerScratch* csb, RecordSource* next, ValueExprNode* value)
-	: m_next(next), m_value(value)
+	: RecordSource(csb),
+	  m_next(next),
+	  m_value(value)
 {
 	fb_assert(m_next && m_value);
 
 	m_impure = csb->allocImpure<Impure>();
 }
 
-void SkipRowsStream::open(thread_db* tdbb) const
+void SkipRowsStream::internalOpen(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -80,7 +82,7 @@ void SkipRowsStream::close(thread_db* tdbb) const
 	}
 }
 
-bool SkipRowsStream::getRecord(thread_db* tdbb) const
+bool SkipRowsStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -113,12 +115,18 @@ bool SkipRowsStream::lockRecord(thread_db* tdbb) const
 	return m_next->lockRecord(tdbb);
 }
 
-void SkipRowsStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void SkipRowsStream::getChildren(Array<const RecordSource*>& children) const
+{
+	children.add(m_next);
+}
+
+void SkipRowsStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 		plan += printIndent(++level) + "Skip N Records";
 
-	m_next->print(tdbb, plan, detailed, level);
+	if (recurse)
+		m_next->print(tdbb, plan, detailed, level, recurse);
 }
 
 void SkipRowsStream::markRecursive()

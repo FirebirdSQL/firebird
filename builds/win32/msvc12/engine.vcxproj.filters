@@ -318,6 +318,9 @@
     <ClCompile Include="..\..\..\src\jrd\PreparedStatement.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\Profiler.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\RandomGenerator.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
@@ -879,6 +882,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\PreparedStatement.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\Profiler.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\que.h">

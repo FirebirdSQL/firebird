@@ -39,6 +39,12 @@ public:
 		return count;
 	}
 
+	void resetCount(size_t newCount)
+	{
+		fb_assert(newCount <= count);
+		count = newCount;
+	}
+
 	Record* getTempRecord() const
 	{
 		return record;

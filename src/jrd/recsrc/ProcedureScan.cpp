@@ -53,7 +53,7 @@ ProcedureScan::ProcedureScan(CompilerScratch* csb, const string& alias, StreamTy
 		fb_assert(sourceList->items.getCount() == targetList->items.getCount());
 }
 
-void ProcedureScan::open(thread_db* tdbb) const
+void ProcedureScan::internalOpen(thread_db* tdbb) const
 {
 	if (!m_procedure->isImplemented())
 	{
@@ -159,7 +159,7 @@ void ProcedureScan::close(thread_db* tdbb) const
 	}
 }
 
-bool ProcedureScan::getRecord(thread_db* tdbb) const
+bool ProcedureScan::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -241,7 +241,11 @@ bool ProcedureScan::lockRecord(thread_db* /*tdbb*/) const
 	return false; // compiler silencer
 }
 
-void ProcedureScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void ProcedureScan::getChildren(Array<const RecordSource*>& children) const
+{
+}
+
+void ProcedureScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
 {
 	if (detailed)
 	{
