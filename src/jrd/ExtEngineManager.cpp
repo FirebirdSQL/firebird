@@ -1281,8 +1281,8 @@ void ExtEngineManager::closeAttachment(thread_db* tdbb, Attachment* attachment)
 				if (close)
 				{
 					WriteLockGuard writeGuard(enginesLock, FB_FUNCTION);					
-					engines.remove(accessor.current()->first);
-					engine->release();
+					if (engines.remove(accessor.current()->first)) // If engine has already been deleted - nothing to do
+						engine->release();
 				}
 			}
 
