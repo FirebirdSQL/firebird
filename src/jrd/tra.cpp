@@ -1817,6 +1817,8 @@ void TRA_sweep(thread_db* tdbb)
 
 		attachment->att_flags &= ~ATT_notify_gc;
 
+		// Mark this attachment to allow properly terminate it
+		attachment->att_flags |= ATT_sweep_thread;
 		if (VIO_sweep(tdbb, transaction, &traceSweep))
 		{
 			// At this point, we know that no record versions belonging to dead
@@ -2677,35 +2679,21 @@ static void start_sweeper(thread_db* tdbb)
 
 	TRA_update_counters(tdbb, dbb);
 
-	// allocate space for the string and a null at the end
-	const char* pszFilename = tdbb->getAttachment()->att_filename.c_str();
-
-	char* database = (char*) gds__alloc(static_cast<SLONG>(strlen(pszFilename)) + 1);
-
-	if (database)
+	try
 	{
-		strcpy(database, pszFilename);
-
-		try
-		{
-			Thread::start(sweep_database, database, THREAD_medium);
-			return;
-		}
-		catch (const Firebird::Exception& ex)
-		{
-			gds__free(database);
-			iscLogException("cannot start sweep thread", ex);
-		}
+		dbb->dbb_sweeper->start();
+		return;
 	}
-	else
+	catch (const Firebird::Exception& ex)
 	{
-		ERR_log(0, 0, "cannot start sweep thread, Out of Memory");
+		iscLogException("cannot start sweep thread", ex);
 	}
+
 	dbb->clearSweepFlags(tdbb);
 }
 
 
-static THREAD_ENTRY_DECLARE sweep_database(THREAD_ENTRY_PARAM database)
+static THREAD_ENTRY_DECLARE sweep_database(THREAD_ENTRY_PARAM sweeper)
 {
 /**************************************
  *
@@ -2727,19 +2715,51 @@ static THREAD_ENTRY_DECLARE sweep_database(THREAD_ENTRY_PARAM database)
 	ISC_STATUS_ARRAY status_vector = {0};
 	isc_db_handle db_handle = 0;
 
-	isc_attach_database(status_vector, 0, (const char*) database,
+	MutexEnsureUnlock guard(((Sweeper*) sweeper)->mutex, FB_FUNCTION);
+	guard.enter();
+	isc_attach_database(status_vector, 0, ((Sweeper*) sweeper)->getDatabase()->dbb_filename.c_str(),
 						&db_handle, dpb.getBufferLength(),
 						reinterpret_cast<const char*>(dpb.getBuffer()));
+	guard.leave();
 
 	if (db_handle)
 	{
 		isc_detach_database(status_vector, &db_handle);
 	}
 
-	gds__free(database);
 	return 0;
 }
 
+Sweeper::Sweeper(Database* dbb):
+	dbb(dbb),
+	sweepThreadHandle(0)
+{
+}
+
+Sweeper::~Sweeper()
+{
+	fb_assert(sweepThreadHandle == 0);
+}
+
+void Sweeper::start()
+{
+	stop();
+	Thread::start(sweep_database, (THREAD_ENTRY_PARAM) this, THREAD_medium, &sweepThreadHandle);
+}
+
+void Sweeper::stop()
+{
+	if (sweepThreadHandle)
+	{
+		Thread::waitForCompletion(sweepThreadHandle);
+		sweepThreadHandle = 0;
+	}
+}
+
+Database* Sweeper::getDatabase()
+{
+	return dbb;
+}
 
 static void transaction_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number)
 {

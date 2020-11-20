@@ -421,6 +421,7 @@ const ULONG ATT_security_db			= 0x20000L; // Attachment used for security purpos
 const ULONG ATT_mapping				= 0x40000L; // Attachment used for mapping auth block
 const ULONG ATT_crypt_thread		= 0x80000L; // Attachment from crypt thread
 const ULONG ATT_monitor_init		= 0x100000L; // Attachment is registered in monitoring
+const ULONG ATT_sweep_thread		= 0x200000L; // Attachment from sweep thread
 
 const ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 

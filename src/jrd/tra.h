@@ -653,6 +653,24 @@ inline void Savepoint::deleteActions(VerbAction* list)
 	}
 };
 
+
+class Sweeper
+{
+public:
+	explicit Sweeper(Database* dbb);
+	~Sweeper();
+	void start();
+	void stop();
+	Database* getDatabase();
+
+private:
+	Database* dbb;
+	Thread::Handle sweepThreadHandle;
+
+public:
+	Firebird::Mutex mutex;
+};
+
 } //namespace Jrd
 
 #endif // JRD_TRA_H

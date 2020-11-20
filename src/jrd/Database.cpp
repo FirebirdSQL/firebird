@@ -93,6 +93,7 @@ namespace Jrd
 				MemoryPool::deletePool(dbb_pools[i]);
 		}
 
+		delete dbb_sweeper;
 		delete dbb_monitoring_data;
 		delete dbb_backup_manager;
 		delete dbb_crypto_manager;

@@ -80,6 +80,7 @@ class ExternalFileDirectoryList;
 class MonitoringData;
 class GarbageCollector;
 class CryptoManager;
+class Sweeper;
 
 // general purpose vector
 template <class T, BlockType TYPE = type_vec>
@@ -471,6 +472,7 @@ public:
 	unsigned dbb_linger_seconds;
 	time_t dbb_linger_end;
 	Firebird::RefPtr<Firebird::IPluginConfig> dbb_plugin_config;
+	Sweeper* dbb_sweeper;
 
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;
