@@ -174,7 +174,7 @@ namespace EDS {
 
 void validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb)
 {
-	// Peliminary checks - should we really validate password ourself
+	// Preliminary checks - should we really validate the password ourselves
 	if (!dpb.find(isc_dpb_user_name))		// check for user name presence
 		return;
 	if (ISC_check_if_remote(file, false))	// check for remote connection
