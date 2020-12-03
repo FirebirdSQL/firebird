@@ -90,6 +90,7 @@ $(BIN_DIR)/cloop: \
 	$(OBJ_DIR)/cloop/Lexer.o \
 	$(OBJ_DIR)/cloop/Parser.o \
 	$(OBJ_DIR)/cloop/Main.o \
+	| $(BIN_DIR)
 
 	$(LD) $^ -o $@ $(LIBS)
 
