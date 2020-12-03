@@ -1929,8 +1929,8 @@ void dsql_req::destroy(thread_db* tdbb, dsql_req* request, bool drop)
 
 	if (drop)
 	{
-		request->req_dbb->deletePool(&request->getPool());
 		request->req_dbb->deletePool(request->liveScratchPool);
+		request->req_dbb->deletePool(&request->getPool());
 	}
 }
 
