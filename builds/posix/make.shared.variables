@@ -1,8 +1,9 @@
 # Helper functions
-doObjects= $(patsubst %.y,%.o,$(patsubst %.epp,%.o,$(patsubst %.c,%.o,$(1:.cpp=.o))))
+doObjects= $(patsubst %.m,%.o,$(patsubst %.y,%.o,$(patsubst %.epp,%.o,$(patsubst %.c,%.o,$(1:.cpp=.o)))))
 makeObjects= $(addprefix $(OBJ)/$(patsubst ../%,%,$(1))/,$(call doObjects,$2))
 dirFiles= $(notdir $(wildcard ../src/$(1)/*.cpp)) $(notdir $(wildcard ../src/$(1)/*.c)) \
-		  $(notdir $(wildcard ../src/$(1)/*.epp)) $(notdir $(wildcard ../src/$(1)/*.y))
+		  $(notdir $(wildcard ../src/$(1)/*.epp)) $(notdir $(wildcard ../src/$(1)/*.y)) \
+		  $(notdir $(wildcard ../src/$(1)/*.m))
 dirInPath= $(call makeObjects,$(1),$(call dirFiles,$(1)))
 
 dirMaster= $(call dirInPath,$(1))

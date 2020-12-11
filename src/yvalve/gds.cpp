@@ -49,6 +49,7 @@
 #include "../jrd/constants.h"
 #include "../jrd/status.h"
 #include "../common/os/os_utils.h"
+#include "../common/os/mac_utils.h"
 #include "../common/classes/BlrReader.h"
 
 #include "../common/classes/alloc.h"
@@ -3785,7 +3786,13 @@ public:
 		}
 		if (!tempDir.length() || tempDir.length() >= MAXPATHLEN)
 		{
-			tempDir = WORKFILE;
+#ifdef DARWIN
+			const char* tmp = getTemporaryFolder();
+			if (tmp)
+				tempDir = tmp;
+			else
+#endif
+				tempDir = WORKFILE;
 		}
 		tempDir.copyTo(fbTempDir, sizeof(fbTempDir));
 
@@ -3795,7 +3802,12 @@ public:
 		Firebird::PathName lockPrefix;
 		if (!fb_utils::readenv(FB_LOCK_ENV, lockPrefix))
 		{
-#ifndef WIN_NT
+#if defined(DARWIN)
+			const char* tmp = getTemporaryFolder();
+			if (!tmp)
+				tmp = WORKFILE;
+			PathUtils::concatPath(lockPrefix, tmp, LOCKDIR);
+#elif !defined(WIN_NT)
 			PathUtils::concatPath(lockPrefix, WORKFILE, LOCKDIR);
 #else
 #ifdef WIN9X_SUPPORT

@@ -47,6 +47,7 @@
 #include "../common/gdsassert.h"
 #include "../common/os/path_utils.h"
 #include "../common/classes/init.h"
+#include "../common/os/mac_utils.h"
 
 #include "../common/classes/TempFile.h"
 
@@ -101,7 +102,13 @@ PathName TempFile::getTempPath()
 	}
 	if (path.empty())
 	{
-		path = DEFAULT_PATH;
+#ifdef DARWIN
+		const char* tmp = getTemporaryFolder();
+		if (tmp)
+			path = tmp;
+		else
+#endif
+			path = DEFAULT_PATH;
 	}
 
 	fb_assert(path.length());
