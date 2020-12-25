@@ -58,6 +58,7 @@
 #include "../common/classes/init.h"
 #include "../common/classes/TempFile.h"
 #include "../common/utils_proto.h"
+#include "../common/isc_f_proto.h"
 #include "../common/ThreadStart.h"
 
 #ifdef HAVE_UNISTD_H
@@ -1192,6 +1193,7 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 #endif
 
 	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
+	ISC_expand_filename(name, false);
 
 #ifdef WIN_NT
 	WaitForSingleObject(CleanupTraceHandles::trace_mutex_handle, INFINITE);

@@ -1803,7 +1803,8 @@ bool LockManager::create_process(CheckStatusWrapper* statusVector)
 
 	if (m_sharedMemory->eventInit(&process->prc_blocking) != FB_SUCCESS)
 	{
-		(Arg::StatusVector(statusVector) << Arg::Gds(isc_lockmanerr)).copyTo(statusVector);
+		(Arg::StatusVector(statusVector) << Arg::Gds(isc_lockmanerr) <<
+			Arg::Gds(isc_random) << Arg::Str("process blocking event failed to initialize properly")).copyTo(statusVector);
 		return false;
 	}
 
@@ -1826,7 +1827,8 @@ bool LockManager::create_process(CheckStatusWrapper* statusVector)
 		}
 		catch (const Exception& ex)
 		{
-			(Arg::Gds(isc_lockmanerr) << Arg::StatusVector(ex)).copyTo(statusVector);
+			(Arg::Gds(isc_lockmanerr) << Arg::StatusVector(ex) <<
+				Arg::Gds(isc_random) << Arg::Str("blocking thread failed to start")).copyTo(statusVector);
 
 			return false;
 		}
@@ -2302,7 +2304,8 @@ bool LockManager::init_owner_block(CheckStatusWrapper* statusVector, own* owner,
 
 	if (m_sharedMemory->eventInit(&owner->own_wakeup) != FB_SUCCESS)
 	{
-		(Arg::StatusVector(statusVector) << Arg::Gds(isc_lockmanerr)).copyTo(statusVector);
+		(Arg::StatusVector(statusVector) << Arg::Gds(isc_lockmanerr) <<
+			Arg::Gds(isc_random) << Arg::Str("owner wakeup event failed initialization")).copyTo(statusVector);
 		return false;
 	}
 
