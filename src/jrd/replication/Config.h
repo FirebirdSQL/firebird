@@ -61,6 +61,7 @@ namespace Replication
 		bool logErrors;
 		bool reportErrors;
 		bool disableOnError;
+		bool cascadeReplication;
 	};
 };
 
