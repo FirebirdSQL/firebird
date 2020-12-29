@@ -29,7 +29,7 @@ extern "C"
 {
 
 const char* getTemporaryFolder();
-Boolean IsSandboxed();
+bool IsSandboxed();
 
 } // extern "C"
 #else // DARWIN
