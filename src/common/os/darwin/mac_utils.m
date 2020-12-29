@@ -25,7 +25,7 @@
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
 
-Boolean IsSandboxed()
+Boolean isSandboxed()
 {
 	SecTaskRef task = SecTaskCreateFromSelf(nil);
 	CFTypeRef value = SecTaskCopyValueForEntitlement(task,
@@ -36,7 +36,7 @@ Boolean IsSandboxed()
 
 const char* getTemporaryFolder()
 {
-	if (!IsSandboxed())
+	if (!isSandboxed())
 		return NULL;
 
 	NSString* tempDir = NSTemporaryDirectory();
