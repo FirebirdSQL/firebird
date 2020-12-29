@@ -102,12 +102,10 @@ PathName TempFile::getTempPath()
 	}
 	if (path.empty())
 	{
-#ifdef DARWIN
 		const char* tmp = getTemporaryFolder();
 		if (tmp)
 			path = tmp;
 		else
-#endif
 			path = DEFAULT_PATH;
 	}
 

@@ -3788,12 +3788,10 @@ public:
 		}
 		if (!tempDir.length() || tempDir.length() >= MAXPATHLEN)
 		{
-#ifdef DARWIN
 			const char* tmp = getTemporaryFolder();
 			if (tmp)
 				tempDir = tmp;
 			else
-#endif
 				tempDir = WORKFILE;
 		}
 		tempDir.copyTo(fbTempDir, sizeof(fbTempDir));
@@ -3804,13 +3802,11 @@ public:
 		Firebird::PathName lockPrefix;
 		if (!fb_utils::readenv(FB_LOCK_ENV, lockPrefix))
 		{
-#if defined(DARWIN)
+#if !defined(WIN_NT)
 			const char* tmp = getTemporaryFolder();
 			if (!tmp)
 				tmp = WORKFILE;
 			PathUtils::concatPath(lockPrefix, tmp, LOCKDIR);
-#elif !defined(WIN_NT)
-			PathUtils::concatPath(lockPrefix, WORKFILE, LOCKDIR);
 #else
 #ifdef WIN9X_SUPPORT
 			// shell32.dll version 5.0 and later supports SHGetFolderPath entry point

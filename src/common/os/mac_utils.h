@@ -25,7 +25,18 @@
 #define COMMON_MAC_UTILS_H
 
 #ifdef DARWIN
-extern "C" const char* getTemporaryFolder();
+extern "C"
+{
+
+const char* getTemporaryFolder();
+Boolean IsSandboxed();
+
+} // extern "C"
+#else // DARWIN
+
+inline const char* getTemporaryFolder() { return "/tmp"; }
+inline bool isSandboxed() { return NULL; }
+
 #endif // DARWIN
 
 #endif // COMMON_MAC_UTILS_H
