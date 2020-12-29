@@ -55,6 +55,7 @@
 #include "../common/isc_proto.h"
 #include "../common/os/isc_i_proto.h"
 #include "../common/os/os_utils.h"
+#include "../common/os/mac_utils.h"
 #include "../common/isc_s_proto.h"
 #include "../common/file_params.h"
 #include "../common/gdsassert.h"
@@ -644,7 +645,7 @@ int SharedMemoryBase::eventInit(event_t* event)
 {
 /**************************************
  *
- *	I S C _ e v e n t _ i n i t	( S Y S V )
+ *	I S C _ e v e n t _ i n i t
  *
  **************************************
  *
@@ -678,8 +679,11 @@ int SharedMemoryBase::eventInit(event_t* event)
 	PTHREAD_ERROR(pthread_mutexattr_init(&mattr));
 	PTHREAD_ERROR(pthread_condattr_init(&cattr));
 #ifdef PTHREAD_PROCESS_SHARED
-	PTHREAD_ERROR(pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
-	PTHREAD_ERROR(pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED));
+	if (!isSandboxed())
+	{
+		PTHREAD_ERROR(pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
+		PTHREAD_ERROR(pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED));
+	}
 #else
 #error Your system must support PTHREAD_PROCESS_SHARED to use firebird.
 #endif
@@ -1355,7 +1359,8 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 
 				PTHREAD_ERR_RAISE(pthread_mutexattr_init(&mattr));
 #ifdef PTHREAD_PROCESS_SHARED
-				PTHREAD_ERR_RAISE(pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
+				if (!isSandboxed())
+					PTHREAD_ERR_RAISE(pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
 #else
 #error Your system must support PTHREAD_PROCESS_SHARED to use pthread shared futex in Firebird.
 #endif
