@@ -45,3 +45,9 @@ const char* getTemporaryFolder()
 
 	return tempDir.UTF8String;
 }
+
+void osLog(const char* msg)
+{
+	os_log(OS_LOG_DEFAULT, "%s", msg);
+}
+

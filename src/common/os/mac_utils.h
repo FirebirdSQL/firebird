@@ -30,6 +30,7 @@ extern "C"
 
 const char* getTemporaryFolder();
 bool isSandboxed();
+void osLog(const char*);
 
 } // extern "C"
 #else // DARWIN

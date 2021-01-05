@@ -58,7 +58,6 @@
 #include "../common/classes/init.h"
 #include "../common/classes/TempFile.h"
 #include "../common/utils_proto.h"
-#include "../common/isc_f_proto.h"
 #include "../common/ThreadStart.h"
 
 #ifdef HAVE_UNISTD_H
@@ -1192,8 +1191,24 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 	now = time((time_t *)0);
 #endif
 
+	TEXT hostName[MAXPATHLEN];
+	ISC_get_host(hostName, MAXPATHLEN);
+
+#ifdef DARWIN
+
+	static GlobalPtr<Firebird::Mutex> logMutex;		// protects big static
+	static char buffer[10240];						// buffer for messages
+	Firebird::MutexLockGuard(logMutex, FB_FUNCTION);
+	fb_utils::snprintf(buffer, sizeof(buffer), "\n\n%s\t%.25s\t", hostName, ctime(&now));
+	unsigned hdrlen = strlen(buffer);
+	va_start(ptr, text);
+	fb_utils::vsnprintf(&buffer[hdrlen], sizeof(buffer) - hdrlen, text, ptr);
+	va_end(ptr);
+	osLog(buffer);
+
+#else
+
 	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
-	ISC_expand_filename(name, false);
 
 #ifdef WIN_NT
 	WaitForSingleObject(CleanupTraceHandles::trace_mutex_handle, INFINITE);
@@ -1219,8 +1234,7 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 		fseek(file, 0, SEEK_END);
 #endif
 
-		TEXT buffer[MAXPATHLEN];
-		fprintf(file, "\n%s\t%.25s\t", ISC_get_host(buffer, MAXPATHLEN), ctime(&now));
+		fprintf(file, "\n%s\t%.25s\t", hostName, ctime(&now));
 		va_start(ptr, text);
 		vfprintf(file, text, ptr);
 		va_end(ptr);
@@ -1232,6 +1246,8 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 #ifdef WIN_NT
 	ReleaseMutex(CleanupTraceHandles::trace_mutex_handle);
 #endif
+
+#endif // DARWIN
 }
 
 #ifdef NOT_USED_OR_REPLACED

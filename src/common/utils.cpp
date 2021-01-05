@@ -1039,12 +1039,8 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 #endif
 			break;
 
-		case Firebird::IConfigManager::DIR_LOG:
-			s = "~/LibraryContainers/de.kic-software.DMSApp/Data/Library/Application Support/kiC/"; //"~/Library/Application Support/Firebird/";
-			s += name;
-			return s;
-
 		case Firebird::IConfigManager::DIR_CONF:
+		case Firebird::IConfigManager::DIR_LOG:
 		case Firebird::IConfigManager::DIR_GUARD:
 		case Firebird::IConfigManager::DIR_SECDB:
 			s = "";
