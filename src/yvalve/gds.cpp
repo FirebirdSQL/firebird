@@ -1196,14 +1196,15 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 
 #ifdef DARWIN
 
-	static GlobalPtr<Firebird::Mutex> logMutex;		// protects big static
-	static char buffer[10240];						// buffer for messages
+	static Firebird::GlobalPtr<Firebird::Mutex> logMutex;	// protects big static
+	static char buffer[10240];								// buffer for messages
 	Firebird::MutexLockGuard(logMutex, FB_FUNCTION);
 	fb_utils::snprintf(buffer, sizeof(buffer), "\n\n%s\t%.25s\t", hostName, ctime(&now));
 	unsigned hdrlen = strlen(buffer);
 	va_start(ptr, text);
-	fb_utils::vsnprintf(&buffer[hdrlen], sizeof(buffer) - hdrlen, text, ptr);
+	VSNPRINTF(&buffer[hdrlen], sizeof(buffer) - hdrlen, text, ptr);
 	va_end(ptr);
+	buffer[sizeof(buffer) - 1] = '\0';		// be safe
 	osLog(buffer);
 
 #else
