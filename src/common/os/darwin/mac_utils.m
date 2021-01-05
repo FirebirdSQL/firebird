@@ -24,6 +24,7 @@
 
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
+#import <os/log.h>
 
 Boolean isSandboxed()
 {
