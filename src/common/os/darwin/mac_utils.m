@@ -49,6 +49,6 @@ const char* getTemporaryFolder()
 
 void osLog(const char* msg)
 {
-	os_log(OS_LOG_DEFAULT, "%s", msg);
+	os_log_with_type(OS_LOG_DEFAULT, OS_LOG_TYPE_DEFAULT, "%{public}s", msg);
 }
 
