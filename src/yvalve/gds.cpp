@@ -1196,18 +1196,24 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 
 #ifdef DARWIN
 
-	static Firebird::GlobalPtr<Firebird::Mutex> logMutex;	// protects big static
-	static char buffer[10240];								// buffer for messages
-	Firebird::MutexLockGuard(logMutex, FB_FUNCTION);
-	fb_utils::snprintf(buffer, sizeof(buffer), "\n\n%s\t%.25s\t", hostName, ctime(&now));
-	unsigned hdrlen = strlen(buffer);
-	va_start(ptr, text);
-	VSNPRINTF(&buffer[hdrlen], sizeof(buffer) - hdrlen, text, ptr);
-	va_end(ptr);
-	buffer[sizeof(buffer) - 1] = '\0';		// be safe
-	osLog(buffer);
+	if (isSandboxed())
+	{
+		static Firebird::GlobalPtr<Firebird::Mutex> logMutex;	// protects big static
+		static char buffer[10240];								// buffer for messages
 
-#else
+		Firebird::MutexLockGuard(logMutex, FB_FUNCTION);
+		fb_utils::snprintf(buffer, sizeof(buffer), "\n\n%s\t%.25s\t", hostName, ctime(&now));
+		unsigned hdrlen = strlen(buffer);
+		va_start(ptr, text);
+		VSNPRINTF(&buffer[hdrlen], sizeof(buffer) - hdrlen, text, ptr);
+		va_end(ptr);
+		buffer[sizeof(buffer) - 1] = '\0';		// be safe
+
+		osLog(buffer);
+		return;
+	}
+
+#endif // DARWIN
 
 	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
 
@@ -1247,8 +1253,6 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 #ifdef WIN_NT
 	ReleaseMutex(CleanupTraceHandles::trace_mutex_handle);
 #endif
-
-#endif // DARWIN
 }
 
 #ifdef NOT_USED_OR_REPLACED
