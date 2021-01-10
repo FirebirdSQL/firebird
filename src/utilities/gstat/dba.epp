@@ -772,7 +772,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	// Check to make sure that the user accessing the database is either
 	// SYSDBA or owner of the database
 
-	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
+	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 	uSvc->fillDpb(dpb);
 	dpb.insertTag(isc_dpb_gstat_attach);
 	dpb.insertTag(isc_dpb_no_garbage_collect);

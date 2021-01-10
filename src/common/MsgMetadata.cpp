@@ -25,7 +25,7 @@
 #include "firebird.h"
 #include "../common/MsgMetadata.h"
 #include "../common/utils_proto.h"
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
 #include "../common/StatusHolder.h"
 #include "../jrd/align.h"
 
@@ -42,17 +42,6 @@ MetadataBuilder::MetadataBuilder(unsigned fieldCount)
 {
 	if (fieldCount)
 		msgMetadata->items.grow(fieldCount);
-}
-
-int MetadataBuilder::release()
-{
-	if (--refCounter != 0)
-	{
-		return 1;
-	}
-
-	delete this;
-	return 0;
 }
 
 void MetadataBuilder::setType(CheckStatusWrapper* status, unsigned index, unsigned type)
@@ -335,10 +324,10 @@ void MetadataBuilder::indexError(unsigned index, const char* functionName)
 
 
 // Add an item based on a descriptor.
-void MsgMetadata::addItem(const MetaName& name, bool nullable, const dsc& desc)
+void MsgMetadata::addItem(const MetaString& name, bool nullable, const dsc& desc)
 {
 	Item& item = items.add();
-	item.field = name.c_str();
+	item.field.assign(name.c_str(), name.length());
 	item.nullable = nullable;
 
 	SLONG sqlLen, sqlSubType, sqlScale, sqlType;
@@ -451,29 +440,5 @@ void MsgMetadata::assign(IMessageMetadata* from)
 
 	makeOffsets();
 }
-
-
-int MsgMetadata::release()
-{
-	if (--refCounter != 0)
-	{
-		return 1;
-	}
-
-	delete this;
-	return 0;
-}
-
-/*
-int AttMetadata::release()
-{
-	if (--refCounter != 0)
-	{
-		return 1;
-	}
-
-	delete this;
-	return 0;
-}*/
 
 }	// namespace Firebird

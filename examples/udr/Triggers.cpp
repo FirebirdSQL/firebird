@@ -31,7 +31,7 @@ using namespace Firebird;
 /***
 Sample usage:
 
-create database 'c:\temp\slave.fdb';
+create database 'c:\temp\replica.fdb';
 create table persons (
     id integer not null,
     name varchar(60) not null,
@@ -40,7 +40,7 @@ create table persons (
 );
 commit;
 
-create database 'c:\temp\master.fdb';
+create database 'c:\temp\main.fdb';
 create table persons (
     id integer not null,
     name varchar(60) not null,
@@ -54,7 +54,7 @@ create table replicate_config (
 );
 
 insert into replicate_config (name, data_source)
-   values ('ds1', 'c:\temp\slave.fdb');
+   values ('ds1', 'c:\temp\replica.fdb');
 
 create trigger persons_replicate
     after insert on persons
@@ -182,8 +182,8 @@ FB_UDR_BEGIN_TRIGGER(replicate)
 		strcat(buffer, outSqlDa->sqlvar[0].sqldata + sizeof(short));
 		strcat(buffer, "';\nend");
 
-		IAttachment* attachment = context->getAttachment(status);
-		ITransaction* transaction = context->getTransaction(status);
+		AutoRelease<IAttachment> attachment(context->getAttachment(status));
+		AutoRelease<ITransaction> transaction(context->getTransaction(status));
 
 		stmt.reset(attachment->prepare(status, transaction, 0, buffer, SQL_DIALECT_CURRENT, 0));
 
@@ -289,8 +289,8 @@ FB_UDR_BEGIN_TRIGGER(replicate_persons)
 		strcat(buffer, outSqlDa->sqlvar[0].sqldata + sizeof(short));
 		strcat(buffer, "';\nend");
 
-		IAttachment* attachment = context->getAttachment(status);
-		ITransaction* transaction = context->getTransaction(status);
+		AutoRelease<IAttachment> attachment(context->getAttachment(status));
+		AutoRelease<ITransaction> transaction(context->getTransaction(status));
 
 		stmt.reset(attachment->prepare(status, transaction, 0, buffer, SQL_DIALECT_CURRENT, 0));
 

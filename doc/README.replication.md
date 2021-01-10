@@ -30,11 +30,28 @@ All replication errors and warnings \(e.g. detected conflicts\) are written into
 
 Replication is configured using a single configuration file: replication.conf. It allows to define global settings as well as per-database settings. All the possible options are listed inside replication.conf, descriptions are provided as comments there. For per-database configuration, full database name must be specified \(aliases or wildcards are not allowed\) inside the {database} section.
 
-Tables to be replicated can be customized using two settings: include\_filter and exclude\_filter. They are regular expressions that are applied to table names and define rules for inclusion table\(s\) into the replication set or excluding them from the replication set.
+Inside the database, replication should be enabled via the DDL command:
+ALTER DATABASE ENABLE PUBLICATION
+
+Also, the replication set (aka publication) should be defined. It includes tables that should be replicated. This is also done via the DDL command:
+
+-- to replicate all tables (including the ones created later): 
+ALTER DATABASE INCLUDE ALL TO PUBLICATION 
+-- to replicate specific tables: 
+ALTER DATABASE INCLUDE TABLE T1, T2, T3 TO PUBLICATION 
+
+Tables may later be excluded from the replication set:
+
+-- to disable replication of all tables (including the ones created later): 
+ALTER DATABASE EXCLUDE ALL FROM PUBLICATION 
+-- to disable replication of specific tables: 
+ALTER DATABASE EXCLUDE TABLE T1, T2, T3 FROM PUBLICATION 
+
+Tables enabled for replicated can be additionally filtered using two settings in the configuration file: include\_filter and exclude\_filter. They are regular expressions that are applied to table names and define rules for inclusion table\(s\) into the replication set or excluding them from the replication set.
 
 Synchronous replication can be turned on using the sync\_replica setting \(multiple entries are allowed\). It must specify a connection string to the replica database, prefixed with username/password. In SuperServer and SuperClassic architectures, replica database is being internally attached when the first user gets connected to the master database and detached when the last user disconnects from the master database. In Classic Server architecture, every server process keeps an active connection to the replica database.
 
-Asynchronous replication requires setting up the journalling mechanism.The primary parameter is log\_directory which defines location of the replication journal. Once this location is specified, asynchronous replication is turned on and Firebird server starts producing the journal segments.
+Asynchronous replication requires setting up the journalling mechanism. The primary parameter is log\_directory which defines location of the replication journal. Once this location is specified, asynchronous replication is turned on and Firebird server starts producing the journal segments.
 
 Minimal configuration looks like this:
 
@@ -44,7 +61,7 @@ database = /data/mydb.fdb
     log\_archive\_directory = /shiplogs/mydb/  
 }
 
-Archiving is performed by copying the segments from /dblogs/mydb/ to /shiplogs/mydb/, Firebird server copies the segments  itself.
+Archiving is performed by copying the segments from /dblogs/mydb/ to /shiplogs/mydb/, Firebird server copies the segments itself.
 
 The same with user-defined archiving:
 

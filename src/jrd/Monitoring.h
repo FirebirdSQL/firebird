@@ -148,19 +148,8 @@ public:
 			storeField(field_id, VALUE_TIMESTAMP_TZ, sizeof(ISC_TIMESTAMP_TZ), &value);
 		}
 
-		void storeString(int field_id, const Firebird::string& value)
-		{
-			if (value.length())
-				storeField(field_id, VALUE_STRING, value.length(), value.c_str());
-		}
-
-		void storeString(int field_id, const Firebird::PathName& value)
-		{
-			if (value.length())
-				storeField(field_id, VALUE_STRING, value.length(), value.c_str());
-		}
-
-		void storeString(int field_id, const Firebird::MetaName& value)
+		template <class S>
+		void storeString(int field_id, const S& value)
 		{
 			if (value.length())
 				storeField(field_id, VALUE_STRING, value.length(), value.c_str());

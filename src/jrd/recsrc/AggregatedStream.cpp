@@ -48,7 +48,7 @@ BaseAggWinStream<ThisType, NextType>::BaseAggWinStream(thread_db* tdbb, Compiler
 	  m_oneRowWhenEmpty(oneRowWhenEmpty)
 {
 	fb_assert(m_next);
-	m_impure = CMP_impure(csb, sizeof(typename ThisType::Impure));
+	m_impure = csb->allocImpure<typename ThisType::Impure>();
 }
 
 template <typename ThisType, typename NextType>
@@ -132,8 +132,7 @@ bool BaseAggWinStream<ThisType, NextType>::evaluateGroup(thread_db* tdbb) const
 {
 	jrd_req* const request = tdbb->getRequest();
 
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	Impure* const impure = getImpure(request);
 
@@ -378,8 +377,7 @@ void AggregatedStream::print(thread_db* tdbb, string& plan, bool detailed, unsig
 
 bool AggregatedStream::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_req* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];

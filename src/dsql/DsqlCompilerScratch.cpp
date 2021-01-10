@@ -331,9 +331,9 @@ void DsqlCompilerScratch::putLocalVariables(CompoundStmtNode* parameters, USHORT
 
 			++locals;
 		}
-		else if (StmtNode::is<DeclareCursorNode>(parameter) ||
-			StmtNode::is<DeclareSubProcNode>(parameter) ||
-			StmtNode::is<DeclareSubFuncNode>(parameter))
+		else if (nodeIs<DeclareCursorNode>(parameter) ||
+			nodeIs<DeclareSubProcNode>(parameter) ||
+			nodeIs<DeclareSubFuncNode>(parameter))
 		{
 			parameter->dsqlPass(this);
 			parameter->genBlr(this);
@@ -660,7 +660,7 @@ void DsqlCompilerScratch::checkUnusedCTEs()
 	}
 }
 
-DeclareSubFuncNode* DsqlCompilerScratch::getSubFunction(const Firebird::MetaName& name)
+DeclareSubFuncNode* DsqlCompilerScratch::getSubFunction(const MetaName& name)
 {
 	DeclareSubFuncNode* subFunc = NULL;
 	subFunctions.get(name, subFunc);
@@ -682,7 +682,7 @@ void DsqlCompilerScratch::putSubFunction(DeclareSubFuncNode* subFunc, bool repla
 	subFunctions.put(subFunc->name, subFunc);
 }
 
-DeclareSubProcNode* DsqlCompilerScratch::getSubProcedure(const Firebird::MetaName& name)
+DeclareSubProcNode* DsqlCompilerScratch::getSubProcedure(const MetaName& name)
 {
 	DeclareSubProcNode* subProc = NULL;
 	subProcedures.get(name, subProc);

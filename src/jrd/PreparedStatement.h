@@ -31,7 +31,8 @@
 #include "../common/classes/array.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/Nullable.h"
 
 namespace Jrd {
@@ -60,6 +61,7 @@ public:
 			TYPE_DOUBLE,
 			TYPE_METANAME,
 			TYPE_STRING,
+			TYPE_METASTRING,
 		};
 
 		// This struct and the member outputParams are used to make the C++ undefined parameter
@@ -162,7 +164,8 @@ public:
 		static Type getType(SINT64)								{ return TYPE_SINT64; }
 		static Type getType(double)								{ return TYPE_DOUBLE; }
 		static Type getType(const Firebird::AbstractString&)	{ return TYPE_STRING; }
-		static Type getType(const Firebird::MetaName&)			{ return TYPE_METANAME; }
+		static Type getType(const MetaName&)				{ return TYPE_METANAME; }
+		static Type getType(const Firebird::MetaString&)		{ return TYPE_METASTRING; }
 
 		void addInput(Type type, const void* address, Firebird::Array<InputSlot>& slots)
 		{
@@ -233,7 +236,7 @@ public:
 	}
 
 	// Escape a metadata name accordingly to SQL rules.
-	static Firebird::string escapeName(const Firebird::MetaName& s)
+	static Firebird::string escapeName(const MetaName& s)
 	{
 		Firebird::string ret;
 
@@ -331,7 +334,16 @@ public:
 		setDesc(tdbb, param, desc);
 	}
 
-	void setMetaName(thread_db* tdbb, unsigned param, const Firebird::MetaName& value)
+	void setMetaName(thread_db* tdbb, unsigned param, const MetaName& value)
+	{
+		fb_assert(param > 0);
+
+		dsc desc;
+		desc.makeText((USHORT) value.length(), CS_METADATA, (UCHAR*) value.c_str());
+		setDesc(tdbb, param, desc);
+	}
+
+	void setMetaString(thread_db* tdbb, unsigned param, const Firebird::MetaString& value)
 	{
 		fb_assert(param > 0);
 

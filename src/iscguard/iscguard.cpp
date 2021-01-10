@@ -586,7 +586,7 @@ THREAD_ENTRY_DECLARE start_and_watch_server(THREAD_ENTRY_PARAM)
 	SC_HANDLE hScManager = 0, hService = 0;
 
 	// get the guardian startup information
-	const short option = Config::getGuardianOption();
+	const short option = Firebird::Config::getGuardianOption();
 
 	char prefix_buffer[MAXPATHLEN];
 	GetModuleFileName(NULL, prefix_buffer, sizeof(prefix_buffer));

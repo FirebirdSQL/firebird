@@ -22,6 +22,7 @@
 
 #include "firebird.h"
 #include "../jrd/jrd.h"
+#include "../../common/classes/BlobWrapper.h"
 
 #include "Config.h"
 #include "Replicator.h"
@@ -35,39 +36,36 @@ using namespace Replication;
 Replicator::Replicator(MemoryPool& pool,
 					   Manager* manager,
 					   const Guid& guid,
-					   const MetaName& user,
-					   bool cleanupTransactions)
-	: PermanentStorage(pool),
-	  m_manager(manager),
+					   const MetaString& user)
+	: m_manager(manager),
 	  m_config(manager->getConfig()),
 	  m_guid(guid),
 	  m_user(user),
 	  m_transactions(pool),
-	  m_generators(pool),
-	  m_status(pool)
+	  m_generators(pool)
 {
-	if (cleanupTransactions)
-		cleanupTransaction(0);
 }
 
 void Replicator::flush(BatchBlock& block, FlushReason reason, ULONG flags)
 {
 	const auto traNumber = block.header.traNumber;
 
-	const auto orgLength = (ULONG) block.buffer->getCount();
-	fb_assert(orgLength > sizeof(Block));
+	const auto dataLength = (ULONG) (block.buffer->getCount() - sizeof(Block));
+	fb_assert(dataLength);
+	const auto metaLength = (ULONG) (block.metadata.getCount() * sizeof(MetaString));
+
 	block.header.protocol = PROTOCOL_CURRENT_VERSION;
-	block.header.dataLength = orgLength - sizeof(Block);
-	block.header.metaLength = (ULONG) (block.metadata.getCount() * sizeof(MetaName));
-	block.header.timestamp = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
 	block.header.flags |= flags;
+	block.header.length = dataLength + metaLength;
+	block.header.metaOffset = dataLength;
+	block.header.timestamp = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
 
 	// Add metadata (if any) to the buffer
 
-	if (block.header.metaLength)
+	if (metaLength)
 	{
-		block.buffer->resize(orgLength + block.header.metaLength);
-		memcpy(block.buffer->begin() + orgLength, block.metadata.begin(), block.header.metaLength);
+		block.buffer->resize(dataLength + metaLength + sizeof(Block));
+		memcpy(block.buffer->begin() + dataLength + sizeof(Block), block.metadata.begin(), metaLength);
 	}
 
 	// Re-write the updated header
@@ -88,54 +86,83 @@ void Replicator::flush(BatchBlock& block, FlushReason reason, ULONG flags)
 	block.flushes++;
 }
 
-void Replicator::logError(const IStatus* status)
+void Replicator::storeBlob(Transaction* transaction, ISC_QUAD blobId)
 {
-	string message;
+	FbLocalStatus localStatus;
 
-	auto statusPtr = status->getErrors();
+	BlobWrapper blob(&localStatus);
+	if (!blob.open(m_attachment, transaction->getInterface(), blobId))
+		localStatus.raise();
 
-	char temp[BUFFER_LARGE];
-	while (fb_interpret(temp, sizeof(temp), &statusPtr))
+	UCharBuffer buffer;
+	const auto bufferLength = MAX_USHORT;
+	auto data = buffer.getBuffer(bufferLength);
+
+	auto& txnData = transaction->getData();
+	bool newOp = true;
+
+	FB_SIZE_T segmentLength;
+	while (blob.getSegment(bufferLength, data, segmentLength))
 	{
-		if (!message.isEmpty())
-			message += "\n\t";
+		if (!segmentLength)
+			continue; // Zero-length segments are unusual but ok.
 
-		message += temp;
+		if (newOp)
+		{
+			txnData.putTag(opStoreBlob);
+			txnData.putInt32(blobId.gds_quad_high);
+			txnData.putInt32(blobId.gds_quad_low);
+			newOp = false;
+		}
+
+		fb_assert(segmentLength <= MAX_USHORT);
+		txnData.putInt16(segmentLength);
+		txnData.putBinary(segmentLength, data);
+
+		if (txnData.getSize() > m_config->bufferSize)
+		{
+			flush(txnData, FLUSH_OVERFLOW);
+			newOp = true;
+		}
 	}
 
-	logOriginMessage(m_config->dbName, message, ERROR_MSG);
+	localStatus.check();
+
+	blob.close();
+
+	if (newOp)
+	{
+		txnData.putTag(opStoreBlob);
+		txnData.putInt32(blobId.gds_quad_high);
+		txnData.putInt32(blobId.gds_quad_low);
+	}
+
+	txnData.putInt16(0); // end-of-blob marker
+
+	if (txnData.getSize() > m_config->bufferSize)
+		flush(txnData, FLUSH_OVERFLOW);
 }
 
-void Replicator::postError(const Exception& ex)
-{
-	FbLocalStatus tempStatus;
-	ex.stuffException(&tempStatus);
-
-	logError(&tempStatus);
-
-	Arg::StatusVector newErrors;
-	newErrors << Arg::Gds(isc_random) << Arg::Str("Replication error");
-	newErrors << Arg::StatusVector(tempStatus->getErrors());
-	newErrors.copyTo(&m_status);
-}
-
-// IDisposable implementation
-
-void Replicator::dispose()
+void Replicator::releaseTransaction(Transaction* transaction)
 {
 	try
 	{
-		delete this;
+		MutexLockGuard guard(m_mutex, FB_FUNCTION);
+
+		auto& txnData = transaction->getData();
+		m_manager->releaseBuffer(txnData.buffer);
+
+		FB_SIZE_T pos;
+		if (m_transactions.find(transaction, pos))
+			m_transactions.remove(pos);
 	}
-	catch (const Exception& ex)
-	{
-		postError(ex);
-	}
+	catch (const Exception&)
+	{} // no-op
 }
 
 // IReplicatedSession implementation
 
-IReplicatedTransaction* Replicator::startTransaction(SINT64 number)
+IReplicatedTransaction* Replicator::startTransaction(CheckStatusWrapper* status, ITransaction* trans, SINT64 number)
 {
 	AutoPtr<Transaction> transaction;
 
@@ -144,7 +171,7 @@ IReplicatedTransaction* Replicator::startTransaction(SINT64 number)
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		MemoryPool& pool = getPool();
-		transaction = FB_NEW_POOL(pool) Transaction(this);
+		transaction = FB_NEW_POOL(pool) Transaction(this, trans);
 		m_transactions.add(transaction);
 
 		auto& txnData = transaction->getData();
@@ -159,13 +186,13 @@ IReplicatedTransaction* Replicator::startTransaction(SINT64 number)
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
+		ex.stuffException(status);
 	}
 
 	return transaction.release();
 }
 
-bool Replicator::prepareTransaction(Transaction* transaction)
+void Replicator::prepareTransaction(CheckStatusWrapper* status, Transaction* transaction)
 {
 	try
 	{
@@ -179,14 +206,11 @@ bool Replicator::prepareTransaction(Transaction* transaction)
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
-		return false;
+		ex.stuffException(status);
 	}
-
-	return true;
 }
 
-bool Replicator::commitTransaction(Transaction* transaction)
+void Replicator::commitTransaction(CheckStatusWrapper* status, Transaction* transaction)
 {
 	try
 	{
@@ -194,36 +218,31 @@ bool Replicator::commitTransaction(Transaction* transaction)
 
 		auto& txnData = transaction->getData();
 
-		for (const auto generator : m_generators)
+		// Assert this transaction being de-facto dirty
+		const auto dataLength = txnData.buffer->getCount() - sizeof(Block);
+		fb_assert(txnData.flushes || dataLength > sizeof(UCHAR));
+
+		for (const auto& generator : m_generators)
 		{
 			fb_assert(generator.name.hasData());
 
 			txnData.putTag(opSetSequence);
 			txnData.putMetaName(generator.name.c_str());
-			txnData.putBigInt(generator.value);
+			txnData.putInt64(generator.value);
 		}
 
 		m_generators.clear();
 
 		txnData.putTag(opCommitTransaction);
 		flush(txnData, FLUSH_SYNC, BLOCK_END_TRANS);
-
-		FB_SIZE_T pos;
-		if (m_transactions.find(transaction, pos))
-			m_transactions.remove(pos);
-
-		transaction->dispose();
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
-		return false;
+		ex.stuffException(status);
 	}
-
-	return true;
 }
 
-bool Replicator::rollbackTransaction(Transaction* transaction)
+void Replicator::rollbackTransaction(CheckStatusWrapper* status, Transaction* transaction)
 {
 	try
 	{
@@ -236,23 +255,14 @@ bool Replicator::rollbackTransaction(Transaction* transaction)
 			txnData.putTag(opRollbackTransaction);
 			flush(txnData, FLUSH_SYNC, BLOCK_END_TRANS);
 		}
-
-		FB_SIZE_T pos;
-		if (m_transactions.find(transaction, pos))
-			m_transactions.remove(pos);
-
-		transaction->dispose();
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
-		return false;
+		ex.stuffException(status);
 	}
-
-	return true;
 }
 
-bool Replicator::startSavepoint(Transaction* transaction)
+void Replicator::startSavepoint(CheckStatusWrapper* status, Transaction* transaction)
 {
 	try
 	{
@@ -267,14 +277,11 @@ bool Replicator::startSavepoint(Transaction* transaction)
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
-		return false;
+		ex.stuffException(status);
 	}
-
-	return true;
 }
 
-bool Replicator::releaseSavepoint(Transaction* transaction)
+void Replicator::releaseSavepoint(CheckStatusWrapper* status, Transaction* transaction)
 {
 	try
 	{
@@ -289,14 +296,11 @@ bool Replicator::releaseSavepoint(Transaction* transaction)
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
-		return false;
+		ex.stuffException(status);
 	}
-
-	return true;
 }
 
-bool Replicator::rollbackSavepoint(Transaction* transaction)
+void Replicator::rollbackSavepoint(CheckStatusWrapper* status, Transaction* transaction)
 {
 	try
 	{
@@ -310,19 +314,33 @@ bool Replicator::rollbackSavepoint(Transaction* transaction)
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
-		return false;
+		ex.stuffException(status);
 	}
-
-	return true;
 }
 
-bool Replicator::insertRecord(Transaction* transaction,
+void Replicator::insertRecord(CheckStatusWrapper* status,
+							  Transaction* transaction,
 							  const char* relName,
 							  IReplicatedRecord* record)
 {
 	try
 	{
+		for (unsigned id = 0; id < record->getCount(); id++)
+		{
+			IReplicatedField* field = record->getField(id);
+			if (field != nullptr)
+			{
+				auto type = field->getType();
+				if (type == SQL_ARRAY || type == SQL_BLOB)
+				{
+					const auto blobId = (ISC_QUAD*) field->getData();
+
+					if (blobId)
+						storeBlob(transaction, *blobId);
+				}
+			}
+		}
+
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		const auto length = record->getRawLength();
@@ -332,6 +350,7 @@ bool Replicator::insertRecord(Transaction* transaction,
 
 		txnData.putTag(opInsertRecord);
 		txnData.putMetaName(relName);
+		txnData.putInt32(length);
 		txnData.putBinary(length, data);
 
 		if (txnData.getSize() > m_config->bufferSize)
@@ -339,20 +358,34 @@ bool Replicator::insertRecord(Transaction* transaction,
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
-		return false;
+		ex.stuffException(status);
 	}
-
-	return true;
 }
 
-bool Replicator::updateRecord(Transaction* transaction,
+void Replicator::updateRecord(CheckStatusWrapper* status,
+							  Transaction* transaction,
 							  const char* relName,
 							  IReplicatedRecord* orgRecord,
 							  IReplicatedRecord* newRecord)
 {
 	try
 	{
+		for (unsigned id = 0; id < newRecord->getCount(); id++)
+		{
+			IReplicatedField* field = newRecord->getField(id);
+			if (field != nullptr)
+			{
+				auto type = field->getType();
+				if (type == SQL_ARRAY || type == SQL_BLOB)
+				{
+					const auto blobId = (ISC_QUAD*) field->getData();
+
+					if (blobId)
+						storeBlob(transaction, *blobId);
+				}
+			}
+		}
+
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		const auto orgLength = orgRecord->getRawLength();
@@ -365,7 +398,9 @@ bool Replicator::updateRecord(Transaction* transaction,
 
 		txnData.putTag(opUpdateRecord);
 		txnData.putMetaName(relName);
+		txnData.putInt32(orgLength);
 		txnData.putBinary(orgLength, orgData);
+		txnData.putInt32(newLength);
 		txnData.putBinary(newLength, newData);
 
 		if (txnData.getSize() > m_config->bufferSize)
@@ -373,14 +408,12 @@ bool Replicator::updateRecord(Transaction* transaction,
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
-		return false;
+		ex.stuffException(status);
 	}
-
-	return true;
 }
 
-bool Replicator::deleteRecord(Transaction* transaction,
+void Replicator::deleteRecord(CheckStatusWrapper* status,
+							  Transaction* transaction,
 							  const char* relName,
 							  IReplicatedRecord* record)
 {
@@ -395,6 +428,7 @@ bool Replicator::deleteRecord(Transaction* transaction,
 
 		txnData.putTag(opDeleteRecord);
 		txnData.putMetaName(relName);
+		txnData.putInt32(length);
 		txnData.putBinary(length, data);
 
 		if (txnData.getSize() > m_config->bufferSize)
@@ -402,47 +436,12 @@ bool Replicator::deleteRecord(Transaction* transaction,
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
-		return false;
+		ex.stuffException(status);
 	}
-
-	return true;
 }
 
-bool Replicator::storeBlob(Transaction* transaction,
-						   ISC_QUAD blobId,
-						   IReplicatedBlob* blob)
-{
-	try
-	{
-		MutexLockGuard guard(m_mutex, FB_FUNCTION);
-
-		UCharBuffer buffer;
-
-		const auto length = blob->getLength();
-		const auto data = buffer.getBuffer(length);
-		blob->getSegment(length, data);
-
-		auto& txnData = transaction->getData();
-
-		txnData.putTag(opStoreBlob);
-		txnData.putInt(blobId.gds_quad_high);
-		txnData.putInt(blobId.gds_quad_low);
-		txnData.putBinary(length, data);
-
-		if (txnData.getSize() > m_config->bufferSize)
-			flush(txnData, FLUSH_OVERFLOW);
-	}
-	catch (const Exception& ex)
-	{
-		postError(ex);
-		return false;
-	}
-
-	return true;
-}
-
-bool Replicator::executeSqlIntl(Transaction* transaction,
+void Replicator::executeSqlIntl(CheckStatusWrapper* status,
+								Transaction* transaction,
 								unsigned charset,
 								const char* sql)
 {
@@ -452,32 +451,22 @@ bool Replicator::executeSqlIntl(Transaction* transaction,
 
 		auto& txnData = transaction->getData();
 
-		if (charset == CS_UTF8)
-		{
-			txnData.putTag(opExecuteSql);
-		}
-		else
-		{
-			txnData.putTag(opExecuteSqlIntl);
-			txnData.putInt(charset);
-		}
-
-		txnData.putString(sql);
+		txnData.putTag(opExecuteSqlIntl);
 		txnData.putMetaName(m_user);
+		txnData.putByte(charset);
+		txnData.putString(sql);
 
 		if (txnData.getSize() > m_config->bufferSize)
 			flush(txnData, FLUSH_OVERFLOW);
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
-		return false;
+		ex.stuffException(status);
 	}
-
-	return true;
 }
 
-FB_BOOLEAN Replicator::cleanupTransaction(SINT64 number)
+void Replicator::cleanupTransaction(CheckStatusWrapper* status,
+									SINT64 number)
 {
 	try
 	{
@@ -492,15 +481,13 @@ FB_BOOLEAN Replicator::cleanupTransaction(SINT64 number)
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
-		return FB_FALSE;
+		ex.stuffException(status);
 	}
-
-	return FB_TRUE;
 }
 
-FB_BOOLEAN Replicator::setSequence(const char* genName,
-								   SINT64 value)
+void Replicator::setSequence(CheckStatusWrapper* status,
+							 const char* genName,
+							 SINT64 value)
 {
 	try
 	{
@@ -511,7 +498,7 @@ FB_BOOLEAN Replicator::setSequence(const char* genName,
 			if (generator.name == genName)
 			{
 				generator.value = value;
-				return true;
+				return;
 			}
 		}
 
@@ -523,9 +510,6 @@ FB_BOOLEAN Replicator::setSequence(const char* genName,
 	}
 	catch (const Exception& ex)
 	{
-		postError(ex);
-		return FB_FALSE;
+		ex.stuffException(status);
 	}
-
-	return FB_TRUE;
 }

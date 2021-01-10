@@ -18,7 +18,9 @@
 #  All Rights Reserved.
 #  Contributor(s): ______________________________________.
 
-ROOT=../..
+ifndef ROOT
+  ROOT=../..
+endif
 #ROOT=$(shell cd ../..; pwd)
 
 PLUGINS=$(ROOT)/plugins
@@ -28,7 +30,17 @@ LIB=$(ROOT)/lib
 LIB_PREFIX=lib
 SHRLIB_EXT=so
 
-makePluginName=$(PLUGINS)/$(LIB_PREFIX)$(1).$(SHRLIB_EXT)
+ifndef INTERMED
+  INTERMED=.
+endif
+
+ifdef OUT
+  OUT_BIN=$(OUT)/bin
+  OUT_PLUG=$(OUT)/plugins
+else
+  OUT_BIN=.
+  OUT_PLUG=.
+endif
 
 TOMCRYPT_COMPILE=-DLTC_PTHREAD -DUSE_LTM -DLTM_DESC
 OwnInclude=$(shell [ -d tomcrypt.include ] && echo Yes || echo No)
@@ -36,20 +48,26 @@ ifeq ($(OwnInclude), Yes)
 TOMCRYPT_COMPILE += -Itomcrypt.include
 TOMCRYPT_LINK=-L$(LIB)/.tm
 endif
-BLD_SIMPLE_KEY_AUTH=libExtAuth.so
-SIMPLE_KEY_AUTH=$(call makePluginName,ExtAuth)
-BLD_KEYGEN=extauth_keygen
-KEYGEN=$(BIN)/$(BLD_KEYGEN)
 
-KEYGEN_objects=keygen.o
-TCWRAP_objects=TcWrapper.o
-KEY_AUTH_objects=ExtAuth.o
+SIMPLE_KEY_AUTH_NAME=$(LIB_PREFIX)fbSampleExtAuth.$(SHRLIB_EXT)
+BLD_SIMPLE_KEY_AUTH=$(OUT_PLUG)/$(SIMPLE_KEY_AUTH_NAME)
+SIMPLE_KEY_AUTH=$(PLUGINS)/$(SIMPLE_KEY_AUTH_NAME)
+
+KEYGEN_NAME=fbSampleExtAuthKeygen
+BLD_KEYGEN=$(OUT_BIN)/$(KEYGEN_NAME)
+KEYGEN=$(BIN)/$(KEYGEN_NAME)
+
+KEYGEN_objects=$(INTERMED)/keygen.o
+TCWRAP_objects=$(INTERMED)/TcWrapper.o
+KEY_AUTH_objects=$(INTERMED)/ExtAuth.o
 
 CXXFLAGS=-std=c++11 -pthread -I$(ROOT)/include -fPIC $(TOMCRYPT_COMPILE)
 LDFLAGS=-pthread -L$(LIB) -Wl,-rpath,'$$ORIGIN/../lib' $(TOMCRYPT_LINK)
 
-LINK=c++
-LINK_LIBS=-lfbclient -ltomcrypt
+LINK_LIBS=-lfbclient -ltomcrypt -ltommath
+
+$(INTERMED)/%.o: ./%.cpp
+	$(CXX) $(CXXFLAGS) -c $(firstword $<) -o $@
 
 .PHONY:		all keygen plugin install
 
@@ -58,15 +76,15 @@ all:		keygen plugin
 keygen:		$(BLD_KEYGEN)
 
 $(BLD_KEYGEN):	$(KEYGEN_objects) $(TCWRAP_objects)
-	$(LINK) $(LDFLAGS) $^ -o $@ $(LINK_LIBS)
+	$(CXX) $(LDFLAGS) $^ -o $@ $(LINK_LIBS)
 
 plugin:		$(BLD_SIMPLE_KEY_AUTH)
 
 $(BLD_SIMPLE_KEY_AUTH):	$(KEY_AUTH_objects) $(TCWRAP_objects)
-	$(LINK) -shared $(LDFLAGS) $^ -o $@ $(LINK_LIBS)
+	$(CXX) -shared $(LDFLAGS) $^ -o $@ $(LINK_LIBS)
 
 clean:
-	rm -f *.o* $(BLD_KEYGEN) $(BLD_SIMPLE_KEY_AUTH)
+	rm -f $(INTERMED)/*.o* $(BLD_KEYGEN) $(BLD_SIMPLE_KEY_AUTH)
 
 install:	$(SIMPLE_KEY_AUTH) $(KEYGEN)
 

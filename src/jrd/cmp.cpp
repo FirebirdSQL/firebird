@@ -321,46 +321,14 @@ IndexLock* CMP_get_index_lock(thread_db* tdbb, jrd_rel* relation, USHORT id)
 }
 
 
-ULONG CMP_impure(CompilerScratch* csb, ULONG size)
-{
-/**************************************
- *
- *	C M P _ i m p u r e
- *
- **************************************
- *
- * Functional description
- *	Allocate space (offset) in request.
- *
- **************************************/
-	DEV_BLKCHK(csb, type_csb);
-
-	if (!csb)
-	{
-		return 0;
-	}
-
-	const ULONG offset = FB_ALIGN(csb->csb_impure, FB_ALIGNMENT);
-
-	if (offset + size > JrdStatement::MAX_REQUEST_SIZE)
-	{
-		IBERROR(226);	// msg 226: request size limit exceeded
-	}
-
-	csb->csb_impure = offset + size;
-
-	return offset;
-}
-
-
 void CMP_post_access(thread_db* tdbb,
 					 CompilerScratch* csb,
-					 const Firebird::MetaName& security_name,
+					 const MetaName& security_name,
 					 SLONG ssRelationId,			// SQL SECURITY relation in which context permissions should be check
 					 SecurityClass::flags_t mask,
 					 SLONG type_name,
-					 const Firebird::MetaName& name,
-					 const Firebird::MetaName& r_name)
+					 const MetaName& name,
+					 const MetaName& r_name)
 {
 /**************************************
  *

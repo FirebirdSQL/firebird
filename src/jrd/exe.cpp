@@ -636,16 +636,14 @@ void EXE_receive(thread_db* tdbb,
 
 	DEV_BLKCHK(request, type_req);
 
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_tra* transaction = request->req_transaction;
 
 	if (!(request->req_flags & req_active))
 		ERR_post(Arg::Gds(isc_req_sync));
 
-	const SavNumber mergeSavNumber = transaction->tra_save_point ?
-		transaction->tra_save_point->getNumber() : 0;
+	SavNumber savNumber = 0;
 
 	if (request->req_flags & req_proc_fetch)
 	{
@@ -658,67 +656,85 @@ void EXE_receive(thread_db* tdbb,
 
 		if (request->req_proc_sav_point)
 		{
+			// We assume here that the saved savepoint stack starts with the
+			// smallest number, the logic will be broken if this ever changes
+			savNumber = request->req_proc_sav_point->getNumber();
 			// Push all saved savepoints to the top of transaction savepoints stack
 			Savepoint::mergeStacks(transaction->tra_save_point, request->req_proc_sav_point);
 			fb_assert(!request->req_proc_sav_point);
 		}
 		else
-			transaction->startSavepoint();
-	}
-
-	const JrdStatement* statement = request->getStatement();
-
-	if (StmtNode::is<StallNode>(request->req_message))
-		execute_looper(tdbb, request, transaction, request->req_next, jrd_req::req_sync);
-
-	if (!(request->req_flags & req_active) || request->req_operation != jrd_req::req_send)
-		ERR_post(Arg::Gds(isc_req_sync));
-
-	const MessageNode* message = StmtNode::as<MessageNode>(request->req_message);
-	const Format* format = message->format;
-
-	if (msg != message->messageNumber)
-		ERR_post(Arg::Gds(isc_req_sync));
-
-	if (length != format->fmt_length)
-		ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
-
-	memcpy(buffer, request->getImpure<UCHAR>(message->impureOffset), length);
-
-	// ASF: temporary blobs returned to the client should not be released
-	// with the request, but in the transaction end.
-	if (top_level)
-	{
-		for (int i = 0; i < format->fmt_count; ++i)
 		{
-			const DSC* desc = &format->fmt_desc[i];
-
-			if (desc->isBlob())
-			{
-				const bid* id = (bid*) (static_cast<UCHAR*>(buffer) + (ULONG)(IPTR) desc->dsc_address);
-
-				if (transaction->tra_blobs->locate(id->bid_temp_id()))
-				{
-					BlobIndex* current = &transaction->tra_blobs->current();
-
-					if (current->bli_request &&
-						current->bli_request->req_blobs.locate(id->bid_temp_id()))
-					{
-						current->bli_request->req_blobs.fastRemove();
-						current->bli_request = NULL;
-					}
-				}
-				else
-				{
-					transaction->checkBlob(tdbb, id, NULL, false);
-				}
-			}
+			const auto savepoint = transaction->startSavepoint();
+			savNumber = savepoint->getNumber();
 		}
 	}
 
-	execute_looper(tdbb, request, transaction, request->req_next, jrd_req::req_proceed);
+	const auto statement = request->getStatement();
 
-	if (request->req_flags & req_proc_fetch)
+	try
+	{
+		if (nodeIs<StallNode>(request->req_message))
+			execute_looper(tdbb, request, transaction, request->req_next, jrd_req::req_sync);
+
+		if (!(request->req_flags & req_active) || request->req_operation != jrd_req::req_send)
+			ERR_post(Arg::Gds(isc_req_sync));
+
+		const MessageNode* message = nodeAs<MessageNode>(request->req_message);
+		const Format* format = message->format;
+
+		if (msg != message->messageNumber)
+			ERR_post(Arg::Gds(isc_req_sync));
+
+		if (length != format->fmt_length)
+			ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
+
+		memcpy(buffer, request->getImpure<UCHAR>(message->impureOffset), length);
+
+		// ASF: temporary blobs returned to the client should not be released
+		// with the request, but in the transaction end.
+		if (top_level)
+		{
+			for (int i = 0; i < format->fmt_count; ++i)
+			{
+				const DSC* desc = &format->fmt_desc[i];
+
+				if (desc->isBlob())
+				{
+					const bid* id = (bid*) (static_cast<UCHAR*>(buffer) + (ULONG)(IPTR) desc->dsc_address);
+
+					if (transaction->tra_blobs->locate(id->bid_temp_id()))
+					{
+						BlobIndex* current = &transaction->tra_blobs->current();
+
+						if (current->bli_request &&
+							current->bli_request->req_blobs.locate(id->bid_temp_id()))
+						{
+							current->bli_request->req_blobs.fastRemove();
+							current->bli_request = NULL;
+						}
+					}
+					else
+					{
+						transaction->checkBlob(tdbb, id, NULL, false);
+					}
+				}
+			}
+		}
+
+		execute_looper(tdbb, request, transaction, request->req_next, jrd_req::req_proceed);
+	}
+	catch (const Exception&)
+	{
+		// In the case of error, undo changes performed under our savepoint
+
+		if (savNumber)
+			transaction->rollbackToSavepoint(tdbb, savNumber);
+
+		throw;
+	}
+
+	if (savNumber)
 	{
 		// At this point request->req_proc_sav_point == NULL that is assured by code above
 		fb_assert(!request->req_proc_sav_point);
@@ -728,9 +744,9 @@ void EXE_receive(thread_db* tdbb,
 			// Merge work into target savepoint and save request's savepoints (with numbers!!!)
 			// till the next looper iteration
 			while (transaction->tra_save_point &&
-				transaction->tra_save_point->getNumber() > mergeSavNumber)
+				transaction->tra_save_point->getNumber() >= savNumber)
 			{
-				Savepoint* const savepoint = transaction->tra_save_point;
+				const auto savepoint = transaction->tra_save_point;
 				transaction->rollforwardSavepoint(tdbb);
 				fb_assert(transaction->tra_save_free == savepoint);
 				transaction->tra_save_free = savepoint->moveToStack(request->req_proc_sav_point);
@@ -789,8 +805,7 @@ void EXE_send(thread_db* tdbb, jrd_req* request, USHORT msg, ULONG length, const
 	SET_TDBB(tdbb);
 	DEV_BLKCHK(request, type_req);
 
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	if (!(request->req_flags & req_active))
 		ERR_post(Arg::Gds(isc_req_sync));
@@ -807,9 +822,9 @@ void EXE_send(thread_db* tdbb, jrd_req* request, USHORT msg, ULONG length, const
 
 	const SelectNode* selectNode;
 
-	if (StmtNode::is<MessageNode>(node))
+	if (nodeIs<MessageNode>(node))
 		message = node;
-	else if ((selectNode = StmtNode::as<SelectNode>(node)))
+	else if ((selectNode = nodeAs<SelectNode>(node)))
 	{
 		const NestConst<StmtNode>* ptr = selectNode->statements.begin();
 
@@ -828,9 +843,9 @@ void EXE_send(thread_db* tdbb, jrd_req* request, USHORT msg, ULONG length, const
 	else
 		BUGCHECK(167);	// msg 167 invalid SEND request
 
-	const Format* format = StmtNode::as<MessageNode>(message)->format;
+	const Format* format = nodeAs<MessageNode>(message)->format;
 
-	if (msg != StmtNode::as<MessageNode>(message)->messageNumber)
+	if (msg != nodeAs<MessageNode>(message)->messageNumber)
 		ERR_post(Arg::Gds(isc_req_sync));
 
 	if (length != format->fmt_length)
@@ -1021,34 +1036,50 @@ static void execute_looper(thread_db* tdbb,
 
 	// Start a save point
 
+	SavNumber savNumber = 0;
+
 	if (!(request->req_flags & req_proc_fetch) && request->req_transaction)
 	{
 		if (transaction && !(transaction->tra_flags & TRA_system))
 		{
 			if (request->req_savepoints)
 			{
-				request->req_savepoints = request->req_savepoints->moveToStack(transaction->tra_save_point);
+				request->req_savepoints =
+					request->req_savepoints->moveToStack(transaction->tra_save_point);
 			}
 			else
 				transaction->startSavepoint();
+
+			savNumber = transaction->tra_save_point->getNumber();
 		}
 	}
 
 	request->req_flags &= ~req_stall;
 	request->req_operation = next_state;
 
-	looper_seh(tdbb, request, node);
+	try
+	{
+		looper_seh(tdbb, request, node);
+	}
+	catch (const Exception&)
+	{
+		// In the case of error, undo changes performed under our savepoint
+
+		if (savNumber)
+			transaction->rollbackToSavepoint(tdbb, savNumber);
+
+		throw;
+	}
 
 	// If any requested modify/delete/insert ops have completed, forget them
 
-	if (!(request->req_flags & req_proc_fetch) && request->req_transaction)
+	if (savNumber)
 	{
-		if (transaction && !(transaction->tra_flags & TRA_system) &&
-			transaction->tra_save_point &&
+		if (transaction->tra_save_point &&
 			transaction->tra_save_point->isSystem() &&
-			!transaction->tra_save_point->isChanging())
+			transaction->tra_save_point->getNumber() == savNumber)
 		{
-			Savepoint* savepoint = transaction->tra_save_point;
+			const auto savepoint = transaction->tra_save_point;
 			// Forget about any undo for this verb
 			transaction->rollforwardSavepoint(tdbb);
 			// Preserve savepoint for reuse
@@ -1186,12 +1217,12 @@ void EXE_execute_triggers(thread_db* tdbb,
 		}
 
 		if (vector != *triggers)
-			MET_release_triggers(tdbb, &vector);
+			MET_release_triggers(tdbb, &vector, true);
 	}
 	catch (const Firebird::Exception& ex)
 	{
 		if (vector != *triggers)
-			MET_release_triggers(tdbb, &vector);
+			MET_release_triggers(tdbb, &vector, true);
 
 		if (trigger)
 		{
@@ -1302,9 +1333,6 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 	fb_assert(request->req_caller == NULL);
 	request->req_caller = exeState.oldRequest;
 
-	const SavNumber savNumber = (request->req_transaction->tra_save_point) ?
-		request->req_transaction->tra_save_point->getNumber() : 0;
-
 	tdbb->tdbb_flags &= ~(TDBB_stack_trace_done | TDBB_sys_error);
 
 	// Execute stuff until we drop
@@ -1317,8 +1345,7 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 		{
 			if (request->req_operation == jrd_req::req_evaluate)
 			{
-				if (--tdbb->tdbb_quantum < 0)
-					JRD_reschedule(tdbb, 0, true);
+				JRD_reschedule(tdbb);
 
 				if (node->hasLineColumn)
 				{
@@ -1405,24 +1432,16 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 
 	// In the case of a pending error condition (one which did not
 	// result in a exception to the top of looper), we need to
-	// delete the last savepoint
+	// release the request snapshot
 
 	if (exeState.errorPending)
 	{
-		if (!(request->req_transaction->tra_flags & TRA_system))
-			request->req_transaction->rollbackToSavepoint(tdbb, savNumber);
-
 		TRA_release_request_snapshot(tdbb, request);
 		ERR_punt();
 	}
 
-	// if the request was aborted, assume that we have already
-	// longjmp'ed to the top of looper, and therefore that the
-	// last savepoint has already been deleted
-
-	if (request->req_flags & req_abort) {
+	if (request->req_flags & req_abort)
 		ERR_post(Arg::Gds(isc_req_sync));
-	}
 
 	return node;
 }

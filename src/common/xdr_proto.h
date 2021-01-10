@@ -36,16 +36,16 @@ bool_t	xdr_enum(XDR*, xdr_op*);
 bool_t	xdr_float(XDR*, float*);
 bool_t	xdr_int(XDR*, int*);
 bool_t	xdr_long(XDR*, SLONG*);
-bool_t	xdr_opaque(XDR*, SCHAR*, u_int);
+bool_t	xdr_opaque(XDR*, SCHAR*, unsigned);
 bool_t	xdr_quad(XDR*, SQUAD*);
 bool_t	xdr_short(XDR*, SSHORT*);
-bool_t	xdr_string(XDR*, SCHAR**, u_int);
-bool_t	xdr_u_int(XDR*, u_int*);
+bool_t	xdr_string(XDR*, SCHAR**, unsigned);
+bool_t	xdr_u_int(XDR*, unsigned*);
 bool_t	xdr_u_long(XDR*, ULONG*);
 bool_t	xdr_u_short(XDR*, u_short*);
 bool_t	xdr_wrapstring(XDR*, SCHAR**);
 bool_t	xdr_hyper(XDR*, void*);
-bool_t	xdrmem_create(XDR*, SCHAR*, u_int, xdr_op);
+bool_t	xdrmem_create(XDR*, SCHAR*, unsigned, xdr_op);
 SLONG	xdr_peek_long(const XDR*, const void* data, size_t size);
 
 #endif	// REMOTE_XDR_PROTO_H

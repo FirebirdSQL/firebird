@@ -267,3 +267,28 @@ void writeAttID(header_page* page, AttNumber number)
 }
 
 } // namespace
+
+
+#ifdef DEV_BUILD
+namespace
+{
+	class CheckODS
+	{
+	public:
+		CheckODS()
+		{
+			for (ULONG page_size = MIN_PAGE_SIZE; page_size <= MAX_PAGE_SIZE; page_size *= 2)
+			{
+				ULONG pagesPerPIP = Ods::pagesPerPIP(page_size);
+				ULONG pagesPerSCN = Ods::pagesPerSCN(page_size);
+				ULONG maxPagesPerSCN = Ods::maxPagesPerSCN(page_size);
+
+				fb_assert((pagesPerPIP % pagesPerSCN) == 0);
+				fb_assert(pagesPerSCN <= maxPagesPerSCN);
+			}
+		}
+	};
+
+	static CheckODS doCheck;
+}
+#endif // DEV_BUILD

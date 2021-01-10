@@ -49,7 +49,6 @@ public:
 
 	// IClient implementation
 	int authenticate(CheckStatusWrapper*, IClientBlock* cb);
-    int release();
 
 private:
 	RemotePassword* client;
@@ -176,16 +175,6 @@ int SrpClient::authenticate(CheckStatusWrapper* status, IClientBlock* cb)
 	}
 
 	return AUTH_SUCCESS;
-}
-
-int SrpClient::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-	return 1;
 }
 
 namespace

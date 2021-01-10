@@ -115,7 +115,7 @@ public:
 		{
 		case ENC:
 			att->execute(status, tra, 0,
-				"ALTER DATABASE ENCRYPT WITH \"DbCrypt_example\"", 3, NULL, NULL, NULL, NULL);
+				"ALTER DATABASE ENCRYPT WITH \"fbSampleDbCrypt\"", 3, NULL, NULL, NULL, NULL);
 			if (status->getState() & IStatus::STATE_ERRORS)
 				throw "execute";
 			break;
@@ -238,8 +238,13 @@ int main(int ac, char** av)
 		av++;
 	}
 
+#ifdef WIN_NT
+	_putenv_s("ISC_USER", "sysdba");
+	_putenv_s("ISC_PASSWORD", "masterkey");
+#else
 	setenv("ISC_USER", "sysdba", 0);
 	setenv("ISC_PASSWORD", "masterkey", 0);
+#endif
 
 	App app;
 	try

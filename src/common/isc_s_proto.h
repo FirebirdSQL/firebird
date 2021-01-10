@@ -174,7 +174,10 @@ struct event_t
 class MemoryHeader
 {
 public:
-	static const USHORT HEADER_VERSION = 1;
+	static const USHORT HEADER_VERSION = 2;
+
+	// Values for mhb_flags
+	static const USHORT FLAG_DELETED = 1;	// Shared file has been deleted
 
 	void init(USHORT type, USHORT version)
 	{
@@ -182,15 +185,26 @@ public:
 		mhb_header_version = HEADER_VERSION;
 		mhb_version = version;
 		mhb_timestamp = TimeStamp::getCurrentTimeStamp().value();
+		mhb_flags = 0;
 #ifdef HAVE_SHARED_MUTEX_SECTION
 		fb_assert(sizeof(mhb_mutex) <= sizeof(dummy));
 #endif
 	}
 
+	void markAsDeleted()
+	{
+		mhb_flags |= FLAG_DELETED;
+	}
+
+	bool isDeleted() const
+	{
+		return (mhb_flags & FLAG_DELETED);
+	}
+
 	USHORT mhb_type;
 	USHORT mhb_header_version;
 	USHORT mhb_version;
-	USHORT reserve;					// not used
+	USHORT mhb_flags;
 	GDS_TIMESTAMP mhb_timestamp;
 	union
 	{
@@ -333,18 +347,6 @@ public:
 										  // because there is no portable barrier semantics for them. Only MS2005+ generate
 										  // barriers, and all other compilers generally do not.
 
-	bool justCreated()
-	{
-		if (sh_mem_just_created)
-		{
-			// complete initialization
-			sh_mem_just_created = false;
-			return true;
-		}
-
-		return false;
-	}
-
 private:
 #ifdef USE_SYS5SEMAPHORE
 	int		fileNum;	// file number in shared table of shared files
@@ -353,7 +355,6 @@ private:
 #endif
 
 	IpcObject* sh_mem_callback;
-	bool sh_mem_just_created;
 #ifdef WIN_NT
 	bool sh_mem_unlink;
 #endif

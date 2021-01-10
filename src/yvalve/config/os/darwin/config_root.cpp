@@ -45,6 +45,8 @@
 #include <mach-o/dyld.h>
 #include <stdlib.h>
 
+#include <dlfcn.h>
+
 typedef Firebird::PathName string;
 
 static string getFrameworkFromBundle()
@@ -95,6 +97,21 @@ static string getExecutablePath()
 	return dir;
 }
 
+static string getDlInfoPath()
+{
+	Dl_info dlInfo;
+	static int test = 1;
+	if (dladdr(&test, &dlInfo) != 0)		// non-zero is success in dladdr
+	{
+		string next, dummy;
+		PathUtils::splitLastComponent(next, dummy, dlInfo.dli_fname);
+		string dir;
+		PathUtils::splitLastComponent(dir, dummy, next);
+		return dir;
+	}
+	return "";
+}
+
 
 void ConfigRoot::osConfigRoot()
 {
@@ -105,6 +122,14 @@ void ConfigRoot::osConfigRoot()
 		return;
 	}
 
+	// Ask dynamic loader to provide info about current dynamic library
+	root_dir = getDlInfoPath();
+	if (root_dir.hasData())
+	{
+		return;
+	}
+
+	// Use executable file path
 	root_dir = getExecutablePath();
 	if (root_dir.hasData())
 	{
@@ -120,6 +145,13 @@ void ConfigRoot::osConfigInstallDir()
 {
 	// Attempt to locate the Firebird.framework bundle
 	install_dir = getFrameworkFromBundle();
+	if (install_dir.hasData())
+	{
+		return;
+	}
+
+	// Ask dynamic loader to provide info about current dynamic library
+	install_dir = getDlInfoPath();
 	if (install_dir.hasData())
 	{
 		return;

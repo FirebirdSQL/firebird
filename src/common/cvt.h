@@ -58,8 +58,8 @@ public:
 	virtual CHARSET_ID getChid(const dsc* d) = 0;
 	virtual Jrd::CharSet* getToCharset(CHARSET_ID charset2) = 0;
 	virtual void validateData(Jrd::CharSet* toCharset, SLONG length, const UCHAR* q) = 0;
-	virtual ULONG validateLength(Jrd::CharSet* toCharset, ULONG toLength, const UCHAR* start,
-		const USHORT to_size) = 0;
+	virtual ULONG validateLength(Jrd::CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+		const USHORT size) = 0;
 	virtual SLONG getLocalDate() = 0;
 	virtual ISC_TIMESTAMP getCurrentGmtTimeStamp() = 0;
 	virtual USHORT getSessionTimeZone() = 0;
@@ -97,6 +97,7 @@ USHORT CVT_make_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird
 void CVT_make_null_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
 void CVT_move_common(const dsc*, dsc*, Firebird::DecimalStatus, Firebird::Callbacks*);
 void CVT_move(const dsc*, dsc*, Firebird::DecimalStatus, ErrorFunction);
+SSHORT CVT_decompose(const char*, USHORT, SSHORT*, ErrorFunction);
 SSHORT CVT_decompose(const char*, USHORT, SLONG*, ErrorFunction);
 SSHORT CVT_decompose(const char*, USHORT, SINT64*, ErrorFunction);
 SSHORT CVT_decompose(const char*, USHORT, Firebird::Int128*, ErrorFunction);

@@ -118,7 +118,6 @@ public:
 	int authenticate(Firebird::CheckStatusWrapper* status, Firebird::IServerBlock* sBlock,
 		Firebird::IWriter* writerInterface);
 	void setDbCryptCallback(Firebird::CheckStatusWrapper* status, Firebird::ICryptKeyCallback* callback) {}; // do nothing
-    int release();
 
 	WinSspiServer(Firebird::IPluginConfig*);
 
@@ -133,7 +132,6 @@ class WinSspiClient :
 public:
 	// IClient implementation
 	int authenticate(Firebird::CheckStatusWrapper* status, Firebird::IClientBlock* sBlock);
-    int release();
 
 	WinSspiClient(Firebird::IPluginConfig*);
 

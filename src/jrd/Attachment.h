@@ -36,16 +36,19 @@
 
 #include "../common/classes/ByteChunk.h"
 #include "../common/classes/GenericMap.h"
-#include "../common/classes/QualifiedName.h"
+#include "../jrd/QualifiedName.h"
 #include "../common/classes/SyncObject.h"
 #include "../common/classes/array.h"
 #include "../common/classes/stack.h"
 #include "../common/classes/timestamp.h"
+#include "../common/classes/TimerImpl.h"
 #include "../common/ThreadStart.h"
 #include "../common/TimeZoneUtil.h"
 
 #include "../jrd/EngineInterface.h"
 #include "../jrd/sbm.h"
+
+#define DEBUG_LCK_LIST
 
 namespace EDS {
 	class Connection;
@@ -106,7 +109,7 @@ struct DSqlCacheItem
 	}
 
 	Firebird::string key;
-	Firebird::GenericMap<Firebird::Pair<Firebird::Left<Firebird::QualifiedName, bool> > > obsoleteMap;
+	Firebird::GenericMap<Firebird::Pair<Firebird::Left<QualifiedName, bool> > > obsoleteMap;
 	Lock* lock;
 	bool locked;
 };
@@ -129,9 +132,9 @@ struct DdlTriggerContext
 
 	Firebird::string eventType;
 	Firebird::string objectType;
-	Firebird::MetaName objectName;
-	Firebird::MetaName oldObjectName;
-	Firebird::MetaName newObjectName;
+	MetaName objectName;
+	MetaName oldObjectName;
+	MetaName newObjectName;
 	Firebird::string sqlText;
 };
 
@@ -157,8 +160,11 @@ const ULONG ATT_creator				= 0x08000L; // This attachment created the DB
 const ULONG ATT_monitor_done		= 0x10000L; // Monitoring data is refreshed
 const ULONG ATT_security_db			= 0x20000L; // Attachment used for security purposes
 const ULONG ATT_mapping				= 0x40000L; // Attachment used for mapping auth block
-const ULONG ATT_crypt_thread		= 0x80000L; // Attachment from crypt thread
+const ULONG ATT_from_thread			= 0x80000L; // Attachment from internal special thread (sweep, crypt)
 const ULONG ATT_monitor_init		= 0x100000L; // Attachment is registered in monitoring
+const ULONG ATT_repl_reset			= 0x200000L; // Replication set has been reset
+const ULONG ATT_replicating			= 0x400000L; // Replication is active
+const ULONG ATT_resetting			= 0x800000L; // Session reset is in progress
 
 const ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 
@@ -265,6 +271,8 @@ public:
 		return shutError;
 	}
 
+	void onIdleTimer(Firebird::TimerImpl*);
+
 private:
 	Attachment* att;
 	JAttachment* jAtt;
@@ -321,7 +329,7 @@ public:
 			: m_objects(pool)
 		{}
 
-		void store(SLONG id, const Firebird::MetaName& name)
+		void store(SLONG id, const MetaName& name)
 		{
 			fb_assert(id >= 0);
 			fb_assert(name.hasData());
@@ -338,7 +346,7 @@ public:
 			}
 		}
 
-		bool lookup(SLONG id, Firebird::MetaName& name)
+		bool lookup(SLONG id, MetaName& name)
 		{
 			if (id < (int) m_objects.getCount())
 			{
@@ -349,7 +357,7 @@ public:
 			return false;
 		}
 
-		SLONG lookup(const Firebird::MetaName& name)
+		SLONG lookup(const MetaName& name)
 		{
 			FB_SIZE_T pos;
 
@@ -360,7 +368,7 @@ public:
 		}
 
 	private:
-		Firebird::Array<Firebird::MetaName> m_objects;
+		Firebird::Array<MetaName> m_objects;
 	};
 
 	class InitialOptions
@@ -393,7 +401,7 @@ public:
 	};
 
 public:
-	static Attachment* create(Database* dbb);
+	static Attachment* create(Database* dbb, JProvider* provider);
 	static void destroy(Attachment* const attachment);
 
 	MemoryPool* const att_pool;					// Memory pool
@@ -404,7 +412,7 @@ public:
 	UserId*		att_user;					// User identification
 	UserId*		att_ss_user;				// User identification for SQL SECURITY actual user
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Firebird::MetaName, UserId*> > > att_user_ids;	// set of used UserIds
+		Firebird::MetaString, UserId*> > > att_user_ids;	// set of used UserIds
 	jrd_tra*	att_transactions;			// Transactions belonging to attachment
 	jrd_tra*	att_dbkey_trans;			// transaction to control db-key scope
 	TraNumber	att_oldest_snapshot;		// GTT's record versions older than this can be garbage-collected
@@ -433,6 +441,9 @@ public:
 	SSHORT		att_client_charset;			// user's charset specified in dpb
 	SSHORT		att_charset;				// current (client or external) attachment charset
 	Lock*		att_long_locks;				// outstanding two phased locks
+#ifdef DEBUG_LCK_LIST
+	UCHAR		att_long_locks_type;		// Lock type of the first lock in list
+#endif
 	Lock*		att_wait_lock;				// lock at which attachment waits currently
 	vec<Lock*>*	att_compatibility_table;	// hash table of compatible locks
 	Validation*	att_validation;
@@ -470,7 +481,7 @@ public:
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
 
-	Firebird::IReplicatedSession* att_replicator;
+	Firebird::RefPtr<Firebird::IReplicatedSession> att_replicator;
 	Firebird::AutoPtr<Replication::TableMatcher> att_repl_matcher;
 	Firebird::AutoPtr<Applier> att_repl_applier;
 
@@ -496,7 +507,7 @@ public:
 
 	Firebird::Array<CharSetContainer*>	att_charsets;		// intl character set descriptions
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Firebird::MetaName, USHORT> > > att_charset_ids;	// Character set ids
+		MetaName, USHORT> > > att_charset_ids;	// Character set ids
 
 	void releaseIntlObjects(thread_db* tdbb);			// defined in intl.cpp
 	void destroyIntlObjects(thread_db* tdbb);			// defined in intl.cpp
@@ -510,6 +521,7 @@ public:
 	static int blockingAstShutdown(void*);
 	static int blockingAstCancel(void*);
 	static int blockingAstMonitor(void*);
+	static int blockingAstReplSet(void*);
 
 	Firebird::Array<MemoryPool*>	att_pools;		// pools
 
@@ -539,8 +551,8 @@ public:
 	PreparedStatement* prepareUserStatement(thread_db* tdbb, jrd_tra* transaction,
 		const Firebird::string& text, Firebird::MemoryPool* pool = NULL);
 
-	Firebird::MetaName nameToMetaCharSet(thread_db* tdbb, const Firebird::MetaName& name);
-	Firebird::MetaName nameToUserCharSet(thread_db* tdbb, const Firebird::MetaName& name);
+	MetaName nameToMetaCharSet(thread_db* tdbb, const MetaName& name);
+	MetaName nameToUserCharSet(thread_db* tdbb, const MetaName& name);
 	Firebird::string stringToMetaCharSet(thread_db* tdbb, const Firebird::string& str,
 		const char* charSet = NULL);
 	Firebird::string stringToUserCharSet(thread_db* tdbb, const Firebird::string& str);
@@ -557,6 +569,7 @@ public:
 	void signalShutdown(ISC_STATUS code);
 
 	void mergeStats();
+	bool hasActiveRequests() const;
 
 	bool backupStateWriteLock(thread_db* tdbb, SSHORT wait);
 	void backupStateWriteUnLock(thread_db* tdbb);
@@ -601,7 +614,14 @@ public:
 	void setupIdleTimer(bool clear);
 
 	// returns time when idle timer will be expired, if set
-	bool getIdleTimerTimestamp(ISC_TIMESTAMP_TZ& ts) const;
+	bool getIdleTimerClock(SINT64& clock) const
+	{
+		if (!att_idle_timer)
+			return false;
+
+		clock = att_idle_timer->getExpireClock();
+		return (clock != 0);
+	}
 
 	// batches control
 	void registerBatch(JBatch* b)
@@ -631,7 +651,7 @@ public:
 		return att_tablespaces.getCount();
 	}
 
-	UserId* getUserId(const Firebird::MetaName &userName);
+	UserId* getUserId(const Firebird::MetaString& userName);
 
 	const UserId* getEffectiveUserId() const
 	{
@@ -653,45 +673,30 @@ public:
 		return att_initial_options.getBindings();
 	}
 
+	void checkReplSetLock(thread_db* tdbb);
+	void invalidateReplSet(thread_db* tdbb, bool broadcast);
+
+	JProvider* getProvider()
+	{
+		fb_assert(att_provider);
+		return att_provider;
+	}
 
 private:
-	Attachment(MemoryPool* pool, Database* dbb);
+	Attachment(MemoryPool* pool, Database* dbb, JProvider* provider);
 	~Attachment();
-
-	class IdleTimer FB_FINAL :
-		public Firebird::RefCntIface<Firebird::ITimerImpl<IdleTimer, Firebird::CheckStatusWrapper> >
-	{
-	public:
-		explicit IdleTimer(JAttachment* jAtt) :
-			m_attachment(jAtt),
-			m_fireTime(0),
-			m_expTime(0)
-		{ }
-
-		// ITimer implementation
-		void handler();
-		int release();
-
-		// Set timeout, seconds
-		void reset(unsigned int timeout);
-
-		SINT64 getExpiryTime() const
-		{
-			return m_expTime;
-		}
-
-	private:
-		Firebird::RefPtr<JAttachment> m_attachment;
-		SINT64 m_fireTime;		// when ITimer will fire, could be less than m_expTime
-		SINT64 m_expTime;		// when actual idle timeout will expire
-	};
 
 	unsigned int att_idle_timeout;		// seconds
 	unsigned int att_stmt_timeout;		// milliseconds
+
+	typedef Firebird::TimerWithRef<StableAttachmentPart> IdleTimer;
 	Firebird::RefPtr<IdleTimer> att_idle_timer;
 
 	Firebird::Array<JBatch*> att_batches;
-	InitialOptions att_initial_options;		// Initial session options
+	InitialOptions att_initial_options;	// Initial session options
+
+	Lock* att_repl_lock;				// Replication set lock
+	JProvider* att_provider;	// Provider which created this attachment
 };
 
 
@@ -762,7 +767,6 @@ public:
 		{
 			if (m_index < m_list.m_attachments.getCount())
 			{
-				AttachmentsRefHolder::debugHelper(FB_FUNCTION);
 				m_list.m_attachments[m_index]->release();
 				m_list.m_attachments.remove(m_index);
 			}
@@ -795,7 +799,6 @@ public:
 	{
 		while (m_attachments.hasData())
 		{
-			debugHelper(FB_FUNCTION);
 			m_attachments.pop()->release();
 		}
 	}
@@ -816,8 +819,6 @@ public:
 
 private:
 	AttachmentsRefHolder(const AttachmentsRefHolder&);
-
-	static void debugHelper(const char* from);
 
 	Firebird::HalfStaticArray<StableAttachmentPart*, 128> m_attachments;
 };

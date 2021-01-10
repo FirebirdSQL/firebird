@@ -28,12 +28,12 @@ using namespace Firebird;
 
 namespace
 {
-	bool hasChar(int32_t len, int32_t pos)
+	bool hasChar(unsigned len, unsigned pos)
 	{
 		return pos < len;
 	}
 
-	UChar32 getChar(bool latin, const char* str, int32_t len, int32_t& pos)
+	UChar32 getChar(bool latin, const char* str, unsigned len, unsigned& pos)
 	{
 		fb_assert(hasChar(len, pos));
 		UChar32 c;
@@ -84,7 +84,7 @@ namespace
 						status_exception::raise(Arg::Gds(isc_malformed_string));
 				}
 
-				int32_t escapePos = 0;
+				unsigned escapePos = 0;
 				escapeChar = getChar(flags & COMP_FLAG_LATIN, escapeStr, escapeLen, escapePos);
 
 				if (escapePos != escapeLen)
@@ -475,7 +475,7 @@ namespace
 							item.lastStart = charSavePos;
 							item.lastEnd = patternPos;
 
-							int32_t cPos = item.firstStart;
+							unsigned cPos = item.firstStart;
 							UChar32 c1 = getChar(flags & COMP_FLAG_LATIN, patternStr, patternLen, cPos);
 
 							cPos = item.lastStart;
@@ -520,7 +520,7 @@ namespace
 						{
 							char hex[40];
 
-							int32_t cPos = item.firstStart;
+							unsigned cPos = item.firstStart;
 							UChar32 c = getChar(flags & COMP_FLAG_LATIN, patternStr, patternLen, cPos);
 
 							if (c > 0)
@@ -674,8 +674,8 @@ namespace
 
 		string re2PatternStr;
 		const char* patternStr;
-		int32_t patternPos;
-		int32_t patternLen;
+		unsigned patternPos;
+		unsigned patternLen;
 		UChar32 escapeChar;
 		unsigned flags;
 		bool useEscape;
@@ -692,7 +692,7 @@ namespace
 			  patternPos(0),
 			  patternLen(aPatternLen)
 		{
-			int32_t escapePos = 0;
+			unsigned escapePos = 0;
 			escapeChar = getChar(flags & COMP_FLAG_LATIN, escapeStr, escapeLen, escapePos);
 
 			if (escapePos != escapeLen)
@@ -789,8 +789,8 @@ namespace
 	private:
 		unsigned flags;
 		const char* patternStr;
-		int32_t patternPos;
-		int32_t patternLen;
+		unsigned patternPos;
+		unsigned patternLen;
 		UChar32 escapeChar;
 	};
 }	// namespace
@@ -852,7 +852,7 @@ bool SimilarToRegex::matches(const char* buffer, unsigned bufferLen, Array<Match
 		{
 			matchPosArray->clear();
 
-			for (const auto resSp : resSps)
+			for (const auto& resSp : resSps)
 			{
 				matchPosArray->push(MatchPos{
 					static_cast<unsigned>(resSp.data() - sp.begin()),

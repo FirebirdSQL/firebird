@@ -41,7 +41,7 @@
 #include "../common/UtilSvc.h"
 #include "../common/classes/array.h"
 #include "../common/classes/fb_pair.h"
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
 #include "../common/SimilarToRegex.h"
 #include "../common/status.h"
 #include "../common/sha.h"
@@ -117,6 +117,8 @@ enum rec_type {
 	rec_mapping,			// Mapping of security names
 	rec_package,			// Package
 	rec_db_creator,			// Database creator
+	rec_publication,		// Publication
+	rec_pub_table,			// Publication table
 	rec_tablespace			// Tablespace
 };
 
@@ -201,7 +203,7 @@ Version 10: FB3.0.
 			See backup_capabilities in OdsDetection.h.
 
 Version 11: FB4.0.
-			SQL SECURITY feature.
+			SQL SECURITY feature, tables RDB$PUBLICATIONS/RDB$PUBLICATION_TABLES.
 */
 
 const int ATT_BACKUP_FORMAT		= 11;
@@ -639,6 +641,16 @@ enum att_type {
 	att_dbc_user = SERIES,
 	att_dbc_type,
 
+	// Publications
+	att_pub_name = SERIES,
+	att_pub_owner_name,
+	att_pub_active_flag,
+	att_pub_auto_enable,
+
+	// Publication tables
+	att_ptab_pub_name = SERIES,
+	att_ptab_table_name,
+
 	// Tablespace attributes
 	att_ts_name = SERIES,
 	att_ts_security_class,
@@ -955,6 +967,7 @@ public:
 		  verboseInterval(10000),
 		  flag_on_line(true),
 		  firstMap(true),
+		  firstDbc(true),
 		  stdIoMode(false),
 		  tablespace_mapping(*getDefaultMemoryPool())
 	{
@@ -1093,6 +1106,7 @@ public:
 	Firebird::IRequest*	handles_get_character_sets_req_handle1;
 	Firebird::IRequest*	handles_get_chk_constraint_req_handle1;
 	Firebird::IRequest*	handles_get_collation_req_handle1;
+	Firebird::IRequest*	handles_get_db_creators_req_handle1;
 	Firebird::IRequest*	handles_get_exception_req_handle1;
 	Firebird::IRequest*	handles_get_field_dimensions_req_handle1;
 	Firebird::IRequest*	handles_get_field_req_handle1;
@@ -1111,17 +1125,18 @@ public:
 	Firebird::IRequest*	handles_get_index_req_handle2;
 	Firebird::IRequest*	handles_get_index_req_handle3;
 	Firebird::IRequest*	handles_get_index_req_handle4;
+	Firebird::IRequest*	handles_get_mapping_req_handle1;
 	Firebird::IRequest*	handles_get_package_req_handle1;
 	Firebird::IRequest*	handles_get_procedure_prm_req_handle1;
 	Firebird::IRequest*	handles_get_procedure_req_handle1;
+	Firebird::IRequest*	handles_get_pub_req_handle1;
+	Firebird::IRequest*	handles_get_pub_tab_req_handle1;
 	Firebird::IRequest*	handles_get_ranges_req_handle1;
 	Firebird::IRequest*	handles_get_ref_constraint_req_handle1;
 	Firebird::IRequest*	handles_get_rel_constraint_req_handle1;
 	Firebird::IRequest*	handles_get_relation_req_handle1;
 	Firebird::IRequest*	handles_get_security_class_req_handle1;
 	Firebird::IRequest*	handles_get_sql_roles_req_handle1;
-	Firebird::IRequest*	handles_get_mapping_req_handle1;
-	Firebird::IRequest* handles_db_creators_req_handle1;
 	Firebird::IRequest*	handles_get_trigger_message_req_handle1;
 	Firebird::IRequest*	handles_get_trigger_message_req_handle2;
 	Firebird::IRequest*	handles_get_trigger_old_req_handle1;
@@ -1177,7 +1192,7 @@ public:
 	Firebird::FbLocalStatus status_vector;
 	Firebird::ThrowLocalStatus throwStatus;
 
-	Firebird::Array<Firebird::Pair<Firebird::NonPooled<Firebird::MetaName, Firebird::MetaName> > >
+	Firebird::Array<Firebird::Pair<Firebird::NonPooled<Firebird::MetaString, Firebird::MetaString> > >
 		defaultCollations;
 	Firebird::UtilSvc* uSvc;
 	ULONG verboseInterval;	// How many records should be backed up or restored before we show this message

@@ -32,9 +32,7 @@
 #include "../common/os/path_utils.h"
 #include "../common/isc_proto.h"
 #include "../common/classes/ClumpletWriter.h"
-#include "../common/classes/MetaName.h"
 #include "../common/ThreadStart.h"
-#include "../common/utils_proto.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/ParsedList.h"
 
@@ -366,7 +364,7 @@ namespace
 			if (m_connected)
 				return m_sequence;
 
-			ClumpletWriter dpb(ClumpletReader::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
+			ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 
 			dpb.insertString(isc_dpb_user_name, DBA_USER_NAME);
 			dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(m_config->dbName));
@@ -624,11 +622,13 @@ namespace
 
 		ProcessStatus ret = PROCESS_SUSPEND;
 
+		const auto config = target->getConfig();
+
 		try
 		{
 			// First pass: create the processing queue
 
-			for (auto iter = PathUtils::newDirIterator(pool, target->getConfig()->logSourceDirectory);
+			for (auto iter = PathUtils::newDirIterator(pool, config->logSourceDirectory);
 				*iter; ++(*iter))
 			{
 				const auto filename = **iter;
@@ -724,7 +724,7 @@ namespace
 			if (queue.isEmpty())
 			{
 				target->verbose("No new segments found, suspending for %u seconds",
-								target->getConfig()->applyIdleTimeout);
+								config->applyIdleTimeout);
 				return ret;
 			}
 
@@ -775,7 +775,7 @@ namespace
 				if (max_sequence == last_sequence)
 				{
 					target->verbose("No new segments found, suspending for %u seconds",
-									target->getConfig()->applyIdleTimeout);
+									config->applyIdleTimeout);
 					return ret;
 				}
 
@@ -835,7 +835,7 @@ namespace
 					if (read(file, &header, sizeof(Block)) != sizeof(Block))
 						raiseError("Log file %s read failed (error %d)", segment->filename.c_str(), ERRNO);
 
-					const auto blockLength = header.dataLength + header.metaLength;
+					const auto blockLength = header.length;
 					const auto length = sizeof(Block) + blockLength;
 
 					if (blockLength)
@@ -936,8 +936,8 @@ namespace
 			string message;
 
 			char temp[BUFFER_LARGE];
-			const ISC_STATUS* status_ptr = localStatus.getErrors();
-			while (fb_interpret(temp, sizeof(temp), &status_ptr))
+			const ISC_STATUS* statusPtr = localStatus.getErrors();
+			while (fb_interpret(temp, sizeof(temp), &statusPtr))
 			{
 				if (!message.isEmpty())
 					message += "\n\t";
@@ -945,11 +945,10 @@ namespace
 				message += temp;
 			}
 
-			if (message.find("Replication") == string::npos)
-				target->logError(message);
+			target->logError(message);
 
 			target->verbose("Suspending for %u seconds",
-							target->getConfig()->applyErrorTimeout);
+							config->applyErrorTimeout);
 
 			ret = PROCESS_ERROR;
 		}

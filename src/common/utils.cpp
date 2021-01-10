@@ -55,6 +55,7 @@
 #include "firebird/impl/sqlda_pub.h"
 #include "../common/classes/ClumpletReader.h"
 #include "../common/StatusArg.h"
+#include "../common/TimeZoneUtil.h"
 
 #ifdef WIN_NT
 #include <direct.h>
@@ -304,6 +305,8 @@ bool readenv(const char* env_name, Firebird::PathName& env_value)
 }
 
 
+// Set environment variable.
+// If overwrite == false and variable already exist, return true.
 bool setenv(const char* name, const char* value, bool overwrite)
 {
 #ifdef WIN_NT
@@ -314,7 +317,7 @@ bool setenv(const char* name, const char* value, bool overwrite)
 		size_t envsize = 0;
 		errcode = getenv_s(&envsize, NULL, 0, name);
 		if (errcode || envsize)
-			return false;
+			return errcode ? false : true;
 	}
 
 	// In Windows, _putenv_s sets only the environment data in the CRT.
@@ -1042,7 +1045,7 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 	const char* configDir[] = {
 		FB_BINDIR, FB_SBINDIR, FB_CONFDIR, FB_LIBDIR, FB_INCDIR, FB_DOCDIR, "", FB_SAMPLEDIR,
 		FB_SAMPLEDBDIR, FB_HELPDIR, FB_INTLDIR, FB_MISCDIR, FB_SECDBDIR, FB_MSGDIR, FB_LOGDIR,
-		FB_GUARDDIR, FB_PLUGDIR
+		FB_GUARDDIR, FB_PLUGDIR, FB_TZDATADIR
 	};
 
 	fb_assert(FB_NELEM(configDir) == Firebird::IConfigManager::DIR_COUNT);
@@ -1060,7 +1063,7 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 		}
 	}
 
-	switch(prefType)
+	switch (prefType)
 	{
 		case Firebird::IConfigManager::DIR_BIN:
 		case Firebird::IConfigManager::DIR_SBIN:
@@ -1089,6 +1092,10 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 		case Firebird::IConfigManager::DIR_PLUGINS:
 			s = "plugins";
 			break;
+
+		case Firebird::IConfigManager::DIR_TZDATA:
+			PathUtils::concatPath(s, Firebird::TimeZoneUtil::getTzDataPath(), name);
+			return s;
 
 		case Firebird::IConfigManager::DIR_INC:
 			s = "include";

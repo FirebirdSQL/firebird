@@ -308,7 +308,7 @@ Expr* Parser::parsePrimaryExpr()
 			const char* p = token.text.c_str();
 			size_t len = strlen(p);
 			int base = len > 2 && tolower(p[1]) == 'x' ? 16 : 10;
-			long val = strtol(p, NULL, base);
+			long long val = strtoll(p, NULL, base);
 
 			return new IntLiteralExpr((int) val, base == 16);
 		}

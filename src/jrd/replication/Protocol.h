@@ -26,30 +26,34 @@
 
 namespace Replication
 {
-	inline ULONG ENCODE_PROTOCOL(ULONG major, USHORT minor)
-	{
-		return ((major << 8) | minor);
-	}
-
 	// Supported protocol versions
-	const ULONG PROTOCOL_VERSION_1 = 1;
-	const ULONG PROTOCOL_1_0 = ENCODE_PROTOCOL(PROTOCOL_VERSION_1, 0);
-	const ULONG PROTOCOL_CURRENT_VERSION = PROTOCOL_1_0;
+	const USHORT PROTOCOL_VERSION_1 = 1;
+	const USHORT PROTOCOL_CURRENT_VERSION = PROTOCOL_VERSION_1;
+
+	// Global (protocol neutral) flags
+	const USHORT BLOCK_BEGIN_TRANS	= 0x0001;
+	const USHORT BLOCK_END_TRANS	= 0x0002;
 
 	struct Block
 	{
 		FB_UINT64 traNumber;
-		ULONG protocol;
-		ULONG dataLength;
-		ULONG metaLength;
-		ULONG flags;
+		USHORT protocol;
+		USHORT flags;
+		ULONG length;
 		ISC_TIMESTAMP timestamp;
+		ULONG metaOffset;
+		ULONG reserved;
 	};
 
-	const ULONG BLOCK_BEGIN_TRANS = 1;
-	const ULONG BLOCK_END_TRANS = 2;
+	static_assert(sizeof(struct Block) == 32, "struct Block size mismatch");
+	static_assert(offsetof(struct Block, traNumber) == 0, "traNumber offset mismatch");
+	static_assert(offsetof(struct Block, protocol) == 8, "protocol offset mismatch");
+	static_assert(offsetof(struct Block, flags) == 10, "flags offset mismatch");
+	static_assert(offsetof(struct Block, length) == 12, "pag_generation offset mismatch");
+	static_assert(offsetof(struct Block, timestamp) == 16, "timestamp offset mismatch");
+	static_assert(offsetof(struct Block, metaOffset) == 24, "metaOffset offset mismatch");
 
-	enum Operation
+	enum Operation: UCHAR
 	{
 		opStartTransaction = 1,
 		opPrepareTransaction = 2,

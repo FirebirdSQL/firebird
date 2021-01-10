@@ -70,7 +70,7 @@ public:
 class ComparativeBoolNode : public TypedNode<BoolExprNode, ExprNode::TYPE_COMPARATIVE_BOOL>
 {
 public:
-	enum DsqlFlag
+	enum DsqlFlag : UCHAR
 	{
 		DFLAG_NONE,
 		DFLAG_ANSI_ALL,

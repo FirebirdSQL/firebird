@@ -64,7 +64,7 @@ int main (
  * Functional description
  *
  **************************************/
-TEXT	cmd [140];
+TEXT	cmd [256];
 
 if (argc > 1)
     strcpy (Db_name, argv[1]);

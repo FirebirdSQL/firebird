@@ -144,18 +144,21 @@ void IscConnection::attach(thread_db* tdbb)
 		}
 	}
 
-	char buff[16];
+	unsigned char buff[BUFFER_TINY];
 	{
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
 
-		const char info[] = {isc_info_db_sql_dialect, isc_info_end};
+		const unsigned char info[] = {isc_info_db_sql_dialect, fb_info_features, isc_info_end};
 		m_iscProvider.isc_database_info(&status, &m_handle, sizeof(info), info, sizeof(buff), buff);
 	}
 	if (status->getState() & IStatus::STATE_ERRORS) {
 		raise(&status, tdbb, "isc_database_info");
 	}
 
-	const char* p = buff, *end = buff + sizeof(buff);
+	memset(m_features, false, sizeof(m_features));
+	m_sqlDialect = 1;
+
+	const unsigned char* p = buff, *end = buff + sizeof(buff);
 	while (p < end)
 	{
 		const UCHAR item = *p++;
@@ -168,22 +171,38 @@ void IscConnection::attach(thread_db* tdbb)
 				m_sqlDialect = m_iscProvider.isc_vax_integer(p, len);
 				break;
 
+			case fb_info_features:
+				for (int i = 0; i < len; i++)
+				{
+					if (p[i] == 0)
+						ERR_post(Arg::Gds(isc_random) << Arg::Str("Bad provider feature value"));
+
+					if (p[i] < fb_feature_max)
+						setFeature(static_cast<info_features>(p[i]));
+					// else this provider supports unknown feature, ignore it.
+				}
+				break;
+
 			case isc_info_error:
-				if (*p == isc_info_db_sql_dialect)
 				{
 					const ULONG err = m_iscProvider.isc_vax_integer(p + 1, len - 1);
 					if (err == isc_infunk)
 					{
-						// Remote server don't understand isc_info_db_sql_dialect.
-						// Consider it as pre-IB6 server and use SQL dialect 1 to work with it.
-						m_sqlDialect = 1;
+						if (*p == fb_info_features)
+						{
+							// Used provider follow Firebird error reporting conventions but is not aware of
+							// this info item. Assume Firebird 3 or earlier.
+							m_features[fb_feature_multi_statements] = true;
+							m_features[fb_feature_multi_transactions] = true;
+							m_features[fb_feature_statement_long_life] = true;
+						}
 						break;
 					}
+					ERR_post(Arg::Gds(isc_random) << Arg::Str("Unexpected error in isc_database_info"));
 				}
-				// fall thru
 
 			case isc_info_truncated:
-				ERR_post(Arg::Gds(isc_random) << Arg::Str("Unexpected error in isc_database_info"));
+				ERR_post(Arg::Gds(isc_random) << Arg::Str("Result truncation in isc_database_info"));
 
 			case isc_info_end:
 				p = end;
@@ -192,7 +211,6 @@ void IscConnection::attach(thread_db* tdbb)
 		p += len;
 	}
 
-	m_features = conFtrFB4;	// Exact feature set will be detected at first usage
 }
 
 void IscConnection::doDetach(thread_db* tdbb)
@@ -240,7 +258,7 @@ bool IscConnection::resetSession()
 	if (!m_handle)
 		return false;
 
-	if (!testFeature(conFtrSessionReset))
+	if (!testFeature(fb_feature_session_reset))
 		return true;
 
 	FbLocalStatus status;
@@ -252,7 +270,7 @@ bool IscConnection::resetSession()
 
 	if (status->getErrors()[1] == isc_dsql_error)
 	{
-		clearFeature(conFtrSessionReset);
+		clearFeature(fb_feature_session_reset);
 		return true;
 	}
 
@@ -267,11 +285,10 @@ bool IscConnection::resetSession()
 //    transactions
 bool IscConnection::isAvailable(thread_db* tdbb, TraScope traScope) const
 {
-	const int flags = m_provider.getFlags();
-	if (m_used_stmts && !(flags & prvMultyStmts))
+	if (m_used_stmts && !testFeature(fb_feature_multi_statements))
 		return false;
 
-	if (m_transactions.getCount() && !(flags & prvMultyTrans) && !findTransaction(tdbb, traScope))
+	if (m_transactions.getCount() && !testFeature(fb_feature_multi_transactions) && !findTransaction(tdbb, traScope))
 	{
 		return false;
 	}
@@ -288,8 +305,8 @@ bool IscConnection::validate(Jrd::thread_db* tdbb)
 
 	EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
 
-	char info[] = {isc_info_attachment_id, isc_info_end};
-	char buff[32];
+	const unsigned char info[] = {isc_info_attachment_id, isc_info_end};
+	unsigned char buff[32];
 
 	return m_iscProvider.isc_database_info(&status, &m_handle,
 		sizeof(info), info, sizeof(buff), buff) == 0;
@@ -315,7 +332,7 @@ Statement* IscConnection::doCreateStatement()
 void IscTransaction::generateTPB(thread_db* tdbb, ClumpletWriter& tpb,
 	TraModes traMode, bool readOnly, bool wait, int lockTimeout) const
 {
-	if (traMode == traReadCommitedReadConsistency && !m_connection.testFeature(conFtrReadConsistency))
+	if (traMode == traReadCommitedReadConsistency && !m_connection.testFeature(fb_feature_read_consistency))
 		traMode = traConcurrency;
 
 	Transaction::generateTPB(tdbb, tpb, traMode, readOnly, wait, lockTimeout);
@@ -335,7 +352,7 @@ void IscTransaction::doStart(FbStatusVector* status, thread_db* tdbb, Firebird::
 	if ((status->getState() & IStatus::STATE_ERRORS) &&
 		(status->getErrors()[1] == isc_bad_tpb_form) &&
 		tpb.find(isc_tpb_read_consistency) &&
-		m_connection.testFeature(conFtrReadConsistency))
+		m_connection.testFeature(fb_feature_read_consistency))
 	{
 		tpb.deleteWithTag(isc_tpb_read_committed);
 		tpb.deleteWithTag(isc_tpb_read_consistency);
@@ -348,7 +365,7 @@ void IscTransaction::doStart(FbStatusVector* status, thread_db* tdbb, Firebird::
 		}
 
 		if (!(status->getState() & IStatus::STATE_ERRORS))
-			m_connection.clearFeature(conFtrReadConsistency);
+			m_connection.clearFeature(fb_feature_read_consistency);
 	}
 }
 
@@ -518,8 +535,8 @@ void IscStatement::doPrepare(thread_db* tdbb, const string& sql)
 	m_inputs = m_in_xsqlda ? m_in_xsqlda->sqld : 0;
 
 	// get statement type
-	const char stmt_info[] = {isc_info_sql_stmt_type};
-	char info_buff[16];
+	const unsigned char stmt_info[] = {isc_info_sql_stmt_type};
+	unsigned char info_buff[16];
 	{
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
 		if (m_iscProvider.isc_dsql_sql_info(&status, &m_handle, sizeof(stmt_info), stmt_info,
@@ -562,7 +579,7 @@ void IscStatement::doPrepare(thread_db* tdbb, const string& sql)
 
 void IscStatement::doSetTimeout(thread_db* tdbb, unsigned int timeout)
 {
-	if (!m_connection.testFeature(conFtrStatementTimeout))
+	if (!m_connection.testFeature(fb_feature_statement_timeout))
 		return;
 
 	FbLocalStatus status;
@@ -578,7 +595,7 @@ void IscStatement::doSetTimeout(thread_db* tdbb, unsigned int timeout)
 		// or loaded client library
 		if (status[0] == isc_arg_gds && (status[1] == isc_wish_list || status[1] == isc_unavailable))
 		{
-			m_connection.clearFeature(conFtrStatementTimeout);
+			m_connection.clearFeature(fb_feature_statement_timeout);
 			return;
 		}
 
@@ -646,7 +663,7 @@ void IscStatement::doClose(thread_db* tdbb, bool drop)
 	}
 }
 
-void IscStatement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaName* const* names,
+void IscStatement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaString* const* names,
 	const NestConst<Jrd::ValueExprNode>* params)
 {
 	Statement::doSetInParams(tdbb, count, names, params);
@@ -1047,15 +1064,15 @@ ISC_STATUS ISC_EXPORT IscProvider::isc_create_database(FbStatusVector* user_stat
 ISC_STATUS ISC_EXPORT IscProvider::isc_database_info(FbStatusVector* user_status,
 									isc_db_handle* db_handle,
 									short info_len,
-									const char* info,
+									const unsigned char* info,
 									short res_len,
-									char* res)
+									unsigned char* res)
 {
 	if (!m_api.database_info)
 		return notImplemented(user_status);
 
 	return (*m_api.database_info) (IscStatus(user_status), db_handle,
-			info_len, info, res_len, res);
+			info_len, reinterpret_cast<const ISC_SCHAR*>(info), res_len, reinterpret_cast<ISC_SCHAR*>(res));
 }
 
 void ISC_EXPORT IscProvider::isc_decode_date(const ISC_QUAD*,
@@ -1228,14 +1245,14 @@ ISC_STATUS ISC_EXPORT IscProvider::isc_dsql_set_cursor_name(FbStatusVector* user
 }
 
 ISC_STATUS ISC_EXPORT IscProvider::isc_dsql_sql_info(FbStatusVector* user_status,
-	isc_stmt_handle* stmt_handle, short items_len, const char* items,
-	short buffer_len, char* buffer)
+	isc_stmt_handle* stmt_handle, short items_len, const unsigned char* items,
+	short buffer_len, unsigned char* buffer)
 {
 	if (!m_api.dsql_sql_info)
 		return notImplemented(user_status);
 
-	return (*m_api.dsql_sql_info) (IscStatus(user_status), stmt_handle, items_len, items,
-				buffer_len, buffer);
+	return (*m_api.dsql_sql_info) (IscStatus(user_status), stmt_handle, items_len, reinterpret_cast<const ISC_SCHAR*>(items),
+				buffer_len, reinterpret_cast<ISC_SCHAR*>(buffer));
 }
 
 void ISC_EXPORT IscProvider::isc_encode_date(const void*,
@@ -1477,10 +1494,10 @@ ISC_STATUS ISC_EXPORT_VARARG IscProvider::isc_start_transaction(FbStatusVector* 
 }
 
 ISC_STATUS ISC_EXPORT_VARARG IscProvider::isc_reconnect_transaction(FbStatusVector* user_status,
-                                               isc_db_handle *,
-                                               isc_tr_handle *,
-                                               short,
-                                               const char*)
+											isc_db_handle *,
+											isc_tr_handle *,
+											short,
+											const char*)
 {
 	return notImplemented(user_status);
 }
@@ -1520,9 +1537,9 @@ ISC_STATUS ISC_EXPORT IscProvider::isc_transact_request(FbStatusVector* user_sta
 	return notImplemented(user_status);
 }
 
-ISC_LONG ISC_EXPORT IscProvider::isc_vax_integer(const char* p, short len)
+ISC_LONG ISC_EXPORT IscProvider::isc_vax_integer(const unsigned char* p, short len)
 {
-	return ::isc_vax_integer(p, len);
+	return ::isc_vax_integer((ISC_SCHAR*) p, len);
 }
 
 ISC_INT64 ISC_EXPORT IscProvider::isc_portable_integer(const unsigned char* p, short len)
@@ -1746,11 +1763,10 @@ static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc> &
 		if (type_alignments[dtype])
 			offset = FB_ALIGN(offset, type_alignments[dtype]);
 
-        offset += xVar->sqllen;
-        const int type = xVar->sqltype & (~1);
-		if (type == SQL_VARYING) {
-            offset += sizeof(SSHORT);
-		}
+		offset += xVar->sqllen;
+		const int type = xVar->sqltype & (~1);
+		if (type == SQL_VARYING)
+			offset += sizeof(SSHORT);
 
 		// null indicator
 		offset = FB_ALIGN(offset, type_alignments[dtype_short]);
@@ -1780,10 +1796,10 @@ static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc> &
 		src.dsc_address = (UCHAR*) xVar->sqldata;
 
 		offset += xVar->sqllen;
-        const int type = xVar->sqltype & (~1);
+		const int type = xVar->sqltype & (~1);
 		if (type == SQL_VARYING)
 		{
-            offset += sizeof(SSHORT);
+			offset += sizeof(SSHORT);
 			src.dsc_length += sizeof(SSHORT);
 		}
 		else if (type == SQL_NULL) {

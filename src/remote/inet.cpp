@@ -241,33 +241,23 @@ private:
 
 	pollfd* getPollFd(int n)
 	{
-		pollfd* const end = slct_poll.end();
-		for (pollfd* pf = slct_poll.begin(); pf < end; ++pf)
-		{
-			if (n == pf->fd)
-			{
-				return pf;
-			}
-		}
+		FB_SIZE_T pos;
+		if (slct_poll.find(n, pos))
+			return &slct_poll[pos];
 
-		return NULL;
-	}
-
-	static int compare(const void* a, const void* b)
-	{
-		// use C-cast here to be for sure compatible with libc
-		return ((pollfd*) a)->fd - ((pollfd*) b)->fd;
+		return nullptr;
 	}
 #endif
 
 public:
 #ifdef HAVE_POLL
 	Select()
-		: slct_time(0), slct_count(0), slct_poll(*getDefaultMemoryPool())
+		: slct_time(0), slct_count(0), slct_poll(*getDefaultMemoryPool()),
+		  slct_ready(*getDefaultMemoryPool())
 	{ }
 
 	explicit Select(Firebird::MemoryPool& pool)
-		: slct_time(0), slct_count(0), slct_poll(pool)
+		: slct_time(0), slct_count(0), slct_poll(pool), slct_ready(pool)
 	{ }
 #else
 	Select()
@@ -285,6 +275,65 @@ public:
 
 	enum HandleState {SEL_BAD, SEL_DISCONNECTED, SEL_NO_DATA, SEL_READY};
 
+	// set first port to check for readyness
+	void checkStart(RemPortPtr& port)
+	{
+		slct_main = port;
+		slct_port = port;
+#ifdef WIRE_COMPRESS_SUPPORT
+		slct_zport = nullptr;
+#endif
+	}
+
+	// get port to check for readyness
+	// assume port_mutex is locked
+	HandleState checkNext(RemPortPtr& port)
+	{
+#ifdef WIRE_COMPRESS_SUPPORT
+		if (slct_zport)
+		{
+			if ((slct_zport->port_flags & PORT_z_data) &&
+				(slct_zport->port_state != rem_port::DISCONNECTED))
+			{
+				port = slct_zport;
+				slct_zport = nullptr;	// Will be set again by select_multi() if needed
+				return SEL_READY;
+			}
+
+			slct_zport = nullptr;
+		}
+#endif
+
+		if (slct_port && slct_port->port_state == rem_port::DISCONNECTED)
+		{
+			// restart from main port
+			slct_port = nullptr;
+			if (slct_main && slct_main->port_state == rem_port::DISCONNECTED)
+				slct_main = nullptr;
+
+			slct_port = slct_main;
+		}
+
+		port = slct_port;
+		if (!slct_port)
+			return SEL_NO_DATA;
+
+#ifdef WIRE_COMPRESS_SUPPORT
+		if (slct_port->port_flags & PORT_z_data)
+			return SEL_READY;
+#endif
+
+		slct_port = slct_port->port_next;
+		return ok(port);
+	}
+
+	void setZDataPort(RemPortPtr& port)
+	{
+#ifdef WIRE_COMPRESS_SUPPORT
+		slct_zport = port;
+#endif
+	}
+
 	HandleState ok(const rem_port* port)
 	{
 #ifdef WIRE_COMPRESS_SUPPORT
@@ -293,16 +342,36 @@ public:
 #endif
 		SOCKET n = port->port_handle;
 #if defined(WIN_NT)
-		return FD_ISSET(n, &slct_fdset) ? SEL_READY : SEL_NO_DATA;
+		if (FD_ISSET(n, &slct_fdset))
+		{
+			unset(n);
+			return SEL_READY;
+		}
+		return SEL_NO_DATA;
 #elif defined(HAVE_POLL)
-		const pollfd* pf = getPollFd(n);
+		pollfd* pf = nullptr;
+		FB_SIZE_T pos;
+		if (slct_ready.find(n, pos))
+			pf = slct_ready[pos];
+
 		if (pf)
-			return pf->events & SEL_CHECK_MASK ? SEL_READY : SEL_NO_DATA;
+		{
+			HandleState ret = pf->events & SEL_CHECK_MASK ? SEL_READY : SEL_NO_DATA;
+			pf->events = 0;		// unset
+			return ret;
+		}
 		return n < 0 ? (port->port_flags & PORT_disconnect ? SEL_DISCONNECTED : SEL_BAD) : SEL_NO_DATA;
 #else
 		if (n < 0 || n >= FD_SETSIZE)
 			return port->port_flags & PORT_disconnect ? SEL_DISCONNECTED : SEL_BAD;
-		return (n < slct_width && FD_ISSET(n, &slct_fdset)) ? SEL_READY : SEL_NO_DATA;
+
+		if (n < slct_width && FD_ISSET(n, &slct_fdset))
+		{
+			unset(n);
+			return SEL_READY;
+		}
+
+		return SEL_NO_DATA;
 #endif
 	}
 
@@ -323,16 +392,18 @@ public:
 	void set(SOCKET handle)
 	{
 #ifdef HAVE_POLL
-		pollfd* pf = getPollFd(handle);
-		if (pf)
+		FB_SIZE_T pos;
+		if (slct_poll.find(handle, pos))
 		{
-			pf->events = SEL_INIT_EVENTS;
-			return;
+			slct_poll[pos].events = SEL_INIT_EVENTS;
 		}
-		pollfd f;
-		f.fd = handle;
-		f.events = SEL_INIT_EVENTS;
-		slct_poll.push(f);
+		else
+		{
+			pollfd f;
+			f.fd = handle;
+			f.events = SEL_INIT_EVENTS;
+			slct_poll.insert(pos, f);
+		}
 #else
 		FD_SET(handle, &slct_fdset);
 #ifdef WIN_NT
@@ -352,11 +423,17 @@ public:
 		slct_width = 0;
 		FD_ZERO(&slct_fdset);
 #endif
+		slct_main = nullptr;
+		slct_port = nullptr;
+#ifdef WIRE_COMPRESS_SUPPORT
+		slct_zport = nullptr;
+#endif
 	}
 
 	void select(timeval* timeout)
 	{
 #ifdef HAVE_POLL
+		slct_ready.clear();
 		bool hasRequest = false;
 		pollfd* const end = slct_poll.end();
 		for (pollfd* pf = slct_poll.begin(); pf < end; ++pf)
@@ -379,7 +456,11 @@ public:
 		if (slct_count >= 0)	// in case of error return revents may contain something bad
 		{
 			for (pollfd* pf = slct_poll.begin(); pf < end; ++pf)
+			{
 				pf->events = pf->revents;
+				if (pf->revents & SEL_CHECK_MASK)
+					slct_ready.add(pf);
+			}
 		}
 #else
 #ifdef WIN_NT
@@ -400,10 +481,23 @@ public:
 private:
 	int		slct_count;
 #ifdef HAVE_POLL
-	HalfStaticArray<pollfd, 8> slct_poll;
+	class PollToFD
+	{
+	public:
+		static int generate(const pollfd* p) { return p->fd; };
+		static int generate(const pollfd& p) { return p.fd; };
+	};
+
+	SortedArray<pollfd, InlineStorage<pollfd, 8>, int, PollToFD>  slct_poll;
+	SortedArray<pollfd*, InlineStorage<pollfd*, 8>, int, PollToFD>  slct_ready;
 #else
 	int		slct_width;
 	fd_set	slct_fdset;
+#endif
+	RemPortPtr slct_main;	// first port to check for readyness
+	RemPortPtr slct_port;	// next port to check for readyness
+#ifdef WIRE_COMPRESS_SUPPORT
+	RemPortPtr slct_zport;	// port with some compressed data remaining in the buffer
 #endif
 };
 
@@ -448,9 +542,9 @@ static SocketsArray* forkSockets;
 static void		get_peer_info(rem_port*);
 
 static void		inet_gen_error(bool, rem_port*, const Arg::StatusVector& v);
-static bool_t	inet_getbytes(XDR*, SCHAR *, u_int);
+static bool_t	inet_getbytes(XDR*, SCHAR *, unsigned);
 static void		inet_error(bool, rem_port*, const TEXT*, ISC_STATUS, int);
-static bool_t	inet_putbytes(XDR*, const SCHAR*, u_int);
+static bool_t	inet_putbytes(XDR*, const SCHAR*, unsigned);
 static bool		inet_read(XDR*);
 static rem_port*		inet_try_connect(	PACKET*,
 									Rdb*,
@@ -482,6 +576,7 @@ static int		send_partial(rem_port*, PACKET *);
 static int		xdrinet_create(XDR*, rem_port*, UCHAR *, USHORT, enum xdr_op);
 static bool		setNoNagleOption(rem_port*);
 static bool		setFastLoopbackOption(rem_port*, SOCKET s = INVALID_SOCKET);
+static bool		setKeepAlive(SOCKET);
 static FPTR_INT	tryStopMainThread = 0;
 
 
@@ -839,11 +934,9 @@ rem_port* INET_connect(const TEXT* name,
 		port->port_connection = nullptr;
 		port->port_connection = REMOTE_make_string(host.c_str());
 	}
-	else {
-		if (packet)
-		{
-			host = port->port_host->str_data;
-		}
+	else if (packet)
+	{
+		host = port->port_host->str_data;
 	}
 
 	if (protocol.isEmpty())
@@ -935,36 +1028,27 @@ rem_port* INET_connect(const TEXT* name,
 			continue;
 		}
 
-		if (packet)
-		{
-			// client
-			int optval = 1;
-			n = setsockopt(port->port_handle, SOL_SOCKET, SO_KEEPALIVE, (SCHAR*) &optval, sizeof(optval));
-			if (n == -1)
-			{
-				gds__log("setsockopt: error setting SO_KEEPALIVE");
-			}
+		if (!packet) // server
+			return listener_socket(port, flag, pai);
 
-			if (!setNoNagleOption(port))
-				gds__log("setsockopt: error setting TCP_NODELAY");
-			else
-			{
-				setFastLoopbackOption(port);
+		// client
+		if (!setKeepAlive(port->port_handle))
+			gds__log("setsockopt: error setting SO_KEEPALIVE");
 
-				n = connect(port->port_handle, pai->ai_addr, pai->ai_addrlen);
-				if (n != -1)
-				{
-					port->port_peer_name = host;
-					get_peer_info(port);
-					if (send_full(port, packet))
-						return port;
-				}
-			}
-		}
+		if (!setNoNagleOption(port))
+			gds__log("setsockopt: error setting TCP_NODELAY");
 		else
 		{
-			// server
-			return listener_socket(port, flag, pai);
+			setFastLoopbackOption(port);
+
+			n = connect(port->port_handle, pai->ai_addr, pai->ai_addrlen);
+			if (n != -1)
+			{
+				port->port_peer_name = host;
+				get_peer_info(port);
+				if (send_full(port, packet))
+					return port;
+			}
 		}
 
 		SOCLOSE(port->port_handle);
@@ -1042,6 +1126,13 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 		if (n == -1)
 		{
 			inet_error(true, port, "setsockopt LINGER", isc_net_connect_listen_err, INET_ERRNO);
+		}
+	}
+	else
+	{
+		if (! setKeepAlive(port->port_handle))
+		{
+			inet_error(true, port, "setsockopt SO_KEEPALIVE", isc_net_connect_listen_err, INET_ERRNO);
 		}
 	}
 
@@ -1168,9 +1259,7 @@ rem_port* INET_reconnect(SOCKET handle)
 	port->port_flags |= PORT_server;
 	port->port_server_flags |= SRVR_server;
 
-	int n = 0, optval = TRUE;
-	n = setsockopt(port->port_handle, SOL_SOCKET, SO_KEEPALIVE, (SCHAR*) &optval, sizeof(optval));
-	if (n == -1) {
+	if (! setKeepAlive(port->port_handle)) {
 		gds__log("inet server err: setting KEEPALIVE socket option \n");
 	}
 
@@ -1200,9 +1289,7 @@ rem_port* INET_server(SOCKET sock)
 	port->port_server_flags |= SRVR_server;
 	port->port_handle = sock;
 
-	int optval = 1;
-	n = setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (SCHAR*) &optval, sizeof(optval));
-	if (n == -1) {
+	if (! setKeepAlive(port->port_handle)) {
 		gds__log("inet server err: setting KEEPALIVE socket option \n");
 	}
 
@@ -1426,17 +1513,13 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 			if (count != -1 || !INTERRUPT_ERROR(inetErrNo))
 			{
 				if (count == 1)
-				{
 					break;
-				}
-				else
-				{
-					const ISC_STATUS error_code =
-						(count == 0) ? isc_net_event_connect_timeout : isc_net_event_connect_err;
-					int savedError = inetErrNo;
-					SOCLOSE(port->port_channel);
-					inet_error(false, port, "select", error_code, savedError);
-				}
+
+				const ISC_STATUS error_code =
+					(count == 0) ? isc_net_event_connect_timeout : isc_net_event_connect_err;
+				int savedError = inetErrNo;
+				SOCLOSE(port->port_channel);
+				inet_error(false, port, "select", error_code, savedError);
 			}
 		}
 
@@ -1500,8 +1583,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 		inet_error(false, port, "socket", isc_net_event_connect_err, savedError);
 	}
 
-	int optval = 1;
-	setsockopt(n, SOL_SOCKET, SO_KEEPALIVE, (SCHAR*) &optval, sizeof(optval));
+	setKeepAlive(n);
 	setFastLoopbackOption(new_port, n);
 
 	status = address.connect(n);
@@ -1730,7 +1812,7 @@ static void disconnect(rem_port* port)
 		SOCLOSE(port->port_channel);
 	}
 
-	if (port->port_thread_guard && port->port_events_thread && !Thread::isCurrent(port->port_events_threadId))
+	if (port->port_thread_guard && port->port_events_thread && !port->port_events_threadId.isCurrent())
 		port->port_thread_guard->setWait(port->port_events_thread);
 	else
 		port->releasePort();
@@ -2035,6 +2117,10 @@ static bool select_multi(rem_port* main_port, UCHAR* buffer, SSHORT bufsize, SSH
 				{
 					*length = 0;
 				}
+#ifdef WIRE_COMPRESS_SUPPORT
+				if (port->port_flags & PORT_z_data)
+					INET_select->setZDataPort(port);
+#endif
 				return (*length) ? true : false;
 			}
 
@@ -2059,6 +2145,10 @@ static bool select_multi(rem_port* main_port, UCHAR* buffer, SSHORT bufsize, SSH
 				}
 				*length = 0;
 			}
+#ifdef WIRE_COMPRESS_SUPPORT
+			if (port->port_flags & PORT_z_data)
+				INET_select->setZDataPort(port);
+#endif
 			return (*length) ? true : false;
 		}
 		if (!select_wait(main_port, &INET_select))
@@ -2091,8 +2181,7 @@ static rem_port* select_accept( rem_port* main_port)
 		inet_error(true, port, "accept", isc_net_connect_err, INET_ERRNO);
 	}
 
-	int optval = 1;
-	setsockopt(port->port_handle, SOL_SOCKET, SO_KEEPALIVE, (SCHAR*) &optval, sizeof(optval));
+	setKeepAlive(port->port_handle);
 
 	port->port_flags |= PORT_server;
 
@@ -2124,11 +2213,11 @@ static void select_port(rem_port* main_port, Select* selct, RemPortPtr& port)
  **************************************/
 
 	MutexLockGuard guard(port_mutex, FB_FUNCTION);
-
-	for (port = main_port; port; port = port->port_next)
+	while (true)
 	{
-		Select::HandleState result = selct->ok(port);
-		selct->unset(port->port_handle);
+		Select::HandleState result = selct->checkNext(port);
+		if (!port)
+			return;
 
 		switch (result)
 		{
@@ -2292,6 +2381,9 @@ static bool select_wait( rem_port* main_port, Select* selct)
 
 			if (selct->getCount() != -1)
 			{
+				RemPortPtr p(main_port);
+				selct->checkStart(p);
+
 				// if selct->slct_count is zero it means that we timed out of
 				// select with nothing to read or accept, so clear the fd_set
 				// bit as this value is undefined on some platforms (eg. HP-UX),
@@ -2490,7 +2582,7 @@ static void inet_gen_error(bool releasePort, rem_port* port, const Arg::StatusVe
 }
 
 
-static bool_t inet_getbytes( XDR* xdrs, SCHAR* buff, u_int count)
+static bool_t inet_getbytes( XDR* xdrs, SCHAR* buff, unsigned bytecount)
 {
 /**************************************
  *
@@ -2504,15 +2596,11 @@ static bool_t inet_getbytes( XDR* xdrs, SCHAR* buff, u_int count)
  **************************************/
 	const rem_port* port = (rem_port*) xdrs->x_public;
 	if (port->port_flags & PORT_server)
-	{
-		return REMOTE_getbytes(xdrs, buff, count);
-	}
-
-	SLONG bytecount = count;
+		return REMOTE_getbytes(xdrs, buff, bytecount);
 
 	// Use memcpy to optimize bulk transfers.
 
-	while (bytecount > (SLONG) sizeof(ISC_QUAD))
+	while (bytecount > sizeof(ISC_QUAD))
 	{
 		if (xdrs->x_handy >= bytecount)
 		{
@@ -2550,9 +2638,9 @@ static bool_t inet_getbytes( XDR* xdrs, SCHAR* buff, u_int count)
 		return TRUE;
 	}
 
-	while (--bytecount >= 0)
+	while (bytecount--)
 	{
-		if (!xdrs->x_handy && !inet_read(xdrs))
+		if (xdrs->x_handy == 0 && !inet_read(xdrs))
 			return FALSE;
 		*buff++ = *xdrs->x_private++;
 		--xdrs->x_handy;
@@ -2624,7 +2712,7 @@ static void inet_error(bool releasePort, rem_port* port, const TEXT* function, I
 	}
 }
 
-static bool_t inet_putbytes( XDR* xdrs, const SCHAR* buff, u_int count)
+static bool_t inet_putbytes( XDR* xdrs, const SCHAR* buff, unsigned bytecount)
 {
 /**************************************
  *
@@ -2636,11 +2724,10 @@ static bool_t inet_putbytes( XDR* xdrs, const SCHAR* buff, u_int count)
  *	Put a bunch of bytes to a memory stream if it fits.
  *
  **************************************/
-	SLONG bytecount = count;
 
 	// Use memcpy to optimize bulk transfers.
 
-	while (bytecount > (SLONG) sizeof(ISC_QUAD))
+	while (bytecount > sizeof(ISC_QUAD))
 	{
 		if (xdrs->x_handy >= bytecount)
 		{
@@ -2680,9 +2767,9 @@ static bool_t inet_putbytes( XDR* xdrs, const SCHAR* buff, u_int count)
 		return TRUE;
 	}
 
-	while (--bytecount >= 0)
+	while (bytecount--)
 	{
-		if (xdrs->x_handy <= 0 && !REMOTE_deflate(xdrs, inet_write, packet_send, false))
+		if (xdrs->x_handy == 0 && !REMOTE_deflate(xdrs, inet_write, packet_send, false))
 			return FALSE;
 		--xdrs->x_handy;
 		*xdrs->x_private++ = *buff++;
@@ -2724,7 +2811,7 @@ static bool inet_read( XDR* xdrs)
 		return false;
 	p += length;
 
-	xdrs->x_handy = (int) ((SCHAR *) p - xdrs->x_base);
+	xdrs->x_handy = (SCHAR *) p - xdrs->x_base;
 	xdrs->x_private = xdrs->x_base;
 
 	return true;
@@ -2986,6 +3073,9 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 
 			if (!slct_count)
 			{
+				if (port->port_protocol == 0)
+					return false;
+
 #ifdef DEBUG
 				if (INET_trace & TRACE_operations)
 				{
@@ -2999,11 +3089,6 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 					return false;
 				}
 				continue;
-			}
-
-			if (!slct_count && port->port_protocol == 0)
-			{
-				return false;
 			}
 		}
 
@@ -3291,6 +3376,25 @@ bool setFastLoopbackOption(rem_port* port, SOCKET s)
 	}
 #endif
 	return false;
+}
+
+static bool setKeepAlive(SOCKET s)
+{
+/**************************************
+ *
+ *      s e t K e e p A l i v e
+ *
+ **************************************
+ *
+ * Functional description
+ *      Set SO_KEEPALIVE, return false
+ *		in case of unexpected error
+ *
+ **************************************/
+	int optval = 1;
+	int n = setsockopt(s, SOL_SOCKET, SO_KEEPALIVE,
+					   (SCHAR*) &optval, sizeof(optval));
+	return n != -1;
 }
 
 void setStopMainThread(FPTR_INT func)

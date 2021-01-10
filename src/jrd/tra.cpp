@@ -64,7 +64,6 @@
 #include "../jrd/jrd_proto.h"
 #include "../jrd/scl_proto.h"
 #include "../common/classes/ClumpletWriter.h"
-#include "../common/classes/TriState.h"
 #include "../common/utils_proto.h"
 #include "../lock/lock_proto.h"
 #include "../dsql/dsql.h"
@@ -106,7 +105,7 @@ static void release_temp_tables(thread_db*, jrd_tra*);
 static void retain_temp_tables(thread_db*, jrd_tra*, TraNumber);
 static void restart_requests(thread_db*, jrd_tra*);
 static void start_sweeper(thread_db*);
-static THREAD_ENTRY_DECLARE sweep_database(THREAD_ENTRY_PARAM);
+//static THREAD_ENTRY_DECLARE sweep_database(THREAD_ENTRY_PARAM);
 static void transaction_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number);
 static void transaction_options(thread_db*, jrd_tra*, const UCHAR*, USHORT);
 static void transaction_start(thread_db* tdbb, jrd_tra* temp);
@@ -467,6 +466,14 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
 
+	// Get rid of all user savepoints
+	while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
+		transaction->rollforwardSavepoint(tdbb);
+
+	// Let replicator perform heavy and error-prone part of work
+
+	REPL_trans_prepare(tdbb, transaction);
+
 	// Perform any meta data work deferred
 
 	if (!(transaction->tra_flags & TRA_prepared))
@@ -493,15 +500,16 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 	if (transaction->tra_flags & (TRA_prepare2 | TRA_reconnected))
 		MET_update_transaction(tdbb, transaction, true);
 
+	// Get rid of the rest of savepoints to allow intermediate garbage collection
+	// in indices and BLOBs after in-place updates
+
+	while (transaction->tra_save_point)
+		transaction->rollforwardSavepoint(tdbb);
+
 	// Flush pages if transaction logically modified data
 
 	if (transaction->tra_flags & TRA_write)
 	{
-		// Get rid of user savepoints to allow intermediate garbage collection
-		// in indices and BLOBs after in-place updates
-		while (transaction->tra_save_point)
-			transaction->rollforwardSavepoint(tdbb);
-
 		transaction_flush(tdbb, FLUSH_TRAN, transaction->tra_number);
 	}
 	else if ((transaction->tra_flags & (TRA_prepare2 | TRA_reconnected)) ||
@@ -1333,7 +1341,10 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 	// Destroy the replicated transaction reference
 
 	if (transaction->tra_replicator)
+	{
 		transaction->tra_replicator->dispose();
+		transaction->tra_replicator = nullptr;
+	}
 
 	// Release transaction's under-modification-rpb list
 
@@ -1423,8 +1434,13 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 			while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
 				transaction->rollforwardSavepoint(tdbb);
 
-			if (transaction->tra_save_point) // we still can use undo log for rollback, it wasn't reset because of no_auto_undo flag or size
+			if (transaction->tra_save_point)
 			{
+				// We still can use the undo log for rollback, it wasn't reset because of
+				// no_auto_undo flag or being oversized
+
+				fb_assert(transaction->tra_save_point->isRoot());
+
 				// In an attempt to avoid deadlocks, clear the precedence by writing
 				// all dirty buffers for this transaction.
 
@@ -1447,7 +1463,12 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 			// Prevent a bugcheck in TRA_set_state to cause a loop
 			// Clear the error because the rollback will succeed.
 			fb_utils::init_status(tdbb->tdbb_status_vector);
+
+			// If undo failed, free all savepoints
+			Savepoint::destroy(transaction->tra_save_point);
 		}
+
+		fb_assert(!transaction->tra_save_point);
 	}
 	else if (!(transaction->tra_flags & TRA_write))
 	{
@@ -1852,7 +1873,7 @@ void TRA_sweep(thread_db* tdbb)
 		// 2) Execution is throttled in JRD_reschedule() by
 		// yielding the processor when our quantum expires.
 
-		tdbb->tdbb_flags |= TDBB_sweeper;
+		ThreadSweepGuard sweepGuard(tdbb);
 
 		TraceSweepEvent traceSweep(tdbb);
 
@@ -1918,7 +1939,6 @@ void TRA_sweep(thread_db* tdbb)
 
 		TRA_commit(tdbb, transaction, false);
 
-		tdbb->tdbb_flags &= ~TDBB_sweeper;
 		tdbb->setTransaction(tdbb_old_trans);
 		dbb->clearSweepFlags(tdbb);
 	}
@@ -1943,7 +1963,6 @@ void TRA_sweep(thread_db* tdbb)
 			}
 		}
 
-		tdbb->tdbb_flags &= ~TDBB_sweeper;
 		tdbb->setTransaction(tdbb_old_trans);
 		dbb->clearSweepFlags(tdbb);
 
@@ -2574,6 +2593,9 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 	Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
+	// All savepoints must already be released in TRA_commit/TRA_rollback
+	fb_assert(!transaction->tra_save_point);
+
 	// The new transaction needs to remember the 'commit-retained' transaction
 	// because it must see the operations of the 'commit-retained' transaction and
 	// its snapshot doesn't contain these operations.
@@ -2668,9 +2690,9 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 
 	transaction->tra_flags &= ~(TRA_write | TRA_prepared);
 
-	// All savepoint were already released in TRA_commit/TRA_rollback except, may be, empty transaction-level one
-	if (!transaction->tra_save_point && !(transaction->tra_flags & TRA_no_auto_undo))
-		transaction->startSavepoint(true);	// start new savepoint if necessary
+	// Restart a transaction-level savepoint, unless NO AUTO UNDO is specified
+	if (!(transaction->tra_flags & TRA_no_auto_undo))
+		transaction->startSavepoint(true);
 
 	if (transaction->tra_flags & TRA_precommitted)
 	{
@@ -2681,6 +2703,103 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 			transaction->tra_flags |= TRA_precommitted;
 		}
 	}
+}
+
+
+namespace {
+	class SweepParameter : public GlobalStorage
+	{
+	public:
+		SweepParameter(Database* d)
+			: dbb(d)
+		{ }
+
+		void waitForStartup()
+		{
+			sem.enter();
+		}
+
+		static void runSweep(SweepParameter* par)
+		{
+			FbLocalStatus status;
+			PathName dbName(par->dbb->dbb_database_name);
+
+			// temporarily disable automatic sweep for encrypted DBs with remote key
+			ICryptKeyCallback* cryptCallback(nullptr);
+#ifdef NEVERDEF
+			ICryptKeyCallback* cryptCallback(par->dbb->dbb_callback);
+			// small (~ 1/2 sec in 2020) delay to debug unload at problematic moment
+			long long x = 0x10000000;
+			while (--x > 0);
+#endif
+
+			// reference is needed to guarantee that provider exists
+			// between semaphore release and attach database
+			AutoPlugin<JProvider> prov(JProvider::getInstance());
+			if (cryptCallback)
+			{
+				prov->setDbCryptCallback(&status, cryptCallback);
+				status.check();
+			}
+			par->sem.release();
+
+			AutoDispose<IXpbBuilder> dpb(UtilInterfacePtr()->getXpbBuilder(&status, IXpbBuilder::DPB, nullptr, 0));
+			status.check();
+			dpb->insertString(&status, isc_dpb_user_name, "sweeper");
+			status.check();
+			UCHAR byte = isc_dpb_records;
+			dpb->insertBytes(&status, isc_dpb_sweep, &byte, 1);
+			status.check();
+			const UCHAR* dpbBytes = dpb->getBuffer(&status);
+			status.check();
+			unsigned dpbLen = dpb->getBufferLength(&status);
+			status.check();
+
+			AutoRelease<IAttachment> att(prov->attachDatabase(&status, dbName.c_str(), dpbLen, dpbBytes));
+			status.check();
+		}
+
+		void exceptionHandler(const Exception& ex, ThreadFinishSync<SweepParameter*>::ThreadRoutine*)
+		{
+			FbLocalStatus st;
+			ex.stuffException(&st);
+			if (st->getErrors()[1] != isc_att_shutdown)
+				iscLogException("Automatic sweep error", ex);
+		}
+
+	private:
+		Semaphore sem;
+		Database* dbb;
+	};
+
+	typedef ThreadFinishSync<SweepParameter*> SweepSync;
+	InitInstance<HalfStaticArray<SweepSync*, 16> > sweepThreads;
+	GlobalPtr<Mutex> swThrMutex;
+	bool sweepDown = false;
+}
+
+
+void TRA_shutdown_sweep()
+{
+/**************************************
+ *
+ *	T R A _ s h u t d o w n _ s w e e p
+ *
+ **************************************
+ *
+ * Functional description
+ *	Wait for sweep threads exit.
+ *
+ **************************************/
+	MutexLockGuard g(swThrMutex, FB_FUNCTION);
+	if (sweepDown)
+		return;
+	sweepDown = true;
+
+	auto& swThr(sweepThreads());
+	for (unsigned n = 0; n < swThr.getCount(); ++n)
+		swThr[n]->waitForCompletion();
+	swThr.clear();
 }
 
 
@@ -2698,73 +2817,45 @@ static void start_sweeper(thread_db* tdbb)
  **************************************/
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
+	bool started = false;
 
 	if (!dbb->allowSweepThread(tdbb))
 		return;
 
 	TRA_update_counters(tdbb, dbb);
 
-	// allocate space for the string and a null at the end
-	const char* pszFilename = tdbb->getAttachment()->att_filename.c_str();
-
-	char* database = (char*) gds__alloc(static_cast<SLONG>(strlen(pszFilename)) + 1);
-
-	if (database)
+	try
 	{
-		strcpy(database, pszFilename);
-
-		try
-		{
-			Thread::start(sweep_database, database, THREAD_medium);
+		MutexLockGuard g(swThrMutex, FB_FUNCTION);
+		if (sweepDown)
 			return;
-		}
-		catch (const Firebird::Exception& ex)
+
+		// perform housekeeping
+		auto& swThr(sweepThreads());
+		for (unsigned n = 0; n < swThr.getCount(); )
 		{
-			gds__free(database);
-			iscLogException("cannot start sweep thread", ex);
+			if (swThr[n]->tryWait())
+			{
+				delete swThr[n];
+				swThr.remove(n);
+			}
+			else
+				++n;
 		}
+
+		AutoPtr<SweepSync> sweepSync(FB_NEW SweepSync(*getDefaultMemoryPool(), SweepParameter::runSweep));
+		SweepParameter swPar(dbb);
+		sweepSync->run(&swPar);
+		started = true;
+		swPar.waitForStartup();
+		sweepThreads().add(sweepSync.release());
 	}
-	else
+	catch (const Exception&)
 	{
-		ERR_log(0, 0, "cannot start sweep thread, Out of Memory");
+		if (!started)
+			dbb->clearSweepStarting();
+		throw;
 	}
-	dbb->clearSweepFlags(tdbb);
-}
-
-
-static THREAD_ENTRY_DECLARE sweep_database(THREAD_ENTRY_PARAM database)
-{
-/**************************************
- *
- *	s w e e p _ d a t a b a s e
- *
- **************************************
- *
- * Functional description
- *	Sweep database.
- *
- **************************************/
-	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
-
-	dpb.insertByte(isc_dpb_sweep, isc_dpb_records);
-	// use embedded authentication to attach database
-	const char* szAuthenticator = "sweeper";
-	dpb.insertString(isc_dpb_user_name, szAuthenticator, fb_strlen(szAuthenticator));
-
-	ISC_STATUS_ARRAY status_vector = {0};
-	isc_db_handle db_handle = 0;
-
-	isc_attach_database(status_vector, 0, (const char*) database,
-						&db_handle, dpb.getBufferLength(),
-						reinterpret_cast<const char*>(dpb.getBuffer()));
-
-	if (db_handle)
-	{
-		isc_detach_database(status_vector, &db_handle);
-	}
-
-	gds__free(database);
-	return 0;
 }
 
 
@@ -2893,7 +2984,7 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_wait:
 			if (!wait.assignOnce(true))
 			{
-				if (!wait.asBool())
+				if (!wait.value)
 				{
 					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_wait") <<
@@ -2974,7 +3065,7 @@ static void transaction_options(thread_db* tdbb,
 				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 					// 'Option @1 is not valid if @2 was used previously in TPB'
 					Arg::Gds(isc_tpb_conflicting_options) <<
-					Arg::Str("isc_tpb_read_consistency") << (rec_version.asBool() ?
+					Arg::Str("isc_tpb_read_consistency") << (rec_version.value ?
 						Arg::Str("isc_tpb_rec_version") : Arg::Str("isc_tpb_no_rec_version")) );
 			}
 
@@ -2982,7 +3073,7 @@ static void transaction_options(thread_db* tdbb,
 			break;
 
 		case isc_tpb_nowait:
-			if (lock_timeout.asBool())
+			if (lock_timeout.value)
 			{
 				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 						 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_nowait") <<
@@ -2991,7 +3082,7 @@ static void transaction_options(thread_db* tdbb,
 
 			if (!wait.assignOnce(false))
 			{
-				if (wait.asBool())
+				if (wait.value)
 				{
 					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_nowait") <<
@@ -3010,7 +3101,7 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_read:
 			if (!read_only.assignOnce(true))
 			{
-				if (!read_only.asBool())
+				if (!read_only.value)
 				{
 					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_read") <<
@@ -3036,7 +3127,7 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_write:
 			if (!read_only.assignOnce(false))
 			{
-				if (read_only.asBool())
+				if (read_only.value)
 				{
 					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_write") <<
@@ -3062,7 +3153,7 @@ static void transaction_options(thread_db* tdbb,
 
 		case isc_tpb_lock_write:
 			// Cannot set a R/W table reservation if the whole txn is R/O.
-			if (read_only.asBool())
+			if (read_only.value)
 			{
 				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 						 Arg::Gds(isc_tpb_writelock_after_readtxn));
@@ -3110,8 +3201,8 @@ static void transaction_options(thread_db* tdbb,
 							 										 Arg::Str(option_name));
 				}
 
-				const Firebird::MetaName orgName(reinterpret_cast<const char*>(tpb), len);
-				const Firebird::MetaName metaName = attachment->nameToMetaCharSet(tdbb, orgName);
+				const MetaName orgName(reinterpret_cast<const char*>(tpb), len);
+				const MetaName metaName = attachment->nameToMetaCharSet(tdbb, orgName);
 
 				tpb += len;
 				jrd_rel* relation = MET_lookup_relation(tdbb, metaName);
@@ -3188,7 +3279,7 @@ static void transaction_options(thread_db* tdbb,
 
 		case isc_tpb_lock_timeout:
 			{
-				if (wait.isAssigned() && !wait.asBool())
+				if (wait.isAssigned() && !wait.value)
 				{
 					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_lock_timeout") <<
@@ -3322,7 +3413,7 @@ static void transaction_options(thread_db* tdbb,
 
 	if (rec_version.isAssigned() && !(transaction->tra_flags & TRA_read_committed))
 	{
-		if (rec_version.asBool())
+		if (rec_version.value)
 		{
 			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 					 Arg::Gds(isc_tpb_option_without_rc) << Arg::Str("isc_tpb_rec_version"));
@@ -3333,7 +3424,6 @@ static void transaction_options(thread_db* tdbb,
 					 Arg::Gds(isc_tpb_option_without_rc) << Arg::Str("isc_tpb_no_rec_version"));
 		}
 	}
-
 
 	if ((transaction->tra_flags & TRA_read_committed) && !(tdbb->tdbb_flags & TDBB_sweeper))
 	{
@@ -3579,7 +3669,7 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 			!(trans->tra_flags & TRA_read_consistency)) ? number : oldest_active;
 
 		static_assert(sizeof(lock->lck_data) == sizeof(lck_data), "Check lock data type !");
-		if (lock->lck_data != lck_data)
+		if (lock->lck_data != (SINT64) lck_data)
 			LCK_write_data(tdbb, lock, lck_data);
 
 		// Query the minimum lock data for all active transaction locks.
@@ -3673,6 +3763,9 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 				LCK_write_data(tdbb, lock, 0); // Fully disinhibit GC for this transaction
 			trans->tra_flags |= TRA_precommitted;
 		}
+
+		if (dbb->isReplicating(tdbb))
+			trans->tra_flags |= TRA_replicating;
 	}
 	catch (const Firebird::Exception&)
 	{
@@ -3923,14 +4016,14 @@ void jrd_tra::rollbackToSavepoint(thread_db* tdbb, SavNumber number)
  *
  **************************************/
 {
-	// Merge all but one folowing savepoints into one
+	// Merge all savepoints (except the given one) into a single one
 	while (tra_save_point && tra_save_point->getNumber() > number &&
 		tra_save_point->getNext() && tra_save_point->getNext()->getNumber() >= number)
 	{
-		rollforwardSavepoint(tdbb);
+		rollforwardSavepoint(tdbb, false);
 	}
 
-	// Check that savepoint with given number really exists
+	// Check that savepoint with the given number really exists
 	fb_assert(tra_save_point && tra_save_point->getNumber() == number);
 
 	if (tra_save_point && tra_save_point->getNumber() >= number) // second line of defence
@@ -3942,7 +4035,7 @@ void jrd_tra::rollbackToSavepoint(thread_db* tdbb, SavNumber number)
 }
 
 
-void jrd_tra::rollforwardSavepoint(thread_db* tdbb)
+void jrd_tra::rollforwardSavepoint(thread_db* tdbb, bool assertChanging)
 /**************************************
  *
  *	 r o l l f o r w a r d S a v e p o i n t
@@ -3956,6 +4049,8 @@ void jrd_tra::rollforwardSavepoint(thread_db* tdbb)
 {
 	if (tra_save_point && !(tra_flags & TRA_system))
 	{
+		fb_assert(!assertChanging || !tra_save_point->isChanging());
+
 		REPL_save_cleanup(tdbb, this, tra_save_point, false);
 
 		Jrd::ContextPoolHolder context(tdbb, tra_pool);

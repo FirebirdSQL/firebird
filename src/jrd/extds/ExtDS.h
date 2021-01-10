@@ -81,7 +81,7 @@ public:
 		const Firebird::string& dataSource, const Firebird::string& user,
 		const Firebird::string& pwd, const Firebird::string& role, TraScope tra_scope);
 
-	static ConnectionsPool* getConnPool() { return m_connPool; }
+	static ConnectionsPool* getConnPool(bool create);
 
 	// Release bound external connections when some jrd attachment is about to be released
 	static void jrdAttachmentEnd(Jrd::thread_db* tdbb, Jrd::Attachment* att, bool forced);
@@ -92,7 +92,6 @@ private:
 	static Firebird::GlobalPtr<Manager> manager;
 	static Firebird::Mutex m_mutex;
 	static Provider* m_providers;
-	static volatile bool m_initialized;
 	static ConnectionsPool* m_connPool;
 };
 
@@ -197,10 +196,7 @@ protected:
 };
 
 // Provider flags
-const int prvMultyStmts		= 0x0001;	// supports many active statements per connection
-const int prvMultyTrans		= 0x0002;	// supports many active transactions per connection
-const int prvNamedParams	= 0x0004;	// supports named parameters
-const int prvTrustedAuth	= 0x0008;	// supports trusted authentication
+const int prvTrustedAuth	= 0x0001;	// supports trusted authentication
 
 
 class ConnectionsPool
@@ -330,7 +326,6 @@ private:
 
 		// ITimer implementation
 		void handler();
-		int release();
 
 		void start();
 		void stop();
@@ -494,12 +489,12 @@ public:
 
 	virtual Blob* createBlob() = 0;
 
-	// Test specified flags, return true if all bits present
-	bool testFeature(ULONG value) const { return m_features & value; }
-	// Set specified flags, return new value
-	ULONG setFeature(ULONG value) { return m_features |= value; }
-	// Clear specified flags, return new value
-	ULONG clearFeature(ULONG value) { return m_features &= ~value; }
+	// Test specified feature flag
+	bool testFeature(info_features value) const { return m_features[value]; }
+	// Set specified flag
+	void setFeature(info_features value) { m_features[value] = true; }
+	// Clear specified flag
+	void clearFeature(info_features value) { m_features[value] = false; }
 
 protected:
 	virtual Transaction* doCreateTransaction() = 0;
@@ -531,16 +526,8 @@ protected:
 	int m_sqlDialect;	// must be filled in attach call
 	bool m_wrapErrors;
 	bool m_broken;
-	ULONG m_features;	// bitmask
+	bool m_features[fb_feature_max];
 };
-
-// Connection features flags
-const ULONG conFtrSessionReset		= 0x01;		// supports ALTER SESSION RESET
-const ULONG conFtrReadConsistency	= 0x02;		// supports READ COMMITTED READ CONSISTENCY
-const ULONG conFtrStatementTimeout	= 0x04;		// supports statements timeout
-
-// Features of Firebird 4
-const ULONG conFtrFB4 = conFtrSessionReset | conFtrReadConsistency | conFtrStatementTimeout;
 
 class Transaction : public Firebird::PermanentStorage
 {
@@ -587,11 +574,11 @@ protected:
 	Connection& m_connection;
 	TraScope m_scope;
 	Transaction* m_nextTran;		// next common transaction
-	Jrd::jrd_tra* m_jrdTran;		// parent JRD transaction
+	Firebird::RefPtr<Jrd::JTransaction> m_jrdTran;		// parent JRD transaction
 };
 
 
-typedef Firebird::Array<const Firebird::MetaName*> ParamNames;
+typedef Firebird::Array<const Jrd::MetaName*> ParamNames;
 typedef Firebird::Array<USHORT> ParamNumbers;
 
 class Statement : public Firebird::PermanentStorage
@@ -615,10 +602,10 @@ public:
 	void prepare(Jrd::thread_db* tdbb, Transaction* tran, const Firebird::string& sql, bool named);
 	void setTimeout(Jrd::thread_db* tdbb, unsigned int timeout);
 	void execute(Jrd::thread_db* tdbb, Transaction* tran,
-		const Firebird::MetaName* const* in_names, const Jrd::ValueListNode* in_params,
+		const Jrd::MetaName* const* in_names, const Jrd::ValueListNode* in_params,
 		const ParamNumbers* in_excess, const Jrd::ValueListNode* out_params);
 	void open(Jrd::thread_db* tdbb, Transaction* tran,
-		const Firebird::MetaName* const* in_names, const Jrd::ValueListNode* in_params, 
+		const Jrd::MetaName* const* in_names, const Jrd::ValueListNode* in_params,
 		const ParamNumbers* in_excess, bool singleton);
 	bool fetch(Jrd::thread_db* tdbb, const Jrd::ValueListNode* out_params);
 	void close(Jrd::thread_db* tdbb, bool invalidTran = false);
@@ -655,12 +642,12 @@ protected:
 	virtual bool doFetch(Jrd::thread_db* tdbb) = 0;
 	virtual void doClose(Jrd::thread_db* tdbb, bool drop) = 0;
 
-	void setInParams(Jrd::thread_db* tdbb, const Firebird::MetaName* const* names,
+	void setInParams(Jrd::thread_db* tdbb, const Jrd::MetaName* const* names,
 		const Jrd::ValueListNode* params, const ParamNumbers* in_excess);
 	virtual void getOutParams(Jrd::thread_db* tdbb, const Jrd::ValueListNode* params);
 
 	virtual void doSetInParams(Jrd::thread_db* tdbb, unsigned int count,
-		const Firebird::MetaName* const* names, const NestConst<Jrd::ValueExprNode>* params);
+		const Firebird::MetaString* const* names, const NestConst<Jrd::ValueExprNode>* params);
 
 	virtual void putExtBlob(Jrd::thread_db* tdbb, dsc& src, dsc& dst);
 	virtual void getExtBlob(Jrd::thread_db* tdbb, const dsc& src, dsc& dst);
@@ -709,8 +696,8 @@ protected:
 	Jrd::jrd_req* m_preparedByReq;
 
 	// set in preprocess
-	Firebird::SortedObjectsArray<const Firebird::MetaName> m_sqlParamNames;
-	ParamNames m_sqlParamsMap;
+	Firebird::SortedObjectsArray<const Firebird::MetaString> m_sqlParamNames;
+	Firebird::Array<const Firebird::MetaString*> m_sqlParamsMap;
 
 	// set in prepare()
 	Firebird::UCharBuffer m_in_buffer;

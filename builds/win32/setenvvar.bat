@@ -3,7 +3,7 @@
 :: FB_LONG_ROOT_PATH long format path of the main directory
 :: FB_DB_PATH unix format path of the main directory
 :: (This is used by gpre and preprocess.bat)
-:: VS_VER VisualStudio version (msvc10|msvc12|msvc14)
+:: VS_VER VisualStudio version (msvc12|msvc14|msvc15)
 
 @echo off
 
@@ -26,11 +26,7 @@ if DEFINED VS140COMNTOOLS (
 if DEFINED VS120COMNTOOLS (
 @set MSVC_VERSION=12
 ) else (
-if DEFINED VS100COMNTOOLS (
-@set MSVC_VERSION=10
-) else (
 @goto :HELP
-)
 )
 )
 )
@@ -78,11 +74,11 @@ goto :END
 @echo    A working version of Visual Studio cannot be found
 @echo    on your current path.
 @echo.
-@echo    You need MS Visual Studio 8 or newer to build Firebird
+@echo    You need MS Visual Studio 12 or newer to build Firebird
 @echo    from these batch files.
 @echo.
 @echo    A properly installed version of Visual Studio will set
-@echo    an environment variable such as %%VS80COMNTOOLS%%.
+@echo    an environment variable such as %%VS150COMNTOOLS%%.
 @echo    We use that variable to run the appropriate batch file
 @echo    to set up the build environment.
 @echo.

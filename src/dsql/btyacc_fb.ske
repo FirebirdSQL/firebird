@@ -31,8 +31,6 @@
 #include "gen/parse.h"
 #include "../dsql/Parser.h"
 
-#define YYERROR_DETAILED
-
 %% tables
 
 #define _C_ "C"
@@ -102,7 +100,6 @@ int yydebug;
 
 #define YYABORT  goto yyabort
 #define YYACCEPT goto yyaccept
-#define YYERROR  goto yyerrlab
 #define YYVALID         do { if (yyps->save)          goto yyvalid; } while(0)
 #define YYVALID_NESTED  do { if (yyps->save && \
                                  yyps->save->save == 0) goto yyvalid; } while(0)
@@ -180,9 +177,20 @@ void Parser::yyFreeState(Parser::yyparsestate* p)
 }
 
 
+void Parser::setNodeLineColumn(Node* node)
+{
+	// Check if we are not accessing the position stack below its base.
+	if (&YYPOSNARG(1) >= yyps->ps)
+	{
+		node->line = YYPOSNARG(1).firstLine;
+		node->column = YYPOSNARG(1).firstColumn;
+	}
+}
+
+
 int Parser::parseAux()
 {
-  int yym, yyn, yystate, yychar, yynewerrflag;
+  int yyn, yystate, yychar;
   yyparsestate *yyerrctx = NULL;
   int reduce_posn;
 
@@ -377,11 +385,6 @@ int Parser::parseAux()
   // Action: error
   //
   if (yyps->errflag) goto yyinrecovery;
-  yynewerrflag = 1;
-  goto yyerrhandler;
-yyerrlab:
-  yynewerrflag = 0;
-yyerrhandler:
   while (yyps->save) {
     int ctry;
     yyparsestate *save = yyps->save;
@@ -453,16 +456,10 @@ yyerrhandler:
       yyFreeState(yyerrctx);
       yyerrctx = NULL;
     }
-    yynewerrflag = 1;
   }
-  if (yynewerrflag) {
-#ifdef YYERROR_DETAILED
-    yyerror_detailed("syntax error", yychar, yylval, yyposn);
-#else
-    yyerror("syntax error");
-#endif
-  }
+  yyerror_detailed("syntax error", yychar, yylval, yyposn);
   ++yynerrs;
+
  yyinrecovery:
   if (yyps->errflag < 3) {
     yyps->errflag = 3;
@@ -476,8 +473,6 @@ yyerrhandler:
           printf("yydebug[%d,%p]: state %d, ERROR recovery shifts to state %d\n",
                  int(yydepth), yytrial, *(yyps->ssp), yytable[yyn]);
 #endif
-        /* Use label yyerrlab, so that compiler does not warn */
-        if (yyps->errflag != yyps->errflag) goto yyerrlab;
         yystate = yytable[yyn];
         goto yyshift;
       } else {
@@ -552,9 +547,6 @@ yyreduce:
   memset(&yyps->pos, 0, sizeof(yyps->pos));
 
   reduce_posn = TRUE;
-
-  yyposn.firstLine = YYPOSNARG(1).firstLine;
-  yyposn.firstColumn = YYPOSNARG(1).firstColumn;
 
   switch (yyn) {
 

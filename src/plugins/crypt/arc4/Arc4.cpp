@@ -105,23 +105,12 @@ public:
 	void decrypt(CheckStatusWrapper* status, unsigned int length, const void* from, void* to);
 	const unsigned char* getSpecificData(CheckStatusWrapper* status, const char* type, unsigned* len);
 	void setSpecificData(CheckStatusWrapper* status, const char* type, unsigned len, const unsigned char* data);
-	int release();
 
 private:
 	Cypher* createCypher(unsigned int l, const void* key);
 	Cypher* en;
 	Cypher* de;
 };
-
-int Arc4::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-	return 1;
-}
 
 void Arc4::setKey(CheckStatusWrapper* status, ICryptKey* key)
 {

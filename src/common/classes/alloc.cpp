@@ -255,7 +255,7 @@ namespace SemiDoubleLink
 
 #ifdef USE_VALGRIND
 // Size of Valgrind red zone applied before and after memory block allocated for user
-#define VALGRIND_REDZONE MEM_ALIGN
+#define VALGRIND_REDZONE ALLOC_ALIGNMENT
 #undef MEM_DEBUG	// valgrind works instead
 #else
 #define VALGRIND_REDZONE 0

@@ -49,17 +49,6 @@ public:
 	{ }
 
 	// ITransaction implementation
-	int release()
-	{
-		if (--refCounter == 0)
-		{
-			delete this;
-			return 0;
-		}
-
-		return 1;
-	}
-
 	void getInfo(CheckStatusWrapper* status, unsigned int itemsLength,
 		const unsigned char* items, unsigned int bufferLength, unsigned char* buffer);
 	void prepare(CheckStatusWrapper* status, unsigned int msgLength,

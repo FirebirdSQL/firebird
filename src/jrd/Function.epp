@@ -429,7 +429,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 						else
 							body.getBuffer(1)[0] = 0;
 
-						dbb->dbb_extManager.makeFunction(tdbb, csb, function, X.RDB$ENGINE_NAME,
+						dbb->dbb_extManager->makeFunction(tdbb, csb, function, X.RDB$ENGINE_NAME,
 							(X.RDB$ENTRYPOINT.NULL ? "" : X.RDB$ENTRYPOINT), (char*) body.begin());
 
 						if (!function->fun_external)
@@ -437,12 +437,10 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 					}
 					else if (!X.RDB$FUNCTION_BLR.NULL)
 					{
-						if (!X.RDB$DEBUG_INFO.NULL)
-							DBG_parse_debug_info(tdbb, &X.RDB$DEBUG_INFO, *csb->csb_dbg_info);
-
 						try
 						{
-							function->parseBlr(tdbb, csb, &X.RDB$FUNCTION_BLR);
+							function->parseBlr(tdbb, csb, &X.RDB$FUNCTION_BLR,
+								X.RDB$DEBUG_INFO.NULL ? NULL : &X.RDB$DEBUG_INFO);
 						}
 						catch (const Exception& ex)
 						{
@@ -460,7 +458,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 					throw;
 				}
 
-				function->getStatement()->function = function;
+				fb_assert(function->getStatement()->function == function);
 			}
 			else
 			{
@@ -551,4 +549,54 @@ bool Function::checkCache(thread_db* tdbb) const
 void Function::clearCache(thread_db* tdbb)
 {
 	tdbb->getAttachment()->att_functions[getId()] = NULL;
+}
+
+bool Function::reload(thread_db* tdbb)
+{
+	fb_assert(this->flags & Routine::FLAG_RELOAD);
+
+	Attachment* attachment = tdbb->getAttachment();
+	AutoCacheRequest request(tdbb, irq_l_funct_blr, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request)
+		X IN RDB$FUNCTIONS
+		WITH X.RDB$FUNCTION_ID EQ this->getId()
+	{
+		if (X.RDB$FUNCTION_BLR.NULL)
+			continue;
+
+		MemoryPool* const csb_pool = attachment->createPool();
+		Jrd::ContextPoolHolder context(tdbb, csb_pool);
+
+		try
+		{
+			AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*csb_pool) CompilerScratch(*csb_pool));
+
+			try
+			{
+				this->parseBlr(tdbb, csb, &X.RDB$FUNCTION_BLR,
+					X.RDB$DEBUG_INFO.NULL ? NULL : &X.RDB$DEBUG_INFO);
+
+				// parseBlr() above could set FLAG_RELOAD again
+				return !(this->flags & Routine::FLAG_RELOAD);
+			}
+			catch (const Exception& ex)
+			{
+				StaticStatusVector temp_status;
+				ex.stuffException(temp_status);
+
+				const string name = this->getName().toString();
+				(Arg::Gds(isc_bad_fun_BLR) << Arg::Str(name)
+					<< Arg::StatusVector(temp_status.begin())).raise();
+			}
+		}
+		catch (const Exception&)
+		{
+			attachment->deletePool(csb_pool);
+			throw;
+		}
+	}
+	END_FOR
+
+	return false;
 }

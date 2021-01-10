@@ -152,10 +152,17 @@ void DataTypeUtilBase::makeFromList(dsc* result, const char* expressionName, int
 			{
 				UCHAR low = MIN(result->dsc_dtype, arg->dsc_dtype);
 				UCHAR high = MAX(result->dsc_dtype, arg->dsc_dtype);
+
 				if (low == dtype_sql_time && high == dtype_sql_time_tz)
+				{
 					result->dsc_dtype = dtype_sql_time_tz;
+					result->dsc_length = sizeof(ISC_TIME_TZ);
+				}
 				else if (low == dtype_timestamp && high == dtype_timestamp_tz)
+				{
 					result->dsc_dtype = dtype_timestamp_tz;
+					result->dsc_length = sizeof(ISC_TIMESTAMP_TZ);
+				}
 				else
 					makeBlobOrText(result, arg, true);
 			}

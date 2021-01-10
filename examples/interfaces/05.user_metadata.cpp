@@ -68,6 +68,10 @@ private:
 
 	FbSampleAtomic referenceCounter;
 
+	// we are using only single field (varchar) in a sample, therefore no strong alignment requirements.
+	// In general message alignment is the maximum field alignment in that message.
+	static const unsigned messageAlignment = sizeof(ISC_SHORT);
+
 public:
 	unsigned offset, nullOffset, length;
 
@@ -178,6 +182,16 @@ public:
 	unsigned getMessageLength(ThrowStatusWrapper* /*status*/)
 	{
 		return length;
+	}
+
+	unsigned getAlignment(ThrowStatusWrapper* /*status*/)
+	{
+		return messageAlignment;
+	}
+
+	unsigned getAlignedLength(ThrowStatusWrapper* /*status*/)
+	{
+		return ((length / messageAlignment) + (length % messageAlignment ? 1 : 0)) * messageAlignment;
 	}
 };
 

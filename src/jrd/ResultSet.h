@@ -28,7 +28,8 @@
 #include "../common/dsc.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
+#include "../jrd/MetaName.h"
 
 struct dsc;
 
@@ -106,7 +107,8 @@ public:
 	}
 
 	Firebird::string getString(thread_db* tdbb, unsigned param);
-	Firebird::MetaName getMetaName(thread_db* tdbb, unsigned param);
+	MetaName getMetaName(thread_db* tdbb, unsigned param);
+	Firebird::MetaString getMetaString(thread_db* tdbb, unsigned param);
 
 private:
 	void moveDesc(thread_db* tdbb, unsigned param, dsc& desc);

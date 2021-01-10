@@ -35,7 +35,6 @@ typedef std::atomic_int FbSampleAtomic;
 typedef int FbSampleAtomic;
 #endif
 
-#include <ibase.h>
 #include <firebird/Interface.h>
 
 #if defined(_WIN32)

@@ -45,7 +45,7 @@ ConditionalStream::ConditionalStream(CompilerScratch* csb,
 {
 	fb_assert(m_first && m_second && m_boolean);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void ConditionalStream::open(thread_db* tdbb) const
@@ -77,8 +77,7 @@ void ConditionalStream::close(thread_db* tdbb) const
 
 bool ConditionalStream::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);

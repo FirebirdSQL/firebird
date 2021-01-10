@@ -22,6 +22,7 @@
 
 #include "firebird.h"
 #include "../common/classes/Hash.h"
+#include "../common/dsc.h"
 
 #if defined(_M_IX86) || defined(_M_X64) || defined(__x86_64__) || defined(__i386__)
 #ifdef _MSC_VER
@@ -126,8 +127,7 @@ void WeakHashContext::update(const void* data, FB_SIZE_T length)
 	}
 }
 
-void WeakHashContext::finish(Buffer& result)
+void WeakHashContext::finish(dsc& result)
 {
-	UCHAR* resultBuffer = result.getBuffer(sizeof(hashNumber));
-	memcpy(resultBuffer, &hashNumber, sizeof(hashNumber));
+	result.makeInt64(0, &hashNumber);
 }

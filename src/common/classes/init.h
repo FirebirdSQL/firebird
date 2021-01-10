@@ -29,6 +29,7 @@
 
 #include "fb_types.h"
 #include "../common/classes/alloc.h"
+#include <atomic>
 
 namespace Firebird {
 
@@ -166,7 +167,7 @@ template <typename C>
 class InitMutex
 {
 private:
-	volatile bool flag;
+	std::atomic<bool> flag;
 #ifdef DEV_BUILD
 	const char* from;
 #endif
@@ -224,12 +225,48 @@ public:
 	}
 };
 
-template <typename T, class A = DefaultInstanceAllocator<T> >
-class InitInstance : private InstanceControl
+template <class I>
+class DeleteInstance : private InstanceControl
+{
+public:
+	void registerInstance(I* instance)
+	{
+		// Put ourselves into linked list for cleanup.
+		// Allocated pointer is saved by InstanceList::constructor.
+		FB_NEW InstanceControl::InstanceLink<I>(instance);
+	}
+};
+
+template <class I>
+class TraditionalDelete
+{
+public:
+	TraditionalDelete()
+		: instance(nullptr)
+	{ }
+
+	void registerInstance(I* inst)
+	{
+		fb_assert(!instance);
+		instance = inst;
+	}
+
+	~TraditionalDelete()
+	{
+		if (instance)
+			instance->dtor();
+	}
+
+private:
+	I* instance;
+};
+
+template <typename T, class A = DefaultInstanceAllocator<T>, template <class I> class DestroyControl = DeleteInstance >
+class InitInstance : private DestroyControl<InitInstance<T, A, DestroyControl> >
 {
 private:
 	T* instance;
-	volatile bool flag;
+	std::atomic<bool> flag;
 	A allocator;
 
 public:
@@ -246,9 +283,7 @@ public:
 			{
 				instance = allocator.create();
 				flag = true;
-				// Put ourselves into linked list for cleanup.
-				// Allocated pointer is saved by InstanceList::constructor.
-				FB_NEW InstanceControl::InstanceLink<InitInstance>(this);
+				DestroyControl<InitInstance<T, A, DestroyControl> >::registerInstance(this);
 			}
 		}
 		return *instance;
@@ -258,7 +293,7 @@ public:
 	{
 		MutexLockGuard guard(*StaticMutex::mutex, "InitInstance - dtor");
 		flag = false;
-		A::destroy(instance);
+		allocator.destroy(instance);
 		instance = NULL;
 	}
 };

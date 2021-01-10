@@ -26,7 +26,7 @@
 #include "../dsql/dsql.h"
 #include "../dsql/BlrDebugWriter.h"
 #include "../common/classes/array.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/stack.h"
 #include "../common/classes/alloc.h"
 
@@ -174,10 +174,10 @@ public:
 	void putType(const TypeClause* type, bool useSubType);
 	void putLocalVariables(CompoundStmtNode* parameters, USHORT locals);
 	void putLocalVariable(dsql_var* variable, const DeclareVariableNode* hostParam,
-		const Firebird::MetaName& collationName);
+		const MetaName& collationName);
 	dsql_var* makeVariable(dsql_fld*, const char*, const dsql_var::Type type, USHORT,
 		USHORT, USHORT);
-	dsql_var* resolveVariable(const Firebird::MetaName& varName);
+	dsql_var* resolveVariable(const MetaName& varName);
 	void genReturn(bool eosFlag = false);
 
 	void genParameters(Firebird::Array<NestConst<ParameterClause> >& parameters,
@@ -202,7 +202,7 @@ public:
 	}
 
 	void addCTEs(WithClause* withClause);
-	SelectExprNode* findCTE(const Firebird::MetaName& name);
+	SelectExprNode* findCTE(const MetaName& name);
 	void clearCTEs();
 	void checkUnusedCTEs();
 
@@ -249,10 +249,10 @@ public:
 	bool isPsql() const { return psql; }
 	void setPsql(bool value) { psql = value; }
 
-	DeclareSubFuncNode* getSubFunction(const Firebird::MetaName& name);
+	DeclareSubFuncNode* getSubFunction(const MetaName& name);
 	void putSubFunction(DeclareSubFuncNode* subFunc, bool replace = false);
 
-	DeclareSubProcNode* getSubProcedure(const Firebird::MetaName& name);
+	DeclareSubProcNode* getSubProcedure(const MetaName& name);
 	void putSubProcedure(DeclareSubProcNode* subProc, bool replace = false);
 
 private:
@@ -280,7 +280,7 @@ public:
 	USHORT derivedContextNumber;		// Next available context number for derived tables
 	USHORT scopeLevel;					// Scope level for parsing aliases in subqueries
 	USHORT loopLevel;					// Loop level
-	Firebird::Stack<Firebird::MetaName*> labels;	// Loop labels
+	Firebird::Stack<MetaName*> labels;	// Loop labels
 	USHORT cursorNumber;				// Cursor number
 	Firebird::Array<DeclareCursorNode*> cursors; // Cursors
 	USHORT inSelectList;				// now processing "select list"
@@ -292,7 +292,7 @@ public:
 	USHORT clientDialect;				// dialect passed into the API call
 	USHORT inOuterJoin;					// processing inside outer-join part
 	Firebird::string aliasRelationPrefix;	// prefix for every relation-alias.
-	Firebird::MetaName package;			// package being defined
+	MetaName package;			// package being defined
 	Firebird::Stack<SelectExprNode*> currCtes;	// current processing CTE's
 	class dsql_ctx* recursiveCtx;		// context of recursive CTE
 	USHORT recursiveCtxId;				// id of recursive union stream context
@@ -310,8 +310,8 @@ private:
 	Firebird::HalfStaticArray<const Firebird::string*, 4> cteAliases; // CTE aliases in recursive members
 	bool psql;
 	DsqlCompilerScratch* mainScratch;
-	Firebird::GenericMap<Firebird::Left<Firebird::MetaName, DeclareSubFuncNode*> > subFunctions;
-	Firebird::GenericMap<Firebird::Left<Firebird::MetaName, DeclareSubProcNode*> > subProcedures;
+	Firebird::GenericMap<Firebird::Left<MetaName, DeclareSubFuncNode*> > subFunctions;
+	Firebird::GenericMap<Firebird::Left<MetaName, DeclareSubProcNode*> > subProcedures;
 };
 
 class PsqlChanger

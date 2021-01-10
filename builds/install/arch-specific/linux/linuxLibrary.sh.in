@@ -139,8 +139,7 @@ installSystemdCtrlFiles() {
 			exit 1
 		fi
 
-		editFile "@FB_MISCDIR@/firebird.service" ExecStart "ExecStart=${fb_install_prefix}/bin/fbguard -pidfile $PidDir/${fb_startup_name}.pid -daemon -forever"
-		editFile "@FB_MISCDIR@/firebird.service" PIDFile "PIDFile=$PidDir/${fb_startup_name}.pid"
+		editFile "@FB_MISCDIR@/firebird.service" ExecStart "ExecStart=${fb_install_prefix}/bin/fbguard -daemon -forever"
 		cp @FB_MISCDIR@/firebird.service "${SYSTEMD_DIR}/${fb_startup_name}.service"
 
 		mkdir -p ${PidDir}
@@ -283,16 +282,9 @@ installInitdScript() {
 	srcScript=""
 	initScript=
 
-# This is for RH and MDK specific
-
-    if [ -e /etc/rc.d/init.d/functions ]
-    then
-        srcScript=firebird.init.d.mandrake
-        initScript=/etc/rc.d/init.d/${fb_startup_name}
-
 # SuSE specific
 
-    elif [ -r /etc/SuSE-release ]
+    if [ -r /etc/SuSE-release ]
     then
         srcScript=firebird.init.d.suse
         initScript=/etc/init.d/${fb_startup_name}
@@ -330,6 +322,13 @@ EOF
     then
         srcScript=firebird.init.d.gentoo
         initScript=/etc/init.d/${fb_startup_name}
+
+# This is for RH and MDK specific
+
+    elif [ -e /etc/rc.d/init.d/functions ]		# very generic check - may be should go later to avoid fault mandrake detection ???
+    then
+        srcScript=firebird.init.d.mandrake
+        initScript=/etc/rc.d/init.d/${fb_startup_name}
 
 # Generic...
 
@@ -389,14 +388,6 @@ EOF
 		echo "the most appropriate startup script in @FB_MISCDIR@"
 		echo "and manually register it in your OS."
 	fi
-
-    # Create directory to store pidfile
-	if [ ! -d $PidDir ] 
-	then
-		[ -e $PidDir ] && rm -rf $PidDir
-		mkdir $PidDir
-	fi
-    chown $RunUser:$RunGroup $PidDir
 }
 
 
@@ -509,10 +500,9 @@ CorrectLibDir() {
 # Validate library name
 
 checkLibName() {
-	libName=${1}
 	grepFlag=-v
 	[ "@CPU_TYPE@" = "amd64" ] && grepFlag=
-	ldconfig -p | grep -w "$libName" | grep $grepFlag 'x86-64'
+	ldconfig -p | grep -w "${1}" | grep $grepFlag 'x86-64'
 }
 
 
@@ -527,8 +517,7 @@ haveLibrary() {
 
 	checkLibName "$libName" >/dev/null 2>/dev/null && return 0
 
-	libName="lib${libName}"
-	checkLibName "$libName" >/dev/null 2>/dev/null
+	checkLibName "lib$libName" >/dev/null 2>/dev/null
 
 	return $?
 }

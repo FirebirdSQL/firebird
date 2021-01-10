@@ -199,6 +199,16 @@ typedef struct dsc
 		return isDecFloat() || isExact();
 	}
 
+	bool isDecOrInt128() const
+	{
+		return isDecFloat() || isInt128();
+	}
+
+	bool is128() const
+	{
+		return dsc_dtype == dtype_dec128 || dsc_dtype == dtype_int128;
+	}
+
 	bool isApprox() const
 	{
 		return DTYPE_IS_APPROX(dsc_dtype);
@@ -603,5 +613,7 @@ inline SCHAR NUMERIC_SCALE(const dsc desc)
 {
 	return ((DTYPE_IS_TEXT(desc.dsc_dtype)) ? 0 : desc.dsc_scale);
 }
+
+const UCHAR DEFAULT_DOUBLE  = dtype_double;
 
 #endif // JRD_DSC_H

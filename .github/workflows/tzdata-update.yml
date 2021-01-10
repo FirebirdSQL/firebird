@@ -6,6 +6,7 @@ on:
 
 jobs:
   tzdata-update:
+    if: github.repository == 'FirebirdSQL/firebird'
     runs-on: ubuntu-latest
 
     steps:
@@ -28,7 +29,7 @@ jobs:
           extern/icu/tzdata/update.sh
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v2
+        uses: peter-evans/create-pull-request@v3.5.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: Updata tzdata.

@@ -81,8 +81,7 @@ namespace EDS {
 GlobalPtr<Manager> Manager::manager;
 Mutex Manager::m_mutex;
 Provider* Manager::m_providers = NULL;
-volatile bool Manager::m_initialized = false;
-ConnectionsPool* Manager::m_connPool;
+ConnectionsPool* Manager::m_connPool = NULL;
 
 const ULONG MIN_CONNPOOL_SIZE		= 0;
 const ULONG MAX_CONNPOOL_SIZE		= 1000;
@@ -93,12 +92,12 @@ const ULONG MAX_LIFE_TIME		= 60 * 60 * 24;	// one day
 Manager::Manager(MemoryPool& pool) :
 	PermanentStorage(pool)
 {
-	m_connPool = FB_NEW_POOL(pool) ConnectionsPool(pool);
+	//m_connPool = FB_NEW_POOL(pool) ConnectionsPool(pool);
 }
 
 Manager::~Manager()
 {
-	fb_assert(m_connPool->getAllCount() == 0);
+	fb_assert(!m_connPool || m_connPool->getAllCount() == 0);
 
 	ThreadContextHolder tdbb;
 
@@ -111,6 +110,7 @@ Manager::~Manager()
 	}
 
 	delete m_connPool;
+	m_connPool = NULL;
 }
 
 void Manager::addProvider(Provider* provider)
@@ -175,11 +175,11 @@ static void splitDataSourceName(thread_db* tdbb, const string& dataSource,
 static bool isCurrentAccount(UserId* currUserID,
 	const MetaName& user, const string& pwd, const MetaName& role)
 {
-	const MetaName& attUser = currUserID->getUserName();
-	const MetaName& attRole = currUserID->getSqlRole();
+	const MetaString& attUser = currUserID->getUserName();
+	const MetaString& attRole = currUserID->getSqlRole();
 
-	return ((user.isEmpty() || user == attUser) && pwd.isEmpty() &&
-			(role.isEmpty() || role == attRole));
+	return ((user.isEmpty() || user == attUser.c_str()) && pwd.isEmpty() &&
+			(role.isEmpty() || role == attRole.c_str()));
 }
 
 Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
@@ -208,6 +208,9 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 		return conn;
 
 	// if could be pooled, ask connections pool
+
+	// Ensure pool is created
+	getConnPool(true);
 
 	ULONG hash = 0;
 
@@ -245,6 +248,14 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 	return conn;
 }
 
+ConnectionsPool* Manager::getConnPool(bool create)
+{ 
+	if (!m_connPool && create)
+		m_connPool = FB_NEW_POOL(manager->getPool()) ConnectionsPool(manager->getPool());
+
+	return m_connPool;
+}
+
 void Manager::jrdAttachmentEnd(thread_db* tdbb, Jrd::Attachment* att, bool forced)
 {
 	for (Provider* prv = m_providers; prv; prv = prv->m_next)
@@ -256,7 +267,8 @@ int Manager::shutdown()
 	FbLocalStatus status;
 	ThreadContextHolder tdbb(&status);
 
-	m_connPool->clear(tdbb);
+	if (m_connPool)
+		m_connPool->clear(tdbb);
 
 	for (Provider* prv = m_providers; prv; prv = prv->m_next) {
 		prv->cancelConnections();
@@ -456,17 +468,15 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 
 	if (!inPool || !connPool || !conn.isConnected() || !conn.resetSession())
 	{
-		if (connPool)
-		{
-			{	// scope
-				MutexLockGuard guard(m_mutex, FB_FUNCTION);
-				AttToConnMap::Accessor acc(&m_connections);
-				if (acc.locate(AttToConn(NULL, &conn)))
-					acc.fastRemove();
-			}
-
-			connPool->delConnection(tdbb, &conn, false);
+		{	// scope
+			MutexLockGuard guard(m_mutex, FB_FUNCTION);
+			AttToConnMap::Accessor acc(&m_connections);
+			if (acc.locate(AttToConn(NULL, &conn)))
+				acc.fastRemove();
 		}
+
+		if (connPool)
+			connPool->delConnection(tdbb, &conn, false);
 
 		Connection::deleteConnection(tdbb, &conn);
 	}
@@ -526,7 +536,7 @@ Connection::Connection(Provider& prov) :
 	m_sqlDialect(0),
 	m_wrapErrors(true),
 	m_broken(false),
-	m_features(0)
+	m_features{}
 {
 }
 
@@ -641,7 +651,7 @@ void Connection::releaseStatement(Jrd::thread_db* tdbb, Statement* stmt)
 {
 	fb_assert(stmt && !stmt->isActive());
 
-	if (stmt->isAllocated() && m_free_stmts < MAX_CACHED_STMTS)
+	if (stmt->isAllocated() && testFeature(fb_feature_statement_long_life) && m_free_stmts < MAX_CACHED_STMTS)
 	{
 		stmt->m_nextFree = m_freeStatements;
 		m_freeStatements = stmt;
@@ -833,7 +843,7 @@ void ConnectionsPool::removeFromPool(Data* item, FB_SIZE_T pos)
 
 	if (item->m_lastUsed != 0)
 	{
-		if (pos == -1)
+		if (pos == (FB_SIZE_T) -1)
 			m_idleArray.find(*item, pos);
 
 		fb_assert(m_idleArray[pos] == item);
@@ -1357,8 +1367,8 @@ int ConnectionsPool::Data::verify(ConnectionsPool* connPool, bool active)
 
 bool ConnectionsPool::verifyPool()
 {
-	int cntIdle = 0, cntActive = 0;
-	int errs = 0;
+	unsigned cntIdle = 0, cntActive = 0;
+	unsigned errs = 0;
 
 	Data* item = m_idleList;
 	if (item)
@@ -1411,17 +1421,6 @@ void ConnectionsPool::IdleTimer::handler()
 	m_connPool.clearIdle(tdbb, false);
 
 	start();
-}
-
-int ConnectionsPool::IdleTimer::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-
-	return 1;
 }
 
 void ConnectionsPool::IdleTimer::start()
@@ -1536,7 +1535,7 @@ void Transaction::start(thread_db* tdbb, TraScope traScope, TraModes traMode,
 	{
 	case traCommon:
 		this->m_nextTran = tran->tra_ext_common;
-		this->m_jrdTran = tran;
+		this->m_jrdTran = tran->getInterface(true);
 		tran->tra_ext_common = this;
 		break;
 
@@ -1638,23 +1637,24 @@ void Transaction::detachFromJrdTran()
 	if (m_scope != traCommon)
 		return;
 
-	fb_assert(m_jrdTran || m_connection.isBroken());
 	if (!m_jrdTran)
 		return;
 
-	Transaction** tran_ptr = &m_jrdTran->tra_ext_common;
-	m_jrdTran = NULL;
-	for (; *tran_ptr; tran_ptr = &(*tran_ptr)->m_nextTran)
+	jrd_tra* transaction = m_jrdTran->getHandle();
+	if (transaction)
 	{
-		if (*tran_ptr == this)
+		Transaction** tran_ptr = &transaction->tra_ext_common;
+		for (; *tran_ptr; tran_ptr = &(*tran_ptr)->m_nextTran)
 		{
-			*tran_ptr = this->m_nextTran;
-			this->m_nextTran = NULL;
-			return;
+			if (*tran_ptr == this)
+			{
+				*tran_ptr = this->m_nextTran;
+				this->m_nextTran = NULL;
+				break;
+			}
 		}
 	}
-
-	fb_assert(false);
+	m_jrdTran = NULL;
 }
 
 void Transaction::jrdTransactionEnd(thread_db* tdbb, jrd_tra* transaction,
@@ -1754,7 +1754,7 @@ void Statement::prepare(thread_db* tdbb, Transaction* tran, const string& sql, b
 	string sql2(getPool());
 	const string* readySql = &sql;
 
-	if (named && !(m_provider.getFlags() & prvNamedParams))
+	if (named && !m_connection.testFeature(fb_feature_named_parameters))
 	{
 		preprocess(sql, sql2);
 		readySql = &sql2;
@@ -1773,7 +1773,7 @@ void Statement::setTimeout(thread_db* tdbb, unsigned int timeout)
 }
 
 void Statement::execute(thread_db* tdbb, Transaction* tran,
-	const MetaName* const* in_names, const ValueListNode* in_params, const ParamNumbers* in_excess, 
+	const MetaName* const* in_names, const ValueListNode* in_params, const ParamNumbers* in_excess,
 	const ValueListNode* out_params)
 {
 	fb_assert(isAllocated() && !m_stmt_selectable);
@@ -1788,7 +1788,7 @@ void Statement::execute(thread_db* tdbb, Transaction* tran,
 }
 
 void Statement::open(thread_db* tdbb, Transaction* tran,
-	const MetaName* const* in_names, const ValueListNode* in_params, const ParamNumbers* in_excess, 
+	const MetaName* const* in_names, const ValueListNode* in_params, const ParamNumbers* in_excess,
 	bool singleton)
 {
 	fb_assert(isAllocated() && m_stmt_selectable);
@@ -2109,7 +2109,7 @@ void Statement::preprocess(const string& sql, string& ret)
 				FB_SIZE_T n = 0;
 				if (!m_sqlParamNames.find(ident.c_str(), n))
 				{
-					MetaName* pName = FB_NEW_POOL(getPool()) MetaName(getPool(), ident);
+					MetaString* pName = FB_NEW_POOL(getPool()) MetaString(getPool(), ident);
 					n = m_sqlParamNames.add(*pName);
 				}
 
@@ -2205,7 +2205,7 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 
 		for (unsigned int sqlNum = 0; sqlNum < mapCount; sqlNum++)
 		{
-			const MetaName* sqlName = m_sqlParamsMap[sqlNum];
+			const MetaString* sqlName = m_sqlParamsMap[sqlNum];
 
 			unsigned int num = 0;
 			for (; num < count; num++)
@@ -2226,11 +2226,11 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 
 		doSetInParams(tdbb, mapCount, m_sqlParamsMap.begin(), sqlParams);
 	}
-	else
-		doSetInParams(tdbb, count, names, (params ? params->items.begin() : NULL));
+	else 
+		doSetInParams(tdbb, count, NULL, (params ? params->items.begin() : NULL));
 }
 
-void Statement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaName* const* /*names*/,
+void Statement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaString* const* /*names*/,
 	const NestConst<ValueExprNode>* params)
 {
 	if (count != getInputs())

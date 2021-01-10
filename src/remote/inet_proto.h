@@ -34,10 +34,10 @@ namespace Firebird
 }
 
 rem_port*	INET_analyze(ClntAuthBlock*, const Firebird::PathName&, const TEXT*,
-						 bool, Firebird::ClumpletReader&, Firebird::RefPtr<const Config>*,
+						 bool, Firebird::ClumpletReader&, Firebird::RefPtr<const Firebird::Config>*,
 						 const Firebird::PathName*, Firebird::ICryptKeyCallback*, int af = AF_UNSPEC);
 rem_port*	INET_connect(const TEXT*, struct packet*, USHORT, Firebird::ClumpletReader*,
-						 Firebird::RefPtr<const Config>*, int af = AF_UNSPEC);
+						 Firebird::RefPtr<const Firebird::Config>*, int af = AF_UNSPEC);
 rem_port*	INET_reconnect(SOCKET);
 rem_port*	INET_server(SOCKET);
 void		setStopMainThread(FPTR_INT func);

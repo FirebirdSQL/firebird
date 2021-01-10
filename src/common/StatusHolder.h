@@ -288,7 +288,7 @@ public:
 	}
 
 public:
-	void dispose()
+	void dispose() override
 	{
 	}
 
@@ -310,7 +310,7 @@ public:
 	{ }
 
 public:
-	void dispose()
+	void dispose() override
 	{
 	}
 

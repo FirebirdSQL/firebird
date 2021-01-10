@@ -59,7 +59,7 @@ namespace
 
 	void parseLong(const string& input, ULONG& output)
 	{
-		char* tail = NULL;
+		char* tail = nullptr;
 		auto number = strtol(input.c_str(), &tail, 10);
 		if (tail && *tail == 0 && number > 0)
 			output = (ULONG) number;
@@ -99,7 +99,11 @@ Config::Config()
 	  logSourceDirectory(getPool()),
 	  verboseLogging(false),
 	  applyIdleTimeout(DEFAULT_APPLY_IDLE_TIMEOUT),
-	  applyErrorTimeout(DEFAULT_APPLY_ERROR_TIMEOUT)
+	  applyErrorTimeout(DEFAULT_APPLY_ERROR_TIMEOUT),
+	  pluginName(getPool()),
+	  logErrors(true),
+	  reportErrors(false),
+	  disableOnError(true)
 {
 	sourceGuid.alignment = 0;
 }
@@ -121,7 +125,11 @@ Config::Config(const Config& other)
 	  logSourceDirectory(getPool(), other.logSourceDirectory),
 	  verboseLogging(other.verboseLogging),
 	  applyIdleTimeout(other.applyIdleTimeout),
-	  applyErrorTimeout(other.applyErrorTimeout)
+	  applyErrorTimeout(other.applyErrorTimeout),
+	  pluginName(getPool(), other.pluginName),
+	  logErrors(other.logErrors),
+	  reportErrors(other.reportErrors),
+	  disableOnError(other.disableOnError)
 {
 	sourceGuid.alignment = 0;
 }
@@ -165,6 +173,8 @@ Config* Config::get(const PathName& lookupName)
 
 			if (dbName != lookupName)
 				continue;
+
+			config->dbName = dbName;
 
 			exactMatch = true;
 		}
@@ -232,30 +242,48 @@ Config* Config::get(const PathName& lookupName)
 				{
 					parseLong(value, config->logArchiveTimeout);
 				}
+				else if (key == "plugin")
+				{
+					config->pluginName = value;
+				}
+				else if (key == "log_errors")
+				{
+					parseBoolean(value, config->logErrors);
+				}
+				else if (key == "report_errors")
+				{
+					parseBoolean(value, config->reportErrors);
+				}
+				else if (key == "disable_on_error")
+				{
+					parseBoolean(value, config->disableOnError);
+				}
 			}
 		}
 
-		if (!exactMatch)
-			continue;
-
-		if (config->logDirectory.hasData() || config->syncReplicas.hasData())
-		{
-			// If log_directory is specified, then replication is enabled
-
-			if (config->logFilePrefix.isEmpty())
-			{
-				PathName db_directory, db_filename;
-				PathUtils::splitLastComponent(db_directory, db_filename, dbName);
-				config->logFilePrefix = db_filename;
-			}
-
-			config->dbName = dbName;
-
-			return config.release();
-		}
+		if (exactMatch)
+			break;
 	}
 
-	return NULL;
+	// TODO: As soon as plugin name is moved into RDB$PUBLICATIONS delay config parse until real replication start
+	if (config->pluginName.hasData())
+		return config.release();
+
+	if (config->logDirectory.hasData() || config->syncReplicas.hasData())
+	{
+		// If log_directory is specified, then replication is enabled
+
+		if (config->logFilePrefix.isEmpty())
+		{
+			PathName db_directory, db_filename;
+			PathUtils::splitLastComponent(db_directory, db_filename, config->dbName);
+			config->logFilePrefix = db_filename;
+		}
+
+		return config.release();
+	}
+
+	return nullptr;
 }
 
 // This routine is used to retrieve the list of replica databases.

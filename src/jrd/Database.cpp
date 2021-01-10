@@ -33,12 +33,14 @@
 #include "../jrd/Database.h"
 #include "../jrd/nbak.h"
 #include "../jrd/tra.h"
+#include "../jrd/met_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/tpc_proto.h"
 #include "../jrd/lck_proto.h"
 #include "../jrd/CryptoManager.h"
 #include "../jrd/os/pio_proto.h"
 #include "../common/os/os_utils.h"
+//#include "../dsql/Parser.h"
 
 // Thread data block
 #include "../common/ThreadData.h"
@@ -84,6 +86,20 @@ namespace Jrd
 		if (!dbb_tip_cache)
 			return 0;
 		return dbb_tip_cache->generateStatementId();
+	}
+
+	AttNumber Database::getLatestAttachmentId() const
+	{
+		if (!dbb_tip_cache)
+			return 0;
+		return dbb_tip_cache->getLatestAttachmentId();
+	}
+
+	StmtNumber Database::getLatestStatementId() const
+	{
+		if (!dbb_tip_cache)
+			return 0;
+		return dbb_tip_cache->getLatestStatementId();
 	}
 
 	const Firebird::string& Database::getUniqueFileId()
@@ -158,10 +174,22 @@ namespace Jrd
 			Database* dbb = static_cast<Database*>(ast_object);
 			AsyncContextHolder tdbb(dbb, FB_FUNCTION);
 
-			if ((dbb->dbb_flags & DBB_sweep_starting) && !(dbb->dbb_flags & DBB_sweep_in_progress))
+			while (true)
 			{
-				dbb->dbb_flags &= ~DBB_sweep_starting;
-				LCK_release(tdbb, dbb->dbb_sweep_lock);
+				AtomicCounter::counter_type old = dbb->dbb_flags;
+				if ((old & DBB_sweep_in_progress) || !(old & DBB_sweep_starting))
+				{
+					SPTHR_DEBUG(fprintf(stderr, "blocking_ast_sweep %p false wrong flags %lx\n", dbb, old));
+					break;
+				}
+
+				if (dbb->dbb_flags.compareExchange(old, old & ~DBB_sweep_starting))
+				{
+					SPTHR_DEBUG(fprintf(stderr, "blocking_ast_sweep true %p\n", dbb));
+					dbb->dbb_thread_mutex.leave();
+					LCK_release(tdbb, dbb->dbb_sweep_lock);
+					break;
+				}
 			}
 		}
 		catch (const Exception&)
@@ -183,6 +211,7 @@ namespace Jrd
 
 	bool Database::allowSweepThread(thread_db* tdbb)
 	{
+		SPTHR_DEBUG(fprintf(stderr, "allowSweepThread %p\n", this));
 		if (readOnly())
 			return false;
 
@@ -190,15 +219,26 @@ namespace Jrd
 		if (attachment->att_flags & ATT_no_cleanup)
 			return false;
 
+		if (!dbb_thread_mutex.tryEnter(FB_FUNCTION))
+		{
+			SPTHR_DEBUG(fprintf(stderr, "allowSweepThread %p false, dbb_thread_mutex busy\n", this));
+			return false;
+		}
+
 		while (true)
 		{
 			AtomicCounter::counter_type old = dbb_flags;
 			if ((old & (DBB_sweep_in_progress | DBB_sweep_starting)) || (dbb_ast_flags & DBB_shutdown))
+			{
+				dbb_thread_mutex.leave();
 				return false;
+			}
 
 			if (dbb_flags.compareExchange(old, old | DBB_sweep_starting))
 				break;
 		}
+
+        SPTHR_DEBUG(fprintf(stderr, "allowSweepThread - set DBB_sweep_starting\n"));
 
 		createSweepLock(tdbb);
 		if (!LCK_lock(tdbb, dbb_sweep_lock, LCK_EX, LCK_NO_WAIT))
@@ -206,15 +246,39 @@ namespace Jrd
 			// clear lock error from status vector
 			fb_utils::init_status(tdbb->tdbb_status_vector);
 
-			dbb_flags &= ~DBB_sweep_starting;
+			clearSweepStarting();
+			SPTHR_DEBUG(fprintf(stderr, "allowSweepThread - !LCK_lock\n"));
 			return false;
 		}
 
+        SPTHR_DEBUG(fprintf(stderr, "allowSweepThread - TRUE\n"));
 		return true;
+	}
+
+	bool Database::clearSweepStarting()
+	{
+		while (true)
+		{
+			AtomicCounter::counter_type old = dbb_flags;
+			if (!(old & DBB_sweep_starting))
+			{
+				SPTHR_DEBUG(fprintf(stderr, "clearSweepStarting false %p\n", this));
+				return false;
+			}
+
+			if (dbb_flags.compareExchange(old, old & ~DBB_sweep_starting))
+			{
+				SPTHR_DEBUG(fprintf(stderr, "clearSweepStarting true %p\n", this));
+				dbb_thread_mutex.leave();
+				return true;
+			}
+		}
 	}
 
 	bool Database::allowSweepRun(thread_db* tdbb)
 	{
+		SPTHR_DEBUG(fprintf(stderr, "allowSweepRun %p\n", this));
+
 		if (readOnly())
 			return false;
 
@@ -226,14 +290,21 @@ namespace Jrd
 		{
 			AtomicCounter::counter_type old = dbb_flags;
 			if (old & DBB_sweep_in_progress)
+			{
+				clearSweepStarting();
 				return false;
+			}
 
 			if (dbb_flags.compareExchange(old, old | DBB_sweep_in_progress))
 				break;
 		}
 
+		SPTHR_DEBUG(fprintf(stderr, "allowSweepRun - set DBB_sweep_in_progress\n"));
+
 		if (!(dbb_flags & DBB_sweep_starting))
 		{
+			SPTHR_DEBUG(fprintf(stderr, "allowSweepRun - createSweepLock\n"));
+
 			createSweepLock(tdbb);
 			if (!LCK_lock(tdbb, dbb_sweep_lock, LCK_EX, -1))
 			{
@@ -245,20 +316,24 @@ namespace Jrd
 			}
 		}
 		else
-			dbb_flags &= ~DBB_sweep_starting;
+		{
+			SPTHR_DEBUG(fprintf(stderr, "allowSweepRun - clearSweepStarting\n"));
+			attachment->att_flags |= ATT_from_thread;
+			clearSweepStarting();
+		}
 
 		return true;
 	}
 
 	void Database::clearSweepFlags(thread_db* tdbb)
 	{
-		if (!(dbb_flags & (DBB_sweep_starting | DBB_sweep_in_progress)))
+		if (!(dbb_flags & DBB_sweep_in_progress))
 			return;
 
 		if (dbb_sweep_lock)
 			LCK_release(tdbb, dbb_sweep_lock);
 
-		dbb_flags &= ~(DBB_sweep_in_progress | DBB_sweep_starting);
+		dbb_flags &= ~DBB_sweep_in_progress;
 	}
 
 	void Database::registerModule(Module& module)
@@ -304,6 +379,77 @@ namespace Jrd
 		}
 	}
 
+	bool Database::isReplicating(thread_db* tdbb)
+	{
+		if (!replConfig())
+			return false;
+
+		Sync sync(&dbb_repl_sync, FB_FUNCTION);
+		sync.lock(SYNC_SHARED);
+
+		if (dbb_repl_state.isUnknown())
+		{
+			sync.unlock();
+			sync.lock(SYNC_EXCLUSIVE);
+
+			if (dbb_repl_state.isUnknown())
+			{
+				if (!dbb_repl_lock)
+				{
+					dbb_repl_lock = FB_NEW_RPT(*dbb_permanent, 0)
+						Lock(tdbb, 0, LCK_repl_state, this, replStateAst);
+				}
+
+				dbb_repl_state = MET_get_repl_state(tdbb, "");
+
+				fb_assert(dbb_repl_lock->lck_logical == LCK_none);
+				LCK_lock(tdbb, dbb_repl_lock, LCK_SR, LCK_WAIT);
+			}
+		}
+
+		return dbb_repl_state.value;
+	}
+
+	void Database::invalidateReplState(thread_db* tdbb, bool broadcast)
+	{
+		SyncLockGuard guard(&dbb_repl_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
+
+		dbb_repl_state.invalidate();
+
+		if (broadcast)
+		{
+			if (!dbb_repl_lock)
+			{
+				dbb_repl_lock = FB_NEW_RPT(*dbb_permanent, 0)
+					Lock(tdbb, 0, LCK_repl_state, this, replStateAst);
+			}
+
+			// Signal other processes about the changed state
+			if (dbb_repl_lock->lck_logical == LCK_none)
+				LCK_lock(tdbb, dbb_repl_lock, LCK_EX, LCK_WAIT);
+			else
+				LCK_convert(tdbb, dbb_repl_lock, LCK_EX, LCK_WAIT);
+		}
+
+		LCK_release(tdbb, dbb_repl_lock);
+	}
+
+	int Database::replStateAst(void* ast_object)
+	{
+		Database* const dbb = static_cast<Database*>(ast_object);
+
+		try
+		{
+			AsyncContextHolder tdbb(dbb, FB_FUNCTION);
+
+			dbb->invalidateReplState(tdbb, false);
+		}
+		catch (const Exception&)
+		{} // no-op
+
+		return 0;
+	}
+
 	void Database::initGlobalObjectHolder(thread_db* tdbb)
 	{
 		dbb_gblobj_holder =
@@ -315,17 +461,6 @@ namespace Jrd
 	void Database::Linger::handler()
 	{
 		JRD_shutdown_database(dbb, SHUT_DBB_RELEASE_POOLS);
-	}
-
-	int Database::Linger::release()
-	{
-		if (--refCounter == 0)
-		{
-			delete this;
-			return 0;
-		}
-
-		return 1;
 	}
 
 	void Database::Linger::reset()
@@ -381,38 +516,49 @@ namespace Jrd
 
 		if (!g_hashTable->remove(m_id))
 			fb_assert(false);
+
+		// these objects should be deleted under g_mutex protection
+		m_lockMgr = nullptr;
+		m_eventMgr = nullptr;
+		m_replMgr = nullptr;
 	}
 
 	LockManager* Database::GlobalObjectHolder::getLockManager()
 	{
-		MutexLockGuard guard(m_mutex, FB_FUNCTION);
-
 		if (!m_lockMgr)
-			m_lockMgr = FB_NEW LockManager(m_id, m_config);
+		{
+			MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
+			if (!m_lockMgr)
+				m_lockMgr = FB_NEW LockManager(m_id, m_config);
+		}
 		return m_lockMgr;
 	}
 
 	EventManager* Database::GlobalObjectHolder::getEventManager()
 	{
-		MutexLockGuard guard(m_mutex, FB_FUNCTION);
-
 		if (!m_eventMgr)
-			m_eventMgr = FB_NEW EventManager(m_id, m_config);
+		{
+			MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
+			if (!m_eventMgr)
+				m_eventMgr = FB_NEW EventManager(m_id, m_config);
+		}
 		return m_eventMgr;
 	}
 
-	Replication::Manager* Database::GlobalObjectHolder::getReplManager(const Guid& guid)
+	Replication::Manager* Database::GlobalObjectHolder::getReplManager(bool create)
 	{
 		if (!m_replConfig)
 			return nullptr;
 
-		MutexLockGuard guard(m_mutex, FB_FUNCTION);
+		if (!m_replMgr && create)
+		{
+			MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
-		if (!m_replMgr)
-			m_replMgr = FB_NEW Replication::Manager(m_id, guid, m_replConfig);
-
+			if (!m_replMgr)
+				m_replMgr = FB_NEW Replication::Manager(m_id, m_replConfig);
+		}
 		return m_replMgr;
 	}
 

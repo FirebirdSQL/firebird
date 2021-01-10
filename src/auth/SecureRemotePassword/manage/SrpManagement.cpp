@@ -64,7 +64,7 @@ class SrpManagement FB_FINAL : public Firebird::StdPlugin<Firebird::IManagementI
 {
 public:
 	explicit SrpManagement(Firebird::IPluginConfig* par)
-		: upCount(0), delCount(0)
+		: curAtt(nullptr), mainTra(nullptr), grAdminTra(nullptr)
 	{
 		Firebird::LocalStatus s;
 		Firebird::CheckStatusWrapper statusWrapper(&s);
@@ -104,7 +104,8 @@ private:
 
 		Firebird::LocalStatus s;
 		Firebird::CheckStatusWrapper statusWrapper(&s);
-		Firebird::ITransaction* ddlTran(att->startTransaction(&statusWrapper, 0, NULL));
+		Firebird::ITransaction* ddlTran(curAtt->startTransaction(&statusWrapper, 0, NULL));
+		check(&statusWrapper);
 
 		try
 		{
@@ -118,7 +119,7 @@ private:
 					err = true;
 				}
 
-				att->execute(&statusWrapper, ddlTran, 0, sql, SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
+				curAtt->execute(&statusWrapper, ddlTran, 0, sql, SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
 
 				if (!err)
 					check(&statusWrapper);
@@ -172,7 +173,7 @@ private:
 				userName2.c_str(), ADMIN_ROLE);
 			Message out;
 			Field<Varying> grantor(out, MAX_SQL_IDENTIFIER_SIZE);
-			Firebird::IResultSet* curs = att->openCursor(&statusWrapper, tra, selGrantor.length(),
+			Firebird::IResultSet* curs = curAtt->openCursor(&statusWrapper, grAdminTra, selGrantor.length(),
 				selGrantor.c_str(), SQL_DIALECT_V6, NULL, NULL, out.getMetadata(), NULL, 0);
 			check(&statusWrapper);
 
@@ -202,22 +203,49 @@ private:
 			sql.printf("GRANT DEFAULT %s TO \"%s\"", ADMIN_ROLE, userName.c_str());
 		}
 
-		att->execute(&statusWrapper, tra, sql.length(), sql.c_str(),
+		curAtt->execute(&statusWrapper, grAdminTra, sql.length(), sql.c_str(),
 			SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
 		check(&statusWrapper);
 	}
+
+	bool getUid(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att, Firebird::UCharBuffer& uid)
+	{
+		UCHAR item = fb_info_db_file_id;
+		UCHAR outbuf[256];
+		att->getInfo(status, 1, &item, sizeof outbuf, outbuf);
+		check(status);
+
+		const UCHAR* const end = &outbuf[sizeof outbuf];
+		for (const UCHAR* d = outbuf; *d != isc_info_end && d + 3 < end;)
+		{
+			item = *d++;
+			const int length = gds__vax_integer(d, 2);
+			d += 2;
+			if (d + length > end)
+				break;
+
+			if (item == fb_info_db_file_id)
+			{
+				uid.assign(d, length);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 
 public:
 	// IManagement implementation
 	void start(Firebird::CheckStatusWrapper* status, Firebird::ILogonInfo* logonInfo)
 	{
+		status->init();
+
 		try
 		{
-			status->init();
-
-			if (att)
+			if (curAtt)
 			{
-				(Firebird::Arg::Gds(isc_random) << "Database is already attached in SRP").raise();
+				(Firebird::Arg::Gds(isc_random) << "Database is already attached in SRP user management").raise();
 			}
 
 			unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
@@ -256,24 +284,52 @@ public:
 			}
 
 			Firebird::DispatcherPtr p;
-			att = p->attachDatabase(status, secDbName, dpb.getBufferLength(), dpb.getBuffer());
+			curAtt = p->attachDatabase(status, secDbName, dpb.getBufferLength(), dpb.getBuffer());
 			check(status);
+			ownAtt.reset(curAtt);
 
-			tra = att->startTransaction(status, 0, NULL);
+			// Check: is passed attachment OK for us?
+
+			// ID of requested sec.db
+			Firebird::UCharBuffer reqId;
+			if (getUid(status, curAtt, reqId))
+			{
+				Firebird::IAttachment* att = logonInfo->attachment(status);
+
+				// ID of passed attachment
+				Firebird::UCharBuffer actualId;
+				if (att && getUid(status, att, actualId))
+				{
+					if (actualId == reqId)
+					{
+						ownAtt.reset(nullptr);	// close own attachment
+						curAtt = att;
+						grAdminTra = mainTra = logonInfo->transaction(status);
+						check(status);
+
+#if SRP_DEBUG > 0
+						fprintf(stderr, "SrpManagement: Use att from logon info\n");
+#endif
+
+						return;
+					}
+				}
+			}
+			status->init();
+
+			grAdminTra = mainTra = curAtt->startTransaction(status, 0, NULL);
 			check(status);
+			ownTra.reset(mainTra);
+
+#if SRP_DEBUG > 0
+			fprintf(stderr, "SrpManagement: Use own att\n");
+#endif
 		}
 		catch (const Firebird::Exception& ex)
 		{
+			ownTra.reset(nullptr);
+			ownAtt.reset(nullptr);
 			ex.stuffException(status);
-
-			if (att)
-			{
-				// detach from database
-				Firebird::LocalStatus ls;
-				Firebird::CheckStatusWrapper lStatus(&ls);
-				att->detach(&lStatus);
-				att = NULL;
-			}
 		}
 	}
 
@@ -283,8 +339,9 @@ public:
 		{
 			status->init();
 
-			fb_assert(att);
-			fb_assert(tra);
+			fb_assert(curAtt);
+			fb_assert(mainTra);
+			fb_assert(grAdminTra);
 
 			switch(user->operation())
 			{
@@ -294,7 +351,7 @@ public:
 					Firebird::string sql;
 					sql.printf("ALTER ROLE " ADMIN_ROLE " %s AUTO ADMIN MAPPING",
 						user->operation() == Firebird::IUser::OP_USER_SET_MAP ? "SET" : "DROP");
-					att->execute(status, tra, sql.length(), sql.c_str(), SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
+					curAtt->execute(status, grAdminTra, sql.length(), sql.c_str(), SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
 					check(status);
 				}
 				break;
@@ -310,7 +367,7 @@ public:
 					{
 						for (unsigned repeat = 0; ; ++repeat)
 						{
-							stmt = att->prepare(status, tra, 0, insert, SQL_DIALECT_V6, Firebird::IStatement::PREPARE_PREFETCH_METADATA);
+							stmt = curAtt->prepare(status, mainTra, 0, insert, SQL_DIALECT_V6, Firebird::IStatement::PREPARE_PREFETCH_METADATA);
 							if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
 							{
 								break;
@@ -323,10 +380,25 @@ public:
 							if (fb_utils::containsErrorCode(status->getErrors(), isc_dsql_relation_err))
 							{
 								prepareDataStructures();
-								tra->commit(status);
+								if (ownAtt)
+								{
+									mainTra->commit(status);
+									check(status);
+									ownTra.release();
+								}
+
+								mainTra = curAtt->startTransaction(status, 0, NULL);
 								check(status);
-								tra = att->startTransaction(status, 0, NULL);
-								check(status);
+								ownTra.reset(mainTra);
+
+								if (ownAtt)
+								{
+									grAdminTra = mainTra;
+								}
+#if SRP_DEBUG > 0
+								else
+									fprintf(stderr, "SrpManagement: switch to own tra\n");
+#endif
 							}
 						}
 
@@ -368,7 +440,7 @@ public:
 						dumpIt("verifier", s);
 						verifier.set(s.getCount(), s.begin());
 
-						stmt->execute(status, tra, add.getMetadata(), add.getBuffer(), NULL, NULL);
+						stmt->execute(status, mainTra, add.getMetadata(), add.getBuffer(), NULL, NULL);
 						check(status);
 
 						stmt->free(status);
@@ -418,7 +490,7 @@ public:
 					Firebird::IStatement* stmt = NULL;
 					try
 					{
-						stmt = att->prepare(status, tra, 0, update.c_str(), SQL_DIALECT_V6, Firebird::IStatement::PREPARE_PREFETCH_METADATA);
+						stmt = curAtt->prepare(status, mainTra, 0, update.c_str(), SQL_DIALECT_V6, Firebird::IStatement::PREPARE_PREFETCH_METADATA);
 						check(status);
 
 						Meta im(stmt, false);
@@ -466,10 +538,12 @@ public:
 						assignField(active, user->active());
 						setField(login, user->userName());
 
-						stmt->execute(status, tra, up.getMetadata(), up.getBuffer(), NULL, NULL);
+						int count = 0;
+						checkCount(status, stmt, &count, isc_info_req_update_count);
+						stmt->execute(status, mainTra, up.getMetadata(), up.getBuffer(), NULL, NULL);
 						check(status);
 
-						if (!checkCount(status, &upCount, isc_info_update_count))
+						if (!checkCount(status, stmt, &count, isc_info_req_update_count))
 						{
 							stmt->release();
 							return GsecMsg22;
@@ -497,7 +571,7 @@ public:
 					Firebird::IStatement* stmt = NULL;
 					try
 					{
-						stmt = att->prepare(status, tra, 0, del, SQL_DIALECT_V6, Firebird::IStatement::PREPARE_PREFETCH_METADATA);
+						stmt = curAtt->prepare(status, mainTra, 0, del, SQL_DIALECT_V6, Firebird::IStatement::PREPARE_PREFETCH_METADATA);
 						check(status);
 
 						Meta im(stmt, false);
@@ -505,10 +579,12 @@ public:
 						Varfield login(dl);
 						setField(login, user->userName());
 
-						stmt->execute(status, tra, dl.getMetadata(), dl.getBuffer(), NULL, NULL);
+						int count = 0;
+						checkCount(status, stmt, &count, isc_info_req_delete_count);
+						stmt->execute(status, mainTra, dl.getMetadata(), dl.getBuffer(), NULL, NULL);
 						check(status);
 
-						if (!checkCount(status, &delCount, isc_info_delete_count))
+						if (!checkCount(status, stmt, &count, isc_info_req_delete_count))
 						{
 							stmt->release();
 							return GsecMsg22;
@@ -552,7 +628,7 @@ public:
 					Firebird::IResultSet* rs = NULL;
 					try
 					{
-						stmt = att->prepare(status, tra, 0, disp.c_str(), SQL_DIALECT_V6,
+						stmt = curAtt->prepare(status, mainTra, 0, disp.c_str(), SQL_DIALECT_V6,
 							Firebird::IStatement::PREPARE_PREFETCH_METADATA);
 						check(status);
 
@@ -573,7 +649,7 @@ public:
 							setField(login, user->userName());
 						}
 
-						rs = stmt->openCursor(status, tra, (par ? par->getMetadata() : NULL),
+						rs = stmt->openCursor(status, mainTra, (par ? par->getMetadata() : NULL),
 							(par ? par->getBuffer() : NULL), om, 0);
 						check(status);
 
@@ -625,83 +701,69 @@ public:
 
 	void commit(Firebird::CheckStatusWrapper* status)
 	{
-		if (tra)
+		if (ownTra)
 		{
-			tra->commit(status);
+			ownTra->commit(status);
 			if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
 			{
-				tra = NULL;
+				ownTra.release();
 			}
 		}
 	}
 
 	void rollback(Firebird::CheckStatusWrapper* status)
 	{
-		if (tra)
+		if (ownTra)
 		{
-			tra->rollback(status);
+			ownTra->rollback(status);
 			if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
 			{
-				tra = NULL;
+				ownTra.release();
 			}
 		}
-	}
-
-	int release()
-	{
-		if (--refCounter == 0)
-		{
-			Firebird::LocalStatus status;
-			Firebird::CheckStatusWrapper statusWrapper(&status);
-			rollback(&statusWrapper);
-			if (att)
-			{
-				att->detach(&statusWrapper);
-				if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
-				{
-					att = NULL;
-				}
-			}
-
-			if (tra)
-			{
-				tra->release();
-			}
-
-			if (att)
-			{
-				att->release();
-			}
-
-			delete this;
-			return 0;
-		}
-
-		return 1;
 	}
 
 private:
 	Firebird::RefPtr<Firebird::IFirebirdConf> config;
-	Firebird::RefPtr<Firebird::IAttachment> att;
-	Firebird::RefPtr<Firebird::ITransaction> tra;
-	RemotePasswordImpl<Firebird::Sha1> server;
-	int upCount, delCount;
 
-	bool checkCount(Firebird::CheckStatusWrapper* status, int* count, UCHAR item)
+	// attachment(s)
+	Firebird::AutoRelease<Firebird::IAttachment> ownAtt;
+	Firebird::IAttachment* curAtt;
+
+	// transactions
+	Firebird::AutoRelease<Firebird::ITransaction> ownTra;
+	Firebird::ITransaction* mainTra;
+	Firebird::ITransaction* grAdminTra;
+
+	RemotePasswordImpl<Firebird::Sha1> server;
+
+	bool checkCount(Firebird::CheckStatusWrapper* status, Firebird::IStatement* stmt, int* count, UCHAR item)
 	{
-		unsigned char buffer[100];
-		att->getInfo(status, 1, &item, sizeof(buffer), buffer);
+		UCHAR buffer[33];
+		const UCHAR count_info[] = { isc_info_sql_records };
+		stmt->getInfo(status, sizeof(count_info), count_info, sizeof(buffer), buffer);
 		check(status);
 
-		if (gds__vax_integer(buffer + 1, 2) != 6)
+		if (buffer[0] == isc_info_sql_records)
 		{
-			return false;
+			const UCHAR* p = buffer + 3;
+			while (*p != isc_info_end)
+			{
+				const UCHAR count_is = *p++;
+				const SSHORT len = gds__vax_integer(p, 2);
+				p += 2;
+				if (count_is == item)
+				{
+					int newCount = gds__vax_integer(p, len);
+					int oldCount = *count;
+					*count = newCount;
+					return newCount == oldCount + 1;
+				}
+				p += len;
+			}
 		}
 
-		int newCount = gds__vax_integer(buffer + 5, 4);
-		int oldCount = *count;
-		*count = newCount;
-		return newCount == oldCount + 1;
+		return false;
 	}
 
 	static void check(Firebird::CheckStatusWrapper* status)
@@ -855,7 +917,7 @@ private:
 			Firebird::IBlob* blob = NULL;
 			try
 			{
-				blob = att->openBlob(&statusWrapper, tra, &from, 0, NULL);
+				blob = curAtt->openBlob(&statusWrapper, mainTra, &from, 0, NULL);
 				check(&statusWrapper);
 
 				char segbuf[256];
@@ -893,7 +955,7 @@ private:
 		Firebird::IBlob* blob = NULL;
 		try
 		{
-			blob = att->createBlob(st, tra, &to, 0, NULL);
+			blob = curAtt->createBlob(st, mainTra, &to, 0, NULL);
 			check(st);
 
 			while (len)

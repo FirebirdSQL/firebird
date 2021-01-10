@@ -346,7 +346,8 @@
 #define isc_action_svc_drop_mapping   28	// Drop auto admins mapping in security database
 #define isc_action_svc_display_user_adm 29	// Displays user(s) from security database with admin info
 #define isc_action_svc_validate		  30	// Starts database online validation
-#define isc_action_svc_last			  31	// keep it last !
+#define isc_action_svc_nfix           31	// Fixup database after file system copy
+#define isc_action_svc_last			  32	// keep it last !
 
 /*****************************
  * Service information items *

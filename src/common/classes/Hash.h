@@ -30,6 +30,8 @@
 
 #include "../common/classes/array.h"
 
+struct dsc;
+
 namespace Firebird
 {
 	template <typename K>
@@ -341,12 +343,8 @@ namespace Firebird
 		}
 	};
 
-
 	class HashContext
 	{
-	public:
-		typedef HalfStaticArray<UCHAR, 256> Buffer;
-
 	public:
 		virtual ~HashContext()
 		{
@@ -354,14 +352,14 @@ namespace Firebird
 
 	public:
 		virtual void update(const void* data, FB_SIZE_T length) = 0;
-		virtual void finish(Buffer& result) = 0;
+		virtual void finish(dsc& result) = 0;
 	};
 
 	class WeakHashContext FB_FINAL : public HashContext
 	{
 	public:
 		virtual void update(const void* data, FB_SIZE_T length);
-		virtual void finish(Buffer& result);
+		virtual void finish(dsc& result);
 
 	private:
 		SINT64 hashNumber = 0;
@@ -383,11 +381,12 @@ namespace Firebird
 
 	public:
 		virtual void update(const void* data, FB_SIZE_T length);
-		virtual void finish(Buffer& result);
+		virtual void finish(dsc& result);
 
 	private:
 		const Descriptor* descriptor;
 		State* statePtr;
+		UCharBuffer buffer;
 	};
 
 	class Md5HashContext FB_FINAL : public LibTomCryptHashContext
@@ -413,6 +412,22 @@ namespace Firebird
 	public:
 		Sha512HashContext(MemoryPool& pool);
 	};
+
+	class Crc32HashContext FB_FINAL : public HashContext
+	{
+	public:
+		Crc32HashContext(MemoryPool& pool);
+		~Crc32HashContext();
+
+		virtual void update(const void* data, FB_SIZE_T length);
+		virtual void finish(dsc& result);
+
+	private:
+		struct State;
+		State* statePtr;
+		SLONG hash;
+	};
+
 } // namespace Firebird
 
 #endif // CLASSES_HASH_H

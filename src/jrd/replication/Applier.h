@@ -148,22 +148,23 @@ namespace Jrd
 		void prepareTransaction(thread_db* tdbb, TraNumber traNum);
 		void commitTransaction(thread_db* tdbb, TraNumber traNum);
 		void rollbackTransaction(thread_db* tdbb, TraNumber traNum, bool cleanup);
+		void cleanupTransactions(thread_db* tdbb);
 
 		void startSavepoint(thread_db* tdbb, TraNumber traNum);
 		void cleanupSavepoint(thread_db* tdbb, TraNumber traNum, bool undo);
 
 		void insertRecord(thread_db* tdbb, TraNumber traNum,
-						  const Firebird::MetaName& relName,
+						  const MetaName& relName,
 						  ULONG length, const UCHAR* data);
 		void updateRecord(thread_db* tdbb, TraNumber traNum,
-						  const Firebird::MetaName& relName,
+						  const MetaName& relName,
 						  ULONG orgLength, const UCHAR* orgData,
 						  ULONG newLength, const UCHAR* newData);
 		void deleteRecord(thread_db* tdbb, TraNumber traNum,
-						  const Firebird::MetaName& relName,
+						  const MetaName& relName,
 						  ULONG length, const UCHAR* data);
 
-		void setSequence(thread_db* tdbb, const Firebird::MetaName& genName, SINT64 value);
+		void setSequence(thread_db* tdbb, const MetaName& genName, SINT64 value);
 
 		void storeBlob(thread_db* tdbb, TraNumber traNum, bid* blob_id,
 					   ULONG length, const UCHAR* data);
@@ -171,7 +172,7 @@ namespace Jrd
 		void executeSql(thread_db* tdbb, TraNumber traNum,
 						unsigned charset,
 						const Firebird::string& sql,
-						const Firebird::MetaName& owner);
+						const MetaName& owner);
 
 		bool lookupKey(thread_db* tdbb, jrd_rel* relation, index_desc& idx);
 		bool compareKey(thread_db* tdbb, jrd_rel* relation,
@@ -190,9 +191,7 @@ namespace Jrd
 		void doDelete(thread_db* tdbb, record_param* rpb,
 						jrd_tra* transaction);
 
-		void logMessage(const Firebird::string& message, Replication::LogMsgType type);
-		void logWarning(const char* msg, ...);
-		void postError(FbStatusVector* status, const Firebird::Exception& ex);
+		void logConflict(const char* msg, ...);
 	};
 }
 

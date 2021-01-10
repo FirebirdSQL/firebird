@@ -4,31 +4,31 @@
 # version 2.1 of the License, or (at your option) any later version.
 # You may obtain a copy of the Licence at
 # http://www.gnu.org/licences/lgpl.html
-# 
+#
 # As a special exception this file can also be included in modules
-# with other source code as long as that source code has been 
-# released under an Open Source Initiative certificed licence.  
-# More information about OSI certification can be found at: 
-# http://www.opensource.org 
-# 
+# with other source code as long as that source code has been
+# released under an Open Source Initiative certificed licence.
+# More information about OSI certification can be found at:
+# http://www.opensource.org
+#
 # This module is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public Licence for more details.
-# 
-# This module was created by members of the firebird development 
-# team.  All individual contributions remain the Copyright (C) of 
-# those individuals and all rights are reserved.  Contributors to 
-# this file are either listed below or can be obtained from a CVS 
+#
+# This module was created by members of the firebird development
+# team.  All individual contributions remain the Copyright (C) of
+# those individuals and all rights are reserved.  Contributors to
+# this file are either listed below or can be obtained from a CVS
 # history command.
 #
 #  Created by:  Mark O'Donohue <mark.odonohue@ludwig.edu.au>
 #
 #  Contributor(s):
-# 
 #
 #
-ROOT=../..
+#
+ROOT=$(shell cd ../..; pwd)
 
 # Add the install include directory to the search path since the
 # examples need to build using those headers values.
@@ -37,7 +37,7 @@ CFLAGS := $(CFLAGS) -I$(FB_BUILD)/include
 
 
 include     $(ROOT)/gen/make.defaults
-ifdef SFIO_EXAMPLES 
+ifdef SFIO_EXAMPLES
 include     $(ROOT)/gen/make.platform.solaris.examples
 else
 include     $(ROOT)/gen/make.platform
@@ -64,7 +64,7 @@ LIB_LINK_MAPFILE =
 
 EXAMPLES_DEST=	$(GEN_ROOT)/examples
 EXAMPLES_SRC=	$(ROOT)/examples
-
+EXAMPLES_FB=	$(FIREBIRD)/examples
 
 EMPBLD_Objects=	$(EXAMPLES_DEST)/empbuild.o
 
@@ -79,50 +79,58 @@ INTL_Files    =	intlddl.sql intldml.sql indexoff.sql indexon.sql \
 INTL_Sources =   $(addprefix $(EXAMPLES_DEST)/, $(INTL_Files))
 
 EMPLOYEE_DB=	$(EXAMPLES_DEST)/employee.fdb
-FINAL_EMPDB=	$(FIREBIRD)/examples/empbuild/employee.fdb
+FINAL_EMPDB=	$(EXAMPLES_FB)/empbuild/employee.fdb
 INTLEMP_DB=	$(EXAMPLES_DEST)/intlemp.fdb
+
+EXTAUTH_PLUGIN=	$(EXAMPLES_FB)/prebuilt/libfbSampleExtAuth.$(SHRLIB_EXT)
 
 .PHONY: all examples
 
 all: examples
 
-# examples: $(EMPLOYEE_DB) $(INTLEMP_DB) $(FIREBIRD)/examples/README
-examples:	$(FINAL_EMPDB) $(FIREBIRD)/examples/README
+# examples: $(EMPLOYEE_DB) $(INTLEMP_DB) $(EXAMPLES_FB)/README
+examples:	$(FINAL_EMPDB) $(EXAMPLES_FB)/README $(EXTAUTH_PLUGIN)
+
+$(EXTAUTH_PLUGIN):	$(EXAMPLES_FB)/extauth/Makefile
+	$(MAKE) -C $(EXAMPLES_FB)/extauth OUT=$(EXAMPLES_FB)/prebuilt INTERMED=$(TMP_ROOT)/examples/extauth
+
+$(EXAMPLES_FB)/extauth/Makefile:
+ifeq ($(TOMCRYPT_BUILD_FLG),Y)
+	mkdir -p $(EXAMPLES_FB)/extauth/tomcrypt.include
+	$(CP) $(ROOT)/extern/libtomcrypt/src/headers/* $(EXAMPLES_FB)/extauth/tomcrypt.include
+endif
+	tar cf - -C $(ROOT)/examples/extauth . | tar xf - -C $(EXAMPLES_FB)/extauth/
 
 $(FINAL_EMPDB):	$(EMPLOYEE_DB)
 	$(RM) $(FINAL_EMPDB)
 	$(CP) $(EMPLOYEE_DB) $(FINAL_EMPDB)
 
-$(FIREBIRD)/examples/README:
-	$(CP) $(ROOT)/examples/readme $(FIREBIRD)/examples/README
-	$(CP) $(ROOT)/examples/*.* $(FIREBIRD)/examples/
-	$(CP) $(ROOT)/examples/api/*.* $(FIREBIRD)/examples/api/
-	$(CP) $(ROOT)/examples/dbcrypt/*.* $(FIREBIRD)/examples/dbcrypt/
-	$(CP) $(ROOT)/examples/extauth/* $(FIREBIRD)/examples/extauth/
-ifeq ($(TOMCRYPT_BUILD_FLG),Y)
-	mkdir -p $(FIREBIRD)/examples/extauth/tomcrypt.include
-	$(CP) $(ROOT)/extern/libtomcrypt/src/headers/* $(FIREBIRD)/examples/extauth/tomcrypt.include
-endif
-	$(CP) $(ROOT)/examples/include/*.* $(FIREBIRD)/examples/include/
-	$(CP) $(ROOT)/examples/interfaces/*.* $(FIREBIRD)/examples/interfaces/
-	$(CP) $(ROOT)/examples/package/*.* $(FIREBIRD)/examples/package/
-	$(CP) $(ROOT)/examples/stat/*.* $(FIREBIRD)/examples/stat/
-	$(CP) $(ROOT)/examples/udf/*.* $(FIREBIRD)/examples/udf/
-	$(CP) $(ROOT)/examples/udr/*.* $(FIREBIRD)/examples/udr/
-#	$(CP) intlemp.fdb $(FIREBIRD)/examples/empbuild/
+$(EXAMPLES_FB)/README:
+	$(CP) $(ROOT)/examples/*.* $(EXAMPLES_FB)/
+	$(CP) $(ROOT)/examples/api/*.* $(EXAMPLES_FB)/api/
+	$(CP) $(ROOT)/examples/dbcrypt/*.* $(EXAMPLES_FB)/dbcrypt/
+	$(CP) $(ROOT)/examples/include/*.* $(EXAMPLES_FB)/include/
+	$(CP) $(ROOT)/examples/interfaces/*.* $(EXAMPLES_FB)/interfaces/
+	$(CP) $(ROOT)/examples/package/*.* $(EXAMPLES_FB)/package/
+	$(CP) $(ROOT)/examples/stat/*.* $(EXAMPLES_FB)/stat/
+	$(CP) $(ROOT)/examples/udf/*.* $(EXAMPLES_FB)/udf/
+	$(CP) $(ROOT)/examples/udr/*.* $(EXAMPLES_FB)/udr/
+#	$(CP) intlemp.fdb $(EXAMPLES_FB)/empbuild/
+	$(CP) $(ROOT)/examples/readme $(EXAMPLES_FB)/README
+	$(CP) $(ROOT)/examples/empbuild/employe2.sql $(EXAMPLES_FB)/empbuild/
 
 $(EXAMPLES_DEST)% : $(EXAMPLES_SRC)%
 	$(CP) $^ $@
 
 # Ok the following little story is, first build empbuild.fdb an empty db
-# using a script file.  Then we can compile the empbuild.e file, then we 
+# using a script file.  Then we can compile the empbuild.e file, then we
 # can run it to create employee.fdb database populated with data by the
 # program.  Thats how I found it.
 # MOD July-2001
 #
 # Another problem here is that empbuild does not fail when it gets an error
 # so MAKE thinks it's all run ok.  empbuild should be modified to return an
-# error when it fails. 
+# error when it fails.
 # MOD 28-July-2002
 
 

@@ -52,6 +52,7 @@ static const UCHAR DESCRIBE_VARS[] =
 static const unsigned INFO_BUFFER_SIZE = MemoryPool::MAX_MEDIUM_BLOCK_SIZE;
 
 
+static USHORT getLen(const UCHAR** ptr, const UCHAR* bufferEnd);
 static int getNumericInfo(const UCHAR** ptr, const UCHAR* bufferEnd);
 static void getStringInfo(const UCHAR** ptr, const UCHAR* bufferEnd, string* str);
 
@@ -373,17 +374,14 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 								}
 							}
 
+							if (parameters->fetched && parameters->makeOffsets() != ~0u)
+								parameters->fetched = false;
+
 							if (parameters->fetched)
 							{
-								unsigned off = 0;
-
 								for (unsigned n = 0; n < parameters->items.getCount(); ++n)
 								{
 									Parameters::Item* param = &parameters->items[n];
-
-									off = fb_utils::sqlTypeToDsc(off, param->type, param->length,
-										NULL /*dtype*/, NULL /*length*/, &param->offset, &param->nullInd);
-
 									switch (param->type)
 									{
 										case SQL_VARYING:
@@ -397,8 +395,6 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 											break;
 									}
 								}
-
-								parameters->length = off;
 							}
 
 							break;
@@ -493,16 +489,27 @@ void StatementMetadata::fetchParameters(UCHAR code, Parameters* parameters)
 //--------------------------------------
 
 
-// Pick up a VAX format numeric info item with a 2 byte length.
-static int getNumericInfo(const UCHAR** ptr, const UCHAR* bufferEnd)
+static USHORT getLen(const UCHAR** ptr, const UCHAR* bufferEnd)
 {
-	fb_assert(bufferEnd - *ptr >= 2);
+	if (bufferEnd - *ptr < 2)
+		fatal_exception::raise("Invalid info structure - no space for clumplet length");
 
-	const SSHORT len = static_cast<SSHORT>(gds__vax_integer(*ptr, 2));
+	const USHORT len = static_cast<USHORT>(gds__vax_integer(*ptr, 2));
 	*ptr += 2;
 
 	fb_assert(bufferEnd - *ptr >= len);
+	if (bufferEnd - *ptr < len)
+		fatal_exception::raiseFmt("Invalid info structure - no space for clumplet data: need %d, actual %d",
+			len, bufferEnd - *ptr);
 
+	return len;
+}
+
+
+// Pick up a VAX format numeric info item with a 2 byte length.
+static int getNumericInfo(const UCHAR** ptr, const UCHAR* bufferEnd)
+{
+	const USHORT len = getLen(ptr, bufferEnd);
 	int item = gds__vax_integer(*ptr, len);
 	*ptr += len;
 	return item;
@@ -511,22 +518,9 @@ static int getNumericInfo(const UCHAR** ptr, const UCHAR* bufferEnd)
 // Pick up a string valued info item.
 static void getStringInfo(const UCHAR** ptr, const UCHAR* bufferEnd, string* str)
 {
-	fb_assert(bufferEnd - *ptr >= 2);
-
-	const UCHAR* p = *ptr;
-	SSHORT len = static_cast<SSHORT>(gds__vax_integer(p, 2));
-	*ptr += 2;
-
-	fb_assert(bufferEnd - *ptr >= len);
-
-	// CVC: What else can we do here?
-	if (len < 0)
-		len = 0;
-
+	const USHORT len = getLen(ptr, bufferEnd);
+	str->assign(*ptr, len);
 	*ptr += len;
-	p += 2;
-
-	str->assign(p, len);
 }
 
 

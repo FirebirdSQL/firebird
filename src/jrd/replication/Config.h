@@ -57,6 +57,10 @@ namespace Replication
 		bool verboseLogging;
 		ULONG applyIdleTimeout;
 		ULONG applyErrorTimeout;
+		Firebird::string pluginName;
+		bool logErrors;
+		bool reportErrors;
+		bool disableOnError;
 	};
 };
 

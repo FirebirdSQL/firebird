@@ -25,9 +25,8 @@ stands for all types (namely TIME & TIMESTAMP) WITH TIME ZONE.
 When incomplete type definiton is used in right side of the statement (TO part) firebird engine will define missing
 details about that type automatically based on source column.
 
-From this statement POV there is no difference between NUMERIC and DECIMAL datatypes. Changing bind of any NUMERIC
-does not affect appropriate underlying integer type. On contrary, changing bind of integer datatype also affects
-appropriate NUMERICs.
+Changing bind of any NUMERIC/DECIMAL does not affect appropriate underlying integer type. On contrary,
+changing bind of integer datatype also affects appropriate NUMERICs/DECIMALs.
 
 Special `TO` part format `LEGACY` is used when datatype, missing in previous FB version, should be represented in
 a way, understandable by old client software (may be with some data losses). The following coercions are done for
@@ -37,11 +36,11 @@ legacy datatypes:
 |--------------------------|-----------------------------|
 | BOOLEAN                  | CHAR(5)                     |
 | DECFLOAT                 | DOUBLE PRECISION            |
-| NUMERIC(38)              | NUMERIC(18)                 |
+| INT128                   | BIGINT                      |
 | TIME WITH TIME ZONE      | TIME WITHOUT TIME ZONE      |
 | TIMESTAMP WITH TIME ZONE | TIMESTAMP WITHOUT TIME ZONE |
 
-Using `EXTENDED` in the `TO` part directs firebird engine to use extended form of `FROM` datatype.
+Using `EXTENDED` in the `TO` part directs firebird engine to coerce to extended form of `FROM` datatype.
 Currently it works only for TIME/TIMESTAMP WITH TIME ZONE - they are coerced to EXTENDED TIME/TIMESTAMP WITH TIME ZONE
 appropriately.
 
@@ -50,20 +49,23 @@ Setting `NATIVE` means `type` will be used as if there were no previous rules fo
 Except SQL-statement there are two more ways to specify data coercion - tag `isc_dpb_set_bind` in DPB
 and `DataTypeCompatibility` parameter in firebird.conf & databases.conf. The later the rule is introduced
 (.conf->DPB->SQL) the higher priotiy it has.
-I.e. one can override .conf in any other way any DPB from SQL statement.
+I.e. one can override .conf in any other way and DPB from SQL statement.
 
 Value of clumplet with `isc_dpb_set_bind` tag in DPB should be specified as a set of partially
 formed SET BIND statements, i.e. with prefix SET BIND OF is omitted, separated by semicolons.
 For example:
 ```c++
-dpb->insertString(&status, isc_dpb_set_bind, "decfloat to char; numeric(38) to char");
+dpb->insertString(&status, isc_dpb_set_bind, "decfloat to char; int128 to char");
 ```
 
 `DataTypeCompatibility` is minor firebird version for which we want to provide some compatibility
 regarding data types. That compatibility may be not absolute - for example SET BIND can't care about type
-of particular SQL functions. The following types will be described in legacy form when `DataTypeCompatibility=3.0:`
-DECFLOAT, NUMERIC(38) and TIME(STAMP) WITH TIME ZONE. When `DataTypeCompatibility=2.5` in addition to this
-list BOOLEAN will be described as legacy type as well.
+of particular SQL functions. The following types will be described in legacy form when `DataTypeCompatibility=3.0`:
+DECFLOAT, INT128 and TIME(STAMP) WITH TIME ZONE. When `DataTypeCompatibility=2.5` in addition to this list
+BOOLEAN will be described as legacy type as well.
+
+Only fields returned by database engine in regular messages are modified according to SET BIND rules.
+Variables returned by getting slice of an array are not affected by SET BIND statement.
 
 
 ### SQL Samples:

@@ -28,7 +28,7 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/GetPlugins.h"
 #include "../common/classes/array.h"
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
 #include "../common/classes/objects_array.h"
 
 namespace Auth {
@@ -225,7 +225,7 @@ public:
 	CharField database, dba, dbaPassword, role;
 	AuthenticationBlock authenticationBlock;
 
-	Firebird::MetaName plugin;
+	Firebird::MetaString plugin;
 
 	// deprecated
 	CharField group;
@@ -260,8 +260,8 @@ public:
 class Get : public Firebird::GetPlugins<Firebird::IManagement>
 {
 public:
-	explicit Get(const Config* firebirdConf);
-	Get(const Config* firebirdConf, const char* plugName);
+	explicit Get(const Firebird::Config* firebirdConf);
+	Get(const Firebird::Config* firebirdConf, const char* plugName);
 };
 
 int setGsecCode(int code, unsigned int operation);

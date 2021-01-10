@@ -550,6 +550,12 @@ const SvcSwitches nrestOptions[] =
 	{0, 0, 0, 0, 0}
 };
 
+const SvcSwitches nfixOptions[] =
+{
+	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
+	{0, 0, 0, 0, 0}
+};
+
 const SvcSwitches traceStartOptions[] =
 {
 	{"trc_cfg", putFileFromArgument, 0, isc_spb_trc_cfg, 0},
@@ -590,6 +596,7 @@ const SvcSwitches actionSwitch[] =
 	{"action_modify_user", putSingleTag, addmodOptions, isc_action_svc_modify_user, 0},
 	{"action_nbak", putSingleTag, nbackOptions, isc_action_svc_nbak, isc_info_svc_line},
 	{"action_nrest", putSingleTag, nrestOptions, isc_action_svc_nrest, isc_info_svc_line},
+	{"action_nfix", putSingleTag, nfixOptions, isc_action_svc_nfix, isc_info_svc_line},
 	{"action_trace_start", putSingleTag, traceStartOptions, isc_action_svc_trace_start, isc_info_svc_to_eof},
 	{"action_trace_suspend", putSingleTag, traceChgStateOptions, isc_action_svc_trace_suspend, isc_info_svc_line},
 	{"action_trace_resume", putSingleTag, traceChgStateOptions, isc_action_svc_trace_resume, isc_info_svc_line},
@@ -948,11 +955,17 @@ bool printInfo(const char* p, size_t pSize, UserPrint& up, ULONG& stdinRq)
 			break;
 
 		case isc_info_svc_line:
-			ret = printLine(p);
+			if (printLine(p))
+			{
+				ret = true;
+			}
 			break;
 
 		case isc_info_svc_to_eof:
-			ret = printData(p);
+			if (printData(p))
+			{
+				ret = true;
+			}
 			ignoreTruncation = true;
 			break;
 
@@ -962,8 +975,7 @@ bool printInfo(const char* p, size_t pSize, UserPrint& up, ULONG& stdinRq)
 				printf("\n%s\n", getMessage(18).c_str());
 			}
 			fflush(stdout);
-			ret = true;
-			break;
+			return true;
 
 		case isc_info_svc_timeout:
 		case isc_info_data_not_ready:

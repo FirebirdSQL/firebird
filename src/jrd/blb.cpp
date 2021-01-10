@@ -628,8 +628,7 @@ USHORT blb::BLB_get_segment(thread_db* tdbb, void* segment, USHORT buffer_length
 	if (blb_flags & BLB_temporary)
 		ERR_post(Arg::Gds(isc_cannot_read_new_blob));
 
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	// If we reached end of file, we're still there
 
@@ -2539,7 +2538,9 @@ static void move_from_string(thread_db* tdbb, const dsc* from_desc, dsc* to_desc
 	transaction = transaction->getOuter();
 
 	UCharBuffer bpb;
-	BLB_gen_bpb_from_descs(from_desc, to_desc, bpb);
+
+	if (!(from_desc->isText() && from_desc->getCharSet() == CS_BINARY))
+		BLB_gen_bpb_from_descs(from_desc, to_desc, bpb);
 
 	bid temp_bid;
 	temp_bid.clear();

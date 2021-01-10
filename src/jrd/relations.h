@@ -499,6 +499,10 @@ RELATION(nam_mon_database, rel_mon_database, ODS_11_1, rel_virtual)
 	FIELD(f_mon_db_owner, nam_mon_owner, fld_user, 0, ODS_12_0)
 	FIELD(f_mon_db_secdb, nam_mon_secdb, fld_sec_db, 0, ODS_12_0)
 	FIELD(f_mon_db_crypt_state, nam_mon_crypt_state, fld_crypt_state, 0, ODS_13_0)
+	FIELD(f_mon_db_guid, nam_mon_guid, fld_guid, 0, ODS_13_0)
+	FIELD(f_mon_db_file_id, nam_mon_file_id, fld_file_id, 0, ODS_13_0)
+	FIELD(f_mon_db_na, nam_mon_na, fld_att_id, 0, ODS_13_0)
+	FIELD(f_mon_db_ns, nam_mon_ns, fld_stmt_id, 0, ODS_13_0)
 END_RELATION
 
 // Relation 34 (MON$ATTACHMENTS)
@@ -710,7 +714,32 @@ RELATION(nam_time_zones, rel_time_zones, ODS_13_0, rel_virtual)
 	FIELD(f_tz_name, nam_tz_name, fld_tz_name, 0, ODS_13_0)
 END_RELATION
 
-// Relation 51 (RDB$TABLESPACES)
+// Relation 51 (RDB$PUBLICATIONS)
+RELATION(nam_pubs, rel_pubs, ODS_13_0, rel_persistent)
+	FIELD(f_pub_name, nam_pub_name, fld_pub_name, 1, ODS_13_0)
+	FIELD(f_pub_owner, nam_owner, fld_user, 1, ODS_13_0)
+	FIELD(f_pub_sys_flag, nam_sys_flag, fld_flag, 1, ODS_13_0)
+	FIELD(f_pub_active_flag, nam_active_flag, fld_flag, 1, ODS_13_0)
+	FIELD(f_pub_auto_enable, nam_auto_enable, fld_flag, 1, ODS_13_0)
+END_RELATION
+
+// Relation 52 (RDB$PUBLICATION_TABLES)
+RELATION(nam_pub_tables, rel_pub_tables, ODS_13_0, rel_persistent)
+	FIELD(f_pubtab_pub_name, nam_pub_name, fld_pub_name, 1, ODS_13_0)
+	FIELD(f_pubtab_tab_name, nam_tab_name, fld_r_name, 1, ODS_13_0)
+END_RELATION
+
+// Relation 53 (RDB$CONFIG)
+RELATION(nam_config, rel_config, ODS_13_0, rel_virtual)
+	FIELD(f_cfg_id, nam_cfg_id, fld_cfg_id, 0, ODS_13_0)
+	FIELD(f_cfg_name, nam_cfg_name, fld_cfg_name, 0, ODS_13_0)
+	FIELD(f_cfg_value, nam_cfg_value, fld_cfg_value, 0, ODS_13_0)
+	FIELD(f_cfg_default, nam_cfg_default, fld_cfg_default, 0, ODS_13_0)
+	FIELD(f_cfg_is_set, nam_cfg_is_set, fld_cfg_is_set, 0, ODS_13_0)
+	FIELD(f_cfg_source, nam_cfg_source, fld_file_name2, 0, ODS_13_0)
+END_RELATION
+
+// Relation 54 (RDB$TABLESPACES)
 // TODO: fix ODS version
 RELATION(nam_tablespaces, rel_tablespaces, ODS_13_0, rel_persistent)
 	FIELD(f_ts_id, nam_ts_id, fld_ts_id, 0, ODS_13_0)

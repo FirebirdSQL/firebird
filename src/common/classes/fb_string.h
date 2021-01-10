@@ -41,7 +41,7 @@
 
 namespace Firebird
 {
-	class MetaName;
+	class MetaString;
 
 	class AbstractString : private AutoStorage
 	{
@@ -160,12 +160,18 @@ namespace Firebird
 
 	protected:
 		AbstractString(const size_type limit, const size_type sizeL, const void* datap);
-
 		AbstractString(const size_type limit, const_pointer p1, const size_type n1,
 					 const_pointer p2, const size_type n2);
-
 		AbstractString(const size_type limit, const AbstractString& v);
-		AbstractString(const size_type limit, const MetaName& v);
+
+		template <class S>
+		AbstractString(const size_type limit, const S& v)
+			: max_length(static_cast<internal_size_type>(limit))
+		{
+			FB_SIZE_T l = v.length();
+			initialize(l);
+			memcpy(stringBuffer, v.c_str(), l);
+		}
 
 		explicit AbstractString(const size_type limit) :
 			max_length(static_cast<internal_size_type>(limit)),
@@ -655,11 +661,11 @@ namespace Firebird
 	public:
 		StringBase() : AbstractString(Comparator::getMaxLength()) {}
 		StringBase(const StringType& v) : AbstractString(Comparator::getMaxLength(), v) {}
-		explicit StringBase(const MetaName& v) : AbstractString(Comparator::getMaxLength(), v) {}
 		StringBase(const void* s, size_type n) : AbstractString(Comparator::getMaxLength(), n, s) {}
 		StringBase(const_pointer s) : AbstractString(Comparator::getMaxLength(), static_cast<size_type>(strlen(s)), s) {}
 		explicit StringBase(const unsigned char* s) :
 			AbstractString(Comparator::getMaxLength(), static_cast<size_type>(strlen((char*)s)), (char*)s) {}
+		StringBase(const MetaString& v) : AbstractString(Comparator::getMaxLength(), v) {}
 		StringBase(size_type n, char_type c) : AbstractString(Comparator::getMaxLength(), n, c) {}
 		StringBase(const_iterator first, const_iterator last) :
 			AbstractString(Comparator::getMaxLength(), last - first, first) {}

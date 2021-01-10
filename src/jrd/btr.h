@@ -193,10 +193,10 @@ public:
 	}
 
 	IndexRetrieval(MemoryPool& pool, jrd_rel* relation, const index_desc* idx,
-				   const Firebird::MetaName& name)
+				   const MetaName& name)
 		: irb_relation(relation), irb_index(idx->idx_id),
 		  irb_generic(0), irb_lower_count(0), irb_upper_count(0), irb_key(NULL),
-		  irb_name(FB_NEW_POOL(pool) Firebird::MetaName(name)),
+		  irb_name(FB_NEW_POOL(pool) MetaName(name)),
 		  irb_value(FB_NEW_POOL(pool) ValueExprNode*[idx->idx_count * 2])
 	{
 		memcpy(&irb_desc, idx, sizeof(irb_desc));
@@ -215,7 +215,7 @@ public:
 	USHORT irb_lower_count;			// Number of segments for retrieval
 	USHORT irb_upper_count;			// Number of segments for retrieval
 	temporary_key* irb_key;			// Key for equality retrieval
-	Firebird::MetaName* irb_name;	// Index name
+	MetaName* irb_name;	// Index name
 	ValueExprNode** irb_value;
 };
 
@@ -244,6 +244,29 @@ public:
 	void enablePageGC(thread_db* tdbb);
 
 	static bool isPageGCAllowed(thread_db* tdbb, const PageNumber& page);
+
+#ifdef DEBUG_LCK_LIST
+	BtrPageGCLock(thread_db* tdbb, Firebird::MemoryPool* pool)
+		: Lock(tdbb, PageNumber::getLockLen(), LCK_btr_dont_gc), m_pool(pool)
+	{
+	}
+
+	static bool checkPool(const Lock* lock, Firebird::MemoryPool* pool) 
+	{
+		if (!pool || !lock)
+			return false;
+
+		const Firebird::MemoryPool* pool2 = NULL;
+
+		if (lock && (lock->lck_type == LCK_btr_dont_gc))
+			pool2 = reinterpret_cast<const BtrPageGCLock*>(lock)->m_pool;
+
+		return (pool == pool2);
+	}
+
+private:
+	const Firebird::MemoryPool* m_pool;
+#endif
 };
 
 // Struct used for index creation

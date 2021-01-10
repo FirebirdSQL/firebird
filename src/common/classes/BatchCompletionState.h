@@ -53,11 +53,6 @@ namespace Firebird {
 				rare[i].second->dispose();
 		}
 
-		void dispose()
-		{
-			delete this;
-		}
-
 		void regError(IStatus* errStatus, Transliterate* transliterate)
 		{
 			IStatus* newVector = nullptr;

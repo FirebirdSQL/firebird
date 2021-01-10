@@ -25,6 +25,9 @@
    as well as by ini.epp in JRD.  Make sure that any
    changes are compatible in both places. */
 
+#ifndef JRD_INI_H
+#define JRD_INI_H
+
 #include "../common/intlobj_new.h"
 #include "../jrd/intl.h"
 #include "../intl/country_codes.h"
@@ -189,3 +192,5 @@ static const rtyp types[] =
 };
 
 #undef TYPE
+
+#endif	// JRD_INI_H

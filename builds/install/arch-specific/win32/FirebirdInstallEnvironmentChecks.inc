@@ -41,7 +41,7 @@
     function ShowCopyGds32Task: boolean;
     function CopyFbClientLib: boolean;
     function ShowCopyFbClientLibTask: boolean;
-		
+
 	function SummarizeInstalledProducts: String;
 	function AnalysisAssessment: boolean;
 
@@ -387,12 +387,11 @@ var
   product: Integer;
   gds32VersionString: String;
   VerInt: Array of Integer;
-  BoolOne, BoolTwo, BoolEval: Boolean;
-  EvalOne, EvalTwo: Integer;
-
+//  BoolOne, BoolTwo, BoolEval: Boolean;
+//  EvalOne, EvalTwo: Integer;
   dbg_ProductPath, dbg_BinPath, dbg_ClientVersion, dbg_GBAKVersion, dbg_Server: String;
   dbg_InstallType : Integer;
-  eval_bool: boolean;
+//  eval_bool: boolean;
 
 
 begin
@@ -723,7 +722,7 @@ Var
 
 function ClassicInstallChosen: Boolean;
 begin
-	result := IsTaskSelected('UseClassicServerTask');
+	result := WizardIsTaskSelected('UseClassicServerTask');
 end;
 
 
@@ -1006,8 +1005,8 @@ function InstallGuardian: boolean;
 begin
   result := False;
   if (ConfigureFirebird) then
-     result := IsTaskSelected('UseSuperServerTask\UseGuardianTask') 
-			or IsTaskSelected('UseSuperClassicTask\UseGuardianTask');
+     result := WizardIsTaskSelected('UseSuperServerTask\UseGuardianTask')
+			or WizardIsTaskSelected('UseSuperClassicTask\UseGuardianTask');
 end;
 
 
@@ -1015,7 +1014,7 @@ function CopyGds32: boolean;
 begin
   result := False;
   if ConfigureFirebird then begin
-     result := ( IsTaskSelected( 'CopyFbClientAsGds32Task' ) );
+     result := ( WizardIsTaskSelected( 'CopyFbClientAsGds32Task' ) );
   end;
 end;
 
@@ -1028,7 +1027,7 @@ end;
 
 function CopyFbClientLib: boolean;
 begin
-    result := ( IsTaskSelected( 'CopyFbClientToSysTask' ) );
+    result := ( WizardIsTaskSelected( 'CopyFbClientToSysTask' ) );
 end;
 
 
@@ -1048,7 +1047,7 @@ var
   i: Integer;
   StatusDescription: String;
   InstallSummary: String;
-  prodstr: String;
+//  prodstr: String;
 begin
 
 //do nothing gracefully if we are called by accident.
@@ -1122,7 +1121,7 @@ function AnalysisAssessment: boolean;
 var
   MsgText: String;
   MsgResult: Integer;
-  VerString: String;
+//  VerString: String;
 begin
   result := false;
 

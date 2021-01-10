@@ -833,7 +833,7 @@ private:
 	Firebird::HalfStaticArray<InternalCryptKey*, 1> cryptKeys;		// Wire crypt keys that came from plugin(s) last time
 	Firebird::string dpbConfig;					// User's configuration parameters
 	Firebird::PathName dpbPlugins;				// User's plugin list
-	Firebird::RefPtr<const Config> clntConfig;	// Used to get plugins list and pass to port
+	Firebird::RefPtr<const Firebird::Config> clntConfig;	// Used to get plugins list and pass to port
 	Firebird::AutoPtr<RmtAuthBlock> remAuthBlock;	//Authentication block if present
 	unsigned nextKey;							// First key to be analyzed
 
@@ -845,7 +845,7 @@ private:
 			: pluginItr(Firebird::IPluginManager::TYPE_KEY_HOLDER, "NoDefault"), currentIface(nullptr)
 		{ }
 
-		Firebird::ICryptKeyCallback* create(const Config* conf);
+		Firebird::ICryptKeyCallback* create(const Firebird::Config* conf);
 
 		// Firebird::ICryptKeyCallback implementation
 		unsigned callback(unsigned dataLength, const void* data, unsigned bufferLength, void* buffer);
@@ -885,11 +885,10 @@ public:
 	Firebird::PathName getPluginName();
 	void tryNewKeys(rem_port*);
 	void releaseKeys(unsigned from);
-	Firebird::RefPtr<const Config>* getConfig();
+	Firebird::RefPtr<const Firebird::Config>* getConfig();
 	void createCryptCallback(Firebird::ICryptKeyCallback** callback);
 
 	// Firebird::IClientBlock implementation
-	int release();
 	const char* getLogin();
 	const char* getPassword();
 	const unsigned char* getData(unsigned int* length);
@@ -1050,7 +1049,7 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	struct linger	port_linger;		// linger value as defined by SO_LINGER
 	Rdb*			port_context;
 	Thread::Handle	port_events_thread;	// handle of thread, handling incoming events
-	ThreadId		port_events_threadId;
+	Thread			port_events_threadId;
 	RemotePortGuard* port_thread_guard;	// will close port_events_thread in safe way
 #ifdef WIN_NT
 	HANDLE			port_pipe;			// port pipe handle
@@ -1080,7 +1079,7 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	OBJCT			port_last_object_id;	// cached last id
 	Firebird::ObjectsArray< Firebird::Array<char> > port_queue;
 	FB_SIZE_T		port_qoffset;			// current packet in the queue
-	Firebird::RefPtr<const Config> port_config;	// connection-specific configuration info
+	Firebird::RefPtr<const Firebird::Config> port_config;	// connection-specific configuration info
 
 	// Authentication and crypt stuff
 	ServerAuthBase*							port_srv_auth;
@@ -1123,7 +1122,7 @@ public:
 		port_server(0), port_server_flags(0), port_protocol(0), port_buff_size(rpt / 2),
 		port_flags(0), port_connect_timeout(0), port_dummy_packet_interval(0),
 		port_dummy_timeout(0), port_handle(INVALID_SOCKET), port_channel(INVALID_SOCKET), port_context(0),
-		port_events_thread(0), port_events_threadId(0), port_thread_guard(0),
+		port_events_thread(0), port_thread_guard(0),
 #ifdef WIN_NT
 		port_pipe(INVALID_HANDLE_VALUE), port_event(INVALID_HANDLE_VALUE),
 #endif
@@ -1168,8 +1167,8 @@ public:
 	static bool checkCompression();
 	void linkParent(rem_port* const parent);
 	void unlinkParent();
-	Firebird::RefPtr<const Config> getPortConfig();
-	const Firebird::RefPtr<const Config>& getPortConfig() const;
+	Firebird::RefPtr<const Firebird::Config> getPortConfig();
+	const Firebird::RefPtr<const Firebird::Config>& getPortConfig() const;
 	void versionInfo(Firebird::string& version) const;
 
 	bool extractNewKeys(CSTRING* to, bool flagPlugList = false)
@@ -1287,7 +1286,7 @@ public:
 	class RecvQueState
 	{
 	public:
-		int save_handy;
+		unsigned save_handy;
 		FB_SIZE_T save_private;
 		FB_SIZE_T save_qoffset;
 

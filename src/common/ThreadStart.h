@@ -57,7 +57,8 @@ typedef THREAD_ENTRY_DECLARE ThreadEntryPoint(THREAD_ENTRY_PARAM);
 
 #if defined(WIN_NT)
 typedef DWORD ThreadId;
-#elif defined(LINUX) && !defined(ANDROID)
+#elif defined(LINUX) && !defined(ANDROID) && !defined(LSB_BUILD)
+#define USE_LWP_AS_THREAD_ID
 typedef int ThreadId;
 #elif defined(USE_POSIX_THREADS)
 typedef pthread_t ThreadId;
@@ -69,21 +70,36 @@ class Thread
 {
 public:
 #ifdef WIN_NT
+	typedef DWORD InternalId;
 	typedef HANDLE Handle;
 #endif
 #ifdef USE_POSIX_THREADS
 	typedef pthread_t Handle;
+	typedef pthread_t InternalId;
 #endif
 
-	static ThreadId	start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle = NULL);
+	static Thread start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle = NULL);
 	static void waitForCompletion(Handle& handle);
 	static void kill(Handle& handle);
-	static bool isCurrent(const ThreadId threadId);
 
 	static ThreadId getId();
 
 	static void sleep(unsigned milliseconds);
 	static void yield();
+
+	bool isCurrent();
+
+	Thread()
+	{
+		memset(&internalId, 0, sizeof(internalId));
+	}
+
+private:
+	Thread(InternalId iid)
+		: internalId(iid)
+	{ }
+
+	InternalId internalId;
 };
 
 inline ThreadId getThreadId()
@@ -102,7 +118,7 @@ class ThreadFinishSync
 public:
 	typedef void ThreadRoutine(TA);
 
-	ThreadFinishSync(Firebird::MemoryPool& pool, ThreadRoutine* routine, int priority_arg)
+	ThreadFinishSync(Firebird::MemoryPool& pool, ThreadRoutine* routine, int priority_arg = THREAD_medium)
 		:
 #ifdef USE_FINI_SEM
 		  fini(pool),
@@ -110,7 +126,8 @@ public:
 		  threadHandle(0),
 #endif
 		  threadRoutine(routine),
-		  threadPriority(priority_arg)
+		  threadPriority(priority_arg),
+		  closing(false)
 	{ }
 
 	void run(TA arg)
@@ -124,13 +141,26 @@ public:
 			);
 	}
 
+	bool tryWait()
+	{
+		if (closing)
+		{
+			waitForCompletion();
+			return true;
+		}
+		return false;
+	}
+
 	void waitForCompletion()
 	{
 #ifdef USE_FINI_SEM
 		fini.enter();
 #else
-		Thread::waitForCompletion(threadHandle);
-		threadHandle = 0;
+		if (threadHandle)
+		{
+			Thread::waitForCompletion(threadHandle);
+			threadHandle = 0;
+		}
 #endif
 	}
 
@@ -144,6 +174,7 @@ private:
 	TA threadArg;
 	ThreadRoutine* threadRoutine;
 	int threadPriority;
+	bool closing;
 
 	static THREAD_ENTRY_DECLARE internalRun(THREAD_ENTRY_PARAM arg)
 	{
@@ -172,6 +203,7 @@ private:
 			threadArg->exceptionHandler(ex, threadRoutine);
 		}
 #endif
+		closing = true;
 	}
 };
 

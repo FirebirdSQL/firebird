@@ -44,7 +44,8 @@
 
 #include "../common/classes/fb_atomic.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
+#include "../common/classes/auto.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/array.h"
 #include "../common/classes/Hash.h"
 #include "../common/classes/objects_array.h"
@@ -53,6 +54,7 @@
 #include "../common/classes/GenericMap.h"
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/semaphore.h"
+#include "../common/classes/XThreadMutex.h"
 #include "../common/utils_proto.h"
 #include "../jrd/RandomGenerator.h"
 #include "../common/os/guid.h"
@@ -70,6 +72,10 @@
 #include "../jrd/replication/Manager.h"
 #include "fb_types.h"
 
+
+#define SPTHR_DEBUG(A)
+
+
 namespace Jrd
 {
 template <typename T> class vec;
@@ -82,6 +88,15 @@ class ExternalFileDirectoryList;
 class MonitoringData;
 class GarbageCollector;
 class CryptoManager;
+class KeywordsMap;
+
+// allocator for keywords table
+class KeywordsMapAllocator
+{
+public:
+	static KeywordsMap* create();
+	static void destroy(KeywordsMap* inst);
+};
 
 // general purpose vector
 template <class T, BlockType TYPE = type_vec>
@@ -221,6 +236,7 @@ const ULONG DBB_no_fs_cache				= 0x40000L;		// Not using file system cache
 const ULONG DBB_sweep_starting			= 0x80000L;		// Auto-sweep is starting
 const ULONG DBB_creating				= 0x100000L;	// Database creation is in progress
 const ULONG DBB_shared					= 0x200000L;	// Database object is shared among connections
+//const ULONG DBB_closing					= 0x400000L;	// Database closing, special backgroud threads should exit
 
 //
 // dbb_ast_flags
@@ -287,17 +303,22 @@ class Database : public pool_alloc<type_dbb>
 	public:
 		static GlobalObjectHolder* init(const Firebird::string& id,
 										const Firebird::PathName& filename,
-										Firebird::RefPtr<const Config> config);
+										Firebird::RefPtr<const Firebird::Config> config);
 
 		~GlobalObjectHolder();
 
 		LockManager* getLockManager();
 		EventManager* getEventManager();
-		Replication::Manager* getReplManager(const Firebird::Guid& guid);
+		Replication::Manager* getReplManager(bool create);
+
+		const Replication::Config* getReplConfig()
+		{
+			return m_replConfig.get();
+		}
 
 	private:
 		const Firebird::string m_id;
-		const Firebird::RefPtr<const Config> m_config;
+		const Firebird::RefPtr<const Firebird::Config> m_config;
 		const Firebird::AutoPtr<const Replication::Config> m_replConfig;
 		Firebird::AutoPtr<LockManager> m_lockMgr;
 		Firebird::AutoPtr<EventManager> m_eventMgr;
@@ -306,7 +327,7 @@ class Database : public pool_alloc<type_dbb>
 
 		explicit GlobalObjectHolder(const Firebird::string& id,
 									const Firebird::PathName& filename,
-									Firebird::RefPtr<const Config> config)
+									Firebird::RefPtr<const Firebird::Config> config)
 			: m_id(getPool(), id), m_config(config),
 			  m_replConfig(Replication::Config::get(filename))
 		{}
@@ -363,7 +384,6 @@ public:
 
 		// ITimer implementation
 		void handler();
-		int release();
 
 	private:
 		Database* dbb;
@@ -442,7 +462,7 @@ private:
 	DatabaseModules	dbb_modules;		// external function/filter modules
 
 public:
-	ExtEngineManager dbb_extManager;	// external engine manager
+	Firebird::AutoPtr<ExtEngineManager>	dbb_extManager;	// external engine manager
 
 	Firebird::SyncObject	dbb_flush_count_mutex;
 	Firebird::RWLock		dbb_ast_lock;		// avoids delivering AST to going away database
@@ -465,7 +485,7 @@ public:
 #ifdef HAVE_ID_BY_NAME
 	Firebird::UCharBuffer dbb_id;
 #endif
-	Firebird::MetaName dbb_owner;		// database owner
+	MetaName dbb_owner;		// database owner
 
 	Firebird::SyncObject			dbb_pools_sync;
 	Firebird::Array<MemoryPool*>	dbb_pools;		// pools
@@ -505,18 +525,25 @@ public:
 	BackupManager*	dbb_backup_manager;						// physical backup manager
 	ISC_TIMESTAMP_TZ dbb_creation_date; 					// creation timestamp in GMT
 	ExternalFileDirectoryList* dbb_external_file_directory_list;
-	Firebird::RefPtr<const Config> dbb_config;
+	Firebird::RefPtr<const Firebird::Config> dbb_config;
 
 	CryptoManager* dbb_crypto_manager;
 	Firebird::RefPtr<ExistenceRefMutex> dbb_init_fini;
+	Firebird::XThreadMutex dbb_thread_mutex;		// special threads start/stop mutex
 	Firebird::RefPtr<Linger> dbb_linger_timer;
 	unsigned dbb_linger_seconds;
 	time_t dbb_linger_end;
 	Firebird::RefPtr<Firebird::IPluginConfig> dbb_plugin_config;
 
+	TriState dbb_repl_state;			// replication state
+	Lock* dbb_repl_lock;				// replication state lock
+	Firebird::SyncObject dbb_repl_sync;
 	FB_UINT64 dbb_repl_sequence;		// replication sequence
 	ReplicaMode dbb_replica_mode;		// replica access mode
+
 	unsigned dbb_compatibility_index;	// datatype backward compatibility level
+	Dictionary dbb_dic;					// metanames dictionary
+	Firebird::InitInstance<KeywordsMap, KeywordsMapAllocator, Firebird::TraditionalDelete> dbb_keywords_map;
 
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;
@@ -561,7 +588,7 @@ private:
 		dbb_page_manager(this, *p),
 		dbb_file_id(*p),
 		dbb_modules(*p),
-		dbb_extManager(*p),
+		dbb_extManager(nullptr),
 		dbb_flags(shared ? DBB_shared : 0),
 		dbb_filename(*p),
 		dbb_database_name(*p),
@@ -583,7 +610,8 @@ private:
 		dbb_plugin_config(pConf),
 		dbb_repl_sequence(0),
 		dbb_replica_mode(REPLICA_NONE),
-		dbb_compatibility_index(~0U)
+		dbb_compatibility_index(~0U),
+		dbb_dic(*p)
 	{
 		dbb_pools.add(p);
 	}
@@ -596,6 +624,8 @@ public:
 	StmtNumber generateStatementId();
 	// void assignLatestTransactionId(TraNumber number);
 	void assignLatestAttachmentId(AttNumber number);
+	AttNumber getLatestAttachmentId() const;
+	StmtNumber getLatestStatementId() const;
 
 	USHORT getMaxIndexKeyLength() const
 	{
@@ -611,8 +641,10 @@ public:
 	bool allowSweepThread(thread_db* tdbb);
 	// returns true if sweep could run
 	bool allowSweepRun(thread_db* tdbb);
-	// reset sweep flags and release sweep lock
+	// reset sweep flag and release sweep lock
 	void clearSweepFlags(thread_db* tdbb);
+	// reset sweep starting flag, release thread starting mutex
+	bool clearSweepStarting();
 
 	static void garbage_collector(Database* dbb);
 	void exceptionHandler(const Firebird::Exception& ex, ThreadFinishSync<Database*>::ThreadRoutine* routine);
@@ -620,6 +652,9 @@ public:
 	void ensureGuid(thread_db* tdbb);
 	FB_UINT64 getReplSequence(thread_db* tdbb);
 	void setReplSequence(thread_db* tdbb, FB_UINT64 sequence);
+	bool isReplicating(thread_db* tdbb);
+	void invalidateReplState(thread_db* tdbb, bool broadcast);
+	static int replStateAst(void*);
 
 	const CoercionArray *getBindings() const;
 
@@ -635,9 +670,14 @@ public:
 		return dbb_gblobj_holder->getEventManager();
 	}
 
-	Replication::Manager* replManager()
+	Replication::Manager* replManager(bool create = false)
 	{
-		return dbb_gblobj_holder->getReplManager(dbb_guid);
+		return dbb_gblobj_holder->getReplManager(create);
+	}
+
+	const Replication::Config* replConfig()
+	{
+		return dbb_gblobj_holder->getReplConfig();
 	}
 
 private:

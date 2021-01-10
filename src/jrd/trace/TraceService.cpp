@@ -116,7 +116,7 @@ void TraceSvcJrd::startSession(TraceSession& session, bool interactive)
 
 		session.ses_auth = m_authBlock;
 		session.ses_user = m_user.hasData() ? m_user : m_svc.getUserName();
-		MetaName role = m_role.hasData() ? m_role : m_svc.getRoleName();
+		MetaString role = m_role.hasData() ? m_role : m_svc.getRoleName();
 		UserId::makeRoleName(role, SQL_DIALECT_V6);
 		session.ses_role = role.c_str();
 
@@ -160,14 +160,10 @@ void TraceSvcJrd::stopSession(ULONG id)
 	ConfigStorage* storage = TraceManager::getStorage();
 	StorageGuard guard(storage);
 
-	storage->restart();
-
 	TraceSession session(*getDefaultMemoryPool());
-	while (storage->getNextSession(session))
+	session.ses_id = id;
+	if (storage->getSession(session, ConfigStorage::AUTH))
 	{
-		if (id != session.ses_id)
-			continue;
-
 		if (checkPrivileges(session))
 		{
 			storage->removeSession(id);
@@ -203,14 +199,10 @@ bool TraceSvcJrd::changeFlags(ULONG id, int setFlags, int clearFlags)
 	ConfigStorage* storage = TraceManager::getStorage();
 	StorageGuard guard(storage);
 
-	storage->restart();
-
 	TraceSession session(*getDefaultMemoryPool());
-	while (storage->getNextSession(session))
+	session.ses_id = id;
+	if (storage->getSession(session, ConfigStorage::AUTH))
 	{
-		if (id != session.ses_id)
-			continue;
-
 		if (checkPrivileges(session))
 		{
 			const int saveFlags = session.ses_flags;
@@ -218,9 +210,8 @@ bool TraceSvcJrd::changeFlags(ULONG id, int setFlags, int clearFlags)
 			session.ses_flags |= setFlags;
 			session.ses_flags &= ~clearFlags;
 
-			if (saveFlags != session.ses_flags) {
-				storage->updateSession(session);
-			}
+			if (saveFlags != session.ses_flags) 
+				storage->updateFlags(session);
 
 			return true;
 		}
@@ -243,7 +234,7 @@ void TraceSvcJrd::listSessions()
 	storage->restart();
 
 	TraceSession session(*getDefaultMemoryPool());
-	while (storage->getNextSession(session))
+	while (storage->getNextSession(session, ConfigStorage::ALL))
 	{
 		if (checkPrivileges(session))
 		{
@@ -287,8 +278,6 @@ void TraceSvcJrd::listSessions()
 
 void TraceSvcJrd::readSession(TraceSession& session)
 {
-	const size_t maxLogSize = Config::getMaxUserTraceLogSize(); // in MB
-
 	if (session.ses_logfile.empty())
 	{
 		m_svc.printf(false, "Can't open trace data log file");
@@ -316,7 +305,7 @@ void TraceSvcJrd::readSession(TraceSession& session)
 			m_svc.putBytes(buff, len);
 
 			const bool logFull = (flags & trs_log_full);
-			if (logFull && log->getApproxLogSize() <= maxLogSize)
+			if (logFull && !log->isFull())
 			{
 				// resume session
 				changeFlags(session.ses_id, 0, trs_log_full);
@@ -336,15 +325,11 @@ bool TraceSvcJrd::checkAliveAndFlags(ULONG sesId, int& flags)
 		StorageGuard guard(storage);
 
 		TraceSession readSession(*getDefaultMemoryPool());
-		storage->restart();
-		while (storage->getNextSession(readSession))
+		readSession.ses_id = sesId;
+		if (storage->getSession(readSession, ConfigStorage::FLAGS))
 		{
-			if (readSession.ses_id == sesId)
-			{
-				alive = true;
-				flags = readSession.ses_flags;
-				break;
-			}
+			flags = readSession.ses_flags;
+			alive = true;
 		}
 
 		m_chg_number = storage->getChangeNumber();
@@ -356,7 +341,7 @@ bool TraceSvcJrd::checkAliveAndFlags(ULONG sesId, int& flags)
 bool TraceSvcJrd::checkPrivileges(TraceSession& session)
 {
 	// Our service run in embedded mode and have no auth info - trust user name as is
-	if (m_admin || m_user.hasData() && (m_user == session.ses_user))
+	if (m_admin || (m_user.hasData() && (m_user == session.ses_user)))
 		return true;
 
 	// Other session is fully authorized - try to map our auth info using other's

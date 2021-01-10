@@ -78,7 +78,7 @@ Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rela
 
 			if (dbb->isReplica(REPLICA_READ_ONLY) &&
 				!(tdbb->tdbb_flags & TDBB_replicator) &&
-				!(tdbb->tdbb_flags & TDBB_repl_sql))
+				!(tdbb->tdbb_flags & TDBB_repl_in_progress))
 			{
 				// This condition is a workaround for nbackup
 				if (relation->rel_id != rel_backup_history)

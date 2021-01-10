@@ -249,6 +249,14 @@ enum drq_type_t
 	drq_g_nxt_ts_id,		// generate next tablespace id
 	drq_tablespace_exist,	// check if tablespace exists
 	drq_m_coll_attrs,		// modify collation attributes
+	drq_l_pub_mode,			// lookup publication auto-enable mode
+	drq_m_pub_state,		// modify publication state
+	drq_m_pub_mode,			// modify publication auto-enable mode
+	drq_s_pub_tab,			// store relation into publication
+	drq_e_pub_tab,			// erase relation from publication
+	drq_l_pub_rel_name,		// lookup relation by name
+	drq_l_pub_all_rels,		// iterate through all user relations
+	drq_e_pub_tab_all,		// erase relation from all publication
 
 	drq_MAX
 };

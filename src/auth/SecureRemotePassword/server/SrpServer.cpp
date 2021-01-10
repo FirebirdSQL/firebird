@@ -83,7 +83,6 @@ public:
 	// IServer implementation
 	int authenticate(CheckStatusWrapper* status, IServerBlock* sBlock, IWriter* writerInterface);
 	void setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback);
-    int release();
 
 	~SrpServer()
 	{
@@ -110,7 +109,8 @@ protected:
 class SecurityDatabase : public VSecDb
 {
 public:
-	bool lookup(void* inMsg, void* outMsg)
+	// VSecDb implementation
+	bool lookup(void* inMsg, void* outMsg) override
 	{
 		FbLocalStatus status;
 
@@ -121,6 +121,14 @@ public:
 		return false;	// safe default
 	}
 
+	bool test() override
+	{
+		FbLocalStatus status;
+
+		att->ping(&status);
+		return !(status->getState() & IStatus::STATE_ERRORS);
+	}
+
 	// This 2 are needed to satisfy temporarily different calling requirements
 	static int shutdown(const int, const int, void*)
 	{
@@ -129,6 +137,24 @@ public:
 	static void cleanup()
 	{
 		instances->shutdown();
+	}
+
+	static void forceClean(IProvider* p, const char* secDbName)
+	{
+		cleanup();
+
+		ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
+		dpb.insertByte(isc_dpb_sec_attach, TRUE);
+		dpb.insertByte(isc_dpb_gfix_attach, TRUE);
+		dpb.insertTag(isc_dpb_nolinger);
+		dpb.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
+		dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(secDbName));
+
+		FbLocalStatus status;
+		RefPtr<IAttachment> att(REF_NO_INCR, p->attachDatabase(&status, secDbName, dpb.getBufferLength(), dpb.getBuffer()));
+		check(&status);
+
+		HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: gfix-like attach to sec db %s\n", secDbName));
 	}
 
 	SecurityDatabase(const char* secDbName, ICryptKeyCallback* cryptCallback)
@@ -143,33 +169,47 @@ public:
 			status->init();		// ignore possible errors like missing call in provider
 		}
 
-		ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
-		dpb.insertByte(isc_dpb_sec_attach, TRUE);
-		dpb.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
-		dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(secDbName));
-		att = p->attachDatabase(&status, secDbName, dpb.getBufferLength(), dpb.getBuffer());
-		check(&status);
-		HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: attached sec db %s\n", secDbName));
-
-		const UCHAR tpb[] =
+		try
 		{
-			isc_tpb_version1,
-			isc_tpb_read,
-			isc_tpb_read_committed,
-			isc_tpb_rec_version,
-			isc_tpb_wait
-		};
-		tra = att->startTransaction(&status, sizeof(tpb), tpb);
-		check(&status);
-		HANDSHAKE_DEBUG(fprintf(stderr, "Srv: SRP1: started transaction\n"));
+			ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
+			dpb.insertByte(isc_dpb_sec_attach, TRUE);
+			dpb.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
+			dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(secDbName));
+			att = p->attachDatabase(&status, secDbName, dpb.getBufferLength(), dpb.getBuffer());
+			check(&status);
+			HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: attached sec db %s\n", secDbName));
 
-		const char* sql =
-			"SELECT PLG$VERIFIER, PLG$SALT FROM PLG$SRP WHERE PLG$USER_NAME = ? AND PLG$ACTIVE";
-		stmt = att->prepare(&status, tra, 0, sql, 3, IStatement::PREPARE_PREFETCH_METADATA);
-		if (status->getState() & IStatus::STATE_ERRORS)
+			const UCHAR tpb[] =
+			{
+				isc_tpb_version1,
+				isc_tpb_read,
+				isc_tpb_read_committed,
+				isc_tpb_rec_version,
+				isc_tpb_wait
+			};
+			tra = att->startTransaction(&status, sizeof(tpb), tpb);
+			check(&status);
+			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: SRP1: started transaction\n"));
+
+			const char* sql =
+				"SELECT PLG$VERIFIER, PLG$SALT FROM PLG$SRP WHERE PLG$USER_NAME = ? AND PLG$ACTIVE";
+			stmt = att->prepare(&status, tra, 0, sql, 3, IStatement::PREPARE_PREFETCH_METADATA);
+			if (status->getState() & IStatus::STATE_ERRORS)
+			{
+				checkStatusVectorForMissingTable(status->getErrors(), [ &p, secDbName ] { forceClean(p, secDbName); });
+				status_exception::raise(&status);
+			}
+		}
+		catch(const Exception&)
 		{
-			checkStatusVectorForMissingTable(status->getErrors());
-			status_exception::raise(&status);
+			if (stmt)
+				stmt->release();
+			if (tra)
+				tra->release();
+			if (att)
+				att->release();
+
+			throw;
 		}
 	}
 
@@ -247,28 +287,19 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 			messages.param->loginNull = 0;
 			messages.data.clear();
 
-			{ // reference & mutex scope scope
+			{ // instance RAII scope
+				CachedSecurityDatabase::Instance instance;
+
 				// Get database block from cache
-				RefPtr<CachedSecurityDatabase> instance;
 				instances->getInstance(iParameter, instance);
+				secDbName = instance->secureDbName;
 
-				try
-				{
-					MutexLockGuard g(instance->mutex, FB_FUNCTION);
+				// Create SecurityDatabase if needed
+				if (!instance->secDb)
+					instance->secDb = FB_NEW SecurityDatabase(instance->secureDbName, cryptCallback);
 
-					secDbName = instance->secureDbName;
-					if (!instance->secDb)
-						instance->secDb = FB_NEW SecurityDatabase(instance->secureDbName, cryptCallback);
-
-					instance->secDb->lookup(messages.param.getData(), messages.data.getData());
-				}
-				catch(const Exception&)
-				{
-					instance->close();
-					throw;
-				}
-
-				instance->close();
+				// Lookup
+				instance->secDb->lookup(messages.param.getData(), messages.data.getData());
 			}
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: SRP1: Executed statement\n"));
 
@@ -369,15 +400,6 @@ void SrpServer::setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback
 	cryptCallback = callback;
 }
 
-int SrpServer::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-	return 1;
-}
 
 SimpleFactory<SrpServerImpl<Sha1> > factory_sha1;
 SimpleFactory<SrpServerImpl<sha224> > factory_sha224;

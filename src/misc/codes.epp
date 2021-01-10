@@ -739,7 +739,7 @@ static void build_other_headers()
 
 	int numLines = FB_NELEM(pas_boiler_plate);
 	for (i = 0; i < numLines; i++) {
-		char buffer[256];
+		char buffer[1400];
 		strcpy(buffer, pas_boiler_plate[i]);
 		char* gds = strstr(buffer, "gds_arg");
 		if (gds)
@@ -923,7 +923,7 @@ static void build_other_headers()
 static void move_if_not_identical(const char* original, const char* new_file, const char *directory)
 {
 	char origName[1000];
-	char buffer[1000];
+	char buffer[1400];
 #if defined(WIN_NT) && !defined(__GNUC__)
 	if ( directory != NULL) {
 		sprintf(origName, "%s\\%s", directory, original);

@@ -32,9 +32,6 @@
 #ifndef INCLUDE_Firebird_H
 #define INCLUDE_Firebird_H
 
-// Uncomment to generate list of time zones to be updated in src/common/TimeZones.h
-//#define TZ_UPDATE
-
 #ifdef _MSC_VER
 #include "gen/autoconfig_msvc.h"
 #else

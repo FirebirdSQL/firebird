@@ -966,17 +966,6 @@ public:
 		}
 	}
 
-	int release()
-	{
-		if (--refCounter == 0)
-		{
-			delete this;
-			return 0;
-		}
-
-		return 1;
-	}
-
 private:
 	Rdb* rdb;
 	Rvnt* event;

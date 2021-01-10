@@ -44,6 +44,7 @@
 */
 
 #include "firebird.h"
+#include <cmath>
 #include <stdio.h>
 #include "../jrd/intl.h"
 #include <stdlib.h>
@@ -593,7 +594,7 @@ static bool M_Transaction()
 {
 	if (DB && !M__trans && setValues.KeepTranParams)
 	{
-		M__trans = DB->execute(fbStatus, nullptr, 
+		M__trans = DB->execute(fbStatus, nullptr,
 							   TranParams->length(), TranParams->c_str(),
 							   isqlGlob.SQL_dialect, nullptr, nullptr, nullptr, nullptr);
 
@@ -1881,10 +1882,10 @@ bool ISQL_printNumericType(const char* fieldName, const int fieldType, const int
 
 	switch (fieldType)
 	{
-	case SMALLINT:
-	case INTEGER:
-	case BIGINT:
-	case DOUBLE_PRECISION:
+	case blr_short:
+	case blr_long:
+	case blr_int64:
+	case blr_double:
 	case blr_int128:
 		// Handle Integral subtypes NUMERIC and DECIMAL
 		// We are ODS >= 10 and could be any Dialect
@@ -1892,7 +1893,7 @@ bool ISQL_printNumericType(const char* fieldName, const int fieldType, const int
 		// We are Dialect >=3 since FIELD_PRECISION is non-NULL
 		if (isqlGlob.major_ods >= ODS_VERSION10 &&
 			fieldPrecision != 0 &&
-			fieldType != DOUBLE_PRECISION &&
+			fieldType != blr_double &&
 			fieldSubType > 0 && fieldSubType <= MAX_INTSUBTYPES)
 		{
 			isqlGlob.printf("%s(%d, %d)",
@@ -1907,16 +1908,16 @@ bool ISQL_printNumericType(const char* fieldName, const int fieldType, const int
 				// Take a stab at numerics and decimals
 				switch (fieldType)
 				{
-				case SMALLINT:
+				case blr_short:
 					isqlGlob.printf("NUMERIC(4, %d)", -fieldScale);
 					break;
-				case INTEGER:
+				case blr_long:
 					isqlGlob.printf("NUMERIC(9, %d)", -fieldScale);
 					break;
-				case BIGINT:
+				case blr_int64:
 					isqlGlob.printf("NUMERIC(18, %d)", -fieldScale);
 					break;
-				case DOUBLE_PRECISION:
+				case blr_double:
 					isqlGlob.printf("NUMERIC(15, %d)", -fieldScale);
 					break;
 				case blr_int128:
@@ -1930,14 +1931,14 @@ bool ISQL_printNumericType(const char* fieldName, const int fieldType, const int
 			}
 		}
 		return true;
-	case T_CHAR:
+	case blr_text:
 		if (fieldSubType >= 0 && fieldSubType <= MAX_TEXTSUBTYPES)
 		{
 			isqlGlob.printf("%s", Text_subtypes[fieldSubType]);
 			return true;
 		}
 		break;
-	case VARCHAR:
+	case blr_varying:
 		if (fieldSubType >= 0 && fieldSubType <= MAX_VARYINGSUBTYPES)
 		{
 			isqlGlob.printf("%s", Varying_subtypes[fieldSubType]);
@@ -4118,6 +4119,8 @@ static void do_isql()
 #endif
 
 #ifdef WIN_NT
+	// Enable Ctrl+C processing
+	SetConsoleCtrlHandler(NULL, FALSE);
 	SetConsoleCtrlHandler(query_abort, TRUE);
 #else
 	fb_shutdown_callback(0, query_abort, fb_shut_confirmation, 0);
@@ -5487,6 +5490,7 @@ static processing_state get_statement(Firebird::string& statement,
 
 	char lastChar = '\0';
 	char altQuoteChar = '\0';
+	unsigned altQuoteStringLength = 0;
 
 	while (!done)
 	{
@@ -5625,6 +5629,7 @@ static processing_state get_statement(Firebird::string& statement,
 					{
 						statement += (lastChar = c);
 						altQuoteChar = c = getNextInputChar();
+						altQuoteStringLength = statement.length();
 
 						switch (altQuoteChar)
 						{
@@ -5648,7 +5653,7 @@ static processing_state get_statement(Firebird::string& statement,
 					state = in_single_quoted_string;
 					break;
 				case in_single_quoted_string:
-					if (!altQuoteChar || lastChar == altQuoteChar)
+					if (!altQuoteChar || (statement.length() != altQuoteStringLength + 1 && lastChar == altQuoteChar))
 						state = normal;
 					break;
 			}
@@ -6409,7 +6414,7 @@ static processing_state newdb(TEXT* dbname,
 		local_numbufs = global_numbufs;
 
 	// Build up a dpb
-	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
+	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 
 	if (*setValues.ISQL_charset && strcmp(setValues.ISQL_charset, DEFCHARSET)) {
 		dpb.insertString(isc_dpb_lc_ctype, setValues.ISQL_charset, fb_strlen(setValues.ISQL_charset));
@@ -7228,9 +7233,9 @@ static bool checkSpecial(TEXT* const p, const int length, const double value)
  *
  **************************************/
 	const TEXT* t = NULL;
-	if (isnan(value))
+	if (std::isnan(value))
 		t = "NaN";
-	else if (isinf(value))
+	else if (std::isinf(value))
 		t = Firebird::isNegativeInf(value) ? "-Infinity" : "Infinity";
 	else
 		return false;
@@ -8186,7 +8191,7 @@ static void process_header(Firebird::IMessageMetadata* msg, const unsigned pad[]
 			isqlGlob.att_charset, static_cast<unsigned>(strlen(var.alias)), var.alias);
 		limit = MAX(limit, pad[i]) + 1;
 
-		for (unsigned j = 1; j < limit && j < 80; j++)
+		for (unsigned j = 1; j < limit; j++)
 			*p2++ = '=';
 		*p2++ = BLANK;
 	}
@@ -9091,7 +9096,7 @@ static const char* sqltype_to_string(unsigned sqltype)
 	case SQL_DEC34:
 		return "DECFLOAT(34)";
 	case SQL_INT128:
-		return "NUMERIC(38)";
+		return "INT128";
 	case SQL_D_FLOAT:
 		return "D_FLOAT";
 	case SQL_TIMESTAMP:

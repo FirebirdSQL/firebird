@@ -3,7 +3,8 @@
 
 :: Reset or clear some variables, as appropriate.
 set ERRLEV=0
-set FB_NOCLEAN=
+set FBBUILD_NOCLEAN=
+set FBBUILD_REAL_CLEAN=
 set FBBUILD_BUILDTYPE=release
 set FBBUILD_INCLUDE_PDB=
 set FBBUILD_MAKE_KITS_ONLY=
@@ -19,17 +20,21 @@ for %%v in ( %1 %2 %3 %4 %5 %6 %7 %8 %9 )  do (
 
 :: Read the command line
 for %%v in ( %* )  do (
-( if /I "%%v"=="NOCLEAN" (set FB_NOCLEAN=1) )
+( if /I "%%v"=="NOCLEAN" (set FBBUILD_NOCLEAN=1) )
+( if /I "%%v"=="REALCLEAN" (set FBBUILD_REAL_CLEAN=REALCLEAN) )
 ( if /I "%%v"=="DEBUG" (set FBBUILD_BUILDTYPE=debug) )
 ( if /I "%%v"=="PDB" (set FBBUILD_INCLUDE_PDB=1) )
 ( if /I "%%v"=="REPACK" (set FBBUILD_MAKE_KITS_ONLY=1) )
 ( if /I "%%v"=="JUSTBUILD" (set FBBUILD_BUILD_ONLY=1) )
 )
 
+call :SETVCENV
+
 if defined FBBUILD_MAKE_KITS_ONLY (goto :MAKE_KITS & goto :EOF)
 
+
 :: Go to work
-if not defined FB_NOCLEAN (call clean_all)
+if not defined FBBUILD_NOCLEAN (call clean_all %FBBUILD_REAL_CLEAN%)
 :: We do not support debug builds of icu, so we don't pass %FBBUILD_BUILDTYPE%
 call make_icu
 if "%ERRLEV%"=="1" goto :END
@@ -54,12 +59,17 @@ call BuildExecutableInstall ISX ZIP EMB %FBBUILD_BUILDTYPE% PDB
 popd
 
 goto :END
+::---------
 
 :HELP
 @echo.
 @echo The following params may be passed:
 @echo.
 @echo    NOCLEAN   - don't run CLEAN_ALL.BAT
+@echo.
+@echo    REALCLEAN   - Run CLEAN_ALL.BAT REALCLEAN
+@echo                  This will do a deeper clean.
+@echo                  Recommended for multi-platform builds
 @echo.
 @echo    DEBUG     - Do a DEBUG build (for experienced developers only.)
 @echo                This switch is not needed to debug Firebird.
@@ -71,6 +81,37 @@ goto :END
 @echo    JUSTBUILD - Just build - don't create packages.
 @echo.
 @goto :EOF
+::---------
+
+
+:SETVCENV
+::===============================
+:: Set up the compiler environment
+
+if DEFINED VS150COMNTOOLS (
+@devenv /? >nul 2>nul
+@if errorlevel 9009 (call "%VS150COMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS150COMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
+) else (
+if DEFINED VS140COMNTOOLS (
+@devenv /? >nul 2>nul
+@if errorlevel 9009 (call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" %PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
+) else (
+if DEFINED VS120COMNTOOLS (
+@devenv /? >nul 2>nul
+@if errorlevel 9009 (call "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" %PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
+) else (
+if DEFINED VS100COMNTOOLS (
+@devenv /? >nul 2>nul
+@if errorlevel 9009 (call "%VS100COMNTOOLS%\..\..\VC\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS100COMNTOOLS%\..\..\VC\vcvarsall.bat" %PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
+) else (
+@goto :HELP
+)
+)
+)
+)
+goto :END
+::---------
+
 
 :END
 

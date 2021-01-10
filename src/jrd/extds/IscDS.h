@@ -186,9 +186,9 @@ public:
 	virtual ISC_STATUS ISC_EXPORT isc_database_info(Jrd::FbStatusVector*,
 										isc_db_handle*,
 										short,
-										const char*,
+										const unsigned char*,
 										short,
-										char*);
+										unsigned char*);
 
 	virtual void ISC_EXPORT isc_decode_date(const ISC_QUAD*,
 								void*);
@@ -288,9 +288,9 @@ public:
 	virtual ISC_STATUS ISC_EXPORT isc_dsql_sql_info(Jrd::FbStatusVector*,
 										isc_stmt_handle*,
 										short,
-										const char*,
+										const unsigned char*,
 										short,
-										char*);
+										unsigned char*);
 
 	virtual void ISC_EXPORT isc_encode_date(const void*,
 								ISC_QUAD*);
@@ -438,7 +438,7 @@ public:
 										   unsigned short,
 										   char*);
 
-	virtual ISC_LONG ISC_EXPORT isc_vax_integer(const char*,
+	virtual ISC_LONG ISC_EXPORT isc_vax_integer(const unsigned char*,
 									short);
 
 	virtual ISC_INT64 ISC_EXPORT isc_portable_integer(const unsigned char*,
@@ -497,7 +497,8 @@ public:
 	explicit FBProvider(const char* prvName) :
 		IscProvider(prvName)
 	{
-		m_flags = (prvMultyStmts | prvMultyTrans | prvTrustedAuth);
+	    // Assume that winsspi auth plugin is enabled in configuration
+		m_flags = prvTrustedAuth;
 	}
 
 protected:
@@ -590,7 +591,7 @@ protected:
 	virtual void doClose(Jrd::thread_db* tdbb, bool drop);
 
 	virtual void doSetInParams(Jrd::thread_db* tdbb, unsigned int count,
-		const Firebird::MetaName* const* names, const NestConst<Jrd::ValueExprNode>* params);
+		const Firebird::MetaString* const* names, const NestConst<Jrd::ValueExprNode>* params);
 
 	IscTransaction* getIscTransaction() { return (IscTransaction*) m_transaction; }
 

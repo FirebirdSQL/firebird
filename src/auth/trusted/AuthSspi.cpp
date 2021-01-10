@@ -459,17 +459,6 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 	return AUTH_MORE_DATA;
 }
 
-int WinSspiServer::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-
-	return 1;
-}
-
 
 WinSspiClient::WinSspiClient(Firebird::IPluginConfig*)
 	: sspiData(getPool()), keySet(false)
@@ -523,17 +512,6 @@ int WinSspiClient::authenticate(Firebird::CheckStatusWrapper* status,
 	}
 
 	return AUTH_MORE_DATA;
-}
-
-int WinSspiClient::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-
-	return 1;
 }
 
 

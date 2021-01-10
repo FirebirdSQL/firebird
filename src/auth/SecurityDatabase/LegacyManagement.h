@@ -45,7 +45,7 @@ public:
 	void commit(Firebird::CheckStatusWrapper* status);
 	void rollback(Firebird::CheckStatusWrapper* status);
 
-	int release();
+	int release() override;
 
 private:
 	Firebird::RefPtr<Firebird::IFirebirdConf> config;

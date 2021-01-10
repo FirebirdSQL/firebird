@@ -517,6 +517,7 @@ namespace Jrd
 		static const USHORT FLAG_PROJECT	= 0x1;	// sort is really a project
 		static const USHORT FLAG_UNIQUE		= 0x2;	// sorts using unique key - for distinct and group by
 		static const USHORT FLAG_KEY_VARY	= 0x4;	// sort key contains varying length string(s)
+		static const USHORT FLAG_REFETCH	= 0x8;	// refetch data after sorting
 
 		// Special values for SortMap::Item::fieldId.
 		static const SSHORT ID_DBKEY		= -1;	// dbkey value

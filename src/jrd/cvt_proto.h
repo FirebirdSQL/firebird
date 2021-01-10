@@ -57,8 +57,8 @@ namespace Jrd
 		virtual CHARSET_ID getChid(const dsc* d);
 		virtual CharSet* getToCharset(CHARSET_ID charset2);
 		virtual void validateData(CharSet* toCharset, SLONG length, const UCHAR* q);
-		virtual ULONG validateLength(CharSet* toCharset, ULONG toLength, const UCHAR* start,
-			const USHORT to_size);
+		virtual ULONG validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+			const USHORT size);
 		virtual SLONG getLocalDate();
 		virtual ISC_TIMESTAMP getCurrentGmtTimeStamp();
 		virtual USHORT getSessionTimeZone();
@@ -76,8 +76,8 @@ namespace Jrd
 		{
 		}
 
-		virtual ULONG validateLength(CharSet* toCharset, ULONG toLength, const UCHAR* start,
-			const USHORT to_size);
+		virtual ULONG validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+			const USHORT size);
 
 	private:
 		const ISC_STATUS truncateReason;

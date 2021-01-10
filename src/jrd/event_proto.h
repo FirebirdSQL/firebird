@@ -31,8 +31,8 @@
 #include "../common/ThreadData.h"
 #include "../jrd/event.h"
 #include "../common/isc_s_proto.h"
+#include "../common/config/config.h"
 
-class Config;
 
 namespace Jrd {
 
@@ -43,7 +43,7 @@ class EventManager final : public Firebird::GlobalStorage, public Firebird::IpcO
 	const int PID;
 
 public:
-	EventManager(const Firebird::string& id, const Config* conf);
+	EventManager(const Firebird::string& id, const Firebird::Config* conf);
 	~EventManager();
 
 	static void init(Attachment*);
@@ -96,7 +96,7 @@ private:
 	SLONG m_processOffset;
 
 	const Firebird::string& m_dbId;
-	const Config* const m_config;
+	const Firebird::Config* const m_config;
 	Firebird::AutoPtr<Firebird::SharedMemory<evh> > m_sharedMemory;
 
 	Firebird::Semaphore m_startupSemaphore;

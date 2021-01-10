@@ -35,6 +35,7 @@
 #include "../../common/isc_s_proto.h"
 #include "../../common/os/path_utils.h"
 #include "../../common/classes/ImplementHelper.h"
+#include "../../common/classes/TimerImpl.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -58,20 +59,15 @@ public:
 	virtual FB_SIZE_T write(const void* buf, FB_SIZE_T size);
 	virtual FB_SIZE_T write_s(Firebird::CheckStatusWrapper* status, const void* buf, unsigned size);
 
-	virtual int release()
-	{
-		if (--refCounter == 0)
-		{
-			delete this;
-			return 0;
-		}
-		return 1;
-	}
-
 private:
 	SINT64 seekToEnd();
 	void reopen();
 	void checkErrno(const char* operation);
+
+	// evaluate new value or clear idle timer
+	void setupIdleTimer(bool clear);
+
+	void onIdleTimer(Firebird::TimerImpl*);
 
 	// Windows requires explicit syncronization when few processes appends to the
 	// same file simultaneously, therefore we used our fastMutex for this
@@ -105,6 +101,10 @@ private:
 	Firebird::PathName m_fileName;
 	int		 m_fileHandle;
 	size_t	 m_maxSize;
+
+	typedef Firebird::TimerImpl IdleTimer;
+	Firebird::RefPtr<IdleTimer> m_idleTimer;
+	Firebird::Mutex m_idleMutex;
 };
 
 #endif // PLUGINLOGWRITER_H

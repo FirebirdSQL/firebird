@@ -48,8 +48,8 @@
 
 using Firebird::FbLocalStatus;
 
-static bool_t burp_getbytes(XDR*, SCHAR *, u_int);
-static bool_t burp_putbytes(XDR*, const SCHAR*, u_int);
+static bool_t burp_getbytes(XDR*, SCHAR *, unsigned);
+static bool_t burp_putbytes(XDR*, const SCHAR*, unsigned);
 static bool_t expand_buffer(XDR*);
 static int xdr_init(XDR*, lstring*, enum xdr_op);
 static bool_t xdr_slice(XDR*, lstring*, /*USHORT,*/ const UCHAR*);
@@ -60,7 +60,7 @@ static xdr_t::xdr_ops burp_ops =
 	burp_putbytes
 };
 
-const int increment = 1024;
+const unsigned increment = 1024;
 
 
 ULONG CAN_encode_decode(burp_rel* relation, lstring* buffer, UCHAR* data, bool direction, bool useMissingOffset)
@@ -279,7 +279,7 @@ ULONG CAN_slice(lstring* buffer, lstring* slice, bool direction, UCHAR* sdl)
 }
 
 
-static bool_t burp_getbytes(XDR* xdrs, SCHAR* buff, u_int bytecount)
+static bool_t burp_getbytes(XDR* xdrs, SCHAR* buff, unsigned bytecount)
 {
 /**************************************
  *
@@ -292,29 +292,29 @@ static bool_t burp_getbytes(XDR* xdrs, SCHAR* buff, u_int bytecount)
  *
  **************************************/
 
-	if (bytecount && xdrs->x_handy >= (int) bytecount)
+	if (bytecount && xdrs->x_handy >= bytecount)
 	{
+		memcpy(buff, xdrs->x_private, bytecount);
+		xdrs->x_private += bytecount;
 		xdrs->x_handy -= bytecount;
-		do {
-			*buff++ = *xdrs->x_private++;
-		} while (--bytecount);
+
 		return TRUE;
 	}
 
-	while (bytecount)
+	while (bytecount--)
 	{
-		if (!xdrs->x_handy && !expand_buffer(xdrs))
+		if (xdrs->x_handy == 0 && !expand_buffer(xdrs))
 			return FALSE;
+
 		*buff++ = *xdrs->x_private++;
 		--xdrs->x_handy;
-		--bytecount;
 	}
 
 	return TRUE;
 }
 
 
-static bool_t burp_putbytes(XDR* xdrs, const SCHAR* buff, u_int bytecount)
+static bool_t burp_putbytes(XDR* xdrs, const SCHAR* buff, unsigned bytecount)
 {
 /**************************************
  *
@@ -327,24 +327,22 @@ static bool_t burp_putbytes(XDR* xdrs, const SCHAR* buff, u_int bytecount)
  *
  **************************************/
 
-	if (bytecount && xdrs->x_handy >= (int) bytecount)
+	if (bytecount && xdrs->x_handy >= bytecount)
 	{
+		memcpy(xdrs->x_private, buff, bytecount);
+		xdrs->x_private += bytecount;
 		xdrs->x_handy -= bytecount;
-		do {
-			*xdrs->x_private++ = *buff++;
-		} while (--bytecount);
+
 		return TRUE;
 	}
 
-	while (bytecount)
+	while (bytecount--)
 	{
-		if (xdrs->x_handy <= 0 && !expand_buffer(xdrs))
-		{
+		if (xdrs->x_handy == 0 && !expand_buffer(xdrs))
 			return FALSE;
-		}
-		--xdrs->x_handy;
+
 		*xdrs->x_private++ = *buff++;
-		--bytecount;
+		--xdrs->x_handy;
 	}
 
 	return TRUE;
@@ -366,22 +364,20 @@ static bool_t expand_buffer(XDR* xdrs)
  *
  **************************************/
 	lstring* buffer = (lstring*) xdrs->x_public;
-	const SSHORT length = (xdrs->x_private - xdrs->x_base) + xdrs->x_handy + increment;
-	buffer->lstr_allocated = buffer->lstr_length = length;
+	const unsigned usedLength = xdrs->x_private - xdrs->x_base;
+	const unsigned length = usedLength + xdrs->x_handy + increment;
 
 	caddr_t new_buf = (caddr_t) BURP_alloc(length);
 
-	caddr_t p = new_buf;
-	for (caddr_t q = xdrs->x_base; q < xdrs->x_private; *p++ = *q++)
-		;
+	buffer->lstr_allocated = buffer->lstr_length = length;
+	buffer->lstr_address = (UCHAR *) new_buf;
+	memcpy(new_buf, xdrs->x_base, usedLength);
 
 	BURP_free(xdrs->x_base);
 
+	xdrs->x_private = new_buf + usedLength;
 	xdrs->x_base = new_buf;
-	xdrs->x_private = p;
 	xdrs->x_handy += increment;
-
-	buffer->lstr_address = (UCHAR *) new_buf;
 
 	return TRUE;
 }

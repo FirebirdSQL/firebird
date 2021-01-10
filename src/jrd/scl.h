@@ -24,7 +24,7 @@
 #ifndef JRD_SCL_H
 #define JRD_SCL_H
 
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/tree.h"
 #include "../common/security.h"
 #include "../jrd/obj.h"
@@ -48,15 +48,15 @@ public:
 	typedef ULONG flags_t;
 	enum BlobAccessCheck { BA_UNKNOWN, BA_SUCCESS, BA_FAILURE };
 
-	SecurityClass(Firebird::MemoryPool &pool, const Firebird::MetaName& name, const Firebird::MetaName& userName)
-		: scl_flags(0), sclClassUser(pool, Firebird::MetaNamePair(name, userName)), scl_blb_access(BA_UNKNOWN)
+	SecurityClass(Firebird::MemoryPool &pool, const MetaName& name, const MetaName& userName)
+		: scl_flags(0), sclClassUser(pool, MetaNamePair(name, userName)), scl_blb_access(BA_UNKNOWN)
 	{}
 
 	flags_t scl_flags;			// Access permissions
-	const Firebird::MetaNamePair sclClassUser;
+	const MetaNamePair sclClassUser;
 	BlobAccessCheck scl_blb_access;
 
-	static const Firebird::MetaNamePair& generate(const void*, const SecurityClass* item)
+	static const MetaNamePair& generate(const void*, const SecurityClass* item)
 	{
 		return item->sclClassUser;
 	}
@@ -64,7 +64,7 @@ public:
 
 typedef Firebird::BePlusTree<
 	SecurityClass*,
-	Firebird::MetaNamePair,
+	MetaNamePair,
 	Firebird::MemoryPool,
 	SecurityClass
 > SecurityClassList;
@@ -203,11 +203,18 @@ public:
 	typedef Bits<maxSystemPrivilege> Privileges;
 
 private:
-	Firebird::MetaName	usr_user_name;		// User name
-	Firebird::MetaName	usr_sql_role_name;	// Role name
-	mutable Firebird::SortedArray<Firebird::MetaName> usr_granted_roles; // Granted roles list
-	Firebird::MetaName	usr_trusted_role;	// Trusted role if set
-	Firebird::MetaName	usr_init_role;		// Initial role, assigned at sclInit()
+/*
+	MetaName	usr_user_name;		// User name
+	MetaName	usr_sql_role_name;	// Role name
+	mutable Firebird::SortedArray<MetaName> usr_granted_roles; // Granted roles list
+	MetaName	usr_trusted_role;	// Trusted role if set
+	MetaName	usr_init_role;		// Initial role, assigned at sclInit()
+ */
+	Firebird::MetaString	usr_user_name;		// User name
+	Firebird::MetaString	usr_sql_role_name;	// Role name
+	mutable Firebird::SortedArray<MetaName> usr_granted_roles; // Granted roles list
+	Firebird::MetaString	usr_trusted_role;	// Trusted role if set
+	Firebird::MetaString	usr_init_role;		// Initial role, assigned at sclInit()
 
 public:
 	Firebird::string	usr_project_name;	// Project name
@@ -313,7 +320,7 @@ public:
 
 	static void sclInit(thread_db* tdbb, bool create, const UserId& tempId);
 
-	void setUserName(const Firebird::MetaName& userName)
+	void setUserName(const Firebird::MetaString& userName)
 	{
 		if (userName != usr_user_name)
 		{
@@ -322,22 +329,22 @@ public:
 		}
 	}
 
-	const Firebird::MetaName& getUserName() const
+	const Firebird::MetaString& getUserName() const
 	{
 		return usr_user_name;
 	}
 
-	void setTrustedRole(const Firebird::MetaName& roleName)
+	void setTrustedRole(const Firebird::MetaString& roleName)
 	{
 		usr_trusted_role = roleName;
 	}
 
-	const Firebird::MetaName& getTrustedRole() const
+	const Firebird::MetaString& getTrustedRole() const
 	{
 		return usr_trusted_role;
 	}
 
-	void setSqlRole(const Firebird::MetaName& roleName)
+	void setSqlRole(const Firebird::MetaString& roleName)
 	{
 		if (roleName != usr_sql_role_name)
 		{
@@ -346,7 +353,7 @@ public:
 		}
 	}
 
-	const Firebird::MetaName& getSqlRole() const
+	const Firebird::MetaString& getSqlRole() const
 	{
 		return usr_sql_role_name;
 	}
@@ -360,7 +367,7 @@ public:
 		return (usr_flags & USR_newrole);
 	}
 
-	bool roleInUse(thread_db* tdbb, const Firebird::MetaName& role) const
+	bool roleInUse(thread_db* tdbb, const MetaName& role) const
 	{
 		if (testFlag(USR_newrole))
 			findGrantedRoles(tdbb);
@@ -383,7 +390,7 @@ public:
 		usr_flags |= (mask & USR_external);
 	}
 
-	static void makeRoleName(Firebird::MetaName& role, const int dialect);
+	static void makeRoleName(Firebird::MetaString& role, const int dialect);
 
 private:
 	void findGrantedRoles(thread_db* tdbb) const;

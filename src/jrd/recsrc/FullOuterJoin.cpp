@@ -42,7 +42,7 @@ FullOuterJoin::FullOuterJoin(CompilerScratch* csb, RecordSource* arg1, RecordSou
 {
 	fb_assert(m_arg1 && m_arg2);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void FullOuterJoin::open(thread_db* tdbb) const
@@ -76,8 +76,7 @@ void FullOuterJoin::close(thread_db* tdbb) const
 
 bool FullOuterJoin::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);

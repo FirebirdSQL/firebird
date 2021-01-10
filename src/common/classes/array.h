@@ -36,7 +36,7 @@
 namespace Firebird {
 
 // Static part of the array
-template <typename T, FB_SIZE_T Capacity>
+template <typename T, FB_SIZE_T Capacity, typename AlignT = T>
 class InlineStorage : public AutoStorage
 {
 public:
@@ -52,7 +52,7 @@ protected:
 		return Capacity;
 	}
 private:
-	T buffer[Capacity];
+	alignas(alignof(AlignT)) T buffer[Capacity];
 };
 
 // Used when array doesn't have static part
@@ -603,25 +603,8 @@ private:
 };
 
 // Nice shorthand for arrays with static part
-template <typename T, FB_SIZE_T InlineCapacity>
-class HalfStaticArray : public Array<T, InlineStorage<T, InlineCapacity> >
-{
-public:
-	typedef typename Array<T, InlineStorage<T, InlineCapacity> >::size_type size_type;
-
-	explicit HalfStaticArray(MemoryPool& p) : Array<T, InlineStorage<T, InlineCapacity> >(p) {}
-
-	HalfStaticArray(MemoryPool& p, size_type InitialCapacity) :
-		Array<T, InlineStorage<T, InlineCapacity> >(p, InitialCapacity) {}
-
-	HalfStaticArray() : Array<T, InlineStorage<T, InlineCapacity> > () {}
-
-	explicit HalfStaticArray(size_type InitialCapacity) :
-		Array<T, InlineStorage<T, InlineCapacity> >(InitialCapacity) {}
-
-	HalfStaticArray(MemoryPool& p, const HalfStaticArray& src) :
-		Array<T, InlineStorage<T, InlineCapacity> >(p, src) {}
-};
+template <typename T, FB_SIZE_T InlineCapacity, typename AlignT = T>
+using HalfStaticArray = Array<T, InlineStorage<T, InlineCapacity, AlignT> >;
 
 typedef HalfStaticArray<UCHAR, BUFFER_TINY> UCharBuffer;
 

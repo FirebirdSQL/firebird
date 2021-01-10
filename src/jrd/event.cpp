@@ -459,14 +459,17 @@ void EventManager::acquire_shmem()
 
 	m_sharedMemory->mutexLock();
 
-	// Check for shared memory state consistency
+	// Reattach if someone has just deleted the shared file
 
-	while (SRQ_EMPTY(m_sharedMemory->getHeader()->evh_processes))
+	while (m_sharedMemory->getHeader()->isDeleted())
 	{
-		if (m_sharedMemory->justCreated())
-			break;
+		fb_assert(!m_process);
+		if (m_process)
+			fb_utils::logAndDie("Process disappeared in EventManager::acquire_shmem");
 
-		// Someone is going to delete shared file? Reattach.
+		// Shared memory must be empty at this point
+		fb_assert(SRQ_EMPTY(m_sharedMemory->getHeader()->evh_processes));
+
 		m_sharedMemory->mutexUnlock();
 		m_sharedMemory.reset();
 
@@ -475,8 +478,6 @@ void EventManager::acquire_shmem()
 		init_shared_file();
 		m_sharedMemory->mutexLock();
 	}
-
-	fb_assert(!m_sharedMemory->justCreated());
 
 	m_sharedMemory->getHeader()->evh_current_process = m_processOffset;
 

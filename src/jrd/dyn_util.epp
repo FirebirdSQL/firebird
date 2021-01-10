@@ -79,7 +79,7 @@ static const UCHAR gen_id_blr2[] =
 };
 
 void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
-	const Firebird::MetaName& object_name, int object_type)
+	const MetaName& object_name, int object_type)
 {
 /**************************************
  *
@@ -279,13 +279,13 @@ void DYN_UTIL_generate_field_name(thread_db* tdbb, TEXT* buffer)
  *	Stub to make it work with char* too.
  *
  **************************************/
-	Firebird::MetaName temp;
+	MetaName temp;
 	DYN_UTIL_generate_field_name(tdbb, temp);
 	strcpy(buffer, temp.c_str());
 }
 
 
-void DYN_UTIL_generate_field_name(thread_db* tdbb, Firebird::MetaName& buffer)
+void DYN_UTIL_generate_field_name(thread_db* tdbb, MetaName& buffer)
 {
 /**************************************
  *
@@ -356,7 +356,7 @@ void DYN_UTIL_generate_field_position(thread_db* tdbb, const MetaName& relation_
 
 
 void DYN_UTIL_generate_index_name(thread_db* tdbb, jrd_tra* /*transaction*/,
-								  Firebird::MetaName& buffer, UCHAR verb)
+								  MetaName& buffer, UCHAR verb)
 {
 /**************************************
  *
@@ -405,7 +405,7 @@ void DYN_UTIL_generate_index_name(thread_db* tdbb, jrd_tra* /*transaction*/,
 
 
 // Generate a name unique to RDB$GENERATORS.
-void DYN_UTIL_generate_generator_name(thread_db* tdbb, Firebird::MetaName& buffer)
+void DYN_UTIL_generate_generator_name(thread_db* tdbb, MetaName& buffer)
 {
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
@@ -467,7 +467,7 @@ void DYN_UTIL_generate_trigger_name(thread_db* tdbb, jrd_tra* /*transaction*/, M
 
 bool DYN_UTIL_find_field_source(thread_db* tdbb,
 								jrd_tra* transaction,
-								const Firebird::MetaName& view_name,
+								const MetaName& view_name,
 								USHORT context,
 								const TEXT* local_name,
 								TEXT* output_field_name)

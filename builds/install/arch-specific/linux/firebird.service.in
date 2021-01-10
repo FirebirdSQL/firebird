@@ -6,8 +6,7 @@ After=syslog.target network.target
 User=firebird
 Group=firebird
 Type=forking
-PIDFile=/var/run/firebird/default.pid
-ExecStart=@FB_SBINDIR@/fbguard -pidfile /var/run/firebird/default.pid -daemon -forever
+ExecStart=@FB_SBINDIR@/fbguard -daemon -forever
 StandardError=syslog
 
 [Install]

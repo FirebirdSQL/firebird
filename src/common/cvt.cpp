@@ -36,18 +36,22 @@
  */
 
 #include "firebird.h"
+#include <cmath>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include "gen/iberror.h"
 
+#include "../jrd/constants.h"
+#include "../common/intlobj_new.h"
 #include "../common/gdsassert.h"
+#include "../common/CharSet.h"
 #include "../common/TimeZoneUtil.h"
 #include "../common/classes/timestamp.h"
 #include "../common/cvt.h"
 #include "../jrd/intl.h"
-#include "../jrd/val.h"
+#include "../jrd/constants.h"
 #include "../common/classes/VaryStr.h"
 #include "../common/classes/FpeControl.h"
 #include "../common/dsc_proto.h"
@@ -110,14 +114,14 @@ using namespace Firebird;
  * less than the number of bits in the type: one bit is for the sign,
  * and the other is because we divide by 5, rather than 10.  */
 
-#define SHORT_LIMIT     ((1 << 14) / 5)
-#define LONG_LIMIT      ((1L << 30) / 5)
+const SSHORT SHORT_LIMIT = ((1 << 14) / 5);
+const SLONG LONG_LIMIT = ((1L << 30) / 5);
 
 // NOTE: The syntax for the below line may need modification to ensure
 // the result of 1 << 62 is a quad
 
 //#define QUAD_LIMIT      ((((SINT64) 1) << 62) / 5)
-#define INT64_LIMIT     ((((SINT64) 1) << 62) / 5)
+const SINT64 INT64_LIMIT = ((((SINT64) 1) << 62) / 5);
 
 #define TODAY           "TODAY"
 #define NOW             "NOW"
@@ -135,6 +139,7 @@ static void decimal_float_to_text(const dsc*, dsc*, DecimalStatus, Callbacks*);
 static void integer_to_text(const dsc*, dsc*, Callbacks*);
 static void int128_to_text(const dsc*, dsc*, Callbacks* cb);
 static void localError(const Firebird::Arg::StatusVector&);
+static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err);
 
 class DummyException {};
 
@@ -469,7 +474,7 @@ static void integer_to_text(const dsc* from, dsc* to, Callbacks* cb)
 		} while (++scale);
 	}
 
-	length = cb->validateLength(cb->getToCharset(to->getCharSet()), length, start, TEXT_LEN(to));
+	length = cb->validateLength(cb->getToCharset(to->getCharSet()), to->getCharSet(), length, start, TEXT_LEN(to));
 
 	// If padding is required, do it now.
 
@@ -623,8 +628,7 @@ void CVT_string_to_datetime(const dsc* desc,
 			}
 			description[i] = precision;
 		}
-		// Month names are only allowed in first 2 positions
-		else if (LETTER7(c) && !have_english_month && i < 2)
+		else if (LETTER7(c) && !have_english_month && i - start_component < 2)
 		{
 			TEXT temp[sizeof(YESTERDAY) + 1];
 
@@ -649,7 +653,8 @@ void CVT_string_to_datetime(const dsc* desc,
 			const TEXT* const* month_ptr = FB_LONG_MONTHS_UPPER;
 			while (true)
 			{
-				if (*month_ptr)
+				// Month names are only allowed in first 2 positions
+				if (*month_ptr && i < 2)
 				{
 					t = temp;
 					const TEXT* m = *month_ptr++;
@@ -666,7 +671,7 @@ void CVT_string_to_datetime(const dsc* desc,
 					// it's not a month name, so it's either a magic word or
 					// a non-date string.  If there are more characters, it's bad
 
-					if (!allow_special || i != 0)
+					if (!allow_special || i != start_component)
 						CVT_conversion_error(desc, cb->err);
 
 					description[i] = SPECIAL;
@@ -678,17 +683,30 @@ void CVT_string_to_datetime(const dsc* desc,
 					}
 
 					// fetch the current datetime
-					*(ISC_TIMESTAMP*) date = Firebird::TimeStamp::getCurrentTimeStamp().value();
+					*date = TimeZoneUtil::getCurrentGmtTimeStamp();
+					date->time_zone = cb->getSessionTimeZone();
 
-					if (expect_type == expect_sql_time_tz || expect_type == expect_timestamp_tz)
-						date->time_zone = cb->getSessionTimeZone();
+					switch (expect_type)
+					{
+						case expect_sql_time_tz:
+							date->utc_timestamp.timestamp_time =
+								TimeZoneUtil::timeStampTzToTimeTz(*date).utc_time;
+							break;
+
+						case expect_sql_date:
+						case expect_sql_time:
+						case expect_timestamp:
+							// Not really UTC.
+							date->utc_timestamp = TimeZoneUtil::timeStampTzToTimeStamp(
+								*date, cb->getSessionTimeZone());
+							break;
+
+						case expect_timestamp_tz:
+							break;
+					}
 
 					if (strcmp(temp, NOW) == 0)
-					{
-						if (expect_type == expect_sql_time_tz || expect_type == expect_timestamp_tz)
-							TimeZoneUtil::localTimeStampToUtc(*date);
 						return;
-					}
 
 					if (expect_type == expect_sql_time || expect_type == expect_sql_time_tz)
 					{
@@ -698,21 +716,18 @@ void CVT_string_to_datetime(const dsc* desc,
 
 					date->utc_timestamp.timestamp_time = 0;
 
-					if (expect_type == expect_sql_time_tz || expect_type == expect_timestamp_tz)
-						TimeZoneUtil::localTimeStampToUtc(*date);
-
 					if (strcmp(temp, TODAY) == 0)
 						return;
 
 					if (strcmp(temp, TOMORROW) == 0)
 					{
-						date->utc_timestamp.timestamp_date++;
+						++date->utc_timestamp.timestamp_date;
 						return;
 					}
 
 					if (strcmp(temp, YESTERDAY) == 0)
 					{
-						date->utc_timestamp.timestamp_date--;
+						--date->utc_timestamp.timestamp_date;
 						return;
 					}
 
@@ -737,9 +752,14 @@ void CVT_string_to_datetime(const dsc* desc,
 
 		components[i] = n;
 
+		bool hadSpace = false;
+
 		// Grab whitespace following the number
 		while (p < end && (*p == ' ' || *p == '\t'))
+		{
 			p++;
+			hadSpace = true;
+		}
 
 		if (p == end)
 			break;
@@ -747,18 +767,16 @@ void CVT_string_to_datetime(const dsc* desc,
 		// Grab a separator character
 		if (i <= 1)
 		{
-			if (date_sep == '\0' || *p == date_sep)
+			if (date_sep == '\0' || (date_sep != ' ' && *p == date_sep) || (date_sep == ' ' && hadSpace))
 			{
-				date_sep = *p;
-
-				if (*p == '/' || *p == '-')
+				if (date_sep != ' ' && (*p == '/' || *p == '-' || *p == '.'))
 				{
-					p++;
+					date_sep = *p++;
 					continue;
 				}
-				else if (*p == '.')
+				else if (hadSpace)
 				{
-					p++;
+					date_sep = ' ';
 					continue;
 				}
 			}
@@ -920,7 +938,10 @@ void CVT_string_to_datetime(const dsc* desc,
 	{
 		// Fetch current date
 		tm times2;
-		Firebird::TimeStamp::getCurrentTimeStamp().decode(&times2);
+		TimeStamp baseTimeStamp;
+		baseTimeStamp.value().timestamp_date = TimeZoneUtil::TIME_TZ_BASE_DATE;
+		baseTimeStamp.value().timestamp_time = 0;
+		baseTimeStamp.decode(&times2);
 
 		times.tm_year = times2.tm_year;
 		times.tm_mon = times2.tm_mon;
@@ -1002,13 +1023,79 @@ void CVT_string_to_datetime(const dsc* desc,
 			ISC_TIME_TZ timeTz;
 			timeTz.utc_time = date->utc_timestamp.timestamp_time;
 			timeTz.time_zone = zone;
-			date->utc_timestamp.timestamp_time = TimeZoneUtil::timeTzToTime(timeTz, sessionTimeZone, cb);
+			date->utc_timestamp.timestamp_time = TimeZoneUtil::timeTzToTime(timeTz, cb);
 		}
 		else if (expect_type == expect_timestamp)
 			*(ISC_TIMESTAMP*) date = TimeZoneUtil::timeStampTzToTimeStamp(*date, sessionTimeZone);
 	}
 }
 
+
+template <typename V>
+void adjustForScale(V& val, SSHORT scale, const V limit, ErrorFunction err)
+{
+	if (scale > 0)
+	{
+		int fraction = 0;
+		do {
+			if (scale == 1)
+				fraction = int(val % 10);
+			val /= 10;
+		} while (--scale);
+
+		if (fraction > 4)
+			val++;
+		// The following 2 lines are correct for platforms where
+		// ((-85 / 10 == -8) && (-85 % 10 == -5)).  If we port to
+		// a platform where ((-85 / 10 == -9) && (-85 % 10 == 5)),
+		// we'll have to change this depending on the platform.
+		else if (fraction < -4)
+			val--;
+	}
+	else if (scale < 0)
+	{
+		do {
+			if ((val > limit) || (val < -limit))
+				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+			val *= 10;
+		} while (++scale);
+	}
+}
+
+
+static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
+{
+/**************************************
+ *
+ *      C V T _ g e t _ s h o r t
+ *
+ **************************************
+ *
+ * Functional description
+ *      Convert something arbitrary to a short (16 bit) integer of given
+ *      scale.
+ *
+ **************************************/
+	SSHORT value;
+
+	if (desc->isText())
+	{
+		VaryStr<20> buffer;			// long enough to represent largest short in ASCII
+		const char* p;
+		USHORT length = CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
+		scale -= CVT_decompose(p, length, &value, err);
+
+		adjustForScale(value, scale, SHORT_LIMIT, err);
+	}
+	else {
+		ULONG lval = CVT_get_long(desc, scale, decSt, err);
+		value = (SSHORT) lval;
+		if (value != SLONG(lval))
+			err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+	}
+
+	return value;
+}
 
 SLONG CVT_get_long(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
@@ -1051,32 +1138,7 @@ SLONG CVT_get_long(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 		val64 = *((SINT64 *) p);
 
 		// adjust for scale first, *before* range-checking the value.
-		if (scale > 0)
-		{
-			SLONG fraction = 0;
-			do {
-				if (scale == 1)
-					fraction = SLONG(val64 % 10);
-				val64 /= 10;
-			} while (--scale);
-			if (fraction > 4)
-				val64++;
-			// The following 2 lines are correct for platforms where
-			// ((-85 / 10 == -8) && (-85 % 10 == -5)).  If we port to
-			// a platform where ((-85 / 10 == -9) && (-85 % 10 == 5)),
-			// we'll have to change this depending on the platform.
-			else if (fraction < -4)
-				val64--;
-		}
-		else if (scale < 0)
-		{
-			do {
-				if ((val64 > INT64_LIMIT) || (val64 < -INT64_LIMIT))
-					err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
-				val64 *= 10;
-			} while (++scale);
-		}
-
+		adjustForScale(val64, scale, INT64_LIMIT, err);
 		if ((val64 > LONG_MAX_int64) || (val64 < LONG_MIN_int64))
 			err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 		return (SLONG) val64;
@@ -1158,33 +1220,7 @@ SLONG CVT_get_long(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 	}
 
 	// Last, but not least, adjust for scale
-
-	if (scale > 0)
-	{
-		SLONG fraction = 0;
-		do {
-			if (scale == 1)
-				fraction = value % 10;
-			value /= 10;
-		} while (--scale);
-
-		if (fraction > 4)
-			value++;
-		// The following 2 lines are correct for platforms where
-		// ((-85 / 10 == -8) && (-85 % 10 == -5)).  If we port to
-		// a platform where ((-85 / 10 == -9) && (-85 % 10 == 5)),
-		// we'll have to change this depending on the platform.
-		else if (fraction < -4)
-			value--;
-	}
-	else if (scale < 0)
-	{
-		do {
-			if (value > LONG_LIMIT || value < -LONG_LIMIT)
-				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
-			value *= 10;
-		} while (++scale);
-	}
+	adjustForScale(value, scale, LONG_LIMIT, err);
 
 	return value;
 }
@@ -1446,7 +1482,7 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 			else if (scale < 0)
 				value *= CVT_power_of_ten(-scale);
 
-			if (isinf(value))
+			if (std::isinf(value))
 			{
 				if (getNumericOverflow)
 				{
@@ -1563,13 +1599,13 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		case dtype_sql_time_tz:
 		case dtype_ex_time_tz:
 			*(ISC_TIMESTAMP*) to->dsc_address =
-				TimeZoneUtil::cvtTimeTzToTimeStamp(*(ISC_TIME_TZ*) from->dsc_address, cb);
+				TimeZoneUtil::timeTzToTimeStamp(*(ISC_TIME_TZ*) from->dsc_address, cb);
 			return;
 
 		case dtype_timestamp_tz:
 		case dtype_ex_timestamp_tz:
 			*(ISC_TIMESTAMP*) to->dsc_address =
-				TimeZoneUtil::cvtTimeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb);
+				TimeZoneUtil::timeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb);
 			return;
 
 		default:
@@ -1579,17 +1615,16 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		break;
 
 	case dtype_ex_timestamp_tz:
-		d.makeTimestampTz((ISC_TIMESTAMP_TZ*)(to->dsc_address));
+		d.makeTimestampTz((ISC_TIMESTAMP_TZ*) to->dsc_address);
 		CVT_move_common(from, &d, decSt, cb);
-		TimeZoneUtil::extractOffset(*(ISC_TIMESTAMP_TZ*)(to->dsc_address),
-			&((ISC_TIMESTAMP_TZ_EX*)(to->dsc_address))->ext_offset);
+		TimeZoneUtil::extractOffset(*(ISC_TIMESTAMP_TZ*) to->dsc_address,
+			&((ISC_TIMESTAMP_TZ_EX*) to->dsc_address)->ext_offset);
 		return;
 
 	case dtype_ex_time_tz:
-		d.makeTimeTz((ISC_TIME_TZ*)(to->dsc_address));
+		d.makeTimeTz((ISC_TIME_TZ*) to->dsc_address);
 		CVT_move_common(from, &d, decSt, cb);
-		TimeZoneUtil::extractOffset(TimeZoneUtil::cvtTimeTzToTimeStampTz(*(ISC_TIME_TZ*)(to->dsc_address), cb),
-			&((ISC_TIME_TZ_EX*)(to->dsc_address))->ext_offset);
+		TimeZoneUtil::extractOffset(*(ISC_TIME_TZ*) to->dsc_address, &((ISC_TIME_TZ_EX*) to->dsc_address)->ext_offset);
 		return;
 
 	case dtype_timestamp_tz:
@@ -1607,13 +1642,13 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 		case dtype_sql_time:
 			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
-				TimeZoneUtil::cvtTimeToTimeStampTz(*(ISC_TIME*) from->dsc_address, cb);
+				TimeZoneUtil::timeToTimeStampTz(*(ISC_TIME*) from->dsc_address, cb);
 			return;
 
 		case dtype_ex_time_tz:
 		case dtype_sql_time_tz:
 			*((ISC_TIMESTAMP_TZ*) to->dsc_address) =
-				TimeZoneUtil::cvtTimeTzToTimeStampTz(*(ISC_TIME_TZ*) from->dsc_address, cb);
+				TimeZoneUtil::timeTzToTimeStampTz(*(ISC_TIME_TZ*) from->dsc_address, cb);
 			return;
 
 		case dtype_ex_timestamp_tz:
@@ -1622,12 +1657,12 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 		case dtype_sql_date:
 			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
-				TimeZoneUtil::cvtDateToTimeStampTz(*(GDS_DATE*) from->dsc_address, cb);
+				TimeZoneUtil::dateToTimeStampTz(*(GDS_DATE*) from->dsc_address, cb);
 			return;
 
 		case dtype_timestamp:
 			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
-				TimeZoneUtil::cvtTimeStampToTimeStampTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
+				TimeZoneUtil::timeStampToTimeStampTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
 			return;
 
 		default:
@@ -1656,7 +1691,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		case dtype_timestamp_tz:
 		case dtype_ex_timestamp_tz:
 			*(GDS_DATE*) to->dsc_address =
-				TimeZoneUtil::cvtTimeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb).timestamp_date;
+				TimeZoneUtil::timeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb).timestamp_date;
 			return;
 
 		default:
@@ -1680,7 +1715,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 		case dtype_sql_time_tz:
 		case dtype_ex_time_tz:
-			*(ISC_TIME*) to->dsc_address = TimeZoneUtil::cvtTimeTzToTime(*(ISC_TIME_TZ*) from->dsc_address, cb);
+			*(ISC_TIME*) to->dsc_address = TimeZoneUtil::timeTzToTime(*(ISC_TIME_TZ*) from->dsc_address, cb);
 			return;
 
 		case dtype_timestamp:
@@ -1690,7 +1725,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		case dtype_timestamp_tz:
 		case dtype_ex_timestamp_tz:
 			*(GDS_TIME*) to->dsc_address =
-				TimeZoneUtil::cvtTimeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb).timestamp_time;
+				TimeZoneUtil::timeStampTzToTimeStamp(*(ISC_TIMESTAMP_TZ*) from->dsc_address, cb).timestamp_time;
 			return;
 
 		default:
@@ -1714,18 +1749,18 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			return;
 
 		case dtype_sql_time:
-			*(ISC_TIME_TZ*) to->dsc_address = TimeZoneUtil::cvtTimeToTimeTz(*(ISC_TIME*) from->dsc_address, cb);
+			*(ISC_TIME_TZ*) to->dsc_address = TimeZoneUtil::timeToTimeTz(*(ISC_TIME*) from->dsc_address, cb);
 			return;
 
 		case dtype_timestamp:
 			*(ISC_TIME_TZ*) to->dsc_address =
-				TimeZoneUtil::cvtTimeStampToTimeTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
+				TimeZoneUtil::timeStampToTimeTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
 			return;
 
 		case dtype_timestamp_tz:
 		case dtype_ex_timestamp_tz:
 			*(ISC_TIME_TZ*) to->dsc_address =
-				TimeZoneUtil::cvtTimeStampTzToTimeTz(*(ISC_TIMESTAMP_TZ*) from->dsc_address);
+				TimeZoneUtil::timeStampTzToTimeTz(*(ISC_TIMESTAMP_TZ*) from->dsc_address);
 			return;
 
 		case dtype_ex_time_tz:
@@ -1753,13 +1788,15 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				if (to->dsc_dtype == dtype_varying)
 					ptr += sizeof(USHORT);
 
-				if (len < from->dsc_length)
+				Jrd::CharSet* charSet = cb->getToCharset(to->getCharSet());
+
+				if (len / charSet->maxBytesPerChar() < from->dsc_length)
 				{
 					cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
-						Arg::Gds(isc_trunc_limits) << Arg::Num(len) << Arg::Num(from->dsc_length));
+						Arg::Gds(isc_trunc_limits) << Arg::Num(len / charSet->maxBytesPerChar()) <<
+						Arg::Num(from->dsc_length));
 				}
 
-				Jrd::CharSet* charSet = cb->getToCharset(to->getCharSet());
 				cb->validateData(charSet, from->dsc_length, from->dsc_address);
 
 				memcpy(ptr, from->dsc_address, from->dsc_length);
@@ -1819,96 +1856,56 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				if (cb->transliterate(from, to, charset2))
 					return;
 
-				ULONG len;
-
 				{ // scope
 					USHORT strtype_unused;
 					UCHAR *ptr;
-					length = len = CVT_get_string_ptr_common(from, &strtype_unused, &ptr, NULL, 0, decSt, cb);
+					length = CVT_get_string_ptr_common(from, &strtype_unused, &ptr, NULL, 0, decSt, cb);
 					q = ptr;
 				} // end scope
 
 				const USHORT to_size = TEXT_LEN(to);
-				const UCHAR* start = to->dsc_address;
-				UCHAR fill_char = ASCII_SPACE;
 				Jrd::CharSet* toCharset = cb->getToCharset(charset2);
 
-				switch (to->dsc_dtype)
-				{
-				case dtype_text:
-					length = MIN(length, to->dsc_length);
-					break;
-
-				case dtype_cstring:
-					// Note: Following is only correct for narrow and
-					// multibyte character sets which use a zero
-					// byte to represent end-of-string
-
-					fb_assert(to->dsc_length > 0);
-					length = MIN(length, ULONG(to->dsc_length - 1));
-					break;
-
-				case dtype_varying:
-					length = to->dsc_length > sizeof(USHORT) ?
-						MIN(length, (ULONG(to->dsc_length) - sizeof(USHORT))) : 0;
-					break;
-				}
-
 				cb->validateData(toCharset, length, q);
-				ULONG toLength = cb->validateLength(toCharset, length, q, to_size);
-				len -= toLength;
-				ULONG fill = ULONG(to->dsc_length) - toLength;
-
-				if (charset2 == ttype_binary)
-					fill_char = 0x00;
+				ULONG toLength = cb->validateLength(toCharset, charset2, length, q, to_size);
 
 				switch (to->dsc_dtype)
 				{
-				case dtype_text:
-					CVT_COPY_BUFF(q, p, toLength);
-					if (fill > 0)
+					case dtype_text:
 					{
-						memset(p, fill_char, fill);
-						p += fill;
-						// Note: above is correct only for narrow
-						// and multi-byte character sets which
-						// use ASCII for the SPACE character.
-					}
-					break;
-
-				case dtype_cstring:
-					CVT_COPY_BUFF(q, p, toLength);
-					*p = 0;
-					break;
-
-				case dtype_varying:
-					if (to->dsc_length > sizeof(USHORT))
-					{
-						// TMN: Here we should really have the following fb_assert
-						// fb_assert(length <= MAX_USHORT);
-						((vary*) p)->vary_length = (USHORT) toLength;
-						start = p = reinterpret_cast<UCHAR*>(((vary*) p)->vary_string);
+						ULONG fill = ULONG(to->dsc_length) - toLength;
 						CVT_COPY_BUFF(q, p, toLength);
-					}
-					else
-						memset(to->dsc_address, 0, to->dsc_length);		// the best we can do
-					break;
-				}
 
-				if (len && toLength == length)
-				{
-					// Scan the truncated string to ensure only spaces lost
-					// Warning: it is correct only for narrow and multi-byte
-					// character sets which use ASCII or NULL for the SPACE character
-
-					do {
-						if (*q++ != fill_char && toLength == length)
+						if (fill > 0)
 						{
-							cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
-									Arg::Gds(isc_trunc_limits) <<
-										Arg::Num(to->getStringLength()) << Arg::Num(from->getStringLength()));
+							fb_assert(!toCharset || toCharset->getSpaceLength() == 1);
+							UCHAR fillChar = toCharset ?
+								*toCharset->getSpace() :
+								(charset2 == ttype_binary ? 0x00 : ASCII_SPACE);
+
+							memset(p, fillChar, fill);
+							p += fill;
 						}
-					} while (--len);
+						break;
+					}
+
+					case dtype_cstring:
+						CVT_COPY_BUFF(q, p, toLength);
+						*p = 0;
+						break;
+
+					case dtype_varying:
+						if (to->dsc_length > sizeof(USHORT))
+						{
+							// TMN: Here we should really have the following fb_assert
+							// fb_assert(length <= MAX_USHORT);
+							((vary*) p)->vary_length = (USHORT) toLength;
+							p = reinterpret_cast<UCHAR*>(((vary*) p)->vary_string);
+							CVT_COPY_BUFF(q, p, toLength);
+						}
+						else
+							memset(to->dsc_address, 0, to->dsc_length);		// the best we can do
+						break;
 				}
 			}
 			return;
@@ -1988,14 +1985,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		return;
 
 	case dtype_short:
-		{
-			ULONG lval = CVT_get_long(from, (SSHORT) to->dsc_scale, decSt, cb->err);
-			// TMN: Here we should really have the following fb_assert
-			// fb_assert(lval <= MAX_SSHORT);
-			*(SSHORT*) p = (SSHORT) lval;
-			if (*(SSHORT*) p != SLONG(lval))
-				cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
-		}
+		*(SSHORT *) p = cvt_get_short(from, (SSHORT) to->dsc_scale, decSt, cb->err);
 		return;
 
 	case dtype_long:
@@ -2197,7 +2187,7 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 	case dtype_sql_time_tz:
 	case dtype_ex_time_tz:
 		tzLookup = TimeZoneUtil::decodeTime(*(ISC_TIME_TZ*) from->dsc_address,
-			true, TimeZoneUtil::NO_OFFSET, cb, &times, &fractions);
+			true, TimeZoneUtil::NO_OFFSET, &times, &fractions);
 		timezone = ((ISC_TIME_TZ*) from->dsc_address)->time_zone;
 		break;
 
@@ -2535,13 +2525,19 @@ static SSHORT cvt_decompose(const char*	string,
 			q++;
 
 		if (q != end || end - p == 0 || (end - p) * 4 > return_value->maxSize() * 8)
+		{
 			CVT_conversion_error(&errd, err);
+			return 0;
+		}
 
 		q = p;
 		hex_to_value(q, digits_end, return_value);
 
 		if (q != digits_end)
+		{
 			CVT_conversion_error(&errd, err);
+			return 0;
+		}
 
 		// 0xFFFFFFFF = -1; 0x0FFFFFFFF = 4294967295
 		if (digits_end - p <= 8)
@@ -2578,11 +2574,12 @@ static SSHORT cvt_decompose(const char*	string,
 						continue;
 				}
 				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
-				break;
+				return 0;
 			case RetPtr::RETVAL_POSSIBLE_OVERFLOW:
 				if ((*p > '8' && sign == -1) || (*p > '7' && sign != -1))
 				{
 					err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+					return 0;
 				}
 				break;
 			default:
@@ -2596,9 +2593,11 @@ static SSHORT cvt_decompose(const char*	string,
 		else if (*p == '.')
 		{
 			if (fraction)
+			{
 				CVT_conversion_error(&errd, err);
-			else
-				fraction = true;
+				return 0;
+			}
+			fraction = true;
 		}
 		else if (*p == '-' && !digit_seen && !sign && !fraction)
 			sign = -1;
@@ -2614,14 +2613,23 @@ static SSHORT cvt_decompose(const char*	string,
 
 			// throw if there is something after the spaces
 			if (p < end)
+			{
 				CVT_conversion_error(&errd, err);
+				return 0;
+			}
 		}
 		else
+		{
 			CVT_conversion_error(&errd, err);
+			return 0;
+		}
 	}
 
 	if (!digit_seen)
+	{
 		CVT_conversion_error(&errd, err);
+		return 0;
+	}
 
 	if ((sign == -1) && !return_value->isLowerLimit())
 		return_value->neg();
@@ -2645,7 +2653,10 @@ static SSHORT cvt_decompose(const char*	string,
 				// applied to the value.
 
 				if (exp >= SHORT_LIMIT)
+				{
 					err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+					return 0;
+				}
 			}
 			else if (*p == '-' && !digit_seen && !sign)
 				sign = -1;
@@ -2659,10 +2670,16 @@ static SSHORT cvt_decompose(const char*	string,
 
 				// throw if there is something after the spaces
 				if (p < end)
+				{
 					CVT_conversion_error(&errd, err);
+					return 0;
+				}
 			}
 			else
+			{
 				CVT_conversion_error(&errd, err);
+				return 0;
+			}
 		}
 		if (sign == -1)
 			scale -= exp;
@@ -2670,7 +2687,10 @@ static SSHORT cvt_decompose(const char*	string,
 			scale += exp;
 
 		if (!digit_seen)
+		{
 			CVT_conversion_error(&errd, err);
+			return 0;
+		}
 	}
 
 	return scale;
@@ -2738,6 +2758,33 @@ private:
 	typename Traits::ValueType value;
 	typename Traits::ValueType* return_value;
 };
+
+
+class SSHORTTraits
+{
+public:
+	typedef SSHORT ValueType;
+	static const SSHORT UPPER_LIMIT_BY_10 = MAX_SSHORT / 10;
+	static const SSHORT LOWER_LIMIT = MIN_SSHORT;
+};
+
+SSHORT CVT_decompose(const char* str, USHORT len, SSHORT* val, ErrorFunction err)
+{
+/**************************************
+ *
+ *      d e c o m p o s e
+ *
+ **************************************
+ *
+ * Functional description
+ *      Decompose a numeric string in mantissa and exponent,
+ *      or if it is in hexadecimal notation.
+ *
+ **************************************/
+
+	RetValue<SSHORTTraits> value(val);
+	return cvt_decompose(str, len, &value, err);
+}
 
 
 class SLONGTraits
@@ -3475,32 +3522,7 @@ SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFu
 	}
 
 	// Last, but not least, adjust for scale
-
-	if (scale > 0)
-	{
-		SLONG fraction = 0;
-		do {
-			if (scale == 1)
-				fraction = (SLONG) (value % 10);
-			value /= 10;
-		} while (--scale);
-		if (fraction > 4)
-			value++;
-		// The following 2 lines are correct for platforms where
-		// (-85 / 10 == -8) && (-85 % 10 == -5)).  If we port to
-		// a platform where ((-85 / 10 == -9) && (-85 % 10 == 5)),
-		// we'll have to change this depending on the platform.
-		else if (fraction < -4)
-			value--;
-	}
-	else if (scale < 0)
-	{
-		do {
-			if (value > INT64_LIMIT || value < -INT64_LIMIT)
-				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
-			value *= 10;
-		} while (++scale);
-	}
+	adjustForScale(value, scale, INT64_LIMIT, err);
 
 	return value;
 }
@@ -3527,7 +3549,7 @@ static void hex_to_value(const char*& string, const char* end, RetPtr* retValue)
 	int nibble = ((end - string) & 1);
 	char ch;
 
-	while ((DIGIT((ch = UPPER(*string)))) || ((ch >= 'A') && (ch <= 'F')))
+	while ((string < end) && ((DIGIT((ch = UPPER(*string)))) || ((ch >= 'A') && (ch <= 'F'))))
 	{
 		// Now convert the character to a nibble
 		SSHORT c;
@@ -3577,8 +3599,8 @@ namespace
 		virtual CHARSET_ID getChid(const dsc* d);
 		virtual Jrd::CharSet* getToCharset(CHARSET_ID charset2);
 		virtual void validateData(Jrd::CharSet* toCharset, SLONG length, const UCHAR* q);
-		virtual ULONG validateLength(Jrd::CharSet* toCharset, ULONG toLength, const UCHAR* start,
-			const USHORT to_size);
+		virtual ULONG validateLength(Jrd::CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+			const USHORT size);
 		virtual SLONG getLocalDate();
 		virtual ISC_TIMESTAMP getCurrentGmtTimeStamp();
 		virtual USHORT getSessionTimeZone();
@@ -3600,9 +3622,32 @@ namespace
 	{
 	}
 
-	ULONG CommonCallbacks::validateLength(Jrd::CharSet*, ULONG l, const UCHAR*, const USHORT)
+	ULONG CommonCallbacks::validateLength(Jrd::CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+		const USHORT size)
 	{
-		return l;
+		if (length > size)
+		{
+			fb_assert(!charSet || (!charSet->isMultiByte() && charSet->getSpaceLength() == 1));
+			UCHAR fillChar = charSet ?
+				*charSet->getSpace() :
+				(charSetId == ttype_binary ? 0x00 : ASCII_SPACE);
+
+			const UCHAR* p = start + size;
+
+			// Scan the truncated string to ensure only spaces lost
+
+			while (p < start + length)
+			{
+				if (*p++ != fillChar)
+				{
+					err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+						Arg::Gds(isc_trunc_limits) <<
+							Arg::Num(size) << Arg::Num(length));
+				}
+			}
+		}
+
+		return MIN(length, size);
 	}
 
 	CHARSET_ID CommonCallbacks::getChid(const dsc* d)

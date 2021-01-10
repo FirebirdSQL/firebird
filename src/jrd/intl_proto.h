@@ -25,6 +25,7 @@
 #define JRD_INTL_PROTO_H
 
 #include "../jrd/intl_classes.h"
+#include "../common/cvt.h"
 
 namespace Jrd {
 	class thread_db;
@@ -41,7 +42,7 @@ int			INTL_compare(Jrd::thread_db*, const dsc*, const dsc*, ErrorFunction);
 ULONG		INTL_convert_bytes(Jrd::thread_db*, CHARSET_ID, UCHAR*, const ULONG, CHARSET_ID,
 								const BYTE*, const ULONG, ErrorFunction);
 Jrd::CsConvert	INTL_convert_lookup(Jrd::thread_db*, CHARSET_ID, CHARSET_ID);
-int			INTL_convert_string(dsc*, const dsc*, ErrorFunction);
+int			INTL_convert_string(dsc*, const dsc*, Firebird::Callbacks* cb);
 bool		INTL_data(const dsc*);
 bool		INTL_data_or_binary(const dsc*);
 bool		INTL_defined_type(Jrd::thread_db*, USHORT);

@@ -297,6 +297,28 @@ ISC_TIMESTAMP NoThrowTimeStamp::encode_timestamp(const struct tm* times, const i
 	return ts;
 }
 
+void NoThrowTimeStamp::add10msec(ISC_TIMESTAMP* v, SINT64 msec, SINT64 multiplier)
+{
+	const SINT64 full = msec * multiplier;
+	const int days = full / (SECONDS_PER_DAY * ISC_TIME_SECONDS_PRECISION);
+	const int secs = full % (SECONDS_PER_DAY * ISC_TIME_SECONDS_PRECISION);
+
+	v->timestamp_date += days;
+
+	// Time portion is unsigned, so we avoid unsigned rolling over negative values
+	// that only produce a new unsigned number with the wrong result.
+	if (secs < 0 && ISC_TIME(-secs) > v->timestamp_time)
+	{
+		v->timestamp_date--;
+		v->timestamp_time += (SECONDS_PER_DAY * ISC_TIME_SECONDS_PRECISION) + secs;
+	}
+	else if ((v->timestamp_time += secs) >= (SECONDS_PER_DAY * ISC_TIME_SECONDS_PRECISION))
+	{
+		v->timestamp_date++;
+		v->timestamp_time -= (SECONDS_PER_DAY * ISC_TIME_SECONDS_PRECISION);
+	}
+}
+
 void NoThrowTimeStamp::round_time(ISC_TIME &ntime, const int precision)
 {
 	const int scale = -ISC_TIME_SECONDS_PRECISION_SCALE - precision;

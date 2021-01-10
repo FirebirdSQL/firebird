@@ -52,6 +52,8 @@ DDL12_0			= 120	// rdb$engine_name and rdb$entrypoint in rdb$triggers
 						// rdb$package_name in mon$call_stack
 						// Table rdb$packages
 						// Type of rdb$triggers.rdb$trigger_type changed from SMALLINT to BIGINT
+DDL13_0			= 130	// Table rdb$publications
+						// Table rdb$publication_tables
 
 ASF: Engine that works with ODS11.1 and newer supports access to non-existent system fields.
 Reads return NULL and writes do nothing.
@@ -66,7 +68,7 @@ const int DB_VERSION_DDL11		= 110; // ods11 db, FB2
 const int DB_VERSION_DDL11_1	= 111; // ods11.1 db, FB2.1
 const int DB_VERSION_DDL11_2	= 112; // ods11.2 db, FB2.5
 const int DB_VERSION_DDL12		= 120; // ods12.0 db, FB3.0
-const int DB_VERSION_DDL13		= 130; // TODO: check this constant before branch merging
+const int DB_VERSION_DDL13		= 130; // ods13.0 db, FB4.0
 
 const int DB_VERSION_OLDEST_SUPPORTED = DB_VERSION_DDL8;  // IB4.0 is ods8
 

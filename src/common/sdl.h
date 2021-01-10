@@ -24,14 +24,15 @@
 #ifndef JRD_SDL_H
 #define JRD_SDL_H
 
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
+#include "../common/dsc.h"
 
 struct sdl_info
 {
 	USHORT			sdl_info_fid;
 	USHORT			sdl_info_rid;
-	Firebird::MetaName	sdl_info_field;
-	Firebird::MetaName	sdl_info_relation;
+	Firebird::MetaString	sdl_info_field;
+	Firebird::MetaString	sdl_info_relation;
 	dsc				sdl_info_element;
 	USHORT			sdl_info_dimensions;
 	SLONG			sdl_info_lower[MAX_ARRAY_DIMENSIONS];

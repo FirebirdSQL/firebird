@@ -722,7 +722,7 @@ static int validate(Firebird::UtilSvc* svc)
 		}
 	}
 
-	ClumpletWriter dpb(ClumpletReader::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
+	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 	if (!userName.isEmpty())
 	{
 		dpb.insertString(isc_dpb_trusted_auth, userName);
@@ -757,10 +757,8 @@ static int validate(Firebird::UtilSvc* svc)
 	{
 		// should be EngineContextHolder but it is declared in jrd.cpp
 		BackgroundContextHolder tdbb(dbb, att, &status, FB_FUNCTION);
+
 		att->att_use_count++;
-
-
-		tdbb->tdbb_flags |= TDBB_sweeper;
 
 		val_pool = dbb->createPool();
 		Jrd::ContextPoolHolder context(tdbb, val_pool);
@@ -1029,7 +1027,7 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 		for (USHORT i = 0; i < VAL_MAX_ERROR; i++)
 			vdr_err_counts[i] = 0;
 
-		tdbb->tdbb_flags |= TDBB_sweeper;
+		ThreadSweepGuard sweepGuard(tdbb);
 
 		gds__log("Database: %s\n\tValidation started", fileName.c_str());
 
@@ -1048,8 +1046,6 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 			CCH_flush(tdbb, flushFlags, 0);
 		}
 
-		tdbb->tdbb_flags &= ~TDBB_sweeper;
-
 		cleanup();
 
 		gds__log("Database: %s\n\tValidation finished: %d errors, %d warnings, %d fixed",
@@ -1065,7 +1061,6 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 
 		cleanup();
 		dbb->deletePool(val_pool);
-		tdbb->tdbb_flags &= ~TDBB_sweeper;
 		return false;
 	}
 
@@ -1185,10 +1180,8 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, PageNumber page_number,
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	if (--vdr_tdbb->tdbb_quantum < 0)
+	if (JRD_reschedule(vdr_tdbb))
 	{
-		JRD_reschedule(vdr_tdbb, 0, true);
-
 		if (vdr_service && vdr_service->finished())
 		{
 			CCH_unwind(vdr_tdbb, false);
@@ -1366,7 +1359,6 @@ void Validation::garbage_collect()
 								p[-1] &= ~(1 << (number & 7));
 								vdr_fixed++;
 							}
-							DEBUG;
 						}
 					}
 					else if (!(byte & 1) && (vdr_flags & VDR_records) &&
@@ -1390,7 +1382,6 @@ void Validation::garbage_collect()
 							if (p[-1] == 0xFF && page->pip_extent > bit)
 								page->pip_extent = bit & ((ULONG) ~7);
 						}
-						DEBUG;
 					}
 				}
 			}
@@ -2920,7 +2911,7 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 		{
 			corrupt(VAL_DATA_PAGE_SLOT_NOT_FOUND, relation, pageSpaceId, page_number,
 					window.win_page.getPageNum(), slot);
-			if (vdr_flags & VDR_update && slot < dbb->dbb_dp_per_pp)
+			if ((vdr_flags & VDR_update) && slot < dbb->dbb_dp_per_pp)
 			{
 				CCH_MARK(vdr_tdbb, &window);
 				for (USHORT i = ppage->ppg_count; i < slot; i++)
@@ -2944,7 +2935,7 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 		{
 			corrupt(VAL_DATA_PAGE_SLOT_BAD_VAL, relation, pageSpaceId, page_number,
 					window.win_page.getPageNum(), slot, ppage->ppg_page[slot]);
-			if (vdr_flags & VDR_update && !ppage->ppg_page[slot])
+			if ((vdr_flags & VDR_update) && !ppage->ppg_page[slot])
 			{
 				CCH_MARK(vdr_tdbb, &window);
 				ppage->ppg_page[slot] = page_number;
@@ -2978,8 +2969,8 @@ void Validation::checkDPinPIP(jrd_rel* relation, ULONG page_number)
 	PageSpace* pageSpace = pageMgr.findPageSpace(pageSpaceId);
 	fb_assert(pageSpace);
 
-	const SLONG sequence = page_number / pageMgr.pagesPerPIP;
-	const SLONG relative_bit = page_number % pageMgr.pagesPerPIP;
+	const ULONG sequence = page_number / pageMgr.pagesPerPIP;
+	const ULONG relative_bit = page_number % pageMgr.pagesPerPIP;
 
 	WIN pip_window(pageSpaceId, (sequence == 0) ? pageSpace->pipFirst : sequence * pageMgr.pagesPerPIP - 1);
 

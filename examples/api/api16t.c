@@ -57,7 +57,7 @@ int main (int argc, char** argv)
     if (argc > 1)
         strcpy(empdb, argv[1]);
     else
-        strcpy(empdb, "employee.fdb");
+        strcpy(empdb, "localhost:employee.fdb");
 
     if (isc_attach_database(status, 0, empdb, &DB, 0, NULL))
     {

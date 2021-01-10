@@ -35,7 +35,6 @@
 #include <string.h>
 
 #include "classes/fb_string.h"
-#include "classes/MetaName.h"
 
 #include "../../extern/ttmath/ttmath.h"
 
@@ -85,12 +84,21 @@ public:
 	Int128 operator-() const;
 	Int128 operator/(unsigned value) const;
 	Int128 operator+=(unsigned value);
+	Int128 operator-=(unsigned value);
 	Int128 operator*=(unsigned value);
+
+	Int128 operator<<(int value) const;
+	Int128 operator>>(int value) const;
 
 	int compare(Int128 tgt) const;
 	bool operator>(Int128 value) const;
 	bool operator>=(Int128 value) const;
 	bool operator==(Int128 value) const;
+	bool operator!=(Int128 value) const;
+	Int128 operator&=(Int128 value);
+	Int128 operator|=(Int128 value);
+	Int128 operator^=(Int128 value);
+	Int128 operator~() const;
 	int sign() const;
 
 	Int128 abs() const;

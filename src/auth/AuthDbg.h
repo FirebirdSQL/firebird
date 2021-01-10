@@ -55,7 +55,6 @@ public:
     int authenticate(Firebird::CheckStatusWrapper* status, Firebird::IServerBlock* sBlock,
     				 Firebird::IWriter* writerInterface);
 	void setDbCryptCallback(Firebird::CheckStatusWrapper*, Firebird::ICryptKeyCallback*);
-    int release();
 
 private:
 	Firebird::string str;
@@ -69,7 +68,6 @@ public:
 	DebugClient(Firebird::IPluginConfig*);
 
     int authenticate(Firebird::CheckStatusWrapper* status, Firebird::IClientBlock* sBlock);
-    int release();
 
 private:
 	Firebird::string str;

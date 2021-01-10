@@ -96,7 +96,6 @@ void ERR_bugcheck_msg(const TEXT* msg)
 	Database* const dbb = tdbb->getDatabase();
 
 	dbb->dbb_flags |= DBB_bugcheck;
-	DEBUG;
 	CCH_shutdown(tdbb);
 
 	ERR_post(Arg::Gds(isc_bug_check) << Arg::Str(msg));
@@ -155,7 +154,6 @@ void ERR_error(int number)
  **************************************/
 	TEXT errmsg[MAX_ERRMSG_LEN + 1];
 
-	DEBUG;
 	if (gds__msg_lookup(0, JRD_BUGCHK, number, sizeof(errmsg), errmsg, NULL) < 1)
 		sprintf(errmsg, "error code %d", number);
 
@@ -178,7 +176,6 @@ void ERR_log(int facility, int number, const TEXT* message)
 	TEXT errmsg[MAX_ERRMSG_LEN + 1];
 	thread_db* tdbb = JRD_get_thread_data();
 
-	DEBUG;
 	if (message)
 		fb_utils::copy_terminate(errmsg, message, sizeof(errmsg));
 	else if (gds__msg_lookup(0, facility, number, sizeof(errmsg), errmsg, NULL) < 1)
@@ -321,7 +318,6 @@ void ERR_post(const Arg::StatusVector& v)
 {
 	ERR_post_nothrow(v);
 
-	DEBUG;
 	ERR_punt();
 }
 
@@ -375,7 +371,6 @@ void ERR_warning(const Arg::StatusVector& v)
 	FbStatusVector* s = tdbb->tdbb_status_vector;
 
 	v.copyTo(s);
-	DEBUG;
 	tdbb->getRequest()->req_flags |= req_warning;
 }
 
@@ -433,7 +428,6 @@ static void internal_error(ISC_STATUS status, int number, const TEXT* file, int 
  **************************************/
 	TEXT errmsg[MAX_ERRMSG_LEN + 1];
 
-	DEBUG;
 	if (gds__msg_lookup(0, JRD_BUGCHK, number, sizeof(errmsg), errmsg, NULL) < 1)
 		strcpy(errmsg, "Internal error code");
 

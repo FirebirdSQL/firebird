@@ -18,20 +18,18 @@ set ERRLEV=0
 :MAIN
 @echo.
 @echo Creating directories
-@rmdir /s /q %FB_GEN_DIR% 2>nul
-:: Remove previously generated output, and recreate the directory hierarchy. 
-for %%v in ( alice auth burp dsql gpre isql jrd misc msgs qli examples yvalve) do (
-  @mkdir %FB_GEN_DIR%\%%v 
+:: Create the directory hierarchy.
+for %%v in ( alice auth burp dsql gpre isql jrd misc msgs qli examples yvalve utilities) do (
+  @mkdir %FB_GEN_DIR%\%%v 2>nul
 )
 
-@rmdir /s /q %FB_GEN_DIR%\utilities 2>nul
-
-@mkdir %FB_GEN_DIR%\utilities 2>nul
 @mkdir %FB_GEN_DIR%\utilities\gstat 2>nul
 @mkdir %FB_GEN_DIR%\auth\SecurityDatabase 2>nul
 @mkdir %FB_GEN_DIR%\gpre\std 2>nul
 
-::=======
+call :interfaces
+if "%ERRLEV%"=="1" goto :END
+
 call :btyacc
 if "%ERRLEV%"=="1" goto :END
 
@@ -133,18 +131,18 @@ goto :EOF
 @echo.
 @call set_build_target.bat %* RELEASE
 @echo Building LibTomMath (%FB_OBJ_DIR%)...
-@call compile.bat extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtommath
+@call compile.bat extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtommath
 if errorlevel 1 call :boot2 libtommath_%FB_OBJ_DIR%
 @echo Building LibTomCrypt (%FB_OBJ_DIR%)...
-@call compile.bat extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtomcrypt
+@call compile.bat extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtomcrypt
 if errorlevel 1 call :boot2 libtomcrypt_%FB_OBJ_DIR%
 
 @call set_build_target.bat %* DEBUG
 @echo Building LibTomMath (%FB_OBJ_DIR%)...
-@call compile.bat extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtommath
+@call compile.bat extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtommath
 if errorlevel 1 call :boot2 libtommath_%FB_OBJ_DIR%
 @echo Building LibTomCrypt (%FB_OBJ_DIR%)...
-@call compile.bat extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtomcrypt
+@call compile.bat extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtomcrypt
 if errorlevel 1 call :boot2 libtomcrypt_%FB_OBJ_DIR%
 
 @call set_build_target.bat %*
@@ -156,11 +154,11 @@ goto :EOF
 @echo.
 @call set_build_target.bat %* RELEASE
 @echo Building decNumber (%FB_OBJ_DIR%)...
-@call compile.bat extern\decNumber\msvc\decNumber_MSVC%MSVC_VERSION% decNumber_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log decNumber
+@call compile.bat extern\decNumber\msvc\decNumber_MSVC%MSVC_VERSION% decNumber_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log decNumber
 if errorlevel 1 call :boot2 decNumber_%FB_OBJ_DIR%
 @call set_build_target.bat %* DEBUG
 @echo Building decNumber (%FB_OBJ_DIR%)...
-@call compile.bat extern\decNumber\msvc\decNumber_MSVC%MSVC_VERSION% decNumber_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log decNumber
+@call compile.bat extern\decNumber\msvc\decNumber_MSVC%MSVC_VERSION% decNumber_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log decNumber
 if errorlevel 1 call :boot2 decNumber_%FB_OBJ_DIR%
 @call set_build_target.bat %*
 goto :EOF
@@ -190,9 +188,19 @@ goto :EOF
 @mkdir %FB_ROOT_PATH%\extern\re2\builds\%FB_TARGET_PLATFORM% 2>nul
 @pushd %FB_ROOT_PATH%\extern\re2\builds\%FB_TARGET_PLATFORM%
 @cmake -G "Visual Studio %MSVC_VERSION%" -A %FB_TARGET_PLATFORM% -S %FB_ROOT_PATH%\extern\re2 
+if errorlevel 1 call :boot2 re2
 @cmake --build %FB_ROOT_PATH%\extern\re2\builds\%FB_TARGET_PLATFORM% --target ALL_BUILD --config Release > re2_Release_%FB_TARGET_PLATFORM%.log
 @cmake --build %FB_ROOT_PATH%\extern\re2\builds\%FB_TARGET_PLATFORM% --target ALL_BUILD --config Debug > re2_Debug_%FB_TARGET_PLATFORM%.log
 @popd
+goto :EOF
+
+::===================
+:: Build CLOOP and generate interface headers
+:interfaces
+@echo.
+@echo Building CLOOP and generating interfaces...
+@nmake /s /x interfaces_%FB_TARGET_PLATFORM%.log /f gen_helper.nmake updateCloopInterfaces
+if errorlevel 1 call :boot2 interfaces
 goto :EOF
 
 ::===================

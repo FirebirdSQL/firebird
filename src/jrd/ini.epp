@@ -77,6 +77,7 @@ static void add_security_class(thread_db* tdbb, AutoRequest&, const MetaName& cl
 	USHORT acl_length, const UCHAR* acl);
 static void add_security_to_sys_rel(thread_db*, AutoRequest&, AutoRequest&, AutoRequest&, const MetaName&,
 	const TEXT*, const USHORT, const UCHAR*);
+static void store_default_pub(thread_db*, const MetaName&);
 static void store_generator(thread_db*, const gen*, AutoRequest&, const MetaName&);
 static void store_global_field(thread_db*, const gfld*, AutoRequest&, const MetaName&);
 static void store_intlnames(thread_db*, const MetaName&);
@@ -326,6 +327,10 @@ void INI_format(const char* owner, const char* charset)
 
 	rdbRelationId = USER_DEF_REL_INIT_ID;
 	ps->execute(tdbb, transaction);
+
+	// Store default publication
+
+	store_default_pub(tdbb, ownerName);
 
 	// Store system role
 
@@ -592,6 +597,8 @@ void INI_format(const char* owner, const char* charset)
 	for (const trigger_msg* message = trigger_messages; message->trigmsg_name; ++message)
 		store_message(tdbb, message, handle1);
 
+	handle1.reset();
+
 	// Add additional grants
 
 	MetaName buf;
@@ -855,7 +862,10 @@ void INI_init_dsql(thread_db* tdbb, dsql_dbb* database)
 			}
 
 			if (DTYPE_IS_TEXT(gfield->gfld_dtype))
-				get_charset_by_text_type(field->charSetId.value, gfield->gfld_sub_type);
+			{
+				if (get_charset_by_text_type(field->charSetId.value, gfield->gfld_sub_type))
+					field->charSetId.specified = true;
+			}
 
 			if (gfield->gfld_nullable)
 				field->flags |= FLD_nullable;
@@ -939,7 +949,7 @@ static void add_index_set(thread_db* tdbb)
 		const ini_idx_t* index = &indices[n];
 		jrd_rel* relation = MET_relation(tdbb, index->ini_idx_relid);
 
-		Firebird::MetaName indexName;
+		MetaName indexName;
 		indexName.printf("RDB$INDEX_%d", index->ini_idx_index_id);
 
 		STORE(REQUEST_HANDLE handle1) X IN RDB$INDICES
@@ -1010,7 +1020,7 @@ static void add_security_to_sys_rel(thread_db*	tdbb,
 									AutoRequest& reqAddSC,
 									AutoRequest& reqModObjSC,
 									AutoRequest& reqInsUserPriv,
-									const Firebird::MetaName&	user_name,
+									const MetaName&	user_name,
 									const TEXT*	rel_name,
 									const USHORT	acl_length,
 									const UCHAR*	acl)
@@ -1029,7 +1039,7 @@ static void add_security_to_sys_rel(thread_db*	tdbb,
  *      privilege.
  *
  **************************************/
-	Firebird::MetaName security_class, default_class;
+	MetaName security_class, default_class;
 
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
@@ -1118,7 +1128,7 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 	SET_TDBB(tdbb);
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
-	Firebird::MetaName security_class;
+	MetaName security_class;
 	security_class.printf("%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
 		DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
 
@@ -1309,6 +1319,32 @@ static void store_admin_role(thread_db* tdbb, const MetaName& roleName, MetaName
 	jrd_tra* transaction = attachment->getSysTransaction();
 	AutoPreparedStatement ps(attachment->prepareStatement(tdbb, transaction, sql));
 	ps->execute(tdbb, transaction);
+}
+
+
+static void store_default_pub(thread_db* tdbb, const MetaName& ownerName)
+{
+	Attachment* const attachment = tdbb->getAttachment();
+	AutoRequest handle;
+
+	STORE(REQUEST_HANDLE handle) PUB IN RDB$PUBLICATIONS
+	{
+		PAD(DEFAULT_PUBLICATION, PUB.RDB$PUBLICATION_NAME);
+		PUB.RDB$PUBLICATION_NAME.NULL = FALSE;
+
+		PAD(ownerName.c_str(), PUB.RDB$OWNER_NAME);
+		PUB.RDB$OWNER_NAME.NULL = FALSE;
+
+		PUB.RDB$SYSTEM_FLAG = RDB_system;
+		PUB.RDB$SYSTEM_FLAG.NULL = FALSE;
+
+		PUB.RDB$ACTIVE_FLAG = 0;
+		PUB.RDB$ACTIVE_FLAG.NULL = FALSE;
+
+		PUB.RDB$AUTO_ENABLE = 0;
+		PUB.RDB$AUTO_ENABLE.NULL = FALSE;
+	}
+	END_STORE
 }
 
 

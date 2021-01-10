@@ -89,17 +89,6 @@ public:
 		}
 	}
 
-	int release()
-	{
-		if (--refCounter == 0)
-		{
-			delete this;
-			return 0;
-		}
-
-		return 1;
-	}
-
 public:
 	UdrPluginImpl* loadModule(ThrowStatusWrapper* status, IRoutineMetadata* metadata,
 		PathName* moduleName, string* entryPoint);
@@ -126,9 +115,6 @@ public:
 		IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder);
 	IExternalTrigger* makeTrigger(ThrowStatusWrapper* status, IExternalContext* context,
 		IRoutineMetadata* metadata, IMetadataBuilder* fieldsBuilder);
-
-public:
-	void dispose();
 
 private:
 	Mutex childrenMutex;
@@ -302,12 +288,6 @@ public:
 	}
 
 public:
-	void dispose()
-	{
-		delete this;
-	}
-
-public:
 	void getCharSet(ThrowStatusWrapper* status, IExternalContext* context,
 		char* name, unsigned nameSize)
 	{
@@ -370,12 +350,6 @@ public:
 	}
 
 public:
-	void dispose()
-	{
-		delete this;
-	}
-
-public:
 	void getCharSet(ThrowStatusWrapper* status, IExternalContext* context,
 		char* name, unsigned nameSize)
 	{
@@ -434,12 +408,6 @@ public:
 	~SharedTrigger()
 	{
 		engine->deleteChildren(children);
-	}
-
-public:
-	void dispose()
-	{
-		delete this;
 	}
 
 public:
@@ -736,12 +704,6 @@ IExternalTrigger* Engine::makeTrigger(ThrowStatusWrapper* status, IExternalConte
 	IRoutineMetadata* metadata, IMetadataBuilder* fieldsBuilder)
 {
 	return FB_NEW SharedTrigger(status, this, context, metadata, fieldsBuilder);
-}
-
-
-void Engine::dispose()
-{
-	delete this;
 }
 
 

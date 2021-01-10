@@ -969,8 +969,12 @@ static const struct {
 	{335545266, "01004"}, // 946 truncate_warn
 	{335545267, "01004"}, // 947 truncate_monitor
 	{335545268, "01004"}, // 948 truncate_context
-	{335545269, "08001"}, // 949 ts_file_exists
-	{335545270, "42000"}, // 950 tablespace_name
+	{335545269, "21000"}, // 949 merge_dup_update
+	{335545270, "XX000"}, // 950 wrong_page
+	{335545271, "HY000"}, // 951 repl_error
+	{335545272, "08003"}, // 952 ses_reset_failed
+	{335545273, "08001"}, // 953 ts_file_exists
+	{335545274, "42000"}, // 954 tablespace_name
 	{335740929, "00000"}, //   1 gfix_db_name
 	{335740930, "00000"}, //   2 gfix_invalid_sw
 	{335740932, "00000"}, //   4 gfix_incmp_sw
@@ -1457,6 +1461,7 @@ static const struct {
 	{337117257, "08006"}, //  73 nbackup_user_stop
 	{337117259, "54023"}, //  75 nbackup_deco_parse
 	{337117261, "00000"}, //  77 nbackup_lostrec_guid_db
+	{337117265, "00000"}, //  81 nbackup_seq_misuse
 	{337182750, "00000"}, //  30 trace_conflict_acts
 	{337182751, "00000"}, //  31 trace_act_notfound
 	{337182752, "00000"}, //  32 trace_switch_once

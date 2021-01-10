@@ -548,8 +548,7 @@ void BackupManager::endBackup(thread_db* tdbb, bool recover)
 		{
 			int n = 0;
 			do {
-				if (--tdbb->tdbb_quantum < 0)
-					JRD_reschedule(tdbb, QUANTUM, true);
+				JRD_reschedule(tdbb);
 
 				WIN window2(DB_PAGE_SPACE, all.current().db_page);
 				NBAK_TRACE(("Merge page %d, diff=%d", all.current().db_page, all.current().diff_page));

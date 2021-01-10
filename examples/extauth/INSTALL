@@ -1,14 +1,14 @@
 0. Brief description.
 
-ExtAuth plugin is useful when you want to run 'execute statement on external' statement
-connecting to databases on non-local servers but do not wish to explicitly add login and
-password to your PL/SQL code. When 2 servers completely trust each other this plugin may
-be used to enable access to remote database without entering login and password in SQL
-code. To ensure that connection comes from trusted source shared secret key (placed into
-plugin's .conf file) is used. That means that the value of a "Key" parameter should be
-exacly the same for all trusting each other hosts. Pay attention - SQL name of connected
-user on remote host may not match local logon, it depends also upon mappings on remote
-host.
+fbSampleExtAuth plugin is useful when you want to run 'execute statement on external'
+statement connecting to databases on non-local servers but do not wish to explicitly
+add login and password to your PL/SQL code. When 2 servers completely trust each other
+this plugin may be used to enable access to remote database without entering login and
+password in SQL code. To ensure that connection comes from trusted source shared secret
+key (placed into plugin's .conf file) is used. That means that the value of a "Key"
+parameter should be exacly the same for all trusting each other hosts. Pay attention -
+SQL name of connected user on remote host may not match local logon, it depends also
+upon mappings on remote host.
 
 1. Before starting the build.
 
@@ -35,19 +35,19 @@ separate servers. See 'Testing' for more details.
 4.Testing.
 
 - imagine you have two hosts: host1 and host2;
-- generate configuration file using extauth_keygen utility on any of them (only ONCE -
+- generate configuration file using fbSampleExtAuthKeygen utility on any of them (only ONCE -
 on ONE host !!!);
 - copy that file and plugin itself to $FIREBIRD/plugins directory on each host;
 - modify firebird.cond, it should contain something like:
-	AuthServer = Srp256, ExtAuth
-	AuthClient = Srp256, ExtAuth
+	AuthServer = Srp256, fbSampleExtAuth
+	AuthClient = Srp256, fbSampleExtAuth
 lines, certainly something else may be used instead recommended Srp256;
-- if you need WIN_SSPI plugin please add it AFTER ExtAuth;
+- if you need WIN_SSPI plugin please add it AFTER fbSampleExtAuth;
 - do not forget to restart firebird after reconfiguring it;
 - create minimal required mapping on host1:
-	CREATE MAPPING EXT USING PLUGIN EXTAUTH FROM ANY USER TO USER EXTUSER;
+	CREATE MAPPING EXT USING PLUGIN fbSampleExtAuth FROM ANY USER TO USER EXTUSER;
 - run the following script on host2:
-	^SET TERM ^;
+	SET TERM ^;
 	EXECUTE BLOCK RETURNS(REMNAME CHAR(32)) AS BEGIN
 		EXECUTE STATEMENT 'SELECT CURRENT_USER FROM RDB$DATABASE'
 				ON EXTERNAL 'host1:employee' INTO :REMNAME;

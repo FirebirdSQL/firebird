@@ -621,20 +621,42 @@ Savepoint* Savepoint::release(Savepoint* prior)
 // AutoSavePoint implementation
 
 AutoSavePoint::AutoSavePoint(thread_db* tdbb, jrd_tra* trans)
-	: m_tdbb(tdbb), m_transaction(trans), m_released(false)
+	: m_tdbb(tdbb), m_transaction(trans), m_number(0)
 {
-	trans->startSavepoint();
+	const auto savepoint = trans->startSavepoint();
+	m_number = savepoint->getNumber();
 }
 
 AutoSavePoint::~AutoSavePoint()
 {
-	if (!(m_tdbb->getDatabase()->dbb_flags & DBB_bugcheck))
+	if (m_number && !(m_tdbb->getDatabase()->dbb_flags & DBB_bugcheck))
 	{
-		if (m_released)
-			m_transaction->rollforwardSavepoint(m_tdbb);
-		else
-			m_transaction->rollbackSavepoint(m_tdbb);
+		fb_assert(m_transaction->tra_save_point);
+		fb_assert(m_transaction->tra_save_point->getNumber() == m_number);
+		m_transaction->rollbackSavepoint(m_tdbb);
 	}
+}
+
+void AutoSavePoint::release()
+{
+	if (!m_number)
+		return;
+
+	fb_assert(m_transaction->tra_save_point);
+	fb_assert(m_transaction->tra_save_point->getNumber() == m_number);
+	m_transaction->rollforwardSavepoint(m_tdbb);
+	m_number = 0;
+}
+
+void AutoSavePoint::rollback(bool preserveLocks)
+{
+	if (!m_number)
+		return;
+
+	fb_assert(m_transaction->tra_save_point);
+	fb_assert(m_transaction->tra_save_point->getNumber() == m_number);
+	m_transaction->rollbackSavepoint(m_tdbb, preserveLocks);
+	m_number = 0;
 }
 
 
@@ -652,7 +674,7 @@ StableCursorSavePoint::StableCursorSavePoint(thread_db* tdbb, jrd_tra* trans, bo
 	if (!trans->tra_save_point)
 		return;
 
-	const Savepoint* const savepoint = trans->startSavepoint();
+	const auto savepoint = trans->startSavepoint();
 	m_number = savepoint->getNumber();
 }
 
@@ -662,8 +684,11 @@ void StableCursorSavePoint::release()
 	if (!m_number)
 		return;
 
-	while (m_transaction->tra_save_point && m_transaction->tra_save_point->getNumber() >= m_number)
+	while (m_transaction->tra_save_point &&
+		m_transaction->tra_save_point->getNumber() >= m_number)
+	{
 		m_transaction->rollforwardSavepoint(m_tdbb);
+	}
 
 	m_number = 0;
 }

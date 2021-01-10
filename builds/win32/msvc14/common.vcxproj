@@ -36,7 +36,7 @@
     <ClCompile Include="..\..\..\src\common\classes\init.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\InternalMessageBuffer.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\locks.cpp" />
-    <ClCompile Include="..\..\..\src\common\classes\MetaName.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\MetaString.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\MsgPrint.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\NoThrowTimeStamp.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\ParsedList.cpp" />
@@ -46,6 +46,7 @@
     <ClCompile Include="..\..\..\src\common\classes\Synchronize.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\SyncObject.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\TempFile.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\TimerImpl.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\timestamp.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\TomCryptHash.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\UserBlob.cpp" />
@@ -134,7 +135,7 @@
     <ClInclude Include="..\..\..\src\common\classes\init.h" />
     <ClInclude Include="..\..\..\src\common\classes\InternalMessageBuffer.h" />
     <ClInclude Include="..\..\..\src\common\classes\locks.h" />
-    <ClInclude Include="..\..\..\src\common\classes\MetaName.h" />
+    <ClInclude Include="..\..\..\src\common\classes\MetaString.h" />
     <ClInclude Include="..\..\..\src\common\classes\MsgPrint.h" />
     <ClInclude Include="..\..\..\src\common\classes\NestConst.h" />
     <ClInclude Include="..\..\..\src\common\classes\NoThrowTimeStamp.h" />
@@ -153,9 +154,9 @@
     <ClInclude Include="..\..\..\src\common\classes\Synchronize.h" />
     <ClInclude Include="..\..\..\src\common\classes\SyncObject.h" />
     <ClInclude Include="..\..\..\src\common\classes\TempFile.h" />
+    <ClInclude Include="..\..\..\src\common\classes\TimerImpl.h" />
     <ClInclude Include="..\..\..\src\common\classes\timestamp.h" />
     <ClInclude Include="..\..\..\src\common\classes\tree.h" />
-    <ClInclude Include="..\..\..\src\common\classes\TriState.h" />
     <ClInclude Include="..\..\..\src\common\classes\UserBlob.h" />
     <ClInclude Include="..\..\..\src\common\classes\VaryStr.h" />
     <ClInclude Include="..\..\..\src\common\classes\vector.h" />

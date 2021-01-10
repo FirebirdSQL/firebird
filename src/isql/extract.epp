@@ -406,7 +406,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 
 			// International character sets
 			// Print only the character set
-			if ((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR) &&
+			if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
 				!RFR.RDB$COLLATION_ID.NULL && RFR.RDB$COLLATION_ID)
 			{
 				char_sets[0] = '\0';
@@ -425,7 +425,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 				return FINI_ERROR;
 			}
 
-			if ((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR))
+			if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying))
 			{
 				isqlGlob.printf("(%d)",
 					ISQL_get_char_length(
@@ -441,7 +441,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			if (!FLD.RDB$DIMENSIONS.NULL)
 				ISQL_array_dimensions(FLD.RDB$FIELD_NAME);
 
-			if (FLD.RDB$FIELD_TYPE == BLOB)
+			if (FLD.RDB$FIELD_TYPE == blr_blob)
 			{
 				const int subtype = FLD.RDB$FIELD_SUB_TYPE;
 				isqlGlob.printf(" SUB_TYPE ");
@@ -455,9 +455,9 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			}
 
 			// International character sets
-			if ((((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR) &&
+			if ((((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
 				  FLD.RDB$FIELD_SUB_TYPE == fb_text_subtype_text) ||
-				 FLD.RDB$FIELD_TYPE == BLOB) &&
+				 FLD.RDB$FIELD_TYPE == blr_blob) &&
 				!FLD.RDB$CHARACTER_SET_ID.NULL)
 			{
 				char_sets[0] = '\0';
@@ -812,7 +812,7 @@ static void get_procedure_args(const char* proc_name)
 
 				// International character sets
 				// Print only the collation
-				if ((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR) &&
+				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
 					!prm_collation_id_null && prm_collation_id)
 				{
 					char_sets[0] = '\0';
@@ -844,7 +844,7 @@ static void get_procedure_args(const char* proc_name)
 				// Changed this to return RDB$CHARACTER_LENGTH if available
 				// Fix for Bug #122563
 				//   FSG 18.Nov.2000
-				if ((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR))
+				if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying))
 				{
 					isqlGlob.printf("(%d)",
 						ISQL_get_char_length(
@@ -857,7 +857,7 @@ static void get_procedure_args(const char* proc_name)
 
 				// Show international character sets and collations
 				if ((!FLD.RDB$COLLATION_ID.NULL || !FLD.RDB$CHARACTER_SET_ID.NULL) &&
-					!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) &&
+					!(((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying)) &&
 					  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 				{
 					char_sets[0] = 0;
@@ -1036,7 +1036,7 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 
 				// International character sets
 				// Print only the collation
-				if ((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR) &&
+				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
 					!prm_collation_id_null && prm_collation_id)
 				{
 					char_sets[0] = '\0';
@@ -1068,7 +1068,7 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 				// Changed this to return RDB$CHARACTER_LENGTH if available
 				// Fix for Bug #122563
 				//   FSG 18.Nov.2000
-				if ((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR))
+				if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying))
 				{
 					isqlGlob.printf("(%d)",
 						ISQL_get_char_length(
@@ -1081,7 +1081,7 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 
 				// Show international character sets and collations
 				if ((!FLD.RDB$COLLATION_ID.NULL || !FLD.RDB$CHARACTER_SET_ID.NULL) &&
-					!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) &&
+					!(((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying)) &&
 					  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 				{
 					char_sets[0] = 0;
@@ -2295,7 +2295,7 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 			return; // ps_ERR;
 		}
 
-		if (FLD.RDB$FIELD_TYPE == BLOB)
+		if (FLD.RDB$FIELD_TYPE == blr_blob)
 		{
 			const int subtype = FLD.RDB$FIELD_SUB_TYPE;
 			isqlGlob.printf(" SUB_TYPE ");
@@ -2309,7 +2309,7 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 			}
 			isqlGlob.printf(" SEGMENT SIZE %u", (USHORT) FLD.RDB$SEGMENT_LENGTH);
 		}
-		else if ((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR))
+		else if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying))
 		{
 			// Length for chars
 			isqlGlob.printf("(%d)", ISQL_get_field_length(FLD.RDB$FIELD_NAME));
@@ -2323,7 +2323,7 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 
 		// Since the character set is part of the field type, display that information now.
 		if (!FLD.RDB$CHARACTER_SET_ID.NULL &&
-			!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) &&
+			!(((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying)) &&
 			  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 		{
 
@@ -2422,7 +2422,7 @@ static void list_domains(SSHORT default_char_set_id)
 			return; // ps_ERR;
 		}
 
-		if (FLD.RDB$FIELD_TYPE == BLOB)
+		if (FLD.RDB$FIELD_TYPE == blr_blob)
 		{
 			const int subtype = FLD.RDB$FIELD_SUB_TYPE;
 			isqlGlob.printf(" SUB_TYPE ");
@@ -2437,7 +2437,7 @@ static void list_domains(SSHORT default_char_set_id)
 			}
 			isqlGlob.printf(" SEGMENT SIZE %u", (USHORT) FLD.RDB$SEGMENT_LENGTH);
 		}
-		else if ((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR))
+		else if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying))
 		{
 			// Length for chars
 			isqlGlob.printf("(%d)", ISQL_get_field_length(FLD.RDB$FIELD_NAME));
@@ -2451,7 +2451,7 @@ static void list_domains(SSHORT default_char_set_id)
 
 		// Since the character set is part of the field type, display that information now.
 		if (!FLD.RDB$CHARACTER_SET_ID.NULL &&
-			!(((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR)) &&
+			!(((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying)) &&
 			  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 		{
 			char_sets[0] = 0;
@@ -2624,7 +2624,7 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 
 				// International character sets
 				// Print only the character set
-				if ((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR) &&
+				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
 					!RFR.RDB$COLLATION_ID.NULL && RFR.RDB$COLLATION_ID)
 				{
 					char_sets[0] = '\0';
@@ -2645,7 +2645,7 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 					return;
 				}
 
-				if ((FLD.RDB$FIELD_TYPE == T_CHAR) || (FLD.RDB$FIELD_TYPE == VARCHAR))
+				if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying))
 				{
 					isqlGlob.printf("(%d)",
 						ISQL_get_char_length(
@@ -2661,7 +2661,7 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 				if (!FLD.RDB$DIMENSIONS.NULL)
 					ISQL_array_dimensions(FLD.RDB$FIELD_NAME);
 
-				if (FLD.RDB$FIELD_TYPE == BLOB)
+				if (FLD.RDB$FIELD_TYPE == blr_blob)
 				{
 					const int subtype = FLD.RDB$FIELD_SUB_TYPE;
 					isqlGlob.printf(" SUB_TYPE ");
@@ -2675,9 +2675,9 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 				}
 
 				// International character sets
-				if ((((FLD.RDB$FIELD_TYPE == T_CHAR || FLD.RDB$FIELD_TYPE == VARCHAR) &&
+				if ((((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
 					  FLD.RDB$FIELD_SUB_TYPE == fb_text_subtype_text) ||
-					 FLD.RDB$FIELD_TYPE == BLOB) &&
+					 FLD.RDB$FIELD_TYPE == blr_blob) &&
 					!FLD.RDB$CHARACTER_SET_ID.NULL)
 				{
 					char_sets[0] = '\0';
@@ -2974,9 +2974,9 @@ static void list_functions_legacy()
 			fb_assert(Column_types[i].type != 0);
 
 			// Print length where appropriate
-			if ((FNA.RDB$FIELD_TYPE == T_CHAR) ||
-				(FNA.RDB$FIELD_TYPE == VARCHAR) ||
-				(FNA.RDB$FIELD_TYPE == CSTRING))
+			if ((FNA.RDB$FIELD_TYPE == blr_text) ||
+				(FNA.RDB$FIELD_TYPE == blr_varying) ||
+				(FNA.RDB$FIELD_TYPE == blr_cstring))
 			{
 				bool did_charset = false;
 				FOR CHARSET IN RDB$CHARACTER_SETS
@@ -3004,9 +3004,10 @@ static void list_functions_legacy()
 				bool precision_known = false;
 
 				if (isqlGlob.major_ods >= ODS_VERSION10 &&
-					(FNA.RDB$FIELD_TYPE == SMALLINT ||
-					 FNA.RDB$FIELD_TYPE == INTEGER ||
-					 FNA.RDB$FIELD_TYPE == BIGINT))
+					(FNA.RDB$FIELD_TYPE == blr_short ||
+					 FNA.RDB$FIELD_TYPE == blr_long ||
+					 FNA.RDB$FIELD_TYPE == blr_int64 ||
+					 FNA.RDB$FIELD_TYPE == blr_int128))
 				{
 					// We are ODS >= 10 and could be any Dialect
 					// We are Dialect >=3 since FIELD_PRECISION is non-NULL
@@ -3025,16 +3026,16 @@ static void list_functions_legacy()
 				if (!precision_known)
 				{
 					// Take a stab at numerics and decimals
-					if ((FNA.RDB$FIELD_TYPE == SMALLINT) && (FNA.RDB$FIELD_SCALE < 0))
+					if ((FNA.RDB$FIELD_TYPE == blr_short) && (FNA.RDB$FIELD_SCALE < 0))
 						fb_utils::snprintf(type_buffer, sizeof(type_buffer), "NUMERIC(4, %d)", -FNA.RDB$FIELD_SCALE);
-					else if ((FNA.RDB$FIELD_TYPE == INTEGER) && (FNA.RDB$FIELD_SCALE < 0))
+					else if ((FNA.RDB$FIELD_TYPE == blr_long) && (FNA.RDB$FIELD_SCALE < 0))
 						fb_utils::snprintf(type_buffer, sizeof(type_buffer), "NUMERIC(9, %d)", -FNA.RDB$FIELD_SCALE);
-					else if ((FNA.RDB$FIELD_TYPE == DOUBLE_PRECISION) && (FNA.RDB$FIELD_SCALE < 0))
+					else if ((FNA.RDB$FIELD_TYPE == blr_double) && (FNA.RDB$FIELD_SCALE < 0))
 						fb_utils::snprintf(type_buffer, sizeof(type_buffer), "NUMERIC(15, %d)", -FNA.RDB$FIELD_SCALE);
 					else
 						fb_utils::snprintf(type_buffer, sizeof(type_buffer), "%s", Column_types[i].type_name);
 				} // if !precision_known
-			} // if T_CHAR or VARCHAR or CSTRING ... else
+			} // if blr_text or blr_varying or blr_cstring ... else
 
 			// If a return argument, save it for the end, otherwise print
 

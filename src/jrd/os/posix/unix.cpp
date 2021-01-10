@@ -343,10 +343,10 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
 				if (SYSCALL_INTERRUPTED(err))
 					continue;
 
-				if (err == EOPNOTSUPP || err == ENOSYS)
-					file->fil_flags |= FIL_no_fast_extend;
-				else
+				if (err != EOPNOTSUPP && err != ENOSYS)
 					unix_error("fallocate", file, isc_io_write_err);
+
+				file->fil_flags |= FIL_no_fast_extend;
 				return;
 			}
 
@@ -357,7 +357,6 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
 				fflush(stderr);
 #endif
 				unix_error("fallocate_retry", file, isc_io_write_err);
-				return;
 			}
 
 			leftPages -= extendBy;
@@ -480,10 +479,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
  **************************************/
 
 	if (file->fil_desc == -1)
-	{
 		unix_error("fstat", file, isc_io_access_err);
-		return (0);
-	}
 
 	struct STAT statistics;
 	if (os_utils::fstat(file->fil_desc, &statistics))
@@ -553,14 +549,10 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 
 	for (i = 0; i < IO_RETRY; i++)
 	{
-		if ((bytes = os_utils::pread(file->fil_desc, address, length, 0)) < 0)
-		{
-			if (SYSCALL_INTERRUPTED(errno))
-				continue;
-			unix_error("read", file, isc_io_read_err);
-		}
-		else
+		if ((bytes = os_utils::pread(file->fil_desc, address, length, 0)) == length)
 			break;
+		if (bytes < 0 && !SYSCALL_INTERRUPTED(errno))
+			unix_error("read", file, isc_io_read_err);
 	}
 
 	if (i == IO_RETRY)
@@ -762,7 +754,7 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, true);
 
-	const FB_UINT64 size = dbb->dbb_page_size;
+	const SLONG size = dbb->dbb_page_size;
 
 	for (i = 0; i < IO_RETRY; i++)
 	{

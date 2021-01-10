@@ -80,12 +80,10 @@ bool TimeZonesTableScan::retrieveRecord(thread_db* tdbb, jrd_rel* relation,
 //--------------------------------------
 
 
-TimeZoneTransitionsResultSet::TimeZoneTransitionsResultSet(ThrowStatusExceptionWrapper* status,
-		IExternalContext* context, void* inMsg, void* outMsg)
-	: out(static_cast<TimeZoneTransitionsOutput::Type*>(outMsg))
+TimeZonePackage::TransitionsResultSet::TransitionsResultSet(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const TransitionsInput::Type* in, TransitionsOutput::Type* aOut)
+	: out(aOut)
 {
-	TimeZoneTransitionsInput::Type* in = static_cast<TimeZoneTransitionsInput::Type*>(inMsg);
-
 	out->startTimestampNull = out->endTimestampNull = out->zoneOffsetNull =
 		out->dstOffsetNull = out->effectiveOffsetNull = FB_FALSE;
 
@@ -94,7 +92,7 @@ TimeZoneTransitionsResultSet::TimeZoneTransitionsResultSet(ThrowStatusExceptionW
 	iterator = FB_NEW TimeZoneRuleIterator(tzId, in->fromTimestamp, in->toTimestamp);
 }
 
-FB_BOOLEAN TimeZoneTransitionsResultSet::fetch(ThrowStatusExceptionWrapper* status)
+FB_BOOLEAN TimeZonePackage::TransitionsResultSet::fetch(ThrowStatusExceptionWrapper* status)
 {
 	if (!iterator->next())
 		return false;
@@ -112,14 +110,59 @@ FB_BOOLEAN TimeZoneTransitionsResultSet::fetch(ThrowStatusExceptionWrapper* stat
 //--------------------------------------
 
 
-void TimeZoneDatabaseVersionFunction::execute(ThrowStatusExceptionWrapper* status,
-	IExternalContext* context, void* inMsg, void* outMsg)
+void TimeZonePackage::databaseVersionFunction(Firebird::ThrowStatusExceptionWrapper* status,
+	Firebird::IExternalContext* context, const void*, DatabaseVersionOutput::Type* out)
 {
-	TimeZoneDatabaseVersionOutput::Type* out = static_cast<TimeZoneDatabaseVersionOutput::Type*>(outMsg);
-
 	string str;
 	TimeZoneUtil::getDatabaseVersion(str);
 
 	out->versionNull = FB_FALSE;
 	out->version.set(str.c_str());
+}
+
+
+//--------------------------------------
+
+
+TimeZonePackage::TimeZonePackage(Firebird::MemoryPool& pool)
+	: SystemPackage(
+		pool,
+		"RDB$TIME_ZONE_UTIL",
+		ODS_13_0,
+		// procedures
+		{
+			SystemProcedure(
+				pool,
+				"TRANSITIONS",
+				SystemProcedureFactory<TransitionsInput, TransitionsOutput, transitionsProcedure>(),
+				prc_selectable,
+				// input parameters
+				{
+					{"RDB$TIME_ZONE_NAME", fld_tz_name, false},
+					{"RDB$FROM_TIMESTAMP", fld_timestamp_tz, false},
+					{"RDB$TO_TIMESTAMP", fld_timestamp_tz, false}
+				},
+				// output parameters
+				{
+					{"RDB$START_TIMESTAMP", fld_timestamp_tz, false},
+					{"RDB$END_TIMESTAMP", fld_timestamp_tz, false},
+					{"RDB$ZONE_OFFSET", fld_tz_offset, false},
+					{"RDB$DST_OFFSET", fld_tz_offset, false},
+					{"RDB$EFFECTIVE_OFFSET", fld_tz_offset, false}
+				}
+			)
+		},
+		// functions
+		{
+			SystemFunction(
+				pool,
+				"DATABASE_VERSION",
+				SystemFunctionFactory<VoidMessage, DatabaseVersionOutput, databaseVersionFunction>(),
+				// parameters
+				{},
+				{fld_tz_db_version, false}
+			)
+		}
+	)
+{
 }

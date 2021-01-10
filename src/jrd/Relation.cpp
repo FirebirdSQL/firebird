@@ -23,6 +23,7 @@
 #include "firebird.h"
 #include "../jrd/Relation.h"
 
+#include "../jrd/met.h"
 #include "../jrd/tra.h"
 #include "../jrd/btr_proto.h"
 #include "../jrd/dpm_proto.h"
@@ -36,6 +37,21 @@ using namespace Jrd;
 
 /// jrd_rel
 
+bool jrd_rel::isReplicating(thread_db* tdbb)
+{
+	Database* const dbb = tdbb->getDatabase();
+	if (!dbb->isReplicating(tdbb))
+		return false;
+
+	Attachment* const attachment = tdbb->getAttachment();
+	attachment->checkReplSetLock(tdbb);
+
+	if (rel_repl_state.isUnknown())
+		rel_repl_state = MET_get_repl_state(tdbb, rel_name);
+
+	return rel_repl_state.value;
+}
+
 RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages)
 {
 	if (tdbb->tdbb_flags & TDBB_use_db_page_space)
@@ -44,14 +60,11 @@ RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool a
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
 
-	SINT64 inst_id;
-	// Vlad asked for this compile-time check to make sure we can contain a txn number here
-	typedef int RangeCheck1[sizeof(inst_id) >= sizeof(TraNumber)];
-	typedef int RangeCheck2[sizeof(inst_id) >= sizeof(AttNumber)];
+	RelationPages::InstanceId inst_id;
 
 	if (rel_flags & REL_temp_tran)
 	{
-		if (tran > 0 && tran != MAX_TRA_NUMBER) //if (tran > 0)
+		if (tran != 0 && tran != MAX_TRA_NUMBER)
 			inst_id = tran;
 		else if (tdbb->tdbb_temp_traid)
 			inst_id = tdbb->tdbb_temp_traid;
@@ -94,7 +107,7 @@ RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool a
 
 #ifdef VIO_DEBUG
 		VIO_trace(DEBUG_WRITES,
-			"jrd_rel::getPages rel_id %u, inst %" SQUADFORMAT", ppp %" SLONGFORMAT", irp %" SLONGFORMAT", addr 0x%x\n",
+			"jrd_rel::getPages rel_id %u, inst %" UQUADFORMAT", ppp %" ULONGFORMAT", irp %" ULONGFORMAT", addr 0x%x\n",
 			rel_id,
 			newPages->rel_instance_id,
 			newPages->rel_pages ? (*newPages->rel_pages)[0] : 0,
@@ -121,7 +134,7 @@ RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool a
 		const index_desc* const end = indices->items + idx_count;
 		for (index_desc* idx = indices->items; idx < end; idx++)
 		{
-			Firebird::MetaName idx_name;
+			MetaName idx_name;
 			MET_lookup_index(tdbb, idx_name, this->rel_name, idx->idx_id + 1);
 
 			idx->idx_root = 0;
@@ -130,7 +143,7 @@ RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool a
 
 #ifdef VIO_DEBUG
 			VIO_trace(DEBUG_WRITES,
-				"jrd_rel::getPages rel_id %u, inst %" SQUADFORMAT", irp %" SLONGFORMAT", idx %u, idx_root %" SLONGFORMAT", addr 0x%x\n",
+				"jrd_rel::getPages rel_id %u, inst %" UQUADFORMAT", irp %" ULONGFORMAT", idx %u, idx_root %" ULONGFORMAT", addr 0x%x\n",
 				rel_id,
 				newPages->rel_instance_id,
 				newPages->rel_index_root,
@@ -158,9 +171,7 @@ bool jrd_rel::delPages(thread_db* tdbb, TraNumber tran, RelationPages* aPages)
 	if (!pages || !pages->rel_instance_id)
 		return false;
 
-	//fb_assert((tran <= 0) || ((tran > 0) && (pages->rel_instance_id == tran)));
-	fb_assert(tran == 0 || tran == MAX_TRA_NUMBER ||
-		(tran > 0 && pages->rel_instance_id == tran));
+	fb_assert(tran == 0 || tran == MAX_TRA_NUMBER || pages->rel_instance_id == tran);
 
 	fb_assert(pages->useCount > 0);
 
@@ -169,7 +180,7 @@ bool jrd_rel::delPages(thread_db* tdbb, TraNumber tran, RelationPages* aPages)
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_WRITES,
-		"jrd_rel::delPages rel_id %u, inst %" SQUADFORMAT", ppp %" SLONGFORMAT", irp %" SLONGFORMAT", addr 0x%x\n",
+		"jrd_rel::delPages rel_id %u, inst %" UQUADFORMAT", ppp %" ULONGFORMAT", irp %" ULONGFORMAT", addr 0x%x\n",
 		rel_id,
 		pages->rel_instance_id,
 		pages->rel_pages ? (*pages->rel_pages)[0] : 0,
@@ -222,8 +233,8 @@ void jrd_rel::getRelLockKey(thread_db* tdbb, UCHAR* key)
 	memcpy(key, &val, sizeof(ULONG));
 	key += sizeof(ULONG);
 
-	const SINT64 inst_id = getPages(tdbb)->rel_instance_id;
-	memcpy(key, &inst_id, sizeof(SINT64));
+	const RelationPages::InstanceId inst_id = getPages(tdbb)->rel_instance_id;
+	memcpy(key, &inst_id, sizeof(inst_id));
 }
 
 USHORT jrd_rel::getRelLockKeyLength() const
@@ -313,6 +324,45 @@ bool jrd_rel::hasTriggers() const
 			return true;
 	}
 	return false;
+}
+
+void jrd_rel::releaseTriggers(thread_db* tdbb, bool destroy)
+{
+	MET_release_triggers(tdbb, &rel_pre_store, destroy);
+	MET_release_triggers(tdbb, &rel_post_store, destroy);
+	MET_release_triggers(tdbb, &rel_pre_erase, destroy);
+	MET_release_triggers(tdbb, &rel_post_erase, destroy);
+	MET_release_triggers(tdbb, &rel_pre_modify, destroy);
+	MET_release_triggers(tdbb, &rel_post_modify, destroy);
+}
+
+void jrd_rel::replaceTriggers(thread_db* tdbb, TrigVector** triggers)
+{
+	TrigVector* tmp_vector;
+
+	tmp_vector = rel_pre_store;
+	rel_pre_store = triggers[TRIGGER_PRE_STORE];
+	MET_release_triggers(tdbb, &tmp_vector, true);
+
+	tmp_vector = rel_post_store;
+	rel_post_store = triggers[TRIGGER_POST_STORE];
+	MET_release_triggers(tdbb, &tmp_vector, true);
+
+	tmp_vector = rel_pre_erase;
+	rel_pre_erase = triggers[TRIGGER_PRE_ERASE];
+	MET_release_triggers(tdbb, &tmp_vector, true);
+
+	tmp_vector = rel_post_erase;
+	rel_post_erase = triggers[TRIGGER_POST_ERASE];
+	MET_release_triggers(tdbb, &tmp_vector, true);
+
+	tmp_vector = rel_pre_modify;
+	rel_pre_modify = triggers[TRIGGER_PRE_MODIFY];
+	MET_release_triggers(tdbb, &tmp_vector, true);
+
+	tmp_vector = rel_post_modify;
+	rel_post_modify = triggers[TRIGGER_POST_MODIFY];
+	MET_release_triggers(tdbb, &tmp_vector, true);
 }
 
 Lock* jrd_rel::createLock(thread_db* tdbb, MemoryPool* pool, jrd_rel* relation, lck_t lckType, bool noAst)

@@ -120,7 +120,7 @@
     <ClCompile Include="..\..\..\src\common\classes\locks.cpp">
       <Filter>classes</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\common\classes\MetaName.cpp">
+    <ClCompile Include="..\..\..\src\common\classes\MetaString.cpp">
       <Filter>classes</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\common\classes\MsgPrint.cpp">
@@ -245,6 +245,9 @@
     </ClCompile>
     <ClCompile Include="..\..\..\src\common\Int128.cpp">
       <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\TimerImpl.cpp">
+      <Filter>classes</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -419,7 +422,7 @@
     <ClInclude Include="..\..\..\src\common\classes\locks.h">
       <Filter>headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\common\classes\MetaName.h">
+    <ClInclude Include="..\..\..\src\common\classes\MetaString.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\MsgPrint.h">
@@ -468,9 +471,6 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\tree.h">
-      <Filter>headers</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\common\classes\TriState.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\UserBlob.h">
@@ -591,6 +591,9 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\Int128.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\TimerImpl.h">
       <Filter>headers</Filter>
     </ClInclude>
   </ItemGroup>

@@ -38,14 +38,14 @@ namespace Replication
 {
 	class TableMatcher
 	{
-		typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Firebird::MetaName, bool> > > TablePermissionMap;
+		typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Jrd::MetaName, bool> > > TablePermissionMap;
 
 	public:
 		TableMatcher(MemoryPool& pool,
 					 const Firebird::string& includeFilter,
 					 const Firebird::string& excludeFilter);
 
-		bool matchTable(const Firebird::MetaName& tableName);
+		bool matchTable(const Jrd::MetaName& tableName);
 
 	private:
 		Firebird::AutoPtr<Firebird::SimilarToRegex> m_includeMatcher;
@@ -68,17 +68,11 @@ namespace Replication
 
 	public:
 		Manager(const Firebird::string& dbId,
-				const Firebird::Guid& guid,
 				const Replication::Config* config);
 		~Manager();
 
-		TableMatcher* createTableMatcher(MemoryPool& pool)
-		{
-			return FB_NEW_POOL(pool)
-				TableMatcher(pool, m_config->includeFilter, m_config->excludeFilter);
-		}
-
 		Firebird::UCharBuffer* getBuffer();
+		void releaseBuffer(Firebird::UCharBuffer* buffer);
 
 		void flush(Firebird::UCharBuffer* buffer, bool sync);
 
@@ -95,7 +89,6 @@ namespace Replication
 
 	private:
 		void logError(const Firebird::IStatus* status);
-		void releaseBuffer(Firebird::UCharBuffer* buffer);
 
 		void bgWriter();
 

@@ -79,7 +79,7 @@ void ConfigRoot::osConfigInstallDir()
 		PathUtils::splitLastComponent(bin_dir, file_name, module_path);
 
 		// search for the configuration file in the bin directory
-		PathUtils::concatPath(file_name, bin_dir, CONFIG_FILE);
+		PathUtils::concatPath(file_name, bin_dir, Firebird::CONFIG_FILE);
 		DWORD attributes = GetFileAttributes(file_name.c_str());
 		if (attributes == INVALID_FILE_ATTRIBUTES || attributes == FILE_ATTRIBUTE_DIRECTORY)
 		{
@@ -89,7 +89,7 @@ void ConfigRoot::osConfigInstallDir()
 
 			if (parent_dir.hasData())
 			{
-				PathUtils::concatPath(file_name, parent_dir, CONFIG_FILE);
+				PathUtils::concatPath(file_name, parent_dir, Firebird::CONFIG_FILE);
 				attributes = GetFileAttributes(file_name.c_str());
 				if (attributes != INVALID_FILE_ATTRIBUTES && attributes != FILE_ATTRIBUTE_DIRECTORY)
 				{

@@ -51,7 +51,7 @@ void CachedSecurityDatabase::handler()
 }
 
 
-void PluginDatabases::getInstance(IPluginConfig* pluginConfig, RefPtr<CachedSecurityDatabase>& instance)
+void PluginDatabases::getInstance(IPluginConfig* pluginConfig, CachedSecurityDatabase::Instance& instance)
 {
 	// Determine sec.db name based on existing config
 	PathName secDbName;
@@ -71,18 +71,29 @@ void PluginDatabases::getInstance(IPluginConfig* pluginConfig, RefPtr<CachedSecu
 
 	{ // guard scope
 		MutexLockGuard g(arrayMutex, FB_FUNCTION);
-		for (unsigned int i = 0; i < dbArray.getCount(); ++i)
+		for (unsigned int i = 0; i < dbArray.getCount(); )
 		{
 			if (secDbName == dbArray[i]->secureDbName)
 			{
-				instance = dbArray[i];
-				break;
+				CachedSecurityDatabase* fromCache = dbArray[i];
+				// if element is just created or test passed we can use it
+				if ((!fromCache->secDb) || fromCache->secDb->test())
+				{
+					instance.set(fromCache);
+					break;
+				}
+				else
+				{
+					dbArray.remove(i);
+					continue;
+				}
 			}
+			++i;
 		}
 
 		if (!instance)
 		{
-			instance = FB_NEW CachedSecurityDatabase(this, secDbName);
+			instance.set(FB_NEW CachedSecurityDatabase(this, secDbName));
 			instance->addRef();
 			secDbName.copyTo(instance->secureDbName, sizeof(instance->secureDbName));
 			dbArray.add(instance);
@@ -147,7 +158,7 @@ void PluginDatabases::handler(CachedSecurityDatabase* tgt)
 		const ISC_STATUS* status = st.begin();
 		if (status[0] == 1 && status[1] != isc_att_shutdown)
 		{
-			iscLogStatus("Legacy security database timer handler", status);
+			iscLogStatus("Security database timer handler", status);
 		}
 	}
 }

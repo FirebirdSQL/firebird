@@ -68,21 +68,21 @@ inline void CHECK_AND_MOVE(Acl& to, UCHAR from)
 
 DATABASE DB = STATIC "yachts.lnk";
 
-static void define_default_class(thread_db*, const TEXT*, Firebird::MetaName&, const Acl&,
+static void define_default_class(thread_db*, const TEXT*, MetaName&, const Acl&,
 							jrd_tra*);
 static void finish_security_class(Acl&, SecurityClass::flags_t);
 static void get_object_info(thread_db*, const TEXT*, SSHORT,
-							Firebird::MetaName&, Firebird::MetaName&, Firebird::MetaName&, bool&);
+							MetaName&, MetaName&, MetaName&, bool&);
 static SecurityClass::flags_t get_public_privs(thread_db*, const TEXT*, SSHORT);
-static void get_user_privs(thread_db*, Acl&, const TEXT*, SSHORT, const Firebird::MetaName&,
+static void get_user_privs(thread_db*, Acl&, const TEXT*, SSHORT, const MetaName&,
 							SecurityClass::flags_t);
-static void grant_user(Acl&, const Firebird::MetaName&, SSHORT, SecurityClass::flags_t);
+static void grant_user(Acl&, const MetaName&, SSHORT, SecurityClass::flags_t);
 static SecurityClass::flags_t save_field_privileges(thread_db*, Acl&, const TEXT*,
-							const Firebird::MetaName&, SecurityClass::flags_t, jrd_tra*);
-static void save_security_class(thread_db*, const Firebird::MetaName&, const Acl&, jrd_tra*);
+							const MetaName&, SecurityClass::flags_t, jrd_tra*);
+static void save_security_class(thread_db*, const MetaName&, const Acl&, jrd_tra*);
 static SecurityClass::flags_t trans_sql_priv(const TEXT*);
-static SecurityClass::flags_t squeeze_acl(Acl&, const Firebird::MetaName&, SSHORT);
-static bool check_string(const UCHAR*, const Firebird::MetaName&);
+static SecurityClass::flags_t squeeze_acl(Acl&, const MetaName&, SSHORT);
+static bool check_string(const UCHAR*, const MetaName&);
 
 
 void GRANT_privileges(thread_db* tdbb, const Firebird::string& name, USHORT id, jrd_tra* transaction)
@@ -104,7 +104,7 @@ void GRANT_privileges(thread_db* tdbb, const Firebird::string& name, USHORT id, 
 
 	bool restrct = false;
 
-	Firebird::MetaName s_class, owner, default_class;
+	MetaName s_class, owner, default_class;
 	bool view; // unused after being retrieved.
 	get_object_info(tdbb, name.c_str(), id, owner, s_class, default_class, view);
 
@@ -197,7 +197,7 @@ void GRANT_privileges(thread_db* tdbb, const Firebird::string& name, USHORT id, 
 
 static void define_default_class(thread_db* tdbb,
 								 const TEXT* relation_name,
-								 Firebird::MetaName& default_class,
+								 MetaName& default_class,
 								 const Acl& acl,
 								 jrd_tra* transaction)
 {
@@ -315,9 +315,9 @@ static SecurityClass::flags_t get_public_privs(thread_db* tdbb,
 static void get_object_info(thread_db* tdbb,
 							const TEXT* object_name,
 							SSHORT obj_type,
-							Firebird::MetaName& owner,
-							Firebird::MetaName& s_class,
-							Firebird::MetaName& default_class,
+							MetaName& owner,
+							MetaName& s_class,
+							MetaName& default_class,
 							bool& view)
 {
 /**************************************
@@ -533,7 +533,7 @@ static void get_user_privs(thread_db*					tdbb,
 						   Acl&							acl,
 						   const TEXT*					object_name,
 						   SSHORT						obj_type,
-						   const Firebird::MetaName&	owner,
+						   const MetaName&	owner,
 						   SecurityClass::flags_t		public_priv)
 {
 /**************************************
@@ -549,7 +549,7 @@ static void get_user_privs(thread_db*					tdbb,
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 
-	Firebird::MetaName user;
+	MetaName user;
 	SSHORT user_type = -2;
 	SecurityClass::flags_t priv = 0;
 
@@ -595,7 +595,7 @@ static void get_user_privs(thread_db*					tdbb,
 
 
 static void grant_user(Acl& acl,
-					   const Firebird::MetaName& user,
+					   const MetaName& user,
 					   SSHORT user_type,
 					   SecurityClass::flags_t privs)
 {
@@ -670,7 +670,7 @@ static void grant_user(Acl& acl,
 static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 													Acl& relation_acl,
 													const TEXT* relation_name,
-													const Firebird::MetaName& owner,
+													const MetaName& owner,
 													SecurityClass::flags_t public_priv,
 													jrd_tra* transaction)
 {
@@ -693,7 +693,7 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 	Acl field_acl(relation_acl);
 	const Acl acl_start(relation_acl);
 
-	Firebird::MetaName field_name, user, s_class;
+	MetaName field_name, user, s_class;
 	SecurityClass::flags_t aggregate_public = public_priv;
 	SecurityClass::flags_t priv = 0;
 	SecurityClass::flags_t field_public = 0;
@@ -852,7 +852,7 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 
 
 static void save_security_class(thread_db* tdbb,
-								const Firebird::MetaName& s_class,
+								const MetaName& s_class,
 								const Acl& acl,
 								jrd_tra* transaction)
 {
@@ -962,7 +962,7 @@ static SecurityClass::flags_t trans_sql_priv(const TEXT* privileges)
 }
 
 
-static SecurityClass::flags_t squeeze_acl(Acl& acl, const Firebird::MetaName& user, SSHORT user_type)
+static SecurityClass::flags_t squeeze_acl(Acl& acl, const MetaName& user, SSHORT user_type)
 {
 /**************************************
  *
@@ -1166,7 +1166,7 @@ static SecurityClass::flags_t squeeze_acl(Acl& acl, const Firebird::MetaName& us
 }
 
 
-static bool check_string(const UCHAR* acl, const Firebird::MetaName& name)
+static bool check_string(const UCHAR* acl, const MetaName& name)
 {
 /**************************************
  *

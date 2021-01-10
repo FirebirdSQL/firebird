@@ -191,6 +191,7 @@ Enhancement in precision of calculations with NUMERIC/DECIMAL (FB 4.0)
     Alex Peshkoff <peshkoff@mail.ru>
 
   Syntax rules:
+    INT128
     NUMERIC ( P {, N} )
     DECIMAL ( P {, N} )
 		where P is precision (P <= 38, was limited prior with 18 digits) and N is optional number
@@ -202,6 +203,7 @@ Enhancement in precision of calculations with NUMERIC/DECIMAL (FB 4.0)
   Example(s):
     1. DECLARE VARIABLE VAR1 DECIMAL(25);
     2. CREATE TABLE TABLE1 (FIELD1 NUMERIC(38, 19));
+    3. CREATE PROCEDURE PROC1 (PAR1 INT128) AS BEGIN END;
 
   Note(s):
     Numerics with precision less than 19 digits use SMALLINT, INTEGER, BIGINT or DOUBLE PRECISION

@@ -46,6 +46,19 @@ template <typename T> static void makeSubRoutines(thread_db* tdbb, JrdStatement*
 	CompilerScratch* csb, T& subs);
 
 
+ULONG CompilerScratch::allocImpure(ULONG align, ULONG size)
+{
+	const ULONG offset = FB_ALIGN(csb_impure, align);
+
+	if (offset + size > JrdStatement::MAX_REQUEST_SIZE)
+		IBERROR(226);	// msg 226: request size limit exceeded
+
+	csb_impure = offset + size;
+
+	return offset;
+}
+
+
 // Start to turn a parsed scratch into a statement. This is completed by makeStatement.
 JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	: pool(p),
@@ -763,7 +776,7 @@ void JrdStatement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list
 			jrd_prc* const procedure = MET_lookup_procedure_id(tdbb, item->exa_prc_id, false, false, 0);
 			if (procedure && procedure->getStatement())
 			{
-				item->user = procedure->invoker ? procedure->invoker->getUserName() : user;
+				item->user = procedure->invoker ? MetaName(procedure->invoker->getUserName()) : user;
 				if (list.find(*item, i))
 					continue;
 				list.insert(i, *item);
@@ -775,7 +788,7 @@ void JrdStatement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list
 			Function* const function = Function::lookup(tdbb, item->exa_fun_id, false, false, 0);
 			if (function && function->getStatement())
 			{
-				item->user = function->invoker ? function->invoker->getUserName() : user;
+				item->user = function->invoker ? MetaName(function->invoker->getUserName()) : user;
 				if (list.find(*item, i))
 					continue;
 				list.insert(i, *item);
@@ -835,21 +848,6 @@ template <typename T> static void makeSubRoutines(thread_db* tdbb, JrdStatement*
 		JrdStatement* subStatement = JrdStatement::makeStatement(tdbb, subCsb, false);
 		subStatement->parentStatement = statement;
 		subRoutine->setStatement(subStatement);
-
-		switch (subRoutine->getObjectType())
-		{
-		case obj_procedure:
-			subStatement->procedure = static_cast<jrd_prc*>(subRoutine);
-			break;
-
-		case obj_udf:
-			subStatement->function = static_cast<Function*>(subRoutine);
-			break;
-
-		default:
-			fb_assert(false);
-			break;
-		}
 
 		// Move dependencies and permissions from the sub routine to the parent.
 

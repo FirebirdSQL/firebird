@@ -62,7 +62,7 @@
 #include "../common/TimeZoneUtil.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/utils_proto.h"
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
 #include "../common/classes/TempFile.h"
 #include "../common/classes/DbImplementation.h"
 #include "../common/ThreadStart.h"
@@ -674,8 +674,7 @@ void decodeTimeTzWithFallback(CheckStatusWrapper* status, const ISC_TIME_TZ* tim
 	{
 		tm times;
 		int intFractions;
-		bool tzLookup = TimeZoneUtil::decodeTime(*timeTz, true, gmtFallback, CVT_commonCallbacks,
-			&times, &intFractions);
+		bool tzLookup = TimeZoneUtil::decodeTime(*timeTz, true, gmtFallback, &times, &intFractions);
 
 		if (hours)
 			*hours = times.tm_hour;
@@ -722,7 +721,7 @@ void UtilInterface::encodeTimeTz(CheckStatusWrapper* status, ISC_TIME_TZ* timeTz
 	{
 		timeTz->utc_time = encodeTime(hours, minutes, seconds, fractions);
 		timeTz->time_zone = TimeZoneUtil::parse(timeZone, strlen(timeZone));
-		TimeZoneUtil::localTimeToUtc(*timeTz, CVT_commonCallbacks);
+		TimeZoneUtil::localTimeToUtc(*timeTz);
 	}
 	catch (const Exception& ex)
 	{
@@ -1187,11 +1186,6 @@ public:
 			ex.stuffException(status);
 			return NULL;
 		}
-	}
-
-	void dispose()
-	{
-		delete this;
 	}
 
 private:
@@ -2391,7 +2385,7 @@ int API_ROUTINE blob__display(SLONG blob_id[2],
  *	PASCAL callable version of EDIT_blob.
  *
  **************************************/
-	const MetaName temp(field_name, *name_length);
+	const MetaString temp(field_name, *name_length);
 
 	return BLOB_display(reinterpret_cast<ISC_QUAD*>(blob_id), *database, *transaction, temp.c_str());
 }
@@ -2565,7 +2559,7 @@ int API_ROUTINE blob__edit(SLONG blob_id[2],
  *	into an internal edit call.
  *
  **************************************/
-	const MetaName temp(field_name, *name_length);
+	const MetaString temp(field_name, *name_length);
 
 	return BLOB_edit(reinterpret_cast<ISC_QUAD*>(blob_id), *database, *transaction, temp.c_str());
 }

@@ -25,12 +25,11 @@
 
 #include "../common/classes/fb_string.h"
 #include "../common/classes/RefCounted.h"
-
-class Config;
+#include "../common/config/config.h"
 
 bool expandDatabaseName(Firebird::PathName alias,
 						Firebird::PathName& file,
-						Firebird::RefPtr<const Config>* config);
+						Firebird::RefPtr<const Firebird::Config>* config);
 
 bool notifyDatabaseName(const Firebird::PathName& file);
 

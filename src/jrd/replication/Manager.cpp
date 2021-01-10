@@ -96,7 +96,6 @@ bool TableMatcher::matchTable(const MetaName& tableName)
 // Replication manager
 
 Manager::Manager(const string& dbId,
-				 const Guid& guid,
 				 const Replication::Config* config)
 	: m_config(config),
 	  m_replicas(getPool()),
@@ -111,6 +110,8 @@ Manager::Manager(const string& dbId,
 	const auto tdbb = JRD_get_thread_data();
 	const auto dbb = tdbb->getDatabase();
 
+	dbb->ensureGuid(tdbb);
+	const Guid& guid = dbb->dbb_guid;
 	m_sequence = dbb->dbb_repl_sequence;
 
 	if (config->logDirectory.hasData())
@@ -118,13 +119,15 @@ Manager::Manager(const string& dbId,
 		m_changeLog = FB_NEW_POOL(getPool())
 			ChangeLog(getPool(), dbId, guid, m_sequence, config);
 	}
+	else
+		fb_assert(config->syncReplicas.hasData());
 
 	// Attach to synchronous replicas (if any)
 
 	FbLocalStatus localStatus;
 	DispatcherPtr provider;
 
-	for (const auto iter : m_config->syncReplicas)
+	for (const auto& iter : m_config->syncReplicas)
 	{
 		string database = iter;
 		string login, password;

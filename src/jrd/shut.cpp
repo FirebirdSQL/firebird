@@ -521,26 +521,7 @@ static bool shutdown(thread_db* tdbb, SSHORT flag, bool force)
 
 	if (force)
 	{
-		bool found = false;
-		for (Jrd::Attachment* attachment = dbb->dbb_attachments;
-			attachment; attachment = attachment->att_next)
-		{
-			StableAttachmentPart* const sAtt = attachment->getStable();
-			MutexLockGuard guard(*(sAtt->getMutex(true)), FB_FUNCTION);
-
-			if (!(attachment->att_flags & ATT_shutdown_manager))
-			{
-				if (!(attachment->att_flags & ATT_shutdown))
-				{
-					attachment->signalShutdown(isc_att_shut_db_down);
-					found = true;
-				}
-			}
-		}
-
-		if (found)
-			JRD_shutdown_attachments(dbb);
-
+		JRD_shutdown_attachments(dbb);
 		return true;
 	}
 

@@ -302,14 +302,14 @@ int CCH_down_grade_dbb(void* ast_object)
 
 		AsyncContextHolder tdbb(dbb, FB_FUNCTION);
 
-		SyncLockGuard dsGuard(&dbb->dbb_sync, SYNC_EXCLUSIVE, "CCH_down_grade_dbb");
-
 		dbb->dbb_ast_flags |= DBB_blocking;
 
 		// Process the database shutdown request, if any
 
 		if (SHUT_blocking_ast(tdbb, true))
 			return 0;
+
+		SyncLockGuard dsGuard(&dbb->dbb_sync, SYNC_EXCLUSIVE, "CCH_down_grade_dbb");
 
 		// If we are already shared, there is nothing more we can do.
 		// If any case, the other guy probably wants exclusive access,
@@ -523,7 +523,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
 	{
 		try
 		{
-			tdbb->checkCancelState(true);
+			tdbb->checkCancelState();
 
 			bool found = false;
 			for (Jrd::Attachment* other_attachment = attachment->att_next; other_attachment;
@@ -2906,7 +2906,7 @@ void BufferControl::cache_reader(BufferControl* bcb)
 		// Otherwise, wait for event notification.
 		BufferDesc* bdb;
 		if (found)
-			JRD_reschedule(tdbb, 0, true);
+			JRD_reschedule(tdbb, true);
 		else if (bcb->bcb_flags & BCB_free_pending &&
 			(bdb = get_buffer(tdbb, FREE_PAGE, LATCH_none, 1)))
 		{
@@ -2960,7 +2960,7 @@ void BufferControl::cache_writer(BufferControl* bcb)
 		UserId user;
 		user.setUserName("Cache Writer");
 
-		Jrd::Attachment* const attachment = Jrd::Attachment::create(dbb);
+		Jrd::Attachment* const attachment = Jrd::Attachment::create(dbb, nullptr);
 		RefPtr<SysStableAttachment> sAtt(FB_NEW SysStableAttachment(attachment));
 		attachment->setStable(sAtt);
 		attachment->att_filename = dbb->dbb_filename;
@@ -3020,9 +3020,7 @@ void BufferControl::cache_writer(BufferControl* bcb)
 				// Otherwise, wait for event notification.
 
 				if ((bcb->bcb_flags & BCB_free_pending) || dbb->dbb_flush_cycle)
-				{
-					JRD_reschedule(tdbb, 0, true);
-				}
+					JRD_reschedule(tdbb, true);
 #ifdef CACHE_READER
 				else if (SBM_next(bcb->bcb_prefetch, &starting_page, RSE_get_forward))
 				{
@@ -3587,7 +3585,7 @@ static bool expand_buffers(thread_db* tdbb, ULONG number)
 
 		if (!num_in_seg)
 		{
-			const size_t alloc_size = dbb->dbb_page_size * (num_per_seg + 1);
+			const size_t alloc_size = ((size_t) dbb->dbb_page_size) * (num_per_seg + 1);
 			memory = (UCHAR*) bcb->bcb_bufferpool->allocate(alloc_size ALLOC_ARGS);
 			bcb->bcb_memory.push(memory);
 			memory = FB_ALIGN(memory, dbb->dbb_page_size);

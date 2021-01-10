@@ -60,7 +60,7 @@ class ConfigRoot : public Firebird::PermanentStorage
 private:
 	void GetRoot()
 	{
-		const Firebird::PathName* clRoot = Config::getCommandLineRootDirectory();
+		const Firebird::PathName* clRoot = Firebird::Config::getCommandLineRootDirectory();
 		if (clRoot)
 		{
 			root_dir = *clRoot;

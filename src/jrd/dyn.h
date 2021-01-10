@@ -25,7 +25,7 @@
 #define JRD_DYN_H
 
 #include "../common/classes/MsgPrint.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
 #include "../common/dsc.h"
@@ -53,9 +53,9 @@ public:
 	SSHORT dyn_collation;
 	SSHORT dyn_charset;
 	SSHORT dyn_sub_type;
-	Firebird::MetaName dyn_fld_source;
-	Firebird::MetaName dyn_rel_name;
-	Firebird::MetaName dyn_fld_name;
+	MetaName dyn_fld_source;
+	MetaName dyn_rel_name;
+	MetaName dyn_fld_name;
     USHORT dyn_charbytelen; // Used to check modify operations on string types.
     const UCHAR* dyn_default_src;
     const UCHAR* dyn_default_val;

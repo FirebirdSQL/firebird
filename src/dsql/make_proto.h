@@ -64,6 +64,7 @@ namespace Jrd {
 			ValueListNode*, const char*, bool = false);
 		static void fromNode(DsqlCompilerScratch*, dsc*,
 			ValueExprNode*, bool = false);
+		static void fromNode(DsqlCompilerScratch*, ValueExprNode*);
 
 	private:
 		static void composeDesc(dsc* desc,

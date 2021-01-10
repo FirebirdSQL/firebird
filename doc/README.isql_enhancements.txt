@@ -154,3 +154,87 @@ is not accounted for when you type
 SET;
 in isql to see the state for most options.
 
+
+
+Isql enhancements in Firebird v3.
+---------------------------------
+
+9) SET KEEP_TRAN_PARAMS option.
+
+Author: Vladyslav Khorsun <hvlad at users sourcefoege net>
+
+When set to ON, isql keeps text of following successful SET TRANSACTION statement and 
+new DML transactions is started using the same SQL text (instead of defaul CONCURRENCY 
+WAIT mode).
+When set to OFF, isql start new DML transaction as usual.
+Name KEEP_TRAN_PARAMS could be cut down to the KEEP_TRAN.
+
+In Firebird 3 KEEP_TRAN_PARAMS value is OFF by default, preserving backward compatibility 
+with old behaviour.
+In Firebird 4 KEEP_TRAN_PARAMS is ON by default to make isql behaviour more logical.
+
+
+Example:
+
+-- check current value
+SQL> SET;
+...
+Keep transaction params: OFF
+
+-- toggle value
+SQL> SET KEEP_TRAN;
+SQL> SET;
+...
+Keep transaction params: ON
+SET TRANSACTION
+
+
+SQL>commit;
+
+-- start new transaction, check KEEP_TRAN value and actual transaction's 
+-- parameters
+SQL>SET TRANSACTION READ COMMITTED WAIT;
+SQL>SET;
+...
+Keep transaction params: ON
+  SET TRANSACTION READ COMMITTED WAIT
+SQL> SELECT RDB$GET_CONTEXT('SYSTEM', 'ISOLATION_LEVEL') FROM RDB$DATABASE;
+
+RDB$GET_CONTEXT
+
+=============================================================
+READ COMMITTED
+
+SQL> commit;
+
+-- start new transaction, ensure is have parameters as KEEP_TRAN value
+SQL> SELECT RDB$GET_CONTEXT('SYSTEM', 'ISOLATION_LEVEL') FROM RDB$DATABASE;
+
+RDB$GET_CONTEXT
+
+=============================================================
+READ COMMITTED
+
+-- disable KEEP_TRAN, current transaction is not changed
+SQL> SET KEEP_TRAN OFF;
+SQL> SELECT RDB$GET_CONTEXT('SYSTEM', 'ISOLATION_LEVEL') FROM RDB$DATABASE;
+
+RDB$GET_CONTEXT
+
+=============================================================
+READ COMMITTED
+
+SQL> commit;
+
+-- start new transaction, ensure is have default parameters (SNAPSHOT)
+SQL> SELECT RDB$GET_CONTEXT('SYSTEM', 'ISOLATION_LEVEL') FROM RDB$DATABASE;
+
+RDB$GET_CONTEXT
+
+=============================================================
+SNAPSHOT
+
+SQL> SET;
+...
+Keep transaction params: OFF
+SQL> 

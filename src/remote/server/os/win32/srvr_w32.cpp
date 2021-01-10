@@ -219,7 +219,7 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 		return STARTUP_ERROR;
 	}
 
-	const DWORD affinity = static_cast<DWORD>(Config::getCpuAffinityMask());
+	const DWORD_PTR affinity = Config::getCpuAffinityMask();
 	if (affinity)
 		SetProcessAffinityMask(GetCurrentProcess(), affinity);
 

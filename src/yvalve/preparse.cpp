@@ -193,7 +193,7 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 
 			PathName file_name(getToken(pos, tks, STRING).ToPathName());
 			*stmt_eaten = false;
-			ClumpletWriter dpb(ClumpletReader::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
+			ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 
 			dpb.insertByte(isc_dpb_overwrite, 0);
 			dpb.insertInt(isc_dpb_sql_dialect, dialect);

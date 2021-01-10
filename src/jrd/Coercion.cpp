@@ -36,8 +36,10 @@
 using namespace Jrd;
 using namespace Firebird;
 
-static const USHORT FROM_MASK = FLD_has_len | FLD_has_chset | FLD_has_scale | FLD_has_sub;
-static const USHORT TO_MASK = FLD_has_len | FLD_has_chset | FLD_has_scale | FLD_legacy | FLD_native | FLD_has_sub | FLD_extended;
+static const USHORT FROM_MASK = FLD_has_len | FLD_has_chset | FLD_has_scale |
+	FLD_has_sub | FLD_has_prec;
+static const USHORT TO_MASK = FLD_has_len | FLD_has_chset | FLD_has_scale |
+	FLD_legacy | FLD_native | FLD_has_sub | FLD_has_prec | FLD_extended;
 
 bool CoercionArray::coerce(dsc* d, unsigned startItem) const
 {
@@ -155,8 +157,8 @@ bool CoercionRule::match(const dsc* d) const
 		return true;
 	}
 
-	// check for inexact datatype match when FLD_has_len is not set
-	if (!(fromMask & FLD_has_len))
+	// check for inexact datatype match when FLD_has_prec is not set
+	if (!(fromMask & FLD_has_prec))
 	{
 		switch(fromDsc.dsc_dtype)
 		{
@@ -170,7 +172,7 @@ bool CoercionRule::match(const dsc* d) const
 		case dtype_long:
 		case dtype_int64:
 		case dtype_int128:
-			if (d->isExact() && (fromMask & FLD_has_sub) && (d->dsc_sub_type != dsc_num_type_none))
+			if (d->isExact() && (fromMask & FLD_has_sub) && (d->dsc_sub_type == fromDsc.dsc_sub_type))
 				return true;
 			break;
 
@@ -182,15 +184,45 @@ bool CoercionRule::match(const dsc* d) const
 		}
 	}
 
-	// ignore minor decimal/numeric difference
-	if (fromDsc.isExact() && (fromMask & FLD_has_sub) &&
-		(fromDsc.dsc_dtype == d->dsc_dtype) && (d->dsc_sub_type != dsc_num_type_none))
-	{
-		return true;
-	}
-
 	return false;
 }
+
+static const USHORT COMPATIBLE_TEXT = 1;
+static const USHORT COMPATIBLE_INT = 2;
+
+static const USHORT subTypeCompatibility[DTYPE_TYPE_MAX] =
+{
+	0,							// dtype_unknown
+	COMPATIBLE_TEXT,			// dtype_text
+	0,							// dtype_cstring
+	COMPATIBLE_TEXT,			// dtype_varying
+	0,
+	0,
+	0,							// dtype_packed
+	0,							// dtype_byte
+	COMPATIBLE_INT,				// dtype_short      -32768
+	COMPATIBLE_INT,				// dtype_long       -2147483648
+	0,							// dtype_quad       -9223372036854775808
+	0,							// dtype_real       -1.23456789e+12
+	0,							// dtype_double     -1.2345678901234567e+123
+	0,							// dtype_d_float (believed to have this range)  -1.2345678901234567e+123
+	0,							// dtype_sql_date   YYYY-MM-DD
+	0,							// dtype_sql_time   HH:MM:SS.MMMM
+	0,							// dtype_timestamp  YYYY-MM-DD HH:MM:SS.MMMM
+	0,							// dtype_blob       FFFF:FFFF
+	0,							// dtype_array      FFFF:FFFF
+	COMPATIBLE_INT,				// dtype_int64      -9223372036854775808
+	0,							// dtype_dbkey
+	0,							// dtype_boolean
+	0,							// dtype_dec64		1 + 1 + 1 + 1 + 16(34) + 3(4)
+	0,							// dtype_dec128		+-  .   e   +-  coeff  + exp
+	COMPATIBLE_INT,				// dtype_int128
+	0,							// dtype_sql_time_tz      HH:MM:SS.MMMM +NN:NN
+	0,							// dtype_timestamp_tz     YYYY-MM-DD HH:MM:SS.MMMM +NN:NN
+	0,							// dtype_ex_time_tz       HH:MM:SS.MMMM +NN:NN
+	0,							// dtype_ex_timestamp_tz  YYYY-MM-DD HH:MM:SS.MMMM +NN:NN
+};
+
 
 bool CoercionRule::coerce(dsc* d) const
 {
@@ -263,10 +295,29 @@ bool CoercionRule::coerce(dsc* d) const
 
 	// final pass - order is important
 
+	// scale
+	if (toMask & FLD_has_scale)
+		d->dsc_scale = toDsc.dsc_scale;
+	else if (!(DTYPE_IS_EXACT(d->dsc_dtype) && DTYPE_IS_EXACT(toDsc.dsc_dtype)))
+		d->dsc_scale = 0;
+
+	// subtype
+	if (toMask & FLD_has_sub ||
+		d->dsc_dtype >= DTYPE_TYPE_MAX || toDsc.dsc_dtype >= DTYPE_TYPE_MAX ||
+		subTypeCompatibility[d->dsc_dtype] == 0 ||
+		subTypeCompatibility[d->dsc_dtype] != subTypeCompatibility[toDsc.dsc_dtype])
+	{
+		d->dsc_sub_type = toDsc.dsc_sub_type;
+	}
+
 	// length
 	if (toMask & FLD_has_len)
 		d->dsc_length = toDsc.dsc_length;
-	else
+
+	// type
+	if (toMask & FLD_has_prec ||
+		subTypeCompatibility[d->dsc_dtype] != COMPATIBLE_INT ||
+		subTypeCompatibility[toDsc.dsc_dtype] != COMPATIBLE_INT)
 	{
 		if (!type_lengths[toDsc.dsc_dtype])
 		{
@@ -275,29 +326,21 @@ bool CoercionRule::coerce(dsc* d) const
 		}
 		else
 			d->dsc_length = type_lengths[toDsc.dsc_dtype];
+
+		d->dsc_dtype = toDsc.dsc_dtype;
 	}
 
-	// scale
-	if (toMask & FLD_has_scale)
-		d->dsc_scale = toDsc.dsc_scale;
-	else if (!(DTYPE_IS_EXACT(d->dsc_dtype) && DTYPE_IS_EXACT(toDsc.dsc_dtype)))
-		d->dsc_scale = 0;
-
-	// type
-	d->dsc_dtype = toDsc.dsc_dtype;
-	d->dsc_sub_type = toDsc.dsc_sub_type;
+	// varchar length
+	if (d->dsc_dtype == dtype_varying)
+		d->dsc_length += sizeof(USHORT);
 
 	// charset
 	if (toMask & FLD_has_chset)
 		d->setTextType(toDsc.getTextType());
 
-	// subtype
+	// subtype - special processing for BLOBs
 	if (toMask & FLD_has_sub)
 		d->setBlobSubType(toDsc.getBlobSubType());
-
-	// varchar
-	if (d->dsc_dtype == dtype_varying)
-		d->dsc_length += sizeof(USHORT);
 
 	return true;
 }

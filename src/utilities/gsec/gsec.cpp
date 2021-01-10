@@ -190,6 +190,16 @@ namespace {
 			return authBytes;
 		}
 
+		Firebird::IAttachment* attachment(Firebird::CheckStatusWrapper* status)
+		{
+			return nullptr;
+		}
+
+		Firebird::ITransaction* transaction(Firebird::CheckStatusWrapper* status)
+		{
+			return nullptr;
+		}
+
 	private:
 		const char* dba;
 		const char* sqlRole;
@@ -379,7 +389,7 @@ int gsec(Firebird::UtilSvc* uSvc)
 	}
 	else
 	{
-		const Firebird::RefPtr<const Config> defConf(Config::getDefaultConfig());
+		const Firebird::RefPtr<const Firebird::Config> defConf(Firebird::Config::getDefaultConfig());
 		databaseName = defConf->getSecurityDatabase();
 	}
 
@@ -416,7 +426,7 @@ int gsec(Firebird::UtilSvc* uSvc)
 	{
 		// Get remote address info for management plugin
 		Firebird::string network_protocol, remote_address;
-		Firebird::ClumpletWriter tmp(Firebird::ClumpletReader::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
+		Firebird::ClumpletWriter tmp(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 		uSvc->fillDpb(tmp);
 
 		if (tmp.find(isc_dpb_address_path))
@@ -460,8 +470,8 @@ int gsec(Firebird::UtilSvc* uSvc)
 		Firebird::string databaseText;
 		databaseText.printf("SecurityDatabase = %s\n", databaseName.c_str());
 		ConfigFile gsecDatabase(ConfigFile::USE_TEXT, databaseText.c_str());
-		Firebird::RefPtr<const Config> defaultConfig(Config::getDefaultConfig());
-		Firebird::RefPtr<const Config> pseudoConfig(FB_NEW Config(gsecDatabase, *defaultConfig));
+		Firebird::RefPtr<const Firebird::Config> defaultConfig(Firebird::Config::getDefaultConfig());
+		Firebird::RefPtr<const Firebird::Config> pseudoConfig(FB_NEW Firebird::Config(gsecDatabase, "<gsec DPB>", *defaultConfig));
 
 		uSvc->checkService();
 

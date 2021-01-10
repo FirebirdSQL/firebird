@@ -297,11 +297,23 @@ ISC_STATUS API_ROUTINE isc_array_set_desc(ISC_STATUS* status,
 	case SQL_TIMESTAMP:
 		desc->array_desc_dtype = blr_timestamp;
 		break;
+	case SQL_TIMESTAMP_TZ:
+		desc->array_desc_dtype = blr_timestamp_tz;
+		break;
+	case SQL_TIMESTAMP_TZ_EX:
+		desc->array_desc_dtype = blr_ex_timestamp_tz;
+		break;
 	case SQL_TYPE_DATE:
 		desc->array_desc_dtype = blr_sql_date;
 		break;
 	case SQL_TYPE_TIME:
 		desc->array_desc_dtype = blr_sql_time;
+		break;
+	case SQL_TIME_TZ:
+		desc->array_desc_dtype = blr_sql_time_tz;
+		break;
+	case SQL_TIME_TZ_EX:
+		desc->array_desc_dtype = blr_ex_time_tz;
 		break;
 	case SQL_LONG:
 		desc->array_desc_dtype = blr_long;
@@ -317,6 +329,15 @@ ISC_STATUS API_ROUTINE isc_array_set_desc(ISC_STATUS* status,
 		break;
 	case SQL_BOOLEAN:
 		desc->array_desc_dtype = blr_bool;
+		break;
+	case SQL_DEC16:
+		desc->array_desc_dtype = blr_dec64;
+		break;
+	case SQL_DEC34:
+		desc->array_desc_dtype = blr_dec128;
+		break;
+	case SQL_INT128:
+		desc->array_desc_dtype = blr_int128;
 		break;
 	default:
 		return error(status, Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
@@ -423,6 +444,7 @@ static ISC_STATUS gen_sdl(ISC_STATUS* status,
 	case blr_long:
 	case blr_int64:
 	case blr_quad:
+	case blr_int128:
 		if (stuff_sdl(gen, desc->array_desc_scale))
 			return status[1];
 		break;

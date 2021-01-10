@@ -68,7 +68,7 @@ public:
 	};
 
 public:
-	CreateAlterPackageNode(MemoryPool& pool, const Firebird::MetaName& aName)
+	CreateAlterPackageNode(MemoryPool& pool, const MetaName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  create(true),
@@ -103,24 +103,24 @@ private:
 	void executeItems(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
-	Firebird::MetaName name;
+	MetaName name;
 	bool create;
 	bool alter;
 	Firebird::string source;
 	Firebird::Array<Item>* items;
-	Firebird::SortedArray<Firebird::MetaName> functionNames;
-	Firebird::SortedArray<Firebird::MetaName> procedureNames;
+	Firebird::SortedArray<MetaName> functionNames;
+	Firebird::SortedArray<MetaName> procedureNames;
 	Nullable<bool> ssDefiner;
 
 private:
-	Firebird::MetaName owner;
+	MetaName owner;
 };
 
 
 class DropPackageNode : public DdlNode
 {
 public:
-	DropPackageNode(MemoryPool& pool, const Firebird::MetaName& aName)
+	DropPackageNode(MemoryPool& pool, const MetaName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  silent(false)
@@ -139,7 +139,7 @@ protected:
 	}
 
 public:
-	Firebird::MetaName name;
+	MetaName name;
 	bool silent;
 };
 
@@ -151,7 +151,7 @@ typedef RecreateNode<CreateAlterPackageNode, DropPackageNode, isc_dsql_recreate_
 class CreatePackageBodyNode : public DdlNode
 {
 public:
-	CreatePackageBodyNode(MemoryPool& pool, const Firebird::MetaName& aName)
+	CreatePackageBodyNode(MemoryPool& pool, const MetaName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  source(pool),
@@ -174,7 +174,7 @@ protected:
 	}
 
 public:
-	Firebird::MetaName name;
+	MetaName name;
 	Firebird::string source;
 	Firebird::Array<CreateAlterPackageNode::Item>* declaredItems;
 	Firebird::Array<CreateAlterPackageNode::Item>* items;
@@ -187,7 +187,7 @@ private:
 class DropPackageBodyNode : public DdlNode
 {
 public:
-	DropPackageBodyNode(MemoryPool& pool, const Firebird::MetaName& aName)
+	DropPackageBodyNode(MemoryPool& pool, const MetaName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  silent(false)
@@ -206,7 +206,7 @@ protected:
 	}
 
 public:
-	Firebird::MetaName name;
+	MetaName name;
 	bool silent;	// Unused. Just to please RecreateNode template.
 };
 

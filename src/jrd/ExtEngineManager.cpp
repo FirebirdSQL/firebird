@@ -603,10 +603,8 @@ ExtEngineManager::ExternalContextImpl::ExternalContextImpl(thread_db* tdbb,
 
 	clientCharSet = INTL_charset_lookup(tdbb, internalAttachment->att_client_charset)->getName();
 
-	internalAttachment->getStable()->addRef();
-
 	externalAttachment = MasterInterfacePtr()->registerAttachment
-		(AutoPlugin<JProvider>(JProvider::getInstance()), internalAttachment->getInterface());
+		(internalAttachment->getProvider(), internalAttachment->getInterface());
 }
 
 ExtEngineManager::ExternalContextImpl::~ExternalContextImpl()
@@ -732,7 +730,7 @@ ExtEngineManager::Function::~Function()
 void ExtEngineManager::Function::execute(thread_db* tdbb, UCHAR* inMsg, UCHAR* outMsg) const
 {
 	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine);
-	const MetaName& userName = udf->invoker ? udf->invoker->getUserName() : "";
+	const MetaString& userName = udf->invoker ? udf->invoker->getUserName() : "";
 	ContextManager<IExternalFunction> ctxManager(tdbb, attInfo, function,
 		(udf->getName().package.isEmpty() ?
 			CallerName(obj_udf, udf->getName().identifier, userName) :
@@ -786,7 +784,7 @@ ExtEngineManager::ResultSet::ResultSet(thread_db* tdbb, UCHAR* inMsg, UCHAR* out
 	  firstFetch(true)
 {
 	attInfo = procedure->extManager->getEngineAttachment(tdbb, procedure->engine);
-	const MetaName& userName = procedure->prc->invoker ? procedure->prc->invoker->getUserName() : "";
+	const MetaString& userName = procedure->prc->invoker ? procedure->prc->invoker->getUserName() : "";
 	ContextManager<IExternalProcedure> ctxManager(tdbb, attInfo, procedure->procedure,
 		(procedure->prc->getName().package.isEmpty() ?
 			CallerName(obj_procedure, procedure->prc->getName().identifier, userName) :
@@ -820,7 +818,7 @@ bool ExtEngineManager::ResultSet::fetch(thread_db* tdbb)
 	if (!resultSet)
 		return wasFirstFetch;
 
-	const MetaName& userName = procedure->prc->invoker ? procedure->prc->invoker->getUserName() : "";
+	const MetaString& userName = procedure->prc->invoker ? procedure->prc->invoker->getUserName() : "";
 	ContextManager<IExternalProcedure> ctxManager(tdbb, attInfo, charSet,
 		(procedure->prc->getName().package.isEmpty() ?
 			CallerName(obj_procedure, procedure->prc->getName().identifier, userName) :
@@ -901,7 +899,7 @@ void ExtEngineManager::Trigger::execute(thread_db* tdbb, jrd_req* request, unsig
 	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine);
 	const Nullable<bool>& ssDefiner = trg->ssDefiner.specified ? trg->ssDefiner :
 		(trg->relation && trg->relation->rel_ss_definer.specified ? trg->relation->rel_ss_definer : Nullable<bool>() );
-	const MetaName& userName = ssDefiner.specified && ssDefiner.value ? trg->relation->rel_owner_name : "";
+	const MetaString& userName = ssDefiner.specified && ssDefiner.value ? trg->relation->rel_owner_name.c_str() : "";
 	ContextManager<IExternalTrigger> ctxManager(tdbb, attInfo, trigger,
 		CallerName(obj_trigger, trg->name, userName));
 
@@ -1131,17 +1129,6 @@ namespace
 		{
 		}
 
-		int release() override
-		{
-			if (--refCounter == 0)
-			{
-				delete this;
-				return 0;
-			}
-
-			return 1;
-		}
-
 	public:
 		void open(ThrowStatusExceptionWrapper* status, IExternalContext* context,
 			char* name, unsigned nameSize) override
@@ -1235,22 +1222,22 @@ ExtEngineManager::ExtEngineManager(MemoryPool& p)
 
 void ExtEngineManager::closeAttachment(thread_db* tdbb, Attachment* attachment)
 {
-	Array<IExternalEngine*> enginesCopy;
+	EnginesMap enginesCopy;
 
 	{	// scope
 		ReadLockGuard readGuard(enginesLock, FB_FUNCTION);
 
 		EnginesMap::Accessor accessor(&engines);
 		for (bool found = accessor.getFirst(); found; found = accessor.getNext())
-			enginesCopy.add(accessor.current()->second);
+			enginesCopy.put(accessor.current()->first, accessor.current()->second);
 	}
 
-	RefDeb(DEB_RLS_JATT, "ExtEngineManager::closeAttachment");
 	EngineCheckout cout(tdbb, FB_FUNCTION, true);
 
-	for (Array<IExternalEngine*>::iterator i = enginesCopy.begin(); i != enginesCopy.end(); ++i)
+	EnginesMap::Accessor accessor(&enginesCopy);
+	for (bool found = accessor.getFirst(); found; found = accessor.getNext())
 	{
-		IExternalEngine* engine = *i;
+		IExternalEngine* engine = accessor.current()->second;
 		EngineAttachmentInfo* attInfo = getEngineAttachment(tdbb, engine, true);
 
 		if (attInfo)
@@ -1259,7 +1246,27 @@ void ExtEngineManager::closeAttachment(thread_db* tdbb, Attachment* attachment)
 				ContextManager<IExternalFunction> ctxManager(tdbb, attInfo, attInfo->adminCharSet);
 				FbLocalStatus status;
 				engine->closeAttachment(&status, attInfo->context);	//// FIXME: log status
-				engine->release();
+
+				// Check whether the engine is used by other attachments. 
+				// If no one uses, release it.
+				bool close = true;
+				WriteLockGuard writeGuard(enginesLock, FB_FUNCTION);
+
+				EnginesAttachmentsMap::Accessor ea_accessor(&enginesAttachments);
+				for (bool ea_found = ea_accessor.getFirst(); ea_found; ea_found = ea_accessor.getNext())
+				{
+					if (ea_accessor.current()->first.engine == engine)
+					{
+						close = false; // engine is in use, no need to release
+						break;
+					}
+				}
+
+				if (close)
+				{										
+					if (engines.remove(accessor.current()->first)) // If engine has already been deleted - nothing to do
+						engine->release();
+				}
 			}
 
 			delete attInfo;
@@ -1275,7 +1282,7 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 	entryPointTrimmed.trim();
 
 	EngineAttachmentInfo* attInfo = getEngineAttachment(tdbb, engine);
-	const MetaName& userName = udf->invoker ? udf->invoker->getUserName() : "";
+	const MetaString& userName = udf->invoker ? udf->invoker->getUserName() : "";
 	ContextManager<IExternalFunction> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
 		(udf->getName().package.isEmpty() ?
 			CallerName(obj_udf, udf->getName().identifier, userName) :
@@ -1399,7 +1406,7 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 	entryPointTrimmed.trim();
 
 	EngineAttachmentInfo* attInfo = getEngineAttachment(tdbb, engine);
-	const MetaName& userName = prc->invoker ? prc->invoker->getUserName() : "";
+	const MetaString& userName = prc->invoker ? prc->invoker->getUserName() : "";
 	ContextManager<IExternalProcedure> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
 		(prc->getName().package.isEmpty() ?
 			CallerName(obj_procedure, prc->getName().identifier, userName) :
@@ -1531,7 +1538,7 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 	entryPointTrimmed.trim();
 
 	EngineAttachmentInfo* attInfo = getEngineAttachment(tdbb, engine);
-	const MetaName& userName = trg->ssDefiner.specified && trg->ssDefiner.value ? trg->owner : "";
+	const MetaString& userName = trg->ssDefiner.specified && trg->ssDefiner.value ? trg->owner.c_str() : "";
 	ContextManager<IExternalTrigger> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
 		CallerName(obj_trigger, trg->name, userName));
 

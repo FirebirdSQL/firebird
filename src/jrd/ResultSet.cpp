@@ -115,19 +115,15 @@ Firebird::string ResultSet::getString(thread_db* tdbb, unsigned param)
 }
 
 
-Firebird::MetaName ResultSet::getMetaName(thread_db* tdbb, unsigned param)
+MetaName ResultSet::getMetaName(thread_db* tdbb, unsigned param)
 {
-	fb_assert(param > 0);
+	return getString(tdbb, param);
+}
 
-	jrd_req* jrdRequest = stmt->getRequest()->req_request;
 
-	// Setup tdbb info necessary for blobs.
-	AutoSetRestore2<jrd_req*, thread_db> autoRequest(
-		tdbb, &thread_db::getRequest, &thread_db::setRequest, jrdRequest);
-	AutoSetRestore<jrd_tra*> autoRequestTrans(&jrdRequest->req_transaction,
-		tdbb->getTransaction());
-
-	return MOV_make_string2(tdbb, &getDesc(param), CS_METADATA);
+Firebird::MetaString ResultSet::getMetaString(thread_db* tdbb, unsigned param)
+{
+	return getString(tdbb, param);
 }
 
 

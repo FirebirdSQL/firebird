@@ -22,8 +22,6 @@
 
 #include "firebird.h"
 #include "../jrd/SystemPackages.h"
-#include "../jrd/ods.h"
-#include "../jrd/ini.h"
 #include "../jrd/TimeZone.h"
 
 using namespace Firebird;
@@ -32,73 +30,24 @@ using namespace Jrd;
 
 namespace
 {
-	struct SystemPackageInit
+	struct SystemPackagesInit
 	{
-		explicit SystemPackageInit(MemoryPool& pool)
-			: list(FB_NEW_POOL(pool) ObjectsArray<SystemPackage>(pool, {
-				SystemPackage(
-					pool,
-					"RDB$TIME_ZONE_UTIL",
-					ODS_13_0,
-					// procedures
-					{
-						SystemProcedure(
-							pool,
-							"TRANSITIONS",
-							[]
-							(ThrowStatusExceptionWrapper* status, IExternalContext* /*context*/,
-								IRoutineMetadata* /*metadata*/, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder)
-							{
-								return FB_NEW TimeZoneTransitionsProcedure(status, inBuilder, outBuilder);
-							},
-							prc_selectable,
-							// input parameters
-							{
-								{"TIME_ZONE_NAME", fld_tz_name, false},
-								{"FROM_TIMESTAMP", fld_timestamp_tz, false},
-								{"TO_TIMESTAMP", fld_timestamp_tz, false}
-							},
-							// output parameters
-							{
-								{"START_TIMESTAMP", fld_timestamp_tz, false},
-								{"END_TIMESTAMP", fld_timestamp_tz, false},
-								{"ZONE_OFFSET", fld_tz_offset, false},
-								{"DST_OFFSET", fld_tz_offset, false},
-								{"EFFECTIVE_OFFSET", fld_tz_offset, false}
-							}
-						)
-					},
-					// functions
-					{
-						SystemFunction(
-							pool,
-							"DATABASE_VERSION",
-							[]
-							(ThrowStatusExceptionWrapper* status, IExternalContext* /*context*/,
-								IRoutineMetadata* /*metadata*/, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder)
-							{
-								return FB_NEW TimeZoneDatabaseVersionFunction(status, inBuilder, outBuilder);
-							},
-							// parameters
-							{},
-							{ fld_tz_db_version, false }
-						)
-					}
-				)
-			}))
+		explicit SystemPackagesInit(MemoryPool& pool)
+			: list(FB_NEW_POOL(pool) ObjectsArray<SystemPackage>(pool))
 		{
+			list->add(TimeZonePackage(pool));
 		}
 
-		static InitInstance<SystemPackageInit> INSTANCE;
+		static InitInstance<SystemPackagesInit> INSTANCE;
 
 		AutoPtr<ObjectsArray<SystemPackage> > list;
 	};
 
-	InitInstance<SystemPackageInit> SystemPackageInit::INSTANCE;
+	InitInstance<SystemPackagesInit> SystemPackagesInit::INSTANCE;
 }
 
 
 ObjectsArray<SystemPackage>& SystemPackage::get()
 {
-	return *SystemPackageInit::INSTANCE().list.get();
+	return *SystemPackagesInit::INSTANCE().list.get();
 }

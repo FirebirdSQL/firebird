@@ -37,17 +37,17 @@ namespace Jrd
 	class ValueListNode;
 }
 
-void PASS1_ambiguity_check(Jrd::DsqlCompilerScratch*, const Firebird::MetaName&, const Jrd::DsqlContextStack&);
+void PASS1_ambiguity_check(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&, const Jrd::DsqlContextStack&);
 void PASS1_check_unique_fields_names(Jrd::StrArray& names, const Jrd::CompoundStmtNode* fields);
 Jrd::BoolExprNode* PASS1_compose(Jrd::BoolExprNode*, Jrd::BoolExprNode*, UCHAR);
-Jrd::DeclareCursorNode* PASS1_cursor_name(Jrd::DsqlCompilerScratch*, const Firebird::MetaName&, USHORT, bool);
+Jrd::DeclareCursorNode* PASS1_cursor_name(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&, USHORT, bool);
 Jrd::RseNode* PASS1_derived_table(Jrd::DsqlCompilerScratch*, Jrd::SelectExprNode*, const char*, bool);
 Jrd::ValueListNode* PASS1_expand_select_list(Jrd::DsqlCompilerScratch*, Jrd::ValueListNode*, Jrd::RecSourceListNode*);
 void PASS1_expand_select_node(Jrd::DsqlCompilerScratch*, Jrd::ExprNode*, Jrd::ValueListNode*, bool);
 void PASS1_field_unknown(const TEXT*, const TEXT*, const Jrd::ExprNode*);
 void PASS1_limit(Jrd::DsqlCompilerScratch*, NestConst<Jrd::ValueExprNode>,
 	NestConst<Jrd::ValueExprNode>, Jrd::RseNode*);
-Jrd::ValueExprNode* PASS1_lookup_alias(Jrd::DsqlCompilerScratch*, const Firebird::MetaName&,
+Jrd::ValueExprNode* PASS1_lookup_alias(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&,
 	Jrd::ValueListNode*, bool);
 Jrd::dsql_ctx* PASS1_make_context(Jrd::DsqlCompilerScratch* statement, Jrd::RecordSourceNode* relationNode);
 bool PASS1_node_match(Jrd::DsqlCompilerScratch*, const Jrd::ExprNode*, const Jrd::ExprNode*, bool);

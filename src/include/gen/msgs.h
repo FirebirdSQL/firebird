@@ -733,7 +733,7 @@ Data source : @4"},		/* eds_statement */
 	{335545026, "External BLR message mismatch: invalid null descriptor at field @1"},		/* ee_blr_mismatch_null */
 	{335545027, "External BLR message mismatch: length = @1, expected @2"},		/* ee_blr_mismatch_length */
 	{335545028, "Subscript @1 out of bounds [@2, @3]"},		/* ss_out_of_bounds */
-	{335545029, "Install incomplete, please read the Compatibility chapter in the release notes for this version"},		/* missing_data_structures */
+	{335545029, "Install incomplete. To complete security database initialization please CREATE USER. For details read doc/README.security_database.txt."},		/* missing_data_structures */
 	{335545030, "@1 operation is not allowed for system table @2"},		/* protect_sys_tab */
 	{335545031, "Libtommath error code @1 in function @2"},		/* libtommath_generic */
 	{335545032, "unsupported BLR version (expected between @1 and @2, encountered @3)"},		/* wroblrver2 */
@@ -917,7 +917,7 @@ Data source : @4"},		/* eds_statement */
 	{335545210, "Plugin @1:"},		/* plugin_name */
 	{335545211, "PARAMETER @1"},		/* parameter_name */
 	{335545212, "Starting page number for file @1 must be @2 or greater"},		/* file_starting_page_err */
-	{335545213, "Invalid time zone offset: @1 - must be between -14:00 and +14:00"},		/* invalid_timezone_offset */
+	{335545213, "Invalid time zone offset: @1 - must use format +/-hours:minutes and be between -14:00 and +14:00"},		/* invalid_timezone_offset */
 	{335545214, "Invalid time zone region: @1"},		/* invalid_timezone_region */
 	{335545215, "Invalid time zone ID: @1"},		/* invalid_timezone_id */
 	{335545216, "Wrong base64 text length @1, should be multiple of 4"},		/* tom_decode64len */
@@ -973,8 +973,12 @@ Data source : @4"},		/* eds_statement */
 	{335545266, "String truncated warning due to the following reason"},		/* truncate_warn */
 	{335545267, "Monitoring data does not fit into the field"},		/* truncate_monitor */
 	{335545268, "Engine data does not fit into return value of system function"},		/* truncate_context */
-	{335545269, "Tablespace \"@1\" creation error. File \"@2\" exists."},		/* ts_file_exists */
-	{335545270, "TABLESPACE @1"},		/* tablespace_name */
+	{335545269, "Multiple source records cannot match the same target during MERGE"},		/* merge_dup_update */
+	{335545270, "RDB$PAGES written by non-system transaction, DB appears to be damaged"},		/* wrong_page */
+	{335545271, "Replication error"},		/* repl_error */
+	{335545272, "Reset of user session failed. Connection is shut down."},		/* ses_reset_failed */
+	{335545273, "Tablespace \"@1\" creation error. File \"@2\" exists."},		/* ts_file_exists */
+	{335545274, "TABLESPACE @1"},		/* tablespace_name */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */
@@ -1461,6 +1465,7 @@ Data source : @4"},		/* eds_statement */
 	{337117257, "Terminated due to user request"},		/* nbackup_user_stop */
 	{337117259, "Too complex decompress command (> @1 arguments)"},		/* nbackup_deco_parse */
 	{337117261, "Cannot find record for database \"@1\" backup GUID @2 in the backup history"},		/* nbackup_lostrec_guid_db */
+	{337117265, "Switch -SEQ(UENCE) can be used only with -FIXUP or -RESTORE"},		/* nbackup_seq_misuse */
 	{337182750, "conflicting actions \"@1\" and \"@2\" found"},		/* trace_conflict_acts */
 	{337182751, "action switch not found"},		/* trace_act_notfound */
 	{337182752, "switch \"@1\" must be set only once"},		/* trace_switch_once */

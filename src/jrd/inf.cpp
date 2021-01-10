@@ -70,32 +70,93 @@
 using namespace Firebird;
 using namespace Jrd;
 
-
-/*
- * The variable DBSERVER_BASE_LEVEL was originally IB_MAJOR_VER but with
- * the change to Firebird this number could no longer be used.
- * The DBSERVER_BASE_LEVEL for Firebird starts at 6 which is the base level
- * of InterBase(r) from which Firebird was derived.
- * It is expected that this value will increase as changes are added to
- * Firebird
- */
+// The variable DBSERVER_BASE_LEVEL was originally IB_MAJOR_VER but with
+// the change to Firebird this number could no longer be used.
+// The DBSERVER_BASE_LEVEL for Firebird starts at 6 which is the base level
+// of InterBase(r) from which Firebird was derived.
+// It was expected that this value will increase as changes are added to
+// Firebird, bit it never happened.
 
 #define DBSERVER_BASE_LEVEL 6
-
 
 #define STUFF_WORD(p, value)	{*p++ = value; *p++ = value >> 8;}
 #define STUFF(p, value)		*p++ = value
 
-typedef HalfStaticArray<UCHAR, BUFFER_SMALL> CountsBuffer;
-
-static USHORT get_counts(thread_db*, USHORT, CountsBuffer&);
-
 #define CHECK_INPUT(fcn) \
 	{ \
-		if (!items || item_length <= 0 || !info || output_length <= 0) \
+		if (!items || !item_length || !info || !output_length) \
 			ERR_post(Arg::Gds(isc_internal_rejected_params) << Arg::Str(fcn)); \
 	}
 
+namespace
+{
+	class AutoTransaction
+	{
+	public:
+		explicit AutoTransaction(thread_db* tdbb)
+			: m_tdbb(tdbb), m_transaction(NULL)
+		{}
+
+		~AutoTransaction()
+		{
+			if (m_transaction)
+				TRA_commit(m_tdbb, m_transaction, false);
+		}
+
+		void start()
+		{
+			if (!m_transaction)
+				m_transaction = TRA_start(m_tdbb, 0, NULL);
+		}
+
+		jrd_tra* operator->()
+		{
+			return m_transaction;
+		}
+
+		operator jrd_tra*()
+		{
+			return m_transaction;
+		}
+
+	private:
+		thread_db* m_tdbb;
+		jrd_tra* m_transaction;
+	};
+
+	typedef HalfStaticArray<UCHAR, BUFFER_SMALL> CountsBuffer;
+
+	ULONG getCounts(thread_db* tdbb, RuntimeStatistics::StatType type, CountsBuffer& buffer)
+	{
+		const Attachment* const attachment = tdbb->getAttachment();
+		const RuntimeStatistics& stats = attachment->att_stats;
+
+		UCHAR num_buffer[BUFFER_TINY];
+
+		buffer.clear();
+		FB_SIZE_T buffer_length = 0;
+
+		for (RuntimeStatistics::Iterator iter = stats.begin(); iter != stats.end(); ++iter)
+		{
+			const USHORT relation_id = (*iter).getRelationId();
+			const SINT64 n = (*iter).getCounter(type);
+
+			if (n)
+			{
+				const USHORT length = INF_convert(n, num_buffer);
+				const FB_SIZE_T new_buffer_length = buffer_length + length + sizeof(USHORT);
+				buffer.grow(new_buffer_length);
+				UCHAR* p = buffer.begin() + buffer_length;
+				STUFF_WORD(p, relation_id);
+				memcpy(p, num_buffer, length);
+				p += length;
+				buffer_length = new_buffer_length;
+			}
+		}
+
+		return buffer.getCount();
+	}
+}
 
 
 void INF_blob_info(const blb* blob,
@@ -227,15 +288,15 @@ void INF_database_info(thread_db* tdbb,
  	CHECK_INPUT("INF_database_info");
 
 	CountsBuffer counts_buffer;
-	UCHAR* buffer = counts_buffer.getBuffer(BUFFER_SMALL);
-	USHORT length;
-	ULONG err_val;
+	UCHAR* buffer = counts_buffer.getBuffer(BUFFER_SMALL, false);
+	ULONG length, err_val;
 	bool header_refreshed = false;
 
 	Database* const dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	jrd_tra* transaction = NULL;
+	AutoTransaction transaction(tdbb);
+
 	const UCHAR* const end_items = items + item_length;
 	const UCHAR* const end = info + output_length;
 
@@ -346,42 +407,42 @@ void INF_database_info(thread_db* tdbb,
 			break;
 
 		case isc_info_read_seq_count:
-			length = get_counts(tdbb, RuntimeStatistics::RECORD_SEQ_READS, counts_buffer);
+			length = getCounts(tdbb, RuntimeStatistics::RECORD_SEQ_READS, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_read_idx_count:
-			length = get_counts(tdbb, RuntimeStatistics::RECORD_IDX_READS, counts_buffer);
+			length = getCounts(tdbb, RuntimeStatistics::RECORD_IDX_READS, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_update_count:
-			length = get_counts(tdbb, RuntimeStatistics::RECORD_UPDATES, counts_buffer);
+			length = getCounts(tdbb, RuntimeStatistics::RECORD_UPDATES, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_insert_count:
-			length = get_counts(tdbb, RuntimeStatistics::RECORD_INSERTS, counts_buffer);
+			length = getCounts(tdbb, RuntimeStatistics::RECORD_INSERTS, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_delete_count:
-			length = get_counts(tdbb, RuntimeStatistics::RECORD_DELETES, counts_buffer);
+			length = getCounts(tdbb, RuntimeStatistics::RECORD_DELETES, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_backout_count:
-			length = get_counts(tdbb, RuntimeStatistics::RECORD_BACKOUTS, counts_buffer);
+			length = getCounts(tdbb, RuntimeStatistics::RECORD_BACKOUTS, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_purge_count:
-			length = get_counts(tdbb, RuntimeStatistics::RECORD_PURGES, counts_buffer);
+			length = getCounts(tdbb, RuntimeStatistics::RECORD_PURGES, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_expunge_count:
-			length = get_counts(tdbb, RuntimeStatistics::RECORD_EXPUNGES, counts_buffer);
+			length = getCounts(tdbb, RuntimeStatistics::RECORD_EXPUNGES, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
@@ -425,17 +486,16 @@ void INF_database_info(thread_db* tdbb,
 			// version number, but for 4.1 the base level is being
 			// incremented, so the base level indicates an engine version
 			// as follows:
-			// 1 == v1.x
-			// 2 == v2.x
-			// 3 == v3.x
-			// 4 == v4.0 only
-			// 5 == v4.1. (v5, too?)
-			// 6 == v6, FB1, FB1.5, FB2, FB2.5
+			// 1 == InterBase v1.x
+			// 2 == InterBase v2.x
+			// 3 == InterBase v3.x
+			// 4 == InterBase v4.0 only
+			// 5 == InterBase v4.1. (v5, too?)
+			// 6 == InterBase v6 and all Firebird versions (for compatibility)
 			// Note: this info item is so old it apparently uses an
 			// archaic format, not a standard vax integer format.
 
 			STUFF(p, 1);		// Count
-			// IB_MAJOR_VER is defined as a character string
 			STUFF(p, DBSERVER_BASE_LEVEL);	// base level of current version
 			length = p - buffer;
 			break;
@@ -458,37 +518,28 @@ void INF_database_info(thread_db* tdbb,
 
 		case isc_info_db_id:
 			{
-				counts_buffer.resize(BUFFER_SMALL);
-				const UCHAR* const end_buf = counts_buffer.end();
-				// May be simpler to code using a server-side version of isql's Extender class.
-				const PathName& str_fn = dbb->dbb_database_name;
-				STUFF(p, 2);
-				USHORT len = str_fn.length();
-				if (p + len + 1 >= end_buf)
-					len = end_buf - p - 1;
-				if (len > 255)
-					len = 255; // Cannot put more in one byte, will truncate instead.
-				*p++ = len;
-				memcpy(p, str_fn.c_str(), len);
-				p += len;
-				if (p + 2 < end_buf)
-				{
-					SCHAR site[256];
-					ISC_get_host(site, sizeof(site));
-					len = static_cast<USHORT>(strlen(site));
-					if (p + len + 1 >= end_buf)
-						len = end_buf - p - 1;
-					*p++ = len;
-					memcpy(p, site, len);
-					p += len;
-				}
-				length = p - buffer;
+				counts_buffer.clear();
+
+				const auto& dbName = dbb->dbb_database_name;
+				counts_buffer.push(2);
+				const ULONG len = MIN(dbName.length(), MAX_UCHAR);
+				counts_buffer.push(static_cast<UCHAR>(len));
+				counts_buffer.push(reinterpret_cast<const UCHAR*>(dbName.c_str()), len);
+
+				TEXT site[256];
+				ISC_get_host(site, sizeof(site));
+				const ULONG siteLen = MIN(strlen(site), MAX_UCHAR);
+				counts_buffer.push(static_cast<UCHAR>(siteLen));
+				counts_buffer.push(reinterpret_cast<UCHAR*>(site), siteLen);
+
+				buffer = counts_buffer.begin();
+				length = counts_buffer.getCount();
 			}
 			break;
 
 		case isc_info_creation_date:
 			{
-				const ISC_TIMESTAMP ts = TimeZoneUtil::cvtTimeStampTzToTimeStamp(
+				const ISC_TIMESTAMP ts = TimeZoneUtil::timeStampTzToTimeStamp(
 					dbb->dbb_creation_date, &EngineCallbacks::instance);
 
 				length = INF_convert(ts.timestamp_date, p);
@@ -521,8 +572,7 @@ void INF_database_info(thread_db* tdbb,
 			break;
 
 		case isc_info_limbo:
-			if (!transaction)
-				transaction = TRA_start(tdbb, 0, NULL);
+			transaction.start();
 			for (TraNumber id = transaction->tra_oldest; id < transaction->tra_number; id++)
 			{
 				if (TRA_snapshot_state(tdbb, transaction, id) == tra_limbo &&
@@ -530,36 +580,26 @@ void INF_database_info(thread_db* tdbb,
 				{
 					length = INF_convert(id, buffer);
 					if (!(info = INF_put_item(item, length, buffer, info, end)))
-					{
-						if (transaction)
-							TRA_commit(tdbb, transaction, false);
 						return;
-					}
 				}
 			}
 			continue;
 
 		case isc_info_active_transactions:
-			if (!transaction)
-				transaction = TRA_start(tdbb, 0, NULL);
+			transaction.start();
 			for (TraNumber id = transaction->tra_oldest_active; id < transaction->tra_number; id++)
 			{
 				if (TRA_snapshot_state(tdbb, transaction, id) == tra_active)
 				{
 					length = INF_convert(id, buffer);
 					if (!(info = INF_put_item(item, length, buffer, info, end)))
-					{
-						if (transaction)
-							TRA_commit(tdbb, transaction, false);
 						return;
-					}
 				}
 			}
 			continue;
 
 		case isc_info_active_tran_count:
-			if (!transaction)
-				transaction = TRA_start(tdbb, 0, NULL);
+			transaction.start();
 			{ // scope
 				SLONG cnt = 0;
 				for (TraNumber id = transaction->tra_oldest_active; id < transaction->tra_number; id++)
@@ -583,17 +623,15 @@ void INF_database_info(thread_db* tdbb,
 			if (!(tdbb->getAttachment()->locksmith(tdbb, USER_MANAGEMENT)))
 			{
 				const UserId* user = tdbb->getAttachment()->att_user;
-				const char* uname = (user && user->getUserName().hasData()) ?
+				const char* userName = (user && user->getUserName().hasData()) ?
 					user->getUserName().c_str() : "<Unknown>";
-				const SSHORT len = static_cast<SSHORT>(strlen(uname));
-				*p++ = len;
-				memcpy(p, uname, len);
+				const ULONG len = MIN(strlen(userName), MAX_UCHAR);
+				*p++ = static_cast<UCHAR>(len);
+				memcpy(p, userName, len);
+
 				if (!(info = INF_put_item(item, len + 1, buffer, info, end)))
-				{
-					if (transaction)
-						TRA_commit(tdbb, transaction, false);
 					return;
-				}
+
 				continue;
 			}
 
@@ -606,23 +644,15 @@ void INF_database_info(thread_db* tdbb,
 
 					if (user)
 					{
-						const char* user_name = user->getUserName().hasData() ?
+						const char* userName = user->getUserName().hasData() ?
 							user->getUserName().c_str() : "(Firebird Worker Thread)";
 						p = buffer;
-						const SSHORT len = static_cast<SSHORT>(strlen(user_name));
-						*p++ = len;
-						memcpy(p, user_name, len);
+						const ULONG len = MIN(strlen(userName), MAX_UCHAR);
+						*p++ = static_cast<UCHAR>(len);
+						memcpy(p, userName, len);
 
 						if (!(info = INF_put_item(item, len + 1, buffer, info, end)))
-						{
-							if (transaction)
-							{
-								sync.unlock();
-								TRA_commit(tdbb, transaction, false);
-							}
-
 							return;
-						}
 					}
 				}
 			}
@@ -744,7 +774,7 @@ void INF_database_info(thread_db* tdbb,
 			{
 				length = gds__vax_integer(items, 2);
 				items += 2;
-				const SLONG page_num = gds__vax_integer(items, length);
+				const ULONG page_num = gds__vax_integer(items, length);
 				items += length;
 
 				win window(PageNumber(DB_PAGE_SPACE, page_num));
@@ -754,11 +784,8 @@ void INF_database_info(thread_db* tdbb,
 				CCH_RELEASE_TAIL(tdbb, &window);
 
 				if (!info)
-				{
-					if (transaction)
-						TRA_commit(tdbb, transaction, false);
 					return;
-				}
+
 				continue;
 			}
 
@@ -784,13 +811,9 @@ void INF_database_info(thread_db* tdbb,
 			if (tdbb->getAttachment()->locksmith(tdbb, GET_DBCRYPT_INFO))
 			{
 				const char* key = dbb->dbb_crypto_manager->getKeyName();
-				if (!(info = INF_put_item(item, static_cast<USHORT>(strlen(key)), key, info, end)))
-				{
-					if (transaction)
-						TRA_commit(tdbb, transaction, false);
-
+				if (!(info = INF_put_item(item, strlen(key), key, info, end)))
 					return;
-				}
+
 				continue;
 			}
 
@@ -803,13 +826,9 @@ void INF_database_info(thread_db* tdbb,
 			if (tdbb->getAttachment()->locksmith(tdbb, GET_DBCRYPT_INFO))
 			{
 				const char* key = dbb->dbb_crypto_manager->getPluginName();
-				if (!(info = INF_put_item(item, static_cast<USHORT>(strlen(key)), key, info, end)))
-				{
-					if (transaction)
-						TRA_commit(tdbb, transaction, false);
-
+				if (!(info = INF_put_item(item, strlen(key), key, info, end)))
 					return;
-				}
+
 				continue;
 			}
 
@@ -825,13 +844,8 @@ void INF_database_info(thread_db* tdbb,
 		case fb_info_wire_crypt:
 			{
 				const PathName& nm = tdbb->getAttachment()->att_remote_crypt;
-				if (!(info = INF_put_item(item, static_cast<USHORT>(nm.length()), nm.c_str(), info, end)))
-				{
-					if (transaction)
-						TRA_commit(tdbb, transaction, false);
-
+				if (!(info = INF_put_item(item, nm.length(), nm.c_str(), info, end)))
 					return;
-				}
 			}
 			continue;
 
@@ -855,6 +869,40 @@ void INF_database_info(thread_db* tdbb,
 			length = INF_convert(att->getActualIdleTimeout(), buffer);
 			break;
 
+		case fb_info_features:
+			{
+				static const unsigned char features[] = ENGINE_FEATURES;
+				length = sizeof(features);
+				counts_buffer.assign(features, length);
+				buffer = counts_buffer.begin();
+				break;
+			}
+
+		case fb_info_next_attachment:
+			length = INF_convert(dbb->getLatestAttachmentId(), buffer);
+			break;
+
+		case fb_info_next_statement:
+			length = INF_convert(dbb->getLatestStatementId(), buffer);
+			break;
+
+		case fb_info_db_guid:
+			{
+				char guidBuffer[GUID_BUFF_SIZE];
+				GuidToString(guidBuffer, &dbb->dbb_guid);
+				if (!(info = INF_put_item(item, strlen(guidBuffer), guidBuffer, info, end)))
+					return;
+			}
+			continue;
+
+		case fb_info_db_file_id:
+			{
+				const auto& fileId = dbb->getUniqueFileId();
+				if (!(info = INF_put_item(item, fileId.length(), fileId.c_str(), info, end)))
+					return;
+			}
+			continue;
+
 		default:
 			buffer[0] = item;
 			item = isc_info_error;
@@ -863,22 +911,15 @@ void INF_database_info(thread_db* tdbb,
 		}
 
 		if (!(info = INF_put_item(item, length, buffer, info, end)))
-		{
-			if (transaction)
-				TRA_commit(tdbb, transaction, false);
 			return;
-		}
 	}
-
-	if (transaction)
-		TRA_commit(tdbb, transaction, false);
 
 	*info++ = isc_info_end;
 }
 
 
 UCHAR* INF_put_item(UCHAR item,
-					USHORT length,
+					ULONG length,
 					const void* data,
 					UCHAR* ptr,
 					const UCHAR* end,
@@ -898,9 +939,14 @@ UCHAR* INF_put_item(UCHAR item,
  *
  **************************************/
 
-	if (ptr + length + (inserting ? 3 : 4) >= end)
+	if ((ptr + length + (inserting ? 3 : 4) >= end) || (length > MAX_USHORT))
 	{
-		*ptr = isc_info_truncated;
+		if (ptr < end)
+		{
+			*ptr++ = isc_info_truncated;
+			if (ptr < end && !inserting)
+				*ptr++ = isc_info_end;
+		}
 		return NULL;
 	}
 
@@ -917,8 +963,11 @@ UCHAR* INF_put_item(UCHAR item,
 }
 
 
-ULONG INF_request_info(const jrd_req* request, const ULONG item_length, const UCHAR* items,
-	const ULONG output_length, UCHAR* info)
+ULONG INF_request_info(const jrd_req* request,
+					   const ULONG item_length,
+					   const UCHAR* items,
+					   const ULONG output_length,
+					   UCHAR* info)
 {
 /**************************************
  *
@@ -995,7 +1044,7 @@ ULONG INF_request_info(const jrd_req* request, const ULONG item_length, const UC
 				length = INF_convert(isc_info_req_inactive, buffer_ptr);
 			else
 			{
-				SSHORT state = isc_info_req_active;
+				auto state = isc_info_req_active;
 				if (request->req_operation == jrd_req::req_send)
 					state = isc_info_req_send;
 				else if (request->req_operation == jrd_req::req_receive)
@@ -1028,7 +1077,7 @@ ULONG INF_request_info(const jrd_req* request, const ULONG item_length, const UC
 			}
 			else
 			{
-				const MessageNode* node = StmtNode::as<MessageNode>(request->req_message);
+				const auto node = nodeAs<MessageNode>(request->req_message);
 
 				if (node)
 				{
@@ -1049,9 +1098,7 @@ ULONG INF_request_info(const jrd_req* request, const ULONG item_length, const UC
 			break;
 		}
 
-		info = INF_put_item(item, length, buffer_ptr, info, end);
-
-		if (!info)
+		if (!(info = INF_put_item(item, length, buffer_ptr, info, end)))
 			return 0;
 	}
 
@@ -1091,7 +1138,7 @@ void INF_transaction_info(const jrd_tra* transaction,
 	CHECK_INPUT("INF_transaction_info");
 
 	UCHAR buffer[MAXPATHLEN];
-	USHORT length;
+	ULONG length;
 
 	const UCHAR* const end_items = items + item_length;
 	const UCHAR* const end = info + output_length;
@@ -1171,13 +1218,12 @@ void INF_transaction_info(const jrd_tra* transaction,
 			break;
 
 		case fb_info_tra_dbpath:
-			length = transaction->tra_attachment->att_database->dbb_database_name.length();
-			if (length > MAXPATHLEN)
-			{
-				length = MAXPATHLEN;
-			}
-			memcpy(buffer, transaction->tra_attachment->att_database->dbb_database_name.c_str(), length);
+		{
+			const auto& dbName = transaction->tra_attachment->att_database->dbb_database_name;
+			if (!(info = INF_put_item(item, dbName.length(), dbName.c_str(), info, end)))
+				return;
 			break;
+		}
 
 		case fb_info_tra_snapshot_number:
 			length = INF_convert(static_cast<SINT64>(transaction->tra_snapshot_number), buffer);
@@ -1205,46 +1251,4 @@ void INF_transaction_info(const jrd_tra* transaction,
 		fb_assert(length == 4); // We only accept SLONG
 		INF_put_item(isc_info_length, length, buffer, start_info, end, true);
 	}
-}
-
-
-static USHORT get_counts(thread_db* tdbb, USHORT count_id, CountsBuffer& buffer)
-{
-/**************************************
- *
- *	g e t _ c o u n t s
- *
- **************************************
- *
- * Functional description
- *	Return operation counts for relation.
- *
- **************************************/
-	const Attachment* const attachment = tdbb->getAttachment();
-	const RuntimeStatistics& stats = attachment->att_stats;
-
-	UCHAR num_buffer[BUFFER_TINY];
-
-	buffer.clear();
-	FB_SIZE_T buffer_length = 0;
-
-	for (RuntimeStatistics::Iterator iter = stats.begin(); iter != stats.end(); ++iter)
-	{
-		const USHORT relation_id = (*iter).getRelationId();
-		const SINT64 n = (*iter).getCounter(count_id);
-
-		if (n)
-		{
-			const USHORT length = INF_convert(n, num_buffer);
-			const FB_SIZE_T new_buffer_length = buffer_length + length + sizeof(USHORT);
-			buffer.grow(new_buffer_length);
-			UCHAR* p = buffer.begin() + buffer_length;
-			STUFF_WORD(p, relation_id);
-			memcpy(p, num_buffer, length);
-			p += length;
-			buffer_length = new_buffer_length;
-		}
-	}
-
-	return buffer.getCount();
 }

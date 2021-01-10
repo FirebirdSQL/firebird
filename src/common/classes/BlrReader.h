@@ -25,8 +25,8 @@
 
 #include "iberror.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
 #include "../common/StatusArg.h"
+#include "../jrd/constants.h"
 
 namespace Firebird {
 
@@ -163,7 +163,8 @@ public:
 		seekForward(len);
 	}
 
-	void getMetaName(MetaName& name)
+	template <typename STR>
+	void getMetaName(STR& name)
 	{
 		string str;
 		getString(str);

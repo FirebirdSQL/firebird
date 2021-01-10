@@ -604,14 +604,14 @@ void rem_port::linkParent(rem_port* const parent)
 	parent->port_clients = parent->port_next = this;
 }
 
-const Firebird::RefPtr<const Config>& rem_port::getPortConfig() const
+const Firebird::RefPtr<const Firebird::Config>& rem_port::getPortConfig() const
 {
-	return port_config.hasData() ? port_config : Config::getDefaultConfig();
+	return port_config.hasData() ? port_config : Firebird::Config::getDefaultConfig();
 }
 
-Firebird::RefPtr<const Config> rem_port::getPortConfig()
+Firebird::RefPtr<const Firebird::Config> rem_port::getPortConfig()
 {
-	return port_config.hasData() ? port_config : Config::getDefaultConfig();
+	return port_config.hasData() ? port_config : Firebird::Config::getDefaultConfig();
 }
 
 void rem_port::unlinkParent()
@@ -711,7 +711,7 @@ void rem_port::auxAcceptError(PACKET* packet)
 	}
 }
 
-bool_t REMOTE_getbytes (XDR* xdrs, SCHAR* buff, u_int count)
+bool_t REMOTE_getbytes (XDR* xdrs, SCHAR* buff, unsigned bytecount)
 {
 /**************************************
  *
@@ -723,9 +723,6 @@ bool_t REMOTE_getbytes (XDR* xdrs, SCHAR* buff, u_int count)
  *	Get a bunch of bytes from a port buffer
  *
  **************************************/
-	SLONG bytecount = count;
-
-	// Use memcpy to optimize bulk transfers.
 
 	while (bytecount > 0)
 	{
@@ -745,6 +742,7 @@ bool_t REMOTE_getbytes (XDR* xdrs, SCHAR* buff, u_int count)
 			bytecount -= xdrs->x_handy;
 			xdrs->x_handy = 0;
 		}
+
 		rem_port* port = (rem_port*) xdrs->x_public;
 		Firebird::RefMutexGuard queGuard(*port->port_que_sync, FB_FUNCTION);
 		if (port->port_qoffset >= port->port_queue.getCount())
@@ -753,7 +751,7 @@ bool_t REMOTE_getbytes (XDR* xdrs, SCHAR* buff, u_int count)
 			return FALSE;
 		}
 
-		xdrs->x_handy = (int) port->port_queue[port->port_qoffset].getCount();
+		xdrs->x_handy = port->port_queue[port->port_qoffset].getCount();
 		fb_assert(xdrs->x_handy <= port->port_buff_size);
 		memcpy(xdrs->x_base, port->port_queue[port->port_qoffset].begin(), xdrs->x_handy);
 		++port->port_qoffset;
@@ -960,7 +958,7 @@ void ClntAuthBlock::extractDataFromPluginTo(Firebird::ClumpletWriter& user_id)
 	addMultiPartConnectParameter(dataFromPlugin, user_id, CNCT_specific_data);
 
 	// Client's wirecrypt requested level
-	user_id.insertInt(CNCT_client_crypt, clntConfig->getWireCrypt(WC_CLIENT));
+	user_id.insertInt(CNCT_client_crypt, clntConfig->getWireCrypt(Firebird::WC_CLIENT));
 }
 
 void ClntAuthBlock::resetClnt(const CSTRING* listStr)
@@ -1011,7 +1009,7 @@ void ClntAuthBlock::resetClnt(const CSTRING* listStr)
 	plugins.set(final.c_str());
 }
 
-Firebird::RefPtr<const Config>* ClntAuthBlock::getConfig()
+Firebird::RefPtr<const Firebird::Config>* ClntAuthBlock::getConfig()
 {
 	return clntConfig.hasData() ? &clntConfig : NULL;
 }
@@ -1022,10 +1020,10 @@ void ClntAuthBlock::storeDataForPlugin(unsigned int length, const unsigned char*
 	HANDSHAKE_DEBUG(fprintf(stderr, "Cli: accepted data for plugin length=%d\n", length));
 }
 
-Firebird::RefPtr<const Config> REMOTE_get_config(const Firebird::PathName* dbName,
+Firebird::RefPtr<const Firebird::Config> REMOTE_get_config(const Firebird::PathName* dbName,
 	const Firebird::string* dpb_config)
 {
-	Firebird::RefPtr<const Config> config;
+	Firebird::RefPtr<const Firebird::Config> config;
 
 	if (dbName && dbName->hasData())
 	{
@@ -1033,9 +1031,9 @@ Firebird::RefPtr<const Config> REMOTE_get_config(const Firebird::PathName* dbNam
 		expandDatabaseName(*dbName, dummy, &config);
 	}
 	else
-		config = Config::getDefaultConfig();
+		config = Firebird::Config::getDefaultConfig();
 
-	Config::merge(config, dpb_config);
+	Firebird::Config::merge(config, dpb_config);
 
 	return config;
 }
@@ -1206,7 +1204,7 @@ bool rem_port::tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptK
 		return false;
 	}
 
-	if (getPortConfig()->getWireCrypt(WC_CLIENT) == WIRE_CRYPT_DISABLED)
+	if (getPortConfig()->getWireCrypt(Firebird::WC_CLIENT) == Firebird::WIRE_CRYPT_DISABLED)
 	{
 		port_crypt_complete = true;
 		return true;
@@ -1451,6 +1449,10 @@ bool REMOTE_inflate(rem_port* port, PacketReceive* packet_receive, UCHAR* buffer
 		port->port_flags |= PORT_z_data;
 	else
 		port->port_flags &= ~PORT_z_data;
+
+#ifdef COMPRESS_DEBUG
+	fprintf(stderr, "Z-buffer %s\n", port->port_flags & PORT_z_data ? "has data" : "is empty");
+#endif
 
 	return true;
 #else

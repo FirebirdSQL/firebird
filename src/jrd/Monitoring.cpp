@@ -114,7 +114,43 @@ bool MonitoringTableScan::retrieveRecord(thread_db* tdbb, jrd_rel* relation,
 										 FB_UINT64 position, Record* record) const
 {
 	MonitoringSnapshot* const snapshot = MonitoringSnapshot::create(tdbb);
-	return snapshot->getData(relation)->fetch(position, record);
+	if (!snapshot->getData(relation)->fetch(position, record))
+		return false;
+
+	if (relation->rel_id == rel_mon_attachments || relation->rel_id == rel_mon_statements)
+	{
+		const USHORT fieldId = (relation->rel_id == rel_mon_attachments) ?
+			(USHORT) f_mon_att_idle_timer : (USHORT) f_mon_stmt_timer;
+
+		dsc desc;
+		if (EVL_field(relation, record, fieldId, &desc))
+		{
+			SINT64 clock;
+			memcpy(&clock, desc.dsc_address, sizeof(clock));
+
+			ISC_TIMESTAMP_TZ* ts = reinterpret_cast<ISC_TIMESTAMP_TZ*> (desc.dsc_address);
+			ts->utc_timestamp = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
+
+			if (relation->rel_id == rel_mon_attachments)
+			{
+				const SINT64 currClock = fb_utils::query_performance_counter() / fb_utils::query_performance_frequency();
+				NoThrowTimeStamp::add10msec(&ts->utc_timestamp, clock - currClock, ISC_TIME_SECONDS_PRECISION);
+				NoThrowTimeStamp::round_time(ts->utc_timestamp.timestamp_time, 0);
+			}
+			else
+			{
+				const SINT64 currClock = fb_utils::query_performance_counter() * 1000 / fb_utils::query_performance_frequency();
+				NoThrowTimeStamp::add10msec(&ts->utc_timestamp, clock - currClock, ISC_TIME_SECONDS_PRECISION / 1000);
+			}
+
+			// hvlad: this will assign local system (server) time zone that was actual
+			// when current attachment created.
+			Attachment* att = tdbb->getAttachment();
+			ts->time_zone = att->att_timestamp.time_zone;
+		}
+	}
+
+	return true;
 }
 
 
@@ -130,7 +166,7 @@ MonitoringData::MonitoringData(Database* dbb)
 
 MonitoringData::~MonitoringData()
 {
-	m_sharedMemory->mutexLock();
+	Guard guard(this);
 
 	try
 	{
@@ -142,8 +178,6 @@ MonitoringData::~MonitoringData()
 	}
 	catch (const Exception&)
 	{} // no-op
-
-	m_sharedMemory->mutexUnlock();
 }
 
 
@@ -174,12 +208,13 @@ void MonitoringData::acquire()
 	m_localMutex.enter(FB_FUNCTION);
 	m_sharedMemory->mutexLock();
 
-	while (m_sharedMemory->getHeader()->used == alignOffset(sizeof(Header)))
-	{
-		if (m_sharedMemory->justCreated())
-			break;
+	// Reattach if someone has just deleted the shared file
 
-		// Someone is going to delete shared file? Reattach.
+	while (m_sharedMemory->getHeader()->isDeleted())
+	{
+		// Shared memory must be empty at this point
+		fb_assert(m_sharedMemory->getHeader()->used == alignOffset(sizeof(Header)));
+
 		m_sharedMemory->mutexUnlock();
 		m_sharedMemory.reset();
 
@@ -188,8 +223,6 @@ void MonitoringData::acquire()
 		initSharedFile();
 		m_sharedMemory->mutexLock();
 	}
-
-	fb_assert(!m_sharedMemory->justCreated());
 
 	if (m_sharedMemory->getHeader()->allocated > m_sharedMemory->sh_mem_length_mapped)
 	{
@@ -781,14 +814,14 @@ SINT64 Monitoring::getGlobalId(int value)
 
 void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 {
-	const Database* const database = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
 	record.reset(rel_mon_database);
 
 	// Determine the backup state
 	int backup_state = backup_state_unknown;
 
-	BackupManager* const bm = database->dbb_backup_manager;
+	BackupManager* const bm = dbb->dbb_backup_manager;
 
 	if (bm && !bm->isShutDown())
 	{
@@ -808,78 +841,78 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 		}
 	}
 
-	PathName databaseName(database->dbb_database_name);
+	PathName databaseName(dbb->dbb_database_name);
 	ISC_systemToUtf8(databaseName);
 
 	// database name or alias (MUST BE ALWAYS THE FIRST ITEM PASSED!)
 	record.storeString(f_mon_db_name, databaseName);
 	// page size
-	record.storeInteger(f_mon_db_page_size, database->dbb_page_size);
+	record.storeInteger(f_mon_db_page_size, dbb->dbb_page_size);
 	// major ODS version
-	record.storeInteger(f_mon_db_ods_major, database->dbb_ods_version);
+	record.storeInteger(f_mon_db_ods_major, dbb->dbb_ods_version);
 	// minor ODS version
-	record.storeInteger(f_mon_db_ods_minor, database->dbb_minor_version);
+	record.storeInteger(f_mon_db_ods_minor, dbb->dbb_minor_version);
 	// oldest interesting transaction
-	record.storeInteger(f_mon_db_oit, database->dbb_oldest_transaction);
+	record.storeInteger(f_mon_db_oit, dbb->dbb_oldest_transaction);
 	// oldest active transaction
-	record.storeInteger(f_mon_db_oat, database->dbb_oldest_active);
+	record.storeInteger(f_mon_db_oat, dbb->dbb_oldest_active);
 	// oldest snapshot transaction
-	record.storeInteger(f_mon_db_ost, database->dbb_oldest_snapshot);
+	record.storeInteger(f_mon_db_ost, dbb->dbb_oldest_snapshot);
 	// next transaction
-	record.storeInteger(f_mon_db_nt, database->dbb_next_transaction);
+	record.storeInteger(f_mon_db_nt, dbb->dbb_next_transaction);
 	// number of page buffers
-	record.storeInteger(f_mon_db_page_bufs, database->dbb_bcb->bcb_count);
+	record.storeInteger(f_mon_db_page_bufs, dbb->dbb_bcb->bcb_count);
 
 	int temp;
 
 	// SQL dialect
-	temp = (database->dbb_flags & DBB_DB_SQL_dialect_3) ? 3 : 1;
+	temp = (dbb->dbb_flags & DBB_DB_SQL_dialect_3) ? 3 : 1;
 	record.storeInteger(f_mon_db_dialect, temp);
 
 	// shutdown mode
-	if (database->dbb_ast_flags & DBB_shutdown_full)
+	if (dbb->dbb_ast_flags & DBB_shutdown_full)
 		temp = shut_mode_full;
-	else if (database->dbb_ast_flags & DBB_shutdown_single)
+	else if (dbb->dbb_ast_flags & DBB_shutdown_single)
 		temp = shut_mode_single;
-	else if (database->dbb_ast_flags & DBB_shutdown)
+	else if (dbb->dbb_ast_flags & DBB_shutdown)
 		temp = shut_mode_multi;
 	else
 		temp = shut_mode_online;
 	record.storeInteger(f_mon_db_shut_mode, temp);
 
 	// sweep interval
-	record.storeInteger(f_mon_db_sweep_int, database->dbb_sweep_interval);
+	record.storeInteger(f_mon_db_sweep_int, dbb->dbb_sweep_interval);
 	// read only flag
-	temp = database->readOnly() ? 1 : 0;
+	temp = dbb->readOnly() ? 1 : 0;
 	record.storeInteger(f_mon_db_read_only, temp);
 	// forced writes flag
-	temp = (database->dbb_flags & DBB_force_write) ? 1 : 0;
+	temp = (dbb->dbb_flags & DBB_force_write) ? 1 : 0;
 	record.storeInteger(f_mon_db_forced_writes, temp);
 	// reserve space flag
-	temp = (database->dbb_flags & DBB_no_reserve) ? 0 : 1;
+	temp = (dbb->dbb_flags & DBB_no_reserve) ? 0 : 1;
 	record.storeInteger(f_mon_db_res_space, temp);
 	// creation date
-	record.storeTimestampTz(f_mon_db_created, database->dbb_creation_date);
+	record.storeTimestampTz(f_mon_db_created, dbb->dbb_creation_date);
 	// database size
-	record.storeInteger(f_mon_db_pages, PageSpace::actAlloc(database));
+	record.storeInteger(f_mon_db_pages, PageSpace::actAlloc(dbb));
 	// database backup state
 	record.storeInteger(f_mon_db_backup_state, backup_state);
 
 	// crypt thread status
-	if (database->dbb_crypto_manager)
+	if (dbb->dbb_crypto_manager)
 	{
-		record.storeInteger(f_mon_db_crypt_page, database->dbb_crypto_manager->getCurrentPage());
-		record.storeInteger(f_mon_db_crypt_state, database->dbb_crypto_manager->getCurrentState());
+		record.storeInteger(f_mon_db_crypt_page, dbb->dbb_crypto_manager->getCurrentPage());
+		record.storeInteger(f_mon_db_crypt_state, dbb->dbb_crypto_manager->getCurrentState());
 	}
 
 	// database owner
-	record.storeString(f_mon_db_owner, database->dbb_owner);
+	record.storeString(f_mon_db_owner, dbb->dbb_owner);
 
 	// security database type
 	PathName secDbName;
 	string secDbType = "Other";
-	expandDatabaseName(database->dbb_config->getSecurityDatabase(), secDbName, NULL);
-	if (secDbName == database->dbb_filename)
+	expandDatabaseName(dbb->dbb_config->getSecurityDatabase(), secDbName, NULL);
+	if (secDbName == dbb->dbb_filename)
 		secDbType = "Self";
 	else
 	{
@@ -889,17 +922,26 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 			secDbType = "Default";
 	}
 	record.storeString(f_mon_db_secdb, secDbType);
+
+	record.storeInteger(f_mon_db_na, dbb->getLatestAttachmentId());
+	record.storeInteger(f_mon_db_ns, dbb->getLatestStatementId());
+
+	char guidBuffer[GUID_BUFF_SIZE];
+	GuidToString(guidBuffer, &dbb->dbb_guid);
+	record.storeString(f_mon_db_guid, string(guidBuffer));
+	record.storeString(f_mon_db_file_id, dbb->getUniqueFileId());
+
 	// statistics
 	const int stat_id = fb_utils::genUniqueId();
 	record.storeGlobalId(f_mon_db_stat_id, getGlobalId(stat_id));
 
 	record.write();
 
-	if (database->dbb_flags & DBB_shared)
+	if (dbb->dbb_flags & DBB_shared)
 	{
-		MutexLockGuard guard(database->dbb_stats_mutex, FB_FUNCTION);
-		putStatistics(record, database->dbb_stats, stat_id, stat_database);
-		putMemoryUsage(record, database->dbb_memory_stats, stat_id, stat_database);
+		MutexLockGuard guard(dbb->dbb_stats_mutex, FB_FUNCTION);
+		putStatistics(record, dbb->dbb_stats, stat_id, stat_database);
+		putMemoryUsage(record, dbb->dbb_memory_stats, stat_id, stat_database);
 	}
 	else
 	{
@@ -919,21 +961,6 @@ void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Atta
 
 	record.reset(rel_mon_attachments);
 
-	int temp = mon_state_idle;
-	for (const jrd_tra* transaction = attachment->att_transactions;
-		 transaction; transaction = transaction->tra_next)
-	{
-		for (const jrd_req* request = transaction->tra_requests;
-			request; request = request->req_tra_next)
-		{
-			if (request->req_transaction && (request->req_flags & req_active))
-			{
-				temp = mon_state_active;
-				break;
-			}
-		}
-	}
-
 	PathName attName(attachment->att_filename);
 	ISC_systemToUtf8(attName);
 
@@ -944,6 +971,7 @@ void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Atta
 	// process id
 	record.storeInteger(f_mon_att_server_pid, getpid());
 	// state
+	int temp = attachment->hasActiveRequests() ? mon_state_active : mon_state_idle;
 	record.storeInteger(f_mon_att_state, temp);
 	// attachment name
 	record.storeString(f_mon_att_name, attName);
@@ -995,9 +1023,15 @@ void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Atta
 	// session idle timeout, seconds
 	record.storeInteger(f_mon_att_idle_timeout, attachment->getIdleTimeout());
 	// when idle timer expires, NULL if not running
-	ISC_TIMESTAMP_TZ idleTimer;
-	if (attachment->getIdleTimerTimestamp(idleTimer))
+	SINT64 clock;
+	if (attachment->getIdleTimerClock(clock))
+	{
+		ISC_TIMESTAMP_TZ idleTimer;
+		static_assert(sizeof(clock) <= sizeof(idleTimer), "timer clock value not fits into timestamp field");
+
+		memcpy(&idleTimer, &clock, sizeof(clock));
 		record.storeTimestampTz(f_mon_att_idle_timer, idleTimer);
+	}
 	// statement timeout, milliseconds
 	record.storeInteger(f_mon_att_stmt_timeout, attachment->getStatementTimeout());
 
@@ -1109,10 +1143,11 @@ void Monitoring::putRequest(SnapshotData::DumpRecord& record, const jrd_req* req
 		record.storeInteger(f_mon_stmt_tra_id, request->req_transaction->tra_number);
 		record.storeTimestampTz(f_mon_stmt_timestamp, request->getTimeStampTz());
 
-		ISC_TIMESTAMP_TZ ts;
-		if (request->req_timer &&
-			request->req_timer->getExpireTimestamp(request->getTimeStampTz(), ts))
+		SINT64 clock;
+		if (request->req_timer && request->req_timer->getExpireClock(clock))
 		{
+			ISC_TIMESTAMP_TZ ts;
+			memcpy(&ts, &clock, sizeof(clock));
 			record.storeTimestampTz(f_mon_stmt_timer, ts);
 		}
 	}
@@ -1344,7 +1379,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment)
 	attachment->mergeStats();
 
 	const AttNumber att_id = attachment->att_attachment_id;
-	const MetaName& user_name = attachment->att_user->getUserName();
+	const MetaString& user_name = attachment->att_user->getUserName();
 
 	fb_assert(dbb->dbb_monitoring_data);
 

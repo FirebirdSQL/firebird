@@ -24,12 +24,11 @@
 #include "firebird.h"
 #include <string.h>
 #include "ibase.h"
-#include "../jrd/val.h"
 #include "../common/sdl.h"
 #include "../jrd/intl.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/sdl_proto.h"
-#include "../jrd/err_proto.h"
+#include "../common/StatusArg.h"
 
 const int COMPILE_SIZE	= 256;
 
@@ -829,6 +828,11 @@ static const UCHAR* sdl_desc(const UCHAR* ptr, DSC* desc)
 		desc->dsc_length = sizeof(SINT64);
 		break;
 
+	case blr_int128:
+		desc->dsc_dtype = dtype_int128;
+		desc->dsc_length = sizeof(Int128);
+		break;
+
 	case blr_quad:
 		desc->dsc_dtype = dtype_quad;
 		desc->dsc_length = sizeof(ISC_QUAD);
@@ -855,24 +859,39 @@ static const UCHAR* sdl_desc(const UCHAR* ptr, DSC* desc)
 		desc->dsc_length = sizeof(Decimal128);
 		break;
 
-	case blr_int128:
-		desc->dsc_dtype = dtype_int128;
-		desc->dsc_length = sizeof(Int128);
-		break;
-
 	case blr_timestamp:
 		desc->dsc_dtype = dtype_timestamp;
-		desc->dsc_length = sizeof(ISC_QUAD);
+		desc->dsc_length = sizeof(ISC_TIMESTAMP);
+		break;
+
+	case blr_timestamp_tz:
+		desc->dsc_dtype = dtype_timestamp_tz;
+		desc->dsc_length = sizeof(ISC_TIMESTAMP_TZ);
+		break;
+
+	case blr_ex_timestamp_tz:
+		desc->dsc_dtype = dtype_ex_timestamp_tz;
+		desc->dsc_length = sizeof(ISC_TIMESTAMP_TZ_EX);
 		break;
 
 	case blr_sql_date:
 		desc->dsc_dtype = dtype_sql_date;
-		desc->dsc_length = sizeof(SLONG);
+		desc->dsc_length = sizeof(ISC_DATE);
 		break;
 
 	case blr_sql_time:
 		desc->dsc_dtype = dtype_sql_time;
-		desc->dsc_length = sizeof(ULONG);
+		desc->dsc_length = sizeof(ISC_TIME);
+		break;
+
+	case blr_sql_time_tz:
+		desc->dsc_dtype = dtype_sql_time_tz;
+		desc->dsc_length = sizeof(ISC_TIME_TZ);
+		break;
+
+	case blr_ex_time_tz:
+		desc->dsc_dtype = dtype_ex_time_tz;
+		desc->dsc_length = sizeof(ISC_TIME_TZ_EX);
 		break;
 
 	case blr_bool:
@@ -891,6 +910,7 @@ static const UCHAR* sdl_desc(const UCHAR* ptr, DSC* desc)
 	case dtype_long:
 	case dtype_quad:
 	case dtype_int64:
+	case dtype_int128:
 		desc->dsc_scale = static_cast<SCHAR>(*sdl++);
 		break;
 

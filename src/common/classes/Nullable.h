@@ -25,7 +25,7 @@
 
 #include "firebird.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/constants.h"
 
 
 // Auxiliary template to build an empty value.
@@ -81,6 +81,16 @@ public:
 		this->specified = true;
 	}
 
+	bool isUnknown() const
+	{
+		return !specified;
+	}
+
+	bool isAssigned() const
+	{
+		return specified;
+	}
+
 public:
 	T value;
 	bool specified;
@@ -127,8 +137,7 @@ public:
 
 	Nullable<T>()
 	{
-		NullableClear<T>::clear(this->value);
-		this->specified = false;
+		invalidate();
 	}
 
 	void operator =(const BaseNullable<T>& o)
@@ -142,7 +151,23 @@ public:
 		this->value = v;
 		this->specified = true;
 	}
+
+	bool assignOnce(const T& v)
+	{
+		if (this->specified)
+			return false;
+
+		*this = v;
+		return true;
+	}
+
+	void invalidate()
+	{
+		NullableClear<T>::clear(this->value);
+		this->specified = false;
+	}
 };
 
+typedef Nullable<bool> TriState;
 
 #endif	// CLASSES_NULLABLE_H

@@ -92,7 +92,7 @@ namespace
 	BufferedStreamWindow::BufferedStreamWindow(CompilerScratch* csb, BufferedStream* next)
 		: m_next(next)
 	{
-		m_impure = CMP_impure(csb, sizeof(Impure));
+		m_impure = csb->allocImpure<Impure>();
 	}
 
 	void BufferedStreamWindow::open(thread_db* tdbb) const
@@ -187,7 +187,7 @@ WindowedStream::WindowedStream(thread_db* tdbb, CompilerScratch* csb,
 	: m_next(FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, next)),
 	  m_joinedStream(NULL)
 {
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 
 	// Process the unpartioned and unordered map, if existent.
 
@@ -321,7 +321,7 @@ WindowedStream::WindowedStream(thread_db* tdbb, CompilerScratch* csb,
 		if (windowOrder)
 		{
 			SortedStream* sortedStream = OPT_gen_sort(tdbb, csb, streams, NULL,
-				m_joinedStream, windowOrder, false);
+				m_joinedStream, windowOrder, false, false);
 
 			m_joinedStream = FB_NEW_POOL(csb->csb_pool) WindowStream(tdbb, csb, window->stream,
 				(window->group ? &window->group->expressions : NULL),
@@ -362,8 +362,7 @@ void WindowedStream::close(thread_db* tdbb) const
 
 bool WindowedStream::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -545,8 +544,7 @@ void WindowedStream::WindowStream::close(thread_db* tdbb) const
 
 bool WindowedStream::WindowStream::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_req* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];
@@ -1085,7 +1083,7 @@ SlidingWindow::~SlidingWindow()
 // Move in the window without pass partition boundaries.
 bool SlidingWindow::moveWithinPartition(SINT64 delta)
 {
-	const SINT64 newPosition = SINT64(savedPosition) + delta;
+	const auto newPosition = savedPosition + delta;
 
 	if (newPosition < partitionStart || newPosition > partitionEnd)
 		return false;
@@ -1106,7 +1104,7 @@ bool SlidingWindow::moveWithinPartition(SINT64 delta)
 // Move in the window without pass frame boundaries.
 bool SlidingWindow::moveWithinFrame(SINT64 delta)
 {
-	const SINT64 newPosition = SINT64(savedPosition) + delta;
+	const auto newPosition = savedPosition + delta;
 
 	if (newPosition < frameStart || newPosition > frameEnd)
 		return false;

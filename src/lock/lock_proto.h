@@ -285,9 +285,8 @@ namespace Firebird {
 	class AtomicCounter;
 	class Mutex;
 	class RWLock;
+	class Config;
 }
-
-class Config;
 
 namespace Jrd {
 
@@ -392,7 +391,7 @@ class LockManager final : public Firebird::GlobalStorage, public Firebird::IpcOb
 	const int PID;
 
 public:
-	explicit LockManager(const Firebird::string&, const Config* conf);
+	explicit LockManager(const Firebird::string&, const Firebird::Config* conf);
 	~LockManager();
 
 	bool initializeOwner(Firebird::CheckStatusWrapper*, LOCK_OWNER_T, UCHAR, SRQ_PTR*);
@@ -489,7 +488,7 @@ private:
 	bool m_blockage;
 
 	const Firebird::string& m_dbId;
-	const Config* const m_config;
+	const Firebird::Config* const m_config;
 
 	// configurations parameters - cached values
 	const ULONG m_acquireSpins;

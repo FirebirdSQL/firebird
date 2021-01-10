@@ -45,7 +45,7 @@ ProcedureScan::ProcedureScan(CompilerScratch* csb, const string& alias, StreamTy
 	: RecordStream(csb, stream, procedure->prc_record_format), m_alias(csb->csb_pool, alias),
 	  m_procedure(procedure), m_sourceList(sourceList), m_targetList(targetList), m_message(message)
 {
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 
 	fb_assert(!sourceList == !targetList);
 
@@ -61,6 +61,8 @@ void ProcedureScan::open(thread_db* tdbb) const
 			Arg::Gds(isc_proc_pack_not_implemented) <<
 				Arg::Str(m_procedure->getName().identifier) << Arg::Str(m_procedure->getName().package));
 	}
+
+	const_cast<jrd_prc*>(m_procedure)->checkReload(tdbb);
 
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -159,8 +161,7 @@ void ProcedureScan::close(thread_db* tdbb) const
 
 bool ProcedureScan::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	UserId* invoker = m_procedure->invoker ? m_procedure->invoker : tdbb->getAttachment()->att_ss_user;
 	AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);

@@ -41,7 +41,7 @@ MergeJoin::MergeJoin(CompilerScratch* csb, FB_SIZE_T count,
 	: m_args(csb->csb_pool), m_keys(csb->csb_pool)
 {
 	const size_t size = sizeof(struct Impure) + count * sizeof(Impure::irsb_mrg_repeat);
-	m_impure = CMP_impure(csb, static_cast<ULONG>(size));
+	m_impure = csb->allocImpure(FB_ALIGNMENT, static_cast<ULONG>(size));
 
 	m_args.resize(count);
 	m_keys.resize(count);
@@ -127,8 +127,7 @@ void MergeJoin::close(thread_db* tdbb) const
 
 bool MergeJoin::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_req* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);

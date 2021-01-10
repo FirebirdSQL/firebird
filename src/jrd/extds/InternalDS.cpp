@@ -173,9 +173,9 @@ void InternalConnection::attach(thread_db* tdbb)
 		FbLocalStatus status;
 		{
 			EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
-			AutoPlugin<JProvider> jInstance(JProvider::getInstance());
-			jInstance->setDbCryptCallback(&status, tdbb->getAttachment()->att_crypt_callback);
-			m_attachment.assignRefNoIncr(jInstance->attachDatabase(&status, m_dbName.c_str(),
+			m_provider.reset(attachment->getProvider());
+			m_provider->addRef();
+			m_attachment.assignRefNoIncr(m_provider->attachDatabase(&status, m_dbName.c_str(),
 				newDpb.getBufferLength(), newDpb.getBuffer()));
 		}
 
@@ -188,7 +188,10 @@ void InternalConnection::attach(thread_db* tdbb)
 	m_sqlDialect = (attachment->att_database->dbb_flags & DBB_DB_SQL_dialect_3) ?
 					SQL_DIALECT_V6 : SQL_DIALECT_V5;
 
-	m_features = conFtrFB4;
+	memset(m_features, false, sizeof(m_features));
+	static const info_features features[] = ENGINE_FEATURES;
+	for (int i = 0; i < FB_NELEM(features); i++)
+		setFeature(features[i]);
 }
 
 void InternalConnection::doDetach(thread_db* tdbb)
@@ -285,10 +288,10 @@ bool InternalConnection::isSameDatabase(const PathName& dbName, ClumpletReader& 
 	if (m_isCurrent)
 	{
 		const Attachment* att = m_attachment->getHandle();
-		const MetaName& attUser = att->att_user->getUserName();
-		const MetaName& attRole = att->att_user->getSqlRole();
+		const MetaString& attUser = att->att_user->getUserName();
+		const MetaString& attRole = att->att_user->getSqlRole();
 
-		MetaName str;
+		MetaString str;
 
 		if (dpb.find(isc_dpb_user_name))
 		{
@@ -386,7 +389,6 @@ void InternalTransaction::doRollback(FbStatusVector* status, thread_db* tdbb, bo
 	if (m_connection.isBroken())
 	{
 		m_transaction = NULL;
-		m_jrdTran = NULL;
 		return;
 	}
 
@@ -448,50 +450,51 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 		fb_assert(!m_allocated);
 	}
 
+	CallerName save_caller_name(tran->getHandle()->tra_caller_name);
+
+	if (m_callerPrivileges)
+	{
+		jrd_req* request = tdbb->getRequest();
+		JrdStatement* statement = request ? request->getStatement() : NULL;
+		CallerName callerName;
+		const Routine* routine;
+
+		if (statement && statement->parentStatement)
+			statement = statement->parentStatement;
+
+		if (statement && statement->triggerInvoker)
+			tran->getHandle()->tra_caller_name = CallerName(obj_trigger,
+															statement->triggerName,
+															statement->triggerInvoker->getUserName());
+		else if (statement && (routine = statement->getRoutine()) &&
+			routine->getName().identifier.hasData())
+		{
+			const MetaString& userName = routine->invoker ? routine->invoker->getUserName() : "";
+			if (routine->getName().package.isEmpty())
+			{
+				tran->getHandle()->tra_caller_name = CallerName(routine->getObjectType(),
+					routine->getName().identifier, userName);
+			}
+			else
+			{
+				tran->getHandle()->tra_caller_name = CallerName(obj_package_header,
+					routine->getName().package, userName);
+			}
+		}
+		else
+			tran->getHandle()->tra_caller_name = CallerName();
+	}
+
 	{
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
 
-		CallerName save_caller_name(tran->getHandle()->tra_caller_name);
-
-		if (m_callerPrivileges)
-		{
-			jrd_req* request = tdbb->getRequest();
-			JrdStatement* statement = request ? request->getStatement() : NULL;
-			CallerName callerName;
-			const Routine* routine;
-
-			if (statement && statement->parentStatement)
-				statement = statement->parentStatement;
-
-			if (statement && statement->triggerInvoker)
-				tran->getHandle()->tra_caller_name = CallerName(obj_trigger,
-																statement->triggerName,
-																statement->triggerInvoker->getUserName());
-			else if (statement && (routine = statement->getRoutine()) &&
-				routine->getName().identifier.hasData())
-			{
-				const MetaName& userName = routine->invoker ? routine->invoker->getUserName() : "";
-				if (routine->getName().package.isEmpty())
-				{
-					tran->getHandle()->tra_caller_name = CallerName(routine->getObjectType(),
-						routine->getName().identifier, userName);
-				}
-				else
-				{
-					tran->getHandle()->tra_caller_name = CallerName(obj_package_header,
-						routine->getName().package, userName);
-				}
-			}
-			else
-				tran->getHandle()->tra_caller_name = CallerName();
-		}
-
 		m_request.assignRefNoIncr(att->prepare(&status, tran, sql.length(), sql.c_str(),
 			m_connection.getSqlDialect(), 0));
-		m_allocated = (m_request != NULL);
-
-		tran->getHandle()->tra_caller_name = save_caller_name;
 	}
+	m_allocated = (m_request != NULL);
+
+	if (tran->getHandle())
+		tran->getHandle()->tra_caller_name = save_caller_name;
 
 	if (status->getState() & IStatus::STATE_ERRORS)
 		raise(&status, tdbb, "JAttachment::prepare", &sql);

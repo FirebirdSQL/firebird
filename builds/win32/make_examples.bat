@@ -27,7 +27,17 @@
 )
 @call compile.bat builds\win32\%VS_VER%\FirebirdExamples udrcpp_example_%FB_TARGET_PLATFORM%.log udrcpp_example
 if errorlevel 1 (
-    @call :ERROR building udrcpp example failed - see make_examples_%FB_TARGET_PLATFORM%.log for details
+    @call :ERROR building udrcpp example failed - see udrcpp_example_%FB_TARGET_PLATFORM%.log for details
+    @goto :EOF
+)
+@call compile.bat examples\extauth\msvc\ExtAuth_%VS_VER% ExtAuth_%FB_TARGET_PLATFORM%.log
+if errorlevel 1 (
+    @call :ERROR building ExtAuth examples failed - see ExtAuth_%FB_TARGET_PLATFORM%.log for details
+    @goto :EOF
+)
+@call compile.bat examples\dbcrypt\msvc\DbCrypt_%VS_VER% DbCrypt_%FB_TARGET_PLATFORM%.log
+if errorlevel 1 (
+    @call :ERROR building DbCrypt examples failed - see DbCrypt_%FB_TARGET_PLATFORM%.log for details
     @goto :EOF
 )
 
@@ -88,8 +98,11 @@ if defined FB2_INTLEMP (
 @mkdir %FB_OUTPUT_DIR%\examples
 @mkdir %FB_OUTPUT_DIR%\examples\api
 @mkdir %FB_OUTPUT_DIR%\examples\dbcrypt
+@mkdir %FB_OUTPUT_DIR%\examples\dbcrypt\msvc
 @mkdir %FB_OUTPUT_DIR%\examples\build_win32
 @mkdir %FB_OUTPUT_DIR%\examples\empbuild
+@mkdir %FB_OUTPUT_DIR%\examples\extauth
+@mkdir %FB_OUTPUT_DIR%\examples\extauth\msvc
 @mkdir %FB_OUTPUT_DIR%\examples\include
 @mkdir %FB_OUTPUT_DIR%\examples\interfaces
 @mkdir %FB_OUTPUT_DIR%\examples\package
@@ -97,14 +110,20 @@ if defined FB2_INTLEMP (
 @mkdir %FB_OUTPUT_DIR%\examples\udf
 @mkdir %FB_OUTPUT_DIR%\examples\udr
 @mkdir %FB_OUTPUT_DIR%\plugins\udr 2>nul
+@mkdir %FB_OUTPUT_DIR%\examples\prebuilt\bin
+@mkdir %FB_OUTPUT_DIR%\examples\prebuilt\plugins
 
 @echo Moving files to output directory
 copy %FB_ROOT_PATH%\examples\* %FB_OUTPUT_DIR%\examples > nul
 ren %FB_OUTPUT_DIR%\examples\readme readme.txt > nul
 copy %FB_ROOT_PATH%\examples\api\* %FB_OUTPUT_DIR%\examples\api > nul
 copy %FB_ROOT_PATH%\examples\dbcrypt\* %FB_OUTPUT_DIR%\examples\dbcrypt > nul
+copy %FB_ROOT_PATH%\examples\dbcrypt\msvc\* %FB_OUTPUT_DIR%\examples\dbcrypt\msvc > nul
+copy %FB_ROOT_PATH%\examples\dbcrypt\*.conf %FB_OUTPUT_DIR%\examples\prebuilt\plugins > nul
 copy %FB_ROOT_PATH%\examples\build_win32\* %FB_OUTPUT_DIR%\examples\build_win32 > nul
 :: @copy %FB_ROOT_PATH%\examples\empbuild\* %FB_OUTPUT_DIR%\examples\empbuild > nul
+@copy %FB_ROOT_PATH%\examples\extauth\* %FB_OUTPUT_DIR%\examples\extauth > nul
+@copy %FB_ROOT_PATH%\examples\extauth\msvc\* %FB_OUTPUT_DIR%\examples\extauth\msvc > nul
 copy %FB_ROOT_PATH%\examples\empbuild\employe2.sql %FB_OUTPUT_DIR%\examples\empbuild > nul
 copy %FB_ROOT_PATH%\examples\include\* %FB_OUTPUT_DIR%\examples\include > nul
 copy %FB_ROOT_PATH%\examples\interfaces\* %FB_OUTPUT_DIR%\examples\interfaces > nul
@@ -113,6 +132,8 @@ copy %FB_ROOT_PATH%\examples\stat\* %FB_OUTPUT_DIR%\examples\stat > nul
 copy %FB_ROOT_PATH%\examples\udf\* %FB_OUTPUT_DIR%\examples\udf > nul
 copy %FB_ROOT_PATH%\examples\udr\* %FB_OUTPUT_DIR%\examples\udr > nul
 copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird\plugins\udr\*.dll %FB_OUTPUT_DIR%\plugins\udr >nul
+copy %FB_ROOT_PATH%\examples\prebuilt\%FB_OBJ_DIR%\bin\*.exe %FB_OUTPUT_DIR%\examples\prebuilt\bin > nul
+copy %FB_ROOT_PATH%\examples\prebuilt\%FB_OBJ_DIR%\plugins\*.dll %FB_OUTPUT_DIR%\examples\prebuilt\plugins > nul
 
 ::@copy %FB_GEN_DIR%\examples\empbuild.c %FB_OUTPUT_DIR%\examples\empbuild\ > nul
 ::@copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\examples\empbuild.exe %FB_GEN_DIR%\examples\empbuild.exe > nul
@@ -172,6 +193,10 @@ endlocal
 ::==============
 :MOVE2
 @copy %FB_GEN_DIR%\examples\employee.fdb %FB_OUTPUT_DIR%\examples\empbuild\ > nul
+if errorlevel 1 (
+  @call :ERROR copying employee database to %FB_OUTPUT_DIR%\examples\empbuild failed - see make_examples_%FB_TARGET_PLATFORM%.log for details
+  @goto :EOF
+)
 
 if defined FB2_INTLEMP (
   if exist %FB_GEN_DIR%\examples\intlemp.fdb (

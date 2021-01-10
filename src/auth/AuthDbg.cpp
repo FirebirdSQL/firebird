@@ -113,6 +113,24 @@ int DebugServer::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IS
 			check(&s);
 		}
 
+		Firebird::RefPtr<Firebird::IConfigEntry> multi(Firebird::REF_NO_INCR, config->find(&s, "MULTIGROUPS"));
+		check(&s);
+		if (multi)
+		{
+			const int limit = multi->getIntValue();
+			// list groups using writerInterface
+			const char* grName = "FillWithBigData";
+			for (int n = 0; n < limit; ++n)
+			{
+				writerInterface->add(status, grName);
+				if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+					return AUTH_FAILED;
+				writerInterface->setType(status, "Group");
+				if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+					return AUTH_FAILED;
+			}
+		}
+
 		return AUTH_SUCCESS;
 	}
 	catch (const Firebird::Exception& ex)
@@ -125,17 +143,6 @@ int DebugServer::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IS
 
 void DebugServer::setDbCryptCallback(Firebird::CheckStatusWrapper*, Firebird::ICryptKeyCallback*)
 { /* ignore it */ }
-
-int DebugServer::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-
-	return 1;
-}
 
 DebugClient::DebugClient(Firebird::IPluginConfig*)
 	: str(getPool())
@@ -192,17 +199,6 @@ int DebugClient::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IC
 	}
 
 	return AUTH_FAILED;
-}
-
-int DebugClient::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-
-	return 1;
 }
 
 } // namespace Auth

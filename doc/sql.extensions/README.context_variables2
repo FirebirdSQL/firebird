@@ -84,6 +84,10 @@ Usage:
                                 | name if connectivity via file names is not allowed or
                                 | fully expanded database file name otherwise.
                                 |
+   DB_GUID                      | GUID of the current database
+                                |
+   DB_FILE_ID                   | Unique filesystem-level ID of the current database
+                                |
    ISOLATION_LEVEL              | Isolation level for current transaction. Returned values
                                 | are "READ COMMITTED", "CONSISTENCY", "SNAPSHOT"
                                 |

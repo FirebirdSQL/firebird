@@ -54,13 +54,13 @@ typedef struct xdr_t
 	xdr_op x_op;			// operation; fast additional param
 	struct xdr_ops
 	{
-		bool_t  (*x_getbytes)(struct xdr_t*, SCHAR *, u_int);	// get some bytes from "
-		bool_t  (*x_putbytes)(struct xdr_t*, const SCHAR*, u_int);	// put some bytes to "
+		bool_t  (*x_getbytes)(struct xdr_t*, SCHAR *, unsigned);	// get some bytes from "
+		bool_t  (*x_putbytes)(struct xdr_t*, const SCHAR*, unsigned);	// put some bytes to "
 	} const *x_ops;
 	caddr_t	x_public;	// Users' data
 	caddr_t	x_private;	// pointer to private data
 	caddr_t	x_base;		// private used for position info
-	int		x_handy;	// extra private word
+	unsigned x_handy;	// extra private word
 	bool	x_local;	// transmission is known to be local (bytes are in the host order)
 #ifdef DEV_BUILD
 	bool	x_client;	// set this flag to true if this is client port

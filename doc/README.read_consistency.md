@@ -70,6 +70,9 @@ scope of higher block, and old block is released when OIT moves out of lower blo
 Block size could be set in firebird.conf using new setting **TipCacheBlockSize**. Default value is
 4MB and it could keep 512K transactions.
 
+**CONCURRENCY** transactions now uses **database snapshot** described above. Thus instead of taking 
+a private copy of TIP at own start it just keeps value of global Commit Number at a moment.
+
 # Statement level read consistency for read-committed transactions
 
 ## Not consistent read problem
@@ -109,14 +112,16 @@ view of database, of course.
 The obvious solution to not consistent read problem is to make read-committed transaction to use 
 stable database snapshot while statement is executed. Each new top-level statement create own 
 database snapshot to see data committed recently. With snapshots based on commit order it is very 
-cheap operation. Nested statements (triggers, nested stored procedures and functions, dynamic 
-statements, etc) uses same database snapshot created by top-level statement. 
+cheap operation. Let name this snapshot as **statement-level snapshot** further. Nested statements
+(triggers, nested stored procedures and functions, dynamic statements, etc) uses same 
+statement-level snapshot created by top-level statement. 
 
 To support this solution new transaction isolation level is introduced: **READ COMMITTED READ 
 CONSISTENCY**
 
 Old read-committed isolation modes (**RECORD VERSION** and **NO RECORD VERSION**) are still 
-allowed but considered as legacy and not recommended to use.
+allowed, works as before (i.e. not using statement-level snapshots) and could be considered 
+as legacy in the future versions of Firebird. 
 
 So, there are three kinds of read-committed transactions now:
  - READ COMMITTED READ CONSISTENCY
@@ -165,18 +170,28 @@ Notes:
   the application if not handled
 - UPDATE\DELETE triggers will fire multiply times for the same record if statement execution was
   restarted and record is updated\deleted again
+- statement restart usually fully transparent to the applications and no special actions should 
+  be taken by developers to handle it in any way. The only exception is the code with side effects 
+  that is out of transactional control, such as:
+  - usage of external tables, sequences or context variables;
+  - sending e-mails using UDF;
+  - committed autonomous transactions or external queries, and so on
+  
+  Take into account that such code could be executed more than once if update conflict happens
+- there is no special tools to detect restart but it could be easy done using code with side 
+  effects as described above, for example - using context variable
 - by historical reasons isc_update_conflict reported as secondary error code with primary error 
   code isc_deadlock.
 
 
-### Precommitted transactions
+### Read-committed read only transactions
 
-READ COMMITTED READ ONLY transactions marked as committed immediately when transaction started. 
-This is correct if read-committed transaction needs no database snapshot. But it is not correct 
-to mark READ CONSISTENCY READ ONLY transaction as committed as it can break statement-level 
-snapshot consistency. Therefore READ CONSISTENCY READ ONLY transactions is not precommitted 
-on start. Other kinds of READ COMMITTED READ ONLY transactions ([NO] RECORD VERSION) works as 
-before and marked as committed when such transaction started.
+READ COMMITTED *READ ONLY* transactions marked as committed immediately when transaction started. 
+Also such transactions do not inhibit regular garbage collection and not delays advance of OST
+marker. READ CONSISTENCY READ ONLY transactions still marked as committed on start but, to not
+let regular garbage collection to break future statement-level snapshots, it delays movement of 
+OST marker in the same way as SNAPSHOT transactions. Note, this delays *regular* (traditional)
+garbage collection only, *intermediate* GC (see below) is not affected.
 
 ### Support for new READ COMMITTED READ CONSISTENCY isolation level
 #### SQL syntax  
@@ -192,19 +207,20 @@ Parameter Buffer (TPB):
 *isc_tpb_read_consistency*
 
 #### Configuration setting
-In the future versions of Firebird old kinds of read-committed transactions could be removed.
-To help test existing applications with new READ COMMITTED READ CONSISTENCY isolation level
-new configuration setting is introduced:   
+It is recommended to use READ COMMITTED READ CONSISTENCY mode whenever read-committed isolation 
+is feasible. To help test existing applications with new READ COMMITTED READ CONSISTENCY isolation 
+level new configuration setting is introduced:   
 
 *ReadConsistency*  
 
 If ReadConsistency set to 1 (by default) engine ignores [NO] RECORD VERSION flags and makes all 
 read-committed transactions READ COMMITTED READ CONSISTENCY.
 
-Set ReadConsistency to 0 to allow old engine behavior - flags [NO] RECORD VERSION takes effect as
-in previous Firebird versions. READ COMMITTED READ CONSISTENCY isolation level should be specified
-explicitly.
+If ReadConsistency is set to 0 - flags [NO] RECORD VERSION takes effect as in previous Firebird 
+versions. READ COMMITTED READ CONSISTENCY isolation level should be specified explicitly by 
+application - in TPB or using SQL syntax.
 
+The setting is per-database.
 
 # Garbage collection of intermediate record versions
 
@@ -241,3 +257,6 @@ Garbage collection of intermediate record versions run by:
  - background garbage collector in SuperServer
  - every user attachment after update or delete record
  - table scan at index creation
+
+Traditional way of garbage collection (regular GC) is not changed and still works the same way
+as in previous Firebird versions. 

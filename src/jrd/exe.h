@@ -35,7 +35,7 @@
 #include "../jrd/blb.h"
 #include "../jrd/Relation.h"
 #include "../common/classes/array.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/NestConst.h"
 
 #include "gen/iberror.h"
@@ -187,9 +187,9 @@ typedef Firebird::SortedArray<Resource, Firebird::EmptyStorage<Resource>,
 
 struct AccessItem
 {
-	Firebird::MetaName		acc_security_name;
+	MetaName		acc_security_name;
 	SLONG					acc_ss_rel_id;	// Relation Id which owner will be used to check permissions
-	Firebird::MetaName		acc_name, acc_r_name;
+	MetaName		acc_name, acc_r_name;
 	SLONG					acc_type;
 	SecurityClass::flags_t	acc_mask;
 
@@ -224,9 +224,9 @@ struct AccessItem
 		return false; // Equal
 	}
 
-	AccessItem(const Firebird::MetaName& security_name, SLONG view_id,
-		const Firebird::MetaName& name, SLONG type,
-		SecurityClass::flags_t mask, const Firebird::MetaName& relName)
+	AccessItem(const MetaName& security_name, SLONG view_id,
+		const MetaName& name, SLONG type,
+		SecurityClass::flags_t mask, const MetaName& relName)
 		: acc_security_name(security_name), acc_ss_rel_id(view_id), acc_name(name),
 			acc_r_name(relName), acc_type(type), acc_mask(mask)
 	{}
@@ -251,7 +251,7 @@ struct ExternalAccess
 	USHORT exa_fun_id;
 	USHORT exa_rel_id;
 	USHORT exa_view_id;
-	Firebird::MetaName user;		// User which touch the recources.
+	MetaName user;		// User which touch the recources.
 
 	// Procedure
 	ExternalAccess(exa_act action, USHORT id) :
@@ -391,14 +391,14 @@ public:
 	}
 
 public:
-	Firebird::MetaName name;
-	Firebird::MetaNamePair field;
+	MetaName name;
+	MetaNamePair field;
 	bool nullable;
 	bool explicitCollation;
 	bool fullDomain;
 };
 
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Firebird::MetaNamePair, FieldInfo> > >
+typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<MetaNamePair, FieldInfo> > >
 	MapFieldInfo;
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::Right<Item, ItemInfo> > > MapItemInfo;
 
@@ -422,11 +422,11 @@ public:
 			jrd_rel* relation;
 			const Function* function;
 			const jrd_prc* procedure;
-			const Firebird::MetaName* name;
+			const MetaName* name;
 			SLONG number;
 		};
 
-		const Firebird::MetaName* subName;
+		const MetaName* subName;
 		SLONG subNumber;
 	};
 
@@ -468,20 +468,21 @@ public:
 		csb_dbg_info = FB_NEW_POOL(p) Firebird::DbgInfo(p);
 	}
 
+	// Implemented in JrdStatement.cpp
+	ULONG allocImpure(ULONG align, ULONG size);
+
+	template <typename T>
+	ULONG allocImpure()
+	{
+		return allocImpure(alignof(T), sizeof(T));
+	}
+
 	StreamType nextStream(bool check = true)
 	{
 		if (csb_n_stream >= MAX_STREAMS && check)
 			ERR_post(Firebird::Arg::Gds(isc_too_many_contexts));
 
 		return csb_n_stream++;
-	}
-
-	void inheritViewFlags(StreamType stream, USHORT flags)
-	{
-		if (csb_view)
-		{
-			csb_rpt[stream].csb_flags |= csb_rpt[csb_view_stream].csb_flags & flags;
-		}
 	}
 
 #ifdef CMP_DEBUG
@@ -528,7 +529,7 @@ public:
 	// Map of message number to field number to pad for external routines.
 	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, USHORT> > > csb_message_pad;
 
-	Firebird::MetaName	csb_domain_validation;	// Parsing domain constraint in PSQL
+	MetaName	csb_domain_validation;	// Parsing domain constraint in PSQL
 
 	// used in cmp.cpp/pass1
 	jrd_rel*	csb_view;
@@ -538,9 +539,10 @@ public:
 	USHORT		csb_remap_variable;
 	bool		csb_validate_expr;
 	bool		csb_returning_expr;
+	bool		csb_implicit_cursor;
 
-	Firebird::GenericMap<Firebird::Left<Firebird::MetaName, DeclareSubFuncNode*> > subFunctions;
-	Firebird::GenericMap<Firebird::Left<Firebird::MetaName, DeclareSubProcNode*> > subProcedures;
+	Firebird::GenericMap<Firebird::Left<MetaName, DeclareSubFuncNode*> > subFunctions;
+	Firebird::GenericMap<Firebird::Left<MetaName, DeclareSubProcNode*> > subProcedures;
 
 	ForNode*	csb_currentForNode;
 	StmtNode*	csb_currentDMLNode;		// could be StoreNode or ModifyNode
@@ -614,13 +616,14 @@ const int csb_post_trigger		= 32;	// this is an AFTER trigger
 const int csb_validation		= 64;	// we're in a validation expression (RDB hack)
 const int csb_reuse_context		= 128;	// allow context reusage
 const int csb_subroutine		= 256;	// sub routine
+const int csb_reload			= 512;	// request's BLR should be loaded and parsed again
 
 // CompilerScratch.csb_rpt[].csb_flags's values.
 const int csb_active		= 1;		// stream is active
 const int csb_used			= 2;		// context has already been defined (BLR parsing only)
 const int csb_view_update	= 4;		// view update w/wo trigger is in progress
 const int csb_trigger		= 8;		// NEW or OLD context in trigger
-const int csb_no_dbkey		= 16;		// stream doesn't have a dbkey
+//const int csb_no_dbkey		= 16;		// unused
 const int csb_store			= 32;		// we are processing a store statement
 const int csb_modify		= 64;		// we are processing a modify
 const int csb_sub_stream	= 128;		// a sub-stream of the RSE being processed

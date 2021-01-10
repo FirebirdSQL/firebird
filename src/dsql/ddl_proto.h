@@ -68,7 +68,7 @@ const USHORT blr_dtypes[] = {
 };
 
 bool DDL_ids(const Jrd::DsqlCompilerScratch*);
-void DDL_resolve_intl_type(Jrd::DsqlCompilerScratch*, Jrd::dsql_fld*, const Firebird::MetaName&,
+void DDL_resolve_intl_type(Jrd::DsqlCompilerScratch*, Jrd::dsql_fld*, const Jrd::MetaName&,
 	bool = false);
 
 #endif // DSQL_DDL_PROTO_H

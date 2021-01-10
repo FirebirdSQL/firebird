@@ -33,13 +33,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#ifndef ANDROID
-#define USE_SYSTEM_NEW
-#endif
-
-#ifdef USE_SYSTEM_NEW
 #include <new>
-#endif
 
 #include "fb_types.h"
 #include "firebird/Interface.h"
@@ -85,21 +79,10 @@ public:
 };
 
 // Used in MemoryPool
-#ifdef USE_SYSTEM_NEW
-
 class BadAlloc : public std::bad_alloc, public Exception
 {
 public:
 	BadAlloc() throw() : std::bad_alloc(), Exception() { }
-#else	// USE_SYSTEM_NEW
-
-class BadAlloc : public Exception
-{
-public:
-	BadAlloc() throw() : Exception() { }
-#endif	// USE_SYSTEM_NEW
-
-public:
 	virtual void stuffByException(StaticStatusVector& status_vector) const throw();
 	virtual const char* what() const throw();
 	static void raise();

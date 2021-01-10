@@ -42,7 +42,7 @@ ExternalTableScan::ExternalTableScan(CompilerScratch* csb, const string& alias,
 									 StreamType stream, jrd_rel* relation)
 	: RecordStream(csb, stream), m_relation(relation), m_alias(csb->csb_pool, alias)
 {
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void ExternalTableScan::open(thread_db* tdbb) const
@@ -78,8 +78,7 @@ void ExternalTableScan::close(thread_db* tdbb) const
 
 bool ExternalTableScan::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_req* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];

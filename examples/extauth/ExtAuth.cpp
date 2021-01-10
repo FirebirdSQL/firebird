@@ -447,6 +447,7 @@ extern "C" void FB_DLL_EXPORT FB_PLUGIN_ENTRY_POINT(IMaster* m)
 	IPluginManager* pluginManager = master->getPluginManager();
 
 	module.registerMe(pluginManager);
-	pluginManager->registerPluginFactory(IPluginManager::TYPE_AUTH_CLIENT, "ExtAuth", &clientFactory);
-	pluginManager->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, "ExtAuth", &serverFactory);
+	const char* plName = "fbSampleExtAuth";
+	pluginManager->registerPluginFactory(IPluginManager::TYPE_AUTH_CLIENT, plName, &clientFactory);
+	pluginManager->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, plName, &serverFactory);
 }

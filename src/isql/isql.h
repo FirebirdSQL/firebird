@@ -290,48 +290,27 @@ struct sqltypes
 	SCHAR type_name[QUOTED_NAME_SIZE];
 };
 
-//
-// Use T_FLOAT and T_CHAR to avoid collisions with windows defines
-//
-const int SMALLINT		= 7;
-const int INTEGER		= 8;
-const int QUAD			= 9;
-const int T_FLOAT		= 10;
-const int T_CHAR		= 14;
-const int DOUBLE_PRECISION = 27;
-const int DATE			= 35;
-const int VARCHAR		= 37;
-const int CSTRING		= 40;
-const int BLOB_ID		= 45;
-const int BLOB			= 261;
-//const int SQL_DATE	= 12;
-//const int SQL_TIME	= 13;
-const int BIGINT		= 16;
-const int BOOLEAN_TYPE	= 23;
-const int DEC64_TYPE	= 24;
-const int DEC128_TYPE	= 25;
-
 static const sqltypes Column_types[] = {
-	{SMALLINT, "SMALLINT"},		// keyword
-	{INTEGER, "INTEGER"},		// keyword
-	{QUAD, "QUAD"},				// keyword
-	{T_FLOAT, "FLOAT"},			// keyword
-	{T_CHAR, "CHAR"},			// keyword
-	{DOUBLE_PRECISION, "DOUBLE PRECISION"},	// keyword
-	{VARCHAR, "VARCHAR"},		// keyword
-	{CSTRING, "CSTRING"},		// keyword
-	{BLOB_ID, "BLOB_ID"},		// keyword
-	{BLOB, "BLOB"},				// keyword
-	{blr_sql_time, "TIME"},		// keyword
-	{blr_sql_date, "DATE"},		// keyword
-	{blr_timestamp, "TIMESTAMP"},	// keyword
-	{BIGINT, "BIGINT"},			// keyword
-	{BOOLEAN_TYPE, "BOOLEAN"},	// keyword
-	{DEC64_TYPE, "DECFLOAT(16)"},
-	{DEC128_TYPE, "DECFLOAT(34)"},
-	{blr_int128, "INT64"},
-	{blr_sql_time_tz, "TIME WITH TIME ZONE"},		// keyword
-	{blr_timestamp_tz, "TIMESTAMP WITH TIME ZONE"},	// keyword
+	{blr_short, "SMALLINT"},
+	{blr_long, "INTEGER"},
+	{blr_quad, "QUAD"},
+	{blr_float, "FLOAT"},
+	{blr_text, "CHAR"},
+	{blr_double, "DOUBLE PRECISION"},
+	{blr_varying, "VARCHAR"},
+	{blr_cstring, "CSTRING"},
+	{blr_blob_id, "BLOB_ID"},
+	{blr_blob, "BLOB"},
+	{blr_sql_time, "TIME"},
+	{blr_sql_date, "DATE"},
+	{blr_timestamp, "TIMESTAMP"},
+	{blr_int64, "BIGINT"},
+	{blr_bool, "BOOLEAN"},
+	{blr_dec64, "DECFLOAT(16)"},
+	{blr_dec128, "DECFLOAT(34)"},
+	{blr_int128, "INT128"},
+	{blr_sql_time_tz, "TIME WITH TIME ZONE"},
+	{blr_timestamp_tz, "TIMESTAMP WITH TIME ZONE"},
 	{blr_ex_time_tz, "TIME WITH TIME ZONE"},
 	{blr_ex_timestamp_tz, "TIMESTAMP WITH TIME ZONE"},
 	{0, ""}

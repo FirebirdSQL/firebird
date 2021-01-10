@@ -72,10 +72,11 @@ public:
 private:
 	thread_db* threadDbb;
 	Firebird::HalfStaticArray<Auth::DynamicUserData*, 8> commands;
-	typedef Firebird::Pair<Firebird::NonPooled<Firebird::MetaName, Firebird::IManagement*> > Manager;
+	typedef Firebird::Pair<Firebird::NonPooled<MetaName, Firebird::IManagement*> > Manager;
 	Firebird::ObjectsArray<Manager> managers;
 	Firebird::NoCaseString plugins;
 	Attachment* att;
+	jrd_tra* tra;
 
 	Firebird::IManagement* getManager(const char* name);
 	void openAllManagers();

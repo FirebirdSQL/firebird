@@ -873,6 +873,16 @@ Decimal128 Decimal128::floor(DecimalStatus decSt) const
 	return rc;
 }
 
+Decimal128 Decimal128::modf(DecimalStatus decSt, Decimal128* ipart) const
+{
+	DecimalContext context(this, decSt);
+	Decimal128 rc, ip;
+	decQuadToIntegralValue(&ip.dec, &dec, &context, DEC_ROUND_DOWN);
+	decQuadSubtract(&rc.dec, &dec, &ip.dec, &context);
+	*ipart = ip;
+	return rc;
+}
+
 #ifdef DEV_BUILD
 int Decimal128::show()
 {

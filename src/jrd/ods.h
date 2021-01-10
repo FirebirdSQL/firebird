@@ -926,6 +926,7 @@ const USHORT PAGE_ALIGNMENT = 1024;
 
 // size of raw I/O operation for header page
 const USHORT RAW_HEADER_SIZE = 1024;	// ROUNDUP(HDR_SIZE, PAGE_ALIGNMENT);
+//static_assert(RAW_HEADER_SIZE >= HDR_SIZE, "RAW_HEADER_SIZE is less than HDR_SIZE");
 
 // max number of table formats (aka versions), limited by "UCHAR rhd_format"
 const int MAX_TABLE_VERSIONS = 255;

@@ -277,7 +277,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			}
 		}
 
-		if (Config::getServerMode() == MODE_CLASSIC)
+		if (Firebird::Config::getServerMode() == Firebird::MODE_CLASSIC)
 		{
 			if (!classic)
 				standaloneClassic = true;
@@ -325,7 +325,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 #endif
 
 #if !(defined(DEV_BUILD))
-		if (Config::getBugcheckAbort())
+		if (Firebird::Config::getBugcheckAbort())
 #endif
 		{
 			// try to force core files creation
@@ -359,7 +359,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		}
 
 		// check firebird.conf presence - must be for server
-		if (Config::missFirebirdConf())
+		if (Firebird::Config::missFirebirdConf())
 		{
 			Firebird::Syslog::Record(Firebird::Syslog::Error, "Missing master config file firebird.conf");
 			exit(STARTUP_ERROR);
@@ -367,7 +367,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 
 		if (!debug)
 		{
-			const char* redirection_file = Config::getOutputRedirectionFile();
+			const char* redirection_file = Firebird::Config::getOutputRedirectionFile();
 
 			int stdout_no = fileno(stdout);
 			int stderr_no = fileno(stderr);
@@ -447,7 +447,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			ISC_STATUS_ARRAY status;
 			isc_db_handle db_handle = 0L;
 
-			const Firebird::RefPtr<const Config> defConf(Config::getDefaultConfig());
+			const Firebird::RefPtr<const Firebird::Config> defConf(Firebird::Config::getDefaultConfig());
 			const char* path = defConf->getSecurityDatabase();
 			const char dpb[] = {isc_dpb_version1, isc_dpb_sec_attach, 1, 1, isc_dpb_address_path, 0};
 

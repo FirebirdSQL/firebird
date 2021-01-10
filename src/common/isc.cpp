@@ -42,10 +42,8 @@
 
 #include "gen/iberror.h"
 #include "ibase.h"
-#include "../jrd/scl.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/isc_proto.h"
-#include "../jrd/jrd_proto.h"
 #include "../common/os/os_utils.h"
 #include "../common/os/path_utils.h"
 

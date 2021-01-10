@@ -57,7 +57,7 @@ public:
 	}
 
 	const Firebird::string vcx_context_name;
-	const Firebird::MetaName vcx_relation_name;
+	const MetaName vcx_relation_name;
 	const USHORT vcx_context;
 	const ViewContextType vcx_type;
 };
@@ -69,14 +69,14 @@ typedef Firebird::SortedArray<ViewContext*, Firebird::EmptyStorage<ViewContext*>
 class RelationPages
 {
 public:
-	typedef SINT64 RP_INSTANCE_ID;
+	typedef FB_UINT64 InstanceId;
 
-	vcl* rel_pages;				// vector of pointer page numbers
-	RP_INSTANCE_ID rel_instance_id;		// 0 or att_attachment_id or tra_number
+	// Vlad asked for this compile-time check to make sure we can contain a txn/att number here
+	static_assert(sizeof(InstanceId) >= sizeof(TraNumber), "InstanceId must fit TraNumber");
+	static_assert(sizeof(InstanceId) >= sizeof(AttNumber), "InstanceId must fit AttNumber");
 
-	// Vlad asked for this compile-time check to make sure we can contain a txn number here
-	typedef int RangeCheck1[sizeof(RP_INSTANCE_ID) >= sizeof(TraNumber)];
-	typedef int RangeCheck2[sizeof(RP_INSTANCE_ID) >= sizeof(AttNumber)];
+	vcl* rel_pages;					// vector of pointer page numbers
+	InstanceId rel_instance_id;		// 0 or att_attachment_id or tra_number
 
 	ULONG rel_index_root;		// index root page number
 	ULONG rel_data_pages;		// count of relation data pages
@@ -104,7 +104,7 @@ public:
 
 	void free(RelationPages*& nextFree);
 
-	static inline RP_INSTANCE_ID generate(const RelationPages* item)
+	static inline InstanceId generate(const RelationPages* item)
 	{
 		return item->rel_instance_id;
 	}
@@ -229,9 +229,9 @@ public:
 	ULONG			rel_flags;
 	Format*			rel_current_format;	// Current record format
 
-	Firebird::MetaName	rel_name;		// ascii relation name
-	Firebird::MetaName	rel_owner_name;	// ascii owner
-	Firebird::MetaName	rel_security_name;	// security class name for relation
+	MetaName	rel_name;		// ascii relation name
+	MetaName	rel_owner_name;	// ascii owner
+	MetaName	rel_security_name;	// security class name for relation
 
 	vec<Format*>*	rel_formats;		// Known record formats
 	vec<jrd_fld*>*	rel_fields;			// vector of field blocks
@@ -243,25 +243,27 @@ public:
 
 	GCRecordList	rel_gc_records;		// records for garbage collection
 
-	USHORT		rel_use_count;		// requests compiled with relation
-	USHORT		rel_sweep_count;	// sweep and/or garbage collector threads active
-	SSHORT		rel_scan_count;		// concurrent sequential scan count
+	USHORT		rel_use_count;			// requests compiled with relation
+	USHORT		rel_sweep_count;		// sweep and/or garbage collector threads active
+	SSHORT		rel_scan_count;			// concurrent sequential scan count
 
-	Lock*		rel_existence_lock;	// existence lock, if any
-	Lock*		rel_partners_lock;	// partners lock
-	Lock*		rel_rescan_lock;	// lock forcing relation to be scanned
-	Lock*		rel_gc_lock;		// garbage collection lock
-	IndexLock*	rel_index_locks;	// index existence locks
-	IndexBlock*	rel_index_blocks;	// index blocks for caching index info
-	TrigVector*	rel_pre_erase; 		// Pre-operation erase trigger
-	TrigVector*	rel_post_erase;		// Post-operation erase trigger
-	TrigVector*	rel_pre_modify;		// Pre-operation modify trigger
-	TrigVector*	rel_post_modify;	// Post-operation modify trigger
-	TrigVector*	rel_pre_store;		// Pre-operation store trigger
-	TrigVector*	rel_post_store;		// Post-operation store trigger
-	prim		rel_primary_dpnds;	// foreign dependencies on this relation's primary key
-	frgn		rel_foreign_refs;	// foreign references to other relations' primary keys
+	Lock*		rel_existence_lock;		// existence lock, if any
+	Lock*		rel_partners_lock;		// partners lock
+	Lock*		rel_rescan_lock;		// lock forcing relation to be scanned
+	Lock*		rel_gc_lock;			// garbage collection lock
+	IndexLock*	rel_index_locks;		// index existence locks
+	IndexBlock*	rel_index_blocks;		// index blocks for caching index info
+	TrigVector*	rel_pre_erase; 			// Pre-operation erase trigger
+	TrigVector*	rel_post_erase;			// Post-operation erase trigger
+	TrigVector*	rel_pre_modify;			// Pre-operation modify trigger
+	TrigVector*	rel_post_modify;		// Post-operation modify trigger
+	TrigVector*	rel_pre_store;			// Pre-operation store trigger
+	TrigVector*	rel_post_store;			// Post-operation store trigger
+	prim		rel_primary_dpnds;		// foreign dependencies on this relation's primary key
+	frgn		rel_foreign_refs;		// foreign references to other relations' primary keys
 	Nullable<bool>	rel_ss_definer;
+
+	TriState	rel_repl_state;			// replication state
 
 	Firebird::Mutex rel_drop_mutex;
 
@@ -269,6 +271,8 @@ public:
 	bool isTemporary() const;
 	bool isVirtual() const;
 	bool isView() const;
+
+	bool isReplicating(thread_db* tdbb);
 
 	// global temporary relations attributes
 	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
@@ -323,13 +327,9 @@ private:
 	typedef Firebird::SortedArray<
 				RelationPages*,
 				Firebird::EmptyStorage<RelationPages*>,
-				SINT64,
+				RelationPages::InstanceId,
 				RelationPages>
 			RelationPagesInstances;
-
-	// Vlad asked for this compile-time check to make sure we can contain a txn number here
-	typedef int RangeCheck1[sizeof(SINT64) >= sizeof(TraNumber)];
-	typedef int RangeCheck2[sizeof(SINT64) >= sizeof(AttNumber)];
 
 	RelationPagesInstances* rel_pages_inst;
 	RelationPages			rel_pages_base;
@@ -342,6 +342,8 @@ public:
 	explicit jrd_rel(MemoryPool& p);
 
 	bool hasTriggers() const;
+	void releaseTriggers(thread_db* tdbb, bool destroy);
+	void replaceTriggers(thread_db* tdbb, TrigVector** triggers);
 
 	static Lock* createLock(thread_db* tdbb, MemoryPool* pool, jrd_rel* relation, lck_t, bool);
 	static int blocking_ast_gcLock(void*);
@@ -495,10 +497,10 @@ public:
 	ValueExprNode*	fld_source;			// source for view fields
 	ValueExprNode*	fld_default_value;	// default value, if any
 	ArrayField*	fld_array;			// array description, if array
-	Firebird::MetaName	fld_name;	// Field name
-	Firebird::MetaName	fld_security_name;	// security class name for field
-	Firebird::MetaName	fld_generator_name;	// identity generator name
-	Firebird::MetaNamePair	fld_source_rel_field;	// Relation/field source name
+	MetaName	fld_name;	// Field name
+	MetaName	fld_security_name;	// security class name for field
+	MetaName	fld_generator_name;	// identity generator name
+	MetaNamePair	fld_source_rel_field;	// Relation/field source name
 	Nullable<IdentityType> fld_identity_type;
 
 public:

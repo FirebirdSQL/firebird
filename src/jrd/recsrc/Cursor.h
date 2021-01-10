@@ -24,7 +24,7 @@
 #define JRD_CURSOR_H
 
 #include "../common/classes/array.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 
 namespace Jrd
 {
@@ -84,7 +84,7 @@ namespace Jrd
 		}
 
 	public:
-		Firebird::MetaName name;	// optional name for explicit PSQL cursors
+		MetaName name;	// optional name for explicit PSQL cursors
 
 	private:
 		ULONG m_impure;

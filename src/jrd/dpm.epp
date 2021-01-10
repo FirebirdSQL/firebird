@@ -70,7 +70,7 @@ DATABASE DB = FILENAME "ODS.RDB";
 #define DECOMPOSE(n, divisor, q, r) {r = n % divisor; q = n / divisor;}
 //#define DECOMPOSE_QUOTIENT(n, divisor, q) {q = n / divisor;}
 #define HIGH_WATER(x)	((USHORT) sizeof (data_page) + (USHORT) sizeof (data_page::dpg_repeat) * (x - 1))
-#define SPACE_FUDGE	RHDF_SIZE
+#define SPACE_FUDGE	(ROUNDUP(RHDF_SIZE, ODS_ALIGNMENT) + sizeof(data_page::dpg_repeat))
 
 using namespace Jrd;
 using namespace Ods;
@@ -429,7 +429,7 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 	// too small, compute the number of pad bytes required
 
 	SLONG fill = (RHDF_SIZE - header_size) - size;
-	if (fill < 0 || (new_rpb->rpb_flags & rpb_deleted))
+	if (fill < 0)
 		fill = 0;
 
 	// Accomodate max record size i.e. 64K
@@ -706,7 +706,7 @@ ULONG DPM_data_pages(thread_db* tdbb, jrd_rel* relation)
 
 			CCH_RELEASE(tdbb, &window);
 
-			tdbb->checkCancelState(true);
+			tdbb->checkCancelState();
 		}
 
 		relPages->rel_data_pages = pages;
@@ -811,7 +811,6 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 			return;
 		}
 
-		DEBUG
 		page->dpg_header.pag_flags &= ~dpg_full;
 		mark_full(tdbb, rpb);
 
@@ -1927,7 +1926,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 			return false;
 
 		if (sweeper)
-			tdbb->checkCancelState(true);
+			tdbb->checkCancelState();
 	}
 }
 
@@ -2417,7 +2416,6 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	// Mark the page as modified, then figure out the compressed length of the
 	// replacement record.
 
-	DEBUG
 	if (stack)
 	{
 		while (stack->hasData())
@@ -3024,7 +3022,7 @@ static void extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window, con
 		CCH_RELEASE(tdbb, &pp_window);
 	}
 
-	int cntAlloc = 1;
+	unsigned cntAlloc = 1;
 	// allocate extent (PAGES_IN_EXTENT contiguous pages) if
 	// - relation already contains at least PAGES_IN_EXTENT pages, and
 	// - first empty slot found is at extent boundary, and
@@ -3035,7 +3033,7 @@ static void extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window, con
 
 		for (USHORT i = 0; i < PAGES_IN_EXTENT; i++)
 		{
-			if(ppage->ppg_page[slot + i] != 0)
+			if (ppage->ppg_page[slot + i] != 0)
 			{
 				cntAlloc = 1;
 				break;
@@ -3056,7 +3054,7 @@ static void extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window, con
 
 	CCH_precedence(tdbb, &pp_window, window->win_page);
 
-	for (int i = 1; i < cntAlloc; i++)
+	for (unsigned i = 1; i < cntAlloc; i++)
 	{
 		window->win_page = firstPage.getPageNum() + i;
 
@@ -3080,7 +3078,7 @@ static void extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window, con
 	if (type != DPM_primary)
 		PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary);
 
-	for (int i = 1; i < cntAlloc; i++)
+	for (unsigned i = 1; i < cntAlloc; i++)
 	{
 		fb_assert(ppage->ppg_page[slot + i] == 0);
 		ppage->ppg_page[slot + i] = firstPage.getPageNum() + i;
@@ -3272,7 +3270,7 @@ static bool get_header(WIN* window, USHORT line, record_param* rpb)
 		if (rpb->rpb_relation->rel_id == 0 /*i.e.RDB$PAGES*/ && rpb->rpb_transaction_nr != 0)
 		{
 			// RDB$PAGES relation should be modified only by system transaction
-			BUGCHECK(307);
+			ERR_post(Arg::Gds(isc_wrong_page));
 		}
 	}
 
@@ -3998,13 +3996,13 @@ void DPM_move_data_pages(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, RelationP
 
 		// Copy and relpace useful markers from oldRelationPages
 		if (oldRelationPages->rel_slot_space == oldPage)
-			newRelationPages->rel_slot_space == newPage;
+			newRelationPages->rel_slot_space = newPage;
 
 		if (oldRelationPages->rel_pri_data_space == oldPage)
-			newRelationPages->rel_pri_data_space == newPage;
+			newRelationPages->rel_pri_data_space = newPage;
 
 		if (oldRelationPages->rel_sec_data_space == oldPage)
-			newRelationPages->rel_sec_data_space == newPage;
+			newRelationPages->rel_sec_data_space = newPage;
 
 		// Now copy the page data
 		CCH_MARK(tdbb, &newWindow);
@@ -4104,7 +4102,7 @@ void DPM_move_data_pages(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, RelationP
 		const ULONG newPage = dPage.current()->second;
 
 		if (oldRelationPages->rel_last_free_pri_dp == oldPage)
-			newRelationPages->rel_last_free_pri_dp == newPage;
+			newRelationPages->rel_last_free_pri_dp = newPage;
 
 		// Copy data page
 		oldWindow.win_page = oldPage;

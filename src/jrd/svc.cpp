@@ -156,10 +156,11 @@ namespace {
 			waitFor(threads);
 		}
 
-		void add(Thread::Handle& h)
+		void add(const Thread::Handle& h)
 		{
 			// put thread into completion wait queue when it finished running
 			MutexLockGuard g(threadsMutex, FB_FUNCTION);
+			fb_assert(h);
 			threads.add(h);
 		}
 
@@ -223,6 +224,7 @@ const serv_entry services[] =
 	{ isc_action_svc_get_fb_log, "Get Log File", Service::readFbLog },
 	{ isc_action_svc_nbak, "Incremental Backup Database", NBACKUP_main },
 	{ isc_action_svc_nrest, "Incremental Restore Database", NBACKUP_main },
+	{ isc_action_svc_nfix, "Fixup Database after FS Copy", NBACKUP_main },
 	{ isc_action_svc_trace_start, "Start Trace Session", TRACE_main },
 	{ isc_action_svc_trace_stop, "Stop Trace Session", TRACE_main },
 	{ isc_action_svc_trace_suspend, "Suspend Trace Session", TRACE_main },
@@ -1339,11 +1341,9 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 		case isc_info_svc_implementation:
 			// The server implementation - e.g. Firebird/sun4
 			{ // scope
-				string buf2 = DbImplementation::current.implementation();
-				info = INF_put_item(item, buf2.length(), buf2.c_str(), info, end);
-				if (!info) {
+				const string buf2 = DbImplementation::current.implementation();
+				if (!(info = INF_put_item(item, buf2.length(), buf2.c_str(), info, end)))
 					return 0;
-				}
 			} // scope
 			break;
 
@@ -1371,10 +1371,8 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 				expandDatabaseName(svc_expected_db, secDb, &config);
 				expandDatabaseName(config->getSecurityDatabase(), secDb, nullptr);
 
-				if (!(info = INF_put_item(item, static_cast<USHORT>(secDb.length()), secDb.c_str(), info, end)))
-				{
+				if (!(info = INF_put_item(item, secDb.length(), secDb.c_str(), info, end)))
 					return 0;
-				}
 			}
 			else
 				need_admin_privs(status, "isc_info_svc_user_dbpath");
@@ -1422,9 +1420,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 			if ( (l = length = svc_resp_len) )
 				length = MIN(end - (info + 5), l);
 			if (!(info = INF_put_item(item, length, svc_resp_ptr, info, end)))
-			{
 				return 0;
-			}
 			svc_resp_ptr += length;
 			svc_resp_len -= length;
 			if (length != l)
@@ -1437,9 +1433,8 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 			get(buffer, 2, GET_BINARY, 0, &length);
 			l = (USHORT) gds__vax_integer(buffer, 2);
 			get(buffer, l, GET_BINARY, 0, &length);
-			if (!(info = INF_put_item(item, length, buffer, info, end))) {
+			if (!(info = INF_put_item(item, length, buffer, info, end)))
 				return 0;
-			}
 			break;
 
 		case isc_info_svc_line:
@@ -1488,13 +1483,9 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 			else //if (!svc_stdin_size_requested)
 			{
 				if (!length && !(svc_flags & SVC_finished))
-				{
 					*info++ = isc_info_data_not_ready;
-				}
 				else if (item == isc_info_svc_to_eof && !(svc_flags & SVC_finished))
-				{
 					*info++ = isc_info_truncated;
-				}
 			}
 			break;
 
@@ -1658,15 +1649,12 @@ void Service::query(USHORT			send_item_length,
 				fb_assert(num_dbs == databases.getCount());
 
 				length = INF_convert(num_att, buffer);
-				info = INF_put_item(item, length, buffer, info, end);
-				if (!info) {
+				if (!(info = INF_put_item(item, length, buffer, info, end)))
 					return;
-				}
+
 				length = INF_convert(num_dbs, buffer);
-				info = INF_put_item(item, length, buffer, info, end);
-				if (!info) {
+				if (!(info = INF_put_item(item, length, buffer, info, end)))
 					return;
-				}
 			}
 			// Can not return error for service v.1 => simply ignore request
 			// else
@@ -1720,7 +1708,7 @@ void Service::query(USHORT			send_item_length,
 				// Note: it is safe to use strlen to get a length of "buffer"
 				// because gds_prefix[_lock|_msg] return a zero-terminated
 				// string.
-				if (!(info = INF_put_item(item, static_cast<USHORT>(strlen(pathBuffer)), pathBuffer, info, end)))
+				if (!(info = INF_put_item(item, strlen(pathBuffer), pathBuffer, info, end)))
 					return;
 			}
 			// Can not return error for service v.1 => simply ignore request
@@ -1825,10 +1813,8 @@ void Service::query(USHORT			send_item_length,
 				expandDatabaseName(svc_expected_db, secDb, &config);
 				expandDatabaseName(config->getSecurityDatabase(), secDb, nullptr);
 
-				if (!(info = INF_put_item(item, static_cast<USHORT>(secDb.length()), secDb.c_str(), info, end)))
-				{
+				if (!(info = INF_put_item(item, secDb.length(), secDb.c_str(), info, end)))
 					return;
-				}
 			}
 			// Can not return error for service v.1 => simply ignore request
 			// else
@@ -1877,9 +1863,7 @@ void Service::query(USHORT			send_item_length,
 			if ( (l = length = svc_resp_len) )
 				length = MIN(end - (info + 4), l);
 			if (!(info = INF_put_item(item, length, svc_resp_ptr, info, end)))
-			{
 				return;
-			}
 			svc_resp_ptr += length;
 			svc_resp_len -= length;
 			if (length != l)
@@ -1893,9 +1877,7 @@ void Service::query(USHORT			send_item_length,
 			l = (USHORT) gds__vax_integer(buffer, 2);
 			get(buffer, l, GET_BINARY, 0, &length);
 			if (!(info = INF_put_item(item, length, buffer, info, end)))
-			{
 				return;
-			}
 			break;
 
 		case isc_info_svc_line:
@@ -2066,6 +2048,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 		svc_id == isc_action_svc_restore ||
 		svc_id == isc_action_svc_nbak ||
 		svc_id == isc_action_svc_nrest ||
+		svc_id == isc_action_svc_nfix ||
 		svc_id == isc_action_svc_repair ||
 		svc_id == isc_action_svc_db_stats ||
 		svc_id == isc_action_svc_properties ||
@@ -2705,6 +2688,28 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 					return false;
 				}
 				get_action_svc_string(spb, switches);
+				break;
+
+			default:
+				return false;
+			}
+			break;
+
+		case isc_action_svc_nfix:
+			found = true;
+
+			switch (spb.getClumpTag())
+			{
+			case isc_spb_dbname:
+				if (nbk_database.hasData())
+				{
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_dbname")).raise();
+				}
+				get_action_svc_string(spb, nbk_database);
+				break;
+
+			default:
+				return false;
 			}
 			break;
 
@@ -2929,6 +2934,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_res_fix_fss_metadata:
 			case isc_spb_bkp_stat:
 			case isc_spb_bkp_skip_data:
+			case isc_spb_bkp_include_data:
 			case isc_spb_bkp_keyholder:
 			case isc_spb_bkp_keyname:
 			case isc_spb_bkp_crypt:
@@ -3105,6 +3111,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		{
 			(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_nbk_file")).raise();
 		}
+
 		if (!get_action_svc_parameter(svc_action, nbackup_action_in_sw_table, switches))
 		{
 			return false;
@@ -3126,6 +3133,19 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		}
 		switches += nbk_database;
 		switches += nbk_file;
+		break;
+
+	case isc_action_svc_nfix:
+		if (nbk_database.isEmpty())
+		{
+			(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_dbname")).raise();
+		}
+
+		if (!get_action_svc_parameter(svc_action, nbackup_action_in_sw_table, switches))
+		{
+			return false;
+		}
+		switches += nbk_database;
 		break;
 
 	case isc_action_svc_validate:

@@ -35,6 +35,7 @@
 namespace Firebird {
 
 class MetadataBuilder;
+class MetaString;
 class StatementMetadata;
 class MetadataFromBlr;
 
@@ -150,8 +151,6 @@ public:
 	}
 
 	// IMessageMetadata implementation
-	int release();
-
 	unsigned getCount(CheckStatusWrapper* /*status*/)
 	{
 		return (unsigned) items.getCount();
@@ -283,7 +282,7 @@ public:
 	}
 
 public:
-	void addItem(const MetaName& name, bool nullable, const dsc& desc);
+	void addItem(const MetaString& name, bool nullable, const dsc& desc);
 	unsigned makeOffsets();
 
 private:
@@ -308,9 +307,6 @@ public:
 		: attachment(att)
 	{ }
 
-	// re-implement here release() present in MsgMetadata to call correct dtor
-	//virtual int release();
-
 	RefPtr<RefCounted> attachment;
 };
 
@@ -320,8 +316,6 @@ class MetadataBuilder FB_FINAL :
 public:
 	explicit MetadataBuilder(const MsgMetadata* from);
 	MetadataBuilder(unsigned fieldCount);
-
-	int release();
 
 	// IMetadataBuilder implementation
 	void setType(CheckStatusWrapper* status, unsigned index, unsigned type);

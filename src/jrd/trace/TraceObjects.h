@@ -84,7 +84,7 @@ class TraceTransactionImpl :
 	public Firebird::AutoIface<Firebird::ITraceTransactionImpl<TraceTransactionImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceTransactionImpl(const jrd_tra* tran, PerformanceInfo* perf = NULL, ISC_INT64 prevID = 0) :
+	TraceTransactionImpl(const jrd_tra* tran, Firebird::PerformanceInfo* perf = NULL, ISC_INT64 prevID = 0) :
 		m_tran(tran),
 		m_perf(perf),
 		m_prevID(prevID)
@@ -95,13 +95,13 @@ public:
 	FB_BOOLEAN getReadOnly();
 	int getWait();
 	unsigned getIsolation();
-	PerformanceInfo* getPerf()	{ return m_perf; }
+	Firebird::PerformanceInfo* getPerf()	{ return m_perf; }
 	ISC_INT64 getInitialID();
 	ISC_INT64 getPreviousID()	{ return m_prevID; }
 
 private:
 	const jrd_tra* const m_tran;
-	PerformanceInfo* const m_perf;
+	Firebird::PerformanceInfo* const m_perf;
 	const ISC_INT64 m_prevID;
 };
 
@@ -146,18 +146,18 @@ private:
 class TraceBLRStatementImpl : public BLRPrinter<TraceBLRStatementImpl>
 {
 public:
-	TraceBLRStatementImpl(const jrd_req* stmt, PerformanceInfo* perf) :
+	TraceBLRStatementImpl(const jrd_req* stmt, Firebird::PerformanceInfo* perf) :
 		BLRPrinter(stmt->getStatement()->blr.begin(), stmt->getStatement()->blr.getCount()),
 		m_stmt(stmt),
 		m_perf(perf)
 	{}
 
 	ISC_INT64 getStmtID()		{ return m_stmt->getRequestId(); }
-	PerformanceInfo* getPerf()	{ return m_perf; }
+	Firebird::PerformanceInfo* getPerf()	{ return m_perf; }
 
 private:
 	const jrd_req* const m_stmt;
-	PerformanceInfo* const m_perf;
+	Firebird::PerformanceInfo* const m_perf;
 };
 
 
@@ -169,7 +169,7 @@ public:
 	{}
 
 	ISC_INT64 getStmtID()		{ return 0; }
-	PerformanceInfo* getPerf()	{ return NULL; }
+	Firebird::PerformanceInfo* getPerf()	{ return NULL; }
 };
 
 
@@ -177,7 +177,7 @@ class TraceSQLStatementImpl :
 	public Firebird::AutoIface<Firebird::ITraceSQLStatementImpl<TraceSQLStatementImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceSQLStatementImpl(const dsql_req* stmt, PerformanceInfo* perf) :
+	TraceSQLStatementImpl(const dsql_req* stmt, Firebird::PerformanceInfo* perf) :
 		m_stmt(stmt),
 		m_perf(perf),
 		m_planExplained(false),
@@ -186,7 +186,7 @@ public:
 
 	// TraceSQLStatement implementation
 	ISC_INT64 getStmtID();
-	PerformanceInfo* getPerf();
+	Firebird::PerformanceInfo* getPerf();
 	Firebird::ITraceParams* getInputs();
 	const char* getText();
 	const char* getPlan();
@@ -224,7 +224,7 @@ private:
 	void fillPlan(bool explained);
 
 	const dsql_req* const m_stmt;
-	PerformanceInfo* const m_perf;
+	Firebird::PerformanceInfo* const m_perf;
 	Firebird::string m_plan;
 	bool m_planExplained;
 	DSQLParamsImpl m_inputs;
@@ -242,7 +242,7 @@ public:
 
 	// TraceSQLStatement implementation
 	ISC_INT64 getStmtID()		{ return 0; }
-	PerformanceInfo* getPerf()	{ return NULL; }
+	Firebird::PerformanceInfo* getPerf()	{ return NULL; }
 	Firebird::ITraceParams* getInputs()	{ return NULL; }
 	const char* getText()		{ return m_text.c_str(); }
 	const char* getPlan()		{ return ""; }
@@ -402,7 +402,7 @@ class TraceProcedureImpl :
 	public Firebird::AutoIface<Firebird::ITraceProcedureImpl<TraceProcedureImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceProcedureImpl(jrd_req* request, PerformanceInfo* perf) :
+	TraceProcedureImpl(jrd_req* request, Firebird::PerformanceInfo* perf) :
 		m_request(request),
 		m_perf(perf),
 		m_inputs(*getDefaultMemoryPool(), request->req_proc_caller, request->req_proc_inputs),
@@ -417,11 +417,11 @@ public:
 	}
 
 	Firebird::ITraceParams* getInputs()	{ return m_inputs; }
-	PerformanceInfo* getPerf()	{ return m_perf; };
+	Firebird::PerformanceInfo* getPerf()	{ return m_perf; };
 
 private:
 	jrd_req* const m_request;
-	PerformanceInfo* const m_perf;
+	Firebird::PerformanceInfo* const m_perf;
 	TraceDscFromValues m_inputs;
 	Firebird::string m_name;
 };
@@ -431,7 +431,7 @@ class TraceFunctionImpl :
 	public Firebird::AutoIface<Firebird::ITraceFunctionImpl<TraceFunctionImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceFunctionImpl(jrd_req* request, Firebird::ITraceParams* inputs, PerformanceInfo* perf, const dsc* value) :
+	TraceFunctionImpl(jrd_req* request, Firebird::ITraceParams* inputs, Firebird::PerformanceInfo* perf, const dsc* value) :
 		m_request(request),
 		m_perf(perf),
 		m_inputs(inputs),
@@ -447,11 +447,11 @@ public:
 
 	Firebird::ITraceParams* getInputs()	{ return m_inputs; }
 	Firebird::ITraceParams* getResult()	{ return m_value; }
-	PerformanceInfo* getPerf()	{ return m_perf; };
+	Firebird::PerformanceInfo* getPerf()	{ return m_perf; };
 
 private:
 	jrd_req* const m_request;
-	PerformanceInfo* const m_perf;
+	Firebird::PerformanceInfo* const m_perf;
 	Firebird::ITraceParams* m_inputs;
 	TraceDscFromDsc m_value;
 	Firebird::string m_name;
@@ -462,7 +462,7 @@ class TraceTriggerImpl :
 	public Firebird::AutoIface<Firebird::ITraceTriggerImpl<TraceTriggerImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceTriggerImpl(const jrd_req* trig, SSHORT which, PerformanceInfo* perf) :
+	TraceTriggerImpl(const jrd_req* trig, SSHORT which, Firebird::PerformanceInfo* perf) :
 	  m_trig(trig),
 	  m_which(which),
 	  m_perf(perf)
@@ -473,12 +473,12 @@ public:
 	const char* getRelationName();
 	int getAction()				{ return m_trig->req_trigger_action; }
 	int getWhich()				{ return m_which; }
-	PerformanceInfo* getPerf()	{ return m_perf; }
+	Firebird::PerformanceInfo* getPerf()	{ return m_perf; }
 
 private:
 	const jrd_req* const m_trig;
 	const SSHORT m_which;
-	PerformanceInfo* const m_perf;
+	Firebird::PerformanceInfo* const m_perf;
 };
 
 
@@ -516,10 +516,10 @@ public:
 	TraceRuntimeStats(Attachment* att, RuntimeStatistics* baseline, RuntimeStatistics* stats,
 		SINT64 clock, SINT64 records_fetched);
 
-	PerformanceInfo* getPerf()	{ return &m_info; }
+	Firebird::PerformanceInfo* getPerf()	{ return &m_info; }
 
 private:
-	PerformanceInfo m_info;
+	Firebird::PerformanceInfo m_info;
 	TraceCountsArray m_counts;
 	static SINT64 m_dummy_counts[RuntimeStatistics::TOTAL_ITEMS];	// Zero-initialized array with zero counts
 };
@@ -623,7 +623,7 @@ public:
 		m_next = Ods::getNT(header);
 	}
 
-	void setPerf(PerformanceInfo* perf)
+	void setPerf(Firebird::PerformanceInfo* perf)
 	{
 		m_perf = perf;
 	}
@@ -632,14 +632,14 @@ public:
 	ISC_INT64 getOST()			{ return m_ost; };
 	ISC_INT64 getOAT()			{ return m_oat; };
 	ISC_INT64 getNext()			{ return m_next; };
-	PerformanceInfo* getPerf()	{ return m_perf; };
+	Firebird::PerformanceInfo* getPerf()	{ return m_perf; };
 
 private:
 	TraNumber m_oit;
 	TraNumber m_ost;
 	TraNumber m_oat;
 	TraNumber m_next;
-	PerformanceInfo* m_perf;
+	Firebird::PerformanceInfo* m_perf;
 };
 
 } // namespace Jrd

@@ -58,7 +58,10 @@
 #include "../jrd/Collation.h"
 #include "../common/classes/FpeControl.h"
 #include "../jrd/extds/ExtDS.h"
+#include "../jrd/align.h"
 
+#include <functional>
+#include <cmath>
 #include <math.h>
 
 #ifndef WIN_NT
@@ -122,7 +125,7 @@ struct HashAlgorithmDescriptor
 	USHORT length;
 	HashContext* (*create)(MemoryPool&);
 
-	static const HashAlgorithmDescriptor* find(const char* name);
+	static const HashAlgorithmDescriptor* find(const HashAlgorithmDescriptor** hashDescriptor, const MetaName name);
 };
 
 template <typename T>
@@ -146,25 +149,45 @@ struct HashAlgorithmDescriptorFactory
 
 template <typename T> HashAlgorithmDescriptor HashAlgorithmDescriptorFactory<T>::desc;
 
-static const HashAlgorithmDescriptor* hashAlgorithmDescriptors[] = {
+static const HashAlgorithmDescriptor* cryptHashAlgorithmDescriptors[] = {
 	HashAlgorithmDescriptorFactory<Md5HashContext>::getInstance("MD5", 16),
 	HashAlgorithmDescriptorFactory<Sha1HashContext>::getInstance("SHA1", 20),
 	HashAlgorithmDescriptorFactory<Sha256HashContext>::getInstance("SHA256", 32),
-	HashAlgorithmDescriptorFactory<Sha512HashContext>::getInstance("SHA512", 64)
+	HashAlgorithmDescriptorFactory<Sha512HashContext>::getInstance("SHA512", 64),
+	nullptr
 };
 
-const HashAlgorithmDescriptor* HashAlgorithmDescriptor::find(const char* name)
-{
-	unsigned count = FB_NELEM(hashAlgorithmDescriptors);
+static const HashAlgorithmDescriptor* hashAlgorithmDescriptors[] = {
+	HashAlgorithmDescriptorFactory<Crc32HashContext>::getInstance("CRC32", 4),
+	nullptr
+};
 
-	for (unsigned i = 0; i < count; ++i)
+const HashAlgorithmDescriptor* HashAlgorithmDescriptor::find(const HashAlgorithmDescriptor** hashDescriptor, const MetaName name)
+{
+	for (; *hashDescriptor; hashDescriptor++)
 	{
-		if (strcmp(name, hashAlgorithmDescriptors[i]->name) == 0)
-			return hashAlgorithmDescriptors[i];
+		if (name == (*hashDescriptor)->name)
+			return *hashDescriptor;
 	}
 
 	status_exception::raise(Arg::Gds(isc_sysf_invalid_hash_algorithm) << name);
 	return nullptr;
+}
+
+
+const HashAlgorithmDescriptor* getHashAlgorithmDesc(thread_db* tdbb, const SysFunction* function, const dsc* algDsc, bool* cHash = nullptr)
+{
+	bool cryptHash = (strcmp(function->name, "CRYPT_HASH") == 0);
+	if (cHash)
+		*cHash = cryptHash;
+
+	if (!algDsc->dsc_address || !algDsc->isText())
+		status_exception::raise(Arg::Gds(isc_sysf_invalid_hash_algorithm) << "<not a string constant>");
+
+	MetaName algorithmName;
+	MOV_get_metaname(tdbb, algDsc, algorithmName);
+
+	return HashAlgorithmDescriptor::find(cryptHash ? cryptHashAlgorithmDescriptors : hashAlgorithmDescriptors, algorithmName);
 }
 
 
@@ -173,7 +196,6 @@ const int oneDay = 86400;
 const unsigned getContextLen = 255;
 
 // auxiliary functions
-void add10msec(ISC_TIMESTAMP* v, SINT64 msec, SINT64 multiplier);
 double fbcot(double value) throw();
 
 // generic setParams functions
@@ -191,12 +213,14 @@ bool dscHasData(const dsc* param);
 
 // specific setParams functions
 void setParamsAsciiVal(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
+void setParamsBin(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsCharToUuid(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsDateAdd(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsDateDiff(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsEncrypt(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args);
 void setParamsFirstLastDay(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsGetSetContext(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
+void setParamsHash(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args);
 void setParamsMakeDbkey(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsOverlay(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsPosition(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
@@ -265,7 +289,6 @@ dsc* evlBin(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 dsc* evlBinShift(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlCeil(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
-dsc* evlCrc32(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlDecode64(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
@@ -335,6 +358,8 @@ const char
 	EXT_CONN_POOL_ACTIVE[] = "EXT_CONN_POOL_ACTIVE_COUNT",
 	EXT_CONN_POOL_LIFETIME[] = "EXT_CONN_POOL_LIFETIME",
 	REPLICATION_SEQ_NAME[] = "REPLICATION_SEQUENCE",
+	DATABASE_GUID[] = "DB_GUID",
+	DATABASE_FILE_ID[] = "DB_FILE_ID",
 	// SYSTEM namespace: connection wise items
 	SESSION_ID_NAME[] = "SESSION_ID",
 	NETWORK_PROTOCOL_NAME[] = "NETWORK_PROTOCOL",
@@ -375,29 +400,6 @@ const char
 static const char
 	FALSE_VALUE[] = "FALSE",
 	TRUE_VALUE[] = "TRUE";
-
-
-void add10msec(ISC_TIMESTAMP* v, SINT64 msec, SINT64 multiplier)
-{
-	const SINT64 full = msec * multiplier;
-	const int days = full / (oneDay * ISC_TIME_SECONDS_PRECISION);
-	const int secs = full % (oneDay * ISC_TIME_SECONDS_PRECISION);
-
-	v->timestamp_date += days;
-
-	// Time portion is unsigned, so we avoid unsigned rolling over negative values
-	// that only produce a new unsigned number with the wrong result.
-	if (secs < 0 && ISC_TIME(-secs) > v->timestamp_time)
-	{
-		v->timestamp_date--;
-		v->timestamp_time += (oneDay * ISC_TIME_SECONDS_PRECISION) + secs;
-	}
-	else if ((v->timestamp_time += secs) >= (oneDay * ISC_TIME_SECONDS_PRECISION))
-	{
-		v->timestamp_date++;
-		v->timestamp_time -= (oneDay * ISC_TIME_SECONDS_PRECISION);
-	}
-}
 
 
 double fbcot(double value) throw()
@@ -454,7 +456,7 @@ bool areParamsDouble(int argsCount, DSC** args)
 	{
 		if (args[i]->isApprox())
 			return true;
-		if (args[i]->isDecFloat())
+		if (args[i]->isDecOrInt128())
 			decSeen = true;
 	}
 
@@ -520,7 +522,7 @@ void setParamsFromList(DataTypeUtilBase* dataTypeUtil, const SysFunction* functi
 	int argsCount, dsc** args)
 {
 	dsc desc;
-	dataTypeUtil->makeFromList(&desc, function->name.c_str(), argsCount, const_cast<const dsc**>(args));
+	dataTypeUtil->makeFromList(&desc, function->name, argsCount, const_cast<const dsc**>(args));
 
 	for (int i = 0; i < argsCount; ++i)
 	{
@@ -536,6 +538,27 @@ void setParamsInteger(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc*
 	{
 		if (args[i]->isUnknown())
 			args[i]->makeLong(0);
+	}
+}
+
+
+void setParamsBin(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	UCHAR t = dtype_long;
+	for (int i = 0; i < argsCount; ++i)
+	{
+		if (args[i]->isExact())
+			t = MAX(t, args[i]->dsc_dtype);
+	}
+
+	for (int i = 0; i < argsCount; ++i)
+	{
+		if (args[i]->isUnknown())
+		{
+			args[i]->clear();
+			args[i]->dsc_dtype = t;
+			args[i]->dsc_length = type_lengths[t];
+		}
 	}
 }
 
@@ -758,6 +781,14 @@ void setParamsGetSetContext(DataTypeUtilBase*, const SysFunction*, int argsCount
 }
 
 
+void setParamsHash(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	fb_assert(argsCount == 1 || argsCount == 2);
+
+	setParamVarying(args[0], ttype_binary);
+}
+
+
 void setParamsMakeDbkey(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
 	// MAKE_DBKEY ( REL_NAME | REL_ID, RECNUM [, DPNUM [, PPNUM] ] )
@@ -908,7 +939,7 @@ void makeFromListResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* funct
 	int argsCount, const dsc** args)
 {
 	result->clear();
-	dataTypeUtil->makeFromList(result, function->name.c_str(), argsCount, args);
+	dataTypeUtil->makeFromList(result, function->name, argsCount, args);
 }
 
 
@@ -1049,6 +1080,7 @@ void makeAbs(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* r
 		case dtype_real:
 		case dtype_double:
 		case dtype_int64:
+		case dtype_int128:
 		case dtype_dec64:
 		case dtype_dec128:
 			*result = *value;
@@ -1088,7 +1120,7 @@ void makeBin(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 
 	bool isNullable = false;
 	bool isNull = false;
-	bool first = true;
+	UCHAR t = dtype_long;
 
 	for (int i = 0; i < argsCount; ++i)
 	{
@@ -1108,40 +1140,33 @@ void makeBin(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 				Arg::Gds(isc_sysf_argmustbe_exact) << Arg::Str(function->name));
 		}
 
-		if (first)
-		{
-			first = false;
-
-			result->clear();
-			result->dsc_dtype = args[i]->dsc_dtype;
-			result->dsc_length = args[i]->dsc_length;
-		}
-		else
-		{
-			if (args[i]->dsc_dtype == dtype_int64)
-				result->makeInt64(0);
-			else if (args[i]->dsc_dtype == dtype_long && result->dsc_dtype != dtype_int64)
-				result->makeLong(0);
-		}
+		if (args[i]->isExact())
+			t = MAX(t, args[i]->dsc_dtype);
 	}
 
-	if (isNull)
-	{
-		if (first)
-			result->makeLong(0);
-		result->setNull();
-	}
-
+	result->clear();
+	result->dsc_dtype = t;
+	result->dsc_length = type_lengths[t];
 	result->setNullable(isNullable);
+	if (isNull)
+		result->setNull();
 }
 
 
 void makeBinShift(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 	int argsCount, const dsc** args)
 {
-	fb_assert(argsCount >= function->minArgCount);
+	fb_assert(argsCount == 2);
+	fb_assert(function->minArgCount == 2);
+	fb_assert(function->maxArgCount == 2);
 
-	result->makeInt64(0);
+	UCHAR t = dtype_int64;
+	if (args[0]->isInt128())
+		t = dtype_int128;
+
+	result->clear();
+	result->dsc_dtype = t;
+	result->dsc_length = type_lengths[t];
 
 	bool isNullable = false;
 
@@ -1190,6 +1215,10 @@ void makeCeilFloor(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 		case dtype_long:
 		case dtype_int64:
 			result->makeInt64(0);
+			break;
+
+		case dtype_int128:
+			result->makeInt128(0);
 			break;
 
 		case dtype_dec128:
@@ -1274,13 +1303,22 @@ void makeHash(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* 
 		makeInt64Result(dataTypeUtil, function, result, argsCount, args);
 	else if (argsCount >= 2)
 	{
-		if (!args[1]->dsc_address || !args[1]->isText())	// not a constant
-			status_exception::raise(Arg::Gds(isc_sysf_invalid_hash_algorithm) << "<not a string constant>");
+		bool cryptHash;
+		const HashAlgorithmDescriptor* d = getHashAlgorithmDesc(JRD_get_thread_data(), function, args[1], &cryptHash);
 
-		MetaName algorithmName;
-		MOV_get_metaname(JRD_get_thread_data(), args[1], algorithmName);
-
-		result->makeVarying(HashAlgorithmDescriptor::find(algorithmName.c_str())->length, ttype_binary);
+		if (cryptHash)
+			result->makeVarying(d->length, ttype_binary);
+		else
+		{
+			switch(d->length)
+			{
+			case 4:
+				result->makeLong(0);
+				break;
+			default:
+				fb_assert(false);
+			}
+		}
 		result->setNullable(args[0]->isNullable());
 	}
 }
@@ -1460,6 +1498,7 @@ void makeMod(DataTypeUtilBase*,	 const SysFunction* function, dsc* result,
 		case dtype_short:
 		case dtype_long:
 		case dtype_int64:
+		case dtype_int128:
 			*result = *value1;
 			result->dsc_scale = 0;
 			break;
@@ -1689,6 +1728,9 @@ void makeTrunc(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 		case dtype_short:
 		case dtype_long:
 		case dtype_int64:
+		case dtype_int128:
+		case dtype_dec64:
+		case dtype_dec128:
 			*result = *value;
 			if (argsCount == 1)
 				result->dsc_scale = 0;
@@ -1825,7 +1867,7 @@ dsc* evlStdMath(thread_db* tdbb, const SysFunction* function, const NestValueArr
 		return NULL;
 	}
 
-	if (isinf(rc))
+	if (std::isinf(rc))
 	{
 		status_exception::raise(Arg::Gds(isc_arith_except) <<
 								Arg::Gds(isc_sysf_fp_overflow) << Arg::Str(function->name));
@@ -1866,6 +1908,10 @@ dsc* evlAbs(thread_db* tdbb, const SysFunction*, const NestValueArray& args, imp
 
 		case dtype_dec128:
 			impure->vlu_misc.vlu_dec128 = impure->vlu_misc.vlu_dec128.abs();
+			break;
+
+		case dtype_int128:
+			impure->vlu_misc.vlu_int128 = impure->vlu_misc.vlu_int128.abs();
 			break;
 
 		case dtype_short:
@@ -1979,54 +2025,108 @@ dsc* evlAtan2(thread_db* tdbb, const SysFunction* function, const NestValueArray
 }
 
 
+template <typename ACC, typename F>
+void evlBin2(thread_db* tdbb, ACC& acc, Function func, const NestValueArray& args, F getValue)
+{
+	for (FB_SIZE_T i = 0; i < args.getCount(); ++i)
+	{
+		const dsc* value = EVL_expr(tdbb, tdbb->getRequest(), args[i]);
+		ACC v = getValue(value);
+
+		if (i == 0)
+		{
+			if (func == funBinNot)
+				acc = ~v;
+			else
+				acc = v;
+		}
+		else
+		{
+			switch (func)
+			{
+				case funBinAnd:
+					acc &= v;
+					break;
+				case funBinOr:
+					acc |= v;
+					break;
+				case funBinXor:
+					acc ^= v;
+					break;
+				default:
+					fb_assert(false);
+			}
+		}
+	}
+}
+
+
 dsc* evlBin(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
 	impure_value* impure)
 {
 	fb_assert(args.getCount() >= 1);
 	fb_assert(function->misc != NULL);
 
+	Function func = (Function)(IPTR) function->misc;
 	jrd_req* request = tdbb->getRequest();
 
-	for (FB_SIZE_T i = 0; i < args.getCount(); ++i)
+	bool f128 = false;
+	for (unsigned i = 0; i < args.getCount(); ++i)
 	{
 		const dsc* value = EVL_expr(tdbb, request, args[i]);
-		if (request->req_flags & req_null)	// return NULL if value is NULL
-			return NULL;
+		if (request->req_flags & req_null)	// return nullptr if value is null
+			return nullptr;
 
-		if (i == 0)
-		{
-			if ((Function)(IPTR) function->misc == funBinNot)
-				impure->vlu_misc.vlu_int64 = ~MOV_get_int64(tdbb, value, 0);
-			else
-				impure->vlu_misc.vlu_int64 = MOV_get_int64(tdbb, value, 0);
-		}
-		else
-		{
-			switch ((Function)(IPTR) function->misc)
-			{
-				case funBinAnd:
-					impure->vlu_misc.vlu_int64 &= MOV_get_int64(tdbb, value, 0);
-					break;
-
-				case funBinOr:
-					impure->vlu_misc.vlu_int64 |= MOV_get_int64(tdbb, value, 0);
-					break;
-
-				case funBinXor:
-					impure->vlu_misc.vlu_int64 ^= MOV_get_int64(tdbb, value, 0);
-					break;
-
-				default:
-					fb_assert(false);
-			}
-		}
+		if (value->dsc_dtype == dtype_int128)
+			f128 = true;
 	}
 
-	impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);
+	if (f128)
+	{
+		evlBin2(tdbb, impure->vlu_misc.vlu_int128, func, args,
+			[ tdbb ] (const dsc* v) { return MOV_get_int128(tdbb, v, 0); });
+		impure->vlu_desc.makeInt128(0, &impure->vlu_misc.vlu_int128);
+	}
+	else
+	{
+		evlBin2(tdbb, impure->vlu_misc.vlu_int64, func, args,
+			[ tdbb ] (const dsc* v) { return MOV_get_int64(tdbb, v, 0); });
+		impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);
+	}
 
 	return &impure->vlu_desc;
 }
 
+
+template <typename TARGET>
+void evlBinShift2(TARGET& acc, Function func, TARGET target, int shift)
+{
+	const int rotshift = shift % sizeof(SINT64);
+
+	switch (func)
+	{
+		case funBinShl:
+			acc = target << shift;
+			break;
+
+		case funBinShr:
+			acc = target >> shift;
+			break;
+
+		case funBinShlRot:
+			acc = target >> (sizeof(SINT64) - rotshift);
+			acc |= (target << rotshift);
+			break;
+
+		case funBinShrRot:
+			acc = target << (sizeof(SINT64) - rotshift);
+			acc |= (target >> rotshift);
+			break;
+
+		default:
+			fb_assert(false);
+	}
+}
 
 dsc* evlBinShift(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
 	impure_value* impure)
@@ -2051,38 +2151,32 @@ dsc* evlBinShift(thread_db* tdbb, const SysFunction* function, const NestValueAr
 								Arg::Gds(isc_sysf_argmustbe_nonneg) << Arg::Str(function->name));
 	}
 
-	const SINT64 rotshift = shift % sizeof(SINT64);
-	SINT64 tempbits = 0;
-
-	const SINT64 target = MOV_get_int64(tdbb, value1, 0);
-
-	switch ((Function)(IPTR) function->misc)
+	Function func = (Function)(IPTR) function->misc;
+	if (value1->isInt128())
 	{
-		case funBinShl:
-			impure->vlu_misc.vlu_int64 = target << shift;
-			break;
-
-		case funBinShr:
-			impure->vlu_misc.vlu_int64 = target >> shift;
-			break;
-
-		case funBinShlRot:
-			tempbits = target >> (sizeof(SINT64) - rotshift);
-			impure->vlu_misc.vlu_int64 = (target << rotshift) | tempbits;
-			break;
-
-		case funBinShrRot:
-			tempbits = target << (sizeof(SINT64) - rotshift);
-			impure->vlu_misc.vlu_int64 = (target >> rotshift) | tempbits;
-			break;
-
-		default:
-			fb_assert(false);
+		evlBinShift2(impure->vlu_misc.vlu_int128, func, MOV_get_int128(tdbb, value1, 0), shift);
+		impure->vlu_desc.makeInt128(0, &impure->vlu_misc.vlu_int128);
+	}
+	else
+	{
+		evlBinShift2(impure->vlu_misc.vlu_int64, func, MOV_get_int64(tdbb, value1, 0), shift);
+		impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);
 	}
 
-	impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);
-
 	return &impure->vlu_desc;
+}
+
+
+template <typename HUGEINT>
+HUGEINT getScale(impure_value* impure)
+{
+	HUGEINT scale = 1;
+
+	fb_assert(impure->vlu_desc.dsc_scale <= 0);
+	for (int i = -impure->vlu_desc.dsc_scale; i > 0; --i)
+		scale *= 10;
+
+	return scale;
 }
 
 
@@ -2105,11 +2199,7 @@ dsc* evlCeil(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 		case dtype_long:
 		case dtype_int64:
 			{
-				SINT64 scale = 1;
-
-				fb_assert(impure->vlu_desc.dsc_scale <= 0);
-				for (int i = -impure->vlu_desc.dsc_scale; i > 0; --i)
-					scale *= 10;
+				SINT64 scale = getScale<SINT64>(impure);
 
 				const SINT64 v1 = MOV_get_int64(tdbb, &impure->vlu_desc, impure->vlu_desc.dsc_scale);
 				const SINT64 v2 = MOV_get_int64(tdbb, &impure->vlu_desc, 0) * scale;
@@ -2120,6 +2210,22 @@ dsc* evlCeil(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 					++impure->vlu_misc.vlu_int64;
 
 				impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);
+			}
+			break;
+
+		case dtype_int128:
+			{
+				Int128 scale = getScale<CInt128>(impure);
+
+				const Int128 v1 = MOV_get_int128(tdbb, &impure->vlu_desc, impure->vlu_desc.dsc_scale);
+				const Int128 v2 = MOV_get_int128(tdbb, &impure->vlu_desc, 0).mul(scale);
+
+				impure->vlu_misc.vlu_int128 = v1.div(scale, 0);
+
+				if (v1.sign() > 0 && v1 != v2)
+					impure->vlu_misc.vlu_int128 += 1u;
+
+				impure->vlu_desc.makeInt128(0, &impure->vlu_misc.vlu_int128);
 			}
 			break;
 
@@ -2450,7 +2556,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			if (valueDsc->dsc_dtype == dtype_sql_date)
 				timestamp.value().timestamp_date += quantity / 24;
 			else
-				add10msec(&timestamp.value(), quantity, 3600 * ISC_TIME_SECONDS_PRECISION);
+				NoThrowTimeStamp::add10msec(&timestamp.value(), quantity, 3600 * ISC_TIME_SECONDS_PRECISION);
 			break;
 
 		case blr_extract_minute:
@@ -2460,7 +2566,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			if (valueDsc->dsc_dtype == dtype_sql_date)
 				timestamp.value().timestamp_date += quantity / 1440; // 1440 == 24 * 60
 			else
-				add10msec(&timestamp.value(), quantity, 60 * ISC_TIME_SECONDS_PRECISION);
+				NoThrowTimeStamp::add10msec(&timestamp.value(), quantity, 60 * ISC_TIME_SECONDS_PRECISION);
 			break;
 
 		case blr_extract_second:
@@ -2473,7 +2579,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			if (valueDsc->dsc_dtype == dtype_sql_date)
 				timestamp.value().timestamp_date += quantity / oneDay;
 			else
-				add10msec(&timestamp.value(), quantity, ISC_TIME_SECONDS_PRECISION);
+				NoThrowTimeStamp::add10msec(&timestamp.value(), quantity, ISC_TIME_SECONDS_PRECISION);
 			break;
 
 		case blr_extract_millisecond:
@@ -2486,7 +2592,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			if (valueDsc->dsc_dtype == dtype_sql_date)
 				timestamp.value().timestamp_date += quantity / milliPow / (oneDay * 1000);
 			else
-				add10msec(&timestamp.value(), quantity, ISC_TIME_SECONDS_PRECISION / 1000 / milliPow);
+				NoThrowTimeStamp::add10msec(&timestamp.value(), quantity, ISC_TIME_SECONDS_PRECISION / 1000 / milliPow);
 			break;
 
 		default:
@@ -3261,50 +3367,6 @@ dsc* evlEncodeHex(thread_db* tdbb, const SysFunction* function, const NestValueA
 	return evlEncodeDecodeHex(tdbb, true, function, args, impure);
 }
 
-
-dsc* evlCrc32(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure)
-{
-	crc32_state ctx;
-	crc32_init(&ctx);
-
-	const dsc* arg = EVL_expr(tdbb, tdbb->getRequest(), args[0]);
-	if (!arg)	// return NULL if value is NULL
-		return NULL;
-
-	if (arg->isBlob())
-	{
-		blb* blob = blb::open2(tdbb, tdbb->getRequest()->req_transaction, reinterpret_cast<const bid*>(arg->dsc_address),
-			sizeof(streamBpb), streamBpb);
-
-		UCHAR buf[4096];
-		for(;;)
-		{
-			const unsigned l = blob->BLB_get_data(tdbb, buf, sizeof buf, false);
-			if (!l)
-				break;
-			crc32_update(&ctx, buf, l);
-		}
-
-		blob->BLB_close(tdbb);
-	}
-	else
-	{
-		unsigned len;
-		const UCHAR* ptr = CVT_get_bytes(arg, len);
-		crc32_update(&ctx, ptr, len);
-	}
-
-	SLONG hash;
-	crc32_finish(&ctx, &hash, sizeof hash);
-
-	dsc result;
-	result.makeLong(0, &hash);
-	EVL_make_value(tdbb, &result, impure);
-
-	return &impure->vlu_desc;
-}
-
-
 dsc* evlRsaEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
 	impure_value* impure, bool encryptFlag)
 {
@@ -3596,7 +3658,10 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 			timestamp1.value().timestamp_date = 0;
 
 			if (value1Dsc->dsc_dtype == dtype_sql_time && value2Dsc->isDateTimeTz())
-				TimeZoneUtil::localTimeToUtc(timestamp1.value().timestamp_time, &EngineCallbacks::instance);
+			{
+				TimeZoneUtil::localTimeToUtc(timestamp1.value().timestamp_time,
+					EngineCallbacks::instance->getSessionTimeZone());
+			}
 			break;
 
 		case dtype_sql_date:
@@ -3629,7 +3694,10 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 			timestamp2.value().timestamp_date = 0;
 
 			if (value2Dsc->dsc_dtype == dtype_sql_time && value1Dsc->isDateTimeTz())
-				TimeZoneUtil::localTimeToUtc(timestamp2.value().timestamp_time, &EngineCallbacks::instance);
+			{
+				TimeZoneUtil::localTimeToUtc(timestamp2.value().timestamp_time,
+					EngineCallbacks::instance->getSessionTimeZone());
+			}
 			break;
 
 		case dtype_sql_date:
@@ -3802,7 +3870,7 @@ dsc* evlExp(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	if (value->isDecFloat())
+	if (value->isDecOrInt128())
 	{
 		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
 		impure->vlu_misc.vlu_dec128 = MOV_get_dec128(tdbb, value);
@@ -3817,7 +3885,7 @@ dsc* evlExp(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 		const double rc = exp(MOV_get_double(tdbb, value));
 		if (rc == HUGE_VAL) // unlikely to trap anything
 			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
-		if (isinf(rc))
+		if (std::isinf(rc))
 			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
 
 		impure->vlu_misc.vlu_double = rc;
@@ -3974,11 +4042,7 @@ dsc* evlFloor(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 		case dtype_long:
 		case dtype_int64:
 			{
-				SINT64 scale = 1;
-
-				fb_assert(impure->vlu_desc.dsc_scale <= 0);
-				for (int i = -impure->vlu_desc.dsc_scale; i > 0; --i)
-					scale *= 10;
+				SINT64 scale = getScale<SINT64>(impure);
 
 				const SINT64 v1 = MOV_get_int64(tdbb, &impure->vlu_desc, impure->vlu_desc.dsc_scale);
 				const SINT64 v2 = MOV_get_int64(tdbb, &impure->vlu_desc, 0) * scale;
@@ -3989,6 +4053,22 @@ dsc* evlFloor(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 					--impure->vlu_misc.vlu_int64;
 
 				impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);
+			}
+			break;
+
+		case dtype_int128:
+			{
+				Int128 scale = getScale<CInt128>(impure);
+
+				const Int128 v1 = MOV_get_int128(tdbb, &impure->vlu_desc, impure->vlu_desc.dsc_scale);
+				const Int128 v2 = MOV_get_int128(tdbb, &impure->vlu_desc, 0).mul(scale);
+
+				impure->vlu_misc.vlu_int128 = v1.div(scale, 0);
+
+				if (v1.sign() < 0 && v1 != v2)
+					impure->vlu_misc.vlu_int128 -= 1u;
+
+				impure->vlu_desc.makeInt128(0, &impure->vlu_misc.vlu_int128);
 			}
 			break;
 
@@ -4089,6 +4169,16 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 			resultStr.printf("%s.%s.%s", FB_MAJOR_VER, FB_MINOR_VER, FB_REV_NO);
 		else if (nameStr == DATABASE_NAME)
 			resultStr = dbb->dbb_database_name.ToString();
+		else if (nameStr == DATABASE_GUID)
+		{
+			char guidBuffer[GUID_BUFF_SIZE];
+			GuidToString(guidBuffer, &dbb->dbb_guid);
+			resultStr = string(guidBuffer);
+		}
+		else if (nameStr == DATABASE_FILE_ID)
+		{
+			resultStr = dbb->getUniqueFileId();
+		}
 		else if (nameStr == SESSION_ID_NAME)
 			resultStr.printf("%" SQUADFORMAT, PAG_attachment_id(tdbb));
 		else if (nameStr == NETWORK_PROTOCOL_NAME)
@@ -4205,16 +4295,16 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 				return NULL;
 		}
 		else if (nameStr == EXT_CONN_POOL_SIZE)
-			resultStr.printf("%d", EDS::Manager::getConnPool()->getMaxCount());
+			resultStr.printf("%d", EDS::Manager::getConnPool(true)->getMaxCount());
 		else if (nameStr == EXT_CONN_POOL_IDLE)
-			resultStr.printf("%d", EDS::Manager::getConnPool()->getIdleCount());
+			resultStr.printf("%d", EDS::Manager::getConnPool(true)->getIdleCount());
 		else if (nameStr == EXT_CONN_POOL_ACTIVE)
 		{
-			EDS::ConnectionsPool* connPool = EDS::Manager::getConnPool();
+			EDS::ConnectionsPool* connPool = EDS::Manager::getConnPool(true);
 			resultStr.printf("%d", connPool->getAllCount() - connPool->getIdleCount());
 		}
 		else if (nameStr == EXT_CONN_POOL_LIFETIME)
-			resultStr.printf("%d", EDS::Manager::getConnPool()->getLifeTime());
+			resultStr.printf("%d", EDS::Manager::getConnPool(true)->getLifeTime());
 		else if (nameStr == REPLICATION_SEQ_NAME)
 			resultStr.printf("%" UQUADFORMAT, dbb->getReplSequence(tdbb));
 		else if (nameStr == EFFECTIVE_USER_NAME)
@@ -4461,7 +4551,7 @@ dsc* evlGetTranCN(thread_db* tdbb, const SysFunction* function, const NestValueA
 }
 
 
-dsc* evlHash(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
+dsc* evlHash(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
 	impure_value* impure)
 {
 	fb_assert(args.getCount() >= 1);
@@ -4481,12 +4571,8 @@ dsc* evlHash(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 		if (request->req_flags & req_null)	// return NULL if algorithm is NULL
 			return NULL;
 
-		if (!algorithmDesc->isText())
-			status_exception::raise(Arg::Gds(isc_sysf_invalid_hash_algorithm) << "<not a string constant>");
-
-		MetaName algorithmName;
-		MOV_get_metaname(tdbb, algorithmDesc, algorithmName);
-		hashContext.reset(HashAlgorithmDescriptor::find(algorithmName.c_str())->create(pool));
+		const HashAlgorithmDescriptor* d = getHashAlgorithmDesc(tdbb, function, algorithmDesc);
+		hashContext.reset(d->create(pool));
 	}
 	else
 	{
@@ -4516,23 +4602,9 @@ dsc* evlHash(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 		hashContext->update(address, length);
 	}
 
-	HashContext::Buffer resultBuffer;
-	hashContext->finish(resultBuffer);
-
-	if (args.getCount() >= 2)
-	{
-		dsc result;
-		result.makeText(resultBuffer.getCount(), ttype_binary, resultBuffer.begin());
-		EVL_make_value(tdbb, &result, impure);
-	}
-	else
-	{
-		fb_assert(resultBuffer.getCount() == sizeof(SINT64));
-		memcpy(&impure->vlu_misc.vlu_int64, resultBuffer.begin(), sizeof(SINT64));
-
-		// make descriptor for return value
-		impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);
-	}
+	dsc result;
+	hashContext->finish(result);
+	EVL_make_value(tdbb, &result, impure);
 
 	return &impure->vlu_desc;
 }
@@ -4573,7 +4645,7 @@ dsc* evlLnLog10(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	if (value->isDecFloat())
+	if (value->isDecOrInt128())
 	{
 		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
 		Decimal128 d = MOV_get_dec128(tdbb, value);
@@ -4987,6 +5059,20 @@ dsc* evlMod(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 
 	EVL_make_value(tdbb, value1, impure);
 	impure->vlu_desc.dsc_scale = 0;
+
+	if (impure->vlu_desc.dsc_dtype == dtype_int128)
+	{
+		const Int128 divisor = MOV_get_int128(tdbb, value2, 0);
+		Int128 cmp0;
+		cmp0.set(0, 0);
+
+		if (divisor == cmp0)
+			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_divide_by_zero));
+
+		impure->vlu_misc.vlu_int128 = MOV_get_int128(tdbb, value1, 0).mod(divisor);
+
+		return &impure->vlu_desc;
+	}
 
 	const SINT64 divisor = MOV_get_int64(tdbb, value2, 0);
 
@@ -5554,7 +5640,7 @@ dsc* evlPower(thread_db* tdbb, const SysFunction* function, const NestValueArray
 		}
 
 		const double rc = pow(v1, v2);
-		if (isinf(rc))
+		if (std::isinf(rc))
 			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
 
 		impure->vlu_misc.vlu_double = rc;
@@ -5913,17 +5999,30 @@ dsc* evlRound(thread_db* tdbb, const SysFunction* function, const NestValueArray
 		if (request->req_flags & req_null)	// return NULL if scaleDsc is NULL
 			return NULL;
 
-		scale = -MOV_get_long(tdbb, scaleDsc, 0);
+		scale = MOV_get_long(tdbb, scaleDsc, 0);
 		if (!(scale >= MIN_SCHAR && scale <= MAX_SCHAR))
 		{
 			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 										Arg::Gds(isc_sysf_invalid_scale) <<
 											Arg::Str(function->name));
 		}
+		scale = -scale;
 	}
 
-	impure->vlu_misc.vlu_int64 = MOV_get_int64(tdbb, value, scale);
-	impure->vlu_desc.makeInt64(scale, &impure->vlu_misc.vlu_int64);
+	// No sense in rounding to something more precise then arg
+	if (value->isExact() && scale < value->dsc_scale)
+		scale = value->dsc_scale;
+
+	if (value->is128())
+	{
+		impure->vlu_misc.vlu_int128 = MOV_get_int128(tdbb, value, scale);
+		impure->vlu_desc.makeInt128(scale, &impure->vlu_misc.vlu_int128);
+	}
+	else
+	{
+		impure->vlu_misc.vlu_int64 = MOV_get_int64(tdbb, value, scale);
+		impure->vlu_desc.makeInt64(scale, &impure->vlu_misc.vlu_int64);
+	}
 
 	return &impure->vlu_desc;
 }
@@ -5971,7 +6070,7 @@ dsc* evlSqrt(thread_db* tdbb, const SysFunction* function, const NestValueArray&
 	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	if (value->isDecFloat())
+	if (value->isDecOrInt128())
 	{
 		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
 		impure->vlu_misc.vlu_dec128 = MOV_get_dec128(tdbb, value);
@@ -6021,19 +6120,23 @@ dsc* evlTrunc(thread_db* tdbb, const SysFunction* function, const NestValueArray
 		if (request->req_flags & req_null)	// return NULL if scaleDsc is NULL
 			return NULL;
 
-		resultScale = -MOV_get_long(tdbb, scaleDsc, 0);
+		resultScale = MOV_get_long(tdbb, scaleDsc, 0);
 		if (!(resultScale >= MIN_SCHAR && resultScale <= MAX_SCHAR))
 		{
 			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 										Arg::Gds(isc_sysf_invalid_scale) <<
 											Arg::Str(function->name));
 		}
+		resultScale = -resultScale;
 	}
 
 	if (value->isExact())
 	{
 		SSHORT scale = value->dsc_scale;
-		impure->vlu_misc.vlu_int64 = MOV_get_int64(tdbb, value, scale);
+		if (value->isInt128())
+			impure->vlu_misc.vlu_int128 = MOV_get_int128(tdbb, value, scale);
+		else
+			impure->vlu_misc.vlu_int64 = MOV_get_int64(tdbb, value, scale);
 
 		if (resultScale < scale)
 			resultScale = scale;
@@ -6044,18 +6147,30 @@ dsc* evlTrunc(thread_db* tdbb, const SysFunction* function, const NestValueArray
 		{
 			while (scale)
 			{
-				impure->vlu_misc.vlu_int64 /= 10;
+				if (value->isInt128())
+					impure->vlu_misc.vlu_int128 = impure->vlu_misc.vlu_int128 / 10;
+				else
+					impure->vlu_misc.vlu_int64 /= 10;
+
 				++scale;
 			}
 		}
 
-		impure->vlu_desc.makeInt64(resultScale, &impure->vlu_misc.vlu_int64);
+		if (value->isInt128())
+			impure->vlu_desc.makeInt128(resultScale, &impure->vlu_misc.vlu_int128);
+		else
+			impure->vlu_desc.makeInt64(resultScale, &impure->vlu_misc.vlu_int64);
 	}
 	else
 	{
-		impure->vlu_misc.vlu_double = MOV_get_double(tdbb, value);
+		if (value->isDecFloat())
+			impure->vlu_misc.vlu_dec128 = MOV_get_dec128(tdbb, value);
+		else
+			impure->vlu_misc.vlu_double = MOV_get_double(tdbb, value);
 
 		SINT64 v = 1;
+		Decimal128 vv;
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
 
 		if (resultScale > 0)
 		{
@@ -6065,25 +6180,55 @@ dsc* evlTrunc(thread_db* tdbb, const SysFunction* function, const NestValueArray
 				--resultScale;
 			}
 
-			impure->vlu_misc.vlu_double /= v;
-			modf(impure->vlu_misc.vlu_double, &impure->vlu_misc.vlu_double);
-			impure->vlu_misc.vlu_double *= v;
+			if (value->isDecFloat())
+			{
+				vv.set(v, decSt, 0);
+				impure->vlu_misc.vlu_dec128 = impure->vlu_misc.vlu_dec128.div(decSt, vv);
+				impure->vlu_misc.vlu_dec128.modf(decSt, &impure->vlu_misc.vlu_dec128);
+				impure->vlu_misc.vlu_dec128 = impure->vlu_misc.vlu_dec128.mul(decSt, vv);
+			}
+			else
+			{
+				impure->vlu_misc.vlu_double /= v;
+				modf(impure->vlu_misc.vlu_double, &impure->vlu_misc.vlu_double);
+				impure->vlu_misc.vlu_double *= v;
+			}
 		}
 		else
 		{
-			double r = modf(impure->vlu_misc.vlu_double, &impure->vlu_misc.vlu_double);
-
-			if (resultScale != 0)
+			if (value->isDecFloat())
 			{
-				for (SLONG i = 0; i > resultScale; --i)
-					v *= 10;
+				Decimal128 r = impure->vlu_misc.vlu_dec128.modf(decSt, &impure->vlu_misc.vlu_dec128);
 
-				modf(r * v, &r);
-				impure->vlu_misc.vlu_double += r / v;
+				if (resultScale != 0)
+				{
+					for (SLONG i = 0; i > resultScale; --i)
+						v *= 10;
+					vv.set(v, decSt, 0);
+
+					r.mul(decSt, vv).modf(decSt, &r);
+					impure->vlu_misc.vlu_dec128 = impure->vlu_misc.vlu_dec128.add(decSt, r.div(decSt, vv));
+				}
+			}
+			else
+			{
+				double r = modf(impure->vlu_misc.vlu_double, &impure->vlu_misc.vlu_double);
+
+				if (resultScale != 0)
+				{
+					for (SLONG i = 0; i > resultScale; --i)
+						v *= 10;
+
+					modf(r * v, &r);
+					impure->vlu_misc.vlu_double += r / v;
+				}
 			}
 		}
 
-		impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
+		if (value->isDecFloat())
+			impure->vlu_desc.makeDecimal128(&impure->vlu_misc.vlu_dec128);
+		else
+			impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
 	}
 
 	return &impure->vlu_desc;
@@ -6199,15 +6344,14 @@ const SysFunction SysFunction::functions[] =
 		{"ATAN2", 2, 2, setParamsDouble, makeDoubleResult, evlAtan2, NULL},
 		{"BASE64_DECODE", 1, 1, NULL, makeDecode64, evlDecode64, NULL},
 		{"BASE64_ENCODE", 1, 1, NULL, makeEncode64, evlEncode64, NULL},
-		{"CRC32", 1, 1, NULL, makeLongResult, evlCrc32, NULL},
-		{"BIN_AND", 2, -1, setParamsInteger, makeBin, evlBin, (void*) funBinAnd},
-		{"BIN_NOT", 1, 1, setParamsInteger, makeBin, evlBin, (void*) funBinNot},
-		{"BIN_OR", 2, -1, setParamsInteger, makeBin, evlBin, (void*) funBinOr},
+		{"BIN_AND", 2, -1, setParamsBin, makeBin, evlBin, (void*) funBinAnd},
+		{"BIN_NOT", 1, 1, setParamsBin, makeBin, evlBin, (void*) funBinNot},
+		{"BIN_OR", 2, -1, setParamsBin, makeBin, evlBin, (void*) funBinOr},
 		{"BIN_SHL", 2, 2, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShl},
 		{"BIN_SHR", 2, 2, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShr},
 		{"BIN_SHL_ROT", 2, 2, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShlRot},
 		{"BIN_SHR_ROT", 2, 2, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShrRot},
-		{"BIN_XOR", 2, -1, setParamsInteger, makeBin, evlBin, (void*) funBinXor},
+		{"BIN_XOR", 2, -1, setParamsBin, makeBin, evlBin, (void*) funBinXor},
 		{"CEIL", 1, 1, setParamsDblDec, makeCeilFloor, evlCeil, NULL},
 		{"CEILING", 1, 1, setParamsDblDec, makeCeilFloor, evlCeil, NULL},
 		{"CHAR_TO_UUID", 1, 1, setParamsCharToUuid, makeUuid, evlCharToUuid, NULL},
@@ -6215,6 +6359,7 @@ const SysFunction SysFunction::functions[] =
 		{"COS", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCos},
 		{"COSH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCosh},
 		{"COT", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCot},
+		{"CRYPT_HASH", 2, 2, setParamsHash, makeHash, evlHash, NULL},
 		{"DATEADD", 3, 3, setParamsDateAdd, makeDateAdd, evlDateAdd, NULL},
 		{"DATEDIFF", 3, 3, setParamsDateDiff, makeInt64Result, evlDateDiff, NULL},
 		{"DECRYPT", 7, 7, setParamsEncrypt, makeDecrypt, evlDecrypt, NULL},
@@ -6223,7 +6368,7 @@ const SysFunction SysFunction::functions[] =
 		{"FIRST_DAY", 2, 2, setParamsFirstLastDay, makeFirstLastDayResult, evlFirstLastDay, (void*) funFirstDay},
 		{"FLOOR", 1, 1, setParamsDblDec, makeCeilFloor, evlFloor, NULL},
 		{"GEN_UUID", 0, 0, NULL, makeUuid, evlGenUuid, NULL},
-		{"HASH", 1, 2, NULL, makeHash, evlHash, NULL},
+		{"HASH", 1, 2, setParamsHash, makeHash, evlHash, NULL},
 		{"HEX_DECODE", 1, 1, NULL, makeDecodeHex, evlDecodeHex, NULL},
 		{"HEX_ENCODE", 1, 1, NULL, makeEncodeHex, evlEncodeHex, NULL},
 		{"LAST_DAY", 2, 2, setParamsFirstLastDay, makeFirstLastDayResult, evlFirstLastDay, (void*) funLastDay},
@@ -6274,9 +6419,9 @@ const SysFunction SysFunction::functions[] =
 
 const SysFunction* SysFunction::lookup(const MetaName& name)
 {
-	for (const SysFunction* f = functions; f->name.length() > 0; ++f)
+	for (const SysFunction* f = functions; f->name[0]; ++f)
 	{
-		if (f->name == name)
+		if (name == f->name)
 			return f;
 	}
 
@@ -6288,6 +6433,6 @@ void SysFunction::checkArgsMismatch(int count) const
 {
 	if (count < minArgCount || (maxArgCount != -1 && count > maxArgCount))
 	{
-		status_exception::raise(Arg::Gds(isc_funmismat) << Arg::Str(name.c_str()));
+		status_exception::raise(Arg::Gds(isc_funmismat) << Arg::Str(name));
 	}
 }

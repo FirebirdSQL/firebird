@@ -147,6 +147,8 @@ const char* const FUNCTIONS_GENERATOR = "RDB$FUNCTIONS";
 const char* const IMPLICIT_INTEGRITY_PREFIX = "INTEG_";
 const int IMPLICIT_INTEGRITY_PREFIX_LEN = 6;
 
+// Default publication name
+const char* const DEFAULT_PUBLICATION = "RDB$DEFAULT";
 
 //*****************************************
 // System flag meaning - mainly Firebird.
@@ -295,6 +297,7 @@ enum InfoType
 	INFO_TYPE_SQLSTATE = 7,
 	INFO_TYPE_EXCEPTION = 8,
 	INFO_TYPE_ERROR_MSG = 9,
+	INFO_TYPE_SESSION_RESETTING = 10,
 	MAX_INFO_TYPE
 };
 
@@ -469,6 +472,14 @@ const int OPT_STATIC_ITEMS = 64;
 
 #define CURRENT_ENGINE "Engine13"
 #define EMBEDDED_PROVIDERS "Providers=" CURRENT_ENGINE
+
+// Features set for current version of engine provider
+#define ENGINE_FEATURES {fb_feature_multi_statements, \
+						 fb_feature_multi_transactions, \
+						 fb_feature_session_reset, \
+						 fb_feature_read_consistency, \
+						 fb_feature_statement_timeout, \
+						 fb_feature_statement_long_life}
 
 const int WITH_GRANT_OPTION = 1;
 const int WITH_ADMIN_OPTION = 2;

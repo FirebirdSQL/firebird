@@ -22,10 +22,9 @@
 **--------------------------------------------------------------
 */
 
-
 DECLARE FILTER desc_filter
 INPUT_TYPE 1
 OUTPUT_TYPE -4
-ENTRY_POINT "desc_filter"
-MODULE_NAME "api9f";
+ENTRY_POINT 'desc_filter'
+MODULE_NAME 'api9f';
 

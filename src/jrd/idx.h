@@ -295,12 +295,21 @@ static const struct ini_idx_t indices[] =
 	INDEX(54, rel_backup_history, idx_unique, 1)
 		SEGMENT(f_backup_guid, idx_string)		// backup guid
 	}},
-	// define index RDB$INDEX_55 for RDB$TABLESPACES unique RDB$TABALESPACE_NAME;
-	INDEX(55, rel_tablespaces, idx_unique, 1)
+	// define index RDB$INDEX_55 for RDB$PUBLICATIONS unique RDB$PUBLICATION_NAME;
+	INDEX(55, rel_pubs, idx_unique, 1)
+		SEGMENT(f_pub_name, idx_string)		// publication name
+	}},
+	// define index RDB$INDEX_56 for RDB$PUBLICATION_TABLES unique RDB$TABLE_NAME, RDB$PUBLICATION_NAME;
+	INDEX(56, rel_pub_tables, idx_unique, 2)
+		SEGMENT(f_pubtab_tab_name, idx_string),		// table name
+		SEGMENT(f_pubtab_pub_name, idx_string)		// publication name
+	}},
+	// define index RDB$INDEX_57 for RDB$TABLESPACES unique RDB$TABALESPACE_NAME;
+	INDEX(57, rel_tablespaces, idx_unique, 1)
 		SEGMENT(f_ts_name, idx_metadata)		// tablespace name
 	}},
-	//	define index RDB$INDEX_52 for RDB$PAGES RDB$PAGE_TYPE, RDB$RELATION_ID, RDB$PAGE_SEQUENCE;
-	INDEX(56, rel_pages, 0, 3)
+	//	define index RDB$INDEX_58 for RDB$PAGES RDB$PAGE_TYPE, RDB$RELATION_ID, RDB$PAGE_SEQUENCE;
+	INDEX(58, rel_pages, 0, 3)
 		SEGMENT(f_pag_type, idx_numeric),	// page type
 		SEGMENT(f_pag_id, idx_numeric),		// relation id
 		SEGMENT(f_pag_seq, idx_numeric)		// page sequence

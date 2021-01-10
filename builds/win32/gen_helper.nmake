@@ -1,0 +1,61 @@
+
+all: updateCloopInterfaces
+
+CLOOP=$(FB_GEN_DIR)\cloop.exe
+CLOOP_DIR=$(FB_ROOT_PATH)\extern\cloop\src\cloop
+CLOOP_SRC=$(CLOOP_DIR)\*.cpp
+
+IDL_ROOT=$(FB_ROOT_PATH)\src\include\firebird
+IDL_FILE=$(IDL_ROOT)\FirebirdInterface.idl
+API_H_FILE=$(IDL_ROOT)\IdlFbInterfaces.h
+API_PAS_FILE=$(FB_ROOT_PATH)\src\include\gen\Firebird.pas
+MISC=$(FB_ROOT_PATH)\src\misc
+PAS_ROOT=$(MISC)\pascal
+PASCAL_SOURCES=$(PAS_ROOT)\Pascal.interface.pas $(PAS_ROOT)\Pascal.implementation.pas
+TMP_FUNCS=$(FB_GEN_DIR)\misc\func.pas
+XPB_CONSTS=$(FB_ROOT_PATH)\src\include\firebird\impl\consts_pub.h
+ERR_CONSTS=$(FB_ROOT_PATH)\lang_helpers\gds_codes.pas
+RPL_AWK=$(FB_GEN_DIR)\def_awk.exe
+RPL_AWK_SRC=$(MISC)\def_awk.c
+RPL_GREP=$(FB_GEN_DIR)\isc_grep.exe
+RPL_GREP_SRC=$(MISC)\isc_grep.c
+# These utils are platform and build independent, use fixed temporary dir.
+UTL_TMP_DIR=$(FB_TEMP_DIR)\Release\misc
+
+CPPFLAGS = /MD /EHsc /O2 /D "_CRT_SECURE_NO_WARNINGS" /D "WIN32" /D "NDEBUG" /D "_CONSOLE"  
+
+updateCloopInterfaces: $(API_H_FILE) $(API_PAS_FILE) 
+
+
+$(CLOOP) $(RPL_AWK) $(RPL_GREP): $(UTL_TMP_DIR) 
+
+$(UTL_TMP_DIR):
+	-mkdir $@ 2>nul
+
+$(CLOOP): $(CLOOP_SRC) 
+	$(CPP) $(CPPFLAGS) /Fe$@ /Fo$(UTL_TMP_DIR)\ $(CLOOP_SRC)
+
+$(API_H_FILE) $(API_PAS_FILE): $(CLOOP) 
+
+$(API_H_FILE): $(IDL_FILE)
+	$(CLOOP) $(IDL_FILE) c++ $@ IDL_FB_INTERFACES_H Firebird I
+
+$(RPL_AWK):	$(RPL_AWK_SRC)
+# NMAKE strips trailing backslash during macro substitution that's why it is here and not in definition.
+	$(CPP) /Fe$@ /Fo$(UTL_TMP_DIR)\ $(RPL_AWK_SRC)
+
+$(RPL_GREP): $(RPL_GREP_SRC)
+	$(CPP) /Fe$@ /Fo$(UTL_TMP_DIR)\ $(RPL_GREP_SRC)
+
+$(TMP_FUNCS): $(PAS_ROOT)\fb_get_master_interface.pas $(XPB_CONSTS) $(ERR_CONSTS) $(RPL_AWK) $(RPL_GREP)
+	copy $(PAS_ROOT)\fb_get_master_interface.pas $(TMP_FUNCS)
+	$(RPL_AWK) <$(XPB_CONSTS) >>$(TMP_FUNCS)
+	$(RPL_GREP) <$(ERR_CONSTS) >>$(TMP_FUNCS)
+
+$(API_PAS_FILE): $(IDL_FILE) $(PASCAL_SOURCES) $(TMP_FUNCS)
+	$(CLOOP) $(IDL_FILE) pascal $@ Firebird --uses SysUtils \
+		--interfaceFile $(PAS_ROOT)\Pascal.interface.pas \
+    	--implementationFile $(PAS_ROOT)\Pascal.implementation.pas \
+    	--exceptionClass FbException \
+    	--functionsFile $(TMP_FUNCS) \
+    	--prefix I

@@ -213,26 +213,15 @@ private:
 
 };
 
-} //namespace Firebird
-
-
-// getting a portable isinf() is harder than you would expect
-#ifdef WIN_NT
-inline bool isinf(double x)
+inline bool isNegativeInf(double x)
 {
-	return (!_finite (x) && !isnan(x));
-}
-#endif // WIN_NT
-
-namespace Firebird {
-	inline bool isNegativeInf(double x)
-	{
 #ifdef WIN_NT
-		return _fpclass(x) == _FPCLASS_NINF;
+	return _fpclass(x) == _FPCLASS_NINF;
 #else
-		return x == -INFINITY;
+	return x == -INFINITY;
 #endif
-	}
 }
 
-#endif //CLASSES_FPE_CONTROL_H
+}	// namespace Firebird
+
+#endif // CLASSES_FPE_CONTROL_H

@@ -59,7 +59,7 @@ public:
 	// Compare with path given by constant
 	bool operator==(const char* path) const
 	{
-		return PathName(*this) == path;
+		return this->operator PathName() == path;
 	}
 	// Check, whether pPath lies inside directory tree,
 	// specified by *this ParsedPath. Also checks against

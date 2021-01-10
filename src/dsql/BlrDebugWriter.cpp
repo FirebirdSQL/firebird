@@ -56,6 +56,9 @@ void BlrDebugWriter::endDebug()
 
 void BlrDebugWriter::putDebugSrcInfo(ULONG line, ULONG col)
 {
+	if (debugData.isEmpty())
+		return;
+
 	debugData.add(fb_dbg_map_src2blr);
 
 	putValue(line);
@@ -65,6 +68,9 @@ void BlrDebugWriter::putDebugSrcInfo(ULONG line, ULONG col)
 
 void BlrDebugWriter::putDebugVariable(USHORT number, const MetaName& name)
 {
+	if (debugData.isEmpty())
+		return;
+
 	debugData.add(fb_dbg_map_varname);
 
 	debugData.add(number);
@@ -78,6 +84,9 @@ void BlrDebugWriter::putDebugVariable(USHORT number, const MetaName& name)
 
 void BlrDebugWriter::putDebugArgument(UCHAR type, USHORT number, const TEXT* name)
 {
+	if (debugData.isEmpty())
+		return;
+
 	fb_assert(name);
 
 	debugData.add(fb_dbg_map_argument);
@@ -96,6 +105,9 @@ void BlrDebugWriter::putDebugArgument(UCHAR type, USHORT number, const TEXT* nam
 
 void BlrDebugWriter::putDebugCursor(USHORT number, const MetaName& name)
 {
+	if (debugData.isEmpty())
+		return;
+
 	debugData.add(fb_dbg_map_curname);
 
 	debugData.add(number);
@@ -109,6 +121,9 @@ void BlrDebugWriter::putDebugCursor(USHORT number, const MetaName& name)
 
 void BlrDebugWriter::putDebugSubFunction(DeclareSubFuncNode* subFuncNode)
 {
+	if (debugData.isEmpty())
+		return;
+
 	debugData.add(fb_dbg_subfunc);
 
 	dsql_udf* subFunc = subFuncNode->dsqlFunction;
@@ -126,6 +141,9 @@ void BlrDebugWriter::putDebugSubFunction(DeclareSubFuncNode* subFuncNode)
 
 void BlrDebugWriter::putDebugSubProcedure(DeclareSubProcNode* subProcNode)
 {
+	if (debugData.isEmpty())
+		return;
+
 	debugData.add(fb_dbg_subproc);
 
 	dsql_prc* subProc = subProcNode->dsqlProcedure;

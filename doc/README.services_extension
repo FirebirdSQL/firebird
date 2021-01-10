@@ -252,3 +252,16 @@ fbsvcmgr host:service_mgr user leg password leg action_restore dbname target.fdb
 fbsvcmgr host:service_mgr user leg password leg role 'rdb$admin' action_restore dbname target.fdb bkp_file some.fbk
    (works as expected)
 
+
+8) Services API extension - nbackup support (more).
+(Alex Peshkov, peshkoff@mail.ru, 2020)
+
+Added support to fixup databases after file system copy.
+
+The following action was added:
+isc_action_svc_nfix - fixup database.
+
+Samples of use of new parameter in fbsvcmgr utility (supposing login and
+password are set using some other method):
+  fbsvcmgr - action_nfix dbname /tmp/ecopy.fdb
+

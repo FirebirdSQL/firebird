@@ -625,8 +625,15 @@ void ALICE_upper_case(const TEXT* in, TEXT* out, const size_t buf_size)
 
 void ALICE_print(USHORT	number, const SafeArg& arg)
 {
-	TEXT buffer[256];
+	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
+	if (tdgbl->uSvc->isService())
+	{
+		tdgbl->uSvc->setServiceStatus(ALICE_MSG_FAC, number, arg);
+		tdgbl->uSvc->started();
+		return;
+	}
 
+	TEXT buffer[256];
 	fb_msg_format(0, ALICE_MSG_FAC, number, sizeof(buffer), buffer, arg);
 	alice_output(false, "%s\n", buffer);
 }

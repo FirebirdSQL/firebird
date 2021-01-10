@@ -211,6 +211,15 @@
 	FIELD(fld_crypt_state	, nam_crypt_state	, dtype_short	, sizeof(SSHORT)			, 0							, NULL		, true)
 	FIELD(fld_remote_crypt	, nam_wire_crypt_plugin, dtype_varying, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true)
 
+	FIELD(fld_pub_name		, nam_pub_name		, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, false)
+	FIELD(fld_file_id		, nam_file_id		, dtype_varying	, 255						, dsc_text_type_ascii		, NULL		, false)
+
+	FIELD(fld_cfg_id		, nam_cfg_id		, dtype_long	, sizeof(SLONG)				, 0							, NULL		, false)
+	FIELD(fld_cfg_name		, nam_cfg_name		, dtype_varying	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, false)
+	FIELD(fld_cfg_value		, nam_cfg_value		, dtype_varying	, 255 * METADATA_BYTES_PER_CHAR, dsc_text_type_metadata	, NULL		, true)
+	FIELD(fld_cfg_default	, nam_cfg_default	, dtype_varying	, 255 * METADATA_BYTES_PER_CHAR, dsc_text_type_metadata	, NULL		, true)
+	FIELD(fld_cfg_is_set	, nam_cfg_is_set	, dtype_boolean	, 1							, 0							, NULL		, false)
+
 	FIELD(fld_ts_id			, nam_ts_id			, dtype_short	, sizeof(SSHORT)			, 0							, NULL		, false)
 	FIELD(fld_ts_name		, nam_ts_name		, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true)
 

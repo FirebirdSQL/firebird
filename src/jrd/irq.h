@@ -51,6 +51,7 @@ enum irq_type_t
 	irq_v_security_o,		// verify security for role
 	irq_l_index,			// lookup index id
 	irq_l_functions,		// lookup function
+	irq_l_funct_blr,		// lookup function BLR and debug info
 	irq_l_args,				// lookup function arguments
 	irq_s_triggers,			// scan triggers
 	irq_s_triggers2,		// scan triggers
@@ -90,6 +91,7 @@ enum irq_type_t
 	irq_r_params,			// scan procedure parameters
 
 	irq_r_procedure,		// scan procedure
+	irq_r_proc_blr,			// look for procedure's BLR and debug info
 	irq_pkg_security,		// verify security for package
 	irq_p_security,			// verify security for procedure
 	irq_c_prc_dpd,			// create procedure dependencies for delete
@@ -182,6 +184,7 @@ enum irq_type_t
 	irq_find_idx_ts,		// find tablespace options for index
 	irq_find_ts,			// find tablespace options by name
 	irq_out_proc_param_dep,	// check output procedure parameter dependency
+	irq_l_pub_tab_state,	// lookup publication state for a table
 	irq_list_ts_files,		// list tablespace files
 	irq_find_ts_dfw,		// find tablespace options by name in dfw
 	irq_find_ts_dfw0,		// find tablespace options by name in dfw for cleanup

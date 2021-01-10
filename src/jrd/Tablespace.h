@@ -22,7 +22,7 @@
 #define JRD_TABLESPACE_H
 
 #include "../common/classes/alloc.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../jrd/pag.h"
 
 namespace Jrd
@@ -48,8 +48,8 @@ namespace Jrd
 		}
 
 		USHORT id;					// tablespace id = pagespace id
-		Firebird::MetaName name;	// tablespace name
-		Lock* existenceLock;	// existence lock, if any
+		MetaName name;	// tablespace name
+		Lock* existenceLock;		// existence lock, if any
 
 	private:
 		int useCount;

@@ -174,6 +174,13 @@ void CVT_double_to_date(double real, SLONG fixed[2])
 }
 
 
+static void error_swallow(const Arg::StatusVector& v)
+{
+	thread_db* tdbb = JRD_get_thread_data();
+	v.copyTo(tdbb->tdbb_status_vector);
+}
+
+
 UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, void* ptr)
 {
 /**************************************
@@ -277,6 +284,16 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 	if (over)
 	{
 		thread_db* tdbb = JRD_get_thread_data();
+
+		tdbb->tdbb_status_vector->init();
+		*scale = CVT_decompose(reinterpret_cast<const char*>(string), length, (Int128*) ptr, error_swallow);
+		if (*scale >= MIN_SCHAR && *scale <= MAX_SCHAR &&
+			(!(tdbb->tdbb_status_vector->getState() & IStatus::STATE_ERRORS)))
+		{
+			return dtype_int128;
+		}
+		tdbb->tdbb_status_vector->init();
+
 		*(Decimal128*) ptr = CVT_get_dec128(&desc, tdbb->getAttachment()->att_dec_status, ERR_post);
 		return dtype_dec128;
 	}
@@ -457,7 +474,7 @@ bool EngineCallbacks::transliterate(const dsc* from, dsc* to, CHARSET_ID& charse
 		(charset2 != ttype_binary) &&
 		(charset1 != ttype_dynamic) && (charset2 != ttype_dynamic))
 	{
-		INTL_convert_string(to, from, err);
+		INTL_convert_string(to, from, this);
 		return true;
 	}
 
@@ -479,45 +496,69 @@ void EngineCallbacks::validateData(CharSet* toCharSet, SLONG length, const UCHAR
 }
 
 
-ULONG EngineCallbacks::validateLength(CharSet* toCharSet, ULONG toLength, const UCHAR* start,
-	const USHORT to_size)
+ULONG EngineCallbacks::validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+	const USHORT size)
 {
-	if (toCharSet && toCharSet->isMultiByte())
-	{
-		const ULONG src_len = toCharSet->length(toLength, start, false);
-		const ULONG dest_len  = (ULONG) to_size / toCharSet->maxBytesPerChar();
+	fb_assert(charSet);
 
-		if (src_len > dest_len)
+	if (charSet && (charSet->isMultiByte() || length > size))
+	{
+		const ULONG srcCharLength = charSet->length(length, start, true);
+		const ULONG destCharLength = (ULONG) size / charSet->maxBytesPerChar();
+
+		if (srcCharLength > destCharLength)
 		{
-			err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
-				Arg::Gds(isc_trunc_limits) << Arg::Num(dest_len) << Arg::Num(src_len));
+			const ULONG spaceByteLength = charSet->getSpaceLength();
+			const ULONG trimmedByteLength = charSet->removeTrailingSpaces(length, start);
+			const ULONG trimmedCharLength = srcCharLength - (length - trimmedByteLength) / spaceByteLength;
+
+			if (trimmedCharLength <= destCharLength)
+				return trimmedByteLength + (destCharLength - trimmedCharLength) * spaceByteLength;
+			else
+			{
+				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+					Arg::Gds(isc_trunc_limits) << Arg::Num(destCharLength) << Arg::Num(srcCharLength));
+			}
 		}
 	}
 
-	return toLength;
+	return length;
 }
 
 
-ULONG TruncateCallbacks::validateLength(CharSet* toCharSet, ULONG toLength, const UCHAR* start,
-	const USHORT to_size)
+ULONG TruncateCallbacks::validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+	const USHORT size)
 {
-	if (toCharSet && toCharSet->isMultiByte())
+	fb_assert(charSet);
+
+	if (charSet && (charSet->isMultiByte() || length > size))
 	{
-		const ULONG dest_len = (ULONG) to_size / toCharSet->maxBytesPerChar();
+		const ULONG srcCharLength = charSet->length(length, start, true);
+		const ULONG destCharLength = (ULONG) size / charSet->maxBytesPerChar();
 
-		for (bool first = true; ; first = false)
+		if (srcCharLength > destCharLength)
 		{
-			const ULONG src_len = toCharSet->length(toLength, start, false);
-			if (src_len <= dest_len)
-				break;
+			const ULONG spaceByteLength = charSet->getSpaceLength();
+			const ULONG trimmedByteLength = charSet->removeTrailingSpaces(length, start);
+			const ULONG trimmedCharLength = srcCharLength - (length - trimmedByteLength) / spaceByteLength;
 
-			toLength -= (src_len - dest_len);		// truncate
-			if (first)
-				ERR_post_warning(Arg::Warning(isc_truncate_warn) << Arg::Warning(truncateReason));
+			if (trimmedCharLength <= destCharLength)
+				return trimmedByteLength + (destCharLength - trimmedCharLength) * spaceByteLength;
+			else if (charSet->isMultiByte())
+			{
+				HalfStaticArray<UCHAR, BUFFER_SMALL, USHORT> buffer(size);
+				length = charSet->substring(
+					length, start, buffer.getCapacity(), buffer.begin(),
+					0, destCharLength);
+			}
+			else
+				length = size;
+
+			ERR_post_warning(Arg::Warning(isc_truncate_warn) << Arg::Warning(truncateReason));
 		}
 	}
 
-	return toLength;
+	return length;
 }
 
 

@@ -29,6 +29,8 @@
 namespace
 {
 
+IMaster* master = NULL;
+
 class PluginModule : public IPluginModuleImpl<PluginModule, CheckStatusWrapper>
 {
 public:
@@ -66,7 +68,8 @@ class CryptKeyHolder : public IKeyHolderPluginImpl<CryptKeyHolder, CheckStatusWr
 {
 public:
 	explicit CryptKeyHolder(IPluginConfig* cnf) throw()
-		: callbackInterface(this), named(NULL), config(cnf), key(0), owner(NULL)
+		: callbackInterface(this), named(NULL), tempStatus(master->getStatus()),
+		  config(cnf), key(0), owner(NULL)
 	{
 		config->addRef();
 	}
@@ -74,6 +77,7 @@ public:
 	~CryptKeyHolder()
 	{
 		config->release();
+		tempStatus.dispose();
 	}
 
 	// IKeyHolderPlugin implementation
@@ -108,6 +112,9 @@ public:
 
 	ISC_UCHAR getKey()
 	{
+		if (!key)
+			keyCallback(&tempStatus, NULL);
+
 		return key;
 	}
 
@@ -177,6 +184,7 @@ private:
 
 	CallbackInterface callbackInterface;
 	NamedCallback *named;
+	CheckStatusWrapper tempStatus;
 
 	IPluginConfig* config;
 	ISC_UCHAR key;
@@ -212,9 +220,18 @@ int CryptKeyHolder::keyCallback(CheckStatusWrapper* status, ICryptKeyCallback* c
 	{
 		FB_BOOLEAN b = confEntry->getBoolValue();
 		confEntry->release();
+
 		if (b)
 		{
-			key = 0x5a;
+			confEntry = getEntry(status, "Key");
+			if (confEntry)
+			{
+				key = confEntry->getIntValue();
+				confEntry->release();
+			}
+			else
+				key = 0x5a;
+
 			return 1;
 		}
 	}
@@ -281,12 +298,13 @@ Factory factory;
 
 } // anonymous namespace
 
-extern "C" void FB_DLL_EXPORT FB_PLUGIN_ENTRY_POINT(IMaster* master)
+extern "C" void FB_DLL_EXPORT FB_PLUGIN_ENTRY_POINT(IMaster* m)
 {
+	master = m;
 	IPluginManager* pluginManager = master->getPluginManager();
 
 	module.registerMe(pluginManager);
-	pluginManager->registerPluginFactory(IPluginManager::TYPE_KEY_HOLDER, "CryptKeyHolder_example",
+	pluginManager->registerPluginFactory(IPluginManager::TYPE_KEY_HOLDER, "fbSampleKeyHolder",
 		&factory);
 }
 

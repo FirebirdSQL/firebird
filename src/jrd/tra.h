@@ -110,7 +110,7 @@ typedef Firebird::BePlusTree<bid, bid, MemoryPool> FetchedBlobIdTree;
 
 struct CallerName
 {
-	CallerName(int aType, const Firebird::MetaName& aName, const Firebird::MetaName& aUserName)
+	CallerName(int aType, const MetaName& aName, const Firebird::MetaString& aUserName)
 		: type(aType),
 		  name(aName),
 		  userName(aUserName)
@@ -140,8 +140,8 @@ struct CallerName
 	}
 
 	int type;
-	Firebird::MetaName name;
-	Firebird::MetaName userName;
+	MetaName name;
+	Firebird::MetaString userName;
 };
 
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, ULONG> > > ReplBlobMap;
@@ -185,7 +185,6 @@ public:
 		tra_snapshot_handle(0),
 		tra_snapshot_number(0),
 		tra_sorts(*p),
-		tra_public_interface(NULL),
 		tra_gen_ids(NULL),
 		tra_replicator(NULL),
 		tra_interface(NULL),
@@ -300,7 +299,6 @@ public:
 
 	EDS::Transaction *tra_ext_common;
 	//Transaction *tra_ext_two_phase;
-	Firebird::ITransaction* tra_public_interface;
 	GenIdCache* tra_gen_ids;
 	Firebird::IReplicatedTransaction* tra_replicator;
 
@@ -389,7 +387,7 @@ public:
 	Savepoint* startSavepoint(bool root = false);
 	void rollbackSavepoint(thread_db* tdbb, bool preserveLocks = false);
 	void rollbackToSavepoint(thread_db* tdbb, SavNumber number);
-	void rollforwardSavepoint(thread_db* tdbb);
+	void rollforwardSavepoint(thread_db* tdbb, bool assertChanging = true);
 	DbCreatorsList* getDbCreatorsList();
 	void checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool punt);
 
@@ -407,26 +405,27 @@ const TraNumber TRA_system_transaction = 0;
 
 // Flag definitions for tra_flags.
 
-const ULONG TRA_system				= 0x1L;		// system transaction
-const ULONG TRA_prepared			= 0x2L;		// transaction is in limbo
-const ULONG TRA_reconnected			= 0x4L;		// reconnect in progress
-const ULONG TRA_degree3				= 0x8L;		// serializeable transaction
-const ULONG TRA_write				= 0x10L;	// transaction has written
-const ULONG TRA_readonly			= 0x20L;	// transaction is readonly
-const ULONG TRA_prepare2			= 0x40L;	// transaction has updated RDB$TRANSACTIONS
-const ULONG TRA_ignore_limbo		= 0x80L;	// ignore transactions in limbo
-const ULONG TRA_invalidated 		= 0x100L;	// transaction invalidated by failed write
-const ULONG TRA_deferred_meta 		= 0x200L;	// deferred meta work posted
-const ULONG TRA_read_committed		= 0x400L;	// can see latest committed records
-const ULONG TRA_autocommit			= 0x800L;	// autocommits all updates
-const ULONG TRA_perform_autocommit	= 0x1000L;	// indicates autocommit is necessary
-const ULONG TRA_rec_version			= 0x2000L;	// don't wait for uncommitted versions
-const ULONG TRA_restart_requests	= 0x4000L;	// restart all requests in attachment
-const ULONG TRA_no_auto_undo		= 0x8000L;	// don't start a savepoint in TRA_start
-const ULONG TRA_precommitted		= 0x10000L;	// transaction committed at startup
-const ULONG TRA_own_interface		= 0x20000L;	// tra_interface was created for internal needs
-const ULONG TRA_read_consistency	= 0x40000L; // ensure read consistency in this transaction
-const ULONG TRA_ex_restart			= 0x80000L; // Exception was raised to restart request 
+const ULONG TRA_system				= 0x1L;			// system transaction
+const ULONG TRA_prepared			= 0x2L;			// transaction is in limbo
+const ULONG TRA_reconnected			= 0x4L;			// reconnect in progress
+const ULONG TRA_degree3				= 0x8L;			// serializeable transaction
+const ULONG TRA_write				= 0x10L;		// transaction has written
+const ULONG TRA_readonly			= 0x20L;		// transaction is readonly
+const ULONG TRA_prepare2			= 0x40L;		// transaction has updated RDB$TRANSACTIONS
+const ULONG TRA_ignore_limbo		= 0x80L;		// ignore transactions in limbo
+const ULONG TRA_invalidated 		= 0x100L;		// transaction invalidated by failed write
+const ULONG TRA_deferred_meta 		= 0x200L;		// deferred meta work posted
+const ULONG TRA_read_committed		= 0x400L;		// can see latest committed records
+const ULONG TRA_autocommit			= 0x800L;		// autocommits all updates
+const ULONG TRA_perform_autocommit	= 0x1000L;		// indicates autocommit is necessary
+const ULONG TRA_rec_version			= 0x2000L;		// don't wait for uncommitted versions
+const ULONG TRA_restart_requests	= 0x4000L;		// restart all requests in attachment
+const ULONG TRA_no_auto_undo		= 0x8000L;		// don't start a savepoint in TRA_start
+const ULONG TRA_precommitted		= 0x10000L;		// transaction committed at startup
+const ULONG TRA_own_interface		= 0x20000L;		// tra_interface was created for internal needs
+const ULONG TRA_read_consistency	= 0x40000L; 	// ensure read consistency in this transaction
+const ULONG TRA_ex_restart			= 0x80000L; 	// Exception was raised to restart request
+const ULONG TRA_replicating			= 0x100000L;	// transaction is allowed to be replicated
 
 // flags derived from TPB, see also transaction_options() at tra.cpp
 const ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |
@@ -512,6 +511,7 @@ enum dfw_t {
 	dfw_check_not_null,
 	dfw_store_view_context_type,
 	dfw_set_generator,
+	dfw_change_repl_state,
 	dfw_create_tablespace,
 	dfw_check_tablespace_dependencies,
 	dfw_drop_tablespace_dependencies,

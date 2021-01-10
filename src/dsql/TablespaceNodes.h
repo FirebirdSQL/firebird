@@ -32,7 +32,7 @@ namespace Jrd {
 class CreateAlterTablespaceNode : public DdlNode
 {
 public:
-	CreateAlterTablespaceNode(MemoryPool& pool, const Firebird::MetaName& aName)
+	CreateAlterTablespaceNode(MemoryPool& pool, const MetaName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  fileName(pool),
@@ -63,7 +63,7 @@ private:
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
-	Firebird::MetaName name;
+	MetaName name;
 	Firebird::string fileName;
 	bool create;
 	bool alter;
@@ -75,7 +75,7 @@ public:
 class DropTablespaceNode : public DdlNode
 {
 public:
-	DropTablespaceNode(MemoryPool& pool, const Firebird::MetaName& aName)
+	DropTablespaceNode(MemoryPool& pool, const MetaName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  silent(false),
@@ -97,7 +97,7 @@ protected:
 	void handleDependencies(thread_db* tdbb, jrd_tra* transaction, bool drop);
 
 public:
-	Firebird::MetaName name;
+	MetaName name;
 	bool silent;
 	bool dropDependencies;
 };

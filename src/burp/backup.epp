@@ -137,6 +137,8 @@ void write_db_creators();
 void write_packages();
 void write_procedures();
 void write_procedure_prms(const GDS_NAME, const GDS_NAME);
+void write_publications();
+void write_pub_tables();
 void write_ref_constraints();
 void write_rel_constraints();
 void write_relations();
@@ -344,7 +346,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)	// TODO: fix version
 	{
 		// Write tablespaces
-		BURP_verbose(396);	// msg 396 writing tablespaces
+		BURP_verbose(403);	// msg 403 writing tablespaces
 		write_tablespaces();
 	}
 	// Now go back and write all data
@@ -414,6 +416,15 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 	{
 		// Write database creators
 		write_db_creators();
+	}
+
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
+	{
+		// Write publications
+		BURP_verbose(403);		// msg 403 writing publications
+
+		write_publications();
+		write_pub_tables();
 	}
 
 	// Finish up
@@ -3693,6 +3704,98 @@ void write_procedure_prms(const GDS_NAME package, const GDS_NAME procptr)
 }
 
 
+void write_publications()
+{
+/**************************************
+ *
+ *	w r i t e _ p u b l i c a t i o n s
+ *
+ **************************************
+ *
+ * Functional description
+ * 	write a record in the burp file for
+ *	each publication.
+ *
+ **************************************/
+	TEXT temp[GDS_NAME_LEN];
+	Firebird::IRequest* req_handle = nullptr;
+
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	FOR (REQUEST_HANDLE req_handle)
+		X IN RDB$PUBLICATIONS
+		WITH X.RDB$SYSTEM_FLAG NE 1
+	{
+		put(tdgbl, rec_publication);
+
+		const SSHORT l = PUT_TEXT(att_pub_name, X.RDB$PUBLICATION_NAME);
+		MISC_terminate(X.RDB$PUBLICATION_NAME, temp, l, sizeof(temp));
+
+		BURP_verbose(397, temp);
+		// msg 397 writing publication %s
+
+		if (!X.RDB$OWNER_NAME.NULL)
+			PUT_TEXT(att_pub_owner_name, X.RDB$OWNER_NAME);
+
+		if (!X.RDB$ACTIVE_FLAG.NULL)
+			put_int32(att_pub_active_flag, X.RDB$ACTIVE_FLAG);
+
+		if (!X.RDB$AUTO_ENABLE.NULL)
+			put_int32(att_pub_auto_enable, X.RDB$AUTO_ENABLE);
+
+		put(tdgbl, att_end);
+	}
+	END_FOR
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	MISC_release_request_silent(req_handle);
+}
+
+
+void write_pub_tables()
+{
+/**************************************
+ *
+ *	w r i t e _ p u b _ t a b l e s
+ *
+ **************************************
+ *
+ * Functional description
+ * 	write a record in the burp file for
+ *	each publication table.
+ *
+ **************************************/
+	TEXT temp[GDS_NAME_LEN];
+	Firebird::IRequest* req_handle = nullptr;
+
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	FOR (REQUEST_HANDLE req_handle)
+		X IN RDB$PUBLICATION_TABLES
+	{
+		put(tdgbl, rec_pub_table);
+
+		PUT_TEXT(att_ptab_pub_name, X.RDB$PUBLICATION_NAME);
+
+		const SSHORT l = PUT_TEXT(att_ptab_table_name, X.RDB$TABLE_NAME);
+		MISC_terminate(X.RDB$TABLE_NAME, temp, l, sizeof(temp));
+
+		BURP_verbose(398, temp);
+		// msg 398 writing publication for table %s
+
+		put(tdgbl, att_end);
+	}
+	END_FOR
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	MISC_release_request_silent(req_handle);
+}
+
+
 void write_ref_constraints()
 {
 /**************************************
@@ -4160,7 +4263,7 @@ void write_tablespaces()
 		const SSHORT l = PUT_TEXT(att_ts_name, X.RDB$TABLESPACE_NAME);
 		MISC_terminate(X.RDB$TABLESPACE_NAME, temp, l, sizeof(temp));
 
-		BURP_verbose(397, temp);	// msg 397 writing tablespace @1
+		BURP_verbose(404, temp);	// msg 404 writing tablespace @1
 
 		if (!X.RDB$SECURITY_CLASS.NULL)
 			PUT_TEXT(att_ts_security_class, X.RDB$SECURITY_CLASS);
@@ -4395,7 +4498,7 @@ void write_trigger_messages()
 		const SSHORT l = PUT_TEXT (att_trigmsg_name, X.RDB$TRIGGER_NAME);
 		MISC_terminate (X.RDB$TRIGGER_NAME, temp, l, sizeof(temp));
 		BURP_verbose (157, temp);
-		// msg 157 writing trigger message for *s
+		// msg 157 writing trigger message for %s
 		put_int32 (att_trigmsg_number, X.RDB$MESSAGE_NUMBER);
 		PUT_MESSAGE (att_trigmsg_text, att_end, X.RDB$MESSAGE);
 		put(tdgbl, att_end);

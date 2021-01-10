@@ -104,7 +104,7 @@ THREAD_ENTRY_DECLARE threadStart(THREAD_ENTRY_PARAM arg)
 
 #ifdef USE_POSIX_THREADS
 #define START_THREAD
-ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
+Thread Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
 {
 /**************************************
  *
@@ -118,16 +118,17 @@ ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, H
  *
  **************************************/
 	pthread_t thread;
+	pthread_t* p_thread = p_handle ? p_handle : &thread;
 	pthread_attr_t pattr;
 	int state;
 
 #if defined (LINUX) || defined (FREEBSD)
-	if ((state = pthread_create(&thread, NULL, THREAD_ENTRYPOINT, THREAD_ARG)))
+	if ((state = pthread_create(p_thread, NULL, THREAD_ENTRYPOINT, THREAD_ARG)))
 		Firebird::system_call_failed::raise("pthread_create", state);
 
 	if (!p_handle)
 	{
-		if ((state = pthread_detach(thread)))
+		if ((state = pthread_detach(*p_thread)))
 			Firebird::system_call_failed::raise("pthread_detach", state);
 	}
 #else
@@ -167,7 +168,7 @@ ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, H
 		if (state)
 			Firebird::system_call_failed::raise("pthread_attr_setdetachstate", state);
 	}
-	state = pthread_create(&thread, &pattr, THREAD_ENTRYPOINT, THREAD_ARG);
+	state = pthread_create(p_thread, &pattr, THREAD_ENTRYPOINT, THREAD_ARG);
 	int state2 = pthread_attr_destroy(&pattr);
 	if (state)
 		Firebird::system_call_failed::raise("pthread_create", state);
@@ -184,10 +185,9 @@ ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, H
 		if (state)
 			 Firebird::system_call_failed::raise("pthread_setcanceltype", state);
 #endif
-		*p_handle = thread;
 	}
 
-	return getId();
+	return Thread(*p_thread);
 }
 
 void Thread::waitForCompletion(Handle& thread)
@@ -209,16 +209,16 @@ void Thread::kill(Handle& thread)
 
 ThreadId Thread::getId()
 {
-#if defined(LINUX) && !defined(ANDROID) && !defined(LSB_BUILD)
+#ifdef USE_LWP_AS_THREAD_ID
 	return syscall(SYS_gettid);
 #else
 	return pthread_self();
 #endif
 }
 
-bool Thread::isCurrent(const ThreadId threadId)
+bool Thread::isCurrent()
 {
-	return getId() == threadId;
+	return pthread_equal(internalId, pthread_self());
 }
 
 void Thread::sleep(unsigned milliseconds)
@@ -265,7 +265,7 @@ void Thread::yield()
 
 #ifdef WIN_NT
 #define START_THREAD
-ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
+Thread Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
 {
 /**************************************
  *
@@ -322,18 +322,18 @@ ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, H
 
 	SetThreadPriority(handle, priority);
 
-	ResumeThread(handle);
-
 	if (p_handle)
 	{
 		*p_handle = handle;
+		ResumeThread(handle);
 	}
 	else
 	{
+		ResumeThread(handle);
 		CloseHandle(handle);
 	}
 
-	return thread_id;
+	return Thread(thread_id);
 }
 
 void Thread::waitForCompletion(Handle& handle)
@@ -360,9 +360,9 @@ ThreadId Thread::getId()
 	return GetCurrentThreadId();
 }
 
-bool Thread::isCurrent(const ThreadId threadId)
+bool Thread::isCurrent()
 {
-	return GetCurrentThreadId() == threadId;
+	return GetCurrentThreadId() == internalId;
 }
 
 void Thread::sleep(unsigned milliseconds)

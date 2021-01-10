@@ -24,7 +24,7 @@
 #include "../common/classes/alloc.h"
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
 #include "../common/StatusArg.h"
 
 namespace Firebird {
@@ -108,12 +108,8 @@ public:
 
 	void appendString(UCHAR verb, const char* string, USHORT len);
 
-	void appendString(UCHAR verb, const Firebird::MetaName& name)
-	{
-		appendString(verb, name.c_str(), static_cast<USHORT>(name.length()));
-	}
-
-	void appendString(UCHAR verb, const Firebird::string& name)
+	template <class S>
+	void appendString(UCHAR verb, const S& name)
 	{
 		appendString(verb, name.c_str(), static_cast<USHORT>(name.length()));
 	}

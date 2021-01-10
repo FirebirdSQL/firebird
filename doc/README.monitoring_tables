@@ -83,6 +83,10 @@ Monitoring tables
       - MON$CRYPT_PAGE (number of page being encrypted / decrypted)
       - MON$OWNER (database owner name)
       - MON$SEC_DATABASE (security database)
+      - MON$GUID (database GUID)
+      - MON$FILE_ID (unique filesystem-level ID)
+      - MON$NEXT_ATTACHMENT (next attachment number)
+      - MON$NEXT_STATEMENT (next statement number)
 
     MON$ATTACHMENTS (connected attachments)
       - MON$ATTACHMENT_ID (attachment ID)

@@ -43,7 +43,7 @@ BitmapTableScan::BitmapTableScan(CompilerScratch* csb, const string& alias,
 {
 	fb_assert(m_inversion);
 
-	m_impure = CMP_impure(csb, sizeof(Impure));
+	m_impure = csb->allocImpure<Impure>();
 }
 
 void BitmapTableScan::open(thread_db* tdbb) const
@@ -82,8 +82,7 @@ void BitmapTableScan::close(thread_db* tdbb) const
 
 bool BitmapTableScan::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_req* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];

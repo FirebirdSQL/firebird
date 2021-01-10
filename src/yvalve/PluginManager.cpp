@@ -30,7 +30,7 @@
 #include "../yvalve/why_proto.h"
 
 #include "../common/os/path_utils.h"
-#include "../jrd/err_proto.h"
+#include "../common/StatusArg.h"
 #include "../common/isc_proto.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/init.h"
@@ -141,17 +141,6 @@ namespace
 
 		IConfig* getSubConfig(CheckStatusWrapper* status);
 
-		int release()
-		{
-			if (--refCounter == 0)
-			{
-				delete this;
-				return 0;
-			}
-
-			return 1;
-		}
-
 	private:
 		RefPtr<IReferenceCounted> cf;
 		const ConfigFile::Parameter* par;
@@ -218,17 +207,6 @@ namespace
 				ex.stuffException(status);
 			}
 			return NULL;
-		}
-
-		int release()
-		{
-			if (--refCounter == 0)
-			{
-				delete this;
-				return 0;
-			}
-
-			return 1;
 		}
 
 	private:
@@ -522,8 +500,6 @@ namespace
 		void handler()
 		{ }
 
-		int release();
-
 	private:
 		~ConfiguredPlugin();
 
@@ -588,17 +564,6 @@ namespace
 		void setReleaseDelay(CheckStatusWrapper*, ISC_UINT64 microSeconds)
 		{
 			configuredPlugin->setReleaseDelay(microSeconds);
-		}
-
-		int release()
-		{
-			if (--refCounter == 0)
-			{
-				delete this;
-				return 0;
-			}
-
-			return 1;
 		}
 
 	private:
@@ -726,23 +691,6 @@ namespace
 		*prev = this;
 	}
 
-	int ConfiguredPlugin::release()
-	{
-		int x = --refCounter;
-
-#ifdef DEBUG_PLUGINS
-		fprintf(stderr, "ConfiguredPlugin::release %s %d\n", plugName.c_str(), x);
-#endif
-
-		if (x == 0)
-		{
-			delete this;
-			return 0;
-		}
-
-		return 1;
-	}
-
 	struct PluginLoadInfo
 	{
 		PathName curModule, regName, plugConfigFile;
@@ -830,17 +778,6 @@ namespace
 			Firebird::CheckStatusWrapper statusWrapper(&s);
 			next(&statusWrapper);
 			check(&statusWrapper);
-		}
-
-		int release()
-		{
-			if (--refCounter == 0)
-			{
-				delete this;
-				return 0;
-			}
-
-			return 1;
 		}
 
 	private:
@@ -1291,7 +1228,7 @@ public:
 		try
 		{
 			PathName dummy;
-			Firebird::RefPtr<const Config> config;
+			Firebird::RefPtr<const Firebird::Config> config;
 			expandDatabaseName(dbName, dummy, &config);
 
 			IFirebirdConf* firebirdConf = FB_NEW FirebirdConf(config);

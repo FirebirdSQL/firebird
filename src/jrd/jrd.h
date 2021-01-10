@@ -41,7 +41,7 @@
 
 #include "../common/classes/fb_atomic.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/NestConst.h"
 #include "../common/classes/array.h"
 #include "../common/classes/objects_array.h"
@@ -60,12 +60,6 @@
 #include "../jrd/Attachment.h"
 #include "firebird/Interface.h"
 
-#ifdef DEV_BUILD
-//#define DEBUG                   if (debug) DBG_supervisor(debug);
-#else // PROD
-//#define DEBUG
-#endif
-#define DEBUG
 
 #define BUGCHECK(number)		ERR_bugcheck(number, __FILE__, __LINE__)
 #define SOFT_BUGCHECK(number)	ERR_soft_bugcheck(number, __FILE__, __LINE__)
@@ -106,8 +100,6 @@ namespace EDS {
 
 namespace Jrd {
 
-const int QUANTUM				= 100;	// Default quantum
-const int SWEEP_QUANTUM			= 10;	// Make sweeps less disruptive
 const unsigned MAX_CALLBACKS	= 50;
 
 // fwd. decl.
@@ -145,18 +137,20 @@ public:
 	Firebird::HalfStaticArray<UCHAR, 128> blr;			// BLR code
 	Firebird::HalfStaticArray<UCHAR, 128> debugInfo;	// Debug info
 	JrdStatement* statement;							// Compiled statement
-	bool		compile_in_progress;
-	bool		sys_trigger;
+	bool		releaseInProgress;
+	bool		sysTrigger;
 	FB_UINT64	type;						// Trigger type
 	USHORT		flags;						// Flags as they are in RDB$TRIGGERS table
 	jrd_rel*	relation;					// Trigger parent relation
-	Firebird::MetaName	name;				// Trigger name
-	Firebird::MetaName	engine;				// External engine name
+	MetaName	name;				// Trigger name
+	MetaName	engine;				// External engine name
 	Firebird::string	entryPoint;			// External trigger entrypoint
 	Firebird::string	extBody;			// External trigger body
 	ExtEngineManager::Trigger* extTrigger;	// External trigger
 	Nullable<bool> ssDefiner;
-	Firebird::MetaName	owner;				// Owner for SQL SECURITY
+	MetaName	owner;				// Owner for SQL SECURITY
+
+	bool isActive() const;
 
 	void compile(thread_db*);				// Ensure that trigger is compiled
 	void release(thread_db*);				// Try to free trigger request
@@ -164,6 +158,7 @@ public:
 	explicit Trigger(MemoryPool& p)
 		: blr(p),
 		  debugInfo(p),
+		  releaseInProgress(false),
 		  name(p),
 		  engine(p),
 		  entryPoint(p),
@@ -193,13 +188,17 @@ public:
 		  useCount(0)
 	{ }
 
-	void addRef() const
+	void addRef()
 	{
 		++useCount;
 	}
 
-	void release() const;
-	void release(thread_db* tdbb) const;
+	bool hasActive() const;
+
+	void decompile(thread_db* tdbb);
+
+	void release();
+	void release(thread_db* tdbb);
 
 	~TrigVector()
 	{
@@ -207,7 +206,7 @@ public:
 	}
 
 private:
-	mutable Firebird::AtomicCounter useCount;
+	Firebird::AtomicCounter useCount;
 };
 
 
@@ -271,6 +270,9 @@ public:
 		delete prc_external;
 		prc_external = NULL;
 	}
+
+protected:
+	virtual bool reload(thread_db* tdbb);	// impl is in met.epp
 };
 
 
@@ -284,8 +286,8 @@ public:
 	NestConst<ValueExprNode>	prm_default_value;
 	bool		prm_nullable;
 	prm_mech_t	prm_mechanism;
-	Firebird::MetaName prm_name;			// asciiz name
-	Firebird::MetaName prm_field_source;
+	MetaName prm_name;			// asciiz name
+	MetaName prm_field_source;
 	FUN_T		prm_fun_mechanism;
 
 public:
@@ -380,7 +382,6 @@ public:
 
 	// ITimer implementation
 	void handler();
-	int release();
 
 	bool expired() const
 	{
@@ -444,8 +445,8 @@ public:
 	// milliseconds left before timer expiration
 	unsigned int timeToExpire() const;
 
-	// evaluate expire timestamp using start timestamp
-	bool getExpireTimestamp(const ISC_TIMESTAMP_TZ start, ISC_TIMESTAMP_TZ& exp) const;
+	// clock value when timer will expire
+	bool getExpireClock(SINT64& clock) const;
 
 	// set timeout value in milliseconds and secondary error code
 	void setup(unsigned int value, ISC_STATUS error)
@@ -487,11 +488,14 @@ const ULONG TDBB_wait_cancel_disable	= 512;		// don't cancel current waiting ope
 const ULONG TDBB_cache_unwound			= 1024;		// page cache was unwound
 const ULONG TDBB_reset_stack			= 2048;		// stack should be reset after stack overflow exception
 const ULONG TDBB_dfw_cleanup			= 4096;		// DFW cleanup phase is active
-const ULONG TDBB_repl_sql				= 8192;	// SQL statement is being replicated
+const ULONG TDBB_repl_in_progress		= 8192;		// Prevent recursion in replication
 const ULONG TDBB_replicator				= 16384;	// Replicator
 
 class thread_db : public Firebird::ThreadData
 {
+	const static int QUANTUM		= 100;	// Default quantum
+	const static int SWEEP_QUANTUM	= 10;	// Make sweeps less disruptive
+
 private:
 	MemoryPool*	defaultPool;
 	void setDefaultPool(MemoryPool* p)
@@ -601,6 +605,12 @@ public:
 
 	SSHORT getCharSet() const;
 
+	void markAsSweeper()
+	{
+		tdbb_quantum = SWEEP_QUANTUM;
+		tdbb_flags |= TDBB_sweeper;
+	}
+
 	void bumpStats(const RuntimeStatistics::StatType index, SINT64 delta = 1)
 	{
 		reqStat->bumpValue(index, delta);
@@ -637,9 +647,9 @@ public:
 			attStat->bumpRelValue(index, relation_id, delta);
 	}
 
-	ISC_STATUS checkCancelState(ISC_STATUS* secondary = NULL);
-	bool checkCancelState(bool punt);
-	bool reschedule(SLONG quantum, bool punt);
+	ISC_STATUS getCancelState(ISC_STATUS* secondary = NULL);
+	void checkCancelState();
+	void reschedule();
 	const TimeoutTimer* getTimeoutTimer() const
 	{
 		return tdbb_reqTimer;
@@ -790,6 +800,25 @@ private:
 };
 
 
+// Helper class to temporarily activate sweeper context
+class ThreadSweepGuard
+{
+public:
+	explicit ThreadSweepGuard(thread_db* tdbb)
+		: m_tdbb(tdbb)
+	{
+		m_tdbb->markAsSweeper();
+	}
+
+	~ThreadSweepGuard()
+	{
+		m_tdbb->tdbb_flags &= ~TDBB_sweeper;
+	}
+
+private:
+	thread_db* const m_tdbb;
+};
+
 // CVC: This class was designed to restore the thread's default status vector automatically.
 // In several places, tdbb_status_vector is replaced by a local temporary.
 class ThreadStatusGuard
@@ -864,9 +893,15 @@ typedef Firebird::HalfStaticArray<UCHAR, 256> MoveBuffer;
 
 } //namespace Jrd
 
-inline bool JRD_reschedule(Jrd::thread_db* tdbb, SLONG quantum, bool punt)
+inline bool JRD_reschedule(Jrd::thread_db* tdbb, bool force = false)
 {
-	return tdbb->reschedule(quantum, punt);
+	if (force || --tdbb->tdbb_quantum < 0)
+	{
+		tdbb->reschedule();
+		return true;
+	}
+
+	return false;
 }
 
 // Threading macros
@@ -957,8 +992,6 @@ inline void SET_DBB(Jrd::Database*& dbb)
 
 
 // global variables for engine
-
-extern int debug;
 
 namespace Jrd {
 	typedef Firebird::SubsystemContextPoolHolder <Jrd::thread_db, MemoryPool> ContextPoolHolder;
@@ -1063,7 +1096,7 @@ namespace Jrd {
 			// If we were signalled to cancel/shutdown, react as soon as possible.
 			// We cannot throw immediately, but we can reschedule ourselves.
 
-			if (m_tdbb && m_tdbb->tdbb_quantum > 0 && m_tdbb->checkCancelState())
+			if (m_tdbb && m_tdbb->tdbb_quantum > 0 && m_tdbb->getCancelState() != FB_SUCCESS)
 				m_tdbb->tdbb_quantum = 0;
 		}
 

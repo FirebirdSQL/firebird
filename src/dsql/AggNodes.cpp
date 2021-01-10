@@ -48,7 +48,7 @@ using namespace Jrd;
 namespace Jrd {
 
 
-static RegisterNode<AggNode> regAggNode(blr_agg_function);
+static RegisterNode<AggNode> regAggNode({blr_agg_function});
 
 AggNode::Factory* AggNode::factories = NULL;
 
@@ -351,7 +351,7 @@ AggNode* AggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
-	impureOffset = CMP_impure(csb, sizeof(impure_value_ex));
+	impureOffset = csb->allocImpure<impure_value_ex>();
 
 	return this;
 }
@@ -595,7 +595,6 @@ void AvgAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 		case dtype_long:
 			desc->dsc_dtype = dtype_int64;
 			desc->dsc_length = sizeof(SINT64);
-			desc->dsc_sub_type = 0;
 			desc->dsc_flags = 0;
 			nodScale = desc->dsc_scale;
 			break;
@@ -604,9 +603,9 @@ void AvgAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 		case dtype_int128:
 			desc->dsc_dtype = dtype_int128;
 			desc->dsc_length = sizeof(Int128);
-			desc->dsc_sub_type = 0;
 			desc->dsc_flags = 0;
 			nodScale = desc->dsc_scale;
+			nodFlags |= FLAG_INT128;
 			break;
 
 		case dtype_unknown:
@@ -653,7 +652,7 @@ AggNode* AvgAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 		nodFlags |= FLAG_DOUBLE;
 
 	// We need a second descriptor in the impure area for AVG.
-	tempImpure = CMP_impure(csb, sizeof(impure_value_ex));
+	tempImpure = csb->allocImpure<impure_value_ex>();
 
 	return this;
 }
@@ -898,7 +897,7 @@ AggNode* ListAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 //--------------------
 
 
-static RegisterNode<CountAggNode> regCountAggNodeLegacy(blr_agg_count);
+static RegisterNode<CountAggNode> regCountAggNodeLegacy({blr_agg_count});
 
 static AggNode::Register<CountAggNode> countAggInfo("COUNT", blr_agg_count2, blr_agg_count_distinct);
 
@@ -1095,7 +1094,6 @@ void SumAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 				desc->dsc_dtype = dtype_long;
 				desc->dsc_length = sizeof(SLONG);
 				nodScale = desc->dsc_scale;
-				desc->dsc_sub_type = 0;
 				desc->dsc_flags = 0;
 				return;
 
@@ -1151,9 +1149,9 @@ void SumAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 			case dtype_int128:
 				desc->dsc_dtype = dtype_int128;
 				desc->dsc_length = sizeof(Int128);
-				desc->dsc_sub_type = 0;
 				desc->dsc_flags = 0;
 				nodScale = desc->dsc_scale;
+				nodFlags |= FLAG_INT128;
 				return;
 
 			case dtype_unknown:
@@ -1382,7 +1380,7 @@ void StdDevAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	if (desc->isNull())
 		return;
 
-	if (DTYPE_IS_DECFLOAT(desc->dsc_dtype))
+	if (desc->isDecOrInt128())
 		desc->makeDecimal128();
 	else
 		desc->makeDouble();
@@ -1392,7 +1390,7 @@ void StdDevAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 {
 	arg->getDesc(tdbb, csb, desc);
 
-	if (DTYPE_IS_DECFLOAT(desc->dsc_dtype))
+	if (desc->isDecOrInt128())
 	{
 		desc->makeDecimal128();
 		nodFlags |= FLAG_DECFLOAT;
@@ -1416,7 +1414,7 @@ AggNode* StdDevAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	AggNode::pass2(tdbb, csb);
 
-	impure2Offset = CMP_impure(csb, sizeof(StdDevImpure));
+	impure2Offset = csb->allocImpure<StdDevImpure>();
 
 	return this;
 }
@@ -1590,7 +1588,7 @@ void CorrAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	if (desc->isNull())
 		return;
 
-	if (DTYPE_IS_DECFLOAT(desc->dsc_dtype))
+	if (desc->isDecOrInt128())
 		desc->makeDecimal128();
 	else
 		desc->makeDouble();
@@ -1600,7 +1598,7 @@ void CorrAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 {
 	arg->getDesc(tdbb, csb, desc);
 
-	if (DTYPE_IS_DECFLOAT(desc->dsc_dtype))
+	if (desc->isDecOrInt128())
 	{
 		desc->makeDecimal128();
 		nodFlags |= FLAG_DECFLOAT;
@@ -1625,7 +1623,7 @@ AggNode* CorrAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	AggNode::pass2(tdbb, csb);
 
-	impure2Offset = CMP_impure(csb, sizeof(CorrImpure));
+	impure2Offset = csb->allocImpure<CorrImpure>();
 
 	return this;
 }
@@ -1866,7 +1864,7 @@ void RegrAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	if (desc->isNull())
 		return;
 
-	if (DTYPE_IS_DECFLOAT(desc->dsc_dtype))
+	if (desc->isDecOrInt128())
 		desc->makeDecimal128();
 	else
 		desc->makeDouble();
@@ -1876,7 +1874,7 @@ void RegrAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 {
 	arg->getDesc(tdbb, csb, desc);
 
-	if (DTYPE_IS_DECFLOAT(desc->dsc_dtype))
+	if (desc->isDecOrInt128())
 	{
 		desc->makeDecimal128();
 		nodFlags |= FLAG_DECFLOAT;
@@ -1901,7 +1899,7 @@ AggNode* RegrAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	AggNode::pass2(tdbb, csb);
 
-	impure2Offset = CMP_impure(csb, sizeof(RegrImpure));
+	impure2Offset = csb->allocImpure<RegrImpure>();
 
 	return this;
 }

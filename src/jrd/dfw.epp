@@ -487,19 +487,21 @@ static bool grant_privileges(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool db_crypt(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool set_linger(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool clear_cache(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+
+static bool change_repl_state(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+
 static bool create_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool check_tablespace_dependencies(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool drop_tablespace_dependencies(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool move_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool move_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
-
 // ----------------------------------------------------------------
 
 static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 	jrd_tra* transaction);
 static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
-	const Firebird::MetaName& fieldName);
+	const MetaName& fieldName);
 static void check_dependencies(thread_db*, const TEXT*, const TEXT*, const TEXT*, int, jrd_tra*);
 static void check_filename(const Firebird::string&, bool);
 static void cleanup_index_creation(thread_db*, DeferredWork*, jrd_tra*);
@@ -507,10 +509,9 @@ static bool formatsAreEqual(const Format*, const Format*);
 static bool	find_depend_in_dfw(thread_db*, TEXT*, USHORT, USHORT, jrd_tra*);
 static void get_array_desc(thread_db*, const TEXT*, Ods::InternalArrayDesc*);
 static void get_trigger_dependencies(DeferredWork*, bool, jrd_tra*);
-static void	load_trigs(thread_db*, jrd_rel*, TrigVector**);
 static Format*	make_format(thread_db*, jrd_rel*, USHORT *, TemporaryField*);
 static void put_summary_blob(thread_db* tdbb, blb*, enum rsr_t, bid*, jrd_tra*);
-static void put_summary_record(thread_db* tdbb, blb*, enum rsr_t, const UCHAR*, USHORT);
+static void put_summary_record(thread_db* tdbb, blb*, enum rsr_t, const UCHAR*, ULONG);
 static void	setup_array(thread_db*, blb*, const TEXT*, USHORT, TemporaryField*);
 static blb*	setup_triggers(thread_db*, jrd_rel*, bool, TrigVector**, blb*);
 static void	setup_trigger_details(thread_db*, jrd_rel*, blb*, TrigVector**, const TEXT*, bool);
@@ -999,8 +1000,8 @@ namespace
 				{
 					Jrd::ContextPoolHolder context(tdbb, new_pool);
 
-					const Firebird::MetaName depName(work->dfw_package.isEmpty() ?
-						Firebird::MetaName(work->dfw_name) : work->dfw_package);
+					const MetaName depName(work->dfw_package.isEmpty() ?
+						MetaName(work->dfw_name) : work->dfw_package);
 					MET_get_dependencies(tdbb, NULL, NULL, 0, NULL, &blobId,
 						(compile ? &statement : NULL),
 						NULL, depName,
@@ -1241,16 +1242,21 @@ static const deferred_task task_table[] =
 	{ dfw_db_crypt, db_crypt },
 	{ dfw_set_linger, set_linger },
 	{ dfw_clear_cache, clear_cache },
+
+	{ dfw_change_repl_state, change_repl_state },
+
 	{ dfw_create_tablespace, create_tablespace },
 	{ dfw_check_tablespace_dependencies, check_tablespace_dependencies },
 	{ dfw_drop_tablespace_dependencies, drop_tablespace_dependencies },
 	{ dfw_move_relation, move_relation },
 	{ dfw_move_index, move_index },
+
+
 	{ dfw_null, NULL }
 };
 
 
-USHORT DFW_assign_index_type(thread_db* tdbb, const Firebird::MetaName& name, SSHORT field_type,
+USHORT DFW_assign_index_type(thread_db* tdbb, const MetaName& name, SSHORT field_type,
 	SSHORT ttype)
 {
 /**************************************
@@ -2888,7 +2894,7 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 
 
 static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
-	const Firebird::MetaName& fieldName)
+	const MetaName& fieldName)
 {
 /**************************************
  *
@@ -2903,8 +2909,8 @@ static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
 	SET_TDBB(tdbb);
 
 	bool err = false;
-	Firebird::SortedObjectsArray<Firebird::MetaName> sortedNames(*tdbb->getDefaultPool());
-	Firebird::ObjectsArray<Firebird::MetaName> names;
+	Firebird::SortedObjectsArray<MetaName> sortedNames(*tdbb->getDefaultPool());
+	Firebird::ObjectsArray<MetaName> names;
 
 	sortedNames.add(fieldName);
 	names.add(fieldName);
@@ -2922,7 +2928,7 @@ static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
 				RFL.RDB$RELATION_NAME = DEP.RDB$DEPENDED_ON_NAME AND
 				RFL.RDB$FIELD_NAME = DEP.RDB$FIELD_NAME
 		{
-			Firebird::MetaName fieldSource(RFL.RDB$FIELD_SOURCE);
+			MetaName fieldSource(RFL.RDB$FIELD_SOURCE);
 
 			if (fieldName == fieldSource)
 			{
@@ -3602,7 +3608,7 @@ static bool create_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 			if (!partner_relation)
 			{
-				Firebird::MetaName constraint_name;
+				MetaName constraint_name;
 				MET_lookup_cnstrt_for_index(tdbb, constraint_name, work->dfw_name);
 				ERR_post(Arg::Gds(isc_partner_idx_not_found) << Arg::Str(constraint_name));
 			}
@@ -3902,12 +3908,12 @@ static bool create_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 					if ((arg->dfw_id & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DB)
 					{
 						unsigned triggerKind = arg->dfw_id & ~TRIGGER_TYPE_DB;
-						MET_release_triggers(tdbb, &tdbb->getAttachment()->att_triggers[triggerKind]);
+						MET_release_triggers(tdbb, &tdbb->getAttachment()->att_triggers[triggerKind], true);
 						MET_load_db_triggers(tdbb, triggerKind);
 					}
 					else if ((arg->dfw_id & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DDL)
 					{
-						MET_release_triggers(tdbb, &tdbb->getAttachment()->att_ddl_triggers);
+						MET_release_triggers(tdbb, &tdbb->getAttachment()->att_ddl_triggers, true);
 						MET_load_ddl_triggers(tdbb);
 					}
 				}
@@ -4040,7 +4046,7 @@ void DFW_reset_icu(thread_db* tdbb)
 		transaction = TRA_start(tdbb, 0, 0);
 		tdbb->setTransaction(transaction);
 
-		SortedArray<Firebird::MetaName> indices;
+		SortedArray<MetaName> indices;
 		ProtectRelations tables(tdbb, transaction);
 
 		// Get list of affected indices & tables
@@ -4106,7 +4112,7 @@ void DFW_reset_icu(thread_db* tdbb)
 			AutoResultSet rs(ps->executeQuery(tdbb, transaction));
 			while(rs->fetch(tdbb))
 			{
-				Firebird::MetaName collName(rs->getMetaName(tdbb, 1));
+				MetaName collName(rs->getMetaName(tdbb, 1));
 				const USHORT charSetId(rs->getSmallInt(tdbb, 2));
 
 				setupSpecificCollationAttributes(tdbb, transaction, charSetId, collName.c_str());
@@ -4115,7 +4121,7 @@ void DFW_reset_icu(thread_db* tdbb)
 
 		// Reactivate indices
 		{	// scope
-			for (Firebird::MetaName* idx = indices.begin(); idx != indices.end(); ++idx)
+			for (MetaName* idx = indices.begin(); idx != indices.end(); ++idx)
 			{
 				AutoRequest request;
 
@@ -4309,7 +4315,7 @@ static bool create_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 	{
 	case 1:
 		{
-			const Firebird::MetaName depName(work->dfw_name);
+			const MetaName depName(work->dfw_name);
 			AutoRequest handle;
 			bid validation;
 			validation.clear();
@@ -4436,7 +4442,7 @@ static bool modify_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 	{
 	case 1:
 		{
-			const Firebird::MetaName depName(work->dfw_name);
+			const MetaName depName(work->dfw_name);
 			AutoRequest handle;
 
 			// If a domain is being changed to NOT NULL, schedule validation of involved relations.
@@ -5027,12 +5033,7 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 		}
 
 		// Release relation triggers
-		MET_release_triggers(tdbb, &relation->rel_pre_store);
-		MET_release_triggers(tdbb, &relation->rel_post_store);
-		MET_release_triggers(tdbb, &relation->rel_pre_erase);
-		MET_release_triggers(tdbb, &relation->rel_post_erase);
-		MET_release_triggers(tdbb, &relation->rel_pre_modify);
-		MET_release_triggers(tdbb, &relation->rel_post_modify);
+		relation->releaseTriggers(tdbb, true);
 
 		break;
 	}
@@ -5060,7 +5061,7 @@ static bool delete_rfr(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
  **************************************/
 	int rel_exists, field_count;
 	AutoRequest handle;
-	Firebird::MetaName f;
+	MetaName f;
 	jrd_rel* relation;
 
 	SET_TDBB(tdbb);
@@ -5503,7 +5504,7 @@ static void get_trigger_dependencies(DeferredWork* work, bool compile, jrd_tra* 
 			par_flags = 0;
 
 		Jrd::ContextPoolHolder context(tdbb, new_pool);
-		const Firebird::MetaName depName(work->dfw_name);
+		const MetaName depName(work->dfw_name);
 		MET_get_dependencies(tdbb, relation, NULL, 0, NULL, &blob_id, (compile ? &statement : NULL),
 							 NULL, depName, obj_trigger, par_flags, transaction);
 
@@ -5512,48 +5513,6 @@ static void get_trigger_dependencies(DeferredWork* work, bool compile, jrd_tra* 
 		else
 			attachment->deletePool(new_pool);
 	}
-}
-
-
-static void load_trigs(thread_db* tdbb, jrd_rel* relation, TrigVector** triggers)
-{
-/**************************************
- *
- *	l o a d _ t r i g s
- *
- **************************************
- *
- * Functional description
- *	We have just loaded the triggers onto the local vector
- *      triggers. Its now time to place them at their rightful
- *      place ie the relation block.
- *
- **************************************/
-	TrigVector* tmp_vector;
-
-	tmp_vector = relation->rel_pre_store;
-	relation->rel_pre_store = triggers[TRIGGER_PRE_STORE];
-	MET_release_triggers(tdbb, &tmp_vector);
-
-	tmp_vector = relation->rel_post_store;
-	relation->rel_post_store = triggers[TRIGGER_POST_STORE];
-	MET_release_triggers(tdbb, &tmp_vector);
-
-	tmp_vector = relation->rel_pre_erase;
-	relation->rel_pre_erase = triggers[TRIGGER_PRE_ERASE];
-	MET_release_triggers(tdbb, &tmp_vector);
-
-	tmp_vector = relation->rel_post_erase;
-	relation->rel_post_erase = triggers[TRIGGER_POST_ERASE];
-	MET_release_triggers(tdbb, &tmp_vector);
-
-	tmp_vector = relation->rel_pre_modify;
-	relation->rel_pre_modify = triggers[TRIGGER_PRE_MODIFY];
-	MET_release_triggers(tdbb, &tmp_vector);
-
-	tmp_vector = relation->rel_post_modify;
-	relation->rel_post_modify = triggers[TRIGGER_POST_MODIFY];
-	MET_release_triggers(tdbb, &tmp_vector);
 }
 
 
@@ -5725,7 +5684,7 @@ static Format* make_format(thread_db* tdbb, jrd_rel* relation, USHORT* version, 
 		buffer[pos] = UCHAR(dflCount);
 		buffer[pos + 1] = UCHAR(dflCount >> 8);
 
-		blob->BLB_put_segment(tdbb, buffer.begin(), buffer.getCount());
+		blob->BLB_put_data(tdbb, buffer.begin(), buffer.getCount());
 		blob->BLB_close(tdbb);
 	}
 	END_STORE
@@ -5960,55 +5919,6 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 					tfb->tfb_next = stack;
 					stack = tfb;
 
-					memset(&tfb->tfb_default, 0, sizeof(tfb->tfb_default));
-
-					if (notNull && !defaultValue->isEmpty())
-					{
-						Jrd::ContextPoolHolder context(tdbb, attachment->createPool());
-						JrdStatement* defaultStatement = NULL;
-						try
-						{
-							ValueExprNode* defaultNode = static_cast<ValueExprNode*>(MET_parse_blob(
-								tdbb, relation, defaultValue, NULL, &defaultStatement, false, false));
-
-							jrd_req* const defaultRequest = defaultStatement->findRequest(tdbb);
-
-							// Attention: this is scoped to the end of this "try".
-							AutoSetRestore2<jrd_req*, thread_db> autoRequest(tdbb,
-								&thread_db::getRequest, &thread_db::setRequest, defaultRequest);
-
-							TimeZoneUtil::validateGmtTimeStamp(defaultRequest->req_gmt_timestamp);
-
-							TRA_attach_request(transaction, defaultRequest);
-							dsc* result = EVL_expr(tdbb, defaultRequest, defaultNode);
-							TRA_detach_request(defaultRequest);
-
-							if (result)
-							{
-								dsc desc = *result;
-								MoveBuffer buffer;
-
-								if (desc.isText() || desc.isBlob())
-								{
-									UCHAR* ptr = NULL;
-									const int len = MOV_make_string2(tdbb, &desc, CS_NONE, &ptr, buffer, true);
-									fb_assert(ULONG(len) < ULONG(MAX_USHORT));
-									desc.makeText(len, ttype_none, ptr);
-								}
-
-								EVL_make_value(tdbb, &desc, &tfb->tfb_default, relation->rel_pool);
-							}
-						}
-						catch (const Exception&)
-						{
-							if (defaultStatement)
-								defaultStatement->release(tdbb);
-							throw;
-						}
-
-						defaultStatement->release(tdbb);
-					}
-
 					// for text data types, grab the CHARACTER_SET and
 					// COLLATION to give the type of international text
 
@@ -6046,6 +5956,85 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 							(DTYPE_IS_TEXT(tfb->tfb_desc.dsc_dtype) ?
 								tfb->tfb_desc.dsc_ttype() : tfb->tfb_desc.dsc_blob_ttype()));	// should punt
 						ERR_punt(); // if INTL_texttype_lookup hasn't punt
+					}
+
+					// Store the default value.
+
+					memset(&tfb->tfb_default, 0, sizeof(tfb->tfb_default));
+
+					if (notNull && !defaultValue->isEmpty())
+					{
+						Jrd::ContextPoolHolder context(tdbb, attachment->createPool());
+						JrdStatement* defaultStatement = NULL;
+						try
+						{
+							ValueExprNode* defaultNode = static_cast<ValueExprNode*>(MET_parse_blob(
+								tdbb, relation, defaultValue, NULL, &defaultStatement, false, false));
+
+							jrd_req* const defaultRequest = defaultStatement->findRequest(tdbb);
+
+							// Attention: this is scoped to the end of this "try".
+							AutoSetRestore2<jrd_req*, thread_db> autoRequest(tdbb,
+								&thread_db::getRequest, &thread_db::setRequest, defaultRequest);
+
+							TimeZoneUtil::validateGmtTimeStamp(defaultRequest->req_gmt_timestamp);
+
+							TRA_attach_request(transaction, defaultRequest);
+							dsc* result = EVL_expr(tdbb, defaultRequest, defaultNode);
+							TRA_detach_request(defaultRequest);
+
+							if (result)
+							{
+								dsc desc = *result;
+								MoveBuffer buffer;
+
+								if (desc.isText() || desc.isBlob())
+								{
+									UCHAR* ptr = NULL;
+									const int len = MOV_make_string2(tdbb, &desc, tfb->tfb_desc.getCharSet(),
+										&ptr, buffer, true);
+									fb_assert(ULONG(len) < ULONG(MAX_USHORT));
+									desc.makeText(len, tfb->tfb_desc.getCharSet(), ptr);
+								}
+
+								impure_value tempValue;
+								MoveBuffer tempBuffer;
+
+								if (!tfb->tfb_desc.isBlob() && !DSC_EQUIV(result, &tfb->tfb_desc, false))
+								{
+									tempValue.vlu_desc = tfb->tfb_desc;
+
+									if (tfb->tfb_desc.isText())
+										tempValue.vlu_desc.dsc_address = tempBuffer.getBuffer(tfb->tfb_desc.dsc_length);
+									else
+										tempValue.vlu_desc.dsc_address = (UCHAR*) &tempValue.vlu_misc;
+
+									try
+									{
+										MOV_move(tdbb, &desc, &tempValue.vlu_desc);
+										desc = tempValue.vlu_desc;
+									}
+									catch (const status_exception&)
+									{
+										if (!tdbb->getAttachment()->isGbak())
+											throw;
+
+										// If we're restoring a database, ignore the error and use the original desc.
+										fb_utils::init_status(tdbb->tdbb_status_vector);
+									}
+								}
+
+								EVL_make_value(tdbb, &desc, &tfb->tfb_default, relation->rel_pool);
+							}
+						}
+						catch (const Exception&)
+						{
+							if (defaultStatement)
+								defaultStatement->release(tdbb);
+							throw;
+						}
+
+						defaultStatement->release(tdbb);
 					}
 
 					// dimitr: view fields shouldn't be marked as computed
@@ -6119,8 +6108,11 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		if (!relation)
 			return false;
 
+		// We have just loaded the triggers onto the local vector triggers.
+		// It's now time to place them at their rightful place inside the relation block.
+
 		if (!(relation->rel_flags & REL_sys_trigs_being_loaded))
-		    load_trigs(tdbb, relation, triggers);
+			relation->replaceTriggers(tdbb, triggers);
 
 		// in case somebody changed the view definition or a computed
 		// field, reset the dependencies by deleting the current ones
@@ -6214,12 +6206,12 @@ static bool modify_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 				if (arg && (arg->dfw_id & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DB)
 				{
 					unsigned triggerKind = arg->dfw_id & ~TRIGGER_TYPE_DB;
-					MET_release_triggers(tdbb, &tdbb->getAttachment()->att_triggers[triggerKind]);
+					MET_release_triggers(tdbb, &tdbb->getAttachment()->att_triggers[triggerKind], true);
 					MET_load_db_triggers(tdbb, triggerKind);
 				}
 				else if ((arg->dfw_id & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DDL)
 				{
-					MET_release_triggers(tdbb, &tdbb->getAttachment()->att_ddl_triggers);
+					MET_release_triggers(tdbb, &tdbb->getAttachment()->att_ddl_triggers, true);
 					MET_load_ddl_triggers(tdbb);
 				}
 			}
@@ -6229,7 +6221,7 @@ static bool modify_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 			const DeferredWork* arg = work->findArg(dfw_arg_check_blr);
 			if (arg)
 			{
-				const Firebird::MetaName relation_name(arg->dfw_name);
+				const MetaName relation_name(arg->dfw_name);
 				SSHORT valid_blr = FALSE;
 
 				try
@@ -6261,7 +6253,7 @@ static bool modify_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 									for (FB_SIZE_T j = 0; j < triggers[i]->getCount(); ++j)
 										(*triggers[i])[j].compile(tdbb);
 
-									MET_release_triggers(tdbb, &triggers[i]);
+									MET_release_triggers(tdbb, &triggers[i], true);
 								}
 							}
 
@@ -6321,13 +6313,18 @@ static void put_summary_blob(thread_db* tdbb, blb* blob, rsr_t type, bid* blob_i
 
 	// Go ahead and open blob
 	blb* blr = blb::open(tdbb, transaction, blob_id);
-	fb_assert(blr->blb_length <= MAX_USHORT);
 
-	USHORT length = (USHORT) blr->blb_length;
-	HalfStaticArray<UCHAR, 128> buffer;
+	ULONG length = blr->blb_length;
+	// We cannot deal with chunks longer than a max blob segment (minus one)
+	fb_assert(length < MAX_USHORT);
 
-	length = (USHORT) blr->BLB_get_data(tdbb, buffer.getBuffer(length), (SLONG) length);
-	put_summary_record(tdbb, blob, type, buffer.begin(), length);
+	HalfStaticArray<UCHAR, BUFFER_TINY> buffer;
+	UCHAR* p = buffer.getBuffer(length + 1);
+	*p++ = (UCHAR) type;
+
+	length = blr->BLB_get_data(tdbb, p, length);
+
+	blob->BLB_put_segment(tdbb, buffer.begin(), length + 1);
 }
 
 
@@ -6335,7 +6332,7 @@ static void put_summary_record(thread_db* tdbb,
 							   blb*		blob,
 							   rsr_t	type,
 							   const UCHAR*	data,
-							   USHORT	length)
+							   ULONG	length)
 {
 /**************************************
  *
@@ -6347,31 +6344,17 @@ static void put_summary_record(thread_db* tdbb,
  *	Put an attribute record to the relation summary blob.
  *
  **************************************/
+	// We cannot deal with chunks longer than a max blob segment (minus one)
+	fb_assert(length < MAX_USHORT);
 
 	SET_TDBB(tdbb);
 
-	fb_assert(length < MAX_USHORT); // otherwise length + 1 wraps. Or do we bugcheck???
-	UCHAR temp[129];
-
-	UCHAR* const buffer = ((size_t) (length + 1) > sizeof(temp)) ?
-		FB_NEW_POOL(*getDefaultMemoryPool()) UCHAR[length + 1] : temp;
-
-	UCHAR* p = buffer;
+	HalfStaticArray<UCHAR, BUFFER_TINY> buffer;
+	UCHAR* p = buffer.getBuffer(length + 1);
 	*p++ = (UCHAR) type;
 	memcpy(p, data, length);
 
-	try {
-		blob->BLB_put_segment(tdbb, buffer, length + 1);
-	}
-	catch (const Firebird::Exception&)
-	{
-		if (buffer != temp)
-			delete[] buffer;
-		throw;
-	}
-
-	if (buffer != temp)
-		delete[] buffer;
+	blob->BLB_put_segment(tdbb, buffer.begin(), length + 1);
 }
 
 
@@ -6407,6 +6390,47 @@ static bool scan_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd
 
 	case 4:
 		MET_scan_relation(tdbb, MET_relation(tdbb, work->dfw_id));
+		break;
+	}
+
+	return false;
+}
+
+
+static bool change_repl_state(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra*)
+{
+/**************************************
+ *
+ *	c h a n g e _ r e p l _ s t a t e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Signal other processes to refresh their replication state.
+ *
+ **************************************/
+	SET_TDBB(tdbb);
+	Database* const dbb = tdbb->getDatabase();
+	Attachment* const attachment = tdbb->getAttachment();
+
+	switch (phase)
+	{
+	case 1:
+	case 2:
+	case 3:
+		return true;
+
+	case 4:
+		if (work->dfw_id == 0)
+		{
+			// replication state is changed
+			dbb->invalidateReplState(tdbb, true);
+		}
+		else
+		{
+			// replication set is changed
+			attachment->invalidateReplSet(tdbb, true);
+		}
 		break;
 	}
 

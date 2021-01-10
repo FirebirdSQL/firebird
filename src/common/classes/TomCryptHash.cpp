@@ -24,6 +24,8 @@
 
 #include "firebird.h"
 #include "../common/classes/Hash.h"
+#include "../common/dsc.h"
+#include "../intl/charsets.h"
 
 #if !defined(__GNUC__) || defined(__clang__)
 #define LTC_NO_ASM	// disable ASM in tomcrypt headers
@@ -45,9 +47,10 @@ struct LibTomCryptHashContext::State
 
 
 LibTomCryptHashContext::LibTomCryptHashContext(MemoryPool& pool, const Descriptor* aDescriptor)
-	: descriptor(aDescriptor)
+	: descriptor(aDescriptor),
+	  statePtr(FB_NEW_POOL(pool) State),
+	  buffer(pool)
 {
-	statePtr = FB_NEW_POOL(pool) State();
 	descriptor->tcDesc->init(&statePtr->tcState);
 }
 
@@ -61,10 +64,11 @@ void LibTomCryptHashContext::update(const void* data, FB_SIZE_T length)
 	descriptor->tcDesc->process(&statePtr->tcState, static_cast<const UCHAR*>(data), length);
 }
 
-void LibTomCryptHashContext::finish(Buffer& result)
+void LibTomCryptHashContext::finish(dsc& result)
 {
-	unsigned char* hashResult = result.getBuffer(descriptor->tcDesc->hashsize);
+	unsigned char* hashResult = buffer.getBuffer(descriptor->tcDesc->hashsize);
 	descriptor->tcDesc->done(&statePtr->tcState, hashResult);
+	result.makeText(descriptor->tcDesc->hashsize, CS_BINARY, hashResult);
 }
 
 
@@ -98,3 +102,37 @@ Sha512HashContext::Sha512HashContext(MemoryPool& pool)
 	: LibTomCryptHashContext(pool, &sha512Descriptor)
 {
 }
+
+
+struct Crc32HashContext::State
+{
+	State()
+	{
+		crc32_init(&ctx);
+	}
+
+	crc32_state ctx;
+};
+
+
+Crc32HashContext::Crc32HashContext(MemoryPool& pool)
+{
+	statePtr = FB_NEW_POOL(pool) State();
+}
+
+Crc32HashContext::~Crc32HashContext()
+{
+	delete statePtr;
+}
+
+void Crc32HashContext::update(const void* data, FB_SIZE_T length)
+{
+	crc32_update(&statePtr->ctx, static_cast<const UCHAR*>(data), length);
+}
+
+void Crc32HashContext::finish(dsc& result)
+{
+	crc32_finish(&statePtr->ctx, &hash, sizeof hash);
+	result.makeLong(0, &hash);
+}
+

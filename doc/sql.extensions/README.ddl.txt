@@ -569,3 +569,35 @@ suppoprted now. Example:
 GRANT ALL ON PLG$SRP_VIEW TO SYSTEM PRIVILEGE USER_MANAGEMENT
 
 Grants all rights to view (used in SRP management plugin) to users having USER_MANAGEMENT privilege.
+
+22) Added replication control clauses to ALTER DATABASE statement.
+(Dmitry Yemanov)
+
+ALTER DATABASE {ENABLE | DISABLE} PUBLICATION
+
+Enables or disabled replication. The change is applied immediately after commit.
+
+ALTER DATABASE INCLUDE ALL TO PUBLICATION
+
+Enables replication for all tables inside the database, including the ones to be created in the future.
+
+ALTER DATABASE INCLUDE TABLE {<table1>, <table2>, ..., <tableN>} TO PUBLICATION
+
+Enables replication for the specified set of tables.
+
+ALTER DATABASE EXCLUDE ALL FROM PUBLICATION
+
+Disables replication for all tables inside the database, including the ones to be created in the future.
+
+ALTER DATABASE EXCLUDE TABLE {<table1>, <table2>, ..., <tableN>} FROM PUBLICATION
+
+Disables replication for the specified set of tables.
+
+23) Added optional replication control clauses to CREATE TABLE and ALTER TABLE statements.
+(Dmitry Yemanov)
+
+CREATE TABLE <name> ... [ {ENABLE | DISABLE} PUBLICATION ]
+ALTER TABLE <name> ... [ {ENABLE | DISABLE} PUBLICATION ]
+
+Defines whether replication is enabled for the specified table.
+If not specified in the CREATE TABLE statement, the database-level default behaviour is applied.

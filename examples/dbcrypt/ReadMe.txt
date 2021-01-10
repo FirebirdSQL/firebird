@@ -5,19 +5,19 @@
 
 Brief description of the sample.
 
-Sample contains 3 components - DbCrypt plugin, KeyHolder plugin and application, which can pass
-crypt key to server. Plugins do not perform any real encryption (XOR with single byte hardly can
-be treated as encryption though makes database useless without crypt plugin), key is sent between
-components in plain form - they just demonstrate what calls in plugins should be done and what
-methods should be implemented in order for plugin to start to work.
+Sample contains 3 components - fbSampleDbCrypt plugin, fbSampleKeyHolder plugin and application,
+which can pass crypt key to server. Plugins do not perform any real encryption (XOR with single
+byte hardly can be treated as encryption) though makes database useless without crypt plugin,
+key is sent between components in plain form - they just demonstrate what calls in plugins
+should be done and what methods should be implemented in order for plugin to start to work.
 
 Depending upon settings in configuration file plugins may use different ways to manage encryption
-key. DbCrypt's configuration file may contain following parameters:
+key. fbSampleDbCrypt's configuration file may contain following parameters:
 Auto - boolean value, when FALSE plugin queries KeyHolder plugin for key value (this is default),
 	when TRUE get key value from "Value" configuration parameter.
 Value - integer value (lower byte is actually used), used in "Auto" mode as key value (default 90).
 
-CryptKeyHolder's configuration file may contain following parameters:
+fbSampleKeyHolder's configuration file may contain following parameters:
 Auto - boolean value, when FALSE plugin queries client application for key value (this is default),
 	when TRUE get key value from configuration file by name or use default (90) for unnamed key.
 Key{Name} - integer value, a key with name "Name" (i.e. when one issues "ALTER DATABASE ENCRYPT ...

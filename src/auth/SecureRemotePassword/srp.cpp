@@ -231,12 +231,15 @@ void dumpIt(const char* name, const BigInteger& bi)
 }
 #endif
 
-void checkStatusVectorForMissingTable(const ISC_STATUS* v)
+void checkStatusVectorForMissingTable(const ISC_STATUS* v, std::function<void ()> cleanup)
 {
 	while (v[0] == isc_arg_gds)
 	{
 		if (v[1] == isc_dsql_relation_err)
 		{
+			if (cleanup)
+				cleanup();
+
 			Arg::Gds(isc_missing_data_structures).raise();
 		}
 

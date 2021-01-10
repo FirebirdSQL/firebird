@@ -168,11 +168,7 @@ bool ChangeLog::Segment::validate(const Guid& guid) const
 
 void ChangeLog::Segment::copyTo(const PathName& filename) const
 {
-#ifdef WIN_NT
-	if (_lseeki64(m_handle, 0, SEEK_SET) != 0)
-#else
 	if (os_utils::lseek(m_handle, 0, SEEK_SET) != 0)
-#endif
 		raiseIOError("seek", m_filename.c_str());
 
 	const auto totalLength = m_header->hdr_length;
@@ -213,13 +209,9 @@ void ChangeLog::Segment::append(ULONG length, const UCHAR* data)
 	fb_assert(m_header->hdr_state == SEGMENT_STATE_USED);
 	fb_assert(length);
 
-	const auto currentLength = m_header->hdr_length;
+	const auto currentLength = (SINT64) m_header->hdr_length;
 
-#ifdef WIN_NT
-	if (_lseeki64(m_handle, currentLength, SEEK_SET) != currentLength)
-#else
 	if (os_utils::lseek(m_handle, currentLength, SEEK_SET) != currentLength)
-#endif
 		raiseError("Log file %s seek failed (error %d)", m_filename.c_str(), ERRNO);
 
 	if (::write(m_handle, data, length) != length)
@@ -247,7 +239,7 @@ void ChangeLog::Segment::truncate()
 
 	const auto hndl = (HANDLE) _get_osfhandle(m_handle);
 	const auto ret = SetFilePointer(hndl, newSize.LowPart, &newSize.HighPart, FILE_BEGIN);
-	if (ret != INVALID_SET_FILE_POINTER || !SetEndOfFile(hndl))
+	if (ret == INVALID_SET_FILE_POINTER || !SetEndOfFile(hndl))
 #else
 	if (os_utils::ftruncate(m_handle, length))
 #endif
@@ -410,27 +402,25 @@ void ChangeLog::lockState()
 	m_localMutex.enter(FB_FUNCTION);
 	m_sharedMemory->mutexLock();
 
+	// Reattach if someone has just deleted the shared file
+
+	while (m_sharedMemory->getHeader()->isDeleted())
+	{
+		// Shared memory must be empty at this point
+		fb_assert(!m_sharedMemory->getHeader()->pidLower);
+		fb_assert(!m_sharedMemory->getHeader()->pidUpper);
+
+		m_sharedMemory->mutexUnlock();
+		m_sharedMemory.reset();
+
+		Thread::yield();
+
+		initSharedFile();
+		m_sharedMemory->mutexLock();
+	}
+
 	try
 	{
-		while (!m_sharedMemory->getHeader()->pidUpper)
-		{
-			fb_assert(!m_sharedMemory->getHeader()->pidLower);
-
-			if (m_sharedMemory->justCreated())
-				break;
-
-			// Someone is going to delete shared file? Reattach.
-			m_sharedMemory->mutexUnlock();
-			m_sharedMemory.reset();
-
-			Thread::yield();
-
-			initSharedFile();
-			m_sharedMemory->mutexLock();
-		}
-
-		fb_assert(!m_sharedMemory->justCreated());
-
 		const auto state = m_sharedMemory->getHeader();
 
 		if (m_segments.isEmpty() || state->segmentCount > m_segments.getCount())

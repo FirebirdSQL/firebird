@@ -73,12 +73,14 @@ public:
 		: login(p_login), password(p_password)
 	{ }
 
-	// Firebird::IClientBlock implementation
-	int release()
+	// Here we are going to place reference counted object on a stack.
+	// Release will never be called, but let's better have safe implementation for it.
+	int release() override
 	{
 		return 1;
 	}
 
+	// Firebird::IClientBlock implementation
 	const char* getLogin()
 	{
 		return login.c_str();
@@ -172,7 +174,7 @@ namespace EDS {
 
 void validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb)
 {
-	// Peliminary checks - should we really validate password ourself
+	// Preliminary checks - should we really validate the password ourselves
 	if (!dpb.find(isc_dpb_user_name))		// check for user name presence
 		return;
 	if (ISC_check_if_remote(file, false))	// check for remote connection

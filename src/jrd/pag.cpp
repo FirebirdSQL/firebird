@@ -478,7 +478,7 @@ PAG PAG_allocate(thread_db* tdbb, WIN* window)
 }
 
 
-PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, int cntAlloc, bool aligned)
+PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, unsigned cntAlloc, bool aligned)
 {
 /**************************************
  *
@@ -505,9 +505,8 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, int cntAlloc, bool aligned)
 
 	// Find an allocation page with something on it
 
-	int toAlloc = cntAlloc;
 	ULONG sequence = (cntAlloc >= PAGES_IN_EXTENT ? pageSpace->pipWithExtent : pageSpace->pipHighWater);
-	for (; toAlloc > 0; sequence++)
+	for (unsigned toAlloc = cntAlloc; toAlloc; sequence++)
 	{
 		WIN pip_window(pageSpace->pageSpaceID,
 			(sequence == 0) ? pageSpace->pipFirst : sequence * dbb->dbb_page_manager.pagesPerPIP - 1);
@@ -628,7 +627,8 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, int cntAlloc, bool aligned)
 		{
 			fb_assert(lastBit - firstBit + 1 == cntAlloc);
 
-			if (lastBit + 1 > pipUsed) {
+			if (lastBit + 1 > pipUsed)
+			{
 				pipUsed = ensureDiskSpace(tdbb, &pip_window,
 					PageNumber(pageSpace->pageSpaceID, lastBit + sequence * pageMgr.pagesPerPIP),
 					pipUsed);
@@ -1164,8 +1164,15 @@ void PAG_header(thread_db* tdbb, bool info)
 										  Arg::Str(attachment->att_filename));
 	}
 
-	const bool useFSCache = dbb->dbb_bcb->bcb_count <
-		ULONG(dbb->dbb_config->getFileSystemCacheThreshold());
+
+	bool present;
+	bool useFSCache = dbb->dbb_config->getUseFileSystemCache(&present);
+
+	if (!present)
+	{
+		useFSCache = dbb->dbb_bcb->bcb_count <
+			ULONG(dbb->dbb_config->getFileSystemCacheThreshold());
+	}
 
 	if ((header->hdr_flags & hdr_force_write) || !useFSCache)
 	{
@@ -2683,30 +2690,3 @@ void PAG_set_page_scn(thread_db* tdbb, win* window)
 	CCH_precedence(tdbb, window, scn_page);
 }
 
-
-#ifdef DEBUG
-namespace
-{
-	// This checks should better be placed at ods.h but we can't use fb_assert() there.
-	// See also comments in ods.h near the scns_page definition.
-
-	class CheckODS
-	{
-	public:
-		CheckODS()
-		{
-			for (ULONG page_size = MIN_PAGE_SIZE; page_size <= MAX_PAGE_SIZE; page_size *= 2)
-			{
-				ULONG pagesPerPIP = Ods::pagesPerPIP(page_size);
-				ULONG pagesPerSCN = Ods::pagesPerSCN(page_size);
-				ULONG maxPagesPerSCN = Ods::maxPagesPerSCN(page_size);
-
-				fb_assert((pagesPerPIP % pagesPerSCN) == 0);
-				fb_assert(pagesPerSCN <= maxPagesPerSCN);
-			}
-		}
-	};
-
-	static CheckODS doCheck;
-}
-#endif // DEBUG

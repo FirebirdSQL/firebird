@@ -969,8 +969,12 @@ static const struct {
 	{335545266,  304}, /* 946 truncate_warn */
 	{335545267,  304}, /* 947 truncate_monitor */
 	{335545268,  304}, /* 948 truncate_context */
-	{335545269, -902}, /* 949 ts_file_exists */
-	{335545270, -901}, /* 950 tablespace_name */
+	{335545269, -811}, /* 949 merge_dup_update */
+	{335545270, -902}, /* 950 wrong_page */
+	{335545271, -902}, /* 951 repl_error */
+	{335545272, -902}, /* 952 ses_reset_failed */
+	{335545273, -902}, /* 953 ts_file_exists */
+	{335545274, -901}, /* 954 tablespace_name */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */
@@ -1457,6 +1461,7 @@ static const struct {
 	{337117257, -901}, /*  73 nbackup_user_stop */
 	{337117259, -901}, /*  75 nbackup_deco_parse */
 	{337117261, -901}, /*  77 nbackup_lostrec_guid_db */
+	{337117265, -901}, /*  81 nbackup_seq_misuse */
 	{337182750, -901}, /*  30 trace_conflict_acts */
 	{337182751, -901}, /*  31 trace_act_notfound */
 	{337182752, -901}, /*  32 trace_switch_once */

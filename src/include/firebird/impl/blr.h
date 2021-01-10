@@ -435,6 +435,10 @@
 #define blr_default					(unsigned char) 212
 #define blr_store3					(unsigned char) 213
 
+// subcodes of blr_store3
+#define blr_store_override_user			(unsigned char) 1
+#define blr_store_override_system		(unsigned char) 2
+
 #define blr_local_timestamp			(unsigned char) 214
 #define blr_local_time				(unsigned char) 215
 

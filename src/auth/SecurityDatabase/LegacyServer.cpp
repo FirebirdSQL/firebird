@@ -137,7 +137,6 @@ public:
 	int authenticate(CheckStatusWrapper* status, IServerBlock* sBlock,
 		IWriter* writerInterface);
 	void setDbCryptCallback(CheckStatusWrapper*, ICryptKeyCallback*) { }	// ignore
-	int release();
 
 private:
 	RefPtr<IPluginConfig> iParameter;
@@ -147,7 +146,12 @@ private:
 class SecurityDatabase : public VSecDb
 {
 public:
-	bool lookup(void* inMsg, void* outMsg);
+	bool lookup(void* inMsg, void* outMsg) override;
+
+	bool test() override
+	{
+		return fb_ping(status, &lookup_db) == FB_SUCCESS;
+	}
 
 	// This 2 are needed to satisfy temporarily different calling requirements
 	static int shutdown(const int, const int, void*)
@@ -217,7 +221,7 @@ void SecurityDatabase::prepare(const char* secureDbName)
 	lookup_db = lookup_req = 0;
 
 	// Perhaps build up a dpb
-	ClumpletWriter dpb(ClumpletReader::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
+	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 
 	// Attachment is for the security database
 	dpb.insertByte(isc_dpb_sec_attach, TRUE);
@@ -326,32 +330,20 @@ int SecurityDatabaseServer::authenticate(CheckStatusWrapper* status, IServerBloc
 		bool found = false;
 		char pw1[MAX_LEGACY_PASSWORD_LENGTH + 1];
 		PathName secureDbName;
-		{ // reference & mutex scope scope
+		{ // instance scope
 			// Get database block from cache
-			RefPtr<CachedSecurityDatabase> instance;
+			CachedSecurityDatabase::Instance instance;
 			instances->getInstance(iParameter, instance);
 
-			try
-			{
-				MutexLockGuard g(instance->mutex, FB_FUNCTION);
+			secureDbName = instance->secureDbName;
+			if (!instance->secDb)
+				instance->secDb = FB_NEW SecurityDatabase(instance->secureDbName);
 
-				secureDbName = instance->secureDbName;
-				if (!instance->secDb)
-					instance->secDb = FB_NEW SecurityDatabase(instance->secureDbName);
-
-				user_name uname;		// user name buffer
-				login.copyTo(uname, sizeof uname);
-				user_record user_block;		// user record
-				found = instance->secDb->lookup(uname, &user_block);
-				fb_utils::copy_terminate(pw1, user_block.password, MAX_LEGACY_PASSWORD_LENGTH + 1);
-			}
-			catch(const Exception&)
-			{
-				instance->close();
-				throw;
-			}
-
-			instance->close();
+			user_name uname;		// user name buffer
+			login.copyTo(uname, sizeof uname);
+			user_record user_block;		// user record
+			found = instance->secDb->lookup(uname, &user_block);
+			fb_utils::copy_terminate(pw1, user_block.password, MAX_LEGACY_PASSWORD_LENGTH + 1);
 		}
 		if (!found)
 		{
@@ -402,17 +394,6 @@ int SecurityDatabaseServer::authenticate(CheckStatusWrapper* status, IServerBloc
 		HANDSHAKE_DEBUG(isc_print_status(status->getWarnings()));
 		return IAuth::AUTH_FAILED;
 	}
-}
-
-int SecurityDatabaseServer::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-
-	return 1;
 }
 
 namespace {

@@ -48,7 +48,7 @@
 #endif
 
 short 			event_flag = 0;
-void			ast_routine (void *, USHORT, const UCHAR *);
+void			ast_routine (void *, ISC_USHORT,  const ISC_UCHAR *);
 
 int main(int argc, char** argv)
 {
@@ -77,9 +77,9 @@ int main(int argc, char** argv)
 				      isc_tpb_wait,
 				      isc_tpb_no_rec_version};
 	if (argc > 1)
-                strcpy(dbname, argv[1]);
-    else
-		strcpy(dbname, "employee.fdb");
+		strcpy(dbname, argv[1]);
+  else
+		strcpy(dbname, "localhost:employee.fdb");
 
 
 	strcpy (ids[0], "new_order");
@@ -217,7 +217,7 @@ int main(int argc, char** argv)
 ** event will land us here .  PLus we get called once when the 
 ** program first starts.
 */
-void ast_routine(void *result, USHORT length, /*const*/ UCHAR *updated)
+void ast_routine(void *result, ISC_USHORT length, const ISC_UCHAR *updated)
 {
 	/* Set the global event flag */
 
@@ -226,6 +226,6 @@ void ast_routine(void *result, USHORT length, /*const*/ UCHAR *updated)
 	printf("ast routine was called\n");
 	/* Copy the updated buffer to the result buffer */
 	while (length--)
-		*(UCHAR*)result++ = *updated++;
+		*(ISC_UCHAR*)result++ = *updated++;
 }
 

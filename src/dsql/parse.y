@@ -457,7 +457,6 @@ using namespace Firebird;
 %token <metaNamePtr> COS
 %token <metaNamePtr> COSH
 %token <metaNamePtr> COT
-%token <metaNamePtr> CRC32
 %token <metaNamePtr> DATEADD
 %token <metaNamePtr> DATEDIFF
 %token <metaNamePtr> DECODE
@@ -599,12 +598,15 @@ using namespace Firebird;
 %token <metaNamePtr> COMPARE_DECFLOAT
 %token <metaNamePtr> CONSISTENCY
 %token <metaNamePtr> COUNTER
+%token <metaNamePtr> CRYPT_HASH
 %token <metaNamePtr> CTR_BIG_ENDIAN
 %token <metaNamePtr> CTR_LENGTH
 %token <metaNamePtr> CTR_LITTLE_ENDIAN
 %token <metaNamePtr> CUME_DIST
 %token <metaNamePtr> DECFLOAT
 %token <metaNamePtr> DEFINER
+%token <metaNamePtr> DISABLE
+%token <metaNamePtr> ENABLE
 %token <metaNamePtr> EXCESS
 %token <metaNamePtr> EXCLUDE
 %token <metaNamePtr> EXTENDED
@@ -613,6 +615,8 @@ using namespace Firebird;
 %token <metaNamePtr> HEX_DECODE
 %token <metaNamePtr> HEX_ENCODE
 %token <metaNamePtr> IDLE
+%token <metaNamePtr> INCLUDE
+%token <metaNamePtr> INT128
 %token <metaNamePtr> INVOKER
 %token <metaNamePtr> IV
 %token <metaNamePtr> LAST_DAY
@@ -634,8 +638,10 @@ using namespace Firebird;
 %token <metaNamePtr> PERCENT_RANK
 %token <metaNamePtr> PRECEDING
 %token <metaNamePtr> PRIVILEGE
+%token <metaNamePtr> PUBLICATION
 %token <metaNamePtr> QUANTIZE
 %token <metaNamePtr> RANGE
+%token <metaNamePtr> RESETTING
 %token <metaNamePtr> RDB_ERROR
 %token <metaNamePtr> RDB_GET_TRANSACTION_CN
 %token <metaNamePtr> RDB_ROLE_IN_USE
@@ -726,10 +732,10 @@ using namespace Firebird;
 	Jrd::ComparativeBoolNode::DsqlFlag cmpBoolFlag;
 	Jrd::dsql_fld* legacyField;
 	Jrd::ReturningClause* returningClause;
-	Firebird::MetaName* metaNamePtr;
-	Firebird::ObjectsArray<Firebird::MetaName>* metaNameArray;
+	Jrd::MetaName* metaNamePtr;
+	Firebird::ObjectsArray<Jrd::MetaName>* metaNameArray;
 	Firebird::PathName* pathNamePtr;
-	Firebird::QualifiedName* qualifiedNamePtr;
+	Jrd::QualifiedName* qualifiedNamePtr;
 	Firebird::string* stringPtr;
 	Jrd::IntlString* intlStringPtr;
 	Jrd::Lim64String* lim64ptr;
@@ -2101,7 +2107,7 @@ db_initial_desc($alterDatabaseNode)
 // With the exception of LENGTH, all clauses here are handled only at the client.
 %type db_initial_option(<alterDatabaseNode>)
 db_initial_option($alterDatabaseNode)
-	: PAGE_SIZE equals pos_short_integer
+	: PAGE_SIZE equals NUMBER32BIT
 	| USER symbol_user_name
 	| USER utf_string
 	| ROLE valid_symbol_name
@@ -2191,13 +2197,44 @@ table_clause
 			{
 				$<createRelationNode>$ = newNode<CreateRelationNode>($1, $2);
 			}
-		'(' table_elements($3) ')' tablespace_name_clause sql_security_clause
+		'(' table_elements($3) ')' table_attributes($3)
 			{
 				$$ = $3;
-				if ($7)
-					$$->tableSpace = *$7;
-				$$->ssDefiner = $8;
 			}
+	;
+
+%type table_attributes(<relationNode>)
+table_attributes($relationNode)
+	: /* nothing */
+	| table_attribute($relationNode) table_attributes($relationNode)
+	;
+
+%type table_attribute(<relationNode>)
+table_attribute($relationNode)
+	: sql_security_clause
+		{ setClause($relationNode->ssDefiner, "SQL SECURITY", $1); }
+	| publication_state
+		{ setClause($relationNode->replicationState, "PUBLICATION", $1); }
+	| tablespace_name_clause
+		{ setClause($relationNode->tableSpace, "TABLESPACE", *$1); }
+	;
+
+%type <boolVal> sql_security_clause
+sql_security_clause
+	: SQL SECURITY DEFINER		{ $$ = true; }
+	| SQL SECURITY INVOKER		{ $$ = false; }
+	;
+
+%type <nullableBoolVal> sql_security_clause_opt
+sql_security_clause_opt
+	: /* nothing */				{ $$ = Nullable<bool>::empty(); }
+	| sql_security_clause		{ $$ = Nullable<bool>::val($1); }
+	;
+
+%type <boolVal> publication_state
+publication_state
+	: ENABLE PUBLICATION		{ $$ = true; }
+	| DISABLE PUBLICATION		{ $$ = false; }
 	;
 
 %type <createRelationNode> gtt_table_clause
@@ -2224,8 +2261,8 @@ gtt_ops($createRelationNode)
 %type gtt_op(<createRelationNode>)
 gtt_op($createRelationNode)
 	: // nothing by default. Will be set "on commit delete rows" in dsqlPass
-	| sql_security_clause
-		{ setClause(static_cast<BaseNullable<bool>&>($createRelationNode->ssDefiner), "SQL SECURITY", $1); }
+	| sql_security_clause_opt
+		{ setClause($createRelationNode->ssDefiner, "SQL SECURITY", $1); }
 	| ON COMMIT DELETE ROWS
 		{ setClause($createRelationNode->relationType, "ON COMMIT DELETE ROWS", rel_global_temp_delete); }
 	| ON COMMIT PRESERVE ROWS
@@ -2630,7 +2667,7 @@ procedure_clause
 
 %type <createAlterProcedureNode> psql_procedure_clause
 psql_procedure_clause
-	: procedure_clause_start sql_security_clause AS local_declarations_opt full_proc_block
+	: procedure_clause_start sql_security_clause_opt AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
 			$$->ssDefiner = $2;
@@ -2657,13 +2694,6 @@ procedure_clause_start
 			{ $$ = newNode<CreateAlterProcedureNode>(*$1); }
 		input_parameters(NOTRIAL(&$2->parameters)) output_parameters(NOTRIAL(&$2->returns))
 			{ $$ = $2; }
-	;
-
-%type <nullableBoolVal> sql_security_clause
-sql_security_clause
-	: /* nothing */				{ $$ = Nullable<bool>::empty(); }
-	| SQL SECURITY DEFINER		{ $$ = Nullable<bool>::val(true); }
-	| SQL SECURITY INVOKER		{ $$ = Nullable<bool>::val(false); }
 	;
 
 %type <createAlterProcedureNode> alter_procedure_clause
@@ -2761,7 +2791,7 @@ function_clause
 
 %type <createAlterFunctionNode> psql_function_clause
 psql_function_clause
-	: function_clause_start sql_security_clause AS local_declarations_opt full_proc_block
+	: function_clause_start sql_security_clause_opt AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
 			$$->ssDefiner = $2;
@@ -2847,7 +2877,7 @@ replace_function_clause
 
 %type <createAlterPackageNode> package_clause
 package_clause
-	: symbol_package_name sql_security_clause AS BEGIN package_items_opt END
+	: symbol_package_name sql_security_clause_opt AS BEGIN package_items_opt END
 		{
 			CreateAlterPackageNode* node = newNode<CreateAlterPackageNode>(*$1);
 			node->ssDefiner = $2;
@@ -4139,22 +4169,37 @@ alter_op($relationNode)
 		}
 	| ALTER SQL SECURITY DEFINER
 		{
-			RelationNode::AlterSqlSecurityClause* clause =
-				newNode<RelationNode::AlterSqlSecurityClause>();
-			clause->ssDefiner = Nullable<bool>::val(true);
+			setClause($relationNode->ssDefiner, "SQL SECURITY", true);
+			RelationNode::Clause* clause =
+				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_SQL_SECURITY);
 			$relationNode->clauses.add(clause);
 		}
 	| ALTER SQL SECURITY INVOKER
 		{
-			RelationNode::AlterSqlSecurityClause* clause =
-				newNode<RelationNode::AlterSqlSecurityClause>();
-			clause->ssDefiner = Nullable<bool>::val(false);
+			setClause($relationNode->ssDefiner, "SQL SECURITY", false);
+			RelationNode::Clause* clause =
+				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_SQL_SECURITY);
 			$relationNode->clauses.add(clause);
 		}
 	| DROP SQL SECURITY
 		{
-			RelationNode::AlterSqlSecurityClause* clause =
-				newNode<RelationNode::AlterSqlSecurityClause>();
+			setClause($relationNode->ssDefiner, "SQL SECURITY", Nullable<bool>::empty());
+			RelationNode::Clause* clause =
+				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_SQL_SECURITY);
+			$relationNode->clauses.add(clause);
+		}
+	| ENABLE PUBLICATION
+		{
+			setClause($relationNode->replicationState, "PUBLICATION", true);
+			RelationNode::Clause* clause =
+				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_PUBLICATION);
+			$relationNode->clauses.add(clause);
+		}
+	| DISABLE PUBLICATION
+		{
+			setClause($relationNode->replicationState, "PUBLICATION", false);
+			RelationNode::Clause* clause =
+				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_PUBLICATION);
 			$relationNode->clauses.add(clause);
 		}
 	| ALTER TABLESPACE symbol_tablespace_name
@@ -4261,14 +4306,19 @@ keyword_or_column
 	| UPDATING
 	| VAR_SAMP
 	| VAR_POP
-	| DECFLOAT				// added in FB 4.0
+	| BINARY				// added in FB 4.0
+	| DECFLOAT
+	| INT128
 	| LATERAL
 	| LOCAL
 	| LOCALTIME
 	| LOCALTIMESTAMP
+	| PUBLICATION
+	| RESETTING
 	| TIMEZONE_HOUR
 	| TIMEZONE_MINUTE
 	| UNBOUNDED
+	| VARBINARY
 	| WINDOW
 	| WITHOUT
 	;
@@ -4432,12 +4482,38 @@ db_alter_clause($alterDatabaseNode)
 		{ $alterDatabaseNode->linger = 0; }
 	| SET DEFAULT sql_security_clause
 		{ $alterDatabaseNode->ssDefiner = $3; }
+	| ENABLE PUBLICATION
+		{ $alterDatabaseNode->clauses |= AlterDatabaseNode::CLAUSE_ENABLE_PUB; }
+	| DISABLE PUBLICATION
+		{ $alterDatabaseNode->clauses |= AlterDatabaseNode::CLAUSE_DISABLE_PUB; }
+	| INCLUDE pub_table_filter($alterDatabaseNode) TO PUBLICATION
+		{ $alterDatabaseNode->clauses |= AlterDatabaseNode::CLAUSE_PUB_INCL_TABLE; }
+	| EXCLUDE pub_table_filter($alterDatabaseNode) FROM PUBLICATION
+		{ $alterDatabaseNode->clauses |= AlterDatabaseNode::CLAUSE_PUB_EXCL_TABLE; }
 	;
 
 %type crypt_key_clause(<alterDatabaseNode>)
 crypt_key_clause($alterDatabaseNode)
 	: // nothing
 	| KEY valid_symbol_name		{ $alterDatabaseNode->keyName = *$2; }
+	;
+
+%type pub_table_filter(<alterDatabaseNode>)
+pub_table_filter($alterDatabaseNode)
+	: ALL
+	| TABLE pub_table_list($alterDatabaseNode)
+	;
+
+%type pub_table_list(<alterDatabaseNode>)
+pub_table_list($alterDatabaseNode)
+	: pub_table_clause($alterDatabaseNode)
+	| pub_table_list ',' pub_table_clause($alterDatabaseNode)
+	;
+
+%type pub_table_clause(<alterDatabaseNode>)
+pub_table_clause($alterDatabaseNode)
+	: symbol_table_name
+		{ $alterDatabaseNode->pubTables.add(*$1); }
 	;
 
 // ALTER TRIGGER
@@ -4696,21 +4772,28 @@ non_charset_simple_type
 
 			$$->dtype = dtype_int64;
 			$$->length = sizeof(SINT64);
-			$$->flags |= FLD_has_len;
+			$$->flags |= FLD_has_prec;
+		}
+	| INT128
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_int128;
+			$$->length = sizeof(Int128);
+			$$->flags |= FLD_has_prec;
 		}
 	| integer_keyword
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_long;
 			$$->length = sizeof(SLONG);
-			$$->flags |= FLD_has_len;
+			$$->flags |= FLD_has_prec;
 		}
 	| SMALLINT
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_short;
 			$$->length = sizeof(SSHORT);
-			$$->flags |= FLD_has_len;
+			$$->flags |= FLD_has_prec;
 		}
 	| DATE
 		{
@@ -4732,7 +4815,7 @@ non_charset_simple_type
 				$$->dtype = dtype_sql_date;
 				$$->length = sizeof(ULONG);
 			}
-			$$->flags |= FLD_has_len;
+			$$->flags |= FLD_has_prec;
 		}
 	| TIME without_time_zone_opt
 		{
@@ -4741,7 +4824,7 @@ non_charset_simple_type
 			checkTimeDialect();
 			$$->dtype = dtype_sql_time;
 			$$->length = sizeof(SLONG);
-			$$->flags |= FLD_has_len;
+			$$->flags |= FLD_has_prec;
 		}
 	| TIME WITH TIME ZONE
 		{
@@ -4750,21 +4833,21 @@ non_charset_simple_type
 			checkTimeDialect();
 			$$->dtype = dtype_sql_time_tz;
 			$$->length = sizeof(ISC_TIME_TZ);
-			$$->flags |= FLD_has_len;
+			$$->flags |= FLD_has_prec;
 		}
 	| TIMESTAMP without_time_zone_opt
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_timestamp;
 			$$->length = sizeof(GDS_TIMESTAMP);
-			$$->flags |= FLD_has_len;
+			$$->flags |= FLD_has_prec;
 		}
 	| TIMESTAMP WITH TIME ZONE
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_timestamp_tz;
 			$$->length = sizeof(ISC_TIMESTAMP_TZ);
-			$$->flags |= FLD_has_len;
+			$$->flags |= FLD_has_prec;
 		}
 	| BOOLEAN
 		{
@@ -4990,7 +5073,7 @@ decfloat_type
 
 			$$ = newNode<dsql_fld>();
 			if (precision)
-				$$->flags |= FLD_has_len;
+				$$->flags |= FLD_has_prec;
 			$$->precision = precision == 0 ? 34 : (USHORT) precision;
 			$$->dtype = precision == 16 ? dtype_dec64 : dtype_dec128;
 			$$->length = precision == 16 ? sizeof(Decimal64) : sizeof(Decimal128);
@@ -5031,7 +5114,7 @@ prec_scale
 	| '(' signed_long_integer ')'
 		{
 			$$ = newNode<dsql_fld>();
-			$$->flags |= FLD_has_len;
+			$$->flags |= FLD_has_prec;
 
 			if ($2 < 1 || $2 > 38)
 				yyabandon(YYPOSNARG(2), -842, Arg::Gds(isc_precision_err2) << Arg::Num(1) << Arg::Num(38));
@@ -5088,7 +5171,7 @@ prec_scale
 	| '(' signed_long_integer ',' signed_long_integer ')'
 		{
 			$$ = newNode<dsql_fld>();
-			$$->flags |= (FLD_has_len | FLD_has_scale);
+			$$->flags |= (FLD_has_prec | FLD_has_scale);
 
 			if ($2 < 1 || $2 > 38)
 				yyabandon(YYPOSNARG(2), -842, Arg::Gds(isc_precision_err2) << Arg::Num(1) << Arg::Num(38));
@@ -5388,14 +5471,14 @@ set_bind_to
 			checkTimeDialect();
 			$$->dtype = dtype_ex_time_tz;
 			$$->length = sizeof(ISC_TIME_TZ_EX);
-			$$->flags |= FLD_has_len;
+			$$->flags |= FLD_has_prec;
 		}
 	| EXTENDED TIMESTAMP WITH TIME ZONE
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_ex_timestamp_tz;
 			$$->length = sizeof(ISC_TIMESTAMP_TZ_EX);
-			$$->flags |= FLD_has_len;
+			$$->flags |= FLD_has_prec;
 		}
 	;
 
@@ -6706,14 +6789,14 @@ exec_function
 	: udf
 		{
 			AssignmentNode* node = newNode<AssignmentNode>();
-			node->asgnTo = newNode<NullNode>();
+			node->asgnTo = NullNode::instance();
 			node->asgnFrom = $1;
 			$$ = node;
 		}
 	| non_aggregate_function
 		{
 			AssignmentNode* node = newNode<AssignmentNode>();
-			node->asgnTo = newNode<NullNode>();
+			node->asgnTo = NullNode::instance();
 			node->asgnFrom = $1;
 			$$ = node;
 		}
@@ -6847,6 +6930,7 @@ predicate
 	| exists_predicate
 	| singular_predicate
 	| trigger_action_predicate
+	| session_reset_predicate
 	;
 
 
@@ -7017,6 +7101,15 @@ trigger_action_predicate
 					MAKE_const_slong(3));
 		}
 	;
+
+%type <boolExprNode> session_reset_predicate
+session_reset_predicate
+	: RESETTING
+		{
+			$$ = newNode<ComparativeBoolNode>(blr_eql,
+					newNode<InternalInfoNode>(MAKE_const_slong(INFO_TYPE_SESSION_RESETTING)),
+					MAKE_const_slong(1));
+		}
 
 %type <boolExprNode> null_predicate
 null_predicate
@@ -7579,6 +7672,7 @@ constant
 	| '-' ul_numeric_constant	{ $$ = newNode<NegateNode>($2); }
 	| '-' LIMIT64_INT			{ $$ = MAKE_const_sint64(MIN_SINT64, 0); }
 	| '-' LIMIT64_NUMBER		{ $$ = MAKE_const_sint64(MIN_SINT64, $2->getScale()); }
+	| '-' u_constant_128		{ $$ = newNode<NegateNode>($2); }
 	| boolean_literal
 	;
 
@@ -7590,7 +7684,12 @@ u_numeric_constant
 		{ $$ = MAKE_constant($1->c_str(), CONSTANT_NUM128, $1->getScale()); }
 	| LIMIT64_INT
 		{ $$ = MAKE_constant($1->c_str(), CONSTANT_NUM128); }
-	| NUM128
+	| u_constant_128
+	;
+
+%type <valueExprNode> u_constant_128
+u_constant_128
+	: NUM128
 		{ $$ = MAKE_constant($1->c_str(), CONSTANT_NUM128, $1->getScale()); }
 	;
 
@@ -7814,11 +7913,11 @@ aggregate_function
 			$$ = $1;
 
 			if ($$->aggInfo.blr == blr_agg_count2 && !$$->arg)	// count(*)
-				$$->arg = newNode<ValueIfNode>($5, MAKE_const_slong(1), newNode<NullNode>());
+				$$->arg = newNode<ValueIfNode>($5, MAKE_const_slong(1), NullNode::instance());
 			else
 			{
 				fb_assert($$->arg);
-				$$->arg = newNode<ValueIfNode>($5, $$->arg, newNode<NullNode>());
+				$$->arg = newNode<ValueIfNode>($5, $$->arg, NullNode::instance());
 			}
 		}
 	;
@@ -7918,15 +8017,15 @@ window_function
 	| LAG '(' value ',' value ',' value ')'
 		{ $$ = newNode<LagWinNode>($3, $5, $7); }
 	| LAG '(' value ',' value ')'
-		{ $$ = newNode<LagWinNode>($3, $5, newNode<NullNode>()); }
+		{ $$ = newNode<LagWinNode>($3, $5, NullNode::instance()); }
 	| LAG '(' value ')'
-		{ $$ = newNode<LagWinNode>($3, MAKE_const_slong(1), newNode<NullNode>()); }
+		{ $$ = newNode<LagWinNode>($3, MAKE_const_slong(1), NullNode::instance()); }
 	| LEAD '(' value ',' value ',' value ')'
 		{ $$ = newNode<LeadWinNode>($3, $5, $7); }
 	| LEAD '(' value ',' value ')'
-		{ $$ = newNode<LeadWinNode>($3, $5, newNode<NullNode>()); }
+		{ $$ = newNode<LeadWinNode>($3, $5, NullNode::instance()); }
 	| LEAD '(' value ')'
-		{ $$ = newNode<LeadWinNode>($3, MAKE_const_slong(1), newNode<NullNode>()); }
+		{ $$ = newNode<LeadWinNode>($3, MAKE_const_slong(1), NullNode::instance()); }
 	| NTILE '(' ntile_arg ')'
 		{ $$ = newNode<NTileWinNode>($3); }
 	;
@@ -8122,7 +8221,6 @@ system_function_std_syntax
 	| COS
 	| COSH
 	| COT
-	| CRC32
 	| EXP
 	| FLOOR
 	| GEN_UUID
@@ -8207,7 +8305,7 @@ system_function_special_syntax
 		}
 	| HASH '(' value ')'
 		{ $$ = newNode<SysFuncCallNode>(*$1, newNode<ValueListNode>($3)); }
-	| HASH '(' value USING valid_symbol_name ')'
+	| hash_func '(' value USING valid_symbol_name ')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add(MAKE_str_constant(newIntlString($5->c_str()), CS_ASCII)));
@@ -8264,6 +8362,11 @@ system_function_special_syntax
 			ValueExprNode* v = MAKE_system_privilege($3->c_str());
 			$$ = newNode<SysFuncCallNode>(*$1, newNode<ValueListNode>(v));
 		}
+	;
+
+%type <metaNamePtr> hash_func
+hash_func
+	: HASH | CRYPT_HASH
 	;
 
 %type <metaNamePtr> rsa_encrypt_decrypt
@@ -8431,7 +8534,7 @@ case_abbreviation
 	: NULLIF '(' value ',' value ')'
 		{
 			ComparativeBoolNode* condition = newNode<ComparativeBoolNode>(blr_eql, $3, $5);
-			$$ = newNode<ValueIfNode>(condition, newNode<NullNode>(), $3);
+			$$ = newNode<ValueIfNode>(condition, NullNode::instance(), $3);
 		}
 	| IIF '(' search_condition ',' value ',' value ')'
 		{ $$ = newNode<ValueIfNode>($3, $5, $7); }
@@ -8530,10 +8633,10 @@ searched_case
 %type <valueIfNode> searched_when_clause
 searched_when_clause
 	: WHEN search_condition THEN case_result
-		{ $$ = newNode<ValueIfNode>($2, $4, newNode<NullNode>()); }
+		{ $$ = newNode<ValueIfNode>($2, $4, NullNode::instance()); }
 	| searched_when_clause WHEN search_condition THEN case_result
 		{
-			ValueIfNode* cond = newNode<ValueIfNode>($3, $5, newNode<NullNode>());
+			ValueIfNode* cond = newNode<ValueIfNode>($3, $5, NullNode::instance());
 			ValueIfNode* last = $1;
 			ValueIfNode* next;
 
@@ -8616,14 +8719,14 @@ distinct_noise
 %type <valueExprNode> null_value
 null_value
 	: NULL
-		{ $$ = newNode<NullNode>(); }
+		{ $$ = NullNode::instance(); }
 	| UNKNOWN
 		{
 			dsql_fld* field = newNode<dsql_fld>();
 			field->dtype = dtype_boolean;
 			field->length = sizeof(UCHAR);
 
-			CastNode* castNode = newNode<CastNode>(newNode<NullNode>(), field);
+			CastNode* castNode = newNode<CastNode>(NullNode::instance(), field);
 			castNode->dsqlAlias = "CONSTANT";
 			$$ = castNode;
 		}
@@ -8791,8 +8894,8 @@ non_reserved_word
 	| FREE_IT
 	| RESTRICT
 	| ROLE
-	| TYPE				// added in IB 6.0
-	| BREAK				// added in FB 1.0
+	| TYPE					// added in IB 6.0
+	| BREAK					// added in FB 1.0
 	| DESCRIPTOR
 	| SUBSTRING
 	| COALESCE				// added in FB 1.5
@@ -9003,12 +9106,14 @@ non_reserved_word
 	| COMPARE_DECFLOAT
 	| CONNECTIONS
 	| CONSISTENCY
-	| CRC32
+	| CRYPT_HASH
 	| CTR_BIG_ENDIAN
 	| CTR_LENGTH
 	| CTR_LITTLE_ENDIAN
 	| CUME_DIST
 	| DEFINER
+	| DISABLE
+	| ENABLE
 	| EXCESS
 	| EXCLUDE
 	| EXTENDED
@@ -9017,6 +9122,7 @@ non_reserved_word
 	| HEX_DECODE
 	| HEX_ENCODE
 	| IDLE
+	| INCLUDE
 	| INVOKER
 	| IV
 	| LAST_DAY

@@ -64,13 +64,6 @@ class AutoIface : public VersionedIface<C>
 {
 public:
 	AutoIface() { }
-
-	/*** TODO: Alex, why this?
-	void* operator new(size_t, void* memory) throw()
-	{
-		return memory;
-	}
-	***/
 };
 
 // Helps to implement disposable interfaces
@@ -80,68 +73,65 @@ class DisposeIface : public VersionedIface<C>, public GlobalStorage
 public:
 	DisposeIface() { }
 
-	//// TODO: can move dispose method to here, cause C has virtual destructor.
+	void dispose() override
+	{
+		delete this;
+	}
 };
 
 // Helps to implement standard interfaces
 template <class C>
 class RefCntIface : public VersionedIface<C>, public GlobalStorage
 {
-#ifdef DEV_BUILD
 
+#ifdef DEV_BUILD
 public:
 	RefCntIface(const char* m = NULL)
-		: refCounter(0), mark(m)
+		:  mark(m), refCounter(0)
 	{
 		refCntDPrt('^');
 	}
 
+	const char* mark;
+#else
+public:
+	RefCntIface() : refCounter(0) { }
+#endif
+
 protected:
-	~RefCntIface()
+	virtual ~RefCntIface()
 	{
 		refCntDPrt('_');
-		fb_assert(refCounter.value() == 0);
+		fb_assert(refCounter == 0);
 	}
 
 public:
-
-	void addRef()
+	void addRef() override
 	{
 		refCntDPrt('+');
 		++refCounter;
 	}
 
-	//// TODO: can move release method to here, cause C has virtual destructor.
+	int release() override
+	{
+		int rc = --refCounter;
+		refCntDPrt('-');
+		if (rc == 0)
+			delete this;
+
+		return rc;
+	}
 
 protected:
 	void refCntDPrt(char f)
 	{
+#ifdef DEV_BUILD
 		if (mark)
-			fprintf(stderr, "%s %p %c %d\n", mark, this, f, int(refCounter.value()));
-	}
-
-	AtomicCounter refCounter;
-	const char* mark;
-
-#else
-
-public:
-	RefCntIface() : refCounter(0) { }
-
-	void addRef()
-	{
-		++refCounter;
-	}
-
-	//// TODO: can move release method to here, cause C has virtual destructor.
-
-protected:
-	AtomicCounter refCounter;
-
-	void refCntDPrt(char)
-	{ }
-
+			fprintf(stderr, "%s %p %c %d\n", mark, this, f, int(refCounter));
 #endif
+	}
+
+	AtomicCounter refCounter;
 };
 
 
@@ -161,12 +151,12 @@ public:
 #endif
 	{ }
 
-	IReferenceCounted* getOwner()
+	IReferenceCounted* getOwner() override
 	{
 		return owner;
 	}
 
-	void setOwner(IReferenceCounted* iface)
+	void setOwner(IReferenceCounted* iface) override
 	{
 		owner = iface;
 	}
@@ -250,9 +240,6 @@ public:
 	PluginManagerInterfacePtr()
 		: AccessAutoInterface<IPluginManager>(getMasterInterface()->getPluginManager())
 	{ }
-/*	explicit PluginManagerInterfacePtr(IMaster* master)
-		: AccessAutoInterface<IPluginManager>(master->getPluginManager())
-	{ } */
 };
 
 
@@ -402,33 +389,18 @@ public:
 	unsigned int getKey(IFirebirdConf* config, const char* keyName);
 };
 
-// debugger for reference counters
-
 #ifdef NEVERDEF
-#define FB_CAT2(a, b) a##b
-#define FB_CAT1(a, b) FB_CAT2(a, b)
-#define FB_RefDeb(c, p, l) Firebird::ReferenceCounterDebugger FB_CAT1(refCntDbg_, l)(c, p)
-#define RefDeb(c, p) FB_RefDeb(c, p, __LINE__)
-
-enum DebugEvent
-{ DEB_AR_JATT, DEB_RLS_JATT, DEB_RLS_YATT, MaxDebugEvent };
-
-class ReferenceCounterDebugger
+static inline int refCount(IReferenceCounted* refCounted)
 {
-public:
-	ReferenceCounterDebugger(DebugEvent code, const char* p);
-	~ReferenceCounterDebugger();
-	static ReferenceCounterDebugger* get(DebugEvent code);
-
-	const char* rcd_point;
-	ReferenceCounterDebugger* rcd_prev;
-	DebugEvent rcd_code;
-};
-
-extern IDebug* getImpDebug();
-
-#else
-#define RefDeb(c, p)
+#ifdef DEV_BUILD
+	if (refCounted)
+	{
+		refCounted->addRef();
+		return refCounted->release();
+	}
+#endif
+	return 0;
+}
 #endif
 
 } // namespace Firebird

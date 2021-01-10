@@ -49,7 +49,7 @@ IndexTableScan::IndexTableScan(CompilerScratch* csb, const string& alias,
 {
 	fb_assert(m_index);
 
-	// Reserve one excess byte for the upper key - in case when length of 
+	// Reserve one excess byte for the upper key - in case when length of
 	// upper key at retrieval is greater than declared index key length.
 	// See also comments at openStream().
 	FB_SIZE_T size = sizeof(Impure) + 2u * m_length + 1u;
@@ -57,7 +57,7 @@ IndexTableScan::IndexTableScan(CompilerScratch* csb, const string& alias,
 	m_offset = size;
 	size += sizeof(index_desc);
 
-	m_impure = CMP_impure(csb, static_cast<ULONG>(size));
+	m_impure = csb->allocImpure(FB_ALIGNMENT, static_cast<ULONG>(size));
 }
 
 void IndexTableScan::open(thread_db* tdbb) const
@@ -97,22 +97,35 @@ void IndexTableScan::close(thread_db* tdbb) const
 			impure->irsb_nav_records_visited = NULL;
 		}
 
-		if (impure->irsb_nav_page)
+		if (impure->irsb_nav_btr_gc_lock)
 		{
-			fb_assert(impure->irsb_nav_btr_gc_lock);
+#ifdef DEBUG_LCK_LIST
+			if (!impure->irsb_nav_page)
+				gds__log("DEBUG_LCK_LIST: irsb_nav_btr_gc_lock && !irsb_nav_page");
+#endif
 			impure->irsb_nav_btr_gc_lock->enablePageGC(tdbb);
 			delete impure->irsb_nav_btr_gc_lock;
 			impure->irsb_nav_btr_gc_lock = NULL;
-
-			impure->irsb_nav_page = 0;
 		}
+		impure->irsb_nav_page = 0;
 	}
+#ifdef DEBUG_LCK_LIST
+	// paranoid check
+	else if (impure->irsb_nav_btr_gc_lock)
+	{
+		gds__log("DEBUG_LCK_LIST: irsb_nav_btr_gc_lock && !(irsb_flags & irsb_open)");
+
+		impure->irsb_nav_btr_gc_lock->enablePageGC(tdbb);
+		delete impure->irsb_nav_btr_gc_lock;
+		impure->irsb_nav_btr_gc_lock = NULL;
+		impure->irsb_nav_page = 0;
+	}
+#endif
 }
 
 bool IndexTableScan::getRecord(thread_db* tdbb) const
 {
-	if (--tdbb->tdbb_quantum < 0)
-		JRD_reschedule(tdbb, 0, true);
+	JRD_reschedule(tdbb);
 
 	jrd_req* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];
@@ -510,8 +523,8 @@ UCHAR* IndexTableScan::openStream(thread_db* tdbb, Impure* impure, win* window) 
 	temporary_key* limit_ptr = NULL;
 	if (retrieval->irb_upper_count)
 	{
-		// If upper key length is greater than declared key length, we need 
-		// one "excess" byte for correct comparison. Without it there could 
+		// If upper key length is greater than declared key length, we need
+		// one "excess" byte for correct comparison. Without it there could
 		// be false equality hits.
 		impure->irsb_nav_upper_length = MIN(m_length + 1, upper.key_length);
 		memcpy(impure->irsb_nav_data + m_length, upper.key_data, impure->irsb_nav_upper_length);
@@ -563,7 +576,11 @@ void IndexTableScan::setPage(thread_db* tdbb, Impure* impure, win* window) const
 			if (!impure->irsb_nav_btr_gc_lock)
 			{
 				impure->irsb_nav_btr_gc_lock =
+#ifdef DEBUG_LCK_LIST
+					FB_NEW_RPT(*tdbb->getDefaultPool(), 0) BtrPageGCLock(tdbb, tdbb->getDefaultPool());
+#else
 					FB_NEW_RPT(*tdbb->getDefaultPool(), 0) BtrPageGCLock(tdbb);
+#endif
 			}
 
 			impure->irsb_nav_btr_gc_lock->disablePageGC(tdbb, window->win_page);

@@ -422,6 +422,45 @@ Int128 Int128::operator/(unsigned value) const
 	return rc;
 }
 
+Int128 Int128::operator<<(int value) const
+{
+	Int128 rc(*this);
+	rc.v <<= value;
+	return rc;
+}
+
+Int128 Int128::operator>>(int value) const
+{
+	Int128 rc(*this);
+	rc.v >>= value;
+	return rc;
+}
+
+Int128 Int128::operator&=(Int128 value)
+{
+	v &= value.v;
+	return *this;
+}
+
+Int128 Int128::operator|=(Int128 value)
+{
+	v |= value.v;
+	return *this;
+}
+
+Int128 Int128::operator^=(Int128 value)
+{
+	v ^= value.v;
+	return *this;
+}
+
+Int128 Int128::operator~() const
+{
+	Int128 rc(*this);
+	rc.v.BitNot();
+	return rc;
+}
+
 Int128 Int128::operator-() const
 {
 	return neg();
@@ -430,6 +469,12 @@ Int128 Int128::operator-() const
 Int128 Int128::operator+=(unsigned value)
 {
 	v.AddInt(value);
+	return *this;
+}
+
+Int128 Int128::operator-=(unsigned value)
+{
+	v.SubInt(value);
 	return *this;
 }
 
@@ -452,6 +497,11 @@ bool Int128::operator>=(Int128 value) const
 bool Int128::operator==(Int128 value) const
 {
 	return v == value.v;
+}
+
+bool Int128::operator!=(Int128 value) const
+{
+	return v != value.v;
 }
 
 void Int128::zerodivide()

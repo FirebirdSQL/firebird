@@ -181,3 +181,4 @@ dbcrypt - a sample of XOR database encryption (do not use in production!!!)
 
 extauth - authentication for cross-server connections based on having same secret key on all servers
 
+replication - a sample or replication. Doesn't do anything useful just write log of calls from the engine.

@@ -276,6 +276,13 @@ namespace
 		{
 			clear();
 
+			PathName confName = getFileName();
+			const char* rootDir = Config::getRootDirectory();
+			const FB_SIZE_T rootLen = strlen(rootDir);
+
+			if ((confName.length() > rootLen) && (confName.compare(0, rootLen, rootDir, rootLen) == 0))
+				confName.erase(0, rootLen);
+
 			ConfigFile aliasConfig(getFileName(), ConfigFile::HAS_SUB_CONF, this);
 			const ConfigFile::Parameters& params = aliasConfig.getParameters();
 
@@ -330,9 +337,9 @@ namespace
 					db->config =
 #ifdef HAVE_ID_BY_NAME
 						(!db->id) ?
-							FB_NEW Config(*par->sub, *Config::getDefaultConfig(), db->name) :
+							FB_NEW Config(*par->sub, confName.c_str(), *Config::getDefaultConfig(), db->name) :
 #endif
-							FB_NEW Config(*par->sub, *Config::getDefaultConfig());
+							FB_NEW Config(*par->sub, confName.c_str(), *Config::getDefaultConfig());
 				}
 
 				PathName correctedAlias(par->name.ToPathName());

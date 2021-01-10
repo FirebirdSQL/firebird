@@ -35,7 +35,6 @@
 #include "firebird/impl/consts_pub.h"
 #include "codetext.h"
 #include "../../common/isc_f_proto.h"
-#include "../../jrd/RuntimeStatistics.h"
 #include "../../common/dsc.h"
 #include "../../common/utils_proto.h"
 #include "../../common/UtilSvc.h"
@@ -485,25 +484,25 @@ void TracePluginImpl::appendGlobalCounts(const PerformanceInfo* info)
 
 	ntrace_counter_t cnt;
 
-	if ((cnt = info->pin_counters[RuntimeStatistics::PAGE_READS]) != 0)
+	if ((cnt = info->pin_counters[PerformanceInfo::READS]) != 0)
 	{
 		temp.printf(", %" QUADFORMAT"d read(s)", cnt);
 		record.append(temp);
 	}
 
-	if ((cnt = info->pin_counters[RuntimeStatistics::PAGE_WRITES]) != 0)
+	if ((cnt = info->pin_counters[PerformanceInfo::WRITES]) != 0)
 	{
 		temp.printf(", %" QUADFORMAT"d write(s)", cnt);
 		record.append(temp);
 	}
 
-	if ((cnt = info->pin_counters[RuntimeStatistics::PAGE_FETCHES]) != 0)
+	if ((cnt = info->pin_counters[PerformanceInfo::FETCHES]) != 0)
 	{
 		temp.printf(", %" QUADFORMAT"d fetch(es)", cnt);
 		record.append(temp);
 	}
 
-	if ((cnt = info->pin_counters[RuntimeStatistics::PAGE_MARKS]) != 0)
+	if ((cnt = info->pin_counters[PerformanceInfo::MARKS]) != 0)
 	{
 		temp.printf(", %" QUADFORMAT"d mark(s)", cnt);
 		record.append(temp);
@@ -542,7 +541,7 @@ void TracePluginImpl::appendTableCounts(const PerformanceInfo *info)
 	{
 		record.append(trc->trc_relation_name);
 		record.append(max_len - fb_strlen(trc->trc_relation_name), ' ');
-		for (int j = 0; j < DBB_max_rel_count; j++)
+		for (int j = 0; j <= TraceCounts::EXPUNGES; j++)
 		{
 			if (trc->trc_counters[j] == 0)
 			{
@@ -748,6 +747,12 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 				else
 					paramtype = "bigint";
 				break;
+			case dtype_int128:
+				if (parameters->dsc_scale)
+					paramtype.printf("int128(*, %d)", parameters->dsc_scale);
+				else
+					paramtype = "int128";
+				break;
 
 			case dtype_real:
 				paramtype = "float";
@@ -764,9 +769,6 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 				break;
 			case dtype_dec128:
 				paramtype = "decfloat(34)";
-				break;
-			case dtype_int128:
-				paramtype = "decimal";
 				break;
 
 			case dtype_sql_date:
@@ -1928,8 +1930,20 @@ void TracePluginImpl::register_service(ITraceServiceConnection* service)
 			remote_address = "internal";
 	}
 
-	if (username.isEmpty())
-		username = "<user is unknown>";
+
+	if (!username.isEmpty())
+	{
+		const char* role = service->getRoleName();
+		if (role && *role) 
+		{
+			username.append(":");
+			username.append(role);
+		}
+	}
+	else
+	{
+		username = "<unknown_user>";
+	}
 
 	tmp = service->getRemoteProcessName();
 	if (tmp && *tmp) {
@@ -2332,16 +2346,6 @@ void TracePluginImpl::log_event_sweep(ITraceDatabaseConnection* connection, ITra
 }
 
 //***************************** PLUGIN INTERFACE ********************************
-
-int TracePluginImpl::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-	return 1;
-}
 
 const char* TracePluginImpl::trace_get_error()
 {

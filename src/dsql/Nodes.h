@@ -29,6 +29,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/NestConst.h"
 #include <functional>
+#include <initializer_list>
 #include <type_traits>
 
 namespace Jrd {
@@ -87,9 +88,10 @@ template <typename T>
 class RegisterNode
 {
 public:
-	explicit RegisterNode(UCHAR blr)
+	explicit RegisterNode(std::initializer_list<UCHAR> blrList)
 	{
-		PAR_register(blr, T::parse);
+		for (const auto blr : blrList)
+			PAR_register(blr, T::parse);
 	}
 };
 
@@ -97,9 +99,10 @@ template <typename T>
 class RegisterBoolNode
 {
 public:
-	explicit RegisterBoolNode(UCHAR blr)
+	explicit RegisterBoolNode(std::initializer_list<UCHAR> blrList)
 	{
-		PAR_register(blr, T::parse);
+		for (const auto blr : blrList)
+			PAR_register(blr, T::parse);
 	}
 };
 
@@ -181,10 +184,10 @@ public:
 	}
 
 	static bool deleteSecurityClass(thread_db* tdbb, jrd_tra* transaction,
-		const Firebird::MetaName& secClass);
+		const MetaName& secClass);
 
 	static void storePrivileges(thread_db* tdbb, jrd_tra* transaction,
-		const Firebird::MetaName& name, int type, const char* privileges);
+		const MetaName& name, int type, const char* privileges);
 
 public:
 	// Check permission on DDL operation. Return true if everything is OK.
@@ -215,11 +218,11 @@ public:
 	enum DdlTriggerWhen { DTW_BEFORE, DTW_AFTER };
 
 	static void executeDdlTrigger(thread_db* tdbb, jrd_tra* transaction,
-		DdlTriggerWhen when, int action, const Firebird::MetaName& objectName,
-		const Firebird::MetaName& oldNewObjectName, const Firebird::string& sqlText);
+		DdlTriggerWhen when, int action, const MetaName& objectName,
+		const MetaName& oldNewObjectName, const Firebird::string& sqlText);
 
 protected:
-	typedef Firebird::Pair<Firebird::Left<Firebird::MetaName, bid> > MetaNameBidPair;
+	typedef Firebird::Pair<Firebird::Left<MetaName, bid> > MetaNameBidPair;
 	typedef Firebird::GenericMap<MetaNameBidPair> MetaNameBidMap;
 
 	// Return exception code based on combination of create and alter clauses.
@@ -240,9 +243,9 @@ protected:
 	}
 
 	void executeDdlTrigger(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-		DdlTriggerWhen when, int action, const Firebird::MetaName& objectName,
-		const Firebird::MetaName& oldNewObjectName);
-	void storeGlobalField(thread_db* tdbb, jrd_tra* transaction, Firebird::MetaName& name,
+		DdlTriggerWhen when, int action, const MetaName& objectName,
+		const MetaName& oldNewObjectName);
+	void storeGlobalField(thread_db* tdbb, jrd_tra* transaction, MetaName& name,
 		const TypeClause* field,
 		const Firebird::string& computedSource = "",
 		const BlrDebugWriter::BlrData& computedValue = BlrDebugWriter::BlrData());
@@ -349,38 +352,44 @@ public:
 	}
 
 public:
+	typename T::Type getType() const override
+	{
+		return typeConst;
+	}
+
+public:
 	const static typename T::Type TYPE = typeConst;
 };
 
 
 template <typename To, typename From> static To* nodeAs(From* fromNode)
 {
-	return fromNode && fromNode->type == To::TYPE ? static_cast<To*>(fromNode) : NULL;
+	return fromNode && fromNode->getType() == To::TYPE ? static_cast<To*>(fromNode) : NULL;
 }
 
 template <typename To, typename From> static To* nodeAs(NestConst<From>& fromNode)
 {
-	return fromNode && fromNode->type == To::TYPE ? static_cast<To*>(fromNode.getObject()) : NULL;
+	return fromNode && fromNode->getType() == To::TYPE ? static_cast<To*>(fromNode.getObject()) : NULL;
 }
 
 template <typename To, typename From> static const To* nodeAs(const From* fromNode)
 {
-	return fromNode && fromNode->type == To::TYPE ? static_cast<const To*>(fromNode) : NULL;
+	return fromNode && fromNode->getType() == To::TYPE ? static_cast<const To*>(fromNode) : NULL;
 }
 
 template <typename To, typename From> static const To* nodeAs(const NestConst<From>& fromNode)
 {
-	return fromNode && fromNode->type == To::TYPE ? static_cast<const To*>(fromNode.getObject()) : NULL;
+	return fromNode && fromNode->getType() == To::TYPE ? static_cast<const To*>(fromNode.getObject()) : NULL;
 }
 
 template <typename To, typename From> static bool nodeIs(const From* fromNode)
 {
-	return fromNode && fromNode->type == To::TYPE;
+	return fromNode && fromNode->getType() == To::TYPE;
 }
 
 template <typename To, typename From> static bool nodeIs(const NestConst<From>& fromNode)
 {
-	return fromNode && fromNode->type == To::TYPE;
+	return fromNode && fromNode->getType() == To::TYPE;
 }
 
 
@@ -509,25 +518,24 @@ public:
 	};
 
 	// Generic flags.
-	static const unsigned FLAG_INVARIANT	= 0x01;	// Node is recognized as being invariant.
+	static const USHORT FLAG_INVARIANT	= 0x01;	// Node is recognized as being invariant.
 
 	// Boolean flags.
-	static const unsigned FLAG_DEOPTIMIZE	= 0x02;	// Boolean which requires deoptimization.
-	static const unsigned FLAG_RESIDUAL		= 0x04;	// Boolean which must remain residual.
-	static const unsigned FLAG_ANSI_NOT		= 0x08;	// ANY/ALL predicate is prefixed with a NOT one.
+	static const USHORT FLAG_DEOPTIMIZE	= 0x02;	// Boolean which requires deoptimization.
+	static const USHORT FLAG_RESIDUAL	= 0x04;	// Boolean which must remain residual.
+	static const USHORT FLAG_ANSI_NOT	= 0x08;	// ANY/ALL predicate is prefixed with a NOT one.
 
 	// Value flags.
-	static const unsigned FLAG_DOUBLE		= 0x10;
-	static const unsigned FLAG_DATE			= 0x20;
-	static const unsigned FLAG_DECFLOAT		= 0x40;
-	static const unsigned FLAG_VALUE		= 0x80;	// Full value area required in impure space.
-	static const unsigned FLAG_INT128		= 0x100;
+	static const USHORT FLAG_DOUBLE		= 0x10;
+	static const USHORT FLAG_DATE		= 0x20;
+	static const USHORT FLAG_DECFLOAT	= 0x40;
+	static const USHORT FLAG_VALUE		= 0x80;	// Full value area required in impure space.
+	static const USHORT FLAG_INT128		= 0x100;
 
 	explicit ExprNode(Type aType, MemoryPool& pool)
 		: DmlNode(pool),
-		  type(aType),
-		  nodFlags(0),
-		  impureOffset(0)
+		  impureOffset(0),
+		  nodFlags(0)
 	{
 	}
 
@@ -545,6 +553,7 @@ public:
 		*node = (*node)->pass2(tdbb, csb);
 	}
 
+	virtual Type getType() const = 0;
 	virtual Firebird::string internalPrint(NodePrinter& printer) const = 0;
 
 	virtual bool dsqlAggregateFinder(AggregateFinder& visitor)
@@ -681,9 +690,8 @@ public:
 	virtual ExprNode* copy(thread_db* tdbb, NodeCopier& copier) const = 0;
 
 public:
-	const Type type;
-	unsigned nodFlags;
 	ULONG impureOffset;
+	USHORT nodFlags;
 };
 
 
@@ -739,7 +747,7 @@ public:
 		: ExprNode(aType, pool),
 		  nodScale(0)
 	{
-		nodDesc.clear();
+		dsqlDesc.clear();
 	}
 
 public:
@@ -748,6 +756,30 @@ public:
 	virtual Kind getKind()
 	{
 		return KIND_VALUE;
+	}
+
+	const dsc& getDsqlDesc() const
+	{
+		return dsqlDesc;
+	}
+
+	void makeDsqlDesc(DsqlCompilerScratch* dsqlScratch)
+	{
+		auto settableDesc = dsqlSetableDesc();
+
+		if (settableDesc)
+			make(dsqlScratch, settableDesc);
+	}
+
+	dsc* dsqlSetableDesc()
+	{
+		return isSharedNode() ? nullptr : &dsqlDesc;
+	}
+
+	// Must be overriden returning true in shared nodes.
+	virtual bool isSharedNode()
+	{
+		return false;
 	}
 
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -791,7 +823,9 @@ public:
 
 public:
 	SCHAR nodScale;
-	dsc nodDesc;
+
+protected:
+	dsc dsqlDesc;
 };
 
 template <typename T, typename ValueExprNode::Type typeConst>
@@ -908,7 +942,7 @@ public:
 
 		AggNode* newInstance(MemoryPool& pool) const
 		{
-			return FB_NEW T(pool);
+			return FB_NEW_POOL(pool) T(pool);
 		}
 	};
 
@@ -924,7 +958,7 @@ public:
 
 		AggNode* newInstance(MemoryPool& pool) const
 		{
-			return FB_NEW T(pool, type);
+			return FB_NEW_POOL(pool) T(pool, type);
 		}
 
 	public:
@@ -937,20 +971,18 @@ public:
 	public:
 		explicit Register(const char* aName, UCHAR blr, UCHAR blrDistinct)
 			: AggInfo(aName, blr, blrDistinct),
-			  registerNode1(blr),
-			  registerNode2(blrDistinct)
+			  registerNode({blr, blrDistinct})
 		{
 		}
 
 		explicit Register(const char* aName, UCHAR blr)
 			: AggInfo(aName, blr, blr),
-			  registerNode1(blr),
-			  registerNode2(blr)
+			  registerNode({blr})
 		{
 		}
 
 	private:
-		RegisterNode<T> registerNode1, registerNode2;
+		RegisterNode<T> registerNode;
 	};
 
 public:
@@ -1060,20 +1092,20 @@ public:
 class RecordSourceNode : public ExprNode
 {
 public:
-	static const unsigned DFLAG_SINGLETON				= 0x01;
-	static const unsigned DFLAG_VALUE					= 0x02;
-	static const unsigned DFLAG_RECURSIVE				= 0x04;	// recursive member of recursive CTE
-	static const unsigned DFLAG_DERIVED					= 0x08;
-	static const unsigned DFLAG_DT_IGNORE_COLUMN_CHECK	= 0x10;
-	static const unsigned DFLAG_DT_CTE_USED				= 0x20;
-	static const unsigned DFLAG_CURSOR					= 0x40;
-	static const unsigned DFLAG_LATERAL					= 0x80;
+	static const USHORT DFLAG_SINGLETON					= 0x01;
+	static const USHORT DFLAG_VALUE						= 0x02;
+	static const USHORT DFLAG_RECURSIVE					= 0x04;	// recursive member of recursive CTE
+	static const USHORT DFLAG_DERIVED					= 0x08;
+	static const USHORT DFLAG_DT_IGNORE_COLUMN_CHECK	= 0x10;
+	static const USHORT DFLAG_DT_CTE_USED				= 0x20;
+	static const USHORT DFLAG_CURSOR					= 0x40;
+	static const USHORT DFLAG_LATERAL					= 0x80;
 
 	RecordSourceNode(Type aType, MemoryPool& pool)
 		: ExprNode(aType, pool),
-		  dsqlFlags(0),
 		  dsqlContext(NULL),
-		  stream(INVALID_STREAM)
+		  stream(INVALID_STREAM),
+		  dsqlFlags(0)
 	{
 	}
 
@@ -1107,7 +1139,6 @@ public:
 	}
 
 	virtual RecordSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const = 0;
-	virtual void ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const = 0;
 	virtual RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb) = 0;
 	virtual void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		BoolExprNode** boolean, RecordSourceNodeStack& stack) = 0;
@@ -1152,11 +1183,13 @@ public:
 	virtual RecordSource* compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream) = 0;
 
 public:
-	unsigned dsqlFlags;
 	dsql_ctx* dsqlContext;
 
 protected:
 	StreamType stream;
+
+public:
+	USHORT dsqlFlags;
 };
 
 
@@ -1369,7 +1402,6 @@ public:
 		TYPE_RECEIVE,
 		TYPE_RETURN,
 		TYPE_SAVEPOINT,
-		TYPE_SAVEPOINT_ENCLOSE,
 		TYPE_SELECT,
 		TYPE_SESSION_MANAGEMENT_WRAPPER,
 		TYPE_SET_GENERATOR,
@@ -1383,7 +1415,7 @@ public:
 		TYPE_EXT_TRIGGER
 	};
 
-	enum WhichTrigger
+	enum WhichTrigger : UCHAR
 	{
 		ALL_TRIGS = 0,
 		PRE_TRIG = 1,
@@ -1403,13 +1435,13 @@ public:
 			  oldPool(tdbb->getDefaultPool()),
 			  oldRequest(tdbb->getRequest()),
 			  oldTransaction(tdbb->getTransaction()),
-			  errorPending(false),
-			  catchDisabled(false),
+			  topNode(NULL),
+			  prevNode(NULL),
 			  whichEraseTrig(ALL_TRIGS),
 			  whichStoTrig(ALL_TRIGS),
 			  whichModTrig(ALL_TRIGS),
-			  topNode(NULL),
-			  prevNode(NULL),
+			  errorPending(false),
+			  catchDisabled(false),
 			  exit(false)
 		{
 			savedTdbb->setTransaction(transaction);
@@ -1426,55 +1458,26 @@ public:
 		MemoryPool* oldPool;		// Save the old pool to restore on exit.
 		jrd_req* oldRequest;		// Save the old request to restore on exit.
 		jrd_tra* oldTransaction;	// Save the old transcation to restore on exit.
-		bool errorPending;			// Is there an error pending to be handled?
-		bool catchDisabled;			// Catch errors so we can unwind cleanly.
+		const StmtNode* topNode;
+		const StmtNode* prevNode;
 		WhichTrigger whichEraseTrig;
 		WhichTrigger whichStoTrig;
 		WhichTrigger whichModTrig;
-		const StmtNode* topNode;
-		const StmtNode* prevNode;
+		bool errorPending;			// Is there an error pending to be handled?
+		bool catchDisabled;			// Catch errors so we can unwind cleanly.
 		bool exit;					// Exit the looper when true.
 	};
 
 public:
 	explicit StmtNode(Type aType, MemoryPool& pool)
 		: DmlNode(pool),
-		  type(aType),
 		  parentStmt(NULL),
 		  impureOffset(0),
 		  hasLineColumn(false)
 	{
 	}
 
-	template <typename T> T* as()
-	{
-		return type == T::TYPE ? static_cast<T*>(this) : NULL;
-	}
-
-	template <typename T> const T* as() const
-	{
-		return type == T::TYPE ? static_cast<const T*>(this) : NULL;
-	}
-
-	template <typename T> bool is() const
-	{
-		return type == T::TYPE;
-	}
-
-	template <typename T, typename T2> static T* as(T2* node)
-	{
-		return node ? node->template as<T>() : NULL;
-	}
-
-	template <typename T, typename T2> static const T* as(const T2* node)
-	{
-		return node ? node->template as<T>() : NULL;
-	}
-
-	template <typename T, typename T2> static bool is(const T2* node)
-	{
-		return node && node->template is<T>();
-	}
+	virtual Type getType() const = 0;
 
 	// Allocate and assign impure space for various nodes.
 	template <typename T> static void doPass2(thread_db* tdbb, CompilerScratch* csb, T** node,
@@ -1494,6 +1497,8 @@ public:
 		return KIND_STATEMENT;
 	}
 
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+
 	virtual StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
 		DmlNode::dsqlPass(dsqlScratch);
@@ -1508,7 +1513,7 @@ public:
 		fb_assert(false);
 		Firebird::status_exception::raise(
 			Firebird::Arg::Gds(isc_cannot_copy_stmt) <<
-			Firebird::Arg::Num(int(type)));
+			Firebird::Arg::Num(int(getType())));
 
 		return NULL;
 	}
@@ -1516,7 +1521,6 @@ public:
 	virtual const StmtNode* execute(thread_db* tdbb, jrd_req* request, ExeState* exeState) const = 0;
 
 public:
-	const Type type;
 	NestConst<StmtNode> parentStmt;
 	ULONG impureOffset;	// Inpure offset from request block.
 	bool hasLineColumn;
@@ -1560,28 +1564,6 @@ public:
 };
 
 
-// Add savepoint pair of nodes to statement having error handlers.
-class SavepointEncloseNode : public TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_SAVEPOINT_ENCLOSE>
-{
-public:
-	explicit SavepointEncloseNode(MemoryPool& pool, StmtNode* aStmt)
-		: TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_SAVEPOINT_ENCLOSE>(pool),
-		  stmt(aStmt)
-	{
-	}
-
-public:
-	static StmtNode* make(MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, StmtNode* node);
-
-public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-
-private:
-	NestConst<StmtNode> stmt;
-};
-
-
 struct ScaledNumber
 {
 	FB_UINT64 number;
@@ -1611,7 +1593,7 @@ public:
 class GeneratorItem : public Printable
 {
 public:
-	GeneratorItem(Firebird::MemoryPool& pool, const Firebird::MetaName& name)
+	GeneratorItem(Firebird::MemoryPool& pool, const MetaName& name)
 		: id(0), name(pool, name), secName(pool)
 	{}
 
@@ -1628,8 +1610,8 @@ public:
 
 public:
 	SLONG id;
-	Firebird::MetaName name;
-	Firebird::MetaName secName;
+	MetaName name;
+	MetaName secName;
 };
 
 typedef Firebird::Array<StreamType> StreamMap;

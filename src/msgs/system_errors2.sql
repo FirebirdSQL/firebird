@@ -955,8 +955,12 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (304, '01', '004', 0, 946, 'truncate_warn', NULL, NULL)
 (304, '01', '004', 0, 947, 'truncate_monitor', NULL, NULL)
 (304, '01', '004', 0, 948, 'truncate_context', NULL, NULL)
-(-902, '08', '001', 0, 949, 'ts_file_exists', NULL, NULL)
-(-901, '42', '000', 0, 950, 'tablespace_name', NULL, NULL)
+(-811, '21', '000', 0, 949, 'merge_dup_update', NULL, NULL)
+(-902, 'XX', '000', 0, 950, 'wrong_page', NULL, NULL)
+(-902, 'HY', '000', 0, 951, 'repl_error', NULL, NULL)
+(-902, '08', '003', 0, 952, 'ses_reset_failed', NULL, NULL)
+(-902, '08', '001', 0, 953, 'ts_file_exists', NULL, NULL)
+(-901, '42', '000', 0, 954, 'tablespace_name', NULL, NULL)
 -- GFIX
 (-901, '00', '000', 3, 1, 'gfix_db_name', NULL, NULL)
 (-901, '00', '000', 3, 2, 'gfix_invalid_sw', NULL, NULL)
@@ -1456,6 +1460,7 @@ COMMIT WORK;
 (-901, '08', '006', 24, 73, 'nbackup_user_stop', NULL, NULL)
 (-901, '54', '023', 24, 75, 'nbackup_deco_parse', NULL, NULL)
 (-901, '00', '000', 24, 77, 'nbackup_lostrec_guid_db', NULL, NULL)
+(-901, '00', '000', 24, 81, 'nbackup_seq_misuse', NULL, NULL)
 -- FBTRACEMGR
 (-901, '00', '000', 25, 30, 'trace_conflict_acts', NULL, NULL)
 (-901, '00', '000', 25, 31, 'trace_act_notfound', NULL, NULL)

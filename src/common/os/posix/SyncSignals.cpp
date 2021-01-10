@@ -54,10 +54,6 @@
 #include <errno.h>
 #include <unistd.h>
 
-#if defined FREEBSD || defined NETBSD || defined DARWIN || defined HPUX
-#define sigset      signal
-#endif
-
 namespace {
 
 	// Here we can't use atomic counter instead mutex/counter pair - or some thread may leave SyncSignalsSet()
@@ -76,22 +72,19 @@ namespace {
 
 	} // extern "C"
 
-#ifndef HAVE_SIGSET
-	typedef void HandlerType(int);
-	void sigset(int signum, HandlerType* handler)
+	void fb_sigset(int signum, void (*handler)(int))
 	{
 		struct sigaction act;
 		memset(&act, 0, sizeof act);
 		act.sa_handler = handler;
 		sigaction(signum, &act, NULL);
 	}
-#endif
 
 } // anonymous namespace
 
 namespace Firebird {
 
-void syncSignalsSet(void* arg)
+void syncSignalsSet(sigjmp_buf* sigenv)
 {
 /**************************************
  *
@@ -103,17 +96,16 @@ void syncSignalsSet(void* arg)
  *	Set all the synchronous signals for a particular thread
  *
  **************************************/
-	sigjmp_buf* const sigenv = static_cast<sigjmp_buf*>(arg);
 	TLS_SET(sigjmpPtr, sigenv);
 
 	Firebird::MutexLockGuard g(syncEnterMutex, "syncSignalsSet");
 
 	if (syncEnterCounter++ == 0)
 	{
-		sigset(SIGILL, longjmpSigHandler);
-		sigset(SIGFPE, longjmpSigHandler);
-		sigset(SIGBUS, longjmpSigHandler);
-		sigset(SIGSEGV, longjmpSigHandler);
+		fb_sigset(SIGILL, longjmpSigHandler);
+		fb_sigset(SIGFPE, longjmpSigHandler);
+		fb_sigset(SIGBUS, longjmpSigHandler);
+		fb_sigset(SIGSEGV, longjmpSigHandler);
 	}
 }
 
@@ -138,10 +130,10 @@ void syncSignalsReset()
 
 	if (--syncEnterCounter == 0)
 	{
-		sigset(SIGILL, SIG_DFL);
-		sigset(SIGFPE, SIG_DFL);
-		sigset(SIGBUS, SIG_DFL);
-		sigset(SIGSEGV, SIG_DFL);
+		fb_sigset(SIGILL, SIG_DFL);
+		fb_sigset(SIGFPE, SIG_DFL);
+		fb_sigset(SIGBUS, SIG_DFL);
+		fb_sigset(SIGSEGV, SIG_DFL);
 	}
 }
 

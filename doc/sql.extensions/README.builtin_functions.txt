@@ -361,18 +361,26 @@ Example:
     select cot(x) from y;
 
 
------
-CRC32
------
+----------
+CRYPT_HASH
+----------
 
 Function:
-	Returns CRC-32 with the polynomial 0x04C11DB7. Accepts argument of any type.
+    Returns a cryptograpic hash of an argument using a specified algorithm.
 
 Format:
-	CRC32( <any value> )
+    CRYPT_HASH( <any value> USING <algorithm> )
+
+    algorithm ::= { MD5 | SHA1 | SHA256 | SHA512 }
+
+Important:
+    - This function returns VARCHAR strings with OCTETS charset with length depended on algorithm.
+
+    - MD5 and SHA1 algorithms are not recommended for use due to known severe issues, that algorithms
+      are provided ONLY for backward compatibility.
 
 Example:
-	select crc32(job_title) from job;
+    select crypt_hash(x using sha256) from y;
 
 
 -------
@@ -560,21 +568,25 @@ HASH
 ----
 
 Function:
-    Returns a HASH of a string using a specified algorithm.
+    Returns a hash of an argument using a specified algorithm.
 
 Format:
-    HASH( <string> [ USING <algorithm> ] )
+    HASH( <any value> [ USING <algorithm> ] )
 
-    algorithm ::= { MD5 | SHA1 | SHA256 | SHA512 }
+    algorithm ::= { CRC32 }
 
 Important:
     - The syntax without USING is very discouraged and maintained for backward compatibility.
     It returns a 64 bit integer and produces very bad hashes that easily result in collisions.
-    - The syntax with USING is introduced in FB 4.0 and returns VARCHAR strings with OCTETS charset.
+
+    - The syntax with USING is introduced in FB 4.0 and returns an integer of appropriate size.
+
+    - Implemented in firebird CRC32 is using polynomial 0x04C11DB7.
 
 Example:
     select hash(x) from y;
-    select hash(x using sha256) from y;
+    select hash(x using crc32) from y;
+
 
 
 -----------------------------

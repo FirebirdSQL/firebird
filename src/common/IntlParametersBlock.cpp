@@ -73,11 +73,7 @@ void processCommandLine(IntlParametersBlock::ProcessString* processString, strin
 			{
 				flagIn = false;
 				processString(current);
-				if (result.hasData())
-				{
-					result += ' ';
-				}
-				result += current;
+				UtilSvc::addStringWithSvcTrmntr(current, result);
 				current = "";
 			}
 		}
@@ -90,13 +86,10 @@ void processCommandLine(IntlParametersBlock::ProcessString* processString, strin
 	if (current.hasData())
 	{
 		processString(current);
-		if (result.hasData())
-		{
-			result += ' ';
-		}
-		result += current;
+		UtilSvc::addStringWithSvcTrmntr(current, result);
 	}
 
+	result.rtrim();
 	par = result;
 }
 

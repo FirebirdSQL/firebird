@@ -36,6 +36,9 @@ if errorlevel 1 call :ERROR build failed - see make_all_%FB_TARGET_PLATFORM%.log
 @del %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird\*.lib 2>nul
 @rmdir /q /s %FB_OUTPUT_DIR% 2>nul
 
+:: short delay to let OS complete actions by rmdir above
+@timeout 1 >nul
+
 @mkdir %FB_OUTPUT_DIR% 2>nul
 @mkdir %FB_OUTPUT_DIR%\intl 2>nul
 @mkdir %FB_OUTPUT_DIR%\tzdata 2>nul
@@ -113,11 +116,6 @@ if defined VS140COMNTOOLS (
 if defined VS120COMNTOOLS (
 @copy "%VS120COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_DIR%\Microsoft.VC120.CRT\msvcr120.dll" %FB_OUTPUT_DIR% >nul
 @copy "%VS120COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_DIR%\Microsoft.VC120.CRT\msvcp120.dll" %FB_OUTPUT_DIR% >nul
-) else (
-if defined VS100COMNTOOLS (
-@copy "%VS100COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_DIR%\Microsoft.VC100.CRT\msvcr100.dll" %FB_OUTPUT_DIR% >nul
-@copy "%VS100COMNTOOLS%\..\..\VC\redist\%FB_VC_CRT_DIR%\Microsoft.VC100.CRT\msvcp100.dll" %FB_OUTPUT_DIR% >nul
-)
 )
 )
 )

@@ -35,7 +35,7 @@
 #include "../common/classes/init.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/classes/SyncObject.h"
-#include "../common/classes/MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/isc_s_proto.h"
 #include "../common/isc_proto.h"
 #include "../common/ThreadStart.h"
@@ -189,7 +189,7 @@ bool Mapping::DbHandle::attach(const char* aliasDb, ICryptKeyCallback* cryptCb)
 		check("IProvider::setDbCryptCallback", &st);
 	}
 
-	ClumpletWriter embeddedSysdba(ClumpletWriter::Tagged, 1024, isc_dpb_version1);
+	ClumpletWriter embeddedSysdba(ClumpletWriter::dpbList, MAX_DPB_SIZE);
 	embeddedSysdba.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
 	embeddedSysdba.insertByte(isc_dpb_sec_attach, TRUE);
 	embeddedSysdba.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(aliasDb));
@@ -1520,6 +1520,45 @@ ULONG Mapping::mapUser(string& name, string& trustedRole)
 	{
 		if (flags & MAP_THROW_NOT_FOUND)
 		{
+			NoCaseString msg = "Missing security context required for ";
+			if (mainDb)
+				msg += mainDb;
+			if (mainDb && securityAlias)
+				msg += " or ";
+			if (securityAlias)
+				msg += secExpanded.c_str();
+
+			msg += "\n\tAvailable context(s): ";
+			bool fstCtx = true;
+			for (AuthReader scan(newBlock); scan.getInfo(info); scan.moveNext())
+			{
+				if (info.type == NM_USER || info.type == NM_ROLE)
+				{
+					if (!fstCtx)
+						msg += "\n\t\t";
+					else
+						fstCtx = false;
+
+					msg += info.type;
+					msg += ' ';
+					msg += info.name;
+					if (info.secDb.hasData())
+					{
+						msg += " in ";
+						msg += info.secDb;
+					}
+					if (info.plugin.hasData())
+					{
+						msg += " plugin ";
+						msg += info.plugin;
+					}
+				}
+			}
+			if (fstCtx)
+				msg += "<none>";
+
+			gds__log("%s", msg.c_str());
+
 			Arg::Gds v(isc_sec_context);
 			v << (errorMessagesContext ? errorMessagesContext : mainAlias ? mainAlias : "<unknown object>");
 			if (rc & MAP_DOWN)
@@ -1630,7 +1669,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, jrd_rel* relation)
 	{
 		const char* dbName = tdbb->getDatabase()->dbb_config->getSecurityDatabase();
 
-		ClumpletWriter embeddedSysdba(ClumpletWriter::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
+		ClumpletWriter embeddedSysdba(ClumpletWriter::dpbList, MAX_DPB_SIZE);
 		embeddedSysdba.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
 		embeddedSysdba.insertByte(isc_dpb_sec_attach, TRUE);
 		embeddedSysdba.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(dbName));

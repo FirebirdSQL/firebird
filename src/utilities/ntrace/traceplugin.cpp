@@ -43,18 +43,7 @@ public:
 	ntrace_mask_t trace_needs();
 	Firebird::ITracePlugin* trace_create(Firebird::CheckStatusWrapper* status,
 		Firebird::ITraceInitInfo* init_info);
-	int release();
 };
-
-int TraceFactoryImpl::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-	return 1;
-}
 
 ntrace_mask_t TraceFactoryImpl::trace_needs()
 {

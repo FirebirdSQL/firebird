@@ -26,6 +26,7 @@
 #include "firebird/impl/blr.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/NodePrinter.h"
+#include "../common/classes/init.h"
 #include "../dsql/pass1_proto.h"
 
 class SysFunction;
@@ -115,11 +116,11 @@ private:
 	void getDescDialect3(thread_db* tdbb, dsc* desc, dsc& desc1, dsc& desc2);
 
 public:
-	const UCHAR blrOp;
-	bool dialect1;
 	Firebird::string label;
 	NestConst<ValueExprNode> arg1;
 	NestConst<ValueExprNode> arg2;
+	const UCHAR blrOp;
+	bool dialect1;
 };
 
 
@@ -257,6 +258,11 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
+	void setDsqlDesc(const dsc& desc)
+	{
+		dsqlDesc = desc;
+	}
+
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
@@ -266,11 +272,11 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	Firebird::MetaName dsqlAlias;
+	MetaName dsqlAlias;
 	dsql_fld* dsqlField;
-	dsc castDesc;
 	NestConst<ValueExprNode> source;
 	NestConst<ItemInfo> itemInfo;
+	dsc castDesc;
 	bool artificial;
 };
 
@@ -302,6 +308,7 @@ public:
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	virtual bool sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const;
 	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
@@ -318,7 +325,7 @@ public:
 class CollateNode : public TypedNode<ValueExprNode, ExprNode::TYPE_COLLATE>
 {
 public:
-	CollateNode(MemoryPool& pool, ValueExprNode* aArg, const Firebird::MetaName& aCollation);
+	CollateNode(MemoryPool& pool, ValueExprNode* aArg, const MetaName& aCollation);
 
 	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
 	{
@@ -332,7 +339,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 
 	static ValueExprNode* pass1Collate(DsqlCompilerScratch* dsqlScratch, ValueExprNode* input,
-		const Firebird::MetaName& collation);
+		const MetaName& collation);
 
 	// This class is used only in the parser. It turns in a CastNode in dsqlPass.
 
@@ -373,7 +380,7 @@ private:
 
 public:
 	NestConst<ValueExprNode> arg;
-	Firebird::MetaName collation;
+	MetaName collation;
 };
 
 
@@ -581,8 +588,8 @@ public:
 class DefaultNode : public DsqlNode<DefaultNode, ExprNode::TYPE_DEFAULT>
 {
 public:
-	explicit DefaultNode(MemoryPool& pool, const Firebird::MetaName& aRelationName,
-		const Firebird::MetaName& aFieldName);
+	explicit DefaultNode(MemoryPool& pool, const MetaName& aRelationName,
+		const MetaName& aFieldName);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 	static ValueExprNode* createFromField(thread_db* tdbb, CompilerScratch* csb, StreamType* map, jrd_fld* fld);
@@ -600,8 +607,8 @@ public:
 	virtual ValueExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 
 public:
-	const Firebird::MetaName relationName;
-	const Firebird::MetaName fieldName;
+	const MetaName relationName;
+	const MetaName fieldName;
 
 private:
 	jrd_fld* field;
@@ -764,6 +771,11 @@ public:
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
 	virtual bool sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const;
 
+	void setDsqlDesc(const dsc& desc)
+	{
+		dsqlDesc = desc;
+	}
+
 	virtual bool possiblyUnknown(OptimizerBlk* /*opt*/)
 	{
 		return false;
@@ -794,20 +806,20 @@ public:
 
 private:
 	static dsql_fld* resolveContext(DsqlCompilerScratch* dsqlScratch,
-		const Firebird::MetaName& qualifier, dsql_ctx* context, bool resolveByAlias);
+		const MetaName& qualifier, dsql_ctx* context, bool resolveByAlias);
 
 public:
-	Firebird::MetaName dsqlQualifier;
-	Firebird::MetaName dsqlName;
+	MetaName dsqlQualifier;
+	MetaName dsqlName;
 	dsql_ctx* const dsqlContext;
 	dsql_fld* const dsqlField;
 	NestConst<ValueListNode> dsqlIndices;
-	const StreamType fieldStream;
 	const Format* format;
+	const StreamType fieldStream;
+	Nullable<USHORT> cursorNumber;
 	const USHORT fieldId;
 	const bool byId;
 	bool dsqlCursorField;
-	Nullable<USHORT> cursorNumber;
 };
 
 
@@ -815,7 +827,7 @@ class GenIdNode : public TypedNode<ValueExprNode, ExprNode::TYPE_GEN_ID>
 {
 public:
 	GenIdNode(MemoryPool& pool, bool aDialect1,
-			  const Firebird::MetaName& name,
+			  const MetaName& name,
 			  ValueExprNode* aArg,
 			  bool aImplicit, bool aIdentity);
 
@@ -844,10 +856,10 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	const bool dialect1;
 	GeneratorItem generator;
 	NestConst<ValueExprNode> arg;
 	SLONG step;
+	const bool dialect1;
 
 private:
 	bool sysGen;
@@ -930,6 +942,7 @@ public:
 	}
 
 	void fixMinSInt64(MemoryPool& pool);
+	void fixMinSInt128(MemoryPool& pool);
 
 public:
 	const IntlString* dsqlStr;
@@ -941,7 +954,7 @@ public:
 class DsqlAliasNode : public TypedNode<ValueExprNode, ExprNode::TYPE_ALIAS>
 {
 public:
-	DsqlAliasNode(MemoryPool& pool, const Firebird::MetaName& aName, ValueExprNode* aValue)
+	DsqlAliasNode(MemoryPool& pool, const MetaName& aName, ValueExprNode* aValue)
 		: TypedNode<ValueExprNode, ExprNode::TYPE_ALIAS>(pool),
 		  name(aName),
 		  value(aValue),
@@ -962,6 +975,11 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
+	void setDsqlDesc(const dsc& desc)
+	{
+		dsqlDesc = desc;
+	}
+
 	virtual void getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* /*desc*/)
 	{
 		fb_assert(false);
@@ -980,7 +998,7 @@ public:
 	}
 
 public:
-	const Firebird::MetaName name;
+	const MetaName name;
 	NestConst<ValueExprNode> value;
 	NestConst<ImplicitJoin> implicitJoin;
 };
@@ -1006,6 +1024,11 @@ public:
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
 
+	void setDsqlDesc(const dsc& desc)
+	{
+		dsqlDesc = desc;
+	}
+
 	virtual void getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* /*desc*/)
 	{
 		fb_assert(false);
@@ -1026,13 +1049,15 @@ public:
 public:
 	dsql_ctx* context;
 	dsql_map* map;
+	bool setNullable;
+	bool clearNull;
 };
 
 
 class DerivedFieldNode : public TypedNode<ValueExprNode, ExprNode::TYPE_DERIVED_FIELD>
 {
 public:
-	DerivedFieldNode(MemoryPool& pool, const Firebird::MetaName& aName, USHORT aScope,
+	DerivedFieldNode(MemoryPool& pool, const MetaName& aName, USHORT aScope,
 		ValueExprNode* aValue);
 
 	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
@@ -1057,6 +1082,11 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
+	void setDsqlDesc(const dsc& desc)
+	{
+		dsqlDesc = desc;
+	}
+
 	virtual void getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* /*desc*/)
 	{
 		fb_assert(false);
@@ -1075,10 +1105,10 @@ public:
 	}
 
 public:
-	Firebird::MetaName name;
-	USHORT scope;
+	MetaName name;
 	NestConst<ValueExprNode> value;
 	dsql_ctx* context;
+	USHORT scope;
 };
 
 
@@ -1169,13 +1199,27 @@ public:
 
 class NullNode : public TypedNode<ValueExprNode, ExprNode::TYPE_NULL>
 {
-public:
+private:
+	friend class Firebird::GlobalPtr<NullNode>;
+
 	explicit NullNode(MemoryPool& pool)
 		: TypedNode<ValueExprNode, ExprNode::TYPE_NULL>(pool)
 	{
+		dsqlDesc.makeNullString();
+	}
+
+public:
+	static NullNode* instance()
+	{
+		return &INSTANCE;
 	}
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	virtual bool isSharedNode()
+	{
+		return true;
+	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void setParameterName(dsql_par* parameter) const;
@@ -1184,15 +1228,17 @@ public:
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
+
+private:
+	static Firebird::GlobalPtr<NullNode> INSTANCE;
 };
 
 
 class OrderNode : public DsqlNode<OrderNode, ExprNode::TYPE_ORDER>
 {
 public:
-	enum NullsPlacement
+	enum NullsPlacement : UCHAR
 	{
 		NULLS_DEFAULT,
 		NULLS_FIRST,
@@ -1381,7 +1427,7 @@ public:
 
 public:
 	explicit WindowClause(MemoryPool& pool,
-			const Firebird::MetaName* aName = NULL,
+			const MetaName* aName = NULL,
 			ValueListNode* aPartition = NULL,
 			ValueListNode* aOrder = NULL,
 			FrameExtent* aFrameExtent = NULL,
@@ -1447,7 +1493,7 @@ public:
 	}
 
 public:
-	const Firebird::MetaName* name;
+	const MetaName* name;
 	NestConst<ValueListNode> partition;
 	NestConst<ValueListNode> order;
 	NestConst<FrameExtent> extent;
@@ -1459,7 +1505,7 @@ public:
 class OverNode : public TypedNode<ValueExprNode, ExprNode::TYPE_OVER>
 {
 public:
-	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr, const Firebird::MetaName* aWindowName);
+	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr, const MetaName* aWindowName);
 	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr, WindowClause* aWindow);
 
 	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
@@ -1492,7 +1538,7 @@ public:
 
 public:
 	NestConst<ValueExprNode> aggExpr;
-	const Firebird::MetaName* windowName;
+	const MetaName* windowName;
 	NestConst<WindowClause> window;
 };
 
@@ -1539,20 +1585,20 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	USHORT dsqlParameterIndex;
 	dsql_par* dsqlParameter;
 	NestConst<MessageNode> message;
-	USHORT argNumber;
 	NestConst<ValueExprNode> argFlag;
 	NestConst<ValueExprNode> argIndicator;
 	NestConst<ItemInfo> argInfo;
+	USHORT dsqlParameterIndex;
+	USHORT argNumber;
 };
 
 
 class RecordKeyNode : public TypedNode<ValueExprNode, ExprNode::TYPE_RECORD_KEY>
 {
 public:
-	RecordKeyNode(MemoryPool& pool, UCHAR aBlrOp, const Firebird::MetaName& aDsqlQualifier = NULL);
+	RecordKeyNode(MemoryPool& pool, UCHAR aBlrOp, const MetaName& aDsqlQualifier = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
@@ -1619,10 +1665,10 @@ private:
 	void raiseError(dsql_ctx* context) const;
 
 public:
-	const UCHAR blrOp;
-	Firebird::MetaName dsqlQualifier;
+	MetaName dsqlQualifier;
 	NestConst<RecordSourceNode> dsqlRelation;
 	StreamType recStream;
+	const UCHAR blrOp;
 	bool aggregate;
 };
 
@@ -1861,13 +1907,13 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	const UCHAR blrOp;
-	bool ownSavepoint;
 	NestConst<RecordSourceNode> dsqlRse;
 	NestConst<RseNode> rse;
 	NestConst<ValueExprNode> value1;
 	NestConst<ValueExprNode> value2;
 	NestConst<SubQuery> subQuery;
+	const UCHAR blrOp;
+	bool ownSavepoint;
 };
 
 
@@ -1952,7 +1998,7 @@ public:
 class SysFuncCallNode : public TypedNode<ValueExprNode, ExprNode::TYPE_SYSFUNC_CALL>
 {
 public:
-	explicit SysFuncCallNode(MemoryPool& pool, const Firebird::MetaName& aName,
+	explicit SysFuncCallNode(MemoryPool& pool, const MetaName& aName,
 		ValueListNode* aArgs = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
@@ -1977,10 +2023,10 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	Firebird::MetaName name;
-	bool dsqlSpecialSyntax;
+	MetaName name;
 	NestConst<ValueListNode> args;
 	const SysFunction* function;
+	bool dsqlSpecialSyntax;
 };
 
 
@@ -2032,7 +2078,7 @@ private:
 	};
 
 public:
-	explicit UdfCallNode(MemoryPool& pool, const Firebird::QualifiedName& aName,
+	explicit UdfCallNode(MemoryPool& pool, const QualifiedName& aName,
 		ValueListNode* aArgs = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
@@ -2063,7 +2109,7 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	Firebird::QualifiedName name;
+	QualifiedName name;
 	NestConst<ValueListNode> args;
 	NestConst<Function> function;
 
@@ -2105,6 +2151,7 @@ public:
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	virtual bool sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const;
 	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
@@ -2129,6 +2176,11 @@ public:
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
 
+	void setDsqlDesc(const dsc& desc)
+	{
+		dsqlDesc = desc;
+	}
+
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual ValueExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
@@ -2136,11 +2188,11 @@ public:
 	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
 
 public:
-	Firebird::MetaName dsqlName;
+	MetaName dsqlName;
 	NestConst<dsql_var> dsqlVar;
-	USHORT varId;
 	NestConst<DeclareVariableNode> varDecl;
 	NestConst<ItemInfo> varInfo;
+	USHORT varId;
 };
 
 

@@ -54,16 +54,6 @@ int SecurityDatabaseClient::authenticate(Firebird::CheckStatusWrapper* status, F
 	return AUTH_SUCCESS;
 }
 
-int SecurityDatabaseClient::release()
-{
-	if (--refCounter == 0)
-	{
-		delete this;
-		return 0;
-	}
-	return 1;
-}
-
 namespace {
 	Firebird::SimpleFactory<SecurityDatabaseClient> factory;
 }

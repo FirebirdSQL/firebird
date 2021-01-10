@@ -29,6 +29,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/objects_array.h"
 #include "../jrd/constants.h"
+#include "../jrd/ini.h"
 #include "firebird/Interface.h"
 #include <initializer_list>
 #include <functional>
@@ -160,6 +161,139 @@ namespace Jrd
 		Firebird::ObjectsArray<SystemFunction> functions;
 
 		static Firebird::ObjectsArray<SystemPackage>& get();
+
+	private:
+		SystemPackage(const SystemPackage&) = delete;
+		SystemPackage& operator=(SystemPackage const&) = default;
+	};
+
+	class VoidMessage
+	{
+	public:
+		typedef void Type;
+
+	public:
+		static void setup(Firebird::ThrowStatusExceptionWrapper*, Firebird::IMetadataBuilder*)
+		{
+		}
+	};
+
+	template <
+		typename Input,
+		typename Output,
+		Firebird::IExternalResultSet* (*OpenFunction)(
+			Firebird::ThrowStatusExceptionWrapper*,
+			Firebird::IExternalContext*,
+			const typename Input::Type*,
+			typename Output::Type*
+		)
+	>
+	struct SystemProcedureFactory
+	{
+		class SystemProcedureImpl :
+			public
+				Firebird::DisposeIface<
+					Firebird::IExternalProcedureImpl<
+						SystemProcedureImpl,
+						Firebird::ThrowStatusExceptionWrapper
+					>
+				>
+		{
+		public:
+			SystemProcedureImpl(Firebird::ThrowStatusExceptionWrapper* status,
+				Firebird::IMetadataBuilder* inBuilder, Firebird::IMetadataBuilder* outBuilder)
+			{
+				Input::setup(status, inBuilder);
+				Output::setup(status, outBuilder);
+			}
+
+		public:
+			void dispose() override
+			{
+				delete this;
+			}
+
+		public:
+			void getCharSet(Firebird::ThrowStatusExceptionWrapper* status, Firebird::IExternalContext* context,
+				char* name, unsigned nameSize) override
+			{
+				strncpy(name, "UTF8", nameSize);
+			}
+
+			Firebird::IExternalResultSet* open(Firebird::ThrowStatusExceptionWrapper* status,
+				Firebird::IExternalContext* context, void* inMsg, void* outMsg) override
+			{
+				return OpenFunction(status, context,
+					static_cast<typename Input::Type*>(inMsg),
+					static_cast<typename Output::Type*>(outMsg));
+			}
+		};
+
+		SystemProcedureImpl* operator()(
+			Firebird::ThrowStatusExceptionWrapper* status,
+			Firebird::IExternalContext* /*context*/,
+			Firebird::IRoutineMetadata* /*metadata*/,
+			Firebird::IMetadataBuilder* inBuilder,
+			Firebird::IMetadataBuilder* outBuilder)
+		{
+			return FB_NEW SystemProcedureImpl(status, inBuilder, outBuilder);
+		}
+	};
+
+	template <
+		typename Input,
+		typename Output,
+		void (*ExecFunction)(
+			Firebird::ThrowStatusExceptionWrapper*,
+			Firebird::IExternalContext*,
+			const typename Input::Type*,
+			typename Output::Type*
+		)
+	>
+	struct SystemFunctionFactory
+	{
+		class SystemFunctionImpl :
+			public
+				Firebird::DisposeIface<
+					Firebird::IExternalFunctionImpl<
+						SystemFunctionImpl,
+						Firebird::ThrowStatusExceptionWrapper
+					>
+				>
+		{
+		public:
+			SystemFunctionImpl(Firebird::ThrowStatusExceptionWrapper* status,
+				Firebird::IMetadataBuilder* inBuilder, Firebird::IMetadataBuilder* outBuilder)
+			{
+				Input::setup(status, inBuilder);
+				Output::setup(status, outBuilder);
+			}
+
+		public:
+			void getCharSet(Firebird::ThrowStatusExceptionWrapper* status, Firebird::IExternalContext* context,
+				char* name, unsigned nameSize) override
+			{
+				strncpy(name, "UTF8", nameSize);
+			}
+
+			void execute(Firebird::ThrowStatusExceptionWrapper* status,
+				Firebird::IExternalContext* context, void* inMsg, void* outMsg) override
+			{
+				ExecFunction(status, context,
+					static_cast<typename Input::Type*>(inMsg),
+					static_cast<typename Output::Type*>(outMsg));
+			}
+		};
+
+		SystemFunctionImpl* operator()(
+			Firebird::ThrowStatusExceptionWrapper* status,
+			Firebird::IExternalContext* /*context*/,
+			Firebird::IRoutineMetadata* /*metadata*/,
+			Firebird::IMetadataBuilder* inBuilder,
+			Firebird::IMetadataBuilder* outBuilder)
+		{
+			return FB_NEW SystemFunctionImpl(status, inBuilder, outBuilder);
+		}
 	};
 }	// namespace Jrd
 

@@ -1077,6 +1077,24 @@ void TipCache::assignLatestAttachmentId(AttNumber number)
 	header->latest_attachment_id.store(number, std::memory_order_release);
 }
 
+AttNumber TipCache::getLatestAttachmentId() const
+{
+	// Can only be called on initialized TipCache
+	fb_assert(m_tpcHeader);
+	GlobalTpcHeader* header = m_tpcHeader->getHeader();
+
+	return header->latest_attachment_id;
+}
+
+StmtNumber TipCache::getLatestStatementId() const
+{
+	// Can only be called on initialized TipCache
+	fb_assert(m_tpcHeader);
+	GlobalTpcHeader* header = m_tpcHeader->getHeader();
+
+	return header->latest_statement_id;
+}
+
 int TPC_snapshot_state(thread_db* tdbb, TraNumber number)
 {
 	TipCache* cache = tdbb->getDatabase()->dbb_tip_cache;

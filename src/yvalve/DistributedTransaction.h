@@ -65,7 +65,7 @@ public:
 	void addWithTpb(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att,
 		unsigned length, const unsigned char* tpb);
 	YTransaction* start(Firebird::CheckStatusWrapper* status);
-	void dispose();
+	void dispose() override;
 
 private:
 	Firebird::HalfStaticArray<Component, 16> components;

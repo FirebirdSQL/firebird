@@ -30,7 +30,7 @@
 #ifndef JRD_TEXTTYPE_H
 #define JRD_TEXTTYPE_H
 
-#include "../common/classes/MetaName.h"
+#include "../common/classes/MetaString.h"
 
 struct texttype;
 
@@ -96,7 +96,7 @@ public:
 	USHORT getFlags() const;
 
 public:
-	Firebird::MetaName name;
+	Firebird::MetaString name;
 
 protected:
 	texttype* tt;

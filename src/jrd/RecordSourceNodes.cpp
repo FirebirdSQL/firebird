@@ -612,47 +612,6 @@ RelationSourceNode* RelationSourceNode::copy(thread_db* tdbb, NodeCopier& copier
 	element->csb_view = newSource->view;
 	element->csb_view_stream = copier.remap[0];
 
-	/*
-	If there was a parent stream no., then copy the flags
-	from that stream to its children streams. (Bug 10164/10166)
-	For e.g. consider a view V1 with 2 streams:
-
-		stream #1 from table T1
-		stream #2 from table T2
-
-	consider a procedure P1 with 2 streams:
-
-		stream #1  from table X
-		stream #2  from view V1
-
-	During pass1 of procedure request, the engine tries to expand
-	all the views into their base tables. It creates a compiler
-	scratch block which initially looks like this:
-
-		stream 1  -------- X
-		stream 2  -------- V1
-
-	while expanding V1 the engine calls copy() with nod_relation.
-	A new stream 3 is created. Now the CompilerScratch looks like:
-
-		stream 1  -------- X
-		stream 2  -------- V1  map [2,3,4]
-		stream 3  -------- T1
-		stream 4  -------- T2
-
-	After T1 stream has been created the flags are copied from
-	stream #1 because V1's definition said the original stream
-	number for T1 was 1. However since its being merged with
-	the procedure request, stream #1 belongs to a different table.
-	The flags should be copied from stream 2 i.e. V1.
-
-	Since we didn't do this properly before, V1's children got
-	tagged with whatever flags X possesed leading to various
-	errors.
-	*/
-
-	copier.csb->inheritViewFlags(newSource->stream, csb_no_dbkey);
-
 	if (alias.hasData())
 	{
 		element->csb_alias = FB_NEW_POOL(*tdbb->getDefaultPool())
@@ -662,21 +621,16 @@ RelationSourceNode* RelationSourceNode::copy(thread_db* tdbb, NodeCopier& copier
 	return newSource;
 }
 
-void RelationSourceNode::ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const
-{
-	csb->csb_rpt[stream].csb_flags |= csb_no_dbkey;
-}
-
 RecordSourceNode* RelationSourceNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
-	const CompilerScratch::csb_repeat* const tail = &csb->csb_rpt[stream];
-	const jrd_rel* const relation = tail->csb_relation;
+	const auto tail = &csb->csb_rpt[stream];
+	const auto relation = tail->csb_relation;
 
-	if (relation)
+	if (relation && !csb->csb_implicit_cursor)
 	{
-		SLONG ssRelationIdId = tail->csb_view ? tail->csb_view->rel_id :
+		const SLONG ssRelationId = tail->csb_view ? tail->csb_view->rel_id :
 			view ? view->rel_id : csb->csb_view ? csb->csb_view->rel_id : 0;
-		CMP_post_access(tdbb, csb, relation->rel_security_name, ssRelationIdId,
+		CMP_post_access(tdbb, csb, relation->rel_security_name, ssRelationId,
 			SCL_select, SCL_object_table, relation->rel_name);
 	}
 
@@ -728,7 +682,6 @@ void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseN
 
 	// we've got a view, expand it
 
-	DEBUG;
 	stack.pop();
 	StreamType* map = CMP_alloc_map(tdbb, csb, stream);
 
@@ -747,10 +700,8 @@ void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseN
 	{
 		NodeCopier copier(csb->csb_pool, csb, map);
 		RseNode* copy = viewRse->copy(tdbb, copier);
-		DEBUG;
 		doPass1(tdbb, csb, &copy);
 		stack.push(copy);
-		DEBUG;
 		return;
 	}
 
@@ -1137,11 +1088,6 @@ ProcedureSourceNode* ProcedureSourceNode::copy(thread_db* tdbb, NodeCopier& copi
 	element->csb_view = newSource->view;
 	element->csb_view_stream = copier.remap[0];
 
-	// dimitr:	I doubt we need to inherit this flag for procedures.
-	//			They don't have a DBKEY to be concatenated.
-	//			Neither they have a stream map to be expanded.
-	copier.csb->inheritViewFlags(newSource->stream, csb_no_dbkey);
-
 	if (alias.hasData())
 	{
 		element->csb_alias = FB_NEW_POOL(*tdbb->getDefaultPool())
@@ -1495,8 +1441,6 @@ AggregateSourceNode* AggregateSourceNode::copy(thread_db* tdbb, NodeCopier& copi
 	copier.remap[stream] = newSource->stream;
 	CMP_csb_element(copier.csb, newSource->stream);
 
-	copier.csb->inheritViewFlags(newSource->stream, csb_no_dbkey);
-
 	newSource->rse = rse->copy(tdbb, copier);
 	if (group)
 		newSource->group = group->copy(tdbb, copier);
@@ -1505,16 +1449,8 @@ AggregateSourceNode* AggregateSourceNode::copy(thread_db* tdbb, NodeCopier& copi
 	return newSource;
 }
 
-void AggregateSourceNode::ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const
-{
-	rse->ignoreDbKey(tdbb, csb);
-}
-
 RecordSourceNode* AggregateSourceNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
-	csb->csb_rpt[stream].csb_flags |= csb_no_dbkey;
-	rse->ignoreDbKey(tdbb, csb);
-
 	doPass1(tdbb, csb, rse.getAddress());
 	doPass1(tdbb, csb, map.getAddress());
 	doPass1(tdbb, csb, group.getAddress());
@@ -1818,15 +1754,11 @@ UnionSourceNode* UnionSourceNode::copy(thread_db* tdbb, NodeCopier& copier) cons
 	copier.remap[stream] = newSource->stream;
 	CMP_csb_element(copier.csb, newSource->stream);
 
-	copier.csb->inheritViewFlags(newSource->stream, csb_no_dbkey);
-
 	if (newSource->recursive)
 	{
 		newSource->mapStream = copier.csb->nextStream();
 		copier.remap[mapStream] = newSource->mapStream;
 		CMP_csb_element(copier.csb, newSource->mapStream);
-
-		copier.csb->inheritViewFlags(newSource->mapStream, csb_no_dbkey);
 	}
 
 	const NestConst<RseNode>* ptr = clauses.begin();
@@ -1839,14 +1771,6 @@ UnionSourceNode* UnionSourceNode::copy(thread_db* tdbb, NodeCopier& copier) cons
 	}
 
 	return newSource;
-}
-
-void UnionSourceNode::ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const
-{
-	const NestConst<RseNode>* ptr = clauses.begin();
-
-	for (const NestConst<RseNode>* const end = clauses.end(); ptr != end; ++ptr)
-		(*ptr)->ignoreDbKey(tdbb, csb);
 }
 
 void UnionSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* /*rse*/,
@@ -1954,7 +1878,7 @@ RecordSource* UnionSourceNode::generate(thread_db* tdbb, OptimizerBlk* opt, cons
 	CompilerScratch* csb = opt->opt_csb;
 	HalfStaticArray<RecordSource*, OPT_STATIC_ITEMS> rsbs;
 
-	const ULONG baseImpure = CMP_impure(csb, 0);
+	const ULONG baseImpure = csb->allocImpure(FB_ALIGNMENT, 0);
 
 	NestConst<RseNode>* ptr = clauses.begin();
 	NestConst<MapNode>* ptr2 = maps.begin();
@@ -2237,8 +2161,6 @@ WindowSourceNode* WindowSourceNode::copy(thread_db* tdbb, NodeCopier& copier) co
 		copier.remap[inputWindow->stream] = copyWindow.stream;
 		CMP_csb_element(copier.csb, copyWindow.stream);
 
-		copier.csb->inheritViewFlags(copyWindow.stream, csb_no_dbkey);
-
 		if (inputWindow->group)
 			copyWindow.group = inputWindow->group->copy(tdbb, copier);
 
@@ -2258,21 +2180,8 @@ WindowSourceNode* WindowSourceNode::copy(thread_db* tdbb, NodeCopier& copier) co
 	return newSource;
 }
 
-void WindowSourceNode::ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const
-{
-	rse->ignoreDbKey(tdbb, csb);
-}
-
 RecordSourceNode* WindowSourceNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
-	for (ObjectsArray<Window>::iterator window = windows.begin();
-		 window != windows.end();
-		 ++window)
-	{
-		csb->csb_rpt[window->stream].csb_flags |= csb_no_dbkey;
-	}
-
-	rse->ignoreDbKey(tdbb, csb);
 	doPass1(tdbb, csb, rse.getAddress());
 
 	for (ObjectsArray<Window>::iterator window = windows.begin();
@@ -2815,15 +2724,6 @@ RseNode* RseNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	return newSource;
 }
 
-// For each relation or aggregate in the RseNode, mark it as not having a dbkey.
-void RseNode::ignoreDbKey(thread_db* tdbb, CompilerScratch* csb) const
-{
-	const NestConst<RecordSourceNode>* ptr = rse_relations.begin();
-
-	for (const NestConst<RecordSourceNode>* const end = rse_relations.end(); ptr != end; ++ptr)
-		(*ptr)->ignoreDbKey(tdbb, csb);
-}
-
 // Process a record select expression during pass 1 of compilation.
 // Mostly this involves expanding views.
 RseNode* RseNode::pass1(thread_db* tdbb, CompilerScratch* csb)
@@ -3110,7 +3010,7 @@ void RseNode::planCheck(const CompilerScratch* csb) const
 	{
 		const RecordSourceNode* node = *ptr;
 
-		if (node->type == RelationSourceNode::TYPE)
+		if (nodeIs<RelationSourceNode>(node))
 		{
 			const StreamType stream = node->getStream();
 
@@ -3120,7 +3020,7 @@ void RseNode::planCheck(const CompilerScratch* csb) const
 					Arg::Str(csb->csb_rpt[stream].csb_relation->rel_name));
 			}
 		}
-		else if (node->type == RseNode::TYPE)
+		else if (nodeIs<RseNode>(node))
 			static_cast<const RseNode*>(node)->planCheck(csb);
 	}
 }

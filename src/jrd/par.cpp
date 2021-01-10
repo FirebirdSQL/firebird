@@ -180,8 +180,10 @@ namespace
 			if (relationNode->getKind() != DmlNode::KIND_REC_SOURCE)
 				PAR_syntax_error(csb, "TABLE");
 
-			RelationSourceNode* relationSource = static_cast<RelationSourceNode*>(relationNode);
-			if (relationSource->type != RelationSourceNode::TYPE)
+			RelationSourceNode* relationSource = nodeAs<RelationSourceNode>(
+				static_cast<RecordSourceNode*>(relationNode));
+
+			if (!relationSource)
 				PAR_syntax_error(csb, "TABLE");
 
 			rse->rse_relations.add(relationSource);
@@ -207,7 +209,7 @@ namespace
 		}
 	};
 
-	static RegisterNode<FetchNode> regFetch(blr_fetch);
+	static RegisterNode<FetchNode> regFetch({blr_fetch});
 }	// namespace
 
 
@@ -821,7 +823,7 @@ void PAR_error(CompilerScratch* csb, const Arg::StatusVector& v, bool isSyntaxEr
 
 
 // Look for named field in procedure output fields.
-SSHORT PAR_find_proc_field(const jrd_prc* procedure, const Firebird::MetaName& name)
+SSHORT PAR_find_proc_field(const jrd_prc* procedure, const MetaName& name)
 {
 	const Array<NestConst<Parameter> >& list = procedure->getOutputFields();
 
@@ -1386,8 +1388,8 @@ RseNode* PAR_rse(thread_db* tdbb, CompilerScratch* csb, SSHORT rse_op)
 			// PAR_parseRecordSource() called RelationSourceNode::parse() => MET_scan_relation().
 			for (FB_SIZE_T iter = 0; iter < rse->rse_relations.getCount(); ++iter)
 			{
-				const RecordSourceNode* subNode = rse->rse_relations[iter];
-				if (subNode->type != RelationSourceNode::TYPE)
+				const RelationSourceNode* subNode = nodeAs<RelationSourceNode>(rse->rse_relations[iter]);
+				if (!subNode)
 					continue;
 				const RelationSourceNode* relNode = static_cast<const RelationSourceNode*>(subNode);
 				const jrd_rel* relation = relNode->relation;

@@ -37,7 +37,7 @@
 namespace Firebird {
 
 class AbstractString;
-class MetaName;
+class MetaString;
 class Exception;
 
 namespace Arg {
@@ -80,7 +80,7 @@ protected:
 		virtual void shiftLeft(const Warning&) throw() { }
 		virtual void shiftLeft(const char*) throw() { }
 		virtual void shiftLeft(const AbstractString&) throw() { }
-		virtual void shiftLeft(const MetaName&) throw() { }
+		virtual void shiftLeft(const MetaString&) throw() { }
 
 		virtual bool compare(const StatusVector& /*v*/) const throw() { return false; }
 
@@ -137,7 +137,7 @@ protected:
 		virtual void shiftLeft(const Warning& arg) throw();
 		virtual void shiftLeft(const char* text) throw();
 		virtual void shiftLeft(const AbstractString& text) throw();
-		virtual void shiftLeft(const MetaName& text) throw();
+		virtual void shiftLeft(const MetaString& text) throw();
 		virtual bool compare(const StatusVector& v) const throw();
 
 		ImplStatusVector(ISC_STATUS k, ISC_STATUS c) throw()
@@ -211,7 +211,7 @@ public:
 		return *this;
 	}
 
-	StatusVector& operator<<(const MetaName& text) throw()
+	StatusVector& operator<<(const MetaString& text) throw()
 	{
 		implementation->shiftLeft(text);
 		return *this;
@@ -248,7 +248,7 @@ class Str : public Base
 public:
 	explicit Str(const char* text) throw();
 	explicit Str(const AbstractString& text) throw();
-	explicit Str(const MetaName& text) throw();
+	explicit Str(const MetaString& text) throw();
 };
 
 class Num : public Base

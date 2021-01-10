@@ -1053,7 +1053,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 		case IN_SW_BURP_TS_MAPPING_FILE:
 			if (++itr >= argc)
 			{
-				BURP_error(401, true);	// msg 401 tablespace mapping file parameter missing
+				BURP_error(408, true);	// msg 408 tablespace mapping file parameter missing
 			}
 			tdgbl->loadMapping(argv[itr], tdgbl->tablespace_mapping, false);
 			break;
@@ -1107,7 +1107,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	}
 
 	// Initialize 'dpb'
-	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
+	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 
 	dpb.insertString(isc_dpb_gbak_attach, FB_VERSION, fb_strlen(FB_VERSION));
 	uSvc->fillDpb(dpb);
@@ -2818,7 +2818,7 @@ void BurpGlobals::loadMapping(const char* mapping_file, StringMap& map, bool cas
 	FILE* f = os_utils::fopen(mapping_file, fopen_read_type);
 	if (!f)
 	{
-		BURP_error(402, true, SafeArg() << mapping_file);	// msg 402 cannot open mapping file @1
+		BURP_error(409, true, SafeArg() << mapping_file);	// msg 409 cannot open mapping file @1
 	}
 
 	//Read lines from file, split by space and add to mapping

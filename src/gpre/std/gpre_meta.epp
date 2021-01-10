@@ -158,7 +158,7 @@ bool MET_database(gpre_dbb* database, bool print_version)
 	// generate a dpb for the attach from the specified
 	// compiletime user name and password
 
-	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
+	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 
 	const TEXT* p;
 	if ((p = database->dbb_c_user)) {

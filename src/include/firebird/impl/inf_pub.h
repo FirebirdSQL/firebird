@@ -162,6 +162,15 @@ enum db_info_types
 
 	fb_info_wire_crypt = 140,
 
+	// Return list of features supported by provider of current connection
+	fb_info_features = 141,
+
+	fb_info_next_attachment = 142,
+	fb_info_next_statement = 143,
+
+	fb_info_db_guid = 144,
+	fb_info_db_file_id = 145,
+
 	isc_info_db_last_value   /* Leave this LAST! */
 };
 
@@ -169,6 +178,19 @@ enum db_info_crypt			/* flags set in fb_info_crypt_state */
 {
 	fb_info_crypt_encrypted = 0x01,
 	fb_info_crypt_process = 0x02
+};
+
+enum info_features // response to fb_info_features
+{
+	fb_feature_multi_statements 	= 1,    // Multiple prepared statements in single attachment
+	fb_feature_multi_transactions	= 2,	// Multiple concurrent transaction in single attachment
+	fb_feature_named_parameters		= 3,	// Query parameters can be named
+	fb_feature_session_reset		= 4,	// ALTER SESSION RESET is supported
+	fb_feature_read_consistency		= 5,	// Read consistency TIL is supported
+	fb_feature_statement_timeout	= 6,	// Statement timeout is supported
+	fb_feature_statement_long_life  = 7,    // Prepared statements are not dropped on transaction end
+
+	fb_feature_max      // Not really a feature. Keep this last.
 };
 
 #define isc_info_version isc_info_isc_version

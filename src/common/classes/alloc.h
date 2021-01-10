@@ -58,11 +58,7 @@
 
 #include <memory.h>
 
-#ifdef USE_SYSTEM_NEW
 #define OOM_EXCEPTION std::bad_alloc
-#else
-#define OOM_EXCEPTION Firebird::BadAlloc
-#endif
 
 #if __cplusplus >= 201103L
 #define FB_NO_THROW_SPECIFIER
@@ -400,22 +396,6 @@ extern void operator delete(void* mem) FB_NOTHROW;
 extern void operator delete[](void* mem) FB_NOTHROW;
 
 #endif // DEBUG_GDS_ALLOC
-
-#ifndef USE_SYSTEM_NEW
-// We must define placement operators NEW & DELETE ourselves
-inline void* operator new(size_t s, void* place) FB_NOTHROW
-{
-	return place;
-}
-inline void* operator new[](size_t s, void* place) FB_NOTHROW
-{
-	return place;
-}
-inline void operator delete(void*, void*) FB_NOTHROW
-{ }
-inline void operator delete[](void*, void*) FB_NOTHROW
-{ }
-#endif
 
 namespace Firebird
 {

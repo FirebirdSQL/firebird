@@ -103,7 +103,7 @@ static const TEXT* const DSC_dtype_names[] =
 	"BOOLEAN",
 	"DECFLOAT(16)",
 	"DECFLOAT(34)",
-	"DECIMAL(34)",
+	"INT128",
 	"TIME WITH TIMEZONE",
 	"TIMESTAMP WITH TIMEZONE"
 };
@@ -1653,7 +1653,7 @@ const char* dsc::typeToText() const
 	case dtype_dec128:
 		return "decfloat(34)";
 	case dtype_int128:
-		return "decimal";
+		return "int128";
 	case dtype_sql_time_tz:
 		return "time with timezone";
 	case dtype_timestamp_tz:
