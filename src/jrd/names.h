@@ -451,3 +451,7 @@ NAME("RDB$CONFIG_VALUE", nam_cfg_value)
 NAME("RDB$CONFIG_DEFAULT", nam_cfg_default)
 NAME("RDB$CONFIG_IS_SET", nam_cfg_is_set)
 NAME("RDB$CONFIG_SOURCE", nam_cfg_source)
+
+NAME("RDB$KEYWORDS", nam_keywords)
+NAME("RDB$KEYWORD_NAME", nam_keyword_name)
+NAME("RDB$KEYWORD_RESERVED", nam_keyword_reserved)

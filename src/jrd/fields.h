@@ -220,3 +220,6 @@
 	FIELD(fld_cfg_is_set	, nam_cfg_is_set	, dtype_boolean	, 1							, 0							, NULL		, false)
 
 	FIELD(fld_repl_mode		, nam_repl_mode		, dtype_short	, sizeof(SSHORT)			, 0							, NULL		, true)
+
+	FIELD(fld_keyword_name	, nam_keyword_name	, dtype_varying	, METADATA_IDENTIFIER_CHAR_LEN, dsc_text_type_ascii		, NULL		, false)
+	FIELD(fld_keyword_reserved, nam_keyword_reserved, dtype_boolean, 1						, 0							, NULL		, false)

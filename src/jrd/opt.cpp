@@ -75,6 +75,7 @@
 #include "../jrd/par_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../jrd/DataTypeUtil.h"
+#include "../jrd/KeywordsTable.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/VirtualTable.h"
 #include "../jrd/Monitoring.h"
@@ -2314,6 +2315,10 @@ static RecordSource* gen_retrieval(thread_db*     tdbb,
 
 		case rel_config:
 			rsb = FB_NEW_POOL(*tdbb->getDefaultPool()) ConfigTableScan(csb, alias, stream, relation);
+			break;
+
+		case rel_keywords:
+			rsb = FB_NEW_POOL(*tdbb->getDefaultPool()) KeywordsTableScan(csb, alias, stream, relation);
 			break;
 
 		default:

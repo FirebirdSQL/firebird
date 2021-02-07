@@ -91,6 +91,7 @@
     <ClCompile Include="..\..\..\src\jrd\intl_builtin.cpp" />
     <ClCompile Include="..\..\..\src\jrd\jrd.cpp" />
     <ClCompile Include="..\..\..\src\jrd\JrdStatement.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\KeywordsTable.cpp" />
     <ClCompile Include="..\..\..\src\jrd\lck.cpp" />
     <ClCompile Include="..\..\..\src\jrd\Mapping.cpp" />
     <ClCompile Include="..\..\..\src\jrd\Monitoring.cpp" />
@@ -276,6 +277,7 @@
     <ClInclude Include="..\..\..\src\jrd\jrd.h" />
     <ClInclude Include="..\..\..\src\jrd\JrdStatement.h" />
     <ClInclude Include="..\..\..\src\jrd\jrd_proto.h" />
+    <ClInclude Include="..\..\..\src\jrd\KeywordsTable.h" />
     <ClInclude Include="..\..\..\src\jrd\lck.h" />
     <ClInclude Include="..\..\..\src\jrd\lck_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\license.h" />
