@@ -93,9 +93,10 @@ AllObjects += $(GFIX_Objects)
 
 # gbak
 Svc_GBAK_Objects:= $(call dirObjects,burp)
-GBAK_Objects:= $(Svc_GBAK_Objects) $(call dirObjects,burp/main)
+GBAK_Own_Objects:= $(Svc_GBAK_Objects) $(call dirObjects,burp/main)
+GBAK_Objects:= $(GBAK_Own_Objects) $(call makeObjects,jrd,ods.cpp)
 
-AllObjects += $(GBAK_Objects)
+AllObjects += $(GBAK_Own_Objects)
 
 # gsec
 Svc_GSEC_Objects:= $(call dirObjects,utilities/gsec)

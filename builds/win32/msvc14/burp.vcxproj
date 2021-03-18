@@ -134,6 +134,7 @@
     <ClCompile Include="..\..\..\gen\burp\backup.cpp" />
     <ClCompile Include="..\..\..\gen\burp\OdsDetection.cpp" />
     <ClCompile Include="..\..\..\gen\burp\restore.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\ods.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\src\burp\backup.epp" />

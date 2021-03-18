@@ -41,6 +41,7 @@
 #include "../jrd/ibsetjmp.h"
 #include "../common/msg_encode.h"
 #include "../jrd/ods.h"			// to get MAX_PAGE_SIZE
+#include "../jrd/ods_proto.h"
 #include "../jrd/constants.h"
 #include "../burp/burp.h"
 #include "../burp/std_desc.h"
@@ -2113,6 +2114,54 @@ static gbak_action open_files(const TEXT* file1,
 			else
 			{
 				Firebird::string nm = tdgbl->toSystem(fil->fil_name);
+				DESC file;
+				bool error = false;
+#ifdef WIN_NT
+				file = CreateFile(nm.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+					NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+#else
+				file = os_utils::open(nm.c_str(), O_RDONLY);
+#endif
+				if (file != INVALID_HANDLE_VALUE)
+				{
+					Ods::header_page header;
+#ifdef WIN_NT
+					DWORD bytes_done;
+
+					if (ReadFile(file, &header, sizeof(header), &bytes_done, NULL))
+#else
+					FB_SSIZE_T bytes_done = read(file, &header, sizeof(header));
+
+					if (bytes_done != -1)
+#endif
+					{
+						if (bytes_done == sizeof(header))
+							error = Ods::isSupported(header.hdr_ods_version, header.hdr_ods_minor);
+					}
+					else
+						error = true;
+
+					close_platf(file);
+				}
+				else
+				{
+#ifdef WIN_NT
+					DWORD error_num = GetLastError();
+
+					if (error_num != ERROR_FILE_NOT_FOUND && error_num != ERROR_PATH_NOT_FOUND)
+#else
+					if (errno != ENOENT)
+#endif
+						error = true;
+				}
+
+				if (error)
+				{
+					BURP_error(65, false, fil->fil_name.c_str());
+					// msg 65 can't open backup file %s
+					flag = QUIT;
+					break;
+				}
 #ifdef WIN_NT
 				if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_WRITE, CREATE_ALWAYS)) == INVALID_HANDLE_VALUE)
 #else

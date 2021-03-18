@@ -16,6 +16,9 @@
       <UniqueIdentifier>{eb4b34e6-bff2-4f4f-acff-eda9621d223b}</UniqueIdentifier>
       <Extensions>h;hpp;hxx;hm;inl</Extensions>
     </Filter>
+    <Filter Include="JRD files">
+      <UniqueIdentifier>{406ca6e9-9417-41b1-a3d7-8d1cde81fe48}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\burp\burp.cpp">
@@ -38,6 +41,9 @@
     </ClCompile>
     <ClCompile Include="..\..\..\gen\burp\restore.cpp">
       <Filter>BURP files\Generated files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\ods.cpp">
+      <Filter>JRD files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
