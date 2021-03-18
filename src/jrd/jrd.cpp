@@ -923,7 +923,7 @@ void Trigger::compile(thread_db* tdbb)
 				dbb->dbb_extManager->makeTrigger(tdbb, csb, this, engine, entryPoint, extBody.c_str(),
 					(relation ?
 						(type & 1 ? IExternalTrigger::TYPE_BEFORE : IExternalTrigger::TYPE_AFTER) :
-						IExternalTrigger::TYPE_DATABASE));
+						IExternalTrigger::TYPE_DATABASE), true);
 			}
 		}
 		catch (const Exception&)
@@ -948,6 +948,24 @@ void Trigger::compile(thread_db* tdbb)
 
 		if (flags & TRG_ignore_perm)
 			statement->flags |= JrdStatement::FLAG_IGNORE_PERM;
+	}
+	else if (!engine.isEmpty())
+	{
+		const auto req_pool = att->createPool();
+		Jrd::ContextPoolHolder context(tdbb, req_pool);
+		AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*req_pool) CompilerScratch(*req_pool));
+
+		USHORT par_flags = (USHORT) (flags & TRG_ignore_perm) ? csb_ignore_perm : 0;
+		if (type & 1)
+			par_flags |= csb_pre_trigger;
+		else
+			par_flags |= csb_post_trigger;
+
+		csb->csb_g_flags |= par_flags;
+		dbb->dbb_extManager->makeTrigger(tdbb, csb, this, engine, entryPoint, extBody.c_str(),
+			(relation ?
+				(type & 1 ? IExternalTrigger::TYPE_BEFORE : IExternalTrigger::TYPE_AFTER) :
+				IExternalTrigger::TYPE_DATABASE), false);
 	}
 }
 

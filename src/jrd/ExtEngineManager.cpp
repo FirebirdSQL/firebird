@@ -1532,7 +1532,7 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 
 void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::Trigger* trg,
 	const MetaName& engine, const string& entryPoint, const string& body,
-	unsigned type)
+	unsigned type, bool makeNode)
 {
 	string entryPointTrimmed = entryPoint;
 	entryPointTrimmed.trim();
@@ -1610,14 +1610,17 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 		trg->extTrigger = FB_NEW_POOL(getPool()) Trigger(tdbb, pool, csb, this, attInfo->engine,
 			metadata.release(), externalTrigger, trg);
 
-		CompoundStmtNode* mainNode = FB_NEW_POOL(getPool()) CompoundStmtNode(getPool());
-		mainNode->statements.append(trg->extTrigger->computedStatements);
+		if (makeNode)
+		{
+			CompoundStmtNode* mainNode = FB_NEW_POOL(getPool()) CompoundStmtNode(getPool());
+			mainNode->statements.append(trg->extTrigger->computedStatements);
 
-		ExtTriggerNode* extTriggerNode = FB_NEW_POOL(getPool()) ExtTriggerNode(getPool(),
-			trg->extTrigger);
-		mainNode->statements.add(extTriggerNode);
+			ExtTriggerNode* extTriggerNode = FB_NEW_POOL(getPool()) ExtTriggerNode(getPool(),
+				trg->extTrigger);
+			mainNode->statements.add(extTriggerNode);
 
-		PAR_preparsed_node(tdbb, trg->relation, mainNode, NULL, &csb, &trg->statement, true, 0);
+			PAR_preparsed_node(tdbb, trg->relation, mainNode, NULL, &csb, &trg->statement, true, 0);
+		}
 	}
 	catch (...)
 	{

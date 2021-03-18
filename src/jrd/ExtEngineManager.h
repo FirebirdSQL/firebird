@@ -321,7 +321,7 @@ public:
 		const Firebird::string& body);
 	void makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::Trigger* trg,
 		const MetaName& engine, const Firebird::string& entryPoint,
-		const Firebird::string& body, unsigned type);
+                const Firebird::string& body, unsigned type, bool makeNode);
 
 private:
 	Firebird::IExternalEngine* getEngine(thread_db* tdbb,
