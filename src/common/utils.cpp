@@ -915,15 +915,15 @@ void get_process_times(SINT64 &userTime, SINT64 &sysTime)
 	FILETIME utime, stime, dummy;
 	if (GetProcessTimes(GetCurrentProcess(), &dummy, &dummy, &stime, &utime))
 	{
-		LARGE_INTEGER lint;
+		LARGE_INTEGER bigint;
 
-		lint.HighPart = stime.dwHighDateTime;
-		lint.LowPart = stime.dwLowDateTime;
-		sysTime = lint.QuadPart / 10000;
+		bigint.HighPart = stime.dwHighDateTime;
+		bigint.LowPart = stime.dwLowDateTime;
+		sysTime = bigint.QuadPart / 10000;
 
-		lint.HighPart = utime.dwHighDateTime;
-		lint.LowPart = utime.dwLowDateTime;
-		userTime = lint.QuadPart / 10000;
+		bigint.HighPart = utime.dwHighDateTime;
+		bigint.LowPart = utime.dwLowDateTime;
+		userTime = bigint.QuadPart / 10000;
 	}
 	else
 	{
