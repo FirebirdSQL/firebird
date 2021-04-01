@@ -493,6 +493,11 @@ dnl CPU_TYPE=ppc64
     EDITLINE_FLG=N
     RAW_DEVICES_FLG=N
     SHRLIB_EXT=dll
+    case "$build" in
+        x86_64-*-mingw*)
+            AC_DEFINE(AMD64, 1, [Define this if CPU is amd64])
+        ;;
+    esac
     ;;
 
   *)
