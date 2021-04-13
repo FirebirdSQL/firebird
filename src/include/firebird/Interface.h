@@ -29,7 +29,6 @@
 #ifndef FB_INTERFACE_H
 #define FB_INTERFACE_H
 
-#include <exception>
 #include "ibase.h"
 #include <assert.h>
 
