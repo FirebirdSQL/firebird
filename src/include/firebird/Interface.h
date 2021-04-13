@@ -29,6 +29,7 @@
 #ifndef FB_INTERFACE_H
 #define FB_INTERFACE_H
 
+#include <exception>
 #include "ibase.h"
 #include <assert.h>
 
@@ -183,11 +184,21 @@ namespace Firebird
 			{
 				status->setErrors(e.getStatus()->getErrors());
 			}
-			catch (...)
+			catch (const std::exception& e)
 			{
 				ISC_STATUS statusVector[] = {
 					isc_arg_gds, isc_random,
 					isc_arg_string, (ISC_STATUS) "Unrecognized C++ exception",
+					isc_arg_gds, isc_random,
+					isc_arg_string, (ISC_STATUS) e.what(),
+					isc_arg_end};
+				status->setErrors(statusVector);
+			}
+			catch (...)
+			{
+				ISC_STATUS statusVector[] = {
+					isc_arg_gds, isc_random,
+					isc_arg_string, (ISC_STATUS) "Unrecognized exception",
 					isc_arg_end};
 				status->setErrors(statusVector);
 			}
