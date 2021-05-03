@@ -492,6 +492,7 @@ static const TOK tokens[] =
 	{TOK_TIMEOUT, "TIMEOUT", true},
 	{TOK_TIMEZONE_HOUR, "TIMEZONE_HOUR", false},
 	{TOK_TIMEZONE_MINUTE, "TIMEZONE_MINUTE", false},
+	{TOK_TIMEZONE_NAME, "TIMEZONE_NAME", true},
 	{TOK_TO, "TO", false},
 	{TOK_TOTALORDER, "TOTALORDER", true},
 	{TOK_TRAILING, "TRAILING", false},

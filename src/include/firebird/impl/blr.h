@@ -288,6 +288,7 @@
 #define blr_extract_week		(unsigned char)9
 #define blr_extract_timezone_hour	(unsigned char)10
 #define blr_extract_timezone_minute	(unsigned char)11
+#define blr_extract_timezone_name	(unsigned char)12
 
 #define blr_current_date	(unsigned char)160
 #define blr_current_timestamp	(unsigned char)161

@@ -8579,6 +8579,7 @@ timestamp_part
 	| MILLISECOND	{ $$ = blr_extract_millisecond; }
 	| TIMEZONE_HOUR	{ $$ = blr_extract_timezone_hour; }
 	| TIMEZONE_MINUTE	{ $$ = blr_extract_timezone_minute; }
+	| TIMEZONE_NAME	{ $$ = blr_extract_timezone_name; }
 	| WEEK			{ $$ = blr_extract_week; }
 	| WEEKDAY		{ $$ = blr_extract_weekday; }
 	| YEARDAY		{ $$ = blr_extract_yearday; }
@@ -9037,6 +9038,7 @@ non_reserved_word
 	| SQL
 	| SYSTEM
 	| TIES
+	| TIMEZONE_NAME
 	| TOTALORDER
 	| TRAPS
 	| ZONE

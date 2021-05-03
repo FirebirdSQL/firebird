@@ -296,6 +296,7 @@ select timestamp '2018-01-01 12:00 GMT' at local
 Two new `EXTRACT` expressions has been added:
 - `TIMEZONE_HOUR`: extracts the time zone hours displacement
 - `TIMEZONE_MINUTE`: extracts the time zone minutes displacement
+- `TIMEZONE_NAME`: extracts the time zone region or displacement string
 
 #### Examples
 
@@ -304,6 +305,9 @@ select extract(timezone_hour from current_time)
   from rdb$database;
 
 select extract(timezone_minute from current_timestamp)
+  from rdb$database;
+
+select extract(timezone_name from current_timestamp)
   from rdb$database;
 ```
 

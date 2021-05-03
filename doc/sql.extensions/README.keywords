@@ -372,6 +372,7 @@ Firebird 4.0
     SQL (1)
     SYSTEM (1)
     TIES
+    TIMEZONE_NAME *
     TOTALORDER *
     TRAPS *
     ZONE
