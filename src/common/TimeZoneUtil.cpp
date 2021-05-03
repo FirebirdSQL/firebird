@@ -797,13 +797,8 @@ bool TimeZoneUtil::decodeTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, bool gmt
 
 ISC_TIMESTAMP_TZ TimeZoneUtil::getCurrentSystemTimeStamp()
 {
-	TimeStamp now = TimeStamp::getCurrentTimeStamp();
-
-	ISC_TIMESTAMP_TZ tsTz;
-	tsTz.utc_timestamp = now.value();
+	auto tsTz = getCurrentGmtTimeStamp();
 	tsTz.time_zone = getSystemTimeZone();
-	localTimeStampToUtc(tsTz);
-
 	return tsTz;
 }
 
