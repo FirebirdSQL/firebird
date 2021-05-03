@@ -449,7 +449,7 @@ public:
 	Validation*	att_validation;
 	Firebird::PathName	att_working_directory;	// Current working directory is cached
 	Firebird::PathName	att_filename;			// alias used to attach the database
-	const ISC_TIMESTAMP_TZ	att_timestamp;	// Connection date and time
+	ISC_TIMESTAMP_TZ	att_timestamp;	    // Connection date and time
 	Firebird::StringMap att_context_vars;	// Context variables for the connection
 	Firebird::Stack<DdlTriggerContext*> ddlTriggersContext;	// Context variables for DDL trigger event
 	Firebird::string att_network_protocol;	// Network protocol used by client for connection

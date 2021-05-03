@@ -2035,8 +2035,10 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 			if (!options.dpb_session_tz.isEmpty())
 			{
-				attachment->att_current_timezone = attachment->att_original_timezone = TimeZoneUtil::parse(
-					options.dpb_session_tz.c_str(), options.dpb_session_tz.length());
+				attachment->att_timestamp.time_zone = attachment->att_current_timezone =
+					attachment->att_original_timezone = TimeZoneUtil::parse(
+						options.dpb_session_tz.c_str(), options.dpb_session_tz.length());
+
 			}
 
 			// if the attachment is through gbak and this attachment is not by owner
@@ -3090,8 +3092,9 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 			if (!options.dpb_session_tz.isEmpty())
 			{
-				attachment->att_current_timezone = attachment->att_original_timezone = TimeZoneUtil::parse(
-					options.dpb_session_tz.c_str(), options.dpb_session_tz.length());
+				attachment->att_timestamp.time_zone = attachment->att_current_timezone =
+					attachment->att_original_timezone = TimeZoneUtil::parse(
+						options.dpb_session_tz.c_str(), options.dpb_session_tz.length());
 			}
 
 			CCH_flush(tdbb, FLUSH_FINI, 0);
