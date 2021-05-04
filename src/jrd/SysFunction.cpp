@@ -384,7 +384,7 @@ const char
 	SESSION_IDLE_TIMEOUT[] = "SESSION_IDLE_TIMEOUT",
 	STATEMENT_TIMEOUT[] = "STATEMENT_TIMEOUT",
 	EFFECTIVE_USER_NAME[] = "EFFECTIVE_USER",
-	SESSION_TIME_ZONE[] = "SESSION_TIME_ZONE",
+	SESSION_TIMEZONE[] = "SESSION_TIMEZONE",
 	// SYSTEM namespace: transaction wise items
 	TRANSACTION_ID_NAME[] = "TRANSACTION_ID",
 	ISOLATION_LEVEL_NAME[] = "ISOLATION_LEVEL",
@@ -4332,7 +4332,7 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 				return NULL;
 			resultStr = user.c_str();
 		}
-		else if (nameStr == SESSION_TIME_ZONE)
+		else if (nameStr == SESSION_TIMEZONE)
 		{
 			char timeZoneBuffer[TimeZoneUtil::MAX_SIZE];
 			TimeZoneUtil::format(timeZoneBuffer, sizeof(timeZoneBuffer), attachment->att_current_timezone);

@@ -132,7 +132,7 @@ Usage:
                                 |
    EXT_CONN_POOL_LIFETIME       | Idle connection lifetime, in seconds
                                 |
-   SESSION_TIME_ZONE            | Current session time zone.
+   SESSION_TIMEZONE             | Current session time zone.
 
 Notes:
    To prevent DoS attacks against Firebird Server you are not allowed to have

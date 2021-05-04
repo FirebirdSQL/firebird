@@ -333,15 +333,15 @@ select localtimestamp
   from rdb$database;
 ```
 
-### `SESSION_TIME_ZONE` context variable
+### `SESSION_TIMEZONE` context variable
 
-`RDB$GET_CONTEXT('SYSTEM', 'SESSION_TIME_ZONE')` could be used to obtain the session current time zone.
+`RDB$GET_CONTEXT('SYSTEM', 'SESSION_TIMEZONE')` could be used to obtain the session current time zone.
 
 #### Examples
 
 ```
 set time zone 'america/sao_paulo';
-select rdb$get_context('SYSTEM', 'SESSION_TIME_ZONE') from rdb$database;
+select rdb$get_context('SYSTEM', 'SESSION_TIMEZONE') from rdb$database;
 -- Result: America/Sao_Paulo
 
 set time zone '-3:00';
