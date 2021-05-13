@@ -6801,7 +6801,10 @@ static bool move_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 				break;
 			}
 
-			fb_assert(relation);
+			// An index may be deleted in the same transaction.
+			// Don't move index pages in this case.
+			if (!relation)
+				break;
 
 			const USHORT newPageSpaceId = MET_tablespace(tdbb, tableSpace)->id;
 
