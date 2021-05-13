@@ -372,10 +372,19 @@ USHORT BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescAlloc** csb_idx, Rel
 
 	index_desc* buffer = (*csb_idx)->items;
 	USHORT count = 0;
-	for (USHORT i = 0; i < root->irt_count; i++)
+
+	try
 	{
-		if (BTR_description(tdbb, relation, root, &buffer[count], i))
-			count++;
+		for (USHORT i = 0; i < root->irt_count; i++)
+		{
+			if (BTR_description(tdbb, relation, root, &buffer[count], i))
+				count++;
+		}
+	}
+	catch (...)
+	{
+		CCH_RELEASE(tdbb, &window);
+		throw;
 	}
 
 	CCH_RELEASE(tdbb, &window);
