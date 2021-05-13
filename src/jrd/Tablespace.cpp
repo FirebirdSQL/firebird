@@ -28,6 +28,13 @@ using namespace Firebird;
 
 namespace Jrd {
 
+Tablespace::~Tablespace()
+{
+	fb_assert(useCount == 0);
+	delete existenceLock;
+	existenceLock = NULL;
+}
+
 void Tablespace::addRef(thread_db *tdbb)
 {
 	useCount++;

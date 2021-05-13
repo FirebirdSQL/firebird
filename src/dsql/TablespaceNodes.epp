@@ -248,6 +248,7 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 	bool found = false;
 	USHORT tableSpaceId = 0;
+	string tableSpaceFileName;
 	AutoCacheRequest requestHandle(tdbb, drq_e_tablespace, DYN_REQUESTS);
 
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
@@ -256,6 +257,7 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	{
 		found = true;
 		tableSpaceId = X.RDB$TABLESPACE_ID;
+		tableSpaceFileName = X.RDB$FILE_NAME;
 
 		// cache it for DFW stage
 		MET_tablespace_id(tdbb, tableSpaceId);
@@ -267,9 +269,6 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 		if (!X.RDB$SECURITY_CLASS.NULL)
 			deleteSecurityClass(tdbb, transaction, X.RDB$SECURITY_CLASS);
-
-		if (dropDependencies)
-			DFW_post_work(transaction, dfw_drop_tablespace, X.RDB$FILE_NAME, tableSpaceId);
 	}
 	END_FOR
 
@@ -341,6 +340,8 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	{
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_TABLESPACE,
 			name, NULL);
+
+		DFW_post_work(transaction, dfw_drop_tablespace, tableSpaceFileName, tableSpaceId);
 	}
 
 	savePoint.release();	// everything is ok

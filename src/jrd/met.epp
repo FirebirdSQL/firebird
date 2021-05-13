@@ -5612,17 +5612,12 @@ Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id)
 
     Attachment* attachment = tdbb->getAttachment();
 
-    const USHORT tsCount = attachment->getTablespaceCount();
+	Tablespace* ts = attachment->getTablespace(id);
 
-    // tablespace id is started from 1
-    if (id <= tsCount)
+	if (ts)
 	{
-        Tablespace* ts = attachment->getTablespace(id);
-        if (ts)
-        {
-            fb_assert(ts->id == id);
-			return ts;
-        }
+		fb_assert(ts->id == id);
+		return ts;
 	}
 
 	// Now we need to find tablespace in system table
@@ -5646,7 +5641,7 @@ Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id)
 		status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpaceName));
 
 	// Check that pageSpaceId is either new or is not set (else it should be found in att_tablespaces above)
-    fb_assert( (id >= tsCount + 1) || !attachment->getTablespace(id));
+    fb_assert(!attachment->getTablespace(id));
 
     dbb->dbb_page_manager.allocTableSpace(tdbb, id, false, file);
 
@@ -5688,14 +5683,13 @@ Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
     if (tableSpaceName.isEmpty())
         return attachment->getTablespace(DB_PAGE_SPACE);
 
-    const USHORT tsCount = attachment->getTablespaceCount();
+	Tablespace* ts = attachment->getTablespaceByName(tableSpaceName);
 
-    for (USHORT i = 2; i <= tsCount; i++)
-    {
-        Tablespace* ts = attachment->getTablespace(i);
-        if (ts && (ts->name == tableSpaceName) )
-            return ts;
-    }
+	if (ts)
+	{
+		fb_assert(ts->name == tableSpaceName);
+		return ts;
+	}
 
     // Now we need to find tablespace in system table
     AutoCacheRequest request(tdbb, irq_find_ts, IRQ_REQUESTS);
@@ -5721,7 +5715,7 @@ Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
     fb_assert(PageSpace::isTablespace(pageSpaceId));
 
     // Check that pageSpaceId is either new or is not set (else it should be found in att_tablespaces above)
-    fb_assert( (pageSpaceId >= tsCount + 1) || !attachment->getTablespace(pageSpaceId));
+    fb_assert(!attachment->getTablespace(pageSpaceId));
 
     dbb->dbb_page_manager.allocTableSpace(tdbb, pageSpaceId, false, file);
 

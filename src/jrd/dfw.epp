@@ -6566,8 +6566,6 @@ static bool drop_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 			{
 			    raiseObjectInUseError("TABLESPACE", tablespace->name.c_str());
 			}
-			// Probably here we need to remove the cache tablespace from attachment. Need to think...
-			// Also it's necessary to close open file descriptor of the tablespace
 		}
 		return true;
 
@@ -6575,8 +6573,12 @@ static bool drop_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	case 3:
 		return true;
 	case 4:
+		dbb->dbb_page_manager.delPageSpace(work->dfw_id);
+
 	    if (tablespace->existenceLock)
 		    LCK_release(tdbb, tablespace->existenceLock);
+
+		attachment->delTablespace(work->dfw_id);
 
 		break;
 	}
