@@ -10096,6 +10096,23 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 			MODIFY IDX
 				if (op == OP_ALTER_TABLESPACE)
 				{
+					bool ts_found = false;
+					AutoRequest request2;
+
+					FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+						X IN RDB$TABLESPACES
+						WITH X.RDB$TABLESPACE_NAME EQ tableSpace.c_str()
+					{
+						ts_found = true;
+					}
+					END_FOR
+
+					if (!ts_found)
+					{
+						status_exception::raise(
+							Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpace));
+					}
+
 					IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
 					strcpy(IDX.RDB$TABLESPACE_NAME, tableSpace.c_str());
 				}
