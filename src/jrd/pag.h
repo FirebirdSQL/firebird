@@ -187,6 +187,7 @@ public:
 	USHORT getTempPageSpaceID(thread_db* tdbb);
 
 	void allocTableSpace(thread_db* tdbb, USHORT tableSpaceID, bool create, const Firebird::PathName& fileName);
+	void delPageSpace(const USHORT pageSpaceID);
 
 	void closeAll();
 
@@ -201,7 +202,6 @@ private:
 		USHORT, PageSpace> PageSpaceArray;
 
 	PageSpace* addPageSpace(const USHORT pageSpaceID);
-	void delPageSpace(const USHORT pageSpaceID);
 
 	Database* dbb;
 	PageSpaceArray pageSpaces;
