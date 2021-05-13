@@ -492,6 +492,7 @@ static bool change_repl_state(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
 static bool create_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool drop_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool modify_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool move_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool move_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
@@ -1246,6 +1247,7 @@ static const deferred_task task_table[] =
 
 	{ dfw_create_tablespace, create_tablespace },
 	{ dfw_drop_tablespace, drop_tablespace },
+	{ dfw_modify_tablespace, modify_tablespace },
 	{ dfw_move_relation, move_relation },
 	{ dfw_move_index, move_index },
 
@@ -6553,21 +6555,19 @@ static bool drop_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 
     // We assume the tablespace must exists if dfw with has added
 	fb_assert(tablespace);
+	fb_assert(tablespace->existenceLock);
 
 	switch (phase)
 	{
 	case 0:
-	    if ( tablespace->existenceLock && tablespace->isUsed() )
-		        LCK_convert(tdbb, tablespace->existenceLock, LCK_SR, transaction->getLockWait());
+		LCK_convert(tdbb, tablespace->existenceLock, LCK_SR, transaction->getLockWait());
 		return false;
 
 	case 1:
 		{
 		    // Make sure that nobody uses the tablespace
-			if ( tablespace->isUsed() ||	// RS: if isUsed maybe I must try to convert SR to EX?
-			    (tablespace->existenceLock &&
-				!LCK_lock(tdbb, tablespace->existenceLock, LCK_EX, transaction->getLockWait()) )
-			   )
+			if (tablespace->isUsed() ||
+				!LCK_convert(tdbb, tablespace->existenceLock, LCK_EX, transaction->getLockWait()))
 			{
 			    raiseObjectInUseError("TABLESPACE", tablespace->name.c_str());
 			}
@@ -6580,8 +6580,63 @@ static bool drop_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	case 4:
 		dbb->dbb_page_manager.delPageSpace(work->dfw_id);
 
-	    if (tablespace->existenceLock)
-		    LCK_release(tdbb, tablespace->existenceLock);
+		LCK_release(tdbb, tablespace->existenceLock);
+
+		attachment->delTablespace(work->dfw_id);
+
+		break;
+	}
+
+	return false;
+}
+
+static bool modify_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	m o d i f y _ t a b l e s p a c e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Modify tablespace
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+	Attachment* attachment = tdbb->getAttachment();
+
+	Tablespace* tablespace = attachment->getTablespace(work->dfw_id);
+
+	// We assume the tablespace must exists if dfw with has added
+	fb_assert(tablespace);
+	fb_assert(tablespace->existenceLock);
+
+	switch (phase)
+	{
+	case 0:
+		LCK_convert(tdbb, tablespace->existenceLock, LCK_SR, transaction->getLockWait());
+		return false;
+
+	case 1:
+		{
+			// Make sure that nobody uses the tablespace
+			if (tablespace->isUsed() ||
+				!LCK_convert(tdbb, tablespace->existenceLock, LCK_EX, transaction->getLockWait()))
+			{
+				raiseObjectInUseError("TABLESPACE", tablespace->name.c_str());
+			}
+		}
+		return true;
+
+	case 2:
+	case 3:
+		return true;
+	case 4:
+		dbb->dbb_page_manager.delPageSpace(work->dfw_id);
+
+		LCK_release(tdbb, tablespace->existenceLock);
 
 		attachment->delTablespace(work->dfw_id);
 

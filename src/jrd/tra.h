@@ -514,6 +514,7 @@ enum dfw_t {
 	dfw_change_repl_state,
 	dfw_create_tablespace,
 	dfw_drop_tablespace,
+	dfw_modify_tablespace,
 	dfw_move_relation,
 	dfw_move_index,
 	dfw_clear_datapages,

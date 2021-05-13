@@ -164,7 +164,7 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 			{
 				// Tablespace is locking after the use in relation and indices.
 				// Should we check it here again?
-				tdbb->getAttachment()->getTablespace(i)->addRef(tdbb);
+				MET_tablespace_id(tdbb, i)->addRef(tdbb);
 			}
 
 		// make a vector of all used RSEs
@@ -662,7 +662,11 @@ void JrdStatement::release(thread_db* tdbb)
 		{
 			// Tablespace is locking after the use in relation and indices.
 			// Should we check it here again?
-			tdbb->getAttachment()->getTablespace(i)->release(tdbb);
+			Tablespace* ts = tdbb->getAttachment()->getTablespace(i);
+			fb_assert(ts);
+			
+			if (ts)
+				ts->release(tdbb);
 		}
 
 	for (jrd_req** instance = requests.begin(); instance != requests.end(); ++instance)

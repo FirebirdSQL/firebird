@@ -5587,7 +5587,7 @@ USHORT MET_index_pagespace(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, USHORT 
 	return pageSpaceId;
 }
 
-Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id)
+Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id, bool open)
 {
 /**************************************
  *
@@ -5617,6 +5617,16 @@ Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id)
 	if (ts)
 	{
 		fb_assert(ts->id == id);
+
+		// Do not allow to use tablespaces modified by ALTER TABLESPACE in the same transaction
+		if (ts->modified && open)
+		{
+			string name;
+			name.printf("TABLESPACE \"%s\"", ts->name.c_str());
+
+			ERR_post(Arg::Gds(isc_obj_in_use) << Arg::Str(name));
+		}
+
 		return ts;
 	}
 
@@ -5646,18 +5656,45 @@ Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id)
 	// Check that pageSpaceId is either new or is not set (else it should be found in att_tablespaces above)
     fb_assert(!attachment->getTablespace(id));
 
-    dbb->dbb_page_manager.allocTableSpace(tdbb, id, false, file);
+	Tablespace* tableSpace = NULL;
 
-	Tablespace* tableSpace = FB_NEW_POOL(*attachment->att_pool) Tablespace(*attachment->att_pool);
-    tableSpace->id = id;
-	tableSpace->name = tableSpaceName;
+	try
+	{
+		tableSpace = FB_NEW_POOL(*attachment->att_pool) Tablespace(*attachment->att_pool);
+		tableSpace->id = id;
+		tableSpace->name = tableSpaceName;
 
-	Lock* lock = FB_NEW_RPT(*attachment->att_pool, 0)
-		Lock(tdbb, sizeof(SLONG), LCK_tablespace_exist, tableSpace);
-	tableSpace->existenceLock = lock;
-	lock->setKey(tableSpace->id);
-    attachment->setTablespace(id, tableSpace);
+		Lock* lock = FB_NEW_RPT(*attachment->att_pool, 0)
+			Lock(tdbb, sizeof(SLONG), LCK_tablespace_exist, tableSpace);
+		tableSpace->existenceLock = lock;
+		lock->setKey(tableSpace->id);
 
+		// Get the SR lock to let other attachments know that we use the tablespace
+		if (!LCK_lock(tdbb, lock, LCK_SR, LCK_NO_WAIT))
+		{
+			string name;
+			name.printf("TABLESPACE ID %d", id);
+
+			ERR_post(Arg::Gds(isc_obj_in_use) << Arg::Str(name));
+		}
+
+		if (open)
+			dbb->dbb_page_manager.allocTableSpace(tdbb, id, false, file);
+	}
+	catch (...)
+	{
+		if (tableSpace)
+		{
+			if (tableSpace->existenceLock)
+				LCK_release(tdbb, tableSpace->existenceLock);
+
+			delete tableSpace;
+		}
+
+		throw;
+	}
+
+	attachment->setTablespace(id, tableSpace);
 	return tableSpace;
 }
 
@@ -5691,6 +5728,16 @@ Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
 	if (ts)
 	{
 		fb_assert(ts->name == tableSpaceName);
+
+		// Do not allow to use tablespaces modified by ALTER TABLESPACE in the same transaction
+		if (ts->modified)
+		{
+			string name;
+			name.printf("TABLESPACE \"%s\"", ts->name.c_str());
+
+			ERR_post(Arg::Gds(isc_obj_in_use) << Arg::Str(name));
+		}
+
 		return ts;
 	}
 
@@ -5720,18 +5767,44 @@ Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
     // Check that pageSpaceId is either new or is not set (else it should be found in att_tablespaces above)
     fb_assert(!attachment->getTablespace(pageSpaceId));
 
-    dbb->dbb_page_manager.allocTableSpace(tdbb, pageSpaceId, false, file);
+	Tablespace* tableSpace = NULL;
 
-    Tablespace* tableSpace = FB_NEW_POOL(*attachment->att_pool) Tablespace(*attachment->att_pool);
-    tableSpace->id = pageSpaceId;
-    tableSpace->name = tableSpaceName;
+	try
+	{
+		tableSpace = FB_NEW_POOL(*attachment->att_pool) Tablespace(*attachment->att_pool);
+		tableSpace->id = pageSpaceId;
+		tableSpace->name = tableSpaceName;
 
-    Lock* lock = FB_NEW_RPT(*attachment->att_pool, 0)
-        Lock(tdbb, sizeof(SLONG), LCK_tablespace_exist, tableSpace);
-    tableSpace->existenceLock = lock;
-    lock->setKey(tableSpace->id);
-    attachment->setTablespace(pageSpaceId, tableSpace);
+		Lock* lock = FB_NEW_RPT(*attachment->att_pool, 0)
+			Lock(tdbb, sizeof(SLONG), LCK_tablespace_exist, tableSpace);
+		tableSpace->existenceLock = lock;
+		lock->setKey(tableSpace->id);
 
+		// Get the SR lock to let other attachments know that we use the tablespace
+		if (!LCK_lock(tdbb, lock, LCK_SR, LCK_NO_WAIT))
+		{
+			string name;
+			name.printf("TABLESPACE \"%s\"", tableSpaceName.c_str());
+
+			ERR_post(Arg::Gds(isc_obj_in_use) << Arg::Str(name));
+		}
+
+		dbb->dbb_page_manager.allocTableSpace(tdbb, pageSpaceId, false, file);
+	}
+	catch (...)
+	{
+		if (tableSpace)
+		{
+			if (tableSpace->existenceLock)
+				LCK_release(tdbb, tableSpace->existenceLock);
+
+			delete tableSpace;
+		}
+
+		throw;
+	}
+
+	attachment->setTablespace(pageSpaceId, tableSpace);
     return tableSpace;
 }
 

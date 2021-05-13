@@ -38,6 +38,7 @@
 #include "../jrd/dyn_ut_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/os/pio_proto.h"
+#include "../jrd/lck_proto.h"
 
 
 using namespace Firebird;
@@ -179,12 +180,31 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 	Attachment* attachment = transaction->getAttachment();
 	AutoCacheRequest requestHandle(tdbb, drq_m_tablespace, DYN_REQUESTS);
 	bool modified = false;
+	USHORT tableSpaceId = 0;
 
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 		X IN RDB$TABLESPACES
 		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
 	{
 		modified = true;
+		tableSpaceId = X.RDB$TABLESPACE_ID;
+
+		fb_assert(PageSpace::isTablespace(tableSpaceId));
+
+		Tablespace* tablespace = MET_tablespace_id(tdbb, tableSpaceId, false);
+		tablespace->modified = true;
+
+		// Get the EX lock here to prevent other attachments from using the tablespace.
+		// It's needed because other attachments see uncommitted changes in RDB$TABLESPACES.
+		// I think this solution is temporary and should be reconsidered.
+		if (tablespace->isUsed() ||
+			!LCK_convert(tdbb, tablespace->existenceLock, LCK_EX, transaction->getLockWait()))
+		{
+			string obj_name;
+			obj_name.printf("TABLESPACE \"%s\"", name.c_str());
+
+			ERR_post(Arg::Gds(isc_obj_in_use) << Arg::Str(obj_name));
+		}
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 			DDL_TRIGGER_ALTER_TABLESPACE, name, NULL);
@@ -209,6 +229,8 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 
 	if (modified)
 	{
+		DFW_post_work(transaction, dfw_modify_tablespace, NULL, tableSpaceId);
+
 		executeDdlTrigger(tdbb, dsqlScratch, transaction,
 			DTW_AFTER, DDL_TRIGGER_ALTER_TABLESPACE, name, NULL);
 	}

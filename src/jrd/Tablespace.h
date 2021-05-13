@@ -43,6 +43,7 @@ namespace Jrd
 			  id(INVALID_PAGE_SPACE),
 			  name(p),
 			  existenceLock(NULL),
+			  modified(false),
 		      useCount(0)
 		{
 		}
@@ -51,7 +52,8 @@ namespace Jrd
 
 		USHORT id;					// tablespace id = pagespace id
 		MetaName name;	// tablespace name
-		Lock* existenceLock;		// existence lock, if any
+		Lock* existenceLock;	// existence lock, if any
+		bool modified;
 
 	private:
 		int useCount;

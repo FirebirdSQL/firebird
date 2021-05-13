@@ -38,18 +38,18 @@ Tablespace::~Tablespace()
 void Tablespace::addRef(thread_db *tdbb)
 {
 	useCount++;
-	if (useCount == 1)
+	/*if (useCount == 1)
 	{
 		LCK_lock(tdbb, existenceLock, LCK_SR, LCK_WAIT);
-	}
+	}*/
 }
 
 void Tablespace::release(thread_db *tdbb)
 {
-	if (useCount == 1)
+	/*if (useCount == 1)
 	{
 		LCK_release(tdbb, existenceLock);
-	}
+	}*/
 	useCount--;
 }
 

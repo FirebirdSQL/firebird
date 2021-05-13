@@ -1011,7 +1011,7 @@ void TRA_post_resources(thread_db* tdbb, jrd_tra* transaction, ResourceList& res
 		{
 			// Tablespace is locking after the use in relation and indices.
 			// Should we check it here again?
-			tdbb->getAttachment()->getTablespace(i)->addRef(tdbb);
+			MET_tablespace_id(tdbb, i)->addRef(tdbb);
 		}
 }
 
@@ -1288,7 +1288,11 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 		{
 			// Tablespace is locking after the use in relation and indices.
 			// Should we check it here again?
-			tdbb->getAttachment()->getTablespace(i)->release(tdbb);
+			Tablespace* ts = tdbb->getAttachment()->getTablespace(i);
+			fb_assert(ts);
+
+			if (ts)
+				ts->release(tdbb);
 		}
 
 	{ // scope
