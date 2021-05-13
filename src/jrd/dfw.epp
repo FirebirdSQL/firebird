@@ -6578,6 +6578,7 @@ static bool drop_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	case 3:
 		return true;
 	case 4:
+		CCH_flush(tdbb, FLUSH_ALL, 0);
 		dbb->dbb_page_manager.delPageSpace(work->dfw_id);
 
 		LCK_release(tdbb, tablespace->existenceLock);
@@ -6634,6 +6635,7 @@ static bool modify_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 	case 3:
 		return true;
 	case 4:
+		CCH_flush(tdbb, FLUSH_ALL, 0);
 		dbb->dbb_page_manager.delPageSpace(work->dfw_id);
 
 		LCK_release(tdbb, tablespace->existenceLock);
