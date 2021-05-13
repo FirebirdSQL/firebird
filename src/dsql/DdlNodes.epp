@@ -7875,21 +7875,24 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					const MetaName& tableSpaceName =
 						static_cast<const AlterTableSpaceClause*>(i->getObject())->name;
 
-					bool found = false;
-					AutoRequest request;
-
-					FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-						X IN RDB$TABLESPACES
-						WITH X.RDB$TABLESPACE_NAME EQ tableSpaceName.c_str()
+					if (!tableSpaceName.isEmpty())
 					{
-						found = true;
-					}
-					END_FOR
+						bool found = false;
+						AutoRequest request;
 
-					if (!found)
-					{
-						status_exception::raise(
-							Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpaceName));
+						FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+							X IN RDB$TABLESPACES
+							WITH X.RDB$TABLESPACE_NAME EQ tableSpaceName.c_str()
+						{
+							found = true;
+						}
+						END_FOR
+
+						if (!found)
+						{
+							status_exception::raise(
+								Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpaceName));
+						}
 					}
 
 					AutoRequest request2;
