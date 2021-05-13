@@ -1811,9 +1811,7 @@ bool set_diff_page(thread_db* tdbb, BufferDesc* bdb)
 	BackupManager* const bm = dbb->dbb_backup_manager;
 
 	// Temporary pages don't write to delta and need no SCN
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(bdb->bdb_page.getPageSpaceID());
-	fb_assert(pageSpace);
-	if (pageSpace->isTemporary())
+	if (PageSpace::isTemporary(bdb->bdb_page.getPageSpaceID()))
 		return true;
 
 	// Take backup state lock
