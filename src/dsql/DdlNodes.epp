@@ -7872,9 +7872,29 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 				case Clause::TYPE_ALTER_TABLESPACE:
 				{
+					const MetaName& tableSpaceName =
+						static_cast<const AlterTableSpaceClause*>(i->getObject())->name;
+
+					bool found = false;
 					AutoRequest request;
 
 					FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+						X IN RDB$TABLESPACES
+						WITH X.RDB$TABLESPACE_NAME EQ tableSpaceName.c_str()
+					{
+						found = true;
+					}
+					END_FOR
+
+					if (!found)
+					{
+						status_exception::raise(
+							Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpaceName));
+					}
+
+					AutoRequest request2;
+
+					FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 						REL IN RDB$RELATIONS
 						WITH REL.RDB$RELATION_NAME EQ name.c_str()
 					{
@@ -7894,9 +7914,6 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 							// msg 311: "Cannot alter tablespace for temporary table @1"
 							status_exception::raise(Arg::PrivateDyn(311) << name);
 						}
-
-						const MetaName& tableSpaceName =
-								static_cast<const AlterTableSpaceClause*>(i->getObject())->name;
 
 						// Check if we are try to change tablespace name to the already set
 						if ( (REL.RDB$TABLESPACE_NAME.NULL && tableSpaceName.isEmpty()) ||
