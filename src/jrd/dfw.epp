@@ -1642,6 +1642,11 @@ void DFW_perform_post_commit_work(thread_db* tdbb, jrd_tra* transaction)
 		case dfw_clear_datapages:
 			{
 				jrd_rel* relation = MET_lookup_relation_id(tdbb, work->dfw_id, false);
+
+				// A relation may already be deleted by dfw_delete_relation in the same transaction
+				if (!relation)
+					break;
+
 				RelationPages* relationPages = relation->getPages(tdbb);
 				DPM_delete_relation_pages(tdbb, relation, relationPages);
 
