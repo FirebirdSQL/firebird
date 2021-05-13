@@ -5638,7 +5638,10 @@ Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id)
 	END_FOR
 
 	if (!found)
+	{
+		tableSpaceName.printf("id %d", id);
 		status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpaceName));
+	}
 
 	// Check that pageSpaceId is either new or is not set (else it should be found in att_tablespaces above)
     fb_assert(!attachment->getTablespace(id));
