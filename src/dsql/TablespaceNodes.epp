@@ -166,8 +166,6 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 		}
 	}
 
-	dbb->dbb_page_manager.allocTableSpace(tdbb, id, true, PathName(fileName.c_str()));
-
 	storePrivileges(tdbb, transaction, name, obj_tablespace, ALL_PRIVILEGES);
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_TABLESPACE,
