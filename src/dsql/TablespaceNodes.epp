@@ -336,10 +336,10 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 	if (found)
 	{
+		DFW_post_work(transaction, dfw_drop_tablespace, tableSpaceFileName, tableSpaceId);
+
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_TABLESPACE,
 			name, NULL);
-
-		DFW_post_work(transaction, dfw_drop_tablespace, tableSpaceFileName, tableSpaceId);
 	}
 
 	savePoint.release();	// everything is ok
