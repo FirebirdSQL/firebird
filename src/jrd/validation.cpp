@@ -1233,7 +1233,7 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, PageNumber page_number,
 	}
 
 	const int pageSpaceId = page_number.getPageSpaceID();
-	const PageManager& pageMgr = dbb->dbb_page_manager;
+	PageManager& pageMgr = dbb->dbb_page_manager;
 	const PageSpace* pageSpace = pageMgr.findPageSpace(pageSpaceId);
 
 	vdr_max_page[pageSpaceId] = MAX(vdr_max_page[pageSpaceId], page_number.getPageNum());

@@ -2154,7 +2154,7 @@ ULONG PageSpace::actAlloc()
 	return tot_pages;
 }
 
-ULONG PageSpace::actAlloc(const Database* dbb)
+ULONG PageSpace::actAlloc(Database* dbb)
 {
 	PageSpace* pgSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	return pgSpace->actAlloc();
@@ -2186,7 +2186,7 @@ ULONG PageSpace::maxAlloc()
 	return nPages;
 }
 
-ULONG PageSpace::maxAlloc(const Database* dbb)
+ULONG PageSpace::maxAlloc(Database* dbb)
 {
 	PageSpace* pgSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	return pgSpace->maxAlloc();
@@ -2291,7 +2291,7 @@ ULONG PageSpace::lastUsedPage()
 	return last_bit + (pipLast == pipFirst ? 0 : pipLast);
 }
 
-ULONG PageSpace::lastUsedPage(const Database* dbb)
+ULONG PageSpace::lastUsedPage(Database* dbb)
 {
 	PageSpace* pgSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	return pgSpace->lastUsedPage();
@@ -2375,7 +2375,7 @@ ULONG PageSpace::usedPages()
 	return used;
 }
 
-ULONG PageSpace::usedPages(const Database* dbb)
+ULONG PageSpace::usedPages(Database* dbb)
 {
 	PageSpace* pgSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	return pgSpace->usedPages();
@@ -2470,18 +2470,24 @@ ULONG PageSpace::getSCNPageNum(ULONG sequence) const
 
 PageSpace* PageManager::addPageSpace(const USHORT pageSpaceID)
 {
-	PageSpace* newPageSpace = findPageSpace(pageSpaceID);
-	if (!newPageSpace)
-	{
-		newPageSpace = FB_NEW_POOL(pool) PageSpace(dbb, pageSpaceID);
-		pageSpaces.add(newPageSpace);
+	WriteLockGuard guard(pageSpacesLock, FB_FUNCTION);
+
+	FB_SIZE_T pos;
+	if (pageSpaces.find(pageSpaceID, pos)) {
+		fb_assert(false);
+		return pageSpaces[pos];
 	}
+
+	PageSpace* newPageSpace = FB_NEW_POOL(pool) PageSpace(dbb, pageSpaceID);
+	pageSpaces.add(newPageSpace);
 
 	return newPageSpace;
 }
 
-PageSpace* PageManager::findPageSpace(const USHORT pageSpace) const
+PageSpace* PageManager::findPageSpace(const USHORT pageSpace)
 {
+	ReadLockGuard guard(pageSpacesLock, FB_FUNCTION);
+
 	FB_SIZE_T pos;
 	if (pageSpaces.find(pageSpace, pos)) {
 		return pageSpaces[pos];
@@ -2492,6 +2498,8 @@ PageSpace* PageManager::findPageSpace(const USHORT pageSpace) const
 
 void PageManager::delPageSpace(const USHORT pageSpace)
 {
+	WriteLockGuard guard(pageSpacesLock, FB_FUNCTION);
+
 	FB_SIZE_T pos;
 	if (pageSpaces.find(pageSpace, pos))
 	{
@@ -2577,28 +2585,41 @@ void PageManager::allocTableSpace(thread_db* tdbb, USHORT tableSpaceID, bool cre
 	 */
     fb_assert(PageSpace::isTablespace(tableSpaceID));
 
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(tableSpaceID);
-	if (!pageSpace)
+	if (!findPageSpace(tableSpaceID))
 	{
 		Firebird::MutexLockGuard guard(initTmpMtx, FB_FUNCTION);
-		// Double check if someone concurrently have added the tablespaceid
-		if (pageSpace = dbb->dbb_page_manager.findPageSpace(tableSpaceID))
-			return;
-		pageSpace = dbb->dbb_page_manager.addPageSpace(tableSpaceID);
-		if (create)
-		{
-			pageSpace->file = PIO_create(tdbb, fileName, false, false);
-			PAG_format_pip(tdbb, *pageSpace);
-		}
-		else
-		{
-			pageSpace->file = PIO_open(tdbb, fileName, fileName);
-			pageSpace->pipFirst = FIRST_PIP_PAGE;
-			pageSpace->scnFirst = FIRST_SCN_PAGE;
-		}
-		if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
-			PIO_force_write(pageSpace->file, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
 
+		// Double check if someone concurrently have added the tablespaceid
+		if (findPageSpace(tableSpaceID))
+			return;
+
+		PageSpace* newPageSpace = FB_NEW_POOL(pool) PageSpace(dbb, tableSpaceID);
+
+		try
+		{
+			if (create)
+			{
+				newPageSpace->file = PIO_create(tdbb, fileName, false, false);
+				PAG_format_pip(tdbb, *newPageSpace);
+			}
+			else
+			{
+				newPageSpace->file = PIO_open(tdbb, fileName, fileName);
+				newPageSpace->pipFirst = FIRST_PIP_PAGE;
+				newPageSpace->scnFirst = FIRST_SCN_PAGE;
+			}
+
+			if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
+				PIO_force_write(newPageSpace->file, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
+		}
+		catch (...)
+		{
+			delete newPageSpace;
+			throw;
+		}
+		
+		WriteLockGuard writeGuard(pageSpacesLock, FB_FUNCTION);
+		pageSpaces.add(newPageSpace);
 	}
 }
 

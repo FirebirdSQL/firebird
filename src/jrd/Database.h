@@ -546,7 +546,7 @@ public:
 	Firebird::InitInstance<KeywordsMap, KeywordsMapAllocator, Firebird::TraditionalDelete> dbb_keywords_map;
 
 	// returns true if primary file is located on raw device
-	bool onRawDevice() const;
+	bool onRawDevice();
 
 	// returns an unique ID string for a database file
 	const Firebird::string& getUniqueFileId();

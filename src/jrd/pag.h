@@ -37,6 +37,7 @@
 #include "../include/fb_blk.h"
 #include "../common/classes/array.h"
 #include "../common/classes/locks.h"
+#include "../common/classes/rwlock.h"
 #include "../jrd/ods.h"
 #include "../jrd/lls.h"
 
@@ -126,19 +127,19 @@ public:
 
 	// how many pages allocated
 	ULONG actAlloc();
-	static ULONG actAlloc(const Database* dbb);
+	static ULONG actAlloc(Database* dbb);
 
 	// number of last allocated page
 	ULONG maxAlloc();
-	static ULONG maxAlloc(const Database* dbb);
+	static ULONG maxAlloc(Database* dbb);
 
 	// number of last used page
 	ULONG lastUsedPage();
-	static ULONG lastUsedPage(const Database* dbb);
+	static ULONG lastUsedPage(Database* dbb);
 
 	// number of used pages
 	ULONG usedPages();
-	static ULONG usedPages(const Database* dbb);
+	static ULONG usedPages(Database* dbb);
 
 	// extend page space
 	bool extend(thread_db*, const ULONG, const bool);
@@ -180,7 +181,7 @@ public:
 			delete pageSpaces.pop();
 	}
 
-	PageSpace* findPageSpace(const USHORT pageSpaceID) const;
+	PageSpace* findPageSpace(const USHORT pageSpaceID);
 
 	void initTempPageSpace(thread_db* tdbb);
 	USHORT getTempPageSpaceID(thread_db* tdbb);
@@ -204,6 +205,7 @@ private:
 
 	Database* dbb;
 	PageSpaceArray pageSpaces;
+	Firebird::RWLock pageSpacesLock;
 	Firebird::MemoryPool& pool;
 	Firebird::Mutex	initTmpMtx;
 	USHORT tempPageSpaceID;
