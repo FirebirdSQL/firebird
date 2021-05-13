@@ -2487,8 +2487,6 @@ PageSpace* PageManager::findPageSpace(const USHORT pageSpace) const
 		return pageSpaces[pos];
 	}
 
-    if (pageSpace)
-
 	return 0;
 }
 
