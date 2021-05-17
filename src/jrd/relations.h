@@ -736,9 +736,8 @@ RELATION(nam_config, rel_config, ODS_13_0, rel_virtual)
 	FIELD(f_cfg_source, nam_cfg_source, fld_file_name2, 0, ODS_13_0)
 END_RELATION
 
-//// FIXME: ODS version
 // Relation 54 (RDB$KEYWORDS)
-RELATION(nam_keywords, rel_keywords, ODS_13_0, rel_virtual)
-	FIELD(f_keyword_name, nam_keyword_name, fld_keyword_name, 0, ODS_13_0)
-	FIELD(f_keyword_reserved, nam_keyword_reserved, fld_keyword_reserved, 0, ODS_13_0)
+RELATION(nam_keywords, rel_keywords, ODS_13_1, rel_virtual)
+	FIELD(f_keyword_name, nam_keyword_name, fld_keyword_name, 0, ODS_13_1)
+	FIELD(f_keyword_reserved, nam_keyword_reserved, fld_keyword_reserved, 0, ODS_13_1)
 END_RELATION
