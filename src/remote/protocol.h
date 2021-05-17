@@ -288,6 +288,8 @@ enum P_OP
 	op_repl_data			= 107,
 	op_repl_req				= 108,
 
+	op_batch_cancel			= 109,
+
 	op_max
 };
 
@@ -689,10 +691,10 @@ typedef struct p_batch_cs				// completion state
 	ULONG	p_batch_errors;				// error's recnums
 } P_BATCH_CS;
 
-typedef struct p_batch_free
+typedef struct p_batch_free_cancel
 {
 	OBJCT	p_batch_statement;			// statement object
-} P_BATCH_FREE;
+} P_BATCH_FREE_CANCEL;
 
 typedef struct p_batch_blob
 {
@@ -769,7 +771,7 @@ typedef struct packet
 	P_BATCH_CREATE p_batch_create; // Create batch interface
 	P_BATCH_MSG p_batch_msg;	// Add messages to batch
 	P_BATCH_EXEC p_batch_exec;	// Run batch
-	P_BATCH_FREE p_batch_free;	// Destroy batch
+	P_BATCH_FREE_CANCEL p_batch_free_cancel;	// Cancel or destroy batch
 	P_BATCH_CS p_batch_cs;		// Batch completion state
 	P_BATCH_BLOB p_batch_blob;	// BLOB stream portion in batch
 	P_BATCH_REGBLOB p_batch_regblob;	// Register already existing BLOB in batch

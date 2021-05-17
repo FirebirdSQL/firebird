@@ -177,24 +177,43 @@ void Parser::parseTypedef()
 void Parser::parseItem()
 {
 	Expr* notImplementedExpr = NULL;
+	std::string onError;
 
-	lexer->getToken(token);
-
-	if (token.type == TOKEN('['))
+	while (lexer->getToken(token).type == TOKEN('['))
 	{
-		getToken(token, Token::TYPE_NOT_IMPLEMENTED);	// This is the only attribute we allow now.
-		getToken(token, TOKEN('('));
-		notImplementedExpr = parseExpr();
-		getToken(token, TOKEN(')'));
-		getToken(token, TOKEN(']'));
+		lexer->getToken(token);
+		switch (token.type)
+		{
+			case Token::TYPE_NOT_IMPLEMENTED:
+				if (notImplementedExpr)
+					syntaxError(token);
+				getToken(token, TOKEN('('));
+				notImplementedExpr = parseExpr();
+				getToken(token, TOKEN(')'));
+				getToken(token, TOKEN(']'));
+				break;
+
+			case Token::TYPE_ON_ERROR:
+				if (onError.length())
+					syntaxError(token);
+				lexer->getToken(token);
+				if (token.type != Token::TYPE_IDENTIFIER)
+					syntaxError(token);
+				onError = token.text;
+				getToken(token, TOKEN(']'));
+				break;
+
+			default:
+				syntaxError(token);
+				break;
+		}
 	}
-	else
-		lexer->pushToken(token);
+	lexer->pushToken(token);
 
 	TypeRef typeRef(parseTypeRef());
 	string name(getToken(token, Token::TYPE_IDENTIFIER).text);
 
-	if (!notImplementedExpr && typeRef.isConst)
+	if ((!(notImplementedExpr || onError.length())) && typeRef.isConst)
 	{
 		if (lexer->getToken(token).type == TOKEN('='))
 		{
@@ -207,7 +226,7 @@ void Parser::parseItem()
 	}
 
 	getToken(token, TOKEN('('));
-	parseMethod(typeRef, name, notImplementedExpr);
+	parseMethod(typeRef, name, notImplementedExpr, onError);
 }
 
 void Parser::parseConstant(const TypeRef& typeRef, const string& name)
@@ -222,7 +241,7 @@ void Parser::parseConstant(const TypeRef& typeRef, const string& name)
 	getToken(token, TOKEN(';'));
 }
 
-void Parser::parseMethod(const TypeRef& returnTypeRef, const string& name, Expr* notImplementedExpr)
+void Parser::parseMethod(const TypeRef& returnTypeRef, const string& name, Expr* notImplementedExpr, const string& onError)
 {
 	Method* method = new Method();
 	interface->methods.push_back(method);
@@ -231,6 +250,7 @@ void Parser::parseMethod(const TypeRef& returnTypeRef, const string& name, Expr*
 	method->name = name;
 	method->version = interface->version;
 	method->notImplementedExpr = notImplementedExpr;
+	method->onErrorFunction = onError;
 
 	if (lexer->getToken(token).type != TOKEN(')'))
 	{

@@ -355,6 +355,7 @@ type
 	IBatch_getBlobAlignmentPtr = function(this: IBatch; status: IStatus): Cardinal; cdecl;
 	IBatch_getMetadataPtr = function(this: IBatch; status: IStatus): IMessageMetadata; cdecl;
 	IBatch_setDefaultBpbPtr = procedure(this: IBatch; status: IStatus; parLength: Cardinal; par: BytePtr); cdecl;
+	IBatch_closePtr = procedure(this: IBatch; status: IStatus); cdecl;
 	IBatchCompletionState_getSizePtr = function(this: IBatchCompletionState; status: IStatus): Cardinal; cdecl;
 	IBatchCompletionState_getStatePtr = function(this: IBatchCompletionState; status: IStatus; pos: Cardinal): Integer; cdecl;
 	IBatchCompletionState_findErrorPtr = function(this: IBatchCompletionState; status: IStatus; pos: Cardinal): Cardinal; cdecl;
@@ -690,7 +691,7 @@ type
 	IReplicatedTransaction_deleteRecordPtr = procedure(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); cdecl;
 	IReplicatedTransaction_executeSqlPtr = procedure(this: IReplicatedTransaction; status: IStatus; sql: PAnsiChar); cdecl;
 	IReplicatedTransaction_executeSqlIntlPtr = procedure(this: IReplicatedTransaction; status: IStatus; charset: Cardinal; sql: PAnsiChar); cdecl;
-	IReplicatedSession_setAttachmentPtr = procedure(this: IReplicatedSession; attachment: IAttachment); cdecl;
+	IReplicatedSession_initPtr = function(this: IReplicatedSession; status: IStatus; attachment: IAttachment): Boolean; cdecl;
 	IReplicatedSession_startTransactionPtr = function(this: IReplicatedSession; status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction; cdecl;
 	IReplicatedSession_cleanupTransactionPtr = procedure(this: IReplicatedSession; status: IStatus; number: Int64); cdecl;
 	IReplicatedSession_setSequencePtr = procedure(this: IReplicatedSession; status: IStatus; name: PAnsiChar; value: Int64); cdecl;
@@ -1508,6 +1509,7 @@ type
 		getBlobAlignment: IBatch_getBlobAlignmentPtr;
 		getMetadata: IBatch_getMetadataPtr;
 		setDefaultBpb: IBatch_setDefaultBpbPtr;
+		close: IBatch_closePtr;
 	end;
 
 	IBatch = class(IReferenceCounted)
@@ -1534,6 +1536,7 @@ type
 		function getBlobAlignment(status: IStatus): Cardinal;
 		function getMetadata(status: IStatus): IMessageMetadata;
 		procedure setDefaultBpb(status: IStatus; parLength: Cardinal; par: BytePtr);
+		procedure close(status: IStatus);
 	end;
 
 	IBatchImpl = class(IBatch)
@@ -1551,6 +1554,7 @@ type
 		function getBlobAlignment(status: IStatus): Cardinal; virtual; abstract;
 		function getMetadata(status: IStatus): IMessageMetadata; virtual; abstract;
 		procedure setDefaultBpb(status: IStatus; parLength: Cardinal; par: BytePtr); virtual; abstract;
+		procedure close(status: IStatus); virtual; abstract;
 	end;
 
 	BatchCompletionStateVTable = class(DisposableVTable)
@@ -3645,7 +3649,7 @@ type
 	end;
 
 	ReplicatedSessionVTable = class(PluginBaseVTable)
-		setAttachment: IReplicatedSession_setAttachmentPtr;
+		init: IReplicatedSession_initPtr;
 		startTransaction: IReplicatedSession_startTransactionPtr;
 		cleanupTransaction: IReplicatedSession_cleanupTransactionPtr;
 		setSequence: IReplicatedSession_setSequencePtr;
@@ -3654,7 +3658,7 @@ type
 	IReplicatedSession = class(IPluginBase)
 		const VERSION = 4;
 
-		procedure setAttachment(attachment: IAttachment);
+		function init(status: IStatus; attachment: IAttachment): Boolean;
 		function startTransaction(status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction;
 		procedure cleanupTransaction(status: IStatus; number: Int64);
 		procedure setSequence(status: IStatus; name: PAnsiChar; value: Int64);
@@ -3667,7 +3671,7 @@ type
 		function release(): Integer; virtual; abstract;
 		procedure setOwner(r: IReferenceCounted); virtual; abstract;
 		function getOwner(): IReferenceCounted; virtual; abstract;
-		procedure setAttachment(attachment: IAttachment); virtual; abstract;
+		function init(status: IStatus; attachment: IAttachment): Boolean; virtual; abstract;
 		function startTransaction(status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction; virtual; abstract;
 		procedure cleanupTransaction(status: IStatus; number: Int64); virtual; abstract;
 		procedure setSequence(status: IStatus; name: PAnsiChar; value: Int64); virtual; abstract;
@@ -4091,6 +4095,7 @@ const
 	fb_shutrsn_signal = -5;
 	fb_shutrsn_services = -6;
 	fb_shutrsn_exit_called = -7;
+	fb_shutrsn_emergency = -8;
 	fb_cancel_disable = byte(1);
 	fb_cancel_enable = byte(2);
 	fb_cancel_raise = byte(3);
@@ -5070,6 +5075,8 @@ const
 	isc_wrong_page                       = 335545270;
 	isc_repl_error                       = 335545271;
 	isc_ses_reset_failed                 = 335545272;
+	isc_block_size                       = 335545273;
+	isc_tom_key_length                   = 335545274;
 	isc_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;
 	isc_gfix_incmp_sw                    = 335740932;
@@ -6415,6 +6422,12 @@ end;
 procedure IBatch.setDefaultBpb(status: IStatus; parLength: Cardinal; par: BytePtr);
 begin
 	BatchVTable(vTable).setDefaultBpb(Self, status, parLength, par);
+	FbException.checkException(status);
+end;
+
+procedure IBatch.close(status: IStatus);
+begin
+	BatchVTable(vTable).close(Self, status);
 	FbException.checkException(status);
 end;
 
@@ -8277,9 +8290,10 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IReplicatedSession.setAttachment(attachment: IAttachment);
+function IReplicatedSession.init(status: IStatus; attachment: IAttachment): Boolean;
 begin
-	ReplicatedSessionVTable(vTable).setAttachment(Self, attachment);
+	Result := ReplicatedSessionVTable(vTable).init(Self, status, attachment);
+	FbException.checkException(status);
 end;
 
 function IReplicatedSession.startTransaction(status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction;
@@ -10099,6 +10113,15 @@ procedure IBatchImpl_setDefaultBpbDispatcher(this: IBatch; status: IStatus; parL
 begin
 	try
 		IBatchImpl(this).setDefaultBpb(status, parLength, par);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IBatchImpl_closeDispatcher(this: IBatch; status: IStatus); cdecl;
+begin
+	try
+		IBatchImpl(this).close(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -14614,12 +14637,12 @@ begin
 	end
 end;
 
-procedure IReplicatedSessionImpl_setAttachmentDispatcher(this: IReplicatedSession; attachment: IAttachment); cdecl;
+function IReplicatedSessionImpl_initDispatcher(this: IReplicatedSession; status: IStatus; attachment: IAttachment): Boolean; cdecl;
 begin
 	try
-		IReplicatedSessionImpl(this).setAttachment(attachment);
+		Result := IReplicatedSessionImpl(this).init(status, attachment);
 	except
-		on e: Exception do FbException.catchException(nil, e);
+		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
@@ -14953,6 +14976,7 @@ initialization
 	IBatchImpl_vTable.getBlobAlignment := @IBatchImpl_getBlobAlignmentDispatcher;
 	IBatchImpl_vTable.getMetadata := @IBatchImpl_getMetadataDispatcher;
 	IBatchImpl_vTable.setDefaultBpb := @IBatchImpl_setDefaultBpbDispatcher;
+	IBatchImpl_vTable.close := @IBatchImpl_closeDispatcher;
 
 	IBatchCompletionStateImpl_vTable := BatchCompletionStateVTable.create;
 	IBatchCompletionStateImpl_vTable.version := 3;
@@ -15604,7 +15628,7 @@ initialization
 	IReplicatedSessionImpl_vTable.release := @IReplicatedSessionImpl_releaseDispatcher;
 	IReplicatedSessionImpl_vTable.setOwner := @IReplicatedSessionImpl_setOwnerDispatcher;
 	IReplicatedSessionImpl_vTable.getOwner := @IReplicatedSessionImpl_getOwnerDispatcher;
-	IReplicatedSessionImpl_vTable.setAttachment := @IReplicatedSessionImpl_setAttachmentDispatcher;
+	IReplicatedSessionImpl_vTable.init := @IReplicatedSessionImpl_initDispatcher;
 	IReplicatedSessionImpl_vTable.startTransaction := @IReplicatedSessionImpl_startTransactionDispatcher;
 	IReplicatedSessionImpl_vTable.cleanupTransaction := @IReplicatedSessionImpl_cleanupTransactionDispatcher;
 	IReplicatedSessionImpl_vTable.setSequence := @IReplicatedSessionImpl_setSequenceDispatcher;

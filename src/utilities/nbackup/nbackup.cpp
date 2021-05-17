@@ -278,7 +278,8 @@ public:
 	  : uSvc(_uSvc), newdb(0), trans(0), database(_database),
 		username(_username), role(_role), password(_password),
 		run_db_triggers(_run_db_triggers), direct_io(_direct_io),
-		dbase(0), backup(0), decompress(_deco), childId(0), db_size_pages(0),
+		dbase(INVALID_HANDLE_VALUE), backup(INVALID_HANDLE_VALUE),
+		decompress(_deco), childId(0), db_size_pages(0),
 		m_odsNumber(0), m_silent(false), m_printed(false)
 	{
 		// Recognition of local prefix allows to work with

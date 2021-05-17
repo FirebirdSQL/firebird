@@ -5334,6 +5334,7 @@ ValueExprNode* ExtractNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		case blr_extract_timezone_hour:
 		case blr_extract_timezone_minute:
+		case blr_extract_timezone_name:
 			if (!nodeIs<NullNode>(sub1) &&
 				!sub1->getDsqlDesc().isTime() &&
 				!sub1->getDsqlDesc().isTimeStamp())
@@ -5385,6 +5386,10 @@ void ExtractNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 			desc->makeLong(ISC_TIME_SECONDS_PRECISION_SCALE + 3);
 			break;
 
+		case blr_extract_timezone_name:
+			desc->makeVarying(TimeZoneUtil::MAX_LEN, ttype_ascii);
+			break;
+
 		default:
 			desc->makeShort(0);
 			break;
@@ -5404,6 +5409,10 @@ void ExtractNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* de
 
 		case blr_extract_millisecond:
 			desc->makeLong(ISC_TIME_SECONDS_PRECISION_SCALE + 3);
+			break;
+
+		case blr_extract_timezone_name:
+			desc->makeVarying(TimeZoneUtil::MAX_LEN, ttype_ascii);
 			break;
 
 		default:
@@ -5484,6 +5493,7 @@ dsc* ExtractNode::execute(thread_db* tdbb, jrd_req* request) const
 
 				case blr_extract_timezone_hour:
 				case blr_extract_timezone_minute:
+				case blr_extract_timezone_name:
 				{
 					ISC_TIME_TZ timeTz = TimeZoneUtil::timeToTimeTz(
 						*(ISC_TIME*) value->dsc_address, &EngineCallbacks::instance);
@@ -5512,6 +5522,7 @@ dsc* ExtractNode::execute(thread_db* tdbb, jrd_req* request) const
 
 				case blr_extract_timezone_hour:
 				case blr_extract_timezone_minute:
+				case blr_extract_timezone_name:
 					timeStampTz.utc_timestamp.timestamp_date = TimeZoneUtil::TIME_TZ_BASE_DATE;
 					timeStampTz.utc_timestamp.timestamp_time = ((ISC_TIME_TZ*) value->dsc_address)->utc_time;
 					timeStampTz.time_zone = ((ISC_TIME_TZ*) value->dsc_address)->time_zone;
@@ -5532,6 +5543,7 @@ dsc* ExtractNode::execute(thread_db* tdbb, jrd_req* request) const
 				case blr_extract_millisecond:
 				case blr_extract_timezone_hour:
 				case blr_extract_timezone_minute:
+				case blr_extract_timezone_name:
 					ERR_post(Arg::Gds(isc_expression_eval_err) <<
 							 Arg::Gds(isc_invalid_extractpart_date));
 					break;
@@ -5546,6 +5558,7 @@ dsc* ExtractNode::execute(thread_db* tdbb, jrd_req* request) const
 			{
 				case blr_extract_timezone_hour:
 				case blr_extract_timezone_minute:
+				case blr_extract_timezone_name:
 				{
 					dsc tempDsc;
 					tempDsc.makeTimestampTz(&timeStampTz);
@@ -5563,6 +5576,7 @@ dsc* ExtractNode::execute(thread_db* tdbb, jrd_req* request) const
 			{
 				case blr_extract_timezone_hour:
 				case blr_extract_timezone_minute:
+				case blr_extract_timezone_name:
 					timeStampTz = *(ISC_TIMESTAMP_TZ*) value->dsc_address;
 					break;
 
@@ -5578,28 +5592,41 @@ dsc* ExtractNode::execute(thread_db* tdbb, jrd_req* request) const
 			break;
 	}
 
-	if (blrSubOp == blr_extract_timezone_hour || blrSubOp == blr_extract_timezone_minute)
-	{
-		int tzSign;
-		unsigned tzh, tzm;
-		TimeZoneUtil::extractOffset(timeStampTz, &tzSign, &tzh, &tzm);
-
-		switch (blrSubOp)
-		{
-			case blr_extract_timezone_hour:
-				*(SSHORT*) impure->vlu_desc.dsc_address = tzSign * int(tzh);
-				return &impure->vlu_desc;
-
-			case blr_extract_timezone_minute:
-				*(SSHORT*) impure->vlu_desc.dsc_address = tzSign * int(tzm);
-				return &impure->vlu_desc;
-		}
-	}
-
 	USHORT part;
 
 	switch (blrSubOp)
 	{
+		case blr_extract_timezone_hour:
+		case blr_extract_timezone_minute:
+		{
+			int tzSign;
+			unsigned tzh, tzm;
+			TimeZoneUtil::extractOffset(timeStampTz, &tzSign, &tzh, &tzm);
+
+			switch (blrSubOp)
+			{
+				case blr_extract_timezone_hour:
+					*(SSHORT*) impure->vlu_desc.dsc_address = tzSign * int(tzh);
+					return &impure->vlu_desc;
+
+				case blr_extract_timezone_minute:
+					*(SSHORT*) impure->vlu_desc.dsc_address = tzSign * int(tzm);
+					return &impure->vlu_desc;
+			}
+
+			break;
+		}
+
+		case blr_extract_timezone_name:
+		{
+			char timeZoneBuffer[TimeZoneUtil::MAX_SIZE];
+			const auto len = TimeZoneUtil::format(timeZoneBuffer, sizeof(timeZoneBuffer), timeStampTz.time_zone);
+
+			impure->vlu_desc.makeText(len, ttype_ascii, (UCHAR*) timeZoneBuffer);
+			EVL_make_value(tdbb, &impure->vlu_desc, impure);
+			return &impure->vlu_desc;
+		}
+
 		case blr_extract_year:
 			part = times.tm_year + 1900;
 			break;

@@ -107,6 +107,7 @@ public:
 	Expr* notImplementedExpr;
 	unsigned version;
 	bool isConst;
+	std::string onErrorFunction;
 };
 
 
@@ -159,7 +160,7 @@ public:
 	void parseTypedef();
 	void parseItem();
 	void parseConstant(const TypeRef& typeRef, const std::string& name);
-	void parseMethod(const TypeRef& returnTypeRef, const std::string& name, Expr* notImplementedExpr);
+	void parseMethod(const TypeRef& returnTypeRef, const std::string& name, Expr* notImplementedExpr, const std::string& onErrorFunction);
 
 	Expr* parseExpr();
 	Expr* parseLogicalExpr();

@@ -81,30 +81,30 @@ public:
 	}
 
 	// Firebird::IClientBlock implementation
-	const char* getLogin()
+	const char* getLogin() override
 	{
 		return login.c_str();
 	}
 
-	const char* getPassword()
+	const char* getPassword() override
 	{
 		return password.c_str();
 	}
 
-	const unsigned char* getData(unsigned int* length)
+	const unsigned char* getData(unsigned int* length) override
 	{
 		*length = data.getCount();
 		return data.begin();
 	}
 
-	void putData(CheckStatusWrapper* status, unsigned int length, const void* d);
+	void putData(CheckStatusWrapper* status, unsigned int length, const void* d) override;
 
-	Firebird::ICryptKey* newKey(Firebird::CheckStatusWrapper* status)
+	Firebird::ICryptKey* newKey(Firebird::CheckStatusWrapper* status) override
 	{
 		return &dummyCryptKey;
 	}
 
-	Firebird::IAuthBlock* getAuthBlock(Firebird::CheckStatusWrapper*)
+	Firebird::IAuthBlock* getAuthBlock(Firebird::CheckStatusWrapper*) override
 	{
 		return nullptr;
 	}

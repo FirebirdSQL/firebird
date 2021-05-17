@@ -5,11 +5,11 @@
 
 BuildVersion="$Id: writeBuildNum.sh,v 1.28732 2010/05/29 13:12:08 fsg Exp $"
 
-BuildType=V
-MajorVer=4
+BuildType=T
+MajorVer=5
 MinorVer=0
 RevNo=0
-BuildNum=2365
+BuildNum=37
 
 NowAt=`pwd`
 cd `dirname $0`
@@ -20,9 +20,9 @@ Root=`dirname $Root`
 
 if [ "$SPECIAL_BUILD_SUFFIX" = "" ]; then
 # Normal builds
-SuffixKind="Release Candidate"
-SuffixVer="1"
-BuildSuffix="Firebird 4.0"
+SuffixKind="Initial"
+SuffixVer=""
+BuildSuffix="Firebird $MajorVer.$MinorVer"
 [ "$SuffixKind" = "" ] || BuildSuffix="$BuildSuffix $SuffixKind"
 [ "$SuffixVer" = "" ] || BuildSuffix="$BuildSuffix $SuffixVer"
 FIREBIRD_PACKAGE_VERSION="$SuffixKind$SuffixVer"
@@ -30,7 +30,7 @@ FIREBIRD_PACKAGE_VERSION="$SuffixKind$SuffixVer"
 PRODUCT_VER_STRING="$MajorVer.$MinorVer.$RevNo.$BuildNum"
 else
 # Special builds (daily snapshots, etc)
-BuildSuffix="Firebird 4.0 $SPECIAL_BUILD_SUFFIX"
+BuildSuffix="Firebird $MajorVer.$MinorVer $SPECIAL_BUILD_SUFFIX"
 FIREBIRD_PACKAGE_VERSION=$SPECIAL_BUILD_SUFFIX
 PRODUCT_VER_STRING="$MajorVer.$MinorVer.$RevNo.$BuildNum-$SPECIAL_BUILD_SUFFIX"
 fi

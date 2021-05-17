@@ -2882,6 +2882,30 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				{
 					string s;
 					spb.getString(s);
+
+					bool inStr = false;
+					for (FB_SIZE_T i = 0; i < s.length(); ++i)
+					{
+						if (s[i] == SVC_TRMNTR)
+						{
+							s.erase(i, 1);
+							if (inStr)
+							{
+								if (i < s.length() && s[i] != SVC_TRMNTR)
+								{
+									inStr = false;
+									continue;
+								}
+							}
+							else
+							{
+								inStr = true;
+								continue;
+							}
+						}
+						++i;
+					}
+
 					switches += s;
 					switches += ' ';
 				}

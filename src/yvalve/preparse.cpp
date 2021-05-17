@@ -157,14 +157,14 @@ static NoCaseString getToken(unsigned& pos, const Tokens& toks, int symbol = SYM
 
  **/
 bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
-					  USHORT stmt_length, const SCHAR* stmt, bool* stmt_eaten, USHORT dialect)
+					  string& stmt, bool* stmt_eaten, USHORT dialect)
 {
 	// no use creating separate pool for a couple of strings
 	ContextPoolHolder context(getDefaultMemoryPool());
 
 	try
 	{
-		if (!stmt)
+		if (stmt.isEmpty())
 		{
 			Arg::Gds(isc_command_end_err).raise();
 		}
@@ -177,7 +177,39 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 
 			Tokens tks;
 			tks.quotes(quotes);
-			tks.parse(stmt_length, stmt);
+			tks.parse(stmt.length(), stmt.c_str());
+
+			for (int tokenPos = tks.getCount() - 1; tokenPos >= 0; --tokenPos)
+			{
+				const Tokens::Tok& token = tks[tokenPos];
+
+				if (token.length > 0 && token.text[0] == '"')
+				{
+					string newToken = "'";
+
+					for (unsigned i = 1; i < token.length - 1; ++i)
+					{
+						switch (token.text[i])
+						{
+							case '\'':
+								newToken += "''";
+								break;
+
+							case '"':
+								++i;
+								newToken += '"';
+								break;
+
+							default:
+								newToken += token.text[i];
+						}
+					}
+
+					newToken += "'";
+					stmt.replace(token.origin, token.length, newToken);
+				}
+			}
+
 			unsigned pos = 0;
 
 			if (getToken(pos, tks) != pp_symbols[PP_CREATE].symbol)
@@ -229,7 +261,7 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 							if (token == "=")
 								token = getToken(pos, tks, NUMERIC);
 
-							page_size = atol(token.c_str());
+							page_size = token.length() > 8 ? 100000000 : atol(token.c_str());
 							dpb.insertInt(isc_dpb_page_size, page_size);
 							matched = true;
 							break;

@@ -1095,6 +1095,25 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([[main () {
 AC_MSG_RESULT($ac_cv_c_double_align)
 AC_DEFINE_UNQUOTED(FB_DOUBLE_ALIGN, $ac_cv_c_double_align, [Alignment of double])
 
+AC_MSG_CHECKING(correctness of comparing 64-bit integers)
+ac_cv_compare_failed=1
+ac_cv_compare_result=failed
+savedflags="$CFLAGS"
+CFLAGS="$CFLAGS -O3"
+AC_RUN_IFELSE([AC_LANG_SOURCE([[typedef long long int SINT64;
+static int abs64Compare(SINT64 n1, SINT64 n2) {
+    n1 = n1 > 0 ? -n1 : n1;
+    n2 = n2 > 0 ? -n2 : n2;
+    return n1 == n2 ? 0 : n1 < n2 ? 1 : -1;
+}
+int main() {
+	exit (abs64Compare(-9223372036854775808, 3652058) == 1 ? 0 : 1);
+}]])],[ac_cv_compare_failed=0
+ac_cv_compare_result=success])
+CFLAGS="$savedflags"
+AC_MSG_RESULT($ac_cv_compare_result)
+AC_DEFINE_UNQUOTED(FB_INT64_COMPARE_FAILED, $ac_cv_compare_failed, [Error when comparing 64-bit integers])
+
 dnl EKU: Add any platform specific tests below
 case "$PLATFORM" in
   LINUX)

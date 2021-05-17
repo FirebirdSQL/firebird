@@ -246,11 +246,10 @@ Sort* SortedStream::init(thread_db* tdbb) const
 
 			if (!flag)
 			{
-				// If moving a TEXT item into the key portion of the sort record,
-				// then want to sort by language dependent order.
+				// If an INTL string is moved into the key portion of the sort record,
+				// then we want to sort by language dependent order
 
-				if (IS_INTL_DATA(&item->desc) &&
-					(ULONG)(IPTR) item->desc.dsc_address < m_map->keyLength)
+				if (IS_INTL_DATA(&item->desc) && isKey(&item->desc))
 				{
 					INTL_string_to_key(tdbb, INTL_INDEX_TYPE(&item->desc), from, &to,
 						(m_map->flags & FLAG_UNIQUE ? INTL_KEY_UNIQUE : INTL_KEY_SORT));
@@ -335,18 +334,14 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 		if (item.node && !nodeIs<FieldNode>(item.node))
 			continue;
 
-		// if moving a TEXT item into the key portion of the sort record,
-		// then want to sort by language dependent order
+		// Some fields may have volatile keys, so that their value
+		// can be possibly changed before or during the sorting.
+		// We should ignore such an item, because there is a later field
+		// in the item list that contains the original value to send back
+		// (or the record will be refetched as a whole).
 
-		// in the case below a nod_field is being converted to
-		// a sort key, there is a later nod_field in the item
-		// list that contains the data to send back
-
-		if ((IS_INTL_DATA(&item.desc) || item.desc.isDecFloat()) &&
-			(ULONG)(IPTR) item.desc.dsc_address < m_map->keyLength)
-		{
+		if (hasVolatileKey(&item.desc) && isKey(&item.desc))
 			continue;
-		}
 
 		const auto rpb = &request->req_rpb[item.stream];
 		const auto relation = rpb->rpb_relation;
@@ -368,6 +363,8 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 			default:
 				fb_assert(false);
 			}
+
+			rpb->rpb_runtime_flags &= ~RPB_CLEAR_FLAGS;
 
 			// If transaction ID is present, then fields from this stream are accessed.
 			// So we need to refetch the stream, either immediately or on demand.
@@ -424,6 +421,8 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 	}
 
 	// If necessary, refetch records from the underlying streams
+
+	UCharBuffer keyBuffer;
 
 	for (const auto stream : refetchStreams)
 	{
@@ -498,6 +497,11 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 
 			for (const auto& item : m_map->items)
 			{
+				// Stop comparing at the first non-key field (if any)
+
+				if (!isKey(&item.desc))
+					break;
+
 				if (item.node && !nodeIs<FieldNode>(item.node))
 					continue;
 
@@ -505,15 +509,40 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 					continue;
 
 				const auto null1 = (*(data + item.flagOffset) == TRUE);
-				from = item.desc;
-				from.dsc_address = data + (IPTR) from.dsc_address;
+				const auto null2 = !EVL_field(relation, rpb->rpb_record, item.fieldId, &from);
 
-				const auto null2 = !EVL_field(relation, rpb->rpb_record, item.fieldId, &to);
-
-				if (null1 != null2 || (!null1 && MOV_compare(tdbb, &from, &to)))
+				if (null1 != null2)
 				{
 					keysChanged = true;
 					break;
+				}
+
+				if (!null1)
+				{
+					dsc sortDesc = item.desc;
+					sortDesc.dsc_address += (IPTR) data;
+
+					const dsc* recDesc = &from;
+
+					if (IS_INTL_DATA(&item.desc))
+					{
+						// For an INTL string, compute the language dependent key
+
+						to = item.desc;
+						to.dsc_address = keyBuffer.getBuffer(to.dsc_length);
+						memset(to.dsc_address, 0, to.dsc_length);
+
+						INTL_string_to_key(tdbb, INTL_INDEX_TYPE(&item.desc), &from, &to,
+							(m_map->flags & FLAG_UNIQUE ? INTL_KEY_UNIQUE : INTL_KEY_SORT));
+
+						recDesc = &to;
+					}
+
+					if (MOV_compare(tdbb, &sortDesc, recDesc))
+					{
+						keysChanged = true;
+						break;
+					}
 				}
 			}
 

@@ -542,8 +542,17 @@ void CppGenerator::generate()
 				if (method->returnTypeRef.token.type != Token::TYPE_VOID ||
 					method->returnTypeRef.isPointer)
 				{
-					fprintf(out, "\t\t\t\treturn static_cast<%s>(0);\n",
-						convertType(method->returnTypeRef).c_str());
+					const char* ret = "\t\t\t\treturn";
+					if (method->onErrorFunction.length())
+					{
+						fprintf(out, "%s %s();\n",
+							ret, method->onErrorFunction.c_str());
+					}
+					else
+					{
+						fprintf(out, "%s static_cast<%s>(0);\n",
+							ret, convertType(method->returnTypeRef).c_str());
+					}
 				}
 
 				fprintf(out, "\t\t\t}\n");

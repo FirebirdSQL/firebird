@@ -93,6 +93,17 @@ struct PerformanceInfo
 	ISC_INT64 pin_records_fetched;	// records fetched from statement/procedure
 };
 
+inline const intptr_t* stubError()
+{
+	static const intptr_t codes[] = {
+		isc_arg_gds, isc_random,
+		isc_arg_string, (intptr_t) "Unrecognized exception in Status interface",
+		isc_arg_end
+	};
+
+	return codes;
+}
+
 } // namespace Firebird
 
 

@@ -441,19 +441,14 @@ namespace
 
 		const PathName& getDirectory() const
 		{
-			return m_config->logSourceDirectory;
-		}
-
-		void logMessage(const string& message, LogMsgType type) const
-		{
-			logReplicaMessage(m_config->dbName, message, type);
+			return m_config->sourceDirectory;
 		}
 
 		void logError(const string& message)
 		{
 			if (message != m_lastError)
 			{
-				logMessage(message, ERROR_MSG);
+				logReplicaError(m_config->dbName, message);
 				m_lastError = message;
 			}
 		}
@@ -469,7 +464,7 @@ namespace
 				VSNPRINTF(buffer, sizeof(buffer), msg, ptr);
 				va_end(ptr);
 
-				logMessage(buffer, VERBOSE_MSG);
+				logReplicaVerbose(m_config->dbName, buffer);
 			}
 		}
 
@@ -484,9 +479,9 @@ namespace
 
 	typedef Array<Target*> TargetList;
 
-	struct LogSegment
+	struct Segment
 	{
-		explicit LogSegment(MemoryPool& pool, const PathName& fname, const SegmentHeader& hdr)
+		explicit Segment(MemoryPool& pool, const PathName& fname, const SegmentHeader& hdr)
 			: filename(pool, fname)
 		{
 			memcpy(&header, &hdr, sizeof(SegmentHeader));
@@ -500,14 +495,14 @@ namespace
 			PathUtils::concatPath(newname, path, "~" + name);
 
 			if (rename(filename.c_str(), newname.c_str()) < 0)
-				raiseError("Log file %s rename failed (error: %d)", filename.c_str(), ERRNO);
+				raiseError("Journal file %s rename failed (error: %d)", filename.c_str(), ERRNO);
 #else
 			if (unlink(filename.c_str()) < 0)
-				raiseError("Log file %s unlink failed (error: %d)", filename.c_str(), ERRNO);
+				raiseError("Journal file %s unlink failed (error: %d)", filename.c_str(), ERRNO);
 #endif
 		}
 
-		static const FB_UINT64& generate(const LogSegment* item)
+		static const FB_UINT64& generate(const Segment* item)
 		{
 			return item->header.hdr_sequence;
 		}
@@ -516,7 +511,7 @@ namespace
 		SegmentHeader header;
 	};
 
-	typedef SortedArray<LogSegment*, EmptyStorage<LogSegment*>, FB_UINT64, LogSegment> ProcessQueue;
+	typedef SortedArray<Segment*, EmptyStorage<Segment*>, FB_UINT64, Segment> ProcessQueue;
 
 	string formatInterval(const TimeStamp& start, const TimeStamp& finish)
 	{
@@ -556,10 +551,10 @@ namespace
 
 	bool validateHeader(const SegmentHeader* header)
 	{
-		if (strcmp(header->hdr_signature, LOG_SIGNATURE))
+		if (strcmp(header->hdr_signature, CHANGELOG_SIGNATURE))
 			return false;
 
-		if (header->hdr_version != LOG_CURRENT_VERSION)
+		if (header->hdr_version != CHANGELOG_CURRENT_VERSION)
 			return false;
 
 		if (header->hdr_state != SEGMENT_STATE_FREE &&
@@ -628,7 +623,7 @@ namespace
 		{
 			// First pass: create the processing queue
 
-			for (auto iter = PathUtils::newDirIterator(pool, config->logSourceDirectory);
+			for (auto iter = PathUtils::newDirIterator(pool, config->sourceDirectory);
 				*iter; ++(*iter))
 			{
 				const auto filename = **iter;
@@ -657,14 +652,14 @@ namespace
 						continue;
 					}
 
-					raiseError("Log file %s open failed (error: %d)", filename.c_str(), ERRNO);
+					raiseError("Journal file %s open failed (error: %d)", filename.c_str(), ERRNO);
 				}
 
 				AutoFile file(fd);
 
 				struct stat stats;
 				if (fstat(file, &stats) < 0)
-					raiseError("Log file %s fstat failed (error: %d)", filename.c_str(), ERRNO);
+					raiseError("Journal file %s fstat failed (error: %d)", filename.c_str(), ERRNO);
 
 				const size_t fileSize = stats.st_size;
 
@@ -676,12 +671,12 @@ namespace
 				}
 
 				if (lseek(file, 0, SEEK_SET) != 0)
-					raiseError("Log file %s seek failed (error: %d)", filename.c_str(), ERRNO);
+					raiseError("Journal file %s seek failed (error: %d)", filename.c_str(), ERRNO);
 
 				SegmentHeader header;
 
 				if (read(file, &header, sizeof(SegmentHeader)) != sizeof(SegmentHeader))
-					raiseError("Log file %s read failed (error: %d)", filename.c_str(), ERRNO);
+					raiseError("Journal file %s read failed (error: %d)", filename.c_str(), ERRNO);
 
 				if (!validateHeader(&header))
 				{
@@ -718,7 +713,7 @@ namespace
 				if (header.hdr_state != SEGMENT_STATE_ARCH)
 					continue;
 */
-				queue.add(FB_NEW_POOL(pool) LogSegment(pool, filename, header));
+				queue.add(FB_NEW_POOL(pool) Segment(pool, filename, header));
 			}
 
 			if (queue.isEmpty())
@@ -739,9 +734,9 @@ namespace
 			FB_UINT64 next_sequence = 0;
 			const bool restart = target->isShutdown();
 
-			for (LogSegment** iter = queue.begin(); iter != queue.end(); ++iter)
+			for (Segment** iter = queue.begin(); iter != queue.end(); ++iter)
 			{
-				LogSegment* const segment = *iter;
+				Segment* const segment = *iter;
 				const FB_UINT64 sequence = segment->header.hdr_sequence;
 				const Guid& guid = segment->header.hdr_guid;
 
@@ -813,7 +808,7 @@ namespace
 						break;
 					}
 
-					raiseError("Log file %s open failed (error: %d)", segment->filename.c_str(), ERRNO);
+					raiseError("Journal file %s open failed (error: %d)", segment->filename.c_str(), ERRNO);
 				}
 
 				const TimeStamp startTime(TimeStamp::getCurrentTimeStamp());
@@ -823,17 +818,17 @@ namespace
 				SegmentHeader header;
 
 				if (read(file, &header, sizeof(SegmentHeader)) != sizeof(SegmentHeader))
-					raiseError("Log file %s read failed (error: %d)", segment->filename.c_str(), ERRNO);
+					raiseError("Journal file %s read failed (error: %d)", segment->filename.c_str(), ERRNO);
 
 				if (memcmp(&header, &segment->header, sizeof(SegmentHeader)))
-					raiseError("Log file %s was unexpectedly changed", segment->filename.c_str());
+					raiseError("Journal file %s was unexpectedly changed", segment->filename.c_str());
 
 				ULONG totalLength = sizeof(SegmentHeader);
 				while (totalLength < segment->header.hdr_length)
 				{
 					Block header;
 					if (read(file, &header, sizeof(Block)) != sizeof(Block))
-						raiseError("Log file %s read failed (error %d)", segment->filename.c_str(), ERRNO);
+						raiseError("Journal file %s read failed (error %d)", segment->filename.c_str(), ERRNO);
 
 					const auto blockLength = header.length;
 					const auto length = sizeof(Block) + blockLength;
@@ -847,7 +842,7 @@ namespace
 						memcpy(data, &header, sizeof(Block));
 
 						if (read(file, data + sizeof(Block), blockLength) != blockLength)
-							raiseError("Log file %s read failed (error %d)", segment->filename.c_str(), ERRNO);
+							raiseError("Journal file %s read failed (error %d)", segment->filename.c_str(), ERRNO);
 
 						const bool success =
 							replicate(localStatus, sequence,
@@ -911,7 +906,7 @@ namespace
 					{
 						do
 						{
-							LogSegment* const segment = queue[pos++];
+							Segment* const segment = queue[pos++];
 							const FB_UINT64 sequence = segment->header.hdr_sequence;
 
 							if (sequence >= threshold)

@@ -168,15 +168,6 @@ static const jrd_trg triggers[] =
 	{ "RDB$TRIGGER_27", (UCHAR) nam_r_fields,
 		RDB$TRIGGERS.RDB$TRIGGER_TYPE.POST_ERASE, sizeof(trigger27),
 		trigger27, 0, ODS_8_0 },
-	{ "RDB$TRIGGER_31", (UCHAR) nam_user_privileges,
-		RDB$TRIGGERS.RDB$TRIGGER_TYPE.PRE_MODIFY, sizeof(trigger31),
-		trigger31, 0, ODS_8_1 },
-	{ "RDB$TRIGGER_32", (UCHAR) nam_user_privileges,
-		RDB$TRIGGERS.RDB$TRIGGER_TYPE.PRE_ERASE, sizeof(trigger31), trigger31,
-		0, ODS_8_1 },
-	{ "RDB$TRIGGER_33", (UCHAR) nam_user_privileges,
-		RDB$TRIGGERS.RDB$TRIGGER_TYPE.PRE_STORE, sizeof(trigger31), trigger31,
-		0, ODS_8_1 },
 	{ "RDB$TRIGGER_34", (UCHAR) nam_rel_constr,
 		RDB$TRIGGERS.RDB$TRIGGER_TYPE.POST_ERASE, sizeof(trigger34),
 		trigger34, TRG_ignore_perm, ODS_8_1 },
@@ -224,9 +215,6 @@ static const trigger_msg trigger_messages[] =
 	{ "RDB$TRIGGER_26", 1, "constaint_on_view", ODS_8_0 },
 	{ "RDB$TRIGGER_26", 2, "invld_cnstrnt_type", ODS_8_0 },
 	{ "RDB$TRIGGER_26", 3, "primary_key_exists", ODS_8_0 },
-	{ "RDB$TRIGGER_31", 0, "no_write_user_priv", ODS_8_1 },
-	{ "RDB$TRIGGER_32", 0, "no_write_user_priv", ODS_8_1 },
-	{ "RDB$TRIGGER_33", 0, "no_write_user_priv", ODS_8_1 },
 	{ "RDB$TRIGGER_24", 2, "integ_index_seg_mod", ODS_11_0 },
 	{ "RDB$TRIGGER_36", 1, "integ_index_seg_mod", ODS_11_0 },
 	{ 0, 0, 0, 0 }
@@ -471,7 +459,8 @@ void INI_format(const char* owner, const char* charset)
 			charset->name;
 			++charset)
 		{
-			add_security_to_sys_obj(tdbb, reqAddSC, reqModObjSC, reqInsUserPriv, ownerName, obj_charset, charset->name, length, buffer);
+			add_security_to_sys_obj(tdbb, reqAddSC, reqModObjSC, reqInsUserPriv, ownerName, obj_charset,
+				charset->name, length, buffer);
 		}
 
 		reqModObjSC.reset();
@@ -479,8 +468,13 @@ void INI_format(const char* owner, const char* charset)
 			collation->name;
 			++collation)
 		{
-			add_security_to_sys_obj(tdbb, reqAddSC, reqModObjSC, reqInsUserPriv, ownerName, obj_collation, collation->name, length, buffer);
+			add_security_to_sys_obj(tdbb, reqAddSC, reqModObjSC, reqInsUserPriv, ownerName, obj_collation,
+				collation->name, length, buffer);
 		}
+
+		reqModObjSC.reset();
+		add_security_to_sys_obj(tdbb, reqAddSC, reqModObjSC, reqInsUserPriv, ownerName, obj_sql_role,
+				ADMIN_ROLE, length, buffer);
 
 		// Must be last!
 		acl = aclPublicStart;
@@ -1202,6 +1196,18 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 			END_MODIFY
 
 			needsUsagePrivileges = true;
+		}
+		END_FOR
+	}
+	else if (obj_type == obj_sql_role)
+	{
+		FOR(REQUEST_HANDLE reqModObjSC) R IN RDB$ROLES
+			WITH R.RDB$ROLE_NAME EQ obj_name.c_str()
+		{
+			MODIFY R USING
+				R.RDB$SECURITY_CLASS.NULL = FALSE;
+				PAD(security_class.c_str(), R.RDB$SECURITY_CLASS);
+			END_MODIFY
 		}
 		END_FOR
 	}

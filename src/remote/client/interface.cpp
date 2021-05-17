@@ -130,6 +130,27 @@ namespace {
 		if (length > MAX_USHORT && port->port_protocol < PROTOCOL_VERSION13)
 			status_exception::raise(Arg::Gds(isc_imp_exc) << Arg::Gds(isc_blktoobig));
 	}
+
+	class SaveString
+	{
+	public:
+		SaveString(cstring& toSave, ULONG newLength, UCHAR* newBuffer)
+			: ptr(&toSave),
+			  oldValue(*ptr)
+		{
+			ptr->cstr_address = newBuffer;
+			ptr->cstr_allocated = newLength;
+		}
+
+		~SaveString()
+		{
+			*ptr = oldValue;
+		}
+
+	private:
+		cstring* ptr;
+		cstring oldValue;
+	};
 }
 
 namespace Remote {
@@ -145,13 +166,13 @@ public:
 	int release() override;
 	void getInfo(CheckStatusWrapper* status,
 						 unsigned int itemsLength, const unsigned char* items,
-						 unsigned int bufferLength, unsigned char* buffer);
+						 unsigned int bufferLength, unsigned char* buffer) override;
 	int getSegment(CheckStatusWrapper* status, unsigned int bufferLength,
-								   void* buffer, unsigned int* segmentLength);
-	void putSegment(CheckStatusWrapper* status, unsigned int length, const void* buffer);
-	void cancel(CheckStatusWrapper* status);
-	void close(CheckStatusWrapper* status);
-	int seek(CheckStatusWrapper* status, int mode, int offset);			// returns position
+								   void* buffer, unsigned int* segmentLength) override;
+	void putSegment(CheckStatusWrapper* status, unsigned int length, const void* buffer) override;
+	void cancel(CheckStatusWrapper* status) override;
+	void close(CheckStatusWrapper* status) override;
+	int seek(CheckStatusWrapper* status, int mode, int offset) override;			// returns position
 
 public:
 	explicit Blob(Rbl* handle)
@@ -191,17 +212,17 @@ public:
 	int release() override;
 	void getInfo(CheckStatusWrapper* status,
 						 unsigned int itemsLength, const unsigned char* items,
-						 unsigned int bufferLength, unsigned char* buffer);
+						 unsigned int bufferLength, unsigned char* buffer) override;
 	void prepare(CheckStatusWrapper* status,
-						 unsigned int msg_length = 0, const unsigned char* message = 0);
-	void commit(CheckStatusWrapper* status);
-	void commitRetaining(CheckStatusWrapper* status);
-	void rollback(CheckStatusWrapper* status);
-	void rollbackRetaining(CheckStatusWrapper* status);
-	void disconnect(CheckStatusWrapper* status);
-	ITransaction* join(CheckStatusWrapper* status, ITransaction* tra);
-	Transaction* validate(CheckStatusWrapper* status, IAttachment* attachment);
-	Transaction* enterDtc(CheckStatusWrapper* status);
+						 unsigned int msg_length = 0, const unsigned char* message = 0) override;
+	void commit(CheckStatusWrapper* status) override;
+	void commitRetaining(CheckStatusWrapper* status) override;
+	void rollback(CheckStatusWrapper* status) override;
+	void rollbackRetaining(CheckStatusWrapper* status) override;
+	void disconnect(CheckStatusWrapper* status) override;
+	ITransaction* join(CheckStatusWrapper* status, ITransaction* tra) override;
+	Transaction* validate(CheckStatusWrapper* status, IAttachment* attachment) override;
+	Transaction* enterDtc(CheckStatusWrapper* status) override;
 
 public:
 	Transaction(Rtr* handle, Attachment* a)
@@ -254,17 +275,17 @@ class ResultSet FB_FINAL : public RefCntIface<IResultSetImpl<ResultSet, CheckSta
 public:
 	// IResultSet implementation
 	int release() override;
-	int fetchNext(CheckStatusWrapper* status, void* message);
-	int fetchPrior(CheckStatusWrapper* status, void* message);
-	int fetchFirst(CheckStatusWrapper* status, void* message);
-	int fetchLast(CheckStatusWrapper* status, void* message);
-	int fetchAbsolute(CheckStatusWrapper* status, int position, void* message);
-	int fetchRelative(CheckStatusWrapper* status, int offset, void* message);
-	FB_BOOLEAN isEof(CheckStatusWrapper* status);
-	FB_BOOLEAN isBof(CheckStatusWrapper* status);
-	IMessageMetadata* getMetadata(CheckStatusWrapper* status);
-	void close(CheckStatusWrapper* status);
-	void setDelayedOutputFormat(CheckStatusWrapper* status, IMessageMetadata* format);
+	int fetchNext(CheckStatusWrapper* status, void* message) override;
+	int fetchPrior(CheckStatusWrapper* status, void* message) override;
+	int fetchFirst(CheckStatusWrapper* status, void* message) override;
+	int fetchLast(CheckStatusWrapper* status, void* message) override;
+	int fetchAbsolute(CheckStatusWrapper* status, int position, void* message) override;
+	int fetchRelative(CheckStatusWrapper* status, int offset, void* message) override;
+	FB_BOOLEAN isEof(CheckStatusWrapper* status) override;
+	FB_BOOLEAN isBof(CheckStatusWrapper* status) override;
+	IMessageMetadata* getMetadata(CheckStatusWrapper* status) override;
+	void close(CheckStatusWrapper* status) override;
+	void setDelayedOutputFormat(CheckStatusWrapper* status, IMessageMetadata* format) override;
 
 	ResultSet(Statement* s, IMessageMetadata* outFmt)
 		: stmt(s), tmpStatement(false), delayedFormat(outFmt == DELAYED_OUT_FORMAT)
@@ -307,17 +328,18 @@ public:
 
 	// IResultSet implementation
 	int release() override;
-	void add(Firebird::CheckStatusWrapper* status, unsigned count, const void* inBuffer);
+	void add(Firebird::CheckStatusWrapper* status, unsigned count, const void* inBuffer) override;
 	void addBlob(Firebird::CheckStatusWrapper* status, unsigned length, const void* inBuffer, ISC_QUAD* blobId,
-		unsigned parLength, const unsigned char* par);
-	void appendBlobData(Firebird::CheckStatusWrapper* status, unsigned length, const void* inBuffer);
-	void addBlobStream(Firebird::CheckStatusWrapper* status, unsigned length, const void* inBuffer);
-	void registerBlob(Firebird::CheckStatusWrapper* status, const ISC_QUAD* existingBlob, ISC_QUAD* blobId);
-	Firebird::IBatchCompletionState* execute(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction);
-	void cancel(Firebird::CheckStatusWrapper* status);
-	unsigned getBlobAlignment(Firebird::CheckStatusWrapper* status);
-	void setDefaultBpb(Firebird::CheckStatusWrapper* status, unsigned parLength, const unsigned char* par);
-	Firebird::IMessageMetadata* getMetadata(Firebird::CheckStatusWrapper* status);
+		unsigned parLength, const unsigned char* par) override;
+	void appendBlobData(Firebird::CheckStatusWrapper* status, unsigned length, const void* inBuffer) override;
+	void addBlobStream(Firebird::CheckStatusWrapper* status, unsigned length, const void* inBuffer) override;
+	void registerBlob(Firebird::CheckStatusWrapper* status, const ISC_QUAD* existingBlob, ISC_QUAD* blobId) override;
+	Firebird::IBatchCompletionState* execute(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction) override;
+	void cancel(Firebird::CheckStatusWrapper* status) override;
+	unsigned getBlobAlignment(Firebird::CheckStatusWrapper* status) override;
+	void setDefaultBpb(Firebird::CheckStatusWrapper* status, unsigned parLength, const unsigned char* par) override;
+	Firebird::IMessageMetadata* getMetadata(Firebird::CheckStatusWrapper* status) override;
+	void close(Firebird::CheckStatusWrapper* status) override;
 
 private:
 	void freeClientData(CheckStatusWrapper* status, bool force = false);
@@ -530,8 +552,8 @@ class Replicator FB_FINAL : public RefCntIface<IReplicatorImpl<Replicator, Check
 public:
 	// IReplicator implementation
 	int release() override;
-	void process(CheckStatusWrapper* status, unsigned length, const unsigned char* data);
-	void close(CheckStatusWrapper* status);
+	void process(CheckStatusWrapper* status, unsigned length, const unsigned char* data) override;
+	void close(CheckStatusWrapper* status) override;
 
 	explicit Replicator(Attachment* att) : attachment(att)
 	{}
@@ -565,23 +587,23 @@ public:
 	int release() override;
 	void getInfo(CheckStatusWrapper* status,
 						 unsigned int itemsLength, const unsigned char* items,
-						 unsigned int bufferLength, unsigned char* buffer);
-	unsigned getType(CheckStatusWrapper* status);
-	const char* getPlan(CheckStatusWrapper* status, FB_BOOLEAN detailed);
-	Firebird::IMessageMetadata* getInputMetadata(CheckStatusWrapper* status);
-	Firebird::IMessageMetadata* getOutputMetadata(CheckStatusWrapper* status);
-	ISC_UINT64 getAffectedRecords(CheckStatusWrapper* status);
+						 unsigned int bufferLength, unsigned char* buffer) override;
+	unsigned getType(CheckStatusWrapper* status) override;
+	const char* getPlan(CheckStatusWrapper* status, FB_BOOLEAN detailed) override;
+	Firebird::IMessageMetadata* getInputMetadata(CheckStatusWrapper* status) override;
+	Firebird::IMessageMetadata* getOutputMetadata(CheckStatusWrapper* status) override;
+	ISC_UINT64 getAffectedRecords(CheckStatusWrapper* status) override;
 	ITransaction* execute(CheckStatusWrapper* status, ITransaction* tra,
 		IMessageMetadata* inMetadata, void* inBuffer,
-		IMessageMetadata* outMetadata, void* outBuffer);
+		IMessageMetadata* outMetadata, void* outBuffer) override;
 	ResultSet* openCursor(CheckStatusWrapper* status, ITransaction* tra,
 		IMessageMetadata* inMetadata, void* inBuffer, IMessageMetadata* outFormat,
-		unsigned int flags);
-	void setCursorName(CheckStatusWrapper* status, const char* name);
-	void free(CheckStatusWrapper* status);
-	unsigned getFlags(CheckStatusWrapper* status);
+		unsigned int flags) override;
+	void setCursorName(CheckStatusWrapper* status, const char* name) override;
+	void free(CheckStatusWrapper* status) override;
+	unsigned getFlags(CheckStatusWrapper* status) override;
 
-	unsigned int getTimeout(CheckStatusWrapper* status)
+	unsigned int getTimeout(CheckStatusWrapper* status) override
 	{
 		if (statement->rsr_rdb->rdb_port->port_protocol < PROTOCOL_STMT_TOUT)
 		{
@@ -592,7 +614,7 @@ public:
 		return statement->rsr_timeout;
 	}
 
-	void setTimeout(CheckStatusWrapper* status, unsigned int timeOut)
+	void setTimeout(CheckStatusWrapper* status, unsigned int timeOut) override
 	{
 		if (timeOut && statement->rsr_rdb->rdb_port->port_protocol < PROTOCOL_STMT_TOUT)
 		{
@@ -604,7 +626,7 @@ public:
 	}
 
 	Batch* createBatch(CheckStatusWrapper* status, IMessageMetadata* inMetadata,
-		unsigned parLength, const unsigned char* par);
+		unsigned parLength, const unsigned char* par) override;
 
 public:
 	Statement(Rsr* handle, Attachment* a, unsigned aDialect)
@@ -668,17 +690,17 @@ public:
 	// IRequest implementation
 	int release() override;
 	void receive(CheckStatusWrapper* status, int level, unsigned int msg_type,
-						 unsigned int length, void* message);
+						 unsigned int length, void* message) override;
 	void send(CheckStatusWrapper* status, int level, unsigned int msg_type,
-					  unsigned int length, const void* message);
+					  unsigned int length, const void* message) override;
 	void getInfo(CheckStatusWrapper* status, int level,
 						 unsigned int itemsLength, const unsigned char* items,
-						 unsigned int bufferLength, unsigned char* buffer);
-	void start(CheckStatusWrapper* status, Firebird::ITransaction* tra, int level);
+						 unsigned int bufferLength, unsigned char* buffer) override;
+	void start(CheckStatusWrapper* status, Firebird::ITransaction* tra, int level) override;
 	void startAndSend(CheckStatusWrapper* status, Firebird::ITransaction* tra, int level, unsigned int msg_type,
-							  unsigned int length, const void* message);
-	void unwind(CheckStatusWrapper* status, int level);
-	void free(CheckStatusWrapper* status);
+							  unsigned int length, const void* message) override;
+	void unwind(CheckStatusWrapper* status, int level) override;
+	void free(CheckStatusWrapper* status) override;
 
 public:
 	Request(Rrq* handle, Attachment* a)
@@ -715,7 +737,7 @@ class Events FB_FINAL : public RefCntIface<IEventsImpl<Events, CheckStatusWrappe
 public:
 	// IEvents implementation
 	int release() override;
-	void cancel(CheckStatusWrapper* status);
+	void cancel(CheckStatusWrapper* status) override;
 
 public:
 	Events(Rvnt* handle)
@@ -759,55 +781,55 @@ public:
 	int release() override;
 	void getInfo(CheckStatusWrapper* status,
 						 unsigned int itemsLength, const unsigned char* items,
-						 unsigned int bufferLength, unsigned char* buffer);
+						 unsigned int bufferLength, unsigned char* buffer) override;
 	Firebird::ITransaction* startTransaction(CheckStatusWrapper* status,
-		unsigned int tpbLength, const unsigned char* tpb);
-	Firebird::ITransaction* reconnectTransaction(CheckStatusWrapper* status, unsigned int length, const unsigned char* id);
-	Firebird::IRequest* compileRequest(CheckStatusWrapper* status, unsigned int blr_length, const unsigned char* blr);
+		unsigned int tpbLength, const unsigned char* tpb) override;
+	Firebird::ITransaction* reconnectTransaction(CheckStatusWrapper* status, unsigned int length, const unsigned char* id) override;
+	Firebird::IRequest* compileRequest(CheckStatusWrapper* status, unsigned int blr_length, const unsigned char* blr) override;
 	void transactRequest(CheckStatusWrapper* status, ITransaction* transaction,
 								 unsigned int blr_length, const unsigned char* blr,
 								 unsigned int in_msg_length, const unsigned char* in_msg,
-								 unsigned int out_msg_length, unsigned char* out_msg);
+								 unsigned int out_msg_length, unsigned char* out_msg) override;
 	Firebird::IBlob* createBlob(CheckStatusWrapper* status, ITransaction* transaction,
-		ISC_QUAD* id, unsigned int bpbLength = 0, const unsigned char* bpb = 0);
+		ISC_QUAD* id, unsigned int bpbLength = 0, const unsigned char* bpb = 0) override;
 	Firebird::IBlob* openBlob(CheckStatusWrapper* status, ITransaction* transaction,
-		ISC_QUAD* id, unsigned int bpbLength = 0, const unsigned char* bpb = 0);
+		ISC_QUAD* id, unsigned int bpbLength = 0, const unsigned char* bpb = 0) override;
 	int getSlice(CheckStatusWrapper* status, ITransaction* transaction, ISC_QUAD* id,
 						 unsigned int sdl_length, const unsigned char* sdl,
 						 unsigned int param_length, const unsigned char* param,
-						 int sliceLength, unsigned char* slice);
+						 int sliceLength, unsigned char* slice) override;
 	void putSlice(CheckStatusWrapper* status, ITransaction* transaction, ISC_QUAD* id,
 						  unsigned int sdl_length, const unsigned char* sdl,
 						  unsigned int param_length, const unsigned char* param,
-						  int sliceLength, unsigned char* slice);
+						  int sliceLength, unsigned char* slice) override;
 	void executeDyn(CheckStatusWrapper* status, ITransaction* transaction, unsigned int length,
-		const unsigned char* dyn);
+		const unsigned char* dyn) override;
 	Statement* prepare(CheckStatusWrapper* status, ITransaction* transaction,
-		unsigned int stmtLength, const char* sqlStmt, unsigned dialect, unsigned int flags);
+		unsigned int stmtLength, const char* sqlStmt, unsigned dialect, unsigned int flags) override;
 	Firebird::ITransaction* execute(CheckStatusWrapper* status, ITransaction* transaction,
 		unsigned int stmtLength, const char* sqlStmt, unsigned dialect,
-		IMessageMetadata* inMetadata, void* inBuffer, IMessageMetadata* outMetadata, void* outBuffer);
+		IMessageMetadata* inMetadata, void* inBuffer, IMessageMetadata* outMetadata, void* outBuffer) override;
 	Firebird::IResultSet* openCursor(CheckStatusWrapper* status, ITransaction* transaction,
 		unsigned int stmtLength, const char* sqlStmt, unsigned dialect,
 		IMessageMetadata* inMetadata, void* inBuffer, Firebird::IMessageMetadata* outMetadata,
-		const char* cursorName, unsigned int cursorFlags);
+		const char* cursorName, unsigned int cursorFlags) override;
 	Firebird::IEvents* queEvents(CheckStatusWrapper* status, Firebird::IEventCallback* callback,
-									 unsigned int length, const unsigned char* events);
-	void cancelOperation(CheckStatusWrapper* status, int option);
-	void ping(CheckStatusWrapper* status);
-	void detach(CheckStatusWrapper* status);
-	void dropDatabase(CheckStatusWrapper* status);
+									 unsigned int length, const unsigned char* events) override;
+	void cancelOperation(CheckStatusWrapper* status, int option) override;
+	void ping(CheckStatusWrapper* status) override;
+	void detach(CheckStatusWrapper* status) override;
+	void dropDatabase(CheckStatusWrapper* status) override;
 
-	unsigned int getIdleTimeout(CheckStatusWrapper* status);
-	void setIdleTimeout(CheckStatusWrapper* status, unsigned int timeOut);
-	unsigned int getStatementTimeout(CheckStatusWrapper* status);
-	void setStatementTimeout(CheckStatusWrapper* status, unsigned int timeOut);
+	unsigned int getIdleTimeout(CheckStatusWrapper* status) override;
+	void setIdleTimeout(CheckStatusWrapper* status, unsigned int timeOut) override;
+	unsigned int getStatementTimeout(CheckStatusWrapper* status) override;
+	void setStatementTimeout(CheckStatusWrapper* status, unsigned int timeOut) override;
 
 	Batch* createBatch(Firebird::CheckStatusWrapper* status, ITransaction* transaction,
 		unsigned stmtLength, const char* sqlStmt, unsigned dialect,
-		IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par);
+		IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) override;
 
-	Replicator* createReplicator(Firebird::CheckStatusWrapper* status);
+	Replicator* createReplicator(Firebird::CheckStatusWrapper* status) override;
 
 public:
 	Attachment(Rdb* handle, const PathName& path)
@@ -860,12 +882,12 @@ class Service FB_FINAL : public RefCntIface<IServiceImpl<Service, CheckStatusWra
 public:
 	// IService implementation
 	int release() override;
-	void detach(CheckStatusWrapper* status);
+	void detach(CheckStatusWrapper* status) override;
 	void query(CheckStatusWrapper* status,
 					   unsigned int sendLength, const unsigned char* sendItems,
 					   unsigned int receiveLength, const unsigned char* receiveItems,
-					   unsigned int bufferLength, unsigned char* buffer);
-	void start(CheckStatusWrapper* status, unsigned int spbLength, const unsigned char* spb);
+					   unsigned int bufferLength, unsigned char* buffer) override;
+	void start(CheckStatusWrapper* status, unsigned int spbLength, const unsigned char* spb) override;
 
 public:
 	Service(Rdb* handle) : rdb(handle) { }
@@ -2730,6 +2752,35 @@ void Batch::cancel(CheckStatusWrapper* status)
 {
 	try
 	{
+		// Check and validate handles, etc.
+		if (!stmt)
+		{
+			Arg::Gds(isc_dsql_cursor_err).raise();
+		}
+
+		Rsr* statement = stmt->getStatement();
+		CHECK_HANDLE(statement, isc_bad_req_handle);
+		Rdb* rdb = statement->rsr_rdb;
+		rem_port* port = rdb->rdb_port;
+		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+
+		// Cleanup local data
+		if (blobPolicy != BLOB_NONE)
+			blobStream = blobStreamBuffer;
+		sizePointer = nullptr;
+		messageStream = 0;
+		batchActive = false;
+
+		// Prepare packet
+		PACKET* packet = &rdb->rdb_packet;
+		packet->p_operation = op_batch_cancel;
+
+		P_BATCH_FREE_CANCEL* batch = &packet->p_batch_free_cancel;
+		batch->p_batch_statement = statement->rsr_id;
+
+		send_and_receive(status, rdb, packet);
+
+		batchActive = false;
 	}
 	catch (const Exception& ex)
 	{
@@ -2758,7 +2809,7 @@ void Batch::freeClientData(CheckStatusWrapper* status, bool force)
 		PACKET* packet = &rdb->rdb_packet;
 		packet->p_operation = op_batch_rls;
 
-		P_BATCH_FREE* batch = &packet->p_batch_free;
+		P_BATCH_FREE_CANCEL* batch = &packet->p_batch_free_cancel;
 		batch->p_batch_statement = statement->rsr_id;
 
 		if (rdb->rdb_port->port_flags & PORT_lazy)
@@ -2785,6 +2836,13 @@ void Batch::freeClientData(CheckStatusWrapper* status, bool force)
 	{
 		ex.stuffException(status);
 	}
+}
+
+
+void Batch::close(CheckStatusWrapper* status)
+{
+	reset(status);
+	freeClientData(status);
 }
 
 
@@ -3491,7 +3549,8 @@ void Statement::freeClientData(CheckStatusWrapper* status, bool force)
 
 		if (rdb->rdb_port->port_flags & PORT_lazy)
 		{
-			defer_packet(rdb->rdb_port, packet);
+			send_packet(rdb->rdb_port, packet);
+			defer_packet(rdb->rdb_port, packet, true);
 			packet->p_resp.p_resp_object = statement->rsr_id;
 		}
 		else
@@ -3692,9 +3751,7 @@ Statement* Attachment::prepare(CheckStatusWrapper* status, ITransaction* apiTra,
 		}
 
 		P_RESP* response = &packet->p_resp;
-		CSTRING temp = response->p_resp_data;
-		response->p_resp_data.cstr_allocated = (ULONG) buffer.getCount();
-		response->p_resp_data.cstr_address = buffer.begin();
+		SaveString temp(response->p_resp_data, buffer.getCount(), buffer.begin());
 
 		try
 		{
@@ -3715,8 +3772,8 @@ Statement* Attachment::prepare(CheckStatusWrapper* status, ITransaction* apiTra,
 		else
 		{
 			fb_assert(!response->p_resp_object);
+			response->p_resp_object = 0;
 		}
-		response->p_resp_data = temp;
 
 		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
 		{
@@ -4213,7 +4270,13 @@ int ResultSet::fetchNext(CheckStatusWrapper* status, void* buffer)
 			status_exception::raise(Arg::Gds(isc_port_len) <<
 				Arg::Num(msg_length) << Arg::Num(statement->rsr_user_select_format->fmt_length));
 		}
-		if (statement->rsr_user_select_format == statement->rsr_select_format) {
+		if (statement->rsr_user_select_format == statement->rsr_select_format)
+		{
+			if (!msg || !message->msg_address)
+			{
+				move_error(Arg::Gds(isc_dsql_sqlda_err));
+				// Msg 263 SQLDA missing or wrong number of variables
+			}
 			memcpy(msg, message->msg_address, msg_length);
 		}
 		else
@@ -4592,7 +4655,7 @@ int Blob::getSegment(CheckStatusWrapper* status, unsigned int bufferLength, void
 		PACKET* packet = &rdb->rdb_packet;
 		P_SGMT* segment = &packet->p_sgmt;
 		P_RESP* response = &packet->p_resp;
-		CSTRING temp = response->p_resp_data;
+		SaveString temp(response->p_resp_data, bufferLength, bufferPtr);
 
 		// Handle a blob that has been created rather than opened (this should yield an error)
 
@@ -4602,21 +4665,10 @@ int Blob::getSegment(CheckStatusWrapper* status, unsigned int bufferLength, void
 			segment->p_sgmt_length = bufferLength;
 			segment->p_sgmt_blob = blob->rbl_id;
 			segment->p_sgmt_segment.cstr_length = 0;
+
 			send_packet(port, packet);
-			response->p_resp_data.cstr_allocated = bufferLength;
-			response->p_resp_data.cstr_address = bufferPtr;
+			receive_response(status, rdb, packet);
 
-			try
-			{
-				receive_response(status, rdb, packet);
-			}
-			catch (const Exception& /*ex*/)
-			{
-				response->p_resp_data = temp;
-				throw;
-			}
-
-			response->p_resp_data = temp;
 			if (segmentLength)
 				*segmentLength = response->p_resp_data.cstr_length;
 			return IStatus::RESULT_OK;
@@ -4750,15 +4802,7 @@ int Blob::getSegment(CheckStatusWrapper* status, unsigned int bufferLength, void
 			response->p_resp_data.cstr_allocated = blob->rbl_buffer_length;
 			response->p_resp_data.cstr_address = blob->rbl_buffer;
 
-			try
-			{
-				receive_response(status, rdb, packet);
-			}
-			catch (const Exception& /*ex*/)
-			{
-				response->p_resp_data = temp;
-				throw;
-			}
+			receive_response(status, rdb, packet);
 
 			blob->rbl_length = (USHORT) response->p_resp_data.cstr_length;
 			blob->rbl_ptr = blob->rbl_buffer;
@@ -4768,8 +4812,6 @@ int Blob::getSegment(CheckStatusWrapper* status, unsigned int bufferLength, void
 			else if (response->p_resp_object == 2)
 				blob->rbl_flags |= Rbl::EOF_PENDING;
 		}
-
-		response->p_resp_data = temp;
 
 		if (segmentLength)
 			*segmentLength = length;
@@ -7354,21 +7396,9 @@ static void info(CheckStatusWrapper* status,
 	// Set up for the response packet.
 
 	P_RESP* response = &packet->p_resp;
-	CSTRING temp = response->p_resp_data;
-	response->p_resp_data.cstr_allocated = buffer_length;
-	response->p_resp_data.cstr_address = buffer;
+	SaveString temp(response->p_resp_data, buffer_length, buffer);
 
-	try
-	{
-		receive_response(status, rdb, packet);
-	}
-	catch (const Exception&)
-	{
-		response->p_resp_data = temp;
-		throw;
-	}
-
-	response->p_resp_data = temp;
+	receive_response(status, rdb, packet);
 }
 
 static bool useLegacyAuth(const char* nm, int protocol, ClumpletWriter& dpb)
@@ -7676,7 +7706,8 @@ static void mov_dsql_message(const UCHAR* from_msg,
  *
  **************************************/
 
-	if (!from_fmt || !to_fmt || from_fmt->fmt_desc.getCount() != to_fmt->fmt_desc.getCount())
+	if (!from_msg || !from_fmt || !to_msg || !to_fmt ||
+		from_fmt->fmt_desc.getCount() != to_fmt->fmt_desc.getCount())
 	{
 		move_error(Arg::Gds(isc_dsql_sqlda_err));
 		// Msg 263 SQLDA missing or wrong number of variables
@@ -8528,19 +8559,10 @@ static void svcstart(CheckStatusWrapper*	status,
 
 	// Set up for the response packet.
 	P_RESP* response = &packet->p_resp;
-	CSTRING temp = response->p_resp_data;
+	SaveString temp(response->p_resp_data, 0, NULL);
+	response->p_resp_data.cstr_length = 0;
 
-	try
-	{
-		receive_response(status, rdb, packet);
-	}
-	catch (const Exception&)
-	{
-		response->p_resp_data = temp;
-		throw;
-	}
-
-	response->p_resp_data = temp;
+	receive_response(status, rdb, packet);
 }
 
 

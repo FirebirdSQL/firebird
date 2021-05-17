@@ -66,6 +66,9 @@ namespace Why
 		FB_BOOLEAN getProcessExiting();
 	};
 
+	// Should be called if process must be terminated wihout any regular shutdown routines
+	void abortShutdown();
+
 	void shutdownTimers();
 
 	Firebird::Mutex& pauseTimer();

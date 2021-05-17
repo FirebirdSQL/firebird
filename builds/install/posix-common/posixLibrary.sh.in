@@ -226,7 +226,8 @@ checkLibraries() {
 		haveLibrary libtommath.so.0 || [ "$fixTommath" ] && $fixTommath
 	fi
 
-	if [ "@TOMCRYPT_BUILD@" != "Y" -o "${fb_install_prefix}" != "${default_prefix}" ]
+#	if [ "@TOMCRYPT_BUILD@" != "Y" -o "${fb_install_prefix}" != "${default_prefix}" ]
+	if [ "@TOMCRYPT_BUILD@" != "Y" ]
 	then
 		[ -z "$LIBTOMCRYPT" ] && LIBTOMCRYPT=tomcrypt
 		checkLibrary $LIBTOMCRYPT

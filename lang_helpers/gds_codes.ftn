@@ -1956,6 +1956,10 @@ C --
       PARAMETER (GDS__repl_error                       = 335545271)
       INTEGER*4 GDS__ses_reset_failed                
       PARAMETER (GDS__ses_reset_failed                 = 335545272)
+      INTEGER*4 GDS__block_size                      
+      PARAMETER (GDS__block_size                       = 335545273)
+      INTEGER*4 GDS__tom_key_length                  
+      PARAMETER (GDS__tom_key_length                   = 335545274)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 

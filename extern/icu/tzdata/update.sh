@@ -20,7 +20,7 @@ curl -OLs $BASE_URL/le/metaZones.res
 curl -OLs $BASE_URL/le/timezoneTypes.res
 curl -OLs $BASE_URL/le/windowsZones.res
 curl -OLs $BASE_URL/le/zoneinfo64.res
-ICU_TIMEZONE_FILES_DIR=. $TMP_DIR/update-ids ids.dat $THIS_DIR/../../../src/common/TimeZones.h
+ICU_TIMEZONE_FILES_DIR=. $TMP_DIR/update-ids ids.dat $THIS_DIR/../../../src/common/TimeZones.h $THIS_DIR/../../../src/include/firebird/TimeZones.h
 rm $THIS_DIR/le.zip
 zip $THIS_DIR/le.zip *.res ids.dat
 

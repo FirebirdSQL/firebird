@@ -735,9 +735,6 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 	insertion.iib_key = &key1;
 	insertion.iib_btr_level = 0;
 
-	Attachment* att = tdbb->getAttachment();
-	AutoSetRestoreFlag<ULONG> gc(&att->att_flags, ATT_no_cleanup, true);
-
 	WIN window(get_root_page(tdbb, rpb->rpb_relation));
 
 	index_root_page* root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);

@@ -253,6 +253,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_dest_bind(&att_bindings),
 	  att_original_timezone(TimeZoneUtil::getSystemTimeZone()),
 	  att_current_timezone(att_original_timezone),
+	  att_repl_appliers(*pool),
 	  att_utility(UTIL_NONE),
 	  att_procedures(*pool),
 	  att_functions(*pool),

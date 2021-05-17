@@ -346,4 +346,6 @@
 typedef int socklen_t;
 #endif
 
+#define FB_INT64_COMPARE_FAILED 0
+
 #endif

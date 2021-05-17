@@ -2512,7 +2512,8 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 				fields.push(SortField(stream, id, desc));
 				totalLength += desc->dsc_length;
 
-				// If the field has already been mentioned as a sort key, don't bother to repeat it
+				// If the field has already been mentioned as a sort key, don't bother to repeat it.
+				// Unless this key is computed/volatile and thus cannot be restored after sorting.
 
 				for (auto expr : sort->expressions)
 				{
@@ -2520,10 +2521,7 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 
 					if (fieldNode && fieldNode->fieldStream == stream && fieldNode->fieldId == id)
 					{
-						// International type text has a computed key.
-						// Different decimal float values sometimes have same keys.
-						// ASF: Date/time with time zones too.
-						if (!IS_INTL_DATA(desc) && !desc->isDecFloat() && !desc->isDateTimeTz())
+						if (!SortedStream::hasVolatileKey(desc))
 						{
 							totalLength -= desc->dsc_length;
 							fields.pop();
@@ -2659,7 +2657,7 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 				sort_key->skd_flags |= SKD_binary;
 		}
 
-		if (IS_INTL_DATA(desc) || desc->isDecFloat() || desc->isDateTimeTz())
+		if (SortedStream::hasVolatileKey(desc) && !refetch_flag)
 			sort_key->skd_flags |= SKD_separate_data;
 
 		map_item->clear();

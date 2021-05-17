@@ -65,6 +65,7 @@
 #endif
 
 #include "../common/config/config.h"
+#include "../common/isc_proto.h"
 #include "../common/utils_proto.h"
 #include "../jrd/jrd.h"
 #include "../jrd/pag.h"
@@ -2562,9 +2563,21 @@ USHORT PageManager::getTempPageSpaceID(thread_db* tdbb)
 		Firebird::MutexLockGuard guard(initTmpMtx, FB_FUNCTION);
 		if (!tempFileCreated)
 		{
-			PageSpace* pageSpaceTemp = dbb->dbb_page_manager.findPageSpace(tempPageSpaceID);
+			FbLocalStatus status;
+			PathName tempDir(dbb->dbb_config->getTempPageSpaceDirectory());
+			PathName file_name = TempFile::create(&status, SCRATCH, tempDir);
 
-			PathName file_name = TempFile::create(SCRATCH);
+			if (!status.isSuccess())
+			{
+				string error;
+				error.printf("Database: %s\n\tError creating file in TempTableDirectory \"%s\"",
+							 dbb->dbb_filename.c_str(), tempDir.c_str());
+				iscLogStatus(error.c_str(), &status);
+
+				file_name = TempFile::create(SCRATCH);
+			}
+
+			PageSpace* pageSpaceTemp = dbb->dbb_page_manager.findPageSpace(tempPageSpaceID);
 			pageSpaceTemp->file = PIO_create(tdbb, file_name, true, true);
 			PAG_format_pip(tdbb, *pageSpaceTemp);
 

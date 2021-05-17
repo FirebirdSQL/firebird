@@ -1115,7 +1115,9 @@ void TRA_prepare(thread_db* tdbb, jrd_tra* transaction, USHORT length, const UCH
 	// Set the state on the inventory page to be limbo
 
 	transaction->tra_flags |= TRA_prepared;
-	TRA_set_state(tdbb, transaction, transaction->tra_number, tra_limbo);
+
+	if (!(tdbb->tdbb_flags & TDBB_replicator))
+		TRA_set_state(tdbb, transaction, transaction->tra_number, tra_limbo);
 }
 
 

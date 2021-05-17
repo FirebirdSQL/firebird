@@ -352,7 +352,7 @@ void BackupManager::beginBackup(thread_db* tdbb)
 		PAG_replace_entry_first(tdbb, header, Ods::HDR_backup_guid, sizeof(guid),
 			reinterpret_cast<const UCHAR*>(&guid));
 
-		REPL_log_switch(tdbb);
+		REPL_journal_switch(tdbb);
 
 		stateGuard.releaseHeader();
 		stateGuard.setSuccess();

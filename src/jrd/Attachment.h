@@ -48,6 +48,8 @@
 #include "../jrd/EngineInterface.h"
 #include "../jrd/sbm.h"
 
+#include <atomic>
+
 #define DEBUG_LCK_LIST
 
 namespace EDS {
@@ -442,12 +444,12 @@ public:
 #ifdef DEBUG_LCK_LIST
 	UCHAR		att_long_locks_type;		// Lock type of the first lock in list
 #endif
-	Lock*		att_wait_lock;				// lock at which attachment waits currently
+	std::atomic<SLONG>	att_wait_owner_handle;	// lock owner with which attachment waits currently
 	vec<Lock*>*	att_compatibility_table;	// hash table of compatible locks
 	Validation*	att_validation;
 	Firebird::PathName	att_working_directory;	// Current working directory is cached
 	Firebird::PathName	att_filename;			// alias used to attach the database
-	const ISC_TIMESTAMP_TZ	att_timestamp;	// Connection date and time
+	ISC_TIMESTAMP_TZ	att_timestamp;	    // Connection date and time
 	Firebird::StringMap att_context_vars;	// Context variables for the connection
 	Firebird::Stack<DdlTriggerContext*> ddlTriggersContext;	// Context variables for DDL trigger event
 	Firebird::string att_network_protocol;	// Network protocol used by client for connection
@@ -481,7 +483,7 @@ public:
 
 	Firebird::RefPtr<Firebird::IReplicatedSession> att_replicator;
 	Firebird::AutoPtr<Replication::TableMatcher> att_repl_matcher;
-	Firebird::AutoPtr<Applier> att_repl_applier;
+	Firebird::Array<Applier*> att_repl_appliers;
 
 	enum UtilType { UTIL_NONE, UTIL_GBAK, UTIL_GFIX, UTIL_GSTAT };
 

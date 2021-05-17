@@ -128,6 +128,7 @@ static jrd_file* setup_file(Database*, const PathName&, const int, const bool, c
 static void lockDatabaseFile(int& desc, const bool shareMode, const bool temporary,
 							 const char* fileName, ISC_STATUS operation);
 static bool unix_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* = NULL);
+static bool block_size_error(const jrd_file*, off_t, FbStatusVector* = NULL);
 #if !(defined HAVE_PREAD && defined HAVE_PWRITE)
 static SLONG pread(int, SCHAR*, SLONG, SLONG);
 static SLONG pwrite(int, SCHAR*, SLONG, SLONG);
@@ -553,6 +554,8 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 			break;
 		if (bytes < 0 && !SYSCALL_INTERRUPTED(errno))
 			unix_error("read", file, isc_io_read_err);
+		if (bytes >= 0)
+			block_size_error(file, bytes);
 	}
 
 	if (i == IO_RETRY)
@@ -721,6 +724,7 @@ jrd_file* PIO_open(thread_db* tdbb,
 		raw = true;
 		if (!raw_devices_validate_database(desc, expandedName))
 		{
+			maybeCloseFile(desc);
 			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("open") << Arg::Str(originalName) <<
 					 Arg::Gds(isc_io_open_err) << Arg::Unix(ENOENT));
 		}
@@ -764,6 +768,8 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 			break;
 		if (bytes < 0 && !SYSCALL_INTERRUPTED(errno))
 			return unix_error("read", file, isc_io_read_err, status_vector);
+		if (bytes >= 0)
+			return block_size_error(file, offset + bytes, status_vector);
 	}
 
 	if (i == IO_RETRY)
@@ -1033,15 +1039,46 @@ static bool unix_error(const TEXT* string,
 		Arg::Gds(operation) << Arg::Unix(errno);
 
 	if (!status_vector)
-	{
 		ERR_post(err);
-	}
 
 	ERR_build_status(status_vector, err);
 	iscLogStatus(NULL, status_vector);
 
 	return false;
 }
+
+
+static bool block_size_error(const jrd_file* file, off_t offset, FbStatusVector* status_vector)
+{
+/**************************************
+ *
+ *	b l o c k _ s i z e _ e r r o r
+ *
+ **************************************
+ *
+ * Functional description
+ *	DB block read incomplete, that may be
+ *	due to signal caught or unexpected EOF.
+ *
+ **************************************/
+	struct stat st;
+	if (os_utils::fstat(file->fil_desc, &st) < 0)
+		return unix_error("fstat", file, isc_io_access_err, status_vector);
+
+	if (offset < st.st_size)	// we might read more but were interupted
+		return true;
+
+	Arg::Gds err(isc_io_error);
+	err << "read" << file->fil_string << Arg::Gds(isc_block_size);
+
+	if (!status_vector)
+		ERR_post(err);
+
+	ERR_build_status(status_vector, err);
+	iscLogStatus(NULL, status_vector);
+	return false;
+}
+
 
 #if !(defined HAVE_PREAD && defined HAVE_PWRITE)
 

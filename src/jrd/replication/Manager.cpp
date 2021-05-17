@@ -114,7 +114,7 @@ Manager::Manager(const string& dbId,
 	const Guid& guid = dbb->dbb_guid;
 	m_sequence = dbb->dbb_repl_sequence;
 
-	if (config->logDirectory.hasData())
+	if (config->journalDirectory.hasData())
 	{
 		m_changeLog = FB_NEW_POOL(getPool())
 			ChangeLog(getPool(), dbId, guid, m_sequence, config);
@@ -162,16 +162,16 @@ Manager::Manager(const string& dbId,
 
 		const auto attachment = provider->attachDatabase(&localStatus, database.c_str(),
 												   	     dpb.getBufferLength(), dpb.getBuffer());
-		if (!localStatus.isSuccess())
+		if (localStatus->getState() & IStatus::STATE_ERRORS)
 		{
-			logError(&localStatus);
+			logPrimaryStatus(m_config->dbName, &localStatus);
 			continue;
 		}
 
 		const auto replicator = attachment->createReplicator(&localStatus);
-		if (!localStatus.isSuccess())
+		if (localStatus->getState() & IStatus::STATE_ERRORS)
 		{
-			logError(&localStatus);
+			logPrimaryStatus(m_config->dbName, &localStatus);
 			attachment->detach(&localStatus);
 			continue;
 		}
@@ -185,12 +185,27 @@ Manager::Manager(const string& dbId,
 
 Manager::~Manager()
 {
+	for (auto& buffer : m_buffers)
+		delete buffer;
+}
+
+void Manager::shutdown()
+{
 	m_shutdown = true;
 
 	m_workingSemaphore.release();
 	m_cleanupSemaphore.enter();
 
 	MutexLockGuard guard(m_queueMutex, FB_FUNCTION);
+
+	for (auto& buffer : m_queue)
+	{
+		if (buffer)
+		{
+			releaseBuffer(buffer);
+			buffer = nullptr;
+		}
+	}
 
 	// Detach from synchronous replicas
 
@@ -202,8 +217,7 @@ Manager::~Manager()
 		iter->attachment->detach(&localStatus);
 	}
 
-	while (m_buffers.hasData())
-		delete m_buffers.pop();
+	m_replicas.clear();
 }
 
 UCharBuffer* Manager::getBuffer()
@@ -227,24 +241,6 @@ void Manager::releaseBuffer(UCharBuffer* buffer)
 
 	fb_assert(!m_buffers.exist(buffer));
 	m_buffers.add(buffer);
-}
-
-void Manager::logError(const IStatus* status)
-{
-	string message;
-
-	auto statusPtr = status->getErrors();
-
-	char temp[BUFFER_LARGE];
-	while (fb_interpret(temp, sizeof(temp), &statusPtr))
-	{
-		if (!message.isEmpty())
-			message += "\n\t";
-
-		message += temp;
-	}
-
-	logOriginMessage(m_config->dbName, message, ERROR_MSG);
 }
 
 void Manager::flush(UCharBuffer* buffer, bool sync)

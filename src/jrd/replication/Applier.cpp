@@ -221,11 +221,16 @@ Applier* Applier::create(thread_db* tdbb)
 	request->req_attachment = attachment;
 
 	auto& att_pool = *attachment->att_pool;
-	return FB_NEW_POOL(att_pool) Applier(att_pool, dbb->dbb_filename, request);
+	const auto applier = FB_NEW_POOL(att_pool) Applier(att_pool, dbb->dbb_filename, request);
+
+	attachment->att_repl_appliers.add(applier);
+	return applier;
 }
 
 void Applier::shutdown(thread_db* tdbb)
 {
+	const auto attachment = tdbb->getAttachment();
+
 	cleanupTransactions(tdbb);
 
 	CMP_release(tdbb, m_request);
@@ -233,6 +238,14 @@ void Applier::shutdown(thread_db* tdbb)
 	m_record = NULL;
 
 	m_bitmap->clear();
+
+	attachment->att_repl_appliers.findAndRemove(this);
+
+	if (m_interface)
+	{
+		m_interface->resetHandle();
+		m_interface = nullptr;
+	}
 }
 
 void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
@@ -330,7 +343,11 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 				do {
 					const ULONG length = reader.getInt16();
 					if (!length)
+					{
+						// Close our newly created blob
+						storeBlob(tdbb, traNum, &blob_id, 0, nullptr);
 						break;
+					}
 					const auto blob = reader.getBinary(length);
 					storeBlob(tdbb, traNum, &blob_id, length, blob);
 				} while (!reader.isEof());
@@ -1231,6 +1248,6 @@ void Applier::logConflict(const char* msg, ...)
 	vsprintf(buffer, msg, ptr);
 	va_end(ptr);
 
-	logReplicaMessage(m_database, buffer, WARNING_MSG);
+	logReplicaWarning(m_database, buffer);
 #endif
 }

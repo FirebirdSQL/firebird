@@ -651,8 +651,8 @@ using namespace Firebird;
 %token <metaNamePtr> RSA_ENCRYPT
 %token <metaNamePtr> RSA_PRIVATE
 %token <metaNamePtr> RSA_PUBLIC
-%token <metaNamePtr> RSA_SIGN
-%token <metaNamePtr> RSA_VERIFY
+%token <metaNamePtr> RSA_SIGN_HASH
+%token <metaNamePtr> RSA_VERIFY_HASH
 %token <metaNamePtr> SALT_LENGTH
 %token <metaNamePtr> SECURITY
 %token <metaNamePtr> SESSION
@@ -676,6 +676,11 @@ using namespace Firebird;
 %token <metaNamePtr> LIFETIME
 %token <metaNamePtr> CLEAR
 %token <metaNamePtr> OLDEST
+
+// tokens added for Firebird 5.0
+
+%token <metaNamePtr> UNICODE_CHAR
+%token <metaNamePtr> UNICODE_VAL
 
 // precedence declarations for expression evaluation
 
@@ -5638,13 +5643,27 @@ comment
 		{ $$ = newNode<CommentOnNode>($3, *$4, *$5, *$7); }
 	| COMMENT ON ddl_type4 ddl_qualified_name IS ddl_desc
 		{ $$ = newNode<CommentOnNode>($3, *$4, "", *$6); }
-	| COMMENT ON USER symbol_user_name IS ddl_desc
-		{
-			CreateAlterUserNode* node =
-				newNode<CreateAlterUserNode>(CreateAlterUserNode::USER_MOD, *$4);
-			node->comment = $6;
-			$$ = node;
-		}
+	| comment_on_user
+		{ $$ = $1; }
+	;
+
+%type <createAlterUserNode> comment_on_user
+comment_on_user
+	: COMMENT ON USER symbol_user_name
+			{
+				$$ = newNode<CreateAlterUserNode>(CreateAlterUserNode::USER_MOD, *$4);
+			}
+		opt_use_plugin($5) IS ddl_desc
+			{
+				CreateAlterUserNode* node = $$ = $5;
+				node->comment = $8;
+			}
+	;
+
+%type opt_use_plugin(<createAlterUserNode>)
+opt_use_plugin($node)
+	: // nothing
+	| use_plugin($node)
 	;
 
 %type <intVal> ddl_type0
@@ -7160,9 +7179,14 @@ user_fixed_option($node)
 	| REVOKE ADMIN ROLE		{ setClause($node->adminRole, "ADMIN ROLE", false); }
 	| ACTIVE				{ setClause($node->active, "ACTIVE/INACTIVE", true); }
 	| INACTIVE				{ setClause($node->active, "ACTIVE/INACTIVE", false); }
-	| USING PLUGIN valid_symbol_name
-							{ setClause($node->plugin, "USING PLUGIN", $3); }
+	| use_plugin($node)
 	| TAGS '(' user_var_list($node) ')'
+	;
+
+%type use_plugin(<createAlterUserNode>)
+use_plugin($node)
+	: USING PLUGIN valid_symbol_name
+							{ setClause($node->plugin, "USING PLUGIN", $3); }
 	;
 
 %type user_var_list(<createAlterUserNode>)
@@ -8115,6 +8139,8 @@ system_function_std_syntax
 	| TAN
 	| TANH
 	| TRUNC
+	| UNICODE_CHAR
+	| UNICODE_VAL
 	| UUID_TO_CHAR
 	| QUANTIZE
 	| TOTALORDER
@@ -8202,14 +8228,14 @@ system_function_special_syntax
 					add(MAKE_str_constant(newIntlString($7->c_str()), CS_ASCII)));
 			$$->dsqlSpecialSyntax = true;
 		}
-	| RSA_SIGN '(' value KEY value crypt_opt_hash crypt_opt_saltlen ')'
+	| RSA_SIGN_HASH '(' value KEY value crypt_opt_hash crypt_opt_saltlen ')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add($5)->
 					add(MAKE_str_constant(newIntlString($6->c_str()), CS_ASCII))->add($7));
 			$$->dsqlSpecialSyntax = true;
 		}
-	| RSA_VERIFY'(' value SIGNATURE value KEY value crypt_opt_hash crypt_opt_saltlen ')'
+	| RSA_VERIFY_HASH '(' value SIGNATURE value KEY value crypt_opt_hash crypt_opt_saltlen ')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add($5)->add($7)->
@@ -8560,6 +8586,7 @@ timestamp_part
 	| MILLISECOND	{ $$ = blr_extract_millisecond; }
 	| TIMEZONE_HOUR	{ $$ = blr_extract_timezone_hour; }
 	| TIMEZONE_MINUTE	{ $$ = blr_extract_timezone_minute; }
+	| TIMEZONE_NAME	{ $$ = blr_extract_timezone_name; }
 	| WEEK			{ $$ = blr_extract_week; }
 	| WEEKDAY		{ $$ = blr_extract_weekday; }
 	| YEARDAY		{ $$ = blr_extract_yearday; }
@@ -9009,8 +9036,8 @@ non_reserved_word
 	| RSA_ENCRYPT
 	| RSA_PRIVATE
 	| RSA_PUBLIC
-	| RSA_SIGN
-	| RSA_VERIFY
+	| RSA_SIGN_HASH
+	| RSA_VERIFY_HASH
 	| SALT_LENGTH
 	| SECURITY
 	| SESSION
@@ -9018,9 +9045,12 @@ non_reserved_word
 	| SQL
 	| SYSTEM
 	| TIES
+	| TIMEZONE_NAME
 	| TOTALORDER
 	| TRAPS
 	| ZONE
+	| UNICODE_CHAR		// added in FB 5.0
+	| UNICODE_VAL
 	;
 
 %%

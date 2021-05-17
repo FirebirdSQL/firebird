@@ -192,15 +192,12 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
  * Functional description
  *      Convert a numeric literal (string) to its binary value.
  *
- *	If the literal contains an exponent or is too large to fit
- *      in an int64, return a double, else if the literal is too
- *      large to fit in a long, return an int64, else return a long.
+ *	According to the literal passed (contains an exponent or not,
+ *      what datatype fits) returns long, int64, int128, double or decfloat.
  *
- *      The return value from the function is set to dtype_double,
- *      dtype_int64, or dtype_long depending on the conversion performed.
- *      The binary value (long, int64, or double) is stored at the
- *      address given by ptr.
- *
+ *      The return value from the function is set to dtype_decfloat, dtype_double,
+ *      dtype_int128, dtype_int64 or dtype_long depending on the conversion performed.
+ *      The binary value is stored at the address given by ptr.
  *
  **************************************/
 	dsc desc;
@@ -218,6 +215,13 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 	bool digit_seen = false, fraction = false, over = false;
 
 	const UCHAR* p = string;
+	if (length > 2 && p[0] == '0' && p[1] == 'X')
+	{
+		*(Int128*) ptr = CVT_hex_to_int128(reinterpret_cast<const char*>(p + 2), length - 2);
+		*scale = 0;
+		return dtype_int128;
+	}
+
 	const UCHAR* const end = p + length;
 	for (; p < end; p++)
 	{

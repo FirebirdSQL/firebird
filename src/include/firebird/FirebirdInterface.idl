@@ -37,8 +37,6 @@ typedef ISC_TIMESTAMP_TZ_EX;
 typedef FB_DEC16;
 typedef FB_DEC34;
 typedef FB_I128;
-typedef isc_tr_handle;
-typedef isc_stmt_handle;
 
 // Versioned interface - base for all FB interfaces
 interface Versioned
@@ -80,7 +78,9 @@ interface Status : Disposable
 	void setErrors(const intptr* value);
 	void setWarnings(const intptr* value);
 
+	[onError stubError]
 	const intptr* getErrors() const;
+	[onError stubError]
 	const intptr* getWarnings() const;
 
 	Status clone() const;
@@ -516,6 +516,7 @@ interface Batch : ReferenceCounted
 	uint getBlobAlignment(Status status);
 	MessageMetadata getMetadata(Status status);
 	void setDefaultBpb(Status status, uint parLength, const uchar* par);
+	void close(Status status);
 }
 
 interface BatchCompletionState : Disposable
@@ -1622,7 +1623,7 @@ interface ReplicatedTransaction : Disposable
 interface ReplicatedSession : PluginBase
 {
 	// Parameter don't need to be released if not used.
-	void setAttachment(Attachment attachment);
+	boolean init(Status status, Attachment attachment);
 
 	ReplicatedTransaction startTransaction(Status status, Transaction transaction, int64 number);
 	void cleanupTransaction(Status status, int64 number);

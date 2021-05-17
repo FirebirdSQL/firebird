@@ -108,6 +108,10 @@ $(OBJ)/%.o: $(SRC_ROOT)/%.c
 	$(CC) $(WCFLAGS) -c $(firstword $<) -o $@
 	@sed $(INLINE_EDIT_SED) -e "1,2s/:/: \$$(wildcard/" -e "\$$s/\(.*\)/\\1)/" $(patsubst %.o,%.d,$@)
 
+$(OBJ)/%.o: $(SRC_ROOT)/%.m
+	$(CC) $(WCFLAGS) -c $(firstword $<) -o $@
+	@sed $(INLINE_EDIT_SED) -e "1,2s/:/: \$$(wildcard/" -e "\$$s/\(.*\)/\\1)/" $(patsubst %.o,%.d,$@)
+
 $(OBJ)/%.o: $(OBJ)/%.cpp
 	$(CXX) $(WCXXFLAGS) -c $(firstword $<) -o $@
 	@sed $(INLINE_EDIT_SED) -e "1,2s/:/: \$$(wildcard/" -e "\$$s/\(.*\)/\\1)/" $(patsubst %.o,%.d,$@)

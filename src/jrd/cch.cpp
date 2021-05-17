@@ -1012,14 +1012,25 @@ void CCH_forget_page(thread_db* tdbb, WIN* window)
 		dbb->dbb_flags &= ~DBB_suspend_bgio;
 
 	clear_dirty_flag_and_nbak_state(tdbb, bdb);
-	bdb->bdb_flags = 0;
 	BufferControl* bcb = dbb->dbb_bcb;
 
 	removeDirty(bcb, bdb);
 
-	QUE_DELETE(bdb->bdb_in_use);
-	QUE_DELETE(bdb->bdb_que);
-	QUE_INSERT(bcb->bcb_empty, bdb->bdb_que);
+	// remove from LRU list
+	{
+		SyncLockGuard lruSync(&bcb->bcb_syncLRU, SYNC_EXCLUSIVE, FB_FUNCTION);
+		requeueRecentlyUsed(bcb);
+		QUE_DELETE(bdb->bdb_in_use);
+	}
+
+	// remove from hash table and put into empty list
+	{
+		SyncLockGuard bcbSync(&bcb->bcb_syncObject, SYNC_EXCLUSIVE, FB_FUNCTION);
+		QUE_DELETE(bdb->bdb_que);
+		QUE_INSERT(bcb->bcb_empty, bdb->bdb_que);
+	}
+
+	bdb->bdb_flags = 0;
 
 	if (tdbb->tdbb_flags & TDBB_no_cache_unwind)
 		bdb->release(tdbb, true);
@@ -2658,6 +2669,8 @@ static void flushAll(thread_db* tdbb, USHORT flush_flag)
 	for (ULONG i = 0; i < bcb->bcb_count; i++)
 	{
 		BufferDesc* bdb = bcb->bcb_rpt[i].bcb_bdb;
+		if (!bdb)		// first non-initialized BDB, abandon following checks
+			break;
 
 		if (bdb->bdb_flags & (BDB_db_dirty | BDB_dirty))
 		{
@@ -3510,8 +3523,8 @@ static bool expand_buffers(thread_db* tdbb, ULONG number)
  **************************************
  *
  * Functional description
- *	Expand the cache to at least a given number of buffers.  If
- *	it's already that big, don't do anything.
+ *	Expand the cache to at least a given number of buffers.
+ *	If it's already that big, don't do anything.
  *
  * Nickolay Samofatov, 08-Mar-2004.
  *  This function does not handle exceptions correctly,
@@ -3541,8 +3554,8 @@ static bool expand_buffers(thread_db* tdbb, ULONG number)
 
 	bcb_repeat* const new_rpt = FB_NEW_POOL(*bcb->bcb_bufferpool) bcb_repeat[number];
 	bcb_repeat* const old_rpt = bcb->bcb_rpt;
-	bcb->bcb_rpt = new_rpt;
 
+	bcb->bcb_rpt = new_rpt;
 	bcb->bcb_count = number;
 	bcb->bcb_free_minimum = (SSHORT) MIN(number / 4, 128);	/* 25% clean page reserve */
 
@@ -3551,7 +3564,10 @@ static bool expand_buffers(thread_db* tdbb, ULONG number)
 	// Initialize tail of new buffer control block
 	bcb_repeat* new_tail;
 	for (new_tail = bcb->bcb_rpt; new_tail < new_end; new_tail++)
+	{
 		QUE_INIT(new_tail->bcb_page_mod);
+		new_tail->bcb_bdb = nullptr;
+	}
 
 	// Move any active buffers from old block to new
 
@@ -3947,11 +3963,11 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 					const bool write_thru = (bcb->bcb_flags & BCB_exclusive);
 					if (!write_buffer(tdbb, bdb, bdb->bdb_page, write_thru, tdbb->tdbb_status_vector, true))
 					{
-						bcbSync.lock(SYNC_EXCLUSIVE);
+						lruSync.lock(SYNC_EXCLUSIVE);
 						bdb->bdb_flags &= ~BDB_free_pending;
 						QUE_DELETE(bdb->bdb_in_use);
 						QUE_APPEND(bcb->bcb_in_use, bdb->bdb_in_use);
-						bcbSync.unlock();
+						lruSync.unlock();
 
 						bdb->release(tdbb, true);
 						CCH_unwind(tdbb, true);

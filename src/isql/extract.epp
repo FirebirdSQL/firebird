@@ -507,7 +507,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 		if (!RFR.RDB$DEFAULT_SOURCE.NULL)
 		{
 			isqlGlob.printf(" ");
-			SHOW_print_metadata_text_blob (isqlGlob.Out, &RFR.RDB$DEFAULT_SOURCE);
+			SHOW_print_metadata_text_blob(isqlGlob.Out, &RFR.RDB$DEFAULT_SOURCE, false, true);
 		}
 
 		if (!RFR.RDB$GENERATOR_NAME.NULL)
@@ -819,7 +819,7 @@ static void get_procedure_args(const char* proc_name)
 					if (!prm_default_source_null)
 					{
 						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source);
+						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source, false, true);
 					}
 				}
 			}
@@ -875,12 +875,12 @@ static void get_procedure_args(const char* proc_name)
 					if (!prm_default_source_null)
 					{
 						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source);
+						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source, false, true);
 					}
 					else if (!FLD.RDB$DEFAULT_SOURCE.NULL)
 					{
 						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
+						SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE, false, true);
 					}
 				}
 			}
@@ -1043,7 +1043,7 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 					if (!prm_default_source_null)
 					{
 						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source);
+						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source, false, true);
 					}
 				}
 			}
@@ -1100,12 +1100,12 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 					if (!prm_default_source_null)
 					{
 						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source);
+						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source, false, true);
 					}
 					else if (!FLD.RDB$DEFAULT_SOURCE.NULL)
 					{
 						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
+						SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE, false, true);
 					}
 				}
 			}
@@ -2327,7 +2327,7 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 		if (!FLD.RDB$DEFAULT_SOURCE.NULL)
 		{
 			isqlGlob.printf("%s%s ", NEWLINE, TAB_AS_SPACES);
-			SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
+			SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE, false, true);
 		}
 		if (!FLD.RDB$VALIDATION_SOURCE.NULL)
 		{
@@ -2454,7 +2454,7 @@ static void list_domains(SSHORT default_char_set_id)
 		if (!FLD.RDB$DEFAULT_SOURCE.NULL)
 		{
 			isqlGlob.printf("%s%s ", NEWLINE, TAB_AS_SPACES);
-			SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
+			SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE, false, true);
 		}
 		// Validation moved to listDomainConstraints().
 		if (FLD.RDB$NULL_FLAG == 1)
@@ -3352,7 +3352,7 @@ static void list_indexes()
 		{
 			isqlGlob.printf(" COMPUTED BY ");
 			if (!IDX.RDB$EXPRESSION_SOURCE.NULL)
-				SHOW_print_metadata_text_blob (isqlGlob.Out, &IDX.RDB$EXPRESSION_SOURCE);
+				SHOW_print_metadata_text_blob(isqlGlob.Out, &IDX.RDB$EXPRESSION_SOURCE, false, true);
 			isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
 		}
 		else if (ISQL_get_index_segments (collist, sizeof(collist), IDX.RDB$INDEX_NAME, true))

@@ -961,6 +961,8 @@ void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Atta
 	if (!attachment->att_user)
 		return;
 
+	const auto dbb = attachment->att_database;
+
 	record.reset(rel_mon_attachments);
 
 	PathName attName(attachment->att_filename);
@@ -1036,6 +1038,13 @@ void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Atta
 	}
 	// statement timeout, milliseconds
 	record.storeInteger(f_mon_att_stmt_timeout, attachment->getStatementTimeout());
+
+	if (ENCODE_ODS(dbb->dbb_ods_version, dbb->dbb_minor_version) >= ODS_13_1)
+	{
+		char timeZoneBuffer[TimeZoneUtil::MAX_SIZE];
+		TimeZoneUtil::format(timeZoneBuffer, sizeof(timeZoneBuffer), attachment->att_current_timezone);
+		record.storeString(f_mon_att_session_tz, string(timeZoneBuffer));
+	}
 
 	record.write();
 

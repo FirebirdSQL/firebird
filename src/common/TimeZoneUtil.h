@@ -85,7 +85,7 @@ public:
 
 	static void iterateRegions(std::function<void (USHORT, const char*)> func);
 
-	static USHORT parse(const char* str, unsigned strLen);
+	static USHORT parse(const char* str, unsigned strLen, bool strict = true);
 	static USHORT parseRegion(const char* str, unsigned strLen);
 
 	static unsigned format(char* buffer, size_t bufferSize, USHORT timeZone,

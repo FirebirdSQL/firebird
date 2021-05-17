@@ -224,7 +224,7 @@ void make(ULONG* key,
 	*key++ = exp;
 
 	// convert to SLONG
-	fb_assert(pMax / 9 < decSize / sizeof(int));
+	fb_assert(pMax / 9 < decSize / sizeof(ULONG));
 	memset(key, 0, decSize);
 
 	for (unsigned i = 0; i < pMax; ++i)
@@ -274,7 +274,7 @@ void grab(ULONG* key,
 	}
 
 	// normal value
-	// here we ignore differnces in class for SUBNORMAL, ZERO and NEG
+	// here we ignore differences in class for SUBNORMAL, ZERO and NEG
 	cl = DEC_CLASS_POS_NORMAL;
 
 	// parse exp
@@ -1052,11 +1052,6 @@ void Decimal128::grabKey(ULONG* key)
 			DFWORD(&dec, 0) |= DECFLOAT_Sign;
 #endif //NOT_USED_OR_REPLACED
 	}
-}
-
-ULONG Decimal128::getIndexKeyLength()
-{
-	return 17;
 }
 
 ULONG Decimal128::makeIndexKey(vary* buf)

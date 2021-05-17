@@ -20,7 +20,7 @@ Asynchronous replication is based on journalling. Replicated changes are written
 
 Segments are regularly rotated, this process is controlled by either maximum segment size or timeout, both thresholds are configurable. Once the active segment reaches the threshold, it's marked as "full" and writing switches to the next available segment. Full segments are archived and then reused for subsequent writes. Archiving basically means copying the segment with a purpose of transferring it to the replica host and applying there. Copying can be done by Firebird server itself or, alternatively, by custom \(user-specified\) command.
 
-On the replica side, journal segments are applied in the replication sequence order. Firebird server periodically scans for the new segments appearing in the configured directory. Once the next segment is found, it gets replicated. Replication state is stored in the local file named {UUID} \(per every replication source\) and contains the following markers: latest segment sequence \(LSS\), oldest segment sequence \(OSS\) and list of active transactions started between OSS and LSS. LSS means the last replicated segment. OSS means the segment that started the earliest transaction that wasn't finished at the time LSS was processed. These markers control two things: \(1\) what segment must be replicated next and \(2\) when segment files can be safely deleted. Segments with numbers between OSS and LSS are preserved for replaying the journal after the replicator disconnects from the replica database \(e.g. due to replication error or idle timeout\). If there are no active transactions pending and LSS was processed without errors, all segments up to \(and including\) LSS are deleted. In the case of any critical error, replication is temporarily suspended and re-attempted after timeout.
+On the replica side, journal segments are applied in the replication sequence order. Firebird server periodically scans for the new segments appearing in the configured directory. Once the next segment is found, it gets replicated. Replication state is stored in the local file named {UUID} \(per every replication source\) and contains the following markers: latest segment sequence \(LSS\), oldest segment sequence \(OSS\) and list of active transactions started between OSS and LSS. LSS means the last replicated segment. OSS means the segment that started the earliest transaction that wasn't finished at the time LSS was processed. These markers control two things: \(1\) what segment must be replicated next and \(2\) when segments can be safely deleted. Segments with numbers between OSS and LSS are preserved for replaying the journal after the replicator disconnects from the replica database \(e.g. due to replication error or idle timeout\). If there are no active transactions pending and LSS was processed without errors, all segments up to \(and including\) LSS are deleted. In the case of any critical error, replication is temporarily suspended and re-attempted after timeout.
 
 ## Error reporting
 
@@ -51,39 +51,39 @@ Tables enabled for replicated can be additionally filtered using two settings in
 
 Synchronous replication can be turned on using the sync\_replica setting \(multiple entries are allowed\). It must specify a connection string to the replica database, prefixed with username/password. In SuperServer and SuperClassic architectures, replica database is being internally attached when the first user gets connected to the master database and detached when the last user disconnects from the master database. In Classic Server architecture, every server process keeps an active connection to the replica database.
 
-Asynchronous replication requires setting up the journalling mechanism. The primary parameter is log\_directory which defines location of the replication journal. Once this location is specified, asynchronous replication is turned on and Firebird server starts producing the journal segments.
+Asynchronous replication requires setting up the journalling mechanism. The primary parameter is journal\_directory which defines location of the replication journal files (_aka_ segments). Once this location is specified, asynchronous replication is turned on and Firebird server starts producing the journal segments.
 
 Minimal configuration looks like this:
 
 database = /data/mydb.fdb  
 {  
-    log\_directory = /dblogs/mydb/  
-    log\_archive\_directory = /shiplogs/mydb/  
+    journal\_directory = /journal/mydb/  
+    journal\_archive\_directory = /archive/mydb/  
 }
 
-Archiving is performed by copying the segments from /dblogs/mydb/ to /shiplogs/mydb/, Firebird server copies the segments itself.
+Archiving is performed by copying the segments from /journal/mydb/ to /archive/mydb/, Firebird server copies the segments itself.
 
 The same with user-defined archiving:
 
 database = /data/mydb.fdb  
 {  
-    log\_directory = /dblogs/mydb/  
-    log\_archive\_directory = /shiplogs/mydb/  
-    log\_archive\_command = "test ! -f $\(archpathname\) && cp $\(logpathname\) $\(archpathname\)"  
+    journal\_directory = /journal/mydb/  
+    journal\_archive\_directory = /archive/mydb/  
+    journal\_archive\_command = "test ! -f $\(archivepathname\) && cp $\(pathname\) $\(archivepathname\)"  
 }
 
-Where $\(logpathname\) and $\(archpathname\) are built-in macros that provide the custom shell command with real file names.
+Where $\(pathname\) and $\(archivepathname\) are built-in macros that provide the custom shell command with real file names.
 
-Custom archiving \(log\_archive\_command setting\) allows to use any system shell command \(including scripts / batch files\) to deliver segments to the replica side. It could use compression, FTP, or whatever else available on the server. Actual transport implementation is up to DBA, Firebird just produces segments on the master side and expects them to appear at the replica side. If the replica storage can be remotely attached to the master host, it becomes just a matter of copying the segment files. In other cases, some transport solution is required.
+Custom archiving \(journal\_archive\_command setting\) allows to use any system shell command \(including scripts / batch files\) to deliver segments to the replica side. It could use compression, FTP, or whatever else available on the server. Actual transport implementation is up to DBA, Firebird just produces segments on the master side and expects them to appear at the replica side. If the replica storage can be remotely attached to the master host, it becomes just a matter of copying the segments. In other cases, some transport solution is required.
 
 The same with archiving performed every 10 seconds:
 
 database = /data/mydb.fdb  
 {  
-    log\_directory = /dblogs/mydb/  
-    log\_archive\_directory = /shiplogs/mydb/  
-    log\_archive\_command = "test ! -f $\(archpathname\) && cp $\(logpathname\) $\(archpathname\)"  
-    log\_archive\_timeout = 10  
+    journal\_directory = /journal/mydb/  
+    journal\_archive\_directory = /archive/mydb/  
+    journal\_archive\_command = "test ! -f $\(archivepathname\) && cp $\(pathname\) $\(archivepathname\)"  
+    journal\_archive\_timeout = 10  
 }
 
 Read replication.conf for other possible settings.
@@ -92,14 +92,14 @@ To apply the changed master-side settings, all users must be reconnected.
 
 ## Setting up the replica side
 
-The same replication.conf file is used. Setting log\_source\_directory specifies the location that Firebird server scans for the transmitted segments. Additionally, DBA may explicitly specify what source database is accepted for replication. Setting source\_guid is used for that purpose.
+The same replication.conf file is used. Setting journal\_source\_directory specifies the location that Firebird server scans for the transmitted segments. Additionally, DBA may explicitly specify what source database is accepted for replication. Setting source\_guid is used for that purpose.
 
 Sample configuration looks like this:
 
 database = /data/mydb.fdb  
 {  
-    log\_source\_directory = /incominglogs/  
-    source\_guid = {6F9619FF-8B86-D011-B42D-00CF4FC964FF}  
+    journal\_source\_directory = /incoming/  
+    source\_guid = "{6F9619FF-8B86-D011-B42D-00CF4FC964FF}"  
 }
 
 Read replication.conf for other possible settings.

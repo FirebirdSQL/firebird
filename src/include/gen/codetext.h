@@ -974,6 +974,8 @@ static const struct {
 	{"wrong_page", 335545270},
 	{"repl_error", 335545271},
 	{"ses_reset_failed", 335545272},
+	{"block_size", 335545273},
+	{"tom_key_length", 335545274},
 	{"gfix_db_name", 335740929},
 	{"gfix_invalid_sw", 335740930},
 	{"gfix_incmp_sw", 335740932},

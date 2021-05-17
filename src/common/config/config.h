@@ -30,6 +30,8 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../jrd/constants.h"
 
+#include <type_traits>
+
 /**
 	Since the original (isc.cpp) code wasn't able to provide powerful and
 	easy-to-use abilities to work with complex configurations, a decision
@@ -186,6 +188,7 @@ enum ConfigKey
 	KEY_DATA_TYPE_COMPATIBILITY,
 	KEY_USE_FILESYSTEM_CACHE,
 	KEY_INLINE_SORT_THRESHOLD,
+	KEY_TEMP_PAGESPACE_DIR,
 	MAX_CONFIG_KEY		// keep it last
 };
 
@@ -300,7 +303,8 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_BOOLEAN,	"ClearGTTAtRetaining",		false,	false},
 	{TYPE_STRING,	"DataTypeCompatibility",	false,	nullptr},
 	{TYPE_BOOLEAN,	"UseFileSystemCache",		false,	true},
-	{TYPE_INTEGER,	"InlineSortThreshold",		false,	1000}		// bytes
+	{TYPE_INTEGER,	"InlineSortThreshold",		false,	1000},		// bytes
+	{TYPE_STRING,	"TempTableDirectory",		false,	""}
 };
 
 
@@ -623,6 +627,8 @@ public:
 	bool getUseFileSystemCache(bool* pPresent = nullptr) const;
 
 	CONFIG_GET_PER_DB_KEY(ULONG, getInlineSortThreshold, KEY_INLINE_SORT_THRESHOLD, getInt);
+
+	CONFIG_GET_PER_DB_STR(getTempPageSpaceDirectory, KEY_TEMP_PAGESPACE_DIR);
 };
 
 // Implementation of interface to access master configuration file

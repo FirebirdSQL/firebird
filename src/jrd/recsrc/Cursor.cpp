@@ -281,8 +281,10 @@ bool Cursor::fetchAbsolute(thread_db* tdbb, SINT64 offset) const
 		return false;
 	}
 
-	const BufferedStream* const buffer = static_cast<const BufferedStream*>(m_top);
-	impure->irsb_position = (offset > 0) ? offset - 1 : buffer->getCount(tdbb) + offset;
+	const auto buffer = static_cast<const BufferedStream*>(m_top);
+	const auto count = buffer->getCount(tdbb);
+
+	impure->irsb_position = (offset > 0) ? offset - 1 : count + offset;
 	buffer->locate(tdbb, impure->irsb_position);
 
 	if (!buffer->getRecord(tdbb))
@@ -323,18 +325,28 @@ bool Cursor::fetchRelative(thread_db* tdbb, SINT64 offset) const
 		return (impure->irsb_state == POSITIONED);
 	}
 
-	if (impure->irsb_state == BOS && offset < 0)
+	const auto buffer = static_cast<const BufferedStream*>(m_top);
+	const auto count = buffer->getCount(tdbb);
+
+	if (impure->irsb_state == BOS)
 	{
-		return false;
+		if (offset < 0)
+			return false;
+
+		impure->irsb_position = offset - 1;
+	}
+	else if (impure->irsb_state == EOS)
+	{
+		if (offset > 0)
+			return false;
+
+		impure->irsb_position = count + offset;
+	}
+	else
+	{
+		impure->irsb_position += offset;
 	}
 
-	if (impure->irsb_state == EOS && offset > 0)
-	{
-		return false;
-	}
-
-	const BufferedStream* const buffer = static_cast<const BufferedStream*>(m_top);
-	impure->irsb_position += offset;
 	buffer->locate(tdbb, impure->irsb_position);
 
 	if (!buffer->getRecord(tdbb))

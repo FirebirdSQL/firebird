@@ -131,6 +131,8 @@ Usage:
    EXT_CONN_POOL_ACTIVE_COUNT   | Count of active connections, associated with pool
                                 |
    EXT_CONN_POOL_LIFETIME       | Idle connection lifetime, in seconds
+                                |
+   SESSION_TIMEZONE             | Current session time zone.
 
 Notes:
    To prevent DoS attacks against Firebird Server you are not allowed to have

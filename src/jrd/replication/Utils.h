@@ -34,24 +34,42 @@
 
 namespace Replication
 {
+	enum LogMsgSide
+	{
+		PRIMARY_SIDE = 0,
+		REPLICA_SIDE
+	};
+
 	enum LogMsgType
 	{
 		ERROR_MSG = 0,
 		WARNING_MSG,
-		VERBOSE_MSG,
-		DEBUG_MSG
+		VERBOSE_MSG
 	};
 
 	void raiseError(const char* msg, ...);
 	int executeShell(const Firebird::string& command);
 
-	void logOriginMessage(const Firebird::PathName& database,
-						  const Firebird::string& message,
-						  LogMsgType type);
+	void logPrimaryError(const Firebird::PathName& database,
+						 const Firebird::string& message);
 
-	void logReplicaMessage(const Firebird::PathName& database,
-						   const Firebird::string& message,
-						   LogMsgType type);
+	void logPrimaryWarning(const Firebird::PathName& database,
+						   const Firebird::string& message);
+
+	void logPrimaryStatus(const Firebird::PathName& database,
+						  const Firebird::CheckStatusWrapper* status);
+
+	void logReplicaError(const Firebird::PathName& database,
+						 const Firebird::string& message);
+
+	void logReplicaWarning(const Firebird::PathName& database,
+						   const Firebird::string& message);
+
+	void logReplicaStatus(const Firebird::PathName& database,
+						  const Firebird::CheckStatusWrapper* status);
+
+	void logReplicaVerbose(const Firebird::PathName& database,
+						   const Firebird::string& message);
 
 	class AutoFile
 	{

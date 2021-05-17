@@ -784,12 +784,23 @@ public:
 			iscLogException("MappingIpc: Cannot initialize the shared memory region", ex);
 			throw;
 		}
-		fb_assert(sharedMemory->getHeader()->mhb_header_version == MemoryHeader::HEADER_VERSION);
-		fb_assert(sharedMemory->getHeader()->mhb_version == MAPPING_VERSION);
-
-		Guard gShared(this);
 
 		MappingHeader* sMem = sharedMemory->getHeader();
+
+		if (sMem->mhb_type != SharedMemoryBase::SRAM_MAPPING_RESET ||
+			sMem->mhb_header_version != MemoryHeader::HEADER_VERSION ||
+			sMem->mhb_version != MAPPING_VERSION)
+		{
+			string err;
+			err.printf("MappingIpc: inconsistent shared memory type/version; found %d/%d:%d, expected %d/%d:%d",
+				sMem->mhb_type, sMem->mhb_header_version, sMem->mhb_version,
+				SharedMemoryBase::SRAM_MAPPING_RESET, MemoryHeader::HEADER_VERSION, MAPPING_VERSION);
+
+			sharedMemory = NULL;
+			(Arg::Gds(isc_random) << Arg::Str(err)).raise();
+		}
+
+		Guard gShared(this);
 
 		for (process = 0; process < sMem->processes; ++process)
 		{

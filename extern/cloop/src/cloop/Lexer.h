@@ -49,6 +49,7 @@ struct Token
 		TYPE_STRUCT,
 		TYPE_TYPEDEF,
 		TYPE_VERSION,
+		TYPE_ON_ERROR,
 		// types
 		TYPE_VOID,
 		TYPE_BOOLEAN,

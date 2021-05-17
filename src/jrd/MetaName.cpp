@@ -233,14 +233,14 @@ Dictionary::Word* Dictionary::get(const char* s, FB_SIZE_T len)
 	Word* newWord = nullptr;
 
 	// first of all get current hash table and entry appropriate for a string
-	HashTable* t = hashTable.load();
+	HashTable* t = hashTable.load(std::memory_order_acquire);
 	TableData* d = t->getEntryByHash(s, len);
 
 	// restart loop
 	for(;;)
 	{
 		// to be used if adding new word to hash later
-		Word* hashWord = d->load();
+		Word* hashWord = d->load(std::memory_order_acquire);
 
 		// try to find existing word
 		Word* word = hashWord;
@@ -331,8 +331,7 @@ Dictionary::Word* Dictionary::get(const char* s, FB_SIZE_T len)
 
 		// complete operation - try to replace hash pointer
 		newWord->next = hashWord;
-		if (d->compare_exchange_weak(hashWord, newWord,
-			std::memory_order_seq_cst, std::memory_order_relaxed))
+		if (d->compare_exchange_weak(hashWord, newWord, std::memory_order_release, std::memory_order_relaxed))
 		{
 			// very rare case - finally avoid having duplicates
 			if (!checkConsistency(t))
@@ -386,8 +385,8 @@ void Dictionary::growHash()
 	{
 		// detach list of words from old table in safe way
 		TableData* tableEntry = &tab->table[n];
-		Word* list = tableEntry->load();
-		while(!tableEntry->compare_exchange_weak(list, nullptr))
+		Word* list = tableEntry->load(std::memory_order_acquire);
+		while(!tableEntry->compare_exchange_weak(list, nullptr, std::memory_order_release, std::memory_order_acquire))
 			;		// empty body of the loop
 
 		// append detached list of words to new table word by word
@@ -431,6 +430,7 @@ Dictionary::HashTable* Dictionary::waitForMutex(Jrd::Dictionary::Word** checkWor
 		{
 			// successfully found same word in new table - use it
 			*checkWordPtr = word;
+			// no need performing any more ops with hash table
 			return nullptr;
 		}
 		word = word->next;
@@ -464,7 +464,7 @@ Dictionary::Word* Dictionary::Segment::getSpace(FB_SIZE_T len DIC_STAT_SEGMENT_P
 	len = getWordLength(len);
 
 	// get old position value
-	unsigned oldPos = position.load();
+	unsigned oldPos = position.load(std::memory_order_acquire);
 
 	// restart loop
 	for(;;)
@@ -475,7 +475,7 @@ Dictionary::Word* Dictionary::Segment::getSpace(FB_SIZE_T len DIC_STAT_SEGMENT_P
 			break;
 
 		// try to store it safely in segment header
-		if (position.compare_exchange_strong(oldPos, newPos))
+		if (position.compare_exchange_weak(oldPos, newPos, std::memory_order_release, std::memory_order_acquire))
 		{
 			return reinterpret_cast<Word*>(&buffer[oldPos]);
 		}

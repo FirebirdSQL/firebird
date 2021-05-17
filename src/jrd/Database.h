@@ -307,6 +307,8 @@ class Database : public pool_alloc<type_dbb>
 
 		~GlobalObjectHolder();
 
+		void shutdown();
+
 		LockManager* getLockManager();
 		EventManager* getEventManager();
 		Replication::Manager* getReplManager(bool create);
@@ -658,7 +660,8 @@ public:
 
 	const CoercionArray *getBindings() const;
 
-	void initGlobalObjectHolder(thread_db* tdbb);
+	void initGlobalObjects();
+	void shutdownGlobalObjects();
 
 	LockManager* lockManager()
 	{

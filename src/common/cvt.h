@@ -93,6 +93,7 @@ double CVT_get_double(const dsc*, Firebird::DecimalStatus, ErrorFunction, bool* 
 Firebird::Decimal64 CVT_get_dec64(const dsc*, Firebird::DecimalStatus, ErrorFunction);
 Firebird::Decimal128 CVT_get_dec128(const dsc*, Firebird::DecimalStatus, ErrorFunction);
 Firebird::Int128 CVT_get_int128(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
+Firebird::Int128 CVT_hex_to_int128(const char* str, USHORT len);
 USHORT CVT_make_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
 void CVT_make_null_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
 void CVT_move_common(const dsc*, dsc*, Firebird::DecimalStatus, Firebird::Callbacks*);

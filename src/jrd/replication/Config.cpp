@@ -24,9 +24,11 @@
 #include "../common/config/config_file.h"
 #include "../common/os/path_utils.h"
 #include "../common/isc_f_proto.h"
+#include "../common/status.h"
 #include "../common/StatusArg.h"
 #include "../jrd/constants.h"
 
+#include "Utils.h"
 #include "Config.h"
 
 #ifdef HAVE_UNISTD_H
@@ -50,10 +52,10 @@ namespace
 	const char* REPLICATION_CFGFILE = "replication.conf";
 
 	const ULONG DEFAULT_BUFFER_SIZE = 1024 * 1024; 				// 1 MB
-	const ULONG DEFAULT_LOG_SEGMENT_SIZE = 16 * 1024 * 1024;	// 16 MB
-	const ULONG DEFAULT_LOG_SEGMENT_COUNT = 8;
-	const ULONG DEFAULT_LOG_ARCHIVE_TIMEOUT = 60;				// seconds
-	const ULONG DEFAULT_LOG_GROUP_FLUSH_DELAY = 0;
+	const ULONG DEFAULT_SEGMENT_SIZE = 16 * 1024 * 1024;	// 16 MB
+	const ULONG DEFAULT_SEGMENT_COUNT = 8;
+	const ULONG DEFAULT_ARCHIVE_TIMEOUT = 60;				// seconds
+	const ULONG DEFAULT_GROUP_FLUSH_DELAY = 0;
 	const ULONG DEFAULT_APPLY_IDLE_TIMEOUT = 10;				// seconds
 	const ULONG DEFAULT_APPLY_ERROR_TIMEOUT = 60;				// seconds
 
@@ -73,9 +75,29 @@ namespace
 			output = false;
 	}
 
-	void raiseError(const char* msg)
+	void configError(const string& type, const string& key, const string& value)
 	{
-		(Arg::Gds(isc_random) << Arg::Str(msg)).raise();
+		string msg;
+		msg.printf("%s specifies %s: %s", key.c_str(), type.c_str(), value.c_str());
+		raiseError(msg.c_str());
+	}
+
+	void checkAccess(const PathName& path, const string& key)
+	{
+		if (path.hasData() && !PathUtils::canAccess(path, 6))
+			configError("missing or inaccessible directory", key, path.c_str());
+	}
+
+	void composeError(CheckStatusWrapper* status, const Exception& ex)
+	{
+		string prefix;
+		prefix.printf("Incorrect entry in %s", REPLICATION_CFGFILE);
+
+		Arg::StatusVector sv;
+		sv << Arg::Gds(isc_random) << Arg::Str(prefix);
+		sv << Arg::StatusVector(ex);
+
+		status->setErrors(sv.value());
 	}
 }
 
@@ -87,16 +109,16 @@ Config::Config()
 	  bufferSize(DEFAULT_BUFFER_SIZE),
 	  includeFilter(getPool()),
 	  excludeFilter(getPool()),
-	  logSegmentSize(DEFAULT_LOG_SEGMENT_SIZE),
-	  logSegmentCount(DEFAULT_LOG_SEGMENT_COUNT),
-	  logDirectory(getPool()),
-	  logFilePrefix(getPool()),
-	  logGroupFlushDelay(DEFAULT_LOG_GROUP_FLUSH_DELAY),
-	  logArchiveDirectory(getPool()),
-	  logArchiveCommand(getPool()),
-	  logArchiveTimeout(DEFAULT_LOG_ARCHIVE_TIMEOUT),
+	  segmentSize(DEFAULT_SEGMENT_SIZE),
+	  segmentCount(DEFAULT_SEGMENT_COUNT),
+	  journalDirectory(getPool()),
+	  filePrefix(getPool()),
+	  groupFlushDelay(DEFAULT_GROUP_FLUSH_DELAY),
+	  archiveDirectory(getPool()),
+	  archiveCommand(getPool()),
+	  archiveTimeout(DEFAULT_ARCHIVE_TIMEOUT),
 	  syncReplicas(getPool()),
-	  logSourceDirectory(getPool()),
+	  sourceDirectory(getPool()),
 	  sourceGuid{},
 	  verboseLogging(false),
 	  applyIdleTimeout(DEFAULT_APPLY_IDLE_TIMEOUT),
@@ -113,16 +135,16 @@ Config::Config(const Config& other)
 	  bufferSize(other.bufferSize),
 	  includeFilter(getPool(), other.includeFilter),
 	  excludeFilter(getPool(), other.excludeFilter),
-	  logSegmentSize(other.logSegmentSize),
-	  logSegmentCount(other.logSegmentCount),
-	  logDirectory(getPool(), other.logDirectory),
-	  logFilePrefix(getPool(), other.logFilePrefix),
-	  logGroupFlushDelay(other.logGroupFlushDelay),
-	  logArchiveDirectory(getPool(), other.logArchiveDirectory),
-	  logArchiveCommand(getPool(), other.logArchiveCommand),
-	  logArchiveTimeout(other.logArchiveTimeout),
+	  segmentSize(other.segmentSize),
+	  segmentCount(other.segmentCount),
+	  journalDirectory(getPool(), other.journalDirectory),
+	  filePrefix(getPool(), other.filePrefix),
+	  groupFlushDelay(other.groupFlushDelay),
+	  archiveDirectory(getPool(), other.archiveDirectory),
+	  archiveCommand(getPool(), other.archiveCommand),
+	  archiveTimeout(other.archiveTimeout),
 	  syncReplicas(getPool(), other.syncReplicas),
-	  logSourceDirectory(getPool(), other.logSourceDirectory),
+	  sourceDirectory(getPool(), other.sourceDirectory),
 	  sourceGuid{},
 	  verboseLogging(other.verboseLogging),
 	  applyIdleTimeout(other.applyIdleTimeout),
@@ -141,48 +163,52 @@ Config* Config::get(const PathName& lookupName)
 {
 	fb_assert(lookupName.hasData());
 
-	const PathName filename =
-		fb_utils::getPrefix(IConfigManager::DIR_CONF, REPLICATION_CFGFILE);
-
-	MemoryPool& pool = *getDefaultMemoryPool();
-
-	ConfigFile cfgFile(filename, ConfigFile::HAS_SUB_CONF | ConfigFile::NATIVE_ORDER | ConfigFile::CUSTOM_MACROS);
-
-	AutoPtr<Config> config(FB_NEW Config);
-
-	bool defaultFound = false, exactMatch = false;
-	const ConfigFile::Parameters& params = cfgFile.getParameters();
-	for (const auto& section : params)
+	try
 	{
-		if (section.name != "database")
-			raiseError("Unknown section found in the configuration file");
+		const PathName filename =
+			fb_utils::getPrefix(IConfigManager::DIR_CONF, REPLICATION_CFGFILE);
 
-		PathName dbName(section.value.c_str());
+		MemoryPool& pool = *getDefaultMemoryPool();
 
-		if (dbName.empty())
+		ConfigFile cfgFile(filename, ConfigFile::HAS_SUB_CONF |
+									 ConfigFile::NATIVE_ORDER |
+									 ConfigFile::CUSTOM_MACROS);
+
+		AutoPtr<Config> config(FB_NEW Config);
+
+		bool defaultFound = false, exactMatch = false;
+
+		for (const auto& section : cfgFile.getParameters())
 		{
-			if (defaultFound)
-				raiseError("Only one default DATABASE section is allowed");
-
-			defaultFound = true;
-		}
-		else
-		{
-			PathUtils::fixupSeparators(dbName);
-			ISC_expand_filename(dbName, true);
-
-			if (dbName != lookupName)
+			if (section.name != "database")
 				continue;
 
-			config->dbName = dbName;
+			PathName dbName(section.value.c_str());
 
-			exactMatch = true;
-		}
+			if (dbName.empty())
+			{
+				if (defaultFound)
+					raiseError("Only one default DATABASE section is allowed");
 
-		if (section.sub)
-		{
-			const ConfigFile::Parameters& elements = section.sub->getParameters();
-			for (const auto& el : elements)
+				defaultFound = true;
+			}
+			else
+			{
+				PathUtils::fixupSeparators(dbName);
+				ISC_expand_filename(dbName, true);
+
+				if (dbName != lookupName)
+					continue;
+
+				config->dbName = dbName;
+
+				exactMatch = true;
+			}
+
+			if (!section.sub)
+				continue;
+
+			for (const auto& el : section.sub->getParameters())
 			{
 				const string key(el.name.c_str());
 				string value(el.value);
@@ -208,39 +234,41 @@ Config* Config::get(const PathName& lookupName)
 					ISC_systemToUtf8(value);
 					config->excludeFilter = value;
 				}
-				else if (key == "log_segment_size")
+				else if (key == "journal_segment_size")
 				{
-					parseLong(value, config->logSegmentSize);
+					parseLong(value, config->segmentSize);
 				}
-				else if (key == "log_segment_count")
+				else if (key == "journal_segment_count")
 				{
-					parseLong(value, config->logSegmentCount);
+					parseLong(value, config->segmentCount);
 				}
-				else if (key == "log_directory")
+				else if (key == "journal_directory")
 				{
-					config->logDirectory = value.c_str();
-					PathUtils::ensureSeparator(config->logDirectory);
+					config->journalDirectory = value.c_str();
+					PathUtils::ensureSeparator(config->journalDirectory);
+					checkAccess(config->journalDirectory, key);
 				}
-				else if (key == "log_file_prefix")
+				else if (key == "journal_file_prefix")
 				{
-					config->logFilePrefix = value.c_str();
+					config->filePrefix = value.c_str();
 				}
-				else if (key == "log_group_flush_delay")
+				else if (key == "journal_group_flush_delay")
 				{
-					parseLong(value, config->logGroupFlushDelay);
+					parseLong(value, config->groupFlushDelay);
 				}
-				else if (key == "log_archive_directory")
+				else if (key == "journal_archive_directory")
 				{
-					config->logArchiveDirectory = value.c_str();
-					PathUtils::ensureSeparator(config->logArchiveDirectory);
+					config->archiveDirectory = value.c_str();
+					PathUtils::ensureSeparator(config->archiveDirectory);
+					checkAccess(config->archiveDirectory, key);
 				}
-				else if (key == "log_archive_command")
+				else if (key == "journal_archive_command")
 				{
-					config->logArchiveCommand = value.c_str();
+					config->archiveCommand = value.c_str();
 				}
-				else if (key == "log_archive_timeout")
+				else if (key == "journal_archive_timeout")
 				{
-					parseLong(value, config->logArchiveTimeout);
+					parseLong(value, config->archiveTimeout);
 				}
 				else if (key == "plugin")
 				{
@@ -259,28 +287,36 @@ Config* Config::get(const PathName& lookupName)
 					parseBoolean(value, config->disableOnError);
 				}
 			}
+
+			if (exactMatch)
+				break;
 		}
 
-		if (exactMatch)
-			break;
-	}
+		// TODO: As soon as plugin name is moved into RDB$PUBLICATIONS,
+		// delay config parse until real replication start
+		if (config->pluginName.hasData())
+			return config.release();
 
-	// TODO: As soon as plugin name is moved into RDB$PUBLICATIONS delay config parse until real replication start
-	if (config->pluginName.hasData())
-		return config.release();
-
-	if (config->logDirectory.hasData() || config->syncReplicas.hasData())
-	{
-		// If log_directory is specified, then replication is enabled
-
-		if (config->logFilePrefix.isEmpty())
+		if (config->journalDirectory.hasData() || config->syncReplicas.hasData())
 		{
-			PathName db_directory, db_filename;
-			PathUtils::splitLastComponent(db_directory, db_filename, config->dbName);
-			config->logFilePrefix = db_filename;
-		}
+			// If log_directory is specified, then replication is enabled
 
-		return config.release();
+			if (config->filePrefix.isEmpty())
+			{
+				PathName db_directory, db_filename;
+				PathUtils::splitLastComponent(db_directory, db_filename, config->dbName);
+				config->filePrefix = db_filename;
+			}
+
+			return config.release();
+		}
+	}
+	catch (const Exception& ex)
+	{
+		FbLocalStatus localStatus;
+		composeError(&localStatus, ex);
+
+		logPrimaryStatus(lookupName, &localStatus);
 	}
 
 	return nullptr;
@@ -291,34 +327,50 @@ Config* Config::get(const PathName& lookupName)
 
 void Config::enumerate(Firebird::Array<Config*>& replicas)
 {
-	const PathName filename =
-		fb_utils::getPrefix(IConfigManager::DIR_CONF, REPLICATION_CFGFILE);
+	PathName dbName;
 
-	MemoryPool& pool = *getDefaultMemoryPool();
-
-	ConfigFile cfgFile(filename, ConfigFile::HAS_SUB_CONF | ConfigFile::NATIVE_ORDER | ConfigFile::CUSTOM_MACROS);
-
-	AutoPtr<Config> defConfig(FB_NEW Config);
-
-	bool defaultFound = false, exactMatch = false;
-	const ConfigFile::Parameters& params = cfgFile.getParameters();
-	for (const auto& section : params)
+	try
 	{
-		if (section.name != "database")
-			raiseError("Unknown section found in the configuration file");
+		const PathName filename =
+			fb_utils::getPrefix(IConfigManager::DIR_CONF, REPLICATION_CFGFILE);
 
-		PathName dbName(section.value.c_str());
+		MemoryPool& pool = *getDefaultMemoryPool();
 
-		AutoPtr<Config> dbConfig;
-		if (!dbName.isEmpty())
-			dbConfig = FB_NEW Config(*defConfig);
+		ConfigFile cfgFile(filename, ConfigFile::HAS_SUB_CONF |
+									 ConfigFile::NATIVE_ORDER |
+									 ConfigFile::CUSTOM_MACROS);
 
-		Config* const config = dbName.isEmpty() ? defConfig : dbConfig;
+		AutoPtr<Config> defConfig(FB_NEW Config);
 
-		if (section.sub)
+		bool defaultFound = false, exactMatch = false;
+
+		for (const auto& section : cfgFile.getParameters())
 		{
-			const ConfigFile::Parameters& elements = section.sub->getParameters();
-			for (const auto& el : elements)
+			if (section.name != "database")
+				continue;
+
+			AutoPtr<Config> dbConfig;
+			Config* config = nullptr;
+
+			dbName = section.value.c_str();
+
+			if (dbName.empty())
+			{
+				if (defaultFound)
+					raiseError("Only one default DATABASE section is allowed");
+
+				defaultFound = true;
+				config = defConfig;
+			}
+			else
+			{
+				config = dbConfig = FB_NEW Config(*defConfig);
+			}
+
+			if (!section.sub)
+				continue;
+
+			for (const auto& el : section.sub->getParameters())
 			{
 				const string key(el.name.c_str());
 				string value(el.value);
@@ -326,14 +378,16 @@ void Config::enumerate(Firebird::Array<Config*>& replicas)
 				if (value.isEmpty())
 					continue;
 
-				if (key == "log_source_directory")
+				if (key == "journal_source_directory")
 				{
-					config->logSourceDirectory = value.c_str();
-					PathUtils::ensureSeparator(config->logSourceDirectory);
+					config->sourceDirectory = value.c_str();
+					PathUtils::ensureSeparator(config->sourceDirectory);
+					checkAccess(config->sourceDirectory, key);
 				}
 				else if (key == "source_guid")
 				{
-					StringToGuid(&config->sourceGuid, value.c_str());
+					if (!StringToGuid(&config->sourceGuid, value.c_str()))
+						configError("invalid (misformatted) value", key, value);
 				}
 				else if (key == "verbose_logging")
 				{
@@ -348,27 +402,24 @@ void Config::enumerate(Firebird::Array<Config*>& replicas)
 					parseLong(value, config->applyErrorTimeout);
 				}
 			}
-		}
 
-		if (dbName.empty())
-		{
-			if (defaultFound)
-				raiseError("Only one default DATABASE section is allowed");
+			if (dbName.hasData() && config->sourceDirectory.hasData())
+			{
+				// If source_directory is specified, then replication is enabled
 
-			defaultFound = true;
-			continue;
-		}
+				PathUtils::fixupSeparators(dbName);
+				ISC_expand_filename(dbName, true);
 
-		if (config->logSourceDirectory.hasData())
-		{
-			// If source_directory is specified, then replication is enabled
-
-			PathUtils::fixupSeparators(dbName);
-			ISC_expand_filename(dbName, true);
-
-			config->dbName = dbName;
-			replicas.add(dbConfig.release());
+				config->dbName = dbName;
+				replicas.add(dbConfig.release());
+			}
 		}
 	}
+	catch (const Exception& ex)
+	{
+		FbLocalStatus localStatus;
+		composeError(&localStatus, ex);
 
+		logReplicaStatus(dbName, &localStatus);
+	}
 }

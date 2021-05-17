@@ -25,6 +25,7 @@
 #define JRD_SORT_H
 
 #include "../include/fb_blk.h"
+#include "../common/DecFloat.h"
 #include "../jrd/TempSpace.h"
 
 namespace Jrd {
@@ -169,16 +170,22 @@ public:
 
 	USHORT getSkdLength() const { return skd_length; }
 
-	void setSkdLength(UCHAR dtype, USHORT v)
+	void setSkdLength(UCHAR dtype, USHORT dscLength)
 	{
 		skd_dtype = dtype;
-		skd_length = v;
+
 		switch (dtype)
 		{
 		case SKD_dec64:
-		case SKD_dec128:
-			skd_length += sizeof(SLONG);
+			fb_assert(dscLength == sizeof(Firebird::Decimal64));
+			skd_length = Firebird::Decimal64::getKeyLength();
 			break;
+		case SKD_dec128:
+			fb_assert(dscLength == sizeof(Firebird::Decimal128));
+			skd_length = Firebird::Decimal128::getKeyLength();
+			break;
+		default:
+			skd_length = dscLength;
 		}
 	}
 

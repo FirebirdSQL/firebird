@@ -41,6 +41,7 @@ class StableAttachmentPart;
 class Attachment;
 class Service;
 class UserId;
+class Applier;
 
 // forward declarations
 class JStatement;
@@ -200,6 +201,7 @@ public:
 	unsigned getBlobAlignment(Firebird::CheckStatusWrapper* status) override;
 	Firebird::IMessageMetadata* getMetadata(Firebird::CheckStatusWrapper* status) override;
 	void setDefaultBpb(Firebird::CheckStatusWrapper* status, unsigned parLength, const unsigned char* par) override;
+	void close(Firebird::CheckStatusWrapper* status) override;
 
 public:
 	JBatch(DsqlBatch* handle, JStatement* aStatement, Firebird::IMessageMetadata* aMetadata);
@@ -234,19 +236,25 @@ public:
 	void close(Firebird::CheckStatusWrapper* status) override;
 
 public:
-	JReplicator(StableAttachmentPart* sa);
+	JReplicator(Applier* appl, StableAttachmentPart* sa);
 
 	StableAttachmentPart* getAttachment()
 	{
 		return sAtt;
 	}
 
-	JReplicator* getHandle() throw()
+	Applier* getHandle() throw()
 	{
-		return this;
+		return applier;
+	}
+
+	void resetHandle()
+	{
+		applier = NULL;
 	}
 
 private:
+	Applier* applier;
 	Firebird::RefPtr<StableAttachmentPart> sAtt;
 
 	void freeEngineData(Firebird::CheckStatusWrapper* status);

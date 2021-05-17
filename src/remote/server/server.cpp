@@ -44,7 +44,6 @@
 #include "../remote/parse_proto.h"
 #include "../remote/remot_proto.h"
 #include "../remote/server/serve_proto.h"
-#include "../common/xdr_proto.h"
 #ifdef WIN_NT
 #include "../../remote/server/os/win32/cntl_proto.h"
 #include <stdlib.h>
@@ -2926,7 +2925,7 @@ void rem_port::disconnect(PACKET* sendL, PACKET* receiveL)
 	}
 
 	this->port_flags |= PORT_disconnect;
-	this->port_flags &= ~PORT_z_data;
+	this->port_z_data = false;
 
 	if (!rdb)
 	{
@@ -3685,7 +3684,7 @@ void rem_port::batch_exec(P_BATCH_EXEC* batch, PACKET* sendL)
 }
 
 
-void rem_port::batch_rls(P_BATCH_FREE* batch, PACKET* sendL)
+void rem_port::batch_rls(P_BATCH_FREE_CANCEL* batch, PACKET* sendL)
 {
 	LocalStatus ls;
 	CheckStatusWrapper status_vector(&ls);
@@ -3699,6 +3698,22 @@ void rem_port::batch_rls(P_BATCH_FREE* batch, PACKET* sendL)
 	statement->rsr_batch = nullptr;
 
 	this->send_response(sendL, 0, 0, &status_vector, true);
+}
+
+
+void rem_port::batch_cancel(P_BATCH_FREE_CANCEL* batch, PACKET* sendL)
+{
+	LocalStatus ls;
+	CheckStatusWrapper status_vector(&ls);
+
+	Rsr* statement;
+	getHandle(statement, batch->p_batch_statement);
+	statement->checkIface();
+	statement->checkBatch();
+
+	statement->rsr_batch->cancel(&status_vector);
+
+	this->send_response(sendL, 0, 0, &status_vector, false);
 }
 
 
@@ -4970,7 +4985,11 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 			break;
 
 		case op_batch_rls:
-			port->batch_rls(&receive->p_batch_free, sendL);
+			port->batch_rls(&receive->p_batch_free_cancel, sendL);
+			break;
+
+		case op_batch_cancel:
+			port->batch_cancel(&receive->p_batch_free_cancel, sendL);
 			break;
 
 		case op_batch_blob_stream:
@@ -6637,7 +6656,7 @@ SSHORT rem_port::asyncReceive(PACKET* asyncPacket, const UCHAR* buffer, SSHORT d
 		return 0;
 	}
 
-	SLONG original_op = xdr_peek_long(&port_async_receive->port_receive, buffer, dataSize);
+	SLONG original_op = xdr_peek_long(port_async_receive->port_receive, buffer, dataSize);
 
 	switch (original_op)
 	{
@@ -6654,7 +6673,7 @@ SSHORT rem_port::asyncReceive(PACKET* asyncPacket, const UCHAR* buffer, SSHORT d
 		MutexLockGuard guard(mutex, FB_FUNCTION);
 
 		port_async_receive->clearRecvQue();
-		port_async_receive->port_receive.x_handy = 0;
+		port_async_receive->port_receive->x_handy = 0;
 		port_async_receive->port_protocol = port_protocol;
 		memcpy(port_async_receive->port_queue.add().getBuffer(dataSize), buffer, dataSize);
 
@@ -6663,7 +6682,7 @@ SSHORT rem_port::asyncReceive(PACKET* asyncPacket, const UCHAR* buffer, SSHORT d
 		port_async_receive->receive(asyncPacket);
 	}
 
-	const SSHORT asyncSize = dataSize - port_async_receive->port_receive.x_handy;
+	const SSHORT asyncSize = dataSize - port_async_receive->port_receive->x_handy;
 	fb_assert(asyncSize >= 0);
 
 	switch (asyncPacket->p_operation)

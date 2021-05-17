@@ -977,6 +977,8 @@ Data source : @4"},		/* eds_statement */
 	{335545270, "RDB$PAGES written by non-system transaction, DB appears to be damaged"},		/* wrong_page */
 	{335545271, "Replication error"},		/* repl_error */
 	{335545272, "Reset of user session failed. Connection is shut down."},		/* ses_reset_failed */
+	{335545273, "File size is less than expected"},		/* block_size */
+	{335545274, "Invalid key length @1, need >@2"},		/* tom_key_length */
 	{335740929, "data base file name (@1) already given"},		/* gfix_db_name */
 	{335740930, "invalid switch @1"},		/* gfix_invalid_sw */
 	{335740932, "incompatible switch combination"},		/* gfix_incmp_sw */

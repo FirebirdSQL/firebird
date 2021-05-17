@@ -48,42 +48,42 @@
 using namespace Firebird;
 
 #ifdef DEBUG_XDR_MEMORY
-inline bool_t P_TRUE(XDR* xdrs, PACKET* p)
+inline bool_t P_TRUE(RemoteXdr* xdrs, PACKET* p)
 {
 	return xdr_debug_packet(xdrs, XDR_FREE, p);
 }
-inline bool_t P_FALSE(XDR* xdrs, PACKET* p)
+inline bool_t P_FALSE(RemoteXdr* xdrs, PACKET* p)
 {
 	return !xdr_debug_packet(xdrs, XDR_FREE, p);
 }
-inline void DEBUG_XDR_PACKET(XDR* xdrs, PACKET* p)
+inline void DEBUG_XDR_PACKET(RemoteXdr* xdrs, PACKET* p)
 {
 	xdr_debug_packet(xdrs, XDR_DECODE, p);
 }
-inline void DEBUG_XDR_ALLOC(XDR* xdrs, const void* xdrvar, const void* addr, ULONG len)
+inline void DEBUG_XDR_ALLOC(RemoteXdr* xdrs, const void* xdrvar, const void* addr, ULONG len)
 {
 	xdr_debug_memory(xdrs, XDR_DECODE, xdrvar, addr, len);
 }
-inline void DEBUG_XDR_FREE(XDR* xdrs, const void* xdrvar, const void* addr, ULONG len)
+inline void DEBUG_XDR_FREE(RemoteXdr* xdrs, const void* xdrvar, const void* addr, ULONG len)
 {
 	xdr_debug_memory(xdrs, XDR_DECODE, xdrvar, addr, len);
 }
 #else
-inline bool_t P_TRUE(XDR*, PACKET*)
+inline bool_t P_TRUE(RemoteXdr*, PACKET*)
 {
 	return TRUE;
 }
-inline bool_t P_FALSE(XDR* xdrs, PACKET*)
+inline bool_t P_FALSE(RemoteXdr* xdrs, PACKET*)
 {
 	return FALSE;
 }
-inline void DEBUG_XDR_PACKET(XDR*, PACKET*)
+inline void DEBUG_XDR_PACKET(RemoteXdr*, PACKET*)
 {
 }
-inline void DEBUG_XDR_ALLOC(XDR*, const void*, const void*, ULONG)
+inline void DEBUG_XDR_ALLOC(RemoteXdr*, const void*, const void*, ULONG)
 {
 }
-inline void DEBUG_XDR_FREE(XDR*, const void*, const void*, ULONG)
+inline void DEBUG_XDR_FREE(RemoteXdr*, const void*, const void*, ULONG)
 {
 }
 #endif // DEBUG_XDR_MEMORY
@@ -99,32 +99,32 @@ enum SQL_STMT_TYPE
 	TYPE_PREPARED
 };
 
-static bool alloc_cstring(XDR*, CSTRING*);
-static void free_cstring(XDR*, CSTRING*);
-static void reset_statement(XDR*, SSHORT);
-static bool_t xdr_cstring(XDR*, CSTRING*);
-static inline bool_t xdr_cstring_const(XDR*, CSTRING_CONST*);
+static bool alloc_cstring(RemoteXdr*, CSTRING*);
+static void free_cstring(RemoteXdr*, CSTRING*);
+static void reset_statement(RemoteXdr*, SSHORT);
+static bool_t xdr_cstring(RemoteXdr*, CSTRING*);
+static bool_t xdr_response(RemoteXdr*, CSTRING*);
+static bool_t xdr_cstring_with_limit(RemoteXdr*, CSTRING*, ULONG);
+static inline bool_t xdr_cstring_const(RemoteXdr*, CSTRING_CONST*);
 #ifdef DEBUG_XDR_MEMORY
-static bool_t xdr_debug_packet(XDR*, enum xdr_op, PACKET*);
+static bool_t xdr_debug_packet(RemoteXdr*, enum xdr_op, PACKET*);
 #endif
-static bool_t xdr_longs(XDR*, CSTRING*);
-static bool_t xdr_message(XDR*, RMessage*, const rem_fmt*);
-static bool_t xdr_packed_message(XDR*, RMessage*, const rem_fmt*);
-static bool_t xdr_request(XDR*, USHORT, USHORT, USHORT);
-static bool_t xdr_slice(XDR*, lstring*, /*USHORT,*/ const UCHAR*);
-static bool_t xdr_status_vector(XDR*, DynamicStatusVector*&);
-static bool_t xdr_sql_blr(XDR*, SLONG, CSTRING*, bool, SQL_STMT_TYPE);
-static bool_t xdr_sql_message(XDR*, SLONG);
-static bool_t xdr_trrq_blr(XDR*, CSTRING*);
-static bool_t xdr_trrq_message(XDR*, USHORT);
-static bool_t xdr_bytes(XDR*, void*, ULONG);
-static bool_t xdr_blob_stream(XDR*, SSHORT, CSTRING*);
-static Rsr* getStatement(XDR*, USHORT);
+static bool_t xdr_longs(RemoteXdr*, CSTRING*);
+static bool_t xdr_message(RemoteXdr*, RMessage*, const rem_fmt*);
+static bool_t xdr_packed_message(RemoteXdr*, RMessage*, const rem_fmt*);
+static bool_t xdr_request(RemoteXdr*, USHORT, USHORT, USHORT);
+static bool_t xdr_slice(RemoteXdr*, lstring*, /*USHORT,*/ const UCHAR*);
+static bool_t xdr_status_vector(RemoteXdr*, DynamicStatusVector*&);
+static bool_t xdr_sql_blr(RemoteXdr*, SLONG, CSTRING*, bool, SQL_STMT_TYPE);
+static bool_t xdr_sql_message(RemoteXdr*, SLONG);
+static bool_t xdr_trrq_blr(RemoteXdr*, CSTRING*);
+static bool_t xdr_trrq_message(RemoteXdr*, USHORT);
+static bool_t xdr_bytes(RemoteXdr*, void*, ULONG);
+static bool_t xdr_blob_stream(RemoteXdr*, SSHORT, CSTRING*);
+static Rsr* getStatement(RemoteXdr*, USHORT);
 
 
-#include "../common/xdr_proto.h"
-
-inline void fixupLength(const XDR* xdrs, ULONG& length)
+inline void fixupLength(const RemoteXdr* xdrs, ULONG& length)
 {
 	// If the short (16-bit) value >= 32KB is being transmitted,
 	// it gets expanded to long (32-bit) with a sign bit propagated.
@@ -139,7 +139,7 @@ inline void fixupLength(const XDR* xdrs, ULONG& length)
 
 #ifdef DEBUG
 static ULONG xdr_save_size = 0;
-inline void DEBUG_PRINTSIZE(XDR* xdrs, P_OP p)
+inline void DEBUG_PRINTSIZE(RemoteXdr* xdrs, P_OP p)
 {
 	fprintf (stderr, "xdr_protocol: %s op %d size %lu\n",
 		((xdrs->x_op == XDR_FREE)   ? "free" :
@@ -149,14 +149,14 @@ inline void DEBUG_PRINTSIZE(XDR* xdrs, P_OP p)
 			(xdrs->x_handy - xdr_save_size) : (xdr_save_size - xdrs->x_handy)));
 }
 #else
-inline void DEBUG_PRINTSIZE(XDR*, P_OP)
+inline void DEBUG_PRINTSIZE(RemoteXdr*, P_OP)
 {
 }
 #endif
 
 
 #ifdef DEBUG_XDR_MEMORY
-void xdr_debug_memory(XDR* xdrs,
+void xdr_debug_memory(RemoteXdr* xdrs,
 					  enum xdr_op xop,
 					  const void* xdrvar, const void* address, ULONG length)
 {
@@ -167,13 +167,13 @@ void xdr_debug_memory(XDR* xdrs,
  **************************************
  *
  * Functional description
- *	Track memory allocation patterns of XDR aggregate
+ *	Track memory allocation patterns of RemoteXdr aggregate
  *	types (i.e. xdr_cstring, xdr_string, etc.) to
  *	validate that memory is not leaked by overwriting
- *	XDR aggregate pointers and that freeing a packet
+ *	RemoteXdr aggregate pointers and that freeing a packet
  *	with REMOTE_free_packet() does not miss anything.
  *
- *	All memory allocations due to marshalling XDR
+ *	All memory allocations due to marshalling RemoteXdr
  *	variables are recorded in a debug memory alloca-
  *	tion table stored at the front of a packet.
  *
@@ -183,18 +183,18 @@ void xdr_debug_memory(XDR* xdrs,
  *	allocation being freed cannot be found. At most
  *	P_MALLOC_SIZE entries can be stored in the memory
  *	allocation table. A rough estimate of the number
- *	of XDR aggregates that can hang off a packet can
+ *	of RemoteXdr aggregates that can hang off a packet can
  *	be obtained by examining the subpackets defined
  *	in <remote/protocol.h>: A guestimate of 36 at this
  *	time includes 10 strings used to decode an xdr
  *	status vector.
  *
  **************************************/
-	rem_port* port = (rem_port*) xdrs->x_public;
+	rem_port* port = xdrs->x_public;
 	fb_assert(port != 0);
 	fb_assert(port->port_header.blk_type == type_port);
 
-	// Compare the XDR variable address with the lower and upper bounds
+	// Compare the RemoteXdr variable address with the lower and upper bounds
 	// of each packet to determine which packet contains it. Record or
 	// delete an entry in that packet's memory allocation table.
 
@@ -251,7 +251,7 @@ void xdr_debug_memory(XDR* xdrs,
 #endif
 
 
-bool_t xdr_protocol(XDR* xdrs, PACKET* p)
+bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 {
 /**************************************
  *
@@ -295,8 +295,11 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 		return P_FALSE(xdrs, p);
 
 #if COMPRESS_DEBUG > 1
-	fprintf(stderr, "operation=%d %c\n", p->p_operation,
-		xdrs->x_op == XDR_ENCODE ? 'E' : xdrs->x_op == XDR_DECODE ? 'D' : xdrs->x_op == XDR_FREE ? 'F' : 'U');
+	if (xdrs->x_op != XDR_FREE)
+	{
+		fprintf(stderr, "operation=%d %c\n", p->p_operation,
+			xdrs->x_op == XDR_ENCODE ? 'E' : xdrs->x_op == XDR_DECODE ? 'D' : xdrs->x_op == XDR_FREE ? 'F' : 'U');
+	}
 #endif
 
 	switch (p->p_operation)
@@ -431,7 +434,7 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 		response = &p->p_resp;
 		MAP(xdr_short, reinterpret_cast<SSHORT&>(response->p_resp_object));
 		MAP(xdr_quad, response->p_resp_blob_id);
-		MAP(xdr_cstring, response->p_resp_data);
+		MAP(xdr_response, response->p_resp_data);
 		return xdr_status_vector(xdrs, response->p_resp_status_vector) ?
 								 	P_TRUE(xdrs, p) : P_FALSE(xdrs, p);
 
@@ -656,7 +659,7 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 			MAP(xdr_short, reinterpret_cast<SSHORT&>(sqldata->p_sqldata_out_message_number));
 		}
 		{ // scope
-			rem_port* port = (rem_port*) xdrs->x_public;
+			rem_port* port = xdrs->x_public;
 			if (port->port_protocol >= PROTOCOL_STMT_TOUT)
 				MAP(xdr_u_long, sqldata->p_sqldata_timeout);
 		}
@@ -816,7 +819,7 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 			P_CRYPT_CALLBACK* cc = &p->p_cc;
 			MAP(xdr_cstring, cc->p_cc_data);
 
-			rem_port* port = (rem_port*) xdrs->x_public;
+			rem_port* port = xdrs->x_public;
 			// If the protocol is 0 we are in the process of establishing a connection.
 			// crypt_key_callback at this phaze means server protocol is at least P15
 			if (port->port_protocol >= PROTOCOL_VERSION14 || port->port_protocol == 0)
@@ -852,7 +855,7 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 				return P_TRUE(xdrs, p);
 			}
 
-			rem_port* port = (rem_port*) xdrs->x_public;
+			rem_port* port = xdrs->x_public;
 			SSHORT statement_id = b->p_batch_statement;
 			Rsr* statement;
 			if (statement_id >= 0)
@@ -929,7 +932,7 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 			if (xdrs->x_op == XDR_FREE)
 				return P_TRUE(xdrs, p);
 
-			rem_port* port = (rem_port*) xdrs->x_public;
+			rem_port* port = xdrs->x_public;
 			SSHORT statement_id = b->p_batch_statement;
 			DEB_RBATCH(fprintf(stderr, "BatRem: xdr CS %d\n", statement_id));
 			Rsr* statement;
@@ -1054,12 +1057,13 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 		}
 
 	case op_batch_rls:
+	case op_batch_cancel:
 		{
-			P_BATCH_FREE* b = &p->p_batch_free;
+			P_BATCH_FREE_CANCEL* b = &p->p_batch_free_cancel;
 			MAP(xdr_short, reinterpret_cast<SSHORT&>(b->p_batch_statement));
 
 			if (xdrs->x_op != XDR_FREE)
-				DEB_RBATCH(fprintf(stderr, "BatRem: xdr release\n"));
+				DEB_RBATCH(fprintf(stderr, "BatRem: xdr release/cancel %d\n", p->p_operation));
 
 			return P_TRUE(xdrs, p);
 		}
@@ -1124,17 +1128,17 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 }
 
 
-static bool_t xdr_bytes(XDR* xdrs, void* bytes, ULONG size)
+static bool_t xdr_bytes(RemoteXdr* xdrs, void* bytes, ULONG size)
 {
 	switch (xdrs->x_op)
 	{
 	case XDR_ENCODE:
-		if (!xdrs->x_ops->x_putbytes(xdrs, reinterpret_cast<const SCHAR*>(bytes), size))
+		if (!xdrs->x_putbytes(reinterpret_cast<const SCHAR*>(bytes), size))
 			return FALSE;
 		break;
 
 	case XDR_DECODE:
-		if (!xdrs->x_ops->x_getbytes(xdrs, reinterpret_cast<SCHAR*>(bytes), size))
+		if (!xdrs->x_getbytes(reinterpret_cast<SCHAR*>(bytes), size))
 			return FALSE;
 		break;
 	}
@@ -1201,7 +1205,7 @@ ULONG xdr_protocol_overhead(P_OP op)
 }
 
 
-static bool alloc_cstring(XDR* xdrs, CSTRING* cstring)
+static bool alloc_cstring(RemoteXdr* xdrs, CSTRING* cstring)
 {
 /**************************************
  *
@@ -1247,7 +1251,7 @@ static bool alloc_cstring(XDR* xdrs, CSTRING* cstring)
 }
 
 
-static void free_cstring( XDR* xdrs, CSTRING* cstring)
+static void free_cstring( RemoteXdr* xdrs, CSTRING* cstring)
 {
 /**************************************
  *
@@ -1271,6 +1275,13 @@ static void free_cstring( XDR* xdrs, CSTRING* cstring)
 }
 
 
+static bool xdr_is_client(RemoteXdr* xdrs)
+{
+	const rem_port* port = xdrs->x_public;
+	return !(port->port_flags & PORT_server);
+}
+
+
 // CVC: This function is a little stub to validate that indeed, bpb's aren't
 // overwritten by accident. Even though xdr_string writes to cstr_address,
 // an action we wanted to block, it first allocates a new buffer.
@@ -1281,21 +1292,41 @@ static void free_cstring( XDR* xdrs, CSTRING* cstring)
 // Changing CSTRING to use cstr_address as const pointer would upset other
 // places of the code, so only P_BLOB was changed to use CSTRING_CONST.
 // The same function is being used to check P_SGMT & P_DDL.
-static inline bool_t xdr_cstring_const(XDR* xdrs, CSTRING_CONST* cstring)
+static inline bool_t xdr_cstring_const(RemoteXdr* xdrs, CSTRING_CONST* cstring)
 {
-#ifdef DEV_BUILD
-	if (xdrs->x_client)
+	if (xdr_is_client(xdrs) && xdrs->x_op == XDR_DECODE)
 	{
-		const bool cond =
-			!(xdrs->x_op == XDR_DECODE &&
-				cstring->cstr_length <= cstring->cstr_allocated && cstring->cstr_allocated);
-		fb_assert(cond);
+		fb_assert(!(cstring->cstr_length <= cstring->cstr_allocated && cstring->cstr_allocated));
+
+		if (!cstring->cstr_allocated)
+		{
+			// Normally we should not decode into such CSTRING_CONST at client side
+			// May be op, normally never sent to client, was received
+			cstring->cstr_address = nullptr;
+			cstring->cstr_length = 0;
+		}
 	}
-#endif
 	return xdr_cstring(xdrs, reinterpret_cast<CSTRING*>(cstring));
 }
 
-static bool_t xdr_cstring( XDR* xdrs, CSTRING* cstring)
+static inline bool_t xdr_response(RemoteXdr* xdrs, CSTRING* cstring)
+{
+	if (xdr_is_client(xdrs) && xdrs->x_op == XDR_DECODE && cstring->cstr_allocated)
+	{
+		ULONG limit = cstring->cstr_allocated;
+		cstring->cstr_allocated = 0;
+		return xdr_cstring_with_limit(xdrs, cstring, limit);
+	}
+
+	return xdr_cstring(xdrs, cstring);
+}
+
+static bool_t xdr_cstring( RemoteXdr* xdrs, CSTRING* cstring)
+{
+	return xdr_cstring_with_limit(xdrs, cstring, 0);
+}
+
+static bool_t xdr_cstring_with_limit( RemoteXdr* xdrs, CSTRING* cstring, ULONG limit)
 {
 /**************************************
  *
@@ -1323,29 +1354,25 @@ static bool_t xdr_cstring( XDR* xdrs, CSTRING* cstring)
 	{
 	case XDR_ENCODE:
 		if (cstring->cstr_length &&
-			!(*xdrs->x_ops->x_putbytes) (xdrs,
-										 reinterpret_cast<const SCHAR*>(cstring->cstr_address),
-										 cstring->cstr_length))
+			!xdrs->x_putbytes(reinterpret_cast<const SCHAR*>(cstring->cstr_address), cstring->cstr_length))
 		{
 			return FALSE;
 		}
 		l = (4 - cstring->cstr_length) & 3;
 		if (l)
-			return (*xdrs->x_ops->x_putbytes) (xdrs, filler, l);
+			return xdrs->x_putbytes(filler, l);
 		return TRUE;
 
 	case XDR_DECODE:
+		if (limit && cstring->cstr_length > limit)
+			return FALSE;
 		if (!alloc_cstring(xdrs, cstring))
 			return FALSE;
-		if (!(*xdrs->x_ops->x_getbytes)(xdrs,
-										reinterpret_cast<SCHAR*>(cstring->cstr_address),
-										cstring->cstr_length))
-		{
+		if (!xdrs->x_getbytes(reinterpret_cast<SCHAR*>(cstring->cstr_address), cstring->cstr_length))
 			return FALSE;
-		}
 		l = (4 - cstring->cstr_length) & 3;
 		if (l)
-			return (*xdrs->x_ops->x_getbytes) (xdrs, trash, l);
+			return xdrs->x_getbytes(trash, l);
 		return TRUE;
 
 	case XDR_FREE:
@@ -1358,7 +1385,7 @@ static bool_t xdr_cstring( XDR* xdrs, CSTRING* cstring)
 
 
 #ifdef DEBUG_XDR_MEMORY
-static bool_t xdr_debug_packet( XDR* xdrs, enum xdr_op xop, PACKET* packet)
+static bool_t xdr_debug_packet( RemoteXdr* xdrs, enum xdr_op xop, PACKET* packet)
 {
 /**************************************
  *
@@ -1371,7 +1398,7 @@ static bool_t xdr_debug_packet( XDR* xdrs, enum xdr_op xop, PACKET* packet)
  *	entering/removing from a port's packet tracking vector.
  *
  **************************************/
-	rem_port* port = (rem_port*) xdrs->x_public;
+	rem_port* port = xdrs->x_public;
 	fb_assert(port != 0);
 	fb_assert(port->port_header.blk_type == type_port);
 
@@ -1425,7 +1452,7 @@ static bool_t xdr_debug_packet( XDR* xdrs, enum xdr_op xop, PACKET* packet)
 #endif
 
 
-static bool_t xdr_longs( XDR* xdrs, CSTRING* cstring)
+static bool_t xdr_longs( RemoteXdr* xdrs, CSTRING* cstring)
 {
 /**************************************
  *
@@ -1475,7 +1502,7 @@ static bool_t xdr_longs( XDR* xdrs, CSTRING* cstring)
 }
 
 
-static bool_t xdr_message( XDR* xdrs, RMessage* message, const rem_fmt* format)
+static bool_t xdr_message( RemoteXdr* xdrs, RMessage* message, const rem_fmt* format)
 {
 /**************************************
  *
@@ -1490,7 +1517,7 @@ static bool_t xdr_message( XDR* xdrs, RMessage* message, const rem_fmt* format)
 	if (xdrs->x_op == XDR_FREE)
 		return TRUE;
 
-	rem_port* port = (rem_port*) xdrs->x_public;
+	rem_port* port = xdrs->x_public;
 
 	if (!message || !format)
 		return FALSE;
@@ -1513,7 +1540,7 @@ static bool_t xdr_message( XDR* xdrs, RMessage* message, const rem_fmt* format)
 }
 
 
-static bool_t xdr_packed_message( XDR* xdrs, RMessage* message, const rem_fmt* format)
+static bool_t xdr_packed_message( RemoteXdr* xdrs, RMessage* message, const rem_fmt* format)
 {
 /**************************************
  *
@@ -1529,7 +1556,7 @@ static bool_t xdr_packed_message( XDR* xdrs, RMessage* message, const rem_fmt* f
 	if (xdrs->x_op == XDR_FREE)
 		return TRUE;
 
-	const rem_port* const port = (rem_port*) xdrs->x_public;
+	const rem_port* const port = xdrs->x_public;
 
 	if (!message || !format)
 		return FALSE;
@@ -1647,7 +1674,7 @@ static bool_t xdr_packed_message( XDR* xdrs, RMessage* message, const rem_fmt* f
 }
 
 
-static bool_t xdr_request(XDR* xdrs,
+static bool_t xdr_request(RemoteXdr* xdrs,
 						  USHORT request_id,
 						  USHORT message_number, USHORT incarnation)
 {
@@ -1664,7 +1691,7 @@ static bool_t xdr_request(XDR* xdrs,
 	if (xdrs->x_op == XDR_FREE)
 		return TRUE;
 
-	rem_port* port = (rem_port*) xdrs->x_public;
+	rem_port* port = xdrs->x_public;
 
 	if (request_id >= port->port_objects.getCount())
 		return FALSE;
@@ -1705,7 +1732,7 @@ static bool_t xdr_request(XDR* xdrs,
 
 
 // Maybe it's better to take sdl_length into account?
-static bool_t xdr_slice(XDR* xdrs, lstring* slice, /*USHORT sdl_length,*/ const UCHAR* sdl)
+static bool_t xdr_slice(RemoteXdr* xdrs, lstring* slice, /*USHORT sdl_length,*/ const UCHAR* sdl)
 {
 /**************************************
  *
@@ -1771,7 +1798,7 @@ static bool_t xdr_slice(XDR* xdrs, lstring* slice, /*USHORT sdl_length,*/ const 
 	}
 
 	const dsc* desc = &info.sdl_info_element;
-	const rem_port* port = (rem_port*) xdrs->x_public;
+	const rem_port* port = xdrs->x_public;
 	BLOB_PTR* p = (BLOB_PTR*) slice->lstr_address;
 	ULONG n;
 
@@ -1800,7 +1827,7 @@ static bool_t xdr_slice(XDR* xdrs, lstring* slice, /*USHORT sdl_length,*/ const 
 }
 
 
-static bool_t xdr_sql_blr(XDR* xdrs,
+static bool_t xdr_sql_blr(RemoteXdr* xdrs,
 						  SLONG statement_id,
 						  CSTRING* blr,
 						  bool direction, SQL_STMT_TYPE stmt_type)
@@ -1824,7 +1851,7 @@ static bool_t xdr_sql_blr(XDR* xdrs,
 	if (xdrs->x_op == XDR_FREE)
 		return TRUE;
 
-	rem_port* port = (rem_port*) xdrs->x_public;
+	rem_port* port = xdrs->x_public;
 
 	Rsr* statement;
 
@@ -1908,7 +1935,7 @@ static bool_t xdr_sql_blr(XDR* xdrs,
 }
 
 
-static bool_t xdr_sql_message( XDR* xdrs, SLONG statement_id)
+static bool_t xdr_sql_message( RemoteXdr* xdrs, SLONG statement_id)
 {
 /**************************************
  *
@@ -1925,7 +1952,7 @@ static bool_t xdr_sql_message( XDR* xdrs, SLONG statement_id)
 	if (xdrs->x_op == XDR_FREE)
 		return TRUE;
 
-	rem_port* port = (rem_port*) xdrs->x_public;
+	rem_port* port = xdrs->x_public;
 
 	if (statement_id >= 0)
 	{
@@ -1963,7 +1990,7 @@ static bool_t xdr_sql_message( XDR* xdrs, SLONG statement_id)
 }
 
 
-static bool_t xdr_status_vector(XDR* xdrs, DynamicStatusVector*& vector)
+static bool_t xdr_status_vector(RemoteXdr* xdrs, DynamicStatusVector*& vector)
 {
 /**************************************
  *
@@ -2054,7 +2081,7 @@ brk:
 	while (space.hasData())
 	{
 		SCHAR* sp = space.pop();
-		XDR freeXdrs;
+		RemoteXdr freeXdrs;
 		freeXdrs.x_public = xdrs->x_public;
 		freeXdrs.x_op = XDR_FREE;
 		if (!xdr_wrapstring(&freeXdrs, &sp))
@@ -2068,7 +2095,7 @@ brk:
 }
 
 
-static bool_t xdr_trrq_blr(XDR* xdrs, CSTRING* blr)
+static bool_t xdr_trrq_blr(RemoteXdr* xdrs, CSTRING* blr)
 {
 /**************************************
  *
@@ -2089,7 +2116,7 @@ static bool_t xdr_trrq_blr(XDR* xdrs, CSTRING* blr)
 	if (xdrs->x_op == XDR_FREE || xdrs->x_op == XDR_ENCODE)
 		return TRUE;
 
-	rem_port* port = (rem_port*) xdrs->x_public;
+	rem_port* port = xdrs->x_public;
 	Rpr* procedure = port->port_rpr;
 	if (!procedure)
 		procedure = port->port_rpr = FB_NEW Rpr;
@@ -2138,7 +2165,7 @@ static bool_t xdr_trrq_blr(XDR* xdrs, CSTRING* blr)
 }
 
 
-static bool_t xdr_trrq_message( XDR* xdrs, USHORT msg_type)
+static bool_t xdr_trrq_message( RemoteXdr* xdrs, USHORT msg_type)
 {
 /**************************************
  *
@@ -2153,7 +2180,7 @@ static bool_t xdr_trrq_message( XDR* xdrs, USHORT msg_type)
 	if (xdrs->x_op == XDR_FREE)
 		return TRUE;
 
-	rem_port* port = (rem_port*) xdrs->x_public;
+	rem_port* port = xdrs->x_public;
 	Rpr* procedure = port->port_rpr;
 
 	if (msg_type == 1)
@@ -2163,7 +2190,7 @@ static bool_t xdr_trrq_message( XDR* xdrs, USHORT msg_type)
 }
 
 
-static void reset_statement( XDR* xdrs, SSHORT statement_id)
+static void reset_statement( RemoteXdr* xdrs, SSHORT statement_id)
 {
 /**************************************
  *
@@ -2177,7 +2204,7 @@ static void reset_statement( XDR* xdrs, SSHORT statement_id)
  **************************************/
 
 	Rsr* statement = NULL;
-	rem_port* port = (rem_port*) xdrs->x_public;
+	rem_port* port = xdrs->x_public;
 
 	// if the statement ID is -1, this seems to indicate that we are
 	// re-executing the previous statement.  This is not a
@@ -2201,9 +2228,9 @@ static void reset_statement( XDR* xdrs, SSHORT statement_id)
 	}
 }
 
-static Rsr* getStatement(XDR* xdrs, USHORT statement_id)
+static Rsr* getStatement(RemoteXdr* xdrs, USHORT statement_id)
 {
-	rem_port* port = (rem_port*) xdrs->x_public;
+	rem_port* port = xdrs->x_public;
 
 	if (statement_id >= 0)
 	{
@@ -2223,7 +2250,7 @@ static Rsr* getStatement(XDR* xdrs, USHORT statement_id)
 	return port->port_statement;
 }
 
-static bool_t xdr_blob_stream(XDR* xdrs, SSHORT statement_id, CSTRING* strmPortion)
+static bool_t xdr_blob_stream(RemoteXdr* xdrs, SSHORT statement_id, CSTRING* strmPortion)
 {
 	if (xdrs->x_op == XDR_FREE)
 		return xdr_cstring(xdrs, strmPortion);

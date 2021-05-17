@@ -3673,6 +3673,15 @@ ISC_STATUS API_ROUTINE isc_unwind_request(ISC_STATUS* userStatus, isc_req_handle
 // Shutdown firebird.
 int API_ROUTINE fb_shutdown(unsigned int timeout, const int reason)
 {
+	if (reason == fb_shutrsn_emergency)
+	{
+		shutdownStarted = true;
+		abortShutdown();
+	}
+
+	if (shutdownStarted)
+		return FB_SUCCESS;
+
 	StatusVector status(NULL);
 	CheckStatusWrapper statusWrapper(&status);
 
@@ -5028,6 +5037,25 @@ void YBatch::cancel(CheckStatusWrapper* status)
 }
 
 
+void YBatch::close(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YBatch> entry(status, this, CHECK_WARN_ZERO_HANDLE);
+
+		if (entry.next())
+			entry.next()->close(status);
+
+		if (!(status->getState() & IStatus::STATE_ERRORS))
+			destroy(DF_RELEASE);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
 //-------------------------------------
 
 
@@ -5061,8 +5089,13 @@ void YReplicator::close(CheckStatusWrapper* status)
 {
 	try
 	{
-		YEntry<YReplicator> entry(status, this);
-		entry.next()->close(status);
+		YEntry<YReplicator> entry(status, this, CHECK_WARN_ZERO_HANDLE);
+
+		if (entry.next())
+			entry.next()->close(status);
+
+		if (!(status->getState() & IStatus::STATE_ERRORS))
+			destroy(DF_RELEASE);
 	}
 	catch (const Exception& e)
 	{
@@ -6159,10 +6192,17 @@ YAttachment* Dispatcher::attachOrCreateDatabase(CheckStatusWrapper* status, bool
 
 		// Take care about DPB
 		setLogin(newDpb, false);
-		if (!utfData)
+
+		if (!newDpb.find(isc_dpb_session_time_zone))
 		{
-			IntlDpb().toUtf8(newDpb);
+			const char* defaultTimeZone = Config::getDefaultTimeZone();
+
+			if (defaultTimeZone && defaultTimeZone[0])
+				newDpb.insertString(isc_dpb_session_time_zone, defaultTimeZone);
 		}
+
+		if (!utfData)
+			IntlDpb().toUtf8(newDpb);
 
 		// Take care about filename
 		PathName orgFilename(filename);

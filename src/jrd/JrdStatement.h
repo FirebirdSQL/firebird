@@ -51,7 +51,7 @@ public:
 	const Routine* getRoutine() const;
 	bool isActive() const;
 
-	jrd_req* findRequest(thread_db* tdbb);
+	jrd_req* findRequest(thread_db* tdbb, bool unique = false);
 	jrd_req* getRequest(thread_db* tdbb, USHORT level);
 	void verifyAccess(thread_db* tdbb);
 	void release(thread_db* tdbb);

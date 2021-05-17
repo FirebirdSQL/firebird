@@ -600,6 +600,19 @@ namespace Jrd
 		UCHAR* getData(thread_db* tdbb) const;
 		void mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const;
 
+		bool isKey(const dsc* desc) const
+		{
+			return ((ULONG)(IPTR) desc->dsc_address < m_map->keyLength);
+		}
+
+		static bool hasVolatileKey(const dsc* desc)
+		{
+			// International type text has a computed key.
+			// Different decimal float values sometimes have same keys.
+			// The same for date/time with time zones.
+			return (IS_INTL_DATA(desc) || desc->isDecFloat() || desc->isDateTimeTz());
+		}
+
 	private:
 		Sort* init(thread_db* tdbb) const;
 

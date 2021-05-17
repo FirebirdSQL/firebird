@@ -2009,7 +2009,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 	case dtype_real:
 		{
 			double d_value = CVT_get_double(from, decSt, cb->err);
-			if (ABSOLUT(d_value) > FLOAT_MAX)
+			if (ABSOLUT(d_value) > FLOAT_MAX && ABSOLUT(d_value) != INFINITY)
 				cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 			*(float*) p = (float) d_value;
 		}
@@ -2232,7 +2232,7 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 		else
 		{
 			// Prior to BLR version 5 timestamps were converted to text in the dd-MMM-yyyy format
-			sprintf(p, "%d-%.3s-%d",
+			sprintf(p, "%2.2d-%.3s-%4.4d",
 					times.tm_mday,
 					FB_LONG_MONTHS_UPPER[times.tm_mon], times.tm_year + 1900);
 		}
@@ -2869,6 +2869,16 @@ SSHORT CVT_decompose(const char* str, USHORT len, Int128* val, ErrorFunction err
 
 	RetValue<I128Traits> value(val);
 	return cvt_decompose(str, len, &value, err);
+}
+
+
+Int128 CVT_hex_to_int128(const char* str, USHORT len)
+{
+	Int128 val;
+	RetValue<I128Traits> value(&val);
+	hex_to_value(str, str + len, &value);
+
+	return val;
 }
 
 
@@ -3538,7 +3548,7 @@ static void hex_to_value(const char*& string, const char* end, RetPtr* retValue)
  * Functional description
  *      Convert a hex string to a numeric value. This code only
  *      converts a hex string into a numeric value, and the
- *      biggest hex string supported must fit into a BIGINT.
+ *      size of biggest hex string depends upon RetPtr.
  *
  *************************************/
 {

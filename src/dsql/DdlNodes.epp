@@ -399,6 +399,12 @@ void defineComputed(DsqlCompilerScratch* dsqlScratch, RelationSourceNode* relati
 			const USHORT bpc = METD_get_charset_bpc(dsqlScratch->getTransaction(), field->charSetId.value);
 			field->charLength = (field->length - adjust) / bpc;
 		}
+		else if (field->dtype == dtype_blob)
+		{
+			field->charSetId = desc.getCharSet();
+			field->collationId = desc.getCollation();
+			field->subType = desc.getBlobSubType();
+		}
 		else
 			field->subType = desc.dsc_sub_type;
 	}

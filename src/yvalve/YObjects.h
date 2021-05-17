@@ -383,6 +383,7 @@ public:
 	Firebird::IBatchCompletionState* execute(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction);
 	void cancel(Firebird::CheckStatusWrapper* status);
 	void setDefaultBpb(Firebird::CheckStatusWrapper* status, unsigned parLength, const unsigned char* par);
+	void close(Firebird::CheckStatusWrapper* status);
 
 public:
 	AtomicAttPtr attachment;

@@ -55,6 +55,7 @@
 #include "../common/isc_proto.h"
 #include "../common/os/isc_i_proto.h"
 #include "../common/os/os_utils.h"
+#include "../common/os/mac_utils.h"
 #include "../common/isc_s_proto.h"
 #include "../common/file_params.h"
 #include "../common/gdsassert.h"
@@ -87,12 +88,6 @@ static int process_id;
 #include <unistd.h>
 #endif
 
-#ifdef USE_SYS5SEMAPHORE
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <sys/sem.h>
-#include <sys/time.h>
-#endif
 
 #ifdef HAVE_FCNTL_H
 #include <fcntl.h>
@@ -328,15 +323,6 @@ FileLock::FileLock(const char* fileName, InitFunction* init)
 	++(oFile->useCount);
 }
 
-#ifdef USE_FILELOCKS
-FileLock::FileLock(const FileLock* main, int s)
-	: level(LCK_NONE), oFile(main->oFile),
-	  lStart(s), rwcl(getRw())
-{
-	MutexLockGuard g(fdNodesMutex, FB_FUNCTION);
-	++(oFile->useCount);
-}
-#endif
 
 FileLock::~FileLock()
 {
@@ -624,441 +610,12 @@ CountedRWLock* FileLock::getRw()
 	return rc;
 }
 
-
-#ifdef USE_SYS5SEMAPHORE
-
-#ifndef HAVE_SEMUN
-union semun
-{
-	int val;
-	struct semid_ds *buf;
-	ushort *array;
-};
-#endif
-
-static SLONG	create_semaphores(CheckStatusWrapper*, SLONG, int);
-
-namespace {
-
-	int sharedCount = 0;
-
-	// this class is mapped into shared file
-	class SemTable
-	{
-	public:
-		const static int N_FILES = 128;
-		const static int N_SETS = 256;
-#if defined(DEV_BUILD)
-		const static int SEM_PER_SET = 4;	// force multiple sets allocation
-#else
-		const static int SEM_PER_SET = 31;	// hard limit for some old systems, might set to 32
-#endif
-		const static unsigned char CURRENT_VERSION = 1;
-		unsigned char version;
-
-	private:
-		int lastSet;
-
-		struct
-		{
-			char name[MAXPATHLEN];
-		} filesTable[N_FILES];
-
-		struct
-		{
-			key_t semKey;
-			int fileNum;
-			SLONG mask;
-
-			int get(int fNum)
-			{
-				if (fileNum == fNum && mask != 0)
-				{
-					for (int bit = 0; bit < SEM_PER_SET; ++bit)
-					{
-						if (mask & (1 << bit))
-						{
-							mask &= ~(1 << bit);
-							return bit;
-						}
-					}
-					// bad bits in mask ?
-					mask = 0;
-				}
-				return -1;
-			}
-
-			int create(int fNum)
-			{
-				fileNum = fNum;
-				mask = 1 << SEM_PER_SET;
-				--mask;
-				mask &= ~1;
-				return 0;
-			}
-
-			void put(int bit)
-			{
-				// fb_assert(!(mask & (1 << bit)));
-				mask |= (1 << bit);
-			}
-		} set[N_SETS];
-
-	public:
-		void cleanup(int fNum, bool release);
-
-		key_t getKey(int semSet) const
-		{
-			fb_assert(semSet >= 0 && semSet < lastSet);
-
-			return set[semSet].semKey;
-		}
-
-		void init(int fdSem)
-		{
-			if (sharedCount)
-			{
-				return;
-			}
-
-			FB_UNUSED(os_utils::ftruncate(fdSem, sizeof(*this)));
-
-			for (int i = 0; i < N_SETS; ++i)
-			{
-				if (set[i].fileNum > 0)
-				{
-					// may be some old data about really active semaphore sets?
-					if (version == CURRENT_VERSION)
-					{
-						const int semId = semget(set[i].semKey, SEM_PER_SET, 0);
-						if (semId > 0)
-						{
-							semctl(semId, 0, IPC_RMID);
-						}
-					}
-					set[i].fileNum = 0;
-				}
-			}
-
-			for (int i = 0; i < N_FILES; ++i)
-			{
-				filesTable[i].name[0] = 0;
-			}
-
-			version = CURRENT_VERSION;
-			lastSet = 0;
-		}
-
-		bool get(int fileNum, Sys5Semaphore* sem)
-		{
-			// try to locate existing set
-			int n;
-			for (n = 0; n < lastSet; ++n)
-			{
-				const int semNum = set[n].get(fileNum);
-				if (semNum >= 0)
-				{
-					sem->semSet = n;
-					sem->semNum = semNum;
-					return true;
-				}
-			}
-
-			// create new set
-			for (n = 0; n < lastSet; ++n)
-			{
-				if (set[n].fileNum <= 0)
-				{
-					break;
-				}
-			}
-
-			if (n >= N_SETS)
-			{
-				fb_assert(false);	// Not supposed to overflow
-				return false;
-			}
-
-			if (n >= lastSet)
-			{
-				lastSet = n + 1;
-			}
-
-			set[n].semKey = ftok(filesTable[fileNum - 1].name, n);
-			sem->semSet = n;
-			sem->semNum = set[n].create(fileNum);
-			return true;
-		}
-
-		void put(Sys5Semaphore* sem)
-		{
-			fb_assert(sem->semSet >= 0 && sem->semSet < N_SETS);
-
-			set[sem->semSet].put(sem->semNum);
-		}
-
-		int findFileByName(const PathName& name) const
-		{
-			// Get a file ID in filesTable.
-			for (int fileId = 0; fileId < N_FILES; ++fileId)
-			{
-				if (name == filesTable[fileId].name)
-				{
-					return fileId + 1;
-				}
-			}
-
-			// not found
-			return 0;
-		}
-
-		int addFileByName(const PathName& name)
-		{
-			int id = findFileByName(name);
-			if (id > 0)
-			{
-				return id;
-			}
-
-			// Get a file ID in filesTable.
-			for (int fileId = 0; fileId < SemTable::N_FILES; ++fileId)
-			{
-				if (filesTable[fileId].name[0] == 0)
-				{
-					name.copyTo(filesTable[fileId].name, sizeof(filesTable[fileId].name));
-					return fileId + 1;
-				}
-			}
-
-			// not found
-			fb_assert(false);
-			return 0;
-		}
-	};
-
-	SemTable* semTable = NULL;
-
-	int idCache[SemTable::N_SETS];
-	GlobalPtr<Mutex> idCacheMutex;
-
-	void initCache()
-	{
-		MutexLockGuard guard(idCacheMutex, FB_FUNCTION);
-		memset(idCache, 0xff, sizeof idCache);
-	}
-
-	void SemTable::cleanup(int fNum, bool release)
-	{
-		fb_assert(fNum > 0 && fNum <= N_FILES);
-
-		if (release)
-		{
-			filesTable[fNum - 1].name[0] = 0;
-		}
-
-		MutexLockGuard guard(idCacheMutex, FB_FUNCTION);
-		for (int n = 0; n < lastSet; ++n)
-		{
-			if (set[n].fileNum == fNum)
-			{
-				if (release)
-				{
-					Sys5Semaphore sem;
-					sem.semSet = n;
-					int id = sem.getId();
-					if (id >= 0)
-					{
-						semctl(id, 0, IPC_RMID);
-					}
-					set[n].fileNum = -1;
-				}
-				idCache[n] = -1;
-			}
-		}
-	}
-
-	// Left from DEB_EVNT code, keep for a while 'as is'. To be cleaned up later!!!
-	void initStart(const event_t* event) {}
-	void initStop(const event_t* event, int code) {}
-	void finiStart(const event_t* event) {}
-	void finiStop(const event_t* event) {}
-
-} // anonymous namespace
-
-bool SharedMemoryBase::getSem5(Sys5Semaphore* sem)
-{
-	try
-	{
-		// Lock init file.
-		FileLockHolder lock(initFile);
-
-		if (!semTable->get(fileNum, sem))
-		{
-			gds__log("semTable->get() failed");
-			return false;
-		}
-
-		return true;
-	}
-	catch (const Exception& ex)
-	{
-		iscLogException("FileLock ctor failed in getSem5", ex);
-	}
-	return false;
-}
-
-void SharedMemoryBase::freeSem5(Sys5Semaphore* sem)
-{
-	try
-	{
-		// Lock init file.
-		FileLockHolder lock(initFile);
-
-		semTable->put(sem);
-	}
-	catch (const Exception& ex)
-	{
-		iscLogException("FileLock ctor failed in freeSem5", ex);
-	}
-}
-
-int Sys5Semaphore::getId()
-{
-	MutexLockGuard guard(idCacheMutex, FB_FUNCTION);
-	fb_assert(semSet >= 0 && semSet < SemTable::N_SETS);
-
-	int id = idCache[semSet];
-
-	if (id < 0)
-	{
-		LocalStatus ls;
-		CheckStatusWrapper st(&ls);
-		id = create_semaphores(&st, semTable->getKey(semSet), SemTable::SEM_PER_SET);
-		if (id >= 0)
-		{
-			idCache[semSet] = id;
-		}
-		else
-		{
-			iscLogStatus("create_semaphores failed:", &st);
-		}
-	}
-
-	return id;
-}
-#endif // USE_SYS5SEMAPHORE
-
 #endif // UNIX
 
 #if defined(WIN_NT)
 static bool make_object_name(TEXT*, size_t, const TEXT*, const TEXT*);
 #endif
 
-
-#ifdef USE_SYS5SEMAPHORE
-
-namespace {
-
-class TimerEntry FB_FINAL :
-	public Firebird::RefCntIface<Firebird::ITimerImpl<TimerEntry, CheckStatusWrapper> >
-{
-public:
-	TimerEntry(int id, USHORT num)
-		: semId(id), semNum(num)
-	{ }
-
-	void handler()
-	{
-		for (;;)
-		{
-			union semun arg;
-			arg.val = 0;
-			int ret = semctl(semId, semNum, SETVAL, arg);
-			if (ret != -1)
-				break;
-			if (!SYSCALL_INTERRUPTED(errno))
-			{
-				gds__log("semctl() failed, errno %d\n", errno);
-				break;
-			}
-		}
-	}
-
-	bool operator== (Sys5Semaphore& sem)
-	{
-		return semId == sem.getId() && semNum == sem.semNum;
-	}
-
-private:
-	int semId;
-	USHORT semNum;
-};
-
-typedef HalfStaticArray<TimerEntry*, 64> TimerQueue;
-GlobalPtr<TimerQueue> timerQueue;
-GlobalPtr<Mutex> timerAccess;
-
-void addTimer(Sys5Semaphore* sem, int microSeconds)
-{
-	TimerEntry* newTimer = FB_NEW TimerEntry(sem->getId(), sem->semNum);
-	{
-		MutexLockGuard guard(timerAccess, FB_FUNCTION);
-		timerQueue->push(newTimer);
-	}
-
-	LocalStatus ls;
-	CheckStatusWrapper st(&ls);
-	TimerInterfacePtr()->start(&st, newTimer, microSeconds);
-	check(&st);
-}
-
-void delTimer(Sys5Semaphore* sem)
-{
-	bool found = false;
-	TimerEntry** t;
-
-	{
-		MutexLockGuard guard(timerAccess, FB_FUNCTION);
-
-		for (t = timerQueue->begin(); t < timerQueue->end(); ++t)
-		{
-			if (**t == *sem)
-			{
-				timerQueue->remove(t);
-				found = true;
-				break;
-			}
-		}
-	}
-
-	if (found)
-	{
-		LocalStatus ls;
-		CheckStatusWrapper st(&ls);
-		TimerInterfacePtr()->stop(&st, *t);
-		check(&st);
-	}
-}
-
-SINT64 curTime()
-{
-	struct timeval cur_time;
-	struct timezone tzUnused;
-
-	if (gettimeofday(&cur_time, &tzUnused) != 0)
-	{
-		system_call_failed::raise("gettimeofday");
-	}
-
-	SINT64 rc = ((SINT64) cur_time.tv_sec) * 1000000 + cur_time.tv_usec;
-	return rc;
-}
-
-} // anonymous namespace
-
-#endif // USE_SYS5SEMAPHORE
-
-#ifdef USE_SHARED_FUTEX
 
 namespace {
 
@@ -1079,14 +636,13 @@ namespace {
 #define PTHREAD_ERR_STATUS(x, v) { int tmpState = (x); if (tmpState) { error(v, #x, tmpState); return false; } }
 #define PTHREAD_ERR_RAISE(x) { int tmpState = (x); if (tmpState) { system_call_failed::raise(#x, tmpState); } }
 
-#endif // USE_SHARED_FUTEX
 
 
 int SharedMemoryBase::eventInit(event_t* event)
 {
 /**************************************
  *
- *	I S C _ e v e n t _ i n i t	( S Y S V )
+ *	I S C _ e v e n t _ i n i t
  *
  **************************************
  *
@@ -1108,34 +664,6 @@ int SharedMemoryBase::eventInit(event_t* event)
 
 	return (event->event_handle) ? FB_SUCCESS : FB_FAILURE;
 
-#elif defined(USE_SYS5SEMAPHORE)
-
-	initStart(event);
-
-	event->event_count = 0;
-
-	if (!getSem5(event))
-	{
-		IPC_TRACE(("ISC_event_init failed get sem %p\n", event));
-		initStop(event, 1);
-		return FB_FAILURE;
-	}
-
-	IPC_TRACE(("ISC_event_init set=%d num=%d\n", event->semSet, event->semNum));
-
-	union semun arg;
-	arg.val = 0;
-	if (semctl(event->getId(), event->semNum, SETVAL, arg) < 0)
-	{
-		initStop(event, 2);
-		iscLogStatus("event_init()",
-			(Arg::Gds(isc_sys_request) << Arg::Str("semctl") << SYS_ERR(errno)).value());
-		return FB_FAILURE;
-	}
-
-	initStop(event, 0);
-	return FB_SUCCESS;
-
 #else // pthread-based event
 
 	event->event_count = 0;
@@ -1148,8 +676,11 @@ int SharedMemoryBase::eventInit(event_t* event)
 	PTHREAD_ERROR(pthread_mutexattr_init(&mattr));
 	PTHREAD_ERROR(pthread_condattr_init(&cattr));
 #ifdef PTHREAD_PROCESS_SHARED
-	PTHREAD_ERROR(pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
-	PTHREAD_ERROR(pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED));
+	if (!isSandboxed())
+	{
+		PTHREAD_ERROR(pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
+		PTHREAD_ERROR(pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED));
+	}
 #else
 #error Your system must support PTHREAD_PROCESS_SHARED to use firebird.
 #endif
@@ -1182,15 +713,8 @@ void SharedMemoryBase::eventFini(event_t* event)
 
 	if (event->event_pid == process_id)
 	{
-		CloseHandle((HANDLE) event->event_handle);
+		CloseHandle(event->event_handle);
 	}
-
-#elif defined(USE_SYS5SEMAPHORE)
-
-	IPC_TRACE(("ISC_event_fini set=%d num=%d\n", event->semSet, event->semNum));
-	finiStart(event);
-	freeSem5(event);
-	finiStop(event);
 
 #else // pthread-based event
 
@@ -1225,22 +749,9 @@ SLONG SharedMemoryBase::eventClear(event_t* event)
 
 #if defined(WIN_NT)
 
-	ResetEvent((HANDLE) event->event_handle);
+	ResetEvent(event->event_handle);
 
 	return event->event_count + 1;
-
-#elif defined(USE_SYS5SEMAPHORE)
-
-	union semun arg;
-
-	arg.val = 1;
-	if (semctl(event->getId(), event->semNum, SETVAL, arg) < 0)
-	{
-		iscLogStatus("event_clear()",
-			(Arg::Gds(isc_sys_request) << Arg::Str("semctl") << SYS_ERR(errno)).value());
-	}
-
-	return (event->event_count + 1);
 
 #else // pthread-based event
 
@@ -1289,58 +800,6 @@ int SharedMemoryBase::eventWait(event_t* event, const SLONG value, const SLONG m
 		if (status != WAIT_OBJECT_0)
 			return FB_FAILURE;
 	}
-
-#elif defined(USE_SYS5SEMAPHORE)
-
-	// Set up timers if a timeout period was specified.
-	SINT64 timeout = 0;
-	if (micro_seconds > 0)
-	{
-		timeout = curTime() + micro_seconds;
-		addTimer(event, micro_seconds);
-	}
-
-	// Go into wait loop
-
-	int ret = FB_SUCCESS;
-	for (;;)
-	{
-		if (!event_blocked(event, value))
-			break;
-
-		struct sembuf sb;
-		sb.sem_op = 0;
-		sb.sem_flg = 0;
-		sb.sem_num = event->semNum;
-
-		int rc = semop(event->getId(), &sb, 1);
-		if (rc == -1 && !SYSCALL_INTERRUPTED(errno))
-		{
-			gds__log("ISC_event_wait: semop failed with errno = %d", errno);
-		}
-
-		if (micro_seconds > 0)
-		{
-			// distinguish between timeout and actually happened event
-			if (! event_blocked(event, value))
-				break;
-
-			// had timeout expired?
-			if (curTime() >= timeout)	// really expired
-			{
-				ret = FB_FAILURE;
-				break;
-			}
-		}
-	}
-
-	// Cancel the handler.  We only get here if a timeout was specified.
-	if (micro_seconds > 0)
-	{
-		delTimer(event);
-	}
-
-	return ret;
 
 #else // pthread-based event
 
@@ -1415,28 +874,7 @@ int SharedMemoryBase::eventPost(event_t* event)
 	if (event->event_pid != process_id)
 		return ISC_kill(event->event_pid, event->event_id, event->event_handle);
 
-	return SetEvent((HANDLE) event->event_handle) ? FB_SUCCESS : FB_FAILURE;
-
-#elif defined(USE_SYS5SEMAPHORE)
-
-	union semun arg;
-
-	++event->event_count;
-
-	for (;;)
-	{
-		arg.val = 0;
-		int ret = semctl(event->getId(), event->semNum, SETVAL, arg);
-		if (ret != -1)
-			break;
-		if (!SYSCALL_INTERRUPTED(errno))
-		{
-			gds__log("ISC_event_post: semctl failed with errno = %d", errno);
-			return FB_FAILURE;
-		}
-	}
-
-	return FB_SUCCESS;
+	return SetEvent(event->event_handle) ? FB_SUCCESS : FB_FAILURE;
 
 #else // pthread-based event
 
@@ -1713,7 +1151,9 @@ ULONG ISC_exception_post(ULONG except_code, const TEXT* err_msg, ISC_STATUS& isc
 		// application is not terminated until you press some button on resulting window.
 		// This happens even if you run application as non-interactive service on
 		// "server" OS like Windows Server 2003.
-		exit(3);
+
+		fb_shutdown(0, fb_shutrsn_emergency);
+		_exit(3);
 	}
 
 	return result;
@@ -1768,14 +1208,6 @@ void SharedMemoryBase::unlinkFile()
 
 void SharedMemoryBase::internalUnmap()
 {
-#ifdef USE_SYS5SEMAPHORE
-	if (fileNum != -1 && mainLock.hasData())
-	{
-		LocalStatus ls;
-		CheckStatusWrapper statusVector(&ls);
-		semTable->cleanup(fileNum, mainLock->setlock(&statusVector, FileLock::FLM_TRY_EXCLUSIVE));
-	}
-#endif
 	if (sh_mem_header)
 	{
 		munmap(sh_mem_header, sh_mem_length_mapped);
@@ -1789,9 +1221,6 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	sh_mem_mutex(0),
 #endif
 	sh_mem_length_mapped(0), sh_mem_header(NULL),
-#ifdef USE_SYS5SEMAPHORE
-	fileNum(-1),
-#endif
 	sh_mem_callback(callback)
 {
 /**************************************
@@ -1833,44 +1262,6 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	// get an exclusive lock on the INIT file with blocking except TransactionStatusBlock
 	// since its initialized under FileLock
 	FileLockHolder initLock(initFile);
-
-#ifdef USE_SYS5SEMAPHORE
-	class Sem5Init
-	{
-	public:
-		static void init(int fd)
-		{
-			void* sTab = os_utils::mmap(0, sizeof(SemTable), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-
-			if ((U_IPTR) sTab == (U_IPTR) -1)
-				system_call_failed::raise("mmap");
-
-			semTable = (SemTable*) sTab;
-			initCache();
-		}
-	};
-
-
-	TEXT sem_filename[MAXPATHLEN];
-	iscPrefixLock(sem_filename, SEM_FILE, true);
-
-	semFile.reset(FB_NEW_POOL(*getDefaultMemoryPool()) FileLock(sem_filename, Sem5Init::init));
-
-	fb_assert(semTable);
-
-	if (semFile->setlock(&statusVector, FileLock::FLM_TRY_EXCLUSIVE))
-	{
-		semTable->init(semFile->getFd());
-		semFile->unlock();
-	}
-	if (!semFile->setlock(&statusVector, FileLock::FLM_SHARED))
-	{
-		if (statusVector.hasData())
-			status_exception::raise(&statusVector);
-		else
-			(Arg::Gds(isc_random) << "Unknown error in setlock").raise();
-	}
-#endif
 
 	// create lock in order to have file autoclosed on error
 	mainLock.reset(FB_NEW_POOL(*getDefaultMemoryPool()) FileLock(expanded_filename));
@@ -1943,16 +1334,6 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 #endif
 #endif // HAVE_SHARED_MUTEX_SECTION
 
-#if defined(USE_SYS5SEMAPHORE)
-#if !defined(USE_FILELOCKS)
-
-	sh_mem_mutex = &sh_mem_header->mhb_mutex;
-
-#endif // USE_FILELOCKS
-
-	fileNum = semTable->addFileByName(expanded_filename);
-
-#endif // USE_SYS5SEMAPHORE
 
 	// Try to get an exclusive lock on the lock file.  This will
 	// fail if somebody else has the exclusive or shared lock
@@ -1965,25 +1346,6 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 		if (callback->initialize(this, true))
 		{
 #ifdef HAVE_SHARED_MUTEX_SECTION
-#ifdef USE_SYS5SEMAPHORE
-
-			if (!getSem5(sh_mem_mutex))
-			{
-				callback->mutexBug(0, "getSem5()");
-				(Arg::Gds(isc_random) << "getSem5() failed").raise();
-			}
-
-			union semun arg;
-			arg.val = 1;
-			int state = semctl(sh_mem_mutex->getId(), sh_mem_mutex->semNum, SETVAL, arg);
-			if (state == -1)
-			{
-				int err = errno;
-				callback->mutexBug(errno, "semctl");
-				system_call_failed::raise("semctl", err);
-			}
-
-#else // USE_SYS5SEMAPHORE
 
 #if (defined(HAVE_PTHREAD_MUTEXATTR_SETPROTOCOL) || defined(USE_ROBUST_MUTEX)) && defined(LINUX)
 // glibc in linux does not conform to the posix standard. When there is no RT kernel,
@@ -2006,7 +1368,8 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 
 				PTHREAD_ERR_RAISE(pthread_mutexattr_init(&mattr));
 #ifdef PTHREAD_PROCESS_SHARED
-				PTHREAD_ERR_RAISE(pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
+				if (!isSandboxed())
+					PTHREAD_ERR_RAISE(pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
 #else
 #error Your system must support PTHREAD_PROCESS_SHARED to use pthread shared futex in Firebird.
 #endif
@@ -2070,7 +1433,6 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 				system_call_failed::raise("pthread_mutex_init", state);
 			}
 
-#endif // USE_SYS5SEMAPHORE
 #endif // HAVE_SHARED_MUTEX_SECTION
 
 			mainLock->unlock();
@@ -2097,13 +1459,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 		}
 	}
 
-#ifdef USE_FILELOCKS
-	sh_mem_fileMutex.reset(FB_NEW_POOL(*getDefaultMemoryPool()) FileLock(mainLock, 1));
-#endif
 
-#ifdef USE_SYS5SEMAPHORE
-	++sharedCount;
-#endif
 
 	autoUnmap.success();
 }
@@ -2902,57 +2258,6 @@ static bool initializeFastMutex(FAST_MUTEX* lpMutex, LPSECURITY_ATTRIBUTES lpAtt
 #endif // DONT_USE_FAST_MUTEX
 }
 
-#ifdef NOT_USED_OR_REPLACED
-static bool openFastMutex(FAST_MUTEX* lpMutex, DWORD DesiredAccess, LPCSTR lpName)
-{
-	LPCSTR name = lpName;
-
-	if (lpName && strlen(lpName) + strlen(FAST_MUTEX_EVT_NAME) - 2 >= MAXPATHLEN)
-	{
-		SetLastError(ERROR_FILENAME_EXCED_RANGE);
-		return false;
-	}
-
-	setupMutex(lpMutex);
-
-	char sz[MAXPATHLEN];
-	if (lpName)
-	{
-		sprintf(sz, FAST_MUTEX_EVT_NAME, lpName);
-		name = sz;
-	}
-
-	lpMutex->hEvent = OpenEvent(EVENT_ALL_ACCESS, FALSE, name);
-
-	DWORD dwLastError = GetLastError();
-
-	if (lpMutex->hEvent)
-	{
-		if (lpName)
-			sprintf(sz, FAST_MUTEX_MAP_NAME, lpName);
-
-		lpMutex->hFileMap = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, name);
-
-		dwLastError = GetLastError();
-
-		if (lpMutex->hFileMap)
-		{
-			lpMutex->lpSharedInfo = (FAST_MUTEX_SHARED_SECTION*)
-				MapViewOfFile(lpMutex->hFileMap, FILE_MAP_WRITE, 0, 0, 0);
-
-			if (lpMutex->lpSharedInfo)
-				return true;
-
-			CloseHandle(lpMutex->hFileMap);
-		}
-		CloseHandle(lpMutex->hEvent);
-	}
-
-	SetLastError(dwLastError);
-	return false;
-}
-#endif
-
 static inline void setFastMutexSpinCount(FAST_MUTEX* lpMutex, ULONG SpinCount)
 {
 	lpMutex->lSpinCount = SpinCount;
@@ -3248,85 +2553,6 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector, ULONG, bool)
 #endif
 
 
-#ifdef USE_SYS5SEMAPHORE
-
-static SLONG create_semaphores(CheckStatusWrapper* statusVector, SLONG key, int semaphores)
-{
-/**************************************
- *
- *	c r e a t e _ s e m a p h o r e s		( U N I X )
- *
- **************************************
- *
- * Functional description
- *	Create or find a block of semaphores.
- *
- **************************************/
-	while (true)
-	{
-		// Try to open existing semaphore set
-		SLONG semid = semget(key, 0, 0);
-		if (semid == -1)
-		{
-			if (errno != ENOENT)
-			{
-				error(statusVector, "semget", errno);
-				return -1;
-			}
-		}
-		else
-		{
-			union semun arg;
-			semid_ds buf;
-			arg.buf = &buf;
-			// Get number of semaphores in opened set
-			if (semctl(semid, 0, IPC_STAT, arg) == -1)
-			{
-				error(statusVector, "semctl", errno);
-				return -1;
-			}
-			if ((int) buf.sem_nsems >= semaphores)
-				return semid;
-			// Number of semaphores in existing set is too small. Discard it.
-			if (semctl(semid, 0, IPC_RMID) == -1)
-			{
-				error(statusVector, "semctl", errno);
-				return -1;
-			}
-		}
-
-		// Try to create new semaphore set
-		semid = semget(key, semaphores, IPC_CREAT | IPC_EXCL | PRIV);
-		if (semid != -1)
-		{
-			// We want to limit access to semaphores, created here
-			// Reasonable access rights to them - exactly like security database has
-			const char* secDb = Config::getDefaultConfig()->getSecurityDatabase();
-			struct STAT st;
-			if (os_utils::stat(secDb, &st) == 0)
-			{
-				union semun arg;
-				semid_ds ds;
-				arg.buf = &ds;
-				ds.sem_perm.uid = geteuid() == 0 ? st.st_uid : geteuid();
-				ds.sem_perm.gid = st.st_gid;
-				ds.sem_perm.mode = st.st_mode;
-				semctl(semid, 0, IPC_SET, arg);
-			}
-			return semid;
-		}
-
-		if (errno != EEXIST)
-		{
-			error(statusVector, "semget", errno);
-			return -1;
-		}
-	}
-}
-
-#endif // USE_SYS5SEMAPHORE
-
-
 #ifdef WIN_NT
 static bool make_object_name(TEXT* buffer, size_t bufsize,
 							 const TEXT* object_name,
@@ -3396,51 +2622,6 @@ void SharedMemoryBase::mutexLock()
 
 	int state = ISC_mutex_lock(sh_mem_mutex);
 
-#elif defined(USE_FILELOCKS)
-
-	int state = 0;
-	try
-	{
-		localMutex.enter(FB_FUNCTION);
-	}
-	catch (const system_call_failed& fail)
-	{
-		state = fail.getErrorCode();
-	}
-	if (!state)
-	{
-		state = sh_mem_fileMutex->setlock(FileLock::FLM_EXCLUSIVE);
-		if (state)
-		{
-			try
-			{
-				localMutex.leave();
-			}
-			catch (const Exception&)
-			{ }
-		}
-	}
-
-#elif defined(USE_SYS5SEMAPHORE)
-
-	struct sembuf sop;
-	sop.sem_num = sh_mem_mutex->semNum;
-	sop.sem_op = -1;
-	sop.sem_flg = SEM_UNDO;
-
-	int state;
-	for (;;)
-	{
-		state = semop(sh_mem_mutex->getId(), &sop, 1);
-		if (state == 0)
-			break;
-		if (!SYSCALL_INTERRUPTED(errno))
-		{
-			state = errno;
-			break;
-		}
-	}
-
 #else // POSIX SHARED MUTEX
 
 	int state = pthread_mutex_lock(sh_mem_mutex->mtx_mutex);
@@ -3469,50 +2650,6 @@ bool SharedMemoryBase::mutexLockCond()
 
 	return ISC_mutex_lock_cond(sh_mem_mutex) == 0;
 
-#elif defined(USE_FILELOCKS)
-
-	try
-	{
-		if (!localMutex.tryEnter(FB_FUNCTION))
-		{
-			return false;
-		}
-	}
-	catch (const system_call_failed& fail)
-	{
-		int state = fail.getErrorCode();
-		sh_mem_callback->mutexBug(state, "mutexLockCond");
-		return false;
-	}
-
-	bool rc = (sh_mem_fileMutex->setlock(FileLock::FLM_TRY_EXCLUSIVE) == 0);
-	if (!rc)
-	{
-		try
-		{
-			localMutex.leave();
-		}
-		catch (const Exception&)
-		{ }
-	}
-	return rc;
-
-#elif defined(USE_SYS5SEMAPHORE)
-
-	struct sembuf sop;
-	sop.sem_num = sh_mem_mutex->semNum;
-	sop.sem_op = -1;
-	sop.sem_flg = SEM_UNDO | IPC_NOWAIT;
-
-	for (;;)
-	{
-		int state = semop(sh_mem_mutex->getId(), &sop, 1);
-		if (state == 0)
-			return true;
-		if (!SYSCALL_INTERRUPTED(errno))
-			return false;
-	}
-
 #else // POSIX SHARED MUTEX
 
 	int state = pthread_mutex_trylock(sh_mem_mutex->mtx_mutex);
@@ -3537,42 +2674,6 @@ void SharedMemoryBase::mutexUnlock()
 #if defined(WIN_NT)
 
 	int state = ISC_mutex_unlock(sh_mem_mutex);
-
-#elif defined(USE_FILELOCKS)
-
-	int state = 0;
-	try
-	{
-		localMutex.leave();
-	}
-	catch (const system_call_failed& fail)
-	{
-		state = fail.getErrorCode();
-	}
-	if (!state)
-	{
-		sh_mem_fileMutex->unlock();
-	}
-
-#elif defined(USE_SYS5SEMAPHORE)
-
-	struct sembuf sop;
-	sop.sem_num = sh_mem_mutex->semNum;
-	sop.sem_op = 1;
-	sop.sem_flg = SEM_UNDO;
-
-	int state;
-	for (;;)
-	{
-		state = semop(sh_mem_mutex->getId(), &sop, 1);
-		if (state == 0)
-			break;
-		if (!SYSCALL_INTERRUPTED(errno))
-		{
-			state = errno;
-			break;
-		}
-	}
 
 #else // POSIX SHARED MUTEX
 
@@ -3600,26 +2701,6 @@ SharedMemoryBase::~SharedMemoryBase()
  *
  **************************************/
 
-#ifdef USE_SYS5SEMAPHORE
-	// freeSem5(sh_mem_mutex);		no need - all set of semaphores will be gone
-
-	try
-	{
-		// Lock init file.
-		FileLockHolder initLock(initFile);
-
-		LocalStatus ls;
-		CheckStatusWrapper statusVector(&ls);
-		mainLock->unlock();
-		semTable->cleanup(fileNum, mainLock->setlock(&statusVector, FileLock::FLM_TRY_EXCLUSIVE));
-	}
-	catch (const Exception& ex)
-	{
-		iscLogException("ISC_unmap_file failed to lock init file", ex);
-	}
-
-	--sharedCount;
-#endif
 
 #if defined(HAVE_SHARED_MUTEX_SECTION) && defined(USE_MUTEX_MAP)
 	LocalStatus ls;

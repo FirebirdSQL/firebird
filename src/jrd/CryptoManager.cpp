@@ -357,7 +357,9 @@ namespace Jrd {
 		crypt = hdr->hdr_flags & Ods::hdr_encrypted;
 		process = hdr->hdr_flags & Ods::hdr_crypt_process;
 
-		if ((crypt || process) && !cryptPlugin)
+		// tdbb w/o attachment comes when database is shutting down in the end of detachDatabase()
+		// the only needed here page is header, i.e. we can live w/o cryptPlugin
+		if ((crypt || process) && (!cryptPlugin) && tdbb->getAttachment())
 		{
 			ClumpletWriter hc(ClumpletWriter::UnTagged, hdr->hdr_page_size);
 			hdr.getClumplets(hc);
@@ -381,7 +383,7 @@ namespace Jrd {
 				hash = valid;
 		}
 
-		if (flags & CRYPT_HDR_INIT)
+		if (cryptPlugin && (flags & CRYPT_HDR_INIT))
 			checkDigitalSignature(tdbb, hdr);
 	}
 

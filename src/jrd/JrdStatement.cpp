@@ -334,7 +334,7 @@ bool JrdStatement::isActive() const
 	return false;
 }
 
-jrd_req* JrdStatement::findRequest(thread_db* tdbb)
+jrd_req* JrdStatement::findRequest(thread_db* tdbb, bool unique)
 {
 	SET_TDBB(tdbb);
 	Attachment* const attachment = tdbb->getAttachment();
@@ -362,6 +362,9 @@ jrd_req* JrdStatement::findRequest(thread_db* tdbb)
 				clone = next;
 				break;
 			}
+
+			if (unique)
+				return NULL;
 
 			++count;
 		}

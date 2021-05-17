@@ -120,7 +120,8 @@ bool BlobWrapper::getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len,
 	while (len)
 	{
 		unsigned olen = 0;
-		bool eof = m_blob->getSegment(m_status, len, buf2, &olen) == Firebird::IStatus::RESULT_NO_DATA;
+		unsigned ilen = MIN(len, SEGMENT_LIMIT);
+		bool eof = m_blob->getSegment(m_status, ilen, buf2, &olen) == Firebird::IStatus::RESULT_NO_DATA;
 		if (m_status->isEmpty() && !eof)
 		{
 			len -= olen;
@@ -188,12 +189,20 @@ bool BlobWrapper::putData(FB_SIZE_T len, const void* buffer, FB_SIZE_T& real_len
 		return false;
 
 	real_len = 0;
-	m_blob->putSegment(m_status, len, buffer);
+	const char* buf2 = static_cast<const char*>(buffer);
+	while (len)
+	{
+		const unsigned ilen = MIN(SEGMENT_LIMIT, len);
+		m_blob->putSegment(m_status, ilen, buf2);
 
-	if (!m_status->isEmpty())
-		return false;
+		if (!m_status->isEmpty())
+			return false;
 
-	real_len = len;
+		len -= ilen;
+		buf2 += ilen;
+		real_len += ilen;
+	}
+
 	return true;
 }
 

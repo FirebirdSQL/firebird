@@ -51,10 +51,10 @@ namespace Replication
 		FB_UINT64 hdr_length;
 	};
 
-	const char LOG_SIGNATURE[] = "FBCHANGELOG";
+	const char CHANGELOG_SIGNATURE[] = "FBCHANGELOG";
 
-	const USHORT LOG_VERSION_1 = 1;
-	const USHORT LOG_CURRENT_VERSION = LOG_VERSION_1;
+	const USHORT CHANGELOG_VERSION_1 = 1;
+	const USHORT CHANGELOG_CURRENT_VERSION = CHANGELOG_VERSION_1;
 
 	class ChangeLog : protected Firebird::PermanentStorage, public Firebird::IpcObject
 	{

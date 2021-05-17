@@ -56,6 +56,7 @@ const int GUID_BODY_SIZE = 36;
 // Some versions of MSVC cannot recognize hh specifier but MSVC 2015 has it
 const char* const GUID_FORMAT =
 	"{%08X-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}";
+const int GUID_FORMAT_ARGS = 11;
 
 void GenerateRandomBytes(void* buffer, FB_SIZE_T size);
 // Generates platform-dependent UUID compatible with RFC 4122
@@ -71,12 +72,14 @@ inline void GuidToString(char* buffer, const Guid* guid)
 		guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7]);
 }
 
-inline void StringToGuid(Guid* guid, const char* buffer)
+inline bool StringToGuid(Guid* guid, const char* buffer)
 {
-	sscanf(buffer, GUID_FORMAT,
+	const auto result = sscanf(buffer, GUID_FORMAT,
 		&guid->Data1, &guid->Data2, &guid->Data3,
 		&guid->Data4[0], &guid->Data4[1], &guid->Data4[2], &guid->Data4[3],
 		&guid->Data4[4], &guid->Data4[5], &guid->Data4[6], &guid->Data4[7]);
+
+	return (result == GUID_FORMAT_ARGS);
 }
 
 }	// namespace

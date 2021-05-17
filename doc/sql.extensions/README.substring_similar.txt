@@ -14,7 +14,7 @@ Author:
 Syntax:
 
 <regular expression substring> ::=
-	SUBSTRING(<value> FROM <similar pattern> ESCAPE <escape character>)
+	SUBSTRING(<value> SIMILAR <similar pattern> ESCAPE <escape character>)
 
 <similar pattern> ::= <character value expression: substring similar expression>
 

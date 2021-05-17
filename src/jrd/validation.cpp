@@ -3141,13 +3141,13 @@ Validation::RTN Validation::walk_root(jrd_rel* relation)
 
 		if (vdr_idx_incl)
 		{
-			if (!vdr_idx_incl->matches(relation->rel_name.c_str(), relation->rel_name.length()))
+			if (!vdr_idx_incl->matches(index.c_str(), index.length()))
 				continue;
 		}
 
 		if (vdr_idx_excl)
 		{
-			if (vdr_idx_excl->matches(relation->rel_name.c_str(), relation->rel_name.length()))
+			if (vdr_idx_excl->matches(index.c_str(), index.length()))
 				continue;
 		}
 

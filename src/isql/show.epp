@@ -1893,7 +1893,7 @@ void SHOW_grant_roles2 (const SCHAR* terminator,
 }
 
 
-void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squote)
+void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squote, bool avoid_end_in_single_line_comment)
 {
 /**************************************
  *
@@ -1916,6 +1916,7 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 	if (ISQL_errmsg(fbStatus))
 		return;
 
+	string fullText;
 	SCHAR buffer[BUFFER_LENGTH512];
 	bool endedWithCr = false;
 
@@ -1947,29 +1948,51 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 		}
 
 		if (prevEndedWithCr && buffer[0] != '\n')
-		    fputc('\r', fp);
+		{
+			fputc('\r', fp);
+			if (avoid_end_in_single_line_comment)
+				fullText += "\r";
+		}
 
 		if (escape_squote)
 		{
 			for (const UCHAR* p = (UCHAR*) buffer; *p; ++p)
 			{
 				if (*p == SINGLE_QUOTE)
-			        fputc(*p, fp);
-			    fputc(*p, fp);
+				{
+					fputc(*p, fp);
+					if (avoid_end_in_single_line_comment)
+						fullText += *p;
+				}
+
+				fputc(*p, fp);
+				if (avoid_end_in_single_line_comment)
+					fullText += *p;
 			}
 			fflush(fp);
 		}
 		else
+		{
 			IUTILS_printf(fp, buffer);
+			if (avoid_end_in_single_line_comment)
+				fullText += buffer;
+		}
 	}
 
 	if (endedWithCr)
-	    fputc('\r', fp);
+	{
+		fputc('\r', fp);
+		if (avoid_end_in_single_line_comment)
+			fullText += "\r";
+	}
 
 	if (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS)
 		ISQL_errmsg(fbStatus);
 
 	blob->close(fbStatus);
+
+	if (avoid_end_in_single_line_comment && ISQL_statement_ends_in_comment(fullText.c_str()))
+		fputc('\n', fp);
 }
 
 

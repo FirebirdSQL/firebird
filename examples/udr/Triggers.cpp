@@ -199,7 +199,7 @@ FB_UDR_BEGIN_TRIGGER(replicate)
 
 	FB_UDR_EXECUTE_TRIGGER
 	{
-		ITransaction* transaction = context->getTransaction(status);
+		AutoRelease<ITransaction> transaction(context->getTransaction(status));
 
 		// This will not work if the table has computed fields.
 		stmt->execute(status, transaction, triggerMetadata, newFields, NULL, NULL);
@@ -306,7 +306,7 @@ FB_UDR_BEGIN_TRIGGER(replicate_persons)
 
 	FB_UDR_EXECUTE_TRIGGER
 	{
-		ITransaction* transaction = context->getTransaction(status);
+		AutoRelease<ITransaction> transaction(context->getTransaction(status));
 
 		stmt->execute(status, transaction, triggerMetadata, newFields, NULL, NULL);
 	}

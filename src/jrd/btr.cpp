@@ -545,8 +545,13 @@ DSC* BTR_eval_expression(thread_db* tdbb, index_desc* idx, Record* record, bool&
 	SET_TDBB(tdbb);
 	fb_assert(idx->idx_expression != NULL);
 
+	// check for resursive expression evaluation
 	jrd_req* const org_request = tdbb->getRequest();
-	jrd_req* const expr_request = idx->idx_expression_statement->findRequest(tdbb);
+	jrd_req* const expr_request = idx->idx_expression_statement->findRequest(tdbb, true);
+
+	if (expr_request == NULL)
+		ERR_post(Arg::Gds(isc_random) << "Attempt to evaluate index expression recursively");
+
 	fb_assert(expr_request != org_request);
 
 	fb_assert(expr_request->req_caller == NULL);
@@ -6299,6 +6304,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 	// stuff the key to the stuff boundary
 	ULONG count;
 	USHORT flag = retrieval->irb_generic;
+	bool partialEquality = false;
 
 	if ((flag & irb_partial) && (flag & irb_equality) &&
 		!(flag & irb_starting) && !(flag & irb_descending))
@@ -6309,6 +6315,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 			key->key_data[key->key_length + i] = 0;
 
 		count += key->key_length;
+		partialEquality = true;
 	}
 	else
 		count = key->key_length;
@@ -6390,8 +6397,36 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 				if (p >= end_key)
 				{
 					if (flag)
-						break;
+					{
+						if (partialEquality)
+						{
+							// node have no more data, it is equality
+							if (q >= node.data + node.length)
+								break;
 
+							// node contains more bytes than a key, check numbers
+							// of last key segment and current node segment.  
+
+							fb_assert(!descending);
+							fb_assert(p - STUFF_COUNT - 1 >= key->key_data);
+
+							const USHORT keySeg = idx->idx_count - p[-STUFF_COUNT - 1];
+							const USHORT nodeSeg = idx->idx_count - *q;
+
+							fb_assert(keySeg <= nodeSeg);
+
+							// If current segment at node is the same as last segment 
+							// of the key then node > key.
+							if (keySeg == nodeSeg)
+								return false;
+
+							// If node segment belongs to the key segments then key contains
+							// null or empty string and node contains some data.
+							if (nodeSeg < retrieval->irb_upper_count)
+								return false;
+						}
+						break;
+					}
 					return false;
 				}
 

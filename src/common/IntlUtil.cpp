@@ -32,6 +32,7 @@
 #include "../intl/country_codes.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/Aligner.h"
+#include <unicode/utf8.h>
 
 
 using Jrd::UnicodeUtil;
@@ -413,6 +414,49 @@ INTL_BOOL IntlUtil::utf8WellFormed(charset* cs, ULONG len, const UCHAR* str, ULO
 }
 
 
+ULONG IntlUtil::utf8SubString(charset* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
+	ULONG startPos, ULONG length)
+{
+	ULONG pos = 0;
+	ULONG currentPos = 0;
+	UChar32 c;
+
+	while (currentPos < startPos)
+	{
+		if (pos >= srcLen)
+			return 0;
+
+		U8_NEXT_UNSAFE(src, pos, c);
+
+		if (c < 0)
+			return INTL_BAD_STR_LENGTH;
+
+		++currentPos;
+	}
+
+	const UCHAR* copyStart = src + pos;
+
+	while (currentPos < startPos + length && pos < srcLen)
+	{
+		U8_NEXT_UNSAFE(src, pos, c);
+
+		if (c < 0)
+			return INTL_BAD_STR_LENGTH;
+
+		++currentPos;
+	}
+
+	unsigned size = src + pos - copyStart;
+
+	fb_assert(size <= dstLen);
+	if (size > dstLen)
+		return INTL_BAD_STR_LENGTH;
+
+	memcpy(dst, copyStart, size);
+	return size;
+}
+
+
 void IntlUtil::initAsciiCharset(charset* cs)
 {
 	initNarrowCharset(cs, "ASCII");
@@ -428,6 +472,7 @@ void IntlUtil::initUtf8Charset(charset* cs)
 	initNarrowCharset(cs, "UTF8");
 	cs->charset_max_bytes_per_char = 4;
 	cs->charset_fn_well_formed = utf8WellFormed;
+	cs->charset_fn_substring = utf8SubString;
 
 	initConvert(&cs->charset_to_unicode, cvtUtf8ToUtf16);
 	initConvert(&cs->charset_from_unicode, cvtUtf16ToUtf8);

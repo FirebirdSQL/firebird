@@ -40,10 +40,10 @@ public:
 	explicit SecurityDatabaseManagement(Firebird::IPluginConfig* par);
 
 	// IManagement implementation
-	void start(Firebird::CheckStatusWrapper* status, Firebird::ILogonInfo* logonInfo);
-	int execute(Firebird::CheckStatusWrapper* status, Firebird::IUser* user, Firebird::IListUsers* callback);
-	void commit(Firebird::CheckStatusWrapper* status);
-	void rollback(Firebird::CheckStatusWrapper* status);
+	void start(Firebird::CheckStatusWrapper* status, Firebird::ILogonInfo* logonInfo) override;
+	int execute(Firebird::CheckStatusWrapper* status, Firebird::IUser* user, Firebird::IListUsers* callback) override;
+	void commit(Firebird::CheckStatusWrapper* status) override;
+	void rollback(Firebird::CheckStatusWrapper* status) override;
 
 	int release() override;
 

@@ -258,8 +258,7 @@ copyFiles() {
 	fi
 
 	if [ "$TomCryptBuild" = "Y" ]; then
-		makeDirs @FB_LIBDIR@/.tm
-		cp -df $BuildRootDir/extern/libtomcrypt/.libs/libtomcrypt.so* ${TargetDir}@FB_LIBDIR@/.tm
+		cp -df $BuildRootDir/extern/libtomcrypt/.libs/libtomcrypt.so* ${TargetDir}@FB_LIBDIR@
 	fi
 
 	chmod 0755 ${TargetDir}@FB_LIBDIR@/*.so*

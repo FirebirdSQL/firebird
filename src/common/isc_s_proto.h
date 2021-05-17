@@ -36,14 +36,6 @@
 
 // Firebird platform-specific synchronization data structures
 
-#if defined(DARWIN)
-#define USE_FILELOCKS
-#endif
-
-#if defined(FREEBSD)
-#define USE_SYS5SEMAPHORE
-#endif
-
 #ifdef LINUX
 // This hack fixes CORE-2896 - embedded connections fail on linux.
 // Looks like a lot of linux kernels are buggy when working with PRIO_INHERIT mutexes.
@@ -52,66 +44,26 @@
 #undef HAVE_PTHREAD_MUTEXATTR_SETPROTOCOL
 #endif
 
-
-#if defined(USE_FILELOCKS) && (!defined(USE_POSIX_SEMAPHORE))
-#define USE_SYS5SEMAPHORE
-#endif
-
 #if defined(HAVE_MMAP) || defined(WIN_NT)
 #define HAVE_OBJECT_MAP
 #endif
 
-#if defined(HAVE_MMAP) && (!defined(USE_SYS5SEMAPHORE))
+#if defined(HAVE_MMAP)
 #define USE_MUTEX_MAP
 #endif
 
-#ifndef USE_POSIX_SEMAPHORE
-#ifndef USE_FILELOCKS
-#ifndef USE_SYS5SEMAPHORE
-#define USE_SHARED_FUTEX
-#endif
-#endif
-#endif
 
 #ifdef UNIX
 
-#if defined(USE_SHARED_FUTEX)
 #if defined(HAVE_PTHREAD_MUTEXATTR_SETROBUST_NP) && defined(HAVE_PTHREAD_MUTEX_CONSISTENT_NP)
 #define USE_ROBUST_MUTEX
 #endif // ROBUST mutex
 
 #include "fb_pthread.h"
-#endif // USE_SHARED_FUTEX
 
-#ifndef USE_FILELOCKS
 #define HAVE_SHARED_MUTEX_SECTION
-#endif
 
 namespace Firebird {
-
-#ifdef USE_SYS5SEMAPHORE
-
-struct Sys5Semaphore
-{
-	int semSet;				// index in shared memory table
-	unsigned short semNum;	// number in semset
-	int getId();
-};
-
-#ifndef USE_FILELOCKS
-struct mtx : public Sys5Semaphore
-{
-};
-#endif
-
-struct event_t : public Sys5Semaphore
-{
-	SLONG event_count;
-};
-
-#endif // USE_SYS5SEMAPHORE
-
-#ifdef USE_SHARED_FUTEX
 
 struct mtx
 {
@@ -125,8 +77,6 @@ struct event_t
 	pthread_mutex_t event_mutex[1];
 	pthread_cond_t event_cond[1];
 };
-
-#endif // USE_SHARED_FUTEX
 
 #endif // UNIX
 
@@ -161,12 +111,18 @@ struct mtx
 	FAST_MUTEX mtx_fast;
 };
 
+// Enforce equal binary layout for both 32 and 64-bit platforms as instances of
+// event_t is used in shared memory.
 struct event_t
 {
 	SLONG event_pid;
 	SLONG event_id;
 	SLONG event_count;
-	void* event_handle;
+	union
+	{
+		HANDLE event_handle;
+		FB_UINT64 dummy;
+	};
 };
 
 #endif // WIN_NT
@@ -218,7 +174,7 @@ public:
 
 #ifdef UNIX
 
-#if defined(USE_FILELOCKS) || (!defined(HAVE_FLOCK))
+#if !defined(HAVE_FLOCK)
 #define USE_FCNTL
 #endif
 
@@ -321,16 +277,9 @@ public:
 #ifdef HAVE_SHARED_MUTEX_SECTION
 	struct mtx* sh_mem_mutex;
 #endif
-#ifdef USE_FILELOCKS
-	Firebird::AutoPtr<FileLock> sh_mem_fileMutex;
-	Firebird::Mutex localMutex;
-#endif
 
 #ifdef UNIX
 	Firebird::AutoPtr<FileLock> initFile;
-#endif
-#ifdef USE_SYS5SEMAPHORE
-	Firebird::AutoPtr<FileLock> semFile;
 #endif
 
 	ULONG	sh_mem_length_mapped;
@@ -348,12 +297,6 @@ public:
 										  // barriers, and all other compilers generally do not.
 
 private:
-#ifdef USE_SYS5SEMAPHORE
-	int		fileNum;	// file number in shared table of shared files
-	bool	getSem5(Sys5Semaphore* sem);
-	void	freeSem5(Sys5Semaphore* sem);
-#endif
-
 	IpcObject* sh_mem_callback;
 #ifdef WIN_NT
 	bool sh_mem_unlink;

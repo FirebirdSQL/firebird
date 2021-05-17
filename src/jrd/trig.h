@@ -1930,56 +1930,6 @@ static const UCHAR trigger27[] =
 };
 
 
-/* new trigger to create ODS 8.1 (and to upgrade from ODS 8.0 to ODS 8.1 */
-static const UCHAR trigger31[] =
-{
-	blr_version5,
-	blr_begin,
-	blr_if,
-	blr_and,
-	blr_not,
-	blr_missing,
-	blr_field, 1, 11, 'R', 'D', 'B', '$', 'G', 'R', 'A', 'N', 'T', 'O', 'R',
-	blr_and,
-	blr_neq,
-	blr_field, 1, 11, 'R', 'D', 'B', '$', 'G', 'R', 'A', 'N', 'T', 'O', 'R',
-	blr_user_name,
-	blr_neq,
-	blr_sys_function, 20, 'R','D','B','$','S','Y','S','T','E','M','_','P','R','I','V','I','L','E','G','E',1,
-	blr_literal, blr_short, 0, Jrd::USE_GRANTED_BY_CLAUSE,0,
-	blr_literal, blr_bool, 1,
-	blr_begin,
-	blr_for,
-	blr_rse, 1,
-	blr_relation, 13, 'R', 'D', 'B', '$', 'R', 'E', 'L', 'A', 'T', 'I', 'O',
-		'N', 'S', 3,
-	blr_boolean,
-	blr_eql,
-	blr_field, 3, 17, 'R', 'D', 'B', '$', 'R', 'E', 'L', 'A', 'T', 'I', 'O',
-		'N', '_', 'N', 'A', 'M', 'E',
-	blr_literal, blr_text, 12, 0, 'R', 'D', 'B', '$', 'D', 'A', 'T', 'A', 'B',
-		'A', 'S', 'E',
-	blr_end,
-	blr_begin,
-	blr_if,
-	blr_or,
-	blr_missing,
-	blr_field, 3, 14, 'R', 'D', 'B', '$', 'O', 'W', 'N', 'E', 'R', '_', 'N',
-		'A', 'M', 'E',
-	blr_neq,
-	blr_field, 3, 14, 'R', 'D', 'B', '$', 'O', 'W', 'N', 'E', 'R', '_', 'N',
-		'A', 'M', 'E',
-	blr_user_name,
-	blr_leave, 0,
-	blr_end,
-	blr_end,
-	blr_end,
-	blr_end,
-	blr_end,
-	blr_eoc
-};
-
-
 /* ODS 8.1 trigger  */
 static const UCHAR trigger34[] =
 {

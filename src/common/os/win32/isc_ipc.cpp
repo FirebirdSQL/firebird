@@ -150,7 +150,7 @@ private:
 
 Firebird::GlobalPtr<OpenEvents> openEvents;
 
-int ISC_kill(SLONG pid, SLONG signal_number, void *object_hndl)
+int ISC_kill(SLONG pid, SLONG signal_number, HANDLE object_hndl)
 {
 /**************************************
  *
@@ -176,7 +176,7 @@ int ISC_kill(SLONG pid, SLONG signal_number, void *object_hndl)
 	return SetEvent(handle) ? 0 : -1;
 }
 
-void* ISC_make_signal(bool /*create_flag*/, bool manual_reset, int process_idL, int signal_number)
+HANDLE ISC_make_signal(bool /*create_flag*/, bool manual_reset, int process_idL, int signal_number)
 {
 /**************************************
  *

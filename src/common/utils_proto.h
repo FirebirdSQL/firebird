@@ -108,6 +108,19 @@ namespace fb_utils
 	// Return 0 if they are equal, <0 if n1 < n2 and >0 if n1 > n2.
 	inline int abs64Compare(SINT64 n1, SINT64 n2)
 	{
+#ifndef FB_INT64_COMPARE_FAILED
+#define FB_INT64_COMPARE_FAILED 1
+#endif
+
+#if FB_INT64_COMPARE_FAILED
+		// avoid compiler bug when comparing minimum INT64
+		const SINT64 MININT64 = 0x8000000000000000;
+		if (n1 == MININT64)
+			return n2 == MININT64 ? 0 : 2;
+		if (n2 == MININT64)
+			return -2;
+#endif
+
 		n1 = n1 > 0 ? -n1 : n1;
 		n2 = n2 > 0 ? -n2 : n2;
 		return n1 == n2 ? 0 : n1 < n2 ? 1 : -1;

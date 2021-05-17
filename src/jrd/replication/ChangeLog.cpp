@@ -73,11 +73,11 @@ namespace
 
 	const unsigned COPY_BLOCK_SIZE = 64 * 1024; // 64 KB
 
-	const char* LOGFILE_PATTERN = "%s.chlog-%09" UQUADFORMAT;
+	const char* FILENAME_PATTERN = "%s.journal-%09" UQUADFORMAT;
 
-	const char* LOGFILENAME_WILDCARD = "$(logfilename)";
-	const char* LOGPATHNAME_WILDCARD = "$(logpathname)";
-	const char* ARCHPATHNAME_WILDCARD = "$(archpathname)";
+	const char* FILENAME_WILDCARD = "$(filename)";
+	const char* PATHNAME_WILDCARD = "$(pathname)";
+	const char* ARCHPATHNAME_WILDCARD = "$(archivepathname)";
 
 	SegmentHeader g_dummyHeader;
 
@@ -133,9 +133,9 @@ ChangeLog::Segment::~Segment()
 
 void ChangeLog::Segment::init(FB_UINT64 sequence, const Guid& guid)
 {
-	fb_assert(sizeof(LOG_SIGNATURE) == sizeof(m_header->hdr_signature));
-	strcpy(m_header->hdr_signature, LOG_SIGNATURE);
-	m_header->hdr_version = LOG_CURRENT_VERSION;
+	fb_assert(sizeof(CHANGELOG_SIGNATURE) == sizeof(m_header->hdr_signature));
+	strcpy(m_header->hdr_signature, CHANGELOG_SIGNATURE);
+	m_header->hdr_version = CHANGELOG_CURRENT_VERSION;
 	m_header->hdr_state = SEGMENT_STATE_USED;
 	memcpy(&m_header->hdr_guid, &guid, sizeof(Guid));
 	m_header->hdr_sequence = sequence;
@@ -146,10 +146,10 @@ void ChangeLog::Segment::init(FB_UINT64 sequence, const Guid& guid)
 
 bool ChangeLog::Segment::validate(const Guid& guid) const
 {
-	if (strcmp(m_header->hdr_signature, LOG_SIGNATURE))
+	if (strcmp(m_header->hdr_signature, CHANGELOG_SIGNATURE))
 		return false;
 
-	if (m_header->hdr_version != LOG_CURRENT_VERSION)
+	if (m_header->hdr_version != CHANGELOG_CURRENT_VERSION)
 		return false;
 
 	if (m_header->hdr_state != SEGMENT_STATE_FREE &&
@@ -212,10 +212,10 @@ void ChangeLog::Segment::append(ULONG length, const UCHAR* data)
 	const auto currentLength = (SINT64) m_header->hdr_length;
 
 	if (os_utils::lseek(m_handle, currentLength, SEEK_SET) != currentLength)
-		raiseError("Log file %s seek failed (error %d)", m_filename.c_str(), ERRNO);
+		raiseError("Journal file %s seek failed (error %d)", m_filename.c_str(), ERRNO);
 
 	if (::write(m_handle, data, length) != length)
-		raiseError("Log file %s write failed (error %d)", m_filename.c_str(), ERRNO);
+		raiseError("Journal file %s write failed (error %d)", m_filename.c_str(), ERRNO);
 
 	m_header->hdr_length += length;
 }
@@ -243,7 +243,7 @@ void ChangeLog::Segment::truncate()
 #else
 	if (os_utils::ftruncate(m_handle, length))
 #endif
-		raiseError("Log file %s truncate failed (error %d)", m_filename.c_str(), ERRNO);
+		raiseError("Journal file %s truncate failed (error %d)", m_filename.c_str(), ERRNO);
 
 	mapHeader();
 }
@@ -267,18 +267,18 @@ void ChangeLog::Segment::mapHeader()
 								  0, sizeof(SegmentHeader), NULL);
 
 	if (m_mapping == INVALID_HANDLE_VALUE)
-		raiseError("Log file %s mapping failed (error %d)", m_filename.c_str(), ERRNO);
+		raiseError("Journal file %s mapping failed (error %d)", m_filename.c_str(), ERRNO);
 
 	auto address = MapViewOfFile(m_mapping, FILE_MAP_READ | FILE_MAP_WRITE,
 								  0, 0, sizeof(SegmentHeader));
 
 	if (!address)
-		raiseError("Log file %s mapping failed (error %d)", m_filename.c_str(), ERRNO);
+		raiseError("Journal file %s mapping failed (error %d)", m_filename.c_str(), ERRNO);
 #else
 	auto address = mmap(NULL, sizeof(SegmentHeader), PROT_READ | PROT_WRITE, MAP_SHARED, m_handle, 0);
 
 	if (address == MAP_FAILED)
-		raiseError("Log file %s mapping failed (error %d)", m_filename.c_str(), ERRNO);
+		raiseError("Journal file %s mapping failed (error %d)", m_filename.c_str(), ERRNO);
 #endif
 
 	m_header = (SegmentHeader*) address;
@@ -567,9 +567,9 @@ FB_UINT64 ChangeLog::write(ULONG length, const UCHAR* data, bool sync)
 		if (i == 0) // log the warning just once
 		{
 			const string warningMsg =
-				"Out of available space in changelog segments, waiting for archiving...";
+				"Out of available space in journal segments, waiting for archiving...";
 
-			logOriginMessage(m_config->dbName, warningMsg, WARNING_MSG);
+			logPrimaryWarning(m_config->dbName, warningMsg);
 		}
 
 		{	// scope
@@ -581,7 +581,7 @@ FB_UINT64 ChangeLog::write(ULONG length, const UCHAR* data, bool sync)
 	}
 
 	if (!segment)
-		raiseError("Out of available space in changelog segments");
+		raiseError("Out of available space in journal segments");
 
 	const auto state = m_sharedMemory->getHeader();
 
@@ -592,13 +592,13 @@ FB_UINT64 ChangeLog::write(ULONG length, const UCHAR* data, bool sync)
 
 	if (sync)
 	{
-		if (m_config->logGroupFlushDelay)
+		if (m_config->groupFlushDelay)
 		{
 			const auto flushMark = state->flushMark;
 
 			segment->addRef();
 
-			for (ULONG delay = 0; delay < m_config->logGroupFlushDelay;
+			for (ULONG delay = 0; delay < m_config->groupFlushDelay;
 				delay += FLUSH_WAIT_INTERVAL)
 			{
 				if (state->flushMark != flushMark)
@@ -630,25 +630,25 @@ FB_UINT64 ChangeLog::write(ULONG length, const UCHAR* data, bool sync)
 
 bool ChangeLog::archiveExecute(Segment* segment)
 {
-	if (m_config->logArchiveCommand.hasData())
+	if (m_config->archiveCommand.hasData())
 	{
 		segment->truncate();
 
-		auto archiveCommand = m_config->logArchiveCommand;
+		auto archiveCommand = m_config->archiveCommand;
 
-		const auto logfilename = segment->getFileName();
-		const auto logpathname = m_config->logDirectory + logfilename;
+		const auto filename = segment->getFileName();
+		const auto pathname = m_config->journalDirectory + filename;
 
-		const auto archpathname = m_config->logArchiveDirectory.hasData() ?
-			m_config->logArchiveDirectory + logfilename : "";
+		const auto archpathname = m_config->archiveDirectory.hasData() ?
+			m_config->archiveDirectory + filename : "";
 
 		size_t pos;
 
-		while ( (pos = archiveCommand.find(LOGFILENAME_WILDCARD)) != string::npos)
-			archiveCommand.replace(pos, strlen(LOGFILENAME_WILDCARD), logfilename);
+		while ( (pos = archiveCommand.find(FILENAME_WILDCARD)) != string::npos)
+			archiveCommand.replace(pos, strlen(FILENAME_WILDCARD), filename);
 
-		while ( (pos = archiveCommand.find(LOGPATHNAME_WILDCARD)) != string::npos)
-			archiveCommand.replace(pos, strlen(LOGPATHNAME_WILDCARD), logpathname);
+		while ( (pos = archiveCommand.find(PATHNAME_WILDCARD)) != string::npos)
+			archiveCommand.replace(pos, strlen(PATHNAME_WILDCARD), pathname);
 
 		while ( (pos = archiveCommand.find(ARCHPATHNAME_WILDCARD)) != string::npos)
 			archiveCommand.replace(pos, strlen(ARCHPATHNAME_WILDCARD), archpathname);
@@ -664,23 +664,23 @@ bool ChangeLog::archiveExecute(Segment* segment)
 
 			if (res < 0)
 			{
-				errorMsg.printf("Cannot execute log archive command (error %d): %s",
+				errorMsg.printf("Cannot execute journal archive command (error %d): %s",
 								ERRNO, archiveCommand.c_str());
 			}
 			else
 			{
-				errorMsg.printf("Unexpected result (%d) while executing log archive command: %s",
+				errorMsg.printf("Unexpected result (%d) while executing journal archive command: %s",
 								res, archiveCommand.c_str());
 			}
 
-			logOriginMessage(m_config->dbName, errorMsg, ERROR_MSG);
+			logPrimaryError(m_config->dbName, errorMsg);
 			return false;
 		}
 	}
-	else if (m_config->logArchiveDirectory.hasData())
+	else if (m_config->archiveDirectory.hasData())
 	{
-		const auto logfilename = segment->getFileName();
-		const auto archpathname = m_config->logArchiveDirectory + logfilename;
+		const auto filename = segment->getFileName();
+		const auto archpathname = m_config->archiveDirectory + filename;
 
 		struct stat statistics;
 		if (os_utils::stat(archpathname.c_str(), &statistics) == 0)
@@ -688,10 +688,10 @@ bool ChangeLog::archiveExecute(Segment* segment)
 			if (statistics.st_size > (int) sizeof(SegmentHeader))
 			{
 				string warningMsg;
-				warningMsg.printf("Destination log file %s exists, it will be overwritten",
+				warningMsg.printf("Destination journal file %s exists, it will be overwritten",
 								  archpathname.c_str());
 
-				logOriginMessage(m_config->dbName, warningMsg, WARNING_MSG);
+				logPrimaryWarning(m_config->dbName, warningMsg);
 			}
 		}
 
@@ -703,7 +703,7 @@ bool ChangeLog::archiveExecute(Segment* segment)
 		}
 		catch (const status_exception& ex)
 		{
-			string errorMsg = "Cannot copy log segment";
+			string errorMsg = "Cannot copy journal segment";
 			const ISC_STATUS* status = ex.value();
 
 			TEXT temp[BUFFER_LARGE];
@@ -713,13 +713,13 @@ bool ChangeLog::archiveExecute(Segment* segment)
 				errorMsg += temp;
 			}
 
-			logOriginMessage(m_config->dbName, errorMsg, ERROR_MSG);
+			logPrimaryError(m_config->dbName, errorMsg);
 			return false;
 		}
 		catch (...)
 		{
-			const string errorMsg = "Cannot copy log segment (reason unknown)";
-			logOriginMessage(m_config->dbName, errorMsg, ERROR_MSG);
+			const string errorMsg = "Cannot copy journal segment (reason unknown)";
+			logPrimaryError(m_config->dbName, errorMsg);
 			return false;
 		}
 	}
@@ -729,7 +729,7 @@ bool ChangeLog::archiveExecute(Segment* segment)
 
 bool ChangeLog::archiveSegment(Segment* segment)
 {
-//	if (m_config->logArchiveCommand.hasData() || m_config->logArchiveDirectory.hasData())
+//	if (m_config->archiveCommand.hasData() || m_config->archiveDirectory.hasData())
 	{
 		segment->setState(SEGMENT_STATE_ARCH);
 		segment->addRef();
@@ -788,11 +788,11 @@ void ChangeLog::bgArchiver()
 			{
 				if (segment->getState() == SEGMENT_STATE_USED)
 				{
-					if (segment->hasData() && m_config->logArchiveTimeout)
+					if (segment->hasData() && m_config->archiveTimeout)
 					{
 						const auto delta_timestamp = time(NULL) - state->timestamp;
 
-						if (delta_timestamp > m_config->logArchiveTimeout)
+						if (delta_timestamp > m_config->archiveTimeout)
 						{
 							segment->setState(SEGMENT_STATE_FULL);
 							state->flushMark++;
@@ -830,7 +830,7 @@ void ChangeLog::bgArchiver()
 	}
 	catch (const Exception& ex)
 	{
-		iscLogException("Error in changelog thread", ex);
+		iscLogException("Error in journal thread", ex);
 	}
 
 	// Signal about our exit
@@ -841,7 +841,7 @@ void ChangeLog::bgArchiver()
 	}
 	catch (const Exception& ex)
 	{
-		iscLogException("Error while exiting changelog thread", ex);
+		iscLogException("Error while exiting journal thread", ex);
 	}
 }
 
@@ -851,7 +851,7 @@ void ChangeLog::initSegments()
 
 	const auto state = m_sharedMemory->getHeader();
 
-	for (auto iter = PathUtils::newDirIterator(getPool(), m_config->logDirectory);
+	for (auto iter = PathUtils::newDirIterator(getPool(), m_config->journalDirectory);
 		*iter; ++(*iter))
 	{
 		const auto filename = **iter;
@@ -885,15 +885,15 @@ ChangeLog::Segment* ChangeLog::createSegment()
 	const auto sequence = ++state->sequence;
 
 	PathName filename;
-	filename.printf(LOGFILE_PATTERN, m_config->logFilePrefix.c_str(), sequence);
-	filename = m_config->logDirectory + filename;
+	filename.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), sequence);
+	filename = m_config->journalDirectory + filename;
 
 	const auto fd = os_utils::openCreateSharedFile(filename.c_str(), O_EXCL | O_BINARY);
 
 	if (::write(fd, &g_dummyHeader, sizeof(SegmentHeader)) != sizeof(SegmentHeader))
 	{
 		::close(fd);
-		raiseError("Log file %s write failed (error %d)", filename.c_str(), ERRNO);
+		raiseError("Journal file %s write failed (error %d)", filename.c_str(), ERRNO);
 	}
 
 	const auto segment = FB_NEW_POOL(getPool()) Segment(getPool(), filename, fd);
@@ -931,11 +931,11 @@ ChangeLog::Segment* ChangeLog::reuseSegment(ChangeLog::Segment* segment)
 	const auto sequence = ++state->sequence;
 
 	PathName newname;
-	newname.printf(LOGFILE_PATTERN, m_config->logFilePrefix.c_str(), sequence);
-	newname = m_config->logDirectory + newname;
+	newname.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), sequence);
+	newname = m_config->journalDirectory + newname;
 
 	if (::rename(orgname.c_str(), newname.c_str()) < 0)
-		raiseError("Log file %s rename failed (error: %d)", orgname.c_str(), ERRNO);
+		raiseError("Journal file %s rename failed (error: %d)", orgname.c_str(), ERRNO);
 
 	// Re-open the segment using a new name and initialize it
 
@@ -966,7 +966,7 @@ ChangeLog::Segment* ChangeLog::getSegment(ULONG length)
 		if (segmentState == SEGMENT_STATE_USED)
 		{
 			if (activeSegment)
-				raiseError("Multiple active changelog segments found");
+				raiseError("Multiple active journal segments found");
 
 			activeSegment = segment;
 		}
@@ -984,18 +984,18 @@ ChangeLog::Segment* ChangeLog::getSegment(ULONG length)
 
 	if (activeSegment)
 	{
-		if (activeSegment->getLength() + length > m_config->logSegmentSize)
+		if (activeSegment->getLength() + length > m_config->segmentSize)
 		{
 			activeSegment->setState(SEGMENT_STATE_FULL);
 			state->flushMark++;
 			activeSegment = NULL;
 			m_workingSemaphore.release();
 		}
-		else if (activeSegment->hasData() && m_config->logArchiveTimeout)
+		else if (activeSegment->hasData() && m_config->archiveTimeout)
 		{
 			const size_t deltaTimestamp = time(NULL) - state->timestamp;
 
-			if (deltaTimestamp > m_config->logArchiveTimeout)
+			if (deltaTimestamp > m_config->archiveTimeout)
 			{
 				activeSegment->setState(SEGMENT_STATE_FULL);
 				activeSegment = NULL;
@@ -1012,7 +1012,7 @@ ChangeLog::Segment* ChangeLog::getSegment(ULONG length)
 
 	// Allocate one more segment if configuration allows that
 
-	if (!m_config->logSegmentCount || m_segments.getCount() < m_config->logSegmentCount)
+	if (!m_config->segmentCount || m_segments.getCount() < m_config->segmentCount)
 		return createSegment();
 
 	return NULL;

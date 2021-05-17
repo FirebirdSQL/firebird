@@ -2594,9 +2594,6 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, jrd_req* request, WhichTrigger
 	record_param* rpb = &request->req_rpb[stream];
 	jrd_rel* relation = rpb->rpb_relation;
 
-	if (rpb->rpb_number.isBof() || (!relation->rel_view_rse && !rpb->rpb_number.isValid()))
-		ERR_post(Arg::Gds(isc_no_cur_rec));
-
 	switch (request->req_operation)
 	{
 		case jrd_req::req_evaluate:
@@ -2625,6 +2622,12 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, jrd_req* request, WhichTrigger
 
 	request->req_operation = jrd_req::req_return;
 	RLCK_reserve_relation(tdbb, transaction, relation, true);
+
+	if (rpb->rpb_runtime_flags & RPB_just_deleted)
+		return parentStmt;
+
+	if (rpb->rpb_number.isBof() || (!relation->rel_view_rse && !rpb->rpb_number.isValid()))
+		ERR_post(Arg::Gds(isc_no_cur_rec));
 
 	if (forNode && forNode->isWriteLockMode(request))
 	{
@@ -2672,6 +2675,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, jrd_req* request, WhichTrigger
 			forNode->setWriteLockMode(request);
 			return parentStmt;
 		}
+
 		REPL_erase(tdbb, rpb, transaction);
 	}
 
@@ -2698,6 +2702,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, jrd_req* request, WhichTrigger
 	}
 
 	rpb->rpb_number.setValid(false);
+	rpb->rpb_runtime_flags |= RPB_just_deleted;
 
 	return parentStmt;
 }
@@ -6599,9 +6604,6 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, jrd_req* request, WhichTrigg
 	record_param* orgRpb = &request->req_rpb[orgStream];
 	jrd_rel* relation = orgRpb->rpb_relation;
 
-	if (orgRpb->rpb_number.isBof() || (!relation->rel_view_rse && !orgRpb->rpb_number.isValid()))
-		ERR_post(Arg::Gds(isc_no_cur_rec));
-
 	record_param* newRpb = &request->req_rpb[newStream];
 
 	switch (request->req_operation)
@@ -6666,6 +6668,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, jrd_req* request, WhichTrigg
 						forNode->setWriteLockMode(request);
 						return parentStmt;
 					}
+
 					IDX_modify(tdbb, orgRpb, newRpb, transaction);
 					REPL_modify(tdbb, orgRpb, newRpb, transaction);
 				}
@@ -6717,6 +6720,15 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, jrd_req* request, WhichTrigg
 
 	impure->sta_state = 0;
 	RLCK_reserve_relation(tdbb, transaction, relation, true);
+
+	if (orgRpb->rpb_runtime_flags & RPB_just_deleted)
+	{
+		request->req_operation = jrd_req::req_return;
+		return parentStmt;
+	}
+
+	if (orgRpb->rpb_number.isBof() || (!relation->rel_view_rse && !orgRpb->rpb_number.isValid()))
+		ERR_post(Arg::Gds(isc_no_cur_rec));
 
 	if (forNode && (marks & StmtNode::MARK_MERGE))
 		forNode->checkRecordUpdated(tdbb, request, orgRpb);

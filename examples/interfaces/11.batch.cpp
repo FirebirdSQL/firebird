@@ -223,7 +223,7 @@ int main()
 			NULL, NULL, NULL, NULL);
 
 		//
-		printf("\nPart 1. Simple messages. Adding one by one or by groups of messages.\n");
+		printf("\nPart 1. Simple messages. Adding one by one or by groups of messages, cancel batch.\n");
 		//
 
 		// Message to store in a table
@@ -251,7 +251,7 @@ int main()
 
 		// fill batch with data record by record
 		project1->id.set("BAT11");
-		project1->name.set("SNGL_REC");
+		project1->name.set("SNGL_REC1");
 		batch->add(&status, 1, project1.getData());
 
 		project1->id.set("BAT12");
@@ -261,6 +261,17 @@ int main()
 		// execute it
 		cs = batch->execute(&status, tra);
 		print_cs(status, cs, utl);
+
+		// add a big set of same records ...
+		for (int i = 0; i < 100000; ++i)
+		{
+			project1->id.set("BAT11");
+			project1->name.set("SNGL_REC");
+			batch->add(&status, 1, project1.getData());
+		}
+
+		// ... and cancel that records
+		batch->cancel(&status);
 
 		// fill batch with data using many records at once
 		stream = streamStart;
@@ -285,18 +296,18 @@ int main()
 		project1->name.set("STRM_REC_D");
 		putMsg(stream, project1.getData(), mesLength, mesAlign);
 
-		project1->id.set("BAT16");
+		project1->id.set("BAT16");		// will not be processed due to return on single error
 		project1->name.set("STRM_REC_E");
 		putMsg(stream, project1.getData(), mesLength, mesAlign);
 
-		batch->add(&status, 1, streamStart);
+		batch->add(&status, 2, streamStart);
 
 		// execute it
 		cs = batch->execute(&status, tra);
 		print_cs(status, cs, utl);
 
 		// close batch
-		batch->release();
+		batch->close(&status);
 		batch = NULL;
 
 		//
@@ -366,7 +377,7 @@ int main()
 		print_cs(status, cs, utl);
 
 		// close batch
-		batch->release();
+		batch->close(&status);
 		batch = NULL;
 
 		//
@@ -493,7 +504,7 @@ int main()
 		print_cs(status, cs, utl);
 
 		// cleanup
-		batch->release();
+		batch->close(&status);
 		batch = NULL;
 		tra->commit(&status);
 		tra = NULL;

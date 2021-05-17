@@ -96,6 +96,8 @@ Token& Lexer::getToken(Token& token)
 			token.type = Token::TYPE_TYPEDEF;
 		else if (token.text == "version")
 			token.type = Token::TYPE_VERSION;
+		else if (token.text == "onError")
+			token.type = Token::TYPE_ON_ERROR;
 		// types
 		else if (token.text == "void")
 			token.type = Token::TYPE_VOID;

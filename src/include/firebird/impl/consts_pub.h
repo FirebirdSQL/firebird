@@ -746,6 +746,7 @@
 #define fb_shutrsn_signal				  -5
 #define fb_shutrsn_services				  -6
 #define fb_shutrsn_exit_called			  -7
+#define fb_shutrsn_emergency			  -8
 
 /****************************************/
 /* Cancel types for fb_cancel_operation */
