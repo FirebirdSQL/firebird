@@ -56,7 +56,7 @@
 #define blr_blob		(unsigned short)261
 #define blr_cstring		(unsigned char)40
 #define blr_cstring2    	(unsigned char)41	/* added in 3.2 JPN */
-#define blr_blob_id     	(unsigned char)45	/* added from gds.h */
+#define blr_blob_id     	(unsigned char)45
 #define blr_sql_date		(unsigned char)12
 #define blr_sql_time		(unsigned char)13
 #define blr_int64           (unsigned char)16
@@ -105,7 +105,7 @@
 
 #define blr_assignment		(unsigned char)1
 #define blr_begin		(unsigned char)2
-#define blr_dcl_variable  	(unsigned char)3	/* added from gds.h */
+#define blr_dcl_variable  	(unsigned char)3
 #define blr_message		(unsigned char)4
 #define blr_erase		(unsigned char)5
 #define blr_fetch		(unsigned char)6
@@ -147,7 +147,7 @@
 #define blr_parameter2		(unsigned char)41
 #define blr_from		(unsigned char)42
 #define blr_via			(unsigned char)43
-#define blr_user_name   	(unsigned char)44	/* added from gds.h */
+#define blr_user_name   	(unsigned char)44
 #define blr_null		(unsigned char)45
 
 #define blr_equiv			(unsigned char)46

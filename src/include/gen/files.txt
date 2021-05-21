@@ -1,5 +1,4 @@
 gds_codes.pas
-gds_codes.ftn
 iberror.h
 codetext.h
 msgs.h

@@ -37,7 +37,6 @@
 DATABASE DB = FILENAME "msg.fdb";
 
 const char* CODES_PAS	= "gds_codes.pas";
-const char* CODES_FTN	= "gds_codes.ftn";
 //const char* CODES_H	= "codes.h"
 const char* IBERROR_H	= "iberror.h";
 const char* CODETEXT_H	= "codetext.h";
@@ -51,8 +50,7 @@ enum formatStyle
 {
 	CSTYLE 		=	1,
 	PASSTYLE	=	2,
-	FTNSTYLE	=	3,
-	CPPSTYLE	=	4
+	CPPSTYLE	=	3
 };
 
 
@@ -64,7 +62,7 @@ static void move_if_not_identical(const char *, const char *, const char*);
 static void add_text(FILE*, formatStyle, const char**);
 
 static const char* genDirectory = NULL;
-static const char* genFtnPasDirectory = NULL;
+static const char* genPasDirectory = NULL;
 
 static void check_open(FILE*& f, const char* name, const char* tmp, const char* mode)
 {
@@ -240,40 +238,6 @@ static const SCHAR *pas_boiler_plate[] =
 	"",
 };
 
-static const SCHAR *ftn_boiler_plate_data[] =
-{
-	"",
-	"      PARAMETER (",
-	"     + GDS_ARG_END          = 0,   { end of argument list }",
-	"     + GDS_ARG_GDS          = 1,   { generic DSRI status value }",
-	"     + GDS_ARG_STRING       = 2,   { string argument }",
-	"     + GDS_ARG_CSTRING      = 3,   { count & string argument }",
-	"     + GDS_ARG_NUMBER       = 4,   { numeric argument (long) }",
-	"     + GDS_ARG_INTERPRETED  = 5,   { interpreted status code (string) }",
-	"     + GDS_ARG_VMS          = 6,   { VAX/VMS status code (long) }",
-	"     + GDS_ARG_UNIX         = 7,   { UNIX error code }",
-	"     + GDS_ARG_DOMAIN       = 8,   { Apollo/Domain error code }",
-	"     + GDS_ARG_DOS          = 9)   { MSDOS/OS2 error code }",
-	"",
-};
-
-static const SCHAR *ftn_boiler_plate_decls[] =
-{
-	"      INTEGER*4",
-	"     + GDS_ARG_END,          { end of argument list }",
-	"     + GDS_ARG_GDS,          { generic DSRI status value }",
-	"     + GDS_ARG_STRING,       { string argument }",
-	"     + GDS_ARG_CSTRING,      { count & string argument }",
-	"     + GDS_ARG_NUMBER,       { numeric argument (long) }",
-	"     + GDS_ARG_INTERPRETED,  { interpreted status code (string) }",
-	"     + GDS_ARG_VMS,          { VAX/VMS status code (long) }",
-	"     + GDS_ARG_UNIX,         { UNIX error code }",
-	"     + GDS_ARG_DOMAIN,       { Apollo/Domain error code }",
-	"     + GDS_ARG_DOS           { MSDOS/OS2 error code }",
-	"",
-};
-
-
 int CLIB_ROUTINE main( int argc, char *argv[])
 {
 /*************************************
@@ -301,7 +265,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		genDirectory = argv[1];
 	}
 	if (argc >= 2 ) {
-		genFtnPasDirectory = argv[2];
+		genPasDirectory = argv[2];
 	}
 
 	START_TRANSACTION;
@@ -698,8 +662,6 @@ static void build_other_headers()
 
 	FILE* pas_codes = NULL;
 	check_open(pas_codes, CODES_PAS, "tmpcode4", "w");
-	FILE* ftn_codes = NULL;
-	check_open(ftn_codes, CODES_FTN, "tmpcode5", "w");
 	FILE* code_text = NULL;
 	check_open(code_text, CODETEXT_H, "tmpcode6", "w");
 	FILE* msgs = NULL;
@@ -713,8 +675,6 @@ static void build_other_headers()
 
 	add_text(pas_codes, PASSTYLE, license);
 	add_text(pas_codes, PASSTYLE, warn);
-	add_text(ftn_codes, FTNSTYLE, license);
-	add_text(ftn_codes, FTNSTYLE, warn);
 	add_text(code_text, CSTYLE, license);
 	add_text(code_text, CSTYLE, warn);
 	add_text(msgs, CSTYLE, license);
@@ -752,31 +712,6 @@ static void build_other_headers()
 	}
 	for (i = 0; i < numLines; i++) {
 		fprintf(pas_codes, "%s\n", pas_boiler_plate[i]);
-	}
-
-	// Start the FORTRAN codes file
-
-	fprintf(ftn_codes, "\n"
-		"      INTEGER*4\n"
-		"     + GDS_FACILITY,\n"
-		"     + GDS_ERR_BASE,\n"
-		"     + GDS_ERR_FACTOR\n");
-
-	numLines = FB_NELEM(ftn_boiler_plate_decls);
-	for (i = 0; i < numLines; i++) {
-		fprintf(ftn_codes, "%s\n", ftn_boiler_plate_decls[i]);
-	}
-
-	fprintf(ftn_codes, "\n"
-		"      PARAMETER (\n"
-		"     + GDS_FACILITY    = %d,\n"
-		"     + GDS_ERR_BASE    = %d,\n"
-		"     + GDS_ERR_FACTOR  = %d)\n",
-		gds_facility_local, gds_base_local, gds_factor_local);
-
-	numLines = FB_NELEM(ftn_boiler_plate_data);
-	for (i = 0; i < numLines; i++) {
-		fprintf(ftn_codes, "%s\n", ftn_boiler_plate_data[i]);
 	}
 
 	// Start the codetext.h
@@ -828,9 +763,6 @@ static void build_other_headers()
 
 		fprintf(pas_codes, "\tisc_%-32.32s = %lu;\n", S.GDS_SYMBOL, new_code);
 		fprintf(pas_codes, "\tgds_%-32.32s = %lu;\n", S.GDS_SYMBOL, new_code);
-		fprintf(ftn_codes,
-				   "      INTEGER*4 GDS__%-32.32s\n      PARAMETER (GDS__%-32.32s = %lu)\n",
-				   S.GDS_SYMBOL, S.GDS_SYMBOL, new_code);
 
 		SCHAR* q = text;
 		const SCHAR* const end = q + sizeof(text) - 1;
@@ -911,8 +843,7 @@ static void build_other_headers()
 	fprintf(sql_states, "\t{0, NULL}\n");
 	fprintf(sql_states, "};\n");
 
-	check_close(pas_codes, CODES_PAS, "tmpcode4", genFtnPasDirectory);
-	check_close(ftn_codes, CODES_FTN, "tmpcode5", genFtnPasDirectory);
+	check_close(pas_codes, CODES_PAS, "tmpcode4", genPasDirectory);
 	check_close(code_text, CODETEXT_H, "tmpcode6", genDirectory);
 	check_close(msgs, MSGS_H, "tmpcode7", genDirectory);
 	check_close(sql_codes, SQL_CODES_H, "tmpcode9", genDirectory);
@@ -995,10 +926,6 @@ static void add_text(FILE* fd, formatStyle style, const char** text)
 		fprintf(fd, "(*\n");
 		break;
 
-	case FTNSTYLE:
-		fprintf(fd, "C --\n");
-		break;
-
 	case CPPSTYLE:
 		fprintf(fd, "//\n");
 		break;
@@ -1018,10 +945,6 @@ static void add_text(FILE* fd, formatStyle style, const char** text)
 			fprintf(fd, " *");
 			break;
 
-		case FTNSTYLE:
-			fprintf(fd, "C --");
-			break;
-
 		case CPPSTYLE:
 			fprintf(fd, "//");
 			break;
@@ -1039,10 +962,6 @@ static void add_text(FILE* fd, formatStyle style, const char** text)
 
 	case PASSTYLE:
 		fprintf(fd, " *)\n");
-		break;
-
-	case FTNSTYLE:
-		fprintf(fd, "C --\n");
 		break;
 
 	case CPPSTYLE:

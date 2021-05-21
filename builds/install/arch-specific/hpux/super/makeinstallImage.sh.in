@@ -182,7 +182,7 @@ copyFiles() {
 
 
 # link include files to /usr/include
-	for i in gds.h iberror.h ibase.h ib_util.h
+	for i in iberror.h ibase.h ib_util.h
 	   do
 		   ln -s ../../$FBRootDir/include/$i $TargetDir/usr/include/$i
 	   done

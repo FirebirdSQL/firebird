@@ -1961,11 +1961,6 @@
 			path = files.txt;
 			refType = 4;
 		};
-		F616C45A0200B0CF01EF0ADE = {
-			isa = PBXFileReference;
-			path = gds_codes.ftn;
-			refType = 4;
-		};
 		F616C45B0200B0CF01EF0ADE = {
 			isa = PBXFileReference;
 			path = gds_codes.pas;
@@ -5675,19 +5670,9 @@
 			path = codetext.h;
 			refType = 4;
 		};
-		F616C7F70200B0D001EF0ADE = {
-			isa = PBXFileReference;
-			path = gds_codes.ftn;
-			refType = 4;
-		};
 		F616C7F80200B0D001EF0ADE = {
 			isa = PBXFileReference;
 			path = gds_codes.pas;
-			refType = 4;
-		};
-		F616C7F90200B0D001EF0ADE = {
-			isa = PBXFileReference;
-			path = gds_header.txt;
 			refType = 4;
 		};
 		F616C7FA0200B0D001EF0ADE = {

@@ -109,7 +109,6 @@ f none @prefix@/help/help.fdb=$SRCDIR/help/help.fdb  0444 root root
 
 d none @prefix@/include  0755 root root
 f none @prefix@/include/blr.h=$SRCDIR/include/blr.h  0644 root root
-f none @prefix@/include/gds.h=$SRCDIR/include/gds.h  0644 root root
 f none @prefix@/include/ib_util.h=$SRCDIR/include/ib_util.h  0644 root root
 f none @prefix@/include/ibase.h=$SRCDIR/include/ibase.h  0644 root root
 f none @prefix@/include/iberror.h=$SRCDIR/include/iberror.h  0644 root root
