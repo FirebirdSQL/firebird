@@ -30,23 +30,23 @@ extern "C" {
 
 ISC_STATUS API_ROUTINE gds__close(ISC_STATUS*, const SCHAR*);
 ISC_STATUS API_ROUTINE gds__declare(ISC_STATUS*, const SCHAR*, const SCHAR*);
-ISC_STATUS API_ROUTINE gds__describe(ISC_STATUS*, const SCHAR*, SQLDA*);
-ISC_STATUS API_ROUTINE gds__describe_bind(ISC_STATUS*, const SCHAR*, SQLDA*);
+ISC_STATUS API_ROUTINE gds__describe(ISC_STATUS*, const SCHAR*, XSQLDA*);
+ISC_STATUS API_ROUTINE gds__describe_bind(ISC_STATUS*, const SCHAR*, XSQLDA*);
 ISC_STATUS API_ROUTINE gds__dsql_finish(FB_API_HANDLE*);
-ISC_STATUS API_ROUTINE gds__execute(ISC_STATUS*, FB_API_HANDLE*, const SCHAR*, SQLDA*);
+ISC_STATUS API_ROUTINE gds__execute(ISC_STATUS*, FB_API_HANDLE*, const SCHAR*, XSQLDA*);
 ISC_STATUS API_ROUTINE gds__execute_immediate(ISC_STATUS*, FB_API_HANDLE*, FB_API_HANDLE*,
 											 SSHORT*, const SCHAR*);
-ISC_STATUS API_ROUTINE gds__fetch(ISC_STATUS*, const SCHAR*, SQLDA*);
-ISC_STATUS API_ROUTINE gds__fetch_a(ISC_STATUS*, int*, const SCHAR*, SQLDA*);
-ISC_STATUS API_ROUTINE gds__open(ISC_STATUS*, FB_API_HANDLE*, const SCHAR*, SQLDA*);
+ISC_STATUS API_ROUTINE gds__fetch(ISC_STATUS*, const SCHAR*, XSQLDA*);
+ISC_STATUS API_ROUTINE gds__fetch_a(ISC_STATUS*, int*, const SCHAR*, XSQLDA*);
+ISC_STATUS API_ROUTINE gds__open(ISC_STATUS*, FB_API_HANDLE*, const SCHAR*, XSQLDA*);
 ISC_STATUS API_ROUTINE gds__prepare(ISC_STATUS*, FB_API_HANDLE*, FB_API_HANDLE*, const SCHAR*,
-								   const SSHORT*, const SCHAR*, SQLDA*);
-ISC_STATUS API_ROUTINE gds__to_sqlda(SQLDA*, int, SCHAR*, int, SCHAR*);
+								   const SSHORT*, const SCHAR*, XSQLDA*);
+ISC_STATUS API_ROUTINE gds__to_sqlda(XSQLDA*, int, SCHAR*, int, SCHAR*);
 ISC_STATUS API_ROUTINE isc_close(ISC_STATUS*, const SCHAR*);
 ISC_STATUS API_ROUTINE isc_declare(ISC_STATUS*, const SCHAR*, const SCHAR*);
 ISC_STATUS API_ROUTINE isc_dsql_finish(FB_API_HANDLE*);
 ISC_STATUS API_ROUTINE isc_dsql_release(ISC_STATUS*, const SCHAR*);
-ISC_STATUS API_ROUTINE isc_dsql_fetch_a(ISC_STATUS*, int*, int*, USHORT, int*);
+ISC_STATUS API_ROUTINE isc_dsql_fetch_a(ISC_STATUS*, int*, int*, USHORT, XSQLDA*);
 
 ISC_STATUS API_ROUTINE isc_embed_dsql_close(ISC_STATUS*, const SCHAR*);
 ISC_STATUS API_ROUTINE isc_embed_dsql_declare(ISC_STATUS*, const SCHAR*, const SCHAR*);
@@ -76,8 +76,8 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_prepare(ISC_STATUS*, FB_API_HANDLE*, FB_AP
 ISC_STATUS API_ROUTINE isc_embed_dsql_release(ISC_STATUS*, const SCHAR*);
 ISC_STATUS API_ROUTINE isc_execute_immediate(ISC_STATUS*, FB_API_HANDLE*, FB_API_HANDLE*,
 	SSHORT*, const SCHAR*);
-ISC_STATUS API_ROUTINE isc_fetch_a(ISC_STATUS*, int*, const SCHAR*, SQLDA*);
-int    API_ROUTINE isc_to_sqlda(SQLDA*, int, SCHAR*, int, SCHAR*);
+ISC_STATUS API_ROUTINE isc_fetch_a(ISC_STATUS*, int*, const SCHAR*, XSQLDA*);
+int    API_ROUTINE isc_to_sqlda(XSQLDA*, int, SCHAR*, int, SCHAR*);
 
 ISC_STATUS API_ROUTINE isc_describe(ISC_STATUS*, const SCHAR*, XSQLDA*);
 ISC_STATUS API_ROUTINE isc_describe_bind(ISC_STATUS*, const SCHAR*, XSQLDA*);

@@ -569,9 +569,6 @@
     <ClInclude Include="..\..\..\src\dsql\pass1_proto.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\dsql\sqlda.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\dsql\sqlda_pub.h">
       <Filter>Header files</Filter>
     </ClInclude>

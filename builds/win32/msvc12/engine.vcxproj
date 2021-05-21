@@ -195,7 +195,6 @@
     <ClInclude Include="..\..\..\src\dsql\PackageNodes.h" />
     <ClInclude Include="..\..\..\src\dsql\Parser.h" />
     <ClInclude Include="..\..\..\src\dsql\pass1_proto.h" />
-    <ClInclude Include="..\..\..\src\dsql\sqlda.h" />
     <ClInclude Include="..\..\..\src\dsql\sqlda_pub.h" />
     <ClInclude Include="..\..\..\src\dsql\StmtNodes.h" />
     <ClInclude Include="..\..\..\src\dsql\sym.h" />

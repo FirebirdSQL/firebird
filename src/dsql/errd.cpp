@@ -34,7 +34,6 @@
 #include <string.h>
 
 #include "../dsql/dsql.h"
-#include "../dsql/sqlda.h"
 #include "gen/iberror.h"
 #include "../jrd/jrd.h"
 #include "../dsql/errd_proto.h"

@@ -33,7 +33,6 @@
 #include "gen/iberror.h"
 #include "gen/msg_facs.h"
 #include "../yvalve/YObjects.h"
-#include "../dsql/sqlda.h"
 #include "firebird/impl/sqlda_pub.h"
 #include "../common/gdsassert.h"
 #include "../common/db_alias.h"

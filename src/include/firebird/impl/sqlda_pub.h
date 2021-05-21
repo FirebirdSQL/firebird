@@ -95,7 +95,7 @@ typedef struct
 /* SQL Dialects            */
 /***************************/
 
-#define SQL_DIALECT_V5				1	/* meaning is same as DIALECT_xsqlda */
+#define SQL_DIALECT_V5				1
 #define SQL_DIALECT_V6_TRANSITION	2	/* flagging anything that is delimited
 										   by double quotes as an error and
 										   flagging keyword DATE as an error */
