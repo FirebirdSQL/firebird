@@ -113,6 +113,12 @@ void divorce_terminal(int mask)
 		}
 	}
 
+	if (int dev_null = open("/dev/null", O_RDWR) >= 0)
+	{
+		dup2(dev_null, fileno(stdout));
+		dup2(dev_null, fileno(stderr));
+	}
+
 #ifdef SIGTTOU
 	// ignore all the teminal related signal if define
 	signal(SIGTTOU, SIG_IGN);
