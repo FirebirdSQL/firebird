@@ -673,7 +673,6 @@ XE_CONF_DIR(fbinclude, [C/C++ header files DIR (PREFIX/include)], FB_INCDIR, /in
 XE_CONF_DIR(fbdoc, [documentation root DIR (PREFIX/doc)], FB_DOCDIR, /doc)
 XE_CONF_DIR(fbsample, [examples DIR (PREFIX/examples)], FB_SAMPLEDIR, /examples)
 XE_CONF_DIR(fbsample-db, [examples database DIR (PREFIX/examples/empbuild)], FB_SAMPLEDBDIR, /examples/empbuild)
-XE_CONF_DIR(fbhelp, [QLI help DIR (PREFIX/help)], FB_HELPDIR, /help)
 XE_CONF_DIR(fbintl, [international DIR (PREFIX/intl)], FB_INTLDIR, /intl)
 XE_CONF_DIR(fbmisc, [misc DIR (PREFIX/misc)], FB_MISCDIR, /misc)
 XE_CONF_DIR(fbsecure-db, [security database DIR (PREFIX)], FB_SECDBDIR)
@@ -1241,7 +1240,6 @@ dnl # output
 	mkdir -p gen/\$fb_tgt/firebird/examples/prebuilt/plugins
 	mkdir -p gen/\$fb_tgt/firebird/lib
 	mkdir -p gen/\$fb_tgt/firebird/misc
-	mkdir -p gen/\$fb_tgt/firebird/help
 
 dnl ### TEMP ### directories for generated .cpp, .o and .d by module name
 	for src_dir in `cd src; ls -R -1 * | grep : | tr -d : | tr "\n" " "; cd ..`; do

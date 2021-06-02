@@ -326,7 +326,6 @@
 #define FB_CONFDIR ""
 #define FB_DOCDIR ""
 #define FB_GUARDDIR ""
-#define FB_HELPDIR ""
 #define FB_INCDIR ""
 #define FB_INTLDIR ""
 #define FB_LIBDIR ""

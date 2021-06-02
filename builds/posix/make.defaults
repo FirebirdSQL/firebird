@@ -399,9 +399,6 @@ INSTSVC		= $(BIN)/instsvc$(EXEC_EXT)
 
 SECURITY_FDB	= $(FIREBIRD)/security5.fdb
 
-# From qli
-QLI            = $(BIN)/qli$(EXEC_EXT)
-
 # From isql
 ISQL            = $(BIN)/isql$(EXEC_EXT)
 RUN_ISQL        = $(RBIN)/isql$(EXEC_EXT)

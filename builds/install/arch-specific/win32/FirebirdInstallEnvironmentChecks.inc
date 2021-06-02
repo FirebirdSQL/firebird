@@ -748,7 +748,7 @@ procedure SetupSharedFilesArray;
 //to list them in the order they appear in the setup script
 // Shared Files are defined as either:
 // - Files which are absolutely necessary for a functioning installation.
-//     Hence gbak and gfix are shared files, isql and qli are not
+//     Hence gbak and gfix are shared files, isql is not
 // - Libraries
 // - License files
 begin
@@ -803,7 +803,7 @@ SharedFileArray[34].Filename := ExpandConstant('{app}')+'fbtracemgr.exe';
 SharedFileArray[35].Filename := ExpandConstant('{app}')+'zlib1.dll';
 SharedFileArray[36].Filename := ExpandConstant('{app}')+'replication.conf';
 
-// FIXME 
+// FIXME
 // Add in WOW64 here.
 
 end;
@@ -1135,7 +1135,7 @@ begin
 
   //If existing install of the same majorver.minorver is
   //found then we can upgrade it.
-//// **** FIX ME **** Don't use hardcoded constants here. They get overlooked.	
+//// **** FIX ME **** Don't use hardcoded constants here. They get overlooked.
   if ( (ProductsInstalledCount = 1) AND
 #if PlatformTarget == "x64"
     ((ProductsInstalled AND FB30_x64 ) = FB30_x64 ) ) then begin

@@ -46,9 +46,6 @@
 /* guardian lock DIR (PREFIX) */
 #define FB_GUARDDIR ""
 
-/* QLI help DIR (PREFIX/help) */
-#define FB_HELPDIR ""
-
 /* C/C++ header files DIR (PREFIX/include) */
 #define FB_INCDIR ""
 

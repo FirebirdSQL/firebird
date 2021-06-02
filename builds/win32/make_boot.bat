@@ -19,7 +19,7 @@ set ERRLEV=0
 @echo.
 @echo Creating directories
 :: Create the directory hierarchy.
-for %%v in ( alice auth burp dsql gpre isql jrd misc msgs qli examples yvalve utilities) do (
+for %%v in ( alice auth burp dsql gpre isql jrd misc msgs examples yvalve utilities) do (
   @mkdir %FB_GEN_DIR%\%%v 2>nul
 )
 
@@ -187,7 +187,7 @@ goto :EOF
 @echo Building re2...
 @mkdir %FB_ROOT_PATH%\extern\re2\builds\%FB_TARGET_PLATFORM% 2>nul
 @pushd %FB_ROOT_PATH%\extern\re2\builds\%FB_TARGET_PLATFORM%
-@cmake -G "Visual Studio %MSVC_VERSION%" -A %FB_TARGET_PLATFORM% -S %FB_ROOT_PATH%\extern\re2 
+@cmake -G "Visual Studio %MSVC_VERSION%" -A %FB_TARGET_PLATFORM% -S %FB_ROOT_PATH%\extern\re2
 if errorlevel 1 call :boot2 re2
 @cmake --build %FB_ROOT_PATH%\extern\re2\builds\%FB_TARGET_PLATFORM% --target ALL_BUILD --config Release > re2_Release_%FB_TARGET_PLATFORM%.log
 @cmake --build %FB_ROOT_PATH%\extern\re2\builds\%FB_TARGET_PLATFORM% --target ALL_BUILD --config Debug > re2_Debug_%FB_TARGET_PLATFORM%.log
@@ -312,13 +312,7 @@ goto :EOF
 @"%FB_BIN_DIR%\isql" -q %FB_GEN_DB_DIR%/dbs/security5.fdb -i %FB_ROOT_PATH%\src\dbs\security.sql
 @copy %FB_GEN_DIR%\dbs\security5.fdb %FB_GEN_DIR%\dbs\security.fdb > nul
 
-@echo Restore metadata.gbak...
-@%FB_BIN_DIR%\gbak -r %FB_ROOT_PATH%\builds\misc\metadata.gbak %FB_GEN_DB_DIR%/dbs/metadata.fdb
-
 @call create_msgs.bat db
-
-@%FB_BIN_DIR%\gbak -r %FB_ROOT_PATH%\builds\misc\help.gbak %FB_GEN_DB_DIR%/dbs/help.fdb
-@copy %FB_GEN_DIR%\dbs\metadata.fdb %FB_GEN_DIR%\dbs\yachts.lnk > nul
 
 @goto :EOF
 

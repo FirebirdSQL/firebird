@@ -162,7 +162,7 @@ copyFiles() {
 
 	#directories
     makeDirs "@FB_BINDIR@ @FB_SBINDIR@ @FB_CONFDIR@ @FB_LIBDIR@ @FB_INCDIR@/firebird @FB_DOCDIR@/sql.extensions \
-    		  @FB_SAMPLEDIR@ @FB_SAMPLEDBDIR@ @FB_HELPDIR@ @FB_INTLDIR@ @FB_MISCDIR@ @FB_SECDBDIR@ @FB_MSGDIR@ @FB_LOGDIR@ \
+    		  @FB_SAMPLEDIR@ @FB_SAMPLEDBDIR@ @FB_INTLDIR@ @FB_MISCDIR@ @FB_SECDBDIR@ @FB_MSGDIR@ @FB_LOGDIR@ \
     		  @FB_GUARDDIR@ @FB_PLUGDIR@ @FB_TZDATADIR@"
 
 	for i in udf; do
@@ -182,7 +182,6 @@ copyFiles() {
     copyIfExists $BuiltFBDir/bin/fbsvcmgr ${TargetDir}@FB_BINDIR@
     copyIfExists $BuiltFBDir/bin/fbtracemgr ${TargetDir}@FB_BINDIR@
     cp $BuiltFBDir/bin/isql ${TargetDir}@FB_BINDIR@/isql
-    cp $BuiltFBDir/bin/qli ${TargetDir}@FB_BINDIR@/qli
 
 	chmod 0755 ${TargetDir}@FB_BINDIR@/*
 
@@ -225,12 +224,6 @@ copyFiles() {
 		# exec bit for sample binaries
 		chmod 0755 ${TargetDir}@FB_SAMPLEDIR@/prebuilt/bin/*
     fi
-
-	#QLI help
-    copyIfExists $BuiltFBDir/help/help.gbak ${TargetDir}@FB_HELPDIR@
-    cp $BuiltFBDir/help/help.fdb ${TargetDir}@FB_HELPDIR@
-
-	chmod 0444 ${TargetDir}@FB_HELPDIR@/*.fdb
 
 	#message file
     cp $BuiltFBDir/*.msg ${TargetDir}@FB_MSGDIR@

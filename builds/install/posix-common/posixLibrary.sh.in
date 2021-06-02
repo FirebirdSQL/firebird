@@ -830,7 +830,7 @@ removeEmptyDirs() {
         dirContentChanged=''
 
 		for rootDir in @FB_BINDIR@ @FB_SBINDIR@ @FB_LIBDIR@ @FB_INCDIR@ @FB_DOCDIR@ @FB_SAMPLEDIR@ @FB_SAMPLEDBDIR@ \
-					   @FB_HELPDIR@ @FB_INTLDIR@ @FB_MISCDIR@ @FB_SECDBDIR@ @FB_MSGDIR@ @FB_LOGDIR@ @FB_GUARDDIR@ @FB_PLUGDIR@ \
+					   @FB_INTLDIR@ @FB_MISCDIR@ @FB_SECDBDIR@ @FB_MSGDIR@ @FB_LOGDIR@ @FB_GUARDDIR@ @FB_PLUGDIR@ \
 					   @FB_TZDATADIR@ @FB_CONFDIR@; do
 
 			if [ -d $rootDir ]; then
@@ -878,7 +878,7 @@ fixFilePermissions() {
 	# First of all set owneship of all files to root
 	# Build list of interesting directories all over the FS
 	dirs="@FB_BINDIR@ @FB_SBINDIR@ @FB_CONFDIR@ @FB_LIBDIR@ @FB_INCDIR@/firebird @FB_DOCDIR@/sql.extensions \
-		@FB_SAMPLEDIR@ @FB_SAMPLEDBDIR@ @FB_HELPDIR@ @FB_INTLDIR@ @FB_MISCDIR@ @FB_SECDBDIR@ @FB_MSGDIR@ @FB_LOGDIR@ \
+		@FB_SAMPLEDIR@ @FB_SAMPLEDBDIR@ @FB_INTLDIR@ @FB_MISCDIR@ @FB_SECDBDIR@ @FB_MSGDIR@ @FB_LOGDIR@ \
 		@FB_GUARDDIR@ @FB_PLUGDIR@ @FB_TZDATADIR@"
 	dirs2=`for i in $dirs; do echo $i; done|sort|uniq`
 
@@ -947,10 +947,6 @@ fixFilePermissions() {
     do
 		MakeFileFirebirdWritable $i
     done
-
-    # Fix QLI help
-	cd @FB_HELPDIR@
-    chmod a=r help.fdb
 }
 
 

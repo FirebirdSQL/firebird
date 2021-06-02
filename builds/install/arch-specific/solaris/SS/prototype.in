@@ -72,7 +72,6 @@ f none @prefix@/bin/fbguard=$SRCDIR/bin/fbguard 0755 firebird firebird
 f none @prefix@/bin/fbserver=$SRCDIR/bin/fbserver 0755 firebird firebird
 f none @prefix@/bin/fbmgr.bin=$SRCDIR/bin/fbmgr.bin 0755 firebird firebird
 f none @prefix@/bin/fb_lock_print=$SRCDIR/bin/fb_lock_print 0755 firebird firebird
-f none @prefix@/bin/qli=$SRCDIR/bin/qli 6777 firebird firebird
 # from 2.0
 f none @prefix@/bin/nbackup=$SRCDIR/bin/nbackup 6777 firebird firebird
 # from 2.1

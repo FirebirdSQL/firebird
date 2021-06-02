@@ -412,32 +412,12 @@ gpre: $(GPRE) databases
 $(GPRE):	$(GPRE_Objects) $(COMMON_LIB)
 	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
-HELP_FDB = $(FIREBIRD)/help/help.fdb
 SECURITY_FDB = $(FIREBIRD)/security5.fdb
 SECURITY_TMP = security.tmp
 
-databases:		yachts.lnk msg.timestamp $(HELP_FDB) $(SECURITY_FDB)
+databases:		msg.timestamp $(SECURITY_FDB)
 
 export LD_LIBRARY_PATH := $(LD_LIBRARY_PATH):$(FIREBIRD)/lib
-
-yachts.lnk:		metadata.fdb
-	-$(RM) $@
-	$(LN) $^ $@
-
-metadata.fdb:	$(RUN_ISQL) $(SRC_ROOT)/dbs/metadata.sql
-	-$(RM) $@
-	$(RUN_ISQL) -q -i $(SRC_ROOT)/dbs/metadata.sql
-	$(RUN_GFIX) -mode read_only $@
-	$(CHMOD) 0444 $@
-
-$(HELP_FDB):	help.fdb
-	-$(RM) $@
-	$(CP) $^ $@
-	$(CHMOD) 0444 $@
-
-help.fdb:	$(BLD_ROOT)/misc/help.gbak
-	$(RUN_GBAK) -MODE read_only -R $< $@
-	$(CHMOD) 0444 $@
 
 $(SECURITY_FDB):	security.fdb
 	-$(RM) $@
@@ -474,7 +454,6 @@ $(LIBIBUTIL_SO): $(UTIL_Objects)
 
 #___________________________________________________________________________
 # most of utilities, including network server and UDF support
-# qli is not here cause it needs special database (help.fdb), therefore needs gbak
 #
 
 .PHONY:	firebird_server fb_lock_print fbguard fbsvcmgr fbtracemgr gbak gfix gsec gsplit gstat isql nbackup
@@ -636,21 +615,16 @@ $(CODES):	$(CODES_Objects) $(COMMON_LIB)
 # all the rest we need to build
 #
 
-.PHONY:	qli message_file tzdata gbak_files
+.PHONY:	message_file tzdata gbak_files
 
-FDB_FILES := $(HELP_FDB) $(ROOT)/gen/msg.fdb $(SECURITY_FDB) $(FIREBIRD)/examples/empbuild/employee.fdb
+FDB_FILES := $(ROOT)/gen/msg.fdb $(SECURITY_FDB) $(FIREBIRD)/examples/empbuild/employee.fdb
 GBAK_FILES := $(FDB_FILES:.fdb=.gbak) $(FIREBIRD)/msg.gbak
 GBAK_FILES := $(subst Native,$(TARGET),$(GBAK_FILES))
 
-rest:	qli message_file tzdata
+rest:	message_file tzdata
 
-cross_rest:	qli gbak_files
+cross_rest:	gbak_files
 	$(MAKE) $(BUILD_FILE)
-
-qli:		$(QLI)
-
-$(QLI):		$(QLI_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 examples: include_generic
 	$(MAKE) -f Makefile.examples -C $(GEN_ROOT)/examples/
@@ -772,7 +746,6 @@ clean_config clean_all: clean clean_makefiles
 
 clean_dbs:
 	$(RM) *.fdb *.FDB msg.timestamp
-	$(RM) yachts.lnk
 
 
 # The examples are a bit different, since the makefile is included in the directory

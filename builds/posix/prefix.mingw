@@ -17,7 +17,7 @@
 # Start of file prefix.mingw:	$(VERSION)	$(PLATFORM)
 #
 # 2003-Sep-27 BRS Removed IPSERVER after XNET is included
-# 
+#
 
 # -Wno-unused-variable is used due to unused gpre generated variables
 PROD_FLAGS=-O2  -DMINGW -Wall -Wshadow -Wundef -Wno-long-long -Wno-unused-variable -Wno-sign-compare -Wno-parentheses -Wno-switch -fmessage-length=0 -Dlint -DWIN32_LEAN_AND_MEAN -MMD -mthreads -Wno-non-virtual-dtor
@@ -42,7 +42,7 @@ LIB_GUI:= -mwindows -lcomctl32 -lgdi32
 
 # Add resources to some files
 FilesToAddVersionInfo=$(LIBFBEMBED_SO) $(LIBFBCLIENT_SO) $(LIBFBINTL_SO) \
- $(GSTAT) $(GSEC) $(GFIX) $(QLI) $(ISQL) $(GBAK) $(GPRE)
+ $(GSTAT) $(GSEC) $(GFIX) $(ISQL) $(GBAK) $(GPRE)
 # TODO: guardians also must be here
 FilesToAddDialog=$(FB_SUPER_SERVER) $(FB_CLASSIC_SERVER)
 FilesToAddDialog2=$(IBGUARD)
@@ -63,7 +63,7 @@ LIB=$(BIN)
 
 # Special options for UDF link
 LINK_UDF = $(LIB_LINK) $(LIB_LINK_OPTIONS) $(call LIB_LINK_SONAME,$(1).$(SHRLIB_EXT)) -L$(LIB) -lib_util
-LINK_UDF_LIBS = 
+LINK_UDF_LIBS =
 
 # Special options for trace plugin link
 LINK_TRACE_LIBS = -L$(LIB) $(SO_LINK_LIBS)

@@ -431,22 +431,6 @@ copy %FB_ROOT_PATH%\builds\install\misc\databases.conf %FB_OUTPUT_DIR%\databases
 @goto :EOF
 
 
-:MISC
-::==============================================
-:: Make sure that qli's help.fdb is available
-::===============================================
-@if not exist %FB_OUTPUT_DIR%\help\help.fdb (
-    (@echo   Copying help.fdb for qli support)
-    (@copy %FB_GEN_DIR%\dbs\help.fdb %FB_OUTPUT_DIR%\help\help.fdb > nul)
-    (@if %ERRORLEVEL% GEQ 1 ( (call :ERROR Could not copy qli help database ) & (goto :EOF)))
-)
-
-
-::End of MISC
-::-----------------
-@goto :EOF
-
-
 :FB_MSG
 ::=================================================================
 :: firebird.msg is generated as part of the build process
@@ -713,9 +697,6 @@ if defined WIX (
 
 @echo   Writing databases conf
 @(@call :DB_CONF ) || (@echo Error calling DB_CONF && @goto :END)
-@echo.
-@echo   Copying miscellany such as the QLI help database
-@(@call :MISC ) || (@echo Error calling MISC & @goto :END)
 @echo.
 @echo   Copying firebird.msg
 @(@call :FB_MSG ) || (@echo Error calling FB_MSG && @goto :END)

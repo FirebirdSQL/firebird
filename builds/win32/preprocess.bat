@@ -81,7 +81,6 @@ goto :EOF
 @for %%i in (dfw, dpm, dyn_util, fun, grant, ini, met, scl, Function) do @call :PREPROCESS jrd %%i -gds_cxx
 @for %%i in (codes) do @call :PREPROCESS misc %%i
 @for %%i in (build_file) do @call :PREPROCESS msgs %%i
-@for %%i in (help, meta, proc, show) do @call :PREPROCESS qli %%i
 @for %%i in (extract, isql, show) do @call :PREPROCESS isql %%i -ocxx
 @for %%i in (dba) do @call :PREPROCESS utilities/gstat %%i
 @for %%i in (stats) do @call :PREPROCESS utilities %%i

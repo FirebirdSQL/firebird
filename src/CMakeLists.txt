@@ -61,10 +61,6 @@ set(epp_master_files
     auth/SecurityDatabase/LegacyManagement.epp
     msgs/build_file.epp
     misc/codes.epp
-    qli/help.epp
-    qli/meta.epp
-    qli/proc.epp
-    qli/show.epp
 )
 
 if (NOT CMAKE_CROSSCOMPILING)
@@ -123,29 +119,6 @@ add_custom_command(
     COMMAND ${BOOT_ISQL_CMD} -q security_.fdb -i ${CMAKE_CURRENT_SOURCE_DIR}/dbs/security.sql
     COMMAND ${CMAKE_COMMAND} -E copy_if_different security_.fdb security.fdb
     COMMAND ${BOOT_GFIX_CMD} -write sync security.fdb
-)
-add_custom_command(
-    OUTPUT metadata.fdb
-    DEPENDS
-        boot_gbak
-        ${CMAKE_SOURCE_DIR}/builds/misc/metadata.gbak
-    #
-    COMMAND ${CMAKE_COMMAND} -E remove metadata.fdb
-    COMMAND ${CMAKE_COMMAND} -E remove metadata_.fdb
-    COMMAND ${BOOT_GBAK_CMD} -r ${CMAKE_SOURCE_DIR}/builds/misc/metadata.gbak metadata_.fdb
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different metadata_.fdb metadata.fdb
-)
-add_custom_command(
-    OUTPUT help.fdb
-    DEPENDS
-        boot_gbak
-        metadata.fdb
-        ${CMAKE_SOURCE_DIR}/builds/misc/help.gbak
-    #
-    COMMAND ${CMAKE_COMMAND} -E remove help.fdb
-    COMMAND ${CMAKE_COMMAND} -E remove help_.fdb
-    COMMAND ${BOOT_GBAK_CMD} -r ${CMAKE_SOURCE_DIR}/builds/misc/help.gbak help_.fdb
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different help_.fdb help.fdb
 )
 add_custom_target(databases
     DEPENDS
@@ -868,23 +841,6 @@ endif()
 
 add_executable              (isql ${isql_src} ${isql_generated_src_master} ${VERSION_RC})
 target_link_libraries       (isql common yvalve)
-
-
-########################################
-# EXECUTABLE qli
-########################################
-
-file(GLOB qli_src "qli/*.cpp" "qli/*.h")
-set(qli_generated_src
-    qli/help.epp
-    qli/meta.epp
-    qli/proc.epp
-    qli/show.epp
-)
-add_epp_suffix(qli_generated_src master)
-
-add_executable          (qli ${qli_src} ${qli_generated_src_master} ${VERSION_RC})
-target_link_libraries   (qli common yvalve)
 
 
 ################################################################################

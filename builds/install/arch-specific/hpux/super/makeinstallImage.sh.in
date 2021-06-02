@@ -109,7 +109,6 @@ copyFiles() {
     cp $BuiltFBDir/bin/gstat $DestDir/bin/gstat
     copyIfExists $BuiltFBDir/bin/security.gbak $DestDir/bin/security.gbak
     cp $BuiltFBDir/bin/isql $DestDir/bin/isql
-    cp $BuiltFBDir/bin/qli $DestDir/bin/qli
 
     cp $BuildRootDir/gen/install/bin/SSchangeRunUser.sh $DestDir/bin
     cp $BuildRootDir/gen/install/bin/SSrestoreRootRunUser.sh $DestDir/bin
@@ -133,9 +132,6 @@ copyFiles() {
              cp $i $DestDir/examples
           done
     fi
-
-    copyIfExists $BuiltFBDir/help/help.gbak $DestDir/help
-    cp $BuiltFBDir/help/help.fdb $DestDir/help
 
     #cp -r $BuildSrcDir/doc $DestDir
     #cp -r $BuiltFBDir/doc $DestDir

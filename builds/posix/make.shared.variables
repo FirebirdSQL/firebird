@@ -169,12 +169,6 @@ ISQL_Objects:= $(call dirObjects,isql)
 AllObjects += $(ISQL_Objects)
 
 
-# QLI
-QLI_Objects:= $(call dirObjects,qli)
-
-AllObjects += $(QLI_Objects)
-
-
 # Legacy users management in security database
 LEGACY_USERS_MANAGE_Objects:= $(call makeObjects,auth/SecurityDatabase,LegacyManagement.epp)
 

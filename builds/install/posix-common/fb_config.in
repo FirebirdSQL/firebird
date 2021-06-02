@@ -33,7 +33,6 @@ fb_confdir=@FB_CONFDIR@
 fb_docdir=@FB_DOCDIR@
 fb_sampledir=@FB_SAMPLEDIR@
 fb_sampledbdir=@FB_SAMPLEDBDIR@
-fb_helpdir=@FB_HELPDIR@
 fb_intldir=@FB_INTLDIR@
 fb_miscdir=@FB_MISCDIR@
 fb_securedbdir=@FB_SECDBDIR@
@@ -100,7 +99,6 @@ while test $# -gt 0
         --confdir) echo $fb_confdir ;;
         --docdir) echo $fb_docdir ;;
         --sampledir) echo $fb_sampledir ;;
-        --helpdir) echo $fb_helpdir ;;
         --intldir) echo $fb_intldir ;;
         --miscdir) echo $fb_miscdir ;;
         --securedbdir) echo $fb_securedbdir ;;

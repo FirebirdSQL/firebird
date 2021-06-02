@@ -22,7 +22,6 @@ LOCK_MGR=	$(BUILD_DIR)/gds_lock_mgr
 GFIX=		$(BUILD_DIR)/gfix
 ISQL=		$(BUILD_DIR)/isql
 GSEC=		$(BUILD_DIR)/gsec
-QLI=		$(BUILD_DIR)/qli
 CHECK_MSGS=	$(BUILD_DIR)/check_msgs
 BUILD_MSGS=	$(BUILD_DIR)/build_file
 SEC_AUTH=	$(VAR)/auth/security_db.auth
@@ -30,7 +29,6 @@ LOCAL_USER_AUTH=	$(VAR)/auth/current_euid.auth
 
 EMPTY_DB=	$(DB_ROOT)/empty.gdb
 MSG_DB=		$(DB_ROOT)/msg.gdb
-HELP_DB=	$(DB_ROOT)/help.gdb
 META_DB=	$(DB_ROOT)/metadata.gdb
 ISC_DB=		$(FIREBIRD)/isc4.gdb
 ISC_GBAK=	$(FIREBIRD)/isc.gbak
@@ -75,9 +73,6 @@ SECURITY_GEN_FILES=	$(SECURITY_EPP_FILES:%.epp=$(GEN_ROOT)/utilities/%.cpp)
 MSG_EPP_FILES=	build_file.epp change_msgs.epp check_msgs.epp enter_msgs.epp load.epp modify_msgs.epp
 MSG_GEN_FILES=	$(MSG_EPP_FILES:%.epp=$(GEN_ROOT)/msgs/%.cpp)
 
-QLI_EPP_FILES=	help.epp meta.epp proc.epp show.epp
-QLI_GEN_FILES=	$(QLI_EPP_FILES:%.epp=$(GEN_ROOT)/qli/%.cpp)
-
 GPRE_FLAGS= -r -m -z -n
 
 all:
@@ -117,9 +112,6 @@ $(GEN_ROOT)/utilities/%.cpp: $(SRC_ROOT)/utilities/%.epp $(GPRE)
 	$(GPRE) $(GPRE_FLAGS) $< $@
 
 $(GEN_ROOT)/msgs/%.cpp: $(SRC_ROOT)/msgs/%.epp $(GPRE)
-	$(GPRE) $(GPRE_FLAGS) $< $@
-
-$(GEN_ROOT)/qli/%.cpp: $(SRC_ROOT)/qli/%.epp $(GPRE)
 	$(GPRE) $(GPRE_FLAGS) $< $@
 
 gds_lock_mgr: $(LOCK_MGR)
@@ -205,13 +197,6 @@ gfix_preprocess_%:
 gfix_preprocess_:
 	./gpre_wrapper.sh gfix_preprocess alice
 
-qli_preprocess_clean:
-	rm -f $(QLI_GEN_FILES)
-qli_preprocess: $(QLI_GEN_FILES)
-qli_preprocess_%:
-qli_preprocess_:
-	./gpre_wrapper.sh qli_preprocess qli
-
 security_preprocess_clean:
 	rm -f $(SECURITY_GEN_FILES)
 security_preprocess: $(SECURITY_GEN_FILES)
@@ -237,10 +222,6 @@ empty_db_:	$(EMPTY_DB)
 $(EMPTY_DB):
 	rm -f $(EMPTY_DB)
 	$(CREATE_DB) $(EMPTY_DB)
-	ln -fs $(EMPTY_DB) $(GEN_ROOT)/burp/yachts.lnk
-	ln -fs $(EMPTY_DB) $(GEN_ROOT)/alice/yachts.lnk
-	ln -fs $(EMPTY_DB) $(GEN_ROOT)/isql/yachts.lnk
-	ln -fs $(EMPTY_DB) $(GEN_ROOT)/utilities/yachts.lnk
 empty_db_%:
 
 $(FULL_FW_FLAG):
@@ -262,23 +243,10 @@ $(PS_FW_FLAG): $(FULL_FW_FLAG) $(UPG_FW_FLAG)
 	touch $(PS_FW_FLAG)
 darwin_pseudo_fw_clean:
 
-build_dbs_: $(MSG_DB) $(HELP_DB) $(META_DB)
-build_dbs_clean:
-	rm -f $(MSG_DB) $(HELP_DB) $(META_DB)
-build_dbs_%:
-
 $(MSG_DB): $(SRC_ROOT)/msgs/msg.gbak
 	$(GBAK) -MODE read_only -R $(SRC_ROOT)/msgs/msg.gbak $@
 	ln -fs $(MSG_DB) $(GEN_ROOT)/msgs/msg.gdb
 	ln -fs $(MSG_DB) $(GEN_ROOT)/msgs/master_msg_db
-
-$(HELP_DB): $(SRC_ROOT)/misc/help.gbak
-	$(GBAK) -MODE read_only -R $(SRC_ROOT)/misc/help.gbak $@
-	ln -fs $(HELP_DB) $(GEN_ROOT)/qli/help.gdb
-
-$(META_DB): $(SRC_ROOT)/misc/metadata.gbak
-	$(GBAK) -MODE read_only -R $(SRC_ROOT)/misc/metadata.gbak $@
-	ln -fs $(META_DB) $(GEN_ROOT)/qli/yachts.lnk
 
 isc4.gdb_: $(ISC_DB) sysdba_user
 $(ISC_DB) : $(SRC_ROOT)/utilities/isc4.sql $(SRC_ROOT)/utilities/isc4.gdl
@@ -334,7 +302,7 @@ fw_files_:
 	mkdir -p $(VAR)/auth
 	mkdir -p $(FB_FW)/Resources/bin
 	cp $(FIREBIRD)/interbase.msg $(VAR)/interbase.msg
-	-cp $(GPRE) $(GBAK) $(ISQL) $(QLI) $(GSEC) $(GFIX) $(FB_FW)/Resources/bin
+	-cp $(GPRE) $(GBAK) $(ISQL) $(GSEC) $(GFIX) $(FB_FW)/Resources/bin
 	cp $(FIREBIRD)/isc.gbak $(VAR)
 	cp build/gdsintl $(VAR)/intl
 	chmod a+x $(VAR)/intl/*
