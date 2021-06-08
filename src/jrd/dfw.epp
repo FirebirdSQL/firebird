@@ -4778,12 +4778,12 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	switch (phase)
 	{
 	case 0:
-		relation = MET_lookup_relation_id(tdbb, work->dfw_id, false);
+		relation = MET_lookup_relation_id(tdbb, work->dfw_id, true);
 		if (!relation) {
 			return false;
 		}
 
-		if (relation->rel_existence_lock)
+		if (relation->rel_existence_lock && !(relation->rel_flags & REL_deleted))
 		{
 			LCK_convert(tdbb, relation->rel_existence_lock, LCK_SR, transaction->getLockWait());
 		}
