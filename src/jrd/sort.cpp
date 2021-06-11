@@ -713,6 +713,7 @@ void Sort::diddleKey(UCHAR* record, bool direction, bool duplicateHandling)
 	for (sort_key_def* key = m_description.begin(), *end = m_description.end(); key < end; key++)
 	{
 		UCHAR* p = record + key->getSkdOffset();
+		SORTP* lwp = (SORTP*) p;
 		USHORT n = key->getSkdLength();
 		USHORT complement = key->skd_flags & SKD_descending;
 
