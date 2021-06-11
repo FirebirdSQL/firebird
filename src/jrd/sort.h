@@ -27,6 +27,7 @@
 #include "../include/fb_blk.h"
 #include "../common/DecFloat.h"
 #include "../jrd/TempSpace.h"
+#include "../jrd/align.h"
 
 namespace Jrd {
 
