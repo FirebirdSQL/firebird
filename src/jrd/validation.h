@@ -61,7 +61,7 @@ public:
 	static const USHORT VDR_repair = 0x04;		// fix non-simple things (-mend)
 	static const USHORT VDR_records = 0x08;		// Walk all records
 	static const USHORT VDR_partial = 0x10;		// Walk only (some) relations
-
+	static bool SkippedWarning;	// added by AIR
 private:
 
 	enum FETCH_CODE
@@ -134,8 +134,6 @@ private:
 
 	static const MSG_ENTRY vdr_msg_table[VAL_MAX_ERROR];
 
-	static bool SkippedWarning;	// added by AIR
-
 	thread_db* vdr_tdbb;
 	ULONG vdr_max_page;
 	USHORT vdr_flags;
@@ -162,7 +160,7 @@ private:
 	void checkDPinPIP(jrd_rel *relation, ULONG page_number);
 
 public:
-	explicit Validation(thread_db*, Firebird::UtilSvc* uSvc = NULL, bool Skipped = false);	// Edited by AIR
+	explicit Validation(thread_db*, Firebird::UtilSvc* uSvc = NULL, bool Skipped = true);	// Edited by AIR
 	~Validation();
 
 	bool run(thread_db* tdbb, USHORT flags);
