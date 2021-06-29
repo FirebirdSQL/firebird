@@ -1577,8 +1577,13 @@ static void prompt_for_name(SCHAR* name, int length)
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	// Unless we are operating as a service, stdin can't necessarily be trusted.
+	if (tdgbl->uSvc->isService())
+	{
+		BURP_error_redirect(0, 50);
+		// msg 50 unexpected end of file on backup file
+	}
+
 	// Get a location to read from.
-	fb_assert(!tdgbl->uSvc->isService());
 
 	if (isatty(fileno(stdout)) || !(term_out = os_utils::fopen(TERM_OUTPUT, "w")))
 	{
