@@ -61,7 +61,6 @@ public:
 	static const USHORT VDR_repair = 0x04;		// fix non-simple things (-mend)
 	static const USHORT VDR_records = 0x08;		// Walk all records
 	static const USHORT VDR_partial = 0x10;		// Walk only (some) relations
-	static bool SkippedWarning;	// added by AIR
 private:
 
 	enum FETCH_CODE
@@ -160,6 +159,7 @@ private:
 	void checkDPinPIP(jrd_rel *relation, ULONG page_number);
 
 public:
+	bool SkippedWarning;	// added by AIR
 	explicit Validation(thread_db*, Firebird::UtilSvc* uSvc = NULL, bool Skipped = true);	// Edited by AIR
 	~Validation();
 
