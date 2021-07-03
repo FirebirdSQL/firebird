@@ -851,7 +851,8 @@ const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} marked as secondary but contains primary record versions"}
 };
 
-Validation::Validation(thread_db* tdbb, UtilSvc* uSvc, bool Skipped) : vdr_used_bdbs(*tdbb->getDefaultPool()) // Edited by AIR
+Validation::Validation(thread_db* tdbb, UtilSvc* uSvc, bool skip) 
+	: vdr_used_bdbs(*tdbb->getDefaultPool())
 {
 	vdr_tdbb = tdbb;
 	vdr_max_page = 0;
@@ -875,7 +876,7 @@ Validation::Validation(thread_db* tdbb, UtilSvc* uSvc, bool Skipped) : vdr_used_
 		parse_args(tdbb);
 	}
 
-	SkippedWarning = Skipped;	// added by AIR
+	vdr_skip = skip;
 	output("Validation started\n\n");
 }
 
@@ -1111,7 +1112,7 @@ Validation::RTN Validation::corrupt(int err_code, const jrd_rel* relation, ...)
 	if (err_code < VAL_MAX_ERROR)
 		vdr_err_counts[err_code]++;
 	// added by AIR
-	if(SkippedWarning && !vdr_msg_table[err_code].error)
+	if(vdr_skip && !vdr_msg_table[err_code].error)
 	{
 		++vdr_warns;
 		return rtn_corrupt;

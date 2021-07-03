@@ -139,6 +139,7 @@ private:
 	int vdr_errors;
 	int vdr_warns;
 	int vdr_fixed;
+	bool vdr_skip;
 	TraNumber vdr_max_transaction;
 	FB_UINT64 vdr_rel_backversion_counter;	// Counts slots w/rhd_chain
 	PageBitmap* vdr_backversion_pages;      // 1 bit per visited table page
@@ -159,8 +160,7 @@ private:
 	void checkDPinPIP(jrd_rel *relation, ULONG page_number);
 
 public:
-	bool SkippedWarning;	// added by AIR
-	explicit Validation(thread_db*, Firebird::UtilSvc* uSvc = NULL, bool Skipped = true);	// Edited by AIR
+	explicit Validation(thread_db*, Firebird::UtilSvc* uSvc = NULL, bool skip = Config::getSkippedWarningInLog());
 	~Validation();
 
 	bool run(thread_db* tdbb, USHORT flags);
