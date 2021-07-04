@@ -603,8 +603,13 @@ ExtEngineManager::ExternalContextImpl::ExternalContextImpl(thread_db* tdbb,
 
 	internalAttachment->getStable()->addRef();
 
-	externalAttachment = MasterInterfacePtr()->registerAttachment
-		(internalAttachment->getProvider(), internalAttachment->getInterface());
+	Jrd::JProvider* jProv = internalAttachment->getProvider();
+	Jrd::JAttachment* jAtt = internalAttachment->getInterface();
+
+	// System attachments (such as garbage collector) have no external interface
+	// and should not be used by UDR's
+	if (jProv && jAtt)
+		externalAttachment = MasterInterfacePtr()->registerAttachment(jProv, jAtt);
 }
 
 ExtEngineManager::ExternalContextImpl::~ExternalContextImpl()
@@ -616,6 +621,8 @@ ExtEngineManager::ExternalContextImpl::~ExternalContextImpl()
 		externalAttachment->release();
 		externalAttachment = NULL;
 	}
+	else
+		internalAttachment->getStable()->release();
 }
 
 void ExtEngineManager::ExternalContextImpl::releaseTransaction()
@@ -640,7 +647,10 @@ void ExtEngineManager::ExternalContextImpl::setTransaction(thread_db* tdbb)
 	fb_assert(!externalTransaction && !internalTransaction);
 
 	if ((internalTransaction = newTransaction))
-		externalTransaction = MasterInterfacePtr()->registerTransaction(externalAttachment, internalTransaction);
+	{
+		if (externalAttachment)
+			externalTransaction = MasterInterfacePtr()->registerTransaction(externalAttachment, internalTransaction);
+	}
 }
 
 IMaster* ExtEngineManager::ExternalContextImpl::getMaster()
@@ -657,6 +667,8 @@ IExternalEngine* ExtEngineManager::ExternalContextImpl::getEngine(CheckStatusWra
 Firebird::IAttachment* ExtEngineManager::ExternalContextImpl::getAttachment(
 	CheckStatusWrapper* /*status*/)
 {
+	checkExternalAttachment();
+
 	externalAttachment->addRef();
 	return externalAttachment;
 }
@@ -664,6 +676,8 @@ Firebird::IAttachment* ExtEngineManager::ExternalContextImpl::getAttachment(
 Firebird::ITransaction* ExtEngineManager::ExternalContextImpl::getTransaction(
 	CheckStatusWrapper* /*status*/)
 {
+	checkExternalAttachment();
+
 	externalTransaction->addRef();
 	return externalTransaction;
 }
@@ -703,6 +717,13 @@ void* ExtEngineManager::ExternalContextImpl::setInfo(int code, void* value)
 	return oldValue;
 }
 
+void ExtEngineManager::ExternalContextImpl::checkExternalAttachment()
+{
+	if (!externalAttachment)
+	{
+		(Arg::Gds(isc_random) << Arg::Str("Use of system attachment in UDR is not allowed")).raise();
+	}
+}
 
 //---------------------
 

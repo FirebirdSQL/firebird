@@ -167,6 +167,8 @@ private:
 		void* setInfo(int code, void* value);
 
 	private:
+		void checkExternalAttachment();
+
 		Firebird::IExternalEngine* engine;
 		Attachment* internalAttachment;
 		Firebird::ITransaction* internalTransaction;

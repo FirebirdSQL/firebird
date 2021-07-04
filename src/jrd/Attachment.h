@@ -388,11 +388,7 @@ public:
 	JAttachment* getInterface() throw();
 	UserId* getUserId(const Firebird::string &userName);
 
-	JProvider* getProvider()
-	{
-		fb_assert(att_provider);
-		return att_provider;
-	}
+	JProvider* getProvider();
 
 private:
 	Attachment(MemoryPool* pool, Database* dbb, JProvider* provider);
@@ -462,6 +458,12 @@ inline bool Attachment::isRWGbak() const
 inline bool Attachment::isUtility() const
 {
 	return (att_utility != UTIL_NONE);
+}
+
+inline JProvider* Attachment::getProvider()
+{
+	fb_assert(att_provider || (att_flags & ATT_system));
+	return att_provider;
 }
 
 // This class holds references to all attachments it contains
