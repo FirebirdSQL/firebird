@@ -51,7 +51,7 @@ class thread_db;
 
 // Validation/garbage collection/repair control block
 
-class Validation
+class Validation : public Config
 {
 public:
 	// vdr_flags
@@ -160,7 +160,7 @@ private:
 	void checkDPinPIP(jrd_rel *relation, ULONG page_number);
 
 public:
-	explicit Validation(thread_db*, Firebird::UtilSvc* uSvc = NULL, bool skip = Config::getSkippedWarningInLog());
+	explicit Validation(thread_db*, Firebird::UtilSvc* uSvc = NULL, bool skip = getSkippedWarningInLog());
 	~Validation();
 
 	bool run(thread_db* tdbb, USHORT flags);
