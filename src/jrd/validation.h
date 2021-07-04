@@ -51,7 +51,7 @@ class thread_db;
 
 // Validation/garbage collection/repair control block
 
-class Validation : public Firebird::Config
+class Validation
 {
 public:
 	// vdr_flags
