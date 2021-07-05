@@ -876,8 +876,7 @@ Validation::Validation(thread_db* tdbb, UtilSvc* uSvc)
 		parse_args(tdbb);
 	}
 
-	AliceGlobals gblInstance(uSvc);
-	AliceGlobals* tdgbl = &gblInstance;
+	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	vdr_skip = tdgbl->ALICE_data.ua_skip_warn;
 	output("Validation started\n\n");
 }
