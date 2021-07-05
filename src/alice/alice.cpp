@@ -146,7 +146,7 @@ int alice(Firebird::UtilSvc* uSvc)
 #ifdef TRUSTED_AUTH
 	tdgbl->ALICE_data.ua_trusted = false;
 #endif
-
+	tdgbl->ALICE_data.ua_skip_warn = false;
 	//  Start by parsing switches
 
 	bool error = false, help = false, version = false;
@@ -213,6 +213,12 @@ int alice(Firebird::UtilSvc* uSvc)
 			continue;
 		}
 #endif
+		if (table->in_sw_value & sw_skip_warn)
+		{
+			tdgbl->ALICE_data.ua_skip_warn = true;
+			continue;
+		}
+
 		if ((table->in_sw_incompatibilities & flags) ||
 			(table->in_sw_requires && !(table->in_sw_requires & flags)))
 		{

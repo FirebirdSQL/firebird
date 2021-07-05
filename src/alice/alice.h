@@ -83,6 +83,7 @@ struct user_action
 	bool ua_no_reserve;
 	bool ua_force;
 	bool ua_read_only;
+	bool ua_skip_warn;
 	SLONG ua_shutdown_delay;
 	SLONG ua_sweep_interval;
 	TraNumber ua_transaction;
