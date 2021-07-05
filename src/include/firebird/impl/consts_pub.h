@@ -557,6 +557,7 @@
 #define isc_spb_res_create				0x2000
 #define isc_spb_res_use_all_space		0x4000
 #define isc_spb_res_replica_mode		20
+#define isc_spb_res_skip_warning		21
 
 /*****************************************
  * Parameters for isc_action_svc_validate *
