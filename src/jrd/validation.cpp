@@ -851,7 +851,7 @@ const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} marked as secondary but contains primary record versions"}
 };
 
-Validation::Validation(thread_db* tdbb, UtilSvc* uSvc, bool skip) 
+Validation::Validation(thread_db* tdbb, UtilSvc* uSvc) 
 	: vdr_used_bdbs(*tdbb->getDefaultPool())
 {
 	vdr_tdbb = tdbb;
@@ -876,7 +876,9 @@ Validation::Validation(thread_db* tdbb, UtilSvc* uSvc, bool skip)
 		parse_args(tdbb);
 	}
 
-	vdr_skip = skip;
+	AliceGlobals gblInstance(uSvc);
+	AliceGlobals* tdgbl = &gblInstance;
+	vdr_skip = tdgbl->ALICE_data.ua_skip_warn;
 	output("Validation started\n\n");
 }
 

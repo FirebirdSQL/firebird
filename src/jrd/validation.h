@@ -27,6 +27,7 @@
 #include "firebird.h"
 #include "fb_types.h"
 
+#include "../alice/alice.h"
 #include "../common/classes/array.h"
 #include "../common/SimilarToRegex.h"
 #include "../jrd/ods.h"
@@ -160,7 +161,7 @@ private:
 	void checkDPinPIP(jrd_rel *relation, ULONG page_number);
 
 public:
-	explicit Validation(thread_db*, Firebird::UtilSvc* uSvc = NULL, bool skip = Firebird::Config::getSkippedWarningInLog());
+	explicit Validation(thread_db*, Firebird::UtilSvc* uSvc = NULL);
 	~Validation();
 
 	bool run(thread_db* tdbb, USHORT flags);
