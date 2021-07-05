@@ -566,6 +566,10 @@ VI. ADDITIONAL NOTES
 #include "../jrd/val_proto.h"
 #include "../jrd/validation.h"
 
+#ifndef SKIPWARNINGS_ERROR
+	#define SKIPWARNINGS_ERROR
+#endif
+#include "../alice/alice.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/db_alias.h"
 #include "../jrd/intl_proto.h"
@@ -598,7 +602,7 @@ static SimilarToRegex* createPatternMatcher(thread_db* tdbb, const char* pattern
 	{
 		if (pattern)
 		{
-			const int len = strlen(pattern);
+			const int len = (int)strlen(pattern);
 
 			//// TODO: Should this be different than trace and replication
 			//// and use case sensitive matcher?

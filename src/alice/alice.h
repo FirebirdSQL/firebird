@@ -143,6 +143,7 @@ enum tdr_db_caps_vals {
 };
 // db has a RDB$TRANSACTIONS relation
 
+#ifndef SKIPWARNINGS_ERROR
 // flags for tdr_state
 enum tdr_state_vals {
 	TRA_none		= 0,		// transaction description record is missing
@@ -151,7 +152,7 @@ enum tdr_state_vals {
 	TRA_rollback	= 3,		// has rolled back
 	TRA_unknown		= 4 		// database couldn't be reattached, state is unknown
 };
-
+#endif
 
 // Global data
 

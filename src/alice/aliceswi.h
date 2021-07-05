@@ -313,7 +313,7 @@ static const Switches::in_sw_tab_t alice_in_sw_table[] =
 		0, 0, 0, false, false, 0, 0, NULL},
 /************************************************************************/
 	{ IN_SW_ALICE_SKIP_WARNING, isc_spb_res_skip_warning, "SKIP_WARNINGS", sw_skip_warn,
-		0, 0, false, true, 55, 1, NULL },
+		sw_validate, 0, false, true, 136, 2, NULL },
 	// msg 55: \t-skip_warnings\t\tignore warnings in log file
 	{IN_SW_ALICE_0, 0, NULL, 0,
      	0, 0, false, false, 0, 0, NULL}
