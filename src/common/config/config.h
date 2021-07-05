@@ -189,7 +189,6 @@ enum ConfigKey
 	KEY_USE_FILESYSTEM_CACHE,
 	KEY_INLINE_SORT_THRESHOLD,
 	KEY_TEMP_PAGESPACE_DIR,
-	KEY_SKIP_IN_LOG_FILE,
 	MAX_CONFIG_KEY		// keep it last
 };
 
@@ -305,8 +304,7 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_STRING,	"DataTypeCompatibility",	false,	nullptr},
 	{TYPE_BOOLEAN,	"UseFileSystemCache",		false,	true},
 	{TYPE_INTEGER,	"InlineSortThreshold",		false,	1000},		// bytes
-	{TYPE_STRING,	"TempTableDirectory",		false,	""},
-	{TYPE_BOOLEAN,	"SkippedWarningInLog",		true,	false }
+	{TYPE_STRING,	"TempTableDirectory",		false,	""}
 };
 
 
@@ -631,8 +629,6 @@ public:
 	CONFIG_GET_PER_DB_KEY(ULONG, getInlineSortThreshold, KEY_INLINE_SORT_THRESHOLD, getInt);
 
 	CONFIG_GET_PER_DB_STR(getTempPageSpaceDirectory, KEY_TEMP_PAGESPACE_DIR);
-
-	CONFIG_GET_GLOBAL_BOOL(getSkippedWarningInLog, KEY_SKIP_IN_LOG_FILE);
 };
 
 // Implementation of interface to access master configuration file
