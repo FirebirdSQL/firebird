@@ -423,6 +423,7 @@ struct header_page
 	SLONG hdr_att_high;				// High word of the next attachment counter
 	USHORT hdr_tra_high[4];			// High words of the transaction counters
 	UCHAR hdr_data[1];				// Misc data
+	USHORT hdr_padding;				// Padding
 };
 
 #define HDR_SIZE static_cast<FB_SIZE_T>(offsetof(Ods::header_page, hdr_data[0]))
@@ -479,6 +480,7 @@ struct page_inv_page
 	ULONG pip_extent;			// Lowest free extent
 	ULONG pip_used;				// Number of pages allocated from this PIP page
 	UCHAR pip_bits[1];
+	USHORT pip_padding;			// Padding
 };
 
 
@@ -530,6 +532,7 @@ struct pointer_page
 	USHORT ppg_count;			// Number of slots active
 	USHORT ppg_relation;		// Relation id
 	USHORT ppg_min_space;		// Lowest slot with space available
+	USHORT ppg_padding;		// Padding
 	ULONG ppg_page[1];			// Data page vector
 };
 
@@ -564,6 +567,7 @@ struct tx_inv_page
 	pag tip_header;
 	ULONG tip_next;				// Next transaction inventory page
 	UCHAR tip_transactions[1];
+	USHORT tip_padding;			// Padding
 };
 
 
@@ -588,6 +592,7 @@ struct rhd
 	USHORT rhd_flags;			// flags, etc
 	UCHAR rhd_format;			// format version
 	UCHAR rhd_data[1];			// record data
+	USHORT rhd_padding;			// padding
 };
 
 #define RHD_SIZE static_cast<FB_SIZE_T>(offsetof(Ods::rhd, rhd_data[0]))
@@ -603,6 +608,7 @@ struct rhde
 	UCHAR rhde_format;			// format version	// until here, same as rhd
 	USHORT rhde_tra_high;		// higher bits of transaction id
 	UCHAR rhde_data[1];			// record data
+	USHORT rhde_padding;			// padding
 };
 
 #define RHDE_SIZE static_cast<FB_SIZE_T>(offsetof(Ods::rhde, rhde_data[0]))
@@ -634,6 +640,7 @@ struct blh
 	USHORT blh_max_segment;		// Longest segment
 	USHORT blh_flags;			// flags, etc
 	UCHAR blh_level;			// Number of address levels, see blb_level in blb.h
+	USHORT blh_padding;			// Padding
 	ULONG blh_count;			// Total number of segments
 	ULONG blh_length;			// Total length of data
 	USHORT blh_sub_type;		// Blob sub-type
