@@ -188,7 +188,7 @@ namespace
 
 static ULONG add_node(thread_db*, WIN*, index_insertion*, temporary_key*, RecordNumber*,
 					  ULONG*, ULONG*);
-static void compress(thread_db*, const dsc*, temporary_key*, USHORT, bool, bool, USHORT);
+static void compress(thread_db*, const dsc*, temporary_key*, USHORT, bool, bool, USHORT, bool);
 static USHORT compress_root(thread_db*, index_root_page*);
 static void copy_key(const temporary_key*, temporary_key*);
 static contents delete_node(thread_db*, WIN*, UCHAR*);
@@ -895,12 +895,14 @@ btree_page* BTR_find_page(thread_db* tdbb,
 	else
 	{
 		idx_e errorCode = idx_e_ok;
+		bool avoidTrailingTrim = !(retrieval->irb_generic & (irb_starting | irb_equality));
 
 		if (retrieval->irb_upper_count)
 		{
 			errorCode = BTR_make_key(tdbb, retrieval->irb_upper_count,
 									 retrieval->irb_value + retrieval->irb_desc.idx_count,
 									 &retrieval->irb_desc, upper,
+									 avoidTrailingTrim && !(retrieval->irb_generic & irb_descending),
 									 (retrieval->irb_generic & irb_starting) != 0);
 		}
 
@@ -910,6 +912,7 @@ btree_page* BTR_find_page(thread_db* tdbb,
 			{
 				errorCode = BTR_make_key(tdbb, retrieval->irb_lower_count,
 										 retrieval->irb_value, &retrieval->irb_desc, lower,
+										 avoidTrailingTrim && (retrieval->irb_generic & irb_descending),
 										 (retrieval->irb_generic & irb_starting) != 0);
 			}
 		}
@@ -1253,7 +1256,7 @@ idx_e BTR_key(thread_db* tdbb, jrd_rel* relation, Record* record, index_desc* id
 
 			key->key_flags |= key_empty;
 
-			compress(tdbb, desc_ptr, key, tail->idx_itype, isNull, descending, keyType);
+			compress(tdbb, desc_ptr, key, tail->idx_itype, isNull, descending, keyType, false);
 		}
 		else
 		{
@@ -1287,7 +1290,7 @@ idx_e BTR_key(thread_db* tdbb, jrd_rel* relation, Record* record, index_desc* id
 					}
 				}
 
-				compress(tdbb, desc_ptr, &temp, tail->idx_itype, isNull, descending, keyType);
+				compress(tdbb, desc_ptr, &temp, tail->idx_itype, isNull, descending, keyType, false);
 
 				const UCHAR* q = temp.key_data;
 				for (USHORT l = temp.key_length; l; --l, --stuff_count)
@@ -1519,6 +1522,7 @@ idx_e BTR_make_key(thread_db* tdbb,
 				   const ValueExprNode* const* exprs,
 				   const index_desc* idx,
 				   temporary_key* key,
+				   bool avoidTrailingTrim,
 				   bool fuzzy)
 {
 /**************************************
@@ -1567,7 +1571,7 @@ idx_e BTR_make_key(thread_db* tdbb,
 		if (isNull)
 			key->key_nulls = 1;
 
-		compress(tdbb, desc, key, tail->idx_itype, isNull, descending, keyType);
+		compress(tdbb, desc, key, tail->idx_itype, isNull, descending, keyType, avoidTrailingTrim);
 
 		if (fuzzy && (key->key_flags & key_empty))
 			key->key_length = 0;
@@ -1600,7 +1604,8 @@ idx_e BTR_make_key(thread_db* tdbb,
 
 			compress(tdbb, desc, &temp, tail->idx_itype, isNull, descending,
 				(n == count - 1 ?
-					keyType : ((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT)));
+					keyType : ((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT)),
+					avoidTrailingTrim && n == count - 1);
 
 			if (!(temp.key_flags & key_empty))
 				is_key_empty = false;
@@ -1707,7 +1712,7 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 	// If the index is a single segment index, don't sweat the compound stuff
 	if ((idx->idx_count == 1) || (idx->idx_flags & idx_expressn))
 	{
-		compress(tdbb, &null_desc, key, tail->idx_itype, true, descending, false);
+		compress(tdbb, &null_desc, key, tail->idx_itype, true, descending, false, false);
 	}
 	else
 	{
@@ -1721,7 +1726,7 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 			for (; stuff_count; --stuff_count)
 				*p++ = 0;
 
-			compress(tdbb, &null_desc, &temp, tail->idx_itype, true, descending, false);
+			compress(tdbb, &null_desc, &temp, tail->idx_itype, true, descending, false, false);
 
 			const UCHAR* q = temp.key_data;
 			for (USHORT l = temp.key_length; l; --l, --stuff_count)
@@ -2409,11 +2414,8 @@ static ULONG add_node(thread_db* tdbb,
 }
 
 
-static void compress(thread_db* tdbb,
-					 const dsc* desc,
-					 temporary_key* key,
-					 USHORT itype,
-					 bool isNull, bool descending, USHORT key_type)
+static void compress(thread_db* tdbb, const dsc* desc, temporary_key* key, USHORT itype,
+	bool isNull, bool descending, USHORT key_type, bool avoidTrailingTrim)
 {
 /**************************************
  *
@@ -2470,9 +2472,8 @@ static void compress(thread_db* tdbb,
 		itype == idx_decimal || itype >= idx_first_intl_string)
 	{
 		VaryStr<MAX_KEY> buffer;
-		const UCHAR pad = (itype == idx_string) ? ' ' : 0;
+		const UCHAR pad = itype == idx_string ? ' ' : 0;
 		UCHAR* ptr;
-
 		size_t length;
 
 		if (itype == idx_decimal)
@@ -2481,11 +2482,18 @@ static void compress(thread_db* tdbb,
 			length = dec.makeIndexKey(&buffer);
 			ptr = reinterpret_cast<UCHAR*>(buffer.vary_string);
 		}
-		else if (itype >= idx_first_intl_string || itype == idx_metadata)
+		else
 		{
-			DSC to;
+			USHORT ttype = ttype_binary;
+			length = MOV_get_string_ptr(tdbb, desc, &ttype, &ptr, &buffer, MAX_KEY);
+
+			dsc desc2 = *desc;
+			desc2.dsc_dtype = dtype_text;
+			desc2.dsc_length = length;
+			desc2.dsc_address = ptr;
 
 			// convert to an international byte array
+			dsc to;
 			to.dsc_dtype = dtype_text;
 			to.dsc_flags = 0;
 			to.dsc_sub_type = 0;
@@ -2493,10 +2501,9 @@ static void compress(thread_db* tdbb,
 			to.dsc_ttype() = ttype_sort_key;
 			to.dsc_length = MIN(MAX_KEY, sizeof(buffer));
 			ptr = to.dsc_address = reinterpret_cast<UCHAR*>(buffer.vary_string);
-			length = INTL_string_to_key(tdbb, itype, desc, &to, key_type);
+
+			length = INTL_string_to_key(tdbb, itype, &desc2, &to, key_type, !avoidTrailingTrim);
 		}
-		else
-			length = MOV_get_string(tdbb, desc, &ptr, &buffer, MAX_KEY);
 
 		if (length)
 		{
@@ -2515,23 +2522,27 @@ static void compress(thread_db* tdbb,
 
 			memcpy(p, ptr, length);
 			p += length;
+
+			if (itype != idx_string)
+			{
+				while (p > key->key_data)
+				{
+					if (*--p != pad)
+					{
+						++p;
+						break;
+					}
+				}
+			}
 		}
 		else
 		{
 			// Leave key_empty flag, because the string is an empty string
 			if (descending && ((pad == desc_end_value_prefix) || (pad == desc_end_value_check)))
 				*p++ = desc_end_value_prefix;
-
-			*p++ = pad;
 		}
 
-		while (p > key->key_data)
-		{
-			if (*--p != pad)
-				break;
-		}
-
-		key->key_length = p + 1 - key->key_data;
+		key->key_length = p - key->key_data;
 		return;
 	}
 
@@ -3443,9 +3454,9 @@ static ULONG fast_load(thread_db* tdbb,
 
 		// Detect the case when set of duplicate keys contains more then one key
 		// from primary record version. It breaks the unique constraint and must
-		// be rejected. Note, it is not always could be detected while sorting. 
-		// Set to true when primary record version is found in current set of 
-		// duplicate keys.		
+		// be rejected. Note, it is not always could be detected while sorting.
+		// Set to true when primary record version is found in current set of
+		// duplicate keys.
 		bool primarySeen = false;
 
 		while (!error)
@@ -6405,7 +6416,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 								break;
 
 							// node contains more bytes than a key, check numbers
-							// of last key segment and current node segment.  
+							// of last key segment and current node segment.
 
 							fb_assert(!descending);
 							fb_assert(p - STUFF_COUNT - 1 >= key->key_data);
@@ -6415,7 +6426,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 
 							fb_assert(keySeg <= nodeSeg);
 
-							// If current segment at node is the same as last segment 
+							// If current segment at node is the same as last segment
 							// of the key then node > key.
 							if (keySeg == nodeSeg)
 								return false;

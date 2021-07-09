@@ -161,7 +161,7 @@ public:
 							  USHORT* err_code, ULONG* err_position);
 	static ULONG utf32ToUtf16(ULONG srcLen, const ULONG* src, ULONG dstLen, USHORT* dst,
 							  USHORT* err_code, ULONG* err_position);
-	static SSHORT utf16Compare(ULONG len1, const USHORT* str1, ULONG len2, const USHORT* str2,
+	static SSHORT utf16Compare(ULONG len1, const USHORT* str1, ULONG len2, const USHORT* str2, bool pad,
 							   INTL_BOOL* error_flag);
 
 	static ULONG utf16Length(ULONG len, const USHORT* str);

@@ -1207,7 +1207,8 @@ USHORT INTL_string_to_key(thread_db* tdbb,
 						USHORT idxType,
 						const dsc* pString,
 						DSC* pByte,
-						USHORT key_type)
+						USHORT key_type,
+						bool trimTrailing)
 {
 /**************************************
  *
@@ -1251,8 +1252,14 @@ USHORT INTL_string_to_key(thread_db* tdbb,
 		ttype = ttype_metadata;
 		break;
 	default:
-		pad_char = 0;
 		ttype = INTL_INDEX_TO_TEXT(idxType);
+
+		if (trimTrailing)
+		{
+			auto charSet = INTL_charset_lookup(tdbb, ttype);
+			pad_char = *charSet->getSpace();
+		}
+
 		break;
 	}
 
@@ -1261,6 +1268,19 @@ USHORT INTL_string_to_key(thread_db* tdbb,
 	MoveBuffer temp;
 	UCHAR* src;
 	USHORT len = MOV_make_string2(tdbb, pString, ttype, &src, temp);
+
+	if (trimTrailing && len)
+	{
+		const UCHAR* end = src + len;
+
+		while (--end >= src)
+		{
+			if (*end != pad_char)
+				break;
+		}
+
+		len = end + 1 - src;
+	}
 
 	USHORT outlen;
 	UCHAR* dest = pByte->dsc_address;
@@ -1274,15 +1294,7 @@ USHORT INTL_string_to_key(thread_db* tdbb,
 	case ttype_none:
 		while (len-- && destLen-- > 0)
 			*dest++ = *src++;
-		// strip off ending pad characters
-		while (dest > pByte->dsc_address)
-		{
-			if (*(dest - 1) == pad_char)
-				dest--;
-			else
-				break;
-		}
-		outlen = (dest - pByte->dsc_address);
+		outlen = dest - pByte->dsc_address;
 		break;
 	default:
 		TextType* obj = INTL_texttype_lookup(tdbb, ttype);

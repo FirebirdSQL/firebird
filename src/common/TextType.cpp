@@ -212,23 +212,8 @@ USHORT TextType::string_to_key(USHORT srcLen, const UCHAR* src,
 		space = utf16Space;
 	}
 
-	if (tt->texttype_pad_option)
-	{
-		const UCHAR* pad;
-
-		for (pad = src + srcLen - spaceLength; pad >= src; pad -= spaceLength)
-		{
-			if (memcmp(pad, space, spaceLength) != 0)
-				break;
-		}
-
-		srcLen = pad - src + spaceLength;
-	}
-
 	if (getCharSet()->isMultiByte())
-	{
 		dstLen = UnicodeUtil::utf16ToKey(srcLen, Firebird::Aligner<USHORT>(src, srcLen), dstLen, dst);
-	}
 	else
 	{
 		if (dstLen >= srcLen)
@@ -278,44 +263,61 @@ SSHORT TextType::compare(ULONG len1, const UCHAR* str1, ULONG len2, const UCHAR*
 			getCharSet()->getConvToUnicode().convert(spaceLength, space, sizeof(utf16Space), utf16Space);
 		fb_assert(spaceLength == 2);	// space character can't be surrogate for default compare
 		space = utf16Space;
+
+		INTL_BOOL error_flag;
+		return UnicodeUtil::utf16Compare(len1, Firebird::Aligner<USHORT>(str1, len1),
+			len2, Firebird::Aligner<USHORT>(str2, len2), tt->texttype_pad_option, &error_flag);
+	}
+
+	int fill = len1 - len2;
+
+	if (len1 >= len2)
+	{
+		if (len2)
+		{
+			do
+			{
+				if (*str1++ != *str2++)
+					return (str1[-1] > str2[-1]) ? 1 : -1;
+			} while (--len2);
+		}
+
+		if (fill > 0)
+		{
+			if (tt->texttype_pad_option)
+			{
+				do
+				{
+					if (*str1++ != *space)
+						return (str1[-1] > *space) ? 1 : -1;
+				} while (--fill);
+			}
+			else
+				return 1;
+		}
+
+		return 0;
+	}
+
+	if (len1)
+	{
+		do
+		{
+			if (*str1++ != *str2++)
+				return (str1[-1] > str2[-1]) ? 1 : -1;
+		} while (--len1);
 	}
 
 	if (tt->texttype_pad_option)
 	{
-		const UCHAR* pad;
-
-		for (pad = str1 + len1 - spaceLength; pad >= str1; pad -= spaceLength)
+		do
 		{
-			if (memcmp(pad, space, spaceLength) != 0)
-				break;
-		}
-
-		len1 = pad - str1 + spaceLength;
-
-		for (pad = str2 + len2 - spaceLength; pad >= str2; pad -= spaceLength)
-		{
-			if (memcmp(pad, space, spaceLength) != 0)
-				break;
-		}
-
-		len2 = pad - str2 + spaceLength;
+			if (*str2++ != *space)
+				return (*space > str2[-1]) ? 1 : -1;
+		} while (++fill);
 	}
 
-	if (getCharSet()->isMultiByte())
-	{
-		INTL_BOOL error_flag;
-		return UnicodeUtil::utf16Compare(len1, Firebird::Aligner<USHORT>(str1, len1),
-										 len2, Firebird::Aligner<USHORT>(str2, len2), &error_flag);
-	}
-
-	int cmp = memcmp(str1, str2, MIN(len1, len2));
-
-	if (cmp == 0)
-		cmp = (len1 < len2 ? -1 : (len1 > len2 ? 1 : 0));
-	else
-		cmp = (cmp < 0 ? -1 : 1);
-
-	return (SSHORT) cmp;
+	return fill ? -1 : 0;
 }
 
 

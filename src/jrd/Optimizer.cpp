@@ -98,18 +98,27 @@ namespace
 
 	ValueExprNode* injectCast(CompilerScratch* csb,
 							  ValueExprNode* value, CastNode*& cast,
-							  const dsc& desc)
+							  const dsc& desc, bool upperLimit)
 	{
 		// If the indexed column is of type int64, then we need to inject
-		// an extra cast to deliver the scale value to the BTR level
+		// an extra cast to deliver the scale value to the BTR level.
+		// If the type is text and this is an upper limit, we need to cast
+		// the expression to CHAR to fill the key with trailing spaces.
 
-		if (value && desc.dsc_dtype == dtype_int64)
+		if (value && (desc.dsc_dtype == dtype_int64 || (desc.isText() && upperLimit)))
 		{
 			if (!cast)
 			{
 				cast = FB_NEW_POOL(csb->csb_pool) CastNode(csb->csb_pool);
 				cast->source = value;
 				cast->castDesc = desc;
+
+				if (cast->castDesc.dsc_dtype == dtype_varying)
+				{
+					cast->castDesc.dsc_dtype = dtype_text;
+					cast->castDesc.dsc_length -= sizeof(USHORT);
+				}
+
 				cast->impureOffset = csb->allocImpure<impure_value>();
 			}
 
@@ -1857,7 +1866,7 @@ bool OptimizerRetrieval::matchBoolean(IndexScratch* indexScratch, BoolExprNode* 
 
 	const bool isDesc = (indexScratch->idx->idx_flags & idx_descending);
 
-	// Needed for int64 matches, see injectCast() function
+	// Needed for int64/text matches, see injectCast() function
 	CastNode *cast = NULL, *cast2 = NULL;
 
 	fb_assert(indexScratch->segments.getCount() == indexScratch->idx->idx_count);
@@ -1885,8 +1894,8 @@ bool OptimizerRetrieval::matchBoolean(IndexScratch* indexScratch, BoolExprNode* 
 					if (!((segment->scanType == segmentScanEqual) ||
 						(segment->scanType == segmentScanEquivalent)))
 					{
-						segment->lowerValue = injectCast(csb, value, cast, matchDesc);
-						segment->upperValue = injectCast(csb, value2, cast2, matchDesc);
+						segment->lowerValue = injectCast(csb, value, cast, matchDesc, false);
+						segment->upperValue = injectCast(csb, value2, cast2, matchDesc, true);
 						segment->scanType = segmentScanBetween;
 						segment->excludeLower = false;
 						segment->excludeUpper = false;
@@ -1900,7 +1909,7 @@ bool OptimizerRetrieval::matchBoolean(IndexScratch* indexScratch, BoolExprNode* 
 					if (!(segment->scanType == segmentScanEqual))
 					{
 						segment->lowerValue = segment->upperValue =
-							injectCast(csb, value, cast, matchDesc);
+							injectCast(csb, value, cast, matchDesc, false);
 						segment->scanType = segmentScanEquivalent;
 						segment->excludeLower = false;
 						segment->excludeUpper = false;
@@ -1910,7 +1919,7 @@ bool OptimizerRetrieval::matchBoolean(IndexScratch* indexScratch, BoolExprNode* 
 				case blr_eql:
 					segment->matches.add(boolean);
 					segment->lowerValue = segment->upperValue =
-						injectCast(csb, value, cast, matchDesc);
+						injectCast(csb, value, cast, matchDesc, false);
 					segment->scanType = segmentScanEqual;
 					segment->excludeLower = false;
 					segment->excludeUpper = false;
@@ -1946,7 +1955,7 @@ bool OptimizerRetrieval::matchBoolean(IndexScratch* indexScratch, BoolExprNode* 
 
 						if (forward)
 						{
-							segment->lowerValue = injectCast(csb, value, cast, matchDesc);
+							segment->lowerValue = injectCast(csb, value, cast, matchDesc, false);
 							if (segment->scanType == segmentScanLess)
 								segment->scanType = segmentScanBetween;
 							else
@@ -1954,7 +1963,7 @@ bool OptimizerRetrieval::matchBoolean(IndexScratch* indexScratch, BoolExprNode* 
 						}
 						else
 						{
-							segment->upperValue = injectCast(csb, value, cast, matchDesc);
+							segment->upperValue = injectCast(csb, value, cast, matchDesc, true);
 							if (segment->scanType == segmentScanGreater)
 								segment->scanType = segmentScanBetween;
 							else
@@ -1977,7 +1986,7 @@ bool OptimizerRetrieval::matchBoolean(IndexScratch* indexScratch, BoolExprNode* 
 
 						if (forward)
 						{
-							segment->upperValue = injectCast(csb, value, cast, matchDesc);
+							segment->upperValue = injectCast(csb, value, cast, matchDesc, true);
 							if (segment->scanType == segmentScanGreater)
 								segment->scanType = segmentScanBetween;
 							else
@@ -1985,7 +1994,7 @@ bool OptimizerRetrieval::matchBoolean(IndexScratch* indexScratch, BoolExprNode* 
 						}
 						else
 						{
-							segment->lowerValue = injectCast(csb, value, cast, matchDesc);
+							segment->lowerValue = injectCast(csb, value, cast, matchDesc, false);
 							if (segment->scanType == segmentScanLess)
 								segment->scanType = segmentScanBetween;
 							else
@@ -2003,7 +2012,7 @@ bool OptimizerRetrieval::matchBoolean(IndexScratch* indexScratch, BoolExprNode* 
 						(segment->scanType == segmentScanEquivalent)))
 					{
 						segment->lowerValue = segment->upperValue =
-							injectCast(csb, value, cast, matchDesc);
+							injectCast(csb, value, cast, matchDesc, false);
 						segment->scanType = segmentScanStarting;
 						segment->excludeLower = false;
 						segment->excludeUpper = false;
