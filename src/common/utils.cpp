@@ -56,6 +56,7 @@
 #include "../common/classes/ClumpletReader.h"
 #include "../common/StatusArg.h"
 #include "../common/TimeZoneUtil.h"
+#include "../common/config/config.h"
 
 #ifdef WIN_NT
 #include <direct.h>
@@ -1074,8 +1075,21 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 #endif
 			break;
 
-		case Firebird::IConfigManager::DIR_CONF:
 		case Firebird::IConfigManager::DIR_LOG:
+			if (! Firebird::Config::getLogsInLogDir())
+			{
+				s = "";
+			}
+			else
+			{
+				s = "logs";
+				char path[MAXPATHLEN];
+				gds__prefix(path, s.c_str());
+				PathUtils::makeDir(path);
+			} //maybe need to add something like this in if (! boot_build), but idk
+			break;
+
+		case Firebird::IConfigManager::DIR_CONF:
 		case Firebird::IConfigManager::DIR_GUARD:
 		case Firebird::IConfigManager::DIR_SECDB:
 			s = "";
