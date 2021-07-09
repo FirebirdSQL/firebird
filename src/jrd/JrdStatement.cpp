@@ -67,7 +67,7 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 		makeSubRoutines(tdbb, this, csb, csb->subProcedures);
 		makeSubRoutines(tdbb, this, csb, csb->subFunctions);
 
-		topNode = (csb->csb_node->kind == DmlNode::KIND_STATEMENT) ?
+		topNode = (csb->csb_node->getKind() == DmlNode::KIND_STATEMENT) ?
 			static_cast<StmtNode*>(csb->csb_node) : NULL;
 
 		accessList = csb->csb_access;
@@ -225,7 +225,7 @@ JrdStatement* JrdStatement::makeStatement(thread_db* tdbb, CompilerScratch* csb,
 
 			if (fieldInfo.validationExpr)
 			{
-				NodeCopier copier(csb, map);
+				NodeCopier copier(csb->csb_pool, csb, map);
 				fieldInfo.validationExpr = copier.copy(tdbb, fieldInfo.validationExpr);
 			}
 
@@ -233,7 +233,7 @@ JrdStatement* JrdStatement::makeStatement(thread_db* tdbb, CompilerScratch* csb,
 			DmlNode::doPass1(tdbb, csb, fieldInfo.validationExpr.getAddress());
 		}
 
-		if (csb->csb_node->kind == DmlNode::KIND_STATEMENT)
+		if (csb->csb_node->getKind() == DmlNode::KIND_STATEMENT)
 			StmtNode::doPass2(tdbb, csb, reinterpret_cast<StmtNode**>(&csb->csb_node), NULL);
 		else
 			ExprNode::doPass2(tdbb, csb, &csb->csb_node);

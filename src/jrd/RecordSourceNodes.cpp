@@ -49,7 +49,7 @@ static int strcmpSpace(const char* p, const char* q);
 static void processSource(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 	RecordSourceNode* source, BoolExprNode** boolean, RecordSourceNodeStack& stack);
 static void processMap(thread_db* tdbb, CompilerScratch* csb, MapNode* map, Format** inputFormat);
-static void genDeliverUnmapped(thread_db* tdbb, BoolExprNodeStack* deliverStack, MapNode* map,
+static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverStack, MapNode* map,
 	BoolExprNodeStack* parentStack, StreamType shellStream);
 static ValueExprNode* resolveUsingField(DsqlCompilerScratch* dsqlScratch, const MetaName& name,
 	ValueListNode* list, const FieldNode* flawedNode, const TEXT* side, dsql_ctx*& ctx);
@@ -220,11 +220,13 @@ MapNode* MapNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 PlanNode* PlanNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	PlanNode* node = FB_NEW_POOL(getPool()) PlanNode(getPool(), type);
+	MemoryPool& pool = dsqlScratch->getPool();
+
+	PlanNode* node = FB_NEW_POOL(pool) PlanNode(pool, type);
 
 	if (accessType)
 	{
-		node->accessType = FB_NEW_POOL(getPool()) AccessType(getPool(), accessType->type);
+		node->accessType = FB_NEW_POOL(pool) AccessType(pool, accessType->type);
 		node->accessType->items = accessType->items;
 	}
 
@@ -235,14 +237,14 @@ PlanNode* PlanNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (dsqlNames)
 	{
-		node->dsqlNames = FB_NEW_POOL(getPool()) ObjectsArray<MetaName>(getPool());
+		node->dsqlNames = FB_NEW_POOL(pool) ObjectsArray<MetaName>(pool);
 		*node->dsqlNames = *dsqlNames;
 
 		dsql_ctx* context = dsqlPassAliasList(dsqlScratch);
 
 		if (context->ctx_relation)
 		{
-			RelationSourceNode* relNode = FB_NEW_POOL(getPool()) RelationSourceNode(getPool());
+			RelationSourceNode* relNode = FB_NEW_POOL(pool) RelationSourceNode(pool);
 			relNode->dsqlContext = context;
 			node->dsqlRecordSourceNode = relNode;
 		}
@@ -250,7 +252,7 @@ PlanNode* PlanNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		{
 			// ASF: Note that usage of procedure name in a PLAN clause causes errors when
 			// parsing the BLR.
-			ProcedureSourceNode* procNode = FB_NEW_POOL(getPool()) ProcedureSourceNode(getPool());
+			ProcedureSourceNode* procNode = FB_NEW_POOL(pool) ProcedureSourceNode(pool);
 			procNode->dsqlContext = context;
 			node->dsqlRecordSourceNode = procNode;
 		}
@@ -311,7 +313,7 @@ dsql_ctx* PlanNode::dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch)
 				{
 					// AB: Pretty ugly huh?
 					// make up a dummy context to hold the resultant relation.
-					dsql_ctx* newContext = FB_NEW_POOL(getPool()) dsql_ctx(getPool());
+					dsql_ctx* newContext = FB_NEW_POOL(dsqlScratch->getPool()) dsql_ctx(dsqlScratch->getPool());
 					newContext->ctx_context = context->ctx_context;
 					newContext->ctx_relation = relation;
 
@@ -424,20 +426,20 @@ RecSourceListNode::RecSourceListNode(MemoryPool& pool, unsigned count)
 	items.resize(count);
 
 	for (unsigned i = 0; i < count; ++i)
-		addDsqlChildNode((items[i] = NULL));
+		items[i] = NULL;
 }
 
 RecSourceListNode::RecSourceListNode(MemoryPool& pool, RecordSourceNode* arg1)
 	: TypedNode<ListExprNode, ExprNode::TYPE_REC_SOURCE_LIST>(pool),
 	  items(pool)
 {
-	items.resize(1);
-	addDsqlChildNode((items[0] = arg1));
+	items.push(arg1);
 }
 
 RecSourceListNode* RecSourceListNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	RecSourceListNode* node = FB_NEW_POOL(getPool()) RecSourceListNode(getPool(), items.getCount());
+	RecSourceListNode* node = FB_NEW_POOL(dsqlScratch->getPool()) RecSourceListNode(dsqlScratch->getPool(),
+		items.getCount());
 
 	NestConst<RecordSourceNode>* dst = node->items.begin();
 
@@ -557,7 +559,8 @@ RecordSourceNode* RelationSourceNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return dsqlPassRelProc(dsqlScratch, this);
 }
 
-bool RelationSourceNode::dsqlMatch(const ExprNode* other, bool /*ignoreMapCast*/) const
+bool RelationSourceNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other,
+	bool /*ignoreMapCast*/) const
 {
 	const RelationSourceNode* o = other->as<RelationSourceNode>();
 	return o && dsqlContext == o->dsqlContext;
@@ -732,7 +735,7 @@ void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseN
 		viewRse->rse_sorted || viewRse->rse_projection || viewRse->rse_first ||
 		viewRse->rse_skip || viewRse->rse_plan)
 	{
-		NodeCopier copier(csb, map);
+		NodeCopier copier(csb->csb_pool, csb, map);
 		RseNode* copy = viewRse->copy(tdbb, copier);
 		DEBUG;
 		doPass1(tdbb, csb, &copy);
@@ -759,7 +762,7 @@ void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseN
 	for (const NestConst<RecordSourceNode>* const end = viewRse->rse_relations.end(); arg != end; ++arg)
 	{
 		// this call not only copies the node, it adds any streams it finds to the map
-		NodeCopier copier(csb, map);
+		NodeCopier copier(csb->csb_pool, csb, map);
 		RecordSourceNode* node = (*arg)->copy(tdbb, copier);
 
 		// Now go out and process the base table itself. This table might also be a view,
@@ -777,7 +780,7 @@ void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseN
 
 	if (viewRse->rse_projection)
 	{
-		NodeCopier copier(csb, map);
+		NodeCopier copier(csb->csb_pool, csb, map);
 		rse->rse_projection = viewRse->rse_projection->copy(tdbb, copier);
 		doPass1(tdbb, csb, rse->rse_projection.getAddress());
 	}
@@ -787,7 +790,7 @@ void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseN
 
 	if (viewRse->rse_boolean)
 	{
-		NodeCopier copier(csb, map);
+		NodeCopier copier(csb->csb_pool, csb, map);
 		BoolExprNode* node = copier.copy(tdbb, viewRse->rse_boolean);
 
 		doPass1(tdbb, csb, &node);
@@ -1013,7 +1016,8 @@ RecordSourceNode* ProcedureSourceNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	return this;
 }
 
-bool ProcedureSourceNode::dsqlMatch(const ExprNode* other, bool /*ignoreMapCast*/) const
+bool ProcedureSourceNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other,
+	bool /*ignoreMapCast*/) const
 {
 	const ProcedureSourceNode* o = other->as<ProcedureSourceNode>();
 	return o && dsqlContext == o->dsqlContext;
@@ -1239,15 +1243,15 @@ void ProcedureSourceNode::findDependentFromStreams(const OptimizerRetrieval* opt
 		targetList->findDependentFromStreams(optRet, streamList);
 }
 
-void ProcedureSourceNode::collectStreams(SortedStreamList& streamList) const
+void ProcedureSourceNode::collectStreams(CompilerScratch* csb, SortedStreamList& streamList) const
 {
-	RecordSourceNode::collectStreams(streamList);
+	RecordSourceNode::collectStreams(csb, streamList);
 
 	if (sourceList)
-		sourceList->collectStreams(streamList);
+		sourceList->collectStreams(csb, streamList);
 
 	if (targetList)
-		targetList->collectStreams(streamList);
+		targetList->collectStreams(csb, streamList);
 }
 
 
@@ -1316,13 +1320,13 @@ RecordSourceNode* AggregateSourceNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	return this;
 }
 
-bool AggregateSourceNode::dsqlMatch(const ExprNode* other, bool ignoreMapCast) const
+bool AggregateSourceNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
 {
 	const AggregateSourceNode* o = other->as<AggregateSourceNode>();
 
 	return o && dsqlContext == o->dsqlContext &&
-		PASS1_node_match(dsqlGroup, o->dsqlGroup, ignoreMapCast) &&
-		PASS1_node_match(dsqlRse, o->dsqlRse, ignoreMapCast);
+		PASS1_node_match(dsqlScratch, dsqlGroup, o->dsqlGroup, ignoreMapCast) &&
+		PASS1_node_match(dsqlScratch, dsqlRse, o->dsqlRse, ignoreMapCast);
 }
 
 void AggregateSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
@@ -1541,7 +1545,7 @@ RecordSource* AggregateSourceNode::generate(thread_db* tdbb, OptimizerBlk* opt,
 	// Those fields are mappings. Mappings that hold a plain field may be used
 	// to distribute. Handle the simple cases only.
 	BoolExprNodeStack deliverStack;
-	genDeliverUnmapped(tdbb, &deliverStack, map, parentStack, shellStream);
+	genDeliverUnmapped(csb, &deliverStack, map, parentStack, shellStream);
 
 	// try to optimize MAX and MIN to use an index; for now, optimize
 	// only the simplest case, although it is probably possible
@@ -1907,7 +1911,7 @@ RecordSource* UnionSourceNode::generate(thread_db* tdbb, OptimizerBlk* opt, cons
 		// hvlad: don't do it for recursive unions else they will work wrong !
 		BoolExprNodeStack deliverStack;
 		if (!recursive)
-			genDeliverUnmapped(tdbb, &deliverStack, map, parentStack, shellStream);
+			genDeliverUnmapped(csb, &deliverStack, map, parentStack, shellStream);
 
 		rsbs.add(OPT_compile(tdbb, csb, rse, &deliverStack));
 
@@ -2158,7 +2162,7 @@ bool WindowSourceNode::containsStream(StreamType checkStream) const
 	return false;
 }
 
-void WindowSourceNode::collectStreams(SortedStreamList& streamList) const
+void WindowSourceNode::collectStreams(CompilerScratch* /*csb*/, SortedStreamList& streamList) const
 {
 	for (ObjectsArray<Partition>::const_iterator partition = partitions.begin();
 		 partition != partitions.end();
@@ -2288,7 +2292,7 @@ RseNode* RseNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	return this;
 }
 
-bool RseNode::dsqlMatch(const ExprNode* other, bool ignoreMapCast) const
+bool RseNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
 {
 	const RseNode* o = other->as<RseNode>();
 
@@ -2298,7 +2302,7 @@ bool RseNode::dsqlMatch(const ExprNode* other, bool ignoreMapCast) const
 	// ASF: Commented-out code "Fixed assertion when subquery is used in group by" to make
 	// CORE-4084 work again.
 	return /***dsqlContext &&***/ dsqlContext == o->dsqlContext &&
-		RecordSourceNode::dsqlMatch(other, ignoreMapCast);
+		RecordSourceNode::dsqlMatch(dsqlScratch, other, ignoreMapCast);
 }
 
 // Make up join node and mark relations as "possibly NULL" if they are in outer joins (inOuterJoin).
@@ -2308,6 +2312,7 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	// that it includes system (e.g. trigger) contexts (if present),
 	// as well as any outer (from other levels) contexts.
 
+	MemoryPool& pool = dsqlScratch->getPool();
 	DsqlContextStack* const base_context = dsqlScratch->context;
 	DsqlContextStack temp;
 	dsqlScratch->context = &temp;
@@ -2325,10 +2330,10 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	const size_t visibleContexts = temp.getCount();
 
 	RecSourceListNode* fromList = dsqlFrom;
-	RecSourceListNode* streamList = FB_NEW_POOL(getPool()) RecSourceListNode(
-		getPool(), fromList->items.getCount());
+	RecSourceListNode* streamList = FB_NEW_POOL(pool) RecSourceListNode(
+		pool, fromList->items.getCount());
 
-	RseNode* node = FB_NEW_POOL(getPool()) RseNode(getPool());
+	RseNode* node = FB_NEW_POOL(pool) RseNode(pool);
 	node->dsqlExplicitJoin = dsqlExplicitJoin;
 	node->rse_jointype = rse_jointype;
 	node->dsqlStreams = streamList;
@@ -2377,13 +2382,13 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					  Arg::Gds(isc_dsql_unsupp_feature_dialect) << Arg::Num(dsqlScratch->clientDialect));
 		}
 
-		ValueListNode leftStack(dsqlScratch->getPool(), 0u);
-		ValueListNode rightStack(dsqlScratch->getPool(), 0u);
+		ValueListNode leftStack(pool, 0u);
+		ValueListNode rightStack(pool, 0u);
 
 		if (usingList->items.isEmpty())	// NATURAL JOIN
 		{
-			StrArray leftNames(dsqlScratch->getPool());
-			ValueListNode* matched = FB_NEW_POOL(getPool()) ValueListNode(getPool(), 0u);
+			StrArray leftNames(pool);
+			ValueListNode* matched = FB_NEW_POOL(pool) ValueListNode(pool, 0u);
 
 			PASS1_expand_select_node(dsqlScratch, streamList->items[0], &leftStack, true);
 			PASS1_expand_select_node(dsqlScratch, streamList->items[1], &rightStack, true);
@@ -2438,7 +2443,7 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		if (usingList)	// JOIN ... USING
 		{
 			BoolExprNode* newBoolean = NULL;
-			StrArray usedColumns(dsqlScratch->getPool());
+			StrArray usedColumns(pool);
 
 			for (FB_SIZE_T i = 0; i < usingList->items.getCount(); ++i)
 			{
@@ -2472,7 +2477,7 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				ValueExprNode* arg2 = resolveUsingField(dsqlScratch, field->dsqlName, &rightStack,
 					field, "right", rightCtx);
 
-				ComparativeBoolNode* eqlNode = FB_NEW_POOL(getPool()) ComparativeBoolNode(getPool(),
+				ComparativeBoolNode* eqlNode = FB_NEW_POOL(pool) ComparativeBoolNode(pool,
 					blr_eql, arg1, arg2);
 
 				fb_assert(leftCtx);
@@ -2482,7 +2487,7 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				ImplicitJoin* impJoinLeft;
 				if (!leftCtx->ctx_imp_join.get(field->dsqlName, impJoinLeft))
 				{
-					impJoinLeft = FB_NEW_POOL(dsqlScratch->getPool()) ImplicitJoin();
+					impJoinLeft = FB_NEW_POOL(pool) ImplicitJoin();
 					impJoinLeft->value = eqlNode->arg1;
 					impJoinLeft->visibleInContext = leftCtx;
 				}
@@ -2492,14 +2497,14 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				ImplicitJoin* impJoinRight;
 				if (!rightCtx->ctx_imp_join.get(field->dsqlName, impJoinRight))
 				{
-					impJoinRight = FB_NEW_POOL(dsqlScratch->getPool()) ImplicitJoin();
+					impJoinRight = FB_NEW_POOL(pool) ImplicitJoin();
 					impJoinRight->value = arg2;
 				}
 				else
 					fb_assert(impJoinRight->visibleInContext == rightCtx);
 
 				// create the COALESCE
-				ValueListNode* stack = FB_NEW_POOL(getPool()) ValueListNode(getPool(), 0u);
+				ValueListNode* stack = FB_NEW_POOL(pool) ValueListNode(pool, 0u);
 
 				NestConst<ValueExprNode> tempNode = impJoinLeft->value;
 				NestConst<DsqlAliasNode> aliasNode = tempNode->as<DsqlAliasNode>();
@@ -2545,9 +2550,9 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 						stack->add(doDsqlPass(dsqlScratch, tempNode));
 				}
 
-				coalesceNode = FB_NEW_POOL(getPool()) CoalesceNode(getPool(), stack);
+				coalesceNode = FB_NEW_POOL(pool) CoalesceNode(pool, stack);
 
-				aliasNode = FB_NEW_POOL(getPool()) DsqlAliasNode(getPool(), field->dsqlName, coalesceNode);
+				aliasNode = FB_NEW_POOL(pool) DsqlAliasNode(pool, field->dsqlName, coalesceNode);
 				aliasNode->implicitJoin = impJoinLeft;
 
 				impJoinLeft->value = aliasNode;
@@ -3170,27 +3175,27 @@ void RseNode::findDependentFromStreams(const OptimizerRetrieval* optRet,
 		(*ptr)->findDependentFromStreams(optRet, streamList);
 }
 
-void RseNode::collectStreams(SortedStreamList& streamList) const
+void RseNode::collectStreams(CompilerScratch* csb, SortedStreamList& streamList) const
 {
 	if (rse_first)
-		rse_first->collectStreams(streamList);
+		rse_first->collectStreams(csb, streamList);
 
 	if (rse_skip)
-		rse_skip->collectStreams(streamList);
+		rse_skip->collectStreams(csb, streamList);
 
 	if (rse_boolean)
-		rse_boolean->collectStreams(streamList);
+		rse_boolean->collectStreams(csb, streamList);
 
 	// ASF: The legacy code used to visit rse_sorted and rse_projection, but the nod_sort was never
 	// handled.
-	// rse_sorted->collectStreams(streamList);
-	// rse_projection->collectStreams(streamList);
+	// rse_sorted->collectStreams(csb, streamList);
+	// rse_projection->collectStreams(csb, streamList);
 
 	const NestConst<RecordSourceNode>* ptr;
 	const NestConst<RecordSourceNode>* end;
 
 	for (ptr = rse_relations.begin(), end = rse_relations.end(); ptr != end; ++ptr)
-		(*ptr)->collectStreams(streamList);
+		(*ptr)->collectStreams(csb, streamList);
 }
 
 
@@ -3452,12 +3457,10 @@ static void processMap(thread_db* tdbb, CompilerScratch* csb, MapNode* map, Form
 
 // Make new boolean nodes from nodes that contain a field from the given shellStream.
 // Those fields are references (mappings) to other nodes and are used by aggregates and union rse's.
-static void genDeliverUnmapped(thread_db* tdbb, BoolExprNodeStack* deliverStack, MapNode* map,
+static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverStack, MapNode* map,
 	BoolExprNodeStack* parentStack, StreamType shellStream)
 {
-	SET_TDBB(tdbb);
-
-	MemoryPool& pool = *tdbb->getDefaultPool();
+	MemoryPool& pool = csb->csb_pool;
 
 	for (BoolExprNodeStack::iterator stack1(*parentStack); stack1.hasData(); ++stack1)
 	{
@@ -3473,7 +3476,7 @@ static void genDeliverUnmapped(thread_db* tdbb, BoolExprNodeStack* deliverStack,
 			orgStack.push(binaryNode->arg1);
 			orgStack.push(binaryNode->arg2);
 
-			genDeliverUnmapped(tdbb, &newStack, map, &orgStack, shellStream);
+			genDeliverUnmapped(csb, &newStack, map, &orgStack, shellStream);
 
 			if (newStack.getCount() == 2)
 			{
@@ -3578,7 +3581,7 @@ static void genDeliverUnmapped(thread_db* tdbb, BoolExprNodeStack* deliverStack,
 					// Check also the expression inside the map, because aggregate
 					// functions aren't allowed to be delivered to the WHERE clause.
 					ValueExprNode* value = map->sourceList[fieldId];
-					okNode = value->unmappable(map, shellStream);
+					okNode = value->unmappable(csb, map, shellStream);
 
 					if (okNode)
 						*newChildren[indexArg] = map->sourceList[fieldId];
@@ -3586,7 +3589,7 @@ static void genDeliverUnmapped(thread_db* tdbb, BoolExprNodeStack* deliverStack,
 			}
 			else
 			{
-				if ((okNode = children[indexArg]->unmappable(map, shellStream)))
+				if ((okNode = children[indexArg]->unmappable(csb, map, shellStream)))
 					*newChildren[indexArg] = children[indexArg];
 			}
 		}

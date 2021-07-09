@@ -454,7 +454,7 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 			msg);
 	}
 
-	dsql_par* parameter = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_par(*tdbb->getDefaultPool());
+	dsql_par* parameter = FB_NEW_POOL(message->getPool()) dsql_par(message->getPool());
 	parameter->par_message = message;
 	message->msg_parameters.insert(0, parameter);
 	parameter->par_parameter = message->msg_parameter++;

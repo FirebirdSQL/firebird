@@ -36,6 +36,11 @@ class DenseRankWinNode : public WinFuncNode
 public:
 	explicit DenseRankWinNode(MemoryPool& pool);
 
+	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	{
+		// nothing
+	}
+
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
@@ -54,6 +59,11 @@ class RankWinNode : public WinFuncNode
 {
 public:
 	explicit RankWinNode(MemoryPool& pool);
+
+	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	{
+		// nothing
+	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
@@ -77,6 +87,11 @@ class RowNumberWinNode : public WinFuncNode
 {
 public:
 	explicit RowNumberWinNode(MemoryPool& pool);
+
+	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	{
+		// nothing
+	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
@@ -168,6 +183,13 @@ public:
 	explicit NthValueWinNode(MemoryPool& pool, ValueExprNode* aArg = NULL,
 		ValueExprNode* aRow = NULL, ValueExprNode* aFrom = NULL);
 
+	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	{
+		WinFuncNode::getChildren(holder, dsql);
+		holder.add(row);
+		holder.add(from);
+	}
+
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
@@ -200,6 +222,13 @@ class LagLeadWinNode : public WinFuncNode
 public:
 	explicit LagLeadWinNode(MemoryPool& pool, const AggInfo& aAggInfo, int aDirection,
 		ValueExprNode* aArg = NULL, ValueExprNode* aRows = NULL, ValueExprNode* aOutExpr = NULL);
+
+	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	{
+		WinFuncNode::getChildren(holder, dsql);
+		holder.add(rows);
+		holder.add(outExpr);
+	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const = 0;
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);

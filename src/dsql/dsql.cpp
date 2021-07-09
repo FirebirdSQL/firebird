@@ -573,10 +573,13 @@ void DSQL_execute_immediate(thread_db* tdbb, Jrd::Attachment* attachment, jrd_tr
 }
 
 
-void DsqlDmlRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch,
+void DsqlDmlRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, bool* destroyScratchPool,
 	ntrace_result_t* traceResult)
 {
-	node = Node::doDsqlPass(scratch, node);
+	{	// scope
+		Jrd::ContextPoolHolder scratchContext(tdbb, &scratch->getPool());
+		node = Node::doDsqlPass(scratch, node);
+	}
 
 	if (scratch->clientDialect > SQL_DIALECT_V5)
 		scratch->getStatement()->setBlrVersion(5);
@@ -592,7 +595,7 @@ void DsqlDmlRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch,
 
 		// Allocate buffer for message
 		const ULONG newLen = message->msg_length + FB_DOUBLE_ALIGN - 1;
-		UCHAR* msgBuffer = FB_NEW_POOL(*tdbb->getDefaultPool()) UCHAR[newLen];
+		UCHAR* msgBuffer = FB_NEW_POOL(scratch->getStatement()->getPool()) UCHAR[newLen];
 		msgBuffer = FB_ALIGN(msgBuffer, FB_DOUBLE_ALIGN);
 		message->msg_buffer_number = req_msg_buffers.add(msgBuffer);
 	}
@@ -654,6 +657,10 @@ void DsqlDmlRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch,
 
 	if (status)
 		status_exception::raise(tdbb->tdbb_status_vector);
+
+	// We don't need the scratch pool anymore. Tell our caller to delete it.
+	node = NULL;
+	*destroyScratchPool = true;
 }
 
 // Execute a dynamic SQL statement.
@@ -804,7 +811,7 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 	trace.finish(have_cursor, ITracePlugin::RESULT_SUCCESS);
 }
 
-void DsqlDdlRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch,
+void DsqlDdlRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, bool* destroyScratchPool,
 	ntrace_result_t* traceResult)
 {
 	internalScratch = scratch;
@@ -889,7 +896,7 @@ void DsqlDdlRequest::rethrowDdlException(status_exception& ex, bool metadataUpda
 }
 
 
-void DsqlTransactionRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch,
+void DsqlTransactionRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, bool* destroyScratchPool,
 	ntrace_result_t* /*traceResult*/)
 {
 	node = Node::doDsqlPass(scratch, node);
@@ -1360,37 +1367,47 @@ static dsql_req* prepareStatement(thread_db* tdbb, dsql_dbb* database, jrd_tra* 
 
 	// allocate the statement block, then prepare the statement
 
-	Jrd::ContextPoolHolder context(tdbb, database->createPool());
-	MemoryPool& pool = *tdbb->getDefaultPool();
-
-	DsqlCompiledStatement* statement = FB_NEW_POOL(pool) DsqlCompiledStatement(pool);
-	DsqlCompilerScratch* scratch = FB_NEW_POOL(pool) DsqlCompilerScratch(pool, database,
-		transaction, statement);
-	scratch->clientDialect = clientDialect;
-
-	if (isInternalRequest)
-		scratch->flags |= DsqlCompilerScratch::FLAG_INTERNAL_REQUEST;
-
+	MemoryPool* statementPool = database->createPool();
+	MemoryPool* scratchPool = NULL;
 	dsql_req* request = NULL;
 
+	Jrd::ContextPoolHolder statementContext(tdbb, statementPool);
 	try
 	{
-		// Parse the SQL statement.  If it croaks, return
+		DsqlCompiledStatement* statement = FB_NEW_POOL(*statementPool) DsqlCompiledStatement(*statementPool);
 
-		Parser parser(*tdbb->getDefaultPool(), scratch, clientDialect,
-			scratch->getAttachment()->dbb_db_SQL_dialect, PARSER_VERSION, text, textLength,
-			tdbb->getAttachment()->att_charset);
+		scratchPool = database->createPool();
 
-		request = parser.parse();
+		DsqlCompilerScratch* scratch = FB_NEW_POOL(*scratchPool) DsqlCompilerScratch(*scratchPool, database,
+			transaction, statement);
+		scratch->clientDialect = clientDialect;
+
+		if (isInternalRequest)
+			scratch->flags |= DsqlCompilerScratch::FLAG_INTERNAL_REQUEST;
+
+		string transformedText;
+
+		{	// scope to delete parser before the scratch pool is gone
+			Jrd::ContextPoolHolder scratchContext(tdbb, scratchPool);
+
+			Parser parser(*scratchPool, scratch, clientDialect,
+				scratch->getAttachment()->dbb_db_SQL_dialect, PARSER_VERSION, text, textLength,
+				tdbb->getAttachment()->att_charset);
+
+			// Parse the SQL statement.  If it croaks, return
+			request = parser.parse();
+			request->liveScratchPool = scratchPool;
+
+			if (parser.isStmtAmbiguous())
+				scratch->flags |= DsqlCompilerScratch::FLAG_AMBIGUOUS_STMT;
+
+			transformedText = parser.getTransformedString();
+		}
 
 		request->req_dbb = scratch->getAttachment();
 		request->req_transaction = scratch->getTransaction();
 		request->statement = scratch->getStatement();
 
-		if (parser.isStmtAmbiguous())
-			scratch->flags |= DsqlCompilerScratch::FLAG_AMBIGUOUS_STMT;
-
-		string transformedText = parser.getTransformedString();
 		SSHORT charSetId = database->dbb_attachment->att_charset;
 
 		// If the attachment charset is NONE, replace non-ASCII characters by question marks, so
@@ -1424,12 +1441,12 @@ static dsql_req* prepareStatement(thread_db* tdbb, dsql_dbb* database, jrd_tra* 
 			transformedText.assign(temp.begin(), temp.getCount());
 		}
 
-		statement->setSqlText(FB_NEW_POOL(pool) RefString(pool, transformedText));
+		statement->setSqlText(FB_NEW_POOL(*statementPool) RefString(*statementPool, transformedText));
 
 		// allocate the send and receive messages
 
-		statement->setSendMsg(FB_NEW_POOL(pool) dsql_msg(pool));
-		dsql_msg* message = FB_NEW_POOL(pool) dsql_msg(pool);
+		statement->setSendMsg(FB_NEW_POOL(*statementPool) dsql_msg(*statementPool));
+		dsql_msg* message = FB_NEW_POOL(*statementPool) dsql_msg(*statementPool);
 		statement->setReceiveMsg(message);
 		message->msg_number = 1;
 
@@ -1441,7 +1458,14 @@ static dsql_req* prepareStatement(thread_db* tdbb, dsql_dbb* database, jrd_tra* 
 		ntrace_result_t traceResult = ITracePlugin::RESULT_SUCCESS;
 		try
 		{
-			request->dsqlPass(tdbb, scratch, &traceResult);
+			bool destroyScratchPool = false;
+			request->dsqlPass(tdbb, scratch, &destroyScratchPool, &traceResult);
+
+			if (destroyScratchPool)
+			{
+				database->deletePool(scratchPool);
+				request->liveScratchPool = scratchPool = NULL;
+			}
 		}
 		catch (const Exception&)
 		{
@@ -1460,6 +1484,11 @@ static dsql_req* prepareStatement(thread_db* tdbb, dsql_dbb* database, jrd_tra* 
 		{
 			request->req_traced = false;
 			dsql_req::destroy(tdbb, request, true);
+		}
+		else
+		{
+			database->deletePool(scratchPool);
+			database->deletePool(statementPool);
 		}
 
 		throw;
@@ -1528,6 +1557,7 @@ static void release_statement(DsqlCompiledStatement* statement)
 dsql_req::dsql_req(MemoryPool& pool)
 	: req_pool(pool),
 	  statement(NULL),
+	  liveScratchPool(NULL),
 	  cursors(req_pool),
 	  req_dbb(NULL),
 	  req_transaction(NULL),
@@ -1629,7 +1659,10 @@ void dsql_req::destroy(thread_db* tdbb, dsql_req* request, bool drop)
 	// Release the entire request if explicitly asked for
 
 	if (drop)
+	{
 		request->req_dbb->deletePool(&request->getPool());
+		request->req_dbb->deletePool(request->liveScratchPool);
+	}
 }
 
 

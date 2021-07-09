@@ -1228,7 +1228,8 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 	jrd_tra* sysTransaction = attachment->getSysTransaction();
 	Database* dbb = tdbb->getDatabase();
 
-	if (!node || node->kind != DmlNode::KIND_STATEMENT)
+	// ASF: It's already a StmtNode, so do not do a virtual call in execution.
+	if (!node)	/// if (!node || node->getKind() != DmlNode::KIND_STATEMENT
 		BUGCHECK(147);
 
 	// Save the old pool and request to restore on exit

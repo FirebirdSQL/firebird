@@ -124,8 +124,10 @@ void GEN_expr(DsqlCompilerScratch* dsqlScratch, ExprNode* node)
 
 	// ASF: Shouldn't we check nod_gen_id2 too?
 
-	if (node->kind == DmlNode::KIND_VALUE && node->dsqlCompatDialectVerb &&
-		dsqlScratch->clientDialect == SQL_DIALECT_V6_TRANSITION)
+	const char* compatDialectVerb;
+
+	if (node->getKind() == DmlNode::KIND_VALUE && dsqlScratch->clientDialect == SQL_DIALECT_V6_TRANSITION &&
+		(compatDialectVerb = node->getCompatDialectVerb()))
 	{
 		dsc desc;
 		MAKE_desc(dsqlScratch, &desc, static_cast<ValueExprNode*>(node));
@@ -134,7 +136,7 @@ void GEN_expr(DsqlCompilerScratch* dsqlScratch, ExprNode* node)
 		{
 			ERRD_post_warning(
 				Arg::Warning(isc_dsql_dialect_warning_expr) <<
-				Arg::Str(node->dsqlCompatDialectVerb));
+				Arg::Str(compatDialectVerb));
 		}
 	}
 }

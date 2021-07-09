@@ -353,10 +353,10 @@ namespace
 		{
 			SuspendNode* suspend = FB_NEW_POOL(pool) SuspendNode(pool);
 			suspend->message = intOutMessageNode;
-			suspend->statement = FB_NEW_POOL(getPool()) MessageMoverNode(pool, extOutMessageNode, intOutMessageNode);
+			suspend->statement = FB_NEW_POOL(pool) MessageMoverNode(pool, extOutMessageNode, intOutMessageNode);
 
 			statements.add(suspend);
-			statements.add(FB_NEW_POOL(getPool()) StallNode(pool));
+			statements.add(FB_NEW_POOL(pool) StallNode(pool));
 		}
 
 		virtual const StmtNode* execute(thread_db* tdbb, jrd_req* request, ExeState* exeState) const

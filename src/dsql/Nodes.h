@@ -38,6 +38,7 @@ class Cursor;
 class Node;
 class NodePrinter;
 class ExprNode;
+class NodeRefsHolder;
 class OptimizerBlk;
 class OptimizerRetrieval;
 class RecordSource;
@@ -101,12 +102,11 @@ public:
 };
 
 
-class Node : public Firebird::PermanentStorage, public Printable
+class Node : public Printable
 {
 public:
 	explicit Node(MemoryPool& pool)
-		: PermanentStorage(pool),
-		  line(0),
+		: line(0),
 		  column(0)
 	{
 	}
@@ -152,6 +152,10 @@ public:
 	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const = 0;
+
+	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	{
+	}
 
 	virtual Node* dsqlPass(DsqlCompilerScratch* /*dsqlScratch*/)
 	{
@@ -285,9 +289,8 @@ public:
 		KIND_LIST
 	};
 
-	explicit DmlNode(MemoryPool& pool, Kind aKind)
-		: Node(pool),
-		  kind(aKind)
+	explicit DmlNode(MemoryPool& pool)
+		: Node(pool)
 	{
 	}
 
@@ -301,13 +304,11 @@ public:
 	}
 
 public:
+	virtual Kind getKind() = 0;
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch) = 0;
 	virtual DmlNode* pass1(thread_db* tdbb, CompilerScratch* csb) = 0;
 	virtual DmlNode* pass2(thread_db* tdbb, CompilerScratch* csb) = 0;
 	virtual DmlNode* copy(thread_db* tdbb, NodeCopier& copier) const = 0;
-
-public:
-	const Kind kind;
 };
 
 
@@ -374,6 +375,28 @@ protected:
 
 private:
 	T** ptr;
+};
+
+class NodeRefsHolder : public Firebird::PermanentStorage
+{
+public:
+	NodeRefsHolder(MemoryPool& pool)
+		: PermanentStorage(pool),
+		  refs(pool)
+	{
+	}
+
+	~NodeRefsHolder()
+	{
+		for (NodeRef** ref = refs.begin(); ref != refs.end(); ++ref)
+			delete *ref;
+	}
+
+public:
+	template <typename T> void add(const NestConst<T>& node);
+
+public:
+	Firebird::HalfStaticArray<NodeRef*, 8> refs;
 };
 
 
@@ -460,14 +483,11 @@ public:
 	static const unsigned FLAG_DATE			= 0x20;
 	static const unsigned FLAG_VALUE		= 0x40;	// Full value area required in impure space.
 
-	explicit ExprNode(Type aType, MemoryPool& pool, Kind aKind)
-		: DmlNode(pool, aKind),
+	explicit ExprNode(Type aType, MemoryPool& pool)
+		: DmlNode(pool),
 		  type(aType),
 		  nodFlags(0),
-		  impureOffset(0),
-		  dsqlCompatDialectVerb(NULL),
-		  dsqlChildNodes(pool),
-		  jrdChildNodes(pool)
+		  impureOffset(0)
 	{
 	}
 
@@ -504,6 +524,11 @@ public:
 		return node ? node->template is<T>() : false;
 	}
 
+	virtual const char* getCompatDialectVerb()
+	{
+		return NULL;
+	}
+
 	// Allocate and assign impure space for various nodes.
 	template <typename T> static void doPass2(thread_db* tdbb, CompilerScratch* csb, T** node)
 	{
@@ -519,7 +544,10 @@ public:
 	{
 		bool ret = false;
 
-		for (NodeRef* const* i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+		NodeRefsHolder holder(visitor.getPool());
+		getChildren(holder, true);
+
+		for (NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
 			ret |= visitor.visit((*i)->getExpr());
 
 		return ret;
@@ -529,7 +557,10 @@ public:
 	{
 		bool ret = false;
 
-		for (NodeRef* const* i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+		NodeRefsHolder holder(visitor.getPool());
+		getChildren(holder, true);
+
+		for (NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
 			ret |= visitor.visit((*i)->getExpr());
 
 		return ret;
@@ -539,7 +570,10 @@ public:
 	{
 		bool ret = false;
 
-		for (NodeRef* const* i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+		NodeRefsHolder holder(visitor.getPool());
+		getChildren(holder, true);
+
+		for (NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
 			ret |= visitor.visit((*i)->getExpr());
 
 		return ret;
@@ -549,7 +583,10 @@ public:
 	{
 		bool ret = false;
 
-		for (NodeRef* const* i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+		NodeRefsHolder holder(visitor.dsqlScratch->getPool());
+		getChildren(holder, true);
+
+		for (NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
 			ret |= visitor.visit((*i)->getExpr());
 
 		return ret;
@@ -559,7 +596,10 @@ public:
 	{
 		bool ret = false;
 
-		for (NodeRef* const* i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+		NodeRefsHolder holder(visitor.getPool());
+		getChildren(holder, true);
+
+		for (NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
 			ret |= visitor.visit((*i)->getExpr());
 
 		return ret;
@@ -567,7 +607,10 @@ public:
 
 	virtual ExprNode* dsqlFieldRemapper(FieldRemapper& visitor)
 	{
-		for (NodeRef* const* i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+		NodeRefsHolder holder(visitor.getPool());
+		getChildren(holder, true);
+
+		for (NodeRef* const* i = holder.refs.begin(); i != holder.refs.end(); ++i)
 			(*i)->remap(visitor);
 
 		return this;
@@ -587,48 +630,23 @@ public:
 	}
 
 	// Check if expression could return NULL or expression can turn NULL into a true/false.
-	virtual bool possiblyUnknown()
-	{
-		for (NodeRef** i = jrdChildNodes.begin(); i != jrdChildNodes.end(); ++i)
-		{
-			if (**i && (*i)->getExpr()->possiblyUnknown())
-				return true;
-		}
-
-		return false;
-	}
+	virtual bool possiblyUnknown(OptimizerBlk* opt);
 
 	// Verify if this node is allowed in an unmapped boolean.
-	virtual bool unmappable(const MapNode* mapNode, StreamType shellStream)
-	{
-		for (NodeRef** i = jrdChildNodes.begin(); i != jrdChildNodes.end(); ++i)
-		{
-			if (**i && !(*i)->getExpr()->unmappable(mapNode, shellStream))
-				return false;
-		}
-
-		return true;
-	}
+	virtual bool unmappable(CompilerScratch* csb, const MapNode* mapNode, StreamType shellStream);
 
 	// Return all streams referenced by the expression.
-	virtual void collectStreams(SortedStreamList& streamList) const
-	{
-		for (const NodeRef* const* i = jrdChildNodes.begin(); i != jrdChildNodes.end(); ++i)
-		{
-			if (**i)
-				(*i)->getExpr()->collectStreams(streamList);
-		}
-	}
+	virtual void collectStreams(CompilerScratch* csb, SortedStreamList& streamList) const;
 
-	virtual bool findStream(StreamType stream)
+	virtual bool findStream(CompilerScratch* csb, StreamType stream)
 	{
 		SortedStreamList streams;
-		collectStreams(streams);
+		collectStreams(csb, streams);
 
 		return streams.exist(stream);
 	}
 
-	virtual bool dsqlMatch(const ExprNode* other, bool ignoreMapCast) const;
+	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
 
 	virtual ExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
@@ -637,7 +655,7 @@ public:
 	}
 
 	// Determine if two expression trees are the same.
-	virtual bool sameAs(const ExprNode* other, bool ignoreStreams) const;
+	virtual bool sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const;
 
 	// See if node is presently computable.
 	// A node is said to be computable, if all the streams involved
@@ -652,33 +670,10 @@ public:
 	virtual ExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual ExprNode* copy(thread_db* tdbb, NodeCopier& copier) const = 0;
 
-protected:
-	template <typename T1, typename T2>
-	void addChildNode(NestConst<T1>& dsqlNode, NestConst<T2>& jrdNode)
-	{
-		addDsqlChildNode(dsqlNode);
-		addChildNode(jrdNode);
-	}
-
-	template <typename T>
-	void addDsqlChildNode(NestConst<T>& dsqlNode)
-	{
-		dsqlChildNodes.add(FB_NEW_POOL(getPool()) NodeRefImpl<T>(dsqlNode.getAddress()));
-	}
-
-	template <typename T>
-	void addChildNode(NestConst<T>& jrdNode)
-	{
-		jrdChildNodes.add(FB_NEW_POOL(getPool()) NodeRefImpl<T>(jrdNode.getAddress()));
-	}
-
 public:
 	const Type type;
 	unsigned nodFlags;
 	ULONG impureOffset;
-	const char* dsqlCompatDialectVerb;
-	Firebird::Array<NodeRef*> dsqlChildNodes;
-	Firebird::Array<NodeRef*> jrdChildNodes;
 };
 
 
@@ -714,12 +709,24 @@ inline void NodeRefImpl<T>::internalPass2(thread_db* tdbb, CompilerScratch* csb)
 }
 
 
+template <typename T>
+inline void NodeRefsHolder::add(const NestConst<T>& node)
+{
+	refs.add(FB_NEW_POOL(getPool()) NodeRefImpl<T>(const_cast<T**>(node.getAddress())));
+}
+
+
 class BoolExprNode : public ExprNode
 {
 public:
 	BoolExprNode(Type aType, MemoryPool& pool)
-		: ExprNode(aType, pool, KIND_BOOLEAN)
+		: ExprNode(aType, pool)
 	{
+	}
+
+	virtual Kind getKind()
+	{
+		return KIND_BOOLEAN;
 	}
 
 	virtual BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -758,7 +765,7 @@ class ValueExprNode : public ExprNode
 {
 public:
 	ValueExprNode(Type aType, MemoryPool& pool)
-		: ExprNode(aType, pool, KIND_VALUE),
+		: ExprNode(aType, pool),
 		  nodScale(0)
 	{
 		nodDesc.clear();
@@ -766,6 +773,11 @@ public:
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const = 0;
+
+	virtual Kind getKind()
+	{
+		return KIND_VALUE;
+	}
 
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
@@ -909,6 +921,12 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
+	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	{
+		ValueExprNode::getChildren(holder, dsql);
+		holder.add(arg);
+	}
+
 	virtual Firebird::string internalPrint(NodePrinter& printer) const = 0;
 
 	virtual bool dsqlAggregateFinder(AggregateFinder& visitor);
@@ -917,7 +935,7 @@ public:
 	virtual bool dsqlSubSelectFinder(SubSelectFinder& visitor);
 	virtual ValueExprNode* dsqlFieldRemapper(FieldRemapper& visitor);
 
-	virtual bool dsqlMatch(const ExprNode* other, bool ignoreMapCast) const;
+	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 
@@ -929,19 +947,19 @@ public:
 
 	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual bool possiblyUnknown()
+	virtual bool possiblyUnknown(OptimizerBlk* /*opt*/)
 	{
 		return true;
 	}
 
-	virtual void collectStreams(SortedStreamList& /*streamList*/) const
+	virtual void collectStreams(CompilerScratch* /*csb*/, SortedStreamList& /*streamList*/) const
 	{
 		// ASF: Although in v2.5 the visitor happens normally for the node childs, nod_count has
 		// been set to 0 in CMP_pass2, so that doesn't happens.
 		return;
 	}
 
-	virtual bool unmappable(const MapNode* /*mapNode*/, StreamType /*shellStream*/)
+	virtual bool unmappable(CompilerScratch* /*csb*/, const MapNode* /*mapNode*/, StreamType /*shellStream*/)
 	{
 		return false;
 	}
@@ -987,10 +1005,10 @@ protected:
 
 public:
 	const AggInfo& aggInfo;
-	bool distinct;
-	bool dialect1;
 	NestConst<ValueExprNode> arg;
 	const AggregateSort* asb;
+	bool distinct;
+	bool dialect1;
 	bool indexed;
 
 private:
@@ -1018,11 +1036,16 @@ public:
 	static const unsigned DFLAG_CURSOR					= 0x40;
 
 	RecordSourceNode(Type aType, MemoryPool& pool)
-		: ExprNode(aType, pool, KIND_REC_SOURCE),
+		: ExprNode(aType, pool),
 		  dsqlFlags(0),
 		  dsqlContext(NULL),
 		  stream(INVALID_STREAM)
 	{
+	}
+
+	virtual Kind getKind()
+	{
+		return KIND_REC_SOURCE;
 	}
 
 	virtual StreamType getStream() const
@@ -1062,23 +1085,23 @@ public:
 		fb_assert(false);
 	}
 
-	virtual bool possiblyUnknown()
+	virtual bool possiblyUnknown(OptimizerBlk* /*opt*/)
 	{
 		return true;
 	}
 
-	virtual bool unmappable(const MapNode* /*mapNode*/, StreamType /*shellStream*/)
+	virtual bool unmappable(CompilerScratch* /*csb*/, const MapNode* /*mapNode*/, StreamType /*shellStream*/)
 	{
 		return false;
 	}
 
-	virtual void collectStreams(SortedStreamList& streamList) const
+	virtual void collectStreams(CompilerScratch* /*csb*/, SortedStreamList& streamList) const
 	{
 		if (!streamList.exist(getStream()))
 			streamList.add(getStream());
 	}
 
-	virtual bool sameAs(const ExprNode* /*other*/, bool /*ignoreStreams*/) const
+	virtual bool sameAs(CompilerScratch* /*csb*/, const ExprNode* /*other*/, bool /*ignoreStreams*/) const
 	{
 		return false;
 	}
@@ -1107,8 +1130,13 @@ class ListExprNode : public ExprNode
 {
 public:
 	ListExprNode(Type aType, MemoryPool& pool)
-		: ExprNode(aType, pool, KIND_LIST)
+		: ExprNode(aType, pool)
 	{
+	}
+
+	virtual Kind getKind()
+	{
+		return KIND_LIST;
 	}
 
 	virtual void genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
@@ -1123,57 +1151,52 @@ class ValueListNode : public TypedNode<ListExprNode, ExprNode::TYPE_VALUE_LIST>
 public:
 	ValueListNode(MemoryPool& pool, unsigned count)
 		: TypedNode<ListExprNode, ExprNode::TYPE_VALUE_LIST>(pool),
-		  items(pool, INITIAL_CAPACITY),
-		  itemsBegin(items.begin())
+		  items(pool, INITIAL_CAPACITY)
 	{
 		items.resize(count);
 
 		for (unsigned i = 0; i < count; ++i)
-		{
 			items[i] = NULL;
-			addChildNode(items[i], items[i]);
-		}
 	}
 
 	ValueListNode(MemoryPool& pool, ValueExprNode* arg1)
 		: TypedNode<ListExprNode, ExprNode::TYPE_VALUE_LIST>(pool),
-		  items(pool, INITIAL_CAPACITY),
-		  itemsBegin(items.begin())
+		  items(pool, INITIAL_CAPACITY)
 	{
-		items.resize(1);
-		addDsqlChildNode((items[0] = arg1));
+		items.push(arg1);
+	}
+
+	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	{
+		ListExprNode::getChildren(holder, dsql);
+
+		for (const NestConst<ValueExprNode>* item = items.begin(); item != items.end(); ++item)
+			holder.add(*item);
 	}
 
 	ValueListNode* add(ValueExprNode* argn)
 	{
-		FB_SIZE_T pos = items.add(argn);
-
-		if (invalidated())
-			resetChildNodes();
-		else
-			addChildNode(items[pos], items[pos]);
-
+		items.add(argn);
 		return this;
 	}
 
 	ValueListNode* addFront(ValueExprNode* argn)
 	{
 		items.insert(0, argn);
-		resetChildNodes();
 		return this;
 	}
 
 	void clear()
 	{
 		items.clear();
-		resetChildNodes();
 	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 
 	virtual ValueListNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
-		ValueListNode* node = FB_NEW_POOL(getPool()) ValueListNode(getPool(), items.getCount());
+		ValueListNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ValueListNode(dsqlScratch->getPool(),
+			items.getCount());
 
 		NestConst<ValueExprNode>* dst = node->items.begin();
 
@@ -1214,28 +1237,8 @@ public:
 		return node;
 	}
 
-private:
-	bool invalidated()
-	{
-		bool ret = items.begin() != itemsBegin;
-		itemsBegin = items.begin();
-		return ret;
-	}
-
-	void resetChildNodes()
-	{
-		dsqlChildNodes.clear();
-		jrdChildNodes.clear();
-
-		for (FB_SIZE_T i = 0; i < items.getCount(); ++i)
-			addChildNode(items[i], items[i]);
-
-		itemsBegin = items.begin();
-	}
-
 public:
 	NestValueArray items;
-	NestConst<ValueExprNode>* itemsBegin;
 
 private:
 	static const unsigned INITIAL_CAPACITY = 4;
@@ -1251,8 +1254,15 @@ public:
 	RecSourceListNode* add(RecordSourceNode* argn)
 	{
 		items.add(argn);
-		resetChildNodes();
 		return this;
+	}
+
+	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	{
+		ListExprNode::getChildren(holder, dsql);
+
+		for (const NestConst<RecordSourceNode>* item = items.begin(); item != items.end(); ++item)
+			holder.add(*item);
 	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -1281,15 +1291,6 @@ public:
 	{
 		fb_assert(false);
 		return NULL;
-	}
-
-private:
-	void resetChildNodes()
-	{
-		dsqlChildNodes.clear();
-
-		for (FB_SIZE_T i = 0; i < items.getCount(); ++i)
-			addDsqlChildNode(items[i]);
 	}
 
 public:
@@ -1396,7 +1397,7 @@ public:
 
 public:
 	explicit StmtNode(Type aType, MemoryPool& pool)
-		: DmlNode(pool, KIND_STATEMENT),
+		: DmlNode(pool),
 		  type(aType),
 		  parentStmt(NULL),
 		  impureOffset(0),
@@ -1445,6 +1446,11 @@ public:
 			(*node)->parentStmt = parentStmt;
 
 		*node = (*node)->pass2(tdbb, csb);
+	}
+
+	virtual Kind getKind()
+	{
+		return KIND_STATEMENT;
 	}
 
 	virtual StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -1543,12 +1549,11 @@ struct ScaledNumber
 };
 
 
-class RowsClause : public Firebird::PermanentStorage, public Printable
+class RowsClause : public Printable
 {
 public:
 	explicit RowsClause(MemoryPool& pool)
-		: PermanentStorage(pool),
-		  length(NULL),
+		: length(NULL),
 		  skip(NULL)
 	{
 	}
@@ -1592,8 +1597,8 @@ typedef Firebird::Array<StreamType> StreamMap;
 class SubExprNodeCopier : private StreamMap, public NodeCopier
 {
 public:
-	SubExprNodeCopier(CompilerScratch* aCsb)
-		: NodeCopier(aCsb, getBuffer(STREAM_MAP_LENGTH))
+	SubExprNodeCopier(Firebird::MemoryPool& pool, CompilerScratch* aCsb)
+		: NodeCopier(pool, aCsb, getBuffer(STREAM_MAP_LENGTH))
 	{
 		// Initialize the map so all streams initially resolve to the original number.
 		// As soon as copy creates new streams, the map is being overwritten.

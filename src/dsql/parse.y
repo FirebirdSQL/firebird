@@ -739,9 +739,9 @@ top
 
 %type <dsqlReq> statement
 statement
-	: dml_statement		{ $$ = newNode<DsqlDmlRequest>($1); }
-	| ddl_statement		{ $$ = newNode<DsqlDdlRequest>($1); }
-	| tra_statement		{ $$ = newNode<DsqlTransactionRequest>($1); }
+	: dml_statement		{ $$ = FB_NEW_POOL(getStatementPool()) DsqlDmlRequest(getStatementPool(), $1); }
+	| ddl_statement		{ $$ = FB_NEW_POOL(getStatementPool()) DsqlDdlRequest(getStatementPool(), $1); }
+	| tra_statement		{ $$ = FB_NEW_POOL(getStatementPool()) DsqlTransactionRequest(getStatementPool(), $1); }
 	;
 
 %type <stmtNode> dml_statement

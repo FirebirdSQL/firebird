@@ -161,6 +161,11 @@ public:
 		bool outer, bool inner, SortNode* sortNode);
 	~OptimizerRetrieval();
 
+	MemoryPool& getPool() const
+	{
+		return pool;
+	}
+
 	InversionCandidate* getInversion()
 	{
 		createIndexScanNodes = true;

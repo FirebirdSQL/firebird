@@ -51,12 +51,12 @@ enum FieldMatchType
 // Check for an aggregate expression in an expression. It could be buried in an expression
 // tree and therefore call itselfs again. The level parameters (currentLevel & deepestLevel)
 // are used to see how deep we are with passing sub-queries (= scope_level).
-class AggregateFinder
+class AggregateFinder : public Firebird::PermanentStorage
 {
 public:
-	AggregateFinder(DsqlCompilerScratch* aDsqlScratch, bool aWindow);
+	AggregateFinder(Firebird::MemoryPool& pool, DsqlCompilerScratch* aDsqlScratch, bool aWindow);
 
-	static bool find(DsqlCompilerScratch* dsqlScratch, bool window, ExprNode* node);
+	static bool find(Firebird::MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, bool window, ExprNode* node);
 
 	bool visit(ExprNode* node);
 
@@ -83,12 +83,13 @@ public:
 //    NOTE 160 - outer reference is defined in Subclause 6.7, "<column reference>".
 // 2) The <search condition> shall not contain a <window function> without an intervening
 // <query expression>.
-class Aggregate2Finder
+class Aggregate2Finder : public Firebird::PermanentStorage
 {
 public:
-	Aggregate2Finder(USHORT aCheckScopeLevel, FieldMatchType aMatchType, bool aWindowOnly);
+	Aggregate2Finder(Firebird::MemoryPool& pool, USHORT aCheckScopeLevel,
+		FieldMatchType aMatchType, bool aWindowOnly);
 
-	static bool find(USHORT checkScopeLevel, FieldMatchType matchType, bool windowOnly,
+	static bool find(Firebird::MemoryPool& pool, USHORT checkScopeLevel, FieldMatchType matchType, bool windowOnly,
 		ExprNode* node);
 
 	bool visit(ExprNode* node);
@@ -102,12 +103,12 @@ public:
 
 // Check the fields inside an aggregate and check if the field scope_level meets the specified
 // conditions.
-class FieldFinder
+class FieldFinder : public Firebird::PermanentStorage
 {
 public:
-	FieldFinder(USHORT aCheckScopeLevel, FieldMatchType aMatchType);
+	FieldFinder(Firebird::MemoryPool& pool, USHORT aCheckScopeLevel, FieldMatchType aMatchType);
 
-	static bool find(USHORT checkScopeLevel, FieldMatchType matchType, ExprNode* node);
+	static bool find(Firebird::MemoryPool& pool, USHORT checkScopeLevel, FieldMatchType matchType, ExprNode* node);
 
 	bool visit(ExprNode* node);
 
@@ -131,13 +132,15 @@ public:
 class InvalidReferenceFinder
 {
 public:
-	InvalidReferenceFinder(const dsql_ctx* aContext, const ValueListNode* aList);
+	InvalidReferenceFinder(DsqlCompilerScratch* aDsqlScratch, const dsql_ctx* aContext, const ValueListNode* aList);
 
-	static bool find(const dsql_ctx* context, const ValueListNode* list, ExprNode* node);
+	static bool find(DsqlCompilerScratch* dsqlScratch, const dsql_ctx* context,
+		const ValueListNode* list, ExprNode* node);
 
 	bool visit(ExprNode* node);
 
 public:
+	DsqlCompilerScratch* dsqlScratch;
 	const dsql_ctx* const context;
 	const ValueListNode* const list;
 	bool insideOwnMap;
@@ -147,17 +150,17 @@ public:
 // Called to map fields used in an aggregate-context after all pass1 calls
 // (SELECT-, ORDER BY-lists). Walk completly through the given node 'field' and map the fields
 // with same scope_level as the given context to the given context with the post_map function.
-class FieldRemapper
+class FieldRemapper : public Firebird::PermanentStorage
 {
 public:
-	FieldRemapper(DsqlCompilerScratch* aDsqlScratch, dsql_ctx* aContext, bool aWindow,
+	FieldRemapper(Firebird::MemoryPool& pool, DsqlCompilerScratch* aDsqlScratch, dsql_ctx* aContext, bool aWindow,
 				ValueListNode* aPartitionNode = NULL, ValueListNode* aOrderNode = NULL);
 
-	static ExprNode* remap(DsqlCompilerScratch* dsqlScratch, dsql_ctx* context, bool window,
+	static ExprNode* remap(Firebird::MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, dsql_ctx* context, bool window,
 		ExprNode* field, ValueListNode* partitionNode = NULL, ValueListNode* orderNode = NULL)
 	{
 		// The bool value returned by the visitor is completely discarded in this class.
-		return FieldRemapper(dsqlScratch, context, window, partitionNode, orderNode).visit(field);
+		return FieldRemapper(pool, dsqlScratch, context, window, partitionNode, orderNode).visit(field);
 	}
 
 	ExprNode* visit(ExprNode* node);
@@ -172,12 +175,17 @@ public:
 };
 
 // Search if a sub select is buried inside a select list from a query expression.
-class SubSelectFinder
+class SubSelectFinder : public Firebird::PermanentStorage
 {
 public:
-	static bool find(ExprNode* node)
+	SubSelectFinder(MemoryPool& pool)
+		: PermanentStorage(pool)
 	{
-		return SubSelectFinder().visit(node);
+	}
+
+	static bool find(MemoryPool& pool, ExprNode* node)
+	{
+		return SubSelectFinder(pool).visit(node);
 	}
 
 	bool visit(ExprNode* node);
@@ -185,11 +193,12 @@ public:
 
 
 // Generic node copier.
-class NodeCopier
+class NodeCopier : public Firebird::PermanentStorage
 {
 public:
-	NodeCopier(CompilerScratch* aCsb, StreamType* aRemap)
-		: csb(aCsb),
+	NodeCopier(Firebird::MemoryPool& pool, CompilerScratch* aCsb, StreamType* aRemap)
+		: PermanentStorage(pool),
+		  csb(aCsb),
 		  remap(aRemap),
 		  message(NULL)
 	{
@@ -222,13 +231,13 @@ public:
 	template <typename T>
 	static T* copy(thread_db* tdbb, CompilerScratch* csb, const T* input, StreamType* remap)
 	{
-		return NodeCopier(csb, remap).copy(tdbb, input);
+		return NodeCopier(*tdbb->getDefaultPool(), csb, remap).copy(tdbb, input);
 	}
 
 	template <typename T>
 	static T* copy(thread_db* tdbb, CompilerScratch* csb, const NestConst<T>& input, StreamType* remap)
 	{
-		return NodeCopier(csb, remap).copy(tdbb, input.getObject());
+		return NodeCopier(*tdbb->getDefaultPool(), csb, remap).copy(tdbb, input.getObject());
 	}
 
 	virtual USHORT remapField(USHORT /*stream*/, USHORT fldId)

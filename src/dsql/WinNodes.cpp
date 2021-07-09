@@ -50,9 +50,6 @@ static WinFuncNode::RegisterFactory0<DenseRankWinNode> denseRankWinInfo("DENSE_R
 DenseRankWinNode::DenseRankWinNode(MemoryPool& pool)
 	: WinFuncNode(pool, denseRankWinInfo)
 {
-	fb_assert(dsqlChildNodes.getCount() == 1 && jrdChildNodes.getCount() == 1);
-	dsqlChildNodes.clear();
-	jrdChildNodes.clear();
 }
 
 string DenseRankWinNode::internalPrint(NodePrinter& printer) const
@@ -98,9 +95,9 @@ dsc* DenseRankWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* request) const
 	return &impure->vlu_desc;
 }
 
-AggNode* DenseRankWinNode::dsqlCopy(DsqlCompilerScratch* /*dsqlScratch*/) /*const*/
+AggNode* DenseRankWinNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) DenseRankWinNode(getPool());
+	return FB_NEW_POOL(dsqlScratch->getPool()) DenseRankWinNode(dsqlScratch->getPool());
 }
 
 
@@ -113,9 +110,6 @@ RankWinNode::RankWinNode(MemoryPool& pool)
 	: WinFuncNode(pool, rankWinInfo),
 	  tempImpure(0)
 {
-	fb_assert(dsqlChildNodes.getCount() == 1 && jrdChildNodes.getCount() == 1);
-	dsqlChildNodes.clear();
-	jrdChildNodes.clear();
 }
 
 string RankWinNode::internalPrint(NodePrinter& printer) const
@@ -183,9 +177,9 @@ dsc* RankWinNode::aggExecute(thread_db* tdbb, jrd_req* request) const
 	return &impureTemp->vlu_desc;
 }
 
-AggNode* RankWinNode::dsqlCopy(DsqlCompilerScratch* /*dsqlScratch*/) /*const*/
+AggNode* RankWinNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) RankWinNode(getPool());
+	return FB_NEW_POOL(dsqlScratch->getPool()) RankWinNode(dsqlScratch->getPool());
 }
 
 
@@ -197,9 +191,6 @@ static WinFuncNode::RegisterFactory0<RowNumberWinNode> rowNumberWinInfo("ROW_NUM
 RowNumberWinNode::RowNumberWinNode(MemoryPool& pool)
 	: WinFuncNode(pool, rowNumberWinInfo)
 {
-	fb_assert(dsqlChildNodes.getCount() == 1 && jrdChildNodes.getCount() == 1);
-	dsqlChildNodes.clear();
-	jrdChildNodes.clear();
 }
 
 string RowNumberWinNode::internalPrint(NodePrinter& printer) const
@@ -251,9 +242,9 @@ dsc* RowNumberWinNode::winPass(thread_db* /*tdbb*/, jrd_req* request, SlidingWin
 	return &impure->vlu_desc;
 }
 
-AggNode* RowNumberWinNode::dsqlCopy(DsqlCompilerScratch* /*dsqlScratch*/) /*const*/
+AggNode* RowNumberWinNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) RowNumberWinNode(getPool());
+	return FB_NEW_POOL(dsqlScratch->getPool()) RowNumberWinNode(dsqlScratch->getPool());
 }
 
 
@@ -333,7 +324,7 @@ dsc* FirstValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow
 
 AggNode* FirstValueWinNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) FirstValueWinNode(getPool(), doDsqlPass(dsqlScratch, arg));
+	return FB_NEW_POOL(dsqlScratch->getPool()) FirstValueWinNode(dsqlScratch->getPool(), doDsqlPass(dsqlScratch, arg));
 }
 
 
@@ -404,7 +395,7 @@ dsc* LastValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow*
 
 AggNode* LastValueWinNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) LastValueWinNode(getPool(), doDsqlPass(dsqlScratch, arg));
+	return FB_NEW_POOL(dsqlScratch->getPool()) LastValueWinNode(dsqlScratch->getPool(), doDsqlPass(dsqlScratch, arg));
 }
 
 
@@ -419,8 +410,6 @@ NthValueWinNode::NthValueWinNode(MemoryPool& pool, ValueExprNode* aArg, ValueExp
 	  row(aRow),
 	  from(aFrom)
 {
-	addChildNode(row, row);
-	addChildNode(from, from);
 }
 
 void NthValueWinNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned /*count*/)
@@ -522,7 +511,7 @@ dsc* NthValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* 
 
 AggNode* NthValueWinNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) NthValueWinNode(getPool(),
+	return FB_NEW_POOL(dsqlScratch->getPool()) NthValueWinNode(dsqlScratch->getPool(),
 		doDsqlPass(dsqlScratch, arg), doDsqlPass(dsqlScratch, row), doDsqlPass(dsqlScratch, from));
 }
 
@@ -539,9 +528,6 @@ LagLeadWinNode::LagLeadWinNode(MemoryPool& pool, const AggInfo& aAggInfo, int aD
 	  outExpr(aOutExpr)
 {
 	fb_assert(direction == -1 || direction == 1);
-
-	addChildNode(rows, rows);
-	addChildNode(outExpr, outExpr);
 }
 
 void LagLeadWinNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned /*count*/)
@@ -643,7 +629,7 @@ ValueExprNode* LagWinNode::copy(thread_db* tdbb, NodeCopier& copier) const
 
 AggNode* LagWinNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) LagWinNode(getPool(),
+	return FB_NEW_POOL(dsqlScratch->getPool()) LagWinNode(dsqlScratch->getPool(),
 		doDsqlPass(dsqlScratch, arg),
 		doDsqlPass(dsqlScratch, rows),
 		doDsqlPass(dsqlScratch, outExpr));
@@ -672,7 +658,7 @@ ValueExprNode* LeadWinNode::copy(thread_db* tdbb, NodeCopier& copier) const
 
 AggNode* LeadWinNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) LeadWinNode(getPool(),
+	return FB_NEW_POOL(dsqlScratch->getPool()) LeadWinNode(dsqlScratch->getPool(),
 		doDsqlPass(dsqlScratch, arg),
 		doDsqlPass(dsqlScratch, rows),
 		doDsqlPass(dsqlScratch, outExpr));

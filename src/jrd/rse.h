@@ -55,7 +55,8 @@ class OptimizerBlk : public pool_alloc<type_opt>
 {
 public:
 	OptimizerBlk(MemoryPool* pool, RseNode* aRse)
-		: opt_conjuncts(*pool),
+		: opt_pool(pool),
+		  opt_conjuncts(*pool),
 		  opt_streams(*pool),
 		  rse(aRse),
 		  outerStreams(*pool),
@@ -66,6 +67,10 @@ public:
 		  keyStreams(*pool)
 	{}
 
+private:
+	Firebird::MemoryPool* opt_pool;
+
+public:
 	CompilerScratch* opt_csb;				// compiler scratch block
 	double opt_best_cost;					// cost of best join order
 	StreamType opt_best_count;				// longest length of indexable streams
@@ -86,6 +91,11 @@ public:
 		StreamType opt_best_stream;			// stream in best join order seen so far
 		StreamType opt_stream_number;		// stream in position of join order
 	};
+
+	Firebird::MemoryPool& getPool()
+	{
+		return *opt_pool;
+	}
 
 	Firebird::HalfStaticArray<opt_conjunct, OPT_STATIC_ITEMS> opt_conjuncts;
 	Firebird::HalfStaticArray<opt_stream, OPT_STATIC_ITEMS> opt_streams;

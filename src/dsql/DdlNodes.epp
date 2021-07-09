@@ -3597,8 +3597,8 @@ void CreateAlterTriggerNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* d
 
 		if (relationName.hasData())
 		{
-			RelationSourceNode* relationNode = FB_NEW_POOL(getPool()) RelationSourceNode(getPool(),
-				relationName);
+			RelationSourceNode* relationNode = FB_NEW_POOL(dsqlScratch->getPool()) RelationSourceNode(
+				dsqlScratch->getPool(), relationName);
 
 			const string temp = relationNode->alias;	// always empty?
 
@@ -4825,7 +4825,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 					status_exception::raise(Arg::PrivateDyn(160));
 				}
 
-				dsql_fld localField(dsqlScratch->getStatement()->getPool());
+				dsql_fld localField(dsqlScratch->getPool());
 
 				// Get the attributes of the domain, and set any occurrences of
 				// keyword VALUE to the correct type, length, scale, etc.
@@ -6364,7 +6364,7 @@ void RelationNode::makeConstraint(thread_db* /*tdbb*/, DsqlCompilerScratch* dsql
 	jrd_tra* transaction, AddConstraintClause* clause,
 	ObjectsArray<CreateDropConstraint>& constraints, bool* notNull)
 {
-	MemoryPool& pool = constraints.getPool();
+	MemoryPool& pool = dsqlScratch->getPool();
 
 	switch (clause->constraintType)
 	{
@@ -12099,7 +12099,7 @@ void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 			if (!DBB.RDB$CHARACTER_SET_NAME.NULL && setDefaultCollation.hasData())
 			{
-				AlterCharSetNode alterCharSetNode(getPool(), setDefaultCharSet, setDefaultCollation);
+				AlterCharSetNode alterCharSetNode(dsqlScratch->getPool(), setDefaultCharSet, setDefaultCollation);
 				alterCharSetNode.execute(tdbb, dsqlScratch, transaction);
 			}
 

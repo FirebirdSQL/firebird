@@ -56,13 +56,12 @@ AggNode::AggNode(MemoryPool& pool, const AggInfo& aAggInfo, bool aDistinct, bool
 			ValueExprNode* aArg)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_AGGREGATE>(pool),
 	  aggInfo(aAggInfo),
-	  distinct(aDistinct),
-	  dialect1(aDialect1),
 	  arg(aArg),
 	  asb(NULL),
+	  distinct(aDistinct),
+	  dialect1(aDialect1),
 	  indexed(false)
 {
-	addChildNode(arg, arg);
 }
 
 DmlNode* AggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
@@ -86,7 +85,10 @@ DmlNode* AggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 
 	UCHAR count = csb->csb_blr_reader.getByte();
 
-	if (count != node->jrdChildNodes.getCount())
+	NodeRefsHolder holder(pool);
+	node->getChildren(holder, false);
+
+	if (count != holder.refs.getCount())
 		PAR_error(csb, Arg::Gds(isc_funmismat) << name);
 
 	node->parseArgs(tdbb, csb, count);
@@ -146,7 +148,10 @@ bool AggNode::dsqlAggregateFinder(AggregateFinder& visitor)
 		AutoSetRestore<USHORT> autoDeepestLevel(&visitor.deepestLevel, 0);
 		AutoSetRestore<bool> autoIgnoreSubSelects(&visitor.ignoreSubSelects, true);
 
-		for (NodeRef** i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+		NodeRefsHolder holder(visitor.getPool());
+		getChildren(holder, true);
+
+		for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
 			visitor.visit((*i)->getExpr());
 
 		localDeepestLevel = visitor.deepestLevel;
@@ -175,7 +180,10 @@ bool AggNode::dsqlAggregateFinder(AggregateFinder& visitor)
 
 		AutoSetRestore<USHORT> autoDeepestLevel(&visitor.deepestLevel, localDeepestLevel);
 
-		for (NodeRef** i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+		NodeRefsHolder holder(visitor.getPool());
+		getChildren(holder, true);
+
+		for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
 			aggregate |= visitor.visit((*i)->getExpr());
 	}
 
@@ -188,9 +196,12 @@ bool AggNode::dsqlAggregate2Finder(Aggregate2Finder& visitor)
 		return false;
 
 	bool found = false;
-	FieldFinder fieldFinder(visitor.checkScopeLevel, visitor.matchType);
+	FieldFinder fieldFinder(visitor.getPool(), visitor.checkScopeLevel, visitor.matchType);
 
-	for (NodeRef** i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+	NodeRefsHolder holder(visitor.getPool());
+	getChildren(holder, true);
+
+	for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
 		found |= fieldFinder.visit((*i)->getExpr());
 
 	if (!fieldFinder.getField())
@@ -234,13 +245,16 @@ bool AggNode::dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor)
 
 	if (!visitor.insideHigherMap)
 	{
-		for (NodeRef** i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+		NodeRefsHolder holder(visitor.dsqlScratch->getPool());
+		getChildren(holder, true);
+
+		for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
 		{
 			// If there's another aggregate with the same scope_level or
 			// an higher one then it's a invalid aggregate, because
 			// aggregate-functions from the same context can't
 			// be part of each other.
-			if (Aggregate2Finder::find(visitor.context->ctx_scope_level,
+			if (Aggregate2Finder::find(visitor.dsqlScratch->getPool(), visitor.context->ctx_scope_level,
 					FIELD_MATCH_TYPE_EQUAL, false, (*i)->getExpr()))
 			{
 				// Nested aggregate functions are not allowed
@@ -260,7 +274,7 @@ bool AggNode::dsqlSubSelectFinder(SubSelectFinder& /*visitor*/)
 
 ValueExprNode* AggNode::dsqlFieldRemapper(FieldRemapper& visitor)
 {
-	AggregateFinder aggFinder(visitor.dsqlScratch, false);
+	AggregateFinder aggFinder(visitor.getPool(), visitor.dsqlScratch, false);
 	aggFinder.deepestLevel = visitor.dsqlScratch->scopeLevel;
 	aggFinder.currentLevel = visitor.currentLevel;
 
@@ -273,15 +287,18 @@ ValueExprNode* AggNode::dsqlFieldRemapper(FieldRemapper& visitor)
 		}
 	}
 
-	for (NodeRef** i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+	NodeRefsHolder holder(visitor.getPool());
+	getChildren(holder, true);
+
+	for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
 		(*i)->remap(visitor);
 
 	return this;
 }
 
-bool AggNode::dsqlMatch(const ExprNode* other, bool ignoreMapCast) const
+bool AggNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
 {
-	if (!ExprNode::dsqlMatch(other, ignoreMapCast))
+	if (!ExprNode::dsqlMatch(dsqlScratch, other, ignoreMapCast))
 		return false;
 
 	const AggNode* o = other->as<AggNode>();
@@ -300,6 +317,9 @@ void AggNode::setParameterName(dsql_par* parameter) const
 
 void AggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	NodeRefsHolder holder(dsqlScratch->getPool());
+	getChildren(holder, true);
+
 	if (aggInfo.blr)	// Is this a standard aggregate function?
 		dsqlScratch->appendUChar((distinct ? aggInfo.distinctBlr : aggInfo.blr));
 	else	// This is a new window function.
@@ -309,7 +329,7 @@ void AggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 		unsigned count = 0;
 
-		for (NodeRef** i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+		for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
 		{
 			if (**i)
 				++count;
@@ -318,7 +338,7 @@ void AggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->appendUChar(UCHAR(count));
 	}
 
-	for (NodeRef** i = dsqlChildNodes.begin(); i != dsqlChildNodes.end(); ++i)
+	for (NodeRef** i = holder.refs.begin(); i != holder.refs.end(); ++i)
 	{
 		if (**i)
 			GEN_expr(dsqlScratch, (*i)->getExpr());
@@ -477,7 +497,6 @@ AvgAggNode::AvgAggNode(MemoryPool& pool, bool aDistinct, bool aDialect1, ValueEx
 	: AggNode(pool, avgAggInfo, aDistinct, aDialect1, aArg),
 	  tempImpure(0)
 {
-	dsqlCompatDialectVerb = "avg";
 }
 
 DmlNode* AvgAggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
@@ -682,7 +701,7 @@ dsc* AvgAggNode::aggExecute(thread_db* tdbb, jrd_req* request) const
 
 AggNode* AvgAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) AvgAggNode(getPool(), distinct, dialect1,
+	return FB_NEW_POOL(dsqlScratch->getPool()) AvgAggNode(dsqlScratch->getPool(), distinct, dialect1,
 		doDsqlPass(dsqlScratch, arg));
 }
 
@@ -697,7 +716,6 @@ ListAggNode::ListAggNode(MemoryPool& pool, bool aDistinct, ValueExprNode* aArg,
 	: AggNode(pool, listAggInfo, aDistinct, false, aArg),
 	  delimiter(aDelimiter)
 {
-	addChildNode(delimiter, delimiter);
 }
 
 DmlNode* ListAggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
@@ -820,7 +838,7 @@ AggNode* ListAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
-	AggNode* node = FB_NEW_POOL(getPool()) ListAggNode(getPool(), distinct,
+	AggNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ListAggNode(dsqlScratch->getPool(), distinct,
 		doDsqlPass(dsqlScratch, arg), doDsqlPass(dsqlScratch, delimiter));
 
 	dsc argDesc;
@@ -930,7 +948,7 @@ dsc* CountAggNode::aggExecute(thread_db* /*tdbb*/, jrd_req* request) const
 
 AggNode* CountAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) CountAggNode(getPool(), distinct, dialect1,
+	return FB_NEW_POOL(dsqlScratch->getPool()) CountAggNode(dsqlScratch->getPool(), distinct, dialect1,
 		doDsqlPass(dsqlScratch, arg));
 }
 
@@ -943,7 +961,6 @@ static AggNode::Register<SumAggNode> sumAggInfo("SUM", blr_agg_total, blr_agg_to
 SumAggNode::SumAggNode(MemoryPool& pool, bool aDistinct, bool aDialect1, ValueExprNode* aArg)
 	: AggNode(pool, sumAggInfo, aDistinct, aDialect1, aArg)
 {
-	dsqlCompatDialectVerb = "sum";
 }
 
 DmlNode* SumAggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
@@ -1167,7 +1184,7 @@ dsc* SumAggNode::aggExecute(thread_db* /*tdbb*/, jrd_req* request) const
 
 AggNode* SumAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) SumAggNode(getPool(), distinct, dialect1,
+	return FB_NEW_POOL(dsqlScratch->getPool()) SumAggNode(dsqlScratch->getPool(), distinct, dialect1,
 		doDsqlPass(dsqlScratch, arg));
 }
 
@@ -1258,7 +1275,8 @@ dsc* MaxMinAggNode::aggExecute(thread_db* /*tdbb*/, jrd_req* request) const
 
 AggNode* MaxMinAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) MaxMinAggNode(getPool(), type, doDsqlPass(dsqlScratch, arg));
+	return FB_NEW_POOL(dsqlScratch->getPool()) MaxMinAggNode(dsqlScratch->getPool(),
+		type, doDsqlPass(dsqlScratch, arg));
 }
 
 
@@ -1394,7 +1412,8 @@ dsc* StdDevAggNode::aggExecute(thread_db* tdbb, jrd_req* request) const
 
 AggNode* StdDevAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) StdDevAggNode(getPool(), type, doDsqlPass(dsqlScratch, arg));
+	return FB_NEW_POOL(dsqlScratch->getPool()) StdDevAggNode(dsqlScratch->getPool(),
+		type, doDsqlPass(dsqlScratch, arg));
 }
 
 
@@ -1418,7 +1437,6 @@ CorrAggNode::CorrAggNode(MemoryPool& pool, CorrType aType, ValueExprNode* aArg, 
 	  arg2(aArg2),
 	  impure2Offset(0)
 {
-	addChildNode(arg2, arg2);
 }
 
 void CorrAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned /*count*/)
@@ -1563,7 +1581,7 @@ dsc* CorrAggNode::aggExecute(thread_db* tdbb, jrd_req* request) const
 
 AggNode* CorrAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) CorrAggNode(getPool(), type,
+	return FB_NEW_POOL(dsqlScratch->getPool()) CorrAggNode(dsqlScratch->getPool(), type,
 		doDsqlPass(dsqlScratch, arg), doDsqlPass(dsqlScratch, arg2));
 }
 
@@ -1603,7 +1621,6 @@ RegrAggNode::RegrAggNode(MemoryPool& pool, RegrType aType, ValueExprNode* aArg, 
 	  arg2(aArg2),
 	  impure2Offset(0)
 {
-	addChildNode(arg2, arg2);
 }
 
 void RegrAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned /*count*/)
@@ -1773,7 +1790,7 @@ dsc* RegrAggNode::aggExecute(thread_db* tdbb, jrd_req* request) const
 
 AggNode* RegrAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) RegrAggNode(getPool(), type,
+	return FB_NEW_POOL(dsqlScratch->getPool()) RegrAggNode(dsqlScratch->getPool(), type,
 		doDsqlPass(dsqlScratch, arg), doDsqlPass(dsqlScratch, arg2));
 }
 
@@ -1787,7 +1804,6 @@ RegrCountAggNode::RegrCountAggNode(MemoryPool& pool, ValueExprNode* aArg, ValueE
 	: AggNode(pool, regrCountAggInfo, false, false, aArg),
 	  arg2(aArg2)
 {
-	addChildNode(arg2, arg2);
 }
 
 void RegrCountAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned /*count*/)
@@ -1865,7 +1881,7 @@ dsc* RegrCountAggNode::aggExecute(thread_db* tdbb, jrd_req* request) const
 
 AggNode* RegrCountAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	return FB_NEW_POOL(getPool()) RegrCountAggNode(getPool(),
+	return FB_NEW_POOL(dsqlScratch->getPool()) RegrCountAggNode(dsqlScratch->getPool(),
 		doDsqlPass(dsqlScratch, arg), doDsqlPass(dsqlScratch, arg2));
 }
 

@@ -162,10 +162,10 @@ namespace
 				csb->csb_rpt[*iter].deactivate();
 		}
 
-		bool isReferenced(const ExprNode* node) const
+		bool isReferenced(CompilerScratch* csb, const ExprNode* node) const
 		{
 			SortedStreamList nodeStreams;
-			node->collectStreams(nodeStreams);
+			node->collectStreams(csb, nodeStreams);
 
 			if (!nodeStreams.hasData())
 				return false;
@@ -311,7 +311,7 @@ namespace
 static bool augment_stack(ValueExprNode*, ValueExprNodeStack&);
 static bool augment_stack(BoolExprNode*, BoolExprNodeStack&);
 static void check_indices(const CompilerScratch::csb_repeat*);
-static void check_sorts(RseNode*);
+static void check_sorts(CompilerScratch*, RseNode*);
 static void class_mask(USHORT, ValueExprNode**, ULONG*);
 static SLONG decompose(thread_db* tdbb, BoolExprNode* boolNode, BoolExprNodeStack& stack,
 	CompilerScratch* csb);
@@ -487,7 +487,7 @@ RecordSource* OPT_compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 
 	RiverList rivers;
 
-	check_sorts(rse);
+	check_sorts(csb, rse);
 	SortNode* sort = rse->rse_sorted;
 	SortNode* project = rse->rse_projection;
 	SortNode* aggregate = rse->rse_aggregate;
@@ -537,7 +537,7 @@ RecordSource* OPT_compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		{
 			BoolExprNode* const node = iter.object();
 
-			if (rse->rse_jointype != blr_inner && node->possiblyUnknown())
+			if (rse->rse_jointype != blr_inner && node->possiblyUnknown(opt))
 			{
 				// parent missing conjunctions shouldn't be
 				// distributed to FULL OUTER JOIN streams at all
@@ -1021,7 +1021,7 @@ static void check_indices(const CompilerScratch::csb_repeat* csb_tail)
 }
 
 
-static void check_sorts(RseNode* rse)
+static void check_sorts(CompilerScratch* csb, RseNode* rse)
 {
 /**************************************
  *
@@ -1208,7 +1208,7 @@ static void check_sorts(RseNode* rse)
 				// This position doesn't use a simple field, thus we should
 				// check the expression internals.
 				SortedStreamList streams;
-				(*sort_ptr)->collectStreams(streams);
+				(*sort_ptr)->collectStreams(csb, streams);
 
 				// We can use this sort only if there's a single stream
 				// referenced by the expression.
@@ -2370,7 +2370,7 @@ static RecordSource* gen_retrieval(thread_db*     tdbb,
 			// that are local to this stream. The remaining ones are left in piece
 			// as possible candidates for a merge/hash join.
 
-			if ((inversion && node->findStream(stream)) ||
+			if ((inversion && node->findStream(csb, stream)) ||
 				(!inversion && node->computable(csb, stream, true)))
 			{
 				compose(*tdbb->getDefaultPool(), &boolean, node);
@@ -2823,9 +2823,9 @@ static bool gen_equi_join(thread_db* tdbb, OptimizerBlk* opt, RiverList& org_riv
 		{
 			River* const river1 = *iter1;
 
-			if (!river1->isReferenced(node1))
+			if (!river1->isReferenced(csb, node1))
 			{
-				if (!river1->isReferenced(node2))
+				if (!river1->isReferenced(csb, node2))
 					continue;
 
 				ValueExprNode* const temp = node1;
@@ -2839,7 +2839,7 @@ static bool gen_equi_join(thread_db* tdbb, OptimizerBlk* opt, RiverList& org_riv
 			{
 				River* const river2 = *iter2;
 
-				if (river2->isReferenced(node2))
+				if (river2->isReferenced(csb, node2))
 				{
 					for (eq_class = classes; eq_class < last_class; eq_class += cnt)
 					{
