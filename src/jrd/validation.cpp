@@ -598,7 +598,7 @@ static SimilarToRegex* createPatternMatcher(thread_db* tdbb, const char* pattern
 	{
 		if (pattern)
 		{
-			const int len = strlen(pattern);
+			const int len = (int)strlen(pattern);
 
 			//// TODO: Should this be different than trace and replication
 			//// and use case sensitive matcher?
@@ -681,6 +681,9 @@ bool VAL_validate(thread_db* tdbb, USHORT switches)
 
 	if (!(switches & isc_dpb_no_update))
 		flags |= Validation::VDR_update;
+
+	if (switches & isc_dpb_skipwarn)
+		flags |= Validation::VDR_skipwarns;
 
 	return att->att_validation->run(tdbb, flags);
 }
@@ -851,7 +854,7 @@ const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} marked as secondary but contains primary record versions"}
 };
 
-Validation::Validation(thread_db* tdbb, UtilSvc* uSvc) :
+Validation::Validation(thread_db* tdbb, UtilSvc* uSvc) : 
 	vdr_used_bdbs(*tdbb->getDefaultPool())
 {
 	vdr_tdbb = tdbb;
@@ -875,6 +878,7 @@ Validation::Validation(thread_db* tdbb, UtilSvc* uSvc) :
 	if (uSvc) {
 		parse_args(tdbb);
 	}
+
 	output("Validation started\n\n");
 }
 
@@ -1110,7 +1114,13 @@ Validation::RTN Validation::corrupt(int err_code, const jrd_rel* relation, ...)
 	if (err_code < VAL_MAX_ERROR)
 		vdr_err_counts[err_code]++;
 
-	const TEXT* err_string = err_code < VAL_MAX_ERROR ? vdr_msg_table[err_code].msg: "Unknown error code";
+	if((vdr_flags & VDR_skipwarns) && !vdr_msg_table[err_code].error)
+	{
+		++vdr_warns;
+		return rtn_corrupt;
+	}
+
+	const TEXT* err_string = err_code < VAL_MAX_ERROR ? vdr_msg_table[err_code].msg : "Unknown error code";
 
 	string s;
 	va_list ptr;

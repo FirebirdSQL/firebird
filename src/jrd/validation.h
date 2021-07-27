@@ -61,7 +61,7 @@ public:
 	static const USHORT VDR_repair = 0x04;		// fix non-simple things (-mend)
 	static const USHORT VDR_records = 0x08;		// Walk all records
 	static const USHORT VDR_partial = 0x10;		// Walk only (some) relations
-
+	static const USHORT VDR_skipwarns = 0x80;	// skip warnings in log file (-skip_warnings)
 private:
 
 	enum FETCH_CODE
