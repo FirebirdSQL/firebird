@@ -1718,7 +1718,7 @@ UnicodeUtil::ICU* UnicodeUtil::Utf16Collation::loadICU(
 					continue;
 
 				icu->ucolClose(testCollator);
-				if (U_FAILURE(status) || (status == U_USING_DEFAULT_WARNING))
+				if (status != U_ZERO_ERROR)
 					continue;
 			}
 		}
