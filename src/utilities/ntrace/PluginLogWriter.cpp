@@ -27,6 +27,7 @@
 
 #include "PluginLogWriter.h"
 #include "../common/classes/init.h"
+#include "../common/ThreadStart.h"
 
 #ifndef S_IREAD
 #define S_IREAD S_IRUSR
@@ -132,23 +133,35 @@ FB_SIZE_T PluginLogWriter::write(const void* buf, FB_SIZE_T size)
 
 	if (m_maxSize && (fileSize > m_maxSize))
 	{
-		const TimeStamp stamp(TimeStamp::getCurrentTimeStamp());
-		struct tm times;
-		stamp.decode(&times);
-
 		PathName newName;
-		const FB_SIZE_T last_dot_pos = m_fileName.rfind(".");
-		if (last_dot_pos > 0)
+
+		while (true)
 		{
-			PathName log_name = m_fileName.substr(0, last_dot_pos);
-			PathName log_ext = m_fileName.substr(last_dot_pos + 1, m_fileName.length());
-			newName.printf("%s.%04d-%02d-%02dT%02d-%02d-%02d.%s", log_name.c_str(), times.tm_year + 1900,
-				times.tm_mon + 1, times.tm_mday, times.tm_hour, times.tm_min, times.tm_sec, log_ext.c_str());
-		}
-		else
-		{
-			newName.printf("%s.%04d-%02d-%02dT%02d-%02d-%02d", m_fileName.c_str(), times.tm_year + 1900,
-				times.tm_mon + 1, times.tm_mday, times.tm_hour, times.tm_min, times.tm_sec);
+			const TimeStamp stamp(TimeStamp::getCurrentTimeStamp());
+			struct tm times;
+			int fractions;
+			stamp.decode(&times, &fractions);
+
+			const FB_SIZE_T last_dot_pos = m_fileName.rfind(".");
+			if (last_dot_pos > 0)
+			{
+				PathName log_name = m_fileName.substr(0, last_dot_pos);
+				PathName log_ext = m_fileName.substr(last_dot_pos + 1, m_fileName.length());
+				newName.printf("%s.%04d-%02d-%02dT%02d-%02d-%02d-%04d.%s", log_name.c_str(), times.tm_year + 1900,
+					times.tm_mon + 1, times.tm_mday, times.tm_hour, times.tm_min, times.tm_sec, fractions, log_ext.c_str());
+			}
+			else
+			{
+				newName.printf("%s.%04d-%02d-%02dT%02d-%02d-%02d-%04d", m_fileName.c_str(), times.tm_year + 1900,
+					times.tm_mon + 1, times.tm_mday, times.tm_hour, times.tm_min, times.tm_sec, fractions);
+			}
+
+			struct stat st;
+
+			if (stat(newName.c_str(), &st))
+				break;
+
+			Thread::sleep(10);
 		}
 
 #ifdef WIN_NT
