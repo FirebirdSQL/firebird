@@ -26,6 +26,7 @@
 */
 
 #include "PluginLogWriter.h"
+#include "../common/isc_proto.h"
 #include "../common/classes/init.h"
 #include "../common/ThreadStart.h"
 
@@ -49,18 +50,44 @@ void strerror_r(int err, char* buf, size_t bufSize)
 }
 #endif
 
+void getMappedFileName(PathName& file, PathName& mapFile)
+{
+	const ULONG hash = file.hash(0xFFFFFFFF);
+	UCHAR* p = (UCHAR*) &hash;
+	for (size_t i = 0; i < sizeof(ULONG); i++)
+	{
+		TEXT hex[3];
+		sprintf(hex, "%02x", *p++);
+		mapFile.append(hex);
+	}
+
+	mapFile.insert(0, "fb_trace_");
+}
+
 PluginLogWriter::PluginLogWriter(const char* fileName, size_t maxSize) :
 	m_fileName(*getDefaultMemoryPool()),
 	m_fileHandle(-1),
-	m_maxSize(maxSize)
+	m_maxSize(maxSize),
+	m_sharedMemory(NULL)
 {
 	m_fileName = fileName;
 
-#ifdef WIN_NT
-	PathName mutexName("fb_mutex_");
-	mutexName.append(m_fileName);
+	PathName logFile(fileName);
+	PathName mapFile;
+	getMappedFileName(logFile, mapFile);
 
-	checkMutex("init", ISC_mutex_init(&m_mutex, mutexName.c_str()));
+	try
+	{
+		m_sharedMemory.reset(FB_NEW_POOL(getPool())
+			SharedMemory<PluginLogWriterHeader>(mapFile.c_str(), sizeof(PluginLogWriterHeader), this));
+	}
+	catch (const Exception& ex)
+	{
+		iscLogException("PluginLogWriter: Cannot initialize the shared memory region", ex);
+		throw;
+	}
+
+#ifdef WIN_NT
 	Guard guard(this);
 #endif
 
@@ -71,10 +98,6 @@ PluginLogWriter::~PluginLogWriter()
 {
 	if (m_fileHandle != -1)
 		::close(m_fileHandle);
-
-#ifdef WIN_NT
-	ISC_mutex_fini(&m_mutex);
-#endif
 }
 
 SINT64 PluginLogWriter::seekToEnd()
@@ -119,6 +142,8 @@ FB_SIZE_T PluginLogWriter::write(const void* buf, FB_SIZE_T size)
 {
 #ifdef WIN_NT
 	Guard guard(this);
+#else
+	Guard guard(m_maxSize ? this : 0);
 #endif
 
 	if (m_fileHandle < 0)
@@ -229,28 +254,25 @@ void PluginLogWriter::checkErrno(const char* operation)
 		operation, m_fileName.c_str(), strErr);
 }
 
-#ifdef WIN_NT
-void PluginLogWriter::checkMutex(const TEXT* string, int state)
+void PluginLogWriter::mutexBug(int state, const TEXT* string)
 {
-	if (state)
-	{
-		TEXT msg[BUFFER_TINY];
+	TEXT msg[BUFFER_TINY];
 
-		sprintf(msg, "PluginLogWriter: mutex %s error, status = %d", string, state);
-		gds__log(msg);
+	sprintf(msg, "PluginLogWriter: mutex %s error, status = %d", string, state);
+	fb_utils::logAndDie(msg);
+}
 
-		fprintf(stderr, "%s\n", msg);
-		exit(FINI_ERROR);
-	}
+bool PluginLogWriter::initialize(SharedMemoryBase* sm, bool init)
+{
+	return true;
 }
 
 void PluginLogWriter::lock()
 {
-	checkMutex("lock", ISC_mutex_lock(&m_mutex));
+	m_sharedMemory->mutexLock();
 }
 
 void PluginLogWriter::unlock()
 {
-	checkMutex("unlock", ISC_mutex_unlock(&m_mutex));
+	m_sharedMemory->mutexUnlock();
 }
-#endif // WIN_NT
