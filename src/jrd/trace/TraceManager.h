@@ -202,9 +202,14 @@ private:
 		FactoryInfo* factory_info;
 		Firebird::ITracePlugin* plugin;
 		ULONG ses_id;
+		NotificationNeeds traceNeeds;
 
 		static ULONG generate(const SessionInfo& item)
 		{ return item.ses_id; }
+		inline bool needs(unsigned e)
+		{
+			return traceNeeds & (FB_CONST64(1) << e);
+		}
 	};
 	class Sessions : public Firebird::SortedArray<SessionInfo, Firebird::EmptyStorage<SessionInfo>, ULONG, SessionInfo>
 	{
