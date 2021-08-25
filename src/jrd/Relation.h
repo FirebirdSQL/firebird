@@ -281,6 +281,8 @@ public:
 		return &rel_pages_base;
 	}
 
+	RelationPages* getInstancePages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = false);
+
 	bool	delPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
 	void	retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNumber);
 
@@ -327,8 +329,6 @@ private:
 	RelationPagesInstances* rel_pages_inst;
 	RelationPages			rel_pages_base;
 	RelationPages*			rel_pages_free;
-
-	RelationPages* getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages);
 
 public:
 	explicit jrd_rel(MemoryPool& p);
@@ -433,10 +433,10 @@ inline bool jrd_rel::isView() const
 
 inline RelationPages* jrd_rel::getPages(thread_db* tdbb, TraNumber tran, bool allocPages)
 {
-	if (!isTemporary())
+	if (!isTemporary() || tdbb->tdbb_flags & TDBB_use_db_page_space)
 		return &rel_pages_base;
 
-	return getPagesInternal(tdbb, tran, allocPages);
+	return getInstancePages(tdbb, tran, allocPages);
 }
 
 /// class jrd_rel::GCShared

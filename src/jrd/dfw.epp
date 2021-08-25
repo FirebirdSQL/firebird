@@ -4855,6 +4855,14 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 		    EXT_fini(relation, false);
 		}
 
+		if (relation->isTemporary())
+		{
+			RelationPages* tempPages = relation->getInstancePages(tdbb);
+
+			if (tempPages)
+				relation->delPages(tdbb, MAX_TRA_NUMBER, tempPages);
+		}
+
 		RelationPages* const relPages = relation->getBasePages();
 		if (relPages->rel_index_root) {
 			IDX_delete_indices(tdbb, relation, relPages);

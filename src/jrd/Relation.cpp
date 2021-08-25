@@ -36,11 +36,8 @@ using namespace Jrd;
 
 /// jrd_rel
 
-RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages)
+RelationPages* jrd_rel::getInstancePages(thread_db* tdbb, TraNumber tran, bool allocPages)
 {
-	if (tdbb->tdbb_flags & TDBB_use_db_page_space)
-		return &rel_pages_base;
-
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
 
