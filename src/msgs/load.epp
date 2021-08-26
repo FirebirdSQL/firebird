@@ -60,7 +60,6 @@ static const stuff a_stuff[] =
 		ITEM(blr_dcl_variable, BLR, STATEMENTS)
 		ITEM(blr_message, BLR, STATEMENTS)
 		ITEM(blr_erase, BLR, STATEMENTS)
-		ITEM(blr_fetch, BLR, STATEMENTS)
 		ITEM(blr_for, BLR, STATEMENTS)
 		ITEM(blr_if, BLR, STATEMENTS)
 		ITEM(blr_loop, BLR, STATEMENTS)

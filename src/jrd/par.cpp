@@ -162,55 +162,6 @@ namespace
 		AutoPtr<CompilerScratch> m_csb;
 		CompilerScratch** const m_csbPtr;
 	};
-
-	class FetchNode
-	{
-	public:
-		// Parse a FETCH statement, and map it into FOR x IN relation WITH x.DBKEY EQ value ...
-		static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, UCHAR /*blrOp*/)
-		{
-			ForNode* forNode = FB_NEW_POOL(pool) ForNode(pool);
-
-			// Fake RseNode.
-
-			RseNode* rse = forNode->rse = FB_NEW_POOL(*tdbb->getDefaultPool()) RseNode(
-				*tdbb->getDefaultPool());
-
-			DmlNode* relationNode = PAR_parse_node(tdbb, csb);
-			if (relationNode->getKind() != DmlNode::KIND_REC_SOURCE)
-				PAR_syntax_error(csb, "TABLE");
-
-			//// TODO: LocalTableSourceNode
-			auto relationSource = nodeAs<RelationSourceNode>(
-				static_cast<RecordSourceNode*>(relationNode));
-
-			if (!relationSource)
-				PAR_syntax_error(csb, "TABLE");
-
-			rse->rse_relations.add(relationSource);
-
-			// Fake boolean.
-
-			ComparativeBoolNode* booleanNode = FB_NEW_POOL(csb->csb_pool) ComparativeBoolNode(
-				csb->csb_pool, blr_eql);
-
-			rse->rse_boolean = booleanNode;
-
-			booleanNode->arg2 = PAR_parse_value(tdbb, csb);
-
-			RecordKeyNode* dbKeyNode = FB_NEW_POOL(csb->csb_pool) RecordKeyNode(csb->csb_pool, blr_dbkey);
-			dbKeyNode->recStream = relationSource->getStream();
-
-			booleanNode->arg1 = dbKeyNode;
-
-			// Pick up statement.
-			forNode->statement = PAR_parse_stmt(tdbb, csb);
-
-			return forNode;
-		}
-	};
-
-	static RegisterNode<FetchNode> regFetch({blr_fetch});
 }	// namespace
 
 

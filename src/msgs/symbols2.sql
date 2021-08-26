@@ -414,7 +414,6 @@ set bulk_insert INSERT INTO SYMBOLS (SYMBOL, "VALUE", CLASS, "TYPE", SEQUENCE) V
 ('blr_dcl_variable', 3, 'BLR', 'STATEMENTS', 220)
 ('blr_message', 4, 'BLR', 'STATEMENTS', 230)
 ('blr_erase', 5, 'BLR', 'STATEMENTS', 240)
-('blr_fetch', 6, 'BLR', 'STATEMENTS', 250)
 ('blr_for', 7, 'BLR', 'STATEMENTS', 260)
 ('blr_if', 8, 'BLR', 'STATEMENTS', 270)
 ('blr_loop', 9, 'BLR', 'STATEMENTS', 280)
