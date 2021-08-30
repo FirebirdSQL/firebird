@@ -4857,10 +4857,9 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 
 		if (relation->isTemporary())
 		{
-			RelationPages* tempPages = relation->getInstancePages(tdbb);
-
-			if (tempPages)
-				relation->delPages(tdbb, MAX_TRA_NUMBER, tempPages);
+			// release pages, allocated for current GTT instance
+			AutoSetRestoreFlag<USHORT> tmpSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, false);
+			relation->delPages(tdbb);
 		}
 
 		RelationPages* const relPages = relation->getBasePages();
