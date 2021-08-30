@@ -1640,7 +1640,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	}
 	else
 	{
-		if ((err != ERROR_ALREADY_EXISTS) || SetFilePointer(file_handle, 0, NULL, FILE_END) == 0)
+		if ((err != ERROR_ALREADY_EXISTS) || SetFilePointer(file_handle, 0, NULL, FILE_END) == INVALID_SET_FILE_POINTER)
 		{
 			CloseHandle(event_handle);
 			CloseHandle(file_handle);
