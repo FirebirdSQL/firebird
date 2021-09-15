@@ -36,6 +36,7 @@ install:
   - sh: if [ $PLATFORM = "x86" ]; then export BUILD_FLAG=--build=i386-pc-linux-gnu; fi
   - sh: sudo apt-get -y update
   - sh: sudo apt-get -y install $APT_PACKAGES
+  - sh: sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 80 --slave /usr/bin/g++ g++ /usr/bin/g++-7
   - sh: find . -type f -iname "*.sh" -exec chmod +x {} \;
   - sh: ./autogen.sh --enable-binreloc --with-builtin-tomcrypt --prefix=/opt/firebird $BUILD_FLAG
   - sh: make -j4

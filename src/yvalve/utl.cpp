@@ -916,8 +916,14 @@ public:
 		case SPB_RESPONSE:
 			k = ClumpletReader::SpbResponse;
 			break;
+		case INFO_SEND:
+			k = ClumpletReader::InfoItems;
+			break;
+		case INFO_RESPONSE:
+			k = ClumpletReader::InfoResponse;
+			break;
 		default:
-			fatal_exception::raiseFmt("Wrong parameters block kind %d, should be from %d to %d", kind, DPB, SPB_RESPONSE);
+			fatal_exception::raiseFmt("Wrong parameters block kind %d, should be from %d to %d", kind, DPB, INFO_RESPONSE);
 			break;
 		}
 

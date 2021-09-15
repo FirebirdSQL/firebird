@@ -856,7 +856,7 @@ FB_IMPL_MSG(JRD, 854, inflate_init, -902, "08", "006", "Decompression stream ini
 FB_IMPL_MSG(JRD, 855, big_segment, -901, "22", "026", "Segment size (@1) should not exceed 65535 (64K - 1) when using segmented blob")
 FB_IMPL_MSG(JRD, 856, batch_policy, -901, "22", "000", "Invalid blob policy in the batch for @1() call")
 FB_IMPL_MSG(JRD, 857, batch_defbpb, -901, "22", "000", "Can't change default BPB after adding any data to batch")
-FB_IMPL_MSG(JRD, 858, batch_align, -901, "22", "000", "Unexpected info buffer structure querying for default blob alignment")
+FB_IMPL_MSG(JRD, 858, batch_align, -901, "22", "000", "Unexpected info buffer structure querying for server batch parameters")
 FB_IMPL_MSG(JRD, 859, multi_segment_dup, -901, "22", "000", "Duplicated segment @1 in multisegment connect block parameter")
 FB_IMPL_MSG(JRD, 860, non_plugin_protocol, -902, "08", "004", "Plugin not supported by network protocol")
 FB_IMPL_MSG(JRD, 861, message_format, -901, "22", "000", "Error parsing message format")

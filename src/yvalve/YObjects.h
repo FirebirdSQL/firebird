@@ -397,6 +397,8 @@ public:
 	void setDefaultBpb(Firebird::CheckStatusWrapper* status, unsigned parLength, const unsigned char* par);
 	void close(Firebird::CheckStatusWrapper* status);
 	void deprecatedClose(Firebird::CheckStatusWrapper* status);
+	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength, const unsigned char* items,
+		unsigned int bufferLength, unsigned char* buffer);
 
 public:
 	AtomicAttPtr attachment;

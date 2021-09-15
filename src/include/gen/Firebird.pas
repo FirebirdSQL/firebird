@@ -366,6 +366,7 @@ type
 	IBatch_setDefaultBpbPtr = procedure(this: IBatch; status: IStatus; parLength: Cardinal; par: BytePtr); cdecl;
 	IBatch_deprecatedClosePtr = procedure(this: IBatch; status: IStatus); cdecl;
 	IBatch_closePtr = procedure(this: IBatch; status: IStatus); cdecl;
+	IBatch_getInfoPtr = procedure(this: IBatch; status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IBatchCompletionState_getSizePtr = function(this: IBatchCompletionState; status: IStatus): Cardinal; cdecl;
 	IBatchCompletionState_getStatePtr = function(this: IBatchCompletionState; status: IStatus; pos: Cardinal): Integer; cdecl;
 	IBatchCompletionState_findErrorPtr = function(this: IBatchCompletionState; status: IStatus; pos: Cardinal): Cardinal; cdecl;
@@ -1548,6 +1549,7 @@ type
 		setDefaultBpb: IBatch_setDefaultBpbPtr;
 		deprecatedClose: IBatch_deprecatedClosePtr;
 		close: IBatch_closePtr;
+		getInfo: IBatch_getInfoPtr;
 	end;
 
 	IBatch = class(IReferenceCounted)
@@ -1563,6 +1565,10 @@ type
 		const BLOB_ID_USER = Byte(2);
 		const BLOB_STREAM = Byte(3);
 		const BLOB_SEGHDR_ALIGN = Cardinal(2);
+		const INF_BUFFER_BYTES_SIZE = Byte(10);
+		const INF_DATA_BYTES_SIZE = Byte(11);
+		const INF_BLOBS_BYTES_SIZE = Byte(12);
+		const INF_BLOB_ALIGNMENT = Byte(13);
 
 		procedure add(status: IStatus; count: Cardinal; inBuffer: Pointer);
 		procedure addBlob(status: IStatus; length: Cardinal; inBuffer: Pointer; blobId: ISC_QUADPtr; parLength: Cardinal; par: BytePtr);
@@ -1576,6 +1582,7 @@ type
 		procedure setDefaultBpb(status: IStatus; parLength: Cardinal; par: BytePtr);
 		procedure deprecatedClose(status: IStatus);
 		procedure close(status: IStatus);
+		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 	end;
 
 	IBatchImpl = class(IBatch)
@@ -1595,6 +1602,7 @@ type
 		procedure setDefaultBpb(status: IStatus; parLength: Cardinal; par: BytePtr); virtual; abstract;
 		procedure deprecatedClose(status: IStatus); virtual; abstract;
 		procedure close(status: IStatus); virtual; abstract;
+		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); virtual; abstract;
 	end;
 
 	BatchCompletionStateVTable = class(DisposableVTable)
@@ -2798,6 +2806,8 @@ type
 		const SPB_SEND = Cardinal(7);
 		const SPB_RECEIVE = Cardinal(8);
 		const SPB_RESPONSE = Cardinal(9);
+		const INFO_SEND = Cardinal(10);
+		const INFO_RESPONSE = Cardinal(11);
 
 		procedure clear(status: IStatus);
 		procedure removeCurrent(status: IStatus);
@@ -6681,6 +6691,17 @@ begin
 	end
 	else begin
 		BatchVTable(vTable).close(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IBatch.getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
+begin
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IBatch', vTable.version, 4);
+	end
+	else begin
+		BatchVTable(vTable).getInfo(Self, status, itemsLength, items, bufferLength, buffer);
 	end;
 	FbException.checkException(status);
 end;
@@ -10699,6 +10720,15 @@ procedure IBatchImpl_closeDispatcher(this: IBatch; status: IStatus); cdecl;
 begin
 	try
 		IBatchImpl(this).close(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IBatchImpl_getInfoDispatcher(this: IBatch; status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
+begin
+	try
+		IBatchImpl(this).getInfo(status, itemsLength, items, bufferLength, buffer);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -15637,6 +15667,7 @@ initialization
 	IBatchImpl_vTable.setDefaultBpb := @IBatchImpl_setDefaultBpbDispatcher;
 	IBatchImpl_vTable.deprecatedClose := @IBatchImpl_deprecatedCloseDispatcher;
 	IBatchImpl_vTable.close := @IBatchImpl_closeDispatcher;
+	IBatchImpl_vTable.getInfo := @IBatchImpl_getInfoDispatcher;
 
 	IBatchCompletionStateImpl_vTable := BatchCompletionStateVTable.create;
 	IBatchCompletionStateImpl_vTable.version := 3;

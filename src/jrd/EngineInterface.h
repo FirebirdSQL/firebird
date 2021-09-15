@@ -209,6 +209,8 @@ public:
 	void setDefaultBpb(Firebird::CheckStatusWrapper* status, unsigned parLength, const unsigned char* par) override;
 	void close(Firebird::CheckStatusWrapper* status) override;
 	void deprecatedClose(Firebird::CheckStatusWrapper* status) override;
+	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength, const unsigned char* items,
+		unsigned int bufferLength, unsigned char* buffer) override;
 
 public:
 	JBatch(DsqlBatch* handle, JStatement* aStatement, Firebird::IMessageMetadata* aMetadata);

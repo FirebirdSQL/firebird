@@ -530,6 +530,11 @@ interface Batch : ReferenceCounted
 
 	const uint BLOB_SEGHDR_ALIGN = 2;		// Alignment of segment header in the stream
 
+	const uchar INF_BUFFER_BYTES_SIZE = 10;	// Maximum possible buffer size
+	const uchar INF_DATA_BYTES_SIZE = 11;	// Already added messages size
+	const uchar INF_BLOBS_BYTES_SIZE = 12;	// Already added blobs size
+	const uchar INF_BLOB_ALIGNMENT = 13;	// Duplicate getBlobAlignment
+
 	void add(Status status, uint count, const void* inBuffer);
 	void addBlob(Status status, uint length, const void* inBuffer, ISC_QUAD* blobId, uint parLength, const uchar* par);
 	void appendBlobData(Status status, uint length, const void* inBuffer);
@@ -545,6 +550,9 @@ interface Batch : ReferenceCounted
 version:	// 4.0.0 => 4.0.1
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedClose(status) endif]
 	void close(Status status);
+	void getInfo(Status status,
+				 uint itemsLength, const uchar* items,
+				 uint bufferLength, uchar* buffer);
 }
 
 interface BatchCompletionState : Disposable
@@ -1203,6 +1211,8 @@ interface XpbBuilder : Disposable
 	const uint SPB_SEND = 7;
 	const uint SPB_RECEIVE = 8;
 	const uint SPB_RESPONSE = 9;
+	const uint INFO_SEND = 10;
+	const uint INFO_RESPONSE = 11;
 
 	// removing data
 	void clear(Status status);

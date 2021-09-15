@@ -6330,6 +6330,48 @@ void JBatch::cancel(CheckStatusWrapper* status)
 }
 
 
+void JBatch::getInfo(CheckStatusWrapper* user_status,
+					 unsigned int itemsLength, const unsigned char* items,
+					 unsigned int bufferLength, unsigned char* buffer)
+{
+/**************************************
+ *
+ *	g d s _ $ b l o b _ i n f o
+ *
+ **************************************
+ *
+ * Functional description
+ *	Provide information on blob object.
+ *
+ **************************************/
+	try
+	{
+		EngineContextHolder tdbb(user_status, this, FB_FUNCTION);
+		check_database(tdbb);
+
+		try
+		{
+			DsqlBatch* b = getHandle();
+			b->info(tdbb, itemsLength, items, bufferLength, buffer);
+		}
+		catch (const Exception& ex)
+		{
+			transliterateException(tdbb, ex, user_status, "JBatch::getInfo");
+			return;
+		}
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(user_status);
+		return;
+	}
+
+	successful_completion(user_status);
+}
+
+
+
+
 JReplicator::JReplicator(Applier* appl, StableAttachmentPart* sa)
 	: applier(appl), sAtt(sa)
 { }

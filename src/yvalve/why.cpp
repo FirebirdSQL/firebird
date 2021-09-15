@@ -5102,6 +5102,22 @@ void YBatch::deprecatedClose(CheckStatusWrapper* status)
 }
 
 
+void YBatch::getInfo(CheckStatusWrapper* status, unsigned int itemsLength, const unsigned char* items,
+	unsigned int bufferLength, unsigned char* buffer)
+{
+	try
+	{
+		YEntry<YBatch> entry(status, this);
+
+		entry.next()->getInfo(status, itemsLength, items, bufferLength, buffer);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
 //-------------------------------------
 
 

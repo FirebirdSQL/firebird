@@ -118,7 +118,6 @@ void	fix_security_class_name(BurpGlobals* tdgbl, TEXT* sec_class, bool is_field)
 bool	get_acl(BurpGlobals* tdgbl, const TEXT*, ISC_QUAD*, ISC_QUAD*);
 void	get_array(BurpGlobals* tdgbl, burp_rel*, UCHAR*);
 void	get_blob(BurpGlobals* tdgbl, Firebird::IBatch* batch, const burp_fld*, UCHAR*);
-void	get_blob_old(BurpGlobals* tdgbl, const burp_fld*, UCHAR*);
 void	get_blr_blob(BurpGlobals* tdgbl, ISC_QUAD&, bool);
 bool	get_character_set(BurpGlobals* tdgbl);
 bool	get_chk_constraint(BurpGlobals* tdgbl);
@@ -2098,6 +2097,12 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 		BURP_free (xdr_buffer.lstr_address);
 }
 
+
+static const unsigned GBAK_BATCH_STEP = 1000;
+static const unsigned GBAK_BATCH_BLOBSTEP = 1024;	// keep slightly bigger than GBAK_BATCH_STEP
+static unsigned batchBufferSize = 0;
+
+
 void get_blob(BurpGlobals* tdgbl, Firebird::IBatch* batch, const burp_fld* fields, UCHAR* record_buffer)
 {
 /**************************************
@@ -2163,16 +2168,58 @@ void get_blob(BurpGlobals* tdgbl, Firebird::IBatch* batch, const burp_fld* field
 		// msg 36 Can't find field for blob
 	}
 
-	// Create new blob
+	// Choose blob creation method
+	FbLocalStatus status_vector;
+	bool blobInline = false;
+	if (batch)
+	{
+		if (!batchBufferSize)
+		{
+			UCHAR item = Firebird::IBatch::INF_BUFFER_BYTES_SIZE;
+			UCHAR infoBuf[64];
+			batch->getInfo(&status_vector, 1, &item, sizeof infoBuf, infoBuf);
+			if (status_vector->hasData())
+			{
+				if (status_vector->getErrors()[1] == isc_interface_version_too_old)	// FB4.0.0
+					batchBufferSize = 256 * 1024 * 1024;
+				else
+					BURP_error_redirect(&status_vector, 405);
+			}
 
+			if (!batchBufferSize)
+			{
+				Firebird::ClumpletReader rdr(Firebird::ClumpletReader::InfoResponse, infoBuf, sizeof infoBuf);
+				rdr.rewind();
+				if (rdr.isEof() || rdr.getClumpTag() != item)
+					BURP_error(405, true);
+				else
+					batchBufferSize = rdr.getInt();
+			}
+
+			fb_assert(batchBufferSize);
+		}
+
+		if (FB_UINT64(segments) * max_segment < batchBufferSize / GBAK_BATCH_BLOBSTEP)
+			blobInline = true;
+	}
+
+	// Create new blob
 	ISC_QUAD* blob_id = (ISC_QUAD*) ((UCHAR*) record_buffer + field->fld_offset);
 	const UCHAR blob_desc[] = {isc_bpb_version1, isc_bpb_type, 1, blob_type};
 
 	BlobBuffer local_buffer;
 	UCHAR* const buffer = local_buffer.getBuffer(max_segment);
-
-	FbLocalStatus status_vector;
 	bool first = true;
+	BlobWrapper blob(&status_vector);
+
+	if (!blobInline)
+	{
+		if (!blob.create(DB, gds_trans, *blob_id, sizeof(blob_desc), blob_desc))
+		{
+			BURP_error_redirect(&status_vector, 37);
+			// msg 37 isc_create_blob failed
+		}
+	}
 
 	// Eat up blob segments
 
@@ -2183,125 +2230,46 @@ void get_blob(BurpGlobals* tdgbl, Firebird::IBatch* batch, const burp_fld* field
 		if (length)
 			get_block(tdgbl, buffer, length);
 
-		if (first)
-			batch->addBlob(&status_vector, length, buffer, blob_id, sizeof(blob_desc), blob_desc);
-		else
-			batch->appendBlobData(&status_vector, length, buffer);
-
-		if (status_vector->hasData())
+		if (blobInline)
 		{
-			BURP_error_redirect(&status_vector, 370);
-			// msg 370 could not append BLOB data to batch
+			if (first)
+				batch->addBlob(&status_vector, length, buffer, blob_id, sizeof(blob_desc), blob_desc);
+			else
+				batch->appendBlobData(&status_vector, length, buffer);
+
+			if (status_vector->hasData())
+			{
+				BURP_error_redirect(&status_vector, 370);
+				// msg 370 could not append BLOB data to batch
+			}
 		}
-
-		first = false;
-	}
-}
-
-
-void get_blob_old(BurpGlobals* tdgbl, const burp_fld* fields, UCHAR* record_buffer)
-{
-/**************************************
- *
- *	g e t _ b l o b
- *
- **************************************
- *
- * Functional description
- *	Read blob attributes and copy data from input file to nice,
- *	shiny, new blob.
- *
- **************************************/
-
-	// Pick up attributes
-
-	ULONG segments = 0;
-	USHORT field_number = MAX_USHORT;
-	USHORT max_segment = 0;
-	UCHAR blob_type = 0;
-
-	att_type	attribute;
-	scan_attr_t	scan_next_attr;
-	skip_init(&scan_next_attr);
-
-	while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_blob_data)
-	{
-		switch (attribute)
-		{
-		case att_blob_field_number:
-			field_number = (USHORT) get_int32(tdgbl);
-			break;
-
-		case att_blob_max_segment:
-			max_segment = (USHORT) get_int32(tdgbl);
-			break;
-
-		case att_blob_number_segments:
-			segments = get_int32(tdgbl);
-			break;
-
-		case att_blob_type:
-			blob_type = (UCHAR) get_int32(tdgbl);
-			break;
-
-		default:
-			bad_attribute(scan_next_attr, attribute, 64);
-			// msg 64 blob
-			break;
-		}
-	}
-
-	// Find the field associated with the blob
-	const burp_fld* field;
-	for (field = fields; field; field = field->fld_next)
-	{
-		if (field->fld_number == field_number)
-			break;
-	}
-
-	if (!field)
-	{
-		BURP_error_redirect(NULL, 36);
-		// msg 36 Can't find field for blob
-	}
-
-	// Create new blob
-
-	ISC_QUAD* blob_id = (ISC_QUAD*) ((UCHAR*) record_buffer + field->fld_offset);
-	FbLocalStatus status_vector;
-	BlobWrapper blob(&status_vector);
-	const UCHAR blob_desc[] = {isc_bpb_version1, isc_bpb_type, 1, blob_type};
-
-	if (!blob.create(DB, gds_trans, *blob_id, sizeof(blob_desc), blob_desc))
-	{
-		BURP_error_redirect(&status_vector, 37);
-		// msg 37 isc_create_blob failed
-	}
-
-	// Allocate blob buffer if static buffer is too short
-	BlobBuffer static_buffer;
-	UCHAR* const buffer = static_buffer.getBuffer(max_segment);
-
-	// Eat up blob segments
-
-	for (; segments > 0; --segments )
-	{
-		USHORT length = get(tdgbl);
-		length |= get(tdgbl) << 8;
-		if (length)
-		{
-			get_block(tdgbl, buffer, length);
-		}
-		if (!blob.putSegment(length, buffer))
+		else if (!blob.putSegment(length, buffer))
 		{
 			BURP_error_redirect(&status_vector, 38);
 			// msg 38 isc_put_segment failed
 		}
+
+		first = false;
 	}
 
-	if (!blob.close())
-		BURP_error_redirect(&status_vector, 23);
-		// msg 23 isc_close_blob failed
+	if (!blobInline)
+	{
+		if (!blob.close())
+			BURP_error_redirect(&status_vector, 23);
+			// msg 23 isc_close_blob failed
+
+		if (batch)
+		{
+			ISC_QUAD real_id = *blob_id;
+			batch->registerBlob(&status_vector, &real_id, blob_id);
+
+			if (status_vector->hasData())
+			{
+				BURP_error_redirect(&status_vector, 370);
+				// msg 370 could not append BLOB data to batch
+			}
+		}
+	}
 }
 
 
@@ -3177,7 +3145,6 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 
 		// Create batch
 
-		const int GBAK_BATCH_STEP = 1000;
 		Firebird::AutoDispose<Firebird::IXpbBuilder> pb(Firebird::UtilInterfacePtr()->
 			getXpbBuilder(&tdgbl->throwStatus, Firebird::IXpbBuilder::BATCH, NULL, 0));
 		pb->insertInt(&tdgbl->throwStatus, Firebird::IBatch::TAG_MULTIERROR, 1);
@@ -3314,7 +3281,7 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 			}
 
 			batch->add(&tdgbl->throwStatus, 1, sql);
-			if ((records % 1000 != 0) && (record == rec_data))
+			if ((records % GBAK_BATCH_STEP != 0) && (record == rec_data))
 				continue;
 
 			Firebird::AutoDispose<Firebird::IBatchCompletionState> cs(batch->execute(&tdgbl->throwStatus, gds_trans));
@@ -3831,7 +3798,7 @@ rec_type get_data_old(BurpGlobals* tdgbl, burp_rel* relation)
 		while (record == rec_blob || record == rec_array)
 		{
 			if (record == rec_blob)
-				get_blob_old(tdgbl, relation->rel_fields, (UCHAR *) buffer);
+				get_blob(tdgbl, nullptr, relation->rel_fields, (UCHAR *) buffer);
 			else if (record == rec_array)
 				get_array(tdgbl, relation, (UCHAR *) buffer);
 			get_record(&record, tdgbl);

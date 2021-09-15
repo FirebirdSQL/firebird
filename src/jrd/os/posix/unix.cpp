@@ -764,35 +764,26 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 	{
 		if (!(file = seek_file(file, bdb, &offset, status_vector)))
 			return false;
+
 		if ((bytes = os_utils::pread(file->fil_desc, page, size, LSEEK_OFFSET_CAST offset)) == size)
-			break;
+		{
+			// os_utils::posix_fadvise(file->desc, offset, size, POSIX_FADV_NOREUSE);
+			return true;
+		}
+
+		// pread() returned error
 		if (bytes < 0 && !SYSCALL_INTERRUPTED(errno))
 			return unix_error("read", file, isc_io_read_err, status_vector);
+
+		// pread() returned not enough bytes
 		if (bytes >= 0)
-			return block_size_error(file, offset + bytes, status_vector);
-	}
-
-	if (i == IO_RETRY)
-	{
-		if (bytes == 0)
 		{
-#ifdef DEV_BUILD
-			fprintf(stderr, "PIO_read: an empty page read!\n");
-			fflush(stderr);
-#endif
-		}
-		else
-		{
-#ifdef DEV_BUILD
-			fprintf(stderr, "PIO_read: retry count exceeded\n");
-			fflush(stderr);
-#endif
-			unix_error("read_retry", file, isc_io_read_err);
+			if (!block_size_error(file, offset + bytes, status_vector))
+				return false;
 		}
 	}
 
-	// os_utils::posix_fadvise(file->desc, offset, size, POSIX_FADV_NOREUSE);
-	return true;
+	return unix_error("read_retry", file, isc_io_read_err, status_vector);
 }
 
 
@@ -825,15 +816,18 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 	{
 		if (!(file = seek_file(file, bdb, &offset, status_vector)))
 			return false;
+
 		if ((bytes = os_utils::pwrite(file->fil_desc, page, size, LSEEK_OFFSET_CAST offset)) == size)
-			break;
+		{
+			// os_utils::posix_fadvise(file->desc, offset, size, POSIX_FADV_DONTNEED);
+			return true;
+		}
+
 		if (bytes < 0 && !SYSCALL_INTERRUPTED(errno))
 			return unix_error("write", file, isc_io_write_err, status_vector);
 	}
 
-
-	// os_utils::posix_fadvise(file->desc, offset, size, POSIX_FADV_DONTNEED);
-	return true;
+	return unix_error("write_retry", file, isc_io_write_err, status_vector);
 }
 
 

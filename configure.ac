@@ -554,6 +554,12 @@ AC_ARG_WITH(termlib,
   [  --with-termlib          build with explicitly specified termcap support library],
   [TERMLIB=${withval}])
 
+RE2_BUILD=Y
+AC_ARG_WITH(system-re2,
+  [  --with-system-re2  use system-wide re2 library instead of embedded copy],
+  [RE2_BUILD=N])
+AC_SUBST(RE2_BUILD)
+
 dnl Avoid dumb '-g -O2' autoconf's default
 dnl Debugging information and optimization flags should be set in prefix.$platform file
 dnl Should be replaced with AC_PROG_GCC_DEFAULT_FLAGS() when available
@@ -609,6 +615,7 @@ if test "$LSB_FLG" = "Y"; then
   CXXFLAGS="$CXXFLAGS --lsb-besteffort  --lsb-shared-libs=fbclient:ib_util:tommath:tomcrypt --lsb-target-version=4.1"
   AC_SUBST(TOMMATH_BUILD, Y)
   AC_SUBST(TOMCRYPT_BUILD, Y)
+  AC_SUBST(RE2_BUILD, Y)
   AC_PATH_PROG(CC, lsbcc, "", [$PATH$PATH_SEPARATOR/opt/lsb/bin$PATH_SEPARATOR])
   AC_PATH_PROG(CXX, lsbc++, "", [$PATH$PATH_SEPARATOR/opt/lsb/bin$PATH_SEPARATOR])
   if test "x$CC" = "x" || test "x$CXX" = "x" ; then
@@ -873,6 +880,17 @@ if test "$EDITLINE_FLG" = "Y"; then
 	fi
 	AC_SUBST(TERMLIB)
 fi
+
+dnl check for re2 presence
+if test "$RE2_BUILD" != "Y"; then
+	XE_SAVE_ENV()
+	AC_LANG_PUSH(C++)
+	AC_CHECK_HEADER(re2/re2.h, RE2LIB=-lre2,
+		AC_MSG_ERROR(Include file for re2 not found - please install development re2 package or drop --with-system-re2))
+        AC_LANG_POP(C++)
+	XE_RESTORE_ENV()
+fi
+AC_SUBST(RE2LIB)
 
 dnl Check for libraries
 AC_SEARCH_LIBS(dlopen, dl)

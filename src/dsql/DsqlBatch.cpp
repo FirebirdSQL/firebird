@@ -30,7 +30,7 @@
 #include "../jrd/exe_proto.h"
 #include "../dsql/dsql.h"
 #include "../dsql/errd_proto.h"
-#include "../common/classes/ClumpletReader.h"
+#include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/fb_string.h"
 #include "../common/utils_proto.h"
@@ -123,6 +123,8 @@ DsqlBatch::DsqlBatch(dsql_req* req, const dsql_msg* /*message*/, IMessageMetadat
 		case IBatch::TAG_BUFFER_BYTES_SIZE:
 			m_bufferSize = pb.getInt();
 			if (m_bufferSize > HARD_BUFFER_LIMIT)
+				m_bufferSize = HARD_BUFFER_LIMIT;
+			if (!m_bufferSize)
 				m_bufferSize = HARD_BUFFER_LIMIT;
 			break;
 		}
@@ -817,7 +819,7 @@ void DsqlBatch::DataCache::put3(const void* data, ULONG dataSize, ULONG offset)
 
 void DsqlBatch::DataCache::put(const void* d, ULONG dataSize)
 {
-	if (m_limit && (m_used + m_cache.getCount() + dataSize > m_limit))
+	if (m_used + m_cache.getCount() + dataSize > m_limit)
 		ERR_post(Arg::Gds(isc_batch_too_big));
 
 	const UCHAR* data = reinterpret_cast<const UCHAR*>(d);
@@ -966,6 +968,14 @@ ULONG DsqlBatch::DataCache::getSize() const
 	return m_used + m_cache.getCount();
 }
 
+ULONG DsqlBatch::DataCache::getCapacity() const
+{
+	if (!m_cacheCapacity)
+		return 0;
+
+	return m_limit;
+}
+
 void DsqlBatch::DataCache::clear()
 {
 	m_cache.clear();
@@ -973,3 +983,99 @@ void DsqlBatch::DataCache::clear()
 		m_space->releaseSpace(0, m_used);
 	m_used = m_got = m_shift = 0;
 }
+
+void DsqlBatch::info(thread_db* tdbb, unsigned int itemsLength, const unsigned char* items,
+	unsigned int bufferLength, unsigned char* buffer)
+{
+	// Sanity check
+	if (bufferLength < 3)	// bigger values will be processed by later code OK
+	{
+		if (bufferLength-- > 0)
+		{
+			*buffer++ = isc_info_truncated;
+			if (bufferLength-- > 0)
+				*buffer++ = isc_info_end;
+		}
+		return;
+	}
+
+	ClumpletReader it(ClumpletReader::InfoItems, items, itemsLength);
+	ClumpletWriter out(ClumpletReader::InfoResponse, bufferLength - 1);		// place for isc_info_truncated / isc_info_end
+	enum BufCloseState {BUF_OPEN, BUF_INTERNAL, BUF_END};
+	BufCloseState closeOut = BUF_OPEN;
+
+	try
+	{
+		bool flInfoLength = false;
+
+		for (it.rewind(); !it.isEof(); it.moveNext())
+		{
+			UCHAR item = it.getClumpTag();
+			if (item == isc_info_end)
+				break;
+
+			switch(item)
+			{
+			case IBatch::INF_BUFFER_BYTES_SIZE:
+				out.insertInt(item, m_messages.getCapacity());
+				break;
+			case IBatch::INF_DATA_BYTES_SIZE:
+				out.insertInt(item, FB_ALIGN(m_messages.getSize(), m_alignment));
+				break;
+			case IBatch::INF_BLOBS_BYTES_SIZE:
+				if (m_blobs.getSize())
+					out.insertInt(item, m_blobs.getSize());
+				break;
+			case IBatch::INF_BLOB_ALIGNMENT:
+				out.insertInt(item, BLOB_STREAM_ALIGN);
+				break;
+			case isc_info_length:
+				flInfoLength = true;
+				break;
+			default:
+				out.insertInt(isc_info_error, isc_infunk);
+				break;
+			}
+		}
+
+		// finalize writer
+		closeOut = BUF_INTERNAL;	// finished adding internal info
+		out.insertTag(isc_info_end);
+		closeOut = BUF_END;			// alreayd marked with isc_info_end but misses isc_info_length
+		if (flInfoLength)
+		{
+			out.rewind();
+			out.insertInt(isc_info_length, out.getBufferLength());
+		}
+	}
+	catch(const fatal_exception&)
+	{
+		// here it's sooner of all caused by writer overflow but carefully check that
+		if (out.hasOverflow())
+		{
+			memcpy(buffer, out.getBuffer(), out.getBufferLength());
+			buffer += out.getBufferLength();
+			switch (closeOut)
+			{
+			case BUF_OPEN:
+				*buffer++ = isc_info_truncated;
+				if (out.getBufferLength() <= bufferLength - 2)
+					*buffer++ = isc_info_end;
+				break;
+			case BUF_INTERNAL:
+				// overflow adding isc_info_end, but we actually have 1 reserved byte
+				*buffer++ = isc_info_end;
+				break;
+			case BUF_END:
+				// ignore isc_info_length
+				break;
+			}
+			return;
+		}
+		else
+			throw;
+	}
+
+	memcpy(buffer, out.getBuffer(), out.getBufferLength());
+}
+

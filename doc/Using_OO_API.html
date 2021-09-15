@@ -6,7 +6,7 @@
 	<meta name="generator" content="LibreOffice 6.4.7.2 (Linux)"/>
 	<meta name="author" content="alex "/>
 	<meta name="created" content="2013-05-31T00:00:00.010003100"/>
-	<meta name="changed" content="2021-08-12T15:06:38.252335410"/>
+	<meta name="changed" content="2021-09-10T16:41:58.007600045"/>
 	<meta name="created" content="00:00:00">
 	<meta name="created" content="00:00:00">
 	<meta name="created" content="00:00:00">
@@ -30,21 +30,19 @@ in some aspects like OLE2 interfaces (some of them have addRef() and
 release() methods) are non standard and have features, missing in
 other widely used types of interfaces. First of all Firebird
 interfaces are </font><font size="4" style="font-size: 14pt"><b>language
-independent</b></font> –
-<font size="4" style="font-size: 14pt">that
+independent</b></font> – <font size="4" style="font-size: 14pt">that
 means that to define/use them one need not use language specific
 constructions like </font><font size="4" style="font-size: 14pt"><i>class</i></font>
-<font size="4" style="font-size: 14pt">in
-C++, interface may be defined using any language able to call
-functions using C calling conventions and having concepts of array
-and pointer to procedure/function. Next interfaces are </font><font size="4" style="font-size: 14pt"><b>versioned</b></font>
-– <font size="4" style="font-size: 14pt">i.e.
-we support different versions of same interface. Binary layout of
-interfaces is designed to support that features very efficient (there
-is no need in additional virtual calls like in OLE2/COM with it's
-</font><strong><font size="4" style="font-size: 14pt">QueryInterface</font></strong><strong><font size="4" style="font-size: 14pt">)</font></strong><strong>
-</strong><strong><font size="4" style="font-size: 14pt">but
-it's not convenient for direct use from most languages. Therefore
+<font size="4" style="font-size: 14pt">in C++, interface may be
+defined using any language able to call functions using C calling
+conventions and having concepts of array and pointer to
+procedure/function. Next interfaces are </font><font size="4" style="font-size: 14pt"><b>versioned</b></font>
+– <font size="4" style="font-size: 14pt">i.e. we support different
+versions of same interface. Binary layout of interfaces is designed
+to support that features very efficient (there is no need in
+additional virtual calls like in OLE2/COM with it's </font><strong><font size="4" style="font-size: 14pt">QueryInterface)</font></strong><strong>
+</strong><strong><font size="4" style="font-size: 14pt">but it's not
+convenient for direct use from most languages. Therefore
 language-specific wrappers should better be designed for different
 languages making use of API easier. Currently we have wrappers for
 C++ and Pascal, Java is coming soon. From end-user POV calls from C++
@@ -74,8 +72,7 @@ for it.</font></p>
 <p style="margin-bottom: 0cm"><a name="result_box"></a><font size="4" style="font-size: 14pt">Firebird
 installation package contains a number of live samples of use of OO
 API – they are in examples/interfaces (database access) and
-examples/dbcrypt (plugin performing </font><font size="4" style="font-size: 14pt">fictitious
-database encryption</font><font size="4" style="font-size: 14pt">)
+examples/dbcrypt (plugin performing fictitious database encryption)
 directories. It's supposed that the reader is familiar with ISC API
 used in Firebird since interbase times.</font></p>
 <p style="margin-bottom: 0cm"><br/>
@@ -101,8 +98,8 @@ too.</font></p>
 <p style="margin-top: 0.43cm; margin-bottom: 0.51cm; page-break-after: avoid">
 <font face="Albany, sans-serif"><font size="5" style="font-size: 18pt">Accessing
 databases.</font></font></p>
-<h1><font size="4" style="font-size: 14pt">Creating
-database and attaching to existing database.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Creating database and
+attaching to existing database.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">First
 of all we need to get access to <b>IMaster</b> interface. IMaster is
 primary Firebird interface, required to access all the rest of
@@ -157,8 +154,7 @@ will have to modify a call too often to add new parameters, and
 number of them will be very big no matter of the fact that typically
 one needs to pass not too much of them. Therefore to pass additional
 parameters special in-memory data structure, called </font><font size="4" style="font-size: 14pt"><i>database
-parameters block</i></font>
-<font size="4" style="font-size: 14pt">(DPB)
+parameters block</i></font> <font size="4" style="font-size: 14pt">(DPB)
 is used. Format of it is well defined, and it's possible to build DPB
 byte after byte. But it's much easier to use special interface
 </font><a href="#XpbBuilder"><font size="4" style="font-size: 14pt"><b>IXpbBuilder</b></font></a><font size="4" style="font-size: 14pt">,
@@ -274,8 +270,7 @@ appropriate samples when reading this document.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Working
-with transactions.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Working with transactions.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Only
 creating empty databases is definitely not enough to work with RDBMS.
 We want to be able to create various objects (like tables and so on)
@@ -319,8 +314,8 @@ may take a look at how to start and commit transaction in examples
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Executing
-SQL operator without input parameters and returned rows.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Executing SQL operator
+without input parameters and returned rows.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">With
 started transaction we are ready to execute our first SQL operators.
 Used for it execute() method in <a href="#Attachment">IAttachment</a>
@@ -353,8 +348,8 @@ may take a look at how to start and commit transaction in examples
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Executing
-SQL operator with input parameters.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Executing SQL operator
+with input parameters.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">There
 are 2 ways to execute statement with input parameters. Choice of
 correct method depends upon do you need to execute it more than once
@@ -434,21 +429,20 @@ fields:</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>builder-&gt;setLength(&amp;status,
 1, 3);</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">New
-API is using old constants for SQL types, smallest bit as earlier
-stands for nullability. In some case it may also make sense to set
-sub-type (for blobs), character set (for text fields) or scale (for
-numeric fields). And finally it's time to get an instance of
-IMessageMetadata:</font></p>
+<font size="4" style="font-size: 14pt">New API is using old constants
+for SQL types, smallest bit as earlier stands for nullability. In
+some case it may also make sense to set sub-type (for blobs),
+character set (for text fields) or scale (for numeric fields). And
+finally it's time to get an instance of IMessageMetadata:</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i><a href="#MessageMetadata">IMessageMetadata</a>*
 meta = builder-&gt;getMetadata(&amp;status);</i></font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">Here
-we do not discuss in details own implementation of IMessageMetadata.
-If one cares there is a sample 05.user_metadata.cpp.</font></p>
+<font size="4" style="font-size: 14pt">Here we do not discuss in
+details own implementation of IMessageMetadata. If one cares there is
+a sample 05.user_metadata.cpp.</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">So
 finally we have obtained (one or another way) an instance of metadata
 description of input parameters. But to work with a message we also
@@ -513,8 +507,8 @@ exception may be caught by C++ program.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Opening
-cursor and fetching data from it.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Opening cursor and
+fetching data from it.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">The
 only way to get rows of data, returned by SELECT operator, in OO API
 is to use <a href="#ResultSet">IResultSet</a> interface. This
@@ -596,10 +590,10 @@ particular field field's offset should be used:</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>unsigned
 char* field_N_ptr = buffer + meta-&gt;getOffset(&amp;status, n);</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">where
-n is the number of a field in a message. That pointer should be
-casted to appropriate type, depending upon field type. For example,
-for a VARCHAR field cast to struct vary should be used:</font></p>
+<font size="4" style="font-size: 14pt">where n is the number of a
+field in a message. That pointer should be casted to appropriate
+type, depending upon field type. For example, for a VARCHAR field
+cast to struct vary should be used:</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>vary*
 v_ptr = (vary*) (buffer + meta-&gt;getOffset(&amp;status, n));</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Now
@@ -617,8 +611,8 @@ metadata values like it's done in our samples 03.select.cpp and
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Using
-FB_MESSAGE macro for static messages.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Using FB_MESSAGE macro for
+static messages.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Working
 with data using offsets is rather efficient but requires a lot of
 code to be written. In C++ this problem can be solved using
@@ -667,12 +661,11 @@ class FbTimestamp, containing two public data members date and time
 of appropriate class, char - with struct <a href="#FbChar">FbChar</a>
 and varchar – with struct <a href="#FbVarChar">FbVarChar</a>. For
 each field preprocessor creates two data members in the message –
-</font><font size="4" style="font-size: 14pt"><i>name</i></font>
-<font size="4" style="font-size: 14pt">for
+</font><font size="4" style="font-size: 14pt"><i>name</i></font> <font size="4" style="font-size: 14pt">for
 field/parameter value and </font><font size="4" style="font-size: 14pt"><i>nameNull</i></font>
-<font size="4" style="font-size: 14pt">for
-NULL indicator. Message constructor has 2 parameters – pointer to
-status wrapper and master interface:</font></p>
+<font size="4" style="font-size: 14pt">for NULL indicator. Message
+constructor has 2 parameters – pointer to status wrapper and master
+interface:</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>FB_MESSAGE(Output,
 ThrowStatusWrapper,</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>(FB_SMALLINT,
@@ -717,8 +710,7 @@ sample 06.fb_message.cpp.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Working
-with blobs.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Working with blobs.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">For
 blobs in message buffer firebird stores blob identifier – an 8-byte
 entity which should be aligned on 4-byte boundary. Identifier has
@@ -911,16 +903,16 @@ meta = batch-&gt;getMetadata(&amp;status);</i></font></p>
 if you have passed your own format of messages to the batch you may
 simply use it.</font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">In
-the former text I suppose that some function fillNextMessage(unsigned
-char* data, IMessageMetadata* metadata) is present and can fill
-buffer ‘data’ according to passed format ‘metadata’. In order
-to work with messages we need a buffer for a data:</font></p>
+<font size="4" style="font-size: 14pt">In the former text I suppose
+that some function fillNextMessage(unsigned char* data,
+IMessageMetadata* metadata) is present and can fill buffer ‘data’
+according to passed format ‘metadata’. In order to work with
+messages we need a buffer for a data:</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>unsigned
 char* data = new unsigned char[meta-&gt;getMessageLength(&amp;status)];</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">Now
-we can add some messages full of data to the batch:</font></p>
+<font size="4" style="font-size: 14pt">Now we can add some messages
+full of data to the batch:</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>fillNextMessage(data,
 meta);</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>batch-&gt;add(&amp;status,
@@ -930,15 +922,15 @@ meta);</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>batch-&gt;add(&amp;status,
 1, data);</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">An
-alternative way of working with messages (using FB_MESSAGE macro) is
-present in the sample of using batch interface 11.batch.cpp.</font></p>
+<font size="4" style="font-size: 14pt">An alternative way of working
+with messages (using FB_MESSAGE macro) is present in the sample of
+using batch interface 11.batch.cpp.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">Finally
-batch should be executed:</font></p>
+<font size="4" style="font-size: 14pt">Finally batch should be
+executed:</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i><a href="#BatchCompletionState">IBatchCompletionState</a>*
 cs = batch-&gt;execute(&amp;status, tra);</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">We
@@ -949,19 +941,19 @@ Determine total number of messages processed by batch (it can be less
 than the number of messages passed to the batch if error happened and
 an option enabling multiple errors during batch processing was not
 turned on):</font></p>
-<p><font size="4" style="font-size: 14pt"><i>unsigned
-total = cs-&gt;getSize(&amp;status);</i></font></p>
-<p><font size="4" style="font-size: 14pt">Now
-print the state of each message:</font></p>
-<p><font size="4" style="font-size: 14pt"><i>for
-(unsigned p = 0; p &lt; total; ++p) printf(“Msg %u state %d\n”,
-p, cs-&gt;getState(&amp;status, p));</i></font></p>
+<p><font size="4" style="font-size: 14pt"><i>unsigned total =
+cs-&gt;getSize(&amp;status);</i></font></p>
+<p><font size="4" style="font-size: 14pt">Now print the state of each
+message:</font></p>
+<p><font size="4" style="font-size: 14pt"><i>for (unsigned p = 0; p &lt;
+total; ++p) printf(“Msg %u state %d\n”, p, cs-&gt;getState(&amp;status,
+p));</i></font></p>
 <p style="font-variant: normal; font-style: normal"><font size="4" style="font-size: 14pt">When
 finished analyzing completion state don’t forget to dispose it:</font></p>
 <p><font size="4" style="font-size: 14pt"><i>cs-&gt;dispose();</i></font></p>
 <p><font color="#000000"><font size="4" style="font-size: 14pt">Full
-sample of printing contents</font></font><font color="#000000">
-of </font><font color="#000000"><font size="4" style="font-size: 14pt"><a href="#BatchCompletionState">BatchCompletionState</a>
+sample of printing contents</font></font><font color="#000000"> of
+</font><font color="#000000"><font size="4" style="font-size: 14pt"><a href="#BatchCompletionState">BatchCompletionState</a>
 is in print_cs() function in sample 11.batch.cpp.</font></font></p>
 <p style="font-variant: normal; font-style: normal"><font size="4" style="font-size: 14pt">If
 for some reason you want to make batch buffers empty not executing it
@@ -969,18 +961,17 @@ for some reason you want to make batch buffers empty not executing it
 method:</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>batch-&gt;cancel(&amp;status);</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">Like
-the rest of our data access interfaces Batch has special method to
-close it:</font></p>
+<font size="4" style="font-size: 14pt">Like the rest of our data
+access interfaces Batch has special method to close it:</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>batch-&gt;close(&amp;status);</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">Standard
-release() call may be used instead if one does not care about errors:</font></p>
+<font size="4" style="font-size: 14pt">Standard release() call may be
+used instead if one does not care about errors:</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>batch-&gt;release();</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">Described
-methods help to implement all what one needs for JDBC-style prepared
-statement batch operations. </font>
+<font size="4" style="font-size: 14pt">Described methods help to
+implement all what one needs for JDBC-style prepared statement batch
+operations. </font>
 </p>
 <p style="margin-bottom: 0cm"><br/>
 
@@ -1002,27 +993,23 @@ returned in </font><font color="#000000"><font size="4" style="font-size: 14pt">
 An optimal batch size should be found for each particular case but
 sooner of all having it &gt;1000 hardly gives you serious performance
 increase.</font></font></p>
-<p><br/>
-<br/>
+<p style="margin-bottom: 0cm"><br/>
 
 </p>
-<p><font size="4" style="font-size: 14pt">One
-can add more than single message in one call to the batch. When doing
-it please remember – messages should be appropriately aligned for
-this feature to work correctly. Required alignment and aligned size
-of the message should be obtained from <a href="#MessageMetadata">MessageMetadata</a>
+<p><font size="4" style="font-size: 14pt">One can add more than
+single message in one call to the batch. When doing it please
+remember – messages should be appropriately aligned for this
+feature to work correctly. Required alignment and aligned size of the
+message should be obtained from <a href="#MessageMetadata">MessageMetadata</a>
 interface, for example:</font></p>
-<p><font size="4" style="font-size: 14pt"><i>unsigned
-aligned = meta-&gt;getAlignedLength(&amp;status);</i></font></p>
-<p><font size="4" style="font-size: 14pt">Later
-that size will be useful when allocating an array of messages and
-working with it:</font></p>
-<p><font size="4" style="font-size: 14pt"><i>unsigned
-char* data = new unsigned char[aligned * N]; // N is desired number
-of messages</i></font></p>
-<p><font size="4" style="font-size: 14pt"><i>for
-(int n = 0; n &lt; N; ++n) fillNextMessage(&amp;data[aligned * n],
-meta);</i></font></p>
+<p><font size="4" style="font-size: 14pt"><i>unsigned aligned =
+meta-&gt;getAlignedLength(&amp;status);</i></font></p>
+<p><font size="4" style="font-size: 14pt">Later that size will be
+useful when allocating an array of messages and working with it:</font></p>
+<p><font size="4" style="font-size: 14pt"><i>unsigned char* data =
+new unsigned char[aligned * N]; // N is desired number of messages</i></font></p>
+<p><font size="4" style="font-size: 14pt"><i>for (int n = 0; n &lt;
+N; ++n) fillNextMessage(&amp;data[aligned * n], meta);</i></font></p>
 <p><font size="4" style="font-size: 14pt"><i>batch-&gt;add(&amp;status,
 N, data);</i></font></p>
 <p style="font-variant: normal; font-style: normal"><font size="4" style="font-size: 14pt">After
@@ -1031,19 +1018,18 @@ it batch may be executed or next portion of messages added to it.</font></p>
 <br/>
 
 </p>
-<p><font size="4" style="font-size: 14pt">Blobs
-in general are not compatible with batches – batch is efficient
-when one needs to pass a lot of small data to the server in single
-step, blobs are treated as large objects and therefore in general it
-makes no sense to use them in batches. But on practice it often
-happens that blobs are not too big – and in this case use of
-traditional blob API (create blob, pass segments to the server, close
-blob, pass blobs ID in the message) kills performance, specially when
-used over WAN. Therefore in firebird batch supports passing blobs to
-server inline, together with other messages. To use that feature
-first of all <a href="#Batch_Blob_Policy">blob usage policy</a> for a
-batch to be created should be set (as an option in <a href="#Batch_PB">parameters
-block</a>):</font></p>
+<p><font size="4" style="font-size: 14pt">Blobs in general are not
+compatible with batches – batch is efficient when one needs to pass
+a lot of small data to the server in single step, blobs are treated
+as large objects and therefore in general it makes no sense to use
+them in batches. But on practice it often happens that blobs are not
+too big – and in this case use of traditional blob API (create
+blob, pass segments to the server, close blob, pass blobs ID in the
+message) kills performance, specially when used over WAN. Therefore
+in firebird batch supports passing blobs to server inline, together
+with other messages. To use that feature first of all <a href="#Batch_Blob_Policy">blob
+usage policy</a> for a batch to be created should be set (as an
+option in <a href="#Batch_PB">parameters block</a>):</font></p>
 <p><font size="4" style="font-size: 14pt"><i>pb-&gt;insertInt(&amp;status,
 IBatch::BLOB_IDS, IBatch::BLOB_IDS_ENGINE);</i></font></p>
 <p style="font-variant: normal; font-style: normal"><font size="4" style="font-size: 14pt">In
@@ -1053,29 +1039,26 @@ that’s the simplest and rather common usage. Imagine that the
 message is described as follows:</font></p>
 <p style="font-variant: normal"><font size="4" style="font-size: 14pt"><i>FB_MESSAGE(Msg,
 ThrowStatusWrapper,</i></font></p>
-<p><font size="4" style="font-size: 14pt"><i>(FB_VARCHAR(5),
-id)</i></font></p>
-<p><font size="4" style="font-size: 14pt"><i>(FB_VARCHAR(10),
-name)</i></font></p>
-<p><font size="4" style="font-size: 14pt"><i>(FB_BLOB,
-desc)</i></font></p>
-<p><font size="4" style="font-size: 14pt"><i>)
-project(&amp;status, master);</i></font></p>
+<p><font size="4" style="font-size: 14pt"><i>(FB_VARCHAR(5), id)</i></font></p>
+<p><font size="4" style="font-size: 14pt"><i>(FB_VARCHAR(10), name)</i></font></p>
+<p><font size="4" style="font-size: 14pt"><i>(FB_BLOB, desc)</i></font></p>
+<p><font size="4" style="font-size: 14pt"><i>) project(&amp;status,
+master);</i></font></p>
 <p style="font-variant: normal; font-style: normal"><font size="4" style="font-size: 14pt">In
 that case to send a message containing blob to the server one can do
 something like this:</font></p>
-<p><font size="4" style="font-size: 14pt"><i>project-&gt;id
-= ++idCounter;</i></font></p>
+<p><font size="4" style="font-size: 14pt"><i>project-&gt;id =
+++idCounter;</i></font></p>
 <p><font size="4" style="font-size: 14pt"><i>project-&gt;name.set(currentName);</i></font></p>
 <p><font size="4" style="font-size: 14pt"><i>batch-&gt;addBlob(&amp;status,
 descriptionSize, descriptionText, &amp;project-&gt;desc);</i></font></p>
 <p><font size="4" style="font-size: 14pt"><i>batch-&gt;add(&amp;status,
 1, project.getData());</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">If
-some blob happened to be big enough not to fit into your existing
-buffer you may instead reallocating buffer use appendBlobData()
-method. It appends more data to last added blob. </font>
+<font size="4" style="font-size: 14pt">If some blob happened to be
+big enough not to fit into your existing buffer you may instead
+reallocating buffer use appendBlobData() method. It appends more data
+to last added blob. </font>
 </p>
 <p style="font-variant: normal"><font size="4" style="font-size: 14pt"><i>batch-&gt;addBlob(&amp;status,
 descriptionSize, descriptionText, &amp;project→desc, bpbLength,
@@ -1085,13 +1068,13 @@ adding first part of blob get next portion of data into
 descriptionText, update descriptionSize and:</font></p>
 <p style="font-variant: normal"><font size="4" style="font-size: 14pt"><i>batch-&gt;appendBlobData(&amp;status,
 descriptionSize, descriptionText);</i></font></p>
-<p><font size="4" style="font-size: 14pt">This
-may be done in a loop but take care not to overflow internal batch
-buffers – it’s size is controlled by <a href="#Batch_PB">BUFFER_BYTES_SIZE</a>
-option when creating batch interface but can’t exceed 256Mb
-(default is 16Mb). If you need to process such big blob (for example
-on the background of a lot of small one – this can explain use of
-batch) just use standard blob API and <a href="#Batch::registerBlob">registerBlob</a>
+<p><font size="4" style="font-size: 14pt">This may be done in a loop
+but take care not to overflow internal batch buffers – it’s size
+is controlled by <a href="#Batch_PB">BUFFER_BYTES_SIZE</a> option
+when creating batch interface but can’t exceed 256Mb (default is
+16Mb). If you need to process such big blob (for example on the
+background of a lot of small one – this can explain use of batch)
+just use standard blob API and <a href="#Batch::registerBlob">registerBlob</a>
 method of <a href="#Batch">Batch</a> interface.</font></p>
 <p style="font-variant: normal; font-style: normal"><font size="4" style="font-size: 14pt">One
 more possible choice of blob policy is BLOB_IDS_USER. Usage at the
@@ -1104,17 +1087,16 @@ imagine a case when you get blobs and other data in relatively
 independent streams (blocks in a file for example) and some good IDs
 are already present in them. In such case use of user-supplied blob
 IDs can greatly simplify your code.</font></p>
-<p><font size="4" style="font-size: 14pt">Please
-take into an account – unlike blobs created using regular
-<a href="#Attachment">createBlob</a>() blobs created by <a href="#Batch">Batch</a>
-interface are by default stream, not segmented. Segmented blobs
-provide nothing interesting compared with stream one and therefore
-not recommended to be used in new development, we support that format
-only for backward compatibility reasons. If you really need segmented
-blobs this default may be overridden by calling:</font></p>
+<p><font size="4" style="font-size: 14pt">Please take into an account
+– unlike blobs created using regular <a href="#Attachment">createBlob</a>()
+blobs created by <a href="#Batch">Batch</a> interface are by default
+stream, not segmented. Segmented blobs provide nothing interesting
+compared with stream one and therefore not recommended to be used in
+new development, we support that format only for backward
+compatibility reasons. If you really need segmented blobs this
+default may be overridden by calling:</font></p>
 <p><font size="4" style="font-size: 14pt"><i>batch-&gt;setDefaultBpb(&amp;status,</i></font>
-<font size="4" style="font-size: 14pt"><i>bpbLength,
-bpb);</i></font></p>
+<font size="4" style="font-size: 14pt"><i>bpbLength, bpb);</i></font></p>
 <p style="font-variant: normal; font-style: normal"><font size="4" style="font-size: 14pt">Certainly
 passed BPB may contain any other blob creation parameters too. As you
 may have already noticed you may also pass BPB directly to addBlob()
@@ -1124,13 +1106,12 @@ to segmented blobs – call to addBlob() will add first segment to
 the blob, following calls to appendBlobData() will add more segments.
 Do not forget that segment size is limited to 64Kb – 1, an attempt
 to pass more data in a single call with cause an error.</font></p>
-<p><font size="4" style="font-size: 14pt">Next
-step when working with existing blob streams is use of
-addBlobStream() method. Using it one can add more than one blob to
-the batch per single call. Blob stream is a sequence of blobs, each
-starts with blob header. Header should be appropriately aligned -
-<a href="#Batch">Batch</a> interface provides special call for this
-purpose:</font></p>
+<p><font size="4" style="font-size: 14pt">Next step when working with
+existing blob streams is use of addBlobStream() method. Using it one
+can add more than one blob to the batch per single call. Blob stream
+is a sequence of blobs, each starts with blob header. Header should
+be appropriately aligned - <a href="#Batch">Batch</a> interface
+provides special call for this purpose:</font></p>
 <p style="font-variant: normal"><font size="4" style="font-size: 14pt"><i>unsigned
 alignment = batch-&gt;getBlobAlignment(&amp;status);</i></font></p>
 <p style="font-variant: normal; font-style: normal"><font size="4" style="font-size: 14pt">It’s
@@ -1161,8 +1142,7 @@ ID must be zero and BPB size must always be zero too. Typically you
 will want to have one continuation record per addBlobStream() call.</font></p>
 <p><a name="Batch::registerBlob"></a><font size="4" style="font-size: 14pt">Last
 method used to work with blobs stands alone from the first three that
-pass blob data inline with the rest of batch data </font>–
-<font size="4" style="font-size: 14pt">it’s
+pass blob data inline with the rest of batch data </font>– <font size="4" style="font-size: 14pt">it’s
 needed to register in a batch ID of a blob created using standard
 blob API. This may be unavoidable if one needs to pass to a batch
 really big blob. Do not use ID of such blob in batch directly –
@@ -1171,50 +1151,47 @@ do:</font></p>
 <p><font size="4" style="font-size: 14pt"><i>batch-&gt;registerBlob(&amp;status,
 &amp;realId, &amp;msg-&gt;desc);</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">If
-blob policy makes firebird engine generate blob IDs this code is
-enough to correctly register existing blob in a batch. In other cases
-you will have to assign correct (from batch POV) ID to msg-&gt;desc.</font></p>
+<font size="4" style="font-size: 14pt">If blob policy makes firebird
+engine generate blob IDs this code is enough to correctly register
+existing blob in a batch. In other cases you will have to assign
+correct (from batch POV) ID to msg-&gt;desc.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">Almost
-all mentioned methods are used in 11.batch.cpp – please use it to
-see an alive sample of batching in firebird.</font></p>
+<font size="4" style="font-size: 14pt">Almost all mentioned methods
+are used in 11.batch.cpp – please use it to see an alive sample of
+batching in firebird.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">Two
-words about access to batches from ISC API - one can execute prepared
-ISC statement in batch mode. Main support for it is presence of two
-new API functions, namely fb_get_transaction_interface &amp;
-fb_get_statement_interface, which make it possible to access
-appropriate interfaces identical to existing ISC handles. An example
-of it is present in 12.batch_isc.cpp.</font></p>
+<font size="4" style="font-size: 14pt">Two words about access to
+batches from ISC API - one can execute prepared ISC statement in
+batch mode. Main support for it is presence of two new API functions,
+namely fb_get_transaction_interface &amp; fb_get_statement_interface,
+which make it possible to access appropriate interfaces identical to
+existing ISC handles. An example of it is present in
+12.batch_isc.cpp.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Working
-with events.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Working with events.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Events
 interface was not completed in FB3, we expect to have something more
 interesting in next version. The minimum existing support is as
 follows: <a href="#Attachment">IAttachment</a> contains call
 queEvents() which performs almost same functions as isc_que_events()
 call. Instead the pair of parameters </font><font size="4" style="font-size: 14pt"><i>FPTR_EVENT_CALLBACK
-ast</i></font> <font size="4" style="font-size: 14pt">and
-</font><font size="4" style="font-size: 14pt"><i>void*
-arg</i></font><font size="4" style="font-size: 14pt">,
-required to invoke user code when event happens in firebird engine,
-callback interface IEventCallback is used. This is traditional
-approach which helps to avoid non-safe casts from void* in user
-function. Another important difference is that instead event
-identifier (a kind of handler) this function returns reference
-counted interface <a href="#Events">IEvents</a> having method
-cancel() used when waiting for event should be stopped. Unlike
-identifier which is automatically destroyed when event arrives
+ast</i></font> <font size="4" style="font-size: 14pt">and </font><font size="4" style="font-size: 14pt"><i>void*
+arg</i></font><font size="4" style="font-size: 14pt">, required to
+invoke user code when event happens in firebird engine, callback
+interface IEventCallback is used. This is traditional approach which
+helps to avoid non-safe casts from void* in user function. Another
+important difference is that instead event identifier (a kind of
+handler) this function returns reference counted interface <a href="#Events">IEvents</a>
+having method cancel() used when waiting for event should be stopped.
+Unlike identifier which is automatically destroyed when event arrives
 interface can not be automatically destroyed – in case when event
 is received right before canceling interface call to cancel() would
 cause segfault when interface is already destroyed. Therefore
@@ -1235,8 +1212,7 @@ with ISC API. Please use for additional details our sample
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Using
-services.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Using services.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">To
 begin to use services one should first of all connect to service
 manager. This is done using attachServiceManager() method of
@@ -1364,15 +1340,14 @@ plugins.</font></font></p>
 write a plugin means to implement some interfaces and place your
 implementation into dynamic library (.dll in windows or .so in linux)
 later referenced as </font><font size="4" style="font-size: 14pt"><i>plugin
-module</i></font> <font size="4" style="font-size: 14pt">or
-just </font><font size="4" style="font-size: 14pt"><i>module</i></font><font size="4" style="font-size: 14pt">.
-In most cases single plugin is placed</font>
-<font size="4" style="font-size: 14pt">into</font>
-<font size="4" style="font-size: 14pt">dynamic
-library but in common case multiple plugins may coexist in single
-dynamic library. One of that interfaces – <a href="#PluginModule">IPluginModule</a>
-– is module-wide (as more or less clear from it's name), others are
-per plugin. Also each plugin module should contain special exported
+module</i></font> <font size="4" style="font-size: 14pt">or just
+</font><font size="4" style="font-size: 14pt"><i>module</i></font><font size="4" style="font-size: 14pt">.
+In most cases single plugin is placed</font> <font size="4" style="font-size: 14pt">into</font>
+<font size="4" style="font-size: 14pt">dynamic library but in common
+case multiple plugins may coexist in single dynamic library. One of
+that interfaces – <a href="#PluginModule">IPluginModule</a> – is
+module-wide (as more or less clear from it's name), others are per
+plugin. Also each plugin module should contain special exported
 entrypoint firebird_plugin() which name is defined in include file
 firebird/Interfaces.h as FB_PLUGIN_ENTRY_POINT.</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">In
@@ -1392,28 +1367,28 @@ sample yourself and learn it when reading later.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Implementation
-of plugin module.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Implementation of plugin
+module.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Plugins
 actively interact with special firebird component called </font><font size="4" style="font-size: 14pt"><i>plugin
-manager</i></font><font size="4" style="font-size: 14pt">.
-In particular plugin manager should be aware what plugin modules were
+manager</i></font><font size="4" style="font-size: 14pt">. In
+particular plugin manager should be aware what plugin modules were
 loaded and must be notified if operating system tries to unload one
 of that modules without explicit plugin manager command (this may
 happen first of all when using embedded access – when exit() is
 called in a program or main firebird library </font><font size="4" style="font-size: 14pt"><i>fbclient</i></font>
-<font size="4" style="font-size: 14pt">is
-unloaded). Primary task of IPluginModule interface is that
-notification. First of all one must decide - how to detect that
-module is going to be unloaded? When dynamic library is unloaded for
-some reason a lot of OS-dependent actions is performed and some of
-that actions may be used to detect this fact in the program. When
-writing plugins distributed with firebird we always use invocation of
-destructor of global variable. The big “plus” for this method is
-that it is OS independent (though something like atexit() function
-maybe also used successfully). But use of destructor makes it
-possible to easily concentrate almost everything related with unload
-detection in single class implementing at the same time <a href="#PluginModule">IPluginModule</a>
+<font size="4" style="font-size: 14pt">is unloaded). Primary task of
+IPluginModule interface is that notification. First of all one must
+decide - how to detect that module is going to be unloaded? When
+dynamic library is unloaded for some reason a lot of OS-dependent
+actions is performed and some of that actions may be used to detect
+this fact in the program. When writing plugins distributed with
+firebird we always use invocation of destructor of global variable.
+The big “plus” for this method is that it is OS independent
+(though something like atexit() function maybe also used
+successfully). But use of destructor makes it possible to easily
+concentrate almost everything related with unload detection in single
+class implementing at the same time <a href="#PluginModule">IPluginModule</a>
 interface.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
@@ -1480,15 +1455,15 @@ It's passed to registerModule() function and saved in private
 variable, at the same time module is registered in plugin manager by
 the call to registerModule() method with own address as a single
 parameter. Variable </font><font size="4" style="font-size: 14pt"><i>pluginManager
-</i></font><font size="4" style="font-size: 14pt">not
-only stores pointer to interface, at the same time it serves as a
-flag that module is registered. When destructor of registered module
-is invoked it notifies plugin manager (yes, this is what for this
-class exists!) about unexpected unload by the call to
-unregisterModule() passing pointer to itself. When plugin manager is
-going to unload module in regular way in first of all calls doClean()
-method changing module state to unregistered and this avoiding call
-to unregisterModule() when OS performs actual unload.</font></p>
+</i></font><font size="4" style="font-size: 14pt">not only stores
+pointer to interface, at the same time it serves as a flag that
+module is registered. When destructor of registered module is invoked
+it notifies plugin manager (yes, this is what for this class exists!)
+about unexpected unload by the call to unregisterModule() passing
+pointer to itself. When plugin manager is going to unload module in
+regular way in first of all calls doClean() method changing module
+state to unregistered and this avoiding call to unregisterModule()
+when OS performs actual unload.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
@@ -1502,8 +1477,8 @@ registerMe() function from FB_PLUGIN_ENTRY_POINT.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Core
-interface of any plugin.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Core interface of any
+plugin.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Let's
 start implementing plugin itself. The type of main interface depends
 upon plugin type (which is obvious), but all of them are based on
@@ -1534,15 +1509,14 @@ config(cnf), refCounter(0), owner(NULL)</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>config-&gt;addRef();</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>}</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">Constructor
-gets as parameter plugin configuration interface. If you are going to
-have you plugin configured in some way it's good idea to save this
-interface in your plugin and use it later. This will let you use
-common for all firebird configuration style letting users have
-familiar configuration and minimize code written. Certainly when
-saving any reference counted interface it's better not forget to add
-reference to it. Also set reference counter to 0 and plugin owner to
-NULL.</font></p>
+<font size="4" style="font-size: 14pt">Constructor gets as parameter
+plugin configuration interface. If you are going to have you plugin
+configured in some way it's good idea to save this interface in your
+plugin and use it later. This will let you use common for all
+firebird configuration style letting users have familiar
+configuration and minimize code written. Certainly when saving any
+reference counted interface it's better not forget to add reference
+to it. Also set reference counter to 0 and plugin owner to NULL.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
@@ -1551,9 +1525,9 @@ NULL.</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>config-&gt;release();</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>}</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">Destructor
-releases config interface. Pay attention – we do not change
-reference counter of our owner cause it owns us, not we own it.</font></p>
+<font size="4" style="font-size: 14pt">Destructor releases config
+interface. Pay attention – we do not change reference counter of
+our owner cause it owns us, not we own it.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
@@ -1582,8 +1556,8 @@ addRef()</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>++refCounter;</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>}</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">Absolutely
-typical implementation of reference counted object.</font></p>
+<font size="4" style="font-size: 14pt">Absolutely typical
+implementation of reference counted object.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
@@ -1605,8 +1579,8 @@ getOwner()</i></font></p>
 owner;</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>}</i></font></p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">As
-it was promised implementation of IPluginBase is trivial.</font></p>
+<font size="4" style="font-size: 14pt">As it was promised
+implementation of IPluginBase is trivial.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
@@ -1635,8 +1609,7 @@ lo-o-o-ot of code to make them useful) interface is ready.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Plugin's
-factory.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Plugin's factory.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">One
 more interface required for plugin to work is <a href="#PluginFactory">IPluginFactory</a>.
 Factory creates instances of plugin and returns them to plugin
@@ -1660,12 +1633,12 @@ p;</i></font></p>
 
 </p>
 <p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
-<font size="4" style="font-size: 14pt">Here
-attention should be payed to the fact that even in a case when code
-in a function may throw exceptions (operator new may throw in a case
-when memory exhausted) one need not always manually define try/catch
-block – implementation of firebird interfaces does this job for
-you, in implementation of IPluginFactory it's placed into template
+<font size="4" style="font-size: 14pt">Here attention should be payed
+to the fact that even in a case when code in a function may throw
+exceptions (operator new may throw in a case when memory exhausted)
+one need not always manually define try/catch block –
+implementation of firebird interfaces does this job for you, in
+implementation of IPluginFactory it's placed into template
 IPluginFactoryImpl. Take into an account that default status wrappers
 perform meaning-full processing only for FbException. But if you
 (that definitely makes sense if you work on some big project) define
@@ -1674,8 +1647,8 @@ useful information about it from your plugin.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Plugin
-module initialization entrypoint.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Plugin module
+initialization entrypoint.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">When
 plugin manager loads plugin module it invokes module initializing
 routine – the only exported from plugin function
@@ -1749,8 +1722,7 @@ direct analogue in old API, that analogue is provided.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Generic
-interfaces.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Generic interfaces.</font></h1>
 <p style="margin-bottom: 0cm"><a name="Attachment"></a><font size="4" style="font-size: 14pt">Attachment
 interface – replaces isc_db_handle:</font></p>
 <ol>
@@ -1827,12 +1799,10 @@ interface – replaces isc_db_handle:</font></p>
 	<li><p><font size="4" style="font-size: 14pt">I</font><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">Batch*
 	createBatch(StatusType* status, ITransaction* transaction, unsigned
 	stmtLength, const char* sqlStmt, unsigned dialect, IMessageMetadata*
-	inMetadata, unsigned</font></font>
-	<font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">parLength,
+	inMetadata, unsigned</font></font> <font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">parLength,
 	const unsigned char* par) – prepares sqlStmt and creates <a href="#Batch">Batch</a>
 	interface ready to accept multiple sets of input parameters in
-	inMetadata format. Leaving inMetadata</font></font>
-	<font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">NULL
+	inMetadata format. Leaving inMetadata</font></font> <font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">NULL
 	makes batch use default format for sqlStmt. Parameters block may be
 	passed to createBatch() making it possible to adjust batch behavior.</font></font></p>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IEvents*
@@ -1861,15 +1831,13 @@ interface – makes it possible to process multiple sets of
 parameters in single statement execution.</font></p>
 <ol>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
-	add(StatusType* status, unsigned</font>
-	<font size="4" style="font-size: 14pt">count,
+	add(StatusType* status, unsigned</font> <font size="4" style="font-size: 14pt">count,
 	const void* inBuffer) – adds count messages from inBuffer to the
 	batch. Total size of messages that can be added to the batch is
 	limited by TAG_BUFFER_BYTES_SIZE <a href="#Batch_PB">parameter</a>
 	of batch creation.</font></p>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
-	addBlob(StatusType* status, unsigned</font>
-	<font size="4" style="font-size: 14pt">length,
+	addBlob(StatusType* status, unsigned</font> <font size="4" style="font-size: 14pt">length,
 	const void* inBuffer, ISC_QUAD* blobId, unsigned bpbLength, const
 	unsigned char* bpb) – adds single blob having length bytes from
 	inBuffer to the batch, blob identifier is located at blobId address.
@@ -1932,6 +1900,10 @@ parameters in single statement execution.</font></p>
 	char* par) – sets BPB which will be used for all blobs missing
 	non-default BPB. Must be called before adding any message or blob to
 	batch.</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
+	getInfo(StatusType* status, unsigned itemsLength, const unsigned
+	char* items, unsigned bufferLength, unsigned char* buffer) –
+	requests information about batch.</font></p>
 </ol>
 <p style="margin-bottom: 0cm"><a name="Batch_PB"></a><font size="4" style="font-size: 14pt">Tag
 for parameters block:</font></p>
@@ -1960,6 +1932,17 @@ used to store blobs:</font></p>
 - blobs are added one by one, IDs are generated by user</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">BLOB_STREAM
 - blobs are added in a stream</font></p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Items
+accepted in getInfo() call:</font></p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">INF_BUFFER_BYTES_SIZE
+– actual </font><font color="#000000"><font size="4" style="font-size: 14pt">m</font></font><font size="4" style="font-size: 14pt">aximum
+possible buffer size (one set by TAG_BUFFER_BYTES_SIZE)</font></p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">INF_DATA_BYTES_SIZE
+- already added messages size</font></p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">INF_BLOBS_BYTES_SIZE
+- already added blobs size</font></p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">INF_BLOB_ALIGNMENT
+- required alignment for the BLOB data (duplicates getBlobAlignment)</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
@@ -2156,10 +2139,10 @@ sub-entries) in firebird configuration file:</font></p>
 
 </p>
 <p style="margin-bottom: 0cm"><a name="DecFloat16"></a><a name="DecFloat34"></a>
-<font size="4" style="font-size: 14pt">DecFloat16
-/ DecFloat34 – interfaces that help to work with DECFLOAT (16 &amp;
-34 respectively) datatypes. They have almost same set of methods with
-FB_DEC16 parameter replaced by FB_DEC34 for DecFloat34:</font></p>
+<font size="4" style="font-size: 14pt">DecFloat16 / DecFloat34 –
+interfaces that help to work with DECFLOAT (16 &amp; 34 respectively)
+datatypes. They have almost same set of methods with FB_DEC16
+parameter replaced by FB_DEC34 for DecFloat34:</font></p>
 <ol>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	toBcd(const FB_DEC16* from, int* sign, unsigned char* bcd, int* exp)
@@ -2794,8 +2777,8 @@ defined by Statement interface:</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IAttachment::prepare()
 flags:</font></p>
 <p style="margin-left: 0.96cm; text-indent: -0.02cm; margin-bottom: 0cm; page-break-before: auto; page-break-after: auto">
-<font size="4" style="font-size: 14pt">PREPARE_PREFETCH_NONE
-– constant to pass no flags, 0 value.</font></p>
+<font size="4" style="font-size: 14pt">PREPARE_PREFETCH_NONE –
+constant to pass no flags, 0 value.</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">The
 following flags may be OR-ed to get desired set of flags:</font></p>
 <ol>
@@ -2820,8 +2803,8 @@ used combinations of flags:</font></p>
 
 </p>
 <p style="margin-bottom: 0cm"><a name="Values returned by getFlags"></a>
-<font size="4" style="font-size: 14pt">Values
-returned by getFlags() method: </font>
+<font size="4" style="font-size: 14pt">Values returned by getFlags()
+method: </font>
 </p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">FLAG_HAS_CURSOR
 – use openCursor() to execute this statement, not execute()</font></p>
@@ -2832,8 +2815,7 @@ parameters</font></p>
 
 </p>
 <p style="margin-bottom: 0cm"><a name="Flags passed to openCursor"></a>
-<font size="4" style="font-size: 14pt">Flags
-passed to openCursor():</font></p>
+<font size="4" style="font-size: 14pt">Flags passed to openCursor():</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">CURSOR_TYPE_SCROLLABLE
 – open bidirectional cursor.</font></p>
 <p style="margin-bottom: 0cm"><br/>
@@ -2931,8 +2913,8 @@ moment when given timer should alarm.</font></p>
 	start(StatusType* status, ITimer* timer, ISC_UINT64 microSeconds) –
 	start <a href="#Timer">ITimer</a> to alarm after given delay (in
 	microseconds, 10</font><sup><font size="4" style="font-size: 14pt">-6</font></sup>
-	<font size="4" style="font-size: 14pt">seconds).
-	Timer will be waked up only once after this call.</font></p>
+	<font size="4" style="font-size: 14pt">seconds). Timer will be waked
+	up only once after this call.</font></p>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	stop(StatusType* status, ITimer* timer) – stop <a href="#Timer">ITimer</a>.
 	It's not an error to stop not started timer thus avoiding problems
@@ -3066,8 +3048,8 @@ interface – various helper methods required here or there.</font></p>
 	decodeTimeTz(StatusType* status, const ISC_TIME_TZ* timeTz,
 	unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned*</font></p>
 	<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">fractions,
-	unsigned timeZoneBufferLength, char* timeZoneBuffer)
-	– decode time taking time zone into an account.</font></p>
+	unsigned timeZoneBufferLength, char* timeZoneBuffer) – decode time
+	taking time zone into an account.</font></p>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	decodeTimeStampTz(StatusType* status, const ISC_TIMESTAMP_TZ*
 	timeStampTz, unsigned* year, unsigned* month, unsigned* day,
@@ -3195,8 +3177,8 @@ builder types:</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Plugin,
-encrypting data transferred over the wire.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Plugin, encrypting data
+transferred over the wire.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Algorithms
 performing encryption of data for different purposes are well known
 for many years. The only “little” typical problem remaining is
@@ -3262,8 +3244,8 @@ such interface it should be implemented by author of the plugin.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Server
-side of authentication plugin.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Server side of
+authentication plugin.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Authentication
 plugin contains two required parts – client and server and may also
 contain related third part - user manager. During authentication
@@ -3350,8 +3332,8 @@ interface is main interface of server side of authentication plugin. </font>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Client
-side of authentication plugin.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Client side of
+authentication plugin.</font></h1>
 <p style="margin-bottom: 0cm"><a name="ClientBlock"></a><font size="4" style="font-size: 14pt">ClientBlock
 interface is used by client side of authentication plugin to exchange
 data with server.</font></p>
@@ -3387,8 +3369,7 @@ interface is main interface of client side of authentication plugin.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">User
-management plugin.</font></h1>
+<h1><font size="4" style="font-size: 14pt">User management plugin.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">This
 plugin is actively related with server side of authentication – it
 prepares users' list for authentication plugin. Not each
@@ -3481,8 +3462,8 @@ about the user. </font>
 
 </p>
 <p style="margin-bottom: 0cm"><a name="Constants defined by User interface"></a>
-<font size="4" style="font-size: 14pt">Constants
-defined by User interface – valid codes of operation.</font></p>
+<font size="4" style="font-size: 14pt">Constants defined by User
+interface – valid codes of operation.</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">OP_USER_ADD
 – create user</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">OP_USER_MODIFY
@@ -3559,8 +3540,8 @@ interface is main interface of user management plugin.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Database
-encryption plugin.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Database encryption
+plugin.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">An
 ability to encrypt database was present in firebird since interbase
 times but appropriate places in the code were commented.
@@ -3651,8 +3632,8 @@ interface is main interface of database crypt plugin.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Key
-holder for database encryption plugin.</font></h1>
+<h1><font size="4" style="font-size: 14pt">Key holder for database
+encryption plugin.</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">This
 type of plugin is needed to delineate functionality – db crypt
 plugin is dealing with actual encryption, key holder solves questions
@@ -3706,8 +3687,8 @@ interface is main interface of database crypt key holder plugin.</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
-<h1><font size="4" style="font-size: 14pt">Non-interface
-objects used by API (C++ specific header Message.h).</font></h1>
+<h1><font size="4" style="font-size: 14pt">Non-interface objects used
+by API (C++ specific header Message.h).</font></h1>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Following
 3 classes are used to represent date, time and timestamp (datetime)
 when using FB_MESSAGE macro. Members of data structure, representing

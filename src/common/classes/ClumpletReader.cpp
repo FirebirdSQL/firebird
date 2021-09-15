@@ -242,6 +242,7 @@ UCHAR ClumpletReader::getBufferTag() const
 	case SpbReceiveItems:
 	case SpbResponse:
 	case InfoResponse:
+	case InfoItems:
 		usage_mistake("buffer is not tagged");
 		return 0;
 	case SpbAttach:
@@ -313,6 +314,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 		}
 		return StringSpb;
 	case SpbReceiveItems:
+	case InfoItems:
 		return SingleTpb;
 	case SpbStart:
 		switch(tag)
@@ -704,6 +706,7 @@ void ClumpletReader::rewind()
 	case SpbReceiveItems:
 	case SpbResponse:
 	case InfoResponse:
+	case InfoItems:
 		cur_offset = 0;
 		break;
 	default:

@@ -4431,6 +4431,15 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 		statement->rsr_iface->getInfo(&status_vector, info_len, info_buffer,
 			buffer_length, buffer);
 		break;
+
+	case op_info_batch:
+		getHandle(statement, stuff->p_info_object);
+		statement->checkIface();
+		statement->checkBatch();
+
+		statement->rsr_batch->getInfo(&status_vector, info_len, info_buffer,
+			buffer_length, buffer);
+		break;
 	}
 
 	// Send a response that includes the segment.
@@ -4911,6 +4920,7 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 		case op_info_transaction:
 		case op_service_info:
 		case op_info_sql:
+		case op_info_batch:
 			port->info(op, &receive->p_info, sendL);
 			break;
 

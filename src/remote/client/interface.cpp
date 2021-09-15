@@ -349,11 +349,14 @@ public:
 	Firebird::IMessageMetadata* getMetadata(Firebird::CheckStatusWrapper* status) override;
 	void close(Firebird::CheckStatusWrapper* status) override;
 	void deprecatedClose(Firebird::CheckStatusWrapper* status) override;
+	void getInfo(CheckStatusWrapper* status,
+				 unsigned int itemsLength, const unsigned char* items,
+				 unsigned int bufferLength, unsigned char* buffer) override;
 
 private:
 	void freeClientData(CheckStatusWrapper* status, bool force = false);
 	void releaseStatement();
-	void setBlobAlignment();
+	void setServerInfo();
 
 	void cleanup()
 	{
@@ -411,7 +414,7 @@ private:
 	// working with blob stream buffer
 	void newBlob()
 	{
-		setBlobAlignment();
+		setServerInfo();
 		alignBlobBuffer(blobAlign);
 
 		fb_assert(blobStream - blobStreamBuffer <= blobBufferSize);
@@ -513,7 +516,7 @@ private:
 	{
 		if (blobPolicy != BLOB_NONE)
 		{
-			setBlobAlignment();
+			setServerInfo();
 			alignBlobBuffer(blobAlign);
 			ULONG size = blobStream - blobStreamBuffer;
 			if (size)
@@ -530,6 +533,7 @@ private:
 		}
 
 		batchActive = false;
+		blobCount = messageCount = 0;
 	}
 
 	void sendBlobPacket(unsigned size, const UCHAR* ptr, bool flash);
@@ -548,6 +552,8 @@ private:
 	int blobAlign;
 	UCHAR blobPolicy;
 	bool segmented, defSegmented, batchActive;
+
+	ULONG messageCount, blobCount, serverSize;
 
 public:
 	bool tmpStatement;
@@ -2368,7 +2374,8 @@ Batch::Batch(Statement* s, IMessageMetadata* inFmt, unsigned parLength, const un
 	: messageStream(0), blobStream(nullptr), sizePointer(nullptr),
 	  messageSize(0), alignedSize(0), blobBufferSize(0), messageBufferSize(0), flags(0),
 	  stmt(s), format(inFmt), blobAlign(0), blobPolicy(BLOB_NONE),
-	  segmented(false), defSegmented(false), batchActive(false), tmpStatement(false)
+	  segmented(false), defSegmented(false), batchActive(false),
+	  messageCount(0), blobCount(0), serverSize(0), tmpStatement(false)
 {
 	LocalStatus ls;
 	CheckStatusWrapper st(&ls);
@@ -2484,6 +2491,7 @@ void Batch::sendMessagePacket(unsigned count, const UCHAR* ptr, bool flash)
 	statement->rsr_batch_size = alignedSize;
 
 	sendDeferredPacket(port, packet, flash);
+	messageCount += count;
 }
 
 
@@ -2616,7 +2624,7 @@ void Batch::sendBlobPacket(unsigned size, const UCHAR* ptr, bool flash)
 	Rdb* rdb = statement->rsr_rdb;
 	rem_port* port = rdb->rdb_port;
 
-	setBlobAlignment();
+	setServerInfo();
 	fb_assert(!(size % blobAlign));
 
 	PACKET* packet = &rdb->rdb_packet;
@@ -2627,6 +2635,8 @@ void Batch::sendBlobPacket(unsigned size, const UCHAR* ptr, bool flash)
 	batch->p_batch_blob_data.cstr_length = size;
 
 	sendDeferredPacket(port, packet, flash);
+
+	blobCount += size;
 }
 
 
@@ -2698,7 +2708,7 @@ unsigned Batch::getBlobAlignment(CheckStatusWrapper* status)
 {
 	try
 	{
-		setBlobAlignment();
+		setServerInfo();
 	}
 	catch (const Exception& ex)
 	{
@@ -2709,7 +2719,7 @@ unsigned Batch::getBlobAlignment(CheckStatusWrapper* status)
 }
 
 
-void Batch::setBlobAlignment()
+void Batch::setServerInfo()
 {
 	if (blobAlign)
 		return;
@@ -2727,21 +2737,68 @@ void Batch::setBlobAlignment()
 	rem_port* port = rdb->rdb_port;
 	RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
 
-	// Perform info call to server
 	LocalStatus ls;
 	CheckStatusWrapper s(&ls);
-	UCHAR item = isc_info_sql_stmt_blob_align;
-	UCHAR buffer[16];
-	info(&s, rdb, op_info_sql, statement->rsr_id, 0,
-		 1, &item, 0, 0, sizeof(buffer), buffer);
+
+	if (port->port_protocol < PROTOCOL_VERSION17)
+	{
+		UCHAR item = isc_info_sql_stmt_blob_align;
+		UCHAR buffer[16];
+		info(&s, rdb, op_info_sql, statement->rsr_id, 0,
+			 1, &item, 0, 0, sizeof(buffer), buffer);
+		check(&s);
+
+		// Extract from buffer
+		if (buffer[0] != item)
+			Arg::Gds(isc_batch_align).raise();
+
+		int len = gds__vax_integer(&buffer[1], 2);
+		statement->rsr_batch_stream.alignment = blobAlign = gds__vax_integer(&buffer[3], len);
+
+		if (!blobAlign)
+			Arg::Gds(isc_batch_align).raise();
+
+		return;
+	}
+
+	// Perform info call to server
+	UCHAR items[] = {IBatch::INF_BLOB_ALIGNMENT, IBatch::INF_BUFFER_BYTES_SIZE};
+	UCHAR buffer[32];
+	info(&s, rdb, op_info_batch, statement->rsr_id, 0,
+		 sizeof(items), items, 0, 0, sizeof(buffer), buffer);
 	check(&s);
 
 	// Extract from buffer
-	if (buffer[0] != item)
-		Arg::Gds(isc_batch_align).raise();
+	ClumpletReader out(ClumpletReader::InfoResponse, buffer, sizeof(buffer));
+	for (out.rewind(); !out.isEof(); out.moveNext())
+	{
+		UCHAR item = out.getClumpTag();
+		if (item == isc_info_end)
+			break;
 
-	int len = gds__vax_integer(&buffer[1], 2);
-	statement->rsr_batch_stream.alignment = blobAlign = gds__vax_integer(&buffer[3], len);
+		switch(item)
+		{
+		case IBatch::INF_BLOB_ALIGNMENT:
+			statement->rsr_batch_stream.alignment = blobAlign = out.getInt();
+			break;
+		case IBatch::INF_BUFFER_BYTES_SIZE:
+			serverSize = out.getInt();
+			break;
+		case isc_info_error:
+			(Arg::Gds(isc_batch_align) << Arg::Gds(out.getInt())).raise();
+		case isc_info_truncated:
+			(Arg::Gds(isc_batch_align) << Arg::Gds(isc_random) << "truncated").raise();
+		default:
+			{
+				string msg;
+				msg.printf("Wrong info item %u", item);
+				(Arg::Gds(isc_batch_align) << Arg::Gds(isc_random) << msg).raise();
+			}
+		}
+	}
+
+	if (! (blobAlign && serverSize))
+		Arg::Gds(isc_batch_align).raise();
 }
 
 
@@ -2957,6 +3014,73 @@ void Batch::close(CheckStatusWrapper* status)
 	deprecatedClose(status);
 	if (status->isEmpty())
 		release();
+}
+
+
+void Batch::getInfo(CheckStatusWrapper* status, unsigned int itemsLength, const unsigned char* items,
+	unsigned int bufferLength, unsigned char* buffer)
+{
+	try
+	{
+		ClumpletReader it(ClumpletReader::InfoItems, items, itemsLength);
+		ClumpletWriter out(ClumpletReader::InfoResponse, bufferLength - 1);		// place for isc_info_end / isc_info_truncated
+
+		for (it.rewind(); !it.isEof(); it.moveNext())
+		{
+			UCHAR item = it.getClumpTag();
+			if (item == isc_info_end)
+				break;
+
+			try
+			{
+				switch(item)
+				{
+				case IBatch::INF_BUFFER_BYTES_SIZE:
+					setServerInfo();
+					if (serverSize)
+						out.insertInt(item, serverSize);
+					break;
+				case IBatch::INF_DATA_BYTES_SIZE:
+					out.insertInt(item, (messageCount + messageStream) * alignedSize);
+					break;
+				case IBatch::INF_BLOBS_BYTES_SIZE:
+					if (blobStream)
+						out.insertInt(item, blobCount + (blobStream - blobStreamBuffer));
+					break;
+				case IBatch::INF_BLOB_ALIGNMENT:
+					setServerInfo();
+					out.insertInt(item, blobAlign);
+					break;
+				default:
+					out.insertInt(isc_info_error, isc_infunk);
+					break;
+				}
+			}
+			catch(const fatal_exception&)
+			{
+				// here it's sooner of all caused by writer overflow but anyway check that
+				if (out.hasOverflow())
+				{
+					memcpy(buffer, out.getBuffer(), out.getBufferLength());
+					buffer += out.getBufferLength();
+					*buffer++ = isc_info_truncated;
+					if (out.getBufferLength() <= bufferLength - 2)
+						*buffer++ = isc_info_end;
+					return;
+				}
+				else
+					throw;
+			}
+		}
+
+		memcpy(buffer, out.getBuffer(), out.getBufferLength());
+		buffer += out.getBufferLength();
+		*buffer++ = isc_info_end;
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
 }
 
 

@@ -98,10 +98,14 @@ public:
 	// Returns true if any found
 	bool deleteWithTag(UCHAR tag);
 
-	virtual const UCHAR* getBuffer() const;
+	const UCHAR* getBuffer() const override;
+	bool hasOverflow() const
+	{
+		return flag_overflow;
+	}
 
 protected:
-	virtual const UCHAR* getBufferEnd() const;
+	const UCHAR* getBufferEnd() const override;
 	virtual void size_overflow();
 	void insertBytesLengthCheck(UCHAR tag, const void* bytes, const FB_SIZE_T length);
 	bool upgradeVersion();	// upgrade clumplet version - obtain newest from kindList
@@ -117,14 +121,10 @@ private:
 	void initNewBuffer(UCHAR tag);
 	void create(const UCHAR* buffer, FB_SIZE_T buffLen, UCHAR tag);
 	static void toVaxInteger(UCHAR* ptr, FB_SIZE_T length, const SINT64 value);
+
+	void size_overflow(bool condition);
+	bool flag_overflow;
 };
-/*
-template <>
-void ClumpletWriter::insertString(UCHAR tag, const char*& str)
-{
-	insertString(tag, str, strlen(str));
-}
-*/
 
 } // namespace Firebird
 

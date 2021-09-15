@@ -114,6 +114,53 @@ unsigned putSegment(unsigned char*& ptr, const char* testData)
 	return align(l + sizeof l, IBatch::BLOB_SEGHDR_ALIGN);
 }
 
+// batch info printer - prints what we know about batch
+
+static void printInfo(ThrowStatusWrapper& status, const char* hdr, IBatch* b, IUtil* utl)
+{
+	printf("\n%s\n", hdr);
+
+	const unsigned char items[] = {IBatch::INF_BLOB_ALIGNMENT, IBatch::INF_BUFFER_BYTES_SIZE,
+								   IBatch::INF_DATA_BYTES_SIZE, IBatch::INF_BLOBS_BYTES_SIZE};
+	unsigned char buffer[29];
+	b->getInfo(&status, sizeof items, items, sizeof buffer, buffer);
+
+	IXpbBuilder* pb = utl->getXpbBuilder(&status, IXpbBuilder::INFO_RESPONSE, buffer, sizeof buffer);
+	for (pb->rewind(&status); !pb->isEof(&status); pb->moveNext(&status))
+	{
+		int val = pb->getInt(&status);
+		const char* text = "Unknown tag";
+		switch (pb->getTag(&status))
+		{
+		case IBatch::INF_BLOB_ALIGNMENT:
+			text = "Blob alignment";
+			break;
+		case IBatch::INF_BUFFER_BYTES_SIZE:
+			text = "Buffer size";
+			break;
+		case IBatch::INF_DATA_BYTES_SIZE:
+			text = "Messages size";
+			break;
+		case IBatch::INF_BLOBS_BYTES_SIZE:
+			text = "Blobs size";
+			break;
+		case isc_info_truncated:
+			printf("  truncated\n");
+			// fall down...
+		case isc_info_end:
+			pb->dispose();
+			return;
+		default:
+			printf("Unexpected item %d\n", pb->getTag(&status));
+			pb->dispose();
+			return;
+		}
+
+		printf("%s = %d\n", text, val);
+	}
+	pb->dispose();
+}
+
 // BatchCompletionState printer - prints all what we know about completed batch
 
 static void print_cs(ThrowStatusWrapper& status, IBatchCompletionState* cs, IUtil* utl)
@@ -270,6 +317,9 @@ int main()
 			batch->add(&status, 1, project1.getData());
 		}
 
+		// check batch state
+		printInfo(status, "Info when added many records", batch, utl);
+
 		// ... and cancel that records
 		batch->cancel(&status);
 
@@ -346,6 +396,8 @@ int main()
 		batch->appendBlobData(&status, 1, "\n");
 		batch->appendBlobData(&status, strlen(sqlStmt1), sqlStmt1);
 		batch->add(&status, 1, project2.getData());
+
+		printInfo(status, "Info with blob", batch, utl);
 
 		// execute it
 		cs = batch->execute(&status, tra);

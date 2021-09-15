@@ -32,7 +32,7 @@
 
 
 # Please don't use compiler/platform specific flags here - nmcc 02-Nov-2002
-WFLAGS =-I$(SRC_ROOT)/include/gen -I$(SRC_ROOT)/include -I$(ROOT)/extern/re2 $(CPPFLAGS) $(LTCSOURCE)
+WFLAGS =-I$(SRC_ROOT)/include/gen -I$(SRC_ROOT)/include $(CPPFLAGS) $(LTCSOURCE)
 
 ifeq ($(TOMMATH_BUILD_FLG),Y)
   WFLAGS += -I$(TOMMATH_INC)
@@ -40,6 +40,10 @@ endif
 
 ifeq ($(TOMCRYPT_BUILD_FLG),Y)
   WFLAGS += -I$(TOMCRYPT_INC)
+endif
+
+ifeq ($(RE2_BUILD_FLG),Y)
+ WFLAGS += -I$(ROOT)/extern/re2
 endif
 
 ifeq ($(LSB_FLG),Y)

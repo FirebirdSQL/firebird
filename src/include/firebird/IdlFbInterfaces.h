@@ -1999,6 +1999,7 @@ namespace Firebird
 			void (CLOOP_CARG *setDefaultBpb)(IBatch* self, IStatus* status, unsigned parLength, const unsigned char* par) throw();
 			void (CLOOP_CARG *deprecatedClose)(IBatch* self, IStatus* status) throw();
 			void (CLOOP_CARG *close)(IBatch* self, IStatus* status) throw();
+			void (CLOOP_CARG *getInfo)(IBatch* self, IStatus* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) throw();
 		};
 
 	protected:
@@ -2025,6 +2026,10 @@ namespace Firebird
 		static const unsigned char BLOB_ID_USER = 2;
 		static const unsigned char BLOB_STREAM = 3;
 		static const unsigned BLOB_SEGHDR_ALIGN = 2;
+		static const unsigned char INF_BUFFER_BYTES_SIZE = 10;
+		static const unsigned char INF_DATA_BYTES_SIZE = 11;
+		static const unsigned char INF_BLOBS_BYTES_SIZE = 12;
+		static const unsigned char INF_BLOB_ALIGNMENT = 13;
 
 		template <typename StatusType> void add(StatusType* status, unsigned count, const void* inBuffer)
 		{
@@ -2121,6 +2126,19 @@ namespace Firebird
 			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->close(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void getInfo(StatusType* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer)
+		{
+			if (cloopVTable->version < 4)
+			{
+				StatusType::setVersionError(status, "IBatch", cloopVTable->version, 4);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->getInfo(this, status, itemsLength, items, bufferLength, buffer);
 			StatusType::checkException(status);
 		}
 	};
@@ -4755,6 +4773,8 @@ namespace Firebird
 		static const unsigned SPB_SEND = 7;
 		static const unsigned SPB_RECEIVE = 8;
 		static const unsigned SPB_RESPONSE = 9;
+		static const unsigned INFO_SEND = 10;
+		static const unsigned INFO_RESPONSE = 11;
 
 		template <typename StatusType> void clear(StatusType* status)
 		{
@@ -10173,6 +10193,7 @@ namespace Firebird
 					this->setDefaultBpb = &Name::cloopsetDefaultBpbDispatcher;
 					this->deprecatedClose = &Name::cloopdeprecatedCloseDispatcher;
 					this->close = &Name::cloopcloseDispatcher;
+					this->getInfo = &Name::cloopgetInfoDispatcher;
 				}
 			} vTable;
 
@@ -10350,6 +10371,20 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopgetInfoDispatcher(IBatch* self, IStatus* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::getInfo(&status2, itemsLength, items, bufferLength, buffer);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) throw()
 		{
 			try
@@ -10401,6 +10436,7 @@ namespace Firebird
 		virtual void setDefaultBpb(StatusType* status, unsigned parLength, const unsigned char* par) = 0;
 		virtual void deprecatedClose(StatusType* status) = 0;
 		virtual void close(StatusType* status) = 0;
+		virtual void getInfo(StatusType* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
