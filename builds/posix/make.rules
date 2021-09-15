@@ -106,7 +106,7 @@ $(OBJ)/%.cpp: $(SRC_ROOT)/%.epp
 	$(CC) $(WCFLAGS) -c $(firstword $<) -o $@
 
 %.o: %.cc
-	$(CC) $(WCFLAGS) -c $(firstword $<) -o $@
+	$(CXX) $(WCFLAGS) -c $(firstword $<) -o $@
 
 $(OBJ)/%.o: $(SRC_ROOT)/%.c
 	$(CC) $(WCFLAGS) -c $(firstword $<) -o $@
@@ -125,7 +125,7 @@ $(OBJ)/%.o: $(SRC_ROOT)/%.cpp
 	@sed $(INLINE_EDIT_SED) -e "1,2s/:/: \$$(wildcard/" -e "\$$s/\(.*\)/\\1)/" $(patsubst %.o,%.d,$@)
 
 $(OBJ)/%.o: $(ROOT)/%.cpp
-	$(CC) $(WCFLAGS) -c $(firstword $<) -o $@
+	$(CXX) $(WCFLAGS) -c $(firstword $<) -o $@
 	@sed $(INLINE_EDIT_SED) -e "1,2s/:/: \$$(wildcard/" -e "\$$s/\(.*\)/\\1)/" $(patsubst %.o,%.d,$@)
 
 .SUFFIXES: .epp .e

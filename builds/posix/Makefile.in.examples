@@ -35,7 +35,7 @@ ROOT=$(shell cd ../..; pwd)
 	$(GPRE_CURRENT) $(GPRE_FLAGS) $< $@
 
 %.o: %.cpp
-	$(CC) $(WCXXFLAGS) -c $(firstword $<) -o $@
+	$(CXX) $(WCXXFLAGS) -c $(firstword $<) -o $@
 
 
 # Add the install include directory to the search path since the
@@ -100,7 +100,7 @@ all: examples
 examples:	$(FINAL_EMPDB) $(EXAMPLES_FB)/README $(EXTAUTH_PLUGIN)
 
 $(EXTAUTH_PLUGIN):	$(EXAMPLES_FB)/extauth/Makefile
-	$(MAKE) -C $(EXAMPLES_FB)/extauth OUT=$(EXAMPLES_FB)/prebuilt INTERMED=$(TMP_ROOT)/examples/extauth
+	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(EXAMPLES_FB)/extauth OUT=$(EXAMPLES_FB)/prebuilt INTERMED=$(TMP_ROOT)/examples/extauth
 
 $(EXAMPLES_FB)/extauth/Makefile:
 ifeq ($(TOMCRYPT_BUILD_FLG),Y)
