@@ -2029,7 +2029,7 @@ void Attachment::freeClientData(CheckStatusWrapper* status, bool force)
 
 		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
 		{
-			iscLogStatus("REMOTE INTERFACE/gds__detach: Unsuccesful detach from "
+			iscLogStatus("REMOTE INTERFACE/gds__detach: Unsuccessful detach from "
 					"database.\n\tUncommitted work may have been lost.", status);
 			reset(status);
 		}
