@@ -174,10 +174,16 @@ FB_SIZE_T PluginLogWriter::write(const void* buf, FB_SIZE_T size)
 					times.tm_mon + 1, times.tm_mday, times.tm_hour, times.tm_min, times.tm_sec, fractions);
 			}
 
+			// Check if the file with the given name exists. If it doesn't, break the loop.
 			struct stat st;
 
 			if (stat(newName.c_str(), &st))
+			{
+				// errno == ENOENT is expected here. But if it's another error, we can still
+				// break the loop and try to rename the file. For example, if there is a
+				// problem with permissions, it will be caught on MoveFile/rename call.
 				break;
+			}
 
 			Thread::sleep(10);
 		}
