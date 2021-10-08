@@ -29,6 +29,7 @@
 #include "../common/isc_proto.h"
 #include "../common/classes/init.h"
 #include "../common/ThreadStart.h"
+#include "../common/file_params.h"
 
 #ifndef S_IREAD
 #define S_IREAD S_IRUSR
@@ -53,15 +54,7 @@ void strerror_r(int err, char* buf, size_t bufSize)
 void getMappedFileName(PathName& file, PathName& mapFile)
 {
 	const ULONG hash = file.hash(0xFFFFFFFF);
-	UCHAR* p = (UCHAR*) &hash;
-	for (size_t i = 0; i < sizeof(ULONG); i++)
-	{
-		TEXT hex[3];
-		sprintf(hex, "%02x", *p++);
-		mapFile.append(hex);
-	}
-
-	mapFile.insert(0, "fb_trace_");
+	mapFile.printf("%s_%08x", FB_TRACE_LOG_MUTEX, hash);
 }
 
 PluginLogWriter::PluginLogWriter(const char* fileName, size_t maxSize) :
