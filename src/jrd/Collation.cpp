@@ -92,7 +92,7 @@
 */
 
 #include "firebird.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/jrd.h"
 #include "../jrd/err_proto.h"
 #include "../jrd/evl_string.h"

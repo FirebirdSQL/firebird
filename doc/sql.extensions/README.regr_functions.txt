@@ -2,7 +2,7 @@
 Linear Regression Functions
 ---------------------------
 
-REGR_* functions analyze relationshitp of the 2 numeric set of data.
+REGR_* functions analyze relationship of the 2 numeric set of data.
 These functions calculate with records that both of 2 set are not NULL.
 
 Syntax:

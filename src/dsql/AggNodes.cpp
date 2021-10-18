@@ -516,11 +516,9 @@ void AvgAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 		return;
 
 	if (DTYPE_IS_DECFLOAT(desc->dsc_dtype))
-	{
-		desc->dsc_dtype = dtype_dec128;
-		desc->dsc_length = sizeof(Decimal128);
-	}
-	else if (dialect1)
+		return;
+
+	if (dialect1)
 	{
 		if (!DTYPE_IS_NUMERIC(desc->dsc_dtype) && !DTYPE_IS_TEXT(desc->dsc_dtype))
 		{
@@ -540,7 +538,7 @@ void AvgAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 			ERRD_post(Arg::Gds(isc_expression_eval_err) <<
 					  Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("AVG"));
 		}
-		else if (desc->dsc_dtype == dtype_int64 || desc->dsc_dtype == dtype_int128)
+		else if (desc->dsc_dtype == dtype_int128)
 		{
 			desc->dsc_dtype = dtype_int128;
 			desc->dsc_length = sizeof(Int128);
@@ -561,15 +559,40 @@ void AvgAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 void AvgAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 {
 	arg->getDesc(tdbb, csb, desc);
+	outputDesc(desc);
 
+	switch (desc->dsc_dtype)
+	{
+		case dtype_dec64:
+		case dtype_dec128:
+			nodFlags |= FLAG_DECFLOAT;
+			break;
+
+		case dtype_int64:
+		case dtype_int128:
+			nodFlags |= FLAG_INT128;
+			// fall down...
+		case dtype_short:
+		case dtype_long:
+			nodScale = desc->dsc_scale;
+			break;
+
+		case dtype_unknown:
+			break;
+
+		default:
+			nodFlags |= FLAG_DOUBLE;
+			break;
+	}
+}
+
+void AvgAggNode::outputDesc(dsc* desc) const
+{
 	if (DTYPE_IS_DECFLOAT(desc->dsc_dtype))
 	{
-		desc->dsc_dtype = dtype_dec128;
-		desc->dsc_length = sizeof(Decimal128);
 		desc->dsc_scale = 0;
 		desc->dsc_sub_type = 0;
 		desc->dsc_flags = 0;
-		nodFlags |= FLAG_DECFLOAT;
 		return;
 	}
 
@@ -593,19 +616,16 @@ void AvgAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 	{
 		case dtype_short:
 		case dtype_long:
+		case dtype_int64:
 			desc->dsc_dtype = dtype_int64;
 			desc->dsc_length = sizeof(SINT64);
 			desc->dsc_flags = 0;
-			nodScale = desc->dsc_scale;
 			break;
 
-		case dtype_int64:
 		case dtype_int128:
 			desc->dsc_dtype = dtype_int128;
 			desc->dsc_length = sizeof(Int128);
 			desc->dsc_flags = 0;
-			nodScale = desc->dsc_scale;
-			nodFlags |= FLAG_INT128;
 			break;
 
 		case dtype_unknown:
@@ -630,7 +650,6 @@ void AvgAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 			desc->dsc_scale = 0;
 			desc->dsc_sub_type = 0;
 			desc->dsc_flags = 0;
-			nodFlags |= FLAG_DOUBLE;
 			break;
 	}
 }
@@ -680,7 +699,7 @@ void AvgAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 	else
 	{
 		// Initialize the result area as an int64. If the field being aggregated is approximate
-		// numeric, the first call to add will convert the descriptor to double.
+		// numeric, the first call to add will convert the descriptor.
 		impure->make_int64(0, nodScale);
 	}
 }
@@ -688,7 +707,12 @@ void AvgAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 void AvgAggNode::aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-	++impure->vlux_count;
+	if (impure->vlux_count++ == 0)		// first call to aggPass()
+	{
+		impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
+		impureTemp->vlu_desc = *desc;
+		outputDesc(&impureTemp->vlu_desc);
+	}
 
 	if (dialect1)
 		ArithmeticNode::add(tdbb, desc, impure, this, blr_add);
@@ -707,7 +731,11 @@ dsc* AvgAggNode::aggExecute(thread_db* tdbb, jrd_req* request) const
 	SINT64 i;
 	double d;
 	Decimal128 dec;
+	Decimal64 d64;
 	Int128 i128;
+
+	impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
+	UCHAR dtype = impureTemp->vlu_desc.dsc_dtype;
 
 	if (!dialect1 && impure->vlu_desc.dsc_dtype == dtype_int64)
 	{
@@ -718,14 +746,29 @@ dsc* AvgAggNode::aggExecute(thread_db* tdbb, jrd_req* request) const
 	{
 		i128.set(impure->vlux_count, 0);
 		i128 = ((Int128*) impure->vlu_desc.dsc_address)->div(i128, 0);
-		temp.makeInt128(impure->vlu_desc.dsc_scale, &i128);
+		if (dtype == dtype_int128)
+			temp.makeInt128(impure->vlu_desc.dsc_scale, &i128);
+		else
+		{
+			fb_assert(dtype == dtype_int64);
+			i = i128.toInt64(0);
+			temp.makeInt64(impure->vlu_desc.dsc_scale, &i);
+		}
 	}
-	else if (DTYPE_IS_DECFLOAT(impure->vlu_desc.dsc_dtype))
+	else if (dtype == dtype_dec128)
 	{
 		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
 		dec.set(impure->vlux_count, decSt, 0);
 		dec = MOV_get_dec128(tdbb, &impure->vlu_desc).div(decSt, dec);
 		temp.makeDecimal128(&dec);
+	}
+	else if (dtype == dtype_dec64)
+	{
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		// use higher precision for division
+		dec.set(impure->vlux_count, decSt, 0);
+		d64 = MOV_get_dec128(tdbb, &impure->vlu_desc).div(decSt, dec).toDecimal64(decSt);
+		temp.makeDecimal64(&d64);
 	}
 	else
 	{
@@ -733,7 +776,6 @@ dsc* AvgAggNode::aggExecute(thread_db* tdbb, jrd_req* request) const
 		temp.makeDouble(&d);
 	}
 
-	impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
 	EVL_make_value(tdbb, &temp, impureTemp);
 
 	return &impureTemp->vlu_desc;
@@ -957,6 +999,7 @@ string CountAggNode::internalPrint(NodePrinter& printer) const
 	return "CountAggNode";
 }
 
+//// TODO: Improve count(*) in local tables.
 void CountAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 {
 	AggNode::aggInit(tdbb, request);
@@ -2194,16 +2237,15 @@ void RegrCountAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 
 bool RegrCountAggNode::aggPass(thread_db* tdbb, jrd_req* request) const
 {
+	EVL_expr(tdbb, request, arg);
+	if (request->req_flags & req_null)
+		return false;
+
+	EVL_expr(tdbb, request, arg2);
+	if (request->req_flags & req_null)
+		return false;
+
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
-	dsc* desc = EVL_expr(tdbb, request, arg);
-	if (request->req_flags & req_null)
-		return false;
-
-	dsc* desc2 = EVL_expr(tdbb, request, arg2);
-	if (request->req_flags & req_null)
-		return false;
-
 	++impure->vlu_misc.vlu_int64;
 
 	return true;

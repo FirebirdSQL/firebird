@@ -114,7 +114,7 @@ Manager::Manager(const string& dbId,
 	const Guid& guid = dbb->dbb_guid;
 	m_sequence = dbb->dbb_repl_sequence;
 
-	if (config->logDirectory.hasData())
+	if (config->journalDirectory.hasData())
 	{
 		m_changeLog = FB_NEW_POOL(getPool())
 			ChangeLog(getPool(), dbId, guid, m_sequence, config);
@@ -151,6 +151,7 @@ Manager::Manager(const string& dbId,
 		}
 
 		ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
+		dpb.insertByte(isc_dpb_no_db_triggers, 1);
 
 		if (login.hasData())
 		{
@@ -162,16 +163,16 @@ Manager::Manager(const string& dbId,
 
 		const auto attachment = provider->attachDatabase(&localStatus, database.c_str(),
 												   	     dpb.getBufferLength(), dpb.getBuffer());
-		if (!localStatus.isSuccess())
+		if (localStatus->getState() & IStatus::STATE_ERRORS)
 		{
-			logError(&localStatus);
+			logPrimaryStatus(m_config->dbName, &localStatus);
 			continue;
 		}
 
 		const auto replicator = attachment->createReplicator(&localStatus);
-		if (!localStatus.isSuccess())
+		if (localStatus->getState() & IStatus::STATE_ERRORS)
 		{
-			logError(&localStatus);
+			logPrimaryStatus(m_config->dbName, &localStatus);
 			attachment->detach(&localStatus);
 			continue;
 		}
@@ -185,12 +186,30 @@ Manager::Manager(const string& dbId,
 
 Manager::~Manager()
 {
+	for (auto& buffer : m_buffers)
+		delete buffer;
+}
+
+void Manager::shutdown()
+{
+	if (m_shutdown)
+		return;
+
 	m_shutdown = true;
 
 	m_workingSemaphore.release();
 	m_cleanupSemaphore.enter();
 
 	MutexLockGuard guard(m_queueMutex, FB_FUNCTION);
+
+	for (auto& buffer : m_queue)
+	{
+		if (buffer)
+		{
+			releaseBuffer(buffer);
+			buffer = nullptr;
+		}
+	}
 
 	// Detach from synchronous replicas
 
@@ -202,8 +221,7 @@ Manager::~Manager()
 		iter->attachment->detach(&localStatus);
 	}
 
-	while (m_buffers.hasData())
-		delete m_buffers.pop();
+	m_replicas.clear();
 }
 
 UCharBuffer* Manager::getBuffer()
@@ -229,27 +247,11 @@ void Manager::releaseBuffer(UCharBuffer* buffer)
 	m_buffers.add(buffer);
 }
 
-void Manager::logError(const IStatus* status)
-{
-	string message;
-
-	auto statusPtr = status->getErrors();
-
-	char temp[BUFFER_LARGE];
-	while (fb_interpret(temp, sizeof(temp), &statusPtr))
-	{
-		if (!message.isEmpty())
-			message += "\n\t";
-
-		message += temp;
-	}
-
-	logOriginMessage(m_config->dbName, message, ERROR_MSG);
-}
-
-void Manager::flush(UCharBuffer* buffer, bool sync)
+void Manager::flush(UCharBuffer* buffer, bool sync, bool prepare)
 {
 	fb_assert(buffer && buffer->hasData());
+
+	const auto prepareBuffer = prepare ? buffer : nullptr;
 
 	MutexLockGuard guard(m_queueMutex, FB_FUNCTION);
 
@@ -260,10 +262,9 @@ void Manager::flush(UCharBuffer* buffer, bool sync)
 	// If the background thread is lagging too far behind,
 	// replicate packets synchronously rather than relying
 	// on the background thread to catch up any time soon
-	if (!sync && m_queueSize > MAX_BG_WRITER_LAG)
-		sync = true;
+	const bool lagging = (m_queueSize > MAX_BG_WRITER_LAG);
 
-	if (sync)
+	if (sync || prepare || lagging)
 	{
 		const auto tdbb = JRD_get_thread_data();
 		const auto dbb = tdbb->getDatabase();
@@ -272,16 +273,39 @@ void Manager::flush(UCharBuffer* buffer, bool sync)
 		{
 			if (buffer)
 			{
-				const auto length = (ULONG) buffer->getCount();
+				auto length = (ULONG) buffer->getCount();
+				fb_assert(length);
+				bool hasData = true;
 
 				if (m_changeLog)
 				{
-					const auto sequence = m_changeLog->write(length, buffer->begin(), true);
-
-					if (sequence != m_sequence)
+					if (prepareBuffer == buffer)
 					{
-						dbb->setReplSequence(tdbb, sequence);
-						m_sequence = sequence;
+						// Remove the opPrepareTransaction command from the journal
+						fb_assert(buffer->back() == opPrepareTransaction);
+
+						const auto block = (Block*) buffer->begin();
+						block->length -= sizeof(UCHAR);
+						length -= sizeof(UCHAR);
+						hasData = (block->length != 0);
+					}
+
+					if (hasData)
+					{
+						const auto sequence = m_changeLog->write(length, buffer->begin(), sync);
+
+						if (sequence != m_sequence)
+						{
+							dbb->setReplSequence(tdbb, sequence);
+							m_sequence = sequence;
+						}
+					}
+
+					if (prepareBuffer == buffer)
+					{
+						const auto block = (Block*) buffer->begin();
+						block->length += sizeof(UCHAR);
+						length += sizeof(UCHAR);
 					}
 				}
 

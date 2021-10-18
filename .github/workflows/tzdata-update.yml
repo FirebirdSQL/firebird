@@ -9,11 +9,20 @@ jobs:
     if: github.repository == 'FirebirdSQL/firebird'
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        branch:
+          - master
+          - v4.0-release
+
     steps:
       - uses: actions/checkout@v2
+        with:
+          ref: ${{ matrix.branch }}
 
       - name: Checkout ICU
-        run: git clone --depth 1 https://github.com/unicode-org/icu-data.git -b master /tmp/icu-checkout
+        run: git clone --depth 1 https://github.com/unicode-org/icu-data.git -b main /tmp/icu-checkout
 
       - name: Check and update
         run: |
@@ -29,10 +38,13 @@ jobs:
           extern/icu/tzdata/update.sh
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v2
+        uses: peter-evans/create-pull-request@v3.5.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: Updata tzdata.
-          title: Updata tzdata.
+          commit-message: Update tzdata.
+          title: Update tzdata.
           assignees: asfernandes
-          branch: work/tzdata-update
+          branch: work/tzdata-update-${{ matrix.branch }}
+          base: ${{ matrix.branch }}
+          labels: |
+            type: task

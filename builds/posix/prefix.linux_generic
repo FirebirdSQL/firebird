@@ -21,4 +21,4 @@
 COMMON_FLAGS=-DLINUX -pipe -MMD -fPIC -DFB_SEND_FLAGS=MSG_NOSIGNAL
 
 PROD_FLAGS=-ggdb -O3 $(COMMON_FLAGS)
-DEV_FLAGS=-ggdb -p -Wall -Wno-switch $(COMMON_FLAGS) -Wno-non-virtual-dtor
+DEV_FLAGS=-ggdb -p -Werror=delete-incomplete -Wall -Wno-switch $(COMMON_FLAGS) -Wno-non-virtual-dtor

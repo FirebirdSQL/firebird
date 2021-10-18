@@ -189,6 +189,9 @@ public:
 	static void storePrivileges(thread_db* tdbb, jrd_tra* transaction,
 		const MetaName& name, int type, const char* privileges);
 
+	static void deletePrivilegesByRelName(thread_db* tdbb, jrd_tra* transaction,
+		const MetaName& name, int type);
+
 public:
 	// Check permission on DDL operation. Return true if everything is OK.
 	// Raise an exception for bad permission.
@@ -393,11 +396,16 @@ template <typename To, typename From> static bool nodeIs(const NestConst<From>& 
 }
 
 
-class NodeRefsHolder : public Firebird::PermanentStorage
+class NodeRefsHolder : public Firebird::AutoStorage
 {
 public:
-	NodeRefsHolder(MemoryPool& pool)
-		: PermanentStorage(pool),
+	NodeRefsHolder()
+		: refs(getPool())
+	{
+	}
+
+	explicit NodeRefsHolder(MemoryPool& pool)
+		: AutoStorage(pool),
 		  refs(pool)
 	{
 	}
@@ -505,6 +513,7 @@ public:
 
 		// RecordSource types
 		TYPE_AGGREGATE_SOURCE,
+		TYPE_LOCAL_TABLE,
 		TYPE_PROCEDURE,
 		TYPE_RELATION,
 		TYPE_RSE,
@@ -519,18 +528,19 @@ public:
 
 	// Generic flags.
 	static const USHORT FLAG_INVARIANT	= 0x01;	// Node is recognized as being invariant.
+	static const USHORT FLAG_PATTERN_MATCHER_CACHE	= 0x02;
 
 	// Boolean flags.
-	static const USHORT FLAG_DEOPTIMIZE	= 0x02;	// Boolean which requires deoptimization.
-	static const USHORT FLAG_RESIDUAL	= 0x04;	// Boolean which must remain residual.
-	static const USHORT FLAG_ANSI_NOT	= 0x08;	// ANY/ALL predicate is prefixed with a NOT one.
+	static const USHORT FLAG_DEOPTIMIZE	= 0x04;	// Boolean which requires deoptimization.
+	static const USHORT FLAG_RESIDUAL	= 0x08;	// Boolean which must remain residual.
+	static const USHORT FLAG_ANSI_NOT	= 0x10;	// ANY/ALL predicate is prefixed with a NOT one.
 
 	// Value flags.
-	static const USHORT FLAG_DOUBLE		= 0x10;
-	static const USHORT FLAG_DATE		= 0x20;
-	static const USHORT FLAG_DECFLOAT	= 0x40;
-	static const USHORT FLAG_VALUE		= 0x80;	// Full value area required in impure space.
-	static const USHORT FLAG_INT128		= 0x100;
+	static const USHORT FLAG_DOUBLE		= 0x20;
+	static const USHORT FLAG_DATE		= 0x40;
+	static const USHORT FLAG_DECFLOAT	= 0x80;
+	static const USHORT FLAG_VALUE		= 0x100;	// Full value area required in impure space.
+	static const USHORT FLAG_INT128		= 0x200;
 
 	explicit ExprNode(Type aType, MemoryPool& pool)
 		: DmlNode(pool),
@@ -649,18 +659,18 @@ public:
 	}
 
 	// Check if expression could return NULL or expression can turn NULL into a true/false.
-	virtual bool possiblyUnknown(OptimizerBlk* opt);
+	virtual bool possiblyUnknown() const;
 
 	// Verify if this node is allowed in an unmapped boolean.
-	virtual bool unmappable(CompilerScratch* csb, const MapNode* mapNode, StreamType shellStream);
+	virtual bool unmappable(const MapNode* mapNode, StreamType shellStream) const;
 
 	// Return all streams referenced by the expression.
-	virtual void collectStreams(CompilerScratch* csb, SortedStreamList& streamList) const;
+	virtual void collectStreams(SortedStreamList& streamList) const;
 
-	virtual bool findStream(CompilerScratch* csb, StreamType stream)
+	virtual bool containsStream(StreamType stream) const
 	{
 		SortedStreamList streams;
-		collectStreams(csb, streams);
+		collectStreams(streams);
 
 		return streams.exist(stream);
 	}
@@ -674,7 +684,7 @@ public:
 	}
 
 	// Determine if two expression trees are the same.
-	virtual bool sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const;
+	virtual bool sameAs(const ExprNode* other, bool ignoreStreams) const;
 
 	// See if node is presently computable.
 	// A node is said to be computable, if all the streams involved
@@ -1017,19 +1027,19 @@ public:
 
 	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual bool possiblyUnknown(OptimizerBlk* /*opt*/)
+	virtual bool possiblyUnknown() const
 	{
 		return true;
 	}
 
-	virtual void collectStreams(CompilerScratch* /*csb*/, SortedStreamList& /*streamList*/) const
+	virtual void collectStreams(SortedStreamList& /*streamList*/) const
 	{
 		// ASF: Although in v2.5 the visitor happens normally for the node childs, nod_count has
 		// been set to 0 in CMP_pass2, so that doesn't happens.
 		return;
 	}
 
-	virtual bool unmappable(CompilerScratch* /*csb*/, const MapNode* /*mapNode*/, StreamType /*shellStream*/)
+	virtual bool unmappable(const MapNode* /*mapNode*/, StreamType /*shellStream*/) const
 	{
 		return false;
 	}
@@ -1150,23 +1160,23 @@ public:
 		fb_assert(false);
 	}
 
-	virtual bool possiblyUnknown(OptimizerBlk* /*opt*/)
+	virtual bool possiblyUnknown() const
 	{
 		return true;
 	}
 
-	virtual bool unmappable(CompilerScratch* /*csb*/, const MapNode* /*mapNode*/, StreamType /*shellStream*/)
+	virtual bool unmappable(const MapNode* /*mapNode*/, StreamType /*shellStream*/) const
 	{
 		return false;
 	}
 
-	virtual void collectStreams(CompilerScratch* /*csb*/, SortedStreamList& streamList) const
+	virtual void collectStreams(SortedStreamList& streamList) const
 	{
 		if (!streamList.exist(getStream()))
 			streamList.add(getStream());
 	}
 
-	virtual bool sameAs(CompilerScratch* /*csb*/, const ExprNode* /*other*/, bool /*ignoreStreams*/) const
+	virtual bool sameAs(const ExprNode* /*other*/, bool /*ignoreStreams*/) const
 	{
 		return false;
 	}
@@ -1376,6 +1386,7 @@ public:
 		TYPE_CONTINUE_LEAVE,
 		TYPE_CURSOR_STMT,
 		TYPE_DECLARE_CURSOR,
+		TYPE_DECLARE_LOCAL_TABLE,
 		TYPE_DECLARE_SUBFUNC,
 		TYPE_DECLARE_SUBPROC,
 		TYPE_DECLARE_VARIABLE,
@@ -1408,6 +1419,7 @@ public:
 		TYPE_STALL,
 		TYPE_STORE,
 		TYPE_SUSPEND,
+		TYPE_TRUNCATE_LOCAL_TABLE,
 		TYPE_UPDATE_OR_INSERT,
 		TYPE_USER_SAVEPOINT,
 

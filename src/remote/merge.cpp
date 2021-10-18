@@ -47,7 +47,8 @@ USHORT MERGE_database_info(const UCHAR* const in,
 							USHORT class_,
 							USHORT base_level,
 							const UCHAR* version,
-							const UCHAR* id)
+							const UCHAR* id,
+							USHORT protocol)
 {
 /**************************************
  *
@@ -98,6 +99,23 @@ USHORT MERGE_database_info(const UCHAR* const in,
 		switch (input.getClumpTag())
 		{
 		case isc_info_end:
+			if (protocol)
+			{
+				--out;
+				if (out + (1 + 2 + 2 + 1) <= end)
+				{
+					PUT(out, (UCHAR)fb_info_protocol_version);
+					PUT_WORD(out, 2u);
+					PUT_WORD(out, protocol);
+					protocol = 0;
+
+					PUT(out, (UCHAR)isc_info_end);
+				}
+				else
+					PUT(out, (UCHAR)isc_info_truncated);
+			}
+			// fall down...
+
 		case isc_info_truncated:
 			return out - start;
 
@@ -140,6 +158,10 @@ USHORT MERGE_database_info(const UCHAR* const in,
 			if (merge_setup(input, &out, end, 1))
 				return 0;
 			PUT(out, (UCHAR) base_level);
+			break;
+
+		case fb_info_protocol_version:
+			--out;
 			break;
 
 		default:

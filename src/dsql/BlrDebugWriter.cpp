@@ -22,7 +22,7 @@
 #include "firebird.h"
 #include "firebird/impl/consts_pub.h"
 #include "dyn_consts.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/jrd.h"
 #include "../jrd/exe.h"
 #include "../dsql/BlrDebugWriter.h"

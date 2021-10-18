@@ -91,7 +91,7 @@ enum drq_type_t
 	drq_e_view_rels,		// erase view relations
 	drq_e_relation,			// erase relation
 	drq_e_rel_con3,			// erase relation constraints
-	drq_e_usr_prvs,			// erase user privileges on relation
+	drq_e_usr_prvs,			// erase user privileges using relation name
 	drq_e_shadow,			// erase shadow
 	drq_e_trg_msg,			// erase trigger message
 	drq_e_class,			// erase security class
@@ -184,7 +184,6 @@ enum drq_type_t
 	drq_e_prms2,
 	drq_m_trigger2,
 	drq_e_prcs2,
-	drq_e_prc_prvs,
 	drq_e_prc_prv,
 	drq_e_trg_msgs3,
 	drq_e_trigger3,
@@ -209,7 +208,6 @@ enum drq_type_t
 	drq_l_fun_name,			// lookup function name
 	drq_g_nxt_fun_id,		// lookup next function ID
 	drq_e_arg_gfld,			// erase argument's global field
-	drq_e_fun_prvs,			// erase function privileges
 	drq_e_fun_prv,			// erase function privileges
 	drq_s_fld_src,			// store field source
 	drq_e_prm_gfld,			// erase parameter source
@@ -225,10 +223,6 @@ enum drq_type_t
 	drq_m_fld2,				// alter domain
 	drq_c_unq_nam2,			// check for unique field names
 	drq_s_rels2,			// store relations
-	drq_e_coll_prvs,		// erase collation privileges
-	drq_e_xcp_prvs,			// erase exception privileges
-	drq_e_gen_prvs,			// erase generator privileges
-	drq_e_gfld_prvs,		// erase domain privileges
 	drq_g_nxt_nbakhist_id,	// generate next history ID for nbackup
 	drq_l_index_relname,	// lookup relation name for index
 	drq_l_trigger_relname,	// lookup relation name for trigger

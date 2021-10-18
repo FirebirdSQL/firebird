@@ -114,7 +114,7 @@ static const USHORT type_alignments[DTYPE_TYPE_MAX] =
 	sizeof(UCHAR),				/* dtype_boolean */
 	sizeof(Firebird::Decimal64),/* dtype_dec64 */
 	sizeof(Firebird::Decimal64),/* dtype_dec128 */
-	sizeof(Firebird::Decimal64),/* dtype_int128 */
+	sizeof(SINT64),				/* dtype_int128 */
 	sizeof(GDS_TIME),			/* dtype_sql_time_tz */
 	sizeof(GDS_DATE),			/* dtype_timestamp_tz */
 	sizeof(GDS_TIME),			/* dtype_ex_time_tz */

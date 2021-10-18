@@ -28,7 +28,7 @@
 
 #include "firebird.h"
 #include "firebird/Interface.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../common/StatusHolder.h"
 #include "../common/classes/fb_atomic.h"
 #include "../common/classes/alloc.h"
@@ -133,6 +133,7 @@ public:
 	typedef YAttachment YRef;
 
 	static const unsigned DF_RELEASE =		0x1;
+	static const unsigned DF_KEEP_NEXT =	0x2;
 
 	explicit YHelper(NextInterface* aNext, const char* m = NULL)
 		:
@@ -160,7 +161,10 @@ public:
 
 	void destroy2(unsigned dstrFlags)
 	{
-		next = NULL;
+		if (dstrFlags & DF_KEEP_NEXT)
+			next.clear();
+		else
+			next = NULL;
 
 		if (dstrFlags & DF_RELEASE)
 		{
@@ -213,6 +217,7 @@ public:
 
 	// IEvents implementation
 	void cancel(Firebird::CheckStatusWrapper* status);
+	void deprecatedCancel(Firebird::CheckStatusWrapper* status);
 
 public:
 	AtomicAttPtr attachment;
@@ -245,6 +250,7 @@ public:
 		unsigned int msgType, unsigned int length, const void* message);
 	void unwind(Firebird::CheckStatusWrapper* status, int level);
 	void free(Firebird::CheckStatusWrapper* status);
+	void deprecatedFree(Firebird::CheckStatusWrapper* status);
 
 public:
 	AtomicAttPtr attachment;
@@ -275,6 +281,9 @@ public:
 	Firebird::ITransaction* join(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction);
 	Firebird::ITransaction* validate(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* testAtt);
 	YTransaction* enterDtc(Firebird::CheckStatusWrapper* status);
+	void deprecatedCommit(Firebird::CheckStatusWrapper* status);
+	void deprecatedRollback(Firebird::CheckStatusWrapper* status);
+	void deprecatedDisconnect(Firebird::CheckStatusWrapper* status);
 
 	void addCleanupHandler(Firebird::CheckStatusWrapper* status, CleanupCallback* callback);
 	void selfCheck();
@@ -324,6 +333,8 @@ public:
 	void cancel(Firebird::CheckStatusWrapper* status);
 	void close(Firebird::CheckStatusWrapper* status);
 	int seek(Firebird::CheckStatusWrapper* status, int mode, int offset);
+	void deprecatedCancel(Firebird::CheckStatusWrapper* status);
+	void deprecatedClose(Firebird::CheckStatusWrapper* status);
 
 public:
 	AtomicAttPtr attachment;
@@ -353,6 +364,7 @@ public:
 	FB_BOOLEAN isBof(Firebird::CheckStatusWrapper* status);
 	Firebird::IMessageMetadata* getMetadata(Firebird::CheckStatusWrapper* status);
 	void close(Firebird::CheckStatusWrapper* status);
+	void deprecatedClose(Firebird::CheckStatusWrapper* status);
 	void setDelayedOutputFormat(Firebird::CheckStatusWrapper* status, Firebird::IMessageMetadata* format);
 
 public:
@@ -383,6 +395,10 @@ public:
 	Firebird::IBatchCompletionState* execute(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction);
 	void cancel(Firebird::CheckStatusWrapper* status);
 	void setDefaultBpb(Firebird::CheckStatusWrapper* status, unsigned parLength, const unsigned char* par);
+	void close(Firebird::CheckStatusWrapper* status);
+	void deprecatedClose(Firebird::CheckStatusWrapper* status);
+	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength, const unsigned char* items,
+		unsigned int bufferLength, unsigned char* buffer);
 
 public:
 	AtomicAttPtr attachment;
@@ -402,6 +418,7 @@ public:
 	// IReplicator implementation
 	void process(Firebird::CheckStatusWrapper* status, unsigned length, const unsigned char* data);
 	void close(Firebird::CheckStatusWrapper* status);
+	void deprecatedClose(Firebird::CheckStatusWrapper* status);
 
 public:
 	AtomicAttPtr attachment;
@@ -450,6 +467,7 @@ public:
 		unsigned int flags);
 	void setCursorName(Firebird::CheckStatusWrapper* status, const char* name);
 	void free(Firebird::CheckStatusWrapper* status);
+	void deprecatedFree(Firebird::CheckStatusWrapper* status);
 	unsigned getFlags(Firebird::CheckStatusWrapper* status);
 
 	unsigned int getTimeout(Firebird::CheckStatusWrapper* status);
@@ -539,6 +557,8 @@ public:
 	void ping(Firebird::CheckStatusWrapper* status);
 	void detach(Firebird::CheckStatusWrapper* status);
 	void dropDatabase(Firebird::CheckStatusWrapper* status);
+	void deprecatedDetach(Firebird::CheckStatusWrapper* status);
+	void deprecatedDropDatabase(Firebird::CheckStatusWrapper* status);
 
 	void addCleanupHandler(Firebird::CheckStatusWrapper* status, CleanupCallback* callback);
 	YTransaction* getTransaction(Firebird::ITransaction* tra);
@@ -586,6 +606,7 @@ public:
 
 	// IService implementation
 	void detach(Firebird::CheckStatusWrapper* status);
+	void deprecatedDetach(Firebird::CheckStatusWrapper* status);
 	void query(Firebird::CheckStatusWrapper* status,
 		unsigned int sendLength, const unsigned char* sendItems,
 		unsigned int receiveLength, const unsigned char* receiveItems,

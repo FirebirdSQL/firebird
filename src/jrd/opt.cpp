@@ -75,6 +75,7 @@
 #include "../jrd/par_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../jrd/DataTypeUtil.h"
+#include "../jrd/KeywordsTable.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/VirtualTable.h"
 #include "../jrd/Monitoring.h"
@@ -112,6 +113,20 @@ namespace
 		if (node2)
 			*node1 = (*node1) ? FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_and, *node1, node2) : node2;
 	}
+
+	struct SortField
+	{
+		SortField() : stream(INVALID_STREAM), id(0), desc(NULL)
+		{}
+
+		SortField(StreamType _stream, ULONG _id, const dsc* _desc)
+			: stream(_stream), id(_id), desc(_desc)
+		{}
+
+		StreamType stream;
+		ULONG id;
+		const dsc* desc;
+	};
 
 	class River
 	{
@@ -164,10 +179,10 @@ namespace
 				csb->csb_rpt[*iter].deactivate();
 		}
 
-		bool isReferenced(CompilerScratch* csb, const ExprNode* node) const
+		bool isReferenced(const ExprNode* node) const
 		{
 			SortedStreamList nodeStreams;
-			node->collectStreams(csb, nodeStreams);
+			node->collectStreams(nodeStreams);
 
 			if (!nodeStreams.hasData())
 				return false;
@@ -337,7 +352,7 @@ static bool map_equal(const ValueExprNode*, const ValueExprNode*, const MapNode*
 static void mark_indices(CompilerScratch::csb_repeat* csbTail, SSHORT relationId);
 static bool node_equality(const ValueExprNode*, const ValueExprNode*);
 static bool node_equality(const BoolExprNode*, const BoolExprNode*);
-static ValueExprNode* optimize_like(thread_db*, CompilerScratch*, ComparativeBoolNode*);
+static ValueExprNode* optimize_like_similar(thread_db*, CompilerScratch*, ComparativeBoolNode*);
 static USHORT river_count(USHORT count, ValueExprNode** eq_class);
 static bool search_stack(const ValueExprNode*, const ValueExprNodeStack&);
 static void set_direction(SortNode*, SortNode*);
@@ -348,11 +363,11 @@ static void sort_indices_by_selectivity(CompilerScratch::csb_repeat* csbTail);
 // macro definitions
 
 #ifdef OPT_DEBUG
-const int DEBUG_PUNT			= 5;
-const int DEBUG_RELATIONSHIPS	= 4;
-const int DEBUG_ALL				= 3;
-const int DEBUG_CANDIDATE		= 2;
-const int DEBUG_BEST			= 1;
+//const int DEBUG_PUNT			= 5;
+//const int DEBUG_RELATIONSHIPS	= 4;
+//const int DEBUG_ALL			= 3;
+//const int DEBUG_CANDIDATE		= 2;
+//const int DEBUG_BEST			= 1;
 const int DEBUG_NONE			= 0;
 
 FILE *opt_debug_file = 0;
@@ -483,7 +498,7 @@ RecordSource* OPT_compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 
 	AutoPtr<OptimizerBlk> opt(FB_NEW_POOL(*pool) OptimizerBlk(pool, rse));
 	opt->opt_streams.grow(csb->csb_n_stream);
-	opt->optimizeFirstRows = (rse->flags & RseNode::FLAG_OPT_FIRST_ROWS) != 0;
+	opt->favorFirstRows = (rse->flags & RseNode::FLAG_OPT_FIRST_ROWS) != 0;
 
 	RecordSource* rsb = NULL;
 
@@ -543,7 +558,7 @@ RecordSource* OPT_compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		{
 			BoolExprNode* const node = iter.object();
 
-			if (rse->rse_jointype != blr_inner && node->possiblyUnknown(opt))
+			if (rse->rse_jointype != blr_inner && node->possiblyUnknown())
 			{
 				// parent missing conjunctions shouldn't be
 				// distributed to FULL OUTER JOIN streams at all
@@ -834,11 +849,11 @@ RecordSource* OPT_compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 
 		// Handle project clause, if present
 		if (project)
-			rsb = OPT_gen_sort(tdbb, opt->opt_csb, opt->beds, &opt->keyStreams, rsb, project, true);
+			rsb = OPT_gen_sort(tdbb, opt->opt_csb, opt->beds, &opt->keyStreams, rsb, project, opt->favorFirstRows, true);
 
 		// Handle sort clause if present
 		if (sort)
-			rsb = OPT_gen_sort(tdbb, opt->opt_csb, opt->beds, &opt->keyStreams, rsb, sort, false);
+			rsb = OPT_gen_sort(tdbb, opt->opt_csb, opt->beds, &opt->keyStreams, rsb, sort, opt->favorFirstRows, false);
 	}
 
     // Handle first and/or skip.  The skip MUST (if present)
@@ -1217,7 +1232,7 @@ static void check_sorts(CompilerScratch* csb, RseNode* rse)
 				// This position doesn't use a simple field, thus we should
 				// check the expression internals.
 				SortedStreamList streams;
-				(*sort_ptr)->collectStreams(csb, streams);
+				(*sort_ptr)->collectStreams(streams);
 
 				// We can use this sort only if there's a single stream
 				// referenced by the expression.
@@ -1266,7 +1281,7 @@ static void check_sorts(CompilerScratch* csb, RseNode* rse)
 							{
 								RecordSourceNode* subNode = new_rse->rse_relations[i];
 
-								if (nodeIs<RelationSourceNode>(subNode) &&
+								if ((nodeIs<RelationSourceNode>(subNode) || nodeIs<LocalTableSourceNode>(subNode)) &&
 									subNode->getStream() == sort_stream &&
 									new_rse != rse)
 								{
@@ -1274,7 +1289,6 @@ static void check_sorts(CompilerScratch* csb, RseNode* rse)
 									sortStreamFound = true;
 									break;
 								}
-
 							}
 
 							if (sortStreamFound)
@@ -1294,7 +1308,7 @@ static void check_sorts(CompilerScratch* csb, RseNode* rse)
 				}
 				else
 				{
-					if (nodeIs<RelationSourceNode>(node) &&
+					if ((nodeIs<RelationSourceNode>(node) || nodeIs<LocalTableSourceNode>(node)) &&
 						node->getStream() == sort_stream &&
 						new_rse && new_rse != rse)
 					{
@@ -1430,12 +1444,13 @@ static SLONG decompose(thread_db* tdbb, BoolExprNode* boolNode, BoolExprNodeStac
 			return 2;
 		}
 
-		// turn a LIKE into a LIKE and a STARTING WITH, if it starts
+		// turn a LIKE/SIMILAR into a LIKE/SIMILAR and a STARTING WITH, if it starts
 		// with anything other than a pattern-matching character
 
 		ValueExprNode* arg;
 
-		if (cmpNode->blrOp == blr_like && (arg = optimize_like(tdbb, csb, cmpNode)))
+		if ((cmpNode->blrOp == blr_like || cmpNode->blrOp == blr_similar) &&
+			(arg = optimize_like_similar(tdbb, csb, cmpNode)))
 		{
 			ComparativeBoolNode* newCmpNode = FB_NEW_POOL(csb->csb_pool) ComparativeBoolNode(
 				csb->csb_pool, blr_starting);
@@ -2074,7 +2089,7 @@ static RecordSource* gen_outer(thread_db* tdbb, OptimizerBlk* opt, RseNode* rse,
 	{
 		const RecordSourceNode* node = rse->rse_relations[i];
 
-		if (nodeIs<RelationSourceNode>(node))
+		if (nodeIs<RelationSourceNode>(node) || nodeIs<LocalTableSourceNode>(node))
 		{
 			stream_ptr[i]->stream_rsb = NULL;
 			stream_ptr[i]->stream_num = node->getStream();
@@ -2302,6 +2317,10 @@ static RecordSource* gen_retrieval(thread_db*     tdbb,
 			rsb = FB_NEW_POOL(*tdbb->getDefaultPool()) ConfigTableScan(csb, alias, stream, relation);
 			break;
 
+		case rel_keywords:
+			rsb = FB_NEW_POOL(*tdbb->getDefaultPool()) KeywordsTableScan(csb, alias, stream, relation);
+			break;
+
 		default:
 			rsb = FB_NEW_POOL(*tdbb->getDefaultPool()) MonitoringTableScan(csb, alias, stream, relation);
 			break;
@@ -2394,7 +2413,7 @@ static RecordSource* gen_retrieval(thread_db*     tdbb,
 			// that are local to this stream. The remaining ones are left in piece
 			// as possible candidates for a merge/hash join.
 
-			if ((inversion && node->findStream(csb, stream)) ||
+			if ((inversion && node->containsStream(stream)) ||
 				(!inversion && node->computable(csb, stream, true)))
 			{
 				compose(*tdbb->getDefaultPool(), &boolean, node);
@@ -2435,7 +2454,8 @@ static RecordSource* gen_retrieval(thread_db*     tdbb,
 
 
 SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamList& streams,
-	const StreamList* dbkey_streams, RecordSource* prior_rsb, SortNode* sort, bool project_flag)
+	const StreamList* dbkey_streams, RecordSource* prior_rsb, SortNode* sort,
+	bool refetch_flag, bool project_flag)
 {
 /**************************************
  *
@@ -2464,55 +2484,93 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 	 * be used to detect update conflict in read committed
 	 * transactions. */
 
-	dsc descriptor;
-
 	ULONG items = sort->expressions.getCount() +
 		3 * streams.getCount() + 2 * (dbkey_streams ? dbkey_streams->getCount() : 0);
-	const StreamType* const end_ptr = streams.end();
 	const NestConst<ValueExprNode>* const end_node = sort->expressions.end();
-	HalfStaticArray<ULONG, OPT_STATIC_ITEMS> id_list;
-	StreamList stream_list;
 
-	for (const StreamType* ptr = streams.begin(); ptr < end_ptr; ptr++)
+	// Collect all fields involved into the sort
+
+	HalfStaticArray<SortField, OPT_STATIC_ITEMS> fields;
+	ULONG totalLength = 0;
+
+	for (const auto stream : streams)
 	{
-		UInt32Bitmap::Accessor accessor(csb->csb_rpt[*ptr].csb_fields);
+		UInt32Bitmap::Accessor accessor(csb->csb_rpt[stream].csb_fields);
 
 		if (accessor.getFirst())
 		{
 			do
 			{
-				const ULONG id = accessor.current();
-				items++;
-				id_list.push(id);
-				stream_list.push(*ptr);
+				const auto id = accessor.current();
 
-				for (NestConst<ValueExprNode>* node_ptr = sort->expressions.begin();
-					 node_ptr != end_node;
-					 ++node_ptr)
+				const auto format = CMP_format(tdbb, csb, stream);
+				const auto desc = &format->fmt_desc[id];
+
+				if (id >= format->fmt_count || desc->isUnknown())
+					IBERROR(157);		// msg 157 cannot sort on a field that does not exist
+
+				fields.push(SortField(stream, id, desc));
+				totalLength += desc->dsc_length;
+
+				// If the field has already been mentioned as a sort key, don't bother to repeat it.
+				// Unless this key is computed/volatile and thus cannot be restored after sorting.
+
+				for (auto expr : sort->expressions)
 				{
-					FieldNode* fieldNode = nodeAs<FieldNode>(*node_ptr);
+					const auto fieldNode = nodeAs<FieldNode>(expr);
 
-					if (fieldNode && fieldNode->fieldStream == *ptr && fieldNode->fieldId == id)
+					if (fieldNode && fieldNode->fieldStream == stream && fieldNode->fieldId == id)
 					{
-						dsc* desc = &descriptor;
-						fieldNode->getDesc(tdbb, csb, desc);
-
-						// International type text has a computed key
-						// Different decimal float values sometimes have same keys
-						// ASF: Date/time with time zones too.
-						if (IS_INTL_DATA(desc) || desc->isDecFloat() || desc->isDateTimeTz())
-							break;
-
-						--items;
-						id_list.pop();
-						stream_list.pop();
+						if (!SortedStream::hasVolatileKey(desc))
+						{
+							totalLength -= desc->dsc_length;
+							fields.pop();
+						}
 
 						break;
 					}
 				}
+
 			} while (accessor.getNext());
 		}
 	}
+
+	auto fieldCount = fields.getCount();
+
+	// Unless refetching is requested explicitly (e.g. FIRST ROWS optimization mode),
+	// validate the sort record length against the configured threshold for inline storage
+
+	if (!refetch_flag)
+	{
+		const auto dbb = tdbb->getDatabase();
+		const auto threshold = dbb->dbb_config->getInlineSortThreshold();
+
+		refetch_flag = (totalLength > threshold);
+	}
+
+	// Check for persistent fields to be excluded from the sort.
+	// If nothing is excluded, there's no point in the refetch mode.
+
+	if (refetch_flag)
+	{
+		for (auto& item : fields)
+		{
+			const auto relation = csb->csb_rpt[item.stream].csb_relation;
+
+			if (relation &&
+				!relation->rel_file &&
+				!relation->rel_view_rse &&
+				!relation->isVirtual())
+			{
+				item.desc = NULL;
+				--fieldCount;
+			}
+		}
+
+		refetch_flag = (fieldCount != fields.getCount());
+	}
+
+	items += fieldCount;
 
 	// Now that we know the number of items, allocate a sort map block.
 	SortedStream::SortMap* map =
@@ -2520,6 +2578,9 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 
 	if (project_flag)
 		map->flags |= SortedStream::FLAG_PROJECT;
+
+	if (refetch_flag)
+		map->flags |= SortedStream::FLAG_REFETCH;
 
 	if (sort->unique)
 		map->flags |= SortedStream::FLAG_UNIQUE;
@@ -2529,6 +2590,8 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 	// Loop thru sort keys building sort keys.  Actually, to handle null values
 	// correctly, two sort keys are made for each field, one for the null flag
 	// and one for field itself.
+
+	dsc descriptor;
 
 	SortedStream::SortMap::Item* map_item = map->items.getBuffer(items);
 	sort_key_def* sort_key = map->keyItems.getBuffer(2 * sort->expressions.getCount());
@@ -2594,7 +2657,7 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 				sort_key->skd_flags |= SKD_binary;
 		}
 
-		if (IS_INTL_DATA(desc) || desc->isDecFloat() || desc->isDateTimeTz())
+		if (SortedStream::hasVolatileKey(desc) && !refetch_flag)
 			sort_key->skd_flags |= SKD_separate_data;
 
 		map_item->clear();
@@ -2607,7 +2670,7 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 
 		FieldNode* fieldNode;
 
-		if ((fieldNode = nodeAs<FieldNode>(node)))
+		if ( (fieldNode = nodeAs<FieldNode>(node)) )
 		{
 			map_item->stream = fieldNode->fieldStream;
 			map_item->fieldId = fieldNode->fieldId;
@@ -2618,100 +2681,98 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 	ULONG map_length = prev_key ? ROUNDUP(prev_key->getSkdOffset() + prev_key->getSkdLength(), sizeof(SLONG)) : 0;
 	map->keyLength = map_length;
 	ULONG flag_offset = map_length;
-	map_length += stream_list.getCount();
+	map_length += fieldCount;
 
-	// Now go back and process all to fields involved with the sort.  If the
-	// field has already been mentioned as a sort key, don't bother to repeat it.
+	// Now go back and process all to fields involved with the sort
 
-	while (stream_list.hasData())
+	for (const auto& item : fields)
 	{
-		const ULONG id = id_list.pop();
-		const StreamType stream = stream_list.pop();
-		const Format* format = CMP_format(tdbb, csb, stream);
-		const dsc* desc = &format->fmt_desc[id];
-		if (id >= format->fmt_count || desc->dsc_dtype == dtype_unknown)
-			IBERROR(157);		// msg 157 cannot sort on a field that does not exist
-		if (desc->dsc_dtype >= dtype_aligned)
-			map_length = FB_ALIGN(map_length, type_alignments[desc->dsc_dtype]);
+		if (!item.desc)
+			continue;
+
+		if (item.desc->dsc_dtype >= dtype_aligned)
+			map_length = FB_ALIGN(map_length, type_alignments[item.desc->dsc_dtype]);
 
 		map_item->clear();
-		map_item->fieldId = (SSHORT) id;
-		map_item->stream = stream;
+		map_item->fieldId = (SSHORT) item.id;
+		map_item->stream = item.stream;
 		map_item->flagOffset = flag_offset++;
-		map_item->desc = *desc;
+		map_item->desc = *item.desc;
 		map_item->desc.dsc_address = (UCHAR*)(IPTR) map_length;
-		map_length += desc->dsc_length;
+		map_length += item.desc->dsc_length;
 		map_item++;
 	}
 
 	// Make fields for record numbers and transaction ids for all streams
 
 	map_length = ROUNDUP(map_length, sizeof(SINT64));
-	for (const StreamType* ptr = streams.begin(); ptr < end_ptr; ptr++, map_item++)
+	for (const auto stream : streams)
 	{
 		map_item->clear();
 		map_item->fieldId = SortedStream::ID_DBKEY;
-		map_item->stream = *ptr;
+		map_item->stream = stream;
 		dsc* desc = &map_item->desc;
 		desc->dsc_dtype = dtype_int64;
 		desc->dsc_length = sizeof(SINT64);
 		desc->dsc_address = (UCHAR*)(IPTR) map_length;
 		map_length += desc->dsc_length;
-
 		map_item++;
 
 		map_item->clear();
 		map_item->fieldId = SortedStream::ID_TRANS;
-		map_item->stream = *ptr;
+		map_item->stream = stream;
 		desc = &map_item->desc;
 		desc->dsc_dtype = dtype_int64;
 		desc->dsc_length = sizeof(SINT64);
 		desc->dsc_address = (UCHAR*)(IPTR) map_length;
 		map_length += desc->dsc_length;
+		map_item++;
 	}
 
 	if (dbkey_streams && dbkey_streams->hasData())
 	{
-		const StreamType* const end_ptrL = dbkey_streams->end();
-
 		map_length = ROUNDUP(map_length, sizeof(SINT64));
-		for (const StreamType* ptr = dbkey_streams->begin(); ptr < end_ptrL; ptr++, map_item++)
+
+		for (const auto stream : *dbkey_streams)
 		{
 			map_item->clear();
 			map_item->fieldId = SortedStream::ID_DBKEY;
-			map_item->stream = *ptr;
+			map_item->stream = stream;
 			dsc* desc = &map_item->desc;
 			desc->dsc_dtype = dtype_int64;
 			desc->dsc_length = sizeof(SINT64);
 			desc->dsc_address = (UCHAR*)(IPTR) map_length;
 			map_length += desc->dsc_length;
+			map_item++;
 		}
 
-		for (const StreamType* ptr = dbkey_streams->begin(); ptr < end_ptrL; ptr++, map_item++)
+		for (const auto stream : *dbkey_streams)
 		{
 			map_item->clear();
 			map_item->fieldId = SortedStream::ID_DBKEY_VALID;
-			map_item->stream = *ptr;
+			map_item->stream = stream;
 			dsc* desc = &map_item->desc;
 			desc->dsc_dtype = dtype_text;
 			desc->dsc_ttype() = CS_BINARY;
 			desc->dsc_length = 1;
 			desc->dsc_address = (UCHAR*)(IPTR) map_length;
 			map_length += desc->dsc_length;
+			map_item++;
 		}
 	}
 
-	for (const StreamType* ptr = streams.begin(); ptr < end_ptr; ptr++, map_item++)
+	for (const auto stream : streams)
 	{
 		map_item->clear();
 		map_item->fieldId = SortedStream::ID_DBKEY_VALID;
-		map_item->stream = *ptr;
+		map_item->stream = stream;
 		dsc* desc = &map_item->desc;
 		desc->dsc_dtype = dtype_text;
 		desc->dsc_ttype() = CS_BINARY;
 		desc->dsc_length = 1;
 		desc->dsc_address = (UCHAR*)(IPTR) map_length;
 		map_length += desc->dsc_length;
+		map_item++;
 	}
 
 	fb_assert(map_item == map->items.end());
@@ -2719,15 +2780,15 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 
 	map_length = ROUNDUP(map_length, sizeof(SLONG));
 
-	// Make fields to store varying and cstring length.
+	// Make fields to store varying and cstring length
 
-	const sort_key_def* const end_key = sort_key;
-	for (sort_key = map->keyItems.begin(); sort_key < end_key; sort_key++)
+	for (auto& sortKey : map->keyItems)
 	{
-		fb_assert(sort_key->skd_dtype != 0);
-		if (sort_key->skd_dtype == SKD_varying || sort_key->skd_dtype == SKD_cstring)
+		fb_assert(sortKey.skd_dtype != 0);
+
+		if (sortKey.skd_dtype == SKD_varying || sortKey.skd_dtype == SKD_cstring)
 		{
-			sort_key->skd_vary_offset = map_length;
+			sortKey.skd_vary_offset = map_length;
 			map_length += sizeof(USHORT);
 			map->flags |= SortedStream::FLAG_KEY_VARY;
 		}
@@ -2841,9 +2902,9 @@ static bool gen_equi_join(thread_db* tdbb, OptimizerBlk* opt, RiverList& org_riv
 		{
 			River* const river1 = *iter1;
 
-			if (!river1->isReferenced(csb, node1))
+			if (!river1->isReferenced(node1))
 			{
-				if (!river1->isReferenced(csb, node2))
+				if (!river1->isReferenced(node2))
 					continue;
 
 				ValueExprNode* const temp = node1;
@@ -2857,7 +2918,7 @@ static bool gen_equi_join(thread_db* tdbb, OptimizerBlk* opt, RiverList& org_riv
 			{
 				River* const river2 = *iter2;
 
-				if (river2->isReferenced(csb, node2))
+				if (river2->isReferenced(node2))
 				{
 					for (eq_class = classes; eq_class < last_class; eq_class += cnt)
 					{
@@ -2972,7 +3033,7 @@ static bool gen_equi_join(thread_db* tdbb, OptimizerBlk* opt, RiverList& org_riv
 
 			StreamList streams;
 			streams.assign(river->getStreams());
-			rsb = OPT_gen_sort(tdbb, opt->opt_csb, streams, NULL, rsb, key, false);
+			rsb = OPT_gen_sort(tdbb, opt->opt_csb, streams, NULL, rsb, key, opt->favorFirstRows, false);
 		}
 		else
 		{
@@ -3328,150 +3389,202 @@ static bool node_equality(const BoolExprNode* node1, const BoolExprNode* node2)
 }
 
 
-static ValueExprNode* optimize_like(thread_db* tdbb, CompilerScratch* csb, ComparativeBoolNode* like_node)
+static ValueExprNode* optimize_like_similar(thread_db* tdbb, CompilerScratch* csb, ComparativeBoolNode* cmpNode)
 {
 /**************************************
  *
- *	o p t i m i z e _ l i k e
+ *	o p t i m i z e _ l i k e _ s i m i l a r
  *
  **************************************
  *
  * Functional description
- *	Optimize a LIKE expression, if possible,
- *	into a "starting with" AND a "like".  This
+ *	Optimize a LIKE/SIMILAR expression, if possible,
+ *	into a "starting with" AND a "LIKE/SIMILAR".  This
  *	will allow us to use the index for the
- *	starting with, and the LIKE can just tag
+ *	starting with, and the LIKE/SIMILAR can just tag
  *	along for the ride.
  *	But on the ride it does useful work, consider
- *	match LIKE "ab%c".  This is optimized by adding
- *	AND starting_with "ab", but the LIKE clause is
+ *	match LIKE/SIMILAR "ab%c".  This is optimized by adding
+ *	AND starting_with "ab", but the LIKE/SIMILAR clause is
  *	still needed.
  *
  **************************************/
 	SET_TDBB(tdbb);
 
-	ValueExprNode* match_node = like_node->arg1;
-	ValueExprNode* pattern_node = like_node->arg2;
-	ValueExprNode* escape_node = like_node->arg3;
+	ValueExprNode* matchNode = cmpNode->arg1;
+	ValueExprNode* patternNode = cmpNode->arg2;
+	ValueExprNode* escapeNode = cmpNode->arg3;
 
 	// if the pattern string or the escape string can't be
 	// evaluated at compile time, forget it
-	if (!nodeIs<LiteralNode>(pattern_node) || (escape_node && !nodeIs<LiteralNode>(escape_node)))
-		return NULL;
+	if (!nodeIs<LiteralNode>(patternNode) || (escapeNode && !nodeIs<LiteralNode>(escapeNode)))
+		return nullptr;
 
-	dsc match_desc;
-	match_node->getDesc(tdbb, csb, &match_desc);
+	dsc matchDesc;
+	matchNode->getDesc(tdbb, csb, &matchDesc);
 
-	dsc* pattern_desc = &nodeAs<LiteralNode>(pattern_node)->litDesc;
-	dsc* escape_desc = NULL;
+	dsc* patternDesc = &nodeAs<LiteralNode>(patternNode)->litDesc;
+	dsc* escapeDesc = nullptr;
 
-	if (escape_node)
-		escape_desc = &nodeAs<LiteralNode>(escape_node)->litDesc;
+	if (escapeNode)
+		escapeDesc = &nodeAs<LiteralNode>(escapeNode)->litDesc;
 
 	// if either is not a character expression, forget it
-	if ((match_desc.dsc_dtype > dtype_any_text) ||
-		(pattern_desc->dsc_dtype > dtype_any_text) ||
-		(escape_node && escape_desc->dsc_dtype > dtype_any_text))
+	if ((matchDesc.dsc_dtype > dtype_any_text) ||
+		(patternDesc->dsc_dtype > dtype_any_text) ||
+		(escapeNode && escapeDesc->dsc_dtype > dtype_any_text))
 	{
-		return NULL;
+		return nullptr;
 	}
 
-	TextType* matchTextType = INTL_texttype_lookup(tdbb, INTL_TTYPE(&match_desc));
+	TextType* matchTextType = INTL_texttype_lookup(tdbb, INTL_TTYPE(&matchDesc));
 	CharSet* matchCharset = matchTextType->getCharSet();
-	TextType* patternTextType = INTL_texttype_lookup(tdbb, INTL_TTYPE(pattern_desc));
+	TextType* patternTextType = INTL_texttype_lookup(tdbb, INTL_TTYPE(patternDesc));
 	CharSet* patternCharset = patternTextType->getCharSet();
 
-	UCHAR escape_canonic[sizeof(ULONG)];
-	UCHAR first_ch[sizeof(ULONG)];
-	ULONG first_len;
-	UCHAR* p;
-	USHORT p_count;
-
-	// Get the escape character, if any
-	if (escape_node)
+	if (cmpNode->blrOp == blr_like)
 	{
-		// Ensure escape string is same character set as match string
+		UCHAR escape_canonic[sizeof(ULONG)];
+		UCHAR first_ch[sizeof(ULONG)];
+		ULONG first_len;
+		UCHAR* p;
+		USHORT p_count;
+		MoveBuffer escapeBuffer;
 
-		MoveBuffer escape_buffer;
+		// Get the escape character, if any
+		if (escapeNode)
+		{
+			// Ensure escape string is same character set as match string
+			p_count = MOV_make_string2(tdbb, escapeDesc, INTL_TTYPE(&matchDesc), &p, escapeBuffer);
 
-		p_count = MOV_make_string2(tdbb, escape_desc, INTL_TTYPE(&match_desc), &p, escape_buffer);
+			first_len = matchCharset->substring(p_count, p, sizeof(first_ch), first_ch, 0, 1);
+			matchTextType->canonical(first_len, p, sizeof(escape_canonic), escape_canonic);
+		}
+
+		MoveBuffer patternBuffer;
+		p_count = MOV_make_string2(tdbb, patternDesc, INTL_TTYPE(&matchDesc), &p, patternBuffer);
 
 		first_len = matchCharset->substring(p_count, p, sizeof(first_ch), first_ch, 0, 1);
-		matchTextType->canonical(first_len, p, sizeof(escape_canonic), escape_canonic);
-	}
 
-	MoveBuffer pattern_buffer;
+		UCHAR first_canonic[sizeof(ULONG)];
+		matchTextType->canonical(first_len, p, sizeof(first_canonic), first_canonic);
 
-	p_count = MOV_make_string2(tdbb, pattern_desc, INTL_TTYPE(&match_desc), &p, pattern_buffer);
+		const BYTE canWidth = matchTextType->getCanonicalWidth();
 
-	first_len = matchCharset->substring(p_count, p, sizeof(first_ch), first_ch, 0, 1);
+		const UCHAR* matchOneChar = matchCharset->getSqlMatchOneLength() != 0 ?
+			matchTextType->getCanonicalChar(TextType::CHAR_SQL_MATCH_ONE) : nullptr;
+		const UCHAR* matchAnyChar = matchCharset->getSqlMatchAnyLength() != 0 ?
+			matchTextType->getCanonicalChar(TextType::CHAR_SQL_MATCH_ANY) : nullptr;
 
-	UCHAR first_canonic[sizeof(ULONG)];
-	matchTextType->canonical(first_len, p, sizeof(first_canonic), first_canonic);
-
-	const BYTE canWidth = matchTextType->getCanonicalWidth();
-
-	const UCHAR* matchOneChar = matchCharset->getSqlMatchOneLength() != 0 ?
-		matchTextType->getCanonicalChar(TextType::CHAR_SQL_MATCH_ONE) : NULL;
-	const UCHAR* matchAnyChar = matchCharset->getSqlMatchAnyLength() != 0 ?
-		matchTextType->getCanonicalChar(TextType::CHAR_SQL_MATCH_ANY) : NULL;
-
-	// If the first character is a wildcard char, forget it.
-	if ((!escape_node || memcmp(first_canonic, escape_canonic, canWidth) != 0) &&
-		((matchOneChar && memcmp(first_canonic, matchOneChar, canWidth) == 0) ||
-		 (matchAnyChar && memcmp(first_canonic, matchAnyChar, canWidth) == 0)))
-	{
-		return NULL;
-	}
-
-	// allocate a literal node to store the starting with string;
-	// assume it will be shorter than the pattern string
-	// CVC: This assumption may not be true if we use "value like field".
-
-	LiteralNode* literal = FB_NEW_POOL(csb->csb_pool) LiteralNode(csb->csb_pool);
-	literal->litDesc = *pattern_desc;
-	UCHAR* q = literal->litDesc.dsc_address = FB_NEW_POOL(csb->csb_pool)
-		UCHAR[literal->litDesc.dsc_length];
-
-	// Set the string length to point till the first wildcard character.
-
-	HalfStaticArray<UCHAR, BUFFER_SMALL> patternCanonical;
-	ULONG patternCanonicalLen = p_count / matchCharset->minBytesPerChar() * canWidth;
-
-	patternCanonicalLen = matchTextType->canonical(p_count, p,
-		patternCanonicalLen, patternCanonical.getBuffer(patternCanonicalLen));
-
-	for (const UCHAR* patternPtr = patternCanonical.begin(); patternPtr < patternCanonical.end(); )
-	{
-		// if there are escape characters, skip past them and
-		// don't treat the next char as a wildcard
-		const UCHAR* patternPtrStart = patternPtr;
-		patternPtr += canWidth;
-
-		if (escape_node && (memcmp(patternPtrStart, escape_canonic, canWidth) == 0))
+		// If the first character is a wildcard char, forget it.
+		if ((!escapeNode || memcmp(first_canonic, escape_canonic, canWidth) != 0) &&
+			((matchOneChar && memcmp(first_canonic, matchOneChar, canWidth) == 0) ||
+			(matchAnyChar && memcmp(first_canonic, matchAnyChar, canWidth) == 0)))
 		{
-			// Check for Escape character at end of string
-			if (!(patternPtr < patternCanonical.end()))
+			return nullptr;
+		}
+
+		// allocate a literal node to store the starting with string;
+		// assume it will be shorter than the pattern string
+
+		LiteralNode* literal = FB_NEW_POOL(csb->csb_pool) LiteralNode(csb->csb_pool);
+		literal->litDesc = *patternDesc;
+		UCHAR* q = literal->litDesc.dsc_address = FB_NEW_POOL(csb->csb_pool) UCHAR[literal->litDesc.dsc_length];
+
+		// Set the string length to point till the first wildcard character.
+
+		HalfStaticArray<UCHAR, BUFFER_SMALL> patternCanonical;
+		ULONG patternCanonicalLen = p_count / matchCharset->minBytesPerChar() * canWidth;
+
+		patternCanonicalLen = matchTextType->canonical(p_count, p,
+			patternCanonicalLen, patternCanonical.getBuffer(patternCanonicalLen));
+
+		for (const UCHAR* patternPtr = patternCanonical.begin(); patternPtr < patternCanonical.end(); )
+		{
+			// if there are escape characters, skip past them and don't treat the next char as a wildcard
+			const UCHAR* patternPtrStart = patternPtr;
+			patternPtr += canWidth;
+
+			if (escapeNode && (memcmp(patternPtrStart, escape_canonic, canWidth) == 0))
+			{
+				// Check for Escape character at end of string
+				if (!(patternPtr < patternCanonical.end()))
+					break;
+
+				patternPtrStart = patternPtr;
+				patternPtr += canWidth;
+			}
+			else if ((matchOneChar && memcmp(patternPtrStart, matchOneChar, canWidth) == 0) ||
+					(matchAnyChar && memcmp(patternPtrStart, matchAnyChar, canWidth) == 0))
+			{
+				break;
+			}
+
+			q += patternCharset->substring(patternDesc->dsc_length,
+					patternDesc->dsc_address,
+					literal->litDesc.dsc_length - (q - literal->litDesc.dsc_address), q,
+					(patternPtrStart - patternCanonical.begin()) / canWidth, 1);
+		}
+
+		literal->litDesc.dsc_length = q - literal->litDesc.dsc_address;
+
+		return literal;
+	}
+	else
+	{
+		fb_assert(cmpNode->blrOp == blr_similar);
+
+		MoveBuffer escapeBuffer;
+		UCHAR* escapeStart = nullptr;
+		ULONG escapeLen = 0;
+
+		// Get the escape character, if any
+		if (escapeNode)
+		{
+			// Ensure escape string is same character set as match string
+			escapeLen = MOV_make_string2(tdbb, escapeDesc, INTL_TTYPE(&matchDesc), &escapeStart, escapeBuffer);
+		}
+
+		MoveBuffer patternBuffer;
+		UCHAR* patternStart;
+		ULONG patternLen = MOV_make_string2(tdbb, patternDesc, INTL_TTYPE(&matchDesc), &patternStart, patternBuffer);
+		const auto patternEnd = patternStart + patternLen;
+		const UCHAR* patternPtr = patternStart;
+
+		MoveBuffer prefixBuffer;
+		ULONG charLen = 0;
+
+		while (IntlUtil::readOneChar(matchCharset, &patternPtr, patternEnd, &charLen))
+		{
+			if (escapeNode && charLen == escapeLen && memcmp(patternPtr, escapeStart, escapeLen) == 0)
+			{
+				if (!IntlUtil::readOneChar(matchCharset, &patternPtr, patternEnd, &charLen) ||
+					!((charLen == escapeLen && memcmp(patternPtr, escapeStart, escapeLen) == 0) ||
+					  (charLen == 1 && SimilarToRegex::isSpecialChar(*patternPtr))))
+				{
+					// Invalid escape.
+					return nullptr;
+				}
+			}
+			else if (charLen == 1 && SimilarToRegex::isSpecialChar(*patternPtr))
 				break;
 
-			patternPtrStart = patternPtr;
-			patternPtr += canWidth;
-		}
-		else if ((matchOneChar && memcmp(patternPtrStart, matchOneChar, canWidth) == 0) ||
-				 (matchAnyChar && memcmp(patternPtrStart, matchAnyChar, canWidth) == 0))
-		{
-			break;
+			prefixBuffer.push(patternPtr, charLen);
 		}
 
-		q += patternCharset->substring(pattern_desc->dsc_length,
-			pattern_desc->dsc_address,
-			literal->litDesc.dsc_length - (q - literal->litDesc.dsc_address), q,
-			(patternPtrStart - patternCanonical.begin()) / canWidth, 1);
+		if (prefixBuffer.isEmpty())
+			return nullptr;
+
+		// Allocate a literal node to store the starting with string.
+		// Use the match text type as the pattern string is converted to it.
+
+		LiteralNode* literal = FB_NEW_POOL(csb->csb_pool) LiteralNode(csb->csb_pool);
+		literal->litDesc.makeText(prefixBuffer.getCount(), INTL_TTYPE(&matchDesc),
+			FB_NEW_POOL(csb->csb_pool) UCHAR[prefixBuffer.getCount()]);
+		memcpy(literal->litDesc.dsc_address, prefixBuffer.begin(), prefixBuffer.getCount());
+
+		return literal;
 	}
-
-	literal->litDesc.dsc_length = q - literal->litDesc.dsc_address;
-
-	return literal;
 }
 
 

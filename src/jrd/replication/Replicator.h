@@ -27,7 +27,6 @@
 #include "../common/classes/timestamp.h"
 #include "../common/classes/MetaString.h"
 #include "../common/os/guid.h"
-#include "../jrd/align.h"
 #include "../jrd/status.h"
 
 #include "Protocol.h"
@@ -38,20 +37,20 @@ namespace Replication
 	class Replicator :
 		public Firebird::StdPlugin<Firebird::IReplicatedSessionImpl<Replicator, Firebird::CheckStatusWrapper> >
 	{
-		typedef Firebird::Array<Firebird::MetaString> MetadataCache;
+		typedef Firebird::Array<Firebird::MetaString> MetaNameCache;
 		typedef Firebird::HalfStaticArray<SavNumber, 16> SavepointStack;
 
 		struct BatchBlock
 		{
 			Block header;
 			Firebird::UCharBuffer* buffer;
-			MetadataCache metadata;
-			ULONG lastMetaId;
+			MetaNameCache atoms;
+			ULONG lastAtom;
 			ULONG flushes;
 
 			explicit BatchBlock(MemoryPool& pool)
-				: buffer(NULL), metadata(pool),
-				  lastMetaId(MAX_ULONG), flushes(0)
+				: buffer(NULL), atoms(pool),
+				  lastAtom(MAX_ULONG), flushes(0)
 			{
 				memset(&header, 0, sizeof(Block));
 			}
@@ -63,54 +62,68 @@ namespace Replication
 
 			void putTag(UCHAR tag)
 			{
-				buffer->add(tag);
+				putByte(tag);
 			}
 
-			void putInt(SLONG value)
+			void putByte(UCHAR value)
 			{
-				const auto newSize = FB_ALIGN(getSize(), type_alignments[dtype_long]);
-				buffer->resize(newSize);
+				buffer->add(value);
+			}
+
+			void putInt16(SLONG value)
+			{
+				const auto ptr = (const UCHAR*) &value;
+				buffer->add(ptr, sizeof(SSHORT));
+			}
+
+			void putInt32(SLONG value)
+			{
 				const auto ptr = (const UCHAR*) &value;
 				buffer->add(ptr, sizeof(SLONG));
 			}
 
-			void putBigInt(SINT64 value)
+			void putInt64(SINT64 value)
 			{
-				const auto newSize = FB_ALIGN(getSize(), type_alignments[dtype_int64]);
-				buffer->resize(newSize);
 				const auto ptr = (const UCHAR*) &value;
 				buffer->add(ptr, sizeof(SINT64));
 			}
 
-			void putMetaName(const Firebird::MetaString& name)
+			ULONG defineAtom(const Firebird::MetaString& name)
 			{
-				if (lastMetaId < metadata.getCount() && metadata[lastMetaId] == name)
-				{
-					putInt(lastMetaId);
-					return;
-				}
+				if (lastAtom < atoms.getCount() && atoms[lastAtom] == name)
+					return lastAtom;
 
 				FB_SIZE_T pos;
-				if (!metadata.find(name, pos))
+				if (!atoms.find(name, pos))
 				{
-					pos = metadata.getCount();
-					metadata.add(name);
+					pos = atoms.getCount();
+					atoms.add(name);
+					putTag(opDefineAtom);
+					putMetaName(name);
 				}
 
-				putInt(pos);
-				lastMetaId = (ULONG) pos;
+				lastAtom = (ULONG) pos;
+				return lastAtom;
+			}
+
+			void putMetaName(const Firebird::MetaString& name)
+			{
+				const auto length = name.length();
+				fb_assert(length <= MAX_UCHAR);
+				putByte((UCHAR) length);
+				buffer->add((const UCHAR*) name.c_str(), length);
 			}
 
 			void putString(const Firebird::string& str)
 			{
 				const auto length = str.length();
-				putInt(length);
-				buffer->add((const UCHAR*) str.c_str(), length);
+				putInt32(length);
+				const auto ptr = (const UCHAR*) str.c_str();
+				buffer->add(ptr, length);
 			}
 
 			void putBinary(ULONG length, const UCHAR* data)
 			{
-				putInt(length);
 				buffer->add(data, length);
 			}
 		};
@@ -143,61 +156,61 @@ namespace Replication
 
 			// IReplicatedTransaction methods
 
-			void prepare(Firebird::CheckStatusWrapper* status)
+			void prepare(Firebird::CheckStatusWrapper* status) override
 			{
 				m_replicator->prepareTransaction(status, this);
 			}
 
-			void commit(Firebird::CheckStatusWrapper* status)
+			void commit(Firebird::CheckStatusWrapper* status) override
 			{
 				m_replicator->commitTransaction(status, this);
 			}
 
-			void rollback(Firebird::CheckStatusWrapper* status)
+			void rollback(Firebird::CheckStatusWrapper* status) override
 			{
 				m_replicator->rollbackTransaction(status, this);
 			}
 
-			void startSavepoint(Firebird::CheckStatusWrapper* status)
+			void startSavepoint(Firebird::CheckStatusWrapper* status) override
 			{
 				m_replicator->startSavepoint(status, this);
 			}
 
-			void releaseSavepoint(Firebird::CheckStatusWrapper* status)
+			void releaseSavepoint(Firebird::CheckStatusWrapper* status) override
 			{
 				m_replicator->releaseSavepoint(status, this);
 			}
 
-			void rollbackSavepoint(Firebird::CheckStatusWrapper* status)
+			void rollbackSavepoint(Firebird::CheckStatusWrapper* status) override
 			{
 				m_replicator->rollbackSavepoint(status, this);
 			}
 
 			void insertRecord(Firebird::CheckStatusWrapper* status, const char* name,
-							  Firebird::IReplicatedRecord* record)
+							  Firebird::IReplicatedRecord* record) override
 			{
 				m_replicator->insertRecord(status, this, name, record);
 			}
 
 			void updateRecord(Firebird::CheckStatusWrapper* status, const char* name,
 							  Firebird::IReplicatedRecord* orgRecord,
-							  Firebird::IReplicatedRecord* newRecord)
+							  Firebird::IReplicatedRecord* newRecord) override
 			{
 				m_replicator->updateRecord(status, this, name, orgRecord, newRecord);
 			}
 
 			void deleteRecord(Firebird::CheckStatusWrapper* status, const char* name,
-							  Firebird::IReplicatedRecord* record)
+							  Firebird::IReplicatedRecord* record) override
 			{
 				m_replicator->deleteRecord(status, this, name, record);
 			}
 
-			void executeSql(Firebird::CheckStatusWrapper* status, const char* sql)
+			void executeSql(Firebird::CheckStatusWrapper* status, const char* sql) override
 			{
 				m_replicator->executeSql(status, this, sql);
 			}
 
-			void executeSqlIntl(Firebird::CheckStatusWrapper* status, unsigned charset, const char* sql)
+			void executeSqlIntl(Firebird::CheckStatusWrapper* status, unsigned charset, const char* sql) override
 			{
 				m_replicator->executeSqlIntl(status, this, charset, sql);
 			}
@@ -231,14 +244,15 @@ namespace Replication
 
 		// IReplicatedSession methods
 
-		void setAttachment(Firebird::IAttachment* att) override
+		FB_BOOLEAN init(Firebird::CheckStatusWrapper* /*status*/, Firebird::IAttachment* att) override
 		{
 			m_attachment = att;
+			return FB_TRUE;
 		}
 
-		Firebird::IReplicatedTransaction* startTransaction(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* trans, SINT64 number);
-		void cleanupTransaction(Firebird::CheckStatusWrapper* status, SINT64 number);
-		void setSequence(Firebird::CheckStatusWrapper* status, const char* name, SINT64 value);
+		Firebird::IReplicatedTransaction* startTransaction(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* trans, SINT64 number) override;
+		void cleanupTransaction(Firebird::CheckStatusWrapper* status, SINT64 number) override;
+		void setSequence(Firebird::CheckStatusWrapper* status, const char* name, SINT64 value) override;
 
 	private:
 		Manager* const m_manager;

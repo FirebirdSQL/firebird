@@ -29,7 +29,7 @@
 #include "../common/config/config_file.h"
 #include "../common/os/os_utils.h"
 
-#include "gen/iberror.h"
+#include "iberror.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>

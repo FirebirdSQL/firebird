@@ -88,7 +88,7 @@ function(epp_process type files)
     foreach(F ${${files}})
         set(in  ${CMAKE_CURRENT_SOURCE_DIR}/${F})
         set(out ${CMAKE_CURRENT_BINARY_DIR}/${F}${epp_suffix})
-        
+
         get_filename_component(dir ${out} PATH)
         if (MSVC OR XCODE)
             set(dir ${dir}/$<CONFIG>)
@@ -263,13 +263,13 @@ function(create_command command type out)
     if ("${type}" STREQUAL "boot")
         set(dir ${boot_dir})
     endif()
-    
+
     set_win32(env "PATH=${dir}\;%PATH%")
     set_unix (env "PATH=${dir}/bin:$PATH")
     set(env "${env}"
         FIREBIRD=${dir}
     )
-    
+
     set(cmd_name ${command})
     if (MSVC OR XCODE)
         set(conf _$<CONFIG>)
@@ -288,16 +288,16 @@ function(create_command command type out)
     endif()
     set(cmd_name ${cmd_name}${conf}${ext})
     set(cmd_name ${CMAKE_BINARY_DIR}/src/${cmd_name})
-    
+
     set(content)
     foreach(e ${env})
         set(content "${content}${pre_cmd}${export} ${e}\n")
     endforeach()
-    
+
     set(cmd $<TARGET_FILE:${cmd}>)
     set(content "${content}${pre_cmd}${cmd} ${options}")
     file(GENERATE OUTPUT ${cmd_name} CONTENT "${content}")
-    
+
     if (UNIX)
         set(cmd_name chmod u+x ${cmd_name} COMMAND ${cmd_name})
     endif()

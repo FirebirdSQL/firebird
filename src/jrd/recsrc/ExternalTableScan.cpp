@@ -90,6 +90,8 @@ bool ExternalTableScan::getRecord(thread_db* tdbb) const
 		return false;
 	}
 
+	rpb->rpb_runtime_flags &= ~RPB_CLEAR_FLAGS;
+
 	if (EXT_get(tdbb, rpb, impure->irsb_position))
 	{
 		rpb->rpb_number.increment();

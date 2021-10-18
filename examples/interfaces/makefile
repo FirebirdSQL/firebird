@@ -33,7 +33,7 @@ FBCLIENT = $(FIREBIRD)/lib/libfbclient.so
 # General Compiler and linker Defines for Linux
 # ---------------------------------------------------------------------
 CXX	= c++
-CXXFLAGS= -c -Wall -g3 -std=c++11  -fno-rtti $(INCLUDE)
+CXXFLAGS= -c -Wall -g3 -std=c++17  -fno-rtti $(INCLUDE)
 RM	= rm -f
 
 #

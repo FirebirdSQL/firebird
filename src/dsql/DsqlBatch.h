@@ -76,6 +76,8 @@ public:
 	Firebird::IMessageMetadata* getMetadata(thread_db* tdbb);
 	void cancel(thread_db* tdbb);
 	void setDefaultBpb(thread_db* tdbb, unsigned parLength, const unsigned char* par);
+	void info(thread_db* tdbb, unsigned int itemsLength, const unsigned char* items,
+		unsigned int bufferLength, unsigned char* buffer);
 
 	// Additional flags - start from the maximum one
 	static const UCHAR FLAG_DEFAULT_SEGMENTED = 31;
@@ -121,6 +123,7 @@ private:
 		ULONG reget(ULONG size, UCHAR** buffer, ULONG alignment);
 		void remained(ULONG size, ULONG alignment = 0);
 		ULONG getSize() const;
+		ULONG getCapacity() const;
 		void clear();
 
 	private:

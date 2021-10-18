@@ -48,13 +48,15 @@ const int IN_SW_NBK_DIRECT			= 13;
 const int IN_SW_NBK_DECOMPRESS		= 14;
 const int IN_SW_NBK_ROLE			= 15;
 const int IN_SW_NBK_INPLACE			= 16;
+const int IN_SW_NBK_SEQUENCE		= 17;
 
 
 static const struct Switches::in_sw_tab_t nbackup_in_sw_table [] =
 {
-	{IN_SW_NBK_NODBTRIG,	isc_spb_nbk_no_triggers,	"T",		0, 0, 0, false,	true, 0,	1, NULL},
-	{IN_SW_NBK_DIRECT,		isc_spb_nbk_direct,			"DIRECT",	0, 0, 0, false, false, 0,  1, NULL},
-	{IN_SW_NBK_INPLACE,		isc_spb_nbk_inplace,		"INPLACE",	0, 0, 0, false, true, 0,	1, NULL},
+	{IN_SW_NBK_NODBTRIG,	isc_spb_nbk_no_triggers,	"T",		0, 0, 0, false,	true,	0,	1, NULL},
+	{IN_SW_NBK_DIRECT,		isc_spb_nbk_direct,			"DIRECT",	0, 0, 0, false, false,	0,	1, NULL},
+	{IN_SW_NBK_INPLACE,		isc_spb_nbk_inplace,		"INPLACE",	0, 0, 0, false, true,	0,	1, NULL},
+	{IN_SW_NBK_SEQUENCE,	isc_spb_nbk_sequence,		"SEQUENCE",	0, 0, 0, false, true,	0,	3, NULL},
 	{IN_SW_NBK_0,			0,							NULL,		0, 0, 0, false, false,	0,	0, NULL}	// End of List
 };
 
@@ -68,10 +70,11 @@ static const struct Switches::in_sw_tab_t nbackup_action_in_sw_table [] =
 	{IN_SW_NBK_FIXUP,		isc_action_svc_nfix,	"FIXUP",			0, 0, 0, false, false,	10,	1,	NULL, nboExclusive},
 	{IN_SW_NBK_BACKUP,		isc_action_svc_nbak,	"BACKUP",			0, 0, 0, false, false,	11,	1,	NULL, nboExclusive},
 	{IN_SW_NBK_RESTORE,		isc_action_svc_nrest,	"RESTORE",			0, 0, 0, false, false,	12,	1,	NULL, nboExclusive},
-	{IN_SW_NBK_DIRECT,		0,						"DIRECT",			0, 0, 0, false, false, 70,	1,	NULL, nboSpecial},
-	{IN_SW_NBK_INPLACE,		0,						"INPLACE",			0, 0, 0, false, false, 78, 1,	NULL, nboSpecial},
+	{IN_SW_NBK_DIRECT,		0,						"DIRECT",			0, 0, 0, false, false,	70,	1,	NULL, nboSpecial},
+	{IN_SW_NBK_INPLACE,		0,						"INPLACE",			0, 0, 0, false, false,	78, 1,	NULL, nboSpecial},
 	{IN_SW_NBK_SIZE,		0,						"SIZE",				0, 0, 0, false, false,	17,	1,	NULL, nboSpecial},
 	{IN_SW_NBK_DECOMPRESS,	0,						"DECOMPRESS",		0, 0, 0, false, false,	74,	2,	NULL, nboSpecial},
+	{IN_SW_NBK_SEQUENCE,	0,						"SEQUENCE",			0, 0, 0, false, false,	80, 3,	NULL, nboSpecial},
 	{IN_SW_NBK_NODBTRIG,	0,						"T",				0, 0, 0, false, false,	0,	1,	NULL, nboGeneral},
 	{IN_SW_NBK_NODBTRIG,	0,						"NODBTRIGGERS",		0, 0, 0, false, false,	16,	3,	NULL, nboGeneral},
 	{IN_SW_NBK_USER_NAME,	0,						"USER",				0, 0, 0, false, false,	13,	1,	NULL, nboGeneral},

@@ -170,7 +170,7 @@ set FBBUILD_PROD_STATUS=PROD
 set FBBUILD_PROD_STATUS=DEV
 )
 
-set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%_%FB_TARGET_PLATFORM%
+set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%_%FBBUILD_PACKAGE_NUMBER%_%FB_TARGET_PLATFORM%
 
 @setlocal
 @echo.
@@ -266,11 +266,13 @@ if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
 
 
 :: Various upgrade scripts and docs
-mkdir %FB_OUTPUT_DIR%\misc\upgrade\security 2>nul
-@copy %FB_ROOT_PATH%\src\misc\upgrade\v3.0\security_* %FB_OUTPUT_DIR%\misc\upgrade\security > nul
-@if %ERRORLEVEL% GEQ 1 (
-  call :ERROR copy %FB_ROOT_PATH%\src\misc\upgrade\v3.0\security_* %FB_OUTPUT_DIR%\misc\upgrade\security failed with error %ERRORLEVEL%.
-  goto :EOF
+for %%d in ( v3.0 v4.0 ) do (
+    mkdir %FB_OUTPUT_DIR%\misc\upgrade\%%d 2>nul
+    @copy %FB_ROOT_PATH%\src\misc\upgrade\%%d\*.* %FB_OUTPUT_DIR%\misc\upgrade\%%d > nul
+    @if %ERRORLEVEL% GEQ 1 (
+        call :ERROR copy %FB_ROOT_PATH%\src\misc\upgrade\%%d\*.* %FB_OUTPUT_DIR%\misc\upgrade\%%d failed with error %ERRORLEVEL%.
+        goto :EOF
+    )
 )
 
 :: INTL script
@@ -301,11 +303,28 @@ mkdir %FB_OUTPUT_DIR%\misc\upgrade\security 2>nul
 :: an error if FB_EXTERNAL_DOCS is not defined. On the other hand,
 :: if the docs are available then we can include them.
 if defined FB_EXTERNAL_DOCS (
-@echo   Copying pdf docs...
-@for %%v in ( Firebird-%FB_MAJOR_VER%.%FB_MINOR_VER%-QuickStart.pdf Firebird_v%FB_MAJOR_VER%.%FB_MINOR_VER%.%FB_REV_NO%.ReleaseNotes.pdf ) do (
-  @echo     ... %%v
-  (@copy /Y %FB_EXTERNAL_DOCS%\%%v %FB_OUTPUT_DIR%\doc\%%v > nul) || (call :WARNING Copying %FB_EXTERNAL_DOCS%\%%v failed.)
-)
+    @echo   Copying pdf docs...
+    @for %%v in ( Firebird_v%FB_MAJOR_VER%.%FB_MINOR_VER%.%FB_REV_NO%.ReleaseNotes.pdf ) do (
+        @echo     ... %%v
+        @copy /Y %FB_EXTERNAL_DOCS%\%%v %FB_OUTPUT_DIR%\doc\%%v > nul
+        if %ERRORLEVEL% GEQ 1 (call :ERROR Copying %FB_EXTERNAL_DOCS%\%%v failed.)
+    )
+
+    @for %%v in ( Firebird-%FB_MAJOR_VER%.%FB_MINOR_VER%-QuickStart.pdf  ) do (
+        @echo     ... %%v
+        @copy /Y %FB_EXTERNAL_DOCS%\%%v %FB_OUTPUT_DIR%\doc\%%v > nul
+        if %ERRORLEVEL% GEQ 1 (
+            REM - As of RC1 there is no quick start guide so we do not want
+            REM   the packaging to fail for something that doesn't exist
+            if "%FBBUILD_FILENAME_SUFFIX%" == "_RC1" (
+                echo Copying %FB_EXTERNAL_DOCS%\%%v failed.
+            ) else (
+                call :ERROR Copying %FB_EXTERNAL_DOCS%\%%v failed.
+            )
+        )
+    )
+
+
 @echo   Finished copying pdf docs...
 @echo.
 )
@@ -386,14 +405,12 @@ setlocal
 ::=========================================================================
 @echo   Copying ib_util etc
 @copy %FB_ROOT_PATH%\src\extlib\ib_util.h %FB_OUTPUT_DIR%\include > nul || (call :WARNING Copying ib_util.h failed. && @goto :EOF )
-@copy %FB_ROOT_PATH%\lang_helpers\ib_util.pas %FB_OUTPUT_DIR%\include > nul || (call :WARNING Copying ib_util.pas failed. && @goto :EOF )
+@copy %FB_ROOT_PATH%\src\misc\pascal\ib_util.pas %FB_OUTPUT_DIR%\include > nul || (call :WARNING Copying ib_util.pas failed. && @goto :EOF )
 
 @echo   Copying other include files required for development...
 set OUTPATH=%FB_OUTPUT_DIR%\include
 @copy %FB_ROOT_PATH%\src\yvalve\perf.h %OUTPATH%\ > nul
 @copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\ > nul || (@call :ERROR Failure executing copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\  )
-@if %ERRLEV% GEQ 1 goto :END
-@xcopy /e /i /y %FB_ROOT_PATH%\src\include\firebird\impl %OUTPATH%\firebird\  > nul || (@call :ERROR Failure executing @xcopy /e /i /y %FB_ROOT_PATH%\src\include\firebird\* %OUTPATH%\firebird\  )
 @if %ERRLEV% GEQ 1 goto :END
 
 endlocal
@@ -410,22 +427,6 @@ endlocal
 copy %FB_ROOT_PATH%\builds\install\misc\databases.conf %FB_OUTPUT_DIR%\databases.conf > nul
 
 ::End of DB_CONF
-::-----------------
-@goto :EOF
-
-
-:MISC
-::==============================================
-:: Make sure that qli's help.fdb is available
-::===============================================
-@if not exist %FB_OUTPUT_DIR%\help\help.fdb (
-    (@echo   Copying help.fdb for qli support)
-    (@copy %FB_GEN_DIR%\dbs\help.fdb %FB_OUTPUT_DIR%\help\help.fdb > nul)
-    (@if %ERRORLEVEL% GEQ 1 ( (call :ERROR Could not copy qli help database ) & (goto :EOF)))
-)
-
-
-::End of MISC
 ::-----------------
 @goto :EOF
 
@@ -481,7 +482,7 @@ if exist %FBBUILD_ZIPFILE% (
   @del %FBBUILD_ZIPFILE%
 )
 
-%SEVENZIP%\7z.exe a -r -tzip -mx9 %SKIP_FILES% %FBBUILD_ZIPFILE% %FB_OUTPUT_DIR%\*.*
+%SEVENZIP%\7z.exe a -r -tzip -mx9 %SKIP_FILES% %FBBUILD_ZIPFILE% %FB_OUTPUT_DIR%\*
 
 endlocal
 
@@ -697,9 +698,6 @@ if defined WIX (
 @echo   Writing databases conf
 @(@call :DB_CONF ) || (@echo Error calling DB_CONF && @goto :END)
 @echo.
-@echo   Copying miscellany such as the QLI help database
-@(@call :MISC ) || (@echo Error calling MISC & @goto :END)
-@echo.
 @echo   Copying firebird.msg
 @(@call :FB_MSG ) || (@echo Error calling FB_MSG && @goto :END)
 @echo.
@@ -742,6 +740,6 @@ if %FBBUILD_ISX_PACK% EQU 1 (
 
 :END
 
-exit /b
+exit /b %ERRLEV%
 
 

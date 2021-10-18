@@ -90,12 +90,28 @@ Token& Lexer::getToken(Token& token)
 			token.type = Token::TYPE_INTERFACE;
 		else if (token.text == "notImplemented")
 			token.type = Token::TYPE_NOT_IMPLEMENTED;
+		else if (token.text == "notImplementedAction")
+			token.type = Token::TYPE_NOT_IMPLEMENTED_ACTION;
 		else if (token.text == "struct")
 			token.type = Token::TYPE_STRUCT;
 		else if (token.text == "typedef")
 			token.type = Token::TYPE_TYPEDEF;
 		else if (token.text == "version")
 			token.type = Token::TYPE_VERSION;
+		else if (token.text == "onError")
+			token.type = Token::TYPE_ON_ERROR;
+		else if (token.text == "if")
+			token.type = Token::TYPE_IF;
+		else if (token.text == "then")
+			token.type = Token::TYPE_THEN;
+		else if (token.text == "else")
+			token.type = Token::TYPE_ELSE;
+		else if (token.text == "endif")
+			token.type = Token::TYPE_ENDIF;
+		else if (token.text == "call")
+			token.type = Token::TYPE_CALL;
+		else if (token.text == "defaultAction")
+			token.type = Token::TYPE_DEFAULT_ACTION;
 		// types
 		else if (token.text == "void")
 			token.type = Token::TYPE_VOID;

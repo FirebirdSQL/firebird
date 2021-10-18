@@ -31,7 +31,7 @@ package_firebird:
 			-e 's/_MINOR_VERS_/$(FB_MINOR_VERS)/g' \
 			-e 's/_REV_NO_/$(FB_REV_NO)/g' \
 			../builds/install/arch-specific/darwin/Info.plist \
-			> $(ROOT)/gen/$(TARGET)/frameworks/Firebird4.framework/Resources/Info.plist
+			> $(ROOT)/gen/$(TARGET)/frameworks/Firebird5.framework/Resources/Info.plist
 	sed -e 's/_FB_BUILD_SUFFIX_/$(FB_VER_SUFFIX)/g' \
 			-e 's/_SMFB_BUILD_SUFFIX_/$(FB_VER_SUFFIX_SM)/g' \
 			-e 's/_MFB_BUILD_SUFFIX_/$(FB_VER_SUFFIX_M)/g' \
@@ -39,7 +39,7 @@ package_firebird:
 			-e 's/_MINOR_VERS_/$(FB_MINOR_VERS)/g' \
 			-e 's/_REV_NO_/$(FB_REV_NO)/g' \
 			../builds/install/arch-specific/darwin/Description.plist \
-			> $(ROOT)/gen/$(TARGET)/frameworks/Firebird4.framework/Resources/Description.plist
+			> $(ROOT)/gen/$(TARGET)/frameworks/Firebird5.framework/Resources/Description.plist
 
 	rm -fr $(ROOT)/gen/$(TARGET)/scripts
 	mkdir $(ROOT)/gen/$(TARGET)/scripts
@@ -63,7 +63,7 @@ package_firebird:
 
 	rm -fr $(TARGET)/packages
 	mkdir $(TARGET)/packages
-	pkgbuild --root $(ROOT)/gen/$(TARGET)/frameworks/Firebird4.framework \
+	pkgbuild --root $(ROOT)/gen/$(TARGET)/frameworks/Firebird5.framework \
 			--identifier com.firebirdsql.Firebird \
 			--install-location /Library/Frameworks/Firebird.framework \
 			--scripts $(ROOT)/gen/$(TARGET)/scripts \

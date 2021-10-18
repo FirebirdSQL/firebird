@@ -38,7 +38,7 @@
 #include "../jrd/MetaName.h"
 #include "../common/classes/NestConst.h"
 
-#include "gen/iberror.h"
+#include "iberror.h"
 
 #include "../common/dsc.h"
 #include "../jrd/rse.h"
@@ -448,7 +448,7 @@ public:
 		csb_resources(p),
 		csb_dependencies(p),
 		csb_fors(p),
-		csb_cursors(p),
+		csb_localTables(p),
 		csb_invariants(p),
 		csb_current_nodes(p),
 		csb_current_for_nodes(p),
@@ -511,7 +511,7 @@ public:
 	ResourceList	csb_resources;				// Resources (relations and indexes)
 	Firebird::Array<Dependency>	csb_dependencies;	// objects that this statement depends upon
 	Firebird::Array<const RecordSource*> csb_fors;	// record sources
-	Firebird::Array<const Cursor*> csb_cursors;	// named cursors
+	Firebird::Array<const DeclareLocalTableNode*> csb_localTables;	// local tables
 	Firebird::Array<ULONG*> csb_invariants;		// stack of pointer to nodes invariant offsets
 	Firebird::Array<ExprNode*> csb_current_nodes;	// RseNode's and other invariant
 												// candidates within whose scope we are

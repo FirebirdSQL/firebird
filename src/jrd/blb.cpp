@@ -47,7 +47,7 @@
 #include "../jrd/blb.h"
 #include "../jrd/ods.h"
 #include "../jrd/lls.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/blob_filter.h"
 #include "../common/sdl.h"
 #include "../jrd/intl.h"

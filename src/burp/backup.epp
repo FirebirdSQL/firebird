@@ -183,6 +183,7 @@ const UCHAR db_info_items[] =
 	isc_info_no_reserve,
 	isc_info_set_page_buffers,
 	isc_info_db_read_only,
+	fb_info_replica_mode,
 	isc_info_end
 };
 const UCHAR limbo_tpb[] =
@@ -2590,7 +2591,7 @@ void write_database( const TEXT* dbb_file)
 		// msg 31 isc_database_info failed
 	}
 
-	USHORT page_size = 0, forced_writes, no_reserve, db_read_only;
+	USHORT page_size = 0, forced_writes, no_reserve, db_read_only, replica_mode;
  	ULONG sweep_interval, page_buffers;
  	USHORT length = 0;
 	for (const UCHAR* d = buffer; *d != isc_info_end; d += length)
@@ -2639,6 +2640,11 @@ void write_database( const TEXT* dbb_file)
 		case isc_info_db_read_only:
 			if (db_read_only = (USHORT) gds__vax_integer(d, length))
 				put_int32(att_db_read_only, db_read_only);
+			break;
+
+		case fb_info_replica_mode:
+			if (replica_mode = (USHORT) gds__vax_integer(d, length))
+				put_int32(att_replica_mode, replica_mode);
 			break;
 
 		default:

@@ -20,13 +20,15 @@
  *  Contributor(s): ______________________________________.
  */
 
+#include <algorithm>
+#include <cctype>
 #include <exception>
 #include <iostream>
 #include <fstream>
+#include <regex>
 #include <string>
 #include <unordered_set>
 #include <vector>
-#include <algorithm>
 #include <utility>
 #include <cassert>
 #include <string.h>
@@ -53,9 +55,9 @@ void writeString(ofstream& stream, const char* str, bool includeNullByte)
 
 int run(int argc, const char* argv[])
 {
-	if (argc != 3)
+	if (argc != 4)
 	{
-		cerr << "Syntax: " << argv[0] << " <ids.dat file> <TimeZones.h file>" << endl;
+		cerr << "Syntax: " << argv[0] << " <ids.dat file> <TimeZones.h file> <TimeZoneIds.h file>" << endl;
 		return 1;
 	}
 
@@ -94,10 +96,11 @@ int run(int argc, const char* argv[])
 
 	uenum_close(uenum);
 
-	ofstream datStream, headerStream;
+	ofstream datStream, headerStream, idsHeaderStream;
 
 	datStream.open(argv[1], std::fstream::out | std::fstream::trunc | std::fstream::binary);
 	headerStream.open(argv[2], std::fstream::out | std::fstream::trunc);
+	idsHeaderStream.open(argv[3], std::fstream::out | std::fstream::trunc);
 
 	uint8_t byte;
 
@@ -135,6 +138,15 @@ int run(int argc, const char* argv[])
 		"// The content of this file is generated with help of update-ids utility Do not edit.\n\n",
 		false);
 
+	writeString(idsHeaderStream,
+		"#ifndef FIREBIRD_TIME_ZONES_H\n"
+		"#define FIREBIRD_TIME_ZONES_H\n\n",
+		false);
+
+	writeString(idsHeaderStream,
+		"// The content of this file is generated with help of update-ids utility Do not edit.\n\n",
+		false);
+
 	sprintf(buffer, "static const char* BUILTIN_TIME_ZONE_VERSION = \"%s\";\n\n", databaseVersion);
 	writeString(headerStream, buffer, false);
 
@@ -145,16 +157,41 @@ int run(int argc, const char* argv[])
 
 	index = MAX_ID;
 
+	const std::regex plusNumberRegex("\\+([[:digit:]])");
+	const std::regex minusNumberRegex("\\-([[:digit:]])");
+
 	for (const auto zone : zonesVector)
 	{
-		sprintf(buffer, "\t\"%s\"%s\t// %u\n", zone.c_str(), (zone == zonesVector.back() ? "" : ","), index);
+		auto zoneDef = zone;
+
+		zoneDef = std::regex_replace(zoneDef, plusNumberRegex, "_plus_$1");
+		zoneDef = std::regex_replace(zoneDef, minusNumberRegex, "_minus_$1");
+		std::replace(zoneDef.begin(), zoneDef.end(), '/', '_');
+		std::replace(zoneDef.begin(), zoneDef.end(), '-', '_');
+
+		std::transform(zoneDef.begin(), zoneDef.end(), zoneDef.begin(),
+			[](unsigned char c) { return std::tolower(c); });
+
+		zoneDef = "fb_tzid_" + zoneDef;
+
+		sprintf(buffer, "\t\"%s\"%s\t// %s - %u\n",
+			zone.c_str(), (zone == zonesVector.back() ? "" : ","), zoneDef.c_str(), index);
 		writeString(headerStream, buffer, false);
+
+		sprintf(buffer, "#define %-45s%u /* %s */\n", zoneDef.c_str(), index, zone.c_str());
+		writeString(idsHeaderStream, buffer, false);
+
 		--index;
 	}
 
 	writeString(headerStream, "};\n", false);
 
+	writeString(idsHeaderStream,
+		"\n#endif /* FIREBIRD_TIME_ZONES_H */\n",
+		false);
+
 	headerStream.close();
+	idsHeaderStream.close();
 
 	return 0;
 }

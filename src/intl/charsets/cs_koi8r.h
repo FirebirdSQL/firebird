@@ -263,7 +263,6 @@
    -------------------------------------------- */
 
 
-static const int UNICODE_REPLACEMENT_CHARACTER = 0xFFFD;
 static const int CANT_MAP_CHARACTER = 0;
 
 static const USHORT to_unicode_map[256] = {

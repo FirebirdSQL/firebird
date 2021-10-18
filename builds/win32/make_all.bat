@@ -8,7 +8,7 @@ set ERRLEV=0
 
 :: verify that boot was run before
 
-@if not exist %FB_GEN_DIR%\dbs\msg.fdb (goto :HELP_BOOT & goto :EOF)
+@if not exist %FB_GEN_DIR%\firebird.msg (goto :HELP_BOOT & goto :EOF)
 
 
 @call set_build_target.bat %*
@@ -61,7 +61,7 @@ if errorlevel 1 call :ERROR build failed - see make_all_%FB_TARGET_PLATFORM%.log
 @copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\yvalve\fbclient.lib %FB_OUTPUT_DIR%\lib\fbclient_ms.lib >nul
 @copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\ib_util\ib_util.lib %FB_OUTPUT_DIR%\lib\ib_util_ms.lib >nul
 
-for %%v in (gpre_boot build_msg codes) do (
+for %%v in (gpre_boot build_msg) do (
 @del %FB_OUTPUT_DIR%\%%v.* 2>nul
 )
 
@@ -78,7 +78,7 @@ for %%v in (gpre_boot build_msg codes) do (
 @copy %FB_ROOT_PATH%\builds\install\misc\IDPLicense.txt %FB_OUTPUT_DIR% >nul
 
 :: DATABASES
-@copy %FB_GEN_DIR%\dbs\security4.FDB %FB_OUTPUT_DIR%\security4.fdb >nul
+@copy %FB_GEN_DIR%\dbs\security5.FDB %FB_OUTPUT_DIR%\security5.fdb >nul
 @copy %FB_GEN_DIR%\dbs\HELP.fdb %FB_OUTPUT_DIR%\help\help.fdb >nul
 
 :: DOCS
@@ -92,7 +92,7 @@ for %%v in (gpre_boot build_msg codes) do (
 copy %FB_ROOT_PATH%\src\extlib\ib_util.h %FB_OUTPUT_DIR%\include > nul
 copy %FB_ROOT_PATH%\src\jrd\perf.h %FB_OUTPUT_DIR%\include >nul
 copy %FB_ROOT_PATH%\src\include\ibase.h %FB_OUTPUT_DIR%\include > nul
-copy %FB_ROOT_PATH%\src\include\gen\iberror.h %FB_OUTPUT_DIR%\include > nul
+copy %FB_ROOT_PATH%\src\include\iberror.h %FB_OUTPUT_DIR%\include > nul
 
 :: New API headers
 xcopy %FB_ROOT_PATH%\src\include\firebird %FB_OUTPUT_DIR%\include\firebird /e > nul

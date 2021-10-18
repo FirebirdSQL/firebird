@@ -21,7 +21,7 @@
 #LD=@CXX@
 
 #PROD_FLAGS=-ggdb -O3 -fno-omit-frame-pointer -DLINUX -pipe -MMD -fPIC
-#DEV_FLAGS=-ggdb -DLINUX -DDEBUG_GDS_ALLOC -pipe -MMD -p -fPIC -Wall -Wno-switch
+#DEV_FLAGS=-ggdb -DLINUX -DDEBUG_GDS_ALLOC -pipe -MMD -p -fPIC -Werror=delete-incomplete -Wall -Wno-switch
 
 PROD_FLAGS=-O3 -DLINUX -DPPC64 -pipe -p -MMD -fPIC -fsigned-char -fmessage-length=0
-DEV_FLAGS=-ggdb -DLINUX -DPPC64 -pipe -p -MMD -fPIC -Wall -fsigned-char -fmessage-length=0 -Wno-non-virtual-dtor
+DEV_FLAGS=-ggdb -DLINUX -DPPC64 -pipe -p -MMD -fPIC -Werror=delete-incomplete -Wall -fsigned-char -fmessage-length=0 -Wno-non-virtual-dtor

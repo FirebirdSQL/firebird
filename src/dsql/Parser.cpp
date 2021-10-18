@@ -122,8 +122,17 @@ Parser::Parser(thread_db* tdbb, MemoryPool& pool, DsqlCompilerScratch* aScratch,
 	yylexp = 0;
 	yylexemes = 0;
 
+	yyposn.firstLine = 1;
+	yyposn.firstColumn = 1;
+	yyposn.lastLine = 1;
+	yyposn.lastColumn = 1;
+	yyposn.firstPos = string;
+	yyposn.leadingFirstPos = string;
+	yyposn.lastPos = string + length;
+	yyposn.trailingLastPos = string + length;
+
 	lex.start = string;
-	lex.line_start = lex.last_token = lex.ptr = string;
+	lex.line_start = lex.last_token = lex.ptr = lex.leadingPtr = string;
 	lex.end = string + length;
 	lex.lines = 1;
 	lex.att_charset = characterSet;
@@ -242,11 +251,12 @@ void Parser::transformString(const char* start, unsigned length, string& dest)
 // Make a substring from the command text being parsed.
 string Parser::makeParseStr(const Position& p1, const Position& p2)
 {
-	const char* start = p1.firstPos;
-	const char* end = p2.lastPos;
+	const char* start = p1.leadingFirstPos;
+	const char* end = p2.trailingLastPos;
 
 	string str;
 	transformString(start, end - start, str);
+	str.trim(" \t\r\n");
 
 	string ret;
 
@@ -278,16 +288,19 @@ void Parser::yyReducePosn(YYPOSN& ret, YYPOSN* termPosns, YYSTYPE* /*termVals*/,
 		// Accessing termPosns[-1] seems to be the only way to get correct positions in this case.
 		ret.firstLine = ret.lastLine = termPosns[termNo - 1].lastLine;
 		ret.firstColumn = ret.lastColumn = termPosns[termNo - 1].lastColumn;
-		ret.firstPos = ret.lastPos = termPosns[termNo - 1].lastPos;
+		ret.firstPos = ret.lastPos = ret.trailingLastPos = termPosns[termNo - 1].trailingLastPos;
+		ret.leadingFirstPos = termPosns[termNo - 1].lastPos;
 	}
 	else
 	{
 		ret.firstLine = termPosns[0].firstLine;
 		ret.firstColumn = termPosns[0].firstColumn;
 		ret.firstPos = termPosns[0].firstPos;
+		ret.leadingFirstPos = termPosns[0].leadingFirstPos;
 		ret.lastLine = termPosns[termNo - 1].lastLine;
 		ret.lastColumn = termPosns[termNo - 1].lastColumn;
 		ret.lastPos = termPosns[termNo - 1].lastPos;
+		ret.trailingLastPos = termPosns[termNo - 1].trailingLastPos;
 	}
 
 	/*** This allows us to see colored output representing the position reductions.
@@ -308,29 +321,24 @@ int Parser::yylex()
 	yyposn.firstLine = lex.lines;
 	yyposn.firstColumn = lex.ptr - lex.line_start;
 	yyposn.firstPos = lex.ptr - 1;
+	yyposn.leadingFirstPos = lex.leadingPtr;
 
 	lex.prev_keyword = yylexAux();
 
-	const TEXT* ptr = lex.ptr;
-	const TEXT* last_token = lex.last_token;
-	const TEXT* line_start = lex.line_start;
-	const SLONG lines = lex.lines;
+	yyposn.lastPos = lex.ptr;
+	lex.leadingPtr = lex.ptr;
 
 	// Lets skip spaces before store lastLine/lastColumn. This is necessary to avoid yyReducePosn
 	// produce invalid line/column information - CORE-4381.
-	yylexSkipSpaces();
+	bool spacesSkipped = yylexSkipSpaces();
 
 	yyposn.lastLine = lex.lines;
 	yyposn.lastColumn = lex.ptr - lex.line_start;
 
-	lex.ptr = ptr;
-	lex.last_token = last_token;
-	lex.line_start = line_start;
-	lex.lines = lines;
+	if (spacesSkipped)
+		--lex.ptr;
 
-	// But the correct value for lastPos is the old (before the second yyLexSkipSpaces)
-	// value of lex.ptr.
-	yyposn.lastPos = ptr;
+	yyposn.trailingLastPos = lex.ptr;
 
 	return lex.prev_keyword;
 }
@@ -501,45 +509,60 @@ int Parser::yylexAux()
 		char* buffer = string;
 		SLONG buffer_len = sizeof(string);
 		const char* buffer_end = buffer + buffer_len - 1;
-		char* p;
-		for (p = buffer; ; ++p)
+		char* p = buffer;
+
+		do
 		{
-			if (lex.ptr >= lex.end)
+			do
 			{
-				if (buffer != string)
-					gds__free (buffer);
-				yyerror("unterminated string");
-				return -1;
-			}
-			// Care about multi-line constants and identifiers
-			if (*lex.ptr == '\n')
-			{
-				lex.lines++;
-				lex.line_start = lex.ptr + 1;
-			}
-			// *lex.ptr is quote - if next != quote we're at the end
-			if ((*lex.ptr == c) && ((++lex.ptr == lex.end) || (*lex.ptr != c)))
-				break;
-			if (p > buffer_end)
-			{
-				char* const new_buffer = (char*) gds__alloc (2 * buffer_len);
-				// FREE: at outer block
-				if (!new_buffer)		// NOMEM:
+				if (lex.ptr >= lex.end)
 				{
 					if (buffer != string)
 						gds__free (buffer);
+					yyerror("unterminated string");
 					return -1;
 				}
-				memcpy (new_buffer, buffer, buffer_len);
-				if (buffer != string)
-					gds__free (buffer);
-				buffer = new_buffer;
-				p = buffer + buffer_len;
-				buffer_len = 2 * buffer_len;
-				buffer_end = buffer + buffer_len - 1;
+				// Care about multi-line constants and identifiers
+				if (*lex.ptr == '\n')
+				{
+					lex.lines++;
+					lex.line_start = lex.ptr + 1;
+				}
+				// *lex.ptr is quote - if next != quote we're at the end
+				if ((*lex.ptr == c) && ((++lex.ptr == lex.end) || (*lex.ptr != c)))
+					break;
+				if (p > buffer_end)
+				{
+					char* const new_buffer = (char*) gds__alloc (2 * buffer_len);
+					// FREE: at outer block
+					if (!new_buffer)		// NOMEM:
+					{
+						if (buffer != string)
+							gds__free (buffer);
+						return -1;
+					}
+					memcpy (new_buffer, buffer, buffer_len);
+					if (buffer != string)
+						gds__free (buffer);
+					buffer = new_buffer;
+					p = buffer + buffer_len;
+					buffer_len = 2 * buffer_len;
+					buffer_end = buffer + buffer_len - 1;
+				}
+				*p++ = *lex.ptr++;
+			} while (true);
+
+			if (c != '\'')
+				break;
+
+			LexerState saveLex = lex;
+
+			if (!yylexSkipSpaces() || lex.ptr[-1] != '\'')
+			{
+				lex = saveLex;
+				break;
 			}
-			*p = *lex.ptr++;
-		}
+		} while (true);
 
 		if (p - buffer > MAX_STR_SIZE)
 		{
@@ -654,80 +677,80 @@ int Parser::yylexAux()
 	// in a character or binary item.
 	if ((c == 'x' || c == 'X') && lex.ptr < lex.end && *lex.ptr == '\'')
 	{
+		++lex.ptr;
+
 		bool hexerror = false;
+		Firebird::string temp;
+		int leadNibble = -1;
 
-		// Remember where we start from, to rescan later.
-		// Also we'll need to know the length of the buffer.
+		// Scan over the hex string converting adjacent bytes into nibble values.
+		// Every other nibble, write the saved byte to the temp space.
+		// At the end of this, the temp.space area will contain the binary representation of the hex constant.
+		// Full string could be composed of multiple segments.
 
-		const char* hexstring = ++lex.ptr;
-		int charlen = 0;
-
-		// Time to scan the string. Make sure the characters are legal,
-		// and find out how long the hex digit string is.
-
-		for (;;)
+		while (!hexerror)
 		{
-			if (lex.ptr >= lex.end)	// Unexpected EOS
+			int leadNibble = -1;
+
+			// Scan over the hex string converting adjacent bytes into nibble values.
+			// Every other nibble, write the saved byte to the temp space.
+			// At the end of this, the temp.space area will contain the binary representation of the hex constant.
+
+			for (;;)
 			{
-				hexerror = true;
-				break;
+				if (lex.ptr >= lex.end)	// Unexpected EOS
+				{
+					hexerror = true;
+					break;
+				}
+
+				c = *lex.ptr;
+
+				if (c == '\'')			// Trailing quote, done
+				{
+					++lex.ptr;			// Skip the quote
+					break;
+				}
+				else if (c != ' ')
+				{
+					if (!(classes(c) & CHR_HEX))	// Illegal character
+					{
+						hexerror = true;
+						break;
+					}
+
+					c = UPPER7(c);
+
+					if (c >= 'A')
+						c = (c - 'A') + 10;
+					else
+						c = (c - '0');
+
+					if (leadNibble == -1)
+						leadNibble = c;
+					else
+					{
+						temp.append(1, char((leadNibble << 4) + (UCHAR) c));
+						leadNibble = -1;
+					}
+				}
+
+				++lex.ptr;	// and advance...
 			}
 
-			c = *lex.ptr;
+			hexerror = hexerror || leadNibble != -1;
 
-			if (c == '\'')			// Trailing quote, done
+			LexerState saveLex = lex;
+
+			if (!yylexSkipSpaces() || lex.ptr - 1 == saveLex.ptr || lex.ptr[-1] != '\'')
 			{
-				++lex.ptr;			// Skip the quote
+				lex = saveLex;
 				break;
 			}
-
-			if (!(classes(c) & CHR_HEX))	// Illegal character
-			{
-				hexerror = true;
-				break;
-			}
-
-			++charlen;	// Okay, just count 'em
-			++lex.ptr;	// and advance...
 		}
 
-		hexerror = hexerror || (charlen & 1);	// IS_ODD(charlen)
-
-		// If we made it this far with no error, then convert the string.
 		if (!hexerror)
 		{
-			// Figure out the length of the actual resulting hex string.
-			// Allocate a second temporary buffer for it.
-
-			Firebird::string temp;
-
-			// Re-scan over the hex string we got earlier, converting
-			// adjacent bytes into nibble values.  Every other nibble,
-			// write the saved byte to the temp space.  At the end of
-			// this, the temp.space area will contain the binary
-			// representation of the hex constant.
-
-			UCHAR byte = 0;
-			for (int i = 0; i < charlen; i++)
-			{
-				c = UPPER7(hexstring[i]);
-
-				// Now convert the character to a nibble
-
-				if (c >= 'A')
-					c = (c - 'A') + 10;
-				else
-					c = (c - '0');
-
-				if (i & 1) // nibble?
-				{
-					byte = (byte << 4) + (UCHAR) c;
-					temp.append(1, (char) byte);
-				}
-				else
-					byte = c;
-			}
-
 			if (temp.length() / 2 > MAX_STR_SIZE)
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
@@ -838,7 +861,7 @@ int Parser::yylexAux()
 			++charlen;			// Okay, just count 'em
 			++lex.ptr;			// and advance...
 
-			if (charlen > 16)	// Too many digits...
+			if (charlen > 32)	// Too many digits...
 			{
 				hexerror = true;
 				break;
@@ -849,11 +872,24 @@ int Parser::yylexAux()
 		// an NUMBER32BIT or NUMBER64BIT.
 		if (!hexerror)
 		{
+			if (charlen > 16)
+			{
+				// we deal with int128
+				fb_assert(charlen <= 32);	// charlen is always <= 32, see 10-15 lines upper
+
+				Firebird::string sbuff(hexstring, charlen);
+				sbuff.insert(0, "0X");
+
+				yylval.lim64ptr = newLim64String(sbuff, 0);
+
+				return TOK_NUM128;
+			}
+
 			// if charlen > 8 (something like FFFF FFFF 0, w/o the spaces)
 			// then we have to return a NUMBER64BIT. We'll make a string
 			// node here, and let make.cpp worry about converting the
 			// string to a number and building the node later.
-			if (charlen > 8)
+			else if (charlen > 8)
 			{
 				char cbuff[32];
 				fb_assert(charlen <= 16);	// charlen is always <= 16, see 10-15 lines upper
@@ -1269,7 +1305,7 @@ int Parser::yylexAux()
 }
 
 
-void Parser::yyerror_detailed(const TEXT* /*error_string*/, int yychar, YYSTYPE&, YYPOSN&)
+void Parser::yyerror_detailed(const TEXT* /*error_string*/, int yychar, YYSTYPE&, YYPOSN& posn)
 {
 /**************************************
  *
@@ -1281,29 +1317,21 @@ void Parser::yyerror_detailed(const TEXT* /*error_string*/, int yychar, YYSTYPE&
  *	Print a syntax error.
  *
  **************************************/
-	const TEXT* line_start = lex.line_start;
-	SLONG lines = lex.lines;
-	if (lex.last_token < line_start)
-	{
-		line_start = lex.line_start_bk;
-		lines--;
-	}
-
 	if (yychar < 1)
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 				  // Unexpected end of command
-				  Arg::Gds(isc_command_end_err2) << Arg::Num(lines) <<
-													Arg::Num(lex.last_token - line_start + 1));
+				  Arg::Gds(isc_command_end_err2) << Arg::Num(posn.firstLine) <<
+													Arg::Num(posn.firstColumn));
 	}
 	else
 	{
 		ERRD_post (Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 				  // Token unknown - line %d, column %d
-				  Arg::Gds(isc_dsql_token_unk_err) << Arg::Num(lines) <<
-				  									  Arg::Num(lex.last_token - line_start + 1) << // CVC: +1
+				  Arg::Gds(isc_dsql_token_unk_err) << Arg::Num(posn.firstLine) <<
+				  									  Arg::Num(posn.firstColumn) <<
 				  // Show the token
-				  Arg::Gds(isc_random) << Arg::Str(string(lex.last_token, lex.ptr - lex.last_token)));
+				  Arg::Gds(isc_random) << Arg::Str(string(posn.firstPos, posn.lastPos - posn.firstPos)));
 	}
 }
 
@@ -1317,15 +1345,12 @@ void Parser::yyerror(const TEXT* error_string)
 	yyerror_detailed(error_string, -1, errt_value, errt_posn);
 }
 
-void Parser::yyerrorIncompleteCmd()
+void Parser::yyerrorIncompleteCmd(const YYPOSN& pos)
 {
-	const TEXT* line_start = lex.line_start;
-	SLONG lines = lex.lines;
-
 	ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 			  // Unexpected end of command
-			  Arg::Gds(isc_command_end_err2) << Arg::Num(lines) <<
-												Arg::Num(lex.ptr - line_start + 1));
+			  Arg::Gds(isc_command_end_err2) << Arg::Num(pos.lastLine) <<
+												Arg::Num(pos.lastColumn + 1));
 }
 
 void Parser::check_bound(const char* const to, const char* const string)

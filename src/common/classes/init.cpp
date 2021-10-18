@@ -203,6 +203,7 @@ namespace
 		initDone = 1;
 #ifdef HAVE_PTHREAD_ATFORK
 		int ret = pthread_atfork(NULL, NULL, child);
+		(void) ret;
 #endif
 
 		Firebird::MemoryPool::contextPoolInit();

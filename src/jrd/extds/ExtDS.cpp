@@ -249,7 +249,7 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 }
 
 ConnectionsPool* Manager::getConnPool(bool create)
-{ 
+{
 	if (!m_connPool && create)
 		m_connPool = FB_NEW_POOL(manager->getPool()) ConnectionsPool(manager->getPool());
 
@@ -412,8 +412,6 @@ Connection* Provider::getBoundConnection(Jrd::thread_db* tdbb,
 
 void Provider::jrdAttachmentEnd(thread_db* tdbb, Jrd::Attachment* att, bool forced)
 {
-	Database* dbb = tdbb->getDatabase();
-
 	HalfStaticArray<Connection*, 16> toRelease(getPool());
 
 	{	// scope
@@ -466,7 +464,7 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 			m_connections.add(AttToConn(NULL, &conn));
 	}
 
-	if (!inPool || !connPool || !conn.isConnected() || !conn.resetSession())
+	if (!inPool || !connPool || !conn.isConnected() || !conn.resetSession(tdbb))
 	{
 		{	// scope
 			MutexLockGuard guard(m_mutex, FB_FUNCTION);
@@ -2104,14 +2102,19 @@ void Statement::preprocess(const string& sql, string& ret)
 				// hvlad: TODO check quoted param names
 				ident.assign(start + 1, p - start - 1);
 				if (tok == ttIdent)
+				{
+					if (ident.length() > MAX_SQL_IDENTIFIER_LEN)
+						ERR_post(Arg::Gds(isc_eds_preprocess) <<
+								 Arg::Gds(isc_dyn_name_longer) <<
+								 Arg::Gds(isc_random) << Arg::Str(ident));
+
 					ident.upper();
+				}
 
 				FB_SIZE_T n = 0;
-				if (!m_sqlParamNames.find(ident.c_str(), n))
-				{
-					MetaName* pName = FB_NEW_POOL(getPool()) MetaName(getPool(), ident);
-					n = m_sqlParamNames.add(*pName);
-				}
+				MetaString name(ident);
+				if (!m_sqlParamNames.find(name, n))
+					n = m_sqlParamNames.add(name);
 
 				m_sqlParamsMap.add(&m_sqlParamNames[n]);
 			}
@@ -2205,7 +2208,7 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 
 		for (unsigned int sqlNum = 0; sqlNum < mapCount; sqlNum++)
 		{
-			const MetaName* sqlName = m_sqlParamsMap[sqlNum];
+			const MetaString* sqlName = m_sqlParamsMap[sqlNum];
 
 			unsigned int num = 0;
 			for (; num < count; num++)
@@ -2227,10 +2230,10 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 		doSetInParams(tdbb, mapCount, m_sqlParamsMap.begin(), sqlParams);
 	}
 	else
-		doSetInParams(tdbb, count, names, (params ? params->items.begin() : NULL));
+		doSetInParams(tdbb, count, NULL, (params ? params->items.begin() : NULL));
 }
 
-void Statement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaName* const* /*names*/,
+void Statement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaString* const* /*names*/,
 	const NestConst<ValueExprNode>* params)
 {
 	if (count != getInputs())
@@ -2538,10 +2541,10 @@ void EngineCallbackGuard::init(thread_db* tdbb, Connection& conn, const char* fr
 		{
 			m_saveConnection = attachment->att_ext_connection;
 			m_stable = attachment->getStable();
-			m_stable->getMutex()->leave();
+			m_stable->getSync()->leave();
 
-			MutexLockGuard guardAsync(*m_stable->getMutex(true, true), FB_FUNCTION);
-			MutexLockGuard guardMain(*m_stable->getMutex(), FB_FUNCTION);
+			Jrd::AttSyncLockGuard guardAsync(*m_stable->getSync(true, true), FB_FUNCTION);
+			Jrd::AttSyncLockGuard guardMain(*m_stable->getSync(), FB_FUNCTION);
 			if (m_stable->getHandle() == attachment)
 				attachment->att_ext_connection = &conn;
 		}
@@ -2563,13 +2566,13 @@ EngineCallbackGuard::~EngineCallbackGuard()
 		Jrd::Attachment* attachment = m_tdbb->getAttachment();
 		if (attachment && m_stable.hasData())
 		{
-			MutexLockGuard guardAsync(*m_stable->getMutex(true, true), FB_FUNCTION);
-			m_stable->getMutex()->enter(FB_FUNCTION);
+			Jrd::AttSyncLockGuard guardAsync(*m_stable->getSync(true, true), FB_FUNCTION);
+			m_stable->getSync()->enter(FB_FUNCTION);
 
 			if (m_stable->getHandle() == attachment)
 				attachment->att_ext_connection = m_saveConnection;
 			else
-				m_stable->getMutex()->leave();
+				m_stable->getSync()->leave();
 		}
 
 		jrd_tra* transaction = m_tdbb->getTransaction();

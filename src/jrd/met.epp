@@ -1994,9 +1994,9 @@ void MET_load_trigger(thread_db* tdbb,
 		// if there is an ignore permission flag, see if it is legit
 		if ((TRG.RDB$FLAGS & TRG_ignore_perm) && !verify_TRG_ignore_perm(tdbb, trigger_name))
 		{
-			fb_msg_format(NULL, JRD_BUGCHK, 304, sizeof(errmsg),
+			fb_msg_format(NULL, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, 304, sizeof(errmsg),
 							errmsg, MsgFormat::SafeArg() << trigger_name.c_str());
-			ERR_log(JRD_BUGCHK, 304, errmsg);
+			ERR_log(FB_IMPL_MSG_FACILITY_JRD_BUGCHK, 304, errmsg);
 
 			trig_flags &= ~TRG_ignore_perm;
 		}
@@ -2777,6 +2777,7 @@ jrd_prc* MET_lookup_procedure(thread_db* tdbb, const QualifiedName& name, bool n
 		jrd_prc* procedure = *iter;
 
 		if (procedure && !(procedure->flags & Routine::FLAG_OBSOLETE) &&
+			!(procedure->flags & Routine::FLAG_CLEARED) &&
 			((procedure->flags & Routine::FLAG_SCANNED) || noscan) &&
 			!(procedure->flags & Routine::FLAG_BEING_SCANNED) &&
 			!(procedure->flags & Routine::FLAG_BEING_ALTERED))
@@ -2845,6 +2846,7 @@ jrd_prc* MET_lookup_procedure_id(thread_db* tdbb, USHORT id,
 
 	if (id < (USHORT) attachment->att_procedures.getCount() && (procedure = attachment->att_procedures[id]) &&
 		procedure->getId() == id &&
+		!(procedure->flags & Routine::FLAG_CLEARED) &&
 		!(procedure->flags & Routine::FLAG_BEING_SCANNED) &&
 		((procedure->flags & Routine::FLAG_SCANNED) || noscan) &&
 		!(procedure->flags & Routine::FLAG_BEING_ALTERED) &&
@@ -3336,7 +3338,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 	try {
 
 	procedure->flags |= (Routine::FLAG_BEING_SCANNED | flags);
-	procedure->flags &= ~Routine::FLAG_OBSOLETE;
+	procedure->flags &= ~(Routine::FLAG_OBSOLETE | Routine::FLAG_CLEARED);
 
 	procedure->setId(id);
 	attachment->att_procedures[id] = procedure;
@@ -3529,7 +3531,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 					{
 						try
 						{
-							procedure->parseBlr(tdbb, csb, &P.RDB$PROCEDURE_BLR, 
+							procedure->parseBlr(tdbb, csb, &P.RDB$PROCEDURE_BLR,
 								P.RDB$DEBUG_INFO.NULL ? NULL : &P.RDB$DEBUG_INFO);
 						}
 						catch (const Exception& ex)
@@ -4072,6 +4074,8 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 			case RSR_computed_blr:
 				{
+					AutoSetRestoreFlag<USHORT> flag(&field->fld_flags, FLD_parse_computed, true);
+
 					DmlNode* nod = dependencies ?
 						MET_get_dependencies(tdbb, relation, p, length, csb, NULL, NULL, NULL,
 							field->fld_name, obj_computed, 0, depTrans) :

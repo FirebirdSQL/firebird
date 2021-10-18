@@ -24,7 +24,7 @@
 # 2. dnl the CPU_TYPE
 # 3. edit extern/icu/source/config and set the right 32bit flags (-arch i386)
 # 4. for  CFLAGS, CXXFLAGS, LDFLAGS export '-m32 -arch i386'
-# 5. export MACOSX_DEPLOYMENT_TARGET=10.7 
+# 5. export MACOSX_DEPLOYMENT_TARGET=10.7
 
 DYLD_LIBRARY_PATH=$(FIREBIRD)/lib
 export DYLD_LIBRARY_PATH
@@ -33,7 +33,7 @@ MACOSX_DEPLOYMENT_TARGET=10.7
 export MACOSX_DEPLOYMENT_TARGET
 
 PROD_FLAGS=-O1 -DDARWIN -pipe -MMD -fPIC -fno-common -arch i386 -mmacosx-version-min=10.7
-DEV_FLAGS=-ggdb -DDARWIN -pipe -MMD -fPIC -fno-common -Wall -arch i386 -mmacosx-version-min=10.7 -Wno-non-virtual-dtor
+DEV_FLAGS=-ggdb -DDARWIN -pipe -MMD -fPIC -fno-common -Werror=delete-incomplete -Wall -arch i386 -mmacosx-version-min=10.7 -Wno-non-virtual-dtor
 CXXFLAGS:=$(CXXFLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -fno-weak
 
 EXE_LINK_OPTIONS:=-m32

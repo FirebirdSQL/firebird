@@ -57,6 +57,7 @@
 #include "../common/classes/UserBlob.h"
 #include "../common/classes/VaryStr.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../common/TimeZoneUtil.h"
 #include "../isql/OptionsBase.h"
 
 #include <firebird/Interface.h>
@@ -251,7 +252,10 @@ static const UCHAR db_items[] =
 	isc_info_db_id,
 #endif
 	fb_info_crypt_state,
+	fb_info_protocol_version,
 	fb_info_wire_crypt,
+	fb_info_creation_timestamp_tz,
+	isc_info_creation_date,
 	isc_info_end
 };
 
@@ -399,6 +403,8 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 	db_handle->getInfo(&statusWrapper, item_length, db_itemsL, sizeof(buffer), buffer);
 	if (ISQL_errmsg(status_vector))
 		return false;
+
+	bool crdatePrinted = false;
 
 	*info_buf = '\0';
 	SCHAR* info = info_buf;
@@ -558,6 +564,62 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 		case fb_info_wire_crypt:
 			if (d && length)
 				sprintf (info, "Wire crypt plugin: %.*s%s", length, d, separator);
+			break;
+
+		case fb_info_protocol_version:
+			value_out = ISQL_vax_integer(d, length);
+			if (value_out)
+				sprintf(info, "Protocol version = %" SQUADFORMAT"%s", value_out, separator);
+			else
+				sprintf(info, "Embedded connection%s", separator);
+			break;
+
+		case isc_info_creation_date:
+			if (length == sizeof(ISC_TIMESTAMP) && !crdatePrinted)
+			{
+				ISC_TIMESTAMP ts;
+
+				const UCHAR* p = d;
+				ts.timestamp_date = ISQL_vax_integer(p, sizeof(ISC_DATE));
+				p += sizeof(ISC_DATE);
+				ts.timestamp_time = ISQL_vax_integer(p, sizeof(ISC_TIME));
+
+				struct tm time;
+				isc_decode_timestamp(&ts, &time);
+
+				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d\n",
+					FB_SHORT_MONTHS[time.tm_mon], time.tm_mday, time.tm_year + 1900,
+					time.tm_hour, time.tm_min, time.tm_sec);
+			}
+			break;
+
+		case fb_info_creation_timestamp_tz:
+			if (length == sizeof(ISC_TIMESTAMP_TZ))
+			{
+				ISC_TIMESTAMP_TZ tsz;
+
+				const UCHAR* p = d;
+				tsz.utc_timestamp.timestamp_date = ISQL_vax_integer(p, sizeof(ISC_DATE));
+				p += sizeof(ISC_DATE);
+				tsz.utc_timestamp.timestamp_time = ISQL_vax_integer(p, sizeof(ISC_TIME));
+				p += sizeof(ISC_TIME);
+				tsz.time_zone = ISQL_vax_integer(p, sizeof(ULONG));
+
+				unsigned year, month, day, hours, minutes, seconds, fractions;
+				char timeZone[Firebird::TimeZoneUtil::MAX_SIZE];
+
+				Firebird::UtilInterfacePtr()->decodeTimeStampTz(fbStatus, &tsz,
+					&year, &month, &day, &hours, &minutes, &seconds, &fractions, sizeof(timeZone), timeZone);
+
+				if (ISQL_errmsg(fbStatus))
+					break;
+
+				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d %s\n",
+					FB_SHORT_MONTHS[month - 1], day, year,
+					hours, minutes, seconds, timeZone);
+
+				crdatePrinted = true;
+			}
 			break;
 
 #ifdef DEV_BUILD
@@ -770,7 +832,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	prev_user_type = -1;
 	prev_object_type = -1;
 	char priv_string[MAX_PRIV_LIST] = "";
-	char col_string[BUFFER_LENGTH256] = "";
+	char col_string[BUFFER_LENGTH512] = "";
 	char with_option[19] = "";
 	USHORT priv_flags = 0;
 	SSHORT prev_field_null = -1;
@@ -1893,7 +1955,7 @@ void SHOW_grant_roles2 (const SCHAR* terminator,
 }
 
 
-void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squote)
+void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squote, bool avoid_end_in_single_line_comment)
 {
 /**************************************
  *
@@ -1916,6 +1978,7 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 	if (ISQL_errmsg(fbStatus))
 		return;
 
+	string fullText;
 	SCHAR buffer[BUFFER_LENGTH512];
 	bool endedWithCr = false;
 
@@ -1947,29 +2010,51 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 		}
 
 		if (prevEndedWithCr && buffer[0] != '\n')
-		    fputc('\r', fp);
+		{
+			fputc('\r', fp);
+			if (avoid_end_in_single_line_comment)
+				fullText += "\r";
+		}
 
 		if (escape_squote)
 		{
 			for (const UCHAR* p = (UCHAR*) buffer; *p; ++p)
 			{
 				if (*p == SINGLE_QUOTE)
-			        fputc(*p, fp);
-			    fputc(*p, fp);
+				{
+					fputc(*p, fp);
+					if (avoid_end_in_single_line_comment)
+						fullText += *p;
+				}
+
+				fputc(*p, fp);
+				if (avoid_end_in_single_line_comment)
+					fullText += *p;
 			}
 			fflush(fp);
 		}
 		else
+		{
 			IUTILS_printf(fp, buffer);
+			if (avoid_end_in_single_line_comment)
+				fullText += buffer;
+		}
 	}
 
 	if (endedWithCr)
-	    fputc('\r', fp);
+	{
+		fputc('\r', fp);
+		if (avoid_end_in_single_line_comment)
+			fullText += "\r";
+	}
 
 	if (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS)
 		ISQL_errmsg(fbStatus);
 
 	blob->close(fbStatus);
+
+	if (avoid_end_in_single_line_comment && ISQL_statement_ends_in_comment(fullText.c_str()))
+		fputc('\n', fp);
 }
 
 
@@ -3513,7 +3598,7 @@ static void show_db()
 		return;
 	END_ERROR;
 
-	SCHAR info_buf[BUFFER_LENGTH400];
+	SCHAR info_buf[BUFFER_LENGTH512];
 
 	// First general database parameters
 

@@ -215,7 +215,11 @@
 	FIELD(fld_file_id		, nam_file_id		, dtype_varying	, 255						, dsc_text_type_ascii		, NULL		, false)
 
 	FIELD(fld_cfg_id		, nam_cfg_id		, dtype_long	, sizeof(SLONG)				, 0							, NULL		, false)
-	FIELD(fld_cfg_name		, nam_cfg_name		, dtype_varying	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, false)
+	FIELD(fld_cfg_name		, nam_cfg_name		, dtype_varying	, MAX_CONFIG_NAME_LEN		, dsc_text_type_ascii		, NULL		, false)
 	FIELD(fld_cfg_value		, nam_cfg_value		, dtype_varying	, 255 * METADATA_BYTES_PER_CHAR, dsc_text_type_metadata	, NULL		, true)
-	FIELD(fld_cfg_default	, nam_cfg_default	, dtype_varying	, 255 * METADATA_BYTES_PER_CHAR, dsc_text_type_metadata	, NULL		, true)
 	FIELD(fld_cfg_is_set	, nam_cfg_is_set	, dtype_boolean	, 1							, 0							, NULL		, false)
+
+	FIELD(fld_repl_mode		, nam_repl_mode		, dtype_short	, sizeof(SSHORT)			, 0							, NULL		, true)
+
+	FIELD(fld_keyword_name	, nam_keyword_name	, dtype_varying	, METADATA_IDENTIFIER_CHAR_LEN, dsc_text_type_ascii		, NULL		, false)
+	FIELD(fld_keyword_reserved, nam_keyword_reserved, dtype_boolean, 1						, 0							, NULL		, false)

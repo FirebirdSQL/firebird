@@ -44,7 +44,7 @@ Jrd::DsqlCursor* DSQL_open(Jrd::thread_db*, Jrd::jrd_tra**, Jrd::dsql_req*,
 	  	  	 	  	  	   Firebird::IMessageMetadata*, const UCHAR*,
 	  	  	 	  	  	   Firebird::IMessageMetadata*, ULONG);
 Jrd::dsql_req* DSQL_prepare(Jrd::thread_db*, Jrd::Attachment*, Jrd::jrd_tra*, ULONG, const TEXT*,
-							USHORT, Firebird::Array<UCHAR>*, Firebird::Array<UCHAR>*, bool);
+							USHORT, unsigned, Firebird::Array<UCHAR>*, Firebird::Array<UCHAR>*, bool);
 void DSQL_sql_info(Jrd::thread_db*, Jrd::dsql_req*,
 				   ULONG, const UCHAR*, ULONG, UCHAR*);
 

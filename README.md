@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/FirebirdSQL/firebird.svg?branch=master)](https://travis-ci.org/FirebirdSQL/firebird)
+[![Build Status](https://travis-ci.com/FirebirdSQL/firebird.svg?branch=master)](https://travis-ci.com/FirebirdSQL/firebird)
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/FirebirdSQL/firebird?branch=master&svg=true)](https://ci.appveyor.com/project/FirebirdSQL/firebird)
 
 # Firebird README
@@ -9,21 +9,21 @@ The Firebird Project is a commercially independent project of C/C++ programmers,
 
 ## Basic information
 
-* http://www.firebirdsql.org/
-* http://www.firebirdsql.org/en/historical-reference/
-* http://www.firebirdsql.org/en/features/
+* https://www.firebirdsql.org/
+* https://www.firebirdsql.org/en/historical-reference/
+* https://www.firebirdsql.org/en/features/
 
 ## Documentation
 
-* http://www.firebirdsql.org/en/documentation/
-* http://www.firebirdfaq.org/
+* https://www.firebirdsql.org/en/documentation/
+* https://www.firebirdfaq.org/
 
 ## Licensing
 
 The source code is released under variants of the Mozilla Public Licence 1.1 (MPL):
 
-* http://www.firebirdsql.org/en/initial-developer-s-public-license-version-1-0/
-* http://www.firebirdsql.org/en/interbase-public-license/
+* https://www.firebirdsql.org/en/initial-developer-s-public-license-version-1-0/
+* https://www.firebirdsql.org/en/interbase-public-license/
 
 ## Development
 
@@ -31,10 +31,10 @@ The source code can be found at:
 https://github.com/FirebirdSQL/firebird
 
 Build instructions are here:
-http://www.firebirdsql.org/en/building-the-code/
+https://www.firebirdsql.org/en/building-the-code/
 
 Bugs and feature requests should be submitted at:  
-http://tracker.firebirdsql.org/
+https://github.com/FirebirdSQL/firebird/issues
 
 You may find more details at:  
-http://www.firebirdsql.org/en/development/
+https://www.firebirdsql.org/en/development/

@@ -321,7 +321,7 @@ WindowedStream::WindowedStream(thread_db* tdbb, CompilerScratch* csb,
 		if (windowOrder)
 		{
 			SortedStream* sortedStream = OPT_gen_sort(tdbb, csb, streams, NULL,
-				m_joinedStream, windowOrder, false);
+				m_joinedStream, windowOrder, false, false);
 
 			m_joinedStream = FB_NEW_POOL(csb->csb_pool) WindowStream(tdbb, csb, window->stream,
 				(window->group ? &window->group->expressions : NULL),

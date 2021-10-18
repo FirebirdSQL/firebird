@@ -64,7 +64,7 @@
 #include "../jrd/exe.h"
 #include "../jrd/extds/ExtDS.h"
 #include "../jrd/tra.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/ods.h"
 #include "../jrd/btr.h"
 #include "../jrd/rse.h"
@@ -670,8 +670,6 @@ void EXE_receive(thread_db* tdbb,
 		}
 	}
 
-	const auto statement = request->getStatement();
-
 	try
 	{
 		if (nodeIs<StallNode>(request->req_message))
@@ -818,7 +816,6 @@ void EXE_send(thread_db* tdbb, jrd_req* request, USHORT msg, ULONG length, const
 	node = request->req_message;
 
 	jrd_tra* transaction = request->req_transaction;
-	const JrdStatement* statement = request->getStatement();
 
 	const SelectNode* selectNode;
 
@@ -881,7 +878,6 @@ void EXE_start(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
 		ERR_post(Arg::Gds(isc_req_no_trans));
 
 	JrdStatement* statement = request->getStatement();
-	const jrd_prc* proc = statement->procedure;
 
 	/* Post resources to transaction block.  In particular, the interest locks
 	on relations/indices are copied to the transaction, which is very
@@ -982,6 +978,17 @@ void EXE_unwind(thread_db* tdbb, jrd_req* request)
 			tdbb->setRequest(old_request);
 			tdbb->setTransaction(old_transaction);
 		}
+
+		for (auto localTable : statement->localTables)
+		{
+			if (!localTable)
+				continue;
+
+			auto impure = localTable->getImpure(tdbb, request, false);
+			delete impure->recordBuffer;
+			impure->recordBuffer = nullptr;
+		}
+
 		release_blobs(tdbb, request);
 	}
 
@@ -1336,8 +1343,6 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 	tdbb->tdbb_flags &= ~(TDBB_stack_trace_done | TDBB_sys_error);
 
 	// Execute stuff until we drop
-
-	const JrdStatement* statement = request->getStatement();
 
 	while (node && !(request->req_flags & req_stall))
 	{

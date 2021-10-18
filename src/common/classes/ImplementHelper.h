@@ -31,7 +31,7 @@
 
 #include "firebird/Interface.h"
 #include "../common/classes/alloc.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/classes/init.h"
 #include "../common/classes/auto.h"

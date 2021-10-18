@@ -85,6 +85,8 @@ bool VirtualTableScan::getRecord(thread_db* tdbb) const
 		return false;
 	}
 
+	rpb->rpb_runtime_flags &= ~RPB_CLEAR_FLAGS;
+
 	rpb->rpb_number.increment();
 
 	if (retrieveRecord(tdbb, m_relation, rpb->rpb_number.getValue(), rpb->rpb_record))

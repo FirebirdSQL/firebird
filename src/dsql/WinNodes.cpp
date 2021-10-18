@@ -256,7 +256,6 @@ dsc* PercentRankWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* request) const
 
 dsc* PercentRankWinNode::winPass(thread_db* /*tdbb*/, jrd_req* request, SlidingWindow* window) const
 {
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
 
 	double partitionSize = window->getPartitionSize();
@@ -433,8 +432,6 @@ void FirstValueWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 
 dsc* FirstValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* window) const
 {
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
 	if (!window->moveWithinFrame(-(window->getRecordPosition() - window->getFrameStart())))
 		return NULL;
 
@@ -496,8 +493,6 @@ void LastValueWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 
 dsc* LastValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* window) const
 {
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
 	if (!window->moveWithinFrame(window->getFrameEnd() - window->getRecordPosition()))
 		return NULL;
 
@@ -573,8 +568,6 @@ void NthValueWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 
 dsc* NthValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* window) const
 {
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
 	dsc* desc = EVL_expr(tdbb, request, row);
 	if (!desc || (request->req_flags & req_null))
 		return NULL;

@@ -2,7 +2,7 @@
 # Compiler settings for Solaris (Sparc - 64 )
 #
 # This file is processed by configure and the output written to
-# gen/make.platform which is included in src directory makefiles 
+# gen/make.platform which is included in src directory makefiles
 # before other common make files ie: make.[rules|defaults|shared.variables]
 #
 
@@ -16,8 +16,8 @@
 CFLAGS_COMMON= -DSOLARIS -DBSD_COMP -Dsparc
 
 # compile flags for GCC compiler
-COMMON_GCC_FLAGS=  -MMD -fPIC -m64   -D__sparcv9   -mptr64 -mstack-bias -mno-v8plus -mcpu=v9 
-DEBUG_GCC_FLAGS=  -gstabs+ -g3 -Wall -Wno-switch -Wcast-align -Wno-non-virtual-dtor
+COMMON_GCC_FLAGS=  -MMD -fPIC -m64   -D__sparcv9   -mptr64 -mstack-bias -mno-v8plus -mcpu=v9
+DEBUG_GCC_FLAGS=  -gstabs+ -g3 -Werror=delete-incomplete -Wall -Wno-switch -Wcast-align -Wno-non-virtual-dtor
 #switch to dbx accoding SF gdb 64 bits mailfunction
 
 PROD_GCC_FLAGS= -mcpu=ultrasparc -mtune=ultrasparc -O3
@@ -34,7 +34,7 @@ LOCAL_CFLAGS=@CFLAGS@
 LOCAL_CPPFLAGS=@CPPFLAGS@
 LOCAL_LDFLAGS=@LDFLAGS@
 
-# don't clear cflags here as some module makefiles set it (BOOTBUILD) before this 
+# don't clear cflags here as some module makefiles set it (BOOTBUILD) before this
 # file is included but not all so cflags get duplicated when compiling some modules
 
 # if we keep sfio this needs to be set by configure (or move in to extern directory)
@@ -63,6 +63,6 @@ LIB_LINK_SONAME=-h $(1)
 LIB_LINK_MAPFILE= -Xlinker -M$(1)
 
 LD=g++
-LDFLAGS=-m64 
+LDFLAGS=-m64
 #/usr/local/lib/gcc-lib/sparc-sun-solaris2.9/3.3.2/sparcv9/gmon.o
 #gmon.o is a work-a-round of SF Compile Farm gcc 3.3.2 (undefined symbol _mcount)

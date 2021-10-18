@@ -71,9 +71,8 @@ void GenerateGuid(Guid* guid)
 {
 	GenerateRandomBytes(guid, sizeof(Guid));
 
-	Win32GUID* wg = (Win32GUID*) guid;
-	wg->data3 = (4 << 12) | (wg->data3 & 0xFFF);	// version 4
-	wg->data4[0] = 0x80 | (wg->data4[0] & 0x3F);	// variant
+	guid->Data3 = (4 << 12) | (guid->Data3 & 0xFFF);	// version 4
+	guid->Data4[0] = 0x80 | (guid->Data4[0] & 0x3F);	// variant
 }
 
 

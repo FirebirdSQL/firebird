@@ -41,3 +41,24 @@ begin
 		status.setErrors(@statusVector);
 	end
 end;
+
+class procedure FbException.setVersionError(status: IStatus; interfaceName: string;
+		currentVersion, expectedVersion: NativeInt);
+var
+	statusVector: array[0..8] of NativeIntPtr;
+	msg: AnsiString;
+begin
+	msg := interfaceName;
+
+	statusVector[0] := NativeIntPtr(isc_arg_gds);
+	statusVector[1] := NativeIntPtr(isc_interface_version_too_old);
+	statusVector[2] := NativeIntPtr(isc_arg_number);
+	statusVector[3] := NativeIntPtr(expectedVersion);
+	statusVector[4] := NativeIntPtr(isc_arg_number);
+	statusVector[5] := NativeIntPtr(currentVersion);
+	statusVector[6] := NativeIntPtr(isc_arg_string);
+	statusVector[7] := NativeIntPtr(PAnsiChar(msg));
+	statusVector[8] := NativeIntPtr(isc_arg_end);
+
+	status.setErrors(@statusVector);
+end;

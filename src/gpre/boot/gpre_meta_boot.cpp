@@ -41,13 +41,6 @@
 #include "../gpre/par_proto.h"
 #include "../yvalve/gds_proto.h"
 
-static const UCHAR blr_bpb[] =
-{
-	isc_bpb_version1,
-	isc_bpb_source_type, 1, isc_blob_blr,
-	isc_bpb_target_type, 1, isc_blob_blr
-};
-
 /*____________________________________________________________
  *
  *		Lookup a field by name in a context.

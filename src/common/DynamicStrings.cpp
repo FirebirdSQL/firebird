@@ -30,7 +30,7 @@
 
 #include "DynamicStrings.h"
 #include "utils_proto.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "classes/alloc.h"
 
 #include <string.h>

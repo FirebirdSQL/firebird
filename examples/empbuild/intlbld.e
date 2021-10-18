@@ -26,13 +26,13 @@
 #define FINI_OK 0
 #define FINI_ERROR 44
 
-/* 
-**  Intlbld.e   International version of Empbuild.e.  Default database
+/*
+**  Intlbld.e   International version of Empbuild.epp.  Default database
 **              name was changed to 'intlemp.fdb'.  Two of the files
 **              executed as ISQL input files were modified: intlddl.sql
 **              and intldml.sql are used by this program.
 **
-**              GPRE with manual switch, since it creates the database 
+**              GPRE with manual switch, since it creates the database
 **		This program then calls isql with various input files
 **		It installs the blobs and arrays.
 **		Usage:  empbuild <db name>
@@ -166,7 +166,7 @@ while (fgets (line, 100, Fp) != NULL)
 	    break;
 	strcpy (lang_array [i], line);
 	}
-		
+
     EXEC SQL
 	UPDATE job
 	    SET language_req = :lang_array
@@ -188,7 +188,7 @@ printf ("Added %d language arrays.\n", rec_cnt);
 fclose (Fp);
 
 return (0);
-		
+
 Error:
 
 printf ("SQLCODE=%d\n", SQLCODE);
@@ -260,7 +260,7 @@ printf ("Added %d job requirement descriptions.\n", rec_cnt);
 fclose (Fp);
 
 return (0);
-	
+
 Error:
 
 printf ("SQLCODE=%d\n", SQLCODE);
@@ -330,7 +330,7 @@ printf ("Added %d project descriptions.\n", rec_cnt);
 fclose (Fp);
 
 return (0);
-		
+
 Error:
 
 printf ("SQLCODE=%d\n", SQLCODE);
@@ -386,7 +386,7 @@ printf ("Added %d quarter arrays.\n", rec_cnt);
 fclose (Fp);
 
 return (0);
-		
+
 Error:
 
 printf ("SQLCODE=%d\n", SQLCODE);

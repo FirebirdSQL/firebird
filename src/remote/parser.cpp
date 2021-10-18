@@ -67,7 +67,6 @@ RMessage* PARSE_messages(const UCHAR* blr, size_t blr_length)
 		return NULL;
 
 	RMessage* message = NULL;
-	ULONG net_length = 0;
 
 	bool error = false;
 

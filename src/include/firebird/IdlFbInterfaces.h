@@ -1044,9 +1044,11 @@ namespace Firebird
 			void (CLOOP_CARG *getInfo)(IBlob* self, IStatus* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) throw();
 			int (CLOOP_CARG *getSegment)(IBlob* self, IStatus* status, unsigned bufferLength, void* buffer, unsigned* segmentLength) throw();
 			void (CLOOP_CARG *putSegment)(IBlob* self, IStatus* status, unsigned length, const void* buffer) throw();
+			void (CLOOP_CARG *deprecatedCancel)(IBlob* self, IStatus* status) throw();
+			void (CLOOP_CARG *deprecatedClose)(IBlob* self, IStatus* status) throw();
+			int (CLOOP_CARG *seek)(IBlob* self, IStatus* status, int mode, int offset) throw();
 			void (CLOOP_CARG *cancel)(IBlob* self, IStatus* status) throw();
 			void (CLOOP_CARG *close)(IBlob* self, IStatus* status) throw();
-			int (CLOOP_CARG *seek)(IBlob* self, IStatus* status, int mode, int offset) throw();
 		};
 
 	protected:
@@ -1060,7 +1062,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 3;
+		static const unsigned VERSION = 4;
 
 		template <typename StatusType> void getInfo(StatusType* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer)
 		{
@@ -1084,17 +1086,17 @@ namespace Firebird
 			StatusType::checkException(status);
 		}
 
-		template <typename StatusType> void cancel(StatusType* status)
+		template <typename StatusType> void deprecatedCancel(StatusType* status)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->cancel(this, status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedCancel(this, status);
 			StatusType::checkException(status);
 		}
 
-		template <typename StatusType> void close(StatusType* status)
+		template <typename StatusType> void deprecatedClose(StatusType* status)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->close(this, status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedClose(this, status);
 			StatusType::checkException(status);
 		}
 
@@ -1105,6 +1107,42 @@ namespace Firebird
 			StatusType::checkException(status);
 			return ret;
 		}
+
+		template <typename StatusType> void cancel(StatusType* status)
+		{
+			if (cloopVTable->version < 4)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "IBlob", cloopVTable->version, 4);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedCancel(status);
+				}
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->cancel(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void close(StatusType* status)
+		{
+			if (cloopVTable->version < 4)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "IBlob", cloopVTable->version, 4);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedClose(status);
+				}
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->close(this, status);
+			StatusType::checkException(status);
+		}
 	};
 
 	class ITransaction : public IReferenceCounted
@@ -1114,14 +1152,17 @@ namespace Firebird
 		{
 			void (CLOOP_CARG *getInfo)(ITransaction* self, IStatus* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) throw();
 			void (CLOOP_CARG *prepare)(ITransaction* self, IStatus* status, unsigned msgLength, const unsigned char* message) throw();
-			void (CLOOP_CARG *commit)(ITransaction* self, IStatus* status) throw();
+			void (CLOOP_CARG *deprecatedCommit)(ITransaction* self, IStatus* status) throw();
 			void (CLOOP_CARG *commitRetaining)(ITransaction* self, IStatus* status) throw();
-			void (CLOOP_CARG *rollback)(ITransaction* self, IStatus* status) throw();
+			void (CLOOP_CARG *deprecatedRollback)(ITransaction* self, IStatus* status) throw();
 			void (CLOOP_CARG *rollbackRetaining)(ITransaction* self, IStatus* status) throw();
-			void (CLOOP_CARG *disconnect)(ITransaction* self, IStatus* status) throw();
+			void (CLOOP_CARG *deprecatedDisconnect)(ITransaction* self, IStatus* status) throw();
 			ITransaction* (CLOOP_CARG *join)(ITransaction* self, IStatus* status, ITransaction* transaction) throw();
 			ITransaction* (CLOOP_CARG *validate)(ITransaction* self, IStatus* status, IAttachment* attachment) throw();
 			ITransaction* (CLOOP_CARG *enterDtc)(ITransaction* self, IStatus* status) throw();
+			void (CLOOP_CARG *commit)(ITransaction* self, IStatus* status) throw();
+			void (CLOOP_CARG *rollback)(ITransaction* self, IStatus* status) throw();
+			void (CLOOP_CARG *disconnect)(ITransaction* self, IStatus* status) throw();
 		};
 
 	protected:
@@ -1135,7 +1176,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 3;
+		static const unsigned VERSION = 4;
 
 		template <typename StatusType> void getInfo(StatusType* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer)
 		{
@@ -1151,10 +1192,10 @@ namespace Firebird
 			StatusType::checkException(status);
 		}
 
-		template <typename StatusType> void commit(StatusType* status)
+		template <typename StatusType> void deprecatedCommit(StatusType* status)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->commit(this, status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedCommit(this, status);
 			StatusType::checkException(status);
 		}
 
@@ -1165,10 +1206,10 @@ namespace Firebird
 			StatusType::checkException(status);
 		}
 
-		template <typename StatusType> void rollback(StatusType* status)
+		template <typename StatusType> void deprecatedRollback(StatusType* status)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->rollback(this, status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedRollback(this, status);
 			StatusType::checkException(status);
 		}
 
@@ -1179,10 +1220,10 @@ namespace Firebird
 			StatusType::checkException(status);
 		}
 
-		template <typename StatusType> void disconnect(StatusType* status)
+		template <typename StatusType> void deprecatedDisconnect(StatusType* status)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->disconnect(this, status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedDisconnect(this, status);
 			StatusType::checkException(status);
 		}
 
@@ -1208,6 +1249,60 @@ namespace Firebird
 			ITransaction* ret = static_cast<VTable*>(this->cloopVTable)->enterDtc(this, status);
 			StatusType::checkException(status);
 			return ret;
+		}
+
+		template <typename StatusType> void commit(StatusType* status)
+		{
+			if (cloopVTable->version < 4)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "ITransaction", cloopVTable->version, 4);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedCommit(status);
+				}
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->commit(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void rollback(StatusType* status)
+		{
+			if (cloopVTable->version < 4)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "ITransaction", cloopVTable->version, 4);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedRollback(status);
+				}
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->rollback(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void disconnect(StatusType* status)
+		{
+			if (cloopVTable->version < 4)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "ITransaction", cloopVTable->version, 4);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedDisconnect(status);
+				}
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->disconnect(this, status);
+			StatusType::checkException(status);
 		}
 	};
 
@@ -1570,8 +1665,9 @@ namespace Firebird
 			FB_BOOLEAN (CLOOP_CARG *isEof)(IResultSet* self, IStatus* status) throw();
 			FB_BOOLEAN (CLOOP_CARG *isBof)(IResultSet* self, IStatus* status) throw();
 			IMessageMetadata* (CLOOP_CARG *getMetadata)(IResultSet* self, IStatus* status) throw();
-			void (CLOOP_CARG *close)(IResultSet* self, IStatus* status) throw();
+			void (CLOOP_CARG *deprecatedClose)(IResultSet* self, IStatus* status) throw();
 			void (CLOOP_CARG *setDelayedOutputFormat)(IResultSet* self, IStatus* status, IMessageMetadata* format) throw();
+			void (CLOOP_CARG *close)(IResultSet* self, IStatus* status) throw();
 		};
 
 	protected:
@@ -1585,7 +1681,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 3;
+		static const unsigned VERSION = 4;
 
 		template <typename StatusType> int fetchNext(StatusType* status, void* message)
 		{
@@ -1659,10 +1755,10 @@ namespace Firebird
 			return ret;
 		}
 
-		template <typename StatusType> void close(StatusType* status)
+		template <typename StatusType> void deprecatedClose(StatusType* status)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->close(this, status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedClose(this, status);
 			StatusType::checkException(status);
 		}
 
@@ -1670,6 +1766,24 @@ namespace Firebird
 		{
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->setDelayedOutputFormat(this, status, format);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void close(StatusType* status)
+		{
+			if (cloopVTable->version < 4)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "IResultSet", cloopVTable->version, 4);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedClose(status);
+				}
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->close(this, status);
 			StatusType::checkException(status);
 		}
 	};
@@ -1688,11 +1802,12 @@ namespace Firebird
 			ITransaction* (CLOOP_CARG *execute)(IStatement* self, IStatus* status, ITransaction* transaction, IMessageMetadata* inMetadata, void* inBuffer, IMessageMetadata* outMetadata, void* outBuffer) throw();
 			IResultSet* (CLOOP_CARG *openCursor)(IStatement* self, IStatus* status, ITransaction* transaction, IMessageMetadata* inMetadata, void* inBuffer, IMessageMetadata* outMetadata, unsigned flags) throw();
 			void (CLOOP_CARG *setCursorName)(IStatement* self, IStatus* status, const char* name) throw();
-			void (CLOOP_CARG *free)(IStatement* self, IStatus* status) throw();
+			void (CLOOP_CARG *deprecatedFree)(IStatement* self, IStatus* status) throw();
 			unsigned (CLOOP_CARG *getFlags)(IStatement* self, IStatus* status) throw();
 			unsigned (CLOOP_CARG *getTimeout)(IStatement* self, IStatus* status) throw();
 			void (CLOOP_CARG *setTimeout)(IStatement* self, IStatus* status, unsigned timeOut) throw();
 			IBatch* (CLOOP_CARG *createBatch)(IStatement* self, IStatus* status, IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) throw();
+			void (CLOOP_CARG *free)(IStatement* self, IStatus* status) throw();
 		};
 
 	protected:
@@ -1706,7 +1821,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 4;
+		static const unsigned VERSION = 5;
 
 		static const unsigned PREPARE_PREFETCH_NONE = 0x0;
 		static const unsigned PREPARE_PREFETCH_TYPE = 0x1;
@@ -1792,10 +1907,10 @@ namespace Firebird
 			StatusType::checkException(status);
 		}
 
-		template <typename StatusType> void free(StatusType* status)
+		template <typename StatusType> void deprecatedFree(StatusType* status)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->free(this, status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedFree(this, status);
 			StatusType::checkException(status);
 		}
 
@@ -1847,6 +1962,24 @@ namespace Firebird
 			StatusType::checkException(status);
 			return ret;
 		}
+
+		template <typename StatusType> void free(StatusType* status)
+		{
+			if (cloopVTable->version < 5)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "IStatement", cloopVTable->version, 5);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedFree(status);
+				}
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->free(this, status);
+			StatusType::checkException(status);
+		}
 	};
 
 	class IBatch : public IReferenceCounted
@@ -1864,6 +1997,9 @@ namespace Firebird
 			unsigned (CLOOP_CARG *getBlobAlignment)(IBatch* self, IStatus* status) throw();
 			IMessageMetadata* (CLOOP_CARG *getMetadata)(IBatch* self, IStatus* status) throw();
 			void (CLOOP_CARG *setDefaultBpb)(IBatch* self, IStatus* status, unsigned parLength, const unsigned char* par) throw();
+			void (CLOOP_CARG *deprecatedClose)(IBatch* self, IStatus* status) throw();
+			void (CLOOP_CARG *close)(IBatch* self, IStatus* status) throw();
+			void (CLOOP_CARG *getInfo)(IBatch* self, IStatus* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) throw();
 		};
 
 	protected:
@@ -1877,7 +2013,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 3;
+		static const unsigned VERSION = 4;
 
 		static const unsigned char VERSION1 = 1;
 		static const unsigned char TAG_MULTIERROR = 1;
@@ -1885,6 +2021,11 @@ namespace Firebird
 		static const unsigned char TAG_BUFFER_BYTES_SIZE = 3;
 		static const unsigned char TAG_BLOB_POLICY = 4;
 		static const unsigned char TAG_DETAILED_ERRORS = 5;
+		static const unsigned char INF_BUFFER_BYTES_SIZE = 10;
+		static const unsigned char INF_DATA_BYTES_SIZE = 11;
+		static const unsigned char INF_BLOBS_BYTES_SIZE = 12;
+		static const unsigned char INF_BLOB_ALIGNMENT = 13;
+		static const unsigned char INF_BLOB_HEADER = 14;
 		static const unsigned char BLOB_NONE = 0;
 		static const unsigned char BLOB_ID_ENGINE = 1;
 		static const unsigned char BLOB_ID_USER = 2;
@@ -1963,6 +2104,44 @@ namespace Firebird
 			static_cast<VTable*>(this->cloopVTable)->setDefaultBpb(this, status, parLength, par);
 			StatusType::checkException(status);
 		}
+
+		template <typename StatusType> void deprecatedClose(StatusType* status)
+		{
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedClose(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void close(StatusType* status)
+		{
+			if (cloopVTable->version < 4)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "IBatch", cloopVTable->version, 4);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedClose(status);
+				}
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->close(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void getInfo(StatusType* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer)
+		{
+			if (cloopVTable->version < 4)
+			{
+				StatusType::setVersionError(status, "IBatch", cloopVTable->version, 4);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->getInfo(this, status, itemsLength, items, bufferLength, buffer);
+			StatusType::checkException(status);
+		}
 	};
 
 	class IBatchCompletionState : public IDisposable
@@ -2031,6 +2210,7 @@ namespace Firebird
 		struct VTable : public IReferenceCounted::VTable
 		{
 			void (CLOOP_CARG *process)(IReplicator* self, IStatus* status, unsigned length, const unsigned char* data) throw();
+			void (CLOOP_CARG *deprecatedClose)(IReplicator* self, IStatus* status) throw();
 			void (CLOOP_CARG *close)(IReplicator* self, IStatus* status) throw();
 		};
 
@@ -2045,7 +2225,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 3;
+		static const unsigned VERSION = 4;
 
 		template <typename StatusType> void process(StatusType* status, unsigned length, const unsigned char* data)
 		{
@@ -2054,8 +2234,26 @@ namespace Firebird
 			StatusType::checkException(status);
 		}
 
+		template <typename StatusType> void deprecatedClose(StatusType* status)
+		{
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedClose(this, status);
+			StatusType::checkException(status);
+		}
+
 		template <typename StatusType> void close(StatusType* status)
 		{
+			if (cloopVTable->version < 4)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "IReplicator", cloopVTable->version, 4);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedClose(status);
+				}
+				return;
+			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->close(this, status);
 			StatusType::checkException(status);
@@ -2073,6 +2271,7 @@ namespace Firebird
 			void (CLOOP_CARG *start)(IRequest* self, IStatus* status, ITransaction* tra, int level) throw();
 			void (CLOOP_CARG *startAndSend)(IRequest* self, IStatus* status, ITransaction* tra, int level, unsigned msgType, unsigned length, const void* message) throw();
 			void (CLOOP_CARG *unwind)(IRequest* self, IStatus* status, int level) throw();
+			void (CLOOP_CARG *deprecatedFree)(IRequest* self, IStatus* status) throw();
 			void (CLOOP_CARG *free)(IRequest* self, IStatus* status) throw();
 		};
 
@@ -2087,7 +2286,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 3;
+		static const unsigned VERSION = 4;
 
 		template <typename StatusType> void receive(StatusType* status, int level, unsigned msgType, unsigned length, void* message)
 		{
@@ -2131,8 +2330,26 @@ namespace Firebird
 			StatusType::checkException(status);
 		}
 
+		template <typename StatusType> void deprecatedFree(StatusType* status)
+		{
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedFree(this, status);
+			StatusType::checkException(status);
+		}
+
 		template <typename StatusType> void free(StatusType* status)
 		{
+			if (cloopVTable->version < 4)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "IRequest", cloopVTable->version, 4);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedFree(status);
+				}
+				return;
+			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->free(this, status);
 			StatusType::checkException(status);
@@ -2144,6 +2361,7 @@ namespace Firebird
 	public:
 		struct VTable : public IReferenceCounted::VTable
 		{
+			void (CLOOP_CARG *deprecatedCancel)(IEvents* self, IStatus* status) throw();
 			void (CLOOP_CARG *cancel)(IEvents* self, IStatus* status) throw();
 		};
 
@@ -2158,10 +2376,28 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 3;
+		static const unsigned VERSION = 4;
+
+		template <typename StatusType> void deprecatedCancel(StatusType* status)
+		{
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedCancel(this, status);
+			StatusType::checkException(status);
+		}
 
 		template <typename StatusType> void cancel(StatusType* status)
 		{
+			if (cloopVTable->version < 4)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "IEvents", cloopVTable->version, 4);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedCancel(status);
+				}
+				return;
+			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->cancel(this, status);
 			StatusType::checkException(status);
@@ -2189,14 +2425,16 @@ namespace Firebird
 			IEvents* (CLOOP_CARG *queEvents)(IAttachment* self, IStatus* status, IEventCallback* callback, unsigned length, const unsigned char* events) throw();
 			void (CLOOP_CARG *cancelOperation)(IAttachment* self, IStatus* status, int option) throw();
 			void (CLOOP_CARG *ping)(IAttachment* self, IStatus* status) throw();
-			void (CLOOP_CARG *detach)(IAttachment* self, IStatus* status) throw();
-			void (CLOOP_CARG *dropDatabase)(IAttachment* self, IStatus* status) throw();
+			void (CLOOP_CARG *deprecatedDetach)(IAttachment* self, IStatus* status) throw();
+			void (CLOOP_CARG *deprecatedDropDatabase)(IAttachment* self, IStatus* status) throw();
 			unsigned (CLOOP_CARG *getIdleTimeout)(IAttachment* self, IStatus* status) throw();
 			void (CLOOP_CARG *setIdleTimeout)(IAttachment* self, IStatus* status, unsigned timeOut) throw();
 			unsigned (CLOOP_CARG *getStatementTimeout)(IAttachment* self, IStatus* status) throw();
 			void (CLOOP_CARG *setStatementTimeout)(IAttachment* self, IStatus* status, unsigned timeOut) throw();
 			IBatch* (CLOOP_CARG *createBatch)(IAttachment* self, IStatus* status, ITransaction* transaction, unsigned stmtLength, const char* sqlStmt, unsigned dialect, IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) throw();
 			IReplicator* (CLOOP_CARG *createReplicator)(IAttachment* self, IStatus* status) throw();
+			void (CLOOP_CARG *detach)(IAttachment* self, IStatus* status) throw();
+			void (CLOOP_CARG *dropDatabase)(IAttachment* self, IStatus* status) throw();
 		};
 
 	protected:
@@ -2210,7 +2448,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 4;
+		static const unsigned VERSION = 5;
 
 		template <typename StatusType> void getInfo(StatusType* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer)
 		{
@@ -2334,17 +2572,17 @@ namespace Firebird
 			StatusType::checkException(status);
 		}
 
-		template <typename StatusType> void detach(StatusType* status)
+		template <typename StatusType> void deprecatedDetach(StatusType* status)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->detach(this, status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedDetach(this, status);
 			StatusType::checkException(status);
 		}
 
-		template <typename StatusType> void dropDatabase(StatusType* status)
+		template <typename StatusType> void deprecatedDropDatabase(StatusType* status)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->dropDatabase(this, status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedDropDatabase(this, status);
 			StatusType::checkException(status);
 		}
 
@@ -2429,6 +2667,42 @@ namespace Firebird
 			StatusType::checkException(status);
 			return ret;
 		}
+
+		template <typename StatusType> void detach(StatusType* status)
+		{
+			if (cloopVTable->version < 5)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "IAttachment", cloopVTable->version, 5);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedDetach(status);
+				}
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->detach(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void dropDatabase(StatusType* status)
+		{
+			if (cloopVTable->version < 5)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "IAttachment", cloopVTable->version, 5);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedDropDatabase(status);
+				}
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->dropDatabase(this, status);
+			StatusType::checkException(status);
+		}
 	};
 
 	class IService : public IReferenceCounted
@@ -2436,9 +2710,10 @@ namespace Firebird
 	public:
 		struct VTable : public IReferenceCounted::VTable
 		{
-			void (CLOOP_CARG *detach)(IService* self, IStatus* status) throw();
+			void (CLOOP_CARG *deprecatedDetach)(IService* self, IStatus* status) throw();
 			void (CLOOP_CARG *query)(IService* self, IStatus* status, unsigned sendLength, const unsigned char* sendItems, unsigned receiveLength, const unsigned char* receiveItems, unsigned bufferLength, unsigned char* buffer) throw();
 			void (CLOOP_CARG *start)(IService* self, IStatus* status, unsigned spbLength, const unsigned char* spb) throw();
+			void (CLOOP_CARG *detach)(IService* self, IStatus* status) throw();
 		};
 
 	protected:
@@ -2452,12 +2727,12 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 3;
+		static const unsigned VERSION = 4;
 
-		template <typename StatusType> void detach(StatusType* status)
+		template <typename StatusType> void deprecatedDetach(StatusType* status)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->detach(this, status);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedDetach(this, status);
 			StatusType::checkException(status);
 		}
 
@@ -2472,6 +2747,24 @@ namespace Firebird
 		{
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->start(this, status, spbLength, spb);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void detach(StatusType* status)
+		{
+			if (cloopVTable->version < 4)
+			{
+				if (FB_UsedInYValve) {
+					StatusType::setVersionError(status, "IService", cloopVTable->version, 4);
+					StatusType::checkException(status);
+				}
+				else {
+					deprecatedDetach(status);
+				}
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->detach(this, status);
 			StatusType::checkException(status);
 		}
 	};
@@ -4481,6 +4774,8 @@ namespace Firebird
 		static const unsigned SPB_SEND = 7;
 		static const unsigned SPB_RECEIVE = 8;
 		static const unsigned SPB_RESPONSE = 9;
+		static const unsigned INFO_SEND = 10;
+		static const unsigned INFO_RESPONSE = 11;
 
 		template <typename StatusType> void clear(StatusType* status)
 		{
@@ -6069,8 +6364,8 @@ namespace Firebird
 		{
 			const char* (CLOOP_CARG *getName)(IReplicatedField* self) throw();
 			unsigned (CLOOP_CARG *getType)(IReplicatedField* self) throw();
-			unsigned (CLOOP_CARG *getSubType)(IReplicatedField* self) throw();
-			unsigned (CLOOP_CARG *getScale)(IReplicatedField* self) throw();
+			int (CLOOP_CARG *getSubType)(IReplicatedField* self) throw();
+			int (CLOOP_CARG *getScale)(IReplicatedField* self) throw();
 			unsigned (CLOOP_CARG *getLength)(IReplicatedField* self) throw();
 			unsigned (CLOOP_CARG *getCharSet)(IReplicatedField* self) throw();
 			const void* (CLOOP_CARG *getData)(IReplicatedField* self) throw();
@@ -6101,15 +6396,15 @@ namespace Firebird
 			return ret;
 		}
 
-		unsigned getSubType()
+		int getSubType()
 		{
-			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getSubType(this);
+			int ret = static_cast<VTable*>(this->cloopVTable)->getSubType(this);
 			return ret;
 		}
 
-		unsigned getScale()
+		int getScale()
 		{
-			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getScale(this);
+			int ret = static_cast<VTable*>(this->cloopVTable)->getScale(this);
 			return ret;
 		}
 
@@ -6295,7 +6590,7 @@ namespace Firebird
 	public:
 		struct VTable : public IPluginBase::VTable
 		{
-			void (CLOOP_CARG *setAttachment)(IReplicatedSession* self, IAttachment* attachment) throw();
+			FB_BOOLEAN (CLOOP_CARG *init)(IReplicatedSession* self, IStatus* status, IAttachment* attachment) throw();
 			IReplicatedTransaction* (CLOOP_CARG *startTransaction)(IReplicatedSession* self, IStatus* status, ITransaction* transaction, ISC_INT64 number) throw();
 			void (CLOOP_CARG *cleanupTransaction)(IReplicatedSession* self, IStatus* status, ISC_INT64 number) throw();
 			void (CLOOP_CARG *setSequence)(IReplicatedSession* self, IStatus* status, const char* name, ISC_INT64 value) throw();
@@ -6314,9 +6609,12 @@ namespace Firebird
 	public:
 		static const unsigned VERSION = 4;
 
-		void setAttachment(IAttachment* attachment)
+		template <typename StatusType> FB_BOOLEAN init(StatusType* status, IAttachment* attachment)
 		{
-			static_cast<VTable*>(this->cloopVTable)->setAttachment(this, attachment);
+			StatusType::clearException(status);
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->init(this, status, attachment);
+			StatusType::checkException(status);
+			return ret;
 		}
 
 		template <typename StatusType> IReplicatedTransaction* startTransaction(StatusType* status, ITransaction* transaction, ISC_INT64 number)
@@ -6603,7 +6901,7 @@ namespace Firebird
 			catch (...)
 			{
 				StatusType::catchException(0);
-				return static_cast<const intptr_t*>(0);
+				return stubError();
 			}
 		}
 
@@ -6616,7 +6914,7 @@ namespace Firebird
 			catch (...)
 			{
 				StatusType::catchException(0);
-				return static_cast<const intptr_t*>(0);
+				return stubError();
 			}
 		}
 
@@ -8208,9 +8506,11 @@ namespace Firebird
 					this->getInfo = &Name::cloopgetInfoDispatcher;
 					this->getSegment = &Name::cloopgetSegmentDispatcher;
 					this->putSegment = &Name::cloopputSegmentDispatcher;
+					this->deprecatedCancel = &Name::cloopdeprecatedCancelDispatcher;
+					this->deprecatedClose = &Name::cloopdeprecatedCloseDispatcher;
+					this->seek = &Name::cloopseekDispatcher;
 					this->cancel = &Name::cloopcancelDispatcher;
 					this->close = &Name::cloopcloseDispatcher;
-					this->seek = &Name::cloopseekDispatcher;
 				}
 			} vTable;
 
@@ -8260,6 +8560,49 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopdeprecatedCancelDispatcher(IBlob* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::deprecatedCancel(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopdeprecatedCloseDispatcher(IBlob* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::deprecatedClose(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static int CLOOP_CARG cloopseekDispatcher(IBlob* self, IStatus* status, int mode, int offset) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::seek(&status2, mode, offset);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<int>(0);
+			}
+		}
+
 		static void CLOOP_CARG cloopcancelDispatcher(IBlob* self, IStatus* status) throw()
 		{
 			StatusType status2(status);
@@ -8285,21 +8628,6 @@ namespace Firebird
 			catch (...)
 			{
 				StatusType::catchException(&status2);
-			}
-		}
-
-		static int CLOOP_CARG cloopseekDispatcher(IBlob* self, IStatus* status, int mode, int offset) throw()
-		{
-			StatusType status2(status);
-
-			try
-			{
-				return static_cast<Name*>(self)->Name::seek(&status2, mode, offset);
-			}
-			catch (...)
-			{
-				StatusType::catchException(&status2);
-				return static_cast<int>(0);
 			}
 		}
 
@@ -8345,9 +8673,11 @@ namespace Firebird
 		virtual void getInfo(StatusType* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) = 0;
 		virtual int getSegment(StatusType* status, unsigned bufferLength, void* buffer, unsigned* segmentLength) = 0;
 		virtual void putSegment(StatusType* status, unsigned length, const void* buffer) = 0;
+		virtual void deprecatedCancel(StatusType* status) = 0;
+		virtual void deprecatedClose(StatusType* status) = 0;
+		virtual int seek(StatusType* status, int mode, int offset) = 0;
 		virtual void cancel(StatusType* status) = 0;
 		virtual void close(StatusType* status) = 0;
-		virtual int seek(StatusType* status, int mode, int offset) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -8367,14 +8697,17 @@ namespace Firebird
 					this->release = &Name::cloopreleaseDispatcher;
 					this->getInfo = &Name::cloopgetInfoDispatcher;
 					this->prepare = &Name::cloopprepareDispatcher;
-					this->commit = &Name::cloopcommitDispatcher;
+					this->deprecatedCommit = &Name::cloopdeprecatedCommitDispatcher;
 					this->commitRetaining = &Name::cloopcommitRetainingDispatcher;
-					this->rollback = &Name::clooprollbackDispatcher;
+					this->deprecatedRollback = &Name::cloopdeprecatedRollbackDispatcher;
 					this->rollbackRetaining = &Name::clooprollbackRetainingDispatcher;
-					this->disconnect = &Name::cloopdisconnectDispatcher;
+					this->deprecatedDisconnect = &Name::cloopdeprecatedDisconnectDispatcher;
 					this->join = &Name::cloopjoinDispatcher;
 					this->validate = &Name::cloopvalidateDispatcher;
 					this->enterDtc = &Name::cloopenterDtcDispatcher;
+					this->commit = &Name::cloopcommitDispatcher;
+					this->rollback = &Name::clooprollbackDispatcher;
+					this->disconnect = &Name::cloopdisconnectDispatcher;
 				}
 			} vTable;
 
@@ -8409,13 +8742,13 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopcommitDispatcher(ITransaction* self, IStatus* status) throw()
+		static void CLOOP_CARG cloopdeprecatedCommitDispatcher(ITransaction* self, IStatus* status) throw()
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::commit(&status2);
+				static_cast<Name*>(self)->Name::deprecatedCommit(&status2);
 			}
 			catch (...)
 			{
@@ -8437,13 +8770,13 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG clooprollbackDispatcher(ITransaction* self, IStatus* status) throw()
+		static void CLOOP_CARG cloopdeprecatedRollbackDispatcher(ITransaction* self, IStatus* status) throw()
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::rollback(&status2);
+				static_cast<Name*>(self)->Name::deprecatedRollback(&status2);
 			}
 			catch (...)
 			{
@@ -8465,13 +8798,13 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopdisconnectDispatcher(ITransaction* self, IStatus* status) throw()
+		static void CLOOP_CARG cloopdeprecatedDisconnectDispatcher(ITransaction* self, IStatus* status) throw()
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::disconnect(&status2);
+				static_cast<Name*>(self)->Name::deprecatedDisconnect(&status2);
 			}
 			catch (...)
 			{
@@ -8524,6 +8857,48 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopcommitDispatcher(ITransaction* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::commit(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG clooprollbackDispatcher(ITransaction* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::rollback(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopdisconnectDispatcher(ITransaction* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::disconnect(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) throw()
 		{
 			try
@@ -8565,14 +8940,17 @@ namespace Firebird
 
 		virtual void getInfo(StatusType* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) = 0;
 		virtual void prepare(StatusType* status, unsigned msgLength, const unsigned char* message) = 0;
-		virtual void commit(StatusType* status) = 0;
+		virtual void deprecatedCommit(StatusType* status) = 0;
 		virtual void commitRetaining(StatusType* status) = 0;
-		virtual void rollback(StatusType* status) = 0;
+		virtual void deprecatedRollback(StatusType* status) = 0;
 		virtual void rollbackRetaining(StatusType* status) = 0;
-		virtual void disconnect(StatusType* status) = 0;
+		virtual void deprecatedDisconnect(StatusType* status) = 0;
 		virtual ITransaction* join(StatusType* status, ITransaction* transaction) = 0;
 		virtual ITransaction* validate(StatusType* status, IAttachment* attachment) = 0;
 		virtual ITransaction* enterDtc(StatusType* status) = 0;
+		virtual void commit(StatusType* status) = 0;
+		virtual void rollback(StatusType* status) = 0;
+		virtual void disconnect(StatusType* status) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -9238,8 +9616,9 @@ namespace Firebird
 					this->isEof = &Name::cloopisEofDispatcher;
 					this->isBof = &Name::cloopisBofDispatcher;
 					this->getMetadata = &Name::cloopgetMetadataDispatcher;
-					this->close = &Name::cloopcloseDispatcher;
+					this->deprecatedClose = &Name::cloopdeprecatedCloseDispatcher;
 					this->setDelayedOutputFormat = &Name::cloopsetDelayedOutputFormatDispatcher;
+					this->close = &Name::cloopcloseDispatcher;
 				}
 			} vTable;
 
@@ -9381,13 +9760,13 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopcloseDispatcher(IResultSet* self, IStatus* status) throw()
+		static void CLOOP_CARG cloopdeprecatedCloseDispatcher(IResultSet* self, IStatus* status) throw()
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::close(&status2);
+				static_cast<Name*>(self)->Name::deprecatedClose(&status2);
 			}
 			catch (...)
 			{
@@ -9402,6 +9781,20 @@ namespace Firebird
 			try
 			{
 				static_cast<Name*>(self)->Name::setDelayedOutputFormat(&status2, format);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopcloseDispatcher(IResultSet* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::close(&status2);
 			}
 			catch (...)
 			{
@@ -9457,8 +9850,9 @@ namespace Firebird
 		virtual FB_BOOLEAN isEof(StatusType* status) = 0;
 		virtual FB_BOOLEAN isBof(StatusType* status) = 0;
 		virtual IMessageMetadata* getMetadata(StatusType* status) = 0;
-		virtual void close(StatusType* status) = 0;
+		virtual void deprecatedClose(StatusType* status) = 0;
 		virtual void setDelayedOutputFormat(StatusType* status, IMessageMetadata* format) = 0;
+		virtual void close(StatusType* status) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -9485,11 +9879,12 @@ namespace Firebird
 					this->execute = &Name::cloopexecuteDispatcher;
 					this->openCursor = &Name::cloopopenCursorDispatcher;
 					this->setCursorName = &Name::cloopsetCursorNameDispatcher;
-					this->free = &Name::cloopfreeDispatcher;
+					this->deprecatedFree = &Name::cloopdeprecatedFreeDispatcher;
 					this->getFlags = &Name::cloopgetFlagsDispatcher;
 					this->getTimeout = &Name::cloopgetTimeoutDispatcher;
 					this->setTimeout = &Name::cloopsetTimeoutDispatcher;
 					this->createBatch = &Name::cloopcreateBatchDispatcher;
+					this->free = &Name::cloopfreeDispatcher;
 				}
 			} vTable;
 
@@ -9629,13 +10024,13 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopfreeDispatcher(IStatement* self, IStatus* status) throw()
+		static void CLOOP_CARG cloopdeprecatedFreeDispatcher(IStatement* self, IStatus* status) throw()
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::free(&status2);
+				static_cast<Name*>(self)->Name::deprecatedFree(&status2);
 			}
 			catch (...)
 			{
@@ -9702,6 +10097,20 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopfreeDispatcher(IStatement* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::free(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) throw()
 		{
 			try
@@ -9750,11 +10159,12 @@ namespace Firebird
 		virtual ITransaction* execute(StatusType* status, ITransaction* transaction, IMessageMetadata* inMetadata, void* inBuffer, IMessageMetadata* outMetadata, void* outBuffer) = 0;
 		virtual IResultSet* openCursor(StatusType* status, ITransaction* transaction, IMessageMetadata* inMetadata, void* inBuffer, IMessageMetadata* outMetadata, unsigned flags) = 0;
 		virtual void setCursorName(StatusType* status, const char* name) = 0;
-		virtual void free(StatusType* status) = 0;
+		virtual void deprecatedFree(StatusType* status) = 0;
 		virtual unsigned getFlags(StatusType* status) = 0;
 		virtual unsigned getTimeout(StatusType* status) = 0;
 		virtual void setTimeout(StatusType* status, unsigned timeOut) = 0;
 		virtual IBatch* createBatch(StatusType* status, IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) = 0;
+		virtual void free(StatusType* status) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -9782,6 +10192,9 @@ namespace Firebird
 					this->getBlobAlignment = &Name::cloopgetBlobAlignmentDispatcher;
 					this->getMetadata = &Name::cloopgetMetadataDispatcher;
 					this->setDefaultBpb = &Name::cloopsetDefaultBpbDispatcher;
+					this->deprecatedClose = &Name::cloopdeprecatedCloseDispatcher;
+					this->close = &Name::cloopcloseDispatcher;
+					this->getInfo = &Name::cloopgetInfoDispatcher;
 				}
 			} vTable;
 
@@ -9931,6 +10344,48 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopdeprecatedCloseDispatcher(IBatch* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::deprecatedClose(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopcloseDispatcher(IBatch* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::close(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopgetInfoDispatcher(IBatch* self, IStatus* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::getInfo(&status2, itemsLength, items, bufferLength, buffer);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) throw()
 		{
 			try
@@ -9980,6 +10435,9 @@ namespace Firebird
 		virtual unsigned getBlobAlignment(StatusType* status) = 0;
 		virtual IMessageMetadata* getMetadata(StatusType* status) = 0;
 		virtual void setDefaultBpb(StatusType* status, unsigned parLength, const unsigned char* par) = 0;
+		virtual void deprecatedClose(StatusType* status) = 0;
+		virtual void close(StatusType* status) = 0;
+		virtual void getInfo(StatusType* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -10113,6 +10571,7 @@ namespace Firebird
 					this->addRef = &Name::cloopaddRefDispatcher;
 					this->release = &Name::cloopreleaseDispatcher;
 					this->process = &Name::cloopprocessDispatcher;
+					this->deprecatedClose = &Name::cloopdeprecatedCloseDispatcher;
 					this->close = &Name::cloopcloseDispatcher;
 				}
 			} vTable;
@@ -10127,6 +10586,20 @@ namespace Firebird
 			try
 			{
 				static_cast<Name*>(self)->Name::process(&status2, length, data);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopdeprecatedCloseDispatcher(IReplicator* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::deprecatedClose(&status2);
 			}
 			catch (...)
 			{
@@ -10188,6 +10661,7 @@ namespace Firebird
 		}
 
 		virtual void process(StatusType* status, unsigned length, const unsigned char* data) = 0;
+		virtual void deprecatedClose(StatusType* status) = 0;
 		virtual void close(StatusType* status) = 0;
 	};
 
@@ -10212,6 +10686,7 @@ namespace Firebird
 					this->start = &Name::cloopstartDispatcher;
 					this->startAndSend = &Name::cloopstartAndSendDispatcher;
 					this->unwind = &Name::cloopunwindDispatcher;
+					this->deprecatedFree = &Name::cloopdeprecatedFreeDispatcher;
 					this->free = &Name::cloopfreeDispatcher;
 				}
 			} vTable;
@@ -10303,6 +10778,20 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopdeprecatedFreeDispatcher(IRequest* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::deprecatedFree(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopfreeDispatcher(IRequest* self, IStatus* status) throw()
 		{
 			StatusType status2(status);
@@ -10362,6 +10851,7 @@ namespace Firebird
 		virtual void start(StatusType* status, ITransaction* tra, int level) = 0;
 		virtual void startAndSend(StatusType* status, ITransaction* tra, int level, unsigned msgType, unsigned length, const void* message) = 0;
 		virtual void unwind(StatusType* status, int level) = 0;
+		virtual void deprecatedFree(StatusType* status) = 0;
 		virtual void free(StatusType* status) = 0;
 	};
 
@@ -10380,11 +10870,26 @@ namespace Firebird
 					this->version = Base::VERSION;
 					this->addRef = &Name::cloopaddRefDispatcher;
 					this->release = &Name::cloopreleaseDispatcher;
+					this->deprecatedCancel = &Name::cloopdeprecatedCancelDispatcher;
 					this->cancel = &Name::cloopcancelDispatcher;
 				}
 			} vTable;
 
 			this->cloopVTable = &vTable;
+		}
+
+		static void CLOOP_CARG cloopdeprecatedCancelDispatcher(IEvents* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::deprecatedCancel(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
 		}
 
 		static void CLOOP_CARG cloopcancelDispatcher(IEvents* self, IStatus* status) throw()
@@ -10440,6 +10945,7 @@ namespace Firebird
 		{
 		}
 
+		virtual void deprecatedCancel(StatusType* status) = 0;
 		virtual void cancel(StatusType* status) = 0;
 	};
 
@@ -10474,14 +10980,16 @@ namespace Firebird
 					this->queEvents = &Name::cloopqueEventsDispatcher;
 					this->cancelOperation = &Name::cloopcancelOperationDispatcher;
 					this->ping = &Name::clooppingDispatcher;
-					this->detach = &Name::cloopdetachDispatcher;
-					this->dropDatabase = &Name::cloopdropDatabaseDispatcher;
+					this->deprecatedDetach = &Name::cloopdeprecatedDetachDispatcher;
+					this->deprecatedDropDatabase = &Name::cloopdeprecatedDropDatabaseDispatcher;
 					this->getIdleTimeout = &Name::cloopgetIdleTimeoutDispatcher;
 					this->setIdleTimeout = &Name::cloopsetIdleTimeoutDispatcher;
 					this->getStatementTimeout = &Name::cloopgetStatementTimeoutDispatcher;
 					this->setStatementTimeout = &Name::cloopsetStatementTimeoutDispatcher;
 					this->createBatch = &Name::cloopcreateBatchDispatcher;
 					this->createReplicator = &Name::cloopcreateReplicatorDispatcher;
+					this->detach = &Name::cloopdetachDispatcher;
+					this->dropDatabase = &Name::cloopdropDatabaseDispatcher;
 				}
 			} vTable;
 
@@ -10722,13 +11230,13 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopdetachDispatcher(IAttachment* self, IStatus* status) throw()
+		static void CLOOP_CARG cloopdeprecatedDetachDispatcher(IAttachment* self, IStatus* status) throw()
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::detach(&status2);
+				static_cast<Name*>(self)->Name::deprecatedDetach(&status2);
 			}
 			catch (...)
 			{
@@ -10736,13 +11244,13 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopdropDatabaseDispatcher(IAttachment* self, IStatus* status) throw()
+		static void CLOOP_CARG cloopdeprecatedDropDatabaseDispatcher(IAttachment* self, IStatus* status) throw()
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::dropDatabase(&status2);
+				static_cast<Name*>(self)->Name::deprecatedDropDatabase(&status2);
 			}
 			catch (...)
 			{
@@ -10838,6 +11346,34 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopdetachDispatcher(IAttachment* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::detach(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopdropDatabaseDispatcher(IAttachment* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::dropDatabase(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) throw()
 		{
 			try
@@ -10893,14 +11429,16 @@ namespace Firebird
 		virtual IEvents* queEvents(StatusType* status, IEventCallback* callback, unsigned length, const unsigned char* events) = 0;
 		virtual void cancelOperation(StatusType* status, int option) = 0;
 		virtual void ping(StatusType* status) = 0;
-		virtual void detach(StatusType* status) = 0;
-		virtual void dropDatabase(StatusType* status) = 0;
+		virtual void deprecatedDetach(StatusType* status) = 0;
+		virtual void deprecatedDropDatabase(StatusType* status) = 0;
 		virtual unsigned getIdleTimeout(StatusType* status) = 0;
 		virtual void setIdleTimeout(StatusType* status, unsigned timeOut) = 0;
 		virtual unsigned getStatementTimeout(StatusType* status) = 0;
 		virtual void setStatementTimeout(StatusType* status, unsigned timeOut) = 0;
 		virtual IBatch* createBatch(StatusType* status, ITransaction* transaction, unsigned stmtLength, const char* sqlStmt, unsigned dialect, IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) = 0;
 		virtual IReplicator* createReplicator(StatusType* status) = 0;
+		virtual void detach(StatusType* status) = 0;
+		virtual void dropDatabase(StatusType* status) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -10918,22 +11456,23 @@ namespace Firebird
 					this->version = Base::VERSION;
 					this->addRef = &Name::cloopaddRefDispatcher;
 					this->release = &Name::cloopreleaseDispatcher;
-					this->detach = &Name::cloopdetachDispatcher;
+					this->deprecatedDetach = &Name::cloopdeprecatedDetachDispatcher;
 					this->query = &Name::cloopqueryDispatcher;
 					this->start = &Name::cloopstartDispatcher;
+					this->detach = &Name::cloopdetachDispatcher;
 				}
 			} vTable;
 
 			this->cloopVTable = &vTable;
 		}
 
-		static void CLOOP_CARG cloopdetachDispatcher(IService* self, IStatus* status) throw()
+		static void CLOOP_CARG cloopdeprecatedDetachDispatcher(IService* self, IStatus* status) throw()
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::detach(&status2);
+				static_cast<Name*>(self)->Name::deprecatedDetach(&status2);
 			}
 			catch (...)
 			{
@@ -10962,6 +11501,20 @@ namespace Firebird
 			try
 			{
 				static_cast<Name*>(self)->Name::start(&status2, spbLength, spb);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopdetachDispatcher(IService* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::detach(&status2);
 			}
 			catch (...)
 			{
@@ -11008,9 +11561,10 @@ namespace Firebird
 		{
 		}
 
-		virtual void detach(StatusType* status) = 0;
+		virtual void deprecatedDetach(StatusType* status) = 0;
 		virtual void query(StatusType* status, unsigned sendLength, const unsigned char* sendItems, unsigned receiveLength, const unsigned char* receiveItems, unsigned bufferLength, unsigned char* buffer) = 0;
 		virtual void start(StatusType* status, unsigned spbLength, const unsigned char* spb) = 0;
+		virtual void detach(StatusType* status) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -18653,7 +19207,7 @@ namespace Firebird
 			}
 		}
 
-		static unsigned CLOOP_CARG cloopgetSubTypeDispatcher(IReplicatedField* self) throw()
+		static int CLOOP_CARG cloopgetSubTypeDispatcher(IReplicatedField* self) throw()
 		{
 			try
 			{
@@ -18662,11 +19216,11 @@ namespace Firebird
 			catch (...)
 			{
 				StatusType::catchException(0);
-				return static_cast<unsigned>(0);
+				return static_cast<int>(0);
 			}
 		}
 
-		static unsigned CLOOP_CARG cloopgetScaleDispatcher(IReplicatedField* self) throw()
+		static int CLOOP_CARG cloopgetScaleDispatcher(IReplicatedField* self) throw()
 		{
 			try
 			{
@@ -18675,7 +19229,7 @@ namespace Firebird
 			catch (...)
 			{
 				StatusType::catchException(0);
-				return static_cast<unsigned>(0);
+				return static_cast<int>(0);
 			}
 		}
 
@@ -18734,8 +19288,8 @@ namespace Firebird
 
 		virtual const char* getName() = 0;
 		virtual unsigned getType() = 0;
-		virtual unsigned getSubType() = 0;
-		virtual unsigned getScale() = 0;
+		virtual int getSubType() = 0;
+		virtual int getScale() = 0;
 		virtual unsigned getLength() = 0;
 		virtual unsigned getCharSet() = 0;
 		virtual const void* getData() = 0;
@@ -19077,7 +19631,7 @@ namespace Firebird
 					this->release = &Name::cloopreleaseDispatcher;
 					this->setOwner = &Name::cloopsetOwnerDispatcher;
 					this->getOwner = &Name::cloopgetOwnerDispatcher;
-					this->setAttachment = &Name::cloopsetAttachmentDispatcher;
+					this->init = &Name::cloopinitDispatcher;
 					this->startTransaction = &Name::cloopstartTransactionDispatcher;
 					this->cleanupTransaction = &Name::cloopcleanupTransactionDispatcher;
 					this->setSequence = &Name::cloopsetSequenceDispatcher;
@@ -19087,15 +19641,18 @@ namespace Firebird
 			this->cloopVTable = &vTable;
 		}
 
-		static void CLOOP_CARG cloopsetAttachmentDispatcher(IReplicatedSession* self, IAttachment* attachment) throw()
+		static FB_BOOLEAN CLOOP_CARG cloopinitDispatcher(IReplicatedSession* self, IStatus* status, IAttachment* attachment) throw()
 		{
+			StatusType status2(status);
+
 			try
 			{
-				static_cast<Name*>(self)->Name::setAttachment(attachment);
+				return static_cast<Name*>(self)->Name::init(&status2, attachment);
 			}
 			catch (...)
 			{
-				StatusType::catchException(0);
+				StatusType::catchException(&status2);
+				return static_cast<FB_BOOLEAN>(0);
 			}
 		}
 
@@ -19206,7 +19763,7 @@ namespace Firebird
 		{
 		}
 
-		virtual void setAttachment(IAttachment* attachment) = 0;
+		virtual FB_BOOLEAN init(StatusType* status, IAttachment* attachment) = 0;
 		virtual IReplicatedTransaction* startTransaction(StatusType* status, ITransaction* transaction, ISC_INT64 number) = 0;
 		virtual void cleanupTransaction(StatusType* status, ISC_INT64 number) = 0;
 		virtual void setSequence(StatusType* status, const char* name, ISC_INT64 value) = 0;

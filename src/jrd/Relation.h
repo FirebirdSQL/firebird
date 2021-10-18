@@ -474,6 +474,8 @@ inline jrd_rel::GCShared::~GCShared()
 
 // Field block, one for each field in a scanned relation
 
+const USHORT FLD_parse_computed = 0x0001;		// computed expression is being parsed
+
 class jrd_fld : public pool_alloc<type_fld>
 {
 public:
@@ -489,6 +491,7 @@ public:
 	MetaName	fld_generator_name;	// identity generator name
 	MetaNamePair	fld_source_rel_field;	// Relation/field source name
 	Nullable<IdentityType> fld_identity_type;
+	USHORT fld_flags;
 
 public:
 	explicit jrd_fld(MemoryPool& p)

@@ -38,7 +38,7 @@ viz část ODINSTALACE níže.
 
 Máte-li nainstalovanou beta či alpha verzi
 Firebirdu $MAJOR.$MINOR, instalátor přejmenuje firebird.conf 
-a security3.fdb, jelikož tyto soubory již nejsou kompatibilní.
+a security5.fdb, jelikož tyto soubory již nejsou kompatibilní.
 
 
 Instalace gds32.dll
@@ -63,7 +63,7 @@ Reinstalace of Firebird $MAJOR.$MINOR
 ---------------------------
 
 Instalační program dělá vše pro detekci a zachování předchozí instalace.
-Jestliže instalátor rozpozná firebird.conf či security3.fdb, nebude
+Jestliže instalátor rozpozná firebird.conf či security5.fdb, nebude
 nabízet možnost instalace legacy_auth. Rovněž nebude nabízet
 volbu pro nastavení hesla pro SYSDBA.
 
@@ -123,7 +123,7 @@ o Odinstalace v instalační složce zanechá
   - fbtrace.conf
   - replication.conf
   - firebird.log
-  - security3.fdb
+  - security5.fdb
 
   To je záměr. Všechny tyto soubory jsou
   potencionálně pozměnitelné uživatelem a

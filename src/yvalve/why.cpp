@@ -28,12 +28,13 @@
  */
 
 #include "firebird.h"
+
+#define FB_UsedInYValve true
 #include "firebird/Interface.h"
+
 #include "memory_routines.h"
-#include "gen/iberror.h"
-#include "gen/msg_facs.h"
+#include "iberror.h"
 #include "../yvalve/YObjects.h"
-#include "../dsql/sqlda.h"
 #include "firebird/impl/sqlda_pub.h"
 #include "../common/gdsassert.h"
 #include "../common/db_alias.h"
@@ -75,6 +76,8 @@
 #include <signal.h>
 #endif
 
+#include <functional>
+
 using namespace Firebird;
 using namespace Why;
 
@@ -103,6 +106,25 @@ namespace Why {
 };
 
 namespace {
+
+static const struct {
+	int fac_code;
+	const char* facility;
+} facilities[] = {
+	{FB_IMPL_MSG_FACILITY_JRD,			"JRD       "},
+	{FB_IMPL_MSG_FACILITY_GFIX,			"GFIX      "},
+	{FB_IMPL_MSG_FACILITY_DSQL,			"DSQL      "},
+	{FB_IMPL_MSG_FACILITY_DYN,			"DYN       "},
+	{FB_IMPL_MSG_FACILITY_GBAK,			"GBAK      "},
+	{FB_IMPL_MSG_FACILITY_SQLERR,		"SQLERR    "},
+	{FB_IMPL_MSG_FACILITY_GSEC,			"GSEC      "},
+	{FB_IMPL_MSG_FACILITY_GSTAT,		"GSTAT     "},
+	{FB_IMPL_MSG_FACILITY_FBSVCMGR,		"FBSVCMGR  "},
+	{FB_IMPL_MSG_FACILITY_UTL,			"UTL       "},
+	{FB_IMPL_MSG_FACILITY_NBACKUP,		"NBACKUP   "},
+	{FB_IMPL_MSG_FACILITY_FBTRACEMGR,	"FBTRACEMGR"},
+	{0, NULL}
+};
 
 // Class-wrapper around external SQLDA.
 // Can be used as local variable, but do it with care
@@ -725,7 +747,7 @@ RefPtr<T> translateHandle(GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, T*>
 
 //-------------------------------------
 
-const int SHUTDOWN_TIMEOUT = 5000;	// 5 sec
+const int SHUTDOWN_TIMEOUT = 10000;	// 10 sec
 
 class ShutdownInit
 {
@@ -935,7 +957,7 @@ namespace Why
 						{
 							bool found = false;
 
-							const _facilities* facs = facilities;
+							const auto* facs = facilities;
 							const int fac_code = GET_FACILITY(*s);
 
 							while (facs->facility)
@@ -1324,6 +1346,27 @@ namespace Why
 		bool shutdownMode;
 	};
 
+
+	template <class Y>
+	void done(CheckStatusWrapper* status, YEntry<Y>& entry, Y* y, std::function<void()> newClose, std::function<void()> oldClose)
+	{
+		if (entry.next())
+			newClose();
+
+		if (!(status->getState() & IStatus::STATE_ERRORS))
+			y->destroy(Y::DF_RELEASE | Y::DF_KEEP_NEXT);
+
+		else if (status->getErrors()[1] == isc_interface_version_too_old)
+		{
+			status->init();
+			if (entry.next())
+				oldClose();
+
+			if (!(status->getState() & IStatus::STATE_ERRORS))
+				y->destroy(Y::DF_RELEASE);
+		}
+	}
+
 }	// namespace Why
 
 struct TEB
@@ -1357,10 +1400,10 @@ static void nullCheck(const FB_API_HANDLE* ptr, ISC_STATUS code)
 
 static void badSqldaVersion(const short version)
 {
-		(Arg::Gds(isc_dsql_sqlda_value_err) <<
-		 Arg::Gds(isc_dsql_invalid_sqlda_version) <<
-		 Arg::Num(SQLDA_VERSION1) << Arg::Num(SQLDA_VERSION1) << Arg::Num(version)
-		).raise();
+	(Arg::Gds(isc_dsql_sqlda_value_err) <<
+		Arg::Gds(isc_dsql_invalid_sqlda_version) <<
+		Arg::Num(SQLDA_VERSION1) << Arg::Num(SQLDA_VERSION1) << Arg::Num(version)
+	).raise();
 }
 
 // Set charset info in SQLVAR according to legacy rules
@@ -1465,7 +1508,7 @@ static ISC_STATUS openOrCreateBlob(ISC_STATUS* userStatus, isc_db_handle* dbHand
 			attachment->createBlob(&statusWrapper, transaction, blobId, bpbLength, bpb) :
 			attachment->openBlob(&statusWrapper, transaction, blobId, bpbLength, bpb);
 
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 			return status[1];
 
 		*blobHandle = blob->getHandle();
@@ -1505,7 +1548,7 @@ ISC_STATUS API_ROUTINE fb_database_crypt_callback(ISC_STATUS* userStatus, void* 
 //-------------------------------------
 
 
-Firebird::IAttachment* handleToIAttachment(Firebird::CheckStatusWrapper* status, isc_db_handle* handle)
+Firebird::IAttachment* handleToIAttachment(CheckStatusWrapper* status, isc_db_handle* handle)
 {
 	try
 	{
@@ -1522,7 +1565,7 @@ Firebird::IAttachment* handleToIAttachment(Firebird::CheckStatusWrapper* status,
 }
 
 
-Firebird::ITransaction* handleToITransaction(Firebird::CheckStatusWrapper* status, isc_tr_handle* handle)
+Firebird::ITransaction* handleToITransaction(CheckStatusWrapper* status, isc_tr_handle* handle)
 {
 	try
 	{
@@ -1561,12 +1604,12 @@ ISC_STATUS API_ROUTINE isc_attach_database(ISC_STATUS* userStatus, SSHORT fileLe
 		RefPtr<Dispatcher> dispatcher(FB_NEW Dispatcher);
 
 		dispatcher->setDbCryptCallback(&statusWrapper, TLS_GET(legacyCryptCallback));
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 			return status[1];
 
 		YAttachment* attachment = dispatcher->attachDatabase(&statusWrapper, pathName.c_str(),
 			dpbLength, reinterpret_cast<const UCHAR*>(dpb));
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 			return status[1];
 
 		*publicHandle = attachment->getHandle();
@@ -1623,7 +1666,7 @@ ISC_STATUS API_ROUTINE isc_cancel_blob(ISC_STATUS* userStatus, isc_blob_handle* 
 
 		blob->cancel(&statusWrapper);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			*blobHandle = 0;
 	}
 	catch (const Exception& e)
@@ -1650,7 +1693,7 @@ ISC_STATUS API_ROUTINE isc_cancel_events(ISC_STATUS* userStatus, isc_db_handle* 
 			// This cast appears awful, but as long as handles are 32-bit entities it's OK.
 			event = translateHandle(events, (FB_API_HANDLE*) id);
 		}
-		catch (const Firebird::status_exception& ex)
+		catch (const status_exception& ex)
 		{
 			if (ex.value()[1] == isc_bad_events_handle)
 			{
@@ -1666,7 +1709,7 @@ ISC_STATUS API_ROUTINE isc_cancel_events(ISC_STATUS* userStatus, isc_db_handle* 
 
 		event->cancel(&statusWrapper);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			*id = 0;
 	}
 	catch (const Exception& e)
@@ -1711,7 +1754,7 @@ ISC_STATUS API_ROUTINE isc_close_blob(ISC_STATUS* userStatus, isc_blob_handle* b
 
 		blob->close(&statusWrapper);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			*blobHandle = 0;
 	}
 	catch (const Exception& e)
@@ -1734,7 +1777,7 @@ ISC_STATUS API_ROUTINE isc_commit_transaction(ISC_STATUS* userStatus, isc_tr_han
 		RefPtr<YTransaction> transaction(translateHandle(transactions, traHandle));
 		transaction->commit(&statusWrapper);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			*traHandle = 0;
 	}
 	catch (const Exception& e)
@@ -1784,7 +1827,7 @@ ISC_STATUS API_ROUTINE isc_compile_request(ISC_STATUS* userStatus, isc_db_handle
 		request = attachment->compileRequest(&statusWrapper, blrLength,
 			reinterpret_cast<const UCHAR*>(blr));
 
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 			return status[1];
 
 		*reqHandle = request->getHandle();
@@ -1872,7 +1915,7 @@ ISC_STATUS API_ROUTINE isc_create_database(ISC_STATUS* userStatus, USHORT fileLe
 		RefPtr<Dispatcher> dispatcher(FB_NEW Dispatcher);
 
 		dispatcher->setDbCryptCallback(&statusWrapper, TLS_GET(legacyCryptCallback));
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 			return status[1];
 
 		ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE, reinterpret_cast<const UCHAR*>(dpb), dpbLength);
@@ -1885,7 +1928,7 @@ ISC_STATUS API_ROUTINE isc_create_database(ISC_STATUS* userStatus, USHORT fileLe
 
 		YAttachment* attachment = dispatcher->createDatabase(&statusWrapper, pathName.c_str(),
 			dpbLength, reinterpret_cast<const UCHAR*>(dpb));
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 			return status[1];
 
 		*publicHandle = attachment->getHandle();
@@ -1915,7 +1958,7 @@ ISC_STATUS API_ROUTINE isc_database_cleanup(ISC_STATUS* userStatus, isc_db_handl
 
 		attachment->addCleanupHandler(&statusWrapper, callback);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			callback.release();
 	}
 	catch (const Exception& e)
@@ -1983,7 +2026,7 @@ ISC_STATUS API_ROUTINE isc_detach_database(ISC_STATUS* userStatus, isc_db_handle
 		RefPtr<YAttachment> attachment(translateHandle(attachments, handle));
 		attachment->detach(&statusWrapper);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			*handle = 0;
 	}
 	catch (const Exception& e)
@@ -2014,7 +2057,7 @@ ISC_STATUS API_ROUTINE isc_drop_database(ISC_STATUS* userStatus, isc_db_handle* 
 		RefPtr<YAttachment> attachment(translateHandle(attachments, handle));
 		attachment->dropDatabase(&statusWrapper);
 
-		if ((!(status.getState() & Firebird::IStatus::STATE_ERRORS)) ||
+		if ((!(status.getState() & IStatus::STATE_ERRORS)) ||
 			status[1] == isc_drdb_completed_with_errs)
 		{
 			*handle = 0;
@@ -2176,7 +2219,7 @@ ISC_STATUS API_ROUTINE isc_dsql_execute2(ISC_STATUS* userStatus, isc_tr_handle* 
 		statement->checkPrepared();
 
 		const unsigned flags = statement->statement->getFlags(&statusWrapper);
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 		{
 			return status[1];
 		}
@@ -2191,7 +2234,7 @@ ISC_STATUS API_ROUTINE isc_dsql_execute2(ISC_STATUS* userStatus, isc_tr_handle* 
 
 			statement->openCursor(&statusWrapper, traHandle,
 				inMessage.metadata, inMsgBuffer.begin(), DELAYED_OUT_FORMAT);
-			if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status.getState() & IStatus::STATE_ERRORS)
 			{
 				return status[1];
 			}
@@ -2204,7 +2247,7 @@ ISC_STATUS API_ROUTINE isc_dsql_execute2(ISC_STATUS* userStatus, isc_tr_handle* 
 
 			statement->execute(&statusWrapper, traHandle,
 				inMessage.metadata, inMsgBuffer.begin(), outMessage.metadata, outMessage.getBuffer());
-			if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+			if (!(status.getState() & IStatus::STATE_ERRORS))
 				outMessage.scatterData();
 		}
 	}
@@ -2252,7 +2295,7 @@ ISC_STATUS API_ROUTINE isc_dsql_execute2_m(ISC_STATUS* userStatus, isc_tr_handle
 		InternalMessageBuffer outMsgBuffer(outBlrLength, (const UCHAR*) outBlr, outMsgLength, (UCHAR*) outMsg);
 
 		const unsigned flags = statement->statement->getFlags(&statusWrapper);
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 		{
 			if ((flags & IStatement::FLAG_HAS_CURSOR) && (outMsgLength == 0))
 			{
@@ -2315,7 +2358,7 @@ ISC_STATUS API_ROUTINE isc_dsql_exec_immed2(ISC_STATUS* userStatus, isc_db_handl
 
 		if (stmtIsCrDb)
 		{
-			if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+			if (!(status.getState() & IStatus::STATE_ERRORS))
 				*dbHandle = att->getHandle();
 
 			return status[1];
@@ -2333,7 +2376,7 @@ ISC_STATUS API_ROUTINE isc_dsql_exec_immed2(ISC_STATUS* userStatus, isc_db_handl
 			dialect, inMessage.metadata, inMessageBuffer.begin(),
 			outMessage.metadata, outMessage.getBuffer());
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 		{
 			outMessage.scatterData();
 		}
@@ -2383,7 +2426,7 @@ ISC_STATUS API_ROUTINE isc_dsql_exec_immed2_m(ISC_STATUS* userStatus, isc_db_han
 
 	if (stmtIsCrDb)
 	{
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			*dbHandle = att->getHandle();
 
 		return status[1];
@@ -2443,7 +2486,7 @@ ISC_STATUS API_ROUTINE isc_dsql_fetch(ISC_STATUS* userStatus, isc_stmt_handle* s
 
 		if (statement->fetch(&statusWrapper, outMessage.metadata, outMessage.getBuffer()))
 			outMessage.scatterData();
-		else if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		else if (!(status.getState() & IStatus::STATE_ERRORS))
 			return 100;
 	}
 	catch (const Exception& e)
@@ -2475,7 +2518,7 @@ ISC_STATUS API_ROUTINE isc_dsql_fetch_m(ISC_STATUS* userStatus, isc_stmt_handle*
 		}
 
 		if (!statement->fetch(&statusWrapper, msgBuffer.metadata, reinterpret_cast<UCHAR*>(msg)) &&
-			!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+			!(status.getState() & IStatus::STATE_ERRORS))
 		{
 			return 100;
 		}
@@ -2567,7 +2610,7 @@ ISC_STATUS API_ROUTINE isc_dsql_prepare(ISC_STATUS* userStatus, isc_tr_handle* t
 		if (statement->statement)
 		{
 			statement->closeStatement(&statusWrapper);
-			if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status.getState() & IStatus::STATE_ERRORS)
 				return status[1];
 		}
 
@@ -2579,7 +2622,7 @@ ISC_STATUS API_ROUTINE isc_dsql_prepare(ISC_STATUS* userStatus, isc_tr_handle* t
 		statement->statement = statement->attachment.get()->prepare(&statusWrapper, transaction,
 			stmtLength, sqlStmt, dialect, IStatement::PREPARE_PREFETCH_METADATA);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 		{
 			StatusVector tempStatus(NULL);
 			CheckStatusWrapper tempCheckStatusWrapper(&tempStatus);
@@ -2616,7 +2659,7 @@ ISC_STATUS API_ROUTINE isc_dsql_prepare_m(ISC_STATUS* userStatus, isc_tr_handle*
 		if (statement->statement)
 		{
 			statement->closeStatement(&statusWrapper);
-			if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status.getState() & IStatus::STATE_ERRORS)
 				return status[1];
 		}
 
@@ -2631,7 +2674,7 @@ ISC_STATUS API_ROUTINE isc_dsql_prepare_m(ISC_STATUS* userStatus, isc_tr_handle*
 		statement->statement = statement->attachment.get()->prepare(&statusWrapper, transaction,
 			stmtLength, sqlStmt, dialect, flags);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 		{
 			StatusVector tempStatus(NULL);
 			CheckStatusWrapper tempCheckStatusWrapper(&tempStatus);
@@ -2781,7 +2824,7 @@ namespace
 				memcpy(buffer, events, length);
 				sem.release();
 			}
-			catch (const Firebird::Exception&)
+			catch (const Exception&)
 			{ }
 		}
 
@@ -2807,7 +2850,7 @@ ISC_STATUS API_ROUTINE isc_wait_for_event(ISC_STATUS* userStatus, isc_db_handle*
 
 		events = attachment->queEvents(&statusWrapper, callback, length, eventsData);
 
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 			return status[1];
 
 		callback->sem.enter();
@@ -2861,7 +2904,7 @@ namespace
 					events = NULL;
 				}
 			}
-			catch (const Firebird::Exception&)
+			catch (const Exception&)
 			{ }
 
 			if (tmp)
@@ -2897,7 +2940,7 @@ ISC_STATUS API_ROUTINE isc_que_events(ISC_STATUS* userStatus, isc_db_handle* dbH
 			*id = FB_API_HANDLE_TO_ULONG(events->getHandle());
 
 		callback->setEvents(events);		// should be called in case of NULL events too
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 		{
 			return status[1];
 		}
@@ -2930,7 +2973,7 @@ ISC_STATUS API_ROUTINE isc_get_segment(ISC_STATUS* userStatus, isc_blob_handle* 
 		unsigned int length;
 		int cc = blob->getSegment(&statusWrapper, bufferLength, reinterpret_cast<UCHAR*>(buffer), &length);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			*returnLength = length;
 
 		// Raise pseudo errors
@@ -2969,7 +3012,7 @@ ISC_STATUS API_ROUTINE isc_get_slice(ISC_STATUS* userStatus, isc_db_handle* dbHa
 		int length = attachment->getSlice(&statusWrapper, transaction, arrayId, sdlLength, sdl,
 			paramLength, reinterpret_cast<const UCHAR*>(param), sliceLength, reinterpret_cast<UCHAR*>(slice));
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS) && returnLength)
+		if (!(status.getState() & IStatus::STATE_ERRORS) && returnLength)
 			*returnLength = length;
 	}
 	catch (const Exception& e)
@@ -2992,7 +3035,7 @@ ISC_STATUS API_ROUTINE fb_disconnect_transaction(ISC_STATUS* userStatus, isc_tr_
 		RefPtr<YTransaction> transaction(translateHandle(transactions, traHandle));
 		transaction->disconnect(&statusWrapper);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			*traHandle = 0;	// ASF: Previous versions wasn't cleaning the handle.
 	}
 	catch (const Exception& e)
@@ -3133,7 +3176,7 @@ ISC_STATUS API_ROUTINE isc_reconnect_transaction(ISC_STATUS* userStatus, isc_db_
 		YTransaction* transaction = attachment->reconnectTransaction(&statusWrapper, length,
 			reinterpret_cast<const UCHAR*>(id));
 
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 			status_exception::raise(status);
 
 		*traHandle = transaction->getHandle();
@@ -3158,7 +3201,7 @@ ISC_STATUS API_ROUTINE isc_release_request(ISC_STATUS* userStatus, isc_req_handl
 		RefPtr<YRequest> request(translateHandle(requests, reqHandle));
 		request->free(&statusWrapper);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			*reqHandle = 0;
 	}
 	catch (const Exception& e)
@@ -3243,7 +3286,7 @@ ISC_STATUS API_ROUTINE isc_rollback_transaction(ISC_STATUS* userStatus, isc_tr_h
 		RefPtr<YTransaction> transaction(translateHandle(transactions, traHandle));
 		transaction->rollback(&statusWrapper);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			*traHandle = 0;
 	}
 	catch (const Exception& e)
@@ -3267,7 +3310,7 @@ ISC_STATUS API_ROUTINE isc_seek_blob(ISC_STATUS* userStatus, isc_blob_handle* bl
 		RefPtr<YBlob> blob(translateHandle(blobs, blobHandle));
 		unsigned int pos = blob->seek(&statusWrapper, mode, offset);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS) && result)
+		if (!(status.getState() & IStatus::STATE_ERRORS) && result)
 			*result = pos;
 	}
 	catch (const Exception& e)
@@ -3321,12 +3364,12 @@ ISC_STATUS API_ROUTINE isc_service_attach(ISC_STATUS* userStatus, USHORT service
 		RefPtr<Dispatcher> dispatcher(FB_NEW Dispatcher);
 
 		dispatcher->setDbCryptCallback(&statusWrapper, TLS_GET(legacyCryptCallback));
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 			return status[1];
 
 		service = dispatcher->attachServiceManager(&statusWrapper, svcName.c_str(),
 			spbLength, reinterpret_cast<const UCHAR*>(spb));
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 			return status[1];
 
 		*publicHandle = service->getHandle();
@@ -3358,7 +3401,7 @@ ISC_STATUS API_ROUTINE isc_service_detach(ISC_STATUS* userStatus, isc_svc_handle
 		RefPtr<YService> service(translateHandle(services, handle));
 		service->detach(&statusWrapper);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			*handle = 0;
 	}
 	catch (const Exception& e)
@@ -3614,7 +3657,7 @@ ISC_STATUS API_ROUTINE gds__transaction_cleanup(ISC_STATUS* userStatus, isc_tr_h
 
 		transaction->addCleanupHandler(&statusWrapper, callback);
 
-		if (!(status.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status.getState() & IStatus::STATE_ERRORS))
 			callback.release();
 	}
 	catch (const Exception& e)
@@ -3679,7 +3722,7 @@ int API_ROUTINE fb_shutdown(unsigned int timeout, const int reason)
 	RefPtr<Dispatcher> dispatcher(FB_NEW Dispatcher);
 
 	dispatcher->shutdown(&statusWrapper, timeout, reason);
-	return (status.getState() & Firebird::IStatus::STATE_ERRORS) ? FB_FAILURE : FB_SUCCESS;
+	return (status.getState() & IStatus::STATE_ERRORS) ? FB_FAILURE : FB_SUCCESS;
 }
 
 
@@ -3892,19 +3935,21 @@ void YEvents::cancel(CheckStatusWrapper* status)
 	{
 		YEntry<YEvents> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		if (entry.next())
-			entry.next()->cancel(status);
-
-		if (status->getErrors()[1] == isc_att_shutdown)
-			status->init();
-
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
-			destroy(DF_RELEASE);
+		done(status, entry, this, [&]{
+				entry.next()->cancel(status);
+				if (status->getErrors()[1] == isc_att_shutdown)
+					status->init();
+			}, [&]{entry.next()->deprecatedCancel(status);});
 	}
 	catch (const Exception& e)
 	{
 		e.stuffException(status);
 	}
+}
+
+void YEvents::deprecatedCancel(CheckStatusWrapper* status)
+{
+	cancel(status);
 }
 
 
@@ -4037,16 +4082,17 @@ void YRequest::free(CheckStatusWrapper* status)
 	{
 		YEntry<YRequest> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		if (entry.next())
-			entry.next()->free(status);
-
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
-			destroy(DF_RELEASE);
+		done(status, entry, this, [&]{entry.next()->free(status);}, [&]{entry.next()->deprecatedFree(status);});
 	}
 	catch (const Exception& e)
 	{
 		e.stuffException(status);
 	}
+}
+
+void YRequest::deprecatedFree(CheckStatusWrapper* status)
+{
+	free(status);
 }
 
 
@@ -4132,16 +4178,17 @@ void YBlob::cancel(CheckStatusWrapper* status)
 	{
 		YEntry<YBlob> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		if (entry.next())
-			entry.next()->cancel(status);
-
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
-			destroy(DF_RELEASE);
+		done(status, entry, this, [&]{entry.next()->cancel(status);}, [&]{entry.next()->deprecatedCancel(status);});
 	}
 	catch (const Exception& e)
 	{
 		e.stuffException(status);
 	}
+}
+
+void YBlob::deprecatedCancel(CheckStatusWrapper* status)
+{
+	cancel(status);
 }
 
 void YBlob::close(CheckStatusWrapper* status)
@@ -4150,16 +4197,17 @@ void YBlob::close(CheckStatusWrapper* status)
 	{
 		YEntry<YBlob> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		if (entry.next())
-			entry.next()->close(status);
-
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
-			destroy(DF_RELEASE);
+		done(status, entry, this, [&]{entry.next()->close(status);}, [&]{entry.next()->deprecatedClose(status);});
 	}
 	catch (const Exception& e)
 	{
 		e.stuffException(status);
 	}
+}
+
+void YBlob::deprecatedClose(CheckStatusWrapper* status)
+{
+	close(status);
 }
 
 int YBlob::seek(CheckStatusWrapper* status, int mode, int offset)
@@ -4294,7 +4342,7 @@ IMessageMetadata* YStatement::getMetadata(bool in, IStatement* next)
 	IMessageMetadata* rc = in ?
 		next->getInputMetadata(&statusWrapper) : next->getOutputMetadata(&statusWrapper);
 
-	if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status.getState() & IStatus::STATE_ERRORS)
 		status_exception::raise(&status);
 
 	return rc;
@@ -4403,7 +4451,7 @@ IResultSet* YStatement::openCursor(CheckStatusWrapper* status, ITransaction* tra
 			attachment.get()->getNextTransaction(status, transaction, trans);
 
 		IResultSet* rs = entry.next()->openCursor(status, trans, inMetadata, inBuffer, outMetadata, flags);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			return NULL;
 		}
@@ -4429,17 +4477,19 @@ void YStatement::free(CheckStatusWrapper* status)
 	{
 		YEntry<YStatement> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		if (entry.next())
-			entry.next()->free(status);
-
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
-			destroy(DF_RELEASE);
+		done(status, entry, this, [&]{entry.next()->free(status);}, [&]{entry.next()->deprecatedFree(status);});
 	}
 	catch (const Exception& e)
 	{
 		e.stuffException(status);
 	}
 }
+
+void YStatement::deprecatedFree(CheckStatusWrapper* status)
+{
+	free(status);
+}
+
 
 YBatch* YStatement::createBatch(CheckStatusWrapper* status, IMessageMetadata* inMetadata, unsigned parLength,
 	const unsigned char* par)
@@ -4449,7 +4499,7 @@ YBatch* YStatement::createBatch(CheckStatusWrapper* status, IMessageMetadata* in
 		YEntry<YStatement> entry(status, this);
 
 		IBatch* batch = entry.next()->createBatch(status, inMetadata, parLength, par);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			return NULL;
 		}
@@ -4505,7 +4555,7 @@ void IscStatement::openCursor(CheckStatusWrapper* status, isc_tr_handle* traHand
 
 	statement->openCursor(status, transaction, inMetadata, buffer, outMetadata, 0);
 
-	if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status->getState() & IStatus::STATE_ERRORS)
 		return;
 
 	fb_assert(statement->cursor);
@@ -4520,7 +4570,7 @@ void IscStatement::closeCursor(CheckStatusWrapper* status, bool raise)
 		fb_assert(!pseudoOpened);
 
 		statement->cursor->close(status);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 			status_exception::raise(status);
 
 		statement->cursor = NULL;
@@ -4536,7 +4586,7 @@ void IscStatement::closeStatement(CheckStatusWrapper* status)
 	if (statement)
 	{
 		statement->free(status);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 			status_exception::raise(status);
 
 		statement = NULL;
@@ -4556,7 +4606,7 @@ void IscStatement::execute(CheckStatusWrapper* status, isc_tr_handle* traHandle,
 	ITransaction* newTrans = statement->execute(status, transaction,
 		inMetadata, inBuffer, outMetadata, outBuffer);
 
-	if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status->getState() & IStatus::STATE_ERRORS))
 	{
 		if (transaction && !newTrans)
 		{
@@ -4580,7 +4630,7 @@ FB_BOOLEAN IscStatement::fetch(CheckStatusWrapper* status, IMessageMetadata* out
 	{
 		statement->cursor->setDelayedOutputFormat(status, outMetadata);
 
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 			return FB_FALSE;
 
 		delayedFormat = false;
@@ -4838,23 +4888,26 @@ IMessageMetadata* YResultSet::getMetadata(CheckStatusWrapper* status)
 	return NULL;
 }
 
+
 void YResultSet::close(CheckStatusWrapper* status)
 {
 	try
 	{
 		YEntry<YResultSet> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		if (entry.next())
-			entry.next()->close(status);
-
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
-			destroy(DF_RELEASE);
+		done(status, entry, this, [&]{entry.next()->close(status);}, [&]{entry.next()->deprecatedClose(status);});
 	}
 	catch (const Exception& e)
 	{
 		e.stuffException(status);
 	}
 }
+
+void YResultSet::deprecatedClose(CheckStatusWrapper* status)
+{
+	close(status);
+}
+
 
 //-------------------------------------
 
@@ -5028,6 +5081,43 @@ void YBatch::cancel(CheckStatusWrapper* status)
 }
 
 
+void YBatch::close(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YBatch> entry(status, this, CHECK_WARN_ZERO_HANDLE);
+
+		done(status, entry, this, [&]{entry.next()->close(status);}, [&]{entry.next()->deprecatedClose(status);});
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
+void YBatch::deprecatedClose(CheckStatusWrapper* status)
+{
+	close(status);
+}
+
+
+void YBatch::getInfo(CheckStatusWrapper* status, unsigned int itemsLength, const unsigned char* items,
+	unsigned int bufferLength, unsigned char* buffer)
+{
+	try
+	{
+		YEntry<YBatch> entry(status, this);
+
+		entry.next()->getInfo(status, itemsLength, items, bufferLength, buffer);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
 //-------------------------------------
 
 
@@ -5061,13 +5151,20 @@ void YReplicator::close(CheckStatusWrapper* status)
 {
 	try
 	{
-		YEntry<YReplicator> entry(status, this);
-		entry.next()->close(status);
+		YEntry<YReplicator> entry(status, this, CHECK_WARN_ZERO_HANDLE);
+
+		done(status, entry, this, [&]{entry.next()->close(status);}, [&]{entry.next()->deprecatedClose(status);});
 	}
 	catch (const Exception& e)
 	{
 		e.stuffException(status);
 	}
+}
+
+
+void YReplicator::deprecatedClose(CheckStatusWrapper* status)
+{
+	close(status);
 }
 
 
@@ -5109,8 +5206,8 @@ void YTransaction::destroy(unsigned dstrFlags)
 	// can't release cursors by itself. See also CORE-6067.
 	const bool releaseCursors = handle;
 
-	childBlobs.destroy(dstrFlags & ~DF_RELEASE);
-	childCursors.destroy(releaseCursors ? dstrFlags : dstrFlags & ~DF_RELEASE);
+	childBlobs.destroy(dstrFlags & ~(DF_RELEASE | DF_KEEP_NEXT));
+	childCursors.destroy((releaseCursors ? dstrFlags : dstrFlags & ~DF_RELEASE) & ~DF_KEEP_NEXT);
 
 	YAttachment* att = attachment.release();
 	if (att)
@@ -5162,10 +5259,7 @@ void YTransaction::commit(CheckStatusWrapper* status)
 	{
 		YEntry<YTransaction> entry(status, this);
 
-		entry.next()->commit(status);
-
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
-			destroy(DF_RELEASE);
+		done(status, entry, this, [&]{entry.next()->commit(status);}, [&]{entry.next()->deprecatedCommit(status);});
 	}
 	catch (const Exception& e)
 	{
@@ -5193,13 +5287,11 @@ void YTransaction::rollback(CheckStatusWrapper* status)
 	{
 		YEntry<YTransaction> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		if (entry.next())
-			entry.next()->rollback(status);
-		if (isNetworkError(status))
-			status->init();
-
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
-			destroy(DF_RELEASE);
+		done(status, entry, this, [&]{
+				entry.next()->rollback(status);
+				if (isNetworkError(status))
+					status->init();
+			}, [&]{entry.next()->deprecatedRollback(status);});
 	}
 	catch (const Exception& e)
 	{
@@ -5234,7 +5326,7 @@ void YTransaction::disconnect(CheckStatusWrapper* status)
 			{
 				i->next->disconnect(status);
 
-				if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (status->getState() & IStatus::STATE_ERRORS)
 					return;
 
 				i->next = NULL;
@@ -5249,6 +5341,22 @@ void YTransaction::disconnect(CheckStatusWrapper* status)
 		e.stuffException(status);
 	}
 }
+
+void YTransaction::deprecatedCommit(CheckStatusWrapper* status)
+{
+	commit(status);
+}
+
+void YTransaction::deprecatedRollback(CheckStatusWrapper* status)
+{
+	rollback(status);
+}
+
+void YTransaction::deprecatedDisconnect(CheckStatusWrapper* status)
+{
+	disconnect(status);
+}
+
 
 void YTransaction::addCleanupHandler(CheckStatusWrapper* status, CleanupCallback* callback)
 {
@@ -5379,12 +5487,13 @@ void YAttachment::destroy(unsigned dstrFlags)
 
 	cleanupHandlers.clear();
 
-	childRequests.destroy(dstrFlags & ~DF_RELEASE);
-	childStatements.destroy(dstrFlags & ~DF_RELEASE);
-	childIscStatements.destroy(dstrFlags & ~DF_RELEASE);
-	childBlobs.destroy(dstrFlags & ~DF_RELEASE);
-	childEvents.destroy(dstrFlags & ~DF_RELEASE);
-	childTransactions.destroy(dstrFlags & ~DF_RELEASE);
+	unsigned childFlags = dstrFlags & ~(DF_KEEP_NEXT | DF_RELEASE);
+	childRequests.destroy(childFlags);
+	childStatements.destroy(childFlags);
+	childIscStatements.destroy(childFlags);
+	childBlobs.destroy(childFlags);
+	childEvents.destroy(childFlags);
+	childTransactions.destroy(childFlags);
 
 	removeHandle(&attachments, handle);
 
@@ -5430,7 +5539,7 @@ YStatement* YAttachment::prepare(CheckStatusWrapper* status, ITransaction* trans
 			getNextTransaction(status, transaction, trans);
 
 		IStatement* st = entry.next()->prepare(status, trans, stmtLength, sqlStmt, dialect, flags);
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status->getState() & IStatus::STATE_ERRORS))
 		{
 			YStatement* r = FB_NEW YStatement(this, st);
 			r->addRef();
@@ -5666,7 +5775,7 @@ IResultSet* YAttachment::openCursor(CheckStatusWrapper* status, ITransaction* tr
 
 		rs = entry.next()->openCursor(status, trans, length, string, dialect,
 			inMetadata, inBuffer, outMetadata, cursorName, cursorFlags);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			return NULL;
 		}
@@ -5733,10 +5842,10 @@ ITransaction* YAttachment::execute(CheckStatusWrapper* status, ITransaction* tra
 }
 
 
-void YAttachment::execute(Firebird::CheckStatusWrapper* status, isc_tr_handle* traHandle,
+void YAttachment::execute(CheckStatusWrapper* status, isc_tr_handle* traHandle,
 		unsigned int stmtLength, const char* sqlStmt, unsigned int dialect,
-		Firebird::IMessageMetadata* inMetadata, void* inBuffer,
-		Firebird::IMessageMetadata* outMetadata, void* outBuffer)
+		IMessageMetadata* inMetadata, void* inBuffer,
+		IMessageMetadata* outMetadata, void* outBuffer)
 {
 	RefPtr<YTransaction> transaction;
 
@@ -5746,7 +5855,7 @@ void YAttachment::execute(Firebird::CheckStatusWrapper* status, isc_tr_handle* t
 	ITransaction* newTrans = execute(status, transaction, stmtLength, sqlStmt,
 		dialect, inMetadata, inBuffer, outMetadata, outBuffer);
 
-	if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status->getState() & IStatus::STATE_ERRORS))
 	{
 		if (transaction && !newTrans)
 		{
@@ -5814,7 +5923,7 @@ void YAttachment::ping(CheckStatusWrapper* status)
 
 		entry.next()->ping(status);
 
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			if (!savedStatus.getError())
 				savedStatus.save(status);
@@ -5839,19 +5948,21 @@ void YAttachment::detach(CheckStatusWrapper* status)
 	{
 		YEntry<YAttachment> entry(status, this, CHECK_NONE);
 
-		if (entry.next())
-			entry.next()->detach(status);
-
-		if (isNetworkError(status))
-			status->init();
-
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
-			destroy(DF_RELEASE);
+		done(status, entry, this, [&]{
+				entry.next()->detach(status);
+				if (isNetworkError(status))
+					status->init();
+			}, [&]{entry.next()->deprecatedDetach(status);});
 	}
 	catch (const Exception& e)
 	{
 		e.stuffException(status);
 	}
+}
+
+void YAttachment::deprecatedDetach(CheckStatusWrapper* status)
+{
+	detach(status);
 }
 
 void YAttachment::dropDatabase(CheckStatusWrapper* status)
@@ -5860,15 +5971,17 @@ void YAttachment::dropDatabase(CheckStatusWrapper* status)
 	{
 		YEntry<YAttachment> entry(status, this);
 
-		entry.next()->dropDatabase(status);
-
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
-			destroy(DF_RELEASE);
+		done(status, entry, this, [&]{entry.next()->dropDatabase(status);}, [&]{entry.next()->deprecatedDropDatabase(status);});
 	}
 	catch (const Exception& e)
 	{
 		e.stuffException(status);
 	}
+}
+
+void YAttachment::deprecatedDropDatabase(CheckStatusWrapper* status)
+{
+	dropDatabase(status);
 }
 
 void YAttachment::addCleanupHandler(CheckStatusWrapper* status, CleanupCallback* callback)
@@ -5987,7 +6100,7 @@ YBatch* YAttachment::createBatch(CheckStatusWrapper* status, ITransaction* trans
 
 		IBatch* batch = entry.next()->createBatch(status, trans, stmtLength, sqlStmt, dialect,
 			inMetadata, parLength, par);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			return NULL;
 		}
@@ -6013,7 +6126,7 @@ YReplicator* YAttachment::createReplicator(CheckStatusWrapper* status)
 
 		IReplicator* replicator = entry.next()->createReplicator(status);
 
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			return NULL;
 		}
@@ -6077,15 +6190,17 @@ void YService::detach(CheckStatusWrapper* status)
 	{
 		YEntry<YService> entry(status, this, CHECK_WARN_ZERO_HANDLE);
 
-		if (entry.next())
-			entry.next()->detach(status);
-
-		destroy(DF_RELEASE);
+		done(status, entry, this, [&]{entry.next()->detach(status);}, [&]{entry.next()->deprecatedDetach(status);});
 	}
 	catch (const Exception& e)
 	{
 		e.stuffException(status);
 	}
+}
+
+void YService::deprecatedDetach(CheckStatusWrapper* status)
+{
+	detach(status);
 }
 
 void YService::query(CheckStatusWrapper* status, unsigned int sendLength, const unsigned char* sendItems,
@@ -6141,7 +6256,7 @@ YAttachment* Dispatcher::createDatabase(CheckStatusWrapper* status, const char* 
 	return attachOrCreateDatabase(status, true, filename, dpbLength, dpb);
 }
 
-YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* status, bool createFlag,
+YAttachment* Dispatcher::attachOrCreateDatabase(CheckStatusWrapper* status, bool createFlag,
 	const char* filename, unsigned int dpbLength, const unsigned char* dpb)
 {
 	try
@@ -6159,10 +6274,17 @@ YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* st
 
 		// Take care about DPB
 		setLogin(newDpb, false);
-		if (!utfData)
+
+		if (!newDpb.find(isc_dpb_session_time_zone))
 		{
-			IntlDpb().toUtf8(newDpb);
+			const char* defaultTimeZone = Config::getDefaultTimeZone();
+
+			if (defaultTimeZone && defaultTimeZone[0])
+				newDpb.insertString(isc_dpb_session_time_zone, defaultTimeZone);
 		}
+
+		if (!utfData)
+			IntlDpb().toUtf8(newDpb);
 
 		// Take care about filename
 		PathName orgFilename(filename);
@@ -6207,7 +6329,7 @@ YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* st
 			if (cryptCallback)
 			{
 				provider->setDbCryptCallback(currentStatus, cryptCallback);
-				if (currentStatus->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (currentStatus->getState() & IStatus::STATE_ERRORS)
 					continue;
 			}
 
@@ -6217,7 +6339,7 @@ YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* st
 				provider->attachDatabase(currentStatus,	expandedFilename.c_str(),
 					newDpb.getBufferLength(), newDpb.getBuffer());
 
-			if (!(currentStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+			if (!(currentStatus->getState() & IStatus::STATE_ERRORS))
 			{
 				if (createFlag)
 				{
@@ -6233,8 +6355,11 @@ YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* st
 #endif
 				}
 
-				status->setErrors(currentStatus->getErrors());
-				status->setWarnings(currentStatus->getWarnings());
+				if (status != currentStatus)
+				{
+					status->setErrors(currentStatus->getErrors());
+					status->setWarnings(currentStatus->getWarnings());
+				}
 				YAttachment* r = FB_NEW YAttachment(provider, attachment, expandedFilename);
 				r->addRef();
 				return r;
@@ -6322,17 +6447,20 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 			if (cryptCallback)
 			{
 				p->setDbCryptCallback(currentStatus, cryptCallback);
-				if (currentStatus->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (currentStatus->getState() & IStatus::STATE_ERRORS)
 					continue;
 			}
 
 			service = p->attachServiceManager(currentStatus, svcName.c_str(),
 				spbWriter.getBufferLength(), spbWriter.getBuffer());
 
-			if (!(currentStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+			if (!(currentStatus->getState() & IStatus::STATE_ERRORS))
 			{
-				status->setErrors(currentStatus->getErrors());
-				status->setWarnings(currentStatus->getWarnings());
+				if (status != currentStatus)
+				{
+					status->setErrors(currentStatus->getErrors());
+					status->setWarnings(currentStatus->getWarnings());
+				}
 				YService* r = FB_NEW YService(p, service, utfData);
 				r->addRef();
 				return r;
@@ -6353,7 +6481,7 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 			currentStatus->init();
 		}
 
-		if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status->getState() & IStatus::STATE_ERRORS))
 		{
 			(Arg::Gds(isc_service_att_err) <<
 			 Arg::Gds(isc_no_providers)).copyTo(status);
@@ -6376,6 +6504,10 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 
 void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, const int reason)
 {
+	// set "process exiting" state
+	if (reason == fb_shutrsn_emergency)
+		abortShutdown();
+
 	// can't syncronize with already killed threads, just exit
 	if (MasterInterfacePtr()->getProcessExiting())
 		return;

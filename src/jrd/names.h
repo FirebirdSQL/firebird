@@ -441,6 +441,8 @@ NAME("MON$FILE_ID", nam_mon_file_id)
 NAME("MON$GUID", nam_mon_guid)
 NAME("MON$NEXT_ATTACHMENT", nam_mon_na)
 NAME("MON$NEXT_STATEMENT", nam_mon_ns)
+NAME("RDB$REPLICA_MODE", nam_repl_mode)
+NAME("MON$REPLICA_MODE", nam_mon_repl_mode)
 
 NAME("RDB$CONFIG", nam_config)
 NAME("RDB$CONFIG_ID", nam_cfg_id)
@@ -449,3 +451,9 @@ NAME("RDB$CONFIG_VALUE", nam_cfg_value)
 NAME("RDB$CONFIG_DEFAULT", nam_cfg_default)
 NAME("RDB$CONFIG_IS_SET", nam_cfg_is_set)
 NAME("RDB$CONFIG_SOURCE", nam_cfg_source)
+
+NAME("MON$SESSION_TIMEZONE", nam_mon_session_tz)
+
+NAME("RDB$KEYWORDS", nam_keywords)
+NAME("RDB$KEYWORD_NAME", nam_keyword_name)
+NAME("RDB$KEYWORD_RESERVED", nam_keyword_reserved)

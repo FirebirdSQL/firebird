@@ -272,6 +272,19 @@ bool putShutdownMode(char**& av, ClumpletWriter& spb, unsigned int tag)
 	return putSpecTag(av, spb, tag, shutSwitch, isc_fbsvcmgr_bad_sm);
 }
 
+const SvcSwitches rmSwitch[] =
+{
+	{"prp_rm_none", 0, 0, isc_spb_prp_rm_none, 0},
+	{"prp_rm_readonly", 0, 0, isc_spb_prp_rm_readonly, 0},
+	{"prp_rm_readwrite", 0, 0, isc_spb_prp_rm_readwrite, 0},
+	{0, 0, 0, 0, 0}
+};
+
+bool putReplicaMode(char**& av, ClumpletWriter& spb, unsigned int tag)
+{
+	return putSpecTag(av, spb, tag, rmSwitch, isc_fbsvcmgr_bad_rm);
+}
+
 // add integer (int32) tag to spb
 
 bool putIntArgument(char**& av, ClumpletWriter& spb, unsigned int tag)
@@ -439,6 +452,7 @@ const SvcSwitches restoreOptions[] =
 	{"res_keyholder", putStringArgument, 0, isc_spb_res_keyholder, 0 },
 	{"res_keyname", putStringArgument, 0, isc_spb_res_keyname, 0 },
 	{"res_crypt", putStringArgument, 0, isc_spb_res_crypt, 0 },
+	{"res_replica_mode", putReplicaMode, 0, isc_spb_res_replica_mode, 0},
 	{0, 0, 0, 0, 0}
 };
 
@@ -462,6 +476,7 @@ const SvcSwitches propertiesOptions[] =
 	{"prp_shutdown_mode", putShutdownMode, 0, isc_spb_prp_shutdown_mode, 0},
 	{"prp_online_mode", putShutdownMode, 0, isc_spb_prp_online_mode, 0},
 	{"prp_nolinger", putOption, 0, isc_spb_prp_nolinger, 0},
+	{"prp_replica_mode", putReplicaMode, 0, isc_spb_prp_replica_mode, 0},
 	{0, 0, 0, 0, 0}
 };
 
@@ -547,12 +562,14 @@ const SvcSwitches nrestOptions[] =
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
 	{"nbk_file", putStringArgument, 0, isc_spb_nbk_file, 0},
 	{"nbk_inplace", putOption, 0, isc_spb_nbk_inplace, 0},
+	{"nbk_sequence", putOption, 0, isc_spb_nbk_sequence, 0},
 	{0, 0, 0, 0, 0}
 };
 
 const SvcSwitches nfixOptions[] =
 {
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
+	{"nbk_sequence", putOption, 0, isc_spb_nbk_sequence, 0},
 	{0, 0, 0, 0, 0}
 };
 
@@ -1021,6 +1038,7 @@ struct TypeText
 	{ putWriteMode, "prp_wm_async | prp_wm_sync", "prp_wm_sync" },
 	{ putReserveSpace, "prp_res_use_full | prp_res", "prp_res_use_full" },
 	{ putShutdownMode, "prp_sm_normal | prp_sm_multi | prp_sm_single | prp_sm_full", "prp_sm_single" },
+	{ putReplicaMode, "prp_rm_none | prp_rm_readonly | prp_rm_readwrite", "prp_rm_none" },
 	{ putIntArgument, "int32 value", "123" },
 	{ putBigIntArgument, "int64 value", "456" },
 	{ putOption, NULL, "" },

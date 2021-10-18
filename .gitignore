@@ -20,6 +20,7 @@ libtool
 src/dsql/parse.cpp
 .vscode/.browse.VC.db
 extern/decNumber/libdecFloat*.a
+extern/int128/absl/numeric/libi128*.a
 /Makefile
 /src/include/gen/parse.h
 /src/include/gen/autoconfig.auto

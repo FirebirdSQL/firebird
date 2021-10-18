@@ -18,10 +18,10 @@
 
 #include "util/util.h"
 #include "util/logging.h"
-#include "util/pod_array.h"
-#include "util/sparse_array.h"
-#include "util/sparse_set.h"
+#include "re2/pod_array.h"
 #include "re2/re2.h"
+#include "re2/sparse_array.h"
+#include "re2/sparse_set.h"
 
 namespace re2 {
 
@@ -198,8 +198,8 @@ class Prog {
 
   Inst *inst(int id) { return &inst_[id]; }
   int start() { return start_; }
-  int start_unanchored() { return start_unanchored_; }
   void set_start(int start) { start_ = start; }
+  int start_unanchored() { return start_unanchored_; }
   void set_start_unanchored(int start) { start_unanchored_ = start; }
   int size() { return size_; }
   bool reversed() { return reversed_; }
@@ -207,19 +207,27 @@ class Prog {
   int list_count() { return list_count_; }
   int inst_count(InstOp op) { return inst_count_[op]; }
   uint16_t* list_heads() { return list_heads_.data(); }
-  void set_dfa_mem(int64_t dfa_mem) { dfa_mem_ = dfa_mem; }
   int64_t dfa_mem() { return dfa_mem_; }
-  int flags() { return flags_; }
-  void set_flags(int flags) { flags_ = flags; }
+  void set_dfa_mem(int64_t dfa_mem) { dfa_mem_ = dfa_mem; }
   bool anchor_start() { return anchor_start_; }
   void set_anchor_start(bool b) { anchor_start_ = b; }
   bool anchor_end() { return anchor_end_; }
   void set_anchor_end(bool b) { anchor_end_ = b; }
   int bytemap_range() { return bytemap_range_; }
   const uint8_t* bytemap() { return bytemap_; }
+  bool can_prefix_accel() { return prefix_size_ != 0; }
 
-  // Lazily computed.
-  int first_byte();
+  // Accelerates to the first likely occurrence of the prefix.
+  // Returns a pointer to the first byte or NULL if not found.
+  const void* PrefixAccel(const void* data, size_t size) {
+    DCHECK_GE(prefix_size_, 1);
+    return prefix_size_ == 1 ? memchr(data, prefix_front_, size)
+                             : PrefixAccel_FrontAndBack(data, size);
+  }
+
+  // An implementation of prefix accel that looks for prefix_front_ and
+  // prefix_back_ to return fewer false positives than memchr(3) alone.
+  const void* PrefixAccel_FrontAndBack(const void* data, size_t size);
 
   // Returns string representation of program for debugging.
   std::string Dump();
@@ -296,10 +304,6 @@ class Prog {
 
   // Compute bytemap.
   void ComputeByteMap();
-
-  // Computes whether all matches must begin with the same first
-  // byte, and if so, returns that byte.  If not, returns -1.
-  int ComputeFirstByte();
 
   // Run peep-hole optimizer on program.
   void Optimize();
@@ -402,8 +406,9 @@ class Prog {
   int start_unanchored_;    // unanchored entry point for program
   int size_;                // number of instructions
   int bytemap_range_;       // bytemap_[x] < bytemap_range_
-  int first_byte_;          // required first byte for match, or -1 if none
-  int flags_;               // regexp parse flags
+  size_t prefix_size_;      // size of prefix (0 if no prefix)
+  int prefix_front_;        // first byte of prefix (-1 if no prefix)
+  int prefix_back_;         // last byte of prefix (-1 if no prefix)
 
   int list_count_;                 // count of lists (see above)
   int inst_count_[kNumInst];       // count of instructions by opcode
@@ -419,7 +424,6 @@ class Prog {
 
   uint8_t bytemap_[256];    // map from input bytes to byte classes
 
-  std::once_flag first_byte_once_;
   std::once_flag dfa_first_once_;
   std::once_flag dfa_longest_once_;
 

@@ -213,6 +213,9 @@ void jrd_rel::retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNum
 	fb_assert(oldNumber != 0);
 	fb_assert(newNumber != 0);
 
+	if (!rel_pages_inst)
+		return;
+
 	SINT64 inst_id = oldNumber;
 	FB_SIZE_T pos;
 	if (!rel_pages_inst->find(oldNumber, pos))

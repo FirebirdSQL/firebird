@@ -34,13 +34,13 @@
 namespace Firebird {
 
 // Aligns output parameter (i.e. transfers data in destructor).
-template <typename C>
+template <typename C, FB_SIZE_T S = BUFFER_SMALL>
 class OutAligner
 {
 private:
 	UCHAR* const userBuffer;
 #ifdef RISC_ALIGNMENT
-	Firebird::HalfStaticArray<C, BUFFER_SMALL> localBuffer;
+	Firebird::HalfStaticArray<C, S> localBuffer;
 	ULONG bSize;
 	C* bPointer;
 #endif
@@ -82,12 +82,12 @@ public:
 };
 
 // Align in/out parameter.
-template <typename C>
-class BiAligner : public OutAligner<C>
+template <typename C, FB_SIZE_T S = BUFFER_SMALL>
+class BiAligner : public OutAligner<C, S>
 {
 public:
 	BiAligner(UCHAR* buf, ULONG len)
-		: OutAligner<C>(buf, len)
+		: OutAligner<C, S>(buf, len)
 	{
 #ifdef RISC_ALIGNMENT
 		C* ptr = this->operator C*();
@@ -100,12 +100,12 @@ public:
 };
 
 // Aligns input parameter.
-template <typename C>
+template <typename C, FB_SIZE_T S = BUFFER_SMALL>
 class Aligner
 {
 private:
 #ifdef RISC_ALIGNMENT
-	Firebird::HalfStaticArray<C, BUFFER_SMALL> localBuffer;
+	Firebird::HalfStaticArray<C, S> localBuffer;
 #endif
 	const C* bPointer;
 

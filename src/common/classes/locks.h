@@ -320,17 +320,18 @@ typedef Mutex Spinlock;
 #endif //WIN_NT
 
 
-// RAII holder
-class MutexLockGuard
+// RAII holders
+template <typename M>
+class RaiiLockGuard
 {
 public:
-	MutexLockGuard(Mutex& aLock, const char* aReason)
+	RaiiLockGuard(M& aLock, const char* aReason)
 		: lock(&aLock)
 	{
 		lock->enter(aReason);
 	}
 
-	~MutexLockGuard()
+	~RaiiLockGuard()
 	{
 		try
 		{
@@ -354,16 +355,20 @@ public:
 
 private:
 	// Forbid copying
-	MutexLockGuard(const MutexLockGuard&);
-	MutexLockGuard& operator=(const MutexLockGuard&);
+	RaiiLockGuard(const RaiiLockGuard&);
+	RaiiLockGuard& operator=(const RaiiLockGuard&);
 
-	Mutex* lock;
+	M* lock;
 };
 
-class MutexUnlockGuard
+typedef RaiiLockGuard<Mutex> MutexLockGuard;
+
+
+template <typename M>
+class RaiiUnlockGuard
 {
 public:
-	explicit MutexUnlockGuard(Mutex& aLock, const char* aReason)
+	explicit RaiiUnlockGuard(M& aLock, const char* aReason)
 		: lock(&aLock)
 #ifdef DEV_BUILD
 			, saveReason(aReason)
@@ -372,7 +377,7 @@ public:
 		lock->leave();
 	}
 
-	~MutexUnlockGuard()
+	~RaiiUnlockGuard()
 	{
 		try
 		{
@@ -390,14 +395,16 @@ public:
 
 private:
 	// Forbid copying
-	MutexUnlockGuard(const MutexUnlockGuard&);
-	MutexUnlockGuard& operator=(const MutexUnlockGuard&);
+	RaiiUnlockGuard(const RaiiUnlockGuard&);
+	RaiiUnlockGuard& operator=(const RaiiUnlockGuard&);
 
-	Mutex* lock;
+	M* lock;
 #ifdef DEV_BUILD
 	const char* saveReason;
 #endif
 };
+
+typedef RaiiUnlockGuard<Mutex> MutexUnlockGuard;
 
 
 class MutexCheckoutGuard

@@ -7,6 +7,8 @@
 
 		class procedure checkException(status: IStatus);
 		class procedure catchException(status: IStatus; e: Exception);
+		class procedure setVersionError(status: IStatus; interfaceName: string;
+			currentVersion, expectedVersion: NativeInt);
 
 	private
 		status: IStatus;

@@ -140,7 +140,6 @@ static const StatFormat STAT_FORMATS[] =
 	{"writes",	"%6" UQUADFORMAT" ", 7}
 };
 
-
 int BURP_main(Firebird::UtilSvc* uSvc)
 {
 /**************************************
@@ -607,6 +606,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	bool verbint = false;
 	bool noGarbage = false, ignoreDamaged = false, noDbTrig = false;
 	bool transportableMentioned = false;
+	Firebird::string replicaMode;
 
 	for (int itr = 1; itr < argc; ++itr)
 	{
@@ -1050,6 +1050,29 @@ int gbak(Firebird::UtilSvc* uSvc)
 			tdgbl->gbl_sw_transportable = true;
 			transportableMentioned = true;
 			break;
+		case IN_SW_BURP_REPLICA:
+			if (replicaMode.length())
+				BURP_error(333, true, SafeArg() << in_sw_tab->in_sw_name << replicaMode.c_str());
+			if (++itr >= argc)
+			{
+				BURP_error(404, true);
+				// msg 404: "none", "read_only" or "read_write" required
+			}
+			str = argv[itr];
+			str.upper();
+			if (str == BURP_SW_MODE_NONE)
+				tdgbl->gbl_sw_replica = REPLICA_NONE;
+			else if (str == BURP_SW_MODE_RO)
+				tdgbl->gbl_sw_replica = REPLICA_READ_ONLY;
+			else if (str == BURP_SW_MODE_RW)
+				tdgbl->gbl_sw_replica = REPLICA_READ_WRITE;
+			else
+			{
+				BURP_error(404, true);
+				// msg 404: "none", "read_only" or "read_write" required
+			}
+			replicaMode = str;
+			break;
 		}
 	}						// for
 
@@ -1275,6 +1298,8 @@ int gbak(Firebird::UtilSvc* uSvc)
 			errNum = IN_SW_BURP_S;
 		else if (tdgbl->gbl_sw_no_reserve)
 			errNum = IN_SW_BURP_US;
+		else if (tdgbl->gbl_sw_replica.isAssigned())
+			errNum = IN_SW_BURP_REPLICA;
 
 		if (errNum != IN_SW_BURP_0)
 		{

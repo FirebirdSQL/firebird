@@ -33,7 +33,7 @@
 #include "../common/classes/MetaString.h"
 #include "../common/classes/alloc.h"
 #include "fb_exception.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "firebird/Interface.h"
 #include "../common/msg_encode.h"
 

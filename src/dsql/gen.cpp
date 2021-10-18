@@ -56,7 +56,7 @@
 #include "../dsql/utld_proto.h"
 #include "../common/dsc_proto.h"
 #include "../yvalve/why_proto.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../common/StatusArg.h"
 
 using namespace Jrd;
@@ -267,6 +267,8 @@ void GEN_request(DsqlCompilerScratch* scratch, DmlNode* node)
 		case DsqlCompiledStatement::TYPE_SELECT_BLOCK:
 			node->genBlr(scratch);
 			break;
+
+		///case DsqlCompiledStatement::TYPE_RETURNING_CURSOR:
 		default:
 			{
 				dsql_msg* message = statement->getSendMsg();
@@ -659,4 +661,14 @@ void GEN_stuff_context(DsqlCompilerScratch* dsqlScratch, const dsql_ctx* context
 
 		dsqlScratch->appendUChar(context->ctx_recursive);
 	}
+}
+
+
+// Write a context number into the BLR buffer. Check for possible overflow.
+void GEN_stuff_context_number(DsqlCompilerScratch* dsqlScratch, USHORT contextNumber)
+{
+	if (contextNumber > MAX_UCHAR)
+		ERRD_post(Arg::Gds(isc_too_many_contexts));
+
+	dsqlScratch->appendUChar(contextNumber);
 }

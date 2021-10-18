@@ -29,7 +29,7 @@
 #include "../jrd/lck.h"
 #include "../jrd/ods.h"
 #include "../jrd/cch.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/lls.h"
 #include "../jrd/req.h"
 #include "../jrd/os/pio.h"

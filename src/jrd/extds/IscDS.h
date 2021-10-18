@@ -520,7 +520,7 @@ public:
 	virtual void attach(Jrd::thread_db* tdbb);
 
 	virtual bool cancelExecution(bool forced);
-	virtual bool resetSession();
+	virtual bool resetSession(Jrd::thread_db* tdbb);
 
 	virtual bool isAvailable(Jrd::thread_db* tdbb, TraScope traScope) const;
 
@@ -591,7 +591,7 @@ protected:
 	virtual void doClose(Jrd::thread_db* tdbb, bool drop);
 
 	virtual void doSetInParams(Jrd::thread_db* tdbb, unsigned int count,
-		const Jrd::MetaName* const* names, const NestConst<Jrd::ValueExprNode>* params);
+		const Firebird::MetaString* const* names, const NestConst<Jrd::ValueExprNode>* params);
 
 	IscTransaction* getIscTransaction() { return (IscTransaction*) m_transaction; }
 

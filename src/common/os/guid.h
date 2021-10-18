@@ -31,53 +31,55 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+
+#ifdef WIN_NT
+#include <rpc.h>
+#else
 #include "fb_types.h"
 
+struct UUID	// Compatible with Win32 UUID struct layout
+{
+	ULONG Data1;
+	USHORT Data2;
+	USHORT Data3;
+	UCHAR Data4[8];
+};
+#endif
+
 namespace Firebird {
+
+typedef UUID Guid;
 
 const int GUID_BUFF_SIZE = 39;
 const int GUID_BODY_SIZE = 36;
 
-const char* const GUID_LEGACY_FORMAT =
-	"{%04hX%04hX-%04hX-%04hX-%04hX-%04hX%04hX%04hX}";
-const char* const GUID_NEW_FORMAT =
-	"{%02hX%02hX%02hX%02hX-%02hX%02hX-%02hX%02hX-%02hX%02hX-%02hX%02hX%02hX%02hX%02hX%02hX}";
-
-struct Guid
-{
-	union
-	{
-		USHORT data[8];
-		ULONG alignment;	// makes sure C-cast to Win32GUID works correctly
-	};
-};
-
-struct Win32GUID	// Compatible with Win32 GUID struct layout.
-{
-	ULONG data1;
-	USHORT data2;
-	USHORT data3;
-	UCHAR data4[8];
-};
+// Some versions of MSVC cannot recognize hh specifier but MSVC 2015 has it
+const char* const GUID_FORMAT =
+	"{%08X-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}";
+const int GUID_FORMAT_ARGS = 11;
 
 void GenerateRandomBytes(void* buffer, FB_SIZE_T size);
+// Generates platform-dependent UUID compatible with RFC 4122
 void GenerateGuid(Guid* guid);
 
-// These functions receive buffers of at least GUID_BUFF_SIZE length.
-// Warning: they are BROKEN in little-endian and should not be used on new code.
+// These functions receive buffers of at least GUID_BUFF_SIZE length
 
 inline void GuidToString(char* buffer, const Guid* guid)
 {
-	sprintf(buffer, GUID_LEGACY_FORMAT,
-		guid->data[0], guid->data[1], guid->data[2], guid->data[3],
-		guid->data[4], guid->data[5], guid->data[6], guid->data[7]);
+	sprintf(buffer, GUID_FORMAT,
+		guid->Data1, guid->Data2, guid->Data3,
+		guid->Data4[0], guid->Data4[1], guid->Data4[2], guid->Data4[3],
+		guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7]);
 }
 
-inline void StringToGuid(Guid* guid, const char* buffer)
+inline bool StringToGuid(Guid* guid, const char* buffer)
 {
-	sscanf(buffer, GUID_LEGACY_FORMAT,
-		&guid->data[0], &guid->data[1], &guid->data[2], &guid->data[3],
-		&guid->data[4], &guid->data[5], &guid->data[6], &guid->data[7]);
+	const auto result = sscanf(buffer, GUID_FORMAT,
+		&guid->Data1, &guid->Data2, &guid->Data3,
+		&guid->Data4[0], &guid->Data4[1], &guid->Data4[2], &guid->Data4[3],
+		&guid->Data4[4], &guid->Data4[5], &guid->Data4[6], &guid->Data4[7]);
+
+	return (result == GUID_FORMAT_ARGS);
 }
 
 }	// namespace

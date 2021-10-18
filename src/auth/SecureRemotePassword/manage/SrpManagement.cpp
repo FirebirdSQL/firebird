@@ -343,6 +343,8 @@ public:
 			fb_assert(mainTra);
 			fb_assert(grAdminTra);
 
+			curAtt->execute(status, nullptr, 0, "SET BIND OF BOOLEAN TO NATIVE", SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
+
 			switch(user->operation())
 			{
 			case Firebird::IUser::OP_USER_DROP_MAP:

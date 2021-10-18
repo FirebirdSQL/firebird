@@ -76,14 +76,12 @@ static rem_str*		make_pipe_name(const RefPtr<const Config>&, const TEXT*, const 
 static rem_port*	receive(rem_port*, PACKET*);
 static int		send_full(rem_port*, PACKET*);
 static int		send_partial(rem_port*, PACKET*);
-static int		xdrwnet_create(XDR*, rem_port*, UCHAR*, USHORT, xdr_op);
-static bool_t	xdrwnet_endofrecord(XDR*);//, int);
+static RemoteXdr*		xdrwnet_create(rem_port*, UCHAR *, USHORT, xdr_op);
+static bool_t	xdrwnet_endofrecord(RemoteXdr*);//, int);
 static bool		wnet_error(rem_port*, const TEXT*, ISC_STATUS, int);
 static void		wnet_gen_error(rem_port*, const Arg::StatusVector& v);
-static bool_t	wnet_getbytes(XDR*, SCHAR*, unsigned);
-static bool_t	wnet_putbytes(XDR*, const SCHAR*, unsigned);
-static bool_t	wnet_read(XDR*);
-static bool_t	wnet_write(XDR*); //, int);
+static bool_t	wnet_read(RemoteXdr*);
+static bool_t	wnet_write(RemoteXdr*); //, int);
 #ifdef DEBUG
 static void		packet_print(const TEXT*, const UCHAR*, const int);
 #endif
@@ -93,10 +91,10 @@ static void		wnet_make_file_name(TEXT*, DWORD);
 
 static int		cleanup_ports(const int, const int, void*);
 
-static xdr_t::xdr_ops wnet_ops =
+struct WnetXdr : public RemoteXdr
 {
-	wnet_getbytes,
-	wnet_putbytes
+	virtual bool_t x_getbytes(SCHAR *, unsigned);		// get some bytes from "
+	virtual bool_t x_putbytes(const SCHAR*, unsigned);	// put some bytes to "
 };
 
 
@@ -154,7 +152,7 @@ rem_port* WNET_analyze(ClntAuthBlock* cBlock,
 
 	P_CNCT* const cnct = &packet->p_cnct;
 	packet->p_operation = op_connect;
-	cnct->p_cnct_operation = op_attach;
+	cnct->p_cnct_operation = 0;
 	cnct->p_cnct_cversion = CONNECT_VERSION3;
 	cnct->p_cnct_client = ARCHITECTURE;
 
@@ -175,7 +173,8 @@ rem_port* WNET_analyze(ClntAuthBlock* cBlock,
 		REMOTE_PROTOCOL(PROTOCOL_VERSION13, ptype_batch_send, 4),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION14, ptype_batch_send, 5),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION15, ptype_batch_send, 6),
-		REMOTE_PROTOCOL(PROTOCOL_VERSION16, ptype_batch_send, 7)
+		REMOTE_PROTOCOL(PROTOCOL_VERSION16, ptype_batch_send, 7),
+		REMOTE_PROTOCOL(PROTOCOL_VERSION17, ptype_batch_send, 8)
 	};
 	fb_assert(FB_NELEM(protocols_to_try) <= FB_NELEM(cnct->p_cnct_versions));
 	cnct->p_cnct_count = FB_NELEM(protocols_to_try);
@@ -391,7 +390,7 @@ rem_port* WNET_connect(const TEXT* name, PACKET* packet, USHORT flag, Firebird::
 		}
 		else
 		{
-			gds__log("WNET/inet_error: fork/CreateProcess errno = %d", GetLastError());
+			gds__log("WNET/wnet_error: fork/CreateProcess errno = %d", GetLastError());
 			CloseHandle(port->port_pipe);
 		}
 
@@ -531,9 +530,9 @@ static rem_port* alloc_port( rem_port* parent)
 
 	port->port_event = CreateEvent(NULL, TRUE, TRUE, NULL);
 
-	xdrwnet_create(&port->port_send, port, &port->port_buffer[BUFFER_SIZE], BUFFER_SIZE, XDR_ENCODE);
+	port->port_send = xdrwnet_create(port, &port->port_buffer[BUFFER_SIZE], BUFFER_SIZE, XDR_ENCODE);
 
-	xdrwnet_create(&port->port_receive, port, port->port_buffer, 0, XDR_DECODE);
+	port->port_receive = xdrwnet_create(port, port->port_buffer, 0, XDR_DECODE);
 
 	if (parent)
 	{
@@ -890,11 +889,7 @@ static rem_port* receive( rem_port* main_port, PACKET* packet)
  *
  **************************************/
 
-#ifdef DEV_BUILD
-	main_port->port_receive.x_client = !(main_port->port_flags & PORT_server);
-#endif
-
-	if (!xdr_protocol(&main_port->port_receive, packet))
+	if (!xdr_protocol(main_port->port_receive, packet))
 		packet->p_operation = op_exit;
 
 	return main_port;
@@ -914,14 +909,10 @@ static int send_full( rem_port* port, PACKET* packet)
  *
  **************************************/
 
-#ifdef DEV_BUILD
-	port->port_send.x_client = !(port->port_flags & PORT_server);
-#endif
-
-	if (!xdr_protocol(&port->port_send, packet))
+	if (!xdr_protocol(port->port_send, packet))
 		return FALSE;
 
-	return xdrwnet_endofrecord(&port->port_send); //, TRUE);
+	return xdrwnet_endofrecord(port->port_send); //, TRUE);
 }
 
 
@@ -938,17 +929,11 @@ static int send_partial( rem_port* port, PACKET* packet)
  *
  **************************************/
 
-#ifdef DEV_BUILD
-	port->port_send.x_client = !(port->port_flags & PORT_server);
-#endif
-
-	return xdr_protocol(&port->port_send, packet);
+	return xdr_protocol(port->port_send, packet);
 }
 
 
-static int xdrwnet_create(XDR* xdrs,
-						  rem_port* port,
-						  UCHAR* buffer, USHORT length, xdr_op x_op)
+static RemoteXdr* xdrwnet_create(rem_port* port, UCHAR* buffer, USHORT length, xdr_op x_op)
 {
 /**************************************
  *
@@ -961,17 +946,16 @@ static int xdrwnet_create(XDR* xdrs,
  *
  **************************************/
 
-	xdrs->x_public = (caddr_t) port;
-	xdrs->x_base = xdrs->x_private = reinterpret_cast<SCHAR*>(buffer);
-	xdrs->x_handy = length;
-	xdrs->x_ops = &wnet_ops;
-	xdrs->x_op = x_op;
+	RemoteXdr* xdrs = FB_NEW WnetXdr;
 
-	return TRUE;
+	xdrs->x_public = port;
+	xdrs->create(reinterpret_cast<SCHAR*>(buffer), length, x_op);
+
+	return xdrs;
 }
 
 
-static bool_t xdrwnet_endofrecord( XDR* xdrs) //, bool_t flushnow)
+static bool_t xdrwnet_endofrecord( RemoteXdr* xdrs) //, bool_t flushnow)
 {
 /**************************************
  *
@@ -1056,7 +1040,7 @@ static void wnet_gen_error (rem_port* port, const Arg::StatusVector& v)
 }
 
 
-static bool_t wnet_getbytes( XDR* xdrs, SCHAR* buff, unsigned bytecount)
+bool_t WnetXdr::x_getbytes(SCHAR* buff, unsigned bytecount)
 {
 /**************************************
  *
@@ -1072,22 +1056,22 @@ static bool_t wnet_getbytes( XDR* xdrs, SCHAR* buff, unsigned bytecount)
 
 	while (bytecount > (SLONG) sizeof(ISC_QUAD))
 	{
-		if (xdrs->x_handy >= bytecount)
+		if (x_handy >= bytecount)
 		{
-			memcpy(buff, xdrs->x_private, bytecount);
-			xdrs->x_private += bytecount;
-			xdrs->x_handy -= bytecount;
+			memcpy(buff, x_private, bytecount);
+			x_private += bytecount;
+			x_handy -= bytecount;
 			return TRUE;
 		}
-		if (xdrs->x_handy > 0)
+		if (x_handy > 0)
 		{
-			memcpy(buff, xdrs->x_private, xdrs->x_handy);
-			xdrs->x_private += xdrs->x_handy;
-			buff += xdrs->x_handy;
-			bytecount -= xdrs->x_handy;
-			xdrs->x_handy = 0;
+			memcpy(buff, x_private, x_handy);
+			x_private += x_handy;
+			buff += x_handy;
+			bytecount -= x_handy;
+			x_handy = 0;
 		}
-		if (!wnet_read(xdrs))
+		if (!wnet_read(this))
 			return FALSE;
 	}
 
@@ -1097,28 +1081,28 @@ static bool_t wnet_getbytes( XDR* xdrs, SCHAR* buff, unsigned bytecount)
 	if (!bytecount)
 		return TRUE;
 
-	if (xdrs->x_handy >= bytecount)
+	if (x_handy >= bytecount)
 	{
-		xdrs->x_handy -= bytecount;
+		x_handy -= bytecount;
 		do {
-			*buff++ = *xdrs->x_private++;
+			*buff++ = *x_private++;
 		} while (--bytecount);
 		return TRUE;
 	}
 
 	while (bytecount--)
 	{
-		if (xdrs->x_handy == 0 && !wnet_read(xdrs))
+		if (x_handy == 0 && !wnet_read(this))
 			return FALSE;
-		*buff++ = *xdrs->x_private++;
-		--xdrs->x_handy;
+		*buff++ = *x_private++;
+		--x_handy;
 	}
 
 	return TRUE;
 }
 
 
-static bool_t wnet_putbytes( XDR* xdrs, const SCHAR* buff, unsigned count)
+bool_t WnetXdr::x_putbytes(const SCHAR* buff, unsigned count)
 {
 /**************************************
  *
@@ -1136,22 +1120,22 @@ static bool_t wnet_putbytes( XDR* xdrs, const SCHAR* buff, unsigned count)
 
 	while (bytecount > (SLONG) sizeof(ISC_QUAD))
 	{
-		if (xdrs->x_handy >= bytecount)
+		if (x_handy >= bytecount)
 		{
-			memcpy(xdrs->x_private, buff, bytecount);
-			xdrs->x_private += bytecount;
-			xdrs->x_handy -= bytecount;
+			memcpy(x_private, buff, bytecount);
+			x_private += bytecount;
+			x_handy -= bytecount;
 			return TRUE;
 		}
-		if (xdrs->x_handy > 0)
+		if (x_handy > 0)
 		{
-			memcpy(xdrs->x_private, buff, xdrs->x_handy);
-			xdrs->x_private += xdrs->x_handy;
-			buff += xdrs->x_handy;
-			bytecount -= xdrs->x_handy;
-			xdrs->x_handy = 0;
+			memcpy(x_private, buff, x_handy);
+			x_private += x_handy;
+			buff += x_handy;
+			bytecount -= x_handy;
+			x_handy = 0;
 		}
-		if (!wnet_write(xdrs /*, 0*/))
+		if (!wnet_write(this /*, 0*/))
 			return FALSE;
 	}
 
@@ -1161,28 +1145,28 @@ static bool_t wnet_putbytes( XDR* xdrs, const SCHAR* buff, unsigned count)
 	if (!bytecount)
 		return TRUE;
 
-	if (xdrs->x_handy >= bytecount)
+	if (x_handy >= bytecount)
 	{
-		xdrs->x_handy -= bytecount;
+		x_handy -= bytecount;
 		do {
-			*xdrs->x_private++ = *buff++;
+			*x_private++ = *buff++;
 		} while (--bytecount);
 		return TRUE;
 	}
 
 	while (bytecount--)
 	{
-		if (xdrs->x_handy == 0 && !wnet_write(xdrs /*, 0*/))
+		if (x_handy == 0 && !wnet_write(this /*, 0*/))
 			return FALSE;
-		--xdrs->x_handy;
-		*xdrs->x_private++ = *buff++;
+		--x_handy;
+		*x_private++ = *buff++;
 	}
 
 	return TRUE;
 }
 
 
-static bool_t wnet_read( XDR* xdrs)
+static bool_t wnet_read( RemoteXdr* xdrs)
 {
 /**************************************
  *
@@ -1197,7 +1181,7 @@ static bool_t wnet_read( XDR* xdrs)
  *	message sent will handle this.
  *
  **************************************/
-	rem_port* port = (rem_port*) xdrs->x_public;
+	rem_port* port = xdrs->x_public;
 	SCHAR* p = xdrs->x_base;
 	const SCHAR* const end = p + BUFFER_SIZE;
 
@@ -1233,7 +1217,7 @@ static bool_t wnet_read( XDR* xdrs)
 }
 
 
-static bool_t wnet_write( XDR* xdrs /*, bool_t end_flag*/)
+static bool_t wnet_write( RemoteXdr* xdrs /*, bool_t end_flag*/)
 {
 /**************************************
  *
@@ -1250,7 +1234,7 @@ static bool_t wnet_write( XDR* xdrs /*, bool_t end_flag*/)
  **************************************/
 	// Encode the data portion of the packet
 
-	rem_port* vport = (rem_port*) xdrs->x_public;
+	rem_port* vport = xdrs->x_public;
 	const SCHAR* p = xdrs->x_base;
 	SSHORT length = xdrs->x_private - p;
 

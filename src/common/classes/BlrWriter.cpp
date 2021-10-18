@@ -21,7 +21,7 @@
 #include "firebird.h"
 #include "firebird/impl/consts_pub.h"
 #include "dyn_consts.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../common/classes/BlrWriter.h"
 #include "firebird/impl/blr.h"
 

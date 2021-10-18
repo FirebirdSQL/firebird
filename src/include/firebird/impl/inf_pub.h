@@ -171,6 +171,11 @@ enum db_info_types
 	fb_info_db_guid = 144,
 	fb_info_db_file_id = 145,
 
+	fb_info_replica_mode = 146,
+
+	fb_info_username = 147,
+	fb_info_sqlrole = 148,
+
 	isc_info_db_last_value   /* Leave this LAST! */
 };
 
@@ -191,6 +196,13 @@ enum info_features // response to fb_info_features
 	fb_feature_statement_long_life  = 7,    // Prepared statements are not dropped on transaction end
 
 	fb_feature_max      // Not really a feature. Keep this last.
+};
+
+enum replica_mode // response to fb_info_replica_mode
+{
+	fb_info_replica_none = 0,
+	fb_info_replica_read_only = 1,
+	fb_info_replica_read_write = 2
 };
 
 #define isc_info_version isc_info_isc_version
@@ -466,6 +478,8 @@ enum info_db_provider
 #define isc_info_sql_stmt_timeout_user	28
 #define isc_info_sql_stmt_timeout_run	29
 #define isc_info_sql_stmt_blob_align	30
+#define isc_info_sql_exec_path_blr_bytes	31
+#define isc_info_sql_exec_path_blr_text		32
 
 /*********************************/
 /* SQL information return values */

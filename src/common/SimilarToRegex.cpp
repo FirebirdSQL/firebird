@@ -28,14 +28,16 @@ using namespace Firebird;
 
 namespace
 {
-	bool hasChar(int32_t len, int32_t pos)
+	bool hasChar(unsigned len, unsigned pos)
 	{
 		return pos < len;
 	}
 
-	UChar32 getChar(bool latin, const char* str, int32_t len, int32_t& pos)
+	UChar32 getChar(bool latin, const char* str, unsigned len, unsigned& pos)
 	{
-		fb_assert(hasChar(len, pos));
+		if (!hasChar(len, pos))
+			status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+
 		UChar32 c;
 
 		if (latin)
@@ -84,7 +86,7 @@ namespace
 						status_exception::raise(Arg::Gds(isc_malformed_string));
 				}
 
-				int32_t escapePos = 0;
+				unsigned escapePos = 0;
 				escapeChar = getChar(flags & COMP_FLAG_LATIN, escapeStr, escapeLen, escapePos);
 
 				if (escapePos != escapeLen)
@@ -108,7 +110,7 @@ namespace
 			options.set_log_errors(false);
 			options.set_dot_nl(true);
 			options.set_case_sensitive(!(flags & COMP_FLAG_CASE_INSENSITIVE));
-			options.set_utf8(!(flags & COMP_FLAG_LATIN));
+			options.set_encoding(flags & COMP_FLAG_LATIN ? RE2::Options::EncodingLatin1 : RE2::Options::EncodingUTF8);
 
 			re2::StringPiece sp((const char*) re2PatternStr.c_str(), re2PatternStr.length());
 			regexp = FB_NEW_POOL(pool) RE2(sp, options);
@@ -138,31 +140,6 @@ namespace
 		bool isRep(UChar32 c) const
 		{
 			return c == '*' || c == '+' || c == '?' || c == '{';
-		}
-
-		bool isSpecial(UChar32 c)
-		{
-			switch (c)
-			{
-				case '^':
-				case '-':
-				case '_':
-				case '%':
-				case '[':
-				case ']':
-				case '(':
-				case ')':
-				case '{':
-				case '}':
-				case '|':
-				case '?':
-				case '+':
-				case '*':
-					return true;
-
-				default:
-					return false;
-			}
 		}
 
 		bool isRe2Special(UChar32 c)
@@ -388,7 +365,6 @@ namespace
 
 					unsigned charSavePos = patternPos;
 					UChar32 c = getPatternChar();
-					bool range = false;
 					bool charClass = false;
 
 					if (useEscape && c == escapeChar)
@@ -399,7 +375,7 @@ namespace
 						charSavePos = patternPos;
 						c = getPatternChar();
 
-						if (!(c == escapeChar || isSpecial(c)))
+						if (!(c == escapeChar || SimilarToRegex::isSpecialChar(c)))
 							status_exception::raise(Arg::Gds(isc_escape_invalid));
 					}
 					else
@@ -468,14 +444,14 @@ namespace
 								charSavePos = patternPos;
 								c = getPatternChar();
 
-								if (!(c == escapeChar || isSpecial(c)))
+								if (!(c == escapeChar || SimilarToRegex::isSpecialChar(c)))
 									status_exception::raise(Arg::Gds(isc_escape_invalid));
 							}
 
 							item.lastStart = charSavePos;
 							item.lastEnd = patternPos;
 
-							int32_t cPos = item.firstStart;
+							unsigned cPos = item.firstStart;
 							UChar32 c1 = getChar(flags & COMP_FLAG_LATIN, patternStr, patternLen, cPos);
 
 							cPos = item.lastStart;
@@ -520,7 +496,7 @@ namespace
 						{
 							char hex[40];
 
-							int32_t cPos = item.firstStart;
+							unsigned cPos = item.firstStart;
 							UChar32 c = getChar(flags & COMP_FLAG_LATIN, patternStr, patternLen, cPos);
 
 							if (c > 0)
@@ -636,12 +612,12 @@ namespace
 						charSavePos = patternPos;
 						op = getPatternChar();
 
-						if (!isSpecial(op) && op != escapeChar)
+						if (!SimilarToRegex::isSpecialChar(op) && op != escapeChar)
 							status_exception::raise(Arg::Gds(isc_escape_invalid));
 					}
 					else
 					{
-						if (isSpecial(op))
+						if (SimilarToRegex::isSpecialChar(op))
 						{
 							controlChar = true;
 							patternPos = charSavePos;
@@ -674,8 +650,8 @@ namespace
 
 		string re2PatternStr;
 		const char* patternStr;
-		int32_t patternPos;
-		int32_t patternLen;
+		unsigned patternPos;
+		unsigned patternLen;
 		UChar32 escapeChar;
 		unsigned flags;
 		bool useEscape;
@@ -692,7 +668,7 @@ namespace
 			  patternPos(0),
 			  patternLen(aPatternLen)
 		{
-			int32_t escapePos = 0;
+			unsigned escapePos = 0;
 			escapeChar = getChar(flags & COMP_FLAG_LATIN, escapeStr, escapeLen, escapePos);
 
 			if (escapePos != escapeLen)
@@ -759,7 +735,7 @@ namespace
 			options.set_log_errors(false);
 			options.set_dot_nl(true);
 			options.set_case_sensitive(!(flags & COMP_FLAG_CASE_INSENSITIVE));
-			options.set_utf8(!(flags & COMP_FLAG_LATIN));
+			options.set_encoding(flags & COMP_FLAG_LATIN ? RE2::Options::EncodingLatin1 : RE2::Options::EncodingUTF8);
 
 			re2::StringPiece sp((const char*) finalRe2Pattern.c_str(), finalRe2Pattern.length());
 			regexp = FB_NEW_POOL(pool) RE2(sp, options);
@@ -789,8 +765,8 @@ namespace
 	private:
 		unsigned flags;
 		const char* patternStr;
-		int32_t patternPos;
-		int32_t patternLen;
+		unsigned patternPos;
+		unsigned patternLen;
 		UChar32 escapeChar;
 	};
 }	// namespace

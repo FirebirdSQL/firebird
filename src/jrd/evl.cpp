@@ -72,7 +72,7 @@
 #include "../jrd/exe.h"
 #include "../jrd/sbm.h"
 #include "../jrd/blb.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/scl.h"
 #include "../jrd/lck.h"
 #include "../jrd/lls.h"

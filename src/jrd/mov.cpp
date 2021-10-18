@@ -327,7 +327,7 @@ ISC_TIMESTAMP_TZ MOV_get_timestamp_tz(const dsc* desc)
 }
 
 
-int MOV_make_string(Jrd::thread_db* tdbb,
+USHORT MOV_make_string(Jrd::thread_db* tdbb,
 					const dsc*	 desc,
 					USHORT	     ttype,
 					const char** address,
@@ -357,7 +357,7 @@ int MOV_make_string(Jrd::thread_db* tdbb,
 }
 
 
-int MOV_make_string2(Jrd::thread_db* tdbb,
+ULONG MOV_make_string2(Jrd::thread_db* tdbb,
 					 const dsc* desc,
 					 USHORT ttype,
 					 UCHAR** address,

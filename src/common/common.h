@@ -773,8 +773,6 @@ extern "C" int remove(const char* path);
 #endif
 #define ROUNDUP_LONG(len)       ROUNDUP (len, sizeof (SLONG))
 
-#define JRD_BUGCHK 15			/* facility code for bugcheck messages */
-
 #ifndef ODS_ALIGNMENT
 #define ODS_ALIGNMENT           4
 #endif

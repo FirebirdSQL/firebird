@@ -65,6 +65,7 @@ Function* Function::lookup(thread_db* tdbb, USHORT id, bool return_deleted, bool
 	Function* function = (id < attachment->att_functions.getCount()) ? attachment->att_functions[id] : NULL;
 
 	if (function && function->getId() == id &&
+		!(function->flags & Routine::FLAG_CLEARED) &&
 		!(function->flags & Routine::FLAG_BEING_SCANNED) &&
 		((function->flags & Routine::FLAG_SCANNED) || noscan) &&
 		!(function->flags & Routine::FLAG_BEING_ALTERED) &&
@@ -118,6 +119,7 @@ Function* Function::lookup(thread_db* tdbb, const QualifiedName& name, bool nosc
 		Function* const function = *iter;
 
 		if (function && !(function->flags & Routine::FLAG_OBSOLETE) &&
+			!(function->flags & Routine::FLAG_CLEARED) &&
 			((function->flags & Routine::FLAG_SCANNED) || noscan) &&
 			!(function->flags & Routine::FLAG_BEING_SCANNED) &&
 			!(function->flags & Routine::FLAG_BEING_ALTERED))
@@ -194,7 +196,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 	try
 	{
 	function->flags |= (Routine::FLAG_BEING_SCANNED | flags);
-	function->flags &= ~Routine::FLAG_OBSOLETE;
+	function->flags &= ~(Routine::FLAG_OBSOLETE | Routine::FLAG_CLEARED);
 
 	function->setId(id);
 	attachment->att_functions[id] = function;

@@ -30,7 +30,7 @@
 
 #include "../jrd/jrd.h"
 #include "../jrd/val.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/intl.h"
 #include "../common/TimeZoneUtil.h"
 #include "../common/gdsassert.h"
@@ -102,7 +102,7 @@ const BYTE CVT2_compare_priority[] =
 	25,	// dtype_dbkey - compares with nothing except itself
 	26,	// dtype_boolean - compares with nothing except itself
 	12,	// dtype_int128 - go after quad
-	16,	// dec64 - go after dtype_d_float 
+	16,	// dec64 - go after dtype_d_float
 	17,	// dec128 - go after dec64 and before dtype_sql_date
 	20,	// dtype_sql_time_tz - go after dtype_sql_time
 	22,	// dtype_timestamp_tz - go after dtype_timestamp

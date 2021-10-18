@@ -132,8 +132,10 @@ const USHORT RPB_refetch		= 0x01;	// re-fetch is required
 const USHORT RPB_undo_data		= 0x02;	// data got from undo log
 const USHORT RPB_undo_read		= 0x04;	// read was performed using the undo log
 const USHORT RPB_undo_deleted	= 0x08;	// read was performed using the undo log, primary version is deleted
+const USHORT RPB_just_deleted	= 0x10;	// record was just deleted by us
 
 const USHORT RPB_UNDO_FLAGS		= (RPB_undo_data | RPB_undo_read | RPB_undo_deleted);
+const USHORT RPB_CLEAR_FLAGS	= (RPB_UNDO_FLAGS | RPB_just_deleted);
 
 const unsigned int MAX_DIFFERENCES	= 1024;	// Max length of generated Differences string
 											// between two records

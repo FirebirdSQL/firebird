@@ -59,6 +59,8 @@ private:
 		ULONG lastColumn;
 		const char* firstPos;
 		const char* lastPos;
+		const char* leadingFirstPos;
+		const char* trailingLastPos;
 	};
 
 	typedef Position YYPOSN;
@@ -89,6 +91,7 @@ private:
 
 		// Actual lexer state begins from here
 
+		const TEXT* leadingPtr;
 		const TEXT* ptr;
 		const TEXT* end;
 		const TEXT* last_token;
@@ -245,7 +248,7 @@ private:
 
 	void yyerror(const TEXT* error_string);
 	void yyerror_detailed(const TEXT* error_string, int yychar, YYSTYPE&, YYPOSN&);
-	void yyerrorIncompleteCmd();
+	void yyerrorIncompleteCmd(const YYPOSN& pos);
 
 	void check_bound(const char* const to, const char* const string);
 	void check_copy_incr(char*& to, const char ch, const char* const string);
@@ -393,7 +396,7 @@ private:
 	Position yyretposn;
 
 	int yynerrs;
-	int yym;
+	int yym;	// ASF: moved from local variable of Parser::parseAux()
 
 	// Current parser state
 	yyparsestate* yyps;

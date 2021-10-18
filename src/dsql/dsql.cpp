@@ -98,6 +98,7 @@ static inline bool reqTypeWithCursor(DsqlCompiledStatement::Type type)
 		case DsqlCompiledStatement::TYPE_SELECT:
 		case DsqlCompiledStatement::TYPE_SELECT_BLOCK:
 		case DsqlCompiledStatement::TYPE_SELECT_UPD:
+		case DsqlCompiledStatement::TYPE_RETURNING_CURSOR:
 			return true;
 	}
 
@@ -234,7 +235,7 @@ DsqlCursor* DSQL_open(thread_db* tdbb,
 
 
 // Provide backward-compatibility
-void DsqlDmlRequest::setDelayedFormat(thread_db* tdbb, Firebird::IMessageMetadata* metadata)
+void DsqlDmlRequest::setDelayedFormat(thread_db* tdbb, IMessageMetadata* metadata)
 {
 	if (!needDelayedFormat)
 	{
@@ -286,10 +287,19 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 		tdbb->checkCancelState();
 
 	UCHAR* dsqlMsgBuffer = req_msg_buffers[message->msg_buffer_number];
-	if (prefetchedFirstRow)
-		prefetchedFirstRow = false;
+	if (!firstRowFetched && needRestarts())
+	{
+		// Note: tra_handle can't be changed by executeReceiveWithRestarts below
+		// and outMetadata and outMsg in not used there, so passing NULL's is safe.
+		jrd_tra* tra = req_transaction;
+
+		executeReceiveWithRestarts(tdbb, &tra, NULL, NULL, false, false, true);
+		fb_assert(tra == req_transaction);
+	}
 	else
 		JRD_receive(tdbb, req_request, message->msg_number, message->msg_length, dsqlMsgBuffer);
+
+	firstRowFetched = true;
 
 	const dsql_par* const eof = statement->getEof();
 	const USHORT* eofPtr = eof ? (USHORT*) (dsqlMsgBuffer + (IPTR) eof->par_desc.dsc_address) : NULL;
@@ -383,7 +393,7 @@ void DSQL_free_statement(thread_db* tdbb, dsql_req* request, USHORT option)
  **/
 dsql_req* DSQL_prepare(thread_db* tdbb,
 					   Attachment* attachment, jrd_tra* transaction,
-					   ULONG length, const TEXT* string, USHORT dialect,
+					   ULONG length, const TEXT* string, USHORT dialect, unsigned prepareFlags,
 					   Array<UCHAR>* items, Array<UCHAR>* buffer,
 					   bool isInternalRequest)
 {
@@ -417,7 +427,7 @@ dsql_req* DSQL_prepare(thread_db* tdbb,
 
 		return request;
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		if (request)
 		{
@@ -536,8 +546,8 @@ void DSQL_sql_info(thread_db* tdbb,
 // Common part of prepare and execute a statement.
 void DSQL_execute_immediate(thread_db* tdbb, Jrd::Attachment* attachment, jrd_tra** tra_handle,
 	ULONG length, const TEXT* string, USHORT dialect,
-	Firebird::IMessageMetadata* in_meta, const UCHAR* in_msg,
-	Firebird::IMessageMetadata* out_meta, UCHAR* out_msg,
+	IMessageMetadata* in_meta, const UCHAR* in_msg,
+	IMessageMetadata* out_meta, UCHAR* out_msg,
 	bool isInternalRequest)
 {
 	SET_TDBB(tdbb);
@@ -578,7 +588,7 @@ void DSQL_execute_immediate(thread_db* tdbb, Jrd::Attachment* attachment, jrd_tr
 
 		dsql_req::destroy(tdbb, request, true);
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		if (request)
 		{
@@ -680,13 +690,18 @@ void DsqlDmlRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, boo
 	*destroyScratchPool = true;
 }
 
+bool DsqlDmlRequest::needRestarts()
+{
+	return (req_transaction && (req_transaction->tra_flags & TRA_read_consistency) &&
+		statement->getType() != DsqlCompiledStatement::TYPE_SAVEPOINT);
+};
+
 // Execute a dynamic SQL statement
 void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
-	Firebird::IMessageMetadata* inMetadata, const UCHAR* inMsg,
-	Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+	IMessageMetadata* outMetadata, UCHAR* outMsg,
 	bool singleton)
 {
-	prefetchedFirstRow = false;
+	firstRowFetched = false;
 	const dsql_msg* message = statement->getSendMsg();
 
 	if (!message)
@@ -769,7 +784,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 						message->msg_length, message_buffer);
 					status = FB_SUCCESS;
 				}
-				catch (Firebird::Exception&)
+				catch (Exception&)
 				{
 					status = tdbb->tdbb_status_vector->getErrors()[1];
 				}
@@ -787,18 +802,6 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 				status_exception::raise(Arg::Gds(isc_stream_eof));
 			else if (status != isc_req_sync)
 				status_exception::raise(&localStatus);
-		}
-	}
-	else
-	{
-		// Prefetch first row of a query
-		if (reqTypeWithCursor(statement->getType()))
-		{
-			dsql_msg* message = (dsql_msg*) statement->getReceiveMsg();
-
-			UCHAR* dsqlMsgBuffer = req_msg_buffers[message->msg_buffer_number];
-			JRD_receive(tdbb, req_request, message->msg_number, message->msg_length, dsqlMsgBuffer);
-			prefetchedFirstRow = true;
 		}
 	}
 
@@ -826,8 +829,8 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 
 // Execute a dynamic SQL statement with tracing, restart and timeout handler
 void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
-	Firebird::IMessageMetadata* inMetadata, const UCHAR* inMsg,
-	Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+	IMessageMetadata* inMetadata, const UCHAR* inMsg,
+	IMessageMetadata* outMetadata, UCHAR* outMsg,
 	bool singleton)
 {
 	if (!req_request)
@@ -852,76 +855,95 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 	setupTimer(tdbb);
 	thread_db::TimerGuard timerGuard(tdbb, req_timer, !have_cursor);
 
-	if (req_transaction && (req_transaction->tra_flags & TRA_read_consistency) &&
-		statement->getType() != DsqlCompiledStatement::TYPE_SAVEPOINT)
-	{
-		req_request->req_flags &= ~req_update_conflict;
-		int numTries = 0;
-		const int MAX_RESTARTS = 10;
-
-		while (true)
-		{
-			AutoSavePoint savePoint(tdbb, req_transaction);
-
-			// Don't set req_restart_ready flas at last attempt to restart request.
-			// It allows to raise update conflict error (if any) as usual and
-			// handle error by PSQL handler.
-			const ULONG flag = (numTries >= MAX_RESTARTS) ? 0 : req_restart_ready;
-			AutoSetRestoreFlag<ULONG> restartReady(&req_request->req_flags, flag, true);
-			try
-			{
-				doExecute(tdbb, traHandle, inMetadata, inMsg, outMetadata, outMsg, singleton);
-			}
-			catch (const status_exception&)
-			{
-				if (!(req_transaction->tra_flags & TRA_ex_restart))
-				{
-					req_request->req_flags &= ~req_update_conflict;
-					throw;
-				}
-			}
-
-			if (!(req_request->req_flags & req_update_conflict))
-			{
-				fb_assert((req_transaction->tra_flags & TRA_ex_restart) == 0);
-				req_transaction->tra_flags &= ~TRA_ex_restart;
-
-#ifdef DEV_BUILD
-				if (numTries > 0)
-				{
-					string s;
-					s.printf("restarts = %d", numTries);
-
-					ERRD_post_warning(Arg::Warning(isc_random) << Arg::Str(s));
-				}
-#endif
-				savePoint.release();	// everything is ok
-				break;
-			}
-
-			fb_assert((req_transaction->tra_flags & TRA_ex_restart) != 0);
-
-			req_request->req_flags &= ~req_update_conflict;
-			req_transaction->tra_flags &= ~TRA_ex_restart;
-			fb_utils::init_status(tdbb->tdbb_status_vector);
-
-			// Undo current savepoint but preserve already taken locks.
-			// Savepoint will be restarted at the next loop iteration.
-			savePoint.rollback(true);
-
-			numTries++;
-			if (numTries >= MAX_RESTARTS)
-			{
-				gds__log("Update conflict: unable to get a stable set of rows in the source tables\n"
-						 "\tafter %d attempts of restart.\n"
-						 "\tQuery:\n%s\n", numTries, req_request->getStatement()->sqlText->c_str() );
-			}
-		}
-	} else {
-		doExecute(tdbb, traHandle, inMetadata, inMsg, outMetadata, outMsg, singleton);
+	if (needRestarts())
+		executeReceiveWithRestarts(tdbb, traHandle, outMetadata, outMsg, singleton, true, false);
+	else {
+		doExecute(tdbb, traHandle, outMetadata, outMsg, singleton);
 	}
 
 	trace.finish(have_cursor, ITracePlugin::RESULT_SUCCESS);
+}
+
+void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHandle,
+	IMessageMetadata* outMetadata, UCHAR* outMsg,
+	bool singleton, bool exec, bool fetch)
+{
+	req_request->req_flags &= ~req_update_conflict;
+	int numTries = 0;
+	const int MAX_RESTARTS = 10;
+
+	while (true)
+	{
+		AutoSavePoint savePoint(tdbb, req_transaction);
+
+		// Don't set req_restart_ready flag at last attempt to restart request.
+		// It allows to raise update conflict error (if any) as usual and
+		// handle error by PSQL handler.
+		const ULONG flag = (numTries >= MAX_RESTARTS) ? 0 : req_restart_ready;
+		AutoSetRestoreFlag<ULONG> restartReady(&req_request->req_flags, flag, true);
+		try
+		{
+			if (exec)
+				doExecute(tdbb, traHandle, outMetadata, outMsg, singleton);
+
+			if (fetch)
+			{
+				fb_assert(reqTypeWithCursor(statement->getType()));
+
+				const dsql_msg* message = statement->getReceiveMsg();
+
+				UCHAR* dsqlMsgBuffer = req_msg_buffers[message->msg_buffer_number];
+				JRD_receive(tdbb, req_request, message->msg_number, message->msg_length, dsqlMsgBuffer);
+			}
+		}
+		catch (const status_exception&)
+		{
+			if (!(req_transaction->tra_flags & TRA_ex_restart))
+			{
+				req_request->req_flags &= ~req_update_conflict;
+				throw;
+			}
+		}
+
+		if (!(req_request->req_flags & req_update_conflict))
+		{
+			fb_assert((req_transaction->tra_flags & TRA_ex_restart) == 0);
+			req_transaction->tra_flags &= ~TRA_ex_restart;
+
+#ifdef DEV_BUILD
+			if (numTries > 0)
+			{
+				string s;
+				s.printf("restarts = %d", numTries);
+
+				ERRD_post_warning(Arg::Warning(isc_random) << Arg::Str(s));
+			}
+#endif
+			savePoint.release();	// everything is ok
+			break;
+		}
+
+		fb_assert((req_transaction->tra_flags & TRA_ex_restart) != 0);
+
+		req_request->req_flags &= ~req_update_conflict;
+		req_transaction->tra_flags &= ~TRA_ex_restart;
+		fb_utils::init_status(tdbb->tdbb_status_vector);
+
+		// Undo current savepoint but preserve already taken locks.
+		// Savepoint will be restarted at the next loop iteration.
+		savePoint.rollback(true);
+
+		numTries++;
+		if (numTries >= MAX_RESTARTS)
+		{
+			gds__log("Update conflict: unable to get a stable set of rows in the source tables\n"
+				"\tafter %d attempts of restart.\n"
+				"\tQuery:\n%s\n", numTries, req_request->getStatement()->sqlText->c_str() );
+		}
+
+		// When restart we must execute query
+		exec = true;
+	}
 }
 
 void DsqlDdlRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, bool* destroyScratchPool,
@@ -972,8 +994,8 @@ void DsqlDdlRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, boo
 
 // Execute a dynamic SQL statement.
 void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
-	Firebird::IMessageMetadata* inMetadata, const UCHAR* inMsg,
-	Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+	IMessageMetadata* inMetadata, const UCHAR* inMsg,
+	IMessageMetadata* outMetadata, UCHAR* outMsg,
 	bool singleton)
 {
 	TraceDSQLExecute trace(req_dbb->dbb_attachment, this);
@@ -1055,18 +1077,17 @@ void DsqlSessionManagementRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch
 	ntrace_result_t* /*traceResult*/)
 {
 	node = Node::doDsqlPass(scratch, node);
-
-	// Don't trace pseudo-statements (without requests associated).
-	req_traced = false;
 }
 
 // Execute a dynamic SQL statement.
 void DsqlSessionManagementRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
-	Firebird::IMessageMetadata* inMetadata, const UCHAR* inMsg,
-	Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+	IMessageMetadata* inMetadata, const UCHAR* inMsg,
+	IMessageMetadata* outMetadata, UCHAR* outMsg,
 	bool singleton)
 {
+	TraceDSQLExecute trace(req_dbb->dbb_attachment, this);
 	node->execute(tdbb, this, traHandle);
+	trace.finish(false, ITracePlugin::RESULT_SUCCESS);
 }
 
 
@@ -1094,7 +1115,7 @@ static ULONG get_request_info(thread_db* tdbb, dsql_req* request, ULONG buffer_l
 		return INF_request_info(request->req_request, sizeof(record_info), record_info,
 			buffer_length, buffer);
 	}
-	catch (Firebird::Exception&)
+	catch (Exception&)
 	{
 		return 0;
 	}
@@ -1459,8 +1480,7 @@ static void checkD(IStatus* st)
 static dsql_req* prepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_tra* transaction,
 	ULONG textLength, const TEXT* text, USHORT clientDialect, bool isInternalRequest)
 {
-	return prepareStatement(tdbb, database, transaction, textLength, text, clientDialect,
-		isInternalRequest);
+	return prepareStatement(tdbb, database, transaction, textLength, text, clientDialect, isInternalRequest);
 }
 
 
@@ -1629,7 +1649,7 @@ static dsql_req* prepareStatement(thread_db* tdbb, dsql_dbb* database, jrd_tra* 
 
 		return request;
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		trace.prepare(ITracePlugin::RESULT_FAILED);
 
@@ -1758,7 +1778,7 @@ void dsql_req::setCursor(thread_db* /*tdbb*/, const TEXT* /*name*/)
 		Arg::Gds(isc_req_sync));
 }
 
-void dsql_req::setDelayedFormat(thread_db* /*tdbb*/, Firebird::IMessageMetadata* /*metadata*/)
+void dsql_req::setDelayedFormat(thread_db* /*tdbb*/, IMessageMetadata* /*metadata*/)
 {
 	status_exception::raise(
 		Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
@@ -1798,7 +1818,7 @@ TimeoutTimer* dsql_req::setupTimer(thread_db* tdbb)
 {
 	if (req_request)
 	{
-		if (req_request->getStatement()->flags & JrdStatement::FLAG_INTERNAL)
+		if (req_request->hasInternalStatement())
 			return req_timer;
 
 		req_request->req_timeout = this->req_timeout;
@@ -1918,7 +1938,7 @@ void dsql_req::destroy(thread_db* tdbb, dsql_req* request, bool drop)
 			CMP_release(tdbb, request->req_request);
 			request->req_request = NULL;
 		}
-		catch (Firebird::Exception&)
+		catch (Exception&)
 		{} // no-op
 	}
 
@@ -1929,8 +1949,8 @@ void dsql_req::destroy(thread_db* tdbb, dsql_req* request, bool drop)
 
 	if (drop)
 	{
-		request->req_dbb->deletePool(&request->getPool());
 		request->req_dbb->deletePool(request->liveScratchPool);
+		request->req_dbb->deletePool(&request->getPool());
 	}
 }
 
@@ -2010,7 +2030,7 @@ static void sql_info(thread_db* tdbb,
 
 	const DsqlCompiledStatement* statement = request->getStatement();
 
-	while (items < end_items && *items != isc_info_end)
+	while (items < end_items && *items != isc_info_end && info < end_info)
 	{
 		ULONG length;
 		USHORT number;
@@ -2043,6 +2063,7 @@ static void sql_info(thread_db* tdbb,
 			case DsqlCompiledStatement::TYPE_SELECT:
 			case DsqlCompiledStatement::TYPE_SELECT_UPD:
 			case DsqlCompiledStatement::TYPE_SELECT_BLOCK:
+			case DsqlCompiledStatement::TYPE_RETURNING_CURSOR:
 				value |= IStatement::FLAG_HAS_CURSOR;
 				break;
 			}
@@ -2056,6 +2077,7 @@ static void sql_info(thread_db* tdbb,
 			switch (statement->getType())
 			{
 			case DsqlCompiledStatement::TYPE_SELECT:
+			case DsqlCompiledStatement::TYPE_RETURNING_CURSOR:
 				number = isc_info_sql_stmt_select;
 				break;
 			case DsqlCompiledStatement::TYPE_SELECT_UPD:
@@ -2116,9 +2138,25 @@ static void sql_info(thread_db* tdbb,
 			break;
 
 		case isc_info_sql_sqlda_start:
-			length = *items++;
-			first_index = static_cast<USHORT>(gds__vax_integer(items, length));
-			items += length;
+			if (items < end_items)
+			{
+				length = *items++;
+
+				if (end_items - items >= length)
+				{
+					first_index = static_cast<USHORT>(gds__vax_integer(items, length));
+					items += length;
+					break;
+				}
+			}
+
+			buffer[0] = item;
+			length = 1 + INF_convert(isc_inf_invalid_args, buffer + 1);
+
+			if (!(info = put_item(isc_info_error, length, buffer, info, end_info)))
+				return;
+
+			items = end_items;
 			break;
 
 		case isc_info_sql_batch_fetch:
@@ -2203,6 +2241,64 @@ static void sql_info(thread_db* tdbb,
 			}
 			break;
 
+		case isc_info_sql_exec_path_blr_bytes:
+		case isc_info_sql_exec_path_blr_text:
+			{
+				HalfStaticArray<UCHAR, 128> path;
+
+				if (request->req_request && request->req_request->getStatement())
+				{
+					const auto& blr = request->req_request->getStatement()->blr;
+
+					if (blr.hasData())
+					{
+						if (item == isc_info_sql_exec_path_blr_bytes)
+							path.push(blr.begin(), blr.getCount());
+						else if (item == isc_info_sql_exec_path_blr_text)
+						{
+							fb_print_blr(blr.begin(), (ULONG) blr.getCount(),
+								[](void* arg, SSHORT offset, const char* line)
+								{
+									auto& localPath = *static_cast<decltype(path)*>(arg);
+									auto lineLen = strlen(line);
+
+									// Trim trailing spaces.
+									while (lineLen > 0 && line[lineLen - 1] == ' ')
+										--lineLen;
+
+									char offsetStr[10];
+									const auto offsetLen = sprintf(offsetStr, "%5d", (int) offset);
+
+									localPath.push(reinterpret_cast<const UCHAR*>(offsetStr), offsetLen);
+									localPath.push(' ');
+									localPath.push(reinterpret_cast<const UCHAR*>(line), lineLen);
+									localPath.push('\n');
+								},
+								&path, 0);
+						}
+					}
+				}
+
+				if (path.hasData())
+				{
+					// 1-byte item + 2-byte length + isc_info_end/isc_info_truncated == 4
+					const ULONG bufferLength = end_info - info - 4;
+					const ULONG maxLength = MIN(bufferLength, MAX_USHORT);
+
+					if (path.getCount() > maxLength)
+					{
+						*info = isc_info_truncated;
+						info = NULL;
+					}
+					else
+						info = put_item(item, path.getCount(), path.begin(), info, end_info);
+				}
+
+				if (!info)
+					return;
+			}
+			break;
+
 		case isc_info_sql_num_variables:
 		case isc_info_sql_describe_vars:
 			if (messageFound)
@@ -2241,7 +2337,8 @@ static void sql_info(thread_db* tdbb,
 		}
 	}
 
-	*info++ = isc_info_end;
+	if (info < end_info)
+		*info++ = isc_info_end;
 
 	if (start_info && (end_info - info >= 7))
 	{

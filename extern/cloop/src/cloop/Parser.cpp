@@ -82,6 +82,12 @@ void Parser::parse()
 				parseTypedef();
 				break;
 
+			case Token::TYPE_BOOLEAN:
+				if (exception)
+					error(token, "Cannot use attribute exception in boolean.");
+				parseBoolean();
+				break;
+
 			default:
 				syntaxError(token);
 				break;
@@ -164,6 +170,16 @@ void Parser::parseStruct()
 	getToken(token, TOKEN(';'));
 }
 
+void Parser::parseBoolean()
+{
+	Boolean* b = new Boolean();
+
+	b->name = getToken(token, Token::TYPE_IDENTIFIER).text;
+	typesByName.insert(pair<string, BaseType*>(b->name, b));
+
+	getToken(token, TOKEN(';'));
+}
+
 void Parser::parseTypedef()
 {
 	Typedef* typeDef = new Typedef();
@@ -176,25 +192,50 @@ void Parser::parseTypedef()
 
 void Parser::parseItem()
 {
-	Expr* notImplementedExpr = NULL;
+	Expr* notImplementedExpr = nullptr;
+	Action* notImplementedAction = nullptr;
+	std::string onError;
 
-	lexer->getToken(token);
-
-	if (token.type == TOKEN('['))
+	while (lexer->getToken(token).type == TOKEN('['))
 	{
-		getToken(token, Token::TYPE_NOT_IMPLEMENTED);	// This is the only attribute we allow now.
-		getToken(token, TOKEN('('));
-		notImplementedExpr = parseExpr();
-		getToken(token, TOKEN(')'));
+		lexer->getToken(token);
+		switch (token.type)
+		{
+			case Token::TYPE_NOT_IMPLEMENTED:
+				if (notImplementedExpr)
+					syntaxError(token);
+				getToken(token, TOKEN('('));
+				notImplementedExpr = parseExpr();
+				getToken(token, TOKEN(')'));
+				break;
+
+			case Token::TYPE_ON_ERROR:
+				if (onError.length())
+					syntaxError(token);
+				lexer->getToken(token);
+				if (token.type != Token::TYPE_IDENTIFIER)
+					syntaxError(token);
+				onError = token.text;
+				break;
+
+			case Token::TYPE_NOT_IMPLEMENTED_ACTION:
+				if (notImplementedAction)
+					syntaxError(token);
+				notImplementedAction = parseAction(DefAction::DEF_NOT_IMPLEMENTED);
+				break;
+
+			default:
+				syntaxError(token);
+				break;
+		}
 		getToken(token, TOKEN(']'));
 	}
-	else
-		lexer->pushToken(token);
+	lexer->pushToken(token);
 
 	TypeRef typeRef(parseTypeRef());
 	string name(getToken(token, Token::TYPE_IDENTIFIER).text);
 
-	if (!notImplementedExpr && typeRef.isConst)
+	if ((!(notImplementedExpr || onError.length())) && typeRef.isConst)
 	{
 		if (lexer->getToken(token).type == TOKEN('='))
 		{
@@ -207,7 +248,7 @@ void Parser::parseItem()
 	}
 
 	getToken(token, TOKEN('('));
-	parseMethod(typeRef, name, notImplementedExpr);
+	parseMethod(typeRef, name, notImplementedExpr, onError, notImplementedAction);
 }
 
 void Parser::parseConstant(const TypeRef& typeRef, const string& name)
@@ -222,7 +263,70 @@ void Parser::parseConstant(const TypeRef& typeRef, const string& name)
 	getToken(token, TOKEN(';'));
 }
 
-void Parser::parseMethod(const TypeRef& returnTypeRef, const string& name, Expr* notImplementedExpr)
+Action* Parser::parseAction(DefAction::DefType dt)
+{
+	switch (lexer->getToken(token).type)
+	{
+	case Token::TYPE_IF:
+		return parseIfThenElseAction(dt);
+
+	case Token::TYPE_CALL:
+		return parseCallAction();
+
+	case Token::TYPE_DEFAULT_ACTION:
+		return parseDefAction(dt);
+
+	default:
+		break;
+	}
+
+	syntaxError(token);
+}
+
+Action* Parser::parseIfThenElseAction(DefAction::DefType dt)
+{
+	IfThenElseAction act;
+
+	act.exprIf = parseLogicalExpr();
+
+	getToken(token, Token::TYPE_THEN);
+	act.actThen = parseAction(dt);
+
+	lexer->getToken(token);
+	if (token.type == Token::TYPE_ELSE)
+		act.actElse = parseAction(dt);
+	else
+		lexer->pushToken(token);
+
+	getToken(token, Token::TYPE_ENDIF);
+	return new IfThenElseAction(act);
+}
+
+Action* Parser::parseCallAction()
+{
+	CallAction act;
+
+	act.name = getToken(token, Token::TYPE_IDENTIFIER).text;
+
+	getToken(token, TOKEN('('));
+	do
+	{
+		act.addParam(getToken(token, Token::TYPE_IDENTIFIER).text);
+	} while(lexer->getToken(token).type == ',');
+
+	if (token.type == ')')
+		return new CallAction(act);
+
+	syntaxError(token);
+}
+
+Action* Parser::parseDefAction(DefAction::DefType dt)
+{
+	return new DefAction(dt);
+}
+
+void Parser::parseMethod(const TypeRef& returnTypeRef, const string& name, Expr* notImplementedExpr,
+	const string& onError, Action* notImplementedAction)
 {
 	Method* method = new Method();
 	interface->methods.push_back(method);
@@ -231,6 +335,8 @@ void Parser::parseMethod(const TypeRef& returnTypeRef, const string& name, Expr*
 	method->name = name;
 	method->version = interface->version;
 	method->notImplementedExpr = notImplementedExpr;
+	method->notImplementedAction = notImplementedAction;
+	method->onErrorFunction = onError;
 
 	if (lexer->getToken(token).type != TOKEN(')'))
 	{
@@ -334,6 +440,10 @@ Expr* Parser::parsePrimaryExpr()
 			}
 		}
 
+		case Token::TYPE_DOUBLE_COLON:
+			getToken(token, Token::TYPE_IDENTIFIER);
+			return new ConstantExpr(nullptr, token.text);
+
 		default:
 			syntaxError(token);
 			return NULL;	// warning
@@ -416,3 +526,26 @@ void Parser::error(const Token& token, const string& msg)
 		lexer->filename.c_str(), token.line, token.column, msg.c_str());
 	throw runtime_error(buffer);
 }
+
+bool TypeRef::valueIsPointer()
+{
+	if (isPointer)
+		return true;
+
+	switch (token.type)
+	{
+		case Token::TYPE_STRING:
+			return true;
+
+		case Token::TYPE_IDENTIFIER:
+			if (type == BaseType::TYPE_INTERFACE)
+				return true;
+			break;
+
+		default:
+			break;
+	}
+
+	return false;
+}
+

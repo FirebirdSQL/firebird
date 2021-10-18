@@ -90,7 +90,7 @@
 #include "../jrd/lck.h"
 
 // Error codes
-#include "gen/iberror.h"
+#include "iberror.h"
 
 struct dsc;
 
@@ -655,6 +655,10 @@ public:
 		return tdbb_reqTimer;
 	}
 
+	// Returns minimum of passed wait timeout and time to expiration of reqTimer.
+	// Timer value is rounded to the upper whole second.
+	ULONG adjustWait(ULONG wait) const;
+
 	void registerBdb(BufferDesc* bdb)
 	{
 		if (tdbb_bdbs.isEmpty()) {
@@ -728,10 +732,9 @@ public:
 	public:
 		TimerGuard(thread_db* tdbb, TimeoutTimer* timer, bool autoStop)
 			: m_tdbb(tdbb),
-			  m_autoStop(autoStop && timer)
+			  m_autoStop(autoStop && timer),
+			  m_saveTimer(tdbb->tdbb_reqTimer)
 		{
-			fb_assert(m_tdbb->tdbb_reqTimer == NULL);
-
 			m_tdbb->tdbb_reqTimer = timer;
 			if (timer && timer->expired())
 				m_tdbb->tdbb_quantum = 0;
@@ -742,12 +745,13 @@ public:
 			if (m_autoStop)
 				m_tdbb->tdbb_reqTimer->stop();
 
-			m_tdbb->tdbb_reqTimer = NULL;
+			m_tdbb->tdbb_reqTimer = m_saveTimer;
 		}
 
 	private:
 		thread_db* m_tdbb;
 		bool m_autoStop;
+		Firebird::RefPtr<TimeoutTimer> m_saveTimer;
 	};
 
 private:
@@ -1085,13 +1089,13 @@ namespace Jrd {
 			fb_assert(optional || m_ref.hasData());
 
 			if (m_ref.hasData())
-				m_ref->getMutex()->leave();
+				m_ref->getSync()->leave();
 		}
 
 		~EngineCheckout()
 		{
 			if (m_ref.hasData())
-				m_ref->getMutex()->enter(m_from);
+				m_ref->getSync()->enter(m_from);
 
 			// If we were signalled to cancel/shutdown, react as soon as possible.
 			// We cannot throw immediately, but we can reschedule ourselves.

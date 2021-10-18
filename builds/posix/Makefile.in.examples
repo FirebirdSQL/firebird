@@ -30,6 +30,14 @@
 #
 ROOT=$(shell cd ../..; pwd)
 
+
+%.cpp: %.epp
+	$(GPRE_CURRENT) $(GPRE_FLAGS) $< $@
+
+%.o: %.cpp
+	$(CXX) $(WCXXFLAGS) -c $(firstword $<) -o $@
+
+
 # Add the install include directory to the search path since the
 # examples need to build using those headers values.
 
@@ -92,7 +100,7 @@ all: examples
 examples:	$(FINAL_EMPDB) $(EXAMPLES_FB)/README $(EXTAUTH_PLUGIN)
 
 $(EXTAUTH_PLUGIN):	$(EXAMPLES_FB)/extauth/Makefile
-	$(MAKE) -C $(EXAMPLES_FB)/extauth OUT=$(EXAMPLES_FB)/prebuilt INTERMED=$(TMP_ROOT)/examples/extauth
+	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(EXAMPLES_FB)/extauth OUT=$(EXAMPLES_FB)/prebuilt INTERMED=$(TMP_ROOT)/examples/extauth
 
 $(EXAMPLES_FB)/extauth/Makefile:
 ifeq ($(TOMCRYPT_BUILD_FLG),Y)
@@ -123,7 +131,7 @@ $(EXAMPLES_DEST)% : $(EXAMPLES_SRC)%
 	$(CP) $^ $@
 
 # Ok the following little story is, first build empbuild.fdb an empty db
-# using a script file.  Then we can compile the empbuild.e file, then we
+# using a script file.  Then we can compile the empbuild.epp file, then we
 # can run it to create employee.fdb database populated with data by the
 # program.  Thats how I found it.
 # MOD July-2001
@@ -149,7 +157,7 @@ $(EXAMPLES_DEST)/isql$(EXEC_EXT):
 $(EXAMPLES_DEST)/empbuild$(EXEC_EXT): $(EMPBLD_Objects) $(COMMON_LIB)
 	$(EXE_LINK) $(EXE_LINK_OPTIONS) $(LSB_UNDEF) $^ -o $@ -L$(LIB) $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
 
-$(EXAMPLES_DEST)/empbuild.c:	$(EXAMPLES_DEST)/empbuild.fdb $(EXAMPLES_DEST)/empbuild.e
+$(EXAMPLES_DEST)/empbuild.cpp:	$(EXAMPLES_DEST)/empbuild.fdb $(EXAMPLES_DEST)/empbuild.epp
 
 $(EXAMPLES_DEST)/empbuild.fdb : $(EXAMPLES_DEST)/empddl.sql $(EXAMPLES_DEST)/empbld.sql $(EXAMPLES_DEST)/isql$(EXEC_EXT)
 	-$(RM) $(EXAMPLES_DEST)/empbuild.fdb
@@ -180,7 +188,7 @@ $(EXAMPLES_DEST)/%.sql: $(EXAMPLES_SRC)/empbuild/%.sql
 $(EXAMPLES_DEST)/%.inp: $(EXAMPLES_SRC)/empbuild/%.inp
 	$(CP) $^ $@
 
-$(EXAMPLES_DEST)/%.e: $(EXAMPLES_SRC)/empbuild/%.e
+$(EXAMPLES_DEST)/%.epp: $(EXAMPLES_SRC)/empbuild/%.epp
 	$(CP) $^ $@
 
 $(EXAMPLES_DEST)/%.h: $(EXAMPLES_SRC)/common/%.h

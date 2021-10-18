@@ -256,6 +256,7 @@ PlanNode* PlanNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			procNode->dsqlContext = context;
 			node->dsqlRecordSourceNode = procNode;
 		}
+		//// TODO: LocalTableSourceNode
 
 		// ASF: I think it's a error to let node->dsqlRecordSourceNode be NULL here, but it happens
 		// at least since v2.5. See gen.cpp/gen_plan for more information.
@@ -447,6 +448,144 @@ RecSourceListNode* RecSourceListNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		*dst = doDsqlPass(dsqlScratch, *src);
 
 	return node;
+}
+
+
+//--------------------
+
+
+// Parse a local table reference.
+LocalTableSourceNode* LocalTableSourceNode::parse(thread_db* tdbb, CompilerScratch* csb,
+	const SSHORT blrOp, bool parseContext)
+{
+	const USHORT tableNumber = csb->csb_blr_reader.getWord();
+
+	if (tableNumber >= csb->csb_localTables.getCount())
+		PAR_error(csb, Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
+
+	// Make a relation reference node
+
+	const auto node = FB_NEW_POOL(*tdbb->getDefaultPool()) LocalTableSourceNode(
+		*tdbb->getDefaultPool());
+
+	node->tableNumber = tableNumber;
+
+	AutoPtr<string> aliasString(FB_NEW_POOL(csb->csb_pool) string(csb->csb_pool));
+	csb->csb_blr_reader.getString(*aliasString);
+
+	if (aliasString->hasData())
+		node->alias = *aliasString;
+	else
+		aliasString.reset();
+
+	// generate a stream for the relation reference, assuming it is a real reference
+
+	if (parseContext)
+	{
+		node->stream = PAR_context(csb, &node->context);
+
+		if (tableNumber >= csb->csb_localTables.getCount() || !csb->csb_localTables[tableNumber])
+			PAR_error(csb, Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
+
+		csb->csb_rpt[node->stream].csb_format = csb->csb_localTables[tableNumber]->format;
+		csb->csb_rpt[node->stream].csb_alias = aliasString.release();
+	}
+
+	return node;
+}
+
+string LocalTableSourceNode::internalPrint(NodePrinter& printer) const
+{
+	RecordSourceNode::internalPrint(printer);
+
+	NODE_PRINT(printer, alias);
+	NODE_PRINT(printer, tableNumber);
+	NODE_PRINT(printer, context);
+
+	return "LocalTableSourceNode";
+}
+
+RecordSourceNode* LocalTableSourceNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	return dsqlPassRelProc(dsqlScratch, this);
+}
+
+bool LocalTableSourceNode::dsqlMatch(DsqlCompilerScratch* /*dsqlScratch*/, const ExprNode* other,
+	bool /*ignoreMapCast*/) const
+{
+	const auto o = nodeAs<LocalTableSourceNode>(other);
+	return o && dsqlContext == o->dsqlContext;
+}
+
+void LocalTableSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	dsqlScratch->appendUChar(blr_local_table_id);
+	dsqlScratch->appendUShort(tableNumber);
+	dsqlScratch->appendMetaString(alias.c_str());	// dsqlContext->ctx_alias?
+
+	GEN_stuff_context(dsqlScratch, dsqlContext);
+}
+
+LocalTableSourceNode* LocalTableSourceNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	if (!copier.remap)
+		BUGCHECK(221);	// msg 221 (CMP) copy: cannot remap
+
+	const auto newSource = FB_NEW_POOL(*tdbb->getDefaultPool()) LocalTableSourceNode(
+		*tdbb->getDefaultPool());
+
+	newSource->stream = copier.csb->nextStream();
+	copier.remap[stream] = newSource->stream;
+
+	newSource->context = context;
+
+	if (tableNumber >= copier.csb->csb_localTables.getCount() || !copier.csb->csb_localTables[tableNumber])
+		ERR_post(Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
+
+	const auto element = CMP_csb_element(copier.csb, newSource->stream);
+
+	element->csb_format = copier.csb->csb_localTables[tableNumber]->format;
+	element->csb_view_stream = copier.remap[0];
+
+	if (alias.hasData())
+	{
+		element->csb_alias = FB_NEW_POOL(*tdbb->getDefaultPool())
+			string(*tdbb->getDefaultPool(), alias);
+	}
+
+	return newSource;
+}
+
+void LocalTableSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* /*rse*/,
+	BoolExprNode** /*boolean*/, RecordSourceNodeStack& stack)
+{
+	fb_assert(!csb->csb_view);	// local tables cannot be inside a view
+
+	stack.push(this);	// Assume that the source will be used. Push it on the final stream stack.
+
+	pass1(tdbb, csb);
+}
+
+void LocalTableSourceNode::pass2Rse(thread_db* tdbb, CompilerScratch* csb)
+{
+	csb->csb_rpt[stream].activate();
+
+	pass2(tdbb, csb);
+}
+
+RecordSource* LocalTableSourceNode::compile(thread_db* tdbb, OptimizerBlk* opt, bool /*innerSubStream*/)
+{
+	opt->beds.add(stream);
+	opt->localStreams.add(stream);
+
+	const auto csb = opt->opt_csb;
+
+	if (tableNumber >= opt->opt_csb->csb_localTables.getCount() || !opt->opt_csb->csb_localTables[tableNumber])
+		ERR_post(Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
+
+	auto localTable = csb->csb_localTables[tableNumber];
+
+	return FB_NEW_POOL(*tdbb->getDefaultPool()) LocalTableStream(csb, stream, localTable);
 }
 
 
@@ -1199,15 +1338,15 @@ void ProcedureSourceNode::findDependentFromStreams(const OptimizerRetrieval* opt
 		targetList->findDependentFromStreams(optRet, streamList);
 }
 
-void ProcedureSourceNode::collectStreams(CompilerScratch* csb, SortedStreamList& streamList) const
+void ProcedureSourceNode::collectStreams(SortedStreamList& streamList) const
 {
-	RecordSourceNode::collectStreams(csb, streamList);
+	RecordSourceNode::collectStreams(streamList);
 
 	if (sourceList)
-		sourceList->collectStreams(csb, streamList);
+		sourceList->collectStreams(streamList);
 
 	if (targetList)
-		targetList->collectStreams(csb, streamList);
+		targetList->collectStreams(streamList);
 }
 
 
@@ -2274,7 +2413,7 @@ bool WindowSourceNode::containsStream(StreamType checkStream) const
 	return false;
 }
 
-void WindowSourceNode::collectStreams(CompilerScratch* /*csb*/, SortedStreamList& streamList) const
+void WindowSourceNode::collectStreams(SortedStreamList& streamList) const
 {
 	for (ObjectsArray<Window>::const_iterator window = windows.begin();
 		 window != windows.end();
@@ -3292,27 +3431,27 @@ void RseNode::findDependentFromStreams(const OptimizerRetrieval* optRet,
 		(*ptr)->findDependentFromStreams(optRet, streamList);
 }
 
-void RseNode::collectStreams(CompilerScratch* csb, SortedStreamList& streamList) const
+void RseNode::collectStreams(SortedStreamList& streamList) const
 {
 	if (rse_first)
-		rse_first->collectStreams(csb, streamList);
+		rse_first->collectStreams(streamList);
 
 	if (rse_skip)
-		rse_skip->collectStreams(csb, streamList);
+		rse_skip->collectStreams(streamList);
 
 	if (rse_boolean)
-		rse_boolean->collectStreams(csb, streamList);
+		rse_boolean->collectStreams(streamList);
 
 	// ASF: The legacy code used to visit rse_sorted and rse_projection, but the nod_sort was never
 	// handled.
-	// rse_sorted->collectStreams(csb, streamList);
-	// rse_projection->collectStreams(csb, streamList);
+	// rse_sorted->collectStreams(streamList);
+	// rse_projection->collectStreams(streamList);
 
 	const NestConst<RecordSourceNode>* ptr;
 	const NestConst<RecordSourceNode>* end;
 
 	for (ptr = rse_relations.begin(), end = rse_relations.end(); ptr != end; ++ptr)
-		(*ptr)->collectStreams(csb, streamList);
+		(*ptr)->collectStreams(streamList);
 }
 
 
@@ -3345,26 +3484,24 @@ RseNode* SelectExprNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, RecordSourceNode* source)
 {
-	ProcedureSourceNode* procNode = nodeAs<ProcedureSourceNode>(source);
-	RelationSourceNode* relNode = nodeAs<RelationSourceNode>(source);
-
-	fb_assert(procNode || relNode);
-
 	bool couldBeCte = true;
 	MetaName relName;
 	string relAlias;
 
-	if (procNode)
+	if (auto procNode = nodeAs<ProcedureSourceNode>(source))
 	{
 		relName = procNode->dsqlName.identifier;
 		relAlias = procNode->alias;
 		couldBeCte = !procNode->sourceList && procNode->dsqlName.package.isEmpty();
 	}
-	else if (relNode)
+	else if (auto relNode = nodeAs<RelationSourceNode>(source))
 	{
 		relName = relNode->dsqlName;
 		relAlias = relNode->alias;
 	}
+	//// TODO: LocalTableSourceNode
+	else
+		fb_assert(false);
 
 	if (relAlias.isEmpty())
 		relAlias = relName.c_str();
@@ -3702,7 +3839,7 @@ static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverS
 					// Check also the expression inside the map, because aggregate
 					// functions aren't allowed to be delivered to the WHERE clause.
 					ValueExprNode* value = map->sourceList[fieldId];
-					okNode = value->unmappable(csb, map, shellStream);
+					okNode = value->unmappable(map, shellStream);
 
 					if (okNode)
 						*newChildren[indexArg] = map->sourceList[fieldId];
@@ -3710,7 +3847,7 @@ static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverS
 			}
 			else
 			{
-				if ((okNode = children[indexArg]->unmappable(csb, map, shellStream)))
+				if ((okNode = children[indexArg]->unmappable(map, shellStream)))
 					*newChildren[indexArg] = children[indexArg];
 			}
 		}

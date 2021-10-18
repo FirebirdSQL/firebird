@@ -104,7 +104,7 @@ static void release_temp_tables(thread_db*, jrd_tra*);
 static void retain_temp_tables(thread_db*, jrd_tra*, TraNumber);
 static void restart_requests(thread_db*, jrd_tra*);
 static void start_sweeper(thread_db*);
-static THREAD_ENTRY_DECLARE sweep_database(THREAD_ENTRY_PARAM);
+//static THREAD_ENTRY_DECLARE sweep_database(THREAD_ENTRY_PARAM);
 static void transaction_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number);
 static void transaction_options(thread_db*, jrd_tra*, const UCHAR*, USHORT);
 static void transaction_start(thread_db* tdbb, jrd_tra* temp);
@@ -1115,7 +1115,9 @@ void TRA_prepare(thread_db* tdbb, jrd_tra* transaction, USHORT length, const UCH
 	// Set the state on the inventory page to be limbo
 
 	transaction->tra_flags |= TRA_prepared;
-	TRA_set_state(tdbb, transaction, transaction->tra_number, tra_limbo);
+
+	if (!(tdbb->tdbb_flags & TDBB_replicator))
+		TRA_set_state(tdbb, transaction, transaction->tra_number, tra_limbo);
 }
 
 
@@ -1169,7 +1171,7 @@ jrd_tra* TRA_reconnect(thread_db* tdbb, const UCHAR* id, USHORT length)
 
 		TEXT text[128];
 		USHORT flags = 0;
-		gds__msg_lookup(NULL, JRD_BUGCHK, message, sizeof(text), text, &flags);
+		gds__msg_lookup(NULL, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, message, sizeof(text), text, &flags);
 
 		// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
 		ERR_post(Arg::Gds(isc_no_recon) <<
@@ -2669,6 +2671,103 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 }
 
 
+namespace {
+	class SweepParameter : public GlobalStorage
+	{
+	public:
+		SweepParameter(Database* d)
+			: dbb(d)
+		{ }
+
+		void waitForStartup()
+		{
+			sem.enter();
+		}
+
+		static void runSweep(SweepParameter* par)
+		{
+			FbLocalStatus status;
+			PathName dbName(par->dbb->dbb_database_name);
+
+			// temporarily disable automatic sweep for encrypted DBs with remote key
+			ICryptKeyCallback* cryptCallback(nullptr);
+#ifdef NEVERDEF
+			ICryptKeyCallback* cryptCallback(par->dbb->dbb_callback);
+			// small (~ 1/2 sec in 2020) delay to debug unload at problematic moment
+			long long x = 0x10000000;
+			while (--x > 0);
+#endif
+
+			// reference is needed to guarantee that provider exists
+			// between semaphore release and attach database
+			AutoPlugin<JProvider> prov(JProvider::getInstance());
+			if (cryptCallback)
+			{
+				prov->setDbCryptCallback(&status, cryptCallback);
+				status.check();
+			}
+			par->sem.release();
+
+			AutoDispose<IXpbBuilder> dpb(UtilInterfacePtr()->getXpbBuilder(&status, IXpbBuilder::DPB, nullptr, 0));
+			status.check();
+			dpb->insertString(&status, isc_dpb_user_name, "sweeper");
+			status.check();
+			UCHAR byte = isc_dpb_records;
+			dpb->insertBytes(&status, isc_dpb_sweep, &byte, 1);
+			status.check();
+			const UCHAR* dpbBytes = dpb->getBuffer(&status);
+			status.check();
+			unsigned dpbLen = dpb->getBufferLength(&status);
+			status.check();
+
+			AutoRelease<IAttachment> att(prov->attachDatabase(&status, dbName.c_str(), dpbLen, dpbBytes));
+			status.check();
+		}
+
+		void exceptionHandler(const Exception& ex, ThreadFinishSync<SweepParameter*>::ThreadRoutine*)
+		{
+			FbLocalStatus st;
+			ex.stuffException(&st);
+			if (st->getErrors()[1] != isc_att_shutdown)
+				iscLogException("Automatic sweep error", ex);
+		}
+
+	private:
+		Semaphore sem;
+		Database* dbb;
+	};
+
+	typedef ThreadFinishSync<SweepParameter*> SweepSync;
+	InitInstance<HalfStaticArray<SweepSync*, 16> > sweepThreads;
+	GlobalPtr<Mutex> swThrMutex;
+	bool sweepDown = false;
+}
+
+
+void TRA_shutdown_sweep()
+{
+/**************************************
+ *
+ *	T R A _ s h u t d o w n _ s w e e p
+ *
+ **************************************
+ *
+ * Functional description
+ *	Wait for sweep threads exit.
+ *
+ **************************************/
+	MutexLockGuard g(swThrMutex, FB_FUNCTION);
+	if (sweepDown)
+		return;
+	sweepDown = true;
+
+	auto& swThr(sweepThreads());
+	for (unsigned n = 0; n < swThr.getCount(); ++n)
+		swThr[n]->waitForCompletion();
+	swThr.clear();
+}
+
+
 static void start_sweeper(thread_db* tdbb)
 {
 /**************************************
@@ -2683,73 +2782,45 @@ static void start_sweeper(thread_db* tdbb)
  **************************************/
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
+	bool started = false;
 
 	if (!dbb->allowSweepThread(tdbb))
 		return;
 
 	TRA_update_counters(tdbb, dbb);
 
-	// allocate space for the string and a null at the end
-	const char* pszFilename = tdbb->getAttachment()->att_filename.c_str();
-
-	char* database = (char*) gds__alloc(static_cast<SLONG>(strlen(pszFilename)) + 1);
-
-	if (database)
+	try
 	{
-		strcpy(database, pszFilename);
-
-		try
-		{
-			Thread::start(sweep_database, database, THREAD_medium);
+		MutexLockGuard g(swThrMutex, FB_FUNCTION);
+		if (sweepDown)
 			return;
-		}
-		catch (const Firebird::Exception& ex)
+
+		// perform housekeeping
+		auto& swThr(sweepThreads());
+		for (unsigned n = 0; n < swThr.getCount(); )
 		{
-			gds__free(database);
-			iscLogException("cannot start sweep thread", ex);
+			if (swThr[n]->tryWait())
+			{
+				delete swThr[n];
+				swThr.remove(n);
+			}
+			else
+				++n;
 		}
+
+		AutoPtr<SweepSync> sweepSync(FB_NEW SweepSync(*getDefaultMemoryPool(), SweepParameter::runSweep));
+		SweepParameter swPar(dbb);
+		sweepSync->run(&swPar);
+		started = true;
+		swPar.waitForStartup();
+		sweepThreads().add(sweepSync.release());
 	}
-	else
+	catch (const Exception&)
 	{
-		ERR_log(0, 0, "cannot start sweep thread, Out of Memory");
+		if (!started)
+			dbb->clearSweepStarting();
+		throw;
 	}
-	dbb->clearSweepFlags(tdbb);
-}
-
-
-static THREAD_ENTRY_DECLARE sweep_database(THREAD_ENTRY_PARAM database)
-{
-/**************************************
- *
- *	s w e e p _ d a t a b a s e
- *
- **************************************
- *
- * Functional description
- *	Sweep database.
- *
- **************************************/
-	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
-
-	dpb.insertByte(isc_dpb_sweep, isc_dpb_records);
-	// use embedded authentication to attach database
-	const char* szAuthenticator = "sweeper";
-	dpb.insertString(isc_dpb_user_name, szAuthenticator, fb_strlen(szAuthenticator));
-
-	ISC_STATUS_ARRAY status_vector = {0};
-	isc_db_handle db_handle = 0;
-
-	isc_attach_database(status_vector, 0, (const char*) database,
-						&db_handle, dpb.getBufferLength(),
-						reinterpret_cast<const char*>(dpb.getBuffer()));
-
-	if (db_handle)
-	{
-		isc_detach_database(status_vector, &db_handle);
-	}
-
-	gds__free(database);
-	return 0;
 }
 
 
@@ -4062,7 +4133,7 @@ TraceSweepEvent::TraceSweepEvent(thread_db* tdbb)
 	gds__log("Sweep is started by %s\n"
 		"\tDatabase \"%s\" \n"
 		"\tOIT %" SQUADFORMAT", OAT %" SQUADFORMAT", OST %" SQUADFORMAT", Next %" SQUADFORMAT,
-		att->att_user ? att->att_user->getUserName().c_str() : "<Unknown user>",
+		att->getUserName("<Unknown user>").c_str(),
 		att->att_filename.c_str(),
 		m_sweep_info.getOIT(),
 		m_sweep_info.getOAT(),

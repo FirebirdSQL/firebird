@@ -35,7 +35,7 @@
 #include "../jrd/constants.h"
 #include "../common/os/path_utils.h"
 #include "../common/isc_proto.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 
 #include <direct.h>
 #include <io.h> // isatty()

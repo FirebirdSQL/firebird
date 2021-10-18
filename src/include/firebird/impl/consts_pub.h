@@ -218,6 +218,14 @@
 #define isc_dpb_shut_single             0x30
 #define isc_dpb_shut_full               0x40
 
+/*****************************************/
+/* isc_dpb_set_db_replica specific flags */
+/*****************************************/
+
+#define isc_dpb_replica_none             0
+#define isc_dpb_replica_read_only        1
+#define isc_dpb_replica_read_write       2
+
 /**************************************/
 /* Bit assignments in RDB$SYSTEM_FLAG */
 /**************************************/
@@ -445,6 +453,7 @@
 #define isc_spb_prp_transactions_shutdown	43
 #define isc_spb_prp_shutdown_mode		44
 #define isc_spb_prp_online_mode			45
+#define isc_spb_prp_replica_mode		46
 
 /********************************************
  * Parameters for isc_spb_prp_shutdown_mode *
@@ -475,6 +484,14 @@
 
 #define isc_spb_prp_am_readonly		39
 #define isc_spb_prp_am_readwrite	40
+
+/*******************************************
+ * Parameters for isc_spb_prp_replica_mode *
+ *******************************************/
+
+#define isc_spb_prp_rm_none			0
+#define isc_spb_prp_rm_readonly		1
+#define isc_spb_prp_rm_readwrite	2
 
 /*****************************************
  * Parameters for isc_action_svc_repair  *
@@ -539,6 +556,7 @@
 #define isc_spb_res_replace				0x1000
 #define isc_spb_res_create				0x2000
 #define isc_spb_res_use_all_space		0x4000
+#define isc_spb_res_replica_mode		20
 
 /*****************************************
  * Parameters for isc_action_svc_validate *
@@ -556,6 +574,14 @@
 
 #define isc_spb_res_am_readonly			isc_spb_prp_am_readonly
 #define isc_spb_res_am_readwrite		isc_spb_prp_am_readwrite
+
+/*******************************************
+ * Parameters for isc_spb_res_replica_mode *
+ *******************************************/
+
+#define isc_spb_res_rm_none				isc_spb_prp_rm_none
+#define isc_spb_res_rm_readonly			isc_spb_prp_rm_readonly
+#define isc_spb_res_rm_readwrite		isc_spb_prp_rm_readwrite
 
 /*******************************************
  * Parameters for isc_info_svc_svr_db_info *
@@ -596,6 +622,7 @@
 #define isc_spb_nbk_guid			8
 #define isc_spb_nbk_no_triggers		0x01
 #define isc_spb_nbk_inplace			0x02
+#define isc_spb_nbk_sequence		0x04
 
 /***************************************
  * Parameters for isc_action_svc_trace *
@@ -719,6 +746,7 @@
 #define fb_shutrsn_signal				  -5
 #define fb_shutrsn_services				  -6
 #define fb_shutrsn_exit_called			  -7
+#define fb_shutrsn_emergency			  -8
 
 /****************************************/
 /* Cancel types for fb_cancel_operation */
@@ -741,6 +769,7 @@
 #define fb_dbg_subproc				5
 #define fb_dbg_subfunc				6
 #define fb_dbg_map_curname			7
+//// TODO: LocalTable name.
 
 // sub code for fb_dbg_map_argument
 #define fb_dbg_arg_input			0

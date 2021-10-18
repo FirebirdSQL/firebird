@@ -1,9 +1,9 @@
 #!/bin/sh
 
+v50Filter="--after=05.05.2021"
 v40Filter="--after=28.02.2016"
 v30Offset=15471
 v25Offset=13822
-v21Offset=9146
 
 processBranch() {
 
@@ -41,10 +41,10 @@ fi
 
 git fetch --all
 
-processBranch master 0 $v40Filter
+processBranch master 0 $v50Filter
+processBranch v4.0-release 0 $v40Filter
 processBranch B3_0_Release $v30Offset
 processBranch B2_5_Release $v25Offset
-processBranch B2_1_Release $v21Offset
 
 export GIT_COMMITTER_NAME="firebirds"
 export GIT_COMMITTER_EMAIL="<>"

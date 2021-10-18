@@ -22,7 +22,6 @@
 
 #include "firebird.h"
 #include "../ids.h"
-#include "../jrd/align.h"
 #include "../jrd/jrd.h"
 #include "../jrd/blb.h"
 #include "../jrd/req.h"
@@ -81,64 +80,76 @@ namespace
 		{ rel_db_creators, { f_crt_user, f_crt_u_type, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF } }
 	};
 
-	class BlockReader
+	class BlockReader : public AutoStorage
 	{
 	public:
 		BlockReader(ULONG length, const UCHAR* data)
 			: m_header((Block*) data),
 			  m_data(data + sizeof(Block)),
-			  m_metadata(data + sizeof(Block) + m_header->dataLength)
+			  m_end(data + length),
+			  m_atoms(getPool())
 		{
-			fb_assert(m_metadata + m_header->metaLength == data + length);
+			fb_assert(m_data + m_header->length == m_end);
 		}
 
 		bool isEof() const
 		{
-			return (m_data >= m_metadata);
+			return (m_data >= m_end);
 		}
 
 		UCHAR getTag()
 		{
+			return getByte();
+		}
+
+		UCHAR getByte()
+		{
 			return *m_data++;
 		}
 
-		SLONG getInt()
+		SSHORT getInt16()
 		{
-			m_data = FB_ALIGN(m_data, type_alignments[dtype_long]);
-			const auto ptr = (const SLONG*) m_data;
-			m_data += sizeof(SLONG);
-			return *ptr;
+			SSHORT value;
+			memcpy(&value, m_data, sizeof(SSHORT));
+			m_data += sizeof(SSHORT);
+			return value;
 		}
 
-		SINT64 getBigInt()
+		SLONG getInt32()
 		{
-			m_data = FB_ALIGN(m_data, type_alignments[dtype_int64]);
-			const auto ptr = (const SINT64*) m_data;
+			SLONG value;
+			memcpy(&value, m_data, sizeof(SLONG));
+			m_data += sizeof(SLONG);
+			return value;
+		}
+
+		SINT64 getInt64()
+		{
+			SINT64 value;
+			memcpy(&value, m_data, sizeof(SINT64));
 			m_data += sizeof(SINT64);
-			return *ptr;
+			return value;
 		}
 
 		const MetaString& getMetaName()
 		{
-			const auto offset = getInt() * sizeof(MetaString);
-			const auto metaPtr = (const MetaString*) (m_metadata + offset);
-			return *metaPtr;
+			const auto pos = getInt32();
+			return m_atoms[pos];
 		}
 
 		string getString()
 		{
-			const auto length = getInt();
+			const auto length = getInt32();
 			const string str((const char*) m_data, length);
 			m_data += length;
 			return str;
 		}
 
-		ULONG getBinary(const UCHAR*& ptr)
+		const UCHAR* getBinary(ULONG length)
 		{
-			const auto len = getInt();
-			ptr = m_data;
-			m_data += len;
-			return len;
+			const auto ptr = m_data;
+			m_data += length;
+			return ptr;
 		}
 
 		TraNumber getTransactionId() const
@@ -151,10 +162,19 @@ namespace
 			return m_header->protocol;
 		}
 
+		void defineAtom()
+		{
+			const auto length = getByte();
+			const auto ptr = getBinary(length);
+			const MetaString name((const char*) ptr, length);
+			m_atoms.add(name);
+		}
+
 	private:
 		const Block* const m_header;
 		const UCHAR* m_data;
-		const UCHAR* const m_metadata;
+		const UCHAR* const m_end;
+		HalfStaticArray<MetaString, 64> m_atoms;
 	};
 
 	class LocalThreadContext
@@ -201,11 +221,16 @@ Applier* Applier::create(thread_db* tdbb)
 	request->req_attachment = attachment;
 
 	auto& att_pool = *attachment->att_pool;
-	return FB_NEW_POOL(att_pool) Applier(att_pool, dbb->dbb_filename, request);
+	const auto applier = FB_NEW_POOL(att_pool) Applier(att_pool, dbb->dbb_filename, request);
+
+	attachment->att_repl_appliers.add(applier);
+	return applier;
 }
 
 void Applier::shutdown(thread_db* tdbb)
 {
+	const auto attachment = tdbb->getAttachment();
+
 	cleanupTransactions(tdbb);
 
 	CMP_release(tdbb, m_request);
@@ -213,6 +238,14 @@ void Applier::shutdown(thread_db* tdbb)
 	m_record = NULL;
 
 	m_bitmap->clear();
+
+	attachment->att_repl_appliers.findAndRemove(this);
+
+	if (m_interface)
+	{
+		m_interface->resetHandle();
+		m_interface = nullptr;
+	}
 }
 
 void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
@@ -278,31 +311,29 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 
 		case opInsertRecord:
 			{
-				const MetaName relName = reader.getMetaName();
-				const UCHAR* record = NULL;
-				const ULONG length = reader.getBinary(record);
+				const auto relName = reader.getMetaName();
+				const ULONG length = reader.getInt32();
+				const auto record = reader.getBinary(length);
 				insertRecord(tdbb, traNum, relName, length, record);
 			}
 			break;
 
 		case opUpdateRecord:
 			{
-				const MetaName relName = reader.getMetaName();
-				const UCHAR* orgRecord = NULL;
-				const ULONG orgLength = reader.getBinary(orgRecord);
-				const UCHAR* newRecord = NULL;
-				const ULONG newLength = reader.getBinary(newRecord);
-				updateRecord(tdbb, traNum, relName,
-									  orgLength, orgRecord,
-									  newLength, newRecord);
+				const auto relName = reader.getMetaName();
+				const ULONG orgLength = reader.getInt32();
+				const auto orgRecord = reader.getBinary(orgLength);
+				const ULONG newLength = reader.getInt32();
+				const auto newRecord = reader.getBinary(newLength);
+				updateRecord(tdbb, traNum, relName, orgLength, orgRecord, newLength, newRecord);
 			}
 			break;
 
 		case opDeleteRecord:
 			{
-				const MetaName relName = reader.getMetaName();
-				const UCHAR* record = NULL;
-				const ULONG length = reader.getBinary(record);
+				const auto relName = reader.getMetaName();
+				const ULONG length = reader.getInt32();
+				const auto record = reader.getBinary(length);
 				deleteRecord(tdbb, traNum, relName, length, record);
 			}
 			break;
@@ -310,34 +341,43 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 		case opStoreBlob:
 			{
 				bid blob_id;
-				blob_id.bid_quad.bid_quad_high = reader.getInt();
-				blob_id.bid_quad.bid_quad_low = reader.getInt();
-				ULONG length = 0;
+				blob_id.bid_quad.bid_quad_high = reader.getInt32();
+				blob_id.bid_quad.bid_quad_low = reader.getInt32();
 				do {
-					const UCHAR* blob = NULL;
-					length = reader.getBinary(blob);
+					const ULONG length = (USHORT) reader.getInt16();
+					if (!length)
+					{
+						// Close our newly created blob
+						storeBlob(tdbb, traNum, &blob_id, 0, nullptr);
+						break;
+					}
+					const auto blob = reader.getBinary(length);
 					storeBlob(tdbb, traNum, &blob_id, length, blob);
-				} while (length && !reader.isEof());
+				} while (!reader.isEof());
 			}
 			break;
 
 		case opExecuteSql:
 		case opExecuteSqlIntl:
 			{
+				const auto ownerName = reader.getMetaName();
 				const unsigned charset =
-					(op == opExecuteSql) ? CS_UTF8 : reader.getInt();
+					(op == opExecuteSql) ? CS_UTF8 : reader.getByte();
 				const string sql = reader.getString();
-				const MetaName ownerName = reader.getMetaName();
 				executeSql(tdbb, traNum, charset, sql, ownerName);
 			}
 			break;
 
 		case opSetSequence:
 			{
-				const MetaName genName = reader.getMetaName();
-				const SINT64 value = reader.getBigInt();
+				const auto genName = reader.getMetaName();
+				const auto value = reader.getInt64();
 				setSequence(tdbb, genName, value);
 			}
+			break;
+
+		case opDefineAtom:
+			reader.defineAtom();
 			break;
 
 		default:
@@ -494,6 +534,20 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 		}
 
 		fb_utils::init_status(tdbb->tdbb_status_vector);
+
+		// Undo this particular insert (without involving a savepoint)
+		VerbAction* const action = transaction->tra_save_point->getAction(relation);
+
+		if (action && action->vct_records)
+		{
+			const SINT64 recno = rpb.rpb_number.getValue();
+			if (action->vct_records->test(recno))
+			{
+				fb_assert(!action->vct_undo || !action->vct_undo->locate(recno));
+				VIO_backout(tdbb, &rpb, transaction);
+				action->vct_records->clear(recno);
+			}
+		}
 	}
 
 	bool found = false;
@@ -821,6 +875,8 @@ void Applier::storeBlob(thread_db* tdbb, TraNumber traNum, bid* blobId,
 	}
 
 	fb_assert(blob);
+	fb_assert(blob->blb_flags & BLB_temporary);
+	fb_assert(!(blob->blb_flags & BLB_closed));
 
 	if (length)
 		blob->BLB_put_segment(tdbb, data, length);
@@ -832,7 +888,7 @@ void Applier::executeSql(thread_db* tdbb,
 						 TraNumber traNum,
 						 unsigned charset,
 						 const string& sql,
-						 const MetaName& owner)
+						 const MetaName& ownerName)
 {
 	jrd_tra* transaction = NULL;
 	if (!m_txnMap.get(traNum, transaction))
@@ -846,11 +902,10 @@ void Applier::executeSql(thread_db* tdbb,
 	const auto dialect =
 		(dbb->dbb_flags & DBB_DB_SQL_dialect_3) ? SQL_DIALECT_V6 : SQL_DIALECT_V5;
 
-	UserId user(*attachment->att_user);
-	user.setUserName(owner);
-
 	AutoSetRestore<SSHORT> autoCharset(&attachment->att_charset, charset);
-	AutoSetRestore<UserId*> autoOwner(&attachment->att_user, &user);
+
+  UserId* const owner = attachment->getUserId(ownerName);
+	AutoSetRestore<UserId*> autoOwner(&attachment->att_ss_user, owner);
 	AutoSetRestoreFlag<ULONG> noCascade(&tdbb->tdbb_flags, TDBB_repl_in_progress, !enableCascade);
 
 	DSQL_execute_immediate(tdbb, attachment, &transaction,
@@ -1106,6 +1161,24 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		}
 	}
 
+	// Cleanup temporary blobs stored for this command beforehand but not materialized
+
+	ReplBlobMap::Accessor accessor(&transaction->tra_repl_blobs);
+	for (bool found = accessor.getFirst(); found; found = accessor.getNext())
+	{
+		const auto tempBlobId = accessor.current()->second;
+
+		if (transaction->tra_blobs->locate(tempBlobId))
+		{
+			const auto current = &transaction->tra_blobs->current();
+
+			if (!current->bli_materialized)
+				current->bli_blob_object->BLB_cancel(tdbb);
+		}
+	}
+
+	transaction->tra_repl_blobs.clear();
+
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
 
 	VIO_store(tdbb, rpb, transaction);
@@ -1186,6 +1259,24 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 		}
 	}
 
+	// Cleanup temporary blobs stored for this command beforehand but not materialized
+
+	ReplBlobMap::Accessor accessor(&transaction->tra_repl_blobs);
+	for (bool found = accessor.getFirst(); found; found = accessor.getNext())
+	{
+		const auto tempBlobId = accessor.current()->second;
+
+		if (transaction->tra_blobs->locate(tempBlobId))
+		{
+			const auto current = &transaction->tra_blobs->current();
+
+			if (!current->bli_materialized)
+				current->bli_blob_object->BLB_cancel(tdbb);
+		}
+	}
+
+	transaction->tra_repl_blobs.clear();
+
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
 
 	VIO_modify(tdbb, orgRpb, newRpb, transaction);
@@ -1217,6 +1308,6 @@ void Applier::logConflict(const char* msg, ...)
 	vsprintf(buffer, msg, ptr);
 	va_end(ptr);
 
-	logReplicaMessage(m_database, buffer, WARNING_MSG);
+	logReplicaWarning(m_database, buffer);
 #endif
 }

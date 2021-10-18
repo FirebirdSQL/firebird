@@ -52,7 +52,7 @@ Re-installation of Firebird
 
 The binary installer does its best to detect and
 preserve a previous install. If the installer detects
-firebird.conf or security4.fdb it will not offer the
+firebird.conf or security5.fdb it will not offer the
 option to set the SYSDBA username and password.
 
 
@@ -112,7 +112,7 @@ o Uninstallation leaves six files in the install
   - fbtrace.conf
   - replication.conf
   - firebird.log
-  - security4.fdb
+  - security5.fdb
 
   This is intentional. These files are all
   potentially modifiable by users and may be required

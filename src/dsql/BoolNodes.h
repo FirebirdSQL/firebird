@@ -53,7 +53,7 @@ public:
 
 	virtual BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
-	virtual bool sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const;
+	virtual bool sameAs(const ExprNode* other, bool ignoreStreams) const;
 	virtual bool execute(thread_db* tdbb, jrd_req* request) const;
 
 private:
@@ -95,14 +95,14 @@ public:
 	virtual BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 
-	virtual bool possiblyUnknown(OptimizerBlk* opt)
+	virtual bool possiblyUnknown() const
 	{
-		return blrOp == blr_equiv ? true : BoolExprNode::possiblyUnknown(opt);
+		return blrOp == blr_equiv ? true : BoolExprNode::possiblyUnknown();
 	}
 
 	virtual BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
-	virtual bool sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const;
+	virtual bool sameAs(const ExprNode* other, bool ignoreStreams) const;
 	virtual BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 	virtual void pass2Boolean1(thread_db* tdbb, CompilerScratch* csb);
 	virtual void pass2Boolean2(thread_db* tdbb, CompilerScratch* csb);
@@ -111,8 +111,6 @@ public:
 private:
 	bool stringBoolean(thread_db* tdbb, jrd_req* request, dsc* desc1, dsc* desc2,
 		bool computedInvariant) const;
-	bool stringFunction(thread_db* tdbb, jrd_req* request, SLONG l1, const UCHAR* p1,
-		SLONG l2, const UCHAR* p2, USHORT ttype, bool computedInvariant) const;
 	bool sleuth(thread_db* tdbb, jrd_req* request, const dsc* desc1, const dsc* desc2) const;
 
 	BoolExprNode* createRseNode(DsqlCompilerScratch* dsqlScratch, UCHAR rseBlrOp);
@@ -145,7 +143,7 @@ public:
 	virtual BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 
-	virtual bool possiblyUnknown(OptimizerBlk* /*opt*/)
+	virtual bool possiblyUnknown() const
 	{
 		return true;
 	}
@@ -178,7 +176,7 @@ public:
 	virtual BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 
-	virtual bool possiblyUnknown(OptimizerBlk* /*opt*/)
+	virtual bool possiblyUnknown() const
 	{
 		return true;
 	}
@@ -226,14 +224,14 @@ public:
 		return true;
 	}
 
-	virtual bool possiblyUnknown(OptimizerBlk* /*opt*/)
+	virtual bool possiblyUnknown() const
 	{
 		return true;
 	}
 
 	virtual BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
-	virtual bool sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const;
+	virtual bool sameAs(const ExprNode* other, bool ignoreStreams) const;
 	virtual BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 	virtual void pass2Boolean1(thread_db* tdbb, CompilerScratch* csb);
 	virtual void pass2Boolean2(thread_db* tdbb, CompilerScratch* csb);

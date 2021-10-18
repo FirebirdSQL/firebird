@@ -49,7 +49,7 @@ RecordBuffer* ConfigTable::getRecords(thread_db* tdbb, jrd_rel* relation)
 
 	// Check privileges to see RDB$CONFIG
 	const Attachment* att = tdbb->getAttachment();
-	if (!att->att_user->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE))
+	if (!att->getEffectiveUserId()->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE))
 		return recordBuffer;
 
 	for (unsigned int key = 0; key < Config::getKeyCount(); key++)

@@ -118,7 +118,7 @@ class ThreadFinishSync
 public:
 	typedef void ThreadRoutine(TA);
 
-	ThreadFinishSync(Firebird::MemoryPool& pool, ThreadRoutine* routine, int priority_arg)
+	ThreadFinishSync(Firebird::MemoryPool& pool, ThreadRoutine* routine, int priority_arg = THREAD_medium)
 		:
 #ifdef USE_FINI_SEM
 		  fini(pool),
@@ -126,7 +126,8 @@ public:
 		  threadHandle(0),
 #endif
 		  threadRoutine(routine),
-		  threadPriority(priority_arg)
+		  threadPriority(priority_arg),
+		  closing(false)
 	{ }
 
 	void run(TA arg)
@@ -140,13 +141,26 @@ public:
 			);
 	}
 
+	bool tryWait()
+	{
+		if (closing)
+		{
+			waitForCompletion();
+			return true;
+		}
+		return false;
+	}
+
 	void waitForCompletion()
 	{
 #ifdef USE_FINI_SEM
 		fini.enter();
 #else
-		Thread::waitForCompletion(threadHandle);
-		threadHandle = 0;
+		if (threadHandle)
+		{
+			Thread::waitForCompletion(threadHandle);
+			threadHandle = 0;
+		}
 #endif
 	}
 
@@ -160,6 +174,7 @@ private:
 	TA threadArg;
 	ThreadRoutine* threadRoutine;
 	int threadPriority;
+	bool closing;
 
 	static THREAD_ENTRY_DECLARE internalRun(THREAD_ENTRY_PARAM arg)
 	{
@@ -188,6 +203,7 @@ private:
 			threadArg->exceptionHandler(ex, threadRoutine);
 		}
 #endif
+		closing = true;
 	}
 };
 

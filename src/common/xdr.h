@@ -26,8 +26,8 @@
  *
  */
 
-#ifndef REMOTE_XDR_H
-#define REMOTE_XDR_H
+#ifndef COMMON_XDR_H
+#define COMMON_XDR_H
 
 #include <sys/types.h>
 #ifdef WIN_NT
@@ -49,32 +49,23 @@ typedef int bool_t;
 
 enum xdr_op { XDR_ENCODE = 0, XDR_DECODE = 1, XDR_FREE = 2 };
 
-typedef struct xdr_t
+struct xdr_t
 {
-	xdr_op x_op;			// operation; fast additional param
-	struct xdr_ops
-	{
-		bool_t  (*x_getbytes)(struct xdr_t*, SCHAR *, unsigned);	// get some bytes from "
-		bool_t  (*x_putbytes)(struct xdr_t*, const SCHAR*, unsigned);	// put some bytes to "
-	} const *x_ops;
-	caddr_t	x_public;	// Users' data
+	virtual bool_t x_getbytes(SCHAR *, unsigned);		// get some bytes from "
+	virtual bool_t x_putbytes(const SCHAR*, unsigned);	// put some bytes to "
+	virtual ~xdr_t();
+
+	xdr_op x_op;		// operation; fast additional param
 	caddr_t	x_private;	// pointer to private data
 	caddr_t	x_base;		// private used for position info
 	unsigned x_handy;	// extra private word
 	bool	x_local;	// transmission is known to be local (bytes are in the host order)
-#ifdef DEV_BUILD
-	bool	x_client;	// set this flag to true if this is client port
-#endif
 
-public:
 	xdr_t() :
-		x_op(XDR_ENCODE), x_ops(0), x_public(0), x_private(0), x_base(0), x_handy(0),
-		x_local(false)
-#ifdef DEV_BUILD
-		, x_client(false)
-#endif
+		x_op(XDR_ENCODE), x_private(0), x_base(0), x_handy(0), x_local(false)
 	{ }
-} XDR;
 
+	int create(SCHAR* addr, unsigned len, xdr_op op);
+};
 
-#endif // REMOTE_XDR_H
+#endif // COMMON_XDR_H

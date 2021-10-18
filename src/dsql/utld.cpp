@@ -34,7 +34,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "../dsql/dsql.h"
-#include "../dsql/sqlda.h"
+#include "firebird/impl/sqlda_pub.h"
 #include "ibase.h"
 #include "../jrd/align.h"
 #include "../jrd/constants.h"

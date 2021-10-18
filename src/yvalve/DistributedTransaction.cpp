@@ -61,6 +61,9 @@ public:
 	DTransaction* join(CheckStatusWrapper* status, ITransaction* transaction);
 	ITransaction* validate(CheckStatusWrapper* status, IAttachment* attachment);
 	DTransaction* enterDtc(CheckStatusWrapper* status);
+	void deprecatedCommit(CheckStatusWrapper* status);
+	void deprecatedRollback(CheckStatusWrapper* status);
+	void deprecatedDisconnect(CheckStatusWrapper* status);
 
 private:
 	typedef HalfStaticArray<ITransaction*, 8> SubArray;
@@ -97,7 +100,7 @@ bool DTransaction::buildPrepareInfo(CheckStatusWrapper* status, TdrBuffer& tdr, 
 	// limit MAX_SSHORT is chosen cause for old API larger buffer cause problems
 	UCHAR* buf = bigBuffer.getBuffer(MAX_SSHORT);
 	from->getInfo(status, sizeof(PREPARE_TR_INFO), PREPARE_TR_INFO, bigBuffer.getCount(), buf);
-	if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status->getState() & IStatus::STATE_ERRORS)
 		return false;
 
 	UCHAR* const end = bigBuffer.end();
@@ -178,7 +181,7 @@ void DTransaction::getInfo(CheckStatusWrapper* status,
 			if (sub[i])
 			{
 				sub[i]->getInfo(status, itemsLength, items, bufferLength, buffer);
-				if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (status->getState() & IStatus::STATE_ERRORS)
 				{
 					return;
 				}
@@ -232,7 +235,7 @@ void DTransaction::prepare(CheckStatusWrapper* status,
 			{
 				sub[i]->prepare(status, msgLength, message);
 
-				if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (status->getState() & IStatus::STATE_ERRORS)
 					return;
 			}
 		}
@@ -252,7 +255,7 @@ void DTransaction::commit(CheckStatusWrapper* status)
 		status->init();
 
 		prepare(status, 0, NULL);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			return;
 		}
@@ -265,7 +268,7 @@ void DTransaction::commit(CheckStatusWrapper* status)
 				if (sub[i])
 				{
 					sub[i]->commit(status);
-					if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+					if (status->getState() & IStatus::STATE_ERRORS)
 						return;
 
 					sub[i] = NULL;
@@ -295,12 +298,10 @@ void DTransaction::commitRetaining(CheckStatusWrapper* status)
 			if (sub[i])
 			{
 				sub[i]->commitRetaining(status);
-				if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (status->getState() & IStatus::STATE_ERRORS)
 					return;
 			}
 		}
-
-		limbo = true;	// ASF: why do retaining marks limbo?
 	}
 	catch (const Exception& ex)
 	{
@@ -322,7 +323,7 @@ void DTransaction::rollback(CheckStatusWrapper* status)
 				if (sub[i])
 				{
 					sub[i]->rollback(status);
-					if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+					if (status->getState() & IStatus::STATE_ERRORS)
 						return;
 
 					sub[i] = NULL;
@@ -349,12 +350,10 @@ void DTransaction::rollbackRetaining(CheckStatusWrapper* status)
 			if (sub[i])
 			{
 				sub[i]->rollbackRetaining(status);
-				if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (status->getState() & IStatus::STATE_ERRORS)
 					return;
 			}
 		}
-
-		limbo = true;	// ASF: why do retaining marks limbo?
 	}
 	catch (const Exception& ex)
 	{
@@ -378,7 +377,7 @@ void DTransaction::disconnect(CheckStatusWrapper* status)
 			if (sub[i])
 			{
 				sub[i]->disconnect(status);
-				if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (status->getState() & IStatus::STATE_ERRORS)
 					return;
 
 				sub[i] = NULL;
@@ -390,6 +389,22 @@ void DTransaction::disconnect(CheckStatusWrapper* status)
 		ex.stuffException(status);
 	}
 }
+
+void DTransaction::deprecatedCommit(CheckStatusWrapper* status)
+{
+	commit(status);
+}
+
+void DTransaction::deprecatedRollback(CheckStatusWrapper* status)
+{
+	rollback(status);
+}
+
+void DTransaction::deprecatedDisconnect(CheckStatusWrapper* status)
+{
+	disconnect(status);
+}
+
 
 // To do: check the maximum allowed dbs in a two phase commit.
 //		  Q: what is the maximum?
@@ -528,7 +543,7 @@ YTransaction* DtcStart::start(CheckStatusWrapper* status)
 		RefPtr<DTransaction> dtransaction(FB_NEW DTransaction);
 
 		unsigned cnt = components.getCount();
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 			status_exception::raise(status);
 		if (cnt == 0)
 			(Arg::Gds(isc_random) << "No attachments to start distributed transaction provided").raise();
@@ -536,11 +551,11 @@ YTransaction* DtcStart::start(CheckStatusWrapper* status)
 		for (unsigned i = 0; i < cnt; ++i)
 		{
 			ITransaction* started = components[i].att->startTransaction(status, components[i].tpbLen, components[i].tpb);
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status->getState() & IStatus::STATE_ERRORS)
 				status_exception::raise(status);
 
 			dtransaction->join(status, started);
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status->getState() & IStatus::STATE_ERRORS)
 			{
 				started->release();
 				status_exception::raise(status);
@@ -570,12 +585,12 @@ YTransaction* Dtc::join(CheckStatusWrapper* status, ITransaction* one, ITransact
 		RefPtr<DTransaction> dtransaction(FB_NEW DTransaction);
 
 		dtransaction->join(status, one);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 			return NULL;
 
 		dtransaction->join(status, two);
 		/* We must not return NULL - first transaction is available only inside dtransaction
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 			return NULL;
 		*/
 

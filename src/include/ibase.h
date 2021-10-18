@@ -44,7 +44,7 @@
 #ifndef FIREBIRD_IBASE_H
 #define FIREBIRD_IBASE_H
 
-#define FB_API_VER 40
+#define FB_API_VER 50
 #define isc_version4
 
 #define  ISC_TRUE	1

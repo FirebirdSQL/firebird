@@ -235,6 +235,8 @@ bool BufferedStream::getRecord(thread_db* tdbb) const
 			record_param* const rpb = &request->req_rpb[map.map_stream];
 			jrd_rel* const relation = rpb->rpb_relation;
 
+			rpb->rpb_runtime_flags &= ~RPB_CLEAR_FLAGS;
+
 			if (relation &&
 				!relation->rel_file &&
 				!relation->rel_view_rse &&

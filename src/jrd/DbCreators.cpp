@@ -29,7 +29,7 @@
 #include "firebird.h"
 #include "firebird/Interface.h"
 #include "../auth/SecureRemotePassword/Message.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 
 #include "../jrd/constants.h"
 #include "../common/classes/ClumpletWriter.h"

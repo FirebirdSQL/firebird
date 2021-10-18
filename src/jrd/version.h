@@ -99,9 +99,6 @@
 #elif defined RC_TARGET_nbackup
 #define VER_FILEDESC "Physical Backup Management tool"
 
-#elif defined RC_TARGET_qli
-#define VER_FILEDESC "QLI tool"
-
 #elif defined RC_TARGET_srp
 #define VER_FILEDESC "SRP User Manager plugin"
 

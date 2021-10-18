@@ -141,100 +141,7 @@ const char*	GCPolicyCooperative	= "cooperative";
 const char*	GCPolicyBackground	= "background";
 const char*	GCPolicyCombined	= "combined";
 
-
-Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
-{
-	{TYPE_INTEGER,		"TempBlockSize",			ConfigValue(1048576)},	// bytes
-	{TYPE_INTEGER,		"TempCacheLimit",			ConfigValue(-1)},		// bytes
-	{TYPE_BOOLEAN,		"RemoteFileOpenAbility",	ConfigValue(false)},
-	{TYPE_INTEGER,		"GuardianOption",			ConfigValue(1)},
-	{TYPE_INTEGER,		"CpuAffinityMask",			ConfigValue(0)},
-	{TYPE_INTEGER,		"TcpRemoteBufferSize",		ConfigValue(8192)},		// bytes
-	{TYPE_BOOLEAN,		"TcpNoNagle",				ConfigValue(true)},
-	{TYPE_BOOLEAN,		"TcpLoopbackFastPath",      ConfigValue(true)},
-	{TYPE_INTEGER,		"DefaultDbCachePages",		ConfigValue(-1)},		// pages
-	{TYPE_INTEGER,		"ConnectionTimeout",		ConfigValue(180)},		// seconds
-	{TYPE_INTEGER,		"DummyPacketInterval",		ConfigValue(0)},		// seconds
-	{TYPE_STRING,		"DefaultTimeZone",			ConfigValue(nullptr)},
-	{TYPE_INTEGER,		"LockMemSize",				ConfigValue(1048576)},	// bytes
-	{TYPE_INTEGER,		"LockHashSlots",			ConfigValue(8191)},		// slots
-	{TYPE_INTEGER,		"LockAcquireSpins",			ConfigValue(0)},
-	{TYPE_INTEGER,		"EventMemSize",				ConfigValue(65536)},	// bytes
-	{TYPE_INTEGER,		"DeadlockTimeout",			ConfigValue(10)},		// seconds
-	{TYPE_STRING,		"RemoteServiceName",		ConfigValue(FB_SERVICE_NAME)},
-	{TYPE_INTEGER,		"RemoteServicePort",		ConfigValue(0)},
-	{TYPE_STRING,		"RemotePipeName",			ConfigValue(FB_PIPE_NAME)},
-	{TYPE_STRING,		"IpcName",					ConfigValue(FB_IPC_NAME)},
-#ifdef WIN_NT
-	{TYPE_INTEGER,		"MaxUnflushedWrites",		ConfigValue(100)},
-	{TYPE_INTEGER,		"MaxUnflushedWriteTime",	ConfigValue(5)},
-#else
-	{TYPE_INTEGER,		"MaxUnflushedWrites",		ConfigValue(-1)},
-	{TYPE_INTEGER,		"MaxUnflushedWriteTime",	ConfigValue(-1)},
-#endif
-	{TYPE_INTEGER,		"ProcessPriorityLevel",		ConfigValue(0)},
-	{TYPE_INTEGER,		"RemoteAuxPort",			ConfigValue(0)},
-	{TYPE_STRING,		"RemoteBindAddress",		ConfigValue(0)},
-	{TYPE_STRING,		"ExternalFileAccess",		ConfigValue("None")},	// location(s) of external files for tables
-	{TYPE_STRING,		"DatabaseAccess",			ConfigValue("Full")},	// location(s) of databases
-	{TYPE_STRING,		"UdfAccess",				ConfigValue("None")},	// location(s) of UDFs
-	{TYPE_STRING,		"TempDirectories",			ConfigValue(0)},
-#ifdef DEV_BUILD
- 	{TYPE_BOOLEAN,		"BugcheckAbort",			ConfigValue(true)},		// whether to abort() engine when internal error is found
-#else
- 	{TYPE_BOOLEAN,		"BugcheckAbort",			ConfigValue(false)},	// whether to abort() engine when internal error is found
-#endif
-	{TYPE_INTEGER,		"TraceDSQL",				ConfigValue(0)},		// bitmask
-	{TYPE_BOOLEAN,		"LegacyHash",				ConfigValue(true)},		// let use old passwd hash verification
-	{TYPE_STRING,		"GCPolicy",					ConfigValue(nullptr)},	// garbage collection policy
-	{TYPE_BOOLEAN,		"Redirection",				ConfigValue(false)},
-	{TYPE_INTEGER,		"DatabaseGrowthIncrement",	ConfigValue(128 * 1048576)},	// bytes
-	{TYPE_INTEGER,		"FileSystemCacheThreshold",	ConfigValue(65536)},	// page buffers
-	{TYPE_BOOLEAN,		"RelaxedAliasChecking",		ConfigValue(false)},	// if true relax strict alias checking rules in DSQL a bit
-	{TYPE_STRING,		"AuditTraceConfigFile",		ConfigValue("")},		// location of audit trace configuration file
-	{TYPE_INTEGER,		"MaxUserTraceLogSize",		ConfigValue(10)},		// maximum size of user session trace log
-	{TYPE_INTEGER,		"FileSystemCacheSize",		ConfigValue(0)},		// percent
-	{TYPE_STRING,		"Providers",				ConfigValue("Remote, " CURRENT_ENGINE ", Loopback")},
-	{TYPE_STRING,		"AuthServer",				ConfigValue("Srp256")},
-#ifdef WIN_NT
-	{TYPE_STRING,		"AuthClient",				ConfigValue("Srp256, Srp, Win_Sspi, Legacy_Auth")},
-#else
-	{TYPE_STRING,		"AuthClient",				ConfigValue("Srp256, Srp, Legacy_Auth")},
-#endif
-	{TYPE_STRING,		"UserManager",				ConfigValue("Srp")},
-	{TYPE_STRING,		"TracePlugin",				ConfigValue("fbtrace")},
-	{TYPE_STRING,		"SecurityDatabase",			ConfigValue(nullptr)},	// sec/db alias - rely on ConfigManager::getDefaultSecurityDb()
-	{TYPE_STRING,		"ServerMode",				ConfigValue(nullptr)},	// actual value differs in boot/regular cases and set at setupDefaultConfig()
-	{TYPE_STRING,		"WireCrypt",				ConfigValue(nullptr)},
-	{TYPE_STRING,		"WireCryptPlugin",			ConfigValue("ChaCha, Arc4")},
-	{TYPE_STRING,		"KeyHolderPlugin",			ConfigValue("")},
-	{TYPE_BOOLEAN,		"RemoteAccess",				ConfigValue(true)},
-	{TYPE_BOOLEAN,		"IPv6V6Only",				ConfigValue(false)},
-	{TYPE_BOOLEAN,		"WireCompression",			ConfigValue(false)},
-	{TYPE_INTEGER,		"MaxIdentifierByteLength",	ConfigValue(MAX_SQL_IDENTIFIER_LEN)},
-	{TYPE_INTEGER,		"MaxIdentifierCharLength",	ConfigValue(METADATA_IDENTIFIER_CHAR_LEN)},
-	{TYPE_BOOLEAN,		"AllowEncryptedSecurityDatabase", ConfigValue(false)},
-	{TYPE_INTEGER,		"StatementTimeout",			ConfigValue(0)},
-	{TYPE_INTEGER,		"ConnectionIdleTimeout",	ConfigValue(0)},
-	{TYPE_INTEGER,		"ClientBatchBuffer",		ConfigValue((128 * 1024))},
-#ifdef DEV_BUILD
-	{TYPE_STRING,		"OutputRedirectionFile", 	ConfigValue("-")},
-#else
-#ifdef WIN_NT
-	{TYPE_STRING,		"OutputRedirectionFile", 	ConfigValue("nul")},
-#else
-	{TYPE_STRING,		"OutputRedirectionFile", 	ConfigValue("/dev/null")},
-#endif
-#endif
-	{TYPE_INTEGER,		"ExtConnPoolSize",			ConfigValue(0)},
-	{TYPE_INTEGER,		"ExtConnPoolLifeTime",		ConfigValue(7200)},
-	{TYPE_INTEGER,		"SnapshotsMemSize",			ConfigValue(65536)},	// bytes
-	{TYPE_INTEGER,		"TipCacheBlockSize",		ConfigValue(4194304)},	// bytes
-	{TYPE_BOOLEAN,		"ReadConsistency",			ConfigValue(true)},
-	{TYPE_BOOLEAN,		"ClearGTTAtRetaining",		ConfigValue(false)},
-	{TYPE_STRING,		"DataTypeCompatibility",	ConfigValue(nullptr)},
-	{TYPE_BOOLEAN,		"UseFileSystemCache",		ConfigValue(true)}
-};
+ConfigValue Config::defaults[MAX_CONFIG_KEY];
 
 /******************************************************************************
  *
@@ -242,9 +149,10 @@ Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
  */
 
 Config::Config(const ConfigFile& file)
-	: notifyDatabase(*getDefaultMemoryPool()),
-	valuesSource(*getDefaultMemoryPool()),
-	serverMode(-1)
+	: valuesSource(*getDefaultMemoryPool()),
+	notifyDatabase(*getDefaultMemoryPool()),
+	serverMode(-1),
+	defaultConfig(false)
 {
 	memset(sourceIdx, 0, sizeof(sourceIdx));
 	valuesSource.add(NULL);
@@ -258,7 +166,7 @@ Config::Config(const ConfigFile& file)
 	// Iterate through the known configuration entries
 	for (unsigned int i = 0; i < MAX_CONFIG_KEY; i++)
 	{
-		values[i] = entries[i].default_value;
+		values[i] = defaults[i];
 		if (entries[i].data_type == TYPE_STRING && values[i].strVal)
 		{
 			ConfigFile::String expand(values[i].strVal);
@@ -275,9 +183,10 @@ Config::Config(const ConfigFile& file)
 }
 
 Config::Config(const ConfigFile& file, const char* srcName, const Config& base, const PathName& notify)
-	: notifyDatabase(*getDefaultMemoryPool()),
-	valuesSource(*getDefaultMemoryPool()),
-	serverMode(-1)
+	: valuesSource(*getDefaultMemoryPool()),
+	notifyDatabase(*getDefaultMemoryPool()),
+	serverMode(-1),
+	defaultConfig(false)
 {
 	memset(sourceIdx, 0, sizeof(sourceIdx));
 	valuesSource.add(NULL);
@@ -332,20 +241,21 @@ void Config::loadValues(const ConfigFile& file, const char* srcName)
 		const ConfigEntry& entry = entries[i];
 		const ConfigFile::Parameter* par = file.findParameter(entry.key);
 
-		if (par)
+		// Don't assign values to the global keys at non-default config
+		if (par && (defaultConfig || !entry.is_global))
 		{
 			// Assign the actual value
 
 			switch (entry.data_type)
 			{
 			case TYPE_BOOLEAN:
-				values[i] = (ConfigValue) par->asBoolean();
+				values[i].boolVal = par->asBoolean();
 				break;
 			case TYPE_INTEGER:
-				values[i] = (ConfigValue) par->asInteger();
+				values[i].intVal = par->asInteger();
 				break;
 			case TYPE_STRING:
-				values[i] = (ConfigValue) par->value.c_str();
+				values[i].strVal = par->value.c_str();
 				break;
 			//case TYPE_STRING_VECTOR:
 			//	break;
@@ -363,7 +273,7 @@ void Config::loadValues(const ConfigFile& file, const char* srcName)
 			sourceIdx[i] = srcIdx;
 		}
 
-		if (entry.data_type == TYPE_STRING && values[i] != entry.default_value)
+		if (entry.data_type == TYPE_STRING && values[i] != defaults[i])
 		{
 			const char* src = values[i].strVal;
 			char* dst = FB_NEW_POOL(getPool()) char[strlen(src) + 1];
@@ -375,32 +285,37 @@ void Config::loadValues(const ConfigFile& file, const char* srcName)
 	checkValues();
 }
 
-static const char* txtServerModes[6] = 
+static const char* txtServerModes[6] =
 {
-	"Super", "ThreadedDedicated", 
-	"SuperClassic", "ThreadedShared", 
-	"Classic", "MultiProcess" 
+	"Super", "ThreadedDedicated",
+	"SuperClassic", "ThreadedShared",
+	"Classic", "MultiProcess"
 };
 
 void Config::setupDefaultConfig()
 {
+	defaultConfig = true;
+
+	for (unsigned i = 0; i < MAX_CONFIG_KEY; i++)
+		defaults[i] = entries[i].default_value;
+
 	const bool bootBuild = fb_utils::bootBuild();
 
-	ConfigValue* pDefault = &entries[KEY_SERVER_MODE].default_value;
+	ConfigValue* pDefault = &defaults[KEY_SERVER_MODE];
 	serverMode = bootBuild ? MODE_CLASSIC : MODE_SUPER;
 	pDefault->strVal = txtServerModes[2 * serverMode];
 
-	pDefault = &entries[KEY_TEMP_CACHE_LIMIT].default_value;
+	pDefault = &defaults[KEY_TEMP_CACHE_LIMIT];
 	if (pDefault->intVal < 0)
 		pDefault->intVal = (serverMode != MODE_SUPER) ? 8388608 : 67108864;	// bytes
 
-	entries[KEY_REMOTE_FILE_OPEN_ABILITY].default_value.boolVal = bootBuild;
+	defaults[KEY_REMOTE_FILE_OPEN_ABILITY].boolVal = bootBuild;
 
-	pDefault = &entries[KEY_DEFAULT_DB_CACHE_PAGES].default_value;
+	pDefault = &defaults[KEY_DEFAULT_DB_CACHE_PAGES];
 	if (pDefault->intVal < 0)
 		pDefault->intVal = (serverMode != MODE_SUPER) ? 256 : 2048;	// pages
 
-	pDefault = &entries[KEY_GC_POLICY].default_value;
+	pDefault = &defaults[KEY_GC_POLICY];
 	if (!pDefault->strVal)
 	{
 		pDefault->strVal = (serverMode == MODE_SUPER) ? GCPolicyCombined : GCPolicyCooperative;
@@ -416,14 +331,14 @@ void Config::checkIntForLoBound(ConfigKey key, SINT64 loBound, bool setDefault)
 {
 	fb_assert(entries[key].data_type == TYPE_INTEGER);
 	if (values[key].intVal < loBound)
-		values[key].intVal = setDefault ? entries[key].default_value.intVal : loBound;
+		values[key].intVal = setDefault ? defaults[key].intVal : loBound;
 }
 
 void Config::checkIntForHiBound(ConfigKey key, SINT64 hiBound, bool setDefault)
 {
 	fb_assert(entries[key].data_type == TYPE_INTEGER);
 	if (values[key].intVal > hiBound)
-		values[key].intVal = setDefault ? entries[key].default_value.intVal : hiBound;
+		values[key].intVal = setDefault ? defaults[key].intVal : hiBound;
 }
 
 void Config::checkValues()
@@ -446,7 +361,7 @@ void Config::checkValues()
 			gcPolicy != GCPolicyCombined)
 		{
 			// user-provided value is invalid - fail to default
-			values[KEY_GC_POLICY] = entries[KEY_GC_POLICY].default_value;
+			values[KEY_GC_POLICY] = defaults[KEY_GC_POLICY];
 		}
 	}
 
@@ -457,7 +372,7 @@ void Config::checkValues()
 		if (wireCrypt != "DISABLED" && wireCrypt != "ENABLED" && wireCrypt != "REQUIRED")
 		{
 			// user-provided value is invalid - fail to default
-			values[KEY_WIRE_CRYPT] = entries[KEY_WIRE_CRYPT].default_value;
+			values[KEY_WIRE_CRYPT] = defaults[KEY_WIRE_CRYPT];
 		}
 	}
 
@@ -477,7 +392,7 @@ void Config::checkValues()
 		}
 
 		if (!found)
-			values[KEY_SERVER_MODE] = entries[KEY_SERVER_MODE].default_value;
+			values[KEY_SERVER_MODE] = defaults[KEY_SERVER_MODE];
 	}
 
 	checkIntForLoBound(KEY_FILESYSTEM_CACHE_THRESHOLD, 0, true);
@@ -493,6 +408,8 @@ void Config::checkValues()
 
 	checkIntForLoBound(KEY_TIP_CACHE_BLOCK_SIZE, 1, true);
 	checkIntForHiBound(KEY_TIP_CACHE_BLOCK_SIZE, MAX_ULONG, true);
+
+	checkIntForLoBound(KEY_INLINE_SORT_THRESHOLD, 0, true);
 }
 
 
@@ -502,7 +419,7 @@ Config::~Config()
 
 	for (int i = 0; i < MAX_CONFIG_KEY; i++)
 	{
-		if (values[i] == entries[i].default_value)
+		if (values[i] == defaults[i])
 			continue;
 
 		switch (entries[i].data_type)
@@ -606,11 +523,11 @@ bool Config::valueAsString(ConfigValue val, ConfigType type, string& str)
 {
 	switch (type)
 	{
-	case Config::TYPE_INTEGER:
+	case TYPE_INTEGER:
 		str.printf("%" SQUADFORMAT, val.intVal);
 		break;
 
-	case Config::TYPE_STRING:
+	case TYPE_STRING:
 	{
 		if (val.strVal == NULL)
 			return false;
@@ -619,7 +536,7 @@ bool Config::valueAsString(ConfigValue val, ConfigType type, string& str)
 	}
 	break;
 
-	case Config::TYPE_BOOLEAN:
+	case TYPE_BOOLEAN:
 		str = val.boolVal ? "true" : "false";
 		break;
 	}
@@ -627,12 +544,41 @@ bool Config::valueAsString(ConfigValue val, ConfigType type, string& str)
 	return true;
 }
 
+const char* Config::getKeyName(unsigned int key)
+{
+	if (key >= MAX_CONFIG_KEY)
+		return nullptr;
+
+	return entries[key].key;
+}
+
+ConfigValue Config::specialProcessing(ConfigKey key, ConfigValue val)
+{
+	// irregular case
+	switch (key)
+	{
+	case KEY_SECURITY_DATABASE:
+		if (!val.strVal)
+		{
+			val.strVal = MasterInterfacePtr()->getConfigManager()->getDefaultSecurityDb();
+			if (!val.strVal)
+				val.strVal = "security.db";
+		}
+		break;
+	}
+
+	return val;
+}
+
 bool Config::getValue(unsigned int key, string& str) const
 {
 	if (key >= MAX_CONFIG_KEY)
 		return false;
 
-	return valueAsString(specialProcessing(static_cast<ConfigKey>(key), values[key]), entries[key].data_type, str);
+	const ConfigValue& val = entries[key].is_global ?
+		getDefaultConfig()->values[key] : values[key];
+
+	return valueAsString(specialProcessing(static_cast<ConfigKey>(key), val), entries[key].data_type, str);
 }
 
 bool Config::getDefaultValue(unsigned int key, string& str)
@@ -640,275 +586,126 @@ bool Config::getDefaultValue(unsigned int key, string& str)
 	if (key >= MAX_CONFIG_KEY)
 		return false;
 
-	if (key == KEY_WIRE_CRYPT && !entries[key].default_value.strVal)
+	if (key == KEY_WIRE_CRYPT && !defaults[key].strVal)
 	{
 		str = "Required";	// see getWireCrypt(WC_SERVER)
 		return true;
 	}
 
-	return valueAsString(specialProcessing(static_cast<ConfigKey>(key), entries[key].default_value), entries[key].data_type, str);
+	return valueAsString(specialProcessing(static_cast<ConfigKey>(key), defaults[key]), entries[key].data_type, str);
 }
 
 
-int Config::getTempBlockSize()
-{
-	return (int) getDefaultConfig()->getInt(KEY_TEMP_BLOCK_SIZE);
-}
 
-FB_UINT64 Config::getTempCacheLimit() const
-{
-	return getInt(KEY_TEMP_CACHE_LIMIT);
-}
+// Macros below helps to implement non-trivial Config::getXXX functions :
+// - checks for correct[non-]static function declaration,
+// - declare and initialize local vars "key" and "config" (correct Config
+//   instance to get values from).
 
-bool Config::getRemoteFileOpenAbility()
-{
-	return getDefaultConfig()->getBool(KEY_REMOTE_FILE_OPEN_ABILITY);
-}
+#define DECLARE_GLOBAL_KEY(KEY)		\
+	static_assert(entries[KEY].is_global, "Requires global key"); \
+	const ConfigKey key = KEY;		\
+	const Config* config = getDefaultConfig();
 
-int Config::getGuardianOption()
-{
-	return getDefaultConfig()->getInt(KEY_GUARDIAN_OPTION);
-}
-
-FB_UINT64 Config::getCpuAffinityMask()
-{
-	return getDefaultConfig()->getInt(KEY_CPU_AFFINITY_MASK);
-}
-
-int Config::getTcpRemoteBufferSize()
-{
-	return getDefaultConfig()->getInt(KEY_TCP_REMOTE_BUFFER_SIZE);
-}
-
-bool Config::getTcpNoNagle() const
-{
-	return getBool(KEY_TCP_NO_NAGLE);
-}
-
-bool Config::getTcpLoopbackFastPath() const
-{
-	return getBool(KEY_TCP_LOOPBACK_FAST_PATH);
-}
-
-bool Config::getIPv6V6Only() const
-{
-	return getBool(KEY_IPV6_V6ONLY);
-}
-
-int Config::getDefaultDbCachePages() const
-{
-	return getInt(KEY_DEFAULT_DB_CACHE_PAGES);
-}
-
-int Config::getConnectionTimeout() const
-{
-	return getInt(KEY_CONNECTION_TIMEOUT);
-}
-
-int Config::getDummyPacketInterval() const
-{
-	return getInt(KEY_DUMMY_PACKET_INTERVAL);
-}
-
-const char* Config::getDefaultTimeZone()
-{
-	return getDefaultConfig()->getStr(KEY_DEFAULT_TIME_ZONE);
-}
-
-int Config::getLockMemSize() const
-{
-	return getInt(KEY_LOCK_MEM_SIZE);
-}
-
-int Config::getLockHashSlots() const
-{
-	return getInt(KEY_LOCK_HASH_SLOTS);
-}
-
-int Config::getLockAcquireSpins() const
-{
-	return getInt(KEY_LOCK_ACQUIRE_SPINS);
-}
-
-int Config::getEventMemSize() const
-{
-	return getInt(KEY_EVENT_MEM_SIZE);
-}
-
-int Config::getDeadlockTimeout() const
-{
-	return getInt(KEY_DEADLOCK_TIMEOUT);
-}
-
-const char *Config::getRemoteServiceName() const
-{
-	return getStr(KEY_REMOTE_SERVICE_NAME);
-}
-
-unsigned short Config::getRemoteServicePort() const
-{
-	return getInt(KEY_REMOTE_SERVICE_PORT);
-}
-
-const char *Config::getRemotePipeName() const
-{
-	return getStr(KEY_REMOTE_PIPE_NAME);
-}
-
-const char *Config::getIpcName() const
-{
-	return getStr(KEY_IPC_NAME);
-}
-
-int Config::getMaxUnflushedWrites() const
-{
-	return getInt(KEY_MAX_UNFLUSHED_WRITES);
-}
-
-int Config::getMaxUnflushedWriteTime() const
-{
-	return getInt(KEY_MAX_UNFLUSHED_WRITE_TIME);
-}
-
-int Config::getProcessPriorityLevel()
-{
-	return getDefaultConfig()->getInt(KEY_PROCESS_PRIORITY_LEVEL);
-}
-
-int Config::getRemoteAuxPort() const
-{
-	return getInt(KEY_REMOTE_AUX_PORT);
-}
-
-const char *Config::getRemoteBindAddress()
-{
-	return getDefaultConfig()->getStr(KEY_REMOTE_BIND_ADDRESS);
-}
-
-const char *Config::getExternalFileAccess() const
-{
-	return getStr(KEY_EXTERNAL_FILE_ACCESS);
-}
-
-const char *Config::getDatabaseAccess()
-{
-	return getDefaultConfig()->getStr(KEY_DATABASE_ACCESS);
-}
-
-const char *Config::getUdfAccess()
-{
-	return getDefaultConfig()->getStr(KEY_UDF_ACCESS);
-}
-
-const char *Config::getTempDirectories()
-{
-	return getDefaultConfig()->getStr(KEY_TEMP_DIRECTORIES);
-}
-
-bool Config::getBugcheckAbort()
-{
-	return getDefaultConfig()->getBool(KEY_BUGCHECK_ABORT);
-}
-
-int Config::getTraceDSQL()
-{
-	return getDefaultConfig()->getInt(KEY_TRACE_DSQL);
-}
-
-bool Config::getLegacyHash()
-{
-	return getDefaultConfig()->getBool(KEY_LEGACY_HASH);
-}
-
-const char *Config::getGCPolicy() const
-{
-	return getStr(KEY_GC_POLICY);
-}
-
-bool Config::getRedirection()
-{
-	return getDefaultConfig()->getBool(KEY_REDIRECTION);
-}
-
-int Config::getDatabaseGrowthIncrement() const
-{
-	return getInt(KEY_DATABASE_GROWTH_INCREMENT);
-}
-
-int Config::getFileSystemCacheThreshold() const
-{
-	return getInt(KEY_FILESYSTEM_CACHE_THRESHOLD);
-}
-
-bool Config::getRelaxedAliasChecking()
-{
-	return getDefaultConfig()->getBool(KEY_RELAXED_ALIAS_CHECKING);
-}
-
-FB_UINT64 Config::getFileSystemCacheSize()
-{
-	return (FB_UINT64) getDefaultConfig()->getInt(KEY_FILESYSTEM_CACHE_SIZE);
-}
-
-const char *Config::getAuditTraceConfigFile()
-{
-	return getDefaultConfig()->getStr(KEY_TRACE_CONFIG);
-}
-
-FB_UINT64 Config::getMaxUserTraceLogSize()
-{
-	return (FB_UINT64) getDefaultConfig()->getInt(KEY_MAX_TRACELOG_SIZE);
-}
+#define DECLARE_PER_DB_KEY(KEY)		\
+	static_assert(!entries[KEY].is_global, "Requires per-database key"); \
+	const ConfigKey key = KEY;		\
+	const Config* config = this;
 
 int Config::getServerMode()
 {
-	return getDefaultConfig()->serverMode;
-}
-
-ULONG Config::getSnapshotsMemSize() const
-{
-	return getInt(KEY_SNAPSHOTS_MEM_SIZE);
-}
-
-ULONG Config::getTipCacheBlockSize() const
-{
-	return getInt(KEY_TIP_CACHE_BLOCK_SIZE);
+	DECLARE_GLOBAL_KEY(KEY_SERVER_MODE);
+	return config->serverMode;
 }
 
 const char* Config::getPlugins(unsigned int type) const
 {
-	ConfigKey key;
+	ConfigKey aKey;
 	switch (type)
 	{
 		case IPluginManager::TYPE_PROVIDER:
-			key = KEY_PLUG_PROVIDERS;
+		{
+			DECLARE_PER_DB_KEY(KEY_PLUG_PROVIDERS);
+			aKey = key;
 			break;
+		}
 		case IPluginManager::TYPE_AUTH_SERVER:
-			key = KEY_PLUG_AUTH_SERVER;
+		{
+			DECLARE_PER_DB_KEY(KEY_PLUG_AUTH_SERVER);
+			aKey = key;
 			break;
+		}
 		case IPluginManager::TYPE_AUTH_CLIENT:
-			key = KEY_PLUG_AUTH_CLIENT;
+		{
+			DECLARE_PER_DB_KEY(KEY_PLUG_AUTH_CLIENT);
+			aKey = key;
 			break;
+		}
 		case IPluginManager::TYPE_AUTH_USER_MANAGEMENT:
-			key = KEY_PLUG_AUTH_MANAGE;
+		{
+			DECLARE_PER_DB_KEY(KEY_PLUG_AUTH_MANAGE);
+			aKey = key;
 			break;
+		}
 		case IPluginManager::TYPE_TRACE:
-			key = KEY_PLUG_TRACE;
+		{
+			DECLARE_PER_DB_KEY(KEY_PLUG_TRACE);
+			aKey = key;
 			break;
+		}
 		case IPluginManager::TYPE_WIRE_CRYPT:
-			key = KEY_PLUG_WIRE_CRYPT;
+		{
+			DECLARE_PER_DB_KEY(KEY_PLUG_WIRE_CRYPT);
+			aKey = key;
 			break;
+		}
 		case IPluginManager::TYPE_KEY_HOLDER:
-			key = KEY_PLUG_KEY_HOLDER;
+		{
+			DECLARE_PER_DB_KEY(KEY_PLUG_KEY_HOLDER);
+			aKey = key;
 			break;
+		}
 
 		default:
 			(Arg::Gds(isc_random) << "Internal error in Config::getPlugins(): unknown plugin type requested").raise();
+			return nullptr;
 	}
 
-	return getStr(key);
+	return getStr(aKey);
 }
 
+int Config::getWireCrypt(WireCryptMode wcMode) const
+{
+	DECLARE_PER_DB_KEY(KEY_WIRE_CRYPT);
+
+	bool present;
+	const char* wc = getStr(key, &present);
+	if (present && wc)
+	{
+		NoCaseString wireCrypt(wc);
+		if (wireCrypt == "DISABLED")
+			return WIRE_CRYPT_DISABLED;
+		if (wireCrypt == "ENABLED")
+			return WIRE_CRYPT_ENABLED;
+		if (wireCrypt == "REQUIRED")
+			return WIRE_CRYPT_REQUIRED;
+
+		// wrong user value, fail to default
+		// should not happens, see checkValues()
+		fb_assert(false);
+	}
+
+	return wcMode == WC_CLIENT ? WIRE_CRYPT_ENABLED : WIRE_CRYPT_REQUIRED;
+}
+
+bool Config::getUseFileSystemCache(bool* pPresent) const
+{
+	DECLARE_PER_DB_KEY(KEY_USE_FILESYSTEM_CACHE);
+	return getBool(key, pPresent);
+}
+
+
+///	class FirebirdConf
 
 // array format: major, minor, release, build
 static unsigned short fileVerNumber[4] = {FILE_VER_NUMBER};
@@ -962,126 +759,6 @@ FB_BOOLEAN FirebirdConf::asBoolean(unsigned int key)
 {
 	checkKey(key);
 	return config->getBoolean(key);
-}
-
-const char* Config::getSecurityDatabase() const
-{
-	return getStr(KEY_SECURITY_DATABASE);
-}
-
-Config::ConfigValue Config::specialProcessing(ConfigKey key, ConfigValue val)
-{
-	// irregular case
-	switch(key)
-	{
-	case KEY_SECURITY_DATABASE:
-		if (!val.strVal)
-		{
-			val.strVal = MasterInterfacePtr()->getConfigManager()->getDefaultSecurityDb();
-			if (!val.strVal)
-				val.strVal = "security.db";
-		}
-		break;
-	}
-
-	return val;
-}
-
-int Config::getWireCrypt(WireCryptMode wcMode) const
-{
-	bool present;
-	const char* wc = getStr(KEY_WIRE_CRYPT, &present);
-	if (present && wc)
-	{
-		NoCaseString wireCrypt(wc);
-		if (wireCrypt == "DISABLED")
-			return WIRE_CRYPT_DISABLED;
-		if (wireCrypt == "ENABLED")
-			return WIRE_CRYPT_ENABLED;
-		if (wireCrypt == "REQUIRED")
-			return WIRE_CRYPT_REQUIRED;
-
-		// wrong user value, fail to default
-		// should not happens, see checkValues()
-		fb_assert(false);
-	}
-
-	return wcMode == WC_CLIENT ? WIRE_CRYPT_ENABLED : WIRE_CRYPT_REQUIRED;
-}
-
-bool Config::getRemoteAccess() const
-{
-	return getBool(KEY_REMOTE_ACCESS);
-}
-
-bool Config::getWireCompression() const
-{
-	return getBool(KEY_WIRE_COMPRESSION);
-}
-
-int Config::getMaxIdentifierByteLength() const
-{
-	return getInt(KEY_MAX_IDENTIFIER_BYTE_LENGTH);
-}
-
-int Config::getMaxIdentifierCharLength() const
-{
-	return getInt(KEY_MAX_IDENTIFIER_CHAR_LENGTH);
-}
-
-bool Config::getCryptSecurityDatabase() const
-{
-	return getBool(KEY_ENCRYPT_SECURITY_DATABASE);
-}
-
-unsigned int Config::getStatementTimeout() const
-{
-	return getInt(KEY_STMT_TIMEOUT);
-}
-
-unsigned int Config::getConnIdleTimeout() const
-{
-	return getInt(KEY_CONN_IDLE_TIMEOUT);
-}
-
-unsigned int Config::getClientBatchBuffer() const
-{
-	return getInt(KEY_CLIENT_BATCH_BUFFER);
-}
-
-const char* Config::getOutputRedirectionFile()
-{
-	return getDefaultConfig()->getStr(KEY_OUTPUT_REDIRECTION_FILE);
-}
-
-int Config::getExtConnPoolSize()
-{
-	return getDefaultConfig()->getInt(KEY_EXT_CONN_POOL_SIZE);
-}
-
-int Config::getExtConnPoolLifeTime()
-{
-	return getDefaultConfig()->getInt(KEY_EXT_CONN_POOL_LIFETIME);
-}
-
-bool Config::getReadConsistency() const
-{
-	return getBool(KEY_READ_CONSISTENCY);
-}
-
-bool Config::getClearGTTAtRetaining() const
-{
-	return getBool(KEY_CLEAR_GTT_RETAINING);
-}
-
-const char* Config::getDataTypeCompatibility() const
-{
-	return getStr(KEY_DATA_TYPE_COMPATIBILITY);
-}
-
-bool Config::getUseFileSystemCache(bool* pPresent) const
-{
-	return getBool(KEY_USE_FILESYSTEM_CACHE, pPresent);
 }
 
 } // namespace Firebird

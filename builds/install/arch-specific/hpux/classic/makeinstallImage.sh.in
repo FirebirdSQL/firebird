@@ -135,7 +135,6 @@ copyFiles() {
     cp $BuiltFBDir/bin/gstat $DestDir/bin/gstat
     copyIfExists $BuiltFBDir/bin/isc4.gbak $DestDir/bin/isc4.gbak
     cp $BuiltFBDir/bin/isql $DestDir/bin/isql
-    cp $BuiltFBDir/bin/qli $DestDir/bin/qli
 
 #   Append libraries to scripts
     addLibs $BuiltFBDir/bin changedbaPassword.sh $DestDir/bin
@@ -165,9 +164,6 @@ copyFiles() {
       else
         echo "Example files have not been built!"
     fi
-
-    copyIfExists $BuiltFBDir/help/help.gbak $DestDir/help
-    cp $BuiltFBDir/help/help.fdb $DestDir/help
 
     #cp -r $BuildSrcDir/doc $DestDir
     #cp -r $BuiltFBDir/doc $DestDir
@@ -200,7 +196,7 @@ copyFiles() {
 #   Copy various upgrade stuff
     cp $BuildRootDir/src/misc/intl.sql                          $DestDir/misc/
     cp $BuildRootDir/src/misc/upgrade/v3.0/security_database*     $DestDir/misc/upgrade/security/
-    
+
 #   Misc config files
     cp $BuildRootDir/gen/install/misc/firebird.conf $DestDir/
     cp $BuildRootDir/gen/install/misc/databases.conf $DestDir/

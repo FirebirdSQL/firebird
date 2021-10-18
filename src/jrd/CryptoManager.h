@@ -42,8 +42,6 @@
 #include "../jrd/status.h"
 #include "firebird/Interface.h"
 
-#define CRYPT_DEBUG(A)
-
 // forward
 
 namespace Ods {
@@ -299,7 +297,7 @@ public:
 	bool checkValidation(Firebird::IDbCryptPlugin* crypt);
 	void setDbInfo(Firebird::IDbCryptPlugin* cp);
 
-	ULONG getCurrentPage() const;
+	ULONG getCurrentPage(thread_db* tdbb) const;
 	UCHAR getCurrentState() const;
 	const char* getKeyName() const;
 	const char* getPluginName() const;
@@ -409,10 +407,9 @@ private:
 	// normal operation.
 
 	SINT64 slowIO;
-	bool crypt, process, down, run;
+	bool crypt, process, flDown, run;
 
-public:
-	Firebird::Mutex cryptAttMutex;
+	bool down() const;
 };
 
 } // namespace Jrd

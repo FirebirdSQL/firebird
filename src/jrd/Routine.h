@@ -82,6 +82,7 @@ namespace Jrd
 															// invalidating procedure pointers from other parts of metadata cache
 		static const USHORT FLAG_CHECK_EXISTENCE	= 16;	// Existence lock released
 		static const USHORT FLAG_RELOAD		 		= 32;	// Recompile before execution
+		static const USHORT FLAG_CLEARED			= 64;	// Routine cleared but not removed from cache
 
 		static const USHORT MAX_ALTER_COUNT = 64;	// Number of times an in-cache routine can be altered
 

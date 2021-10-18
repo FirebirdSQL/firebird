@@ -39,11 +39,12 @@ RETURNING clause
   Note(s):
     1. The INTO part (i.e. the variable list) is allowed in PSQL only (to assign local variables)
        and rejected in DSQL.
-    2. In DSQL, values are being returned within the same protocol roundtrip as the INSERT itself
-       is executed.
+    2. In DSQL, INSERT INTO ... VALUES are returned within the same protocol roundtrip as the
+       INSERT is executed - this is not the case for INSERT INTO ... SELECT.
     3. If the RETURNING clause is present, then the statement is described as
-       isc_info_sql_stmt_exec_procedure by the API (instead of isc_info_sql_stmt_insert),
-       so the existing connectivity drivers should support this feature automagically.
+       isc_info_sql_stmt_exec_procedure by the API (for INSERT INTO ... VALUES and statements
+       with WHERE CURRENT OF) and isc_info_sql_stmt_select for the others statements, so the
+       existing connectivity drivers should support this feature automagically.
     4. Any explicit record change (update or delete) performed by AFTER-triggers is ignored by
        the RETURNING clause.
     5. OLD and NEW could be used in RETURNING clause of UPDATE, INSERT OR UPDATE and MERGE statements.
@@ -53,9 +54,13 @@ RETURNING clause
        by table name/alias fields are resolved to NEW. In MERGE WHEN MATCHED DELETE they are
        resolved to OLD.
     8. Since v4 it's possible to use * and alias.*, as well OLD.* and NEW.* where applicable.
+    9. ORDER BY works with fields from the OLD context (the original record source before changes are applied).
 
   Limitations:
-    1. The modify statement (INSERT, UPDATE, DELETE, MERGE) should operate in no more than one record
-       (i.e. should be singleton).
-    2. The statement always return one row in DSQL, even if no record is inserted/updated/deleted.
-       This may be changed in the future (i.e. return empty resultset).
+    1. The modify statement (INSERT, UPDATE, DELETE, UPDATE OR INSERT, MERGE) in PSQL should
+       operate in no more than one record (i.e. should be singleton).
+
+  Changes in v5:
+    1. Ability to return multiple rows (or no row) in DSQL.
+    2. Added PLAN and ORDER BY subclauses to MERGE.
+	3. Added PLAN, ORDER BY and ROWS subclauses to UPDATE OR INSERT.

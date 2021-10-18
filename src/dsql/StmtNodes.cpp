@@ -18,6 +18,7 @@
  * Adriano dos Santos Fernandes - refactored from pass1.cpp, gen.cpp, cmp.cpp, par.cpp and exe.cpp
  */
 
+#include <algorithm>
 #include "firebird.h"
 #include "firebird/impl/blr.h"
 #include "../common/TimeZoneUtil.h"
@@ -73,20 +74,26 @@ template <typename T> static void dsqlExplodeFields(dsql_rel* relation, Array<Ne
 	bool includeComputed);
 static dsql_par* dsqlFindDbKey(const dsql_req*, const RelationSourceNode*);
 static dsql_par* dsqlFindRecordVersion(const dsql_req*, const RelationSourceNode*);
-static const dsql_msg* dsqlGenDmlHeader(DsqlCompilerScratch*, RseNode*);
+static void dsqlGenEofAssignment(DsqlCompilerScratch* dsqlScratch, SSHORT value);
+static void dsqlGenReturning(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
+	Nullable<USHORT> localTableNumber);
+static void dsqlGenReturningLocalTableCursor(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
+	USHORT localTableNumber);
+static void dsqlGenReturningLocalTableDecl(DsqlCompilerScratch* dsqlScratch, USHORT tableNumber);
 static dsql_ctx* dsqlGetContext(const RecordSourceNode* node);
 static void dsqlGetContexts(DsqlContextStack& contexts, const RecordSourceNode* node);
-static StmtNode* dsqlNullifyReturning(DsqlCompilerScratch*, StmtNode* input, bool returnList);
+static StmtNode* dsqlNullifyReturning(DsqlCompilerScratch*, StmtNode* input);
 static void dsqlFieldAppearsOnce(const Array<NestConst<ValueExprNode> >& values, const char* command);
 static ValueListNode* dsqlPassArray(DsqlCompilerScratch*, ValueListNode*);
 static dsql_ctx* dsqlPassCursorContext(DsqlCompilerScratch*, const MetaName&, const RelationSourceNode*);
 static RseNode* dsqlPassCursorReference(DsqlCompilerScratch*, const MetaName&, RelationSourceNode*);
 static VariableNode* dsqlPassHiddenVariable(DsqlCompilerScratch* dsqlScratch, ValueExprNode* expr);
 static USHORT dsqlPassLabel(DsqlCompilerScratch* dsqlScratch, bool breakContinue, MetaName* label);
-static StmtNode* dsqlProcessReturning(DsqlCompilerScratch*, ReturningClause*, StmtNode*);
+static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, dsql_rel* relation, ReturningClause* input, bool singleton);
+static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, dsql_ctx* oldContext,
+	dsql_ctx* modContext, ReturningClause* input, bool singleton);
 static void dsqlSetParameterName(DsqlCompilerScratch*, ExprNode*, const ValueExprNode*, const dsql_rel*);
 static void dsqlSetParametersName(DsqlCompilerScratch*, CompoundStmtNode*, const RecordSourceNode*);
-
 static void cleanupRpb(thread_db* tdbb, record_param* rpb);
 static void forceWriteLock(thread_db* tdbb, record_param* rpb, jrd_tra* transaction);
 static void makeValidation(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
@@ -133,137 +140,6 @@ namespace
 
 	private:
 		USHORT fldId;
-	};
-
-	class ReturningProcessor
-	{
-	public:
-		// Play with contexts for RETURNING purposes.
-		// Its assumed that oldContext is already on the stack.
-		// Changes oldContext name to "OLD".
-		ReturningProcessor(DsqlCompilerScratch* aScratch, dsql_ctx* aOldContext, dsql_ctx* modContext,
-				ReturningClause* aNode)
-			: scratch(aScratch),
-			  oldContext(aOldContext),
-			  node(aNode),
-			  oldAlias(oldContext->ctx_alias),
-			  oldInternalAlias(oldContext->ctx_internal_alias),
-			  autoFlags(&oldContext->ctx_flags, oldContext->ctx_flags | CTX_system | CTX_returning),
-			  autoScopeLevel(&aScratch->scopeLevel, aScratch->scopeLevel + 1),
-			  autoNodeFirst(node ? &node->first : &temp, node ? node->first : temp)
-		{
-			// Clone the modify/old context and push with name "NEW" in a greater scope level.
-
-			dsql_ctx* newContext = FB_NEW_POOL(scratch->getPool()) dsql_ctx(scratch->getPool());
-
-			if (modContext)
-			{
-				// Push the modify context in the same scope level.
-				scratch->context->push(modContext);
-				*newContext = *modContext;
-				newContext->ctx_flags |= CTX_system;
-			}
-			else
-			{
-				// Create the target (= OLD) context and push it on the stack.
-				dsql_ctx* targetContext = FB_NEW_POOL(scratch->getPool()) dsql_ctx(scratch->getPool());
-				*targetContext = *oldContext;
-
-				// ASF: dsql_ctx::operator= do not copy ctx_internal_alias.
-				targetContext->ctx_internal_alias = oldContext->ctx_internal_alias;
-
-				targetContext->ctx_flags &= ~CTX_system;	// resolve unqualified fields
-				scratch->context->push(targetContext);
-
-				// This is NEW in the context of a DELETE. Mark it as NULL.
-				*newContext = *oldContext;
-				newContext->ctx_flags |= CTX_null;
-			}
-
-			oldContext->ctx_alias = oldContext->ctx_internal_alias = OLD_CONTEXT_NAME;
-
-			newContext->ctx_alias = newContext->ctx_internal_alias = NEW_CONTEXT_NAME;
-			newContext->ctx_flags |= CTX_returning;
-			newContext->ctx_scope_level = scratch->scopeLevel;
-			scratch->context->push(newContext);
-
-			explode(scratch, oldContext->ctx_relation, node);
-		}
-
-		~ReturningProcessor()
-		{
-			oldContext->ctx_alias = oldAlias;
-			oldContext->ctx_internal_alias = oldInternalAlias;
-
-			// Restore the context stack.
-			scratch->context->pop();
-			scratch->context->pop();
-		}
-
-		// Process the RETURNING clause.
-		StmtNode* process(StmtNode* stmtNode)
-		{
-			return dsqlProcessReturning(scratch, node, stmtNode);
-		}
-
-		// Explode RETURNING * and RETURNING alias.* fields.
-		static void explode(DsqlCompilerScratch* scratch, dsql_rel* relation, ReturningClause* node)
-		{
-			if (!node)
-				return;
-
-			if (!node->first)
-			{
-				// Process RETURNING *
-				node->first = FB_NEW_POOL(scratch->getPool()) ValueListNode(scratch->getPool(), 0u);
-				dsqlExplodeFields(relation, node->first->items, true);
-			}
-			else
-			{
-				// Process alias.* items.
-				node->first = PASS1_expand_select_list(scratch, node->first, nullptr);
-			}
-		}
-
-		// Clone a RETURNING node without create duplicate parameters.
-		static StmtNode* clone(DsqlCompilerScratch* scratch, ReturningClause* unprocessed, StmtNode* processed)
-		{
-			if (!processed)
-				return NULL;
-
-			// nod_returning was already processed
-			CompoundStmtNode* processedStmt = nodeAs<CompoundStmtNode>(processed);
-			fb_assert(processed);
-
-			// And we create a RETURNING node where the targets are already processed.
-			CompoundStmtNode* newNode =
-				FB_NEW_POOL(scratch->getPool()) CompoundStmtNode(scratch->getPool());
-
-			NestConst<ValueExprNode>* srcPtr = unprocessed->first->items.begin();
-			NestConst<StmtNode>* dstPtr = processedStmt->statements.begin();
-
-			for (const NestConst<ValueExprNode>* const end = unprocessed->first->items.end();
-				 srcPtr != end;
-				 ++srcPtr, ++dstPtr)
-			{
-				AssignmentNode* temp = FB_NEW_POOL(scratch->getPool()) AssignmentNode(scratch->getPool());
-				temp->asgnFrom = *srcPtr;
-				temp->asgnTo = nodeAs<AssignmentNode>(*dstPtr)->asgnTo;
-				newNode->statements.add(temp);
-			}
-
-			return newNode;
-		}
-
-	private:
-		DsqlCompilerScratch* scratch;
-		dsql_ctx* oldContext;
-		ReturningClause* node;
-		string oldAlias, oldInternalAlias;
-		AutoSetRestore<USHORT> autoFlags;
-		AutoSetRestore<USHORT> autoScopeLevel;
-		NestConst<ValueListNode> temp;
-		AutoSetRestore<NestConst<ValueListNode> > autoNodeFirst;
 	};
 
 	class SavepointChangeMarker : public Savepoint::ChangeMarker
@@ -1428,11 +1304,6 @@ DeclareCursorNode* DeclareCursorNode::pass2(thread_db* tdbb, CompilerScratch* cs
 		(rse->flags & RseNode::FLAG_SCROLLABLE));
 	csb->csb_dbg_info->curIndexToName.get(cursorNumber, cursor->name);
 
-	if (cursorNumber >= csb->csb_cursors.getCount())
-		csb->csb_cursors.grow(cursorNumber + 1);
-
-	csb->csb_cursors[cursorNumber] = cursor;
-
 	StreamList cursorStreams;
 	cursor->getAccessPath()->findUsedStreams(cursorStreams);
 
@@ -1465,6 +1336,121 @@ const StmtNode* DeclareCursorNode::execute(thread_db* /*tdbb*/, jrd_req* request
 	}
 
 	return parentStmt;
+}
+
+
+//--------------------
+
+
+static RegisterNode<DeclareLocalTableNode> regDeclareLocalTableNode({blr_dcl_local_table});
+
+DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
+{
+	auto& blrReader = csb->csb_blr_reader;
+
+	const auto node = FB_NEW_POOL(pool) DeclareLocalTableNode(pool);
+	node->tableNumber = blrReader.getWord();
+
+	csb->csb_localTables.grow(node->tableNumber + 1);
+	fb_assert(!csb->csb_localTables[node->tableNumber]);
+	csb->csb_localTables[node->tableNumber] = node;
+
+	USHORT fieldCount = 0;
+
+	for (UCHAR verb; (verb = blrReader.getByte()) != blr_end;)
+	{
+		switch (verb)
+		{
+			case blr_dcl_local_table_format:
+				if (node->format)
+					PAR_error(csb, Arg::Gds(isc_random) << "duplicate local table format");
+
+				fieldCount = blrReader.getWord();
+				node->format = Format::newFormat(pool, fieldCount);
+				node->format->fmt_length = FLAG_BYTES(fieldCount);
+
+				for (USHORT fieldNum = 0; fieldNum < fieldCount; ++fieldNum)
+				{
+					dsc& fmtDesc = node->format->fmt_desc[fieldNum];
+					//// TODO: Support NOT NULL fields with blr_not_nullable.
+					PAR_desc(tdbb, csb, &fmtDesc, nullptr);
+
+					if (fmtDesc.dsc_dtype >= dtype_aligned)
+						node->format->fmt_length = FB_ALIGN(node->format->fmt_length, type_alignments[fmtDesc.dsc_dtype]);
+
+					fmtDesc.dsc_address = (UCHAR*)(IPTR) node->format->fmt_length;
+					node->format->fmt_length += fmtDesc.dsc_length;
+				}
+
+				break;
+
+			default:
+				PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_dcl_local_table sub code");
+		}
+	}
+
+	if (fieldCount == 0)
+		PAR_error(csb, Arg::Gds(isc_random) << "Local table without fields");
+
+	return node;
+}
+
+DeclareLocalTableNode* DeclareLocalTableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	tableNumber = dsqlScratch->localTableNumber++;
+	dsqlScratch->localTables.push(this);
+
+	return this;
+}
+
+string DeclareLocalTableNode::internalPrint(NodePrinter& printer) const
+{
+	StmtNode::internalPrint(printer);
+
+	NODE_PRINT(printer, tableNumber);
+
+	return "DeclareLocalTableNode";
+}
+
+void DeclareLocalTableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	dsqlScratch->appendUChar(blr_dcl_local_table);
+	dsqlScratch->appendUShort(tableNumber);
+}
+
+DeclareLocalTableNode* DeclareLocalTableNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	const auto node = FB_NEW_POOL(*tdbb->getDefaultPool()) DeclareLocalTableNode(*tdbb->getDefaultPool());
+	node->format = format;
+	node->tableNumber = tableNumber;
+	return node;
+}
+
+DeclareLocalTableNode* DeclareLocalTableNode::pass2(thread_db* /*tdbb*/, CompilerScratch* csb)
+{
+	impureOffset = csb->allocImpure<Impure>();
+	return this;
+}
+
+const StmtNode* DeclareLocalTableNode::execute(thread_db* /*tdbb*/, jrd_req* request, ExeState* /*exeState*/) const
+{
+	if (request->req_operation == jrd_req::req_evaluate)
+		request->req_operation = jrd_req::req_return;
+
+	return parentStmt;
+}
+
+DeclareLocalTableNode::Impure* DeclareLocalTableNode::getImpure(thread_db* tdbb, jrd_req* request, bool createWhenDead) const
+{
+	const auto impure = request->getImpure<Impure>(impureOffset);
+
+	if (createWhenDead && !impure->recordBuffer)
+	{
+		impure->recordBuffer = FB_NEW_POOL(*tdbb->getDefaultPool())
+			RecordBuffer(*tdbb->getDefaultPool(), format);
+	}
+
+	return impure;
 }
 
 
@@ -2021,7 +2007,6 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 		for (NestConst<ParameterClause>* i = paramArray.begin(); i != paramArray.end(); ++i)
 		{
 			ParameterClause* param = *i;
-			const unsigned paramIndex = i - paramArray.begin();
 
 			SignatureParameter sigParam(pool);
 			sigParam.type = 1;	// output
@@ -2064,8 +2049,10 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	blockScratch = FB_NEW_POOL(pool) DsqlCompilerScratch(pool,
 		dsqlScratch->getAttachment(), dsqlScratch->getTransaction(), statement, dsqlScratch);
 	blockScratch->clientDialect = dsqlScratch->clientDialect;
-	blockScratch->flags |= DsqlCompilerScratch::FLAG_PROCEDURE | DsqlCompilerScratch::FLAG_SUB_ROUTINE;
-	blockScratch->flags |= dsqlScratch->flags & DsqlCompilerScratch::FLAG_DDL;
+	blockScratch->flags |=
+		DsqlCompilerScratch::FLAG_PROCEDURE |
+		DsqlCompilerScratch::FLAG_SUB_ROUTINE |
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_DDL);
 
 	dsqlBlock = dsqlBlock->dsqlPass(blockScratch);
 
@@ -2274,11 +2261,10 @@ DmlNode* EraseNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch
 
 StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	thread_db* tdbb = JRD_get_thread_data(); //necessary?
+	auto relation = dsqlRelation;
 
-	NestConst<RelationSourceNode> relation = dsqlRelation;
-
-	EraseNode* node = FB_NEW_POOL(dsqlScratch->getPool()) EraseNode(dsqlScratch->getPool());
+	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) EraseNode(dsqlScratch->getPool());
+	node->dsqlCursorName = dsqlCursorName;
 
 	if (dsqlCursorName.hasData() && dsqlScratch->isPsql())
 	{
@@ -2289,9 +2275,7 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->context->push(node->dsqlContext);
 		++dsqlScratch->scopeLevel;
 
-		ReturningProcessor::explode(dsqlScratch, node->dsqlContext->ctx_relation, dsqlReturning);
-
-		node->statement = dsqlProcessReturning(dsqlScratch, dsqlReturning, statement);
+		node->dsqlReturning = dsqlProcessReturning(dsqlScratch, node->dsqlContext->ctx_relation, dsqlReturning, true);
 
 		--dsqlScratch->scopeLevel;
 		dsqlScratch->context->pop();
@@ -2331,17 +2315,18 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			PASS1_limit(dsqlScratch, dsqlRows->length, dsqlRows->skip, rse);
 	}
 
-	if (dsqlReturning || statement)
+	if (dsqlReturning && dsqlScratch->isPsql())
 		rse->dsqlFlags |= RecordSourceNode::DFLAG_SINGLETON;
 
 	node->dsqlRse = rse;
 	node->dsqlRelation = nodeAs<RelationSourceNode>(rse->dsqlStreams->items[0]);
 
-	ReturningProcessor::explode(dsqlScratch, node->dsqlRelation->dsqlContext->ctx_relation, dsqlReturning);
+	node->dsqlReturning = dsqlProcessReturning(dsqlScratch, node->dsqlRelation->dsqlContext->ctx_relation,
+		dsqlReturning, dsqlCursorName.hasData());
 
-	node->statement = dsqlProcessReturning(dsqlScratch, dsqlReturning, statement);
-
-	StmtNode* ret = dsqlNullifyReturning(dsqlScratch, node, true);
+	StmtNode* ret = dsqlCursorName.hasData() ?
+		dsqlNullifyReturning(dsqlScratch, node) :
+		node;
 
 	dsqlScratch->context->pop();
 
@@ -2371,18 +2356,37 @@ string EraseNode::internalPrint(NodePrinter& printer) const
 
 void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	const dsql_msg* message = dsqlGenDmlHeader(dsqlScratch, dsqlRse);
-	const dsql_ctx* context;
+	Nullable<USHORT> tableNumber;
 
-	if (dsqlContext)
-		context = dsqlContext;
-	else
-		context = dsqlRelation->dsqlContext;
+	if (dsqlReturning && !dsqlScratch->isPsql())
+	{
+		if (dsqlCursorName.isEmpty())
+		{
+			dsqlScratch->appendUChar(blr_begin);
 
-	if (statement)
+			tableNumber = dsqlScratch->localTableNumber++;
+			dsqlGenReturningLocalTableDecl(dsqlScratch, tableNumber.value);
+		}
+		else
+		{
+			dsqlScratch->appendUChar(blr_send);
+			dsqlScratch->appendUChar(dsqlScratch->getStatement()->getReceiveMsg()->msg_number);
+		}
+	}
+
+	if (dsqlRse)
+	{
+		dsqlScratch->appendUChar(blr_for);
+		dsqlScratch->putBlrMarkers(StmtNode::MARK_FOR_UPDATE);
+		GEN_expr(dsqlScratch, dsqlRse);
+	}
+
+	const auto* context = dsqlContext ? dsqlContext : dsqlRelation->dsqlContext;
+
+	if (dsqlReturning)
 	{
 		dsqlScratch->appendUChar(blr_begin);
-		statement->genBlr(dsqlScratch);
+		dsqlGenReturning(dsqlScratch, dsqlReturning, tableNumber);
 	}
 
 	dsqlScratch->appendUChar(blr_erase);
@@ -2391,11 +2395,17 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (marks)
 		dsqlScratch->putBlrMarkers(marks);
 
-	if (statement)
+	if (dsqlReturning)
+	{
 		dsqlScratch->appendUChar(blr_end);
 
-	if (message)
-		dsqlScratch->appendUChar(blr_end);
+		if (!dsqlScratch->isPsql() && dsqlCursorName.isEmpty())
+		{
+			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, tableNumber.value);
+
+			dsqlScratch->appendUChar(blr_end);
+		}
+	}
 }
 
 EraseNode* EraseNode::pass1(thread_db* tdbb, CompilerScratch* csb)
@@ -2432,6 +2442,15 @@ void EraseNode::pass1Erase(thread_db* tdbb, CompilerScratch* csb, EraseNode* nod
 		tail->csb_flags |= csb_erase;
 
 		jrd_rel* const relation = tail->csb_relation;
+
+		//// TODO: LocalTableSourceNode
+		if (!relation)
+		{
+			ERR_post(
+				Arg::Gds(isc_wish_list) <<
+				Arg::Gds(isc_random) << "erase local_table");
+		}
+
 		view = relation->rel_view_rse ? relation : view;
 
 		if (!parent)
@@ -2594,9 +2613,6 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, jrd_req* request, WhichTrigger
 	record_param* rpb = &request->req_rpb[stream];
 	jrd_rel* relation = rpb->rpb_relation;
 
-	if (rpb->rpb_number.isBof() || (!relation->rel_view_rse && !rpb->rpb_number.isValid()))
-		ERR_post(Arg::Gds(isc_no_cur_rec));
-
 	switch (request->req_operation)
 	{
 		case jrd_req::req_evaluate:
@@ -2625,6 +2641,12 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, jrd_req* request, WhichTrigger
 
 	request->req_operation = jrd_req::req_return;
 	RLCK_reserve_relation(tdbb, transaction, relation, true);
+
+	if (rpb->rpb_runtime_flags & RPB_just_deleted)
+		return parentStmt;
+
+	if (rpb->rpb_number.isBof() || (!relation->rel_view_rse && !rpb->rpb_number.isValid()))
+		ERR_post(Arg::Gds(isc_no_cur_rec));
 
 	if (forNode && forNode->isWriteLockMode(request))
 	{
@@ -2672,6 +2694,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, jrd_req* request, WhichTrigger
 			forNode->setWriteLockMode(request);
 			return parentStmt;
 		}
+
 		REPL_erase(tdbb, rpb, transaction);
 	}
 
@@ -2688,8 +2711,14 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, jrd_req* request, WhichTrigger
 	// This is required for cascading referential integrity, which can be implemented as
 	// post_erase triggers.
 
-	if (!relation->rel_file && !relation->rel_view_rse && !relation->isVirtual())
-		IDX_erase(tdbb, rpb, transaction);
+	if (!relation->rel_view_rse)
+	{
+		if (!relation->rel_file && !relation->isVirtual())
+			IDX_erase(tdbb, rpb, transaction);
+
+		// Mark this rpb as already deleted to skip the subsequent attempts
+		rpb->rpb_runtime_flags |= RPB_just_deleted;
+	}
 
 	if (!relation->rel_view_rse || (whichTrig == ALL_TRIGS || whichTrig == POST_TRIG))
 	{
@@ -5467,447 +5496,472 @@ const StmtNode* LoopNode::execute(thread_db* /*tdbb*/, jrd_req* request, ExeStat
 
 StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	// Puts a blr_send before blr_for in DSQL statements.
-	class MergeSendNode : public TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_MERGE_SEND>
-	{
-	public:
-		MergeSendNode(MemoryPool& pool, StmtNode* aStmt)
-			: TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_MERGE_SEND>(pool),
-			  stmt(aStmt)
-		{
-		}
-
-	public:
-		virtual string internalPrint(NodePrinter& printer) const
-		{
-			DsqlOnlyStmtNode::internalPrint(printer);
-
-			NODE_PRINT(printer, stmt);
-
-			return "MergeSendNode";
-		}
-
-		// Do not make dsqlPass to process 'stmt'. It's already processed.
-
-		virtual void genBlr(DsqlCompilerScratch* dsqlScratch)
-		{
-			dsql_msg* message = dsqlScratch->getStatement()->getReceiveMsg();
-
-			if (!dsqlScratch->isPsql() && message)
-			{
-				dsqlScratch->appendUChar(blr_send);
-				dsqlScratch->appendUChar(message->msg_number);
-			}
-
-			stmt->genBlr(dsqlScratch);
-		}
-
-	private:
-		StmtNode* stmt;
-	};
-
-	thread_db* tdbb = JRD_get_thread_data();
-	MemoryPool& pool = *tdbb->getDefaultPool();
+	auto& pool = dsqlScratch->getPool();
 
 	RecordSourceNode* source = usingClause;		// USING
 	RelationSourceNode* target = relation;		// INTO
 
 	// Build a join between USING and INTO tables.
-	RseNode* join = FB_NEW_POOL(pool) RseNode(pool);
+	const auto join = FB_NEW_POOL(pool) RseNode(pool);
 	join->dsqlExplicitJoin = true;
 	join->dsqlFrom = FB_NEW_POOL(pool) RecSourceListNode(pool, 2);
 
 	join->dsqlFrom->items[0] = source;
 
-	// Left join if WHEN NOT MATCHED is present.
-	if (whenNotMatched.hasData())
+	// Choose join type.
+	if (whenNotMatchedBySource.hasData())
+		join->rse_jointype = whenNotMatchedByTarget.hasData() ? blr_full : blr_right;
+	else if (whenNotMatchedByTarget.hasData())
 		join->rse_jointype = blr_left;
 
 	join->dsqlFrom->items[1] = target;
 	join->dsqlWhere = condition;
 
-	RseNode* querySpec = FB_NEW_POOL(pool) RseNode(pool);
+	const auto querySpec = FB_NEW_POOL(pool) RseNode(pool);
 	querySpec->dsqlFrom = FB_NEW_POOL(pool) RecSourceListNode(pool, 1);
 	querySpec->dsqlFrom->items[0] = join;
+	querySpec->rse_plan = plan;
 
-	BoolExprNode* matchedConditions = NULL;
-	BoolExprNode* notMatchedConditions = NULL;
+	const auto selectExpr = FB_NEW_POOL(pool) SelectExprNode(pool);
+	selectExpr->querySpec = querySpec;
+	selectExpr->orderClause = order;
 
-	for (auto matched = whenMatched.begin();
-		 matched != whenMatched.end();
-		 ++matched)
-	{
-		if (matched->condition)
-			matchedConditions = PASS1_compose(matchedConditions, matched->condition, blr_or);
-		else
-		{
-			matchedConditions = NULL;
-			break;
-		}
-	}
+	if (returning && dsqlScratch->isPsql())
+		selectExpr->dsqlFlags |= RecordSourceNode::DFLAG_SINGLETON;
 
-	for (auto notMatched = whenNotMatched.begin();
-		 notMatched != whenNotMatched.end();
-		 ++notMatched)
-	{
-		if (notMatched->condition)
-			notMatchedConditions = PASS1_compose(notMatchedConditions, notMatched->condition, blr_or);
-		else
-		{
-			notMatchedConditions = NULL;
-			break;
-		}
-	}
+	const auto dsqlSelect = FB_NEW_POOL(pool) SelectNode(pool);
+	dsqlSelect->dsqlExpr = selectExpr;
 
-	if (matchedConditions || notMatchedConditions)
-	{
-		const char* targetName = target->alias.nullStr();
-		if (!targetName)
-			targetName = target->dsqlName.c_str();
-
-		if (whenMatched.hasData())	// WHEN MATCHED
-		{
-			MissingBoolNode* missingNode = FB_NEW_POOL(pool) MissingBoolNode(
-				pool, FB_NEW_POOL(pool) RecordKeyNode(pool, blr_dbkey, targetName));
-
-			querySpec->dsqlWhere = FB_NEW_POOL(pool) NotBoolNode(pool, missingNode);
-
-			if (matchedConditions)
-				querySpec->dsqlWhere = PASS1_compose(querySpec->dsqlWhere, matchedConditions, blr_and);
-		}
-
-		if (whenNotMatched.hasData())	// WHEN NOT MATCHED
-		{
-			BoolExprNode* temp = FB_NEW_POOL(pool) MissingBoolNode(pool,
-				FB_NEW_POOL(pool) RecordKeyNode(pool, blr_dbkey, targetName));
-
-			if (notMatchedConditions)
-				temp = PASS1_compose(temp, notMatchedConditions, blr_and);
-
-			querySpec->dsqlWhere = PASS1_compose(querySpec->dsqlWhere, temp, blr_or);
-		}
-	}
-
-	SelectExprNode* select_expr = FB_NEW_POOL(dsqlScratch->getPool()) SelectExprNode(dsqlScratch->getPool());
-	select_expr->querySpec = querySpec;
-
-	// build a FOR SELECT node
-	ForNode* forNode = FB_NEW_POOL(pool) ForNode(pool);
-	forNode->dsqlSelect = FB_NEW_POOL(pool) SelectNode(pool);
-	forNode->dsqlSelect->dsqlExpr = select_expr;
-	forNode->statement = FB_NEW_POOL(pool) CompoundStmtNode(pool);
-
-	forNode = forNode->dsqlPass(dsqlScratch);
-
-	if (returning)
-		forNode->dsqlForceSingular = true;
-
-	forNode->forUpdate = true;
-	forNode->isMerge = true;
+	const auto mergeNode = FB_NEW_POOL(pool) MergeNode(pool);
+	mergeNode->rse = dsqlSelect->dsqlPass(dsqlScratch)->dsqlRse;
 
 	// Get the already processed relations.
-	RseNode* processedRse = nodeAs<RseNode>(forNode->rse->dsqlStreams->items[0]);
+	const auto processedRse = nodeAs<RseNode>(mergeNode->rse->dsqlStreams->items[0]);
 	source = processedRse->dsqlStreams->items[0];
 	target = nodeAs<RelationSourceNode>(processedRse->dsqlStreams->items[1]);
 
+	mergeNode->oldContext = dsqlGetContext(target);
+
 	DsqlContextStack usingCtxs;
+
+	PASS1_expand_contexts(usingCtxs, source->dsqlContext);
+	DerivedFieldNode::getContextNumbers(mergeNode->usingContexts, usingCtxs);
+
+	usingCtxs.clear();
 	dsqlGetContexts(usingCtxs, source);
 
-	StmtNode* processedRet = NULL;
-	StmtNode* nullRet = NULL;
+	const auto noConditionCheck = [](const auto& i) {
+		return i.condition == nullptr;
+	};
 
-	StmtNode* update = NULL;
-	IfNode* lastIf = NULL;
+	const bool useMatchedConditions = std::none_of(
+		whenMatched.begin(), whenMatched.end(),
+		noConditionCheck);
 
-	for (auto nextMatched = whenMatched.begin(), matched = nextMatched++;
-		 matched != whenMatched.end();
-		 matched = nextMatched++)
+	const bool useNotMatchedByTargetConditions = std::none_of(
+		whenNotMatchedByTarget.begin(), whenNotMatchedByTarget.end(),
+		noConditionCheck);
+
+	const bool useNotMatchedBySourceConditions = std::none_of(
+		whenNotMatchedBySource.begin(), whenNotMatchedBySource.end(),
+		noConditionCheck);
+
+	BoolExprNode* matchedConditions = nullptr;
+	BoolExprNode* notMatchedByTargetConditions = nullptr;
+	BoolExprNode* notMatchedBySourceConditions = nullptr;
+
+	for (auto& matched : whenMatched)
 	{
-		IfNode* thisIf = FB_NEW_POOL(pool) IfNode(pool);
+		auto& processedMatched = mergeNode->whenMatched.add();
+		processedMatched.assignments = matched.assignments;
 
-		if (matched->assignments)
+		if (matched.assignments)	// SET
 		{
 			// Get the assignments of the UPDATE dsqlScratch.
-			CompoundStmtNode* stmts = matched->assignments;
-			Array<NestConst<ValueExprNode> > orgValues, newValues;
-
 			// Separate the new and org values to process in correct contexts.
-			for (FB_SIZE_T i = 0; i < stmts->statements.getCount(); ++i)
+			for (auto& stmt : matched.assignments->statements)
 			{
-				AssignmentNode* const assign = nodeAs<AssignmentNode>(stmts->statements[i]);
+				const auto assign = nodeAs<AssignmentNode>(stmt);
 				fb_assert(assign);
-				orgValues.add(assign->asgnFrom);
-				newValues.add(assign->asgnTo);
+				processedMatched.processedValues.add(assign->asgnFrom);
+				processedMatched.processedFields.add(assign->asgnTo);
 			}
 
-			// Build the MODIFY node.
-			ModifyNode* modify = FB_NEW_POOL(pool) ModifyNode(pool);
-			modify->marks |= StmtNode::MARK_MERGE;
-			thisIf->trueAction = modify;
+			{	// scope
+				// Go to the same level of source and target contexts.
+				AutoSetRestore<USHORT> autoScopeLevel(&dsqlScratch->scopeLevel, dsqlScratch->scopeLevel + 1);
+				DsqlContextStack::AutoRestore autoContext(*dsqlScratch->context);
 
-			dsql_ctx* const oldContext = dsqlGetContext(target);
+				dsqlScratch->context->push(usingCtxs);	// push the USING contexts
+				dsqlScratch->context->push(mergeNode->oldContext);	// push the OLD context
 
-			modify->dsqlContext = oldContext;
+				processedMatched.condition = doDsqlPass(dsqlScratch, matched.condition, false);
 
-			++dsqlScratch->scopeLevel;	// Go to the same level of source and target contexts.
+				if (useMatchedConditions)
+				{
+					matchedConditions = PASS1_compose(matchedConditions,
+						doDsqlPass(dsqlScratch, matched.condition, false), blr_or);
+				}
 
-			for (DsqlContextStack::iterator itr(usingCtxs); itr.hasData(); ++itr)
-				dsqlScratch->context->push(itr.object());	// push the USING contexts
-
-			dsqlScratch->context->push(oldContext);	// process old context values
-
-			if (matched->condition)
-				thisIf->condition = doDsqlPass(dsqlScratch, matched->condition, false);
-
-			NestConst<ValueExprNode>* ptr;
-
-			for (ptr = orgValues.begin(); ptr != orgValues.end(); ++ptr)
-				*ptr = doDsqlPass(dsqlScratch, *ptr, false);
-
-			// And pop the contexts.
-			dsqlScratch->context->pop();
-			dsqlScratch->context->pop();
-			--dsqlScratch->scopeLevel;
+				for (auto& ptr : processedMatched.processedValues)
+					ptr = doDsqlPass(dsqlScratch, ptr, false);
+			}
 
 			// Process relation.
-			modify->dsqlRelation = PASS1_relation(dsqlScratch, relation);
-			dsql_ctx* modContext = dsqlGetContext(modify->dsqlRelation);
+			processedMatched.modifyRelation = PASS1_relation(dsqlScratch, relation);
+			auto modContext = dsqlGetContext(processedMatched.modifyRelation);
 
 			// Process new context values.
-			for (ptr = newValues.begin(); ptr != newValues.end(); ++ptr)
-				*ptr = doDsqlPass(dsqlScratch, *ptr, false);
+			for (auto& ptr : processedMatched.processedFields)
+				ptr = doDsqlPass(dsqlScratch, ptr, false);
 
 			dsqlScratch->context->pop();
 
 			if (returning)
 			{
-				// Repush the source contexts.
-				++dsqlScratch->scopeLevel;	// Go to the same level of source and target contexts.
+				// Go to the same level of source and target contexts.
+				AutoSetRestore<USHORT> autoScopeLevel(&dsqlScratch->scopeLevel, dsqlScratch->scopeLevel + 1);
+				DsqlContextStack::AutoRestore autoContext(*dsqlScratch->context);
 
-				for (DsqlContextStack::iterator itr(usingCtxs); itr.hasData(); ++itr)
-					dsqlScratch->context->push(itr.object());	// push the USING contexts
+				dsqlScratch->context->push(usingCtxs);	// push the USING contexts
+				dsqlScratch->context->push(mergeNode->oldContext);	// push the OLD context
 
-				dsqlScratch->context->push(oldContext);	// process old context values
+				modContext->ctx_scope_level = mergeNode->oldContext->ctx_scope_level;
 
-				modContext->ctx_scope_level = oldContext->ctx_scope_level;
-
-				{	// scope
-					ReturningProcessor returningProcessor(dsqlScratch, oldContext, modContext, returning);
-					StmtNode* updRet = ReturningProcessor::clone(dsqlScratch, returning, processedRet);
-					processedRet = modify->statement2 = returningProcessor.process(updRet);
-				}
-
-				if (!nullRet)
-					nullRet = dsqlNullifyReturning(dsqlScratch, modify, false);
-
-				// And pop them.
-				dsqlScratch->context->pop();
-				dsqlScratch->context->pop();
-				--dsqlScratch->scopeLevel;
+				mergeNode->returning = processedMatched.processedReturning = dsqlProcessReturning(dsqlScratch,
+					mergeNode->oldContext, modContext, returning, dsqlScratch->isPsql());
 			}
 
-			// Recreate the list of assignments.
+			auto valueIt = processedMatched.processedValues.begin();
 
-			CompoundStmtNode* assignStatements = FB_NEW_POOL(pool) CompoundStmtNode(pool);
-			modify->statement = assignStatements;
-
-			assignStatements->statements.resize(stmts->statements.getCount());
-
-			for (FB_SIZE_T i = 0; i < assignStatements->statements.getCount(); ++i)
+			for (auto& field : processedMatched.processedFields)
 			{
-				if (!PASS1_set_parameter_type(dsqlScratch, orgValues[i], newValues[i], false))
-					PASS1_set_parameter_type(dsqlScratch, newValues[i], orgValues[i], false);
+				if (!PASS1_set_parameter_type(dsqlScratch, *valueIt, field, false))
+					PASS1_set_parameter_type(dsqlScratch, field, *valueIt, false);
 
-				AssignmentNode* assign = FB_NEW_POOL(pool) AssignmentNode(pool);
-				assign->asgnFrom = orgValues[i];
-				assign->asgnTo = newValues[i];
-				assignStatements->statements[i] = assign;
+				++valueIt;
 			}
 
 			// We do not allow cases like UPDATE SET f1 = v1, f2 = v2, f1 = v3...
-			dsqlFieldAppearsOnce(newValues, "MERGE");
+			dsqlFieldAppearsOnce(processedMatched.processedFields, "MERGE");
 		}
-		else
+		else	// DELETE
 		{
-			// Build the DELETE node.
-			EraseNode* erase = FB_NEW_POOL(pool) EraseNode(pool);
-			erase->marks |= StmtNode::MARK_MERGE;
-			thisIf->trueAction = erase;
+			// Go to the same level of source and target contexts.
+			AutoSetRestore<USHORT> autoScopeLevel(&dsqlScratch->scopeLevel, dsqlScratch->scopeLevel + 1);
+			DsqlContextStack::AutoRestore autoContext(*dsqlScratch->context);
 
-			dsql_ctx* context = dsqlGetContext(target);
-			erase->dsqlContext = context;
+			dsqlScratch->context->push(usingCtxs);	// push the USING contexts
+			dsqlScratch->context->push(mergeNode->oldContext);	// push the OLD context
 
-			++dsqlScratch->scopeLevel;	// Go to the same level of source and target contexts.
+			processedMatched.condition = doDsqlPass(dsqlScratch, matched.condition, false);
 
-			for (DsqlContextStack::iterator itr(usingCtxs); itr.hasData(); ++itr)
-				dsqlScratch->context->push(itr.object());	// push the USING contexts
-
-			dsqlScratch->context->push(context);	// process old context values
-
-			if (matched->condition)
-				thisIf->condition = doDsqlPass(dsqlScratch, matched->condition, false);
-
-			if (returning)
+			if (useMatchedConditions)
 			{
-				{	// scope
-					ReturningProcessor returningProcessor(dsqlScratch, context, NULL, returning);
-					StmtNode* delRet = ReturningProcessor::clone(dsqlScratch, returning, processedRet);
-					processedRet = erase->statement = returningProcessor.process(delRet);
-				}
-
-				if (!nullRet)
-					nullRet = dsqlNullifyReturning(dsqlScratch, erase, false);
+				matchedConditions = PASS1_compose(matchedConditions,
+					doDsqlPass(dsqlScratch, matched.condition, false), blr_or);
 			}
 
-			// And pop the contexts.
-			dsqlScratch->context->pop();
-			dsqlScratch->context->pop();
-			--dsqlScratch->scopeLevel;
+			mergeNode->returning = processedMatched.processedReturning = dsqlProcessReturning(dsqlScratch,
+				mergeNode->oldContext, nullptr, returning, dsqlScratch->isPsql());
 		}
-
-		if (!thisIf->condition && nextMatched != whenMatched.end())
-		{
-			ComparativeBoolNode* cmpNode = FB_NEW_POOL(pool) ComparativeBoolNode(pool,
-				blr_eql, MAKE_constant("1", CONSTANT_BOOLEAN), MAKE_constant("1", CONSTANT_BOOLEAN));
-			cmpNode->dsqlCheckBoolean = true;
-
-			NestConst<BoolExprNode> trueCondition(cmpNode);
-			thisIf->condition = doDsqlPass(dsqlScratch, trueCondition, false);
-		}
-
-		if (lastIf)
-			lastIf->falseAction = thisIf->condition ? thisIf : thisIf->trueAction;
-		else
-			update = thisIf->condition ? thisIf : thisIf->trueAction;
-
-		lastIf = thisIf;
 	}
 
-	StmtNode* insert = NULL;
-	lastIf = NULL;
-
-	for (auto nextNotMatched = whenNotMatched.begin(), notMatched = nextNotMatched++;
-		 notMatched != whenNotMatched.end();
-		 notMatched = nextNotMatched++)
+	for (auto& notMatched : whenNotMatchedByTarget)
 	{
-		IfNode* thisIf = FB_NEW_POOL(pool) IfNode(pool);
+		// Go to the same level of the source context.
+		AutoSetRestore<USHORT> autoScopeLevel(&dsqlScratch->scopeLevel, dsqlScratch->scopeLevel + 1);
+		DsqlContextStack::AutoRestore autoContext(*dsqlScratch->context);
 
-		++dsqlScratch->scopeLevel;	// Go to the same level of the source context.
-
-		for (DsqlContextStack::iterator itr(usingCtxs); itr.hasData(); ++itr)
-			dsqlScratch->context->push(itr.object());	// push the USING contexts
+		dsqlScratch->context->push(usingCtxs);	// push the USING contexts
 
 		// The INSERT relation should be processed in a higher level than the source context.
 		++dsqlScratch->scopeLevel;
 
-		// Build the INSERT node.
-		StoreNode* store = FB_NEW_POOL(pool) StoreNode(pool);
-		store->dsqlRelation = relation;
-		store->dsqlFields = notMatched->fields;
-		store->dsqlValues = notMatched->values;
-		store->overrideClause = notMatched->overrideClause;
+		auto& processedNotMatched = mergeNode->whenNotMatchedByTarget.add();
+		processedNotMatched.overrideClause = notMatched.overrideClause;
+		processedNotMatched.condition = doDsqlPass(dsqlScratch, notMatched.condition, false);
 
-		bool needSavePoint; // unused
-		thisIf->trueAction = store = nodeAs<StoreNode>(store->internalDsqlPass(dsqlScratch, false, needSavePoint));
-		fb_assert(store);
+		if (useNotMatchedByTargetConditions)
+		{
+			notMatchedByTargetConditions = PASS1_compose(notMatchedByTargetConditions,
+				doDsqlPass(dsqlScratch, notMatched.condition, false), blr_or);
+		}
 
-		if (notMatched->condition)
-			thisIf->condition = doDsqlPass(dsqlScratch, notMatched->condition, false);
+		{	// scope
+			DsqlContextStack::AutoRestore autoContextForValues(*dsqlScratch->context);
+
+			const auto values = doDsqlPass(dsqlScratch, notMatched.values, false);
+
+			processedNotMatched.storeRelation = PASS1_relation(dsqlScratch, relation);
+			const auto storeContext = processedNotMatched.storeRelation->dsqlContext;
+			const auto dsqlRelation = storeContext->ctx_relation;
+
+			auto& fields = processedNotMatched.processedFields;
+
+			if (notMatched.fields.hasData())
+			{
+				for (auto& field : notMatched.fields)
+				{
+					fields.add(nullptr);
+					doDsqlPass(dsqlScratch, fields.back(), field, false);
+				}
+
+				// We do not allow cases like INSERT INTO T (f1, f2, f1)...
+				dsqlFieldAppearsOnce(fields, "MERGE");
+
+				// begin IBO hack
+				for (const auto& field : fields)
+				{
+					const dsql_ctx* tmpCtx = nullptr;
+					const TEXT* tmpName = nullptr;
+
+					if (auto fieldNode = nodeAs<FieldNode>(field))
+					{
+						tmpCtx = fieldNode->dsqlContext;
+						if (fieldNode->dsqlField)
+							tmpName = fieldNode->dsqlField->fld_name.c_str();
+					}
+					else if (auto derivedField = nodeAs<DerivedFieldNode>(field))
+					{
+						tmpCtx = derivedField->context;
+						tmpName = derivedField->name.nullStr();
+					}
+
+					if (tmpCtx &&
+						((tmpCtx->ctx_relation && dsqlRelation->rel_name != tmpCtx->ctx_relation->rel_name) ||
+						tmpCtx->ctx_context != storeContext->ctx_context))
+					{
+						const auto badRel = tmpCtx->ctx_relation;
+
+						PASS1_field_unknown((badRel ? badRel->rel_name.c_str() : NULL),
+							tmpName, notMatched.fields[&field - fields.begin()]);
+					}
+				}
+				// end IBO hack
+			}
+			else
+			{
+				dsqlExplodeFields(dsqlRelation, fields, false);
+
+				for (auto& field : fields)
+					field = doDsqlPass(dsqlScratch, field, false);
+			}
+
+			if (fields.getCount() != values->items.getCount())
+			{
+				// count of column list and value list don't match
+				ERRD_post(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+					Arg::Gds(isc_dsql_var_count_err));
+			}
+
+			auto ptr2 = values->items.begin();
+			for (const auto& ptr : fields)
+			{
+				// *ptr2 is nullptr for DEFAULT
+
+				if (!*ptr2)
+				{
+					const auto field = nodeAs<FieldNode>(ptr);
+
+					if (field && field->dsqlField)
+					{
+						*ptr2 = FB_NEW_POOL(dsqlScratch->getPool()) DefaultNode(dsqlScratch->getPool(),
+							dsqlRelation->rel_name, field->dsqlField->fld_name);
+						*ptr2 = doDsqlPass(dsqlScratch, *ptr2, false);
+					}
+				}
+
+				fb_assert(*ptr2);
+				PASS1_set_parameter_type(dsqlScratch, *ptr2, ptr, false);
+
+				++ptr2;
+			}
+
+			processedNotMatched.values = values;
+		}
 
 		// Restore the scope level.
 		--dsqlScratch->scopeLevel;
 
 		if (returning)
 		{
-			dsql_ctx* const oldContext = dsqlGetContext(target);
-			dsqlScratch->context->push(oldContext);
+			dsqlScratch->context->push(mergeNode->oldContext);
 
-			dsql_ctx* context = dsqlGetContext(store->dsqlRelation);
-			context->ctx_scope_level = oldContext->ctx_scope_level;
+			const auto storeContext = dsqlGetContext(processedNotMatched.storeRelation);
+			storeContext->ctx_scope_level = mergeNode->oldContext->ctx_scope_level;
 
-			{	// scope
-				ReturningProcessor returningProcessor(dsqlScratch, oldContext, context, returning);
-				StmtNode* insRet = ReturningProcessor::clone(dsqlScratch, returning, processedRet);
-				processedRet = store->statement2 = returningProcessor.process(insRet);
-			}
-
-			if (!nullRet)
-				nullRet = dsqlNullifyReturning(dsqlScratch, store, false);
+			mergeNode->returning = processedNotMatched.processedReturning = dsqlProcessReturning(dsqlScratch,
+				mergeNode->oldContext, storeContext, returning, dsqlScratch->isPsql());
 
 			dsqlScratch->context->pop();
 		}
+	}
 
-		// Pop the USING context.
-		dsqlScratch->context->pop();
-		--dsqlScratch->scopeLevel;
+	for (auto& notMatched : whenNotMatchedBySource)
+	{
+		auto& processedNotMatched = mergeNode->whenNotMatchedBySource.add();
+		processedNotMatched.assignments = notMatched.assignments;
 
-		if (!thisIf->condition && nextNotMatched != whenNotMatched.end())
+		if (notMatched.assignments)	// SET
 		{
-			ComparativeBoolNode* cmpNode = FB_NEW_POOL(pool) ComparativeBoolNode(pool,
-				blr_eql, MAKE_constant("1", CONSTANT_BOOLEAN), MAKE_constant("1", CONSTANT_BOOLEAN));
-			cmpNode->dsqlCheckBoolean = true;
+			// Get the assignments of the UPDATE dsqlScratch.
+			// Separate the new and org values to process in correct contexts.
+			for (auto& stmt : notMatched.assignments->statements)
+			{
+				const auto assign = nodeAs<AssignmentNode>(stmt);
+				fb_assert(assign);
+				processedNotMatched.processedValues.add(assign->asgnFrom);
+				processedNotMatched.processedFields.add(assign->asgnTo);
+			}
 
-			NestConst<BoolExprNode> trueCondition(cmpNode);
-			thisIf->condition = doDsqlPass(dsqlScratch, trueCondition, false);
+			++dsqlScratch->scopeLevel;	// Go to the same level of source and target contexts.
+			dsqlScratch->context->push(mergeNode->oldContext);	// push the OLD context
+
+			processedNotMatched.condition = doDsqlPass(dsqlScratch, notMatched.condition, false);
+
+			if (useNotMatchedBySourceConditions)
+			{
+				notMatchedBySourceConditions = PASS1_compose(notMatchedBySourceConditions,
+					doDsqlPass(dsqlScratch, notMatched.condition, false), blr_or);
+			}
+
+			for (auto& ptr : processedNotMatched.processedValues)
+				ptr = doDsqlPass(dsqlScratch, ptr, false);
+
+			// And pop the context.
+			dsqlScratch->context->pop();
+			--dsqlScratch->scopeLevel;
+
+			// Process relation.
+			processedNotMatched.modifyRelation = PASS1_relation(dsqlScratch, relation);
+			auto modContext = dsqlGetContext(processedNotMatched.modifyRelation);
+
+			// Process new context values.
+			for (auto& ptr : processedNotMatched.processedFields)
+				ptr = doDsqlPass(dsqlScratch, ptr, false);
+
+			dsqlScratch->context->pop();
+
+			if (returning)
+			{
+				// Go to the same level of source and target contexts.
+				AutoSetRestore<USHORT> autoScopeLevel(&dsqlScratch->scopeLevel, dsqlScratch->scopeLevel + 1);
+				DsqlContextStack::AutoRestore autoContext(*dsqlScratch->context);
+
+				dsqlScratch->context->push(usingCtxs);	// push the USING contexts
+				dsqlScratch->context->push(mergeNode->oldContext);	// push the OLD context
+
+				modContext->ctx_scope_level = mergeNode->oldContext->ctx_scope_level;
+
+				mergeNode->returning = processedNotMatched.processedReturning = dsqlProcessReturning(dsqlScratch,
+					mergeNode->oldContext, modContext, returning, dsqlScratch->isPsql());
+			}
+
+			auto valueIt = processedNotMatched.processedValues.begin();
+
+			for (auto& field : processedNotMatched.processedFields)
+			{
+				if (!PASS1_set_parameter_type(dsqlScratch, *valueIt, field, false))
+					PASS1_set_parameter_type(dsqlScratch, field, *valueIt, false);
+
+				++valueIt;
+			}
+
+			// We do not allow cases like UPDATE SET f1 = v1, f2 = v2, f1 = v3...
+			dsqlFieldAppearsOnce(processedNotMatched.processedFields, "MERGE");
+		}
+		else	// DELETE
+		{
+			// Go to the same level of source and target contexts.
+			AutoSetRestore<USHORT> autoScopeLevel(&dsqlScratch->scopeLevel, dsqlScratch->scopeLevel + 1);
+			DsqlContextStack::AutoRestore autoContext(*dsqlScratch->context);
+
+			dsqlScratch->context->push(mergeNode->oldContext);	// push the OLD context
+
+			processedNotMatched.condition = doDsqlPass(dsqlScratch, notMatched.condition, false);
+
+			if (useNotMatchedBySourceConditions)
+			{
+				notMatchedBySourceConditions = PASS1_compose(notMatchedBySourceConditions,
+					doDsqlPass(dsqlScratch, notMatched.condition, false), blr_or);
+			}
+
+			dsqlScratch->context->push(usingCtxs);	// push the USING contexts
+
+			mergeNode->returning = processedNotMatched.processedReturning = dsqlProcessReturning(dsqlScratch,
+				mergeNode->oldContext, nullptr, returning, dsqlScratch->isPsql());
+		}
+	}
+
+	const auto targetDbKey = [dsqlScratch, mergeNode]() {
+		auto relNode = FB_NEW_POOL(dsqlScratch->getPool()) RelationSourceNode(dsqlScratch->getPool());
+		relNode->dsqlContext = mergeNode->oldContext;
+
+		auto recKeyNode = FB_NEW_POOL(dsqlScratch->getPool()) RecordKeyNode(dsqlScratch->getPool(), blr_dbkey);
+		recKeyNode->dsqlRelation = relNode;
+
+		return recKeyNode;
+	};
+
+	const auto sourceDbKey = [dsqlScratch, source]() {
+		auto relNode = FB_NEW_POOL(dsqlScratch->getPool()) RelationSourceNode(dsqlScratch->getPool());
+		relNode->dsqlContext = source->dsqlContext;
+
+		return FB_NEW_POOL(dsqlScratch->getPool()) DerivedFieldNode(dsqlScratch->getPool(), source->dsqlContext,
+			MAKE_constant("1", CONSTANT_BOOLEAN));
+	};
+
+	if (join->rse_jointype != blr_inner)
+	{
+		if (whenMatched.hasData())
+		{
+			matchedConditions = PASS1_compose(
+				PASS1_compose(
+					FB_NEW_POOL(pool) NotBoolNode(pool, FB_NEW_POOL(pool) MissingBoolNode(pool, targetDbKey())),
+					join->rse_jointype == blr_left ?
+						nullptr :
+						FB_NEW_POOL(pool) NotBoolNode(pool, FB_NEW_POOL(pool) MissingBoolNode(pool, sourceDbKey())),
+					blr_and
+				),
+				matchedConditions,
+				blr_and);
 		}
 
-		if (lastIf)
-			lastIf->falseAction = thisIf->condition ? thisIf : thisIf->trueAction;
-		else
-			insert = thisIf->condition ? thisIf : thisIf->trueAction;
+		if (whenNotMatchedByTarget.hasData())
+		{
+			notMatchedByTargetConditions = PASS1_compose(
+				FB_NEW_POOL(pool) MissingBoolNode(pool, targetDbKey()),
+				notMatchedByTargetConditions,
+				blr_and);
+		}
 
-		lastIf = thisIf;
+		if (whenNotMatchedBySource.hasData())
+		{
+			notMatchedBySourceConditions = PASS1_compose(
+				FB_NEW_POOL(pool) MissingBoolNode(pool, sourceDbKey()),
+				notMatchedBySourceConditions,
+				blr_and);
+		}
 	}
 
-	// Build a IF (target.RDB$DB_KEY IS NULL).
-	IfNode* action = FB_NEW_POOL(pool) IfNode(pool);
+	fb_assert(!mergeNode->rse->dsqlWhere);
 
-	RecordKeyNode* dbKeyNode = FB_NEW_POOL(pool) RecordKeyNode(pool, blr_dbkey);
-	dbKeyNode->dsqlRelation = target;
-
-	action->condition = FB_NEW_POOL(pool) MissingBoolNode(pool, dbKeyNode);
-
-	if (insert)
-	{
-		action->trueAction = insert;	// then INSERT
-		action->falseAction = update;	// else UPDATE/DELETE
-	}
-	else
-	{
-		// Negate the condition -> IF (target.RDB$DB_KEY IS NOT NULL).
-		action->condition = FB_NEW_POOL(pool) NotBoolNode(pool, action->condition);
-		action->trueAction = update;	// then UPDATE/DELETE
-	}
+	mergeNode->rse->dsqlWhere = PASS1_compose(mergeNode->rse->dsqlWhere, matchedConditions, blr_or);
+	mergeNode->rse->dsqlWhere = PASS1_compose(mergeNode->rse->dsqlWhere, notMatchedByTargetConditions, blr_or);
+	mergeNode->rse->dsqlWhere = PASS1_compose(mergeNode->rse->dsqlWhere, notMatchedBySourceConditions, blr_or);
 
 	if (!dsqlScratch->isPsql())
 	{
-		// Describe it as EXECUTE_PROCEDURE if RETURNING is present or as INSERT otherwise.
-		if (returning)
-			dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_EXEC_PROCEDURE);
-		else
-			dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_INSERT);
-
-		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_MERGE;
+		// Describe it as TYPE_RETURNING_CURSOR if RETURNING is present or as INSERT otherwise.
+		dsqlScratch->getStatement()->setType(returning ?
+			DsqlCompiledStatement::TYPE_RETURNING_CURSOR :
+			DsqlCompiledStatement::TYPE_INSERT);
 	}
-
-	// Insert the IF inside the FOR SELECT.
-	forNode->statement = action;
-
-	StmtNode* mergeStmt = forNode;
 
 	// Setup the main node.
-
-	if (nullRet)
-	{
-		CompoundStmtNode* temp = FB_NEW_POOL(pool) CompoundStmtNode(pool);
-		temp->statements.add(nullRet);
-		temp->statements.add(forNode);
-		mergeStmt = temp;
-	}
-
-	StmtNode* sendNode = (FB_NEW_POOL(pool) MergeSendNode(pool, mergeStmt))->dsqlPass(dsqlScratch);
-
-	return SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, sendNode);
+	return SavepointEncloseNode::make(pool, dsqlScratch, mergeNode);
 }
 
 string MergeNode::internalPrint(NodePrinter& printer) const
@@ -5918,14 +5972,270 @@ string MergeNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, usingClause);
 	NODE_PRINT(printer, condition);
 	//// FIXME-PRINT: NODE_PRINT(printer, whenMatched);
-	//// FIXME-PRINT: NODE_PRINT(printer, whenNotMatched);
+	//// FIXME-PRINT: NODE_PRINT(printer, whenNotMatchedByTarget);
+	//// FIXME-PRINT: NODE_PRINT(printer, whenNotMatchedBySource);
 	NODE_PRINT(printer, returning);
+	NODE_PRINT(printer, rse);
 
 	return "MergeNode";
 }
 
-void MergeNode::genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
+void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	Nullable<USHORT> tableNumber;
+
+	if (returning && !dsqlScratch->isPsql())
+	{
+		dsqlScratch->appendUChar(blr_begin);
+
+		tableNumber = dsqlScratch->localTableNumber++;
+		dsqlGenReturningLocalTableDecl(dsqlScratch, tableNumber.value);
+	}
+
+	// Put src info for blr_for.
+	if (hasLineColumn)
+		dsqlScratch->putDebugSrcInfo(line, column);
+
+	// Generate FOR loop
+
+	dsqlScratch->appendUChar(blr_for);
+	dsqlScratch->putBlrMarkers(MARK_FOR_UPDATE | MARK_MERGE);
+	GEN_rse(dsqlScratch, rse);
+
+	// Build body of FOR loop
+
+	if (whenNotMatchedBySource.hasData())
+	{
+		dsqlScratch->appendUChar(blr_if);
+		dsqlScratch->appendUChar(blr_missing);
+		dsqlScratch->appendUChar(blr_derived_expr);
+		dsqlScratch->appendUChar(usingContexts.getCount());
+
+		for (auto usingContext : usingContexts)
+			GEN_stuff_context_number(dsqlScratch, usingContext);
+
+		dsqlScratch->appendUChar(blr_literal);
+		dsqlScratch->appendUChar(blr_bool);
+		dsqlScratch->appendUChar(1);
+
+		for (auto nextNotMatched = whenNotMatchedBySource.begin(), notMatched = nextNotMatched++;
+			 notMatched != whenNotMatchedBySource.end();
+			 notMatched = nextNotMatched++)
+		{
+			const bool isLast = nextNotMatched == whenNotMatchedBySource.end();
+
+			if (notMatched->condition || !isLast)
+			{
+				dsqlScratch->appendUChar(blr_if);
+
+				if (notMatched->condition)
+					notMatched->condition->genBlr(dsqlScratch);
+				else
+				{
+					dsqlScratch->appendUChar(blr_eql);
+					dsqlScratch->appendUChar(blr_literal);
+					dsqlScratch->appendUChar(blr_bool);
+					dsqlScratch->appendUChar(1);
+					dsqlScratch->appendUChar(blr_literal);
+					dsqlScratch->appendUChar(blr_bool);
+					dsqlScratch->appendUChar(1);
+				}
+			}
+
+			if (notMatched->assignments)	// UPDATE
+			{
+				dsqlScratch->appendUChar(returning ? blr_modify2 : blr_modify);
+				GEN_stuff_context(dsqlScratch, oldContext);
+				GEN_stuff_context(dsqlScratch, notMatched->modifyRelation->dsqlContext);
+				dsqlScratch->putBlrMarkers(MARK_MERGE);
+
+				dsqlScratch->appendUChar(blr_begin);
+
+				auto valueIt = notMatched->processedValues.begin();
+
+				for (auto& field : notMatched->processedFields)
+				{
+					dsqlScratch->appendUChar(blr_assignment);
+					(*valueIt++)->genBlr(dsqlScratch);
+					field->genBlr(dsqlScratch);
+				}
+
+				dsqlScratch->appendUChar(blr_end);
+
+				if (returning)
+					dsqlGenReturning(dsqlScratch, notMatched->processedReturning, tableNumber);
+			}
+			else	// DELETE
+			{
+				if (returning)
+				{
+					dsqlScratch->appendUChar(blr_begin);
+					dsqlGenReturning(dsqlScratch, notMatched->processedReturning, tableNumber);
+				}
+
+				dsqlScratch->appendUChar(blr_erase);
+				GEN_stuff_context(dsqlScratch, oldContext);
+				dsqlScratch->putBlrMarkers(MARK_MERGE);
+
+				if (returning)
+					dsqlScratch->appendUChar(blr_end);
+			}
+
+			if (notMatched->condition && isLast)
+				dsqlScratch->appendUChar(blr_end);
+		}
+
+		if (whenNotMatchedByTarget.isEmpty() && whenMatched.isEmpty())
+			dsqlScratch->appendUChar(blr_end);
+	}
+
+	if (whenNotMatchedByTarget.hasData() || whenMatched.hasData())
+	{
+		dsqlScratch->appendUChar(blr_if);
+
+		if (whenNotMatchedByTarget.isEmpty())
+			dsqlScratch->appendUChar(blr_not);
+
+		dsqlScratch->appendUChar(blr_missing);
+		dsqlScratch->appendUChar(blr_dbkey);
+		GEN_stuff_context(dsqlScratch, oldContext);
+	}
+
+	//// TODO: It should be possible, under certain circunstances, to use single blr_store for inserts
+	//// and single blr_modify for updates.
+	//// However, if there are inserts with different override clauses or deletes, this is not possible.
+
+	for (auto nextNotMatched = whenNotMatchedByTarget.begin(), notMatched = nextNotMatched++;
+		 notMatched != whenNotMatchedByTarget.end();
+		 notMatched = nextNotMatched++)
+	{
+		const bool isLast = nextNotMatched == whenNotMatchedByTarget.end();
+
+		if (notMatched->condition || !isLast)
+		{
+			dsqlScratch->appendUChar(blr_if);
+
+			if (notMatched->condition)
+				notMatched->condition->genBlr(dsqlScratch);
+			else
+			{
+				dsqlScratch->appendUChar(blr_eql);
+				dsqlScratch->appendUChar(blr_literal);
+				dsqlScratch->appendUChar(blr_bool);
+				dsqlScratch->appendUChar(1);
+				dsqlScratch->appendUChar(blr_literal);
+				dsqlScratch->appendUChar(blr_bool);
+				dsqlScratch->appendUChar(1);
+			}
+		}
+
+		dsqlScratch->appendUChar(notMatched->overrideClause.specified ? blr_store3 : (returning ? blr_store2 : blr_store));
+
+		if (notMatched->overrideClause.specified)
+			dsqlScratch->appendUChar(UCHAR(notMatched->overrideClause.value));
+
+		GEN_expr(dsqlScratch, notMatched->storeRelation);
+
+		dsqlScratch->appendUChar(blr_begin);
+
+		auto valueIt = notMatched->values->items.begin();
+		for (auto& field : notMatched->processedFields)
+		{
+			dsqlScratch->appendUChar(blr_assignment);
+			(*valueIt++)->genBlr(dsqlScratch);
+			field->genBlr(dsqlScratch);
+		}
+
+		dsqlScratch->appendUChar(blr_end);
+
+		if (returning)
+			dsqlGenReturning(dsqlScratch, notMatched->processedReturning, tableNumber);
+		else if (notMatched->overrideClause.specified)
+			dsqlScratch->appendUChar(blr_null);
+
+		if (notMatched->condition && isLast)
+			dsqlScratch->appendUChar(blr_end);
+	}
+
+	for (auto nextMatched = whenMatched.begin(), matched = nextMatched++;
+		 matched != whenMatched.end();
+		 matched = nextMatched++)
+	{
+		const bool isLast = nextMatched == whenMatched.end();
+
+		if (matched->condition || !isLast)
+		{
+			dsqlScratch->appendUChar(blr_if);
+
+			if (matched->condition)
+				matched->condition->genBlr(dsqlScratch);
+			else
+			{
+				dsqlScratch->appendUChar(blr_eql);
+				dsqlScratch->appendUChar(blr_literal);
+				dsqlScratch->appendUChar(blr_bool);
+				dsqlScratch->appendUChar(1);
+				dsqlScratch->appendUChar(blr_literal);
+				dsqlScratch->appendUChar(blr_bool);
+				dsqlScratch->appendUChar(1);
+			}
+		}
+
+		if (matched->assignments)	// UPDATE
+		{
+			dsqlScratch->appendUChar(returning ? blr_modify2 : blr_modify);
+			GEN_stuff_context(dsqlScratch, oldContext);
+			GEN_stuff_context(dsqlScratch, matched->modifyRelation->dsqlContext);
+			dsqlScratch->putBlrMarkers(MARK_MERGE);
+
+			dsqlScratch->appendUChar(blr_begin);
+
+			auto valueIt = matched->processedValues.begin();
+
+			for (auto& field : matched->processedFields)
+			{
+				dsqlScratch->appendUChar(blr_assignment);
+				(*valueIt++)->genBlr(dsqlScratch);
+				field->genBlr(dsqlScratch);
+			}
+
+			dsqlScratch->appendUChar(blr_end);
+
+			if (returning)
+				dsqlGenReturning(dsqlScratch, matched->processedReturning, tableNumber);
+		}
+		else	// DELETE
+		{
+			if (returning)
+			{
+				dsqlScratch->appendUChar(blr_begin);
+				dsqlGenReturning(dsqlScratch, matched->processedReturning, tableNumber);
+			}
+
+			dsqlScratch->appendUChar(blr_erase);
+			GEN_stuff_context(dsqlScratch, oldContext);
+			dsqlScratch->putBlrMarkers(MARK_MERGE);
+
+			if (returning)
+				dsqlScratch->appendUChar(blr_end);
+		}
+
+		if (matched->condition && isLast)
+			dsqlScratch->appendUChar(blr_end);
+	}
+
+	if ((whenNotMatchedByTarget.hasData() || whenMatched.hasData()) &&
+		whenNotMatchedByTarget.hasData() != whenMatched.hasData())
+	{
+		dsqlScratch->appendUChar(blr_end);
+	}
+
+	if (returning && !dsqlScratch->isPsql())
+	{
+		dsqlGenReturningLocalTableCursor(dsqlScratch, returning, tableNumber.value);
+
+		dsqlScratch->appendUChar(blr_end);
+	}
 }
 
 
@@ -6116,14 +6426,13 @@ DmlNode* ModifyNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* c
 
 StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool updateOrInsert)
 {
-	thread_db* tdbb = JRD_get_thread_data(); // necessary?
-	MemoryPool& pool = dsqlScratch->getPool();
+	auto& pool = dsqlScratch->getPool();
 
 	// Separate old and new context references.
 
-	Array<NestConst<ValueExprNode> > orgValues, newValues;
+	Array<NestConst<ValueExprNode>> orgValues, newValues;
 
-	CompoundStmtNode* assignments = nodeAs<CompoundStmtNode>(statement);
+	const auto assignments = nodeAs<CompoundStmtNode>(statement);
 	fb_assert(assignments);
 
 	for (FB_SIZE_T i = 0; i < assignments->statements.getCount(); ++i)
@@ -6139,7 +6448,16 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 
 	NestConst<ValueExprNode>* ptr;
 
-	ModifyNode* node = FB_NEW_POOL(pool) ModifyNode(pool);
+	const auto node = FB_NEW_POOL(pool) ModifyNode(pool);
+
+	if (dsqlReturning && !dsqlScratch->isPsql() && dsqlCursorName.isEmpty())
+	{
+		node->dsqlReturningLocalTableNumber = updateOrInsert ?
+			dsqlReturningLocalTableNumber.value :
+			dsqlScratch->localTableNumber++;
+	}
+
+	node->dsqlCursorName = dsqlCursorName;
 
 	if (dsqlCursorName.hasData() && dsqlScratch->isPsql())
 	{
@@ -6171,21 +6489,15 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 		dsqlScratch->context->push(oldContext);	// process old context values
 		++dsqlScratch->scopeLevel;
 
-		{	// scope
-			ReturningProcessor returningProcessor(dsqlScratch, oldContext, modContext, dsqlReturning);
-
-			if (updateOrInsert)
-				statement2 = ReturningProcessor::clone(dsqlScratch, dsqlReturning, statement2);
-
-			node->statement2 = returningProcessor.process(statement2);
-		}
+		node->dsqlReturning = dsqlProcessReturning(dsqlScratch,
+			oldContext, modContext, dsqlReturning, true);
 
 		--dsqlScratch->scopeLevel;
 		dsqlScratch->context->pop();
 
 		// Recreate list of assignments.
 
-		CompoundStmtNode* assignStatements = FB_NEW_POOL(pool) CompoundStmtNode(pool);
+		const auto assignStatements = FB_NEW_POOL(pool) CompoundStmtNode(pool);
 		node->statement = assignStatements;
 
 		assignStatements->statements.resize(assignments->statements.getCount());
@@ -6211,8 +6523,8 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 	dsql_ctx* mod_context = dsqlGetContext(node->dsqlRelation);
 
 	// Process new context values.
-	for (ptr = newValues.begin(); ptr != newValues.end(); ++ptr)
-		*ptr = doDsqlPass(dsqlScratch, *ptr, false);
+	for (auto& value : newValues)
+		value = doDsqlPass(dsqlScratch, value, false);
 
 	dsqlScratch->context->pop();
 
@@ -6232,7 +6544,7 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 		rse = FB_NEW_POOL(pool) RseNode(pool);
 		rse->dsqlFlags = dsqlRseFlags;
 
-		if (dsqlReturning || statement2)
+		if (dsqlReturning && dsqlScratch->isPsql())
 			rse->dsqlFlags |= RecordSourceNode::DFLAG_SINGLETON;
 
 		rse->dsqlStreams = FB_NEW_POOL(pool) RecSourceListNode(pool, 1);
@@ -6252,27 +6564,20 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 			PASS1_limit(dsqlScratch, dsqlRows->length, dsqlRows->skip, rse);
 	}
 
-	if (dsqlReturning || statement2)
-	{
-		ReturningProcessor returningProcessor(dsqlScratch, old_context, mod_context, dsqlReturning);
-
-		if (updateOrInsert)
-			statement2 = ReturningProcessor::clone(dsqlScratch, dsqlReturning, statement2);
-
-		node->statement2 = returningProcessor.process(statement2);
-	}
+	node->dsqlReturning = dsqlProcessReturning(dsqlScratch,
+		old_context, mod_context, dsqlReturning, dsqlCursorName.hasData());
 
 	node->dsqlRse = rse;
 
 	// Process old context values.
-	for (ptr = orgValues.begin(); ptr != orgValues.end(); ++ptr)
-		*ptr = doDsqlPass(dsqlScratch, *ptr, false);
+	for (auto& value : orgValues)
+		value = doDsqlPass(dsqlScratch, value, false);
 
 	dsqlScratch->context->pop();
 
 	// Recreate list of assignments.
 
-	CompoundStmtNode* assignStatements = FB_NEW_POOL(pool) CompoundStmtNode(pool);
+	const auto assignStatements = FB_NEW_POOL(pool) CompoundStmtNode(pool);
 	node->statement = assignStatements;
 
 	assignStatements->statements.resize(assignments->statements.getCount());
@@ -6293,11 +6598,9 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 
 	dsqlSetParametersName(dsqlScratch, assignStatements, node->dsqlRelation);
 
-	StmtNode* ret = node;
-	if (!updateOrInsert)
-		ret = dsqlNullifyReturning(dsqlScratch, node, true);
-
-	return ret;
+	return dsqlCursorName.hasData() ?
+		dsqlNullifyReturning(dsqlScratch, node) :
+		node;
 }
 
 StmtNode* ModifyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -6333,11 +6636,25 @@ string ModifyNode::internalPrint(NodePrinter& printer) const
 
 void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	RseNode* rse = nodeAs<RseNode>(dsqlRse);
+	if (dsqlReturning && !dsqlScratch->isPsql())
+	{
+		if (dsqlCursorName.isEmpty())
+			dsqlGenReturningLocalTableDecl(dsqlScratch, dsqlReturningLocalTableNumber.value);
+		else
+		{
+			dsqlScratch->appendUChar(blr_send);
+			dsqlScratch->appendUChar(dsqlScratch->getStatement()->getReceiveMsg()->msg_number);
+		}
+	}
 
-	const dsql_msg* message = dsqlGenDmlHeader(dsqlScratch, rse);
+	if (dsqlRse)
+	{
+		dsqlScratch->appendUChar(blr_for);
+		dsqlScratch->putBlrMarkers(StmtNode::MARK_FOR_UPDATE);
+		GEN_expr(dsqlScratch, dsqlRse);
+	}
 
-	dsqlScratch->appendUChar(statement2 ? blr_modify2 : blr_modify);
+	dsqlScratch->appendUChar(dsqlReturning ? blr_modify2 : blr_modify);
 
 	const dsql_ctx* context;
 
@@ -6345,6 +6662,7 @@ void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		context = dsqlContext;
 	else
 	{
+		auto rse = nodeAs<RseNode>(dsqlRse);
 		fb_assert(rse);
 		context = rse->dsqlStreams->items[0]->dsqlContext;
 	}
@@ -6358,11 +6676,17 @@ void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	statement->genBlr(dsqlScratch);
 
-	if (statement2)
-		statement2->genBlr(dsqlScratch);
+	if (dsqlReturning)
+	{
+		dsqlGenReturning(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber);
 
-	if (message)
-		dsqlScratch->appendUChar(blr_end);
+		if (!dsqlScratch->isPsql() &&
+			!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT) &&
+			dsqlCursorName.isEmpty())
+		{
+			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber.value);
+		}
+	}
 }
 
 ModifyNode* ModifyNode::pass1(thread_db* tdbb, CompilerScratch* csb)
@@ -6407,6 +6731,15 @@ void ModifyNode::pass1Modify(thread_db* tdbb, CompilerScratch* csb, ModifyNode* 
 		new_tail->csb_flags |= csb_modify;
 
 		jrd_rel* const relation = tail->csb_relation;
+
+		//// TODO: LocalTableSourceNode
+		if (!relation)
+		{
+			ERR_post(
+				Arg::Gds(isc_wish_list) <<
+				Arg::Gds(isc_random) << "modify local_table");
+		}
+
 		view = relation->rel_view_rse ? relation : view;
 
 		if (!parent)
@@ -6599,9 +6932,6 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, jrd_req* request, WhichTrigg
 	record_param* orgRpb = &request->req_rpb[orgStream];
 	jrd_rel* relation = orgRpb->rpb_relation;
 
-	if (orgRpb->rpb_number.isBof() || (!relation->rel_view_rse && !orgRpb->rpb_number.isValid()))
-		ERR_post(Arg::Gds(isc_no_cur_rec));
-
 	record_param* newRpb = &request->req_rpb[newStream];
 
 	switch (request->req_operation)
@@ -6666,6 +6996,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, jrd_req* request, WhichTrigg
 						forNode->setWriteLockMode(request);
 						return parentStmt;
 					}
+
 					IDX_modify(tdbb, orgRpb, newRpb, transaction);
 					REPL_modify(tdbb, orgRpb, newRpb, transaction);
 				}
@@ -6717,6 +7048,15 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, jrd_req* request, WhichTrigg
 
 	impure->sta_state = 0;
 	RLCK_reserve_relation(tdbb, transaction, relation, true);
+
+	if (orgRpb->rpb_runtime_flags & RPB_just_deleted)
+	{
+		request->req_operation = jrd_req::req_return;
+		return parentStmt;
+	}
+
+	if (orgRpb->rpb_number.isBof() || (!relation->rel_view_rse && !orgRpb->rpb_number.isValid()))
+		ERR_post(Arg::Gds(isc_no_cur_rec));
 
 	if (forNode && (marks & StmtNode::MARK_MERGE))
 		forNode->checkRecordUpdated(tdbb, request, orgRpb);
@@ -6973,9 +7313,10 @@ DmlNode* StoreNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 
 	const UCHAR* blrPos = csb->csb_blr_reader.getPos();
 
-	node->relationSource = nodeAs<RelationSourceNode>(PAR_parseRecordSource(tdbb, csb));
+	node->target = PAR_parseRecordSource(tdbb, csb);
 
-	if (!node->relationSource)
+	if (!nodeIs<RelationSourceNode>(node->target) &&
+		!nodeIs<LocalTableSourceNode>(node->target))
 	{
 		csb->csb_blr_reader.setPos(blrPos);
 		PAR_syntax_error(csb, "relation source");
@@ -6999,13 +7340,16 @@ DmlNode* StoreNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 	bool updateOrInsert, bool& needSavePoint)
 {
-	thread_db* tdbb = JRD_get_thread_data(); // necessary?
 	DsqlContextStack::AutoRestore autoContext(*dsqlScratch->context);
 
 	dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_INSERT);
 
-	StoreNode* node = FB_NEW_POOL(dsqlScratch->getPool()) StoreNode(dsqlScratch->getPool());
+	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) StoreNode(dsqlScratch->getPool());
 	node->overrideClause = overrideClause;
+	node->dsqlReturning = dsqlReturning;
+
+	if (dsqlReturning && !dsqlScratch->isPsql() && (dsqlRse || updateOrInsert))
+		node->dsqlReturningLocalTableNumber = dsqlScratch->localTableNumber++;
 
 	// Process SELECT expression, if present
 
@@ -7016,7 +7360,7 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 		SelectExprNode* selExpr = nodeAs<SelectExprNode>(dsqlRse);
 		fb_assert(selExpr);
 
-		if (dsqlReturning || statement2)
+		if (dsqlRse && dsqlScratch->isPsql() && dsqlReturning)
 			selExpr->dsqlFlags |= RecordSourceNode::DFLAG_SINGLETON;
 
 		RseNode* rse = PASS1_rse(dsqlScratch, selExpr, false);
@@ -7032,58 +7376,51 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 
 	// Process relation
 
-	node->dsqlRelation = PASS1_relation(dsqlScratch, dsqlRelation);
-	dsql_ctx* context = node->dsqlRelation->dsqlContext;
+	node->target = PASS1_relation(dsqlScratch, target);
+	dsql_ctx* context = node->target->dsqlContext;
 	dsql_rel* relation = context->ctx_relation;
 
 	// If there isn't a field list, generate one
 
-	Array<NestConst<ValueExprNode> > fields;
+	NestValueArray fields;
 
 	if (dsqlFields.hasData())
 	{
-		for (NestConst<FieldNode>* i = dsqlFields.begin(); i != dsqlFields.end(); ++i)
+		for (auto& field : dsqlFields)
 		{
-			fields.add(NULL);
-			doDsqlPass(dsqlScratch, fields.back(), *i, false);
+			fields.add(nullptr);
+			doDsqlPass(dsqlScratch, fields.back(), field, false);
 		}
 
 		// We do not allow cases like INSERT INTO T (f1, f2, f1)...
 		dsqlFieldAppearsOnce(fields, "INSERT");
 
 		// begin IBO hack
-		// 02-May-2004, Nickolay Samofatov. Do not constify ptr further e.g. to
-		// const dsql_nod* const* .... etc. It chokes GCC 3.4.0
-		NestConst<ValueExprNode>* ptr = fields.begin();
-		for (const NestConst<ValueExprNode>* const end = fields.end(); ptr != end; ++ptr)
+		for (const auto& field : fields)
 		{
-			const ValueExprNode* temp2 = *ptr;
+			const dsql_ctx* tmpCtx = nullptr;
+			const TEXT* tmpName = nullptr;
 
-			const dsql_ctx* tmp_ctx = NULL;
-			const TEXT* tmp_name = NULL;
-			const FieldNode* fieldNode;
-			const DerivedFieldNode* derivedField;
-
-			if ((fieldNode = nodeAs<FieldNode>(temp2)))
+			if (auto fieldNode = nodeAs<FieldNode>(field))
 			{
-				tmp_ctx = fieldNode->dsqlContext;
+				tmpCtx = fieldNode->dsqlContext;
 				if (fieldNode->dsqlField)
-					tmp_name = fieldNode->dsqlField->fld_name.c_str();
+					tmpName = fieldNode->dsqlField->fld_name.c_str();
 			}
-			else if ((derivedField = nodeAs<DerivedFieldNode>(temp2)))
+			else if (auto derivedField = nodeAs<DerivedFieldNode>(field))
 			{
-				tmp_ctx = derivedField->context;
-				tmp_name = derivedField->name.nullStr();
+				tmpCtx = derivedField->context;
+				tmpName = derivedField->name.nullStr();
 			}
 
-			if (tmp_ctx &&
-				((tmp_ctx->ctx_relation && relation->rel_name != tmp_ctx->ctx_relation->rel_name) ||
-				 tmp_ctx->ctx_context != context->ctx_context))
+			if (tmpCtx &&
+				((tmpCtx->ctx_relation && relation->rel_name != tmpCtx->ctx_relation->rel_name) ||
+				 tmpCtx->ctx_context != context->ctx_context))
 			{
-				const dsql_rel* bad_rel = tmp_ctx->ctx_relation;
+				const auto badRel = tmpCtx->ctx_relation;
 
-				PASS1_field_unknown((bad_rel ? bad_rel->rel_name.c_str() : NULL),
-					tmp_name, dsqlFields[ptr - fields.begin()]);
+				PASS1_field_unknown((badRel ? badRel->rel_name.c_str() : NULL),
+					tmpName, dsqlFields[&field - fields.begin()]);
 			}
 		}
 		// end IBO hack
@@ -7092,13 +7429,13 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 	{
 		dsqlExplodeFields(relation, fields, false);
 
-		for (NestConst<ValueExprNode>* i = fields.begin(); i != fields.end(); ++i)
-			*i = doDsqlPass(dsqlScratch, *i, false);
+		for (auto& field : fields)
+			field = doDsqlPass(dsqlScratch, field, false);
 	}
 
 	// Match field fields and values
 
-	CompoundStmtNode* assignStatements = FB_NEW_POOL(dsqlScratch->getPool()) CompoundStmtNode(dsqlScratch->getPool());
+	const auto assignStatements = FB_NEW_POOL(dsqlScratch->getPool()) CompoundStmtNode(dsqlScratch->getPool());
 	node->statement = assignStatements;
 
 	if (values)
@@ -7110,15 +7447,14 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 					  Arg::Gds(isc_dsql_var_count_err));
 		}
 
-		NestConst<ValueExprNode>* ptr = fields.begin();
-		NestConst<ValueExprNode>* ptr2 = values->items.begin();
-		for (const NestConst<ValueExprNode>* end = fields.end(); ptr != end; ++ptr, ++ptr2)
+		auto ptr2 = values->items.begin();
+		for (const auto& ptr : fields)
 		{
-			// *ptr2 is NULL for DEFAULT
+			// *ptr2 is nullptr for DEFAULT
 
 			if (!*ptr2)
 			{
-				const FieldNode* field = nodeAs<FieldNode>(*ptr);
+				const auto field = nodeAs<FieldNode>(ptr);
 
 				if (field && field->dsqlField)
 				{
@@ -7130,13 +7466,15 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 
 			if (*ptr2)
 			{
-				AssignmentNode* temp = FB_NEW_POOL(dsqlScratch->getPool()) AssignmentNode(dsqlScratch->getPool());
+				auto temp = FB_NEW_POOL(dsqlScratch->getPool()) AssignmentNode(dsqlScratch->getPool());
 				temp->asgnFrom = *ptr2;
-				temp->asgnTo = *ptr;
+				temp->asgnTo = ptr;
 				assignStatements->statements.add(temp);
 
 				PASS1_set_parameter_type(dsqlScratch, *ptr2, temp->asgnTo, false);
 			}
+
+			++ptr2;
 		}
 	}
 
@@ -7159,13 +7497,7 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 		dsqlScratch->context->push(new_context);
 	}
 
-	NestConst<ValueListNode> temp;
-	AutoSetRestore<NestConst<ValueListNode> > autoNodeFirst(
-		dsqlReturning ? &dsqlReturning->first : &temp, dsqlReturning ? dsqlReturning->first : temp);
-
-	ReturningProcessor::explode(dsqlScratch, relation, dsqlReturning);
-
-	node->statement2 = dsqlProcessReturning(dsqlScratch, dsqlReturning, statement2);
+	node->dsqlReturning = dsqlProcessReturning(dsqlScratch, relation, dsqlReturning, !(dsqlRse || updateOrInsert));
 
 	if (updateOrInsert)
 	{
@@ -7174,15 +7506,11 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 		dsqlScratch->context->pop();
 	}
 
-	dsqlSetParametersName(dsqlScratch, assignStatements, node->dsqlRelation);
-
-	StmtNode* ret = node;
-	if (!updateOrInsert)
-		ret = dsqlNullifyReturning(dsqlScratch, node, true);
+	dsqlSetParametersName(dsqlScratch, assignStatements, node->target);
 
 	dsqlScratch->context->pop();
 
-	return ret;
+	return node;
 }
 
 StmtNode* StoreNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -7201,7 +7529,7 @@ string StoreNode::internalPrint(NodePrinter& printer) const
 {
 	StmtNode::internalPrint(printer);
 
-	NODE_PRINT(printer, dsqlRelation);
+	NODE_PRINT(printer, target);
 	NODE_PRINT(printer, dsqlFields);
 	NODE_PRINT(printer, dsqlValues);
 	NODE_PRINT(printer, dsqlReturning);
@@ -7210,36 +7538,58 @@ string StoreNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, statement2);
 	NODE_PRINT(printer, subStore);
 	//// FIXME-PRINT: NODE_PRINT(printer, validations);
-	NODE_PRINT(printer, relationSource);
 
 	return "StoreNode";
 }
 
 void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	const dsql_msg* message = dsqlGenDmlHeader(dsqlScratch, nodeAs<RseNode>(dsqlRse));
+	if (dsqlReturning && !dsqlScratch->isPsql())
+	{
+		if (dsqlRse)
+			dsqlGenReturningLocalTableDecl(dsqlScratch, dsqlReturningLocalTableNumber.value);
+		else if (!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT))
+		{
+			dsqlScratch->appendUChar(blr_send);
+			dsqlScratch->appendUChar(dsqlScratch->getStatement()->getReceiveMsg()->msg_number);
+		}
+	}
 
-	dsqlScratch->appendUChar(overrideClause.specified ? blr_store3 : (statement2 ? blr_store2 : blr_store));
+	if (dsqlRse)
+	{
+		dsqlScratch->appendUChar(blr_for);
+		dsqlScratch->putBlrMarkers(StmtNode::MARK_FOR_UPDATE);
+		GEN_expr(dsqlScratch, dsqlRse);
+	}
+
+	dsqlScratch->appendUChar(overrideClause.specified ? blr_store3 : (dsqlReturning ? blr_store2 : blr_store));
 
 	if (overrideClause.specified)
 		dsqlScratch->appendUChar(UCHAR(overrideClause.value));
 
-	GEN_expr(dsqlScratch, dsqlRelation);
+	GEN_expr(dsqlScratch, target);
 
 	statement->genBlr(dsqlScratch);
 
-	if (statement2)
-		statement2->genBlr(dsqlScratch);
+	if (dsqlReturning)
+	{
+		dsqlGenReturning(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber);
+
+		if (dsqlReturningLocalTableNumber.isAssigned())
+		{
+			if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT)
+				dsqlScratch->appendUChar(blr_end);	// close blr_if (blr_eql, blr_internal_info)
+
+			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber.value);
+		}
+	}
 	else if (overrideClause.specified)
 		dsqlScratch->appendUChar(blr_null);
-
-	if (message)
-		dsqlScratch->appendUChar(blr_end);
 }
 
 StoreNode* StoreNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
-	preprocessAssignments(tdbb, csb, relationSource->getStream(), nodeAs<CompoundStmtNode>(statement), &overrideClause);
+	preprocessAssignments(tdbb, csb, target->getStream(), nodeAs<CompoundStmtNode>(statement), &overrideClause);
 
 	if (pass1Store(tdbb, csb, this))
 		makeDefaults(tdbb, csb);
@@ -7265,6 +7615,20 @@ bool StoreNode::pass1Store(thread_db* tdbb, CompilerScratch* csb, StoreNode* nod
 	if (node->subStore)
 		return false;
 
+	auto relSource = nodeAs<RelationSourceNode>(node->target);
+
+	if (!relSource)	// Is this a LocalTableSourceNode?
+	{
+		const StreamType stream = node->target->getStream();
+		const auto tail = &csb->csb_rpt[stream];
+		tail->csb_flags |= csb_store;
+
+		// Apply validation constraints.
+		makeValidation(tdbb, csb, stream, node->validations);
+
+		return false;
+	}
+
 	jrd_rel* parent = NULL;
 	jrd_rel* view = NULL;
 	StreamType parentStream;
@@ -7274,8 +7638,7 @@ bool StoreNode::pass1Store(thread_db* tdbb, CompilerScratch* csb, StoreNode* nod
 
 	for (;;)
 	{
-		RelationSourceNode* relSource = node->relationSource;
-		const StreamType stream = relSource->getStream();
+		const StreamType stream = node->target->getStream();
 
 		CompilerScratch::csb_repeat* const tail = &csb->csb_rpt[stream];
 		tail->csb_flags |= csb_store;
@@ -7340,7 +7703,7 @@ bool StoreNode::pass1Store(thread_db* tdbb, CompilerScratch* csb, StoreNode* nod
 			const StreamType newStream = relSource->getStream();
 			StoreNode* viewNode = FB_NEW_POOL(*tdbb->getDefaultPool()) StoreNode(*tdbb->getDefaultPool());
 
-			viewNode->relationSource = relSource;
+			viewNode->target = relSource;
 			viewNode->statement = pass1ExpandView(tdbb, csb, stream, newStream, true);
 
 			node->subStore = viewNode;
@@ -7353,7 +7716,7 @@ bool StoreNode::pass1Store(thread_db* tdbb, CompilerScratch* csb, StoreNode* nod
 			// This relation is not actually being updated as this operation
 			// goes deeper (we have a naturally updatable view).
 			csb->csb_rpt[stream].csb_flags &= ~csb_view_update;
-			node->relationSource = relSource->copy(tdbb, copier);
+			node->target = relSource->copy(tdbb, copier);
 		}
 	}
 }
@@ -7361,7 +7724,7 @@ bool StoreNode::pass1Store(thread_db* tdbb, CompilerScratch* csb, StoreNode* nod
 // Build a default value assignments.
 void StoreNode::makeDefaults(thread_db* tdbb, CompilerScratch* csb)
 {
-	const StreamType stream = relationSource->getStream();
+	const StreamType stream = target->getStream();
 	jrd_rel* relation = csb->csb_rpt[stream].csb_relation;
 
 	vec<jrd_fld*>* vector = relation->rel_fields;
@@ -7443,7 +7806,7 @@ StoreNode* StoreNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	// So that the optimizer can use indices for eventually used sub-selects.
 
 	StreamList streams;
-	streams.add(relationSource->getStream());
+	streams.add(target->getStream());
 
 	StreamStateHolder stateHolder(csb, streams);
 	stateHolder.activate();
@@ -7512,9 +7875,15 @@ const StmtNode* StoreNode::store(thread_db* tdbb, jrd_req* request, WhichTrigger
 	jrd_tra* transaction = request->req_transaction;
 	impure_state* impure = request->getImpure<impure_state>(impureOffset);
 
-	const StreamType stream = relationSource->getStream();
+	const StreamType stream = target->getStream();
 	record_param* rpb = &request->req_rpb[stream];
 	jrd_rel* relation = rpb->rpb_relation;
+
+	const auto localTableSource = nodeAs<LocalTableSourceNode>(target);
+	const auto localTable = localTableSource ?
+		request->getStatement()->localTables[localTableSource->tableNumber] :
+		nullptr;
+	const auto localTableImpure = localTable ? localTable->getImpure(tdbb, request) : nullptr;
 
 	switch (request->req_operation)
 	{
@@ -7524,7 +7893,8 @@ const StmtNode* StoreNode::store(thread_db* tdbb, jrd_req* request, WhichTrigger
 
 			request->req_records_affected.bumpModified(false);
 			impure->sta_state = 0;
-			RLCK_reserve_relation(tdbb, transaction, relation, true);
+			if (relation)
+				RLCK_reserve_relation(tdbb, transaction, relation, true);
 			break;
 
 		case jrd_req::req_return:
@@ -7532,7 +7902,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, jrd_req* request, WhichTrigger
 			{
 				SavepointChangeMarker scMarker(transaction);
 
-				if (relation->rel_pre_store && whichTrig != POST_TRIG)
+				if (relation && relation->rel_pre_store && whichTrig != POST_TRIG)
 				{
 					EXE_execute_triggers(tdbb, &relation->rel_pre_store, NULL, rpb,
 						TRIGGER_INSERT, PRE_TRIG);
@@ -7550,7 +7920,9 @@ const StmtNode* StoreNode::store(thread_db* tdbb, jrd_req* request, WhichTrigger
 
 				cleanupRpb(tdbb, rpb);
 
-				if (relation->rel_file)
+				if (localTableSource)
+					localTableImpure->recordBuffer->store(rpb->rpb_record);
+				else if (relation->rel_file)
 					EXT_store(tdbb, rpb);
 				else if (relation->isVirtual())
 					VirtualTable::store(tdbb, rpb);
@@ -7563,13 +7935,14 @@ const StmtNode* StoreNode::store(thread_db* tdbb, jrd_req* request, WhichTrigger
 
 				rpb->rpb_number.setValid(true);
 
-				if (relation->rel_post_store && whichTrig != PRE_TRIG)
+				if (relation && relation->rel_post_store && whichTrig != PRE_TRIG)
 				{
 					EXE_execute_triggers(tdbb, &relation->rel_post_store, NULL, rpb,
 						TRIGGER_INSERT, POST_TRIG);
 				}
 
-				if (!relation->rel_view_rse ||
+				if (!relation ||
+					!relation->rel_view_rse ||
 					(!subStore && (whichTrig == ALL_TRIGS || whichTrig == POST_TRIG)))
 				{
 					request->req_records_inserted++;
@@ -7594,8 +7967,23 @@ const StmtNode* StoreNode::store(thread_db* tdbb, jrd_req* request, WhichTrigger
 	// exists for the stream and is big enough, and initialize all null flags
 	// to "missing."
 
-	const Format* format = MET_current(tdbb, relation);
-	Record* record = VIO_record(tdbb, rpb, format, tdbb->getDefaultPool());
+	const Format* format = localTableSource ?
+		request->getStatement()->localTables[localTableSource->tableNumber]->format :
+		MET_current(tdbb, relation);
+
+	Record* record;
+
+	if (localTableSource)
+	{
+		record = rpb->rpb_record;
+
+		if (!record)
+			record = rpb->rpb_record = localTableImpure->recordBuffer->getTempRecord();
+
+		record->reset(format);
+	}
+	else
+		record = VIO_record(tdbb, rpb, format, tdbb->getDefaultPool());
 
 	rpb->rpb_address = record->getData();
 	rpb->rpb_length = format->fmt_length;
@@ -7855,14 +8243,11 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (dsqlForUpdate && !rse->dsqlDistinct)
 	{
 		RecSourceListNode* streamList = rse->dsqlStreams;
-		NestConst<RecordSourceNode>* ptr2 = streamList->items.begin();
 
-		for (const NestConst<RecordSourceNode>* const end2 = streamList->items.end(); ptr2 != end2; ++ptr2)
+		for (auto& item : streamList->items)
 		{
-			RecordSourceNode* const item = *ptr2;
-			RelationSourceNode* relNode;
-
-			if (item && (relNode = nodeAs<RelationSourceNode>(item)))
+			//// TODO: LocalTableSourceNode
+			if (auto relNode = nodeAs<RelationSourceNode>(item))
 			{
 				context = relNode->dsqlContext;
 				const dsql_rel* const relation = context->ctx_relation;
@@ -8566,6 +8951,39 @@ void SetRoleNode::execute(thread_db* tdbb, dsql_req* request, jrd_tra** /*traHan
 //--------------------
 
 
+SetDebugOptionNode::SetDebugOptionNode(MemoryPool& pool, MetaName* aName, ExprNode* aValue)
+	: SessionManagementNode(pool),
+	  name(pool, *aName),
+	  value(aValue)
+{
+}
+
+void SetDebugOptionNode::execute(thread_db* tdbb, dsql_req* /*request*/, jrd_tra** /*traHandle*/) const
+{
+	SET_TDBB(tdbb);
+	auto& debugOptions = tdbb->getAttachment()->getDebugOptions();
+
+	const auto literal = nodeAs<LiteralNode>(value);
+
+	if (!literal)
+	{
+		// This currently can happen with negative numbers.
+		// Since it's not relevant for DSQL_KEEP_BLR, let's throw an error.
+		ERR_post(Arg::Gds(isc_random) << "Invalid DEBUG option value");
+	}
+
+	const auto litDesc = &literal->litDesc;
+
+	if (name == "DSQL_KEEP_BLR")
+		debugOptions.setDsqlKeepBlr(MOV_get_boolean(litDesc));
+	else
+		ERR_post(Arg::Gds(isc_random) << "Invalid DEBUG option");
+}
+
+
+//--------------------
+
+
 SetDecFloatRoundNode::SetDecFloatRoundNode(MemoryPool& pool, MetaName* name)
 	: SessionManagementNode(pool)
 {
@@ -8717,70 +9135,136 @@ void SetTimeZoneNode::execute(thread_db* tdbb, dsql_req* request, jrd_tra** /*tr
 //--------------------
 
 
+static RegisterNode<TruncateLocalTableNode> regTruncateLocalTableNode({blr_local_table_truncate});
+
+DmlNode* TruncateLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
+{
+	const auto node = FB_NEW_POOL(pool) TruncateLocalTableNode(pool);
+	node->tableNumber = csb->csb_blr_reader.getWord();
+
+	if (node->tableNumber >= csb->csb_localTables.getCount() || !csb->csb_localTables[node->tableNumber])
+		PAR_error(csb, Arg::Gds(isc_bad_loctab_num) << Arg::Num(node->tableNumber));
+
+	return node;
+}
+
+string TruncateLocalTableNode::internalPrint(NodePrinter& printer) const
+{
+	StmtNode::internalPrint(printer);
+
+	NODE_PRINT(printer, tableNumber);
+
+	return "TruncateLocalTableNode";
+}
+
+void TruncateLocalTableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	dsqlScratch->appendUChar(blr_local_table_truncate);
+	dsqlScratch->appendUShort(tableNumber);
+}
+
+TruncateLocalTableNode* TruncateLocalTableNode::copy(thread_db* tdbb, NodeCopier& /*copier*/) const
+{
+	const auto node = FB_NEW_POOL(*tdbb->getDefaultPool()) TruncateLocalTableNode(*tdbb->getDefaultPool());
+	node->tableNumber = tableNumber;
+	return node;
+}
+
+const StmtNode* TruncateLocalTableNode::execute(thread_db* tdbb, jrd_req* request, ExeState* /*exeState*/) const
+{
+	if (request->req_operation == jrd_req::req_evaluate)
+	{
+		const auto localTable = request->getStatement()->localTables[tableNumber];
+
+		if (auto& recordBuffer = localTable->getImpure(tdbb, request, false)->recordBuffer)
+		{
+			delete recordBuffer;
+			recordBuffer = nullptr;
+		}
+
+		request->req_operation = jrd_req::req_return;
+	}
+
+	return parentStmt;
+}
+
+
+//--------------------
+
+
 StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	thread_db* tdbb = JRD_get_thread_data(); // necessary?
-	MemoryPool& pool = dsqlScratch->getPool();
+	auto& pool = dsqlScratch->getPool();
 
 	if (!dsqlScratch->isPsql())
 		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT;
 
-	const MetaName& relation_name = nodeAs<RelationSourceNode>(relation)->dsqlName;
-	MetaName base_name = relation_name;
+	RelationSourceNode* target = relation;
+
+	const auto querySpec = FB_NEW_POOL(pool) RseNode(pool);
+	querySpec->dsqlExplicitJoin = true;
+	querySpec->dsqlFrom = FB_NEW_POOL(pool) RecSourceListNode(pool, 1);
+	querySpec->dsqlFrom->items[0] = target;
+	querySpec->rse_plan = plan;
+
+	const auto node = FB_NEW_POOL(pool) UpdateOrInsertNode(pool);
+	node->returning = returning;
+
+	const auto& relationName = nodeAs<RelationSourceNode>(relation)->dsqlName;
+	MetaName baseName = relationName;
 
 	bool needSavePoint;
 
 	// Build the INSERT node.
-	StoreNode* insert = FB_NEW_POOL(pool) StoreNode(pool);
-	insert->dsqlRelation = relation;
-	insert->dsqlFields = fields;
-	insert->dsqlValues = values;
-	insert->dsqlReturning = returning;
-	insert->overrideClause = overrideClause;
-	insert = nodeAs<StoreNode>(insert->internalDsqlPass(dsqlScratch, true, needSavePoint));
-	fb_assert(insert);
+	node->storeNode = FB_NEW_POOL(pool) StoreNode(pool);
+	node->storeNode->target = relation;
+	node->storeNode->dsqlFields = fields;
+	node->storeNode->dsqlValues = values;
+	node->storeNode->dsqlReturning = returning;
+	node->storeNode->overrideClause = overrideClause;
+	node->storeNode = nodeAs<StoreNode>(node->storeNode->internalDsqlPass(dsqlScratch, true, needSavePoint));
 
-	dsql_ctx* context = insert->dsqlRelation->dsqlContext;
+	auto context = node->storeNode->target->dsqlContext;
 	DEV_BLKCHK(context, dsql_type_ctx);
 
-	dsql_rel* ctxRelation = context->ctx_relation;
-	Array<NestConst<FieldNode> > fieldsCopy = fields;
+	const auto ctxRelation = context->ctx_relation;
+	auto fieldsCopy = fields;
 
 	// If a field list isn't present, build one using the same rules of INSERT INTO table VALUES ...
 	if (fieldsCopy.isEmpty())
 		dsqlExplodeFields(ctxRelation, fieldsCopy, false);
 
 	// Maintain a pair of view's field name / base field name.
-	MetaNamePairMap view_fields;
+	MetaNamePairMap viewFields;
 
 	if ((ctxRelation->rel_flags & REL_view) && matching.isEmpty())
 	{
-		dsql_rel* base_rel = METD_get_view_base(dsqlScratch->getTransaction(), dsqlScratch,
-			relation_name.c_str(), view_fields);
+		auto baseRel = METD_get_view_base(dsqlScratch->getTransaction(), dsqlScratch,
+			relationName.c_str(), viewFields);
 
 		// Get the base table name if there is only one.
-		if (base_rel)
-			base_name = base_rel->rel_name;
+		if (baseRel)
+			baseName = baseRel->rel_name;
 		else
 			ERRD_post(Arg::Gds(isc_upd_ins_with_complex_view));
 	}
 
-	Array<NestConst<FieldNode> > matchingCopy = matching;
-	UCHAR equality_type;
+	auto matchingCopy = matching;
+	UCHAR equalityType;
 
 	if (matching.hasData())
 	{
-		equality_type = blr_equiv;
+		equalityType = blr_equiv;
 
 		dsqlScratch->context->push(context);
 		++dsqlScratch->scopeLevel;
 
-		Array<NestConst<ValueExprNode> > matchingFields;
+		Array<NestConst<ValueExprNode>> matchingFields;
 
-		for (NestConst<FieldNode>* i = matchingCopy.begin(); i != matchingCopy.end(); ++i)
+		for (auto& matching : matchingCopy)
 		{
 			PsqlChanger changer(dsqlScratch, false);
-			matchingFields.add((*i)->dsqlPass(dsqlScratch));
+			matchingFields.add(matching->dsqlPass(dsqlScratch));
 		}
 
 		--dsqlScratch->scopeLevel;
@@ -8790,33 +9274,30 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	}
 	else
 	{
-		equality_type = blr_eql;
+		equalityType = blr_eql;
 
-		METD_get_primary_key(dsqlScratch->getTransaction(), base_name.c_str(), matchingCopy);
+		METD_get_primary_key(dsqlScratch->getTransaction(), baseName.c_str(), matchingCopy);
 
 		if (matchingCopy.isEmpty())
-			ERRD_post(Arg::Gds(isc_primary_key_required) << base_name);
+			ERRD_post(Arg::Gds(isc_primary_key_required) << baseName);
 	}
 
 	// Build a boolean to use in the UPDATE dsqlScratch.
-	BoolExprNode* match = NULL;
+	BoolExprNode* match = nullptr;
 	USHORT matchCount = 0;
 
-	CompoundStmtNode* list = FB_NEW_POOL(pool) CompoundStmtNode(pool);
+	const auto assignments = FB_NEW_POOL(pool) CompoundStmtNode(pool);
+	auto fieldPtr = fieldsCopy.begin();
+	auto valuePtr = values->items.begin();
 
-	CompoundStmtNode* assignments = FB_NEW_POOL(pool) CompoundStmtNode(pool);
-	NestConst<FieldNode>* fieldPtr = fieldsCopy.begin();
-	NestConst<ValueExprNode>* valuePtr = values->items.begin();
-
-	Array<NestConst<StmtNode> >& insertStatements =
-		nodeAs<CompoundStmtNode>(insert->statement)->statements;
+	auto& insertStatements = nodeAs<CompoundStmtNode>(node->storeNode->statement)->statements;
 
 	for (; fieldPtr != fieldsCopy.end(); ++fieldPtr, ++valuePtr)
 	{
-		AssignmentNode* assign = FB_NEW_POOL(pool) AssignmentNode(pool);
+		const auto assign = FB_NEW_POOL(pool) AssignmentNode(pool);
 
-		if (!(assign->asgnFrom = *valuePtr))	// it's NULL for DEFAULT
-			assign->asgnFrom = FB_NEW_POOL(pool) DefaultNode(pool, relation_name, (*fieldPtr)->dsqlName);
+		if (!(assign->asgnFrom = *valuePtr))	// it's nullptr for DEFAULT
+			assign->asgnFrom = FB_NEW_POOL(pool) DefaultNode(pool, relationName, (*fieldPtr)->dsqlName);
 
 		assign->asgnTo = *fieldPtr;
 		assignments->statements.add(assign);
@@ -8827,45 +9308,41 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		MetaName fieldName;
 
 		if ((ctxRelation->rel_flags & REL_view) && matching.isEmpty())
-			view_fields.get((*fieldPtr)->dsqlName, fieldName);
+			viewFields.get((*fieldPtr)->dsqlName, fieldName);
 		else
 			fieldName = (*fieldPtr)->dsqlName;
 
 		if (fieldName.hasData())
 		{
-			for (NestConst<FieldNode>* matchingPtr = matchingCopy.begin();
-				 matchingPtr != matchingCopy.end();
-				 ++matchingPtr)
+			for (auto& matching : matchingCopy)
 			{
-				const MetaName testField = (*matchingPtr)->dsqlName;
+				const auto testField = matching->dsqlName;
 
 				if (testField == fieldName)
 				{
-					if (!*valuePtr)	// it's NULL for DEFAULT
+					if (!*valuePtr)	// it's nullptr for DEFAULT
 						ERRD_post(Arg::Gds(isc_upd_ins_cannot_default) << fieldName);
 
 					++matchCount;
 
 					const FB_SIZE_T fieldPos = fieldPtr - fieldsCopy.begin();
-					AssignmentNode* assign2 = nodeAs<AssignmentNode>(insertStatements[fieldPos]);
-					NestConst<ValueExprNode>& expr = assign2->asgnFrom;
-					ValueExprNode* var = dsqlPassHiddenVariable(dsqlScratch, expr);
+					const auto assign2 = nodeAs<AssignmentNode>(insertStatements[fieldPos]);
+					ValueExprNode* var = dsqlPassHiddenVariable(dsqlScratch, assign2->asgnFrom);
 
 					if (var)
 					{
-						AssignmentNode* varAssign = FB_NEW_POOL(pool) AssignmentNode(pool);
-						varAssign->asgnFrom = expr;
+						const auto varAssign = FB_NEW_POOL(pool) AssignmentNode(pool);
+						varAssign->asgnFrom = assign2->asgnFrom;
 						varAssign->asgnTo = var;
+						node->varAssignments.add(varAssign);
 
-						list->statements.add(varAssign);
-
-						assign2->asgnFrom = expr = var;
+						assign2->asgnFrom = var;
 					}
 					else
 						var = *valuePtr;
 
-					ComparativeBoolNode* eqlNode = FB_NEW_POOL(pool) ComparativeBoolNode(pool,
-						equality_type, *fieldPtr, var);
+					const auto eqlNode = FB_NEW_POOL(pool) ComparativeBoolNode(pool,
+						equalityType, *fieldPtr, var);
 
 					match = PASS1_compose(match, eqlNode, blr_and);
 				}
@@ -8879,55 +9356,28 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		if (matching.hasData())
 			ERRD_post(Arg::Gds(isc_upd_ins_doesnt_match_matching));
 		else
-			ERRD_post(Arg::Gds(isc_upd_ins_doesnt_match_pk) << base_name);
+			ERRD_post(Arg::Gds(isc_upd_ins_doesnt_match_pk) << baseName);
 	}
 
 	// build the UPDATE node
-	ModifyNode* update = FB_NEW_POOL(pool) ModifyNode(pool);
-	update->dsqlRelation = relation;
-	update->statement = assignments;
-	update->dsqlBoolean = match;
+	node->modifyNode = FB_NEW_POOL(pool) ModifyNode(pool);
+	node->modifyNode->dsqlRelation = relation;
+	node->modifyNode->statement = assignments;
+	node->modifyNode->dsqlBoolean = match;
+	node->modifyNode->dsqlPlan = plan;
+	node->modifyNode->dsqlOrder = order;
+	node->modifyNode->dsqlRows = rows;
+	node->modifyNode->dsqlReturning = returning;
+	node->modifyNode->dsqlReturningLocalTableNumber = node->storeNode->dsqlReturningLocalTableNumber;
 
-	if (returning)
-	{
-		update->dsqlRseFlags = RecordSourceNode::DFLAG_SINGLETON;
-		update->dsqlReturning = returning;
-		update->statement2 = insert->statement2;
-	}
-
-	update = nodeAs<ModifyNode>(update->internalDsqlPass(dsqlScratch, true));
-	fb_assert(update);
-
-	// test if ROW_COUNT = 0
-
-	NestConst<BoolExprNode> eqlNode = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_eql,
-		FB_NEW_POOL(pool) InternalInfoNode(pool, MAKE_const_slong(INFO_TYPE_ROWS_AFFECTED)),
-		MAKE_const_slong(0));
-
-	const ULONG save_flags = dsqlScratch->flags;
-	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_BLOCK;	// to compile ROW_COUNT
-	eqlNode = doDsqlPass(dsqlScratch, eqlNode);
-	dsqlScratch->flags = save_flags;
-
-	// If (ROW_COUNT = 0) then INSERT.
-	IfNode* ifNode = FB_NEW_POOL(pool) IfNode(pool);
-	ifNode->condition = eqlNode;
-	ifNode->trueAction = insert;
-
-	// Build the temporary vars / UPDATE / IF nodes.
-
-	list->statements.add(update);
-	list->statements.add(ifNode);
+	node->modifyNode = nodeAs<ModifyNode>(node->modifyNode->internalDsqlPass(dsqlScratch, true));
+	fb_assert(node->modifyNode);
 
 	// If RETURNING is present, type is already DsqlCompiledStatement::TYPE_EXEC_PROCEDURE.
 	if (!returning)
 		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_INSERT);
 
-	StmtNode* ret = SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, list);
-	if (!needSavePoint || nodeIs<SavepointEncloseNode>(ret))
-		return ret;
-
-	return FB_NEW_POOL(dsqlScratch->getPool()) SavepointEncloseNode(dsqlScratch->getPool(), ret);
+	return SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, node);
 }
 
 string UpdateOrInsertNode::internalPrint(NodePrinter& printer) const
@@ -8943,8 +9393,40 @@ string UpdateOrInsertNode::internalPrint(NodePrinter& printer) const
 	return "UpdateOrInsertNode";
 }
 
-void UpdateOrInsertNode::genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
+void UpdateOrInsertNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	dsqlScratch->appendUChar(blr_begin);
+
+	for (auto& varAssign : varAssignments)
+		varAssign->genBlr(dsqlScratch);
+
+	modifyNode->genBlr(dsqlScratch);
+
+	// if ROW_COUNT = 0
+	dsqlScratch->appendUChar(blr_if);
+
+	dsqlScratch->appendUChar(blr_eql);
+
+	dsqlScratch->appendUChar(blr_internal_info);
+
+	dsqlScratch->appendUChar(blr_literal);
+	dsqlScratch->appendUChar(blr_long);
+	dsqlScratch->appendUChar(0);
+	dsqlScratch->appendULong(INFO_TYPE_ROWS_AFFECTED);
+
+	dsqlScratch->appendUChar(blr_literal);
+	dsqlScratch->appendUChar(blr_long);
+	dsqlScratch->appendUChar(0);
+	dsqlScratch->appendULong(0);
+
+	// then INSERT.
+	storeNode->genBlr(dsqlScratch);
+
+	// StoreNode::genBlr closes our blr_if when RETURNING in DSQL is used.
+	if (storeNode->dsqlReturningLocalTableNumber.isUnknown())
+		dsqlScratch->appendUChar(blr_end);	// blr_if
+
+	dsqlScratch->appendUChar(blr_end);
 }
 
 
@@ -9023,161 +9505,203 @@ static dsql_par* dsqlFindRecordVersion(const dsql_req* request, const RelationSo
 	return candidate;
 }
 
-// Generate DML header for INSERT/UPDATE/DELETE.
-static const dsql_msg* dsqlGenDmlHeader(DsqlCompilerScratch* dsqlScratch, RseNode* dsqlRse)
+// Generate assignment to EOF parameter.
+static void dsqlGenEofAssignment(DsqlCompilerScratch* dsqlScratch, SSHORT value)
 {
-	const dsql_msg* message = NULL;
-	const bool innerSend = !dsqlRse || (dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT);
-	const bool merge = dsqlScratch->flags & DsqlCompilerScratch::FLAG_MERGE;
+	dsc valueDesc;
+	valueDesc.makeShort(0, &value);
 
-	if (dsqlScratch->getStatement()->getType() == DsqlCompiledStatement::TYPE_EXEC_PROCEDURE &&
-		!innerSend && !merge)
+	dsqlScratch->appendUChar(blr_assignment);
+	LiteralNode::genConstant(dsqlScratch, &valueDesc, false);
+	GEN_parameter(dsqlScratch, dsqlScratch->getStatement()->getEof());
+}
+
+static void dsqlGenReturning(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
+	Nullable<USHORT> localTableNumber)
+{
+	if (localTableNumber.isAssigned())
 	{
-		if ((message = dsqlScratch->getStatement()->getReceiveMsg()))
+		const USHORT localStoreContext = dsqlScratch->contextNumber++;
+
+		dsqlScratch->appendUChar(blr_store);
+		dsqlScratch->appendUChar(blr_local_table_id);
+		dsqlScratch->appendUShort(localTableNumber.value);
+		dsqlScratch->appendMetaString("");	// alias
+		GEN_stuff_context_number(dsqlScratch, localStoreContext);
+
+		dsqlScratch->appendUChar(blr_begin);
+
+		USHORT fieldNum = 0;
+
+		for (auto& retSource : returning->first->items)
 		{
-			dsqlScratch->appendUChar(blr_send);
-			dsqlScratch->appendUChar(message->msg_number);
+			dsqlScratch->appendUChar(blr_assignment);
+			retSource->genBlr(dsqlScratch);
+			dsqlScratch->appendUChar(blr_fid);
+			GEN_stuff_context_number(dsqlScratch, localStoreContext);
+			dsqlScratch->appendUShort(fieldNum++);
 		}
-	}
 
-	if (dsqlRse)
-	{
-		dsqlScratch->appendUChar(blr_for);
-		dsqlScratch->putBlrMarkers(StmtNode::MARK_FOR_UPDATE);
-		GEN_expr(dsqlScratch, dsqlRse);
+		dsqlScratch->appendUChar(blr_end);
 	}
-
-	if (dsqlScratch->getStatement()->getType() == DsqlCompiledStatement::TYPE_EXEC_PROCEDURE)
+	else
 	{
-		if ((message = dsqlScratch->getStatement()->getReceiveMsg()))
+		dsqlScratch->appendUChar(blr_begin);
+
+		auto retTargetIt = returning->second->items.begin();
+
+		for (auto& retSource : returning->first->items)
 		{
-			dsqlScratch->appendUChar(blr_begin);
-
-			if (innerSend && !merge)
-			{
-				dsqlScratch->appendUChar(blr_send);
-				dsqlScratch->appendUChar(message->msg_number);
-			}
+			dsqlScratch->appendUChar(blr_assignment);
+			retSource->genBlr(dsqlScratch);
+			(*retTargetIt++)->genBlr(dsqlScratch);
 		}
+
+		dsqlScratch->appendUChar(blr_end);
+	}
+}
+
+// Generate BLR for returning's local table cursor.
+static void dsqlGenReturningLocalTableCursor(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
+	USHORT localTableNumber)
+{
+	dsqlGenEofAssignment(dsqlScratch, 1);
+
+	const USHORT localForContext = dsqlScratch->contextNumber++;
+
+	dsqlScratch->appendUChar(blr_for);
+	dsqlScratch->appendUChar(blr_rse);
+	dsqlScratch->appendUChar(1);
+	dsqlScratch->appendUChar(blr_local_table_id);
+	dsqlScratch->appendUShort(localTableNumber);
+	dsqlScratch->appendMetaString("");	// alias
+	GEN_stuff_context_number(dsqlScratch, localForContext);
+	dsqlScratch->appendUChar(blr_end);
+
+	dsqlScratch->appendUChar(blr_send);
+	dsqlScratch->appendUChar(dsqlScratch->getStatement()->getReceiveMsg()->msg_number);
+
+	dsqlScratch->appendUChar(blr_begin);
+
+	USHORT fieldNum = 0;
+
+	for (auto& retTarget : returning->second->items)
+	{
+		dsqlScratch->appendUChar(blr_assignment);
+		dsqlScratch->appendUChar(blr_fid);
+		GEN_stuff_context_number(dsqlScratch, localForContext);
+		dsqlScratch->appendUShort(fieldNum++);
+		retTarget->genBlr(dsqlScratch);
 	}
 
-	return message;
+	dsqlScratch->appendUChar(blr_end);
+
+	dsqlScratch->appendUChar(blr_send);
+	dsqlScratch->appendUChar(dsqlScratch->getStatement()->getReceiveMsg()->msg_number);
+	dsqlGenEofAssignment(dsqlScratch, 0);
+}
+
+// Generate BLR for returning's local table declaration.
+static void dsqlGenReturningLocalTableDecl(DsqlCompilerScratch* dsqlScratch, USHORT tableNumber)
+{
+	dsqlScratch->appendUChar(blr_dcl_local_table);
+	dsqlScratch->appendUShort(tableNumber);
+	dsqlScratch->appendUChar(blr_dcl_local_table_format);
+	dsqlScratch->appendUShort(dsqlScratch->returningClause->second->items.getCount());
+
+	for (auto& retTarget : dsqlScratch->returningClause->second->items)
+	{
+		dsc fieldDesc;
+		DsqlDescMaker::fromNode(dsqlScratch, &fieldDesc, retTarget);
+		GEN_descriptor(dsqlScratch, &fieldDesc, true);
+	}
+
+	dsqlScratch->appendUChar(blr_end);
 }
 
 // Get the context of a relation, procedure or derived table.
 static dsql_ctx* dsqlGetContext(const RecordSourceNode* node)
 {
-	const ProcedureSourceNode* procNode;
-	const RelationSourceNode* relNode;
-	const RseNode* rseNode;
-
-	if ((procNode = nodeAs<ProcedureSourceNode>(node)))
+	if (auto procNode = nodeAs<ProcedureSourceNode>(node))
 		return procNode->dsqlContext;
-
-	if ((relNode = nodeAs<RelationSourceNode>(node)))
+	else if (auto relNode = nodeAs<RelationSourceNode>(node))
 		return relNode->dsqlContext;
-
-	if ((rseNode = nodeAs<RseNode>(node)))
+	//// TODO: LocalTableSourceNode
+	else if (auto rseNode = nodeAs<RseNode>(node))
 		return rseNode->dsqlContext;
-
-	fb_assert(false);
-	return NULL;
+	else
+	{
+		fb_assert(false);
+		return nullptr;
+	}
 }
 
 // Get the contexts of a relation, procedure, derived table or a list of joins.
 static void dsqlGetContexts(DsqlContextStack& contexts, const RecordSourceNode* node)
 {
-	const ProcedureSourceNode* procNode;
-	const RelationSourceNode* relNode;
-	const RseNode* rseNode;
-
-	if ((procNode = nodeAs<ProcedureSourceNode>(node)))
+	if (auto procNode = nodeAs<ProcedureSourceNode>(node))
 		contexts.push(procNode->dsqlContext);
-	else if ((relNode = nodeAs<RelationSourceNode>(node)))
+	else if (auto relNode = nodeAs<RelationSourceNode>(node))
 		contexts.push(relNode->dsqlContext);
-	else if ((rseNode = nodeAs<RseNode>(node)))
+	//// TODO: LocalTableSourceNode
+	else if (auto rseNode = nodeAs<RseNode>(node))
 	{
 		if (rseNode->dsqlContext)	// derived table
 			contexts.push(rseNode->dsqlContext);
 		else	// joins
 		{
-			NestConst<RecSourceListNode> streamList = rseNode->dsqlStreams;
-
-			for (NestConst<RecordSourceNode>* ptr = streamList->items.begin();
-				 ptr != streamList->items.end();
-				 ++ptr)
-			{
-				dsqlGetContexts(contexts, *ptr);
-			}
+			for (auto item : rseNode->dsqlStreams->items)
+				dsqlGetContexts(contexts, item);
 		}
 	}
 	else
-	{
 		fb_assert(false);
-	}
 }
 
 // Create a compound statement to initialize returning parameters.
-static StmtNode* dsqlNullifyReturning(DsqlCompilerScratch* dsqlScratch, StmtNode* input, bool returnList)
+static StmtNode* dsqlNullifyReturning(DsqlCompilerScratch* dsqlScratch, StmtNode* input)
 {
-	thread_db* tdbb = JRD_get_thread_data();
-	MemoryPool& pool = *tdbb->getDefaultPool();
+	if (dsqlScratch->isPsql())
+		return input;
 
-	StmtNode* returning = NULL;
-	EraseNode* eraseNode;
-	ModifyNode* modifyNode;
-	StoreNode* storeNode;
+	auto& pool = dsqlScratch->getPool();
+	ReturningClause* returning;
 
-	if ((eraseNode = nodeAs<EraseNode>(input)))
-		returning = eraseNode->statement;
-	else if ((modifyNode = nodeAs<ModifyNode>(input)))
-		returning = modifyNode->statement2;
-	else if ((storeNode = nodeAs<StoreNode>(input)))
-		returning = storeNode->statement2;
+	if (auto eraseNode = nodeAs<EraseNode>(input))
+		returning = eraseNode->dsqlReturning;
+	else if (auto modifyNode = nodeAs<ModifyNode>(input))
+		returning = modifyNode->dsqlReturning;
+	else if (auto storeNode = nodeAs<StoreNode>(input))
+		returning = storeNode->dsqlReturning;
 	else
 	{
 		fb_assert(false);
+		returning = nullptr;
 	}
 
-	if (dsqlScratch->isPsql() || !returning)
-		return returnList ? input : NULL;
+	if (!returning)
+		return input;
 
 	// If this is a RETURNING in DSQL, we need to initialize the output
-	// parameters with NULL, to return in case of empty resultset.
-	// Note: this may be changed in the future, i.e. return empty resultset
-	// instead of NULLs. In this case, I suppose this function could be
-	// completely removed.
+	// parameters with NULL, to return in case of empty resultset in some
+	// circumstances (for example WHERE CURRENT OF ... RETURNING).
 
-	// nod_returning was already processed
-	CompoundStmtNode* returningStmt = nodeAs<CompoundStmtNode>(returning);
-	fb_assert(returningStmt);
+	const auto nullAssign = FB_NEW_POOL(pool) CompoundStmtNode(pool);
+	auto nullPtr = nullAssign->statements.getBuffer(returning->first->items.getCount());
 
-	CompoundStmtNode* nullAssign = FB_NEW_POOL(pool) CompoundStmtNode(pool);
-
-	NestConst<StmtNode>* ret_ptr = returningStmt->statements.begin();
-	NestConst<StmtNode>* null_ptr = nullAssign->statements.getBuffer(returningStmt->statements.getCount());
-
-	for (const NestConst<StmtNode>* const end = ret_ptr + returningStmt->statements.getCount();
-		 ret_ptr != end;
-		 ++ret_ptr, ++null_ptr)
+	for (auto& retPtr : returning->second->items)
 	{
 		AssignmentNode* assign = FB_NEW_POOL(pool) AssignmentNode(pool);
 		assign->asgnFrom = NullNode::instance();
-		assign->asgnTo = nodeAs<AssignmentNode>(*ret_ptr)->asgnTo;
-		*null_ptr = assign;
+		assign->asgnTo = retPtr;
+		*nullPtr++ = assign;
 	}
 
-	// If asked for, return a compound statement with the initialization and the
-	// original statement.
-	if (returnList)
-	{
-		CompoundStmtNode* list = FB_NEW_POOL(pool) CompoundStmtNode(pool);
-		list->statements.add(nullAssign);
-		list->statements.add(input);
-		return list;
-	}
-
-	return nullAssign;	// return the initialization statement.
+	// Return a compound statement with the initialization and the original statement.
+	const auto list = FB_NEW_POOL(pool) CompoundStmtNode(pool);
+	list->statements.add(nullAssign);
+	list->statements.add(input);
+	return list;
 }
 
 // Check that a field is named only once in INSERT or UPDATE statements.
@@ -9258,14 +9782,9 @@ static dsql_ctx* dsqlPassCursorContext(DsqlCompilerScratch* dsqlScratch, const M
 	NestConst<RecSourceListNode> temp = nodeRse->dsqlStreams;
 	dsql_ctx* context = NULL;
 
-	NestConst<RecordSourceNode>* ptr = temp->items.begin();
-
-	for (const NestConst<RecordSourceNode>* const end = temp->items.end(); ptr != end; ++ptr)
+	for (auto& recSource : temp->items)
 	{
-		RecordSourceNode* r_node = *ptr;
-		RelationSourceNode* relNode = nodeAs<RelationSourceNode>(r_node);
-
-		if (relNode)
+		if (auto relNode = nodeAs<RelationSourceNode>(recSource))
 		{
 			dsql_ctx* candidate = relNode->dsqlContext;
 			DEV_BLKCHK(candidate, dsql_type_ctx);
@@ -9284,7 +9803,8 @@ static dsql_ctx* dsqlPassCursorContext(DsqlCompilerScratch* dsqlScratch, const M
 					context = candidate;
 			}
 		}
-		else if (nodeAs<AggregateSourceNode>(r_node))
+		//// TODO: LocalTableSourceNode
+		else if (nodeIs<AggregateSourceNode>(recSource))
 		{
 			// cursor with aggregation is not updatable
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-510) <<
@@ -9489,37 +10009,39 @@ static USHORT dsqlPassLabel(DsqlCompilerScratch* dsqlScratch, bool breakContinue
 	return number;
 }
 
-// Compile a RETURNING clause (nod_returning or not).
-static StmtNode* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, ReturningClause* input,
-	StmtNode* stmt)
+// Compile a RETURNING clause.
+static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, dsql_rel* relation,
+	ReturningClause* input, bool singleton)
 {
-	thread_db* tdbb = JRD_get_thread_data();
+	if (!input)
+		return nullptr;
 
-	if (stmt)
+	auto& pool = dsqlScratch->getPool();
+
+	auto inputFirst = input->first;
+
+	if (!inputFirst)
 	{
-		const bool isPsql = dsqlScratch->isPsql();
-
-		PsqlChanger changer(dsqlScratch, false);
-		stmt = stmt->dsqlPass(dsqlScratch);
-
-		if (!isPsql)
-			dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_EXEC_PROCEDURE);
-
-		return stmt;
+		// Process RETURNING *
+		inputFirst = FB_NEW_POOL(pool) ValueListNode(pool, 0u);
+		dsqlExplodeFields(relation, inputFirst->items, true);
+	}
+	else
+	{
+		// Process alias.* items.
+		inputFirst = PASS1_expand_select_list(dsqlScratch, inputFirst, nullptr);
 	}
 
-	if (!input)
-		return NULL;
+	const auto node = FB_NEW_POOL(pool) ReturningClause(pool);
 
-	MemoryPool& pool = *tdbb->getDefaultPool();
-
-	ValueListNode* const source = Node::doDsqlPass(dsqlScratch, input->first, false);
+	node->first = Node::doDsqlPass(dsqlScratch, inputFirst, false);
 
 	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_RETURNING_INTO;
-	ValueListNode* target = dsqlPassArray(dsqlScratch, input->second);
+	node->second = dsqlPassArray(dsqlScratch,
+		dsqlScratch->returningClause ? dsqlScratch->returningClause->second : input->second);
 	dsqlScratch->flags &= ~DsqlCompilerScratch::FLAG_RETURNING_INTO;
 
-	if (!dsqlScratch->isPsql() && target)
+	if (!dsqlScratch->isPsql() && input->second)
 	{
 		// RETURNING INTO is not allowed syntax for DSQL
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
@@ -9527,10 +10049,10 @@ static StmtNode* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, Returnin
 				  Arg::Gds(isc_token_err) <<
 				  Arg::Gds(isc_random) << Arg::Str("INTO"));
 	}
-	else if (dsqlScratch->isPsql() && !target)
+	else if (dsqlScratch->isPsql() && !input->second)
 	{
 		// This trick because we don't copy lexer positions when copying lists.
-		const ValueListNode* errSrc = input->first;
+		const ValueListNode* errSrc = inputFirst;
 		// RETURNING without INTO is not allowed for PSQL
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 				  // Unexpected end of command
@@ -9538,33 +10060,18 @@ static StmtNode* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, Returnin
 													Arg::Num(errSrc->column));
 	}
 
-	const unsigned int count = source->items.getCount();
+	const unsigned count = node->first->items.getCount();
 	fb_assert(count);
 
-	CompoundStmtNode* node = FB_NEW_POOL(pool) CompoundStmtNode(pool);
-
-	if (target)
+	if (input->second)
 	{
-		// PSQL case
 		fb_assert(dsqlScratch->isPsql());
 
-		if (count != target->items.getCount())
+		if (count != node->second->items.getCount())
 		{
 			// count of column list and value list don't match
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 					  Arg::Gds(isc_dsql_var_count_err));
-		}
-
-		NestConst<ValueExprNode>* src = source->items.begin();
-		NestConst<ValueExprNode>* dst = target->items.begin();
-
-		for (const NestConst<ValueExprNode>* const end = source->items.end(); src != end; ++src, ++dst)
-		{
-			AssignmentNode* temp = FB_NEW_POOL(pool) AssignmentNode(pool);
-			temp->asgnFrom = *src;
-			temp->asgnTo = *dst;
-
-			node->statements.add(temp);
 		}
 	}
 	else
@@ -9572,32 +10079,127 @@ static StmtNode* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, Returnin
 		// DSQL case
 		fb_assert(!dsqlScratch->isPsql());
 
-		NestConst<ValueExprNode>* src = source->items.begin();
-
-		for (const NestConst<ValueExprNode>* const end = source->items.end(); src != end; ++src)
+		if (dsqlScratch->returningClause)
 		{
-			dsql_par* parameter = MAKE_parameter(dsqlScratch->getStatement()->getReceiveMsg(),
-				true, true, 0, *src);
-			parameter->par_node = *src;
-			DsqlDescMaker::fromNode(dsqlScratch, &parameter->par_desc, *src, true);
+			fb_assert(node->first->items.getCount() == dsqlScratch->returningClause->first->items.getCount());
 
-			ParameterNode* paramNode = FB_NEW_POOL(*tdbb->getDefaultPool()) ParameterNode(
-				*tdbb->getDefaultPool());
-			paramNode->dsqlParameterIndex = parameter->par_index;
-			paramNode->dsqlParameter = parameter;
+			auto secondIt = node->second->items.begin();
 
-			AssignmentNode* temp = FB_NEW_POOL(pool) AssignmentNode(pool);
-			temp->asgnFrom = *src;
-			temp->asgnTo = paramNode;
+			for (auto& src : node->first->items)
+			{
+				auto parameterNode = nodeAs<ParameterNode>(*secondIt++);
+				fb_assert(parameterNode);
 
-			node->statements.add(temp);
+				// When RETURNING context marked with CTX_null is processed first, parameter
+				// node should be fixed when resolving parameters in the real context.
+				if (nodeIs<NullNode>(parameterNode->dsqlParameter->par_node))
+				{
+					parameterNode->dsqlParameter->par_node = src;
+					DsqlDescMaker::fromNode(dsqlScratch, &parameterNode->dsqlParameter->par_desc, src, true);
+				}
+			}
+		}
+		else
+		{
+			node->second = FB_NEW_POOL(pool) ValueListNode(pool, count);
+			auto secondIt = node->second->items.begin();
+
+			for (auto& src : node->first->items)
+			{
+				auto parameter = MAKE_parameter(dsqlScratch->getStatement()->getReceiveMsg(),
+					true, true, 0, src);
+				parameter->par_node = src;
+				DsqlDescMaker::fromNode(dsqlScratch, &parameter->par_desc, src, true);
+
+				auto paramNode = FB_NEW_POOL(pool) ParameterNode(pool);
+				paramNode->dsqlParameterIndex = parameter->par_index;
+				paramNode->dsqlParameter = parameter;
+
+				*secondIt++ = paramNode;
+			}
+
+			dsqlScratch->returningClause = node;
+
+			if (!singleton)
+			{
+				// Set up parameter to handle EOF
+				auto parameter = MAKE_parameter(dsqlScratch->getStatement()->getReceiveMsg(), false, false, 0, nullptr);
+				dsqlScratch->getStatement()->setEof(parameter);
+				parameter->par_desc.dsc_dtype = dtype_short;
+				parameter->par_desc.dsc_scale = 0;
+				parameter->par_desc.dsc_length = sizeof(SSHORT);
+			}
 		}
 	}
 
 	if (!dsqlScratch->isPsql())
-		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_EXEC_PROCEDURE);
+	{
+		dsqlScratch->getStatement()->setType(singleton ?
+			DsqlCompiledStatement::TYPE_EXEC_PROCEDURE : DsqlCompiledStatement::TYPE_RETURNING_CURSOR);
+	}
 
 	return node;
+}
+
+// Play with contexts for RETURNING purposes.
+// Its assumed that oldContext is already on the stack.
+// Changes oldContext name to "OLD".
+static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, dsql_ctx* oldContext,
+	dsql_ctx* modContext, ReturningClause* input, bool singleton)
+{
+	if (!input)
+		return nullptr;
+
+	AutoSaveRestore<string> autoOldAlias(&oldContext->ctx_alias);
+	AutoSaveRestore<string> autoOldInternalAlias(&oldContext->ctx_internal_alias);
+
+	AutoSetRestore<USHORT> autoFlags(&oldContext->ctx_flags, oldContext->ctx_flags | CTX_system | CTX_returning);
+	AutoSetRestore<USHORT> autoScopeLevel(&dsqlScratch->scopeLevel, dsqlScratch->scopeLevel + 1);
+
+	auto& pool = dsqlScratch->getPool();
+
+	// Clone the modify/old context and push with name "NEW" in a greater scope level.
+
+	const auto newContext = FB_NEW_POOL(pool) dsql_ctx(pool);
+
+	if (modContext)
+	{
+		// Push the modify context in the same scope level.
+		dsqlScratch->context->push(modContext);
+		*newContext = *modContext;
+		newContext->ctx_flags |= CTX_system;
+	}
+	else
+	{
+		// Create the target (= OLD) context and push it on the stack.
+		const auto targetContext = FB_NEW_POOL(pool) dsql_ctx(pool);
+		*targetContext = *oldContext;
+
+		// ASF: dsql_ctx::operator= do not copy ctx_internal_alias.
+		targetContext->ctx_internal_alias = oldContext->ctx_internal_alias;
+
+		targetContext->ctx_flags &= ~CTX_system;	// resolve unqualified fields
+		dsqlScratch->context->push(targetContext);
+
+		// This is NEW in the context of a DELETE. Mark it as NULL.
+		*newContext = *oldContext;
+		newContext->ctx_flags |= CTX_null;
+	}
+
+	oldContext->ctx_alias = oldContext->ctx_internal_alias = OLD_CONTEXT_NAME;
+
+	newContext->ctx_alias = newContext->ctx_internal_alias = NEW_CONTEXT_NAME;
+	newContext->ctx_flags |= CTX_returning;
+	newContext->ctx_scope_level = dsqlScratch->scopeLevel;
+	dsqlScratch->context->push(newContext);
+
+	const auto ret = dsqlProcessReturning(dsqlScratch, oldContext->ctx_relation, input, singleton);
+
+	// Restore the context stack.
+	dsqlScratch->context->pop();
+	dsqlScratch->context->pop();
+
+	return ret;
 }
 
 // Setup parameter name.
@@ -9748,6 +10350,8 @@ static void makeValidation(thread_db* tdbb, CompilerScratch* csb, StreamType str
 	DEV_BLKCHK(csb, type_csb);
 
 	jrd_rel* relation = csb->csb_rpt[stream].csb_relation;
+	if (!relation)	//// TODO: LocalTableSourceNode
+		return;
 
 	vec<jrd_fld*>* vector = relation->rel_fields;
 	if (!vector)
@@ -10035,7 +10639,7 @@ static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
 
 	jrd_rel* relation = csb->csb_rpt[stream].csb_relation;
 
-	fb_assert(relation);
+	//// TODO: LocalTableSourceNode
 	if (!relation)
 		return;
 

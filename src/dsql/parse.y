@@ -81,7 +81,7 @@
 #include <string.h>
 #include <stdarg.h>
 
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../dsql/dsql.h"
 #include "ibase.h"
 #include "../jrd/flags.h"
@@ -641,6 +641,7 @@ using namespace Firebird;
 %token <metaNamePtr> PUBLICATION
 %token <metaNamePtr> QUANTIZE
 %token <metaNamePtr> RANGE
+%token <metaNamePtr> RESETTING
 %token <metaNamePtr> RDB_ERROR
 %token <metaNamePtr> RDB_GET_TRANSACTION_CN
 %token <metaNamePtr> RDB_ROLE_IN_USE
@@ -650,8 +651,8 @@ using namespace Firebird;
 %token <metaNamePtr> RSA_ENCRYPT
 %token <metaNamePtr> RSA_PRIVATE
 %token <metaNamePtr> RSA_PUBLIC
-%token <metaNamePtr> RSA_SIGN
-%token <metaNamePtr> RSA_VERIFY
+%token <metaNamePtr> RSA_SIGN_HASH
+%token <metaNamePtr> RSA_VERIFY_HASH
 %token <metaNamePtr> SALT_LENGTH
 %token <metaNamePtr> SECURITY
 %token <metaNamePtr> SESSION
@@ -675,6 +676,18 @@ using namespace Firebird;
 %token <metaNamePtr> LIFETIME
 %token <metaNamePtr> CLEAR
 %token <metaNamePtr> OLDEST
+
+// tokens added for Firebird 4.0.1
+
+%token <metaNamePtr> DEBUG
+%token <metaNamePtr> PKCS_1_5
+
+// tokens added for Firebird 5.0
+
+%token <metaNamePtr> TARGET
+%token <metaNamePtr> TIMEZONE_NAME
+%token <metaNamePtr> UNICODE_CHAR
+%token <metaNamePtr> UNICODE_VAL
 
 // precedence declarations for expression evaluation
 
@@ -883,7 +896,8 @@ tra_statement
 
 %type <mngNode> mng_statement
 mng_statement
-	: set_decfloat_round						{ $$ = $1; }
+	: set_debug_option							{ $$ = $1; }
+	| set_decfloat_round						{ $$ = $1; }
 	| set_decfloat_traps						{ $$ = $1; }
 	| session_statement							{ $$ = $1; }
 	| set_role									{ $$ = $1; }
@@ -1798,7 +1812,7 @@ replace_sequence_clause
 		{
 			// Remove this to implement CORE-5137
 			if (!$2->restartSpecified && !$2->step.specified)
-				yyerrorIncompleteCmd();
+				yyerrorIncompleteCmd(YYPOSNARG(3));
 			$$ = $2;
 		}
 	;
@@ -1831,7 +1845,7 @@ alter_sequence_clause
 	  alter_sequence_options($2)
 		{
 			if (!$2->restartSpecified && !$2->value.specified && !$2->step.specified)
-				yyerrorIncompleteCmd();
+				yyerrorIncompleteCmd(YYPOSNARG(3));
 			$$ = $2;
 		}
 
@@ -4278,6 +4292,7 @@ keyword_or_column
 	| LOCALTIME
 	| LOCALTIMESTAMP
 	| PUBLICATION
+	| RESETTING
 	| TIMEZONE_HOUR
 	| TIMEZONE_MINUTE
 	| UNBOUNDED
@@ -5346,6 +5361,12 @@ set_role
 		{ $$ = newNode<SetRoleNode>(); }
 	;
 
+%type <mngNode> set_debug_option
+set_debug_option
+	: SET DEBUG OPTION valid_symbol_name '=' constant
+		{ $$ = newNode<SetDebugOptionNode>($4, $6); }
+	;
+
 %type <setDecFloatRoundNode> set_decfloat_round
 set_decfloat_round
 	: SET DECFLOAT ROUND valid_symbol_name
@@ -5636,13 +5657,27 @@ comment
 		{ $$ = newNode<CommentOnNode>($3, *$4, *$5, *$7); }
 	| COMMENT ON ddl_type4 ddl_qualified_name IS ddl_desc
 		{ $$ = newNode<CommentOnNode>($3, *$4, "", *$6); }
-	| COMMENT ON USER symbol_user_name IS ddl_desc
-		{
-			CreateAlterUserNode* node =
-				newNode<CreateAlterUserNode>(CreateAlterUserNode::USER_MOD, *$4);
-			node->comment = $6;
-			$$ = node;
-		}
+	| comment_on_user
+		{ $$ = $1; }
+	;
+
+%type <createAlterUserNode> comment_on_user
+comment_on_user
+	: COMMENT ON USER symbol_user_name
+			{
+				$$ = newNode<CreateAlterUserNode>(CreateAlterUserNode::USER_MOD, *$4);
+			}
+		opt_use_plugin($5) IS ddl_desc
+			{
+				CreateAlterUserNode* node = $$ = $5;
+				node->comment = $8;
+			}
+	;
+
+%type opt_use_plugin(<createAlterUserNode>)
+opt_use_plugin($node)
+	: // nothing
+	| use_plugin($node)
 	;
 
 %type <intVal> ddl_type0
@@ -5858,9 +5893,36 @@ select_expr_body
 		}
 	;
 
-%type <rseNode> query_term
+%type <recSourceNode> query_term
 query_term
+	: query_primary
+	;
+
+%type <recSourceNode> query_primary
+query_primary
 	: query_spec
+		{ $$ = $1; }
+	| '(' select_expr_body order_clause_opt result_offset_clause fetch_first_clause ')'
+		{
+			if ($3 || $4 || $5)
+			{
+				SelectExprNode* node = newNode<SelectExprNode>();
+				node->querySpec = $2;
+				node->orderClause = $3;
+
+				if ($4 || $5)
+				{
+					RowsClause* rowsNode = newNode<RowsClause>();
+					rowsNode->skip = $4;
+					rowsNode->length = $5;
+					node->rowsClause = rowsNode;
+				}
+
+				$$ = node;
+			}
+			else
+				$$ = $2;
+		}
 	;
 
 %type <rseNode> query_spec
@@ -6463,7 +6525,7 @@ insert_start
 	: INSERT INTO simple_table_name
 		{
 			StoreNode* node = newNode<StoreNode>();
-			node->dsqlRelation = $3;
+			node->target = $3;
 			$$ = node;
 		}
 	;
@@ -6498,10 +6560,13 @@ merge
 				node->usingClause = $5;
 				node->condition = $7;
 			}
-		merge_when_clause($8) returning_clause
+		merge_when_clause($8)
+		plan_clause order_clause_opt returning_clause
 			{
 				MergeNode* node = $$ = $8;
-				node->returning = $10;
+				node->plan = $10;
+				node->order = $11;
+				node->returning = $12;
 			}
 	;
 
@@ -6522,9 +6587,17 @@ merge_when_matched_clause($mergeNode)
 
 %type merge_when_not_matched_clause(<mergeNode>)
 merge_when_not_matched_clause($mergeNode)
-	: WHEN NOT MATCHED
-			{ $<mergeNotMatchedClause>$ = &$mergeNode->whenNotMatched.add(); }
-		merge_insert_specification(NOTRIAL($<mergeNotMatchedClause>4))
+	: WHEN NOT MATCHED by_target_noise
+			{ $<mergeNotMatchedClause>$ = &$mergeNode->whenNotMatchedByTarget.add(); }
+		merge_insert_specification(NOTRIAL($<mergeNotMatchedClause>5))
+	| WHEN NOT MATCHED BY SOURCE
+			{ $<mergeMatchedClause>$ = &$mergeNode->whenNotMatchedBySource.add(); }
+		merge_update_specification(NOTRIAL($<mergeMatchedClause>6), NOTRIAL(&$mergeNode->relation->dsqlName))
+	;
+
+by_target_noise
+	: // empty
+	| BY TARGET
 	;
 
 %type merge_update_specification(<mergeMatchedClause>, <metaNamePtr>)
@@ -6644,12 +6717,16 @@ update_or_insert
 				node->relation = $5;
 			}
 		ins_column_parens_opt(NOTRIAL(&$6->fields)) override_opt VALUES '(' value_or_default_list ')'
-				update_or_insert_matching_opt(NOTRIAL(&$6->matching)) returning_clause
+				update_or_insert_matching_opt(NOTRIAL(&$6->matching))
+				plan_clause order_clause_opt rows_clause_optional returning_clause
 			{
 				UpdateOrInsertNode* node = $$ = $6;
 				node->overrideClause = $8;
 				node->values = $11;
-				node->returning = $14;
+				node->plan = $14;
+				node->order = $15;
+				node->rows = $16;
+				node->returning = $17;
 			}
 	;
 
@@ -6874,6 +6951,7 @@ predicate
 	| exists_predicate
 	| singular_predicate
 	| trigger_action_predicate
+	| session_reset_predicate
 	;
 
 
@@ -7045,6 +7123,15 @@ trigger_action_predicate
 		}
 	;
 
+%type <boolExprNode> session_reset_predicate
+session_reset_predicate
+	: RESETTING
+		{
+			$$ = newNode<ComparativeBoolNode>(blr_eql,
+					newNode<InternalInfoNode>(MAKE_const_slong(INFO_TYPE_SESSION_RESETTING)),
+					MAKE_const_slong(1));
+		}
+
 %type <boolExprNode> null_predicate
 null_predicate
 	: value IS NULL
@@ -7148,9 +7235,14 @@ user_fixed_option($node)
 	| REVOKE ADMIN ROLE		{ setClause($node->adminRole, "ADMIN ROLE", false); }
 	| ACTIVE				{ setClause($node->active, "ACTIVE/INACTIVE", true); }
 	| INACTIVE				{ setClause($node->active, "ACTIVE/INACTIVE", false); }
-	| USING PLUGIN valid_symbol_name
-							{ setClause($node->plugin, "USING PLUGIN", $3); }
+	| use_plugin($node)
 	| TAGS '(' user_var_list($node) ')'
+	;
+
+%type use_plugin(<createAlterUserNode>)
+use_plugin($node)
+	: USING PLUGIN valid_symbol_name
+							{ setClause($node->plugin, "USING PLUGIN", $3); }
 	;
 
 %type user_var_list(<createAlterUserNode>)
@@ -8103,6 +8195,8 @@ system_function_std_syntax
 	| TAN
 	| TANH
 	| TRUNC
+	| UNICODE_CHAR
+	| UNICODE_VAL
 	| UUID_TO_CHAR
 	| QUANTIZE
 	| TOTALORDER
@@ -8183,25 +8277,25 @@ system_function_special_syntax
 		}
 	| POSITION '(' value_list_opt  ')'
 		{ $$ = newNode<SysFuncCallNode>(*$1, $3); }
-	| rsa_encrypt_decrypt '(' value KEY value crypt_opt_lparam crypt_opt_hash ')'
+	| rsa_encrypt_decrypt '(' value KEY value crypt_opt_lparam crypt_opt_hash crypt_opt_pkcs')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add($5)->add($6)->
-					add(MAKE_str_constant(newIntlString($7->c_str()), CS_ASCII)));
+					add(MAKE_str_constant(newIntlString($7->c_str()), CS_ASCII))->add($8));
 			$$->dsqlSpecialSyntax = true;
 		}
-	| RSA_SIGN '(' value KEY value crypt_opt_hash crypt_opt_saltlen ')'
+	| RSA_SIGN_HASH '(' value KEY value crypt_opt_hash crypt_opt_saltlen crypt_opt_pkcs ')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add($5)->
-					add(MAKE_str_constant(newIntlString($6->c_str()), CS_ASCII))->add($7));
+					add(MAKE_str_constant(newIntlString($6->c_str()), CS_ASCII))->add($7)->add($8));
 			$$->dsqlSpecialSyntax = true;
 		}
-	| RSA_VERIFY'(' value SIGNATURE value KEY value crypt_opt_hash crypt_opt_saltlen ')'
+	| RSA_VERIFY_HASH '(' value SIGNATURE value KEY value crypt_opt_hash crypt_opt_saltlen crypt_opt_pkcs ')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add($5)->add($7)->
-					add(MAKE_str_constant(newIntlString($8->c_str()), CS_ASCII))->add($9));
+					add(MAKE_str_constant(newIntlString($8->c_str()), CS_ASCII))->add($9)->add($10));
 			$$->dsqlSpecialSyntax = true;
 		}
 	| RDB_SYSTEM_PRIVILEGE '(' valid_symbol_name ')'
@@ -8227,6 +8321,14 @@ crypt_opt_lparam
 		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
 	| LPARAM value
 		{ $$ = $2; }
+	;
+
+%type <valueExprNode> crypt_opt_pkcs
+crypt_opt_pkcs
+	: // nothing
+		{ $$ = MAKE_const_slong(0); }
+	| PKCS_1_5
+		{ $$ = MAKE_const_slong(1); }
 	;
 
 %type <metaNamePtr> crypt_opt_hash
@@ -8548,6 +8650,7 @@ timestamp_part
 	| MILLISECOND	{ $$ = blr_extract_millisecond; }
 	| TIMEZONE_HOUR	{ $$ = blr_extract_timezone_hour; }
 	| TIMEZONE_MINUTE	{ $$ = blr_extract_timezone_minute; }
+	| TIMEZONE_NAME	{ $$ = blr_extract_timezone_name; }
 	| WEEK			{ $$ = blr_extract_week; }
 	| WEEKDAY		{ $$ = blr_extract_weekday; }
 	| YEARDAY		{ $$ = blr_extract_yearday; }
@@ -8997,8 +9100,8 @@ non_reserved_word
 	| RSA_ENCRYPT
 	| RSA_PRIVATE
 	| RSA_PUBLIC
-	| RSA_SIGN
-	| RSA_VERIFY
+	| RSA_SIGN_HASH
+	| RSA_VERIFY_HASH
 	| SALT_LENGTH
 	| SECURITY
 	| SESSION
@@ -9009,6 +9112,12 @@ non_reserved_word
 	| TOTALORDER
 	| TRAPS
 	| ZONE
+	| DEBUG				// added in FB 4.0.1
+	| PKCS_1_5
+	| TARGET			// added in FB 5.0
+	| TIMEZONE_NAME
+	| UNICODE_CHAR
+	| UNICODE_VAL
 	;
 
 %%

@@ -77,6 +77,7 @@
     <ClCompile Include="..\..\..\src\common\isc_sync.cpp" />
     <ClCompile Include="..\..\..\src\common\keywords.cpp" />
     <ClCompile Include="..\..\..\src\common\MsgMetadata.cpp" />
+    <ClCompile Include="..\..\..\src\common\MsgUtil.cpp" />
     <ClCompile Include="..\..\..\src\common\os\win32\fbsyslog.cpp" />
     <ClCompile Include="..\..\..\src\common\os\win32\guid.cpp" />
     <ClCompile Include="..\..\..\src\common\os\win32\isc_ipc.cpp" />
@@ -188,6 +189,7 @@
     <ClInclude Include="..\..\..\src\common\isc_s_proto.h" />
     <ClInclude Include="..\..\..\src\common\keywords.h" />
     <ClInclude Include="..\..\..\src\common\MsgMetadata.h" />
+	<ClInclude Include="..\..\..\src\common\MsgUtil.h" />
     <ClInclude Include="..\..\..\src\common\os\divorce.h" />
     <ClInclude Include="..\..\..\src\common\os\fbsyslog.h" />
     <ClInclude Include="..\..\..\src\common\os\guid.h" />

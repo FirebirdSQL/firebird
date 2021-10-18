@@ -228,6 +228,10 @@ void SCL_check_access(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
+	// Allow the replicator any access to database, its permissions are already validated
+	if (tdbb->tdbb_flags & TDBB_replicator)
+		return;
+
 	const MetaName& userName = s_class->sclClassUser.second;
 
 	if (s_class && (s_class->scl_flags & SCL_corrupt))
@@ -286,6 +290,11 @@ void SCL_check_create_access(thread_db* tdbb, int type)
  *
  **************************************/
 	SET_TDBB(tdbb);
+
+	// Allow the replicator any access to database, its permissions are already validated
+	if (tdbb->tdbb_flags & TDBB_replicator)
+		return;
+
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
 	// Allow the locksmith any access to database
@@ -915,11 +924,7 @@ SecurityClass* SCL_get_class(thread_db* tdbb, const TEXT* par_string)
 		return NULL;
 
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
-
-	const UserId* effectiveUserId = attachment->getEffectiveUserId();
-	MetaName userName;
-	if (effectiveUserId)
-		userName= effectiveUserId->getUserName();
+	const MetaString& userName = attachment->getEffectiveUserName();
 
 	MetaNamePair key(string, userName);
 	// Look for the class already known

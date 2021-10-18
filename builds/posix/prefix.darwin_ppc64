@@ -18,7 +18,7 @@
 # 2 Oct 2002, Nickolay Samofatov - Major Cleanup
 
 # To use this file to build 64bit version of Firebird for MacOS 10.5 (Leopard)
-# Can only be built on MacOSX 10.5 (Leopard) due to lack of 64bit support in 
+# Can only be built on MacOSX 10.5 (Leopard) due to lack of 64bit support in
 # Carbon in previous versions of MacOSX
 # 1. edit configure.in so that MAKEFILE_PREFIX=darwin_ppc64
 # 2. uncomment the CPU_TYPE
@@ -36,10 +36,10 @@ MACOSX_DEPLOYMENT_TARGET=10.5
 export MACOSX_DEPLOYMENT_TARGET
 
 PROD_FLAGS=-O3 -DDARWIN -pipe -p -MMD -fPIC -fno-common -mmacosx-version-min=10.5
-DEV_FLAGS=-ggdb -DDARWIN -pipe -p -MMD -fPIC -fno-common -Wall -mmacosx-version-min=10.5 -Wno-non-virtual-dtor
+DEV_FLAGS=-ggdb -DDARWIN -pipe -p -MMD -fPIC -fno-common -Werror=delete-incomplete -Wall -mmacosx-version-min=10.5 -Wno-non-virtual-dtor
 CXXFLAGS:=$(CXXFLAGS) -fvisibility-inlines-hidden -fvisibility=hidden
 
-EXE_LINK_OPTIONS:=-arch ppc64 
+EXE_LINK_OPTIONS:=-arch ppc64
 LD_FLAGS+=-arch ppc64
 
 include $(ROOT)/gen/darwin.defaults

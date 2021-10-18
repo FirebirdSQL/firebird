@@ -73,7 +73,6 @@ void InternalProvider::jrdAttachmentEnd(thread_db* tdbb, Attachment* att, bool f
 		return;
 
 	{	// scope
-		Database* dbb = tdbb->getDatabase();
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		AttToConnMap::Accessor acc(&m_connections);
@@ -209,7 +208,7 @@ void InternalConnection::doDetach(thread_db* tdbb)
 		FbLocalStatus status;
 
 		RefPtr<JAttachment> att = m_attachment;
-		m_attachment = NULL;
+		m_attachment = NULL;	// release and nullify
 
 		{	// scope
 			EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
@@ -245,7 +244,7 @@ bool InternalConnection::cancelExecution(bool /*forced*/)
 	return !(status->getState() & IStatus::STATE_ERRORS);
 }
 
-bool InternalConnection::resetSession()
+bool InternalConnection::resetSession(thread_db* tdbb)
 {
 	fb_assert(!m_isCurrent);
 
@@ -253,9 +252,11 @@ bool InternalConnection::resetSession()
 		return true;
 
 	FbLocalStatus status;
-	m_attachment->execute(&status, NULL, 0, "ALTER SESSION RESET",
-		m_sqlDialect, NULL, NULL, NULL, NULL);
-
+	{
+		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
+		m_attachment->execute(&status, NULL, 0, "ALTER SESSION RESET",
+			m_sqlDialect, NULL, NULL, NULL, NULL);
+	}
 	return !(status->getState() & IStatus::STATE_ERRORS);
 }
 
@@ -288,8 +289,8 @@ bool InternalConnection::isSameDatabase(const PathName& dbName, ClumpletReader& 
 	if (m_isCurrent)
 	{
 		const Attachment* att = m_attachment->getHandle();
-		const MetaString& attUser = att->att_user->getUserName();
-		const MetaString& attRole = att->att_user->getSqlRole();
+		const MetaString& attUser = att->getUserName();
+		const MetaString& attRole = att->getSqlRole();
 
 		MetaString str;
 
@@ -367,7 +368,7 @@ void InternalTransaction::doCommit(FbStatusVector* status, thread_db* tdbb, bool
 	if (m_scope == traCommon && m_IntConnection.isCurrent())
 	{
 		if (!retain) {
-			m_transaction = NULL;
+			m_transaction = NULL;	// release and nullify
 		}
 	}
 	else
@@ -378,7 +379,11 @@ void InternalTransaction::doCommit(FbStatusVector* status, thread_db* tdbb, bool
 		if (retain)
 			m_transaction->commitRetaining(&s);
 		else
+		{
 			m_transaction->commit(&s);
+			if (!(s->getState() & IStatus::STATE_ERRORS))
+				m_transaction.clear();
+		}
 	}
 }
 
@@ -388,14 +393,14 @@ void InternalTransaction::doRollback(FbStatusVector* status, thread_db* tdbb, bo
 
 	if (m_connection.isBroken())
 	{
-		m_transaction = NULL;
+		m_transaction.clear();
 		return;
 	}
 
 	if (m_scope == traCommon && m_IntConnection.isCurrent())
 	{
 		if (!retain) {
-			m_transaction = NULL;
+			m_transaction = NULL;	// release and nullify
 		}
 	}
 	else
@@ -406,12 +411,16 @@ void InternalTransaction::doRollback(FbStatusVector* status, thread_db* tdbb, bo
 		if (retain)
 			m_transaction->rollbackRetaining(&s);
 		else
+		{
 			m_transaction->rollback(&s);
+			if (!(s->getState() & IStatus::STATE_ERRORS))
+				m_transaction.clear();
+		}
 	}
 
 	if ((status->getErrors()[1] == isc_att_shutdown || status->getErrors()[1] == isc_shutdown) && !retain)
 	{
-		m_transaction = NULL;
+		m_transaction.clear();
 		status->init();
 	}
 }
@@ -538,6 +547,7 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 	switch (statement->getType())
 	{
 	case DsqlCompiledStatement::TYPE_SELECT:
+	case DsqlCompiledStatement::TYPE_RETURNING_CURSOR:
 	case DsqlCompiledStatement::TYPE_SELECT_UPD:
 	case DsqlCompiledStatement::TYPE_SELECT_BLOCK:
 		m_stmt_selectable = true;
@@ -616,7 +626,7 @@ void InternalStatement::doOpen(thread_db* tdbb)
 		if (m_cursor)
 		{
 			m_cursor->close(&status);
-			m_cursor = NULL;
+			m_cursor.clear();
 		}
 
 		fb_assert(m_inMetadata->getMessageLength() == m_in_buffer.getCount());
@@ -659,9 +669,11 @@ void InternalStatement::doClose(thread_db* tdbb, bool drop)
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
 
 		if (m_cursor)
+		{
 			m_cursor->close(&status);
+			m_cursor.clear();
+		}
 
-		m_cursor = NULL;
 		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			raise(&status, tdbb, "JResultSet::close");
@@ -670,10 +682,12 @@ void InternalStatement::doClose(thread_db* tdbb, bool drop)
 		if (drop)
 		{
 			if (m_request)
+			{
 				m_request->free(&status);
+				m_request.clear();
+			}
 
 			m_allocated = false;
-			m_request = NULL;
 
 			if (status->getState() & IStatus::STATE_ERRORS)
 			{
@@ -833,7 +847,7 @@ void InternalBlob::close(thread_db* tdbb)
 	{
 		EngineCallbackGuard guard(tdbb, m_connection, FB_FUNCTION);
 		m_blob->close(&status);
-		m_blob = NULL;
+		m_blob.clear();
 	}
 
 	if (status->getState() & IStatus::STATE_ERRORS)
@@ -853,7 +867,7 @@ void InternalBlob::cancel(thread_db* tdbb)
 	{
 		EngineCallbackGuard guard(tdbb, m_connection, FB_FUNCTION);
 		m_blob->cancel(&status);
-		m_blob = NULL;
+		m_blob.clear();
 	}
 
 	if (status->getState() & IStatus::STATE_ERRORS)

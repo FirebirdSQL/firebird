@@ -26,7 +26,10 @@
 */
 
 #include "PluginLogWriter.h"
+#include "../common/isc_proto.h"
 #include "../common/classes/init.h"
+#include "../common/ThreadStart.h"
+#include "../common/file_params.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/os/os_utils.h"
 
@@ -50,18 +53,36 @@ void strerror_r(int err, char* buf, size_t bufSize)
 }
 #endif
 
+void getMappedFileName(PathName& file, PathName& mapFile)
+{
+	const ULONG hash = file.hash(0xFFFFFFFF);
+	mapFile.printf("%s_%08x", FB_TRACE_LOG_MUTEX, hash);
+}
+
 PluginLogWriter::PluginLogWriter(const char* fileName, size_t maxSize) :
 	m_fileName(*getDefaultMemoryPool()),
 	m_fileHandle(-1),
-	m_maxSize(maxSize)
+	m_maxSize(maxSize),
+	m_sharedMemory(NULL)
 {
 	m_fileName = fileName;
 
-#ifdef WIN_NT
-	PathName mutexName("fb_mutex_");
-	mutexName.append(m_fileName);
+	PathName logFile(fileName);
+	PathName mapFile;
+	getMappedFileName(logFile, mapFile);
 
-	checkMutex("init", ISC_mutex_init(&m_mutex, mutexName.c_str()));
+	try
+	{
+		m_sharedMemory.reset(FB_NEW_POOL(getPool())
+			SharedMemory<PluginLogWriterHeader>(mapFile.c_str(), sizeof(PluginLogWriterHeader), this));
+	}
+	catch (const Exception& ex)
+	{
+		iscLogException("PluginLogWriter: Cannot initialize the shared memory region", ex);
+		throw;
+	}
+
+#ifdef WIN_NT
 	Guard guard(this);
 #endif
 
@@ -75,10 +96,6 @@ PluginLogWriter::~PluginLogWriter()
 
 	if (m_fileHandle != -1)
 		::close(m_fileHandle);
-
-#ifdef WIN_NT
-	ISC_mutex_fini(&m_mutex);
-#endif
 }
 
 SINT64 PluginLogWriter::seekToEnd()
@@ -122,6 +139,8 @@ FB_SIZE_T PluginLogWriter::write(const void* buf, FB_SIZE_T size)
 
 #ifdef WIN_NT
 	Guard guard(this);
+#else
+	Guard guard(m_maxSize ? this : 0);
 #endif
 
 	if (m_fileHandle < 0)
@@ -136,23 +155,41 @@ FB_SIZE_T PluginLogWriter::write(const void* buf, FB_SIZE_T size)
 
 	if (m_maxSize && (fileSize > m_maxSize))
 	{
-		const TimeStamp stamp(TimeStamp::getCurrentTimeStamp());
-		struct tm times;
-		stamp.decode(&times);
-
 		PathName newName;
-		const FB_SIZE_T last_dot_pos = m_fileName.rfind(".");
-		if (last_dot_pos > 0)
+
+		while (true)
 		{
-			PathName log_name = m_fileName.substr(0, last_dot_pos);
-			PathName log_ext = m_fileName.substr(last_dot_pos + 1, m_fileName.length());
-			newName.printf("%s.%04d-%02d-%02dT%02d-%02d-%02d.%s", log_name.c_str(), times.tm_year + 1900,
-				times.tm_mon + 1, times.tm_mday, times.tm_hour, times.tm_min, times.tm_sec, log_ext.c_str());
-		}
-		else
-		{
-			newName.printf("%s.%04d-%02d-%02dT%02d-%02d-%02d", m_fileName.c_str(), times.tm_year + 1900,
-				times.tm_mon + 1, times.tm_mday, times.tm_hour, times.tm_min, times.tm_sec);
+			const TimeStamp stamp(TimeStamp::getCurrentTimeStamp());
+			struct tm times;
+			int fractions;
+			stamp.decode(&times, &fractions);
+
+			const FB_SIZE_T last_dot_pos = m_fileName.rfind(".");
+			if (last_dot_pos > 0)
+			{
+				PathName log_name = m_fileName.substr(0, last_dot_pos);
+				PathName log_ext = m_fileName.substr(last_dot_pos + 1, m_fileName.length());
+				newName.printf("%s.%04d-%02d-%02dT%02d-%02d-%02d.%04d.%s", log_name.c_str(), times.tm_year + 1900,
+					times.tm_mon + 1, times.tm_mday, times.tm_hour, times.tm_min, times.tm_sec, fractions, log_ext.c_str());
+			}
+			else
+			{
+				newName.printf("%s.%04d-%02d-%02dT%02d-%02d-%02d.%04d", m_fileName.c_str(), times.tm_year + 1900,
+					times.tm_mon + 1, times.tm_mday, times.tm_hour, times.tm_min, times.tm_sec, fractions);
+			}
+
+			// Check if the file with the given name exists. If it doesn't, break the loop.
+			struct stat st;
+
+			if (stat(newName.c_str(), &st))
+			{
+				// errno == ENOENT is expected here. But if it's another error, we can still
+				// break the loop and try to rename the file. For example, if there is a
+				// problem with permissions, it will be caught on MoveFile/rename call.
+				break;
+			}
+
+			Thread::sleep(10);
 		}
 
 #ifdef WIN_NT
@@ -221,31 +258,28 @@ void PluginLogWriter::checkErrno(const char* operation)
 		operation, m_fileName.c_str(), strErr);
 }
 
-#ifdef WIN_NT
-void PluginLogWriter::checkMutex(const TEXT* string, int state)
+void PluginLogWriter::mutexBug(int state, const TEXT* string)
 {
-	if (state)
-	{
-		TEXT msg[BUFFER_TINY];
+	TEXT msg[BUFFER_TINY];
 
-		sprintf(msg, "PluginLogWriter: mutex %s error, status = %d", string, state);
-		gds__log(msg);
+	sprintf(msg, "PluginLogWriter: mutex %s error, status = %d", string, state);
+	fb_utils::logAndDie(msg);
+}
 
-		fprintf(stderr, "%s\n", msg);
-		exit(FINI_ERROR);
-	}
+bool PluginLogWriter::initialize(SharedMemoryBase* sm, bool init)
+{
+	return true;
 }
 
 void PluginLogWriter::lock()
 {
-	checkMutex("lock", ISC_mutex_lock(&m_mutex));
+	m_sharedMemory->mutexLock();
 }
 
 void PluginLogWriter::unlock()
 {
-	checkMutex("unlock", ISC_mutex_unlock(&m_mutex));
+	m_sharedMemory->mutexUnlock();
 }
-#endif // WIN_NT
 
 
 const unsigned int IDLE_TIMEOUT = 30; // seconds

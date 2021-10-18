@@ -49,6 +49,7 @@ public:
 	}
 
 	virtual bool lookup(void* inMsg, void* outMsg) = 0;
+	virtual bool test() = 0;
 };
 
 
@@ -73,6 +74,33 @@ public:
 	Firebird::Mutex mutex;
 	Firebird::AutoPtr<VSecDb> secDb;
 	PluginDatabases* list;
+
+public:
+	// Related RAII holder
+	class Instance : public Firebird::RefPtr<CachedSecurityDatabase>
+	{
+	public:
+		Instance()
+		{ }
+
+		void set(CachedSecurityDatabase* db)
+		{
+			fb_assert(!hasData());
+			fb_assert(db);
+
+			assign(db);
+			(*this)->mutex.enter(FB_FUNCTION);
+		}
+
+		~Instance()
+		{
+			if (hasData())
+			{
+				(*this)->mutex.leave();
+				(*this)->close();
+			}
+		}
+	};
 };
 
 class PluginDatabases
@@ -87,7 +115,7 @@ private:
 	Firebird::Mutex arrayMutex;
 
 public:
-	void getInstance(Firebird::IPluginConfig* pluginConfig, Firebird::RefPtr<CachedSecurityDatabase>& instance);
+	void getInstance(Firebird::IPluginConfig* pluginConfig, CachedSecurityDatabase::Instance& instance);
 	int shutdown();
 	void handler(CachedSecurityDatabase* tgt);
 };

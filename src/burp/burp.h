@@ -42,6 +42,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/fb_pair.h"
 #include "../common/classes/MetaString.h"
+#include "../common/classes/Nullable.h"
 #include "../common/SimilarToRegex.h"
 #include "../common/status.h"
 #include "../common/sha.h"
@@ -252,6 +253,7 @@ enum att_type {
 	att_db_read_only,		// Is the database ReadOnly?
 	att_database_linger,	// Disconnection timeout
 	att_database_sql_security,// default sql security value
+	att_replica_mode,		// replica mode
 
 	// Relation attributes
 
@@ -1013,6 +1015,7 @@ public:
 	ULONG		io_buffer_size;
 	redirect_vals	sw_redirect;
 	bool		burp_throw;
+	Nullable<ReplicaMode>	gbl_sw_replica;
 
 	UCHAR*		blk_io_ptr;
 	int			blk_io_cnt;
@@ -1146,6 +1149,7 @@ public:
 
 	bool			hdr_forced_writes;
 	TEXT			database_security_class[GDS_NAME_LEN]; // To save database security class for deferred update
+	unsigned		batchInlineBlobLimit;
 
 	static inline BurpGlobals* getSpecific()
 	{

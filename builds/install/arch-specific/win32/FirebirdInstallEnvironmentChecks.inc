@@ -748,7 +748,7 @@ procedure SetupSharedFilesArray;
 //to list them in the order they appear in the setup script
 // Shared Files are defined as either:
 // - Files which are absolutely necessary for a functioning installation.
-//     Hence gbak and gfix are shared files, isql and qli are not
+//     Hence gbak and gfix are shared files, isql is not
 // - Libraries
 // - License files
 begin
@@ -795,7 +795,7 @@ else
 SharedFileArray[27].Filename := ExpandConstant('{app}')+'databases.conf';
 SharedFileArray[28].Filename := ExpandConstant('{app}')+'firebird.conf';
 SharedFileArray[29].Filename := ExpandConstant('{app}')+'firebird.log';
-SharedFileArray[30].Filename := ExpandConstant('{app}')+'security4.fdb';
+SharedFileArray[30].Filename := ExpandConstant('{app}')+'security5.fdb';
 SharedFileArray[31].Filename := ExpandConstant('{app}')+'fbtrace.conf';
 SharedFileArray[32].Filename := ExpandConstant('{app}')+'fbsvcmgr.exe';
 SharedFileArray[33].Filename := ExpandConstant('{app}')+'fbrmclib.dll';
@@ -803,7 +803,7 @@ SharedFileArray[34].Filename := ExpandConstant('{app}')+'fbtracemgr.exe';
 SharedFileArray[35].Filename := ExpandConstant('{app}')+'zlib1.dll';
 SharedFileArray[36].Filename := ExpandConstant('{app}')+'replication.conf';
 
-// FIXME 
+// FIXME
 // Add in WOW64 here.
 
 end;
@@ -1135,7 +1135,7 @@ begin
 
   //If existing install of the same majorver.minorver is
   //found then we can upgrade it.
-//// **** FIX ME **** Don't use hardcoded constants here. They get overlooked.	
+//// **** FIX ME **** Don't use hardcoded constants here. They get overlooked.
   if ( (ProductsInstalledCount = 1) AND
 #if PlatformTarget == "x64"
     ((ProductsInstalled AND FB30_x64 ) = FB30_x64 ) ) then begin
@@ -1173,7 +1173,7 @@ begin
     LoadStringFromFile( GetAppPath+'\firebird.conf', FirebirdConfStr );
     if  pos('SharedDatabase', FirebirdConfStr) > 0 then begin
       RenameFile(GetAppPath+'\firebird.conf', GetAppPath+'\firebird.conf.preRC1');
-      RenameFile(GetAppPath+'\security4.fdb', GetAppPath+'\security4.fdb.preRC1');
+      RenameFile(GetAppPath+'\security5.fdb', GetAppPath+'\security5.fdb.preRC1');
     end
   end
 end;
@@ -1181,7 +1181,7 @@ end;
 
 function ConfigureAuthentication: boolean;
 begin
-  if FileExists(WizardDirValue + '\security4.fdb') then
+  if FileExists(WizardDirValue + '\security5.fdb') then
 		Result := false
 	else
 		Result := true;

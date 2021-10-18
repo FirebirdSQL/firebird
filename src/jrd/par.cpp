@@ -58,6 +58,7 @@
 #include "../yvalve/gds_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/par_proto.h"
+#include "../common/MsgUtil.h"
 #include "../common/utils_proto.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/SysFunction.h"
@@ -71,8 +72,6 @@
 
 using namespace Jrd;
 using namespace Firebird;
-
-#include "gen/codetext.h"
 
 
 static NodeParseFunc blr_parsers[256] = {NULL};
@@ -162,54 +161,6 @@ namespace
 		AutoPtr<CompilerScratch> m_csb;
 		CompilerScratch** const m_csbPtr;
 	};
-
-	class FetchNode
-	{
-	public:
-		// Parse a FETCH statement, and map it into FOR x IN relation WITH x.DBKEY EQ value ...
-		static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, UCHAR /*blrOp*/)
-		{
-			ForNode* forNode = FB_NEW_POOL(pool) ForNode(pool);
-
-			// Fake RseNode.
-
-			RseNode* rse = forNode->rse = FB_NEW_POOL(*tdbb->getDefaultPool()) RseNode(
-				*tdbb->getDefaultPool());
-
-			DmlNode* relationNode = PAR_parse_node(tdbb, csb);
-			if (relationNode->getKind() != DmlNode::KIND_REC_SOURCE)
-				PAR_syntax_error(csb, "TABLE");
-
-			RelationSourceNode* relationSource = nodeAs<RelationSourceNode>(
-				static_cast<RecordSourceNode*>(relationNode));
-
-			if (!relationSource)
-				PAR_syntax_error(csb, "TABLE");
-
-			rse->rse_relations.add(relationSource);
-
-			// Fake boolean.
-
-			ComparativeBoolNode* booleanNode = FB_NEW_POOL(csb->csb_pool) ComparativeBoolNode(
-				csb->csb_pool, blr_eql);
-
-			rse->rse_boolean = booleanNode;
-
-			booleanNode->arg2 = PAR_parse_value(tdbb, csb);
-
-			RecordKeyNode* dbKeyNode = FB_NEW_POOL(csb->csb_pool) RecordKeyNode(csb->csb_pool, blr_dbkey);
-			dbKeyNode->recStream = relationSource->getStream();
-
-			booleanNode->arg1 = dbKeyNode;
-
-			// Pick up statement.
-			forNode->statement = PAR_parse_stmt(tdbb, csb);
-
-			return forNode;
-		}
-	};
-
-	static RegisterNode<FetchNode> regFetch({blr_fetch});
 }	// namespace
 
 
@@ -773,14 +724,7 @@ SLONG PAR_symbol_to_gdscode(const Firebird::string& name)
  *
  **************************************/
 
-	for (int i = 0; codes[i].code_number; ++i)
-	{
-		if (name == codes[i].code_string) {
-			return codes[i].code_number;
-		}
-	}
-
-	return 0;
+	return MsgUtil::getCodeByName(name.c_str());
 }
 
 
@@ -1011,6 +955,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 		// in which case the base relation (and alias) must be specified
 
 		USHORT n = (unsigned int) csb->csb_blr_reader.getByte();
+		//// TODO: LocalTableSourceNode (blr_local_table_id)
 		if (n != blr_relation && n != blr_relation2 && n != blr_rid && n != blr_rid2)
 			PAR_syntax_error(csb, "TABLE");
 
@@ -1018,6 +963,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 		// this would add a new context; while this is a reference to
 		// an existing context
 
+		//// TODO: LocalTableSourceNode
 		plan->relationNode = RelationSourceNode::parse(tdbb, csb, n, false);
 
 		jrd_rel* relation = plan->relationNode->relation;
@@ -1296,6 +1242,9 @@ RecordSourceNode* PAR_parseRecordSource(thread_db* tdbb, CompilerScratch* csb)
 		case blr_relation2:
 		case blr_rid2:
 			return RelationSourceNode::parse(tdbb, csb, blrOp, true);
+
+		case blr_local_table_id:
+			return LocalTableSourceNode::parse(tdbb, csb, blrOp, true);
 
 		case blr_union:
 		case blr_recurse:
@@ -1622,6 +1571,7 @@ DmlNode* PAR_parse_node(thread_db* tdbb, CompilerScratch* csb)
 		case blr_rid:
 		case blr_relation2:
 		case blr_rid2:
+		case blr_local_table_id:
 		case blr_union:
 		case blr_recurse:
 		case blr_window:

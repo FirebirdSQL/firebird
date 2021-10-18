@@ -36,6 +36,7 @@ namespace Jrd
 class BinaryBoolNode;
 class CompoundStmtNode;
 class DeclareCursorNode;
+class DeclareLocalTableNode;
 class DeclareVariableNode;
 class ParameterClause;
 class RseNode;
@@ -43,6 +44,9 @@ class SelectExprNode;
 class TypeClause;
 class VariableNode;
 class WithClause;
+
+typedef Firebird::Pair<
+	Firebird::NonPooled<NestConst<ValueListNode>, NestConst<ValueListNode>>> ReturningClause;
 
 
 // DSQL Compiler scratch block - may be discarded after compilation in the future.
@@ -57,7 +61,6 @@ public:
 	static const unsigned FLAG_BLOCK				= 0x0020;
 	static const unsigned FLAG_RECURSIVE_CTE		= 0x0040;
 	static const unsigned FLAG_UPDATE_OR_INSERT		= 0x0080;
-	static const unsigned FLAG_MERGE				= 0x0100;
 	static const unsigned FLAG_FUNCTION				= 0x0200;
 	static const unsigned FLAG_SUB_ROUTINE			= 0x0400;
 	static const unsigned FLAG_INTERNAL_REQUEST		= 0x0800;
@@ -91,6 +94,8 @@ public:
 		  labels(p),
 		  cursorNumber(0),
 		  cursors(p),
+		  localTableNumber(0),
+		  localTables(p),
 		  inSelectList(0),
 		  inWhereClause(0),
 		  inGroupByClause(0),
@@ -110,6 +115,7 @@ public:
 		  hiddenVariables(p),
 		  variables(p),
 		  outputVariables(p),
+		  returningClause(nullptr),
 		  currCteAlias(NULL),
 		  ctes(p),
 		  cteAliases(p),
@@ -283,6 +289,8 @@ public:
 	Firebird::Stack<MetaName*> labels;	// Loop labels
 	USHORT cursorNumber;				// Cursor number
 	Firebird::Array<DeclareCursorNode*> cursors; // Cursors
+	USHORT localTableNumber;				// Local table number
+	Firebird::Array<DeclareLocalTableNode*> localTables; // Local tables
 	USHORT inSelectList;				// now processing "select list"
 	USHORT inWhereClause;				// processing "where clause"
 	USHORT inGroupByClause;				// processing "group by clause"
@@ -303,6 +311,7 @@ public:
 	Firebird::Array<dsql_var*> hiddenVariables;	// hidden variables
 	Firebird::Array<dsql_var*> variables;
 	Firebird::Array<dsql_var*> outputVariables;
+	ReturningClause* returningClause;
 	const Firebird::string* const* currCteAlias;
 
 private:

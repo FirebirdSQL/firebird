@@ -65,9 +65,6 @@ const char* const ucTemplate = "lib/libicuuc.%s.dylib";
 #elif defined(HPUX)
 const char* const inTemplate = "libicui18n.sl.%s";
 const char* const ucTemplate = "libicuuc.sl.%s";
-#elif defined(ANDROID)
-const char* const inTemplate = "libicui18n.so";
-const char* const ucTemplate = "libicuuc.so";
 #else
 const char* const inTemplate = "libicui18n.so.%s";
 const char* const ucTemplate = "libicuuc.so.%s";
@@ -134,7 +131,7 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 	getEntryPoint("u_setTimeZoneFilesDirectory", module, uSetTimeZoneFilesDirectory, true);
 	getEntryPoint("u_setDataDirectory", module, uSetDataDirectory, true);
 
-#if defined(WIN_NT) || defined(DARWIN)
+#if defined(WIN_NT) || defined(DARWIN) || defined(ANDROID)
 	if (uSetDataDirectory)
 	{
 		// call uSetDataDirectory only if .dat file is exists at same folder
@@ -143,6 +140,7 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 		PathName path, file, fullName;
 		PathUtils::splitLastComponent(path, file, module->fileName);
 
+#ifdef WIN_NT
 		// icuucXX.dll -> icudtXX.dll
 		file.replace(3, 2, "dt");
 
@@ -150,6 +148,17 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 		const FB_SIZE_T pos = file.find_last_of('.');
 		file.erase(pos);
 		file.append("l.dat");
+#else
+		// libicuuc.so.XX -> icudtXX
+		const FB_SIZE_T pos = file.find_last_of('.');
+		if (pos > 0 && pos != file.npos)
+		{
+			file.replace(0, pos + 1, "icudt");
+		}
+
+		// icudtXX -> icudtXXl.dat
+		file += "l.dat";
+#endif
 
 		PathUtils::concatPath(fullName, path, file);
 
@@ -185,7 +194,7 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 namespace Jrd {
 
 static ModuleLoader::Module* formatAndLoad(const char* templateName,
-	int majorVersion, int minorVersion);
+	int& majorVersion, int& minorVersion);
 
 
 // encapsulate ICU collations libraries
@@ -264,9 +273,12 @@ public:
 
 	void (U_EXPORT2 *ucolClose)(UCollator* coll);
 	int32_t (U_EXPORT2 *ucolGetContractions)(const UCollator* coll, USet* conts, UErrorCode* status);
+	const UChar* (U_EXPORT2 *ucolGetRules)(const UCollator* coll, int32_t* length);
 	int32_t (U_EXPORT2 *ucolGetSortKey)(const UCollator* coll, const UChar* source,
 		int32_t sourceLength, uint8_t* result, int32_t resultLength);
 	UCollator* (U_EXPORT2 *ucolOpen)(const char* loc, UErrorCode* status);
+	UCollator* (U_EXPORT2 *ucolOpenRules)(const UChar* rules, int32_t rulesLength, UColAttributeValue normalizationMode,
+		UCollationStrength strength, UParseError* parseError, UErrorCode* status);
 	void (U_EXPORT2 *ucolSetAttribute)(UCollator* coll, UColAttribute attr,
 		UColAttributeValue value, UErrorCode* status);
 	UCollationResult (U_EXPORT2 *ucolStrColl)(const UCollator* coll, const UChar* source,
@@ -300,7 +312,7 @@ private:
 	ImplementConversionICU(int aMajorVersion, int aMinorVersion)
 		: BaseICU(aMajorVersion, aMinorVersion)
 	{
-		module = formatAndLoad(ucTemplate, aMajorVersion, aMinorVersion);
+		module = formatAndLoad(ucTemplate, this->majorVersion, this->minorVersion);
 		if (!module)
 			return;
 
@@ -330,6 +342,15 @@ private:
 		inModule = formatAndLoad(inTemplate, aMajorVersion, aMinorVersion);
 		if (!inModule)
 			return;
+
+		if (aMajorVersion != this->majorVersion || aMinorVersion != this->minorVersion)
+		{
+			string err;
+			err.printf("Wrong version of IN icu module: loaded %d.%d, expected %d.%d",
+						aMajorVersion, aMinorVersion, this->majorVersion, this->minorVersion);
+
+			(Arg::Gds(isc_random) << Arg::Str(err)).raise();
+		}
 
 		getEntryPoint("ucal_getTZDataVersion", inModule, ucalGetTZDataVersion);
 		getEntryPoint("ucal_getDefaultTimeZone", inModule, ucalGetDefaultTimeZone);
@@ -401,10 +422,58 @@ static const char* const COLL_30_VERSION = "41.128.4.4";	// ICU 3.0 collator ver
 
 static GlobalPtr<UnicodeUtil::ICUModules> icuModules;
 
+#ifdef LINUX
+static bool extractVersionFromPath(const PathName& realPath, int& major, int& minor)
+{
+	major = 0;
+	minor = 0;
+	int mult = 1;
+
+	const FB_SIZE_T len = realPath.length();
+	const char* buf = realPath.begin();
+
+	bool dot = false;
+	for (const char* p = buf + len - 1; p >= buf; p--)
+	{
+		if (*p >= '0' && *p < '9')
+		{
+			major += (*p - '0') * mult;
+			mult *= 10;
+		}
+		else if (*p == '.' && !dot)
+		{
+			dot = true;
+			minor = major;
+			major = 0;
+			mult = 1;
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	if (minor && !major)
+	{
+		major = minor;
+		minor = 0;
+	}
+
+	return major != 0;
+}
+#endif
 
 static ModuleLoader::Module* formatAndLoad(const char* templateName,
-	int majorVersion, int minorVersion)
+	int& majorVersion, int& minorVersion)
 {
+#ifdef ANDROID
+	static ModuleLoader::Module* dat = ModuleLoader::loadModule(NULL,
+		fb_utils::getPrefix(Firebird::IConfigManager::DIR_LIB, "libicudata.so"));
+
+	Firebird::PathName newName = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LIB, templateName);
+	templateName = newName.c_str();
+#endif
+
 	ModuleLoader::Module* module = nullptr;
 
 	// System-wide ICU have no version number at file names
@@ -412,7 +481,28 @@ static ModuleLoader::Module* formatAndLoad(const char* templateName,
 	{
 		PathName filename;
 		filename.printf(templateName, "");
+		filename.rtrim(".");
+
+		//gds__log("ICU: link %s", filename.c_str());
+
 		module = ModuleLoader::fixAndLoadModule(NULL, filename);
+
+#ifdef LINUX
+		// try to resolve symlinks and extract version numbers from suffix
+		PathName realPath;
+		if (module && module->getRealPath(realPath))
+		{
+			//gds__log("ICU: module name %s, real path %s", module->fileName.c_str(), realPath.c_str());
+
+			int major, minor;
+			if (extractVersionFromPath(realPath, major, minor))
+			{
+				//gds__log("ICU: extracted version %d.%d", major, minor);
+				majorVersion = major;
+				minorVersion = minor;
+			}
+		}
+#endif
 	}
 	else
 	{
@@ -1114,7 +1204,7 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 
 		icu = FB_NEW_POOL(*getDefaultMemoryPool()) ICU(majorVersion, minorVersion);
 
-		icu->ucModule = formatAndLoad(ucTemplate, majorVersion, minorVersion);
+		icu->ucModule = formatAndLoad(ucTemplate, icu->majorVersion, icu->minorVersion);
 		if (!icu->ucModule)
 		{
 			gds__log("failed to load UC icu module version %s", configVersion.c_str());
@@ -1126,6 +1216,14 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 		if (!icu->inModule)
 		{
 			gds__log("failed to load IN icu module version %s", configVersion.c_str());
+			delete icu;
+			continue;
+		}
+
+		if (icu->majorVersion != majorVersion || icu->minorVersion != minorVersion)
+		{
+			gds__log("Wrong version of IN icu module: loaded %d.%d, expected %d.%d",
+					 majorVersion, minorVersion, icu->majorVersion, icu->minorVersion);
 			delete icu;
 			continue;
 		}
@@ -1144,8 +1242,10 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 
 			icu->getEntryPoint("ucol_close", icu->inModule, icu->ucolClose);
 			icu->getEntryPoint("ucol_getContractions", icu->inModule, icu->ucolGetContractions);
+			icu->getEntryPoint("ucol_getRules", icu->inModule, icu->ucolGetRules);
 			icu->getEntryPoint("ucol_getSortKey", icu->inModule, icu->ucolGetSortKey);
 			icu->getEntryPoint("ucol_open", icu->inModule, icu->ucolOpen);
+			icu->getEntryPoint("ucol_openRules", icu->inModule, icu->ucolOpenRules);
 			icu->getEntryPoint("ucol_setAttribute", icu->inModule, icu->ucolSetAttribute);
 			icu->getEntryPoint("ucol_strcoll", icu->inModule, icu->ucolStrColl);
 			icu->getEntryPoint("ucol_getVersion", icu->inModule, icu->ucolGetVersion);
@@ -1243,7 +1343,12 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 
 	for (int major = 79; major >= 3;)
 	{
+#ifdef WIN_NT
 		int minor = 0;
+#else
+		int minor = 9;
+#endif
+
 		if (major == 4)
 			minor = 8;
 		else if (major <= 4)
@@ -1359,6 +1464,19 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 		}
 	}
 
+	string disableCompressions;
+	if (specificAttributes.get(IntlUtil::convertAsciiToUtf16("DISABLE-COMPRESSIONS"), disableCompressions))
+	{
+		++attributeCount;
+
+		disableCompressions = IntlUtil::convertUtf16ToAscii(disableCompressions, &error);
+		if (error || !(disableCompressions == "0" || disableCompressions == "1"))
+		{
+			gds__log("IntlUtil::convertUtf16ToAscii failed");
+			return NULL;
+		}
+	}
+
 	locale = IntlUtil::convertUtf16ToAscii(locale, &error);
 	if (error)
 	{
@@ -1389,15 +1507,48 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 	}
 
 	UErrorCode status = U_ZERO_ERROR;
+	HalfStaticArray<UChar, BUFFER_TINY> rulesBuffer;
 
-	UCollator* compareCollator = icu->ucolOpen(locale.c_str(), &status);
+	if (disableCompressions == "1")
+	{
+		UCollator* initialCollator = icu->ucolOpen(locale.c_str(), &status);
+
+		if (!initialCollator)
+		{
+			gds__log("ucolOpen failed");
+			return NULL;
+		}
+
+		static const char16_t CONTRACTION_RULES[] = u"[suppressContractions [^]]";
+		int32_t rulesLen;
+		const UChar* rules = icu->ucolGetRules(initialCollator, &rulesLen);
+		rulesBuffer.push(rules, rulesLen);
+		rulesBuffer.push((const UChar*) CONTRACTION_RULES, FB_NELEM(CONTRACTION_RULES) - 1);
+
+		icu->ucolClose(initialCollator);
+	}
+
+	auto openCollation = [&]()
+	{
+		if (disableCompressions == "1")
+		{
+			UParseError parseError;
+			return icu->ucolOpenRules(rulesBuffer.begin(), rulesBuffer.getCount(),
+				UCOL_DEFAULT, UCOL_DEFAULT, &parseError, &status);
+		}
+		else
+			return icu->ucolOpen(locale.c_str(), &status);
+	};
+
+	UCollator* compareCollator = openCollation();
 	if (!compareCollator)
 	{
 		gds__log("ucolOpen failed");
 		return NULL;
 	}
 
-	UCollator* partialCollator = icu->ucolOpen(locale.c_str(), &status);
+	UCollator* partialCollator = openCollation();
+
 	if (!partialCollator)
 	{
 		gds__log("ucolOpen failed");
@@ -1405,7 +1556,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 		return NULL;
 	}
 
-	UCollator* sortCollator = icu->ucolOpen(locale.c_str(), &status);
+	UCollator* sortCollator = openCollation();
 	if (!sortCollator)
 	{
 		gds__log("ucolOpen failed");
@@ -1454,10 +1605,6 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 			icu->ucolSetAttribute(compareCollator, UCOL_STRENGTH, UCOL_SECONDARY, &status);
 	}
 
-	USet* contractions = icu->usetOpen(0, 0);
-	// status not verified here.
-	icu->ucolGetContractions(partialCollator, contractions, &status);
-
 	Utf16Collation* obj = FB_NEW Utf16Collation();
 	obj->icu = icu;
 	obj->tt = tt;
@@ -1465,9 +1612,39 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 	obj->compareCollator = compareCollator;
 	obj->partialCollator = partialCollator;
 	obj->sortCollator = sortCollator;
-	obj->contractions = contractions;
-	obj->contractionsCount = icu->usetGetItemCount(contractions);
 	obj->numericSort = isNumericSort;
+	obj->maxContractionsPrefixLength = 0;
+
+	USet* contractions = icu->usetOpen(1, 0);
+	// status not verified here.
+	icu->ucolGetContractions(partialCollator, contractions, &status);
+
+	int contractionsCount = icu->usetGetItemCount(contractions);
+
+	for (int contractionIndex = 0; contractionIndex < contractionsCount; ++contractionIndex)
+	{
+		UChar str[10];
+		UChar32 start, end;
+
+		status = U_ZERO_ERROR;
+		int len = icu->usetGetItem(contractions, contractionIndex, &start, &end, str, sizeof(str), &status);
+
+		if (len >= 2)
+		{
+			obj->maxContractionsPrefixLength = len - 1 > obj->maxContractionsPrefixLength ?
+				len - 1 : obj->maxContractionsPrefixLength;
+
+			for (int currentLen = 1; currentLen < len; ++currentLen)
+			{
+				string s(reinterpret_cast<const char*>(str), currentLen * 2);
+
+				if (!obj->contractionsPrefix.exist(s))
+					obj->contractionsPrefix.push(s);
+			}
+		}
+	}
+
+	icu->usetClose(contractions);
 
 	return obj;
 }
@@ -1475,8 +1652,6 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 
 UnicodeUtil::Utf16Collation::~Utf16Collation()
 {
-	icu->usetClose(contractions);
-
 	icu->ucolClose(compareCollator);
 	icu->ucolClose(partialCollator);
 	icu->ucolClose(sortCollator);
@@ -1527,28 +1702,16 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 	switch (key_type)
 	{
 		case INTL_KEY_PARTIAL:
-		{
 			coll = partialCollator;
 
 			// Remove last bytes of key if they are start of a contraction
 			// to correctly find in the index.
-			ConversionICU& cIcu(getConversionICU());
-			for (int i = 0; i < contractionsCount; ++i)
+
+			for (int i = MIN(maxContractionsPrefixLength, srcLenLong); i > 0; --i)
 			{
-				UChar str[10];
-				UErrorCode status = U_ZERO_ERROR;
-				int len = icu->usetGetItem(contractions, i, NULL, NULL, str, sizeof(str), &status);
-
-				if (len > srcLenLong)
-					len = srcLenLong;
-				else
-					--len;
-
-				// safe cast - alignment not changed
-				if (cIcu.u_strCompare(str, len,
-						reinterpret_cast<const UChar*>(src) + srcLenLong - len, len, true) == 0)
+				if (contractionsPrefix.exist(string(reinterpret_cast<const char*>(src + srcLenLong - i), i * 2)))
 				{
-					srcLenLong -= len;
+					srcLenLong -= i;
 					break;
 				}
 			}
@@ -1569,7 +1732,6 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 			}
 
 			break;
-		}
 
 		case INTL_KEY_UNIQUE:
 			coll = compareCollator;
@@ -1683,7 +1845,16 @@ UnicodeUtil::ICU* UnicodeUtil::Utf16Collation::loadICU(
 			}
 
 			if (avail < 0)
-				continue;
+			{
+				UErrorCode status = U_ZERO_ERROR;
+				UCollator* testCollator = icu->ucolOpen(locale.c_str(), &status);
+				if (!testCollator)
+					continue;
+
+				icu->ucolClose(testCollator);
+				if (status != U_ZERO_ERROR)
+					continue;
+			}
 		}
 
 		char version[U_MAX_VERSION_STRING_LENGTH];

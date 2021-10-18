@@ -33,7 +33,7 @@
 #include <string.h>
 #include "../jrd/jrd.h"
 #include "../jrd/sort.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/intl.h"
 #include "../common/TimeZoneUtil.h"
 #include "../common/gdsassert.h"
@@ -713,6 +713,7 @@ void Sort::diddleKey(UCHAR* record, bool direction, bool duplicateHandling)
 	for (sort_key_def* key = m_description.begin(), *end = m_description.end(); key < end; key++)
 	{
 		UCHAR* p = record + key->getSkdOffset();
+		SORTP* lwp = (SORTP*) p;
 		USHORT n = key->getSkdLength();
 		USHORT complement = key->skd_flags & SKD_descending;
 
@@ -1956,7 +1957,7 @@ void Sort::orderAndSave(thread_db* tdbb)
  * scratch file as one big chunk
  *
  **************************************/
-	EngineCheckout(tdbb, FB_FUNCTION);
+	EngineCheckout cout(tdbb, FB_FUNCTION);
 
 	run_control* run = m_runs;
 	run->run_records = 0;
@@ -2052,7 +2053,7 @@ void Sort::sortBuffer(thread_db* tdbb)
  * been requested, detect and handle them.
  *
  **************************************/
-	EngineCheckout(tdbb, FB_FUNCTION);
+	EngineCheckout cout(tdbb, FB_FUNCTION);
 
 	// First, insert a pointer to the high key
 

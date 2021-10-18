@@ -40,7 +40,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "../common/gdsassert.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/isc_proto.h"
 #include "../common/os/isc_i_proto.h"
@@ -106,7 +106,7 @@ const USHORT SIG_user		= 0;		// Our routine
 const USHORT SIG_client		= 1;		// Not our routine
 const USHORT SIG_informs	= 2;		// routine tells us whether to chain
 
-const SLONG SIG_informs_continue	= 0;	// continue on signal processing
+//const SLONG SIG_informs_continue	= 0;	// continue on signal processing
 const SLONG SIG_informs_stop		= 1;	// stop signal processing
 
 namespace {

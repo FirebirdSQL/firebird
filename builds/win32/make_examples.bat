@@ -76,9 +76,9 @@ if defined FB2_INTLEMP (
 
 @echo.
 @echo path = %FB_GEN_DB_DIR%\examples
-@echo   Preprocessing empbuild.e...
+@echo   Preprocessing empbuild.epp...
 @echo.
-@%FB_BIN_DIR%\gpre.exe -r -m -n -z %FB_ROOT_PATH%\examples\empbuild\empbuild.e %FB_GEN_DIR%\examples\empbuild.c -b %FB_GEN_DB_DIR%/examples/
+@%FB_BIN_DIR%\gpre.exe -r -m -n -z %FB_ROOT_PATH%\examples\empbuild\empbuild.epp %FB_GEN_DIR%\examples\empbuild.cpp -b %FB_GEN_DB_DIR%/examples/
 
 if defined FB2_INTLEMP (
 @echo   Preprocessing intlbld.e...
@@ -135,7 +135,7 @@ copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird\plugins\udr\*.dll %FB_OUTPUT_DIR%
 copy %FB_ROOT_PATH%\examples\prebuilt\%FB_OBJ_DIR%\bin\*.exe %FB_OUTPUT_DIR%\examples\prebuilt\bin > nul
 copy %FB_ROOT_PATH%\examples\prebuilt\%FB_OBJ_DIR%\plugins\*.dll %FB_OUTPUT_DIR%\examples\prebuilt\plugins > nul
 
-::@copy %FB_GEN_DIR%\examples\empbuild.c %FB_OUTPUT_DIR%\examples\empbuild\ > nul
+::@copy %FB_GEN_DIR%\examples\empbuild.cpp %FB_OUTPUT_DIR%\examples\empbuild\ > nul
 ::@copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\examples\empbuild.exe %FB_GEN_DIR%\examples\empbuild.exe > nul
 ::if defined FB2_INTLEMP (
 ::if "%VS_VER%"=="msvc6" (

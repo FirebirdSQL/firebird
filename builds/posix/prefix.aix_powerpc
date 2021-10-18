@@ -56,10 +56,10 @@ SHRLIB_FOREIGN_EXT=a
 
 # -O3 causes lock manager seizure for gcc 4.2.3, 4.2.4, -O2 is ok
 # -O3 turns on -finline-functions, no need to specify it explicitly.
-PROD_FLAGS=-ggdb -O3 -fsigned-char -fmessage-length=0 -fno-omit-frame-pointer -pipe -MMD -fPIC 
+PROD_FLAGS=-ggdb -O3 -fsigned-char -fmessage-length=0 -fno-omit-frame-pointer -pipe -MMD -fPIC
 
 # -Wno-unused-variable
-DEV_FLAGS=-ggdb -O0 -fsigned-char -fmessage-length=0 -pipe -MMD -fPIC -Wall -Wextra -Wno-unused-parameter -Wno-switch -Wno-parentheses -Wno-unknown-pragmas -Wno-non-virtual-dtor
+DEV_FLAGS=-ggdb -O0 -fsigned-char -fmessage-length=0 -pipe -MMD -fPIC -Werror=delete-incomplete -Wall -Wextra -Wno-unused-parameter -Wno-switch -Wno-parentheses -Wno-unknown-pragmas -Wno-non-virtual-dtor
 
 # link options when using IBM /usr/bin/ld fronted by g++
 EXE_LINK_OPTIONS= $(LDFLAGS) $(THR_FLAGS) $(UNDEF_FLAGS) $(LIB_PATH_OPTS) -Wl,-bbigtoc,-brtl

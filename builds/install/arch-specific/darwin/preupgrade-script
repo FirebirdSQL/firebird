@@ -10,8 +10,8 @@
 FB_FW="/Library/Frameworks/Firebird.framework"
 FB_UDF="/Library/Frameworks/Firebird.framework/Resources/English.lproj/var/UDF"
 
-if test -f "$FB_FW/Versions/A/Resources/English.lproj/var/security3.fdb"; then
-	mv -f "$FB_FW/Versions/A/Resources/English.lproj/var/security3.fdb" /tmp/fb-security-database-update3.fdb
+if test -f "$FB_FW/Versions/A/Resources/English.lproj/var/security5.fdb"; then
+	mv -f "$FB_FW/Versions/A/Resources/English.lproj/var/security5.fdb" /tmp/fb-security-database-update5.fdb
 fi
 
 if test -f "$FB_FW/Versions/A/Resources/English.lproj/var/aliases.conf"; then

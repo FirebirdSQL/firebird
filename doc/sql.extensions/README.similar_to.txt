@@ -84,11 +84,11 @@ Syntax:
 Note:
 1) <non-escaped character> is any character except <left bracket>, <right bracket>, <left paren>,
 <right paren>, <vertical bar>, <circumflex>, <minus sign>, <plus sign>, <asterisk>, <underscore>,
-<percent>, <question mark>, <left brace> and <escape character>.
+<percent>, <question mark>, <left brace>, <right brace> and <escape character>.
 
 2) <escaped character> is the <escape character> succeeded by one of <left bracket>, <right bracket>,
 <left paren>, <right paren>, <vertical bar>, <circumflex>, <minus sign>, <plus sign>, <asterisk>,
-<underscore>, <percent>, <question mark>, <left brace> or <escape character>.
+<underscore>, <percent>, <question mark>, <left brace>, <right brace> or <escape character>.
 
 3) Since FB 4 the repeat factor low/high values could not be greater than 1000.
 

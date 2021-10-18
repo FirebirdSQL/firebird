@@ -477,7 +477,7 @@ ISC_STATUS filter_runtime(USHORT action, BlobControl* control)
 	q[1] = p[1];
 	bool blr = false;
 
-	TEXT line[128];
+	TEXT line[BUFFER_MEDIUM];
 	switch ((rsr_t) buff[0])
 	{
 	case RSR_field_name:

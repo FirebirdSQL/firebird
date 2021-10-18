@@ -39,5 +39,6 @@ void	GEN_request(Jrd::DsqlCompilerScratch*, Jrd::DmlNode*);
 void	GEN_rse(Jrd::DsqlCompilerScratch*, Jrd::RseNode*);
 void	GEN_sort(Jrd::DsqlCompilerScratch*, UCHAR, Jrd::ValueListNode*);
 void	GEN_stuff_context(Jrd::DsqlCompilerScratch*, const Jrd::dsql_ctx*);
+void	GEN_stuff_context_number(Jrd::DsqlCompilerScratch*, USHORT);
 
 #endif //  DSQL_GEN_PROTO_H

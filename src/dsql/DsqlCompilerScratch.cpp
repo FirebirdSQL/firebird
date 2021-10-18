@@ -960,6 +960,7 @@ RseNode* DsqlCompilerScratch::pass1RseIsRecursive(RseNode* input)
 			}
 		}
 		else if (nodeIs<ProcedureSourceNode>(*pDstTable) || nodeIs<RelationSourceNode>(*pDstTable))
+		//// TODO: LocalTableSourceNode
 		{
 			if (pass1RelProcIsRecursive(*pDstTable))
 			{
@@ -990,19 +991,18 @@ bool DsqlCompilerScratch::pass1RelProcIsRecursive(RecordSourceNode* input)
 {
 	MetaName relName;
 	string relAlias;
-	ProcedureSourceNode* procNode;
-	RelationSourceNode* relNode;
 
-	if ((procNode = nodeAs<ProcedureSourceNode>(input)))
+	if (auto procNode = nodeAs<ProcedureSourceNode>(input))
 	{
 		relName = procNode->dsqlName.identifier;
 		relAlias = procNode->alias;
 	}
-	else if ((relNode = nodeAs<RelationSourceNode>(input)))
+	else if (auto relNode = nodeAs<RelationSourceNode>(input))
 	{
 		relName = relNode->dsqlName;
 		relAlias = relNode->alias;
 	}
+	//// TODO: LocalTableSourceNode
 	else
 		return false;
 

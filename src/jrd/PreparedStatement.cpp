@@ -125,9 +125,19 @@ namespace
 				item.length = sizeof(SLONG);
 				break;
 
+			case dtype_sql_time_tz:
+				item.type = SQL_TIME_TZ;
+				item.length = sizeof(ISC_TIME_TZ);
+				break;
+
 			case dtype_timestamp:
 				item.type = SQL_TIMESTAMP;
 				item.length = sizeof(SLONG) * 2;
+				break;
+
+			case dtype_timestamp_tz:
+				item.type = SQL_TIMESTAMP_TZ;
+				item.length = sizeof(ISC_TIMESTAMP_TZ);
 				break;
 
 			case dtype_array:
@@ -312,7 +322,7 @@ void PreparedStatement::init(thread_db* tdbb, Attachment* attachment, jrd_tra* t
 		const int dialect = isInternalRequest || (dbb.dbb_flags & DBB_DB_SQL_dialect_3) ?
 			SQL_DIALECT_V6 : SQL_DIALECT_V5;
 
-		request = DSQL_prepare(tdbb, attachment, transaction, text.length(), text.c_str(), dialect,
+		request = DSQL_prepare(tdbb, attachment, transaction, text.length(), text.c_str(), dialect, 0,
 			NULL, NULL, isInternalRequest);
 
 		const DsqlCompiledStatement* statement = request->getStatement();

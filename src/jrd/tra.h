@@ -185,7 +185,6 @@ public:
 		tra_snapshot_handle(0),
 		tra_snapshot_number(0),
 		tra_sorts(*p),
-		tra_public_interface(NULL),
 		tra_gen_ids(NULL),
 		tra_replicator(NULL),
 		tra_interface(NULL),
@@ -300,7 +299,6 @@ public:
 
 	EDS::Transaction *tra_ext_common;
 	//Transaction *tra_ext_two_phase;
-	Firebird::ITransaction* tra_public_interface;
 	GenIdCache* tra_gen_ids;
 	Firebird::IReplicatedTransaction* tra_replicator;
 

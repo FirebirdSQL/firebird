@@ -39,7 +39,7 @@ public:
 
 	//static const unsigned MAP_LENGTH;		// CVC: Moved to dsql/Nodes.h as STREAM_MAP_LENGTH
 	static const unsigned MAX_CLONES = 1000;
-	static const unsigned MAX_REQUEST_SIZE = 10485760;	// 10 MB - just to be safe
+	static const unsigned MAX_REQUEST_SIZE = 50 * 1048576;	// 50 MB - just to be safe
 
 private:
 	JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb);
@@ -51,7 +51,7 @@ public:
 	const Routine* getRoutine() const;
 	bool isActive() const;
 
-	jrd_req* findRequest(thread_db* tdbb);
+	jrd_req* findRequest(thread_db* tdbb, bool unique = false);
 	jrd_req* getRequest(thread_db* tdbb, USHORT level);
 	void verifyAccess(thread_db* tdbb);
 	void release(thread_db* tdbb);
@@ -81,6 +81,7 @@ public:
 	Firebird::Array<JrdStatement*> subStatements;	// Array of subroutines' statements
 	const StmtNode* topNode;			// top of execution tree
 	Firebird::Array<const RecordSource*> fors;	// record sources
+	Firebird::Array<const DeclareLocalTableNode*> localTables;	// local tables
 	Firebird::Array<ULONG*> invariants;	// pointer to nodes invariant offsets
 	Firebird::RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)
 	Firebird::Array<UCHAR> blr;			// BLR for non-SQL query

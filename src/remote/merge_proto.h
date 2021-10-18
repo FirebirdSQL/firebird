@@ -25,7 +25,7 @@
 #define REMOTE_MERGE_PROTO_H
 
 USHORT MERGE_database_info(const UCHAR*, UCHAR*, USHORT, USHORT,
-							USHORT, USHORT, const UCHAR*, const UCHAR*); //, ULONG);
+							USHORT, USHORT, const UCHAR*, const UCHAR*, USHORT);
 
 #endif // REMOTE_MERGE_PROTO_H
 

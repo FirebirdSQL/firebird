@@ -206,14 +206,14 @@ if (MINGW)
     set(CMAKE_STATIC_LIBRARY_PREFIX)
 
     add_definitions(-D_WIN32_WINNT=0x0600)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4 -std=c++11")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4 -std=c++17")
 endif()
 
 if (UNIX)
     set(OS_DIR posix)
 
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -msse4 -std=c++11")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -msse4 -std=c++17")
 
     if (NOT CMAKE_CROSSCOMPILING)
         set(LIB_readline readline)

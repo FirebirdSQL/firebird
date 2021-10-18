@@ -365,12 +365,12 @@ void Routine::remove(thread_db* tdbb)
 	else
 	{
 		// Fully clear routine block. Some pieces of code check for empty
-		// routine name and ID, this is why we do it.
+		// routine name, this is why we do it.
 		setName(QualifiedName());
 		setSecurityName("");
-		setId(0);
 		setDefaultCount(0);
 		releaseExternal();
+		flags |= FLAG_CLEARED;
 	}
 }
 

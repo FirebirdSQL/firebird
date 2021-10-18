@@ -467,8 +467,8 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 	// Enumerate active sessions
 
 	const bool locksmith = attachment->locksmith(tdbb, MONITOR_ANY_ATTACHMENT);
-	const char* user_name_ptr = locksmith ? NULL : attachment->att_user ?
-		attachment->att_user->getUserName().c_str() : "";
+	const MetaString& user_name = attachment->getEffectiveUserName();
+	const char* const user_name_ptr = locksmith ? NULL : user_name.c_str();
 
 	MonitoringData::SessionList sessions(pool);
 
@@ -901,7 +901,7 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	// crypt thread status
 	if (dbb->dbb_crypto_manager)
 	{
-		record.storeInteger(f_mon_db_crypt_page, dbb->dbb_crypto_manager->getCurrentPage());
+		record.storeInteger(f_mon_db_crypt_page, dbb->dbb_crypto_manager->getCurrentPage(tdbb));
 		record.storeInteger(f_mon_db_crypt_state, dbb->dbb_crypto_manager->getCurrentState());
 	}
 
@@ -931,6 +931,8 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	record.storeString(f_mon_db_guid, string(guidBuffer));
 	record.storeString(f_mon_db_file_id, dbb->getUniqueFileId());
 
+	record.storeInteger(f_mon_db_repl_mode, dbb->dbb_replica_mode);
+
 	// statistics
 	const int stat_id = fb_utils::genUniqueId();
 	record.storeGlobalId(f_mon_db_stat_id, getGlobalId(stat_id));
@@ -959,13 +961,15 @@ void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Atta
 	if (!attachment->att_user)
 		return;
 
+	const auto dbb = attachment->att_database;
+
 	record.reset(rel_mon_attachments);
 
 	PathName attName(attachment->att_filename);
 	ISC_systemToUtf8(attName);
 
 	// user (MUST BE ALWAYS THE FIRST ITEM PASSED!)
-	record.storeString(f_mon_att_user, attachment->att_user->getUserName());
+	record.storeString(f_mon_att_user, attachment->getUserName());
 	// attachment id
 	record.storeInteger(f_mon_att_id, attachment->att_attachment_id);
 	// process id
@@ -976,7 +980,7 @@ void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Atta
 	// attachment name
 	record.storeString(f_mon_att_name, attName);
 	// role
-	record.storeString(f_mon_att_role, attachment->att_user->getSqlRole());
+	record.storeString(f_mon_att_role, attachment->getSqlRole());
 	// remote protocol
 	record.storeString(f_mon_att_remote_proto, attachment->att_network_protocol);
 	// remote address
@@ -1034,6 +1038,13 @@ void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Atta
 	}
 	// statement timeout, milliseconds
 	record.storeInteger(f_mon_att_stmt_timeout, attachment->getStatementTimeout());
+
+	if (ENCODE_ODS(dbb->dbb_ods_version, dbb->dbb_minor_version) >= ODS_13_1)
+	{
+		char timeZoneBuffer[TimeZoneUtil::MAX_SIZE];
+		TimeZoneUtil::format(timeZoneBuffer, sizeof(timeZoneBuffer), attachment->att_current_timezone);
+		record.storeString(f_mon_att_session_tz, string(timeZoneBuffer));
+	}
 
 	record.write();
 
@@ -1379,7 +1390,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment)
 	attachment->mergeStats();
 
 	const AttNumber att_id = attachment->att_attachment_id;
-	const MetaString& user_name = attachment->att_user->getUserName();
+	const MetaString& user_name = attachment->getUserName();
 
 	fb_assert(dbb->dbb_monitoring_data);
 
@@ -1444,8 +1455,7 @@ void Monitoring::publishAttachment(thread_db* tdbb)
 	Database* const dbb = tdbb->getDatabase();
 	Attachment* const attachment = tdbb->getAttachment();
 
-	const char* user_name = attachment->att_user ?
-		attachment->att_user->getUserName().c_str() : "";
+	const char* user_name = attachment->getUserName().c_str();
 
 	fb_assert(dbb->dbb_monitoring_data);
 

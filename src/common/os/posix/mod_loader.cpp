@@ -32,8 +32,13 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+
+#include <limits.h>
+#include <stdlib.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <link.h>
 #include <dlfcn.h>
 
 /// This is the POSIX (dlopen) implementation of the mod_loader abstraction.
@@ -48,6 +53,8 @@ public:
 
 	~DlfcnModule();
 	void* findSymbol(ISC_STATUS*, const Firebird::string&);
+
+	bool getRealPath(Firebird::PathName& realPath);
 
 private:
 	void* module;
@@ -138,7 +145,13 @@ ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const Firebir
 	system(command.c_str());
 #endif
 
-	return FB_NEW_POOL(*getDefaultMemoryPool()) DlfcnModule(*getDefaultMemoryPool(), modPath, module);
+	Firebird::PathName linkPath = modPath;
+	char b[PATH_MAX];
+	const char* newPath = realpath(modPath.c_str(), b);
+	if (newPath)
+		linkPath = newPath;
+
+	return FB_NEW_POOL(*getDefaultMemoryPool()) DlfcnModule(*getDefaultMemoryPool(), linkPath, module);
 }
 
 DlfcnModule::~DlfcnModule()
@@ -191,4 +204,40 @@ void* DlfcnModule::findSymbol(ISC_STATUS* status, const Firebird::string& symNam
 #endif
 
 	return result;
+}
+
+bool DlfcnModule::getRealPath(Firebird::PathName& realPath)
+{
+#ifdef HAVE_DLINFO
+	char b[PATH_MAX];
+
+#ifdef HAVE_RTLD_DI_ORIGIN
+	if (dlinfo(module, RTLD_DI_ORIGIN, b) == 0)
+	{
+		realPath = b;
+		realPath += '/';
+		realPath += fileName;
+
+		if (realpath(realPath.c_str(), b))
+		{
+			realPath = b;
+			return true;
+		}
+	}
+#endif
+
+#ifdef HAVE_RTLD_DI_LINKMAP
+	struct link_map* lm;
+	if (dlinfo(module, RTLD_DI_LINKMAP, &lm) == 0)
+	{
+		if (realpath(lm->l_name, b))
+		{
+			realPath = b;
+			return true;
+		}
+	}
+#endif
+
+#endif
+	return false;
 }

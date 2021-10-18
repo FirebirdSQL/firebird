@@ -3,7 +3,7 @@
 # Run this to generate all the initial makefiles, etc.
 #
 
-PKG_NAME=Firebird4
+PKG_NAME=Firebird5
 SRCDIR=`dirname $0`
 
 if [ -z "$AUTORECONF" ]

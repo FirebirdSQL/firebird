@@ -61,10 +61,6 @@ $(SRC_ROOT)/gpre/gpre_meta.cpp:  $(SRC_ROOT)/gpre/gpre_meta.epp
 	$(GPRE_BOOT) -lang_internal $(GPRE_FLAGS) $< $@
 
 
-# These need to change to $(GEN_SRC) at some stage
-#$(SRC_ROOT)/qli/meta.cpp $(SRC_ROOT)/qli/proc.cpp $(SRC_ROOT)/qli/show.cpp: yachts.lnk
-#$(SRC_ROOT)/qli/help.cpp:        help.fdb
-
 # Explicit dependence on generated header (parser)
 $(OBJ)/dsql/Parser.o $(OBJ)/common/keywords.o $(OBJ)/dsql/dsql.o:	$(SRC_ROOT)/include/gen/parse.h
 

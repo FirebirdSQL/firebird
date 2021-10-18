@@ -33,9 +33,9 @@
 #include "PluginLogWriter.h"
 #include "os/platform.h"
 #include "firebird/impl/consts_pub.h"
-#include "codetext.h"
 #include "../../common/isc_f_proto.h"
 #include "../../common/dsc.h"
+#include "../../common/MsgUtil.h"
 #include "../../common/utils_proto.h"
 #include "../../common/UtilSvc.h"
 #include "../../jrd/svc_undoc.h"
@@ -612,40 +612,6 @@ bool TracePluginImpl::filterStatus(const ISC_STATUS* status, GdsCodesArray& arr)
 }
 
 
-namespace {
-
-class GdsName2CodeMap
-{
-public:
-	GdsName2CodeMap(MemoryPool& pool) :
-	  m_map(pool)
-	{
-		for (int i = 0; codes[i].code_string; i++)
-			m_map.put(codes[i].code_string, codes[i].code_number);
-	}
-
-	bool find(const char* name, ISC_STATUS& code) const
-	{
-		return m_map.get(name, code);
-	}
-
-private:
-	class NocaseCmp
-	{
-	public:
-		static bool greaterThan(const char* i1, const char* i2)
-		{
-			return fb_utils::stricmp(i1, i2) > 0;
-		}
-	};
-
-	GenericMap<Pair<NonPooled<const char*, ISC_STATUS> >, NocaseCmp > m_map;
-};
-
-}	// namespace
-
-static InitInstance<GdsName2CodeMap> gdsNamesMap;
-
 void TracePluginImpl::str2Array(const Firebird::string& str, GdsCodesArray& arr)
 {
 	// input: string with comma-delimited list of gds codes values and\or gds codes names
@@ -664,7 +630,7 @@ void TracePluginImpl::str2Array(const Firebird::string& str, GdsCodesArray& arr)
 
 		ISC_STATUS code = atol(s.c_str());
 
-		if (!code && !gdsNamesMap().find(s.c_str(), code))
+		if (!code && !(code = MsgUtil::getCodeByName(s.c_str())))
 		{
 			fatal_exception::raiseFmt(
 				"Error parsing error codes filter: \n"
@@ -1934,7 +1900,7 @@ void TracePluginImpl::register_service(ITraceServiceConnection* service)
 	if (!username.isEmpty())
 	{
 		const char* role = service->getRoleName();
-		if (role && *role) 
+		if (role && *role)
 		{
 			username.append(":");
 			username.append(role);

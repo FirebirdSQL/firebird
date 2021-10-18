@@ -47,8 +47,8 @@ GDS_TIME	MOV_get_sql_time(const dsc*);
 ISC_TIME_TZ	MOV_get_sql_time_tz(const dsc*);
 GDS_TIMESTAMP	MOV_get_timestamp(const dsc*);
 ISC_TIMESTAMP_TZ MOV_get_timestamp_tz(const dsc*);
-int		MOV_make_string(Jrd::thread_db*, const dsc*, USHORT, const char**, vary*, USHORT);
-int		MOV_make_string2(Jrd::thread_db*, const dsc*, USHORT, UCHAR**, Jrd::MoveBuffer&, bool = true);
+USHORT	MOV_make_string(Jrd::thread_db*, const dsc*, USHORT, const char**, vary*, USHORT);
+ULONG	MOV_make_string2(Jrd::thread_db*, const dsc*, USHORT, UCHAR**, Jrd::MoveBuffer&, bool = true);
 Firebird::string MOV_make_string2(Jrd::thread_db* tdbb, const dsc* desc, USHORT ttype,
 	bool limit = true);
 void	MOV_move(Jrd::thread_db*, /*const*/ dsc*, dsc*);

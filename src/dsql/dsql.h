@@ -461,7 +461,8 @@ public:
 		TYPE_SELECT, TYPE_SELECT_UPD, TYPE_INSERT, TYPE_DELETE, TYPE_UPDATE, TYPE_UPDATE_CURSOR,
 		TYPE_DELETE_CURSOR, TYPE_COMMIT, TYPE_ROLLBACK, TYPE_CREATE_DB, TYPE_DDL, TYPE_START_TRANS,
 		TYPE_EXEC_PROCEDURE, TYPE_COMMIT_RETAIN, TYPE_ROLLBACK_RETAIN, TYPE_SET_GENERATOR,
-		TYPE_SAVEPOINT, TYPE_EXEC_BLOCK, TYPE_SELECT_BLOCK, TYPE_SESSION_MANAGEMENT
+		TYPE_SAVEPOINT, TYPE_EXEC_BLOCK, TYPE_SELECT_BLOCK, TYPE_SESSION_MANAGEMENT,
+		TYPE_RETURNING_CURSOR
 	};
 
 	// Statement flags.
@@ -655,7 +656,7 @@ public:
 		: dsql_req(pool),
 		  node(aNode),
 		  needDelayedFormat(false),
-		  prefetchedFirstRow(false)
+		  firstRowFetched(false)
 	{
 	}
 
@@ -674,14 +675,22 @@ public:
 	virtual void setDelayedFormat(thread_db* tdbb, Firebird::IMessageMetadata* metadata);
 
 private:
+	// True, if request could be restarted
+	bool needRestarts();
+
 	void doExecute(thread_db* tdbb, jrd_tra** traHandle,
-		Firebird::IMessageMetadata* inMetadata, const UCHAR* inMsg,
 		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton);
+
+	// [Re]start part of "request restarts" algorithm
+	void executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHandle,
+		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+		bool singleton, bool exec, bool fetch);
+
 	NestConst<StmtNode> node;
 	Firebird::RefPtr<Firebird::IMessageMetadata> delayedFormat;
 	bool needDelayedFormat;
-	bool prefetchedFirstRow;
+	bool firstRowFetched;
 };
 
 class DsqlDdlRequest : public dsql_req

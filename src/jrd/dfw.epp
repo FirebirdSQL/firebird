@@ -131,7 +131,7 @@
 #include <unistd.h>
 #endif
 
-#include "gen/iberror.h"
+#include "iberror.h"
 
 // Pick up system relation ids
 #include "../jrd/ini.h"
@@ -4778,12 +4778,12 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	switch (phase)
 	{
 	case 0:
-		relation = MET_lookup_relation_id(tdbb, work->dfw_id, false);
+		relation = MET_lookup_relation_id(tdbb, work->dfw_id, true);
 		if (!relation) {
 			return false;
 		}
 
-		if (relation->rel_existence_lock)
+		if (relation->rel_existence_lock && !(relation->rel_flags & REL_deleted))
 		{
 			LCK_convert(tdbb, relation->rel_existence_lock, LCK_SR, transaction->getLockWait());
 		}
@@ -4913,6 +4913,13 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 
 		if (relation->rel_file) {
 		    EXT_fini(relation, false);
+		}
+
+		if (relation->isTemporary())
+		{
+			// release pages, allocated for current GTT instance
+			AutoSetRestoreFlag<ULONG> tmpSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, false);
+			relation->delPages(tdbb);
 		}
 
 		RelationPages* const relPages = relation->getBasePages();

@@ -301,8 +301,6 @@ int BaseAggWinStream<ThisType, NextType>::lookForChange(thread_db* tdbb, jrd_req
 	if (!group)
 		return false;
 
-	Impure* const impure = getImpure(request);
-
 	for (const NestConst<ValueExprNode>* ptrValue = group->begin(), *endValue = group->end();
 		 ptrValue != endValue;
 		 ++ptrValue)

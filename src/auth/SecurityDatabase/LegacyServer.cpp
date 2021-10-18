@@ -26,7 +26,7 @@
 #include "firebird.h"
 
 #include "ibase.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "firebird/Interface.h"
 
 #include "../auth/SecurityDatabase/LegacyServer.h"
@@ -146,7 +146,12 @@ private:
 class SecurityDatabase : public VSecDb
 {
 public:
-	bool lookup(void* inMsg, void* outMsg);
+	bool lookup(void* inMsg, void* outMsg) override;
+
+	bool test() override
+	{
+		return fb_ping(status, &lookup_db) == FB_SUCCESS;
+	}
 
 	// This 2 are needed to satisfy temporarily different calling requirements
 	static int shutdown(const int, const int, void*)
@@ -325,32 +330,20 @@ int SecurityDatabaseServer::authenticate(CheckStatusWrapper* status, IServerBloc
 		bool found = false;
 		char pw1[MAX_LEGACY_PASSWORD_LENGTH + 1];
 		PathName secureDbName;
-		{ // reference & mutex scope scope
+		{ // instance scope
 			// Get database block from cache
-			RefPtr<CachedSecurityDatabase> instance;
+			CachedSecurityDatabase::Instance instance;
 			instances->getInstance(iParameter, instance);
 
-			try
-			{
-				MutexLockGuard g(instance->mutex, FB_FUNCTION);
+			secureDbName = instance->secureDbName;
+			if (!instance->secDb)
+				instance->secDb = FB_NEW SecurityDatabase(instance->secureDbName);
 
-				secureDbName = instance->secureDbName;
-				if (!instance->secDb)
-					instance->secDb = FB_NEW SecurityDatabase(instance->secureDbName);
-
-				user_name uname;		// user name buffer
-				login.copyTo(uname, sizeof uname);
-				user_record user_block;		// user record
-				found = instance->secDb->lookup(uname, &user_block);
-				fb_utils::copy_terminate(pw1, user_block.password, MAX_LEGACY_PASSWORD_LENGTH + 1);
-			}
-			catch(const Exception&)
-			{
-				instance->close();
-				throw;
-			}
-
-			instance->close();
+			user_name uname;		// user name buffer
+			login.copyTo(uname, sizeof uname);
+			user_record user_block;		// user record
+			found = instance->secDb->lookup(uname, &user_block);
+			fb_utils::copy_terminate(pw1, user_block.password, MAX_LEGACY_PASSWORD_LENGTH + 1);
 		}
 		if (!found)
 		{

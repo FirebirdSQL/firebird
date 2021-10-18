@@ -27,13 +27,17 @@
 #define COMMON_SYNC_SIGNALS_H
 
 #ifdef UNIX
+#ifdef HAVE_SETJMP_H
+
+#include <setjmp.h>
 
 namespace Firebird
 {
-	void syncSignalsSet(void*);
+	void syncSignalsSet(sigjmp_buf*);
 	void syncSignalsReset();
 }
 
+#endif // #ifdef HAVE_SETJMP_H
 #endif // UNIX
 
 #endif // COMMON_SYNC_SIGNALS_H

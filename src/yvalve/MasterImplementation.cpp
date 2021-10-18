@@ -44,6 +44,7 @@
 #include "../common/ThreadStart.h"
 #include "../common/utils_proto.h"
 #include "../common/dllinst.h"
+#include "../common/status.h"
 #include "ibase.h"
 #include "../yvalve/utl_proto.h"
 
@@ -129,10 +130,20 @@ int MasterImplementation::serverMode(int mode)
 
 namespace Why {
 
+static bool abortShutdownFlag = false;
+
+void abortShutdown()
+{
+	abortShutdownFlag = true;
+}
+
 Thread::Handle timerThreadHandle = 0;
 
 FB_BOOLEAN MasterImplementation::getProcessExiting()
 {
+	if (abortShutdownFlag)
+		return true;
+
 #ifdef WIN_NT
 	// Sometime, when user process exits not calling fb_shutdown and timer thread should 
 	// be terminated already, wait for its handle with zero timeout returns WAIT_TIMEOUT.
@@ -208,10 +219,10 @@ void TimerEntry::cleanup()
 
 ISC_UINT64 curTime()
 {
-	ISC_UINT64 rc = fb_utils::query_performance_counter();
+	double rc = fb_utils::query_performance_counter();
 	rc *= 1000000;
 	rc /= fb_utils::query_performance_frequency();
-	return rc;
+	return ISC_UINT64(rc);
 }
 
 TimerEntry* getTimer(ITimer* timer)

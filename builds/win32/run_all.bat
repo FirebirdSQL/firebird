@@ -51,7 +51,7 @@ if "%FBBUILD_BUILD_ONLY%"=="1" goto :END
 :: Package everything up
 pushd ..\install\arch-specific\win32
 call BuildExecutableInstall ISX ZIP EMB %FBBUILD_BUILDTYPE%
-if "%ERRLEV%"=="1" (popd & goto :END)
+if "%ERRLEV%"=="1" ( @echo Oops - some sort of error & popd & goto :END)
 if defined FBBUILD_INCLUDE_PDB (
 set /A FBBUILD_PACKAGE_NUMBER-=1
 call BuildExecutableInstall ISX ZIP EMB %FBBUILD_BUILDTYPE% PDB

@@ -38,12 +38,10 @@ class CompoundStmtNode;
 class ExecBlockNode;
 class ForNode;
 class PlanNode;
+class RecordBuffer;
 class RelationSourceNode;
 class SelectNode;
 class GeneratorItem;
-
-typedef Firebird::Pair<
-	Firebird::NonPooled<NestConst<ValueListNode>, NestConst<ValueListNode> > > ReturningClause;
 
 
 class ExceptionItem : public Firebird::PermanentStorage, public Printable
@@ -411,6 +409,45 @@ public:
 	USHORT dsqlCursorType;
 	USHORT cursorNumber;
 	bool dsqlScroll;
+};
+
+
+class DeclareLocalTableNode : public TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>
+{
+public:
+	struct Impure
+	{
+		RecordBuffer* recordBuffer;
+	};
+
+public:
+	explicit DeclareLocalTableNode(MemoryPool& pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>(pool)
+	{
+	}
+
+public:
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DeclareLocalTableNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	DeclareLocalTableNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+
+	DeclareLocalTableNode* pass1(thread_db* tdbb, CompilerScratch* csb) override
+	{
+		return this;
+	}
+
+	DeclareLocalTableNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, jrd_req* request, ExeState* exeState) const override;
+
+public:
+	Impure* getImpure(thread_db* tdbb, jrd_req* request, bool createWhenDead = true) const;
+
+public:
+	NestConst<Format> format;
+	USHORT tableNumber = 0;
 };
 
 
@@ -1075,38 +1112,44 @@ public:
 	struct Matched
 	{
 		explicit Matched(MemoryPool& pool)
-			: assignments(NULL),
-			  condition(NULL)
+			: processedFields(pool),
+			  processedValues(pool)
 		{
 		}
 
 		NestConst<CompoundStmtNode> assignments;
 		NestConst<BoolExprNode> condition;
+
+		NestConst<Jrd::RecordSourceNode> modifyRelation;
+		NestValueArray processedFields;
+		NestValueArray processedValues;
+		NestConst<ReturningClause> processedReturning;
 	};
 
 	struct NotMatched
 	{
 		explicit NotMatched(MemoryPool& pool)
 			: fields(pool),
-			  values(NULL),
-			  condition(NULL)
+			  processedFields(pool)
 		{
 		}
 
-		Firebird::Array<NestConst<FieldNode> > fields;
+		Firebird::Array<NestConst<FieldNode>> fields;
 		NestConst<ValueListNode> values;
 		NestConst<BoolExprNode> condition;
 		Nullable<OverrideClause> overrideClause;
+
+		NestConst<Jrd::RecordSourceNode> storeRelation;
+		NestValueArray processedFields;
+		NestConst<ReturningClause> processedReturning;
 	};
 
 	explicit MergeNode(MemoryPool& pool)
 		: TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_MERGE>(pool),
-		  relation(NULL),
-		  usingClause(NULL),
-		  condition(NULL),
 		  whenMatched(pool),
-		  whenNotMatched(pool),
-		  returning(NULL)
+		  whenNotMatchedByTarget(pool),
+		  whenNotMatchedBySource(pool),
+		  usingContexts(pool)
 	{
 	}
 
@@ -1119,8 +1162,15 @@ public:
 	NestConst<RecordSourceNode> usingClause;
 	NestConst<BoolExprNode> condition;
 	Firebird::ObjectsArray<Matched> whenMatched;
-	Firebird::ObjectsArray<NotMatched> whenNotMatched;
+	Firebird::ObjectsArray<NotMatched> whenNotMatchedByTarget;
+	Firebird::ObjectsArray<Matched> whenNotMatchedBySource;
+	NestConst<PlanNode> plan;
+	NestConst<ValueListNode> order;
 	NestConst<ReturningClause> returning;
+
+	NestConst<RseNode> rse;
+	dsql_ctx* oldContext = nullptr;
+	Firebird::SortedArray<USHORT> usingContexts;
 };
 
 
@@ -1163,24 +1213,8 @@ class ModifyNode : public TypedNode<StmtNode, StmtNode::TYPE_MODIFY>
 public:
 	explicit ModifyNode(MemoryPool& pool)
 		: TypedNode<StmtNode, StmtNode::TYPE_MODIFY>(pool),
-		  dsqlRelation(NULL),
-		  dsqlBoolean(NULL),
-		  dsqlPlan(NULL),
-		  dsqlOrder(NULL),
-		  dsqlRows(NULL),
 		  dsqlCursorName(pool),
-		  dsqlReturning(NULL),
-		  dsqlRse(NULL),
-		  dsqlContext(NULL),
-		  statement(NULL),
-		  statement2(NULL),
-		  subMod(NULL),
-		  validations(pool),
-		  mapView(NULL),
-		  orgStream(0),
-		  newStream(0),
-		  marks(0),
-		  dsqlRseFlags(0)
+		  validations(pool)
 	{
 	}
 
@@ -1208,17 +1242,18 @@ public:
 	MetaName dsqlCursorName;
 	NestConst<ReturningClause> dsqlReturning;
 	NestConst<RecordSourceNode> dsqlRse;
-	dsql_ctx* dsqlContext;
+	dsql_ctx* dsqlContext = nullptr;
 	NestConst<StmtNode> statement;
 	NestConst<StmtNode> statement2;
 	NestConst<StmtNode> subMod;
 	Firebird::Array<ValidateInfo> validations;
 	NestConst<StmtNode> mapView;
 	NestConst<ForNode> forNode;			// parent implicit cursor, if present
-	StreamType orgStream;
-	StreamType newStream;
-	unsigned marks;						// see StmtNode::IUD_MARK_xxx
-	USHORT dsqlRseFlags;
+	StreamType orgStream = 0;
+	StreamType newStream = 0;
+	unsigned marks = 0;						// see StmtNode::IUD_MARK_xxx
+	USHORT dsqlRseFlags = 0;
+	Nullable<USHORT> dsqlReturningLocalTableNumber;
 };
 
 
@@ -1281,16 +1316,8 @@ class StoreNode : public TypedNode<StmtNode, StmtNode::TYPE_STORE>
 public:
 	explicit StoreNode(MemoryPool& pool)
 		: TypedNode<StmtNode, StmtNode::TYPE_STORE>(pool),
-		  dsqlRelation(NULL),
 		  dsqlFields(pool),
-		  dsqlValues(NULL),
-		  dsqlReturning(NULL),
-		  dsqlRse(NULL),
-		  statement(NULL),
-		  statement2(NULL),
-		  subStore(NULL),
-		  validations(pool),
-		  relationSource(NULL)
+		  validations(pool)
 	{
 	}
 
@@ -1311,8 +1338,8 @@ private:
 	const StmtNode* store(thread_db* tdbb, jrd_req* request, WhichTrigger whichTrig) const;
 
 public:
-	NestConst<RecordSourceNode> dsqlRelation;
-	Firebird::Array<NestConst<FieldNode> > dsqlFields;
+	NestConst<RecordSourceNode> target;
+	Firebird::Array<NestConst<FieldNode>> dsqlFields;
 	NestConst<ValueListNode> dsqlValues;
 	NestConst<ReturningClause> dsqlReturning;
 	NestConst<RecordSourceNode> dsqlRse;
@@ -1320,7 +1347,7 @@ public:
 	NestConst<StmtNode> statement2;
 	NestConst<StmtNode> subStore;
 	Firebird::Array<ValidateInfo> validations;
-	NestConst<RelationSourceNode> relationSource;
+	Nullable<USHORT> dsqlReturningLocalTableNumber;
 	Nullable<OverrideClause> overrideClause;
 };
 
@@ -1725,6 +1752,30 @@ private:
 };
 
 
+class SetDebugOptionNode : public SessionManagementNode
+{
+public:
+	SetDebugOptionNode(MemoryPool& pool, MetaName* aName, ExprNode* aValue);
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	{
+		SessionManagementNode::internalPrint(printer);
+
+		NODE_PRINT(printer, name);
+		NODE_PRINT(printer, value);
+
+		return "SetDebugOptionNode";
+	}
+
+	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+
+private:
+	MetaName name;
+	ExprNode* value;
+};
+
+
 class SetDecFloatRoundNode : public SessionManagementNode
 {
 public:
@@ -1841,16 +1892,52 @@ public:
 };
 
 
+class TruncateLocalTableNode : public TypedNode<StmtNode, StmtNode::TYPE_TRUNCATE_LOCAL_TABLE>
+{
+public:
+	explicit TruncateLocalTableNode(MemoryPool& pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_TRUNCATE_LOCAL_TABLE>(pool)
+	{
+	}
+
+public:
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+
+	TruncateLocalTableNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		return this;
+	}
+
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	TruncateLocalTableNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+
+	TruncateLocalTableNode* pass1(thread_db* tdbb, CompilerScratch* csb) override
+	{
+		return this;
+	}
+
+	TruncateLocalTableNode* pass2(thread_db* tdbb, CompilerScratch* csb) override
+	{
+		return this;
+	}
+
+	const StmtNode* execute(thread_db* tdbb, jrd_req* request, ExeState* exeState) const override;
+
+public:
+	USHORT tableNumber = 0;
+};
+
+
 class UpdateOrInsertNode : public TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_UPDATE_OR_INSERT>
 {
 public:
 	explicit UpdateOrInsertNode(MemoryPool& pool)
 		: TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_UPDATE_OR_INSERT>(pool),
-		  relation(NULL),
 		  fields(pool),
-		  values(NULL),
 		  matching(pool),
-		  returning(NULL)
+		  varAssignments(pool)
 	{
 	}
 
@@ -1860,11 +1947,17 @@ public:
 
 public:
 	NestConst<RelationSourceNode> relation;
-	Firebird::Array<NestConst<FieldNode> > fields;
+	Firebird::Array<NestConst<FieldNode>> fields;
 	NestConst<ValueListNode> values;
-	Firebird::Array<NestConst<FieldNode> > matching;
+	Firebird::Array<NestConst<FieldNode>> matching;
+	NestConst<PlanNode> plan;
+	NestConst<ValueListNode> order;
+	NestConst<RowsClause> rows;
 	NestConst<ReturningClause> returning;
 	Nullable<OverrideClause> overrideClause;
+	NestConst<StoreNode> storeNode;
+	NestConst<ModifyNode> modifyNode;
+	Firebird::Array<NestConst<AssignmentNode>> varAssignments;
 };
 
 

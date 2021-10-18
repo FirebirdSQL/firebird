@@ -330,8 +330,8 @@ void CreateAlterPackageNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
-	Attachment* attachment = transaction->getAttachment();
-	const MetaString& userName = attachment->att_user->getUserName();
+	Attachment* const attachment = transaction->getAttachment();
+	const MetaString& ownerName = attachment->getEffectiveUserName();
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_PACKAGE, name, NULL);
@@ -348,7 +348,7 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 		PKG.RDB$SYSTEM_FLAG = 0;
 
 		PKG.RDB$OWNER_NAME.NULL = FALSE;
-		strcpy(PKG.RDB$OWNER_NAME, userName.c_str());
+		strcpy(PKG.RDB$OWNER_NAME, ownerName.c_str());
 
 		PKG.RDB$PACKAGE_HEADER_SOURCE.NULL = FALSE;
 		attachment->storeMetaDataBlob(tdbb, transaction, &PKG.RDB$PACKAGE_HEADER_SOURCE, source);
@@ -365,7 +365,7 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 
 	storePrivileges(tdbb, transaction, name, obj_package_header, EXEC_PRIVILEGES);
 
-	owner = userName;
+	owner = ownerName;
 
 	executeItems(tdbb, dsqlScratch, transaction);
 

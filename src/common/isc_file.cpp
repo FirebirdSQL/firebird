@@ -46,7 +46,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/isc_proto.h"
 #include "../common/isc_f_proto.h"

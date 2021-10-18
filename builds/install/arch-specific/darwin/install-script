@@ -73,7 +73,7 @@ chown -R firebird:firebird "$FB_FW"
 # set the permissions correctly
 echo "Set the permissions correctly"
     chmod 777 "$FB_FW/Resources/"
-    chmod 660 "$FB_FW/Resources/security4.fdb"
+    chmod 660 "$FB_FW/Resources/security5.fdb"
     chmod 444 "$FB_FW/Resources/help/help.fdb"
 
 # Remove all older traces of Classic first
@@ -92,16 +92,11 @@ if [ -f /etc/xinetd.d/firebird ]; then
 	HUPNEEDED='y'
 fi
 
-# Install the saved security2 database, if any
-echo "Install the saved security2 database"
-if test -f /tmp/fb-security-database-update2fdb; then
-	mv -f /tmp/fb-security-database-update2.fdb "$FB_RES/security2.fdb"
-fi
 # Install the saved security database, if any
 echo "Install the saved security database"
-if test -f /tmp/fb-security-database-update4.fdb; then
-	mv -f /tmp/fb-security-database-update4.fdb "$FB_RES/security4.fdb"
-	rm -f /tmp/fb-security-database-update4.fdb
+if test -f /tmp/fb-security-database-update5.fdb; then
+	mv -f /tmp/fb-security-database-update5.fdb "$FB_RES/security5.fdb"
+	rm -f /tmp/fb-security-database-update5.fdb
 fi
 
 #Install the saved aliases.conf, if any
@@ -123,17 +118,13 @@ cp /tmp/UDF_Save/*.* $FB_RES/UDF/
 rm -fr /tmp/UDF_save
 
 # Test for saved security database
-if test -f "$FB_FW/Versions/A/Resources/security2.fdb"; then
-echo "Legacy 2.x Security database has been preserved"
-fi
-
-if test -f "$FB_FW/Versions/A/Resources/security4.fdb"; then
+if test -f "$FB_RES/security5.fdb"; then
 echo "Security database has been preserved"
 fi
 
 # Initilise the security database with default user
 echo "Add SYSDBA and password"
-$FB_FW/Versions/A/Resources/bin/gsec -add sysdba -pw masterkey -user sysdba
+$FB_RES/bin/gsec -add sysdba -pw masterkey -user sysdba
 rm -fr /tmp/firebird
 
 # And last but not least, start the Server

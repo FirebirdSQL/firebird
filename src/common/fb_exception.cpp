@@ -3,7 +3,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdarg.h>
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../common/classes/alloc.h"
 #include "../common/classes/init.h"
 #include "../common/classes/array.h"

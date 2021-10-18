@@ -103,8 +103,7 @@ public:
 	RseNode* const rse;
 	StreamList outerStreams, subStreams;
 	StreamList compileStreams, beds, localStreams, keyStreams;
-	bool optimizeFirstRows;
-	bool isLateral;
+	bool favorFirstRows;
 };
 
 // values for opt_conjunct_flags

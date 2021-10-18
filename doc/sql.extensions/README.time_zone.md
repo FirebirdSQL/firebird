@@ -8,11 +8,13 @@ data types are defined to use the session time zone when converting from or to a
 `TIME` and `TIMESTAMP` are synonymous to theirs respectively `WITHOUT TIME ZONE` data types.
 
 The session time zone, as the name implies, can be a different one for each database attachment.
-It can be set with the isc_dpb_session_time_zone DPB, and if not, it starts by default defined to be the
-`firebird.conf` parameter `DefaultTimeZone` or the same time zone used by the Firebird OS process when the parameter is not defined.
+It can be set (with this priority) using `isc_dpb_session_time_zone` DPB, the client's `firebird.conf`
+parameter `DefaultTimeZone` and the server's `firebird.conf` parameter `DefaultTimeZone`. If none of these are set,
+it starts using the same time zone used by the Firebird engine OS process.
 A change in `DefaultTimeZone` configuration or the OS time zone does not changes the default of a running Firebird process.
 
-It can then be changed with `SET TIME ZONE` statement to a given time zone or reset to its original value with `SET TIME ZONE LOCAL`.
+The session time zone can be changed with `SET TIME ZONE` statement to a given time zone or reset to its original value
+with `SET TIME ZONE LOCAL`.
 
 The original time zone value is initially defined equal to the current time zone in session initialization and cannot
 be changed manually. But the original time zone is internally changed when a routine (function, procedure or trigger)
@@ -296,6 +298,7 @@ select timestamp '2018-01-01 12:00 GMT' at local
 Two new `EXTRACT` expressions has been added:
 - `TIMEZONE_HOUR`: extracts the time zone hours displacement
 - `TIMEZONE_MINUTE`: extracts the time zone minutes displacement
+- `TIMEZONE_NAME`: extracts the time zone region or displacement string
 
 #### Examples
 
@@ -304,6 +307,9 @@ select extract(timezone_hour from current_time)
   from rdb$database;
 
 select extract(timezone_minute from current_timestamp)
+  from rdb$database;
+
+select extract(timezone_name from current_timestamp)
   from rdb$database;
 ```
 
@@ -327,6 +333,21 @@ Returns the current timestamp as a `TIMESTAMP WITHOUT TIME ZONE`, i.e., in the s
 ```
 select localtimestamp
   from rdb$database;
+```
+
+### `SESSION_TIMEZONE` context variable
+
+`RDB$GET_CONTEXT('SYSTEM', 'SESSION_TIMEZONE')` could be used to obtain the session current time zone.
+
+#### Examples
+
+```
+set time zone 'america/sao_paulo';
+select rdb$get_context('SYSTEM', 'SESSION_TIMEZONE') from rdb$database;
+-- Result: America/Sao_Paulo
+
+set time zone '-3:00';
+-- Result: -03:00
 ```
 
 # Changes in `CURRENT_TIME` and `CURRENT_TIMESTAMP`

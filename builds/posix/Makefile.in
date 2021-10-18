@@ -108,9 +108,9 @@ API_PAS_FILE=$(SRC_ROOT)/include/gen/Firebird.pas
 MISC=$(SRC_ROOT)/misc
 PAS_ROOT=$(MISC)/pascal
 PASCAL_SOURCES=$(wildcard $(PAS_ROOT)/*)
-TMP_FUNCS=$(TMP_ROOT)/func.pas
+TMP_FUNCS_PAS=$(TMP_ROOT)/func.pas
 XPB_CONSTS=$(SRC_ROOT)/include/firebird/impl/consts_pub.h
-ERR_CONSTS=$(ROOT)/lang_helpers/gds_codes.pas
+ERR_CONSTS_PAS=$(SRC_ROOT)/misc/pascal/gds_codes.pas
 RPL_AWK=$(GEN_ROOT)/def_awk
 RPL_AWK_SRC=$(MISC)/def_awk.c
 RPL_GREP=$(GEN_ROOT)/isc_grep
@@ -125,10 +125,10 @@ $(API_H_FILE): $(IDL_FILE)
 # This way firebird.pas can be created not using own mini-utilities.
 # They were added to be able to build on windows, this code is left for reference.
 #
-#$(TMP_FUNCS): $(PASCAL_SOURCES) $(XPB_CONSTS) $(ERR_CONSTS)
-#	cat $(PAS_ROOT)/fb_get_master_interface.pas >$(TMP_FUNCS)
-#	awk -f $(PAS_ROOT)/Pascal.Constants.awk <$(XPB_CONSTS) >>$(TMP_FUNCS)
-#	grep '[[:space:]]isc_' $(ERR_CONSTS) >>$(TMP_FUNCS)
+#$(TMP_FUNCS_PAS): $(PASCAL_SOURCES) $(XPB_CONSTS) $(ERR_CONSTS_PAS)
+#	cat $(PAS_ROOT)/fb_get_master_interface.pas >$(TMP_FUNCS_PAS)
+#	awk -f $(PAS_ROOT)/Pascal.Constants.awk <$(XPB_CONSTS) >>$(TMP_FUNCS_PAS)
+#	grep '[[:space:]]isc_' $(ERR_CONSTS_PAS) >>$(TMP_FUNCS_PAS)
 #
 
 $(RPL_AWK):	$(RPL_AWK_SRC)
@@ -137,17 +137,22 @@ $(RPL_AWK):	$(RPL_AWK_SRC)
 $(RPL_GREP): $(RPL_GREP_SRC)
 	$(CC) -o $@ $^
 
-$(TMP_FUNCS): $(PASCAL_SOURCES) $(XPB_CONSTS) $(ERR_CONSTS) $(RPL_AWK) $(RPL_GREP)
-	cp $(PAS_ROOT)/fb_get_master_interface.pas $(TMP_FUNCS)
-	$(RPL_AWK) <$(XPB_CONSTS) >>$(TMP_FUNCS)
-	$(RPL_GREP) <$(ERR_CONSTS) >>$(TMP_FUNCS)
+$(TMP_ROOT)/iberror.pas: $(BUILD_FILE) $(ERR_CONSTS_PAS) $(SRC_ROOT)/include/firebird/impl/msg/*.h
+	$(BUILD_FILE) -p $(TMP_ROOT)/iberror_codes.pas
+	cp $(ERR_CONSTS_PAS) $(TMP_ROOT)/iberror.pas
+	cat $(TMP_ROOT)/iberror_codes.pas >> $(TMP_ROOT)/iberror.pas
 
-$(API_PAS_FILE): $(IDL_FILE) $(PASCAL_SOURCES) $(TMP_FUNCS)
+$(TMP_FUNCS_PAS): $(PASCAL_SOURCES) $(XPB_CONSTS) $(TMP_ROOT)/iberror.pas $(RPL_AWK) $(RPL_GREP)
+	cp $(PAS_ROOT)/fb_get_master_interface.pas $(TMP_FUNCS_PAS)
+	$(RPL_AWK) <$(XPB_CONSTS) >>$(TMP_FUNCS_PAS)
+	$(RPL_GREP) <$(TMP_ROOT)/iberror.pas >>$(TMP_FUNCS_PAS)
+
+$(API_PAS_FILE): $(IDL_FILE) $(PASCAL_SOURCES) $(TMP_FUNCS_PAS)
 	$(CLOOP) $(IDL_FILE) pascal $@ Firebird --uses SysUtils \
 		--interfaceFile $(PAS_ROOT)/Pascal.interface.pas \
     	--implementationFile $(PAS_ROOT)/Pascal.implementation.pas \
     	--exceptionClass FbException \
-    	--functionsFile $(TMP_FUNCS) \
+    	--functionsFile $(TMP_FUNCS_PAS) \
     	--prefix I
 
 updateBuildNum : $(SRC_ROOT)/jrd/build_no.h $(GEN_ROOT)/Make.Version
@@ -164,17 +169,24 @@ $(GEN_ROOT)/Make.Version : $(SRC_ROOT)/misc/writeBuildNum.sh
 #
 
 external:
-	$(MAKE) -C $(ROOT)/extern/btyacc
-	$(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop
+	CC="$(CC)" CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/btyacc
+	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop
 
-	$(MAKE) -C $(ROOT)/extern/decNumber
+	CC="$(CC)" CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/decNumber
 	ln -sf $(ROOT)/extern/decNumber/libdecFloat.a $(LIB)
 
-	CXXFLAGS="-O3 -g -fPIC" $(MAKE) -C $(ROOT)/extern/re2
+ifeq ($(ABSEIL_BUILD_FLG),Y)
+	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(ROOT)/extern/int128/absl/numeric
+	ln -sf $(ROOT)/extern/int128/absl/numeric/libi128.a $(LIB)
+endif
+
+ifeq ($(RE2_BUILD_FLG),Y)
+	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS) -O3 -g -fPIC" $(MAKE) -C $(ROOT)/extern/re2
 	ln -sf $(ROOT)/extern/re2/obj/libre2.a $(LIB)
+endif
 
 ifeq ($(TOMMATH_BUILD_FLG),Y)
-	CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/libtommath -f makefile.shared GCC=$(GCC)
+	CC="$(CC)" CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/libtommath -f makefile.shared GCC=$(GCC)
 
 ifeq ($(PLATFORM),DARWIN)
 	install_name_tool -id "@rpath/lib/libtommath.dylib" $(TOMMATH)/.libs/libtommath.0.dylib
@@ -186,7 +198,7 @@ endif
 endif
 
 ifeq ($(TOMCRYPT_BUILD_FLG),Y)
-	CFLAGS="$(CFLAGS) $(TOM2TOM_FLAGS)" $(MAKE) -C $(ROOT)/extern/libtomcrypt -f makefile.shared GCC=$(GCC)
+	CC="$(CC)" CFLAGS="$(CFLAGS) $(TOM2TOM_FLAGS)" $(MAKE) -C $(ROOT)/extern/libtomcrypt -f makefile.shared GCC=$(GCC)
 
 ifeq ($(PLATFORM),DARWIN)
 	install_name_tool -id "@rpath/lib/libtomcrypt.dylib" $(TOMCRYPT)/.libs/libtomcrypt.1.dylib
@@ -199,7 +211,7 @@ endif
 
 ifeq ($(STD_EDITLINE),false)
 ifeq ($(EDITLINE_FLG),Y)
-	$(MAKE) -f $(GEN_ROOT)/Makefile.extern.editline
+	CC="$(CC)" CFLAGS="$(CFLAGS)" $(MAKE) -f $(GEN_ROOT)/Makefile.extern.editline
 endif
 endif
 
@@ -266,7 +278,7 @@ $(RE2_LIB):	$(RE2_Objs)
 # main build target for both debug and release builds
 #
 
-.PHONY:	cross1 cross2 boot yvalve engine fbintl gpre utilities plugins rest codes examples cross_rest
+.PHONY:	cross1 cross2 boot yvalve engine fbintl gpre utilities plugins rest examples cross_rest
 
 master_process:
 	ln -sf $(SRC_ROOT)/include/gen/autoconfig.auto $(SRC_ROOT)/include/gen/autoconfig.h
@@ -286,10 +298,6 @@ master_process:
 # even if gpre itself was not rebuilt
 	-$(RM) $(GPRE_CURRENT)
 	(cd $(BIN); $(LN) $(notdir $(GPRE)) $(notdir $(GPRE_CURRENT)))
-ifeq ($(IsDeveloper), Y)
-# In developer mode we must regenerate various files in include/gen
-	$(MAKE) codes
-endif
 	$(MAKE) plugins
 	$(MAKE) examples
 	$(MAKE) rest
@@ -324,10 +332,12 @@ cross2:
 	ln -sf $(SRC_ROOT)/include/cross/$(CROSS_CONFIG) $(SRC_ROOT)/include/gen/autoconfig.h
 	$(MAKE) prerequisites
 	$(MAKE) tommath
-	$(MAKE) tomcrypt
+	$(MAKE) LTCSOURCE=-DLTC_SOURCE tomcrypt
 	$(MAKE) re2
-	$(MAKE) -C $(ROOT)/extern/decNumber
+	CC="$(CC)" CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/decNumber
 	ln -sf $(ROOT)/extern/decNumber/libdecFloat$(CROSS).a $(LIB)
+	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(ROOT)/extern/int128/absl/numeric
+	ln -sf $(ROOT)/extern/int128/absl/numeric/libi128$(CROSS).a $(LIB)
 	$(MAKE) yvalve
 	$(MAKE) engine
 	$(MAKE) fbintl
@@ -412,11 +422,10 @@ gpre: $(GPRE) databases
 $(GPRE):	$(GPRE_Objects) $(COMMON_LIB)
 	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
-HELP_FDB = $(FIREBIRD)/help/help.fdb
-SECURITY_FDB = $(FIREBIRD)/security4.fdb
+SECURITY_FDB = $(FIREBIRD)/security5.fdb
 SECURITY_TMP = security.tmp
 
-databases:		yachts.lnk msg.timestamp $(HELP_FDB) $(SECURITY_FDB)
+databases:		yachts.lnk $(SECURITY_FDB)
 
 export LD_LIBRARY_PATH := $(LD_LIBRARY_PATH):$(FIREBIRD)/lib
 
@@ -424,19 +433,10 @@ yachts.lnk:		metadata.fdb
 	-$(RM) $@
 	$(LN) $^ $@
 
-metadata.fdb:	$(RUN_ISQL) $(SRC_ROOT)/dbs/metadata.sql
+metadata.fdb:	$(RUN_ISQL)
 	-$(RM) $@
-	$(RUN_ISQL) -q -i $(SRC_ROOT)/dbs/metadata.sql
+	echo create database \'metadata.fdb\'\; | $(RUN_ISQL) -sqldialect 1
 	$(RUN_GFIX) -mode read_only $@
-	$(CHMOD) 0444 $@
-
-$(HELP_FDB):	help.fdb
-	-$(RM) $@
-	$(CP) $^ $@
-	$(CHMOD) 0444 $@
-
-help.fdb:	$(BLD_ROOT)/misc/help.gbak
-	$(RUN_GBAK) -MODE read_only -R $< $@
 	$(CHMOD) 0444 $@
 
 $(SECURITY_FDB):	security.fdb
@@ -453,13 +453,6 @@ security.fdb:	$(SRC_ROOT)/dbs/security.sql
 	$(CP) $(SECURITY_TMP) $@
 	$(RUN_GFIX) -write sync $@
 
-msg.timestamp:	$(MSG_FILES)
-	-$(RM) msg.fdb
-	echo create database \'msg.fdb\'\; | $(RUN_ISQL)
-	$(RUN_GFIX) -write async msg.fdb
-	for sql in $(MSG_FILES); do (echo $$sql; $(RUN_ISQL) -i $$sql msg.fdb) || exit; done
-	$(TOUCH) $@
-
 
 .PHONY:	ibutil udfsupport
 
@@ -474,7 +467,6 @@ $(LIBIBUTIL_SO): $(UTIL_Objects)
 
 #___________________________________________________________________________
 # most of utilities, including network server and UDF support
-# qli is not here cause it needs special database (help.fdb), therefore needs gbak
 #
 
 .PHONY:	firebird_server fb_lock_print fbguard fbsvcmgr fbtracemgr gbak gfix gsec gsplit gstat isql nbackup
@@ -618,39 +610,19 @@ $(COMPAT_SQL):	$(SRC_COMPAT_SQL)
 	cp $^ $@
 
 #___________________________________________________________________________
-# codes - developers change them sometimes
-#
-
-.PHONY: gen_codes
-CODES = $(BIN)/codes$(EXEC_EXT)
-
-codes:	gen_codes
-
-gen_codes:	$(CODES) msg.timestamp
-	$(CODES) $(SRC_ROOT)/include/gen $(LNG_ROOT)
-
-$(CODES):	$(CODES_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
-
-#___________________________________________________________________________
 # all the rest we need to build
 #
 
-.PHONY:	qli message_file tzdata gbak_files
+.PHONY:	message_file tzdata gbak_files
 
-FDB_FILES := $(HELP_FDB) $(ROOT)/gen/msg.fdb $(SECURITY_FDB) $(FIREBIRD)/examples/empbuild/employee.fdb
-GBAK_FILES := $(FDB_FILES:.fdb=.gbak) $(FIREBIRD)/msg.gbak
+FDB_FILES := $(SECURITY_FDB) $(FIREBIRD)/examples/empbuild/employee.fdb
+GBAK_FILES := $(FDB_FILES:.fdb=.gbak)
 GBAK_FILES := $(subst Native,$(TARGET),$(GBAK_FILES))
 
-rest:	qli message_file tzdata
+rest:	message_file tzdata
 
-cross_rest:	qli gbak_files
+cross_rest:
 	$(MAKE) $(BUILD_FILE)
-
-qli:		$(QLI)
-
-$(QLI):		$(QLI_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
 
 examples: include_generic
 	$(MAKE) -f Makefile.examples -C $(GEN_ROOT)/examples/
@@ -658,9 +630,9 @@ examples: include_generic
 
 message_file:	$(FIREBIRD_MSG)
 
-$(FIREBIRD_MSG):	$(BUILD_FILE) msg.timestamp
-	$(BUILD_FILE) -d msg.fdb -f $@
-	$(CHMOD_6) $@
+$(FIREBIRD_MSG) $(FIREBIRD)/include/firebird/impl/iberror_c.h:	$(BUILD_FILE)
+	$(BUILD_FILE) -f $(FIREBIRD_MSG) -c $(FIREBIRD)/include/firebird/impl/iberror_c.h
+	$(CHMOD_6) $(FIREBIRD_MSG)
 
 tzdata: $(FIREBIRD)/tzdata
 
@@ -669,13 +641,10 @@ $(FIREBIRD)/tzdata: $(ROOT)/extern/icu/tzdata/le.zip
 	mkdir -p $(FIREBIRD)/tzdata
 	unzip -o $(ROOT)/extern/icu/tzdata/le.zip -d $(FIREBIRD)/tzdata
 
-$(BUILD_FILE):	$(BUILD_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $(LSB_UNDEF) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(call LINK_DARWIN_RPATH,..)
+$(BUILD_FILE):	$(BUILD_Objects)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $(LSB_UNDEF) $^ -o $@
 
 gbak_files: $(GBAK_FILES)
-
-$(GEN_ROOT)/$(TARGET)/firebird/msg.gbak:	$(ROOT)/gen/msg.gbak
-	cp $^ $@
 
 #---------------------------------------------------------------------------
 
@@ -699,7 +668,7 @@ include_generic: $(INCLUDE_DEST)/ib_util.h  \
 
 OtherDistribHeaders = extlib/ib_util.h \
                       yvalve/perf.h  \
-                      include/gen/iberror.h \
+                      include/iberror.h \
 					  include/ibase.h
 
 SRC_OtherDistribHeaders = $(addprefix $(SRC_ROOT)/, $(OtherDistribHeaders))
@@ -707,6 +676,11 @@ SRC_OtherDistribHeaders = $(addprefix $(SRC_ROOT)/, $(OtherDistribHeaders))
 $(INCLUDE_DEST)/ib_util.h : $(SRC_OtherDistribHeaders)
 	mkdir -p $(INCLUDE_DEST)
 	$(CP) $^ $(INCLUDE_DEST)/
+
+ifeq ($(SYSTEM_BOOST_FLG),Y)
+$(INCLUDE_DEST)/firebird/Message.h : $(SRC_ROOT)/include/firebird/Message.h
+	sed 's,^#include "\./impl/boost/\(.\+\)",#include <boost/\1>,; s/\bFB_BOOST_PP_/BOOST_PP_/g' $< > $@
+endif
 
 $(INCLUDE_DEST)/firebird/%: $(SRC_ROOT)/include/firebird/%
 	mkdir -p $(@D)
@@ -738,19 +712,19 @@ install install-embedded silent_install package packages dist:
 #
 .PHONY: clean clean_objects clean_dependancies clean_extern_objects clean_build \
 		clean_gpre_gen clean_icu clean_dbs clean_examples clean_makefiles \
-		clean_editline clean_all clean_decfloat clean_vers clean_misc
+		clean_editline clean_all clean_decfloat clean_int128 clean_vers clean_misc
 
 
 clean: clean_objects clean_dependancies clean_extern_objects clean_build \
 		clean_yacc_gen clean_gpre_gen clean_dbs clean_examples clean_tommath \
-		clean_tomcrypt clean_decfloat clean_vers clean_misc
+		clean_tomcrypt clean_decfloat clean_int128 clean_vers clean_misc
 
 clean_vers:
 	$(RM) *.vers
 
 clean_misc:
 	$(RM) security.tmp test.header.txt
-	$(RM) $(API_PAS_FILE) $(API_H_FILE) $(TMP_FUNCS) $(RPL_AWK) $(RPL_GREP)
+	$(RM) $(TMP_FUNCS_PAS) $(RPL_AWK) $(RPL_GREP)
 
 
 ifeq ($(EDITLINE_FLG),Y)
@@ -771,7 +745,7 @@ clean_config clean_all: clean clean_makefiles
 	-$(MAKE) -C $(ROOT)/extern/btyacc distclean
 
 clean_dbs:
-	$(RM) *.fdb *.FDB msg.timestamp
+	$(RM) *.fdb *.FDB
 	$(RM) yachts.lnk
 
 
@@ -796,6 +770,9 @@ clean_tomcrypt:
 
 clean_decfloat:
 	-$(MAKE) -C $(ROOT)/extern/decNumber clean
+
+clean_int128:
+	-$(MAKE) -C $(ROOT)/extern/int128/absl/numeric clean
 
 clean_objects:
 	$(RM) `find $(TMP_ROOT)/ -type f -name '*.o' -print`
@@ -823,6 +800,8 @@ clean_build:
 clean_makefiles:
 	$(RM) $(GEN_ROOT)/Make*
 	$(RM) $(GEN_ROOT)/make*
+	-$(RM) $(GEN_ROOT)/darwin.defaults
+	-$(RM) $(GEN_ROOT)/vers.sh
 	$(RM) `find $(GEN_ROOT)/install \( -type f -o -type l \) -print`
 	-$(RM) $(GEN_ROOT)/examples/Make*
 	$(RM) $(ROOT)/Makefile

@@ -141,7 +141,7 @@ int main()
 	t8.process("something", false, true);
 	t8.process("something else", false, true);
 
-	// Test optimization of consequitive "_" and "%" subpatterns
+	// Test optimization of consecutive "_" and "%" subpatterns
 	StringLikeEvaluator t9(p, "%__%%_A", 0);
 	t9.process("ABAB", true, false);
 	t9.process("ABA", true, true);

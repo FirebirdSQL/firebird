@@ -190,10 +190,7 @@ public:
 	void fetch(bool eof, ntrace_result_t result)
 	{
 		if (!m_need_trace)
-		{
-			m_request->req_fetch_baseline = NULL;
 			return;
-		}
 
 		m_need_trace = false;
 		m_request->req_fetch_elapsed += fb_utils::query_performance_counter() - m_start_clock;

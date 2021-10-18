@@ -61,6 +61,7 @@ protected:
 	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
 
 private:
+	void outputDesc(dsc* desc) const;
 	ULONG tempImpure;
 };
 

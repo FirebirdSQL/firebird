@@ -44,7 +44,6 @@
 #include "../remote/parse_proto.h"
 #include "../remote/remot_proto.h"
 #include "../remote/server/serve_proto.h"
-#include "../common/xdr_proto.h"
 #ifdef WIN_NT
 #include "../../remote/server/os/win32/cntl_proto.h"
 #include <stdlib.h>
@@ -61,7 +60,7 @@
 #include "../common/config/config.h"
 #include "../common/utils_proto.h"
 #ifdef DEBUG
-#include "gen/iberror.h"
+#include "iberror.h"
 #endif
 #include "../common/classes/FpeControl.h"
 #include "../remote/proto_proto.h"	// xdr_protocol_overhead()
@@ -1919,7 +1918,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	{
 		if ((protocol->p_cnct_version == PROTOCOL_VERSION10 ||
 			 (protocol->p_cnct_version >= PROTOCOL_VERSION11 &&
-			  protocol->p_cnct_version <= PROTOCOL_VERSION16)) &&
+			  protocol->p_cnct_version <= PROTOCOL_VERSION17)) &&
 			 (protocol->p_cnct_architecture == arch_generic ||
 			  protocol->p_cnct_architecture == ARCHITECTURE) &&
 			protocol->p_cnct_weight >= weight)
@@ -2926,7 +2925,7 @@ void rem_port::disconnect(PACKET* sendL, PACKET* receiveL)
 	}
 
 	this->port_flags |= PORT_disconnect;
-	this->port_flags &= ~PORT_z_data;
+	this->port_z_data = false;
 
 	if (!rdb)
 	{
@@ -3685,7 +3684,7 @@ void rem_port::batch_exec(P_BATCH_EXEC* batch, PACKET* sendL)
 }
 
 
-void rem_port::batch_rls(P_BATCH_FREE* batch, PACKET* sendL)
+void rem_port::batch_rls(P_BATCH_FREE_CANCEL* batch, PACKET* sendL)
 {
 	LocalStatus ls;
 	CheckStatusWrapper status_vector(&ls);
@@ -3702,6 +3701,32 @@ void rem_port::batch_rls(P_BATCH_FREE* batch, PACKET* sendL)
 }
 
 
+void rem_port::batch_cancel(P_BATCH_FREE_CANCEL* batch, PACKET* sendL)
+{
+	LocalStatus ls;
+	CheckStatusWrapper status_vector(&ls);
+
+	Rsr* statement;
+	getHandle(statement, batch->p_batch_statement);
+	statement->checkIface();
+	statement->checkBatch();
+
+	statement->rsr_batch->cancel(&status_vector);
+
+	this->send_response(sendL, 0, 0, &status_vector, false);
+}
+
+
+void rem_port::batch_sync(PACKET* sendL)
+{
+	LocalStatus ls;
+	CheckStatusWrapper status_vector(&ls);
+
+	// no need checking protocol version if client is using batch_sync, just return synced response
+	this->send_response(sendL, 0, 0, &status_vector, false);
+}
+
+
 void rem_port::replicate(P_REPLICATE* repl, PACKET* sendL)
 {
 	LocalStatus ls;
@@ -3715,7 +3740,11 @@ void rem_port::replicate(P_REPLICATE* repl, PACKET* sendL)
 	}
 
 	if (!this->port_replicator)
+	{
 		this->port_replicator = rdb->rdb_iface->createReplicator(&status_vector);
+		check(&status_vector);
+		fb_assert(this->port_replicator);
+	}
 
 	if (repl->p_repl_data.cstr_length)
 	{
@@ -4366,11 +4395,14 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 		{
 			string version;
 			versionInfo(version);
+			USHORT protocol = memchr(stuff->p_info_items.cstr_address, fb_info_protocol_version,
+				stuff->p_info_items.cstr_length) ? port_protocol & FB_PROTOCOL_MASK : 0;
 			info_db_len = MERGE_database_info(temp_buffer, //temp
 				buffer, buffer_length,
 				DbImplementation::current.backwardCompatibleImplementation(), 4, 1,
 				reinterpret_cast<const UCHAR*>(version.c_str()),
-				reinterpret_cast<const UCHAR*>(this->port_host->str_data));
+				reinterpret_cast<const UCHAR*>(this->port_host->str_data),
+				protocol);
 		}
 		break;
 
@@ -4401,6 +4433,15 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 		statement->checkIface(isc_info_unprepared_stmt);
 
 		statement->rsr_iface->getInfo(&status_vector, info_len, info_buffer,
+			buffer_length, buffer);
+		break;
+
+	case op_info_batch:
+		getHandle(statement, stuff->p_info_object);
+		statement->checkIface();
+		statement->checkBatch();
+
+		statement->rsr_batch->getInfo(&status_vector, info_len, info_buffer,
 			buffer_length, buffer);
 		break;
 	}
@@ -4883,6 +4924,7 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 		case op_info_transaction:
 		case op_service_info:
 		case op_info_sql:
+		case op_info_batch:
 			port->info(op, &receive->p_info, sendL);
 			break;
 
@@ -4970,7 +5012,15 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 			break;
 
 		case op_batch_rls:
-			port->batch_rls(&receive->p_batch_free, sendL);
+			port->batch_rls(&receive->p_batch_free_cancel, sendL);
+			break;
+
+		case op_batch_cancel:
+			port->batch_cancel(&receive->p_batch_free_cancel, sendL);
+			break;
+
+		case op_batch_sync:
+			port->batch_sync(sendL);
 			break;
 
 		case op_batch_blob_stream:
@@ -6111,12 +6161,15 @@ void rem_port::start_crypt(P_CRYPT * crypt, PACKET* sendL)
 	{
 		ICryptKey* key = NULL;
 		PathName keyName(crypt->p_key.cstr_address, crypt->p_key.cstr_length);
-		for (unsigned k = 0; k < port_crypt_keys.getCount(); ++k)
+		if (getPortConfig()->getWireCrypt(WC_SERVER) != WIRE_CRYPT_DISABLED)
 		{
-			if (keyName == port_crypt_keys[k]->keyName)
+			for (unsigned k = 0; k < port_crypt_keys.getCount(); ++k)
 			{
-				key = port_crypt_keys[k];
-				break;
+				if (keyName == port_crypt_keys[k]->keyName)
+				{
+					key = port_crypt_keys[k];
+					break;
+				}
 			}
 		}
 
@@ -6637,7 +6690,7 @@ SSHORT rem_port::asyncReceive(PACKET* asyncPacket, const UCHAR* buffer, SSHORT d
 		return 0;
 	}
 
-	SLONG original_op = xdr_peek_long(&port_async_receive->port_receive, buffer, dataSize);
+	SLONG original_op = xdr_peek_long(port_async_receive->port_receive, buffer, dataSize);
 
 	switch (original_op)
 	{
@@ -6654,7 +6707,7 @@ SSHORT rem_port::asyncReceive(PACKET* asyncPacket, const UCHAR* buffer, SSHORT d
 		MutexLockGuard guard(mutex, FB_FUNCTION);
 
 		port_async_receive->clearRecvQue();
-		port_async_receive->port_receive.x_handy = 0;
+		port_async_receive->port_receive->x_handy = 0;
 		port_async_receive->port_protocol = port_protocol;
 		memcpy(port_async_receive->port_queue.add().getBuffer(dataSize), buffer, dataSize);
 
@@ -6663,7 +6716,7 @@ SSHORT rem_port::asyncReceive(PACKET* asyncPacket, const UCHAR* buffer, SSHORT d
 		port_async_receive->receive(asyncPacket);
 	}
 
-	const SSHORT asyncSize = dataSize - port_async_receive->port_receive.x_handy;
+	const SSHORT asyncSize = dataSize - port_async_receive->port_receive->x_handy;
 	fb_assert(asyncSize >= 0);
 
 	switch (asyncPacket->p_operation)

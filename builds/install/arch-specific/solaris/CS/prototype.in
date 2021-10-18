@@ -71,7 +71,6 @@ f none @prefix@/bin/gstat=$SRCDIR/bin/gstat 0451 firebird firebird
 #f none @prefix@/bin/fbguard=$SRCDIR/bin/fbguard 0451 firebird firebird
 #f none @prefix@/bin/fbmgr.bin=$SRCDIR/bin/fbmgr.bin 0451 firebird firebird
 f none @prefix@/bin/fb_lock_print=$SRCDIR/bin/fb_lock_print 0451 firebird firebird
-f none @prefix@/bin/qli=$SRCDIR/bin/qli 0555 firebird firebird
 # from 2.0
 f none @prefix@/bin/nbackup=$SRCDIR/bin/nbackup 0451 firebird firebird
 

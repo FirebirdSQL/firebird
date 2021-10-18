@@ -51,22 +51,6 @@ namespace
 	const char* NO_PLUGIN_ERROR = "Replication plugin %s is not found";
 	const char* STOP_ERROR = "Replication is stopped due to critical error(s)";
 
-	void logStatus(const Database* dbb, const ISC_STATUS* status, LogMsgType type)
-	{
-		string message;
-		char temp[BUFFER_LARGE];
-
-		while (fb_interpret(temp, sizeof(temp), &status))
-		{
-			if (!message.isEmpty())
-				message += "\n\t";
-
-			message += temp;
-		}
-
-		logOriginMessage(dbb->dbb_filename.c_str(), message, type);
-	}
-
 	bool checkStatus(thread_db* tdbb, const FbLocalStatus& status,
 					 jrd_tra* transaction = nullptr, bool canThrow = true)
 	{
@@ -78,19 +62,11 @@ namespace
 		const auto config = dbb->replConfig();
 		fb_assert(config);
 
-		const auto state = status->getState();
+		if (config->logErrors)
+			logPrimaryStatus(dbb->dbb_filename, &status);
 
-		if (state & IStatus::STATE_WARNINGS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
-			if (config->logErrors)
-				logStatus(dbb, status->getWarnings(), WARNING_MSG);
-		}
-
-		if (state & IStatus::STATE_ERRORS)
-		{
-			if (config->logErrors)
-				logStatus(dbb, status->getErrors(), ERROR_MSG);
-
 			if (config->disableOnError)
 			{
 				if (transaction)
@@ -107,7 +83,7 @@ namespace
 				attachment->att_flags &= ~ATT_replicating;
 				attachment->att_replicator = nullptr;
 
-				logOriginMessage(dbb->dbb_filename, STOP_ERROR, ERROR_MSG);
+				logPrimaryError(dbb->dbb_filename, STOP_ERROR);
 			}
 
 			if (config->reportErrors && canThrow)
@@ -157,7 +133,7 @@ namespace
 				auto& pool = *attachment->att_pool;
 				const auto manager = dbb->replManager(true);
 				const auto& guid = dbb->dbb_guid;
-				const auto& userName = attachment->att_user->getUserName();
+				const auto& userName = attachment->getUserName();
 
 				attachment->att_replicator = FB_NEW Replicator(pool, manager, guid, userName);
 			}
@@ -169,7 +145,7 @@ namespace
 				{
 					string msg;
 					msg.printf(NO_PLUGIN_ERROR, config->pluginName.c_str());
-					logOriginMessage(dbb->dbb_filename, msg, ERROR_MSG);
+					logPrimaryError(dbb->dbb_filename, msg);
 
 					return nullptr;
 				}
@@ -177,7 +153,19 @@ namespace
 				attachment->att_replicator = plugins.plugin();
 			}
 
-			attachment->att_replicator->setAttachment(attachment->getInterface());
+			FbLocalStatus status;
+			const bool replicating =
+				attachment->att_replicator->init(&status, attachment->getInterface());
+
+			if (!checkStatus(tdbb, status))
+				return nullptr;
+
+			if (!replicating)
+			{
+				attachment->att_flags &= ~ATT_replicating;
+				attachment->att_replicator = nullptr;
+				return nullptr;
+			}
 		}
 
 		fb_assert(attachment->att_replicator.hasData());
@@ -227,6 +215,12 @@ namespace
 
 			if (!checkStatus(tdbb, status, transaction))
 				return nullptr;
+
+			if (!transaction->tra_replicator)
+			{
+				transaction->tra_flags &= ~TRA_replicating;
+				return nullptr;
+			}
 		}
 
 		// Ensure all active savepoints are replicated
@@ -317,12 +311,12 @@ namespace
 			return m_fieldType;
 		}
 
-		unsigned getSubType() override
+		int getSubType() override
 		{
 			return m_desc->getSubType();
 		}
 
-		unsigned getScale() override
+		int getScale() override
 		{
 			return m_desc->dsc_scale;
 		}
@@ -667,6 +661,8 @@ void REPL_gen_id(thread_db* tdbb, SLONG genId, SINT64 value)
 		attachment->att_generators.store(genId, genName);
 	}
 
+	fb_assert(genName.hasData());
+
 	AutoSetRestoreFlag<ULONG> noRecursion(&tdbb->tdbb_flags, TDBB_repl_in_progress, true);
 
 	FbLocalStatus status;
@@ -697,7 +693,7 @@ void REPL_exec_sql(thread_db* tdbb, jrd_tra* transaction, const string& sql)
 	checkStatus(tdbb, status, transaction);
 }
 
-void REPL_log_switch(thread_db* tdbb)
+void REPL_journal_switch(thread_db* tdbb)
 {
 	const auto dbb = tdbb->getDatabase();
 
@@ -705,5 +701,5 @@ void REPL_log_switch(thread_db* tdbb)
 	if (!replMgr)
 		return;
 
-	replMgr->forceLogSwitch();
+	replMgr->forceJournalSwitch();
 }

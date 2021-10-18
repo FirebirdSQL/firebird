@@ -375,6 +375,7 @@ void UserManagement::execute(USHORT id)
 	LocalStatus status;
 	CheckStatusWrapper statusWrapper(&status);
 	ChangeCharset cc(att);
+	AutoSaveRestore<CoercionArray> restoreBindings(&att->att_bindings);
 
 	if (command->attr.entered() || command->op == Auth::ADDMOD_OPER)
 	{
@@ -590,6 +591,7 @@ RecordBuffer* UserManagement::getList(thread_db* tdbb, jrd_rel* relation)
 	try
 	{
 		openAllManagers();
+
 		bool flagSuccess = false;
 		LocalStatus st1, st2;
 		CheckStatusWrapper statusWrapper1(&st1);
@@ -597,6 +599,8 @@ RecordBuffer* UserManagement::getList(thread_db* tdbb, jrd_rel* relation)
 		CheckStatusWrapper* currentWrapper(&statusWrapper1);
 		int errcode1, errcode2;
 		int* ec(&errcode1);
+
+		AutoSaveRestore<CoercionArray> restoreBindings(&att->att_bindings);
 
 		threadDbb = tdbb;
 		MemoryPool* const pool = threadDbb->getTransaction()->tra_pool;

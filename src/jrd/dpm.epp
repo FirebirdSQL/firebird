@@ -1744,7 +1744,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 				if (get_header(window, line, rpb) &&
 					!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
 				{
-					if (sweeper && !rpb->rpb_b_page && rpb->rpb_transaction_nr <= oldest)
+					if (sweeper && !rpb->rpb_b_page && !(rpb->rpb_flags & rpb_deleted) && rpb->rpb_transaction_nr <= oldest)
 						continue;
 
 					rpb->rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp,
@@ -1816,7 +1816,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 					if (get_header(window, line, rpb) &&
 						!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
 					{
-						if (sweeper && !rpb->rpb_b_page && rpb->rpb_transaction_nr <= oldest)
+						if (sweeper && !rpb->rpb_b_page && !(rpb->rpb_flags & rpb_deleted) && rpb->rpb_transaction_nr <= oldest)
 							continue;
 
 						rpb->rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp,
@@ -2457,7 +2457,7 @@ static void check_swept(thread_db* tdbb, record_param* rpb)
 		{
 			rhd* header = (rhd*) ((SCHAR*) dpage + index->dpg_offset);
 			if (Ods::getTraNum(header) > transaction->tra_oldest ||
-				(header->rhd_flags & (rpb_blob | rpb_chained | rpb_fragment)) ||
+				(header->rhd_flags & (rpb_blob | rpb_chained | rpb_fragment | rpb_deleted)) ||
 				header->rhd_b_page)
 			{
 				CCH_RELEASE_TAIL(tdbb, window);

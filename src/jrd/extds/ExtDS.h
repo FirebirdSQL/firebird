@@ -434,7 +434,7 @@ public:
 	virtual bool cancelExecution(bool forced) = 0;
 
 	// Try to reset connection, return true if it can be pooled
-	virtual bool resetSession() = 0;
+	virtual bool resetSession(Jrd::thread_db* tdbb) = 0;
 
 	int getSqlDialect() const { return m_sqlDialect; }
 
@@ -647,7 +647,7 @@ protected:
 	virtual void getOutParams(Jrd::thread_db* tdbb, const Jrd::ValueListNode* params);
 
 	virtual void doSetInParams(Jrd::thread_db* tdbb, unsigned int count,
-		const Jrd::MetaName* const* names, const NestConst<Jrd::ValueExprNode>* params);
+		const Firebird::MetaString* const* names, const NestConst<Jrd::ValueExprNode>* params);
 
 	virtual void putExtBlob(Jrd::thread_db* tdbb, dsc& src, dsc& dst);
 	virtual void getExtBlob(Jrd::thread_db* tdbb, const dsc& src, dsc& dst);
@@ -696,8 +696,8 @@ protected:
 	Jrd::jrd_req* m_preparedByReq;
 
 	// set in preprocess
-	Firebird::SortedObjectsArray<const Jrd::MetaName> m_sqlParamNames;
-	ParamNames m_sqlParamsMap;
+	Firebird::SortedObjectsArray<const Firebird::MetaString> m_sqlParamNames;
+	Firebird::Array<const Firebird::MetaString*> m_sqlParamsMap;
 
 	// set in prepare()
 	Firebird::UCharBuffer m_in_buffer;

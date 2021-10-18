@@ -72,6 +72,10 @@ public:
 
 		const Firebird::PathName fileName;
 
+#ifdef LINUX
+		virtual bool getRealPath(Firebird::PathName& realPath) = 0;
+#endif
+
 	protected:
 		/// The constructor is protected so normal code can't allocate instances
 		/// of the class, but the class itself is still able to be subclassed.

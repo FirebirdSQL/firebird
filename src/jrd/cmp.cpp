@@ -257,17 +257,12 @@ const Format* CMP_format(thread_db* tdbb, CompilerScratch* csb, StreamType strea
 	if (!tail->csb_format)
 	{
 		if (tail->csb_relation)
-		{
 			tail->csb_format = MET_current(tdbb, tail->csb_relation);
-		}
 		else if (tail->csb_procedure)
-		{
 			tail->csb_format = tail->csb_procedure->prc_record_format;
-		}
+		//// TODO: LocalTableSourceNode
 		else
-		{
 			IBERROR(222);	// msg 222 bad blr - invalid stream
-		}
 	}
 
 	fb_assert(tail->csb_format);

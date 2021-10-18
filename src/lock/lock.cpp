@@ -43,7 +43,7 @@
 #include "../common/ThreadStart.h"
 #include "../jrd/jrd.h"
 #include "../jrd/Attachment.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/gdsassert.h"
 #include "../common/isc_proto.h"
@@ -1735,7 +1735,8 @@ bool LockManager::create_process(CheckStatusWrapper* statusVector)
 
 	if (m_sharedMemory->eventInit(&process->prc_blocking) != FB_SUCCESS)
 	{
-		(Arg::StatusVector(statusVector) << Arg::Gds(isc_lockmanerr)).copyTo(statusVector);
+		(Arg::StatusVector(statusVector) << Arg::Gds(isc_lockmanerr) <<
+			Arg::Gds(isc_random) << Arg::Str("process blocking event failed to initialize properly")).copyTo(statusVector);
 		return false;
 	}
 
@@ -1758,7 +1759,8 @@ bool LockManager::create_process(CheckStatusWrapper* statusVector)
 		}
 		catch (const Exception& ex)
 		{
-			(Arg::Gds(isc_lockmanerr) << Arg::StatusVector(ex)).copyTo(statusVector);
+			(Arg::Gds(isc_lockmanerr) << Arg::StatusVector(ex) <<
+				Arg::Gds(isc_random) << Arg::Str("blocking thread failed to start")).copyTo(statusVector);
 
 			return false;
 		}
@@ -2234,7 +2236,8 @@ bool LockManager::init_owner_block(CheckStatusWrapper* statusVector, own* owner,
 
 	if (m_sharedMemory->eventInit(&owner->own_wakeup) != FB_SUCCESS)
 	{
-		(Arg::StatusVector(statusVector) << Arg::Gds(isc_lockmanerr)).copyTo(statusVector);
+		(Arg::StatusVector(statusVector) << Arg::Gds(isc_lockmanerr) <<
+			Arg::Gds(isc_random) << Arg::Str("owner wakeup event failed initialization")).copyTo(statusVector);
 		return false;
 	}
 
@@ -2601,9 +2604,6 @@ void LockManager::post_blockage(thread_db* tdbb, lrq* request, lbl* lock)
  **************************************/
 	const SRQ_PTR owner_offset = request->lrq_owner;
 	const own* owner = (own*) SRQ_ABS_PTR(owner_offset);
-
-	const SRQ_PTR request_offset = SRQ_REL_PTR(request);
-	const SRQ_PTR lock_offset = SRQ_REL_PTR(lock);
 
 	ASSERT_ACQUIRED;
 	CHECK(request->lrq_flags & LRQ_pending);
@@ -3713,7 +3713,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 	ASSERT_ACQUIRED;
 
 	++(m_sharedMemory->getHeader()->lhb_waits);
-	const SLONG scan_interval = m_sharedMemory->getHeader()->lhb_scan_interval;
+	const ULONG scan_interval = m_sharedMemory->getHeader()->lhb_scan_interval;
 
 	// lrq_count will be off if we wait for a pending request
 	CHECK(!(request->lrq_flags & LRQ_pending));
@@ -3762,7 +3762,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 	// out the time when the lock request will timeout
 
 	const time_t lock_timeout = (lck_wait < 0) ? current_time + (-lck_wait) : 0;
-	time_t deadlock_timeout = current_time + scan_interval;
+	time_t deadlock_timeout = current_time + tdbb->adjustWait(scan_interval);
 
 	// Wait in a loop until the lock becomes available
 
@@ -3887,7 +3887,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 
 		// We're going to do some real work - reset when we next want to
 		// do a deadlock scan
-		deadlock_timeout = current_time + scan_interval;
+		deadlock_timeout = current_time + tdbb->adjustWait(scan_interval);
 
 		// Handle lock event first
 		if (ret == FB_SUCCESS)

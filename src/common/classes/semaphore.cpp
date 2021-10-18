@@ -27,7 +27,7 @@
 #include "firebird.h"
 #include "../common/classes/semaphore.h"
 #include "../common/classes/alloc.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 
 #ifdef HAVE_SYS_TIMES_H
 #include <sys/times.h>

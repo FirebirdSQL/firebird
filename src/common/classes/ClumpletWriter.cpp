@@ -36,15 +36,23 @@
 
 namespace Firebird {
 
-ClumpletWriter::ClumpletWriter(Kind k, FB_SIZE_T limit, UCHAR tag) :
-	ClumpletReader(k, NULL, 0), sizeLimit(limit), kindList(NULL), dynamic_buffer(getPool())
+ClumpletWriter::ClumpletWriter(Kind k, FB_SIZE_T limit, UCHAR tag)
+	: ClumpletReader(k, NULL, 0),
+	  sizeLimit(limit),
+	  kindList(NULL),
+	  dynamic_buffer(getPool()),
+	  flag_overflow(false)
 {
 	initNewBuffer(tag);
 	rewind();
 }
 
-ClumpletWriter::ClumpletWriter(MemoryPool& given_pool, Kind k, FB_SIZE_T limit, UCHAR tag) :
-	ClumpletReader(given_pool, k, NULL, 0), sizeLimit(limit), kindList(NULL), dynamic_buffer(getPool())
+ClumpletWriter::ClumpletWriter(MemoryPool& given_pool, Kind k, FB_SIZE_T limit, UCHAR tag)
+	: ClumpletReader(given_pool, k, NULL, 0),
+	  sizeLimit(limit),
+	  kindList(NULL),
+	  dynamic_buffer(getPool()),
+	  flag_overflow(false)
 {
 	initNewBuffer(tag);
 	rewind();
@@ -82,46 +90,72 @@ void ClumpletWriter::initNewBuffer(UCHAR tag)
 }
 
 ClumpletWriter::ClumpletWriter(Kind k, FB_SIZE_T limit, const UCHAR* buffer, FB_SIZE_T buffLen, UCHAR tag)
-	: ClumpletReader(k, NULL, 0), sizeLimit(limit), kindList(NULL), dynamic_buffer(getPool())
+	: ClumpletReader(k, NULL, 0),
+	  sizeLimit(limit),
+	  kindList(NULL),
+	  dynamic_buffer(getPool()),
+	  flag_overflow(false)
 {
 	create(buffer, buffLen, tag);
 }
 
 ClumpletWriter::ClumpletWriter(MemoryPool& pool, const KindList* kl, FB_SIZE_T limit,
 							   const UCHAR* buffer, FB_SIZE_T buffLen)
-	: ClumpletReader(pool, kl, buffer, buffLen), sizeLimit(limit),
-	  kindList(kl), dynamic_buffer(getPool())
+	: ClumpletReader(pool, kl, buffer, buffLen),
+	  sizeLimit(limit),
+	  kindList(kl),
+	  dynamic_buffer(getPool()),
+	  flag_overflow(false)
 {
 	create(buffer, buffLen, kl->tag);
 }
 
 ClumpletWriter::ClumpletWriter(const KindList* kl, FB_SIZE_T limit, const UCHAR* buffer, FB_SIZE_T buffLen)
-	: ClumpletReader(kl, buffer, buffLen), sizeLimit(limit), kindList(kl), dynamic_buffer(getPool())
+	: ClumpletReader(kl, buffer, buffLen),
+	  sizeLimit(limit),
+	  kindList(kl),
+	  dynamic_buffer(getPool()),
+	  flag_overflow(false)
 {
 	create(buffer, buffLen, kl->tag);
 }
 
 ClumpletWriter::ClumpletWriter(MemoryPool& pool, const KindList* kl, FB_SIZE_T limit)
-	: ClumpletReader(pool, kl, NULL, 0), sizeLimit(limit),
-	  kindList(kl), dynamic_buffer(getPool())
+	: ClumpletReader(pool, kl, NULL, 0),
+	  sizeLimit(limit),
+	  kindList(kl),
+	  dynamic_buffer(getPool()),
+	  flag_overflow(false)
 {
 	create(NULL, 0, kl->tag);
 }
 
 ClumpletWriter::ClumpletWriter(const KindList* kl, FB_SIZE_T limit)
-	: ClumpletReader(kl, NULL, 0), sizeLimit(limit), kindList(kl), dynamic_buffer(getPool())
+	: ClumpletReader(kl, NULL, 0),
+	  sizeLimit(limit),
+	  kindList(kl),
+	  dynamic_buffer(getPool()),
+	  flag_overflow(false)
 {
 	create(NULL, 0, kl->tag);
 }
 
 ClumpletWriter::ClumpletWriter(MemoryPool& pool, const ClumpletWriter& from)
-	: ClumpletReader(pool, from), sizeLimit(from.sizeLimit), kindList(NULL), dynamic_buffer(getPool())
+	: ClumpletReader(pool, from),
+	  sizeLimit(from.sizeLimit),
+	  kindList(NULL),
+	  dynamic_buffer(getPool()),
+	  flag_overflow(false)
 {
 	create(from.getBuffer(), from.getBufferEnd() - from.getBuffer(), from.isTagged() ? from.getBufferTag() : 0);
 }
 
 ClumpletWriter::ClumpletWriter(const ClumpletWriter& from)
-	: ClumpletReader(from), sizeLimit(from.sizeLimit), kindList(NULL), dynamic_buffer(getPool())
+	: ClumpletReader(from),
+	  sizeLimit(from.sizeLimit),
+	  kindList(NULL),
+	  dynamic_buffer(getPool()),
+	  flag_overflow(false)
 {
 	create(from.getBuffer(), from.getBufferEnd() - from.getBuffer(), from.isTagged() ? from.getBufferTag() : 0);
 }
@@ -138,8 +172,11 @@ void ClumpletWriter::create(const UCHAR* buffer, FB_SIZE_T buffLen, UCHAR tag)
 }
 
 ClumpletWriter::ClumpletWriter(MemoryPool& given_pool, Kind k, FB_SIZE_T limit,
-							   const UCHAR* buffer, FB_SIZE_T buffLen, UCHAR tag) :
-	ClumpletReader(given_pool, k, NULL, 0), sizeLimit(limit), dynamic_buffer(getPool())
+							   const UCHAR* buffer, FB_SIZE_T buffLen, UCHAR tag)
+	: ClumpletReader(given_pool, k, NULL, 0),
+	  sizeLimit(limit),
+	  dynamic_buffer(getPool()),
+	  flag_overflow(false)
 {
 	if (buffer && buffLen) {
 		dynamic_buffer.push(buffer, buffLen);
@@ -192,6 +229,13 @@ void ClumpletWriter::reset(const UCHAR* buffer, const FB_SIZE_T buffLen)
 void ClumpletWriter::size_overflow()
 {
 	fatal_exception::raise("Clumplet buffer size limit reached");
+}
+
+void ClumpletWriter::size_overflow(bool condition)
+{
+	flag_overflow = condition;
+	if (condition)
+		size_overflow();
 }
 
 void ClumpletWriter::toVaxInteger(UCHAR* ptr, FB_SIZE_T length, const SINT64 value)
@@ -362,9 +406,7 @@ void ClumpletWriter::insertBytesLengthCheck(UCHAR tag, const void* bytes, const 
 	}
 
 	// Check that resulting data doesn't overflow size limit
-	if (dynamic_buffer.getCount() + length + lenSize + 1 > sizeLimit) {
-		size_overflow();
-	}
+	size_overflow(dynamic_buffer.getCount() + length + lenSize + 1 > sizeLimit);
 
 	// Insert the data
 	const FB_SIZE_T saved_offset = cur_offset;
@@ -415,9 +457,7 @@ void ClumpletWriter::insertEndMarker(UCHAR tag)
 	}
 
 	// Check that resulting data doesn't overflow size limit
-	if (cur_offset + 1 > sizeLimit) {
-		size_overflow();
-	}
+	size_overflow(cur_offset + 1 > sizeLimit);
 
 	dynamic_buffer.shrink(cur_offset);
 	dynamic_buffer.push(tag);

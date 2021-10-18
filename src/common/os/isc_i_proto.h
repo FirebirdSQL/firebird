@@ -26,7 +26,7 @@
 
 #ifdef WIN_NT
 // This will poke event
-int		ISC_kill(SLONG, SLONG, void *);
+int		ISC_kill(SLONG, SLONG, HANDLE);
 #else
 // And that are functions to manage UNIX signals
 bool	ISC_signal(int, FPTR_VOID_PTR, void *);
@@ -34,7 +34,7 @@ void	ISC_signal_cancel(int, FPTR_VOID_PTR, void *);
 #endif
 
 #ifdef WIN_NT
-void*	ISC_make_signal(bool, bool, int, int);
+HANDLE	ISC_make_signal(bool, bool, int, int);
 #endif
 
 void	ISC_signal_init();

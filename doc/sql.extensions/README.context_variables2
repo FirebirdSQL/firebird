@@ -14,17 +14,9 @@ Format:
     RDB$SET_CONTEXT( <namespace>, <variable>, <value> )
     RDB$GET_CONTEXT( <namespace>, <variable> )
 
-Declared as:
-  DECLARE EXTERNAL FUNCTION RDB$GET_CONTEXT
-      VARCHAR(80),
-      VARCHAR(80)
-  RETURNS VARCHAR(255) FREE_IT;
-
-  DECLARE EXTERNAL FUNCTION RDB$SET_CONTEXT
-      VARCHAR(80),
-      VARCHAR(80),
-      VARCHAR(255)
-  RETURNS INTEGER BY VALUE;
+Returned value:
+    INTEGER for RDB$SET_CONTEXT
+    VARCHAR(32765) for RDB$GET_CONTEXT
 
 Usage:
 
@@ -34,6 +26,8 @@ Usage:
   written to and by whom are determined by namespace which they belong to.
 
   Namespace and variable names are case-sensitive.
+
+  Value of a variable is stored as a string, its length is limited by 32765 bytes.
 
   RDB$GET_CONTEXT retrieves current value of a variable. If variable does not
   exist in namespace return value for the function is NULL.
@@ -54,7 +48,7 @@ Usage:
    Variable name                  Value
   ------------------------------------------------------------------------------
    NETWORK_PROTOCOL	            | The network protocol used by client to connect. Currently
-                                | used values: "TCPv4", "TCPv6", "WNET", "XNET" and NULL
+                                | used values: "TCPv4", "TCPv6", "WNET", "XNET" and NULL.
                                 |
    WIRE_COMPRESSED              | Compression status of current connection.
                                 | If connection is compressed - returns "TRUE", if it is
@@ -71,10 +65,10 @@ Usage:
                                 | represented as string. Value is IP address concatenated with
                                 | port number using the '/' separator character. Value is
                                 | returned for TCPv4 and TCPv6 protocols only, for all other
-                                | protocols NULL is returned
+                                | protocols NULL is returned.
                                 |
    CLIENT_HOST                  | The wire protocol host name of remote client. Value is
-                                | returned for all supported protocols
+                                | returned for all supported protocols.
                                 |
    CLIENT_PID                   | Process ID of remote client application
                                 |
@@ -89,10 +83,10 @@ Usage:
    DB_FILE_ID                   | Unique filesystem-level ID of the current database
                                 |
    ISOLATION_LEVEL              | Isolation level for current transaction. Returned values
-                                | are "READ COMMITTED", "CONSISTENCY", "SNAPSHOT"
+                                | are "READ COMMITTED", "CONSISTENCY", "SNAPSHOT".
                                 |
    TRANSACTION_ID               | Numeric ID for current transaction. Returned value is the
-                                | same as of CURRENT_TRANSACTION pseudo-variable
+                                | same as of CURRENT_TRANSACTION pseudo-variable.
                                 |
    LOCK_TIMEOUT                 | Lock timeout value specified for current transaction
                                 |
@@ -100,16 +94,16 @@ Usage:
                                 | "FALSE" otherwise
                                 |
    SESSION_ID                   | Numeric ID for current session. Returned value is the
-                                | same as of CURRENT_CONNECTION pseudo-variable
+                                | same as of CURRENT_CONNECTION pseudo-variable.
                                 |
    CURRENT_USER                 | Current user for the connection. Returned value is the
-                                | same as of CURRENT_USER pseudo-variable
+                                | same as of CURRENT_USER pseudo-variable.
                                 |
    EFFECTIVE_USER               | Effective user for now. It indicates privileges of
                                 | which user is currently used to execute function, procedure, trigger.
                                 |
    CURRENT_ROLE                 | Current role for the connection. Returned value is the
-                                | same as of CURRENT_ROLE pseudo-variable
+                                | same as of CURRENT_ROLE pseudo-variable.
                                 |
    ENGINE_VERSION               | Engine version number, e.g. "2.1.0" (since V2.1)
                                 |
@@ -127,6 +121,9 @@ Usage:
    REPLICATION_SEQUENCE         | Current replication sequence (number of the latest segment
                                 | written to the replication journal)
                                 |
+   REPLICA_MODE                 | Replica mode of the database. Possible values are
+                                | "READ-ONLY", "READ-WRITE" and NULL.
+                                |
    EXT_CONN_POOL_SIZE           | Pool size (number of connections inside the pool)
                                 |
    EXT_CONN_POOL_IDLE_COUNT     | Count of currently inactive connections in the pool
@@ -134,6 +131,8 @@ Usage:
    EXT_CONN_POOL_ACTIVE_COUNT   | Count of active connections, associated with pool
                                 |
    EXT_CONN_POOL_LIFETIME       | Idle connection lifetime, in seconds
+                                |
+   SESSION_TIMEZONE             | Current session time zone.
 
 Notes:
    To prevent DoS attacks against Firebird Server you are not allowed to have

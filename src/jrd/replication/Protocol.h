@@ -26,28 +26,27 @@
 
 namespace Replication
 {
-	inline ULONG ENCODE_PROTOCOL(ULONG major, USHORT minor)
-	{
-		return ((major << 8) | minor);
-	}
-
 	// Supported protocol versions
-	const ULONG PROTOCOL_VERSION_1 = 1;
-	const ULONG PROTOCOL_1_0 = ENCODE_PROTOCOL(PROTOCOL_VERSION_1, 0);
-	const ULONG PROTOCOL_CURRENT_VERSION = PROTOCOL_1_0;
+	const USHORT PROTOCOL_VERSION_1 = 1;
+	const USHORT PROTOCOL_CURRENT_VERSION = PROTOCOL_VERSION_1;
+
+	// Global (protocol neutral) flags
+	const USHORT BLOCK_BEGIN_TRANS	= 0x0001;
+	const USHORT BLOCK_END_TRANS	= 0x0002;
 
 	struct Block
 	{
 		FB_UINT64 traNumber;
-		ULONG protocol;
-		ULONG dataLength;
-		ULONG metaLength;
-		ULONG flags;
-		ISC_TIMESTAMP timestamp;
+		USHORT protocol;
+		USHORT flags;
+		ULONG length;
 	};
 
-	const ULONG BLOCK_BEGIN_TRANS = 1;
-	const ULONG BLOCK_END_TRANS = 2;
+	static_assert(sizeof(struct Block) == 16, "struct Block size mismatch");
+	static_assert(offsetof(struct Block, traNumber) == 0, "traNumber offset mismatch");
+	static_assert(offsetof(struct Block, protocol) == 8, "protocol offset mismatch");
+	static_assert(offsetof(struct Block, flags) == 10, "flags offset mismatch");
+	static_assert(offsetof(struct Block, length) == 12, "length offset mismatch");
 
 	enum Operation: UCHAR
 	{
@@ -67,7 +66,9 @@ namespace Replication
 		opStoreBlob = 12,
 		opExecuteSql = 13,
 		opSetSequence = 14,
-		opExecuteSqlIntl = 15
+		opExecuteSqlIntl = 15,
+
+		opDefineAtom = 16
 	};
 
 } // namespace

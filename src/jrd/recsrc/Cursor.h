@@ -59,7 +59,6 @@ namespace Jrd
 			bool irsb_active;
 			State irsb_state;
 			FB_UINT64 irsb_position;
-			RecordBuffer* irsb_buffer;
 		};
 
 	public:

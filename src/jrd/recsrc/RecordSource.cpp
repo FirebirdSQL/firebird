@@ -119,7 +119,6 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 	case InversionNode::TYPE_INDEX:
 		{
 			const IndexRetrieval* const retrieval = inversion->retrieval;
-			const jrd_rel* const relation = retrieval->irb_relation;
 
 			MetaName indexName;
 			if (retrieval->irb_name && retrieval->irb_name->hasData())

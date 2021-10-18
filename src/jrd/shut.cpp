@@ -462,7 +462,6 @@ static bool notify_shutdown(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* gu
  *
  **************************************/
 	Database* const dbb = tdbb->getDatabase();
-	StableAttachmentPart* const sAtt = tdbb->getAttachment()->getStable();
 
 	shutdown_data data;
 	data.data_items.flag = flag;
@@ -472,7 +471,7 @@ static bool notify_shutdown(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* gu
 
 	{ // scope
 		// Checkout before calling AST function
-		MutexUnlockGuard uguard(*(sAtt->getMutex()), FB_FUNCTION);
+		EngineCheckout uguard(tdbb, FB_FUNCTION);
 
 		// Notify local attachments
 		SHUT_blocking_ast(tdbb, true);

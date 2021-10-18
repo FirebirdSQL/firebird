@@ -92,7 +92,7 @@
 */
 
 #include "firebird.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/intl_classes.h"
 #include "../common/IntlUtil.h"
 #include "../common/classes/Aligner.h"

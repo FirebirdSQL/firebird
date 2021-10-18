@@ -61,10 +61,10 @@ public:
 	}
 
 	// IDtcStart implementation
-	void addAttachment(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att);
+	void addAttachment(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att) override;
 	void addWithTpb(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att,
-		unsigned length, const unsigned char* tpb);
-	YTransaction* start(Firebird::CheckStatusWrapper* status);
+		unsigned length, const unsigned char* tpb) override;
+	YTransaction* start(Firebird::CheckStatusWrapper* status) override;
 	void dispose() override;
 
 private:

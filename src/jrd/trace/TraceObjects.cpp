@@ -83,14 +83,12 @@ const char* TraceConnectionImpl::getDatabaseName()
 
 const char* TraceConnectionImpl::getUserName()
 {
-	const UserId* user = m_att->att_user;
-	return user ? user->getUserName().c_str() : NULL;
+	return m_att->getUserName().nullStr();
 }
 
 const char* TraceConnectionImpl::getRoleName()
 {
-	const UserId* user = m_att->att_user;
-	return user ? user->getSqlRole().c_str() : NULL;
+	return m_att->getSqlRole().nullStr();
 }
 
 const char* TraceConnectionImpl::getCharSet()
@@ -213,7 +211,8 @@ void TraceSQLStatementImpl::fillPlan(bool explained)
 	if (m_plan.isEmpty() || m_planExplained != explained)
 	{
 		m_planExplained = explained;
-		m_plan = OPT_get_plan(JRD_get_thread_data(), m_stmt->req_request, m_planExplained);
+		if (m_stmt->req_request)
+			m_plan = OPT_get_plan(JRD_get_thread_data(), m_stmt->req_request, m_planExplained);
 	}
 }
 
@@ -654,7 +653,7 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* att, RuntimeStatistics* baselin
 	m_info.pin_time = clock * 1000 / fb_utils::query_performance_frequency();
 	m_info.pin_records_fetched = records_fetched;
 
-	if (baseline)
+	if (baseline && stats)
 		baseline->computeDifference(att, *stats, m_info, m_counts);
 	else
 	{
