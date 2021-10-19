@@ -4070,7 +4070,7 @@ const StmtNode* InAutonomousTransactionNode::execute(thread_db* tdbb, jrd_req* r
 			transaction->tra_save_point->isSystem() &&
 			transaction->tra_save_point->isChanging())
 		{
-			transaction->rollforwardSavepoint(tdbb, false);
+			transaction->rollforwardSavepoint(tdbb, false, false);
 		}
 
 		{ // scope
@@ -4095,7 +4095,7 @@ const StmtNode* InAutonomousTransactionNode::execute(thread_db* tdbb, jrd_req* r
 					transaction->tra_save_point->isSystem() &&
 					transaction->tra_save_point->isChanging())
 				{
-					transaction->rollforwardSavepoint(tdbb, false);
+					transaction->rollforwardSavepoint(tdbb, false, false);
 				}
 
 				AutoSetRestore2<jrd_req*, thread_db> autoNullifyRequest(

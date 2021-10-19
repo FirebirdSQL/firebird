@@ -4000,7 +4000,7 @@ void jrd_tra::rollbackToSavepoint(thread_db* tdbb, SavNumber number)
 }
 
 
-void jrd_tra::rollforwardSavepoint(thread_db* tdbb, bool fake)
+void jrd_tra::rollforwardSavepoint(thread_db* tdbb, bool fake, bool assertChanging)
 /**************************************
  *
  *	 r o l l f o r w a r d S a v e p o i n t
@@ -4014,7 +4014,7 @@ void jrd_tra::rollforwardSavepoint(thread_db* tdbb, bool fake)
 {
 	if (tra_save_point && !(tra_flags & TRA_system))
 	{
-		fb_assert(fake || !tra_save_point->isChanging());
+		fb_assert(fake || !assertChanging || !tra_save_point->isChanging());
 
 		REPL_save_cleanup(tdbb, this, tra_save_point, fake);
 
