@@ -387,7 +387,7 @@ public:
 	Savepoint* startSavepoint(bool root = false);
 	void rollbackSavepoint(thread_db* tdbb, bool preserveLocks = false);
 	void rollbackToSavepoint(thread_db* tdbb, SavNumber number);
-	void rollforwardSavepoint(thread_db* tdbb, bool assertChanging = true);
+	void rollforwardSavepoint(thread_db* tdbb, bool fake);
 	DbCreatorsList* getDbCreatorsList();
 	void checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool punt);
 

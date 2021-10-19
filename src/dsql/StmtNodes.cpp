@@ -517,7 +517,7 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, jrd_req* request, ExeState* 
 					while (transaction->tra_save_point &&
 						transaction->tra_save_point->getNumber() >= savNumber)
 					{
-						transaction->rollforwardSavepoint(tdbb);
+						transaction->rollforwardSavepoint(tdbb, false);
 					}
 				}
 
@@ -547,7 +547,7 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, jrd_req* request, ExeState* 
 						transaction->tra_save_point->getNext() &&
 						transaction->tra_save_point->getNext()->getNumber() > savNumber)
 					{
-						transaction->rollforwardSavepoint(tdbb, false);
+						transaction->rollforwardSavepoint(tdbb, true);
 					}
 
 					// There can be no savepoints above the given one
@@ -633,7 +633,7 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, jrd_req* request, ExeState* 
 					while (transaction->tra_save_point &&
 						transaction->tra_save_point->getNumber() >= savNumber)
 					{
-						transaction->rollforwardSavepoint(tdbb);
+						transaction->rollforwardSavepoint(tdbb, true);
 					}
 				}
 			}
@@ -654,7 +654,7 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, jrd_req* request, ExeState* 
 					transaction->tra_save_point->getNext() &&
 					transaction->tra_save_point->getNumber() >= savNumber)
 				{
-					transaction->rollforwardSavepoint(tdbb);
+					transaction->rollforwardSavepoint(tdbb, false);
 				}
 			}
 
@@ -3293,7 +3293,7 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, jrd_req* request) cons
 			while (transaction->tra_save_point &&
 				transaction->tra_save_point->getNumber() > savNumber)
 			{
-				transaction->rollforwardSavepoint(tdbb);
+				transaction->rollforwardSavepoint(tdbb, false);
 			}
 		}
 	}
@@ -5137,7 +5137,7 @@ const StmtNode* ForNode::execute(thread_db* tdbb, jrd_req* request, ExeState* /*
 				while (transaction->tra_save_point &&
 					transaction->tra_save_point->getNumber() >= impure->savepoint)
 				{
-					transaction->rollforwardSavepoint(tdbb);
+					transaction->rollforwardSavepoint(tdbb, false);
 				}
 			}
 
@@ -5169,7 +5169,7 @@ const StmtNode* ForNode::execute(thread_db* tdbb, jrd_req* request, ExeState* /*
 						while (transaction->tra_save_point &&
 							transaction->tra_save_point->getNumber() >= impure->savepoint)
 						{
-							transaction->rollforwardSavepoint(tdbb);
+							transaction->rollforwardSavepoint(tdbb, false);
 						}
 					}
 				}
@@ -8113,7 +8113,7 @@ const StmtNode* UserSavepointNode::execute(thread_db* tdbb, jrd_req* request, Ex
 				while (transaction->tra_save_point &&
 					transaction->tra_save_point->getNumber() >= savNumber)
 				{
-					transaction->rollforwardSavepoint(tdbb);
+					transaction->rollforwardSavepoint(tdbb, false);
 				}
 
 				// Restore the savepoint initially created by EXE_start
@@ -8786,7 +8786,7 @@ const StmtNode* SavepointEncloseNode::execute(thread_db* tdbb, jrd_req* request,
 			while (transaction->tra_save_point &&
 				transaction->tra_save_point->getNumber() >= savNumber)
 			{
-				transaction->rollforwardSavepoint(tdbb);
+				transaction->rollforwardSavepoint(tdbb, false);
 			}
 		}
 	}

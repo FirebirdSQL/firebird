@@ -13116,7 +13116,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, jrd_req* request) const
 				while (transaction->tra_save_point &&
 					transaction->tra_save_point->getNumber() > savNumber)
 				{
-					transaction->rollforwardSavepoint(tdbb);
+					transaction->rollforwardSavepoint(tdbb, false);
 				}
 			}
 		}

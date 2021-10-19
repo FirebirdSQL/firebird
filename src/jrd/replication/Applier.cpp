@@ -480,7 +480,7 @@ void Applier::cleanupSavepoint(thread_db* tdbb, TraNumber traNum, bool undo)
 	if (undo)
 		transaction->rollbackSavepoint(tdbb);
 	else
-		transaction->rollforwardSavepoint(tdbb);
+		transaction->rollforwardSavepoint(tdbb, false);
 }
 
 void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,

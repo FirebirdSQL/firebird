@@ -454,7 +454,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 		// Get rid of all user savepoints
 		while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
-			transaction->rollforwardSavepoint(tdbb);
+			transaction->rollforwardSavepoint(tdbb, false);
 
 		trace.finish(ITracePlugin::RESULT_SUCCESS);
 		return;
@@ -467,7 +467,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 	// Get rid of all user savepoints
 	while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
-		transaction->rollforwardSavepoint(tdbb);
+		transaction->rollforwardSavepoint(tdbb, false);
 
 	// Let replicator perform heavy and error-prone part of work
 
@@ -503,7 +503,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 	// in indices and BLOBs after in-place updates
 
 	while (transaction->tra_save_point)
-		transaction->rollforwardSavepoint(tdbb);
+		transaction->rollforwardSavepoint(tdbb, false);
 
 	// Flush pages if transaction logically modified data
 
@@ -1397,7 +1397,7 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 			// It will clean up blob ids and temporary space anyway but faster than rollback
 			// because record data won't be updated with intermediate versions
 			while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
-				transaction->rollforwardSavepoint(tdbb);
+				transaction->rollforwardSavepoint(tdbb, true);
 
 			if (transaction->tra_save_point)
 			{
@@ -3985,7 +3985,7 @@ void jrd_tra::rollbackToSavepoint(thread_db* tdbb, SavNumber number)
 	while (tra_save_point && tra_save_point->getNumber() > number &&
 		tra_save_point->getNext() && tra_save_point->getNext()->getNumber() >= number)
 	{
-		rollforwardSavepoint(tdbb, false);
+		rollforwardSavepoint(tdbb, true);
 	}
 
 	// Check that savepoint with the given number really exists
@@ -4000,7 +4000,7 @@ void jrd_tra::rollbackToSavepoint(thread_db* tdbb, SavNumber number)
 }
 
 
-void jrd_tra::rollforwardSavepoint(thread_db* tdbb, bool assertChanging)
+void jrd_tra::rollforwardSavepoint(thread_db* tdbb, bool fake)
 /**************************************
  *
  *	 r o l l f o r w a r d S a v e p o i n t
@@ -4014,9 +4014,9 @@ void jrd_tra::rollforwardSavepoint(thread_db* tdbb, bool assertChanging)
 {
 	if (tra_save_point && !(tra_flags & TRA_system))
 	{
-		fb_assert(!assertChanging || !tra_save_point->isChanging());
+		fb_assert(fake || !tra_save_point->isChanging());
 
-		REPL_save_cleanup(tdbb, this, tra_save_point, false);
+		REPL_save_cleanup(tdbb, this, tra_save_point, fake);
 
 		Jrd::ContextPoolHolder context(tdbb, tra_pool);
 		tra_save_point = tra_save_point->rollforward(tdbb);
