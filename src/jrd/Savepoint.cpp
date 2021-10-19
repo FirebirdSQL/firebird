@@ -644,7 +644,7 @@ void AutoSavePoint::release()
 
 	fb_assert(m_transaction->tra_save_point);
 	fb_assert(m_transaction->tra_save_point->getNumber() == m_number);
-	m_transaction->rollforwardSavepoint(m_tdbb);
+	m_transaction->rollforwardSavepoint(m_tdbb, false);
 	m_number = 0;
 }
 
@@ -687,7 +687,7 @@ void StableCursorSavePoint::release()
 	while (m_transaction->tra_save_point &&
 		m_transaction->tra_save_point->getNumber() >= m_number)
 	{
-		m_transaction->rollforwardSavepoint(m_tdbb);
+		m_transaction->rollforwardSavepoint(m_tdbb, false);
 	}
 
 	m_number = 0;
