@@ -4029,7 +4029,15 @@ void jrd_tra::mergeSavepoint(thread_db* tdbb)
  **************************************
  *
  * Functional description
- *	Merge last savepoint into the next one to optimize following rollback.
+ *	Does the same as releaseSavepoint()
+ *	but calls IReplicatedTransaction::rollbackSavepoint
+ *	instead of IReplicatedTransaction::releaseSavepoint.
+ *	(See issue 7009.)
+ *
+ *	To be used only if call to rollbackSavepoint() will
+ *	surely follow. It is faster to merge savepoints into
+ *	single one and then rollback it than rollback them
+ *	separately.
  *
  **************************************/
 {
