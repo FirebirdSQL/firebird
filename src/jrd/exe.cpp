@@ -745,7 +745,8 @@ void EXE_receive(thread_db* tdbb,
 				transaction->tra_save_point->getNumber() >= savNumber)
 			{
 				const auto savepoint = transaction->tra_save_point;
-				transaction->rollforwardSavepoint(tdbb, false);
+				fb_assert(!transaction->tra_save_point->isChanging());
+				transaction->releaseSavepoint(tdbb);
 				fb_assert(transaction->tra_save_free == savepoint);
 				transaction->tra_save_free = savepoint->moveToStack(request->req_proc_sav_point);
 				fb_assert(request->req_proc_sav_point == savepoint);
@@ -1088,7 +1089,8 @@ static void execute_looper(thread_db* tdbb,
 		{
 			const auto savepoint = transaction->tra_save_point;
 			// Forget about any undo for this verb
-			transaction->rollforwardSavepoint(tdbb, false);
+			fb_assert(!transaction->tra_save_point->isChanging());
+			transaction->releaseSavepoint(tdbb);
 			// Preserve savepoint for reuse
 			fb_assert(savepoint == transaction->tra_save_free);
 			transaction->tra_save_free = savepoint->moveToStack(request->req_savepoints);
