@@ -70,6 +70,11 @@ public:
 		m_request = request;
 	}
 
+	void setTransaction(jrd_tra* transaction)
+	{
+		m_transaction = transaction;
+	}
+
 	void prepare(ntrace_result_t result)
 	{
 		if (m_request) {
@@ -99,7 +104,7 @@ public:
 private:
 	bool m_need_trace;
 	Attachment* m_attachment;
-	jrd_tra* const m_transaction;
+	jrd_tra* m_transaction;
 	dsql_req* m_request;
 	SINT64 m_start_clock;
 	FB_SIZE_T m_string_len;

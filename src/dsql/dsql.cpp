@@ -1543,7 +1543,10 @@ static dsql_req* prepareStatement(thread_db* tdbb, dsql_dbb* database, jrd_tra* 
 		scratchPool = database->createPool();
 
 		if (!transaction)		// Useful for session management statements
+		{
 			transaction = database->dbb_attachment->getSysTransaction();
+			trace.setTransaction(transaction);
+		}
 
 		DsqlCompilerScratch* scratch = FB_NEW_POOL(*scratchPool) DsqlCompilerScratch(*scratchPool, database,
 			transaction, statement);
