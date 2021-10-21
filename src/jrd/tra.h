@@ -388,7 +388,6 @@ public:
 	void rollbackSavepoint(thread_db* tdbb, bool preserveLocks = false);
 	void rollbackToSavepoint(thread_db* tdbb, SavNumber number);
 	void releaseSavepoint(thread_db* tdbb);
-	void mergeSavepoint(thread_db* tdbb);
 	DbCreatorsList* getDbCreatorsList();
 	void checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool punt);
 

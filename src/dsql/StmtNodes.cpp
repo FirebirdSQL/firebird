@@ -543,12 +543,15 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, jrd_req* request, ExeState* 
 					// The savepoint of this block will be dealt with below.
 					// Do this only if error handlers exist. Otherwise, leave undo up to callers.
 
+					Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
+
 					while (transaction->tra_save_point &&
 						transaction->tra_save_point->getNumber() > savNumber &&
 						transaction->tra_save_point->getNext() &&
 						transaction->tra_save_point->getNext()->getNumber() > savNumber)
 					{
-						transaction->mergeSavepoint(tdbb);
+						REPL_save_cleanup(tdbb, transaction, transaction->tra_save_point, true);
+						transaction->tra_save_point = transaction->tra_save_point->rollforward(tdbb);
 					}
 
 					// There can be no savepoints above the given one

@@ -1397,7 +1397,10 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 			// It will clean up blob ids and temporary space anyway but faster than rollback
 			// because record data won't be updated with intermediate versions
 			while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
-				transaction->mergeSavepoint(tdbb);
+			{
+				REPL_save_cleanup(tdbb, transaction, transaction->tra_save_point, true);
+				transaction->tra_save_point = transaction->tra_save_point->rollforward(tdbb);
+			}
 
 			if (transaction->tra_save_point)
 			{
@@ -3981,11 +3984,14 @@ void jrd_tra::rollbackToSavepoint(thread_db* tdbb, SavNumber number)
  *
  **************************************/
 {
+	Jrd::ContextPoolHolder context(tdbb, tra_pool);
+
 	// Merge all savepoints (except the given one) into a single one
 	while (tra_save_point && tra_save_point->getNumber() > number &&
 		tra_save_point->getNext() && tra_save_point->getNext()->getNumber() >= number)
 	{
-		mergeSavepoint(tdbb);
+		REPL_save_cleanup(tdbb, this, tra_save_point, true);
+		tra_save_point = tra_save_point->rollforward(tdbb);
 	}
 
 	// Check that savepoint with the given number really exists
@@ -4015,35 +4021,6 @@ void jrd_tra::releaseSavepoint(thread_db* tdbb)
 	if (tra_save_point && !(tra_flags & TRA_system))
 	{
 		REPL_save_cleanup(tdbb, this, tra_save_point, false);
-
-		Jrd::ContextPoolHolder context(tdbb, tra_pool);
-		tra_save_point = tra_save_point->rollforward(tdbb);
-	}
-}
-
-void jrd_tra::mergeSavepoint(thread_db* tdbb)
-/**************************************
- *
- *	 m e r g e S a v e p o i n t
- *
- **************************************
- *
- * Functional description
- *	Does the same as releaseSavepoint()
- *	but calls IReplicatedTransaction::rollbackSavepoint
- *	instead of IReplicatedTransaction::releaseSavepoint.
- *	(See issue 7009.)
- *
- *	To be used only if call to rollbackSavepoint() will
- *	surely follow. It is faster to merge savepoints into
- *	single one and then rollback it than rollback them
- *	separately.
- *
- **************************************/
-{
-	if (tra_save_point && !(tra_flags & TRA_system))
-	{
-		REPL_save_cleanup(tdbb, this, tra_save_point, true);
 
 		Jrd::ContextPoolHolder context(tdbb, tra_pool);
 		tra_save_point = tra_save_point->rollforward(tdbb);
