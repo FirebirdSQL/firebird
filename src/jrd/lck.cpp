@@ -689,6 +689,7 @@ bool LCK_lock(thread_db* tdbb, Lock* lock, USHORT level, SSHORT wait)
 			return false;
 		case isc_lockmanerr:
 			dbb->dbb_flags |= DBB_bugcheck;
+			statusVector.copyTo(tdbb->tdbb_status_vector);
 			break;
 		}
 
