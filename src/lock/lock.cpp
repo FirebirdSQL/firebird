@@ -143,6 +143,8 @@ const SLONG HASH_MIN_SLOTS	= 101;
 const SLONG HASH_MAX_SLOTS	= 65521;
 const USHORT HISTORY_BLOCKS	= 256;
 
+const ULONG MAX_TABLE_LENGTH = SLONG_MAX;
+
 // SRQ_ABS_PTR uses this macro.
 #define SRQ_BASE                    ((UCHAR*) m_sharedMemory->getHeader())
 
@@ -1183,14 +1185,14 @@ bool LockManager::Extent::initialize(bool)
 void LockManager::Extent::mutexBug(int, const char*)
 { }
 
-bool LockManager::createExtent(CheckStatusWrapper* statusVector)
+bool LockManager::createExtent(CheckStatusWrapper* statusVector, ULONG memorySize)
 {
 	PathName name;
 	get_shared_file_name(name, (ULONG) m_extents.getCount());
 
 	Extent& extent = m_extents.add();
 
-	if (!extent.mapFile(statusVector, name.c_str(), m_memorySize))
+	if (!extent.mapFile(statusVector, name.c_str(), memorySize ? memorySize : m_memorySize))
 	{
 		m_extents.pop();
 		logError("LockManager::createExtent() mapFile", local_status);
@@ -1223,17 +1225,31 @@ UCHAR* LockManager::alloc(USHORT size, CheckStatusWrapper* statusVector)
 	size = FB_ALIGN(size, FB_ALIGNMENT);
 	ASSERT_ACQUIRED;
 	ULONG block = m_sharedMemory->getHeader()->lhb_used;
+	ULONG memorySize = m_memorySize;
 
 	// Make sure we haven't overflowed the lock table.  If so, bump the size of the table.
 
 	if (m_sharedMemory->getHeader()->lhb_used + size > m_sharedMemory->getHeader()->lhb_length)
 	{
+		// New table size shouldn't exceed max table length 
+		if (m_sharedMemory->getHeader()->lhb_length + memorySize > MAX_TABLE_LENGTH)
+			if (m_sharedMemory->getHeader()->lhb_used + size <= MAX_TABLE_LENGTH)
+				memorySize = MAX_TABLE_LENGTH - m_sharedMemory->getHeader()->lhb_length;
+			else
+			{
+				// Return an error if can't alloc enough memory
+				(Arg::Gds(isc_lockmanerr) <<
+				Arg::Gds(isc_random) << Arg::Str("lock table size exceeds limit") <<
+				Arg::StatusVector(statusVector)).copyTo(statusVector);
+
+				return NULL;
+			}
 #ifdef USE_SHMEM_EXT
 		// round up so next object starts at beginning of next extent
 		block = m_sharedMemory->getHeader()->lhb_used = m_sharedMemory->getHeader()->lhb_length;
-		if (createExtent(*statusVector))
+		if (createExtent(*statusVector, memorySize))
 		{
-			m_sharedMemory->getHeader()->lhb_length += m_memorySize;
+			m_sharedMemory->getHeader()->lhb_length += memorySize;
 		}
 		else
 #elif (defined HAVE_OBJECT_MAP)
@@ -1241,7 +1257,7 @@ UCHAR* LockManager::alloc(USHORT size, CheckStatusWrapper* statusVector)
 		// Post remapping notifications
 		remap_local_owners();
 		// Remap the shared memory region
-		const ULONG new_length = m_sharedMemory->sh_mem_length_mapped + m_memorySize;
+		const ULONG new_length = m_sharedMemory->sh_mem_length_mapped + memorySize;
 		if (m_sharedMemory->remapFile(statusVector, new_length, true))
 		{
 			ASSERT_ACQUIRED;
