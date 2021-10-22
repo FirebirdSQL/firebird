@@ -147,6 +147,8 @@ const SLONG HASH_MIN_SLOTS	= 101;
 const SLONG HASH_MAX_SLOTS	= 65521;
 const USHORT HISTORY_BLOCKS	= 256;
 
+const ULONG MAX_TABLE_LENGTH = SLONG_MAX;
+
 // SRQ_ABS_PTR uses this macro.
 #define SRQ_BASE                    ((UCHAR*) m_header)
 
@@ -1267,7 +1269,7 @@ namespace {
 	void initializeExtent(void*, sh_mem*, bool) { }
 }
 
-bool LockManager::newExtent(ISC_STATUS* status)
+bool LockManager::newExtent(ISC_STATUS* status, ULONG memorySize)
 {
 	Firebird::PathName name;
 	get_shared_file_name(name, m_extents.getCount());
@@ -1279,7 +1281,7 @@ bool LockManager::newExtent(ISC_STATUS* status)
 	Extent extent;
 
 	if (!(extent.table = (lhb*) ISC_map_file(status, name.c_str(), initializeExtent,
-											 this, m_memorySize, &extent.sh_data)))
+											 this, memorySize ? memorySize : m_memorySize, &extent.sh_data)))
 	{
 		return false;
 	}
@@ -1305,17 +1307,36 @@ UCHAR* LockManager::alloc(USHORT size, ISC_STATUS* status_vector)
 	size = FB_ALIGN(size, FB_ALIGNMENT);
 	ASSERT_ACQUIRED;
 	ULONG block = m_header->lhb_used;
+	ULONG memorySize = m_memorySize;
 
 	// Make sure we haven't overflowed the lock table.  If so, bump the size of the table.
 
 	if (m_header->lhb_used + size > m_header->lhb_length)
 	{
+		// New table size shouldn't exceed max table length 
+		if (m_header->lhb_length + memorySize > MAX_TABLE_LENGTH)
+			if (m_header->lhb_used + size <= MAX_TABLE_LENGTH)
+				memorySize = MAX_TABLE_LENGTH - m_header->lhb_length;
+			else
+			{
+				// Return an error if can't alloc enough memory
+				if (status_vector)
+				{
+					*status_vector++ = isc_arg_gds;
+					*status_vector++ = isc_random;
+					*status_vector++ = isc_arg_string;
+					*status_vector++ = (ISC_STATUS) "lock table size exceeds limit";
+					*status_vector++ = isc_arg_end;
+				}
+
+				return NULL;
+			}
 #ifdef USE_SHMEM_EXT
 		// round up so next object starts at beginning of next extent
 		block = m_header->lhb_used = m_header->lhb_length;
-		if (newExtent(status_vector))
+		if (newExtent(status_vector, memorySize))
 		{
-			m_header->lhb_length += m_memorySize;
+			m_header->lhb_length += memorySize;
 		}
 		else
 #elif (defined HAVE_MMAP || defined WIN_NT)
@@ -1323,7 +1344,7 @@ UCHAR* LockManager::alloc(USHORT size, ISC_STATUS* status_vector)
 		// Post remapping notifications
 		remap_local_owners();
 		// Remap the shared memory region
-		const ULONG new_length = m_shmem.sh_mem_length_mapped + m_memorySize;
+		const ULONG new_length = m_shmem.sh_mem_length_mapped + memorySize;
 		lhb* header = (lhb*) ISC_remap_file(status_vector, &m_shmem, new_length, true, MUTEX_PTR);
 		if (header)
 		{
