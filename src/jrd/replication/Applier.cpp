@@ -258,7 +258,7 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 	tdbb->tdbb_flags |= TDBB_replicator;
 
 	const auto config = dbb->replConfig();
-	enableCascade = config != nullptr && config->cascadeReplication;
+	m_enableCascade = config != nullptr && config->cascadeReplication;
 
 	BlockReader reader(length, data);
 
@@ -836,7 +836,7 @@ void Applier::setSequence(thread_db* tdbb, const MetaName& genName, SINT64 value
 		attachment->att_generators.store(gen_id, genName);
 	}
 
-	AutoSetRestoreFlag<ULONG> noCascade(&tdbb->tdbb_flags, TDBB_repl_in_progress, !enableCascade);
+	AutoSetRestoreFlag<ULONG> noCascade(&tdbb->tdbb_flags, TDBB_repl_in_progress, !m_enableCascade);
 
 	if (DPM_gen_id(tdbb, gen_id, false, 0) < value)
 		DPM_gen_id(tdbb, gen_id, true, value);
@@ -906,7 +906,7 @@ void Applier::executeSql(thread_db* tdbb,
 
   UserId* const owner = attachment->getUserId(ownerName);
 	AutoSetRestore<UserId*> autoOwner(&attachment->att_ss_user, owner);
-	AutoSetRestoreFlag<ULONG> noCascade(&tdbb->tdbb_flags, TDBB_repl_in_progress, !enableCascade);
+	AutoSetRestoreFlag<ULONG> noCascade(&tdbb->tdbb_flags, TDBB_repl_in_progress, !m_enableCascade);
 
 	DSQL_execute_immediate(tdbb, attachment, &transaction,
 						   0, sql.c_str(), dialect,
@@ -1183,7 +1183,7 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	VIO_store(tdbb, rpb, transaction);
 	IDX_store(tdbb, rpb, transaction);
-	if (enableCascade)
+	if (m_enableCascade)
 		REPL_store(tdbb, rpb, transaction);
 }
 
@@ -1281,7 +1281,7 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 
 	VIO_modify(tdbb, orgRpb, newRpb, transaction);
 	IDX_modify(tdbb, orgRpb, newRpb, transaction);
-	if (enableCascade)
+	if (m_enableCascade)
 		REPL_modify(tdbb, orgRpb, newRpb, transaction);
 }
 
@@ -1294,7 +1294,7 @@ void Applier::doDelete(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
 
 	VIO_erase(tdbb, rpb, transaction);
-	if (enableCascade)
+	if (m_enableCascade)
 		REPL_erase(tdbb, rpb, transaction);
 }
 

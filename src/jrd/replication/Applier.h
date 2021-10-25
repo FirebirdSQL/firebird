@@ -154,7 +154,7 @@ namespace Jrd
 		Firebird::AutoPtr<RecordBitmap> m_bitmap;
 		Record* m_record;
 		JReplicator* m_interface;
-		bool enableCascade;
+		bool m_enableCascade;
 
 		void startTransaction(thread_db* tdbb, TraNumber traNum);
 		void prepareTransaction(thread_db* tdbb, TraNumber traNum);
