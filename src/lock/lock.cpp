@@ -1233,6 +1233,7 @@ UCHAR* LockManager::alloc(USHORT size, CheckStatusWrapper* statusVector)
 	{
 		// New table size shouldn't exceed max table length 
 		if (m_sharedMemory->getHeader()->lhb_length + memorySize > MAX_TABLE_LENGTH)
+		{
 			if (m_sharedMemory->getHeader()->lhb_used + size <= MAX_TABLE_LENGTH)
 				memorySize = MAX_TABLE_LENGTH - m_sharedMemory->getHeader()->lhb_length;
 			else
@@ -1244,6 +1245,7 @@ UCHAR* LockManager::alloc(USHORT size, CheckStatusWrapper* statusVector)
 
 				return NULL;
 			}
+		}
 #ifdef USE_SHMEM_EXT
 		// round up so next object starts at beginning of next extent
 		block = m_sharedMemory->getHeader()->lhb_used = m_sharedMemory->getHeader()->lhb_length;
