@@ -285,9 +285,6 @@
 #define FB_SERVICE_NAME "gds_db"
 #define FB_SERVICE_PORT 3050
 
-/* Wnet pipe name */
-#define FB_PIPE_NAME "interbas"
-
 /* Xnet objects name */
 #define FB_IPC_NAME "FIREBIRD"
 

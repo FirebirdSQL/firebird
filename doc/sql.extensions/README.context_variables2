@@ -48,7 +48,7 @@ Usage:
    Variable name                  Value
   ------------------------------------------------------------------------------
    NETWORK_PROTOCOL	            | The network protocol used by client to connect. Currently
-                                | used values: "TCPv4", "TCPv6", "WNET", "XNET" and NULL.
+                                | used values: "TCPv4", "TCPv6", "XNET" and NULL.
                                 |
    WIRE_COMPRESSED              | Compression status of current connection.
                                 | If connection is compressed - returns "TRUE", if it is

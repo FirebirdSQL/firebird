@@ -81,11 +81,10 @@ const USHORT SRVR_server			= 1;	// server
 const USHORT SRVR_multi_client		= 2;	// multi-client server
 const USHORT SRVR_debug				= 4;	// debug run
 const USHORT SRVR_inet				= 8;	// Inet protocol
-const USHORT SRVR_wnet				= 16;	// Wnet (named pipe) protocol (WinNT)
-const USHORT SRVR_xnet				= 32;	// Xnet protocol (Win32)
-const USHORT SRVR_non_service		= 64;	// not running as an NT service
-const USHORT SRVR_high_priority		= 128;	// fork off server at high priority
-const USHORT SRVR_thread_per_port	= 256;	// bind thread to a port
-const USHORT SRVR_no_icon			= 512;	// tell the server not to show the icon
+const USHORT SRVR_xnet				= 16;	// Xnet protocol (Win32)
+const USHORT SRVR_non_service		= 32;	// not running as an NT service
+const USHORT SRVR_high_priority		= 64;	// fork off server at high priority
+const USHORT SRVR_thread_per_port	= 128;	// bind thread to a port
+const USHORT SRVR_no_icon			= 256;	// tell the server not to show the icon
 
 #endif /* REMOTE_REMOTE_DEF_H */

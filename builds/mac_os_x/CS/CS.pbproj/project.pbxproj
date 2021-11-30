@@ -6767,16 +6767,6 @@
 			path = winvx.cpp;
 			refType = 4;
 		};
-		F616C8C00200B0D001EF0ADE = {
-			isa = PBXFileReference;
-			path = wnet.cpp;
-			refType = 4;
-		};
-		F616C8C10200B0D001EF0ADE = {
-			isa = PBXFileReference;
-			path = wnet_proto.h;
-			refType = 4;
-		};
 		F616C8C20200B0D001EF0ADE = {
 			isa = PBXFileReference;
 			path = xdr.cpp;

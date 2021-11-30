@@ -67,9 +67,6 @@
 /* message files DIR (PREFIX) */
 #define FB_MSGDIR ""
 
-/* Wnet pipe name */
-#define FB_PIPE_NAME "interbas"
-
 /* plugins DIR (PREFIX) */
 #define FB_PLUGDIR ""
 

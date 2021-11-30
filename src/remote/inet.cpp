@@ -671,7 +671,7 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 
 	ISC_get_user(&buffer, &eff_uid, &eff_gid);
 #ifdef WIN_NT
-	// WNET and XNET lowercase user names (as it's always case-insensitive in Windows)
+	// XNET lowercases user names (as it's always case-insensitive in Windows),
 	// so let's be consistent and use the same trick for INET as well
 	buffer.lower();
 #endif

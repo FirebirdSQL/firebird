@@ -48,7 +48,6 @@ produced by Borland Resource Workshop
 #define IDI_IBSVR       1007
 
 #define IDS_TCP         11
-#define IDS_NP          12
 #define IDS_IPC         13
 #define IDS_SUPER       14
 

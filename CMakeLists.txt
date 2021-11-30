@@ -155,7 +155,6 @@ endif()
 set(FB_PREFIX ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME})
 set(FB_IPC_NAME "FirebirdIPI")
 set(FB_LOGFILENAME "firebird.log")
-set(FB_PIPE_NAME "interbas")
 set(FB_SERVICE_NAME "gds_db")
 set(FB_SERVICE_PORT 3050)
 

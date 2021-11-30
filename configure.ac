@@ -1222,15 +1222,6 @@ case "$PLATFORM" in
     ;;
 
   win32)
-    FB_PIPE_NAME=interbas
-    AC_ARG_WITH(pipe-name,
-      [  --with-pipe-name        specify wnet pipe name (default=interbas)],
-      [FB_PIPE_NAME=${withval}])
-    AH_VERBATIM(FB_PIPE_NAME,
-[/* Wnet pipe name */
-#define FB_PIPE_NAME "interbas"])
-    AC_DEFINE_UNQUOTED(FB_PIPE_NAME,"$FB_PIPE_NAME")
-    AC_SUBST(FB_PIPE_NAME)
     XE_PREPEND( -mthreads -lmpr -lversion -lws2_32 -lole32,LIBS)
     ;;
 
@@ -1502,10 +1493,6 @@ esac
 
 echo           "                   Service name : $FB_SERVICE_NAME"
 echo           "                   Service port : $FB_SERVICE_PORT"
-
-case "$PLATFORM" in
- win32)   echo "                      Pipe name : $FB_PIPE_NAME";;
-esac
 
 echo           "                   GPRE modules : c_cxx.cpp$GPRE_LANGUAGE_MODULES"
 echo

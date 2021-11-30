@@ -472,7 +472,7 @@ bool TDR_reconnect_multiple(FB_API_HANDLE handle, TraNumber id, const TEXT* name
 			{
 				if (ptr->tdr_state == TRA_limbo)
 				{
-					reconnect(ptr->tdr_db_handle, ptr->tdr_id, ptr->tdr_filename, switches);
+					reconnect(ptr->tdr_db_handle, ptr->tdr_id, ptr->tdr_filename.c_str(), switches);
 				}
 			}
 		}
@@ -504,28 +504,23 @@ static void print_description(const tdr* trans)
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 
 	if (!trans)
-	{
 		return;
-	}
 
 	if (!tdgbl->uSvc->isService())
-	{
 		ALICE_print(92);	// msg 92:   Multidatabase transaction:
-	}
 
 	bool prepared_seen = false;
 	for (const tdr* ptr = trans; ptr; ptr = ptr->tdr_next)
 	{
-		if (ptr->tdr_host_site)
+		const auto host_site = ptr->tdr_host_site.nullStr();
+		if (host_site)
 		{
-			const char* pszHostSize = reinterpret_cast<const char*>(ptr->tdr_host_site->str_data);
-
 			if (!tdgbl->uSvc->isService())
 			{
 				// msg 93: Host Site: %s
-				ALICE_print(93, SafeArg() << pszHostSize);
+				ALICE_print(93, SafeArg() << host_site);
 			}
-			tdgbl->uSvc->putLine(isc_spb_tra_host_site, pszHostSize);
+			tdgbl->uSvc->putLine(isc_spb_tra_host_site, host_site);
 		}
 
 		if (ptr->tdr_id)
@@ -586,28 +581,26 @@ static void print_description(const tdr* trans)
 			break;
 		}
 
-		if (ptr->tdr_remote_site)
+		const auto remote_site = ptr->tdr_remote_site.nullStr();
+		if (remote_site)
 		{
-			const char* pszRemoteSite = reinterpret_cast<const char*>(ptr->tdr_remote_site->str_data);
-
 			if (!tdgbl->uSvc->isService())
 			{
 				// msg 101: Remote Site: %s
-				ALICE_print(101, SafeArg() << pszRemoteSite);
+				ALICE_print(101, SafeArg() << remote_site);
 			}
-			tdgbl->uSvc->putLine(isc_spb_tra_remote_site, pszRemoteSite);
+			tdgbl->uSvc->putLine(isc_spb_tra_remote_site, remote_site);
 		}
 
-		if (ptr->tdr_fullpath)
+		const auto fullpath = ptr->tdr_fullpath.nullStr();
+		if (fullpath)
 		{
-			const char* pszFullpath = reinterpret_cast<const char*>(ptr->tdr_fullpath->str_data);
-
 			if (!tdgbl->uSvc->isService())
 			{
 				// msg 102: Database Path: %s
-				ALICE_print(102, SafeArg() << pszFullpath);
+				ALICE_print(102, SafeArg() << fullpath);
 			}
-			tdgbl->uSvc->putLine(isc_spb_tra_db_path, pszFullpath);
+			tdgbl->uSvc->putLine(isc_spb_tra_db_path, fullpath);
 		}
 	}
 
@@ -649,10 +642,9 @@ static void print_description(const tdr* trans)
 static SINT64 ask()
 {
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
+
 	if (tdgbl->uSvc->isService())
-	{
 		return ~SINT64(0);
-	}
 
 	char response[32];
 	SINT64 switches = 0;
@@ -694,79 +686,56 @@ static SINT64 ask()
 static void reattach_database(tdr* trans)
 {
 	ISC_STATUS_ARRAY status_vector;
-	char buffer[1024];
+	char buffer[BUFFER_LARGE];
 	// sizeof(buffer) - 1 => leave space for the terminator.
 	const char* const end = buffer + sizeof(buffer) - 1;
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 
-	ISC_get_host(buffer, sizeof(buffer));
-
-	if (trans->tdr_fullpath)
+	if (trans->tdr_fullpath.hasData())
 	{
+		Firebird::string hostname;
+		ISC_get_host(hostname);
+
 		// if this is being run from the same host,
 		// try to reconnect using the same pathname
 
-		if (!strcmp(buffer, reinterpret_cast<const char*>(trans->tdr_host_site->str_data)))
+		if (trans->tdr_host_site == hostname)
 		{
-			if (TDR_attach_database(status_vector, trans,
-								reinterpret_cast<char*>(trans->tdr_fullpath->str_data)))
-			{
+			if (TDR_attach_database(status_vector, trans, trans->tdr_fullpath.c_str()))
 				return;
-			}
 		}
-		else if (trans->tdr_host_site)
+		else if (trans->tdr_host_site.hasData())
 		{
 			//  try going through the previous host with all available
 			//  protocols, using chaining to try the same method of
 			//  attachment originally used from that host
-			char* p = buffer;
-			const UCHAR* q = trans->tdr_host_site->str_data;
-			while (*q && p < end)
-			*p++ = *q++;
-			*p++ = ':';
-			q = trans->tdr_fullpath->str_data;
-			while (*q && p < end)
-				*p++ = *q++;
-			*p = 0;
-			if (TDR_attach_database(status_vector, trans, buffer))
-			{
+			const Firebird::string pathname = trans->tdr_host_site + ':' + trans->tdr_fullpath;
+			if (TDR_attach_database(status_vector, trans, pathname.c_str()))
 				return;
-			}
 		}
 
 		// attaching using the old method didn't work;
 		// try attaching to the remote node directly
 
-		if (trans->tdr_remote_site)
+		if (trans->tdr_remote_site.hasData())
 		{
-			char* p = buffer;
-			const UCHAR* q = trans->tdr_remote_site->str_data;
-			while (*q && p < end)
-				*p++ = *q++;
-			*p++ = ':';
-			q = reinterpret_cast<const UCHAR*>(trans->tdr_filename);
-			while (*q && p < end)
-				*p++ = *q++;
-			*p = 0;
-			if (TDR_attach_database (status_vector, trans, buffer))
-			{
+			const Firebird::string pathname = trans->tdr_remote_site + ':' + trans->tdr_filename;
+			if (TDR_attach_database(status_vector, trans, pathname.c_str()))
 				return;
-			}
 		}
 
 	}
+
 	// we have failed to reattach; notify the user
 	// and let them try to succeed where we have failed
 
 	ALICE_print(86, SafeArg() << trans->tdr_id);
 	// msg 86: Could not reattach to database for transaction %ld.
-	ALICE_print(87, SafeArg() << (trans->tdr_fullpath ? (char*)(trans->tdr_fullpath->str_data) : "is unknown"));
+	ALICE_print(87, SafeArg() << (trans->tdr_fullpath.hasData() ? trans->tdr_fullpath.c_str() : "unknown"));
 	// msg 87: Original path: %s
 
 	if (tdgbl->uSvc->isService())
-	{
 		ALICE_exit(FINI_ERROR, tdgbl);
-	}
 
 	for (;;)
 	{
@@ -782,12 +751,8 @@ static void reattach_database(tdr* trans)
 			++p;
 		if (TDR_attach_database(status_vector, trans, p))
 		{
-			const size_t p_len = strlen(p);
-			alice_str* string = FB_NEW_RPT(*tdgbl->getDefaultPool(), p_len + 1) alice_str;
-			strcpy(reinterpret_cast<char*>(string->str_data), p);
-			string->str_length = static_cast<USHORT>(p_len);
-			trans->tdr_fullpath = string;
-			trans->tdr_filename = (TEXT *) string->str_data;
+			trans->tdr_fullpath.assign(p);
+			trans->tdr_filename = trans->tdr_fullpath;
 			return;
 		}
 		ALICE_print(89);	// msg 89: Attach unsuccessful.

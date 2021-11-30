@@ -45,7 +45,6 @@ STRINGTABLE
 BEGIN
  IDS_TCP, "TCP/IP Client Support"
  IDS_IPC, "Local Client Support"
- IDS_NP, "NetBEUI Client Support"
  IDS_SUPER, "Multithreaded Server"
  IDS_SERVERPROD_NAME, "Firebird SQL Server for Windows"
  IDS_LOCALPROD_NAME, "Local Firebird Server"

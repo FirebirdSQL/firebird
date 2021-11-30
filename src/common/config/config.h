@@ -137,7 +137,6 @@ enum ConfigKey
 	KEY_DEADLOCK_TIMEOUT,
 	KEY_REMOTE_SERVICE_NAME,
 	KEY_REMOTE_SERVICE_PORT,
-	KEY_REMOTE_PIPE_NAME,
 	KEY_IPC_NAME,
 	KEY_MAX_UNFLUSHED_WRITES,
 	KEY_MAX_UNFLUSHED_WRITE_TIME,
@@ -232,7 +231,6 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,	"DeadlockTimeout",			false,	10},		// seconds
 	{TYPE_STRING,	"RemoteServiceName",		false,	FB_SERVICE_NAME},
 	{TYPE_INTEGER,	"RemoteServicePort",		false,	0},
-	{TYPE_STRING,	"RemotePipeName",			false,	FB_PIPE_NAME},
 	{TYPE_STRING,	"IpcName",					false,	FB_IPC_NAME},
 #ifdef WIN_NT
 	{TYPE_INTEGER,	"MaxUnflushedWrites",		false,	100},
@@ -521,9 +519,6 @@ public:
 
 	// Service port for INET
 	CONFIG_GET_PER_DB_KEY(unsigned short, getRemoteServicePort, KEY_REMOTE_SERVICE_PORT, getInt);
-
-	// Pipe name for WNET
-	CONFIG_GET_PER_DB_STR(getRemotePipeName, KEY_REMOTE_PIPE_NAME);
 
 	// Name for IPC-related objects
 	CONFIG_GET_PER_DB_STR(getIpcName, KEY_IPC_NAME);

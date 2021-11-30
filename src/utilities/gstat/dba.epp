@@ -593,18 +593,13 @@ int gstat(Firebird::UtilSvc* uSvc)
 	const Firebird::PathName connName = fileName;
 	Firebird::PathName tempStr;
 
-#ifdef WIN_NT
-	if (!ISC_analyze_pclan(fileName, tempStr))
-#endif
+	if (!ISC_analyze_tcp(fileName, tempStr))
 	{
-		if (!ISC_analyze_tcp(fileName, tempStr))
-		{
 #ifndef NO_NFS
-			if (!ISC_analyze_nfs(fileName, tempStr))
+		if (!ISC_analyze_nfs(fileName, tempStr))
 #endif
-			{
-				fileName = connName;
-			}
+		{
+			fileName = connName;
 		}
 	}
 

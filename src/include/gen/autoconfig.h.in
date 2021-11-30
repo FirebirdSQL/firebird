@@ -94,9 +94,6 @@
 /* log file name within log dir */
 #define FB_LOGFILENAME "@FB_LOGFILENAME@"
 
-/* Wnet pipe name */
-#define FB_PIPE_NAME "@FB_PIPE_NAME@"
-
 /* Installation path prefix */
 #define FB_PREFIX "@FB_PREFIX@"
 

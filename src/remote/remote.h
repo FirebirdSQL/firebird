@@ -1042,7 +1042,6 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 
 	enum rem_port_t {
 		INET,			// Internet (TCP/IP)
-		PIPE,			// Windows NT named pipe connection
 		XNET			// Windows NT shared memory connection
 	}				port_type;
 	enum state_t {

@@ -94,9 +94,8 @@ you only use 0/1
 
 String
 ------
-Strings are also what they sound like, strings. Examples:
+Strings are also what they sound like, strings. Example:
 RootDirectory  = /opt/firebird
-RemotePipeName = "pipe47"
 
 
 Configuration options
@@ -144,8 +143,7 @@ DeadThreadsCollection      integer  default 50
 PriorityBoost              integer  default 5
 RemoteServiceName          string   default gds_db
 RemoteServicePort          integer  default 3050 (TCP port number)
-RemotePipeName             string   default "interbas" (Windows only?)
-IpcName                    string   default "FirebirdIPI" (Windows only)
+IpcName                    string   default "FIREBIRD" (Windows only)
 
 MaxUnflushedWrites         integer
 # of writes before file writes are forcibly synched.

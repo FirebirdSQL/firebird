@@ -160,8 +160,7 @@
  <protocol-string> ::=
 	"TCPv4" |
 	"TCPv6" |
-	"XNET" |
-	"WNET" |
+	"XNET"
 	....
 
  <plugin-string> ::=

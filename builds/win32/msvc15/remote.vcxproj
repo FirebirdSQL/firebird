@@ -157,7 +157,6 @@
     <ClCompile Include="..\..\..\src\remote\parser.cpp" />
     <ClCompile Include="..\..\..\src\remote\protocol.cpp" />
     <ClCompile Include="..\..\..\src\remote\remote.cpp" />
-    <ClCompile Include="..\..\..\src\remote\os\win32\wnet.cpp" />
     <ClCompile Include="..\..\..\src\auth\trusted\AuthSspi.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -165,7 +164,6 @@
     <ClInclude Include="..\..\..\src\auth\SecureRemotePassword\srp.h" />
     <ClInclude Include="..\..\..\src\remote\inet_proto.h" />
     <ClInclude Include="..\..\..\src\remote\merge_proto.h" />
-    <ClInclude Include="..\..\..\src\remote\os\win32\wnet_proto.h" />
     <ClInclude Include="..\..\..\src\remote\os\win32\xnet.h" />
     <ClInclude Include="..\..\..\src\remote\os\win32\xnet_proto.h" />
     <ClInclude Include="..\..\..\src\remote\parse_proto.h" />

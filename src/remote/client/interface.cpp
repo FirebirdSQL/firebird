@@ -83,7 +83,6 @@
 
 #if defined(WIN_NT)
 #include "../common/isc_proto.h"
-#include "../remote/os/win32/wnet_proto.h"
 #include "../remote/os/win32/xnet_proto.h"
 #endif
 
@@ -97,15 +96,10 @@ const char* const PROTOCOL_INET4 = "inet4";
 const char* const PROTOCOL_INET6 = "inet6";
 
 #ifdef WIN_NT
-const char* const PROTOCOL_WNET = "wnet";
 const char* const PROTOCOL_XNET = "xnet";
-
-const char* const WNET_SEPARATOR = "@";
-const char* const WNET_LOCALHOST = "\\\\.";
 #endif
 
 const char* const INET_SEPARATOR = "/";
-
 const char* const INET_LOCALHOST = "localhost";
 
 
@@ -4726,13 +4720,11 @@ bool ResultSet::fetch(CheckStatusWrapper* status, void* buffer, P_FETCH operatio
 		(	// Low in inventory
 			(statement->rsr_rows_pending <= statement->rsr_reorder_level) &&
 			(statement->rsr_msgs_waiting <= statement->rsr_reorder_level) &&
-			// not using named pipe on NT
 			// Pipelining causes both server & client to
-			// write at the same time. In named pipes, writes
+			// write at the same time. In XNET, writes
 			// block for the other end to read -  and so when both
 			// attempt to write simultaneously, they end up
-			// waiting indefinitely for the other end to read
-			(port->port_type != rem_port::PIPE) &&
+			// waiting indefinitely for the other end to read.
 			(port->port_type != rem_port::XNET) &&
 			// We're fetching either forward or backward
 			(operation == fetch_next || operation == fetch_prior) &&
@@ -5871,12 +5863,11 @@ void Request::receive(CheckStatusWrapper* status, int level, unsigned int msg_ty
 				(tail->rrq_rows_pending <= tail->rrq_reorder_level &&	// Low in inventory
 					tail->rrq_msgs_waiting <= tail->rrq_reorder_level &&
 					// Pipelining causes both server & client to
-					// write at the same time. In named pipes, writes
+					// write at the same time. In XNET, writes
 					// block for the other end to read -  and so when both
 					// attempt to write simultaenously, they end up
-					// waiting indefinetly for the other end to read
-					(port->port_type != rem_port::PIPE) &&	// not named pipe on NT
-					(port->port_type != rem_port::XNET) &&	// not shared memory on NT
+					// waiting indefinetly for the other end to read.
+					(port->port_type != rem_port::XNET) &&
 					request->rrq_max_msg <= 1)))
 		{
 			// there's only one message type
@@ -7295,20 +7286,6 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 #ifdef WIN_NT
 	if (ISC_analyze_protocol(PROTOCOL_XNET, attach_name, node_name, NULL, needFile))
 		port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_USER_VFY, cBlock.getConfig(), ref_db_name);
-	else if (ISC_analyze_protocol(PROTOCOL_WNET, attach_name, node_name, WNET_SEPARATOR, needFile) ||
-		ISC_analyze_pclan(attach_name, node_name))
-	{
-		if (node_name.isEmpty())
-			node_name = WNET_LOCALHOST;
-		else
-		{
-			ISC_unescape(node_name);
-			ISC_utf8ToSystem(node_name);
-		}
-
-		port = WNET_analyze(&cBlock, attach_name, node_name.c_str(), flags & ANALYZE_USER_VFY,
-			cBlock.getConfig(), ref_db_name);
-	}
 	else
 #endif
 
@@ -7341,15 +7318,13 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 		if (!port)
 		{
 			PathName expanded_name = attach_name;
-			ISC_expand_share(expanded_name);
-
 			if (ISC_analyze_pclan(expanded_name, node_name))
 			{
 				ISC_unescape(node_name);
 				ISC_utf8ToSystem(node_name);
 
-				port = WNET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_USER_VFY,
-					cBlock.getConfig(), ref_db_name);
+				port = INET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
+					cBlock.getConfig(), ref_db_name, cryptCb);
 			}
 		}
 #endif
@@ -7381,12 +7356,6 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 			if (!port)
 			{
 				port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_USER_VFY,
-					cBlock.getConfig(), ref_db_name);
-			}
-
-			if (!port)
-			{
-				port = WNET_analyze(&cBlock, attach_name, WNET_LOCALHOST, flags & ANALYZE_USER_VFY,
 					cBlock.getConfig(), ref_db_name);
 			}
 #endif
@@ -7809,20 +7778,9 @@ static void disconnect( rem_port* port)
 			}
 		}
 
-		// BAND-AID:
-		// It seems as if we are disconnecting the port
-		// on both the server and client side.  For now
-		// let the server handle this for named pipes
+		packet->p_operation = op_disconnect;
+		port->send(packet);
 
-		// 8-Aug-1997  M.  Duquette
-		// R.  Kumar
-		// M.  Romanini
-
-		if (port->port_type != rem_port::PIPE)
-		{
-			packet->p_operation = op_disconnect;
-			port->send(packet);
-		}
 		REMOTE_free_packet(port, packet);
 	}
 
