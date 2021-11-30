@@ -476,22 +476,11 @@ static USHORT internal_string_to_key(texttype* obj,
  **************************************/
 	const UCHAR* const pStart = dest;
 	const UCHAR pad_char = static_cast<TextTypeImpl*>(obj->texttype_impl)->texttype_pad_char;
+
 	while (inLen-- && outLen--)
 		*dest++ = *src++;
 
-	if (obj->texttype_pad_option)
-	{
-		// strip off ending pad characters
-		while (dest > pStart)
-		{
-			if (*(dest - 1) == pad_char)
-				dest--;
-			else
-				break;
-		}
-	}
-
-	return (dest - pStart);
+	return dest - pStart;
 }
 
 static SSHORT internal_compare(texttype* obj,
@@ -508,56 +497,56 @@ static SSHORT internal_compare(texttype* obj,
  *
  **************************************/
 	const UCHAR pad = static_cast<TextTypeImpl*>(obj->texttype_impl)->texttype_pad_char;
-	SLONG fill = length1 - length2;
+
+	int fill = length1 - length2;
+
 	if (length1 >= length2)
 	{
 		if (length2)
 		{
-			do {
+			do
+			{
 				if (*p1++ != *p2++)
-				{
-					if (p1[-1] > p2[-1])
-						return 1;
-					return -1;
-				}
+					return (p1[-1] > p2[-1]) ? 1 : -1;
 			} while (--length2);
 		}
+
 		if (fill > 0)
 		{
-			do {
-				if (!obj->texttype_pad_option || *p1++ != pad)
+			if (obj->texttype_pad_option)
+			{
+				do
 				{
-					if (p1[-1] > pad)
-						return 1;
-					return -1;
-				}
-			} while (--fill);
+					if (*p1++ != pad)
+						return (p1[-1] > pad) ? 1 : -1;
+				} while (--fill);
+			}
+			else
+				return 1;
 		}
+
 		return 0;
 	}
 
 	if (length1)
 	{
-		do {
+		do
+		{
 			if (*p1++ != *p2++)
-			{
-				if (p1[-1] > p2[-1])
-					return 1;
-				return -1;
-			}
+				return (p1[-1] > p2[-1]) ? 1 : -1;
 		} while (--length1);
 	}
 
-	do {
-		if (!obj->texttype_pad_option || *p2++ != pad)
+	if (obj->texttype_pad_option)
+	{
+		do
 		{
-			if (pad > p2[-1])
-				return 1;
-			return -1;
-		}
-	} while (++fill);
+			if (*p2++ != pad)
+				return (pad > p2[-1]) ? 1 : -1;
+		} while (++fill);
+	}
 
-	return 0;
+	return fill ? -1 : 0;
 }
 
 
@@ -638,19 +627,6 @@ static USHORT utf16_keylength(texttype* /*obj*/, USHORT len)
 	return UnicodeUtil::utf16KeyLength(len);
 }
 
-namespace {
-template <typename U>
-void padUtf16(const USHORT* text, U& len)
-{
-	fb_assert(len % sizeof(USHORT) == 0);
-	for (; len > 0; len -= sizeof(USHORT))
-	{
-		if (text[len / sizeof(USHORT) - 1] != 32)
-			break;
-	}
-}
-} //namespace
-
 static USHORT utf16_string_to_key(texttype* obj,
 								  USHORT srcLen,
 								  const UCHAR* src,
@@ -671,11 +647,6 @@ static USHORT utf16_string_to_key(texttype* obj,
 	fb_assert(srcLen % 2 == 0);
 
 	Firebird::Aligner<USHORT> alSrc(src, srcLen);
-
-	if (obj->texttype_pad_option)
-	{
-		padUtf16(alSrc, srcLen);
-	}
 
 	return UnicodeUtil::utf16ToKey(srcLen, alSrc, dstLen, dst);
 }
@@ -703,13 +674,7 @@ static SSHORT utf16_compare(texttype* obj,
 	Firebird::Aligner<USHORT> al1(str1, len1);
 	Firebird::Aligner<USHORT> al2(str2, len2);
 
-	if (obj->texttype_pad_option)
-	{
-		padUtf16(al1, len1);
-		padUtf16(al2, len2);
-	}
-
-	return UnicodeUtil::utf16Compare(len1, al1, len2, al2, error_flag);
+	return UnicodeUtil::utf16Compare(len1, al1, len2, al2, obj->texttype_pad_option, error_flag);
 }
 
 static ULONG utf16_upper(texttype* obj, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst)
@@ -791,11 +756,6 @@ static USHORT utf32_string_to_key(texttype* obj,
 	ULONG sLen = UnicodeUtil::utf32ToUtf16(srcLen, Firebird::Aligner<ULONG>(src, srcLen),
 		dstLen, utf16Str.getBuffer(dstLen / sizeof(USHORT) + 1), &err_code, &err_position);
 	const USHORT* s = utf16Str.begin();
-
-	if (obj->texttype_pad_option)
-	{
-		padUtf16(s, sLen);
-	}
 
 	return UnicodeUtil::utf16ToKey(sLen, s, dstLen, dst);
 }

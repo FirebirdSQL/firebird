@@ -527,36 +527,12 @@ USHORT famasc_string_to_key(texttype* obj, USHORT iInLen, const BYTE* pInChar, U
 	fb_assert(iOutLen <= LANGASCII_MAX_KEY);
 	fb_assert(iOutLen >= famasc_key_length(obj, iInLen));
 
-	// point inbuff at last character
-	const BYTE* inbuff = pInChar + iInLen - 1;
-
-	if (obj->texttype_pad_option)
-	{
-		// skip backwards over all spaces & reset input length
-		while ((inbuff >= pInChar) && (*inbuff == ASCII_SPACE))
-			inbuff--;
-	}
-
-	iInLen = (inbuff - pInChar + 1);
-
 	BYTE* outbuff = pOutChar;
-	while (iInLen-- && iOutLen--) {
+
+	while (iInLen-- && iOutLen--)
 		*outbuff++ = *pInChar++;
-	}
-	return (outbuff - pOutChar);
-}
 
-
-static bool all_spaces(const BYTE* s, SLONG len)
-{
-	fb_assert(s != NULL);
-
-	while (len-- > 0)
-	{
-		if (*s++ != ASCII_SPACE)
-			return false;
-	}
-	return true;
+	return outbuff - pOutChar;
 }
 
 
@@ -570,32 +546,53 @@ SSHORT famasc_compare(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, const B
 
 	*error_flag = false;
 
-	const ULONG len = MIN(l1, l2);
-	for (ULONG i = 0; i < len; i++)
-	{
-		if (s1[i] == s2[i])
-			continue;
-		if (all_spaces(&s1[i], (SLONG) (l1 - i)))
-			return -1;
-		if (all_spaces(&s2[i], (SLONG) (l2 - i)))
-			return 1;
-		if (s1[i] < s2[i])
-			return -1;
+	int fill = l1 - l2;
 
-		return 1;
+	if (l1 >= l2)
+	{
+		if (l2)
+		{
+			do
+			{
+				if (*s1++ != *s2++)
+					return (s1[-1] > s2[-1]) ? 1 : -1;
+			} while (--l2);
+		}
+
+		if (fill > 0)
+		{
+			if (obj->texttype_pad_option)
+			{
+				do
+				{
+					if (*s1++ != ASCII_SPACE)
+						return (s1[-1] > ASCII_SPACE) ? 1 : -1;
+				} while (--fill);
+			}
+			else
+				return 1;
+		}
+
+		return 0;
 	}
 
-	if (l1 > len)
+	if (l1)
 	{
-		if (obj->texttype_pad_option && all_spaces(&s1[len], (SLONG) (l1 - len)))
-			return 0;
-		return 1;
+		do
+		{
+			if (*s1++ != *s2++)
+				return (s1[-1] > s2[-1]) ? 1 : -1;
+		} while (--l1);
 	}
-	if (l2 > len)
+
+	if (obj->texttype_pad_option)
 	{
-		if (obj->texttype_pad_option && all_spaces(&s2[len], (SLONG) (l2 - len)))
-			return 0;
-		return -1;
+		do
+		{
+			if (*s2++ != ASCII_SPACE)
+				return (ASCII_SPACE > s2[-1]) ? 1 : -1;
+		} while (++fill);
 	}
-	return (0);
+
+	return fill ? -1 : 0;
 }

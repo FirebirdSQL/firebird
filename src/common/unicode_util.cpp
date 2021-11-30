@@ -978,7 +978,7 @@ ULONG UnicodeUtil::utf32ToUtf16(ULONG srcLen, const ULONG* src, ULONG dstLen, US
 }
 
 
-SSHORT UnicodeUtil::utf16Compare(ULONG len1, const USHORT* str1, ULONG len2, const USHORT* str2,
+SSHORT UnicodeUtil::utf16Compare(ULONG len1, const USHORT* str1, ULONG len2, const USHORT* str2, bool pad,
 								 INTL_BOOL* error_flag)
 {
 	fb_assert(len1 % sizeof(*str1) == 0);
@@ -989,11 +989,62 @@ SSHORT UnicodeUtil::utf16Compare(ULONG len1, const USHORT* str1, ULONG len2, con
 
 	*error_flag = false;
 
-	// safe casts - alignment not changed
-	int32_t cmp = getConversionICU().u_strCompare(reinterpret_cast<const UChar*>(str1), len1 / sizeof(*str1),
-		reinterpret_cast<const UChar*>(str2), len2 / sizeof(*str2), true);
+	len1 /= sizeof(*str1);
+	len2 /= sizeof(*str2);
 
-	return (cmp < 0 ? -1 : (cmp > 0 ? 1 : 0));
+	int32_t cmp;
+
+	if (pad)
+	{
+		int length1 = len1;
+		int length2 = len2;
+
+		if (len2 > len1)
+		{
+			length2 = len1;
+			if (len1 > 0 && UTF_IS_LEAD(str2[len1 - 1]))
+				++length2;
+		}
+		else if (len1 > len2)
+		{
+			length1 = len2;
+			if (len2 > 0 && UTF_IS_LEAD(str1[len2 - 1]))
+				++length1;
+		}
+
+		// safe casts - alignment not changed
+		cmp = getConversionICU().u_strCompare(reinterpret_cast<const UChar*>(str1), length1,
+			reinterpret_cast<const UChar*>(str2), length2, true);
+
+		if (cmp == 0)
+		{
+			if (length1 < len1)
+			{
+				for (const USHORT* p = str1 + length1; p != str1 + len1; ++p)
+				{
+					if (*p != ' ')
+						return *p < ' ' ? -1 : 1;
+				}
+			}
+
+			if (length2 < len2)
+			{
+				for (const USHORT* p = str2 + length2; p != str2 + len2; ++p)
+				{
+					if (*p != ' ')
+						return ' ' < *p ? -1 : 1;
+				}
+			}
+		}
+	}
+	else
+	{
+		// safe casts - alignment not changed
+		cmp = getConversionICU().u_strCompare(reinterpret_cast<const UChar*>(str1), len1,
+			reinterpret_cast<const UChar*>(str2), len2, true);
+	}
+
+	return cmp < 0 ? -1 : (cmp > 0 ? 1 : 0);
 }
 
 
@@ -1683,19 +1734,6 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 
 	srcLenLong /= sizeof(*src);
 
-	if (tt->texttype_pad_option)
-	{
-		const USHORT* pad;
-
-		for (pad = src + srcLenLong - 1; pad >= src; --pad)
-		{
-			if (*pad != 32)
-				break;
-		}
-
-		srcLenLong = pad - src + 1;
-	}
-
 	HalfStaticArray<USHORT, BUFFER_SMALL / 2> buffer;
 	const UCollator* coll = NULL;
 
@@ -1767,33 +1805,6 @@ SSHORT UnicodeUtil::Utf16Collation::compare(ULONG len1, const USHORT* str1,
 
 	*error_flag = false;
 
-	len1 /= sizeof(*str1);
-	len2 /= sizeof(*str2);
-
-	if (tt->texttype_pad_option)
-	{
-		const USHORT* pad;
-
-		for (pad = str1 + len1 - 1; pad >= str1; --pad)
-		{
-			if (*pad != 32)
-				break;
-		}
-
-		len1 = pad - str1 + 1;
-
-		for (pad = str2 + len2 - 1; pad >= str2; --pad)
-		{
-			if (*pad != 32)
-				break;
-		}
-
-		len2 = pad - str2 + 1;
-	}
-
-	len1 *= sizeof(*str1);
-	len2 *= sizeof(*str2);
-
 	HalfStaticArray<USHORT, BUFFER_SMALL / 2> buffer1, buffer2;
 	normalize(&len1, &str1, true, buffer1);
 	normalize(&len2, &str2, true, buffer2);
@@ -1801,10 +1812,61 @@ SSHORT UnicodeUtil::Utf16Collation::compare(ULONG len1, const USHORT* str1,
 	len1 /= sizeof(*str1);
 	len2 /= sizeof(*str2);
 
-	return (SSHORT) icu->ucolStrColl(compareCollator,
+	int32_t cmp;
+
+	if (tt->texttype_pad_option)
+	{
+		int length1 = len1;
+		int length2 = len2;
+
+		if (len2 > len1)
+		{
+			length2 = len1;
+			if (len1 > 0 && UTF_IS_LEAD(str2[len1 - 1]))
+				++length2;
+		}
+		else if (len1 > len2)
+		{
+			length1 = len2;
+			if (len2 > 0 && UTF_IS_LEAD(str1[len2 - 1]))
+				++length1;
+		}
+
 		// safe casts - alignment not changed
-		reinterpret_cast<const UChar*>(str1), len1,
-		reinterpret_cast<const UChar*>(str2), len2);
+		SSHORT cmp = icu->ucolStrColl(compareCollator,
+			reinterpret_cast<const UChar*>(str1), length1,
+			reinterpret_cast<const UChar*>(str2), length2);
+
+		if (cmp == 0)
+		{
+			if (length1 < len1)
+			{
+				for (const USHORT* p = str1 + length1; p != str1 + len1; ++p)
+				{
+					if (*p != ' ')
+						return *p < ' ' ? -1 : 1;
+				}
+			}
+
+			if (length2 < len2)
+			{
+				for (const USHORT* p = str2 + length2; p != str2 + len2; ++p)
+				{
+					if (*p != ' ')
+						return ' ' < *p ? -1 : 1;
+				}
+			}
+		}
+
+		return cmp;
+	}
+	else
+	{
+		// safe casts - alignment not changed
+		return (SSHORT) icu->ucolStrColl(compareCollator,
+			reinterpret_cast<const UChar*>(str1), len1,
+			reinterpret_cast<const UChar*>(str2), len2);
+	}
 }
 
 

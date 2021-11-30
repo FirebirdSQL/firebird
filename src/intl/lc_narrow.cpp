@@ -193,18 +193,6 @@ USHORT LC_NARROW_string_to_key(texttype* obj, USHORT iInLen, const BYTE* pInChar
 	BYTE tertiary[LANGFAM2_MAX_KEY];
 	BYTE special[LANGFAM2_MAX_KEY * 2];
 
-	// point inbuff at last character
-	const BYTE* inbuff = pInChar + iInLen - 1;
-
-	if (obj->texttype_pad_option)
-	{
-		// skip backwards over all spaces & reset input length
-		while ((inbuff >= pInChar) && (*inbuff == ASCII_SPACE))
-			inbuff--;
-	}
-
-	iInLen = (inbuff - pInChar + 1);
-
 	for (USHORT i = 0; i < iInLen; i++, pInChar++)
 	{
 		fb_assert(lprimary < iOutLen);
@@ -405,10 +393,11 @@ struct coltab_status
 
 
 
-static SSHORT special_scan(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, const BYTE* s2)
+static SSHORT special_scan(texttype* obj, const UCHAR* s1, const UCHAR* end1, ULONG paddedLen1,
+	const UCHAR* s2, const UCHAR* end2, ULONG paddedLen2)
 {
-	const SortOrderTblEntry* col1 = 0;
-	const SortOrderTblEntry* col2 = 0;
+	const SortOrderTblEntry* col1 = nullptr;
+	const SortOrderTblEntry* col2 = nullptr;
 
 	ULONG index1 = 0;
 	ULONG index2 = 0;
@@ -419,47 +408,49 @@ static SSHORT special_scan(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, co
 	while (true)
 	{
 		// Scan to find ignore char from l1
-		while (l1)
+		while (paddedLen1)
 		{
-			col1 = &((const SortOrderTblEntry*) impl->texttype_collation_table)[*s1];
+			col1 = &((const SortOrderTblEntry*) impl->texttype_collation_table)[s1 < end1 ? *s1 : ASCII_SPACE];
 
 			if (col1->IsExpand && col1->IsCompress && noSpecialsFirst)
 			{
 				break;
 			}
 
-			l1--;
+			paddedLen1--;
 			s1++;
 			index1++;
 		}
 
 		// Scan to find ignore char from l2
-		while (l2)
+		while (paddedLen2)
 		{
-			col2 = &((const SortOrderTblEntry*) impl->texttype_collation_table)[*s2];
+			col2 = &((const SortOrderTblEntry*) impl->texttype_collation_table)[s2 < end2 ? *s2 : ASCII_SPACE];
 			if (col2->IsExpand && col2->IsCompress && noSpecialsFirst)
 			{
 				break;
 			}
 
-			l2--;
+			paddedLen2--;
 			s2++;
 			index2++;
 		}
-		if (!l1 && !l2)			// All out of ignore characters
+
+		if (!paddedLen1 && !paddedLen2)			// All out of ignore characters
 			return 0;
-		if (l1 && !l2)			// Out in l2 only
+		if (paddedLen1 && !paddedLen2)			// Out in paddedLen2 only
 			return 1000;
-		if (!l1 && l2)			// Out in l1 only
+		if (!paddedLen1 && paddedLen2)			// Out in paddedLen1 only
 			return -1000;
-		if (index1 < index2)	// l1 has ignore ch before l2
+		if (index1 < index2)	// paddedLen1 has ignore ch before paddedLen2
 			return -2000;
-		if (index1 > index2)	// l2 has ignore ch before l1
+		if (index1 > index2)	// paddedLen2 has ignore ch before paddedLen1
 			return 2000;
 		if (col1->Primary != col2->Primary)
 			return (col1->Primary - col2->Primary);
-		l1--;
-		l2--;
+
+		paddedLen1--;
+		paddedLen2--;
 		s1++;
 		s2++;
 		index1++;
@@ -468,8 +459,8 @@ static SSHORT special_scan(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, co
 }
 
 
-static const SortOrderTblEntry* get_coltab_entry(texttype* obj, const UCHAR** p,
-	ULONG* l, coltab_status* stat, int* sum)
+static const SortOrderTblEntry* get_coltab_entry(texttype* obj, const UCHAR** ptr,
+	const UCHAR* end, ULONG* paddedLen, coltab_status* stat, int* sum)
 {
 	TextTypeImpl* impl = static_cast<TextTypeImpl*>(obj->texttype_impl);
 
@@ -477,18 +468,18 @@ static const SortOrderTblEntry* get_coltab_entry(texttype* obj, const UCHAR** p,
 
 	if (stat->stat_flags & LC_HAVE_WAITING)
 	{
-		--*l;
-		++*p;
+		--*paddedLen;
+		++*ptr;
 		stat->stat_flags &= ~LC_HAVE_WAITING;
 		fb_assert(stat->stat_waiting);
 		return stat->stat_waiting;
 	}
 
 	stat->stat_waiting = NULL;
-	while (*l)
+	while (*paddedLen)
 	{
 		const SortOrderTblEntry* col =
-			&((const SortOrderTblEntry*) impl->texttype_collation_table)[**p];
+			&((const SortOrderTblEntry*) impl->texttype_collation_table)[*ptr < end ? **ptr : ASCII_SPACE];
 
 		if (col->IsExpand && col->IsCompress)
 		{
@@ -497,15 +488,15 @@ static const SortOrderTblEntry* get_coltab_entry(texttype* obj, const UCHAR** p,
 				*sum = impl->ignore_sum;
 
 				// Have col
-				--*l;
-				++*p;
+				--*paddedLen;
+				++*ptr;
 				return col;
 			}
 
 			// Both flags set indicate a special value
 			// Need a new col
-			--*l;
-			++*p;
+			--*paddedLen;
+			++*ptr;
 			stat->stat_flags |= LC_HAVE_SPECIAL;
 			continue;
 		}
@@ -514,17 +505,17 @@ static const SortOrderTblEntry* get_coltab_entry(texttype* obj, const UCHAR** p,
 				   (col->IsCompress && !(impl->texttype_flags & TEXTTYPE_disable_compressions))))
 		{
 			// Have col
-			--*l;
-			++*p;
+			--*paddedLen;
+			++*ptr;
 			return col;
 		}
 
 		if (col->IsExpand)
 		{
 			const ExpandChar* exp = &((const ExpandChar*) impl->texttype_expand_table)[0];
-			while (exp->Ch && exp->Ch != **p)
+			while (exp->Ch && exp->Ch != (*ptr < end ? **ptr : ASCII_SPACE))
 				exp++;
-			fb_assert(exp->Ch == **p);
+			fb_assert(exp->Ch == (*ptr < end ? **ptr : ASCII_SPACE));
 			// Have coll1
 			// Have waiting
 
@@ -534,29 +525,31 @@ static const SortOrderTblEntry* get_coltab_entry(texttype* obj, const UCHAR** p,
 		}
 
 		// (col->IsCompress)
-		if (*l > 1)
+		if (*ptr + 1 < end)
 		{
 			const CompressPair* cmp = &((const CompressPair*) impl->texttype_compress_table)[0];
 			while (cmp->CharPair[0])
 			{
-				if ((cmp->CharPair[0] == **p) &&
-					(cmp->CharPair[1] == *(*p + 1)))
+				if ((cmp->CharPair[0] == **ptr) &&
+					(cmp->CharPair[1] == *(*ptr + 1)))
 				{
 					// Have Col
 					col = &cmp->NoCaseWeight;
-					(*l) -= 2;
-					(*p) += 2;
+					*paddedLen -= 2;
+					*ptr += 2;
 					return col;
 				}
 				cmp++;
 			}
 		}
+
 		// Have col
-		--*l;
-		++*p;
+		--*paddedLen;
+		++*ptr;
 		return col;
 	}
-	return NULL;
+
+	return nullptr;
 }
 
 
@@ -575,24 +568,14 @@ SSHORT LC_NARROW_compare(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, cons
 
 	*error_flag = false;
 
-	if (obj->texttype_pad_option)
-	{
-		// Start at EOS, scan backwards to find non-space
-		const BYTE* p = s1 + l1 - 1;
-		while ((p >= s1) && (*p == ASCII_SPACE))
-			p--;
-		l1 = (p - s1 + 1);
-
-		p = s2 + l2 - 1;
-		while ((p >= s2) && (*p == ASCII_SPACE))
-			p--;
-		l2 = (p - s2 + 1);
-	}
-
-	const ULONG save_l1 = l1;
-	const ULONG save_l2 = l2;
+	const UCHAR* const end1 = s1 + l1;
+	const UCHAR* const end2 = s2 + l2;
 	const BYTE* const save_s1 = s1;
 	const BYTE* const save_s2 = s2;
+	ULONG paddedLen1 = obj->texttype_pad_option ? MAX(l1, l2) : l1;
+	ULONG paddedLen2 = obj->texttype_pad_option ? MAX(l1, l2) : l2;
+	ULONG savePaddedLen1 = paddedLen1;
+	ULONG savePaddedLen2 = paddedLen2;
 	SSHORT save_secondary = 0;
 	SSHORT save_tertiary = 0;
 	SSHORT save_quandary = 0;
@@ -601,15 +584,15 @@ SSHORT LC_NARROW_compare(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, cons
 	stat1.stat_flags = 0;
 	stat2.stat_flags = 0;
 
-	const SortOrderTblEntry* col1 = 0;
-	const SortOrderTblEntry* col2 = 0;
+	const SortOrderTblEntry* col1 = nullptr;
+	const SortOrderTblEntry* col2 = nullptr;
 
 	while (true)
 	{
 		int sum1, sum2;
 
-		col1 = get_coltab_entry(obj, &s1, &l1, &stat1, &sum1);
-		col2 = get_coltab_entry(obj, &s2, &l2, &stat2, &sum2);
+		col1 = get_coltab_entry(obj, &s1, end1, &paddedLen1, &stat1, &sum1);
+		col2 = get_coltab_entry(obj, &s2, end2, &paddedLen2, &stat2, &sum2);
 
 		if (!col1 || !col2)
 			break;
@@ -640,7 +623,7 @@ SSHORT LC_NARROW_compare(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, cons
 	}
 
 	// One of the strings ended
-	fb_assert(l1 == 0 || l2 == 0);
+	fb_assert(paddedLen1 == 0 || paddedLen2 == 0);
 	fb_assert(col1 == NULL || col2 == NULL);
 
 	if (col1 && !col2)
@@ -649,7 +632,7 @@ SSHORT LC_NARROW_compare(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, cons
 	if (!col1 && col2)
 		return -500;
 
-	if (l1 == 0 && l2 == 0)
+	if (paddedLen1 == 0 && paddedLen2 == 0)
 	{
 		if (save_secondary)
 			return save_secondary;
@@ -662,12 +645,12 @@ SSHORT LC_NARROW_compare(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, cons
 			!(impl->texttype_flags & TEXTTYPE_ignore_specials) &&
 			!(impl->texttype_flags & TEXTTYPE_specials_first))
 		{
-			return special_scan(obj, save_l1, save_s1, save_l2, save_s2);
+			return special_scan(obj, save_s1, end1, savePaddedLen1, save_s2, end2, savePaddedLen2);
 		}
 		return 0;
 	}
 
-	if (l1)
+	if (paddedLen1)
 		return 600;
 	return -600;
 }
