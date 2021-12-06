@@ -297,6 +297,7 @@ enum  info_db_implementations
 	isc_info_db_impl_linux_ppc64 = 86,
 	isc_info_db_impl_linux_m68k = 87,
 	isc_info_db_impl_linux_riscv64 = 88,
+	isc_info_db_impl_linux_loongarch64 = 89,
 
 	isc_info_db_impl_last_value   // Leave this LAST!
 };

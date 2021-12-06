@@ -148,6 +148,10 @@
 #define RISC_ALIGNMENT
 #endif /* sparc */
 
+#ifdef __loongarch64
+#define FB_CPU CpuLoongarch64
+#endif /* Loongarch64 */
+
 #ifdef MIPSEL
 #define FB_CPU CpuMipsel
 #endif /* mipsel */
