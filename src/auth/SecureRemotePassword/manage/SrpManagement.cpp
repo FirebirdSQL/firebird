@@ -38,14 +38,6 @@
 #include "../common/classes/auto.h"
 #include "../common/classes/ParsedList.h"
 
-#ifndef FB_EXPORTED
-#if defined(DARWIN)
-#define FB_EXPORTED __attribute__((visibility("default")))
-#else
-#define FB_EXPORTED
-#endif // OS choice (DARWIN)
-#endif // FB_EXPORTED
-
 namespace {
 
 const unsigned int SZ_LOGIN = 31;
@@ -986,7 +978,7 @@ static Firebird::SimpleFactory<Auth::SrpManagement> factory;
 
 } // namespace Auth
 
-extern "C" void FB_EXPORTED FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
+extern "C" void FB_DLL_EXPORT FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 {
 	Firebird::CachedMasterInterface::set(master);
 	Firebird::PluginManagerInterfacePtr()->registerPluginFactory(Firebird::IPluginManager::TYPE_AUTH_USER_MANAGEMENT, Auth::RemotePassword::plugName, &Auth::factory);

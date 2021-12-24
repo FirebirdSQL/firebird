@@ -37,14 +37,6 @@ typedef int FbSampleAtomic;
 
 #include <firebird/Interface.h>
 
-#if defined(_WIN32)
-#define FB_DLL_EXPORT __declspec(dllexport)
-#elif defined(__APPLE__)
-#define FB_DLL_EXPORT __attribute__((visibility("default")))
-#else
-#define FB_DLL_EXPORT
-#endif
-
 using namespace Firebird;
 
 #define SAMPLES_DIALECT SQL_DIALECT_V6

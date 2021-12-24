@@ -189,7 +189,7 @@ SimpleFactory<ChaCha<8> > factory64;
 
 } // anonymous namespace
 
-extern "C" void FB_EXPORTED FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
+extern "C" void FB_DLL_EXPORT FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 {
 	CachedMasterInterface::set(master);
 	PluginManagerInterfacePtr()->registerPluginFactory(IPluginManager::TYPE_WIRE_CRYPT, "ChaCha", &factory);
