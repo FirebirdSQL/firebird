@@ -718,7 +718,7 @@ class IExternalEngineFactoryImpl : public SimpleFactory<Engine>
 {
 } factory;
 
-extern "C" void FB_DLL_EXPORT FB_PLUGIN_ENTRY_POINT(IMaster* master)
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 {
 	CachedMasterInterface::set(master);
 

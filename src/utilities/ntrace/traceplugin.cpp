@@ -115,7 +115,7 @@ void registerTrace(Firebird::IPluginManager* iPlugin)
 }
 
 
-extern "C" void FB_DLL_EXPORT FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 {
 	Firebird::CachedMasterInterface::set(master);
 	registerTrace(Firebird::PluginManagerInterfacePtr());

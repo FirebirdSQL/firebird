@@ -100,7 +100,7 @@ public:
 
 extern "C"
 {
-	void FB_DLL_EXPORT FB_PLUGIN_ENTRY_POINT(IMaster* m)
+	FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* m)
 	{
 		master = m;
 		IPluginManager* pm = m->getPluginManager();

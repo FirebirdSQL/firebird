@@ -22,18 +22,16 @@
 #include "firebird.h"
 #include "ibase.h"
 
-typedef void* VoidPtr;
-
 
 // initialized by the engine
 static void* (*allocFunc)(long) = NULL;
 
-extern "C" void FB_DLL_EXPORT ib_util_init(void* (*aAllocFunc)(long))
+extern "C" FB_DLL_EXPORT void ib_util_init(void* (*aAllocFunc)(long))
 {
 	allocFunc = aAllocFunc;
 }
 
-extern "C" VoidPtr FB_DLL_EXPORT ib_util_malloc(long size)
+extern "C" FB_DLL_EXPORT void* ib_util_malloc(long size)
 {
 	return allocFunc ? allocFunc(size) : malloc(size);
 }
