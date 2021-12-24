@@ -3977,13 +3977,13 @@ static void sanitize(Firebird::string& locale)
 }
 
 
-void FB_DLL_EXPORT gds__default_printer(void* /*arg*/, SSHORT offset, const TEXT* line)
+void API_ROUTINE_VARARG gds__default_printer(void* /*arg*/, SSHORT offset, const TEXT* line)
 {
 	printf("%4d %s\n", offset, line);
 }
 
 
-void FB_DLL_EXPORT gds__trace_printer(void* /*arg*/, SSHORT offset, const TEXT* line)
+void API_ROUTINE_VARARG gds__trace_printer(void* /*arg*/, SSHORT offset, const TEXT* line)
 {
 	// Assume that line is not too long
 	char buffer[PRETTY_BUFFER_SIZE + 10];

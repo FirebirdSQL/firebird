@@ -252,7 +252,6 @@
 
 #define API_ROUTINE __attribute__((visibility("default")))
 #define API_ROUTINE_VARARG API_ROUTINE
-#define INTERNAL_API_ROUTINE API_ROUTINE
 
 #define O_DIRECT F_NOCACHE
 #endif /* Darwin Platforms */

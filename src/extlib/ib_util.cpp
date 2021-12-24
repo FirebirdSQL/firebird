@@ -19,7 +19,6 @@
  */
 
 #include <stdlib.h>
-#include "ib_util.h"
 #include "firebird.h"
 #include "ibase.h"
 
