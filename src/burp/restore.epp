@@ -192,8 +192,13 @@ static inline UCHAR get(BurpGlobals* tdgbl)
 	return tdgbl->get();
 }
 
-static inline FB_BOOLEAN get_boolean(BurpGlobals* tdgbl)
+static inline FB_BOOLEAN get_boolean(BurpGlobals* tdgbl, bool depricated)
 {
+	if (!depricated)
+	{
+		const UCHAR length = get(tdgbl);
+		fb_assert(length == 1);
+	}
 	return get(tdgbl) ? FB_TRUE : FB_FALSE;
 }
 
@@ -5142,10 +5147,11 @@ bool get_function(BurpGlobals* tdgbl)
 						bad_attribute(scan_next_attr, attribute, 89);
 					break;
 
+				case att_function_sql_security_depricated:
 				case att_function_sql_security:
 					if (tdgbl->RESTORE_format >= 11)
 					{
-						X.RDB$SQL_SECURITY = get_boolean(tdgbl);
+						X.RDB$SQL_SECURITY = get_boolean(tdgbl, attribute == att_function_sql_security_depricated);
 						X.RDB$SQL_SECURITY.NULL = FALSE;
 					}
 					else
@@ -5274,9 +5280,10 @@ bool get_function(BurpGlobals* tdgbl)
 						bad_attribute(scan_next_attr, attribute, 89);
 					break;
 
+				case att_function_sql_security_depricated:
 				case att_function_sql_security:
 					if (tdgbl->RESTORE_format >= 11)
-						get_boolean(tdgbl);
+						get_boolean(tdgbl, attribute == att_function_sql_security_depricated);
 					else
 						bad_attribute(scan_next_attr, attribute, 89);
 					break;
@@ -7417,10 +7424,11 @@ bool get_package(BurpGlobals* tdgbl)
 				X.RDB$DESCRIPTION.NULL = FALSE;
 				break;
 
+			case att_package_sql_security_depricated:
 			case att_package_sql_security:
 				if (tdgbl->RESTORE_format >= 11)
 				{
-					X.RDB$SQL_SECURITY = get_boolean(tdgbl);
+					X.RDB$SQL_SECURITY = get_boolean(tdgbl, attribute == att_package_sql_security_depricated);
 					X.RDB$SQL_SECURITY.NULL = FALSE;
 				}
 				else
@@ -7634,10 +7642,11 @@ bool get_procedure(BurpGlobals* tdgbl)
 						bad_attribute(scan_next_attr, attribute, 290);
 					break;
 
+				case att_procedure_sql_security_depricated:
 				case att_procedure_sql_security:
 					if (tdgbl->RESTORE_format >= 11)
 					{
-						X.RDB$SQL_SECURITY = get_boolean(tdgbl);
+						X.RDB$SQL_SECURITY = get_boolean(tdgbl, attribute == att_procedure_sql_security_depricated);
 						X.RDB$SQL_SECURITY.NULL = FALSE;
 					}
 					else
@@ -7759,9 +7768,10 @@ bool get_procedure(BurpGlobals* tdgbl)
 						bad_attribute(scan_next_attr, attribute, 290);
 					break;
 
+				case att_procedure_sql_security_depricated:
 				case att_procedure_sql_security:
 					if (tdgbl->RESTORE_format >= 11)
-						get_boolean(tdgbl);
+						get_boolean(tdgbl, attribute == att_procedure_sql_security_depricated);
 					else
 						bad_attribute(scan_next_attr, attribute, 290);
 					break;
@@ -8443,9 +8453,10 @@ bool get_relation(BurpGlobals* tdgbl)
 				bad_attribute(scan_next_attr, attribute, 111);
 			break;
 
+		case att_relation_sql_security_depricated:
 		case att_relation_sql_security:
 			sql_security_null = false;
-			sql_security = get_boolean(tdgbl);
+			sql_security = get_boolean(tdgbl, attribute == att_relation_sql_security_depricated);
 			break;
 
 		default:
@@ -9784,10 +9795,11 @@ bool get_trigger(BurpGlobals* tdgbl)
 						bad_attribute(scan_next_attr, attribute, 134);
 					break;
 
+				case att_trig_sql_security_depricated:
 				case att_trig_sql_security:
 					if (tdgbl->RESTORE_format >= 11)
 					{
-						X.RDB$SQL_SECURITY = get_boolean(tdgbl);
+						X.RDB$SQL_SECURITY = get_boolean(tdgbl, attribute == att_trig_sql_security_depricated);
 						X.RDB$SQL_SECURITY.NULL = FALSE;
 					}
 					else
@@ -9930,9 +9942,10 @@ bool get_trigger(BurpGlobals* tdgbl)
 						bad_attribute(scan_next_attr, attribute, 134);
 					break;
 
+				case att_trig_sql_security_depricated:
 				case att_trig_sql_security:
 					if (tdgbl->RESTORE_format >= 11)
-						get_boolean(tdgbl);
+						get_boolean(tdgbl, attribute == att_trig_sql_security_depricated);
 					else
 						bad_attribute(scan_next_attr, attribute, 134);
 					break;
@@ -11009,6 +11022,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 			}
 			break;
 
+		case att_database_sql_security_depricated:
 		case att_database_sql_security:
 			if (tdgbl->RESTORE_format >= 11)
 			{
@@ -11017,7 +11031,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 					FOR (REQUEST_HANDLE req_handle5)
 						X IN RDB$DATABASE
 						MODIFY X USING
-							X.RDB$SQL_SECURITY = get_boolean(tdgbl);
+							X.RDB$SQL_SECURITY = get_boolean(tdgbl, attribute == att_database_sql_security_depricated);
 						END_MODIFY;
 						ON_ERROR
 							general_on_error();
@@ -11028,7 +11042,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 					END_ERROR;
 				}
 				else
-					get_boolean(tdgbl);
+					get_boolean(tdgbl, attribute == att_database_sql_security_depricated);
 			}
 			else
 			{

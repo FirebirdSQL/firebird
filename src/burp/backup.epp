@@ -1961,6 +1961,7 @@ void put_boolean(att_type attribute, const FB_BOOLEAN value)
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	put(tdgbl, attribute);
+	put(tdgbl, (UCHAR) 1);
 	put(tdgbl, value ? 1u : 0u);
 }
 
