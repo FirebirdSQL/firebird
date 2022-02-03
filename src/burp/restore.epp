@@ -10239,6 +10239,8 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 		case att_priv_obj_type:
 			flags |= USER_PRIV_OBJECT_TYPE;
 			object_type = (USHORT) get_int32(tdgbl);
+			if ( (tdgbl->RESTORE_format < 11) && (object_type > 19) )	// FB 4 has a shift :(
+				object_type++;
 			break;
 
 		default:
@@ -10308,9 +10310,6 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 					break;
 				}
 			}
-			break;
-
-		case obj_database:
 			break;
 
 		default:
