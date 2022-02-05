@@ -65,7 +65,7 @@ namespace Jrd
 
 		virtual SLONG getSclType() const
 		{
-			return SCL_object_function;
+			return obj_functions;
 		}
 
 		virtual bool checkCache(thread_db* tdbb) const;

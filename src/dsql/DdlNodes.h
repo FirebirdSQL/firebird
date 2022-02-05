@@ -2279,7 +2279,7 @@ typedef RecreateNode<CreateAlterUserNode, DropUserNode, isc_dsql_recreate_user_f
 
 
 typedef Firebird::Pair<Firebird::NonPooled<char, ValueListNode*> > PrivilegeClause;
-typedef Firebird::Pair<Firebird::NonPooled<SSHORT, MetaName> > GranteeClause;
+typedef Firebird::Pair<Firebird::NonPooled<ObjectType, MetaName> > GranteeClause;
 
 class GrantRevokeNode : public PrivilegesNode, private ExecInSecurityDb
 {

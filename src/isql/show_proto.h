@@ -26,11 +26,12 @@
 
 #include "../common/classes/fb_string.h"
 #include <firebird/Interface.h>
+#include "../jrd/obj.h"
 
 void	SHOW_comments(bool force);
 bool	SHOW_dbb_parameters (Firebird::IAttachment*, SCHAR*, const UCHAR*, unsigned, bool, const char*);
-processing_state	SHOW_grants (const SCHAR*, const SCHAR*, USHORT);
-processing_state	SHOW_grants2 (const SCHAR*, const SCHAR*, USHORT, const TEXT*, bool);
+processing_state	SHOW_grants (const SCHAR*, const SCHAR*, ObjectType);
+processing_state	SHOW_grants2 (const SCHAR*, const SCHAR*, ObjectType, const TEXT*, bool);
 void	SHOW_grant_roles (const SCHAR*, bool*);
 void	SHOW_grant_roles2 (const SCHAR*, bool*, const TEXT*, bool);
 void	SHOW_print_metadata_text_blob(FILE*, ISC_QUAD*, bool escape_squote = false,

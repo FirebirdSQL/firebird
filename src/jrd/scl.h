@@ -389,24 +389,6 @@ private:
 	void findGrantedRoles(thread_db* tdbb) const;
 };
 
-// These numbers are arbitrary and only used at run-time. Can be changed if necessary at any moment.
-// We need to include here the new objects that accept ACLs.
-const SLONG SCL_object_database		= obj_database;
-const SLONG SCL_object_table		= obj_relations;
-const SLONG SCL_object_package		= obj_packages;
-const SLONG SCL_object_procedure	= obj_procedures;
-const SLONG SCL_object_function		= obj_functions;
-const SLONG SCL_object_collation	= obj_collations;
-const SLONG SCL_object_exception	= obj_exceptions;
-const SLONG SCL_object_generator	= obj_generators;
-const SLONG SCL_object_charset		= obj_charsets;
-const SLONG SCL_object_domain		= obj_domains;
-const SLONG SCL_object_view			= obj_views;
-const SLONG SCL_object_role			= obj_roles;
-const SLONG SCL_object_filter		= obj_filters;
-// Please keep it with code more than other objects
-// - relations and procedures should be sorted before columns.
-const SLONG SCL_object_column		= obj_type_MAX + 1;
 
 } //namespace Jrd
 

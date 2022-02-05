@@ -248,7 +248,7 @@ public:
 
 	virtual SLONG getSclType() const
 	{
-		return SCL_object_procedure;
+		return obj_procedures;
 	}
 
 	virtual void releaseFormat()

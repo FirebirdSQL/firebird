@@ -290,7 +290,7 @@ void CreateAlterPackageNode::checkPermission(thread_db* tdbb, jrd_tra* transacti
 			return;
 	}
 
-	SCL_check_create_access(tdbb, SCL_object_package);
+	SCL_check_create_access(tdbb, obj_packages);
 }
 
 
@@ -687,7 +687,7 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 void CreatePackageBodyNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
-	SCL_check_create_access(tdbb, SCL_object_package);
+	SCL_check_create_access(tdbb, obj_packages);
 }
 
 

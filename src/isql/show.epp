@@ -655,7 +655,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 }
 
 
-processing_state SHOW_grants(const SCHAR* object, const SCHAR* terminator, USHORT obj_type)
+processing_state SHOW_grants(const SCHAR* object, const SCHAR* terminator, ObjectType obj_type)
 {
 /**************************************
  *
@@ -786,7 +786,7 @@ static void set_grantee(int user_type, const char* SQL_identifier, char* user_st
 
 processing_state SHOW_grants2 (const SCHAR* object,
 				  const SCHAR* terminator,
-				  USHORT obj_type,
+				  ObjectType obj_type,
 				  const TEXT* optional_msg,
 				  bool mangle)
 {
@@ -837,7 +837,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	USHORT priv_flags = 0;
 	SSHORT prev_field_null = -1;
 
-	if (obj_type == obj_relation || obj_type == 255)
+	if (obj_type == obj_relation || obj_type == obj_any)
 	{
 		// Find the user specified relation and show its privileges
 
@@ -1020,7 +1020,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	}
 
 	// No relation called "object" was found, try procedure "object"
-	if (obj_type == obj_procedure || obj_type == 255)
+	if (obj_type == obj_procedure || obj_type == obj_any)
 	{
 		FOR FIRST 1 P IN RDB$PROCEDURES WITH
 			P.RDB$PROCEDURE_NAME EQ object AND
@@ -1099,7 +1099,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	// No procedure called "object" was found, try role "object"
 	SCHAR role_name[BUFFER_LENGTH256];
 
-	if (obj_type == obj_sql_role || obj_type == 255)
+	if (obj_type == obj_sql_role || obj_type == obj_any)
 	{
 		// No procedure called "object" was found, try role "object"
 		// CVC: This code could be superseded by SHOW_grant_roles() below
@@ -1164,7 +1164,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 			return (SKIP);
 	}
 
-	if (obj_type == obj_package_header || obj_type == 255)
+	if (obj_type == obj_package_header || obj_type == obj_any)
 	{
 		if (isqlGlob.major_ods >= ODS_VERSION12)
 		{
@@ -1238,7 +1238,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 		}
 	}
 
-	if (obj_type == obj_udf || obj_type == 255)
+	if (obj_type == obj_udf || obj_type == obj_any)
 	{
 		if (isqlGlob.major_ods >= ODS_VERSION12)
 		{
@@ -1316,7 +1316,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 		}
 	}
 
-	if (obj_type == obj_generator || obj_type == 255)
+	if (obj_type == obj_generator || obj_type == obj_any)
 	{
 		if (isqlGlob.major_ods >= ODS_VERSION12)
 		{
@@ -1390,7 +1390,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 		}
 	}
 
-	if (obj_type == obj_exception || obj_type == 255)
+	if (obj_type == obj_exception || obj_type == obj_any)
 	{
 		if (isqlGlob.major_ods >= ODS_VERSION12)
 		{
@@ -1688,7 +1688,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	}
 	***/
 
-	if (obj_type >= obj_database || obj_type == 255)
+	if (isDdlObject(obj_type) || obj_type == obj_any)
 	{
 		if (isqlGlob.major_ods >= ODS_VERSION12)
 		{
@@ -1697,6 +1697,10 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				PRV.RDB$OBJECT_TYPE >= obj_database AND
 				PRV.RDB$RELATION_NAME EQ object
 				SORTED BY PRV.RDB$USER, PRV.RDB$GRANT_OPTION
+
+				// Double check if the object is DDL one.
+				if (!isDdlObject(static_cast<ObjectType>(PRV.RDB$OBJECT_TYPE)))
+					continue;
 
 				if (first && optional_msg)
 					isqlGlob.prints(optional_msg);
@@ -1753,60 +1757,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 
 				set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
 
-				switch (PRV.RDB$OBJECT_TYPE)
-				{
-				case obj_database:
-					strcpy(obj_string, "DATABASE");
-					break;
-
-				case obj_relations:
-					strcpy(obj_string, "TABLE");
-					break;
-
-				case obj_views:
-					strcpy(obj_string, "VIEW");
-					break;
-
-				case obj_procedures:
-					strcpy(obj_string, "PROCEDURE");
-					break;
-
-				case obj_functions:
-					strcpy(obj_string, "FUNCTION");
-					break;
-
-				case obj_packages:
-					strcpy(obj_string, "PACKAGE");
-					break;
-
-				case obj_generators:
-					strcpy(obj_string, "GENERATOR");
-					break;
-
-				case obj_domains:
-					strcpy(obj_string, "DOMAIN");
-					break;
-
-				case obj_exceptions:
-					strcpy(obj_string, "EXCEPTION");
-					break;
-
-				case obj_roles:
-					strcpy(obj_string, "ROLE");
-					break;
-
-				case obj_charsets:
-					strcpy(obj_string, "CHARACTER SET");
-					break;
-
-				case obj_collations:
-					strcpy(obj_string, "COLLATION");
-					break;
-
-				case obj_filters:
-					strcpy(obj_string, "FILTER");
-					break;
-				}
+				strcpy(obj_string, getDdlObjectName(static_cast<ObjectType>(PRV.RDB$OBJECT_TYPE)));
 
 				if (PRV.RDB$GRANT_OPTION)
 					strcpy(with_option, " WITH GRANT OPTION");
@@ -1824,7 +1775,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				return ps_ERR;
 			END_ERROR
 
-			if (obj_type == obj_database || obj_type == 255)
+			if (obj_type == obj_database || obj_type == obj_any)
 			{
 				FOR PRV IN SEC$DB_CREATORS
 					SORTED BY PRV.SEC$USER_TYPE, PRV.SEC$USER
@@ -2448,7 +2399,7 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 			}
 			else
 				strcpy(SQL_id_for_grant, cmd[2]);
-			ret = SHOW_grants(SQL_id_for_grant, "", 255);
+			ret = SHOW_grants(SQL_id_for_grant, "", obj_any);
 		}
 		else
 		{

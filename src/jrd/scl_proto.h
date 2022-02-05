@@ -35,9 +35,9 @@ struct dsc;
 
 void SCL_check_access(Jrd::thread_db*, const Jrd::SecurityClass*,
 					  SLONG, const Jrd::MetaName&,
-					  Jrd::SecurityClass::flags_t, SLONG type, bool recursive, const Jrd::MetaName&,
+					  Jrd::SecurityClass::flags_t, ObjectType type, bool recursive, const Jrd::MetaName&,
 					  const Jrd::MetaName& = "");
-void SCL_check_create_access(Jrd::thread_db*, int type);
+void SCL_check_create_access(Jrd::thread_db*, ObjectType type);
 void SCL_check_charset(Jrd::thread_db* tdbb, const Jrd::MetaName&, Jrd::SecurityClass::flags_t);
 void SCL_check_collation(Jrd::thread_db* tdbb, const Jrd::MetaName&, Jrd::SecurityClass::flags_t);
 void SCL_check_database(Jrd::thread_db* tdbb, Jrd::SecurityClass::flags_t mask);
@@ -57,7 +57,7 @@ Jrd::SecurityClass::flags_t SCL_get_mask(Jrd::thread_db* tdbb, const TEXT*, cons
 void SCL_clear_classes(Jrd::thread_db*, const TEXT*);
 void SCL_release_all(Jrd::SecurityClassList*&);
 bool SCL_role_granted(Jrd::thread_db* tdbb, const Jrd::UserId& usr, const TEXT* sql_role);
-Jrd::SecurityClass::flags_t SCL_get_object_mask(const int object_type);
+Jrd::SecurityClass::flags_t SCL_get_object_mask(ObjectType object_type);
 ULONG SCL_get_number(const UCHAR*);
 USHORT SCL_convert_privilege(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction, const Firebird::string& priv);
 

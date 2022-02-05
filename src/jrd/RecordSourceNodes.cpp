@@ -767,7 +767,7 @@ RecordSourceNode* RelationSourceNode::pass1(thread_db* tdbb, CompilerScratch* cs
 		const SLONG ssRelationId = tail->csb_view ? tail->csb_view->rel_id :
 			view ? view->rel_id : csb->csb_view ? csb->csb_view->rel_id : 0;
 		CMP_post_access(tdbb, csb, relation->rel_security_name, ssRelationId,
-			SCL_select, SCL_object_table, relation->rel_name);
+			SCL_select, obj_relations, relation->rel_name);
 	}
 
 	return this;

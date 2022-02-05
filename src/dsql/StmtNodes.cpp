@@ -4671,7 +4671,7 @@ ExceptionNode* ExceptionNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	if (exception)
 	{
 		CMP_post_access(tdbb, csb, exception->secName, 0,
-						SCL_usage, SCL_object_exception, exception->name);
+						SCL_usage, obj_exceptions, exception->name);
 	}
 
 	return this;
@@ -8421,7 +8421,7 @@ SetGeneratorNode* SetGeneratorNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	doPass1(tdbb, csb, value.getAddress());
 
 	CMP_post_access(tdbb, csb, generator.secName, 0,
-					SCL_usage, SCL_object_generator, generator.name);
+					SCL_usage, obj_generators, generator.name);
 
 	return this;
 }
@@ -10628,7 +10628,7 @@ static RelationSourceNode* pass1Update(thread_db* tdbb, CompilerScratch* csb, jr
 	// unless this is an internal request, check access permission
 
 	CMP_post_access(tdbb, csb, relation->rel_security_name, (view ? view->rel_id : 0),
-		priv, SCL_object_table, relation->rel_name);
+		priv, obj_relations, relation->rel_name);
 
 	// ensure that the view is set for the input streams,
 	// so that access to views can be checked at the field level

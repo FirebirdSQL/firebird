@@ -1002,7 +1002,7 @@ grant0($node)
 	| db_ddl_privileges(NOTRIAL(&$node->privileges)) DATABASE
 			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
 		{
-			$node->object = newNode<GranteeClause>(obj_database, get_object_name(obj_database));
+			$node->object = newNode<GranteeClause>(obj_database, getSecurityClassName(obj_database));
 			$node->grantAdminOption = $5;
 			$node->grantor = $6;
 			$node->isDdl = true;
@@ -1018,31 +1018,31 @@ grant0($node)
 %type <granteeClause> object
 object
 	: TABLE
-		{ $$ = newNode<GranteeClause>(obj_relations, get_object_name(obj_relations)); }
+		{ $$ = newNode<GranteeClause>(obj_relations, getSecurityClassName(obj_relations)); }
 	| VIEW
-		{ $$ = newNode<GranteeClause>(obj_views, get_object_name(obj_views)); }
+		{ $$ = newNode<GranteeClause>(obj_views, getSecurityClassName(obj_views)); }
 	| PROCEDURE
-		{ $$ = newNode<GranteeClause>(obj_procedures, get_object_name(obj_procedures)); }
+		{ $$ = newNode<GranteeClause>(obj_procedures, getSecurityClassName(obj_procedures)); }
 	| FUNCTION
-		{ $$ = newNode<GranteeClause>(obj_functions, get_object_name(obj_functions)); }
+		{ $$ = newNode<GranteeClause>(obj_functions, getSecurityClassName(obj_functions)); }
 	| PACKAGE
-		{ $$ = newNode<GranteeClause>(obj_packages, get_object_name(obj_packages)); }
+		{ $$ = newNode<GranteeClause>(obj_packages, getSecurityClassName(obj_packages)); }
 	| GENERATOR
-		{ $$ = newNode<GranteeClause>(obj_generators, get_object_name(obj_generators)); }
+		{ $$ = newNode<GranteeClause>(obj_generators, getSecurityClassName(obj_generators)); }
 	| SEQUENCE
-		{ $$ = newNode<GranteeClause>(obj_generators, get_object_name(obj_generators)); }
+		{ $$ = newNode<GranteeClause>(obj_generators, getSecurityClassName(obj_generators)); }
 	| DOMAIN
-		{ $$ = newNode<GranteeClause>(obj_domains, get_object_name(obj_domains)); }
+		{ $$ = newNode<GranteeClause>(obj_domains, getSecurityClassName(obj_domains)); }
 	| EXCEPTION
-		{ $$ = newNode<GranteeClause>(obj_exceptions, get_object_name(obj_exceptions)); }
+		{ $$ = newNode<GranteeClause>(obj_exceptions, getSecurityClassName(obj_exceptions)); }
 	| ROLE
-		{ $$ = newNode<GranteeClause>(obj_roles, get_object_name(obj_roles)); }
+		{ $$ = newNode<GranteeClause>(obj_roles, getSecurityClassName(obj_roles)); }
 	| CHARACTER SET
-		{ $$ = newNode<GranteeClause>(obj_charsets, get_object_name(obj_charsets)); }
+		{ $$ = newNode<GranteeClause>(obj_charsets, getSecurityClassName(obj_charsets)); }
 	| COLLATION
-		{ $$ = newNode<GranteeClause>(obj_collations, get_object_name(obj_collations)); }
+		{ $$ = newNode<GranteeClause>(obj_collations, getSecurityClassName(obj_collations)); }
 	| FILTER
-		{ $$ = newNode<GranteeClause>(obj_filters, get_object_name(obj_filters)); }
+		{ $$ = newNode<GranteeClause>(obj_filters, getSecurityClassName(obj_filters)); }
 	;
 
 table_noise
@@ -1259,7 +1259,7 @@ revoke0($node)
 	| rev_grant_option db_ddl_privileges(NOTRIAL(&$node->privileges)) DATABASE
 			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
 		{
-			$node->object = newNode<GranteeClause>(obj_database, get_object_name(obj_database));
+			$node->object = newNode<GranteeClause>(obj_database, getSecurityClassName(obj_database));
 			$node->grantAdminOption = $1;
 			$node->grantor = $6;
 			$node->isDdl = true;

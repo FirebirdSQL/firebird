@@ -71,7 +71,7 @@ DATABASE DB = STATIC "yachts.lnk";
 static void define_default_class(thread_db*, const TEXT*, MetaName&, const Acl&,
 							jrd_tra*);
 static void finish_security_class(Acl&, SecurityClass::flags_t);
-static void get_object_info(thread_db*, const TEXT*, SSHORT,
+static void get_object_info(thread_db*, const TEXT*, ObjectType,
 							MetaName&, MetaName&, MetaName&, bool&);
 static SecurityClass::flags_t get_public_privs(thread_db*, const TEXT*, SSHORT);
 static void get_user_privs(thread_db*, Acl&, const TEXT*, SSHORT, const MetaName&,
@@ -85,7 +85,7 @@ static SecurityClass::flags_t squeeze_acl(Acl&, const MetaName&, SSHORT);
 static bool check_string(const UCHAR*, const MetaName&);
 
 
-void GRANT_privileges(thread_db* tdbb, const Firebird::string& name, USHORT id, jrd_tra* transaction)
+void GRANT_privileges(thread_db* tdbb, const Firebird::string& name, ObjectType id, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -142,7 +142,7 @@ void GRANT_privileges(thread_db* tdbb, const Firebird::string& name, USHORT id, 
 			break;
 
 		default:
-			if (id >= obj_database && id < obj_type_MAX)
+			if (isDdlObject(id))
 				priv = OWNER_PRIVS;
 			break;
 	}
@@ -314,7 +314,7 @@ static SecurityClass::flags_t get_public_privs(thread_db* tdbb,
 
 static void get_object_info(thread_db* tdbb,
 							const TEXT* object_name,
-							SSHORT obj_type,
+							ObjectType obj_type,
 							MetaName& owner,
 							MetaName& s_class,
 							MetaName& default_class,
@@ -521,7 +521,7 @@ static void get_object_info(thread_db* tdbb,
 	}
 	else
 	{
-		s_class = get_object_name(obj_type);
+		s_class = getSecurityClassName(obj_type);
 		default_class = "";
 		owner = tdbb->getDatabase()->dbb_owner;
 		view = false;

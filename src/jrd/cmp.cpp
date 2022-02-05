@@ -321,7 +321,7 @@ void CMP_post_access(thread_db* tdbb,
 					 const MetaName& security_name,
 					 SLONG ssRelationId,			// SQL SECURITY relation in which context permissions should be check
 					 SecurityClass::flags_t mask,
-					 SLONG type_name,
+					 ObjectType obj_type,
 					 const MetaName& name,
 					 const MetaName& r_name)
 {
@@ -347,7 +347,7 @@ void CMP_post_access(thread_db* tdbb,
 
 	SET_TDBB(tdbb);
 
-	AccessItem access(security_name, ssRelationId, name, type_name, mask, r_name);
+	AccessItem access(security_name, ssRelationId, name, obj_type, mask, r_name);
 
 	FB_SIZE_T i;
 
@@ -481,13 +481,13 @@ void CMP_post_procedure_access(thread_db* tdbb, CompilerScratch* csb, jrd_prc* p
 	{
 		CMP_post_access(tdbb, csb, procedure->getSecurityName(),
 			(csb->csb_view ? csb->csb_view->rel_id : 0),
-			SCL_execute, SCL_object_procedure, procedure->getName().identifier);
+			SCL_execute, obj_procedures, procedure->getName().identifier);
 	}
 	else
 	{
 		CMP_post_access(tdbb, csb, procedure->getSecurityName(),
 			(csb->csb_view ? csb->csb_view->rel_id : 0),
-			SCL_execute, SCL_object_package, procedure->getName().package);
+			SCL_execute, obj_packages, procedure->getName().package);
 	}
 
 	// Add the procedure to list of external objects accessed

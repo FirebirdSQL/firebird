@@ -24,56 +24,89 @@
 #ifndef JRD_OBJ_H
 #define JRD_OBJ_H
 
-// Object types used in RDB$DEPENDENCIES and RDB$USER_PRIVILEGES
+// Object types used in RDB$DEPENDENCIES and RDB$USER_PRIVILEGES and stored in backup.
 // Note: some values are hard coded in grant.gdl
+// Keep existing constants unchanged.
 
-const int obj_relation			= 0;
-const int obj_view				= 1;
-const int obj_trigger			= 2;
-const int obj_computed			= 3;
-const int obj_validation		= 4;
-const int obj_procedure			= 5;
-const int obj_expression_index	= 6;
-const int obj_exception			= 7;
-const int obj_user				= 8;
-const int obj_field				= 9;
-const int obj_index				= 10;
-const int obj_charset			= 11;
-const int obj_user_group		= 12;
-const int obj_sql_role			= 13;
-const int obj_generator			= 14;
-const int obj_udf				= 15;
-const int obj_blob_filter		= 16;
-const int obj_collation			= 17;
-const int obj_package_header	= 18;
-const int obj_package_body		= 19;
-const int obj_privilege			= 20;
+enum ObjectType
+{
+	obj_relation = 0,
+	obj_view,			// 1
+	obj_trigger,
+	obj_computed,
+	obj_validation,
+	obj_procedure,		// 5
+	obj_expression_index,
+	obj_exception,
+	obj_user,
+	obj_field,
+	obj_index,			// 10
+	obj_charset,
+	obj_user_group,
+	obj_sql_role,
+	obj_generator,
+	obj_udf,			// 15
+	obj_blob_filter,
+	obj_collation,
+	obj_package_header,
+	obj_package_body,
+	obj_privilege,		// 20
 
-const int obj_last_non_ddl		= 20;	// keep in sync!!!
+	// objects types for ddl operations
+	obj_database,
+	obj_relations,
+	obj_views,
+	obj_procedures,
+	obj_functions,		// 25
+	obj_packages,
+	obj_generators,
+	obj_domains,
+	obj_exceptions,
+	obj_roles,			// 30
+	obj_charsets,
+	obj_collations,
+	obj_filters,
 
-// objects types for ddl operations
-const int obj_database			= obj_last_non_ddl + 1;
-const int obj_relations			= obj_last_non_ddl + 2;
-const int obj_views				= obj_last_non_ddl + 3;
-const int obj_procedures		= obj_last_non_ddl + 4;
-const int obj_functions			= obj_last_non_ddl + 5;
-const int obj_packages			= obj_last_non_ddl + 6;
-const int obj_generators		= obj_last_non_ddl + 7;
-const int obj_domains			= obj_last_non_ddl + 8;
-const int obj_exceptions		= obj_last_non_ddl + 9;
-const int obj_roles				= obj_last_non_ddl + 10;
-const int obj_charsets			= obj_last_non_ddl + 11;
-const int obj_collations		= obj_last_non_ddl + 12;
-const int obj_filters			= obj_last_non_ddl + 13;
+	// Add new codes here if they are used in RDB$DEPENDENCIES or RDB$USER_PRIVILEGES or stored in backup
+	// Codes for DDL operations add in isDdlObject function as well (find it below).
+	// etc. obj_tablespaces,
 
-const int obj_type_MAX			= obj_last_non_ddl + 14;	// keep this last!
+	obj_type_MAX,
 
-// used in the parser only / no relation with obj_type_MAX (should be greater)
-const int obj_user_or_role		= 100;
-const int obj_schema			= 101;
-const int obj_parameter			= 102;
+	// used in the parser only / no relation with obj_type_MAX (should be greater)
+	obj_user_or_role= 100,
+	obj_parameter,
+	obj_column,
 
-inline const char* get_object_name(int object_type)
+	obj_any = 255
+};
+
+
+inline bool isDdlObject(ObjectType object_type)
+{
+	switch (object_type)
+	{
+		case obj_database:
+		case obj_relations:
+		case obj_views:
+		case obj_procedures:
+		case obj_functions:
+		case obj_packages:
+		case obj_generators:
+		case obj_filters:
+		case obj_domains:
+		case obj_exceptions:
+		case obj_roles:
+		case obj_charsets:
+		case obj_collations:
+			return true;
+		default:
+			return false;
+	}
+}
+
+
+inline const char* getSecurityClassName(ObjectType object_type)
 {
 	switch (object_type)
 	{
@@ -107,5 +140,45 @@ inline const char* get_object_name(int object_type)
 			return "";
 	}
 }
+
+
+inline const char* getDdlObjectName(ObjectType object_type)
+{
+	switch (object_type)
+	{
+		case obj_database:
+			return "DATABASE";
+		case obj_relations:
+			return "TABLE";
+		case obj_packages:
+			return "PACKAGE";
+		case obj_procedures:
+			return "PROCEDURE";
+		case obj_functions:
+			return "FUNCTION";
+		case obj_column:
+			return "COLUMN";
+		case obj_charsets:
+			return "CHARACTER SET";
+		case obj_collations:
+			return "COLLATION";
+		case obj_domains:
+			return "DOMAIN";
+		case obj_exceptions:
+			return "EXCEPTION";
+		case obj_generators:
+			return "GENERATOR";
+		case obj_views:
+			return "VIEW";
+		case obj_roles:
+			return "ROLE";
+		case obj_filters:
+			return "FILTER";
+		default:
+			fb_assert(false);
+			return "<unknown object type>";
+	}
+}
+
 
 #endif // JRD_OBJ_H

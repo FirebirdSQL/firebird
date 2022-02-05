@@ -189,9 +189,10 @@ typedef Firebird::SortedArray<Resource, Firebird::EmptyStorage<Resource>,
 struct AccessItem
 {
 	MetaName		acc_security_name;
-	SLONG					acc_ss_rel_id;	// Relation Id which owner will be used to check permissions
-	MetaName		acc_name, acc_r_name;
-	SLONG					acc_type;
+	SLONG			acc_ss_rel_id;	// Relation Id which owner will be used to check permissions
+	MetaName		acc_name;
+	MetaName		acc_r_name;
+	ObjectType		acc_type;
 	SecurityClass::flags_t	acc_mask;
 
 	static bool greaterThan(const AccessItem& i1, const AccessItem& i2)
@@ -226,7 +227,7 @@ struct AccessItem
 	}
 
 	AccessItem(const MetaName& security_name, SLONG view_id,
-		const MetaName& name, SLONG type,
+		const MetaName& name, ObjectType type,
 		SecurityClass::flags_t mask, const MetaName& relName)
 		: acc_security_name(security_name), acc_ss_rel_id(view_id), acc_name(name),
 			acc_r_name(relName), acc_type(type), acc_mask(mask)

@@ -685,12 +685,12 @@ void JrdStatement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 
 			if (!(ownerRelation->rel_flags & REL_system))
 			{
-				if (access->acc_type == SCL_object_table &&
+				if (access->acc_type == obj_relations &&
 					(ownerRelation->rel_name == access->acc_name))
 				{
 					continue;
 				}
-				if (access->acc_type == SCL_object_column &&
+				if (access->acc_type == obj_column &&
 					(ownerRelation->rel_name == access->acc_r_name))
 				{
 					continue;

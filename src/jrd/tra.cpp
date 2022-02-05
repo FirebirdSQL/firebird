@@ -4077,12 +4077,12 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 
 					if (fld)
 					{
-						SCL_check_access(tdbb, s_class, 0, 0, SCL_select, SCL_object_column,
+						SCL_check_access(tdbb, s_class, 0, 0, SCL_select, obj_column,
 							false, fld->fld_name, blb_relation->rel_name);
 					}
 					else
 					{
-						SCL_check_access(tdbb, s_class, 0, 0, SCL_select, SCL_object_table,
+						SCL_check_access(tdbb, s_class, 0, 0, SCL_select, obj_relations,
 							false, blb_relation->rel_name);
 					}
 

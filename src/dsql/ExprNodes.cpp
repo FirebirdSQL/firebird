@@ -6622,14 +6622,14 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 			tail->csb_view->rel_id : (csb->csb_view ? csb->csb_view->rel_id : 0);
 
 		CMP_post_access(tdbb, csb, relation->rel_security_name, ssRelationId,
-			privilege, SCL_object_table, relation->rel_name);
+			privilege, obj_relations, relation->rel_name);
 
 		// Field-level privilege access is posted for every operation except DELETE
 
 		if (privilege != SCL_delete)
 		{
 			CMP_post_access(tdbb, csb, field->fld_security_name, ssRelationId,
-				privilege, SCL_object_column, field->fld_name, relation->rel_name);
+				privilege, obj_column, field->fld_name, relation->rel_name);
 		}
 	}
 
@@ -7037,7 +7037,7 @@ ValueExprNode* GenIdNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	if (!identity)
 	{
 		CMP_post_access(tdbb, csb, generator.secName, 0,
-						SCL_usage, SCL_object_generator, generator.name);
+						SCL_usage, obj_generators, generator.name);
 	}
 
 	return this;
@@ -12916,13 +12916,13 @@ ValueExprNode* UdfCallNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 				}
 
 				CMP_post_access(tdbb, csb, function->getSecurityName(), ssRelationId,
-					SCL_execute, SCL_object_function, function->getName().identifier);
+					SCL_execute, obj_functions, function->getName().identifier);
 			}
 			else
 			{
 				CMP_post_access(tdbb, csb, function->getSecurityName(),
 					(csb->csb_view ? csb->csb_view->rel_id : 0),
-					SCL_execute, SCL_object_package, function->getName().package);
+					SCL_execute, obj_packages, function->getName().package);
 			}
 
 			ExternalAccess temp(ExternalAccess::exa_function, function->getId());

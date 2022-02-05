@@ -1404,10 +1404,15 @@ static processing_state list_all_grants2(bool show_role_list, const SCHAR* termi
 		***/
 
 		// Process DDL permissions
-		for (int i = obj_database; i < obj_type_MAX; i++)
+		for (int i = static_cast<int>(obj_database); i < static_cast<int>(obj_type_MAX); i++)
 		{
+			const ObjectType obj = static_cast<ObjectType>(i);
+
+			if (!isDdlObject(obj))
+				continue;
+
 			const processing_state rc =
-				SHOW_grants2(get_object_name(i), terminator, i, first ? banner : 0, mangle);
+				SHOW_grants2(getSecurityClassName(obj), terminator, obj, first ? banner : 0, mangle);
 			if (rc == SKIP)
 				first = false;
 		}

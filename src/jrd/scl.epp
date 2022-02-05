@@ -75,10 +75,10 @@ static SecurityClass::flags_t compute_access(thread_db* tdbb, const SecurityClas
 static SecurityClass::flags_t get_sys_privileges(thread_db* tdbb);
 static SecurityClass::flags_t walk_acl(thread_db* tdbb, const Acl&, const MetaName&,
 	SLONG, const MetaName&);
-static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, SLONG type, const MetaName& name,
+static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, ObjectType type, const MetaName& name,
 	const MetaName& r_name, const MetaName &invoker);
 static bool check_object(thread_db* tdbb, bool found, const SecurityClass* s_class, SLONG obj_type,
-	const MetaName& obj_name, SecurityClass::flags_t mask, SLONG type, const MetaName& name);
+	const MetaName& obj_name, SecurityClass::flags_t mask, ObjectType type, const MetaName& name);
 
 
 namespace
@@ -105,79 +105,10 @@ namespace
 		{ SCL_create, priv_create, "CREATE" },
 		{ 0, 0, "" }
 	};
-
-
-	// Database is never requested through CMP_post_access.
-	const char* const object_str_database	= "DATABASE";
-	//const char* const object_str_schema		= "SCHEMA";
-	const char* const object_str_table		= "TABLE";
-	const char* const object_str_package	= "PACKAGE";
-	const char* const object_str_procedure	= "PROCEDURE";
-	const char* const object_str_function	= "FUNCTION";
-	const char* const object_str_column		= "COLUMN";
-	const char* const object_str_charset	= "CHARACTER SET";
-	const char* const object_str_collation	= "COLLATION";
-	const char* const object_str_domain		= "DOMAIN";
-	const char* const object_str_exception	= "EXCEPTION";
-	const char* const object_str_generator	= "GENERATOR";
-	const char* const object_str_view		= "VIEW";
-	const char* const object_str_role		= "ROLE";
-	const char* const object_str_filter		= "FILTER";
-
-
-	struct SecObjectNamePriority
-	{
-		const char* name;
-		SLONG num;
-	};
-
-	const SecObjectNamePriority priorities[] =
-	{
-		{object_str_database, SCL_object_database},
-		//{object_str_schema, SCL_object_schema},
-		{object_str_table, SCL_object_table},
-		{object_str_package, SCL_object_package},
-		{object_str_procedure, SCL_object_procedure},
-		{object_str_function, SCL_object_function},
-		{object_str_column, SCL_object_column},
-		{object_str_charset, SCL_object_charset},
-		{object_str_collation, SCL_object_collation},
-		{object_str_domain, SCL_object_domain},
-		{object_str_exception, SCL_object_exception},
-		{object_str_generator, SCL_object_generator},
-		{object_str_view, SCL_object_view},
-		{object_str_role, SCL_object_role},
-		{object_str_filter, SCL_object_filter},
-		{"", 0}
-	};
-
-	/* Unused, may be needed
-	SLONG accTypeStrToNum(const char* name)
-	{
-		for (const SecObjectNamePriority* p = priorities; p->num != 0; ++p)
-		{
-			if (strcmp(p->name, name) == 0)
-				return p->num;
-		}
-		fb_assert(false);
-		return 0;
-	}
-	*/
-
-	const char* accTypeNumToStr(const SLONG num)
-	{
-		for (const SecObjectNamePriority* p = priorities; p->num != 0; ++p)
-		{
-			if (p->num == num)
-				return p->name;
-		}
-		fb_assert(false);
-		return "<unknown object type>";
-	}
 } // anonymous namespace
 
 
-static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, SLONG type, const MetaName& name,
+static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, ObjectType type, const MetaName& name,
 	const MetaName& r_name, const MetaName& invoker)
 {
 	const P_NAMES* names;
@@ -187,13 +118,13 @@ static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, SLONG type,
 			break;
 	}
 
-	const char* const typeAsStr = accTypeNumToStr(type);
+	const char* const ddlObjectName = getDdlObjectName(type);
 	const Firebird::string fullName = r_name.hasData() ?
 		r_name.c_str() + Firebird::string(".") + name.c_str() : name.c_str();
 
 	Arg::StatusVector status;
 	status << Arg::Gds(isc_no_priv) << Arg::Str(names->p_names_string) <<
-			  Arg::Str(typeAsStr) <<
+			  Arg::Str(ddlObjectName) <<
 			  Arg::Str(fullName);
 	if (invoker.hasData())
 	{
@@ -207,10 +138,10 @@ static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, SLONG type,
 
 void SCL_check_access(thread_db* tdbb,
 					  const SecurityClass* s_class,
-					  SLONG obj_type,
+					  SLONG obj_id,
 					  const MetaName& obj_name,
 					  SecurityClass::flags_t mask,
-					  SLONG type,
+					  ObjectType type,
 					  bool recursive,
 					  const MetaName& name,
 					  const MetaName& r_name)
@@ -252,13 +183,13 @@ void SCL_check_access(thread_db* tdbb,
 		return;
 
 	// Check global DDL permissions with ANY option which allow user to make changes non owned objects
-	if ((type > obj_last_non_ddl) && (mask & SCL_get_object_mask(type)))
+	if (isDdlObject(type) && (mask & SCL_get_object_mask(type)))
 		return;
 
 	if (!s_class || (mask & s_class->scl_flags) )
 		return;
 
-	if (obj_name.hasData() && (compute_access(tdbb, s_class, obj_type, obj_name) & mask) )
+	if (obj_name.hasData() && (compute_access(tdbb, s_class, obj_id, obj_name) & mask) )
 	{
 		return;
 	}
@@ -266,8 +197,8 @@ void SCL_check_access(thread_db* tdbb,
 	// Allow recursive procedure/function call
 
 	if (recursive &&
-		((type == SCL_object_procedure && obj_type == id_procedure) ||
-		 (type == SCL_object_function && obj_type == id_function)) &&
+		((type == obj_procedures && obj_id == id_procedure) ||
+		 (type == obj_functions && obj_id == id_function)) &&
 		obj_name == name)
 	{
 		return;
@@ -277,7 +208,7 @@ void SCL_check_access(thread_db* tdbb,
 }
 
 
-void SCL_check_create_access(thread_db* tdbb, int type)
+void SCL_check_create_access(thread_db* tdbb, ObjectType type)
 {
 /**************************************
  *
@@ -305,7 +236,7 @@ void SCL_check_create_access(thread_db* tdbb, int type)
 
 	if (!(obj_mask & SCL_create))
 	{
-		const char* name = accTypeNumToStr(type);
+		const char* name = getDdlObjectName(type);
 		ERR_post(Arg::Gds(isc_dyn_no_create_priv) << name);
 	}
 }
@@ -338,7 +269,7 @@ void SCL_check_charset(thread_db* tdbb, const MetaName& name, SecurityClass::fla
 	}
 	END_FOR
 
-	SCL_check_access(tdbb, s_class, 0, name, mask, SCL_object_charset, false, name);
+	SCL_check_access(tdbb, s_class, 0, name, mask, obj_charsets, false, name);
 }
 
 
@@ -369,7 +300,7 @@ void SCL_check_collation(thread_db* tdbb, const MetaName& name, SecurityClass::f
 	}
 	END_FOR
 
-	SCL_check_access(tdbb, s_class, 0, name, mask, SCL_object_collation, false, name);
+	SCL_check_access(tdbb, s_class, 0, name, mask, obj_collations, false, name);
 }
 
 
@@ -406,7 +337,7 @@ void SCL_check_database(thread_db* tdbb, SecurityClass::flags_t mask)
 	}
 
 	ERR_post(Arg::Gds(isc_no_priv) << Arg::Str(names->p_names_string) <<
-									  Arg::Str(object_str_database) <<
+									  Arg::Str(getDdlObjectName(obj_database)) <<
 									  Arg::Str(""));
 }
 
@@ -438,7 +369,7 @@ void SCL_check_domain(thread_db* tdbb, const MetaName& name, SecurityClass::flag
 	}
 	END_FOR
 
-	SCL_check_access(tdbb, s_class, 0, name, mask, SCL_object_domain, false, name);
+	SCL_check_access(tdbb, s_class, 0, name, mask, obj_domains, false, name);
 }
 
 
@@ -471,7 +402,7 @@ bool SCL_check_exception(thread_db* tdbb, const MetaName& name, SecurityClass::f
 	}
 	END_FOR
 
-	return check_object(tdbb, found, s_class, 0, name, mask, SCL_object_exception, name);
+	return check_object(tdbb, found, s_class, 0, name, mask, obj_exceptions, name);
 }
 
 
@@ -504,7 +435,7 @@ bool SCL_check_generator(thread_db* tdbb, const MetaName& name, SecurityClass::f
 	}
 	END_FOR
 
-	return check_object(tdbb, found, s_class, 0, name, mask, SCL_object_generator, name);
+	return check_object(tdbb, found, s_class, 0, name, mask, obj_generators, name);
 }
 
 
@@ -590,7 +521,7 @@ void SCL_check_index(thread_db* tdbb, const MetaName& index_name, UCHAR index_id
 	{
 		// Someone is going to reference system table in FK
 		// Usually it's not good idea
-		raiseError(tdbb, mask, SCL_object_table, reln_name, "", NULL);
+		raiseError(tdbb, mask, obj_relations, reln_name, "", NULL);
 	}
 
 	// Check if the relation exists. It may not have been created yet.
@@ -599,7 +530,7 @@ void SCL_check_index(thread_db* tdbb, const MetaName& index_name, UCHAR index_id
 	if (reln_name.isEmpty())
 		return;
 
-	SCL_check_access(tdbb, s_class, 0, NULL, mask, SCL_object_table, false, reln_name);
+	SCL_check_access(tdbb, s_class, 0, NULL, mask, obj_relations, false, reln_name);
 
 	request.reset();
 
@@ -620,7 +551,7 @@ void SCL_check_index(thread_db* tdbb, const MetaName& index_name, UCHAR index_id
 		s_class = (!RF.RDB$SECURITY_CLASS.NULL) ?
 			SCL_get_class(tdbb, RF.RDB$SECURITY_CLASS) : default_s_class;
 		SCL_check_access(tdbb, s_class, 0, NULL, mask,
-						 SCL_object_column, false, RF.RDB$FIELD_NAME, reln_name);
+						 obj_column, false, RF.RDB$FIELD_NAME, reln_name);
 	}
 	END_FOR
 }
@@ -663,7 +594,7 @@ bool SCL_check_package(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flag
 	}
 	END_FOR
 
-	return check_object(tdbb, found, s_class, id_package, name, mask, SCL_object_package, name);
+	return check_object(tdbb, found, s_class, id_package, name, mask, obj_packages, name);
 }
 
 
@@ -705,7 +636,7 @@ bool SCL_check_procedure(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fl
 	}
 	END_FOR
 
-	return check_object(tdbb, found, s_class, id_procedure, name, mask, SCL_object_procedure, name);
+	return check_object(tdbb, found, s_class, id_procedure, name, mask, obj_procedures, name);
 }
 
 
@@ -747,7 +678,7 @@ bool SCL_check_function(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fla
 	}
 	END_FOR
 
-	return check_object(tdbb, found, s_class, id_function, name, mask, SCL_object_function, name);
+	return check_object(tdbb, found, s_class, id_function, name, mask, obj_functions, name);
 }
 
 
@@ -781,7 +712,7 @@ void SCL_check_filter(thread_db* tdbb, const MetaName &name, SecurityClass::flag
 	}
 	END_FOR
 
-	SCL_check_access(tdbb, s_class, id_filter, name, mask, SCL_object_filter, false, name);
+	SCL_check_access(tdbb, s_class, id_filter, name, mask, obj_filters, false, name);
 }
 
 
@@ -819,7 +750,7 @@ void SCL_check_relation(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fla
 		{
 			// Someone is going to modify system table layout
 			// Usually it's not good idea
-			raiseError(tdbb, mask, SCL_object_table, name, "", NULL);
+			raiseError(tdbb, mask, obj_relations, name, "", NULL);
 		}
 
         if (!REL.RDB$SECURITY_CLASS.NULL)
@@ -827,7 +758,7 @@ void SCL_check_relation(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fla
 	}
 	END_FOR
 
-	SCL_check_access(tdbb, s_class, 0, NULL, mask, SCL_object_table, false, name);
+	SCL_check_access(tdbb, s_class, 0, NULL, mask, obj_relations, false, name);
 }
 
 bool SCL_check_view(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t mask)
@@ -866,7 +797,7 @@ bool SCL_check_view(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t
 	}
 	END_FOR
 
-	return check_object(tdbb, found, s_class, 0, NULL, mask, SCL_object_view, name);
+	return check_object(tdbb, found, s_class, 0, NULL, mask, obj_views, name);
 }
 
 void SCL_check_role(thread_db* tdbb, const MetaName& name, SecurityClass::flags_t mask)
@@ -896,7 +827,7 @@ void SCL_check_role(thread_db* tdbb, const MetaName& name, SecurityClass::flags_
 	}
 	END_FOR
 
-	SCL_check_access(tdbb, s_class, 0, NULL, mask, SCL_object_role, false, name);
+	SCL_check_access(tdbb, s_class, 0, NULL, mask, obj_roles, false, name);
 }
 
 SecurityClass* SCL_get_class(thread_db* tdbb, const TEXT* par_string)
@@ -1292,7 +1223,7 @@ void SCL_release_all(SecurityClassList*& list)
 }
 
 
-SecurityClass::flags_t SCL_get_object_mask(const int object_type)
+SecurityClass::flags_t SCL_get_object_mask(ObjectType object_type)
 {
 /**************************************
  *
@@ -1307,7 +1238,7 @@ SecurityClass::flags_t SCL_get_object_mask(const int object_type)
 	thread_db* tdbb = JRD_get_thread_data();
 	Database* dbb = tdbb->getDatabase();
 
-	const TEXT* object_name = get_object_name(object_type);
+	const TEXT* object_name = getSecurityClassName(object_type);
 	if (!*object_name)
 		return 0;
 
@@ -1836,7 +1767,7 @@ static bool check_object(thread_db* tdbb,
 						 SLONG obj_type,
 						 const MetaName& obj_name,
 						 SecurityClass::flags_t mask,
-						 SLONG type,
+						 ObjectType type,
 						 const MetaName& name)
 {
 	if (s_class)

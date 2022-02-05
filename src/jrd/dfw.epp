@@ -2650,7 +2650,7 @@ static bool grant_privileges(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 		return true;
 
 	case 3:
-		GRANT_privileges(tdbb, work->dfw_name, work->dfw_id, transaction);
+		GRANT_privileges(tdbb, work->dfw_name, (ObjectType)work->dfw_id, transaction);
 		break;
 
 	default:

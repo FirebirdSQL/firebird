@@ -877,7 +877,7 @@ RecordSource* OPT_compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 			{
 				CMP_post_access(tdbb, csb, r->csb_relation->rel_security_name,
 					r->csb_view ? r->csb_view->rel_id : 0,
-					SCL_update, SCL_object_table, r->csb_relation->rel_name);
+					SCL_update, obj_relations, r->csb_relation->rel_name);
 			}
 		}
 	}
