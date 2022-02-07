@@ -219,6 +219,11 @@ public:
 			CS_METADATA : req_attachment->att_charset;
 	}
 
+	bool isRoot() const
+	{
+		return statement->requests.hasData() && this == statement->requests[0];
+	}
+
 	bool isRequestIdUnassigned() const
 	{
 		return req_id == 0;
@@ -228,7 +233,7 @@ public:
 	{
 		if (!req_id)
 		{
-			req_id = statement->requests.hasData() && this == statement->requests[0] ?
+			req_id = isRoot() ?
 				statement->getStatementId() :
 				JRD_get_thread_data()->getDatabase()->generateStatementId();
 		}

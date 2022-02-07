@@ -883,7 +883,7 @@ void EXE_start(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
 
 	// Generate request id.
 	request->setRequestId(
-		request->isRequestIdUnassigned() && statement->requests.hasData() && request == statement->requests[0] ?
+		request->isRequestIdUnassigned() && request->isRoot() ?
 			statement->getStatementId() :
 			dbb->generateStatementId());
 
