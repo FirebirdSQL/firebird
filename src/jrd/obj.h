@@ -28,58 +28,57 @@
 // Note: some values are hard coded in grant.gdl
 // Keep existing constants unchanged.
 
-enum ObjectType
-{
-	obj_relation = 0,
-	obj_view,			// 1
-	obj_trigger,
-	obj_computed,
-	obj_validation,
-	obj_procedure,		// 5
-	obj_expression_index,
-	obj_exception,
-	obj_user,
-	obj_field,
-	obj_index,			// 10
-	obj_charset,
-	obj_user_group,
-	obj_sql_role,
-	obj_generator,
-	obj_udf,			// 15
-	obj_blob_filter,
-	obj_collation,
-	obj_package_header,
-	obj_package_body,
-	obj_privilege,		// 20
+typedef SSHORT ObjectType;
 
-	// objects types for ddl operations
-	obj_database,
-	obj_relations,
-	obj_views,
-	obj_procedures,
-	obj_functions,		// 25
-	obj_packages,
-	obj_generators,
-	obj_domains,
-	obj_exceptions,
-	obj_roles,			// 30
-	obj_charsets,
-	obj_collations,
-	obj_filters,
+const ObjectType obj_relation = 0;
+const ObjectType obj_view = 1;
+const ObjectType obj_trigger = 2;
+const ObjectType obj_computed = 3;
+const ObjectType obj_validation = 4;
+const ObjectType obj_procedure = 5;
+const ObjectType obj_expression_index = 6;
+const ObjectType obj_exception = 7;
+const ObjectType obj_user = 8;
+const ObjectType obj_field = 9;
+const ObjectType obj_index = 10;
+const ObjectType obj_charset = 11;
+const ObjectType obj_user_group = 12;
+const ObjectType obj_sql_role = 13;
+const ObjectType obj_generator = 14;
+const ObjectType obj_udf = 15;
+const ObjectType obj_blob_filter = 16;
+const ObjectType obj_collation = 17;
+const ObjectType obj_package_header = 18;
+const ObjectType obj_package_body = 19;
+const ObjectType obj_privilege = 20;
 
-	// Add new codes here if they are used in RDB$DEPENDENCIES or RDB$USER_PRIVILEGES or stored in backup
-	// Codes for DDL operations add in isDdlObject function as well (find it below).
-	// etc. obj_tablespaces,
+// objects types for ddl operations
+const ObjectType obj_database = 21;
+const ObjectType obj_relations = 22;
+const ObjectType obj_views = 23;
+const ObjectType obj_procedures = 24;
+const ObjectType obj_functions = 25;
+const ObjectType obj_packages = 26;
+const ObjectType obj_generators = 27;
+const ObjectType obj_domains = 28;
+const ObjectType obj_exceptions = 29;
+const ObjectType obj_roles = 30;
+const ObjectType obj_charsets = 31;
+const ObjectType obj_collations = 32;
+const ObjectType obj_filters = 33;
 
-	obj_type_MAX,
+// Add new codes here if they are used in RDB$DEPENDENCIES or RDB$USER_PRIVILEGES or stored in backup
+// Codes for DDL operations add in isDdlObject function as well (find it below).
+// etc. obj_tablespaces,
 
-	// used in the parser only / no relation with obj_type_MAX (should be greater)
-	obj_user_or_role= 100,
-	obj_parameter,
-	obj_column,
+const ObjectType obj_type_MAX = 34;
 
-	obj_any = 255
-};
+// used in the parser only / no relation with obj_type_MAX (should be greater)
+const ObjectType obj_user_or_role= 100;
+const ObjectType obj_parameter = 101;
+const ObjectType obj_column = 102;
+
+const ObjectType obj_any = 255;
 
 
 inline bool isDdlObject(ObjectType object_type)

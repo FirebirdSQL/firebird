@@ -524,9 +524,8 @@ void INI_format(const char* owner, const char* charset)
 
 	length = acl - buffer;
 
-	for (int n = static_cast<int>(obj_database) + 1; n < static_cast<int>(obj_type_MAX); ++n)
+	for (int obj = obj_database + 1; obj < obj_type_MAX; obj++)
 	{
-		const ObjectType obj = static_cast<ObjectType>(n);
 		if (isDdlObject(obj))
 			add_security_class(tdbb, reqAddSC, getSecurityClassName(obj), length, buffer);
 	}

@@ -1404,10 +1404,8 @@ static processing_state list_all_grants2(bool show_role_list, const SCHAR* termi
 		***/
 
 		// Process DDL permissions
-		for (int i = static_cast<int>(obj_database); i < static_cast<int>(obj_type_MAX); i++)
+		for (SSHORT obj = obj_database; obj < obj_type_MAX; obj++)
 		{
-			const ObjectType obj = static_cast<ObjectType>(i);
-
 			if (!isDdlObject(obj))
 				continue;
 

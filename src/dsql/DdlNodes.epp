@@ -12302,7 +12302,7 @@ void GrantRevokeNode::checkGrantorCanGrantDdl(thread_db* tdbb, jrd_tra* transact
 			continue;
 
 		// Double check if the object is DDL one.
-		if (!isDdlObject(static_cast<ObjectType>(PRV.RDB$OBJECT_TYPE)))
+		if (!isDdlObject(PRV.RDB$OBJECT_TYPE))
 			continue;
 
 		if (PRV.RDB$GRANT_OPTION == WITH_GRANT_OPTION)

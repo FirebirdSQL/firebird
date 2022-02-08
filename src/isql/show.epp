@@ -1699,7 +1699,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				SORTED BY PRV.RDB$USER, PRV.RDB$GRANT_OPTION
 
 				// Double check if the object is DDL one.
-				if (!isDdlObject(static_cast<ObjectType>(PRV.RDB$OBJECT_TYPE)))
+				if (!isDdlObject(PRV.RDB$OBJECT_TYPE))
 					continue;
 
 				if (first && optional_msg)
@@ -1757,7 +1757,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 
 				set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
 
-				strcpy(obj_string, getDdlObjectName(static_cast<ObjectType>(PRV.RDB$OBJECT_TYPE)));
+				strcpy(obj_string, getDdlObjectName(PRV.RDB$OBJECT_TYPE));
 
 				if (PRV.RDB$GRANT_OPTION)
 					strcpy(with_option, " WITH GRANT OPTION");
