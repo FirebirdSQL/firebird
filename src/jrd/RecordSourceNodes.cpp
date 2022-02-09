@@ -22,7 +22,6 @@
 #include "../jrd/align.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/DataTypeUtil.h"
-#include "../jrd/Optimizer.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../dsql/BoolNodes.h"
 #include "../dsql/ExprNodes.h"
@@ -32,12 +31,12 @@
 #include "../jrd/cmp_proto.h"
 #include "../common/dsc_proto.h"
 #include "../jrd/met_proto.h"
-#include "../jrd/opt_proto.h"
 #include "../jrd/par_proto.h"
 #include "../dsql/ddl_proto.h"
 #include "../dsql/gen_proto.h"
 #include "../dsql/metd_proto.h"
 #include "../dsql/pass1_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -53,45 +52,6 @@ static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverS
 	BoolExprNodeStack* parentStack, StreamType shellStream);
 static ValueExprNode* resolveUsingField(DsqlCompilerScratch* dsqlScratch, const MetaName& name,
 	ValueListNode* list, const FieldNode* flawedNode, const TEXT* side, dsql_ctx*& ctx);
-
-namespace
-{
-	class AutoActivateResetStreams : public AutoStorage
-	{
-	public:
-		AutoActivateResetStreams(CompilerScratch* csb, const RseNode* rse)
-			: m_csb(csb), m_streams(getPool()), m_flags(getPool())
-		{
-			rse->computeRseStreams(m_streams);
-
-			if (m_streams.getCount() >= MAX_STREAMS)
-				ERR_post(Arg::Gds(isc_too_many_contexts));
-
-			m_flags.resize(m_streams.getCount());
-
-			for (FB_SIZE_T i = 0; i < m_streams.getCount(); i++)
-			{
-				const StreamType stream = m_streams[i];
-				m_flags[i] = m_csb->csb_rpt[stream].csb_flags;
-				m_csb->csb_rpt[stream].csb_flags |= (csb_active | csb_sub_stream);
-			}
-		}
-
-		~AutoActivateResetStreams()
-		{
-			for (FB_SIZE_T i = 0; i < m_streams.getCount(); i++)
-			{
-				const StreamType stream = m_streams[i];
-				m_csb->csb_rpt[stream].csb_flags = m_flags[i];
-			}
-		}
-
-	private:
-		CompilerScratch* m_csb;
-		StreamList m_streams;
-		HalfStaticArray<USHORT, OPT_STATIC_ITEMS> m_flags;
-	};
-}
 
 
 //--------------------
@@ -153,11 +113,11 @@ bool SortNode::computable(CompilerScratch* csb, StreamType stream, bool allowOnl
 	return true;
 }
 
-void SortNode::findDependentFromStreams(const OptimizerRetrieval* optRet,
-	SortedStreamList* streamList)
+void SortNode::findDependentFromStreams(const CompilerScratch* csb,
+	StreamType currentStream, SortedStreamList* streamList)
 {
 	for (NestConst<ValueExprNode>* i = expressions.begin(); i != expressions.end(); ++i)
-		(*i)->findDependentFromStreams(optRet, streamList);
+		(*i)->findDependentFromStreams(csb, currentStream, streamList);
 }
 
 
@@ -570,14 +530,11 @@ void LocalTableSourceNode::pass2Rse(thread_db* tdbb, CompilerScratch* csb)
 	pass2(tdbb, csb);
 }
 
-RecordSource* LocalTableSourceNode::compile(thread_db* tdbb, OptimizerBlk* opt, bool /*innerSubStream*/)
+RecordSource* LocalTableSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*innerSubStream*/)
 {
-	opt->beds.add(stream);
-	opt->localStreams.add(stream);
+	const auto csb = opt->getCompilerScratch();
 
-	const auto csb = opt->opt_csb;
-
-	if (tableNumber >= opt->opt_csb->csb_localTables.getCount() || !opt->opt_csb->csb_localTables[tableNumber])
+	if (tableNumber >= csb->csb_localTables.getCount() || !csb->csb_localTables[tableNumber])
 		ERR_post(Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
 
 	auto localTable = csb->csb_localTables[tableNumber];
@@ -855,12 +812,11 @@ void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseN
 
 	// disect view into component relations
 
-	NestConst<RecordSourceNode>* arg = viewRse->rse_relations.begin();
-	for (const NestConst<RecordSourceNode>* const end = viewRse->rse_relations.end(); arg != end; ++arg)
+	for (const auto sub : viewRse->rse_relations)
 	{
 		// this call not only copies the node, it adds any streams it finds to the map
 		NodeCopier copier(csb->csb_pool, csb, map);
-		RecordSourceNode* node = (*arg)->copy(tdbb, copier);
+		RecordSourceNode* node = sub->copy(tdbb, copier);
 
 		// Now go out and process the base table itself. This table might also be a view,
 		// in which case we will continue the process by recursion.
@@ -916,22 +872,9 @@ void RelationSourceNode::pass2Rse(thread_db* tdbb, CompilerScratch* csb)
 	pass2(tdbb, csb);
 }
 
-RecordSource* RelationSourceNode::compile(thread_db* tdbb, OptimizerBlk* opt, bool /*innerSubStream*/)
+RecordSource* RelationSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*innerSubStream*/)
 {
-	// we have found a base relation; record its stream
-	// number in the streams array as a candidate for
-	// merging into a river
-
-	opt->beds.add(stream);
-	opt->compileStreams.add(stream);
-
-	// if we have seen any booleans or sort fields, we may be able to
-	// use an index to optimize them; retrieve the current format of
-	// all indices at this time so we can determine if it's possible
-
-	const bool needIndices =
-		opt->opt_conjuncts.getCount() || opt->rse->rse_sorted || opt->rse->rse_aggregate;
-	OPT_compile_relation(tdbb, relation, opt->opt_csb, stream, needIndices);
+	opt->compileRelation(stream);
 
 	return NULL;
 }
@@ -1293,21 +1236,18 @@ void ProcedureSourceNode::pass2Rse(thread_db* tdbb, CompilerScratch* csb)
 	pass2(tdbb, csb);
 }
 
-RecordSource* ProcedureSourceNode::compile(thread_db* tdbb, OptimizerBlk* opt, bool /*innerSubStream*/)
+RecordSource* ProcedureSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*innerSubStream*/)
 {
-	opt->beds.add(stream);
-	opt->localStreams.add(stream);
-
 	return generate(tdbb, opt);
 }
 
 // Compile and optimize a record selection expression into a set of record source blocks (rsb's).
-ProcedureScan* ProcedureSourceNode::generate(thread_db* tdbb, OptimizerBlk* opt)
+ProcedureScan* ProcedureSourceNode::generate(thread_db* tdbb, Optimizer* opt)
 {
 	SET_TDBB(tdbb);
 
-	CompilerScratch* const csb = opt->opt_csb;
-	const string alias = OPT_make_alias(csb, stream);
+	const auto csb = opt->getCompilerScratch();
+	const string alias = opt->makeAlias(stream);
 
 	return FB_NEW_POOL(*tdbb->getDefaultPool()) ProcedureScan(csb, alias, stream, procedure,
 		sourceList, targetList, in_msg);
@@ -1325,14 +1265,14 @@ bool ProcedureSourceNode::computable(CompilerScratch* csb, StreamType stream,
 	return true;
 }
 
-void ProcedureSourceNode::findDependentFromStreams(const OptimizerRetrieval* optRet,
-	SortedStreamList* streamList)
+void ProcedureSourceNode::findDependentFromStreams(const CompilerScratch* csb,
+	StreamType currentStream, SortedStreamList* streamList)
 {
 	if (sourceList)
-		sourceList->findDependentFromStreams(optRet, streamList);
+		sourceList->findDependentFromStreams(csb, currentStream, streamList);
 
 	if (targetList)
-		targetList->findDependentFromStreams(optRet, streamList);
+		targetList->findDependentFromStreams(csb, currentStream, streamList);
 }
 
 void ProcedureSourceNode::collectStreams(SortedStreamList& streamList) const
@@ -1643,29 +1583,23 @@ bool AggregateSourceNode::containsStream(StreamType checkStream) const
 	return false;
 }
 
-RecordSource* AggregateSourceNode::compile(thread_db* tdbb, OptimizerBlk* opt, bool /*innerSubStream*/)
+RecordSource* AggregateSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*innerSubStream*/)
 {
-	opt->beds.add(stream);
-
 	BoolExprNodeStack conjunctStack;
-	for (USHORT i = 0; i < opt->opt_conjuncts.getCount(); i++)
-		conjunctStack.push(opt->opt_conjuncts[i].opt_conjunct_node);
+	for (auto iter = opt->getConjuncts(); iter.hasData(); ++iter)
+		conjunctStack.push(iter);
 
-	RecordSource* const rsb = generate(tdbb, opt, &conjunctStack, stream);
-
-	opt->localStreams.add(stream);
-
-	return rsb;
+	return generate(tdbb, opt, &conjunctStack, stream);
 }
 
 // Generate a RecordSource (Record Source Block) for each aggregate operation.
 // Generate an AggregateSort (Aggregate SortedStream Block) for each DISTINCT aggregate.
-RecordSource* AggregateSourceNode::generate(thread_db* tdbb, OptimizerBlk* opt,
+RecordSource* AggregateSourceNode::generate(thread_db* tdbb, Optimizer* opt,
 	BoolExprNodeStack* parentStack, StreamType shellStream)
 {
 	SET_TDBB(tdbb);
 
-	CompilerScratch* const csb = opt->opt_csb;
+	const auto csb = opt->getCompilerScratch();
 	rse->rse_sorted = group;
 
 	// AB: Try to distribute items from the HAVING CLAUSE to the WHERE CLAUSE.
@@ -1701,7 +1635,7 @@ RecordSource* AggregateSourceNode::generate(thread_db* tdbb, OptimizerBlk* opt,
 		rse->flags |= RseNode::FLAG_OPT_FIRST_ROWS;
 	}
 
-	RecordSource* const nextRsb = OPT_compile(tdbb, csb, rse, &deliverStack);
+	RecordSource* const nextRsb = Optimizer::compile(tdbb, csb, rse, &deliverStack);
 
 	// allocate and optimize the record source block
 
@@ -1716,7 +1650,7 @@ RecordSource* AggregateSourceNode::generate(thread_db* tdbb, OptimizerBlk* opt,
 		aggNode->indexed = true;
 	}
 
-	OPT_gen_aggregate_distincts(tdbb, csb, map);
+	opt->generateAggregateDistincts(map);
 
 	return rsb;
 }
@@ -1728,11 +1662,11 @@ bool AggregateSourceNode::computable(CompilerScratch* csb, StreamType stream,
 	return rse->computable(csb, stream, allowOnlyCurrentStream, NULL);
 }
 
-void AggregateSourceNode::findDependentFromStreams(const OptimizerRetrieval* optRet,
-	SortedStreamList* streamList)
+void AggregateSourceNode::findDependentFromStreams(const CompilerScratch* csb,
+	StreamType currentStream, SortedStreamList* streamList)
 {
 	rse->rse_sorted = group;
-	rse->findDependentFromStreams(optRet, streamList);
+	rse->findDependentFromStreams(csb, currentStream, streamList);
 }
 
 
@@ -1986,32 +1920,25 @@ bool UnionSourceNode::containsStream(StreamType checkStream) const
 	return false;
 }
 
-RecordSource* UnionSourceNode::compile(thread_db* tdbb, OptimizerBlk* opt, bool /*innerSubStream*/)
+RecordSource* UnionSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*innerSubStream*/)
 {
-	opt->beds.add(stream);
-
-	const FB_SIZE_T oldCount = opt->keyStreams.getCount();
-	computeDbKeyStreams(opt->keyStreams);
+	StreamList keyStreams;
+	computeDbKeyStreams(keyStreams);
 
 	BoolExprNodeStack conjunctStack;
-	for (USHORT i = 0; i < opt->opt_conjuncts.getCount(); i++)
-		conjunctStack.push(opt->opt_conjuncts[i].opt_conjunct_node);
+	for (auto iter = opt->getConjuncts(); iter.hasData(); ++iter)
+		conjunctStack.push(iter);
 
-	RecordSource* const rsb = generate(tdbb, opt, opt->keyStreams.begin() + oldCount,
-		opt->keyStreams.getCount() - oldCount, &conjunctStack, stream);
-
-	opt->localStreams.add(stream);
-
-	return rsb;
+	return generate(tdbb, opt, keyStreams.begin(), keyStreams.getCount(), &conjunctStack, stream);
 }
 
 // Generate an union complex.
-RecordSource* UnionSourceNode::generate(thread_db* tdbb, OptimizerBlk* opt, const StreamType* streams,
+RecordSource* UnionSourceNode::generate(thread_db* tdbb, Optimizer* opt, const StreamType* streams,
 	FB_SIZE_T nstreams, BoolExprNodeStack* parentStack, StreamType shellStream)
 {
 	SET_TDBB(tdbb);
 
-	CompilerScratch* csb = opt->opt_csb;
+	const auto csb = opt->getCompilerScratch();
 	HalfStaticArray<RecordSource*, OPT_STATIC_ITEMS> rsbs;
 
 	const ULONG baseImpure = csb->allocImpure(FB_ALIGNMENT, 0);
@@ -2031,7 +1958,7 @@ RecordSource* UnionSourceNode::generate(thread_db* tdbb, OptimizerBlk* opt, cons
 		if (!recursive)
 			genDeliverUnmapped(csb, &deliverStack, map, parentStack, shellStream);
 
-		rsbs.add(OPT_compile(tdbb, csb, rse, &deliverStack));
+		rsbs.add(Optimizer::compile(tdbb, csb, rse, &deliverStack));
 
 		// hvlad: activate recursive union itself after processing first (non-recursive)
 		// member to allow recursive members be optimized
@@ -2075,13 +2002,11 @@ bool UnionSourceNode::computable(CompilerScratch* csb, StreamType stream,
 	return true;
 }
 
-void UnionSourceNode::findDependentFromStreams(const OptimizerRetrieval* optRet,
-	SortedStreamList* streamList)
+void UnionSourceNode::findDependentFromStreams(const CompilerScratch* csb,
+	StreamType currentStream, SortedStreamList* streamList)
 {
-	NestConst<RseNode>* ptr = clauses.begin();
-
-	for (NestConst<RseNode>* const end = clauses.end(); ptr != end; ++ptr)
-		(*ptr)->findDependentFromStreams(optRet, streamList);
+	for (auto clause : clauses)
+		clause->findDependentFromStreams(csb, currentStream, streamList);
 }
 
 
@@ -2421,24 +2346,12 @@ void WindowSourceNode::collectStreams(SortedStreamList& streamList) const
 	}
 }
 
-RecordSource* WindowSourceNode::compile(thread_db* tdbb, OptimizerBlk* opt, bool /*innerSubStream*/)
+RecordSource* WindowSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*innerSubStream*/)
 {
-	for (ObjectsArray<Window>::iterator window = windows.begin();
-		 window != windows.end();
-		 ++window)
-	{
-		opt->beds.add(window->stream);
-	}
+	const auto csb = opt->getCompilerScratch();
 
-	RecordSource* const rsb = FB_NEW_POOL(*tdbb->getDefaultPool()) WindowedStream(tdbb, opt->opt_csb,
-		windows, OPT_compile(tdbb, opt->opt_csb, rse, NULL));
-
-	StreamList rsbStreams;
-	rsb->findUsedStreams(rsbStreams);
-
-	opt->localStreams.join(rsbStreams);
-
-	return rsb;
+	return FB_NEW_POOL(*tdbb->getDefaultPool()) WindowedStream(tdbb, opt,
+		windows, Optimizer::compile(tdbb, csb, rse, NULL));
 }
 
 bool WindowSourceNode::computable(CompilerScratch* csb, StreamType stream,
@@ -2457,10 +2370,10 @@ void WindowSourceNode::computeRseStreams(StreamList& streamList) const
 	}
 }
 
-void WindowSourceNode::findDependentFromStreams(const OptimizerRetrieval* optRet,
-	SortedStreamList* streamList)
+void WindowSourceNode::findDependentFromStreams(const CompilerScratch* csb,
+	StreamType currentStream, SortedStreamList* streamList)
 {
-	rse->findDependentFromStreams(optRet, streamList);
+	rse->findDependentFromStreams(csb, currentStream, streamList);
 }
 
 
@@ -2838,10 +2751,8 @@ RseNode* RseNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
 	RseNode* newSource = FB_NEW_POOL(*tdbb->getDefaultPool()) RseNode(*tdbb->getDefaultPool());
 
-	const NestConst<RecordSourceNode>* ptr = rse_relations.begin();
-
-	for (const NestConst<RecordSourceNode>* const end = rse_relations.end(); ptr != end; ++ptr)
-		newSource->rse_relations.add((*ptr)->copy(tdbb, copier));
+	for (const auto sub : rse_relations)
+		newSource->rse_relations.add(sub->copy(tdbb, copier));
 
 	newSource->flags = flags;
 	newSource->rse_jointype = rse_jointype;
@@ -2873,10 +2784,9 @@ RseNode* RseNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	bool topLevelRse = true;
 
-	for (ExprNode** node = csb->csb_current_nodes.begin();
-		 node != csb->csb_current_nodes.end(); ++node)
+	for (const auto node : csb->csb_current_nodes)
 	{
-		if (nodeAs<RseNode>(*node))
+		if (nodeAs<RseNode>(node))
 		{
 			topLevelRse = false;
 			break;
@@ -2897,14 +2807,13 @@ RseNode* RseNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	PlanNode* plan = rse_plan;
 
 	// zip thru RseNode expanding views and inner joins
-	NestConst<RecordSourceNode>* arg = rse_relations.begin();
-	for (const NestConst<RecordSourceNode>* const end = rse_relations.end(); arg != end; ++arg)
-		processSource(tdbb, csb, this, *arg, &boolean, stack);
+	for (auto sub : rse_relations)
+		processSource(tdbb, csb, this, sub, &boolean, stack);
 
 	// Now, rebuild the RseNode block.
 
 	rse_relations.resize(stack.getCount());
-	arg = rse_relations.end();
+	auto arg = rse_relations.end();
 
 	while (stack.hasData())
 		*--arg = stack.pop();
@@ -2981,9 +2890,8 @@ void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		!rse_sorted && !rse_projection &&
 		!rse_first && !rse_skip && !rse_plan)
 	{
-		NestConst<RecordSourceNode>* arg = rse_relations.begin();
-		for (const NestConst<RecordSourceNode>* const end = rse_relations.end(); arg != end; ++arg)
-			processSource(tdbb, csb, rse, *arg, boolean, stack);
+		for (auto sub : rse_relations)
+			processSource(tdbb, csb, rse, sub, boolean, stack);
 
 		// fold in the boolean for this inner join with the one for the parent
 
@@ -3026,10 +2934,8 @@ void RseNode::pass2Rse(thread_db* tdbb, CompilerScratch* csb)
 	if (rse_skip)
 	    ExprNode::doPass2(tdbb, csb, rse_skip.getAddress());
 
-	NestConst<RecordSourceNode>* ptr = rse_relations.begin();
-
-	for (const NestConst<RecordSourceNode>* const end = rse_relations.end(); ptr != end; ++ptr)
-		(*ptr)->pass2Rse(tdbb, csb);
+	for (auto sub : rse_relations)
+		sub->pass2Rse(tdbb, csb);
 
 	ExprNode::doPass2(tdbb, csb, rse_boolean.getAddress());
 	ExprNode::doPass2(tdbb, csb, rse_sorted.getAddress());
@@ -3052,12 +2958,8 @@ bool RseNode::containsStream(StreamType checkStream) const
 	// Look through all relation nodes in this RseNode to see
 	// if the field references this instance of the relation.
 
-	const NestConst<RecordSourceNode>* ptr = rse_relations.begin();
-
-	for (const NestConst<RecordSourceNode>* const end = rse_relations.end(); ptr != end; ++ptr)
+	for (const auto sub : rse_relations)
 	{
-		const RecordSourceNode* sub = *ptr;
-
 		if (sub->containsStream(checkStream))
 			return true;		// do not mark as variant
 	}
@@ -3065,15 +2967,13 @@ bool RseNode::containsStream(StreamType checkStream) const
 	return false;
 }
 
-RecordSource* RseNode::compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream)
+RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream)
 {
-	// for nodes which are not relations, generate an rsb to
+	// For nodes which are not relations, generate an rsb to
 	// represent that work has to be done to retrieve them;
 	// find all the substreams involved and compile them as well
 
-	computeRseStreams(opt->beds);
-	computeRseStreams(opt->localStreams);
-	computeDbKeyStreams(opt->keyStreams);
+	const auto csb = opt->getCompilerScratch();
 
 	BoolExprNodeStack conjunctStack;
 
@@ -3081,8 +2981,7 @@ RecordSource* RseNode::compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSub
 
 	// pass RseNode boolean only to inner substreams because join condition
 	// should never exclude records from outer substreams
-	if (opt->rse->rse_jointype == blr_inner ||
-		(opt->rse->rse_jointype == blr_left && innerSubStream))
+	if (opt->isInnerJoin() || (opt->isLeftJoin() && innerSubStream))
 	{
 		// AB: For an (X LEFT JOIN Y) mark the outer-streams (X) as
 		// active because the inner-streams (Y) are always "dependent"
@@ -3090,49 +2989,35 @@ RecordSource* RseNode::compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSub
 		//
 		// dimitr: the same for lateral derived tables in inner joins
 
-		if (opt->rse->rse_jointype == blr_left || isLateral)
-		{
-			for (StreamList::iterator i = opt->outerStreams.begin();
-				 i != opt->outerStreams.end();
-				 ++i)
-			{
-				opt->opt_csb->csb_rpt[*i].activate();
-			}
+		StreamStateHolder stateHolder(csb, opt->getOuterStreams());
 
-			if (opt->rse->rse_jointype == blr_left)
+		if (opt->isLeftJoin() || isLateral)
+		{
+			stateHolder.activate();
+
+			if (opt->isLeftJoin())
 			{
 				// Push all conjuncts except "missing" ones (e.g. IS NULL)
 
-				for (USHORT i = 0; i < opt->opt_base_missing_conjuncts; i++)
-					conjunctStack.push(opt->opt_conjuncts[i].opt_conjunct_node);
+				for (auto iter = opt->getConjuncts(true, false); iter.hasData(); ++iter)
+					conjunctStack.push(iter);
 			}
 		}
 		else
 		{
-			for (USHORT i = 0; i < opt->opt_conjuncts.getCount(); i++)
-				conjunctStack.push(opt->opt_conjuncts[i].opt_conjunct_node);
+			for (auto iter = opt->getConjuncts(); iter.hasData(); ++iter)
+				conjunctStack.push(iter);
 		}
 
-		RecordSource* const rsb = OPT_compile(tdbb, opt->opt_csb, this, &conjunctStack);
-
-		if (opt->rse->rse_jointype == blr_left || isLateral)
-		{
-			for (StreamList::iterator i = opt->outerStreams.begin();
-				i != opt->outerStreams.end(); ++i)
-			{
-				opt->opt_csb->csb_rpt[*i].deactivate();
-			}
-		}
-
-		return rsb;
+		return Optimizer::compile(tdbb, csb, this, &conjunctStack);
 	}
 
 	// Push only parent conjuncts to the outer stream
 
-	for (USHORT i = opt->opt_base_parent_conjuncts; i < opt->opt_conjuncts.getCount(); i++)
-		conjunctStack.push(opt->opt_conjuncts[i].opt_conjunct_node);
+	for (auto iter = opt->getConjuncts(false, true); iter.hasData(); ++iter)
+		conjunctStack.push(iter);
 
-	return OPT_compile(tdbb, opt->opt_csb, this, &conjunctStack);
+	return Optimizer::compile(tdbb, csb, this, &conjunctStack);
 }
 
 // Check that all streams in the RseNode have a plan specified for them.
@@ -3141,11 +3026,8 @@ void RseNode::planCheck(const CompilerScratch* csb) const
 {
 	// if any streams are not marked with a plan, give an error
 
-	const NestConst<RecordSourceNode>* ptr = rse_relations.begin();
-	for (const NestConst<RecordSourceNode>* const end = rse_relations.end(); ptr != end; ++ptr)
+	for (const auto node : rse_relations)
 	{
-		const RecordSourceNode* node = *ptr;
-
 		if (nodeIs<RelationSourceNode>(node))
 		{
 			const StreamType stream = node->getStream();
@@ -3156,8 +3038,8 @@ void RseNode::planCheck(const CompilerScratch* csb) const
 					Arg::Str(csb->csb_rpt[stream].csb_relation->rel_name));
 			}
 		}
-		else if (nodeIs<RseNode>(node))
-			static_cast<const RseNode*>(node)->planCheck(csb);
+		else if (const auto rse = nodeAs<RseNode>(node))
+			rse->planCheck(csb);
 	}
 }
 
@@ -3168,12 +3050,8 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 {
 	if (plan->type == PlanNode::TYPE_JOIN)
 	{
-		for (NestConst<PlanNode>* ptr = plan->subNodes.begin(), *end = plan->subNodes.end();
-			 ptr != end;
-			 ++ptr)
-		{
-			planSet(csb, *ptr);
-		}
+		for (auto planNode : plan->subNodes)
+			planSet(csb, planNode);
 	}
 
 	if (plan->type != PlanNode::TYPE_RETRIEVE)
@@ -3353,18 +3231,14 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 
 void RseNode::computeDbKeyStreams(StreamList& streamList) const
 {
-	const NestConst<RecordSourceNode>* ptr = rse_relations.begin();
-
-	for (const NestConst<RecordSourceNode>* const end = rse_relations.end(); ptr != end; ++ptr)
-		(*ptr)->computeDbKeyStreams(streamList);
+	for (const auto sub : rse_relations)
+		sub->computeDbKeyStreams(streamList);
 }
 
 void RseNode::computeRseStreams(StreamList& streamList) const
 {
-	const NestConst<RecordSourceNode>* ptr = rse_relations.begin();
-
-	for (const NestConst<RecordSourceNode>* const end = rse_relations.end(); ptr != end; ++ptr)
-		(*ptr)->computeRseStreams(streamList);
+	for (const auto sub : rse_relations)
+		sub->computeRseStreams(streamList);
 }
 
 bool RseNode::computable(CompilerScratch* csb, StreamType stream,
@@ -3376,11 +3250,11 @@ bool RseNode::computable(CompilerScratch* csb, StreamType stream,
 	if (rse_skip && !rse_skip->computable(csb, stream, allowOnlyCurrentStream))
 		return false;
 
-	const NestConst<RecordSourceNode>* const end = rse_relations.end();
-	NestConst<RecordSourceNode>* ptr;
-
 	// Set sub-streams of rse active
-	AutoActivateResetStreams activator(csb, this);
+	StreamList streams;
+	computeRseStreams(streams);
+	StreamStateHolder streamHolder(csb, streams);
+	streamHolder.activate(true);
 
 	// Check sub-stream
 	if ((rse_boolean && !rse_boolean->computable(csb, stream, allowOnlyCurrentStream)) ||
@@ -3390,9 +3264,9 @@ bool RseNode::computable(CompilerScratch* csb, StreamType stream,
 		return false;
 	}
 
-	for (ptr = rse_relations.begin(); ptr != end; ++ptr)
+	for (auto sub : rse_relations)
 	{
-		if (!(*ptr)->computable(csb, stream, allowOnlyCurrentStream, NULL))
+		if (!sub->computable(csb, stream, allowOnlyCurrentStream, NULL))
 			return false;
 	}
 
@@ -3403,29 +3277,26 @@ bool RseNode::computable(CompilerScratch* csb, StreamType stream,
 	return true;
 }
 
-void RseNode::findDependentFromStreams(const OptimizerRetrieval* optRet,
-	SortedStreamList* streamList)
+void RseNode::findDependentFromStreams(const CompilerScratch* csb,
+	StreamType currentStream, SortedStreamList* streamList)
 {
 	if (rse_first)
-		rse_first->findDependentFromStreams(optRet, streamList);
+		rse_first->findDependentFromStreams(csb, currentStream, streamList);
 
 	if (rse_skip)
-		rse_skip->findDependentFromStreams(optRet, streamList);
+		rse_skip->findDependentFromStreams(csb, currentStream, streamList);
 
 	if (rse_boolean)
-		rse_boolean->findDependentFromStreams(optRet, streamList);
+		rse_boolean->findDependentFromStreams(csb, currentStream, streamList);
 
 	if (rse_sorted)
-		rse_sorted->findDependentFromStreams(optRet, streamList);
+		rse_sorted->findDependentFromStreams(csb, currentStream, streamList);
 
 	if (rse_projection)
-		rse_projection->findDependentFromStreams(optRet, streamList);
+		rse_projection->findDependentFromStreams(csb, currentStream, streamList);
 
-	NestConst<RecordSourceNode>* ptr;
-	const NestConst<RecordSourceNode>* end;
-
-	for (ptr = rse_relations.begin(), end = rse_relations.end(); ptr != end; ++ptr)
-		(*ptr)->findDependentFromStreams(optRet, streamList);
+	for (auto sub : rse_relations)
+		sub->findDependentFromStreams(csb, currentStream, streamList);
 }
 
 void RseNode::collectStreams(SortedStreamList& streamList) const
@@ -3444,11 +3315,8 @@ void RseNode::collectStreams(SortedStreamList& streamList) const
 	// rse_sorted->collectStreams(streamList);
 	// rse_projection->collectStreams(streamList);
 
-	const NestConst<RecordSourceNode>* ptr;
-	const NestConst<RecordSourceNode>* end;
-
-	for (ptr = rse_relations.begin(), end = rse_relations.end(); ptr != end; ++ptr)
-		(*ptr)->collectStreams(streamList);
+	for (const auto sub : rse_relations)
+		sub->collectStreams(streamList);
 }
 
 

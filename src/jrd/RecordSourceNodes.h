@@ -69,7 +69,8 @@ public:
 	SortNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 	SortNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	bool computable(CompilerScratch* csb, StreamType stream, bool allowOnlyCurrentStream);
-	void findDependentFromStreams(const OptimizerRetrieval* optRet, SortedStreamList* streamList);
+	void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
 
 	NullsPlacement getEffectiveNullOrder(unsigned index) const
 	{
@@ -339,12 +340,12 @@ public:
 		return true;
 	}
 
-	void findDependentFromStreams(const OptimizerRetrieval* /*optRet*/,
-		SortedStreamList* /*streamList*/) override
+	void findDependentFromStreams(const CompilerScratch* /*csb*/,
+		StreamType /*currentStream*/, SortedStreamList* /*streamList*/) override
 	{
 	}
 
-	RecordSource* compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream) override;
+	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) override;
 
 public:
 	Firebird::string alias;
@@ -409,12 +410,12 @@ public:
 		return true;
 	}
 
-	virtual void findDependentFromStreams(const OptimizerRetrieval* /*optRet*/,
-		SortedStreamList* /*streamList*/)
+	virtual void findDependentFromStreams(const CompilerScratch* /*csb*/,
+		StreamType /*currentStream*/, SortedStreamList* /*streamList*/)
 	{
 	}
 
-	virtual RecordSource* compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream);
+	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream);
 
 public:
 	MetaName dsqlName;
@@ -481,15 +482,15 @@ public:
 
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value);
-	virtual void findDependentFromStreams(const OptimizerRetrieval* optRet,
-		SortedStreamList* streamList);
+	virtual void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
 
 	virtual void collectStreams(SortedStreamList& streamList) const;
 
-	virtual RecordSource* compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream);
+	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream);
 
 private:
-	ProcedureScan* generate(thread_db* tdbb, OptimizerBlk* opt);
+	ProcedureScan* generate(thread_db* tdbb, Optimizer* opt);
 
 public:
 	QualifiedName dsqlName;
@@ -565,15 +566,15 @@ public:
 
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value);
-	virtual void findDependentFromStreams(const OptimizerRetrieval* optRet,
-		SortedStreamList* streamList);
+	virtual void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
 
-	virtual RecordSource* compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream);
+	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream);
 
 private:
 	void genMap(DsqlCompilerScratch* dsqlScratch, UCHAR blrVerb, dsql_map* map);
 
-	RecordSource* generate(thread_db* tdbb, OptimizerBlk* opt, BoolExprNodeStack* parentStack,
+	RecordSource* generate(thread_db* tdbb, Optimizer* opt, BoolExprNodeStack* parentStack,
 		StreamType shellStream);
 
 public:
@@ -631,13 +632,13 @@ public:
 	virtual void computeDbKeyStreams(StreamList& streamList) const;
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value);
-	virtual void findDependentFromStreams(const OptimizerRetrieval* optRet,
-		SortedStreamList* streamList);
+	virtual void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
 
-	virtual RecordSource* compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream);
+	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream);
 
 private:
-	RecordSource* generate(thread_db* tdbb, OptimizerBlk* opt, const StreamType* streams,
+	RecordSource* generate(thread_db* tdbb, Optimizer* opt, const StreamType* streams,
 		FB_SIZE_T nstreams, BoolExprNodeStack* parentStack, StreamType shellStream);
 
 public:
@@ -713,9 +714,9 @@ public:
 
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value);
-	virtual void findDependentFromStreams(const OptimizerRetrieval* optRet,
-		SortedStreamList* streamList);
-	virtual RecordSource* compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream);
+	virtual void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
+	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream);
 
 private:
 	NestConst<RseNode> rse;
@@ -833,12 +834,12 @@ public:
 	virtual void computeRseStreams(StreamList& streamList) const;
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value);
-	virtual void findDependentFromStreams(const OptimizerRetrieval* optRet,
-		SortedStreamList* streamList);
+	virtual void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
 
 	virtual void collectStreams(SortedStreamList& streamList) const;
 
-	virtual RecordSource* compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream);
+	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream);
 
 private:
 	void planCheck(const CompilerScratch* csb) const;
@@ -928,7 +929,7 @@ public:
 		fb_assert(false);
 	}
 
-	virtual RecordSource* compile(thread_db* /*tdbb*/, OptimizerBlk* /*opt*/, bool /*innerSubStream*/)
+	virtual RecordSource* compile(thread_db* /*tdbb*/, Optimizer* /*opt*/, bool /*innerSubStream*/)
 	{
 		fb_assert(false);
 		return NULL;

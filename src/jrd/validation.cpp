@@ -550,7 +550,6 @@ VI. ADDITIONAL NOTES
 #include "../jrd/btr.h"
 #include "../jrd/btn.h"
 #include "../jrd/cch.h"
-#include "../jrd/rse.h"
 #include "../jrd/tra.h"
 #include "../jrd/svc.h"
 #include "../jrd/btr_proto.h"

@@ -41,7 +41,7 @@ class ClumpletReader;
 
 namespace Jrd {
 
-class dsql_req;
+class DsqlDmlRequest;
 class dsql_msg;
 class thread_db;
 class JBatch;
@@ -50,7 +50,7 @@ class Attachment;
 class DsqlBatch
 {
 public:
-	DsqlBatch(dsql_req* req, const dsql_msg* message, Firebird::IMessageMetadata* inMetadata,
+	DsqlBatch(DsqlDmlRequest* req, const dsql_msg* message, Firebird::IMessageMetadata* inMetadata,
 		Firebird::ClumpletReader& pb);
 	~DsqlBatch();
 
@@ -61,7 +61,7 @@ public:
 	static const ULONG SIZEOF_BLOB_HEAD = sizeof(ISC_QUAD) + 2 * sizeof(ULONG);
 	static const unsigned BLOB_STREAM_ALIGN = 4;
 
-	static DsqlBatch* open(thread_db* tdbb, dsql_req* req, Firebird::IMessageMetadata* inMetadata,
+	static DsqlBatch* open(thread_db* tdbb, DsqlDmlRequest* req, Firebird::IMessageMetadata* inMetadata,
 		unsigned parLength, const UCHAR* par);
 
 	Attachment* getAttachment() const;
@@ -101,7 +101,7 @@ private:
 			m_flags &= ~(1 << bit);
 	}
 
-	dsql_req* const m_request;
+	DsqlDmlRequest* const m_request;
 	JBatch* m_batch;
 	Firebird::IMessageMetadata* m_meta;
 

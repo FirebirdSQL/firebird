@@ -392,7 +392,7 @@ public:
 		m_start_clock = fb_utils::query_performance_counter();
 	}
 
-	void finish(jrd_req* request, ntrace_result_t result)
+	void finish(JrdStatement* statement, ntrace_result_t result)
 	{
 		if (!m_need_trace)
 			return;
@@ -406,9 +406,9 @@ public:
 		TraceConnectionImpl conn(m_tdbb->getAttachment());
 		TraceTransactionImpl tran(m_tdbb->getTransaction());
 
-		if (request)
+		if (statement)
 		{
-			TraceBLRStatementImpl stmt(request, NULL);
+			TraceBLRStatementImpl stmt(statement, NULL);
 			trace_mgr->event_blr_compile(&conn, m_tdbb->getTransaction() ? &tran : NULL, &stmt,
 				m_start_clock, result);
 		}
@@ -474,7 +474,7 @@ public:
 
 		TraceConnectionImpl conn(m_tdbb->getAttachment());
 		TraceTransactionImpl tran(m_tdbb->getTransaction());
-		TraceBLRStatementImpl stmt(m_request, stats.getPerf());
+		TraceBLRStatementImpl stmt(m_request->getStatement(), stats.getPerf());
 
 		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
 		trace_mgr->event_blr_execute(&conn, &tran, &stmt, result);

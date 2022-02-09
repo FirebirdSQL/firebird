@@ -561,6 +561,7 @@ RELATION(nam_mon_statements, rel_mon_statements, ODS_11_1, rel_virtual)
 	FIELD(f_mon_stmt_expl_plan, nam_mon_expl_plan, fld_source, 0, ODS_11_1)
 	FIELD(f_mon_stmt_timeout, nam_stmt_timeout, fld_stmt_timeout, 0, ODS_13_0)
 	FIELD(f_mon_stmt_timer, nam_stmt_timer, fld_stmt_timer, 0, ODS_13_0)
+	FIELD(f_mon_stmt_cmp_stmt_id, nam_mon_cmp_stmt_id, fld_stmt_id, 0, ODS_13_1)
 END_RELATION
 
 // Relation 37 (MON$CALL_STACK)
@@ -575,6 +576,7 @@ RELATION(nam_mon_calls, rel_mon_calls, ODS_11_1, rel_virtual)
 	FIELD(f_mon_call_src_column, nam_mon_src_column, fld_src_info, 0, ODS_11_1)
 	FIELD(f_mon_call_stat_id, nam_mon_stat_id, fld_stat_id, 0, ODS_11_1)
 	FIELD(f_mon_call_pkg_name, nam_mon_pkg_name, fld_pkg_name, 0, ODS_12_0)
+	FIELD(f_mon_call_cmp_stmt_id, nam_mon_cmp_stmt_id, fld_stmt_id, 0, ODS_13_1)
 END_RELATION
 
 // Relation 38 (MON$IO_STATS)
@@ -740,4 +742,14 @@ END_RELATION
 RELATION(nam_keywords, rel_keywords, ODS_13_1, rel_virtual)
 	FIELD(f_keyword_name, nam_keyword_name, fld_keyword_name, 0, ODS_13_1)
 	FIELD(f_keyword_reserved, nam_keyword_reserved, fld_keyword_reserved, 0, ODS_13_1)
+END_RELATION
+
+// Relation 55 (MON$COMPILED_STATEMENTS)
+RELATION(nam_mon_compiled_statements, rel_mon_compiled_statements, ODS_13_1, rel_virtual)
+	FIELD(f_mon_cmp_stmt_id, nam_mon_cmp_stmt_id, fld_stmt_id, 0, ODS_13_1)
+	FIELD(f_mon_cmp_stmt_sql_text, nam_mon_sql_text, fld_source, 0, ODS_13_1)
+	FIELD(f_mon_cmp_stmt_expl_plan, nam_mon_expl_plan, fld_source, 0, ODS_13_1)
+	FIELD(f_mon_cmp_stmt_name, nam_mon_obj_name, fld_gnr_name, 0, ODS_13_1)
+	FIELD(f_mon_cmp_stmt_type, nam_mon_obj_type, fld_obj_type, 0, ODS_13_1)
+	FIELD(f_mon_cmp_stmt_pkg_name, nam_mon_pkg_name, fld_pkg_name, 0, ODS_13_1)
 END_RELATION

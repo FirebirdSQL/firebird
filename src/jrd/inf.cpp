@@ -54,7 +54,6 @@
 #include "../jrd/cvt_proto.h"
 #include "../jrd/inf_proto.h"
 #include "../common/isc_proto.h"
-#include "../jrd/opt_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/os/pio_proto.h"
 #include "../jrd/tra_proto.h"

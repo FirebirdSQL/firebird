@@ -23,7 +23,6 @@
 #include "firebird.h"
 #include "../jrd/jrd.h"
 #include "../jrd/req.h"
-#include "../jrd/rse.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/vio_proto.h"

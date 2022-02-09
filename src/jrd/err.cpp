@@ -37,7 +37,6 @@
 #include "../jrd/ods.h"
 #include "../jrd/btr.h"
 #include "../jrd/req.h"
-#include "../jrd/rse.h"
 #include "../jrd/tra.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/met_proto.h"

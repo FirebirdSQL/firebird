@@ -63,7 +63,6 @@
 #include "../jrd/exe.h"
 #include "../jrd/extds/ExtDS.h"
 #include "../jrd/val.h"
-#include "../jrd/rse.h"
 #include "../jrd/intl.h"
 #include "../jrd/sbm.h"
 #include "../jrd/svc.h"
@@ -94,7 +93,6 @@
 #include "../jrd/lck_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
-#include "../jrd/opt_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/par_proto.h"
 #include "../jrd/os/pio_proto.h"
@@ -345,7 +343,7 @@ JEvents::JEvents(int aId, StableAttachmentPart* sa, Firebird::IEventCallback* aC
 {
 }
 
-JStatement::JStatement(dsql_req* handle, StableAttachmentPart* sa, Firebird::Array<UCHAR>& meta)
+JStatement::JStatement(DsqlRequest* handle, StableAttachmentPart* sa, Firebird::Array<UCHAR>& meta)
 	: statement(handle), sAtt(sa), metadata(getPool(), this, sAtt)
 {
 	metadata.parse(meta.getCount(), meta.begin());
@@ -657,7 +655,7 @@ namespace
 		validateHandle(tdbb, statement->requests[0]->req_attachment);
 	}
 
-	inline void validateHandle(thread_db* tdbb, dsql_req* const statement)
+	inline void validateHandle(thread_db* tdbb, DsqlRequest* const statement)
 	{
 		if (!statement)
 			status_exception::raise(Arg::Gds(isc_bad_req_handle));
@@ -2693,11 +2691,14 @@ JRequest* JAttachment::compileRequest(CheckStatusWrapper* user_status,
 		TraceBlrCompile trace(tdbb, blr_length, blr);
 		try
 		{
-			jrd_req* request = NULL;
-			JRD_compile(tdbb, getHandle(), &request, blr_length, blr, RefStrPtr(), 0, NULL, false);
-			stmt = request->getStatement();
+			stmt = CMP_compile(tdbb, blr, blr_length, false, 0, nullptr);
 
-			trace.finish(request, ITracePlugin::RESULT_SUCCESS);
+			const auto attachment = tdbb->getAttachment();
+			const auto rootRequest = stmt->getRequest(tdbb, 0);
+			rootRequest->setAttachment(attachment);
+			attachment->att_requests.add(rootRequest);
+
+			trace.finish(stmt, ITracePlugin::RESULT_SUCCESS);
 		}
 		catch (const Exception& ex)
 		{
@@ -4717,7 +4718,6 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 
 				for (FB_SIZE_T i = 0; i < csb->csb_rpt.getCount(); i++)
 				{
-
 					const MessageNode* node = csb->csb_rpt[i].csb_message;
 					if (node)
 					{
@@ -5066,7 +5066,7 @@ JResultSet* JStatement::openCursor(CheckStatusWrapper* user_status, ITransaction
 				}
 			}
 
-			DsqlCursor* const cursor = DSQL_open(tdbb, &tra, getHandle(),
+			const auto cursor = getHandle()->openCursor(tdbb, &tra,
 				inMetadata, static_cast<UCHAR*>(inBuffer), outMetadata, flags);
 
 			rs = FB_NEW JResultSet(cursor, this);
@@ -5542,7 +5542,7 @@ JStatement* JAttachment::prepare(CheckStatusWrapper* user_status, ITransaction* 
 			validateHandle(tdbb, tra);
 
 		check_database(tdbb);
-		dsql_req* statement = NULL;
+		DsqlRequest* statement = NULL;
 
 		try
 		{
@@ -5814,7 +5814,7 @@ void JResultSet::setDelayedOutputFormat(CheckStatusWrapper* user_status, Firebir
 
 		try
 		{
-			dsql_req* req = statement->getHandle();
+			DsqlRequest* req = statement->getHandle();
 			fb_assert(req);
 			req->setDelayedFormat(tdbb, outMetadata);
 		}
@@ -5874,7 +5874,7 @@ unsigned int JStatement::getTimeout(CheckStatusWrapper* user_status)
 
 		try
 		{
-			Jrd::dsql_req* req = getHandle();
+			Jrd::DsqlRequest* req = getHandle();
 			return req->getTimeout();
 		}
 		catch (const Exception& ex)
@@ -5904,7 +5904,7 @@ void JStatement::setTimeout(CheckStatusWrapper* user_status, unsigned int timeOu
 
 		try
 		{
-			Jrd::dsql_req* req = getHandle();
+			Jrd::DsqlRequest* req = getHandle();
 			req->setTimeout(timeOut);
 		}
 		catch (const Exception& ex)
@@ -5946,11 +5946,11 @@ JBatch* JStatement::createBatch(Firebird::CheckStatusWrapper* status, Firebird::
 				}
 			}
 
-			DsqlBatch* const b = DsqlBatch::open(tdbb, getHandle(), inMetadata, parLength, par);
+			const auto dsqlBatch = getHandle()->openBatch(tdbb, inMetadata, parLength, par);
 
-			batch = FB_NEW JBatch(b, this, inMetadata);
+			batch = FB_NEW JBatch(dsqlBatch, this, inMetadata);
 			batch->addRef();
-			b->setInterfacePtr(batch);
+			dsqlBatch->setInterfacePtr(batch);
 			tdbb->getAttachment()->registerBatch(batch);
 		}
 		catch (const Exception& ex)
@@ -9364,47 +9364,6 @@ void JRD_unwind_request(thread_db* tdbb, jrd_req* request)
  **************************************/
 	// Unwind request. This just tweaks some bits.
 	EXE_unwind(tdbb, request);
-}
-
-
-void JRD_compile(thread_db* tdbb,
-				 Jrd::Attachment* attachment,
-				 jrd_req** req_handle,
-				 ULONG blr_length,
-				 const UCHAR* blr,
-				 RefStrPtr ref_str,
-				 ULONG dbginfo_length,
-				 const UCHAR* dbginfo,
-				 bool isInternalRequest)
-{
-/**************************************
- *
- *	J R D _ c o m p i l e
- *
- **************************************
- *
- * Functional description
- *	Compile a request passing the SQL text and debug information.
- *
- **************************************/
-	if (*req_handle)
-		status_exception::raise(Arg::Gds(isc_bad_req_handle));
-
-	jrd_req* request = CMP_compile2(tdbb, blr, blr_length, isInternalRequest, dbginfo_length, dbginfo);
-	request->req_attachment = attachment;
-	attachment->att_requests.add(request);
-
-	JrdStatement* statement = request->getStatement();
-
-	if (ref_str)
-		statement->sqlText = ref_str;
-
-	fb_assert(statement->blr.isEmpty());
-
-	if (attachment->getDebugOptions().getDsqlKeepBlr())
-		statement->blr.insert(0, blr, blr_length);
-
-	*req_handle = request;
 }
 
 

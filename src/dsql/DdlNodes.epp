@@ -2347,7 +2347,7 @@ void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* 
 
 		stmtNode->genBlr(dsqlScratch);
 
-		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_DDL);
+		dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_DDL);
 		dsqlScratch->appendUChar(blr_end);
 		dsqlScratch->genReturn(false);
 		dsqlScratch->appendUChar(blr_end);
@@ -2872,7 +2872,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 	AutoCacheRequest requestHandle(tdbb, drq_m_prcs2, DYN_REQUESTS);
 	bool modified = false;
 
-	DsqlCompiledStatement* statement = dsqlScratch->getStatement();
+	DsqlStatement* statement = dsqlScratch->getStatement();
 
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 		P IN RDB$PROCEDURES
@@ -2966,7 +2966,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 
 					P.RDB$PROCEDURE_TYPE.NULL = FALSE;
 					P.RDB$PROCEDURE_TYPE = (USHORT)
-						(statement->getFlags() & DsqlCompiledStatement::FLAG_SELECTABLE ?
+						(statement->getFlags() & DsqlStatement::FLAG_SELECTABLE ?
 							prc_selectable : prc_executable);
 				}
 			}
@@ -3242,7 +3242,7 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 
 	stmtNode->genBlr(dsqlScratch);
 
-	dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_DDL);
+	dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_DDL);
 	dsqlScratch->appendUChar(blr_end);
 	dsqlScratch->genReturn(true);
 	dsqlScratch->appendUChar(blr_end);
@@ -3773,7 +3773,7 @@ void CreateAlterTriggerNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* d
 		// The statement type may have been set incorrectly when parsing
 		// the trigger actions, so reset it to reflect the fact that this
 		// is a data definition statement; also reset the ddl node.
-		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_DDL);
+		dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_DDL);
 	}
 
 	invalid = false;
@@ -10735,7 +10735,7 @@ void MappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd
 		(Arg::Gds(isc_adm_task_denied) << Arg::Gds(isc_miss_prvlg) << "CHANGE_MAPPING_RULES").raise();
 
 	if (from)
-		fromUtf8 = from->toUtf8(dsqlScratch);
+		fromUtf8 = from->toUtf8(transaction);
 
 	if (global)
 	{

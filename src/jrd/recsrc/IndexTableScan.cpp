@@ -22,7 +22,6 @@
 #include "../jrd/exe.h"
 #include "../jrd/btr.h"
 #include "../jrd/req.h"
-#include "../jrd/rse.h"
 #include "../jrd/btr_proto.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/cmp_proto.h"

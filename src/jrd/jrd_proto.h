@@ -40,7 +40,7 @@ namespace Jrd {
 	class Service;
 	class thread_db;
 	struct teb;
-	class dsql_req;
+	class DsqlRequest;
 	class MetaName;
 }
 
@@ -71,9 +71,6 @@ void JRD_start_and_send(Jrd::thread_db* tdbb, Jrd::jrd_req* request, Jrd::jrd_tr
 void JRD_start_transaction(Jrd::thread_db* tdbb, Jrd::jrd_tra** transaction,
 	Jrd::Attachment* attachment, unsigned int tpb_length, const UCHAR* tpb);
 void JRD_unwind_request(Jrd::thread_db* tdbb, Jrd::jrd_req* request);
-void JRD_compile(Jrd::thread_db* tdbb, Jrd::Attachment* attachment, Jrd::jrd_req** req_handle,
-	ULONG blr_length, const UCHAR* blr, Firebird::RefStrPtr,
-	ULONG dbginfo_length, const UCHAR* dbginfo, bool isInternalRequest);
 bool JRD_verify_database_access(const Firebird::PathName&);
 void JRD_shutdown_attachment(Jrd::Attachment* attachment);
 void JRD_shutdown_attachments(Jrd::Database* dbb);

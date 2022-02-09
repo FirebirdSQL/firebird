@@ -77,7 +77,7 @@ AllObjects += $(Chacha_Objects)
 
 # Engine
 Engine_Objects:= $(call dirObjects,jrd) $(call dirObjects,dsql) $(call dirObjects,jrd/extds) \
-				 $(call dirObjects,jrd/recsrc) $(call dirObjects,jrd/replication) $(call dirObjects,jrd/trace) \
+				 $(call dirObjects,jrd/optimizer) $(call dirObjects,jrd/recsrc) $(call dirObjects,jrd/replication) $(call dirObjects,jrd/trace) \
 				 $(call makeObjects,lock,lock.cpp)
 
 AllObjects += $(Engine_Objects)

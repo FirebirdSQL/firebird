@@ -220,22 +220,22 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 
 	message->msg_length = offset;
 
-	dsqlScratch->ports.add(message);
+	dsqlScratch->getStatement()->getPorts().add(message);
 }
 
 
 // Generate complete blr for a dsqlScratch.
-void GEN_request(DsqlCompilerScratch* scratch, DmlNode* node)
+void GEN_statement(DsqlCompilerScratch* scratch, DmlNode* node)
 {
-	DsqlCompiledStatement* statement = scratch->getStatement();
+	DsqlStatement* statement = scratch->getStatement();
 
 	if (statement->getBlrVersion() == 4)
 		scratch->appendUChar(blr_version4);
 	else
 		scratch->appendUChar(blr_version5);
 
-	const bool block = statement->getType() == DsqlCompiledStatement::TYPE_EXEC_BLOCK ||
-		statement->getType() == DsqlCompiledStatement::TYPE_SELECT_BLOCK;
+	const bool block = statement->getType() == DsqlStatement::TYPE_EXEC_BLOCK ||
+		statement->getType() == DsqlStatement::TYPE_SELECT_BLOCK;
 
 	// To parse sub-routines messages, they must not have that begin...end pair.
 	// And since it appears to be unnecessary for execute block too, do not generate them.
@@ -247,14 +247,14 @@ void GEN_request(DsqlCompilerScratch* scratch, DmlNode* node)
 
 	switch (statement->getType())
 	{
-	case DsqlCompiledStatement::TYPE_SELECT:
-	case DsqlCompiledStatement::TYPE_SELECT_UPD:
-	case DsqlCompiledStatement::TYPE_EXEC_BLOCK:
-	case DsqlCompiledStatement::TYPE_SELECT_BLOCK:
+	case DsqlStatement::TYPE_SELECT:
+	case DsqlStatement::TYPE_SELECT_UPD:
+	case DsqlStatement::TYPE_EXEC_BLOCK:
+	case DsqlStatement::TYPE_SELECT_BLOCK:
 		node->genBlr(scratch);
 		break;
 
-	///case DsqlCompiledStatement::TYPE_RETURNING_CURSOR:
+	///case DsqlStatement::TYPE_RETURNING_CURSOR:
 	default:
 		{
 			dsql_msg* message = statement->getSendMsg();

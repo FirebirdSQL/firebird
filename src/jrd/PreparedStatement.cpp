@@ -325,7 +325,7 @@ void PreparedStatement::init(thread_db* tdbb, Attachment* attachment, jrd_tra* t
 		request = DSQL_prepare(tdbb, attachment, transaction, text.length(), text.c_str(), dialect, 0,
 			NULL, NULL, isInternalRequest);
 
-		const DsqlCompiledStatement* statement = request->getStatement();
+		const DsqlStatement* statement = request->getStatement();
 
 		if (statement->getSendMsg())
 			parseDsqlMessage(statement->getSendMsg(), inValues, inMetadata, inMessage);
@@ -348,7 +348,7 @@ void PreparedStatement::setDesc(thread_db* tdbb, unsigned param, const dsc& valu
 {
 	fb_assert(param > 0);
 
-	jrd_req* jrdRequest = getRequest()->req_request;
+	jrd_req* jrdRequest = getRequest()->getJrdRequest();
 
 	// Setup tdbb info necessary for blobs.
 	AutoSetRestore2<jrd_req*, thread_db> autoRequest(
@@ -382,7 +382,7 @@ void PreparedStatement::open(thread_db* tdbb, jrd_tra* transaction)
 	if (builder)
 		builder->moveToStatement(tdbb, this);
 
-	DSQL_open(tdbb, &transaction, request, inMetadata, inMessage.begin(), outMetadata, 0);
+	request->openCursor(tdbb, &transaction, inMetadata, inMessage.begin(), outMetadata, 0);
 }
 
 
@@ -400,7 +400,7 @@ ResultSet* PreparedStatement::executeQuery(thread_db* tdbb, jrd_tra* transaction
 unsigned PreparedStatement::executeUpdate(thread_db* tdbb, jrd_tra* transaction)
 {
 	execute(tdbb, transaction);
-	return getRequest()->req_request->req_records_updated;
+	return getRequest()->getJrdRequest()->req_records_updated;
 }
 
 

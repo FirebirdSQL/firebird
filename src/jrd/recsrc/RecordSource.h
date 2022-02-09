@@ -28,7 +28,7 @@
 #include "../common/classes/NestConst.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/req.h"
-#include "../jrd/rse.h"
+#include "../jrd/RecordBuffer.h"
 #include "firebird/impl/inf_pub.h"
 #include "../jrd/evl_proto.h"
 
@@ -42,7 +42,6 @@ namespace Jrd
 	class DeclareLocalTableNode;
 	class Sort;
 	class CompilerScratch;
-	class RecordBuffer;
 	class BtrPageGCLock;
 	struct index_desc;
 	struct record_param;
@@ -880,7 +879,7 @@ namespace Jrd
 		};
 
 	public:
-		WindowedStream(thread_db* tdbb, CompilerScratch* csb,
+		WindowedStream(thread_db* tdbb, Optimizer* opt,
 			Firebird::ObjectsArray<WindowSourceNode::Window>& windows, RecordSource* next);
 
 		void open(thread_db* tdbb) const override;

@@ -35,7 +35,7 @@
 #include "../jrd/SysFunction.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/recsrc/Cursor.h"
-#include "../jrd/Optimizer.h"
+#include "../jrd/optimizer/Optimizer.h"
 #include "../jrd/recsrc/Cursor.h"
 #include "../jrd/blb_proto.h"
 #include "../jrd/cmp_proto.h"
@@ -344,15 +344,16 @@ bool ExprNode::computable(CompilerScratch* csb, StreamType stream,
 	return true;
 }
 
-void ExprNode::findDependentFromStreams(const OptimizerRetrieval* optRet, SortedStreamList* streamList)
+void ExprNode::findDependentFromStreams(const CompilerScratch* csb,
+	StreamType currentStream, SortedStreamList* streamList)
 {
-	NodeRefsHolder holder(optRet->getPool());
+	NodeRefsHolder holder(csb->csb_pool);
 	getChildren(holder, false);
 
 	for (auto i : holder.refs)
 	{
 		if (*i)
-			(*i)->findDependentFromStreams(optRet, streamList);
+			(*i)->findDependentFromStreams(csb, currentStream, streamList);
 	}
 }
 
@@ -5035,15 +5036,15 @@ bool DerivedExprNode::computable(CompilerScratch* csb, StreamType stream,
 	return true;
 }
 
-void DerivedExprNode::findDependentFromStreams(const OptimizerRetrieval* optRet,
-	SortedStreamList* streamList)
+void DerivedExprNode::findDependentFromStreams(const CompilerScratch* csb,
+	StreamType currentStream, SortedStreamList* streamList)
 {
-	arg->findDependentFromStreams(optRet, streamList);
+	arg->findDependentFromStreams(csb, currentStream, streamList);
 
 	for (const auto derivedStream : internalStreamList)
 	{
-		if (derivedStream != optRet->stream &&
-			(optRet->csb->csb_rpt[derivedStream].csb_flags & csb_active))
+		if (derivedStream != currentStream &&
+			(csb->csb_rpt[derivedStream].csb_flags & csb_active))
 		{
 			if (!streamList->exist(derivedStream))
 				streamList->add(derivedStream);
@@ -6479,13 +6480,14 @@ bool FieldNode::computable(CompilerScratch* csb, StreamType stream,
 	return csb->csb_rpt[fieldStream].csb_flags & csb_active;
 }
 
-void FieldNode::findDependentFromStreams(const OptimizerRetrieval* optRet, SortedStreamList* streamList)
+void FieldNode::findDependentFromStreams(const CompilerScratch* csb,
+	StreamType currentStream, SortedStreamList* streamList)
 {
-	// dimitr: OLD/NEW contexts shouldn't create any stream dependencies.
+	// dimitr: OLD/NEW contexts shouldn't create any stream dependencies
 
-	if (fieldStream != optRet->stream &&
-		(optRet->csb->csb_rpt[fieldStream].csb_flags & csb_active) &&
-		!(optRet->csb->csb_rpt[fieldStream].csb_flags & csb_trigger))
+	if (fieldStream != currentStream &&
+		(csb->csb_rpt[fieldStream].csb_flags & csb_active) &&
+		!(csb->csb_rpt[fieldStream].csb_flags & csb_trigger))
 	{
 		if (!streamList->exist(fieldStream))
 			streamList->add(fieldStream);
@@ -10066,9 +10068,10 @@ bool RecordKeyNode::computable(CompilerScratch* csb, StreamType stream,
 	return csb->csb_rpt[recStream].csb_flags & csb_active;
 }
 
-void RecordKeyNode::findDependentFromStreams(const OptimizerRetrieval* optRet, SortedStreamList* streamList)
+void RecordKeyNode::findDependentFromStreams(const CompilerScratch* csb,
+	StreamType currentStream, SortedStreamList* streamList)
 {
-	if (recStream != optRet->stream && (optRet->csb->csb_rpt[recStream].csb_flags & csb_active))
+	if (recStream != currentStream && (csb->csb_rpt[recStream].csb_flags & csb_active))
 	{
 		if (!streamList->exist(recStream))
 			streamList->add(recStream);
@@ -11153,17 +11156,17 @@ bool SubQueryNode::computable(CompilerScratch* csb, StreamType stream,
 	return rse->computable(csb, stream, allowOnlyCurrentStream, value1);
 }
 
-void SubQueryNode::findDependentFromStreams(const OptimizerRetrieval* optRet,
-	SortedStreamList* streamList)
+void SubQueryNode::findDependentFromStreams(const CompilerScratch* csb,
+	StreamType currentStream, SortedStreamList* streamList)
 {
 	if (value2)
-		value2->findDependentFromStreams(optRet, streamList);
+		value2->findDependentFromStreams(csb, currentStream, streamList);
 
-	rse->findDependentFromStreams(optRet, streamList);
+	rse->findDependentFromStreams(csb, currentStream, streamList);
 
 	// Check value expression, if any.
 	if (value1)
-		value1->findDependentFromStreams(optRet, streamList);
+		value1->findDependentFromStreams(csb, currentStream, streamList);
 }
 
 void SubQueryNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)

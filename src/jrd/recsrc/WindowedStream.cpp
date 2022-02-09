@@ -23,10 +23,11 @@
 #include "firebird.h"
 #include "../dsql/Nodes.h"
 #include "../jrd/mov_proto.h"
-#include "../jrd/opt_proto.h"
 #include "../jrd/evl_proto.h"
 #include "../jrd/exe_proto.h"
 #include "../jrd/par_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
+
 #include "RecordSource.h"
 
 using namespace Firebird;
@@ -182,11 +183,13 @@ namespace
 
 // ------------------------------
 
-WindowedStream::WindowedStream(thread_db* tdbb, CompilerScratch* csb,
+WindowedStream::WindowedStream(thread_db* tdbb, Optimizer* opt,
 			ObjectsArray<WindowSourceNode::Window>& windows, RecordSource* next)
-	: m_next(FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, next)),
-	  m_joinedStream(NULL)
+	: m_joinedStream(nullptr)
 {
+	const auto csb = opt->getCompilerScratch();
+
+	m_next = FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, next);
 	m_impure = csb->allocImpure<Impure>();
 
 	// Process the unpartioned and unordered map, if existent.
@@ -236,7 +239,7 @@ WindowedStream::WindowedStream(thread_db* tdbb, CompilerScratch* csb,
 					nullptr, window.map, window.frameExtent, window.exclusion);
 			}
 
-			OPT_gen_aggregate_distincts(tdbb, csb, window.map);
+			opt->generateAggregateDistincts(window.map);
 		}
 	}
 
@@ -317,15 +320,15 @@ WindowedStream::WindowedStream(thread_db* tdbb, CompilerScratch* csb,
 			streams.clear();
 			m_joinedStream->findUsedStreams(streams);
 
-			SortedStream* sortedStream = OPT_gen_sort(tdbb, csb, streams, nullptr,
-				m_joinedStream, windowOrder, false, false);
+			const auto sortedStream =
+				opt->generateSort(streams, nullptr, m_joinedStream, windowOrder, false, false);
 
 			m_joinedStream = FB_NEW_POOL(csb->csb_pool) WindowStream(tdbb, csb, window.stream,
 				(window.group ? &window.group->expressions : nullptr),
 				FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, sortedStream),
 				window.order, window.map, window.frameExtent, window.exclusion);
 
-			OPT_gen_aggregate_distincts(tdbb, csb, window.map);
+			opt->generateAggregateDistincts(window.map);
 		}
 	}
 }

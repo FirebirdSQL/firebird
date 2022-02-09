@@ -462,8 +462,8 @@ const TraNumber MAX_TRA_NUMBER = 0x0000FFFFFFFFFFFF;	// ~2.8 * 10^14
 
 // Number of streams, conjuncts, indices that will be statically allocated
 // in various arrays. Larger numbers will have to be allocated dynamically
-// CVC: I think we need to have a special, higher value for streams.
-const int OPT_STATIC_ITEMS = 64;
+const unsigned OPT_STATIC_ITEMS = 16;
+const unsigned OPT_STATIC_STREAMS = 64;
 
 #define CURRENT_ENGINE "Engine13"
 #define EMBEDDED_PROVIDERS "Providers=" CURRENT_ENGINE

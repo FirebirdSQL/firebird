@@ -93,7 +93,7 @@ namespace Jrd
 			if (request)
 				return;
 
-			request = CMP_compile2(tdbb, blr, blrLength, true);
+			request = CMP_compile_request(tdbb, blr, blrLength, true);
 			cacheRequest();
 		}
 
@@ -166,7 +166,7 @@ namespace Jrd
 			if (request)
 				return;
 
-			request = CMP_compile2(tdbb, blr, blrLength, true);
+			request = CMP_compile_request(tdbb, blr, blrLength, true);
 		}
 
 		jrd_req* operator ->()

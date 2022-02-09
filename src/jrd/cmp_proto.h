@@ -37,8 +37,9 @@ StreamType* CMP_alloc_map(Jrd::thread_db*, Jrd::CompilerScratch*, StreamType str
 Jrd::ValueExprNode* CMP_clone_node_opt(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::ValueExprNode*);
 Jrd::BoolExprNode* CMP_clone_node_opt(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::BoolExprNode*);
 Jrd::ValueExprNode* CMP_clone_node(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::ValueExprNode*);
-Jrd::jrd_req* CMP_compile2(Jrd::thread_db*, const UCHAR* blr, ULONG blr_length, bool internal_flag,
-	ULONG = 0, const UCHAR* = NULL);
+Jrd::JrdStatement* CMP_compile(Jrd::thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool internalFlag,
+	ULONG dbginfoLength, const UCHAR* dbginfo);
+Jrd::jrd_req* CMP_compile_request(Jrd::thread_db*, const UCHAR* blr, ULONG blrLength, bool internalFlag);
 Jrd::CompilerScratch::csb_repeat* CMP_csb_element(Jrd::CompilerScratch*, StreamType element);
 const Jrd::Format* CMP_format(Jrd::thread_db*, Jrd::CompilerScratch*, StreamType);
 Jrd::IndexLock* CMP_get_index_lock(Jrd::thread_db*, Jrd::jrd_rel*, USHORT);

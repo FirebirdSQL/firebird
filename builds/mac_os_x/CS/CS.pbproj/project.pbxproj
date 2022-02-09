@@ -4881,16 +4881,6 @@
 			path = old_proto.h;
 			refType = 4;
 		};
-		F616C66F0200B0CF01EF0ADE = {
-			isa = PBXFileReference;
-			path = opt.cpp;
-			refType = 4;
-		};
-		F616C6700200B0CF01EF0ADE = {
-			isa = PBXFileReference;
-			path = opt_proto.h;
-			refType = 4;
-		};
 		F616C6710200B0CF01EF0ADE = {
 			children = (
 				F616C6720200B0CF01EF0ADE,
@@ -5131,11 +5121,6 @@
 		F616C6A60200B0D001EF0ADE = {
 			isa = PBXFileReference;
 			path = rse.cpp;
-			refType = 4;
-		};
-		F616C6A70200B0D001EF0ADE = {
-			isa = PBXFileReference;
-			path = rse.h;
 			refType = 4;
 		};
 		F616C6A80200B0D001EF0ADE = {

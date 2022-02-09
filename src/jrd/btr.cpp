@@ -340,7 +340,7 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 }
 
 
-USHORT BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescAlloc** csb_idx, RelationPages* relPages)
+void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, RelationPages* relPages)
 {
 /**************************************
  *
@@ -362,21 +362,16 @@ USHORT BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescAlloc** csb_idx, Rel
 
 	index_root_page* const root = fetch_root(tdbb, &window, relation, relPages);
 	if (!root)
-		return 0;
+		return;
 
-	delete *csb_idx;
-	*csb_idx = FB_NEW_RPT(*tdbb->getDefaultPool(), root->irt_count) IndexDescAlloc();
-
-	index_desc* buffer = (*csb_idx)->items;
-	USHORT count = 0;
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
-		if (BTR_description(tdbb, relation, root, &buffer[count], i))
-			count++;
+		index_desc idx;
+		if (BTR_description(tdbb, relation, root, &idx, i))
+			idxList.add(idx);
 	}
 
 	CCH_RELEASE(tdbb, &window);
-	return count;
 }
 
 

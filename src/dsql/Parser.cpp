@@ -98,10 +98,10 @@ namespace
 }
 
 
-Parser::Parser(thread_db* tdbb, MemoryPool& pool, DsqlCompilerScratch* aScratch,
-			USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length,
-			SSHORT characterSet)
+Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
+			USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length, SSHORT characterSet)
 	: PermanentStorage(pool),
+	  statementPool(aStatementPool),
 	  scratch(aScratch),
 	  client_dialect(aClientDialect),
 	  db_dialect(aDbDialect),
@@ -172,7 +172,7 @@ Parser::~Parser()
 }
 
 
-dsql_req* Parser::parse()
+DsqlStatement* Parser::parse()
 {
 	if (parseAux() != 0)
 	{
@@ -182,7 +182,7 @@ dsql_req* Parser::parse()
 
 	transformString(lex.start, lex.end - lex.start, transformedString);
 
-	return DSQL_parse;
+	return parsedStatement;
 }
 
 

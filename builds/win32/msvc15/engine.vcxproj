@@ -41,6 +41,8 @@
     <ClCompile Include="..\..\..\src\dsql\DsqlCompilerScratch.cpp" />
     <ClCompile Include="..\..\..\src\dsql\DsqlCursor.cpp" />
     <ClCompile Include="..\..\..\src\dsql\DSqlDataTypeUtil.cpp" />
+    <ClCompile Include="..\..\..\src\dsql\DsqlRequests.cpp" />
+    <ClCompile Include="..\..\..\src\dsql\DsqlStatements.cpp" />
     <ClCompile Include="..\..\..\src\dsql\errd.cpp" />
     <ClCompile Include="..\..\..\src\dsql\ExprNodes.cpp" />
     <ClCompile Include="..\..\..\src\dsql\gen.cpp" />
@@ -100,8 +102,9 @@
     <ClCompile Include="..\..\..\src\jrd\nbak.cpp" />
     <ClCompile Include="..\..\..\src\jrd\nodebug.cpp" />
     <ClCompile Include="..\..\..\src\jrd\ods.cpp" />
-    <ClCompile Include="..\..\..\src\jrd\opt.cpp" />
-    <ClCompile Include="..\..\..\src\jrd\Optimizer.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\optimizer\Optimizer.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\optimizer\Retrieval.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\optimizer\InnerJoin.cpp" />
     <ClCompile Include="..\..\..\src\jrd\os\win32\winnt.cpp" />
     <ClCompile Include="..\..\..\src\jrd\pag.cpp" />
     <ClCompile Include="..\..\..\src\jrd\par.cpp" />
@@ -186,6 +189,8 @@
     <ClInclude Include="..\..\..\src\dsql\DsqlCompilerScratch.h" />
     <ClInclude Include="..\..\..\src\dsql\DsqlCursor.h" />
     <ClInclude Include="..\..\..\src\dsql\DSqlDataTypeUtil.h" />
+    <ClInclude Include="..\..\..\src\dsql\DsqlRequests.h" />
+    <ClInclude Include="..\..\..\src\dsql\DsqlStatements.h" />
     <ClInclude Include="..\..\..\src\dsql\dsql_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\errd_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\ExprNodes.h" />
@@ -296,8 +301,7 @@
     <ClInclude Include="..\..\..\src\jrd\obj.h" />
     <ClInclude Include="..\..\..\src\jrd\ods.h" />
     <ClInclude Include="..\..\..\src\jrd\ods_proto.h" />
-    <ClInclude Include="..\..\..\src\jrd\Optimizer.h" />
-    <ClInclude Include="..\..\..\src\jrd\opt_proto.h" />
+    <ClInclude Include="..\..\..\src\jrd\optimizer\Optimizer.h" />
     <ClInclude Include="..\..\..\src\jrd\pag.h" />
     <ClInclude Include="..\..\..\src\jrd\pag_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\par_proto.h" />
@@ -317,7 +321,6 @@
     <ClInclude Include="..\..\..\src\jrd\rlck_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\Routine.h" />
     <ClInclude Include="..\..\..\src\jrd\rpb_chain.h" />
-    <ClInclude Include="..\..\..\src\jrd\rse.h" />
     <ClInclude Include="..\..\..\src\jrd\RuntimeStatistics.h" />
     <ClInclude Include="..\..\..\src\jrd\sbm.h" />
     <ClInclude Include="..\..\..\src\jrd\scl.h" />

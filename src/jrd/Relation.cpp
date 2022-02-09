@@ -127,19 +127,18 @@ RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool a
 		if (!idxTran)
 			idxTran = attachment->getSysTransaction();
 
-		IndexDescAlloc* indices = NULL;
+		IndexDescList indices;
 		// read indices from "base" index root page
-		const USHORT idx_count = BTR_all(tdbb, this, &indices, &rel_pages_base);
+		BTR_all(tdbb, this, indices, &rel_pages_base);
 
-		const index_desc* const end = indices->items + idx_count;
-		for (index_desc* idx = indices->items; idx < end; idx++)
+		for (auto& idx : indices)
 		{
 			MetaName idx_name;
-			MET_lookup_index(tdbb, idx_name, this->rel_name, idx->idx_id + 1);
+			MET_lookup_index(tdbb, idx_name, this->rel_name, idx.idx_id + 1);
 
-			idx->idx_root = 0;
+			idx.idx_root = 0;
 			SelectivityList selectivity(*pool);
-			IDX_create_index(tdbb, this, idx, idx_name.c_str(), NULL, idxTran, selectivity);
+			IDX_create_index(tdbb, this, &idx, idx_name.c_str(), NULL, idxTran, selectivity);
 
 #ifdef VIO_DEBUG
 			VIO_trace(DEBUG_WRITES,
@@ -147,15 +146,14 @@ RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool a
 				rel_id,
 				newPages->rel_instance_id,
 				newPages->rel_index_root,
-				idx->idx_id,
-				idx->idx_root,
+				idx.idx_id,
+				idx.idx_root,
 				newPages);
 #endif
 		}
 
 		if (poolCreated)
 			dbb->deletePool(pool);
-		delete indices;
 
 		return newPages;
 	}

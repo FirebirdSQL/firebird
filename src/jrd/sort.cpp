@@ -38,7 +38,6 @@
 #include "../common/TimeZoneUtil.h"
 #include "../common/gdsassert.h"
 #include "../jrd/req.h"
-#include "../jrd/rse.h"
 #include "../jrd/val.h"
 #include "../jrd/err_proto.h"
 #include "../yvalve/gds_proto.h"

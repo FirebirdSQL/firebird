@@ -76,11 +76,7 @@ struct index_desc
 	} idx_rpt[MAX_INDEX_SEGMENTS];
 };
 
-struct IndexDescAlloc : public pool_alloc_rpt<index_desc>
-{
-	index_desc items[1];
-};
-
+typedef Firebird::HalfStaticArray<index_desc, 16> IndexDescList;
 
 const USHORT idx_invalid = USHORT(~0);		// Applies to idx_id as special value
 

@@ -58,7 +58,6 @@
 #include "../jrd/os/pio.h"
 #include "../jrd/btr.h"
 #include "../jrd/exe.h"
-#include "../jrd/rse.h"
 #include "../jrd/scl.h"
 #include "../common/classes/alloc.h"
 #include "../common/ThreadStart.h"

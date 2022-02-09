@@ -67,7 +67,6 @@
 #include "iberror.h"
 #include "../jrd/ods.h"
 #include "../jrd/btr.h"
-#include "../jrd/rse.h"
 #include "../jrd/lck.h"
 #include "../jrd/intl.h"
 #include "../jrd/sbm.h"
@@ -92,7 +91,6 @@
 #include "../jrd/lck_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
-#include "../jrd/opt_proto.h"
 #include "../jrd/par_proto.h"
 #include "../jrd/rlck_proto.h"
 
@@ -860,7 +858,14 @@ void EXE_start(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
 	if (transaction->tra_flags & TRA_prepared)
 		ERR_post(Arg::Gds(isc_req_no_trans));
 
-	JrdStatement* statement = request->getStatement();
+	const auto dbb = tdbb->getDatabase();
+	const auto statement = request->getStatement();
+
+	// Generate request id.
+	request->setRequestId(
+		request->isRequestIdUnassigned() && request->isRoot() ?
+			statement->getStatementId() :
+			dbb->generateStatementId());
 
 	/* Post resources to transaction block.  In particular, the interest locks
 	on relations/indices are copied to the transaction, which is very

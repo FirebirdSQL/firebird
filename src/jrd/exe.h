@@ -42,7 +42,6 @@
 #include "iberror.h"
 
 #include "../common/dsc.h"
-#include "../jrd/rse.h"
 
 #include "../jrd/err_proto.h"
 #include "../jrd/scl.h"
@@ -75,7 +74,6 @@ template <typename T> class vec;
 class jrd_prc;
 class Collation;
 struct index_desc;
-struct IndexDescAlloc;
 class Format;
 class ForNode;
 class Cursor;
@@ -562,21 +560,20 @@ public:
 		// We must zero-initialize this one
 		csb_repeat();
 
-		void activate();
+		void activate(bool subStream = false);
 		void deactivate();
 
 		Nullable<USHORT> csb_cursor_number;	// Cursor number for this stream
 		StreamType csb_stream;			// Map user context to internal stream
 		StreamType csb_view_stream;		// stream number for view relation, below
 		USHORT csb_flags;
-		USHORT csb_indices;				// Number of indices
 
 		jrd_rel* csb_relation;
 		Firebird::string* csb_alias;	// SQL alias name for this instance of relation
 		jrd_prc* csb_procedure;
 		jrd_rel* csb_view;				// parent view
 
-		IndexDescAlloc* csb_idx;		// Packed description of indices
+		IndexDescList* csb_idx;			// Packed description of indices
 		MessageNode* csb_message;		// Msg for send/receive
 		const Format* csb_format;		// Default Format for stream
 		Format* csb_internal_format;	// Statement internal format
@@ -597,7 +594,6 @@ inline CompilerScratch::csb_repeat::csb_repeat()
 	: csb_stream(0),
 	  csb_view_stream(0),
 	  csb_flags(0),
-	  csb_indices(0),
 	  csb_relation(0),
 	  csb_alias(0),
 	  csb_procedure(0),
@@ -640,9 +636,12 @@ const int csb_unmatched		= 512;		// stream has conjuncts unmatched by any index
 const int csb_update		= 1024;		// erase or modify for relation
 const int csb_unstable		= 2048;		// unstable explicit cursor
 
-inline void CompilerScratch::csb_repeat::activate()
+inline void CompilerScratch::csb_repeat::activate(bool subStream)
 {
 	csb_flags |= csb_active;
+
+	if (subStream)
+		csb_flags |= csb_sub_stream;
 }
 
 inline void CompilerScratch::csb_repeat::deactivate()
@@ -671,6 +670,9 @@ public:
 
 // must correspond to the declared size of RDB$EXCEPTIONS.RDB$MESSAGE
 const unsigned XCP_MESSAGE_LENGTH = 1023;
+
+// Array which stores relative pointers to impure areas of invariant nodes
+typedef Firebird::SortedArray<ULONG> VarInvariantArray;
 
 } // namespace Jrd
 

@@ -42,8 +42,8 @@
 #include "../../jrd/evl_proto.h"
 #include "../../jrd/intl_proto.h"
 #include "../../jrd/mov_proto.h"
-#include "../../jrd/opt_proto.h"
 #include "../../jrd/pag_proto.h"
+#include "../../jrd/optimizer/Optimizer.h"
 #include "../../common/os/path_utils.h"
 #include "../../dsql/dsql_proto.h"
 
@@ -169,8 +169,8 @@ ISC_INT64 TraceTransactionImpl::getInitialID()
 
 ISC_INT64 TraceSQLStatementImpl::getStmtID()
 {
-	if (m_stmt->req_request)
-		return m_stmt->req_request->getRequestId();
+	if (m_stmt->getJrdRequest())
+		return m_stmt->getJrdRequest()->getRequestId();
 
 	return 0;
 }
@@ -211,8 +211,8 @@ void TraceSQLStatementImpl::fillPlan(bool explained)
 	if (m_plan.isEmpty() || m_planExplained != explained)
 	{
 		m_planExplained = explained;
-		if (m_stmt->req_request)
-			m_plan = OPT_get_plan(JRD_get_thread_data(), m_stmt->req_request, m_planExplained);
+		if (m_stmt->getJrdStatement())
+			m_plan = Optimizer::getPlan(JRD_get_thread_data(), m_stmt->getJrdStatement(), m_planExplained);
 	}
 }
 
@@ -234,6 +234,14 @@ void TraceSQLStatementImpl::DSQLParamsImpl::fillParams()
 	if (m_descs.getCount() || !m_params)
 		return;
 
+	if (!m_stmt->isDml())
+	{
+		fb_assert(false);
+		return;
+	}
+
+	const auto dmlRequest = (DsqlDmlRequest*) m_stmt;
+
 	USHORT first_index = 0;
 	for (FB_SIZE_T i = 0 ; i < m_params->getCount(); ++i)
 	{
@@ -246,7 +254,7 @@ void TraceSQLStatementImpl::DSQLParamsImpl::fillParams()
 			if (parameter->par_null)
 			{
 				const UCHAR* msgBuffer =
-					m_stmt->req_msg_buffers[parameter->par_null->par_message->msg_buffer_number];
+					dmlRequest->req_msg_buffers[parameter->par_null->par_message->msg_buffer_number];
 
 				if (*(SSHORT*) (msgBuffer + (IPTR) parameter->par_null->par_desc.dsc_address))
 					null_flag = DSC_null;
@@ -263,7 +271,7 @@ void TraceSQLStatementImpl::DSQLParamsImpl::fillParams()
 			*desc = parameter->par_desc;
 			desc->dsc_flags |= null_flag;
 
-			UCHAR* msgBuffer = m_stmt->req_msg_buffers[parameter->par_message->msg_buffer_number];
+			UCHAR* msgBuffer = dmlRequest->req_msg_buffers[parameter->par_message->msg_buffer_number];
 			desc->dsc_address = msgBuffer + (IPTR) desc->dsc_address;
 		}
 	}

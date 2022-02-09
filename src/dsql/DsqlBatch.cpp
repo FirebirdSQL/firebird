@@ -60,7 +60,7 @@ namespace {
 	};
 }
 
-DsqlBatch::DsqlBatch(dsql_req* req, const dsql_msg* /*message*/, IMessageMetadata* inMeta, ClumpletReader& pb)
+DsqlBatch::DsqlBatch(DsqlDmlRequest* req, const dsql_msg* /*message*/, IMessageMetadata* inMeta, ClumpletReader& pb)
 	: m_request(req),
 	  m_batch(NULL),
 	  m_meta(inMeta),
@@ -183,7 +183,7 @@ void DsqlBatch::setInterfacePtr(JBatch* interfacePtr) throw()
 	m_batch = interfacePtr;
 }
 
-DsqlBatch* DsqlBatch::open(thread_db* tdbb, dsql_req* req, IMessageMetadata* inMetadata,
+DsqlBatch* DsqlBatch::open(thread_db* tdbb, DsqlDmlRequest* req, IMessageMetadata* inMetadata,
 	unsigned parLength, const UCHAR* par)
 {
 	SET_TDBB(tdbb);
@@ -205,15 +205,15 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, dsql_req* req, IMessageMetadata* inM
 
 	// Sanity checks before creating batch
 
-	if (!req->req_request)
+	if (!req->getJrdRequest())
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
 				  Arg::Gds(isc_unprepared_stmt));
 	}
 
-	const DsqlCompiledStatement* statement = req->getStatement();
+	const DsqlStatement* statement = req->getStatement();
 
-	if (statement->getFlags() & DsqlCompiledStatement::FLAG_ORPHAN)
+	if (statement->getFlags() & DsqlStatement::FLAG_ORPHAN)
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
 		          Arg::Gds(isc_bad_req_handle));
@@ -221,11 +221,11 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, dsql_req* req, IMessageMetadata* inM
 
 	switch (statement->getType())
 	{
-		case DsqlCompiledStatement::TYPE_INSERT:
-		case DsqlCompiledStatement::TYPE_DELETE:
-		case DsqlCompiledStatement::TYPE_UPDATE:
-		case DsqlCompiledStatement::TYPE_EXEC_PROCEDURE:
-		case DsqlCompiledStatement::TYPE_EXEC_BLOCK:
+		case DsqlStatement::TYPE_INSERT:
+		case DsqlStatement::TYPE_DELETE:
+		case DsqlStatement::TYPE_UPDATE:
+		case DsqlStatement::TYPE_EXEC_PROCEDURE:
+		case DsqlStatement::TYPE_EXEC_BLOCK:
 			break;
 
 		default:
@@ -652,7 +652,7 @@ private:
 
 	// execute request
 	m_request->req_transaction = transaction;
-	jrd_req* req = m_request->req_request;
+	jrd_req* req = m_request->getJrdRequest();
 	fb_assert(req);
 
 	// prepare completion interface
@@ -662,7 +662,7 @@ private:
 	const dsql_msg* message = m_request->getStatement()->getSendMsg();
 	bool startRequest = true;
 
-	bool isExecBlock = m_request->getStatement()->getType() == DsqlCompiledStatement::TYPE_EXEC_BLOCK;
+	bool isExecBlock = m_request->getStatement()->getType() == DsqlStatement::TYPE_EXEC_BLOCK;
 	const auto receiveMessage = isExecBlock ? m_request->getStatement()->getReceiveMsg() : nullptr;
 	auto receiveMsgBuffer = isExecBlock ? m_request->req_msg_buffers[receiveMessage->msg_buffer_number] : nullptr;
 

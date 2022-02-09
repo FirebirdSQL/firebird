@@ -545,6 +545,7 @@ private:
 	StableAttachmentPart* att_stable;
 
 public:
+	Firebird::SortedArray<JrdStatement*> att_statements;	// Statements belonging to attachment
 	Firebird::SortedArray<jrd_req*> att_requests;	// Requests belonging to attachment
 	Lock*		att_id_lock;				// Attachment lock (if any)
 	AttNumber	att_attachment_id;			// Attachment ID

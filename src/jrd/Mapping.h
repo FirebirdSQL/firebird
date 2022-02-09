@@ -79,7 +79,7 @@ public:
 	// possible clearCache() flags
 	static const USHORT MAPPING_CACHE =				0x01;
 	static const USHORT SYSTEM_PRIVILEGES_CACHE =	0x02;
-	static const USHORT ALL_CACHE =					~0u;
+	static const USHORT ALL_CACHE =					MAX_USHORT;
 	// Helper statuc functions to perform cleanup & shutdown.
 	static void clearCache(const char* dbName, USHORT id);
 	static void shutdownIpc();

@@ -392,7 +392,7 @@ void InternalTransaction::doRollback(FbStatusVector* status, thread_db* tdbb, bo
 		else
 			m_transaction->rollback(status);
 
-		if (status->getState() & IStatus::STATE_ERRORS) 
+		if (status->getState() & IStatus::STATE_ERRORS)
 			err = status->getErrors()[1];
 
 		if (err == isc_cancelled)
@@ -504,7 +504,7 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 	if (status->getState() & IStatus::STATE_ERRORS)
 		raise(&status, tdbb, "JAttachment::prepare", &sql);
 
-	const DsqlCompiledStatement* statement = m_request->getHandle()->getStatement();
+	const DsqlStatement* statement = m_request->getHandle()->getStatement();
 
 	if (statement->getSendMsg())
 	{
@@ -542,33 +542,33 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 
 	switch (statement->getType())
 	{
-	case DsqlCompiledStatement::TYPE_SELECT:
-	case DsqlCompiledStatement::TYPE_RETURNING_CURSOR:
-	case DsqlCompiledStatement::TYPE_SELECT_UPD:
-	case DsqlCompiledStatement::TYPE_SELECT_BLOCK:
+	case DsqlStatement::TYPE_SELECT:
+	case DsqlStatement::TYPE_RETURNING_CURSOR:
+	case DsqlStatement::TYPE_SELECT_UPD:
+	case DsqlStatement::TYPE_SELECT_BLOCK:
 		m_stmt_selectable = true;
 		break;
 
-	case DsqlCompiledStatement::TYPE_START_TRANS:
-	case DsqlCompiledStatement::TYPE_COMMIT:
-	case DsqlCompiledStatement::TYPE_ROLLBACK:
-	case DsqlCompiledStatement::TYPE_COMMIT_RETAIN:
-	case DsqlCompiledStatement::TYPE_ROLLBACK_RETAIN:
-	case DsqlCompiledStatement::TYPE_CREATE_DB:
+	case DsqlStatement::TYPE_START_TRANS:
+	case DsqlStatement::TYPE_COMMIT:
+	case DsqlStatement::TYPE_ROLLBACK:
+	case DsqlStatement::TYPE_COMMIT_RETAIN:
+	case DsqlStatement::TYPE_ROLLBACK_RETAIN:
+	case DsqlStatement::TYPE_CREATE_DB:
 		Arg::Gds(isc_eds_expl_tran_ctrl).copyTo(&status);
 		raise(&status, tdbb, "JAttachment::prepare", &sql);
 		break;
 
-	case DsqlCompiledStatement::TYPE_INSERT:
-	case DsqlCompiledStatement::TYPE_DELETE:
-	case DsqlCompiledStatement::TYPE_UPDATE:
-	case DsqlCompiledStatement::TYPE_UPDATE_CURSOR:
-	case DsqlCompiledStatement::TYPE_DELETE_CURSOR:
-	case DsqlCompiledStatement::TYPE_DDL:
-	case DsqlCompiledStatement::TYPE_EXEC_PROCEDURE:
-	case DsqlCompiledStatement::TYPE_SET_GENERATOR:
-	case DsqlCompiledStatement::TYPE_SAVEPOINT:
-	case DsqlCompiledStatement::TYPE_EXEC_BLOCK:
+	case DsqlStatement::TYPE_INSERT:
+	case DsqlStatement::TYPE_DELETE:
+	case DsqlStatement::TYPE_UPDATE:
+	case DsqlStatement::TYPE_UPDATE_CURSOR:
+	case DsqlStatement::TYPE_DELETE_CURSOR:
+	case DsqlStatement::TYPE_DDL:
+	case DsqlStatement::TYPE_EXEC_PROCEDURE:
+	case DsqlStatement::TYPE_SET_GENERATOR:
+	case DsqlStatement::TYPE_SAVEPOINT:
+	case DsqlStatement::TYPE_EXEC_BLOCK:
 		break;
 	}
 }

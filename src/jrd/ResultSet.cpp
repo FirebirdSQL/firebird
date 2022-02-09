@@ -54,14 +54,14 @@ ResultSet::~ResultSet()
 
 	stmt->resultSet = NULL;
 
-	if (stmt->request->getStatement()->getType() != DsqlCompiledStatement::TYPE_EXEC_PROCEDURE)
+	if (stmt->request->getStatement()->getType() != DsqlStatement::TYPE_EXEC_PROCEDURE)
 		DSQL_free_statement(tdbb, stmt->request, DSQL_close);
 }
 
 
 bool ResultSet::fetch(thread_db* tdbb)
 {
-	if (stmt->request->getStatement()->getType() == DsqlCompiledStatement::TYPE_EXEC_PROCEDURE &&
+	if (stmt->request->getStatement()->getType() == DsqlStatement::TYPE_EXEC_PROCEDURE &&
 		firstFetchDone)
 	{
 		return false;
@@ -103,7 +103,7 @@ Firebird::string ResultSet::getString(thread_db* tdbb, unsigned param)
 {
 	fb_assert(param > 0);
 
-	jrd_req* jrdRequest = stmt->getRequest()->req_request;
+	jrd_req* jrdRequest = stmt->getRequest()->getJrdRequest();
 
 	// Setup tdbb info necessary for blobs.
 	AutoSetRestore2<jrd_req*, thread_db> autoRequest(
@@ -131,7 +131,7 @@ void ResultSet::moveDesc(thread_db* tdbb, unsigned param, dsc& desc)
 {
 	fb_assert(param > 0);
 
-	jrd_req* jrdRequest = stmt->getRequest()->req_request;
+	jrd_req* jrdRequest = stmt->getRequest()->getJrdRequest();
 
 	// Setup tdbb info necessary for blobs.
 	AutoSetRestore2<jrd_req*, thread_db> autoRequest(

@@ -28,7 +28,7 @@
 #include "../jrd/tra.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/recsrc/Cursor.h"
-#include "../jrd/Optimizer.h"
+#include "../jrd/optimizer/Optimizer.h"
 #include "../jrd/blb_proto.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/evl_proto.h"

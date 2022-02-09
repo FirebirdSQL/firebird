@@ -48,7 +48,6 @@
 #include "../jrd/lck.h"
 #include "../jrd/cch.h"
 #include "../jrd/pag.h"
-#include "../jrd/rse.h"
 #include "../jrd/val.h"
 #include "../jrd/vio_debug.h"
 #include "../jrd/cch_proto.h"

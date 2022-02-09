@@ -45,7 +45,6 @@
 #include "../jrd/exe.h"
 #include "../jrd/scl.h"
 #include "../jrd/lck.h"
-#include "../jrd/rse.h"
 #include "../jrd/cch.h"
 #include "../common/gdsassert.h"
 #include "../jrd/btr_proto.h"

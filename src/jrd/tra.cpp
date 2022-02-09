@@ -37,7 +37,6 @@
 #include "../jrd/req.h"
 #include "../jrd/exe.h"
 #include "../jrd/extds/ExtDS.h"
-#include "../jrd/rse.h"
 #include "../jrd/intl_classes.h"
 #include "../common/ThreadStart.h"
 #include "../jrd/TimeZone.h"

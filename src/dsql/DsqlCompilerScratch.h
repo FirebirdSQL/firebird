@@ -24,6 +24,7 @@
 
 #include "../jrd/jrd.h"
 #include "../dsql/dsql.h"
+#include "../dsql/DsqlStatements.h"
 #include "../dsql/BlrDebugWriter.h"
 #include "../common/classes/array.h"
 #include "../jrd/MetaName.h"
@@ -73,14 +74,13 @@ public:
 
 public:
 	DsqlCompilerScratch(MemoryPool& p, dsql_dbb* aDbb, jrd_tra* aTransaction,
-				DsqlCompiledStatement* aStatement, DsqlCompilerScratch* aMainScratch = NULL)
+				DsqlStatement* aStatement = nullptr, DsqlCompilerScratch* aMainScratch = nullptr)
 		: BlrDebugWriter(p),
 		  dbb(aDbb),
 		  transaction(aTransaction),
 		  statement(aStatement),
 		  flags(0),
 		  nestingLevel(0),
-		  ports(p),
 		  relation(NULL),
 		  mainContext(p),
 		  context(&mainContext),
@@ -167,14 +167,14 @@ public:
 		transaction = value;
 	}
 
-	DsqlCompiledStatement* getStatement()
+	DsqlStatement* getStatement() const
 	{
 		return statement;
 	}
 
-	DsqlCompiledStatement* getStatement() const
+	void setStatement(DsqlStatement* aStatement)
 	{
-		return statement;
+		statement = aStatement;
 	}
 
 	void putBlrMarkers(ULONG marks);
@@ -272,12 +272,11 @@ private:
 
 	dsql_dbb* dbb;						// DSQL attachment
 	jrd_tra* transaction;				// Transaction
-	DsqlCompiledStatement* statement;	// Compiled statement
+	DsqlStatement* statement;	// Compiled statement
 
 public:
 	unsigned flags;						// flags
 	unsigned nestingLevel;				// begin...end nesting level
-	Firebird::Array<dsql_msg*> ports;	// Port messages
 	dsql_rel* relation;					// relation created by this request (for DDL)
 	DsqlContextStack mainContext;
 	DsqlContextStack* context;

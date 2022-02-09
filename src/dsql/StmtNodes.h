@@ -1473,7 +1473,7 @@ public:
 
 		// Save and reset the statement type, as SessionManagementNode sets it to TYPE_SESSION_MANAGEMENT but
 		// we are a DML statement.
-		DsqlCompiledStatement::Type statementType = dsqlScratch->getStatement()->getType();
+		DsqlStatement::Type statementType = dsqlScratch->getStatement()->getType();
 		wrapped->dsqlPass(dsqlScratch);
 		dsqlScratch->getStatement()->setType(statementType);
 
@@ -1566,7 +1566,7 @@ public:
 	}
 
 	virtual SetTransactionNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** transaction) const;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** transaction) const;
 
 private:
 	void genTableLock(DsqlCompilerScratch* dsqlScratch, const RestrictionOption& tblLock,
@@ -1607,7 +1607,7 @@ public:
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual CommitRollbackNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** transaction) const;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** transaction) const;
 
 private:
 	const Command command;
@@ -1637,7 +1637,7 @@ public:
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual UserSavepointNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** transaction) const;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** transaction) const;
 
 public:
 	const Command command;
@@ -1661,7 +1661,7 @@ public:
 		return "SessionResetNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
 };
 
 
@@ -1693,7 +1693,7 @@ public:
 		return "SetRoleNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
 
 public:
 	bool trusted;
@@ -1714,7 +1714,7 @@ public:
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
 
 private:
 	Type m_type;
@@ -1738,7 +1738,7 @@ public:
 		return "SetDebugOptionNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
 
 private:
 	MetaName name;
@@ -1761,7 +1761,7 @@ public:
 		return "SetDecFloatRoundNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
 
 public:
 	USHORT rndMode;
@@ -1787,7 +1787,7 @@ public:
 		return "SetDecFloatTrapsNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
 
 	void trap(MetaName* name);
 
@@ -1818,7 +1818,7 @@ public:
 	}
 
 	virtual SessionManagementNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
 
 public:
 	dsql_fld* from;
@@ -1854,7 +1854,7 @@ public:
 		return "SetTimeZoneNode";
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
 
 public:
 	Firebird::string str;

@@ -42,7 +42,7 @@ class Node;
 class NodePrinter;
 class ExprNode;
 class NodeRefsHolder;
-class OptimizerBlk;
+class Optimizer;
 class OptimizerRetrieval;
 class RecordSource;
 class RseNode;
@@ -52,7 +52,7 @@ class ValueExprNode;
 
 
 // Must be less then MAX_SSHORT. Not used for static arrays.
-const int MAX_CONJUNCTS	= 32000;
+const unsigned MAX_CONJUNCTS = 32000;
 
 // New: MAX_STREAMS should be a multiple of BITS_PER_LONG (32 and hard to believe it will change)
 
@@ -64,7 +64,7 @@ const StreamType STREAM_MAP_LENGTH = MAX_STREAMS + 2;
 // New formula is simply MAX_STREAMS / BITS_PER_LONG
 const int OPT_STREAM_BITS = MAX_STREAMS / BITS_PER_LONG; // 128 with 4096 streams
 
-typedef Firebird::HalfStaticArray<StreamType, OPT_STATIC_ITEMS> StreamList;
+typedef Firebird::HalfStaticArray<StreamType, OPT_STATIC_STREAMS> StreamList;
 typedef Firebird::SortedArray<StreamType> SortedStreamList;
 
 typedef Firebird::Array<NestConst<ValueExprNode> > NestValueArray;
@@ -213,7 +213,7 @@ public:
 
 	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
-		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_DDL);
+		dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_DDL);
 		return this;
 	}
 
@@ -283,7 +283,7 @@ public:
 		return this;
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** transaction) const = 0;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** transaction) const = 0;
 };
 
 
@@ -300,12 +300,12 @@ public:
 	{
 		Node::dsqlPass(dsqlScratch);
 
-		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_SESSION_MANAGEMENT);
+		dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_SESSION_MANAGEMENT);
 
 		return this;
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const = 0;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const = 0;
 };
 
 
@@ -692,8 +692,8 @@ public:
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value = NULL);
 
-	virtual void findDependentFromStreams(const OptimizerRetrieval* optRet,
-		SortedStreamList* streamList);
+	virtual void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
 	virtual ExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 	virtual ExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual ExprNode* copy(thread_db* tdbb, NodeCopier& copier) const = 0;
@@ -1189,7 +1189,7 @@ public:
 		streamList.add(getStream());
 	}
 
-	virtual RecordSource* compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream) = 0;
+	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) = 0;
 
 public:
 	dsql_ctx* dsqlContext;

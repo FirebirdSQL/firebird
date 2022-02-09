@@ -457,3 +457,6 @@ NAME("MON$SESSION_TIMEZONE", nam_mon_session_tz)
 NAME("RDB$KEYWORDS", nam_keywords)
 NAME("RDB$KEYWORD_NAME", nam_keyword_name)
 NAME("RDB$KEYWORD_RESERVED", nam_keyword_reserved)
+
+NAME("MON$COMPILED_STATEMENTS", nam_mon_compiled_statements)
+NAME("MON$COMPILED_STATEMENT_ID", nam_mon_cmp_stmt_id)

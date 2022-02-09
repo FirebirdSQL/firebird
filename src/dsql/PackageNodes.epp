@@ -221,21 +221,14 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	// items
 	for (unsigned i = 0; i < items->getCount(); ++i)
 	{
-		DsqlCompiledStatement* itemStatement = FB_NEW_POOL(pool) DsqlCompiledStatement(pool);
-
-		DsqlCompilerScratch* itemScratch = (*items)[i].dsqlScratch =
-			FB_NEW_POOL(pool) DsqlCompilerScratch(pool, dsqlScratch->getAttachment(),
-				dsqlScratch->getTransaction(), itemStatement);
-
-		itemScratch->clientDialect = dsqlScratch->clientDialect;
-		itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
-		itemScratch->package = name;
+		DdlNode* ddlNode;
 
 		switch ((*items)[i].type)
 		{
 			case CreateAlterPackageNode::Item::FUNCTION:
 			{
 				CreateAlterFunctionNode* const fun = (*items)[i].function;
+				ddlNode = fun;
 
 				if (functionNames.exist(fun->name))
 				{
@@ -249,13 +242,13 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 				fun->alter = true;
 				fun->package = name;
-				fun->dsqlPass(itemScratch);
 				break;
 			}
 
 			case CreateAlterPackageNode::Item::PROCEDURE:
 			{
 				CreateAlterProcedureNode* const proc = (*items)[i].procedure;
+				ddlNode = proc;
 
 				if (procedureNames.exist(proc->name))
 				{
@@ -269,10 +262,24 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 				proc->alter = true;
 				proc->package = name;
-				proc->dsqlPass(itemScratch);
 				break;
 			}
+
+			default:
+				fb_assert(false);
 		}
+
+		auto itemStatement = FB_NEW_POOL(pool) DsqlDdlStatement(pool, dsqlScratch->getAttachment(), ddlNode);
+
+		auto itemScratch = (*items)[i].dsqlScratch =
+			FB_NEW_POOL(pool) DsqlCompilerScratch(pool, dsqlScratch->getAttachment(),
+				dsqlScratch->getTransaction(), itemStatement);
+
+		itemScratch->clientDialect = dsqlScratch->clientDialect;
+		itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
+		itemScratch->package = name;
+
+		ddlNode->dsqlPass(itemScratch);
 	}
 
 	return DdlNode::dsqlPass(dsqlScratch);
@@ -616,21 +623,14 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		for (unsigned j = 0; j < arrays[i]->getCount(); ++j)
 		{
-			DsqlCompiledStatement* itemStatement = FB_NEW_POOL(pool) DsqlCompiledStatement(pool);
-
-			DsqlCompilerScratch* itemScratch = (*arrays[i])[j].dsqlScratch =
-				FB_NEW_POOL(pool) DsqlCompilerScratch(pool, dsqlScratch->getAttachment(),
-					dsqlScratch->getTransaction(), itemStatement);
-
-			itemScratch->clientDialect = dsqlScratch->clientDialect;
-			itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
-			itemScratch->package = name;
+			DdlNode* ddlNode;
 
 			switch ((*arrays[i])[j].type)
 			{
 				case CreateAlterPackageNode::Item::FUNCTION:
 				{
 					CreateAlterFunctionNode* const fun = (*arrays[i])[j].function;
+					ddlNode = fun;
 
 					if (functionNames[i].exist(fun->name))
 					{
@@ -648,14 +648,13 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					if (arrays[i] == items)
 						fun->alter = true;
 
-					fun->dsqlPass(itemScratch);
-
 					break;
 				}
 
 				case CreateAlterPackageNode::Item::PROCEDURE:
 				{
 					CreateAlterProcedureNode* const proc = (*arrays[i])[j].procedure;
+					ddlNode = proc;
 
 					if (procedureNames[i].exist(proc->name))
 					{
@@ -673,11 +672,24 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					if (arrays[i] == items)
 						proc->alter = true;
 
-					proc->dsqlPass(itemScratch);
-
 					break;
 				}
+
+				default:
+					fb_assert(false);
 			}
+
+			auto itemStatement = FB_NEW_POOL(pool) DsqlDdlStatement(pool, dsqlScratch->getAttachment(), ddlNode);
+
+			auto itemScratch = (*arrays[i])[j].dsqlScratch =
+				FB_NEW_POOL(pool) DsqlCompilerScratch(pool, dsqlScratch->getAttachment(),
+					dsqlScratch->getTransaction(), itemStatement);
+
+			itemScratch->clientDialect = dsqlScratch->clientDialect;
+			itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
+			itemScratch->package = name;
+
+			ddlNode->dsqlPass(itemScratch);
 		}
 	}
 

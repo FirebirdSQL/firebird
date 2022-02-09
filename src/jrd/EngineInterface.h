@@ -35,7 +35,7 @@ class blb;
 class jrd_tra;
 class DsqlCursor;
 class DsqlBatch;
-class dsql_req;
+class DsqlRequest;
 class JrdStatement;
 class StableAttachmentPart;
 class Attachment;
@@ -305,20 +305,20 @@ public:
 		unsigned parLength, const unsigned char* par) override;
 
 public:
-	JStatement(dsql_req* handle, StableAttachmentPart* sa, Firebird::Array<UCHAR>& meta);
+	JStatement(DsqlRequest* handle, StableAttachmentPart* sa, Firebird::Array<UCHAR>& meta);
 
 	StableAttachmentPart* getAttachment()
 	{
 		return sAtt;
 	}
 
-	dsql_req* getHandle() throw()
+	DsqlRequest* getHandle() throw()
 	{
 		return statement;
 	}
 
 private:
-	dsql_req* statement;
+	DsqlRequest* statement;
 	Firebird::RefPtr<StableAttachmentPart> sAtt;
 	Firebird::StatementMetadata metadata;
 

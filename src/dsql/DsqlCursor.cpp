@@ -33,7 +33,7 @@ using namespace Jrd;
 static const char* const SCRATCH = "fb_cursor_";
 static const ULONG PREFETCH_SIZE = 65536; // 64 KB
 
-DsqlCursor::DsqlCursor(dsql_req* req, ULONG flags)
+DsqlCursor::DsqlCursor(DsqlDmlRequest* req, ULONG flags)
 	: m_request(req), m_message(req->getStatement()->getReceiveMsg()),
 	  m_resultSet(NULL), m_flags(flags),
 	  m_space(req->getPool(), SCRATCH),
@@ -69,10 +69,10 @@ void DsqlCursor::close(thread_db* tdbb, DsqlCursor* cursor)
 	if (!cursor)
 		return;
 
-	Jrd::Attachment* const attachment = cursor->getAttachment();
-	dsql_req* const request = cursor->m_request;
+	const auto attachment = cursor->getAttachment();
+	const auto request = cursor->m_request;
 
-	if (request->req_request)
+	if (request->getJrdRequest())
 	{
 		ThreadStatusGuard status_vector(tdbb);
 		try
@@ -90,7 +90,7 @@ void DsqlCursor::close(thread_db* tdbb, DsqlCursor* cursor)
 				TraceManager::event_dsql_free(attachment, &stmt, DSQL_close);
 			}
 
-			JRD_unwind_request(tdbb, request->req_request);
+			JRD_unwind_request(tdbb, request->getJrdRequest());
 		}
 		catch (Firebird::Exception&)
 		{} // no-op

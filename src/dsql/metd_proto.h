@@ -34,7 +34,7 @@
 namespace Jrd {
 	typedef Firebird::GenericMap<Jrd::MetaNamePair> MetaNamePairMap;
 
-	class dsql_req;
+	class DsqlRequest;
 	class DsqlCompilerScratch;
 	class jrd_tra;
 	class dsql_intlsym;

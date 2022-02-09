@@ -448,6 +448,7 @@ file(GLOB engine_src
     "dsql/*.cpp"
     "jrd/*.cpp"
     "jrd/extds/*.cpp"
+    "jrd/optimizer/*.cpp"
     "jrd/recsrc/*.cpp"
     "jrd/replication/*.cpp"
     "jrd/trace/*.cpp"

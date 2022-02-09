@@ -130,13 +130,12 @@ public:
 	static const int MAX_TOKEN_LEN = 256;
 
 public:
-	Parser(thread_db* tdbb, MemoryPool& pool, DsqlCompilerScratch* aScratch, USHORT aClientDialect,
-		USHORT aDbDialect, const TEXT* string, size_t length,
-		SSHORT characterSet);
+	Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
+		USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length, SSHORT characterSet);
 	~Parser();
 
 public:
-	dsql_req* parse();
+	DsqlStatement* parse();
 
 	const Firebird::string& getTransformedString() const
 	{
@@ -231,11 +230,6 @@ private:
 		cmpNode->dsqlCheckBoolean = true;
 
 		return cmpNode;
-	}
-
-	MemoryPool& getStatementPool()
-	{
-		return scratch->getStatement()->getPool();
 	}
 
 	void yyReducePosn(YYPOSN& ret, YYPOSN* termPosns, YYSTYPE* termVals,
@@ -376,6 +370,7 @@ private:
 // end - defined in btyacc_fb.ske
 
 private:
+	MemoryPool* statementPool;
 	DsqlCompilerScratch* scratch;
 	USHORT client_dialect;
 	USHORT db_dialect;
@@ -385,7 +380,7 @@ private:
 	Firebird::string transformedString;
 	Firebird::GenericMap<Firebird::NonPooled<IntlString*, StrMark> > strMarks;
 	bool stmt_ambiguous;
-	dsql_req* DSQL_parse;
+	DsqlStatement* parsedStatement;
 
 	// These value/posn are taken from the lexer
 	YYSTYPE yylval;

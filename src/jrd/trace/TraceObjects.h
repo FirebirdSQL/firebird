@@ -146,17 +146,17 @@ private:
 class TraceBLRStatementImpl : public BLRPrinter<TraceBLRStatementImpl>
 {
 public:
-	TraceBLRStatementImpl(const jrd_req* stmt, Firebird::PerformanceInfo* perf) :
-		BLRPrinter(stmt->getStatement()->blr.begin(), stmt->getStatement()->blr.getCount()),
+	TraceBLRStatementImpl(const JrdStatement* stmt, Firebird::PerformanceInfo* perf) :
+		BLRPrinter(stmt->blr.begin(), stmt->blr.getCount()),
 		m_stmt(stmt),
 		m_perf(perf)
 	{}
 
-	ISC_INT64 getStmtID()		{ return m_stmt->getRequestId(); }
+	ISC_INT64 getStmtID()		{ return m_stmt->getStatementId(); }
 	Firebird::PerformanceInfo* getPerf()	{ return m_perf; }
 
 private:
-	const jrd_req* const m_stmt;
+	const JrdStatement* const m_stmt;
 	Firebird::PerformanceInfo* const m_perf;
 };
 
@@ -177,7 +177,7 @@ class TraceSQLStatementImpl :
 	public Firebird::AutoIface<Firebird::ITraceSQLStatementImpl<TraceSQLStatementImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceSQLStatementImpl(const dsql_req* stmt, Firebird::PerformanceInfo* perf) :
+	TraceSQLStatementImpl(DsqlRequest* stmt, Firebird::PerformanceInfo* perf) :
 		m_stmt(stmt),
 		m_perf(perf),
 		m_planExplained(false),
@@ -198,7 +198,7 @@ private:
 		public Firebird::AutoIface<Firebird::ITraceParamsImpl<DSQLParamsImpl, Firebird::CheckStatusWrapper> >
 	{
 	public:
-		DSQLParamsImpl(Firebird::MemoryPool& pool, const dsql_req* const stmt) :
+		DSQLParamsImpl(Firebird::MemoryPool& pool, DsqlRequest* const stmt) :
 			m_stmt(stmt),
 			m_params(NULL),
 			m_descs(pool)
@@ -215,7 +215,7 @@ private:
 	private:
 		void fillParams();
 
-		const dsql_req* const m_stmt;
+		DsqlRequest* const m_stmt;
 		const Firebird::Array<dsql_par*>* m_params;
 		Firebird::HalfStaticArray<dsc, 16> m_descs;
 		Firebird::string temp_utf8_text;
@@ -223,7 +223,7 @@ private:
 
 	void fillPlan(bool explained);
 
-	const dsql_req* const m_stmt;
+	DsqlRequest* const m_stmt;
 	Firebird::PerformanceInfo* const m_perf;
 	Firebird::string m_plan;
 	bool m_planExplained;

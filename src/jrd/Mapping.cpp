@@ -1235,10 +1235,10 @@ InitInstance<SysPrivCache> spCache;
 
 void resetMap(const char* db, ULONG index)
 {
-	if(index & Mapping::MAPPING_CACHE)
+	if (index & Mapping::MAPPING_CACHE)
 		resetMap(db);
 
-	if(index & Mapping::SYSTEM_PRIVILEGES_CACHE)
+	if (index & Mapping::SYSTEM_PRIVILEGES_CACHE)
 		spCache().invalidate(db);
 }
 

@@ -828,7 +828,7 @@ using namespace Firebird;
 	Jrd::SetTransactionNode::RestrictionOption* setTransactionRestrictionClause;
 	Jrd::DeclareSubProcNode* declareSubProcNode;
 	Jrd::DeclareSubFuncNode* declareSubFuncNode;
-	Jrd::dsql_req* dsqlReq;
+	Jrd::DsqlStatement* dsqlStatement;
 	Jrd::CreateAlterUserNode* createAlterUserNode;
 	Jrd::MappingNode* mappingNode;
 	Jrd::MappingNode::OP mappingOp;
@@ -848,16 +848,23 @@ using namespace Firebird;
 // list of possible statements
 
 top
-	: statement			{ DSQL_parse = $1; }
-	| statement ';'		{ DSQL_parse = $1; }
+	: statement			{ parsedStatement = $1; }
+	| statement ';'		{ parsedStatement = $1; }
 	;
 
-%type <dsqlReq> statement
+%type <dsqlStatement> statement
 statement
-	: dml_statement		{ $$ = FB_NEW_POOL(getStatementPool()) DsqlDmlRequest(getStatementPool(), $1); }
-	| ddl_statement		{ $$ = FB_NEW_POOL(getStatementPool()) DsqlDdlRequest(getStatementPool(), $1); }
-	| tra_statement		{ $$ = FB_NEW_POOL(getStatementPool()) DsqlTransactionRequest(getStatementPool(), $1); }
-	| mng_statement		{ $$ = FB_NEW_POOL(getStatementPool()) DsqlSessionManagementRequest(getStatementPool(), $1); }
+	: dml_statement
+		{ $$ = FB_NEW_POOL(*statementPool) DsqlDmlStatement(*statementPool, scratch->getAttachment(), $1); }
+	| ddl_statement
+		{ $$ = FB_NEW_POOL(*statementPool) DsqlDdlStatement(*statementPool, scratch->getAttachment(), $1); }
+	| tra_statement
+		{ $$ = FB_NEW_POOL(*statementPool) DsqlTransactionStatement(*statementPool, scratch->getAttachment(), $1); }
+	| mng_statement
+		{
+			$$ = FB_NEW_POOL(*statementPool) DsqlSessionManagementStatement(
+				*statementPool, scratch->getAttachment(), $1);
+		}
 	;
 
 %type <stmtNode> dml_statement
@@ -7743,7 +7750,7 @@ sql_string
 %type <stringPtr> utf_string
 utf_string
 	: sql_string
-		{ $$ = newString($1->toUtf8(scratch)); }
+		{ $$ = newString($1->toUtf8(scratch->getTransaction())); }
 	;
 
 %type <int32Val> signed_short_integer

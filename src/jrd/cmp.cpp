@@ -48,7 +48,6 @@
 #include "../jrd/align.h"
 #include "../jrd/lls.h"
 #include "../jrd/exe.h"
-#include "../jrd/rse.h"
 #include "../jrd/scl.h"
 #include "../jrd/tra.h"
 #include "../jrd/lck.h"
@@ -69,12 +68,11 @@
 #include "../jrd/jrd_proto.h"
 
 #include "../jrd/lck_proto.h"
-#include "../jrd/opt_proto.h"
 #include "../jrd/par_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../common/dsc_proto.h"
-#include "../jrd/Optimizer.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "../jrd/DataTypeUtil.h"
 #include "../jrd/SysFunction.h"
@@ -143,38 +141,26 @@ BoolExprNode* CMP_clone_node_opt(thread_db* tdbb, CompilerScratch* csb, BoolExpr
 	return clone;
 }
 
-
-jrd_req* CMP_compile2(thread_db* tdbb, const UCHAR* blr, ULONG blr_length, bool internal_flag,
-					  ULONG dbginfo_length, const UCHAR* dbginfo)
+// Compile a statement.
+JrdStatement* CMP_compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool internalFlag,
+	ULONG dbginfoLength, const UCHAR* dbginfo)
 {
-/**************************************
- *
- *	C M P _ c o m p i l e 2
- *
- **************************************
- *
- * Functional description
- *	Compile a BLR request.
- *
- **************************************/
-	jrd_req* request = NULL;
+	JrdStatement* statement = nullptr;
 
 	SET_TDBB(tdbb);
-	Jrd::Attachment* const att = tdbb->getAttachment();
+	const auto att = tdbb->getAttachment();
 
 	// 26.09.2002 Nickolay Samofatov: default memory pool will become statement pool
 	// and will be freed by CMP_release
-	MemoryPool* const new_pool = att->createPool();
+	const auto newPool = att->createPool();
 
 	try
 	{
-		Jrd::ContextPoolHolder context(tdbb, new_pool);
+		Jrd::ContextPoolHolder context(tdbb, newPool);
 
-		CompilerScratch* csb =
-			PAR_parse(tdbb, blr, blr_length, internal_flag, dbginfo_length, dbginfo);
+		const auto csb = PAR_parse(tdbb, blr, blrLength, internalFlag, dbginfoLength, dbginfo);
 
-		request = JrdStatement::makeRequest(tdbb, csb, internal_flag);
-		new_pool->setStatsGroup(request->req_memory_stats);
+		statement = JrdStatement::makeStatement(tdbb, csb, internalFlag);
 
 #ifdef CMP_DEBUG
 		if (csb->csb_dump.hasData())
@@ -196,19 +182,39 @@ jrd_req* CMP_compile2(thread_db* tdbb, const UCHAR* blr, ULONG blr_length, bool 
 		}
 #endif
 
-		request->getStatement()->verifyAccess(tdbb);
+		statement->verifyAccess(tdbb);
 
 		delete csb;
 	}
 	catch (const Firebird::Exception& ex)
 	{
 		ex.stuffException(tdbb->tdbb_status_vector);
-		if (request)
-			CMP_release(tdbb, request);
+		if (statement)
+			statement->release(tdbb);
 		else
-			att->deletePool(new_pool);
+			att->deletePool(newPool);
 		ERR_punt();
 	}
+
+	return statement;
+}
+
+jrd_req* CMP_compile_request(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool internalFlag)
+{
+/**************************************
+ *
+ *	C M P _ c o m p i l e _ r e q u e s t
+ *
+ **************************************
+ *
+ * Functional description
+ *	Compile a BLR request.
+ *
+ **************************************/
+	SET_TDBB(tdbb);
+
+	auto statement = CMP_compile(tdbb, blr, blrLength, internalFlag, 0, nullptr);
+	auto request = statement->getRequest(tdbb, 0);
 
 	return request;
 }
@@ -512,32 +518,15 @@ RecordSource* CMP_post_rse(thread_db* tdbb, CompilerScratch* csb, RseNode* rse)
  **************************************/
 	SET_TDBB(tdbb);
 
-	DEV_BLKCHK(csb, type_csb);
-	DEV_BLKCHK(rse, type_nod);
+	const auto rsb = Optimizer::compile(tdbb, csb, rse);
 
-	RecordSource* rsb = OPT_compile(tdbb, csb, rse, NULL);
-
-	if (rse->flags & RseNode::FLAG_SINGULAR)
-		rsb = FB_NEW_POOL(*tdbb->getDefaultPool()) SingularStream(csb, rsb);
-
-	if (rse->flags & RseNode::FLAG_WRITELOCK)
-	{
-		for (StreamType i = 0; i < csb->csb_n_stream; i++)
-			csb->csb_rpt[i].csb_flags |= csb_update;
-
-		rsb = FB_NEW_POOL(*tdbb->getDefaultPool()) LockedStream(csb, rsb);
-	}
-
-	if (rse->flags & RseNode::FLAG_SCROLLABLE)
-		rsb = FB_NEW_POOL(*tdbb->getDefaultPool()) BufferedStream(csb, rsb);
-
-	// mark all the substreams as inactive
+	// Mark all the substreams as inactive
 
 	StreamList streams;
 	rse->computeRseStreams(streams);
 
-	for (StreamList::iterator i = streams.begin(); i != streams.end(); ++i)
-		csb->csb_rpt[*i].deactivate();
+	for (const auto stream : streams)
+		csb->csb_rpt[stream].deactivate();
 
 	return rsb;
 }

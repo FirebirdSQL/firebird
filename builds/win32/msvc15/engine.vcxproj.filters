@@ -43,6 +43,9 @@
     <Filter Include="Replication">
       <UniqueIdentifier>{686cba10-1e4f-44f7-b044-972ef8327197}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Optimizer">
+      <UniqueIdentifier>{4acc7c23-ac25-4311-a075-813ed730cb40}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jrd\recsrc\WindowedStream.cpp">
@@ -136,6 +139,12 @@
       <Filter>DSQL</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\dsql\DSqlDataTypeUtil.cpp">
+      <Filter>DSQL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\dsql\DsqlRequests.cpp">
+      <Filter>DSQL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\dsql\DsqlStatements.cpp">
       <Filter>DSQL</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\dsql\errd.cpp">
@@ -310,12 +319,6 @@
       <Filter>JRD files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\ods.cpp">
-      <Filter>JRD files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\src\jrd\opt.cpp">
-      <Filter>JRD files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\src\jrd\Optimizer.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\pag.cpp">
@@ -507,6 +510,15 @@
     <ClCompile Include="..\..\..\src\jrd\MetaName.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\optimizer\InnerJoin.cpp">
+      <Filter>Optimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\optimizer\Optimizer.cpp">
+      <Filter>Optimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\optimizer\Retrieval.cpp">
+      <Filter>Optimizer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\jrd\recsrc\RecordSource.h">
@@ -543,6 +555,12 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\dsql\DSqlDataTypeUtil.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\dsql\DsqlRequests.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\dsql\DsqlStatements.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\dsql\errd_proto.h">
@@ -878,10 +896,7 @@
     <ClInclude Include="..\..\..\src\jrd\ods_proto.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\jrd\opt_proto.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\jrd\Optimizer.h">
+    <ClInclude Include="..\..\..\src\jrd\optimizer\Optimizer.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\pag.h">
@@ -930,9 +945,6 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\rpb_chain.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\jrd\rse.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\RuntimeStatistics.h">

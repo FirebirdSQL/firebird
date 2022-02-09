@@ -666,8 +666,8 @@ public:
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value);
 
-	virtual void findDependentFromStreams(const OptimizerRetrieval* optRet,
-		SortedStreamList* streamList);
+	virtual void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
@@ -795,8 +795,8 @@ public:
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value);
 
-	virtual void findDependentFromStreams(const OptimizerRetrieval* optRet,
-		SortedStreamList* streamList);
+	virtual void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
@@ -1656,8 +1656,8 @@ public:
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value);
 
-	virtual void findDependentFromStreams(const OptimizerRetrieval* optRet,
-		SortedStreamList* streamList);
+	virtual void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
@@ -1915,8 +1915,8 @@ public:
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value);
 
-	virtual void findDependentFromStreams(const OptimizerRetrieval* optRet,
-		SortedStreamList* streamList);
+	virtual void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
