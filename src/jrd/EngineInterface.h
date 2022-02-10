@@ -36,7 +36,7 @@ class jrd_tra;
 class DsqlCursor;
 class DsqlBatch;
 class DsqlRequest;
-class JrdStatement;
+class Statement;
 class StableAttachmentPart;
 class Attachment;
 class Service;
@@ -346,20 +346,20 @@ public:
 	void deprecatedFree(Firebird::CheckStatusWrapper* status) override;
 
 public:
-	JRequest(JrdStatement* handle, StableAttachmentPart* sa);
+	JRequest(Statement* handle, StableAttachmentPart* sa);
 
 	StableAttachmentPart* getAttachment()
 	{
 		return sAtt;
 	}
 
-	JrdStatement* getHandle() throw()
+	Statement* getHandle() throw()
 	{
 		return rq;
 	}
 
 private:
-	JrdStatement* rq;
+	Statement* rq;
 	Firebird::RefPtr<StableAttachmentPart> sAtt;
 
 	void freeEngineData(Firebird::CheckStatusWrapper* status);

@@ -54,14 +54,14 @@ ResultSet::~ResultSet()
 
 	stmt->resultSet = NULL;
 
-	if (stmt->request->getStatement()->getType() != DsqlStatement::TYPE_EXEC_PROCEDURE)
-		DSQL_free_statement(tdbb, stmt->request, DSQL_close);
+	if (stmt->dsqlRequest->getDsqlStatement()->getType() != DsqlStatement::TYPE_EXEC_PROCEDURE)
+		DSQL_free_statement(tdbb, stmt->dsqlRequest, DSQL_close);
 }
 
 
 bool ResultSet::fetch(thread_db* tdbb)
 {
-	if (stmt->request->getStatement()->getType() == DsqlStatement::TYPE_EXEC_PROCEDURE &&
+	if (stmt->dsqlRequest->getDsqlStatement()->getType() == DsqlStatement::TYPE_EXEC_PROCEDURE &&
 		firstFetchDone)
 	{
 		return false;
@@ -69,7 +69,7 @@ bool ResultSet::fetch(thread_db* tdbb)
 
 	memset(stmt->outMessage.begin(), 0, stmt->outMessage.getCount());
 
-	if (!stmt->request->fetch(tdbb, stmt->outMessage.begin()))
+	if (!stmt->dsqlRequest->fetch(tdbb, stmt->outMessage.begin()))
 		return false;
 
 	if (stmt->builder)
@@ -103,12 +103,12 @@ Firebird::string ResultSet::getString(thread_db* tdbb, unsigned param)
 {
 	fb_assert(param > 0);
 
-	jrd_req* jrdRequest = stmt->getRequest()->getJrdRequest();
+	jrd_req* request = stmt->getDsqlRequest()->getRequest();
 
 	// Setup tdbb info necessary for blobs.
 	AutoSetRestore2<jrd_req*, thread_db> autoRequest(
-		tdbb, &thread_db::getRequest, &thread_db::setRequest, jrdRequest);
-	AutoSetRestore<jrd_tra*> autoRequestTrans(&jrdRequest->req_transaction,
+		tdbb, &thread_db::getRequest, &thread_db::setRequest, request);
+	AutoSetRestore<jrd_tra*> autoRequestTrans(&request->req_transaction,
 		tdbb->getTransaction());
 
 	return MOV_make_string2(tdbb, &getDesc(param), CS_NONE);
@@ -131,12 +131,12 @@ void ResultSet::moveDesc(thread_db* tdbb, unsigned param, dsc& desc)
 {
 	fb_assert(param > 0);
 
-	jrd_req* jrdRequest = stmt->getRequest()->getJrdRequest();
+	jrd_req* request = stmt->getDsqlRequest()->getRequest();
 
 	// Setup tdbb info necessary for blobs.
 	AutoSetRestore2<jrd_req*, thread_db> autoRequest(
-		tdbb, &thread_db::getRequest, &thread_db::setRequest, jrdRequest);
-	AutoSetRestore<jrd_tra*> autoRequestTrans(&jrdRequest->req_transaction,
+		tdbb, &thread_db::getRequest, &thread_db::setRequest, request);
+	AutoSetRestore<jrd_tra*> autoRequestTrans(&request->req_transaction,
 		tdbb->getTransaction());
 
 	MOV_move(tdbb, &getDesc(param), &desc);

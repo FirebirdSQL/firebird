@@ -213,7 +213,7 @@ public:
 
 	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
-		dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_DDL);
+		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_DDL);
 		return this;
 	}
 
@@ -300,7 +300,7 @@ public:
 	{
 		Node::dsqlPass(dsqlScratch);
 
-		dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_SESSION_MANAGEMENT);
+		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_SESSION_MANAGEMENT);
 
 		return this;
 	}

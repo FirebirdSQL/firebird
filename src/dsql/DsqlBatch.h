@@ -101,7 +101,7 @@ private:
 			m_flags &= ~(1 << bit);
 	}
 
-	DsqlDmlRequest* const m_request;
+	DsqlDmlRequest* const m_dsqlRequest;
 	JBatch* m_batch;
 	Firebird::IMessageMetadata* m_meta;
 

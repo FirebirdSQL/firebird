@@ -74,11 +74,11 @@ public:
 
 public:
 	DsqlCompilerScratch(MemoryPool& p, dsql_dbb* aDbb, jrd_tra* aTransaction,
-				DsqlStatement* aStatement = nullptr, DsqlCompilerScratch* aMainScratch = nullptr)
+				DsqlStatement* aDsqlStatement = nullptr, DsqlCompilerScratch* aMainScratch = nullptr)
 		: BlrDebugWriter(p),
 		  dbb(aDbb),
 		  transaction(aTransaction),
-		  statement(aStatement),
+		  dsqlStatement(aDsqlStatement),
 		  flags(0),
 		  nestingLevel(0),
 		  relation(NULL),
@@ -144,7 +144,7 @@ public:
 public:
 	virtual bool isVersion4()
 	{
-		return statement->getBlrVersion() == 4;
+		return dsqlStatement->getBlrVersion() == 4;
 	}
 
 	MemoryPool& getPool()
@@ -167,14 +167,14 @@ public:
 		transaction = value;
 	}
 
-	DsqlStatement* getStatement() const
+	DsqlStatement* getDsqlStatement() const
 	{
-		return statement;
+		return dsqlStatement;
 	}
 
-	void setStatement(DsqlStatement* aStatement)
+	void setDsqlStatement(DsqlStatement* aDsqlStatement)
 	{
-		statement = aStatement;
+		dsqlStatement = aDsqlStatement;
 	}
 
 	void putBlrMarkers(ULONG marks);
@@ -272,7 +272,7 @@ private:
 
 	dsql_dbb* dbb;						// DSQL attachment
 	jrd_tra* transaction;				// Transaction
-	DsqlStatement* statement;	// Compiled statement
+	DsqlStatement* dsqlStatement;		// DSQL statement
 
 public:
 	unsigned flags;						// flags

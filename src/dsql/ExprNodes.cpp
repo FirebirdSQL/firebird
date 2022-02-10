@@ -9484,7 +9484,7 @@ ValueExprNode* ParameterNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	auto msg = dsqlMessage ? dsqlMessage :
 		dsqlParameter ? dsqlParameter->par_message :
-		dsqlScratch->getStatement()->getSendMsg();
+		dsqlScratch->getDsqlStatement()->getSendMsg();
 
 	auto node = FB_NEW_POOL(dsqlScratch->getPool()) ParameterNode(dsqlScratch->getPool());
 	node->dsqlParameter = MAKE_parameter(msg, true, true, dsqlParameterIndex, nullptr);
@@ -9556,7 +9556,7 @@ bool ParameterNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 
 	if (!dsqlParameter)
 	{
-		dsqlParameter = MAKE_parameter(dsqlScratch->getStatement()->getSendMsg(), true, true,
+		dsqlParameter = MAKE_parameter(dsqlScratch->getDsqlStatement()->getSendMsg(), true, true,
 			dsqlParameterIndex, NULL);
 		dsqlParameterIndex = dsqlParameter->par_index;
 	}

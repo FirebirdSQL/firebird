@@ -34,7 +34,7 @@ namespace Jrd
 {
 	class thread_db;
 	class CompilerScratch;
-	class JrdStatement;
+	class Statement;
 	class Lock;
 	class Format;
 	class Parameter;
@@ -105,8 +105,8 @@ namespace Jrd
 		const MetaName& getSecurityName() const { return securityName; }
 		void setSecurityName(const MetaName& value) { securityName = value; }
 
-		/*const*/ JrdStatement* getStatement() const { return statement; }
-		void setStatement(JrdStatement* value);
+		/*const*/ Statement* getStatement() const { return statement; }
+		void setStatement(Statement* value);
 
 		bool isSubRoutine() const { return subRoutine; }
 		void setSubRoutine(bool value) { subRoutine = value; }
@@ -166,7 +166,7 @@ namespace Jrd
 		USHORT id;							// routine ID
 		QualifiedName name;					// routine name
 		MetaName securityName;				// security class name
-		JrdStatement* statement;			// compiled routine statement
+		Statement* statement;			// compiled routine statement
 		bool subRoutine;					// Is this a subroutine?
 		bool implemented;					// Is the packaged routine missing the body/entrypoint?
 		bool defined;						// UDF has its implementation module available

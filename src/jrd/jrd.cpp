@@ -333,7 +333,7 @@ JResultSet::JResultSet(DsqlCursor* handle, JStatement* aStatement)
 {
 }
 
-JRequest::JRequest(JrdStatement* handle, StableAttachmentPart* sa)
+JRequest::JRequest(Statement* handle, StableAttachmentPart* sa)
 	: rq(handle), sAtt(sa)
 {
 }
@@ -647,7 +647,7 @@ namespace
 		tdbb->setTransaction(transaction);
 	}
 
-	inline void validateHandle(thread_db* tdbb, JrdStatement* const statement)
+	inline void validateHandle(thread_db* tdbb, Statement* const statement)
 	{
 		if (!statement)
 			status_exception::raise(Arg::Gds(isc_bad_req_handle));
@@ -942,10 +942,10 @@ void Trigger::compile(thread_db* tdbb)
 			statement->triggerInvoker = att->getUserId(owner);
 
 		if (sysTrigger)
-			statement->flags |= JrdStatement::FLAG_SYS_TRIGGER;
+			statement->flags |= Statement::FLAG_SYS_TRIGGER;
 
 		if (flags & TRG_ignore_perm)
-			statement->flags |= JrdStatement::FLAG_IGNORE_PERM;
+			statement->flags |= Statement::FLAG_IGNORE_PERM;
 	}
 }
 
@@ -1311,7 +1311,7 @@ static bool			drop_files(const jrd_file*);
 static void			find_intl_charset(thread_db*, Jrd::Attachment*, const DatabaseOptions*);
 static void			init_database_lock(thread_db*);
 static void			run_commit_triggers(thread_db* tdbb, jrd_tra* transaction);
-static jrd_req*		verify_request_synchronization(JrdStatement* statement, USHORT level);
+static jrd_req*		verify_request_synchronization(Statement* statement, USHORT level);
 static void			purge_transactions(thread_db*, Jrd::Attachment*, const bool);
 static void			check_single_maintenance(thread_db* tdbb);
 
@@ -2681,7 +2681,7 @@ JRequest* JAttachment::compileRequest(CheckStatusWrapper* user_status,
  * Functional description
  *
  **************************************/
-	JrdStatement* stmt = NULL;
+	Statement* stmt = NULL;
 
 	try
 	{
@@ -4713,7 +4713,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 				CompilerScratch* csb = PAR_parse(tdbb, reinterpret_cast<const UCHAR*>(blr),
 					blr_length, false);
 
-				request = JrdStatement::makeRequest(tdbb, csb, false);
+				request = Statement::makeRequest(tdbb, csb, false);
 				request->getStatement()->verifyAccess(tdbb);
 
 				for (FB_SIZE_T i = 0; i < csb->csb_rpt.getCount(); i++)
@@ -8335,7 +8335,7 @@ static void run_commit_triggers(thread_db* tdbb, jrd_tra* transaction)
 //
 // @param request The incoming, parent request to be replaced.
 // @param level The level of the sub-request we need to find.
-static jrd_req* verify_request_synchronization(JrdStatement* statement, USHORT level)
+static jrd_req* verify_request_synchronization(Statement* statement, USHORT level)
 {
 	if (level)
 	{
@@ -8945,7 +8945,7 @@ ISC_STATUS thread_db::getCancelState(ISC_STATUS* secondary)
 			if ((!request ||
 					!(request->getStatement()->flags &
 						// temporary change to fix shutdown
-						(/*JrdStatement::FLAG_INTERNAL | */JrdStatement::FLAG_SYS_TRIGGER))) &&
+						(/*Statement::FLAG_INTERNAL | */Statement::FLAG_SYS_TRIGGER))) &&
 				(!transaction || !(transaction->tra_flags & TRA_system)))
 			{
 				return isc_cancelled;

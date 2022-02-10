@@ -471,7 +471,7 @@ public:
 		csb_dbg_info = FB_NEW_POOL(p) Firebird::DbgInfo(p);
 	}
 
-	// Implemented in JrdStatement.cpp
+	// Implemented in Statement.cpp
 	ULONG allocImpure(ULONG align, ULONG size);
 
 	template <typename T>

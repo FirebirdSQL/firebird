@@ -43,7 +43,7 @@ class DsqlDmlStatement;
 class dsql_par;
 class jrd_req;
 class jrd_tra;
-class JrdStatement;
+class Statement;
 class SessionManagementNode;
 class TransactionNode;
 
@@ -60,17 +60,17 @@ public:
 		return req_transaction;
 	}
 
-	Firebird::RefPtr<DsqlStatement> getStatement()
+	Firebird::RefPtr<DsqlStatement> getDsqlStatement()
 	{
-		return statement;
+		return dsqlStatement;
 	}
 
-	virtual JrdStatement* getJrdStatement() const
+	virtual Statement* getStatement() const
 	{
 		return nullptr;
 	}
 
-	virtual jrd_req* getJrdRequest() const
+	virtual jrd_req* getRequest() const
 	{
 		return nullptr;
 	}
@@ -126,7 +126,7 @@ public:
 
 public:
 	dsql_dbb* req_dbb;					// DSQL attachment
-	Firebird::RefPtr<DsqlStatement> statement;
+	Firebird::RefPtr<DsqlStatement> dsqlStatement;
 	Firebird::Array<DsqlDmlStatement*> cursors{getPool()};	// Cursor update statements
 
 	jrd_tra* req_transaction = nullptr;	// JRD transaction
@@ -150,19 +150,19 @@ protected:
 class DsqlDmlRequest final : public DsqlRequest
 {
 public:
-	DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb, DsqlStatement* aStatement);
+	DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb, DsqlStatement* aDsqlStatement);
 
 	// Reintroduce method to fake covariant return type with RefPtr.
-	auto getStatement()
+	auto getDsqlStatement()
 	{
-		return Firebird::RefPtr<DsqlDmlStatement>((DsqlDmlStatement*) statement.getPtr());
+		return Firebird::RefPtr<DsqlDmlStatement>((DsqlDmlStatement*) dsqlStatement.getPtr());
 	}
 
-	JrdStatement* getJrdStatement() const override;
+	Statement* getStatement() const override;
 
-	jrd_req* getJrdRequest() const override
+	jrd_req* getRequest() const override
 	{
-		return jrdRequest;
+		return request;
 	}
 
 	bool isDml() const override
@@ -209,7 +209,7 @@ public:
 
 private:
 	Firebird::RefPtr<Firebird::IMessageMetadata> delayedFormat;
-	jrd_req* jrdRequest = nullptr;
+	jrd_req* request = nullptr;
 	bool needDelayedFormat = false;
 	bool firstRowFetched = false;
 };

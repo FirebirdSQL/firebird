@@ -580,7 +580,7 @@ Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse)
 
 Optimizer::~Optimizer()
 {
-    // Release memory allocated for index descriptions
+	// Release memory allocated for index descriptions
 	for (const auto compileStream : compileStreams)
 	{
 		delete csb->csb_rpt[compileStream].csb_idx;
@@ -625,7 +625,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	// AB: If we have limit our retrieval with FIRST / SKIP syntax then
 	// we may not deliver above conditions (from higher rse's) to this
 	// rse, because the results should be consistent.
-    if (rse->rse_skip || rse->rse_first)
+	if (rse->rse_skip || rse->rse_first)
 		parentStack = nullptr;
 
 	// Set base-point before the parent/distributed nodes begin.
@@ -1792,10 +1792,7 @@ void Optimizer::checkSorts()
 
 unsigned Optimizer::decompose(BoolExprNode* boolNode, BoolExprNodeStack& stack)
 {
-	const auto binaryNode = nodeAs<BinaryBoolNode>(boolNode);
-	const auto cmpNode = nodeAs<ComparativeBoolNode>(boolNode);
-
-	if (binaryNode)
+	if (const auto binaryNode = nodeAs<BinaryBoolNode>(boolNode))
 	{
 		if (binaryNode->blrOp == blr_and)
 		{
@@ -1840,7 +1837,7 @@ unsigned Optimizer::decompose(BoolExprNode* boolNode, BoolExprNodeStack& stack)
 			}
 		}
 	}
-	else if (cmpNode)
+	else if (const auto cmpNode = nodeAs<ComparativeBoolNode>(boolNode))
 	{
 		// turn a between into (a greater than or equal) AND (a less than  or equal)
 

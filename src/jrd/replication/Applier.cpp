@@ -240,7 +240,7 @@ Applier* Applier::create(thread_db* tdbb)
 	Jrd::ContextPoolHolder context(tdbb, req_pool);
 	AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*req_pool) CompilerScratch(*req_pool));
 
-	const auto request = JrdStatement::makeRequest(tdbb, csb, true);
+	const auto request = Statement::makeRequest(tdbb, csb, true);
 	request->validateTimeStamp();
 	request->req_attachment = attachment;
 

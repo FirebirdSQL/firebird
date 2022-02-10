@@ -3713,7 +3713,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			EVL_field(0, rpb->rpb_record, f_trg_rname, &desc);
 
 			// check if this  request go through without checking permissions
-			if (!(request->getStatement()->flags & (JrdStatement::FLAG_IGNORE_PERM | JrdStatement::FLAG_INTERNAL)))
+			if (!(request->getStatement()->flags & (Statement::FLAG_IGNORE_PERM | Statement::FLAG_INTERNAL)))
 				SCL_check_relation(tdbb, &desc, SCL_control | SCL_alter);
 
 			if (EVL_field(0, rpb->rpb_record, f_trg_rname, &desc2))

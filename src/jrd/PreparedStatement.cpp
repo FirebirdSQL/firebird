@@ -302,7 +302,7 @@ PreparedStatement::~PreparedStatement()
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
-	DSQL_free_statement(tdbb, request, DSQL_drop);
+	DSQL_free_statement(tdbb, dsqlRequest, DSQL_drop);
 
 	if (resultSet)
 		resultSet->stmt = NULL;
@@ -315,30 +315,28 @@ void PreparedStatement::init(thread_db* tdbb, Attachment* attachment, jrd_tra* t
 	AutoSetRestore<SSHORT> autoAttCharset(&attachment->att_charset,
 		(isInternalRequest ? CS_METADATA : attachment->att_charset));
 
-	request = NULL;
+	dsqlRequest = NULL;
 	try
 	{
 		const Database& dbb = *tdbb->getDatabase();
 		const int dialect = isInternalRequest || (dbb.dbb_flags & DBB_DB_SQL_dialect_3) ?
 			SQL_DIALECT_V6 : SQL_DIALECT_V5;
 
-		request = DSQL_prepare(tdbb, attachment, transaction, text.length(), text.c_str(), dialect, 0,
+		dsqlRequest = DSQL_prepare(tdbb, attachment, transaction, text.length(), text.c_str(), dialect, 0,
 			NULL, NULL, isInternalRequest);
 
-		const DsqlStatement* statement = request->getStatement();
+		const auto dsqlStatement = dsqlRequest->getDsqlStatement();
 
-		if (statement->getSendMsg())
-			parseDsqlMessage(statement->getSendMsg(), inValues, inMetadata, inMessage);
+		if (dsqlStatement->getSendMsg())
+			parseDsqlMessage(dsqlStatement->getSendMsg(), inValues, inMetadata, inMessage);
 
-		if (statement->getReceiveMsg())
-			parseDsqlMessage(statement->getReceiveMsg(), outValues, outMetadata, outMessage);
+		if (dsqlStatement->getReceiveMsg())
+			parseDsqlMessage(dsqlStatement->getReceiveMsg(), outValues, outMetadata, outMessage);
 	}
 	catch (const Exception&)
 	{
-		if (request)
-		{
-			DSQL_free_statement(tdbb, request, DSQL_drop);
-		}
+		if (dsqlRequest)
+			DSQL_free_statement(tdbb, dsqlRequest, DSQL_drop);
 		throw;
 	}
 }
@@ -348,12 +346,12 @@ void PreparedStatement::setDesc(thread_db* tdbb, unsigned param, const dsc& valu
 {
 	fb_assert(param > 0);
 
-	jrd_req* jrdRequest = getRequest()->getJrdRequest();
+	jrd_req* request = getDsqlRequest()->getRequest();
 
 	// Setup tdbb info necessary for blobs.
 	AutoSetRestore2<jrd_req*, thread_db> autoRequest(
-		tdbb, &thread_db::getRequest, &thread_db::setRequest, jrdRequest);
-	AutoSetRestore<jrd_tra*> autoRequestTrans(&jrdRequest->req_transaction,
+		tdbb, &thread_db::getRequest, &thread_db::setRequest, request);
+	AutoSetRestore<jrd_tra*> autoRequestTrans(&request->req_transaction,
 		tdbb->getTransaction());
 
 	MOV_move(tdbb, const_cast<dsc*>(&value), &inValues[(param - 1) * 2]);
@@ -371,7 +369,7 @@ void PreparedStatement::execute(thread_db* tdbb, jrd_tra* transaction)
 	if (builder)
 		builder->moveToStatement(tdbb, this);
 
-	DSQL_execute(tdbb, &transaction, request, inMetadata, inMessage.begin(), NULL, NULL);
+	DSQL_execute(tdbb, &transaction, dsqlRequest, inMetadata, inMessage.begin(), NULL, NULL);
 }
 
 
@@ -382,13 +380,13 @@ void PreparedStatement::open(thread_db* tdbb, jrd_tra* transaction)
 	if (builder)
 		builder->moveToStatement(tdbb, this);
 
-	request->openCursor(tdbb, &transaction, inMetadata, inMessage.begin(), outMetadata, 0);
+	dsqlRequest->openCursor(tdbb, &transaction, inMetadata, inMessage.begin(), outMetadata, 0);
 }
 
 
 ResultSet* PreparedStatement::executeQuery(thread_db* tdbb, jrd_tra* transaction)
 {
-	fb_assert(resultSet == NULL && request->getStatement()->getReceiveMsg());
+	fb_assert(resultSet == NULL && dsqlRequest->getDsqlStatement()->getReceiveMsg());
 
 	if (builder)
 		builder->moveToStatement(tdbb, this);
@@ -400,7 +398,7 @@ ResultSet* PreparedStatement::executeQuery(thread_db* tdbb, jrd_tra* transaction
 unsigned PreparedStatement::executeUpdate(thread_db* tdbb, jrd_tra* transaction)
 {
 	execute(tdbb, transaction);
-	return getRequest()->getJrdRequest()->req_records_updated;
+	return getDsqlRequest()->getRequest()->req_records_updated;
 }
 
 

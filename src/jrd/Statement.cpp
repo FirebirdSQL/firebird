@@ -19,7 +19,7 @@
  */
 
 #include "firebird.h"
-#include "../jrd/JrdStatement.h"
+#include "../jrd/Statement.h"
 #include "../jrd/Attachment.h"
 #include "../jrd/intl_classes.h"
 #include "../jrd/acl.h"
@@ -41,7 +41,7 @@ using namespace Firebird;
 using namespace Jrd;
 
 
-template <typename T> static void makeSubRoutines(thread_db* tdbb, JrdStatement* statement,
+template <typename T> static void makeSubRoutines(thread_db* tdbb, Statement* statement,
 	CompilerScratch* csb, T& subs);
 
 
@@ -49,7 +49,7 @@ ULONG CompilerScratch::allocImpure(ULONG align, ULONG size)
 {
 	const ULONG offset = FB_ALIGN(csb_impure, align);
 
-	if (offset + size > JrdStatement::MAX_REQUEST_SIZE)
+	if (offset + size > Statement::MAX_REQUEST_SIZE)
 		IBERROR(226);	// msg 226: request size limit exceeded
 
 	csb_impure = offset + size;
@@ -59,7 +59,7 @@ ULONG CompilerScratch::allocImpure(ULONG align, ULONG size)
 
 
 // Start to turn a parsed scratch into a statement. This is completed by makeStatement.
-JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
+Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	: pool(p),
 	  rpbsSetup(*p),
 	  requests(*p),
@@ -133,7 +133,7 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 #ifdef DEBUG_PROCS
 					string buffer;
 					buffer.printf(
-						"Called from JrdStatement::makeRequest:\n\t Incrementing use count of %s\n",
+						"Called from Statement::makeRequest:\n\t Incrementing use count of %s\n",
 						routine->getName()->toString().c_str());
 					JRD_print_procedure_info(tdbb, buffer.c_str());
 #endif
@@ -189,7 +189,7 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	}
 	catch (Exception&)
 	{
-		for (JrdStatement** subStatement = subStatements.begin();
+		for (Statement** subStatement = subStatements.begin();
 			 subStatement != subStatements.end();
 			 ++subStatement)
 		{
@@ -201,7 +201,7 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 }
 
 // Turn a parsed scratch into a statement.
-JrdStatement* JrdStatement::makeStatement(thread_db* tdbb, CompilerScratch* csb, bool internalFlag)
+Statement* Statement::makeStatement(thread_db* tdbb, CompilerScratch* csb, bool internalFlag)
 {
 	DEV_BLKCHK(csb, type_csb);
 	SET_TDBB(tdbb);
@@ -212,7 +212,7 @@ JrdStatement* JrdStatement::makeStatement(thread_db* tdbb, CompilerScratch* csb,
 	jrd_req* const old_request = tdbb->getRequest();
 	tdbb->setRequest(NULL);
 
-	JrdStatement* statement = NULL;
+	Statement* statement = NULL;
 
 	try
 	{
@@ -279,7 +279,7 @@ JrdStatement* JrdStatement::makeStatement(thread_db* tdbb, CompilerScratch* csb,
 
 		MemoryPool* const pool = tdbb->getDefaultPool();
 
-		statement = FB_NEW_POOL(*pool) JrdStatement(tdbb, pool, csb);
+		statement = FB_NEW_POOL(*pool) Statement(tdbb, pool, csb);
 
 		tdbb->setRequest(old_request);
 	} // try
@@ -288,7 +288,7 @@ JrdStatement* JrdStatement::makeStatement(thread_db* tdbb, CompilerScratch* csb,
 		if (statement)
 		{
 			// Release sub statements.
-			for (JrdStatement** subStatement = statement->subStatements.begin();
+			for (Statement** subStatement = statement->subStatements.begin();
 				 subStatement != statement->subStatements.end();
 				 ++subStatement)
 			{
@@ -310,14 +310,14 @@ JrdStatement* JrdStatement::makeStatement(thread_db* tdbb, CompilerScratch* csb,
 }
 
 // Turn a parsed scratch into an executable request.
-jrd_req* JrdStatement::makeRequest(thread_db* tdbb, CompilerScratch* csb, bool internalFlag)
+jrd_req* Statement::makeRequest(thread_db* tdbb, CompilerScratch* csb, bool internalFlag)
 {
-	JrdStatement* statement = makeStatement(tdbb, csb, internalFlag);
+	Statement* statement = makeStatement(tdbb, csb, internalFlag);
 	return statement->getRequest(tdbb, 0);
 }
 
 // Returns function or procedure routine.
-const Routine* JrdStatement::getRoutine() const
+const Routine* Statement::getRoutine() const
 {
 	fb_assert(!(procedure && function));
 
@@ -328,7 +328,7 @@ const Routine* JrdStatement::getRoutine() const
 }
 
 // Determine if any request of this statement are active.
-bool JrdStatement::isActive() const
+bool Statement::isActive() const
 {
 	for (const jrd_req* const* request = requests.begin(); request != requests.end(); ++request)
 	{
@@ -339,12 +339,12 @@ bool JrdStatement::isActive() const
 	return false;
 }
 
-jrd_req* JrdStatement::findRequest(thread_db* tdbb, bool unique)
+jrd_req* Statement::findRequest(thread_db* tdbb, bool unique)
 {
 	SET_TDBB(tdbb);
 	Attachment* const attachment = tdbb->getAttachment();
 
-	const JrdStatement* const thisPointer = this;	// avoid warning
+	const Statement* const thisPointer = this;	// avoid warning
 	if (!thisPointer)
 		BUGCHECK(167);	/* msg 167 invalid SEND request */
 
@@ -391,7 +391,7 @@ jrd_req* JrdStatement::findRequest(thread_db* tdbb, bool unique)
 	return clone;
 }
 
-jrd_req* JrdStatement::getRequest(thread_db* tdbb, USHORT level)
+jrd_req* Statement::getRequest(thread_db* tdbb, USHORT level)
 {
 	SET_TDBB(tdbb);
 
@@ -420,7 +420,7 @@ jrd_req* JrdStatement::getRequest(thread_db* tdbb, USHORT level)
 
 // Check that we have enough rights to access all resources this request touches including
 // resources it used indirectly via procedures or triggers.
-void JrdStatement::verifyAccess(thread_db* tdbb)
+void Statement::verifyAccess(thread_db* tdbb)
 {
 	SET_TDBB(tdbb);
 
@@ -590,12 +590,12 @@ void JrdStatement::verifyAccess(thread_db* tdbb)
 }
 
 // Release a statement.
-void JrdStatement::release(thread_db* tdbb)
+void Statement::release(thread_db* tdbb)
 {
 	SET_TDBB(tdbb);
 
 	// Release sub statements.
-	for (JrdStatement** subStatement = subStatements.begin();
+	for (Statement** subStatement = subStatements.begin();
 		 subStatement != subStatements.end();
 		 ++subStatement)
 	{
@@ -665,7 +665,7 @@ void JrdStatement::release(thread_db* tdbb)
 }
 
 // Returns a formatted textual plan for all RseNode's in the specified request
-string JrdStatement::getPlan(thread_db* tdbb, bool detailed) const
+string Statement::getPlan(thread_db* tdbb, bool detailed) const
 {
 	string plan;
 
@@ -679,7 +679,7 @@ string JrdStatement::getPlan(thread_db* tdbb, bool detailed) const
 }
 
 // Check that we have enough rights to access all resources this list of triggers touches.
-void JrdStatement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
+void Statement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 	TrigVector* triggers, MetaName userName)
 {
 	if (!triggers)
@@ -743,7 +743,7 @@ void JrdStatement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 }
 
 // Invoke buildExternalAccess for triggers in vector
-inline void JrdStatement::triggersExternalAccess(thread_db* tdbb, ExternalAccessList& list,
+inline void Statement::triggersExternalAccess(thread_db* tdbb, ExternalAccessList& list,
 	TrigVector* tvec, const MetaName& user)
 {
 	if (!tvec)
@@ -764,7 +764,7 @@ inline void JrdStatement::triggersExternalAccess(thread_db* tdbb, ExternalAccess
 
 // Recursively walk external dependencies (procedures, triggers) for request to assemble full
 // list of requests it depends on.
-void JrdStatement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list, const MetaName &user)
+void Statement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list, const MetaName &user)
 {
 	for (ExternalAccess* item = externalList.begin(); item != externalList.end(); ++item)
 	{
@@ -834,7 +834,7 @@ void JrdStatement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list
 
 
 // Make sub routines.
-template <typename T> static void makeSubRoutines(thread_db* tdbb, JrdStatement* statement,
+template <typename T> static void makeSubRoutines(thread_db* tdbb, Statement* statement,
 	CompilerScratch* csb, T& subs)
 {
 	typename T::Accessor subAccessor(&subs);
@@ -845,7 +845,7 @@ template <typename T> static void makeSubRoutines(thread_db* tdbb, JrdStatement*
 		Routine* subRoutine = subNode->routine;
 		CompilerScratch*& subCsb = subNode->subCsb;
 
-		JrdStatement* subStatement = JrdStatement::makeStatement(tdbb, subCsb, false);
+		Statement* subStatement = Statement::makeStatement(tdbb, subCsb, false);
 		subStatement->parentStatement = statement;
 		subRoutine->setStatement(subStatement);
 

@@ -24,7 +24,7 @@
 #include "../dsql/dsql.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/DsqlCompilerScratch.h"
-#include "../jrd/JrdStatement.h"
+#include "../jrd/Statement.h"
 #include "../dsql/errd_proto.h"
 #include "../dsql/gen_proto.h"
 #include "../jrd/cmp_proto.h"
@@ -103,14 +103,14 @@ void DsqlDmlStatement::doRelease()
 			parent->cursors.remove(pos);
 	}
 
-	if (jrdStatement)
+	if (statement)
 	{
 		thread_db* tdbb = JRD_get_thread_data();
 		ThreadStatusGuard status_vector(tdbb);
 
 		try
 		{
-			jrdStatement->release(tdbb);
+			statement->release(tdbb);
 		}
 		catch (Exception&)
 		{} // no-op
@@ -127,9 +127,9 @@ void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 	}
 
 	if (scratch->clientDialect > SQL_DIALECT_V5)
-		scratch->getStatement()->setBlrVersion(5);
+		scratch->getDsqlStatement()->setBlrVersion(5);
 	else
-		scratch->getStatement()->setBlrVersion(4);
+		scratch->getDsqlStatement()->setBlrVersion(4);
 
 	GEN_statement(scratch, node);
 
@@ -171,17 +171,17 @@ void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 		const auto& blr = scratch->getBlrData();
 		const auto& debugData = scratch->getDebugData();
 
-		jrdStatement = CMP_compile(tdbb, blr.begin(), blr.getCount(),
+		statement = CMP_compile(tdbb, blr.begin(), blr.getCount(),
 			(scratch->flags & DsqlCompilerScratch::FLAG_INTERNAL_REQUEST),
 			debugData.getCount(), debugData.begin());
 
 		if (getSqlText())
-			jrdStatement->sqlText = getSqlText();
+			statement->sqlText = getSqlText();
 
-		fb_assert(jrdStatement->blr.isEmpty());
+		fb_assert(statement->blr.isEmpty());
 
 		if (attachment->getDebugOptions().getDsqlKeepBlr())
-			jrdStatement->blr.insert(0, blr.begin(), blr.getCount());
+			statement->blr.insert(0, blr.begin(), blr.getCount());
 	}
 	catch (const Exception&)
 	{
@@ -264,9 +264,9 @@ void DsqlDdlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 	}
 
 	if (scratch->clientDialect > SQL_DIALECT_V5)
-		scratch->getStatement()->setBlrVersion(5);
+		scratch->getDsqlStatement()->setBlrVersion(5);
 	else
-		scratch->getStatement()->setBlrVersion(4);
+		scratch->getDsqlStatement()->setBlrVersion(4);
 
 	this->scratch = scratch;
 }

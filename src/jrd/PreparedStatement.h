@@ -359,9 +359,9 @@ public:
 
 	int getResultCount() const;
 
-	DsqlRequest* getRequest()
+	DsqlRequest* getDsqlRequest()
 	{
-		return request;
+		return dsqlRequest;
 	}
 
 	static void parseDsqlMessage(const dsql_msg* dsqlMsg, Firebird::Array<dsc>& values,
@@ -369,7 +369,7 @@ public:
 
 private:
 	const Builder* builder;
-	DsqlRequest* request;
+	DsqlRequest* dsqlRequest;
 	Firebird::Array<dsc> inValues, outValues;
 	Firebird::RefPtr<Firebird::MsgMetadata> inMetadata, outMetadata;
 	Firebird::UCharBuffer inMessage, outMessage;

@@ -317,7 +317,7 @@ public:
 		m_which_trig(which_trig)
 	{
 		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
-		m_need_trace = !(m_request->getStatement()->flags & JrdStatement::FLAG_SYS_TRIGGER) &&
+		m_need_trace = !(m_request->getStatement()->flags & Statement::FLAG_SYS_TRIGGER) &&
 			trace_mgr->needs(ITraceFactory::TRACE_EVENT_TRIGGER_EXECUTE);
 
 		if (!m_need_trace)
@@ -392,7 +392,7 @@ public:
 		m_start_clock = fb_utils::query_performance_counter();
 	}
 
-	void finish(JrdStatement* statement, ntrace_result_t result)
+	void finish(Statement* statement, ntrace_result_t result)
 	{
 		if (!m_need_trace)
 			return;
@@ -442,11 +442,11 @@ public:
 		m_request(request)
 	{
 		Attachment* attachment = m_tdbb->getAttachment();
-		JrdStatement* statement = m_request->getStatement();
+		Statement* statement = m_request->getStatement();
 
 		m_need_trace = attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_BLR_EXECUTE) &&
 			!statement->sqlText &&
-			!(statement->flags & JrdStatement::FLAG_INTERNAL) &&
+			!(statement->flags & Statement::FLAG_INTERNAL) &&
 			!attachment->isUtility();
 
 		if (!m_need_trace)

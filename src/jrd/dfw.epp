@@ -983,7 +983,7 @@ namespace
 
 			if (routine && !blobId.isEmpty())
 			{
-				JrdStatement* statement = NULL;
+				Statement* statement = NULL;
 				// Nickolay Samofatov: allocate statement memory pool...
 				MemoryPool* new_pool = attachment->createPool();
 				// block is used to ensure MET_verify_cache
@@ -5433,7 +5433,7 @@ static void get_trigger_dependencies(DeferredWork* work, bool compile, jrd_tra* 
 
 	if ((relation || (type & TRIGGER_TYPE_MASK) != TRIGGER_TYPE_DML) && !blob_id.isEmpty())
 	{
-		JrdStatement* statement = NULL;
+		Statement* statement = NULL;
 		// Nickolay Samofatov: allocate statement memory pool...
 		MemoryPool* new_pool = attachment->createPool();
 		USHORT par_flags;
@@ -5905,7 +5905,7 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 					if (notNull && !defaultValue->isEmpty())
 					{
 						Jrd::ContextPoolHolder context(tdbb, attachment->createPool());
-						JrdStatement* defaultStatement = NULL;
+						Statement* defaultStatement = NULL;
 						try
 						{
 							ValueExprNode* defaultNode = static_cast<ValueExprNode*>(MET_parse_blob(

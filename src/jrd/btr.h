@@ -43,7 +43,7 @@ namespace Jrd {
 class jrd_rel;
 class jrd_tra;
 template <typename T> class vec;
-class JrdStatement;
+class Statement;
 struct temporary_key;
 class jrd_tra;
 class BtrPageGCLock;
@@ -66,7 +66,7 @@ struct index_desc
 	vec<int>*	idx_foreign_indexes;		// ids for foreign key partner indexes
 	ValueExprNode* idx_expression;			// node tree for indexed expresssion
 	dsc		idx_expression_desc;			// descriptor for expression result
-	JrdStatement* idx_expression_statement;	// stored statement for expression evaluation
+	Statement* idx_expression_statement;	// stored statement for expression evaluation
 	// This structure should exactly match IRTD structure for current ODS
 	struct idx_repeat
 	{
@@ -246,7 +246,7 @@ public:
 	{
 	}
 
-	static bool checkPool(const Lock* lock, Firebird::MemoryPool* pool) 
+	static bool checkPool(const Lock* lock, Firebird::MemoryPool* pool)
 	{
 		if (!pool || !lock)
 			return false;

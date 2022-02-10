@@ -34,12 +34,12 @@ static const char* const SCRATCH = "fb_cursor_";
 static const ULONG PREFETCH_SIZE = 65536; // 64 KB
 
 DsqlCursor::DsqlCursor(DsqlDmlRequest* req, ULONG flags)
-	: m_request(req), m_message(req->getStatement()->getReceiveMsg()),
+	: m_dsqlRequest(req), m_message(req->getDsqlStatement()->getReceiveMsg()),
 	  m_resultSet(NULL), m_flags(flags),
 	  m_space(req->getPool(), SCRATCH),
 	  m_state(BOS), m_eof(false), m_position(0), m_cachedCount(0)
 {
-	TRA_link_cursor(m_request->req_transaction, this);
+	TRA_link_cursor(m_dsqlRequest->req_transaction, this);
 }
 
 DsqlCursor::~DsqlCursor()
@@ -50,12 +50,12 @@ DsqlCursor::~DsqlCursor()
 
 jrd_tra* DsqlCursor::getTransaction() const
 {
-	return m_request->req_transaction;
+	return m_dsqlRequest->req_transaction;
 }
 
 Attachment* DsqlCursor::getAttachment() const
 {
-	return m_request->req_dbb->dbb_attachment;
+	return m_dsqlRequest->req_dbb->dbb_attachment;
 }
 
 void DsqlCursor::setInterfacePtr(JResultSet* interfacePtr) throw()
@@ -70,34 +70,34 @@ void DsqlCursor::close(thread_db* tdbb, DsqlCursor* cursor)
 		return;
 
 	const auto attachment = cursor->getAttachment();
-	const auto request = cursor->m_request;
+	const auto dsqlRequest = cursor->m_dsqlRequest;
 
-	if (request->getJrdRequest())
+	if (dsqlRequest->getRequest())
 	{
 		ThreadStatusGuard status_vector(tdbb);
 		try
 		{
 			// Report some remaining fetches if any
-			if (request->req_fetch_baseline)
+			if (dsqlRequest->req_fetch_baseline)
 			{
-				TraceDSQLFetch trace(attachment, request);
+				TraceDSQLFetch trace(attachment, dsqlRequest);
 				trace.fetch(true, ITracePlugin::RESULT_SUCCESS);
 			}
 
-			if (request->req_traced && TraceManager::need_dsql_free(attachment))
+			if (dsqlRequest->req_traced && TraceManager::need_dsql_free(attachment))
 			{
-				TraceSQLStatementImpl stmt(request, NULL);
+				TraceSQLStatementImpl stmt(dsqlRequest, NULL);
 				TraceManager::event_dsql_free(attachment, &stmt, DSQL_close);
 			}
 
-			JRD_unwind_request(tdbb, request->getJrdRequest());
+			JRD_unwind_request(tdbb, dsqlRequest->getRequest());
 		}
 		catch (Firebird::Exception&)
 		{} // no-op
 	}
 
-	request->req_cursor = NULL;
-	TRA_unlink_cursor(request->req_transaction, cursor);
+	dsqlRequest->req_cursor = NULL;
+	TRA_unlink_cursor(dsqlRequest->req_transaction, cursor);
 	delete cursor;
 }
 
@@ -105,7 +105,7 @@ int DsqlCursor::fetchNext(thread_db* tdbb, UCHAR* buffer)
 {
 	if (!(m_flags & IStatement::CURSOR_TYPE_SCROLLABLE))
 	{
-		m_eof = !m_request->fetch(tdbb, buffer);
+		m_eof = !m_dsqlRequest->fetch(tdbb, buffer);
 
 		if (m_eof)
 		{
@@ -223,13 +223,13 @@ int DsqlCursor::fetchFromCache(thread_db* tdbb, UCHAR* buffer, FB_UINT64 positio
 
 	fb_assert(position < m_cachedCount);
 
-	UCHAR* const msgBuffer = m_request->req_msg_buffers[m_message->msg_buffer_number];
+	UCHAR* const msgBuffer = m_dsqlRequest->req_msg_buffers[m_message->msg_buffer_number];
 
 	const FB_UINT64 offset = position * m_message->msg_length;
 	const FB_UINT64 readBytes = m_space.read(offset, msgBuffer, m_message->msg_length);
 	fb_assert(readBytes == m_message->msg_length);
 
-	m_request->mapInOut(tdbb, true, m_message, NULL, buffer);
+	m_dsqlRequest->mapInOut(tdbb, true, m_message, NULL, buffer);
 
 	m_position = position;
 	m_state = POSITIONED;
@@ -241,13 +241,13 @@ bool DsqlCursor::cacheInput(thread_db* tdbb, FB_UINT64 position)
 	fb_assert(!m_eof);
 
 	const ULONG prefetchCount = MAX(PREFETCH_SIZE / m_message->msg_length, 1);
-	const UCHAR* const msgBuffer = m_request->req_msg_buffers[m_message->msg_buffer_number];
+	const UCHAR* const msgBuffer = m_dsqlRequest->req_msg_buffers[m_message->msg_buffer_number];
 
 	while (position >= m_cachedCount)
 	{
 		for (ULONG count = 0; count < prefetchCount; count++)
 		{
-			if (!m_request->fetch(tdbb, NULL))
+			if (!m_dsqlRequest->fetch(tdbb, NULL))
 			{
 				m_eof = true;
 				break;

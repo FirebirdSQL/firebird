@@ -389,7 +389,7 @@ private:
 
 	static void putAttachment(SnapshotData::DumpRecord&, const Attachment*);
 	static void putTransaction(SnapshotData::DumpRecord&, const jrd_tra*);
-	static void putStatement(SnapshotData::DumpRecord&, const JrdStatement*, const Firebird::string&);
+	static void putStatement(SnapshotData::DumpRecord&, const Statement*, const Firebird::string&);
 	static void putRequest(SnapshotData::DumpRecord&, const jrd_req*, const Firebird::string&);
 	static void putCall(SnapshotData::DumpRecord&, const jrd_req*);
 	static void putStatistics(SnapshotData::DumpRecord&, const RuntimeStatistics&, int, int);

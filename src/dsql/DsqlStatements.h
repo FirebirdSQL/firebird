@@ -39,7 +39,7 @@ class dsql_msg;
 class dsql_par;
 class DsqlRequest;
 class DsqlCompilerScratch;
-class JrdStatement;
+class Statement;
 class SessionManagementNode;
 class TransactionNode;
 
@@ -134,7 +134,7 @@ public:
 	void setEof(dsql_par* value) { eof = value; }
 
 public:
-	virtual JrdStatement* getJrdStatement() const
+	virtual Statement* getStatement() const
 	{
 		return nullptr;
 	}
@@ -182,9 +182,9 @@ public:
 	}
 
 public:
-	JrdStatement* getJrdStatement() const override
+	Statement* getStatement() const override
 	{
-		return jrdStatement;
+		return statement;
 	}
 
 	void dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, ntrace_result_t* traceResult) override;
@@ -214,7 +214,7 @@ protected:
 
 private:
 	NestConst<StmtNode> node;
-	JrdStatement* jrdStatement = nullptr;
+	Statement* statement = nullptr;
 	dsql_par* dbKey = nullptr;					// Database key for current of
 	dsql_par* recVersion = nullptr;				// Record Version for current of
 	dsql_par* parentRecVersion = nullptr;		// parent record version

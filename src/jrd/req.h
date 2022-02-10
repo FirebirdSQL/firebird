@@ -31,7 +31,7 @@
 #include "../jrd/exe.h"
 #include "../jrd/sort.h"
 #include "../jrd/Attachment.h"
-#include "../jrd/JrdStatement.h"
+#include "../jrd/Statement.h"
 #include "../jrd/Record.h"
 #include "../jrd/RecordNumber.h"
 #include "../common/classes/timestamp.h"
@@ -266,7 +266,7 @@ private:
 	};
 
 public:
-	jrd_req(Attachment* attachment, /*const*/ JrdStatement* aStatement,
+	jrd_req(Attachment* attachment, /*const*/ Statement* aStatement,
 			Firebird::MemoryStats* parent_stats)
 		: statement(aStatement),
 		  req_pool(statement->pool),
@@ -290,30 +290,30 @@ public:
 		impureArea.grow(statement->impureSize);
 	}
 
-	JrdStatement* getStatement()
+	Statement* getStatement()
 	{
 		return statement;
 	}
 
-	const JrdStatement* getStatement() const
+	const Statement* getStatement() const
 	{
 		return statement;
 	}
 
 	bool hasInternalStatement() const
 	{
-		return statement->flags & JrdStatement::FLAG_INTERNAL;
+		return statement->flags & Statement::FLAG_INTERNAL;
 	}
 
 	bool hasPowerfulStatement() const
 	{
-		return statement->flags & JrdStatement::FLAG_POWERFUL;
+		return statement->flags & Statement::FLAG_POWERFUL;
 	}
 
 	void setAttachment(Attachment* newAttachment)
 	{
 		req_attachment = newAttachment;
-		charSetId = statement->flags & JrdStatement::FLAG_INTERNAL ?
+		charSetId = statement->flags & Statement::FLAG_INTERNAL ?
 			CS_METADATA : req_attachment->att_charset;
 	}
 
@@ -345,7 +345,7 @@ public:
 	}
 
 private:
-	JrdStatement* const statement;
+	Statement* const statement;
 	mutable StmtNumber	req_id;			// request identifier
 	TimeStampCache req_timeStampCache;	// time stamp cache
 

@@ -94,7 +94,7 @@ namespace Jrd
 	class Trigger;
 	class TrigVector;
 	class Function;
-	class JrdStatement;
+	class Statement;
 	class Validation;
 	class Applier;
 
@@ -545,7 +545,7 @@ private:
 	StableAttachmentPart* att_stable;
 
 public:
-	Firebird::SortedArray<JrdStatement*> att_statements;	// Statements belonging to attachment
+	Firebird::SortedArray<Statement*> att_statements;	// Statements belonging to attachment
 	Firebird::SortedArray<jrd_req*> att_requests;	// Requests belonging to attachment
 	Lock*		att_id_lock;				// Attachment lock (if any)
 	AttNumber	att_attachment_id;			// Attachment ID
@@ -620,8 +620,8 @@ public:
 	Firebird::Array<Function*>		att_functions;			// User defined functions
 	GeneratorFinder					att_generators;
 
-	Firebird::Array<JrdStatement*>	att_internal;			// internal statements
-	Firebird::Array<JrdStatement*>	att_dyn_req;			// internal dyn statements
+	Firebird::Array<Statement*>	att_internal;			// internal statements
+	Firebird::Array<Statement*>	att_dyn_req;			// internal dyn statements
 	Firebird::ICryptKeyCallback*	att_crypt_callback;		// callback for DB crypt
 	Firebird::DecimalStatus			att_dec_status;			// error handling and rounding
 

@@ -169,21 +169,21 @@ ISC_INT64 TraceTransactionImpl::getInitialID()
 
 ISC_INT64 TraceSQLStatementImpl::getStmtID()
 {
-	if (m_stmt->getJrdRequest())
-		return m_stmt->getJrdRequest()->getRequestId();
+	if (m_stmt->getRequest())
+		return m_stmt->getRequest()->getRequestId();
 
 	return 0;
 }
 
 const char* TraceSQLStatementImpl::getText()
 {
-	const string* stmtText = m_stmt->getStatement()->getSqlText();
+	const string* stmtText = m_stmt->getDsqlStatement()->getSqlText();
 	return stmtText ? stmtText->c_str() : "";
 }
 
 const char* TraceSQLStatementImpl::getTextUTF8()
 {
-	const string* stmtText = m_stmt->getStatement()->getSqlText();
+	const string* stmtText = m_stmt->getDsqlStatement()->getSqlText();
 
 	if (m_textUTF8.isEmpty() && stmtText && !stmtText->isEmpty())
 	{
@@ -211,8 +211,8 @@ void TraceSQLStatementImpl::fillPlan(bool explained)
 	if (m_plan.isEmpty() || m_planExplained != explained)
 	{
 		m_planExplained = explained;
-		if (m_stmt->getJrdStatement())
-			m_plan = Optimizer::getPlan(JRD_get_thread_data(), m_stmt->getJrdStatement(), m_planExplained);
+		if (m_stmt->getStatement())
+			m_plan = Optimizer::getPlan(JRD_get_thread_data(), m_stmt->getStatement(), m_planExplained);
 	}
 }
 

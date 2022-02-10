@@ -142,10 +142,10 @@ BoolExprNode* CMP_clone_node_opt(thread_db* tdbb, CompilerScratch* csb, BoolExpr
 }
 
 // Compile a statement.
-JrdStatement* CMP_compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool internalFlag,
+Statement* CMP_compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool internalFlag,
 	ULONG dbginfoLength, const UCHAR* dbginfo)
 {
-	JrdStatement* statement = nullptr;
+	Statement* statement = nullptr;
 
 	SET_TDBB(tdbb);
 	const auto att = tdbb->getAttachment();
@@ -160,7 +160,7 @@ JrdStatement* CMP_compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bo
 
 		const auto csb = PAR_parse(tdbb, blr, blrLength, internalFlag, dbginfoLength, dbginfo);
 
-		statement = JrdStatement::makeStatement(tdbb, csb, internalFlag);
+		statement = Statement::makeStatement(tdbb, csb, internalFlag);
 
 #ifdef CMP_DEBUG
 		if (csb->csb_dump.hasData())

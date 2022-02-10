@@ -669,7 +669,7 @@ jrd_req* Jrd::Attachment::findSystemRequest(thread_db* tdbb, USHORT id, USHORT w
 
 	fb_assert(which == IRQ_REQUESTS || which == DYN_REQUESTS);
 
-	JrdStatement* statement = (which == IRQ_REQUESTS ? att_internal[id] : att_dyn_req[id]);
+	Statement* statement = (which == IRQ_REQUESTS ? att_internal[id] : att_dyn_req[id]);
 
 	if (!statement)
 		return NULL;
@@ -846,13 +846,13 @@ void Jrd::Attachment::releaseLocks(thread_db* tdbb)
 
 	// And release the system requests
 
-	for (JrdStatement** itr = att_internal.begin(); itr != att_internal.end(); ++itr)
+	for (Statement** itr = att_internal.begin(); itr != att_internal.end(); ++itr)
 	{
 		if (*itr)
 			(*itr)->release(tdbb);
 	}
 
-	for (JrdStatement** itr = att_dyn_req.begin(); itr != att_dyn_req.end(); ++itr)
+	for (Statement** itr = att_dyn_req.begin(); itr != att_dyn_req.end(); ++itr)
 	{
 		if (*itr)
 			(*itr)->release(tdbb);

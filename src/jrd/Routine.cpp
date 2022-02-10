@@ -21,7 +21,7 @@
 
 #include "firebird.h"
 #include "../jrd/Routine.h"
-#include "../jrd/JrdStatement.h"
+#include "../jrd/Statement.h"
 #include "../jrd/Function.h"
 #include "../jrd/jrd.h"
 #include "../jrd/exe.h"
@@ -111,8 +111,8 @@ Format* Routine::createFormat(MemoryPool& pool, IMessageMetadata* params, bool a
 	return format;
 }
 
-void Routine::setStatement(JrdStatement* value) 
-{ 
+void Routine::setStatement(Statement* value)
+{
 	statement = value;
 
 	if (statement)
@@ -142,7 +142,7 @@ void Routine::checkReload(thread_db* tdbb)
 	if (!reload(tdbb))
 	{
 		string err;
-		err.printf("Recompile of %s \"%s\" failed", 
+		err.printf("Recompile of %s \"%s\" failed",
 					getObjectType() == obj_udf ? "FUNCTION" : "PROCEDURE",
 					getName().toString().c_str());
 
@@ -173,7 +173,7 @@ void Routine::parseBlr(thread_db* tdbb, CompilerScratch* csb, bid* blob_id, bid*
 
 	flags &= ~Routine::FLAG_RELOAD;
 
-	JrdStatement* statement = getStatement();
+	Statement* statement = getStatement();
 	PAR_blr(tdbb, NULL, tmp.begin(), (ULONG) tmp.getCount(), NULL, &csb, &statement, false, 0);
 	setStatement(statement);
 

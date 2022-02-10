@@ -1129,7 +1129,7 @@ public:
 
 	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
-		dsqlScratch->getStatement()->setType(
+		dsqlScratch->getDsqlStatement()->setType(
 			legacy ? DsqlStatement::TYPE_SET_GENERATOR : DsqlStatement::TYPE_DDL);
 		return this;
 	}
@@ -2417,7 +2417,7 @@ public:
 public:
 	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
-		dsqlScratch->getStatement()->setType(
+		dsqlScratch->getDsqlStatement()->setType(
 			create ? DsqlStatement::TYPE_CREATE_DB : DsqlStatement::TYPE_DDL);
 		return this;
 	}

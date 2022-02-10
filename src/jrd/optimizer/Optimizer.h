@@ -330,7 +330,7 @@ public:
 		return ConjunctIterator(begin, end);
 	}
 
-	static Firebird::string getPlan(thread_db* tdbb, const JrdStatement* statement, bool detailed)
+	static Firebird::string getPlan(thread_db* tdbb, const Statement* statement, bool detailed)
 	{
 		return statement ? statement->getPlan(tdbb, detailed) : "";
 	}

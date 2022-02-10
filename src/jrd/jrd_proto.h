@@ -36,7 +36,7 @@ namespace Jrd {
 	class blb;
 	struct bid;
 	class jrd_req;
-	class JrdStatement;
+	class Statement;
 	class Service;
 	class thread_db;
 	struct teb;

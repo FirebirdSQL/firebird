@@ -2076,7 +2076,7 @@ void DeclareSubProcNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->appendUChar(SUB_ROUTINE_TYPE_PSQL);
 
 	dsqlScratch->appendUChar(
-		blockScratch->getStatement()->getFlags() & DsqlStatement::FLAG_SELECTABLE ? 1 : 0);
+		blockScratch->getDsqlStatement()->getFlags() & DsqlStatement::FLAG_SELECTABLE ? 1 : 0);
 
 	genParameters(dsqlScratch, dsqlBlock->parameters);
 	genParameters(dsqlScratch, dsqlBlock->returns);
@@ -2290,7 +2290,7 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		return SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, node);
 	}
 
-	dsqlScratch->getStatement()->setType(dsqlCursorName.hasData() ?
+	dsqlScratch->getDsqlStatement()->setType(dsqlCursorName.hasData() ?
 		DsqlStatement::TYPE_DELETE_CURSOR : DsqlStatement::TYPE_DELETE);
 
 	// Generate record selection expression.
@@ -2377,7 +2377,7 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		else
 		{
 			dsqlScratch->appendUChar(blr_send);
-			dsqlScratch->appendUChar(dsqlScratch->getStatement()->getReceiveMsg()->msg_number);
+			dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
 		}
 	}
 
@@ -2990,7 +2990,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	}
 
 	if (!dsqlScratch->isPsql())
-		dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_EXEC_PROCEDURE);
+		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_EXEC_PROCEDURE);
 
 	ExecProcedureNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ExecProcedureNode(dsqlScratch->getPool(), dsqlName);
 	node->dsqlProcedure = procedure;
@@ -3081,7 +3081,7 @@ ValueListNode* ExecProcedureNode::explodeOutputs(DsqlCompilerScratch* dsqlScratc
 		*ptr = paramNode;
 
 		dsql_par* parameter = paramNode->dsqlParameter = MAKE_parameter(
-			dsqlScratch->getStatement()->getReceiveMsg(), true, true, 0, NULL);
+			dsqlScratch->getDsqlStatement()->getReceiveMsg(), true, true, 0, NULL);
 		paramNode->dsqlParameterIndex = parameter->par_index;
 
 		DsqlDescMaker::fromField(&parameter->par_desc, field);
@@ -3112,9 +3112,9 @@ void ExecProcedureNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	const dsql_msg* message = NULL;
 
-	if (dsqlScratch->getStatement()->getType() == DsqlStatement::TYPE_EXEC_PROCEDURE)
+	if (dsqlScratch->getDsqlStatement()->getType() == DsqlStatement::TYPE_EXEC_PROCEDURE)
 	{
-		if ((message = dsqlScratch->getStatement()->getReceiveMsg()))
+		if ((message = dsqlScratch->getDsqlStatement()->getReceiveMsg()))
 		{
 			dsqlScratch->appendUChar(blr_begin);
 			dsqlScratch->appendUChar(blr_send);
@@ -4267,7 +4267,7 @@ const StmtNode* InitVariableNode::execute(thread_db* tdbb, jrd_req* request, Exe
 
 ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	DsqlStatement* const statement = dsqlScratch->getStatement();
+	DsqlStatement* const statement = dsqlScratch->getDsqlStatement();
 
 	if (returns.hasData())
 		statement->setType(DsqlStatement::TYPE_SELECT_BLOCK);
@@ -4404,7 +4404,7 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		}
 	}
 
-	DsqlStatement* const statement = dsqlScratch->getStatement();
+	DsqlStatement* const statement = dsqlScratch->getDsqlStatement();
 
 	dsqlScratch->appendUChar(blr_begin);
 
@@ -5968,7 +5968,7 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (!dsqlScratch->isPsql())
 	{
 		// Describe it as TYPE_RETURNING_CURSOR if RETURNING is present or as INSERT otherwise.
-		dsqlScratch->getStatement()->setType(returning ?
+		dsqlScratch->getDsqlStatement()->setType(returning ?
 			DsqlStatement::TYPE_RETURNING_CURSOR :
 			DsqlStatement::TYPE_INSERT);
 	}
@@ -6529,7 +6529,7 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 		return node;
 	}
 
-	dsqlScratch->getStatement()->setType(dsqlCursorName.hasData() ?
+	dsqlScratch->getDsqlStatement()->setType(dsqlCursorName.hasData() ?
 		DsqlStatement::TYPE_UPDATE_CURSOR : DsqlStatement::TYPE_UPDATE);
 
 	doDsqlPass(dsqlScratch, node->dsqlRelation, relation, false);
@@ -6656,7 +6656,7 @@ void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		else
 		{
 			dsqlScratch->appendUChar(blr_send);
-			dsqlScratch->appendUChar(dsqlScratch->getStatement()->getReceiveMsg()->msg_number);
+			dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
 		}
 	}
 
@@ -7461,7 +7461,7 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 {
 	DsqlContextStack::AutoRestore autoContext(*dsqlScratch->context);
 
-	dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_INSERT);
+	dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_INSERT);
 
 	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) StoreNode(dsqlScratch->getPool());
 	node->overrideClause = overrideClause;
@@ -7671,7 +7671,7 @@ void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		else if (!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT))
 		{
 			dsqlScratch->appendUChar(blr_send);
-			dsqlScratch->appendUChar(dsqlScratch->getStatement()->getReceiveMsg()->msg_number);
+			dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
 		}
 	}
 
@@ -8164,8 +8164,8 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (dsqlForUpdate)
 	{
-		dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_SELECT_UPD);
-		dsqlScratch->getStatement()->addFlags(DsqlStatement::FLAG_NO_BATCH);
+		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_SELECT_UPD);
+		dsqlScratch->getDsqlStatement()->addFlags(DsqlStatement::FLAG_NO_BATCH);
 	}
 	else
 	{
@@ -8177,8 +8177,8 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		if (rseNode->dsqlOrder || rseNode->dsqlDistinct)
 		{
-			dsqlScratch->getStatement()->setFlags(
-				dsqlScratch->getStatement()->getFlags() & ~DsqlStatement::FLAG_NO_BATCH);
+			dsqlScratch->getDsqlStatement()->setFlags(
+				dsqlScratch->getDsqlStatement()->getFlags() & ~DsqlStatement::FLAG_NO_BATCH);
 		}
 	}
 
@@ -8204,7 +8204,7 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	RseNode* const rse = nodeAs<RseNode>(dsqlRse);
 	fb_assert(rse);
 
-	DsqlStatement* const statement = dsqlScratch->getStatement();
+	DsqlStatement* const statement = dsqlScratch->getDsqlStatement();
 
 	// Set up parameter for things in the select list.
 	ValueListNode* list = rse->dsqlSelectList;
@@ -8532,7 +8532,7 @@ DmlNode* SuspendNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 
 SuspendNode* SuspendNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	DsqlStatement* const statement = dsqlScratch->getStatement();
+	DsqlStatement* const statement = dsqlScratch->getDsqlStatement();
 
 	if (dsqlScratch->flags & (DsqlCompilerScratch::FLAG_TRIGGER | DsqlCompilerScratch::FLAG_FUNCTION))
 	{
@@ -8790,7 +8790,7 @@ const StmtNode* SavepointEncloseNode::execute(thread_db* tdbb, jrd_req* request,
 
 SetTransactionNode* SetTransactionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_START_TRANS);
+	dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_START_TRANS);
 
 	// Generate tpb for set transaction. Use blr string of dsqlScratch.
 	// If a value is not specified, default is not stuffed, let the engine handle it.
@@ -9365,7 +9365,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	// If RETURNING is present, type is already DsqlStatement::TYPE_EXEC_PROCEDURE.
 	if (!returning)
-		dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_INSERT);
+		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_INSERT);
 
 	return SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, node);
 }
@@ -9438,12 +9438,12 @@ CommitRollbackNode* CommitRollbackNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	switch (command)
 	{
 		case CMD_COMMIT:
-			dsqlScratch->getStatement()->setType(retain ?
+			dsqlScratch->getDsqlStatement()->setType(retain ?
 				DsqlStatement::TYPE_COMMIT_RETAIN : DsqlStatement::TYPE_COMMIT);
 			break;
 
 		case CMD_ROLLBACK:
-			dsqlScratch->getStatement()->setType(retain ?
+			dsqlScratch->getDsqlStatement()->setType(retain ?
 				DsqlStatement::TYPE_ROLLBACK_RETAIN : DsqlStatement::TYPE_ROLLBACK);
 			break;
 	}
@@ -9499,7 +9499,7 @@ Firebird::string UserSavepointNode::internalPrint(NodePrinter& printer) const
 
 UserSavepointNode* UserSavepointNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_SAVEPOINT);
+	dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_SAVEPOINT);
 	return this;
 }
 
@@ -9666,7 +9666,7 @@ static void dsqlGenEofAssignment(DsqlCompilerScratch* dsqlScratch, SSHORT value)
 
 	dsqlScratch->appendUChar(blr_assignment);
 	LiteralNode::genConstant(dsqlScratch, &valueDesc, false);
-	GEN_parameter(dsqlScratch, dsqlScratch->getStatement()->getEof());
+	GEN_parameter(dsqlScratch, dsqlScratch->getDsqlStatement()->getEof());
 }
 
 static void dsqlGenReturning(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
@@ -9734,7 +9734,7 @@ static void dsqlGenReturningLocalTableCursor(DsqlCompilerScratch* dsqlScratch, R
 	dsqlScratch->appendUChar(blr_end);
 
 	dsqlScratch->appendUChar(blr_send);
-	dsqlScratch->appendUChar(dsqlScratch->getStatement()->getReceiveMsg()->msg_number);
+	dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
 
 	dsqlScratch->appendUChar(blr_begin);
 
@@ -9752,7 +9752,7 @@ static void dsqlGenReturningLocalTableCursor(DsqlCompilerScratch* dsqlScratch, R
 	dsqlScratch->appendUChar(blr_end);
 
 	dsqlScratch->appendUChar(blr_send);
-	dsqlScratch->appendUChar(dsqlScratch->getStatement()->getReceiveMsg()->msg_number);
+	dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
 	dsqlGenEofAssignment(dsqlScratch, 0);
 }
 
@@ -10004,8 +10004,8 @@ static RseNode* dsqlPassCursorReference(DsqlCompilerScratch* dsqlScratch, const 
 
 	// Verify that the cursor is appropriate and updatable
 
-	dsql_par* source = dsqlFindDbKey(parent->getStatement(), relation_name);
-	dsql_par* rv_source = dsqlFindRecordVersion(parent->getStatement(), relation_name);
+	dsql_par* source = dsqlFindDbKey(parent->getDsqlStatement(), relation_name);
+	dsql_par* rv_source = dsqlFindRecordVersion(parent->getDsqlStatement(), relation_name);
 
 	if (!source || !rv_source)
 	{
@@ -10014,7 +10014,7 @@ static RseNode* dsqlPassCursorReference(DsqlCompilerScratch* dsqlScratch, const 
 				  Arg::Gds(isc_dsql_cursor_update_err) << cursor);
 	}
 
-	const auto statement = static_cast<DsqlDmlStatement*>(dsqlScratch->getStatement());
+	const auto statement = static_cast<DsqlDmlStatement*>(dsqlScratch->getDsqlStatement());
 
 	statement->setParentRequest(parent);
 	statement->setParentDbKey(source);
@@ -10261,7 +10261,7 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 
 			for (auto& src : node->first->items)
 			{
-				auto parameter = MAKE_parameter(dsqlScratch->getStatement()->getReceiveMsg(),
+				auto parameter = MAKE_parameter(dsqlScratch->getDsqlStatement()->getReceiveMsg(),
 					true, true, 0, src);
 				parameter->par_node = src;
 				DsqlDescMaker::fromNode(dsqlScratch, &parameter->par_desc, src, true);
@@ -10278,8 +10278,8 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 			if (!singleton)
 			{
 				// Set up parameter to handle EOF
-				auto parameter = MAKE_parameter(dsqlScratch->getStatement()->getReceiveMsg(), false, false, 0, nullptr);
-				dsqlScratch->getStatement()->setEof(parameter);
+				auto parameter = MAKE_parameter(dsqlScratch->getDsqlStatement()->getReceiveMsg(), false, false, 0, nullptr);
+				dsqlScratch->getDsqlStatement()->setEof(parameter);
 				parameter->par_desc.dsc_dtype = dtype_short;
 				parameter->par_desc.dsc_scale = 0;
 				parameter->par_desc.dsc_length = sizeof(SSHORT);
@@ -10289,7 +10289,7 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 
 	if (!dsqlScratch->isPsql())
 	{
-		dsqlScratch->getStatement()->setType(singleton ?
+		dsqlScratch->getDsqlStatement()->setType(singleton ?
 			DsqlStatement::TYPE_EXEC_PROCEDURE : DsqlStatement::TYPE_RETURNING_CURSOR);
 	}
 

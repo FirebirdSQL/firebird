@@ -107,7 +107,7 @@ class thread_db;
 class Attachment;
 class jrd_tra;
 class jrd_req;
-class JrdStatement;
+class Statement;
 class jrd_file;
 class Format;
 class BufferDesc;
@@ -136,7 +136,7 @@ class Trigger
 public:
 	Firebird::HalfStaticArray<UCHAR, 128> blr;			// BLR code
 	Firebird::HalfStaticArray<UCHAR, 128> debugInfo;	// Debug info
-	JrdStatement* statement;							// Compiled statement
+	Statement* statement;							// Compiled statement
 	bool		releaseInProgress;
 	bool		sysTrigger;
 	FB_UINT64	type;						// Trigger type
@@ -305,7 +305,7 @@ class IndexBlock : public pool_alloc<type_idb>
 public:
 	IndexBlock*	idb_next;
 	ValueExprNode* idb_expression;			// node tree for index expression
-	JrdStatement* idb_expression_statement;	// statement for index expression evaluation
+	Statement* idb_expression_statement;	// statement for index expression evaluation
 	dsc			idb_expression_desc;		// descriptor for expression result
 	Lock*		idb_lock;					// lock to synchronize changes to index
 	USHORT		idb_id;

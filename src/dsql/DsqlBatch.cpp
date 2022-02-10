@@ -61,14 +61,14 @@ namespace {
 }
 
 DsqlBatch::DsqlBatch(DsqlDmlRequest* req, const dsql_msg* /*message*/, IMessageMetadata* inMeta, ClumpletReader& pb)
-	: m_request(req),
+	: m_dsqlRequest(req),
 	  m_batch(NULL),
 	  m_meta(inMeta),
-	  m_messages(m_request->getPool()),
-	  m_blobs(m_request->getPool()),
-	  m_blobMap(m_request->getPool()),
-	  m_blobMeta(m_request->getPool()),
-	  m_defaultBpb(m_request->getPool()),
+	  m_messages(m_dsqlRequest->getPool()),
+	  m_blobs(m_dsqlRequest->getPool()),
+	  m_blobMap(m_dsqlRequest->getPool()),
+	  m_blobMeta(m_dsqlRequest->getPool()),
+	  m_defaultBpb(m_dsqlRequest->getPool()),
 	  m_messageSize(0),
 	  m_alignedMessage(0),
 	  m_alignment(0),
@@ -168,13 +168,13 @@ DsqlBatch::~DsqlBatch()
 {
 	if (m_batch)
 		m_batch->resetHandle();
-	if (m_request)
-		m_request->req_batch = NULL;
+	if (m_dsqlRequest)
+		m_dsqlRequest->req_batch = NULL;
 }
 
 Attachment* DsqlBatch::getAttachment() const
 {
-	return m_request->req_dbb->dbb_attachment;
+	return m_dsqlRequest->req_dbb->dbb_attachment;
 }
 
 void DsqlBatch::setInterfacePtr(JBatch* interfacePtr) throw()
@@ -205,13 +205,13 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, DsqlDmlRequest* req, IMessageMetadat
 
 	// Sanity checks before creating batch
 
-	if (!req->getJrdRequest())
+	if (!req->getRequest())
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
 				  Arg::Gds(isc_unprepared_stmt));
 	}
 
-	const DsqlStatement* statement = req->getStatement();
+	const auto statement = req->getDsqlStatement();
 
 	if (statement->getFlags() & DsqlStatement::FLAG_ORPHAN)
 	{
@@ -451,7 +451,7 @@ Firebird::IBatchCompletionState* DsqlBatch::execute(thread_db* tdbb)
 	jrd_tra* transaction = tdbb->getTransaction();
 
 	// execution timer
-	thread_db::TimerGuard timerGuard(tdbb, m_request->setupTimer(tdbb), true);
+	thread_db::TimerGuard timerGuard(tdbb, m_dsqlRequest->setupTimer(tdbb), true);
 
 	// sync internal buffers
 	m_messages.done();
@@ -651,20 +651,20 @@ private:
 	}
 
 	// execute request
-	m_request->req_transaction = transaction;
-	jrd_req* req = m_request->getJrdRequest();
+	m_dsqlRequest->req_transaction = transaction;
+	jrd_req* req = m_dsqlRequest->getRequest();
 	fb_assert(req);
 
 	// prepare completion interface
 	AutoPtr<BatchCompletionState, SimpleDispose> completionState
 		(FB_NEW BatchCompletionState(m_flags & (1 << IBatch::TAG_RECORD_COUNTS), m_detailed));
 	AutoSetRestore<bool> batchFlag(&req->req_batch_mode, true);
-	const dsql_msg* message = m_request->getStatement()->getSendMsg();
+	const dsql_msg* message = m_dsqlRequest->getDsqlStatement()->getSendMsg();
 	bool startRequest = true;
 
-	bool isExecBlock = m_request->getStatement()->getType() == DsqlStatement::TYPE_EXEC_BLOCK;
-	const auto receiveMessage = isExecBlock ? m_request->getStatement()->getReceiveMsg() : nullptr;
-	auto receiveMsgBuffer = isExecBlock ? m_request->req_msg_buffers[receiveMessage->msg_buffer_number] : nullptr;
+	bool isExecBlock = m_dsqlRequest->getDsqlStatement()->getType() == DsqlStatement::TYPE_EXEC_BLOCK;
+	const auto receiveMessage = isExecBlock ? m_dsqlRequest->getDsqlStatement()->getReceiveMsg() : nullptr;
+	auto receiveMsgBuffer = isExecBlock ? m_dsqlRequest->req_msg_buffers[receiveMessage->msg_buffer_number] : nullptr;
 
 	// process messages
 	ULONG remains;
@@ -720,11 +720,11 @@ private:
 			}
 
 			// map message to internal engine format
-			m_request->mapInOut(tdbb, false, message, m_meta, NULL, data);
+			m_dsqlRequest->mapInOut(tdbb, false, message, m_meta, NULL, data);
 			data += m_messageSize;
 			remains -= m_messageSize;
 
-			UCHAR* msgBuffer = m_request->req_msg_buffers[message->msg_buffer_number];
+			UCHAR* msgBuffer = m_dsqlRequest->req_msg_buffers[message->msg_buffer_number];
 			try
 			{
 				// runsend data to request and collect stats

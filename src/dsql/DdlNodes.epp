@@ -985,7 +985,7 @@ void DdlNode::executeDdlTrigger(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	const MetaName& oldNewObjectName)
 {
 	executeDdlTrigger(tdbb, transaction, when, action, objectName, oldNewObjectName,
-		*dsqlScratch->getStatement()->getSqlText());
+		*dsqlScratch->getDsqlStatement()->getSqlText());
 }
 
 void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, MetaName& name,
@@ -2347,7 +2347,7 @@ void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* 
 
 		stmtNode->genBlr(dsqlScratch);
 
-		dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_DDL);
+		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_DDL);
 		dsqlScratch->appendUChar(blr_end);
 		dsqlScratch->genReturn(false);
 		dsqlScratch->appendUChar(blr_end);
@@ -2872,7 +2872,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 	AutoCacheRequest requestHandle(tdbb, drq_m_prcs2, DYN_REQUESTS);
 	bool modified = false;
 
-	DsqlStatement* statement = dsqlScratch->getStatement();
+	DsqlStatement* statement = dsqlScratch->getDsqlStatement();
 
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 		P IN RDB$PROCEDURES
@@ -3242,7 +3242,7 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 
 	stmtNode->genBlr(dsqlScratch);
 
-	dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_DDL);
+	dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_DDL);
 	dsqlScratch->appendUChar(blr_end);
 	dsqlScratch->genReturn(true);
 	dsqlScratch->appendUChar(blr_end);
@@ -3773,7 +3773,7 @@ void CreateAlterTriggerNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* d
 		// The statement type may have been set incorrectly when parsing
 		// the trigger actions, so reset it to reflect the fact that this
 		// is a data definition statement; also reset the ddl node.
-		dsqlScratch->getStatement()->setType(DsqlStatement::TYPE_DDL);
+		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_DDL);
 	}
 
 	invalid = false;

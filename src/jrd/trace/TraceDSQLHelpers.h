@@ -111,31 +111,31 @@ private:
 class TraceDSQLExecute
 {
 public:
-	TraceDSQLExecute(Attachment* attachment, DsqlRequest* request) :
+	TraceDSQLExecute(Attachment* attachment, DsqlRequest* dsqlRequest) :
 		m_attachment(attachment),
-		m_request(request)
+		m_dsqlRequest(dsqlRequest)
 	{
-		m_need_trace = m_request->req_traced && TraceManager::need_dsql_execute(m_attachment);
+		m_need_trace = m_dsqlRequest->req_traced && TraceManager::need_dsql_execute(m_attachment);
 		if (!m_need_trace)
 			return;
 
 		{	// scope
-			TraceSQLStatementImpl stmt(request, NULL);
-			TraceManager::event_dsql_execute(m_attachment, request->req_transaction, &stmt, true,
+			TraceSQLStatementImpl stmt(dsqlRequest, NULL);
+			TraceManager::event_dsql_execute(m_attachment, dsqlRequest->req_transaction, &stmt, true,
 				ITracePlugin::RESULT_SUCCESS);
 		}
 
 		m_start_clock = fb_utils::query_performance_counter();
 
-		m_request->req_fetch_elapsed = 0;
-		m_request->req_fetch_rowcount = 0;
-		fb_assert(!m_request->req_fetch_baseline);
-		m_request->req_fetch_baseline = NULL;
+		m_dsqlRequest->req_fetch_elapsed = 0;
+		m_dsqlRequest->req_fetch_rowcount = 0;
+		fb_assert(!m_dsqlRequest->req_fetch_baseline);
+		m_dsqlRequest->req_fetch_baseline = NULL;
 
-		if (auto jrdRequest = m_request->getJrdRequest())
+		if (auto request = m_dsqlRequest->getRequest())
 		{
 			MemoryPool* pool = MemoryPool::getContextPool();
-			m_request->req_fetch_baseline = FB_NEW_POOL(*pool) RuntimeStatistics(*pool, jrdRequest->req_stats);
+			m_dsqlRequest->req_fetch_baseline = FB_NEW_POOL(*pool) RuntimeStatistics(*pool, request->req_stats);
 		}
 	}
 
@@ -147,19 +147,19 @@ public:
 		m_need_trace = false;
 		if (have_cursor)
 		{
-			m_request->req_fetch_elapsed = fb_utils::query_performance_counter() - m_start_clock;
+			m_dsqlRequest->req_fetch_elapsed = fb_utils::query_performance_counter() - m_start_clock;
 			return;
 		}
 
-		TraceRuntimeStats stats(m_attachment, m_request->req_fetch_baseline,
-			m_request->getJrdRequest() ? &m_request->getJrdRequest()->req_stats : NULL,
+		TraceRuntimeStats stats(m_attachment, m_dsqlRequest->req_fetch_baseline,
+			m_dsqlRequest->getRequest() ? &m_dsqlRequest->getRequest()->req_stats : NULL,
 			fb_utils::query_performance_counter() - m_start_clock,
-			m_request->req_fetch_rowcount);
+			m_dsqlRequest->req_fetch_rowcount);
 
-		TraceSQLStatementImpl stmt(m_request, stats.getPerf());
-		TraceManager::event_dsql_execute(m_attachment, m_request->req_transaction, &stmt, false, result);
+		TraceSQLStatementImpl stmt(m_dsqlRequest, stats.getPerf());
+		TraceManager::event_dsql_execute(m_attachment, m_dsqlRequest->req_transaction, &stmt, false, result);
 
-		m_request->req_fetch_baseline = NULL;
+		m_dsqlRequest->req_fetch_baseline = NULL;
 	}
 
 	~TraceDSQLExecute()
@@ -170,7 +170,7 @@ public:
 private:
 	bool m_need_trace;
 	Attachment* const m_attachment;
-	DsqlRequest* const m_request;
+	DsqlRequest* const m_dsqlRequest;
 	SINT64 m_start_clock;
 };
 
@@ -179,14 +179,14 @@ class TraceDSQLFetch
 public:
 	TraceDSQLFetch(Attachment* attachment, DsqlRequest* request) :
 		m_attachment(attachment),
-		m_request(request)
+		m_dsqlRequest(request)
 	{
-		m_need_trace = m_request->req_traced && TraceManager::need_dsql_execute(m_attachment) &&
-					   m_request->getJrdRequest() && (m_request->getJrdRequest()->req_flags & req_active);
+		m_need_trace = m_dsqlRequest->req_traced && TraceManager::need_dsql_execute(m_attachment) &&
+					   m_dsqlRequest->getRequest() && (m_dsqlRequest->getRequest()->req_flags & req_active);
 
 		if (!m_need_trace)
 		{
-			m_request->req_fetch_baseline = NULL;
+			m_dsqlRequest->req_fetch_baseline = NULL;
 			return;
 		}
 
@@ -204,30 +204,30 @@ public:
 			return;
 
 		m_need_trace = false;
-		m_request->req_fetch_elapsed += fb_utils::query_performance_counter() - m_start_clock;
+		m_dsqlRequest->req_fetch_elapsed += fb_utils::query_performance_counter() - m_start_clock;
 		if (!eof)
 		{
-			m_request->req_fetch_rowcount++;
+			m_dsqlRequest->req_fetch_rowcount++;
 			return;
 		}
 
-		TraceRuntimeStats stats(m_attachment, m_request->req_fetch_baseline,
-			&m_request->getJrdRequest()->req_stats, m_request->req_fetch_elapsed,
-			m_request->req_fetch_rowcount);
+		TraceRuntimeStats stats(m_attachment, m_dsqlRequest->req_fetch_baseline,
+			&m_dsqlRequest->getRequest()->req_stats, m_dsqlRequest->req_fetch_elapsed,
+			m_dsqlRequest->req_fetch_rowcount);
 
-		TraceSQLStatementImpl stmt(m_request, stats.getPerf());
+		TraceSQLStatementImpl stmt(m_dsqlRequest, stats.getPerf());
 
-		TraceManager::event_dsql_execute(m_attachment, m_request->req_transaction,
+		TraceManager::event_dsql_execute(m_attachment, m_dsqlRequest->req_transaction,
 			&stmt, false, result);
 
-		m_request->req_fetch_elapsed = 0;
-		m_request->req_fetch_baseline = NULL;
+		m_dsqlRequest->req_fetch_elapsed = 0;
+		m_dsqlRequest->req_fetch_baseline = NULL;
 	}
 
 private:
 	bool m_need_trace;
 	Attachment* const m_attachment;
-	DsqlRequest* const m_request;
+	DsqlRequest* const m_dsqlRequest;
 	SINT64 m_start_clock;
 };
 

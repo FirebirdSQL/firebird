@@ -117,15 +117,15 @@ dsql_dbb::~dsql_dbb()
 // Execute a dynamic SQL statement.
 void DSQL_execute(thread_db* tdbb,
 			  	  jrd_tra** tra_handle,
-				  DsqlRequest* request,
+				  DsqlRequest* dsqlRequest,
 				  IMessageMetadata* in_meta, const UCHAR* in_msg,
 				  IMessageMetadata* out_meta, UCHAR* out_msg)
 {
 	SET_TDBB(tdbb);
 
-	Jrd::ContextPoolHolder context(tdbb, &request->getPool());
+	Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 
-	const DsqlStatement* statement = request->getStatement();
+	const auto statement = dsqlRequest->getDsqlStatement();
 
 	if (statement->getFlags() & DsqlStatement::FLAG_ORPHAN)
 	{
@@ -151,7 +151,7 @@ void DSQL_execute(thread_db* tdbb,
 
 	if (statement->isCursorBased())
 	{
-		if (request->req_cursor)
+		if (dsqlRequest->req_cursor)
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
 					  Arg::Gds(isc_dsql_cursor_open_err));
@@ -161,8 +161,8 @@ void DSQL_execute(thread_db* tdbb,
 			(Arg::Gds(isc_random) << "Cannot execute SELECT statement").raise();
 	}
 
-	request->req_transaction = *tra_handle;
-	request->execute(tdbb, tra_handle, in_meta, in_msg, out_meta, out_msg, singleton);
+	dsqlRequest->req_transaction = *tra_handle;
+	dsqlRequest->execute(tdbb, tra_handle, in_meta, in_msg, out_meta, out_msg, singleton);
 }
 
 
@@ -178,33 +178,33 @@ void DSQL_execute(thread_db* tdbb,
     @param option
 
  **/
-void DSQL_free_statement(thread_db* tdbb, DsqlRequest* request, USHORT option)
+void DSQL_free_statement(thread_db* tdbb, DsqlRequest* dsqlRequest, USHORT option)
 {
 	SET_TDBB(tdbb);
 
-	Jrd::ContextPoolHolder context(tdbb, &request->getPool());
+	Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 
-	const DsqlStatement* statement = request->getStatement();
+	const auto dsqlStatement = dsqlRequest->getDsqlStatement();
 
 	fb_assert(!(option & DSQL_unprepare));	// handled in y-valve
 
 	if (option & DSQL_drop)
 	{
 		// Release everything associated with the request
-		DsqlRequest::destroy(tdbb, request);
+		DsqlRequest::destroy(tdbb, dsqlRequest);
 	}
 	else if (option & DSQL_close)
 	{
 		// Just close the cursor associated with the request
-		if (statement->isCursorBased())
+		if (dsqlStatement->isCursorBased())
 		{
-			if (!request->req_cursor)
+			if (!dsqlRequest->req_cursor)
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-501) <<
 						  Arg::Gds(isc_dsql_cursor_close_err));
 			}
 
-			DsqlCursor::close(tdbb, request->req_cursor);
+			DsqlCursor::close(tdbb, dsqlRequest->req_cursor);
 		}
 	}
 }
@@ -238,18 +238,18 @@ DsqlRequest* DSQL_prepare(thread_db* tdbb,
 	SET_TDBB(tdbb);
 
 	dsql_dbb* database = init(tdbb, attachment);
-	DsqlRequest* request = NULL;
+	DsqlRequest* dsqlRequest = NULL;
 
 	try
 	{
 		// Allocate a new request block and then prepare the request.
 
-		request = prepareRequest(tdbb, database, transaction, length, string, dialect,
+		dsqlRequest = prepareRequest(tdbb, database, transaction, length, string, dialect,
 			isInternalRequest);
 
 		// Can not prepare a CREATE DATABASE/SCHEMA statement
 
-		const DsqlStatement* statement = request->getStatement();
+		const auto statement = dsqlRequest->getDsqlStatement();
 		if (statement->getType() == DsqlStatement::TYPE_CREATE_DB)
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-530) <<
@@ -258,19 +258,19 @@ DsqlRequest* DSQL_prepare(thread_db* tdbb,
 
 		if (items && buffer)
 		{
-			Jrd::ContextPoolHolder context(tdbb, &request->getPool());
-			sql_info(tdbb, request, items->getCount(), items->begin(),
+			Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+			sql_info(tdbb, dsqlRequest, items->getCount(), items->begin(),
 				buffer->getCount(), buffer->begin());
 		}
 
-		return request;
+		return dsqlRequest;
 	}
 	catch (const Exception&)
 	{
-		if (request)
+		if (dsqlRequest)
 		{
-			Jrd::ContextPoolHolder context(tdbb, &request->getPool());
-			DsqlRequest::destroy(tdbb, request);
+			Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+			DsqlRequest::destroy(tdbb, dsqlRequest);
 		}
 		throw;
 	}
@@ -293,15 +293,15 @@ DsqlRequest* DSQL_prepare(thread_db* tdbb,
 
  **/
 void DSQL_sql_info(thread_db* tdbb,
-				   DsqlRequest* request,
+				   DsqlRequest* dsqlRequest,
 				   ULONG item_length, const UCHAR* items,
 				   ULONG info_length, UCHAR* info)
 {
 	SET_TDBB(tdbb);
 
-	Jrd::ContextPoolHolder context(tdbb, &request->getPool());
+	Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 
-	sql_info(tdbb, request, item_length, items, info_length, info);
+	sql_info(tdbb, dsqlRequest, item_length, items, info_length, info);
 }
 
 
@@ -315,47 +315,47 @@ void DSQL_execute_immediate(thread_db* tdbb, Jrd::Attachment* attachment, jrd_tr
 	SET_TDBB(tdbb);
 
 	dsql_dbb* const database = init(tdbb, attachment);
-	DsqlRequest* request = NULL;
+	DsqlRequest* dsqlRequest = NULL;
 
 	try
 	{
-		request = prepareRequest(tdbb, database, *tra_handle, length, string, dialect,
+		dsqlRequest = prepareRequest(tdbb, database, *tra_handle, length, string, dialect,
 			isInternalRequest);
 
-		const DsqlStatement* statement = request->getStatement();
+		const auto dsqlStatement = dsqlRequest->getDsqlStatement();
 
 		// Only allow NULL trans_handle if we're starting a transaction or set session properties
 
 		if (!*tra_handle &&
-			statement->getType() != DsqlStatement::TYPE_START_TRANS &&
-			statement->getType() != DsqlStatement::TYPE_SESSION_MANAGEMENT)
+			dsqlStatement->getType() != DsqlStatement::TYPE_START_TRANS &&
+			dsqlStatement->getType() != DsqlStatement::TYPE_SESSION_MANAGEMENT)
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
 					  Arg::Gds(isc_bad_trans_handle));
 		}
 
-		Jrd::ContextPoolHolder context(tdbb, &request->getPool());
+		Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 
 		// A select having cursor is a singleton select when executed immediate
-		const bool singleton = statement->isCursorBased();
+		const bool singleton = dsqlStatement->isCursorBased();
 		if (singleton && !(out_msg && out_meta))
 		{
 			ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
 					  Arg::Gds(isc_dsql_no_output_sqlda));
 		}
 
-		request->req_transaction = *tra_handle;
+		dsqlRequest->req_transaction = *tra_handle;
 
-		request->execute(tdbb, tra_handle, in_meta, in_msg, out_meta, out_msg, singleton);
+		dsqlRequest->execute(tdbb, tra_handle, in_meta, in_msg, out_meta, out_msg, singleton);
 
-		DsqlRequest::destroy(tdbb, request);
+		DsqlRequest::destroy(tdbb, dsqlRequest);
 	}
 	catch (const Exception&)
 	{
-		if (request)
+		if (dsqlRequest)
 		{
-			Jrd::ContextPoolHolder context(tdbb, &request->getPool());
-			DsqlRequest::destroy(tdbb, request);
+			Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+			DsqlRequest::destroy(tdbb, dsqlRequest);
 		}
 		throw;
 	}
@@ -374,16 +374,16 @@ void DSQL_execute_immediate(thread_db* tdbb, Jrd::Attachment* attachment, jrd_tr
     @param buffer
 
  **/
-static ULONG get_request_info(thread_db* tdbb, DsqlRequest* request, ULONG buffer_length, UCHAR* buffer)
+static ULONG get_request_info(thread_db* tdbb, DsqlRequest* dsqlRequest, ULONG buffer_length, UCHAR* buffer)
 {
-	if (!request->getJrdRequest())	// DDL
+	if (!dsqlRequest->getRequest())	// DDL
 		return 0;
 
 	// get the info for the request from the engine
 
 	try
 	{
-		return INF_request_info(request->getJrdRequest(), sizeof(record_info), record_info,
+		return INF_request_info(dsqlRequest->getRequest(), sizeof(record_info), record_info,
 			buffer_length, buffer);
 	}
 	catch (Exception&)
@@ -438,13 +438,13 @@ static DsqlRequest* prepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_tra*
 		auto statement = prepareStatement(tdbb, database, transaction, textLength, text,
 			clientDialect, isInternalRequest, &traceResult);
 
-		auto request = statement->createRequest(tdbb, database);
+		auto dsqlRequest = statement->createRequest(tdbb, database);
 
-		request->req_traced = true;
-		trace.setStatement(request);
+		dsqlRequest->req_traced = true;
+		trace.setStatement(dsqlRequest);
 		trace.prepare(traceResult);
 
-		return request;
+		return dsqlRequest;
 	}
 	catch (const Exception&)
 	{
@@ -502,7 +502,7 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 	MemoryPool* scratchPool = nullptr;
 	DsqlCompilerScratch* scratch = nullptr;
 	MemoryPool* statementPool = database->createPool();
-	RefPtr<DsqlStatement> statement;
+	RefPtr<DsqlStatement> dsqlStatement;
 
 	Jrd::ContextPoolHolder statementContext(tdbb, statementPool);
 	try
@@ -532,9 +532,9 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 				dbDialect, text, textLength, charSetId);
 
 			// Parse the SQL statement.  If it croaks, return
-			statement = parser.parse();
+			dsqlStatement = parser.parse();
 
-			scratch->setStatement(statement);
+			scratch->setDsqlStatement(dsqlStatement);
 
 			if (parser.isStmtAmbiguous())
 				scratch->flags |= DsqlCompilerScratch::FLAG_AMBIGUOUS_STMT;
@@ -573,34 +573,34 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 			transformedText.assign(temp.begin(), temp.getCount());
 		}
 
-		statement->setSqlText(FB_NEW_POOL(*statementPool) RefString(*statementPool, transformedText));
+		dsqlStatement->setSqlText(FB_NEW_POOL(*statementPool) RefString(*statementPool, transformedText));
 
 		// allocate the send and receive messages
 
-		statement->setSendMsg(FB_NEW_POOL(*statementPool) dsql_msg(*statementPool));
+		dsqlStatement->setSendMsg(FB_NEW_POOL(*statementPool) dsql_msg(*statementPool));
 		dsql_msg* message = FB_NEW_POOL(*statementPool) dsql_msg(*statementPool);
-		statement->setReceiveMsg(message);
+		dsqlStatement->setReceiveMsg(message);
 		message->msg_number = 1;
 
-		statement->setType(DsqlStatement::TYPE_SELECT);
-		statement->dsqlPass(tdbb, scratch, traceResult);
+		dsqlStatement->setType(DsqlStatement::TYPE_SELECT);
+		dsqlStatement->dsqlPass(tdbb, scratch, traceResult);
 
-		if (!statement->shouldPreserveScratch())
+		if (!dsqlStatement->shouldPreserveScratch())
 			database->deletePool(scratchPool);
 
 		scratchPool = nullptr;
 
-		if (!isInternalRequest && statement->mustBeReplicated())
-			statement->setOrgText(text, textLength);
+		if (!isInternalRequest && dsqlStatement->mustBeReplicated())
+			dsqlStatement->setOrgText(text, textLength);
 
-		return statement;
+		return dsqlStatement;
 	}
 	catch (const Exception&)
 	{
 		if (scratchPool)
 			database->deletePool(scratchPool);
 
-		if (!statement)
+		if (!dsqlStatement)
 			database->deletePool(statementPool);
 
 		throw;
@@ -678,7 +678,7 @@ string IntlString::toUtf8(jrd_tra* transaction) const
 
 	@brief	Return DSQL information buffer.
 
-	@param request
+	@param dsqlRequest
 	@param item_length
 	@param items
 	@param info_length
@@ -687,7 +687,7 @@ string IntlString::toUtf8(jrd_tra* transaction) const
  **/
 
 static void sql_info(thread_db* tdbb,
-					 DsqlRequest* request,
+					 DsqlRequest* dsqlRequest,
 					 ULONG item_length,
 					 const UCHAR* items,
 					 ULONG info_length,
@@ -720,7 +720,7 @@ static void sql_info(thread_db* tdbb,
 	bool messageFound = false;
 	USHORT first_index = 0;
 
-	const DsqlStatement* statement = request->getStatement();
+	const auto dsqlStatement = dsqlRequest->getDsqlStatement();
 
 	while (items < end_items && *items != isc_info_end && info < end_info)
 	{
@@ -734,7 +734,7 @@ static void sql_info(thread_db* tdbb,
 		case isc_info_sql_select:
 		case isc_info_sql_bind:
 			message = (item == isc_info_sql_select) ?
-				statement->getReceiveMsg() : statement->getSendMsg();
+				dsqlStatement->getReceiveMsg() : dsqlStatement->getSendMsg();
 			messageFound = true;
 			if (info + 1 >= end_info)
 			{
@@ -746,7 +746,7 @@ static void sql_info(thread_db* tdbb,
 
 		case isc_info_sql_stmt_flags:
 			value = IStatement::FLAG_REPEAT_EXECUTE;
-			switch (statement->getType())
+			switch (dsqlStatement->getType())
 			{
 			case DsqlStatement::TYPE_CREATE_DB:
 			case DsqlStatement::TYPE_DDL:
@@ -766,7 +766,7 @@ static void sql_info(thread_db* tdbb,
 			break;
 
 		case isc_info_sql_stmt_type:
-			switch (statement->getType())
+			switch (dsqlStatement->getType())
 			{
 			case DsqlStatement::TYPE_SELECT:
 			case DsqlStatement::TYPE_RETURNING_CURSOR:
@@ -852,7 +852,7 @@ static void sql_info(thread_db* tdbb,
 			break;
 
 		case isc_info_sql_batch_fetch:
-			if (statement->getFlags() & DsqlStatement::FLAG_NO_BATCH)
+			if (dsqlStatement->getFlags() & DsqlStatement::FLAG_NO_BATCH)
 				number = 0;
 			else
 				number = 1;
@@ -862,14 +862,14 @@ static void sql_info(thread_db* tdbb,
 			break;
 
 		case isc_info_sql_records:
-			length = get_request_info(tdbb, request, sizeof(buffer), buffer);
+			length = get_request_info(tdbb, dsqlRequest, sizeof(buffer), buffer);
 			if (length && !(info = put_item(item, length, buffer, info, end_info)))
 				return;
 			break;
 
 		case isc_info_sql_stmt_timeout_user:
 		case isc_info_sql_stmt_timeout_run:
-			value = (item == isc_info_sql_stmt_timeout_user) ? request->getTimeout() : request->getActualTimeout();
+			value = (item == isc_info_sql_stmt_timeout_user) ? dsqlRequest->getTimeout() : dsqlRequest->getActualTimeout();
 
 			length = put_vax_long(buffer, value);
 			if (!(info = put_item(item, length, buffer, info, end_info)))
@@ -889,7 +889,7 @@ static void sql_info(thread_db* tdbb,
 			{
 				const bool detailed = (item == isc_info_sql_explain_plan);
 				string plan = tdbb->getAttachment()->stringToUserCharSet(tdbb,
-					Optimizer::getPlan(tdbb, request->getJrdStatement(), detailed));
+					Optimizer::getPlan(tdbb, dsqlRequest->getStatement(), detailed));
 
 				if (plan.hasData())
 				{
@@ -939,9 +939,9 @@ static void sql_info(thread_db* tdbb,
 			{
 				HalfStaticArray<UCHAR, 128> path;
 
-				if (request->getJrdStatement())
+				if (dsqlRequest->getStatement())
 				{
-					const auto& blr = request->getJrdStatement()->blr;
+					const auto& blr = dsqlRequest->getStatement()->blr;
 
 					if (blr.hasData())
 					{
@@ -1011,7 +1011,7 @@ static void sql_info(thread_db* tdbb,
 				}
 
 				info = var_info(message, items, end_describe, info, end_info, first_index,
-					message == statement->getSendMsg());
+					message == dsqlStatement->getSendMsg());
 				if (!info)
 					return;
 

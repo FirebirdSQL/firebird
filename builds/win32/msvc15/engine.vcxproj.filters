@@ -297,9 +297,6 @@
     <ClCompile Include="..\..\..\src\jrd\jrd.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\jrd\JrdStatement.cpp">
-      <Filter>JRD files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\KeywordsTable.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
@@ -364,6 +361,9 @@
       <Filter>JRD files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\sqz.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\Statement.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\svc.cpp">
@@ -845,9 +845,6 @@
     <ClInclude Include="..\..\..\src\jrd\jrd_proto.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\jrd\JrdStatement.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\KeywordsTable.h">
       <Filter>Header files</Filter>
     </ClInclude>
@@ -972,6 +969,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\sqz.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\Statement.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\status.h">

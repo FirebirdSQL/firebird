@@ -1140,7 +1140,7 @@ void Monitoring::putTransaction(SnapshotData::DumpRecord& record, const jrd_tra*
 }
 
 
-void Monitoring::putStatement(SnapshotData::DumpRecord& record, const JrdStatement* statement, const string& plan)
+void Monitoring::putStatement(SnapshotData::DumpRecord& record, const Statement* statement, const string& plan)
 {
 	fb_assert(statement);
 
@@ -1209,7 +1209,7 @@ void Monitoring::putRequest(SnapshotData::DumpRecord& record, const jrd_req* req
 	else
 		record.storeInteger(f_mon_stmt_state, mon_state_idle);
 
-	const JrdStatement* const statement = request->getStatement();
+	const Statement* const statement = request->getStatement();
 
 	// sql text
 	if (statement->sqlText)
@@ -1259,7 +1259,7 @@ void Monitoring::putCall(SnapshotData::DumpRecord& record, const jrd_req* reques
 	if (initialRequest != request->req_caller)
 		record.storeInteger(f_mon_call_caller_id, request->req_caller->getRequestId());
 
-	const JrdStatement* statement = request->getStatement();
+	const Statement* statement = request->getStatement();
 	const Routine* routine = statement->getRoutine();
 
 	// object name/type
@@ -1477,7 +1477,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment)
 			request->adjustCallerStats();
 
 			if (!(request->getStatement()->flags &
-					(JrdStatement::FLAG_INTERNAL | JrdStatement::FLAG_SYS_TRIGGER)) &&
+					(Statement::FLAG_INTERNAL | Statement::FLAG_SYS_TRIGGER)) &&
 				request->req_caller)
 			{
 				putCall(record, request);
@@ -1491,7 +1491,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment)
 
 		for (const auto statement : attachment->att_statements)
 		{
-			if (!(statement->flags & (JrdStatement::FLAG_INTERNAL | JrdStatement::FLAG_SYS_TRIGGER)))
+			if (!(statement->flags & (Statement::FLAG_INTERNAL | Statement::FLAG_SYS_TRIGGER)))
 			{
 				const string plan = Optimizer::getPlan(tdbb, statement, true);
 				putStatement(record, statement, plan);
@@ -1505,7 +1505,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment)
 	{
 		const auto statement = request->getStatement();
 
-		if (!(statement->flags & (JrdStatement::FLAG_INTERNAL | JrdStatement::FLAG_SYS_TRIGGER)))
+		if (!(statement->flags & (Statement::FLAG_INTERNAL | Statement::FLAG_SYS_TRIGGER)))
 		{
 			const string plan = Optimizer::getPlan(tdbb, statement, true);
 			putRequest(record, request, plan);

@@ -930,7 +930,7 @@ void EXE_unwind(thread_db* tdbb, jrd_req* request)
 
 	if (request->req_flags & req_active)
 	{
-		const JrdStatement* statement = request->getStatement();
+		const Statement* statement = request->getStatement();
 
 		if (statement->fors.getCount() || request->req_ext_resultset || request->req_ext_stmt)
 		{
@@ -1199,7 +1199,7 @@ void EXE_execute_triggers(thread_db* tdbb,
 			TraceTrigExecute trace(tdbb, trigger, which_trig);
 
 			{	// Scope to replace att_ss_user
-				const JrdStatement* s = trigger->getStatement();
+				const Statement* s = trigger->getStatement();
 				UserId* invoker = s->triggerInvoker ? s->triggerInvoker : tdbb->getAttachment()->att_ss_user;
 				AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);
 
@@ -1252,7 +1252,7 @@ static void stuff_stack_trace(const jrd_req* request)
 
 	for (const jrd_req* req = request; req; req = req->req_caller)
 	{
-		const JrdStatement* const statement = req->getStatement();
+		const Statement* const statement = req->getStatement();
 
 		string context, name;
 
@@ -1572,7 +1572,7 @@ static void trigger_failure(thread_db* tdbb, jrd_req* trigger)
 		MET_trigger_msg(tdbb, msg, trigger->getStatement()->triggerName, trigger->req_label);
 		if (msg.hasData())
 		{
-			if (trigger->getStatement()->flags & JrdStatement::FLAG_SYS_TRIGGER)
+			if (trigger->getStatement()->flags & Statement::FLAG_SYS_TRIGGER)
 			{
 				ISC_STATUS code = PAR_symbol_to_gdscode(msg);
 				if (code)

@@ -1387,7 +1387,7 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 		extFunctionNode->statement = FB_NEW_POOL(csbPool) MessageMoverNode(
 			csbPool, extOutMessageNode, intOutMessageNode);
 
-		JrdStatement* statement = udf->getStatement();
+		Statement* statement = udf->getStatement();
 		PAR_preparsed_node(tdbb, NULL, mainNode, NULL, &csb, &statement, false, 0);
 		udf->setStatement(statement);
 	}
@@ -1519,7 +1519,7 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 			extInMessageNode, extOutMessageNode, intOutMessageNode, prc->getExternal());
 		mainNode->statements.add(extProcedureNode);
 
-		JrdStatement* statement = prc->getStatement();
+		Statement* statement = prc->getStatement();
 		PAR_preparsed_node(tdbb, NULL, mainNode, NULL, &csb, &statement, false, 0);
 		prc->setStatement(statement);
 	}

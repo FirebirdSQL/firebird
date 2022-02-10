@@ -460,7 +460,7 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 	if (m_callerPrivileges)
 	{
 		jrd_req* request = tdbb->getRequest();
-		JrdStatement* statement = request ? request->getStatement() : NULL;
+		auto statement = request ? request->getStatement() : NULL;
 		CallerName callerName;
 		const Routine* routine;
 
@@ -504,13 +504,13 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 	if (status->getState() & IStatus::STATE_ERRORS)
 		raise(&status, tdbb, "JAttachment::prepare", &sql);
 
-	const DsqlStatement* statement = m_request->getHandle()->getStatement();
+	const auto dsqlStatement = m_request->getHandle()->getDsqlStatement();
 
-	if (statement->getSendMsg())
+	if (dsqlStatement->getSendMsg())
 	{
 		try
 		{
-			PreparedStatement::parseDsqlMessage(statement->getSendMsg(), m_inDescs,
+			PreparedStatement::parseDsqlMessage(dsqlStatement->getSendMsg(), m_inDescs,
 				m_inMetadata, m_in_buffer);
 			m_inputs = m_inMetadata->getCount();
 		}
@@ -522,11 +522,11 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 	else
 		m_inputs = 0;
 
-	if (statement->getReceiveMsg())
+	if (dsqlStatement->getReceiveMsg())
 	{
 		try
 		{
-			PreparedStatement::parseDsqlMessage(statement->getReceiveMsg(), m_outDescs,
+			PreparedStatement::parseDsqlMessage(dsqlStatement->getReceiveMsg(), m_outDescs,
 				m_outMetadata, m_out_buffer);
 			m_outputs = m_outMetadata->getCount();
 		}
@@ -540,7 +540,7 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 
 	m_stmt_selectable = false;
 
-	switch (statement->getType())
+	switch (dsqlStatement->getType())
 	{
 	case DsqlStatement::TYPE_SELECT:
 	case DsqlStatement::TYPE_RETURNING_CURSOR:

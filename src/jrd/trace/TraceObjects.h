@@ -146,7 +146,7 @@ private:
 class TraceBLRStatementImpl : public BLRPrinter<TraceBLRStatementImpl>
 {
 public:
-	TraceBLRStatementImpl(const JrdStatement* stmt, Firebird::PerformanceInfo* perf) :
+	TraceBLRStatementImpl(const Statement* stmt, Firebird::PerformanceInfo* perf) :
 		BLRPrinter(stmt->blr.begin(), stmt->blr.getCount()),
 		m_stmt(stmt),
 		m_perf(perf)
@@ -156,7 +156,7 @@ public:
 	Firebird::PerformanceInfo* getPerf()	{ return m_perf; }
 
 private:
-	const JrdStatement* const m_stmt;
+	const Statement* const m_stmt;
 	Firebird::PerformanceInfo* const m_perf;
 };
 
@@ -203,7 +203,7 @@ private:
 			m_params(NULL),
 			m_descs(pool)
 		{
-			const dsql_msg* msg = m_stmt->getStatement()->getSendMsg();
+			const dsql_msg* msg = m_stmt->getDsqlStatement()->getSendMsg();
 			if (msg)
 				m_params = &msg->msg_parameters;
 		}

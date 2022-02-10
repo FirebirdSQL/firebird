@@ -2138,9 +2138,7 @@ bool Retrieval::validateStarts(IndexScratch* indexScratch,
 		}
 
 		// Every string starts with an empty string so don't bother using an index in that case.
-		const auto literal = nodeAs<LiteralNode>(value);
-
-		if (literal)
+		if (const auto literal = nodeAs<LiteralNode>(value))
 		{
 			if ((literal->litDesc.dsc_dtype == dtype_text && literal->litDesc.dsc_length == 0) ||
 				(literal->litDesc.dsc_dtype == dtype_varying &&

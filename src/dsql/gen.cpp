@@ -220,14 +220,14 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 
 	message->msg_length = offset;
 
-	dsqlScratch->getStatement()->getPorts().add(message);
+	dsqlScratch->getDsqlStatement()->getPorts().add(message);
 }
 
 
 // Generate complete blr for a dsqlScratch.
 void GEN_statement(DsqlCompilerScratch* scratch, DmlNode* node)
 {
-	DsqlStatement* statement = scratch->getStatement();
+	DsqlStatement* statement = scratch->getDsqlStatement();
 
 	if (statement->getBlrVersion() == 4)
 		scratch->appendUChar(blr_version4);

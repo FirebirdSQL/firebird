@@ -1473,9 +1473,9 @@ public:
 
 		// Save and reset the statement type, as SessionManagementNode sets it to TYPE_SESSION_MANAGEMENT but
 		// we are a DML statement.
-		DsqlStatement::Type statementType = dsqlScratch->getStatement()->getType();
+		DsqlStatement::Type statementType = dsqlScratch->getDsqlStatement()->getType();
 		wrapped->dsqlPass(dsqlScratch);
-		dsqlScratch->getStatement()->setType(statementType);
+		dsqlScratch->getDsqlStatement()->setType(statementType);
 
 		return this;
 	}

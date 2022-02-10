@@ -24,7 +24,7 @@
 #include "../dsql/dsql.h"
 #include "../dsql/DsqlBatch.h"
 #include "../dsql/Nodes.h"
-#include "../jrd/JrdStatement.h"
+#include "../jrd/Statement.h"
 #include "../jrd/req.h"
 #include "../jrd/tra.h"
 #include "../jrd/replication/Publisher.h"
@@ -43,10 +43,10 @@ static void checkD(IStatus* st);
 
 // DsqlRequest
 
-DsqlRequest::DsqlRequest(MemoryPool& pool, dsql_dbb* dbb, DsqlStatement* aStatement)
+DsqlRequest::DsqlRequest(MemoryPool& pool, dsql_dbb* dbb, DsqlStatement* aDsqlStatement)
 	: PermanentStorage(pool),
 	  req_dbb(dbb),
-	  statement(aStatement)
+	  dsqlStatement(aDsqlStatement)
 {
 }
 
@@ -100,17 +100,17 @@ void DsqlRequest::setTimeout(unsigned int timeOut)
 
 TimeoutTimer* DsqlRequest::setupTimer(thread_db* tdbb)
 {
-	auto jrdRequest = getJrdRequest();
+	auto request = getRequest();
 
-	if (jrdRequest)
+	if (request)
 	{
-		if (jrdRequest->hasInternalStatement())
+		if (request->hasInternalStatement())
 			return req_timer;
 
-		jrdRequest->req_timeout = this->req_timeout;
+		request->req_timeout = this->req_timeout;
 
-		fb_assert(!jrdRequest->req_caller);
-		if (jrdRequest->req_caller)
+		fb_assert(!request->req_caller);
+		if (request->req_caller)
 		{
 			if (req_timer)
 				req_timer->setup(0, 0);
@@ -146,8 +146,8 @@ TimeoutTimer* DsqlRequest::setupTimer(thread_db* tdbb)
 	if (!req_timer && timeOut)
 	{
 		req_timer = FB_NEW TimeoutTimer();
-		fb_assert(jrdRequest);
-		jrdRequest->req_timer = this->req_timer;
+		fb_assert(request);
+		request->req_timer = this->req_timer;
 	}
 
 	if (req_timer)
@@ -160,19 +160,19 @@ TimeoutTimer* DsqlRequest::setupTimer(thread_db* tdbb)
 }
 
 // Release a dynamic request.
-void DsqlRequest::destroy(thread_db* tdbb, DsqlRequest* request)
+void DsqlRequest::destroy(thread_db* tdbb, DsqlRequest* dsqlRequest)
 {
 	SET_TDBB(tdbb);
 
-	if (request->req_timer)
+	if (dsqlRequest->req_timer)
 	{
-		request->req_timer->stop();
-		request->req_timer = nullptr;
+		dsqlRequest->req_timer->stop();
+		dsqlRequest->req_timer = nullptr;
 	}
 
 	// If request is parent, orphan the children and release a portion of their requests
 
-	for (auto childStatement : request->cursors)
+	for (auto childStatement : dsqlRequest->cursors)
 	{
 		childStatement->addFlags(DsqlStatement::FLAG_ORPHAN);
 		childStatement->setParentRequest(nullptr);
@@ -189,37 +189,37 @@ void DsqlRequest::destroy(thread_db* tdbb, DsqlRequest* request)
 
 	// If the request had an open cursor, close it
 
-	if (request->req_cursor)
-		DsqlCursor::close(tdbb, request->req_cursor);
+	if (dsqlRequest->req_cursor)
+		DsqlCursor::close(tdbb, dsqlRequest->req_cursor);
 
-	if (request->req_batch)
+	if (dsqlRequest->req_batch)
 	{
-		delete request->req_batch;
-		request->req_batch = nullptr;
+		delete dsqlRequest->req_batch;
+		dsqlRequest->req_batch = nullptr;
 	}
 
-	Jrd::Attachment* att = request->req_dbb->dbb_attachment;
-	const bool need_trace_free = request->req_traced && TraceManager::need_dsql_free(att);
+	Jrd::Attachment* att = dsqlRequest->req_dbb->dbb_attachment;
+	const bool need_trace_free = dsqlRequest->req_traced && TraceManager::need_dsql_free(att);
 	if (need_trace_free)
 	{
-		TraceSQLStatementImpl stmt(request, NULL);
+		TraceSQLStatementImpl stmt(dsqlRequest, NULL);
 		TraceManager::event_dsql_free(att, &stmt, DSQL_drop);
 	}
 
-	if (request->req_cursor_name.hasData())
-		request->req_dbb->dbb_cursors.remove(request->req_cursor_name);
+	if (dsqlRequest->req_cursor_name.hasData())
+		dsqlRequest->req_dbb->dbb_cursors.remove(dsqlRequest->req_cursor_name);
 
 	// If a request has been compiled, release it now
-	if (request->getJrdRequest())
-		EXE_release(tdbb, request->getJrdRequest());
+	if (dsqlRequest->getRequest())
+		EXE_release(tdbb, dsqlRequest->getRequest());
 
 	// Increase the statement refCount so its pool is not destroyed before the request is gone.
-	auto statement = request->getStatement();
+	auto dsqlStatement = dsqlRequest->getDsqlStatement();
 
 	// Release the entire request
-	delete request;
+	delete dsqlRequest;
 
-	statement = nullptr;
+	dsqlStatement = nullptr;
 }
 
 // Parse the message of a request.
@@ -333,13 +333,13 @@ DsqlDmlRequest::DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb,
 		req_msg_buffers.add(msgBuffer);
 	}
 
-	jrdRequest = aStatement->getJrdStatement()->findRequest(tdbb);
-	tdbb->getAttachment()->att_requests.add(jrdRequest);
+	request = aStatement->getStatement()->findRequest(tdbb);
+	tdbb->getAttachment()->att_requests.add(request);
 }
 
-JrdStatement* DsqlDmlRequest::getJrdStatement() const
+Statement* DsqlDmlRequest::getStatement() const
 {
-	return jrdRequest ? jrdRequest->getStatement() : nullptr;
+	return request ? request->getStatement() : nullptr;
 }
 
 // Provide backward-compatibility
@@ -364,10 +364,8 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 
 	Jrd::ContextPoolHolder context(tdbb, &getPool());
 
-	const auto statement = getStatement();
-
 	// if the cursor isn't open, we've got a problem
-	if (statement->isCursorBased())
+	if (dsqlStatement->isCursorBased())
 	{
 		if (!req_cursor)
 		{
@@ -377,13 +375,13 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 		}
 	}
 
-	if (!jrdRequest)
+	if (!request)
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
 				  Arg::Gds(isc_unprepared_stmt));
 	}
 
-	dsql_msg* message = (dsql_msg*) statement->getReceiveMsg();
+	dsql_msg* message = (dsql_msg*) dsqlStatement->getReceiveMsg();
 
 	if (delayedFormat && message)
 	{
@@ -410,11 +408,11 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 		fb_assert(tra == req_transaction);
 	}
 	else
-		JRD_receive(tdbb, jrdRequest, message->msg_number, message->msg_length, dsqlMsgBuffer);
+		JRD_receive(tdbb, request, message->msg_number, message->msg_length, dsqlMsgBuffer);
 
 	firstRowFetched = true;
 
-	const dsql_par* const eof = statement->getEof();
+	const dsql_par* const eof = dsqlStatement->getEof();
 	const USHORT* eofPtr = eof ? (USHORT*) (dsqlMsgBuffer + (IPTR) eof->par_desc.dsc_address) : NULL;
 	const bool eofReached = eof && !(*eofPtr);
 
@@ -517,7 +515,7 @@ DsqlCursor* DsqlDmlRequest::openCursor(thread_db* tdbb, jrd_tra** traHandle,
 
 	Jrd::ContextPoolHolder context(tdbb, &getPool());
 
-	if (statement->getFlags() & DsqlStatement::FLAG_ORPHAN)
+	if (dsqlStatement->getFlags() & DsqlStatement::FLAG_ORPHAN)
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
 		          Arg::Gds(isc_bad_req_handle));
@@ -533,7 +531,7 @@ DsqlCursor* DsqlDmlRequest::openCursor(thread_db* tdbb, jrd_tra** traHandle,
 
 	// Validate statement type
 
-	if (!statement->isCursorBased())
+	if (!dsqlStatement->isCursorBased())
 		Arg::Gds(isc_no_cursor).raise();
 
 	// Validate cursor or batch being not already open
@@ -569,28 +567,28 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 	bool singleton)
 {
 	firstRowFetched = false;
-	const dsql_msg* message = statement->getSendMsg();
+	const dsql_msg* message = dsqlStatement->getSendMsg();
 
 	if (!message)
-		JRD_start(tdbb, jrdRequest, req_transaction);
+		JRD_start(tdbb, request, req_transaction);
 	else
 	{
 		UCHAR* msgBuffer = req_msg_buffers[message->msg_buffer_number];
-		JRD_start_and_send(tdbb, jrdRequest, req_transaction, message->msg_number,
+		JRD_start_and_send(tdbb, request, req_transaction, message->msg_number,
 			message->msg_length, msgBuffer);
 	}
 
 	// Selectable execute block should get the "proc fetch" flag assigned,
 	// which ensures that the savepoint stack is preserved while suspending
-	if (statement->getType() == DsqlStatement::TYPE_SELECT_BLOCK)
-		jrdRequest->req_flags |= req_proc_fetch;
+	if (dsqlStatement->getType() == DsqlStatement::TYPE_SELECT_BLOCK)
+		request->req_flags |= req_proc_fetch;
 
 	// TYPE_EXEC_BLOCK has no outputs so there are no out_msg
 	// supplied from client side, but TYPE_EXEC_BLOCK requires
 	// 2-byte message for EOS synchronization
-	const bool isBlock = (statement->getType() == DsqlStatement::TYPE_EXEC_BLOCK);
+	const bool isBlock = (dsqlStatement->getType() == DsqlStatement::TYPE_EXEC_BLOCK);
 
-	message = statement->getReceiveMsg();
+	message = dsqlStatement->getReceiveMsg();
 
 	if (outMetadata == DELAYED_OUT_FORMAT)
 	{
@@ -619,7 +617,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 			msgBuffer = FB_ALIGN(temp_buffer, FB_DOUBLE_ALIGN);
 		}
 
-		JRD_receive(tdbb, jrdRequest, message->msg_number, message->msg_length, msgBuffer);
+		JRD_receive(tdbb, request, message->msg_number, message->msg_length, msgBuffer);
 
 		if (outMsg)
 			mapInOut(tdbb, true, message, NULL, outMsg);
@@ -647,7 +645,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 
 				try
 				{
-					JRD_receive(tdbb, jrdRequest, message->msg_number,
+					JRD_receive(tdbb, request, message->msg_number,
 						message->msg_length, message_buffer);
 					status = FB_SUCCESS;
 				}
@@ -672,10 +670,10 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 		}
 	}
 
-	switch (statement->getType())
+	switch (dsqlStatement->getType())
 	{
 		case DsqlStatement::TYPE_UPDATE_CURSOR:
-			if (!jrdRequest->req_records_updated)
+			if (!request->req_records_updated)
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-913) <<
 						  Arg::Gds(isc_deadlock) <<
@@ -684,7 +682,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 			break;
 
 		case DsqlStatement::TYPE_DELETE_CURSOR:
-			if (!jrdRequest->req_records_deleted)
+			if (!request->req_records_deleted)
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-913) <<
 						  Arg::Gds(isc_deadlock) <<
@@ -706,7 +704,7 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 	IMessageMetadata* outMetadata, UCHAR* outMsg,
 	bool singleton)
 {
-	if (!jrdRequest)
+	if (!request)
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
 				  Arg::Gds(isc_unprepared_stmt));
@@ -714,7 +712,7 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 
 	// If there is no data required, just start the request
 
-	const dsql_msg* message = statement->getSendMsg();
+	const dsql_msg* message = dsqlStatement->getSendMsg();
 	if (message)
 		mapInOut(tdbb, false, message, inMetadata, NULL, inMsg);
 
@@ -723,7 +721,7 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 	TraceDSQLExecute trace(req_dbb->dbb_attachment, this);
 
 	// Setup and start timeout timer
-	const bool have_cursor = statement->isCursorBased() && !singleton;
+	const bool have_cursor = dsqlStatement->isCursorBased() && !singleton;
 
 	setupTimer(tdbb);
 	thread_db::TimerGuard timerGuard(tdbb, req_timer, !have_cursor);
@@ -741,7 +739,7 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 	IMessageMetadata* outMetadata, UCHAR* outMsg,
 	bool singleton, bool exec, bool fetch)
 {
-	jrdRequest->req_flags &= ~req_update_conflict;
+	request->req_flags &= ~req_update_conflict;
 	int numTries = 0;
 	const int MAX_RESTARTS = 10;
 
@@ -753,7 +751,7 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 		// It allows to raise update conflict error (if any) as usual and
 		// handle error by PSQL handler.
 		const ULONG flag = (numTries >= MAX_RESTARTS) ? 0 : req_restart_ready;
-		AutoSetRestoreFlag<ULONG> restartReady(&jrdRequest->req_flags, flag, true);
+		AutoSetRestoreFlag<ULONG> restartReady(&request->req_flags, flag, true);
 		try
 		{
 			if (exec)
@@ -761,24 +759,24 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 
 			if (fetch)
 			{
-				fb_assert(statement->isCursorBased());
+				fb_assert(dsqlStatement->isCursorBased());
 
-				const dsql_msg* message = statement->getReceiveMsg();
+				const dsql_msg* message = dsqlStatement->getReceiveMsg();
 
 				UCHAR* dsqlMsgBuffer = req_msg_buffers[message->msg_buffer_number];
-				JRD_receive(tdbb, jrdRequest, message->msg_number, message->msg_length, dsqlMsgBuffer);
+				JRD_receive(tdbb, request, message->msg_number, message->msg_length, dsqlMsgBuffer);
 			}
 		}
 		catch (const status_exception&)
 		{
 			if (!(req_transaction->tra_flags & TRA_ex_restart))
 			{
-				jrdRequest->req_flags &= ~req_update_conflict;
+				request->req_flags &= ~req_update_conflict;
 				throw;
 			}
 		}
 
-		if (!(jrdRequest->req_flags & req_update_conflict))
+		if (!(request->req_flags & req_update_conflict))
 		{
 			fb_assert((req_transaction->tra_flags & TRA_ex_restart) == 0);
 			req_transaction->tra_flags &= ~TRA_ex_restart;
@@ -798,7 +796,7 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 
 		fb_assert((req_transaction->tra_flags & TRA_ex_restart) != 0);
 
-		jrdRequest->req_flags &= ~req_update_conflict;
+		request->req_flags &= ~req_update_conflict;
 		req_transaction->tra_flags &= ~TRA_ex_restart;
 		fb_utils::init_status(tdbb->tdbb_status_vector);
 
@@ -811,7 +809,7 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 		{
 			gds__log("Update conflict: unable to get a stable set of rows in the source tables\n"
 				"\tafter %d attempts of restart.\n"
-				"\tQuery:\n%s\n", numTries, jrdRequest->getStatement()->sqlText->c_str() );
+				"\tQuery:\n%s\n", numTries, request->getStatement()->sqlText->c_str() );
 		}
 
 		// When restart we must execute query
@@ -946,15 +944,15 @@ void DsqlDmlRequest::mapInOut(thread_db* tdbb, bool toExternal, const dsql_msg* 
 			Arg::Gds(isc_dsql_wrong_param_num) << Arg::Num(count) <<Arg::Num(count2));
 	}
 
-	const auto statement = getStatement();
+	const auto dsqlStatement = getDsqlStatement();
 	const dsql_par* parameter;
 
 	const dsql_par* dbkey;
-	if (!toExternal && (dbkey = statement->getParentDbKey()) &&
-		(parameter = statement->getDbKey()))
+	if (!toExternal && (dbkey = dsqlStatement->getParentDbKey()) &&
+		(parameter = dsqlStatement->getDbKey()))
 	{
-		UCHAR* parentMsgBuffer = statement->getParentRequest() ?
-			statement->getParentRequest()->req_msg_buffers[dbkey->par_message->msg_buffer_number] : NULL;
+		UCHAR* parentMsgBuffer = dsqlStatement->getParentRequest() ?
+			dsqlStatement->getParentRequest()->req_msg_buffers[dbkey->par_message->msg_buffer_number] : NULL;
 		UCHAR* msgBuffer = req_msg_buffers[parameter->par_message->msg_buffer_number];
 
 		fb_assert(parentMsgBuffer);
@@ -979,11 +977,11 @@ void DsqlDmlRequest::mapInOut(thread_db* tdbb, bool toExternal, const dsql_msg* 
 	}
 
 	const dsql_par* rec_version;
-	if (!toExternal && (rec_version = statement->getParentRecVersion()) &&
-		(parameter = statement->getRecVersion()))
+	if (!toExternal && (rec_version = dsqlStatement->getParentRecVersion()) &&
+		(parameter = dsqlStatement->getRecVersion()))
 	{
-		UCHAR* parentMsgBuffer = statement->getParentRequest() ?
-			statement->getParentRequest()->req_msg_buffers[rec_version->par_message->msg_buffer_number] :
+		UCHAR* parentMsgBuffer = dsqlStatement->getParentRequest() ?
+			dsqlStatement->getParentRequest()->req_msg_buffers[rec_version->par_message->msg_buffer_number] :
 			NULL;
 		UCHAR* msgBuffer = req_msg_buffers[parameter->par_message->msg_buffer_number];
 
@@ -1013,7 +1011,7 @@ void DsqlDmlRequest::mapInOut(thread_db* tdbb, bool toExternal, const dsql_msg* 
 // DsqlDdlRequest
 
 DsqlDdlRequest::DsqlDdlRequest(MemoryPool& pool, dsql_dbb* dbb, DsqlCompilerScratch* aInternalScratch, DdlNode* aNode)
-	: DsqlRequest(pool, dbb, aInternalScratch->getStatement()),
+	: DsqlRequest(pool, dbb, aInternalScratch->getDsqlStatement()),
 	  internalScratch(aInternalScratch),
 	  node(aNode)
 {
@@ -1043,7 +1041,7 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 				(internalScratch->flags & DsqlCompilerScratch::FLAG_INTERNAL_REQUEST);
 
 			if (!isInternalRequest && node->mustBeReplicated())
-				REPL_exec_sql(tdbb, req_transaction, getStatement()->getOrgText());
+				REPL_exec_sql(tdbb, req_transaction, getDsqlStatement()->getOrgText());
 		}
 		catch (status_exception& ex)
 		{
