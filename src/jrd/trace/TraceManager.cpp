@@ -206,12 +206,17 @@ void TraceManager::update_sessions()
 		changeNumber = storage->getChangeNumber();
 	}
 
+	// Reset cumulative mask beforehand
+	trace_needs = 0;
+
 	// remove sessions not present in storage
 	FB_SIZE_T i = 0;
 	while (i < trace_sessions.getCount())
 	{
 		FB_SIZE_T pos;
-		if (liveSessions.find(trace_sessions[i].ses_id, pos)) {
+		if (liveSessions.find(trace_sessions[i].ses_id, pos))
+		{
+			trace_needs |= trace_sessions[i].traceNeeds;
 			i++;
 		}
 		else
@@ -227,12 +232,6 @@ void TraceManager::update_sessions()
 		TraceSession* s = newSessions.pop();
 		update_session(*s);
 		delete s;
-	}
-
-	// nothing to trace, clear needs
-	if (trace_sessions.getCount() == 0)
-	{
-		trace_needs = 0;
 	}
 }
 
@@ -342,9 +341,10 @@ void TraceManager::update_session(const TraceSession& session)
 			sesInfo.plugin = plugin;
 			sesInfo.factory_info = info;
 			sesInfo.ses_id = session.ses_id;
+			sesInfo.traceNeeds = info->factory->trace_needs();
 			trace_sessions.add(sesInfo);
 
-			trace_needs |= info->factory->trace_needs();
+			trace_needs |= sesInfo.traceNeeds;
 		}
 		else if (status->getState() & IStatus::STATE_ERRORS)
 		{
@@ -395,17 +395,17 @@ void TraceManager::event_dsql_execute(Attachment* att, jrd_tra* transaction,
 	TraceConnectionImpl conn(att);
 	TraceTransactionImpl tran(transaction);
 
-	att->att_trace_manager->event_dsql_execute(&conn, transaction ? &tran : NULL, statement, 
+	att->att_trace_manager->event_dsql_execute(&conn, transaction ? &tran : NULL, statement,
 											   started, req_result);
 }
 
 
-#define EXECUTE_HOOKS(METHOD, PARAMS) \
+#define EXECUTE_HOOKS(METHOD, MASK, PARAMS) \
 	FB_SIZE_T i = 0; \
 	while (i < trace_sessions.getCount()) \
 	{ \
 		SessionInfo* plug_info = &trace_sessions[i]; \
-		if (check_result(plug_info->plugin, plug_info->factory_info->name, #METHOD, \
+		if (!plug_info->needs(MASK) || check_result(plug_info->plugin, plug_info->factory_info->name, #METHOD, \
 			plug_info->plugin->METHOD PARAMS)) \
 		{ \
 			i++; /* Move to next plugin */ \
@@ -419,20 +419,20 @@ void TraceManager::event_dsql_execute(Attachment* att, jrd_tra* transaction,
 void TraceManager::event_attach(ITraceDatabaseConnection* connection,
 		bool create_db, ntrace_result_t att_result)
 {
-	EXECUTE_HOOKS(trace_attach,
+	EXECUTE_HOOKS(trace_attach, ITraceFactory::TRACE_EVENT_ATTACH,
 		(connection, create_db, att_result));
 }
 
 void TraceManager::event_detach(ITraceDatabaseConnection* connection, bool drop_db)
 {
-	EXECUTE_HOOKS(trace_detach, (connection, drop_db));
+	EXECUTE_HOOKS(trace_detach, ITraceFactory::TRACE_EVENT_DETACH, (connection, drop_db));
 }
 
 void TraceManager::event_transaction_start(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, unsigned tpb_length, const ntrace_byte_t* tpb,
 		ntrace_result_t tra_result)
 {
-	EXECUTE_HOOKS(trace_transaction_start,
+	EXECUTE_HOOKS(trace_transaction_start, ITraceFactory::TRACE_EVENT_TRANSACTION_START,
 		(connection, transaction, tpb_length, tpb, tra_result));
 }
 
@@ -440,42 +440,42 @@ void TraceManager::event_transaction_end(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, bool commit, bool retain_context,
 		ntrace_result_t tra_result)
 {
-	EXECUTE_HOOKS(trace_transaction_end,
+	EXECUTE_HOOKS(trace_transaction_end, ITraceFactory::TRACE_EVENT_TRANSACTION_END,
 		(connection, transaction, commit, retain_context, tra_result));
 }
 
 void TraceManager::event_set_context(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, ITraceContextVariable* variable)
 {
-	EXECUTE_HOOKS(trace_set_context,
+	EXECUTE_HOOKS(trace_set_context, ITraceFactory::TRACE_EVENT_SET_CONTEXT,
 		(connection, transaction, variable));
 }
 
  void TraceManager::event_proc_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
 		ITraceProcedure* procedure, bool started, ntrace_result_t proc_result)
 {
-	EXECUTE_HOOKS(trace_proc_execute,
+	EXECUTE_HOOKS(trace_proc_execute, ITraceFactory::TRACE_EVENT_PROC_EXECUTE,
 		(connection, transaction, procedure, started, proc_result));
 }
 
 void TraceManager::event_func_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
 		ITraceFunction* function, bool started, ntrace_result_t func_result)
 {
-	EXECUTE_HOOKS(trace_func_execute,
+	EXECUTE_HOOKS(trace_func_execute, ITraceFactory::TRACE_EVENT_FUNC_EXECUTE,
 		(connection, transaction, function, started, func_result));
 }
 
 void TraceManager::event_trigger_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
 		ITraceTrigger* trigger, bool started, ntrace_result_t trig_result)
 {
-	EXECUTE_HOOKS(trace_trigger_execute,
+	EXECUTE_HOOKS(trace_trigger_execute, ITraceFactory::TRACE_EVENT_TRIGGER_EXECUTE,
 		(connection, transaction, trigger, started, trig_result));
 }
 
 void TraceManager::event_dsql_prepare(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
 		ITraceSQLStatement* statement, ntrace_counter_t time_millis, ntrace_result_t req_result)
 {
-	EXECUTE_HOOKS(trace_dsql_prepare,
+	EXECUTE_HOOKS(trace_dsql_prepare, ITraceFactory::TRACE_EVENT_DSQL_PREPARE,
 		(connection, transaction, statement,
 		 time_millis, req_result));
 }
@@ -483,14 +483,14 @@ void TraceManager::event_dsql_prepare(ITraceDatabaseConnection* connection, ITra
 void TraceManager::event_dsql_free(ITraceDatabaseConnection* connection,
 		ITraceSQLStatement* statement, unsigned short option)
 {
-	EXECUTE_HOOKS(trace_dsql_free,
+	EXECUTE_HOOKS(trace_dsql_free, ITraceFactory::TRACE_EVENT_DSQL_FREE,
 		(connection, statement, option));
 }
 
 void TraceManager::event_dsql_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
 		ITraceSQLStatement* statement, bool started, ntrace_result_t req_result)
 {
-	EXECUTE_HOOKS(trace_dsql_execute,
+	EXECUTE_HOOKS(trace_dsql_execute, ITraceFactory::TRACE_EVENT_DSQL_EXECUTE,
 		(connection, transaction, statement, started, req_result));
 }
 
@@ -499,7 +499,7 @@ void TraceManager::event_blr_compile(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, ITraceBLRStatement* statement,
 		ntrace_counter_t time_millis, ntrace_result_t req_result)
 {
-	EXECUTE_HOOKS(trace_blr_compile,
+	EXECUTE_HOOKS(trace_blr_compile, ITraceFactory::TRACE_EVENT_BLR_COMPILE,
 		(connection, transaction, statement,
 		 time_millis, req_result));
 }
@@ -508,7 +508,7 @@ void TraceManager::event_blr_execute(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, ITraceBLRStatement* statement,
 		ntrace_result_t req_result)
 {
-	EXECUTE_HOOKS(trace_blr_execute,
+	EXECUTE_HOOKS(trace_blr_execute, ITraceFactory::TRACE_EVENT_BLR_EXECUTE,
 		(connection, transaction, statement, req_result));
 }
 
@@ -516,14 +516,14 @@ void TraceManager::event_dyn_execute(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, ITraceDYNRequest* request,
 		ntrace_counter_t time_millis, ntrace_result_t req_result)
 {
-	EXECUTE_HOOKS(trace_dyn_execute,
+	EXECUTE_HOOKS(trace_dyn_execute, ITraceFactory::TRACE_EVENT_DYN_EXECUTE,
 		(connection, transaction, request, time_millis,
 			req_result));
 }
 
 void TraceManager::event_service_attach(ITraceServiceConnection* service, ntrace_result_t att_result)
 {
-	EXECUTE_HOOKS(trace_service_attach,
+	EXECUTE_HOOKS(trace_service_attach, ITraceFactory::TRACE_EVENT_SERVICE_ATTACH,
 		(service, att_result));
 }
 
@@ -531,7 +531,7 @@ void TraceManager::event_service_start(ITraceServiceConnection* service,
 		unsigned switches_length, const char* switches,
 		ntrace_result_t start_result)
 {
-	EXECUTE_HOOKS(trace_service_start,
+	EXECUTE_HOOKS(trace_service_start, ITraceFactory::TRACE_EVENT_SERVICE_START,
 		(service, switches_length, switches, start_result));
 }
 
@@ -540,20 +540,20 @@ void TraceManager::event_service_query(ITraceServiceConnection* service,
 		unsigned recv_item_length, const ntrace_byte_t* recv_items,
 		ntrace_result_t query_result)
 {
-	EXECUTE_HOOKS(trace_service_query,
+	EXECUTE_HOOKS(trace_service_query, ITraceFactory::TRACE_EVENT_SERVICE_QUERY,
 		(service, send_item_length, send_items,
 		 recv_item_length, recv_items, query_result));
 }
 
 void TraceManager::event_service_detach(ITraceServiceConnection* service, ntrace_result_t detach_result)
 {
-	EXECUTE_HOOKS(trace_service_detach,
+	EXECUTE_HOOKS(trace_service_detach, ITraceFactory::TRACE_EVENT_SERVICE_DETACH,
 		(service, detach_result));
 }
 
 void TraceManager::event_error(ITraceConnection* connection, ITraceStatusVector* status, const char* function)
 {
-	EXECUTE_HOOKS(trace_event_error,
+	EXECUTE_HOOKS(trace_event_error, ITraceFactory::TRACE_EVENT_ERROR,
 		(connection, status, function));
 }
 
@@ -561,7 +561,7 @@ void TraceManager::event_error(ITraceConnection* connection, ITraceStatusVector*
 void TraceManager::event_sweep(ITraceDatabaseConnection* connection, ITraceSweepInfo* sweep,
 		ntrace_process_state_t sweep_state)
 {
-	EXECUTE_HOOKS(trace_event_sweep,
+	EXECUTE_HOOKS(trace_event_sweep, ITraceFactory::TRACE_EVENT_SWEEP,
 		(connection, sweep, sweep_state));
 }
 
