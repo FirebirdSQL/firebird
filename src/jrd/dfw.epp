@@ -373,6 +373,7 @@ static bool begin_backup(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool end_backup(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool user_management(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool grant_privileges(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool clear_met_cache(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
 /* ---------------------------------------------------------------- */
 
@@ -477,6 +478,7 @@ static const deferred_task task_table[] =
 	{ dfw_begin_backup, begin_backup },
 	{ dfw_end_backup, end_backup },
 	{ dfw_user_management, user_management },
+	{ dfw_clear_met_cache, clear_met_cache },
 	{ dfw_null, NULL }
 };
 
@@ -5781,4 +5783,33 @@ static string get_string(const dsc* desc)
 	length = (p + 1) - str;
 
 	return string(str, length);
+}
+
+static bool clear_met_cache(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	c l e a r _ m e t _ c a c h e
+ *
+ **************************************
+ *
+ * Invalidate metadata cache. Useful after changing column privileges for example.
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+
+	switch (phase)
+	{
+	case 1:
+	case 2:
+		return true;
+
+	case 3:
+		MET_clear_cache(tdbb);
+		break;
+	}
+
+	return false;
 }
