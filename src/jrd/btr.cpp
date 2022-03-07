@@ -1018,6 +1018,9 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 
 	// The top of the index has split.  We need to make a new level and
 	// update the index root page.  Oh boy.
+	fb_assert(window.win_bdb != NULL && window.win_page.getPageNum() == split_page);
+	win split_window(window);
+
 	index_root_page* root = (index_root_page*) CCH_FETCH(tdbb, root_window, LCK_write, pag_root);
 
 	window.win_page = root->irt_rpt[idx->idx_id].getRoot();
@@ -1040,6 +1043,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 
 		if (bucket->btr_level < root_level + 1)
 		{
+			CCH_RELEASE(tdbb, &split_window);
 			CCH_RELEASE(tdbb, &window);
 			CCH_RELEASE(tdbb, root_window);
 			BUGCHECK(204);	// msg 204 index inconsistent
@@ -1057,6 +1061,8 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 
 		split_page = add_node(tdbb, &window, &propagate, &ret_key, &recordNumber, NULL, NULL);
 
+		CCH_RELEASE(tdbb, &split_window);
+
 		if (split_page == NO_SPLIT)
 		{
 			CCH_RELEASE(tdbb, root_window);
@@ -1068,6 +1074,9 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 			CCH_RELEASE(tdbb, root_window);
 			BUGCHECK(204);	// msg 204 index inconsistent
 		}
+
+		fb_assert(window.win_bdb != NULL && window.win_page.getPageNum() == split_page);
+		split_window = window;
 
 		window.win_page = root->irt_rpt[idx->idx_id].getRoot();
 		bucket = (btree_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_index);
@@ -1084,6 +1093,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 
 	if (bucket->btr_level != new_bucket->btr_level)
 	{
+		CCH_RELEASE(tdbb, &split_window);
 		CCH_RELEASE(tdbb, root_window);
 		CCH_RELEASE(tdbb, &new_window);
 		CCH_RELEASE(tdbb, &window);
@@ -1104,6 +1114,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 
 	if (btr_level >= MAX_LEVELS)
 	{
+		CCH_RELEASE(tdbb, &split_window);
 		CCH_RELEASE(tdbb, root_window);
 
 		// Maximum level depth reached.
@@ -1151,6 +1162,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 	// and make sure the new page has higher precedence so that
 	// it will be written out first--this will make sure that the
 	// root page doesn't point into space
+	CCH_RELEASE(tdbb, &split_window);
 	CCH_RELEASE(tdbb, &new_window);
 	CCH_precedence(tdbb, root_window, new_window.win_page);
 	CCH_MARK(tdbb, root_window);
@@ -2268,8 +2280,9 @@ static ULONG add_node(thread_db* tdbb,
  *
  * Functional description
  *	Insert a node in an index.  This recurses to the leaf level.
- *	If a split occurs, return the new index page number and its
- *	leading string.
+ *	If a split occurs, return the new index page number and its leading string.
+ *	Also, return locked buffer with new (split) page via "window".
+ *  It must be released by caller.
  *
  **************************************/
 
@@ -2341,6 +2354,9 @@ static ULONG add_node(thread_db* tdbb,
 
 	// The page at the lower level split, so we need to insert a pointer
 	// to the new page to the page at this level.
+	fb_assert(window->win_bdb != NULL && window->win_page.getPageNum() == split_page);
+	win split_window(*window);
+
 	window->win_page = index;
 	bucket = (btree_page*) CCH_FETCH(tdbb, window, LCK_write, pag_index);
 
@@ -2370,6 +2386,7 @@ static ULONG add_node(thread_db* tdbb,
 
 	// the split page on the lower level has been propagated, so we can go back to
 	// the page it was split from, and mark it as garbage-collectable now
+	CCH_RELEASE(tdbb, &split_window);
 	lockLower.enablePageGC(tdbb);
 	insertion->iib_dont_gc_lock = propagate.iib_dont_gc_lock;
 
@@ -5275,8 +5292,9 @@ static ULONG insert_node(thread_db* tdbb,
  * Functional description
  *	Insert a node in a index leaf page.
  *  If this isn't the right bucket, return NO_VALUE.
- *  If it splits, return the split page number and
- *	leading string.  This is the workhorse for add_node.
+ *  If it splits, return the split page number and leading string.
+ *	Also, return locked buffer with new (split) page via "window".
+ *	This is the workhorse for add_node.
  *
  **************************************/
 
@@ -5359,8 +5377,7 @@ static ULONG insert_node(thread_db* tdbb,
 				return NO_VALUE_PAGE;
 			}
 
-			if (newRecordNumber < beforeInsertNode.recordNumber)
-			{
+			if (leafPage && newRecordNumber < beforeInsertNode.recordNumber) {
 				break;
 			}
 
@@ -5388,15 +5405,23 @@ static ULONG insert_node(thread_db* tdbb,
 			return 0;
 		}*/
 		//else
-		if (!validateDuplicates)
+		if (!leafPage)
 		{
-			// if recordnumber is higher we need to insert before it.
-			if (newRecordNumber <= beforeInsertNode.recordNumber) {
+			if (insertion->iib_sibling == beforeInsertNode.pageNumber)
+				break;
+		}
+		else
+		{
+			if (!validateDuplicates)
+			{
+				// if recordnumber is higher we need to insert before it.
+				if (newRecordNumber <= beforeInsertNode.recordNumber) {
+					break;
+				}
+			}
+			else if (!unique) {
 				break;
 			}
-		}
-		else if (!unique) {
-			break;
 		}
 
 		prefix = newPrefix;
@@ -5795,7 +5820,10 @@ static ULONG insert_node(thread_db* tdbb,
 	split->btr_prefix_total = newBucket->btr_prefix_total - prefix_total;
 	const ULONG split_page = split_window.win_page.getPageNum();
 
-	CCH_RELEASE(tdbb, &split_window);
+	// Delay release of split page until propagation of split key at upper level.
+	// It prevents addtional split of new page.
+	// Handoff below actually downgrades EX latch for split page buffer.
+	CCH_HANDOFF(tdbb, &split_window, split_window.win_page.getPageNum(), LCK_read, pag_index);
 	CCH_precedence(tdbb, window, split_window.win_page);
 	CCH_MARK_MUST_WRITE(tdbb, window);
 
@@ -5901,6 +5929,8 @@ static ULONG insert_node(thread_db* tdbb,
 		}
 	}
 
+	// Let caller release split buffer after propagation of split key at upper level.
+	*window = split_window;
 	return split_page;
 }
 
