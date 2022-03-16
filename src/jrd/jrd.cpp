@@ -3314,15 +3314,15 @@ void JAttachment::freeEngineData(CheckStatusWrapper* user_status, bool forceFree
 
 			unsigned flags = PURGE_LINGER;
 
-			if (engineShutdown ||
+			if (engineShutdown)
+				flags |= PURGE_FORCE;
+
+			if (forceFree ||
 				(dbb->dbb_ast_flags & DBB_shutdown) ||
 				(attachment->att_flags & ATT_shutdown))
 			{
-				flags |= PURGE_FORCE;
-			}
-
-			if (forceFree)
 				flags |= PURGE_NOCHECK;
+			}
 
 			ISC_STATUS reason = 0;
 			if (!forceFree)
@@ -8605,7 +8605,7 @@ namespace
 				{
 					// purge attachment, rollback any open transactions
 					attachment->att_use_count++;
-					purge_attachment(tdbb, sAtt, PURGE_FORCE);
+					purge_attachment(tdbb, sAtt, engineShutdown ? PURGE_FORCE : PURGE_NOCHECK);
 				}
 				catch (const Exception& ex)
 				{
