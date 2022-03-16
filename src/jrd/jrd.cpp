@@ -8200,8 +8200,13 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 					transaction = TRA_start(tdbb, 0, NULL);
 					attachment->att_flags = save_flags;
 
+					// Allow cancelling while ON DISCONNECT triggers are running
+					tdbb->tdbb_flags &= ~TDBB_detaching;
+
 					// run ON DISCONNECT triggers
 					EXE_execute_db_triggers(tdbb, transaction, TRIGGER_DISCONNECT);
+
+					tdbb->tdbb_flags |= TDBB_detaching;
 
 					// and commit the transaction
 					TRA_commit(tdbb, transaction, false);
@@ -8209,6 +8214,7 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 				catch (const Exception& ex)
 				{
 					attachment->att_flags = save_flags;
+					tdbb->tdbb_flags |= TDBB_detaching;
 
 					string s;
 					s.printf("Database: %s\n\tError at disconnect:", attachment->att_filename.c_str());
@@ -8927,11 +8933,8 @@ ISC_STATUS thread_db::getCancelState(ISC_STATUS* secondary)
 	if (tdbb_flags & (TDBB_verb_cleanup | TDBB_dfw_cleanup | TDBB_detaching | TDBB_wait_cancel_disable))
 		return FB_SUCCESS;
 
-	if (attachment)
+	if (attachment && attachment->att_purge_tid != Thread::getId())
 	{
-		if (attachment->att_purge_tid == Thread::getId())
-			return FB_SUCCESS;
-
 		if (attachment->att_flags & ATT_shutdown)
 		{
 			if (database->dbb_ast_flags & DBB_shutdown)
