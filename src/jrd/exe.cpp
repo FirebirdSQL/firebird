@@ -1243,6 +1243,14 @@ void EXE_execute_triggers(thread_db* tdbb,
 			trigger->req_flags &= ~req_in_use;
 
 			ex.stuffException(tdbb->tdbb_status_vector);
+
+			if (trigger_action == TRIGGER_DISCONNECT &&
+				!(tdbb->tdbb_flags & TDBB_stack_trace_done) && (tdbb->tdbb_flags & TDBB_sys_error))
+			{
+				stuff_stack_trace(trigger);
+				tdbb->tdbb_flags |= TDBB_stack_trace_done;
+			}
+
 			trigger_failure(tdbb, trigger);
 		}
 
