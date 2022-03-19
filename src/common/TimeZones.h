@@ -1,6 +1,6 @@
 // The content of this file is generated with help of update-ids utility Do not edit.
 
-static const char* BUILTIN_TIME_ZONE_VERSION = "2021a4";
+static const char* BUILTIN_TIME_ZONE_VERSION = "2022a";
 
 // Do not change order of items in this array! The index corresponds to a TimeZone ID, which must be fixed!
 static const char* BUILTIN_TIME_ZONE_LIST[] = {
