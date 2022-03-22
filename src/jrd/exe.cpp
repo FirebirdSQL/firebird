@@ -1218,7 +1218,7 @@ void EXE_execute_triggers(thread_db* tdbb,
 					trigger->req_timer->setup(timeOut, isc_cfg_stmt_timeout);
 					trigger->req_timer->start();
 					thread_db::TimerGuard timerGuard(tdbb, trigger->req_timer, true);
-					EXE_start(tdbb, trigger, transaction);
+					EXE_start(tdbb, trigger, transaction); // Under timerGuard scope
 				}
 				else
 					EXE_start(tdbb, trigger, transaction);
