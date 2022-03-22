@@ -1687,7 +1687,11 @@ jrd_tra* TRA_start(thread_db* tdbb, ULONG flags, SSHORT lock_timeout, Jrd::jrd_t
 	Database* const dbb = tdbb->getDatabase();
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
-	if (dbb->dbb_ast_flags & DBB_shut_tran)
+	// Starting new transactions should be allowed for threads which
+	// are running purge_attachment() because it's needed for
+	// ON DISCONNECT triggers
+	if (dbb->dbb_ast_flags & DBB_shut_tran &&
+		attachment->att_purge_tid != Thread::getId())
 	{
 		ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(attachment->att_filename));
 	}
@@ -1740,7 +1744,11 @@ jrd_tra* TRA_start(thread_db* tdbb, int tpb_length, const UCHAR* tpb, Jrd::jrd_t
 	Database* dbb = tdbb->getDatabase();
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 
-	if (dbb->dbb_ast_flags & DBB_shut_tran)
+	// Starting new transactions should be allowed for threads which
+	// are running purge_attachment() because it's needed for
+	// ON DISCONNECT triggers
+	if (dbb->dbb_ast_flags & DBB_shut_tran &&
+		attachment->att_purge_tid != Thread::getId())
 	{
 		ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(attachment->att_filename));
 	}
