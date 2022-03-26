@@ -145,6 +145,8 @@ void Jrd::Attachment::destroy(Attachment* const attachment)
 MemoryPool* Jrd::Attachment::createPool()
 {
 	MemoryPool* const pool = MemoryPool::createPool(att_pool, att_memory_stats);
+	auto stats = FB_NEW_POOL(*pool) MemoryStats(&att_memory_stats);
+	pool->setStatsGroup(*stats);
 	att_pools.add(pool);
 	return pool;
 }
@@ -154,9 +156,7 @@ void Jrd::Attachment::deletePool(MemoryPool* pool)
 {
 	if (pool)
 	{
-		FB_SIZE_T pos;
-		if (att_pools.find(pool, pos))
-			att_pools.remove(pos);
+		att_pools.findAndRemove(pool);
 
 #ifdef DEBUG_LCK_LIST
 		// hvlad: this could be slow, use only when absolutely necessary

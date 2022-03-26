@@ -74,8 +74,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	  localTables(*p),
 	  invariants(*p),
 	  blr(*p),
-	  mapFieldInfo(*p),
-	  mapItemInfo(*p)
+	  mapFieldInfo(*p)
 {
 	try
 	{
@@ -86,9 +85,16 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 			static_cast<StmtNode*>(csb->csb_node) : NULL;
 
 		accessList = csb->csb_access;
+		csb->csb_access.clear();
+
 		externalList = csb->csb_external;
+		csb->csb_external.clear();
+
 		mapFieldInfo.takeOwnership(csb->csb_map_field_info);
+
 		resources = csb->csb_resources; // Assign array contents
+		csb->csb_resources.clear();
+
 		impureSize = csb->csb_impure;
 
 		//if (csb->csb_g_flags & csb_blr_version4)
@@ -155,19 +161,22 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 
 		// make a vector of all used RSEs
 		fors = csb->csb_fors;
+		csb->csb_fors.clear();
 
 		localTables = csb->csb_localTables;
+		csb->csb_localTables.clear();
 
 		// make a vector of all invariant-type nodes, so that we will
 		// be able to easily reinitialize them when we restart the request
 		invariants.join(csb->csb_invariants);
+		csb->csb_invariants.clear();
 
 		rpbsSetup.grow(csb->csb_n_stream);
 
-		CompilerScratch::csb_repeat* tail = csb->csb_rpt.begin();
-		const CompilerScratch::csb_repeat* const streams_end = tail + csb->csb_n_stream;
+		auto tail = csb->csb_rpt.begin();
+		const auto* const streams_end = tail + csb->csb_n_stream;
 
-		for (record_param* rpb = rpbsSetup.begin(); tail < streams_end; ++rpb, ++tail)
+		for (auto rpb = rpbsSetup.begin(); tail < streams_end; ++rpb, ++tail)
 		{
 			// fetch input stream for update if all booleans matched against indices
 			if ((tail->csb_flags & csb_update) && !(tail->csb_flags & csb_unmatched))
@@ -186,6 +195,22 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 			delete tail->csb_fields;
 			tail->csb_fields = NULL;
 		}
+
+		if (csb->csb_variables)
+			csb->csb_variables->clear();
+
+		csb->csb_current_nodes.free();
+		csb->csb_current_for_nodes.free();
+		csb->csb_computing_fields.free();
+		csb->csb_variables_used_in_subroutines.free();
+		csb->csb_dbg_info.reset();
+		csb->csb_map_item_info.clear();
+		csb->csb_message_pad.clear();
+		csb->subFunctions.clear();
+		csb->subProcedures.clear();
+		csb->outerMessagesMap.clear();
+		csb->outerVarsMap.clear();
+		csb->csb_rpt.free();
 	}
 	catch (Exception&)
 	{
@@ -206,13 +231,15 @@ Statement* Statement::makeStatement(thread_db* tdbb, CompilerScratch* csb, bool 
 	DEV_BLKCHK(csb, type_csb);
 	SET_TDBB(tdbb);
 
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 	fb_assert(dbb);
 
-	Request* const old_request = tdbb->getRequest();
-	tdbb->setRequest(NULL);
+	const auto attachment = tdbb->getAttachment();
 
-	Statement* statement = NULL;
+	const auto old_request = tdbb->getRequest();
+	tdbb->setRequest(nullptr);
+
+	Statement* statement = nullptr;
 
 	try
 	{
@@ -277,7 +304,7 @@ Statement* Statement::makeStatement(thread_db* tdbb, CompilerScratch* csb, bool 
 
 		// Build the statement and the final request block.
 
-		MemoryPool* const pool = tdbb->getDefaultPool();
+		const auto pool = tdbb->getDefaultPool();
 
 		statement = FB_NEW_POOL(*pool) Statement(tdbb, pool, csb);
 
@@ -288,12 +315,8 @@ Statement* Statement::makeStatement(thread_db* tdbb, CompilerScratch* csb, bool 
 		if (statement)
 		{
 			// Release sub statements.
-			for (Statement** subStatement = statement->subStatements.begin();
-				 subStatement != statement->subStatements.end();
-				 ++subStatement)
-			{
-				(*subStatement)->release(tdbb);
-			}
+			for (auto subStatement : statement->subStatements)
+				subStatement->release(tdbb);
 		}
 
 		ex.stuffException(tdbb->tdbb_status_vector);
@@ -302,9 +325,14 @@ Statement* Statement::makeStatement(thread_db* tdbb, CompilerScratch* csb, bool 
 	}
 
 	if (internalFlag)
+	{
 		statement->flags |= FLAG_INTERNAL;
+		statement->charSetId = CS_METADATA;
+	}
+	else
+		statement->charSetId = attachment->att_charset;
 
-	tdbb->getAttachment()->att_statements.add(statement);
+	attachment->att_statements.add(statement);
 
 	return statement;
 }
@@ -402,17 +430,11 @@ Request* Statement::getRequest(thread_db* tdbb, USHORT level)
 	if (level < requests.getCount() && requests[level])
 		return requests[level];
 
-	requests.grow(level + 1);
-
-	MemoryStats* const parentStats = (flags & FLAG_INTERNAL) ?
-		&dbb->dbb_memory_stats : &attachment->att_memory_stats;
-
 	// Create the request.
-	Request* const request = FB_NEW_POOL(*pool) Request(attachment, this, parentStats);
+	AutoMemoryPool reqPool(MemoryPool::createPool(pool));
+	const auto request = FB_NEW_POOL(*reqPool) Request(reqPool, attachment, this);
 
-	if (level == 0)
-		pool->setStatsGroup(request->req_memory_stats);
-
+	requests.grow(level + 1);
 	requests[level] = request;
 
 	return request;
@@ -500,15 +522,13 @@ void Statement::verifyAccess(thread_db* tdbb)
 		if (!routine->getStatement())
 			continue;
 
-		for (const AccessItem* access = routine->getStatement()->accessList.begin();
-			 access != routine->getStatement()->accessList.end();
-			 ++access)
+		for (const auto& access : routine->getStatement()->accessList)
 		{
 			MetaName userName = item->user;
 
-			if (access->acc_ss_rel_id)
+			if (access.acc_ss_rel_id)
 			{
-				const jrd_rel* view = MET_lookup_relation_id(tdbb, access->acc_ss_rel_id, false);
+				const jrd_rel* view = MET_lookup_relation_id(tdbb, access.acc_ss_rel_id, false);
 				if (view && (view->rel_flags & REL_sql_relation))
 					userName = view->rel_owner_name;
 			}
@@ -517,17 +537,17 @@ void Statement::verifyAccess(thread_db* tdbb)
 			UserId* effectiveUser = userName.hasData() ? attachment->getUserId(userName) : attachment->att_ss_user;
 			AutoSetRestore<UserId*> userIdHolder(&attachment->att_ss_user, effectiveUser);
 
-			const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());
+			const SecurityClass* sec_class = SCL_get_class(tdbb, access.acc_security_name.c_str());
 
 			if (routine->getName().package.isEmpty())
 			{
 				SCL_check_access(tdbb, sec_class, aclType, routine->getName().identifier,
-							access->acc_mask, access->acc_type, true, access->acc_name, access->acc_r_name);
+							access.acc_mask, access.acc_type, true, access.acc_name, access.acc_r_name);
 			}
 			else
 			{
 				SCL_check_access(tdbb, sec_class, id_package, routine->getName().package,
-							access->acc_mask, access->acc_type, true, access->acc_name, access->acc_r_name);
+							access.acc_mask, access.acc_type, true, access.acc_name, access.acc_r_name);
 			}
 		}
 	}
@@ -650,7 +670,11 @@ void Statement::release(thread_db* tdbb)
 	}
 
 	for (Request** instance = requests.begin(); instance != requests.end(); ++instance)
+	{
 		EXE_release(tdbb, *instance);
+		MemoryPool::deletePool((*instance)->req_pool);
+		*instance = nullptr;
+	}
 
 	const auto attachment = tdbb->getAttachment();
 
@@ -842,41 +866,33 @@ template <typename T> static void makeSubRoutines(thread_db* tdbb, Statement* st
 {
 	typename T::Accessor subAccessor(&subs);
 
-	for (bool found = subAccessor.getFirst(); found; found = subAccessor.getNext())
+	for (auto& sub : subs)
 	{
-		typename T::ValueType subNode = subAccessor.current()->second;
-		Routine* subRoutine = subNode->routine;
-		CompilerScratch*& subCsb = subNode->subCsb;
+		auto subNode = sub.second;
+		auto subRoutine = subNode->routine;
+		auto& subCsb = subNode->subCsb;
 
-		Statement* subStatement = Statement::makeStatement(tdbb, subCsb, false);
+		auto subStatement = Statement::makeStatement(tdbb, subCsb, false);
 		subStatement->parentStatement = statement;
 		subRoutine->setStatement(subStatement);
 
 		// Move dependencies and permissions from the sub routine to the parent.
 
-		for (CompilerScratch::Dependency* dependency = subCsb->csb_dependencies.begin();
-			 dependency != subCsb->csb_dependencies.end();
-			 ++dependency)
-		{
-			csb->csb_dependencies.push(*dependency);
-		}
+		for (auto& dependency : subCsb->csb_dependencies)
+			csb->csb_dependencies.push(dependency);
 
-		for (ExternalAccess* access = subCsb->csb_external.begin();
-			 access != subCsb->csb_external.end();
-			 ++access)
+		for (auto& access : subStatement->externalList)
 		{
 			FB_SIZE_T i;
-			if (!csb->csb_external.find(*access, i))
-				csb->csb_external.insert(i, *access);
+			if (!csb->csb_external.find(access, i))
+				csb->csb_external.insert(i, access);
 		}
 
-		for (AccessItem* access = subCsb->csb_access.begin();
-			 access != subCsb->csb_access.end();
-			 ++access)
+		for (auto& access : subStatement->accessList)
 		{
 			FB_SIZE_T i;
-			if (!csb->csb_access.find(*access, i))
-				csb->csb_access.insert(i, *access);
+			if (!csb->csb_access.find(access, i))
+				csb->csb_access.insert(i, access);
 		}
 
 		delete subCsb;

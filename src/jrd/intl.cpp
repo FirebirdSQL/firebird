@@ -1272,6 +1272,7 @@ USHORT INTL_string_to_key(thread_db* tdbb,
 	case ttype_binary:
 	case ttype_ascii:
 	case ttype_none:
+		fb_assert(key_type != INTL_KEY_MULTI_STARTING);
 		while (len-- && destLen-- > 0)
 			*dest++ = *src++;
 		// strip off ending pad characters
@@ -1286,6 +1287,7 @@ USHORT INTL_string_to_key(thread_db* tdbb,
 		break;
 	default:
 		TextType* obj = INTL_texttype_lookup(tdbb, ttype);
+		fb_assert(key_type != INTL_KEY_MULTI_STARTING || (obj->getFlags() & TEXTTYPE_MULTI_STARTING_KEY));
 		outlen = obj->string_to_key(len, src, pByte->dsc_length, dest, key_type);
 		break;
 	}

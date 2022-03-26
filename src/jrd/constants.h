@@ -284,7 +284,8 @@ enum stat_group_t {
 	stat_attachment = 1,
 	stat_transaction = 2,
 	stat_statement = 3,
-	stat_call = 4
+	stat_call = 4,
+	stat_cmp_statement = 5
 };
 
 enum InfoType

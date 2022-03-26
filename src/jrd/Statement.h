@@ -55,6 +55,11 @@ public:
 		return id;
 	}
 
+	unsigned getSize() const
+	{
+		return (unsigned) pool->getStatsGroup().getCurrentUsage();
+	}
+
 	const Routine* getRoutine() const;
 	bool isActive() const;
 
@@ -78,6 +83,7 @@ public:
 	unsigned blrVersion;
 	ULONG impureSize;					// Size of impure area
 	mutable StmtNumber id;				// statement identifier
+	USHORT charSetId;					// client character set (CS_METADATA for internal statements)
 	Firebird::Array<record_param> rpbsSetup;
 	Firebird::Array<Request*> requests;	// vector of requests
 	ExternalAccessList externalList;	// Access to procedures/triggers to be checked
@@ -96,7 +102,6 @@ public:
 	Firebird::RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)
 	Firebird::Array<UCHAR> blr;			// BLR for non-SQL query
 	MapFieldInfo mapFieldInfo;			// Map field name to field info
-	MapItemInfo mapItemInfo;			// Map item to item info
 };
 
 

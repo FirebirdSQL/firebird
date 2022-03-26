@@ -392,6 +392,9 @@
     <ClInclude Include="..\..\..\src\common\classes\DbImplementation.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\DoublyLinkedList.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\fb_atomic.h">
       <Filter>headers</Filter>
     </ClInclude>

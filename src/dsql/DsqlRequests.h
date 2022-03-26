@@ -75,11 +75,6 @@ public:
 		return nullptr;
 	}
 
-	virtual bool isDml() const
-	{
-		return false;
-	}
-
 	virtual DsqlCursor* openCursor(thread_db* tdbb, jrd_tra** traHandle,
 		Firebird::IMessageMetadata* inMeta, const UCHAR* inMsg,
 		Firebird::IMessageMetadata* outMeta, ULONG flags)
@@ -163,11 +158,6 @@ public:
 	Request* getRequest() const override
 	{
 		return request;
-	}
-
-	bool isDml() const override
-	{
-		return true;
 	}
 
 	DsqlCursor* openCursor(thread_db* tdbb, jrd_tra** traHandle,

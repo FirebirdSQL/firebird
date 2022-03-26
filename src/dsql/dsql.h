@@ -77,12 +77,9 @@ namespace Jrd
 	class Attachment;
 	class Database;
 	class DsqlCompilerScratch;
-	class DsqlDmlStatement;
-	class DdlNode;
+	class DsqlStatement;
+	class DsqlStatementCache;
 	class RseNode;
-	class StmtNode;
-	class TransactionNode;
-	class SessionManagementNode;
 	class ValueExprNode;
 	class ValueListNode;
 	class WindowClause;
@@ -92,7 +89,6 @@ namespace Jrd
 	struct bid;
 
 	class dsql_ctx;
-	class dsql_msg;
 	class dsql_par;
 	class dsql_map;
 	class dsql_intlsym;
@@ -130,24 +126,14 @@ public:
 	Firebird::LeftPooledMap<MetaName, class dsql_intlsym*> dbb_collations;	// known collations in database
 	Firebird::NonPooledMap<SSHORT, dsql_intlsym*> dbb_charsets_by_id;		// charsets sorted by charset_id
 	Firebird::LeftPooledMap<Firebird::string, DsqlDmlRequest*> dbb_cursors;	// known cursors in database
+	Firebird::AutoPtr<DsqlStatementCache> dbb_statement_cache;
 
 	MemoryPool&		dbb_pool;			// The current pool for the dbb
 	Attachment*		dbb_attachment;
 	MetaName dbb_dfl_charset;
 	bool			dbb_no_charset;
 
-	explicit dsql_dbb(MemoryPool& p)
-		: dbb_relations(p),
-		  dbb_procedures(p),
-		  dbb_functions(p),
-		  dbb_charsets(p),
-		  dbb_collations(p),
-		  dbb_charsets_by_id(p),
-		  dbb_cursors(p),
-		  dbb_pool(p),
-		  dbb_dfl_charset(p)
-	{}
-
+	dsql_dbb(MemoryPool& p, Attachment* attachment);
 	~dsql_dbb();
 
 	MemoryPool* createPool()

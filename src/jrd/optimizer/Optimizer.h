@@ -495,7 +495,8 @@ struct IndexScratch
 	unsigned lowerCount = 0;
 	unsigned upperCount = 0;
 	unsigned nonFullMatchedSegments = 0;
-	bool fuzzy = false;							// Need to use INTL_KEY_PARTIAL in btr lookups
+	bool usePartialKey = false;				// Use INTL_KEY_PARTIAL
+	bool useMultiStartingKeys = false;		// Use INTL_KEY_MULTI_STARTING
 
 	Firebird::ObjectsArray<IndexScratchSegment> segments;
 };

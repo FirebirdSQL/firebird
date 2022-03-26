@@ -85,6 +85,7 @@
 #include "../jrd/intl.h"
 #include "../intl/charsets.h"
 #include "../jrd/align.h"
+#include "../dsql/DsqlStatementCache.h"
 #include "../common/gdsassert.h"
 #include "../jrd/blb_proto.h"
 #include "../jrd/btr_proto.h"
@@ -1477,6 +1478,9 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 	}
 
 	SET_TDBB(tdbb);
+
+	tdbb->getAttachment()->att_dsql_instance->dbb_statement_cache->purgeAllAttachments(tdbb);
+
 	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
 
 	/* Loop for as long as any of the deferred work routines says that it has

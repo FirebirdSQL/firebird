@@ -150,6 +150,7 @@ struct temporary_key
 	UCHAR key_flags;
 	USHORT key_nulls;	// bitmap of encountered null segments,
 						// USHORT is enough to store MAX_INDEX_SEGMENTS bits
+	Firebird::AutoPtr<temporary_key> key_next;	// next key (INTL_KEY_MULTI_STARTING)
 };
 
 
@@ -223,6 +224,7 @@ const int irb_ignore_null_value_key  = 8;	// if lower bound is specified and upp
 const int irb_descending	= 16;			// Base index uses descending order
 const int irb_exclude_lower	= 32;			// exclude lower bound keys while scanning index
 const int irb_exclude_upper	= 64;			// exclude upper bound keys while scanning index
+const int irb_multi_starting	= 128;		// Use INTL_KEY_MULTI_STARTING
 
 typedef Firebird::HalfStaticArray<float, 4> SelectivityList;
 

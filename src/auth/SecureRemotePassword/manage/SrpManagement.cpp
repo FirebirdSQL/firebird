@@ -532,12 +532,9 @@ public:
 						assignField(active, user->active());
 						setField(login, user->userName());
 
-						int count = 0;
-						checkCount(status, stmt, &count, isc_info_req_update_count);
 						stmt->execute(status, mainTra, up.getMetadata(), up.getBuffer(), NULL, NULL);
 						check(status);
-
-						if (!checkCount(status, stmt, &count, isc_info_req_update_count))
+						if (recordsCount(status, stmt, isc_info_req_update_count) != 1)
 						{
 							stmt->release();
 							return GsecMsg22;
@@ -573,12 +570,9 @@ public:
 						Varfield login(dl);
 						setField(login, user->userName());
 
-						int count = 0;
-						checkCount(status, stmt, &count, isc_info_req_delete_count);
 						stmt->execute(status, mainTra, dl.getMetadata(), dl.getBuffer(), NULL, NULL);
 						check(status);
-
-						if (!checkCount(status, stmt, &count, isc_info_req_delete_count))
+						if (recordsCount(status, stmt, isc_info_req_delete_count) != 1)
 						{
 							stmt->release();
 							return GsecMsg22;
@@ -731,7 +725,7 @@ private:
 
 	RemotePasswordImpl<Firebird::Sha1> server;
 
-	bool checkCount(Firebird::CheckStatusWrapper* status, Firebird::IStatement* stmt, int* count, UCHAR item)
+	int recordsCount(Firebird::CheckStatusWrapper* status, Firebird::IStatement* stmt, UCHAR item)
 	{
 		UCHAR buffer[33];
 		const UCHAR count_info[] = { isc_info_sql_records };
@@ -747,17 +741,12 @@ private:
 				const SSHORT len = gds__vax_integer(p, 2);
 				p += 2;
 				if (count_is == item)
-				{
-					int newCount = gds__vax_integer(p, len);
-					int oldCount = *count;
-					*count = newCount;
-					return newCount == oldCount + 1;
-				}
+					return gds__vax_integer(p, len);
 				p += len;
 			}
 		}
 
-		return false;
+		return 0;
 	}
 
 	static void check(Firebird::CheckStatusWrapper* status)

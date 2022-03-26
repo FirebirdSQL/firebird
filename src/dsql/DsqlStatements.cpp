@@ -24,6 +24,7 @@
 #include "../dsql/dsql.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/DsqlCompilerScratch.h"
+#include "../dsql/DsqlStatementCache.h"
 #include "../jrd/Statement.h"
 #include "../dsql/errd_proto.h"
 #include "../dsql/gen_proto.h"
@@ -58,12 +59,22 @@ void DsqlStatement::rethrowDdlException(status_exception& ex, bool metadataUpdat
 int DsqlStatement::release()
 {
 	fb_assert(refCounter.value() > 0);
-	const int refCnt = --refCounter;
+	int refCnt = --refCounter;
 
 	if (!refCnt)
 	{
-		doRelease();
-		dsqlAttachment->deletePool(&getPool());
+		if (cacheKey)
+		{
+			refCnt = ++refCounter;
+			auto key = cacheKey;
+			cacheKey = nullptr;
+			dsqlAttachment->dbb_statement_cache->statementGoingInactive(key);
+		}
+		else
+		{
+			doRelease();
+			dsqlAttachment->deletePool(&getPool());
+		}
 	}
 
 	return refCnt;
@@ -117,6 +128,11 @@ void DsqlDmlStatement::doRelease()
 	}
 
 	DsqlStatement::doRelease();
+}
+
+unsigned DsqlDmlStatement::getSize() const
+{
+	return DsqlStatement::getSize() + statement->getSize();
 }
 
 void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, ntrace_result_t* traceResult)

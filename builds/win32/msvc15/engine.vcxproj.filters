@@ -144,6 +144,9 @@
     <ClCompile Include="..\..\..\src\dsql\DsqlRequests.cpp">
       <Filter>DSQL</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\dsql\DsqlStatementCache.cpp">
+      <Filter>DSQL</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\dsql\DsqlStatements.cpp">
       <Filter>DSQL</Filter>
     </ClCompile>
@@ -558,6 +561,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\dsql\DsqlRequests.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\dsql\DsqlStatementCache.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\dsql\DsqlStatements.h">

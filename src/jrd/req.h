@@ -266,11 +266,10 @@ private:
 	};
 
 public:
-	Request(Attachment* attachment, /*const*/ Statement* aStatement,
-			Firebird::MemoryStats* parent_stats)
+	Request(Firebird::AutoMemoryPool& pool, Attachment* attachment, /*const*/ Statement* aStatement)
 		: statement(aStatement),
-		  req_pool(statement->pool),
-		  req_memory_stats(parent_stats),
+		  req_pool(pool),
+		  req_memory_stats(&aStatement->pool->getStatsGroup()),
 		  req_blobs(req_pool),
 		  req_stats(*req_pool),
 		  req_base_stats(*req_pool),
@@ -288,6 +287,9 @@ public:
 		setAttachment(attachment);
 		req_rpb = statement->rpbsSetup;
 		impureArea.grow(statement->impureSize);
+
+		pool->setStatsGroup(req_memory_stats);
+		pool.release();
 	}
 
 	Statement* getStatement()
@@ -313,8 +315,6 @@ public:
 	void setAttachment(Attachment* newAttachment)
 	{
 		req_attachment = newAttachment;
-		charSetId = statement->flags & Statement::FLAG_INTERNAL ?
-			CS_METADATA : req_attachment->att_charset;
 	}
 
 	bool isRoot() const
@@ -351,9 +351,9 @@ private:
 
 public:
 	MemoryPool* req_pool;
+	Firebird::MemoryStats req_memory_stats;
 	Attachment*	req_attachment;			// database attachment
 	USHORT		req_incarnation;		// incarnation number
-	Firebird::MemoryStats req_memory_stats;
 
 	// Transaction pointer and doubly linked list pointers for requests in this
 	// transaction. Maintained by TRA_attach_request/TRA_detach_request.
@@ -399,7 +399,6 @@ public:
 	SortOwner req_sorts;
 	Firebird::Array<record_param> req_rpb;	// record parameter blocks
 	Firebird::Array<UCHAR> impureArea;		// impure area
-	USHORT charSetId;						// "client" character set of the request
 	TriggerAction req_trigger_action;		// action that caused trigger to fire
 
 	// Fields to support read consistency in READ COMMITTED transactions

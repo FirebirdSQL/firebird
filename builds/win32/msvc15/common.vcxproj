@@ -124,6 +124,7 @@
     <ClInclude Include="..\..\..\src\common\classes\ClumpletWriter.h" />
     <ClInclude Include="..\..\..\src\common\classes\condition.h" />
     <ClInclude Include="..\..\..\src\common\classes\DbImplementation.h" />
+    <ClInclude Include="..\..\..\src\common\classes\DoublyLinkedList.h" />
     <ClInclude Include="..\..\..\src\common\classes\fb_atomic.h" />
     <ClInclude Include="..\..\..\src\common\classes\fb_pair.h" />
     <ClInclude Include="..\..\..\src\common\classes\fb_string.h" />

@@ -387,9 +387,12 @@ void BTR_complement_key(temporary_key* key)
  *	Negate a key for descending index.
  *
  **************************************/
-	UCHAR* p = key->key_data;
-	for (const UCHAR* const end = p + key->key_length; p < end; p++)
-		*p ^= -1;
+	do
+	{
+		UCHAR* p = key->key_data;
+		for (const UCHAR* const end = p + key->key_length; p < end; p++)
+			*p ^= -1;
+	} while (key = key->key_next.get());
 }
 
 
@@ -694,149 +697,158 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 	index_desc idx;
 	RelationPages* relPages = retrieval->irb_relation->getPages(tdbb);
 	WIN window(relPages->rel_pg_space_id, -1);
-	temporary_key lower, upper;
-	lower.key_flags = 0;
-	lower.key_length = 0;
-	upper.key_flags = 0;
-	upper.key_length = 0;
-	btree_page* page = BTR_find_page(tdbb, retrieval, &window, &idx, &lower, &upper);
+	temporary_key lowerKey, upperKey;
+	lowerKey.key_flags = 0;
+	lowerKey.key_length = 0;
+	upperKey.key_flags = 0;
+	upperKey.key_length = 0;
 
-	const bool descending = (idx.idx_flags & idx_descending);
-	bool skipLowerKey = (retrieval->irb_generic & irb_exclude_lower);
-	const bool partLower = (retrieval->irb_lower_count < idx.idx_count);
+	temporary_key* lower = &lowerKey;
+	temporary_key* upper = &upperKey;
+	bool first = true;
 
-	// If there is a starting descriptor, search down index to starting position.
-	// This may involve sibling buckets if splits are in progress.  If there
-	// isn't a starting descriptor, walk down the left side of the index.
-	USHORT prefix;
-	UCHAR* pointer;
-	if (retrieval->irb_lower_count)
+	do
 	{
-		while (!(pointer = find_node_start_point(page, &lower, 0, &prefix,
-			idx.idx_flags & idx_descending, (retrieval->irb_generic & (irb_starting | irb_partial)))))
-		{
-			page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
-		}
+		btree_page* page = BTR_find_page(tdbb, retrieval, &window, &idx, lower, upper, first);
+		first = false;
 
-		// Compute the number of matching characters in lower and upper bounds
-		if (retrieval->irb_upper_count)
-		{
-			prefix = IndexNode::computePrefix(upper.key_data, upper.key_length,
-											  lower.key_data, lower.key_length);
-		}
+		const bool descending = (idx.idx_flags & idx_descending);
+		bool skipLowerKey = (retrieval->irb_generic & irb_exclude_lower);
+		const bool partLower = (retrieval->irb_lower_count < idx.idx_count);
 
-		if (skipLowerKey)
+		// If there is a starting descriptor, search down index to starting position.
+		// This may involve sibling buckets if splits are in progress.  If there
+		// isn't a starting descriptor, walk down the left side of the index.
+		USHORT prefix;
+		UCHAR* pointer;
+		if (retrieval->irb_lower_count)
 		{
-			IndexNode node;
-			node.readNode(pointer, true);
-
-			if ((lower.key_length == node.prefix + node.length) ||
-				((lower.key_length <= node.prefix + node.length) && partLower))
+			while (!(pointer = find_node_start_point(page, lower, 0, &prefix,
+				idx.idx_flags & idx_descending, (retrieval->irb_generic & (irb_starting | irb_partial)))))
 			{
-				const UCHAR* p = node.data, *q = lower.key_data + node.prefix;
-				const UCHAR* const end = lower.key_data + lower.key_length;
-				while (q < end)
+				page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
+			}
+
+			// Compute the number of matching characters in lower and upper bounds
+			if (retrieval->irb_upper_count)
+			{
+				prefix = IndexNode::computePrefix(upper->key_data, upper->key_length,
+													lower->key_data, lower->key_length);
+			}
+
+			if (skipLowerKey)
+			{
+				IndexNode node;
+				node.readNode(pointer, true);
+
+				if ((lower->key_length == node.prefix + node.length) ||
+					((lower->key_length <= node.prefix + node.length) && partLower))
 				{
-					if (*p++ != *q++)
+					const UCHAR* p = node.data, *q = lower->key_data + node.prefix;
+					const UCHAR* const end = lower->key_data + lower->key_length;
+					while (q < end)
 					{
-						skipLowerKey = false;
-						break;
+						if (*p++ != *q++)
+						{
+							skipLowerKey = false;
+							break;
+						}
+					}
+
+					if ((q >= end) && (p < node.data + node.length) && skipLowerKey && partLower)
+					{
+						// since key length always is multiplier of (STUFF_COUNT + 1) (for partial
+						// compound keys) and we passed lower key completely then p pointed
+						// us to the next segment number and we can use this fact to calculate
+						// how many segments is equal to lower key
+						const USHORT segnum = idx.idx_count - (UCHAR) (descending ? ((*p) ^ -1) : *p);
+
+						if (segnum < retrieval->irb_lower_count)
+							skipLowerKey = false;
 					}
 				}
-
-				if ((q >= end) && (p < node.data + node.length) && skipLowerKey && partLower)
-				{
-					// since key length always is multiplier of (STUFF_COUNT + 1) (for partial
-					// compound keys) and we passed lower key completely then p pointed
-					// us to the next segment number and we can use this fact to calculate
-					// how many segments is equal to lower key
-					const USHORT segnum = idx.idx_count - (UCHAR) (descending ? ((*p) ^ -1) : *p);
-
-					if (segnum < retrieval->irb_lower_count)
-						skipLowerKey = false;
-				}
+				else
+					skipLowerKey = false;
 			}
-			else
-				skipLowerKey = false;
 		}
-	}
-	else
-	{
-		pointer = page->btr_nodes + page->btr_jump_size;
-		prefix = 0;
-		skipLowerKey = false;
-	}
-
-	// if there is an upper bound, scan the index pages looking for it
-	if (retrieval->irb_upper_count)
-	{
-		while (scan(tdbb, pointer, bitmap, bitmap_and, &idx, retrieval, prefix, &upper,
-					skipLowerKey, lower))
+		else
 		{
-			page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
 			pointer = page->btr_nodes + page->btr_jump_size;
 			prefix = 0;
+			skipLowerKey = false;
 		}
-	}
-	else
-	{
-		// if there isn't an upper bound, just walk the index to the end of the level
-		const UCHAR* endPointer = (UCHAR*) page + page->btr_length;
-		const bool ignoreNulls =
-			(retrieval->irb_generic & irb_ignore_null_value_key) && (idx.idx_count == 1);
 
-		IndexNode node;
-		pointer = node.readNode(pointer, true);
-
-		// Check if pointer is still valid
-		if (pointer > endPointer)
-			BUGCHECK(204);	// msg 204 index inconsistent
-
-		while (true)
+		// if there is an upper bound, scan the index pages looking for it
+		if (retrieval->irb_upper_count)
 		{
-			if (node.isEndLevel)
-				break;
-
-			if (!node.isEndBucket)
+			while (scan(tdbb, pointer, bitmap, bitmap_and, &idx, retrieval, prefix, upper,
+						skipLowerKey, *lower))
 			{
-				// If we're walking in a descending index and we need to ignore NULLs
-				// then stop at the first NULL we see (only for single segment!)
-				if (descending && ignoreNulls && node.prefix == 0 &&
-					node.length >= 1 && node.data[0] == 255)
-				{
-					break;
-				}
-
-				if (skipLowerKey)
-					checkForLowerKeySkip(skipLowerKey, partLower, node, lower, idx, retrieval);
-
-				if (!skipLowerKey)
-				{
-					if (!bitmap_and || bitmap_and->test(node.recordNumber.getValue()))
-						RBM_SET(tdbb->getDefaultPool(), bitmap, node.recordNumber.getValue());
-				}
-
-				pointer = node.readNode(pointer, true);
-
-				// Check if pointer is still valid
-				if (pointer > endPointer)
-					BUGCHECK(204);	// msg 204 index inconsistent
-
-				continue;
+				page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
+				pointer = page->btr_nodes + page->btr_jump_size;
+				prefix = 0;
 			}
+		}
+		else
+		{
+			// if there isn't an upper bound, just walk the index to the end of the level
+			const UCHAR* endPointer = (UCHAR*) page + page->btr_length;
+			const bool ignoreNulls =
+				(retrieval->irb_generic & irb_ignore_null_value_key) && (idx.idx_count == 1);
 
-			page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
-			endPointer = (UCHAR*) page + page->btr_length;
-			pointer = page->btr_nodes + page->btr_jump_size;
+			IndexNode node;
 			pointer = node.readNode(pointer, true);
 
 			// Check if pointer is still valid
 			if (pointer > endPointer)
 				BUGCHECK(204);	// msg 204 index inconsistent
-		}
-	}
 
-	CCH_RELEASE(tdbb, &window);
+			while (true)
+			{
+				if (node.isEndLevel)
+					break;
+
+				if (!node.isEndBucket)
+				{
+					// If we're walking in a descending index and we need to ignore NULLs
+					// then stop at the first NULL we see (only for single segment!)
+					if (descending && ignoreNulls && node.prefix == 0 &&
+						node.length >= 1 && node.data[0] == 255)
+					{
+						break;
+					}
+
+					if (skipLowerKey)
+						checkForLowerKeySkip(skipLowerKey, partLower, node, *lower, idx, retrieval);
+
+					if (!skipLowerKey)
+					{
+						if (!bitmap_and || bitmap_and->test(node.recordNumber.getValue()))
+							RBM_SET(tdbb->getDefaultPool(), bitmap, node.recordNumber.getValue());
+					}
+
+					pointer = node.readNode(pointer, true);
+
+					// Check if pointer is still valid
+					if (pointer > endPointer)
+						BUGCHECK(204);	// msg 204 index inconsistent
+
+					continue;
+				}
+
+				page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
+				endPointer = (UCHAR*) page + page->btr_length;
+				pointer = page->btr_nodes + page->btr_jump_size;
+				pointer = node.readNode(pointer, true);
+
+				// Check if pointer is still valid
+				if (pointer > endPointer)
+					BUGCHECK(204);	// msg 204 index inconsistent
+			}
+		}
+
+		CCH_RELEASE(tdbb, &window);
+	} while ((lower = lower->key_next.get()) && (upper = upper->key_next.get()));
 }
 
 
@@ -864,7 +876,8 @@ btree_page* BTR_find_page(thread_db* tdbb,
 						  WIN* window,
 						  index_desc* idx,
 						  temporary_key* lower,
-						  temporary_key* upper)
+						  temporary_key* upper,
+						  bool makeKeys)
 {
 /**************************************
  *
@@ -884,19 +897,26 @@ btree_page* BTR_find_page(thread_db* tdbb,
 	// are looking for an equality
 	if (retrieval->irb_key)
 	{
+		fb_assert(makeKeys);
 		copy_key(retrieval->irb_key, lower);
 		copy_key(retrieval->irb_key, upper);
 	}
-	else
+	else if (makeKeys)
 	{
 		idx_e errorCode = idx_e_ok;
+
+		const USHORT keyType =
+			(retrieval->irb_generic & irb_multi_starting) ? INTL_KEY_MULTI_STARTING :
+			(retrieval->irb_generic & irb_starting) ? INTL_KEY_PARTIAL :
+			(retrieval->irb_desc.idx_flags & idx_unique) ? INTL_KEY_UNIQUE :
+			INTL_KEY_SORT;
 
 		if (retrieval->irb_upper_count)
 		{
 			errorCode = BTR_make_key(tdbb, retrieval->irb_upper_count,
 									 retrieval->irb_value + retrieval->irb_desc.idx_count,
 									 &retrieval->irb_desc, upper,
-									 (retrieval->irb_generic & irb_starting) != 0);
+									 keyType);
 		}
 
 		if (errorCode == idx_e_ok)
@@ -905,7 +925,7 @@ btree_page* BTR_find_page(thread_db* tdbb,
 			{
 				errorCode = BTR_make_key(tdbb, retrieval->irb_lower_count,
 										 retrieval->irb_value, &retrieval->irb_desc, lower,
-										 (retrieval->irb_generic & irb_starting) != 0);
+										 keyType);
 			}
 		}
 
@@ -1085,7 +1105,11 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 
 		window.win_page = root->irt_rpt[idx->idx_id].getRoot();
 		bucket = (btree_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_index);
-		key = ret_key;
+		key.key_length = ret_key.key_length;
+		memcpy(key.key_data, ret_key.key_data, ret_key.key_length);
+		key.key_flags = ret_key.key_flags;
+		key.key_nulls = ret_key.key_nulls;
+		key.key_next.reset(ret_key.key_next.release());
 	}
 
 	// the original page was marked as not garbage-collectable, but
@@ -1172,7 +1196,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 
 
 idx_e BTR_key(thread_db* tdbb, jrd_rel* relation, Record* record, index_desc* idx,
-			  temporary_key* key, const bool fuzzy, USHORT count)
+			  temporary_key* key, const USHORT keyType, USHORT count)
 {
 /**************************************
  *
@@ -1209,11 +1233,6 @@ idx_e BTR_key(thread_db* tdbb, jrd_rel* relation, Record* record, index_desc* id
 	const USHORT maxKeyLength = dbb->getMaxIndexKeyLength();
 
 	try {
-
-		const USHORT keyType = fuzzy ?
-			INTL_KEY_PARTIAL :
-			((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT);
-
 		// Special case single segment indices
 
 		if (idx->idx_count == 1)
@@ -1516,7 +1535,7 @@ idx_e BTR_make_key(thread_db* tdbb,
 				   const ValueExprNode* const* exprs,
 				   const index_desc* idx,
 				   temporary_key* key,
-				   bool fuzzy)
+				   USHORT keyType)
 {
 /**************************************
  *
@@ -1545,12 +1564,10 @@ idx_e BTR_make_key(thread_db* tdbb,
 	key->key_flags = 0;
 	key->key_nulls = 0;
 
+	const bool fuzzy = (keyType == INTL_KEY_PARTIAL || keyType == INTL_KEY_MULTI_STARTING);
 	const bool descending = (idx->idx_flags & idx_descending);
 
 	const index_desc::idx_repeat* tail = idx->idx_rpt;
-
-	const USHORT keyType = fuzzy ?
-		INTL_KEY_PARTIAL : ((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT);
 
 	const USHORT maxKeyLength = dbb->getMaxIndexKeyLength();
 
@@ -1567,7 +1584,10 @@ idx_e BTR_make_key(thread_db* tdbb,
 		compress(tdbb, desc, key, tail->idx_itype, isNull, descending, keyType);
 
 		if (fuzzy && (key->key_flags & key_empty))
+		{
 			key->key_length = 0;
+			key->key_next.reset();
+		}
 	}
 	else
 	{
@@ -1604,37 +1624,64 @@ idx_e BTR_make_key(thread_db* tdbb,
 
 			prior_length = (p - key->key_data);
 
-			const UCHAR* q = temp.key_data;
-			for (USHORT l = temp.key_length; l; --l, --stuff_count)
-			{
-				if (stuff_count == 0)
-				{
-					*p++ = idx->idx_count - n;
-					stuff_count = STUFF_COUNT;
+			fb_assert(n == count - 1 || !temp.key_next);
 
-					if (p - key->key_data >= maxKeyLength)
+			SSHORT save_stuff_count = stuff_count;
+			temporary_key* current_key = key;
+			temporary_key* temp_ptr = &temp;
+
+			do
+			{
+				const UCHAR* q = temp_ptr->key_data;
+
+				for (USHORT l = temp_ptr->key_length; l; --l, --stuff_count)
+				{
+					if (stuff_count == 0)
+					{
+						*p++ = idx->idx_count - n;
+						stuff_count = STUFF_COUNT;
+
+						if (p - current_key->key_data >= maxKeyLength)
+							return idx_e_keytoobig;
+					}
+
+					*p++ = *q++;
+
+					if (p - current_key->key_data >= maxKeyLength)
 						return idx_e_keytoobig;
 				}
 
-				*p++ = *q++;
+				// AB: Fix bug SF #1242982
+				// Equality search on first segment (integer) in compound indexes resulted
+				// in more scans on specific values (2^n, f.e. 131072) than needed.
+				if (!fuzzy && count != idx->idx_count && n == count - 1)
+				{
+					for (; stuff_count; --stuff_count)
+					{
+						*p++ = 0;
 
-				if (p - key->key_data >= maxKeyLength)
-					return idx_e_keytoobig;
-			}
-		}
+						if (p - current_key->key_data >= maxKeyLength)
+							return idx_e_keytoobig;
+					}
+				}
 
-		// AB: Fix bug SF #1242982
-		// Equality search on first segment (integer) in compound indexes resulted
-		// in more scans on specific values (2^n, f.e. 131072) than needed.
-		if (!fuzzy && (n != idx->idx_count))
-		{
-			for (; stuff_count; --stuff_count)
-			{
-				*p++ = 0;
+				current_key->key_length = p - current_key->key_data;
 
-				if (p - key->key_data >= maxKeyLength)
-					return idx_e_keytoobig;
-			}
+				if ((temp_ptr = temp_ptr->key_next.get()))
+				{
+					temporary_key* next_key = FB_NEW_POOL(*tdbb->getDefaultPool()) temporary_key();
+					next_key->key_length = 0;
+					next_key->key_flags = key->key_flags;
+					next_key->key_nulls = key->key_nulls;
+					memcpy(next_key->key_data, key->key_data, prior_length);
+
+					current_key->key_next = next_key;
+					current_key = next_key;
+					p = current_key->key_data + prior_length;
+
+					stuff_count = save_stuff_count;
+				}
+			} while (temp_ptr);
 		}
 
 		// dimitr:	If the search is fuzzy and the last segment is empty,
@@ -1642,8 +1689,6 @@ idx_e BTR_make_key(thread_db* tdbb,
 		//			the rule that every string starts with an empty string.
 		if (fuzzy && (temp.key_flags & key_empty))
 			key->key_length = prior_length;
-		else
-			key->key_length = (p - key->key_data);
 
 		if (is_key_empty)
 		{
@@ -1704,7 +1749,7 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 	// If the index is a single segment index, don't sweat the compound stuff
 	if ((idx->idx_count == 1) || (idx->idx_flags & idx_expressn))
 	{
-		compress(tdbb, &null_desc, key, tail->idx_itype, true, descending, false);
+		compress(tdbb, &null_desc, key, tail->idx_itype, true, descending, INTL_KEY_SORT);
 	}
 	else
 	{
@@ -1718,7 +1763,7 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 			for (; stuff_count; --stuff_count)
 				*p++ = 0;
 
-			compress(tdbb, &null_desc, &temp, tail->idx_itype, true, descending, false);
+			compress(tdbb, &null_desc, &temp, tail->idx_itype, true, descending, INTL_KEY_SORT);
 
 			const UCHAR* q = temp.key_data;
 			for (USHORT l = temp.key_length; l; --l, --stuff_count)
@@ -2422,16 +2467,24 @@ static void compress(thread_db* tdbb,
  *	Compress a data value into an index key.
  *
  **************************************/
-	union {
-		INT64_KEY temp_int64_key;
-		double temp_double;
-		ULONG temp_ulong;
-		SLONG temp_slong;
-		SINT64 temp_sint64;
-		UCHAR temp_char[sizeof(INT64_KEY)];
-	} temp;
-	bool temp_is_negative = false;
-	bool int64_key_op = false;
+	if (isNull)
+	{
+		const UCHAR pad = 0;
+		key->key_flags &= ~key_empty;
+		// AB: NULL should be threated as lowest value possible.
+		//     Therefore don't complement pad when we have an ascending index.
+		if (descending)
+		{
+			// DESC NULLs are stored as 1 byte
+			key->key_data[0] = pad;
+			key->key_length = 1;
+		}
+		else
+			key->key_length = 0; // ASC NULLs are stored with no data
+
+		fb_assert(!key->key_next);
+		return;
+	}
 
 	// For descending index and new index structure we insert 0xFE at the beginning.
 	// This is only done for values which begin with 0xFE (254) or 0xFF (255) and
@@ -2442,95 +2495,150 @@ static void compress(thread_db* tdbb,
 	const UCHAR desc_end_value_check = 0x00; // ~0xFF;
 
 	const Database* dbb = tdbb->getDatabase();
-
+	bool first_key = true;
+	VaryStr<MAX_KEY * 4> buffer;
+	size_t multiKeyLength;
+	UCHAR* ptr;
 	UCHAR* p = key->key_data;
-
-	if (isNull)
-	{
-		const UCHAR pad = 0;
-		key->key_flags &= ~key_empty;
-		// AB: NULL should be threated as lowest value possible.
-		//     Therefore don't complement pad when we have an ascending index.
-		if (descending)
-		{
-			// DESC NULLs are stored as 1 byte
-			*p++ = pad;
-			key->key_length = (p - key->key_data);
-		}
-		else
-			key->key_length = 0; // ASC NULLs are stored with no data
-
-		return;
-	}
 
 	if (itype == idx_string || itype == idx_byte_array || itype == idx_metadata ||
 		itype == idx_decimal || itype >= idx_first_intl_string)
 	{
-		VaryStr<MAX_KEY> buffer;
-		const UCHAR pad = (itype == idx_string) ? ' ' : 0;
-		UCHAR* ptr;
+		temporary_key* root_key = key;
+		bool has_next;
 
-		size_t length;
-
-		if (itype == idx_decimal)
+		do
 		{
-			Decimal128 dec = MOV_get_dec128(tdbb, desc);
-			length = dec.makeIndexKey(&buffer);
-			ptr = reinterpret_cast<UCHAR*>(buffer.vary_string);
-		}
-		else if (itype >= idx_first_intl_string || itype == idx_metadata)
-		{
-			DSC to;
+			size_t length;
 
-			// convert to an international byte array
-			to.dsc_dtype = dtype_text;
-			to.dsc_flags = 0;
-			to.dsc_sub_type = 0;
-			to.dsc_scale = 0;
-			to.dsc_ttype() = ttype_sort_key;
-			to.dsc_length = MIN(MAX_KEY, sizeof(buffer));
-			ptr = to.dsc_address = reinterpret_cast<UCHAR*>(buffer.vary_string);
-			length = INTL_string_to_key(tdbb, itype, desc, &to, key_type);
-		}
-		else
-			length = MOV_get_string(tdbb, desc, &ptr, &buffer, MAX_KEY);
+			has_next = false;
 
-		if (length)
-		{
-			// clear key_empty flag, because length is >= 1
-			key->key_flags &= ~key_empty;
-
-			if (length > sizeof(key->key_data))
-				length = sizeof(key->key_data);
-
-			if (descending && ((*ptr == desc_end_value_prefix) || (*ptr == desc_end_value_check)))
+			if (first_key)
 			{
-				*p++ = desc_end_value_prefix;
-				if ((length + 1) > sizeof(key->key_data))
-					length = sizeof(key->key_data) - 1;
+				first_key = false;
+
+				if (itype == idx_decimal)
+				{
+					Decimal128 dec = MOV_get_dec128(tdbb, desc);
+					length = dec.makeIndexKey(&buffer);
+					ptr = reinterpret_cast<UCHAR*>(buffer.vary_string);
+				}
+				else if (itype >= idx_first_intl_string || itype == idx_metadata)
+				{
+					DSC to;
+
+					// convert to an international byte array
+					to.dsc_dtype = dtype_text;
+					to.dsc_flags = 0;
+					to.dsc_sub_type = 0;
+					to.dsc_scale = 0;
+					to.dsc_ttype() = ttype_sort_key;
+					to.dsc_length = MIN(MAX_COLUMN_SIZE, MAX_KEY * 4);
+					ptr = to.dsc_address = reinterpret_cast<UCHAR*>(buffer.vary_string);
+					multiKeyLength = length = INTL_string_to_key(tdbb, itype, desc, &to, key_type);
+				}
+				else
+					length = MOV_get_string(tdbb, desc, &ptr, &buffer, MAX_KEY);
 			}
 
-			memcpy(p, ptr, length);
-			p += length;
-		}
-		else
-		{
-			// Leave key_empty flag, because the string is an empty string
-			if (descending && ((pad == desc_end_value_prefix) || (pad == desc_end_value_check)))
-				*p++ = desc_end_value_prefix;
+			if (key_type == INTL_KEY_MULTI_STARTING && multiKeyLength != 0)
+			{
+				fb_assert(ptr < (UCHAR*) buffer.vary_string + multiKeyLength);
 
-			*p++ = pad;
-		}
+				length = ptr[0] + ptr[1] * 256;
+				ptr += 2;
 
-		while (p > key->key_data)
-		{
-			if (*--p != pad)
-				break;
-		}
+				has_next = ptr + length < (UCHAR*) buffer.vary_string + multiKeyLength;
 
-		key->key_length = p + 1 - key->key_data;
+				if (descending)
+				{
+					if (has_next)
+					{
+						temporary_key* new_key = FB_NEW_POOL(*tdbb->getDefaultPool()) temporary_key();
+						new_key->key_length = 0;
+						new_key->key_flags = 0;
+						new_key->key_nulls = 0;
+						new_key->key_next = key == root_key ? NULL : key;
+
+						key = new_key;
+					}
+					else if (key != root_key)
+					{
+						root_key->key_next = key;
+						key = root_key;
+					}
+
+					p = key->key_data;
+				}
+			}
+
+			const UCHAR pad = (itype == idx_string) ? ' ' : 0;
+
+			if (length)
+			{
+				// clear key_empty flag, because length is >= 1
+				key->key_flags &= ~key_empty;
+
+				if (length > sizeof(key->key_data))
+					length = sizeof(key->key_data);
+
+				if (descending && ((*ptr == desc_end_value_prefix) || (*ptr == desc_end_value_check)))
+				{
+					*p++ = desc_end_value_prefix;
+					if ((length + 1) > sizeof(key->key_data))
+						length = sizeof(key->key_data) - 1;
+				}
+
+				memcpy(p, ptr, length);
+				p += length;
+			}
+			else
+			{
+				// Leave key_empty flag, because the string is an empty string
+				if (descending && ((pad == desc_end_value_prefix) || (pad == desc_end_value_check)))
+					*p++ = desc_end_value_prefix;
+
+				*p++ = pad;
+			}
+
+			while (p > key->key_data)
+			{
+				if (*--p != pad)
+					break;
+			}
+
+			key->key_length = p + 1 - key->key_data;
+
+			if (has_next && !descending)
+			{
+				temporary_key* new_key = FB_NEW_POOL(*tdbb->getDefaultPool()) temporary_key();
+				new_key->key_length = 0;
+				new_key->key_flags = 0;
+				new_key->key_nulls = 0;
+				key->key_next = new_key;
+
+				key = new_key;
+				p = key->key_data;
+			}
+
+			ptr += length;
+		} while (has_next);
+
 		return;
 	}
+
+	p = key->key_data;
+
+	union {
+		INT64_KEY temp_int64_key;
+		double temp_double;
+		ULONG temp_ulong;
+		SLONG temp_slong;
+		SINT64 temp_sint64;
+		UCHAR temp_char[sizeof(INT64_KEY)];
+	} temp;
+	bool temp_is_negative = false;
+	bool int64_key_op = false;
 
 	// The index is numeric.
 	//   For idx_numeric...

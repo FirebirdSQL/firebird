@@ -160,7 +160,8 @@ IndexScratch::IndexScratch(MemoryPool& p, const IndexScratch& other)
 	  lowerCount(other.lowerCount),
 	  upperCount(other.upperCount),
 	  nonFullMatchedSegments(other.nonFullMatchedSegments),
-	  fuzzy(other.fuzzy),
+	  usePartialKey(other.usePartialKey),
+	  useMultiStartingKeys(other.useMultiStartingKeys),
 	  segments(p, other.segments)
 {}
 
@@ -738,7 +739,8 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 		scratch.lowerCount = 0;
 		scratch.upperCount = 0;
 		scratch.nonFullMatchedSegments = MAX_INDEX_SEGMENTS + 1;
-		scratch.fuzzy = false;
+		scratch.usePartialKey = false;
+		scratch.useMultiStartingKeys = false;
 
 		if (scratch.candidate)
 		{
@@ -755,26 +757,34 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 				if (segment.scope == scope)
 					scratch.scopeCandidate = true;
 
-				if (segment.scanType != segmentScanMissing && !(idx->idx_flags & idx_unique))
+				const USHORT iType = idx->idx_rpt[j].idx_itype;
+
+				if (iType >= idx_first_intl_string)
 				{
-					const auto iType = idx->idx_rpt[j].idx_itype;
+					auto textType = INTL_texttype_lookup(tdbb, INTL_INDEX_TO_TEXT(iType));
 
-					if (iType >= idx_first_intl_string)
+					if (segment.scanType != segmentScanMissing && !(idx->idx_flags & idx_unique))
 					{
-						TextType* textType = INTL_texttype_lookup(tdbb, INTL_INDEX_TO_TEXT(iType));
-
 						if (textType->getFlags() & TEXTTYPE_SEPARATE_UNIQUE)
 						{
 							// ASF: Order is more precise than equivalence class.
 							// We can't use the next segments, and we'll need to use
 							// INTL_KEY_PARTIAL to construct the last segment's key.
-							scratch.fuzzy = true;
+							scratch.usePartialKey = true;
 						}
+					}
+
+					if (segment.scanType == segmentScanStarting)
+					{
+						if (textType->getFlags() & TEXTTYPE_MULTI_STARTING_KEY)
+							scratch.useMultiStartingKeys = true;	// use INTL_KEY_MULTI_STARTING
+
+						scratch.usePartialKey = true;
 					}
 				}
 
 				// Check if this is the last usable segment
-				if (!scratch.fuzzy &&
+				if (!scratch.usePartialKey &&
 					(segment.scanType == segmentScanEqual ||
 					 segment.scanType == segmentScanEquivalent ||
 					 segment.scanType == segmentScanMissing))
@@ -1032,8 +1042,14 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 			retrieval->irb_generic |= irb_exclude_upper;
 	}
 
-	if (indexScratch->fuzzy)
+	if (indexScratch->usePartialKey)
 		retrieval->irb_generic |= irb_starting;	// Flag the need to use INTL_KEY_PARTIAL in btr.
+
+	if (indexScratch->useMultiStartingKeys)
+	{
+		// Flag the need to use INTL_KEY_MULTI_STARTING in btr.
+		retrieval->irb_generic |= irb_multi_starting | irb_starting;
+	}
 
 	// This index is never used for IS NULL, thus we can ignore NULLs
 	// already at index scan. But this rule doesn't apply to nod_equiv

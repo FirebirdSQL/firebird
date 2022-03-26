@@ -23,6 +23,7 @@
 #include "../dsql/DsqlRequests.h"
 #include "../dsql/dsql.h"
 #include "../dsql/DsqlBatch.h"
+///#include "../dsql/DsqlStatementCache.h"
 #include "../dsql/Nodes.h"
 #include "../jrd/Statement.h"
 #include "../jrd/req.h"
@@ -1034,6 +1035,9 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 		try
 		{
 			AutoSetRestoreFlag<ULONG> execDdl(&tdbb->tdbb_flags, TDBB_repl_in_progress, true);
+
+			//// Doing it in DFW_perform_work to avoid problems with DDL+DML in the same transaction.
+			///req_dbb->dbb_attachment->att_dsql_instance->dbb_statement_cache->purgeAllAttachments(tdbb);
 
 			node->executeDdl(tdbb, internalScratch, req_transaction);
 

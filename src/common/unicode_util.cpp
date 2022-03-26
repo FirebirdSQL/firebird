@@ -272,8 +272,10 @@ public:
 	USet* (U_EXPORT2 *usetOpen)(UChar32 start, UChar32 end);
 
 	void (U_EXPORT2 *ucolClose)(UCollator* coll);
-	int32_t (U_EXPORT2 *ucolGetContractions)(const UCollator* coll, USet* conts, UErrorCode* status);
+	int32_t (U_EXPORT2 *ucolGetContractionsAndExpansions)(const UCollator* coll, USet* contractions, USet* expansions,
+		UBool addPrefixes, UErrorCode* status);
 	const UChar* (U_EXPORT2 *ucolGetRules)(const UCollator* coll, int32_t* length);
+
 	int32_t (U_EXPORT2 *ucolGetSortKey)(const UCollator* coll, const UChar* source,
 		int32_t sourceLength, uint8_t* result, int32_t resultLength);
 	UCollator* (U_EXPORT2 *ucolOpen)(const char* loc, UErrorCode* status);
@@ -1241,7 +1243,8 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 			icu->getEntryPoint("uset_open", icu->ucModule, icu->usetOpen);
 
 			icu->getEntryPoint("ucol_close", icu->inModule, icu->ucolClose);
-			icu->getEntryPoint("ucol_getContractions", icu->inModule, icu->ucolGetContractions);
+			icu->getEntryPoint("ucol_getContractionsAndExpansions", icu->inModule,
+				icu->ucolGetContractionsAndExpansions);
 			icu->getEntryPoint("ucol_getRules", icu->inModule, icu->ucolGetRules);
 			icu->getEntryPoint("ucol_getSortKey", icu->inModule, icu->ucolGetSortKey);
 			icu->getEntryPoint("ucol_open", icu->inModule, icu->ucolOpen);
@@ -1617,34 +1620,144 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 
 	USet* contractions = icu->usetOpen(1, 0);
 	// status not verified here.
-	icu->ucolGetContractions(partialCollator, contractions, &status);
+	icu->ucolGetContractionsAndExpansions(partialCollator, contractions, nullptr, false, &status);
 
 	int contractionsCount = icu->usetGetItemCount(contractions);
 
 	for (int contractionIndex = 0; contractionIndex < contractionsCount; ++contractionIndex)
 	{
-		UChar str[10];
+		UChar strChars[10];
 		UChar32 start, end;
 
 		status = U_ZERO_ERROR;
-		int len = icu->usetGetItem(contractions, contractionIndex, &start, &end, str, sizeof(str), &status);
+		int len = icu->usetGetItem(contractions, contractionIndex, &start, &end, strChars, sizeof(strChars), &status);
 
 		if (len >= 2)
 		{
 			obj->maxContractionsPrefixLength = len - 1 > obj->maxContractionsPrefixLength ?
 				len - 1 : obj->maxContractionsPrefixLength;
 
-			for (int currentLen = 1; currentLen < len; ++currentLen)
-			{
-				string s(reinterpret_cast<const char*>(str), currentLen * 2);
+			UCHAR key[100];
+			int keyLen = icu->ucolGetSortKey(partialCollator, strChars, len, key, sizeof(key));
 
-				if (!obj->contractionsPrefix.exist(s))
-					obj->contractionsPrefix.push(s);
+			for (int prefixLen = 1; prefixLen < len; ++prefixLen)
+			{
+				const Array<USHORT> str(reinterpret_cast<USHORT*>(strChars), prefixLen);
+				auto keySet = obj->contractionsPrefix.get(str);
+
+				if (!keySet)
+				{
+					keySet = obj->contractionsPrefix.put(str);
+
+					UCHAR prefixKey[100];
+					int prefixKeyLen = icu->ucolGetSortKey(partialCollator,
+						strChars, prefixLen, prefixKey, sizeof(prefixKey));
+
+					keySet->add(Array<UCHAR>(prefixKey, prefixKeyLen));
+				}
+
+				keySet->add(Array<UCHAR>(key, keyLen));
 			}
 		}
 	}
 
 	icu->usetClose(contractions);
+
+	ContractionsPrefixMap::Accessor accessor(&obj->contractionsPrefix);
+
+	for (bool found = accessor.getFirst(); found; found = accessor.getNext())
+	{
+		auto& keySet = accessor.current()->second;
+
+		if (keySet.getCount() <= 1)
+			continue;
+
+		fb_assert(accessor.current()->first.hasData());
+		USHORT ch = accessor.current()->first[0];
+
+		if (ch >= 0xFDD0 && ch <= 0xFDEF)
+		{
+			keySet.clear();
+			keySet.add(Array<UCHAR>());
+			continue;
+		}
+
+		auto firstKeyIt = keySet.begin();
+		auto lastKeyIt = --keySet.end();
+
+		const UCHAR* firstKeyDataIt = firstKeyIt->begin();
+		const UCHAR* lastKeyDataIt = lastKeyIt->begin();
+		const UCHAR* firstKeyDataEnd = firstKeyIt->end();
+		const UCHAR* lastKeyDataEnd = lastKeyIt->end();
+
+		if (*firstKeyDataIt == *lastKeyDataIt)
+		{
+			unsigned common = 0;
+
+			do
+			{
+				++common;
+			} while (++firstKeyDataIt != firstKeyDataEnd && ++lastKeyDataIt != lastKeyDataEnd &&
+				*firstKeyDataIt == *lastKeyDataIt);
+
+			Array<UCHAR> commonKey(firstKeyIt->begin(), common);
+			keySet.clear();
+			keySet.add(commonKey);
+		}
+		else
+		{
+			auto secondKeyIt = ++keySet.begin();
+			const UCHAR* secondKeyDataIt = secondKeyIt->begin();
+			const UCHAR* secondKeyDataEnd = secondKeyIt->end();
+
+			ObjectsArray<Array<UCHAR> > commonKeys;
+			commonKeys.add(*firstKeyIt);
+
+			while (secondKeyIt != keySet.end())
+			{
+				unsigned common = 0;
+
+				while (firstKeyDataIt != firstKeyDataEnd && secondKeyDataIt != secondKeyDataEnd &&
+					*firstKeyDataIt == *secondKeyDataIt)
+				{
+					++common;
+					++firstKeyDataIt;
+					++secondKeyDataIt;
+				}
+
+				unsigned backSize = commonKeys.back()->getCount();
+
+				if (common > backSize)
+					commonKeys.back()->append(secondKeyIt->begin() + backSize, common - backSize);
+				else if (common < backSize)
+				{
+					if (common == 0)
+						commonKeys.push(*secondKeyIt);
+					else
+						commonKeys.back()->resize(common);
+				}
+
+				if (++secondKeyIt != keySet.end())
+				{
+					++firstKeyIt;
+
+					firstKeyDataIt = firstKeyIt->begin();
+					secondKeyDataIt = secondKeyIt->begin();
+
+					firstKeyDataEnd = firstKeyIt->end();
+					secondKeyDataEnd = secondKeyIt->end();
+				}
+			}
+
+			keySet.clear();
+
+			for (auto ck : commonKeys)
+				keySet.add(ck);
+		}
+	}
+
+	if (obj->maxContractionsPrefixLength)
+		tt->texttype_flags |= TEXTTYPE_MULTI_STARTING_KEY;
 
 	return obj;
 }
@@ -1696,41 +1809,17 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 		srcLenLong = pad - src + 1;
 	}
 
+	if (srcLenLong == 0)
+		return 0;
+
 	HalfStaticArray<USHORT, BUFFER_SMALL / 2> buffer;
 	const UCollator* coll = NULL;
 
 	switch (key_type)
 	{
 		case INTL_KEY_PARTIAL:
+		case INTL_KEY_MULTI_STARTING:
 			coll = partialCollator;
-
-			// Remove last bytes of key if they are start of a contraction
-			// to correctly find in the index.
-
-			for (int i = MIN(maxContractionsPrefixLength, srcLenLong); i > 0; --i)
-			{
-				if (contractionsPrefix.exist(string(reinterpret_cast<const char*>(src + srcLenLong - i), i * 2)))
-				{
-					srcLenLong -= i;
-					break;
-				}
-			}
-
-			if (numericSort)
-			{
-				// ASF: Wee need to remove trailing numbers to return sub key that
-				// matches full key. Example: "abc1" becomes "abc" to match "abc10".
-				const USHORT* p = src + srcLenLong - 1;
-
-				for (; p >= src; --p)
-				{
-					if (!(*p >= '0' && *p <= '9'))
-						break;
-				}
-
-				srcLenLong = p - src + 1;
-			}
-
 			break;
 
 		case INTL_KEY_UNIQUE:
@@ -1749,11 +1838,100 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 			return INTL_BAD_KEY_LENGTH;
 	}
 
-	if (srcLenLong == 0)
-		return 0;
+	if (key_type == INTL_KEY_MULTI_STARTING)
+	{
+		bool trailingNumbersRemoved = false;
 
-	return icu->ucolGetSortKey(coll,
+		if (numericSort)
+		{
+			// ASF: Wee need to remove trailing numbers to return sub key that
+			// matches full key. Example: "abc1" becomes "abc" to match "abc10".
+			const USHORT* p = src + srcLenLong - 1;
+
+			for (; p >= src; --p)
+			{
+				if (!(*p >= '0' && *p <= '9'))
+					break;
+
+				trailingNumbersRemoved = true;
+			}
+
+			srcLenLong = p - src + 1;
+		}
+
+		if (!trailingNumbersRemoved)
+		{
+			for (int i = MIN(maxContractionsPrefixLength, srcLenLong); i > 0; --i)
+			{
+				auto keys = contractionsPrefix.get(Array<USHORT>(src + srcLenLong - i, i));
+
+				if (keys)
+				{
+					const UCHAR* dstStart = dst;
+					ULONG prefixLen;
+
+					srcLenLong -= i;
+
+					if (srcLenLong != 0)
+					{
+						prefixLen = icu->ucolGetSortKey(coll,
+							reinterpret_cast<const UChar*>(src), srcLenLong, dst + 2, dstLen - 2);
+
+						if (prefixLen == 0 || prefixLen > dstLen - 2 || prefixLen > MAX_USHORT)
+							return INTL_BAD_KEY_LENGTH;
+
+						fb_assert(dst[2 + prefixLen - 1] == '\0');
+						--prefixLen;
+						dstLen -= 2 + prefixLen;
+					}
+					else
+						prefixLen = 0;
+
+					for (const auto& keyIt : *keys)
+					{
+						const ULONG keyLen = prefixLen + keyIt.getCount();
+
+						if (keyLen > dstLen - 2 || keyLen > MAX_USHORT)
+							return INTL_BAD_KEY_LENGTH;
+
+						dst[0] = UCHAR(keyLen & 0xFF);
+						dst[1] = UCHAR(keyLen >> 8);
+
+						if (dst != dstStart)
+							memcpy(dst + 2, dstStart + 2, prefixLen);
+
+						memcpy(dst + 2 + prefixLen, keyIt.begin(), keyIt.getCount());
+						dst += 2 + keyLen;
+						dstLen -= 2 + keyLen;
+					}
+
+					return dst - dstStart;
+				}
+			}
+		}
+
+		ULONG keyLen = icu->ucolGetSortKey(coll,
+			reinterpret_cast<const UChar*>(src), srcLenLong, dst + 2, dstLen - 3);
+
+		if (keyLen == 0 || keyLen > dstLen - 3 || keyLen > MAX_USHORT)
+			return INTL_BAD_KEY_LENGTH;
+
+		fb_assert(dst[2 + keyLen - 1] == '\0');
+		--keyLen;
+
+		dst[0] = UCHAR(keyLen & 0xFF);
+		dst[1] = UCHAR(keyLen >> 8);
+
+		return keyLen + 2;
+	}
+
+	const ULONG keyLen = icu->ucolGetSortKey(coll,
 		reinterpret_cast<const UChar*>(src), srcLenLong, dst, dstLen);
+
+	if (keyLen == 0 || keyLen > dstLen || keyLen > MAX_USHORT)
+		return INTL_BAD_KEY_LENGTH;
+
+	return keyLen;
 }
 
 

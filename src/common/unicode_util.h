@@ -30,7 +30,9 @@
 #include "intlobj_new.h"
 #include "../common/IntlUtil.h"
 #include "../common/os/mod_loader.h"
+#include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
+#include "../common/classes/GenericMap.h"
 #include "../common/classes/objects_array.h"
 #include <unicode/ucnv.h>
 #include <unicode/ucal.h>
@@ -200,6 +202,45 @@ public:
 		ULONG canonical(ULONG srcLen, const USHORT* src, ULONG dstLen, ULONG* dst, const ULONG* exceptions);
 
 	private:
+		template <typename T>
+		class ArrayComparator
+		{
+		public:
+			static bool greaterThan(const Firebird::Array<T>& i1, const Firebird::Array<T>& i2)
+			{
+				FB_SIZE_T minCount = MIN(i1.getCount(), i2.getCount());
+				int cmp = memcmp(i1.begin(), i2.begin(), minCount * sizeof(T));
+
+				if (cmp != 0)
+					return cmp > 0;
+
+				return i1.getCount() > i2.getCount();
+			}
+
+			static bool greaterThan(const Firebird::Array<T>* i1, const Firebird::Array<T>* i2)
+			{
+				return greaterThan(*i1, *i2);
+			}
+		};
+
+		typedef Firebird::SortedObjectsArray<
+					Firebird::Array<UCHAR>,
+					Firebird::InlineStorage<Firebird::Array<UCHAR>*, 3>,
+					Firebird::Array<UCHAR>,
+					Firebird::DefaultKeyValue<const Firebird::Array<UCHAR>*>,
+					ArrayComparator<UCHAR>
+				> SortKeyArray;
+
+		typedef Firebird::GenericMap<
+					Firebird::Pair<
+						Firebird::Full<
+							Firebird::Array<USHORT>,	// UTF-16 string
+							SortKeyArray				// sort keys
+						>
+					>,
+					ArrayComparator<USHORT>
+				> ContractionsPrefixMap;
+
 		static ICU* loadICU(const Firebird::string& collVersion, const Firebird::string& locale,
 			const Firebird::string& configInfo);
 
@@ -212,7 +253,7 @@ public:
 		UCollator* compareCollator;
 		UCollator* partialCollator;
 		UCollator* sortCollator;
-		Firebird::SortedObjectsArray<Firebird::string> contractionsPrefix;	// UTF-16 string
+		ContractionsPrefixMap contractionsPrefix;
 		unsigned maxContractionsPrefixLength;	// number of characters
 		bool numericSort;
 	};
