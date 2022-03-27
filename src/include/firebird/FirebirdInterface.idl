@@ -718,6 +718,9 @@ interface Service : ReferenceCounted
 version:	// 3.0.7 => 3.0.8, 4.0.0 => 4.0.1
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedDetach(status) endif]
 	void detach(Status status);
+
+version:	// 3.0.9 => 3.0.10, 4.0.1 => 4.0.2
+	void cancel(Status status);
 }
 
 interface Provider : PluginBase

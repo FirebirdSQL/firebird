@@ -1792,10 +1792,6 @@ void SRVR_multi_thread( rem_port* main_port, USHORT flags)
 			}
 		}
 
-		// stop running requests if any
-		if (!(main_port->port_server_flags & SRVR_multi_client))
-			fb_shutdown(1000, fb_shutrsn_no_connection);
-
 		Worker::shutdown();
 
 		// All worker threads are stopped and will never run any more
@@ -2685,23 +2681,28 @@ static void cancel_operation(rem_port* port, USHORT kind)
 	if ((port->port_flags & (PORT_async | PORT_disconnect)) || !(port->port_context))
 		return;
 
-	ServAttachment iface;
+	ServAttachment dbIface;
+	ServService svcIface;
 	{
 		RefMutexGuard portGuard(*port->port_cancel_sync, FB_FUNCTION);
 
-		Rdb* rdb;
-		if ((port->port_flags & PORT_disconnect) || !(rdb = port->port_context))
+		Rdb* rdb = port->port_context;
+		if ((port->port_flags & PORT_disconnect) || !rdb)
 			return;
 
-		iface = rdb->rdb_iface;
+		if (rdb->rdb_svc)
+			svcIface = rdb->rdb_svc->svc_iface;
+		else
+			dbIface = rdb->rdb_iface;
 	}
 
-	if (iface)
-	{
-		LocalStatus ls;
-		CheckStatusWrapper status_vector(&ls);
-		iface->cancelOperation(&status_vector, kind);
-	}
+	LocalStatus ls;
+	CheckStatusWrapper status_vector(&ls);
+
+	if (dbIface)
+		dbIface->cancelOperation(&status_vector, kind);
+	else if (svcIface && kind == fb_cancel_raise)
+		svcIface->cancel(&status_vector);
 }
 
 

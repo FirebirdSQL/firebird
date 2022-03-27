@@ -4386,6 +4386,26 @@ void JService::query(CheckStatusWrapper* user_status,
 }
 
 
+void JService::cancel(CheckStatusWrapper* user_status)
+{
+	try
+	{
+		ThreadContextHolder tdbb(user_status);
+
+		validateHandle(svc);
+
+		svc->cancel(tdbb);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(user_status);
+		return;
+	}
+
+	successful_completion(user_status);
+}
+
+
 void JService::start(CheckStatusWrapper* user_status, unsigned int spbLength, const unsigned char* spb)
 {
 /**************************************

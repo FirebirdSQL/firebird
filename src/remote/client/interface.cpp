@@ -935,6 +935,7 @@ public:
 					   unsigned int receiveLength, const unsigned char* receiveItems,
 					   unsigned int bufferLength, unsigned char* buffer) override;
 	void start(CheckStatusWrapper* status, unsigned int spbLength, const unsigned char* spb) override;
+	void cancel(CheckStatusWrapper* status) override;
 
 public:
 	Service(Rdb* handle) : rdb(handle) { }
@@ -6639,6 +6640,28 @@ void Service::query(CheckStatusWrapper* status,
 		info(status, rdb, op_service_info, rdb->rdb_id, 0,
 			 sendLength, sendItems, receiveLength, receiveItems,
 			 bufferLength, buffer);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
+
+void Service::cancel(CheckStatusWrapper* status)
+{
+	try
+	{
+		reset(status);
+
+		// Check and validate handles, etc.
+		CHECK_HANDLE(rdb, isc_bad_svc_handle);
+/*
+		rem_port* port = rdb->rdb_port;
+		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+*/
+
+		Arg::Gds(isc_wish_list).raise();
 	}
 	catch (const Exception& ex)
 	{

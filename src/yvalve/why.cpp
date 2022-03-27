@@ -6212,6 +6212,19 @@ void YService::query(CheckStatusWrapper* status, unsigned int sendLength, const 
 	}
 }
 
+void YService::cancel(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YService> entry(status, this);
+		entry.next()->cancel(status);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
 void YService::start(CheckStatusWrapper* status, unsigned int spbLength, const unsigned char* spbItems)
 {
 	try

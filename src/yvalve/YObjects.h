@@ -613,6 +613,7 @@ public:
 		unsigned int bufferLength, unsigned char* buffer);
 	void start(Firebird::CheckStatusWrapper* status,
 		unsigned int spbLength, const unsigned char* spb);
+	void cancel(Firebird::CheckStatusWrapper* status);
 
 public:
 	typedef Firebird::IService NextInterface;

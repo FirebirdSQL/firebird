@@ -414,6 +414,7 @@ type
 	IService_queryPtr = procedure(this: IService; status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IService_startPtr = procedure(this: IService; status: IStatus; spbLength: Cardinal; spb: BytePtr); cdecl;
 	IService_detachPtr = procedure(this: IService; status: IStatus); cdecl;
+	IService_cancelPtr = procedure(this: IService; status: IStatus); cdecl;
 	IProvider_attachDatabasePtr = function(this: IProvider; status: IStatus; fileName: PAnsiChar; dpbLength: Cardinal; dpb: BytePtr): IAttachment; cdecl;
 	IProvider_createDatabasePtr = function(this: IProvider; status: IStatus; fileName: PAnsiChar; dpbLength: Cardinal; dpb: BytePtr): IAttachment; cdecl;
 	IProvider_attachServiceManagerPtr = function(this: IProvider; status: IStatus; service: PAnsiChar; spbLength: Cardinal; spb: BytePtr): IService; cdecl;
@@ -1818,15 +1819,17 @@ type
 		query: IService_queryPtr;
 		start: IService_startPtr;
 		detach: IService_detachPtr;
+		cancel: IService_cancelPtr;
 	end;
 
 	IService = class(IReferenceCounted)
-		const VERSION = 4;
+		const VERSION = 5;
 
 		procedure deprecatedDetach(status: IStatus);
 		procedure query(status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 		procedure start(status: IStatus; spbLength: Cardinal; spb: BytePtr);
 		procedure detach(status: IStatus);
+		procedure cancel(status: IStatus);
 	end;
 
 	IServiceImpl = class(IService)
@@ -1838,6 +1841,7 @@ type
 		procedure query(status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr); virtual; abstract;
 		procedure start(status: IStatus; spbLength: Cardinal; spb: BytePtr); virtual; abstract;
 		procedure detach(status: IStatus); virtual; abstract;
+		procedure cancel(status: IStatus); virtual; abstract;
 	end;
 
 	ProviderVTable = class(PluginBaseVTable)
@@ -7087,6 +7091,17 @@ begin
 	FbException.checkException(status);
 end;
 
+procedure IService.cancel(status: IStatus);
+begin
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IService', vTable.version, 5);
+	end
+	else begin
+		ServiceVTable(vTable).cancel(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
 function IProvider.attachDatabase(status: IStatus; fileName: PAnsiChar; dpbLength: Cardinal; dpb: BytePtr): IAttachment;
 begin
 	Result := ProviderVTable(vTable).attachDatabase(Self, status, fileName, dpbLength, dpb);
@@ -11304,6 +11319,15 @@ procedure IServiceImpl_detachDispatcher(this: IService; status: IStatus); cdecl;
 begin
 	try
 		IServiceImpl(this).detach(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IServiceImpl_cancelDispatcher(this: IService; status: IStatus); cdecl;
+begin
+	try
+		IServiceImpl(this).cancel(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -15742,13 +15766,14 @@ initialization
 	IAttachmentImpl_vTable.dropDatabase := @IAttachmentImpl_dropDatabaseDispatcher;
 
 	IServiceImpl_vTable := ServiceVTable.create;
-	IServiceImpl_vTable.version := 4;
+	IServiceImpl_vTable.version := 5;
 	IServiceImpl_vTable.addRef := @IServiceImpl_addRefDispatcher;
 	IServiceImpl_vTable.release := @IServiceImpl_releaseDispatcher;
 	IServiceImpl_vTable.deprecatedDetach := @IServiceImpl_deprecatedDetachDispatcher;
 	IServiceImpl_vTable.query := @IServiceImpl_queryDispatcher;
 	IServiceImpl_vTable.start := @IServiceImpl_startDispatcher;
 	IServiceImpl_vTable.detach := @IServiceImpl_detachDispatcher;
+	IServiceImpl_vTable.cancel := @IServiceImpl_cancelDispatcher;
 
 	IProviderImpl_vTable := ProviderVTable.create;
 	IProviderImpl_vTable.version := 4;

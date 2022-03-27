@@ -2715,6 +2715,7 @@ namespace Firebird
 			void (CLOOP_CARG *query)(IService* self, IStatus* status, unsigned sendLength, const unsigned char* sendItems, unsigned receiveLength, const unsigned char* receiveItems, unsigned bufferLength, unsigned char* buffer) throw();
 			void (CLOOP_CARG *start)(IService* self, IStatus* status, unsigned spbLength, const unsigned char* spb) throw();
 			void (CLOOP_CARG *detach)(IService* self, IStatus* status) throw();
+			void (CLOOP_CARG *cancel)(IService* self, IStatus* status) throw();
 		};
 
 	protected:
@@ -2728,7 +2729,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 4;
+		static const unsigned VERSION = 5;
 
 		template <typename StatusType> void deprecatedDetach(StatusType* status)
 		{
@@ -2766,6 +2767,19 @@ namespace Firebird
 			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->detach(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void cancel(StatusType* status)
+		{
+			if (cloopVTable->version < 5)
+			{
+				StatusType::setVersionError(status, "IService", cloopVTable->version, 5);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->cancel(this, status);
 			StatusType::checkException(status);
 		}
 	};
@@ -11461,6 +11475,7 @@ namespace Firebird
 					this->query = &Name::cloopqueryDispatcher;
 					this->start = &Name::cloopstartDispatcher;
 					this->detach = &Name::cloopdetachDispatcher;
+					this->cancel = &Name::cloopcancelDispatcher;
 				}
 			} vTable;
 
@@ -11523,6 +11538,20 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopcancelDispatcher(IService* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::cancel(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) throw()
 		{
 			try
@@ -11566,6 +11595,7 @@ namespace Firebird
 		virtual void query(StatusType* status, unsigned sendLength, const unsigned char* sendItems, unsigned receiveLength, const unsigned char* receiveItems, unsigned bufferLength, unsigned char* buffer) = 0;
 		virtual void start(StatusType* status, unsigned spbLength, const unsigned char* spb) = 0;
 		virtual void detach(StatusType* status) = 0;
+		virtual void cancel(StatusType* status) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

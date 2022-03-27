@@ -506,6 +506,7 @@ public:
 		unsigned int bufferLength, unsigned char* buffer) override;
 	void start(Firebird::CheckStatusWrapper* status,
 		unsigned int spbLength, const unsigned char* spb) override;
+	void cancel(Firebird::CheckStatusWrapper* status) override;
 
 public:
 	explicit JService(Jrd::Service* handle);
