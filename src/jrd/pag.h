@@ -231,7 +231,6 @@ public:
 
 	inline ULONG getPageSpaceID() const
 	{
-		fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
 		return pageSpaceID;
 	}
 

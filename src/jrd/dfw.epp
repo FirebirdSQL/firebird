@@ -6745,7 +6745,7 @@ static bool create_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 			{
 				if (dbb->dbb_page_manager.findPageSpace(work->dfw_id))
 				{
-					CCH_flush(tdbb, FLUSH_ALL, 0);
+					CCH_flush(tdbb, FLUSH_ALL, 0, work->dfw_id);
 					dbb->dbb_page_manager.delPageSpace(work->dfw_id);
 					unlink(TS.RDB$FILE_NAME);
 				}
@@ -6837,7 +6837,7 @@ static bool drop_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	case 3:
 		return true;
 	case 4:
-		CCH_flush(tdbb, FLUSH_ALL, 0);
+		CCH_flush(tdbb, FLUSH_ALL, 0, work->dfw_id);
 		dbb->dbb_page_manager.delPageSpace(work->dfw_id);
 
 		LCK_release(tdbb, tablespace->existenceLock);
@@ -6895,7 +6895,7 @@ static bool modify_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 	case 3:
 		return true;
 	case 4:
-		CCH_flush(tdbb, FLUSH_ALL, 0);
+		CCH_flush(tdbb, FLUSH_ALL, 0, work->dfw_id);
 		dbb->dbb_page_manager.delPageSpace(work->dfw_id);
 
 		LCK_release(tdbb, tablespace->existenceLock);

@@ -51,7 +51,7 @@ LockState	CCH_fetch_lock(Jrd::thread_db*, Jrd::win*, int, int, SCHAR);
 void		CCH_fetch_page(Jrd::thread_db*, Jrd::win*, const bool);
 void		CCH_fini(Jrd::thread_db*);
 void		CCH_forget_page(Jrd::thread_db*, Jrd::win*);
-void		CCH_flush(Jrd::thread_db* tdbb, USHORT flush_flag, TraNumber tra_number);
+void		CCH_flush(Jrd::thread_db* tdbb, USHORT flush_flag, TraNumber tra_number, ULONG page_space_id = Jrd::INVALID_PAGE_SPACE);
 bool		CCH_free_page(Jrd::thread_db*);
 SLONG		CCH_get_incarnation(Jrd::win*);
 void		CCH_get_related(Jrd::thread_db*, Jrd::PageNumber, Jrd::PagesArray&);

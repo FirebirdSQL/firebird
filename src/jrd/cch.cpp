@@ -188,7 +188,7 @@ static inline void removeDirty(BufferControl* bcb, BufferDesc* bdb)
 }
 
 static void flushDirty(thread_db* tdbb, SLONG transaction_mask, const bool sys_only);
-static void flushAll(thread_db* tdbb, USHORT flush_flag);
+static void flushAll(thread_db* tdbb, USHORT flush_flag, ULONG page_space_id);
 static void flushPages(thread_db* tdbb, USHORT flush_flag, BufferDesc** begin, FB_SIZE_T count);
 
 static void recentlyUsed(BufferDesc* bdb);
@@ -1178,7 +1178,7 @@ void CCH_fini(thread_db* tdbb)
 }
 
 
-void CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number)
+void CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number, ULONG page_space_id)
 {
 /**************************************
  *
@@ -1220,7 +1220,7 @@ void CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number)
 			flushDirty(tdbb, transaction_mask, sys_only);
 	}
 	else
-		flushAll(tdbb, flush_flag);
+		flushAll(tdbb, flush_flag, page_space_id);
 
 	//
 	// Check if flush needed
@@ -2709,7 +2709,7 @@ static void flushDirty(thread_db* tdbb, SLONG transaction_mask, const bool sys_o
 // Collect pages modified by garbage collector or all dirty pages or release page
 // locks - depending of flush_flag, and write it to disk.
 // See also comments in flushPages.
-static void flushAll(thread_db* tdbb, USHORT flush_flag)
+static void flushAll(thread_db* tdbb, USHORT flush_flag, ULONG page_space_id)
 {
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
@@ -2732,28 +2732,33 @@ static void flushAll(thread_db* tdbb, USHORT flush_flag)
 			{
 				BufferDesc* bdb = &blk.m_bdbs[i];
 
-				if (bdb->bdb_flags & (BDB_db_dirty | BDB_dirty))
+				if (page_space_id == INVALID_PAGE_SPACE ||
+					bdb->bdb_page.getPageSpaceID() == page_space_id)
 				{
-					if (bdb->bdb_flags & BDB_dirty)
-						flush.add(bdb);
-					else if (bdb->bdb_flags & BDB_db_dirty)
+
+					if (bdb->bdb_flags & (BDB_db_dirty | BDB_dirty))
 					{
-						// pages modified by sweep\garbage collector are not in dirty list
-						const bool dirty_list = (bdb->bdb_dirty.que_forward != &bdb->bdb_dirty);
-
-						if (all_flag || (sweep_flag && !dirty_list))
+						if (bdb->bdb_flags & BDB_dirty)
 							flush.add(bdb);
+						else if (bdb->bdb_flags & BDB_db_dirty)
+						{
+							// pages modified by sweep\garbage collector are not in dirty list
+							const bool dirty_list = (bdb->bdb_dirty.que_forward != &bdb->bdb_dirty);
+
+							if (all_flag || (sweep_flag && !dirty_list))
+								flush.add(bdb);
+						}
 					}
-				}
-				else if (release_flag)
-				{
-					bdb->addRef(tdbb, SYNC_EXCLUSIVE);
+					else if (release_flag)
+					{
+						bdb->addRef(tdbb, SYNC_EXCLUSIVE);
 
-					if (bdb->bdb_use_count > 1)
-						BUGCHECK(210);	// msg 210 page in use during flush
+						if (bdb->bdb_use_count > 1)
+							BUGCHECK(210);	// msg 210 page in use during flush
 
-					PAGE_LOCK_RELEASE(tdbb, bcb, bdb->bdb_lock);
-					bdb->release(tdbb, false);
+						PAGE_LOCK_RELEASE(tdbb, bcb, bdb->bdb_lock);
+						bdb->release(tdbb, false);
+					}
 				}
 			}
 		}
