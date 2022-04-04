@@ -31,7 +31,7 @@
 
 #include "firebird/Interface.h"
 #include "../common/classes/alloc.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/classes/init.h"
 #include "../common/classes/auto.h"
@@ -293,7 +293,7 @@ public:
 // when yvalve is starting fb_shutdown(). This causes almost unavoidable segfault.
 // To avoid it this class is added - it detects spontaneous (not by PluginManager)
 // module unload and notifies PluginManager about this said fact.
-class UnloadDetectorHelper FB_FINAL :
+class UnloadDetectorHelper final :
 	public VersionedIface<IPluginModuleImpl<UnloadDetectorHelper, CheckStatusWrapper> >
 {
 public:

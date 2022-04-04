@@ -32,6 +32,7 @@
 #include "../common/os/mod_loader.h"
 #include "../common/os/path_utils.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../common/classes/GetPlugins.h"
 #include "../common/StatusHolder.h"
 
 
@@ -274,6 +275,7 @@ public:
 		  info(*getDefaultMemoryPool()),
 		  children(*getDefaultMemoryPool())
 	{
+		engine->addRef();
 		module = engine->loadModule(status, metadata, &moduleName, &entryPoint);
 
 		IUdrFunctionFactory* factory = engine->findNode<IUdrFunctionFactory>(
@@ -310,7 +312,7 @@ public:
 	}
 
 public:
-	Engine* engine;
+	AutoPlugin<Engine> engine;
 	IRoutineMetadata* metadata;
 	PathName moduleName;
 	string entryPoint;
@@ -336,6 +338,7 @@ public:
 		  info(*getDefaultMemoryPool()),
 		  children(*getDefaultMemoryPool())
 	{
+		engine->addRef();
 		module = engine->loadModule(status, metadata, &moduleName, &entryPoint);
 
 		IUdrProcedureFactory* factory = engine->findNode<IUdrProcedureFactory>(
@@ -372,7 +375,7 @@ public:
 	}
 
 public:
-	Engine* engine;
+	AutoPlugin<Engine> engine;
 	IRoutineMetadata* metadata;
 	PathName moduleName;
 	string entryPoint;
@@ -397,6 +400,7 @@ public:
 		  info(*getDefaultMemoryPool()),
 		  children(*getDefaultMemoryPool())
 	{
+		engine->addRef();
 		module = engine->loadModule(status, metadata, &moduleName, &entryPoint);
 
 		IUdrTriggerFactory* factory = engine->findNode<IUdrTriggerFactory>(
@@ -434,7 +438,7 @@ public:
 	}
 
 public:
-	Engine* engine;
+	AutoPlugin<Engine> engine;
 	IRoutineMetadata* metadata;
 	PathName moduleName;
 	string entryPoint;
@@ -714,7 +718,7 @@ class IExternalEngineFactoryImpl : public SimpleFactory<Engine>
 {
 } factory;
 
-extern "C" void FB_EXPORTED FB_PLUGIN_ENTRY_POINT(IMaster* master)
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 {
 	CachedMasterInterface::set(master);
 

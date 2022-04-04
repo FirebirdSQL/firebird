@@ -31,9 +31,9 @@
 
 #include "../include/fb_blk.h"
 #include "../common/classes/array.h"
+#include "../jrd/intl_classes.h"
 #include "../jrd/MetaName.h"
 #include "../jrd/QualifiedName.h"
-
 #include "../jrd/RecordNumber.h"
 #include "../common/dsc.h"
 
@@ -55,9 +55,8 @@ namespace Jrd {
 
 class ArrayField;
 class blb;
-class jrd_req;
+class Request;
 class jrd_tra;
-class PatternMatcher;
 
 // Various structures in the impure area
 
@@ -68,9 +67,25 @@ struct impure_state
 
 struct impure_value
 {
+	struct PatternMatcherCache : pool_alloc_rpt<UCHAR>
+	{
+		PatternMatcherCache(ULONG aKeySize)
+			: keySize(aKeySize)
+		{
+		}
+
+		ULONG keySize;
+		USHORT ttype;
+		USHORT patternLen;
+		Firebird::AutoPtr<Jrd::PatternMatcher> matcher;
+		USHORT escapeLen;
+		UCHAR key[1];
+	};
+
 	dsc vlu_desc;
 	USHORT vlu_flags; // Computed/invariant flags
 	VaryingString* vlu_string;
+
 	union
 	{
 		UCHAR vlu_uchar;
@@ -91,8 +106,9 @@ struct impure_value
 		GDS_DATE vlu_sql_date;
 		bid vlu_bid;
 
-		// Pre-compiled invariant object for nod_like and other string functions
+		// Pre-compiled invariant object for pattern matcher functions
 		Jrd::PatternMatcher* vlu_invariant;
+		PatternMatcherCache* vlu_patternMatcherCache;
 	} vlu_misc;
 
 	void make_long(const SLONG val, const signed char scale = 0);
@@ -238,7 +254,7 @@ public:
 	blb*				arr_blob;			// Blob for data access
 	jrd_tra*			arr_transaction;	// Parent transaction block
 	ArrayField*			arr_next;			// Next array in transaction
-	jrd_req*			arr_request;		// request
+	Request*			arr_request;		// request
 	SLONG				arr_effective_length;	// Length of array instance
 	USHORT				arr_desc_length;	// Length of array descriptor
 	ULONG				arr_temp_id;		// Temporary ID for open array inside the transaction

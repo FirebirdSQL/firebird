@@ -199,7 +199,7 @@ FB_UDR_BEGIN_TRIGGER(replicate)
 
 	FB_UDR_EXECUTE_TRIGGER
 	{
-		ITransaction* transaction = context->getTransaction(status);
+		AutoRelease<ITransaction> transaction(context->getTransaction(status));
 
 		// This will not work if the table has computed fields.
 		stmt->execute(status, transaction, triggerMetadata, newFields, NULL, NULL);
@@ -233,8 +233,6 @@ FB_UDR_BEGIN_TRIGGER(replicate_persons)
 		FbException::check(isc_dsql_prepare(statusVector, &trHandle, &stmtHandle, 0,
 			"select data_source from replicate_config where name = ?",
 			SQL_DIALECT_CURRENT, NULL), status, statusVector);
-
-		const char* table = metadata->getTriggerTable(status);
 
 		// Skip the first exclamation point, separating the module name and entry point.
 		const char* info = strchr(metadata->getEntryPoint(status), '!');
@@ -306,7 +304,7 @@ FB_UDR_BEGIN_TRIGGER(replicate_persons)
 
 	FB_UDR_EXECUTE_TRIGGER
 	{
-		ITransaction* transaction = context->getTransaction(status);
+		AutoRelease<ITransaction> transaction(context->getTransaction(status));
 
 		stmt->execute(status, transaction, triggerMetadata, newFields, NULL, NULL);
 	}

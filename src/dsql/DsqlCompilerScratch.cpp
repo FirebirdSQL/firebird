@@ -345,30 +345,24 @@ void DsqlCompilerScratch::putLocalVariables(CompoundStmtNode* parameters, USHORT
 	if (!(flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE))
 	{
 		// Check not implemented sub-functions.
-
-		GenericMap<Left<MetaName, DeclareSubFuncNode*> >::ConstAccessor funcAccessor(&subFunctions);
-
-		for (bool found = funcAccessor.getFirst(); found; found = funcAccessor.getNext())
+		for (const auto& funcPair : subFunctions)
 		{
-			if (!funcAccessor.current()->second->dsqlBlock)
+			if (!funcPair.second->dsqlBlock)
 			{
 				status_exception::raise(
 					Arg::Gds(isc_subfunc_not_impl) <<
-					funcAccessor.current()->first.c_str());
+					funcPair.first.c_str());
 			}
 		}
 
 		// Check not implemented sub-procedures.
-
-		GenericMap<Left<MetaName, DeclareSubProcNode*> >::ConstAccessor procAccessor(&subProcedures);
-
-		for (bool found = procAccessor.getFirst(); found; found = procAccessor.getNext())
+		for (const auto& procPair : subProcedures)
 		{
-			if (!procAccessor.current()->second->dsqlBlock)
+			if (!procPair.second->dsqlBlock)
 			{
 				status_exception::raise(
 					Arg::Gds(isc_subproc_not_impl) <<
-					procAccessor.current()->first.c_str());
+					procPair.first.c_str());
 			}
 		}
 	}
@@ -428,6 +422,31 @@ void DsqlCompilerScratch::putLocalVariable(dsql_var* variable, const DeclareVari
 		putDebugVariable(variable->number, variable->field->fld_name);
 
 	++hiddenVarsNumber;
+}
+
+// Put maps in subroutines for outer variables/parameters usage.
+void DsqlCompilerScratch::putOuterMaps()
+{
+	if (!outerMessagesMap.count() && !outerVarsMap.count())
+		return;
+
+	appendUChar(blr_outer_map);
+
+	for (auto& pair : outerVarsMap)
+	{
+		appendUChar(blr_outer_map_variable);
+		appendUShort(pair.first);
+		appendUShort(pair.second);
+	}
+
+	for (auto& pair : outerMessagesMap)
+	{
+		appendUChar(blr_outer_map_message);
+		appendUShort(pair.first);
+		appendUShort(pair.second);
+	}
+
+	appendUChar(blr_end);
 }
 
 // Make a variable.
@@ -960,6 +979,7 @@ RseNode* DsqlCompilerScratch::pass1RseIsRecursive(RseNode* input)
 			}
 		}
 		else if (nodeIs<ProcedureSourceNode>(*pDstTable) || nodeIs<RelationSourceNode>(*pDstTable))
+		//// TODO: LocalTableSourceNode
 		{
 			if (pass1RelProcIsRecursive(*pDstTable))
 			{
@@ -990,19 +1010,18 @@ bool DsqlCompilerScratch::pass1RelProcIsRecursive(RecordSourceNode* input)
 {
 	MetaName relName;
 	string relAlias;
-	ProcedureSourceNode* procNode;
-	RelationSourceNode* relNode;
 
-	if ((procNode = nodeAs<ProcedureSourceNode>(input)))
+	if (auto procNode = nodeAs<ProcedureSourceNode>(input))
 	{
 		relName = procNode->dsqlName.identifier;
 		relAlias = procNode->alias;
 	}
-	else if ((relNode = nodeAs<RelationSourceNode>(input)))
+	else if (auto relNode = nodeAs<RelationSourceNode>(input))
 	{
 		relName = relNode->dsqlName;
 		relAlias = relNode->alias;
 	}
+	//// TODO: LocalTableSourceNode
 	else
 		return false;
 

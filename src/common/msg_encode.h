@@ -23,10 +23,12 @@
 #ifndef MSG_ENCODE_H
 #define MSG_ENCODE_H
 
-const ISC_STATUS ISC_MASK	= 0x14000000;	// Defines the code as a valid ISC code
-const ISC_STATUS FAC_MASK	= 0x00FF0000;	// Specifies the facility where the code is located
-const ISC_STATUS CODE_MASK	= 0x0000FFFF;	// Specifies the code in the message file
-const ISC_STATUS CLASS_MASK	= 0xF0000000;	// Defines the code as warning, error, info, or other
+#include "firebird/impl/msg_helper.h"
+
+constexpr ISC_STATUS ISC_MASK	= FB_IMPL_MSG_MASK;	// Defines the code as a valid ISC code
+constexpr ISC_STATUS FAC_MASK	= 0x00FF0000;	// Specifies the facility where the code is located
+constexpr ISC_STATUS CODE_MASK	= 0x0000FFFF;	// Specifies the code in the message file
+constexpr ISC_STATUS CLASS_MASK	= 0xF0000000;	// Defines the code as warning, error, info, or other
 
 // The following definitions can be used to specify the context in
 // which a status code is used.
@@ -44,22 +46,22 @@ const ISC_STATUS CLASS_MASK	= 0xF0000000;	// Defines the code as warning, error,
  * since gds__decode returns the error code, facility, and error type
  * from a given error message */
 
-inline ISC_STATUS ENCODE_ISC_MSG(ISC_STATUS code, USHORT facility)
+constexpr ISC_STATUS ENCODE_ISC_MSG(ISC_STATUS code, USHORT facility)
 {
-	return ((ISC_STATUS(facility & 0x1F) << 16) | (code & 0x3FFF) | ISC_MASK);
+	return FB_IMPL_MSG_ENCODE(code, facility);
 }
 
-inline USHORT GET_FACILITY(ISC_STATUS code)
+constexpr USHORT GET_FACILITY(ISC_STATUS code)
 {
 	return (code & FAC_MASK) >> 16;
 }
 
-inline USHORT GET_CLASS(ISC_STATUS code)
+constexpr USHORT GET_CLASS(ISC_STATUS code)
 {
 	return (code & CLASS_MASK) >> 30;
 }
 
-inline ISC_STATUS GET_CODE(ISC_STATUS code)
+constexpr ISC_STATUS GET_CODE(ISC_STATUS code)
 {
 	return (code & CODE_MASK);
 }

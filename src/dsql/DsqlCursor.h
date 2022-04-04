@@ -27,7 +27,7 @@
 
 namespace Jrd {
 
-class dsql_req;
+class DsqlDmlRequest;
 class JResultSet;
 
 class DsqlCursor
@@ -35,7 +35,7 @@ class DsqlCursor
 	enum State { BOS, POSITIONED, EOS };
 
 public:
-	DsqlCursor(dsql_req* req, ULONG flags);
+	DsqlCursor(DsqlDmlRequest* req, ULONG flags);
 	~DsqlCursor();
 
 	jrd_tra* getTransaction() const;
@@ -65,7 +65,8 @@ private:
 	int fetchFromCache(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position);
 	bool cacheInput(thread_db* tdbb, FB_UINT64 position = MAX_UINT64);
 
-	dsql_req* const m_request;
+	DsqlDmlRequest* const m_dsqlRequest;
+	const dsql_msg* const m_message;
 	JResultSet* m_resultSet;
 	const ULONG m_flags;
 	TempSpace m_space;
@@ -73,7 +74,6 @@ private:
 	bool m_eof;
 	FB_UINT64 m_position;
 	FB_UINT64 m_cachedCount;
-	ULONG m_messageSize;
 };
 
 } // namespace

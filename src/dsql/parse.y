@@ -81,7 +81,7 @@
 #include <string.h>
 #include <stdarg.h>
 
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../dsql/dsql.h"
 #include "ibase.h"
 #include "../jrd/flags.h"
@@ -651,8 +651,8 @@ using namespace Firebird;
 %token <metaNamePtr> RSA_ENCRYPT
 %token <metaNamePtr> RSA_PRIVATE
 %token <metaNamePtr> RSA_PUBLIC
-%token <metaNamePtr> RSA_SIGN
-%token <metaNamePtr> RSA_VERIFY
+%token <metaNamePtr> RSA_SIGN_HASH
+%token <metaNamePtr> RSA_VERIFY_HASH
 %token <metaNamePtr> SALT_LENGTH
 %token <metaNamePtr> SECURITY
 %token <metaNamePtr> SESSION
@@ -677,12 +677,25 @@ using namespace Firebird;
 %token <metaNamePtr> CLEAR
 %token <metaNamePtr> OLDEST
 
+// tokens added for Firebird 4.0.1
+
+%token <metaNamePtr> DEBUG
+%token <metaNamePtr> PKCS_1_5
+
+// tokens added for Firebird 5.0
+
+%token <metaNamePtr> TARGET
+%token <metaNamePtr> TIMEZONE_NAME
+%token <metaNamePtr> UNICODE_CHAR
+%token <metaNamePtr> UNICODE_VAL
+
 // tablespaces
 %token <metaNamePtr> INCLUDING
 %token <metaNamePtr> CONTENTS
 %token <metaNamePtr> TABLESPACE
 %token <metaNamePtr> OFFLINE
 %token <metaNamePtr> ONLINE
+
 // precedence declarations for expression evaluation
 
 %left	OR
@@ -822,7 +835,7 @@ using namespace Firebird;
 	Jrd::SetTransactionNode::RestrictionOption* setTransactionRestrictionClause;
 	Jrd::DeclareSubProcNode* declareSubProcNode;
 	Jrd::DeclareSubFuncNode* declareSubFuncNode;
-	Jrd::dsql_req* dsqlReq;
+	Jrd::DsqlStatement* dsqlStatement;
 	Jrd::CreateAlterUserNode* createAlterUserNode;
 	Jrd::MappingNode* mappingNode;
 	Jrd::MappingNode::OP mappingOp;
@@ -844,16 +857,23 @@ using namespace Firebird;
 // list of possible statements
 
 top
-	: statement			{ DSQL_parse = $1; }
-	| statement ';'		{ DSQL_parse = $1; }
+	: statement			{ parsedStatement = $1; }
+	| statement ';'		{ parsedStatement = $1; }
 	;
 
-%type <dsqlReq> statement
+%type <dsqlStatement> statement
 statement
-	: dml_statement		{ $$ = FB_NEW_POOL(getStatementPool()) DsqlDmlRequest(getStatementPool(), $1); }
-	| ddl_statement		{ $$ = FB_NEW_POOL(getStatementPool()) DsqlDdlRequest(getStatementPool(), $1); }
-	| tra_statement		{ $$ = FB_NEW_POOL(getStatementPool()) DsqlTransactionRequest(getStatementPool(), $1); }
-	| mng_statement		{ $$ = FB_NEW_POOL(getStatementPool()) DsqlSessionManagementRequest(getStatementPool(), $1); }
+	: dml_statement
+		{ $$ = FB_NEW_POOL(*statementPool) DsqlDmlStatement(*statementPool, scratch->getAttachment(), $1); }
+	| ddl_statement
+		{ $$ = FB_NEW_POOL(*statementPool) DsqlDdlStatement(*statementPool, scratch->getAttachment(), $1); }
+	| tra_statement
+		{ $$ = FB_NEW_POOL(*statementPool) DsqlTransactionStatement(*statementPool, scratch->getAttachment(), $1); }
+	| mng_statement
+		{
+			$$ = FB_NEW_POOL(*statementPool) DsqlSessionManagementStatement(
+				*statementPool, scratch->getAttachment(), $1);
+		}
 	;
 
 %type <stmtNode> dml_statement
@@ -863,7 +883,6 @@ dml_statement
 	| merge										{ $$ = $1; }
 	| exec_procedure							{ $$ = $1; }
 	| exec_block								{ $$ = $1; }
-	| savepoint									{ $$ = $1; }
 	| select									{ $$ = $1; }
 	| update									{ $$ = $1; }
 	| update_or_insert							{ $$ = $1; }
@@ -886,13 +905,15 @@ ddl_statement
 %type <traNode> tra_statement
 tra_statement
 	: set_transaction							{ $$ = $1; }
+	| savepoint									{ $$ = $1; }
 	| commit									{ $$ = $1; }
 	| rollback									{ $$ = $1; }
 	;
 
 %type <mngNode> mng_statement
 mng_statement
-	: set_decfloat_round						{ $$ = $1; }
+	: set_debug_option							{ $$ = $1; }
+	| set_decfloat_round						{ $$ = $1; }
 	| set_decfloat_traps						{ $$ = $1; }
 	| session_statement							{ $$ = $1; }
 	| set_role									{ $$ = $1; }
@@ -997,7 +1018,7 @@ grant0($node)
 	| db_ddl_privileges(NOTRIAL(&$node->privileges)) DATABASE
 			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
 		{
-			$node->object = newNode<GranteeClause>(obj_database, get_object_name(obj_database));
+			$node->object = newNode<GranteeClause>(obj_database, getSecurityClassName(obj_database));
 			$node->grantAdminOption = $5;
 			$node->grantor = $6;
 			$node->isDdl = true;
@@ -1013,33 +1034,33 @@ grant0($node)
 %type <granteeClause> object
 object
 	: TABLE
-		{ $$ = newNode<GranteeClause>(obj_relations, get_object_name(obj_relations)); }
+		{ $$ = newNode<GranteeClause>(obj_relations, getSecurityClassName(obj_relations)); }
 	| VIEW
-		{ $$ = newNode<GranteeClause>(obj_views, get_object_name(obj_views)); }
+		{ $$ = newNode<GranteeClause>(obj_views, getSecurityClassName(obj_views)); }
 	| PROCEDURE
-		{ $$ = newNode<GranteeClause>(obj_procedures, get_object_name(obj_procedures)); }
+		{ $$ = newNode<GranteeClause>(obj_procedures, getSecurityClassName(obj_procedures)); }
 	| FUNCTION
-		{ $$ = newNode<GranteeClause>(obj_functions, get_object_name(obj_functions)); }
+		{ $$ = newNode<GranteeClause>(obj_functions, getSecurityClassName(obj_functions)); }
 	| PACKAGE
-		{ $$ = newNode<GranteeClause>(obj_packages, get_object_name(obj_packages)); }
+		{ $$ = newNode<GranteeClause>(obj_packages, getSecurityClassName(obj_packages)); }
 	| GENERATOR
-		{ $$ = newNode<GranteeClause>(obj_generators, get_object_name(obj_generators)); }
+		{ $$ = newNode<GranteeClause>(obj_generators, getSecurityClassName(obj_generators)); }
 	| SEQUENCE
-		{ $$ = newNode<GranteeClause>(obj_generators, get_object_name(obj_generators)); }
+		{ $$ = newNode<GranteeClause>(obj_generators, getSecurityClassName(obj_generators)); }
 	| DOMAIN
-		{ $$ = newNode<GranteeClause>(obj_domains, get_object_name(obj_domains)); }
+		{ $$ = newNode<GranteeClause>(obj_domains, getSecurityClassName(obj_domains)); }
 	| EXCEPTION
-		{ $$ = newNode<GranteeClause>(obj_exceptions, get_object_name(obj_exceptions)); }
+		{ $$ = newNode<GranteeClause>(obj_exceptions, getSecurityClassName(obj_exceptions)); }
 	| ROLE
-		{ $$ = newNode<GranteeClause>(obj_roles, get_object_name(obj_roles)); }
+		{ $$ = newNode<GranteeClause>(obj_roles, getSecurityClassName(obj_roles)); }
 	| CHARACTER SET
-		{ $$ = newNode<GranteeClause>(obj_charsets, get_object_name(obj_charsets)); }
+		{ $$ = newNode<GranteeClause>(obj_charsets, getSecurityClassName(obj_charsets)); }
 	| COLLATION
-		{ $$ = newNode<GranteeClause>(obj_collations, get_object_name(obj_collations)); }
+		{ $$ = newNode<GranteeClause>(obj_collations, getSecurityClassName(obj_collations)); }
 	| FILTER
-		{ $$ = newNode<GranteeClause>(obj_filters, get_object_name(obj_filters)); }
+		{ $$ = newNode<GranteeClause>(obj_filters, getSecurityClassName(obj_filters)); }
 	| TABLESPACE
-		{ $$ = newNode<GranteeClause>(obj_tablespaces, get_object_name(obj_tablespaces)); }
+		{ $$ = newNode<GranteeClause>(obj_tablespaces, getSecurityClassName(obj_tablespaces)); }
 	;
 
 table_noise
@@ -1256,7 +1277,7 @@ revoke0($node)
 	| rev_grant_option db_ddl_privileges(NOTRIAL(&$node->privileges)) DATABASE
 			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
 		{
-			$node->object = newNode<GranteeClause>(obj_database, get_object_name(obj_database));
+			$node->object = newNode<GranteeClause>(obj_database, getSecurityClassName(obj_database));
 			$node->grantAdminOption = $1;
 			$node->grantor = $6;
 			$node->isDdl = true;
@@ -1815,7 +1836,7 @@ replace_sequence_clause
 		{
 			// Remove this to implement CORE-5137
 			if (!$2->restartSpecified && !$2->step.specified)
-				yyerrorIncompleteCmd();
+				yyerrorIncompleteCmd(YYPOSNARG(3));
 			$$ = $2;
 		}
 	;
@@ -1848,7 +1869,7 @@ alter_sequence_clause
 	  alter_sequence_options($2)
 		{
 			if (!$2->restartSpecified && !$2->value.specified && !$2->step.specified)
-				yyerrorIncompleteCmd();
+				yyerrorIncompleteCmd(YYPOSNARG(3));
 			$$ = $2;
 		}
 
@@ -5301,50 +5322,31 @@ precision_opt_nz
 
 // transaction statements
 
-%type <stmtNode> savepoint
+%type <traNode> savepoint
 savepoint
 	: set_savepoint
 	| release_savepoint
 	| undo_savepoint
 	;
 
-%type <stmtNode> set_savepoint
+%type <traNode> set_savepoint
 set_savepoint
 	: SAVEPOINT symbol_savepoint_name
-		{
-			UserSavepointNode* node = newNode<UserSavepointNode>();
-			node->command = UserSavepointNode::CMD_SET;
-			node->name = *$2;
-			$$ = node;
-		}
+		{ $$ = newNode<UserSavepointNode>(UserSavepointNode::CMD_SET, *$2); }
 	;
 
-%type <stmtNode> release_savepoint
+%type <traNode> release_savepoint
 release_savepoint
-	: RELEASE SAVEPOINT symbol_savepoint_name release_only_opt
-		{
-			UserSavepointNode* node = newNode<UserSavepointNode>();
-			node->command = ($4 ? UserSavepointNode::CMD_RELEASE_ONLY : UserSavepointNode::CMD_RELEASE);
-			node->name = *$3;
-			$$ = node;
-		}
+	: RELEASE SAVEPOINT symbol_savepoint_name
+		{ $$ = newNode<UserSavepointNode>(UserSavepointNode::CMD_RELEASE, *$3); }
+	| RELEASE SAVEPOINT symbol_savepoint_name ONLY
+		{ $$ = newNode<UserSavepointNode>(UserSavepointNode::CMD_RELEASE_ONLY, *$3); }
 	;
 
-%type <boolVal> release_only_opt
-release_only_opt
-	: /* nothing */		{ $$ = false; }
-	| ONLY				{ $$ = true; }
-	;
-
-%type <stmtNode> undo_savepoint
+%type <traNode> undo_savepoint
 undo_savepoint
 	: ROLLBACK optional_work TO optional_savepoint symbol_savepoint_name
-		{
-			UserSavepointNode* node = newNode<UserSavepointNode>();
-			node->command = UserSavepointNode::CMD_ROLLBACK;
-			node->name = *$5;
-			$$ = node;
-		}
+		{ $$ = newNode<UserSavepointNode>(UserSavepointNode::CMD_ROLLBACK, *$5); }
 	;
 
 optional_savepoint
@@ -5400,6 +5402,12 @@ set_role
 		{ $$ = newNode<SetRoleNode>($3); }
 	| SET TRUSTED ROLE
 		{ $$ = newNode<SetRoleNode>(); }
+	;
+
+%type <mngNode> set_debug_option
+set_debug_option
+	: SET DEBUG OPTION valid_symbol_name '=' constant
+		{ $$ = newNode<SetDebugOptionNode>($4, $6); }
 	;
 
 %type <setDecFloatRoundNode> set_decfloat_round
@@ -5692,13 +5700,27 @@ comment
 		{ $$ = newNode<CommentOnNode>($3, *$4, *$5, *$7); }
 	| COMMENT ON ddl_type4 ddl_qualified_name IS ddl_desc
 		{ $$ = newNode<CommentOnNode>($3, *$4, "", *$6); }
-	| COMMENT ON USER symbol_user_name IS ddl_desc
-		{
-			CreateAlterUserNode* node =
-				newNode<CreateAlterUserNode>(CreateAlterUserNode::USER_MOD, *$4);
-			node->comment = $6;
-			$$ = node;
-		}
+	| comment_on_user
+		{ $$ = $1; }
+	;
+
+%type <createAlterUserNode> comment_on_user
+comment_on_user
+	: COMMENT ON USER symbol_user_name
+			{
+				$$ = newNode<CreateAlterUserNode>(CreateAlterUserNode::USER_MOD, *$4);
+			}
+		opt_use_plugin($5) IS ddl_desc
+			{
+				CreateAlterUserNode* node = $$ = $5;
+				node->comment = $8;
+			}
+	;
+
+%type opt_use_plugin(<createAlterUserNode>)
+opt_use_plugin($node)
+	: // nothing
+	| use_plugin($node)
 	;
 
 %type <intVal> ddl_type0
@@ -5914,9 +5936,36 @@ select_expr_body
 		}
 	;
 
-%type <rseNode> query_term
+%type <recSourceNode> query_term
 query_term
+	: query_primary
+	;
+
+%type <recSourceNode> query_primary
+query_primary
 	: query_spec
+		{ $$ = $1; }
+	| '(' select_expr_body order_clause_opt result_offset_clause fetch_first_clause ')'
+		{
+			if ($3 || $4 || $5)
+			{
+				SelectExprNode* node = newNode<SelectExprNode>();
+				node->querySpec = $2;
+				node->orderClause = $3;
+
+				if ($4 || $5)
+				{
+					RowsClause* rowsNode = newNode<RowsClause>();
+					rowsNode->skip = $4;
+					rowsNode->length = $5;
+					node->rowsClause = rowsNode;
+				}
+
+				$$ = node;
+			}
+			else
+				$$ = $2;
+		}
 	;
 
 %type <rseNode> query_spec
@@ -6519,7 +6568,7 @@ insert_start
 	: INSERT INTO simple_table_name
 		{
 			StoreNode* node = newNode<StoreNode>();
-			node->dsqlRelation = $3;
+			node->target = $3;
 			$$ = node;
 		}
 	;
@@ -6554,10 +6603,13 @@ merge
 				node->usingClause = $5;
 				node->condition = $7;
 			}
-		merge_when_clause($8) returning_clause
+		merge_when_clause($8)
+		plan_clause order_clause_opt returning_clause
 			{
 				MergeNode* node = $$ = $8;
-				node->returning = $10;
+				node->plan = $10;
+				node->order = $11;
+				node->returning = $12;
 			}
 	;
 
@@ -6578,9 +6630,17 @@ merge_when_matched_clause($mergeNode)
 
 %type merge_when_not_matched_clause(<mergeNode>)
 merge_when_not_matched_clause($mergeNode)
-	: WHEN NOT MATCHED
-			{ $<mergeNotMatchedClause>$ = &$mergeNode->whenNotMatched.add(); }
-		merge_insert_specification(NOTRIAL($<mergeNotMatchedClause>4))
+	: WHEN NOT MATCHED by_target_noise
+			{ $<mergeNotMatchedClause>$ = &$mergeNode->whenNotMatchedByTarget.add(); }
+		merge_insert_specification(NOTRIAL($<mergeNotMatchedClause>5))
+	| WHEN NOT MATCHED BY SOURCE
+			{ $<mergeMatchedClause>$ = &$mergeNode->whenNotMatchedBySource.add(); }
+		merge_update_specification(NOTRIAL($<mergeMatchedClause>6), NOTRIAL(&$mergeNode->relation->dsqlName))
+	;
+
+by_target_noise
+	: // empty
+	| BY TARGET
 	;
 
 %type merge_update_specification(<mergeMatchedClause>, <metaNamePtr>)
@@ -6700,12 +6760,16 @@ update_or_insert
 				node->relation = $5;
 			}
 		ins_column_parens_opt(NOTRIAL(&$6->fields)) override_opt VALUES '(' value_or_default_list ')'
-				update_or_insert_matching_opt(NOTRIAL(&$6->matching)) returning_clause
+				update_or_insert_matching_opt(NOTRIAL(&$6->matching))
+				plan_clause order_clause_opt rows_clause_optional returning_clause
 			{
 				UpdateOrInsertNode* node = $$ = $6;
 				node->overrideClause = $8;
 				node->values = $11;
-				node->returning = $14;
+				node->plan = $14;
+				node->order = $15;
+				node->rows = $16;
+				node->returning = $17;
 			}
 	;
 
@@ -7214,9 +7278,14 @@ user_fixed_option($node)
 	| REVOKE ADMIN ROLE		{ setClause($node->adminRole, "ADMIN ROLE", false); }
 	| ACTIVE				{ setClause($node->active, "ACTIVE/INACTIVE", true); }
 	| INACTIVE				{ setClause($node->active, "ACTIVE/INACTIVE", false); }
-	| USING PLUGIN valid_symbol_name
-							{ setClause($node->plugin, "USING PLUGIN", $3); }
+	| use_plugin($node)
 	| TAGS '(' user_var_list($node) ')'
+	;
+
+%type use_plugin(<createAlterUserNode>)
+use_plugin($node)
+	: USING PLUGIN valid_symbol_name
+							{ setClause($node->plugin, "USING PLUGIN", $3); }
 	;
 
 %type user_var_list(<createAlterUserNode>)
@@ -7823,7 +7892,7 @@ sql_string
 %type <stringPtr> utf_string
 utf_string
 	: sql_string
-		{ $$ = newString($1->toUtf8(scratch)); }
+		{ $$ = newString($1->toUtf8(scratch->getTransaction())); }
 	;
 
 %type <int32Val> signed_short_integer
@@ -8256,6 +8325,8 @@ system_function_std_syntax
 	| TAN
 	| TANH
 	| TRUNC
+	| UNICODE_CHAR
+	| UNICODE_VAL
 	| UUID_TO_CHAR
 	| QUANTIZE
 	| TOTALORDER
@@ -8336,25 +8407,25 @@ system_function_special_syntax
 		}
 	| POSITION '(' value_list_opt  ')'
 		{ $$ = newNode<SysFuncCallNode>(*$1, $3); }
-	| rsa_encrypt_decrypt '(' value KEY value crypt_opt_lparam crypt_opt_hash ')'
+	| rsa_encrypt_decrypt '(' value KEY value crypt_opt_lparam crypt_opt_hash crypt_opt_pkcs')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add($5)->add($6)->
-					add(MAKE_str_constant(newIntlString($7->c_str()), CS_ASCII)));
+					add(MAKE_str_constant(newIntlString($7->c_str()), CS_ASCII))->add($8));
 			$$->dsqlSpecialSyntax = true;
 		}
-	| RSA_SIGN '(' value KEY value crypt_opt_hash crypt_opt_saltlen ')'
+	| RSA_SIGN_HASH '(' value KEY value crypt_opt_hash crypt_opt_saltlen crypt_opt_pkcs ')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add($5)->
-					add(MAKE_str_constant(newIntlString($6->c_str()), CS_ASCII))->add($7));
+					add(MAKE_str_constant(newIntlString($6->c_str()), CS_ASCII))->add($7)->add($8));
 			$$->dsqlSpecialSyntax = true;
 		}
-	| RSA_VERIFY'(' value SIGNATURE value KEY value crypt_opt_hash crypt_opt_saltlen ')'
+	| RSA_VERIFY_HASH '(' value SIGNATURE value KEY value crypt_opt_hash crypt_opt_saltlen crypt_opt_pkcs ')'
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>($3)->add($5)->add($7)->
-					add(MAKE_str_constant(newIntlString($8->c_str()), CS_ASCII))->add($9));
+					add(MAKE_str_constant(newIntlString($8->c_str()), CS_ASCII))->add($9)->add($10));
 			$$->dsqlSpecialSyntax = true;
 		}
 	| RDB_SYSTEM_PRIVILEGE '(' valid_symbol_name ')'
@@ -8380,6 +8451,14 @@ crypt_opt_lparam
 		{ $$ = MAKE_str_constant(newIntlString(""), CS_ASCII); }
 	| LPARAM value
 		{ $$ = $2; }
+	;
+
+%type <valueExprNode> crypt_opt_pkcs
+crypt_opt_pkcs
+	: // nothing
+		{ $$ = MAKE_const_slong(0); }
+	| PKCS_1_5
+		{ $$ = MAKE_const_slong(1); }
 	;
 
 %type <metaNamePtr> crypt_opt_hash
@@ -8701,6 +8780,7 @@ timestamp_part
 	| MILLISECOND	{ $$ = blr_extract_millisecond; }
 	| TIMEZONE_HOUR	{ $$ = blr_extract_timezone_hour; }
 	| TIMEZONE_MINUTE	{ $$ = blr_extract_timezone_minute; }
+	| TIMEZONE_NAME	{ $$ = blr_extract_timezone_name; }
 	| WEEK			{ $$ = blr_extract_week; }
 	| WEEKDAY		{ $$ = blr_extract_weekday; }
 	| YEARDAY		{ $$ = blr_extract_yearday; }
@@ -9150,8 +9230,8 @@ non_reserved_word
 	| RSA_ENCRYPT
 	| RSA_PRIVATE
 	| RSA_PUBLIC
-	| RSA_SIGN
-	| RSA_VERIFY
+	| RSA_SIGN_HASH
+	| RSA_VERIFY_HASH
 	| SALT_LENGTH
 	| SECURITY
 	| SESSION
@@ -9162,6 +9242,12 @@ non_reserved_word
 	| TOTALORDER
 	| TRAPS
 	| ZONE
+	| DEBUG				// added in FB 4.0.1
+	| PKCS_1_5
+	| TARGET			// added in FB 5.0
+	| TIMEZONE_NAME
+	| UNICODE_CHAR
+	| UNICODE_VAL
 	| TABLESPACE
 	| ONLINE
 	| OFFLINE

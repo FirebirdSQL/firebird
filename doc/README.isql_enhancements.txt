@@ -163,13 +163,13 @@ Isql enhancements in Firebird v3.
 
 Author: Vladyslav Khorsun <hvlad at users sourcefoege net>
 
-When set to ON, isql keeps text of following successful SET TRANSACTION statement and 
-new DML transactions is started using the same SQL text (instead of defaul CONCURRENCY 
+When set to ON, isql keeps text of following successful SET TRANSACTION statement and
+new DML transactions is started using the same SQL text (instead of defaul CONCURRENCY
 WAIT mode).
 When set to OFF, isql start new DML transaction as usual.
 Name KEEP_TRAN_PARAMS could be cut down to the KEEP_TRAN.
 
-In Firebird 3 KEEP_TRAN_PARAMS value is OFF by default, preserving backward compatibility 
+In Firebird 3 KEEP_TRAN_PARAMS value is OFF by default, preserving backward compatibility
 with old behaviour.
 In Firebird 4 KEEP_TRAN_PARAMS is ON by default to make isql behaviour more logical.
 
@@ -191,7 +191,7 @@ SET TRANSACTION
 
 SQL>commit;
 
--- start new transaction, check KEEP_TRAN value and actual transaction's 
+-- start new transaction, check KEEP_TRAN value and actual transaction's
 -- parameters
 SQL>SET TRANSACTION READ COMMITTED WAIT;
 SQL>SET;
@@ -237,4 +237,19 @@ SNAPSHOT
 SQL> SET;
 ...
 Keep transaction params: OFF
-SQL> 
+SQL>
+
+
+
+Isql enhancements in Firebird v4.0.1.
+---------------------------------
+
+10) SET EXEC_PATH_DISPLAY BLR/OFF
+
+Retrieves the execution path of a DML statement formatted as BLR text.
+
+It requires server v4.0.1 or greater to work.
+
+Warning: this feature is very tied to engine internals and its usage is discouraged
+if you do not understand very well how these internals are subject to change between
+versions.

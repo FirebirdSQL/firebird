@@ -56,7 +56,7 @@
 #define blr_blob		(unsigned short)261
 #define blr_cstring		(unsigned char)40
 #define blr_cstring2    	(unsigned char)41	/* added in 3.2 JPN */
-#define blr_blob_id     	(unsigned char)45	/* added from gds.h */
+#define blr_blob_id     	(unsigned char)45
 #define blr_sql_date		(unsigned char)12
 #define blr_sql_time		(unsigned char)13
 #define blr_int64           (unsigned char)16
@@ -105,10 +105,10 @@
 
 #define blr_assignment		(unsigned char)1
 #define blr_begin		(unsigned char)2
-#define blr_dcl_variable  	(unsigned char)3	/* added from gds.h */
+#define blr_dcl_variable  	(unsigned char)3
 #define blr_message		(unsigned char)4
 #define blr_erase		(unsigned char)5
-#define blr_fetch		(unsigned char)6
+//#define blr_fetch		(unsigned char)6
 #define blr_for			(unsigned char)7
 #define blr_if			(unsigned char)8
 #define blr_loop		(unsigned char)9
@@ -147,7 +147,7 @@
 #define blr_parameter2		(unsigned char)41
 #define blr_from		(unsigned char)42
 #define blr_via			(unsigned char)43
-#define blr_user_name   	(unsigned char)44	/* added from gds.h */
+#define blr_user_name   	(unsigned char)44
 #define blr_null		(unsigned char)45
 
 #define blr_equiv			(unsigned char)46
@@ -193,8 +193,8 @@
 #define blr_agg_min		(unsigned char)85
 #define blr_agg_total		(unsigned char)86
 #define blr_agg_average		(unsigned char)87
-#define	blr_parameter3		(unsigned char)88	/* same as Rdb definition */
 /* unsupported
+#define	blr_parameter3		(unsigned char)88
 #define blr_run_max		(unsigned char)89
 #define blr_run_min		(unsigned char)90
 #define blr_run_total		(unsigned char)91
@@ -221,7 +221,7 @@
 
 // unused codes: 111..117
 
-#define blr_run_count		(unsigned char)118	/* changed from 88 to avoid conflict with blr_parameter3 */
+///#define blr_run_count		(unsigned char)118
 #define blr_rs_stream		(unsigned char)119
 #define blr_exec_proc		(unsigned char)120
 
@@ -288,6 +288,7 @@
 #define blr_extract_week		(unsigned char)9
 #define blr_extract_timezone_hour	(unsigned char)10
 #define blr_extract_timezone_minute	(unsigned char)11
+#define blr_extract_timezone_name	(unsigned char)12
 
 #define blr_current_date	(unsigned char)160
 #define blr_current_timestamp	(unsigned char)161
@@ -297,7 +298,7 @@
 
 #define blr_post_arg		(unsigned char)163
 #define blr_exec_into		(unsigned char)164
-#define blr_user_savepoint	(unsigned char)165
+//#define blr_user_savepoint	(unsigned char)165
 #define blr_dcl_cursor		(unsigned char)166
 #define blr_cursor_stmt		(unsigned char)167
 #define blr_current_timestamp2	(unsigned char)168
@@ -341,13 +342,6 @@
 /* second sub parameter for blr_trim */
 #define blr_trim_spaces		(unsigned char)0
 #define blr_trim_characters	(unsigned char)1
-
-/* These codes are actions for user-defined savepoints */
-
-#define blr_savepoint_set	(unsigned char)0
-#define blr_savepoint_release	(unsigned char)1
-#define blr_savepoint_undo	(unsigned char)2
-#define blr_savepoint_release_single	(unsigned char)3
 
 /* These codes are actions for cursors */
 
@@ -449,5 +443,17 @@
 #define blr_at_zone					(unsigned char) 1
 
 #define blr_marks					(unsigned char) 217		// mark some blr code with specific flags
+
+#define blr_dcl_local_table			(unsigned char) 218
+
+// subcodes of blr_dcl_local_table
+#define blr_dcl_local_table_format	(unsigned char) 1
+
+#define blr_local_table_truncate	(unsigned char) 219
+#define blr_local_table_id			(unsigned char) 220
+
+#define blr_outer_map				(unsigned char) 221
+#define blr_outer_map_message		(unsigned char) 1
+#define blr_outer_map_variable			(unsigned char) 2
 
 #endif // FIREBIRD_IMPL_BLR_H

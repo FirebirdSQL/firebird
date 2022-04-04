@@ -204,6 +204,9 @@
     <ClCompile Include="..\..\..\src\common\MsgMetadata.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\MsgUtil.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\DynamicStrings.cpp">
       <Filter>common</Filter>
     </ClCompile>
@@ -549,6 +552,9 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\MsgMetadata.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\MsgUtil.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\DynamicStrings.h">

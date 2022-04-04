@@ -31,12 +31,13 @@
 #include "../common/dllinst.h"
 #include "../common/os/os_utils.h"
 
-#ifdef HAVE_DLADDR
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
+#ifdef WIN_NT
+#include <windows.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX MAX_PATH
 #endif
-#include <dlfcn.h>
-#endif // HAVE_DLADDR
+#endif
 
 // Setting this define helps (with AV at exit time) detect globals
 // with destructors, declared not using InstanceControl.
@@ -96,36 +97,14 @@ namespace
 		Firebird::AutoPtr<FILE> file;
 
 		{	// scope
-			Firebird::PathName name = "memdebug.log";
-#ifdef HAVE_DLADDR
-			Dl_info path;
-			if (dladdr((void*) &allClean, &path))
-			{
-				name = path.dli_fname;
-				name += ".memdebug.log";
-			}
-			else
-			{
-				fprintf(stderr, "dladdr: %s\n", dlerror());
-			}
-#elif defined(WIN_NT)
-			HMODULE hmod = 0;
-			GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-				(LPCTSTR) &allClean,
-				&hmod);
+			char name[PATH_MAX];
 
-			if (hmod)
-			{
-				char moduleName[MAX_PATH];
-				DWORD len = GetModuleFileName(hmod, moduleName, MAX_PATH);
-				if (len < MAX_PATH)
-				{
-					name = moduleName;
-					name += ".memdebug.log";
-				}
-			}
-#endif	// HAVE_DLADDR
-			file = os_utils::fopen(name.c_str(), "w+t");
+			if (os_utils::getCurrentModulePath(name, sizeof(name)))
+				strncat(name, ".memdebug.log", sizeof(name) - 1);
+			else
+				strcpy(name, "memdebug.log");
+
+			file = os_utils::fopen(name, "w+t");
 		}
 #endif	// DEBUG_GDS_ALLOC
 
@@ -154,7 +133,7 @@ namespace
 				file = NULL;
 			}
 #endif
-			Firebird::MemoryPool::cleanup();
+			Firebird::MemoryPool::cleanupDefaultPool();
 		}
 		catch (...)
 		{
@@ -193,7 +172,7 @@ namespace
 		}
 
 		Firebird::Mutex::initMutexes();
-		Firebird::MemoryPool::init();
+		Firebird::MemoryPool::initDefaultPool();
 		Firebird::StaticMutex::create();
 
 #ifdef DEBUG_INIT
@@ -203,6 +182,7 @@ namespace
 		initDone = 1;
 #ifdef HAVE_PTHREAD_ATFORK
 		int ret = pthread_atfork(NULL, NULL, child);
+		(void) ret;
 #endif
 
 		Firebird::MemoryPool::contextPoolInit();

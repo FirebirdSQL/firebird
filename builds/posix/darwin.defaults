@@ -27,6 +27,11 @@ LIB_LINK_MAPFILE=-Wl,-exported_symbols_list,$(1)
 #EXE_LINK_OPTIONS+=-dylib_file /Library/Frameworks/Firebird.framework/Versions/A/Firebird ../gen/Release/firebird/lib/libfbclient.dylib
 #LIB_LINK_RPATH:=-dylib_file /Library/Frameworks/Firebird.framework/Versions/A/Firebird ../gen/Release/firebird/lib/libfbclient.dylib
 
+ADD_LIBS:=-lobjc -framework Foundation -framework Security
+LINK_LIBS += $(ADD_LIBS)
+STATICLINK_LIBS += $(ADD_LIBS)
+SO_LINK_LIBS += $(ADD_LIBS)
+
 PLATFORM_PATH=os/darwin
 PLATFORM_FALLBACK=os/posix
 

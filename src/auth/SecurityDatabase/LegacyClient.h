@@ -35,7 +35,7 @@ namespace Auth {
 // Required to stop analyzing rest of plugins before first roundtrip to server
 // if legacy login is present in DPB
 
-class SecurityDatabaseClient FB_FINAL :
+class SecurityDatabaseClient final :
 	public Firebird::StdPlugin<Firebird::IClientImpl<SecurityDatabaseClient, Firebird::CheckStatusWrapper> >
 {
 public:

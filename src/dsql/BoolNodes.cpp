@@ -28,7 +28,7 @@
 #include "../jrd/tra.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/recsrc/Cursor.h"
-#include "../jrd/Optimizer.h"
+#include "../jrd/optimizer/Optimizer.h"
 #include "../jrd/blb_proto.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/evl_proto.h"
@@ -142,22 +142,22 @@ bool BinaryBoolNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode*
 	return blrOp == o->blrOp;
 }
 
-bool BinaryBoolNode::sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const
+bool BinaryBoolNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 {
 	const BinaryBoolNode* const otherNode = nodeAs<BinaryBoolNode>(other);
 
 	if (!otherNode || blrOp != otherNode->blrOp)
 		return false;
 
-	if (arg1->sameAs(csb, otherNode->arg1, ignoreStreams) &&
-		arg2->sameAs(csb, otherNode->arg2, ignoreStreams))
+	if (arg1->sameAs(otherNode->arg1, ignoreStreams) &&
+		arg2->sameAs(otherNode->arg2, ignoreStreams))
 	{
 		return true;
 	}
 
 	// A AND B is equivalent to B AND A, ditto for A OR B and B OR A.
-	return arg1->sameAs(csb, otherNode->arg2, ignoreStreams) &&
-		arg2->sameAs(csb, otherNode->arg1, ignoreStreams);
+	return arg1->sameAs(otherNode->arg2, ignoreStreams) &&
+		arg2->sameAs(otherNode->arg1, ignoreStreams);
 }
 
 BoolExprNode* BinaryBoolNode::copy(thread_db* tdbb, NodeCopier& copier) const
@@ -170,7 +170,7 @@ BoolExprNode* BinaryBoolNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	return node;
 }
 
-bool BinaryBoolNode::execute(thread_db* tdbb, jrd_req* request) const
+bool BinaryBoolNode::execute(thread_db* tdbb, Request* request) const
 {
 	switch (blrOp)
 	{
@@ -185,7 +185,7 @@ bool BinaryBoolNode::execute(thread_db* tdbb, jrd_req* request) const
 	return false;
 }
 
-bool BinaryBoolNode::executeAnd(thread_db* tdbb, jrd_req* request) const
+bool BinaryBoolNode::executeAnd(thread_db* tdbb, Request* request) const
 {
 	// If either operand is false, then the result is false;
 	// If both are true, the result is true;
@@ -231,7 +231,7 @@ bool BinaryBoolNode::executeAnd(thread_db* tdbb, jrd_req* request) const
 	return false;
 }
 
-bool BinaryBoolNode::executeOr(thread_db* tdbb, jrd_req* request) const
+bool BinaryBoolNode::executeOr(thread_db* tdbb, Request* request) const
 {
 	// If either operand is true, then the result is true;
 	// If both are false, the result is false;
@@ -492,20 +492,20 @@ bool ComparativeBoolNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const Expr
 	return dsqlFlag == o->dsqlFlag && blrOp == o->blrOp;
 }
 
-bool ComparativeBoolNode::sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const
+bool ComparativeBoolNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 {
 	const ComparativeBoolNode* const otherNode = nodeAs<ComparativeBoolNode>(other);
 
 	if (!otherNode || blrOp != otherNode->blrOp)
 		return false;
 
-	bool matching = arg1->sameAs(csb, otherNode->arg1, ignoreStreams) &&
-		arg2->sameAs(csb, otherNode->arg2, ignoreStreams);
+	bool matching = arg1->sameAs(otherNode->arg1, ignoreStreams) &&
+		arg2->sameAs(otherNode->arg2, ignoreStreams);
 
 	if (matching)
 	{
 		matching = (!arg3 == !otherNode->arg3) &&
-			(!arg3 || arg3->sameAs(csb, otherNode->arg3, ignoreStreams));
+			(!arg3 || arg3->sameAs(otherNode->arg3, ignoreStreams));
 
 		if (matching)
 			return true;
@@ -516,8 +516,8 @@ bool ComparativeBoolNode::sameAs(CompilerScratch* csb, const ExprNode* other, bo
 	if (blrOp == blr_eql || blrOp == blr_equiv || blrOp == blr_neq)
 	{
 		// A = B is equivalent to B = A, etc.
-		if (arg1->sameAs(csb, otherNode->arg2, ignoreStreams) &&
-			arg2->sameAs(csb, otherNode->arg1, ignoreStreams))
+		if (arg1->sameAs(otherNode->arg2, ignoreStreams) &&
+			arg2->sameAs(otherNode->arg1, ignoreStreams))
 		{
 			return true;
 		}
@@ -634,13 +634,16 @@ void ComparativeBoolNode::pass2Boolean2(thread_db* tdbb, CompilerScratch* csb)
 		arg1->nodFlags |= FLAG_DATE;
 
 	if (nodFlags & FLAG_INVARIANT)
-	{
-		// This may currently happen for nod_like, nod_contains and nod_similar
 		impureOffset = csb->allocImpure<impure_value>();
+	// Do not use FLAG_PATTERN_MATCHER_CACHE for blr_starting as it has very fast compilation.
+	else if (blrOp == blr_containing || blrOp == blr_like || blrOp == blr_similar)
+	{
+		impureOffset = csb->allocImpure<impure_value>();
+		nodFlags |= FLAG_PATTERN_MATCHER_CACHE;
 	}
 }
 
-bool ComparativeBoolNode::execute(thread_db* tdbb, jrd_req* request) const
+bool ComparativeBoolNode::execute(thread_db* tdbb, Request* request) const
 {
 	dsc* desc[2] = {NULL, NULL};
 	bool computed_invariant = false;
@@ -814,296 +817,40 @@ bool ComparativeBoolNode::execute(thread_db* tdbb, jrd_req* request) const
 }
 
 // Perform one of the complex string functions CONTAINING, MATCHES, or STARTS WITH.
-bool ComparativeBoolNode::stringBoolean(thread_db* tdbb, jrd_req* request, dsc* desc1,
-	dsc* desc2, bool computed_invariant) const
+bool ComparativeBoolNode::stringBoolean(thread_db* tdbb, Request* request, dsc* desc1,
+	dsc* desc2, bool computedInvariant) const
 {
-	UCHAR* p1 = NULL;
-	UCHAR* p2 = NULL;
-	SLONG l2 = 0;
-	USHORT type1;
-	MoveBuffer match_str;
-
 	SET_TDBB(tdbb);
 
+	USHORT type1;
+
 	if (!desc1->isBlob())
-	{
-		// Source is not a blob, do a simple search
-
-		// Get text type of data string
-
 		type1 = INTL_TEXT_TYPE(*desc1);
-
-		// Get address and length of search string - convert to datatype of data
-
-		if (!computed_invariant)
-			l2 = MOV_make_string2(tdbb, desc2, type1, &p2, match_str, false);
-
-		VaryStr<256> temp1;
-		USHORT xtype1;
-		const USHORT l1 = MOV_get_string_ptr(tdbb, desc1, &xtype1, &p1, &temp1, sizeof(temp1));
-
-		fb_assert(xtype1 == type1);
-
-		return stringFunction(tdbb, request, l1, p1, l2, p2, type1, computed_invariant);
-	}
-
-	// Source string is a blob, things get interesting
-
-	HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
-
-	if (desc1->dsc_sub_type == isc_blob_text)
-		type1 = desc1->dsc_blob_ttype();	// pick up character set and collation of blob
 	else
-		type1 = ttype_none;	// Do byte matching
+	{
+		// No MATCHES support for blob
+		if (blrOp == blr_matching)
+			return false;
+
+		type1 = desc1->dsc_sub_type == isc_blob_text ? desc1->dsc_blob_ttype() : ttype_none;
+	}
 
 	Collation* obj = INTL_texttype_lookup(tdbb, type1);
 	CharSet* charset = obj->getCharSet();
 
-	// Get address and length of search string - make it string if necessary
-	// but don't transliterate character set if the source blob is binary
-	if (!computed_invariant)
-	{
-		l2 = MOV_make_string2(tdbb, desc2, type1, &p2, match_str, false);
-	}
+	VaryStr<TEMP_STR_LENGTH> escapeTemp;
+	const UCHAR* escapeStr = nullptr;
+	USHORT escapeLen = 0;
 
-	blb* blob =	blb::open(tdbb, request->req_transaction, reinterpret_cast<bid*>(desc1->dsc_address));
-
-	if (charset->isMultiByte() &&
-		(blrOp != blr_starting || !(obj->getFlags() & TEXTTYPE_DIRECT_MATCH)))
-	{
-		buffer.getBuffer(blob->blb_length);		// alloc space to put entire blob in memory
-	}
-
-	// Performs the string_function on each segment of the blob until
-	// a positive result is obtained
-
-	bool ret_val = false;
-
-	switch (blrOp)
-	{
-		case blr_like:
-		case blr_similar:
-		{
-			VaryStr<TEMP_STR_LENGTH> temp3;
-			const UCHAR* escape_str = NULL;
-			USHORT escape_length = 0;
-
-			// ensure 3rd argument (escape char) is in operation text type
-			if (arg3 && !computed_invariant)
-			{
-				// Convert ESCAPE to operation character set
-				dsc* desc = EVL_expr(tdbb, request, arg3);
-
-				if (request->req_flags & req_null)
-				{
-					if (nodFlags & FLAG_INVARIANT)
-					{
-						impure_value* impure = request->getImpure<impure_value>(impureOffset);
-						impure->vlu_flags |= VLU_computed;
-						impure->vlu_flags |= VLU_null;
-					}
-					ret_val = false;
-					break;
-				}
-
-				escape_length = MOV_make_string(tdbb, desc, type1,
-					reinterpret_cast<const char**>(&escape_str), &temp3, sizeof(temp3));
-
-				if (!escape_length || charset->length(escape_length, escape_str, true) != 1)
-				{
-					// If characters left, or null byte character, return error
-					blob->BLB_close(tdbb);
-					ERR_post(Arg::Gds(isc_escape_invalid));
-				}
-
-				USHORT escape[2] = {0, 0};
-
-				charset->getConvToUnicode().convert(escape_length, escape_str, sizeof(escape), escape);
-				if (!escape[0])
-				{
-					// If or null byte character, return error
-					blob->BLB_close(tdbb);
-					ERR_post(Arg::Gds(isc_escape_invalid));
-				}
-			}
-
-			PatternMatcher* evaluator;
-
-			if (nodFlags & FLAG_INVARIANT)
-			{
-				impure_value* impure = request->getImpure<impure_value>(impureOffset);
-
-				if (!(impure->vlu_flags & VLU_computed))
-				{
-					delete impure->vlu_misc.vlu_invariant;
-					impure->vlu_flags |= VLU_computed;
-
-					if (blrOp == blr_like)
-					{
-						impure->vlu_misc.vlu_invariant = evaluator = obj->createLikeMatcher(
-							*tdbb->getDefaultPool(), p2, l2, escape_str, escape_length);
-					}
-					else	// nod_similar
-					{
-						impure->vlu_misc.vlu_invariant = evaluator = obj->createSimilarToMatcher(
-							tdbb, *tdbb->getDefaultPool(), p2, l2, escape_str, escape_length);
-					}
-				}
-				else
-				{
-					evaluator = impure->vlu_misc.vlu_invariant;
-					evaluator->reset();
-				}
-			}
-			else if (blrOp == blr_like)
-			{
-				evaluator = obj->createLikeMatcher(*tdbb->getDefaultPool(),
-					p2, l2, escape_str, escape_length);
-			}
-			else	// nod_similar
-			{
-				evaluator = obj->createSimilarToMatcher(tdbb, *tdbb->getDefaultPool(),
-					p2, l2, escape_str, escape_length);
-			}
-
-			while (!(blob->blb_flags & BLB_eof))
-			{
-				const SLONG l1 = blob->BLB_get_data(tdbb, buffer.begin(), buffer.getCapacity(), false);
-				if (!evaluator->process(buffer.begin(), l1))
-					break;
-			}
-
-			ret_val = evaluator->result();
-
-			if (!(nodFlags & FLAG_INVARIANT))
-				delete evaluator;
-
-			break;
-		}
-
-		case blr_containing:
-		case blr_starting:
-		{
-			PatternMatcher* evaluator;
-
-			if (nodFlags & FLAG_INVARIANT)
-			{
-				impure_value* impure = request->getImpure<impure_value>(impureOffset);
-				if (!(impure->vlu_flags & VLU_computed))
-				{
-					delete impure->vlu_misc.vlu_invariant;
-
-					if (blrOp == blr_containing)
-					{
-						impure->vlu_misc.vlu_invariant = evaluator =
-							obj->createContainsMatcher(*tdbb->getDefaultPool(), p2, l2);
-					}
-					else	// nod_starts
-					{
-						impure->vlu_misc.vlu_invariant = evaluator =
-							obj->createStartsMatcher(*tdbb->getDefaultPool(), p2, l2);
-					}
-
-					impure->vlu_flags |= VLU_computed;
-				}
-				else
-				{
-					evaluator = impure->vlu_misc.vlu_invariant;
-					evaluator->reset();
-				}
-			}
-			else
-			{
-				if (blrOp == blr_containing)
-					evaluator = obj->createContainsMatcher(*tdbb->getDefaultPool(), p2, l2);
-				else	// nod_starts
-					evaluator = obj->createStartsMatcher(*tdbb->getDefaultPool(), p2, l2);
-			}
-
-			while (!(blob->blb_flags & BLB_eof))
-			{
-				const SLONG l1 = blob->BLB_get_data(tdbb, buffer.begin(), buffer.getCapacity(), false);
-				if (!evaluator->process(buffer.begin(), l1))
-					break;
-			}
-
-			ret_val = evaluator->result();
-
-			if (!(nodFlags & FLAG_INVARIANT))
-				delete evaluator;
-
-			break;
-		}
-	}
-
-	blob->BLB_close(tdbb);
-
-	return ret_val;
-}
-
-// Perform one of the pattern matching string functions.
-bool ComparativeBoolNode::stringFunction(thread_db* tdbb, jrd_req* request,
-	SLONG l1, const UCHAR* p1, SLONG l2, const UCHAR* p2, USHORT ttype,
-	bool computed_invariant) const
-{
-	SET_TDBB(tdbb);
-
-	Collation* obj = INTL_texttype_lookup(tdbb, ttype);
-	CharSet* charset = obj->getCharSet();
-
-	// Handle contains and starts
-	if (blrOp == blr_containing || blrOp == blr_starting)
-	{
-		if (nodFlags & FLAG_INVARIANT)
-		{
-			impure_value* impure = request->getImpure<impure_value>(impureOffset);
-			PatternMatcher* evaluator;
-			if (!(impure->vlu_flags & VLU_computed))
-			{
-				delete impure->vlu_misc.vlu_invariant;
-
-				if (blrOp == blr_containing)
-				{
-					impure->vlu_misc.vlu_invariant = evaluator =
-						obj->createContainsMatcher(*tdbb->getDefaultPool(), p2, l2);
-				}
-				else
-				{
-					// nod_starts
-					impure->vlu_misc.vlu_invariant = evaluator =
-						obj->createStartsMatcher(*tdbb->getDefaultPool(), p2, l2);
-				}
-
-				impure->vlu_flags |= VLU_computed;
-			}
-			else
-			{
-				evaluator = impure->vlu_misc.vlu_invariant;
-				evaluator->reset();
-			}
-
-			evaluator->process(p1, l1);
-			return evaluator->result();
-		}
-
-		if (blrOp == blr_containing)
-			return obj->contains(*tdbb->getDefaultPool(), p1, l1, p2, l2);
-
-		// nod_starts
-		return obj->starts(*tdbb->getDefaultPool(), p1, l1, p2, l2);
-	}
-
-	// Handle LIKE and SIMILAR
+	// Handle escape for LIKE and SIMILAR
 	if (blrOp == blr_like || blrOp == blr_similar)
 	{
-		VaryStr<TEMP_STR_LENGTH> temp3;
-		const UCHAR* escape_str = NULL;
-		USHORT escape_length = 0;
 		// ensure 3rd argument (escape char) is in operation text type
-		if (arg3 && !computed_invariant)
+		if (arg3 && !computedInvariant)
 		{
 			// Convert ESCAPE to operation character set
 			dsc* desc = EVL_expr(tdbb, request, arg3);
+
 			if (request->req_flags & req_null)
 			{
 				if (nodFlags & FLAG_INVARIANT)
@@ -1115,10 +862,10 @@ bool ComparativeBoolNode::stringFunction(thread_db* tdbb, jrd_req* request,
 				return false;
 			}
 
-			escape_length = MOV_make_string(tdbb, desc, ttype,
-				reinterpret_cast<const char**>(&escape_str), &temp3, sizeof(temp3));
+			escapeLen = MOV_make_string(tdbb, desc, type1,
+				reinterpret_cast<const char**>(&escapeStr), &escapeTemp, sizeof(escapeTemp));
 
-			if (!escape_length || charset->length(escape_length, escape_str, true) != 1)
+			if (!escapeLen || charset->length(escapeLen, escapeStr, true) != 1)
 			{
 				// If characters left, or null byte character, return error
 				ERR_post(Arg::Gds(isc_escape_invalid));
@@ -1126,7 +873,7 @@ bool ComparativeBoolNode::stringFunction(thread_db* tdbb, jrd_req* request,
 
 			USHORT escape[2] = {0, 0};
 
-			charset->getConvToUnicode().convert(escape_length, escape_str, sizeof(escape), escape);
+			charset->getConvToUnicode().convert(escapeLen, escapeStr, sizeof(escape), escape);
 
 			if (!escape[0])
 			{
@@ -1134,52 +881,149 @@ bool ComparativeBoolNode::stringFunction(thread_db* tdbb, jrd_req* request,
 				ERR_post(Arg::Gds(isc_escape_invalid));
 			}
 		}
-
-		if (nodFlags & FLAG_INVARIANT)
-		{
-			impure_value* impure = request->getImpure<impure_value>(impureOffset);
-			PatternMatcher* evaluator;
-
-			if (!(impure->vlu_flags & VLU_computed))
-			{
-				delete impure->vlu_misc.vlu_invariant;
-				impure->vlu_flags |= VLU_computed;
-
-				if (blrOp == blr_like)
-				{
-					impure->vlu_misc.vlu_invariant = evaluator = obj->createLikeMatcher(
-						*tdbb->getDefaultPool(), p2, l2, escape_str, escape_length);
-				}
-				else	// nod_similar
-				{
-					impure->vlu_misc.vlu_invariant = evaluator = obj->createSimilarToMatcher(
-						tdbb, *tdbb->getDefaultPool(), p2, l2, escape_str, escape_length);
-				}
-			}
-			else
-			{
-				evaluator = impure->vlu_misc.vlu_invariant;
-				evaluator->reset();
-			}
-
-			evaluator->process(p1, l1);
-
-			return evaluator->result();
-		}
-
-		if (blrOp == blr_like)
-			return obj->like(*tdbb->getDefaultPool(), p1, l1, p2, l2, escape_str, escape_length);
-
-		// nod_similar
-		return obj->similarTo(tdbb, *tdbb->getDefaultPool(), p1, l1, p2, l2, escape_str, escape_length);
 	}
 
-	// Handle MATCHES
-	return obj->matches(*tdbb->getDefaultPool(), p1, l1, p2, l2);
+	UCHAR* patternStr = nullptr;
+	SLONG patternLen = 0;
+	MoveBuffer patternBuffer;
+
+	auto createMatcher = [&]()
+	{
+		return blrOp == blr_containing ? obj->createContainsMatcher(*tdbb->getDefaultPool(), patternStr, patternLen) :
+			blrOp == blr_starting ? obj->createStartsMatcher(*tdbb->getDefaultPool(), patternStr, patternLen) :
+			blrOp == blr_like ? obj->createLikeMatcher(*tdbb->getDefaultPool(),
+				patternStr, patternLen, escapeStr, escapeLen) :
+			blrOp == blr_similar ? obj->createSimilarToMatcher(tdbb, *tdbb->getDefaultPool(),
+				patternStr, patternLen, escapeStr, escapeLen) :
+			nullptr;	// blr_matching
+	};
+
+	// Get address and length of search string - convert to datatype of data
+	if (!computedInvariant)
+		patternLen = MOV_make_string2(tdbb, desc2, type1, &patternStr, patternBuffer, false);
+
+	AutoPtr<PatternMatcher> autoEvaluator;	// deallocate non-invariant/non-cached evaluator
+	PatternMatcher* evaluator;
+
+	impure_value* impure = request->getImpure<impure_value>(impureOffset);
+
+	if (nodFlags & FLAG_INVARIANT)
+	{
+		auto& matcher = impure->vlu_misc.vlu_invariant;
+
+		if (!(impure->vlu_flags & VLU_computed))
+		{
+			delete matcher;
+			matcher = nullptr;
+			matcher = createMatcher();
+			impure->vlu_flags |= VLU_computed;
+		}
+		else
+			matcher->reset();
+
+		evaluator = matcher;
+	}
+	else if (nodFlags & FLAG_PATTERN_MATCHER_CACHE)
+	{
+		auto& cache = impure->vlu_misc.vlu_patternMatcherCache;
+		const bool cacheHit = cache &&
+			cache->matcher &&
+			cache->ttype == type1 &&
+			cache->patternLen == patternLen &&
+			cache->escapeLen == escapeLen &&
+			memcmp(cache->key, patternStr, patternLen) == 0 &&
+			memcmp(cache->key + patternLen, escapeStr, escapeLen) == 0;
+
+		if (cacheHit)
+			cache->matcher->reset();
+		else
+		{
+			if (cache && cache->keySize < patternLen + escapeLen)
+			{
+				delete cache;
+				cache = nullptr;
+			}
+
+			if (!cache)
+			{
+				cache = FB_NEW_RPT(*tdbb->getDefaultPool(), patternLen + escapeLen)
+					impure_value::PatternMatcherCache(patternLen + escapeLen);
+			}
+
+			cache->ttype = type1;
+			cache->patternLen = patternLen;
+			cache->escapeLen = escapeLen;
+			memcpy(cache->key, patternStr, patternLen);
+			memcpy(cache->key + patternLen, escapeStr, escapeLen);
+
+			cache->matcher = createMatcher();
+		}
+
+		evaluator = cache->matcher;
+	}
+	else
+		autoEvaluator = evaluator = desc1->isBlob() ? createMatcher() : nullptr;
+
+	if (!desc1->isBlob())
+	{
+		// Source is not a blob, do a simple search
+
+		VaryStr<256> temp1;
+		UCHAR* str = NULL;
+		const USHORT strLen = MOV_get_string_ptr(tdbb, desc1, &type1, &str, &temp1, sizeof(temp1));
+
+		if (evaluator)
+		{
+			evaluator->process(str, strLen);
+			return evaluator->result();
+		}
+		else
+		{
+			if (blrOp == blr_containing)
+				return obj->contains(*tdbb->getDefaultPool(), str, strLen, patternStr, patternLen);
+			else if (blrOp == blr_starting)
+				return obj->starts(*tdbb->getDefaultPool(), str, strLen, patternStr, patternLen);
+			else if (blrOp == blr_like)
+				return obj->like(*tdbb->getDefaultPool(), str, strLen, patternStr, patternLen, escapeStr, escapeLen);
+			else if (blrOp == blr_similar)
+			{
+				return obj->similarTo(tdbb, *tdbb->getDefaultPool(),
+					str, strLen, patternStr, patternLen, escapeStr, escapeLen);
+			}
+			else	// blr_matching
+				return obj->matches(*tdbb->getDefaultPool(), str, strLen, patternStr, patternLen);
+		}
+	}
+
+	fb_assert(evaluator);
+
+	// Source string is a blob, things get interesting
+
+	AutoBlb blob(tdbb, blb::open(tdbb, request->req_transaction, reinterpret_cast<bid*>(desc1->dsc_address)));
+
+	HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
+
+	if (charset->isMultiByte() &&
+		(blrOp != blr_starting || !(obj->getFlags() & TEXTTYPE_DIRECT_MATCH)))
+	{
+		buffer.getBuffer(blob->blb_length);		// alloc space to put entire blob in memory
+	}
+
+	// Performs the string_function on each segment of the blob until
+	// a positive result is obtained
+
+	while (!(blob->blb_flags & BLB_eof))
+	{
+		const SLONG bufferLen = blob->BLB_get_data(tdbb, buffer.begin(), buffer.getCapacity(), false);
+		if (!evaluator->process(buffer.begin(), bufferLen))
+			break;
+	}
+
+	return evaluator->result();
 }
 
 // Execute SLEUTH operator.
-bool ComparativeBoolNode::sleuth(thread_db* tdbb, jrd_req* request, const dsc* desc1,
+bool ComparativeBoolNode::sleuth(thread_db* tdbb, Request* request, const dsc* desc1,
 	const dsc* desc2) const
 {
 	SET_TDBB(tdbb);
@@ -1379,7 +1223,7 @@ void MissingBoolNode::pass2Boolean2(thread_db* tdbb, CompilerScratch* csb)
 	arg->getDesc(tdbb, csb, &descriptor_a);
 }
 
-bool MissingBoolNode::execute(thread_db* tdbb, jrd_req* request) const
+bool MissingBoolNode::execute(thread_db* tdbb, Request* request) const
 {
 	EVL_expr(tdbb, request, arg);
 
@@ -1454,7 +1298,7 @@ BoolExprNode* NotBoolNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	return BoolExprNode::pass1(tdbb, csb);
 }
 
-bool NotBoolNode::execute(thread_db* tdbb, jrd_req* request) const
+bool NotBoolNode::execute(thread_db* tdbb, Request* request) const
 {
 	bool value = arg->execute(tdbb, request);
 
@@ -1661,9 +1505,9 @@ bool RseBoolNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* ot
 	return blrOp == o->blrOp;
 }
 
-bool RseBoolNode::sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const
+bool RseBoolNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 {
-	if (!BoolExprNode::sameAs(csb, other, ignoreStreams))
+	if (!BoolExprNode::sameAs(other, ignoreStreams))
 		return false;
 
 	const RseBoolNode* const otherNode = nodeAs<RseBoolNode>(other);
@@ -1768,7 +1612,7 @@ void RseBoolNode::pass2Boolean2(thread_db* tdbb, CompilerScratch* csb)
 	subQuery = FB_NEW_POOL(*tdbb->getDefaultPool()) SubQuery(rsb, rse->rse_invariants);
 }
 
-bool RseBoolNode::execute(thread_db* tdbb, jrd_req* request) const
+bool RseBoolNode::execute(thread_db* tdbb, Request* request) const
 {
 	USHORT* invariant_flags;
 	impure_value* impure;

@@ -30,7 +30,7 @@
 namespace Jrd {
 
 
-class AvgAggNode : public AggNode
+class AvgAggNode final : public AggNode
 {
 public:
 	explicit AvgAggNode(MemoryPool& pool, bool aDistinct, bool aDialect1, ValueExprNode* aArg = NULL);
@@ -53,18 +53,19 @@ public:
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
-	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
+	virtual void aggInit(thread_db* tdbb, Request* request) const;
+	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
+	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
 
 protected:
 	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
 
 private:
+	void outputDesc(dsc* desc) const;
 	ULONG tempImpure;
 };
 
-class ListAggNode : public AggNode
+class ListAggNode final : public AggNode
 {
 public:
 	explicit ListAggNode(MemoryPool& pool, bool aDistinct, ValueExprNode* aArg = NULL,
@@ -90,9 +91,9 @@ public:
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
-	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
+	virtual void aggInit(thread_db* tdbb, Request* request) const;
+	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
+	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
 
 protected:
 	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
@@ -101,7 +102,7 @@ private:
 	NestConst<ValueExprNode> delimiter;
 };
 
-class CountAggNode : public AggNode
+class CountAggNode final : public AggNode
 {
 public:
 	explicit CountAggNode(MemoryPool& pool, bool aDistinct, bool aDialect1, ValueExprNode* aArg = NULL);
@@ -119,15 +120,15 @@ public:
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
-	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
+	virtual void aggInit(thread_db* tdbb, Request* request) const;
+	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
+	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
 
 protected:
 	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
 };
 
-class SumAggNode : public AggNode
+class SumAggNode final : public AggNode
 {
 public:
 	explicit SumAggNode(MemoryPool& pool, bool aDistinct, bool aDialect1, ValueExprNode* aArg = NULL);
@@ -149,15 +150,15 @@ public:
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
-	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
+	virtual void aggInit(thread_db* tdbb, Request* request) const;
+	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
+	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
 
 protected:
 	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
 };
 
-class MaxMinAggNode : public AggNode
+class MaxMinAggNode final : public AggNode
 {
 public:
 	enum MaxMinType
@@ -180,9 +181,9 @@ public:
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
-	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
+	virtual void aggInit(thread_db* tdbb, Request* request) const;
+	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
+	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
 
 protected:
 	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
@@ -191,7 +192,7 @@ public:
 	const MaxMinType type;
 };
 
-class StdDevAggNode : public AggNode
+class StdDevAggNode final : public AggNode
 {
 public:
 	enum StdDevType
@@ -229,9 +230,9 @@ public:
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
-	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
+	virtual void aggInit(thread_db* tdbb, Request* request) const;
+	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
+	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
 
 protected:
 	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
@@ -243,7 +244,7 @@ private:
 	ULONG impure2Offset;
 };
 
-class CorrAggNode : public AggNode
+class CorrAggNode final : public AggNode
 {
 public:
 	enum CorrType
@@ -287,10 +288,10 @@ public:
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
-	virtual bool aggPass(thread_db* tdbb, jrd_req* request) const;
-	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
+	virtual void aggInit(thread_db* tdbb, Request* request) const;
+	virtual bool aggPass(thread_db* tdbb, Request* request) const;
+	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
+	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
 
 protected:
 	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
@@ -303,7 +304,7 @@ private:
 	ULONG impure2Offset;
 };
 
-class RegrAggNode : public AggNode
+class RegrAggNode final : public AggNode
 {
 public:
 	enum RegrType
@@ -352,10 +353,10 @@ public:
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
-	virtual bool aggPass(thread_db* tdbb, jrd_req* request) const;
-	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
+	virtual void aggInit(thread_db* tdbb, Request* request) const;
+	virtual bool aggPass(thread_db* tdbb, Request* request) const;
+	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
+	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
 
 protected:
 	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
@@ -368,7 +369,7 @@ private:
 	ULONG impure2Offset;
 };
 
-class RegrCountAggNode : public AggNode
+class RegrCountAggNode final : public AggNode
 {
 public:
 	explicit RegrCountAggNode(MemoryPool& pool,
@@ -392,10 +393,10 @@ public:
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request) const;
-	virtual bool aggPass(thread_db* tdbb, jrd_req* request) const;
-	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const;
+	virtual void aggInit(thread_db* tdbb, Request* request) const;
+	virtual bool aggPass(thread_db* tdbb, Request* request) const;
+	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
+	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
 
 protected:
 	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;

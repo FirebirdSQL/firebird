@@ -61,7 +61,7 @@ Union::Union(CompilerScratch* csb, StreamType stream,
 
 void Union::open(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_flags = irsb_open;
@@ -82,7 +82,7 @@ void Union::open(thread_db* tdbb) const
 
 void Union::close(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	invalidateRecords(request);
 
@@ -101,7 +101,7 @@ bool Union::getRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
@@ -144,7 +144,7 @@ bool Union::getRecord(thread_db* tdbb) const
 
 bool Union::refetchRecord(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (impure->irsb_count >= m_args.getCount())
@@ -155,7 +155,7 @@ bool Union::refetchRecord(thread_db* tdbb) const
 
 bool Union::lockRecord(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (impure->irsb_count >= m_args.getCount())
@@ -197,7 +197,7 @@ void Union::markRecursive()
 		m_args[i]->markRecursive();
 }
 
-void Union::invalidateRecords(jrd_req* request) const
+void Union::invalidateRecords(Request* request) const
 {
 	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 		m_args[i]->invalidateRecords(request);

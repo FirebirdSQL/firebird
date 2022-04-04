@@ -24,16 +24,16 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_if_different empbuild_.fdb empbuild.fdb
 )
 add_custom_command(
-    OUTPUT empbuild.c
+    OUTPUT empbuild.cpp
     DEPENDS
         gpre
-        ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbuild.e
+        ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbuild.epp
         empbuild.fdb
-    COMMENT "Calling GPRE for empbuild.e"
-    COMMAND ${GPRE_CMD} -r -m -n ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbuild.e empbuild.c
+    COMMENT "Calling GPRE for empbuild.epp"
+    COMMAND ${GPRE_CMD} -r -m -n ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbuild.epp empbuild.cpp
 )
 
-add_executable          (empbuild empbuild.c empbuild.fdb ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbuild.e)
+add_executable          (empbuild empbuild.cpp empbuild.fdb ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbuild.epp)
 target_link_libraries   (empbuild yvalve)
 set_output_directory    (empbuild . CURRENT_DIR)
 add_dependencies_cc     (empbuild engine)

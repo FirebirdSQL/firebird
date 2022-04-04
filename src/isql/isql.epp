@@ -368,6 +368,7 @@ static processing_state drop_db();
 static processing_state edit(const TEXT* const*);
 static processing_state end_trans();
 static processing_state escape(const TEXT*);
+static processing_state execSetDebugCommand();
 static processing_state frontend(const TEXT*);
 static processing_state frontend_set(const char* cmd, const char* const* parms,
 	const char* const* lparms, char* const bad_dialect_buf, bool& bad_dialect);
@@ -400,6 +401,7 @@ static processing_state print_performance(const SINT64* perf_before);
 static void print_message(Firebird::IMessageMetadata* msg, const char* dir);
 static void process_header(Firebird::IMessageMetadata*, const unsigned pad[], TEXT header[], TEXT header2[]);
 static void process_plan();
+static void process_exec_path();
 static SINT64 process_record_count(const unsigned statement_type);
 static unsigned process_message_display(Firebird::IMessageMetadata* msg, unsigned pad[]);
 static processing_state process_statement(const TEXT*);
@@ -457,6 +459,7 @@ public:
 		Echo = false;
 		Time_display = false;
 		Sqlda_display = false;
+		ExecPathDisplay[0] = 0;
 		Stats = false;
 		Autocommit = true;	// Commit ddl
 		Warnings = true;	// Print warnings
@@ -480,6 +483,7 @@ public:
 	bool Echo;
 	bool Time_display;
 	bool Sqlda_display;
+	UCHAR ExecPathDisplay[10];
 	bool Stats;
 	bool Autocommit;	// Commit ddl
 	bool Warnings;		// Print warnings
@@ -1411,6 +1415,120 @@ processing_state ISQL_fill_var(IsqlVar* var,
 }
 
 
+// Check if statement ends with single-line comment.
+bool ISQL_statement_ends_in_comment(const char* statement)
+{
+	const char* const statementStart = statement;
+	const char* commentStart = nullptr;
+	const char* commentEnd = nullptr;
+	char altQuoteChar = '\0';
+
+	enum
+	{
+		normal,
+		in_single_line_comment,
+		in_block_comment,
+		in_single_quoted_string,
+		in_double_quoted_string
+	} state = normal;
+
+	while (char c = *statement++)
+	{
+		char lastChar = statement - 1 == statementStart ? '\0' : statement[-2];
+
+		switch (c)
+		{
+			case '\n':
+				if (state == in_single_line_comment)
+					state = normal;
+				break;
+
+			case '-':
+				// Could this the be start of a single-line comment.
+				if (state == normal && lastChar == '-')
+					state = in_single_line_comment;
+				break;
+
+			case '*':
+				// Could this the be start of a comment. We can only look back, not forward.
+				// Ignore possibilities of a comment beginning inside quoted strings.
+				if (state == normal && lastChar == '/' && statement - commentEnd > 3)
+				{
+					state = in_block_comment;
+					commentStart = statement - 2;
+				}
+				break;
+
+			case '/':
+				// Perhaps this is the end of a comment.
+				// Ignore possibilities of a comment ending inside quoted strings.
+				// Ignore things like /*/ since it isn't a block comment; only the start of it. Or end.
+				if (state == in_block_comment && lastChar == '*' && statement - commentStart > 3)
+				{
+					state = normal;
+					commentEnd = statement - 2;	// mark start of non-comment to track this: /**/*
+				}
+				break;
+
+			case SINGLE_QUOTE:
+				switch (state)
+				{
+					case normal:
+						if (lastChar == 'q' || lastChar == 'Q')
+						{
+							if (!(altQuoteChar = *statement++))
+								return false;
+
+							switch (altQuoteChar)
+							{
+								case '{':
+									altQuoteChar = '}';
+									break;
+								case '(':
+									altQuoteChar = ')';
+									break;
+								case '[':
+									altQuoteChar = ']';
+									break;
+								case '<':
+									altQuoteChar = '>';
+									break;
+							}
+						}
+						else
+							altQuoteChar = '\0';
+
+						state = in_single_quoted_string;
+						break;
+
+					case in_single_quoted_string:
+						if (!altQuoteChar || lastChar == altQuoteChar)
+							state = normal;
+						break;
+				}
+				break;
+
+			case DBL_QUOTE:
+				switch (state)
+				{
+					case normal:
+						state = in_double_quoted_string;
+						break;
+					case in_double_quoted_string:
+						state = normal;
+						break;
+				}
+				break;
+
+			default:
+				break;
+		}
+	}
+
+	return state == in_single_line_comment;
+}
+
+
 void ISQL_get_default_source(const TEXT* rel_name,
 							 TEXT* field_name,
 							 ISC_QUAD* blob_id)
@@ -1986,6 +2104,7 @@ void ISQL_print_validation(FILE* fp,
 	bool issql = false;
 	bool firsttime = true;
 	TEXT buffer[BUFFER_LENGTH512];
+	Firebird::string fullText;
 
 	do
 	{
@@ -2023,6 +2142,7 @@ void ISQL_print_validation(FILE* fp,
 		}
 
 		IUTILS_printf(fp, buffer);
+		fullText += buffer;
 	} while (true);
 
 	// CVC: If firsttime == true, then it didn't write the "/*" or the "(".
@@ -2033,6 +2153,9 @@ void ISQL_print_validation(FILE* fp,
 		ISQL_errmsg(fbStatus);
 
 	blob->close(fbStatus);
+
+	if (ISQL_statement_ends_in_comment(fullText.c_str()))
+		fputc('\n', fp);
 }
 
 
@@ -3876,7 +3999,7 @@ static processing_state copy_table(TEXT* source,
 
 	if (EXTRACT_list_table(source, destination, domain_flag, -1))
 	{
-		IUTILS_msg_get(NOT_FOUND_MSG, errbuf, SafeArg() << source);
+		IUTILS_msg_get(NOT_FOUND, errbuf, SafeArg() << source);
 		STDERROUT(errbuf);
 		fclose(isqlGlob.Out);
 	}
@@ -4665,6 +4788,27 @@ static processing_state escape(const TEXT* cmd)
 }
 
 
+static processing_state execSetDebugCommand()
+{
+	if (!DB)
+		return SKIP;
+
+	const char* stmt = setValues.ExecPathDisplay[0] ?
+		"set debug option dsql_keep_blr = true" :
+		"set debug option dsql_keep_blr = false";
+
+	DB->execute(fbStatus, nullptr, 0, stmt, isqlGlob.SQL_dialect, nullptr, nullptr, nullptr, nullptr);
+
+	if (setValues.ExecPathDisplay[0] && (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+	{
+		STDERROUT("SET EXEC_PATH_DISPLAY is not supported in this connection.");
+		return FAIL;
+	}
+
+	return SKIP;
+}
+
+
 static processing_state frontend(const TEXT* statement)
 {
 /**************************************
@@ -5053,9 +5197,8 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 		{
 			stat, count, list, plan, planonly, explain, blobdisplay, echo, autoddl,
 			width, transaction, terminator, names, time,
-//#ifdef DEV_BUILD
 			sqlda_display,
-//#endif
+			exec_path_display,
 			sql, warning, sqlCont, heading, bail,
 			bulk_insert, maxrows, stmtTimeout,
 			keepTranParams,
@@ -5082,9 +5225,8 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 		{SetOptions::terminator, "TERMINATOR", 4},
 		{SetOptions::names, "NAMES", 0},
 		{SetOptions::time, "TIME", 0},
-//#ifdef DEV_BUILD
 		{SetOptions::sqlda_display, "SQLDA_DISPLAY", 0},
-//#endif
+		{SetOptions::exec_path_display, "EXEC_PATH_DISPLAY", 0},
 		{SetOptions::sql, "SQL", 0},
 		{SetOptions::warning, "WARNINGS", 7},
 		{SetOptions::warning, "WNG", 0},
@@ -5228,11 +5370,59 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 			ret = do_set_command(parms[2], &setValues.Time_display);
 		break;
 
-//#ifdef DEV_BUILD
 	case SetOptions::sqlda_display:
 		ret = do_set_command(parms[2], &setValues.Sqlda_display);
 		break;
-//#endif // DEV_BUILD
+
+	case SetOptions::exec_path_display:
+		ret = SKIP;
+
+		if (!*parms[2])
+			ret = ps_ERR;
+		else if (strcmp(parms[2], "OFF") == 0)
+			setValues.ExecPathDisplay[0] = 0;
+		else
+		{
+			Firebird::Array<UCHAR> execPath;
+
+			for (int parNum = 2; parNum < MAX_TERMS - 1 && *parms[parNum]; ++parNum)
+			{
+				const char* param = parms[parNum];
+				UCHAR code;
+
+				if (strcmp(param, "BLR") == 0)
+					code = isc_info_sql_exec_path_blr_text;
+				else
+				{
+					ret = ps_ERR;
+					break;
+				}
+
+				if (execPath.exist(code))
+				{
+					ret = ps_ERR;
+					break;
+				}
+
+				execPath.push(code);
+			}
+
+			if (ret != ps_ERR)
+			{
+				if (execPath.getCount() < sizeof(setValues.ExecPathDisplay))
+				{
+					memcpy(setValues.ExecPathDisplay, execPath.begin(), execPath.getCount());
+					setValues.ExecPathDisplay[execPath.getCount()] = 0;
+				}
+				else
+					ret = ps_ERR;
+			}
+		}
+
+		if (ret != ps_ERR)
+			ret = execSetDebugCommand();
+
+		break;
 
 	case SetOptions::sql:
 		if (!strcmp(parms[2], "DIALECT"))
@@ -5936,6 +6126,9 @@ void ISQL_get_version(bool call_by_create_db)
 		isqlGlob.db_SQL_dialect = global_dialect_spoken;
 	else
 		isqlGlob.db_SQL_dialect = SQL_DIALECT_V5;
+
+	if (setValues.ExecPathDisplay[0])
+		execSetDebugCommand();
 }
 
 
@@ -6146,7 +6339,7 @@ static processing_state help(const TEXT* what)
 	{
 		HLP_FRONTEND,			// Frontend commands:
 		HLP_BLOBDMP,			// BLOBDUMP <blobid> <file>	-- dump BLOB to a file
-		HLP_BLOBVIEW,			// BLOBVIEW <blobid>		-- view BLOB in text editor
+		HLP_BLOBED,				// BLOBVIEW <blobid>		-- view BLOB in text editor
 		HLP_EDIT,				// EDIT	 [<filename>]		-- edit SQL script file and execute
 		HLP_EDIT2,				// EDIT						-- edit current command buffer and execute
 		HLP_HELP,				// HELP						-- display this menu
@@ -6246,6 +6439,67 @@ static bool isyesno(const TEXT* buffer)
 
 static bool printUser(const char* dbName)
 {
+	unsigned char info[] = {fb_info_username, fb_info_sqlrole};
+	unsigned char buffer[(1 + 2 + MAX_SQL_IDENTIFIER_SIZE) * 2 + 2];
+	Firebird::string login, role;
+
+	DB->getInfo(fbStatus, sizeof(info), info, sizeof(buffer), buffer);
+	if (failed())
+		return false;
+
+	UCHAR* p = buffer;
+
+	while (p)
+	{
+		unsigned int len;
+		switch (*p++)
+		{
+		case fb_info_username:
+			len = gds__vax_integer(p, 2);
+			login.assign(p + 2, len);
+			break;
+
+		case fb_info_sqlrole:
+			len = gds__vax_integer(p, 2);
+			role.assign(p + 2, len);
+			if (role == "NONE")
+				role.erase();
+			break;
+
+		default:
+			p = NULL;
+			continue;
+		}
+
+		p += (2 + len);
+	}
+
+	if (login.hasData() || role.hasData())
+	{
+		bool wasOut = dbName && dbName[0];
+		if (wasOut)
+			isqlGlob.printf("Database: %s", dbName);
+
+		if (login.hasData())
+		{
+			isqlGlob.printf("%sUser: %s", wasOut ? ", " : "", login.c_str());
+			wasOut = true;
+		}
+
+		if (role.hasData())
+		{
+			isqlGlob.printf("%sRole: %s", wasOut ? ", " : "", role.c_str());
+			wasOut = true;
+		}
+
+		if (wasOut)
+			isqlGlob.printf("%s", NEWLINE);
+
+		return true;
+	}
+
+	// fallback to SQL way to do job
+
 	if (!frontendTransaction())
 		return false;
 
@@ -6535,6 +6789,9 @@ static processing_state newdb(TEXT* dbname,
 			}
 		}
 	}
+
+	if (setValues.ExecPathDisplay[0])
+		execSetDebugCommand();
 
 	global_Stmt = NULL;
 
@@ -7637,13 +7894,13 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				else
 				{
 					if (setValues.Time_display)
-						sprintf(d, "%2d-%s-%4d %2.2d:%2.2d:%2.2d.%4.4" ULONGFORMAT,
+						sprintf(d, "%2.2d-%s-%4.4d %2.2d:%2.2d:%2.2d.%4.4" ULONGFORMAT,
 								times.tm_mday, alpha_months[times.tm_mon],
 								times.tm_year + 1900, times.tm_hour, times.tm_min,
 								times.tm_sec,
 								fractions);
 					else
-						sprintf(d, "%2d-%s-%4d", times.tm_mday,
+						sprintf(d, "%2.2d-%s-%4.4d", times.tm_mday,
 								alpha_months[times.tm_mon], times.tm_year + 1900);
 				}
 
@@ -8277,6 +8534,58 @@ static void process_plan()
 }
 
 
+static void process_exec_path()
+{
+	if (!global_Stmt)
+		return;
+
+	Firebird::Array<UCHAR> pathBuffer;
+	pathBuffer.getBuffer(MAX_USHORT, false);
+
+	for (const UCHAR* code = setValues.ExecPathDisplay; *code; ++code)
+	{
+		global_Stmt->getInfo(fbStatus, 1, code, pathBuffer.getCount(), pathBuffer.begin());
+
+		if (ISQL_errmsg(fbStatus))
+			return;
+
+		Firebird::string pathString;
+
+		for (const UCHAR* ptr = pathBuffer.begin(); ptr < pathBuffer.end();)
+		{
+			const UCHAR tag = *ptr++;
+
+			if (tag == *code)
+			{
+				const USHORT len = (USHORT) gds__vax_integer(ptr, sizeof(USHORT));
+				ptr += sizeof(USHORT);
+				pathString.assign((const char*) ptr, len);
+				ptr += len;
+			}
+			else if (tag == isc_info_end)
+				break;
+			else if (tag == isc_info_truncated)
+			{
+				pathString = "* error: overflow *\n";
+				break;
+			}
+			else
+				pathString = "* unknown error *\n";
+		}
+
+		if (pathString.hasData())
+		{
+			IUTILS_printf2(Diag, "%sExecution path (%s):%s%s%s", NEWLINE,
+				(*code == isc_info_sql_exec_path_blr_text ? "BLR" :
+				 "* unknown *"
+				),
+				NEWLINE, NEWLINE,
+				pathString.c_str());
+		}
+	}
+}
+
+
 // ***************************************
 // p r o c e s s _ r e c o r d _ c o u n t
 // ***************************************
@@ -8477,9 +8786,13 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 				pad[i] = setValues.global_Col_default;
 			disp_length = pad[i];
 
-			if (charSet == CS_UTF8)
+			if (charSet == CS_UNICODE_FSS)
+				disp_length *= 3;
+			else if (charSet == CS_UTF8)
 				disp_length *= 4;
 		}
+		else if (isqlGlob.att_charset == CS_UNICODE_FSS)
+			disp_length = MAX(disp_length, namelength * 3);
 		else if (isqlGlob.att_charset == CS_UTF8)
 			disp_length = MAX(disp_length, namelength * 4);
 
@@ -8645,7 +8958,6 @@ static processing_state process_statement(const TEXT* str2)
 		}
 	}
 
-
 	const bool is_selectable =
 		statement_type == isc_info_sql_stmt_select ||
 		statement_type == isc_info_sql_stmt_select_for_upd ||
@@ -8663,6 +8975,9 @@ static processing_state process_statement(const TEXT* str2)
 			return ret;	// do not execute
 		}
 	}
+
+	if (setValues.ExecPathDisplay[0])
+		process_exec_path();
 
 	// If the statement isn't a select, execute it and be done
 
@@ -8934,6 +9249,10 @@ static processing_state process_statement(const TEXT* str2)
 		}
 
 		curs->close(fbStatus);
+		if (ISQL_errmsg(fbStatus))
+		{
+			return ps_ERR;
+		}
 	}
 
 	// Avoid cancel during cleanup

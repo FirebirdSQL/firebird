@@ -38,14 +38,6 @@
 #include "../common/classes/auto.h"
 #include "../common/classes/ParsedList.h"
 
-#ifndef FB_EXPORTED
-#if defined(DARWIN)
-#define FB_EXPORTED __attribute__((visibility("default")))
-#else
-#define FB_EXPORTED
-#endif // OS choice (DARWIN)
-#endif // FB_EXPORTED
-
 namespace {
 
 const unsigned int SZ_LOGIN = 31;
@@ -60,7 +52,7 @@ Firebird::GlobalPtr<Firebird::ConfigKeys> keys;
 
 namespace Auth {
 
-class SrpManagement FB_FINAL : public Firebird::StdPlugin<Firebird::IManagementImpl<SrpManagement, Firebird::CheckStatusWrapper> >
+class SrpManagement final : public Firebird::StdPlugin<Firebird::IManagementImpl<SrpManagement, Firebird::CheckStatusWrapper> >
 {
 public:
 	explicit SrpManagement(Firebird::IPluginConfig* par)
@@ -342,6 +334,8 @@ public:
 			fb_assert(curAtt);
 			fb_assert(mainTra);
 			fb_assert(grAdminTra);
+
+			curAtt->execute(status, nullptr, 0, "SET BIND OF BOOLEAN TO NATIVE", SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
 
 			switch(user->operation())
 			{
@@ -984,7 +978,7 @@ static Firebird::SimpleFactory<Auth::SrpManagement> factory;
 
 } // namespace Auth
 
-extern "C" void FB_EXPORTED FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 {
 	Firebird::CachedMasterInterface::set(master);
 	Firebird::PluginManagerInterfacePtr()->registerPluginFactory(Firebird::IPluginManager::TYPE_AUTH_USER_MANAGEMENT, Auth::RemotePassword::plugName, &Auth::factory);

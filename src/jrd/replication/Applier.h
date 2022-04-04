@@ -125,7 +125,7 @@ namespace Jrd
 	public:
 		Applier(Firebird::MemoryPool& pool,
 				const Firebird::PathName& database,
-				Jrd::jrd_req* request)
+				Jrd::Request* request)
 			: PermanentStorage(pool),
 			  m_txnMap(pool), m_database(pool, database),
 			  m_request(request), m_bitmap(FB_NEW_POOL(pool) RecordBitmap(pool)), m_record(NULL)
@@ -134,21 +134,32 @@ namespace Jrd
 		static Applier* create(thread_db* tdbb);
 
 		void process(thread_db* tdbb, ULONG length, const UCHAR* data);
-
+		void cleanupTransactions(thread_db* tdbb);
 		void shutdown(thread_db* tdbb);
+
+		Attachment* getAttachment() const
+		{
+			return m_request ? m_request->req_attachment : nullptr;
+		}
+
+		void setInterfacePtr(JReplicator* interfacePtr)
+		{
+			m_interface = interfacePtr;
+		}
 
 	private:
 		TransactionMap m_txnMap;
 		const Firebird::PathName m_database;
-		jrd_req* m_request;
+		Request* m_request;
 		Firebird::AutoPtr<RecordBitmap> m_bitmap;
 		Record* m_record;
+		JReplicator* m_interface;
+		bool m_enableCascade;
 
 		void startTransaction(thread_db* tdbb, TraNumber traNum);
 		void prepareTransaction(thread_db* tdbb, TraNumber traNum);
 		void commitTransaction(thread_db* tdbb, TraNumber traNum);
 		void rollbackTransaction(thread_db* tdbb, TraNumber traNum, bool cleanup);
-		void cleanupTransactions(thread_db* tdbb);
 
 		void startSavepoint(thread_db* tdbb, TraNumber traNum);
 		void cleanupSavepoint(thread_db* tdbb, TraNumber traNum, bool undo);

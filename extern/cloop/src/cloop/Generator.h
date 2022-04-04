@@ -146,4 +146,7 @@ private:
 };
 
 
+void identify(FILE* out, unsigned ident);
+
+
 #endif	// CLOOP_GENERATOR_H

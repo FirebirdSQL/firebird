@@ -4,28 +4,28 @@
 # version 2.1 of the License, or (at your option) any later version.
 # You may obtain a copy of the Licence at
 # http://www.gnu.org/licences/lgpl.html
-# 
+#
 # As a special exception this file can also be included in modules
-# with other source code as long as that source code has been 
-# released under an Open Source Initiative certificed licence.  
-# More information about OSI certification can be found at: 
-# http://www.opensource.org 
-# 
+# with other source code as long as that source code has been
+# released under an Open Source Initiative certificed licence.
+# More information about OSI certification can be found at:
+# http://www.opensource.org
+#
 # This module is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public Licence for more details.
-# 
-# This module was created by members of the firebird development 
-# team.  All individual contributions remain the Copyright (C) of 
-# those individuals and all rights are reserved.  Contributors to 
-# this file are either listed below or can be obtained from a CVS 
+#
+# This module was created by members of the firebird development
+# team.  All individual contributions remain the Copyright (C) of
+# those individuals and all rights are reserved.  Contributors to
+# this file are either listed below or can be obtained from a CVS
 # history command.
 #
 #  Created by:  Mark O'Donohue <mark.odonohue@ludwig.edu.au>
 #
 #  Contributor(s):
-# 
+#
 #
 #  $Id: Makefile.in.v5_examples,v 1.1 2003-07-11 13:30:32 brodsom Exp $
 #
@@ -100,14 +100,14 @@ $(EXAMPLE_DB) : employee.fdb
 	$(GBAK_STATIC) -r $(EXAMPLES_DEST)employee.gbk $(EXAMPLE_DB)
 
 # Ok the following little story is, first build empbuild.fdb an empty db
-# using a script file.  Then we can compile the empbuild.e file, then we 
+# using a script file.  Then we can compile the empbuild.epp file, then we
 # can run it to create employee.fdb database populated with data by the
 # program.  Thats how I found it.
 # MOD July-2001
 #
 # Another problem here is that empbuild does not fail when it gets an error
 # so MAKE thinks it's all run ok.  empbuild should be modified to return an
-# error when it fails. 
+# error when it fails.
 # MOD 28-July-2002
 
 
@@ -122,10 +122,10 @@ employee.fdb:	empbuild$(EXEC_EXT) $(INPUT_FILES) isql$(EXEC_EXT)
 isql$(EXEC_EXT):
 	-$(LN) $(ISQL_STATIC) isql$(EXEC_EXT)
 
-empbuild$(EXEC_EXT): $(EMPBLD_Objects) $(LIBFBCOMMON_A) $(LIBFBSTATIC_A) 
+empbuild$(EXEC_EXT): $(EMPBLD_Objects) $(LIBFBCOMMON_A) $(LIBFBSTATIC_A)
 	$(EXE_LINK) $(LINK_OPTS) $(EMPBLD_Objects) -o $@ -L$(LIB) -lfbstatic -lfbcommon $(LINK_LIBS)
 
-empbuild.c:	empbuild.fdb empbuild.e
+empbuild.cpp:	empbuild.fdb empbuild.epp
 
 empbuild.fdb : $(EXAMPLES_SRC)empddl.sql $(EXAMPLES_SRC)empbld.sql
 	-$(CP) $^ .
@@ -146,12 +146,12 @@ intlemp.fdb:	intlbld$(EXEC_EXT) $(INTL_FILES)
 	./intlbld intlemp.fdb
 	-$(CHMOD_6) intlemp.fdb
 
-intlbuild.fdb : intlddl.sql intlbld.sql 
+intlbuild.fdb : intlddl.sql intlbld.sql
 	-$(RM) intlbuild.fdb
 	$(ISQL_STATIC) -i intlbld.sql
 
 
-intlbld: $(INTLBLD_Objects)  $(LIBFBCOMMON_A) $(LIBFBSTATIC_A) 
+intlbld: $(INTLBLD_Objects)  $(LIBFBCOMMON_A) $(LIBFBSTATIC_A)
 	-$(RM) $@
 	$(EXE_LINK) $(LINK_OPTS) $(INTLBLD_Objects) -o $@ -L$(LIB) -lfbstatic -lfbcommon $(LINK_LIBS)
 

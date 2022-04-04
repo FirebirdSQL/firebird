@@ -51,7 +51,7 @@ void FullTableScan::open(thread_db* tdbb) const
 {
 	Database* const dbb = tdbb->getDatabase();
 	Attachment* const attachment = tdbb->getAttachment();
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_flags = irsb_open;
@@ -112,7 +112,7 @@ void FullTableScan::open(thread_db* tdbb) const
 
 void FullTableScan::close(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	invalidateRecords(request);
 
@@ -135,7 +135,7 @@ bool FullTableScan::getRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 

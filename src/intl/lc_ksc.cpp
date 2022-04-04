@@ -139,8 +139,6 @@ static USHORT LCKSC_string_to_key(texttype* obj, USHORT iInLen, const BYTE* pInC
 {
 	fb_assert(pOutChar != NULL);
 	fb_assert(pInChar != NULL);
-	fb_assert(iInLen <= LANGKSC_MAX_KEY);
-	fb_assert(iOutLen <= LANGKSC_MAX_KEY);
 	fb_assert(iOutLen >= LCKSC_key_length(obj, iInLen));
 
 	const BYTE* inbuff = pInChar + iInLen - 1;

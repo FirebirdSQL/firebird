@@ -1961,11 +1961,6 @@
 			path = files.txt;
 			refType = 4;
 		};
-		F616C45A0200B0CF01EF0ADE = {
-			isa = PBXFileReference;
-			path = gds_codes.ftn;
-			refType = 4;
-		};
 		F616C45B0200B0CF01EF0ADE = {
 			isa = PBXFileReference;
 			path = gds_codes.pas;
@@ -4886,16 +4881,6 @@
 			path = old_proto.h;
 			refType = 4;
 		};
-		F616C66F0200B0CF01EF0ADE = {
-			isa = PBXFileReference;
-			path = opt.cpp;
-			refType = 4;
-		};
-		F616C6700200B0CF01EF0ADE = {
-			isa = PBXFileReference;
-			path = opt_proto.h;
-			refType = 4;
-		};
 		F616C6710200B0CF01EF0ADE = {
 			children = (
 				F616C6720200B0CF01EF0ADE,
@@ -5136,11 +5121,6 @@
 		F616C6A60200B0D001EF0ADE = {
 			isa = PBXFileReference;
 			path = rse.cpp;
-			refType = 4;
-		};
-		F616C6A70200B0D001EF0ADE = {
-			isa = PBXFileReference;
-			path = rse.h;
 			refType = 4;
 		};
 		F616C6A80200B0D001EF0ADE = {
@@ -5675,19 +5655,9 @@
 			path = codetext.h;
 			refType = 4;
 		};
-		F616C7F70200B0D001EF0ADE = {
-			isa = PBXFileReference;
-			path = gds_codes.ftn;
-			refType = 4;
-		};
 		F616C7F80200B0D001EF0ADE = {
 			isa = PBXFileReference;
 			path = gds_codes.pas;
-			refType = 4;
-		};
-		F616C7F90200B0D001EF0ADE = {
-			isa = PBXFileReference;
-			path = gds_header.txt;
 			refType = 4;
 		};
 		F616C7FA0200B0D001EF0ADE = {
@@ -5778,11 +5748,6 @@
 		F616C8060200B0D001EF0ADE = {
 			isa = PBXFileReference;
 			path = build_file.cpp;
-			refType = 4;
-		};
-		F616C8070200B0D001EF0ADE = {
-			isa = PBXFileReference;
-			path = build_file.epp;
 			refType = 4;
 		};
 		F616C8080200B0D001EF0ADE = {
@@ -6787,16 +6752,6 @@
 			path = winvx.cpp;
 			refType = 4;
 		};
-		F616C8C00200B0D001EF0ADE = {
-			isa = PBXFileReference;
-			path = wnet.cpp;
-			refType = 4;
-		};
-		F616C8C10200B0D001EF0ADE = {
-			isa = PBXFileReference;
-			path = wnet_proto.h;
-			refType = 4;
-		};
 		F616C8C20200B0D001EF0ADE = {
 			isa = PBXFileReference;
 			path = xdr.cpp;
@@ -7385,12 +7340,12 @@
 		};
 		F616C91E0200B0D001EF0ADE = {
 			isa = PBXFileReference;
-			path = empbuild.c;
+			path = empbuild.cpp;
 			refType = 4;
 		};
 		F616C91F0200B0D001EF0ADE = {
 			isa = PBXFileReference;
-			path = empbuild.e;
+			path = empbuild.epp;
 			refType = 4;
 		};
 		F616C9200200B0D001EF0ADE = {

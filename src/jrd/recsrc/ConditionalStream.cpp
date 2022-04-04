@@ -50,7 +50,7 @@ ConditionalStream::ConditionalStream(CompilerScratch* csb,
 
 void ConditionalStream::open(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_flags = irsb_open;
@@ -61,7 +61,7 @@ void ConditionalStream::open(thread_db* tdbb) const
 
 void ConditionalStream::close(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	invalidateRecords(request);
 
@@ -79,7 +79,7 @@ bool ConditionalStream::getRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!(impure->irsb_flags & irsb_open))
@@ -90,7 +90,7 @@ bool ConditionalStream::getRecord(thread_db* tdbb) const
 
 bool ConditionalStream::refetchRecord(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!(impure->irsb_flags & irsb_open))
@@ -101,7 +101,7 @@ bool ConditionalStream::refetchRecord(thread_db* tdbb) const
 
 bool ConditionalStream::lockRecord(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!(impure->irsb_flags & irsb_open))
@@ -146,7 +146,7 @@ void ConditionalStream::findUsedStreams(StreamList& streams, bool expandAll) con
 	m_second->findUsedStreams(streams, expandAll);
 }
 
-void ConditionalStream::invalidateRecords(jrd_req* request) const
+void ConditionalStream::invalidateRecords(Request* request) const
 {
 	m_first->invalidateRecords(request);
 	m_second->invalidateRecords(request);

@@ -165,7 +165,7 @@ int EXTRACT_ddl(LegacyTables flag, const SCHAR* tabname)
 		if (EXTRACT_list_table(tabname, NULL, true, default_char_set_id))
 		{
 			SCHAR errbuf[MSG_LENGTH];
-			IUTILS_msg_get(NOT_FOUND_MSG, errbuf, SafeArg() << tabname);
+			IUTILS_msg_get(NOT_FOUND, errbuf, SafeArg() << tabname);
 			STDERROUT(errbuf);
 			ret_code = FINI_ERROR;
 		}
@@ -517,7 +517,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 		if (!RFR.RDB$DEFAULT_SOURCE.NULL)
 		{
 			isqlGlob.printf(" ");
-			SHOW_print_metadata_text_blob (isqlGlob.Out, &RFR.RDB$DEFAULT_SOURCE);
+			SHOW_print_metadata_text_blob(isqlGlob.Out, &RFR.RDB$DEFAULT_SOURCE, false, true);
 		}
 
 		if (!RFR.RDB$GENERATOR_NAME.NULL)
@@ -829,7 +829,7 @@ static void get_procedure_args(const char* proc_name)
 					if (!prm_default_source_null)
 					{
 						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source);
+						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source, false, true);
 					}
 				}
 			}
@@ -885,12 +885,12 @@ static void get_procedure_args(const char* proc_name)
 					if (!prm_default_source_null)
 					{
 						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source);
+						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source, false, true);
 					}
 					else if (!FLD.RDB$DEFAULT_SOURCE.NULL)
 					{
 						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
+						SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE, false, true);
 					}
 				}
 			}
@@ -1053,7 +1053,7 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 					if (!prm_default_source_null)
 					{
 						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source);
+						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source, false, true);
 					}
 				}
 			}
@@ -1110,12 +1110,12 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 					if (!prm_default_source_null)
 					{
 						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source);
+						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source, false, true);
 					}
 					else if (!FLD.RDB$DEFAULT_SOURCE.NULL)
 					{
 						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
+						SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE, false, true);
 					}
 				}
 			}
@@ -1414,10 +1414,13 @@ static processing_state list_all_grants2(bool show_role_list, const SCHAR* termi
 		***/
 
 		// Process DDL permissions
-		for (int i = obj_database; i < obj_type_MAX; i++)
+		for (SSHORT obj = obj_database; obj < obj_type_MAX; obj++)
 		{
+			if (!isDdlObject(obj))
+				continue;
+
 			const processing_state rc =
-				SHOW_grants2(get_object_name(i), terminator, i, first ? banner : 0, mangle);
+				SHOW_grants2(getSecurityClassName(obj), terminator, obj, first ? banner : 0, mangle);
 			if (rc == SKIP)
 				first = false;
 		}
@@ -2341,7 +2344,7 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 		if (!FLD.RDB$DEFAULT_SOURCE.NULL)
 		{
 			isqlGlob.printf("%s%s ", NEWLINE, TAB_AS_SPACES);
-			SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
+			SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE, false, true);
 		}
 		if (!FLD.RDB$VALIDATION_SOURCE.NULL)
 		{
@@ -2468,7 +2471,7 @@ static void list_domains(SSHORT default_char_set_id)
 		if (!FLD.RDB$DEFAULT_SOURCE.NULL)
 		{
 			isqlGlob.printf("%s%s ", NEWLINE, TAB_AS_SPACES);
-			SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
+			SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE, false, true);
 		}
 		// Validation moved to listDomainConstraints().
 		if (FLD.RDB$NULL_FLAG == 1)
@@ -3366,7 +3369,7 @@ static void list_indexes()
 		{
 			isqlGlob.printf(" COMPUTED BY ");
 			if (!IDX.RDB$EXPRESSION_SOURCE.NULL)
-				SHOW_print_metadata_text_blob (isqlGlob.Out, &IDX.RDB$EXPRESSION_SOURCE);
+				SHOW_print_metadata_text_blob(isqlGlob.Out, &IDX.RDB$EXPRESSION_SOURCE, false, true);
 		}
 		else if (ISQL_get_index_segments (collist, sizeof(collist), IDX.RDB$INDEX_NAME, true))
 		{

@@ -347,6 +347,9 @@ public:
 
 private:
 	Firebird::Semaphore svc_sem_empty, svc_sem_full;
+	bool svc_output_overflow;
+
+	void unblockQueryGet(bool over = false);
 
 	class Validate
 	{

@@ -355,7 +355,7 @@ namespace Firebird
 		virtual void finish(dsc& result) = 0;
 	};
 
-	class WeakHashContext FB_FINAL : public HashContext
+	class WeakHashContext final : public HashContext
 	{
 	public:
 		virtual void update(const void* data, FB_SIZE_T length);
@@ -389,31 +389,31 @@ namespace Firebird
 		UCharBuffer buffer;
 	};
 
-	class Md5HashContext FB_FINAL : public LibTomCryptHashContext
+	class Md5HashContext final : public LibTomCryptHashContext
 	{
 	public:
 		Md5HashContext(MemoryPool& pool);
 	};
 
-	class Sha1HashContext FB_FINAL : public LibTomCryptHashContext
+	class Sha1HashContext final : public LibTomCryptHashContext
 	{
 	public:
 		Sha1HashContext(MemoryPool& pool);
 	};
 
-	class Sha256HashContext FB_FINAL : public LibTomCryptHashContext
+	class Sha256HashContext final : public LibTomCryptHashContext
 	{
 	public:
 		Sha256HashContext(MemoryPool& pool);
 	};
 
-	class Sha512HashContext FB_FINAL : public LibTomCryptHashContext
+	class Sha512HashContext final : public LibTomCryptHashContext
 	{
 	public:
 		Sha512HashContext(MemoryPool& pool);
 	};
 
-	class Crc32HashContext FB_FINAL : public HashContext
+	class Crc32HashContext final : public HashContext
 	{
 	public:
 		Crc32HashContext(MemoryPool& pool);

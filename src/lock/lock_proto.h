@@ -552,7 +552,7 @@ private:
 
 	SRQ_PTR REL_PTR(const void* item);
 	void* ABS_PTR(SRQ_PTR item);
-	bool createExtent();
+	bool createExtent(ULONG memorySize = 0);
 #endif
 };
 

@@ -145,7 +145,7 @@ int main()
 	/*IProvider* prov = master->getDispatcher();
 	IAttachment* att = NULL;*/
 	IUtil* utl = master->getUtilInterface();
-	IStatement* statemt = NULL;
+	IStatement* statement = NULL;
 	ITransaction* tra = NULL;
 	IBatch* batch = NULL;
 	IBatchCompletionState* cs = NULL;
@@ -185,7 +185,7 @@ int main()
 		if (isc_dsql_prepare(st, &tr, &stmt, 0, sqlStmt1, 3, NULL))
 			raiseError(status, st);
 		// and get it's interface
-		if (fb_get_statement_interface(st, &statemt, &stmt))
+		if (fb_get_statement_interface(st, &statement, &stmt))
 			raiseError(status, st);
 
 		// Message to store in a table
@@ -202,7 +202,7 @@ int main()
 		pb->insertInt(&status, IBatch::TAG_RECORD_COUNTS, 1);
 
 		// create batch
-		batch = statemt->createBatch(&status, meta,
+		batch = statement->createBatch(&status, meta,
 			pb->getBufferLength(&status), pb->getBuffer(&status));
 
 		// fill batch with data record by record
@@ -223,8 +223,8 @@ int main()
 		batch = NULL;
 
 		// unprepare statement
-		statemt->release();
-		statemt = NULL;
+		statement->release();
+		statement = NULL;
 		if (isc_dsql_free_statement(st, &stmt, DSQL_unprepare))
 			raiseError(status, st);
 
@@ -237,7 +237,7 @@ int main()
 		if (isc_dsql_prepare(st, &tr, &stmt, 0, sqlStmt2, 3, NULL))
 			raiseError(status, st);
 		// and get it's interface
-		if (fb_get_statement_interface(st, &statemt, &stmt))
+		if (fb_get_statement_interface(st, &statement, &stmt))
 			raiseError(status, st);
 
 		// Message to store in a table
@@ -255,7 +255,7 @@ int main()
 		pb->insertInt(&status, IBatch::TAG_BLOB_POLICY, IBatch::BLOB_ID_ENGINE);
 
 		// create batch
-		batch = statemt->createBatch(&status, meta,
+		batch = statement->createBatch(&status, meta,
 			pb->getBufferLength(&status), pb->getBuffer(&status));
 
 		// create blob
@@ -283,8 +283,8 @@ int main()
 		batch = NULL;
 
 		// unprepare statement
-		statemt->release();
-		statemt = NULL;
+		statement->release();
+		statement = NULL;
 		if (isc_dsql_free_statement(st, &stmt, DSQL_drop))
 			raiseError(status, st);
 
@@ -312,8 +312,8 @@ int main()
 		batch->release();
 	if (tra)
 		tra->release();
-	if (statemt)
-		statemt->release();
+	if (statement)
+		statement->release();
 
 	// close handles if not closed
 	if (blb)

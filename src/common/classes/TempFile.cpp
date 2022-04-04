@@ -48,6 +48,7 @@
 #include "../common/os/os_utils.h"
 #include "../common/os/path_utils.h"
 #include "../common/classes/init.h"
+#include "../common/os/mac_utils.h"
 
 #include "../common/classes/TempFile.h"
 
@@ -68,8 +69,11 @@ static const char* DEFAULT_PATH =
 #endif
 
 static const char* const NAME_PATTERN = "XXXXXX";
+
+#ifdef WIN_NT
 static const char* const NAME_LETTERS = "abcdefghijklmnopqrstuvwxyz0123456789";
 static const FB_SIZE_T MAX_TRIES = 256;
+#endif
 
 // we need a class here only to return memory on shutdown and avoid
 // false memory leak reports
@@ -102,7 +106,11 @@ PathName TempFile::getTempPath()
 	}
 	if (path.empty())
 	{
-		path = DEFAULT_PATH;
+		const char* tmp = getTemporaryFolder();
+		if (tmp)
+			path = tmp;
+		else
+			path = DEFAULT_PATH;
 	}
 
 	fb_assert(path.length());
@@ -134,6 +142,9 @@ PathName TempFile::create(const PathName& prefix, const PathName& directory)
 //
 // Creates a temporary file and returns its name.
 // In error case store exception in status arg.
+//
+// Make sure exception will not be passed to the end-user as it
+// contains server-side directory and it could break security!
 //
 
 PathName TempFile::create(CheckStatusWrapper* status, const PathName& prefix, const PathName& directory)
@@ -201,11 +212,18 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 			filename = name;
 			break;
 		}
+		const DWORD err = GetLastError();
+		if (err != ERROR_FILE_EXISTS)
+		{
+			(Arg::Gds(isc_io_error) << Arg::Str("CreateFile (create)") << Arg::Str(name) <<
+				Arg::Gds(isc_io_create_err) << Arg::OsError(err)).raise();
+		}
 		randomness++;
 	}
 	if (handle == INVALID_HANDLE_VALUE)
 	{
-		system_error::raise("CreateFile");
+		(Arg::Gds(isc_io_error) << Arg::Str("CreateFile (create)") << Arg::Str(filename) <<
+			Arg::Gds(isc_io_create_err) << Arg::OsError()).raise();
 	}
 #else
 	filename += prefix;
@@ -216,7 +234,8 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 #else
 	if (!mktemp(filename.begin()))
 	{
-		system_error::raise("mktemp");
+		(Arg::Gds(isc_io_error) << Arg::Str("mktemp") << Arg::Str(filename) <<
+			Arg::Gds(isc_io_create_err) << Arg::OsError()).raise();
 	}
 
 	handle = os_utils::open(filename.c_str(), O_RDWR | O_EXCL | O_CREAT);
@@ -224,7 +243,8 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 
 	if (handle == -1)
 	{
-		system_error::raise("open");
+		(Arg::Gds(isc_io_error) << Arg::Str("open") << Arg::Str(filename) <<
+			Arg::Gds(isc_io_create_err) << Arg::OsError()).raise();
 	}
 
 	if (doUnlink)

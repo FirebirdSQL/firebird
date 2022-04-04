@@ -1,0 +1,49 @@
+# The contents of this file are subject to the Interbase Public
+# License Version 1.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy
+# of the License at http://www.Inprise.com/IPL.html
+#
+# Software distributed under the License is distributed on an
+# "AS IS" basis, WITHOUT WARRANTY OF ANY KIND, either express
+# or implied. See the License for the specific language governing
+# rights and limitations under the License.
+#
+# The Original Code was created by Inprise Corporation
+# and its predecessors. Portions created by Inprise Corporation are
+#
+# Copyright (C) 2000 Inprise Corporation
+# All Rights Reserved.
+# Contributor(s): ______________________________________.
+# Start of file prefix.darwin:	$(VERSION)	@PLATFORM@
+# 2 Oct 2002, Nickolay Samofatov - Major Cleanup
+#
+# Default build from 10.9 using Clang
+#
+# Build instructions
+# set CFLAGS='-I (ICUDIR)/icu/source/common' (ucnv.h)
+# set LDFLAGS='-L(ICUDIR)/icu/source/lib' (-licuuc)
+# set CXXFLAGS='-I (ICUDIR)/icu/source/common -I ICUDIR/icu/source/i18n'
+# where ICUDIR is where you installed ICU
+# configure using --with-builtin-tommath
+# or add the relevant -I, -L for an installed version of libtommath
+
+#DYLD_PRINT_ENV=1
+#export DYLD_PRINT_ENV
+
+#DYLD_PRINT_LIBRARIES=1
+#export DYLD_PRINT_LIBRARIES
+
+MACOSX_DEPLOYMENT_TARGET=12.0
+export MACOSX_DEPLOYMENT_TARGET
+
+PROD_FLAGS=-DDARWIN -DARM64 -pipe -O2 -MMD -fPIC -fno-common -mmacosx-version-min=12.0
+DEV_FLAGS=-ggdb -DDARWIN -DARM64 -pipe -MMD -fPIC -fno-omit-frame-pointer -fno-common -Wall -fno-optimize-sibling-calls -mmacosx-version-min=12.0 -Wno-non-virtual-dtor
+CXXFLAGS:=$(CXXFLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -stdlib=libc++
+
+UNDEF_PLATFORM=
+
+LINK_LIBS+=-liconv
+#MATHLIB=$(ROOT)/extern/libtommath/.libs/libtommath.a
+SO_LINK_LIBS+=-liconv
+
+include $(ROOT)/gen/darwin.defaults

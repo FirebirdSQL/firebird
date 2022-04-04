@@ -98,6 +98,8 @@ typedef ULONG (*pfn_INTL_str2case) (
 
 /*
   Places exactly texttype_canonical_width number of bytes into dst for each character from src.
+  src (srcLen) string may be a truncated string and in this case this function must consider
+  it as valid and process only the fully read characters.
   Returns INTL_BAD_STR_LENGTH in case of error or number of characters processed if successful.
  */
 typedef ULONG (*pfn_INTL_canonical) (

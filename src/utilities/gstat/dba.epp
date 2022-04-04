@@ -452,10 +452,14 @@ int gstat(Firebird::UtilSvc* uSvc)
 		const Switches::in_sw_tab_t* in_sw_tab = switches.findSwitch(str);
 		if (!in_sw_tab)
 		{
-			if (!str[1])
-				str = "-*NONE*";
-			dba_print(true, 20, SafeArg() << (str + 1));	// msg 20: unknown switch "%s"
-			print_help();
+			if (!tddba->uSvc->isService())		// normally service manager doesn't pass illegal switches
+			{
+				if (!str[1])
+					str = "-*NONE*";
+				dba_print(true, 20, SafeArg() << (str + 1));	// msg 20: unknown switch "%s"
+				print_help();
+			}
+
 			dba_error(1);	// msg 1: found unknown switch
 			break; // redundant
 		}
@@ -593,18 +597,13 @@ int gstat(Firebird::UtilSvc* uSvc)
 	const Firebird::PathName connName = fileName;
 	Firebird::PathName tempStr;
 
-#ifdef WIN_NT
-	if (!ISC_analyze_pclan(fileName, tempStr))
-#endif
+	if (!ISC_analyze_tcp(fileName, tempStr))
 	{
-		if (!ISC_analyze_tcp(fileName, tempStr))
-		{
 #ifndef NO_NFS
-			if (!ISC_analyze_nfs(fileName, tempStr))
+		if (!ISC_analyze_nfs(fileName, tempStr))
 #endif
-			{
-				fileName = connName;
-			}
+		{
+			fileName = connName;
 		}
 	}
 

@@ -37,12 +37,12 @@
 
 #include "firebird.h"
 #include "../dsql/chars.h"
-#include "../dsql/sqlda.h"
+#include "firebird/impl/sqlda_pub.h"
 #include "../yvalve/gds_proto.h"
 #include "../yvalve/why_proto.h"
 #include "../yvalve/user__proto.h"
 #include "../yvalve/utl_proto.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../common/classes/init.h"
 #include "../common/classes/rwlock.h"
 #include "../common/StatusArg.h"
@@ -50,6 +50,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
+// SQLDA dialects
+const USHORT DIALECT_sqlda	= 0;
+//const USHORT DIALECT_xsqlda	= 1;	// meaning is same as SQL_DIALECT_V5
 
 using namespace Firebird;
 
@@ -686,7 +690,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_release(ISC_STATUS* user_status, const SCH
 ISC_STATUS API_ROUTINE isc_dsql_fetch_a(ISC_STATUS* user_status,
 										int* sqlcode,
 										int* stmt_handle,
-										USHORT dialect, int* sqlda)
+										USHORT dialect, XSQLDA* sqlda)
 {
 /**************************************
  *
@@ -701,7 +705,7 @@ ISC_STATUS API_ROUTINE isc_dsql_fetch_a(ISC_STATUS* user_status,
 	*sqlcode = 0;
 
 	const ISC_STATUS s = isc_dsql_fetch(user_status, reinterpret_cast<FB_API_HANDLE*>(stmt_handle),
-										dialect, reinterpret_cast<XSQLDA*>(sqlda));
+										dialect, sqlda);
 	if (s == 100)
 		*sqlcode = 100;
 
@@ -778,10 +782,10 @@ ISC_STATUS API_ROUTINE isc_fetch(ISC_STATUS* status_vector,
 
 ISC_STATUS API_ROUTINE isc_fetch_a(ISC_STATUS* status_vector,
 								   int *sqlcode,
-								   const SCHAR* cursor_name, SQLDA* sqlda)
+								   const SCHAR* cursor_name, XSQLDA* sqlda)
 {
 	return isc_embed_dsql_fetch_a(status_vector, sqlcode, cursor_name, DIALECT_sqlda,
-								  reinterpret_cast<XSQLDA*>(sqlda));
+								  sqlda);
 }
 
 ISC_STATUS API_ROUTINE isc_open(ISC_STATUS* status_vector,
@@ -809,7 +813,7 @@ ISC_STATUS API_ROUTINE isc_dsql_release(ISC_STATUS*	status_vector, const SCHAR* 
 	return isc_embed_dsql_release(status_vector, statement_name);
 }
 
-int API_ROUTINE isc_to_sqlda(SQLDA*	,	// sqlda
+int API_ROUTINE isc_to_sqlda(XSQLDA*	,	// sqlda
 							int		,	// number
 							SCHAR*	,	// host_var
 							int		,	// host_var_size
@@ -844,16 +848,16 @@ ISC_STATUS API_ROUTINE gds__declare(ISC_STATUS*	status_vector,
 
 ISC_STATUS API_ROUTINE gds__describe(ISC_STATUS*	status_vector,
 									 const SCHAR*	statement_name,
-									 SQLDA*	sqlda)
+									 XSQLDA*	sqlda)
 {
-	return isc_describe(status_vector, statement_name, reinterpret_cast<XSQLDA*>(sqlda));
+	return isc_describe(status_vector, statement_name, sqlda);
 }
 
 ISC_STATUS API_ROUTINE gds__describe_bind(ISC_STATUS*	status_vector,
 										  const SCHAR*	statement_name,
-										  SQLDA*	sqlda)
+										  XSQLDA*	sqlda)
 {
-	return isc_describe_bind(status_vector, statement_name, reinterpret_cast<XSQLDA*>(sqlda));
+	return isc_describe_bind(status_vector, statement_name, sqlda);
 }
 
 ISC_STATUS API_ROUTINE gds__dsql_finish(FB_API_HANDLE* db_handle)
@@ -864,9 +868,9 @@ ISC_STATUS API_ROUTINE gds__dsql_finish(FB_API_HANDLE* db_handle)
 ISC_STATUS API_ROUTINE gds__execute(ISC_STATUS*	status_vector,
 									FB_API_HANDLE*	tra_handle,
 									const SCHAR*	statement_name,
-									SQLDA*	sqlda)
+									XSQLDA*	sqlda)
 {
-	return isc_execute(status_vector, tra_handle, statement_name, reinterpret_cast<XSQLDA*>(sqlda));
+	return isc_execute(status_vector, tra_handle, statement_name, sqlda);
 }
 
 ISC_STATUS API_ROUTINE gds__execute_immediate(ISC_STATUS*	status_vector,
@@ -880,15 +884,15 @@ ISC_STATUS API_ROUTINE gds__execute_immediate(ISC_STATUS*	status_vector,
 
 ISC_STATUS API_ROUTINE gds__fetch(ISC_STATUS*	status_vector,
 								  const SCHAR*	statement_name,
-								  SQLDA*	sqlda)
+								  XSQLDA*	sqlda)
 {
-	return isc_fetch(status_vector, statement_name, reinterpret_cast<XSQLDA*>(sqlda));
+	return isc_fetch(status_vector, statement_name, sqlda);
 }
 
 ISC_STATUS API_ROUTINE gds__fetch_a(ISC_STATUS*	status_vector,
 									int*	sqlcode,
 									const SCHAR*	statement_name,
-									SQLDA*	sqlda)
+									XSQLDA*	sqlda)
 {
 	return isc_fetch_a(status_vector, sqlcode, statement_name, sqlda);
 }
@@ -896,9 +900,9 @@ ISC_STATUS API_ROUTINE gds__fetch_a(ISC_STATUS*	status_vector,
 ISC_STATUS API_ROUTINE gds__open(ISC_STATUS*	status_vector,
 								 FB_API_HANDLE*	tra_handle,
 								 const SCHAR*		cursor_name,
-								 SQLDA*		sqlda)
+								 XSQLDA*		sqlda)
 {
-	return isc_open(status_vector, tra_handle, cursor_name, reinterpret_cast<XSQLDA*>(sqlda));
+	return isc_open(status_vector, tra_handle, cursor_name, sqlda);
 }
 
 ISC_STATUS API_ROUTINE gds__prepare(ISC_STATUS*	status_vector,
@@ -907,13 +911,13 @@ ISC_STATUS API_ROUTINE gds__prepare(ISC_STATUS*	status_vector,
 									const SCHAR*	statement_name,
 									const SSHORT*	sql_length,
 									const SCHAR*	sql,
-									SQLDA*	sqlda)
+									XSQLDA*	sqlda)
 {
 	return isc_prepare(status_vector, db_handle, tra_handle, statement_name,
-					   sql_length, sql, reinterpret_cast<XSQLDA*>(sqlda));
+					   sql_length, sql, sqlda);
 }
 
-ISC_STATUS API_ROUTINE gds__to_sqlda(SQLDA* sqlda, int number,
+ISC_STATUS API_ROUTINE gds__to_sqlda(XSQLDA* sqlda, int number,
 								 	 SCHAR* host_variable, int host_variable_size,
 								 	 SCHAR* host_variable_name)
 {

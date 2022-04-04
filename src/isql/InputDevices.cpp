@@ -25,6 +25,8 @@
 #if defined(DARWIN) && !defined(IOS)
 #if defined(i386) || defined(__x86_64__)
 #include <architecture/i386/io.h>
+#elif defined(__aarch64__)
+#include <sys/uio.h>
 #else
 #include <io.h>
 #endif

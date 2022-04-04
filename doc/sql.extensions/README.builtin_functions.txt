@@ -485,7 +485,7 @@ Important:
 
 Example:
     select encrypt('897897' using sober128 key 'AbcdAbcdAbcdAbcd' iv '01234567') from rdb$database;
-    select decrypt(x'0154090759DF' using sober128 key 'AbcdAbcdAbcdAbcd' iv '01234567') from rdb$database;
+    select cast(decrypt(x'0154090759DF' using sober128 key 'AbcdAbcdAbcdAbcd' iv '01234567') as varchar(128)) from rdb$database;
     select decrypt(secret_field using aes mode ofb key '0123456701234567' iv init_vector) from secure_table;
 
 
@@ -721,22 +721,22 @@ Notes:
     1) If the first argument (relation) is a string expression or literal, then
        it's treated as a relation name and the engine searches for the
        corresponding relation ID. The search is case-sensitive.
-       In the case of string literal, relation ID is evaluated at prepare time. 
-       In the case of expression, relation ID is evaluated at execution time. 
+       In the case of string literal, relation ID is evaluated at prepare time.
+       In the case of expression, relation ID is evaluated at execution time.
        If the relation couldn't be found, then isc_relnotdef error is raised.
-    2) If the first argument (relation) is a numeric expression or literal, then 
+    2) If the first argument (relation) is a numeric expression or literal, then
        it's treated as a relation ID and used "as is", without verification
        against existing relations.
        If the argument value is negative or greater than the maximum allowed
        relation ID (65535 currently), then NULL is returned.
-    3) Second argument (recnum) represents an absolute record number in relation 
+    3) Second argument (recnum) represents an absolute record number in relation
        (if the next arguments -- dpnum and ppnum -- are missing), or a record
        number relative to the first record, specified by the next arguments.
-    4) Third argument (dpnum) is a logical number of data page in relation (if 
+    4) Third argument (dpnum) is a logical number of data page in relation (if
        the next argument -- ppnum -- is missing), or number of data page
        relative to the first data page addressed by the given ppnum.
     5) Forth argument (ppnum) is a logical number of pointer page in relation.
-    6) All numbers are zero-based. 
+    6) All numbers are zero-based.
 	   Maximum allowed value for dpnum and ppnum is 2^32 (4294967296).
 	   If dpnum is specified, then recnum could be negative.
 	   If dpnum is missing and recnum is negative then NULL is returned.
@@ -763,7 +763,7 @@ Examples:
 		 where rdb$db_key >= make_dbkey(6, 0, 0)
 		   and rdb$db_key <  make_dbkey(6, 0, 1)
 
-	4) Select all records that physically reside at first data page of 6th pointer 
+	4) Select all records that physically reside at first data page of 6th pointer
 	   page at relation
 
 		select * from SOMETABLE
@@ -1069,11 +1069,13 @@ Function:
     short symmetric keys which are then used in block ciphers to encrypt a message.
 
 Format:
-    RSA_ENCRYPT ( <string> KEY <public key> [LPARAM <string>] [HASH <hash>] )
+    RSA_ENCRYPT ( <string> KEY <public key> [LPARAM <string>] [HASH <hash>] [PKCS_1_5] )
         KEY should be a value, returhed by RSA_PUBLIC function.
         LPARAM is an additional system specific tag that can be applied to identify which
             system encoded the message. Default value is NULL.
         hash ::= { MD5 | SHA1 | SHA256 | SHA512 } Default is SHA256.
+        PKCS_1_5 makes engine use old padding, needed for backward compatibility.
+            Due to security reasons should NOT be used in new projects.
 
 Example:
     (tip - start running samples one by one from RSA_PRIVATE function)
@@ -1089,57 +1091,61 @@ Function:
     Decrypts using RSA private key and OAEP de-pads the resulting data.
 
 Format:
-    RSA_DECRYPT ( <string> KEY <private key> [LPARAM <string>] [HASH <hash>] )
+    RSA_DECRYPT ( <string> KEY <private key> [LPARAM <string>] [HASH <hash>] [PKCS_1_5] )
         KEY should be a value, returhed by RSA_PRIVATE function.
         LPARAM is the same variable passed to RSA_ENCRYPT. If it does not match
           what was used during encoding this function will not decrypt the packet.
         hash ::= { MD5 | SHA1 | SHA256 | SHA512 } Default is SHA256.
+        PKCS_1_5 makes engine use old padding, needed for backward compatibility.
+            Due to security reasons should NOT be used in new projects.
 
 Example:
     (tip - start running samples one by one from RSA_PRIVATE function)
-    select rsa_decrypt(rdb$get_context('USER_SESSION', 'msg')
-        key rdb$get_context('USER_SESSION', 'private_key')) from rdb$database;
+    select cast(rsa_decrypt(rdb$get_context('USER_SESSION', 'msg')
+        key rdb$get_context('USER_SESSION', 'private_key')) as varchar(128)) from rdb$database;
 
 
---------
-RSA_SIGN
---------
+-------------
+RSA_SIGN_HASH
+-------------
 
 Function:
     Performs PSS encoding of message digest to be signed and signs using RSA private key.
 
 Format:
-    RSA_SIGN ( <string> KEY <private key> [HASH <hash>] [SALT_LENGTH <smallint>] )
+    RSA_SIGN_HASH ( <string> KEY <private key> [HASH <hash>] [SALT_LENGTH <smallint>] [PKCS_1_5] )
         KEY should be a value, returhed by RSA_PRIVATE function.
         hash ::= { MD5 | SHA1 | SHA256 | SHA512 } Default is SHA256.
         SALT_LENGTH indicates the length of the desired salt, and should typically be small.
             A good value is between 8 and 16.
+        PKCS_1_5 makes engine use old padding, needed for backward compatibility.
 
 Example:
     (tip - start running samples one by one from RSA_PRIVATE function)
-    select rdb$set_context('USER_SESSION', 'msg', rsa_sign(hash('Test message' using sha256)
+    select rdb$set_context('USER_SESSION', 'msg', rsa_sign_hash(crypt_hash('Test message' using sha256)
         key rdb$get_context('USER_SESSION', 'private_key'))) from rdb$database;
 
 
-----------
-RSA_VERIFY
-----------
+---------------
+RSA_VERIFY_HASH
+---------------
 
 Function:
     Performs PSS encoding of message digest to be signed and verifies it's digital signature
         using RSA public key.
 
 Format:
-    RSA_VERIFY ( <string> SIGNATURE <string> KEY <public key> [HASH <hash>] [SALT_LENGTH <smallint>] )
+    RSA_VERIFY_HASH ( <string> SIGNATURE <string> KEY <public key> [HASH <hash>] [SALT_LENGTH <smallint>] [PKCS_1_5] )
         SIGNATURE should be a value, returhed by RSA_SIGN function.
         KEY should be a value, returhed by RSA_PUBLIC function.
         hash ::= { MD5 | SHA1 | SHA256 | SHA512 } Default is SHA256.
         SALT_LENGTH indicates the length of the desired salt, and should typically be small.
             A good value is between 8 and 16.
+        PKCS_1_5 makes engine use old padding, needed for backward compatibility.
 
 Example:
     (tip - start running samples one by one from RSA_PRIVATE function)
-    select rsa_verify(hash('Test message' using sha256) signature rdb$get_context('USER_SESSION', 'msg')
+    select rsa_verify_hash(crypt_hash('Test message' using sha256) signature rdb$get_context('USER_SESSION', 'msg')
         key rdb$get_context('USER_SESSION', 'public_key')) from rdb$database;
 
 
@@ -1253,6 +1259,41 @@ Example:
     1) select trunc(x) from y;
     2) select trunc(-2.8), trunc(2.8) from rdb$database;  -- returns -2, 2
     3) select trunc(987.65, 1), trunc(987.65, -1) from rdb$database;  -- returns 987.60, 980.00
+
+
+------------
+UNICODE_CHAR
+------------
+
+Function:
+    Returns the UNICODE character with the specified code point.
+
+Format:
+    UNICODE_CHAR( <number> )
+
+Notes:
+    Argument to UNICODE_CHAR must be a valid UNICODE code point and not in the range of
+    high/low surrogates (0xD800 to 0xDFFF). Otherwise it throws an error.
+
+Example:
+    select unicode_char(x) from y;
+
+
+-----------
+UNICODE_VAL
+-----------
+
+Function:
+    Returns the UNICODE code point of the first character of the specified string.
+
+Format:
+    UNICODE_VAL( <string> )
+
+Notes:
+    Returns 0 if the string is empty.
+
+Example:
+    select unicode_val(x) from y;
 
 
 ------------

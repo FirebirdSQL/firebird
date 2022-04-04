@@ -21,7 +21,7 @@
 # Notes:
 
 # Firebird requires the HP-UX Atomic APIs ("AtomicAPI" bundle), released as an
-# optional Software Pack (SPK) for HP-UX 11i v2 or v3. 
+# optional Software Pack (SPK) for HP-UX 11i v2 or v3.
 
 # Before attempting the HPUX build, you must export necessary
 # CFLAGS and CXXFLAGS to be picked up by the configure process and
@@ -60,15 +60,12 @@ COMMON_FLAGS= -DHP11 -DHPUX -D_XOPEN_SOURCE_EXTENDED -D_HP_ATOMIC_INLINE \
 
 # Flags specific to production or debug build...
 # -z, disallow dereferencing of null pointers at runtime
-# -DLIBC_CALLS_NEW, Firebird macro, used when C++ runtime can call
-#   redefined by us operator new before initialization of global variables.
-#   Required on IA-64, but evidently only by debug build!?
 
 ifeq ($(shell uname -m),ia64)
 # ...for IA-64
 PROD_FLAGS= +O2 +Onolimit +Ofltacc=strict +Ofenvaccess \
 	$(COMMON_FLAGS)
-DEV_FLAGS= -g -z -DLIBC_CALLS_NEW \
+DEV_FLAGS= -g -z \
 	$(COMMON_FLAGS)
 else
 # ...for PA-RISC

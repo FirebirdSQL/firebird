@@ -40,7 +40,7 @@ namespace Jrd {
 
 class thread_db;
 class jrd_prc;
-class jrd_req;
+class Request;
 class jrd_tra;
 class Attachment;
 class CompilerScratch;
@@ -55,14 +55,14 @@ struct impure_value;
 struct record_param;
 
 
-class ExtEngineManager FB_FINAL : public Firebird::PermanentStorage
+class ExtEngineManager final : public Firebird::PermanentStorage
 {
 private:
 	class AttachmentImpl;
 	template <typename T> class ContextManager;
 	class TransactionImpl;
 
-	class RoutineMetadata FB_FINAL :
+	class RoutineMetadata final :
 		public Firebird::VersionedIface<Firebird::IRoutineMetadataImpl<RoutineMetadata, Firebird::CheckStatusWrapper> >,
 		public Firebird::PermanentStorage
 	{
@@ -280,12 +280,12 @@ public:
 			Firebird::IExternalTrigger* aTrigger, const Jrd::Trigger* aTrg);
 		~Trigger();
 
-		void execute(thread_db* tdbb, jrd_req* request, unsigned action,
+		void execute(thread_db* tdbb, Request* request, unsigned action,
 			record_param* oldRpb, record_param* newRpb) const;
 
 	private:
 		void setupComputedFields(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb);
-		void setValues(thread_db* tdbb, jrd_req* request, Firebird::Array<UCHAR>& msgBuffer, record_param* rpb) const;
+		void setValues(thread_db* tdbb, Request* request, Firebird::Array<UCHAR>& msgBuffer, record_param* rpb) const;
 
 	public:
 		Firebird::Array<NestConst<StmtNode>> computedStatements;

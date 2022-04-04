@@ -207,7 +207,6 @@
 #if _MSC_VER < 1500
 #define vsnprintf _vsnprintf
 #endif
-#define isnan _isnan
 #endif
 
 #if !defined(HAS_NOEXCEPT)
@@ -286,9 +285,6 @@
 #define FB_SERVICE_NAME "gds_db"
 #define FB_SERVICE_PORT 3050
 
-/* Wnet pipe name */
-#define FB_PIPE_NAME "interbas"
-
 /* Xnet objects name */
 #define FB_IPC_NAME "FIREBIRD"
 
@@ -326,7 +322,6 @@
 #define FB_CONFDIR ""
 #define FB_DOCDIR ""
 #define FB_GUARDDIR ""
-#define FB_HELPDIR ""
 #define FB_INCDIR ""
 #define FB_INTLDIR ""
 #define FB_LIBDIR ""
@@ -345,5 +340,7 @@
 #ifndef HAVE_SOCKLEN_T
 typedef int socklen_t;
 #endif
+
+#define FB_INT64_COMPARE_FAILED 0
 
 #endif

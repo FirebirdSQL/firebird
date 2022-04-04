@@ -234,7 +234,7 @@ private:
 	{
 		unsigned l = aMeta->getMessageLength(&statusWrapper);
 		check(&statusWrapper);
-		buffer = new unsigned char[l];
+		buffer = FB_NEW unsigned char[l];
 	}
 
 public:
@@ -336,7 +336,7 @@ public:
 
 		if (!charBuffer)
 		{
-			charBuffer = new char[size + 1];
+			charBuffer = FB_NEW char[size + 1];
 		}
 		getStrValue(charBuffer);
 		return charBuffer;

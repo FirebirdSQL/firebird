@@ -60,7 +60,7 @@
 #include "../yvalve/gds_proto.h"
 #include "../jrd/err_proto.h"
 
-#include "gen/iberror.h"
+#include "iberror.h"
 
 #include <string.h>
 

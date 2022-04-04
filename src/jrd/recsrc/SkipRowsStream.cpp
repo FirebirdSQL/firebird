@@ -46,7 +46,7 @@ SkipRowsStream::SkipRowsStream(CompilerScratch* csb, RecordSource* next, ValueEx
 
 void SkipRowsStream::open(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_flags = irsb_open;
@@ -66,7 +66,7 @@ void SkipRowsStream::open(thread_db* tdbb) const
 
 void SkipRowsStream::close(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	invalidateRecords(request);
 
@@ -84,7 +84,7 @@ bool SkipRowsStream::getRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!(impure->irsb_flags & irsb_open))
@@ -131,7 +131,7 @@ void SkipRowsStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_next->findUsedStreams(streams, expandAll);
 }
 
-void SkipRowsStream::invalidateRecords(jrd_req* request) const
+void SkipRowsStream::invalidateRecords(Request* request) const
 {
 	m_next->invalidateRecords(request);
 }

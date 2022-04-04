@@ -587,7 +587,10 @@ YAttachment* UtilInterface::executeCreateDatabase(
 		if (stmtIsCreateDb)
 			*stmtIsCreateDb = FB_FALSE;
 
-		if (!PREPARSE_execute(status, &att, stmtLength, creatDBstatement, &stmtEaten, dialect))
+		string statement(creatDBstatement,
+			(stmtLength == 0 && creatDBstatement ? strlen(creatDBstatement) : stmtLength));
+
+		if (!PREPARSE_execute(status, &att, statement, &stmtEaten, dialect))
 			return NULL;
 
 		if (stmtIsCreateDb)
@@ -611,7 +614,7 @@ YAttachment* UtilInterface::executeCreateDatabase(
 
 		if (!stmtEaten)
 		{
-			att->execute(status, crdbTrans, stmtLength, creatDBstatement, dialect, NULL, NULL, NULL, NULL);
+			att->execute(status, crdbTrans, statement.length(), statement.c_str(), dialect, NULL, NULL, NULL, NULL);
 			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
 			{
 				crdbTrans->rollback(&tempCheckStatusWrapper);
@@ -871,7 +874,7 @@ unsigned UtilInterface::getClientVersion()
 }
 
 // End-user proxy for ClumpletReader & Writer
-class XpbBuilder FB_FINAL : public DisposeIface<IXpbBuilderImpl<XpbBuilder, CheckStatusWrapper> >
+class XpbBuilder final : public DisposeIface<IXpbBuilderImpl<XpbBuilder, CheckStatusWrapper> >
 {
 public:
 	XpbBuilder(unsigned kind, const unsigned char* buf, unsigned len)
@@ -913,8 +916,14 @@ public:
 		case SPB_RESPONSE:
 			k = ClumpletReader::SpbResponse;
 			break;
+		case INFO_SEND:
+			k = ClumpletReader::InfoItems;
+			break;
+		case INFO_RESPONSE:
+			k = ClumpletReader::InfoResponse;
+			break;
 		default:
-			fatal_exception::raiseFmt("Wrong parameters block kind %d, should be from %d to %d", kind, DPB, SPB_RESPONSE);
+			fatal_exception::raiseFmt("Wrong parameters block kind %d, should be from %d to %d", kind, DPB, INFO_RESPONSE);
 			break;
 		}
 
@@ -1208,7 +1217,7 @@ IXpbBuilder* UtilInterface::getXpbBuilder(CheckStatusWrapper* status,
 	}
 }
 
-class DecFloat16 FB_FINAL : public AutoIface<IDecFloat16Impl<DecFloat16, CheckStatusWrapper> >
+class DecFloat16 final : public AutoIface<IDecFloat16Impl<DecFloat16, CheckStatusWrapper> >
 {
 public:
 	// IDecFloat16 implementation
@@ -1269,7 +1278,7 @@ IDecFloat16* UtilInterface::getDecFloat16(CheckStatusWrapper* status)
 	return &decFloat16;
 }
 
-class DecFloat34 FB_FINAL : public AutoIface<IDecFloat34Impl<DecFloat34, CheckStatusWrapper> >
+class DecFloat34 final : public AutoIface<IDecFloat34Impl<DecFloat34, CheckStatusWrapper> >
 {
 public:
 	// IDecFloat34 implementation
@@ -1330,7 +1339,7 @@ IDecFloat34* UtilInterface::getDecFloat34(CheckStatusWrapper* status)
 	return &decFloat34;
 }
 
-class IfaceInt128 FB_FINAL : public AutoIface<IInt128Impl<IfaceInt128, CheckStatusWrapper> >
+class IfaceInt128 final : public AutoIface<IInt128Impl<IfaceInt128, CheckStatusWrapper> >
 {
 public:
 	// IInt128 implementation
@@ -3238,7 +3247,7 @@ void makeKey()
 	int err = pthread_key_create(&key, ThreadCleanup::destructor);
 	if (err)
 	{
-		Firebird::system_call_failed("pthread_key_create", err);
+		Firebird::system_call_failed::raise("pthread_key_create", err);
 	}
 	keySet = true;
 }
@@ -3248,13 +3257,13 @@ void ThreadCleanup::initThreadCleanup()
 	int err = pthread_once(&keyOnce, makeKey);
 	if (err)
 	{
-		Firebird::system_call_failed("pthread_once", err);
+		Firebird::system_call_failed::raise("pthread_once", err);
 	}
 
 	err = pthread_setspecific(key, &key);
 	if (err)
 	{
-		Firebird::system_call_failed("pthread_setspecific", err);
+		Firebird::system_call_failed::raise("pthread_setspecific", err);
 	}
 }
 
@@ -3278,7 +3287,7 @@ public:
 		{
 			int err = pthread_key_delete(key);
 			if (err)
-				Firebird::system_call_failed("pthread_key_delete", err);
+				gds__log("pthread_key_delete failed with error %d", err);
 		}
 	}
 };

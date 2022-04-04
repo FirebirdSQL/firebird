@@ -41,7 +41,7 @@
 // Bring in off_t
 #include <sys/types.h>
 
-class TracePluginImpl FB_FINAL :
+class TracePluginImpl final :
 	public Firebird::RefCntIface<Firebird::ITracePluginImpl<TracePluginImpl, Firebird::CheckStatusWrapper> >
 {
 public:

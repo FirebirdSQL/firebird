@@ -523,8 +523,6 @@ USHORT famasc_string_to_key(texttype* obj, USHORT iInLen, const BYTE* pInChar, U
 {
 	fb_assert(pOutChar != NULL);
 	fb_assert(pInChar != NULL);
-	fb_assert(iInLen <= LANGASCII_MAX_KEY);
-	fb_assert(iOutLen <= LANGASCII_MAX_KEY);
 	fb_assert(iOutLen >= famasc_key_length(obj, iInLen));
 
 	// point inbuff at last character

@@ -40,7 +40,7 @@
 #include "firebird.h"
 #include "../../../common/classes/init.h"
 #include "../../../common/utils_proto.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/isc_proto.h"
 #include "../common/os/isc_i_proto.h"
@@ -150,7 +150,7 @@ private:
 
 Firebird::GlobalPtr<OpenEvents> openEvents;
 
-int ISC_kill(SLONG pid, SLONG signal_number, void *object_hndl)
+int ISC_kill(SLONG pid, SLONG signal_number, HANDLE object_hndl)
 {
 /**************************************
  *
@@ -176,7 +176,7 @@ int ISC_kill(SLONG pid, SLONG signal_number, void *object_hndl)
 	return SetEvent(handle) ? 0 : -1;
 }
 
-void* ISC_make_signal(bool /*create_flag*/, bool manual_reset, int process_idL, int signal_number)
+HANDLE ISC_make_signal(bool /*create_flag*/, bool manual_reset, int process_idL, int signal_number)
 {
 /**************************************
  *

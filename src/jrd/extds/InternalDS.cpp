@@ -73,7 +73,6 @@ void InternalProvider::jrdAttachmentEnd(thread_db* tdbb, Attachment* att, bool f
 		return;
 
 	{	// scope
-		Database* dbb = tdbb->getDatabase();
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		AttToConnMap::Accessor acc(&m_connections);
@@ -126,24 +125,6 @@ Connection* InternalProvider::doCreateConnection()
 InternalConnection::~InternalConnection()
 {
 }
-
-// Status helper
-class IntStatus : public Firebird::FbLocalStatus
-{
-public:
-	explicit IntStatus(FbStatusVector *p)
-		: FbLocalStatus(), v(p)
-	{}
-
-	~IntStatus()
-	{
-		if (v)
-			fb_utils::copyStatus(v, &(*this));
-	}
-
-private:
-	FbStatusVector *v;
-};
 
 void InternalConnection::attach(thread_db* tdbb)
 {
@@ -209,7 +190,7 @@ void InternalConnection::doDetach(thread_db* tdbb)
 		FbLocalStatus status;
 
 		RefPtr<JAttachment> att = m_attachment;
-		m_attachment = NULL;
+		m_attachment = NULL;	// release and nullify
 
 		{	// scope
 			EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
@@ -245,7 +226,7 @@ bool InternalConnection::cancelExecution(bool /*forced*/)
 	return !(status->getState() & IStatus::STATE_ERRORS);
 }
 
-bool InternalConnection::resetSession()
+bool InternalConnection::resetSession(thread_db* tdbb)
 {
 	fb_assert(!m_isCurrent);
 
@@ -253,9 +234,11 @@ bool InternalConnection::resetSession()
 		return true;
 
 	FbLocalStatus status;
-	m_attachment->execute(&status, NULL, 0, "ALTER SESSION RESET",
-		m_sqlDialect, NULL, NULL, NULL, NULL);
-
+	{
+		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
+		m_attachment->execute(&status, NULL, 0, "ALTER SESSION RESET",
+			m_sqlDialect, NULL, NULL, NULL, NULL);
+	}
 	return !(status->getState() & IStatus::STATE_ERRORS);
 }
 
@@ -288,8 +271,8 @@ bool InternalConnection::isSameDatabase(const PathName& dbName, ClumpletReader& 
 	if (m_isCurrent)
 	{
 		const Attachment* att = m_attachment->getHandle();
-		const MetaString& attUser = att->att_user->getUserName();
-		const MetaString& attRole = att->att_user->getSqlRole();
+		const MetaString& attUser = att->getUserName();
+		const MetaString& attRole = att->getSqlRole();
 
 		MetaString str;
 
@@ -343,10 +326,9 @@ void InternalTransaction::doStart(FbStatusVector* status, thread_db* tdbb, Clump
 		JAttachment* att = m_IntConnection.getJrdAtt();
 
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
-		IntStatus s(status);
 
 		m_transaction.assignRefNoIncr(
-			att->startTransaction(&s, tpb.getBufferLength(), tpb.getBuffer()));
+			att->startTransaction(status, tpb.getBufferLength(), tpb.getBuffer()));
 
 		if (m_transaction)
 			m_transaction->getHandle()->tra_callback_count = localTran->tra_callback_count;
@@ -367,18 +349,20 @@ void InternalTransaction::doCommit(FbStatusVector* status, thread_db* tdbb, bool
 	if (m_scope == traCommon && m_IntConnection.isCurrent())
 	{
 		if (!retain) {
-			m_transaction = NULL;
+			m_transaction = NULL;	// release and nullify
 		}
 	}
 	else
 	{
-		IntStatus s(status);
-
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
 		if (retain)
-			m_transaction->commitRetaining(&s);
+			m_transaction->commitRetaining(status);
 		else
-			m_transaction->commit(&s);
+		{
+			m_transaction->commit(status);
+			if (!(status->getState() & IStatus::STATE_ERRORS))
+				m_transaction.clear();
+		}
 	}
 }
 
@@ -388,30 +372,51 @@ void InternalTransaction::doRollback(FbStatusVector* status, thread_db* tdbb, bo
 
 	if (m_connection.isBroken())
 	{
-		m_transaction = NULL;
+		m_transaction.clear();
 		return;
 	}
 
 	if (m_scope == traCommon && m_IntConnection.isCurrent())
 	{
 		if (!retain) {
-			m_transaction = NULL;
+			m_transaction = NULL;	// release and nullify
 		}
+		return;
 	}
-	else
-	{
-		IntStatus s(status);
 
+	ISC_STATUS err = 0;
+	{
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
 		if (retain)
-			m_transaction->rollbackRetaining(&s);
+			m_transaction->rollbackRetaining(status);
 		else
-			m_transaction->rollback(&s);
+			m_transaction->rollback(status);
+
+		if (status->getState() & IStatus::STATE_ERRORS)
+			err = status->getErrors()[1];
+
+		if (err == isc_cancelled)
+		{
+			FbLocalStatus temp;
+			JAttachment* jAtt = m_IntConnection.getJrdAtt();
+			jAtt->cancelOperation(&temp, fb_cancel_disable);
+
+			status->init();
+			if (retain)
+				m_transaction->rollbackRetaining(status);
+			else
+				m_transaction->rollback(status);
+
+			err = (status->getState() & IStatus::STATE_ERRORS) ?
+				status->getErrors()[1] : 0;
+
+			jAtt->cancelOperation(&temp, fb_cancel_enable);
+		}
 	}
 
-	if ((status->getErrors()[1] == isc_att_shutdown || status->getErrors()[1] == isc_shutdown) && !retain)
+	if ((!err || err == isc_att_shutdown || err == isc_shutdown) && !retain)
 	{
-		m_transaction = NULL;
+		m_transaction.clear();
 		status->init();
 	}
 }
@@ -454,8 +459,8 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 
 	if (m_callerPrivileges)
 	{
-		jrd_req* request = tdbb->getRequest();
-		JrdStatement* statement = request ? request->getStatement() : NULL;
+		Request* request = tdbb->getRequest();
+		auto statement = request ? request->getStatement() : NULL;
 		CallerName callerName;
 		const Routine* routine;
 
@@ -499,13 +504,13 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 	if (status->getState() & IStatus::STATE_ERRORS)
 		raise(&status, tdbb, "JAttachment::prepare", &sql);
 
-	const DsqlCompiledStatement* statement = m_request->getHandle()->getStatement();
+	const auto dsqlStatement = m_request->getHandle()->getDsqlStatement();
 
-	if (statement->getSendMsg())
+	if (dsqlStatement->getSendMsg())
 	{
 		try
 		{
-			PreparedStatement::parseDsqlMessage(statement->getSendMsg(), m_inDescs,
+			PreparedStatement::parseDsqlMessage(dsqlStatement->getSendMsg(), m_inDescs,
 				m_inMetadata, m_in_buffer);
 			m_inputs = m_inMetadata->getCount();
 		}
@@ -517,11 +522,11 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 	else
 		m_inputs = 0;
 
-	if (statement->getReceiveMsg())
+	if (dsqlStatement->getReceiveMsg())
 	{
 		try
 		{
-			PreparedStatement::parseDsqlMessage(statement->getReceiveMsg(), m_outDescs,
+			PreparedStatement::parseDsqlMessage(dsqlStatement->getReceiveMsg(), m_outDescs,
 				m_outMetadata, m_out_buffer);
 			m_outputs = m_outMetadata->getCount();
 		}
@@ -535,34 +540,35 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 
 	m_stmt_selectable = false;
 
-	switch (statement->getType())
+	switch (dsqlStatement->getType())
 	{
-	case DsqlCompiledStatement::TYPE_SELECT:
-	case DsqlCompiledStatement::TYPE_SELECT_UPD:
-	case DsqlCompiledStatement::TYPE_SELECT_BLOCK:
+	case DsqlStatement::TYPE_SELECT:
+	case DsqlStatement::TYPE_RETURNING_CURSOR:
+	case DsqlStatement::TYPE_SELECT_UPD:
+	case DsqlStatement::TYPE_SELECT_BLOCK:
 		m_stmt_selectable = true;
 		break;
 
-	case DsqlCompiledStatement::TYPE_START_TRANS:
-	case DsqlCompiledStatement::TYPE_COMMIT:
-	case DsqlCompiledStatement::TYPE_ROLLBACK:
-	case DsqlCompiledStatement::TYPE_COMMIT_RETAIN:
-	case DsqlCompiledStatement::TYPE_ROLLBACK_RETAIN:
-	case DsqlCompiledStatement::TYPE_CREATE_DB:
+	case DsqlStatement::TYPE_START_TRANS:
+	case DsqlStatement::TYPE_COMMIT:
+	case DsqlStatement::TYPE_ROLLBACK:
+	case DsqlStatement::TYPE_COMMIT_RETAIN:
+	case DsqlStatement::TYPE_ROLLBACK_RETAIN:
+	case DsqlStatement::TYPE_CREATE_DB:
 		Arg::Gds(isc_eds_expl_tran_ctrl).copyTo(&status);
 		raise(&status, tdbb, "JAttachment::prepare", &sql);
 		break;
 
-	case DsqlCompiledStatement::TYPE_INSERT:
-	case DsqlCompiledStatement::TYPE_DELETE:
-	case DsqlCompiledStatement::TYPE_UPDATE:
-	case DsqlCompiledStatement::TYPE_UPDATE_CURSOR:
-	case DsqlCompiledStatement::TYPE_DELETE_CURSOR:
-	case DsqlCompiledStatement::TYPE_DDL:
-	case DsqlCompiledStatement::TYPE_EXEC_PROCEDURE:
-	case DsqlCompiledStatement::TYPE_SET_GENERATOR:
-	case DsqlCompiledStatement::TYPE_SAVEPOINT:
-	case DsqlCompiledStatement::TYPE_EXEC_BLOCK:
+	case DsqlStatement::TYPE_INSERT:
+	case DsqlStatement::TYPE_DELETE:
+	case DsqlStatement::TYPE_UPDATE:
+	case DsqlStatement::TYPE_UPDATE_CURSOR:
+	case DsqlStatement::TYPE_DELETE_CURSOR:
+	case DsqlStatement::TYPE_DDL:
+	case DsqlStatement::TYPE_EXEC_PROCEDURE:
+	case DsqlStatement::TYPE_SET_GENERATOR:
+	case DsqlStatement::TYPE_SAVEPOINT:
+	case DsqlStatement::TYPE_EXEC_BLOCK:
 		break;
 	}
 }
@@ -616,7 +622,7 @@ void InternalStatement::doOpen(thread_db* tdbb)
 		if (m_cursor)
 		{
 			m_cursor->close(&status);
-			m_cursor = NULL;
+			m_cursor.clear();
 		}
 
 		fb_assert(m_inMetadata->getMessageLength() == m_in_buffer.getCount());
@@ -659,9 +665,11 @@ void InternalStatement::doClose(thread_db* tdbb, bool drop)
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
 
 		if (m_cursor)
+		{
 			m_cursor->close(&status);
+			m_cursor.clear();
+		}
 
-		m_cursor = NULL;
 		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			raise(&status, tdbb, "JResultSet::close");
@@ -670,10 +678,12 @@ void InternalStatement::doClose(thread_db* tdbb, bool drop)
 		if (drop)
 		{
 			if (m_request)
+			{
 				m_request->free(&status);
+				m_request.clear();
+			}
 
 			m_allocated = false;
-			m_request = NULL;
 
 			if (status->getState() & IStatus::STATE_ERRORS)
 			{
@@ -833,7 +843,7 @@ void InternalBlob::close(thread_db* tdbb)
 	{
 		EngineCallbackGuard guard(tdbb, m_connection, FB_FUNCTION);
 		m_blob->close(&status);
-		m_blob = NULL;
+		m_blob.clear();
 	}
 
 	if (status->getState() & IStatus::STATE_ERRORS)
@@ -853,7 +863,7 @@ void InternalBlob::cancel(thread_db* tdbb)
 	{
 		EngineCallbackGuard guard(tdbb, m_connection, FB_FUNCTION);
 		m_blob->cancel(&status);
-		m_blob = NULL;
+		m_blob.clear();
 	}
 
 	if (status->getState() & IStatus::STATE_ERRORS)

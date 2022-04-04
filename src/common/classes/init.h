@@ -304,12 +304,12 @@ template <typename T>
 class StaticInstanceAllocator
 {
 private:
-	char buf[sizeof(T) + FB_ALIGNMENT];
+	alignas(alignof(T)) char buf[sizeof(T)];
 
 public:
 	T* create()
 	{
-		return new((void*) FB_ALIGN(buf, FB_ALIGNMENT)) T();
+		return new(buf) T();
 	}
 
 	static void destroy(T*)

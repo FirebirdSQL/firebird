@@ -29,9 +29,6 @@
     <ClCompile Include="..\..\..\src\remote\remote.cpp">
       <Filter>REMOTE files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\remote\os\win32\wnet.cpp">
-      <Filter>REMOTE files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\src\auth\trusted\AuthSspi.cpp">
       <Filter>AUTH files</Filter>
     </ClCompile>
@@ -62,9 +59,6 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\remote\remote.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\remote\os\win32\wnet_proto.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\remote\os\win32\xnet.h">

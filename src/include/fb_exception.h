@@ -102,9 +102,9 @@ public:
 
 	const ISC_STATUS* value() const throw() { return m_status_vector; }
 
-	static void raise(const ISC_STATUS *status_vector);
-	static void raise(const Arg::StatusVector& statusVector);
-	static void raise(const IStatus* status);
+	[[noreturn]] static void raise(const ISC_STATUS* status_vector);
+	[[noreturn]] static void raise(const Arg::StatusVector& statusVector);
+	[[noreturn]] static void raise(const IStatus* status);
 
 protected:
 	// Create exception with undefined status vector, this constructor allows
@@ -129,9 +129,11 @@ class system_error : public status_exception
 {
 private:
 	int errorCode;
-public:
-	system_error(const char* syscall, int error_code);
 
+protected:
+	system_error(const char* syscall, const char* arg, int error_code);
+
+public:
 	static void raise(const char* syscall, int error_code);
 	static void raise(const char* syscall);
 
@@ -147,11 +149,14 @@ public:
 // it will call abort() in DEV_BUILD to create core dump
 class system_call_failed : public system_error
 {
-public:
-	system_call_failed(const char* syscall, int error_code);
+protected:
+	system_call_failed(const char* syscall, const char* arg, int error_code);
 
+public:
 	static void raise(const char* syscall, int error_code);
 	static void raise(const char* syscall);
+	static void raise(const char* syscall, const char* arg, int error_code);
+	static void raise(const char* syscall, const char* arg);
 };
 
 class fatal_exception : public status_exception

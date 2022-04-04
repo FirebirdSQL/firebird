@@ -40,7 +40,7 @@
 #include "../jrd/irq.h"
 #include "../jrd/drq.h"
 #include "../jrd/lck.h"
-#include "../include/gen/iberror.h"
+#include "../include/iberror.h"
 
 #include "../common/classes/fb_atomic.h"
 #include "../common/classes/fb_string.h"
@@ -59,6 +59,7 @@
 #include "../jrd/RandomGenerator.h"
 #include "../common/os/guid.h"
 #include "../common/os/os_utils.h"
+#include "../jrd/ods.h"
 #include "../jrd/sbm.h"
 #include "../jrd/flu.h"
 #include "../jrd/RuntimeStatistics.h"
@@ -370,7 +371,7 @@ public:
 		bool exist;
 	};
 
-	class Linger FB_FINAL :
+	class Linger final :
 		public Firebird::RefCntIface<Firebird::ITimerImpl<Linger, Firebird::CheckStatusWrapper> >
 	{
 	public:
@@ -582,6 +583,11 @@ public:
 		return (dbb_replica_mode == mode);
 	}
 
+	USHORT getEncodedOdsVersion() const
+	{
+		return ENCODE_ODS(dbb_ods_version, dbb_minor_version);
+	}
+
 private:
 	Database(MemoryPool* p, Firebird::IPluginConfig* pConf, bool shared)
 	:	dbb_permanent(p),
@@ -658,7 +664,8 @@ public:
 
 	const CoercionArray *getBindings() const;
 
-	void initGlobalObjectHolder(thread_db* tdbb);
+	void initGlobalObjects();
+	void shutdownGlobalObjects();
 
 	LockManager* lockManager()
 	{

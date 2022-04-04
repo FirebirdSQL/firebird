@@ -27,7 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../common/classes/init.h"
 #include "../common/config/config.h"
 #include "../common/ThreadStart.h"

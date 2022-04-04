@@ -478,21 +478,24 @@ standaloneServerInstalled() {
 
 CorrectLibDir() {
 	ld=${1}
-	l=/usr/lib
-	l64=/usr/lib64
 
-	if [ "$ld" = "$l64" ]
-	then
-		if [ -d "$l" ]
-		then
-			if [ ! -d "$l64" ]
-			then
-				ld="$l"
-			fi
-		fi
-	fi
+	case $(uname -m) in
+		i686)
+			LDL=ld-linux.so
+			;;
+		x86_64)
+			LDL=ld-linux-x86-64.so
+			;;
+		aarch64)
+			LDL=ld-linux-aarch64.so
+			;;
+		*)
+			echo $ld
+			return
+			;;
+	esac
 
-	echo "$ld"
+	dirname $(ldconfig -p | grep $LDL | awk -F '>' '{print $2;}') | head -n 1
 }
 
 

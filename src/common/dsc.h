@@ -146,12 +146,12 @@ typedef struct dsc
 
 	bool isNumeric() const
 	{
-		return (dsc_dtype >= dtype_byte && dsc_dtype <= dtype_d_float) || dsc_dtype == dtype_int64;
+		return DTYPE_IS_NUMERIC(dsc_dtype);
 	}
 
 	bool isText() const
 	{
-		return dsc_dtype >= dtype_text && dsc_dtype <= dtype_varying;
+		return DTYPE_IS_TEXT(dsc_dtype);
 	}
 
 	bool isDbKey() const
@@ -186,7 +186,7 @@ typedef struct dsc
 
 	bool isDecFloat() const
 	{
-		return dsc_dtype == dtype_dec128 || dsc_dtype == dtype_dec64;
+		return DTYPE_IS_DECFLOAT(dsc_dtype);
 	}
 
 	bool isInt128() const

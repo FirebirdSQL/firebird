@@ -57,6 +57,7 @@
 #include "../common/classes/UserBlob.h"
 #include "../common/classes/VaryStr.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../common/TimeZoneUtil.h"
 #include "../isql/OptionsBase.h"
 
 #include <firebird/Interface.h>
@@ -252,7 +253,10 @@ static const UCHAR db_items[] =
 	isc_info_db_id,
 #endif
 	fb_info_crypt_state,
+	fb_info_protocol_version,
 	fb_info_wire_crypt,
+	fb_info_creation_timestamp_tz,
+	isc_info_creation_date,
 	isc_info_end
 };
 
@@ -400,6 +404,8 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 	db_handle->getInfo(&statusWrapper, item_length, db_itemsL, sizeof(buffer), buffer);
 	if (ISQL_errmsg(status_vector))
 		return false;
+
+	bool crdatePrinted = false;
 
 	*info_buf = '\0';
 	SCHAR* info = info_buf;
@@ -561,6 +567,62 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				sprintf (info, "Wire crypt plugin: %.*s%s", length, d, separator);
 			break;
 
+		case fb_info_protocol_version:
+			value_out = ISQL_vax_integer(d, length);
+			if (value_out)
+				sprintf(info, "Protocol version = %" SQUADFORMAT"%s", value_out, separator);
+			else
+				sprintf(info, "Embedded connection%s", separator);
+			break;
+
+		case isc_info_creation_date:
+			if (length == sizeof(ISC_TIMESTAMP) && !crdatePrinted)
+			{
+				ISC_TIMESTAMP ts;
+
+				const UCHAR* p = d;
+				ts.timestamp_date = ISQL_vax_integer(p, sizeof(ISC_DATE));
+				p += sizeof(ISC_DATE);
+				ts.timestamp_time = ISQL_vax_integer(p, sizeof(ISC_TIME));
+
+				struct tm time;
+				isc_decode_timestamp(&ts, &time);
+
+				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d\n",
+					FB_SHORT_MONTHS[time.tm_mon], time.tm_mday, time.tm_year + 1900,
+					time.tm_hour, time.tm_min, time.tm_sec);
+			}
+			break;
+
+		case fb_info_creation_timestamp_tz:
+			if (length == sizeof(ISC_TIMESTAMP_TZ))
+			{
+				ISC_TIMESTAMP_TZ tsz;
+
+				const UCHAR* p = d;
+				tsz.utc_timestamp.timestamp_date = ISQL_vax_integer(p, sizeof(ISC_DATE));
+				p += sizeof(ISC_DATE);
+				tsz.utc_timestamp.timestamp_time = ISQL_vax_integer(p, sizeof(ISC_TIME));
+				p += sizeof(ISC_TIME);
+				tsz.time_zone = ISQL_vax_integer(p, sizeof(ULONG));
+
+				unsigned year, month, day, hours, minutes, seconds, fractions;
+				char timeZone[Firebird::TimeZoneUtil::MAX_SIZE];
+
+				Firebird::UtilInterfacePtr()->decodeTimeStampTz(fbStatus, &tsz,
+					&year, &month, &day, &hours, &minutes, &seconds, &fractions, sizeof(timeZone), timeZone);
+
+				if (ISQL_errmsg(fbStatus))
+					break;
+
+				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d %s\n",
+					FB_SHORT_MONTHS[month - 1], day, year,
+					hours, minutes, seconds, timeZone);
+
+				crdatePrinted = true;
+			}
+			break;
+
 #ifdef DEV_BUILD
 		case isc_info_db_id:
 			{
@@ -594,7 +656,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 }
 
 
-processing_state SHOW_grants(const SCHAR* object, const SCHAR* terminator, USHORT obj_type)
+processing_state SHOW_grants(const SCHAR* object, const SCHAR* terminator, ObjectType obj_type)
 {
 /**************************************
  *
@@ -725,7 +787,7 @@ static void set_grantee(int user_type, const char* SQL_identifier, char* user_st
 
 processing_state SHOW_grants2 (const SCHAR* object,
 				  const SCHAR* terminator,
-				  USHORT obj_type,
+				  ObjectType obj_type,
 				  const TEXT* optional_msg,
 				  bool mangle)
 {
@@ -776,7 +838,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	USHORT priv_flags = 0;
 	SSHORT prev_field_null = -1;
 
-	if (obj_type == obj_relation || obj_type == 255)
+	if (obj_type == obj_relation || obj_type == obj_any)
 	{
 		// Find the user specified relation and show its privileges
 
@@ -959,7 +1021,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	}
 
 	// No relation called "object" was found, try procedure "object"
-	if (obj_type == obj_procedure || obj_type == 255)
+	if (obj_type == obj_procedure || obj_type == obj_any)
 	{
 		FOR FIRST 1 P IN RDB$PROCEDURES WITH
 			P.RDB$PROCEDURE_NAME EQ object AND
@@ -1038,7 +1100,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	// No procedure called "object" was found, try role "object"
 	SCHAR role_name[BUFFER_LENGTH256];
 
-	if (obj_type == obj_sql_role || obj_type == 255)
+	if (obj_type == obj_sql_role || obj_type == obj_any)
 	{
 		// No procedure called "object" was found, try role "object"
 		// CVC: This code could be superseded by SHOW_grant_roles() below
@@ -1103,7 +1165,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 			return (SKIP);
 	}
 
-	if (obj_type == obj_package_header || obj_type == 255)
+	if (obj_type == obj_package_header || obj_type == obj_any)
 	{
 		if (isqlGlob.major_ods >= ODS_VERSION12)
 		{
@@ -1177,7 +1239,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 		}
 	}
 
-	if (obj_type == obj_udf || obj_type == 255)
+	if (obj_type == obj_udf || obj_type == obj_any)
 	{
 		if (isqlGlob.major_ods >= ODS_VERSION12)
 		{
@@ -1255,7 +1317,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 		}
 	}
 
-	if (obj_type == obj_generator || obj_type == 255)
+	if (obj_type == obj_generator || obj_type == obj_any)
 	{
 		if (isqlGlob.major_ods >= ODS_VERSION12)
 		{
@@ -1329,7 +1391,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 		}
 	}
 
-	if (obj_type == obj_exception || obj_type == 255)
+	if (obj_type == obj_exception || obj_type == obj_any)
 	{
 		if (isqlGlob.major_ods >= ODS_VERSION12)
 		{
@@ -1627,7 +1689,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	}
 	***/
 
-	if (obj_type >= obj_database || obj_type == 255)
+	if (isDdlObject(obj_type) || obj_type == obj_any)
 	{
 		if (isqlGlob.major_ods >= ODS_VERSION12)
 		{
@@ -1636,6 +1698,10 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				PRV.RDB$OBJECT_TYPE >= obj_database AND
 				PRV.RDB$RELATION_NAME EQ object
 				SORTED BY PRV.RDB$USER, PRV.RDB$GRANT_OPTION
+
+				// Double check if the object is DDL one.
+				if (!isDdlObject(PRV.RDB$OBJECT_TYPE))
+					continue;
 
 				if (first && optional_msg)
 					isqlGlob.prints(optional_msg);
@@ -1692,64 +1758,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 
 				set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
 
-				switch (PRV.RDB$OBJECT_TYPE)
-				{
-				case obj_database:
-					strcpy(obj_string, "DATABASE");
-					break;
-
-				case obj_relations:
-					strcpy(obj_string, "TABLE");
-					break;
-
-				case obj_views:
-					strcpy(obj_string, "VIEW");
-					break;
-
-				case obj_procedures:
-					strcpy(obj_string, "PROCEDURE");
-					break;
-
-				case obj_functions:
-					strcpy(obj_string, "FUNCTION");
-					break;
-
-				case obj_packages:
-					strcpy(obj_string, "PACKAGE");
-					break;
-
-				case obj_generators:
-					strcpy(obj_string, "GENERATOR");
-					break;
-
-				case obj_domains:
-					strcpy(obj_string, "DOMAIN");
-					break;
-
-				case obj_exceptions:
-					strcpy(obj_string, "EXCEPTION");
-					break;
-
-				case obj_roles:
-					strcpy(obj_string, "ROLE");
-					break;
-
-				case obj_charsets:
-					strcpy(obj_string, "CHARACTER SET");
-					break;
-
-				case obj_collations:
-					strcpy(obj_string, "COLLATION");
-					break;
-
-				case obj_filters:
-					strcpy(obj_string, "FILTER");
-					break;
-
-				case obj_tablespaces:
-					strcpy(obj_string, "TABLESPACE");
-					break;
-				}
+				strcpy(obj_string, getDdlObjectName(PRV.RDB$OBJECT_TYPE));
 
 				if (PRV.RDB$GRANT_OPTION)
 					strcpy(with_option, " WITH GRANT OPTION");
@@ -1767,7 +1776,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				return ps_ERR;
 			END_ERROR
 
-			if (obj_type == obj_database || obj_type == 255)
+			if (obj_type == obj_database || obj_type == obj_any)
 			{
 				FOR PRV IN SEC$DB_CREATORS
 					SORTED BY PRV.SEC$USER_TYPE, PRV.SEC$USER
@@ -1898,7 +1907,7 @@ void SHOW_grant_roles2 (const SCHAR* terminator,
 }
 
 
-void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squote)
+void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squote, bool avoid_end_in_single_line_comment)
 {
 /**************************************
  *
@@ -1921,6 +1930,7 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 	if (ISQL_errmsg(fbStatus))
 		return;
 
+	string fullText;
 	SCHAR buffer[BUFFER_LENGTH512];
 	bool endedWithCr = false;
 
@@ -1952,29 +1962,51 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 		}
 
 		if (prevEndedWithCr && buffer[0] != '\n')
-		    fputc('\r', fp);
+		{
+			fputc('\r', fp);
+			if (avoid_end_in_single_line_comment)
+				fullText += "\r";
+		}
 
 		if (escape_squote)
 		{
 			for (const UCHAR* p = (UCHAR*) buffer; *p; ++p)
 			{
 				if (*p == SINGLE_QUOTE)
-			        fputc(*p, fp);
-			    fputc(*p, fp);
+				{
+					fputc(*p, fp);
+					if (avoid_end_in_single_line_comment)
+						fullText += *p;
+				}
+
+				fputc(*p, fp);
+				if (avoid_end_in_single_line_comment)
+					fullText += *p;
 			}
 			fflush(fp);
 		}
 		else
+		{
 			IUTILS_printf(fp, buffer);
+			if (avoid_end_in_single_line_comment)
+				fullText += buffer;
+		}
 	}
 
 	if (endedWithCr)
-	    fputc('\r', fp);
+	{
+		fputc('\r', fp);
+		if (avoid_end_in_single_line_comment)
+			fullText += "\r";
+	}
 
 	if (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS)
 		ISQL_errmsg(fbStatus);
 
 	blob->close(fbStatus);
+
+	if (avoid_end_in_single_line_comment && ISQL_statement_ends_in_comment(fullText.c_str()))
+		fputc('\n', fp);
 }
 
 
@@ -2369,7 +2401,7 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 			}
 			else
 				strcpy(SQL_id_for_grant, cmd[2]);
-			ret = SHOW_grants(SQL_id_for_grant, "", 255);
+			ret = SHOW_grants(SQL_id_for_grant, "", obj_any);
 		}
 		else
 		{
@@ -3538,7 +3570,7 @@ static void show_db()
 		return;
 	END_ERROR;
 
-	SCHAR info_buf[BUFFER_LENGTH400];
+	SCHAR info_buf[BUFFER_LENGTH512];
 
 	// First general database parameters
 

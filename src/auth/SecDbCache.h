@@ -55,7 +55,7 @@ public:
 
 class PluginDatabases;
 
-class CachedSecurityDatabase FB_FINAL
+class CachedSecurityDatabase final
 	: public Firebird::RefCntIface<Firebird::ITimerImpl<CachedSecurityDatabase, Firebird::CheckStatusWrapper> >
 {
 public:
@@ -90,6 +90,16 @@ public:
 
 			assign(db);
 			(*this)->mutex.enter(FB_FUNCTION);
+		}
+
+		void reset()
+		{
+			if (hasData())
+			{
+				(*this)->mutex.leave();
+				(*this)->close();
+				assign(nullptr);
+			}
 		}
 
 		~Instance()

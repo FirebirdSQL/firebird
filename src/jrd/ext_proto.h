@@ -29,7 +29,6 @@ namespace Jrd {
 	class jrd_tra;
 	class RecordSource;
 	class jrd_rel;
-	class OptimizerBlk;
 	struct record_param;
 	struct bid;
 }

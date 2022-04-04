@@ -36,7 +36,7 @@ popd >/dev/null 2>&1
 
 # What and where to bundle
 MODULE=$SRCROOT/temp/src
-MEMBERS="builds doc examples extern lang_helpers src CHANGELOG.md Makefile.in acx_pthread.m4 autogen.sh binreloc.m4 configure.ac CMakeLists.txt README.md travis.sh .travis.yml"
+MEMBERS="builds doc examples extern src CHANGELOG.md Makefile.in acx_pthread.m4 autogen.sh binreloc.m4 configure.ac CMakeLists.txt README.md travis.sh .travis.yml"
 
 # Cleanup
 rm -rf $MODULE

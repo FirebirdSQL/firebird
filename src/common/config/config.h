@@ -30,6 +30,8 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../jrd/constants.h"
 
+#include <type_traits>
+
 /**
 	Since the original (isc.cpp) code wasn't able to provide powerful and
 	easy-to-use abilities to work with complex configurations, a decision
@@ -63,9 +65,9 @@
 				type getParameterName() const;
 		   form, for world-wide (global) parameters
 				static type getParameterName();
-		   should be used. Also, for world-wide parameters, values of default 
+		   should be used. Also, for world-wide parameters, values of default
 		   config instance (see getDefaultConfig()) should be used.
-		5. Macros CONFIG_GET_GLOBAL_XXX and CONFIG_GET_PER_DB_XXX helps to 
+		5. Macros CONFIG_GET_GLOBAL_XXX and CONFIG_GET_PER_DB_XXX helps to
 		   declare and implement trivial getXXX functions and to enforce rule (4).
 **/
 
@@ -135,7 +137,6 @@ enum ConfigKey
 	KEY_DEADLOCK_TIMEOUT,
 	KEY_REMOTE_SERVICE_NAME,
 	KEY_REMOTE_SERVICE_PORT,
-	KEY_REMOTE_PIPE_NAME,
 	KEY_IPC_NAME,
 	KEY_MAX_UNFLUSHED_WRITES,
 	KEY_MAX_UNFLUSHED_WRITE_TIME,
@@ -186,6 +187,7 @@ enum ConfigKey
 	KEY_DATA_TYPE_COMPATIBILITY,
 	KEY_USE_FILESYSTEM_CACHE,
 	KEY_INLINE_SORT_THRESHOLD,
+	KEY_TEMP_PAGESPACE_DIR,
 	MAX_CONFIG_KEY		// keep it last
 };
 
@@ -229,7 +231,6 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,	"DeadlockTimeout",			false,	10},		// seconds
 	{TYPE_STRING,	"RemoteServiceName",		false,	FB_SERVICE_NAME},
 	{TYPE_INTEGER,	"RemoteServicePort",		false,	0},
-	{TYPE_STRING,	"RemotePipeName",			false,	FB_PIPE_NAME},
 	{TYPE_STRING,	"IpcName",					false,	FB_IPC_NAME},
 #ifdef WIN_NT
 	{TYPE_INTEGER,	"MaxUnflushedWrites",		false,	100},
@@ -272,7 +273,7 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_STRING,	"SecurityDatabase",			false,	nullptr},	// sec/db alias - rely on ConfigManager::getDefaultSecurityDb(
 	{TYPE_STRING,	"ServerMode",				true,	nullptr},	// actual value differs in boot/regular cases and set at setupDefaultConfig(
 	{TYPE_STRING,	"WireCrypt",				false,	nullptr},
-	{TYPE_STRING,	"WireCryptPlugin",			false,	"ChaCha, Arc4"},
+	{TYPE_STRING,	"WireCryptPlugin",			false,	"ChaCha64, ChaCha, Arc4"},
 	{TYPE_STRING,	"KeyHolderPlugin",			false,	""},
 	{TYPE_BOOLEAN,	"RemoteAccess",				false,	true},
 	{TYPE_BOOLEAN,	"IPv6V6Only",				false,	false},
@@ -300,7 +301,8 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_BOOLEAN,	"ClearGTTAtRetaining",		false,	false},
 	{TYPE_STRING,	"DataTypeCompatibility",	false,	nullptr},
 	{TYPE_BOOLEAN,	"UseFileSystemCache",		false,	true},
-	{TYPE_INTEGER,	"InlineSortThreshold",		false,	1000}		// bytes
+	{TYPE_INTEGER,	"InlineSortThreshold",		false,	1000},		// bytes
+	{TYPE_STRING,	"TempTableDirectory",		false,	""}
 };
 
 
@@ -430,7 +432,7 @@ public:
 
 
 	// CONFIG_GET_GLOBAL_XXX (CONFIG_GET_PER_DB_XXX) set of macros helps to
-	// create trivial static (non-static) getXXX functions. 
+	// create trivial static (non-static) getXXX functions.
 	// Correctness of declaration and implementation is enforced with help
 	// of entries[XXX].is_global.
 
@@ -517,9 +519,6 @@ public:
 
 	// Service port for INET
 	CONFIG_GET_PER_DB_KEY(unsigned short, getRemoteServicePort, KEY_REMOTE_SERVICE_PORT, getInt);
-
-	// Pipe name for WNET
-	CONFIG_GET_PER_DB_STR(getRemotePipeName, KEY_REMOTE_PIPE_NAME);
 
 	// Name for IPC-related objects
 	CONFIG_GET_PER_DB_STR(getIpcName, KEY_IPC_NAME);
@@ -623,10 +622,12 @@ public:
 	bool getUseFileSystemCache(bool* pPresent = nullptr) const;
 
 	CONFIG_GET_PER_DB_KEY(ULONG, getInlineSortThreshold, KEY_INLINE_SORT_THRESHOLD, getInt);
+
+	CONFIG_GET_PER_DB_STR(getTempPageSpaceDirectory, KEY_TEMP_PAGESPACE_DIR);
 };
 
 // Implementation of interface to access master configuration file
-class FirebirdConf FB_FINAL :
+class FirebirdConf final :
 	public RefCntIface<IFirebirdConfImpl<FirebirdConf, CheckStatusWrapper> >
 {
 public:

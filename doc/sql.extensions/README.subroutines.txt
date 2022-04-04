@@ -11,7 +11,7 @@ Description:
 
 Syntax:
     <declaration item> ::=
-        DECLARE [VARIABLE] <variable name> <data type> [ := <value> ];
+        DECLARE [VARIABLE] <variable name> <data type> [ = <value> ];
         |
         DECLARE [VARIABLE] CURSOR <cursor name> FOR (<query>);
         |
@@ -46,8 +46,11 @@ Syntax:
 Limitations:
     1) Subroutines may not be nested in another subroutine. They are only supported in the main
        routine.
-    2) Currently, a subroutine may not directly access or use variables or cursors of the
-       main statements. This may be allowed in the future.
+    2) Currently, a subroutine may not directly access cursors of the main routine/block.
+       This may be allowed in the future.
+    3) Since FB 5 subroutines may use variables and parameters from the main routine/block.
+    4) Variables and parameters that are accessed by subroutines may have a small performance
+       penalty (even in the main routine) when being read.
 
 Notes:
     1) Starting in FB 4, subroutines may be recursive or call others subroutines.

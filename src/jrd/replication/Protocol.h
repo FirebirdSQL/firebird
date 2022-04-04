@@ -40,18 +40,13 @@ namespace Replication
 		USHORT protocol;
 		USHORT flags;
 		ULONG length;
-		ISC_TIMESTAMP timestamp;
-		ULONG metaOffset;
-		ULONG reserved;
 	};
 
-	static_assert(sizeof(struct Block) == 32, "struct Block size mismatch");
+	static_assert(sizeof(struct Block) == 16, "struct Block size mismatch");
 	static_assert(offsetof(struct Block, traNumber) == 0, "traNumber offset mismatch");
 	static_assert(offsetof(struct Block, protocol) == 8, "protocol offset mismatch");
 	static_assert(offsetof(struct Block, flags) == 10, "flags offset mismatch");
-	static_assert(offsetof(struct Block, length) == 12, "pag_generation offset mismatch");
-	static_assert(offsetof(struct Block, timestamp) == 16, "timestamp offset mismatch");
-	static_assert(offsetof(struct Block, metaOffset) == 24, "metaOffset offset mismatch");
+	static_assert(offsetof(struct Block, length) == 12, "length offset mismatch");
 
 	enum Operation: UCHAR
 	{
@@ -71,7 +66,9 @@ namespace Replication
 		opStoreBlob = 12,
 		opExecuteSql = 13,
 		opSetSequence = 14,
-		opExecuteSqlIntl = 15
+		opExecuteSqlIntl = 15,
+
+		opDefineAtom = 16
 	};
 
 } // namespace

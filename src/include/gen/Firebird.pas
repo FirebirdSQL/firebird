@@ -121,6 +121,8 @@ type
 
 		class procedure checkException(status: IStatus);
 		class procedure catchException(status: IStatus; e: Exception);
+		class procedure setVersionError(status: IStatus; interfaceName: string;
+			currentVersion, expectedVersion: NativeInt);
 
 	private
 		status: IStatus;
@@ -276,19 +278,24 @@ type
 	IBlob_getInfoPtr = procedure(this: IBlob; status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IBlob_getSegmentPtr = function(this: IBlob; status: IStatus; bufferLength: Cardinal; buffer: Pointer; segmentLength: CardinalPtr): Integer; cdecl;
 	IBlob_putSegmentPtr = procedure(this: IBlob; status: IStatus; length: Cardinal; buffer: Pointer); cdecl;
+	IBlob_deprecatedCancelPtr = procedure(this: IBlob; status: IStatus); cdecl;
+	IBlob_deprecatedClosePtr = procedure(this: IBlob; status: IStatus); cdecl;
+	IBlob_seekPtr = function(this: IBlob; status: IStatus; mode: Integer; offset: Integer): Integer; cdecl;
 	IBlob_cancelPtr = procedure(this: IBlob; status: IStatus); cdecl;
 	IBlob_closePtr = procedure(this: IBlob; status: IStatus); cdecl;
-	IBlob_seekPtr = function(this: IBlob; status: IStatus; mode: Integer; offset: Integer): Integer; cdecl;
 	ITransaction_getInfoPtr = procedure(this: ITransaction; status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	ITransaction_preparePtr = procedure(this: ITransaction; status: IStatus; msgLength: Cardinal; message: BytePtr); cdecl;
-	ITransaction_commitPtr = procedure(this: ITransaction; status: IStatus); cdecl;
+	ITransaction_deprecatedCommitPtr = procedure(this: ITransaction; status: IStatus); cdecl;
 	ITransaction_commitRetainingPtr = procedure(this: ITransaction; status: IStatus); cdecl;
-	ITransaction_rollbackPtr = procedure(this: ITransaction; status: IStatus); cdecl;
+	ITransaction_deprecatedRollbackPtr = procedure(this: ITransaction; status: IStatus); cdecl;
 	ITransaction_rollbackRetainingPtr = procedure(this: ITransaction; status: IStatus); cdecl;
-	ITransaction_disconnectPtr = procedure(this: ITransaction; status: IStatus); cdecl;
+	ITransaction_deprecatedDisconnectPtr = procedure(this: ITransaction; status: IStatus); cdecl;
 	ITransaction_joinPtr = function(this: ITransaction; status: IStatus; transaction: ITransaction): ITransaction; cdecl;
 	ITransaction_validatePtr = function(this: ITransaction; status: IStatus; attachment: IAttachment): ITransaction; cdecl;
 	ITransaction_enterDtcPtr = function(this: ITransaction; status: IStatus): ITransaction; cdecl;
+	ITransaction_commitPtr = procedure(this: ITransaction; status: IStatus); cdecl;
+	ITransaction_rollbackPtr = procedure(this: ITransaction; status: IStatus); cdecl;
+	ITransaction_disconnectPtr = procedure(this: ITransaction; status: IStatus); cdecl;
 	IMessageMetadata_getCountPtr = function(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 	IMessageMetadata_getFieldPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
 	IMessageMetadata_getRelationPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
@@ -329,8 +336,9 @@ type
 	IResultSet_isEofPtr = function(this: IResultSet; status: IStatus): Boolean; cdecl;
 	IResultSet_isBofPtr = function(this: IResultSet; status: IStatus): Boolean; cdecl;
 	IResultSet_getMetadataPtr = function(this: IResultSet; status: IStatus): IMessageMetadata; cdecl;
-	IResultSet_closePtr = procedure(this: IResultSet; status: IStatus); cdecl;
+	IResultSet_deprecatedClosePtr = procedure(this: IResultSet; status: IStatus); cdecl;
 	IResultSet_setDelayedOutputFormatPtr = procedure(this: IResultSet; status: IStatus; format: IMessageMetadata); cdecl;
+	IResultSet_closePtr = procedure(this: IResultSet; status: IStatus); cdecl;
 	IStatement_getInfoPtr = procedure(this: IStatement; status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IStatement_getTypePtr = function(this: IStatement; status: IStatus): Cardinal; cdecl;
 	IStatement_getPlanPtr = function(this: IStatement; status: IStatus; detailed: Boolean): PAnsiChar; cdecl;
@@ -340,11 +348,12 @@ type
 	IStatement_executePtr = function(this: IStatement; status: IStatus; transaction: ITransaction; inMetadata: IMessageMetadata; inBuffer: Pointer; outMetadata: IMessageMetadata; outBuffer: Pointer): ITransaction; cdecl;
 	IStatement_openCursorPtr = function(this: IStatement; status: IStatus; transaction: ITransaction; inMetadata: IMessageMetadata; inBuffer: Pointer; outMetadata: IMessageMetadata; flags: Cardinal): IResultSet; cdecl;
 	IStatement_setCursorNamePtr = procedure(this: IStatement; status: IStatus; name: PAnsiChar); cdecl;
-	IStatement_freePtr = procedure(this: IStatement; status: IStatus); cdecl;
+	IStatement_deprecatedFreePtr = procedure(this: IStatement; status: IStatus); cdecl;
 	IStatement_getFlagsPtr = function(this: IStatement; status: IStatus): Cardinal; cdecl;
 	IStatement_getTimeoutPtr = function(this: IStatement; status: IStatus): Cardinal; cdecl;
 	IStatement_setTimeoutPtr = procedure(this: IStatement; status: IStatus; timeOut: Cardinal); cdecl;
 	IStatement_createBatchPtr = function(this: IStatement; status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch; cdecl;
+	IStatement_freePtr = procedure(this: IStatement; status: IStatus); cdecl;
 	IBatch_addPtr = procedure(this: IBatch; status: IStatus; count: Cardinal; inBuffer: Pointer); cdecl;
 	IBatch_addBlobPtr = procedure(this: IBatch; status: IStatus; length: Cardinal; inBuffer: Pointer; blobId: ISC_QUADPtr; parLength: Cardinal; par: BytePtr); cdecl;
 	IBatch_appendBlobDataPtr = procedure(this: IBatch; status: IStatus; length: Cardinal; inBuffer: Pointer); cdecl;
@@ -355,11 +364,15 @@ type
 	IBatch_getBlobAlignmentPtr = function(this: IBatch; status: IStatus): Cardinal; cdecl;
 	IBatch_getMetadataPtr = function(this: IBatch; status: IStatus): IMessageMetadata; cdecl;
 	IBatch_setDefaultBpbPtr = procedure(this: IBatch; status: IStatus; parLength: Cardinal; par: BytePtr); cdecl;
+	IBatch_deprecatedClosePtr = procedure(this: IBatch; status: IStatus); cdecl;
+	IBatch_closePtr = procedure(this: IBatch; status: IStatus); cdecl;
+	IBatch_getInfoPtr = procedure(this: IBatch; status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IBatchCompletionState_getSizePtr = function(this: IBatchCompletionState; status: IStatus): Cardinal; cdecl;
 	IBatchCompletionState_getStatePtr = function(this: IBatchCompletionState; status: IStatus; pos: Cardinal): Integer; cdecl;
 	IBatchCompletionState_findErrorPtr = function(this: IBatchCompletionState; status: IStatus; pos: Cardinal): Cardinal; cdecl;
 	IBatchCompletionState_getStatusPtr = procedure(this: IBatchCompletionState; status: IStatus; to_: IStatus; pos: Cardinal); cdecl;
 	IReplicator_processPtr = procedure(this: IReplicator; status: IStatus; length: Cardinal; data: BytePtr); cdecl;
+	IReplicator_deprecatedClosePtr = procedure(this: IReplicator; status: IStatus); cdecl;
 	IReplicator_closePtr = procedure(this: IReplicator; status: IStatus); cdecl;
 	IRequest_receivePtr = procedure(this: IRequest; status: IStatus; level: Integer; msgType: Cardinal; length: Cardinal; message: Pointer); cdecl;
 	IRequest_sendPtr = procedure(this: IRequest; status: IStatus; level: Integer; msgType: Cardinal; length: Cardinal; message: Pointer); cdecl;
@@ -367,7 +380,9 @@ type
 	IRequest_startPtr = procedure(this: IRequest; status: IStatus; tra: ITransaction; level: Integer); cdecl;
 	IRequest_startAndSendPtr = procedure(this: IRequest; status: IStatus; tra: ITransaction; level: Integer; msgType: Cardinal; length: Cardinal; message: Pointer); cdecl;
 	IRequest_unwindPtr = procedure(this: IRequest; status: IStatus; level: Integer); cdecl;
+	IRequest_deprecatedFreePtr = procedure(this: IRequest; status: IStatus); cdecl;
 	IRequest_freePtr = procedure(this: IRequest; status: IStatus); cdecl;
+	IEvents_deprecatedCancelPtr = procedure(this: IEvents; status: IStatus); cdecl;
 	IEvents_cancelPtr = procedure(this: IEvents; status: IStatus); cdecl;
 	IAttachment_getInfoPtr = procedure(this: IAttachment; status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IAttachment_startTransactionPtr = function(this: IAttachment; status: IStatus; tpbLength: Cardinal; tpb: BytePtr): ITransaction; cdecl;
@@ -385,17 +400,20 @@ type
 	IAttachment_queEventsPtr = function(this: IAttachment; status: IStatus; callback: IEventCallback; length: Cardinal; events: BytePtr): IEvents; cdecl;
 	IAttachment_cancelOperationPtr = procedure(this: IAttachment; status: IStatus; option: Integer); cdecl;
 	IAttachment_pingPtr = procedure(this: IAttachment; status: IStatus); cdecl;
-	IAttachment_detachPtr = procedure(this: IAttachment; status: IStatus); cdecl;
-	IAttachment_dropDatabasePtr = procedure(this: IAttachment; status: IStatus); cdecl;
+	IAttachment_deprecatedDetachPtr = procedure(this: IAttachment; status: IStatus); cdecl;
+	IAttachment_deprecatedDropDatabasePtr = procedure(this: IAttachment; status: IStatus); cdecl;
 	IAttachment_getIdleTimeoutPtr = function(this: IAttachment; status: IStatus): Cardinal; cdecl;
 	IAttachment_setIdleTimeoutPtr = procedure(this: IAttachment; status: IStatus; timeOut: Cardinal); cdecl;
 	IAttachment_getStatementTimeoutPtr = function(this: IAttachment; status: IStatus): Cardinal; cdecl;
 	IAttachment_setStatementTimeoutPtr = procedure(this: IAttachment; status: IStatus; timeOut: Cardinal); cdecl;
 	IAttachment_createBatchPtr = function(this: IAttachment; status: IStatus; transaction: ITransaction; stmtLength: Cardinal; sqlStmt: PAnsiChar; dialect: Cardinal; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch; cdecl;
 	IAttachment_createReplicatorPtr = function(this: IAttachment; status: IStatus): IReplicator; cdecl;
-	IService_detachPtr = procedure(this: IService; status: IStatus); cdecl;
+	IAttachment_detachPtr = procedure(this: IAttachment; status: IStatus); cdecl;
+	IAttachment_dropDatabasePtr = procedure(this: IAttachment; status: IStatus); cdecl;
+	IService_deprecatedDetachPtr = procedure(this: IService; status: IStatus); cdecl;
 	IService_queryPtr = procedure(this: IService; status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IService_startPtr = procedure(this: IService; status: IStatus; spbLength: Cardinal; spb: BytePtr); cdecl;
+	IService_detachPtr = procedure(this: IService; status: IStatus); cdecl;
 	IProvider_attachDatabasePtr = function(this: IProvider; status: IStatus; fileName: PAnsiChar; dpbLength: Cardinal; dpb: BytePtr): IAttachment; cdecl;
 	IProvider_createDatabasePtr = function(this: IProvider; status: IStatus; fileName: PAnsiChar; dpbLength: Cardinal; dpb: BytePtr): IAttachment; cdecl;
 	IProvider_attachServiceManagerPtr = function(this: IProvider; status: IStatus; service: PAnsiChar; spbLength: Cardinal; spb: BytePtr): IService; cdecl;
@@ -690,7 +708,7 @@ type
 	IReplicatedTransaction_deleteRecordPtr = procedure(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); cdecl;
 	IReplicatedTransaction_executeSqlPtr = procedure(this: IReplicatedTransaction; status: IStatus; sql: PAnsiChar); cdecl;
 	IReplicatedTransaction_executeSqlIntlPtr = procedure(this: IReplicatedTransaction; status: IStatus; charset: Cardinal; sql: PAnsiChar); cdecl;
-	IReplicatedSession_setAttachmentPtr = procedure(this: IReplicatedSession; attachment: IAttachment); cdecl;
+	IReplicatedSession_initPtr = function(this: IReplicatedSession; status: IStatus; attachment: IAttachment): Boolean; cdecl;
 	IReplicatedSession_startTransactionPtr = function(this: IReplicatedSession; status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction; cdecl;
 	IReplicatedSession_cleanupTransactionPtr = procedure(this: IReplicatedSession; status: IStatus; number: Int64); cdecl;
 	IReplicatedSession_setSequencePtr = procedure(this: IReplicatedSession; status: IStatus; name: PAnsiChar; value: Int64); cdecl;
@@ -1182,20 +1200,24 @@ type
 		getInfo: IBlob_getInfoPtr;
 		getSegment: IBlob_getSegmentPtr;
 		putSegment: IBlob_putSegmentPtr;
+		deprecatedCancel: IBlob_deprecatedCancelPtr;
+		deprecatedClose: IBlob_deprecatedClosePtr;
+		seek: IBlob_seekPtr;
 		cancel: IBlob_cancelPtr;
 		close: IBlob_closePtr;
-		seek: IBlob_seekPtr;
 	end;
 
 	IBlob = class(IReferenceCounted)
-		const VERSION = 3;
+		const VERSION = 4;
 
 		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 		function getSegment(status: IStatus; bufferLength: Cardinal; buffer: Pointer; segmentLength: CardinalPtr): Integer;
 		procedure putSegment(status: IStatus; length: Cardinal; buffer: Pointer);
+		procedure deprecatedCancel(status: IStatus);
+		procedure deprecatedClose(status: IStatus);
+		function seek(status: IStatus; mode: Integer; offset: Integer): Integer;
 		procedure cancel(status: IStatus);
 		procedure close(status: IStatus);
-		function seek(status: IStatus; mode: Integer; offset: Integer): Integer;
 	end;
 
 	IBlobImpl = class(IBlob)
@@ -1206,37 +1228,45 @@ type
 		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); virtual; abstract;
 		function getSegment(status: IStatus; bufferLength: Cardinal; buffer: Pointer; segmentLength: CardinalPtr): Integer; virtual; abstract;
 		procedure putSegment(status: IStatus; length: Cardinal; buffer: Pointer); virtual; abstract;
+		procedure deprecatedCancel(status: IStatus); virtual; abstract;
+		procedure deprecatedClose(status: IStatus); virtual; abstract;
+		function seek(status: IStatus; mode: Integer; offset: Integer): Integer; virtual; abstract;
 		procedure cancel(status: IStatus); virtual; abstract;
 		procedure close(status: IStatus); virtual; abstract;
-		function seek(status: IStatus; mode: Integer; offset: Integer): Integer; virtual; abstract;
 	end;
 
 	TransactionVTable = class(ReferenceCountedVTable)
 		getInfo: ITransaction_getInfoPtr;
 		prepare: ITransaction_preparePtr;
-		commit: ITransaction_commitPtr;
+		deprecatedCommit: ITransaction_deprecatedCommitPtr;
 		commitRetaining: ITransaction_commitRetainingPtr;
-		rollback: ITransaction_rollbackPtr;
+		deprecatedRollback: ITransaction_deprecatedRollbackPtr;
 		rollbackRetaining: ITransaction_rollbackRetainingPtr;
-		disconnect: ITransaction_disconnectPtr;
+		deprecatedDisconnect: ITransaction_deprecatedDisconnectPtr;
 		join: ITransaction_joinPtr;
 		validate: ITransaction_validatePtr;
 		enterDtc: ITransaction_enterDtcPtr;
+		commit: ITransaction_commitPtr;
+		rollback: ITransaction_rollbackPtr;
+		disconnect: ITransaction_disconnectPtr;
 	end;
 
 	ITransaction = class(IReferenceCounted)
-		const VERSION = 3;
+		const VERSION = 4;
 
 		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 		procedure prepare(status: IStatus; msgLength: Cardinal; message: BytePtr);
-		procedure commit(status: IStatus);
+		procedure deprecatedCommit(status: IStatus);
 		procedure commitRetaining(status: IStatus);
-		procedure rollback(status: IStatus);
+		procedure deprecatedRollback(status: IStatus);
 		procedure rollbackRetaining(status: IStatus);
-		procedure disconnect(status: IStatus);
+		procedure deprecatedDisconnect(status: IStatus);
 		function join(status: IStatus; transaction: ITransaction): ITransaction;
 		function validate(status: IStatus; attachment: IAttachment): ITransaction;
 		function enterDtc(status: IStatus): ITransaction;
+		procedure commit(status: IStatus);
+		procedure rollback(status: IStatus);
+		procedure disconnect(status: IStatus);
 	end;
 
 	ITransactionImpl = class(ITransaction)
@@ -1246,14 +1276,17 @@ type
 		function release(): Integer; virtual; abstract;
 		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); virtual; abstract;
 		procedure prepare(status: IStatus; msgLength: Cardinal; message: BytePtr); virtual; abstract;
-		procedure commit(status: IStatus); virtual; abstract;
+		procedure deprecatedCommit(status: IStatus); virtual; abstract;
 		procedure commitRetaining(status: IStatus); virtual; abstract;
-		procedure rollback(status: IStatus); virtual; abstract;
+		procedure deprecatedRollback(status: IStatus); virtual; abstract;
 		procedure rollbackRetaining(status: IStatus); virtual; abstract;
-		procedure disconnect(status: IStatus); virtual; abstract;
+		procedure deprecatedDisconnect(status: IStatus); virtual; abstract;
 		function join(status: IStatus; transaction: ITransaction): ITransaction; virtual; abstract;
 		function validate(status: IStatus; attachment: IAttachment): ITransaction; virtual; abstract;
 		function enterDtc(status: IStatus): ITransaction; virtual; abstract;
+		procedure commit(status: IStatus); virtual; abstract;
+		procedure rollback(status: IStatus); virtual; abstract;
+		procedure disconnect(status: IStatus); virtual; abstract;
 	end;
 
 	MessageMetadataVTable = class(ReferenceCountedVTable)
@@ -1389,12 +1422,13 @@ type
 		isEof: IResultSet_isEofPtr;
 		isBof: IResultSet_isBofPtr;
 		getMetadata: IResultSet_getMetadataPtr;
-		close: IResultSet_closePtr;
+		deprecatedClose: IResultSet_deprecatedClosePtr;
 		setDelayedOutputFormat: IResultSet_setDelayedOutputFormatPtr;
+		close: IResultSet_closePtr;
 	end;
 
 	IResultSet = class(IReferenceCounted)
-		const VERSION = 3;
+		const VERSION = 4;
 
 		function fetchNext(status: IStatus; message: Pointer): Integer;
 		function fetchPrior(status: IStatus; message: Pointer): Integer;
@@ -1405,8 +1439,9 @@ type
 		function isEof(status: IStatus): Boolean;
 		function isBof(status: IStatus): Boolean;
 		function getMetadata(status: IStatus): IMessageMetadata;
-		procedure close(status: IStatus);
+		procedure deprecatedClose(status: IStatus);
 		procedure setDelayedOutputFormat(status: IStatus; format: IMessageMetadata);
+		procedure close(status: IStatus);
 	end;
 
 	IResultSetImpl = class(IResultSet)
@@ -1423,8 +1458,9 @@ type
 		function isEof(status: IStatus): Boolean; virtual; abstract;
 		function isBof(status: IStatus): Boolean; virtual; abstract;
 		function getMetadata(status: IStatus): IMessageMetadata; virtual; abstract;
-		procedure close(status: IStatus); virtual; abstract;
+		procedure deprecatedClose(status: IStatus); virtual; abstract;
 		procedure setDelayedOutputFormat(status: IStatus; format: IMessageMetadata); virtual; abstract;
+		procedure close(status: IStatus); virtual; abstract;
 	end;
 
 	StatementVTable = class(ReferenceCountedVTable)
@@ -1437,15 +1473,16 @@ type
 		execute: IStatement_executePtr;
 		openCursor: IStatement_openCursorPtr;
 		setCursorName: IStatement_setCursorNamePtr;
-		free: IStatement_freePtr;
+		deprecatedFree: IStatement_deprecatedFreePtr;
 		getFlags: IStatement_getFlagsPtr;
 		getTimeout: IStatement_getTimeoutPtr;
 		setTimeout: IStatement_setTimeoutPtr;
 		createBatch: IStatement_createBatchPtr;
+		free: IStatement_freePtr;
 	end;
 
 	IStatement = class(IReferenceCounted)
-		const VERSION = 4;
+		const VERSION = 5;
 		const PREPARE_PREFETCH_NONE = Cardinal($0);
 		const PREPARE_PREFETCH_TYPE = Cardinal($1);
 		const PREPARE_PREFETCH_INPUT_PARAMETERS = Cardinal($2);
@@ -1469,11 +1506,12 @@ type
 		function execute(status: IStatus; transaction: ITransaction; inMetadata: IMessageMetadata; inBuffer: Pointer; outMetadata: IMessageMetadata; outBuffer: Pointer): ITransaction;
 		function openCursor(status: IStatus; transaction: ITransaction; inMetadata: IMessageMetadata; inBuffer: Pointer; outMetadata: IMessageMetadata; flags: Cardinal): IResultSet;
 		procedure setCursorName(status: IStatus; name: PAnsiChar);
-		procedure free(status: IStatus);
+		procedure deprecatedFree(status: IStatus);
 		function getFlags(status: IStatus): Cardinal;
 		function getTimeout(status: IStatus): Cardinal;
 		procedure setTimeout(status: IStatus; timeOut: Cardinal);
 		function createBatch(status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch;
+		procedure free(status: IStatus);
 	end;
 
 	IStatementImpl = class(IStatement)
@@ -1490,11 +1528,12 @@ type
 		function execute(status: IStatus; transaction: ITransaction; inMetadata: IMessageMetadata; inBuffer: Pointer; outMetadata: IMessageMetadata; outBuffer: Pointer): ITransaction; virtual; abstract;
 		function openCursor(status: IStatus; transaction: ITransaction; inMetadata: IMessageMetadata; inBuffer: Pointer; outMetadata: IMessageMetadata; flags: Cardinal): IResultSet; virtual; abstract;
 		procedure setCursorName(status: IStatus; name: PAnsiChar); virtual; abstract;
-		procedure free(status: IStatus); virtual; abstract;
+		procedure deprecatedFree(status: IStatus); virtual; abstract;
 		function getFlags(status: IStatus): Cardinal; virtual; abstract;
 		function getTimeout(status: IStatus): Cardinal; virtual; abstract;
 		procedure setTimeout(status: IStatus; timeOut: Cardinal); virtual; abstract;
 		function createBatch(status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch; virtual; abstract;
+		procedure free(status: IStatus); virtual; abstract;
 	end;
 
 	BatchVTable = class(ReferenceCountedVTable)
@@ -1508,16 +1547,25 @@ type
 		getBlobAlignment: IBatch_getBlobAlignmentPtr;
 		getMetadata: IBatch_getMetadataPtr;
 		setDefaultBpb: IBatch_setDefaultBpbPtr;
+		deprecatedClose: IBatch_deprecatedClosePtr;
+		close: IBatch_closePtr;
+		getInfo: IBatch_getInfoPtr;
 	end;
 
 	IBatch = class(IReferenceCounted)
-		const VERSION = 3;
+		const VERSION = 4;
 		const VERSION1 = Byte(1);
+		const CURRENT_VERSION = Byte(IBatch.VERSION1);
 		const TAG_MULTIERROR = Byte(1);
 		const TAG_RECORD_COUNTS = Byte(2);
 		const TAG_BUFFER_BYTES_SIZE = Byte(3);
 		const TAG_BLOB_POLICY = Byte(4);
 		const TAG_DETAILED_ERRORS = Byte(5);
+		const INF_BUFFER_BYTES_SIZE = Byte(10);
+		const INF_DATA_BYTES_SIZE = Byte(11);
+		const INF_BLOBS_BYTES_SIZE = Byte(12);
+		const INF_BLOB_ALIGNMENT = Byte(13);
+		const INF_BLOB_HEADER = Byte(14);
 		const BLOB_NONE = Byte(0);
 		const BLOB_ID_ENGINE = Byte(1);
 		const BLOB_ID_USER = Byte(2);
@@ -1534,6 +1582,9 @@ type
 		function getBlobAlignment(status: IStatus): Cardinal;
 		function getMetadata(status: IStatus): IMessageMetadata;
 		procedure setDefaultBpb(status: IStatus; parLength: Cardinal; par: BytePtr);
+		procedure deprecatedClose(status: IStatus);
+		procedure close(status: IStatus);
+		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 	end;
 
 	IBatchImpl = class(IBatch)
@@ -1551,6 +1602,9 @@ type
 		function getBlobAlignment(status: IStatus): Cardinal; virtual; abstract;
 		function getMetadata(status: IStatus): IMessageMetadata; virtual; abstract;
 		procedure setDefaultBpb(status: IStatus; parLength: Cardinal; par: BytePtr); virtual; abstract;
+		procedure deprecatedClose(status: IStatus); virtual; abstract;
+		procedure close(status: IStatus); virtual; abstract;
+		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); virtual; abstract;
 	end;
 
 	BatchCompletionStateVTable = class(DisposableVTable)
@@ -1584,13 +1638,15 @@ type
 
 	ReplicatorVTable = class(ReferenceCountedVTable)
 		process: IReplicator_processPtr;
+		deprecatedClose: IReplicator_deprecatedClosePtr;
 		close: IReplicator_closePtr;
 	end;
 
 	IReplicator = class(IReferenceCounted)
-		const VERSION = 3;
+		const VERSION = 4;
 
 		procedure process(status: IStatus; length: Cardinal; data: BytePtr);
+		procedure deprecatedClose(status: IStatus);
 		procedure close(status: IStatus);
 	end;
 
@@ -1600,6 +1656,7 @@ type
 		procedure addRef(); virtual; abstract;
 		function release(): Integer; virtual; abstract;
 		procedure process(status: IStatus; length: Cardinal; data: BytePtr); virtual; abstract;
+		procedure deprecatedClose(status: IStatus); virtual; abstract;
 		procedure close(status: IStatus); virtual; abstract;
 	end;
 
@@ -1610,11 +1667,12 @@ type
 		start: IRequest_startPtr;
 		startAndSend: IRequest_startAndSendPtr;
 		unwind: IRequest_unwindPtr;
+		deprecatedFree: IRequest_deprecatedFreePtr;
 		free: IRequest_freePtr;
 	end;
 
 	IRequest = class(IReferenceCounted)
-		const VERSION = 3;
+		const VERSION = 4;
 
 		procedure receive(status: IStatus; level: Integer; msgType: Cardinal; length: Cardinal; message: Pointer);
 		procedure send(status: IStatus; level: Integer; msgType: Cardinal; length: Cardinal; message: Pointer);
@@ -1622,6 +1680,7 @@ type
 		procedure start(status: IStatus; tra: ITransaction; level: Integer);
 		procedure startAndSend(status: IStatus; tra: ITransaction; level: Integer; msgType: Cardinal; length: Cardinal; message: Pointer);
 		procedure unwind(status: IStatus; level: Integer);
+		procedure deprecatedFree(status: IStatus);
 		procedure free(status: IStatus);
 	end;
 
@@ -1636,16 +1695,19 @@ type
 		procedure start(status: IStatus; tra: ITransaction; level: Integer); virtual; abstract;
 		procedure startAndSend(status: IStatus; tra: ITransaction; level: Integer; msgType: Cardinal; length: Cardinal; message: Pointer); virtual; abstract;
 		procedure unwind(status: IStatus; level: Integer); virtual; abstract;
+		procedure deprecatedFree(status: IStatus); virtual; abstract;
 		procedure free(status: IStatus); virtual; abstract;
 	end;
 
 	EventsVTable = class(ReferenceCountedVTable)
+		deprecatedCancel: IEvents_deprecatedCancelPtr;
 		cancel: IEvents_cancelPtr;
 	end;
 
 	IEvents = class(IReferenceCounted)
-		const VERSION = 3;
+		const VERSION = 4;
 
+		procedure deprecatedCancel(status: IStatus);
 		procedure cancel(status: IStatus);
 	end;
 
@@ -1654,6 +1716,7 @@ type
 
 		procedure addRef(); virtual; abstract;
 		function release(): Integer; virtual; abstract;
+		procedure deprecatedCancel(status: IStatus); virtual; abstract;
 		procedure cancel(status: IStatus); virtual; abstract;
 	end;
 
@@ -1674,18 +1737,20 @@ type
 		queEvents: IAttachment_queEventsPtr;
 		cancelOperation: IAttachment_cancelOperationPtr;
 		ping: IAttachment_pingPtr;
-		detach: IAttachment_detachPtr;
-		dropDatabase: IAttachment_dropDatabasePtr;
+		deprecatedDetach: IAttachment_deprecatedDetachPtr;
+		deprecatedDropDatabase: IAttachment_deprecatedDropDatabasePtr;
 		getIdleTimeout: IAttachment_getIdleTimeoutPtr;
 		setIdleTimeout: IAttachment_setIdleTimeoutPtr;
 		getStatementTimeout: IAttachment_getStatementTimeoutPtr;
 		setStatementTimeout: IAttachment_setStatementTimeoutPtr;
 		createBatch: IAttachment_createBatchPtr;
 		createReplicator: IAttachment_createReplicatorPtr;
+		detach: IAttachment_detachPtr;
+		dropDatabase: IAttachment_dropDatabasePtr;
 	end;
 
 	IAttachment = class(IReferenceCounted)
-		const VERSION = 4;
+		const VERSION = 5;
 
 		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 		function startTransaction(status: IStatus; tpbLength: Cardinal; tpb: BytePtr): ITransaction;
@@ -1703,14 +1768,16 @@ type
 		function queEvents(status: IStatus; callback: IEventCallback; length: Cardinal; events: BytePtr): IEvents;
 		procedure cancelOperation(status: IStatus; option: Integer);
 		procedure ping(status: IStatus);
-		procedure detach(status: IStatus);
-		procedure dropDatabase(status: IStatus);
+		procedure deprecatedDetach(status: IStatus);
+		procedure deprecatedDropDatabase(status: IStatus);
 		function getIdleTimeout(status: IStatus): Cardinal;
 		procedure setIdleTimeout(status: IStatus; timeOut: Cardinal);
 		function getStatementTimeout(status: IStatus): Cardinal;
 		procedure setStatementTimeout(status: IStatus; timeOut: Cardinal);
 		function createBatch(status: IStatus; transaction: ITransaction; stmtLength: Cardinal; sqlStmt: PAnsiChar; dialect: Cardinal; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch;
 		function createReplicator(status: IStatus): IReplicator;
+		procedure detach(status: IStatus);
+		procedure dropDatabase(status: IStatus);
 	end;
 
 	IAttachmentImpl = class(IAttachment)
@@ -1734,28 +1801,32 @@ type
 		function queEvents(status: IStatus; callback: IEventCallback; length: Cardinal; events: BytePtr): IEvents; virtual; abstract;
 		procedure cancelOperation(status: IStatus; option: Integer); virtual; abstract;
 		procedure ping(status: IStatus); virtual; abstract;
-		procedure detach(status: IStatus); virtual; abstract;
-		procedure dropDatabase(status: IStatus); virtual; abstract;
+		procedure deprecatedDetach(status: IStatus); virtual; abstract;
+		procedure deprecatedDropDatabase(status: IStatus); virtual; abstract;
 		function getIdleTimeout(status: IStatus): Cardinal; virtual; abstract;
 		procedure setIdleTimeout(status: IStatus; timeOut: Cardinal); virtual; abstract;
 		function getStatementTimeout(status: IStatus): Cardinal; virtual; abstract;
 		procedure setStatementTimeout(status: IStatus; timeOut: Cardinal); virtual; abstract;
 		function createBatch(status: IStatus; transaction: ITransaction; stmtLength: Cardinal; sqlStmt: PAnsiChar; dialect: Cardinal; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch; virtual; abstract;
 		function createReplicator(status: IStatus): IReplicator; virtual; abstract;
+		procedure detach(status: IStatus); virtual; abstract;
+		procedure dropDatabase(status: IStatus); virtual; abstract;
 	end;
 
 	ServiceVTable = class(ReferenceCountedVTable)
-		detach: IService_detachPtr;
+		deprecatedDetach: IService_deprecatedDetachPtr;
 		query: IService_queryPtr;
 		start: IService_startPtr;
+		detach: IService_detachPtr;
 	end;
 
 	IService = class(IReferenceCounted)
-		const VERSION = 3;
+		const VERSION = 4;
 
-		procedure detach(status: IStatus);
+		procedure deprecatedDetach(status: IStatus);
 		procedure query(status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 		procedure start(status: IStatus; spbLength: Cardinal; spb: BytePtr);
+		procedure detach(status: IStatus);
 	end;
 
 	IServiceImpl = class(IService)
@@ -1763,9 +1834,10 @@ type
 
 		procedure addRef(); virtual; abstract;
 		function release(): Integer; virtual; abstract;
-		procedure detach(status: IStatus); virtual; abstract;
+		procedure deprecatedDetach(status: IStatus); virtual; abstract;
 		procedure query(status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr); virtual; abstract;
 		procedure start(status: IStatus; spbLength: Cardinal; spb: BytePtr); virtual; abstract;
+		procedure detach(status: IStatus); virtual; abstract;
 	end;
 
 	ProviderVTable = class(PluginBaseVTable)
@@ -2736,6 +2808,8 @@ type
 		const SPB_SEND = Cardinal(7);
 		const SPB_RECEIVE = Cardinal(8);
 		const SPB_RESPONSE = Cardinal(9);
+		const INFO_SEND = Cardinal(10);
+		const INFO_RESPONSE = Cardinal(11);
 
 		procedure clear(status: IStatus);
 		procedure removeCurrent(status: IStatus);
@@ -3645,7 +3719,7 @@ type
 	end;
 
 	ReplicatedSessionVTable = class(PluginBaseVTable)
-		setAttachment: IReplicatedSession_setAttachmentPtr;
+		init: IReplicatedSession_initPtr;
 		startTransaction: IReplicatedSession_startTransactionPtr;
 		cleanupTransaction: IReplicatedSession_cleanupTransactionPtr;
 		setSequence: IReplicatedSession_setSequencePtr;
@@ -3654,7 +3728,7 @@ type
 	IReplicatedSession = class(IPluginBase)
 		const VERSION = 4;
 
-		procedure setAttachment(attachment: IAttachment);
+		function init(status: IStatus; attachment: IAttachment): Boolean;
 		function startTransaction(status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction;
 		procedure cleanupTransaction(status: IStatus; number: Int64);
 		procedure setSequence(status: IStatus; name: PAnsiChar; value: Int64);
@@ -3667,7 +3741,7 @@ type
 		function release(): Integer; virtual; abstract;
 		procedure setOwner(r: IReferenceCounted); virtual; abstract;
 		function getOwner(): IReferenceCounted; virtual; abstract;
-		procedure setAttachment(attachment: IAttachment); virtual; abstract;
+		function init(status: IStatus; attachment: IAttachment): Boolean; virtual; abstract;
 		function startTransaction(status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction; virtual; abstract;
 		procedure cleanupTransaction(status: IStatus; number: Int64); virtual; abstract;
 		procedure setSequence(status: IStatus; name: PAnsiChar; value: Int64); virtual; abstract;
@@ -3676,6 +3750,7 @@ type
 	function fb_get_master_interface : IMaster; cdecl; external 'fbclient';
 
 const
+	FB_UsedInYValve = FALSE;
 	isc_dpb_version1 = byte(1);
 	isc_dpb_version2 = byte(2);
 	isc_dpb_cdd_pathname = byte(1);
@@ -3773,6 +3848,7 @@ const
 	isc_dpb_set_bind = byte(93);
 	isc_dpb_decfloat_round = byte(94);
 	isc_dpb_decfloat_traps = byte(95);
+	isc_dpb_clear_map = byte(96);
 	isc_dpb_address = byte(1);
 	isc_dpb_addr_protocol = byte(1);
 	isc_dpb_addr_endpoint = byte(2);
@@ -3797,6 +3873,9 @@ const
 	isc_dpb_shut_multi = $20;
 	isc_dpb_shut_single = $30;
 	isc_dpb_shut_full = $40;
+	isc_dpb_replica_none = byte(0);
+	isc_dpb_replica_read_only = byte(1);
+	isc_dpb_replica_read_write = byte(2);
 	RDB_system = byte(1);
 	RDB_id_assigned = byte(2);
 	isc_tpb_version1 = byte(1);
@@ -3954,6 +4033,7 @@ const
 	isc_spb_prp_transactions_shutdown = byte(43);
 	isc_spb_prp_shutdown_mode = byte(44);
 	isc_spb_prp_online_mode = byte(45);
+	isc_spb_prp_replica_mode = byte(46);
 	isc_spb_prp_sm_normal = byte(0);
 	isc_spb_prp_sm_multi = byte(1);
 	isc_spb_prp_sm_single = byte(2);
@@ -3964,6 +4044,9 @@ const
 	isc_spb_prp_wm_sync = byte(38);
 	isc_spb_prp_am_readonly = byte(39);
 	isc_spb_prp_am_readwrite = byte(40);
+	isc_spb_prp_rm_none = byte(0);
+	isc_spb_prp_rm_readonly = byte(1);
+	isc_spb_prp_rm_readwrite = byte(2);
 	isc_spb_rpr_commit_trans = byte(15);
 	isc_spb_rpr_rollback_trans = byte(34);
 	isc_spb_rpr_recover_two_phase = byte(17);
@@ -4010,6 +4093,7 @@ const
 	isc_spb_res_replace = $1000;
 	isc_spb_res_create = $2000;
 	isc_spb_res_use_all_space = $4000;
+	isc_spb_res_replica_mode = byte(20);
 	isc_spb_val_tab_incl = byte(1);
 	isc_spb_val_tab_excl = byte(2);
 	isc_spb_val_idx_incl = byte(3);
@@ -4032,6 +4116,7 @@ const
 	isc_spb_nbk_guid = byte(8);
 	isc_spb_nbk_no_triggers = $01;
 	isc_spb_nbk_inplace = $02;
+	isc_spb_nbk_sequence = $04;
 	isc_spb_trc_id = byte(1);
 	isc_spb_trc_name = byte(2);
 	isc_spb_trc_cfg = byte(3);
@@ -4082,6 +4167,7 @@ const
 	fb_shutrsn_signal = -5;
 	fb_shutrsn_services = -6;
 	fb_shutrsn_exit_called = -7;
+	fb_shutrsn_emergency = -8;
 	fb_cancel_disable = byte(1);
 	fb_cancel_enable = byte(2);
 	fb_cancel_raise = byte(3);
@@ -4109,1459 +4195,1457 @@ const
 	isc_arg_unix		= 7;	(* UNIX error code *)
 	isc_arg_domain		= 8;	(* Apollo/Domain error code *)
 	isc_arg_dos		= 9;	(* MSDOS/OS2 error code *)
-	isc_arith_except                     = 335544321;
-	isc_bad_dbkey                        = 335544322;
-	isc_bad_db_format                    = 335544323;
-	isc_bad_db_handle                    = 335544324;
-	isc_bad_dpb_content                  = 335544325;
-	isc_bad_dpb_form                     = 335544326;
-	isc_bad_req_handle                   = 335544327;
-	isc_bad_segstr_handle                = 335544328;
-	isc_bad_segstr_id                    = 335544329;
-	isc_bad_tpb_content                  = 335544330;
-	isc_bad_tpb_form                     = 335544331;
-	isc_bad_trans_handle                 = 335544332;
-	isc_bug_check                        = 335544333;
-	isc_convert_error                    = 335544334;
-	isc_db_corrupt                       = 335544335;
-	isc_deadlock                         = 335544336;
-	isc_excess_trans                     = 335544337;
-	isc_from_no_match                    = 335544338;
-	isc_infinap                          = 335544339;
-	isc_infona                           = 335544340;
-	isc_infunk                           = 335544341;
-	isc_integ_fail                       = 335544342;
-	isc_invalid_blr                      = 335544343;
-	isc_io_error                         = 335544344;
-	isc_lock_conflict                    = 335544345;
-	isc_metadata_corrupt                 = 335544346;
-	isc_not_valid                        = 335544347;
-	isc_no_cur_rec                       = 335544348;
-	isc_no_dup                           = 335544349;
-	isc_no_finish                        = 335544350;
-	isc_no_meta_update                   = 335544351;
-	isc_no_priv                          = 335544352;
-	isc_no_recon                         = 335544353;
-	isc_no_record                        = 335544354;
-	isc_no_segstr_close                  = 335544355;
-	isc_obsolete_metadata                = 335544356;
-	isc_open_trans                       = 335544357;
-	isc_port_len                         = 335544358;
-	isc_read_only_field                  = 335544359;
-	isc_read_only_rel                    = 335544360;
-	isc_read_only_trans                  = 335544361;
-	isc_read_only_view                   = 335544362;
-	isc_req_no_trans                     = 335544363;
-	isc_req_sync                         = 335544364;
-	isc_req_wrong_db                     = 335544365;
-	isc_segment                          = 335544366;
-	isc_segstr_eof                       = 335544367;
-	isc_segstr_no_op                     = 335544368;
-	isc_segstr_no_read                   = 335544369;
-	isc_segstr_no_trans                  = 335544370;
-	isc_segstr_no_write                  = 335544371;
-	isc_segstr_wrong_db                  = 335544372;
-	isc_sys_request                      = 335544373;
-	isc_stream_eof                       = 335544374;
-	isc_unavailable                      = 335544375;
-	isc_unres_rel                        = 335544376;
-	isc_uns_ext                          = 335544377;
-	isc_wish_list                        = 335544378;
-	isc_wrong_ods                        = 335544379;
-	isc_wronumarg                        = 335544380;
-	isc_imp_exc                          = 335544381;
-	isc_random                           = 335544382;
-	isc_fatal_conflict                   = 335544383;
-	isc_badblk                           = 335544384;
-	isc_invpoolcl                        = 335544385;
-	isc_nopoolids                        = 335544386;
-	isc_relbadblk                        = 335544387;
-	isc_blktoobig                        = 335544388;
-	isc_bufexh                           = 335544389;
-	isc_syntaxerr                        = 335544390;
-	isc_bufinuse                         = 335544391;
-	isc_bdbincon                         = 335544392;
-	isc_reqinuse                         = 335544393;
-	isc_badodsver                        = 335544394;
-	isc_relnotdef                        = 335544395;
-	isc_fldnotdef                        = 335544396;
-	isc_dirtypage                        = 335544397;
-	isc_waifortra                        = 335544398;
-	isc_doubleloc                        = 335544399;
-	isc_nodnotfnd                        = 335544400;
-	isc_dupnodfnd                        = 335544401;
-	isc_locnotmar                        = 335544402;
-	isc_badpagtyp                        = 335544403;
-	isc_corrupt                          = 335544404;
-	isc_badpage                          = 335544405;
-	isc_badindex                         = 335544406;
-	isc_dbbnotzer                        = 335544407;
-	isc_tranotzer                        = 335544408;
-	isc_trareqmis                        = 335544409;
-	isc_badhndcnt                        = 335544410;
-	isc_wrotpbver                        = 335544411;
-	isc_wroblrver                        = 335544412;
-	isc_wrodpbver                        = 335544413;
-	isc_blobnotsup                       = 335544414;
-	isc_badrelation                      = 335544415;
-	isc_nodetach                         = 335544416;
-	isc_notremote                        = 335544417;
-	isc_trainlim                         = 335544418;
-	isc_notinlim                         = 335544419;
-	isc_traoutsta                        = 335544420;
-	isc_connect_reject                   = 335544421;
-	isc_dbfile                           = 335544422;
-	isc_orphan                           = 335544423;
-	isc_no_lock_mgr                      = 335544424;
-	isc_ctxinuse                         = 335544425;
-	isc_ctxnotdef                        = 335544426;
-	isc_datnotsup                        = 335544427;
-	isc_badmsgnum                        = 335544428;
-	isc_badparnum                        = 335544429;
-	isc_virmemexh                        = 335544430;
-	isc_blocking_signal                  = 335544431;
-	isc_lockmanerr                       = 335544432;
-	isc_journerr                         = 335544433;
-	isc_keytoobig                        = 335544434;
-	isc_nullsegkey                       = 335544435;
-	isc_sqlerr                           = 335544436;
-	isc_wrodynver                        = 335544437;
-	isc_funnotdef                        = 335544438;
-	isc_funmismat                        = 335544439;
-	isc_bad_msg_vec                      = 335544440;
-	isc_bad_detach                       = 335544441;
-	isc_noargacc_read                    = 335544442;
-	isc_noargacc_write                   = 335544443;
-	isc_read_only                        = 335544444;
-	isc_ext_err                          = 335544445;
-	isc_non_updatable                    = 335544446;
-	isc_no_rollback                      = 335544447;
-	isc_bad_sec_info                     = 335544448;
-	isc_invalid_sec_info                 = 335544449;
-	isc_misc_interpreted                 = 335544450;
-	isc_update_conflict                  = 335544451;
-	isc_unlicensed                       = 335544452;
-	isc_obj_in_use                       = 335544453;
-	isc_nofilter                         = 335544454;
-	isc_shadow_accessed                  = 335544455;
-	isc_invalid_sdl                      = 335544456;
-	isc_out_of_bounds                    = 335544457;
-	isc_invalid_dimension                = 335544458;
-	isc_rec_in_limbo                     = 335544459;
-	isc_shadow_missing                   = 335544460;
-	isc_cant_validate                    = 335544461;
-	isc_cant_start_journal               = 335544462;
-	isc_gennotdef                        = 335544463;
-	isc_cant_start_logging               = 335544464;
-	isc_bad_segstr_type                  = 335544465;
-	isc_foreign_key                      = 335544466;
-	isc_high_minor                       = 335544467;
-	isc_tra_state                        = 335544468;
-	isc_trans_invalid                    = 335544469;
-	isc_buf_invalid                      = 335544470;
-	isc_indexnotdefined                  = 335544471;
-	isc_login                            = 335544472;
-	isc_invalid_bookmark                 = 335544473;
-	isc_bad_lock_level                   = 335544474;
-	isc_relation_lock                    = 335544475;
-	isc_record_lock                      = 335544476;
-	isc_max_idx                          = 335544477;
-	isc_jrn_enable                       = 335544478;
-	isc_old_failure                      = 335544479;
-	isc_old_in_progress                  = 335544480;
-	isc_old_no_space                     = 335544481;
-	isc_no_wal_no_jrn                    = 335544482;
-	isc_num_old_files                    = 335544483;
-	isc_wal_file_open                    = 335544484;
-	isc_bad_stmt_handle                  = 335544485;
-	isc_wal_failure                      = 335544486;
-	isc_walw_err                         = 335544487;
-	isc_logh_small                       = 335544488;
-	isc_logh_inv_version                 = 335544489;
-	isc_logh_open_flag                   = 335544490;
-	isc_logh_open_flag2                  = 335544491;
-	isc_logh_diff_dbname                 = 335544492;
-	isc_logf_unexpected_eof              = 335544493;
-	isc_logr_incomplete                  = 335544494;
-	isc_logr_header_small                = 335544495;
-	isc_logb_small                       = 335544496;
-	isc_wal_illegal_attach               = 335544497;
-	isc_wal_invalid_wpb                  = 335544498;
-	isc_wal_err_rollover                 = 335544499;
-	isc_no_wal                           = 335544500;
-	isc_drop_wal                         = 335544501;
-	isc_stream_not_defined               = 335544502;
-	isc_wal_subsys_error                 = 335544503;
-	isc_wal_subsys_corrupt               = 335544504;
-	isc_no_archive                       = 335544505;
-	isc_shutinprog                       = 335544506;
-	isc_range_in_use                     = 335544507;
-	isc_range_not_found                  = 335544508;
-	isc_charset_not_found                = 335544509;
-	isc_lock_timeout                     = 335544510;
-	isc_prcnotdef                        = 335544511;
-	isc_prcmismat                        = 335544512;
-	isc_wal_bugcheck                     = 335544513;
-	isc_wal_cant_expand                  = 335544514;
-	isc_codnotdef                        = 335544515;
-	isc_xcpnotdef                        = 335544516;
-	isc_except                           = 335544517;
-	isc_cache_restart                    = 335544518;
-	isc_bad_lock_handle                  = 335544519;
-	isc_jrn_present                      = 335544520;
-	isc_wal_err_rollover2                = 335544521;
-	isc_wal_err_logwrite                 = 335544522;
-	isc_wal_err_jrn_comm                 = 335544523;
-	isc_wal_err_expansion                = 335544524;
-	isc_wal_err_setup                    = 335544525;
-	isc_wal_err_ww_sync                  = 335544526;
-	isc_wal_err_ww_start                 = 335544527;
-	isc_shutdown                         = 335544528;
-	isc_existing_priv_mod                = 335544529;
-	isc_primary_key_ref                  = 335544530;
-	isc_primary_key_notnull              = 335544531;
-	isc_ref_cnstrnt_notfound             = 335544532;
-	isc_foreign_key_notfound             = 335544533;
-	isc_ref_cnstrnt_update               = 335544534;
-	isc_check_cnstrnt_update             = 335544535;
-	isc_check_cnstrnt_del                = 335544536;
-	isc_integ_index_seg_del              = 335544537;
-	isc_integ_index_seg_mod              = 335544538;
-	isc_integ_index_del                  = 335544539;
-	isc_integ_index_mod                  = 335544540;
-	isc_check_trig_del                   = 335544541;
-	isc_check_trig_update                = 335544542;
-	isc_cnstrnt_fld_del                  = 335544543;
-	isc_cnstrnt_fld_rename               = 335544544;
-	isc_rel_cnstrnt_update               = 335544545;
-	isc_constaint_on_view                = 335544546;
-	isc_invld_cnstrnt_type               = 335544547;
-	isc_primary_key_exists               = 335544548;
-	isc_systrig_update                   = 335544549;
-	isc_not_rel_owner                    = 335544550;
-	isc_grant_obj_notfound               = 335544551;
-	isc_grant_fld_notfound               = 335544552;
-	isc_grant_nopriv                     = 335544553;
-	isc_nonsql_security_rel              = 335544554;
-	isc_nonsql_security_fld              = 335544555;
-	isc_wal_cache_err                    = 335544556;
-	isc_shutfail                         = 335544557;
-	isc_check_constraint                 = 335544558;
-	isc_bad_svc_handle                   = 335544559;
-	isc_shutwarn                         = 335544560;
-	isc_wrospbver                        = 335544561;
-	isc_bad_spb_form                     = 335544562;
-	isc_svcnotdef                        = 335544563;
-	isc_no_jrn                           = 335544564;
-	isc_transliteration_failed           = 335544565;
-	isc_start_cm_for_wal                 = 335544566;
-	isc_wal_ovflow_log_required          = 335544567;
-	isc_text_subtype                     = 335544568;
-	isc_dsql_error                       = 335544569;
-	isc_dsql_command_err                 = 335544570;
-	isc_dsql_constant_err                = 335544571;
-	isc_dsql_cursor_err                  = 335544572;
-	isc_dsql_datatype_err                = 335544573;
-	isc_dsql_decl_err                    = 335544574;
-	isc_dsql_cursor_update_err           = 335544575;
-	isc_dsql_cursor_open_err             = 335544576;
-	isc_dsql_cursor_close_err            = 335544577;
-	isc_dsql_field_err                   = 335544578;
-	isc_dsql_internal_err                = 335544579;
-	isc_dsql_relation_err                = 335544580;
-	isc_dsql_procedure_err               = 335544581;
-	isc_dsql_request_err                 = 335544582;
-	isc_dsql_sqlda_err                   = 335544583;
-	isc_dsql_var_count_err               = 335544584;
-	isc_dsql_stmt_handle                 = 335544585;
-	isc_dsql_function_err                = 335544586;
-	isc_dsql_blob_err                    = 335544587;
-	isc_collation_not_found              = 335544588;
-	isc_collation_not_for_charset        = 335544589;
-	isc_dsql_dup_option                  = 335544590;
-	isc_dsql_tran_err                    = 335544591;
-	isc_dsql_invalid_array               = 335544592;
-	isc_dsql_max_arr_dim_exceeded        = 335544593;
-	isc_dsql_arr_range_error             = 335544594;
-	isc_dsql_trigger_err                 = 335544595;
-	isc_dsql_subselect_err               = 335544596;
-	isc_dsql_crdb_prepare_err            = 335544597;
-	isc_specify_field_err                = 335544598;
-	isc_num_field_err                    = 335544599;
-	isc_col_name_err                     = 335544600;
-	isc_where_err                        = 335544601;
-	isc_table_view_err                   = 335544602;
-	isc_distinct_err                     = 335544603;
-	isc_key_field_count_err              = 335544604;
-	isc_subquery_err                     = 335544605;
-	isc_expression_eval_err              = 335544606;
-	isc_node_err                         = 335544607;
-	isc_command_end_err                  = 335544608;
-	isc_index_name                       = 335544609;
-	isc_exception_name                   = 335544610;
-	isc_field_name                       = 335544611;
-	isc_token_err                        = 335544612;
-	isc_union_err                        = 335544613;
-	isc_dsql_construct_err               = 335544614;
-	isc_field_aggregate_err              = 335544615;
-	isc_field_ref_err                    = 335544616;
-	isc_order_by_err                     = 335544617;
-	isc_return_mode_err                  = 335544618;
-	isc_extern_func_err                  = 335544619;
-	isc_alias_conflict_err               = 335544620;
-	isc_procedure_conflict_error         = 335544621;
-	isc_relation_conflict_err            = 335544622;
-	isc_dsql_domain_err                  = 335544623;
-	isc_idx_seg_err                      = 335544624;
-	isc_node_name_err                    = 335544625;
-	isc_table_name                       = 335544626;
-	isc_proc_name                        = 335544627;
-	isc_idx_create_err                   = 335544628;
-	isc_wal_shadow_err                   = 335544629;
-	isc_dependency                       = 335544630;
-	isc_idx_key_err                      = 335544631;
-	isc_dsql_file_length_err             = 335544632;
-	isc_dsql_shadow_number_err           = 335544633;
-	isc_dsql_token_unk_err               = 335544634;
-	isc_dsql_no_relation_alias           = 335544635;
-	isc_indexname                        = 335544636;
-	isc_no_stream_plan                   = 335544637;
-	isc_stream_twice                     = 335544638;
-	isc_stream_not_found                 = 335544639;
-	isc_collation_requires_text          = 335544640;
-	isc_dsql_domain_not_found            = 335544641;
-	isc_index_unused                     = 335544642;
-	isc_dsql_self_join                   = 335544643;
-	isc_stream_bof                       = 335544644;
-	isc_stream_crack                     = 335544645;
-	isc_db_or_file_exists                = 335544646;
-	isc_invalid_operator                 = 335544647;
-	isc_conn_lost                        = 335544648;
-	isc_bad_checksum                     = 335544649;
-	isc_page_type_err                    = 335544650;
-	isc_ext_readonly_err                 = 335544651;
-	isc_sing_select_err                  = 335544652;
-	isc_psw_attach                       = 335544653;
-	isc_psw_start_trans                  = 335544654;
-	isc_invalid_direction                = 335544655;
-	isc_dsql_var_conflict                = 335544656;
-	isc_dsql_no_blob_array               = 335544657;
-	isc_dsql_base_table                  = 335544658;
-	isc_duplicate_base_table             = 335544659;
-	isc_view_alias                       = 335544660;
-	isc_index_root_page_full             = 335544661;
-	isc_dsql_blob_type_unknown           = 335544662;
-	isc_req_max_clones_exceeded          = 335544663;
-	isc_dsql_duplicate_spec              = 335544664;
-	isc_unique_key_violation             = 335544665;
-	isc_srvr_version_too_old             = 335544666;
-	isc_drdb_completed_with_errs         = 335544667;
-	isc_dsql_procedure_use_err           = 335544668;
-	isc_dsql_count_mismatch              = 335544669;
-	isc_blob_idx_err                     = 335544670;
-	isc_array_idx_err                    = 335544671;
-	isc_key_field_err                    = 335544672;
-	isc_no_delete                        = 335544673;
-	isc_del_last_field                   = 335544674;
-	isc_sort_err                         = 335544675;
-	isc_sort_mem_err                     = 335544676;
-	isc_version_err                      = 335544677;
-	isc_inval_key_posn                   = 335544678;
-	isc_no_segments_err                  = 335544679;
-	isc_crrp_data_err                    = 335544680;
-	isc_rec_size_err                     = 335544681;
-	isc_dsql_field_ref                   = 335544682;
-	isc_req_depth_exceeded               = 335544683;
-	isc_no_field_access                  = 335544684;
-	isc_no_dbkey                         = 335544685;
-	isc_jrn_format_err                   = 335544686;
-	isc_jrn_file_full                    = 335544687;
-	isc_dsql_open_cursor_request         = 335544688;
-	isc_ib_error                         = 335544689;
-	isc_cache_redef                      = 335544690;
-	isc_cache_too_small                  = 335544691;
-	isc_log_redef                        = 335544692;
-	isc_log_too_small                    = 335544693;
-	isc_partition_too_small              = 335544694;
-	isc_partition_not_supp               = 335544695;
-	isc_log_length_spec                  = 335544696;
-	isc_precision_err                    = 335544697;
-	isc_scale_nogt                       = 335544698;
-	isc_expec_short                      = 335544699;
-	isc_expec_long                       = 335544700;
-	isc_expec_ushort                     = 335544701;
-	isc_escape_invalid                   = 335544702;
-	isc_svcnoexe                         = 335544703;
-	isc_net_lookup_err                   = 335544704;
-	isc_service_unknown                  = 335544705;
-	isc_host_unknown                     = 335544706;
-	isc_grant_nopriv_on_base             = 335544707;
-	isc_dyn_fld_ambiguous                = 335544708;
-	isc_dsql_agg_ref_err                 = 335544709;
-	isc_complex_view                     = 335544710;
-	isc_unprepared_stmt                  = 335544711;
-	isc_expec_positive                   = 335544712;
-	isc_dsql_sqlda_value_err             = 335544713;
-	isc_invalid_array_id                 = 335544714;
-	isc_extfile_uns_op                   = 335544715;
-	isc_svc_in_use                       = 335544716;
-	isc_err_stack_limit                  = 335544717;
-	isc_invalid_key                      = 335544718;
-	isc_net_init_error                   = 335544719;
-	isc_loadlib_failure                  = 335544720;
-	isc_network_error                    = 335544721;
-	isc_net_connect_err                  = 335544722;
-	isc_net_connect_listen_err           = 335544723;
-	isc_net_event_connect_err            = 335544724;
-	isc_net_event_listen_err             = 335544725;
-	isc_net_read_err                     = 335544726;
-	isc_net_write_err                    = 335544727;
-	isc_integ_index_deactivate           = 335544728;
-	isc_integ_deactivate_primary         = 335544729;
-	isc_cse_not_supported                = 335544730;
-	isc_tra_must_sweep                   = 335544731;
-	isc_unsupported_network_drive        = 335544732;
-	isc_io_create_err                    = 335544733;
-	isc_io_open_err                      = 335544734;
-	isc_io_close_err                     = 335544735;
-	isc_io_read_err                      = 335544736;
-	isc_io_write_err                     = 335544737;
-	isc_io_delete_err                    = 335544738;
-	isc_io_access_err                    = 335544739;
-	isc_udf_exception                    = 335544740;
-	isc_lost_db_connection               = 335544741;
-	isc_no_write_user_priv               = 335544742;
-	isc_token_too_long                   = 335544743;
-	isc_max_att_exceeded                 = 335544744;
-	isc_login_same_as_role_name          = 335544745;
-	isc_reftable_requires_pk             = 335544746;
-	isc_usrname_too_long                 = 335544747;
-	isc_password_too_long                = 335544748;
-	isc_usrname_required                 = 335544749;
-	isc_password_required                = 335544750;
-	isc_bad_protocol                     = 335544751;
-	isc_dup_usrname_found                = 335544752;
-	isc_usrname_not_found                = 335544753;
-	isc_error_adding_sec_record          = 335544754;
-	isc_error_modifying_sec_record       = 335544755;
-	isc_error_deleting_sec_record        = 335544756;
-	isc_error_updating_sec_db            = 335544757;
-	isc_sort_rec_size_err                = 335544758;
-	isc_bad_default_value                = 335544759;
-	isc_invalid_clause                   = 335544760;
-	isc_too_many_handles                 = 335544761;
-	isc_optimizer_blk_exc                = 335544762;
-	isc_invalid_string_constant          = 335544763;
-	isc_transitional_date                = 335544764;
-	isc_read_only_database               = 335544765;
-	isc_must_be_dialect_2_and_up         = 335544766;
-	isc_blob_filter_exception            = 335544767;
-	isc_exception_access_violation       = 335544768;
-	isc_exception_datatype_missalignment = 335544769;
-	isc_exception_array_bounds_exceeded  = 335544770;
-	isc_exception_float_denormal_operand = 335544771;
-	isc_exception_float_divide_by_zero   = 335544772;
-	isc_exception_float_inexact_result   = 335544773;
-	isc_exception_float_invalid_operand  = 335544774;
-	isc_exception_float_overflow         = 335544775;
-	isc_exception_float_stack_check      = 335544776;
-	isc_exception_float_underflow        = 335544777;
-	isc_exception_integer_divide_by_zero = 335544778;
-	isc_exception_integer_overflow       = 335544779;
-	isc_exception_unknown                = 335544780;
-	isc_exception_stack_overflow         = 335544781;
-	isc_exception_sigsegv                = 335544782;
-	isc_exception_sigill                 = 335544783;
-	isc_exception_sigbus                 = 335544784;
-	isc_exception_sigfpe                 = 335544785;
-	isc_ext_file_delete                  = 335544786;
-	isc_ext_file_modify                  = 335544787;
-	isc_adm_task_denied                  = 335544788;
-	isc_extract_input_mismatch           = 335544789;
-	isc_insufficient_svc_privileges      = 335544790;
-	isc_file_in_use                      = 335544791;
-	isc_service_att_err                  = 335544792;
-	isc_ddl_not_allowed_by_db_sql_dial   = 335544793;
-	isc_cancelled                        = 335544794;
-	isc_unexp_spb_form                   = 335544795;
-	isc_sql_dialect_datatype_unsupport   = 335544796;
-	isc_svcnouser                        = 335544797;
-	isc_depend_on_uncommitted_rel        = 335544798;
-	isc_svc_name_missing                 = 335544799;
-	isc_too_many_contexts                = 335544800;
-	isc_datype_notsup                    = 335544801;
-	isc_dialect_reset_warning            = 335544802;
-	isc_dialect_not_changed              = 335544803;
-	isc_database_create_failed           = 335544804;
-	isc_inv_dialect_specified            = 335544805;
-	isc_valid_db_dialects                = 335544806;
-	isc_sqlwarn                          = 335544807;
-	isc_dtype_renamed                    = 335544808;
-	isc_extern_func_dir_error            = 335544809;
-	isc_date_range_exceeded              = 335544810;
-	isc_inv_client_dialect_specified     = 335544811;
-	isc_valid_client_dialects            = 335544812;
-	isc_optimizer_between_err            = 335544813;
-	isc_service_not_supported            = 335544814;
-	isc_generator_name                   = 335544815;
-	isc_udf_name                         = 335544816;
-	isc_bad_limit_param                  = 335544817;
-	isc_bad_skip_param                   = 335544818;
-	isc_io_32bit_exceeded_err            = 335544819;
-	isc_invalid_savepoint                = 335544820;
-	isc_dsql_column_pos_err              = 335544821;
-	isc_dsql_agg_where_err               = 335544822;
-	isc_dsql_agg_group_err               = 335544823;
-	isc_dsql_agg_column_err              = 335544824;
-	isc_dsql_agg_having_err              = 335544825;
-	isc_dsql_agg_nested_err              = 335544826;
-	isc_exec_sql_invalid_arg             = 335544827;
-	isc_exec_sql_invalid_req             = 335544828;
-	isc_exec_sql_invalid_var             = 335544829;
-	isc_exec_sql_max_call_exceeded       = 335544830;
-	isc_conf_access_denied               = 335544831;
-	isc_wrong_backup_state               = 335544832;
-	isc_wal_backup_err                   = 335544833;
-	isc_cursor_not_open                  = 335544834;
-	isc_bad_shutdown_mode                = 335544835;
-	isc_concat_overflow                  = 335544836;
-	isc_bad_substring_offset             = 335544837;
-	isc_foreign_key_target_doesnt_exist  = 335544838;
-	isc_foreign_key_references_present   = 335544839;
-	isc_no_update                        = 335544840;
-	isc_cursor_already_open              = 335544841;
-	isc_stack_trace                      = 335544842;
-	isc_ctx_var_not_found                = 335544843;
-	isc_ctx_namespace_invalid            = 335544844;
-	isc_ctx_too_big                      = 335544845;
-	isc_ctx_bad_argument                 = 335544846;
-	isc_identifier_too_long              = 335544847;
-	isc_except2                          = 335544848;
-	isc_malformed_string                 = 335544849;
-	isc_prc_out_param_mismatch           = 335544850;
-	isc_command_end_err2                 = 335544851;
-	isc_partner_idx_incompat_type        = 335544852;
-	isc_bad_substring_length             = 335544853;
-	isc_charset_not_installed            = 335544854;
-	isc_collation_not_installed          = 335544855;
-	isc_att_shutdown                     = 335544856;
-	isc_blobtoobig                       = 335544857;
-	isc_must_have_phys_field             = 335544858;
-	isc_invalid_time_precision           = 335544859;
-	isc_blob_convert_error               = 335544860;
-	isc_array_convert_error              = 335544861;
-	isc_record_lock_not_supp             = 335544862;
-	isc_partner_idx_not_found            = 335544863;
-	isc_tra_num_exc                      = 335544864;
-	isc_field_disappeared                = 335544865;
-	isc_met_wrong_gtt_scope              = 335544866;
-	isc_subtype_for_internal_use         = 335544867;
-	isc_illegal_prc_type                 = 335544868;
-	isc_invalid_sort_datatype            = 335544869;
-	isc_collation_name                   = 335544870;
-	isc_domain_name                      = 335544871;
-	isc_domnotdef                        = 335544872;
-	isc_array_max_dimensions             = 335544873;
-	isc_max_db_per_trans_allowed         = 335544874;
-	isc_bad_debug_format                 = 335544875;
-	isc_bad_proc_BLR                     = 335544876;
-	isc_key_too_big                      = 335544877;
-	isc_concurrent_transaction           = 335544878;
-	isc_not_valid_for_var                = 335544879;
-	isc_not_valid_for                    = 335544880;
-	isc_need_difference                  = 335544881;
-	isc_long_login                       = 335544882;
-	isc_fldnotdef2                       = 335544883;
-	isc_invalid_similar_pattern          = 335544884;
-	isc_bad_teb_form                     = 335544885;
-	isc_tpb_multiple_txn_isolation       = 335544886;
-	isc_tpb_reserv_before_table          = 335544887;
-	isc_tpb_multiple_spec                = 335544888;
-	isc_tpb_option_without_rc            = 335544889;
-	isc_tpb_conflicting_options          = 335544890;
-	isc_tpb_reserv_missing_tlen          = 335544891;
-	isc_tpb_reserv_long_tlen             = 335544892;
-	isc_tpb_reserv_missing_tname         = 335544893;
-	isc_tpb_reserv_corrup_tlen           = 335544894;
-	isc_tpb_reserv_null_tlen             = 335544895;
-	isc_tpb_reserv_relnotfound           = 335544896;
-	isc_tpb_reserv_baserelnotfound       = 335544897;
-	isc_tpb_missing_len                  = 335544898;
-	isc_tpb_missing_value                = 335544899;
-	isc_tpb_corrupt_len                  = 335544900;
-	isc_tpb_null_len                     = 335544901;
-	isc_tpb_overflow_len                 = 335544902;
-	isc_tpb_invalid_value                = 335544903;
-	isc_tpb_reserv_stronger_wng          = 335544904;
-	isc_tpb_reserv_stronger              = 335544905;
-	isc_tpb_reserv_max_recursion         = 335544906;
-	isc_tpb_reserv_virtualtbl            = 335544907;
-	isc_tpb_reserv_systbl                = 335544908;
-	isc_tpb_reserv_temptbl               = 335544909;
-	isc_tpb_readtxn_after_writelock      = 335544910;
-	isc_tpb_writelock_after_readtxn      = 335544911;
-	isc_time_range_exceeded              = 335544912;
-	isc_datetime_range_exceeded          = 335544913;
-	isc_string_truncation                = 335544914;
-	isc_blob_truncation                  = 335544915;
-	isc_numeric_out_of_range             = 335544916;
-	isc_shutdown_timeout                 = 335544917;
-	isc_att_handle_busy                  = 335544918;
-	isc_bad_udf_freeit                   = 335544919;
-	isc_eds_provider_not_found           = 335544920;
-	isc_eds_connection                   = 335544921;
-	isc_eds_preprocess                   = 335544922;
-	isc_eds_stmt_expected                = 335544923;
-	isc_eds_prm_name_expected            = 335544924;
-	isc_eds_unclosed_comment             = 335544925;
-	isc_eds_statement                    = 335544926;
-	isc_eds_input_prm_mismatch           = 335544927;
-	isc_eds_output_prm_mismatch          = 335544928;
-	isc_eds_input_prm_not_set            = 335544929;
-	isc_too_big_blr                      = 335544930;
-	isc_montabexh                        = 335544931;
-	isc_modnotfound                      = 335544932;
-	isc_nothing_to_cancel                = 335544933;
-	isc_ibutil_not_loaded                = 335544934;
-	isc_circular_computed                = 335544935;
-	isc_psw_db_error                     = 335544936;
-	isc_invalid_type_datetime_op         = 335544937;
-	isc_onlycan_add_timetodate           = 335544938;
-	isc_onlycan_add_datetotime           = 335544939;
-	isc_onlycansub_tstampfromtstamp      = 335544940;
-	isc_onlyoneop_mustbe_tstamp          = 335544941;
-	isc_invalid_extractpart_time         = 335544942;
-	isc_invalid_extractpart_date         = 335544943;
-	isc_invalidarg_extract               = 335544944;
-	isc_sysf_argmustbe_exact             = 335544945;
-	isc_sysf_argmustbe_exact_or_fp       = 335544946;
-	isc_sysf_argviolates_uuidtype        = 335544947;
-	isc_sysf_argviolates_uuidlen         = 335544948;
-	isc_sysf_argviolates_uuidfmt         = 335544949;
-	isc_sysf_argviolates_guidigits       = 335544950;
-	isc_sysf_invalid_addpart_time        = 335544951;
-	isc_sysf_invalid_add_datetime        = 335544952;
-	isc_sysf_invalid_addpart_dtime       = 335544953;
-	isc_sysf_invalid_add_dtime_rc        = 335544954;
-	isc_sysf_invalid_diff_dtime          = 335544955;
-	isc_sysf_invalid_timediff            = 335544956;
-	isc_sysf_invalid_tstamptimediff      = 335544957;
-	isc_sysf_invalid_datetimediff        = 335544958;
-	isc_sysf_invalid_diffpart            = 335544959;
-	isc_sysf_argmustbe_positive          = 335544960;
-	isc_sysf_basemustbe_positive         = 335544961;
-	isc_sysf_argnmustbe_nonneg           = 335544962;
-	isc_sysf_argnmustbe_positive         = 335544963;
-	isc_sysf_invalid_zeropowneg          = 335544964;
-	isc_sysf_invalid_negpowfp            = 335544965;
-	isc_sysf_invalid_scale               = 335544966;
-	isc_sysf_argmustbe_nonneg            = 335544967;
-	isc_sysf_binuuid_mustbe_str          = 335544968;
-	isc_sysf_binuuid_wrongsize           = 335544969;
-	isc_missing_required_spb             = 335544970;
-	isc_net_server_shutdown              = 335544971;
-	isc_bad_conn_str                     = 335544972;
-	isc_bad_epb_form                     = 335544973;
-	isc_no_threads                       = 335544974;
-	isc_net_event_connect_timeout        = 335544975;
-	isc_sysf_argmustbe_nonzero           = 335544976;
-	isc_sysf_argmustbe_range_inc1_1      = 335544977;
-	isc_sysf_argmustbe_gteq_one          = 335544978;
-	isc_sysf_argmustbe_range_exc1_1      = 335544979;
-	isc_internal_rejected_params         = 335544980;
-	isc_sysf_fp_overflow                 = 335544981;
-	isc_udf_fp_overflow                  = 335544982;
-	isc_udf_fp_nan                       = 335544983;
-	isc_instance_conflict                = 335544984;
-	isc_out_of_temp_space                = 335544985;
-	isc_eds_expl_tran_ctrl               = 335544986;
-	isc_no_trusted_spb                   = 335544987;
-	isc_package_name                     = 335544988;
-	isc_cannot_make_not_null             = 335544989;
-	isc_feature_removed                  = 335544990;
-	isc_view_name                        = 335544991;
-	isc_lock_dir_access                  = 335544992;
-	isc_invalid_fetch_option             = 335544993;
-	isc_bad_fun_BLR                      = 335544994;
-	isc_func_pack_not_implemented        = 335544995;
-	isc_proc_pack_not_implemented        = 335544996;
-	isc_eem_func_not_returned            = 335544997;
-	isc_eem_proc_not_returned            = 335544998;
-	isc_eem_trig_not_returned            = 335544999;
-	isc_eem_bad_plugin_ver               = 335545000;
-	isc_eem_engine_notfound              = 335545001;
-	isc_attachment_in_use                = 335545002;
-	isc_transaction_in_use               = 335545003;
-	isc_pman_cannot_load_plugin          = 335545004;
-	isc_pman_module_notfound             = 335545005;
-	isc_pman_entrypoint_notfound         = 335545006;
-	isc_pman_module_bad                  = 335545007;
-	isc_pman_plugin_notfound             = 335545008;
-	isc_sysf_invalid_trig_namespace      = 335545009;
-	isc_unexpected_null                  = 335545010;
-	isc_type_notcompat_blob              = 335545011;
-	isc_invalid_date_val                 = 335545012;
-	isc_invalid_time_val                 = 335545013;
-	isc_invalid_timestamp_val            = 335545014;
-	isc_invalid_index_val                = 335545015;
-	isc_formatted_exception              = 335545016;
-	isc_async_active                     = 335545017;
-	isc_private_function                 = 335545018;
-	isc_private_procedure                = 335545019;
-	isc_request_outdated                 = 335545020;
-	isc_bad_events_handle                = 335545021;
-	isc_cannot_copy_stmt                 = 335545022;
-	isc_invalid_boolean_usage            = 335545023;
-	isc_sysf_argscant_both_be_zero       = 335545024;
-	isc_spb_no_id                        = 335545025;
-	isc_ee_blr_mismatch_null             = 335545026;
-	isc_ee_blr_mismatch_length           = 335545027;
-	isc_ss_out_of_bounds                 = 335545028;
-	isc_missing_data_structures          = 335545029;
-	isc_protect_sys_tab                  = 335545030;
-	isc_libtommath_generic               = 335545031;
-	isc_wroblrver2                       = 335545032;
-	isc_trunc_limits                     = 335545033;
-	isc_info_access                      = 335545034;
-	isc_svc_no_stdin                     = 335545035;
-	isc_svc_start_failed                 = 335545036;
-	isc_svc_no_switches                  = 335545037;
-	isc_svc_bad_size                     = 335545038;
-	isc_no_crypt_plugin                  = 335545039;
-	isc_cp_name_too_long                 = 335545040;
-	isc_cp_process_active                = 335545041;
-	isc_cp_already_crypted               = 335545042;
-	isc_decrypt_error                    = 335545043;
-	isc_no_providers                     = 335545044;
-	isc_null_spb                         = 335545045;
-	isc_max_args_exceeded                = 335545046;
-	isc_ee_blr_mismatch_names_count      = 335545047;
-	isc_ee_blr_mismatch_name_not_found   = 335545048;
-	isc_bad_result_set                   = 335545049;
-	isc_wrong_message_length             = 335545050;
-	isc_no_output_format                 = 335545051;
-	isc_item_finish                      = 335545052;
-	isc_miss_config                      = 335545053;
-	isc_conf_line                        = 335545054;
-	isc_conf_include                     = 335545055;
-	isc_include_depth                    = 335545056;
-	isc_include_miss                     = 335545057;
-	isc_protect_ownership                = 335545058;
-	isc_badvarnum                        = 335545059;
-	isc_sec_context                      = 335545060;
-	isc_multi_segment                    = 335545061;
-	isc_login_changed                    = 335545062;
-	isc_auth_handshake_limit             = 335545063;
-	isc_wirecrypt_incompatible           = 335545064;
-	isc_miss_wirecrypt                   = 335545065;
-	isc_wirecrypt_key                    = 335545066;
-	isc_wirecrypt_plugin                 = 335545067;
-	isc_secdb_name                       = 335545068;
-	isc_auth_data                        = 335545069;
-	isc_auth_datalength                  = 335545070;
-	isc_info_unprepared_stmt             = 335545071;
-	isc_idx_key_value                    = 335545072;
-	isc_forupdate_virtualtbl             = 335545073;
-	isc_forupdate_systbl                 = 335545074;
-	isc_forupdate_temptbl                = 335545075;
-	isc_cant_modify_sysobj               = 335545076;
-	isc_server_misconfigured             = 335545077;
-	isc_alter_role                       = 335545078;
-	isc_map_already_exists               = 335545079;
-	isc_map_not_exists                   = 335545080;
-	isc_map_load                         = 335545081;
-	isc_map_aster                        = 335545082;
-	isc_map_multi                        = 335545083;
-	isc_map_undefined                    = 335545084;
-	isc_baddpb_damaged_mode              = 335545085;
-	isc_baddpb_buffers_range             = 335545086;
-	isc_baddpb_temp_buffers              = 335545087;
-	isc_map_nodb                         = 335545088;
-	isc_map_notable                      = 335545089;
-	isc_miss_trusted_role                = 335545090;
-	isc_set_invalid_role                 = 335545091;
-	isc_cursor_not_positioned            = 335545092;
-	isc_dup_attribute                    = 335545093;
-	isc_dyn_no_priv                      = 335545094;
-	isc_dsql_cant_grant_option           = 335545095;
-	isc_read_conflict                    = 335545096;
-	isc_crdb_load                        = 335545097;
-	isc_crdb_nodb                        = 335545098;
-	isc_crdb_notable                     = 335545099;
-	isc_interface_version_too_old        = 335545100;
-	isc_fun_param_mismatch               = 335545101;
-	isc_savepoint_backout_err            = 335545102;
-	isc_domain_primary_key_notnull       = 335545103;
-	isc_invalid_attachment_charset       = 335545104;
-	isc_map_down                         = 335545105;
-	isc_login_error                      = 335545106;
-	isc_already_opened                   = 335545107;
-	isc_bad_crypt_key                    = 335545108;
-	isc_encrypt_error                    = 335545109;
-	isc_max_idx_depth                    = 335545110;
-	isc_wrong_prvlg                      = 335545111;
-	isc_miss_prvlg                       = 335545112;
-	isc_crypt_checksum                   = 335545113;
-	isc_not_dba                          = 335545114;
-	isc_no_cursor                        = 335545115;
-	isc_dsql_window_incompat_frames      = 335545116;
-	isc_dsql_window_range_multi_key      = 335545117;
-	isc_dsql_window_range_inv_key_type   = 335545118;
-	isc_dsql_window_frame_value_inv_type = 335545119;
-	isc_window_frame_value_invalid       = 335545120;
-	isc_dsql_window_not_found            = 335545121;
-	isc_dsql_window_cant_overr_part      = 335545122;
-	isc_dsql_window_cant_overr_order     = 335545123;
-	isc_dsql_window_cant_overr_frame     = 335545124;
-	isc_dsql_window_duplicate            = 335545125;
-	isc_sql_too_long                     = 335545126;
-	isc_cfg_stmt_timeout                 = 335545127;
-	isc_att_stmt_timeout                 = 335545128;
-	isc_req_stmt_timeout                 = 335545129;
-	isc_att_shut_killed                  = 335545130;
-	isc_att_shut_idle                    = 335545131;
-	isc_att_shut_db_down                 = 335545132;
-	isc_att_shut_engine                  = 335545133;
-	isc_overriding_without_identity      = 335545134;
-	isc_overriding_system_invalid        = 335545135;
-	isc_overriding_user_invalid          = 335545136;
-	isc_overriding_system_missing        = 335545137;
-	isc_decprecision_err                 = 335545138;
-	isc_decfloat_divide_by_zero          = 335545139;
-	isc_decfloat_inexact_result          = 335545140;
-	isc_decfloat_invalid_operation       = 335545141;
-	isc_decfloat_overflow                = 335545142;
-	isc_decfloat_underflow               = 335545143;
-	isc_subfunc_notdef                   = 335545144;
-	isc_subproc_notdef                   = 335545145;
-	isc_subfunc_signat                   = 335545146;
-	isc_subproc_signat                   = 335545147;
-	isc_subfunc_defvaldecl               = 335545148;
-	isc_subproc_defvaldecl               = 335545149;
-	isc_subfunc_not_impl                 = 335545150;
-	isc_subproc_not_impl                 = 335545151;
-	isc_sysf_invalid_hash_algorithm      = 335545152;
-	isc_expression_eval_index            = 335545153;
-	isc_invalid_decfloat_trap            = 335545154;
-	isc_invalid_decfloat_round           = 335545155;
-	isc_sysf_invalid_first_last_part     = 335545156;
-	isc_sysf_invalid_date_timestamp      = 335545157;
-	isc_precision_err2                   = 335545158;
-	isc_bad_batch_handle                 = 335545159;
-	isc_intl_char                        = 335545160;
-	isc_null_block                       = 335545161;
-	isc_mixed_info                       = 335545162;
-	isc_unknown_info                     = 335545163;
-	isc_bpb_version                      = 335545164;
-	isc_user_manager                     = 335545165;
-	isc_icu_entrypoint                   = 335545166;
-	isc_icu_library                      = 335545167;
-	isc_metadata_name                    = 335545168;
-	isc_tokens_parse                     = 335545169;
-	isc_iconv_open                       = 335545170;
-	isc_batch_compl_range                = 335545171;
-	isc_batch_compl_detail               = 335545172;
-	isc_deflate_init                     = 335545173;
-	isc_inflate_init                     = 335545174;
-	isc_big_segment                      = 335545175;
-	isc_batch_policy                     = 335545176;
-	isc_batch_defbpb                     = 335545177;
-	isc_batch_align                      = 335545178;
-	isc_multi_segment_dup                = 335545179;
-	isc_non_plugin_protocol              = 335545180;
-	isc_message_format                   = 335545181;
-	isc_batch_param_version              = 335545182;
-	isc_batch_msg_long                   = 335545183;
-	isc_batch_open                       = 335545184;
-	isc_batch_type                       = 335545185;
-	isc_batch_param                      = 335545186;
-	isc_batch_blobs                      = 335545187;
-	isc_batch_blob_append                = 335545188;
-	isc_batch_stream_align               = 335545189;
-	isc_batch_rpt_blob                   = 335545190;
-	isc_batch_blob_buf                   = 335545191;
-	isc_batch_small_data                 = 335545192;
-	isc_batch_cont_bpb                   = 335545193;
-	isc_batch_big_bpb                    = 335545194;
-	isc_batch_big_segment                = 335545195;
-	isc_batch_big_seg2                   = 335545196;
-	isc_batch_blob_id                    = 335545197;
-	isc_batch_too_big                    = 335545198;
-	isc_num_literal                      = 335545199;
-	isc_map_event                        = 335545200;
-	isc_map_overflow                     = 335545201;
-	isc_hdr_overflow                     = 335545202;
-	isc_vld_plugins                      = 335545203;
-	isc_db_crypt_key                     = 335545204;
-	isc_no_keyholder_plugin              = 335545205;
-	isc_ses_reset_err                    = 335545206;
-	isc_ses_reset_open_trans             = 335545207;
-	isc_ses_reset_warn                   = 335545208;
-	isc_ses_reset_tran_rollback          = 335545209;
-	isc_plugin_name                      = 335545210;
-	isc_parameter_name                   = 335545211;
-	isc_file_starting_page_err           = 335545212;
-	isc_invalid_timezone_offset          = 335545213;
-	isc_invalid_timezone_region          = 335545214;
-	isc_invalid_timezone_id              = 335545215;
-	isc_tom_decode64len                  = 335545216;
-	isc_tom_strblob                      = 335545217;
-	isc_tom_reg                          = 335545218;
-	isc_tom_algorithm                    = 335545219;
-	isc_tom_mode_miss                    = 335545220;
-	isc_tom_mode_bad                     = 335545221;
-	isc_tom_no_mode                      = 335545222;
-	isc_tom_iv_miss                      = 335545223;
-	isc_tom_no_iv                        = 335545224;
-	isc_tom_ctrtype_bad                  = 335545225;
-	isc_tom_no_ctrtype                   = 335545226;
-	isc_tom_ctr_big                      = 335545227;
-	isc_tom_no_ctr                       = 335545228;
-	isc_tom_iv_length                    = 335545229;
-	isc_tom_error                        = 335545230;
-	isc_tom_yarrow_start                 = 335545231;
-	isc_tom_yarrow_setup                 = 335545232;
-	isc_tom_init_mode                    = 335545233;
-	isc_tom_crypt_mode                   = 335545234;
-	isc_tom_decrypt_mode                 = 335545235;
-	isc_tom_init_cip                     = 335545236;
-	isc_tom_crypt_cip                    = 335545237;
-	isc_tom_decrypt_cip                  = 335545238;
-	isc_tom_setup_cip                    = 335545239;
-	isc_tom_setup_chacha                 = 335545240;
-	isc_tom_encode                       = 335545241;
-	isc_tom_decode                       = 335545242;
-	isc_tom_rsa_import                   = 335545243;
-	isc_tom_oaep                         = 335545244;
-	isc_tom_hash_bad                     = 335545245;
-	isc_tom_rsa_make                     = 335545246;
-	isc_tom_rsa_export                   = 335545247;
-	isc_tom_rsa_sign                     = 335545248;
-	isc_tom_rsa_verify                   = 335545249;
-	isc_tom_chacha_key                   = 335545250;
-	isc_bad_repl_handle                  = 335545251;
-	isc_tra_snapshot_does_not_exist      = 335545252;
-	isc_eds_input_prm_not_used           = 335545253;
-	isc_effective_user                   = 335545254;
-	isc_invalid_time_zone_bind           = 335545255;
-	isc_invalid_decfloat_bind            = 335545256;
-	isc_odd_hex_len                      = 335545257;
-	isc_invalid_hex_digit                = 335545258;
-	isc_bind_err                         = 335545259;
-	isc_bind_statement                   = 335545260;
-	isc_bind_convert                     = 335545261;
-	isc_cannot_update_old_blob           = 335545262;
-	isc_cannot_read_new_blob             = 335545263;
-	isc_dyn_no_create_priv               = 335545264;
-	isc_suspend_without_returns          = 335545265;
-	isc_truncate_warn                    = 335545266;
-	isc_truncate_monitor                 = 335545267;
-	isc_truncate_context                 = 335545268;
-	isc_merge_dup_update                 = 335545269;
-	isc_wrong_page                       = 335545270;
-	isc_repl_error                       = 335545271;
-	isc_ses_reset_failed                 = 335545272;
-	isc_ts_file_exists                   = 335545273;
-	isc_tablespace_name                  = 335545274;
-	isc_ts_file_not_exists               = 335545275;
-	isc_gfix_db_name                     = 335740929;
-	isc_gfix_invalid_sw                  = 335740930;
-	isc_gfix_incmp_sw                    = 335740932;
-	isc_gfix_replay_req                  = 335740933;
-	isc_gfix_pgbuf_req                   = 335740934;
-	isc_gfix_val_req                     = 335740935;
-	isc_gfix_pval_req                    = 335740936;
-	isc_gfix_trn_req                     = 335740937;
-	isc_gfix_full_req                    = 335740940;
-	isc_gfix_usrname_req                 = 335740941;
-	isc_gfix_pass_req                    = 335740942;
-	isc_gfix_subs_name                   = 335740943;
-	isc_gfix_wal_req                     = 335740944;
-	isc_gfix_sec_req                     = 335740945;
-	isc_gfix_nval_req                    = 335740946;
-	isc_gfix_type_shut                   = 335740947;
-	isc_gfix_retry                       = 335740948;
-	isc_gfix_retry_db                    = 335740951;
-	isc_gfix_exceed_max                  = 335740991;
-	isc_gfix_corrupt_pool                = 335740992;
-	isc_gfix_mem_exhausted               = 335740993;
-	isc_gfix_bad_pool                    = 335740994;
-	isc_gfix_trn_not_valid               = 335740995;
-	isc_gfix_unexp_eoi                   = 335741012;
-	isc_gfix_recon_fail                  = 335741018;
-	isc_gfix_trn_unknown                 = 335741036;
-	isc_gfix_mode_req                    = 335741038;
-	isc_gfix_pzval_req                   = 335741042;
-	isc_dsql_dbkey_from_non_table        = 336003074;
-	isc_dsql_transitional_numeric        = 336003075;
-	isc_dsql_dialect_warning_expr        = 336003076;
-	isc_sql_db_dialect_dtype_unsupport   = 336003077;
-	isc_sql_dialect_conflict_num         = 336003079;
-	isc_dsql_warning_number_ambiguous    = 336003080;
-	isc_dsql_warning_number_ambiguous1   = 336003081;
-	isc_dsql_warn_precision_ambiguous    = 336003082;
-	isc_dsql_warn_precision_ambiguous1   = 336003083;
-	isc_dsql_warn_precision_ambiguous2   = 336003084;
-	isc_dsql_ambiguous_field_name        = 336003085;
-	isc_dsql_udf_return_pos_err          = 336003086;
-	isc_dsql_invalid_label               = 336003087;
-	isc_dsql_datatypes_not_comparable    = 336003088;
-	isc_dsql_cursor_invalid              = 336003089;
-	isc_dsql_cursor_redefined            = 336003090;
-	isc_dsql_cursor_not_found            = 336003091;
-	isc_dsql_cursor_exists               = 336003092;
-	isc_dsql_cursor_rel_ambiguous        = 336003093;
-	isc_dsql_cursor_rel_not_found        = 336003094;
-	isc_dsql_cursor_not_open             = 336003095;
-	isc_dsql_type_not_supp_ext_tab       = 336003096;
-	isc_dsql_feature_not_supported_ods   = 336003097;
-	isc_primary_key_required             = 336003098;
-	isc_upd_ins_doesnt_match_pk          = 336003099;
-	isc_upd_ins_doesnt_match_matching    = 336003100;
-	isc_upd_ins_with_complex_view        = 336003101;
-	isc_dsql_incompatible_trigger_type   = 336003102;
-	isc_dsql_db_trigger_type_cant_change = 336003103;
-	isc_dsql_record_version_table        = 336003104;
-	isc_dsql_invalid_sqlda_version       = 336003105;
-	isc_dsql_sqlvar_index                = 336003106;
-	isc_dsql_no_sqlind                   = 336003107;
-	isc_dsql_no_sqldata                  = 336003108;
-	isc_dsql_no_input_sqlda              = 336003109;
-	isc_dsql_no_output_sqlda             = 336003110;
-	isc_dsql_wrong_param_num             = 336003111;
-	isc_dsql_invalid_drop_ss_clause      = 336003112;
-	isc_upd_ins_cannot_default           = 336003113;
-	isc_dyn_filter_not_found             = 336068645;
-	isc_dyn_func_not_found               = 336068649;
-	isc_dyn_index_not_found              = 336068656;
-	isc_dyn_view_not_found               = 336068662;
-	isc_dyn_domain_not_found             = 336068697;
-	isc_dyn_cant_modify_auto_trig        = 336068717;
-	isc_dyn_dup_table                    = 336068740;
-	isc_dyn_proc_not_found               = 336068748;
-	isc_dyn_exception_not_found          = 336068752;
-	isc_dyn_proc_param_not_found         = 336068754;
-	isc_dyn_trig_not_found               = 336068755;
-	isc_dyn_charset_not_found            = 336068759;
-	isc_dyn_collation_not_found          = 336068760;
-	isc_dyn_role_not_found               = 336068763;
-	isc_dyn_name_longer                  = 336068767;
-	isc_dyn_column_does_not_exist        = 336068784;
-	isc_dyn_role_does_not_exist          = 336068796;
-	isc_dyn_no_grant_admin_opt           = 336068797;
-	isc_dyn_user_not_role_member         = 336068798;
-	isc_dyn_delete_role_failed           = 336068799;
-	isc_dyn_grant_role_to_user           = 336068800;
-	isc_dyn_inv_sql_role_name            = 336068801;
-	isc_dyn_dup_sql_role                 = 336068802;
-	isc_dyn_kywd_spec_for_role           = 336068803;
-	isc_dyn_roles_not_supported          = 336068804;
-	isc_dyn_domain_name_exists           = 336068812;
-	isc_dyn_field_name_exists            = 336068813;
-	isc_dyn_dependency_exists            = 336068814;
-	isc_dyn_dtype_invalid                = 336068815;
-	isc_dyn_char_fld_too_small           = 336068816;
-	isc_dyn_invalid_dtype_conversion     = 336068817;
-	isc_dyn_dtype_conv_invalid           = 336068818;
-	isc_dyn_zero_len_id                  = 336068820;
-	isc_dyn_gen_not_found                = 336068822;
-	isc_max_coll_per_charset             = 336068829;
-	isc_invalid_coll_attr                = 336068830;
-	isc_dyn_wrong_gtt_scope              = 336068840;
-	isc_dyn_coll_used_table              = 336068843;
-	isc_dyn_coll_used_domain             = 336068844;
-	isc_dyn_cannot_del_syscoll           = 336068845;
-	isc_dyn_cannot_del_def_coll          = 336068846;
-	isc_dyn_table_not_found              = 336068849;
-	isc_dyn_coll_used_procedure          = 336068851;
-	isc_dyn_scale_too_big                = 336068852;
-	isc_dyn_precision_too_small          = 336068853;
-	isc_dyn_miss_priv_warning            = 336068855;
-	isc_dyn_ods_not_supp_feature         = 336068856;
-	isc_dyn_cannot_addrem_computed       = 336068857;
-	isc_dyn_no_empty_pw                  = 336068858;
-	isc_dyn_dup_index                    = 336068859;
-	isc_dyn_package_not_found            = 336068864;
-	isc_dyn_schema_not_found             = 336068865;
-	isc_dyn_cannot_mod_sysproc           = 336068866;
-	isc_dyn_cannot_mod_systrig           = 336068867;
-	isc_dyn_cannot_mod_sysfunc           = 336068868;
-	isc_dyn_invalid_ddl_proc             = 336068869;
-	isc_dyn_invalid_ddl_trig             = 336068870;
-	isc_dyn_funcnotdef_package           = 336068871;
-	isc_dyn_procnotdef_package           = 336068872;
-	isc_dyn_funcsignat_package           = 336068873;
-	isc_dyn_procsignat_package           = 336068874;
-	isc_dyn_defvaldecl_package_proc      = 336068875;
-	isc_dyn_package_body_exists          = 336068877;
-	isc_dyn_invalid_ddl_func             = 336068878;
-	isc_dyn_newfc_oldsyntax              = 336068879;
-	isc_dyn_func_param_not_found         = 336068886;
-	isc_dyn_routine_param_not_found      = 336068887;
-	isc_dyn_routine_param_ambiguous      = 336068888;
-	isc_dyn_coll_used_function           = 336068889;
-	isc_dyn_domain_used_function         = 336068890;
-	isc_dyn_alter_user_no_clause         = 336068891;
-	isc_dyn_duplicate_package_item       = 336068894;
-	isc_dyn_cant_modify_sysobj           = 336068895;
-	isc_dyn_cant_use_zero_increment      = 336068896;
-	isc_dyn_cant_use_in_foreignkey       = 336068897;
-	isc_dyn_defvaldecl_package_func      = 336068898;
-	isc_dyn_cyclic_role                  = 336068900;
-	isc_dyn_cant_use_zero_inc_ident      = 336068904;
-	isc_dyn_no_ddl_grant_opt_priv        = 336068907;
-	isc_dyn_no_grant_opt_priv            = 336068908;
-	isc_dyn_func_not_exist               = 336068909;
-	isc_dyn_proc_not_exist               = 336068910;
-	isc_dyn_pack_not_exist               = 336068911;
-	isc_dyn_trig_not_exist               = 336068912;
-	isc_dyn_view_not_exist               = 336068913;
-	isc_dyn_rel_not_exist                = 336068914;
-	isc_dyn_exc_not_exist                = 336068915;
-	isc_dyn_gen_not_exist                = 336068916;
-	isc_dyn_fld_not_exist                = 336068917;
-	isc_dyn_ts_not_found                 = 336068918;
-	isc_dyn_cant_alter_ts                = 336068919;
-	isc_gbak_unknown_switch              = 336330753;
-	isc_gbak_page_size_missing           = 336330754;
-	isc_gbak_page_size_toobig            = 336330755;
-	isc_gbak_redir_ouput_missing         = 336330756;
-	isc_gbak_switches_conflict           = 336330757;
-	isc_gbak_unknown_device              = 336330758;
-	isc_gbak_no_protection               = 336330759;
-	isc_gbak_page_size_not_allowed       = 336330760;
-	isc_gbak_multi_source_dest           = 336330761;
-	isc_gbak_filename_missing            = 336330762;
-	isc_gbak_dup_inout_names             = 336330763;
-	isc_gbak_inv_page_size               = 336330764;
-	isc_gbak_db_specified                = 336330765;
-	isc_gbak_db_exists                   = 336330766;
-	isc_gbak_unk_device                  = 336330767;
-	isc_gbak_blob_info_failed            = 336330772;
-	isc_gbak_unk_blob_item               = 336330773;
-	isc_gbak_get_seg_failed              = 336330774;
-	isc_gbak_close_blob_failed           = 336330775;
-	isc_gbak_open_blob_failed            = 336330776;
-	isc_gbak_put_blr_gen_id_failed       = 336330777;
-	isc_gbak_unk_type                    = 336330778;
-	isc_gbak_comp_req_failed             = 336330779;
-	isc_gbak_start_req_failed            = 336330780;
-	isc_gbak_rec_failed                  = 336330781;
-	isc_gbak_rel_req_failed              = 336330782;
-	isc_gbak_db_info_failed              = 336330783;
-	isc_gbak_no_db_desc                  = 336330784;
-	isc_gbak_db_create_failed            = 336330785;
-	isc_gbak_decomp_len_error            = 336330786;
-	isc_gbak_tbl_missing                 = 336330787;
-	isc_gbak_blob_col_missing            = 336330788;
-	isc_gbak_create_blob_failed          = 336330789;
-	isc_gbak_put_seg_failed              = 336330790;
-	isc_gbak_rec_len_exp                 = 336330791;
-	isc_gbak_inv_rec_len                 = 336330792;
-	isc_gbak_exp_data_type               = 336330793;
-	isc_gbak_gen_id_failed               = 336330794;
-	isc_gbak_unk_rec_type                = 336330795;
-	isc_gbak_inv_bkup_ver                = 336330796;
-	isc_gbak_missing_bkup_desc           = 336330797;
-	isc_gbak_string_trunc                = 336330798;
-	isc_gbak_cant_rest_record            = 336330799;
-	isc_gbak_send_failed                 = 336330800;
-	isc_gbak_no_tbl_name                 = 336330801;
-	isc_gbak_unexp_eof                   = 336330802;
-	isc_gbak_db_format_too_old           = 336330803;
-	isc_gbak_inv_array_dim               = 336330804;
-	isc_gbak_xdr_len_expected            = 336330807;
-	isc_gbak_open_bkup_error             = 336330817;
-	isc_gbak_open_error                  = 336330818;
-	isc_gbak_missing_block_fac           = 336330934;
-	isc_gbak_inv_block_fac               = 336330935;
-	isc_gbak_block_fac_specified         = 336330936;
-	isc_gbak_missing_username            = 336330940;
-	isc_gbak_missing_password            = 336330941;
-	isc_gbak_missing_skipped_bytes       = 336330952;
-	isc_gbak_inv_skipped_bytes           = 336330953;
-	isc_gbak_err_restore_charset         = 336330965;
-	isc_gbak_err_restore_collation       = 336330967;
-	isc_gbak_read_error                  = 336330972;
-	isc_gbak_write_error                 = 336330973;
-	isc_gbak_db_in_use                   = 336330985;
-	isc_gbak_sysmemex                    = 336330990;
-	isc_gbak_restore_role_failed         = 336331002;
-	isc_gbak_role_op_missing             = 336331005;
-	isc_gbak_page_buffers_missing        = 336331010;
-	isc_gbak_page_buffers_wrong_param    = 336331011;
-	isc_gbak_page_buffers_restore        = 336331012;
-	isc_gbak_inv_size                    = 336331014;
-	isc_gbak_file_outof_sequence         = 336331015;
-	isc_gbak_join_file_missing           = 336331016;
-	isc_gbak_stdin_not_supptd            = 336331017;
-	isc_gbak_stdout_not_supptd           = 336331018;
-	isc_gbak_bkup_corrupt                = 336331019;
-	isc_gbak_unk_db_file_spec            = 336331020;
-	isc_gbak_hdr_write_failed            = 336331021;
-	isc_gbak_disk_space_ex               = 336331022;
-	isc_gbak_size_lt_min                 = 336331023;
-	isc_gbak_svc_name_missing            = 336331025;
-	isc_gbak_not_ownr                    = 336331026;
-	isc_gbak_mode_req                    = 336331031;
-	isc_gbak_just_data                   = 336331033;
-	isc_gbak_data_only                   = 336331034;
-	isc_gbak_missing_interval            = 336331078;
-	isc_gbak_wrong_interval              = 336331079;
-	isc_gbak_verify_verbint              = 336331081;
-	isc_gbak_option_only_restore         = 336331082;
-	isc_gbak_option_only_backup          = 336331083;
-	isc_gbak_option_conflict             = 336331084;
-	isc_gbak_param_conflict              = 336331085;
-	isc_gbak_option_repeated             = 336331086;
-	isc_gbak_max_dbkey_recursion         = 336331091;
-	isc_gbak_max_dbkey_length            = 336331092;
-	isc_gbak_invalid_metadata            = 336331093;
-	isc_gbak_invalid_data                = 336331094;
-	isc_gbak_inv_bkup_ver2               = 336331096;
-	isc_gbak_db_format_too_old2          = 336331100;
-	isc_dsql_too_old_ods                 = 336397205;
-	isc_dsql_table_not_found             = 336397206;
-	isc_dsql_view_not_found              = 336397207;
-	isc_dsql_line_col_error              = 336397208;
-	isc_dsql_unknown_pos                 = 336397209;
-	isc_dsql_no_dup_name                 = 336397210;
-	isc_dsql_too_many_values             = 336397211;
-	isc_dsql_no_array_computed           = 336397212;
-	isc_dsql_implicit_domain_name        = 336397213;
-	isc_dsql_only_can_subscript_array    = 336397214;
-	isc_dsql_max_sort_items              = 336397215;
-	isc_dsql_max_group_items             = 336397216;
-	isc_dsql_conflicting_sort_field      = 336397217;
-	isc_dsql_derived_table_more_columns  = 336397218;
-	isc_dsql_derived_table_less_columns  = 336397219;
-	isc_dsql_derived_field_unnamed       = 336397220;
-	isc_dsql_derived_field_dup_name      = 336397221;
-	isc_dsql_derived_alias_select        = 336397222;
-	isc_dsql_derived_alias_field         = 336397223;
-	isc_dsql_auto_field_bad_pos          = 336397224;
-	isc_dsql_cte_wrong_reference         = 336397225;
-	isc_dsql_cte_cycle                   = 336397226;
-	isc_dsql_cte_outer_join              = 336397227;
-	isc_dsql_cte_mult_references         = 336397228;
-	isc_dsql_cte_not_a_union             = 336397229;
-	isc_dsql_cte_nonrecurs_after_recurs  = 336397230;
-	isc_dsql_cte_wrong_clause            = 336397231;
-	isc_dsql_cte_union_all               = 336397232;
-	isc_dsql_cte_miss_nonrecursive       = 336397233;
-	isc_dsql_cte_nested_with             = 336397234;
-	isc_dsql_col_more_than_once_using    = 336397235;
-	isc_dsql_unsupp_feature_dialect      = 336397236;
-	isc_dsql_cte_not_used                = 336397237;
-	isc_dsql_col_more_than_once_view     = 336397238;
-	isc_dsql_unsupported_in_auto_trans   = 336397239;
-	isc_dsql_eval_unknode                = 336397240;
-	isc_dsql_agg_wrongarg                = 336397241;
-	isc_dsql_agg2_wrongarg               = 336397242;
-	isc_dsql_nodateortime_pm_string      = 336397243;
-	isc_dsql_invalid_datetime_subtract   = 336397244;
-	isc_dsql_invalid_dateortime_add      = 336397245;
-	isc_dsql_invalid_type_minus_date     = 336397246;
-	isc_dsql_nostring_addsub_dial3       = 336397247;
-	isc_dsql_invalid_type_addsub_dial3   = 336397248;
-	isc_dsql_invalid_type_multip_dial1   = 336397249;
-	isc_dsql_nostring_multip_dial3       = 336397250;
-	isc_dsql_invalid_type_multip_dial3   = 336397251;
-	isc_dsql_mustuse_numeric_div_dial1   = 336397252;
-	isc_dsql_nostring_div_dial3          = 336397253;
-	isc_dsql_invalid_type_div_dial3      = 336397254;
-	isc_dsql_nostring_neg_dial3          = 336397255;
-	isc_dsql_invalid_type_neg            = 336397256;
-	isc_dsql_max_distinct_items          = 336397257;
-	isc_dsql_alter_charset_failed        = 336397258;
-	isc_dsql_comment_on_failed           = 336397259;
-	isc_dsql_create_func_failed          = 336397260;
-	isc_dsql_alter_func_failed           = 336397261;
-	isc_dsql_create_alter_func_failed    = 336397262;
-	isc_dsql_drop_func_failed            = 336397263;
-	isc_dsql_recreate_func_failed        = 336397264;
-	isc_dsql_create_proc_failed          = 336397265;
-	isc_dsql_alter_proc_failed           = 336397266;
-	isc_dsql_create_alter_proc_failed    = 336397267;
-	isc_dsql_drop_proc_failed            = 336397268;
-	isc_dsql_recreate_proc_failed        = 336397269;
-	isc_dsql_create_trigger_failed       = 336397270;
-	isc_dsql_alter_trigger_failed        = 336397271;
-	isc_dsql_create_alter_trigger_failed = 336397272;
-	isc_dsql_drop_trigger_failed         = 336397273;
-	isc_dsql_recreate_trigger_failed     = 336397274;
-	isc_dsql_create_collation_failed     = 336397275;
-	isc_dsql_drop_collation_failed       = 336397276;
-	isc_dsql_create_domain_failed        = 336397277;
-	isc_dsql_alter_domain_failed         = 336397278;
-	isc_dsql_drop_domain_failed          = 336397279;
-	isc_dsql_create_except_failed        = 336397280;
-	isc_dsql_alter_except_failed         = 336397281;
-	isc_dsql_create_alter_except_failed  = 336397282;
-	isc_dsql_recreate_except_failed      = 336397283;
-	isc_dsql_drop_except_failed          = 336397284;
-	isc_dsql_create_sequence_failed      = 336397285;
-	isc_dsql_create_table_failed         = 336397286;
-	isc_dsql_alter_table_failed          = 336397287;
-	isc_dsql_drop_table_failed           = 336397288;
-	isc_dsql_recreate_table_failed       = 336397289;
-	isc_dsql_create_pack_failed          = 336397290;
-	isc_dsql_alter_pack_failed           = 336397291;
-	isc_dsql_create_alter_pack_failed    = 336397292;
-	isc_dsql_drop_pack_failed            = 336397293;
-	isc_dsql_recreate_pack_failed        = 336397294;
-	isc_dsql_create_pack_body_failed     = 336397295;
-	isc_dsql_drop_pack_body_failed       = 336397296;
-	isc_dsql_recreate_pack_body_failed   = 336397297;
-	isc_dsql_create_view_failed          = 336397298;
-	isc_dsql_alter_view_failed           = 336397299;
-	isc_dsql_create_alter_view_failed    = 336397300;
-	isc_dsql_recreate_view_failed        = 336397301;
-	isc_dsql_drop_view_failed            = 336397302;
-	isc_dsql_drop_sequence_failed        = 336397303;
-	isc_dsql_recreate_sequence_failed    = 336397304;
-	isc_dsql_drop_index_failed           = 336397305;
-	isc_dsql_drop_filter_failed          = 336397306;
-	isc_dsql_drop_shadow_failed          = 336397307;
-	isc_dsql_drop_role_failed            = 336397308;
-	isc_dsql_drop_user_failed            = 336397309;
-	isc_dsql_create_role_failed          = 336397310;
-	isc_dsql_alter_role_failed           = 336397311;
-	isc_dsql_alter_index_failed          = 336397312;
-	isc_dsql_alter_database_failed       = 336397313;
-	isc_dsql_create_shadow_failed        = 336397314;
-	isc_dsql_create_filter_failed        = 336397315;
-	isc_dsql_create_index_failed         = 336397316;
-	isc_dsql_create_user_failed          = 336397317;
-	isc_dsql_alter_user_failed           = 336397318;
-	isc_dsql_grant_failed                = 336397319;
-	isc_dsql_revoke_failed               = 336397320;
-	isc_dsql_cte_recursive_aggregate     = 336397321;
-	isc_dsql_mapping_failed              = 336397322;
-	isc_dsql_alter_sequence_failed       = 336397323;
-	isc_dsql_create_generator_failed     = 336397324;
-	isc_dsql_set_generator_failed        = 336397325;
-	isc_dsql_wlock_simple                = 336397326;
-	isc_dsql_firstskip_rows              = 336397327;
-	isc_dsql_wlock_aggregates            = 336397328;
-	isc_dsql_wlock_conflict              = 336397329;
-	isc_dsql_max_exception_arguments     = 336397330;
-	isc_dsql_string_byte_length          = 336397331;
-	isc_dsql_string_char_length          = 336397332;
-	isc_dsql_max_nesting                 = 336397333;
-	isc_dsql_recreate_user_failed        = 336397334;
-	isc_dsql_create_ts_failed            = 336397335;
-	isc_dsql_alter_ts_failed             = 336397336;
-	isc_dsql_create_alter_ts_failed      = 336397337;
-	isc_dsql_drop_ts_failed              = 336397338;
-	isc_dsql_recreate_ts_failed          = 336397339;
-	isc_gsec_cant_open_db                = 336723983;
-	isc_gsec_switches_error              = 336723984;
-	isc_gsec_no_op_spec                  = 336723985;
-	isc_gsec_no_usr_name                 = 336723986;
-	isc_gsec_err_add                     = 336723987;
-	isc_gsec_err_modify                  = 336723988;
-	isc_gsec_err_find_mod                = 336723989;
-	isc_gsec_err_rec_not_found           = 336723990;
-	isc_gsec_err_delete                  = 336723991;
-	isc_gsec_err_find_del                = 336723992;
-	isc_gsec_err_find_disp               = 336723996;
-	isc_gsec_inv_param                   = 336723997;
-	isc_gsec_op_specified                = 336723998;
-	isc_gsec_pw_specified                = 336723999;
-	isc_gsec_uid_specified               = 336724000;
-	isc_gsec_gid_specified               = 336724001;
-	isc_gsec_proj_specified              = 336724002;
-	isc_gsec_org_specified               = 336724003;
-	isc_gsec_fname_specified             = 336724004;
-	isc_gsec_mname_specified             = 336724005;
-	isc_gsec_lname_specified             = 336724006;
-	isc_gsec_inv_switch                  = 336724008;
-	isc_gsec_amb_switch                  = 336724009;
-	isc_gsec_no_op_specified             = 336724010;
-	isc_gsec_params_not_allowed          = 336724011;
-	isc_gsec_incompat_switch             = 336724012;
-	isc_gsec_inv_username                = 336724044;
-	isc_gsec_inv_pw_length               = 336724045;
-	isc_gsec_db_specified                = 336724046;
-	isc_gsec_db_admin_specified          = 336724047;
-	isc_gsec_db_admin_pw_specified       = 336724048;
-	isc_gsec_sql_role_specified          = 336724049;
-	isc_gstat_unknown_switch             = 336920577;
-	isc_gstat_retry                      = 336920578;
-	isc_gstat_wrong_ods                  = 336920579;
-	isc_gstat_unexpected_eof             = 336920580;
-	isc_gstat_open_err                   = 336920605;
-	isc_gstat_read_err                   = 336920606;
-	isc_gstat_sysmemex                   = 336920607;
-	isc_fbsvcmgr_bad_am                  = 336986113;
-	isc_fbsvcmgr_bad_wm                  = 336986114;
-	isc_fbsvcmgr_bad_rs                  = 336986115;
-	isc_fbsvcmgr_info_err                = 336986116;
-	isc_fbsvcmgr_query_err               = 336986117;
-	isc_fbsvcmgr_switch_unknown          = 336986118;
-	isc_fbsvcmgr_bad_sm                  = 336986159;
-	isc_fbsvcmgr_fp_open                 = 336986160;
-	isc_fbsvcmgr_fp_read                 = 336986161;
-	isc_fbsvcmgr_fp_empty                = 336986162;
-	isc_fbsvcmgr_bad_arg                 = 336986164;
-	isc_fbsvcmgr_info_limbo              = 336986170;
-	isc_fbsvcmgr_limbo_state             = 336986171;
-	isc_fbsvcmgr_limbo_advise            = 336986172;
-	isc_utl_trusted_switch               = 337051649;
-	isc_nbackup_missing_param            = 337117213;
-	isc_nbackup_allowed_switches         = 337117214;
-	isc_nbackup_unknown_param            = 337117215;
-	isc_nbackup_unknown_switch           = 337117216;
-	isc_nbackup_nofetchpw_svc            = 337117217;
-	isc_nbackup_pwfile_error             = 337117218;
-	isc_nbackup_size_with_lock           = 337117219;
-	isc_nbackup_no_switch                = 337117220;
-	isc_nbackup_err_read                 = 337117223;
-	isc_nbackup_err_write                = 337117224;
-	isc_nbackup_err_seek                 = 337117225;
-	isc_nbackup_err_opendb               = 337117226;
-	isc_nbackup_err_fadvice              = 337117227;
-	isc_nbackup_err_createdb             = 337117228;
-	isc_nbackup_err_openbk               = 337117229;
-	isc_nbackup_err_createbk             = 337117230;
-	isc_nbackup_err_eofdb                = 337117231;
-	isc_nbackup_fixup_wrongstate         = 337117232;
-	isc_nbackup_err_db                   = 337117233;
-	isc_nbackup_userpw_toolong           = 337117234;
-	isc_nbackup_lostrec_db               = 337117235;
-	isc_nbackup_lostguid_db              = 337117236;
-	isc_nbackup_err_eofhdrdb             = 337117237;
-	isc_nbackup_db_notlock               = 337117238;
-	isc_nbackup_lostguid_bk              = 337117239;
-	isc_nbackup_page_changed             = 337117240;
-	isc_nbackup_dbsize_inconsistent      = 337117241;
-	isc_nbackup_failed_lzbk              = 337117242;
-	isc_nbackup_err_eofhdrbk             = 337117243;
-	isc_nbackup_invalid_incbk            = 337117244;
-	isc_nbackup_unsupvers_incbk          = 337117245;
-	isc_nbackup_invlevel_incbk           = 337117246;
-	isc_nbackup_wrong_orderbk            = 337117247;
-	isc_nbackup_err_eofbk                = 337117248;
-	isc_nbackup_err_copy                 = 337117249;
-	isc_nbackup_err_eofhdr_restdb        = 337117250;
-	isc_nbackup_lostguid_l0bk            = 337117251;
-	isc_nbackup_switchd_parameter        = 337117255;
-	isc_nbackup_user_stop                = 337117257;
-	isc_nbackup_deco_parse               = 337117259;
-	isc_nbackup_lostrec_guid_db          = 337117261;
-	isc_nbackup_seq_misuse               = 337117265;
-	isc_trace_conflict_acts              = 337182750;
-	isc_trace_act_notfound               = 337182751;
-	isc_trace_switch_once                = 337182752;
-	isc_trace_param_val_miss             = 337182753;
-	isc_trace_param_invalid              = 337182754;
-	isc_trace_switch_unknown             = 337182755;
-	isc_trace_switch_svc_only            = 337182756;
-	isc_trace_switch_user_only           = 337182757;
-	isc_trace_switch_param_miss          = 337182758;
-	isc_trace_param_act_notcompat        = 337182759;
-	isc_trace_mandatory_switch_miss      = 337182760;
+	 isc_arith_except = 335544321;
+	 isc_bad_dbkey = 335544322;
+	 isc_bad_db_format = 335544323;
+	 isc_bad_db_handle = 335544324;
+	 isc_bad_dpb_content = 335544325;
+	 isc_bad_dpb_form = 335544326;
+	 isc_bad_req_handle = 335544327;
+	 isc_bad_segstr_handle = 335544328;
+	 isc_bad_segstr_id = 335544329;
+	 isc_bad_tpb_content = 335544330;
+	 isc_bad_tpb_form = 335544331;
+	 isc_bad_trans_handle = 335544332;
+	 isc_bug_check = 335544333;
+	 isc_convert_error = 335544334;
+	 isc_db_corrupt = 335544335;
+	 isc_deadlock = 335544336;
+	 isc_excess_trans = 335544337;
+	 isc_from_no_match = 335544338;
+	 isc_infinap = 335544339;
+	 isc_infona = 335544340;
+	 isc_infunk = 335544341;
+	 isc_integ_fail = 335544342;
+	 isc_invalid_blr = 335544343;
+	 isc_io_error = 335544344;
+	 isc_lock_conflict = 335544345;
+	 isc_metadata_corrupt = 335544346;
+	 isc_not_valid = 335544347;
+	 isc_no_cur_rec = 335544348;
+	 isc_no_dup = 335544349;
+	 isc_no_finish = 335544350;
+	 isc_no_meta_update = 335544351;
+	 isc_no_priv = 335544352;
+	 isc_no_recon = 335544353;
+	 isc_no_record = 335544354;
+	 isc_no_segstr_close = 335544355;
+	 isc_obsolete_metadata = 335544356;
+	 isc_open_trans = 335544357;
+	 isc_port_len = 335544358;
+	 isc_read_only_field = 335544359;
+	 isc_read_only_rel = 335544360;
+	 isc_read_only_trans = 335544361;
+	 isc_read_only_view = 335544362;
+	 isc_req_no_trans = 335544363;
+	 isc_req_sync = 335544364;
+	 isc_req_wrong_db = 335544365;
+	 isc_segment = 335544366;
+	 isc_segstr_eof = 335544367;
+	 isc_segstr_no_op = 335544368;
+	 isc_segstr_no_read = 335544369;
+	 isc_segstr_no_trans = 335544370;
+	 isc_segstr_no_write = 335544371;
+	 isc_segstr_wrong_db = 335544372;
+	 isc_sys_request = 335544373;
+	 isc_stream_eof = 335544374;
+	 isc_unavailable = 335544375;
+	 isc_unres_rel = 335544376;
+	 isc_uns_ext = 335544377;
+	 isc_wish_list = 335544378;
+	 isc_wrong_ods = 335544379;
+	 isc_wronumarg = 335544380;
+	 isc_imp_exc = 335544381;
+	 isc_random = 335544382;
+	 isc_fatal_conflict = 335544383;
+	 isc_badblk = 335544384;
+	 isc_invpoolcl = 335544385;
+	 isc_nopoolids = 335544386;
+	 isc_relbadblk = 335544387;
+	 isc_blktoobig = 335544388;
+	 isc_bufexh = 335544389;
+	 isc_syntaxerr = 335544390;
+	 isc_bufinuse = 335544391;
+	 isc_bdbincon = 335544392;
+	 isc_reqinuse = 335544393;
+	 isc_badodsver = 335544394;
+	 isc_relnotdef = 335544395;
+	 isc_fldnotdef = 335544396;
+	 isc_dirtypage = 335544397;
+	 isc_waifortra = 335544398;
+	 isc_doubleloc = 335544399;
+	 isc_nodnotfnd = 335544400;
+	 isc_dupnodfnd = 335544401;
+	 isc_locnotmar = 335544402;
+	 isc_badpagtyp = 335544403;
+	 isc_corrupt = 335544404;
+	 isc_badpage = 335544405;
+	 isc_badindex = 335544406;
+	 isc_dbbnotzer = 335544407;
+	 isc_tranotzer = 335544408;
+	 isc_trareqmis = 335544409;
+	 isc_badhndcnt = 335544410;
+	 isc_wrotpbver = 335544411;
+	 isc_wroblrver = 335544412;
+	 isc_wrodpbver = 335544413;
+	 isc_blobnotsup = 335544414;
+	 isc_badrelation = 335544415;
+	 isc_nodetach = 335544416;
+	 isc_notremote = 335544417;
+	 isc_trainlim = 335544418;
+	 isc_notinlim = 335544419;
+	 isc_traoutsta = 335544420;
+	 isc_connect_reject = 335544421;
+	 isc_dbfile = 335544422;
+	 isc_orphan = 335544423;
+	 isc_no_lock_mgr = 335544424;
+	 isc_ctxinuse = 335544425;
+	 isc_ctxnotdef = 335544426;
+	 isc_datnotsup = 335544427;
+	 isc_badmsgnum = 335544428;
+	 isc_badparnum = 335544429;
+	 isc_virmemexh = 335544430;
+	 isc_blocking_signal = 335544431;
+	 isc_lockmanerr = 335544432;
+	 isc_journerr = 335544433;
+	 isc_keytoobig = 335544434;
+	 isc_nullsegkey = 335544435;
+	 isc_sqlerr = 335544436;
+	 isc_wrodynver = 335544437;
+	 isc_funnotdef = 335544438;
+	 isc_funmismat = 335544439;
+	 isc_bad_msg_vec = 335544440;
+	 isc_bad_detach = 335544441;
+	 isc_noargacc_read = 335544442;
+	 isc_noargacc_write = 335544443;
+	 isc_read_only = 335544444;
+	 isc_ext_err = 335544445;
+	 isc_non_updatable = 335544446;
+	 isc_no_rollback = 335544447;
+	 isc_bad_sec_info = 335544448;
+	 isc_invalid_sec_info = 335544449;
+	 isc_misc_interpreted = 335544450;
+	 isc_update_conflict = 335544451;
+	 isc_unlicensed = 335544452;
+	 isc_obj_in_use = 335544453;
+	 isc_nofilter = 335544454;
+	 isc_shadow_accessed = 335544455;
+	 isc_invalid_sdl = 335544456;
+	 isc_out_of_bounds = 335544457;
+	 isc_invalid_dimension = 335544458;
+	 isc_rec_in_limbo = 335544459;
+	 isc_shadow_missing = 335544460;
+	 isc_cant_validate = 335544461;
+	 isc_cant_start_journal = 335544462;
+	 isc_gennotdef = 335544463;
+	 isc_cant_start_logging = 335544464;
+	 isc_bad_segstr_type = 335544465;
+	 isc_foreign_key = 335544466;
+	 isc_high_minor = 335544467;
+	 isc_tra_state = 335544468;
+	 isc_trans_invalid = 335544469;
+	 isc_buf_invalid = 335544470;
+	 isc_indexnotdefined = 335544471;
+	 isc_login = 335544472;
+	 isc_invalid_bookmark = 335544473;
+	 isc_bad_lock_level = 335544474;
+	 isc_relation_lock = 335544475;
+	 isc_record_lock = 335544476;
+	 isc_max_idx = 335544477;
+	 isc_jrn_enable = 335544478;
+	 isc_old_failure = 335544479;
+	 isc_old_in_progress = 335544480;
+	 isc_old_no_space = 335544481;
+	 isc_no_wal_no_jrn = 335544482;
+	 isc_num_old_files = 335544483;
+	 isc_wal_file_open = 335544484;
+	 isc_bad_stmt_handle = 335544485;
+	 isc_wal_failure = 335544486;
+	 isc_walw_err = 335544487;
+	 isc_logh_small = 335544488;
+	 isc_logh_inv_version = 335544489;
+	 isc_logh_open_flag = 335544490;
+	 isc_logh_open_flag2 = 335544491;
+	 isc_logh_diff_dbname = 335544492;
+	 isc_logf_unexpected_eof = 335544493;
+	 isc_logr_incomplete = 335544494;
+	 isc_logr_header_small = 335544495;
+	 isc_logb_small = 335544496;
+	 isc_wal_illegal_attach = 335544497;
+	 isc_wal_invalid_wpb = 335544498;
+	 isc_wal_err_rollover = 335544499;
+	 isc_no_wal = 335544500;
+	 isc_drop_wal = 335544501;
+	 isc_stream_not_defined = 335544502;
+	 isc_wal_subsys_error = 335544503;
+	 isc_wal_subsys_corrupt = 335544504;
+	 isc_no_archive = 335544505;
+	 isc_shutinprog = 335544506;
+	 isc_range_in_use = 335544507;
+	 isc_range_not_found = 335544508;
+	 isc_charset_not_found = 335544509;
+	 isc_lock_timeout = 335544510;
+	 isc_prcnotdef = 335544511;
+	 isc_prcmismat = 335544512;
+	 isc_wal_bugcheck = 335544513;
+	 isc_wal_cant_expand = 335544514;
+	 isc_codnotdef = 335544515;
+	 isc_xcpnotdef = 335544516;
+	 isc_except = 335544517;
+	 isc_cache_restart = 335544518;
+	 isc_bad_lock_handle = 335544519;
+	 isc_jrn_present = 335544520;
+	 isc_wal_err_rollover2 = 335544521;
+	 isc_wal_err_logwrite = 335544522;
+	 isc_wal_err_jrn_comm = 335544523;
+	 isc_wal_err_expansion = 335544524;
+	 isc_wal_err_setup = 335544525;
+	 isc_wal_err_ww_sync = 335544526;
+	 isc_wal_err_ww_start = 335544527;
+	 isc_shutdown = 335544528;
+	 isc_existing_priv_mod = 335544529;
+	 isc_primary_key_ref = 335544530;
+	 isc_primary_key_notnull = 335544531;
+	 isc_ref_cnstrnt_notfound = 335544532;
+	 isc_foreign_key_notfound = 335544533;
+	 isc_ref_cnstrnt_update = 335544534;
+	 isc_check_cnstrnt_update = 335544535;
+	 isc_check_cnstrnt_del = 335544536;
+	 isc_integ_index_seg_del = 335544537;
+	 isc_integ_index_seg_mod = 335544538;
+	 isc_integ_index_del = 335544539;
+	 isc_integ_index_mod = 335544540;
+	 isc_check_trig_del = 335544541;
+	 isc_check_trig_update = 335544542;
+	 isc_cnstrnt_fld_del = 335544543;
+	 isc_cnstrnt_fld_rename = 335544544;
+	 isc_rel_cnstrnt_update = 335544545;
+	 isc_constaint_on_view = 335544546;
+	 isc_invld_cnstrnt_type = 335544547;
+	 isc_primary_key_exists = 335544548;
+	 isc_systrig_update = 335544549;
+	 isc_not_rel_owner = 335544550;
+	 isc_grant_obj_notfound = 335544551;
+	 isc_grant_fld_notfound = 335544552;
+	 isc_grant_nopriv = 335544553;
+	 isc_nonsql_security_rel = 335544554;
+	 isc_nonsql_security_fld = 335544555;
+	 isc_wal_cache_err = 335544556;
+	 isc_shutfail = 335544557;
+	 isc_check_constraint = 335544558;
+	 isc_bad_svc_handle = 335544559;
+	 isc_shutwarn = 335544560;
+	 isc_wrospbver = 335544561;
+	 isc_bad_spb_form = 335544562;
+	 isc_svcnotdef = 335544563;
+	 isc_no_jrn = 335544564;
+	 isc_transliteration_failed = 335544565;
+	 isc_start_cm_for_wal = 335544566;
+	 isc_wal_ovflow_log_required = 335544567;
+	 isc_text_subtype = 335544568;
+	 isc_dsql_error = 335544569;
+	 isc_dsql_command_err = 335544570;
+	 isc_dsql_constant_err = 335544571;
+	 isc_dsql_cursor_err = 335544572;
+	 isc_dsql_datatype_err = 335544573;
+	 isc_dsql_decl_err = 335544574;
+	 isc_dsql_cursor_update_err = 335544575;
+	 isc_dsql_cursor_open_err = 335544576;
+	 isc_dsql_cursor_close_err = 335544577;
+	 isc_dsql_field_err = 335544578;
+	 isc_dsql_internal_err = 335544579;
+	 isc_dsql_relation_err = 335544580;
+	 isc_dsql_procedure_err = 335544581;
+	 isc_dsql_request_err = 335544582;
+	 isc_dsql_sqlda_err = 335544583;
+	 isc_dsql_var_count_err = 335544584;
+	 isc_dsql_stmt_handle = 335544585;
+	 isc_dsql_function_err = 335544586;
+	 isc_dsql_blob_err = 335544587;
+	 isc_collation_not_found = 335544588;
+	 isc_collation_not_for_charset = 335544589;
+	 isc_dsql_dup_option = 335544590;
+	 isc_dsql_tran_err = 335544591;
+	 isc_dsql_invalid_array = 335544592;
+	 isc_dsql_max_arr_dim_exceeded = 335544593;
+	 isc_dsql_arr_range_error = 335544594;
+	 isc_dsql_trigger_err = 335544595;
+	 isc_dsql_subselect_err = 335544596;
+	 isc_dsql_crdb_prepare_err = 335544597;
+	 isc_specify_field_err = 335544598;
+	 isc_num_field_err = 335544599;
+	 isc_col_name_err = 335544600;
+	 isc_where_err = 335544601;
+	 isc_table_view_err = 335544602;
+	 isc_distinct_err = 335544603;
+	 isc_key_field_count_err = 335544604;
+	 isc_subquery_err = 335544605;
+	 isc_expression_eval_err = 335544606;
+	 isc_node_err = 335544607;
+	 isc_command_end_err = 335544608;
+	 isc_index_name = 335544609;
+	 isc_exception_name = 335544610;
+	 isc_field_name = 335544611;
+	 isc_token_err = 335544612;
+	 isc_union_err = 335544613;
+	 isc_dsql_construct_err = 335544614;
+	 isc_field_aggregate_err = 335544615;
+	 isc_field_ref_err = 335544616;
+	 isc_order_by_err = 335544617;
+	 isc_return_mode_err = 335544618;
+	 isc_extern_func_err = 335544619;
+	 isc_alias_conflict_err = 335544620;
+	 isc_procedure_conflict_error = 335544621;
+	 isc_relation_conflict_err = 335544622;
+	 isc_dsql_domain_err = 335544623;
+	 isc_idx_seg_err = 335544624;
+	 isc_node_name_err = 335544625;
+	 isc_table_name = 335544626;
+	 isc_proc_name = 335544627;
+	 isc_idx_create_err = 335544628;
+	 isc_wal_shadow_err = 335544629;
+	 isc_dependency = 335544630;
+	 isc_idx_key_err = 335544631;
+	 isc_dsql_file_length_err = 335544632;
+	 isc_dsql_shadow_number_err = 335544633;
+	 isc_dsql_token_unk_err = 335544634;
+	 isc_dsql_no_relation_alias = 335544635;
+	 isc_indexname = 335544636;
+	 isc_no_stream_plan = 335544637;
+	 isc_stream_twice = 335544638;
+	 isc_stream_not_found = 335544639;
+	 isc_collation_requires_text = 335544640;
+	 isc_dsql_domain_not_found = 335544641;
+	 isc_index_unused = 335544642;
+	 isc_dsql_self_join = 335544643;
+	 isc_stream_bof = 335544644;
+	 isc_stream_crack = 335544645;
+	 isc_db_or_file_exists = 335544646;
+	 isc_invalid_operator = 335544647;
+	 isc_conn_lost = 335544648;
+	 isc_bad_checksum = 335544649;
+	 isc_page_type_err = 335544650;
+	 isc_ext_readonly_err = 335544651;
+	 isc_sing_select_err = 335544652;
+	 isc_psw_attach = 335544653;
+	 isc_psw_start_trans = 335544654;
+	 isc_invalid_direction = 335544655;
+	 isc_dsql_var_conflict = 335544656;
+	 isc_dsql_no_blob_array = 335544657;
+	 isc_dsql_base_table = 335544658;
+	 isc_duplicate_base_table = 335544659;
+	 isc_view_alias = 335544660;
+	 isc_index_root_page_full = 335544661;
+	 isc_dsql_blob_type_unknown = 335544662;
+	 isc_req_max_clones_exceeded = 335544663;
+	 isc_dsql_duplicate_spec = 335544664;
+	 isc_unique_key_violation = 335544665;
+	 isc_srvr_version_too_old = 335544666;
+	 isc_drdb_completed_with_errs = 335544667;
+	 isc_dsql_procedure_use_err = 335544668;
+	 isc_dsql_count_mismatch = 335544669;
+	 isc_blob_idx_err = 335544670;
+	 isc_array_idx_err = 335544671;
+	 isc_key_field_err = 335544672;
+	 isc_no_delete = 335544673;
+	 isc_del_last_field = 335544674;
+	 isc_sort_err = 335544675;
+	 isc_sort_mem_err = 335544676;
+	 isc_version_err = 335544677;
+	 isc_inval_key_posn = 335544678;
+	 isc_no_segments_err = 335544679;
+	 isc_crrp_data_err = 335544680;
+	 isc_rec_size_err = 335544681;
+	 isc_dsql_field_ref = 335544682;
+	 isc_req_depth_exceeded = 335544683;
+	 isc_no_field_access = 335544684;
+	 isc_no_dbkey = 335544685;
+	 isc_jrn_format_err = 335544686;
+	 isc_jrn_file_full = 335544687;
+	 isc_dsql_open_cursor_request = 335544688;
+	 isc_ib_error = 335544689;
+	 isc_cache_redef = 335544690;
+	 isc_cache_too_small = 335544691;
+	 isc_log_redef = 335544692;
+	 isc_log_too_small = 335544693;
+	 isc_partition_too_small = 335544694;
+	 isc_partition_not_supp = 335544695;
+	 isc_log_length_spec = 335544696;
+	 isc_precision_err = 335544697;
+	 isc_scale_nogt = 335544698;
+	 isc_expec_short = 335544699;
+	 isc_expec_long = 335544700;
+	 isc_expec_ushort = 335544701;
+	 isc_escape_invalid = 335544702;
+	 isc_svcnoexe = 335544703;
+	 isc_net_lookup_err = 335544704;
+	 isc_service_unknown = 335544705;
+	 isc_host_unknown = 335544706;
+	 isc_grant_nopriv_on_base = 335544707;
+	 isc_dyn_fld_ambiguous = 335544708;
+	 isc_dsql_agg_ref_err = 335544709;
+	 isc_complex_view = 335544710;
+	 isc_unprepared_stmt = 335544711;
+	 isc_expec_positive = 335544712;
+	 isc_dsql_sqlda_value_err = 335544713;
+	 isc_invalid_array_id = 335544714;
+	 isc_extfile_uns_op = 335544715;
+	 isc_svc_in_use = 335544716;
+	 isc_err_stack_limit = 335544717;
+	 isc_invalid_key = 335544718;
+	 isc_net_init_error = 335544719;
+	 isc_loadlib_failure = 335544720;
+	 isc_network_error = 335544721;
+	 isc_net_connect_err = 335544722;
+	 isc_net_connect_listen_err = 335544723;
+	 isc_net_event_connect_err = 335544724;
+	 isc_net_event_listen_err = 335544725;
+	 isc_net_read_err = 335544726;
+	 isc_net_write_err = 335544727;
+	 isc_integ_index_deactivate = 335544728;
+	 isc_integ_deactivate_primary = 335544729;
+	 isc_cse_not_supported = 335544730;
+	 isc_tra_must_sweep = 335544731;
+	 isc_unsupported_network_drive = 335544732;
+	 isc_io_create_err = 335544733;
+	 isc_io_open_err = 335544734;
+	 isc_io_close_err = 335544735;
+	 isc_io_read_err = 335544736;
+	 isc_io_write_err = 335544737;
+	 isc_io_delete_err = 335544738;
+	 isc_io_access_err = 335544739;
+	 isc_udf_exception = 335544740;
+	 isc_lost_db_connection = 335544741;
+	 isc_no_write_user_priv = 335544742;
+	 isc_token_too_long = 335544743;
+	 isc_max_att_exceeded = 335544744;
+	 isc_login_same_as_role_name = 335544745;
+	 isc_reftable_requires_pk = 335544746;
+	 isc_usrname_too_long = 335544747;
+	 isc_password_too_long = 335544748;
+	 isc_usrname_required = 335544749;
+	 isc_password_required = 335544750;
+	 isc_bad_protocol = 335544751;
+	 isc_dup_usrname_found = 335544752;
+	 isc_usrname_not_found = 335544753;
+	 isc_error_adding_sec_record = 335544754;
+	 isc_error_modifying_sec_record = 335544755;
+	 isc_error_deleting_sec_record = 335544756;
+	 isc_error_updating_sec_db = 335544757;
+	 isc_sort_rec_size_err = 335544758;
+	 isc_bad_default_value = 335544759;
+	 isc_invalid_clause = 335544760;
+	 isc_too_many_handles = 335544761;
+	 isc_optimizer_blk_exc = 335544762;
+	 isc_invalid_string_constant = 335544763;
+	 isc_transitional_date = 335544764;
+	 isc_read_only_database = 335544765;
+	 isc_must_be_dialect_2_and_up = 335544766;
+	 isc_blob_filter_exception = 335544767;
+	 isc_exception_access_violation = 335544768;
+	 isc_exception_datatype_missalignment = 335544769;
+	 isc_exception_array_bounds_exceeded = 335544770;
+	 isc_exception_float_denormal_operand = 335544771;
+	 isc_exception_float_divide_by_zero = 335544772;
+	 isc_exception_float_inexact_result = 335544773;
+	 isc_exception_float_invalid_operand = 335544774;
+	 isc_exception_float_overflow = 335544775;
+	 isc_exception_float_stack_check = 335544776;
+	 isc_exception_float_underflow = 335544777;
+	 isc_exception_integer_divide_by_zero = 335544778;
+	 isc_exception_integer_overflow = 335544779;
+	 isc_exception_unknown = 335544780;
+	 isc_exception_stack_overflow = 335544781;
+	 isc_exception_sigsegv = 335544782;
+	 isc_exception_sigill = 335544783;
+	 isc_exception_sigbus = 335544784;
+	 isc_exception_sigfpe = 335544785;
+	 isc_ext_file_delete = 335544786;
+	 isc_ext_file_modify = 335544787;
+	 isc_adm_task_denied = 335544788;
+	 isc_extract_input_mismatch = 335544789;
+	 isc_insufficient_svc_privileges = 335544790;
+	 isc_file_in_use = 335544791;
+	 isc_service_att_err = 335544792;
+	 isc_ddl_not_allowed_by_db_sql_dial = 335544793;
+	 isc_cancelled = 335544794;
+	 isc_unexp_spb_form = 335544795;
+	 isc_sql_dialect_datatype_unsupport = 335544796;
+	 isc_svcnouser = 335544797;
+	 isc_depend_on_uncommitted_rel = 335544798;
+	 isc_svc_name_missing = 335544799;
+	 isc_too_many_contexts = 335544800;
+	 isc_datype_notsup = 335544801;
+	 isc_dialect_reset_warning = 335544802;
+	 isc_dialect_not_changed = 335544803;
+	 isc_database_create_failed = 335544804;
+	 isc_inv_dialect_specified = 335544805;
+	 isc_valid_db_dialects = 335544806;
+	 isc_sqlwarn = 335544807;
+	 isc_dtype_renamed = 335544808;
+	 isc_extern_func_dir_error = 335544809;
+	 isc_date_range_exceeded = 335544810;
+	 isc_inv_client_dialect_specified = 335544811;
+	 isc_valid_client_dialects = 335544812;
+	 isc_optimizer_between_err = 335544813;
+	 isc_service_not_supported = 335544814;
+	 isc_generator_name = 335544815;
+	 isc_udf_name = 335544816;
+	 isc_bad_limit_param = 335544817;
+	 isc_bad_skip_param = 335544818;
+	 isc_io_32bit_exceeded_err = 335544819;
+	 isc_invalid_savepoint = 335544820;
+	 isc_dsql_column_pos_err = 335544821;
+	 isc_dsql_agg_where_err = 335544822;
+	 isc_dsql_agg_group_err = 335544823;
+	 isc_dsql_agg_column_err = 335544824;
+	 isc_dsql_agg_having_err = 335544825;
+	 isc_dsql_agg_nested_err = 335544826;
+	 isc_exec_sql_invalid_arg = 335544827;
+	 isc_exec_sql_invalid_req = 335544828;
+	 isc_exec_sql_invalid_var = 335544829;
+	 isc_exec_sql_max_call_exceeded = 335544830;
+	 isc_conf_access_denied = 335544831;
+	 isc_wrong_backup_state = 335544832;
+	 isc_wal_backup_err = 335544833;
+	 isc_cursor_not_open = 335544834;
+	 isc_bad_shutdown_mode = 335544835;
+	 isc_concat_overflow = 335544836;
+	 isc_bad_substring_offset = 335544837;
+	 isc_foreign_key_target_doesnt_exist = 335544838;
+	 isc_foreign_key_references_present = 335544839;
+	 isc_no_update = 335544840;
+	 isc_cursor_already_open = 335544841;
+	 isc_stack_trace = 335544842;
+	 isc_ctx_var_not_found = 335544843;
+	 isc_ctx_namespace_invalid = 335544844;
+	 isc_ctx_too_big = 335544845;
+	 isc_ctx_bad_argument = 335544846;
+	 isc_identifier_too_long = 335544847;
+	 isc_except2 = 335544848;
+	 isc_malformed_string = 335544849;
+	 isc_prc_out_param_mismatch = 335544850;
+	 isc_command_end_err2 = 335544851;
+	 isc_partner_idx_incompat_type = 335544852;
+	 isc_bad_substring_length = 335544853;
+	 isc_charset_not_installed = 335544854;
+	 isc_collation_not_installed = 335544855;
+	 isc_att_shutdown = 335544856;
+	 isc_blobtoobig = 335544857;
+	 isc_must_have_phys_field = 335544858;
+	 isc_invalid_time_precision = 335544859;
+	 isc_blob_convert_error = 335544860;
+	 isc_array_convert_error = 335544861;
+	 isc_record_lock_not_supp = 335544862;
+	 isc_partner_idx_not_found = 335544863;
+	 isc_tra_num_exc = 335544864;
+	 isc_field_disappeared = 335544865;
+	 isc_met_wrong_gtt_scope = 335544866;
+	 isc_subtype_for_internal_use = 335544867;
+	 isc_illegal_prc_type = 335544868;
+	 isc_invalid_sort_datatype = 335544869;
+	 isc_collation_name = 335544870;
+	 isc_domain_name = 335544871;
+	 isc_domnotdef = 335544872;
+	 isc_array_max_dimensions = 335544873;
+	 isc_max_db_per_trans_allowed = 335544874;
+	 isc_bad_debug_format = 335544875;
+	 isc_bad_proc_BLR = 335544876;
+	 isc_key_too_big = 335544877;
+	 isc_concurrent_transaction = 335544878;
+	 isc_not_valid_for_var = 335544879;
+	 isc_not_valid_for = 335544880;
+	 isc_need_difference = 335544881;
+	 isc_long_login = 335544882;
+	 isc_fldnotdef2 = 335544883;
+	 isc_invalid_similar_pattern = 335544884;
+	 isc_bad_teb_form = 335544885;
+	 isc_tpb_multiple_txn_isolation = 335544886;
+	 isc_tpb_reserv_before_table = 335544887;
+	 isc_tpb_multiple_spec = 335544888;
+	 isc_tpb_option_without_rc = 335544889;
+	 isc_tpb_conflicting_options = 335544890;
+	 isc_tpb_reserv_missing_tlen = 335544891;
+	 isc_tpb_reserv_long_tlen = 335544892;
+	 isc_tpb_reserv_missing_tname = 335544893;
+	 isc_tpb_reserv_corrup_tlen = 335544894;
+	 isc_tpb_reserv_null_tlen = 335544895;
+	 isc_tpb_reserv_relnotfound = 335544896;
+	 isc_tpb_reserv_baserelnotfound = 335544897;
+	 isc_tpb_missing_len = 335544898;
+	 isc_tpb_missing_value = 335544899;
+	 isc_tpb_corrupt_len = 335544900;
+	 isc_tpb_null_len = 335544901;
+	 isc_tpb_overflow_len = 335544902;
+	 isc_tpb_invalid_value = 335544903;
+	 isc_tpb_reserv_stronger_wng = 335544904;
+	 isc_tpb_reserv_stronger = 335544905;
+	 isc_tpb_reserv_max_recursion = 335544906;
+	 isc_tpb_reserv_virtualtbl = 335544907;
+	 isc_tpb_reserv_systbl = 335544908;
+	 isc_tpb_reserv_temptbl = 335544909;
+	 isc_tpb_readtxn_after_writelock = 335544910;
+	 isc_tpb_writelock_after_readtxn = 335544911;
+	 isc_time_range_exceeded = 335544912;
+	 isc_datetime_range_exceeded = 335544913;
+	 isc_string_truncation = 335544914;
+	 isc_blob_truncation = 335544915;
+	 isc_numeric_out_of_range = 335544916;
+	 isc_shutdown_timeout = 335544917;
+	 isc_att_handle_busy = 335544918;
+	 isc_bad_udf_freeit = 335544919;
+	 isc_eds_provider_not_found = 335544920;
+	 isc_eds_connection = 335544921;
+	 isc_eds_preprocess = 335544922;
+	 isc_eds_stmt_expected = 335544923;
+	 isc_eds_prm_name_expected = 335544924;
+	 isc_eds_unclosed_comment = 335544925;
+	 isc_eds_statement = 335544926;
+	 isc_eds_input_prm_mismatch = 335544927;
+	 isc_eds_output_prm_mismatch = 335544928;
+	 isc_eds_input_prm_not_set = 335544929;
+	 isc_too_big_blr = 335544930;
+	 isc_montabexh = 335544931;
+	 isc_modnotfound = 335544932;
+	 isc_nothing_to_cancel = 335544933;
+	 isc_ibutil_not_loaded = 335544934;
+	 isc_circular_computed = 335544935;
+	 isc_psw_db_error = 335544936;
+	 isc_invalid_type_datetime_op = 335544937;
+	 isc_onlycan_add_timetodate = 335544938;
+	 isc_onlycan_add_datetotime = 335544939;
+	 isc_onlycansub_tstampfromtstamp = 335544940;
+	 isc_onlyoneop_mustbe_tstamp = 335544941;
+	 isc_invalid_extractpart_time = 335544942;
+	 isc_invalid_extractpart_date = 335544943;
+	 isc_invalidarg_extract = 335544944;
+	 isc_sysf_argmustbe_exact = 335544945;
+	 isc_sysf_argmustbe_exact_or_fp = 335544946;
+	 isc_sysf_argviolates_uuidtype = 335544947;
+	 isc_sysf_argviolates_uuidlen = 335544948;
+	 isc_sysf_argviolates_uuidfmt = 335544949;
+	 isc_sysf_argviolates_guidigits = 335544950;
+	 isc_sysf_invalid_addpart_time = 335544951;
+	 isc_sysf_invalid_add_datetime = 335544952;
+	 isc_sysf_invalid_addpart_dtime = 335544953;
+	 isc_sysf_invalid_add_dtime_rc = 335544954;
+	 isc_sysf_invalid_diff_dtime = 335544955;
+	 isc_sysf_invalid_timediff = 335544956;
+	 isc_sysf_invalid_tstamptimediff = 335544957;
+	 isc_sysf_invalid_datetimediff = 335544958;
+	 isc_sysf_invalid_diffpart = 335544959;
+	 isc_sysf_argmustbe_positive = 335544960;
+	 isc_sysf_basemustbe_positive = 335544961;
+	 isc_sysf_argnmustbe_nonneg = 335544962;
+	 isc_sysf_argnmustbe_positive = 335544963;
+	 isc_sysf_invalid_zeropowneg = 335544964;
+	 isc_sysf_invalid_negpowfp = 335544965;
+	 isc_sysf_invalid_scale = 335544966;
+	 isc_sysf_argmustbe_nonneg = 335544967;
+	 isc_sysf_binuuid_mustbe_str = 335544968;
+	 isc_sysf_binuuid_wrongsize = 335544969;
+	 isc_missing_required_spb = 335544970;
+	 isc_net_server_shutdown = 335544971;
+	 isc_bad_conn_str = 335544972;
+	 isc_bad_epb_form = 335544973;
+	 isc_no_threads = 335544974;
+	 isc_net_event_connect_timeout = 335544975;
+	 isc_sysf_argmustbe_nonzero = 335544976;
+	 isc_sysf_argmustbe_range_inc1_1 = 335544977;
+	 isc_sysf_argmustbe_gteq_one = 335544978;
+	 isc_sysf_argmustbe_range_exc1_1 = 335544979;
+	 isc_internal_rejected_params = 335544980;
+	 isc_sysf_fp_overflow = 335544981;
+	 isc_udf_fp_overflow = 335544982;
+	 isc_udf_fp_nan = 335544983;
+	 isc_instance_conflict = 335544984;
+	 isc_out_of_temp_space = 335544985;
+	 isc_eds_expl_tran_ctrl = 335544986;
+	 isc_no_trusted_spb = 335544987;
+	 isc_package_name = 335544988;
+	 isc_cannot_make_not_null = 335544989;
+	 isc_feature_removed = 335544990;
+	 isc_view_name = 335544991;
+	 isc_lock_dir_access = 335544992;
+	 isc_invalid_fetch_option = 335544993;
+	 isc_bad_fun_BLR = 335544994;
+	 isc_func_pack_not_implemented = 335544995;
+	 isc_proc_pack_not_implemented = 335544996;
+	 isc_eem_func_not_returned = 335544997;
+	 isc_eem_proc_not_returned = 335544998;
+	 isc_eem_trig_not_returned = 335544999;
+	 isc_eem_bad_plugin_ver = 335545000;
+	 isc_eem_engine_notfound = 335545001;
+	 isc_attachment_in_use = 335545002;
+	 isc_transaction_in_use = 335545003;
+	 isc_pman_cannot_load_plugin = 335545004;
+	 isc_pman_module_notfound = 335545005;
+	 isc_pman_entrypoint_notfound = 335545006;
+	 isc_pman_module_bad = 335545007;
+	 isc_pman_plugin_notfound = 335545008;
+	 isc_sysf_invalid_trig_namespace = 335545009;
+	 isc_unexpected_null = 335545010;
+	 isc_type_notcompat_blob = 335545011;
+	 isc_invalid_date_val = 335545012;
+	 isc_invalid_time_val = 335545013;
+	 isc_invalid_timestamp_val = 335545014;
+	 isc_invalid_index_val = 335545015;
+	 isc_formatted_exception = 335545016;
+	 isc_async_active = 335545017;
+	 isc_private_function = 335545018;
+	 isc_private_procedure = 335545019;
+	 isc_request_outdated = 335545020;
+	 isc_bad_events_handle = 335545021;
+	 isc_cannot_copy_stmt = 335545022;
+	 isc_invalid_boolean_usage = 335545023;
+	 isc_sysf_argscant_both_be_zero = 335545024;
+	 isc_spb_no_id = 335545025;
+	 isc_ee_blr_mismatch_null = 335545026;
+	 isc_ee_blr_mismatch_length = 335545027;
+	 isc_ss_out_of_bounds = 335545028;
+	 isc_missing_data_structures = 335545029;
+	 isc_protect_sys_tab = 335545030;
+	 isc_libtommath_generic = 335545031;
+	 isc_wroblrver2 = 335545032;
+	 isc_trunc_limits = 335545033;
+	 isc_info_access = 335545034;
+	 isc_svc_no_stdin = 335545035;
+	 isc_svc_start_failed = 335545036;
+	 isc_svc_no_switches = 335545037;
+	 isc_svc_bad_size = 335545038;
+	 isc_no_crypt_plugin = 335545039;
+	 isc_cp_name_too_long = 335545040;
+	 isc_cp_process_active = 335545041;
+	 isc_cp_already_crypted = 335545042;
+	 isc_decrypt_error = 335545043;
+	 isc_no_providers = 335545044;
+	 isc_null_spb = 335545045;
+	 isc_max_args_exceeded = 335545046;
+	 isc_ee_blr_mismatch_names_count = 335545047;
+	 isc_ee_blr_mismatch_name_not_found = 335545048;
+	 isc_bad_result_set = 335545049;
+	 isc_wrong_message_length = 335545050;
+	 isc_no_output_format = 335545051;
+	 isc_item_finish = 335545052;
+	 isc_miss_config = 335545053;
+	 isc_conf_line = 335545054;
+	 isc_conf_include = 335545055;
+	 isc_include_depth = 335545056;
+	 isc_include_miss = 335545057;
+	 isc_protect_ownership = 335545058;
+	 isc_badvarnum = 335545059;
+	 isc_sec_context = 335545060;
+	 isc_multi_segment = 335545061;
+	 isc_login_changed = 335545062;
+	 isc_auth_handshake_limit = 335545063;
+	 isc_wirecrypt_incompatible = 335545064;
+	 isc_miss_wirecrypt = 335545065;
+	 isc_wirecrypt_key = 335545066;
+	 isc_wirecrypt_plugin = 335545067;
+	 isc_secdb_name = 335545068;
+	 isc_auth_data = 335545069;
+	 isc_auth_datalength = 335545070;
+	 isc_info_unprepared_stmt = 335545071;
+	 isc_idx_key_value = 335545072;
+	 isc_forupdate_virtualtbl = 335545073;
+	 isc_forupdate_systbl = 335545074;
+	 isc_forupdate_temptbl = 335545075;
+	 isc_cant_modify_sysobj = 335545076;
+	 isc_server_misconfigured = 335545077;
+	 isc_alter_role = 335545078;
+	 isc_map_already_exists = 335545079;
+	 isc_map_not_exists = 335545080;
+	 isc_map_load = 335545081;
+	 isc_map_aster = 335545082;
+	 isc_map_multi = 335545083;
+	 isc_map_undefined = 335545084;
+	 isc_baddpb_damaged_mode = 335545085;
+	 isc_baddpb_buffers_range = 335545086;
+	 isc_baddpb_temp_buffers = 335545087;
+	 isc_map_nodb = 335545088;
+	 isc_map_notable = 335545089;
+	 isc_miss_trusted_role = 335545090;
+	 isc_set_invalid_role = 335545091;
+	 isc_cursor_not_positioned = 335545092;
+	 isc_dup_attribute = 335545093;
+	 isc_dyn_no_priv = 335545094;
+	 isc_dsql_cant_grant_option = 335545095;
+	 isc_read_conflict = 335545096;
+	 isc_crdb_load = 335545097;
+	 isc_crdb_nodb = 335545098;
+	 isc_crdb_notable = 335545099;
+	 isc_interface_version_too_old = 335545100;
+	 isc_fun_param_mismatch = 335545101;
+	 isc_savepoint_backout_err = 335545102;
+	 isc_domain_primary_key_notnull = 335545103;
+	 isc_invalid_attachment_charset = 335545104;
+	 isc_map_down = 335545105;
+	 isc_login_error = 335545106;
+	 isc_already_opened = 335545107;
+	 isc_bad_crypt_key = 335545108;
+	 isc_encrypt_error = 335545109;
+	 isc_max_idx_depth = 335545110;
+	 isc_wrong_prvlg = 335545111;
+	 isc_miss_prvlg = 335545112;
+	 isc_crypt_checksum = 335545113;
+	 isc_not_dba = 335545114;
+	 isc_no_cursor = 335545115;
+	 isc_dsql_window_incompat_frames = 335545116;
+	 isc_dsql_window_range_multi_key = 335545117;
+	 isc_dsql_window_range_inv_key_type = 335545118;
+	 isc_dsql_window_frame_value_inv_type = 335545119;
+	 isc_window_frame_value_invalid = 335545120;
+	 isc_dsql_window_not_found = 335545121;
+	 isc_dsql_window_cant_overr_part = 335545122;
+	 isc_dsql_window_cant_overr_order = 335545123;
+	 isc_dsql_window_cant_overr_frame = 335545124;
+	 isc_dsql_window_duplicate = 335545125;
+	 isc_sql_too_long = 335545126;
+	 isc_cfg_stmt_timeout = 335545127;
+	 isc_att_stmt_timeout = 335545128;
+	 isc_req_stmt_timeout = 335545129;
+	 isc_att_shut_killed = 335545130;
+	 isc_att_shut_idle = 335545131;
+	 isc_att_shut_db_down = 335545132;
+	 isc_att_shut_engine = 335545133;
+	 isc_overriding_without_identity = 335545134;
+	 isc_overriding_system_invalid = 335545135;
+	 isc_overriding_user_invalid = 335545136;
+	 isc_overriding_system_missing = 335545137;
+	 isc_decprecision_err = 335545138;
+	 isc_decfloat_divide_by_zero = 335545139;
+	 isc_decfloat_inexact_result = 335545140;
+	 isc_decfloat_invalid_operation = 335545141;
+	 isc_decfloat_overflow = 335545142;
+	 isc_decfloat_underflow = 335545143;
+	 isc_subfunc_notdef = 335545144;
+	 isc_subproc_notdef = 335545145;
+	 isc_subfunc_signat = 335545146;
+	 isc_subproc_signat = 335545147;
+	 isc_subfunc_defvaldecl = 335545148;
+	 isc_subproc_defvaldecl = 335545149;
+	 isc_subfunc_not_impl = 335545150;
+	 isc_subproc_not_impl = 335545151;
+	 isc_sysf_invalid_hash_algorithm = 335545152;
+	 isc_expression_eval_index = 335545153;
+	 isc_invalid_decfloat_trap = 335545154;
+	 isc_invalid_decfloat_round = 335545155;
+	 isc_sysf_invalid_first_last_part = 335545156;
+	 isc_sysf_invalid_date_timestamp = 335545157;
+	 isc_precision_err2 = 335545158;
+	 isc_bad_batch_handle = 335545159;
+	 isc_intl_char = 335545160;
+	 isc_null_block = 335545161;
+	 isc_mixed_info = 335545162;
+	 isc_unknown_info = 335545163;
+	 isc_bpb_version = 335545164;
+	 isc_user_manager = 335545165;
+	 isc_icu_entrypoint = 335545166;
+	 isc_icu_library = 335545167;
+	 isc_metadata_name = 335545168;
+	 isc_tokens_parse = 335545169;
+	 isc_iconv_open = 335545170;
+	 isc_batch_compl_range = 335545171;
+	 isc_batch_compl_detail = 335545172;
+	 isc_deflate_init = 335545173;
+	 isc_inflate_init = 335545174;
+	 isc_big_segment = 335545175;
+	 isc_batch_policy = 335545176;
+	 isc_batch_defbpb = 335545177;
+	 isc_batch_align = 335545178;
+	 isc_multi_segment_dup = 335545179;
+	 isc_non_plugin_protocol = 335545180;
+	 isc_message_format = 335545181;
+	 isc_batch_param_version = 335545182;
+	 isc_batch_msg_long = 335545183;
+	 isc_batch_open = 335545184;
+	 isc_batch_type = 335545185;
+	 isc_batch_param = 335545186;
+	 isc_batch_blobs = 335545187;
+	 isc_batch_blob_append = 335545188;
+	 isc_batch_stream_align = 335545189;
+	 isc_batch_rpt_blob = 335545190;
+	 isc_batch_blob_buf = 335545191;
+	 isc_batch_small_data = 335545192;
+	 isc_batch_cont_bpb = 335545193;
+	 isc_batch_big_bpb = 335545194;
+	 isc_batch_big_segment = 335545195;
+	 isc_batch_big_seg2 = 335545196;
+	 isc_batch_blob_id = 335545197;
+	 isc_batch_too_big = 335545198;
+	 isc_num_literal = 335545199;
+	 isc_map_event = 335545200;
+	 isc_map_overflow = 335545201;
+	 isc_hdr_overflow = 335545202;
+	 isc_vld_plugins = 335545203;
+	 isc_db_crypt_key = 335545204;
+	 isc_no_keyholder_plugin = 335545205;
+	 isc_ses_reset_err = 335545206;
+	 isc_ses_reset_open_trans = 335545207;
+	 isc_ses_reset_warn = 335545208;
+	 isc_ses_reset_tran_rollback = 335545209;
+	 isc_plugin_name = 335545210;
+	 isc_parameter_name = 335545211;
+	 isc_file_starting_page_err = 335545212;
+	 isc_invalid_timezone_offset = 335545213;
+	 isc_invalid_timezone_region = 335545214;
+	 isc_invalid_timezone_id = 335545215;
+	 isc_tom_decode64len = 335545216;
+	 isc_tom_strblob = 335545217;
+	 isc_tom_reg = 335545218;
+	 isc_tom_algorithm = 335545219;
+	 isc_tom_mode_miss = 335545220;
+	 isc_tom_mode_bad = 335545221;
+	 isc_tom_no_mode = 335545222;
+	 isc_tom_iv_miss = 335545223;
+	 isc_tom_no_iv = 335545224;
+	 isc_tom_ctrtype_bad = 335545225;
+	 isc_tom_no_ctrtype = 335545226;
+	 isc_tom_ctr_big = 335545227;
+	 isc_tom_no_ctr = 335545228;
+	 isc_tom_iv_length = 335545229;
+	 isc_tom_error = 335545230;
+	 isc_tom_yarrow_start = 335545231;
+	 isc_tom_yarrow_setup = 335545232;
+	 isc_tom_init_mode = 335545233;
+	 isc_tom_crypt_mode = 335545234;
+	 isc_tom_decrypt_mode = 335545235;
+	 isc_tom_init_cip = 335545236;
+	 isc_tom_crypt_cip = 335545237;
+	 isc_tom_decrypt_cip = 335545238;
+	 isc_tom_setup_cip = 335545239;
+	 isc_tom_setup_chacha = 335545240;
+	 isc_tom_encode = 335545241;
+	 isc_tom_decode = 335545242;
+	 isc_tom_rsa_import = 335545243;
+	 isc_tom_oaep = 335545244;
+	 isc_tom_hash_bad = 335545245;
+	 isc_tom_rsa_make = 335545246;
+	 isc_tom_rsa_export = 335545247;
+	 isc_tom_rsa_sign = 335545248;
+	 isc_tom_rsa_verify = 335545249;
+	 isc_tom_chacha_key = 335545250;
+	 isc_bad_repl_handle = 335545251;
+	 isc_tra_snapshot_does_not_exist = 335545252;
+	 isc_eds_input_prm_not_used = 335545253;
+	 isc_effective_user = 335545254;
+	 isc_invalid_time_zone_bind = 335545255;
+	 isc_invalid_decfloat_bind = 335545256;
+	 isc_odd_hex_len = 335545257;
+	 isc_invalid_hex_digit = 335545258;
+	 isc_bind_err = 335545259;
+	 isc_bind_statement = 335545260;
+	 isc_bind_convert = 335545261;
+	 isc_cannot_update_old_blob = 335545262;
+	 isc_cannot_read_new_blob = 335545263;
+	 isc_dyn_no_create_priv = 335545264;
+	 isc_suspend_without_returns = 335545265;
+	 isc_truncate_warn = 335545266;
+	 isc_truncate_monitor = 335545267;
+	 isc_truncate_context = 335545268;
+	 isc_merge_dup_update = 335545269;
+	 isc_wrong_page = 335545270;
+	 isc_repl_error = 335545271;
+	 isc_ses_reset_failed = 335545272;
+	 isc_block_size = 335545273;
+	 isc_tom_key_length = 335545274;
+	 isc_inf_invalid_args = 335545275;
+	 isc_sysf_invalid_null_empty = 335545276;
+	 isc_bad_loctab_num = 335545277;
+	 isc_quoted_str_bad = 335545278;
+	 isc_quoted_str_miss = 335545279;
+	 isc_gfix_db_name = 335740929;
+	 isc_gfix_invalid_sw = 335740930;
+	 isc_gfix_incmp_sw = 335740932;
+	 isc_gfix_replay_req = 335740933;
+	 isc_gfix_pgbuf_req = 335740934;
+	 isc_gfix_val_req = 335740935;
+	 isc_gfix_pval_req = 335740936;
+	 isc_gfix_trn_req = 335740937;
+	 isc_gfix_full_req = 335740940;
+	 isc_gfix_usrname_req = 335740941;
+	 isc_gfix_pass_req = 335740942;
+	 isc_gfix_subs_name = 335740943;
+	 isc_gfix_wal_req = 335740944;
+	 isc_gfix_sec_req = 335740945;
+	 isc_gfix_nval_req = 335740946;
+	 isc_gfix_type_shut = 335740947;
+	 isc_gfix_retry = 335740948;
+	 isc_gfix_retry_db = 335740951;
+	 isc_gfix_exceed_max = 335740991;
+	 isc_gfix_corrupt_pool = 335740992;
+	 isc_gfix_mem_exhausted = 335740993;
+	 isc_gfix_bad_pool = 335740994;
+	 isc_gfix_trn_not_valid = 335740995;
+	 isc_gfix_unexp_eoi = 335741012;
+	 isc_gfix_recon_fail = 335741018;
+	 isc_gfix_trn_unknown = 335741036;
+	 isc_gfix_mode_req = 335741038;
+	 isc_gfix_pzval_req = 335741042;
+	 isc_dsql_dbkey_from_non_table = 336003074;
+	 isc_dsql_transitional_numeric = 336003075;
+	 isc_dsql_dialect_warning_expr = 336003076;
+	 isc_sql_db_dialect_dtype_unsupport = 336003077;
+	 isc_sql_dialect_conflict_num = 336003079;
+	 isc_dsql_warning_number_ambiguous = 336003080;
+	 isc_dsql_warning_number_ambiguous1 = 336003081;
+	 isc_dsql_warn_precision_ambiguous = 336003082;
+	 isc_dsql_warn_precision_ambiguous1 = 336003083;
+	 isc_dsql_warn_precision_ambiguous2 = 336003084;
+	 isc_dsql_ambiguous_field_name = 336003085;
+	 isc_dsql_udf_return_pos_err = 336003086;
+	 isc_dsql_invalid_label = 336003087;
+	 isc_dsql_datatypes_not_comparable = 336003088;
+	 isc_dsql_cursor_invalid = 336003089;
+	 isc_dsql_cursor_redefined = 336003090;
+	 isc_dsql_cursor_not_found = 336003091;
+	 isc_dsql_cursor_exists = 336003092;
+	 isc_dsql_cursor_rel_ambiguous = 336003093;
+	 isc_dsql_cursor_rel_not_found = 336003094;
+	 isc_dsql_cursor_not_open = 336003095;
+	 isc_dsql_type_not_supp_ext_tab = 336003096;
+	 isc_dsql_feature_not_supported_ods = 336003097;
+	 isc_primary_key_required = 336003098;
+	 isc_upd_ins_doesnt_match_pk = 336003099;
+	 isc_upd_ins_doesnt_match_matching = 336003100;
+	 isc_upd_ins_with_complex_view = 336003101;
+	 isc_dsql_incompatible_trigger_type = 336003102;
+	 isc_dsql_db_trigger_type_cant_change = 336003103;
+	 isc_dsql_record_version_table = 336003104;
+	 isc_dsql_invalid_sqlda_version = 336003105;
+	 isc_dsql_sqlvar_index = 336003106;
+	 isc_dsql_no_sqlind = 336003107;
+	 isc_dsql_no_sqldata = 336003108;
+	 isc_dsql_no_input_sqlda = 336003109;
+	 isc_dsql_no_output_sqlda = 336003110;
+	 isc_dsql_wrong_param_num = 336003111;
+	 isc_dsql_invalid_drop_ss_clause = 336003112;
+	 isc_upd_ins_cannot_default = 336003113;
+	 isc_dyn_filter_not_found = 336068645;
+	 isc_dyn_func_not_found = 336068649;
+	 isc_dyn_index_not_found = 336068656;
+	 isc_dyn_view_not_found = 336068662;
+	 isc_dyn_domain_not_found = 336068697;
+	 isc_dyn_cant_modify_auto_trig = 336068717;
+	 isc_dyn_dup_table = 336068740;
+	 isc_dyn_proc_not_found = 336068748;
+	 isc_dyn_exception_not_found = 336068752;
+	 isc_dyn_proc_param_not_found = 336068754;
+	 isc_dyn_trig_not_found = 336068755;
+	 isc_dyn_charset_not_found = 336068759;
+	 isc_dyn_collation_not_found = 336068760;
+	 isc_dyn_role_not_found = 336068763;
+	 isc_dyn_name_longer = 336068767;
+	 isc_dyn_column_does_not_exist = 336068784;
+	 isc_dyn_role_does_not_exist = 336068796;
+	 isc_dyn_no_grant_admin_opt = 336068797;
+	 isc_dyn_user_not_role_member = 336068798;
+	 isc_dyn_delete_role_failed = 336068799;
+	 isc_dyn_grant_role_to_user = 336068800;
+	 isc_dyn_inv_sql_role_name = 336068801;
+	 isc_dyn_dup_sql_role = 336068802;
+	 isc_dyn_kywd_spec_for_role = 336068803;
+	 isc_dyn_roles_not_supported = 336068804;
+	 isc_dyn_domain_name_exists = 336068812;
+	 isc_dyn_field_name_exists = 336068813;
+	 isc_dyn_dependency_exists = 336068814;
+	 isc_dyn_dtype_invalid = 336068815;
+	 isc_dyn_char_fld_too_small = 336068816;
+	 isc_dyn_invalid_dtype_conversion = 336068817;
+	 isc_dyn_dtype_conv_invalid = 336068818;
+	 isc_dyn_zero_len_id = 336068820;
+	 isc_dyn_gen_not_found = 336068822;
+	 isc_max_coll_per_charset = 336068829;
+	 isc_invalid_coll_attr = 336068830;
+	 isc_dyn_wrong_gtt_scope = 336068840;
+	 isc_dyn_coll_used_table = 336068843;
+	 isc_dyn_coll_used_domain = 336068844;
+	 isc_dyn_cannot_del_syscoll = 336068845;
+	 isc_dyn_cannot_del_def_coll = 336068846;
+	 isc_dyn_table_not_found = 336068849;
+	 isc_dyn_coll_used_procedure = 336068851;
+	 isc_dyn_scale_too_big = 336068852;
+	 isc_dyn_precision_too_small = 336068853;
+	 isc_dyn_miss_priv_warning = 336068855;
+	 isc_dyn_ods_not_supp_feature = 336068856;
+	 isc_dyn_cannot_addrem_computed = 336068857;
+	 isc_dyn_no_empty_pw = 336068858;
+	 isc_dyn_dup_index = 336068859;
+	 isc_dyn_package_not_found = 336068864;
+	 isc_dyn_schema_not_found = 336068865;
+	 isc_dyn_cannot_mod_sysproc = 336068866;
+	 isc_dyn_cannot_mod_systrig = 336068867;
+	 isc_dyn_cannot_mod_sysfunc = 336068868;
+	 isc_dyn_invalid_ddl_proc = 336068869;
+	 isc_dyn_invalid_ddl_trig = 336068870;
+	 isc_dyn_funcnotdef_package = 336068871;
+	 isc_dyn_procnotdef_package = 336068872;
+	 isc_dyn_funcsignat_package = 336068873;
+	 isc_dyn_procsignat_package = 336068874;
+	 isc_dyn_defvaldecl_package_proc = 336068875;
+	 isc_dyn_package_body_exists = 336068877;
+	 isc_dyn_invalid_ddl_func = 336068878;
+	 isc_dyn_newfc_oldsyntax = 336068879;
+	 isc_dyn_func_param_not_found = 336068886;
+	 isc_dyn_routine_param_not_found = 336068887;
+	 isc_dyn_routine_param_ambiguous = 336068888;
+	 isc_dyn_coll_used_function = 336068889;
+	 isc_dyn_domain_used_function = 336068890;
+	 isc_dyn_alter_user_no_clause = 336068891;
+	 isc_dyn_duplicate_package_item = 336068894;
+	 isc_dyn_cant_modify_sysobj = 336068895;
+	 isc_dyn_cant_use_zero_increment = 336068896;
+	 isc_dyn_cant_use_in_foreignkey = 336068897;
+	 isc_dyn_defvaldecl_package_func = 336068898;
+	 isc_dyn_cyclic_role = 336068900;
+	 isc_dyn_cant_use_zero_inc_ident = 336068904;
+	 isc_dyn_no_ddl_grant_opt_priv = 336068907;
+	 isc_dyn_no_grant_opt_priv = 336068908;
+	 isc_dyn_func_not_exist = 336068909;
+	 isc_dyn_proc_not_exist = 336068910;
+	 isc_dyn_pack_not_exist = 336068911;
+	 isc_dyn_trig_not_exist = 336068912;
+	 isc_dyn_view_not_exist = 336068913;
+	 isc_dyn_rel_not_exist = 336068914;
+	 isc_dyn_exc_not_exist = 336068915;
+	 isc_dyn_gen_not_exist = 336068916;
+	 isc_dyn_fld_not_exist = 336068917;
+	 isc_gbak_unknown_switch = 336330753;
+	 isc_gbak_page_size_missing = 336330754;
+	 isc_gbak_page_size_toobig = 336330755;
+	 isc_gbak_redir_ouput_missing = 336330756;
+	 isc_gbak_switches_conflict = 336330757;
+	 isc_gbak_unknown_device = 336330758;
+	 isc_gbak_no_protection = 336330759;
+	 isc_gbak_page_size_not_allowed = 336330760;
+	 isc_gbak_multi_source_dest = 336330761;
+	 isc_gbak_filename_missing = 336330762;
+	 isc_gbak_dup_inout_names = 336330763;
+	 isc_gbak_inv_page_size = 336330764;
+	 isc_gbak_db_specified = 336330765;
+	 isc_gbak_db_exists = 336330766;
+	 isc_gbak_unk_device = 336330767;
+	 isc_gbak_blob_info_failed = 336330772;
+	 isc_gbak_unk_blob_item = 336330773;
+	 isc_gbak_get_seg_failed = 336330774;
+	 isc_gbak_close_blob_failed = 336330775;
+	 isc_gbak_open_blob_failed = 336330776;
+	 isc_gbak_put_blr_gen_id_failed = 336330777;
+	 isc_gbak_unk_type = 336330778;
+	 isc_gbak_comp_req_failed = 336330779;
+	 isc_gbak_start_req_failed = 336330780;
+	 isc_gbak_rec_failed = 336330781;
+	 isc_gbak_rel_req_failed = 336330782;
+	 isc_gbak_db_info_failed = 336330783;
+	 isc_gbak_no_db_desc = 336330784;
+	 isc_gbak_db_create_failed = 336330785;
+	 isc_gbak_decomp_len_error = 336330786;
+	 isc_gbak_tbl_missing = 336330787;
+	 isc_gbak_blob_col_missing = 336330788;
+	 isc_gbak_create_blob_failed = 336330789;
+	 isc_gbak_put_seg_failed = 336330790;
+	 isc_gbak_rec_len_exp = 336330791;
+	 isc_gbak_inv_rec_len = 336330792;
+	 isc_gbak_exp_data_type = 336330793;
+	 isc_gbak_gen_id_failed = 336330794;
+	 isc_gbak_unk_rec_type = 336330795;
+	 isc_gbak_inv_bkup_ver = 336330796;
+	 isc_gbak_missing_bkup_desc = 336330797;
+	 isc_gbak_string_trunc = 336330798;
+	 isc_gbak_cant_rest_record = 336330799;
+	 isc_gbak_send_failed = 336330800;
+	 isc_gbak_no_tbl_name = 336330801;
+	 isc_gbak_unexp_eof = 336330802;
+	 isc_gbak_db_format_too_old = 336330803;
+	 isc_gbak_inv_array_dim = 336330804;
+	 isc_gbak_xdr_len_expected = 336330807;
+	 isc_gbak_open_bkup_error = 336330817;
+	 isc_gbak_open_error = 336330818;
+	 isc_gbak_missing_block_fac = 336330934;
+	 isc_gbak_inv_block_fac = 336330935;
+	 isc_gbak_block_fac_specified = 336330936;
+	 isc_gbak_missing_username = 336330940;
+	 isc_gbak_missing_password = 336330941;
+	 isc_gbak_missing_skipped_bytes = 336330952;
+	 isc_gbak_inv_skipped_bytes = 336330953;
+	 isc_gbak_err_restore_charset = 336330965;
+	 isc_gbak_err_restore_collation = 336330967;
+	 isc_gbak_read_error = 336330972;
+	 isc_gbak_write_error = 336330973;
+	 isc_gbak_db_in_use = 336330985;
+	 isc_gbak_sysmemex = 336330990;
+	 isc_gbak_restore_role_failed = 336331002;
+	 isc_gbak_role_op_missing = 336331005;
+	 isc_gbak_page_buffers_missing = 336331010;
+	 isc_gbak_page_buffers_wrong_param = 336331011;
+	 isc_gbak_page_buffers_restore = 336331012;
+	 isc_gbak_inv_size = 336331014;
+	 isc_gbak_file_outof_sequence = 336331015;
+	 isc_gbak_join_file_missing = 336331016;
+	 isc_gbak_stdin_not_supptd = 336331017;
+	 isc_gbak_stdout_not_supptd = 336331018;
+	 isc_gbak_bkup_corrupt = 336331019;
+	 isc_gbak_unk_db_file_spec = 336331020;
+	 isc_gbak_hdr_write_failed = 336331021;
+	 isc_gbak_disk_space_ex = 336331022;
+	 isc_gbak_size_lt_min = 336331023;
+	 isc_gbak_svc_name_missing = 336331025;
+	 isc_gbak_not_ownr = 336331026;
+	 isc_gbak_mode_req = 336331031;
+	 isc_gbak_just_data = 336331033;
+	 isc_gbak_data_only = 336331034;
+	 isc_gbak_missing_interval = 336331078;
+	 isc_gbak_wrong_interval = 336331079;
+	 isc_gbak_verify_verbint = 336331081;
+	 isc_gbak_option_only_restore = 336331082;
+	 isc_gbak_option_only_backup = 336331083;
+	 isc_gbak_option_conflict = 336331084;
+	 isc_gbak_param_conflict = 336331085;
+	 isc_gbak_option_repeated = 336331086;
+	 isc_gbak_max_dbkey_recursion = 336331091;
+	 isc_gbak_max_dbkey_length = 336331092;
+	 isc_gbak_invalid_metadata = 336331093;
+	 isc_gbak_invalid_data = 336331094;
+	 isc_gbak_inv_bkup_ver2 = 336331096;
+	 isc_gbak_db_format_too_old2 = 336331100;
+	 isc_dsql_too_old_ods = 336397205;
+	 isc_dsql_table_not_found = 336397206;
+	 isc_dsql_view_not_found = 336397207;
+	 isc_dsql_line_col_error = 336397208;
+	 isc_dsql_unknown_pos = 336397209;
+	 isc_dsql_no_dup_name = 336397210;
+	 isc_dsql_too_many_values = 336397211;
+	 isc_dsql_no_array_computed = 336397212;
+	 isc_dsql_implicit_domain_name = 336397213;
+	 isc_dsql_only_can_subscript_array = 336397214;
+	 isc_dsql_max_sort_items = 336397215;
+	 isc_dsql_max_group_items = 336397216;
+	 isc_dsql_conflicting_sort_field = 336397217;
+	 isc_dsql_derived_table_more_columns = 336397218;
+	 isc_dsql_derived_table_less_columns = 336397219;
+	 isc_dsql_derived_field_unnamed = 336397220;
+	 isc_dsql_derived_field_dup_name = 336397221;
+	 isc_dsql_derived_alias_select = 336397222;
+	 isc_dsql_derived_alias_field = 336397223;
+	 isc_dsql_auto_field_bad_pos = 336397224;
+	 isc_dsql_cte_wrong_reference = 336397225;
+	 isc_dsql_cte_cycle = 336397226;
+	 isc_dsql_cte_outer_join = 336397227;
+	 isc_dsql_cte_mult_references = 336397228;
+	 isc_dsql_cte_not_a_union = 336397229;
+	 isc_dsql_cte_nonrecurs_after_recurs = 336397230;
+	 isc_dsql_cte_wrong_clause = 336397231;
+	 isc_dsql_cte_union_all = 336397232;
+	 isc_dsql_cte_miss_nonrecursive = 336397233;
+	 isc_dsql_cte_nested_with = 336397234;
+	 isc_dsql_col_more_than_once_using = 336397235;
+	 isc_dsql_unsupp_feature_dialect = 336397236;
+	 isc_dsql_cte_not_used = 336397237;
+	 isc_dsql_col_more_than_once_view = 336397238;
+	 isc_dsql_unsupported_in_auto_trans = 336397239;
+	 isc_dsql_eval_unknode = 336397240;
+	 isc_dsql_agg_wrongarg = 336397241;
+	 isc_dsql_agg2_wrongarg = 336397242;
+	 isc_dsql_nodateortime_pm_string = 336397243;
+	 isc_dsql_invalid_datetime_subtract = 336397244;
+	 isc_dsql_invalid_dateortime_add = 336397245;
+	 isc_dsql_invalid_type_minus_date = 336397246;
+	 isc_dsql_nostring_addsub_dial3 = 336397247;
+	 isc_dsql_invalid_type_addsub_dial3 = 336397248;
+	 isc_dsql_invalid_type_multip_dial1 = 336397249;
+	 isc_dsql_nostring_multip_dial3 = 336397250;
+	 isc_dsql_invalid_type_multip_dial3 = 336397251;
+	 isc_dsql_mustuse_numeric_div_dial1 = 336397252;
+	 isc_dsql_nostring_div_dial3 = 336397253;
+	 isc_dsql_invalid_type_div_dial3 = 336397254;
+	 isc_dsql_nostring_neg_dial3 = 336397255;
+	 isc_dsql_invalid_type_neg = 336397256;
+	 isc_dsql_max_distinct_items = 336397257;
+	 isc_dsql_alter_charset_failed = 336397258;
+	 isc_dsql_comment_on_failed = 336397259;
+	 isc_dsql_create_func_failed = 336397260;
+	 isc_dsql_alter_func_failed = 336397261;
+	 isc_dsql_create_alter_func_failed = 336397262;
+	 isc_dsql_drop_func_failed = 336397263;
+	 isc_dsql_recreate_func_failed = 336397264;
+	 isc_dsql_create_proc_failed = 336397265;
+	 isc_dsql_alter_proc_failed = 336397266;
+	 isc_dsql_create_alter_proc_failed = 336397267;
+	 isc_dsql_drop_proc_failed = 336397268;
+	 isc_dsql_recreate_proc_failed = 336397269;
+	 isc_dsql_create_trigger_failed = 336397270;
+	 isc_dsql_alter_trigger_failed = 336397271;
+	 isc_dsql_create_alter_trigger_failed = 336397272;
+	 isc_dsql_drop_trigger_failed = 336397273;
+	 isc_dsql_recreate_trigger_failed = 336397274;
+	 isc_dsql_create_collation_failed = 336397275;
+	 isc_dsql_drop_collation_failed = 336397276;
+	 isc_dsql_create_domain_failed = 336397277;
+	 isc_dsql_alter_domain_failed = 336397278;
+	 isc_dsql_drop_domain_failed = 336397279;
+	 isc_dsql_create_except_failed = 336397280;
+	 isc_dsql_alter_except_failed = 336397281;
+	 isc_dsql_create_alter_except_failed = 336397282;
+	 isc_dsql_recreate_except_failed = 336397283;
+	 isc_dsql_drop_except_failed = 336397284;
+	 isc_dsql_create_sequence_failed = 336397285;
+	 isc_dsql_create_table_failed = 336397286;
+	 isc_dsql_alter_table_failed = 336397287;
+	 isc_dsql_drop_table_failed = 336397288;
+	 isc_dsql_recreate_table_failed = 336397289;
+	 isc_dsql_create_pack_failed = 336397290;
+	 isc_dsql_alter_pack_failed = 336397291;
+	 isc_dsql_create_alter_pack_failed = 336397292;
+	 isc_dsql_drop_pack_failed = 336397293;
+	 isc_dsql_recreate_pack_failed = 336397294;
+	 isc_dsql_create_pack_body_failed = 336397295;
+	 isc_dsql_drop_pack_body_failed = 336397296;
+	 isc_dsql_recreate_pack_body_failed = 336397297;
+	 isc_dsql_create_view_failed = 336397298;
+	 isc_dsql_alter_view_failed = 336397299;
+	 isc_dsql_create_alter_view_failed = 336397300;
+	 isc_dsql_recreate_view_failed = 336397301;
+	 isc_dsql_drop_view_failed = 336397302;
+	 isc_dsql_drop_sequence_failed = 336397303;
+	 isc_dsql_recreate_sequence_failed = 336397304;
+	 isc_dsql_drop_index_failed = 336397305;
+	 isc_dsql_drop_filter_failed = 336397306;
+	 isc_dsql_drop_shadow_failed = 336397307;
+	 isc_dsql_drop_role_failed = 336397308;
+	 isc_dsql_drop_user_failed = 336397309;
+	 isc_dsql_create_role_failed = 336397310;
+	 isc_dsql_alter_role_failed = 336397311;
+	 isc_dsql_alter_index_failed = 336397312;
+	 isc_dsql_alter_database_failed = 336397313;
+	 isc_dsql_create_shadow_failed = 336397314;
+	 isc_dsql_create_filter_failed = 336397315;
+	 isc_dsql_create_index_failed = 336397316;
+	 isc_dsql_create_user_failed = 336397317;
+	 isc_dsql_alter_user_failed = 336397318;
+	 isc_dsql_grant_failed = 336397319;
+	 isc_dsql_revoke_failed = 336397320;
+	 isc_dsql_cte_recursive_aggregate = 336397321;
+	 isc_dsql_mapping_failed = 336397322;
+	 isc_dsql_alter_sequence_failed = 336397323;
+	 isc_dsql_create_generator_failed = 336397324;
+	 isc_dsql_set_generator_failed = 336397325;
+	 isc_dsql_wlock_simple = 336397326;
+	 isc_dsql_firstskip_rows = 336397327;
+	 isc_dsql_wlock_aggregates = 336397328;
+	 isc_dsql_wlock_conflict = 336397329;
+	 isc_dsql_max_exception_arguments = 336397330;
+	 isc_dsql_string_byte_length = 336397331;
+	 isc_dsql_string_char_length = 336397332;
+	 isc_dsql_max_nesting = 336397333;
+	 isc_dsql_recreate_user_failed = 336397334;
+	 isc_gsec_cant_open_db = 336723983;
+	 isc_gsec_switches_error = 336723984;
+	 isc_gsec_no_op_spec = 336723985;
+	 isc_gsec_no_usr_name = 336723986;
+	 isc_gsec_err_add = 336723987;
+	 isc_gsec_err_modify = 336723988;
+	 isc_gsec_err_find_mod = 336723989;
+	 isc_gsec_err_rec_not_found = 336723990;
+	 isc_gsec_err_delete = 336723991;
+	 isc_gsec_err_find_del = 336723992;
+	 isc_gsec_err_find_disp = 336723996;
+	 isc_gsec_inv_param = 336723997;
+	 isc_gsec_op_specified = 336723998;
+	 isc_gsec_pw_specified = 336723999;
+	 isc_gsec_uid_specified = 336724000;
+	 isc_gsec_gid_specified = 336724001;
+	 isc_gsec_proj_specified = 336724002;
+	 isc_gsec_org_specified = 336724003;
+	 isc_gsec_fname_specified = 336724004;
+	 isc_gsec_mname_specified = 336724005;
+	 isc_gsec_lname_specified = 336724006;
+	 isc_gsec_inv_switch = 336724008;
+	 isc_gsec_amb_switch = 336724009;
+	 isc_gsec_no_op_specified = 336724010;
+	 isc_gsec_params_not_allowed = 336724011;
+	 isc_gsec_incompat_switch = 336724012;
+	 isc_gsec_inv_username = 336724044;
+	 isc_gsec_inv_pw_length = 336724045;
+	 isc_gsec_db_specified = 336724046;
+	 isc_gsec_db_admin_specified = 336724047;
+	 isc_gsec_db_admin_pw_specified = 336724048;
+	 isc_gsec_sql_role_specified = 336724049;
+	 isc_gstat_unknown_switch = 336920577;
+	 isc_gstat_retry = 336920578;
+	 isc_gstat_wrong_ods = 336920579;
+	 isc_gstat_unexpected_eof = 336920580;
+	 isc_gstat_open_err = 336920605;
+	 isc_gstat_read_err = 336920606;
+	 isc_gstat_sysmemex = 336920607;
+	 isc_fbsvcmgr_bad_am = 336986113;
+	 isc_fbsvcmgr_bad_wm = 336986114;
+	 isc_fbsvcmgr_bad_rs = 336986115;
+	 isc_fbsvcmgr_info_err = 336986116;
+	 isc_fbsvcmgr_query_err = 336986117;
+	 isc_fbsvcmgr_switch_unknown = 336986118;
+	 isc_fbsvcmgr_bad_sm = 336986159;
+	 isc_fbsvcmgr_fp_open = 336986160;
+	 isc_fbsvcmgr_fp_read = 336986161;
+	 isc_fbsvcmgr_fp_empty = 336986162;
+	 isc_fbsvcmgr_bad_arg = 336986164;
+	 isc_fbsvcmgr_info_limbo = 336986170;
+	 isc_fbsvcmgr_limbo_state = 336986171;
+	 isc_fbsvcmgr_limbo_advise = 336986172;
+	 isc_fbsvcmgr_bad_rm = 336986173;
+	 isc_utl_trusted_switch = 337051649;
+	 isc_nbackup_missing_param = 337117213;
+	 isc_nbackup_allowed_switches = 337117214;
+	 isc_nbackup_unknown_param = 337117215;
+	 isc_nbackup_unknown_switch = 337117216;
+	 isc_nbackup_nofetchpw_svc = 337117217;
+	 isc_nbackup_pwfile_error = 337117218;
+	 isc_nbackup_size_with_lock = 337117219;
+	 isc_nbackup_no_switch = 337117220;
+	 isc_nbackup_err_read = 337117223;
+	 isc_nbackup_err_write = 337117224;
+	 isc_nbackup_err_seek = 337117225;
+	 isc_nbackup_err_opendb = 337117226;
+	 isc_nbackup_err_fadvice = 337117227;
+	 isc_nbackup_err_createdb = 337117228;
+	 isc_nbackup_err_openbk = 337117229;
+	 isc_nbackup_err_createbk = 337117230;
+	 isc_nbackup_err_eofdb = 337117231;
+	 isc_nbackup_fixup_wrongstate = 337117232;
+	 isc_nbackup_err_db = 337117233;
+	 isc_nbackup_userpw_toolong = 337117234;
+	 isc_nbackup_lostrec_db = 337117235;
+	 isc_nbackup_lostguid_db = 337117236;
+	 isc_nbackup_err_eofhdrdb = 337117237;
+	 isc_nbackup_db_notlock = 337117238;
+	 isc_nbackup_lostguid_bk = 337117239;
+	 isc_nbackup_page_changed = 337117240;
+	 isc_nbackup_dbsize_inconsistent = 337117241;
+	 isc_nbackup_failed_lzbk = 337117242;
+	 isc_nbackup_err_eofhdrbk = 337117243;
+	 isc_nbackup_invalid_incbk = 337117244;
+	 isc_nbackup_unsupvers_incbk = 337117245;
+	 isc_nbackup_invlevel_incbk = 337117246;
+	 isc_nbackup_wrong_orderbk = 337117247;
+	 isc_nbackup_err_eofbk = 337117248;
+	 isc_nbackup_err_copy = 337117249;
+	 isc_nbackup_err_eofhdr_restdb = 337117250;
+	 isc_nbackup_lostguid_l0bk = 337117251;
+	 isc_nbackup_switchd_parameter = 337117255;
+	 isc_nbackup_user_stop = 337117257;
+	 isc_nbackup_deco_parse = 337117259;
+	 isc_nbackup_lostrec_guid_db = 337117261;
+	 isc_nbackup_seq_misuse = 337117265;
+	 isc_trace_conflict_acts = 337182750;
+	 isc_trace_act_notfound = 337182751;
+	 isc_trace_switch_once = 337182752;
+	 isc_trace_param_val_miss = 337182753;
+	 isc_trace_param_invalid = 337182754;
+	 isc_trace_switch_unknown = 337182755;
+	 isc_trace_switch_svc_only = 337182756;
+	 isc_trace_switch_user_only = 337182757;
+	 isc_trace_switch_param_miss = 337182758;
+	 isc_trace_param_act_notcompat = 337182759;
+	 isc_trace_mandatory_switch_miss = 337182760;
 implementation
 
 procedure IReferenceCounted.addRef();
@@ -5789,7 +5873,13 @@ end;
 
 function IFirebirdConf.getVersion(status: IStatus): Cardinal;
 begin
-	Result := FirebirdConfVTable(vTable).getVersion(Self, status);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IFirebirdConf', vTable.version, 4);
+		Result := 0;
+	end
+	else begin
+		Result := FirebirdConfVTable(vTable).getVersion(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -5829,7 +5919,11 @@ end;
 
 procedure IPluginModule.threadDetach();
 begin
-	PluginModuleVTable(vTable).threadDetach(Self);
+	if (vTable.version < 3) then begin
+	end
+	else begin
+		PluginModuleVTable(vTable).threadDetach(Self);
+	end;
 end;
 
 procedure IPluginManager.registerPluginFactory(pluginType: Cardinal; defaultName: PAnsiChar; factory: IPluginFactory);
@@ -5918,7 +6012,12 @@ end;
 
 function IConfigManager.getDefaultSecurityDb(): PAnsiChar;
 begin
-	Result := ConfigManagerVTable(vTable).getDefaultSecurityDb(Self);
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := ConfigManagerVTable(vTable).getDefaultSecurityDb(Self);
+	end;
 end;
 
 procedure IEventCallback.eventCallbackFunction(length: Cardinal; events: BytePtr);
@@ -5944,21 +6043,53 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IBlob.cancel(status: IStatus);
+procedure IBlob.deprecatedCancel(status: IStatus);
 begin
-	BlobVTable(vTable).cancel(Self, status);
+	BlobVTable(vTable).deprecatedCancel(Self, status);
 	FbException.checkException(status);
 end;
 
-procedure IBlob.close(status: IStatus);
+procedure IBlob.deprecatedClose(status: IStatus);
 begin
-	BlobVTable(vTable).close(Self, status);
+	BlobVTable(vTable).deprecatedClose(Self, status);
 	FbException.checkException(status);
 end;
 
 function IBlob.seek(status: IStatus; mode: Integer; offset: Integer): Integer;
 begin
 	Result := BlobVTable(vTable).seek(Self, status, mode, offset);
+	FbException.checkException(status);
+end;
+
+procedure IBlob.cancel(status: IStatus);
+begin
+	if (vTable.version < 4) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'IBlob', vTable.version, 4);
+		end
+		else begin
+			deprecatedCancel(status);
+		end
+	end
+	else begin
+		BlobVTable(vTable).cancel(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IBlob.close(status: IStatus);
+begin
+	if (vTable.version < 4) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'IBlob', vTable.version, 4);
+		end
+		else begin
+			deprecatedClose(status);
+		end
+	end
+	else begin
+		BlobVTable(vTable).close(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -5974,9 +6105,9 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure ITransaction.commit(status: IStatus);
+procedure ITransaction.deprecatedCommit(status: IStatus);
 begin
-	TransactionVTable(vTable).commit(Self, status);
+	TransactionVTable(vTable).deprecatedCommit(Self, status);
 	FbException.checkException(status);
 end;
 
@@ -5986,9 +6117,9 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure ITransaction.rollback(status: IStatus);
+procedure ITransaction.deprecatedRollback(status: IStatus);
 begin
-	TransactionVTable(vTable).rollback(Self, status);
+	TransactionVTable(vTable).deprecatedRollback(Self, status);
 	FbException.checkException(status);
 end;
 
@@ -5998,9 +6129,9 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure ITransaction.disconnect(status: IStatus);
+procedure ITransaction.deprecatedDisconnect(status: IStatus);
 begin
-	TransactionVTable(vTable).disconnect(Self, status);
+	TransactionVTable(vTable).deprecatedDisconnect(Self, status);
 	FbException.checkException(status);
 end;
 
@@ -6019,6 +6150,54 @@ end;
 function ITransaction.enterDtc(status: IStatus): ITransaction;
 begin
 	Result := TransactionVTable(vTable).enterDtc(Self, status);
+	FbException.checkException(status);
+end;
+
+procedure ITransaction.commit(status: IStatus);
+begin
+	if (vTable.version < 4) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'ITransaction', vTable.version, 4);
+		end
+		else begin
+			deprecatedCommit(status);
+		end
+	end
+	else begin
+		TransactionVTable(vTable).commit(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure ITransaction.rollback(status: IStatus);
+begin
+	if (vTable.version < 4) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'ITransaction', vTable.version, 4);
+		end
+		else begin
+			deprecatedRollback(status);
+		end
+	end
+	else begin
+		TransactionVTable(vTable).rollback(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure ITransaction.disconnect(status: IStatus);
+begin
+	if (vTable.version < 4) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'ITransaction', vTable.version, 4);
+		end
+		else begin
+			deprecatedDisconnect(status);
+		end
+	end
+	else begin
+		TransactionVTable(vTable).disconnect(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -6114,13 +6293,25 @@ end;
 
 function IMessageMetadata.getAlignment(status: IStatus): Cardinal;
 begin
-	Result := MessageMetadataVTable(vTable).getAlignment(Self, status);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IMessageMetadata', vTable.version, 4);
+		Result := 0;
+	end
+	else begin
+		Result := MessageMetadataVTable(vTable).getAlignment(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
 function IMessageMetadata.getAlignedLength(status: IStatus): Cardinal;
 begin
-	Result := MessageMetadataVTable(vTable).getAlignedLength(Self, status);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IMessageMetadata', vTable.version, 4);
+		Result := 0;
+	end
+	else begin
+		Result := MessageMetadataVTable(vTable).getAlignedLength(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -6186,25 +6377,45 @@ end;
 
 procedure IMetadataBuilder.setField(status: IStatus; index: Cardinal; field: PAnsiChar);
 begin
-	MetadataBuilderVTable(vTable).setField(Self, status, index, field);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IMetadataBuilder', vTable.version, 4);
+	end
+	else begin
+		MetadataBuilderVTable(vTable).setField(Self, status, index, field);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IMetadataBuilder.setRelation(status: IStatus; index: Cardinal; relation: PAnsiChar);
 begin
-	MetadataBuilderVTable(vTable).setRelation(Self, status, index, relation);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IMetadataBuilder', vTable.version, 4);
+	end
+	else begin
+		MetadataBuilderVTable(vTable).setRelation(Self, status, index, relation);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IMetadataBuilder.setOwner(status: IStatus; index: Cardinal; owner: PAnsiChar);
 begin
-	MetadataBuilderVTable(vTable).setOwner(Self, status, index, owner);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IMetadataBuilder', vTable.version, 4);
+	end
+	else begin
+		MetadataBuilderVTable(vTable).setOwner(Self, status, index, owner);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IMetadataBuilder.setAlias(status: IStatus; index: Cardinal; alias: PAnsiChar);
 begin
-	MetadataBuilderVTable(vTable).setAlias(Self, status, index, alias);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IMetadataBuilder', vTable.version, 4);
+	end
+	else begin
+		MetadataBuilderVTable(vTable).setAlias(Self, status, index, alias);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -6262,15 +6473,31 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IResultSet.close(status: IStatus);
+procedure IResultSet.deprecatedClose(status: IStatus);
 begin
-	ResultSetVTable(vTable).close(Self, status);
+	ResultSetVTable(vTable).deprecatedClose(Self, status);
 	FbException.checkException(status);
 end;
 
 procedure IResultSet.setDelayedOutputFormat(status: IStatus; format: IMessageMetadata);
 begin
 	ResultSetVTable(vTable).setDelayedOutputFormat(Self, status, format);
+	FbException.checkException(status);
+end;
+
+procedure IResultSet.close(status: IStatus);
+begin
+	if (vTable.version < 4) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'IResultSet', vTable.version, 4);
+		end
+		else begin
+			deprecatedClose(status);
+		end
+	end
+	else begin
+		ResultSetVTable(vTable).close(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -6328,9 +6555,9 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IStatement.free(status: IStatus);
+procedure IStatement.deprecatedFree(status: IStatus);
 begin
-	StatementVTable(vTable).free(Self, status);
+	StatementVTable(vTable).deprecatedFree(Self, status);
 	FbException.checkException(status);
 end;
 
@@ -6342,19 +6569,52 @@ end;
 
 function IStatement.getTimeout(status: IStatus): Cardinal;
 begin
-	Result := StatementVTable(vTable).getTimeout(Self, status);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IStatement', vTable.version, 4);
+		Result := 0;
+	end
+	else begin
+		Result := StatementVTable(vTable).getTimeout(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IStatement.setTimeout(status: IStatus; timeOut: Cardinal);
 begin
-	StatementVTable(vTable).setTimeout(Self, status, timeOut);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IStatement', vTable.version, 4);
+	end
+	else begin
+		StatementVTable(vTable).setTimeout(Self, status, timeOut);
+	end;
 	FbException.checkException(status);
 end;
 
 function IStatement.createBatch(status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch;
 begin
-	Result := StatementVTable(vTable).createBatch(Self, status, inMetadata, parLength, par);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IStatement', vTable.version, 4);
+		Result := nil;
+	end
+	else begin
+		Result := StatementVTable(vTable).createBatch(Self, status, inMetadata, parLength, par);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IStatement.free(status: IStatus);
+begin
+	if (vTable.version < 5) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'IStatement', vTable.version, 5);
+		end
+		else begin
+			deprecatedFree(status);
+		end
+	end
+	else begin
+		StatementVTable(vTable).free(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -6418,6 +6678,39 @@ begin
 	FbException.checkException(status);
 end;
 
+procedure IBatch.deprecatedClose(status: IStatus);
+begin
+	BatchVTable(vTable).deprecatedClose(Self, status);
+	FbException.checkException(status);
+end;
+
+procedure IBatch.close(status: IStatus);
+begin
+	if (vTable.version < 4) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'IBatch', vTable.version, 4);
+		end
+		else begin
+			deprecatedClose(status);
+		end
+	end
+	else begin
+		BatchVTable(vTable).close(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IBatch.getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
+begin
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IBatch', vTable.version, 4);
+	end
+	else begin
+		BatchVTable(vTable).getInfo(Self, status, itemsLength, items, bufferLength, buffer);
+	end;
+	FbException.checkException(status);
+end;
+
 function IBatchCompletionState.getSize(status: IStatus): Cardinal;
 begin
 	Result := BatchCompletionStateVTable(vTable).getSize(Self, status);
@@ -6448,9 +6741,25 @@ begin
 	FbException.checkException(status);
 end;
 
+procedure IReplicator.deprecatedClose(status: IStatus);
+begin
+	ReplicatorVTable(vTable).deprecatedClose(Self, status);
+	FbException.checkException(status);
+end;
+
 procedure IReplicator.close(status: IStatus);
 begin
-	ReplicatorVTable(vTable).close(Self, status);
+	if (vTable.version < 4) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'IReplicator', vTable.version, 4);
+		end
+		else begin
+			deprecatedClose(status);
+		end
+	end
+	else begin
+		ReplicatorVTable(vTable).close(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -6490,15 +6799,47 @@ begin
 	FbException.checkException(status);
 end;
 
+procedure IRequest.deprecatedFree(status: IStatus);
+begin
+	RequestVTable(vTable).deprecatedFree(Self, status);
+	FbException.checkException(status);
+end;
+
 procedure IRequest.free(status: IStatus);
 begin
-	RequestVTable(vTable).free(Self, status);
+	if (vTable.version < 4) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'IRequest', vTable.version, 4);
+		end
+		else begin
+			deprecatedFree(status);
+		end
+	end
+	else begin
+		RequestVTable(vTable).free(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IEvents.deprecatedCancel(status: IStatus);
+begin
+	EventsVTable(vTable).deprecatedCancel(Self, status);
 	FbException.checkException(status);
 end;
 
 procedure IEvents.cancel(status: IStatus);
 begin
-	EventsVTable(vTable).cancel(Self, status);
+	if (vTable.version < 4) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'IEvents', vTable.version, 4);
+		end
+		else begin
+			deprecatedCancel(status);
+		end
+	end
+	else begin
+		EventsVTable(vTable).cancel(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -6598,57 +6939,123 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IAttachment.detach(status: IStatus);
+procedure IAttachment.deprecatedDetach(status: IStatus);
 begin
-	AttachmentVTable(vTable).detach(Self, status);
+	AttachmentVTable(vTable).deprecatedDetach(Self, status);
 	FbException.checkException(status);
 end;
 
-procedure IAttachment.dropDatabase(status: IStatus);
+procedure IAttachment.deprecatedDropDatabase(status: IStatus);
 begin
-	AttachmentVTable(vTable).dropDatabase(Self, status);
+	AttachmentVTable(vTable).deprecatedDropDatabase(Self, status);
 	FbException.checkException(status);
 end;
 
 function IAttachment.getIdleTimeout(status: IStatus): Cardinal;
 begin
-	Result := AttachmentVTable(vTable).getIdleTimeout(Self, status);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 4);
+		Result := 0;
+	end
+	else begin
+		Result := AttachmentVTable(vTable).getIdleTimeout(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IAttachment.setIdleTimeout(status: IStatus; timeOut: Cardinal);
 begin
-	AttachmentVTable(vTable).setIdleTimeout(Self, status, timeOut);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 4);
+	end
+	else begin
+		AttachmentVTable(vTable).setIdleTimeout(Self, status, timeOut);
+	end;
 	FbException.checkException(status);
 end;
 
 function IAttachment.getStatementTimeout(status: IStatus): Cardinal;
 begin
-	Result := AttachmentVTable(vTable).getStatementTimeout(Self, status);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 4);
+		Result := 0;
+	end
+	else begin
+		Result := AttachmentVTable(vTable).getStatementTimeout(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IAttachment.setStatementTimeout(status: IStatus; timeOut: Cardinal);
 begin
-	AttachmentVTable(vTable).setStatementTimeout(Self, status, timeOut);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 4);
+	end
+	else begin
+		AttachmentVTable(vTable).setStatementTimeout(Self, status, timeOut);
+	end;
 	FbException.checkException(status);
 end;
 
 function IAttachment.createBatch(status: IStatus; transaction: ITransaction; stmtLength: Cardinal; sqlStmt: PAnsiChar; dialect: Cardinal; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch;
 begin
-	Result := AttachmentVTable(vTable).createBatch(Self, status, transaction, stmtLength, sqlStmt, dialect, inMetadata, parLength, par);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 4);
+		Result := nil;
+	end
+	else begin
+		Result := AttachmentVTable(vTable).createBatch(Self, status, transaction, stmtLength, sqlStmt, dialect, inMetadata, parLength, par);
+	end;
 	FbException.checkException(status);
 end;
 
 function IAttachment.createReplicator(status: IStatus): IReplicator;
 begin
-	Result := AttachmentVTable(vTable).createReplicator(Self, status);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 4);
+		Result := nil;
+	end
+	else begin
+		Result := AttachmentVTable(vTable).createReplicator(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
-procedure IService.detach(status: IStatus);
+procedure IAttachment.detach(status: IStatus);
 begin
-	ServiceVTable(vTable).detach(Self, status);
+	if (vTable.version < 5) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'IAttachment', vTable.version, 5);
+		end
+		else begin
+			deprecatedDetach(status);
+		end
+	end
+	else begin
+		AttachmentVTable(vTable).detach(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IAttachment.dropDatabase(status: IStatus);
+begin
+	if (vTable.version < 5) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'IAttachment', vTable.version, 5);
+		end
+		else begin
+			deprecatedDropDatabase(status);
+		end
+	end
+	else begin
+		AttachmentVTable(vTable).dropDatabase(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IService.deprecatedDetach(status: IStatus);
+begin
+	ServiceVTable(vTable).deprecatedDetach(Self, status);
 	FbException.checkException(status);
 end;
 
@@ -6661,6 +7068,22 @@ end;
 procedure IService.start(status: IStatus; spbLength: Cardinal; spb: BytePtr);
 begin
 	ServiceVTable(vTable).start(Self, status, spbLength, spb);
+	FbException.checkException(status);
+end;
+
+procedure IService.detach(status: IStatus);
+begin
+	if (vTable.version < 4) then begin
+		if FB_UsedInYValve then begin
+			FbException.setVersionError(status, 'IService', vTable.version, 4);
+		end
+		else begin
+			deprecatedDetach(status);
+		end
+	end
+	else begin
+		ServiceVTable(vTable).detach(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -6798,7 +7221,13 @@ end;
 
 function IClientBlock.getAuthBlock(status: IStatus): IAuthBlock;
 begin
-	Result := ClientBlockVTable(vTable).getAuthBlock(Self, status);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IClientBlock', vTable.version, 4);
+		Result := nil;
+	end
+	else begin
+		Result := ClientBlockVTable(vTable).getAuthBlock(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -6810,7 +7239,12 @@ end;
 
 procedure IServer.setDbCryptCallback(status: IStatus; cryptCallback: ICryptKeyCallback);
 begin
-	ServerVTable(vTable).setDbCryptCallback(Self, status, cryptCallback);
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IServer', vTable.version, 6);
+	end
+	else begin
+		ServerVTable(vTable).setDbCryptCallback(Self, status, cryptCallback);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -6947,13 +7381,25 @@ end;
 
 function ILogonInfo.attachment(status: IStatus): IAttachment;
 begin
-	Result := LogonInfoVTable(vTable).attachment(Self, status);
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'ILogonInfo', vTable.version, 3);
+		Result := nil;
+	end
+	else begin
+		Result := LogonInfoVTable(vTable).attachment(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
 function ILogonInfo.transaction(status: IStatus): ITransaction;
 begin
-	Result := LogonInfoVTable(vTable).transaction(Self, status);
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'ILogonInfo', vTable.version, 3);
+		Result := nil;
+	end
+	else begin
+		Result := LogonInfoVTable(vTable).transaction(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -7044,13 +7490,24 @@ end;
 
 function IWireCryptPlugin.getSpecificData(status: IStatus; keyType: PAnsiChar; length: CardinalPtr): BytePtr;
 begin
-	Result := WireCryptPluginVTable(vTable).getSpecificData(Self, status, keyType, length);
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IWireCryptPlugin', vTable.version, 5);
+		Result := nil;
+	end
+	else begin
+		Result := WireCryptPluginVTable(vTable).getSpecificData(Self, status, keyType, length);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IWireCryptPlugin.setSpecificData(status: IStatus; keyType: PAnsiChar; length: Cardinal; data: BytePtr);
 begin
-	WireCryptPluginVTable(vTable).setSpecificData(Self, status, keyType, length, data);
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IWireCryptPlugin', vTable.version, 5);
+	end
+	else begin
+		WireCryptPluginVTable(vTable).setSpecificData(Self, status, keyType, length, data);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -7073,13 +7530,25 @@ end;
 
 function IKeyHolderPlugin.useOnlyOwnKeys(status: IStatus): Boolean;
 begin
-	Result := KeyHolderPluginVTable(vTable).useOnlyOwnKeys(Self, status);
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IKeyHolderPlugin', vTable.version, 5);
+		Result := false;
+	end
+	else begin
+		Result := KeyHolderPluginVTable(vTable).useOnlyOwnKeys(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
 function IKeyHolderPlugin.chainHandle(status: IStatus): ICryptKeyCallback;
 begin
-	Result := KeyHolderPluginVTable(vTable).chainHandle(Self, status);
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IKeyHolderPlugin', vTable.version, 5);
+		Result := nil;
+	end
+	else begin
+		Result := KeyHolderPluginVTable(vTable).chainHandle(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -7109,7 +7578,12 @@ end;
 
 procedure IDbCryptPlugin.setInfo(status: IStatus; info: IDbCryptInfo);
 begin
-	DbCryptPluginVTable(vTable).setInfo(Self, status, info);
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IDbCryptPlugin', vTable.version, 5);
+	end
+	else begin
+		DbCryptPluginVTable(vTable).setInfo(Self, status, info);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -7395,55 +7869,103 @@ end;
 
 function IUtil.getDecFloat16(status: IStatus): IDecFloat16;
 begin
-	Result := UtilVTable(vTable).getDecFloat16(Self, status);
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'IUtil', vTable.version, 3);
+		Result := nil;
+	end
+	else begin
+		Result := UtilVTable(vTable).getDecFloat16(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
 function IUtil.getDecFloat34(status: IStatus): IDecFloat34;
 begin
-	Result := UtilVTable(vTable).getDecFloat34(Self, status);
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'IUtil', vTable.version, 3);
+		Result := nil;
+	end
+	else begin
+		Result := UtilVTable(vTable).getDecFloat34(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IUtil.decodeTimeTz(status: IStatus; timeTz: ISC_TIME_TZPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar);
 begin
-	UtilVTable(vTable).decodeTimeTz(Self, status, timeTz, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'IUtil', vTable.version, 3);
+	end
+	else begin
+		UtilVTable(vTable).decodeTimeTz(Self, status, timeTz, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IUtil.decodeTimeStampTz(status: IStatus; timeStampTz: ISC_TIMESTAMP_TZPtr; year: CardinalPtr; month: CardinalPtr; day: CardinalPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar);
 begin
-	UtilVTable(vTable).decodeTimeStampTz(Self, status, timeStampTz, year, month, day, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'IUtil', vTable.version, 3);
+	end
+	else begin
+		UtilVTable(vTable).decodeTimeStampTz(Self, status, timeStampTz, year, month, day, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IUtil.encodeTimeTz(status: IStatus; timeTz: ISC_TIME_TZPtr; hours: Cardinal; minutes: Cardinal; seconds: Cardinal; fractions: Cardinal; timeZone: PAnsiChar);
 begin
-	UtilVTable(vTable).encodeTimeTz(Self, status, timeTz, hours, minutes, seconds, fractions, timeZone);
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'IUtil', vTable.version, 3);
+	end
+	else begin
+		UtilVTable(vTable).encodeTimeTz(Self, status, timeTz, hours, minutes, seconds, fractions, timeZone);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IUtil.encodeTimeStampTz(status: IStatus; timeStampTz: ISC_TIMESTAMP_TZPtr; year: Cardinal; month: Cardinal; day: Cardinal; hours: Cardinal; minutes: Cardinal; seconds: Cardinal; fractions: Cardinal; timeZone: PAnsiChar);
 begin
-	UtilVTable(vTable).encodeTimeStampTz(Self, status, timeStampTz, year, month, day, hours, minutes, seconds, fractions, timeZone);
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'IUtil', vTable.version, 3);
+	end
+	else begin
+		UtilVTable(vTable).encodeTimeStampTz(Self, status, timeStampTz, year, month, day, hours, minutes, seconds, fractions, timeZone);
+	end;
 	FbException.checkException(status);
 end;
 
 function IUtil.getInt128(status: IStatus): IInt128;
 begin
-	Result := UtilVTable(vTable).getInt128(Self, status);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IUtil', vTable.version, 4);
+		Result := nil;
+	end
+	else begin
+		Result := UtilVTable(vTable).getInt128(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IUtil.decodeTimeTzEx(status: IStatus; timeTz: ISC_TIME_TZ_EXPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar);
 begin
-	UtilVTable(vTable).decodeTimeTzEx(Self, status, timeTz, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IUtil', vTable.version, 4);
+	end
+	else begin
+		UtilVTable(vTable).decodeTimeTzEx(Self, status, timeTz, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+	end;
 	FbException.checkException(status);
 end;
 
 procedure IUtil.decodeTimeStampTzEx(status: IStatus; timeStampTz: ISC_TIMESTAMP_TZ_EXPtr; year: CardinalPtr; month: CardinalPtr; day: CardinalPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar);
 begin
-	UtilVTable(vTable).decodeTimeStampTzEx(Self, status, timeStampTz, year, month, day, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IUtil', vTable.version, 4);
+	end
+	else begin
+		UtilVTable(vTable).decodeTimeStampTzEx(Self, status, timeStampTz, year, month, day, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -7655,12 +8177,22 @@ end;
 
 function ITraceTransaction.getInitialID(): Int64;
 begin
-	Result := TraceTransactionVTable(vTable).getInitialID(Self);
+	if (vTable.version < 3) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceTransactionVTable(vTable).getInitialID(Self);
+	end;
 end;
 
 function ITraceTransaction.getPreviousID(): Int64;
 begin
-	Result := TraceTransactionVTable(vTable).getPreviousID(Self);
+	if (vTable.version < 3) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceTransactionVTable(vTable).getPreviousID(Self);
+	end;
 end;
 
 function ITraceParams.getCount(): Cardinal;
@@ -7675,7 +8207,13 @@ end;
 
 function ITraceParams.getTextUTF8(status: IStatus; idx: Cardinal): PAnsiChar;
 begin
-	Result := TraceParamsVTable(vTable).getTextUTF8(Self, status, idx);
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'ITraceParams', vTable.version, 3);
+		Result := nil;
+	end
+	else begin
+		Result := TraceParamsVTable(vTable).getTextUTF8(Self, status, idx);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -7886,7 +8424,13 @@ end;
 
 function ITraceLogWriter.write_s(status: IStatus; buf: Pointer; size: Cardinal): Cardinal;
 begin
-	Result := TraceLogWriterVTable(vTable).write_s(Self, status, buf, size);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'ITraceLogWriter', vTable.version, 4);
+		Result := 0;
+	end
+	else begin
+		Result := TraceLogWriterVTable(vTable).write_s(Self, status, buf, size);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -8277,9 +8821,10 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IReplicatedSession.setAttachment(attachment: IAttachment);
+function IReplicatedSession.init(status: IStatus; attachment: IAttachment): Boolean;
 begin
-	ReplicatedSessionVTable(vTable).setAttachment(Self, attachment);
+	Result := ReplicatedSessionVTable(vTable).init(Self, status, attachment);
+	FbException.checkException(status);
 end;
 
 function IReplicatedSession.startTransaction(status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction;
@@ -9237,6 +9782,33 @@ begin
 	end
 end;
 
+procedure IBlobImpl_deprecatedCancelDispatcher(this: IBlob; status: IStatus); cdecl;
+begin
+	try
+		IBlobImpl(this).deprecatedCancel(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IBlobImpl_deprecatedCloseDispatcher(this: IBlob; status: IStatus); cdecl;
+begin
+	try
+		IBlobImpl(this).deprecatedClose(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+function IBlobImpl_seekDispatcher(this: IBlob; status: IStatus; mode: Integer; offset: Integer): Integer; cdecl;
+begin
+	try
+		Result := IBlobImpl(this).seek(status, mode, offset);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
 procedure IBlobImpl_cancelDispatcher(this: IBlob; status: IStatus); cdecl;
 begin
 	try
@@ -9250,15 +9822,6 @@ procedure IBlobImpl_closeDispatcher(this: IBlob; status: IStatus); cdecl;
 begin
 	try
 		IBlobImpl(this).close(status);
-	except
-		on e: Exception do FbException.catchException(status, e);
-	end
-end;
-
-function IBlobImpl_seekDispatcher(this: IBlob; status: IStatus; mode: Integer; offset: Integer): Integer; cdecl;
-begin
-	try
-		Result := IBlobImpl(this).seek(status, mode, offset);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -9308,10 +9871,10 @@ begin
 	end
 end;
 
-procedure ITransactionImpl_commitDispatcher(this: ITransaction; status: IStatus); cdecl;
+procedure ITransactionImpl_deprecatedCommitDispatcher(this: ITransaction; status: IStatus); cdecl;
 begin
 	try
-		ITransactionImpl(this).commit(status);
+		ITransactionImpl(this).deprecatedCommit(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -9326,10 +9889,10 @@ begin
 	end
 end;
 
-procedure ITransactionImpl_rollbackDispatcher(this: ITransaction; status: IStatus); cdecl;
+procedure ITransactionImpl_deprecatedRollbackDispatcher(this: ITransaction; status: IStatus); cdecl;
 begin
 	try
-		ITransactionImpl(this).rollback(status);
+		ITransactionImpl(this).deprecatedRollback(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -9344,10 +9907,10 @@ begin
 	end
 end;
 
-procedure ITransactionImpl_disconnectDispatcher(this: ITransaction; status: IStatus); cdecl;
+procedure ITransactionImpl_deprecatedDisconnectDispatcher(this: ITransaction; status: IStatus); cdecl;
 begin
 	try
-		ITransactionImpl(this).disconnect(status);
+		ITransactionImpl(this).deprecatedDisconnect(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -9375,6 +9938,33 @@ function ITransactionImpl_enterDtcDispatcher(this: ITransaction; status: IStatus
 begin
 	try
 		Result := ITransactionImpl(this).enterDtc(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure ITransactionImpl_commitDispatcher(this: ITransaction; status: IStatus); cdecl;
+begin
+	try
+		ITransactionImpl(this).commit(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure ITransactionImpl_rollbackDispatcher(this: ITransaction; status: IStatus); cdecl;
+begin
+	try
+		ITransactionImpl(this).rollback(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure ITransactionImpl_disconnectDispatcher(this: ITransaction; status: IStatus); cdecl;
+begin
+	try
+		ITransactionImpl(this).disconnect(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -9818,10 +10408,10 @@ begin
 	end
 end;
 
-procedure IResultSetImpl_closeDispatcher(this: IResultSet; status: IStatus); cdecl;
+procedure IResultSetImpl_deprecatedCloseDispatcher(this: IResultSet; status: IStatus); cdecl;
 begin
 	try
-		IResultSetImpl(this).close(status);
+		IResultSetImpl(this).deprecatedClose(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -9831,6 +10421,15 @@ procedure IResultSetImpl_setDelayedOutputFormatDispatcher(this: IResultSet; stat
 begin
 	try
 		IResultSetImpl(this).setDelayedOutputFormat(status, format);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IResultSetImpl_closeDispatcher(this: IResultSet; status: IStatus); cdecl;
+begin
+	try
+		IResultSetImpl(this).close(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -9943,10 +10542,10 @@ begin
 	end
 end;
 
-procedure IStatementImpl_freeDispatcher(this: IStatement; status: IStatus); cdecl;
+procedure IStatementImpl_deprecatedFreeDispatcher(this: IStatement; status: IStatus); cdecl;
 begin
 	try
-		IStatementImpl(this).free(status);
+		IStatementImpl(this).deprecatedFree(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -9983,6 +10582,15 @@ function IStatementImpl_createBatchDispatcher(this: IStatement; status: IStatus;
 begin
 	try
 		Result := IStatementImpl(this).createBatch(status, inMetadata, parLength, par);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IStatementImpl_freeDispatcher(this: IStatement; status: IStatus); cdecl;
+begin
+	try
+		IStatementImpl(this).free(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -10104,6 +10712,33 @@ begin
 	end
 end;
 
+procedure IBatchImpl_deprecatedCloseDispatcher(this: IBatch; status: IStatus); cdecl;
+begin
+	try
+		IBatchImpl(this).deprecatedClose(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IBatchImpl_closeDispatcher(this: IBatch; status: IStatus); cdecl;
+begin
+	try
+		IBatchImpl(this).close(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IBatchImpl_getInfoDispatcher(this: IBatch; status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
+begin
+	try
+		IBatchImpl(this).getInfo(status, itemsLength, items, bufferLength, buffer);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
 var
 	IBatchImpl_vTable: BatchVTable;
 
@@ -10187,6 +10822,15 @@ procedure IReplicatorImpl_processDispatcher(this: IReplicator; status: IStatus; 
 begin
 	try
 		IReplicatorImpl(this).process(status, length, data);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IReplicatorImpl_deprecatedCloseDispatcher(this: IReplicator; status: IStatus); cdecl;
+begin
+	try
+		IReplicatorImpl(this).deprecatedClose(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -10281,6 +10925,15 @@ begin
 	end
 end;
 
+procedure IRequestImpl_deprecatedFreeDispatcher(this: IRequest; status: IStatus); cdecl;
+begin
+	try
+		IRequestImpl(this).deprecatedFree(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
 procedure IRequestImpl_freeDispatcher(this: IRequest; status: IStatus); cdecl;
 begin
 	try
@@ -10313,6 +10966,15 @@ begin
 		Result := IEventsImpl(this).release();
 	except
 		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+procedure IEventsImpl_deprecatedCancelDispatcher(this: IEvents; status: IStatus); cdecl;
+begin
+	try
+		IEventsImpl(this).deprecatedCancel(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
@@ -10495,19 +11157,19 @@ begin
 	end
 end;
 
-procedure IAttachmentImpl_detachDispatcher(this: IAttachment; status: IStatus); cdecl;
+procedure IAttachmentImpl_deprecatedDetachDispatcher(this: IAttachment; status: IStatus); cdecl;
 begin
 	try
-		IAttachmentImpl(this).detach(status);
+		IAttachmentImpl(this).deprecatedDetach(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
-procedure IAttachmentImpl_dropDatabaseDispatcher(this: IAttachment; status: IStatus); cdecl;
+procedure IAttachmentImpl_deprecatedDropDatabaseDispatcher(this: IAttachment; status: IStatus); cdecl;
 begin
 	try
-		IAttachmentImpl(this).dropDatabase(status);
+		IAttachmentImpl(this).deprecatedDropDatabase(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -10567,6 +11229,24 @@ begin
 	end
 end;
 
+procedure IAttachmentImpl_detachDispatcher(this: IAttachment; status: IStatus); cdecl;
+begin
+	try
+		IAttachmentImpl(this).detach(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IAttachmentImpl_dropDatabaseDispatcher(this: IAttachment; status: IStatus); cdecl;
+begin
+	try
+		IAttachmentImpl(this).dropDatabase(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
 var
 	IAttachmentImpl_vTable: AttachmentVTable;
 
@@ -10593,10 +11273,10 @@ begin
 	end
 end;
 
-procedure IServiceImpl_detachDispatcher(this: IService; status: IStatus); cdecl;
+procedure IServiceImpl_deprecatedDetachDispatcher(this: IService; status: IStatus); cdecl;
 begin
 	try
-		IServiceImpl(this).detach(status);
+		IServiceImpl(this).deprecatedDetach(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -10615,6 +11295,15 @@ procedure IServiceImpl_startDispatcher(this: IService; status: IStatus; spbLengt
 begin
 	try
 		IServiceImpl(this).start(status, spbLength, spb);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IServiceImpl_detachDispatcher(this: IService; status: IStatus); cdecl;
+begin
+	try
+		IServiceImpl(this).detach(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -14614,12 +15303,12 @@ begin
 	end
 end;
 
-procedure IReplicatedSessionImpl_setAttachmentDispatcher(this: IReplicatedSession; attachment: IAttachment); cdecl;
+function IReplicatedSessionImpl_initDispatcher(this: IReplicatedSession; status: IStatus; attachment: IAttachment): Boolean; cdecl;
 begin
 	try
-		IReplicatedSessionImpl(this).setAttachment(attachment);
+		Result := IReplicatedSessionImpl(this).init(status, attachment);
 	except
-		on e: Exception do FbException.catchException(nil, e);
+		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
@@ -14700,6 +15389,27 @@ begin
 
 		status.setErrors(@statusVector);
 	end
+end;
+
+class procedure FbException.setVersionError(status: IStatus; interfaceName: string;
+		currentVersion, expectedVersion: NativeInt);
+var
+	statusVector: array[0..8] of NativeIntPtr;
+	msg: AnsiString;
+begin
+	msg := interfaceName;
+
+	statusVector[0] := NativeIntPtr(isc_arg_gds);
+	statusVector[1] := NativeIntPtr(isc_interface_version_too_old);
+	statusVector[2] := NativeIntPtr(isc_arg_number);
+	statusVector[3] := NativeIntPtr(expectedVersion);
+	statusVector[4] := NativeIntPtr(isc_arg_number);
+	statusVector[5] := NativeIntPtr(currentVersion);
+	statusVector[6] := NativeIntPtr(isc_arg_string);
+	statusVector[7] := NativeIntPtr(PAnsiChar(msg));
+	statusVector[8] := NativeIntPtr(isc_arg_end);
+
+	status.setErrors(@statusVector);
 end;
 initialization
 	IVersionedImpl_vTable := VersionedVTable.create;
@@ -14838,30 +15548,35 @@ initialization
 	IEventCallbackImpl_vTable.eventCallbackFunction := @IEventCallbackImpl_eventCallbackFunctionDispatcher;
 
 	IBlobImpl_vTable := BlobVTable.create;
-	IBlobImpl_vTable.version := 3;
+	IBlobImpl_vTable.version := 4;
 	IBlobImpl_vTable.addRef := @IBlobImpl_addRefDispatcher;
 	IBlobImpl_vTable.release := @IBlobImpl_releaseDispatcher;
 	IBlobImpl_vTable.getInfo := @IBlobImpl_getInfoDispatcher;
 	IBlobImpl_vTable.getSegment := @IBlobImpl_getSegmentDispatcher;
 	IBlobImpl_vTable.putSegment := @IBlobImpl_putSegmentDispatcher;
+	IBlobImpl_vTable.deprecatedCancel := @IBlobImpl_deprecatedCancelDispatcher;
+	IBlobImpl_vTable.deprecatedClose := @IBlobImpl_deprecatedCloseDispatcher;
+	IBlobImpl_vTable.seek := @IBlobImpl_seekDispatcher;
 	IBlobImpl_vTable.cancel := @IBlobImpl_cancelDispatcher;
 	IBlobImpl_vTable.close := @IBlobImpl_closeDispatcher;
-	IBlobImpl_vTable.seek := @IBlobImpl_seekDispatcher;
 
 	ITransactionImpl_vTable := TransactionVTable.create;
-	ITransactionImpl_vTable.version := 3;
+	ITransactionImpl_vTable.version := 4;
 	ITransactionImpl_vTable.addRef := @ITransactionImpl_addRefDispatcher;
 	ITransactionImpl_vTable.release := @ITransactionImpl_releaseDispatcher;
 	ITransactionImpl_vTable.getInfo := @ITransactionImpl_getInfoDispatcher;
 	ITransactionImpl_vTable.prepare := @ITransactionImpl_prepareDispatcher;
-	ITransactionImpl_vTable.commit := @ITransactionImpl_commitDispatcher;
+	ITransactionImpl_vTable.deprecatedCommit := @ITransactionImpl_deprecatedCommitDispatcher;
 	ITransactionImpl_vTable.commitRetaining := @ITransactionImpl_commitRetainingDispatcher;
-	ITransactionImpl_vTable.rollback := @ITransactionImpl_rollbackDispatcher;
+	ITransactionImpl_vTable.deprecatedRollback := @ITransactionImpl_deprecatedRollbackDispatcher;
 	ITransactionImpl_vTable.rollbackRetaining := @ITransactionImpl_rollbackRetainingDispatcher;
-	ITransactionImpl_vTable.disconnect := @ITransactionImpl_disconnectDispatcher;
+	ITransactionImpl_vTable.deprecatedDisconnect := @ITransactionImpl_deprecatedDisconnectDispatcher;
 	ITransactionImpl_vTable.join := @ITransactionImpl_joinDispatcher;
 	ITransactionImpl_vTable.validate := @ITransactionImpl_validateDispatcher;
 	ITransactionImpl_vTable.enterDtc := @ITransactionImpl_enterDtcDispatcher;
+	ITransactionImpl_vTable.commit := @ITransactionImpl_commitDispatcher;
+	ITransactionImpl_vTable.rollback := @ITransactionImpl_rollbackDispatcher;
+	ITransactionImpl_vTable.disconnect := @ITransactionImpl_disconnectDispatcher;
 
 	IMessageMetadataImpl_vTable := MessageMetadataVTable.create;
 	IMessageMetadataImpl_vTable.version := 4;
@@ -14905,7 +15620,7 @@ initialization
 	IMetadataBuilderImpl_vTable.setAlias := @IMetadataBuilderImpl_setAliasDispatcher;
 
 	IResultSetImpl_vTable := ResultSetVTable.create;
-	IResultSetImpl_vTable.version := 3;
+	IResultSetImpl_vTable.version := 4;
 	IResultSetImpl_vTable.addRef := @IResultSetImpl_addRefDispatcher;
 	IResultSetImpl_vTable.release := @IResultSetImpl_releaseDispatcher;
 	IResultSetImpl_vTable.fetchNext := @IResultSetImpl_fetchNextDispatcher;
@@ -14917,11 +15632,12 @@ initialization
 	IResultSetImpl_vTable.isEof := @IResultSetImpl_isEofDispatcher;
 	IResultSetImpl_vTable.isBof := @IResultSetImpl_isBofDispatcher;
 	IResultSetImpl_vTable.getMetadata := @IResultSetImpl_getMetadataDispatcher;
-	IResultSetImpl_vTable.close := @IResultSetImpl_closeDispatcher;
+	IResultSetImpl_vTable.deprecatedClose := @IResultSetImpl_deprecatedCloseDispatcher;
 	IResultSetImpl_vTable.setDelayedOutputFormat := @IResultSetImpl_setDelayedOutputFormatDispatcher;
+	IResultSetImpl_vTable.close := @IResultSetImpl_closeDispatcher;
 
 	IStatementImpl_vTable := StatementVTable.create;
-	IStatementImpl_vTable.version := 4;
+	IStatementImpl_vTable.version := 5;
 	IStatementImpl_vTable.addRef := @IStatementImpl_addRefDispatcher;
 	IStatementImpl_vTable.release := @IStatementImpl_releaseDispatcher;
 	IStatementImpl_vTable.getInfo := @IStatementImpl_getInfoDispatcher;
@@ -14933,14 +15649,15 @@ initialization
 	IStatementImpl_vTable.execute := @IStatementImpl_executeDispatcher;
 	IStatementImpl_vTable.openCursor := @IStatementImpl_openCursorDispatcher;
 	IStatementImpl_vTable.setCursorName := @IStatementImpl_setCursorNameDispatcher;
-	IStatementImpl_vTable.free := @IStatementImpl_freeDispatcher;
+	IStatementImpl_vTable.deprecatedFree := @IStatementImpl_deprecatedFreeDispatcher;
 	IStatementImpl_vTable.getFlags := @IStatementImpl_getFlagsDispatcher;
 	IStatementImpl_vTable.getTimeout := @IStatementImpl_getTimeoutDispatcher;
 	IStatementImpl_vTable.setTimeout := @IStatementImpl_setTimeoutDispatcher;
 	IStatementImpl_vTable.createBatch := @IStatementImpl_createBatchDispatcher;
+	IStatementImpl_vTable.free := @IStatementImpl_freeDispatcher;
 
 	IBatchImpl_vTable := BatchVTable.create;
-	IBatchImpl_vTable.version := 3;
+	IBatchImpl_vTable.version := 4;
 	IBatchImpl_vTable.addRef := @IBatchImpl_addRefDispatcher;
 	IBatchImpl_vTable.release := @IBatchImpl_releaseDispatcher;
 	IBatchImpl_vTable.add := @IBatchImpl_addDispatcher;
@@ -14953,6 +15670,9 @@ initialization
 	IBatchImpl_vTable.getBlobAlignment := @IBatchImpl_getBlobAlignmentDispatcher;
 	IBatchImpl_vTable.getMetadata := @IBatchImpl_getMetadataDispatcher;
 	IBatchImpl_vTable.setDefaultBpb := @IBatchImpl_setDefaultBpbDispatcher;
+	IBatchImpl_vTable.deprecatedClose := @IBatchImpl_deprecatedCloseDispatcher;
+	IBatchImpl_vTable.close := @IBatchImpl_closeDispatcher;
+	IBatchImpl_vTable.getInfo := @IBatchImpl_getInfoDispatcher;
 
 	IBatchCompletionStateImpl_vTable := BatchCompletionStateVTable.create;
 	IBatchCompletionStateImpl_vTable.version := 3;
@@ -14963,14 +15683,15 @@ initialization
 	IBatchCompletionStateImpl_vTable.getStatus := @IBatchCompletionStateImpl_getStatusDispatcher;
 
 	IReplicatorImpl_vTable := ReplicatorVTable.create;
-	IReplicatorImpl_vTable.version := 3;
+	IReplicatorImpl_vTable.version := 4;
 	IReplicatorImpl_vTable.addRef := @IReplicatorImpl_addRefDispatcher;
 	IReplicatorImpl_vTable.release := @IReplicatorImpl_releaseDispatcher;
 	IReplicatorImpl_vTable.process := @IReplicatorImpl_processDispatcher;
+	IReplicatorImpl_vTable.deprecatedClose := @IReplicatorImpl_deprecatedCloseDispatcher;
 	IReplicatorImpl_vTable.close := @IReplicatorImpl_closeDispatcher;
 
 	IRequestImpl_vTable := RequestVTable.create;
-	IRequestImpl_vTable.version := 3;
+	IRequestImpl_vTable.version := 4;
 	IRequestImpl_vTable.addRef := @IRequestImpl_addRefDispatcher;
 	IRequestImpl_vTable.release := @IRequestImpl_releaseDispatcher;
 	IRequestImpl_vTable.receive := @IRequestImpl_receiveDispatcher;
@@ -14979,16 +15700,18 @@ initialization
 	IRequestImpl_vTable.start := @IRequestImpl_startDispatcher;
 	IRequestImpl_vTable.startAndSend := @IRequestImpl_startAndSendDispatcher;
 	IRequestImpl_vTable.unwind := @IRequestImpl_unwindDispatcher;
+	IRequestImpl_vTable.deprecatedFree := @IRequestImpl_deprecatedFreeDispatcher;
 	IRequestImpl_vTable.free := @IRequestImpl_freeDispatcher;
 
 	IEventsImpl_vTable := EventsVTable.create;
-	IEventsImpl_vTable.version := 3;
+	IEventsImpl_vTable.version := 4;
 	IEventsImpl_vTable.addRef := @IEventsImpl_addRefDispatcher;
 	IEventsImpl_vTable.release := @IEventsImpl_releaseDispatcher;
+	IEventsImpl_vTable.deprecatedCancel := @IEventsImpl_deprecatedCancelDispatcher;
 	IEventsImpl_vTable.cancel := @IEventsImpl_cancelDispatcher;
 
 	IAttachmentImpl_vTable := AttachmentVTable.create;
-	IAttachmentImpl_vTable.version := 4;
+	IAttachmentImpl_vTable.version := 5;
 	IAttachmentImpl_vTable.addRef := @IAttachmentImpl_addRefDispatcher;
 	IAttachmentImpl_vTable.release := @IAttachmentImpl_releaseDispatcher;
 	IAttachmentImpl_vTable.getInfo := @IAttachmentImpl_getInfoDispatcher;
@@ -15007,22 +15730,25 @@ initialization
 	IAttachmentImpl_vTable.queEvents := @IAttachmentImpl_queEventsDispatcher;
 	IAttachmentImpl_vTable.cancelOperation := @IAttachmentImpl_cancelOperationDispatcher;
 	IAttachmentImpl_vTable.ping := @IAttachmentImpl_pingDispatcher;
-	IAttachmentImpl_vTable.detach := @IAttachmentImpl_detachDispatcher;
-	IAttachmentImpl_vTable.dropDatabase := @IAttachmentImpl_dropDatabaseDispatcher;
+	IAttachmentImpl_vTable.deprecatedDetach := @IAttachmentImpl_deprecatedDetachDispatcher;
+	IAttachmentImpl_vTable.deprecatedDropDatabase := @IAttachmentImpl_deprecatedDropDatabaseDispatcher;
 	IAttachmentImpl_vTable.getIdleTimeout := @IAttachmentImpl_getIdleTimeoutDispatcher;
 	IAttachmentImpl_vTable.setIdleTimeout := @IAttachmentImpl_setIdleTimeoutDispatcher;
 	IAttachmentImpl_vTable.getStatementTimeout := @IAttachmentImpl_getStatementTimeoutDispatcher;
 	IAttachmentImpl_vTable.setStatementTimeout := @IAttachmentImpl_setStatementTimeoutDispatcher;
 	IAttachmentImpl_vTable.createBatch := @IAttachmentImpl_createBatchDispatcher;
 	IAttachmentImpl_vTable.createReplicator := @IAttachmentImpl_createReplicatorDispatcher;
+	IAttachmentImpl_vTable.detach := @IAttachmentImpl_detachDispatcher;
+	IAttachmentImpl_vTable.dropDatabase := @IAttachmentImpl_dropDatabaseDispatcher;
 
 	IServiceImpl_vTable := ServiceVTable.create;
-	IServiceImpl_vTable.version := 3;
+	IServiceImpl_vTable.version := 4;
 	IServiceImpl_vTable.addRef := @IServiceImpl_addRefDispatcher;
 	IServiceImpl_vTable.release := @IServiceImpl_releaseDispatcher;
-	IServiceImpl_vTable.detach := @IServiceImpl_detachDispatcher;
+	IServiceImpl_vTable.deprecatedDetach := @IServiceImpl_deprecatedDetachDispatcher;
 	IServiceImpl_vTable.query := @IServiceImpl_queryDispatcher;
 	IServiceImpl_vTable.start := @IServiceImpl_startDispatcher;
+	IServiceImpl_vTable.detach := @IServiceImpl_detachDispatcher;
 
 	IProviderImpl_vTable := ProviderVTable.create;
 	IProviderImpl_vTable.version := 4;
@@ -15604,7 +16330,7 @@ initialization
 	IReplicatedSessionImpl_vTable.release := @IReplicatedSessionImpl_releaseDispatcher;
 	IReplicatedSessionImpl_vTable.setOwner := @IReplicatedSessionImpl_setOwnerDispatcher;
 	IReplicatedSessionImpl_vTable.getOwner := @IReplicatedSessionImpl_getOwnerDispatcher;
-	IReplicatedSessionImpl_vTable.setAttachment := @IReplicatedSessionImpl_setAttachmentDispatcher;
+	IReplicatedSessionImpl_vTable.init := @IReplicatedSessionImpl_initDispatcher;
 	IReplicatedSessionImpl_vTable.startTransaction := @IReplicatedSessionImpl_startTransactionDispatcher;
 	IReplicatedSessionImpl_vTable.cleanupTransaction := @IReplicatedSessionImpl_cleanupTransactionDispatcher;
 	IReplicatedSessionImpl_vTable.setSequence := @IReplicatedSessionImpl_setSequenceDispatcher;

@@ -25,12 +25,12 @@
 #define DSQL_PREPA_PROTO_H
 
 #include "firebird/Interface.h"
+#include "../common/classes/fb_string.h"
 
 namespace Why {
 	class YAttachment;
 }
 
-bool PREPARSE_execute(Firebird::CheckStatusWrapper*, Why::YAttachment**,
-	USHORT, const SCHAR*, bool*, USHORT);
+bool PREPARSE_execute(Firebird::CheckStatusWrapper*, Why::YAttachment**, Firebird::string&, bool*, USHORT);
 
 #endif //  DSQL_PREPA_PROTO_H

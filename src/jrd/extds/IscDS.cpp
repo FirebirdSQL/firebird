@@ -253,7 +253,7 @@ bool IscConnection::cancelExecution(bool forced)
 	return !(status->getState() & IStatus::STATE_ERRORS);
 }
 
-bool IscConnection::resetSession()
+bool IscConnection::resetSession(thread_db* tdbb)
 {
 	if (!m_handle)
 		return false;
@@ -262,8 +262,11 @@ bool IscConnection::resetSession()
 		return true;
 
 	FbLocalStatus status;
-	m_iscProvider.isc_dsql_execute_immediate(&status, &m_handle,
-		NULL, 0, "ALTER SESSION RESET", m_sqlDialect, NULL);
+	{
+		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
+		m_iscProvider.isc_dsql_execute_immediate(&status, &m_handle,
+			NULL, 0, "ALTER SESSION RESET", m_sqlDialect, NULL);
+	}
 
 	if (!(status->getState() & IStatus::STATE_ERRORS))
 		return true;
@@ -392,6 +395,22 @@ void IscTransaction::doRollback(FbStatusVector* status, thread_db* tdbb, bool re
 		m_iscProvider.isc_rollback_retaining(status, &m_handle);
 	else
 		m_iscProvider.isc_rollback_transaction(status, &m_handle);
+
+	if ((status->getState() & IStatus::STATE_ERRORS) &&
+		(status->getErrors()[1] == isc_cancelled))
+	{
+		FbLocalStatus temp;
+		FB_API_HANDLE db = m_iscConnection.getAPIHandle();
+		m_iscProvider.fb_cancel_operation(&temp, &db, fb_cancel_disable);
+
+		status->init();
+		if (retain)
+			m_iscProvider.isc_rollback_retaining(status, &m_handle);
+		else
+			m_iscProvider.isc_rollback_transaction(status, &m_handle);
+
+		m_iscProvider.fb_cancel_operation(&temp, &db, fb_cancel_enable);
+	}
 
 	if ((status->getState() & IStatus::STATE_ERRORS) &&
 		isConnectionBrokenError(status) && !retain)

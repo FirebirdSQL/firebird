@@ -45,7 +45,7 @@ private:
 };
 
 
-class ConfigTableScan : public VirtualTableScan
+class ConfigTableScan final : public VirtualTableScan
 {
 public:
 	ConfigTableScan(CompilerScratch* csb, const Firebird::string& alias,

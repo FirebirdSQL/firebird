@@ -222,6 +222,8 @@ void TraceManager::update_sessions()
 	}
 
 	// add new sessions
+	new_needs = trace_needs;
+	trace_needs = 0;
 	while (newSessions.hasData())
 	{
 		TraceSession* s = newSessions.pop();
@@ -233,6 +235,10 @@ void TraceManager::update_sessions()
 	if (trace_sessions.getCount() == 0)
 	{
 		trace_needs = 0;
+	}
+	else
+	{
+		trace_needs = new_needs;
 	}
 }
 
@@ -262,7 +268,7 @@ void TraceManager::update_session(const TraceSession& session)
 				if ((!attachment->att_user) || (attachment->att_flags & ATT_mapping))
 					return;
 
-				curr_user = attachment->att_user->getUserName().c_str();
+				curr_user = attachment->getUserName().c_str();
 
 				if (session.ses_auth.hasData())
 				{ // scope
@@ -344,7 +350,7 @@ void TraceManager::update_session(const TraceSession& session)
 			sesInfo.ses_id = session.ses_id;
 			trace_sessions.add(sesInfo);
 
-			trace_needs |= info->factory->trace_needs();
+			new_needs |= info->factory->trace_needs();
 		}
 		else if (status->getState() & IStatus::STATE_ERRORS)
 		{
@@ -395,7 +401,8 @@ void TraceManager::event_dsql_execute(Attachment* att, jrd_tra* transaction,
 	TraceConnectionImpl conn(att);
 	TraceTransactionImpl tran(transaction);
 
-	att->att_trace_manager->event_dsql_execute(&conn, &tran, statement, started, req_result);
+	att->att_trace_manager->event_dsql_execute(&conn, transaction ? &tran : NULL, statement, 
+											   started, req_result);
 }
 
 

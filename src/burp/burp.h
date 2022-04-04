@@ -42,6 +42,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/fb_pair.h"
 #include "../common/classes/MetaString.h"
+#include "../common/classes/Nullable.h"
 #include "../common/SimilarToRegex.h"
 #include "../common/status.h"
 #include "../common/sha.h"
@@ -253,7 +254,9 @@ enum att_type {
 	att_SQL_dialect,		// SQL dialect that it speaks
 	att_db_read_only,		// Is the database ReadOnly?
 	att_database_linger,	// Disconnection timeout
-	att_database_sql_security,// default sql security value
+	att_database_sql_security_deprecated,	// can be removed later
+	att_replica_mode,		// replica mode
+	att_database_sql_security,	// default sql security value
 
 	// Relation attributes
 
@@ -275,6 +278,7 @@ enum att_type {
 	att_relation_flags,
 	att_relation_ext_file_name, // name of file for external tables
 	att_relation_type,
+	att_relation_sql_security_deprecated,	// can be removed later
 	att_relation_sql_security,
 	att_relation_tablespace_name,
 
@@ -414,6 +418,7 @@ enum att_type {
 	att_trig_engine_name,
 	att_trig_entrypoint,
 	att_trig_type2,
+	att_trig_sql_security_deprecated,	// can be removed later
 	att_trig_sql_security,
 
 	// Function attributes
@@ -438,6 +443,7 @@ enum att_type {
 	att_function_owner_name,
 	att_function_legacy_flag,
 	att_function_deterministic_flag,
+	att_function_sql_security_deprecated,	// can be removed later
 	att_function_sql_security,
 
 	// Function argument attributes
@@ -534,6 +540,7 @@ enum att_type {
 	att_procedure_entrypoint,
 	att_procedure_package_name,
 	att_procedure_private_flag,
+	att_procedure_sql_security_deprecated,	// can be removed later
 	att_procedure_sql_security,
 
 	// Stored procedure parameter attributes
@@ -635,6 +642,7 @@ enum att_type {
 	att_package_security_class,
 	att_package_owner_name,
 	att_package_description,
+	att_package_sql_security_deprecated,	// can be removed later
 	att_package_sql_security,
 
 	// Database creators
@@ -1031,6 +1039,7 @@ public:
 	ULONG		io_buffer_size;
 	redirect_vals	sw_redirect;
 	bool		burp_throw;
+	Nullable<ReplicaMode>	gbl_sw_replica;
 
 	UCHAR*		blk_io_ptr;
 	int			blk_io_cnt;
@@ -1165,6 +1174,7 @@ public:
 
 	bool			hdr_forced_writes;
 	TEXT			database_security_class[GDS_NAME_LEN]; // To save database security class for deferred update
+	unsigned		batchInlineBlobLimit;
 
 	typedef Firebird::GenericMap<Firebird::Pair<
 		Firebird::Full<Firebird::string, Firebird::string> > > StringMap;

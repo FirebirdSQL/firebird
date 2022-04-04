@@ -27,7 +27,7 @@
  */
 
 #include "firebird.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 
 #include <stdlib.h>
 

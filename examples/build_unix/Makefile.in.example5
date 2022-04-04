@@ -13,21 +13,21 @@
 #   but WITHOUT ANY WARRANTY; without even the implied warranty of
 #   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #   Relevant for more details.
-# 
+#
 #   This file was created by members of the firebird development team.
 #   All individual contributions remain the Copyright (C) of those
 #   individuals.  Contributors to this file are either listed here or
 #   can be obtained from a CVS history command.
-# 
+#
 #   All rights reserved.
 #
 #   Created by: Mark O'Donohue <mark.odonohue@ludwig.edu.au>
-# 
+#
 #   Contributor(s):
-# 
-# 
+#
+#
 #   $Id: Makefile.in.example5,v 1.1 2003-07-11 13:30:32 brodsom Exp $
-# 
+#
 
 ROOT=../..
 
@@ -132,7 +132,7 @@ nt_examples:
 	$(CP) $(EXAMPLES_SRC)makefile.msc $(EXAMPLES_DEST)Makefile.msc
 
 # Ok the following little story is, first build empbuild.fdb an empty db
-# using a script file.  Then we can compile the empbuild.e file, then we 
+# using a script file.  Then we can compile the empbuild.epp file, then we
 # can run it to create employee.fdb database populated with data by the
 # program.  Thats how I found it.
 
@@ -158,7 +158,7 @@ empbuild.exe:	$(EMPBLD_OBJ)
 	-$(RM) empbuild.exe
 	$(LD) $(O_EXE_SWITCH)empbuild $(LINK_OPTS) empbuild.o $(GDS_LINK)
 
-empbuild.c:	empbuild.fdb empbuild.e
+empbuild.cpp:	empbuild.fdb empbuild.epp
 
 empbuild.fdb : empddl.sql empbld.sql
 	-$(RM) $@
@@ -179,7 +179,7 @@ intlemp.fdb:	intlbld$(EXEC_EXT) $(INTL_FILES)
 	./intlbld intlemp.fdb
 	-$(CHMOD_6) intlemp.fdb
 
-intlbuild.fdb : intlddl.sql intlbld.sql 
+intlbuild.fdb : intlddl.sql intlbld.sql
 	-$(RM) intlbuild.fdb
 	$(ISQL) -i intlbld.sql
 

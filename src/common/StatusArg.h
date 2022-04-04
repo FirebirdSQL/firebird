@@ -172,7 +172,7 @@ public:
 	void prepend(const StatusVector& v) throw() { implementation->prepend(v); }
 	void assign(const StatusVector& v) throw() { implementation->assign(v); }
 	void assign(const Exception& ex) throw() { implementation->assign(ex); }
-	void raise() const;
+	[[noreturn]] void raise() const;
 	ISC_STATUS copyTo(ISC_STATUS* dest) const throw() { return implementation->copyTo(dest); }
 	void copyTo(IStatus* dest) const throw() { implementation->copyTo(dest); }
 	void appendTo(IStatus* dest) const throw() { implementation->appendTo(dest); }

@@ -52,7 +52,7 @@ SortedStream::SortedStream(CompilerScratch* csb, RecordSource* next, SortMap* ma
 
 void SortedStream::open(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_flags = irsb_open;
@@ -67,7 +67,7 @@ void SortedStream::open(thread_db* tdbb) const
 
 void SortedStream::close(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	invalidateRecords(request);
 
@@ -88,7 +88,7 @@ bool SortedStream::getRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!(impure->irsb_flags & irsb_open))
@@ -150,7 +150,7 @@ void SortedStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_next->findUsedStreams(streams, expandAll);
 }
 
-void SortedStream::invalidateRecords(jrd_req* request) const
+void SortedStream::invalidateRecords(Request* request) const
 {
 	m_next->invalidateRecords(request);
 }
@@ -162,7 +162,7 @@ void SortedStream::nullRecords(thread_db* tdbb) const
 
 Sort* SortedStream::init(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	m_next->open(tdbb);
 	ULONG records = 0;
@@ -246,11 +246,10 @@ Sort* SortedStream::init(thread_db* tdbb) const
 
 			if (!flag)
 			{
-				// If moving a TEXT item into the key portion of the sort record,
-				// then want to sort by language dependent order.
+				// If an INTL string is moved into the key portion of the sort record,
+				// then we want to sort by language dependent order
 
-				if (IS_INTL_DATA(&item->desc) &&
-					(ULONG)(IPTR) item->desc.dsc_address < m_map->keyLength)
+				if (IS_INTL_DATA(&item->desc) && isKey(&item->desc))
 				{
 					INTL_string_to_key(tdbb, INTL_INDEX_TYPE(&item->desc), from, &to,
 						(m_map->flags & FLAG_UNIQUE ? INTL_KEY_UNIQUE : INTL_KEY_SORT));
@@ -311,7 +310,7 @@ bool SortedStream::compareKeys(const UCHAR* p, const UCHAR* q) const
 
 UCHAR* SortedStream::getData(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	ULONG* data = nullptr;
@@ -320,7 +319,7 @@ UCHAR* SortedStream::getData(thread_db* tdbb) const
 	return reinterpret_cast<UCHAR*>(data);
 }
 
-void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
+void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 {
 	StreamType stream = INVALID_STREAM;
 	dsc from, to;
@@ -335,18 +334,14 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 		if (item.node && !nodeIs<FieldNode>(item.node))
 			continue;
 
-		// if moving a TEXT item into the key portion of the sort record,
-		// then want to sort by language dependent order
+		// Some fields may have volatile keys, so that their value
+		// can be possibly changed before or during the sorting.
+		// We should ignore such an item, because there is a later field
+		// in the item list that contains the original value to send back
+		// (or the record will be refetched as a whole).
 
-		// in the case below a nod_field is being converted to
-		// a sort key, there is a later nod_field in the item
-		// list that contains the data to send back
-
-		if ((IS_INTL_DATA(&item.desc) || item.desc.isDecFloat()) &&
-			(ULONG)(IPTR) item.desc.dsc_address < m_map->keyLength)
-		{
+		if (hasVolatileKey(&item.desc) && isKey(&item.desc))
 			continue;
-		}
 
 		const auto rpb = &request->req_rpb[item.stream];
 		const auto relation = rpb->rpb_relation;
@@ -368,6 +363,8 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 			default:
 				fb_assert(false);
 			}
+
+			rpb->rpb_runtime_flags &= ~RPB_CLEAR_FLAGS;
 
 			// If transaction ID is present, then fields from this stream are accessed.
 			// So we need to refetch the stream, either immediately or on demand.
@@ -425,6 +422,8 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 
 	// If necessary, refetch records from the underlying streams
 
+	UCharBuffer keyBuffer;
+
 	for (const auto stream : refetchStreams)
 	{
 		fb_assert(m_map->flags & FLAG_REFETCH);
@@ -433,7 +432,8 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 		const auto relation = rpb->rpb_relation;
 
 		// Ensure the record is still in the most recent format
-		VIO_record(tdbb, rpb, MET_current(tdbb, relation), tdbb->getDefaultPool());
+		const auto record =
+			VIO_record(tdbb, rpb, MET_current(tdbb, relation), tdbb->getDefaultPool());
 
 		// Set all fields to NULL if the stream was originally marked as invalid
 		if (!rpb->rpb_number.isValid())
@@ -449,34 +449,42 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 		fb_assert(transaction);
 		const auto selfTraNum = transaction->tra_number;
 
+		const auto orgTraNum = rpb->rpb_transaction_nr;
+
 		// Code underneath is a slightly customized version of VIO_refetch_record,
 		// because in the case of deleted record followed by a commit we should
 		// find the original version (or die trying).
 
-		const auto orgTraNum = rpb->rpb_transaction_nr;
+		auto temp = *rpb;
+		temp.rpb_record = nullptr;
+		AutoPtr<Record> tempRecord;
 
 		// If the primary record version disappeared, we cannot proceed
 
-		if (!DPM_get(tdbb, rpb, LCK_read))
+		if (!DPM_get(tdbb, &temp, LCK_read))
 			Arg::Gds(isc_no_cur_rec).raise();
 
-		tdbb->bumpRelStats(RuntimeStatistics::RECORD_RPT_READS, rpb->rpb_relation->rel_id);
+		tdbb->bumpRelStats(RuntimeStatistics::RECORD_RPT_READS, relation->rel_id);
 
-		if (VIO_chase_record_version(tdbb, rpb, transaction, tdbb->getDefaultPool(), false, false))
+		if (VIO_chase_record_version(tdbb, &temp, transaction, tdbb->getDefaultPool(), false, false))
 		{
-			if (!(rpb->rpb_runtime_flags & RPB_undo_data))
-				VIO_data(tdbb, rpb, tdbb->getDefaultPool());
+			if (!(temp.rpb_runtime_flags & RPB_undo_data))
+				VIO_data(tdbb, &temp, tdbb->getDefaultPool());
 
-			if (rpb->rpb_transaction_nr == orgTraNum && orgTraNum != selfTraNum)
+			tempRecord = temp.rpb_record;
+
+			VIO_copy_record(tdbb, relation, tempRecord, record);
+
+			if (temp.rpb_transaction_nr == orgTraNum && orgTraNum != selfTraNum)
 				continue; // we surely see the original record version
 		}
-		else if (!(rpb->rpb_flags & rpb_deleted))
+		else if (!(temp.rpb_flags & rpb_deleted))
 			Arg::Gds(isc_no_cur_rec).raise();
 
-		if (rpb->rpb_transaction_nr != selfTraNum)
+		if (temp.rpb_transaction_nr != selfTraNum)
 		{
 			// Ensure that somebody really touched this record
-			fb_assert(rpb->rpb_transaction_nr != orgTraNum);
+			fb_assert(temp.rpb_transaction_nr != orgTraNum);
 			// and we discovered it in READ COMMITTED transaction
 			fb_assert(transaction->tra_flags & TRA_read_committed);
 			// and our transaction isn't READ CONSISTENCY one
@@ -486,10 +494,10 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 		// We have found a more recent record version. Unless it's a delete stub,
 		// validate whether it's still suitable for the result set.
 
-		if (!(rpb->rpb_flags & rpb_deleted))
+		if (!(temp.rpb_flags & rpb_deleted))
 		{
-			fb_assert(rpb->rpb_length != 0);
-			fb_assert(rpb->rpb_address != nullptr);
+			fb_assert(temp.rpb_length != 0);
+			fb_assert(temp.rpb_address != nullptr);
 
 			// Record can be safely returned only if it has no fields
 			// acting as sort keys or they haven't been changed
@@ -498,6 +506,11 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 
 			for (const auto& item : m_map->items)
 			{
+				// Stop comparing at the first non-key field (if any)
+
+				if (!isKey(&item.desc))
+					break;
+
 				if (item.node && !nodeIs<FieldNode>(item.node))
 					continue;
 
@@ -505,15 +518,40 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 					continue;
 
 				const auto null1 = (*(data + item.flagOffset) == TRUE);
-				from = item.desc;
-				from.dsc_address = data + (IPTR) from.dsc_address;
+				const auto null2 = !EVL_field(relation, temp.rpb_record, item.fieldId, &from);
 
-				const auto null2 = !EVL_field(relation, rpb->rpb_record, item.fieldId, &to);
-
-				if (null1 != null2 || (!null1 && MOV_compare(tdbb, &from, &to)))
+				if (null1 != null2)
 				{
 					keysChanged = true;
 					break;
+				}
+
+				if (!null1)
+				{
+					dsc sortDesc = item.desc;
+					sortDesc.dsc_address += (IPTR) data;
+
+					const dsc* recDesc = &from;
+
+					if (IS_INTL_DATA(&item.desc))
+					{
+						// For an INTL string, compute the language dependent key
+
+						to = item.desc;
+						to.dsc_address = keyBuffer.getBuffer(to.dsc_length);
+						memset(to.dsc_address, 0, to.dsc_length);
+
+						INTL_string_to_key(tdbb, INTL_INDEX_TYPE(&item.desc), &from, &to,
+							(m_map->flags & FLAG_UNIQUE ? INTL_KEY_UNIQUE : INTL_KEY_SORT));
+
+						recDesc = &to;
+					}
+
+					if (MOV_compare(tdbb, &sortDesc, recDesc))
+					{
+						keysChanged = true;
+						break;
+					}
 				}
 			}
 
@@ -524,14 +562,11 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 		// If it's our transaction who updated/deleted this record, punt.
 		// We don't know how to find the original record version.
 
-		if (rpb->rpb_transaction_nr == selfTraNum)
+		if (temp.rpb_transaction_nr == selfTraNum)
 			Arg::Gds(isc_no_cur_rec).raise();
 
 		// We have to find the original record version, sigh.
 		// Scan version chain backwards until it's done.
-
-		auto temp = *rpb;
-		temp.rpb_record = nullptr;
 
 		RuntimeStatistics::Accumulator backversions(tdbb, relation,
 													RuntimeStatistics::RECORD_BACKVERSION_READS);
@@ -554,10 +589,11 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 
 			VIO_data(tdbb, &temp, tdbb->getDefaultPool());
 
+			tempRecord.reset(temp.rpb_record);
+
 			++backversions;
 		}
 
-		VIO_copy_record(tdbb, &temp, rpb);
-		delete temp.rpb_record;
+		VIO_copy_record(tdbb, relation, tempRecord, record);
 	}
 }

@@ -67,5 +67,6 @@ void	ISQL_ri_action_print(const TEXT*, const TEXT*, bool);
 //void	ISQL_win_err(const char*);
 processing_state ISQL_print_item_blob(FILE*, const IsqlVar*, Firebird::ITransaction*, int subtype);
 processing_state ISQL_fill_var(IsqlVar*, Firebird::IMessageMetadata*, unsigned, UCHAR*);
+bool ISQL_statement_ends_in_comment(const char* statement);
 
 #endif // ISQL_ISQL_PROTO_H

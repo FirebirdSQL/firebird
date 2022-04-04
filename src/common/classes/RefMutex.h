@@ -101,7 +101,7 @@ namespace Firebird
 		}
 	};
 
-	template <typename Mtx, typename RefCounted = DefaultRefCounted<Mtx> >
+	template <typename Mtx, template <typename T> class RefCounted = DefaultRefCounted >
 	class EnsureUnlock
 	{
 	public:
@@ -114,14 +114,14 @@ namespace Firebird
 #define FB_LOCKED_FROM NULL
 #endif
 		{
-			RefCounted::addRef(m_mutex);
+			RefCounted<Mtx>::addRef(m_mutex);
 		}
 
 		~EnsureUnlock()
 		{
 			while (m_locked)
 				leave();
-			RefCounted::release(m_mutex);
+			RefCounted<Mtx>::release(m_mutex);
 		}
 
 		void enter()
@@ -155,7 +155,7 @@ namespace Firebird
 	};
 #undef FB_LOCKED_FROM
 
-	typedef EnsureUnlock<Mutex, NotRefCounted<Mutex> > MutexEnsureUnlock;
+	typedef EnsureUnlock<Mutex, NotRefCounted> MutexEnsureUnlock;
 	typedef EnsureUnlock<RefMutex> RefMutexEnsureUnlock;
 
 } // namespace

@@ -17,8 +17,6 @@ set(remote_src
     ../auth/trusted/AuthSspi.cpp
 )
 add_src_win32(remote_src
-    os/win32/wnet.cpp
-    os/win32/wnet_proto.h
     os/win32/xnet.cpp
     os/win32/xnet.h
     os/win32/xnet_proto.h

@@ -133,7 +133,7 @@ DestDir=@prefix@
 # The guts of the tranfer of files and other directories
 # (mkdir -p <dirname> does not elicit an error message if the <dirname> exists.)
 echo Installing binaries
-for D in "bin examples help include intl doc/sql.extensions UDF"
+for D in "bin examples include intl doc/sql.extensions UDF"
 do
 	mkdir -p $DestDir/$D || exit
 done
@@ -151,7 +151,6 @@ copyIfExists $BuiltFBDir/bin/gsplit $DestDir/bin/gsplit  || exit
 cp $BuiltFBDir/bin/gstat $DestDir/bin/gstat  || exit
 copyIfExists $BuiltFBDir/bin/isc4.gbak $DestDir/bin/isc4.gbk  || exit
 cp $BuiltFBDir/bin/isql $DestDir/bin/isql  || exit
-cp $BuiltFBDir/bin/qli $DestDir/bin/qli  || exit
 
 # Copy examples only if we have them
 exampleFiles=`find $BuiltFBDir/examples/ -type f -print`
@@ -164,9 +163,6 @@ else
 		cp $i $DestDir/examples || exit
 	done
 fi
-
-copyIfExists $BuiltFBDir/help/help.gbak $DestDir/help  || exit
-cp $BuiltFBDir/help/help.fdb $DestDir/help  || exit
 
 cp $BuiltFBDir/firebird.msg $DestDir/firebird.msg  || exit
 cp $BuiltFBDir/security2.fdb $DestDir/security2.fdb.sample || exit
@@ -240,7 +236,7 @@ do
 	chmod ug=rx,o= $i || exit
 done
 
-chmod a=rx isql qli
+chmod a=rx isql
 
 # SUID is needed for running server programs.
 for i in fb_lock_mgr gds_drop fb_smp_server
@@ -274,7 +270,6 @@ chmod ug=r,o= *.sample || exit
 # make databases writable by firebird only
 # local database connections are not a good idea
 chmod ug=rw,o= examples/*.fdb || exit
-chmod ug=rw,o= help/*.fdb || exit
 
 # install the samples if they don't exist
 [ -f databases.conf ] || install -o firebird -g firebird -m 440 databases.conf.sample databases.conf

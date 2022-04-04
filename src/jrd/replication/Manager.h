@@ -67,16 +67,17 @@ namespace Replication
 		};
 
 	public:
-		Manager(const Firebird::string& dbId,
-				const Replication::Config* config);
+		Manager(const Firebird::string& dbId, const Replication::Config* config);
 		~Manager();
+
+		void shutdown();
 
 		Firebird::UCharBuffer* getBuffer();
 		void releaseBuffer(Firebird::UCharBuffer* buffer);
 
-		void flush(Firebird::UCharBuffer* buffer, bool sync);
+		void flush(Firebird::UCharBuffer* buffer, bool sync, bool prepare);
 
-		void forceLogSwitch()
+		void forceJournalSwitch()
 		{
 			if (m_changeLog)
 				m_changeLog->forceSwitch();
@@ -88,8 +89,6 @@ namespace Replication
 		}
 
 	private:
-		void logError(const Firebird::IStatus* status);
-
 		void bgWriter();
 
 		static THREAD_ENTRY_DECLARE writer_thread(THREAD_ENTRY_PARAM arg)
@@ -114,7 +113,6 @@ namespace Replication
 
 		volatile bool m_shutdown;
 		volatile bool m_signalled;
-		Firebird::AtomicCounter m_waiters;
 
 		Firebird::AutoPtr<ChangeLog> m_changeLog;
 		Firebird::RWLock m_lock;

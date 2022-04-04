@@ -39,7 +39,7 @@
 #include "../jrd/jrd.h"
 #include "../jrd/svc.h"
 #include "../jrd/constants.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/license.h"
 #include "../jrd/err_proto.h"
 #include "../yvalve/gds_proto.h"
@@ -677,6 +677,14 @@ void Service::fillDpb(ClumpletWriter& dpb)
 			status_exception::raise(status);
 		}
 	}
+	if (svc_remote_process.hasData())
+	{
+		dpb.insertString(isc_dpb_process_name, svc_remote_process);
+	}
+	if (svc_remote_pid)
+	{
+		dpb.insertInt(isc_dpb_process_id, svc_remote_pid);
+	}
 }
 
 bool Service::utf8FileNames()
@@ -921,8 +929,11 @@ void Service::detach()
 	// save it cause after call to finish() we can't access class members any more
 	const bool localDoShutdown = svc_do_shutdown;
 
-	TraceServiceImpl service(this);
-	svc_trace_manager->event_service_detach(&service, ITracePlugin::RESULT_SUCCESS);
+	if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_DETACH))
+	{
+		TraceServiceImpl service(this);
+		svc_trace_manager->event_service_detach(&service, ITracePlugin::RESULT_SUCCESS);
+	}
 
 	// Mark service as detached.
 	finish(SVC_detached);
@@ -1140,7 +1151,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 		start_info = NULL;
 	}
 
-	while (items < end_items2 && *items != isc_info_end)
+	while (items < end_items2 && *items != isc_info_end && info < end)
 	{
 		// if we attached to the "anonymous" service we allow only following queries:
 
@@ -1959,10 +1970,12 @@ THREAD_ENTRY_DECLARE Service::run(THREAD_ENTRY_PARAM arg)
 		RefPtr<SvcMutex> ref(svc->svc_existence);
 		exit_code = svc->svc_service_run->serv_thd(svc);
 
-		threadCollect->add(svc->svc_thread);
+		Thread::Handle thrHandle = svc->svc_thread;
 		svc->started();
-		svc->svc_sem_full.release();
+		svc->unblockQueryGet();
 		svc->finish(SVC_finished);
+
+		threadCollect->add(thrHandle);
 	}
 	catch (const Exception& ex)
 	{
@@ -2279,7 +2292,7 @@ void Service::enqueue(const UCHAR* s, ULONG len)
 {
 	if (checkForShutdown() || (svc_flags & SVC_detached))
 	{
-		svc_sem_full.release();
+		unblockQueryGet();
 		return;
 	}
 
@@ -2291,13 +2304,13 @@ void Service::enqueue(const UCHAR* s, ULONG len)
 		{
 			if (flagFirst)
 			{
-				svc_sem_full.release();
+				unblockQueryGet(true);
 				flagFirst = false;
 			}
 			svc_sem_empty.tryEnter(1, 0);
 			if (checkForShutdown() || (svc_flags & SVC_detached))
 			{
-				svc_sem_full.release();
+				unblockQueryGet();
 				return;
 			}
 		}
@@ -2319,6 +2332,13 @@ void Service::enqueue(const UCHAR* s, ULONG len)
 		s += cnt;
 		len -= cnt;
 	}
+	unblockQueryGet();
+}
+
+
+void Service::unblockQueryGet(bool over)
+{
+	svc_output_overflow = over;
 	svc_sem_full.release();
 }
 
@@ -2409,8 +2429,11 @@ void Service::get(UCHAR* buffer, USHORT length, USHORT flags, USHORT timeout, US
 			buffer[(*return_length)++] = ch;
 		}
 
-		if (!(flags & GET_LINE))
+		if (svc_output_overflow || !(flags & GET_LINE))
+		{
+			svc_output_overflow = false;
 			svc_stdout_head = head;
+		}
 	}
 
 	if (flags & GET_LINE)
@@ -2509,7 +2532,7 @@ ULONG Service::getBytes(UCHAR* buffer, ULONG size)
 		svc_stdin_size_requested = size;
 		svc_stdin_buffer = buffer;
 		// Wakeup Service::query() if it waits for data from service
-		svc_sem_full.release();
+		unblockQueryGet();
 	}
 
 	// Wait for data from client
@@ -2549,7 +2572,7 @@ void Service::finish(USHORT flag)
 
 		if (svc_flags & SVC_finished)
 		{
-			svc_sem_full.release();
+			unblockQueryGet();
 		}
 		else
 		{
@@ -2706,6 +2729,13 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_dbname")).raise();
 				}
 				get_action_svc_string(spb, nbk_database);
+				break;
+
+			case isc_spb_options:
+				if (!get_action_svc_bitmask(spb, nbackup_in_sw_table, switches))
+				{
+					return false;
+				}
 				break;
 
 			default:
@@ -2875,6 +2905,30 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				{
 					string s;
 					spb.getString(s);
+
+					bool inStr = false;
+					for (FB_SIZE_T i = 0; i < s.length(); )
+					{
+						if (s[i] == SVC_TRMNTR)
+						{
+							s.erase(i, 1);
+							if (inStr)
+							{
+								if (i < s.length() && s[i] != SVC_TRMNTR)
+								{
+									inStr = false;
+									continue;
+								}
+							}
+							else
+							{
+								inStr = true;
+								continue;
+							}
+						}
+						++i;
+					}
+
 					switches += s;
 					switches += ' ';
 				}
@@ -2924,6 +2978,19 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 					return false;
 				}
 				break;
+			case isc_spb_res_replica_mode:
+				if (get_action_svc_parameter(spb.getClumpTag(), reference_burp_in_sw_table, switches))
+				{
+					unsigned int val = spb.getInt();
+					if (val >= FB_NELEM(burp_repl_mode_sw_table))
+					{
+						return false;
+					}
+					switches += burp_repl_mode_sw_table[val];
+					switches += " ";
+					break;
+				}
+				return false;
 			case isc_spb_verbose:
 				if (!get_action_svc_parameter(spb.getClumpTag(), reference_burp_in_sw_table, switches))
 				{
@@ -2998,11 +3065,24 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				if (get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
 				{
 					unsigned int val = spb.getInt();
-					if (val >= FB_NELEM(alice_mode_sw_table))
+					if (val >= FB_NELEM(alice_shut_mode_sw_table))
 					{
 						return false;
 					}
-					switches += alice_mode_sw_table[val];
+					switches += alice_shut_mode_sw_table[val];
+					switches += " ";
+					break;
+				}
+				return false;
+			case isc_spb_prp_replica_mode:
+				if (get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
+				{
+					unsigned int val = spb.getInt();
+					if (val >= FB_NELEM(alice_repl_mode_sw_table))
+					{
+						return false;
+					}
+					switches += alice_repl_mode_sw_table[val];
 					switches += " ";
 					break;
 				}

@@ -2902,7 +2902,7 @@ static void gen_request(const gpre_req* request)
 			{
 				printa(0, "static %sshort\n   isc_%dl = %d;", CONST_STR,
 					   reference->ref_sdl_ident, reference->ref_sdl_length);
-				printa(0, "static %schar\n   isc_%d [] = {", CONST_STR, reference->ref_sdl_ident);
+				printa(0, "static %sunsigned char\n   isc_%d [] = {", CONST_STR, reference->ref_sdl_ident);
 				if (gpreGlob.sw_raw)
 					gen_raw(reference->ref_sdl, reference->ref_sdl_length);
 				else if (PRETTY_print_sdl(reference->ref_sdl, gen_blr, 0, 0))

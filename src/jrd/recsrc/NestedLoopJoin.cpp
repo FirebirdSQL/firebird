@@ -59,7 +59,7 @@ NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, RecordSource* outer, Record
 
 void NestedLoopJoin::open(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_flags = irsb_open | irsb_first | irsb_mustread;
@@ -67,7 +67,7 @@ void NestedLoopJoin::open(thread_db* tdbb) const
 
 void NestedLoopJoin::close(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	invalidateRecords(request);
 
@@ -86,7 +86,7 @@ bool NestedLoopJoin::getRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!(impure->irsb_flags & irsb_open))
@@ -257,7 +257,7 @@ void NestedLoopJoin::findUsedStreams(StreamList& streams, bool expandAll) const
 		m_args[i]->findUsedStreams(streams, expandAll);
 }
 
-void NestedLoopJoin::invalidateRecords(jrd_req* request) const
+void NestedLoopJoin::invalidateRecords(Request* request) const
 {
 	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 		m_args[i]->invalidateRecords(request);

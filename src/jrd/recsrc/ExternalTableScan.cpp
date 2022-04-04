@@ -23,7 +23,6 @@
 #include "firebird.h"
 #include "../jrd/jrd.h"
 #include "../jrd/req.h"
-#include "../jrd/rse.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/ext_proto.h"
 #include "../jrd/met_proto.h"
@@ -48,7 +47,7 @@ ExternalTableScan::ExternalTableScan(CompilerScratch* csb, const string& alias,
 void ExternalTableScan::open(thread_db* tdbb) const
 {
 	Database* const dbb = tdbb->getDatabase();
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_flags = irsb_open;
@@ -66,7 +65,7 @@ void ExternalTableScan::open(thread_db* tdbb) const
 
 void ExternalTableScan::close(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	invalidateRecords(request);
 
@@ -80,7 +79,7 @@ bool ExternalTableScan::getRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
@@ -89,6 +88,8 @@ bool ExternalTableScan::getRecord(thread_db* tdbb) const
 		rpb->rpb_number.setValid(false);
 		return false;
 	}
+
+	rpb->rpb_runtime_flags &= ~RPB_CLEAR_FLAGS;
 
 	if (EXT_get(tdbb, rpb, impure->irsb_position))
 	{

@@ -46,7 +46,7 @@ void		EVL_validate(Jrd::thread_db*, const Jrd::Item&, const Jrd::ItemInfo*, dsc*
 namespace Jrd
 {
 	// Evaluate a value expression.
-	inline dsc* EVL_expr(thread_db* tdbb, jrd_req* request, const ValueExprNode* node)
+	inline dsc* EVL_expr(thread_db* tdbb, Request* request, const ValueExprNode* node)
 	{
 		if (!node)
 			BUGCHECK(303);	// msg 303 Invalid expression for evaluation

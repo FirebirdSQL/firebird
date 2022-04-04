@@ -146,17 +146,17 @@ private:
 class TraceBLRStatementImpl : public BLRPrinter<TraceBLRStatementImpl>
 {
 public:
-	TraceBLRStatementImpl(const jrd_req* stmt, Firebird::PerformanceInfo* perf) :
-		BLRPrinter(stmt->getStatement()->blr.begin(), stmt->getStatement()->blr.getCount()),
+	TraceBLRStatementImpl(const Statement* stmt, Firebird::PerformanceInfo* perf) :
+		BLRPrinter(stmt->blr.begin(), stmt->blr.getCount()),
 		m_stmt(stmt),
 		m_perf(perf)
 	{}
 
-	ISC_INT64 getStmtID()		{ return m_stmt->getRequestId(); }
+	ISC_INT64 getStmtID()		{ return m_stmt->getStatementId(); }
 	Firebird::PerformanceInfo* getPerf()	{ return m_perf; }
 
 private:
-	const jrd_req* const m_stmt;
+	const Statement* const m_stmt;
 	Firebird::PerformanceInfo* const m_perf;
 };
 
@@ -177,7 +177,7 @@ class TraceSQLStatementImpl :
 	public Firebird::AutoIface<Firebird::ITraceSQLStatementImpl<TraceSQLStatementImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceSQLStatementImpl(const dsql_req* stmt, Firebird::PerformanceInfo* perf) :
+	TraceSQLStatementImpl(DsqlRequest* stmt, Firebird::PerformanceInfo* perf) :
 		m_stmt(stmt),
 		m_perf(perf),
 		m_planExplained(false),
@@ -198,12 +198,12 @@ private:
 		public Firebird::AutoIface<Firebird::ITraceParamsImpl<DSQLParamsImpl, Firebird::CheckStatusWrapper> >
 	{
 	public:
-		DSQLParamsImpl(Firebird::MemoryPool& pool, const dsql_req* const stmt) :
+		DSQLParamsImpl(Firebird::MemoryPool& pool, DsqlRequest* const stmt) :
 			m_stmt(stmt),
 			m_params(NULL),
 			m_descs(pool)
 		{
-			const dsql_msg* msg = m_stmt->getStatement()->getSendMsg();
+			const dsql_msg* msg = m_stmt->getDsqlStatement()->getSendMsg();
 			if (msg)
 				m_params = &msg->msg_parameters;
 		}
@@ -215,7 +215,7 @@ private:
 	private:
 		void fillParams();
 
-		const dsql_req* const m_stmt;
+		DsqlRequest* const m_stmt;
 		const Firebird::Array<dsql_par*>* m_params;
 		Firebird::HalfStaticArray<dsc, 16> m_descs;
 		Firebird::string temp_utf8_text;
@@ -223,7 +223,7 @@ private:
 
 	void fillPlan(bool explained);
 
-	const dsql_req* const m_stmt;
+	DsqlRequest* const m_stmt;
 	Firebird::PerformanceInfo* const m_perf;
 	Firebird::string m_plan;
 	bool m_planExplained;
@@ -342,7 +342,7 @@ private:
 class TraceDscFromValues : public TraceDescriptors
 {
 public:
-	TraceDscFromValues(Firebird::MemoryPool& pool, jrd_req* request, const ValueListNode* params) :
+	TraceDscFromValues(Firebird::MemoryPool& pool, Request* request, const ValueListNode* params) :
 		TraceDescriptors(pool),
 		m_request(request),
 		m_params(params)
@@ -352,7 +352,7 @@ protected:
 	void fillParams();
 
 private:
-	jrd_req* m_request;
+	Request* m_request;
 	const ValueListNode* m_params;
 };
 
@@ -402,7 +402,7 @@ class TraceProcedureImpl :
 	public Firebird::AutoIface<Firebird::ITraceProcedureImpl<TraceProcedureImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceProcedureImpl(jrd_req* request, Firebird::PerformanceInfo* perf) :
+	TraceProcedureImpl(Request* request, Firebird::PerformanceInfo* perf) :
 		m_request(request),
 		m_perf(perf),
 		m_inputs(*getDefaultMemoryPool(), request->req_proc_caller, request->req_proc_inputs),
@@ -420,7 +420,7 @@ public:
 	Firebird::PerformanceInfo* getPerf()	{ return m_perf; };
 
 private:
-	jrd_req* const m_request;
+	Request* const m_request;
 	Firebird::PerformanceInfo* const m_perf;
 	TraceDscFromValues m_inputs;
 	Firebird::string m_name;
@@ -431,7 +431,7 @@ class TraceFunctionImpl :
 	public Firebird::AutoIface<Firebird::ITraceFunctionImpl<TraceFunctionImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceFunctionImpl(jrd_req* request, Firebird::ITraceParams* inputs, Firebird::PerformanceInfo* perf, const dsc* value) :
+	TraceFunctionImpl(Request* request, Firebird::ITraceParams* inputs, Firebird::PerformanceInfo* perf, const dsc* value) :
 		m_request(request),
 		m_perf(perf),
 		m_inputs(inputs),
@@ -450,7 +450,7 @@ public:
 	Firebird::PerformanceInfo* getPerf()	{ return m_perf; };
 
 private:
-	jrd_req* const m_request;
+	Request* const m_request;
 	Firebird::PerformanceInfo* const m_perf;
 	Firebird::ITraceParams* m_inputs;
 	TraceDscFromDsc m_value;
@@ -462,7 +462,7 @@ class TraceTriggerImpl :
 	public Firebird::AutoIface<Firebird::ITraceTriggerImpl<TraceTriggerImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceTriggerImpl(const jrd_req* trig, SSHORT which, Firebird::PerformanceInfo* perf) :
+	TraceTriggerImpl(const Request* trig, SSHORT which, Firebird::PerformanceInfo* perf) :
 	  m_trig(trig),
 	  m_which(which),
 	  m_perf(perf)
@@ -476,7 +476,7 @@ public:
 	Firebird::PerformanceInfo* getPerf()	{ return m_perf; }
 
 private:
-	const jrd_req* const m_trig;
+	const Request* const m_trig;
 	const SSHORT m_which;
 	Firebird::PerformanceInfo* const m_perf;
 };

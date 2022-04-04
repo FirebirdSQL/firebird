@@ -27,7 +27,7 @@
 #include "../jrd/cmp_proto.h"
 
 namespace Jrd {
-	class jrd_req;
+	class Request;
 	class jrd_tra;
 	class AssignmentNode;
 }
@@ -40,17 +40,17 @@ void EXE_assignment(Jrd::thread_db* tdbb, const Jrd::ValueExprNode* to, dsc* fro
 void EXE_execute_db_triggers(Jrd::thread_db*, Jrd::jrd_tra*, enum TriggerAction);
 void EXE_execute_ddl_triggers(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction,
 	bool preTriggers, int action);
-const Jrd::StmtNode* EXE_looper(Jrd::thread_db* tdbb, Jrd::jrd_req* request,
+const Jrd::StmtNode* EXE_looper(Jrd::thread_db* tdbb, Jrd::Request* request,
 	const Jrd::StmtNode* in_node);
 
 void EXE_execute_triggers(Jrd::thread_db*, Jrd::TrigVector**, Jrd::record_param*, Jrd::record_param*,
 	enum TriggerAction, Jrd::StmtNode::WhichTrigger);
 
-void EXE_receive(Jrd::thread_db*, Jrd::jrd_req*, USHORT, ULONG, void*, bool = false);
-void EXE_release(Jrd::thread_db*, Jrd::jrd_req*);
-void EXE_send(Jrd::thread_db*, Jrd::jrd_req*, USHORT, ULONG, const void*);
-void EXE_start(Jrd::thread_db*, Jrd::jrd_req*, Jrd::jrd_tra*);
-void EXE_unwind(Jrd::thread_db*, Jrd::jrd_req*);
+void EXE_receive(Jrd::thread_db*, Jrd::Request*, USHORT, ULONG, void*, bool = false);
+void EXE_release(Jrd::thread_db*, Jrd::Request*);
+void EXE_send(Jrd::thread_db*, Jrd::Request*, USHORT, ULONG, const void*);
+void EXE_start(Jrd::thread_db*, Jrd::Request*, Jrd::jrd_tra*);
+void EXE_unwind(Jrd::thread_db*, Jrd::Request*);
 
 namespace Jrd
 {
@@ -93,16 +93,16 @@ namespace Jrd
 			if (request)
 				return;
 
-			request = CMP_compile2(tdbb, blr, blrLength, true);
+			request = CMP_compile_request(tdbb, blr, blrLength, true);
 			cacheRequest();
 		}
 
-		jrd_req* operator ->()
+		Request* operator ->()
 		{
 			return request;
 		}
 
-		operator jrd_req*()
+		operator Request*()
 		{
 			return request;
 		}
@@ -139,7 +139,7 @@ namespace Jrd
 	private:
 		USHORT id;
 		USHORT which;
-		jrd_req* request;
+		Request* request;
 	};
 
 	class AutoRequest
@@ -166,15 +166,15 @@ namespace Jrd
 			if (request)
 				return;
 
-			request = CMP_compile2(tdbb, blr, blrLength, true);
+			request = CMP_compile_request(tdbb, blr, blrLength, true);
 		}
 
-		jrd_req* operator ->()
+		Request* operator ->()
 		{
 			return request;
 		}
 
-		operator jrd_req*()
+		operator Request*()
 		{
 			return request;
 		}
@@ -195,7 +195,7 @@ namespace Jrd
 		}
 
 	private:
-		jrd_req* request;
+		Request* request;
 	};
 }
 

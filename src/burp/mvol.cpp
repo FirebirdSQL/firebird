@@ -134,7 +134,7 @@ static ULONG unzip_read_block(BurpGlobals*, UCHAR*, FB_SIZE_T);
 // Portion of data passed to crypt plugin
 const ULONG CRYPT_STEP = 256;
 
-class DbInfo FB_FINAL : public Firebird::RefCntIface<Firebird::IDbCryptInfoImpl<DbInfo, Firebird::CheckStatusWrapper> >
+class DbInfo final : public Firebird::RefCntIface<Firebird::IDbCryptInfoImpl<DbInfo, Firebird::CheckStatusWrapper> >
 {
 public:
 	DbInfo(BurpGlobals* bg)

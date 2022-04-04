@@ -28,8 +28,8 @@ OBJS_C := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS_C))
 OBJS_CPP := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS_CPP))
 
 C_FLAGS := -ggdb -fPIC -MMD -MP -W -Wall -Wno-unused-parameter
-CXX_FLAGS := $(C_FLAGS)
-FPC_FLAGS := -Mdelphi
+CXX_FLAGS := $(C_FLAGS) -std=c++11
+FPC_FLAGS := -Mdelphi -Cg
 
 ifeq ($(shell uname),FreeBSD)
 	DL_LIB :=
@@ -47,16 +47,17 @@ endif
 
 ifeq ($(TARGET),debug)
 	FPC_FLAGS += -g
+	LD_FLAGS += -ggdb
 endif
 
 vpath %.c $(SRC_DIRS)
 vpath %.cpp $(SRC_DIRS)
 
 define compile
-$1/%.o: %.c
+$1/%.o: %.c | $1
 	$(CC) -c $$(C_FLAGS) $$< -o $$@
 
-$1/%.o: %.cpp
+$1/%.o: %.cpp | $1
 	$(CXX) -c $$(CXX_FLAGS) $$< -o $$@
 endef
 
@@ -85,6 +86,7 @@ $(foreach bdir,$(OBJ_DIRS),$(eval $(call compile,$(bdir))))
 -include $(addsuffix .d,$(basename $(OBJS_CPP)))
 
 $(BIN_DIR)/cloop: \
+	$(OBJ_DIR)/cloop/Action.o \
 	$(OBJ_DIR)/cloop/Expr.o \
 	$(OBJ_DIR)/cloop/Generator.o \
 	$(OBJ_DIR)/cloop/Lexer.o \

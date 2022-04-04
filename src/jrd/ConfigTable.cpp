@@ -49,7 +49,7 @@ RecordBuffer* ConfigTable::getRecords(thread_db* tdbb, jrd_rel* relation)
 
 	// Check privileges to see RDB$CONFIG
 	const Attachment* att = tdbb->getAttachment();
-	if (!att->att_user->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE))
+	if (!att->getEffectiveUserId()->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE))
 		return recordBuffer;
 
 	for (unsigned int key = 0; key < Config::getKeyCount(); key++)
@@ -88,7 +88,7 @@ RecordBuffer* ConfigTable::getRecords(thread_db* tdbb, jrd_rel* relation)
 
 void ConfigTableScan::close(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	delete impure->table;
@@ -112,7 +112,7 @@ bool ConfigTableScan::retrieveRecord(thread_db* tdbb, jrd_rel* relation,
 
 RecordBuffer* ConfigTableScan::getRecords(thread_db* tdbb, jrd_rel* relation) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!impure->table)

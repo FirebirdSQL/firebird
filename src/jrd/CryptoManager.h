@@ -262,7 +262,7 @@ private:
 	static const int BIG_VALUE = 1000000;
 };
 
-class CryptoManager FB_FINAL : public Firebird::PermanentStorage, public BarSync::IBar
+class CryptoManager final : public Firebird::PermanentStorage, public BarSync::IBar
 {
 public:
 	typedef Firebird::GetPlugins<Firebird::IDbCryptPlugin> Factory;
@@ -297,7 +297,7 @@ public:
 	bool checkValidation(Firebird::IDbCryptPlugin* crypt);
 	void setDbInfo(Firebird::IDbCryptPlugin* cp);
 
-	ULONG getCurrentPage() const;
+	ULONG getCurrentPage(thread_db* tdbb) const;
 	UCHAR getCurrentState() const;
 	const char* getKeyName() const;
 	const char* getPluginName() const;
@@ -327,7 +327,7 @@ private:
 	class DbInfo;
 	friend class DbInfo;
 
-	class DbInfo FB_FINAL : public Firebird::RefCntIface<Firebird::IDbCryptInfoImpl<DbInfo, Firebird::CheckStatusWrapper> >
+	class DbInfo final : public Firebird::RefCntIface<Firebird::IDbCryptInfoImpl<DbInfo, Firebird::CheckStatusWrapper> >
 	{
 	public:
 		DbInfo(CryptoManager* cm)

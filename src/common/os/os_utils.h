@@ -81,6 +81,8 @@ namespace os_utils
 
 	bool isIPv6supported();
 
+	bool getCurrentModulePath(char* buffer, size_t bufferSize);
+
 	// force descriptor to have O_CLOEXEC set
 	int open(const char* pathname, int flags, mode_t mode = DEFAULT_OPEN_MODE);
 	void setCloseOnExec(int fd);	// posix only

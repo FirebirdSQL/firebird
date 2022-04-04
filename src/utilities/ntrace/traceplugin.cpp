@@ -32,7 +32,7 @@
 #include "TraceConfiguration.h"
 #include "TracePluginImpl.h"
 
-class TraceFactoryImpl FB_FINAL :
+class TraceFactoryImpl final :
 	public Firebird::StdPlugin<Firebird::ITraceFactoryImpl<TraceFactoryImpl, Firebird::CheckStatusWrapper> >
 {
 public:
@@ -115,7 +115,7 @@ void registerTrace(Firebird::IPluginManager* iPlugin)
 }
 
 
-extern "C" void FB_EXPORTED FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 {
 	Firebird::CachedMasterInterface::set(master);
 	registerTrace(Firebird::PluginManagerInterfacePtr());

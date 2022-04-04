@@ -56,7 +56,7 @@
 #include "../dsql/utld_proto.h"
 #include "../common/dsc_proto.h"
 #include "../yvalve/why_proto.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../common/StatusArg.h"
 
 using namespace Jrd;
@@ -77,14 +77,9 @@ void GEN_hidden_variables(DsqlCompilerScratch* dsqlScratch)
  *	Emit BLR for hidden variables.
  *
  **************************************/
-	if (dsqlScratch->hiddenVariables.isEmpty())
-		return;
 
-	for (Array<dsql_var*>::const_iterator i = dsqlScratch->hiddenVariables.begin();
-		 i != dsqlScratch->hiddenVariables.end();
-		 ++i)
+	for (const auto var : dsqlScratch->hiddenVariables)
 	{
-		const dsql_var* var = *i;
 		dsqlScratch->appendUChar(blr_dcl_variable);
 		dsqlScratch->appendUShort(var->number);
 		GEN_descriptor(dsqlScratch, &var->desc, true);
@@ -225,71 +220,63 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 
 	message->msg_length = offset;
 
-	dsqlScratch->ports.add(message);
+	dsqlScratch->getDsqlStatement()->getPorts().add(message);
 }
 
 
 // Generate complete blr for a dsqlScratch.
-void GEN_request(DsqlCompilerScratch* scratch, DmlNode* node)
+void GEN_statement(DsqlCompilerScratch* scratch, DmlNode* node)
 {
-	DsqlCompiledStatement* statement = scratch->getStatement();
+	DsqlStatement* statement = scratch->getDsqlStatement();
 
 	if (statement->getBlrVersion() == 4)
 		scratch->appendUChar(blr_version4);
 	else
 		scratch->appendUChar(blr_version5);
 
-	if (statement->getType() == DsqlCompiledStatement::TYPE_SAVEPOINT)
+	const bool block = statement->getType() == DsqlStatement::TYPE_EXEC_BLOCK ||
+		statement->getType() == DsqlStatement::TYPE_SELECT_BLOCK;
+
+	// To parse sub-routines messages, they must not have that begin...end pair.
+	// And since it appears to be unnecessary for execute block too, do not generate them.
+	if (!block)
+		scratch->appendUChar(blr_begin);
+
+	scratch->putOuterMaps();
+	GEN_hidden_variables(scratch);
+
+	switch (statement->getType())
 	{
-		// Do not generate BEGIN..END block around savepoint statement
-		// to avoid breaking of savepoint logic
-		statement->setSendMsg(NULL);
-		statement->setReceiveMsg(NULL);
+	case DsqlStatement::TYPE_SELECT:
+	case DsqlStatement::TYPE_SELECT_UPD:
+	case DsqlStatement::TYPE_EXEC_BLOCK:
+	case DsqlStatement::TYPE_SELECT_BLOCK:
 		node->genBlr(scratch);
-	}
-	else
-	{
-		const bool block = statement->getType() == DsqlCompiledStatement::TYPE_EXEC_BLOCK ||
-			statement->getType() == DsqlCompiledStatement::TYPE_SELECT_BLOCK;
+		break;
 
-		// To parse sub-routines messages, they must not have that begin...end pair.
-		// And since it appears to be unnecessary for execute block too, do not generate them.
-		if (!block)
-			scratch->appendUChar(blr_begin);
-
-		GEN_hidden_variables(scratch);
-
-		switch (statement->getType())
+	///case DsqlStatement::TYPE_RETURNING_CURSOR:
+	default:
 		{
-		case DsqlCompiledStatement::TYPE_SELECT:
-		case DsqlCompiledStatement::TYPE_SELECT_UPD:
-		case DsqlCompiledStatement::TYPE_EXEC_BLOCK:
-		case DsqlCompiledStatement::TYPE_SELECT_BLOCK:
-			node->genBlr(scratch);
-			break;
-		default:
+			dsql_msg* message = statement->getSendMsg();
+			if (!message->msg_parameter)
+				statement->setSendMsg(NULL);
+			else
 			{
-				dsql_msg* message = statement->getSendMsg();
-				if (!message->msg_parameter)
-					statement->setSendMsg(NULL);
-				else
-				{
-					GEN_port(scratch, message);
-					scratch->appendUChar(blr_receive_batch);
-					scratch->appendUChar(message->msg_number);
-				}
-				message = statement->getReceiveMsg();
-				if (!message->msg_parameter)
-					statement->setReceiveMsg(NULL);
-				else
-					GEN_port(scratch, message);
-				node->genBlr(scratch);
+				GEN_port(scratch, message);
+				scratch->appendUChar(blr_receive_batch);
+				scratch->appendUChar(message->msg_number);
 			}
+			message = statement->getReceiveMsg();
+			if (!message->msg_parameter)
+				statement->setReceiveMsg(NULL);
+			else
+				GEN_port(scratch, message);
+			node->genBlr(scratch);
 		}
-
-		if (!block)
-			scratch->appendUChar(blr_end);
 	}
+
+	if (!block)
+		scratch->appendUChar(blr_end);
 
 	scratch->appendUChar(blr_eoc);
 }
@@ -659,4 +646,14 @@ void GEN_stuff_context(DsqlCompilerScratch* dsqlScratch, const dsql_ctx* context
 
 		dsqlScratch->appendUChar(context->ctx_recursive);
 	}
+}
+
+
+// Write a context number into the BLR buffer. Check for possible overflow.
+void GEN_stuff_context_number(DsqlCompilerScratch* dsqlScratch, USHORT contextNumber)
+{
+	if (contextNumber > MAX_UCHAR)
+		ERRD_post(Arg::Gds(isc_too_many_contexts));
+
+	dsqlScratch->appendUChar(contextNumber);
 }

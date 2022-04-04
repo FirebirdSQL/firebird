@@ -42,6 +42,8 @@
     <ClCompile Include="..\..\..\src\dsql\DsqlCompilerScratch.cpp" />
     <ClCompile Include="..\..\..\src\dsql\DsqlCursor.cpp" />
     <ClCompile Include="..\..\..\src\dsql\DSqlDataTypeUtil.cpp" />
+    <ClCompile Include="..\..\..\src\dsql\DsqlRequests.cpp" />
+    <ClCompile Include="..\..\..\src\dsql\DsqlStatements.cpp" />
     <ClCompile Include="..\..\..\src\dsql\errd.cpp" />
     <ClCompile Include="..\..\..\src\dsql\ExprNodes.cpp" />
     <ClCompile Include="..\..\..\src\dsql\gen.cpp" />
@@ -91,7 +93,7 @@
     <ClCompile Include="..\..\..\src\jrd\IntlManager.cpp" />
     <ClCompile Include="..\..\..\src\jrd\intl_builtin.cpp" />
     <ClCompile Include="..\..\..\src\jrd\jrd.cpp" />
-    <ClCompile Include="..\..\..\src\jrd\JrdStatement.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\KeywordsTable.cpp" />
     <ClCompile Include="..\..\..\src\jrd\lck.cpp" />
     <ClCompile Include="..\..\..\src\jrd\Mapping.cpp" />
     <ClCompile Include="..\..\..\src\jrd\MetaName.cpp" />
@@ -100,8 +102,9 @@
     <ClCompile Include="..\..\..\src\jrd\nbak.cpp" />
     <ClCompile Include="..\..\..\src\jrd\nodebug.cpp" />
     <ClCompile Include="..\..\..\src\jrd\ods.cpp" />
-    <ClCompile Include="..\..\..\src\jrd\opt.cpp" />
-    <ClCompile Include="..\..\..\src\jrd\Optimizer.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\optimizer\Optimizer.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\optimizer\Retrieval.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\optimizer\InnerJoin.cpp" />
     <ClCompile Include="..\..\..\src\jrd\os\win32\winnt.cpp" />
     <ClCompile Include="..\..\..\src\jrd\pag.cpp" />
     <ClCompile Include="..\..\..\src\jrd\par.cpp" />
@@ -121,6 +124,7 @@
     <ClCompile Include="..\..\..\src\jrd\recsrc\FullTableScan.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\HashJoin.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\IndexTableScan.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\recsrc\LocalTableStream.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\LockedStream.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\MergeJoin.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\NestedLoopJoin.cpp" />
@@ -151,6 +155,7 @@
     <ClCompile Include="..\..\..\src\jrd\shut.cpp" />
     <ClCompile Include="..\..\..\src\jrd\sort.cpp" />
     <ClCompile Include="..\..\..\src\jrd\sqz.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\Statement.cpp" />
     <ClCompile Include="..\..\..\src\jrd\svc.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SysFunction.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SystemPackages.cpp" />
@@ -186,6 +191,8 @@
     <ClInclude Include="..\..\..\src\dsql\DsqlCompilerScratch.h" />
     <ClInclude Include="..\..\..\src\dsql\DsqlCursor.h" />
     <ClInclude Include="..\..\..\src\dsql\DSqlDataTypeUtil.h" />
+    <ClInclude Include="..\..\..\src\dsql\DsqlRequests.h" />
+    <ClInclude Include="..\..\..\src\dsql\DsqlStatements.h" />
     <ClInclude Include="..\..\..\src\dsql\dsql_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\errd_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\ExprNodes.h" />
@@ -197,14 +204,12 @@
     <ClInclude Include="..\..\..\src\dsql\PackageNodes.h" />
     <ClInclude Include="..\..\..\src\dsql\Parser.h" />
     <ClInclude Include="..\..\..\src\dsql\pass1_proto.h" />
-    <ClInclude Include="..\..\..\src\dsql\sqlda.h" />
     <ClInclude Include="..\..\..\src\dsql\sqlda_pub.h" />
     <ClInclude Include="..\..\..\src\dsql\StmtNodes.h" />
     <ClInclude Include="..\..\..\src\dsql\sym.h" />
     <ClInclude Include="..\..\..\src\dsql\utld_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\Visitors.h" />
     <ClInclude Include="..\..\..\src\dsql\WinNodes.h" />
-    <ClInclude Include="..\..\..\src\include\gen\iberror.h" />
     <ClInclude Include="..\..\..\src\jrd\acl.h" />
     <ClInclude Include="..\..\..\src\jrd\align.h" />
     <ClInclude Include="..\..\..\src\jrd\Attachment.h" />
@@ -277,8 +282,8 @@
     <ClInclude Include="..\..\..\src\jrd\irq.h" />
     <ClInclude Include="..\..\..\src\jrd\isc_version.h" />
     <ClInclude Include="..\..\..\src\jrd\jrd.h" />
-    <ClInclude Include="..\..\..\src\jrd\JrdStatement.h" />
     <ClInclude Include="..\..\..\src\jrd\jrd_proto.h" />
+    <ClInclude Include="..\..\..\src\jrd\KeywordsTable.h" />
     <ClInclude Include="..\..\..\src\jrd\lck.h" />
     <ClInclude Include="..\..\..\src\jrd\lck_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\license.h" />
@@ -297,8 +302,7 @@
     <ClInclude Include="..\..\..\src\jrd\obj.h" />
     <ClInclude Include="..\..\..\src\jrd\ods.h" />
     <ClInclude Include="..\..\..\src\jrd\ods_proto.h" />
-    <ClInclude Include="..\..\..\src\jrd\Optimizer.h" />
-    <ClInclude Include="..\..\..\src\jrd\opt_proto.h" />
+    <ClInclude Include="..\..\..\src\jrd\optimizer\Optimizer.h" />
     <ClInclude Include="..\..\..\src\jrd\pag.h" />
     <ClInclude Include="..\..\..\src\jrd\pag_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\par_proto.h" />
@@ -318,7 +322,6 @@
     <ClInclude Include="..\..\..\src\jrd\rlck_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\Routine.h" />
     <ClInclude Include="..\..\..\src\jrd\rpb_chain.h" />
-    <ClInclude Include="..\..\..\src\jrd\rse.h" />
     <ClInclude Include="..\..\..\src\jrd\RuntimeStatistics.h" />
     <ClInclude Include="..\..\..\src\jrd\sbm.h" />
     <ClInclude Include="..\..\..\src\jrd\scl.h" />
@@ -328,6 +331,7 @@
     <ClInclude Include="..\..\..\src\jrd\shut_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\sort.h" />
     <ClInclude Include="..\..\..\src\jrd\sqz.h" />
+    <ClInclude Include="..\..\..\src\jrd\Statement.h" />
     <ClInclude Include="..\..\..\src\jrd\status.h" />
     <ClInclude Include="..\..\..\src\jrd\svc.h" />
     <ClInclude Include="..\..\..\src\jrd\svc_undoc.h" />
@@ -415,32 +419,42 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{F8798A49-9D20-451E-A7BD-FEB5237103B5}</ProjectGuid>
-    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion Condition="'$(VisualStudioVersion)'=='15.0'">10.0.17763.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion Condition="'$(VisualStudioVersion)'=='16.0'">10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion Condition="'$(VisualStudioVersion)'=='17.0'">10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v141_xp</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141_xp</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v141_xp</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141_xp</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">

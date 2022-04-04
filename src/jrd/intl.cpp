@@ -96,7 +96,7 @@
 #include "../jrd/jrd.h"
 #include "../jrd/req.h"
 #include "../jrd/val.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/intl.h"
 #include "../jrd/intl_classes.h"
 #include "../jrd/ods.h"

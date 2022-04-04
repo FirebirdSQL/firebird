@@ -89,7 +89,7 @@ private:
 };
 
 typedef RaiiLockGuard<XThreadMutex> XThreadLockGuard;
-typedef EnsureUnlock<XThreadMutex, NotRefCounted<XThreadMutex> > XThreadEnsureUnlock;
+typedef EnsureUnlock<XThreadMutex, NotRefCounted> XThreadEnsureUnlock;
 
 }
 

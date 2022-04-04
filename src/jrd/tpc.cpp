@@ -31,6 +31,7 @@
 #include "../jrd/ods_proto.h"
 #include "../jrd/tpc_proto.h"
 #include "../jrd/tra_proto.h"
+#include "../jrd/replication/Publisher.h"
 #include "../common/isc_proto.h"
 
 #include <sys/stat.h>
@@ -601,6 +602,7 @@ CommitNumber TipCache::snapshotState(thread_db* tdbb, TraNumber number)
 	// to avoid more work in the future
 	if (state == tra_active)
 	{
+		REPL_trans_cleanup(tdbb, number);
 		TRA_set_state(tdbb, 0, number, tra_dead); // This will update TIP cache
 		return CN_DEAD;
 	}

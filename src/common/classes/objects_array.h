@@ -28,7 +28,9 @@
 #ifndef CLASSES_OBJECTS_ARRAY_H
 #define CLASSES_OBJECTS_ARRAY_H
 
+#include <cstddef>
 #include <initializer_list>
+#include <iterator>
 #include "../common/classes/alloc.h"
 #include "../common/classes/array.h"
 
@@ -52,6 +54,12 @@ namespace Firebird
 			size_type pos;
 			iterator(ObjectsArray *l, size_type p) : lst(l), pos(p) { }
 		public:
+			using iterator_category = std::forward_iterator_tag;
+			using difference_type = std::ptrdiff_t;
+			using value_type = T;
+			using pointer = T*;
+			using reference = T&;
+
 			iterator() : lst(0), pos(0) { }
 			iterator(const iterator& it) : lst(it.lst), pos(it.pos) { }
 
@@ -111,6 +119,12 @@ namespace Firebird
 			size_type pos;
 			const_iterator(const ObjectsArray *l, size_type p) : lst(l), pos(p) { }
 		public:
+			using iterator_category = std::forward_iterator_tag;
+			using difference_type = std::ptrdiff_t;
+			using value_type = T;
+			using pointer = const T*;
+			using reference = const T&;
+
 			const_iterator() : lst(0), pos(0) { }
 			const_iterator(const iterator& it) : lst(it.lst), pos(it.pos) { }
 			const_iterator(const const_iterator& it) : lst(it.lst), pos(it.pos) { }

@@ -44,12 +44,13 @@ TMP_ROOT=$(ROOT)/temp/$(TARGET)
 GEN_ROOT=$(ROOT)/gen
 SRC_ROOT=$(ROOT)/src
 BLD_ROOT=$(ROOT)/builds
-LNG_ROOT=$(ROOT)/lang_helpers
 EXA_ROOT=$(ROOT)/examples
 
 IsCross=@IS_CROSS@
 TOMMATH_BUILD_FLG=@TOMMATH_BUILD@
 TOMCRYPT_BUILD_FLG=@TOMCRYPT_BUILD@
+RE2_BUILD_FLG=@RE2_BUILD@
+SYSTEM_BOOST_FLG=@SYSTEM_BOOST@
 
 FB_BUILD=$(GEN_ROOT)/$(TARGET)/firebird
 ifeq ($(IsCross), Y)
@@ -103,13 +104,14 @@ GLOB_OPTIONS:=
 #____________________________________________________________________________
 
 # Global c++ flags: firebird needs no RTTI, choose build standard
-PLUSPLUS_FLAGS:= -fno-rtti -std=c++11
+PLUSPLUS_FLAGS:= -fno-rtti -std=c++17
 
 # If this is defined then we use special rules useful for developers only
 IsDeveloper = @DEVEL_FLG@
 
 CpuType=@CPU_TYPE@
 PLATFORM=@PLATFORM@
+TZDATA_ZIP=@TZDATA_ZIP@
 SFIO_EXAMPLES=@SFIO_EXAMPLES@
 
 # link with readline libraries - set by configure
@@ -131,10 +133,18 @@ ATOMIC_OPTIONS=@ATOMIC_OPTIONS@
 # needed at least for solaris inline assembly routines
 CAS_OPTIONS=@CAS_OPTIONS@
 
+# BigEndian int128 support
+ABSEIL_BUILD_FLG = @ABSEIL_BUILD_FLG@
+
 # multiple-precision integer library
 MATHLIB=@MATHLIB@
 DECLIB=-ldecFloat$(CROSS)
 RE2LIB=-lre2
+ifeq ($(ABSEIL_BUILD_FLG), Y)
+  I128LIB=-li128$(CROSS)
+else
+  I128LIB=
+endif
 
 # crypt library
 CRYPTLIB=@CRYPTLIB@
@@ -190,8 +200,8 @@ endif
 STATICLIB_LINK = $(AR) crus
 STATICEXE_LINK = $(CXX) $(GLOB_OPTIONS) $(CXXFLAGS) -static-libstdc++
 
-LINK_LIBS = @LIBS@ $(DECLIB) $(RE2LIB)
-SO_LINK_LIBS = @LIBS@ $(DECLIB) $(RE2LIB)
+LINK_LIBS = @LIBS@ $(DECLIB) $(RE2LIB) $(I128LIB)
+SO_LINK_LIBS = @LIBS@ $(DECLIB) $(RE2LIB) $(I128LIB)
 
 # Default extensions
 
@@ -315,7 +325,7 @@ ifeq (@USE_RPATH@,1)
     ifeq ($(strip @BINRELOC_CFLAGS@),)
         LIB_LINK_RPATH = $(call LIB_PLATFORM_RPATH,$(if $(subst intl,,$(1)),@FB_LIBDIR@,@FB_INTLDIR@))
     else
-        LIB_LINK_RPATH = $(call LIB_PLATFORM_RPATH,'$$ORIGIN/../$(1)')
+        LIB_LINK_RPATH = $(call LIB_PLATFORM_RPATH,\$$ORIGIN/../$(1))
     endif
 else
     LIB_LINK_RPATH =
@@ -335,7 +345,7 @@ LIB_LINK_SONAME= -Wl,-soname,$(1)
 LIB_LINK_MAPFILE= -Wl,--version-script,$(1)
 FIREBIRD_LIBRARY_LINK= -L$(LIB) -lfbclient $(MATHLIB) $(CRYPTLIB)
 
-EXE_LINK_OPTIONS= $(LDFLAGS) $(THR_FLAGS) $(UNDEF_FLAGS) $(LIB_PATH_OPTS) $(LINK_EMPTY_SYMBOLS)
+EXE_LINK_OPTIONS= $(LDFLAGS) $(THR_FLAGS) $(UNDEF_FLAGS) $(LIB_PATH_OPTS) $(call LINK_DARWIN_RPATH,..) $(LINK_EMPTY_SYMBOLS)
 LIB_LINK_OPTIONS= $(LDFLAGS) $(THR_FLAGS) -shared
 
 FB_DAEMON = $(BIN)/firebird$(EXEC_EXT)
@@ -397,10 +407,7 @@ FBMGR_BIN	= $(BIN)/fbmgr.bin$(EXEC_EXT)
 INSTREG		= $(BIN)/instreg$(EXEC_EXT)
 INSTSVC		= $(BIN)/instsvc$(EXEC_EXT)
 
-SECURITY_FDB	= $(FIREBIRD)/security4.fdb
-
-# From qli
-QLI            = $(BIN)/qli$(EXEC_EXT)
+SECURITY_FDB	= $(FIREBIRD)/security5.fdb
 
 # From isql
 ISQL            = $(BIN)/isql$(EXEC_EXT)
@@ -418,22 +425,12 @@ GPRE            = $(BIN)/gpre$(EXEC_EXT)
 RUN_GPRE        = $(RBIN)/gpre$(EXEC_EXT)
 GPRE_CURRENT    = $(RBIN)/gpre_current$(EXEC_EXT)
 
-
 # From msgs
-CHECK_MESSAGES  = $(BIN)/check_messages$(EXEC_EXT)
 BUILD_FILE      = $(BIN)/build_file$(EXEC_EXT)
 FIREBIRD_MSG    = $(FIREBIRD)/firebird.msg
 
-ENTER_MESSAGES  = $(BIN)/enter_messages$(EXEC_EXT)
-MODIFY_MESSAGES = $(BIN)/modify_messages$(EXEC_EXT)
-CHANGE_MESSAGES = $(BIN)/change_messages$(EXEC_EXT)
-
-fr_FR_MSG       = $(FIREBIRD)/fr_FR.msg
-de_DE_MSG       = $(FIREBIRD)/de_DE.msg
-ja_JP_MSG       = $(FIREBIRD)/ja_JP.msg
-
-
-#Platform Manager
-#For want of a better suggestion we may as well default to posix
+# Platform Manager
+# For want of a better suggestion we may as well default to posix
 PLATFORM_PATH	=	os/posix
 TRACE_OS_Sources	=
+

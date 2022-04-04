@@ -56,6 +56,7 @@ static const struct Switches::in_sw_tab_t nbackup_in_sw_table [] =
 	{IN_SW_NBK_NODBTRIG,	isc_spb_nbk_no_triggers,	"T",		0, 0, 0, false,	true,	0,	1, NULL},
 	{IN_SW_NBK_DIRECT,		isc_spb_nbk_direct,			"DIRECT",	0, 0, 0, false, false,	0,	1, NULL},
 	{IN_SW_NBK_INPLACE,		isc_spb_nbk_inplace,		"INPLACE",	0, 0, 0, false, true,	0,	1, NULL},
+	{IN_SW_NBK_SEQUENCE,	isc_spb_nbk_sequence,		"SEQUENCE",	0, 0, 0, false, true,	0,	3, NULL},
 	{IN_SW_NBK_0,			0,							NULL,		0, 0, 0, false, false,	0,	0, NULL}	// End of List
 };
 

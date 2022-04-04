@@ -3,7 +3,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdarg.h>
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../common/classes/alloc.h"
 #include "../common/classes/init.h"
 #include "../common/classes/array.h"
@@ -202,23 +202,25 @@ const char* LongJump::what() const throw()
 
 // ********************************* system_error ***************************
 
-system_error::system_error(const char* syscall, int error_code) :
+system_error::system_error(const char* syscall, const char* arg, int error_code) :
 	status_exception(), errorCode(error_code)
 {
 	Arg::Gds temp(isc_sys_request);
 	temp << Arg::Str(syscall);
 	temp << SYS_ERR(errorCode);
+	if (arg)
+		temp << Arg::Gds(isc_random) << arg;
 	set_status(temp.value());
 }
 
 void system_error::raise(const char* syscall, int error_code)
 {
-	throw system_error(syscall, error_code);
+	throw system_error(syscall, nullptr, error_code);
 }
 
 void system_error::raise(const char* syscall)
 {
-	throw system_error(syscall, getSystemError());
+	throw system_error(syscall, nullptr, getSystemError());
 }
 
 int system_error::getSystemError()
@@ -232,8 +234,8 @@ int system_error::getSystemError()
 
 // ********************************* system_call_failed ***************************
 
-system_call_failed::system_call_failed(const char* syscall, int error_code) :
-	system_error(syscall, error_code)
+system_call_failed::system_call_failed(const char* syscall, const char* arg, int error_code) :
+	system_error(syscall, arg, error_code)
 {
 	// NS: something unexpected has happened. Log the error to log file
 	// In the future we may consider terminating the process even in PROD_BUILD
@@ -247,12 +249,23 @@ system_call_failed::system_call_failed(const char* syscall, int error_code) :
 
 void system_call_failed::raise(const char* syscall, int error_code)
 {
-	throw system_call_failed(syscall, error_code);
+	throw system_call_failed(syscall, nullptr, error_code);
 }
 
 void system_call_failed::raise(const char* syscall)
 {
-	throw system_call_failed(syscall, getSystemError());
+	throw system_call_failed(syscall, nullptr, getSystemError());
+}
+
+
+void system_call_failed::raise(const char* syscall, const char* arg, int error_code)
+{
+	throw system_call_failed(syscall, arg, error_code);
+}
+
+void system_call_failed::raise(const char* syscall, const char* arg)
+{
+	raise(syscall, arg, getSystemError());
 }
 
 // ********************************* fatal_exception *******************************

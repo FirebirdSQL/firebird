@@ -140,7 +140,7 @@ using namespace Firebird;
 
 namespace
 {
-	class sh_mem FB_FINAL : public IpcObject
+	class sh_mem final : public IpcObject
 	{
 	public:
 		explicit sh_mem(bool p_consistency, const char* filename)

@@ -43,7 +43,7 @@
 		}	\
 	}	\
 	\
-	extern "C" FB_BOOLEAN* FB_UDR_PLUGIN_ENTRY_POINT(::Firebird::IStatus* status,	\
+	extern "C" FB_DLL_EXPORT FB_BOOLEAN* FB_UDR_PLUGIN_ENTRY_POINT(::Firebird::IStatus* status,	\
 		FB_BOOLEAN* theirUnloadFlag, ::Firebird::IUdrPlugin* udrPlugin)	\
 	{	\
 		::Firebird::Udr::FactoryRegistration::finish(status, udrPlugin);	\

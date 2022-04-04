@@ -60,6 +60,8 @@ private:
 		ULONG lastColumn;
 		const char* firstPos;
 		const char* lastPos;
+		const char* leadingFirstPos;
+		const char* trailingLastPos;
 	};
 
 	typedef Position YYPOSN;
@@ -90,6 +92,7 @@ private:
 
 		// Actual lexer state begins from here
 
+		const TEXT* leadingPtr;
 		const TEXT* ptr;
 		const TEXT* end;
 		const TEXT* last_token;
@@ -128,13 +131,12 @@ public:
 	static const int MAX_TOKEN_LEN = 256;
 
 public:
-	Parser(thread_db* tdbb, MemoryPool& pool, DsqlCompilerScratch* aScratch, USHORT aClientDialect,
-		USHORT aDbDialect, const TEXT* string, size_t length,
-		SSHORT characterSet);
+	Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
+		USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length, SSHORT characterSet);
 	~Parser();
 
 public:
-	dsql_req* parse();
+	DsqlStatement* parse();
 
 	const Firebird::string& getTransformedString() const
 	{
@@ -231,11 +233,6 @@ private:
 		return cmpNode;
 	}
 
-	MemoryPool& getStatementPool()
-	{
-		return scratch->getStatement()->getPool();
-	}
-
 	void yyReducePosn(YYPOSN& ret, YYPOSN* termPosns, YYSTYPE* termVals,
 		int termNo, int stkPos, int yychar, YYPOSN& yyposn, void*);
 
@@ -246,7 +243,7 @@ private:
 
 	void yyerror(const TEXT* error_string);
 	void yyerror_detailed(const TEXT* error_string, int yychar, YYSTYPE&, YYPOSN&);
-	void yyerrorIncompleteCmd();
+	void yyerrorIncompleteCmd(const YYPOSN& pos);
 
 	void check_bound(const char* const to, const char* const string);
 	void check_copy_incr(char*& to, const char ch, const char* const string);
@@ -374,6 +371,7 @@ private:
 // end - defined in btyacc_fb.ske
 
 private:
+	MemoryPool* statementPool;
 	DsqlCompilerScratch* scratch;
 	USHORT client_dialect;
 	USHORT db_dialect;
@@ -383,7 +381,7 @@ private:
 	Firebird::string transformedString;
 	Firebird::GenericMap<Firebird::NonPooled<IntlString*, StrMark> > strMarks;
 	bool stmt_ambiguous;
-	dsql_req* DSQL_parse;
+	DsqlStatement* parsedStatement;
 
 	// These value/posn are taken from the lexer
 	YYSTYPE yylval;
@@ -394,7 +392,7 @@ private:
 	Position yyretposn;
 
 	int yynerrs;
-	int yym;
+	int yym;	// ASF: moved from local variable of Parser::parseAux()
 
 	// Current parser state
 	yyparsestate* yyps;

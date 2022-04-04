@@ -139,8 +139,11 @@ public:
 		instances->shutdown();
 	}
 
-	static void forceClean(IProvider* p, const char* secDbName)
+	static void forceClean(IProvider* p, CachedSecurityDatabase::Instance& instance)
 	{
+		Firebird::PathName secDbName(instance->secureDbName);
+
+		instance.reset();
 		cleanup();
 
 		ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
@@ -151,13 +154,14 @@ public:
 		dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(secDbName));
 
 		FbLocalStatus status;
-		RefPtr<IAttachment> att(REF_NO_INCR, p->attachDatabase(&status, secDbName, dpb.getBufferLength(), dpb.getBuffer()));
+		RefPtr<IAttachment> att(REF_NO_INCR,
+			p->attachDatabase(&status, secDbName.c_str(), dpb.getBufferLength(), dpb.getBuffer()));
 		check(&status);
 
 		HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: gfix-like attach to sec db %s\n", secDbName));
 	}
 
-	SecurityDatabase(const char* secDbName, ICryptKeyCallback* cryptCallback)
+	SecurityDatabase(CachedSecurityDatabase::Instance& instance, ICryptKeyCallback* cryptCallback)
 		: att(nullptr), tra(nullptr), stmt(nullptr)
 	{
 		FbLocalStatus status;
@@ -174,10 +178,10 @@ public:
 			ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 			dpb.insertByte(isc_dpb_sec_attach, TRUE);
 			dpb.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
-			dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(secDbName));
-			att = p->attachDatabase(&status, secDbName, dpb.getBufferLength(), dpb.getBuffer());
+			dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(instance->secureDbName));
+			att = p->attachDatabase(&status, instance->secureDbName, dpb.getBufferLength(), dpb.getBuffer());
 			check(&status);
-			HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: attached sec db %s\n", secDbName));
+			HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: attached sec db %s\n", instance->secureDbName));
 
 			const UCHAR tpb[] =
 			{
@@ -196,7 +200,7 @@ public:
 			stmt = att->prepare(&status, tra, 0, sql, 3, IStatement::PREPARE_PREFETCH_METADATA);
 			if (status->getState() & IStatus::STATE_ERRORS)
 			{
-				checkStatusVectorForMissingTable(status->getErrors(), [ &p, secDbName ] { forceClean(p, secDbName); });
+				checkStatusVectorForMissingTable(status->getErrors(), [ &p, &instance ] { forceClean(p, instance); });
 				status_exception::raise(&status);
 			}
 		}
@@ -240,7 +244,7 @@ private:
 };
 
 
-template <class SHA> class SrpServerImpl FB_FINAL : public SrpServer
+template <class SHA> class SrpServerImpl final : public SrpServer
 {
 public:
 	explicit SrpServerImpl<SHA>(IPluginConfig* ipc)
@@ -296,7 +300,7 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 
 				// Create SecurityDatabase if needed
 				if (!instance->secDb)
-					instance->secDb = FB_NEW SecurityDatabase(instance->secureDbName, cryptCallback);
+					instance->secDb = FB_NEW SecurityDatabase(instance, cryptCallback);
 
 				// Lookup
 				instance->secDb->lookup(messages.param.getData(), messages.data.getData());

@@ -140,6 +140,12 @@ namespace Firebird {
 					  : FB_NEW_POOL(getPool()) Entry(e, 0);
 		}
 
+		void push(const Stack& s)
+		{
+			for (const_iterator itr(s); itr.hasData(); ++itr)
+				push(itr.object());
+		}
+
 		Object pop()
 		{
 			fb_assert(stk);

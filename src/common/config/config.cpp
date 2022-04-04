@@ -285,11 +285,11 @@ void Config::loadValues(const ConfigFile& file, const char* srcName)
 	checkValues();
 }
 
-static const char* txtServerModes[6] = 
+static const char* txtServerModes[6] =
 {
-	"Super", "ThreadedDedicated", 
-	"SuperClassic", "ThreadedShared", 
-	"Classic", "MultiProcess" 
+	"Super", "ThreadedDedicated",
+	"SuperClassic", "ThreadedShared",
+	"Classic", "MultiProcess"
 };
 
 void Config::setupDefaultConfig()
@@ -599,7 +599,7 @@ bool Config::getDefaultValue(unsigned int key, string& str)
 
 // Macros below helps to implement non-trivial Config::getXXX functions :
 // - checks for correct[non-]static function declaration,
-// - declare and initialize local vars "key" and "config" (correct Config 
+// - declare and initialize local vars "key" and "config" (correct Config
 //   instance to get values from).
 
 #define DECLARE_GLOBAL_KEY(KEY)		\
@@ -668,6 +668,7 @@ const char* Config::getPlugins(unsigned int type) const
 
 		default:
 			(Arg::Gds(isc_random) << "Internal error in Config::getPlugins(): unknown plugin type requested").raise();
+			return nullptr;
 	}
 
 	return getStr(aKey);
@@ -704,7 +705,7 @@ bool Config::getUseFileSystemCache(bool* pPresent) const
 }
 
 
-///	class FirebirdConf 
+///	class FirebirdConf
 
 // array format: major, minor, release, build
 static unsigned short fileVerNumber[4] = {FILE_VER_NUMBER};

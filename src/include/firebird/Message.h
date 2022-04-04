@@ -308,9 +308,9 @@ public:
 	}
 
 public:
-	FbDate& operator=(ISC_DATE& val)
+	FbDate& operator=(const ISC_DATE& val)
 	{
-		*(this) = *(FbDate*) &val;
+		*(this) = *(const FbDate*) &val;
 		return *this;
 	}
 
@@ -372,9 +372,9 @@ public:
 	}
 
 public:
-	FbTime& operator=(ISC_TIME& val)
+	FbTime& operator=(const ISC_TIME& val)
 	{
-		*(this) = *(FbTime*) &val;
+		*(this) = *(const FbTime*) &val;
 		return *this;
 	}
 
@@ -396,9 +396,9 @@ public:
 class FbTimeTz
 {
 public:
-	FbTimeTz& operator=(ISC_TIME_TZ& val)
+	FbTimeTz& operator=(const ISC_TIME_TZ& val)
 	{
-		*(this) = *(FbTimeTz*) &val;
+		*(this) = *(const FbTimeTz*) &val;
 		return *this;
 	}
 
@@ -421,9 +421,9 @@ public:
 class FbTimeTzEx
 {
 public:
-	FbTimeTzEx& operator=(ISC_TIME_TZ_EX& val)
+	FbTimeTzEx& operator=(const ISC_TIME_TZ_EX& val)
 	{
-		*(this) = *(FbTimeTzEx*) &val;
+		*(this) = *(const FbTimeTzEx*) &val;
 		return *this;
 	}
 
@@ -447,9 +447,9 @@ public:
 class FbTimestamp
 {
 public:
-	FbTimestamp& operator=(ISC_TIMESTAMP& val)
+	FbTimestamp& operator=(const ISC_TIMESTAMP& val)
 	{
-		*(this) = *(FbTimestamp*) &val;
+		*(this) = *(const FbTimestamp*) &val;
 		return *this;
 	}
 
@@ -472,9 +472,9 @@ public:
 class FbTimestampTz
 {
 public:
-	FbTimestampTz& operator=(ISC_TIMESTAMP_TZ& val)
+	FbTimestampTz& operator=(const ISC_TIMESTAMP_TZ& val)
 	{
-		*(this) = *(FbTimestampTz*) &val;
+		*(this) = *(const FbTimestampTz*) &val;
 		return *this;
 	}
 
@@ -497,9 +497,9 @@ public:
 class FbTimestampTzEx
 {
 public:
-	FbTimestampTzEx& operator=(ISC_TIMESTAMP_TZ_EX& val)
+	FbTimestampTzEx& operator=(const ISC_TIMESTAMP_TZ_EX& val)
 	{
-		*(this) = *(FbTimestampTzEx*) &val;
+		*(this) = *(const FbTimestampTzEx*) &val;
 		return *this;
 	}
 

@@ -154,7 +154,7 @@ LRESULT CALLBACK GeneralPage(HWND hDlg, UINT unMsg, WPARAM wParam, LPARAM lParam
 			lstrcpy(szText, FB_VERSION);
 			SetDlgItemText(hDlg, IDC_STAT1, szText);
 
-			if (usServerFlags & (SRVR_inet | SRVR_wnet))
+			if (usServerFlags & SRVR_inet)
 				LoadString(hInstance, IDS_SERVERPROD_NAME, szText, sizeof(szText));
 			else
 				LoadString(hInstance, IDS_LOCALPROD_NAME, szText, sizeof(szText));
@@ -236,14 +236,6 @@ static char* MakeVersionString(char* pchBuf, size_t nLen, USHORT usServerFlagMas
 	if (usServerFlagMask & SRVR_inet)
 	{
 		p += LoadString(hInstance, IDS_TCP, p, end - p);
-		if (p < end)
-			*p++ = '\r';
-		if (p < end)
-			*p++ = '\n';
-	}
-	if ((usServerFlagMask & SRVR_wnet) && end > p)
-	{
-		p += LoadString(hInstance, IDS_NP, p, end - p);
 		if (p < end)
 			*p++ = '\r';
 		if (p < end)

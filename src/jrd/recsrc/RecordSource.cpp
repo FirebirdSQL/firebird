@@ -25,7 +25,6 @@
 #include "../jrd/btr.h"
 #include "../jrd/intl.h"
 #include "../jrd/req.h"
-#include "../jrd/rse.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/dpm_proto.h"
 #include "../jrd/err_proto.h"
@@ -46,24 +45,7 @@ using namespace Jrd;
 
 string RecordSource::printName(thread_db* tdbb, const string& name, bool quote)
 {
-	const UCHAR* namePtr = (const UCHAR*) name.c_str();
-	ULONG nameLength = (ULONG) name.length();
-
-	MoveBuffer nameBuffer;
-
-	const CHARSET_ID charset = tdbb->getCharSet();
-	if (charset != CS_METADATA && charset != CS_NONE)
-	{
-		const ULONG bufferLength = INTL_convert_bytes(tdbb, charset, NULL, 0,
-													  CS_METADATA, namePtr, nameLength, ERR_post);
-		nameBuffer.getBuffer(bufferLength);
-		nameLength = INTL_convert_bytes(tdbb, charset, nameBuffer.begin(), bufferLength,
-										CS_METADATA, namePtr, nameLength, ERR_post);
-
-		namePtr = nameBuffer.begin();
-	}
-
-	const string result(namePtr, nameLength);
+	const string result(name.c_str(), name.length());
 	return quote ? "\"" + result + "\"" : result;
 }
 
@@ -119,7 +101,6 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 	case InversionNode::TYPE_INDEX:
 		{
 			const IndexRetrieval* const retrieval = inversion->retrieval;
-			const jrd_rel* const relation = retrieval->irb_relation;
 
 			MetaName indexName;
 			if (retrieval->irb_name && retrieval->irb_name->hasData())
@@ -207,7 +188,7 @@ RecordStream::RecordStream(CompilerScratch* csb, StreamType stream, const Format
 
 bool RecordStream::refetchRecord(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	jrd_tra* const transaction = request->req_transaction;
 
 	record_param* const rpb = &request->req_rpb[m_stream];
@@ -226,7 +207,7 @@ bool RecordStream::refetchRecord(thread_db* tdbb) const
 
 bool RecordStream::lockRecord(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	jrd_tra* const transaction = request->req_transaction;
 
 	record_param* const rpb = &request->req_rpb[m_stream];
@@ -250,7 +231,7 @@ void RecordStream::findUsedStreams(StreamList& streams, bool /*expandAll*/) cons
 		streams.add(m_stream);
 }
 
-void RecordStream::invalidateRecords(jrd_req* request) const
+void RecordStream::invalidateRecords(Request* request) const
 {
 	record_param* const rpb = &request->req_rpb[m_stream];
 	rpb->rpb_number.setValid(false);
@@ -258,7 +239,7 @@ void RecordStream::invalidateRecords(jrd_req* request) const
 
 void RecordStream::nullRecords(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];
 
 	rpb->rpb_number.setValid(false);

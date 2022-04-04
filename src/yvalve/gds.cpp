@@ -36,6 +36,7 @@
 //#define ISC_TIME_SECONDS_PRECISION_SCALE	-4
 
 #include "firebird.h"
+#include "firebird/impl/msg_helper.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,6 +52,7 @@
 #include "../jrd/constants.h"
 #include "../jrd/status.h"
 #include "../common/os/os_utils.h"
+#include "../common/os/mac_utils.h"
 #include "../common/classes/BlrReader.h"
 
 #include "../common/classes/alloc.h"
@@ -92,9 +94,7 @@
 
 #include "../common/config/config.h"
 
-#include "gen/sql_code.h"
-#include "gen/sql_state.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "ibase.h"
 
 #include "firebird/impl/blr.h"
@@ -120,7 +120,62 @@ static char* fb_prefix = NULL;
 static char* fb_prefix_lock = NULL;
 static char* fb_prefix_msg = NULL;
 
-#include "gen/msgs.h"
+#define FB_IMPL_MSG_NO_SYMBOL(facility, number, text)
+
+#define FB_IMPL_MSG_SYMBOL(facility, number, symbol, text)
+
+#define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) \
+	{ENCODE_ISC_MSG(number, FB_IMPL_MSG_FACILITY_##facility), text},
+
+static const struct {
+	SLONG code_number;
+	const SCHAR *code_text;
+} messages[] = {
+	#include "firebird/impl/msg/all.h"
+	{0, nullptr}
+};
+
+#undef FB_IMPL_MSG_NO_SYMBOL
+#undef FB_IMPL_MSG_SYMBOL
+#undef FB_IMPL_MSG
+
+#define FB_IMPL_MSG_NO_SYMBOL(facility, number, text)
+
+#define FB_IMPL_MSG_SYMBOL(facility, number, symbol, text)
+
+#define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) \
+	{ENCODE_ISC_MSG(number, FB_IMPL_MSG_FACILITY_##facility), sqlClass sqlSubClass},
+
+static const struct {
+	SLONG gds_code;
+	const char* sql_state;
+} sql_states[] = {
+	#include "firebird/impl/msg/all.h"
+	{0, nullptr}
+};
+
+#undef FB_IMPL_MSG_NO_SYMBOL
+#undef FB_IMPL_MSG_SYMBOL
+#undef FB_IMPL_MSG
+
+#define FB_IMPL_MSG_NO_SYMBOL(facility, number, text)
+
+#define FB_IMPL_MSG_SYMBOL(facility, number, symbol, text)
+
+#define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) \
+	{ENCODE_ISC_MSG(number, FB_IMPL_MSG_FACILITY_##facility), sqlCode},
+
+static const struct {
+	SLONG gds_code;
+	SSHORT sql_code;
+} sql_codes[] = {
+	#include "firebird/impl/msg/all.h"
+	{0, 0}
+};
+
+#undef FB_IMPL_MSG_NO_SYMBOL
+#undef FB_IMPL_MSG_SYMBOL
+#undef FB_IMPL_MSG
 
 const SLONG GENERIC_SQLCODE		= -999;
 
@@ -166,6 +221,7 @@ void GDS_breakpoint(int);
 
 
 static void		blr_error(gds_ctl*, const TEXT*, ...) ATTRIBUTE_FORMAT(2,3);
+static void		blr_format(gds_ctl*, const char*, va_list args);
 static void		blr_format(gds_ctl*, const char*, ...) ATTRIBUTE_FORMAT(2,3);
 static void		blr_indent(gds_ctl*, SSHORT);
 static void		blr_print_blr(gds_ctl*, UCHAR);
@@ -260,6 +316,9 @@ const int op_partition_args	= 26;
 const int op_subproc_decl	= 27;
 const int op_subfunc_decl	= 28;
 const int op_window_win		= 29;
+const int op_erase			= 30;	// special due to optional blr_marks after blr_erase
+const int op_dcl_local_table	= 31;
+const int op_outer_map		= 32;
 
 static const UCHAR
 	// generic print formats
@@ -271,7 +330,6 @@ static const UCHAR
 	byte_line[]		= { op_byte, op_line, 0},
 	byte_args[] = { op_byte, op_line, op_args, 0},
 	byte_verb[] = { op_byte, op_line, op_verb, 0},
-	byte_verb_verb[] = { op_byte, op_line, op_verb, op_verb, 0},
 	byte_literal[] = { op_byte, op_literal, op_line, 0},
 	byte_byte_verb[] = { op_byte, op_byte, op_line, op_verb, 0},
 	verb_byte_verb[] = { op_verb, op_byte, op_line, op_verb, 0},
@@ -299,7 +357,7 @@ static const UCHAR
 	gen_id[]	= { op_byte, op_literal, op_line, op_verb, 0},
 	gen_id2[]	= { op_byte, op_literal, op_line, 0},
 	declare[]	= { op_word, op_dtype, op_line, 0},
-	variable[]	= { op_word, op_line, 0},
+	one_word[]	= { op_word, op_line, 0},
 	indx[]		= { op_line, op_verb, op_indent, op_byte, op_line, op_args, 0},
 	seek[]		= { op_line, op_verb, op_verb, 0},
 	join[]		= { op_join, op_line, 0},
@@ -329,6 +387,7 @@ static const UCHAR
 	user_savepoint[]	= { op_byte, op_byte, op_literal, op_line, 0},
 	exec_into[] = { op_word, op_line, op_indent, op_exec_into, 0},
 	dcl_cursor[] = { op_word, op_line, op_verb, op_indent, op_word, op_line, op_args, 0},
+	dcl_local_table[] = { op_dcl_local_table, 0 },
 	cursor_stmt[] = { op_cursor_stmt, 0 },
 	strlength[] = { op_byte, op_line, op_verb, 0},
 	trim[] = { op_byte, op_byte_opt_verb, op_verb, 0},
@@ -346,7 +405,10 @@ static const UCHAR
 	relation_field[] = { op_line, op_indent, op_byte, op_literal,
 						 op_line, op_indent, op_byte, op_literal, op_pad, op_line, 0},
 	store3[] = { op_line, op_byte, op_line, op_verb, op_verb, op_verb, 0},
-	marks[] = { op_byte, op_literal, op_line, op_verb, 0};
+	marks[] = { op_byte, op_literal, op_line, op_verb, 0},
+	erase[] = { op_erase, 0},
+	local_table[] = { op_word, op_byte, op_literal, op_byte, op_line, 0},
+	outer_map[] = { op_outer_map, 0 };
 
 
 #include "../jrd/blp.h"
@@ -1190,6 +1252,30 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 	now = time((time_t *)0);
 #endif
 
+	TEXT hostName[MAXPATHLEN];
+	ISC_get_host(hostName, MAXPATHLEN);
+
+#ifdef DARWIN
+
+	if (isSandboxed())
+	{
+		static Firebird::GlobalPtr<Firebird::Mutex> logMutex;	// protects big static
+		static char buffer[10240];								// buffer for messages
+
+		Firebird::MutexLockGuard(logMutex, FB_FUNCTION);
+		fb_utils::snprintf(buffer, sizeof(buffer), "\n\n%s\t%.25s\t", hostName, ctime(&now));
+		unsigned hdrlen = strlen(buffer);
+		va_start(ptr, text);
+		VSNPRINTF(&buffer[hdrlen], sizeof(buffer) - hdrlen, text, ptr);
+		va_end(ptr);
+		buffer[sizeof(buffer) - 1] = '\0';		// be safe
+
+		osLog(buffer);
+		return;
+	}
+
+#endif // DARWIN
+
 	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
 
 #ifdef WIN_NT
@@ -1216,8 +1302,7 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 		fseek(file, 0, SEEK_END);
 #endif
 
-		TEXT buffer[MAXPATHLEN];
-		fprintf(file, "\n%s\t%.25s\t", ISC_get_host(buffer, MAXPATHLEN), ctime(&now));
+		fprintf(file, "\n%s\t%.25s\t", hostName, ctime(&now));
 		va_start(ptr, text);
 		vfprintf(file, text, ptr);
 		va_end(ptr);
@@ -2195,13 +2280,13 @@ SLONG API_ROUTINE gds__sqlcode(const ISC_STATUS* status_vector)
 
 				if (gdscode)
 				{
-					for (int i = 0; gds__sql_code[i].gds_code; ++i)
+					for (int i = 0; sql_codes[i].gds_code; ++i)
 					{
-						if (gdscode == gds__sql_code[i].gds_code)
+						if (gdscode == sql_codes[i].gds_code)
 						{
-							if (gds__sql_code[i].sql_code != GENERIC_SQLCODE)
+							if (sql_codes[i].sql_code != GENERIC_SQLCODE)
 							{
-								sqlcode = gds__sql_code[i].sql_code;
+								sqlcode = sql_codes[i].sql_code;
 								have_sqlcode = true;
 							}
 							break;
@@ -2330,11 +2415,11 @@ void API_ROUTINE fb_sqlstate(char* sqlstate, const ISC_STATUS* status_vector)
 
 					// implement a binary search for array gds__sql_state[]
 					int first = 0;
-					int last = FB_NELEM(gds__sql_states) - 1;
+					int last = FB_NELEM(sql_states) - 1;
 					while (first <= last)
 					{
 						const int mid = (first + last) / 2;
-						const SLONG new_code = gds__sql_states[mid].gds_code;
+						const SLONG new_code = sql_states[mid].gds_code;
 						if (gdscode > new_code)
 						{
 							first = mid + 1;
@@ -2349,7 +2434,7 @@ void API_ROUTINE fb_sqlstate(char* sqlstate, const ISC_STATUS* status_vector)
 
 							// we get 00000 for info messages like "Table %"
 							// these are completely ignored
-							const char* new_state = gds__sql_states[mid].sql_state;
+							const char* new_state = sql_states[mid].sql_state;
 							if (strcmp("00000", new_state) != 0)
 							{
 								fb_utils::copy_terminate(sqlstate, new_state, FB_SQLSTATE_SIZE);
@@ -2711,6 +2796,23 @@ static void blr_error(gds_ctl* control, const TEXT* string, ...)
 }
 
 
+static void blr_format(gds_ctl* control, const char* string, va_list args)
+{
+/**************************************
+ *
+ *	b l r _ f o r m a t
+ *
+ **************************************
+ *
+ * Functional description
+ *	Format args passed as va_list.
+ *
+ **************************************/
+	Firebird::string temp;
+	temp.vprintf(string, args);
+	control->ctl_string += temp;
+}
+
 static void blr_format(gds_ctl* control, const char* string, ...)
 {
 /**************************************
@@ -2723,13 +2825,10 @@ static void blr_format(gds_ctl* control, const char* string, ...)
  *	Format an utterance.
  *
  **************************************/
-	va_list ptr;
-
-	va_start(ptr, string);
-	Firebird::string temp;
-	temp.vprintf(string, ptr);
-	control->ctl_string += temp;
-	va_end(ptr);
+	va_list args;
+	va_start(args, string);
+	blr_format(control, string, args);
+	va_end(args);
 }
 
 
@@ -3723,6 +3822,111 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 			break;
 		}
 
+		case op_erase:
+			blr_print_byte(control);
+			if (control->ctl_blr_reader.peekByte() == blr_marks)
+			{
+				offset = blr_print_line(control, offset);
+				blr_indent(control, level);
+				blr_print_blr(control, control->ctl_blr_reader.getByte());
+				n = blr_print_byte(control);
+
+				while (n-- > 0)
+					blr_print_char(control);
+			}
+			offset = blr_print_line(control, offset);
+			break;
+
+		case op_dcl_local_table:
+		{
+			offset = blr_print_line(control, offset);
+			blr_indent(control, level);
+			blr_print_word(control);
+			offset = blr_print_line(control, offset);
+
+			static const char* subCodes[] =
+			{
+				nullptr,
+				"format"
+			};
+
+			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
+			{
+				blr_indent(control, level);
+
+				if (blr_operator == 0 || blr_operator >= FB_NELEM(subCodes))
+					blr_error(control, "*** invalid blr_dcl_local_table sub code ***");
+
+				blr_format(control, "blr_dcl_local_table_%s, ", subCodes[blr_operator]);
+
+				switch (blr_operator)
+				{
+					case blr_dcl_local_table_format:
+						n = blr_print_word(control);
+						offset = blr_print_line(control, offset);
+						++level;
+
+						while (--n >= 0)
+						{
+							blr_indent(control, level);
+							blr_print_dtype(control);
+							offset = blr_print_line(control, offset);
+						}
+
+						--level;
+						break;
+
+					default:
+						fb_assert(false);
+				}
+			}
+
+			// print blr_end
+			control->ctl_blr_reader.seekBackward(1);
+			blr_print_verb(control, level);
+			break;
+		}
+
+		case op_outer_map:
+		{
+			offset = blr_print_line(control, offset);
+
+			static const char* subCodes[] =
+			{
+				nullptr,
+				"message",
+				"variable"
+			};
+
+			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
+			{
+				blr_indent(control, level);
+
+				if (blr_operator == 0 || blr_operator >= FB_NELEM(subCodes))
+					blr_error(control, "*** invalid blr_outer_map sub code ***");
+
+				blr_format(control, "blr_outer_map_%s, ", subCodes[blr_operator]);
+
+				switch (blr_operator)
+				{
+					case blr_outer_map_message:
+					case blr_outer_map_variable:
+						blr_print_word(control);
+						n = blr_print_word(control);
+						offset = blr_print_line(control, offset);
+						break;
+
+					default:
+						fb_assert(false);
+				}
+			}
+
+			// print blr_end
+			control->ctl_blr_reader.seekBackward(1);
+			blr_print_verb(control, level);
+			break;
+		}
+
 		default:
 			fb_assert(false);
 			break;
@@ -3815,13 +4019,13 @@ static void sanitize(Firebird::string& locale)
 }
 
 
-void FB_EXPORTED gds__default_printer(void* /*arg*/, SSHORT offset, const TEXT* line)
+void API_ROUTINE_VARARG gds__default_printer(void* /*arg*/, SSHORT offset, const TEXT* line)
 {
 	printf("%4d %s\n", offset, line);
 }
 
 
-void FB_EXPORTED gds__trace_printer(void* /*arg*/, SSHORT offset, const TEXT* line)
+void API_ROUTINE_VARARG gds__trace_printer(void* /*arg*/, SSHORT offset, const TEXT* line)
 {
 	// Assume that line is not too long
 	char buffer[PRETTY_BUFFER_SIZE + 10];
@@ -3892,7 +4096,11 @@ public:
 		}
 		if (!tempDir.length() || tempDir.length() >= MAXPATHLEN)
 		{
-			tempDir = WORKFILE;
+			const char* tmp = getTemporaryFolder();
+			if (tmp)
+				tempDir = tmp;
+			else
+				tempDir = WORKFILE;
 		}
 		tempDir.copyTo(fbTempDir, sizeof(fbTempDir));
 
@@ -3902,8 +4110,11 @@ public:
 		Firebird::PathName lockPrefix;
 		if (!fb_utils::readenv(FB_LOCK_ENV, lockPrefix))
 		{
-#ifndef WIN_NT
-			PathUtils::concatPath(lockPrefix, WORKFILE, LOCKDIR);
+#if !defined(WIN_NT)
+			const char* tmp = getTemporaryFolder();
+			if (!tmp)
+				tmp = WORKFILE;
+			PathUtils::concatPath(lockPrefix, tmp, LOCKDIR);
 #else
 			char cmnData[MAXPATHLEN];
 			if (SHGetSpecialFolderPath(NULL, cmnData, CSIDL_COMMON_APPDATA, TRUE))

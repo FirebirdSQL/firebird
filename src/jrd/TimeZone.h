@@ -43,7 +43,7 @@ public:
 	TimeZoneSnapshot(thread_db* tdbb, MemoryPool& pool);
 };
 
-class TimeZonesTableScan : public VirtualTableScan
+class TimeZonesTableScan final : public VirtualTableScan
 {
 public:
 	TimeZonesTableScan(CompilerScratch* csb, const Firebird::string& alias, StreamType stream, jrd_rel* relation);

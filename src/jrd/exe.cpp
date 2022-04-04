@@ -64,10 +64,9 @@
 #include "../jrd/exe.h"
 #include "../jrd/extds/ExtDS.h"
 #include "../jrd/tra.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/ods.h"
 #include "../jrd/btr.h"
-#include "../jrd/rse.h"
 #include "../jrd/lck.h"
 #include "../jrd/intl.h"
 #include "../jrd/sbm.h"
@@ -92,7 +91,6 @@
 #include "../jrd/lck_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
-#include "../jrd/opt_proto.h"
 #include "../jrd/par_proto.h"
 #include "../jrd/rlck_proto.h"
 
@@ -216,11 +214,11 @@ string StatusXcp::as_text() const
 }
 
 
-static void execute_looper(thread_db*, jrd_req*, jrd_tra*, const StmtNode*, jrd_req::req_s);
-static void looper_seh(thread_db*, jrd_req*, const StmtNode*);
-static void release_blobs(thread_db*, jrd_req*);
-static void trigger_failure(thread_db*, jrd_req*);
-static void stuff_stack_trace(const jrd_req*);
+static void execute_looper(thread_db*, Request*, jrd_tra*, const StmtNode*, Request::req_s);
+static void looper_seh(thread_db*, Request*, const StmtNode*);
+static void release_blobs(thread_db*, Request*);
+static void trigger_failure(thread_db*, Request*);
+static void stuff_stack_trace(const Request*);
 
 const size_t MAX_STACK_TRACE = 2048;
 
@@ -231,7 +229,7 @@ void EXE_assignment(thread_db* tdbb, const AssignmentNode* node)
 	DEV_BLKCHK(node, type_nod);
 
 	SET_TDBB(tdbb);
-	jrd_req* request = tdbb->getRequest();
+	Request* request = tdbb->getRequest();
 
 	// Get descriptors of src field/parameter/variable, etc.
 	request->req_flags &= ~req_null;
@@ -245,7 +243,7 @@ void EXE_assignment(thread_db* tdbb, const AssignmentNode* node)
 void EXE_assignment(thread_db* tdbb, const ValueExprNode* source, const ValueExprNode* target)
 {
 	SET_TDBB(tdbb);
-	jrd_req* request = tdbb->getRequest();
+	Request* request = tdbb->getRequest();
 
 	// Get descriptors of src field/parameter/variable, etc.
 	request->req_flags &= ~req_null;
@@ -259,7 +257,15 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 	const ValueExprNode* missing_node, const ValueExprNode* missing2_node)
 {
 	SET_TDBB(tdbb);
-	jrd_req* request = tdbb->getRequest();
+	Request* request = tdbb->getRequest();
+
+	const auto toVar = nodeAs<VariableNode>(to);
+
+	if (toVar && toVar->outerDecl)
+		request = toVar->getVarRequest(request);
+
+	AutoSetRestore2<Request*, thread_db> autoSetRequest(
+		tdbb, &thread_db::getRequest, &thread_db::setRequest, request);
 
 	// Get descriptors of receiving and sending fields/parameters, variables, etc.
 
@@ -284,31 +290,39 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 		null = -1;
 
 	USHORT* impure_flags = NULL;
-	const ParameterNode* toParam;
-	const VariableNode* toVar;
+	const auto toParam = nodeAs<ParameterNode>(to);
 
-	if ((toParam = nodeAs<ParameterNode>(to)))
+	if (toParam)
 	{
 		const MessageNode* message = toParam->message;
+		const auto paramRequest = toParam->getParamRequest(request);
 
 		if (toParam->argInfo)
 		{
+			AutoSetRestore2<Request*, thread_db> autoSetRequest(
+				tdbb, &thread_db::getRequest, &thread_db::setRequest, paramRequest);
+
 			EVL_validate(tdbb, Item(Item::TYPE_PARAMETER, message->messageNumber, toParam->argNumber),
 				toParam->argInfo, from_desc, null == -1);
 		}
 
-		impure_flags = request->getImpure<USHORT>(
+		impure_flags = paramRequest->getImpure<USHORT>(
 			message->impureFlags + (sizeof(USHORT) * toParam->argNumber));
 	}
-	else if ((toVar = nodeAs<VariableNode>(to)))
+	else if (toVar)
 	{
+		const auto varRequest = toVar->getVarRequest(request);
+
 		if (toVar->varInfo)
 		{
+			AutoSetRestore2<Request*, thread_db> autoSetRequest(
+				tdbb, &thread_db::getRequest, &thread_db::setRequest, varRequest);
+
 			EVL_validate(tdbb, Item(Item::TYPE_VARIABLE, toVar->varId),
 				toVar->varInfo, from_desc, null == -1);
 		}
 
-		impure_flags = &request->getImpure<impure_value>(
+		impure_flags = &varRequest->getImpure<impure_value>(
 			toVar->varDecl->impureOffset)->vlu_flags;
 	}
 
@@ -321,43 +335,6 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 
 	if (!null)
 	{
-		// if necessary and appropriate, use the indicator variable
-
-		if (toParam && toParam->argIndicator)
-		{
-			dsc* indicator = EVL_assign_to(tdbb, toParam->argIndicator);
-			temp.dsc_dtype = dtype_short;
-			temp.dsc_length = sizeof(SSHORT);
-			temp.dsc_scale = 0;
-			temp.dsc_sub_type = 0;
-
-			SSHORT len;
-
-			if ((from_desc->dsc_dtype <= dtype_varying) && (to_desc->dsc_dtype <= dtype_varying) &&
-				(TEXT_LEN(from_desc) > TEXT_LEN(to_desc)))
-			{
-				len = TEXT_LEN(from_desc);
-			}
-			else
-				len = 0;
-
-			temp.dsc_address = (UCHAR *) &len;
-			MOV_move(tdbb, &temp, indicator);
-
-			if (len)
-			{
-				temp = *from_desc;
-				temp.dsc_length = TEXT_LEN(to_desc);
-
-				if (temp.dsc_dtype == dtype_cstring)
-					temp.dsc_length += 1;
-				else if (temp.dsc_dtype == dtype_varying)
-					temp.dsc_length += 2;
-
-				from_desc = &temp;
-			}
-		}
-
 		// Validate range for datetime values
 
 		if (DTYPE_IS_DATE(from_desc->dsc_dtype))
@@ -399,21 +376,25 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 			// ASF: Don't let MOV_move call blb::move because MOV
 			// will not pass the destination field to blb::move.
 
-			record_param* rpb = NULL;
+			jrd_rel* relation = nullptr;
+			Record* record = nullptr;
 			USHORT fieldId = 0;
+
 			if (to)
 			{
 				const FieldNode* toField = nodeAs<FieldNode>(to);
 				if (toField)
 				{
+					const auto rpb = &request->req_rpb[toField->fieldStream];
+					relation = rpb->rpb_relation;
+					record = rpb->rpb_record;
 					fieldId = toField->fieldId;
-					rpb = &request->req_rpb[toField->fieldStream];
 				}
 				else if (!(nodeAs<ParameterNode>(to) || nodeAs<VariableNode>(to)))
 					BUGCHECK(199);	// msg 199 expected field node
 			}
 
-			blb::move(tdbb, from_desc, to_desc, rpb, fieldId);
+			blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
 		}
 		else if (!DSC_EQUIV(from_desc, to_desc, false))
 		{
@@ -449,7 +430,6 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 	}
 
 	// Handle the null flag as appropriate for fields and message arguments.
-
 
 	const FieldNode* toField = nodeAs<FieldNode>(to);
 	if (toField)
@@ -495,12 +475,6 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 		temp.dsc_sub_type = 0;
 		temp.dsc_address = (UCHAR*) &null;
 		MOV_move(tdbb, &temp, to_desc);
-
-		if (null && toParam->argIndicator)
-		{
-			to_desc = EVL_assign_to(tdbb, toParam->argIndicator);
-			MOV_move(tdbb, &temp, to_desc);
-		}
 	}
 }
 
@@ -615,7 +589,7 @@ void EXE_execute_ddl_triggers(thread_db* tdbb, jrd_tra* transaction, bool preTri
 
 
 void EXE_receive(thread_db* tdbb,
-				 jrd_req* request,
+				 Request* request,
 				 USHORT msg,
 				 ULONG length,
 				 void* buffer,
@@ -670,14 +644,12 @@ void EXE_receive(thread_db* tdbb,
 		}
 	}
 
-	const auto statement = request->getStatement();
-
 	try
 	{
 		if (nodeIs<StallNode>(request->req_message))
-			execute_looper(tdbb, request, transaction, request->req_next, jrd_req::req_sync);
+			execute_looper(tdbb, request, transaction, request->req_next, Request::req_sync);
 
-		if (!(request->req_flags & req_active) || request->req_operation != jrd_req::req_send)
+		if (!(request->req_flags & req_active) || request->req_operation != Request::req_send)
 			ERR_post(Arg::Gds(isc_req_sync));
 
 		const MessageNode* message = nodeAs<MessageNode>(request->req_message);
@@ -722,7 +694,7 @@ void EXE_receive(thread_db* tdbb,
 			}
 		}
 
-		execute_looper(tdbb, request, transaction, request->req_next, jrd_req::req_proceed);
+		execute_looper(tdbb, request, transaction, request->req_next, Request::req_proceed);
 	}
 	catch (const Exception&)
 	{
@@ -747,10 +719,17 @@ void EXE_receive(thread_db* tdbb,
 				transaction->tra_save_point->getNumber() >= savNumber)
 			{
 				const auto savepoint = transaction->tra_save_point;
-				transaction->rollforwardSavepoint(tdbb);
+				fb_assert(!transaction->tra_save_point->isChanging());
+				transaction->releaseSavepoint(tdbb);
 				fb_assert(transaction->tra_save_free == savepoint);
 				transaction->tra_save_free = savepoint->moveToStack(request->req_proc_sav_point);
 				fb_assert(request->req_proc_sav_point == savepoint);
+
+				// Ensure that the priorly existing savepoints are preserved,
+				// e.g. 10-11-12-(5-6-7) where savNumber == 5. This may happen
+				// due to looper savepoints being reused in subsequent invokations.
+				if (savepoint->getNumber() == savNumber)
+					break;
 			}
 		}
 		catch (...)
@@ -765,7 +744,7 @@ void EXE_receive(thread_db* tdbb,
 
 
 // Release a request instance.
-void EXE_release(thread_db* tdbb, jrd_req* request)
+void EXE_release(thread_db* tdbb, Request* request)
 {
 	DEV_BLKCHK(request, type_req);
 
@@ -786,10 +765,12 @@ void EXE_release(thread_db* tdbb, jrd_req* request)
 
 		request->req_attachment = NULL;
 	}
+
+	request->req_flags &= ~req_in_use;
 }
 
 
-void EXE_send(thread_db* tdbb, jrd_req* request, USHORT msg, ULONG length, const void* buffer)
+void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const void* buffer)
 {
 /**************************************
  *
@@ -813,12 +794,11 @@ void EXE_send(thread_db* tdbb, jrd_req* request, USHORT msg, ULONG length, const
 	const StmtNode* message = NULL;
 	const StmtNode* node;
 
-	if (request->req_operation != jrd_req::req_receive)
+	if (request->req_operation != Request::req_receive)
 		ERR_post(Arg::Gds(isc_req_sync));
 	node = request->req_message;
 
 	jrd_tra* transaction = request->req_transaction;
-	const JrdStatement* statement = request->getStatement();
 
 	const SelectNode* selectNode;
 
@@ -853,11 +833,11 @@ void EXE_send(thread_db* tdbb, jrd_req* request, USHORT msg, ULONG length, const
 
 	memcpy(request->getImpure<UCHAR>(message->impureOffset), buffer, length);
 
-	execute_looper(tdbb, request, transaction, request->req_next, jrd_req::req_proceed);
+	execute_looper(tdbb, request, transaction, request->req_next, Request::req_proceed);
 }
 
 
-void EXE_start(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
+void EXE_start(thread_db* tdbb, Request* request, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -880,8 +860,14 @@ void EXE_start(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
 	if (transaction->tra_flags & TRA_prepared)
 		ERR_post(Arg::Gds(isc_req_no_trans));
 
-	JrdStatement* statement = request->getStatement();
-	const jrd_prc* proc = statement->procedure;
+	const auto dbb = tdbb->getDatabase();
+	const auto statement = request->getStatement();
+
+	// Generate request id.
+	request->setRequestId(
+		request->isRequestIdUnassigned() && request->isRoot() ?
+			statement->getStatementId() :
+			dbb->generateStatementId());
 
 	/* Post resources to transaction block.  In particular, the interest locks
 	on relations/indices are copied to the transaction, which is very
@@ -906,7 +892,7 @@ void EXE_start(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
 	request->req_records_affected.clear();
 
 	// Store request start time for timestamp work
-	TimeZoneUtil::validateGmtTimeStamp(request->req_gmt_timestamp);
+	request->validateTimeStamp();
 
 	// Set all invariants to not computed.
 	const ULONG* const* ptr, * const* end;
@@ -924,11 +910,11 @@ void EXE_start(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
 
 	execute_looper(tdbb, request, transaction,
 				   request->getStatement()->topNode,
-				   jrd_req::req_evaluate);
+				   Request::req_evaluate);
 }
 
 
-void EXE_unwind(thread_db* tdbb, jrd_req* request)
+void EXE_unwind(thread_db* tdbb, Request* request)
 {
 /**************************************
  *
@@ -946,12 +932,12 @@ void EXE_unwind(thread_db* tdbb, jrd_req* request)
 
 	if (request->req_flags & req_active)
 	{
-		const JrdStatement* statement = request->getStatement();
+		const Statement* statement = request->getStatement();
 
 		if (statement->fors.getCount() || request->req_ext_resultset || request->req_ext_stmt)
 		{
 			Jrd::ContextPoolHolder context(tdbb, request->req_pool);
-			jrd_req* old_request = tdbb->getRequest();
+			Request* old_request = tdbb->getRequest();
 			jrd_tra* old_transaction = tdbb->getTransaction();
 			try {
 				tdbb->setRequest(request);
@@ -982,6 +968,17 @@ void EXE_unwind(thread_db* tdbb, jrd_req* request)
 			tdbb->setRequest(old_request);
 			tdbb->setTransaction(old_transaction);
 		}
+
+		for (auto localTable : statement->localTables)
+		{
+			if (!localTable)
+				continue;
+
+			auto impure = localTable->getImpure(tdbb, request, false);
+			delete impure->recordBuffer;
+			impure->recordBuffer = nullptr;
+		}
+
 		release_blobs(tdbb, request);
 	}
 
@@ -999,7 +996,7 @@ void EXE_unwind(thread_db* tdbb, jrd_req* request)
 
 	request->req_flags &= ~(req_active | req_proc_fetch | req_reserved);
 	request->req_flags |= req_abort | req_stall;
-	request->req_gmt_timestamp.invalidate();
+	request->invalidateTimeStamp();
 	request->req_caller = NULL;
 	request->req_proc_inputs = NULL;
 	request->req_proc_caller = NULL;
@@ -1007,10 +1004,10 @@ void EXE_unwind(thread_db* tdbb, jrd_req* request)
 
 
 static void execute_looper(thread_db* tdbb,
-						   jrd_req* request,
+						   Request* request,
 						   jrd_tra* transaction,
 						   const StmtNode* node,
-						   jrd_req::req_s next_state)
+						   Request::req_s next_state)
 {
 /**************************************
  *
@@ -1075,17 +1072,29 @@ static void execute_looper(thread_db* tdbb,
 
 	if (savNumber)
 	{
-		if (transaction->tra_save_point &&
-			transaction->tra_save_point->isSystem() &&
-			transaction->tra_save_point->getNumber() == savNumber)
+		// Unless the looper returns after SUSPEND (this preserves existing savepoints),
+		// there should be no other savepoint but the one started by ourselves.
+		fb_assert((request->req_flags & req_stall) ||
+			(transaction->tra_save_point &&
+				transaction->tra_save_point->getNumber() == savNumber));
+
+		while (transaction->tra_save_point &&
+			transaction->tra_save_point->getNumber() >= savNumber)
 		{
 			const auto savepoint = transaction->tra_save_point;
 			// Forget about any undo for this verb
-			transaction->rollforwardSavepoint(tdbb);
+			fb_assert(!transaction->tra_save_point->isChanging());
+			transaction->releaseSavepoint(tdbb);
 			// Preserve savepoint for reuse
 			fb_assert(savepoint == transaction->tra_save_free);
 			transaction->tra_save_free = savepoint->moveToStack(request->req_savepoints);
 			fb_assert(savepoint != transaction->tra_save_free);
+
+			// Ensure that the priorly existing savepoints are preserved,
+			// e.g. 10-11-12-(5-6-7) where savNumber == 5. This may happen
+			// due to looper savepoints being reused in subsequent invokations.
+			if (savepoint->getNumber() == savNumber)
+				break;
 		}
 	}
 }
@@ -1113,7 +1122,7 @@ void EXE_execute_triggers(thread_db* tdbb,
 
 	SET_TDBB(tdbb);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	jrd_tra* const transaction = request ? request->req_transaction : tdbb->getTransaction();
 
 	TrigVector* vector = *triggers;
@@ -1138,11 +1147,11 @@ void EXE_execute_triggers(thread_db* tdbb,
 	TimeStamp timestamp;
 
 	if (request)
-		timestamp = request->req_gmt_timestamp;
+		timestamp = request->getGmtTimeStamp();
 	else
 		TimeZoneUtil::validateGmtTimeStamp(timestamp);
 
-	jrd_req* trigger = NULL;
+	Request* trigger = NULL;
 
 	try
 	{
@@ -1186,13 +1195,13 @@ void EXE_execute_triggers(thread_db* tdbb,
 				}
 			}
 
-			trigger->req_gmt_timestamp = timestamp;
+			trigger->setGmtTimeStamp(timestamp.value());
 			trigger->req_trigger_action = trigger_action;
 
 			TraceTrigExecute trace(tdbb, trigger, which_trig);
 
 			{	// Scope to replace att_ss_user
-				const JrdStatement* s = trigger->getStatement();
+				const Statement* s = trigger->getStatement();
 				UserId* invoker = s->triggerInvoker ? s->triggerInvoker : tdbb->getAttachment()->att_ss_user;
 				AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);
 
@@ -1203,7 +1212,7 @@ void EXE_execute_triggers(thread_db* tdbb,
 				EXE_start(tdbb, trigger, transaction);
 			}
 
-			const bool ok = (trigger->req_operation != jrd_req::req_unwind);
+			const bool ok = (trigger->req_operation != Request::req_unwind);
 			trace.finish(ok ? ITracePlugin::RESULT_SUCCESS : ITracePlugin::RESULT_FAILED);
 
 			EXE_unwind(tdbb, trigger);
@@ -1239,13 +1248,13 @@ void EXE_execute_triggers(thread_db* tdbb,
 }
 
 
-static void stuff_stack_trace(const jrd_req* request)
+static void stuff_stack_trace(const Request* request)
 {
 	string sTrace;
 
-	for (const jrd_req* req = request; req; req = req->req_caller)
+	for (const Request* req = request; req; req = req->req_caller)
 	{
-		const JrdStatement* const statement = req->getStatement();
+		const Statement* const statement = req->getStatement();
 
 		string context, name;
 
@@ -1303,7 +1312,7 @@ static void stuff_stack_trace(const jrd_req* request)
 }
 
 
-const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* node)
+const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* node)
 {
 /**************************************
  *
@@ -1337,13 +1346,11 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 
 	// Execute stuff until we drop
 
-	const JrdStatement* statement = request->getStatement();
-
 	while (node && !(request->req_flags & req_stall))
 	{
 		try
 		{
-			if (request->req_operation == jrd_req::req_evaluate)
+			if (request->req_operation == Request::req_evaluate)
 			{
 				JRD_reschedule(tdbb);
 
@@ -1385,7 +1392,7 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 
 			exeState.errorPending = true;
 			exeState.catchDisabled = true;
-			request->req_operation = jrd_req::req_unwind;
+			request->req_operation = Request::req_unwind;
 			request->req_label = 0;
 
 			if (!(tdbb->tdbb_flags & TDBB_stack_trace_done) && !(tdbb->tdbb_flags & TDBB_sys_error))
@@ -1418,7 +1425,7 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 			TRA_release_request_snapshot(tdbb, request);
 
 		request->req_flags &= ~(req_active | req_reserved);
-		request->req_gmt_timestamp.invalidate();
+		request->invalidateTimeStamp();
 		release_blobs(tdbb, request);
 	}
 
@@ -1448,7 +1455,7 @@ const StmtNode* EXE_looper(thread_db* tdbb, jrd_req* request, const StmtNode* no
 
 
 // Start looper under Windows SEH (Structured Exception Handling) control
-static void looper_seh(thread_db* tdbb, jrd_req* request, const StmtNode* node)
+static void looper_seh(thread_db* tdbb, Request* request, const StmtNode* node)
 {
 #ifdef WIN_NT
 	START_CHECK_FOR_EXCEPTIONS(NULL);
@@ -1470,7 +1477,7 @@ static void looper_seh(thread_db* tdbb, jrd_req* request, const StmtNode* node)
 }
 
 
-static void release_blobs(thread_db* tdbb, jrd_req* request)
+static void release_blobs(thread_db* tdbb, Request* request)
 {
 /**************************************
  *
@@ -1545,7 +1552,7 @@ static void release_blobs(thread_db* tdbb, jrd_req* request)
 }
 
 
-static void trigger_failure(thread_db* tdbb, jrd_req* trigger)
+static void trigger_failure(thread_db* tdbb, Request* trigger)
 {
 /**************************************
  *
@@ -1567,7 +1574,7 @@ static void trigger_failure(thread_db* tdbb, jrd_req* trigger)
 		MET_trigger_msg(tdbb, msg, trigger->getStatement()->triggerName, trigger->req_label);
 		if (msg.hasData())
 		{
-			if (trigger->getStatement()->flags & JrdStatement::FLAG_SYS_TRIGGER)
+			if (trigger->getStatement()->flags & Statement::FLAG_SYS_TRIGGER)
 			{
 				ISC_STATUS code = PAR_symbol_to_gdscode(msg);
 				if (code)

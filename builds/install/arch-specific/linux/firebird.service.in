@@ -1,13 +1,13 @@
 [Unit]
 Description=Firebird Database Server
 After=syslog.target network.target
+Documentation=https://firebirdsql.org/en/firebird-rdbms/
 
 [Service]
 User=firebird
 Group=firebird
 Type=forking
 ExecStart=@FB_SBINDIR@/fbguard -daemon -forever
-StandardError=syslog
 
 [Install]
 WantedBy=multi-user.target

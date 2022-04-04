@@ -86,6 +86,20 @@ dnl Test for special ar options?
 AR_OPT_CHECK=false
 
 case "$build" in
+  aarch64-*-darwin*)
+    MAKEFILE_PREFIX=darwin_aarch64
+    MAKEFILE_POSTFIX=darwin
+    PLATFORM=DARWIN
+    INSTALL_PREFIX=darwin
+    AC_DEFINE(DARWIN, 1, [Define this if OS is DARWIN])
+	XE_APPEND(-framework CoreFoundation,LIBS)
+    EDITLINE_FLG=Y
+    SHRLIB_EXT=dylib
+    CPU_TYPE=ARM64
+    EXPORT_SYMBOLS_STYLE=darwin
+    RAW_DEVICES_FLG=N
+    ;;
+
   x*64-*-darwin*)
     MAKEFILE_PREFIX=darwin_x86_64
     MAKEFILE_POSTFIX=darwin
@@ -549,6 +563,23 @@ AC_ARG_WITH(builtin-tomcrypt,
   [TOMCRYPT_BUILD=Y])
 AC_SUBST(TOMCRYPT_BUILD)
 
+TERMLIB=
+AC_ARG_WITH(termlib,
+  [  --with-termlib          build with explicitly specified termcap support library],
+  [TERMLIB=${withval}])
+
+RE2_BUILD=Y
+AC_ARG_WITH(system-re2,
+  [  --with-system-re2  use system-wide re2 library instead of embedded copy],
+  [RE2_BUILD=N])
+AC_SUBST(RE2_BUILD)
+
+SYSTEM_BOOST=N
+AC_ARG_WITH(system-boost,
+  [  --with-system-boost     use system-wide boost library instead of embedded copy],
+  [SYSTEM_BOOST=Y])
+AC_SUBST(SYSTEM_BOOST)
+
 dnl Avoid dumb '-g -O2' autoconf's default
 dnl Debugging information and optimization flags should be set in prefix.$platform file
 dnl Should be replaced with AC_PROG_GCC_DEFAULT_FLAGS() when available
@@ -604,6 +635,8 @@ if test "$LSB_FLG" = "Y"; then
   CXXFLAGS="$CXXFLAGS --lsb-besteffort  --lsb-shared-libs=fbclient:ib_util:tommath:tomcrypt --lsb-target-version=4.1"
   AC_SUBST(TOMMATH_BUILD, Y)
   AC_SUBST(TOMCRYPT_BUILD, Y)
+  AC_SUBST(RE2_BUILD, Y)
+  AC_SUBST(SYSTEM_BOOST, N)
   AC_PATH_PROG(CC, lsbcc, "", [$PATH$PATH_SEPARATOR/opt/lsb/bin$PATH_SEPARATOR])
   AC_PATH_PROG(CXX, lsbc++, "", [$PATH$PATH_SEPARATOR/opt/lsb/bin$PATH_SEPARATOR])
   if test "x$CC" = "x" || test "x$CXX" = "x" ; then
@@ -673,7 +706,6 @@ XE_CONF_DIR(fbinclude, [C/C++ header files DIR (PREFIX/include)], FB_INCDIR, /in
 XE_CONF_DIR(fbdoc, [documentation root DIR (PREFIX/doc)], FB_DOCDIR, /doc)
 XE_CONF_DIR(fbsample, [examples DIR (PREFIX/examples)], FB_SAMPLEDIR, /examples)
 XE_CONF_DIR(fbsample-db, [examples database DIR (PREFIX/examples/empbuild)], FB_SAMPLEDBDIR, /examples/empbuild)
-XE_CONF_DIR(fbhelp, [QLI help DIR (PREFIX/help)], FB_HELPDIR, /help)
 XE_CONF_DIR(fbintl, [international DIR (PREFIX/intl)], FB_INTLDIR, /intl)
 XE_CONF_DIR(fbmisc, [misc DIR (PREFIX/misc)], FB_MISCDIR, /misc)
 XE_CONF_DIR(fbsecure-db, [security database DIR (PREFIX)], FB_SECDBDIR)
@@ -858,18 +890,32 @@ else
 fi
 AC_SUBST(CRYPTLIB)
 
-dnl Check for libraries
-AC_SEARCH_LIBS(dlopen, dl)
-AC_CHECK_LIB(m, main)
+dnl Check for termcap support
 if test "$EDITLINE_FLG" = "Y"; then
-	AC_CHECK_LIB(curses, tgetent, TERMLIB=curses, \
-		AC_CHECK_LIB(ncurses, tgetent, TERMLIB=ncurses, \
-			AC_CHECK_LIB(termcap, tgetent, TERMLIB=termcap, \
-				AC_CHECK_LIB(tinfo, tgetent, TERMLIB=tinfo, \
-					AC_MSG_ERROR(termcap support not found)))))
+	if test -z "$TERMLIB"; then
+		AC_CHECK_LIB(curses, tgetent, TERMLIB=curses, \
+			AC_CHECK_LIB(ncurses, tgetent, TERMLIB=ncurses, \
+				AC_CHECK_LIB(termcap, tgetent, TERMLIB=termcap, \
+					AC_CHECK_LIB(tinfo, tgetent, TERMLIB=tinfo, \
+						AC_MSG_ERROR(termcap support not found)))))
+	fi
 	AC_SUBST(TERMLIB)
 fi
 
+dnl check for re2 presence
+if test "$RE2_BUILD" != "Y"; then
+	XE_SAVE_ENV()
+	AC_LANG_PUSH(C++)
+	AC_CHECK_HEADER(re2/re2.h, RE2LIB=-lre2,
+		AC_MSG_ERROR(Include file for re2 not found - please install development re2 package or drop --with-system-re2))
+        AC_LANG_POP(C++)
+	XE_RESTORE_ENV()
+fi
+AC_SUBST(RE2LIB)
+
+dnl Check for libraries
+AC_SEARCH_LIBS(dlopen, dl)
+AC_CHECK_LIB(m, main)
 AC_SEARCH_LIBS(inet_aton, resolv)
 AC_CHECK_LIB(atomic, main)
 
@@ -899,7 +945,7 @@ dnl if 64-bit mode, then archive tool, ar, needs -X64 option
 fi
 
 XE_SAVE_ENV()
-CXXFLAGS="$CXXFLAGS -std=c++11"
+CXXFLAGS="$CXXFLAGS -std=c++17"
 AC_CACHE_CHECK([whether the C++ compiler understands noexcept], [ac_cv_cxx_noexcept], [
     AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[int f(int x) noexcept { return x + 1; }]], [[]])],
 	[ac_cv_cxx_noexcept=yes], [ac_cv_cxx_noexcept=no])])
@@ -975,6 +1021,18 @@ case $host in
 		;;
 esac
 AC_CHECK_FUNCS(poll)
+AC_CHECK_FUNCS(dlinfo)
+if test "$ac_cv_func_dlinfo" = "yes"; then
+  AC_MSG_CHECKING(if dlinfo supports RTLD_DI_LINKMAP)
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#define _GNU_SOURCE
+#include <link.h>
+#include <dlfcn.h>]], [[struct link_map info; dlinfo(0, RTLD_DI_LINKMAP, &info);]])],[AC_DEFINE(HAVE_RTLD_DI_LINKMAP, [1], [Linkmap info support]) AC_MSG_RESULT(yes)],[AC_MSG_RESULT(no)])
+
+  AC_MSG_CHECKING(if dlinfo supports RTLD_DI_ORIGIN)
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#define _GNU_SOURCE
+#include <link.h>
+#include <dlfcn.h>]], [[char info[256]; dlinfo(0, RTLD_DI_ORIGIN, info);]])],[AC_DEFINE(HAVE_RTLD_DI_ORIGIN, [1], [Origin info support]) AC_MSG_RESULT(yes)],[AC_MSG_RESULT(no)])
+fi
 
 dnl Check for time function
 AC_SEARCH_LIBS(clock_gettime, rt)
@@ -1005,7 +1063,7 @@ AC_MSG_CHECKING(for working sem_init())
 AC_RUN_IFELSE([AC_LANG_SOURCE([[#include <semaphore.h>
 	main () {
 		sem_t s;
-		exit(sem_init(&s,0,0));
+		return sem_init(&s,0,0);
 		}
 	]])],[AC_DEFINE(WORKING_SEM_INIT,1,[Define this if sem_init() works on the platform])
 AC_MSG_RESULT(yes)],[AC_MSG_RESULT(no)
@@ -1027,7 +1085,15 @@ AC_LINK_IFELSE(
 AC_LANG_POP(C++)
 
 dnl Checks for typedefs, structures, and compiler characteristics.
-AC_C_BIGENDIAN
+AC_C_BIGENDIAN(
+	[
+		AC_DEFINE(WORDS_BIGENDIAN,1,[Words have most significant byte first])
+		AC_SUBST(TZDATA_ZIP,be.zip)
+	],
+	[
+		AC_SUBST(TZDATA_ZIP,le.zip)
+	]
+)
 AC_C_VOLATILE
 AC_TYPE_OFF_T
 AC_TYPE_SIZE_T
@@ -1037,10 +1103,19 @@ if test "$ac_cv_sys_file_offset_bits" = "no"; then
   AC_MSG_CHECKING(for native large file support)
   AC_RUN_IFELSE([AC_LANG_SOURCE([[#include <unistd.h>
     main () {
-    exit(!(sizeof(off_t) == 8));
+    return !(sizeof(off_t) == 8);
   }]])],[ac_cv_sys_file_offset_bits=64; AC_DEFINE(_FILE_OFFSET_BITS,64)
    AC_MSG_RESULT(yes)],[AC_MSG_RESULT(no)],[])
 fi
+
+dnl Use int128 support for big endians
+if test "$ac_cv_c_bigendian" = "yes"; then
+  ABSEIL_BUILD_FLG=Y
+  AC_DEFINE(FB_USE_ABSEIL_INT128, 1, [Use Abseil's class int128])
+else
+  ABSEIL_BUILD_FLG=N
+fi
+AC_SUBST(ABSEIL_BUILD_FLG)
 
 AC_CHECK_SIZEOF(void *)
 VOID_PTR_SIZE=$ac_cv_sizeof_void_p
@@ -1079,7 +1154,7 @@ main () {
     char a;
     union { long long x; sem_t y; } b;
   };
-  exit((int)&((struct s*)0)->b);
+  return (int)&((struct s*)0)->b;
 }]])],[ac_cv_c_alignment=$ac_status],[ac_cv_c_alignment=$ac_status],[])
 AC_MSG_RESULT($ac_cv_c_alignment)
 AC_DEFINE_UNQUOTED(FB_ALIGNMENT, $ac_cv_c_alignment, [Alignment of long])
@@ -1090,10 +1165,29 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([[main () {
     char a;
     double b;
   };
-  exit((int)&((struct s*)0)->b);
+  return (int)&((struct s*)0)->b;
 }]])],[ac_cv_c_double_align=$ac_status],[ac_cv_c_double_align=$ac_status],[])
 AC_MSG_RESULT($ac_cv_c_double_align)
 AC_DEFINE_UNQUOTED(FB_DOUBLE_ALIGN, $ac_cv_c_double_align, [Alignment of double])
+
+AC_MSG_CHECKING(correctness of comparing 64-bit integers)
+ac_cv_compare_failed=1
+ac_cv_compare_result=failed
+savedflags="$CFLAGS"
+CFLAGS="$CFLAGS -O3"
+AC_RUN_IFELSE([AC_LANG_SOURCE([[typedef long long int SINT64;
+static int abs64Compare(SINT64 n1, SINT64 n2) {
+    n1 = n1 > 0 ? -n1 : n1;
+    n2 = n2 > 0 ? -n2 : n2;
+    return n1 == n2 ? 0 : n1 < n2 ? 1 : -1;
+}
+int main() {
+	return abs64Compare(-9223372036854775808, 3652058) == 1 ? 0 : 1;
+}]])],[ac_cv_compare_failed=0
+ac_cv_compare_result=success])
+CFLAGS="$savedflags"
+AC_MSG_RESULT($ac_cv_compare_result)
+AC_DEFINE_UNQUOTED(FB_INT64_COMPARE_FAILED, $ac_cv_compare_failed, [Error when comparing 64-bit integers])
 
 dnl EKU: Add any platform specific tests below
 case "$PLATFORM" in
@@ -1142,15 +1236,6 @@ case "$PLATFORM" in
     ;;
 
   win32)
-    FB_PIPE_NAME=interbas
-    AC_ARG_WITH(pipe-name,
-      [  --with-pipe-name        specify wnet pipe name (default=interbas)],
-      [FB_PIPE_NAME=${withval}])
-    AH_VERBATIM(FB_PIPE_NAME,
-[/* Wnet pipe name */
-#define FB_PIPE_NAME "interbas"])
-    AC_DEFINE_UNQUOTED(FB_PIPE_NAME,"$FB_PIPE_NAME")
-    AC_SUBST(FB_PIPE_NAME)
     XE_PREPEND( -mthreads -lmpr -lversion -lws2_32 -lole32,LIBS)
     ;;
 
@@ -1214,15 +1299,17 @@ dnl # output
 	mkdir -p gen/\$fb_tgt/firebird/examples/extauth
 	mkdir -p gen/\$fb_tgt/firebird/examples/include
 	mkdir -p gen/\$fb_tgt/firebird/examples/interfaces
+	mkdir -p gen/\$fb_tgt/firebird/examples/object_pascal
+	mkdir -p gen/\$fb_tgt/firebird/examples/object_pascal/common
 	mkdir -p gen/\$fb_tgt/firebird/examples/package
 	mkdir -p gen/\$fb_tgt/firebird/examples/stat
 	mkdir -p gen/\$fb_tgt/firebird/examples/udf
 	mkdir -p gen/\$fb_tgt/firebird/examples/udr
 	mkdir -p gen/\$fb_tgt/firebird/examples/prebuilt/bin
 	mkdir -p gen/\$fb_tgt/firebird/examples/prebuilt/plugins
+	mkdir -p gen/\$fb_tgt/firebird/include/firebird/impl
 	mkdir -p gen/\$fb_tgt/firebird/lib
 	mkdir -p gen/\$fb_tgt/firebird/misc
-	mkdir -p gen/\$fb_tgt/firebird/help
 
 dnl ### TEMP ### directories for generated .cpp, .o and .d by module name
 	for src_dir in `cd src; ls -R -1 * | grep : | tr -d : | tr "\n" " "; cd ..`; do
@@ -1400,7 +1487,7 @@ AC_OUTPUT
 dnl Print out the build configuration (the most interesting thing)
 echo
 echo
-echo The Firebird4 package has been configured with the following options:
+echo The Firebird5 package has been configured with the following options:
 echo
 
 case $DEVEL_FLG in
@@ -1422,10 +1509,6 @@ esac
 
 echo           "                   Service name : $FB_SERVICE_NAME"
 echo           "                   Service port : $FB_SERVICE_PORT"
-
-case "$PLATFORM" in
- win32)   echo "                      Pipe name : $FB_PIPE_NAME";;
-esac
 
 echo           "                   GPRE modules : c_cxx.cpp$GPRE_LANGUAGE_MODULES"
 echo

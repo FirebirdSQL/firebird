@@ -36,13 +36,16 @@ using namespace Firebird;
 namespace
 {
 
-void tomCheck(int err, const char* text)
+void tomCheck(int err, const char* text, int specErr = CRYPT_OK,  const char* specText = nullptr)
 {
 	if (err == CRYPT_OK)
 		return;
 
 	string buf;
-	buf.printf("TomCrypt library error %s: %s", text, error_to_string(err));
+	if (specText && (err == specErr))
+		buf = specText;
+	else
+		buf.printf("TomCrypt library error %s: %s", text, error_to_string(err));
 	(Arg::Gds(isc_random) << buf).raise();
 }
 
@@ -76,7 +79,8 @@ public:
 	{
 		unsigned char* t = static_cast<unsigned char*>(to);
 		const unsigned char* f = static_cast<const unsigned char*>(from);
-		tomCheck(chacha_crypt(&chacha, f, length, t), "processing CHACHA#20");
+		tomCheck(chacha_crypt(&chacha, f, length, t), "processing CHACHA#20",
+			CRYPT_OVERFLOW, "Connection broken - internal chacha overflow. Reattach to server to proceed.");
 	}
 
 private:
@@ -84,97 +88,111 @@ private:
 };
 
 
-class ChaCha FB_FINAL : public StdPlugin<IWireCryptPluginImpl<ChaCha, CheckStatusWrapper> >
+template <unsigned IV_SIZE>
+class ChaCha final : public StdPlugin<IWireCryptPluginImpl<ChaCha<IV_SIZE>, CheckStatusWrapper> >
 {
 public:
 	explicit ChaCha(IPluginConfig*)
-		: en(NULL), de(NULL), iv(getPool())
-	{ }
+		: en(NULL), de(NULL), iv(this->getPool())
+	{
+		if (IV_SIZE == 16)
+		{
+			GenerateRandomBytes(iv.getBuffer(16), 12);
+			iv[12] = iv[13] = iv[14] = iv[15] = 0;
+		}
+		else
+			GenerateRandomBytes(iv.getBuffer(8), 8);
+	}
 
 	// ICryptPlugin implementation
-	const char* getKnownTypes(CheckStatusWrapper* status);
-	void setKey(CheckStatusWrapper* status, ICryptKey* key);
-	void encrypt(CheckStatusWrapper* status, unsigned int length, const void* from, void* to);
-	void decrypt(CheckStatusWrapper* status, unsigned int length, const void* from, void* to);
-	const unsigned char* getSpecificData(CheckStatusWrapper* status, const char* type, unsigned* len);
-	void setSpecificData(CheckStatusWrapper* status, const char* type, unsigned len, const unsigned char* data);
+	const char* getKnownTypes(CheckStatusWrapper* status)
+	{
+		return "Symmetric";
+	}
+
+	void setKey(CheckStatusWrapper* status, ICryptKey* key)
+	{
+		try
+		{
+    		unsigned int l;
+			const void* k = key->getEncryptKey(&l);
+			en = createCypher(l, k);
+
+	    	k = key->getDecryptKey(&l);
+			de = createCypher(l, k);
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
+	}
+
+	void encrypt(CheckStatusWrapper* status, unsigned int length, const void* from, void* to)
+	{
+		try
+		{
+			en->transform(length, from, to);
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
+	}
+
+	void decrypt(CheckStatusWrapper* status, unsigned int length, const void* from, void* to)
+	{
+		try
+		{
+			de->transform(length, from, to);
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
+	}
+
+	const unsigned char* getSpecificData(CheckStatusWrapper* status, const char* type, unsigned* len)
+	{
+		*len = IV_SIZE;
+
+		//WIRECRYPT_DEBUG(fprintf(stderr, "getSpecificData %d\n", *len));
+		return iv.begin();
+	}
+
+	void setSpecificData(CheckStatusWrapper* status, const char* type, unsigned len, const unsigned char* data)
+	{
+		//WIRECRYPT_DEBUG(fprintf(stderr, "setSpecificData %d\n", len));
+		memcpy(iv.getBuffer(len), data, len);
+	}
 
 private:
-	Cipher* createCypher(unsigned int l, const void* key);
+	Cipher* createCypher(unsigned int l, const void* key)
+	{
+		if (l < 16)
+			(Arg::Gds(isc_random) << "Key too short").raise();
+
+		hash_state md;
+		tomCheck(sha256_init(&md), "initializing sha256");
+		tomCheck(sha256_process(&md, static_cast<const unsigned char*>(key), l), "processing original key in sha256");
+		unsigned char stretched[32];
+		tomCheck(sha256_done(&md, stretched), "getting stretched key from sha256");
+
+		return FB_NEW Cipher(stretched, iv.getCount(), iv.begin());
+	}
+
 	AutoPtr<Cipher> en, de;
 	UCharBuffer iv;
 };
 
-void ChaCha::setKey(CheckStatusWrapper* status, ICryptKey* key)
-{
-	status->init();
-	try
-	{
-    	unsigned int l;
-		const void* k = key->getEncryptKey(&l);
-		en = createCypher(l, k);
-
-	    k = key->getDecryptKey(&l);
-		de = createCypher(l, k);
-	}
-	catch (const Exception& ex)
-	{
-		ex.stuffException(status);
-	}
-}
-
-void ChaCha::encrypt(CheckStatusWrapper* status, unsigned int length, const void* from, void* to)
-{
-	status->init();
-	en->transform(length, from, to);
-}
-
-void ChaCha::decrypt(CheckStatusWrapper* status, unsigned int length, const void* from, void* to)
-{
-	status->init();
-	de->transform(length, from, to);
-}
-
-Cipher* ChaCha::createCypher(unsigned int l, const void* key)
-{
-	if (l < 16)
-		(Arg::Gds(isc_random) << "Key too short").raise();
-
-	hash_state md;
-	tomCheck(sha256_init(&md), "initializing sha256");
-	tomCheck(sha256_process(&md, static_cast<const unsigned char*>(key), l), "processing original key in sha256");
-	unsigned char stretched[32];
-	tomCheck(sha256_done(&md, stretched), "getting stretched key from sha256");
-
-	return FB_NEW Cipher(stretched, iv.getCount(), iv.begin());
-}
-
-const char* ChaCha::getKnownTypes(CheckStatusWrapper* status)
-{
-	status->init();
-	return "Symmetric";
-}
-
-const unsigned char* ChaCha::getSpecificData(CheckStatusWrapper* status, const char*, unsigned* len)
-{
-	*len = 16;
-	GenerateRandomBytes(iv.getBuffer(*len), 12);
-	iv[12] = iv[13] = iv[14] = iv[15] = 0;
-	return iv.begin();
-}
-
-void ChaCha::setSpecificData(CheckStatusWrapper* status, const char*, unsigned len, const unsigned char* data)
-{
-	memcpy(iv.getBuffer(len), data, len);
-}
-
-SimpleFactory<ChaCha> factory;
+SimpleFactory<ChaCha<16> > factory;
+SimpleFactory<ChaCha<8> > factory64;
 
 } // anonymous namespace
 
-extern "C" void FB_EXPORTED FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 {
 	CachedMasterInterface::set(master);
 	PluginManagerInterfacePtr()->registerPluginFactory(IPluginManager::TYPE_WIRE_CRYPT, "ChaCha", &factory);
+	PluginManagerInterfacePtr()->registerPluginFactory(IPluginManager::TYPE_WIRE_CRYPT, "ChaCha64", &factory64);
 	getUnloadDetector()->registerMe();
 }

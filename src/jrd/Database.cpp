@@ -354,7 +354,7 @@ namespace Jrd
 		if (readOnly())
 			return;
 
-		if (!dbb_guid.alignment) // hackery way to check whether it was loaded
+		if (!dbb_guid.Data1) // It would be better to full check but one field should be enough
 		{
 			GenerateGuid(&dbb_guid);
 			PAG_set_db_guid(tdbb, dbb_guid);
@@ -450,7 +450,7 @@ namespace Jrd
 		return 0;
 	}
 
-	void Database::initGlobalObjectHolder(thread_db* tdbb)
+	void Database::initGlobalObjects()
 	{
 		dbb_gblobj_holder =
 			GlobalObjectHolder::init(getUniqueFileId(), dbb_filename, dbb_config);
@@ -512,8 +512,13 @@ namespace Jrd
 
 	Database::GlobalObjectHolder::~GlobalObjectHolder()
 	{
+		// here we cleanup what should not be globally protected
+		if (m_replMgr)
+			m_replMgr->shutdown();
+
 		MutexLockGuard guard(g_mutex, FB_FUNCTION);
 
+		Database::GlobalObjectHolder::DbId* entry = g_hashTable->lookup(m_id);
 		if (!g_hashTable->remove(m_id))
 			fb_assert(false);
 
@@ -521,6 +526,8 @@ namespace Jrd
 		m_lockMgr = nullptr;
 		m_eventMgr = nullptr;
 		m_replMgr = nullptr;
+
+		delete entry;
 	}
 
 	LockManager* Database::GlobalObjectHolder::getLockManager()

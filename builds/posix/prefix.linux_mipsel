@@ -22,4 +22,4 @@ LD=@CXX@
 # -fno-builtin is used because GCC 3.0-3.2.2 had bug with builtins expansion
 # you may remove it if engine is getting compiled with any other GCC version
 PROD_FLAGS=-ggdb -O3 -fno-omit-frame-pointer -DLINUX -pipe -MMD -fPIC
-DEV_FLAGS=-ggdb -DLINUX -DDEBUG_GDS_ALLOC -pipe -MMD -p -fPIC -Wall -Wno-switch -Wno-non-virtual-dtor
+DEV_FLAGS=-ggdb -DLINUX -DDEBUG_GDS_ALLOC -pipe -MMD -p -fPIC -Werror=delete-incomplete -Wall -Wno-switch -Wno-non-virtual-dtor

@@ -40,12 +40,11 @@
 #include "../jrd/sort.h"
 #include "../jrd/lls.h"
 #include "../jrd/tra.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/sbm.h"
 #include "../jrd/exe.h"
 #include "../jrd/scl.h"
 #include "../jrd/lck.h"
-#include "../jrd/rse.h"
 #include "../jrd/cch.h"
 #include "../common/gdsassert.h"
 #include "../jrd/btr_proto.h"
@@ -169,11 +168,11 @@ void IDX_check_access(thread_db* tdbb, CompilerScratch* csb, jrd_rel* view, jrd_
 				CMP_post_access(tdbb, csb,
 								referenced_relation->rel_security_name,
 								(view ? view->rel_id : 0),
-								SCL_references, SCL_object_table,
+								SCL_references, obj_relations,
 								referenced_relation->rel_name);
 				CMP_post_access(tdbb, csb,
 								referenced_field->fld_security_name, 0,
-								SCL_references, SCL_object_column,
+								SCL_references, obj_column,
 								referenced_field->fld_name, referenced_relation->rel_name);
 			}
 
@@ -210,7 +209,7 @@ bool IDX_check_master_types(thread_db* tdbb, index_desc& idx, jrd_rel* partner_r
 	// get the description of the partner index
 	const bool ok = BTR_description(tdbb, partner_relation, root, &partner_idx, idx.idx_primary_index);
 	CCH_RELEASE(tdbb, &window);
-	
+
 	if (!ok)
 		BUGCHECK(175);			// msg 175 partner index description not found
 
@@ -736,9 +735,6 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 	insertion.iib_key = &key1;
 	insertion.iib_btr_level = 0;
 
-	Attachment* att = tdbb->getAttachment();
-	AutoSetRestoreFlag<ULONG> gc(&att->att_flags, ATT_no_cleanup, true);
-
 	WIN window(get_root_page(tdbb, rpb->rpb_relation));
 
 	index_root_page* root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
@@ -1110,7 +1106,7 @@ static bool cmpRecordKeys(thread_db* tdbb,
  **************************************
  *
  * Functional description
- *	Compare indexed fields in two records. Records could belong to different 
+ *	Compare indexed fields in two records. Records could belong to different
  *  relations but set of indexed fields to compare should be equal.
  *
  **************************************/
@@ -1235,11 +1231,11 @@ static idx_e check_duplicates(thread_db* tdbb,
 			if (cmpRecordKeys(tdbb, rpb.rpb_record, relation_1, insertion_idx,
 							  record, relation_2, record_idx))
 			{
-				// When check foreign keys in snapshot or read consistency transaction, 
-				// ensure that master record is visible in transaction context and still 
+				// When check foreign keys in snapshot or read consistency transaction,
+				// ensure that master record is visible in transaction context and still
 				// satisfy foreign key constraint.
 
-				if (is_fk && 
+				if (is_fk &&
 					(!(transaction->tra_flags & TRA_read_committed) ||
 					(transaction->tra_flags & TRA_read_consistency)))
 				{

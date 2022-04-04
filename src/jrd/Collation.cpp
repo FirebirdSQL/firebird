@@ -92,7 +92,7 @@
 */
 
 #include "firebird.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/jrd.h"
 #include "../jrd/err_proto.h"
 #include "../jrd/evl_string.h"
@@ -444,15 +444,21 @@ template <typename CharType, typename StrConverter>
 class StartsMatcher : public PatternMatcher
 {
 public:
-	StartsMatcher(MemoryPool& pool, TextType* ttype, const CharType* str, SLONG str_len)
+	StartsMatcher(MemoryPool& pool, TextType* ttype, const CharType* str, SLONG str_len, SLONG aByteLengthLimit)
 		: PatternMatcher(pool, ttype),
 		  evaluator(pool, str, str_len)
 	{
+		auto charSet = ttype->getCharSet();
+
+		byteLengthLimit = charSet->isMultiByte() ?
+			aByteLengthLimit / charSet->minBytesPerChar() * charSet->maxBytesPerChar() :
+			aByteLengthLimit;
 	}
 
 	void reset()
 	{
 		evaluator.reset();
+		processedByteLength = 0;
 	}
 
 	bool result()
@@ -462,8 +468,14 @@ public:
 
 	bool process(const UCHAR* str, SLONG length)
 	{
+		if (processedByteLength + length > byteLengthLimit)
+			length = byteLengthLimit - processedByteLength;
+
+		processedByteLength += length;
+
 		StrConverter cvt(pool, textType, str, length);
 		fb_assert(length % sizeof(CharType) == 0);
+
 		return evaluator.processNextChunk(
 			reinterpret_cast<const CharType*>(str), length / sizeof(CharType));
 	}
@@ -471,27 +483,45 @@ public:
 	static StartsMatcher* create(MemoryPool& pool, TextType* ttype,
 		const UCHAR* str, SLONG length)
 	{
+		const auto byteLengthLimit = length;
+
 		StrConverter cvt(pool, ttype, str, length);
 		fb_assert(length % sizeof(CharType) == 0);
+
 		return FB_NEW_POOL(pool) StartsMatcher(pool, ttype,
-			reinterpret_cast<const CharType*>(str), length / sizeof(CharType));
+			reinterpret_cast<const CharType*>(str), length / sizeof(CharType), byteLengthLimit);
 	}
 
 	static bool evaluate(MemoryPool& pool, TextType* ttype, const UCHAR* s, SLONG sl,
 		const UCHAR* p, SLONG pl)
 	{
+		if (sl > pl)
+		{
+			auto charSet = ttype->getCharSet();
+
+			sl = charSet->isMultiByte() ?
+				MIN(sl, pl / charSet->minBytesPerChar() * charSet->maxBytesPerChar()) :
+				pl;
+		}
+
 		StrConverter cvt1(pool, ttype, p, pl);
-		StrConverter cvt2(pool, ttype, s, sl);
 		fb_assert(pl % sizeof(CharType) == 0);
+
+		StrConverter cvt2(pool, ttype, s, sl);
 		fb_assert(sl % sizeof(CharType) == 0);
+
 		Firebird::StartsEvaluator<CharType> evaluator(pool,
 			reinterpret_cast<const CharType*>(p), pl / sizeof(CharType));
+
 		evaluator.processNextChunk(reinterpret_cast<const CharType*>(s), sl / sizeof(CharType));
+
 		return evaluator.getResult();
 	}
 
 private:
 	Firebird::StartsEvaluator<CharType> evaluator;
+	SLONG byteLengthLimit;
+	SLONG processedByteLength = 0;
 };
 
 template <typename CharType, typename StrConverter = CanonicalConverter<UpcaseConverter<> > >

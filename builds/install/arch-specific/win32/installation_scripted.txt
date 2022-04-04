@@ -147,7 +147,7 @@ Parameters specific to Firebird uninstalls
     firebird.conf
     databases.conf
     firebird.log
-    security3.fdb
+    security5.fdb
     fbtrace.conf
     replication.conf
 

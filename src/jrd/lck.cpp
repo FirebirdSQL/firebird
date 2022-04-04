@@ -31,7 +31,7 @@
 #include "../common/classes/Hash.h"
 #include "../jrd/jrd.h"
 #include "../jrd/lck.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/err_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../jrd/jrd_proto.h"
@@ -56,7 +56,6 @@
 using namespace Jrd;
 using namespace Firebird;
 
-static SSHORT adjust_wait(thread_db* tdbb, SSHORT wait);
 static void bug_lck(const TEXT*);
 static bool compatible(const Lock*, const Lock*, USHORT);
 static void enqueue(thread_db*, CheckStatusWrapper*, Lock*, USHORT, SSHORT);
@@ -237,11 +236,11 @@ class WaitCancelGuard
 public:
 	WaitCancelGuard(thread_db* tdbb, Lock* lock, int wait)
 		: m_tdbb(tdbb),
-		  m_save_lock(NULL)
+		  m_save_handle(0)
 	{
 		Jrd::Attachment* att = m_tdbb->getAttachment();
 		if (att)
-			m_save_lock = att->att_wait_lock;
+			m_save_handle = att->att_wait_owner_handle;
 
 		m_cancel_disabled = (m_tdbb->tdbb_flags & TDBB_wait_cancel_disable);
 		if (wait == LCK_WAIT)
@@ -249,20 +248,23 @@ public:
 			switch (lock->lck_type)
 			{
 			case LCK_tra:
+			case LCK_record_gc:
 				m_tdbb->tdbb_flags &= ~TDBB_wait_cancel_disable;
 				if (att)
-					att->att_wait_lock = lock;
+					att->att_wait_owner_handle = lock->lck_owner_handle;
 				break;
 
 			default:
 				m_tdbb->tdbb_flags |= TDBB_wait_cancel_disable;
+				if (att && m_save_handle)
+					att->att_wait_owner_handle = 0;
 			}
 		}
 		else if (wait != LCK_NO_WAIT)
 		{
 			m_tdbb->tdbb_flags &= ~TDBB_wait_cancel_disable;
 			if (att)
-				att->att_wait_lock = lock;
+				att->att_wait_owner_handle = lock->lck_owner_handle;
 		}
 	}
 
@@ -270,7 +272,7 @@ public:
 	{
 		Jrd::Attachment* att = m_tdbb->getAttachment();
 		if (att)
-			att->att_wait_lock = m_save_lock;
+			att->att_wait_owner_handle = m_save_handle;
 
 		if (m_cancel_disabled)
 			m_tdbb->tdbb_flags |= TDBB_wait_cancel_disable;
@@ -280,7 +282,7 @@ public:
 
 private:
 	thread_db* m_tdbb;
-	Lock* m_save_lock;
+	SLONG m_save_handle;
 	bool m_cancel_disabled;
 };
 
@@ -341,7 +343,6 @@ bool LCK_convert(thread_db* tdbb, Lock* lock, USHORT level, SSHORT wait)
 	WaitCancelGuard guard(tdbb, lock, wait);
 	FbLocalStatus statusVector;
 
-	wait = adjust_wait(tdbb, wait);
 	const bool result = CONVERT(tdbb, &statusVector, lock, level, wait);
 
 	if (!result)
@@ -421,8 +422,9 @@ bool LCK_cancel_wait(Jrd::Attachment* attachment)
  **************************************/
 	Database *dbb = attachment->att_database;
 
-	if (attachment->att_wait_lock)
-		return dbb->lockManager()->cancelWait(attachment->att_wait_lock->lck_owner_handle);
+	const SLONG owner_offset = attachment->att_wait_owner_handle;
+	if (owner_offset)
+		return dbb->lockManager()->cancelWait(owner_offset);
 
 	return false;
 }
@@ -669,7 +671,6 @@ bool LCK_lock(thread_db* tdbb, Lock* lock, USHORT level, SSHORT wait)
 	WaitCancelGuard guard(tdbb, lock, wait);
 	FbLocalStatus statusVector;
 
-	wait = adjust_wait(tdbb, wait);
 	ENQUEUE(tdbb, &statusVector, lock, level, wait);
 	fb_assert(LCK_CHECK_LOCK(lock));
 
@@ -866,40 +867,6 @@ void LCK_write_data(thread_db* tdbb, Lock* lock, LOCK_DATA_T data)
 	lock->lck_data = data;
 
 	fb_assert(LCK_CHECK_LOCK(lock));
-}
-
-
-static SSHORT adjust_wait(thread_db* tdbb, SSHORT wait)
-{
-/**************************************
- *
- *	a d j u s t _ w a i t
- *
- **************************************
- *
- * Functional description
- *	If wait is cancellable and if statement timer was started - calc new wait
- *	time to ensure it will not take longer than rest of timeout.
- *
- **************************************/
-	if ((wait == LCK_NO_WAIT) || (tdbb->tdbb_flags & TDBB_wait_cancel_disable) || !tdbb->getTimeoutTimer())
-		return wait;
-
-	unsigned int tout = tdbb->getTimeoutTimer()->timeToExpire();
-	if (tout > 0)
-	{
-		SSHORT t;
-		if (tout < 1000)
-			t = 1;
-		else if (tout < MAX_SSHORT * 1000)
-			t = (tout + 999) / 1000;
-		else
-			t = MAX_SSHORT;
-
-		if ((wait == LCK_WAIT) || (-wait > t))
-			return -t;
-	}
-	return wait;
 }
 
 
@@ -1522,7 +1489,7 @@ Lock::~Lock()
 	{
 #ifdef DEBUG_LCK_LIST
 		gds__log("DEBUG_LCK_LIST: Lock::~Lock(): this 0x%p, attachment 0x%p, lck_type %d, lck_next 0x%p, lck_prior 0x%p",
-			this, lck_attachment ? lck_attachment->getHandle() : NULL, 
+			this, lck_attachment ? lck_attachment->getHandle() : NULL,
 			(int) lck_type, lck_next, lck_prior);
 #endif
 

@@ -39,7 +39,7 @@
 #include "../jrd/err_proto.h"
 #include "../jrd/ibsetjmp.h"
 #include "../common/isc_s_proto.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 
 using namespace Jrd;
 using namespace Firebird;

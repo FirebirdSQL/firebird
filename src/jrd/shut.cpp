@@ -26,6 +26,7 @@
 #include "../jrd/scl.h"
 #include "../jrd/nbak.h"
 #include "../jrd/ods.h"
+#include "../jrd/Mapping.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/err_proto.h"
@@ -222,6 +223,9 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 		check_backup_state(tdbb);
 	}
 
+	// Clear old mapping cache data (if present)
+	Mapping::clearCache(dbb->dbb_filename.c_str(), Mapping::ALL_CACHE);
+
 	attachment->att_flags |= ATT_shutdown_manager;
 
 	// Database is being shutdown. First notification gives shutdown type and delay in seconds.
@@ -401,6 +405,9 @@ void SHUT_online(thread_db* tdbb, SSHORT flag, Sync* guard)
 		check_backup_state(tdbb);
 	}
 
+	// Clear old mapping cache data (if present)
+	Mapping::clearCache(dbb->dbb_filename.c_str(), Mapping::ALL_CACHE);
+
 	// Reset shutdown flag on database header page
 
 	WIN window(HEADER_PAGE_NUMBER);
@@ -462,7 +469,6 @@ static bool notify_shutdown(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* gu
  *
  **************************************/
 	Database* const dbb = tdbb->getDatabase();
-	StableAttachmentPart* const sAtt = tdbb->getAttachment()->getStable();
 
 	shutdown_data data;
 	data.data_items.flag = flag;
@@ -472,7 +478,7 @@ static bool notify_shutdown(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* gu
 
 	{ // scope
 		// Checkout before calling AST function
-		MutexUnlockGuard uguard(*(sAtt->getMutex()), FB_FUNCTION);
+		EngineCheckout uguard(tdbb, FB_FUNCTION);
 
 		// Notify local attachments
 		SHUT_blocking_ast(tdbb, true);

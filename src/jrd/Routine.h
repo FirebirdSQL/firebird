@@ -34,7 +34,7 @@ namespace Jrd
 {
 	class thread_db;
 	class CompilerScratch;
-	class JrdStatement;
+	class Statement;
 	class Lock;
 	class Format;
 	class Parameter;
@@ -82,6 +82,7 @@ namespace Jrd
 															// invalidating procedure pointers from other parts of metadata cache
 		static const USHORT FLAG_CHECK_EXISTENCE	= 16;	// Existence lock released
 		static const USHORT FLAG_RELOAD		 		= 32;	// Recompile before execution
+		static const USHORT FLAG_CLEARED			= 64;	// Routine cleared but not removed from cache
 
 		static const USHORT MAX_ALTER_COUNT = 64;	// Number of times an in-cache routine can be altered
 
@@ -104,8 +105,8 @@ namespace Jrd
 		const MetaName& getSecurityName() const { return securityName; }
 		void setSecurityName(const MetaName& value) { securityName = value; }
 
-		/*const*/ JrdStatement* getStatement() const { return statement; }
-		void setStatement(JrdStatement* value);
+		/*const*/ Statement* getStatement() const { return statement; }
+		void setStatement(Statement* value);
 
 		bool isSubRoutine() const { return subRoutine; }
 		void setSubRoutine(bool value) { subRoutine = value; }
@@ -165,7 +166,7 @@ namespace Jrd
 		USHORT id;							// routine ID
 		QualifiedName name;					// routine name
 		MetaName securityName;				// security class name
-		JrdStatement* statement;			// compiled routine statement
+		Statement* statement;			// compiled routine statement
 		bool subRoutine;					// Is this a subroutine?
 		bool implemented;					// Is the packaged routine missing the body/entrypoint?
 		bool defined;						// UDF has its implementation module available

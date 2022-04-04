@@ -285,7 +285,7 @@ void DataTypeUtilBase::makeConcatenate(dsc* result, const dsc* value1, const dsc
 		result->dsc_length = length + static_cast<USHORT>(sizeof(USHORT));
 	}
 
-	result->dsc_flags = (value1->dsc_flags | value2->dsc_flags) & DSC_nullable;
+	result->setNullable(value1->isNullable() || value2->isNullable());
 }
 
 

@@ -46,7 +46,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/isc_proto.h"
 #include "../common/isc_f_proto.h"
@@ -346,6 +346,47 @@ bool ISC_analyze_nfs(tstring& expanded_filename, tstring& node_name)
 #endif
 
 
+#if defined(WIN_NT)
+bool ISC_analyze_pclan(tstring& expanded_name, tstring& node_name)
+{
+/**************************************
+ *
+ *	I S C _ a n a l y z e _ p c l a n
+ *
+ **************************************
+ *
+ * Functional description
+ *	Check a file name for a SMB mount point.  If so,
+ *	decompose into node name and remote file name.
+ *
+ **************************************/
+	ISC_expand_share(expanded_name);
+
+	if (expanded_name.length() < 2 ||
+		(expanded_name[0] != '\\' && expanded_name[0] != '/') ||
+		(expanded_name[1] != '\\' && expanded_name[1] != '/'))
+	{
+		return false;
+	}
+
+	const size p = expanded_name.find_first_of("\\/", 2);
+	if (p == npos)
+		return false;
+
+	if (Config::getRemoteFileOpenAbility())
+	{
+		if (expanded_name.find(':', p + 1) == npos)
+			return false;
+	}
+
+	node_name = expanded_name.substr(2, p - 2);
+	expanded_name.erase(0, p + 1);
+
+	return true;
+}
+#endif
+
+
 bool ISC_analyze_protocol(const char* protocol, tstring& expanded_name, tstring& node_name,
 						  const char* separator, bool need_file)
 {
@@ -401,57 +442,6 @@ bool ISC_analyze_protocol(const char* protocol, tstring& expanded_name, tstring&
 
 	return true;
 }
-
-
-#if defined(WIN_NT)
-bool ISC_analyze_pclan(tstring& expanded_name, tstring& node_name)
-{
-/**************************************
- *
- *	I S C _ a n a l y z e _ p c l a n
- *
- **************************************
- *
- * Functional description
- *	Analyze a filename for a named pipe node name on the front.
- *	If one is found, extract the node name, compute the residual
- *	file name, and return true.  Otherwise return false.
- *
- **************************************/
-	node_name.erase();
-	if (expanded_name.length() < 2 ||
-		(expanded_name[0] != '\\' && expanded_name[0] != '/') ||
-		(expanded_name[1] != '\\' && expanded_name[1] != '/'))
-	{
-		return false;
-	}
-
-	const size p = expanded_name.find_first_of("\\/", 2);
-	if (p == npos)
-		return false;
-
-	if (Config::getRemoteFileOpenAbility())
-	{
-		if (expanded_name.find(':', p + 1) == npos)
-			return false;
-	}
-
-	node_name = "\\\\";
-	node_name += expanded_name.substr(2, p - 2);
-
-	// If this is a loopback, substitute "." for the host name.  Otherwise,
-	// the CreateFile on the pipe will fail.
-	TEXT localhost[MAXHOSTLEN];
-	ISC_get_host(localhost, sizeof(localhost));
-	if (node_name.substr(2, npos) == localhost)
-	{
-		node_name.replace(2, npos, ".");
-	}
-
-	expanded_name.erase(0, p + 1);
-	return true;
-}
-#endif	// WIN_NT
 
 
 bool ISC_analyze_tcp(tstring& file_name, tstring& node_name, bool need_file)
@@ -564,46 +554,22 @@ iscProtocol ISC_extract_host(Firebird::PathName& file_name,
 	// Always check for an explicit TCP node name
 
 	if (ISC_analyze_tcp(file_name, host_name))
-	{
 		return ISC_PROTOCOL_TCPIP;
-	}
-#ifndef NO_NFS
+
 	if (implicit_flag)
 	{
-		// Check for a file on an NFS mounted device
+		// Check for a file on a network mount
 
-		if (ISC_analyze_nfs(file_name, host_name))
-		{
+#ifdef WIN_NT
+		if (ISC_analyze_pclan(file_name, host_name))
 			return ISC_PROTOCOL_TCPIP;
-		}
-	}
 #endif
 
-#if defined(WIN_NT)
-	// Check for an explicit named pipe node name
-
-	if (ISC_analyze_pclan(file_name, host_name))
-	{
-		return ISC_PROTOCOL_WLAN;
-	}
-
-	if (implicit_flag)
-	{
-		// Check for a file on a shared drive.  First try to expand
-		// the path.  Then check the expanded path for a TCP or named pipe.
-
-		ISC_expand_share(file_name);
-		if (ISC_analyze_tcp(file_name, host_name))
-		{
+#ifndef NO_NFS
+		if (ISC_analyze_nfs(file_name, host_name))
 			return ISC_PROTOCOL_TCPIP;
-		}
-		if (ISC_analyze_pclan(file_name, host_name))
-		{
-			return ISC_PROTOCOL_WLAN;
-		}
-
+#endif
 	}
-#endif	// WIN_NT
 
 	return ISC_PROTOCOL_LOCAL;
 }

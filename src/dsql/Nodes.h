@@ -42,7 +42,7 @@ class Node;
 class NodePrinter;
 class ExprNode;
 class NodeRefsHolder;
-class OptimizerBlk;
+class Optimizer;
 class OptimizerRetrieval;
 class RecordSource;
 class RseNode;
@@ -52,7 +52,7 @@ class ValueExprNode;
 
 
 // Must be less then MAX_SSHORT. Not used for static arrays.
-const int MAX_CONJUNCTS	= 32000;
+const unsigned MAX_CONJUNCTS = 32000;
 
 // New: MAX_STREAMS should be a multiple of BITS_PER_LONG (32 and hard to believe it will change)
 
@@ -64,7 +64,7 @@ const StreamType STREAM_MAP_LENGTH = MAX_STREAMS + 2;
 // New formula is simply MAX_STREAMS / BITS_PER_LONG
 const int OPT_STREAM_BITS = MAX_STREAMS / BITS_PER_LONG; // 128 with 4096 streams
 
-typedef Firebird::HalfStaticArray<StreamType, OPT_STATIC_ITEMS> StreamList;
+typedef Firebird::HalfStaticArray<StreamType, OPT_STATIC_STREAMS> StreamList;
 typedef Firebird::SortedArray<StreamType> SortedStreamList;
 
 typedef Firebird::Array<NestConst<ValueExprNode> > NestValueArray;
@@ -189,6 +189,9 @@ public:
 	static void storePrivileges(thread_db* tdbb, jrd_tra* transaction,
 		const MetaName& name, int type, const char* privileges);
 
+	static void deletePrivilegesByRelName(thread_db* tdbb, jrd_tra* transaction,
+		const MetaName& name, int type);
+
 public:
 	// Check permission on DDL operation. Return true if everything is OK.
 	// Raise an exception for bad permission.
@@ -210,7 +213,7 @@ public:
 
 	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
-		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_DDL);
+		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_DDL);
 		return this;
 	}
 
@@ -280,7 +283,7 @@ public:
 		return this;
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** transaction) const = 0;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** transaction) const = 0;
 };
 
 
@@ -297,12 +300,12 @@ public:
 	{
 		Node::dsqlPass(dsqlScratch);
 
-		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_SESSION_MANAGEMENT);
+		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_SESSION_MANAGEMENT);
 
 		return this;
 	}
 
-	virtual void execute(thread_db* tdbb, dsql_req* request, jrd_tra** traHandle) const = 0;
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const = 0;
 };
 
 
@@ -393,11 +396,16 @@ template <typename To, typename From> static bool nodeIs(const NestConst<From>& 
 }
 
 
-class NodeRefsHolder : public Firebird::PermanentStorage
+class NodeRefsHolder : public Firebird::AutoStorage
 {
 public:
-	NodeRefsHolder(MemoryPool& pool)
-		: PermanentStorage(pool),
+	NodeRefsHolder()
+		: refs(getPool())
+	{
+	}
+
+	explicit NodeRefsHolder(MemoryPool& pool)
+		: AutoStorage(pool),
 		  refs(pool)
 	{
 	}
@@ -505,6 +513,7 @@ public:
 
 		// RecordSource types
 		TYPE_AGGREGATE_SOURCE,
+		TYPE_LOCAL_TABLE,
 		TYPE_PROCEDURE,
 		TYPE_RELATION,
 		TYPE_RSE,
@@ -519,17 +528,17 @@ public:
 
 	// Generic flags.
 	static const USHORT FLAG_INVARIANT	= 0x01;	// Node is recognized as being invariant.
+	static const USHORT FLAG_PATTERN_MATCHER_CACHE	= 0x02;
 
 	// Boolean flags.
-	static const USHORT FLAG_DEOPTIMIZE	= 0x02;	// Boolean which requires deoptimization.
-	static const USHORT FLAG_RESIDUAL	= 0x04;	// Boolean which must remain residual.
-	static const USHORT FLAG_ANSI_NOT	= 0x08;	// ANY/ALL predicate is prefixed with a NOT one.
+	static const USHORT FLAG_DEOPTIMIZE	= 0x04;	// Boolean which requires deoptimization.
+	static const USHORT FLAG_RESIDUAL	= 0x08;	// Boolean which must remain residual.
+	static const USHORT FLAG_ANSI_NOT	= 0x10;	// ANY/ALL predicate is prefixed with a NOT one.
 
 	// Value flags.
-	static const USHORT FLAG_DOUBLE		= 0x10;
-	static const USHORT FLAG_DATE		= 0x20;
-	static const USHORT FLAG_DECFLOAT	= 0x40;
-	static const USHORT FLAG_VALUE		= 0x80;	// Full value area required in impure space.
+	static const USHORT FLAG_DOUBLE		= 0x20;
+	static const USHORT FLAG_DATE		= 0x40;
+	static const USHORT FLAG_DECFLOAT	= 0x80;
 	static const USHORT FLAG_INT128		= 0x100;
 
 	explicit ExprNode(Type aType, MemoryPool& pool)
@@ -649,18 +658,18 @@ public:
 	}
 
 	// Check if expression could return NULL or expression can turn NULL into a true/false.
-	virtual bool possiblyUnknown(OptimizerBlk* opt);
+	virtual bool possiblyUnknown() const;
 
 	// Verify if this node is allowed in an unmapped boolean.
-	virtual bool unmappable(CompilerScratch* csb, const MapNode* mapNode, StreamType shellStream);
+	virtual bool unmappable(const MapNode* mapNode, StreamType shellStream) const;
 
 	// Return all streams referenced by the expression.
-	virtual void collectStreams(CompilerScratch* csb, SortedStreamList& streamList) const;
+	virtual void collectStreams(SortedStreamList& streamList) const;
 
-	virtual bool findStream(CompilerScratch* csb, StreamType stream)
+	virtual bool containsStream(StreamType stream) const
 	{
 		SortedStreamList streams;
-		collectStreams(csb, streams);
+		collectStreams(streams);
 
 		return streams.exist(stream);
 	}
@@ -674,7 +683,7 @@ public:
 	}
 
 	// Determine if two expression trees are the same.
-	virtual bool sameAs(CompilerScratch* csb, const ExprNode* other, bool ignoreStreams) const;
+	virtual bool sameAs(const ExprNode* other, bool ignoreStreams) const;
 
 	// See if node is presently computable.
 	// A node is said to be computable, if all the streams involved
@@ -683,8 +692,8 @@ public:
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value = NULL);
 
-	virtual void findDependentFromStreams(const OptimizerRetrieval* optRet,
-		SortedStreamList* streamList);
+	virtual void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
 	virtual ExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 	virtual ExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual ExprNode* copy(thread_db* tdbb, NodeCopier& copier) const = 0;
@@ -737,7 +746,7 @@ public:
 	}
 
 	virtual BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const = 0;
-	virtual bool execute(thread_db* tdbb, jrd_req* request) const = 0;
+	virtual bool execute(thread_db* tdbb, Request* request) const = 0;
 };
 
 class ValueExprNode : public ExprNode
@@ -819,7 +828,7 @@ public:
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) = 0;
 
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const = 0;
-	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const = 0;
+	virtual dsc* execute(thread_db* tdbb, Request* request) const = 0;
 
 public:
 	SCHAR nodScale;
@@ -876,7 +885,7 @@ public:
 		return NULL;
 	}
 
-	virtual dsc* execute(thread_db* /*tdbb*/, jrd_req* /*request*/) const
+	virtual dsc* execute(thread_db* /*tdbb*/, Request* /*request*/) const
 	{
 		fb_assert(false);
 		return NULL;
@@ -1017,36 +1026,36 @@ public:
 
 	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual bool possiblyUnknown(OptimizerBlk* /*opt*/)
+	virtual bool possiblyUnknown() const
 	{
 		return true;
 	}
 
-	virtual void collectStreams(CompilerScratch* /*csb*/, SortedStreamList& /*streamList*/) const
+	virtual void collectStreams(SortedStreamList& /*streamList*/) const
 	{
 		// ASF: Although in v2.5 the visitor happens normally for the node childs, nod_count has
 		// been set to 0 in CMP_pass2, so that doesn't happens.
 		return;
 	}
 
-	virtual bool unmappable(CompilerScratch* /*csb*/, const MapNode* /*mapNode*/, StreamType /*shellStream*/)
+	virtual bool unmappable(const MapNode* /*mapNode*/, StreamType /*shellStream*/) const
 	{
 		return false;
 	}
 
-	virtual dsc* winPass(thread_db* /*tdbb*/, jrd_req* /*request*/, SlidingWindow* /*window*/) const
+	virtual dsc* winPass(thread_db* /*tdbb*/, Request* /*request*/, SlidingWindow* /*window*/) const
 	{
 		return NULL;
 	}
 
-	virtual void aggInit(thread_db* tdbb, jrd_req* request) const = 0;	// pure, but defined
-	virtual void aggFinish(thread_db* tdbb, jrd_req* request) const;
-	virtual bool aggPass(thread_db* tdbb, jrd_req* request) const;
-	virtual dsc* execute(thread_db* tdbb, jrd_req* request) const;
+	virtual void aggInit(thread_db* tdbb, Request* request) const = 0;	// pure, but defined
+	virtual void aggFinish(thread_db* tdbb, Request* request) const;
+	virtual bool aggPass(thread_db* tdbb, Request* request) const;
+	virtual dsc* execute(thread_db* tdbb, Request* request) const;
 
 	virtual unsigned getCapabilities() const = 0;
-	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const = 0;
-	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const = 0;
+	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const = 0;
+	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const = 0;
 
 	virtual AggNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 
@@ -1078,11 +1087,11 @@ public:
 	explicit WinFuncNode(MemoryPool& pool, const AggInfo& aAggInfo, ValueExprNode* aArg = NULL);
 
 public:
-	virtual void aggPass(thread_db* tdbb, jrd_req* request, dsc* desc) const
+	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 	{
 	}
 
-	virtual dsc* aggExecute(thread_db* tdbb, jrd_req* request) const
+	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const
 	{
 		return NULL;
 	}
@@ -1150,23 +1159,23 @@ public:
 		fb_assert(false);
 	}
 
-	virtual bool possiblyUnknown(OptimizerBlk* /*opt*/)
+	virtual bool possiblyUnknown() const
 	{
 		return true;
 	}
 
-	virtual bool unmappable(CompilerScratch* /*csb*/, const MapNode* /*mapNode*/, StreamType /*shellStream*/)
+	virtual bool unmappable(const MapNode* /*mapNode*/, StreamType /*shellStream*/) const
 	{
 		return false;
 	}
 
-	virtual void collectStreams(CompilerScratch* /*csb*/, SortedStreamList& streamList) const
+	virtual void collectStreams(SortedStreamList& streamList) const
 	{
 		if (!streamList.exist(getStream()))
 			streamList.add(getStream());
 	}
 
-	virtual bool sameAs(CompilerScratch* /*csb*/, const ExprNode* /*other*/, bool /*ignoreStreams*/) const
+	virtual bool sameAs(const ExprNode* /*other*/, bool /*ignoreStreams*/) const
 	{
 		return false;
 	}
@@ -1180,7 +1189,7 @@ public:
 		streamList.add(getStream());
 	}
 
-	virtual RecordSource* compile(thread_db* tdbb, OptimizerBlk* opt, bool innerSubStream) = 0;
+	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) = 0;
 
 public:
 	dsql_ctx* dsqlContext;
@@ -1376,6 +1385,7 @@ public:
 		TYPE_CONTINUE_LEAVE,
 		TYPE_CURSOR_STMT,
 		TYPE_DECLARE_CURSOR,
+		TYPE_DECLARE_LOCAL_TABLE,
 		TYPE_DECLARE_SUBFUNC,
 		TYPE_DECLARE_SUBPROC,
 		TYPE_DECLARE_VARIABLE,
@@ -1398,6 +1408,7 @@ public:
 		TYPE_MERGE_SEND,
 		TYPE_MESSAGE,
 		TYPE_MODIFY,
+		TYPE_OUTER_MAP,
 		TYPE_POST_EVENT,
 		TYPE_RECEIVE,
 		TYPE_RETURN,
@@ -1408,8 +1419,8 @@ public:
 		TYPE_STALL,
 		TYPE_STORE,
 		TYPE_SUSPEND,
+		TYPE_TRUNCATE_LOCAL_TABLE,
 		TYPE_UPDATE_OR_INSERT,
-		TYPE_USER_SAVEPOINT,
 
 		TYPE_EXT_INIT_PARAMETER,
 		TYPE_EXT_TRIGGER
@@ -1422,15 +1433,15 @@ public:
 		POST_TRIG = 2
 	};
 
-	// Marks used by EraseNode, ModifyNode and StoreNode
-	static const unsigned MARK_POSITIONED	= 0x01;		// Erase|Modify node is positioned at explicit cursor
-	static const unsigned MARK_MERGE		= 0x02;		// node is part of MERGE statement
-	// Marks used by ForNode
-	static const unsigned MARK_FOR_UPDATE	= 0x04;		// implicit cursor used in UPDATE\DELETE\MERGE statement
+	// Marks used by EraseNode, ModifyNode, StoreNode and ForNode
+	static const unsigned MARK_POSITIONED		= 0x01;	// Erase|Modify node is positioned at explicit cursor
+	static const unsigned MARK_MERGE			= 0x02;	// node is part of MERGE statement
+	static const unsigned MARK_FOR_UPDATE		= 0x04;	// implicit cursor used in UPDATE\DELETE\MERGE statement
+	static const unsigned MARK_AVOID_COUNTERS	= 0x08;	// do not touch record counters
 
 	struct ExeState
 	{
-		ExeState(thread_db* tdbb, jrd_req* request, jrd_tra* transaction)
+		ExeState(thread_db* tdbb, Request* request, jrd_tra* transaction)
 			: savedTdbb(tdbb),
 			  oldPool(tdbb->getDefaultPool()),
 			  oldRequest(tdbb->getRequest()),
@@ -1456,7 +1467,7 @@ public:
 
 		thread_db* savedTdbb;
 		MemoryPool* oldPool;		// Save the old pool to restore on exit.
-		jrd_req* oldRequest;		// Save the old request to restore on exit.
+		Request* oldRequest;		// Save the old request to restore on exit.
 		jrd_tra* oldTransaction;	// Save the old transcation to restore on exit.
 		const StmtNode* topNode;
 		const StmtNode* prevNode;
@@ -1518,7 +1529,7 @@ public:
 		return NULL;
 	}
 
-	virtual const StmtNode* execute(thread_db* tdbb, jrd_req* request, ExeState* exeState) const = 0;
+	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const = 0;
 
 public:
 	NestConst<StmtNode> parentStmt;
@@ -1556,7 +1567,7 @@ public:
 		return NULL;
 	}
 
-	const StmtNode* execute(thread_db* /*tdbb*/, jrd_req* /*request*/, ExeState* /*exeState*/) const
+	const StmtNode* execute(thread_db* /*tdbb*/, Request* /*request*/, ExeState* /*exeState*/) const
 	{
 		fb_assert(false);
 		return NULL;

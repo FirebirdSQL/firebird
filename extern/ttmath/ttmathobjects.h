@@ -484,7 +484,7 @@ public:
 
 		if( i == table.end() )
 		{
-			value.empty();
+			value.clear();
 			*param = 0;
 			return err_unknown_object;
 		}

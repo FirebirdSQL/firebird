@@ -29,7 +29,7 @@
 #include "firebird.h"
 #include "firebird/Interface.h"
 #include "../auth/SecureRemotePassword/Message.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 
 #include "../jrd/constants.h"
 #include "../common/classes/init.h"
@@ -636,7 +636,7 @@ public:
 	static const ULONG FLAG_DELIVER = 0x2;
 };
 
-class MappingIpc FB_FINAL : public Firebird::IpcObject
+class MappingIpc final : public Firebird::IpcObject
 {
 	static const USHORT MAPPING_VERSION = 1;
 	static const size_t DEFAULT_SIZE = 1024 * 1024;
@@ -784,12 +784,23 @@ public:
 			iscLogException("MappingIpc: Cannot initialize the shared memory region", ex);
 			throw;
 		}
-		fb_assert(sharedMemory->getHeader()->mhb_header_version == MemoryHeader::HEADER_VERSION);
-		fb_assert(sharedMemory->getHeader()->mhb_version == MAPPING_VERSION);
-
-		Guard gShared(this);
 
 		MappingHeader* sMem = sharedMemory->getHeader();
+
+		if (sMem->mhb_type != SharedMemoryBase::SRAM_MAPPING_RESET ||
+			sMem->mhb_header_version != MemoryHeader::HEADER_VERSION ||
+			sMem->mhb_version != MAPPING_VERSION)
+		{
+			string err;
+			err.printf("MappingIpc: inconsistent shared memory type/version; found %d/%d:%d, expected %d/%d:%d",
+				sMem->mhb_type, sMem->mhb_header_version, sMem->mhb_version,
+				SharedMemoryBase::SRAM_MAPPING_RESET, MemoryHeader::HEADER_VERSION, MAPPING_VERSION);
+
+			sharedMemory = NULL;
+			(Arg::Gds(isc_random) << Arg::Str(err)).raise();
+		}
+
+		Guard gShared(this);
 
 		for (process = 0; process < sMem->processes; ++process)
 		{
@@ -856,13 +867,13 @@ private:
 				{
 					MappingHeader* sMem = sharedMemory->getHeader();
 					resetMap(sMem->databaseForReset, sMem->resetIndex);
+					p->flags &= ~MappingHeader::FLAG_DELIVER;
 
 					MappingHeader::Process* cur = &sMem->process[sMem->currentProcess];
 					if (sharedMemory->eventPost(&cur->callbackEvent) != FB_SUCCESS)
 					{
 						(Arg::Gds(isc_map_event) << "POST").raise();
 					}
-					p->flags &= ~MappingHeader::FLAG_DELIVER;
 				}
 
 				if (startup)
@@ -1224,20 +1235,11 @@ InitInstance<SysPrivCache> spCache;
 
 void resetMap(const char* db, ULONG index)
 {
-	switch(index)
-	{
-	case Mapping::MAPPING_CACHE:
+	if (index & Mapping::MAPPING_CACHE)
 		resetMap(db);
-		break;
 
-	case Mapping::SYSTEM_PRIVILEGES_CACHE:
+	if (index & Mapping::SYSTEM_PRIVILEGES_CACHE)
 		spCache().invalidate(db);
-		break;
-
-	default:
-		fb_assert(false);
-		break;
-	}
 }
 
 } // anonymous namespace

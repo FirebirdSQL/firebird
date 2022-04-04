@@ -21,7 +21,7 @@ postremove install/scripts/postUninstall.sh
 architecture HP-UX_B.11_64
 os_name HP-UX
 os_release ?.11.*
-os_version ? 
+os_version ?
 #
 fileset
 tag main
@@ -32,7 +32,7 @@ file -u 0644 -g firebird -o firebird buildroot@prefix@/CHANGELOG.md @prefix@/CHA
 file -u 0644 -g firebird -o firebird buildroot@prefix@/README.md @prefix@/README.md
 end
 #
-fileset 
+fileset
 tag include
 directory buildroot@prefix@/include=@prefix@/include
 file_permissions -u 0644 -g firebird -o firebird
@@ -49,9 +49,9 @@ fileset
 tag UDF
 file -u 0755 -g firebird -o firebird buildroot@prefix@/UDF/ib_udf.sl @prefix@/UDF/ib_udf.sl
 file -u 0755 -g firebird -o firebird buildroot@prefix@/UDF/fbudf.sl @prefix@/UDF/fbudf.sl
-file -u 0644 -g firebird -o firebird buildroot@prefix@/UDF/ib_udf.sql @prefix@/UDF/ib_udf.sql 
-file -u 0644 -g firebird -o firebird buildroot@prefix@/UDF/ib_udf2.sql @prefix@/UDF/ib_udf2.sql 
-file -u 0644 -g firebird -o firebird buildroot@prefix@/UDF/fbudf.sql @prefix@/UDF/fbudf.sql 
+file -u 0644 -g firebird -o firebird buildroot@prefix@/UDF/ib_udf.sql @prefix@/UDF/ib_udf.sql
+file -u 0644 -g firebird -o firebird buildroot@prefix@/UDF/ib_udf2.sql @prefix@/UDF/ib_udf2.sql
+file -u 0644 -g firebird -o firebird buildroot@prefix@/UDF/fbudf.sql @prefix@/UDF/fbudf.sql
 end
 #
 fileset
@@ -71,7 +71,7 @@ file_permissions -u 0644 -g firebird -o firebird
 file *
 end
 #
-fileset 
+fileset
 tag examples
 file -u 0644 -g firebird -o firebird firebird/examples/README @prefix@/examples/README
 file -u 0644 -g firebird -o firebird firebird/examples/functions.c @prefix@/examples/functions/functions.c
@@ -100,11 +100,6 @@ tag lib
 directory buildroot@prefix@/lib=@prefix@/lib
 file_permissions -u 0755 -g firebird -o firebird
 file *
-end
-#
-fileset
-tag help
-file -u 0444 -g firebird -o firebird firebird/help/help.fdb @prefix@/help/help.fdb
 end
 #
 fileset

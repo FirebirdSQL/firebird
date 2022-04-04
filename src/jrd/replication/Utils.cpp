@@ -55,12 +55,17 @@ using namespace Replication;
 
 namespace
 {
+	// Must match items inside enum LogMsgSide
+	const char* LOG_MSG_SIDES[] = {
+		"primary",	// LogMsgSide::PRIMARY_SIDE
+		"replica",	// LogMsgSide::REPLICA_SIDE
+	};
+
 	// Must match items inside enum LogMsgType
 	const char* LOG_MSG_TYPES[] = {
 		"ERROR",	// LogMsgType::ERROR_MSG
 		"WARNING",	// LogMsgType::WARNING_MSG
-		"VERBOSE",	// LogMsgType::VERBOSE_MSG
-		"DEBUG"		// LogMsgType::DEBUG_MSG
+		"VERBOSE"	// LogMsgType::VERBOSE_MSG
 	};
 
 	const char* REPLICATION_LOGFILE = "replication.log";
@@ -87,8 +92,9 @@ namespace
 #endif
 		}
 
-		void logMessage(const string& source, const PathName& database,
-						LogMsgType type, const string& message)
+		void logMessage(LogMsgSide side, LogMsgType type,
+						const PathName& database,
+						const string& message)
 		{
 			const time_t now = time(NULL);
 
@@ -101,10 +107,17 @@ namespace
 					return;
 				}
 
+				string dbname, text;
+
+				if (database.hasData())
+					dbname.printf("Database: %s\n\t", database.c_str());
+
+				text.printf("\n%s (%s) %s\t%s%s: %s\n",
+							m_hostname.c_str(), LOG_MSG_SIDES[side], ctime(&now),
+							dbname.c_str(), LOG_MSG_TYPES[type], message.c_str());
+
 				fseek(file, 0, SEEK_END);
-				fprintf(file, "\n%s (%s) %s\tDatabase: %s\n\t%s: %s\n",
-						m_hostname.c_str(), source.c_str(), ctime(&now),
-						database.c_str(), LOG_MSG_TYPES[type], message.c_str());
+				fputs(text.c_str(), file);
 				fclose(file);
 				unlock();
 			}
@@ -143,12 +156,44 @@ namespace
 #endif
 	};
 
-	void logMessage(const string& source, const PathName& database,
-					const string& message, LogMsgType type)
+	void logMessage(LogMsgSide side, LogMsgType type,
+					const PathName& database,
+					const string& message)
 	{
 		static LogWriter g_writer;
 
-		g_writer.logMessage(source, database, type, message);
+		g_writer.logMessage(side, type, database, message);
+	}
+
+	void logStatus(LogMsgSide side, LogMsgType type,
+				   const PathName& database,
+				   const ISC_STATUS* status)
+	{
+		string message;
+		char temp[BUFFER_LARGE];
+
+		while (fb_interpret(temp, sizeof(temp), &status))
+		{
+			if (!message.isEmpty())
+				message += "\n\t";
+
+			message += temp;
+		}
+
+		logMessage(side, type, database, message);
+	}
+
+	void logStatus(LogMsgSide side,
+				   const PathName& database,
+				   const CheckStatusWrapper* status)
+	{
+		const auto state = status->getState();
+
+		if (state & IStatus::STATE_WARNINGS)
+			logStatus(side, WARNING_MSG, database, status->getWarnings());
+
+		if (state & IStatus::STATE_ERRORS)
+			logStatus(side, ERROR_MSG, database, status->getErrors());
 	}
 
 } // namespace
@@ -194,18 +239,39 @@ namespace Replication
 #endif
 	}
 
-	void logOriginMessage(const PathName& database,
-						  const string& message,
-						  LogMsgType type)
+	void logPrimaryError(const PathName& database, const string& message)
 	{
-		logMessage("origin", database, message, type);
+		logMessage(PRIMARY_SIDE, ERROR_MSG, database, message);
 	}
 
-	void logReplicaMessage(const PathName& database,
-						  const string& message,
-						  LogMsgType type)
+	void logPrimaryWarning(const PathName& database, const string& message)
 	{
-		logMessage("replica", database, message, type);
+		logMessage(PRIMARY_SIDE, WARNING_MSG, database, message);
+	}
+
+	void logPrimaryStatus(const PathName& database, const CheckStatusWrapper* status)
+	{
+		logStatus(PRIMARY_SIDE, database, status);
+	}
+
+	void logReplicaError(const PathName& database, const string& message)
+	{
+		logMessage(REPLICA_SIDE, ERROR_MSG, database, message);
+	}
+
+	void logReplicaWarning(const PathName& database, const string& message)
+	{
+		logMessage(REPLICA_SIDE, WARNING_MSG, database, message);
+	}
+
+	void logReplicaStatus(const PathName& database, const CheckStatusWrapper* status)
+	{
+		logStatus(REPLICA_SIDE, database, status);
+	}
+
+	void logReplicaVerbose(const PathName& database, const string& message)
+	{
+		logMessage(REPLICA_SIDE, VERBOSE_MSG, database, message);
 	}
 
 } // namespace

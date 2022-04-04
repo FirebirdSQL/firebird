@@ -64,7 +64,7 @@ void ProcedureScan::open(thread_db* tdbb) const
 
 	const_cast<jrd_prc*>(m_procedure)->checkReload(tdbb);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_flags = irsb_open;
@@ -98,7 +98,7 @@ void ProcedureScan::open(thread_db* tdbb) const
 		im = NULL;
 	}
 
-	jrd_req* const proc_request = m_procedure->getStatement()->findRequest(tdbb);
+	Request* const proc_request = m_procedure->getStatement()->findRequest(tdbb);
 	impure->irsb_req_handle = proc_request;
 
 	// req_proc_fetch flag used only when fetching rows, so
@@ -108,7 +108,7 @@ void ProcedureScan::open(thread_db* tdbb) const
 
 	try
 	{
-		proc_request->req_gmt_timestamp = request->req_gmt_timestamp;
+		proc_request->setGmtTimeStamp(request->getGmtTimeStamp());
 
 		TraceProcExecute trace(tdbb, proc_request, request, m_targetList);
 
@@ -134,7 +134,7 @@ void ProcedureScan::open(thread_db* tdbb) const
 
 void ProcedureScan::close(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	invalidateRecords(request);
 
@@ -144,7 +144,7 @@ void ProcedureScan::close(thread_db* tdbb) const
 	{
 		impure->irsb_flags &= ~irsb_open;
 
-		jrd_req* const proc_request = impure->irsb_req_handle;
+		Request* const proc_request = impure->irsb_req_handle;
 
 		if (proc_request)
 		{
@@ -166,7 +166,7 @@ bool ProcedureScan::getRecord(thread_db* tdbb) const
 	UserId* invoker = m_procedure->invoker ? m_procedure->invoker : tdbb->getAttachment()->att_ss_user;
 	AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
@@ -185,7 +185,7 @@ bool ProcedureScan::getRecord(thread_db* tdbb) const
 
 	Record* const record = VIO_record(tdbb, rpb, m_format, tdbb->getDefaultPool());
 
-	jrd_req* const proc_request = impure->irsb_req_handle;
+	Request* const proc_request = impure->irsb_req_handle;
 
 	TraceProcFetch trace(tdbb, proc_request);
 

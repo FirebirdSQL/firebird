@@ -48,7 +48,6 @@ f none @prefix@/bin/gstat=$SRCDIR/bin/gstat  0755 root root
 f none @prefix@/bin/isql=$SRCDIR/bin/isql  0755 root root
 #f none @prefix@/bin/isql_static=$SRCDIR/bin/isql_static  0755 root root
 #f none @prefix@/bin/modify_messages=$SRCDIR/bin/modify_messages  0755 root root
-f none @prefix@/bin/qli=$SRCDIR/bin/qli  0755 root root
 f none @prefix@/bin/fb_lock_print=$SRCDIR/bin/fb_lock_print  0755 root root
 
 d none @prefix@/examples  0755 root root
@@ -104,12 +103,8 @@ f none @prefix@/examples/v5/udflib.c=$SRCDIR/examples/v5/udflib.c 0644 root root
 
 
 
-d none @prefix@/help  0755 root root
-f none @prefix@/help/help.fdb=$SRCDIR/help/help.fdb  0444 root root
-
 d none @prefix@/include  0755 root root
 f none @prefix@/include/blr.h=$SRCDIR/include/blr.h  0644 root root
-f none @prefix@/include/gds.h=$SRCDIR/include/gds.h  0644 root root
 f none @prefix@/include/ib_util.h=$SRCDIR/include/ib_util.h  0644 root root
 f none @prefix@/include/ibase.h=$SRCDIR/include/ibase.h  0644 root root
 f none @prefix@/include/iberror.h=$SRCDIR/include/iberror.h  0644 root root

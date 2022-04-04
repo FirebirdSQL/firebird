@@ -37,7 +37,6 @@
 #include "../jrd/req.h"
 #include "../jrd/exe.h"
 #include "../jrd/extds/ExtDS.h"
-#include "../jrd/rse.h"
 #include "../jrd/intl_classes.h"
 #include "../common/ThreadStart.h"
 #include "../jrd/TimeZone.h"
@@ -117,10 +116,10 @@ static const UCHAR sweep_tpb[] =
 };
 
 
-jrd_req* TRA_get_prior_request(thread_db* tdbb)
+Request* TRA_get_prior_request(thread_db* tdbb)
 {
 	// See if there is any request right above us in the call stack
-	jrd_req* org_request;
+	Request* org_request;
 	thread_db* jrd_ctx = tdbb;
 	do
 	{
@@ -145,7 +144,7 @@ jrd_req* TRA_get_prior_request(thread_db* tdbb)
 	return org_request;
 }
 
-void TRA_setup_request_snapshot(Jrd::thread_db* tdbb, Jrd::jrd_req* request)
+void TRA_setup_request_snapshot(Jrd::thread_db* tdbb, Jrd::Request* request)
 {
 	// This function is called whenever request is started in a transaction.
 	// Setup context to preserve read consistency in READ COMMITTED transactions.
@@ -160,7 +159,7 @@ void TRA_setup_request_snapshot(Jrd::thread_db* tdbb, Jrd::jrd_req* request)
 		return;
 
 	// See if there is any request right above us in the call stack
-	jrd_req* org_request = TRA_get_prior_request(tdbb);
+	Request* org_request = TRA_get_prior_request(tdbb);
 
 	if (org_request && org_request->req_transaction == transaction)
 	{
@@ -181,7 +180,7 @@ void TRA_setup_request_snapshot(Jrd::thread_db* tdbb, Jrd::jrd_req* request)
 }
 
 
-void TRA_release_request_snapshot(Jrd::thread_db* tdbb, Jrd::jrd_req* request)
+void TRA_release_request_snapshot(Jrd::thread_db* tdbb, Jrd::Request* request)
 {
 	// This function is called whenever request has completed processing
 	// in a transaction (normally or abnormally)
@@ -201,7 +200,7 @@ void TRA_release_request_snapshot(Jrd::thread_db* tdbb, Jrd::jrd_req* request)
 }
 
 
-void TRA_attach_request(Jrd::jrd_tra* transaction, Jrd::jrd_req* request)
+void TRA_attach_request(Jrd::jrd_tra* transaction, Jrd::Request* request)
 {
 	// When request finishes normally transaction reference is not cleared.
 	// Then if afterwards request is restarted TRA_attach_request is called again.
@@ -229,7 +228,7 @@ void TRA_attach_request(Jrd::jrd_tra* transaction, Jrd::jrd_req* request)
 	transaction->tra_requests = request;
 }
 
-void TRA_detach_request(Jrd::jrd_req* request)
+void TRA_detach_request(Jrd::Request* request)
 {
 	if (!request->req_transaction)
 	{
@@ -455,7 +454,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 		// Get rid of all user savepoints
 		while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
-			transaction->rollforwardSavepoint(tdbb);
+			transaction->releaseSavepoint(tdbb);
 
 		trace.finish(ITracePlugin::RESULT_SUCCESS);
 		return;
@@ -468,7 +467,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 	// Get rid of all user savepoints
 	while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
-		transaction->rollforwardSavepoint(tdbb);
+		transaction->releaseSavepoint(tdbb);
 
 	// Let replicator perform heavy and error-prone part of work
 
@@ -504,7 +503,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 	// in indices and BLOBs after in-place updates
 
 	while (transaction->tra_save_point)
-		transaction->rollforwardSavepoint(tdbb);
+		transaction->releaseSavepoint(tdbb);
 
 	// Flush pages if transaction logically modified data
 
@@ -531,8 +530,8 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 	// Set the state on the inventory page to be committed
 
-	TRA_set_state(tdbb, transaction, transaction->tra_number, tra_committed);
 	REPL_trans_commit(tdbb, transaction);
+	TRA_set_state(tdbb, transaction, transaction->tra_number, tra_committed);
 
 	// Perform any post commit work
 
@@ -1128,7 +1127,9 @@ void TRA_prepare(thread_db* tdbb, jrd_tra* transaction, USHORT length, const UCH
 	// Set the state on the inventory page to be limbo
 
 	transaction->tra_flags |= TRA_prepared;
-	TRA_set_state(tdbb, transaction, transaction->tra_number, tra_limbo);
+
+	if (!(tdbb->tdbb_flags & TDBB_replicator))
+		TRA_set_state(tdbb, transaction, transaction->tra_number, tra_limbo);
 }
 
 
@@ -1182,7 +1183,7 @@ jrd_tra* TRA_reconnect(thread_db* tdbb, const UCHAR* id, USHORT length)
 
 		TEXT text[128];
 		USHORT flags = 0;
-		gds__msg_lookup(NULL, JRD_BUGCHK, message, sizeof(text), text, &flags);
+		gds__msg_lookup(NULL, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, message, sizeof(text), text, &flags);
 
 		// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
 		ERR_post(Arg::Gds(isc_no_recon) <<
@@ -1436,7 +1437,10 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 			// It will clean up blob ids and temporary space anyway but faster than rollback
 			// because record data won't be updated with intermediate versions
 			while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
-				transaction->rollforwardSavepoint(tdbb);
+			{
+				REPL_save_cleanup(tdbb, transaction, transaction->tra_save_point, true);
+				transaction->tra_save_point = transaction->tra_save_point->rollforward(tdbb);
+			}
 
 			if (transaction->tra_save_point)
 			{
@@ -1494,8 +1498,8 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 		return;
 	}
 
-	TRA_set_state(tdbb, transaction, transaction->tra_number, state);
 	REPL_trans_rollback(tdbb, transaction);
+	TRA_set_state(tdbb, transaction, transaction->tra_number, state);
 
 	TRA_release_transaction(tdbb, transaction, &trace);
 }
@@ -1677,12 +1681,12 @@ int TRA_snapshot_state(thread_db* tdbb, const jrd_tra* trans, TraNumber number, 
 		if ((trans->tra_flags & TRA_read_consistency) && state == tra_committed)
 		{
 			// GC thread accesses data directly without any request
-			if (jrd_req* current_request = tdbb->getRequest())
+			if (Request* current_request = tdbb->getRequest())
 			{
 				// Notes:
 				// 1) There is no request snapshot when we build expression index
 				// 2) Disable read committed snapshot after we encountered update conflict
-				jrd_req* snapshot_request = current_request->req_snapshot.m_owner;
+				Request* snapshot_request = current_request->req_snapshot.m_owner;
 				if (snapshot_request && !(snapshot_request->req_flags & req_update_conflict))
 				{
 					if (stateCn > snapshot_request->req_snapshot.m_number)
@@ -2031,8 +2035,8 @@ int TRA_wait(thread_db* tdbb, jrd_tra* trans, TraNumber number, jrd_tra::wait_t 
 	if (state == tra_active)
 	{
 		state = tra_dead;
-		TRA_set_state(tdbb, 0, number, tra_dead);
 		REPL_trans_cleanup(tdbb, number);
+		TRA_set_state(tdbb, 0, number, tra_dead);
 	}
 
 	// If the transaction disappeared into limbo, died, for constructively
@@ -2141,7 +2145,17 @@ static header_page* bump_transaction_id(thread_db* tdbb, WIN* window, bool dontW
 	const bool new_tip = ((number % dbb->dbb_page_manager.transPerTIP) == 0);
 
 	if (new_tip)
-		TRA_extend_tip(tdbb, (number / dbb->dbb_page_manager.transPerTIP)); //, window);
+	{
+		try
+		{
+			TRA_extend_tip(tdbb, (number / dbb->dbb_page_manager.transPerTIP)); //, window);
+		}
+		catch (Exception&)
+		{
+			CCH_RELEASE(tdbb, window);
+			throw;
+		}
+	}
 
 	// Extend, if necessary, has apparently succeeded.  Next, update header page
 
@@ -2554,15 +2568,15 @@ static void restart_requests(thread_db* tdbb, jrd_tra* trans)
  **************************************/
 	SET_TDBB(tdbb);
 
-	for (jrd_req** i = trans->tra_attachment->att_requests.begin();
+	for (Request** i = trans->tra_attachment->att_requests.begin();
 		 i != trans->tra_attachment->att_requests.end();
 		 ++i)
 	{
-		Array<jrd_req*>& requests = (*i)->getStatement()->requests;
+		Array<Request*>& requests = (*i)->getStatement()->requests;
 
-		for (jrd_req** j = requests.begin(); j != requests.end(); ++j)
+		for (Request** j = requests.begin(); j != requests.end(); ++j)
 		{
-			jrd_req* request = *j;
+			Request* request = *j;
 
 			if (request && request->req_transaction)
 			{
@@ -2658,13 +2672,13 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 
 	if (!dbb->readOnly())
 	{
-		// Set the state on the inventory page
-		TRA_set_state(tdbb, transaction, old_number, state);
-
 		if (commit)
 			REPL_trans_commit(tdbb, transaction);
 		else
 			REPL_trans_rollback(tdbb, transaction);
+
+		// Set the state on the inventory page
+		TRA_set_state(tdbb, transaction, old_number, state);
 	}
 	if (dbb->dbb_config->getClearGTTAtRetaining())
 		release_temp_tables(tdbb, transaction);
@@ -4020,11 +4034,14 @@ void jrd_tra::rollbackToSavepoint(thread_db* tdbb, SavNumber number)
  *
  **************************************/
 {
+	Jrd::ContextPoolHolder context(tdbb, tra_pool);
+
 	// Merge all savepoints (except the given one) into a single one
 	while (tra_save_point && tra_save_point->getNumber() > number &&
 		tra_save_point->getNext() && tra_save_point->getNext()->getNumber() >= number)
 	{
-		rollforwardSavepoint(tdbb, false);
+		REPL_save_cleanup(tdbb, this, tra_save_point, true);
+		tra_save_point = tra_save_point->rollforward(tdbb);
 	}
 
 	// Check that savepoint with the given number really exists
@@ -4039,10 +4056,10 @@ void jrd_tra::rollbackToSavepoint(thread_db* tdbb, SavNumber number)
 }
 
 
-void jrd_tra::rollforwardSavepoint(thread_db* tdbb, bool assertChanging)
+void jrd_tra::releaseSavepoint(thread_db* tdbb)
 /**************************************
  *
- *	 r o l l f o r w a r d S a v e p o i n t
+ *	 r e l e a s e S a v e p o i n t
  *
  **************************************
  *
@@ -4053,8 +4070,6 @@ void jrd_tra::rollforwardSavepoint(thread_db* tdbb, bool assertChanging)
 {
 	if (tra_save_point && !(tra_flags & TRA_system))
 	{
-		fb_assert(!assertChanging || !tra_save_point->isChanging());
-
 		REPL_save_cleanup(tdbb, this, tra_save_point, false);
 
 		Jrd::ContextPoolHolder context(tdbb, tra_pool);
@@ -4102,12 +4117,12 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 
 					if (fld)
 					{
-						SCL_check_access(tdbb, s_class, 0, 0, SCL_select, SCL_object_column,
+						SCL_check_access(tdbb, s_class, 0, 0, SCL_select, obj_column,
 							false, fld->fld_name, blb_relation->rel_name);
 					}
 					else
 					{
-						SCL_check_access(tdbb, s_class, 0, 0, SCL_select, SCL_object_table,
+						SCL_check_access(tdbb, s_class, 0, 0, SCL_select, obj_relations,
 							false, blb_relation->rel_name);
 					}
 
@@ -4172,7 +4187,7 @@ TraceSweepEvent::TraceSweepEvent(thread_db* tdbb)
 	gds__log("Sweep is started by %s\n"
 		"\tDatabase \"%s\" \n"
 		"\tOIT %" SQUADFORMAT", OAT %" SQUADFORMAT", OST %" SQUADFORMAT", Next %" SQUADFORMAT,
-		att->att_user ? att->att_user->getUserName().c_str() : "<Unknown user>",
+		att->getUserName("<Unknown user>").c_str(),
 		att->att_filename.c_str(),
 		m_sweep_info.getOIT(),
 		m_sweep_info.getOAT(),

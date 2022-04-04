@@ -87,26 +87,34 @@ public:
 		memset(&ackd, 0, sizeof(ackd));
 		ackd.cbSize = sizeof(ackd);
 
+		const char* crtDll =
+#if _MSC_VER == 1400
+			"msvcr80.dll";
+#elif _MSC_VER == 1500
+			"msvcr90.dll";
+#elif _MSC_VER == 1600
+			"msvcr100.dll";
+#elif _MSC_VER == 1700
+			"msvcr110.dll";
+#elif _MSC_VER == 1800
+			"msvcr120.dll";
+#elif _MSC_VER >= 1900 && _MSC_VER < 2000
+			"vcruntime140.dll";
+#else
+			"";
+
+#define TO_STR(x) #x
+#define ERRSTR(x) "Unknown " #x " value: "  TO_STR(x) ". Specify CRT DLL name here !"
+
+		static_assert(false, ERRSTR(_MSC_VER));
+//		#error Specify CRT DLL name here !
+#endif
+
 		// if CRT already present in some activation context then nothing to do
 		if ((*mFindActCtxSectionString)
 				(0, NULL,
 				ACTIVATION_CONTEXT_SECTION_DLL_REDIRECTION,
-#if _MSC_VER == 1400
-                    "msvcr80.dll",
-#elif _MSC_VER == 1500
-                    "msvcr90.dll",
-#elif _MSC_VER == 1600
-				"msvcr100.dll",
-#elif _MSC_VER == 1700
-				"msvcr110.dll",
-#elif _MSC_VER == 1800
-					"msvcr120.dll",
-#elif _MSC_VER >= 1900 && _MSC_VER < 1930
-					"vcruntime140.dll",
-#else
-                    #error Specify CRT DLL name here !
-#endif
-				&ackd))
+				crtDll, &ackd))
 		{
 			return;
 		}

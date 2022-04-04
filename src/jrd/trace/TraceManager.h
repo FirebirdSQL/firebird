@@ -163,7 +163,7 @@ private:
 	Attachment*	attachment;
 	Service* service;
 	const char* filename;
-	NotificationNeeds trace_needs;
+	NotificationNeeds trace_needs, new_needs;
 
 	// This structure should be POD-like to be stored in Array
 	struct FactoryInfo

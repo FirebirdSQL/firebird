@@ -30,13 +30,15 @@
 #include "../common/classes/fb_string.h"
 #include "../common/common.h"
 
-enum iscProtocol {ISC_PROTOCOL_LOCAL, ISC_PROTOCOL_TCPIP, ISC_PROTOCOL_WLAN};
+enum iscProtocol {ISC_PROTOCOL_LOCAL, ISC_PROTOCOL_TCPIP};
 
 #ifndef NO_NFS
 bool		ISC_analyze_nfs(Firebird::PathName&, Firebird::PathName&);
 #endif
-bool		ISC_analyze_protocol(const char*, Firebird::PathName&, Firebird::PathName&, const char*, bool needFile);
+#ifdef WIN_NT
 bool		ISC_analyze_pclan(Firebird::PathName&, Firebird::PathName&);
+#endif
+bool		ISC_analyze_protocol(const char*, Firebird::PathName&, Firebird::PathName&, const char*, bool needFile);
 bool		ISC_analyze_tcp(Firebird::PathName&, Firebird::PathName&, bool = true);
 bool		ISC_check_if_remote(const Firebird::PathName&, bool);
 iscProtocol	ISC_extract_host(Firebird::PathName&, Firebird::PathName&, bool);

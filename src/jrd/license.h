@@ -125,8 +125,8 @@
 #if defined(__ppc__) || defined(__ppc64__)
 #define FB_PLATFORM     "UP"	// Darwin/PowerPC
 #endif
-#if defined(ARM)
-#define FB_PLATFORM     "UA"
+#if defined(ARM) || defined(__aarch64__)
+#define FB_PLATFORM     "UA"	// Darwin/ARM
 #endif
 #endif
 

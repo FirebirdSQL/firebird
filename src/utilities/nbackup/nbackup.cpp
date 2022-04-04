@@ -189,8 +189,6 @@ namespace
 		usage(uSvc, isc_nbackup_allowed_switches);
 	}
 
-	const int MSG_LEN = 1024;
-
 	// HPUX has non-posix-conformant method to return error codes from posix_fadvise().
 	// Instead of error code, directly returned by function (like specified by posix),
 	// -1 is returned in case of error and errno is set. Luckily, we can easily detect it runtime.
@@ -278,8 +276,9 @@ public:
 	  : uSvc(_uSvc), newdb(0), trans(0), database(_database),
 		username(_username), role(_role), password(_password),
 		run_db_triggers(_run_db_triggers), direct_io(_direct_io),
-		dbase(0), backup(0), decompress(_deco), childId(0), db_size_pages(0),
-		m_odsNumber(0), m_silent(false), m_printed(false)
+		dbase(INVALID_HANDLE_VALUE), backup(INVALID_HANDLE_VALUE),
+		decompress(_deco), childId(0), db_size_pages(0),
+		m_odsNumber(0), m_silent(false), m_printed(false), m_flash_map(false)
 	{
 		// Recognition of local prefix allows to work with
 		// database using TCP/IP loopback while reading file locally.
@@ -345,6 +344,7 @@ private:
 	USHORT m_odsNumber;
 	bool m_silent;		// are we already handling an exception?
 	bool m_printed;		// pr_error() was called to print status vector
+	bool m_flash_map;	// clear mapping cache on attach
 
 	// IO functions
 	FB_SIZE_T read_file(FILE_HANDLE &file, void *buffer, FB_SIZE_T bufsize);
@@ -922,7 +922,7 @@ void NBackup::print_child_stderr()
 	DWORD bytesRead;
 	while (true)
 	{
-		// Check if pipe have data to read. This is necessary to avoid hung if 
+		// Check if pipe have data to read. This is necessary to avoid hung if
 		// pipe is empty. Ignore read error as ReadFile set bytesRead to zero
 		// in this case and it is enough for our usage.
 		const BOOL ret = PeekNamedPipe(childStdErr, NULL, 1, NULL, &bytesRead, NULL);
@@ -946,7 +946,7 @@ void NBackup::print_child_stderr()
 				if (*pEndL == '\n')
 					pEndL++;
 			}
-			else 
+			else
 			{
 				pEndL = strchr(p, '\n');
 				if (pEndL)
@@ -1007,6 +1007,9 @@ void NBackup::attach_database()
 
 	if (!run_db_triggers)
 		dpb.insertByte(isc_dpb_no_db_triggers, 1);
+
+	if (m_flash_map)
+		dpb.insertByte(isc_dpb_clear_map, 1);
 
 	if (m_silent)
 	{
@@ -1671,6 +1674,14 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 				{
 					close_database();
 					fixup_database(repl_seq, inc_rest);
+
+					m_silent = true;
+					m_flash_map = true;
+					run_db_triggers = false;
+
+					attach_database();
+					detach_database();
+
 					return;
 				}
 				if (!inc_rest || curLevel)

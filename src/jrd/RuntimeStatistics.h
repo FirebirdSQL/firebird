@@ -32,7 +32,7 @@ namespace Firebird
 {
 
 // declared in firebird/Interface.h
-struct TraceCounts;	
+struct TraceCounts;
 struct PerformanceInfo;
 
 } // namespace Firebird
@@ -360,7 +360,7 @@ private:
 	// These two numbers are used in adjust() and assign() methods as "generation"
 	// values in order to avoid costly operations when two instances of RuntimeStatistics
 	// contain equal counters values. This is intended to use *only* with the
-	// same pair of class instances, as in jrd_req.
+	// same pair of class instances, as in Request.
 	ULONG allChgNumber;		// incremented when any counter changes
 	ULONG relChgNumber;		// incremented when relation counter changes
 

@@ -38,7 +38,7 @@
 static Firebird::SimpleFactory<Auth::DebugClient> clientFactory;
 static Firebird::SimpleFactory<Auth::DebugServer> serverFactory;
 
-extern "C" void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 {
 	Firebird::CachedMasterInterface::set(master);
 

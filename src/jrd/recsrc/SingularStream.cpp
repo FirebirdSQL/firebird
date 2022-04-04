@@ -44,7 +44,7 @@ SingularStream::SingularStream(CompilerScratch* csb, RecordSource* next)
 
 void SingularStream::open(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_flags = irsb_open;
@@ -54,7 +54,7 @@ void SingularStream::open(thread_db* tdbb) const
 
 void SingularStream::close(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	invalidateRecords(request);
 
@@ -72,7 +72,7 @@ bool SingularStream::getRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!(impure->irsb_flags & irsb_open))
@@ -92,7 +92,7 @@ bool SingularStream::getRecord(thread_db* tdbb) const
 
 void SingularStream::doGetRecord(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	const FB_SIZE_T streamCount = m_streams.getCount();
@@ -160,7 +160,7 @@ void SingularStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_next->findUsedStreams(streams, expandAll);
 }
 
-void SingularStream::invalidateRecords(jrd_req* request) const
+void SingularStream::invalidateRecords(Request* request) const
 {
 	m_next->invalidateRecords(request);
 }

@@ -42,6 +42,7 @@
 #include "../common/classes/GenericMap.h"
 #include "../common/db_alias.h"
 #include "../common/dllinst.h"
+#include "../common/file_params.h"
 
 #include "../yvalve/config/os/config_root.h"
 
@@ -112,7 +113,7 @@ namespace
 
 	bool flShutdown = false;
 
-	class ConfigParameterAccess FB_FINAL :
+	class ConfigParameterAccess final :
 		public RefCntIface<IConfigEntryImpl<ConfigParameterAccess, CheckStatusWrapper> >
 	{
 	public:
@@ -146,7 +147,7 @@ namespace
 		const ConfigFile::Parameter* par;
 	};
 
-	class ConfigAccess FB_FINAL :
+	class ConfigAccess final :
 		public RefCntIface<IConfigImpl<ConfigAccess, CheckStatusWrapper> >
 	{
 	public:
@@ -431,7 +432,7 @@ namespace
 
 	// Provides most of configuration services for plugins,
 	// except per-database configuration in databases.conf
-	class ConfiguredPlugin FB_FINAL :
+	class ConfiguredPlugin final :
 		public RefCntIface<ITimerImpl<ConfiguredPlugin, CheckStatusWrapper> >
 	{
 	public:
@@ -500,8 +501,10 @@ namespace
 		void handler()
 		{ }
 
+		int release();
 	private:
-		~ConfiguredPlugin();
+		~ConfiguredPlugin() {}
+		void destroy();
 
 		RefPtr<PluginModule> module;
 		unsigned int regPlugin;
@@ -514,7 +517,7 @@ namespace
 	};
 
 	// Provides per-database configuration from databases.conf.
-	class FactoryParameter FB_FINAL :
+	class FactoryParameter final :
 		public RefCntIface<IPluginConfigImpl<FactoryParameter, CheckStatusWrapper> >
 	{
 	public:
@@ -653,10 +656,15 @@ namespace
 
 	GlobalPtr<PluginsMap> plugins;
 
-	ConfiguredPlugin::~ConfiguredPlugin()
+	void ConfiguredPlugin::destroy()
 	{
-		MutexLockGuard g(plugins->mutex, FB_FUNCTION);
+		// plugins->mutex must be entered by current thread
 
+#ifdef DEV_BUILD
+		if (!plugins->mutex.tryEnter(FB_FUNCTION))
+			fb_assert(false);
+		plugins->mutex.leave();
+#endif
 		if (!destroyingPluginsMap)
 		{
 			plugins->remove(MapKey(module->getPlugin(regPlugin).type, plugName));
@@ -674,6 +682,33 @@ namespace
 #ifdef DEBUG_PLUGINS
 		fprintf(stderr, "~ConfiguredPlugin %s type %d\n", plugName.c_str(), module->getPlugin(regPlugin).type);
 #endif
+	}
+
+	int ConfiguredPlugin::release()
+	{
+		int x = --refCounter;
+
+#ifdef DEBUG_PLUGINS
+		fprintf(stderr, "ConfiguredPlugin::release %s %d\n", plugName.c_str(), x);
+#endif
+
+		if (x == 0)
+		{
+			{ // plugins->mutex scope
+				MutexLockGuard g(plugins->mutex, FB_FUNCTION);
+				if (refCounter != 0)
+					return 1;
+
+				destroy();
+			}
+
+			// Must run out of mutex scope to avoid deadlock with PluginManager::threadDetach()
+			// called when module is unloaded by dtor
+			delete this;
+			return 0;
+		}
+
+		return 1;
 	}
 
 	PluginModule* modules = NULL;
@@ -735,7 +770,7 @@ namespace
 
 
 	// Provides access to plugins of given type / name.
-	class PluginSet FB_FINAL : public RefCntIface<IPluginSetImpl<PluginSet, CheckStatusWrapper> >
+	class PluginSet final : public RefCntIface<IPluginSetImpl<PluginSet, CheckStatusWrapper> >
 	{
 	public:
 		// IPluginSet implementation
@@ -906,6 +941,9 @@ namespace
 			current = rc;
 			startModule(masterInterface);
 			current = NULL;
+#ifdef DARWIN	// Plugin unload disabled in MacOS - GH-7112
+			rc->addRef();
+#endif
 			return rc;
 		}
 
@@ -1024,7 +1062,7 @@ void PluginManager::unregisterModule(IPluginModule* cleanup)
 		Firebird::dDllUnloadTID = GetCurrentThreadId();
 #endif
 
-	fb_shutdown(5000, fb_shutrsn_exit_called);
+	fb_shutdown(10000, fb_shutrsn_exit_called);
 }
 
 IPluginSet* PluginManager::getPlugins(CheckStatusWrapper* status, unsigned int interfaceType,
@@ -1148,7 +1186,7 @@ public:
 			cache[i] = fb_utils::getPrefix(i, "");
 		}
 
-		db = fb_utils::getPrefix(IConfigManager::DIR_SECDB, "security4.fdb");
+		db = fb_utils::getPrefix(IConfigManager::DIR_SECDB, SECURITY_DB);
 	}
 
 	const char* getDir(unsigned code)

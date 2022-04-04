@@ -92,7 +92,7 @@
 */
 
 #include "firebird.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/intl_classes.h"
 #include "../common/IntlUtil.h"
 #include "../common/classes/Aligner.h"
@@ -364,12 +364,13 @@ ULONG TextType::canonical(ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* d
 
 		ULONG utf16_len = getCharSet()->getConvToUnicode().convertLength(srcLen);
 
+		ULONG errPos;
+
 		// convert to UTF-16
 		utf16_len = getCharSet()->getConvToUnicode().convert(srcLen, src,
-			utf16_len, utf16_str.getBuffer(utf16_len));
+			utf16_len, utf16_str.getBuffer(utf16_len), &errPos);
 
 		USHORT errCode;
-		ULONG errPos;
 
 		// convert UTF-16 to UTF-32
 		return UnicodeUtil::utf16ToUtf32(utf16_len, Firebird::Aligner<USHORT>(utf16_str.begin(), utf16_len),

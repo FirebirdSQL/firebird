@@ -396,22 +396,12 @@ int gsec(Firebird::UtilSvc* uSvc)
 	const Firebird::string sqlRoleName(user_data->role.entered() ? user_data->role.get() : "");
 
 	Firebird::PathName serverName;
-	const bool useServices = !uSvc->isService();
-
-	switch (ISC_extract_host(databaseName, serverName, true))
-	{
-	case ISC_PROTOCOL_TCPIP:
+	if (ISC_extract_host(databaseName, serverName, true) == ISC_PROTOCOL_TCPIP)
 		serverName += ":";
-		break;
-	case ISC_PROTOCOL_WLAN:
-		serverName = "\\\\" + serverName + "\\";
-		break;
-	}
 
+	const bool useServices = !uSvc->isService();
 	if (!useServices)
-	{
 		serverName = "";
-	}
 
 	Firebird::LocalStatus s;
 	Firebird::CheckStatusWrapper statusWrapper(&s);

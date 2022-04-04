@@ -59,12 +59,11 @@ namespace Jrd
 			bool irsb_active;
 			State irsb_state;
 			FB_UINT64 irsb_position;
-			RecordBuffer* irsb_buffer;
 		};
 
 	public:
 		Cursor(CompilerScratch* csb, const RecordSource* rsb, const VarInvariantArray* invariants,
-			bool scrollable);
+			bool scrollable, bool updateCounters);
 
 		void open(thread_db* tdbb) const;
 		void close(thread_db* tdbb) const;
@@ -76,11 +75,19 @@ namespace Jrd
 		bool fetchAbsolute(thread_db* tdbb, SINT64 offset) const;
 		bool fetchRelative(thread_db* tdbb, SINT64 offset) const;
 
-		void checkState(jrd_req* request) const;
+		void checkState(Request* request) const;
 
 		const RecordSource* getAccessPath() const
 		{
 			return m_top;
+		}
+
+#if (!defined __GNUC__) || (__GNUC__ > 6)
+		constexpr
+#endif
+				  bool isUpdateCounters() const
+		{
+			return m_updateCounters;
 		}
 
 	public:
@@ -91,6 +98,7 @@ namespace Jrd
 		const RecordSource* const m_top;
 		const VarInvariantArray* const m_invariants;
 		const bool m_scrollable;
+		const bool m_updateCounters;
 	};
 
 } // namespace

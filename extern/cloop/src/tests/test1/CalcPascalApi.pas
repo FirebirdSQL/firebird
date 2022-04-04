@@ -30,6 +30,8 @@ public
 
 	class procedure checkException(status: Status);
 	class procedure catchException(status: Status; e: Exception);
+	class procedure setVersionError(status: Status; interfaceName: string;
+		currentVersion, expectedVersion: NativeInt);
 
 private
 	code: Integer;
@@ -221,17 +223,31 @@ end;
 
 function Calculator.getMemory(): Integer;
 begin
-	Result := CalculatorVTable(vTable).getMemory(Self);
+	if (vTable.version < 3) then begin
+		Result := Status.ERROR_1;
+	end
+	else begin
+		Result := CalculatorVTable(vTable).getMemory(Self);
+	end;
 end;
 
 procedure Calculator.setMemory(n: Integer);
 begin
-	CalculatorVTable(vTable).setMemory(Self, n);
+	if (vTable.version < 3) then begin
+	end
+	else begin
+		CalculatorVTable(vTable).setMemory(Self, n);
+	end;
 end;
 
 procedure Calculator.sumAndStore(status: Status; n1: Integer; n2: Integer);
 begin
-	CalculatorVTable(vTable).sumAndStore(Self, status, n1, n2);
+	if (vTable.version < 4) then begin
+		CalcException.setVersionError(status, 'Calculator', vTable.version, 4);
+	end
+	else begin
+		CalculatorVTable(vTable).sumAndStore(Self, status, n1, n2);
+	end;
 	CalcException.checkException(status);
 end;
 
@@ -248,7 +264,11 @@ end;
 
 procedure Calculator2.copyMemory2(address: IntegerPtr);
 begin
-	Calculator2VTable(vTable).copyMemory2(Self, address);
+	if (vTable.version < 6) then begin
+	end
+	else begin
+		Calculator2VTable(vTable).copyMemory2(Self, address);
+	end;
 end;
 
 procedure DisposableImpl_disposeDispatcher(this: Disposable); cdecl;
@@ -515,6 +535,12 @@ begin
 		status.setCode(CalcException(e).code)
 	else
 		status.setCode(-1);
+end;
+
+class procedure CalcException.setVersionError(status: Status; interfaceName: string;
+		currentVersion, expectedVersion: NativeInt);
+begin
+	status.setCode(Status.ERROR_1);
 end;
 initialization
 	DisposableImpl_vTable := DisposableVTable.create;

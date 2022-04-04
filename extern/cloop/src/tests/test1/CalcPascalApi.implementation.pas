@@ -25,3 +25,9 @@ begin
 	else
 		status.setCode(-1);
 end;
+
+class procedure CalcException.setVersionError(status: Status; interfaceName: string;
+		currentVersion, expectedVersion: NativeInt);
+begin
+	status.setCode(Status.ERROR_1);
+end;

@@ -172,6 +172,11 @@ public:
 	bool isNan() const;
 	int sign() const;
 
+	static ULONG getKeyLength()
+	{
+		return sizeof(Decimal64) + sizeof(ULONG);
+	}
+
 	void makeKey(ULONG* key) const;
 	void grabKey(ULONG* key);
 
@@ -243,9 +248,19 @@ public:
 	bool isNan() const;
 	int sign() const;
 
+	static ULONG getKeyLength()
+	{
+		return sizeof(Decimal128) + sizeof(ULONG);
+	}
+
 	void makeKey(ULONG* key) const;
 	void grabKey(ULONG* key);
-	static ULONG getIndexKeyLength();
+
+	static ULONG getIndexKeyLength()
+	{
+		return 17;
+	}
+
 	ULONG makeIndexKey(vary* buf);
 
 	Decimal128 modf(DecimalStatus decSt, Decimal128* ipart) const;
@@ -289,6 +304,12 @@ public:
 		set(value, decSt);
 	}
 };
+
+static_assert(sizeof(Decimal64) % sizeof(ULONG) == 0, "Decimal64 size mismatch");
+static_assert(sizeof(Decimal128) % sizeof(ULONG) == 0, "Decimal128 size mismatch");
+
+static const size_t MAX_DEC_LONGS = MAX(sizeof(Decimal64), sizeof(Decimal128)) >> SHIFTLONG;
+static const size_t MAX_DEC_KEY_LONGS = MAX_DEC_LONGS + 1; // key is one longword bigger
 
 } // namespace Firebird
 

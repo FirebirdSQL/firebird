@@ -80,20 +80,21 @@ namespace
 		{ rel_db_creators, { f_crt_user, f_crt_u_type, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF } }
 	};
 
-	class BlockReader
+	class BlockReader : public AutoStorage
 	{
 	public:
 		BlockReader(ULONG length, const UCHAR* data)
 			: m_header((Block*) data),
 			  m_data(data + sizeof(Block)),
-			  m_metadata(m_data + m_header->metaOffset)
+			  m_end(data + length),
+			  m_atoms(getPool())
 		{
-			fb_assert(m_data + m_header->length == data + length);
+			fb_assert(m_data + m_header->length == m_end);
 		}
 
 		bool isEof() const
 		{
-			return (m_data >= m_metadata);
+			return (m_data >= m_end);
 		}
 
 		UCHAR getTag()
@@ -103,11 +104,17 @@ namespace
 
 		UCHAR getByte()
 		{
+			if (m_data >= m_end)
+				malformed();
+
 			return *m_data++;
 		}
 
 		SSHORT getInt16()
 		{
+			if (m_data + sizeof(SSHORT) > m_end)
+				malformed();
+
 			SSHORT value;
 			memcpy(&value, m_data, sizeof(SSHORT));
 			m_data += sizeof(SSHORT);
@@ -116,6 +123,9 @@ namespace
 
 		SLONG getInt32()
 		{
+			if (m_data + sizeof(SLONG) > m_end)
+				malformed();
+
 			SLONG value;
 			memcpy(&value, m_data, sizeof(SLONG));
 			m_data += sizeof(SLONG);
@@ -124,6 +134,9 @@ namespace
 
 		SINT64 getInt64()
 		{
+			if (m_data + sizeof(SINT64) > m_end)
+				malformed();
+
 			SINT64 value;
 			memcpy(&value, m_data, sizeof(SINT64));
 			m_data += sizeof(SINT64);
@@ -132,14 +145,17 @@ namespace
 
 		const MetaString& getMetaName()
 		{
-			const auto offset = getInt32() * sizeof(MetaString);
-			const auto metaPtr = (const MetaString*) (m_metadata + offset);
-			return *metaPtr;
+			const auto pos = getInt32();
+			return m_atoms[pos];
 		}
 
 		string getString()
 		{
 			const auto length = getInt32();
+
+			if (m_data + length > m_end)
+				malformed();
+
 			const string str((const char*) m_data, length);
 			m_data += length;
 			return str;
@@ -147,6 +163,9 @@ namespace
 
 		const UCHAR* getBinary(ULONG length)
 		{
+			if (m_data + length > m_end)
+				malformed();
+
 			const auto ptr = m_data;
 			m_data += length;
 			return ptr;
@@ -162,16 +181,30 @@ namespace
 			return m_header->protocol;
 		}
 
+		void defineAtom()
+		{
+			const auto length = getByte();
+			const auto ptr = getBinary(length);
+			const MetaString name((const char*) ptr, length);
+			m_atoms.add(name);
+		}
+
 	private:
 		const Block* const m_header;
 		const UCHAR* m_data;
-		const UCHAR* const m_metadata;
+		const UCHAR* const m_end;
+		HalfStaticArray<MetaString, 64> m_atoms;
+
+		static void malformed()
+		{
+			raiseError("Replication block is malformed");
+		}
 	};
 
 	class LocalThreadContext
 	{
 	public:
-		LocalThreadContext(thread_db* tdbb, jrd_tra* tra, jrd_req* req = NULL)
+		LocalThreadContext(thread_db* tdbb, jrd_tra* tra, Request* req = NULL)
 			: m_tdbb(tdbb)
 		{
 			tdbb->setTransaction(tra);
@@ -207,16 +240,21 @@ Applier* Applier::create(thread_db* tdbb)
 	Jrd::ContextPoolHolder context(tdbb, req_pool);
 	AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*req_pool) CompilerScratch(*req_pool));
 
-	const auto request = JrdStatement::makeRequest(tdbb, csb, true);
-	TimeZoneUtil::validateGmtTimeStamp(request->req_gmt_timestamp);
+	const auto request = Statement::makeRequest(tdbb, csb, true);
+	request->validateTimeStamp();
 	request->req_attachment = attachment;
 
 	auto& att_pool = *attachment->att_pool;
-	return FB_NEW_POOL(att_pool) Applier(att_pool, dbb->dbb_filename, request);
+	const auto applier = FB_NEW_POOL(att_pool) Applier(att_pool, dbb->dbb_filename, request);
+
+	attachment->att_repl_appliers.add(applier);
+	return applier;
 }
 
 void Applier::shutdown(thread_db* tdbb)
 {
+	const auto attachment = tdbb->getAttachment();
+
 	cleanupTransactions(tdbb);
 
 	CMP_release(tdbb, m_request);
@@ -224,6 +262,14 @@ void Applier::shutdown(thread_db* tdbb)
 	m_record = NULL;
 
 	m_bitmap->clear();
+
+	attachment->att_repl_appliers.findAndRemove(this);
+
+	if (m_interface)
+	{
+		m_interface->resetHandle();
+		m_interface = nullptr;
+	}
 }
 
 void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
@@ -234,6 +280,9 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 		raiseError("Replication is impossible for read-only database");
 
 	tdbb->tdbb_flags |= TDBB_replicator;
+
+	const auto config = dbb->replConfig();
+	m_enableCascade = config != nullptr && config->cascadeReplication;
 
 	BlockReader reader(length, data);
 
@@ -319,9 +368,13 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 				blob_id.bid_quad.bid_quad_high = reader.getInt32();
 				blob_id.bid_quad.bid_quad_low = reader.getInt32();
 				do {
-					const ULONG length = reader.getInt16();
+					const ULONG length = (USHORT) reader.getInt16();
 					if (!length)
+					{
+						// Close our newly created blob
+						storeBlob(tdbb, traNum, &blob_id, 0, nullptr);
 						break;
+					}
 					const auto blob = reader.getBinary(length);
 					storeBlob(tdbb, traNum, &blob_id, length, blob);
 				} while (!reader.isEof());
@@ -345,6 +398,10 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 				const auto value = reader.getInt64();
 				setSequence(tdbb, genName, value);
 			}
+			break;
+
+		case opDefineAtom:
+			reader.defineAtom();
 			break;
 
 		default:
@@ -444,13 +501,13 @@ void Applier::cleanupSavepoint(thread_db* tdbb, TraNumber traNum, bool undo)
 
 	LocalThreadContext context(tdbb, transaction);
 
-	if (!transaction->tra_save_point)
+	if (!transaction->tra_save_point || transaction->tra_save_point->isRoot())
 		raiseError("Transaction %" SQUADFORMAT" has no savepoints to cleanup", traNum);
 
 	if (undo)
 		transaction->rollbackSavepoint(tdbb);
 	else
-		transaction->rollforwardSavepoint(tdbb);
+		transaction->releaseSavepoint(tdbb);
 }
 
 void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
@@ -501,6 +558,40 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 		}
 
 		fb_utils::init_status(tdbb->tdbb_status_vector);
+
+		// The subsequent backout will delete the blobs we have stored before,
+		// so we have to copy them and adjust the references
+		for (USHORT id = 0; id < format->fmt_count; id++)
+		{
+			dsc desc;
+			if (DTYPE_IS_BLOB(format->fmt_desc[id].dsc_dtype) &&
+				EVL_field(NULL, record, id, &desc))
+			{
+				const auto blobId = (bid*) desc.dsc_address;
+
+				if (!blobId->isEmpty())
+				{
+					const auto numericId = blobId->get_permanent_number().getValue();
+					const auto destination = blb::copy(tdbb, blobId);
+					transaction->tra_repl_blobs.put(numericId, destination.bid_temp_id());
+				}
+			}
+		}
+
+		// Undo this particular insert (without involving a savepoint)
+		VIO_backout(tdbb, &rpb, transaction);
+
+		if (transaction->tra_save_point)
+		{
+			const auto action = transaction->tra_save_point->getAction(relation);
+			if (action && action->vct_records)
+			{
+				const auto recno = rpb.rpb_number.getValue();
+				fb_assert(action->vct_records->test(recno));
+				fb_assert(!action->vct_undo || !action->vct_undo->locate(recno));
+				action->vct_records->clear(recno);
+			}
+		}
 	}
 
 	bool found = false;
@@ -540,14 +631,10 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 
 		record_param newRpb;
 		newRpb.rpb_relation = relation;
-
-		newRpb.rpb_record = NULL;
-		AutoPtr<Record> newRecord(VIO_record(tdbb, &newRpb, format, m_request->req_pool));
-
+		newRpb.rpb_record = record;
 		newRpb.rpb_format_number = format->fmt_version;
-		newRpb.rpb_address = newRecord->getData();
-		newRpb.rpb_length = length;
-		newRecord->copyDataFrom(data);
+		newRpb.rpb_address = record->getData();
+		newRpb.rpb_length = record->getLength();
 
 		doUpdate(tdbb, &rpb, &newRpb, transaction, NULL);
 	}
@@ -789,6 +876,8 @@ void Applier::setSequence(thread_db* tdbb, const MetaName& genName, SINT64 value
 		attachment->att_generators.store(gen_id, genName);
 	}
 
+	AutoSetRestoreFlag<ULONG> noCascade(&tdbb->tdbb_flags, TDBB_repl_in_progress, !m_enableCascade);
+
 	if (DPM_gen_id(tdbb, gen_id, false, 0) < value)
 		DPM_gen_id(tdbb, gen_id, true, value);
 }
@@ -802,15 +891,13 @@ void Applier::storeBlob(thread_db* tdbb, TraNumber traNum, bid* blobId,
 
 	LocalThreadContext context(tdbb, transaction);
 
-	const auto orgBlobId = blobId->get_permanent_number().getValue();
-
+	ULONG tempBlobId;
 	blb* blob = NULL;
 
-	ReplBlobMap::Accessor accessor(&transaction->tra_repl_blobs);
-	if (accessor.locate(orgBlobId))
-	{
-		const auto tempBlobId = accessor.current()->second;
+	const auto numericId = blobId->get_permanent_number().getValue();
 
+	if (transaction->tra_repl_blobs.get(numericId, tempBlobId))
+	{
 		if (transaction->tra_blobs->locate(tempBlobId))
 		{
 			const auto current = &transaction->tra_blobs->current();
@@ -822,10 +909,12 @@ void Applier::storeBlob(thread_db* tdbb, TraNumber traNum, bid* blobId,
 	{
 		bid newBlobId;
 		blob = blb::create(tdbb, transaction, &newBlobId);
-		transaction->tra_repl_blobs.put(orgBlobId, newBlobId.bid_temp_id());
+		transaction->tra_repl_blobs.put(numericId, newBlobId.bid_temp_id());
 	}
 
 	fb_assert(blob);
+	fb_assert(blob->blb_flags & BLB_temporary);
+	fb_assert(!(blob->blb_flags & BLB_closed));
 
 	if (length)
 		blob->BLB_put_segment(tdbb, data, length);
@@ -837,7 +926,7 @@ void Applier::executeSql(thread_db* tdbb,
 						 TraNumber traNum,
 						 unsigned charset,
 						 const string& sql,
-						 const MetaName& owner)
+						 const MetaName& ownerName)
 {
 	jrd_tra* transaction = NULL;
 	if (!m_txnMap.get(traNum, transaction))
@@ -851,11 +940,11 @@ void Applier::executeSql(thread_db* tdbb,
 	const auto dialect =
 		(dbb->dbb_flags & DBB_DB_SQL_dialect_3) ? SQL_DIALECT_V6 : SQL_DIALECT_V5;
 
-	UserId user(*attachment->att_user);
-	user.setUserName(owner);
-
 	AutoSetRestore<SSHORT> autoCharset(&attachment->att_charset, charset);
-	AutoSetRestore<UserId*> autoOwner(&attachment->att_user, &user);
+
+  UserId* const owner = attachment->getUserId(ownerName);
+	AutoSetRestore<UserId*> autoOwner(&attachment->att_ss_user, owner);
+	AutoSetRestoreFlag<ULONG> noCascade(&tdbb->tdbb_flags, TDBB_repl_in_progress, !m_enableCascade);
 
 	DSQL_execute_immediate(tdbb, attachment, &transaction,
 						   0, sql.c_str(), dialect,
@@ -1073,13 +1162,13 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 			if (!blobId->isEmpty())
 			{
+				ULONG tempBlobId;
 				bool found = false;
 
 				const auto numericId = blobId->get_permanent_number().getValue();
 
-				ReplBlobMap::Accessor accessor(&transaction->tra_repl_blobs);
-				if (accessor.locate(numericId) &&
-					transaction->tra_blobs->locate(accessor.current()->second))
+				if (transaction->tra_repl_blobs.get(numericId, tempBlobId) &&
+					transaction->tra_blobs->locate(tempBlobId))
 				{
 					const auto current = &transaction->tra_blobs->current();
 
@@ -1094,7 +1183,6 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 						current->bli_materialized = true;
 						current->bli_blob_id = *blobId;
 						transaction->tra_blobs->fastRemove();
-						accessor.fastRemove();
 						found = true;
 					}
 				}
@@ -1110,11 +1198,30 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		}
 	}
 
+	// Cleanup temporary blobs stored for this command beforehand but not materialized
+
+	ReplBlobMap::ConstAccessor accessor(&transaction->tra_repl_blobs);
+	for (bool found = accessor.getFirst(); found; found = accessor.getNext())
+	{
+		const auto tempBlobId = accessor.current()->second;
+
+		if (transaction->tra_blobs->locate(tempBlobId))
+		{
+			const auto current = &transaction->tra_blobs->current();
+
+			if (!current->bli_materialized)
+				current->bli_blob_object->BLB_cancel(tdbb);
+		}
+	}
+
+	transaction->tra_repl_blobs.clear();
+
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
 
 	VIO_store(tdbb, rpb, transaction);
 	IDX_store(tdbb, rpb, transaction);
-	REPL_store(tdbb, rpb, transaction);
+	if (m_enableCascade)
+		REPL_store(tdbb, rpb, transaction);
 }
 
 void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newRpb,
@@ -1151,13 +1258,13 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 				}
 				else
 				{
+					ULONG tempBlobId;
 					bool found = false;
 
 					const auto numericId = dstBlobId->get_permanent_number().getValue();
 
-					ReplBlobMap::Accessor accessor(&transaction->tra_repl_blobs);
-					if (accessor.locate(numericId) &&
-						transaction->tra_blobs->locate(accessor.current()->second))
+					if (transaction->tra_repl_blobs.get(numericId, tempBlobId) &&
+						transaction->tra_blobs->locate(tempBlobId))
 					{
 						const auto current = &transaction->tra_blobs->current();
 
@@ -1172,7 +1279,6 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 							current->bli_materialized = true;
 							current->bli_blob_id = *dstBlobId;
 							transaction->tra_blobs->fastRemove();
-							accessor.fastRemove();
 							found = true;
 						}
 					}
@@ -1189,11 +1295,30 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 		}
 	}
 
+	// Cleanup temporary blobs stored for this command beforehand but not materialized
+
+	ReplBlobMap::ConstAccessor accessor(&transaction->tra_repl_blobs);
+	for (bool found = accessor.getFirst(); found; found = accessor.getNext())
+	{
+		const auto tempBlobId = accessor.current()->second;
+
+		if (transaction->tra_blobs->locate(tempBlobId))
+		{
+			const auto current = &transaction->tra_blobs->current();
+
+			if (!current->bli_materialized)
+				current->bli_blob_object->BLB_cancel(tdbb);
+		}
+	}
+
+	transaction->tra_repl_blobs.clear();
+
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
 
 	VIO_modify(tdbb, orgRpb, newRpb, transaction);
 	IDX_modify(tdbb, orgRpb, newRpb, transaction);
-	REPL_modify(tdbb, orgRpb, newRpb, transaction);
+	if (m_enableCascade)
+		REPL_modify(tdbb, orgRpb, newRpb, transaction);
 }
 
 void Applier::doDelete(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
@@ -1205,7 +1330,8 @@ void Applier::doDelete(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
 
 	VIO_erase(tdbb, rpb, transaction);
-	REPL_erase(tdbb, rpb, transaction);
+	if (m_enableCascade)
+		REPL_erase(tdbb, rpb, transaction);
 }
 
 void Applier::logConflict(const char* msg, ...)
@@ -1218,6 +1344,6 @@ void Applier::logConflict(const char* msg, ...)
 	vsprintf(buffer, msg, ptr);
 	va_end(ptr);
 
-	logReplicaMessage(m_database, buffer, WARNING_MSG);
+	logReplicaWarning(m_database, buffer);
 #endif
 }

@@ -25,7 +25,7 @@
 #define JRD_INF_PROTO_H
 
 namespace Jrd {
-	class jrd_req;
+	class Request;
 	class jrd_tra;
 	class blb;
 }
@@ -34,7 +34,7 @@ void INF_blob_info(const Jrd::blb*, const ULONG, const UCHAR*, const ULONG, UCHA
 USHORT INF_convert(SINT64, UCHAR*);
 void INF_database_info(Jrd::thread_db*, const ULONG, const UCHAR*, const ULONG, UCHAR*);
 UCHAR* INF_put_item(UCHAR, ULONG, const void*, UCHAR*, const UCHAR*, const bool inserting = false);
-ULONG INF_request_info(const Jrd::jrd_req*, const ULONG, const UCHAR*, const ULONG, UCHAR*);
+ULONG INF_request_info(const Jrd::Request*, const ULONG, const UCHAR*, const ULONG, UCHAR*);
 void INF_transaction_info(const Jrd::jrd_tra*, const ULONG, const UCHAR*, const ULONG, UCHAR*);
 
 #endif // JRD_INF_PROTO_H

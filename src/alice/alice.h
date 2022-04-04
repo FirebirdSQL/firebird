@@ -98,30 +98,21 @@ struct user_action
 
 
 
-// String block: used to store a string of constant length.
-
-class alice_str : public pool_alloc_rpt<UCHAR, alice_type_str>
-{
-public:
-	USHORT str_length;
-	UCHAR str_data[2];
-};
-
 // Transaction block: used to store info about a multi-database transaction.
 // Transaction Description Record
 
 struct tdr : public pool_alloc<alice_type_tdr>
 {
-	tdr* tdr_next;					// next sub-transaction
-	TraNumber tdr_id;				// database-specific transaction id
-	alice_str* tdr_fullpath;		// full (possibly) remote pathname
-	const TEXT* tdr_filename;		// filename within full pathname
-	alice_str* tdr_host_site;		// host for transaction
-	alice_str* tdr_remote_site;		// site for remote transaction
-	FB_API_HANDLE tdr_handle;		// reconnected transaction handle
-	FB_API_HANDLE tdr_db_handle;	// re-attached database handle
-	USHORT tdr_db_caps;				// capabilities of database
-	USHORT tdr_state;				// see flags below
+	tdr* tdr_next;						// next sub-transaction
+	TraNumber tdr_id;					// database-specific transaction id
+	Firebird::string tdr_fullpath;		// full (possibly) remote pathname
+	Firebird::string tdr_filename;		// filename
+	Firebird::string tdr_host_site;		// host for transaction
+	Firebird::string tdr_remote_site;	// site for remote transaction
+	FB_API_HANDLE tdr_handle;			// reconnected transaction handle
+	FB_API_HANDLE tdr_db_handle;		// re-attached database handle
+	USHORT tdr_db_caps;					// capabilities of database
+	USHORT tdr_state;					// see flags below
 };
 
 // CVC: This information should match Transaction Description Record constants in acl.h

@@ -42,8 +42,8 @@
 #include "../../jrd/evl_proto.h"
 #include "../../jrd/intl_proto.h"
 #include "../../jrd/mov_proto.h"
-#include "../../jrd/opt_proto.h"
 #include "../../jrd/pag_proto.h"
+#include "../../jrd/optimizer/Optimizer.h"
 #include "../../common/os/path_utils.h"
 #include "../../dsql/dsql_proto.h"
 
@@ -83,14 +83,12 @@ const char* TraceConnectionImpl::getDatabaseName()
 
 const char* TraceConnectionImpl::getUserName()
 {
-	const UserId* user = m_att->att_user;
-	return user ? user->getUserName().c_str() : NULL;
+	return m_att->getUserName().nullStr();
 }
 
 const char* TraceConnectionImpl::getRoleName()
 {
-	const UserId* user = m_att->att_user;
-	return user ? user->getSqlRole().c_str() : NULL;
+	return m_att->getSqlRole().nullStr();
 }
 
 const char* TraceConnectionImpl::getCharSet()
@@ -171,21 +169,21 @@ ISC_INT64 TraceTransactionImpl::getInitialID()
 
 ISC_INT64 TraceSQLStatementImpl::getStmtID()
 {
-	if (m_stmt->req_request)
-		return m_stmt->req_request->getRequestId();
+	if (m_stmt->getRequest())
+		return m_stmt->getRequest()->getRequestId();
 
 	return 0;
 }
 
 const char* TraceSQLStatementImpl::getText()
 {
-	const string* stmtText = m_stmt->getStatement()->getSqlText();
+	const string* stmtText = m_stmt->getDsqlStatement()->getSqlText();
 	return stmtText ? stmtText->c_str() : "";
 }
 
 const char* TraceSQLStatementImpl::getTextUTF8()
 {
-	const string* stmtText = m_stmt->getStatement()->getSqlText();
+	const string* stmtText = m_stmt->getDsqlStatement()->getSqlText();
 
 	if (m_textUTF8.isEmpty() && stmtText && !stmtText->isEmpty())
 	{
@@ -213,7 +211,8 @@ void TraceSQLStatementImpl::fillPlan(bool explained)
 	if (m_plan.isEmpty() || m_planExplained != explained)
 	{
 		m_planExplained = explained;
-		m_plan = OPT_get_plan(JRD_get_thread_data(), m_stmt->req_request, m_planExplained);
+		if (m_stmt->getStatement())
+			m_plan = Optimizer::getPlan(JRD_get_thread_data(), m_stmt->getStatement(), m_planExplained);
 	}
 }
 
@@ -232,8 +231,16 @@ ITraceParams* TraceSQLStatementImpl::getInputs()
 
 void TraceSQLStatementImpl::DSQLParamsImpl::fillParams()
 {
-	if (m_descs.getCount() || !m_params)
+	if (m_descs.getCount() || !m_params || m_params->getCount() == 0)
 		return;
+
+	if (!m_stmt->isDml())
+	{
+		fb_assert(false);
+		return;
+	}
+
+	const auto dmlRequest = (DsqlDmlRequest*) m_stmt;
 
 	USHORT first_index = 0;
 	for (FB_SIZE_T i = 0 ; i < m_params->getCount(); ++i)
@@ -247,7 +254,7 @@ void TraceSQLStatementImpl::DSQLParamsImpl::fillParams()
 			if (parameter->par_null)
 			{
 				const UCHAR* msgBuffer =
-					m_stmt->req_msg_buffers[parameter->par_null->par_message->msg_buffer_number];
+					dmlRequest->req_msg_buffers[parameter->par_null->par_message->msg_buffer_number];
 
 				if (*(SSHORT*) (msgBuffer + (IPTR) parameter->par_null->par_desc.dsc_address))
 					null_flag = DSC_null;
@@ -264,7 +271,7 @@ void TraceSQLStatementImpl::DSQLParamsImpl::fillParams()
 			*desc = parameter->par_desc;
 			desc->dsc_flags |= null_flag;
 
-			UCHAR* msgBuffer = m_stmt->req_msg_buffers[parameter->par_message->msg_buffer_number];
+			UCHAR* msgBuffer = dmlRequest->req_msg_buffers[parameter->par_message->msg_buffer_number];
 			desc->dsc_address = msgBuffer + (IPTR) desc->dsc_address;
 		}
 	}
@@ -497,7 +504,7 @@ const char* TraceTriggerImpl::getRelationName()
 
 /// TraceLogWriterImpl
 
-class TraceLogWriterImpl FB_FINAL :
+class TraceLogWriterImpl final :
 	public RefCntIface<ITraceLogWriterImpl<TraceLogWriterImpl, CheckStatusWrapper> >
 {
 public:
@@ -654,7 +661,7 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* att, RuntimeStatistics* baselin
 	m_info.pin_time = clock * 1000 / fb_utils::query_performance_frequency();
 	m_info.pin_records_fetched = records_fetched;
 
-	if (baseline)
+	if (baseline && stats)
 		baseline->computeDifference(att, *stats, m_info, m_counts);
 	else
 	{

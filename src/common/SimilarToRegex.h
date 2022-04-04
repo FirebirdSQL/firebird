@@ -51,6 +51,31 @@ public:
 		const char* patternStr, unsigned patternLen, const char* escapeStr, unsigned escapeLen);
 	~SimilarToRegex();
 
+public:
+	static bool isSpecialChar(ULONG c)
+	{
+		switch (c)
+		{
+			case '^':
+			case '-':
+			case '_':
+			case '%':
+			case '[':
+			case ']':
+			case '(':
+			case ')':
+			case '{':
+			case '}':
+			case '|':
+			case '?':
+			case '+':
+			case '*':
+				return true;
+		}
+
+		return false;
+	}
+
 private:
 	static void finalize(SimilarToRegex* self);
 

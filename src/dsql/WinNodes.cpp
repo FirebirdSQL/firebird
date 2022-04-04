@@ -76,7 +76,7 @@ ValueExprNode* DenseRankWinNode::copy(thread_db* tdbb, NodeCopier& /*copier*/) c
 	return FB_NEW_POOL(*tdbb->getDefaultPool()) DenseRankWinNode(*tdbb->getDefaultPool());
 }
 
-void DenseRankWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
+void DenseRankWinNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 
@@ -84,11 +84,11 @@ void DenseRankWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 	impure->make_int64(0, 0);
 }
 
-void DenseRankWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* /*request*/, dsc* /*desc*/) const
+void DenseRankWinNode::aggPass(thread_db* /*tdbb*/, Request* /*request*/, dsc* /*desc*/) const
 {
 }
 
-dsc* DenseRankWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* request) const
+dsc* DenseRankWinNode::aggExecute(thread_db* /*tdbb*/, Request* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	++impure->vlu_misc.vlu_int64;
@@ -146,7 +146,7 @@ AggNode* RankWinNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
-void RankWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
+void RankWinNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 
@@ -155,13 +155,13 @@ void RankWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 	impure->vlux_count = 0;
 }
 
-void RankWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* request, dsc* /*desc*/) const
+void RankWinNode::aggPass(thread_db* /*tdbb*/, Request* request, dsc* /*desc*/) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	++impure->vlux_count;
 }
 
-dsc* RankWinNode::aggExecute(thread_db* tdbb, jrd_req* request) const
+dsc* RankWinNode::aggExecute(thread_db* tdbb, Request* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 
@@ -222,7 +222,7 @@ AggNode* PercentRankWinNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
-void PercentRankWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
+void PercentRankWinNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 
@@ -235,13 +235,13 @@ void PercentRankWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 	impureTemp->vlux_count = 0;
 }
 
-void PercentRankWinNode::aggPass(thread_db* /*tdbb*/, jrd_req* request, dsc* /*desc*/) const
+void PercentRankWinNode::aggPass(thread_db* /*tdbb*/, Request* request, dsc* /*desc*/) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	++impure->vlux_count;
 }
 
-dsc* PercentRankWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* request) const
+dsc* PercentRankWinNode::aggExecute(thread_db* /*tdbb*/, Request* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
@@ -254,9 +254,8 @@ dsc* PercentRankWinNode::aggExecute(thread_db* /*tdbb*/, jrd_req* request) const
 	return NULL;
 }
 
-dsc* PercentRankWinNode::winPass(thread_db* /*tdbb*/, jrd_req* request, SlidingWindow* window) const
+dsc* PercentRankWinNode::winPass(thread_db* /*tdbb*/, Request* request, SlidingWindow* window) const
 {
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
 
 	double partitionSize = window->getPartitionSize();
@@ -308,7 +307,7 @@ AggNode* CumeDistWinNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
-void CumeDistWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
+void CumeDistWinNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 
@@ -316,7 +315,7 @@ void CumeDistWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 	impure->make_double(0);
 }
 
-dsc* CumeDistWinNode::winPass(thread_db* /*tdbb*/, jrd_req* request, SlidingWindow* window) const
+dsc* CumeDistWinNode::winPass(thread_db* /*tdbb*/, Request* request, SlidingWindow* window) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 
@@ -367,7 +366,7 @@ ValueExprNode* RowNumberWinNode::copy(thread_db* tdbb, NodeCopier& /*copier*/) c
 	return FB_NEW_POOL(*tdbb->getDefaultPool()) RowNumberWinNode(*tdbb->getDefaultPool());
 }
 
-void RowNumberWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
+void RowNumberWinNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 
@@ -375,7 +374,7 @@ void RowNumberWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 	impure->make_int64(0, 0);
 }
 
-dsc* RowNumberWinNode::winPass(thread_db* /*tdbb*/, jrd_req* request, SlidingWindow* window) const
+dsc* RowNumberWinNode::winPass(thread_db* /*tdbb*/, Request* request, SlidingWindow* window) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->vlu_misc.vlu_int64 = window->getRecordPosition() - window->getPartitionStart() + 1;
@@ -426,15 +425,13 @@ ValueExprNode* FirstValueWinNode::copy(thread_db* tdbb, NodeCopier& copier) cons
 	return node;
 }
 
-void FirstValueWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
+void FirstValueWinNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 }
 
-dsc* FirstValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* window) const
+dsc* FirstValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* window) const
 {
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
 	if (!window->moveWithinFrame(-(window->getRecordPosition() - window->getFrameStart())))
 		return NULL;
 
@@ -489,15 +486,13 @@ ValueExprNode* LastValueWinNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	return node;
 }
 
-void LastValueWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
+void LastValueWinNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 }
 
-dsc* LastValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* window) const
+dsc* LastValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* window) const
 {
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
 	if (!window->moveWithinFrame(window->getFrameEnd() - window->getRecordPosition()))
 		return NULL;
 
@@ -563,7 +558,7 @@ ValueExprNode* NthValueWinNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	return node;
 }
 
-void NthValueWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
+void NthValueWinNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 
@@ -571,10 +566,8 @@ void NthValueWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 	impure->make_int64(0, 0);
 }
 
-dsc* NthValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* window) const
+dsc* NthValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* window) const
 {
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-
 	dsc* desc = EVL_expr(tdbb, request, row);
 	if (!desc || (request->req_flags & req_null))
 		return NULL;
@@ -659,12 +652,12 @@ void LagLeadWinNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 	arg->getDesc(tdbb, csb, desc);
 }
 
-void LagLeadWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
+void LagLeadWinNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 }
 
-dsc* LagLeadWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* window) const
+dsc* LagLeadWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* window) const
 {
 	dsc* desc = EVL_expr(tdbb, request, rows);
 	if (!desc || (request->req_flags & req_null))
@@ -825,7 +818,7 @@ AggNode* NTileWinNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
-void NTileWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
+void NTileWinNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 
@@ -854,7 +847,7 @@ void NTileWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 	}
 }
 
-dsc* NTileWinNode::winPass(thread_db* /*tdbb*/, jrd_req* request, SlidingWindow* window) const
+dsc* NTileWinNode::winPass(thread_db* /*tdbb*/, Request* request, SlidingWindow* window) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	ThisImpure* thisImpure = request->getImpure<ThisImpure>(thisImpureOffset);

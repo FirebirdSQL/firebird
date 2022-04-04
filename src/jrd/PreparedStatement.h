@@ -40,7 +40,7 @@ namespace Jrd {
 class thread_db;
 class jrd_tra;
 class Attachment;
-class dsql_req;
+class DsqlRequest;
 class dsql_msg;
 class ResultSet;
 
@@ -359,9 +359,9 @@ public:
 
 	int getResultCount() const;
 
-	dsql_req* getRequest()
+	DsqlRequest* getDsqlRequest()
 	{
-		return request;
+		return dsqlRequest;
 	}
 
 	static void parseDsqlMessage(const dsql_msg* dsqlMsg, Firebird::Array<dsc>& values,
@@ -369,7 +369,7 @@ public:
 
 private:
 	const Builder* builder;
-	dsql_req* request;
+	DsqlRequest* dsqlRequest;
 	Firebird::Array<dsc> inValues, outValues;
 	Firebird::RefPtr<Firebird::MsgMetadata> inMetadata, outMetadata;
 	Firebird::UCharBuffer inMessage, outMessage;

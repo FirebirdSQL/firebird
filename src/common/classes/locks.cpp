@@ -33,6 +33,7 @@
 
 #include "../../common/classes/locks.h"
 #include "../../common/ThreadStart.h"
+#include <mutex>
 
 
 namespace Firebird {
@@ -50,15 +51,18 @@ pthread_mutexattr_t Mutex::attr;
 
 void Mutex::initMutexes()
 {
-	// Throw exceptions on errors, but they will not be processed in init
-	// (first constructor). Better logging facilities are required here.
-	int rc = pthread_mutexattr_init(&attr);
-	if (rc < 0)
-		system_call_failed::raise("pthread_mutexattr_init", rc);
+	static std::once_flag onceFlag;
+	std::call_once(onceFlag, [] {
+		// Throw exceptions on errors, but they will not be processed in init
+		// (first constructor). Better logging facilities are required here.
+		int rc = pthread_mutexattr_init(&attr);
+		if (rc < 0)
+			system_call_failed::raise("pthread_mutexattr_init", rc);
 
-	rc = pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-	if (rc < 0)
-		system_call_failed::raise("pthread_mutexattr_settype", rc);
+		rc = pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+		if (rc < 0)
+			system_call_failed::raise("pthread_mutexattr_settype", rc);
+	});
 }
 
 #endif

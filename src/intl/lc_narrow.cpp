@@ -168,8 +168,6 @@ USHORT LC_NARROW_string_to_key(texttype* obj, USHORT iInLen, const BYTE* pInChar
 {
 	fb_assert(pOutChar != NULL);
 	fb_assert(pInChar != NULL);
-	// fb_assert (iInLen   <= LANGFAM2_MAX_KEY);
-	fb_assert(iOutLen <= LANGFAM2_MAX_KEY);
 	fb_assert(iOutLen >= LC_NARROW_key_length(obj, iInLen));
 
 	TextTypeImpl* impl = static_cast<TextTypeImpl*>(obj->texttype_impl);

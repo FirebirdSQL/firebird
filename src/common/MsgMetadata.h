@@ -310,7 +310,7 @@ public:
 	RefPtr<RefCounted> attachment;
 };
 
-class MetadataBuilder FB_FINAL :
+class MetadataBuilder final :
 	public RefCntIface<IMetadataBuilderImpl<MetadataBuilder, CheckStatusWrapper> >
 {
 public:

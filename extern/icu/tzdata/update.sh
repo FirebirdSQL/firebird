@@ -7,7 +7,7 @@ THIS_DIR=`dirname $THIS_DIR`
 
 TMP_DIR=`mktemp -d`
 VERSION=`cat $THIS_DIR/version.txt`
-BASE_URL=https://github.com/unicode-org/icu-data/raw/master/tzdata/icunew/$VERSION/44
+BASE_URL=https://github.com/unicode-org/icu-data/raw/main/tzdata/icunew/$VERSION/44
 
 echo Building update-ids...
 cd $THIS_DIR
@@ -20,7 +20,7 @@ curl -OLs $BASE_URL/le/metaZones.res
 curl -OLs $BASE_URL/le/timezoneTypes.res
 curl -OLs $BASE_URL/le/windowsZones.res
 curl -OLs $BASE_URL/le/zoneinfo64.res
-ICU_TIMEZONE_FILES_DIR=. $TMP_DIR/update-ids ids.dat $THIS_DIR/../../../src/common/TimeZones.h
+ICU_TIMEZONE_FILES_DIR=. $TMP_DIR/update-ids ids.dat $THIS_DIR/../../../src/common/TimeZones.h $THIS_DIR/../../../src/include/firebird/TimeZones.h
 rm $THIS_DIR/le.zip
 zip $THIS_DIR/le.zip *.res ids.dat
 

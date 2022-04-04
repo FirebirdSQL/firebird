@@ -359,7 +359,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 
 	const Parameter* return_ptr = function->getOutputFields()[0];
 
-	jrd_req* request = tdbb->getRequest();
+	Request* request = tdbb->getRequest();
 	// CVC: restoring the null flag seems like a Borland hack to try to
 	// patch a bug with null handling. There's no evident reason to restore it
 	// because EVL_expr() resets it every time it's called.	Kept it for now.

@@ -46,7 +46,7 @@ FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next, BoolExp
 
 void FilteredStream::open(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_flags = irsb_open;
@@ -56,7 +56,7 @@ void FilteredStream::open(thread_db* tdbb) const
 
 void FilteredStream::close(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	invalidateRecords(request);
 
@@ -74,7 +74,7 @@ bool FilteredStream::getRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!(impure->irsb_flags & irsb_open))
@@ -91,7 +91,7 @@ bool FilteredStream::getRecord(thread_db* tdbb) const
 
 bool FilteredStream::refetchRecord(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	return m_next->refetchRecord(tdbb) &&
 		m_boolean->execute(tdbb, request);
@@ -120,7 +120,7 @@ void FilteredStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_next->findUsedStreams(streams, expandAll);
 }
 
-void FilteredStream::invalidateRecords(jrd_req* request) const
+void FilteredStream::invalidateRecords(Request* request) const
 {
 	m_next->invalidateRecords(request);
 }
@@ -132,7 +132,7 @@ void FilteredStream::nullRecords(thread_db* tdbb) const
 
 bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 
 	// For ANY and ALL clauses (ALL is handled as a negated ANY),
 	// we must first detect them, and then make sure that the returned

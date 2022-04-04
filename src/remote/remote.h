@@ -29,7 +29,7 @@
 #ifndef REMOTE_REMOTE_H
 #define REMOTE_REMOTE_H
 
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../remote/remote_def.h"
 #include "../common/ThreadData.h"
 #include "../common/ThreadStart.h"
@@ -44,6 +44,8 @@
 #include "../common/classes/RefMutex.h"
 
 #include "firebird/Interface.h"
+
+#include <type_traits>	// std::is_unsigned
 
 #ifndef WIN_NT
 #include <signal.h>
@@ -425,8 +427,7 @@ public:
 		m_flags(0)
 	{
 		// Require base flags field to be unsigned.
-		// This is a compile-time assertion; it won't build if you use a signed flags field.
-		typedef int dummy[T(-1) > 0];
+		static_assert(std::is_unsigned<T>::value, "T must be unsigned");
 	}
 	explicit RFlags(const T flags) :
 		m_flags(flags)
@@ -496,6 +497,9 @@ struct Rsr : public Firebird::GlobalStorage, public TypedHandle<rem_type_rsr>
 		Firebird::BatchCompletionState* rsr_batch_cs;	// client
 	};
 
+	P_FETCH			rsr_fetch_operation;	// Last performed fetch operation
+	SLONG			rsr_fetch_position;		// and position
+
 	struct BatchStream
 	{
 		BatchStream()
@@ -525,16 +529,20 @@ struct Rsr : public Firebird::GlobalStorage, public TypedHandle<rem_type_rsr>
 
 public:
 	// Values for rsr_flags.
-	enum {
+	enum : USHORT {
 		FETCHED = 1,		// Cleared by execute, set by fetch
 		EOF_SET = 2,		// End-of-stream encountered
-		//BLOB = 4,			// Statement relates to blob op
-		NO_BATCH = 8,		// Do not batch fetch rows
-		STREAM_ERR = 16,	// There is an error pending in the batched rows
-		LAZY = 32,			// To be allocated at the first reference
-		DEFER_EXECUTE = 64,	// op_execute can be deferred
-		PAST_EOF = 128		// EOF was returned by fetch from this statement
+		NO_BATCH = 4,		// Do not batch fetch rows
+		STREAM_ERR = 8,		// There is an error pending in the batched rows
+		LAZY = 16,			// To be allocated at the first reference
+		DEFER_EXECUTE = 32,	// op_execute can be deferred
+		PAST_EOF = 64,		// EOF was returned by fetch from this statement
+		BOF_SET = 128,		// Beginning-of-stream
+		PAST_BOF = 256		// BOF was returned by fetch from this statement
 	};
+
+	static const auto STREAM_END = (BOF_SET | EOF_SET);
+	static const auto PAST_END = (PAST_BOF | PAST_EOF);
 
 public:
 	Rsr() :
@@ -543,7 +551,8 @@ public:
 		rsr_format(0), rsr_message(0), rsr_buffer(0), rsr_status(0),
 		rsr_id(0), rsr_fmt_length(0),
 		rsr_rows_pending(0), rsr_msgs_waiting(0), rsr_reorder_level(0), rsr_batch_count(0),
-		rsr_cursor_name(getPool()), rsr_delayed_format(false), rsr_timeout(0), rsr_self(NULL)
+		rsr_cursor_name(getPool()), rsr_delayed_format(false), rsr_timeout(0), rsr_self(NULL),
+		rsr_fetch_operation(fetch_next), rsr_fetch_position(0)
 	{ }
 
 	~Rsr()
@@ -574,6 +583,17 @@ public:
 	void checkIface(ISC_STATUS code = isc_unprepared_stmt);
 	void checkCursor();
 	void checkBatch();
+
+	SLONG getCursorAdjustment() const
+	{
+		if (rsr_fetch_operation != fetch_next && rsr_fetch_operation != fetch_prior)
+			return 0;
+
+		const bool isEnd = rsr_flags.test(Rsr::STREAM_END) && !rsr_flags.test(Rsr::PAST_END);
+		const SLONG offset = rsr_msgs_waiting + (isEnd ? 1 : 0);
+		const bool isAhead = (rsr_fetch_operation == fetch_next);
+		return isAhead ? -offset : offset;
+	}
 };
 
 
@@ -653,7 +673,7 @@ inline void Rsr::releaseException()
 	rsr_status = NULL;
 }
 
-#include "../common/xdr.h"
+#include "../remote/remot_proto.h"
 
 
 // Generalized port definition.
@@ -694,7 +714,7 @@ public:
 };
 
 // CryptKey implementation
-class InternalCryptKey FB_FINAL :
+class InternalCryptKey final :
 	public Firebird::VersionedIface<Firebird::ICryptKeyImpl<InternalCryptKey, Firebird::CheckStatusWrapper> >,
 	public Firebird::GlobalStorage
 {
@@ -796,7 +816,7 @@ typedef Firebird::GetPlugins<Firebird::IClient> AuthClientPlugins;
 
 // Representation of authentication data, visible for plugin
 // Transfered in format, depending upon type of the packet (phase of handshake)
-class RmtAuthBlock FB_FINAL :
+class RmtAuthBlock final :
 	public Firebird::VersionedIface<Firebird::IAuthBlockImpl<RmtAuthBlock, Firebird::CheckStatusWrapper> >
 {
 public:
@@ -820,7 +840,7 @@ private:
 };
 
 
-class ClntAuthBlock FB_FINAL :
+class ClntAuthBlock final :
 	public Firebird::RefCntIface<Firebird::IClientBlockImpl<ClntAuthBlock, Firebird::CheckStatusWrapper> >
 {
 private:
@@ -837,7 +857,7 @@ private:
 	Firebird::AutoPtr<RmtAuthBlock> remAuthBlock;	//Authentication block if present
 	unsigned nextKey;							// First key to be analyzed
 
-	class ClientCrypt FB_FINAL :
+	class ClientCrypt final :
 		public Firebird::VersionedIface<Firebird::ICryptKeyCallbackImpl<ClientCrypt, Firebird::CheckStatusWrapper> >
 	{
 	public:
@@ -901,7 +921,7 @@ public:
 // Transfered from client data in format, suitable for plugins access
 typedef Firebird::GetPlugins<Firebird::IServer> AuthServerPlugins;
 
-class SrvAuthBlock FB_FINAL :
+class SrvAuthBlock final :
 	public Firebird::VersionedIface<Firebird::IServerBlockImpl<SrvAuthBlock, Firebird::CheckStatusWrapper> >,
 	public Firebird::GlobalStorage
 {
@@ -977,15 +997,15 @@ const USHORT PORT_async			= 0x0002;	// Port is asynchronous channel for events
 const USHORT PORT_no_oob		= 0x0004;	// Don't send out of band data
 const USHORT PORT_disconnect	= 0x0008;	// Disconnect is in progress
 const USHORT PORT_dummy_pckt_set= 0x0010;	// A dummy packet interval is set
-const USHORT PORT_partial_data	= 0x0020;	// Physical packet doesn't contain all API packet
+//const USHORT PORT_partial_data	= 0x0020;	// Physical packet doesn't contain all API packet
 const USHORT PORT_lazy			= 0x0040;	// Deferred operations are allowed
 const USHORT PORT_server		= 0x0080;	// Server (not client) port
 const USHORT PORT_detached		= 0x0100;	// op_detach, op_drop_database or op_service_detach was processed
 const USHORT PORT_rdb_shutdown	= 0x0200;	// Database is shut down
 const USHORT PORT_connecting	= 0x0400;	// Aux connection waits for a channel to be activated by client
-const USHORT PORT_z_data		= 0x0800;	// Zlib incoming buffer has data left after decompression
+//const USHORT PORT_z_data		= 0x0800;	// Zlib incoming buffer has data left after decompression
 const USHORT PORT_compressed	= 0x1000;	// Compress outgoing stream (does not affect incoming)
-const USHORT PORT_released		= 0x2000;	// release(), complementary to the first addRef() in constructor, was called 
+const USHORT PORT_released		= 0x2000;	// release(), complementary to the first addRef() in constructor, was called
 
 // forward decl
 class RemotePortGuard;
@@ -1022,7 +1042,6 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 
 	enum rem_port_t {
 		INET,			// Internet (TCP/IP)
-		PIPE,			// Windows NT named pipe connection
 		XNET			// Windows NT shared memory connection
 	}				port_type;
 	enum state_t {
@@ -1041,6 +1060,9 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	USHORT			port_protocol;		// protocol version number
 	USHORT			port_buff_size;		// port buffer size
 	USHORT			port_flags;			// Misc flags
+	std::atomic<bool>
+					port_partial_data,	// Physical packet doesn't contain all API packet
+					port_z_data;		// Zlib incoming buffer has data left after decompression
 	SLONG			port_connect_timeout;   // Connection timeout value
 	SLONG			port_dummy_packet_interval; // keep alive dummy packet interval
 	SLONG			port_dummy_timeout;	// time remaining until keepalive packet
@@ -1055,8 +1077,8 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	HANDLE			port_pipe;			// port pipe handle
 	HANDLE			port_event;			// event associated with a port
 #endif
-	XDR				port_receive;
-	XDR				port_send;
+	Firebird::AutoPtr<RemoteXdr>	port_receive;
+	Firebird::AutoPtr<RemoteXdr>	port_send;
 #ifdef DEBUG_XDR_MEMORY
 	r e m _ v e c*	port_packet_vector;		// Vector of send/receive packets
 #endif
@@ -1120,7 +1142,8 @@ public:
 		port_type(t), port_state(PENDING), port_clients(0), port_next(0),
 		port_parent(0), port_async(0), port_async_receive(0),
 		port_server(0), port_server_flags(0), port_protocol(0), port_buff_size(rpt / 2),
-		port_flags(0), port_connect_timeout(0), port_dummy_packet_interval(0),
+		port_flags(0), port_partial_data(false), port_z_data(false),
+		port_connect_timeout(0), port_dummy_packet_interval(0),
 		port_dummy_timeout(0), port_handle(INVALID_SOCKET), port_channel(INVALID_SOCKET), port_context(0),
 		port_events_thread(0), port_thread_guard(0),
 #ifdef WIN_NT
@@ -1233,7 +1256,7 @@ public:
 
 	void releaseObject(OBJCT id)
 	{
-		if (id != INVALID_OBJECT)
+		if (id != INVALID_OBJECT && id <= MAX_OBJCT_HANDLES)
 		{
 			port_objects[id].release();
 		}
@@ -1272,7 +1295,7 @@ public:
 	bool haveRecvData()
 	{
 		Firebird::RefMutexGuard queGuard(*port_que_sync, FB_FUNCTION);
-		return ((port_receive.x_handy > 0) || (port_qoffset < port_queue.getCount()));
+		return ((port_receive->x_handy > 0) || (port_qoffset < port_queue.getCount()));
 	}
 
 	void clearRecvQue()
@@ -1280,7 +1303,7 @@ public:
 		Firebird::RefMutexGuard queGuard(*port_que_sync, FB_FUNCTION);
 		port_queue.clear();
 		port_qoffset = 0;
-		port_receive.x_private = port_receive.x_base;
+		port_receive->x_private = port_receive->x_base;
 	}
 
 	class RecvQueState
@@ -1292,8 +1315,8 @@ public:
 
 		RecvQueState(const rem_port* port)
 		{
-			save_handy = port->port_receive.x_handy;
-			save_private = port->port_receive.x_private - port->port_receive.x_base;
+			save_handy = port->port_receive->x_handy;
+			save_private = port->port_receive->x_private - port->port_receive->x_base;
 			save_qoffset = port->port_qoffset;
 		}
 	};
@@ -1308,11 +1331,11 @@ public:
 		if (rs.save_qoffset > 0 && (rs.save_qoffset != port_qoffset))
 		{
 			Firebird::Array<char>& q = port_queue[rs.save_qoffset - 1];
-			memcpy(port_receive.x_base, q.begin(), q.getCount());
+			memcpy(port_receive->x_base, q.begin(), q.getCount());
 		}
 		port_qoffset = rs.save_qoffset;
-		port_receive.x_private = port_receive.x_base + rs.save_private;
-		port_receive.x_handy = rs.save_handy;
+		port_receive->x_private = port_receive->x_base + rs.save_private;
+		port_receive->x_handy = rs.save_handy;
 	}
 
 	// TMN: The following member functions are conceptually private
@@ -1331,7 +1354,7 @@ public:
 	ISC_STATUS	end_transaction(P_OP, P_RLSE*, PACKET*);
 	ISC_STATUS	execute_immediate(P_OP, P_SQLST*, PACKET*);
 	ISC_STATUS	execute_statement(P_OP, P_SQLDATA*, PACKET*);
-	ISC_STATUS	fetch(P_SQLDATA*, PACKET*);
+	ISC_STATUS	fetch(P_SQLDATA*, PACKET*, bool);
 	ISC_STATUS	get_segment(P_SGMT*, PACKET*);
 	ISC_STATUS	get_slice(P_SLC*, PACKET*);
 	void		info(P_OP, P_INFO*, PACKET*);
@@ -1362,7 +1385,9 @@ public:
 	void		batch_blob_stream(P_BATCH_BLOB*, PACKET*);
 	void		batch_regblob(P_BATCH_REGBLOB*, PACKET*);
 	void		batch_exec(P_BATCH_EXEC*, PACKET*);
-	void		batch_rls(P_BATCH_FREE*, PACKET*);
+	void		batch_rls(P_BATCH_FREE_CANCEL*, PACKET*);
+	void		batch_cancel(P_BATCH_FREE_CANCEL*, PACKET*);
+	void		batch_sync(PACKET*);
 	void		batch_bpb(P_BATCH_SETBPB*, PACKET*);
 	void		replicate(P_REPLICATE*, PACKET*);
 
@@ -1370,7 +1395,7 @@ public:
 	void auxAcceptError(PACKET* packet);
 
 	// Working with 'key/plugin' pairs and associated plugin specific data
-	void addServerKeys(CSTRING* str);
+	void addServerKeys(const CSTRING* str);
 	void addSpecificData(const Firebird::PathName& type, const Firebird::PathName& plugin,
 		unsigned length, const void* data);
 	const Firebird::UCharBuffer* findSpecificData(const Firebird::PathName& type, const Firebird::PathName& plugin);

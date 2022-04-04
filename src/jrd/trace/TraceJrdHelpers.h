@@ -94,7 +94,7 @@ private:
 class TraceProcExecute
 {
 public:
-	TraceProcExecute(thread_db* tdbb, jrd_req* request, jrd_req* caller, const ValueListNode* inputs) :
+	TraceProcExecute(thread_db* tdbb, Request* request, Request* caller, const ValueListNode* inputs) :
 		m_tdbb(tdbb),
 		m_request(request)
 	{
@@ -161,14 +161,14 @@ public:
 private:
 	bool m_need_trace;
 	thread_db* const m_tdbb;
-	jrd_req* const m_request;
+	Request* const m_request;
 	SINT64 m_start_clock;
 };
 
 class TraceProcFetch
 {
 public:
-	TraceProcFetch(thread_db* tdbb, jrd_req* request) :
+	TraceProcFetch(thread_db* tdbb, Request* request) :
 		m_tdbb(tdbb),
 		m_request(request)
 	{
@@ -190,10 +190,7 @@ public:
 	void fetch(bool eof, ntrace_result_t result)
 	{
 		if (!m_need_trace)
-		{
-			m_request->req_fetch_baseline = NULL;
 			return;
-		}
 
 		m_need_trace = false;
 		m_request->req_fetch_elapsed += fb_utils::query_performance_counter() - m_start_clock;
@@ -222,7 +219,7 @@ public:
 private:
 	bool m_need_trace;
 	thread_db* const m_tdbb;
-	jrd_req* const m_request;
+	Request* const m_request;
 	SINT64 m_start_clock;
 };
 
@@ -230,7 +227,7 @@ private:
 class TraceFuncExecute
 {
 public:
-	TraceFuncExecute(thread_db* tdbb, jrd_req* request, jrd_req* caller,
+	TraceFuncExecute(thread_db* tdbb, Request* request, Request* caller,
 					 const UCHAR* inMsg, ULONG inMsgLength) :
 		m_tdbb(tdbb),
 		m_request(request),
@@ -304,7 +301,7 @@ public:
 private:
 	bool m_need_trace;
 	thread_db* const m_tdbb;
-	jrd_req* const m_request;
+	Request* const m_request;
 	const UCHAR* m_inMsg;
 	ULONG m_inMsgLength;
 	SINT64 m_start_clock;
@@ -314,13 +311,13 @@ private:
 class TraceTrigExecute
 {
 public:
-	TraceTrigExecute(thread_db* tdbb, jrd_req* trigger, int which_trig) :
+	TraceTrigExecute(thread_db* tdbb, Request* trigger, int which_trig) :
 		m_tdbb(tdbb),
 		m_request(trigger),
 		m_which_trig(which_trig)
 	{
 		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
-		m_need_trace = !(m_request->getStatement()->flags & JrdStatement::FLAG_SYS_TRIGGER) &&
+		m_need_trace = !(m_request->getStatement()->flags & Statement::FLAG_SYS_TRIGGER) &&
 			trace_mgr->needs(ITraceFactory::TRACE_EVENT_TRIGGER_EXECUTE);
 
 		if (!m_need_trace)
@@ -370,7 +367,7 @@ public:
 private:
 	bool m_need_trace;
 	thread_db* const m_tdbb;
-	jrd_req* const m_request;
+	Request* const m_request;
 	SINT64 m_start_clock;
 	const int m_which_trig;
 };
@@ -395,7 +392,7 @@ public:
 		m_start_clock = fb_utils::query_performance_counter();
 	}
 
-	void finish(jrd_req* request, ntrace_result_t result)
+	void finish(Statement* statement, ntrace_result_t result)
 	{
 		if (!m_need_trace)
 			return;
@@ -409,9 +406,9 @@ public:
 		TraceConnectionImpl conn(m_tdbb->getAttachment());
 		TraceTransactionImpl tran(m_tdbb->getTransaction());
 
-		if (request)
+		if (statement)
 		{
-			TraceBLRStatementImpl stmt(request, NULL);
+			TraceBLRStatementImpl stmt(statement, NULL);
 			trace_mgr->event_blr_compile(&conn, m_tdbb->getTransaction() ? &tran : NULL, &stmt,
 				m_start_clock, result);
 		}
@@ -440,16 +437,16 @@ private:
 class TraceBlrExecute
 {
 public:
-	TraceBlrExecute(thread_db* tdbb, jrd_req* request) :
+	TraceBlrExecute(thread_db* tdbb, Request* request) :
 		m_tdbb(tdbb),
 		m_request(request)
 	{
 		Attachment* attachment = m_tdbb->getAttachment();
-		JrdStatement* statement = m_request->getStatement();
+		Statement* statement = m_request->getStatement();
 
 		m_need_trace = attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_BLR_EXECUTE) &&
 			!statement->sqlText &&
-			!(statement->flags & JrdStatement::FLAG_INTERNAL) &&
+			!(statement->flags & Statement::FLAG_INTERNAL) &&
 			!attachment->isUtility();
 
 		if (!m_need_trace)
@@ -477,7 +474,7 @@ public:
 
 		TraceConnectionImpl conn(m_tdbb->getAttachment());
 		TraceTransactionImpl tran(m_tdbb->getTransaction());
-		TraceBLRStatementImpl stmt(m_request, stats.getPerf());
+		TraceBLRStatementImpl stmt(m_request->getStatement(), stats.getPerf());
 
 		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
 		trace_mgr->event_blr_execute(&conn, &tran, &stmt, result);
@@ -493,7 +490,7 @@ public:
 private:
 	bool m_need_trace;
 	thread_db* const m_tdbb;
-	jrd_req* const m_request;
+	Request* const m_request;
 	SINT64 m_start_clock;
 };
 

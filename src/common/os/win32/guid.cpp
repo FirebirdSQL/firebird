@@ -76,7 +76,7 @@ void GenerateRandomBytes(void* buffer, FB_SIZE_T size)
 
 void GenerateGuid(Guid* guid)
 {
-	const HRESULT error = CoCreateGuid((GUID*) guid);
+	const HRESULT error = CoCreateGuid(guid);
 	if (!SUCCEEDED(error))
 		Firebird::system_call_failed::raise("CoCreateGuid", error);
 }

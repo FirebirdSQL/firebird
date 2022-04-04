@@ -133,7 +133,7 @@
 #include <unistd.h>
 #endif
 
-#include "gen/iberror.h"
+#include "iberror.h"
 
 // Pick up system relation ids
 #include "../jrd/ini.h"
@@ -992,7 +992,7 @@ namespace
 
 			if (routine && !blobId.isEmpty())
 			{
-				JrdStatement* statement = NULL;
+				Statement* statement = NULL;
 				// Nickolay Samofatov: allocate statement memory pool...
 				MemoryPool* new_pool = attachment->createPool();
 				// block is used to ensure MET_verify_cache
@@ -2868,7 +2868,7 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 			SelectivityList selectivity(*tdbb->getDefaultPool());
 
 			jrd_tra* const current_transaction = tdbb->getTransaction();
-			jrd_req* const current_request = tdbb->getRequest();
+			Request* const current_request = tdbb->getRequest();
 
 			try
 			{
@@ -2884,6 +2884,10 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 			{
 				tdbb->setTransaction(current_transaction);
 				tdbb->setRequest(current_request);
+
+				// Get rid of the expression statement.
+				idx.idx_expression_statement->release(tdbb);
+
 				throw;
 			}
 
@@ -2892,9 +2896,8 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 
 			DFW_update_index(work->dfw_name.c_str(), idx.idx_id, selectivity, transaction);
 
-			// Get rid of the pool containing the expression tree
-
-			attachment->deletePool(new_pool);
+			// Get rid of the expression statement.
+			idx.idx_expression_statement->release(tdbb);
 		}
 		break;
 
@@ -3580,18 +3583,18 @@ static bool create_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		}
 		END_FOR
 
+		if (!relation)
+		{
+			// The record was not found in RDB$INDICES.
+			// Apparently the index was dropped in the same transaction.
+			return false;
+		}
+
 		if (key_count != idx.idx_count)
 		{
 			ERR_post(Arg::Gds(isc_no_meta_update) <<
 					 Arg::Gds(isc_key_field_err) << Arg::Str(work->dfw_name));
 			// Msg352: too few key columns found for index %s (incorrect column name?)
-		}
-
-		if (!relation)
-		{
-			ERR_post(Arg::Gds(isc_no_meta_update) <<
-					 Arg::Gds(isc_idx_create_err) << Arg::Str(work->dfw_name));
-			// Msg308: can't create index %s
 		}
 
 		// Make sure the relation info is all current
@@ -4081,6 +4084,7 @@ void DFW_reset_icu(thread_db* tdbb)
 			"join RDB$CHARACTER_SETS cs on coll.RDB$CHARACTER_SET_ID = cs.RDB$CHARACTER_SET_ID "
 			"where coll.RDB$SPECIFIC_ATTRIBUTES like '%COLL-VERSION=%' "
 			" and coalesce(ind.RDB$INDEX_INACTIVE, 0) = 0 "
+			" and coalesce(rel.RDB$RELATION_TYPE, 0) = 0 "		// rel_persistent
 			"group by ind.RDB$INDEX_NAME, rel.RDB$RELATION_ID, coll.RDB$BASE_COLLATION_NAME, "
 			" coll.RDB$COLLATION_NAME, cs.RDB$CHARACTER_SET_NAME, coll.RDB$SPECIFIC_ATTRIBUTES";
 
@@ -4864,12 +4868,12 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	switch (phase)
 	{
 	case 0:
-		relation = MET_lookup_relation_id(tdbb, work->dfw_id, false);
+		relation = MET_lookup_relation_id(tdbb, work->dfw_id, true);
 		if (!relation) {
 			return false;
 		}
 
-		if (relation->rel_existence_lock)
+		if (relation->rel_existence_lock && !(relation->rel_flags & REL_deleted))
 		{
 			LCK_convert(tdbb, relation->rel_existence_lock, LCK_SR, transaction->getLockWait());
 		}
@@ -4999,6 +5003,13 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 
 		if (relation->rel_file) {
 		    EXT_fini(relation, false);
+		}
+
+		if (relation->isTemporary())
+		{
+			// release pages, allocated for current GTT instance
+			AutoSetRestoreFlag<ULONG> tmpSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, false);
+			relation->delPages(tdbb);
 		}
 
 		RelationPages* const relPages = relation->getBasePages();
@@ -5509,7 +5520,7 @@ static void get_trigger_dependencies(DeferredWork* work, bool compile, jrd_tra* 
 
 	if ((relation || (type & TRIGGER_TYPE_MASK) != TRIGGER_TYPE_DML) && !blob_id.isEmpty())
 	{
-		JrdStatement* statement = NULL;
+		Statement* statement = NULL;
 		// Nickolay Samofatov: allocate statement memory pool...
 		MemoryPool* new_pool = attachment->createPool();
 		USHORT par_flags;
@@ -5981,19 +5992,19 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 					if (notNull && !defaultValue->isEmpty())
 					{
 						Jrd::ContextPoolHolder context(tdbb, attachment->createPool());
-						JrdStatement* defaultStatement = NULL;
+						Statement* defaultStatement = NULL;
 						try
 						{
 							ValueExprNode* defaultNode = static_cast<ValueExprNode*>(MET_parse_blob(
 								tdbb, relation, defaultValue, NULL, &defaultStatement, false, false));
 
-							jrd_req* const defaultRequest = defaultStatement->findRequest(tdbb);
+							Request* const defaultRequest = defaultStatement->findRequest(tdbb);
 
 							// Attention: this is scoped to the end of this "try".
-							AutoSetRestore2<jrd_req*, thread_db> autoRequest(tdbb,
+							AutoSetRestore2<Request*, thread_db> autoRequest(tdbb,
 								&thread_db::getRequest, &thread_db::setRequest, defaultRequest);
 
-							TimeZoneUtil::validateGmtTimeStamp(defaultRequest->req_gmt_timestamp);
+							defaultRequest->validateTimeStamp();
 
 							TRA_attach_request(transaction, defaultRequest);
 							dsc* result = EVL_expr(tdbb, defaultRequest, defaultNode);

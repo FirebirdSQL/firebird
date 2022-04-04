@@ -41,7 +41,7 @@ class ClumpletReader;
 
 namespace Jrd {
 
-class dsql_req;
+class DsqlDmlRequest;
 class dsql_msg;
 class thread_db;
 class JBatch;
@@ -50,7 +50,7 @@ class Attachment;
 class DsqlBatch
 {
 public:
-	DsqlBatch(dsql_req* req, const dsql_msg* message, Firebird::IMessageMetadata* inMetadata,
+	DsqlBatch(DsqlDmlRequest* req, const dsql_msg* message, Firebird::IMessageMetadata* inMetadata,
 		Firebird::ClumpletReader& pb);
 	~DsqlBatch();
 
@@ -61,7 +61,7 @@ public:
 	static const ULONG SIZEOF_BLOB_HEAD = sizeof(ISC_QUAD) + 2 * sizeof(ULONG);
 	static const unsigned BLOB_STREAM_ALIGN = 4;
 
-	static DsqlBatch* open(thread_db* tdbb, dsql_req* req, Firebird::IMessageMetadata* inMetadata,
+	static DsqlBatch* open(thread_db* tdbb, DsqlDmlRequest* req, Firebird::IMessageMetadata* inMetadata,
 		unsigned parLength, const UCHAR* par);
 
 	Attachment* getAttachment() const;
@@ -76,6 +76,8 @@ public:
 	Firebird::IMessageMetadata* getMetadata(thread_db* tdbb);
 	void cancel(thread_db* tdbb);
 	void setDefaultBpb(thread_db* tdbb, unsigned parLength, const unsigned char* par);
+	void info(thread_db* tdbb, unsigned int itemsLength, const unsigned char* items,
+		unsigned int bufferLength, unsigned char* buffer);
 
 	// Additional flags - start from the maximum one
 	static const UCHAR FLAG_DEFAULT_SEGMENTED = 31;
@@ -99,7 +101,7 @@ private:
 			m_flags &= ~(1 << bit);
 	}
 
-	dsql_req* const m_request;
+	DsqlDmlRequest* const m_dsqlRequest;
 	JBatch* m_batch;
 	Firebird::IMessageMetadata* m_meta;
 
@@ -121,6 +123,7 @@ private:
 		ULONG reget(ULONG size, UCHAR** buffer, ULONG alignment);
 		void remained(ULONG size, ULONG alignment = 0);
 		ULONG getSize() const;
+		ULONG getCapacity() const;
 		void clear();
 
 	private:

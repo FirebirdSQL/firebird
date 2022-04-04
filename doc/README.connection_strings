@@ -10,10 +10,6 @@ For TCP (aka INET) protocol:
 
   <host> [ / <port>] : <file path to database or alias>
 
-For named pipes (aka NetBEUI, aka WNET) protocol:
-
-  \\ <host> [ @ <port>] \ <file path to database or alias>
-
 For local connections as simple as:
 
   <file path to database or alias>
@@ -55,11 +51,6 @@ Examples:
     myserver/fb_db:mydb
     localhost/fb_db:mydb
 
-  Connect via named pipes:
-
-    \\myserver\C:\db\mydb.fdb
-    \\myserver@fb_db\C:\db\mydb.fdb
-
   Local connection:
 
     /db/mydb.fdb
@@ -71,8 +62,7 @@ connection strings:
 
   [ <protocol> : // [ <host> [ : <port> ] ] ] / <file path to database or alias>
 
-Where protocol is one of: INET (means TCP), WNET (means named pipes) or XNET
-(means shared memory).
+Where protocol is one of: INET (means TCP) or XNET (means shared memory).
 
 Examples:
 
@@ -114,21 +104,11 @@ Examples:
     inet4://myserver/mydb
     inet6://myserver/mydb
 
-  Connect via named pipes:
-
-    wnet://myserver/C:\db\mydb.fdb
-    wnet://myserver:fb_db/C:\db\mydb.fdb
-
   Loopback connection via TCP:
 
     inet:///db/mydb.fdb
     inet://C:\db\mydb.fdb
     inet://mydb
-
-  Loopback connection via named pipes:
-
-    wnet://C:\db\mydb.fdb
-    wnet://mydb
 
   Local connection via shared memory:
 
@@ -155,9 +135,7 @@ to connect locally using a specific transport protocol, please specify:
 
   inet://<file path to database or alias>
   or
-  wnet://<file path to database or alias>
-  or
   xnet://<file path to database or alias>
 
-Note: WNET (named pipes) and XNET (shared memory) protocols are available on Windows only.
+Note: XNET (shared memory) protocol is available on Windows only.
 

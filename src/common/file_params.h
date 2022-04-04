@@ -44,6 +44,7 @@ static const char* const SNAPSHOTS_FILE	= "fb_snap_%s";
 
 static const char* const TRACE_FILE		= "fb" COMMON_FILE_PREFIX "_trace";
 static const char* const USER_MAP_FILE	= "fb" COMMON_FILE_PREFIX "_user_mapping";
+static const char* const FB_TRACE_LOG_MUTEX = "fb_trace_log_mutex";
 
 #ifdef UNIX
 static const char* const INIT_FILE		= "fb_init";
@@ -81,6 +82,8 @@ static const char MSG_FILE_LANG[]	= "intl/%.10s.msg";
 static const char* const LOCKDIR	= "firebird";		// created in WORKFILE
 static const char* const LOGFILE	= FB_LOGFILENAME;
 static const char* const MSG_FILE	= "firebird.msg";
+static const char* const SECURITY_DB	= "security5.fdb";
+
 // Keep in sync with MSG_FILE_LANG
 const int LOCALE_MAX	= 10;
 

@@ -34,7 +34,7 @@ namespace Firebird {
 		virtual void transliterate(IStatus* status) = 0;
 	};
 
-	class BatchCompletionState FB_FINAL :
+	class BatchCompletionState final :
 		public DisposeIface<IBatchCompletionStateImpl<BatchCompletionState, CheckStatusWrapper> >
 	{
 	public:

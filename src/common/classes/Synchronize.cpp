@@ -133,7 +133,7 @@ bool Synchronize::sleep(int milliseconds)
 	if (ret)
 		system_call_failed::raise("pthread_mutex_lock", ret);
 
-	int seconds = nanoTime.tv_sec - microTime.tv_sec;
+	///int seconds = nanoTime.tv_sec - microTime.tv_sec;
 
 	while (!wakeup)
 	{

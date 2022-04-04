@@ -97,10 +97,12 @@ const int IN_SW_BURP_KEYNAME			= 50;	// name of crypt key
 const int IN_SW_BURP_CRYPT				= 51;	// name of crypt plugin
 
 const int IN_SW_BURP_INCLUDE_DATA		= 52;	// backup data from tables
-const int IN_SW_BURP_TS_MAPPING_FILE	= 53;   // mapping file for tablespaces
+const int IN_SW_BURP_REPLICA			= 53;	// replica mode
+const int IN_SW_BURP_TS_MAPPING_FILE	= 54;   // mapping file for tablespaces
 
 /**************************************************************************/
 
+static const char* const BURP_SW_MODE_NONE = "NONE";
 static const char* const BURP_SW_MODE_RO = "READ_ONLY";
 static const char* const BURP_SW_MODE_RW = "READ_WRITE";
 static const char* const BURP_SW_OVERWRITE = "OVERWRITE"; // recreate with overwrite
@@ -169,6 +171,8 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 				// msg 284: @1R(ECREATE_DATABASE) [O(VERWRITE)] create (or replace if OVERWRITE used) database from backup file
 	{IN_SW_BURP_R,	  isc_spb_res_replace,		"REPLACE_DATABASE", 0, 0, 0, false, true,	112,	3, NULL, boMain},
 				// msg 112: @1REP(LACE_DATABASE) replace database from backup file
+	{IN_SW_BURP_REPLICA,	isc_spb_res_replica_mode,	"REPLICA", 0, 0, 0, false, false,	403,	7, NULL, boRestore},
+				// msg 403: @1REPLICA replica mode
 /**************************************************************
 ** msg 252: @1RO(LE) Firebird SQL role
 ***************************************************************/
@@ -223,6 +227,11 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 /**************************************************************************/
 	{IN_SW_BURP_TS_MAPPING_FILE,	0,	"TABLESPACE_MAPPING_FILE",	0, 0, 0, false, false,	1014, 14, NULL, boRestore},	//TODO: Check message no (1014)
 	{IN_SW_BURP_0,		 0, NULL,			0, 0, 0, false, false,	0, 0, NULL, boGeneral}
+};
+
+static const char* burp_repl_mode_sw_table[] =
+{
+	BURP_SW_MODE_NONE, BURP_SW_MODE_RO, BURP_SW_MODE_RW
 };
 
 

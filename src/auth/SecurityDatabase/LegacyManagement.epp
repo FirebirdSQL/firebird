@@ -762,7 +762,7 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 // register plugin
 static Firebird::SimpleFactory<Auth::SecurityDatabaseManagement> factory;
 
-extern "C" void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 {
 	Firebird::CachedMasterInterface::set(master);
 	Firebird::PluginManagerInterfacePtr()->registerPluginFactory(

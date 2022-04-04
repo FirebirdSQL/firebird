@@ -93,6 +93,17 @@ const USHORT PROTOCOL_VERSION15 = (FB_PROTOCOL_FLAG | 15);
 const USHORT PROTOCOL_VERSION16 = (FB_PROTOCOL_FLAG | 16);
 const USHORT PROTOCOL_STMT_TOUT = PROTOCOL_VERSION16;
 
+// Protocol 17:
+//	- supports op_batch_sync, op_info_batch
+
+const USHORT PROTOCOL_VERSION17 = (FB_PROTOCOL_FLAG | 17);
+
+// Protocol 18:
+//	- supports op_fetch_scroll
+
+const USHORT PROTOCOL_VERSION18 = (FB_PROTOCOL_FLAG | 18);
+const USHORT PROTOCOL_FETCH_SCROLL = PROTOCOL_VERSION18;
+
 // Architecture types
 
 enum P_ARCH
@@ -138,6 +149,18 @@ const int INVALID_OBJECT = MAX_USHORT;
 //const USHORT STMT_BLOB			= 1;
 const USHORT STMT_NO_BATCH		= 2;
 const USHORT STMT_DEFER_EXECUTE	= 4;
+
+enum P_FETCH
+{
+	fetch_next		= 0,
+	fetch_prior		= 1,
+	fetch_first		= 2,
+	fetch_last		= 3,
+	fetch_absolute	= 4,
+	fetch_relative	= 5
+};
+
+const P_FETCH fetch_execute = fetch_next;
 
 // Operation (packet) types
 
@@ -288,6 +311,12 @@ enum P_OP
 	op_repl_data			= 107,
 	op_repl_req				= 108,
 
+	op_batch_cancel			= 109,
+	op_batch_sync			= 110,
+	op_info_batch			= 111,
+
+	op_fetch_scroll			= 112,
+
 	op_max
 };
 
@@ -335,7 +364,7 @@ typedef struct p_malloc
 
 typedef struct p_cnct
 {
-	P_OP	p_cnct_operation;			// OP_CREATE or OP_OPEN
+	USHORT	p_cnct_operation;			// unused
 	USHORT	p_cnct_cversion;			// Version of connect protocol
 	P_ARCH	p_cnct_client;				// Architecture of client
 	CSTRING_CONST	p_cnct_file;		// File name
@@ -596,6 +625,9 @@ typedef struct p_sqldata
     USHORT	p_sqldata_out_message_number;
     ULONG	p_sqldata_status;			// final eof status
 	ULONG	p_sqldata_timeout;			// statement timeout
+	ULONG	p_sqldata_cursor_flags;		// cursor flags
+	P_FETCH	p_sqldata_fetch_op;			// Fetch operation
+	SLONG	p_sqldata_fetch_pos;		// Fetch position
 } P_SQLDATA;
 
 typedef struct p_sqlfree
@@ -689,10 +721,10 @@ typedef struct p_batch_cs				// completion state
 	ULONG	p_batch_errors;				// error's recnums
 } P_BATCH_CS;
 
-typedef struct p_batch_free
+typedef struct p_batch_free_cancel
 {
 	OBJCT	p_batch_statement;			// statement object
-} P_BATCH_FREE;
+} P_BATCH_FREE_CANCEL;
 
 typedef struct p_batch_blob
 {
@@ -769,7 +801,7 @@ typedef struct packet
 	P_BATCH_CREATE p_batch_create; // Create batch interface
 	P_BATCH_MSG p_batch_msg;	// Add messages to batch
 	P_BATCH_EXEC p_batch_exec;	// Run batch
-	P_BATCH_FREE p_batch_free;	// Destroy batch
+	P_BATCH_FREE_CANCEL p_batch_free_cancel;	// Cancel or destroy batch
 	P_BATCH_CS p_batch_cs;		// Batch completion state
 	P_BATCH_BLOB p_batch_blob;	// BLOB stream portion in batch
 	P_BATCH_REGBLOB p_batch_regblob;	// Register already existing BLOB in batch

@@ -435,13 +435,7 @@ Factory<ExtAuthServer> serverFactory;
 } // anonymous namespace
 
 
-#if defined(_WIN32)
-#define FB_DLL_EXPORT __declspec(dllexport)
-#else
-#define FB_DLL_EXPORT
-#endif
-
-extern "C" void FB_DLL_EXPORT FB_PLUGIN_ENTRY_POINT(IMaster* m)
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* m)
 {
 	master = m;
 	IPluginManager* pluginManager = master->getPluginManager();

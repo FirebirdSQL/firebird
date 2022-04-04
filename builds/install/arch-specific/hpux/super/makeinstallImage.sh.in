@@ -82,7 +82,6 @@ copyFiles() {
     mkdir -p $DestDir
     mkdir $DestDir/bin
     mkdir $DestDir/examples
-    mkdir $DestDir/help
     mkdir $DestDir/include
     mkdir $DestDir/intl
     mkdir $DestDir/lib
@@ -109,7 +108,6 @@ copyFiles() {
     cp $BuiltFBDir/bin/gstat $DestDir/bin/gstat
     copyIfExists $BuiltFBDir/bin/security.gbak $DestDir/bin/security.gbak
     cp $BuiltFBDir/bin/isql $DestDir/bin/isql
-    cp $BuiltFBDir/bin/qli $DestDir/bin/qli
 
     cp $BuildRootDir/gen/install/bin/SSchangeRunUser.sh $DestDir/bin
     cp $BuildRootDir/gen/install/bin/SSrestoreRootRunUser.sh $DestDir/bin
@@ -133,9 +131,6 @@ copyFiles() {
              cp $i $DestDir/examples
           done
     fi
-
-    copyIfExists $BuiltFBDir/help/help.gbak $DestDir/help
-    cp $BuiltFBDir/help/help.fdb $DestDir/help
 
     #cp -r $BuildSrcDir/doc $DestDir
     #cp -r $BuiltFBDir/doc $DestDir
@@ -182,7 +177,7 @@ copyFiles() {
 
 
 # link include files to /usr/include
-	for i in gds.h iberror.h ibase.h ib_util.h
+	for i in iberror.h ibase.h ib_util.h
 	   do
 		   ln -s ../../$FBRootDir/include/$i $TargetDir/usr/include/$i
 	   done

@@ -1,5 +1,5 @@
 #include "firebird.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 
 #include "../auth/SecureRemotePassword/srp.h"
 #include "../common/classes/alloc.h"

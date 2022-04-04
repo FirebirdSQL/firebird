@@ -61,7 +61,7 @@ KEYGEN_objects=$(INTERMED)/keygen.o
 TCWRAP_objects=$(INTERMED)/TcWrapper.o
 KEY_AUTH_objects=$(INTERMED)/ExtAuth.o
 
-CXXFLAGS=-std=c++11 -pthread -I$(ROOT)/include -fPIC $(TOMCRYPT_COMPILE)
+CXXFLAGS=-std=c++17 -pthread -I$(ROOT)/include -fPIC $(TOMCRYPT_COMPILE)
 LDFLAGS=-pthread -L$(LIB) -Wl,-rpath,'$$ORIGIN/../lib' $(TOMCRYPT_LINK)
 
 LINK_LIBS=-lfbclient -ltomcrypt -ltommath

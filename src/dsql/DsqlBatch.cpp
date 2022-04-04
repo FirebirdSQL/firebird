@@ -30,7 +30,7 @@
 #include "../jrd/exe_proto.h"
 #include "../dsql/dsql.h"
 #include "../dsql/errd_proto.h"
-#include "../common/classes/ClumpletReader.h"
+#include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/fb_string.h"
 #include "../common/utils_proto.h"
@@ -60,15 +60,15 @@ namespace {
 	};
 }
 
-DsqlBatch::DsqlBatch(dsql_req* req, const dsql_msg* /*message*/, IMessageMetadata* inMeta, ClumpletReader& pb)
-	: m_request(req),
+DsqlBatch::DsqlBatch(DsqlDmlRequest* req, const dsql_msg* /*message*/, IMessageMetadata* inMeta, ClumpletReader& pb)
+	: m_dsqlRequest(req),
 	  m_batch(NULL),
 	  m_meta(inMeta),
-	  m_messages(m_request->getPool()),
-	  m_blobs(m_request->getPool()),
-	  m_blobMap(m_request->getPool()),
-	  m_blobMeta(m_request->getPool()),
-	  m_defaultBpb(m_request->getPool()),
+	  m_messages(m_dsqlRequest->getPool()),
+	  m_blobs(m_dsqlRequest->getPool()),
+	  m_blobMap(m_dsqlRequest->getPool()),
+	  m_blobMeta(m_dsqlRequest->getPool()),
+	  m_defaultBpb(m_dsqlRequest->getPool()),
 	  m_messageSize(0),
 	  m_alignedMessage(0),
 	  m_alignment(0),
@@ -124,6 +124,8 @@ DsqlBatch::DsqlBatch(dsql_req* req, const dsql_msg* /*message*/, IMessageMetadat
 			m_bufferSize = pb.getInt();
 			if (m_bufferSize > HARD_BUFFER_LIMIT)
 				m_bufferSize = HARD_BUFFER_LIMIT;
+			if (!m_bufferSize)
+				m_bufferSize = HARD_BUFFER_LIMIT;
 			break;
 		}
 	}
@@ -166,13 +168,13 @@ DsqlBatch::~DsqlBatch()
 {
 	if (m_batch)
 		m_batch->resetHandle();
-	if (m_request)
-		m_request->req_batch = NULL;
+	if (m_dsqlRequest)
+		m_dsqlRequest->req_batch = NULL;
 }
 
 Attachment* DsqlBatch::getAttachment() const
 {
-	return m_request->req_dbb->dbb_attachment;
+	return m_dsqlRequest->req_dbb->dbb_attachment;
 }
 
 void DsqlBatch::setInterfacePtr(JBatch* interfacePtr) throw()
@@ -181,7 +183,7 @@ void DsqlBatch::setInterfacePtr(JBatch* interfacePtr) throw()
 	m_batch = interfacePtr;
 }
 
-DsqlBatch* DsqlBatch::open(thread_db* tdbb, dsql_req* req, IMessageMetadata* inMetadata,
+DsqlBatch* DsqlBatch::open(thread_db* tdbb, DsqlDmlRequest* req, IMessageMetadata* inMetadata,
 	unsigned parLength, const UCHAR* par)
 {
 	SET_TDBB(tdbb);
@@ -203,15 +205,15 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, dsql_req* req, IMessageMetadata* inM
 
 	// Sanity checks before creating batch
 
-	if (!req->req_request)
+	if (!req->getRequest())
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
 				  Arg::Gds(isc_unprepared_stmt));
 	}
 
-	const DsqlCompiledStatement* statement = req->getStatement();
+	const auto statement = req->getDsqlStatement();
 
-	if (statement->getFlags() & DsqlCompiledStatement::FLAG_ORPHAN)
+	if (statement->getFlags() & DsqlStatement::FLAG_ORPHAN)
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
 		          Arg::Gds(isc_bad_req_handle));
@@ -219,11 +221,11 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, dsql_req* req, IMessageMetadata* inM
 
 	switch (statement->getType())
 	{
-		case DsqlCompiledStatement::TYPE_INSERT:
-		case DsqlCompiledStatement::TYPE_DELETE:
-		case DsqlCompiledStatement::TYPE_UPDATE:
-		case DsqlCompiledStatement::TYPE_EXEC_PROCEDURE:
-		case DsqlCompiledStatement::TYPE_EXEC_BLOCK:
+		case DsqlStatement::TYPE_INSERT:
+		case DsqlStatement::TYPE_DELETE:
+		case DsqlStatement::TYPE_UPDATE:
+		case DsqlStatement::TYPE_EXEC_PROCEDURE:
+		case DsqlStatement::TYPE_EXEC_BLOCK:
 			break;
 
 		default:
@@ -449,7 +451,7 @@ Firebird::IBatchCompletionState* DsqlBatch::execute(thread_db* tdbb)
 	jrd_tra* transaction = tdbb->getTransaction();
 
 	// execution timer
-	thread_db::TimerGuard timerGuard(tdbb, m_request->setupTimer(tdbb), true);
+	thread_db::TimerGuard timerGuard(tdbb, m_dsqlRequest->setupTimer(tdbb), true);
 
 	// sync internal buffers
 	m_messages.done();
@@ -649,16 +651,20 @@ private:
 	}
 
 	// execute request
-	m_request->req_transaction = transaction;
-	jrd_req* req = m_request->req_request;
+	m_dsqlRequest->req_transaction = transaction;
+	Request* req = m_dsqlRequest->getRequest();
 	fb_assert(req);
 
 	// prepare completion interface
 	AutoPtr<BatchCompletionState, SimpleDispose> completionState
 		(FB_NEW BatchCompletionState(m_flags & (1 << IBatch::TAG_RECORD_COUNTS), m_detailed));
 	AutoSetRestore<bool> batchFlag(&req->req_batch_mode, true);
-	const dsql_msg* message = m_request->getStatement()->getSendMsg();
+	const dsql_msg* message = m_dsqlRequest->getDsqlStatement()->getSendMsg();
 	bool startRequest = true;
+
+	bool isExecBlock = m_dsqlRequest->getDsqlStatement()->getType() == DsqlStatement::TYPE_EXEC_BLOCK;
+	const auto receiveMessage = isExecBlock ? m_dsqlRequest->getDsqlStatement()->getReceiveMsg() : nullptr;
+	auto receiveMsgBuffer = isExecBlock ? m_dsqlRequest->req_msg_buffers[receiveMessage->msg_buffer_number] : nullptr;
 
 	// process messages
 	ULONG remains;
@@ -674,13 +680,6 @@ private:
 
 		while (remains >= m_messageSize)
 		{
-			if (startRequest)
-			{
-				EXE_unwind(tdbb, req);
-				EXE_start(tdbb, req, transaction);
-				startRequest = false;
-			}
-
 			// skip alignment data
 			UCHAR* alignedData = FB_ALIGN(data, m_alignment);
 			if (alignedData != data)
@@ -688,6 +687,13 @@ private:
 				remains -= (alignedData - data);
 				data = alignedData;
 				continue;
+			}
+
+			if (startRequest)
+			{
+				EXE_unwind(tdbb, req);
+				EXE_start(tdbb, req, transaction);
+				startRequest = isExecBlock;
 			}
 
 			// translate blob IDs
@@ -714,11 +720,11 @@ private:
 			}
 
 			// map message to internal engine format
-			m_request->mapInOut(tdbb, false, message, m_meta, NULL, data);
+			m_dsqlRequest->mapInOut(tdbb, false, message, m_meta, NULL, data);
 			data += m_messageSize;
 			remains -= m_messageSize;
 
-			UCHAR* msgBuffer = m_request->req_msg_buffers[message->msg_buffer_number];
+			UCHAR* msgBuffer = m_dsqlRequest->req_msg_buffers[message->msg_buffer_number];
 			try
 			{
 				// runsend data to request and collect stats
@@ -728,6 +734,9 @@ private:
 				ULONG after = req->req_records_inserted + req->req_records_updated +
 					req->req_records_deleted;
 				completionState->regUpdate(after - before);
+
+				if (isExecBlock)
+					EXE_receive(tdbb, req, receiveMessage->msg_number, receiveMessage->msg_length, receiveMsgBuffer);
 			}
 			catch (const Exception& ex)
 			{
@@ -817,11 +826,8 @@ void DsqlBatch::DataCache::put3(const void* data, ULONG dataSize, ULONG offset)
 
 void DsqlBatch::DataCache::put(const void* d, ULONG dataSize)
 {
-	if (m_limit && (m_used + m_cache.getCount() + dataSize > m_limit))
-	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-			  Arg::Gds(isc_batch_too_big));
-	}
+	if (m_used + m_cache.getCount() + dataSize > m_limit)
+		ERR_post(Arg::Gds(isc_batch_too_big));
 
 	const UCHAR* data = reinterpret_cast<const UCHAR*>(d);
 
@@ -969,6 +975,14 @@ ULONG DsqlBatch::DataCache::getSize() const
 	return m_used + m_cache.getCount();
 }
 
+ULONG DsqlBatch::DataCache::getCapacity() const
+{
+	if (!m_cacheCapacity)
+		return 0;
+
+	return m_limit;
+}
+
 void DsqlBatch::DataCache::clear()
 {
 	m_cache.clear();
@@ -976,3 +990,102 @@ void DsqlBatch::DataCache::clear()
 		m_space->releaseSpace(0, m_used);
 	m_used = m_got = m_shift = 0;
 }
+
+void DsqlBatch::info(thread_db* tdbb, unsigned int itemsLength, const unsigned char* items,
+	unsigned int bufferLength, unsigned char* buffer)
+{
+	// Sanity check
+	if (bufferLength < 3)	// bigger values will be processed by later code OK
+	{
+		if (bufferLength-- > 0)
+		{
+			*buffer++ = isc_info_truncated;
+			if (bufferLength-- > 0)
+				*buffer++ = isc_info_end;
+		}
+		return;
+	}
+
+	ClumpletReader it(ClumpletReader::InfoItems, items, itemsLength);
+	ClumpletWriter out(ClumpletReader::InfoResponse, bufferLength - 1);		// place for isc_info_truncated / isc_info_end
+	enum BufCloseState {BUF_OPEN, BUF_INTERNAL, BUF_END};
+	BufCloseState closeOut = BUF_OPEN;
+
+	try
+	{
+		bool flInfoLength = false;
+
+		for (it.rewind(); !it.isEof(); it.moveNext())
+		{
+			UCHAR item = it.getClumpTag();
+			if (item == isc_info_end)
+				break;
+
+			switch(item)
+			{
+			case IBatch::INF_BUFFER_BYTES_SIZE:
+				out.insertInt(item, m_messages.getCapacity());
+				break;
+			case IBatch::INF_DATA_BYTES_SIZE:
+				out.insertInt(item, FB_ALIGN(m_messages.getSize(), m_alignment));
+				break;
+			case IBatch::INF_BLOBS_BYTES_SIZE:
+				if (m_blobs.getSize())
+					out.insertInt(item, m_blobs.getSize());
+				break;
+			case IBatch::INF_BLOB_ALIGNMENT:
+				out.insertInt(item, BLOB_STREAM_ALIGN);
+				break;
+			case IBatch::INF_BLOB_HEADER:
+				out.insertInt(item, SIZEOF_BLOB_HEAD);
+				break;
+			case isc_info_length:
+				flInfoLength = true;
+				break;
+			default:
+				out.insertInt(isc_info_error, isc_infunk);
+				break;
+			}
+		}
+
+		// finalize writer
+		closeOut = BUF_INTERNAL;	// finished adding internal info
+		out.insertTag(isc_info_end);
+		closeOut = BUF_END;			// alreayd marked with isc_info_end but misses isc_info_length
+		if (flInfoLength)
+		{
+			out.rewind();
+			out.insertInt(isc_info_length, out.getBufferLength());
+		}
+	}
+	catch(const fatal_exception&)
+	{
+		// here it's sooner of all caused by writer overflow but carefully check that
+		if (out.hasOverflow())
+		{
+			memcpy(buffer, out.getBuffer(), out.getBufferLength());
+			buffer += out.getBufferLength();
+			switch (closeOut)
+			{
+			case BUF_OPEN:
+				*buffer++ = isc_info_truncated;
+				if (out.getBufferLength() <= bufferLength - 2)
+					*buffer++ = isc_info_end;
+				break;
+			case BUF_INTERNAL:
+				// overflow adding isc_info_end, but we actually have 1 reserved byte
+				*buffer++ = isc_info_end;
+				break;
+			case BUF_END:
+				// ignore isc_info_length
+				break;
+			}
+			return;
+		}
+		else
+			throw;
+	}
+
+	memcpy(buffer, out.getBuffer(), out.getBufferLength());
+}
+

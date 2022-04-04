@@ -40,9 +40,10 @@ you would do the following to create a project from 03.select.pas:
  - Open select.lpr as a project
  - When prompted choose 'Simple Program' as the project template
  - Go into Project options and add the following paths:
-    /opt/firebird/include/Firebird
+```
+    /usr/include/Firebird
     common
-
+```
 You can then compile and run the example through the debugger.
 
 

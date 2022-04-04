@@ -85,7 +85,7 @@ struct BlobIndex
 {
 	ULONG bli_temp_id;
 	bool bli_materialized;
-	jrd_req* bli_request;
+	Request* bli_request;
 	union
 	{
 		bid bli_blob_id;		// ID of materialized blob
@@ -286,7 +286,7 @@ public:
 	SSHORT tra_lock_timeout;			// in seconds, -1 means infinite, 0 means NOWAIT
 	ULONG tra_next_blob_id;     		// ID of the previous blob or array created in this transaction
 	const ISC_TIMESTAMP_TZ tra_timestamp;	// transaction start time
-	jrd_req* tra_requests;				// Doubly linked list of requests active in this transaction
+	Request* tra_requests;				// Doubly linked list of requests active in this transaction
 	MonitoringSnapshot* tra_mon_snapshot;	// Database state snapshot (for monitoring purposes)
 	RuntimeStatistics tra_stats;
 	Firebird::Array<DsqlCursor*> tra_open_cursors;
@@ -387,7 +387,7 @@ public:
 	Savepoint* startSavepoint(bool root = false);
 	void rollbackSavepoint(thread_db* tdbb, bool preserveLocks = false);
 	void rollbackToSavepoint(thread_db* tdbb, SavNumber number);
-	void rollforwardSavepoint(thread_db* tdbb, bool assertChanging = true);
+	void releaseSavepoint(thread_db* tdbb);
 	DbCreatorsList* getDbCreatorsList();
 	void checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool punt);
 

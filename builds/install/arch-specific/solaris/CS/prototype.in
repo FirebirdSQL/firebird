@@ -71,7 +71,6 @@ f none @prefix@/bin/gstat=$SRCDIR/bin/gstat 0451 firebird firebird
 #f none @prefix@/bin/fbguard=$SRCDIR/bin/fbguard 0451 firebird firebird
 #f none @prefix@/bin/fbmgr.bin=$SRCDIR/bin/fbmgr.bin 0451 firebird firebird
 f none @prefix@/bin/fb_lock_print=$SRCDIR/bin/fb_lock_print 0451 firebird firebird
-f none @prefix@/bin/qli=$SRCDIR/bin/qli 0555 firebird firebird
 # from 2.0
 f none @prefix@/bin/nbackup=$SRCDIR/bin/nbackup 0451 firebird firebird
 
@@ -164,11 +163,6 @@ s none @prefix@/lib/libfbembed.so.2=@prefix@/lib/libfbembed.so.@FIREBIRD_VERSION
 s none @prefix@/lib/libfbembed.so=@prefix@/lib/libfbembed.so.2
 
 f none @prefix@/lib/libib_util.so=$SRCDIR/lib/libib_util.so 0555 firebird firebird
-
-# help
-
-d none @prefix@/help 0751 firebird firebird
-f none @prefix@/help/help.fdb=$SRCDIR/help/help.fdb 0444 firebird firebird
 
 # messages
 

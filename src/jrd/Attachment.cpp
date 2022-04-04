@@ -227,6 +227,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_user_ids(*pool),
 	  att_active_snapshots(*pool),
 	  att_tablespaces(*pool),
+	  att_statements(*pool),
 	  att_requests(*pool),
 	  att_lock_owner_id(Database::getLockOwnerId()),
 	  att_backup_state_counter(0),
@@ -255,6 +256,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_dest_bind(&att_bindings),
 	  att_original_timezone(TimeZoneUtil::getSystemTimeZone()),
 	  att_current_timezone(att_original_timezone),
+	  att_repl_appliers(*pool),
 	  att_utility(UTIL_NONE),
 	  att_procedures(*pool),
 	  att_functions(*pool),
@@ -650,7 +652,7 @@ bool Attachment::hasActiveRequests() const
 	for (const jrd_tra* transaction = att_transactions;
 		transaction; transaction = transaction->tra_next)
 	{
-		for (const jrd_req* request = transaction->tra_requests;
+		for (const Request* request = transaction->tra_requests;
 			request; request = request->req_tra_next)
 		{
 			if (request->req_transaction && (request->req_flags & req_active))
@@ -663,7 +665,7 @@ bool Attachment::hasActiveRequests() const
 
 
 // Find an inactive incarnation of a system request. If necessary, clone it.
-jrd_req* Jrd::Attachment::findSystemRequest(thread_db* tdbb, USHORT id, USHORT which)
+Request* Jrd::Attachment::findSystemRequest(thread_db* tdbb, USHORT id, USHORT which)
 {
 	static const int MAX_RECURSION = 100;
 
@@ -673,7 +675,7 @@ jrd_req* Jrd::Attachment::findSystemRequest(thread_db* tdbb, USHORT id, USHORT w
 
 	fb_assert(which == IRQ_REQUESTS || which == DYN_REQUESTS);
 
-	JrdStatement* statement = (which == IRQ_REQUESTS ? att_internal[id] : att_dyn_req[id]);
+	Statement* statement = (which == IRQ_REQUESTS ? att_internal[id] : att_dyn_req[id]);
 
 	if (!statement)
 		return NULL;
@@ -689,7 +691,7 @@ jrd_req* Jrd::Attachment::findSystemRequest(thread_db* tdbb, USHORT id, USHORT w
 			// Msg363 "request depth exceeded. (Recursive definition?)"
 		}
 
-		jrd_req* clone = statement->getRequest(tdbb, n);
+		Request* clone = statement->getRequest(tdbb, n);
 
 		if (!(clone->req_flags & (req_active | req_reserved)))
 		{
@@ -863,13 +865,13 @@ void Jrd::Attachment::releaseLocks(thread_db* tdbb)
 
 	// And release the system requests
 
-	for (JrdStatement** itr = att_internal.begin(); itr != att_internal.end(); ++itr)
+	for (Statement** itr = att_internal.begin(); itr != att_internal.end(); ++itr)
 	{
 		if (*itr)
 			(*itr)->release(tdbb);
 	}
 
-	for (JrdStatement** itr = att_dyn_req.begin(); itr != att_dyn_req.end(); ++itr)
+	for (Statement** itr = att_dyn_req.begin(); itr != att_dyn_req.end(); ++itr)
 	{
 		if (*itr)
 			(*itr)->release(tdbb);
@@ -1007,10 +1009,10 @@ void Jrd::Attachment::SyncGuard::init(const char* f, bool
 
 	if (jStable)
 	{
-		jStable->getMutex()->enter(f);
+		jStable->getSync()->enter(f);
 		if (!jStable->getHandle())
 		{
-			jStable->getMutex()->leave();
+			jStable->getSync()->leave();
 			Arg::Gds(isc_att_shutdown).raise();
 		}
 	}
@@ -1022,13 +1024,13 @@ void StableAttachmentPart::manualLock(ULONG& flags, const ULONG whatLock)
 
 	if (whatLock & ATT_async_manual_lock)
 	{
-		asyncMutex.enter(FB_FUNCTION);
+		async.enter(FB_FUNCTION);
 		flags |= ATT_async_manual_lock;
 	}
 
 	if (whatLock & ATT_manual_lock)
 	{
-		mainMutex.enter(FB_FUNCTION);
+		mainSync.enter(FB_FUNCTION);
 		flags |= ATT_manual_lock;
 	}
 }
@@ -1038,7 +1040,7 @@ void StableAttachmentPart::manualUnlock(ULONG& flags)
 	if (flags & ATT_manual_lock)
 	{
 		flags &= ~ATT_manual_lock;
-		mainMutex.leave();
+		mainSync.leave();
 	}
 	manualAsyncUnlock(flags);
 }
@@ -1048,7 +1050,7 @@ void StableAttachmentPart::manualAsyncUnlock(ULONG& flags)
 	if (flags & ATT_async_manual_lock)
 	{
 		flags &= ~ATT_async_manual_lock;
-		asyncMutex.leave();
+		async.leave();
 	}
 }
 
@@ -1056,7 +1058,7 @@ void StableAttachmentPart::onIdleTimer(TimerImpl*)
 {
 	// Ensure attachment is still alive and still idle
 
-	MutexEnsureUnlock guard(*this->getMutex(), FB_FUNCTION);
+	EnsureUnlock<Sync, NotRefCounted> guard(*this->getSync(), FB_FUNCTION);
 	if (!guard.tryEnter())
 		return;
 

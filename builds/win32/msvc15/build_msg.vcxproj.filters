@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\gen\msgs\build_file.cpp">
+    <ClCompile Include="..\..\..\src\msgs\build_file.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

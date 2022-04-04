@@ -100,14 +100,7 @@ public:
 
 extern "C"
 {
-#if defined(__WIN32__)
-	void __declspec(dllexport) FB_PLUGIN_ENTRY_POINT(IMaster* m);
-#else
-	void FB_PLUGIN_ENTRY_POINT(IMaster* m)
-		__attribute__((visibility("default")));
-#endif // __WIN32__
-
-	void FB_PLUGIN_ENTRY_POINT(IMaster* m)
+	FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* m)
 	{
 		master = m;
 		IPluginManager* pm = m->getPluginManager();

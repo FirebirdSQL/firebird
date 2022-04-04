@@ -36,12 +36,12 @@
 #include "../jrd/Relation.h"
 #include "../common/classes/array.h"
 #include "../jrd/MetaName.h"
+#include "../common/classes/fb_pair.h"
 #include "../common/classes/NestConst.h"
 
-#include "gen/iberror.h"
+#include "iberror.h"
 
 #include "../common/dsc.h"
-#include "../jrd/rse.h"
 
 #include "../jrd/err_proto.h"
 #include "../jrd/scl.h"
@@ -74,7 +74,6 @@ template <typename T> class vec;
 class jrd_prc;
 class Collation;
 struct index_desc;
-struct IndexDescAlloc;
 class Format;
 class ForNode;
 class Cursor;
@@ -188,9 +187,10 @@ typedef Firebird::SortedArray<Resource, Firebird::EmptyStorage<Resource>,
 struct AccessItem
 {
 	MetaName		acc_security_name;
-	SLONG					acc_ss_rel_id;	// Relation Id which owner will be used to check permissions
-	MetaName		acc_name, acc_r_name;
-	SLONG					acc_type;
+	SLONG			acc_ss_rel_id;	// Relation Id which owner will be used to check permissions
+	MetaName		acc_name;
+	MetaName		acc_r_name;
+	ObjectType		acc_type;
 	SecurityClass::flags_t	acc_mask;
 
 	static bool greaterThan(const AccessItem& i1, const AccessItem& i2)
@@ -225,7 +225,7 @@ struct AccessItem
 	}
 
 	AccessItem(const MetaName& security_name, SLONG view_id,
-		const MetaName& name, SLONG type,
+		const MetaName& name, ObjectType type,
 		SecurityClass::flags_t mask, const MetaName& relName)
 		: acc_security_name(security_name), acc_ss_rel_id(view_id), acc_name(name),
 			acc_r_name(relName), acc_type(type), acc_mask(mask)
@@ -448,17 +448,20 @@ public:
 		csb_resources(p),
 		csb_dependencies(p),
 		csb_fors(p),
-		csb_cursors(p),
+		csb_localTables(p),
 		csb_invariants(p),
 		csb_current_nodes(p),
 		csb_current_for_nodes(p),
 		csb_computing_fields(p),
+		csb_variables_used_in_subroutines(p),
 		csb_pool(p),
 		csb_map_field_info(p),
 		csb_map_item_info(p),
 		csb_message_pad(p),
 		subFunctions(p),
 		subProcedures(p),
+		outerMessagesMap(p),
+		outerVarsMap(p),
 		csb_currentForNode(NULL),
 		csb_currentDMLNode(NULL),
 		csb_currentAssignTarget(NULL),
@@ -468,7 +471,7 @@ public:
 		csb_dbg_info = FB_NEW_POOL(p) Firebird::DbgInfo(p);
 	}
 
-	// Implemented in JrdStatement.cpp
+	// Implemented in Statement.cpp
 	ULONG allocImpure(ULONG align, ULONG size);
 
 	template <typename T>
@@ -511,12 +514,13 @@ public:
 	ResourceList	csb_resources;				// Resources (relations and indexes)
 	Firebird::Array<Dependency>	csb_dependencies;	// objects that this statement depends upon
 	Firebird::Array<const RecordSource*> csb_fors;	// record sources
-	Firebird::Array<const Cursor*> csb_cursors;	// named cursors
+	Firebird::Array<const DeclareLocalTableNode*> csb_localTables;	// local tables
 	Firebird::Array<ULONG*> csb_invariants;		// stack of pointer to nodes invariant offsets
 	Firebird::Array<ExprNode*> csb_current_nodes;	// RseNode's and other invariant
 												// candidates within whose scope we are
 	Firebird::Array<ForNode*> csb_current_for_nodes;
 	Firebird::SortedArray<jrd_fld*> csb_computing_fields;	// Computed fields being compiled
+	Firebird::SortedArray<USHORT> csb_variables_used_in_subroutines;
 	StreamType		csb_n_stream;				// Next available stream
 	USHORT			csb_msg_number;				// Highest used message number
 	ULONG			csb_impure;					// Next offset into impure area
@@ -541,8 +545,10 @@ public:
 	bool		csb_returning_expr;
 	bool		csb_implicit_cursor;
 
-	Firebird::GenericMap<Firebird::Left<MetaName, DeclareSubFuncNode*> > subFunctions;
-	Firebird::GenericMap<Firebird::Left<MetaName, DeclareSubProcNode*> > subProcedures;
+	Firebird::LeftPooledMap<MetaName, DeclareSubFuncNode*> subFunctions;
+	Firebird::LeftPooledMap<MetaName, DeclareSubProcNode*> subProcedures;
+	Firebird::NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <inner, outer>
+	Firebird::NonPooledMap<USHORT, USHORT> outerVarsMap;		// <inner, outer>
 
 	ForNode*	csb_currentForNode;
 	StmtNode*	csb_currentDMLNode;		// could be StoreNode or ModifyNode
@@ -554,21 +560,20 @@ public:
 		// We must zero-initialize this one
 		csb_repeat();
 
-		void activate();
+		void activate(bool subStream = false);
 		void deactivate();
 
 		Nullable<USHORT> csb_cursor_number;	// Cursor number for this stream
 		StreamType csb_stream;			// Map user context to internal stream
 		StreamType csb_view_stream;		// stream number for view relation, below
 		USHORT csb_flags;
-		USHORT csb_indices;				// Number of indices
 
 		jrd_rel* csb_relation;
 		Firebird::string* csb_alias;	// SQL alias name for this instance of relation
 		jrd_prc* csb_procedure;
 		jrd_rel* csb_view;				// parent view
 
-		IndexDescAlloc* csb_idx;		// Packed description of indices
+		IndexDescList* csb_idx;			// Packed description of indices
 		MessageNode* csb_message;		// Msg for send/receive
 		const Format* csb_format;		// Default Format for stream
 		Format* csb_internal_format;	// Statement internal format
@@ -589,7 +594,6 @@ inline CompilerScratch::csb_repeat::csb_repeat()
 	: csb_stream(0),
 	  csb_view_stream(0),
 	  csb_flags(0),
-	  csb_indices(0),
 	  csb_relation(0),
 	  csb_alias(0),
 	  csb_procedure(0),
@@ -632,9 +636,12 @@ const int csb_unmatched		= 512;		// stream has conjuncts unmatched by any index
 const int csb_update		= 1024;		// erase or modify for relation
 const int csb_unstable		= 2048;		// unstable explicit cursor
 
-inline void CompilerScratch::csb_repeat::activate()
+inline void CompilerScratch::csb_repeat::activate(bool subStream)
 {
 	csb_flags |= csb_active;
+
+	if (subStream)
+		csb_flags |= csb_sub_stream;
 }
 
 inline void CompilerScratch::csb_repeat::deactivate()
@@ -663,6 +670,9 @@ public:
 
 // must correspond to the declared size of RDB$EXCEPTIONS.RDB$MESSAGE
 const unsigned XCP_MESSAGE_LENGTH = 1023;
+
+// Array which stores relative pointers to impure areas of invariant nodes
+typedef Firebird::SortedArray<ULONG> VarInvariantArray;
 
 } // namespace Jrd
 

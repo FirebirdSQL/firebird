@@ -86,7 +86,7 @@
 #include <windows.h>
 
 #include "fb_exception.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../common/ThreadStart.h"
 #include "../common/os/fbsyslog.h"
 #include "../common/isc_proto.h"
@@ -103,7 +103,6 @@
 #include "../remote/server/serve_proto.h"
 #include "../remote/server/ReplServer.h"
 #include "../remote/server/os/win32/window_proto.h"
-#include "../remote/os/win32/wnet_proto.h"
 #include "../remote/server/os/win32/window.rh"
 #include "../remote/os/win32/xnet_proto.h"
 #include "../yvalve/gds_proto.h"
@@ -118,7 +117,6 @@
 
 
 static THREAD_ENTRY_DECLARE inet_connect_wait_thread(THREAD_ENTRY_PARAM);
-static THREAD_ENTRY_DECLARE wnet_connect_wait_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE xnet_connect_wait_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE process_connection_thread(THREAD_ENTRY_PARAM);
@@ -129,7 +127,6 @@ static int wait_threads(const int reason, const int mask, void* arg);
 static HINSTANCE hInst;
 
 static TEXT protocol_inet[128];
-static TEXT protocol_wnet[128];
 static TEXT instance[MAXPATHLEN];
 static USHORT server_flag = 0;
 static bool server_shutdown = false;
@@ -224,7 +221,6 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 		SetProcessAffinityMask(GetCurrentProcess(), affinity);
 
 	protocol_inet[0] = 0;
-	protocol_wnet[0] = 0;
 
 	strcpy(instance, FB_DEFAULT_INSTANCE);
 
@@ -295,8 +291,6 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 					port = NULL;
 				}
 			}
-			else if (server_flag & SRVR_wnet)
-				port = WNET_reconnect(connection_handle);
 			else if (server_flag & SRVR_xnet)
 				port = XNET_reconnect((ULONG_PTR) connection_handle);
 
@@ -308,7 +302,7 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 			iscLogException("Server error", ex);
 		}
 
-		fb_shutdown(5 * 1000 /*5 seconds*/, fb_shutrsn_no_connection);
+		fb_shutdown(10 * 1000 /*10 seconds*/, fb_shutrsn_no_connection);
 	}
 	else if (!(server_flag & SRVR_non_service))
 	{
@@ -428,56 +422,6 @@ static THREAD_ENTRY_DECLARE inet_connect_wait_thread(THREAD_ENTRY_PARAM)
 }
 
 
-static THREAD_ENTRY_DECLARE wnet_connect_wait_thread(THREAD_ENTRY_PARAM)
-{
-/**************************************
- *
- *      w n e t _ c o n n e c t _ w a i t _ t h r e a d
- *
- **************************************
- *
- * Functional description
- *
- **************************************/
-	ThreadCounter counter;
-
-	while (!server_shutdown)
-	{
-		rem_port* port = NULL;
-
-		try
-		{
-			port = WNET_connect(protocol_wnet, NULL, server_flag, NULL);
-		}
-		catch (const Exception& ex)
-		{
-			SimpleStatusVector<> status_vector;
-			ex.stuffException(status_vector);
-
-			if (status_vector[1] == isc_net_server_shutdown)
-				break;
-
-			iscLogException("WNET_connect", ex);
-		}
-
-		if (port)
-		{
-			try
-			{
-				Thread::start(process_connection_thread, port, THREAD_medium);
-			}
-			catch (const Exception&)
-			{
-				gds__log("WNET: can't start worker thread, connection terminated");
-				port->disconnect(NULL, NULL);
-			}
-		}
-	}
-
-	return 0;
-}
-
-
 static THREAD_ENTRY_DECLARE xnet_connect_wait_thread(THREAD_ENTRY_PARAM)
 {
 /**************************************
@@ -557,7 +501,6 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
  *
  **************************************/
 	ThreadCounter counter;
-	FbLocalStatus localStatus;
 
 	if (server_flag & SRVR_inet)
 	{
@@ -568,18 +511,6 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 		catch (const Exception& ex)
 		{
 			iscLogException("INET: can't start listener thread", ex);
-		}
-	}
-
-	if (server_flag & SRVR_wnet)
-	{
-		try
-		{
-			Thread::start(wnet_connect_wait_thread, 0, THREAD_medium);
-		}
-		catch (const Exception& ex)
-		{
-			iscLogException("WNET: can't start listener thread", ex);
 		}
 	}
 
@@ -595,7 +526,13 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 		}
 	}
 
-	REPL_server(&localStatus, false, &server_shutdown);
+	FbLocalStatus localStatus;
+	if (!REPL_server(&localStatus, false, &server_shutdown))
+	{
+		const char* errorMsg = "Replication server initialization error";
+		iscLogStatus(errorMsg, localStatus->getErrors());
+		Syslog::Record(Syslog::Error, errorMsg);
+	}
 
 	return 0;
 }
@@ -651,13 +588,14 @@ static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag)
 					{
 						TEXT buffer[32];
 						char* pp = buffer;
-						while (*p && *p != ' ' && (pp - buffer < sizeof(buffer) - 1))
+						const char* ppend = buffer + sizeof(buffer) - 1;
+						while (*p && *p != ' ' && pp < ppend)
 						{
 							if (*p == '@')
 							{
 								p++;
 								*pp++ = '\0';
-								connection_handle = (HANDLE) _atoi64(buffer);
+								connection_handle = (HANDLE)_atoi64(buffer);
 								pp = buffer;
 							}
 							else
@@ -699,7 +637,7 @@ static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag)
 					*pserver_flag |= SRVR_no_icon;
 					break;
 
-				case 'P':	// Specify a port or named pipe other than the default
+				case 'P':	// Specify a port other than the default
 					while (*p && *p == ' ')
 						p++;
 					if (*p)
@@ -708,23 +646,11 @@ static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag)
 						// in the future, hence I did generic code.
 						char* pi = protocol_inet;
 						const char* piend = protocol_inet + sizeof(protocol_inet) - 1;
-						char* pw = protocol_wnet;
-						const char* pwend = protocol_wnet + sizeof(protocol_wnet) - 1;
 
 						*pi++ = '/';
-						*pw++ = '\\';
-						*pw++ = '\\';
-						*pw++ = '.';
-						*pw++ = '@';
-						while (*p && *p != ' ')
-						{
-							if (pi < piend)
-								*pi++ = *p;
-							if (pw < pwend)
-								*pw++ = *p++;
-						}
+						while (*p && *p != ' ' && pi < piend)
+							*pi++ = *p++;
 						*pi++ = '\0';
-						*pw++ = '\0';
 					}
 					break;
 
@@ -766,10 +692,6 @@ static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag)
 					}
 					break;
 
-				case 'W':
-					*pserver_flag |= SRVR_wnet;
-					break;
-
 				case 'X':
 					*pserver_flag |= SRVR_xnet;
 					break;
@@ -791,9 +713,8 @@ static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag)
 		}
 	}
 
-	if ((*pserver_flag & (SRVR_inet | SRVR_wnet | SRVR_xnet)) == 0)
+	if ((*pserver_flag & (SRVR_inet | SRVR_xnet)) == 0)
 	{
-		*pserver_flag |= SRVR_wnet;
 		*pserver_flag |= SRVR_inet;
 		*pserver_flag |= SRVR_xnet;
 	}

@@ -35,7 +35,7 @@
 #include "../jrd/constants.h"
 #include "../common/os/path_utils.h"
 #include "../common/isc_proto.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 
 #include <direct.h>
 #include <io.h> // isatty()
@@ -377,6 +377,23 @@ bool isIPv6supported()
 	}
 
 	WSASetLastError(0);
+	return false;
+}
+
+bool getCurrentModulePath(char* buffer, size_t bufferSize)
+{
+	HMODULE hmod = 0;
+
+	GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		(LPCTSTR) &getCurrentModulePath,
+		&hmod);
+
+	if (hmod)
+	{
+		GetModuleFileName(hmod, buffer, bufferSize);
+		return true;
+	}
+
 	return false;
 }
 

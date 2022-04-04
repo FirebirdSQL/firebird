@@ -58,7 +58,6 @@
 #include "../jrd/os/pio.h"
 #include "../jrd/btr.h"
 #include "../jrd/exe.h"
-#include "../jrd/rse.h"
 #include "../jrd/scl.h"
 #include "../common/classes/alloc.h"
 #include "../common/ThreadStart.h"
@@ -99,7 +98,6 @@ static void check_class(thread_db*, jrd_tra*, record_param*, record_param*, USHO
 static bool check_nullify_source(thread_db*, record_param*, record_param*, int, int = -1);
 static void check_owner(thread_db*, jrd_tra*, record_param*, record_param*, USHORT);
 static void check_repl_state(thread_db*, jrd_tra*, record_param*, record_param*, USHORT);
-static bool check_user(thread_db*, const dsc*);
 static int check_precommitted(const jrd_tra*, const record_param*);
 static void check_rel_field_class(thread_db*, record_param*, jrd_tra*);
 static void delete_record(thread_db*, record_param*, ULONG, MemoryPool*);
@@ -164,7 +162,7 @@ const int PREPARE_LOCKERR	= 3;
 static int prepare_update(thread_db*, jrd_tra*, TraNumber commit_tid_read, record_param*,
 	record_param*, record_param*, PageStack&, bool);
 
-static void protect_system_table_insert(thread_db* tdbb, const jrd_req* req, const jrd_rel* relation,
+static void protect_system_table_insert(thread_db* tdbb, const Request* req, const jrd_rel* relation,
 	bool force_flag = false);
 static void protect_system_table_delupd(thread_db* tdbb, const jrd_rel* relation, const char* operation,
 	bool force_flag = false);
@@ -226,13 +224,13 @@ static bool assert_gc_enabled(const jrd_tra* transaction, const jrd_rel* relatio
 inline void check_gbak_cheating_insupd(thread_db* tdbb, const jrd_rel* relation, const char* op)
 {
 	const Attachment* const attachment = tdbb->getAttachment();
-	const jrd_tra* const transaction = tdbb->getTransaction();
+	const Request* const request = tdbb->getRequest();
 
-	// It doesn't matter that we use protect_system_table_upd() that's for deletions and updates
-	// but this code is for insertions and updates, because we use force = true.
-	if (relation->isSystem() && attachment->isGbak() && !(attachment->att_flags & ATT_creator))
+	if (relation->isSystem() && attachment->isGbak() && !(attachment->att_flags & ATT_creator) &&
+		!request->hasInternalStatement())
 	{
-		protect_system_table_delupd(tdbb, relation, op, true);
+		status_exception::raise(Arg::Gds(isc_protect_sys_tab) <<
+			Arg::Str(op) << Arg::Str(relation->rel_name));
 	}
 }
 
@@ -240,7 +238,6 @@ inline void check_gbak_cheating_insupd(thread_db* tdbb, const jrd_rel* relation,
 inline void check_gbak_cheating_delete(thread_db* tdbb, const jrd_rel* relation)
 {
 	const Attachment* const attachment = tdbb->getAttachment();
-	const jrd_tra* const transaction = tdbb->getTransaction();
 
 	if (relation->isSystem() && attachment->isGbak())
 	{
@@ -298,7 +295,16 @@ inline void waitGCActive(thread_db* tdbb, const record_param* rpb)
 	Lock temp_lock(tdbb, sizeof(SINT64), LCK_record_gc);
 	temp_lock.setKey(((SINT64) rpb->rpb_page << 16) | rpb->rpb_line);
 
-	if (!LCK_lock(tdbb, &temp_lock, LCK_SR, LCK_WAIT))
+	SSHORT wait = LCK_WAIT;
+
+	jrd_tra* transaction = tdbb->getTransaction();
+	if (transaction->tra_number == rpb->rpb_transaction_nr)
+	{
+		// There is no sense to wait for self
+		wait = LCK_NO_WAIT;
+	}
+
+	if (!LCK_lock(tdbb, &temp_lock, LCK_SR, wait))
 		ERR_punt();
 
 	LCK_release(tdbb, &temp_lock);
@@ -733,7 +739,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 	// Take care about modifications performed by our own transaction
 
-	rpb->rpb_runtime_flags &= ~RPB_UNDO_FLAGS;
+	rpb->rpb_runtime_flags &= ~RPB_CLEAR_FLAGS;
 	int forceBack = 0;
 
 	if (rpb->rpb_stream_flags & RPB_s_unstable)
@@ -1245,7 +1251,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 }
 
 
-void VIO_copy_record(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
+void VIO_copy_record(thread_db* tdbb, jrd_rel* relation, Record* orgRecord, Record* newRecord)
 {
 /**************************************
  *
@@ -1257,60 +1263,60 @@ void VIO_copy_record(thread_db* tdbb, record_param* org_rpb, record_param* new_r
  *	Copy the given record to a new destination,
  *	taking care about possible format differences.
  **************************************/
-	fb_assert(org_rpb && new_rpb);
-	Record* const org_record = org_rpb->rpb_record;
-	Record* const new_record = new_rpb->rpb_record;
-	fb_assert(org_record && new_record);
-
 	// dimitr:	Clear the req_null flag that may stay active after the last
 	//			boolean evaluation. Here we use only EVL_field() calls that
 	//			do not touch this flag and data copying is done only for
 	//			non-NULL fields, so req_null should never be seen inside blb::move().
 	//			See CORE-6090 for details.
 
-	jrd_req* const request = tdbb->getRequest();
+	const auto request = tdbb->getRequest();
 	request->req_flags &= ~req_null;
+
+	const auto orgFormat = orgRecord->getFormat();
+	const auto newFormat = newRecord->getFormat();
+	fb_assert(orgFormat && newFormat);
 
 	// Copy the original record to the new record. If the format hasn't changed,
 	// this is a simple move. If the format has changed, each field must be
 	// fetched and moved separately, remembering to set the missing flag.
 
-	if (new_rpb->rpb_format_number == org_rpb->rpb_format_number)
-		new_record->copyDataFrom(org_record, true);
-	else
+	if (newFormat->fmt_version == orgFormat->fmt_version)
 	{
-		DSC org_desc, new_desc;
+		newRecord->copyDataFrom(orgRecord, true);
+		return;
+	}
 
-		for (USHORT i = 0; i < new_record->getFormat()->fmt_count; i++)
+	dsc orgDesc, newDesc;
+
+	for (USHORT i = 0; i < newFormat->fmt_count; i++)
+	{
+		newRecord->clearNull(i);
+
+		if (EVL_field(relation, newRecord, i, &newDesc))
 		{
-			new_record->clearNull(i);
-
-			if (EVL_field(new_rpb->rpb_relation, new_record, i, &new_desc))
+			if (EVL_field(relation, orgRecord, i, &orgDesc))
 			{
-				if (EVL_field(org_rpb->rpb_relation, org_record, i, &org_desc))
-				{
-					// If the source is not a blob or it's a temporary blob,
-					// then we'll need to materialize the resulting blob.
-					// Thus blb::move() is called with rpb and field ID.
-					// See also CORE-5600.
+				// If the source is not a blob or it's a temporary blob,
+				// then we'll need to materialize the resulting blob.
+				// Thus blb::move() is called with rpb and field ID.
+				// See also CORE-5600.
 
-					const bool materialize =
-						(DTYPE_IS_BLOB_OR_QUAD(new_desc.dsc_dtype) &&
-							!(DTYPE_IS_BLOB_OR_QUAD(org_desc.dsc_dtype) &&
-								((bid*) org_desc.dsc_address)->bid_internal.bid_relation_id));
+				const bool materialize =
+					(DTYPE_IS_BLOB_OR_QUAD(newDesc.dsc_dtype) &&
+						!(DTYPE_IS_BLOB_OR_QUAD(orgDesc.dsc_dtype) &&
+							((bid*) orgDesc.dsc_address)->bid_internal.bid_relation_id));
 
-					if (materialize)
-						blb::move(tdbb, &org_desc, &new_desc, new_rpb, i);
-					else
-						MOV_move(tdbb, &org_desc, &new_desc);
-				}
+				if (materialize)
+					blb::move(tdbb, &orgDesc, &newDesc, relation, newRecord, i);
 				else
-				{
-					new_record->setNull(i);
+					MOV_move(tdbb, &orgDesc, &newDesc);
+			}
+			else
+			{
+				newRecord->setNull(i);
 
-					if (new_desc.dsc_dtype)
-						memset(new_desc.dsc_address, 0, new_desc.dsc_length);
-				}
+				if (!newDesc.isUnknown())
+					memset(newDesc.dsc_address, 0, newDesc.dsc_length);
 			}
 		}
 	}
@@ -1446,7 +1452,7 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 }
 
 
-static bool check_prepare_result(int prepare_result, jrd_tra* transaction, jrd_req* request, record_param* rpb)
+static bool check_prepare_result(int prepare_result, jrd_tra* transaction, Request* request, record_param* rpb)
 {
 /**************************************
  *
@@ -1455,7 +1461,7 @@ static bool check_prepare_result(int prepare_result, jrd_tra* transaction, jrd_r
  **************************************
  *
  * Functional description
- *	Called by VIO_modify and VIO_erase. Raise update conflict error if not in 
+ *	Called by VIO_modify and VIO_erase. Raise update conflict error if not in
  *  read consistency transaction or lock error happens or if request is already
  *  in update conflict mode. In latter case set TRA_ex_restart flag to correctly
  *  handle request restart.
@@ -1464,19 +1470,19 @@ static bool check_prepare_result(int prepare_result, jrd_tra* transaction, jrd_r
 	if (prepare_result == PREPARE_OK)
 		return true;
 
-	jrd_req* top_request = request->req_snapshot.m_owner;
+	Request* top_request = request->req_snapshot.m_owner;
 
-	const bool restart_ready = top_request && 
+	const bool restart_ready = top_request &&
 		(top_request->req_flags & req_restart_ready);
 
 	// Second update conflict when request is already in update conflict mode
-	// means we have some (indirect) UPDATE\DELETE in WHERE clause of primary 
+	// means we have some (indirect) UPDATE\DELETE in WHERE clause of primary
 	// cursor. In this case all we can do is restart whole request immediately.
-	const bool secondary = top_request && 
-		(top_request->req_flags & req_update_conflict) && 
+	const bool secondary = top_request &&
+		(top_request->req_flags & req_update_conflict) &&
 		(prepare_result != PREPARE_LOCKERR);
 
-	if (!(transaction->tra_flags & TRA_read_consistency) || prepare_result == PREPARE_LOCKERR || 
+	if (!(transaction->tra_flags & TRA_read_consistency) || prepare_result == PREPARE_LOCKERR ||
 		secondary || !restart_ready)
 	{
 		if (secondary)
@@ -1515,7 +1521,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	MetaName object_name, package_name;
 
 	SET_TDBB(tdbb);
-	jrd_req* request = tdbb->getRequest();
+	Request* request = tdbb->getRequest();
 	jrd_rel* relation = rpb->rpb_relation;
 
 #ifdef VIO_DEBUG
@@ -1541,9 +1547,6 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
 		fb_assert(!(rpb->rpb_runtime_flags & RPB_undo_read));
 	}
-
-	// deleting tx has updated/inserted this record before
-	tdbb->bumpRelStats(RuntimeStatistics::RECORD_DELETES, relation->rel_id);
 
 	// Special case system transaction
 
@@ -1836,10 +1839,16 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_priv:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
 			EVL_field(0, rpb->rpb_record, f_file_name, &desc);
-			if (!(tdbb->getRequest()->getStatement()->flags & JrdStatement::FLAG_INTERNAL))
+			if (!tdbb->getRequest()->hasInternalStatement())
 			{
 				EVL_field(0, rpb->rpb_record, f_prv_grantor, &desc);
-				if (!check_user(tdbb, &desc))
+				MetaName grantor;
+				MOV_get_metaname(tdbb, &desc, grantor);
+
+				const auto attachment = tdbb->getAttachment();
+				const MetaString& currentUser = attachment->getUserName();
+
+				if (grantor != currentUser)
 				{
 					ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("REVOKE") <<
 													  Arg::Str("TABLE") <<
@@ -1875,6 +1884,9 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	// If the page can be updated simply, we can skip the remaining crud
 
+	Database* dbb = tdbb->getDatabase();
+	const bool backVersion = (rpb->rpb_b_page != 0);
+
 	record_param temp;
 	temp.rpb_transaction_nr = transaction->tra_number;
 	temp.rpb_address = NULL;
@@ -1890,10 +1902,17 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		if (transaction->tra_save_point && transaction->tra_save_point->isChanging())
 			verb_post(tdbb, transaction, rpb, rpb->rpb_undo);
 
+		// We have INSERT + DELETE or UPDATE + DELETE in the same transaction.
+		// UPDATE has already notified GC, while INSERT has not. Check for
+		// backversion allows to avoid second notification in case of UPDATE.
+
+		if ((dbb->dbb_flags & DBB_gc_background) && !rpb->rpb_relation->isTemporary() && !backVersion)
+			notify_garbage_collector(tdbb, rpb, transaction->tra_number);
+
+		tdbb->bumpRelStats(RuntimeStatistics::RECORD_DELETES, relation->rel_id);
 		return true;
 	}
 
-	const bool backVersion = (rpb->rpb_b_page != 0);
 	const TraNumber tid_fetch = rpb->rpb_transaction_nr;
 	if (DPM_chain(tdbb, rpb, &temp))
 	{
@@ -1947,6 +1966,8 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	if (transaction->tra_save_point && transaction->tra_save_point->isChanging())
 		verb_post(tdbb, transaction, rpb, 0);
 
+	tdbb->bumpRelStats(RuntimeStatistics::RECORD_DELETES, relation->rel_id);
+
 	// for an autocommit transaction, mark a commit as necessary
 
 	if (transaction->tra_flags & TRA_autocommit)
@@ -1954,7 +1975,6 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	// VIO_erase
 
-	Database* dbb = tdbb->getDatabase();
 	if (backVersion && !(tdbb->getAttachment()->att_flags & ATT_no_cleanup) &&
 		(dbb->dbb_flags & DBB_gc_cooperative))
 	{
@@ -2511,8 +2531,6 @@ bool VIO_get_current(thread_db* tdbb,
  *
  **************************************/
 	SET_TDBB(tdbb);
-
-	Attachment* const attachment = tdbb->getAttachment();
 
 #ifdef VIO_DEBUG
 	jrd_rel* relation = rpb->rpb_relation;
@@ -3213,7 +3231,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	const bool backVersion = (org_rpb->rpb_b_page != 0);
 	record_param temp;
 	PageStack stack;
-	int prepare_result = prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb, 
+	int prepare_result = prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb,
 										&temp, new_rpb, stack, false);
 	if (!check_prepare_result(prepare_result, transaction, tdbb->getRequest(), org_rpb))
 		return false;
@@ -3473,7 +3491,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	jrd_rel* relation = rpb->rpb_relation;
 
 	DeferredWork* work = NULL;
@@ -3710,7 +3728,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			EVL_field(0, rpb->rpb_record, f_trg_rname, &desc);
 
 			// check if this  request go through without checking permissions
-			if (!(request->getStatement()->flags & JrdStatement::FLAG_IGNORE_PERM))
+			if (!(request->getStatement()->flags & (Statement::FLAG_IGNORE_PERM | Statement::FLAG_INTERNAL)))
 				SCL_check_relation(tdbb, &desc, SCL_control | SCL_alter);
 
 			if (EVL_field(0, rpb->rpb_record, f_trg_rname, &desc2))
@@ -4056,9 +4074,10 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 
 	transaction->tra_flags |= TRA_write;
 
-	if (!org_rpb->rpb_record)
+	Record* org_record = org_rpb->rpb_record;
+	if (!org_record)
 	{
-		Record* const org_record = VIO_record(tdbb, org_rpb, NULL, tdbb->getDefaultPool());
+		org_record = VIO_record(tdbb, org_rpb, NULL, tdbb->getDefaultPool());
 		org_rpb->rpb_address = org_record->getData();
 		const Format* const org_format = org_record->getFormat();
 		org_rpb->rpb_length = org_format->fmt_length;
@@ -4084,7 +4103,7 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 		new_rpb.rpb_length = new_format->fmt_length;
 		new_rpb.rpb_format_number = new_format->fmt_version;
 
-		VIO_copy_record(tdbb, org_rpb, &new_rpb);
+		VIO_copy_record(tdbb, relation, org_record, new_record);
 	}
 
 	// We're about to lock the record. Post a refetch request
@@ -4102,7 +4121,7 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 		case PREPARE_DELETE:
 			if ((transaction->tra_flags & TRA_read_consistency))
 			{
-				jrd_req* top_request = tdbb->getRequest()->req_snapshot.m_owner;
+				Request* top_request = tdbb->getRequest()->req_snapshot.m_owner;
 				if (top_request && !(top_request->req_flags & req_update_conflict))
 				{
 					if (!(top_request->req_flags & req_restart_ready))
@@ -4342,11 +4361,11 @@ static void check_owner(thread_db* tdbb,
 		if (!MOV_compare(tdbb, &desc1, &desc2))
 			return;
 
-		const Jrd::Attachment* const attachment = tdbb->getAttachment();
+		const auto attachment = tdbb->getAttachment();
+		const MetaString& name = attachment->getEffectiveUserName();
 
-		if (attachment->att_user)
+		if (name.hasData())
 		{
-			const MetaName name(attachment->att_user->getUserName());
 			desc2.makeText((USHORT) name.length(), CS_METADATA, (UCHAR*) name.c_str());
 
 			if (!MOV_compare(tdbb, &desc1, &desc2))
@@ -4391,38 +4410,6 @@ static void check_repl_state(thread_db* tdbb,
 		return;
 
 	DFW_post_work(transaction, dfw_change_repl_state, "", 0);
-}
-
-
-static bool check_user(thread_db* tdbb, const dsc* desc)
-{
-/**************************************
- *
- *	c h e c k _ u s e r
- *
- **************************************
- *
- * Functional description
- *	Validate string against current user name.
- *
- **************************************/
-	SET_TDBB(tdbb);
-
-	const TEXT* p = (TEXT *) desc->dsc_address;
-	const TEXT* const end = p + desc->dsc_length;
-	const UserId* user = tdbb->getAttachment()->att_user;
-	const TEXT* q = user ? user->getUserName().c_str() : "";
-
-	// It is OK to not internationalize this function for v4.00 as
-	// User names are limited to 7-bit ASCII for v4.00
-
-	for (; p < end && *p != ' '; p++, q++)
-	{
-		if (UPPER7(*p) != UPPER7(*q))
-			return false;
-	}
-
-	return *q ? false : true;
 }
 
 
@@ -5169,7 +5156,7 @@ static void invalidate_cursor_records(jrd_tra* transaction, record_param* mod_rp
  **************************************/
 	fb_assert(mod_rpb && mod_rpb->rpb_relation);
 
-	for (jrd_req* request = transaction->tra_requests; request; request = request->req_tra_next)
+	for (Request* request = transaction->tra_requests; request; request = request->req_tra_next)
 	{
 		if (request->req_flags & req_active)
 		{
@@ -5244,12 +5231,15 @@ static void list_staying_fast(thread_db* tdbb, record_param* rpb, RecordStack& s
 		}
 	}
 
-	const TraNumber oldest_active = tdbb->getTransaction()->tra_oldest_active;
+	///const TraNumber oldest_active = tdbb->getTransaction()->tra_oldest_active;
 
 	while (temp.rpb_b_page)
 	{
-		ULONG page = temp.rpb_page = temp.rpb_b_page;
-		USHORT line = temp.rpb_line = temp.rpb_b_line;
+		///ULONG page = temp.rpb_page = temp.rpb_b_page;
+		///USHORT line = temp.rpb_line = temp.rpb_b_line;
+		temp.rpb_page = temp.rpb_b_page;
+		temp.rpb_line = temp.rpb_b_line;
+
 		temp.rpb_record = NULL;
 
 		if (temp.rpb_flags & rpb_delta)
@@ -5583,7 +5573,6 @@ static int prepare_update(	thread_db*		tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
-	Attachment* const attachment = tdbb->getAttachment();
 	jrd_rel* const relation = rpb->rpb_relation;
 
 #ifdef VIO_DEBUG
@@ -5921,7 +5910,7 @@ static int prepare_update(	thread_db*		tdbb,
 
 
 static void protect_system_table_insert(thread_db* tdbb,
-										const jrd_req* request,
+										const Request* request,
 										const jrd_rel* relation,
 										bool force_flag)
 {
@@ -5969,7 +5958,7 @@ static void protect_system_table_delupd(thread_db* tdbb,
  *
  **************************************/
 	const Attachment* const attachment = tdbb->getAttachment();
-	const jrd_req* const request = tdbb->getRequest();
+	const Request* const request = tdbb->getRequest();
 
 	if (!force_flag)
 	{
@@ -6252,10 +6241,11 @@ static void set_owner_name(thread_db* tdbb, Record* record, USHORT field_id)
 
 	if (!EVL_field(0, record, field_id, &desc1))
 	{
-		const Jrd::UserId* const user = tdbb->getAttachment()->att_user;
-		if (user)
+		const auto attachment = tdbb->getAttachment();
+		const MetaString& name = attachment->getEffectiveUserName();
+
+		if (name.hasData())
 		{
-			const MetaName name(user->getUserName());
 			dsc desc2;
 			desc2.makeText((USHORT) name.length(), CS_METADATA, (UCHAR*) name.c_str());
 			MOV_move(tdbb, &desc2, &desc1);

@@ -503,6 +503,7 @@ RELATION(nam_mon_database, rel_mon_database, ODS_11_1, rel_virtual)
 	FIELD(f_mon_db_file_id, nam_mon_file_id, fld_file_id, 0, ODS_13_0)
 	FIELD(f_mon_db_na, nam_mon_na, fld_att_id, 0, ODS_13_0)
 	FIELD(f_mon_db_ns, nam_mon_ns, fld_stmt_id, 0, ODS_13_0)
+	FIELD(f_mon_db_repl_mode, nam_mon_repl_mode, fld_repl_mode, 0, ODS_13_0)
 END_RELATION
 
 // Relation 34 (MON$ATTACHMENTS)
@@ -532,7 +533,8 @@ RELATION(nam_mon_attachments, rel_mon_attachments, ODS_11_1, rel_virtual)
 	FIELD(f_mon_att_stmt_timeout, nam_stmt_timeout, fld_stmt_timeout, 0, ODS_13_0)
 	FIELD(f_mon_att_wire_compressed, nam_wire_compressed, fld_bool, 0, ODS_13_0)
 	FIELD(f_mon_att_wire_encrypted, nam_wire_encrypted, fld_bool, 0, ODS_13_0)
-	FIELD(f_mon_att_remote_crypt, nam_wire_crypt_plugin, fld_remote_crypt, 0, ODS_12_0)
+	FIELD(f_mon_att_remote_crypt, nam_wire_crypt_plugin, fld_remote_crypt, 0, ODS_13_0)
+	FIELD(f_mon_att_session_tz, nam_mon_session_tz, fld_tz_name, 0, ODS_13_1)
 END_RELATION
 
 // Relation 35 (MON$TRANSACTIONS)
@@ -564,6 +566,7 @@ RELATION(nam_mon_statements, rel_mon_statements, ODS_11_1, rel_virtual)
 	FIELD(f_mon_stmt_expl_plan, nam_mon_expl_plan, fld_source, 0, ODS_11_1)
 	FIELD(f_mon_stmt_timeout, nam_stmt_timeout, fld_stmt_timeout, 0, ODS_13_0)
 	FIELD(f_mon_stmt_timer, nam_stmt_timer, fld_stmt_timer, 0, ODS_13_0)
+	FIELD(f_mon_stmt_cmp_stmt_id, nam_mon_cmp_stmt_id, fld_stmt_id, 0, ODS_13_1)
 END_RELATION
 
 // Relation 37 (MON$CALL_STACK)
@@ -578,6 +581,7 @@ RELATION(nam_mon_calls, rel_mon_calls, ODS_11_1, rel_virtual)
 	FIELD(f_mon_call_src_column, nam_mon_src_column, fld_src_info, 0, ODS_11_1)
 	FIELD(f_mon_call_stat_id, nam_mon_stat_id, fld_stat_id, 0, ODS_11_1)
 	FIELD(f_mon_call_pkg_name, nam_mon_pkg_name, fld_pkg_name, 0, ODS_12_0)
+	FIELD(f_mon_call_cmp_stmt_id, nam_mon_cmp_stmt_id, fld_stmt_id, 0, ODS_13_1)
 END_RELATION
 
 // Relation 38 (MON$IO_STATS)
@@ -734,21 +738,37 @@ RELATION(nam_config, rel_config, ODS_13_0, rel_virtual)
 	FIELD(f_cfg_id, nam_cfg_id, fld_cfg_id, 0, ODS_13_0)
 	FIELD(f_cfg_name, nam_cfg_name, fld_cfg_name, 0, ODS_13_0)
 	FIELD(f_cfg_value, nam_cfg_value, fld_cfg_value, 0, ODS_13_0)
-	FIELD(f_cfg_default, nam_cfg_default, fld_cfg_default, 0, ODS_13_0)
+	FIELD(f_cfg_default, nam_cfg_default, fld_cfg_value, 0, ODS_13_0)
 	FIELD(f_cfg_is_set, nam_cfg_is_set, fld_cfg_is_set, 0, ODS_13_0)
 	FIELD(f_cfg_source, nam_cfg_source, fld_file_name2, 0, ODS_13_0)
 END_RELATION
 
-// Relation 54 (RDB$TABLESPACES)
+// Relation 54 (RDB$KEYWORDS)
+RELATION(nam_keywords, rel_keywords, ODS_13_1, rel_virtual)
+	FIELD(f_keyword_name, nam_keyword_name, fld_keyword_name, 0, ODS_13_1)
+	FIELD(f_keyword_reserved, nam_keyword_reserved, fld_keyword_reserved, 0, ODS_13_1)
+END_RELATION
+
+// Relation 55 (MON$COMPILED_STATEMENTS)
+RELATION(nam_mon_compiled_statements, rel_mon_compiled_statements, ODS_13_1, rel_virtual)
+	FIELD(f_mon_cmp_stmt_id, nam_mon_cmp_stmt_id, fld_stmt_id, 0, ODS_13_1)
+	FIELD(f_mon_cmp_stmt_sql_text, nam_mon_sql_text, fld_source, 0, ODS_13_1)
+	FIELD(f_mon_cmp_stmt_expl_plan, nam_mon_expl_plan, fld_source, 0, ODS_13_1)
+	FIELD(f_mon_cmp_stmt_name, nam_mon_obj_name, fld_gnr_name, 0, ODS_13_1)
+	FIELD(f_mon_cmp_stmt_type, nam_mon_obj_type, fld_obj_type, 0, ODS_13_1)
+	FIELD(f_mon_cmp_stmt_pkg_name, nam_mon_pkg_name, fld_pkg_name, 0, ODS_13_1)
+END_RELATION
+
+// Relation 56 (RDB$TABLESPACES)
 // TODO: fix ODS version
-RELATION(nam_tablespaces, rel_tablespaces, ODS_13_0, rel_persistent)
-	FIELD(f_ts_id, nam_ts_id, fld_ts_id, 0, ODS_13_0)
-	FIELD(f_ts_name, nam_ts_name, fld_ts_name, 1, ODS_13_0)
-	FIELD(f_ts_class, nam_class, fld_class, 1, ODS_13_0)
-	FIELD(f_ts_sys_flag, nam_sys_flag, fld_flag, 1, ODS_13_0)
-	FIELD(f_ts_desc, nam_description, fld_description, 1, ODS_13_0)
-	FIELD(f_ts_owner, nam_owner, fld_user, 1, ODS_13_0)
-	FIELD(f_ts_file, nam_file_name, fld_file_name, 1, ODS_13_0)
-	FIELD(f_ts_offline, nam_ts_offline, fld_flag, 1, ODS_13_0)
-	FIELD(f_ts_readonly, nam_ts_readonly, fld_flag, 1, ODS_13_0)
+RELATION(nam_tablespaces, rel_tablespaces, ODS_13_1, rel_persistent)
+	FIELD(f_ts_id, nam_ts_id, fld_ts_id, 0, ODS_13_1)
+	FIELD(f_ts_name, nam_ts_name, fld_ts_name, 1, ODS_13_1)
+	FIELD(f_ts_class, nam_class, fld_class, 1, ODS_13_1)
+	FIELD(f_ts_sys_flag, nam_sys_flag, fld_flag, 1, ODS_13_1)
+	FIELD(f_ts_desc, nam_description, fld_description, 1, ODS_13_1)
+	FIELD(f_ts_owner, nam_owner, fld_user, 1, ODS_13_1)
+	FIELD(f_ts_file, nam_file_name, fld_file_name, 1, ODS_13_1)
+	FIELD(f_ts_offline, nam_ts_offline, fld_flag, 1, ODS_13_1)
+	FIELD(f_ts_readonly, nam_ts_readonly, fld_flag, 1, ODS_13_1)
 END_RELATION

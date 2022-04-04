@@ -226,13 +226,13 @@ int alice(Firebird::UtilSvc* uSvc)
 		{
 			ALICE_upper_case(*argv, string, sizeof(string));
 			bool found = true;
-			if (strcmp(string, "NORMAL") == 0)
+			if (strcmp(string, ALICE_SW_SHUT_NORMAL) == 0)
 				tdgbl->ALICE_data.ua_shutdown_mode = SHUT_NORMAL;
-			else if (strcmp(string, "MULTI") == 0)
+			else if (strcmp(string, ALICE_SW_SHUT_MULTI) == 0)
 				tdgbl->ALICE_data.ua_shutdown_mode = SHUT_MULTI;
-			else if (strcmp(string, "SINGLE") == 0)
+			else if (strcmp(string, ALICE_SW_SHUT_SINGLE) == 0)
 				tdgbl->ALICE_data.ua_shutdown_mode = SHUT_SINGLE;
-			else if (strcmp(string, "FULL") == 0)
+			else if (strcmp(string, ALICE_SW_SHUT_FULL) == 0)
 				tdgbl->ALICE_data.ua_shutdown_mode = SHUT_FULL;
 			else
 				found = false;
@@ -455,7 +455,7 @@ int alice(Firebird::UtilSvc* uSvc)
 
 			ALICE_upper_case(*argv++, string, sizeof(string));
 
-			if (!strcmp(string, "NONE"))
+			if (!strcmp(string, ALICE_SW_MODE_NONE))
 				tdgbl->ALICE_data.ua_replica_mode = REPL_NONE;
 			else if (!strcmp(string, ALICE_SW_MODE_RO))
 				tdgbl->ALICE_data.ua_replica_mode = REPL_READ_ONLY;

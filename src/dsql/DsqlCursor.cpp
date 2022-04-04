@@ -33,13 +33,13 @@ using namespace Jrd;
 static const char* const SCRATCH = "fb_cursor_";
 static const ULONG PREFETCH_SIZE = 65536; // 64 KB
 
-DsqlCursor::DsqlCursor(dsql_req* req, ULONG flags)
-	: m_request(req), m_resultSet(NULL), m_flags(flags),
+DsqlCursor::DsqlCursor(DsqlDmlRequest* req, ULONG flags)
+	: m_dsqlRequest(req), m_message(req->getDsqlStatement()->getReceiveMsg()),
+	  m_resultSet(NULL), m_flags(flags),
 	  m_space(req->getPool(), SCRATCH),
-	  m_state(BOS), m_eof(false), m_position(0), m_cachedCount(0),
-	  m_messageSize(req->getStatement()->getReceiveMsg()->msg_length)
+	  m_state(BOS), m_eof(false), m_position(0), m_cachedCount(0)
 {
-	TRA_link_cursor(m_request->req_transaction, this);
+	TRA_link_cursor(m_dsqlRequest->req_transaction, this);
 }
 
 DsqlCursor::~DsqlCursor()
@@ -50,12 +50,12 @@ DsqlCursor::~DsqlCursor()
 
 jrd_tra* DsqlCursor::getTransaction() const
 {
-	return m_request->req_transaction;
+	return m_dsqlRequest->req_transaction;
 }
 
 Attachment* DsqlCursor::getAttachment() const
 {
-	return m_request->req_dbb->dbb_attachment;
+	return m_dsqlRequest->req_dbb->dbb_attachment;
 }
 
 void DsqlCursor::setInterfacePtr(JResultSet* interfacePtr) throw()
@@ -69,35 +69,35 @@ void DsqlCursor::close(thread_db* tdbb, DsqlCursor* cursor)
 	if (!cursor)
 		return;
 
-	Jrd::Attachment* const attachment = cursor->getAttachment();
-	dsql_req* const request = cursor->m_request;
+	const auto attachment = cursor->getAttachment();
+	const auto dsqlRequest = cursor->m_dsqlRequest;
 
-	if (request->req_request)
+	if (dsqlRequest->getRequest())
 	{
 		ThreadStatusGuard status_vector(tdbb);
 		try
 		{
 			// Report some remaining fetches if any
-			if (request->req_fetch_baseline)
+			if (dsqlRequest->req_fetch_baseline)
 			{
-				TraceDSQLFetch trace(attachment, request);
+				TraceDSQLFetch trace(attachment, dsqlRequest);
 				trace.fetch(true, ITracePlugin::RESULT_SUCCESS);
 			}
 
-			if (request->req_traced && TraceManager::need_dsql_free(attachment))
+			if (dsqlRequest->req_traced && TraceManager::need_dsql_free(attachment))
 			{
-				TraceSQLStatementImpl stmt(request, NULL);
+				TraceSQLStatementImpl stmt(dsqlRequest, NULL);
 				TraceManager::event_dsql_free(attachment, &stmt, DSQL_close);
 			}
 
-			JRD_unwind_request(tdbb, request->req_request);
+			JRD_unwind_request(tdbb, dsqlRequest->getRequest());
 		}
 		catch (Firebird::Exception&)
 		{} // no-op
 	}
 
-	request->req_cursor = NULL;
-	TRA_unlink_cursor(request->req_transaction, cursor);
+	dsqlRequest->req_cursor = NULL;
+	TRA_unlink_cursor(dsqlRequest->req_transaction, cursor);
 	delete cursor;
 }
 
@@ -105,7 +105,7 @@ int DsqlCursor::fetchNext(thread_db* tdbb, UCHAR* buffer)
 {
 	if (!(m_flags & IStatement::CURSOR_TYPE_SCROLLABLE))
 	{
-		m_eof = !m_request->fetch(tdbb, buffer);
+		m_eof = !m_dsqlRequest->fetch(tdbb, buffer);
 
 		if (m_eof)
 		{
@@ -117,11 +117,7 @@ int DsqlCursor::fetchNext(thread_db* tdbb, UCHAR* buffer)
 		return 0;
 	}
 
-	if (m_state == EOS)
-		return 1;
-
-	const FB_UINT64 position = (m_state == BOS) ? 0 : m_position + 1;
-	return fetchFromCache(tdbb, buffer, position);
+	return fetchRelative(tdbb, buffer, 1);
 }
 
 int DsqlCursor::fetchPrior(thread_db* tdbb, UCHAR* buffer)
@@ -129,17 +125,7 @@ int DsqlCursor::fetchPrior(thread_db* tdbb, UCHAR* buffer)
 	if (!(m_flags & IStatement::CURSOR_TYPE_SCROLLABLE))
 		(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("PRIOR")).raise();
 
-	if (m_state == BOS)
-		return -1;
-
-	if (!m_position)
-	{
-		m_state = BOS;
-		return -1;
-	}
-
-	const FB_UINT64 position = ((m_state == EOS) ? m_cachedCount : m_position) - 1;
-	return fetchFromCache(tdbb, buffer, position);
+	return fetchRelative(tdbb, buffer, -1);
 }
 
 int DsqlCursor::fetchFirst(thread_db* tdbb, UCHAR* buffer)
@@ -182,6 +168,12 @@ int DsqlCursor::fetchAbsolute(thread_db* tdbb, UCHAR* buffer, SLONG position)
 		offset = m_cachedCount;
 	}
 
+	if (position + offset < 0)
+	{
+		m_state = BOS;
+		return -1;
+	}
+
 	return fetchFromCache(tdbb, buffer, position + offset);
 }
 
@@ -190,12 +182,14 @@ int DsqlCursor::fetchRelative(thread_db* tdbb, UCHAR* buffer, SLONG offset)
 	if (!(m_flags & IStatement::CURSOR_TYPE_SCROLLABLE))
 		(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("RELATIVE")).raise();
 
+	SINT64 position = m_position + offset;
+
 	if (m_state == BOS)
 	{
 		if (offset <= 0)
 			return -1;
 
-		return fetchFromCache(tdbb, buffer, offset - 1);
+		position = offset - 1;
 	}
 	else if (m_state == EOS)
 	{
@@ -204,19 +198,16 @@ int DsqlCursor::fetchRelative(thread_db* tdbb, UCHAR* buffer, SLONG offset)
 
 		fb_assert(m_eof);
 
-		if ((SINT64) m_cachedCount + offset < 0)
-			return -1;
-
-		return fetchFromCache(tdbb, buffer, m_cachedCount + offset);
+		position = m_cachedCount + offset;
 	}
 
-	if ((SINT64) m_position + offset < 0)
+	if (position < 0)
 	{
 		m_state = BOS;
 		return -1;
 	}
 
-	return fetchFromCache(tdbb, buffer, m_position + offset);
+	return fetchFromCache(tdbb, buffer, position);
 }
 
 int DsqlCursor::fetchFromCache(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position)
@@ -232,9 +223,14 @@ int DsqlCursor::fetchFromCache(thread_db* tdbb, UCHAR* buffer, FB_UINT64 positio
 
 	fb_assert(position < m_cachedCount);
 
-	const FB_UINT64 offset = position * m_messageSize;
-	const FB_UINT64 readBytes = m_space.read(offset, buffer, m_messageSize);
-	fb_assert(readBytes == m_messageSize);
+	UCHAR* const msgBuffer = m_dsqlRequest->req_msg_buffers[m_message->msg_buffer_number];
+
+	const FB_UINT64 offset = position * m_message->msg_length;
+	const FB_UINT64 readBytes = m_space.read(offset, msgBuffer, m_message->msg_length);
+	fb_assert(readBytes == m_message->msg_length);
+
+	m_dsqlRequest->mapInOut(tdbb, true, m_message, NULL, buffer);
+
 	m_position = position;
 	m_state = POSITIONED;
 	return 0;
@@ -244,34 +240,23 @@ bool DsqlCursor::cacheInput(thread_db* tdbb, FB_UINT64 position)
 {
 	fb_assert(!m_eof);
 
-	const ULONG prefetchCount = MAX(PREFETCH_SIZE / m_messageSize, 1);
-	const ULONG prefetchSize = prefetchCount * m_messageSize;
-
-	UCharBuffer messageBuffer;
-	UCHAR* const buffer = messageBuffer.getBuffer(prefetchSize);
+	const ULONG prefetchCount = MAX(PREFETCH_SIZE / m_message->msg_length, 1);
+	const UCHAR* const msgBuffer = m_dsqlRequest->req_msg_buffers[m_message->msg_buffer_number];
 
 	while (position >= m_cachedCount)
 	{
-		ULONG count = 0;
-
-		for (; count < prefetchCount; count++)
+		for (ULONG count = 0; count < prefetchCount; count++)
 		{
-			UCHAR* const ptr = buffer + count * m_messageSize;
-
-			if (!m_request->fetch(tdbb, ptr))
+			if (!m_dsqlRequest->fetch(tdbb, NULL))
 			{
 				m_eof = true;
 				break;
 			}
-		}
 
-		if (count)
-		{
-			const FB_UINT64 offset = m_cachedCount * m_messageSize;
-			const ULONG fetchedSize = count * m_messageSize;
-			const FB_UINT64 writtenBytes = m_space.write(offset, buffer, fetchedSize);
-			fb_assert(writtenBytes == fetchedSize);
-			m_cachedCount += count;
+			const FB_UINT64 offset = m_cachedCount * m_message->msg_length;
+			const FB_UINT64 writtenBytes = m_space.write(offset, msgBuffer, m_message->msg_length);
+			fb_assert(writtenBytes == m_message->msg_length);
+			m_cachedCount++;
 		}
 
 		if (m_eof)

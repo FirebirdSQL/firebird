@@ -28,7 +28,7 @@
 
 #include "firebird.h"
 #include "firebird/Interface.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "../jrd/CryptoManager.h"
 
 #include "../common/classes/alloc.h"
@@ -214,7 +214,6 @@ namespace Jrd {
 			fb_assert(pageSpace);
 
 			Jrd::jrd_file* file = pageSpace->file;
-			const bool isTempPage = pageSpace->isTemporary();
 
 			Jrd::BackupManager::StateReadGuard stateGuard(tdbb);
 			Jrd::BackupManager* bm = dbb->dbb_backup_manager;
@@ -357,7 +356,9 @@ namespace Jrd {
 		crypt = hdr->hdr_flags & Ods::hdr_encrypted;
 		process = hdr->hdr_flags & Ods::hdr_crypt_process;
 
-		if ((crypt || process) && !cryptPlugin)
+		// tdbb w/o attachment comes when database is shutting down in the end of detachDatabase()
+		// the only needed here page is header, i.e. we can live w/o cryptPlugin
+		if ((crypt || process) && (!cryptPlugin) && tdbb->getAttachment())
 		{
 			ClumpletWriter hc(ClumpletWriter::UnTagged, hdr->hdr_page_size);
 			hdr.getClumplets(hc);
@@ -381,7 +382,7 @@ namespace Jrd {
 				hash = valid;
 		}
 
-		if (flags & CRYPT_HDR_INIT)
+		if (cryptPlugin && (flags & CRYPT_HDR_INIT))
 			checkDigitalSignature(tdbb, hdr);
 	}
 
@@ -969,7 +970,7 @@ namespace Jrd {
 						dbb.dbb_database_name.c_str(), writer.getBufferLength(), writer.getBuffer()));
 					check(&status_vector);
 
-					MutexLockGuard attGuard(*(jAtt->getStable()->getMutex()), FB_FUNCTION);
+					AttSyncLockGuard attGuard(*(jAtt->getStable()->getSync()), FB_FUNCTION);
 					Attachment* att = jAtt->getHandle();
 					if (!att)
 						Arg::Gds(isc_att_shutdown).raise();
@@ -1015,6 +1016,7 @@ namespace Jrd {
 
 							// scheduling
 							JRD_reschedule(tdbb);
+							JRD_reschedule(tempDbb);
 
 							// nbackup state check
 							int bak_state = Ods::hdr_nbak_unknown;
@@ -1320,9 +1322,16 @@ namespace Jrd {
 		return 0;
 	}
 
-	ULONG CryptoManager::getCurrentPage() const
+	ULONG CryptoManager::getCurrentPage(thread_db* tdbb) const
 	{
-		return process ? currentPage : 0;
+		if (!process)
+			return 0;
+
+		if (currentPage)
+			return currentPage;
+
+		CchHdr hdr(tdbb, LCK_read);
+		return hdr->hdr_crypt_page;
 	}
 
 	ULONG CryptoManager::getLastPage(thread_db* tdbb)

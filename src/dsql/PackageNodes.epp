@@ -221,21 +221,14 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	// items
 	for (unsigned i = 0; i < items->getCount(); ++i)
 	{
-		DsqlCompiledStatement* itemStatement = FB_NEW_POOL(pool) DsqlCompiledStatement(pool);
-
-		DsqlCompilerScratch* itemScratch = (*items)[i].dsqlScratch =
-			FB_NEW_POOL(pool) DsqlCompilerScratch(pool, dsqlScratch->getAttachment(),
-				dsqlScratch->getTransaction(), itemStatement);
-
-		itemScratch->clientDialect = dsqlScratch->clientDialect;
-		itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
-		itemScratch->package = name;
+		DdlNode* ddlNode;
 
 		switch ((*items)[i].type)
 		{
 			case CreateAlterPackageNode::Item::FUNCTION:
 			{
 				CreateAlterFunctionNode* const fun = (*items)[i].function;
+				ddlNode = fun;
 
 				if (functionNames.exist(fun->name))
 				{
@@ -249,13 +242,13 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 				fun->alter = true;
 				fun->package = name;
-				fun->dsqlPass(itemScratch);
 				break;
 			}
 
 			case CreateAlterPackageNode::Item::PROCEDURE:
 			{
 				CreateAlterProcedureNode* const proc = (*items)[i].procedure;
+				ddlNode = proc;
 
 				if (procedureNames.exist(proc->name))
 				{
@@ -269,10 +262,24 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 				proc->alter = true;
 				proc->package = name;
-				proc->dsqlPass(itemScratch);
 				break;
 			}
+
+			default:
+				fb_assert(false);
 		}
+
+		auto itemStatement = FB_NEW_POOL(pool) DsqlDdlStatement(pool, dsqlScratch->getAttachment(), ddlNode);
+
+		auto itemScratch = (*items)[i].dsqlScratch =
+			FB_NEW_POOL(pool) DsqlCompilerScratch(pool, dsqlScratch->getAttachment(),
+				dsqlScratch->getTransaction(), itemStatement);
+
+		itemScratch->clientDialect = dsqlScratch->clientDialect;
+		itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
+		itemScratch->package = name;
+
+		ddlNode->dsqlPass(itemScratch);
 	}
 
 	return DdlNode::dsqlPass(dsqlScratch);
@@ -290,7 +297,7 @@ void CreateAlterPackageNode::checkPermission(thread_db* tdbb, jrd_tra* transacti
 			return;
 	}
 
-	SCL_check_create_access(tdbb, SCL_object_package);
+	SCL_check_create_access(tdbb, obj_packages);
 }
 
 
@@ -330,8 +337,8 @@ void CreateAlterPackageNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
-	Attachment* attachment = transaction->getAttachment();
-	const MetaString& userName = attachment->att_user->getUserName();
+	Attachment* const attachment = transaction->getAttachment();
+	const MetaString& ownerName = attachment->getEffectiveUserName();
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_PACKAGE, name, NULL);
@@ -348,7 +355,7 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 		PKG.RDB$SYSTEM_FLAG = 0;
 
 		PKG.RDB$OWNER_NAME.NULL = FALSE;
-		strcpy(PKG.RDB$OWNER_NAME, userName.c_str());
+		strcpy(PKG.RDB$OWNER_NAME, ownerName.c_str());
 
 		PKG.RDB$PACKAGE_HEADER_SOURCE.NULL = FALSE;
 		attachment->storeMetaDataBlob(tdbb, transaction, &PKG.RDB$PACKAGE_HEADER_SOURCE, source);
@@ -365,7 +372,7 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 
 	storePrivileges(tdbb, transaction, name, obj_package_header, EXEC_PRIVILEGES);
 
-	owner = userName;
+	owner = ownerName;
 
 	executeItems(tdbb, dsqlScratch, transaction);
 
@@ -432,6 +439,8 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 				PKG.RDB$SQL_SECURITY.NULL = FALSE;
 				PKG.RDB$SQL_SECURITY = ssDefiner.value ? FB_TRUE : FB_FALSE;
 			}
+			else
+				PKG.RDB$SQL_SECURITY.NULL = TRUE;
 		END_MODIFY
 
 		owner = PKG.RDB$OWNER_NAME;
@@ -616,21 +625,14 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		for (unsigned j = 0; j < arrays[i]->getCount(); ++j)
 		{
-			DsqlCompiledStatement* itemStatement = FB_NEW_POOL(pool) DsqlCompiledStatement(pool);
-
-			DsqlCompilerScratch* itemScratch = (*arrays[i])[j].dsqlScratch =
-				FB_NEW_POOL(pool) DsqlCompilerScratch(pool, dsqlScratch->getAttachment(),
-					dsqlScratch->getTransaction(), itemStatement);
-
-			itemScratch->clientDialect = dsqlScratch->clientDialect;
-			itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
-			itemScratch->package = name;
+			DdlNode* ddlNode;
 
 			switch ((*arrays[i])[j].type)
 			{
 				case CreateAlterPackageNode::Item::FUNCTION:
 				{
 					CreateAlterFunctionNode* const fun = (*arrays[i])[j].function;
+					ddlNode = fun;
 
 					if (functionNames[i].exist(fun->name))
 					{
@@ -648,14 +650,13 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					if (arrays[i] == items)
 						fun->alter = true;
 
-					fun->dsqlPass(itemScratch);
-
 					break;
 				}
 
 				case CreateAlterPackageNode::Item::PROCEDURE:
 				{
 					CreateAlterProcedureNode* const proc = (*arrays[i])[j].procedure;
+					ddlNode = proc;
 
 					if (procedureNames[i].exist(proc->name))
 					{
@@ -673,11 +674,24 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					if (arrays[i] == items)
 						proc->alter = true;
 
-					proc->dsqlPass(itemScratch);
-
 					break;
 				}
+
+				default:
+					fb_assert(false);
 			}
+
+			auto itemStatement = FB_NEW_POOL(pool) DsqlDdlStatement(pool, dsqlScratch->getAttachment(), ddlNode);
+
+			auto itemScratch = (*arrays[i])[j].dsqlScratch =
+				FB_NEW_POOL(pool) DsqlCompilerScratch(pool, dsqlScratch->getAttachment(),
+					dsqlScratch->getTransaction(), itemStatement);
+
+			itemScratch->clientDialect = dsqlScratch->clientDialect;
+			itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
+			itemScratch->package = name;
+
+			ddlNode->dsqlPass(itemScratch);
 		}
 	}
 
@@ -687,7 +701,7 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 void CreatePackageBodyNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
-	SCL_check_create_access(tdbb, SCL_object_package);
+	SCL_check_create_access(tdbb, obj_packages);
 }
 
 

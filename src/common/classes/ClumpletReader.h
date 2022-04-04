@@ -58,7 +58,8 @@ public:
 		SpbSendItems,
 		SpbReceiveItems,
 		SpbResponse,
-		InfoResponse
+		InfoResponse,
+		InfoItems
 	};
 
 	struct KindList
@@ -132,7 +133,7 @@ public:
 		if (rc == 1 && kind != UnTagged     && kind != SpbStart &&
 					   kind != WideUnTagged && kind != SpbSendItems &&
 					   kind != SpbReceiveItems && kind != SpbResponse &&
-					   kind != InfoResponse)
+					   kind != InfoResponse && kind != InfoItems)
 		{
 			rc = 0;
 		}

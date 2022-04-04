@@ -68,7 +68,7 @@ RecursiveStream::RecursiveStream(CompilerScratch* csb, StreamType stream, Stream
 
 void RecursiveStream::open(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_flags = irsb_open;
@@ -96,7 +96,7 @@ void RecursiveStream::open(thread_db* tdbb) const
 
 void RecursiveStream::close(thread_db* tdbb) const
 {
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	invalidateRecords(request);
@@ -119,7 +119,7 @@ bool RecursiveStream::getRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
-	jrd_req* const request = tdbb->getRequest();
+	Request* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 	Impure* const saveImpure = request->getImpure<Impure>(m_saveOffset);
@@ -273,7 +273,7 @@ void RecursiveStream::markRecursive()
 	m_inner->markRecursive();
 }
 
-void RecursiveStream::invalidateRecords(jrd_req* request) const
+void RecursiveStream::invalidateRecords(Request* request) const
 {
 	m_root->invalidateRecords(request);
 	m_inner->invalidateRecords(request);
@@ -293,7 +293,7 @@ void RecursiveStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	}
 }
 
-void RecursiveStream::cleanupLevel(jrd_req* request, Impure* impure) const
+void RecursiveStream::cleanupLevel(Request* request, Impure* impure) const
 {
 	Impure* const saveImpure = request->getImpure<Impure>(m_saveOffset);
 

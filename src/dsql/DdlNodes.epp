@@ -401,6 +401,12 @@ void defineComputed(DsqlCompilerScratch* dsqlScratch, RelationSourceNode* relati
 			const USHORT bpc = METD_get_charset_bpc(dsqlScratch->getTransaction(), field->charSetId.value);
 			field->charLength = (field->length - adjust) / bpc;
 		}
+		else if (field->dtype == dtype_blob)
+		{
+			field->charSetId = desc.getCharSet();
+			field->collationId = desc.getCollation();
+			field->subType = desc.getBlobSubType();
+		}
 		else
 			field->subType = desc.dsc_sub_type;
 	}
@@ -909,7 +915,7 @@ void DdlNode::storePrivileges(thread_db* tdbb, jrd_tra* transaction,
 							  const char* privileges)
 {
 	Attachment* const attachment = transaction->tra_attachment;
-	const MetaString& userName = attachment->att_user->getUserName();
+	const MetaString& ownerName = attachment->getEffectiveUserName();
 
 	AutoCacheRequest request(tdbb, drq_s_usr_prvs, DYN_REQUESTS);
 
@@ -919,7 +925,7 @@ void DdlNode::storePrivileges(thread_db* tdbb, jrd_tra* transaction,
 			X IN RDB$USER_PRIVILEGES
 		{
 			strcpy(X.RDB$RELATION_NAME, name.c_str());
-			strcpy(X.RDB$USER, userName.c_str());
+			strcpy(X.RDB$USER, ownerName.c_str());
 			X.RDB$USER_TYPE = obj_user;
 			X.RDB$OBJECT_TYPE = type;
 			X.RDB$PRIVILEGE[0] = *p;
@@ -928,6 +934,22 @@ void DdlNode::storePrivileges(thread_db* tdbb, jrd_tra* transaction,
 		}
 		END_STORE
 	}
+}
+
+void DdlNode::deletePrivilegesByRelName(thread_db* tdbb, jrd_tra* transaction,
+	const MetaName& name, int type)
+{
+	AutoCacheRequest request(tdbb, drq_e_usr_prvs, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		PRIV IN RDB$USER_PRIVILEGES
+		WITH PRIV.RDB$RELATION_NAME EQ name.c_str() AND
+			 PRIV.RDB$OBJECT_TYPE = type AND
+			 PRIV.RDB$GRANTOR NOT MISSING
+	{
+		ERASE PRIV;
+	}
+	END_FOR
 }
 
 void DdlNode::executeDdlTrigger(thread_db* tdbb, jrd_tra* transaction, DdlTriggerWhen when,
@@ -965,14 +987,14 @@ void DdlNode::executeDdlTrigger(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	const MetaName& oldNewObjectName)
 {
 	executeDdlTrigger(tdbb, transaction, when, action, objectName, oldNewObjectName,
-		*dsqlScratch->getStatement()->getSqlText());
+		*dsqlScratch->getDsqlStatement()->getSqlText());
 }
 
 void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, MetaName& name,
 	const TypeClause* field, const string& computedSource, const BlrDebugWriter::BlrData& computedValue)
 {
 	Attachment* const attachment = transaction->tra_attachment;
-	const MetaString& userName = attachment->att_user->getUserName();
+	const MetaString& ownerName = attachment->getEffectiveUserName();
 
 	const ValueListNode* elements = field->ranges;
 	const USHORT dims = elements ? elements->items.getCount() / 2 : 0;
@@ -996,7 +1018,7 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, MetaName& 
 		strcpy(FLD.RDB$FIELD_NAME, name.c_str());
 
 		FLD.RDB$OWNER_NAME.NULL = FALSE;
-		strcpy(FLD.RDB$OWNER_NAME, userName.c_str());
+		strcpy(FLD.RDB$OWNER_NAME, ownerName.c_str());
 
 		FLD.RDB$COMPUTED_SOURCE.NULL = TRUE;
 		FLD.RDB$COMPUTED_BLR.NULL = TRUE;
@@ -1192,7 +1214,7 @@ string AlterEDSPoolSetNode::internalPrint(NodePrinter& printer) const
 
 void AlterEDSPoolSetNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScratch*/, jrd_tra* /*transaction*/)
 {
-	EDS::ConnectionsPool* pool = EDS::Manager::getConnPool(false);
+	EDS::ConnectionsPool* pool = EDS::Manager::getConnPool(true);
 	switch (m_param)
 	{
 	case POOL_SIZE:
@@ -1334,7 +1356,6 @@ void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 
 	switch (objType)
 	{
-		case obj_schema:
 		case obj_database:
 			SCL_check_database(tdbb, SCL_alter);
 			break;
@@ -1557,12 +1578,6 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 			status << Arg::Gds(isc_dyn_package_not_found) << Arg::Str(objNameStr);
 			break;
 
-		case obj_schema:
-			tableClause = "rdb$schemas";
-			columnClause = "rdb$schema_name";
-			status << Arg::Gds(isc_dyn_schema_not_found) << Arg::Str(objNameStr);
-			break;
-
 		default:
 			fb_assert(false);
 			return;
@@ -1721,7 +1736,7 @@ void CreateAlterFunctionNode::checkPermission(thread_db* tdbb, jrd_tra* transact
 			return;
 	}
 
-	SCL_check_create_access(tdbb, SCL_object_function);
+	SCL_check_create_access(tdbb, obj_functions);
 }
 
 void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -1775,7 +1790,7 @@ void CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->getAttachment();
-	const MetaString& userName = attachment->att_user->getUserName();
+	const MetaString& ownerName = attachment->getEffectiveUserName();
 
 	if (package.isEmpty())
 	{
@@ -1823,7 +1838,7 @@ void CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 					FUN.RDB$PRIVATE_FLAG.NULL = TRUE;
 
 					FUN.RDB$OWNER_NAME.NULL = FALSE;
-					strcpy(FUN.RDB$OWNER_NAME, userName.c_str());
+					strcpy(FUN.RDB$OWNER_NAME, ownerName.c_str());
 				}
 
 				FUN.RDB$LEGACY_FLAG.NULL = FALSE;
@@ -2322,6 +2337,8 @@ void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* 
 		dsqlScratch->cursorNumber = 0;
 
 		StmtNode* stmtNode = body->dsqlPass(dsqlScratch);
+
+		dsqlScratch->putOuterMaps();
 		GEN_hidden_variables(dsqlScratch);
 
 		dsqlScratch->appendUChar(blr_stall);
@@ -2332,7 +2349,7 @@ void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* 
 
 		stmtNode->genBlr(dsqlScratch);
 
-		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_DDL);
+		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_DDL);
 		dsqlScratch->appendUChar(blr_end);
 		dsqlScratch->genReturn(false);
 		dsqlScratch->appendUChar(blr_end);
@@ -2482,6 +2499,11 @@ void DropFunctionNode::dropArguments(thread_db* tdbb, jrd_tra* transaction,
 					 FLD.RDB$SYSTEM_FLAG EQ 0
 			{
 				ERASE FLD;
+
+				if (!FLD.RDB$SECURITY_CLASS.NULL)
+					deleteSecurityClass(tdbb, transaction, FLD.RDB$SECURITY_CLASS);
+
+				deletePrivilegesByRelName(tdbb, transaction, FLD.RDB$FIELD_NAME, obj_field);
 			}
 			END_FOR
 		}
@@ -2558,16 +2580,7 @@ void DropFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 	if (package.isEmpty())
 	{
-		requestHandle.reset(tdbb, drq_e_fun_prvs, DYN_REQUESTS);
-
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
-			PRIV IN RDB$USER_PRIVILEGES WITH PRIV.RDB$RELATION_NAME EQ name.c_str()
-				AND PRIV.RDB$OBJECT_TYPE = obj_udf
-				AND PRIV.RDB$GRANTOR NOT MISSING
-		{
-			ERASE PRIV;
-		}
-		END_FOR
+		deletePrivilegesByRelName(tdbb, transaction, name, obj_udf);
 
 		requestHandle.reset(tdbb, drq_e_fun_prv, DYN_REQUESTS);
 
@@ -2731,7 +2744,7 @@ void CreateAlterProcedureNode::checkPermission(thread_db* tdbb, jrd_tra* transac
 			return;
 	}
 
-	SCL_check_create_access(tdbb, SCL_object_procedure);
+	SCL_check_create_access(tdbb, obj_procedures);
 }
 
 void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -2783,7 +2796,7 @@ void CreateAlterProcedureNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->getAttachment();
-	const MetaString& userName = attachment->att_user->getUserName();
+	const MetaString& ownerName = attachment->getEffectiveUserName();
 
 	if (package.isEmpty())
 	{
@@ -2829,7 +2842,7 @@ void CreateAlterProcedureNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 					P.RDB$PACKAGE_NAME.NULL = TRUE;
 					P.RDB$PRIVATE_FLAG.NULL = TRUE;
 
-					strcpy(P.RDB$OWNER_NAME, userName.c_str());
+					strcpy(P.RDB$OWNER_NAME, ownerName.c_str());
 				}
 			}
 			END_STORE
@@ -2861,7 +2874,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 	AutoCacheRequest requestHandle(tdbb, drq_m_prcs2, DYN_REQUESTS);
 	bool modified = false;
 
-	DsqlCompiledStatement* statement = dsqlScratch->getStatement();
+	DsqlStatement* statement = dsqlScratch->getDsqlStatement();
 
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 		P IN RDB$PROCEDURES
@@ -2955,7 +2968,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 
 					P.RDB$PROCEDURE_TYPE.NULL = FALSE;
 					P.RDB$PROCEDURE_TYPE = (USHORT)
-						(statement->getFlags() & DsqlCompiledStatement::FLAG_SELECTABLE ?
+						(statement->getFlags() & DsqlStatement::FLAG_SELECTABLE ?
 							prc_selectable : prc_executable);
 				}
 			}
@@ -3219,6 +3232,8 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 	dsqlScratch->cursorNumber = 0;
 
 	StmtNode* stmtNode = body->dsqlPass(dsqlScratch);
+
+	dsqlScratch->putOuterMaps();
 	GEN_hidden_variables(dsqlScratch);
 
 	dsqlScratch->appendUChar(blr_stall);
@@ -3229,7 +3244,7 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 
 	stmtNode->genBlr(dsqlScratch);
 
-	dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_DDL);
+	dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_DDL);
 	dsqlScratch->appendUChar(blr_end);
 	dsqlScratch->genReturn(true);
 	dsqlScratch->appendUChar(blr_end);
@@ -3285,6 +3300,11 @@ void DropProcedureNode::dropParameters(thread_db* tdbb, jrd_tra* transaction,
 					 FLD.RDB$SYSTEM_FLAG EQ 0
 			{
 				ERASE FLD;
+
+				if (!FLD.RDB$SECURITY_CLASS.NULL)
+					deleteSecurityClass(tdbb, transaction, FLD.RDB$SECURITY_CLASS);
+
+				deletePrivilegesByRelName(tdbb, transaction, FLD.RDB$FIELD_NAME, obj_field);
 			}
 			END_FOR
 		}
@@ -3361,16 +3381,7 @@ void DropProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 	if (package.isEmpty())
 	{
-		requestHandle.reset(tdbb, drq_e_prc_prvs, DYN_REQUESTS);
-
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
-			PRIV IN RDB$USER_PRIVILEGES WITH PRIV.RDB$RELATION_NAME EQ name.c_str()
-				AND PRIV.RDB$OBJECT_TYPE = obj_procedure
-				AND PRIV.RDB$GRANTOR NOT MISSING
-		{
-			ERASE PRIV;
-		}
-		END_FOR
+		deletePrivilegesByRelName(tdbb, transaction, name, obj_procedure);
 
 		requestHandle.reset(tdbb, drq_e_prc_prv, DYN_REQUESTS);
 
@@ -3739,6 +3750,8 @@ void CreateAlterTriggerNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* d
 		dsqlScratch->scopeLevel++;
 
 		StmtNode* stmtNode = body->dsqlPass(dsqlScratch);
+
+		dsqlScratch->putOuterMaps();
 		GEN_hidden_variables(dsqlScratch);
 
 		// dimitr: I see no reason to deny EXIT command in triggers,
@@ -3762,7 +3775,7 @@ void CreateAlterTriggerNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* d
 		// The statement type may have been set incorrectly when parsing
 		// the trigger actions, so reset it to reflect the fact that this
 		// is a data definition statement; also reset the ddl node.
-		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_DDL);
+		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_DDL);
 	}
 
 	invalid = false;
@@ -3932,14 +3945,14 @@ string CreateCollationNode::internalPrint(NodePrinter& printer) const
 
 void CreateCollationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
-	SCL_check_create_access(tdbb, SCL_object_collation);
+	SCL_check_create_access(tdbb, obj_collations);
 }
 
 void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->tra_attachment;
-	const MetaString& userName = attachment->att_user->getUserName();
+	const MetaString& ownerName = attachment->getEffectiveUserName();
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -3957,7 +3970,7 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		X.RDB$SYSTEM_FLAG = 0;
 
 		X.RDB$OWNER_NAME.NULL = FALSE;
-		strcpy(X.RDB$OWNER_NAME, userName.c_str());
+		strcpy(X.RDB$OWNER_NAME, ownerName.c_str());
 
 		X.RDB$SPECIFIC_ATTRIBUTES.NULL = TRUE;
 		X.RDB$BASE_COLLATION_NAME.NULL = TRUE;
@@ -4266,17 +4279,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	}
 	END_FOR
 
-	request.reset(tdbb, drq_e_coll_prvs, DYN_REQUESTS);
-
-	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		PRIV IN RDB$USER_PRIVILEGES
-		WITH PRIV.RDB$RELATION_NAME EQ name.c_str() AND
-			 PRIV.RDB$OBJECT_TYPE = obj_collation AND
-			 PRIV.RDB$GRANTOR NOT MISSING
-	{
-		ERASE PRIV;
-	}
-	END_FOR
+	deletePrivilegesByRelName(tdbb, transaction, name, obj_collation);
 
 	if (found)
 	{
@@ -4310,7 +4313,7 @@ string CreateDomainNode::internalPrint(NodePrinter& printer) const
 
 void CreateDomainNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
-	SCL_check_create_access(tdbb, SCL_object_domain);
+	SCL_check_create_access(tdbb, obj_domains);
 }
 
 void CreateDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -5351,17 +5354,7 @@ void DropDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	}
 	END_FOR
 
-	request.reset(tdbb, drq_e_gfld_prvs, DYN_REQUESTS);
-
-	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		PRIV IN RDB$USER_PRIVILEGES
-		WITH PRIV.RDB$RELATION_NAME EQ name.c_str() AND
-			 PRIV.RDB$OBJECT_TYPE = obj_field AND
-			 PRIV.RDB$GRANTOR NOT MISSING
-	{
-		ERASE PRIV;
-	}
-	END_FOR
+	deletePrivilegesByRelName(tdbb, transaction, name, obj_field);
 
 	if (found)
 	{
@@ -5458,7 +5451,7 @@ void CreateAlterExceptionNode::checkPermission(thread_db* tdbb, jrd_tra* transac
 			return;
 	}
 
-	SCL_check_create_access(tdbb, SCL_object_exception);
+	SCL_check_create_access(tdbb, obj_exceptions);
 }
 
 void CreateAlterExceptionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -5495,7 +5488,7 @@ void CreateAlterExceptionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->getAttachment();
-	const MetaString& userName = attachment->att_user->getUserName();
+	const MetaString& ownerName = attachment->getEffectiveUserName();
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_EXCEPTION, name, NULL);
@@ -5523,7 +5516,7 @@ void CreateAlterExceptionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 				strcpy(X.RDB$EXCEPTION_NAME, name.c_str());
 
 				X.RDB$OWNER_NAME.NULL = FALSE;
-				strcpy(X.RDB$OWNER_NAME, userName.c_str());
+				strcpy(X.RDB$OWNER_NAME, ownerName.c_str());
 
 				strcpy(X.RDB$MESSAGE, message.c_str());
 			}
@@ -5622,17 +5615,7 @@ void DropExceptionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	}
 	END_FOR
 
-	request.reset(tdbb, drq_e_xcp_prvs, DYN_REQUESTS);
-
-	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		PRIV IN RDB$USER_PRIVILEGES
-		WITH PRIV.RDB$RELATION_NAME EQ name.c_str() AND
-			 PRIV.RDB$OBJECT_TYPE = obj_exception AND
-			 PRIV.RDB$GRANTOR NOT MISSING
-	{
-		ERASE PRIV;
-	}
-	END_FOR
+	deletePrivilegesByRelName(tdbb, transaction, name, obj_exception);
 
 	if (found)
 	{
@@ -5675,7 +5658,7 @@ void CreateAlterSequenceNode::checkPermission(thread_db* tdbb, jrd_tra* transact
 			return;
 	}
 
-	SCL_check_create_access(tdbb, SCL_object_generator);
+	SCL_check_create_access(tdbb, obj_generators);
 }
 
 void CreateAlterSequenceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -5862,7 +5845,7 @@ SSHORT CreateAlterSequenceNode::store(thread_db* tdbb, jrd_tra* transaction, con
 	fb_sysflag sysFlag, SINT64 val, SLONG step)
 {
 	Attachment* const attachment = transaction->tra_attachment;
-	const MetaString& userName = attachment->att_user->getUserName();
+	const MetaString& ownerName = attachment->getEffectiveUserName();
 
 	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_generator);
 
@@ -5888,7 +5871,7 @@ SSHORT CreateAlterSequenceNode::store(thread_db* tdbb, jrd_tra* transaction, con
 				strcpy(X.RDB$GENERATOR_NAME, name.c_str());
 
 				X.RDB$OWNER_NAME.NULL = FALSE;
-				strcpy(X.RDB$OWNER_NAME, userName.c_str());
+				strcpy(X.RDB$OWNER_NAME, ownerName.c_str());
 
 				X.RDB$INITIAL_VALUE.NULL = FALSE;
 				X.RDB$INITIAL_VALUE = val;
@@ -5970,17 +5953,7 @@ void DropSequenceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	}
 	END_FOR
 
-	request.reset(tdbb, drq_e_gen_prvs, DYN_REQUESTS);
-
-	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		PRIV IN RDB$USER_PRIVILEGES
-		WITH PRIV.RDB$RELATION_NAME EQ name.c_str() AND
-			 PRIV.RDB$OBJECT_TYPE = obj_generator AND
-			 PRIV.RDB$GRANTOR NOT MISSING
-	{
-		ERASE PRIV;
-	}
-	END_FOR
+	deletePrivilegesByRelName(tdbb, transaction, name, obj_generator);
 
 	if (found)
 	{
@@ -6787,6 +6760,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				definition.unique = constraint.type != Constraint::TYPE_FK;
 				if (constraint.index->descending)
 					definition.descending = true;
+				definition.inactive = false;
 				definition.columns = constraint.columns;
 				definition.refRelation = constraint.refRelation;
 				definition.refColumns = constraint.refColumns;
@@ -7430,7 +7404,7 @@ string CreateRelationNode::internalPrint(NodePrinter& printer) const
 
 void CreateRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
-	SCL_check_create_access(tdbb, SCL_object_table);
+	SCL_check_create_access(tdbb, obj_relations);
 }
 
 void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -8547,7 +8521,7 @@ void DropRelationNode::dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
         R IN RDB$RELATIONS
         WITH R.RDB$RELATION_NAME EQ name.c_str()
     {
-        executeDdlTrigger(tdbb, transaction, DTW_BEFORE, ddlTriggerAction, name, NULL, *dsqlScratch->getStatement()->getSqlText());
+        executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, ddlTriggerAction, name, NULL);
         found = true;
     }
     END_FOR
@@ -8682,17 +8656,7 @@ void DropRelationNode::dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
     }
     END_FOR
 
-    request.reset(tdbb, drq_e_usr_prvs, DYN_REQUESTS);
-
-    FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-        PRIV IN RDB$USER_PRIVILEGES
-        WITH PRIV.RDB$RELATION_NAME EQ name.c_str() AND
-             PRIV.RDB$OBJECT_TYPE = obj_relation AND
-             PRIV.RDB$GRANTOR NOT MISSING
-    {
-        ERASE PRIV;
-    }
-    END_FOR
+    deletePrivilegesByRelName(tdbb, transaction, name, obj_relation);
 
     request.reset(tdbb, drq_e_view_prv, DYN_REQUESTS);
 
@@ -8719,7 +8683,7 @@ void DropRelationNode::dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
     END_FOR
 
     if (found)
-        executeDdlTrigger(tdbb, transaction, DTW_AFTER, ddlTriggerAction, name, NULL, *dsqlScratch->getStatement()->getSqlText());
+        executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, ddlTriggerAction, name, NULL);
     else
     {
         // msg 61: "Relation not found"
@@ -8824,14 +8788,14 @@ void CreateAlterViewNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 			return;
 	}
 
-	SCL_check_create_access(tdbb, SCL_object_view);
+	SCL_check_create_access(tdbb, obj_views);
 }
 
 void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->tra_attachment;
-	const MetaString& userName = attachment->att_user->getUserName();
+	const MetaString& ownerName = attachment->getEffectiveUserName();
 
 	const dsql_rel* modifyingView = NULL;
 
@@ -9003,7 +8967,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		// so I included a call to strip trailing blanks.
 		fb_utils::exact_name_limit(PREL.RDB$OWNER_NAME, sizeof(PREL.RDB$OWNER_NAME));
 
-		if (userName != PREL.RDB$OWNER_NAME)
+		if (ownerName != PREL.RDB$OWNER_NAME)
 		{
 			SecurityClass::flags_t priv;
 
@@ -10006,6 +9970,7 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	definition.relation = relation->dsqlName;
 	definition.unique = unique;
 	definition.descending = descending;
+	definition.inactive = false;
 
 	if (columns)
 	{
@@ -10306,13 +10271,14 @@ string CreateFilterNode::internalPrint(NodePrinter& printer) const
 
 void CreateFilterNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
-	SCL_check_create_access(tdbb, SCL_object_filter);
+	SCL_check_create_access(tdbb, obj_filters);
 }
 
 // Define a blob filter.
 void CreateFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScratch*/, jrd_tra* transaction)
 {
-	MetaName ownerName(tdbb->getAttachment()->att_user->getUserName());
+	Attachment* const attachment = transaction->tra_attachment;
+	const MetaString& ownerName = attachment->getEffectiveUserName();
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -10561,7 +10527,7 @@ string CreateAlterRoleNode::internalPrint(NodePrinter& printer) const
 void CreateAlterRoleNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
 	if (createFlag)
-		SCL_check_create_access(tdbb, SCL_object_role);
+		SCL_check_create_access(tdbb, obj_roles);
 	else
 		SCL_check_role(tdbb, name, SCL_alter);
 }
@@ -10574,7 +10540,8 @@ void CreateAlterRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		Arg::PrivateDyn(293).raise();
 	}
 
-	MetaName ownerName(tdbb->getAttachment()->att_user->getUserName());
+	Attachment* const attachment = transaction->tra_attachment;
+	const MetaString& ownerName = attachment->getEffectiveUserName();
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -10623,8 +10590,6 @@ void CreateAlterRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		for (const MetaName* privName = privileges.begin(); privName < end; ++privName)
 			newPrivileges.set(convertPrivilegeFromString(tdbb, transaction, *privName));
 	}
-
-	Attachment* attachment = tdbb->getAttachment();
 
 	string p;
 	newPrivileges.store(p.getBuffer(newPrivileges.BYTES_COUNT));
@@ -10950,7 +10915,7 @@ void MappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd
 		(Arg::Gds(isc_adm_task_denied) << Arg::Gds(isc_miss_prvlg) << "CHANGE_MAPPING_RULES").raise();
 
 	if (from)
-		fromUtf8 = from->toUtf8(dsqlScratch);
+		fromUtf8 = from->toUtf8(transaction);
 
 	if (global)
 	{
@@ -11113,8 +11078,6 @@ void DropRoleNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 
 void DropRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
-	MetaName user(tdbb->getAttachment()->att_user->getUserName());
-
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
@@ -11270,13 +11233,10 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	if (text.isEmpty() && mode == USER_MOD)
 	{
 		// alter current user
-		UserId* usr = tdbb->getAttachment()->att_user;
-		fb_assert(usr);
+		text = tdbb->getAttachment()->getUserName();
 
-		if (!usr)
+		if (text.isEmpty())
 			(Arg::Gds(isc_random) << "Missing user name for ALTER CURRENT USER").raise();
-
-		text = usr->getUserName();
 	}
 
 	Firebird::LocalStatus s;
@@ -11745,14 +11705,14 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 	const GranteeClause* userNod, const char* privs,
 	MetaName field, int options)
 {
-	SSHORT userType = userNod->first;
+	ObjectType userType = userNod->first;
 	MetaName user(userNod->second);
 	MetaName dummyName;
-	const SSHORT objType = object ? object->first : obj_type_MAX;
+	const ObjectType objType = object ? object->first : obj_type_MAX;
 	const MetaName objName(object ? object->second : "");
 	bool crdb = false;
 
-	AutoPtr<char, ArrayDelete> privileges(new char[MAX(strlen(ALL_PRIVILEGES), strlen(privs ? privs : "")) + 1]);
+	AutoPtr<char, ArrayDelete> privileges(FB_NEW char[MAX(strlen(ALL_PRIVILEGES), strlen(privs ? privs : "")) + 1]);
 	strcpy(privileges, privs ? privs : "");
 
 	if (strcmp(privileges, "A") == 0)
@@ -11900,7 +11860,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 			break;
 
 		default:
-			fb_assert(object == NULL || objType >= obj_database);
+			fb_assert(object == NULL || isDdlObject(objType));
 	}
 
 	if (options == 1)	// with grant option
@@ -11948,8 +11908,8 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 			(Arg::PrivateDyn(295) << DBA_USER_NAME << owner).raise();
 	}
 
-	MetaName currentUser(attachment->getEffectiveUserId()->getUserName());
-	MetaName grantorRevoker(grantor ? *grantor : currentUser);
+	const MetaName currentUser(attachment->getEffectiveUserName());
+	const MetaName grantorRevoker(grantor ? *grantor : currentUser);
 
 	if (!isGrant && !privs)	// REVOKE ALL ON ALL
 	{
@@ -12104,10 +12064,8 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 					}
 
 					default:
-						if (objType >= obj_database)
-						{
+						if (isDdlObject(objType))
 							checkGrantorCanGrantDdl(tdbb, transaction, currentUser.c_str(), priv, objName);
-						}
 						else
 							fb_assert(false);
 				}
@@ -12529,10 +12487,14 @@ void GrantRevokeNode::checkGrantorCanGrantDdl(thread_db* tdbb, jrd_tra* transact
 		WITH ((PRV.RDB$USER = UPPERCASE(grantor.c_str()) AND
 				PRV.RDB$USER_TYPE = obj_user) OR (PRV.RDB$USER_TYPE = obj_sql_role)) AND
 			 PRV.RDB$RELATION_NAME EQ objName.c_str() AND
-			 PRV.RDB$OBJECT_TYPE >= obj_database AND
+			 PRV.RDB$OBJECT_TYPE >= obj_database AND	// it might be deleted but I believe it's more efficient
 			 PRV.RDB$PRIVILEGE EQ privilege
 	{
 		if ( (PRV.RDB$USER_TYPE == obj_sql_role) && !attachment->att_user->roleInUse(tdbb, PRV.RDB$USER))
+			continue;
+
+		// Double check if the object is DDL one.
+		if (!isDdlObject(PRV.RDB$OBJECT_TYPE))
 			continue;
 
 		if (PRV.RDB$GRANT_OPTION == WITH_GRANT_OPTION)

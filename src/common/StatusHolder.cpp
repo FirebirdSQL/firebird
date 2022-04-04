@@ -28,7 +28,7 @@
 
 #include "firebird.h"
 #include "StatusHolder.h"
-#include "gen/iberror.h"
+#include "iberror.h"
 #include "classes/alloc.h"
 
 namespace Firebird {

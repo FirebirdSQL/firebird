@@ -29,7 +29,7 @@
 #include "firebird.h"
 #include <stdio.h>
 #include <string.h>
-#include "gen/iberror.h"
+#include "iberror.h"
 #include <errno.h>
 #include "../jrd/jrd.h"
 #include "../jrd/os/pio.h"
@@ -37,7 +37,6 @@
 #include "../jrd/ods.h"
 #include "../jrd/btr.h"
 #include "../jrd/req.h"
-#include "../jrd/rse.h"
 #include "../jrd/tra.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/met_proto.h"
@@ -154,7 +153,7 @@ void ERR_error(int number)
  **************************************/
 	TEXT errmsg[MAX_ERRMSG_LEN + 1];
 
-	if (gds__msg_lookup(0, JRD_BUGCHK, number, sizeof(errmsg), errmsg, NULL) < 1)
+	if (gds__msg_lookup(0, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, number, sizeof(errmsg), errmsg, NULL) < 1)
 		sprintf(errmsg, "error code %d", number);
 
 	ERR_post(Arg::Gds(isc_random) << Arg::Str(errmsg));
@@ -214,7 +213,7 @@ void ERR_post_warning(const Arg::StatusVector& v)
 		return;
 	}
 
-	const ISC_STATUS* oldVector = statusVector->getErrors();
+	const ISC_STATUS* oldVector = statusVector->getWarnings();
 	unsigned lenOld = fb_utils::statusLength(oldVector);
 
 	// check for duplicated error code
@@ -428,7 +427,7 @@ static void internal_error(ISC_STATUS status, int number, const TEXT* file, int 
  **************************************/
 	TEXT errmsg[MAX_ERRMSG_LEN + 1];
 
-	if (gds__msg_lookup(0, JRD_BUGCHK, number, sizeof(errmsg), errmsg, NULL) < 1)
+	if (gds__msg_lookup(0, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, number, sizeof(errmsg), errmsg, NULL) < 1)
 		strcpy(errmsg, "Internal error code");
 
 	const size_t len = strlen(errmsg);

@@ -854,8 +854,11 @@ FetchPassResult fetchPassword(const Firebird::PathName& name, const char*& passw
 
 
 
-const SINT64 BILLION = 1000000000;
+#ifdef WIN_NT
 static SINT64 saved_frequency = 0;
+#elif defined(HAVE_CLOCK_GETTIME)
+const SINT64 BILLION = 1000000000;
+#endif
 
 // Returns current value of performance counter
 SINT64 query_performance_counter()
@@ -915,15 +918,15 @@ void get_process_times(SINT64 &userTime, SINT64 &sysTime)
 	FILETIME utime, stime, dummy;
 	if (GetProcessTimes(GetCurrentProcess(), &dummy, &dummy, &stime, &utime))
 	{
-		LARGE_INTEGER lint;
+		LARGE_INTEGER bigint;
 
-		lint.HighPart = stime.dwHighDateTime;
-		lint.LowPart = stime.dwLowDateTime;
-		sysTime = lint.QuadPart / 10000;
+		bigint.HighPart = stime.dwHighDateTime;
+		bigint.LowPart = stime.dwLowDateTime;
+		sysTime = bigint.QuadPart / 10000;
 
-		lint.HighPart = utime.dwHighDateTime;
-		lint.LowPart = utime.dwLowDateTime;
-		userTime = lint.QuadPart / 10000;
+		bigint.HighPart = utime.dwHighDateTime;
+		bigint.LowPart = utime.dwLowDateTime;
+		userTime = bigint.QuadPart / 10000;
 	}
 	else
 	{
@@ -1044,7 +1047,7 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 
 	const char* configDir[] = {
 		FB_BINDIR, FB_SBINDIR, FB_CONFDIR, FB_LIBDIR, FB_INCDIR, FB_DOCDIR, "", FB_SAMPLEDIR,
-		FB_SAMPLEDBDIR, FB_HELPDIR, FB_INTLDIR, FB_MISCDIR, FB_SECDBDIR, FB_MSGDIR, FB_LOGDIR,
+		FB_SAMPLEDBDIR, "", FB_INTLDIR, FB_MISCDIR, FB_SECDBDIR, FB_MSGDIR, FB_LOGDIR,
 		FB_GUARDDIR, FB_PLUGDIR, FB_TZDATADIR
 	};
 
@@ -1140,7 +1143,7 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 
 	if (s.hasData() && name[0])
 	{
-		s += '/';
+		s += PathUtils::dir_sep;
 	}
 	s += name;
 	gds__prefix(tmp, s.c_str());
@@ -1562,8 +1565,7 @@ unsigned sqlTypeToDsc(unsigned runOffset, unsigned sqlType, unsigned sqlLength,
 	if (dscType == dtype_unknown)
 	{
 		fb_assert(false);
-		// keep old yvalve logic
-		dscType = sqlType;
+		Firebird::Arg::Gds(isc_dsql_datatype_err).raise();
 	}
 
 	if (dtype)
@@ -1611,6 +1613,13 @@ bool containsErrorCode(const ISC_STATUS* v, ISC_STATUS code)
 	return false;
 }
 
+inline bool sqlSymbolChar(char c, bool first)
+{
+	if (c & 0x80)
+		return false;
+	return (isdigit(c) && !first) || isalpha(c) || c == '_' || c == '$';
+}
+
 const char* dpbItemUpper(const char* s, FB_SIZE_T l, Firebird::string& buf)
 {
 	if (l && (s[0] == '"' || s[0] == '\''))
@@ -1623,30 +1632,38 @@ const char* dpbItemUpper(const char* s, FB_SIZE_T l, Firebird::string& buf)
 		{
 			if (s[i] == end_quote)
 			{
-				if (++i >= l || s[i] != end_quote)
-					break;		// delimited quote, done processing
+				if (++i >= l)
+				{
+					if (ascii && s[0] == '\'')
+						buf.upper();
+
+					return buf.c_str();
+				}
+
+				if (s[i] != end_quote)
+				{
+					buf.assign(&s[i], l - i);
+					(Firebird::Arg::Gds(isc_quoted_str_bad) << buf).raise();
+				}
 
 				// skipped the escape quote, continue processing
 			}
-
-			if (s[i] & 0x80)
+			else if (!sqlSymbolChar(s[i], i == 1))
 				ascii = false;
+
 			buf += s[i];
 		}
 
-		if (ascii && s[0] == '\'')
-			buf.upper();
-
-		return buf.c_str();
+		buf.assign(1, s[0]);
+		(Firebird::Arg::Gds(isc_quoted_str_miss) << buf).raise();
 	}
 
 	// non-quoted string - try to uppercase
 	for (FB_SIZE_T i = 0; i < l; ++i)
 	{
-		if (!(s[i] & 0x80))
-			buf += toupper(s[i]);
-		else
+		if (!sqlSymbolChar(s[i], i == 0))
 			return NULL;				// contains non-ascii data
+		buf += toupper(s[i]);
 	}
 
 	return buf.c_str();

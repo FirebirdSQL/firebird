@@ -30,9 +30,9 @@
 #include "firebird.h"
 #include <stdio.h>
 #include <errno.h>
+#include "../common/classes/alloc.h"
 #include "../common/ThreadStart.h"
 #include "../yvalve/gds_proto.h"
-#include "../common/isc_s_proto.h"
 #include "../common/gdsassert.h"
 
 #ifdef WIN_NT
@@ -210,7 +210,10 @@ void Thread::kill(Handle& thread)
 ThreadId Thread::getId()
 {
 #ifdef USE_LWP_AS_THREAD_ID
-	return syscall(SYS_gettid);
+	static __thread int tid = 0;
+	if (!tid)
+		tid = syscall(SYS_gettid);
+	return tid;
 #else
 	return pthread_self();
 #endif
@@ -258,6 +261,7 @@ void Thread::yield()
 #else
 	pthread_yield();
 #endif // _POSIX_PRIORITY_SCHEDULING
+	// sleep(0);		--- removed due to performance iisue
 }
 
 #endif // USE_POSIX_THREADS

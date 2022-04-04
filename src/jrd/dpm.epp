@@ -48,7 +48,6 @@
 #include "../jrd/lck.h"
 #include "../jrd/cch.h"
 #include "../jrd/pag.h"
-#include "../jrd/rse.h"
 #include "../jrd/val.h"
 #include "../jrd/vio_debug.h"
 #include "../jrd/cch_proto.h"
@@ -1783,7 +1782,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 				if (get_header(window, line, rpb) &&
 					!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
 				{
-					if (sweeper && !rpb->rpb_b_page && rpb->rpb_transaction_nr <= oldest)
+					if (sweeper && !rpb->rpb_b_page && !(rpb->rpb_flags & rpb_deleted) && rpb->rpb_transaction_nr <= oldest)
 						continue;
 
 					rpb->rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp,
@@ -1855,7 +1854,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 					if (get_header(window, line, rpb) &&
 						!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
 					{
-						if (sweeper && !rpb->rpb_b_page && rpb->rpb_transaction_nr <= oldest)
+						if (sweeper && !rpb->rpb_b_page && !(rpb->rpb_flags & rpb_deleted) && rpb->rpb_transaction_nr <= oldest)
 							continue;
 
 						rpb->rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp,
@@ -2557,7 +2556,7 @@ static void check_swept(thread_db* tdbb, record_param* rpb)
 		{
 			rhd* header = (rhd*) ((SCHAR*) dpage + index->dpg_offset);
 			if (Ods::getTraNum(header) > transaction->tra_oldest ||
-				(header->rhd_flags & (rpb_blob | rpb_chained | rpb_fragment)) ||
+				(header->rhd_flags & (rpb_blob | rpb_chained | rpb_fragment | rpb_deleted)) ||
 				header->rhd_b_page)
 			{
 				CCH_RELEASE_TAIL(tdbb, window);
@@ -3140,6 +3139,16 @@ static UCHAR* find_space(thread_db*	tdbb,
 
 	const SSHORT aligned_size = ROUNDUP(size, ODS_ALIGNMENT);
 	data_page* page = (data_page*) rpb->getWindow(tdbb).win_buffer;
+
+	if ((page->dpg_count > 0) && (type == DPM_primary) && (page->dpg_header.pag_flags & dpg_secondary))
+	{
+		// Attempt to put primary record on secondary data page - seems
+		// flags on PP is not correct. Fix flags and let caller to find
+		// space for record at another data page.
+
+		mark_full(tdbb, rpb);
+		return NULL;
+	}
 
 	// Scan allocated lines looking for an empty slot, the high water mark,
 	// and the amount of space potentially available on the page
@@ -3807,11 +3816,15 @@ static void store_big_record(thread_db* tdbb,
 	RelationPages* relPages = rpb->rpb_relation->getPages(tdbb);
 	PageNumber prior(relPages->rel_pg_space_id, 0);
 	signed char count = 0;
-	const USHORT max_data = dbb->dbb_page_size - (static_cast<USHORT>(sizeof(data_page)) + RHDF_SIZE);
+
+	// The last fragment should have rhd header because rhd_incomplete flag won't be set for it.
+	// It's important for get_header() function which relies on rhd_incomplete flag to determine header size.
+	FB_SIZE_T header_size = RHD_SIZE;
+	USHORT max_data = dbb->dbb_page_size - (static_cast<USHORT>(sizeof(data_page)) + header_size);
 
 	// Fill up data pages tail first until what's left fits on a single page.
 
-	while (size > max_data)
+	do
 	{
 		// Allocate and format data page and fragment header
 
@@ -3820,14 +3833,23 @@ static void store_big_record(thread_db* tdbb,
 		page->dpg_header.pag_flags = dpg_orphan | dpg_full;
 		page->dpg_relation = rpb->rpb_relation->rel_id;
 		page->dpg_count = 1;
+
+		// Cast to (rhdf*) but use only rhd fields for the last fragment
 		rhdf* header = (rhdf*) & page->dpg_rpt[1];
 		page->dpg_rpt[0].dpg_offset = (UCHAR *) header - (UCHAR *) page;
-		page->dpg_rpt[0].dpg_length = max_data + RHDF_SIZE;
-		header->rhdf_flags = (prior.getPageNum()) ? rhd_fragment | rhd_incomplete : rhd_fragment;
-		header->rhdf_f_page = prior.getPageNum();
+		page->dpg_rpt[0].dpg_length = max_data + header_size;
+		header->rhdf_flags = rhd_fragment;
+
+		if (prior.getPageNum())
+		{
+			// This is not the last fragment
+			header->rhdf_flags |= rhd_incomplete;
+			header->rhdf_f_page = prior.getPageNum();
+		}
+
 		USHORT length = max_data;
 		size -= length;
-		UCHAR* out = header->rhdf_data + length;
+		UCHAR* out = (UCHAR *) header + page->dpg_rpt[0].dpg_length;
 
 		// Move compressed data onto page
 
@@ -3882,9 +3904,15 @@ static void store_big_record(thread_db* tdbb,
 
 		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 		prior = rpb->getWindow(tdbb).win_page;
-	}
+
+		// Other fragments except the last one should have rhdf header
+		header_size = RHDF_SIZE;
+		max_data = dbb->dbb_page_size - (static_cast<USHORT>(sizeof(data_page)) + header_size);
+	} while (size > max_data);
 
 	// What's left fits on a page.  Luckily, we don't have to store it ourselves.
+
+	stack.push(prior);
 
 	// rpb is already converted to UTC
 	const Compressor dcc(*tdbb->getDefaultPool(), in - rpb->rpb_address, rpb->rpb_address);

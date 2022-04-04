@@ -313,6 +313,7 @@ USHORT TimeZoneUtil::getSystemTimeZone()
 	const char* str = buffer;
 	int32_t len;
 	const char* configDefault = Config::getDefaultTimeZone();
+	bool strictParse = true;
 
 	if (configDefault && configDefault[0])
 	{
@@ -334,6 +335,8 @@ USHORT TimeZoneUtil::getSystemTimeZone()
 
 			str = buffer;
 			buffer[len] = '\0';
+
+			strictParse = false;
 		}
 		else
 		{
@@ -359,7 +362,7 @@ USHORT TimeZoneUtil::getSystemTimeZone()
 	{
 		try
 		{
-			USHORT id = parse(str, len);
+			USHORT id = parse(str, len, strictParse);
 			cachedTimeZoneId = id;
 			cachedTimeZoneNameLen = len;
 			return cachedTimeZoneId;
@@ -421,8 +424,10 @@ void TimeZoneUtil::iterateRegions(std::function<void (USHORT, const char*)> func
 }
 
 // Parses a time zone, offset- or region-based.
-USHORT TimeZoneUtil::parse(const char* str, unsigned strLen)
+USHORT TimeZoneUtil::parse(const char* str, unsigned strLen, bool strict)
 {
+	// Non-strict parse is used to detect OS time zone.
+
 	const char* end = str + strLen;
 	const char* p = str;
 
@@ -440,6 +445,9 @@ USHORT TimeZoneUtil::parse(const char* str, unsigned strLen)
 		if (tzh >= 0)
 		{
 			skipSpaces(p, end);
+
+			if (!strict && p == end)
+				return makeFromOffset(sign, tzh, 0);
 
 			if (p < end && *p == ':')
 			{
@@ -789,13 +797,8 @@ bool TimeZoneUtil::decodeTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, bool gmt
 
 ISC_TIMESTAMP_TZ TimeZoneUtil::getCurrentSystemTimeStamp()
 {
-	TimeStamp now = TimeStamp::getCurrentTimeStamp();
-
-	ISC_TIMESTAMP_TZ tsTz;
-	tsTz.utc_timestamp = now.value();
+	auto tsTz = getCurrentGmtTimeStamp();
 	tsTz.time_zone = getSystemTimeZone();
-	localTimeStampToUtc(tsTz);
-
 	return tsTz;
 }
 

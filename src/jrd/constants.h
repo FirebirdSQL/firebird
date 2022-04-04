@@ -72,6 +72,7 @@ const unsigned int USERNAME_LENGTH	= METADATA_IDENTIFIER_CHAR_LEN * METADATA_BYT
 
 const FB_SIZE_T MAX_SQL_IDENTIFIER_LEN = METADATA_IDENTIFIER_CHAR_LEN * METADATA_BYTES_PER_CHAR;
 const FB_SIZE_T MAX_SQL_IDENTIFIER_SIZE = MAX_SQL_IDENTIFIER_LEN + 1;
+const FB_SIZE_T MAX_CONFIG_NAME_LEN = 63;
 
 const ULONG MAX_SQL_LENGTH = 10 * 1024 * 1024; // 10 MB - just a safety check
 
@@ -467,8 +468,8 @@ const TraNumber MAX_TRA_NUMBER = 0x0000FFFFFFFFFFFF;	// ~2.8 * 10^14
 
 // Number of streams, conjuncts, indices that will be statically allocated
 // in various arrays. Larger numbers will have to be allocated dynamically
-// CVC: I think we need to have a special, higher value for streams.
-const int OPT_STATIC_ITEMS = 64;
+const unsigned OPT_STATIC_ITEMS = 16;
+const unsigned OPT_STATIC_STREAMS = 64;
 
 #define CURRENT_ENGINE "Engine13"
 #define EMBEDDED_PROVIDERS "Providers=" CURRENT_ENGINE

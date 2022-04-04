@@ -59,7 +59,7 @@ protected:
     virtual RemotePassword* remotePasswordFactory() = 0;
 };
 
-template <class SHA> class SrpClientImpl FB_FINAL : public SrpClient
+template <class SHA> class SrpClientImpl final : public SrpClient
 {
 public:
 	explicit SrpClientImpl<SHA>(IPluginConfig* ipc)

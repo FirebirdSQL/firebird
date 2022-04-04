@@ -24,6 +24,7 @@
 
 #include "../jrd/jrd.h"
 #include "../dsql/dsql.h"
+#include "../dsql/DsqlStatements.h"
 #include "../dsql/BlrDebugWriter.h"
 #include "../common/classes/array.h"
 #include "../jrd/MetaName.h"
@@ -36,6 +37,7 @@ namespace Jrd
 class BinaryBoolNode;
 class CompoundStmtNode;
 class DeclareCursorNode;
+class DeclareLocalTableNode;
 class DeclareVariableNode;
 class ParameterClause;
 class RseNode;
@@ -43,6 +45,9 @@ class SelectExprNode;
 class TypeClause;
 class VariableNode;
 class WithClause;
+
+typedef Firebird::Pair<
+	Firebird::NonPooled<NestConst<ValueListNode>, NestConst<ValueListNode>>> ReturningClause;
 
 
 // DSQL Compiler scratch block - may be discarded after compilation in the future.
@@ -57,7 +62,6 @@ public:
 	static const unsigned FLAG_BLOCK				= 0x0020;
 	static const unsigned FLAG_RECURSIVE_CTE		= 0x0040;
 	static const unsigned FLAG_UPDATE_OR_INSERT		= 0x0080;
-	static const unsigned FLAG_MERGE				= 0x0100;
 	static const unsigned FLAG_FUNCTION				= 0x0200;
 	static const unsigned FLAG_SUB_ROUTINE			= 0x0400;
 	static const unsigned FLAG_INTERNAL_REQUEST		= 0x0800;
@@ -70,14 +74,13 @@ public:
 
 public:
 	DsqlCompilerScratch(MemoryPool& p, dsql_dbb* aDbb, jrd_tra* aTransaction,
-				DsqlCompiledStatement* aStatement, DsqlCompilerScratch* aMainScratch = NULL)
+				DsqlStatement* aDsqlStatement = nullptr, DsqlCompilerScratch* aMainScratch = nullptr)
 		: BlrDebugWriter(p),
 		  dbb(aDbb),
 		  transaction(aTransaction),
-		  statement(aStatement),
+		  dsqlStatement(aDsqlStatement),
 		  flags(0),
 		  nestingLevel(0),
-		  ports(p),
 		  relation(NULL),
 		  mainContext(p),
 		  context(&mainContext),
@@ -91,6 +94,8 @@ public:
 		  labels(p),
 		  cursorNumber(0),
 		  cursors(p),
+		  localTableNumber(0),
+		  localTables(p),
 		  inSelectList(0),
 		  inWhereClause(0),
 		  inGroupByClause(0),
@@ -110,11 +115,14 @@ public:
 		  hiddenVariables(p),
 		  variables(p),
 		  outputVariables(p),
+		  returningClause(nullptr),
 		  currCteAlias(NULL),
+		  mainScratch(aMainScratch),
+		  outerMessagesMap(p),
+		  outerVarsMap(p),
 		  ctes(p),
 		  cteAliases(p),
 		  psql(false),
-		  mainScratch(aMainScratch),
 		  subFunctions(p),
 		  subProcedures(p)
 	{
@@ -136,7 +144,7 @@ public:
 public:
 	virtual bool isVersion4()
 	{
-		return statement->getBlrVersion() == 4;
+		return dsqlStatement->getBlrVersion() == 4;
 	}
 
 	MemoryPool& getPool()
@@ -159,14 +167,14 @@ public:
 		transaction = value;
 	}
 
-	DsqlCompiledStatement* getStatement()
+	DsqlStatement* getDsqlStatement() const
 	{
-		return statement;
+		return dsqlStatement;
 	}
 
-	DsqlCompiledStatement* getStatement() const
+	void setDsqlStatement(DsqlStatement* aDsqlStatement)
 	{
-		return statement;
+		dsqlStatement = aDsqlStatement;
 	}
 
 	void putBlrMarkers(ULONG marks);
@@ -175,6 +183,7 @@ public:
 	void putLocalVariables(CompoundStmtNode* parameters, USHORT locals);
 	void putLocalVariable(dsql_var* variable, const DeclareVariableNode* hostParam,
 		const MetaName& collationName);
+	void putOuterMaps();
 	dsql_var* makeVariable(dsql_fld*, const char*, const dsql_var::Type type, USHORT,
 		USHORT, USHORT);
 	dsql_var* resolveVariable(const MetaName& varName);
@@ -263,12 +272,11 @@ private:
 
 	dsql_dbb* dbb;						// DSQL attachment
 	jrd_tra* transaction;				// Transaction
-	DsqlCompiledStatement* statement;	// Compiled statement
+	DsqlStatement* dsqlStatement;		// DSQL statement
 
 public:
 	unsigned flags;						// flags
 	unsigned nestingLevel;				// begin...end nesting level
-	Firebird::Array<dsql_msg*> ports;	// Port messages
 	dsql_rel* relation;					// relation created by this request (for DDL)
 	DsqlContextStack mainContext;
 	DsqlContextStack* context;
@@ -283,6 +291,8 @@ public:
 	Firebird::Stack<MetaName*> labels;	// Loop labels
 	USHORT cursorNumber;				// Cursor number
 	Firebird::Array<DeclareCursorNode*> cursors; // Cursors
+	USHORT localTableNumber;				// Local table number
+	Firebird::Array<DeclareLocalTableNode*> localTables; // Local tables
 	USHORT inSelectList;				// now processing "select list"
 	USHORT inWhereClause;				// processing "where clause"
 	USHORT inGroupByClause;				// processing "group by clause"
@@ -303,15 +313,18 @@ public:
 	Firebird::Array<dsql_var*> hiddenVariables;	// hidden variables
 	Firebird::Array<dsql_var*> variables;
 	Firebird::Array<dsql_var*> outputVariables;
+	ReturningClause* returningClause;
 	const Firebird::string* const* currCteAlias;
+	DsqlCompilerScratch* mainScratch;
+	Firebird::NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <outer, inner>
+	Firebird::NonPooledMap<USHORT, USHORT> outerVarsMap;		// <outer, inner>
 
 private:
 	Firebird::HalfStaticArray<SelectExprNode*, 4> ctes; // common table expressions
 	Firebird::HalfStaticArray<const Firebird::string*, 4> cteAliases; // CTE aliases in recursive members
 	bool psql;
-	DsqlCompilerScratch* mainScratch;
-	Firebird::GenericMap<Firebird::Left<MetaName, DeclareSubFuncNode*> > subFunctions;
-	Firebird::GenericMap<Firebird::Left<MetaName, DeclareSubProcNode*> > subProcedures;
+	Firebird::LeftPooledMap<MetaName, DeclareSubFuncNode*> subFunctions;
+	Firebird::LeftPooledMap<MetaName, DeclareSubProcNode*> subProcedures;
 };
 
 class PsqlChanger

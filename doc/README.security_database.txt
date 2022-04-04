@@ -1,6 +1,6 @@
 Initializing the Security Database
 ----------------------------------
-The security database (security4.fdb) has no predefined users. This is intentional.
+The security database (security5.fdb) has no predefined users. This is intentional.
 Having user with well known predefined password and full access rights is serious security risk.
 
 Firebird starting with version 3.0 does not require presence of SYSDBA user. One can use another name

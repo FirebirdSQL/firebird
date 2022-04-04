@@ -30,7 +30,7 @@ static const struct
 	{"begin", begin},
 	{"declare", declare},
 	{"message", message},
-	{"erase", byte_line},
+	{"erase", erase},
 	{"fetch", two},
 	{"for", two},
 	{"if", three},
@@ -51,13 +51,13 @@ static const struct
 	{"field", field},
 	{"fid", parm},
 	{"parameter", parm},
-	{"variable", variable},
+	{"variable", one_word},
 	{"average", two},
 	{"count", one},
 	{"maximum", two},
 	{"minimum", two},	// 30
 	{"total", two},
-	{NULL, NULL}, // {"count2", two},
+	{"receive_batch", byte_verb},
 	{NULL, NULL},
 	{"add", two},
 	{"subtract", two},
@@ -213,7 +213,7 @@ static const struct
 	{"strlen", strlength},
 	{"trim", trim},
 	// New BLR in FB2.1
-	{"init_variable", variable},
+	{"init_variable", one_word},
 	{"recurse", union_ops},
 	{"sys_function", function},
 	// New BLR in FB2.5
@@ -248,5 +248,10 @@ static const struct
 	{"local_time", byte_line},
 	{"at", verb_byte_verb},
 	{"marks", marks},
+	// New BLR in FB5.0
+	{"dcl_local_table", dcl_local_table},
+	{"local_table_truncate", one_word},
+	{"local_table_id", local_table},
+	{"outer_map", outer_map},
 	{0, 0}
 };

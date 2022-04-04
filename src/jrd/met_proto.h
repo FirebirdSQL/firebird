@@ -31,8 +31,8 @@ struct dsc;
 namespace Jrd
 {
 	class jrd_tra;
-	class jrd_req;
-	class JrdStatement;
+	class Request;
+	class Statement;
 	class jrd_prc;
 	class Format;
 	class jrd_rel;
@@ -86,7 +86,7 @@ Jrd::Format*	MET_format(Jrd::thread_db*, Jrd::jrd_rel*, USHORT);
 bool		MET_get_char_coll_subtype(Jrd::thread_db*, USHORT*, const UCHAR*, USHORT);
 bool		MET_get_char_coll_subtype_info(Jrd::thread_db*, USHORT, SubtypeInfo* info);
 Jrd::DmlNode*	MET_get_dependencies(Jrd::thread_db*, Jrd::jrd_rel*, const UCHAR*, const ULONG,
-								Jrd::CompilerScratch*, Jrd::bid*, Jrd::JrdStatement**,
+								Jrd::CompilerScratch*, Jrd::bid*, Jrd::Statement**,
 								Jrd::CompilerScratch**, const Jrd::MetaName&, int, USHORT,
 								Jrd::jrd_tra*, const Jrd::MetaName& = Jrd::MetaName());
 Jrd::jrd_fld*	MET_get_field(const Jrd::jrd_rel*, USHORT);
@@ -115,7 +115,7 @@ Jrd::jrd_prc*	MET_lookup_procedure_id(Jrd::thread_db*, USHORT, bool, bool, USHOR
 Jrd::jrd_rel*	MET_lookup_relation(Jrd::thread_db*, const Jrd::MetaName&);
 Jrd::jrd_rel*	MET_lookup_relation_id(Jrd::thread_db*, SLONG, bool);
 Jrd::DmlNode*	MET_parse_blob(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::bid*, Jrd::CompilerScratch**,
-							   Jrd::JrdStatement**, bool, bool);
+							   Jrd::Statement**, bool, bool);
 void		MET_parse_sys_trigger(Jrd::thread_db*, Jrd::jrd_rel*);
 void		MET_post_existence(Jrd::thread_db*, Jrd::jrd_rel*);
 void		MET_prepare(Jrd::thread_db*, Jrd::jrd_tra*, USHORT, const UCHAR*);

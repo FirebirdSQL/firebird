@@ -34,7 +34,7 @@ namespace Jrd {
 	class TypeClause;
 	class dsql_msg;
 	class dsql_par;
-	class dsql_req;
+	class DsqlRequest;
 	class DsqlCompilerScratch;
 	class IntlString;
 	class ExprNode;

@@ -40,7 +40,7 @@ namespace Jrd {
 void	VIO_backout(Jrd::thread_db*, Jrd::record_param*, const Jrd::jrd_tra*);
 bool	VIO_chase_record_version(Jrd::thread_db*, Jrd::record_param*,
 									Jrd::jrd_tra*, MemoryPool*, bool, bool);
-void	VIO_copy_record(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*);
+void	VIO_copy_record(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::Record*, Jrd::Record*);
 void	VIO_data(Jrd::thread_db*, Jrd::record_param*, MemoryPool*);
 bool	VIO_erase(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
 void	VIO_fini(Jrd::thread_db*);

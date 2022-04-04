@@ -232,7 +232,7 @@ public:
 	IntField u, g;
 };
 
-class StackUserData FB_FINAL : public UserData
+class StackUserData final : public UserData
 {
 public:
 	void* operator new(size_t, void* memory) throw()
@@ -241,7 +241,7 @@ public:
 	}
 };
 
-class DynamicUserData FB_FINAL : public UserData
+class DynamicUserData final : public UserData
 {
 public:
 #ifdef DEBUG_GDS_ALLOC

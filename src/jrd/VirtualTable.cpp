@@ -29,7 +29,6 @@
 #include "../jrd/ids.h"
 #include "../jrd/ini.h"
 #include "../jrd/req.h"
-#include "../jrd/rse.h"
 #include "../jrd/val.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/err_proto.h"

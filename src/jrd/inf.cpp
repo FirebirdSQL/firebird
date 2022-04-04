@@ -54,7 +54,6 @@
 #include "../jrd/cvt_proto.h"
 #include "../jrd/inf_proto.h"
 #include "../common/isc_proto.h"
-#include "../jrd/opt_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/os/pio_proto.h"
 #include "../jrd/tra_proto.h"
@@ -192,7 +191,7 @@ void INF_blob_info(const blb* blob,
 	else
 		start_info = 0;
 
-	while (items < end_items && *items != isc_info_end)
+	while (items < end_items && *items != isc_info_end && info < end)
 	{
 		UCHAR item = *items++;
 
@@ -229,7 +228,8 @@ void INF_blob_info(const blb* blob,
 			return;
 	}
 
-	*info++ = isc_info_end;
+	if (info < end)
+		*info++ = isc_info_end;
 
 	if (start_info && (end - info >= 7))
 	{
@@ -302,7 +302,7 @@ void INF_database_info(thread_db* tdbb,
 
 	const Jrd::Attachment* const att = tdbb->getAttachment();
 
-	while (items < end_items && *items != isc_info_end)
+	while (items < end_items && *items != isc_info_end && info < end)
 	{
 		UCHAR* p = buffer;
 		UCHAR item = *items++;
@@ -550,10 +550,8 @@ void INF_database_info(thread_db* tdbb,
 
 		case fb_info_creation_timestamp_tz:
 			length = INF_convert(dbb->dbb_creation_date.utc_timestamp.timestamp_date, p);
-			p += length;
-			length += INF_convert(dbb->dbb_creation_date.utc_timestamp.timestamp_time, p);
-			p += length;
-			length += INF_convert(dbb->dbb_creation_date.time_zone, p);
+			length += INF_convert(dbb->dbb_creation_date.utc_timestamp.timestamp_time, p + length);
+			length += INF_convert(dbb->dbb_creation_date.time_zone, p + length);
 			break;
 
 		case isc_info_no_reserve:
@@ -620,11 +618,10 @@ void INF_database_info(thread_db* tdbb,
 
 		case isc_info_user_names:
 			// Assumes user names will be smaller than sizeof(buffer) - 1.
-			if (!(tdbb->getAttachment()->locksmith(tdbb, USER_MANAGEMENT)))
+			if (!tdbb->getAttachment()->locksmith(tdbb, USER_MANAGEMENT))
 			{
-				const UserId* user = tdbb->getAttachment()->att_user;
-				const char* userName = (user && user->getUserName().hasData()) ?
-					user->getUserName().c_str() : "<Unknown>";
+				const auto attachment = tdbb->getAttachment();
+				const char* userName = attachment->getUserName("<Unknown>").c_str();
 				const ULONG len = MIN(strlen(userName), MAX_UCHAR);
 				*p++ = static_cast<UCHAR>(len);
 				memcpy(p, userName, len);
@@ -640,7 +637,7 @@ void INF_database_info(thread_db* tdbb,
 
 				for (const Jrd::Attachment* att = dbb->dbb_attachments; att; att = att->att_next)
 				{
-					const UserId* user = att->att_user;
+					const UserId* const user = att->att_user;
 
 					if (user)
 					{
@@ -770,28 +767,49 @@ void INF_database_info(thread_db* tdbb,
 			break;
 
 		case fb_info_page_contents:
-			if (tdbb->getAttachment()->locksmith(tdbb, READ_RAW_PAGES))
 			{
-				length = gds__vax_integer(items, 2);
-				items += 2;
-				const ULONG page_num = gds__vax_integer(items, length);
-				items += length;
+				bool validArgs = false;
+				ULONG pageNum;
 
-				win window(PageNumber(DB_PAGE_SPACE, page_num));
+				if (end_items - items >= 2)
+				{
+					length = gds__vax_integer(items, 2);
+					items += 2;
 
-				Ods::pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
-				info = INF_put_item(item, dbb->dbb_page_size, page, info, end);
-				CCH_RELEASE_TAIL(tdbb, &window);
+					if (end_items - items >= length)
+					{
+						pageNum = gds__vax_integer(items, length);
+						items += length;
+						validArgs = true;
+					}
+				}
 
-				if (!info)
-					return;
+				if (!validArgs)
+				{
+					buffer[0] = item;
+					item = isc_info_error;
+					length = 1 + INF_convert(isc_inf_invalid_args, buffer + 1);
+					break;
+				}
 
-				continue;
+				if (tdbb->getAttachment()->locksmith(tdbb, READ_RAW_PAGES))
+				{
+					win window(PageNumber(DB_PAGE_SPACE, pageNum));
+
+					Ods::pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
+					info = INF_put_item(item, dbb->dbb_page_size, page, info, end);
+					CCH_RELEASE_TAIL(tdbb, &window);
+
+					if (!info)
+						return;
+
+					continue;
+				}
+
+				buffer[0] = item;
+				item = isc_info_error;
+				length = 1 + INF_convert(isc_adm_task_denied, buffer + 1);
 			}
-
-			buffer[0] = item;
-			item = isc_info_error;
-			length = 1 + INF_convert(isc_adm_task_denied, buffer + 1);
 			break;
 
 		case fb_info_pages_used:
@@ -869,6 +887,10 @@ void INF_database_info(thread_db* tdbb,
 			length = INF_convert(att->getActualIdleTimeout(), buffer);
 			break;
 
+		case fb_info_protocol_version:
+			length = INF_convert(0, buffer);
+			break;
+
 		case fb_info_features:
 			{
 				static const unsigned char features[] = ENGINE_FEATURES;
@@ -903,6 +925,28 @@ void INF_database_info(thread_db* tdbb,
 			}
 			continue;
 
+		case fb_info_replica_mode:
+			// fb_info_replica_* reply items are equal to the ReplicaMode enumeration
+			*p++ = (UCHAR) dbb->dbb_replica_mode;
+			length = p - buffer;
+			break;
+
+		case fb_info_username:
+			{
+				const MetaString& user = att->getUserName();
+				if (!(info = INF_put_item(item, user.length(), user.c_str(), info, end)))
+					return;
+			}
+			continue;
+
+		case fb_info_sqlrole:
+			{
+				const MetaString& role = att->getSqlRole();
+				if (!(info = INF_put_item(item, role.length(), role.c_str(), info, end)))
+					return;
+			}
+			continue;
+
 		default:
 			buffer[0] = item;
 			item = isc_info_error;
@@ -914,7 +958,8 @@ void INF_database_info(thread_db* tdbb,
 			return;
 	}
 
-	*info++ = isc_info_end;
+	if (info < end)
+		*info++ = isc_info_end;
 }
 
 
@@ -963,7 +1008,7 @@ UCHAR* INF_put_item(UCHAR item,
 }
 
 
-ULONG INF_request_info(const jrd_req* request,
+ULONG INF_request_info(const Request* request,
 					   const ULONG item_length,
 					   const UCHAR* items,
 					   const ULONG output_length,
@@ -994,7 +1039,7 @@ ULONG INF_request_info(const jrd_req* request,
 	HalfStaticArray<UCHAR, BUFFER_LARGE> buffer;
 	UCHAR* buffer_ptr = buffer.getBuffer(BUFFER_TINY);
 
-	while (items < end_items && *items != isc_info_end)
+	while (items < end_items && *items != isc_info_end && info < end)
 	{
 		UCHAR item = *items++;
 
@@ -1045,9 +1090,9 @@ ULONG INF_request_info(const jrd_req* request,
 			else
 			{
 				auto state = isc_info_req_active;
-				if (request->req_operation == jrd_req::req_send)
+				if (request->req_operation == Request::req_send)
 					state = isc_info_req_send;
-				else if (request->req_operation == jrd_req::req_receive)
+				else if (request->req_operation == Request::req_receive)
 				{
 					const StmtNode* node = request->req_next;
 
@@ -1056,7 +1101,7 @@ ULONG INF_request_info(const jrd_req* request,
 					else
 						state = isc_info_req_receive;
 				}
-				else if ((request->req_operation == jrd_req::req_return) &&
+				else if ((request->req_operation == Request::req_return) &&
 					(request->req_flags & req_stall))
 				{
 					state = isc_info_req_sql_stall;
@@ -1068,8 +1113,8 @@ ULONG INF_request_info(const jrd_req* request,
 		case isc_info_message_number:
 		case isc_info_message_size:
 			if (!(request->req_flags & req_active) ||
-				(request->req_operation != jrd_req::req_receive &&
-					request->req_operation != jrd_req::req_send))
+				(request->req_operation != Request::req_receive &&
+					request->req_operation != Request::req_send))
 			{
 				buffer_ptr[0] = item;
 				item = isc_info_error;
@@ -1102,7 +1147,8 @@ ULONG INF_request_info(const jrd_req* request,
 			return 0;
 	}
 
-	*info++ = isc_info_end;
+	if (info < end)
+		*info++ = isc_info_end;
 
 	if (infoLengthPresent && (end - info >= 7))
 	{
@@ -1152,7 +1198,7 @@ void INF_transaction_info(const jrd_tra* transaction,
 	else
 		start_info = 0;
 
-	while (items < end_items && *items != isc_info_end)
+	while (items < end_items && *items != isc_info_end && info < end)
 	{
 		UCHAR item = *items++;
 
@@ -1240,7 +1286,8 @@ void INF_transaction_info(const jrd_tra* transaction,
 			return;
 	}
 
-	*info++ = isc_info_end;
+	if (info < end)
+		*info++ = isc_info_end;
 
 	if (start_info && (end - info >= 7))
 	{
