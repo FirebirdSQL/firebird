@@ -7047,6 +7047,17 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 				{
 					attachment->att_flags = save_flags;
 
+					if (attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_ERROR))
+					{
+						FbLocalStatus status;
+						ex.stuffException(&status);
+
+						TraceConnectionImpl conn(attachment);
+						TraceStatusVectorImpl traceStatus(&status, TraceStatusVectorImpl::TS_ERRORS);
+
+						attachment->att_trace_manager->event_error(&conn, &traceStatus, FB_FUNCTION);
+					}
+
 					string s;
 					s.printf("Database: %s\n\tError at disconnect:", attachment->att_filename.c_str());
 					iscLogException(s.c_str(), ex);
