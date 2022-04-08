@@ -1296,19 +1296,6 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 				ts->release(tdbb);
 		}
 
-	{ // scope
-		vec<jrd_rel*>& rels = *attachment->att_relations;
-
-		for (FB_SIZE_T i = 0; i < rels.count(); i++)
-		{
-			jrd_rel* relation = rels[i];
-
-			if (relation && (relation->rel_flags & REL_temp_tran))
-				relation->delPages(tdbb, transaction->tra_number);
-		}
-
-	} // end scope
-
 	// Release the locks associated with the transaction
 
 	if (transaction->tra_alter_db_lock)
