@@ -227,9 +227,9 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 	{IN_SW_BURP_HIDDEN_RDONLY,	isc_spb_res_am_readonly,	"MODE READ_ONLY",	0, 0, 0, false, false,	0, 14, NULL, boRestore},
 	{IN_SW_BURP_HIDDEN_RDWRITE, isc_spb_res_am_readwrite,	"MODE READ_WRITE",	0, 0, 0, false, false,	0, 15, NULL, boRestore},
 /**************************************************************************/
-	{IN_SW_BURP_TS_MAPPING_FILE,	0,	"TABLESPACE_MAPPING_FILE",	0, 0, 0, false, false,	410, 14, NULL, boRestore},
+	{IN_SW_BURP_TS_MAPPING_FILE,	0,	"TS_MAPPING_FILE",	0, 0, 0, false, false,	410, 6, NULL, boRestore},
 	{IN_SW_BURP_TS_PATH,	0,	"TS",	0, 0, 0, false, false,	413, 2, NULL, boRestore},
-	{IN_SW_BURP_TS_ORIGINAL_PATHS,	0,	"TABLESPACE_ORIGINAL_PATHS",	0, 0, 0, false, false,	412, 15, NULL, boRestore},
+	{IN_SW_BURP_TS_ORIGINAL_PATHS,	0,	"TS_ORIGINAL_PATHS",	0, 0, 0, false, false,	412, 7, NULL, boRestore},
 	{IN_SW_BURP_0,		 0, NULL,			0, 0, 0, false, false,	0, 0, NULL, boGeneral}
 };
 
