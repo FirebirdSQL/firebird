@@ -9604,7 +9604,7 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 		IDX.RDB$RELATION_NAME.NULL = FALSE;
 		IDX.RDB$SYSTEM_FLAG = 0;
 		IDX.RDB$SYSTEM_FLAG.NULL = FALSE; // Probably redundant.
-		IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
+		IDX.RDB$TABLESPACE_NAME.NULL = TRUE;
 
 		MetaName relationTablespace;
 
@@ -9648,15 +9648,18 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 		{
 			if (!checkObjectExist(tdbb, transaction, definition.tableSpace, obj_tablespaces))
 				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << definition.tableSpace.c_str());
+
+			IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
 			strcpy(IDX.RDB$TABLESPACE_NAME, definition.tableSpace.c_str());
 		}
-		else
+		else if (relationTablespace.hasData())
 		{
 			/**
 			 * if tablespace for the index is not defined we use relation tablespace.
 			 * It's necessary to write it explicitly since later we can move relation
 			 * into another tablespace.
 			*/
+			IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
 			strcpy(IDX.RDB$TABLESPACE_NAME, relationTablespace.c_str());
 		}
 
