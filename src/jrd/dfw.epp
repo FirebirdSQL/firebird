@@ -6708,7 +6708,7 @@ static bool move_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd
 		RelationPages* relationPages = relation->getPages(tdbb);
 
 		// Copy index root page to a new relation tablespace
-		// And free previos one
+		// And free previous one
 		WIN oldWindow(relationPages->rel_pg_space_id, relationPages->rel_index_root);
 		Ods::pag* oldPage = CCH_FETCH(tdbb, &oldWindow, LCK_read, pag_root);
 

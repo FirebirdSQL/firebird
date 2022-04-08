@@ -852,7 +852,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 	DECOMPOSE(sequence, dbb->dbb_dp_per_pp, pp_sequence, slot);
 
 	RelationPages* relPages	= NULL;
-	WIN pwindow(DB_PAGE_SPACE, -1);	// Will be initialized by pagespace of relation leter
+	WIN pwindow(DB_PAGE_SPACE, -1);	// Will be initialized by pagespace of relation later
 
 	for (;;)
 	{
