@@ -6491,7 +6491,21 @@ static bool create_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 				TS IN RDB$TABLESPACES
 				WITH TS.RDB$TABLESPACE_ID EQ work->dfw_id
 			{
-				unlink(TS.RDB$FILE_NAME);
+				if (dbb->dbb_page_manager.findPageSpace(work->dfw_id))
+				{
+					CCH_flush(tdbb, FLUSH_ALL, 0);
+					dbb->dbb_page_manager.delPageSpace(work->dfw_id);
+					unlink(TS.RDB$FILE_NAME);
+				}
+
+				Attachment* attachment = tdbb->getAttachment();
+				Tablespace* tablespace = attachment->getTablespace(work->dfw_id);
+
+				if (tablespace)
+				{
+					LCK_release(tdbb, tablespace->existenceLock);
+					attachment->delTablespace(work->dfw_id);
+				}
 			}
 			END_FOR
 		}
