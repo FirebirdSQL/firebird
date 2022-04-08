@@ -2874,7 +2874,7 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 			{
 				fb_assert(work->dfw_id <= dbb->dbb_max_idx);
 				idx.idx_id = work->dfw_id;
-				idx.idx_pg_space_id = MET_tablespace(tdbb, tableSpace)->id;
+				idx.idx_pg_space_id = tableSpaceId;
 				IDX_create_index(tdbb, relation, &idx, work->dfw_name.c_str(), &work->dfw_id,
 					transaction, selectivity);
 
