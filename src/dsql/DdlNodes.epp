@@ -7851,24 +7851,10 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 					fb_assert(tableSpaceName.hasData());
 
-					if (tableSpaceName != PRIMARY_TABLESPACE_NAME)
+					if (tableSpaceName != PRIMARY_TABLESPACE_NAME &&
+						!checkObjectExist(tdbb, transaction, tableSpaceName, obj_tablespaces))
 					{
-						bool found = false;
-						AutoRequest request;
-
-						FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-							X IN RDB$TABLESPACES
-							WITH X.RDB$TABLESPACE_NAME EQ tableSpaceName.c_str()
-						{
-							found = true;
-						}
-						END_FOR
-
-						if (!found)
-						{
-							status_exception::raise(
-								Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpaceName));
-						}
+						status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpaceName.c_str());
 					}
 
 					AutoRequest request2;
@@ -10072,22 +10058,8 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 			MODIFY IDX
 				if (tableSpace != PRIMARY_TABLESPACE_NAME)
 				{
-					bool ts_found = false;
-					AutoRequest request2;
-
-					FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
-						X IN RDB$TABLESPACES
-						WITH X.RDB$TABLESPACE_NAME EQ tableSpace.c_str()
-					{
-						ts_found = true;
-					}
-					END_FOR
-
-					if (!ts_found)
-					{
-						status_exception::raise(
-							Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpace));
-					}
+					if (!checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
+						status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
 
 					IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
 					strcpy(IDX.RDB$TABLESPACE_NAME, tableSpace.c_str());
