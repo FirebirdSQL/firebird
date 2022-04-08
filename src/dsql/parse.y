@@ -4244,9 +4244,9 @@ alter_op($relationNode)
 		}
 	| SET TABLESPACE to_opt symbol_tablespace_name
 		{
-			RelationNode::SetTableSpaceClause* clause =
-				newNode<RelationNode::SetTableSpaceClause>();
-			clause->name = *$4;
+			setClause($relationNode->tableSpace, "TABLESPACE", *$4);
+			RelationNode::Clause* clause =
+				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_SET_TABLESPACE);
 			$relationNode->clauses.add(clause);
 		}
 	;

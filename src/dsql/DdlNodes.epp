@@ -7849,15 +7849,12 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 				case Clause::TYPE_SET_TABLESPACE:
 				{
-					const MetaName& tableSpaceName =
-						static_cast<const SetTableSpaceClause*>(i->getObject())->name;
+					fb_assert(tableSpace.hasData());
 
-					fb_assert(tableSpaceName.hasData());
+					const bool primary_ts = (tableSpace == PRIMARY_TABLESPACE_NAME);
 
-					const bool primary_ts = (tableSpaceName == PRIMARY_TABLESPACE_NAME);
-
-					if (!primary_ts && !checkObjectExist(tdbb, transaction, tableSpaceName, obj_tablespaces))
-						status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpaceName.c_str());
+					if (!primary_ts && !checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
+						status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
 
 					AutoRequest request2;
 
@@ -7878,7 +7875,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 						// Check if we are trying to change tablespace name to the already set
 						if ( (REL.RDB$TABLESPACE_NAME.NULL && primary_ts) ||
-							 (!REL.RDB$TABLESPACE_NAME.NULL && tableSpaceName == REL.RDB$TABLESPACE_NAME) )
+							 (!REL.RDB$TABLESPACE_NAME.NULL && tableSpace == REL.RDB$TABLESPACE_NAME) )
 						{
 							break;
 						}
@@ -7896,7 +7893,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 							if (!primary_ts)
 							{
 								REL.RDB$TABLESPACE_NAME.NULL = FALSE;
-								strcpy(REL.RDB$TABLESPACE_NAME, tableSpaceName.c_str());
+								strcpy(REL.RDB$TABLESPACE_NAME, tableSpace.c_str());
 							}
 							else
 							{

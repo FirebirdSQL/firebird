@@ -1506,17 +1506,6 @@ public:
 		MetaName name;
 	};
 
-	struct SetTableSpaceClause : public Clause
-	{
-		explicit SetTableSpaceClause(MemoryPool& p)
-			: Clause(p, TYPE_SET_TABLESPACE),
-			  name(p)
-		{
-		}
-
-		MetaName name;
-	};
-
 	RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode);
 
 	static void deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
