@@ -6567,6 +6567,7 @@ static bool drop_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
     // We assume the tablespace must exists if dfw with has added
 	fb_assert(tablespace);
 	fb_assert(tablespace->existenceLock);
+	fb_assert(tablespace->existenceLock->lck_logical != LCK_none);
 
 	switch (phase)
 	{
@@ -6624,6 +6625,7 @@ static bool modify_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 	// We assume the tablespace must exists if dfw with has added
 	fb_assert(tablespace);
 	fb_assert(tablespace->existenceLock);
+	fb_assert(tablespace->existenceLock->lck_logical != LCK_none);
 
 	switch (phase)
 	{
