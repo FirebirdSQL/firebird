@@ -1274,7 +1274,8 @@ public:
 			  refUpdateAction(RI_RESTRICT),
 			  refDeleteAction(RI_RESTRICT),
 			  triggers(p),
-			  blrWritersHolder(p)
+			  blrWritersHolder(p),
+			  tableSpace(p)
 		{
 		}
 
@@ -1287,6 +1288,7 @@ public:
 		const char* refDeleteAction;
 		Firebird::ObjectsArray<TriggerDefinition> triggers;
 		Firebird::ObjectsArray<BlrWriter> blrWritersHolder;
+		MetaName tableSpace;
 	};
 
 	struct CreateDropConstraint
@@ -1362,7 +1364,8 @@ public:
 			  refRelation(p),
 			  refColumns(p),
 			  refAction(NULL),
-			  check(NULL)
+			  check(NULL),
+			  tableSpace(p)
 		{
 		}
 
@@ -1374,6 +1377,7 @@ public:
 		Firebird::ObjectsArray<MetaName> refColumns;
 		NestConst<RefActionClause> refAction;
 		NestConst<BoolSourceClause> check;
+		MetaName tableSpace;
 	};
 
 	struct IdentityOptions

@@ -2509,7 +2509,7 @@ column_constraint($addColumnClause)
 			constraint.check = $1;
 		}
 	| REFERENCES symbol_table_name column_parens_opt
-			referential_trigger_action constraint_index_opt
+			referential_trigger_action constraint_index_opt tablespace_name_clause
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_FK;
@@ -2528,18 +2528,27 @@ column_constraint($addColumnClause)
 			}
 
 			constraint.index = $5;
+
+			if ($6)
+				constraint.tableSpace = *$6;
 		}
-	| UNIQUE constraint_index_opt
+	| UNIQUE constraint_index_opt tablespace_name_clause
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_UNIQUE;
 			constraint.index = $2;
+
+			if ($3)
+				constraint.tableSpace = *$3;
 		}
-	| PRIMARY KEY constraint_index_opt
+	| PRIMARY KEY constraint_index_opt tablespace_name_clause
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_PK;
 			constraint.index = $3;
+
+			if ($4)
+				constraint.tableSpace = *$4;
 		}
 	;
 
@@ -2566,7 +2575,7 @@ constraint_name_opt
 
 %type table_constraint(<relationNode>)
 table_constraint($relationNode)
-	: UNIQUE column_parens constraint_index_opt
+	: UNIQUE column_parens constraint_index_opt tablespace_name_clause
 		{
 			RelationNode::AddConstraintClause& constraint = *newNode<RelationNode::AddConstraintClause>();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_UNIQUE;
@@ -2579,9 +2588,12 @@ table_constraint($relationNode)
 
 			constraint.index = $3;
 
+			if ($4)
+				constraint.tableSpace = *$4;
+
 			$relationNode->clauses.add(&constraint);
 		}
-	| PRIMARY KEY column_parens constraint_index_opt
+	| PRIMARY KEY column_parens constraint_index_opt tablespace_name_clause
 		{
 			RelationNode::AddConstraintClause& constraint = *newNode<RelationNode::AddConstraintClause>();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_PK;
@@ -2594,10 +2606,13 @@ table_constraint($relationNode)
 
 			constraint.index = $4;
 
+			if ($5)
+				constraint.tableSpace = *$5;
+
 			$relationNode->clauses.add(&constraint);
 		}
 	| FOREIGN KEY column_parens REFERENCES symbol_table_name column_parens_opt
-		referential_trigger_action constraint_index_opt
+		referential_trigger_action constraint_index_opt tablespace_name_clause
 		{
 			RelationNode::AddConstraintClause& constraint = *newNode<RelationNode::AddConstraintClause>();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_FK;
@@ -2621,6 +2636,9 @@ table_constraint($relationNode)
 			}
 
 			constraint.index = $8;
+
+			if ($9)
+				constraint.tableSpace = *$9;
 
 			$relationNode->clauses.add(&constraint);
 		}

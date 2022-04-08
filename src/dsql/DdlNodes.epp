@@ -6568,6 +6568,7 @@ void RelationNode::makeConstraint(thread_db* /*tdbb*/, DsqlCompilerScratch* dsql
 			if (constraint.create->index && constraint.create->index->name.isEmpty())
 				constraint.create->index->name = constraint.name;
 			constraint.create->columns = clause->columns;
+			constraint.create->tableSpace = clause->tableSpace;
 			break;
 		}
 
@@ -6686,6 +6687,7 @@ void RelationNode::makeConstraint(thread_db* /*tdbb*/, DsqlCompilerScratch* dsql
 				}
 			}
 
+			constraint.create->tableSpace = clause->tableSpace;
 			break;
 		}
 
@@ -6764,6 +6766,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				definition.columns = constraint.columns;
 				definition.refRelation = constraint.refRelation;
 				definition.refColumns = constraint.refColumns;
+				definition.tableSpace = constraint.tableSpace;
 
 				CreateIndexNode::store(tdbb, transaction, constraint.index->name,
 					definition, &referredIndexName);
