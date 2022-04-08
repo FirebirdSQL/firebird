@@ -4721,7 +4721,16 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		index = CMP_get_index_lock(tdbb, relation, id);
 		if (isTempIndex && index)
 			index->idl_count++;
-		IDX_delete_index(tdbb, relation, id);
+
+		try
+		{
+			IDX_delete_index(tdbb, relation, id);
+		}
+		catch (...)
+		{
+			index->idl_count = 0;
+			throw;
+		}
 
 		if (isTempIndex)
 			return false;

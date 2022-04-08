@@ -468,9 +468,24 @@ bool BTR_delete_index(thread_db* tdbb, Jrd::jrd_rel* relation, WIN* window, USHO
 	else
 	{
 		index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
+		const USHORT pg_space_id = irt_desc->getRootPageSpaceId();
+
+		if (PageSpace::isTablespace(pg_space_id))
+		{
+			try
+			{
+				MET_tablespace_id(tdbb, pg_space_id);
+			}
+			catch (...)
+			{
+				CCH_RELEASE(tdbb, window);
+				throw;
+			}
+		}
+
 		CCH_MARK(tdbb, window);
 		// next is on index page space!!!
-		const PageNumber next(irt_desc->getRootPageSpaceId(), irt_desc->getRootPage());
+		const PageNumber next(pg_space_id, irt_desc->getRootPage());
 		tree_exists = (irt_desc->getRootPage() != 0);
 
 		// remove the pointer to the top-level index page before we delete it
