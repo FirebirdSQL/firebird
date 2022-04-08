@@ -1196,7 +1196,7 @@ public:
 	void setupSkipData(const Firebird::string& regexp);
 	void setupIncludeData(const Firebird::string& regexp);
 	bool skipRelation(const char* name);
-	void loadMapping(const char* mapping_file, StringMap& map, bool caseSensitive = true);
+	void loadMapping(const char* mapping_file, StringMap& map, bool clearMap = true, bool caseSensitive = true);
 
 	char veryEnd;
 	//starting after this members must be initialized in constructor explicitly

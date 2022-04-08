@@ -2859,8 +2859,7 @@ void BurpGlobals::print_stats_header()
 	burp_output(false, "\n");
 }
 
-
-void BurpGlobals::loadMapping(const char* mapping_file, StringMap& map, bool caseSensitive)
+void BurpGlobals::loadMapping(const char* mapping_file, StringMap& map, bool clearMap, bool caseSensitive)
 {
 	FILE* f = os_utils::fopen(mapping_file, fopen_read_type);
 	if (!f)
@@ -2869,7 +2868,9 @@ void BurpGlobals::loadMapping(const char* mapping_file, StringMap& map, bool cas
 	}
 
 	//Read lines from file, split by space and add to mapping
-	map.clear();
+	if (clearMap)
+		map.clear();
+
 	bool end = false;
 	do
 	{
