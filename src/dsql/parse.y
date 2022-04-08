@@ -4905,7 +4905,7 @@ without_time_zone_opt
 
 %type <legacyField> blob_type
 blob_type
-	: BLOB { $$ = newNode<dsql_fld>(); } blob_subtype(NOTRIAL($2)) blob_segsize charset_clause tablespace_name_clause
+	: BLOB { $$ = newNode<dsql_fld>(); } blob_subtype(NOTRIAL($2)) blob_segsize charset_clause /*tablespace_name_clause*/
 		{
 			$$ = $2;
 			$$->dtype = dtype_blob;
@@ -4916,20 +4916,22 @@ blob_type
 				$$->charSet = *$5;
 				$$->flags |= FLD_has_chset;
 			}
-			if ($6)
-				$$->fld_ts_name = *$6;
+
+			//if ($6)
+			//	$$->fld_ts_name = *$6;
 		}
-	| BLOB '(' unsigned_short_integer ')' tablespace_name_clause
+	| BLOB '(' unsigned_short_integer ')' /*tablespace_name_clause*/
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_blob;
 			$$->length = sizeof(ISC_QUAD);
 			$$->segLength = (USHORT) $3;
 			$$->subType = 0;
-			if ($5)
-				$$->fld_ts_name = *$5;
+
+			//if ($5)
+			//	$$->fld_ts_name = *$5;
 		}
-	| BLOB '(' unsigned_short_integer ',' signed_short_integer ')' tablespace_name_clause
+	| BLOB '(' unsigned_short_integer ',' signed_short_integer ')' /*tablespace_name_clause*/
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_blob;
@@ -4938,10 +4940,10 @@ blob_type
 			$$->subType = (USHORT) $5;
 			$$->flags |= FLD_has_sub;
 
-			if ($7)
-				$$->fld_ts_name = *$7;
+			//if ($7)
+			//	$$->fld_ts_name = *$7;
 		}
-	| BLOB '(' ',' signed_short_integer ')' tablespace_name_clause
+	| BLOB '(' ',' signed_short_integer ')' /*tablespace_name_clause*/
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_blob;
@@ -4950,8 +4952,8 @@ blob_type
 			$$->subType = (USHORT) $4;
 			$$->flags |= FLD_has_sub;
 
-			if ($6)
-				$$->fld_ts_name = *$6;
+			//if ($6)
+			//	$$->fld_ts_name = *$6;
 		}
 	;
 
@@ -7473,12 +7475,12 @@ map_role
 // TABLESPACE
 %type <createAlterTablespaceNode> tablespace_clause
 tablespace_clause
-	: symbol_tablespace_name FILE utf_string tablespace_offline_clause tablespace_readonly_clause
+	: symbol_tablespace_name FILE utf_string /*tablespace_offline_clause tablespace_readonly_clause*/
 		{
 			$$ = newNode<CreateAlterTablespaceNode>(*$1);
 			$$->fileName = *$3;
-			$$->offline = $4;
-			$$->readonly = $5;
+			//$$->offline = $4;
+			//$$->readonly = $5;
 		}
 	;
 
@@ -7497,38 +7499,38 @@ symbol_tablespace_name
 	: valid_symbol_name
 	;
 
-%type <boolVal> tablespace_offline_clause
-tablespace_offline_clause
-	: { $$ = false; }
-	| OFFLINE	{ $$ = true; }
-	| ONLINE	{ $$ = false; }
-	;
+//%type <boolVal> tablespace_offline_clause
+//tablespace_offline_clause
+//	: { $$ = false; }
+//	| OFFLINE	{ $$ = true; }
+//	| ONLINE	{ $$ = false; }
+//	;
 
-%type <boolVal> tablespace_readonly_clause
-tablespace_readonly_clause
-	:				{ $$ = false; }
-	| READ ONLY		{ $$ = true; }
-	| READ WRITE	{ $$ = false; }
-	;
+//%type <boolVal> tablespace_readonly_clause
+//tablespace_readonly_clause
+//	:				{ $$ = false; }
+//	| READ ONLY		{ $$ = true; }
+//	| READ WRITE	{ $$ = false; }
+//	;
 
 %type <createAlterTablespaceNode> alter_tablespace_clause
 alter_tablespace_clause
-	: symbol_tablespace_name SET FILE to_opt utf_string tablespace_offline_clause tablespace_readonly_clause
+	: symbol_tablespace_name SET FILE to_opt utf_string /*tablespace_offline_clause tablespace_readonly_clause*/
 		{
 			$$ = newNode<CreateAlterTablespaceNode>(*$1);
 			$$->create = false;
 			$$->alter = true;
 			$$->fileName = *$5;
-			$$->offline = $6;
-			$$->readonly = $7;
+			//$$->offline = $6;
+			//$$->readonly = $7;
 		}
-	| symbol_tablespace_name tablespace_offline_clause tablespace_readonly_clause
+	| symbol_tablespace_name /*tablespace_offline_clause tablespace_readonly_clause*/
 		{
 			$$ = newNode<CreateAlterTablespaceNode>(*$1);
 			$$->create = false;
 			$$->alter = true;
-			$$->offline = $2;
-			$$->readonly = $3;
+			//$$->offline = $2;
+			//$$->readonly = $3;
 		}
 	;
 
