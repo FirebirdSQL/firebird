@@ -1089,7 +1089,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 		case IN_SW_BURP_TS_PATH:
 			if (itr + 2 >= argc)
 			{
-				BURP_error(1025, true, SafeArg() << "TS");
+				BURP_error(1025, true, SafeArg() << in_sw_tab->in_sw_name);
 				// parameter for option -@1 is missing
 			}
 
