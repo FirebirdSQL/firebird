@@ -2155,7 +2155,7 @@ ULONG PageSpace::actAlloc()
 	return tot_pages;
 }
 
-ULONG PageSpace::actAlloc(Database* dbb)
+ULONG PageSpace::actAlloc(const Database* dbb)
 {
 	PageSpace* pgSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	return pgSpace->actAlloc();
@@ -2187,7 +2187,7 @@ ULONG PageSpace::maxAlloc()
 	return nPages;
 }
 
-ULONG PageSpace::maxAlloc(Database* dbb)
+ULONG PageSpace::maxAlloc(const Database* dbb)
 {
 	PageSpace* pgSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	return pgSpace->maxAlloc();
@@ -2292,7 +2292,7 @@ ULONG PageSpace::lastUsedPage()
 	return last_bit + (pipLast == pipFirst ? 0 : pipLast);
 }
 
-ULONG PageSpace::lastUsedPage(Database* dbb)
+ULONG PageSpace::lastUsedPage(const Database* dbb)
 {
 	PageSpace* pgSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	return pgSpace->lastUsedPage();
@@ -2376,7 +2376,7 @@ ULONG PageSpace::usedPages()
 	return used;
 }
 
-ULONG PageSpace::usedPages(Database* dbb)
+ULONG PageSpace::usedPages(const Database* dbb)
 {
 	PageSpace* pgSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	return pgSpace->usedPages();
@@ -2469,6 +2469,27 @@ ULONG PageSpace::getSCNPageNum(ULONG sequence) const
 	return sequence * dbb->dbb_page_manager.pagesPerSCN;
 }
 
+
+PageManager::PageManager(Database* aDbb, Firebird::MemoryPool& aPool) :
+	dbb(aDbb),
+	pageSpaces(aPool),
+	pageSpacesLock(NULL),
+	pool(aPool)
+{
+	pagesPerPIP = 0;
+	bytesBitPIP = 0;
+	transPerTIP = 0;
+	gensPerPage = 0;
+	pagesPerSCN = 0;
+	tempPageSpaceID = 0;
+	tempFileCreated = false;
+
+	if (dbb->dbb_config->getServerMode() == MODE_SUPER)
+		pageSpacesLock = FB_NEW_POOL(pool) RWLock();
+
+	addPageSpace(DB_PAGE_SPACE);
+}
+
 PageSpace* PageManager::addPageSpace(const USHORT pageSpaceID)
 {
 	WriteLockGuard guard(pageSpacesLock, FB_FUNCTION);
@@ -2485,7 +2506,7 @@ PageSpace* PageManager::addPageSpace(const USHORT pageSpaceID)
 	return newPageSpace;
 }
 
-PageSpace* PageManager::findPageSpace(const USHORT pageSpace)
+PageSpace* PageManager::findPageSpace(const USHORT pageSpace) const
 {
 	ReadLockGuard guard(pageSpacesLock, FB_FUNCTION);
 

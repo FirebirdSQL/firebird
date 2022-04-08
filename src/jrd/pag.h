@@ -127,19 +127,19 @@ public:
 
 	// how many pages allocated
 	ULONG actAlloc();
-	static ULONG actAlloc(Database* dbb);
+	static ULONG actAlloc(const Database* dbb);
 
 	// number of last allocated page
 	ULONG maxAlloc();
-	static ULONG maxAlloc(Database* dbb);
+	static ULONG maxAlloc(const Database* dbb);
 
 	// number of last used page
 	ULONG lastUsedPage();
-	static ULONG lastUsedPage(Database* dbb);
+	static ULONG lastUsedPage(const Database* dbb);
 
 	// number of used pages
 	ULONG usedPages();
-	static ULONG usedPages(Database* dbb);
+	static ULONG usedPages(const Database* dbb);
 
 	// extend page space
 	bool extend(thread_db*, const ULONG, const bool);
@@ -159,29 +159,17 @@ private:
 class PageManager : public pool_alloc<type_PageManager>
 {
 public:
-	explicit PageManager(Database* aDbb, Firebird::MemoryPool& aPool) :
-		dbb(aDbb),
-		pageSpaces(aPool),
-		pool(aPool)
-	{
-		pagesPerPIP = 0;
-		bytesBitPIP = 0;
-		transPerTIP = 0;
-		gensPerPage = 0;
-		pagesPerSCN = 0;
-		tempPageSpaceID = 0;
-		tempFileCreated = false;
-
-		addPageSpace(DB_PAGE_SPACE);
-	}
+	explicit PageManager(Database* aDbb, Firebird::MemoryPool& aPool);
 
 	~PageManager()
 	{
 		while (pageSpaces.hasData())
 			delete pageSpaces.pop();
+
+		delete pageSpacesLock;
 	}
 
-	PageSpace* findPageSpace(const USHORT pageSpaceID);
+	PageSpace* findPageSpace(const USHORT pageSpaceID) const;
 
 	void initTempPageSpace(thread_db* tdbb);
 	USHORT getTempPageSpaceID(thread_db* tdbb);
@@ -205,7 +193,7 @@ private:
 
 	Database* dbb;
 	PageSpaceArray pageSpaces;
-	Firebird::RWLock pageSpacesLock;
+	Firebird::RWLock* pageSpacesLock;
 	Firebird::MemoryPool& pool;
 	Firebird::Mutex	initTmpMtx;
 	USHORT tempPageSpaceID;

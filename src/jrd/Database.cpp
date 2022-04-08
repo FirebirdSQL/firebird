@@ -49,7 +49,7 @@ using namespace Firebird;
 
 namespace Jrd
 {
-	bool Database::onRawDevice()
+	bool Database::onRawDevice() const
 	{
 		const PageSpace* const pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		return pageSpace->onRawDevice();
