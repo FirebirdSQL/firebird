@@ -7867,10 +7867,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 							ULONG flags = MET_get_rel_flags_from_TYPE(REL.RDB$RELATION_TYPE);
 
 							if (flags & (REL_temp_tran | REL_temp_conn))
-							{
-								// msg 311: "Cannot alter tablespace for temporary table @1"
-								status_exception::raise(Arg::PrivateDyn(311) << name);
-							}
+								status_exception::raise(Arg::Gds(isc_dyn_cant_set_ts_table) << name);
 						}
 
 						// Check if we are trying to change tablespace name to the already set
@@ -9594,6 +9591,7 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 		IDX.RDB$TABLESPACE_NAME.NULL = TRUE;
 
 		MetaName relationTablespace;
+		bool temporary = false;
 
 		// Check if the table is actually a view.
 
@@ -9608,8 +9606,15 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 				// msg 181: "attempt to index a view"
 				status_exception::raise(Arg::PrivateDyn(181));
 			}
+
 			if (!VREL.RDB$TABLESPACE_NAME.NULL)
 				relationTablespace = VREL.RDB$TABLESPACE_NAME;
+
+			if (!VREL.RDB$RELATION_TYPE.NULL)
+			{
+				ULONG flags = MET_get_rel_flags_from_TYPE(VREL.RDB$RELATION_TYPE);
+				temporary = flags & (REL_temp_tran | REL_temp_conn);
+			}
 		}
 		END_FOR
 
@@ -9633,6 +9638,9 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 
 		if (definition.tableSpace.hasData())
 		{
+			if (temporary)
+				status_exception::raise(Arg::Gds(isc_dyn_cant_set_ts_index) << IDX.RDB$INDEX_NAME);
+
 			if (definition.tableSpace != PRIMARY_TABLESPACE_NAME)
 			{
 				if (!checkObjectExist(tdbb, transaction, definition.tableSpace, obj_tablespaces))
@@ -10058,6 +10066,22 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 
 			if (!primary_ts && !checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
 				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
+
+			AutoRequest request2;
+
+			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+				REL IN RDB$RELATIONS
+				WITH REL.RDB$RELATION_NAME EQ IDX.RDB$RELATION_NAME
+			{
+				if (!REL.RDB$RELATION_TYPE.NULL)
+				{
+					ULONG flags = MET_get_rel_flags_from_TYPE(REL.RDB$RELATION_TYPE);
+
+					if (flags & (REL_temp_tran | REL_temp_conn))
+						status_exception::raise(Arg::Gds(isc_dyn_cant_set_ts_index) << name);
+				}
+			}
+			END_FOR
 
 			// Check if we are trying to change tablespace name to the already set
 			if ( (IDX.RDB$TABLESPACE_NAME.NULL && primary_ts) ||
