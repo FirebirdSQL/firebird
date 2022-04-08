@@ -7851,11 +7851,10 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 					fb_assert(tableSpaceName.hasData());
 
-					if (tableSpaceName != PRIMARY_TABLESPACE_NAME &&
-						!checkObjectExist(tdbb, transaction, tableSpaceName, obj_tablespaces))
-					{
+					const bool primary_ts = (tableSpaceName == PRIMARY_TABLESPACE_NAME);
+
+					if (!primary_ts && !checkObjectExist(tdbb, transaction, tableSpaceName, obj_tablespaces))
 						status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpaceName.c_str());
-					}
 
 					AutoRequest request2;
 
@@ -7875,7 +7874,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						}
 
 						// Check if we are trying to change tablespace name to the already set
-						if ( (REL.RDB$TABLESPACE_NAME.NULL && tableSpaceName == PRIMARY_TABLESPACE_NAME) ||
+						if ( (REL.RDB$TABLESPACE_NAME.NULL && primary_ts) ||
 							 (!REL.RDB$TABLESPACE_NAME.NULL && tableSpaceName == REL.RDB$TABLESPACE_NAME) )
 						{
 							break;
@@ -7891,7 +7890,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 						MODIFY REL
 						{
-							if (tableSpaceName != PRIMARY_TABLESPACE_NAME)
+							if (!primary_ts)
 							{
 								REL.RDB$TABLESPACE_NAME.NULL = FALSE;
 								strcpy(REL.RDB$TABLESPACE_NAME, tableSpaceName.c_str());
@@ -10055,12 +10054,21 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 			fb_assert(op == OP_SET_TABLESPACE);
 			fb_assert(tableSpace.hasData());
 
-			MODIFY IDX
-				if (tableSpace != PRIMARY_TABLESPACE_NAME)
-				{
-					if (!checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
-						status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
+			const bool primary_ts = (tableSpace == PRIMARY_TABLESPACE_NAME);
 
+			if (!primary_ts && !checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
+				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
+
+			// Check if we are trying to change tablespace name to the already set
+			if ( (IDX.RDB$TABLESPACE_NAME.NULL && primary_ts) ||
+				 (!IDX.RDB$TABLESPACE_NAME.NULL && tableSpace == IDX.RDB$TABLESPACE_NAME) )
+			{
+				break;
+			}
+
+			MODIFY IDX
+				if (!primary_ts)
+				{
 					IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
 					strcpy(IDX.RDB$TABLESPACE_NAME, tableSpace.c_str());
 				}
