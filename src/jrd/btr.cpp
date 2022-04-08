@@ -426,12 +426,16 @@ void BTR_create(thread_db* tdbb,
 	jrd_rel* const relation = creation.relation;
 	index_desc* const idx = creation.index;
 
+	RelationPages* const relPages = relation->getPages(tdbb);
+
+	if (relation->isTemporary())
+		idx->idx_pg_space_id = relPages->rel_pg_space_id;
+
 	// Now that the index id has been checked out, create the index.
 	idx->idx_root = fast_load<Sort>(tdbb, creation, selectivity, creation.sort);
 
 	// Index is created.  Go back to the index root page and update it to
 	// point to the index.
-	RelationPages* const relPages = relation->getPages(tdbb);
 	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
 	index_root_page* const root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_root);
 	CCH_MARK(tdbb, &window);
