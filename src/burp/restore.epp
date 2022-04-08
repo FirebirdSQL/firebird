@@ -61,6 +61,7 @@
 #include "../auth/trusted/AuthSspi.h"
 #include "../common/dsc_proto.h"
 #include "../common/ThreadStart.h"
+#include "../common/db_alias.h"
 
 using MsgFormat::SafeArg;
 using Firebird::FbLocalStatus;
@@ -7551,8 +7552,26 @@ bool get_tablespace(BurpGlobals* tdgbl)
 		Firebird::string newFile;
 		if (tdgbl->tablespace_mapping.get(X.RDB$TABLESPACE_NAME, newFile))
 		{
+			PathUtils::fixupSeparators(newFile.begin());
+			Firebird::PathName ts_file_name;
+
+			if (PathUtils::isRelative(newFile.c_str()))
+			{
+				Firebird::PathName expanded_db;
+				expandDatabaseName(tdgbl->gbl_database_file_name, expanded_db, NULL);
+
+				Firebird::PathName db_path, db_file;
+				PathUtils::splitLastComponent(db_path, db_file, expanded_db);
+				PathUtils::concatPath(ts_file_name, db_path, newFile.c_str());
+			}
+			else
+				ts_file_name = newFile.c_str();
+
+			if (ts_file_name.length() >= sizeof(X.RDB$FILE_NAME))
+				BURP_error(46, true); // msg 46 string truncated
+
 			X.RDB$FILE_NAME.NULL = FALSE;
-			strcpy(X.RDB$FILE_NAME, newFile.c_str());
+			strcpy(X.RDB$FILE_NAME, ts_file_name.c_str());
 		}
 
 	}

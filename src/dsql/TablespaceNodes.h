@@ -64,7 +64,7 @@ private:
 
 public:
 	MetaName name;
-	Firebird::string fileName;
+	Firebird::PathName fileName;
 	bool create;
 	bool alter;
 	bool offline;

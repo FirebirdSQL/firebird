@@ -33,6 +33,7 @@
 #include "../dsql/make_proto.h"
 #include "../dsql/pass1_proto.h"
 #include "../common/StatusArg.h"
+#include "../common/os/path_utils.h"
 #include "../jrd/Attachment.h"
 #include "../jrd/scl_proto.h"
 #include "../jrd/dyn_ut_proto.h"
@@ -81,6 +82,16 @@ void CreateAlterTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* ds
 	jrd_tra* transaction)
 {
 	fb_assert(create || alter);
+
+	PathUtils::fixupSeparators(fileName);
+
+	if (PathUtils::isRelative(fileName))
+	{
+		PathName temp = fileName;
+		PathName db_path, db_file;
+		PathUtils::splitLastComponent(db_path, db_file, tdbb->getDatabase()->dbb_filename);
+		PathUtils::concatPath(fileName, db_path, temp);
+	}
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -141,6 +152,9 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 
 				X.RDB$OWNER_NAME.NULL = FALSE;
 				strcpy(X.RDB$OWNER_NAME, userName.c_str());
+
+				if (fileName.length() >= sizeof(X.RDB$FILE_NAME))
+					status_exception::raise(Arg::Gds(isc_dyn_name_longer));
 
 				X.RDB$FILE_NAME.NULL = FALSE;
 				strcpy(X.RDB$FILE_NAME, fileName.c_str());
@@ -212,6 +226,9 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 		MODIFY X
 			if (fileName.hasData())
 			{
+				if (fileName.length() >= sizeof(X.RDB$FILE_NAME))
+					status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+
 				fb_assert(X.RDB$FILE_NAME.NULL == FALSE);
 				if (!PIO_file_exists(fileName.c_str()))
 					ERR_post(Arg::Gds(isc_ts_file_not_exists) << Arg::Str(name) << Arg::Str(fileName));

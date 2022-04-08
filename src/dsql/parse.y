@@ -7478,7 +7478,7 @@ tablespace_clause
 	: symbol_tablespace_name FILE utf_string /*tablespace_offline_clause tablespace_readonly_clause*/
 		{
 			$$ = newNode<CreateAlterTablespaceNode>(*$1);
-			$$->fileName = *$3;
+			$$->fileName = $3->c_str();
 			//$$->offline = $4;
 			//$$->readonly = $5;
 		}
@@ -7520,7 +7520,7 @@ alter_tablespace_clause
 			$$ = newNode<CreateAlterTablespaceNode>(*$1);
 			$$->create = false;
 			$$->alter = true;
-			$$->fileName = *$5;
+			$$->fileName = $5->c_str();
 			//$$->offline = $6;
 			//$$->readonly = $7;
 		}
