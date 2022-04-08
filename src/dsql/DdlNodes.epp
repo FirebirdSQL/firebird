@@ -7875,21 +7875,15 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						REL IN RDB$RELATIONS
 						WITH REL.RDB$RELATION_NAME EQ name.c_str()
 					{
-						if (REL.RDB$RELATION_ID.NULL)
+						if (!REL.RDB$RELATION_TYPE.NULL)
 						{
-							// msg 306: "Table @1 does not exist"
-							status_exception::raise(Arg::PrivateDyn(306) << name);
-						}
+							ULONG flags = MET_get_rel_flags_from_TYPE(REL.RDB$RELATION_TYPE);
 
-						// RS: We need to have relation in the cache with current pageSpaceId
-						// to copy data from it. So check it in assert.
-						jrd_rel* rel = MET_lookup_relation_id(tdbb, REL.RDB$RELATION_ID, false);
-						fb_assert(rel);
-
-						if (rel->isTemporary())
-						{
-							// msg 311: "Cannot alter tablespace for temporary table @1"
-							status_exception::raise(Arg::PrivateDyn(311) << name);
+							if (flags & (REL_temp_tran | REL_temp_conn))
+							{
+								// msg 311: "Cannot alter tablespace for temporary table @1"
+								status_exception::raise(Arg::PrivateDyn(311) << name);
+							}
 						}
 
 						// Check if we are try to change tablespace name to the already set
@@ -7899,9 +7893,16 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 							break;
 						}
 
+						if (!REL.RDB$RELATION_ID.NULL)
+						{
+							// RS: We need to have relation in the cache with current pageSpaceId
+							// to copy data from it. So check it in assert.
+							jrd_rel* rel = MET_lookup_relation_id(tdbb, REL.RDB$RELATION_ID, false);
+							fb_assert(rel);
+						}
+
 						MODIFY REL
 						{
-
 							if (tableSpaceName.hasData())
 							{
 								REL.RDB$TABLESPACE_NAME.NULL = FALSE;
@@ -7912,9 +7913,11 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 								REL.RDB$TABLESPACE_NAME.NULL = TRUE;
 								REL.RDB$TABLESPACE_NAME[0] = 0;
 							}
-							DFW_post_work(transaction, dfw_move_relation, name.c_str(), REL.RDB$RELATION_ID);
 						}
 						END_MODIFY
+
+						if (!REL.RDB$RELATION_ID.NULL)
+							DFW_post_work(transaction, dfw_move_relation, name.c_str(), REL.RDB$RELATION_ID);
 					}
 					END_FOR
 
