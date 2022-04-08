@@ -1522,12 +1522,8 @@ create_clause
 				node->relation = $6;
 				$$ = node;
 			}
-		index_definition(static_cast<CreateIndexNode*>($7)) tablespace_name_clause
-			{
-				$$ = $7;
-				if ($9)
-					static_cast<CreateIndexNode*>($$)->tableSpace = *$9;
-			}
+		index_definition(static_cast<CreateIndexNode*>($7)) index_tablespace_clause(static_cast<CreateIndexNode*>($7))
+			{ $$ = $7; }
 	| FUNCTION function_clause					{ $$ = $2; }
 	| PROCEDURE procedure_clause				{ $$ = $2; }
 	| TABLE table_clause						{ $$ = $2; }
@@ -1657,6 +1653,17 @@ index_definition($createIndexNode)
  			$createIndexNode->computed = newNode<ValueSourceClause>();
 			$createIndexNode->computed->value = $3;
 			$createIndexNode->computed->source = makeParseStr(YYPOSNARG(2), YYPOSNARG(4));
+		}
+	;
+
+%type index_tablespace_clause(<createIndexNode>)
+index_tablespace_clause($createIndexNode)
+	: TABLESPACE DEFAULT
+		{ $createIndexNode->tableSpaceDefault = true; }
+	| tablespace_name_clause
+		{
+			if ($1)
+				$createIndexNode->tableSpace = *$1;
 		}
 	;
 

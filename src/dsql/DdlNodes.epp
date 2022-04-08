@@ -9652,10 +9652,12 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 			IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
 			strcpy(IDX.RDB$TABLESPACE_NAME, definition.tableSpace.c_str());
 		}
-		else if (relationTablespace.hasData())
+		else if (definition.tableSpaceDefault.specified &&
+			definition.tableSpaceDefault.value &&
+			relationTablespace.hasData())
 		{
 			/**
-			 * if tablespace for the index is not defined we use relation tablespace.
+			 * If TABLESPACE DEFAULT clause is specified, the index uses relation tablespace.
 			 * It's necessary to write it explicitly since later we can move relation
 			 * into another tablespace.
 			*/
@@ -10000,6 +10002,7 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	}
 
 	definition.tableSpace = tableSpace;
+	definition.tableSpaceDefault = tableSpaceDefault;
 
 	store(tdbb, transaction, name, definition);
 

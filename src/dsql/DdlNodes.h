@@ -1748,6 +1748,7 @@ public:
 		MetaName refRelation;
 		Firebird::ObjectsArray<MetaName> refColumns;
 		MetaName tableSpace;
+		Nullable<bool> tableSpaceDefault;
 	};
 
 public:
@@ -1758,7 +1759,8 @@ public:
 		  descending(false),
 		  relation(NULL),
 		  columns(NULL),
-		  computed(NULL)
+		  computed(NULL),
+		  tableSpaceDefault(false)
 	{
 	}
 
@@ -1785,6 +1787,7 @@ public:
 	NestConst<ValueListNode> columns;
 	NestConst<ValueSourceClause> computed;
 	MetaName tableSpace;
+	bool tableSpaceDefault;
 };
 
 
