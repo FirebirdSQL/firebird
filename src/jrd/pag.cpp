@@ -2627,6 +2627,13 @@ void PageManager::allocTableSpace(thread_db* tdbb, USHORT tableSpaceID, bool cre
 		if (findPageSpace(tableSpaceID))
 			return;
 
+		// Verify tablespace file path against DatabaseAccess entry of firebird.conf
+		if (!JRD_verify_database_access(fileName))
+		{
+			ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("tablespace") <<
+				Arg::Str(fileName));
+		}
+
 		PageSpace* newPageSpace = FB_NEW_POOL(pool) PageSpace(dbb, tableSpaceID);
 
 		try
