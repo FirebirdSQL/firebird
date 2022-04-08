@@ -3698,6 +3698,11 @@ jrd_rel* MET_relation(thread_db* tdbb, USHORT id)
 	// reserved for system relations
 	const USHORT max_sys_rel = USER_DEF_REL_INIT_ID - 1;
 
+	USHORT pageSpaceId = DB_PAGE_SPACE;
+
+	if (id > max_sys_rel)
+		pageSpaceId = MET_rel_pagespace(tdbb, id);
+
 	relation = FB_NEW_POOL(*pool) jrd_rel(*pool);
 	(*vector)[id] = relation;
 	relation->rel_id = id;
@@ -3729,7 +3734,6 @@ jrd_rel* MET_relation(thread_db* tdbb, USHORT id)
 
 	relation->rel_flags |= (REL_check_existence | REL_check_partners);
 
-	const USHORT pageSpaceId = MET_rel_pagespace(tdbb, id);
 	relation->setPageSpace(pageSpaceId);
 
 	return relation;
