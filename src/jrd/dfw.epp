@@ -6487,22 +6487,13 @@ static bool create_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 
 			AutoCacheRequest request(tdbb, irq_find_ts_dfw0, IRQ_REQUESTS);
 
-			bool found = false;
-			PathName file;
-
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 				TS IN RDB$TABLESPACES
 				WITH TS.RDB$TABLESPACE_ID EQ work->dfw_id
 			{
-				found = true;
-				file = TS.RDB$FILE_NAME;
+				unlink(TS.RDB$FILE_NAME);
 			}
 			END_FOR
-
-			if (!found)
-				return false;
-
-			unlink(file.c_str());
 		}
 		return false;
 
@@ -6515,22 +6506,14 @@ static bool create_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 
 			AutoCacheRequest request(tdbb, irq_find_ts_dfw, IRQ_REQUESTS);
 
-			bool found = false;
-			PathName file;
-
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 				TS IN RDB$TABLESPACES
 				WITH TS.RDB$TABLESPACE_ID EQ work->dfw_id
 			{
-				found = true;
-				file = TS.RDB$FILE_NAME;
+				PathName file = TS.RDB$FILE_NAME;
+				dbb->dbb_page_manager.allocTableSpace(tdbb, work->dfw_id, true, file);
 			}
 			END_FOR
-
-			if (!found)
-				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(work->dfw_name));
-
-			dbb->dbb_page_manager.allocTableSpace(tdbb, work->dfw_id, true, file);
 		}
 		return true;
 

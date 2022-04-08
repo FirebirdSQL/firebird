@@ -7568,16 +7568,25 @@ bool get_tablespace(BurpGlobals* tdgbl)
 				ts_file_name = newFile.c_str();
 
 			if (ts_file_name.length() >= sizeof(X.RDB$FILE_NAME))
-				BURP_error(46, true); // msg 46 string truncated
+			{
+				BURP_error(46, false); // msg 46 string truncated
+				return false;
+			}
 
 			X.RDB$FILE_NAME.NULL = FALSE;
 			strcpy(X.RDB$FILE_NAME, ts_file_name.c_str());
 		}
-
+		else
+		{
+			BURP_error(1022, false, SafeArg() << X.RDB$TABLESPACE_NAME << X.RDB$FILE_NAME);
+			// msg 1022 path to tablespace @1 is not specified (original path: "@2")
+			return false;
+		}
 	}
 	END_STORE
 	ON_ERROR
-		general_on_error();
+		BURP_print_status(true, &tdgbl->status_vector);
+		return false;
 	END_ERROR
 
 	return true;
@@ -11272,10 +11281,33 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 	bool flag_norel = true;	// To fix bug 10098
 	bool flag = false;
+	bool ts_error = false;
 	rec_type record;
 
-	while (get_record(&record, tdgbl) != rec_end)
+	while (true)
 	{
+		get_record(&record, tdgbl);
+
+		if (ts_error && record != rec_tablespace)
+		{
+			// Clean up RDB$TABLESPACES to prevent creation of files during DFW
+			FOR (REQUEST_HANDLE tdgbl->handles_get_ts_req_handle2)
+				X IN RDB$TABLESPACES
+				ERASE X;
+				ON_ERROR
+					general_on_error();
+				END_ERROR;
+			END_FOR;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
+
+			return false;
+		}
+
+		if (record == rec_end)
+			break;
+
 		switch (record)
 		{
 		case rec_charset:
@@ -11341,7 +11373,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 		case rec_tablespace:
 			if (!get_tablespace(tdgbl))
-				return false;
+				ts_error = true;
 			flag = true;
 			break;
 

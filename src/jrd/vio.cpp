@@ -247,13 +247,15 @@ inline void check_gbak_cheating_delete(thread_db* tdbb, const jrd_rel* relation)
 			if (tdbb->tdbb_flags & TDBB_dont_post_dfw)
 				return;
 
-			// There are 2 tables whose contents gbak might delete:
+			// There are 3 tables whose contents gbak might delete:
 			// - RDB$INDEX_SEGMENTS if it detects inconsistencies while restoring
 			// - RDB$FILES if switch -k is set
+			// - RDB$TABLESPACES if errors occur while restoring tablespaces
 			switch(relation->rel_id)
 			{
 			case rel_segments:
 			case rel_files:
+			case rel_tablespaces:
 				return;
 			}
 		}
