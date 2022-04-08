@@ -7452,7 +7452,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		REL.RDB$VIEW_SOURCE.NULL = TRUE;
 		REL.RDB$EXTERNAL_FILE.NULL = TRUE;
 
-		if (!tableSpace.isEmpty())
+		if (tableSpace.hasData() && tableSpace != PRIMARY_TABLESPACE_NAME)
 		{
 			if (!checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
 				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
@@ -7844,12 +7844,14 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					break;
 				}
 
-				case Clause::TYPE_ALTER_TABLESPACE:
+				case Clause::TYPE_SET_TABLESPACE:
 				{
 					const MetaName& tableSpaceName =
-						static_cast<const AlterTableSpaceClause*>(i->getObject())->name;
+						static_cast<const SetTableSpaceClause*>(i->getObject())->name;
 
-					if (!tableSpaceName.isEmpty())
+					fb_assert(tableSpaceName.hasData());
+
+					if (tableSpaceName != PRIMARY_TABLESPACE_NAME)
 					{
 						bool found = false;
 						AutoRequest request;
@@ -7886,9 +7888,9 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 							}
 						}
 
-						// Check if we are try to change tablespace name to the already set
-						if ( (REL.RDB$TABLESPACE_NAME.NULL && tableSpaceName.isEmpty()) ||
-							 (!REL.RDB$TABLESPACE_NAME.NULL && (tableSpaceName == REL.RDB$TABLESPACE_NAME) ) )
+						// Check if we are trying to change tablespace name to the already set
+						if ( (REL.RDB$TABLESPACE_NAME.NULL && tableSpaceName == PRIMARY_TABLESPACE_NAME) ||
+							 (!REL.RDB$TABLESPACE_NAME.NULL && tableSpaceName == REL.RDB$TABLESPACE_NAME) )
 						{
 							break;
 						}
@@ -7903,7 +7905,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 						MODIFY REL
 						{
-							if (tableSpaceName.hasData())
+							if (tableSpaceName != PRIMARY_TABLESPACE_NAME)
 							{
 								REL.RDB$TABLESPACE_NAME.NULL = FALSE;
 								strcpy(REL.RDB$TABLESPACE_NAME, tableSpaceName.c_str());
@@ -9646,18 +9648,19 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 
 		if (definition.tableSpace.hasData())
 		{
-			if (!checkObjectExist(tdbb, transaction, definition.tableSpace, obj_tablespaces))
-				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << definition.tableSpace.c_str());
+			if (definition.tableSpace != PRIMARY_TABLESPACE_NAME)
+			{
+				if (!checkObjectExist(tdbb, transaction, definition.tableSpace, obj_tablespaces))
+					status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << definition.tableSpace.c_str());
 
-			IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
-			strcpy(IDX.RDB$TABLESPACE_NAME, definition.tableSpace.c_str());
+				IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
+				strcpy(IDX.RDB$TABLESPACE_NAME, definition.tableSpace.c_str());
+			}
 		}
-		else if (definition.tableSpaceDefault.specified &&
-			definition.tableSpaceDefault.value &&
-			relationTablespace.hasData())
+		else if (relationTablespace.hasData())
 		{
 			/**
-			 * If TABLESPACE DEFAULT clause is specified, the index uses relation tablespace.
+			 * If TABLESPACE clause is omitted, the index uses relation tablespace.
 			 * It's necessary to write it explicitly since later we can move relation
 			 * into another tablespace.
 			*/
@@ -10002,7 +10005,6 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	}
 
 	definition.tableSpace = tableSpace;
-	definition.tableSpaceDefault = tableSpaceDefault;
 
 	store(tdbb, transaction, name, definition);
 
@@ -10064,9 +10066,11 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 		}
 		else
 		{
-			fb_assert(op == OP_ALTER_TABLESPACE || op == OP_DROP_TABLESPACE);
+			fb_assert(op == OP_SET_TABLESPACE);
+			fb_assert(tableSpace.hasData());
+
 			MODIFY IDX
-				if (op == OP_ALTER_TABLESPACE)
+				if (tableSpace != PRIMARY_TABLESPACE_NAME)
 				{
 					bool ts_found = false;
 					AutoRequest request2;
@@ -10090,7 +10094,6 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 				}
 				else
 				{
-					fb_assert(op == OP_DROP_TABLESPACE);
 					IDX.RDB$TABLESPACE_NAME.NULL = TRUE;
 					IDX.RDB$TABLESPACE_NAME[0] = 0;
 				}

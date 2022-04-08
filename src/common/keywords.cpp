@@ -373,7 +373,7 @@ static const TOK tokens[] =
 	{TOK_PRECEDING, "PRECEDING", true},
 	{TOK_PRECISION, "PRECISION", false},
 	{TOK_PRESERVE, "PRESERVE", true},
-	{TOK_PRIMARY, "PRIMARY", false},
+	{TOK_PRIMARY, "PRIMARY", true},
 	{TOK_PRIOR, "PRIOR", true},
 	{TOK_PRIVILEGE, "PRIVILEGE", true},
 	{TOK_PRIVILEGES, "PRIVILEGES", true},

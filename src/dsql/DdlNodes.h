@@ -1314,7 +1314,7 @@ public:
 			TYPE_DROP_CONSTRAINT,
 			TYPE_ALTER_SQL_SECURITY,
 			TYPE_ALTER_PUBLICATION,
-			TYPE_ALTER_TABLESPACE
+			TYPE_SET_TABLESPACE
 		};
 
 		explicit Clause(MemoryPool& p, Type aType)
@@ -1502,10 +1502,11 @@ public:
 		MetaName name;
 	};
 
-	struct AlterTableSpaceClause : public Clause
+	struct SetTableSpaceClause : public Clause
 	{
-		explicit AlterTableSpaceClause(MemoryPool& p)
-			: Clause(p, TYPE_ALTER_TABLESPACE)
+		explicit SetTableSpaceClause(MemoryPool& p)
+			: Clause(p, TYPE_SET_TABLESPACE),
+			  name(p)
 		{
 		}
 
@@ -1748,7 +1749,6 @@ public:
 		MetaName refRelation;
 		Firebird::ObjectsArray<MetaName> refColumns;
 		MetaName tableSpace;
-		Nullable<bool> tableSpaceDefault;
 	};
 
 public:
@@ -1759,8 +1759,7 @@ public:
 		  descending(false),
 		  relation(NULL),
 		  columns(NULL),
-		  computed(NULL),
-		  tableSpaceDefault(false)
+		  computed(NULL)
 	{
 	}
 
@@ -1787,14 +1786,13 @@ public:
 	NestConst<ValueListNode> columns;
 	NestConst<ValueSourceClause> computed;
 	MetaName tableSpace;
-	bool tableSpaceDefault;
 };
 
 
 class AlterIndexNode : public DdlNode
 {
 public:
-	enum OP {OP_ACTIVE, OP_INACTIVE, OP_ALTER_TABLESPACE, OP_DROP_TABLESPACE};
+	enum OP {OP_ACTIVE, OP_INACTIVE, OP_SET_TABLESPACE};
 
 	AlterIndexNode(MemoryPool& p, const MetaName& aName, OP aOp)
 		: DdlNode(p),

@@ -1522,8 +1522,13 @@ create_clause
 				node->relation = $6;
 				$$ = node;
 			}
-		index_definition(static_cast<CreateIndexNode*>($7)) index_tablespace_clause(static_cast<CreateIndexNode*>($7))
-			{ $$ = $7; }
+		index_definition(static_cast<CreateIndexNode*>($7)) tablespace_name_clause
+			{
+				if ($9)
+					static_cast<CreateIndexNode*>($7)->tableSpace = *$9;
+
+				$$ = $7;
+			}
 	| FUNCTION function_clause					{ $$ = $2; }
 	| PROCEDURE procedure_clause				{ $$ = $2; }
 	| TABLE table_clause						{ $$ = $2; }
@@ -1653,17 +1658,6 @@ index_definition($createIndexNode)
  			$createIndexNode->computed = newNode<ValueSourceClause>();
 			$createIndexNode->computed->value = $3;
 			$createIndexNode->computed->source = makeParseStr(YYPOSNARG(2), YYPOSNARG(4));
-		}
-	;
-
-%type index_tablespace_clause(<createIndexNode>)
-index_tablespace_clause($createIndexNode)
-	: TABLESPACE DEFAULT
-		{ $createIndexNode->tableSpaceDefault = true; }
-	| tablespace_name_clause
-		{
-			if ($1)
-				$createIndexNode->tableSpace = *$1;
 		}
 	;
 
@@ -4230,17 +4224,11 @@ alter_op($relationNode)
 				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_PUBLICATION);
 			$relationNode->clauses.add(clause);
 		}
-	| ALTER TABLESPACE symbol_tablespace_name
+	| SET TABLESPACE to_opt symbol_tablespace_name
 		{
-			RelationNode::AlterTableSpaceClause* clause =
-				newNode<RelationNode::AlterTableSpaceClause>();
-			clause->name = *$3;
-			$relationNode->clauses.add(clause);
-		}
-	| DROP TABLESPACE
-		{
-			RelationNode::AlterTableSpaceClause* clause =
-				newNode<RelationNode::AlterTableSpaceClause>();
+			RelationNode::SetTableSpaceClause* clause =
+				newNode<RelationNode::SetTableSpaceClause>();
+			clause->name = *$4;
 			$relationNode->clauses.add(clause);
 		}
 	;
@@ -4412,13 +4400,12 @@ drop_behaviour
 alter_index_clause
 	: symbol_index_name ACTIVE		{ $$ = newNode<AlterIndexNode>(*$1, AlterIndexNode::OP_ACTIVE); }
 	| symbol_index_name INACTIVE	{ $$ = newNode<AlterIndexNode>(*$1, AlterIndexNode::OP_INACTIVE); }
-	| symbol_index_name ALTER TABLESPACE symbol_tablespace_name
+	| symbol_index_name SET TABLESPACE to_opt symbol_tablespace_name
 		{
-			AlterIndexNode* node = newNode<AlterIndexNode>(*$1, AlterIndexNode::OP_ALTER_TABLESPACE);
-			node->tableSpace = *$4;
+			AlterIndexNode* node = newNode<AlterIndexNode>(*$1, AlterIndexNode::OP_SET_TABLESPACE);
+			node->tableSpace = *$5;
 			$$ = node;
 		}
-	| symbol_index_name DROP TABLESPACE		{ $$ = newNode<AlterIndexNode>(*$1, AlterIndexNode::OP_DROP_TABLESPACE); }
 	;
 
 %type <ddlNode>	alter_udf_clause
@@ -7477,6 +7464,16 @@ tablespace_clause
 		}
 	;
 
+to_opt
+	: // nothing
+	| TO
+	;
+
+in_opt
+	: // nothing
+	| IN
+	;
+
 %type <metaNamePtr> symbol_tablespace_name
 symbol_tablespace_name
 	: valid_symbol_name
@@ -7498,14 +7495,14 @@ tablespace_readonly_clause
 
 %type <createAlterTablespaceNode> alter_tablespace_clause
 alter_tablespace_clause
-	: symbol_tablespace_name FILE utf_string tablespace_offline_clause tablespace_readonly_clause
+	: symbol_tablespace_name SET FILE to_opt utf_string tablespace_offline_clause tablespace_readonly_clause
 		{
 			$$ = newNode<CreateAlterTablespaceNode>(*$1);
 			$$->create = false;
 			$$->alter = true;
-			$$->fileName = *$3;
-			$$->offline = $4;
-			$$->readonly = $5;
+			$$->fileName = *$5;
+			$$->offline = $6;
+			$$->readonly = $7;
 		}
 	| symbol_tablespace_name tablespace_offline_clause tablespace_readonly_clause
 		{
@@ -7528,13 +7525,8 @@ replace_tablespace_clause
 
 %type <metaNamePtr> tablespace_name_clause
 tablespace_name_clause
-	:	{
-			$$ = NULL;
-		}
-	| TABLESPACE symbol_tablespace_name
-		{
-			$$ = $2;
-		}
+	: /* nothing */ { $$ = NULL; }
+	| in_opt TABLESPACE symbol_tablespace_name { $$ = $3; }
 	;
 
 %type <dropTablespaceNode> drop_tablespace_clause
@@ -9260,6 +9252,7 @@ non_reserved_word
 	| OFFLINE
 	| INCLUDING
 	| CONTENTS
+	| PRIMARY
 	;
 
 %%
