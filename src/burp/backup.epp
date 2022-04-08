@@ -4285,10 +4285,10 @@ void write_tablespaces()
 			PUT_TEXT(att_ts_file, X.RDB$FILE_NAME);
 
 		if (!X.RDB$OFFLINE.NULL)
-			put_int32(att_ts_offline, X.RDB$OFFLINE);
+			put_boolean(att_ts_offline, X.RDB$OFFLINE);
 
 		if (!X.RDB$READ_ONLY.NULL)
-			put_int32(att_ts_readonly, X.RDB$READ_ONLY);
+			put_boolean(att_ts_readonly, X.RDB$READ_ONLY);
 
 		put(tdgbl, att_end);
 	}

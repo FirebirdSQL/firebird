@@ -769,6 +769,6 @@ RELATION(nam_tablespaces, rel_tablespaces, ODS_13_1, rel_persistent)
 	FIELD(f_ts_desc, nam_description, fld_description, 1, ODS_13_1)
 	FIELD(f_ts_owner, nam_owner, fld_user, 1, ODS_13_1)
 	FIELD(f_ts_file, nam_file_name, fld_file_name, 1, ODS_13_1)
-	FIELD(f_ts_offline, nam_ts_offline, fld_flag, 1, ODS_13_1)
-	FIELD(f_ts_readonly, nam_ts_readonly, fld_flag, 1, ODS_13_1)
+	FIELD(f_ts_offline, nam_ts_offline, fld_bool, 1, ODS_13_1)
+	FIELD(f_ts_readonly, nam_ts_readonly, fld_bool, 1, ODS_13_1)
 END_RELATION

@@ -7533,12 +7533,12 @@ bool get_tablespace(BurpGlobals* tdgbl)
 				break;
 
 			case att_ts_offline:
-				X.RDB$OFFLINE = (USHORT) get_int32(tdgbl);
+				X.RDB$OFFLINE = (USHORT) get_boolean(tdgbl);
 				X.RDB$OFFLINE.NULL = FALSE;
 				break;
 
 			case att_ts_readonly:
-				X.RDB$READ_ONLY = (USHORT) get_int32(tdgbl);
+				X.RDB$READ_ONLY = (USHORT) get_boolean(tdgbl);
 				X.RDB$READ_ONLY.NULL = FALSE;
 				break;
 
