@@ -1647,7 +1647,10 @@ void DFW_perform_post_commit_work(thread_db* tdbb, jrd_tra* transaction)
 
 				// A relation may already be deleted by dfw_delete_relation in the same transaction
 				if (!relation)
+				{
+					CCH_release_exclusive(tdbb);
 					break;
+				}
 
 				RelationPages* relationPages = relation->getPages(tdbb);
 				DPM_delete_relation_pages(tdbb, relation, relationPages);
@@ -1667,6 +1670,8 @@ void DFW_perform_post_commit_work(thread_db* tdbb, jrd_tra* transaction)
 				CCH_flush(tdbb, FLUSH_SYSTEM, 0);
 
 				*relationPages = *newRelationPages;
+
+				CCH_release_exclusive(tdbb);
 			}
 			break;
 		case dfw_clear_indexpages:
@@ -6812,7 +6817,10 @@ static bool move_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 			// An index may be deleted in the same transaction.
 			// Don't move index pages in this case.
 			if (!relation)
+			{
+				CCH_release_exclusive(tdbb);
 				break;
+			}
 
 			const USHORT newPageSpaceId = MET_tablespace(tdbb, tableSpace)->id;
 
@@ -6828,6 +6836,8 @@ static bool move_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 				ids[1] = oldRootPage.getPageSpaceID();
 				ids[2] = oldRootPage.getPageNum();
 			}
+
+			CCH_release_exclusive(tdbb);
 		}
 		break;
 
