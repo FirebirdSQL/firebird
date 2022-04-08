@@ -6162,7 +6162,7 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 		if (tableSpace.hasData())
 		{
 			if (!checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
-				status_exception::raise(Arg::PrivateDyn(310) << tableSpace.c_str());	//Tablespace @1 not found
+				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
 			RFR.RDB$TABLESPACE_NAME.NULL = FALSE;
 			strcpy(RFR.RDB$TABLESPACE_NAME, tableSpace.c_str());
 		}
@@ -7455,7 +7455,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		if (!tableSpace.isEmpty())
 		{
 			if (!checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
-				status_exception::raise(Arg::PrivateDyn(310) << tableSpace.c_str());	//Tablespace @1 not found
+				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
 			REL.RDB$TABLESPACE_NAME.NULL = FALSE;
 			strcpy(REL.RDB$TABLESPACE_NAME, tableSpace.c_str());
 		}
@@ -9647,7 +9647,7 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 		if (definition.tableSpace.hasData())
 		{
 			if (!checkObjectExist(tdbb, transaction, definition.tableSpace, obj_tablespaces))
-				status_exception::raise(Arg::PrivateDyn(310) << definition.tableSpace.c_str());	//Tablespace @1 not found
+				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << definition.tableSpace.c_str());
 			strcpy(IDX.RDB$TABLESPACE_NAME, definition.tableSpace.c_str());
 		}
 		else
