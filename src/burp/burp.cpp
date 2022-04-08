@@ -596,6 +596,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	tdgbl->gbl_sw_old_descriptions = false;
 	tdgbl->gbl_sw_mode = false;
 	tdgbl->gbl_sw_skip_count = 0;
+	tdgbl->gbl_sw_ts_orig_paths = false;
 	tdgbl->action = NULL;
 
 	burp_fil* file = NULL;
@@ -1079,6 +1080,11 @@ int gbak(Firebird::UtilSvc* uSvc)
 				BURP_error(408, true);	// msg 408 tablespace mapping file parameter missing
 			}
 			tdgbl->loadMapping(argv[itr], tdgbl->tablespace_mapping, false);
+			break;
+		case IN_SW_BURP_TS_ORIGINAL_PATHS:
+			if (tdgbl->gbl_sw_ts_orig_paths)
+				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
+			tdgbl->gbl_sw_ts_orig_paths = true;
 			break;
 		}
 	}						// for

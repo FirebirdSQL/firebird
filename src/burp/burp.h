@@ -1040,6 +1040,7 @@ public:
 	redirect_vals	sw_redirect;
 	bool		burp_throw;
 	Nullable<ReplicaMode>	gbl_sw_replica;
+	bool		gbl_sw_ts_orig_paths;
 
 	UCHAR*		blk_io_ptr;
 	int			blk_io_cnt;
