@@ -1086,6 +1086,22 @@ int gbak(Firebird::UtilSvc* uSvc)
 				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
 			tdgbl->gbl_sw_ts_orig_paths = true;
 			break;
+		case IN_SW_BURP_TS_PATH:
+			if (itr + 2 >= argc)
+			{
+				BURP_error(1025, true, SafeArg() << "TS");
+				// parameter for option -@1 is missing
+			}
+
+			{
+				string ts_name = argv[++itr];
+				string ts_path = argv[++itr];
+
+				if (ts_name.length() && ts_path.length())
+					tdgbl->tablespace_mapping.put(ts_name, ts_path);
+			}
+
+			break;
 		}
 	}						// for
 

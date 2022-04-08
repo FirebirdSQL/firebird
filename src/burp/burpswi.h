@@ -100,6 +100,7 @@ const int IN_SW_BURP_INCLUDE_DATA		= 52;	// backup data from tables
 const int IN_SW_BURP_REPLICA			= 53;	// replica mode
 const int IN_SW_BURP_TS_MAPPING_FILE	= 54;   // mapping file for tablespaces
 const int IN_SW_BURP_TS_ORIGINAL_PATHS	= 55;	// restore tablespaces to their original paths
+const int IN_SW_BURP_TS_PATH			= 56;	// set a path for a tablespace
 
 /**************************************************************************/
 
@@ -227,6 +228,7 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 	{IN_SW_BURP_HIDDEN_RDWRITE, isc_spb_res_am_readwrite,	"MODE READ_WRITE",	0, 0, 0, false, false,	0, 15, NULL, boRestore},
 /**************************************************************************/
 	{IN_SW_BURP_TS_MAPPING_FILE,	0,	"TABLESPACE_MAPPING_FILE",	0, 0, 0, false, false,	410, 14, NULL, boRestore},
+	{IN_SW_BURP_TS_PATH,	0,	"TS",	0, 0, 0, false, false,	413, 2, NULL, boRestore},
 	{IN_SW_BURP_TS_ORIGINAL_PATHS,	0,	"TABLESPACE_ORIGINAL_PATHS",	0, 0, 0, false, false,	412, 15, NULL, boRestore},
 	{IN_SW_BURP_0,		 0, NULL,			0, 0, 0, false, false,	0, 0, NULL, boGeneral}
 };
