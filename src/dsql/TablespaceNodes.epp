@@ -332,7 +332,7 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 			if (rel_drop)
 				MET_scan_relation(tdbb, rel_drop);
 
-			DropRelationNode::dropRelation(tdbb, dsqlScratch, transaction, false, rel_drop);
+			DropRelationNode::dropRelation(tdbb, dsqlScratch, transaction, false, rel_drop, relationName);
 		}
 		else
 		{

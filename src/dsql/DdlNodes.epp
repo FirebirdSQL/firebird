@@ -8499,11 +8499,9 @@ void DropRelationNode::deleteGlobalField(thread_db* tdbb, jrd_tra* transaction,
 }
 
 
-void DropRelationNode::dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction, bool view, jrd_rel* rel_drop)
+void DropRelationNode::dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction, bool view, jrd_rel* rel_drop, const MetaName& name)
 {
-    MetaName name(rel_drop->rel_name);
-
-    if (!view)
+    if (!view && rel_drop)
     {
         RelationPages* relPages = rel_drop->getBasePages();
         if (!relPages->rel_pages || (relPages->rel_pages->count() == 0))
@@ -8754,7 +8752,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		}
 	}
 
-    dropRelation(tdbb, dsqlScratch, transaction, view, rel_drop);
+    dropRelation(tdbb, dsqlScratch, transaction, view, rel_drop, name);
 }
 
 
