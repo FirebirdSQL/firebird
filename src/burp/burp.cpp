@@ -1094,8 +1094,8 @@ int gbak(Firebird::UtilSvc* uSvc)
 			}
 
 			{
-				string ts_name = argv[++itr];
-				string ts_path = argv[++itr];
+				Firebird::string ts_name = argv[++itr];
+				Firebird::string ts_path = argv[++itr];
 
 				if (ts_name.length() && ts_path.length())
 					tdgbl->tablespace_mapping.put(ts_name, ts_path);

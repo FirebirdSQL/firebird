@@ -8506,7 +8506,7 @@ void DropRelationNode::dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
         R IN RDB$RELATIONS
         WITH R.RDB$RELATION_NAME EQ name.c_str()
     {
-        executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, ddlTriggerAction, name, NULL);
+        executeDdlTrigger(tdbb, transaction, DTW_BEFORE, ddlTriggerAction, name, NULL, *dsqlScratch->getDsqlStatement()->getSqlText());
         found = true;
     }
     END_FOR
@@ -8668,7 +8668,7 @@ void DropRelationNode::dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
     END_FOR
 
     if (found)
-        executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, ddlTriggerAction, name, NULL);
+        executeDdlTrigger(tdbb, transaction, DTW_AFTER, ddlTriggerAction, name, NULL, *dsqlScratch->getDsqlStatement()->getSqlText());
     else
     {
         // msg 61: "Relation not found"

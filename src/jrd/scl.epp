@@ -864,7 +864,7 @@ void SCL_check_tablespace(thread_db* tdbb, const dsc* dsc_name, SecurityClass::f
 	}
 	END_FOR
 
-	SCL_check_access(tdbb, s_class, 0, name, mask, SCL_object_tablespace, false, name);
+	SCL_check_access(tdbb, s_class, 0, name, mask, obj_tablespaces, false, name);
 }
 
 

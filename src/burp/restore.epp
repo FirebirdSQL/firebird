@@ -59,6 +59,7 @@
 #include "memory_routines.h"
 #include "../burp/OdsDetection.h"
 #include "../auth/trusted/AuthSspi.h"
+#include "../common/os/path_utils.h"
 #include "../common/dsc_proto.h"
 #include "../common/ThreadStart.h"
 #include "../common/db_alias.h"
@@ -7534,12 +7535,12 @@ bool get_tablespace(BurpGlobals* tdgbl)
 				break;
 
 			case att_ts_offline:
-				X.RDB$OFFLINE = (USHORT) get_boolean(tdgbl);
+				X.RDB$OFFLINE = (USHORT) get_boolean(tdgbl, false);
 				X.RDB$OFFLINE.NULL = FALSE;
 				break;
 
 			case att_ts_readonly:
-				X.RDB$READ_ONLY = (USHORT) get_boolean(tdgbl);
+				X.RDB$READ_ONLY = (USHORT) get_boolean(tdgbl, false);
 				X.RDB$READ_ONLY.NULL = FALSE;
 				break;
 

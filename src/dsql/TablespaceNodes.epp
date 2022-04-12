@@ -74,7 +74,7 @@ void CreateAlterTablespaceNode::checkPermission(thread_db* tdbb, jrd_tra* transa
 	if (alter)
 		SCL_check_tablespace(tdbb, &dscName, SCL_alter);
 	else
-		SCL_check_create_access(tdbb, SCL_object_tablespace);
+		SCL_check_create_access(tdbb, obj_tablespaces);
 }
 
 

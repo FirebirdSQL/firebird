@@ -121,10 +121,6 @@ const int ISQL_MSG_FAC	= FB_IMPL_MSG_FACILITY_ISQL;
 #undef FB_IMPL_MSG_SYMBOL
 #undef FB_IMPL_MSG
 
-//TODO: Fix message numbers here and in messages2.sql
-const int NO_TABLESPACE				= 1022;		// There is no tablespace @1 in this database
-const int NO_TABLESPACES			= 1023;		// There are no tablespaces in this database
-const int MSG_TABLESPACES			= 1024;		// Tablespaces:
 
 // Initialize types
 
