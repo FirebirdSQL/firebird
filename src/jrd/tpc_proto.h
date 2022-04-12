@@ -147,6 +147,11 @@ public:
 		return m_tpcHeader->getHeader()->latest_commit_number.load(std::memory_order_acquire);
 	}
 
+	bool isInitialized()
+	{
+		return m_tpcHeader;
+	}
+
 private:
 	class GlobalTpcHeader : public Firebird::MemoryHeader
 	{
