@@ -4360,6 +4360,7 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 			// ODS 12
 			X.RDB$GENERATOR_NAME.NULL = TRUE;
 			X.RDB$IDENTITY_TYPE.NULL = TRUE;
+			// ODS 14
 			X.RDB$TABLESPACE_NAME.NULL = TRUE;
 
 			skip_init(&scan_next_attr);
@@ -4529,6 +4530,8 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 					X.RDB$IDENTITY_TYPE.NULL = FALSE;
 					X.RDB$IDENTITY_TYPE = field->fld_identity_type;
 					break;
+
+				// ODS 14
 
 				case att_field_tablespace_name:
 					GET_TEXT(X.RDB$TABLESPACE_NAME);
@@ -7122,6 +7125,7 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 		X.RDB$EXPRESSION_BLR.NULL = TRUE;
 		X.RDB$SYSTEM_FLAG = 0;
 		X.RDB$SYSTEM_FLAG.NULL = FALSE;
+		// ODS 14
 		X.RDB$TABLESPACE_NAME.NULL = TRUE;
 
 		skip_init(&scan_next_attr);
@@ -7214,6 +7218,8 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 				X.RDB$FOREIGN_KEY.NULL = FALSE;
 				GET_TEXT(X.RDB$FOREIGN_KEY);
 				break;
+
+			// ODS 14
 
 			case att_index_tablespace_name:
 				GET_TEXT(X.RDB$TABLESPACE_NAME);
@@ -7481,9 +7487,7 @@ bool get_tablespace(BurpGlobals* tdgbl)
 	SSHORT len;
 	scan_attr_t scan_next_attr;
 
-	// TODO: Fix format version for the current version after merge.
-	// Check other places of RDB$TABLESPACE_NAME usage
-	if (tdgbl->RESTORE_format < 11)
+	if (tdgbl->RESTORE_format < 12) // Probably this check is not needed
 		return false;
 
 //	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
@@ -8643,7 +8647,6 @@ bool get_relation(BurpGlobals* tdgbl)
 			X.RDB$EXTERNAL_FILE.NULL = ext_file_name_null;
 			X.RDB$RELATION_TYPE.NULL = FALSE;
 			X.RDB$SQL_SECURITY.NULL = sql_security_null;
-			X.RDB$TABLESPACE_NAME.NULL = tableSpaceNull;
 
 			X.RDB$SYSTEM_FLAG = (USHORT) sys_flag;
 			X.RDB$FLAGS = (USHORT) rel_flags;
@@ -8658,6 +8661,9 @@ bool get_relation(BurpGlobals* tdgbl)
 
 			X.RDB$RELATION_TYPE = (USHORT) type;
 			X.RDB$SQL_SECURITY = (FB_BOOLEAN) sql_security;
+
+			// ODS 14
+			X.RDB$TABLESPACE_NAME.NULL = tableSpaceNull;
 			strcpy(X.RDB$TABLESPACE_NAME, tableSpace);
 
 		END_STORE;

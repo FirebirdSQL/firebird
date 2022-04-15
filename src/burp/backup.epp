@@ -344,7 +344,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		write_packages();
 	}
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)	// TODO: fix version
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 	{
 		// Write tablespaces
 		BURP_verbose(406);	// msg 406 writing tablespaces
@@ -701,7 +701,8 @@ burp_fld* get_fields( burp_rel* relation)
 				field->fld_identity_type = X.RDB$IDENTITY_TYPE;
 			}
 
-			if (!X.RDB$TABLESPACE_NAME.NULL)
+			// ODS 14
+			if (!X.RDB$TABLESPACE_NAME.NULL) // For older ODS NULL is expected here
 				COPY(X.RDB$TABLESPACE_NAME, field->fld_tablespace);
 
 			field_list.add(field);
@@ -1845,8 +1846,11 @@ void put_index( burp_rel* relation)
 			put_blr_blob (att_index_expression_blr, X.RDB$EXPRESSION_BLR);
 		if (!X.RDB$FOREIGN_KEY.NULL)
 			PUT_TEXT (att_index_foreign_key, X.RDB$FOREIGN_KEY);
-		if (!X.RDB$TABLESPACE_NAME.NULL)	// For old versions I expect it will be NULL here. Right?
+
+		// ODS 14
+		if (!X.RDB$TABLESPACE_NAME.NULL) // For older ODS NULL is expected here
 			PUT_TEXT(att_index_tablespace_name, X.RDB$TABLESPACE_NAME);
+
 		put(tdgbl, att_end);
 
 	END_FOR;
@@ -3955,7 +3959,8 @@ void write_relations()
 			if (!X.RDB$SQL_SECURITY.NULL)
 				put_boolean(att_relation_sql_security, X.RDB$SQL_SECURITY);
 
-			if (!X.RDB$TABLESPACE_NAME.NULL)	// For old versions I expect it will be NULL here. Right?
+			// ODS 14
+			if (!X.RDB$TABLESPACE_NAME.NULL) // For older ODS NULL is expected here
 				PUT_TEXT(att_relation_tablespace_name, X.RDB$TABLESPACE_NAME);
 
 			put(tdgbl, att_end);

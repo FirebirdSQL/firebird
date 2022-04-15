@@ -207,7 +207,7 @@ Version 11: FB4.0.
 			SQL SECURITY feature, tables RDB$PUBLICATIONS/RDB$PUBLICATION_TABLES.
 */
 
-const int ATT_BACKUP_FORMAT		= 11;
+const int ATT_BACKUP_FORMAT		= 12;
 
 // max array dimension
 
@@ -340,8 +340,6 @@ enum att_type {
 	att_field_owner_name, // FB3.0, ODS12_0,
 	att_field_generator_name,
 	att_field_identity_type,
-
-	//TODO: FB???.???, ODS???_???
 	att_field_tablespace_name,
 
 	// Index attributes

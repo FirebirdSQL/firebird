@@ -69,6 +69,7 @@ const int DB_VERSION_DDL11_1	= 111; // ods11.1 db, FB2.1
 const int DB_VERSION_DDL11_2	= 112; // ods11.2 db, FB2.5
 const int DB_VERSION_DDL12		= 120; // ods12.0 db, FB3.0
 const int DB_VERSION_DDL13		= 130; // ods13.0 db, FB4.0
+const int DB_VERSION_DDL14		= 140;
 
 const int DB_VERSION_OLDEST_SUPPORTED = DB_VERSION_DDL8;  // IB4.0 is ods8
 
