@@ -7510,7 +7510,7 @@ bool get_tablespace(BurpGlobals* tdgbl)
 				len = GET_TEXT(X.RDB$TABLESPACE_NAME);
 				X.RDB$TABLESPACE_NAME.NULL = FALSE;
 				MISC_terminate(X.RDB$TABLESPACE_NAME, temp, len, sizeof(temp));
-				BURP_verbose(398, temp);	// msg 398 restoring tablespace %s
+				BURP_verbose(408, temp);	// msg 408 restoring tablespace %s
 				break;
 
 			case att_ts_security_class:
@@ -7545,7 +7545,7 @@ bool get_tablespace(BurpGlobals* tdgbl)
 				break;
 
 			default:
-				bad_attribute(scan_next_attr, attribute, 399);	// msg 399 tablespace
+				bad_attribute(scan_next_attr, attribute, 409);	// msg 409 tablespace
 				break;
 			}
 		}
@@ -7579,8 +7579,8 @@ bool get_tablespace(BurpGlobals* tdgbl)
 		}
 		else if (!tdgbl->gbl_sw_ts_orig_paths)
 		{
-			BURP_error(1022, false, SafeArg() << X.RDB$TABLESPACE_NAME << X.RDB$FILE_NAME);
-			// msg 1022 path to tablespace @1 is not specified (original path: "@2")
+			BURP_error(411, false, SafeArg() << X.RDB$TABLESPACE_NAME << X.RDB$FILE_NAME);
+			// msg 411 path to tablespace @1 is not specified (original path: "@2")
 			return false;
 		}
 	}

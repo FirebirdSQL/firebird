@@ -347,7 +347,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)	// TODO: fix version
 	{
 		// Write tablespaces
-		BURP_verbose(403);	// msg 403 writing tablespaces
+		BURP_verbose(406);	// msg 406 writing tablespaces
 		write_tablespaces();
 	}
 	// Now go back and write all data
@@ -422,7 +422,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
 	{
 		// Write publications
-		BURP_verbose(403);		// msg 403 writing publications
+		BURP_verbose(396);	// msg 396 writing publications
 
 		write_publications();
 		write_pub_tables();
@@ -4270,7 +4270,7 @@ void write_tablespaces()
 		const SSHORT l = PUT_TEXT(att_ts_name, X.RDB$TABLESPACE_NAME);
 		MISC_terminate(X.RDB$TABLESPACE_NAME, temp, l, sizeof(temp));
 
-		BURP_verbose(404, temp);	// msg 404 writing tablespace @1
+		BURP_verbose(407, temp);	// msg 407 writing tablespace @1
 
 		if (!X.RDB$SECURITY_CLASS.NULL)
 			PUT_TEXT(att_ts_security_class, X.RDB$SECURITY_CLASS);

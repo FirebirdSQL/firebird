@@ -410,3 +410,4 @@ FB_IMPL_MSG_NO_SYMBOL(GBAK, 411, "path to tablespace @1 is not specified (origin
 FB_IMPL_MSG_NO_SYMBOL(GBAK, 412, "    @1TS_ORIG(INAL_PATHS)        restore tablespaces to their original paths")
 FB_IMPL_MSG_NO_SYMBOL(GBAK, 413, "    @1TS <tablespace> <path>     set a path for a tablespace")
 FB_IMPL_MSG_NO_SYMBOL(GBAK, 414, "parameter for option -@1 is missing")
+FB_IMPL_MSG_NO_SYMBOL(GBAK, 415, "cannot open mapping file \"@1\"")

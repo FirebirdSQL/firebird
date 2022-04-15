@@ -1077,7 +1077,8 @@ int gbak(Firebird::UtilSvc* uSvc)
 		case IN_SW_BURP_TS_MAPPING_FILE:
 			if (++itr >= argc)
 			{
-				BURP_error(408, true);	// msg 408 tablespace mapping file parameter missing
+				BURP_error(414, true, SafeArg() << in_sw_tab->in_sw_name);
+				// parameter for option -@1 is missing
 			}
 			tdgbl->loadMapping(argv[itr], tdgbl->tablespace_mapping, false);
 			break;
@@ -1089,7 +1090,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 		case IN_SW_BURP_TS_PATH:
 			if (itr + 2 >= argc)
 			{
-				BURP_error(1025, true, SafeArg() << in_sw_tab->in_sw_name);
+				BURP_error(414, true, SafeArg() << in_sw_tab->in_sw_name);
 				// parameter for option -@1 is missing
 			}
 
@@ -2864,7 +2865,7 @@ void BurpGlobals::loadMapping(const char* mapping_file, StringMap& map, bool cle
 	FILE* f = os_utils::fopen(mapping_file, fopen_read_type);
 	if (!f)
 	{
-		BURP_error(409, true, SafeArg() << mapping_file);	// msg 409 cannot open mapping file @1
+		BURP_error(415, true, SafeArg() << mapping_file);	// msg 415 cannot open mapping file @1
 	}
 
 	//Read lines from file, split by space and add to mapping
