@@ -665,21 +665,10 @@ ULONG DPM_data_pages(thread_db* tdbb, jrd_rel* relation)
 
 	RelationPages* relPages = relation->getPages(tdbb);
 	ULONG pages = relPages->rel_data_pages;
-	ULONG step = 1;
-
 	if (!pages)
 	{
-		const size_t ppCount = relPages->rel_pages ? relPages->rel_pages->count() : 0;
-		const ULONG PAGES_LIMIT = 100;
-
-		if (ppCount > PAGES_LIMIT)
-		{
-			step = ppCount / PAGES_LIMIT + 1;
-			DPM_scan_pages(tdbb, pag_pointer);
-		}
-
 		WIN window(relPages->rel_pg_space_id, -1);
-		for (ULONG sequence = 0; (step == 1) || (sequence < ppCount); sequence += step)
+		for (ULONG sequence = 0; true; sequence++)
 		{
 			const pointer_page* ppage =
 				get_pointer_page(tdbb, relation, relPages, &window, sequence, LCK_read);
@@ -698,16 +687,14 @@ ULONG DPM_data_pages(thread_db* tdbb, jrd_rel* relation)
 			}
 
 			if (ppage->ppg_header.pag_flags & ppg_eof)
-			{
-				CCH_RELEASE(tdbb, &window);
 				break;
-			}
 
 			CCH_RELEASE(tdbb, &window);
 
 			tdbb->checkCancelState();
 		}
 
+		CCH_RELEASE(tdbb, &window);
 		relPages->rel_data_pages = pages;
 	}
 
@@ -716,7 +703,7 @@ ULONG DPM_data_pages(thread_db* tdbb, jrd_rel* relation)
 		"    returned pages: %" ULONGFORMAT"\n", pages);
 #endif
 
-	return pages * step;
+	return pages;
 }
 
 
