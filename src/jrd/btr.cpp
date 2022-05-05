@@ -446,7 +446,7 @@ void BTR_create(thread_db* tdbb,
 }
 
 
-bool BTR_delete_index(thread_db* tdbb, Jrd::jrd_rel* relation, WIN* window, USHORT id)
+bool BTR_delete_index(thread_db* tdbb, WIN* window, USHORT id)
 {
 /**************************************
  *
@@ -1835,7 +1835,7 @@ bool BTR_next_index(thread_db* tdbb, jrd_rel* relation, jrd_tra* transaction, in
 				irt_desc = root->irt_rpt + id;
 
 				if (irt_desc->getTransaction() == trans)
-					BTR_delete_index(tdbb, relation, window, id);
+					BTR_delete_index(tdbb, window, id);
 				else
 					CCH_RELEASE(tdbb, window);
 

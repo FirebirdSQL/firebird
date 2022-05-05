@@ -3127,7 +3127,7 @@ static void cleanup_index_creation(thread_db* tdbb, DeferredWork* work, jrd_tra*
 				WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
 				CCH_FETCH(tdbb, &window, LCK_write, pag_root);
 				CCH_MARK_MUST_WRITE(tdbb, &window);
-				const bool tree_exists = BTR_delete_index(tdbb, relation, &window, work->dfw_id);
+				const bool tree_exists = BTR_delete_index(tdbb, &window, work->dfw_id);
 
 				if (!isTempIndex) {
 					work->dfw_id = dbb->dbb_max_idx;

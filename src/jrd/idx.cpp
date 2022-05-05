@@ -610,7 +610,7 @@ void IDX_delete_index(thread_db* tdbb, jrd_rel* relation, USHORT id)
 	WIN window(get_root_page(tdbb, relation));
 	CCH_FETCH(tdbb, &window, LCK_write, pag_root);
 
-	const bool tree_exists = BTR_delete_index(tdbb, relation, &window, id);
+	const bool tree_exists = BTR_delete_index(tdbb, &window, id);
 
 	if ((relation->rel_flags & REL_temp_conn) && (relation->getPages(tdbb)->rel_instance_id != 0) &&
 		tree_exists)
@@ -650,7 +650,7 @@ void IDX_delete_indices(thread_db* tdbb, jrd_rel* relation, RelationPages* relPa
 
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
-		const bool tree_exists = BTR_delete_index(tdbb, relation, &window, i);
+		const bool tree_exists = BTR_delete_index(tdbb, &window, i);
 		root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_root);
 
 		if (is_temp && tree_exists)

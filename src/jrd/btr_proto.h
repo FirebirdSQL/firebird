@@ -32,7 +32,7 @@
 void	BTR_all(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::IndexDescList&, Jrd::RelationPages*);
 void	BTR_complement_key(Jrd::temporary_key*);
 void	BTR_create(Jrd::thread_db*, Jrd::IndexCreation&, Jrd::SelectivityList&);
-bool	BTR_delete_index(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::win*, USHORT);
+bool	BTR_delete_index(Jrd::thread_db*, Jrd::win*, USHORT);
 bool	BTR_description(Jrd::thread_db*, Jrd::jrd_rel*, Ods::index_root_page*, Jrd::index_desc*, USHORT);
 DSC*	BTR_eval_expression(Jrd::thread_db*, Jrd::index_desc*, Jrd::Record*, bool&);
 void	BTR_evaluate(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::RecordBitmap**, Jrd::RecordBitmap*);
