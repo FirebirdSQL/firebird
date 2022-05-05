@@ -3959,8 +3959,8 @@ void DPM_move_data_pages(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, RelationP
 	 *  - fix every PP by correcting DP numbers and ppg_next pointer and build a map
 	 *  - walking through the map and copy every DP to the new one by fixing
 	 *    b_page and f_page numbers.
-	 * We expect that DPM_scan_pages was called.
-	 * In the end of work replace records in RDB$PAGES.
+	 * We expect that DPM_scan_pages has been called.
+	 * At the end of work replace records in RDB$PAGES.
 	 *
 	 **************************************/
 	SET_TDBB(tdbb);

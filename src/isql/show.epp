@@ -5001,7 +5001,7 @@ static processing_state show_tablespaces(const SCHAR* tablespace_name)
 			X.RDB$TABLESPACE_NAME EQ tablespace_name
 
 			first = false;
-			// Print the name of the package
+
 			fb_utils::exact_name(X.RDB$TABLESPACE_NAME);
 			isqlGlob.printf("%s", X.RDB$TABLESPACE_NAME);
 

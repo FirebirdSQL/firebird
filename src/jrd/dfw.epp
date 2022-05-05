@@ -6665,7 +6665,7 @@ static bool move_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd
 {
 /**************************************
  *
- *	move_relation
+ *	m o v e _ r e l a t i o n
  *
  **************************************
  *
@@ -6729,7 +6729,7 @@ static bool move_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd
 		relation->setReplacedPages(newRelationPages);
 
 		{	// We delete all from RDB$PAGES about the relation to have an ability to understand that
-			// we need to restore pages if transaction won't be able to finish succeccfully.
+			// we need to restore pages if transaction won't be able to finish successfully.
 			AutoRequest handle;
 
 			FOR(REQUEST_HANDLE handle) X IN RDB$PAGES
@@ -6761,7 +6761,7 @@ static bool move_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 {
 /**************************************
  *
- *	move_index
+ *	m o v e _ i n d e x
  *
  **************************************
  *
