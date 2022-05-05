@@ -3126,7 +3126,7 @@ static void check_precedence(thread_db* tdbb, WIN* window, PageNumber page)
 
 	const USHORT pageSpaceId = page.getPageSpaceID();
 
-	switch(pageSpaceId)
+	switch (pageSpaceId)
 	{
 		case DB_PAGE_SPACE:
 			break;
@@ -3138,8 +3138,8 @@ static void check_precedence(thread_db* tdbb, WIN* window, PageNumber page)
 			break;
 
 		default:
-            if (PageSpace::isTablespace(pageSpaceId))
-                break;
+			if (PageSpace::isTablespace(pageSpaceId))
+				break;
 			fb_assert(false);
 			return;
 	}

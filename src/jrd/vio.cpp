@@ -3480,6 +3480,7 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 	return true;
 }
 
+
 void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 {
 /**************************************

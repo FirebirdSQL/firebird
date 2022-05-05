@@ -350,6 +350,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		BURP_verbose(406);	// msg 406 writing tablespaces
 		write_tablespaces();
 	}
+
 	// Now go back and write all data
 
 	for (burp_rel* relation = tdgbl->relations; relation; relation = relation->rel_next)

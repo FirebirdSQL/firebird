@@ -519,22 +519,22 @@ static void get_object_info(thread_db* tdbb,
 		}
 		END_FOR
 	}
-    else if (obj_type == obj_tablespace)
-    {
-        AutoCacheRequest request(tdbb, irq_grant20, IRQ_REQUESTS);
+	else if (obj_type == obj_tablespace)
+	{
+		AutoCacheRequest request(tdbb, irq_grant20, IRQ_REQUESTS);
 
-        FOR(REQUEST_HANDLE request)
-            X IN RDB$TABLESPACES WITH
-                X.RDB$TABLESPACE_NAME EQ object_name
-        {
-            s_class = X.RDB$SECURITY_CLASS;
-            default_class = "";
-            owner = X.RDB$OWNER_NAME;
-            view = false;
-        }
-        END_FOR
-    }
-    else
+		FOR(REQUEST_HANDLE request)
+			X IN RDB$TABLESPACES WITH
+				X.RDB$TABLESPACE_NAME EQ object_name
+		{
+			s_class = X.RDB$SECURITY_CLASS;
+			default_class = "";
+			owner = X.RDB$OWNER_NAME;
+			view = false;
+		}
+		END_FOR
+	}
+	else
 	{
 		s_class = getSecurityClassName(obj_type);
 		default_class = "";

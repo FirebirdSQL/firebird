@@ -5503,9 +5503,9 @@ Nullable<bool> MET_get_ss_definer(Jrd::thread_db* tdbb)
  *
  **************************************/
 	SET_TDBB(tdbb);
-
-	Nullable<bool> r;
 	Attachment* attachment = tdbb->getAttachment();
+	Nullable<bool> r;
+
 	AutoCacheRequest request(tdbb, irq_dbb_ss_definer, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE request)
@@ -5529,9 +5529,9 @@ USHORT MET_rel_pagespace(Jrd::thread_db* tdbb, USHORT rel_id)
  *
  * Functional description
  *      Find id and filename of tablespace by ID of relation and allocate page space
- *		Returns page space id for relation of default DB_PAGE_SPACE if table space
- *		for relation is not specified
- *		RS: Probably later it would be useful to implement cache of tablespaces
+ *      Returns page space id for relation of default DB_PAGE_SPACE if table space
+ *      for relation is not specified
+ *      RS: Probably later it would be useful to implement cache of tablespaces
  *
  **************************************/
 	SET_TDBB(tdbb);
@@ -5564,9 +5564,9 @@ USHORT MET_index_pagespace(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, USHORT 
  *
  * Functional description
  *      Find tablespace name for index and lookup page space for it.
- *		If there is no tablespace for the index or relation is system
- *		returns relation pagespace.
-  *
+ *      If there is no tablespace for the index or relation is system
+ *      returns relation pagespace.
+ *
  **************************************/
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
@@ -5615,10 +5615,10 @@ Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id, bool open)
 	Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-    // Check that pageSpaceId has reasonable value
-    fb_assert(PageSpace::isTablespace(id));
+	// Check that pageSpaceId has reasonable value
+	fb_assert(PageSpace::isTablespace(id));
 
-    Attachment* attachment = tdbb->getAttachment();
+	Attachment* attachment = tdbb->getAttachment();
 
 	Tablespace* ts = attachment->getTablespace(id);
 
@@ -5639,19 +5639,19 @@ Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id, bool open)
 	}
 
 	// Now we need to find tablespace in system table
-    AutoCacheRequest request(tdbb, irq_find_ts_id, IRQ_REQUESTS);
+	AutoCacheRequest request(tdbb, irq_find_ts_id, IRQ_REQUESTS);
 
-    MetaName tableSpaceName;
+	MetaName tableSpaceName;
 	PathName file;
 	bool found = false;
 
-    FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request)
 		TS IN RDB$TABLESPACES
-        WITH TS.RDB$TABLESPACE_ID EQ id
-    {
-        found = true;
-        tableSpaceName = TS.RDB$TABLESPACE_NAME;
-        file = TS.RDB$FILE_NAME;
+		WITH TS.RDB$TABLESPACE_ID EQ id
+	{
+		found = true;
+		tableSpaceName = TS.RDB$TABLESPACE_NAME;
+		file = TS.RDB$FILE_NAME;
 	}
 	END_FOR
 
@@ -5662,7 +5662,7 @@ Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id, bool open)
 	}
 
 	// Check that pageSpaceId is either new or is not set (else it should be found in att_tablespaces above)
-    fb_assert(!attachment->getTablespace(id));
+	fb_assert(!attachment->getTablespace(id));
 
 	Tablespace* tableSpace = NULL;
 
@@ -5723,13 +5723,13 @@ Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
  *      Return a pointer to the tablespace.
  *
  **************************************/
-    SET_TDBB(tdbb);
-    Database* dbb = tdbb->getDatabase();
-    CHECK_DBB(dbb);
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+	CHECK_DBB(dbb);
 
-    Attachment* attachment = tdbb->getAttachment();
-    if (tableSpaceName.isEmpty())
-        return attachment->getTablespace(DB_PAGE_SPACE);
+	Attachment* attachment = tdbb->getAttachment();
+	if (tableSpaceName.isEmpty())
+		return attachment->getTablespace(DB_PAGE_SPACE);
 
 	Tablespace* ts = attachment->getTablespaceByName(tableSpaceName);
 
@@ -5749,31 +5749,31 @@ Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
 		return ts;
 	}
 
-    // Now we need to find tablespace in system table
-    AutoCacheRequest request(tdbb, irq_find_ts, IRQ_REQUESTS);
+	// Now we need to find tablespace in system table
+	AutoCacheRequest request(tdbb, irq_find_ts, IRQ_REQUESTS);
 
-    USHORT pageSpaceId;
-    PathName file;
-    bool found = false;
+	USHORT pageSpaceId;
+	PathName file;
+	bool found = false;
 
-    FOR(REQUEST_HANDLE request)
-        TS IN RDB$TABLESPACES
-        WITH TS.RDB$TABLESPACE_NAME EQ tableSpaceName.c_str()
-    {
-        found = true;
-        pageSpaceId = TS.RDB$TABLESPACE_ID;
-        file = TS.RDB$FILE_NAME;
-    }
-    END_FOR
+	FOR(REQUEST_HANDLE request)
+		TS IN RDB$TABLESPACES
+		WITH TS.RDB$TABLESPACE_NAME EQ tableSpaceName.c_str()
+	{
+		found = true;
+		pageSpaceId = TS.RDB$TABLESPACE_ID;
+		file = TS.RDB$FILE_NAME;
+	}
+	END_FOR
 
-    if (!found)
-        status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpaceName));
+	if (!found)
+		status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(tableSpaceName));
 
-    // Check that pageSpaceId has reasonable value
-    fb_assert(PageSpace::isTablespace(pageSpaceId));
+	// Check that pageSpaceId has reasonable value
+	fb_assert(PageSpace::isTablespace(pageSpaceId));
 
-    // Check that pageSpaceId is either new or is not set (else it should be found in att_tablespaces above)
-    fb_assert(!attachment->getTablespace(pageSpaceId));
+	// Check that pageSpaceId is either new or is not set (else it should be found in att_tablespaces above)
+	fb_assert(!attachment->getTablespace(pageSpaceId));
 
 	Tablespace* tableSpace = NULL;
 
@@ -5813,7 +5813,7 @@ Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
 	}
 
 	attachment->setTablespace(pageSpaceId, tableSpace);
-    return tableSpace;
+	return tableSpace;
 }
 
 

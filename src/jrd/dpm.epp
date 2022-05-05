@@ -1137,7 +1137,6 @@ void DPM_delete_relation_pages(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation,
 	relPages->rel_index_root = 0;
 }
 
-
 bool DPM_fetch(thread_db* tdbb, record_param* rpb, USHORT lock)
 {
 /**************************************

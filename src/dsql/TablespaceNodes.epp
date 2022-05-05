@@ -46,8 +46,6 @@ using namespace Firebird;
 
 namespace Jrd {
 
-using namespace Firebird;
-
 DATABASE DB = STATIC "ODS.RDB";
 
 

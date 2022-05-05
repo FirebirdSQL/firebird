@@ -3614,10 +3614,10 @@ static void list_tablespaces()
  *
  **************************************/
 
- 	if (isqlGlob.major_ods < ODS_VERSION14)
- 		return;
+	if (isqlGlob.major_ods < ODS_VERSION14)
+		return;
 
- 	bool first = true;
+	bool first = true;
 
 	FOR X IN RDB$TABLESPACES WITH
 		(X.RDB$SYSTEM_FLAG NE 1 OR X.RDB$SYSTEM_FLAG MISSING)

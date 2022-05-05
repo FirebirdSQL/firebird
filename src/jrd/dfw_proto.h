@@ -1,4 +1,4 @@
-    /*
+/*
  *	PROGRAM:	JRD Access Method
  *	MODULE:		dfw_proto.h
  *	DESCRIPTION:	Prototype header file for dfw.cpp

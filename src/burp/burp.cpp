@@ -2906,7 +2906,6 @@ void BurpGlobals::loadMapping(const char* mapping_file, StringMap& map, bool cle
 	fclose(f);
 }
 
-
 void BURP_makeSymbol(BurpGlobals* tdgbl, Firebird::string& name)		// add double quotes to string
 {
 	if (tdgbl->gbl_dialect < SQL_DIALECT_V6)

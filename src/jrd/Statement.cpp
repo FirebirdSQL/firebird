@@ -677,7 +677,7 @@ void Statement::release(thread_db* tdbb)
 			// Should we check it here again?
 			Tablespace* ts = tdbb->getAttachment()->getTablespace(i);
 			fb_assert(ts);
-			
+
 			if (ts)
 				ts->release(tdbb);
 		}

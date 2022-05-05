@@ -105,9 +105,9 @@ static void show_index(SCHAR*, SCHAR*, const SSHORT, const SSHORT, const SSHORT,
 static processing_state show_indices(const SCHAR* const*);
 static processing_state show_proc(const SCHAR*);
 static processing_state show_packages(const SCHAR* package_name);
+static processing_state show_tablespaces(const SCHAR*);
 static processing_state show_role(const SCHAR*, bool, const char* msg = NULL);
 static processing_state show_secclass(const char* object, const char* opt);
-static processing_state show_tablespaces(const SCHAR*);
 static processing_state show_table(const SCHAR*, bool);
 static processing_state show_trigger(const SCHAR*, bool, bool);
 static processing_state show_users();
@@ -2092,7 +2092,7 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 		{ShowOptions::package, "PACKAGES", 4},
 		{ShowOptions::schema, "SCHEMAS", 4},
 		{ShowOptions::map, "MAPPING", 3},
-		{ShowOptions::tablespace, "TABLESPACES", 0 }
+		{ShowOptions::tablespace, "TABLESPACES", 0}
 	};
 
 	const ShowOptions showoptions(options, FB_NELEM(options), ShowOptions::wrong);

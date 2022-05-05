@@ -2105,7 +2105,6 @@ void BTR_selectivity(thread_db* tdbb, jrd_rel* relation, USHORT id, SelectivityL
 		return;
 	}
 
-
 	const bool descending = (root->irt_rpt[id].irt_flags & irt_descending);
 	const ULONG segments = root->irt_rpt[id].irt_keys;
 
@@ -2270,7 +2269,7 @@ void BTR_selectivity(thread_db* tdbb, jrd_rel* relation, USHORT id, SelectivityL
 		selectivity[0] = (float) (nodes ? 1.0 / (float) (nodes - duplicates) : 0.0);
 
 	// Store the selectivity on the root page
-    window.win_page = PageNumber(relPages->rel_pg_space_id, relPages->rel_index_root);
+	window.win_page = PageNumber(relPages->rel_pg_space_id, relPages->rel_index_root);
 	window.win_flags = 0;
 	root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_root);
 	CCH_MARK(tdbb, &window);

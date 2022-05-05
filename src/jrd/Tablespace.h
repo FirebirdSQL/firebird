@@ -46,7 +46,7 @@ namespace Jrd
 			  name(p),
 			  existenceLock(NULL),
 			  modified(false),
-		      useCount(0)
+			  useCount(0)
 		{
 		}
 

@@ -6741,8 +6741,8 @@ static bool drop_files(ObjectsArray<PathName>& tsFiles)
 		if (unlink(file.c_str()))
 		{
 			ERR_build_status(&status, Arg::Gds(isc_io_error) << Arg::Str("unlink") <<
-							   								   Arg::Str(file) <<
-									 Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
+									  Arg::Str(file) <<
+									  Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
 			Database* dbb = GET_DBB();
 			PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 			iscDbLogStatus(pageSpace->file->fil_string, &status);

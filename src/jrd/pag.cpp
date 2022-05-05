@@ -2617,7 +2617,7 @@ void PageManager::allocTableSpace(thread_db* tdbb, USHORT tableSpaceID, bool cre
 	/***
 	 * NOTE: PageSpaceId of Tablespaces is equal to tablespace id
 	 */
-    fb_assert(PageSpace::isTablespace(tableSpaceID));
+	fb_assert(PageSpace::isTablespace(tableSpaceID));
 
 	if (!findPageSpace(tableSpaceID))
 	{
@@ -2658,7 +2658,7 @@ void PageManager::allocTableSpace(thread_db* tdbb, USHORT tableSpaceID, bool cre
 			delete newPageSpace;
 			throw;
 		}
-		
+
 		WriteLockGuard writeGuard(pageSpacesLock, FB_FUNCTION);
 		pageSpaces.add(newPageSpace);
 	}

@@ -184,9 +184,9 @@ enum irq_type_t
 	irq_find_rel_ts,		// find tablespace options for relation
 	irq_find_idx_ts,		// find tablespace options for index
 	irq_find_ts,			// find tablespace options by name
+	irq_find_ts_id,			// find tablespace options by id
 	irq_out_proc_param_dep,	// check output procedure parameter dependency
 	irq_l_pub_tab_state,	// lookup publication state for a table
-	irq_find_ts_id,			// find tablespace options by id
 	irq_list_ts_files,		// list tablespace files
 	irq_find_ts_dfw,		// find tablespace options by name in dfw
 	irq_find_ts_dfw0,		// find tablespace options by name in dfw for cleanup

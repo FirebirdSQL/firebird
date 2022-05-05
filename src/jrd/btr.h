@@ -310,7 +310,7 @@ private:
 	bool isLocationDefined;
 };
 
-} //namespace Jrd
 
+} //namespace Jrd
 
 #endif // JRD_BTR_H
