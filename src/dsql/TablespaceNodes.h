@@ -94,8 +94,6 @@ protected:
 		statusVector << Firebird::Arg::Gds(isc_dsql_drop_ts_failed) << name;
 	}
 
-	void handleDependencies(thread_db* tdbb, jrd_tra* transaction, bool drop);
-
 public:
 	MetaName name;
 	bool silent;
