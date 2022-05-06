@@ -2892,7 +2892,7 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 	WIN window(pageSpaceId, page_number);
 	data_page* dpage;
 	fetch_page(false, window.win_page, pag_data, &window, &dpage);
-	const SLONG sequence = dpage->dpg_sequence;
+	const ULONG sequence = dpage->dpg_sequence;
 	const bool dpEmpty = (dpage->dpg_count == 0);
 	release_page(&window);
 
