@@ -308,11 +308,10 @@ static const struct ini_idx_t indices[] =
 	INDEX(57, rel_tablespaces, idx_unique, 1)
 		SEGMENT(f_ts_name, idx_metadata)		// tablespace name
 	}},
-	//	define index RDB$INDEX_58 for RDB$PAGES RDB$PAGE_TYPE, RDB$RELATION_ID, RDB$PAGE_SEQUENCE;
-	INDEX(58, rel_pages, 0, 3)
+	//	define index RDB$INDEX_58 for RDB$PAGES RDB$PAGE_TYPE, RDB$RELATION_ID;
+	INDEX(58, rel_pages, 0, 2)
 		SEGMENT(f_pag_type, idx_numeric),	// page type
 		SEGMENT(f_pag_id, idx_numeric),		// relation id
-		SEGMENT(f_pag_seq, idx_numeric)		// page sequence
 	}}
 };
 

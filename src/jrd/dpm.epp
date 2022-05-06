@@ -2014,7 +2014,7 @@ SLONG DPM_prefetch_bitmap(thread_db* tdbb, jrd_rel* relation, PageBitmap* bitmap
 #endif
 
 
-void DPM_scan_pages(thread_db* tdbb, SCHAR pagType /*= 0*/, int relId /*= 0*/, ULONG startSequence /*= 0*/)
+void DPM_scan_pages(thread_db* tdbb, SCHAR pagType /*= 0*/, int relId /*= 0*/)
 {
 /**************************************
  *
@@ -2115,7 +2115,6 @@ void DPM_scan_pages(thread_db* tdbb, SCHAR pagType /*= 0*/, int relId /*= 0*/, U
 		FOR(REQUEST_HANDLE request) X IN RDB$PAGES
 			WITH X.RDB$RELATION_ID = relId
 			AND X.RDB$PAGE_TYPE = pagType
-			AND X.RDB$PAGE_SEQUENCE >= startSequence
 		{
 			relation = MET_relation(tdbb, X.RDB$RELATION_ID);
 			relPages = relation->getBasePages();
@@ -2140,12 +2139,6 @@ void DPM_scan_pages(thread_db* tdbb, SCHAR pagType /*= 0*/, int relId /*= 0*/, U
 
 			default:
 				CORRUPT(257);		// msg 257 bad record in RDB$PAGES
-			}
-
-			if ((sequence == startSequence) && (vector = *address))
-			{
-				fb_assert(vector->count() > sequence);
-				fb_assert((*vector)[sequence] == X.RDB$PAGE_NUMBER);
 			}
 
 			vector = *address = vcl::newVector(*dbb->dbb_permanent, *address, sequence + 1);
