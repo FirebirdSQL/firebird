@@ -314,8 +314,12 @@ static const struct ini_idx_t indices[] =
 	INDEX(58, rel_tablespaces, idx_unique, 1, ODS_13_0)
 		SEGMENT(f_ts_name, idx_metadata)		// tablespace name
 	}},
-	//	define index RDB$INDEX_59 for RDB$PAGES RDB$PAGE_TYPE, RDB$RELATION_ID;
-	INDEX(59, rel_pages, 0, 2, ODS_13_0)
+	// define index RDB$INDEX_59 for RDB$TABLESPACES unique RDB$TABLESPACE_ID;
+	INDEX(59, rel_tablespaces, idx_unique, 1, ODS_13_0)
+		SEGMENT(f_ts_id, idx_numeric)		// tablespace id
+	}},
+	// define index RDB$INDEX_60 for RDB$PAGES RDB$PAGE_TYPE, RDB$RELATION_ID;
+	INDEX(60, rel_pages, 0, 2, ODS_13_0)
 		SEGMENT(f_pag_type, idx_numeric),	// page type
 		SEGMENT(f_pag_id, idx_numeric),		// relation id
 	}}
