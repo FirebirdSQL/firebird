@@ -52,7 +52,7 @@ namespace Jrd
 
 		~Tablespace();
 
-		USHORT id;					// tablespace id = pagespace id
+		ULONG id;					// tablespace id = pagespace id
 		MetaName name;	// tablespace name
 		Lock* existenceLock;	// existence lock, if any
 		bool modified;

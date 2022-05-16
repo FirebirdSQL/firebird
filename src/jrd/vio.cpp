@@ -6348,7 +6348,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 			}
 
 			{
-				const USHORT pageSpaceID = temp->getWindow(tdbb).win_page.getPageSpaceID();
+				const ULONG pageSpaceID = temp->getWindow(tdbb).win_page.getPageSpaceID();
 				stack.push(PageNumber(pageSpaceID, temp->rpb_page));
 			}
 			return PrepareResult::SUCCESS;
@@ -6923,7 +6923,7 @@ void VIO_update_in_place(thread_db* tdbb,
 
 		if (stack)
 		{
-			const USHORT pageSpaceID = temp2.getWindow(tdbb).win_page.getPageSpaceID();
+			const ULONG pageSpaceID = temp2.getWindow(tdbb).win_page.getPageSpaceID();
 			stack->push(PageNumber(pageSpaceID, temp2.rpb_page));
 		}
 	}

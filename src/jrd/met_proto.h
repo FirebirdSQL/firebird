@@ -150,9 +150,9 @@ void MET_store_dependencies(Jrd::thread_db*, Firebird::Array<Jrd::CompilerScratc
 int			MET_get_linger(Jrd::thread_db*);
 Firebird::TriState	MET_get_ss_definer(Jrd::thread_db*);
 
-USHORT MET_rel_pagespace(Jrd::thread_db* tdbb, USHORT rel_id);
-USHORT MET_index_pagespace(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, USHORT idx_id);
-Jrd::Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id, bool open = true);
+ULONG MET_rel_pagespace(Jrd::thread_db* tdbb, USHORT rel_id);
+ULONG MET_index_pagespace(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, USHORT idx_id);
+Jrd::Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, ULONG id, bool open = true);
 Jrd::Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const Jrd::MetaName& tableSpaceName);
 void MET_ts_files(Jrd::thread_db* tdbb, Firebird::ObjectsArray<Firebird::PathName> &files);
 void MET_scan_tablespaces(Jrd::thread_db*);

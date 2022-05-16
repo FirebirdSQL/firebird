@@ -132,7 +132,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 							LCK_lock(tdbb, index->idl_lock, LCK_SR, LCK_WAIT);
 						}
 					}
-					const USHORT pageSpaceId = MET_index_pagespace(tdbb, relation, resource->rsc_id);
+					const ULONG pageSpaceId = MET_index_pagespace(tdbb, relation, resource->rsc_id);
 					usedTablespaces[pageSpaceId]++;
 					break;
 				}
@@ -167,7 +167,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 		}
 
 		// Now let's lock all used tablespaces
-		for (USHORT i = DB_PAGE_SPACE + 1; i < TRANS_PAGE_SPACE; i++)
+		for (ULONG i = DB_PAGE_SPACE + 1; i < TRANS_PAGE_SPACE; i++)
 			if (usedTablespaces[i] > 0)
 			{
 				// Tablespace is locking after the use in relation and indices.
@@ -697,7 +697,7 @@ void Statement::release(thread_db* tdbb)
 					if (!index->idl_count)
 						LCK_release(tdbb, index->idl_lock);
 				}
-				const USHORT pageSpaceId = MET_index_pagespace(tdbb, relation, resource->rsc_id);
+				const ULONG pageSpaceId = MET_index_pagespace(tdbb, relation, resource->rsc_id);
 				usedTablespaces[pageSpaceId]++;
 				break;
 			}
@@ -721,7 +721,7 @@ void Statement::release(thread_db* tdbb)
 	}
 
 	// Now let's release all used tablespaces
-	for (USHORT i = DB_PAGE_SPACE + 1; i < TRANS_PAGE_SPACE; i++)
+	for (ULONG i = DB_PAGE_SPACE + 1; i < TRANS_PAGE_SPACE; i++)
 		if (usedTablespaces[i] > 0)
 		{
 			// Tablespace is locking after the use in relation and indices.

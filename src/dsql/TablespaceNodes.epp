@@ -192,7 +192,7 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 	Attachment* attachment = transaction->getAttachment();
 	AutoCacheRequest requestHandle(tdbb, drq_m_tablespace, DYN_REQUESTS);
 	bool modified = false;
-	USHORT tableSpaceId = 0;
+	ULONG tableSpaceId = 0;
 
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 		X IN RDB$TABLESPACES
@@ -282,7 +282,7 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	AutoSavePoint savePoint(tdbb, transaction);
 
 	bool found = false;
-	USHORT tableSpaceId = 0;
+	ULONG tableSpaceId = 0;
 	string tableSpaceFileName;
 	AutoCacheRequest requestHandle(tdbb, drq_e_tablespace, DYN_REQUESTS);
 

@@ -61,11 +61,13 @@ class PageControl : public pool_alloc<type_pgc>
 // TEMP_PAGE_SPACE and page spaces above TEMP_PAGE_SPACE contain temporary pages
 // TRANS_PAGE_SPACE is pseudo space to store transaction numbers in precedence stack
 // INVALID_PAGE_SPACE is to ???
-const USHORT INVALID_PAGE_SPACE	= 0;
-const USHORT DB_PAGE_SPACE		= 1;
-// .. here all tablespace IDs. Keep TRANS_PAGE_SPACE right after DB_PAGE_SPACE
-const USHORT TRANS_PAGE_SPACE	= 255;	// is not used for tablespace id
-const USHORT TEMP_PAGE_SPACE	= 256;
+const ULONG INVALID_PAGE_SPACE	= 0;
+const ULONG DB_PAGE_SPACE		= 1;
+// .. here all tablespace IDs. Keep TRANS_PAGE_SPACE right after DB_PAGE_SPACE.
+// Note that the max tablespace ID should be MAX_USHORT as long as dfw_id is USHORT.
+const ULONG TRANS_PAGE_SPACE	= MAX_USHORT + 1;	// is not used for tablespace id
+const ULONG TEMP_PAGE_SPACE		= TRANS_PAGE_SPACE + 1;
+const ULONG MAX_PAGE_SPACE_ID	= MAX_ULONG;
 
 const USHORT PAGES_IN_EXTENT	= 8;
 
@@ -77,7 +79,7 @@ class PageManager;
 class PageSpace : public pool_alloc<type_PageSpace>
 {
 public:
-	explicit PageSpace(Database* aDbb, USHORT aPageSpaceID)
+	explicit PageSpace(Database* aDbb, ULONG aPageSpaceID)
 	{
 		pageSpaceID = aPageSpaceID;
 		pipHighWater = 0;
@@ -92,7 +94,7 @@ public:
 
 	~PageSpace();
 
-	USHORT pageSpaceID;
+	ULONG pageSpaceID;
 	Firebird::AtomicCounter pipHighWater;		// Lowest PIP with space
 	Firebird::AtomicCounter pipWithExtent;		// Lowest PIP with free extent
 	ULONG pipFirst;								// First pointer page
@@ -100,7 +102,7 @@ public:
 
 	jrd_file*	file;
 
-	static inline bool isTemporary(USHORT aPageSpaceID)
+	static inline bool isTemporary(ULONG aPageSpaceID)
 	{
 		return (aPageSpaceID >= TEMP_PAGE_SPACE);
 	}
@@ -110,7 +112,7 @@ public:
 		return isTemporary(pageSpaceID);
 	}
 
-	static inline bool isTablespace(USHORT aPageSpaceID)
+	static inline bool isTablespace(ULONG aPageSpaceID)
 	{
 		return (aPageSpaceID > DB_PAGE_SPACE) && (aPageSpaceID < TRANS_PAGE_SPACE);
 	}
@@ -120,7 +122,7 @@ public:
 		return isTablespace(pageSpaceID);
 	}
 
-	static inline SLONG generate(const PageSpace* Item)
+	static inline ULONG generate(const PageSpace* Item)
 	{
 		return Item->pageSpaceID;
 	}
@@ -169,13 +171,13 @@ public:
 		delete pageSpacesLock;
 	}
 
-	PageSpace* findPageSpace(const USHORT pageSpaceID) const;
+	PageSpace* findPageSpace(const ULONG pageSpaceID) const;
 
 	void initTempPageSpace(thread_db* tdbb);
-	USHORT getTempPageSpaceID(thread_db* tdbb);
+	ULONG getTempPageSpaceID(thread_db* tdbb);
 
-	void allocTableSpace(thread_db* tdbb, USHORT tableSpaceID, bool create, const Firebird::PathName& fileName);
-	void delPageSpace(const USHORT pageSpaceID);
+	void allocTableSpace(thread_db* tdbb, ULONG tableSpaceID, bool create, const Firebird::PathName& fileName);
+	void delPageSpace(const ULONG pageSpaceID);
 
 	void closeAll();
 
@@ -187,9 +189,9 @@ public:
 
 private:
 	typedef Firebird::SortedArray<PageSpace*, Firebird::EmptyStorage<PageSpace*>,
-		USHORT, PageSpace> PageSpaceArray;
+		ULONG, PageSpace> PageSpaceArray;
 
-	PageSpace* addPageSpace(const USHORT pageSpaceID);
+	PageSpace* addPageSpace(const ULONG pageSpaceID);
 
 	Database* dbb;
 	PageSpaceArray pageSpaces;
@@ -204,7 +206,7 @@ class PageNumber
 {
 public:
 	// CVC: To be completely in sync, the second param would have to be TraNumber
-	inline PageNumber(const USHORT aPageSpace, const ULONG aPageNum)
+	inline PageNumber(const ULONG aPageSpace, const ULONG aPageNum)
 		: pageNum(aPageNum), pageSpaceID(aPageSpace)
 	{
 		// Some asserts are commented cause 0 was also used as 'does not matter' pagespace
@@ -226,13 +228,13 @@ public:
 		return pageNum;
 	}
 
-	inline USHORT getPageSpaceID() const
+	inline ULONG getPageSpaceID() const
 	{
 		fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
 		return pageSpaceID;
 	}
 
-	inline USHORT setPageSpaceID(const USHORT aPageSpaceID)
+	inline ULONG setPageSpaceID(const ULONG aPageSpaceID)
 	{
 		fb_assert(aPageSpaceID != INVALID_PAGE_SPACE);
 		pageSpaceID = aPageSpaceID;
@@ -321,7 +323,7 @@ public:
 
 private:
 	ULONG	pageNum;
-	USHORT	pageSpaceID;
+	ULONG	pageSpaceID;
 };
 
 const PageNumber ZERO_PAGE_NUMBER(DB_PAGE_SPACE, 0);

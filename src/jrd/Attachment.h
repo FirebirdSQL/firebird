@@ -808,7 +808,7 @@ public:
 		att_batches.findAndRemove(b);
 	}
 
-	Tablespace* getTablespace(USHORT id)
+	Tablespace* getTablespace(ULONG id)
 	{
 		// tablespace id is started from 1
 		if (id <= att_tablespaces.getCount())
@@ -833,7 +833,7 @@ public:
 		return NULL;
 	}
 
-	void setTablespace(USHORT id, Tablespace* value)
+	void setTablespace(ULONG id, Tablespace* value)
 	{
 		if (id > att_tablespaces.getCount())
 			att_tablespaces.grow(id);
@@ -842,7 +842,7 @@ public:
 		att_tablespaces[id - 1] = value;
 	}
 
-	void delTablespace(USHORT id)
+	void delTablespace(ULONG id)
 	{
 		if (id <= att_tablespaces.getCount())
 		{

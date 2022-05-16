@@ -427,7 +427,7 @@ bool jrd_rel::acquireGCLock(thread_db* tdbb, int wait)
 	return ret;
 }
 
-void jrd_rel::setPageSpace(USHORT pageSpaceId)
+void jrd_rel::setPageSpace(ULONG pageSpaceId)
 {
 	rel_pages_base.rel_pg_space_id = pageSpaceId;
 }

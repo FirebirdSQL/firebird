@@ -1013,7 +1013,7 @@ void TRA_post_resources(thread_db* tdbb, jrd_tra* transaction, ResourceList& res
 	}
 
 	// Now let's lock all used tablespaces
-	for (USHORT i = DB_PAGE_SPACE + 1; i < TRANS_PAGE_SPACE; i++)
+	for (ULONG i = DB_PAGE_SPACE + 1; i < TRANS_PAGE_SPACE; i++)
 		if (usedTablespaces[i] > 0)
 		{
 			// Tablespace is locking after the use in relation and indices.
@@ -1305,7 +1305,7 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 	release_temp_tables(tdbb, transaction);
 
 	// Now let's release all used tablespaces
-	for (USHORT i = DB_PAGE_SPACE + 1; i < TRANS_PAGE_SPACE; i++)
+	for (ULONG i = DB_PAGE_SPACE + 1; i < TRANS_PAGE_SPACE; i++)
 		if (usedTablespaces[i] > 0)
 		{
 			// Tablespace is locking after the use in relation and indices.

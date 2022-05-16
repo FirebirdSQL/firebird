@@ -933,7 +933,7 @@ bool BTR_delete_index(thread_db* tdbb, WIN* window, USHORT id)
 	else
 	{
 		index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
-		const USHORT pg_space_id = irt_desc->getRootPageSpaceId();
+		const ULONG pg_space_id = irt_desc->getRootPageSpaceId();
 
 		if (PageSpace::isTablespace(pg_space_id))
 		{
@@ -2723,7 +2723,7 @@ private:
 	int nullIndLen;
 };
 
-bool BTR_move_index(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, SLONG indexId, USHORT pageSpaceId, PageNumber& oldRootPage)
+bool BTR_move_index(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, SLONG indexId, ULONG pageSpaceId, PageNumber& oldRootPage)
 {
 /**************************************
  *
@@ -3937,7 +3937,7 @@ static ULONG fast_load(thread_db* tdbb,
 	index_desc* const idx = creation.index;
 	const USHORT key_length = creation.key_length;
 
-	const USHORT pageSpaceID = idx->idx_pg_space_id;
+	const ULONG pageSpaceID = idx->idx_pg_space_id;
 
 	// leaf-page and pointer-page size limits, we always need to
 	// leave room for the END_LEVEL node.
@@ -5295,7 +5295,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 	const Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	const USHORT pageSpaceID = window->win_page.getPageSpaceID();
+	const ULONG pageSpaceID = window->win_page.getPageSpaceID();
 	btree_page* gc_page = (btree_page*) window->win_buffer;
 	contents result = contents_above_threshold;
 
@@ -5953,7 +5953,7 @@ static ULONG insert_node(thread_db* tdbb,
 	const Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	const USHORT pageSpaceID = window->win_page.getPageSpaceID();
+	const ULONG pageSpaceID = window->win_page.getPageSpaceID();
 
 	// find the insertion point for the specified key
 	btree_page* bucket = (btree_page*) window->win_buffer;

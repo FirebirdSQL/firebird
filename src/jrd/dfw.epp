@@ -2818,7 +2818,7 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 			jrd_rel* relation = nullptr;
 			CompilerScratch* csb = nullptr;
 
-			USHORT tableSpaceId = DB_PAGE_SPACE;
+			ULONG tableSpaceId = DB_PAGE_SPACE;
 
 			const auto dbb = tdbb->getDatabase();
 			const auto attachment = tdbb->getAttachment();
@@ -3496,7 +3496,7 @@ static bool create_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		relation = NULL;
 		idx.idx_flags = 0;
 
-		USHORT tableSpaceId = DB_PAGE_SPACE;
+		ULONG tableSpaceId = DB_PAGE_SPACE;
 
 		// Fetch the information necessary to create the index.  On the first
 		// time thru, check to see if the index already exists.  If so, delete
@@ -7069,7 +7069,7 @@ static bool move_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 				break;
 			}
 
-			const USHORT newPageSpaceId = MET_tablespace(tdbb, tableSpace)->id;
+			const ULONG newPageSpaceId = MET_tablespace(tdbb, tableSpace)->id;
 
 			PageNumber oldRootPage;
 			if (BTR_move_index(tdbb, relation, indexId, newPageSpaceId, oldRootPage))

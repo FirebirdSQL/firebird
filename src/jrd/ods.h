@@ -364,7 +364,7 @@ struct index_root_page
 	{
 	private:
 		friend struct index_root_page; // to allow offset check for private members
-		USHORT irt_page_space_id;	// page space of index root
+		ULONG irt_page_space_id;	// page space of index root
 		ULONG irt_root;				// page number of index root if irt_in_progress is NOT set, or
 									// highest 32 bit of transaction if irt_in_progress is set
 		ULONG irt_transaction;		// transaction in progress (lowest 32 bits)
@@ -373,9 +373,9 @@ struct index_root_page
 		UCHAR irt_keys;				// number of keys in index
 		UCHAR irt_flags;
 
-		USHORT getRootPageSpaceId() const;
+		ULONG getRootPageSpaceId() const;
 		ULONG getRootPage() const;
-		void setRoot(USHORT pageSpaceId, ULONG page);
+		void setRoot(ULONG pageSpaceId, ULONG page);
 
 		TraNumber getTransaction() const;
 		void setTransaction(TraNumber traNumber);
@@ -422,7 +422,7 @@ const USHORT irt_primary		= 16;
 const USHORT irt_expression		= 32;
 const USHORT irt_condition		= 64;
 
-inline USHORT index_root_page::irt_repeat::getRootPageSpaceId() const
+inline ULONG index_root_page::irt_repeat::getRootPageSpaceId() const
 {
 	return irt_page_space_id;
 }
@@ -432,7 +432,7 @@ inline ULONG index_root_page::irt_repeat::getRootPage() const
 	return (irt_flags & irt_in_progress) ? 0 : irt_root;
 }
 
-inline void index_root_page::irt_repeat::setRoot(USHORT pageSpaceId, ULONG page)
+inline void index_root_page::irt_repeat::setRoot(ULONG pageSpaceId, ULONG page)
 {
 	irt_page_space_id = pageSpaceId;
 	irt_root = page;

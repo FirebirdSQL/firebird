@@ -73,7 +73,7 @@ struct index_desc
 	Statement* idx_condition_statement;		// stored statement for index condition
 	float idx_fraction;						// fraction of keys included in the index
 
-	USHORT	idx_pg_space_id;				// PageSpace of index pages
+	ULONG	idx_pg_space_id;				// PageSpace of index pages
 	// This structure should exactly match IRTD structure for current ODS
 	struct idx_repeat
 	{

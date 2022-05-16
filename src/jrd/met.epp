@@ -3816,7 +3816,7 @@ jrd_rel* MET_relation(thread_db* tdbb, USHORT id)
 	// reserved for system relations
 	const USHORT max_sys_rel = USER_DEF_REL_INIT_ID - 1;
 
-	USHORT pageSpaceId = DB_PAGE_SPACE;
+	ULONG pageSpaceId = DB_PAGE_SPACE;
 
 	if (id > max_sys_rel)
 		pageSpaceId = MET_rel_pagespace(tdbb, id);
@@ -5644,7 +5644,7 @@ TriState MET_get_ss_definer(Jrd::thread_db* tdbb)
 	return r;
 }
 
-USHORT MET_rel_pagespace(Jrd::thread_db* tdbb, USHORT rel_id)
+ULONG MET_rel_pagespace(Jrd::thread_db* tdbb, USHORT rel_id)
 {
 /**************************************
  *
@@ -5663,7 +5663,7 @@ USHORT MET_rel_pagespace(Jrd::thread_db* tdbb, USHORT rel_id)
 	Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	USHORT pageSpaceId = DB_PAGE_SPACE;
+	ULONG pageSpaceId = DB_PAGE_SPACE;
 	Attachment* attachment = tdbb->getAttachment();
 	AutoCacheRequest request(tdbb, irq_find_rel_ts, IRQ_REQUESTS);
 
@@ -5679,7 +5679,7 @@ USHORT MET_rel_pagespace(Jrd::thread_db* tdbb, USHORT rel_id)
 	return pageSpaceId;
 }
 
-USHORT MET_index_pagespace(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, USHORT idx_id)
+ULONG MET_index_pagespace(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, USHORT idx_id)
 {
 /**************************************
  *
@@ -5703,7 +5703,7 @@ USHORT MET_index_pagespace(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, USHORT 
 
 	// Relation tablespace name must be in system table after index creation
 	// If it's not so we shoud use the main DB page space.
-	USHORT pageSpaceId = DB_PAGE_SPACE;
+	ULONG pageSpaceId = DB_PAGE_SPACE;
 	Attachment* attachment = tdbb->getAttachment();
 	AutoCacheRequest request(tdbb, irq_find_idx_ts, IRQ_REQUESTS);
 
@@ -5720,7 +5720,7 @@ USHORT MET_index_pagespace(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, USHORT 
 	return pageSpaceId;
 }
 
-Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id, bool open)
+Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, ULONG id, bool open)
 {
 /**************************************
  *
@@ -5798,7 +5798,7 @@ Tablespace* MET_tablespace_id(Jrd::thread_db* tdbb, USHORT id, bool open)
 		tableSpace->name = tableSpaceName;
 
 		Lock* lock = FB_NEW_RPT(*attachment->att_pool, 0)
-			Lock(tdbb, sizeof(SLONG), LCK_tablespace_exist, tableSpace);
+			Lock(tdbb, sizeof(ULONG), LCK_tablespace_exist, tableSpace);
 		tableSpace->existenceLock = lock;
 		lock->setKey(tableSpace->id);
 
@@ -5877,7 +5877,7 @@ Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
 	// Now we need to find tablespace in system table
 	AutoCacheRequest request(tdbb, irq_find_ts, IRQ_REQUESTS);
 
-	USHORT pageSpaceId;
+	ULONG pageSpaceId;
 	PathName file;
 	bool found = false;
 
@@ -5909,7 +5909,7 @@ Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
 		tableSpace->name = tableSpaceName;
 
 		Lock* lock = FB_NEW_RPT(*attachment->att_pool, 0)
-			Lock(tdbb, sizeof(SLONG), LCK_tablespace_exist, tableSpace);
+			Lock(tdbb, sizeof(ULONG), LCK_tablespace_exist, tableSpace);
 		tableSpace->existenceLock = lock;
 		lock->setKey(tableSpace->id);
 

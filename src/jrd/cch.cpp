@@ -1793,7 +1793,7 @@ void CCH_must_write(thread_db* tdbb, WIN* window)
 
 void CCH_precedence(thread_db* tdbb, WIN* window, ULONG pageNum)
 {
-	const USHORT pageSpaceID = pageNum > FIRST_PIP_PAGE ?
+	const ULONG pageSpaceID = pageNum > FIRST_PIP_PAGE ?
 		window->win_page.getPageSpaceID() : DB_PAGE_SPACE;
 
 	CCH_precedence(tdbb, window, PageNumber(pageSpaceID, pageNum));
@@ -3199,7 +3199,7 @@ static void check_precedence(thread_db* tdbb, WIN* window, PageNumber page)
 
 	// If this is really a transaction id, sort things out
 
-	const USHORT pageSpaceId = page.getPageSpaceID();
+	const ULONG pageSpaceId = page.getPageSpaceID();
 
 	switch (pageSpaceId)
 	{

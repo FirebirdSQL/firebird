@@ -1072,7 +1072,7 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 
 void Validation::cleanup()
 {
-	for (USHORT i = DB_PAGE_SPACE; i < TRANS_PAGE_SPACE; i++)
+	for (ULONG i = DB_PAGE_SPACE; i < TRANS_PAGE_SPACE; i++)
 	{
 		if (!vdr_page_bitmap[i])
 			continue;
@@ -1242,7 +1242,7 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, PageNumber page_number,
 			CCH_MARK(vdr_tdbb, window);
 	}
 
-	const int pageSpaceId = page_number.getPageSpaceID();
+	const ULONG pageSpaceId = page_number.getPageSpaceID();
 	const PageManager& pageMgr = dbb->dbb_page_manager;
 	const PageSpace* pageSpace = pageMgr.findPageSpace(pageSpaceId);
 
@@ -1337,7 +1337,7 @@ void Validation::garbage_collect()
 
 	PageManager& pageSpaceMgr = dbb->dbb_page_manager;
 
-	for (USHORT pageSpaceId = DB_PAGE_SPACE; pageSpaceId < TRANS_PAGE_SPACE; pageSpaceId++)
+	for (ULONG pageSpaceId = DB_PAGE_SPACE; pageSpaceId < TRANS_PAGE_SPACE; pageSpaceId++)
 	{
 		if (!vdr_max_page[pageSpaceId])
 			continue;
@@ -1495,7 +1495,7 @@ Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHO
 		corrupt(VAL_BLOB_UNKNOWN_LEVEL, relation, number.getValue(), header->blh_level);
 	}
 
-	const USHORT pageSpaceId = relation->getBasePages()->rel_pg_space_id;
+	const ULONG pageSpaceId = relation->getBasePages()->rel_pg_space_id;
 	// Level 1 blobs are a little more complicated
 	WIN window1(pageSpaceId, -1), window2(pageSpaceId, -1);
 	window1.win_flags = window2.win_flags = WIN_garbage_collector;
@@ -1563,7 +1563,7 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 	USHORT counter = 0;
 #endif
 
-	const USHORT pageSpaceId = relation->getBasePages()->rel_pg_space_id;
+	const ULONG pageSpaceId = relation->getBasePages()->rel_pg_space_id;
 
 	ULONG page_number = header->rhd_b_page;
 	USHORT line_number = header->rhd_b_line;
@@ -1734,7 +1734,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const USHORT pageSpaceId = relation->getBasePages()->rel_pg_space_id;
+	const ULONG pageSpaceId = relation->getBasePages()->rel_pg_space_id;
 	WIN window(pageSpaceId, -1);
 	window.win_flags = WIN_garbage_collector;
 
@@ -2471,7 +2471,7 @@ void Validation::walk_pip()
 
 	MET_scan_tablespaces(vdr_tdbb);
 
-	for (USHORT pageSpaceId = DB_PAGE_SPACE; pageSpaceId < TRANS_PAGE_SPACE; pageSpaceId++)
+	for (ULONG pageSpaceId = DB_PAGE_SPACE; pageSpaceId < TRANS_PAGE_SPACE; pageSpaceId++)
 	{
 		const PageSpace* pageSpace = pageSpaceMgr.findPageSpace(pageSpaceId);
 		if (!pageSpace)
@@ -2609,7 +2609,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 		return corrupt(VAL_P_PAGE_LOST, relation, sequence);
 
 	pointer_page* page = 0;
-	const USHORT pageSpaceId = relation->getBasePages()->rel_pg_space_id;
+	const ULONG pageSpaceId = relation->getBasePages()->rel_pg_space_id;
 	WIN window(pageSpaceId, -1);
 	window.win_flags = WIN_garbage_collector;
 
@@ -2862,7 +2862,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	data_page* page = 0;
 	while (flags & rhd_incomplete)
 	{
-		const USHORT pageSpaceId = relation->getBasePages()->rel_pg_space_id;
+		const ULONG pageSpaceId = relation->getBasePages()->rel_pg_space_id;
 		WIN window(pageSpaceId, -1);
 		window.win_flags = WIN_garbage_collector;
 
@@ -2966,7 +2966,7 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 	* Early in walk_chain we observed that this page in related to the relation so we skip such kind of check here.
 	**************************************/
 
-	const USHORT pageSpaceId = relation->getBasePages()->rel_pg_space_id;
+	const ULONG pageSpaceId = relation->getBasePages()->rel_pg_space_id;
 
 	WIN window(pageSpaceId, page_number);
 	data_page* dpage;
@@ -3042,7 +3042,7 @@ void Validation::checkDPinPIP(jrd_rel* relation, ULONG page_number)
 
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const USHORT pageSpaceId = relation->getBasePages()->rel_pg_space_id;
+	const ULONG pageSpaceId = relation->getBasePages()->rel_pg_space_id;
 	PageManager& pageMgr = dbb->dbb_page_manager;
 	PageSpace* pageSpace = pageMgr.findPageSpace(pageSpaceId);
 	fb_assert(pageSpace);
@@ -3173,7 +3173,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 		if (rs->fetch(vdr_tdbb))
 		{
 			// Try to restore pages and check every page that it is a pointer page and belongs to the relation
-			const USHORT pageSpaceId = relation->getBasePages()->rel_pg_space_id;
+			const ULONG pageSpaceId = relation->getBasePages()->rel_pg_space_id;
 			ULONG sequence = 0;
 			while (pointerPage)
 			{
@@ -3323,7 +3323,7 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 	if (!relPages->rel_index_root)
 		return corrupt(VAL_INDEX_ROOT_MISSING, relation);
 
-	const USHORT pageSpaceId = relPages->rel_pg_space_id;
+	const ULONG pageSpaceId = relPages->rel_pg_space_id;
 	index_root_page* page = 0;
 	WIN window(pageSpaceId, -1);
 	fetch_page(!getInfo, PageNumber(pageSpaceId, relPages->rel_index_root), pag_root, &window, &page);
@@ -3445,7 +3445,7 @@ Validation::RTN Validation::walk_scns()
 
 	PageManager& pageMgr = dbb->dbb_page_manager;
 
-	for (USHORT pageSpaceId = DB_PAGE_SPACE; pageSpaceId < TRANS_PAGE_SPACE; pageSpaceId++)
+	for (ULONG pageSpaceId = DB_PAGE_SPACE; pageSpaceId < TRANS_PAGE_SPACE; pageSpaceId++)
 	{
 		PageSpace* pageSpace = pageMgr.findPageSpace(pageSpaceId);
 		if (!pageSpace)
