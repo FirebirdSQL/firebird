@@ -65,7 +65,8 @@ const ULONG INVALID_PAGE_SPACE	= 0;
 const ULONG DB_PAGE_SPACE		= 1;
 // .. here all tablespace IDs. Keep TRANS_PAGE_SPACE right after DB_PAGE_SPACE.
 // Note that the max tablespace ID should be MAX_USHORT as long as dfw_id is USHORT.
-const ULONG TRANS_PAGE_SPACE	= MAX_USHORT + 1;	// is not used for tablespace id
+//const ULONG TRANS_PAGE_SPACE	= MAX_USHORT + 1;	// is not used for tablespace id
+const ULONG TRANS_PAGE_SPACE	= 255;
 const ULONG TEMP_PAGE_SPACE		= TRANS_PAGE_SPACE + 1;
 const ULONG MAX_PAGE_SPACE_ID	= MAX_ULONG;
 
