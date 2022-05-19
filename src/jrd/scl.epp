@@ -1065,7 +1065,9 @@ void UserId::findGrantedRoles(thread_db* tdbb) const
 		string usr_get_priv;
 		sql << "with recursive role_tree as ( "
 			<< "   select rdb$relation_name as nm, 0 as ur from rdb$user_privileges "
-			<< "       where rdb$privilege = 'M' and rdb$field_name = 'D' and rdb$user = " << usr_user_name << " and rdb$user_type = 8 "
+			<< "       where rdb$privilege = 'M' and rdb$field_name = 'D'"
+			<< "			and (rdb$user = " << usr_user_name << "	or rdb$user = 'PUBLIC')"
+			<< "			and rdb$user_type = 8 "
 			<< "   union all "
 			<< "   select rdb$role_name as nm, 1 as ur from rdb$roles "
 			<< "       where rdb$role_name = " << usr_sql_role_name
