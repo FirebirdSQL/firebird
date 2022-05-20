@@ -3459,7 +3459,10 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 			Ods::header_page* header = NULL;
 			XThreadEnsureUnlock threadGuard(dbb->dbb_thread_mutex, FB_FUNCTION);
 
-			ObjectsArray<PathName> tsFiles;
+			// Use the default memory pool instead of the dbb permanent memory pool
+			// because the last one will be destroyed below in this function
+			// before ~ObjectsArray call.
+			ObjectsArray<PathName> tsFiles(*getDefaultMemoryPool());
 
 			try
 			{
