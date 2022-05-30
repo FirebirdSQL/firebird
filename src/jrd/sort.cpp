@@ -689,10 +689,11 @@ void Sort::releaseBuffer()
 
 	SyncLockGuard guard(&m_dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, "Sort::releaseBuffer");
 
-	if (m_size_memory == MAX_SORT_BUFFER_SIZE &&
-		(m_flags & scb_reuse_buffer) &&
+	if ((m_flags & scb_reuse_buffer) &&
 		m_dbb->dbb_sort_buffers.getCount() < MAX_CACHED_SORT_BUFFERS)
 	{
+		fb_assert(m_size_memory == MAX_SORT_BUFFER_SIZE);
+
 		m_dbb->dbb_sort_buffers.push(m_memory);
 	}
 	else
