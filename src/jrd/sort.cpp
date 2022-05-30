@@ -200,7 +200,7 @@ Sort::Sort(Database* dbb,
 		m_longs = record_size >> SHIFTLONG;
 
 		m_min_alloc_size = record_size * MIN_RECORDS_TO_ALLOC;
-		m_max_alloc_size = MAX(record_size * MIN_RECORDS_TO_ALLOC, MAX_SORT_BUFFER_SIZE);
+		m_max_alloc_size = MAX(m_min_alloc_size, MAX_SORT_BUFFER_SIZE);
 
 		m_dup_callback = call_back;
 		m_dup_callback_arg = user_arg;
@@ -639,6 +639,7 @@ void Sort::allocateBuffer(MemoryPool& pool)
 			// The sort buffer cache has at least one big block, let's use it
 			m_size_memory = MAX_SORT_BUFFER_SIZE;
 			m_memory = m_dbb->dbb_sort_buffers.pop();
+			m_flags |= scb_reuse_buffer;
 			return;
 		}
 	}
@@ -655,6 +656,7 @@ void Sort::allocateBuffer(MemoryPool& pool)
 	{
 		m_size_memory = m_max_alloc_size;
 		m_memory = FB_NEW_POOL(*m_dbb->dbb_permanent) UCHAR[m_size_memory];
+		m_flags |= scb_reuse_buffer;
 	}
 	catch (const BadAlloc&)
 	{
@@ -666,6 +668,7 @@ void Sort::allocateBuffer(MemoryPool& pool)
 			{
 				m_size_memory /= 2;
 				m_memory = FB_NEW_POOL(pool) UCHAR[m_size_memory];
+				m_flags &= ~scb_reuse_buffer;
 				break;
 			}
 			catch (const BadAlloc&)
@@ -687,6 +690,7 @@ void Sort::releaseBuffer()
 	SyncLockGuard guard(&m_dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, "Sort::releaseBuffer");
 
 	if (m_size_memory == MAX_SORT_BUFFER_SIZE &&
+		(m_flags & scb_reuse_buffer) &&
 		m_dbb->dbb_sort_buffers.getCount() < MAX_CACHED_SORT_BUFFERS)
 	{
 		m_dbb->dbb_sort_buffers.push(m_memory);

@@ -336,6 +336,7 @@ private:
 // flags as set in m_flags
 
 const int scb_sorted = 1;	// stream has been sorted
+const int scb_reuse_buffer = 2;	// reuse buffer if possible
 
 class SortOwner
 {
