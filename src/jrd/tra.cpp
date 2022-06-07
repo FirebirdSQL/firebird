@@ -4061,13 +4061,17 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 		vec<jrd_rel*>* vector = tra_attachment->att_relations;
 		jrd_rel* blb_relation;
 
-		if (rel_id < vector->count() &&	(blb_relation = (*vector)[rel_id]))
+		if ((rel_id < vector->count() && (blb_relation = (*vector)[rel_id])) ||
+			(blb_relation = MET_relation(tdbb, rel_id)))
 		{
-			const MetaName security_name = fld ?
+			MetaName security_name = (fld && fld->fld_security_name.hasData()) ?
 				fld->fld_security_name : blb_relation->rel_security_name;
 
 			if (security_name.isEmpty())
+			{
 				MET_scan_relation(tdbb, blb_relation);
+				security_name = blb_relation->rel_security_name;
+			}
 
 			SecurityClass* s_class = SCL_get_class(tdbb, security_name.c_str());
 
