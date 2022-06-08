@@ -6249,7 +6249,7 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 				baseField.c_str(), RFR.RDB$FIELD_SOURCE);
 		}
 
-		if (tableSpace.hasData())
+		if (tableSpace.hasData() && applyTablespacesDdl(tdbb))
 		{
 			if (!checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
 				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
@@ -7571,7 +7571,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		REL.RDB$VIEW_SOURCE.NULL = TRUE;
 		REL.RDB$EXTERNAL_FILE.NULL = TRUE;
 
-		if (tableSpace.hasData() && tableSpace != PRIMARY_TABLESPACE_NAME)
+		if (tableSpace.hasData() && tableSpace != PRIMARY_TABLESPACE_NAME && applyTablespacesDdl(tdbb))
 		{
 			if (!checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
 				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
@@ -8072,6 +8072,9 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 				case Clause::TYPE_SET_TABLESPACE:
 				{
 					fb_assert(tableSpace.hasData());
+
+					if (!applyTablespacesDdl(tdbb))
+						break;
 
 					const bool primary_ts = (tableSpace == PRIMARY_TABLESPACE_NAME);
 
@@ -9840,7 +9843,7 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 			IDX.RDB$INDEX_TYPE = SSHORT(definition.descending.asBool());
 		}
 
-		if (definition.tableSpace.hasData())
+		if (definition.tableSpace.hasData() && applyTablespacesDdl(tdbb))
 		{
 			if (temporary)
 				status_exception::raise(Arg::Gds(isc_dyn_cant_set_ts_index) << IDX.RDB$INDEX_NAME);
@@ -10308,6 +10311,9 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 		{
 			fb_assert(op == OP_SET_TABLESPACE);
 			fb_assert(tableSpace.hasData());
+
+			if (!applyTablespacesDdl(tdbb))
+				break;
 
 			const bool primary_ts = (tableSpace == PRIMARY_TABLESPACE_NAME);
 

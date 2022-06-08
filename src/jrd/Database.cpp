@@ -393,7 +393,9 @@ namespace Jrd
 
 	bool Database::isReplicating(thread_db* tdbb)
 	{
-		if (!replConfig())
+		const auto config = replConfig();
+
+		if (!config || !config->isMaster())
 			return false;
 
 		Sync sync(&dbb_repl_sync, FB_FUNCTION);

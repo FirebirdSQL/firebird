@@ -43,6 +43,8 @@ namespace Replication
 		static Config* get(const Firebird::PathName& dbName);
 		static void enumerate(ReplicaList& replicas);
 
+		bool isMaster() const;
+
 		Firebird::PathName dbName;
 		ULONG bufferSize;
 		Firebird::string includeFilter;
@@ -66,6 +68,7 @@ namespace Replication
 		bool reportErrors;
 		bool disableOnError;
 		bool cascadeReplication;
+		bool applyTablespacesDdl;
 	};
 };
 

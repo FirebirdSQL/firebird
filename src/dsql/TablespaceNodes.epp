@@ -81,6 +81,9 @@ void CreateAlterTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* ds
 {
 	fb_assert(create || alter);
 
+	if (!applyTablespacesDdl(tdbb))
+		return;
+
 	PathUtils::fixupSeparators(fileName);
 
 	if (PathUtils::isRelative(fileName))
@@ -276,6 +279,9 @@ void DropTablespaceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
+	if (!applyTablespacesDdl(tdbb))
+		return;
+
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 

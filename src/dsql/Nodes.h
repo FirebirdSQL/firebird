@@ -192,6 +192,12 @@ public:
 	static void deletePrivilegesByRelName(thread_db* tdbb, jrd_tra* transaction,
 		const MetaName& name, int type);
 
+	static inline bool applyTablespacesDdl(thread_db* tdbb)
+	{
+		return !(tdbb->tdbb_flags & TDBB_replicator) ||
+			tdbb->getDatabase()->replConfig()->applyTablespacesDdl;
+	}
+
 public:
 	// Check permission on DDL operation. Return true if everything is OK.
 	// Raise an exception for bad permission.
