@@ -1547,7 +1547,7 @@ void PAG_release_page(thread_db* tdbb, const PageNumber& number, const PageNumbe
 }
 
 
-void PAG_release_pages(thread_db* tdbb, USHORT pageSpaceID, int cntRelease,
+void PAG_release_pages(thread_db* tdbb, ULONG pageSpaceID, int cntRelease,
 		const ULONG* pgNums, const ULONG prior_page)
 {
 /**************************************
@@ -2474,7 +2474,7 @@ ULONG PageSpace::getSCNPageNum(const Database* dbb, ULONG sequence)
 	return pgSpace->getSCNPageNum(sequence);
 }
 
-PageSpace* PageManager::addPageSpace(const USHORT pageSpaceID)
+PageSpace* PageManager::addPageSpace(const ULONG pageSpaceID)
 {
 	PageSpace* newPageSpace = findPageSpace(pageSpaceID);
 	if (!newPageSpace)
@@ -2486,7 +2486,7 @@ PageSpace* PageManager::addPageSpace(const USHORT pageSpaceID)
 	return newPageSpace;
 }
 
-PageSpace* PageManager::findPageSpace(const USHORT pageSpace) const
+PageSpace* PageManager::findPageSpace(const ULONG pageSpace) const
 {
 	FB_SIZE_T pos;
 	if (pageSpaces.find(pageSpace, pos)) {
@@ -2496,7 +2496,7 @@ PageSpace* PageManager::findPageSpace(const USHORT pageSpace) const
 	return 0;
 }
 
-void PageManager::delPageSpace(const USHORT pageSpace)
+void PageManager::delPageSpace(const ULONG pageSpace)
 {
 	FB_SIZE_T pos;
 	if (pageSpaces.find(pageSpace, pos))
@@ -2531,12 +2531,12 @@ void PageManager::initTempPageSpace(thread_db* tdbb)
 		if (!attachment->att_temp_pg_lock)
 		{
 			Lock* const lock = FB_NEW_RPT(*attachment->att_pool, 0)
-				Lock(tdbb, sizeof(SLONG), LCK_page_space);
+				Lock(tdbb, sizeof(ULONG), LCK_page_space);
 
 			while (true)
 			{
-				const double tmp = rand() * (MAX_USHORT - TEMP_PAGE_SPACE - 1.0) / (RAND_MAX + 1.0);
-				lock->setKey(static_cast<SLONG>(tmp) + TEMP_PAGE_SPACE + 1);
+				const double tmp = rand() * (MAX_PAGE_SPACE_ID - TEMP_PAGE_SPACE - 1.0) / (RAND_MAX + 1.0);
+				lock->setKey(static_cast<ULONG>(tmp) + TEMP_PAGE_SPACE + 1);
 				if (LCK_lock(tdbb, lock, LCK_write, LCK_NO_WAIT))
 					break;
 				fb_utils::init_status(tdbb->tdbb_status_vector);
@@ -2545,7 +2545,7 @@ void PageManager::initTempPageSpace(thread_db* tdbb)
 			attachment->att_temp_pg_lock = lock;
 		}
 
-		tempPageSpaceID = (USHORT) attachment->att_temp_pg_lock->getKey();
+		tempPageSpaceID = (ULONG) attachment->att_temp_pg_lock->getKey();
 	}
 	else
 	{
@@ -2555,7 +2555,7 @@ void PageManager::initTempPageSpace(thread_db* tdbb)
 	addPageSpace(tempPageSpaceID);
 }
 
-USHORT PageManager::getTempPageSpaceID(thread_db* tdbb)
+ULONG PageManager::getTempPageSpaceID(thread_db* tdbb)
 {
 	fb_assert(tempPageSpaceID != 0);
 	if (!tempFileCreated)

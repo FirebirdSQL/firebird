@@ -5161,6 +5161,9 @@ const
 	 isc_bad_loctab_num = 335545277;
 	 isc_quoted_str_bad = 335545278;
 	 isc_quoted_str_miss = 335545279;
+	 isc_ts_file_exists = 335545280;
+	 isc_tablespace_name = 335545281;
+	 isc_ts_file_not_exists = 335545282;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -5317,6 +5320,9 @@ const
 	 isc_dyn_exc_not_exist = 336068915;
 	 isc_dyn_gen_not_exist = 336068916;
 	 isc_dyn_fld_not_exist = 336068917;
+	 isc_dyn_ts_not_found = 336068918;
+	 isc_dyn_cant_set_ts_table = 336068919;
+	 isc_dyn_cant_set_ts_index = 336068920;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;
@@ -5545,6 +5551,11 @@ const
 	 isc_dsql_string_char_length = 336397332;
 	 isc_dsql_max_nesting = 336397333;
 	 isc_dsql_recreate_user_failed = 336397334;
+	 isc_dsql_create_ts_failed = 336397335;
+	 isc_dsql_alter_ts_failed = 336397336;
+	 isc_dsql_create_alter_ts_failed = 336397337;
+	 isc_dsql_drop_ts_failed = 336397338;
+	 isc_dsql_recreate_ts_failed = 336397339;
 	 isc_gsec_cant_open_db = 336723983;
 	 isc_gsec_switches_error = 336723984;
 	 isc_gsec_no_op_spec = 336723985;

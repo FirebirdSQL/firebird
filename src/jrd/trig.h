@@ -81,6 +81,7 @@ static const Jrd::gen generators[] =
 	{ "RDB$BACKUP_HISTORY", 9, "Nbackup technology" },
 	{ FUNCTIONS_GENERATOR, 10, "Function ID" },
 	{ "RDB$GENERATOR_NAME", 11, "Implicit generator name" },
+	{ "RDB$TABLESPACES", 12, "Tablespace ID" },
 	{ nullptr, 0, nullptr }
 };
 

@@ -41,7 +41,6 @@ namespace Ods {
 //void	PAG_add_clump(Jrd::thread_db* tdbb, SLONG, USHORT, USHORT, const UCHAR*, Ods::ClumpOper);
 USHORT	PAG_add_file(Jrd::thread_db* tdbb, const TEXT*, SLONG);
 bool	PAG_add_header_entry(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
-//void	PAG_attach_temp_pages(Jrd::thread_db*, USHORT pageSpaceID);
 bool	PAG_replace_entry_first(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
 Ods::pag*	PAG_allocate(Jrd::thread_db* tdbb, Jrd::win*);
 Ods::pag*	PAG_allocate_pages(Jrd::thread_db* tdbb, Jrd::win* window, unsigned cntAlloc, bool aligned);
@@ -56,7 +55,7 @@ void	PAG_init(Jrd::thread_db*);
 void	PAG_init2(Jrd::thread_db*, USHORT);
 SLONG	PAG_last_page(Jrd::thread_db* tdbb);
 void	PAG_release_page(Jrd::thread_db* tdbb, const Jrd::PageNumber&, const Jrd::PageNumber&);
-void	PAG_release_pages(Jrd::thread_db* tdbb, USHORT pageSpaceID, int cntRelease,
+void	PAG_release_pages(Jrd::thread_db* tdbb, ULONG pageSpaceID, int cntRelease,
 			const ULONG* pgNums, const ULONG prior_page);
 void	PAG_set_db_guid(Jrd::thread_db* tdbb, const Firebird::Guid&);
 void	PAG_set_force_write(Jrd::thread_db* tdbb, bool);

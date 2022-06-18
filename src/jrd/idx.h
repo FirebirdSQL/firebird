@@ -304,6 +304,14 @@ static const struct ini_idx_t indices[] =
 		SEGMENT(f_pubtab_tab_name, idx_string),		// table name
 		SEGMENT(f_pubtab_pub_name, idx_string)		// publication name
 	}},
+	// define index RDB$INDEX_57 for RDB$TABLESPACES unique RDB$TABLESPACE_NAME;
+	INDEX(57, rel_tablespaces, idx_unique, 1)
+		SEGMENT(f_ts_name, idx_metadata)		// tablespace name
+	}},
+	// define index RDB$INDEX_58 for RDB$TABLESPACES unique RDB$TABLESPACE_ID;
+	INDEX(58, rel_tablespaces, idx_unique, 1)
+		SEGMENT(f_ts_id, idx_numeric)		// tablespace id
+	}},
 };
 
 #define SYSTEM_INDEX_COUNT FB_NELEM(indices)

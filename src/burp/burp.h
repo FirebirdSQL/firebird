@@ -118,7 +118,8 @@ enum rec_type {
 	rec_package,			// Package
 	rec_db_creator,			// Database creator
 	rec_publication,		// Publication
-	rec_pub_table			// Publication table
+	rec_pub_table,			// Publication table
+	rec_tablespace			// Tablespace
 };
 
 
@@ -278,6 +279,7 @@ enum att_type {
 	att_relation_type,
 	att_relation_sql_security_deprecated,	// can be removed later
 	att_relation_sql_security,
+	att_relation_tablespace_name,
 
 	// Field attributes (used for both global and local fields)
 
@@ -337,6 +339,7 @@ enum att_type {
 	att_field_owner_name, // FB3.0, ODS12_0,
 	att_field_generator_name,
 	att_field_identity_type,
+	att_field_tablespace_name,
 
 	// Index attributes
 
@@ -351,6 +354,7 @@ enum att_type {
 	att_index_description2,
 	att_index_expression_source,
 	att_index_expression_blr,
+	att_index_tablespace_name,
 
 	// Data record
 
@@ -650,7 +654,16 @@ enum att_type {
 
 	// Publication tables
 	att_ptab_pub_name = SERIES,
-	att_ptab_table_name
+	att_ptab_table_name,
+
+	// Tablespace attributes
+	att_ts_name = SERIES,
+	att_ts_security_class,
+	att_ts_description,
+	att_ts_owner_name,
+	att_ts_file,
+	att_ts_offline,
+	att_ts_readonly
 };
 
 

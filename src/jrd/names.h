@@ -269,6 +269,9 @@ NAME("RDB$ARGUMENT_NAME", nam_arg_name)
 NAME("RDB$IDENTITY_TYPE", nam_identity_type)
 NAME("RDB$AUTH_METHOD", nam_auth_method)
 
+NAME("RDB$POINTER_PAGE", nam_pp_number)
+NAME("RDB$ROOT_PAGE", nam_idx_number)
+
 NAME("SEC$USER_NAME", nam_user_name)
 NAME("SEC$FIRST_NAME", nam_first_name)
 NAME("SEC$MIDDLE_NAME", nam_middle_name)
@@ -460,3 +463,9 @@ NAME("RDB$KEYWORD_RESERVED", nam_keyword_reserved)
 
 NAME("MON$COMPILED_STATEMENTS", nam_mon_compiled_statements)
 NAME("MON$COMPILED_STATEMENT_ID", nam_mon_cmp_stmt_id)
+
+NAME("RDB$TABLESPACES", nam_tablespaces)
+NAME("RDB$TABLESPACE_ID", nam_ts_id)
+NAME("RDB$TABLESPACE_NAME", nam_ts_name)
+NAME("RDB$OFFLINE", nam_ts_offline)
+NAME("RDB$READ_ONLY", nam_ts_readonly)

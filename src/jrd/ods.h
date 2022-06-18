@@ -70,6 +70,7 @@ const USHORT ODS_VERSION10	= 10;		// V6.0 features. SQL delimited idetifier,
 const USHORT ODS_VERSION11	= 11;		// Firebird 2.x features
 const USHORT ODS_VERSION12	= 12;		// Firebird 3.x features
 const USHORT ODS_VERSION13	= 13;		// Firebird 4.x features
+const USHORT ODS_VERSION14	= 14;
 
 // ODS minor version -- minor versions ARE compatible, but may be
 // increasingly functional.  Add new minor versions, but leave previous
@@ -126,6 +127,11 @@ const USHORT ODS_CURRENT13_0	= 0;	// Firebird 4.0 features
 const USHORT ODS_CURRENT13_1	= 1;	// Firebird 4.1 features
 const USHORT ODS_CURRENT13		= 1;
 
+// Minor versions for ODS 14
+
+const USHORT ODS_CURRENT14_0	= 0;
+const USHORT ODS_CURRENT14		= 0;
+
 // useful ODS macros. These are currently used to flag the version of the
 // system triggers and system indices in ini.e
 
@@ -146,6 +152,7 @@ const USHORT ODS_11_2		= ENCODE_ODS(ODS_VERSION11, 2);
 const USHORT ODS_12_0		= ENCODE_ODS(ODS_VERSION12, 0);
 const USHORT ODS_13_0		= ENCODE_ODS(ODS_VERSION13, 0);
 const USHORT ODS_13_1		= ENCODE_ODS(ODS_VERSION13, 1);
+const USHORT ODS_14_0		= ENCODE_ODS(ODS_VERSION14, 0);
 
 const USHORT ODS_FIREBIRD_FLAG = 0x8000;
 
@@ -164,16 +171,16 @@ inline USHORT DECODE_ODS_MINOR(USHORT ods_version)
 
 // Set current ODS major and minor version
 
-const USHORT ODS_VERSION = ODS_VERSION13;		// Current ODS major version -- always
+const USHORT ODS_VERSION = ODS_VERSION14;		// Current ODS major version -- always
 												// the highest.
 
-const USHORT ODS_RELEASED = ODS_CURRENT13_0;	// The lowest stable minor version
+const USHORT ODS_RELEASED = ODS_CURRENT14_0;	// The lowest stable minor version
 												// number for this ODS_VERSION!
 
-const USHORT ODS_CURRENT = ODS_CURRENT13;		// The highest defined minor version
+const USHORT ODS_CURRENT = ODS_CURRENT14;		// The highest defined minor version
 												// number for this ODS_VERSION!
 
-const USHORT ODS_CURRENT_VERSION = ODS_13_1;	// Current ODS version in use which includes
+const USHORT ODS_CURRENT_VERSION = ODS_14_0;	// Current ODS version in use which includes
 												// both major and minor ODS versions!
 
 
@@ -361,6 +368,7 @@ struct index_root_page
 	{
 	private:
 		friend struct index_root_page; // to allow offset check for private members
+		ULONG irt_page_space_id;	// page space of index root
 		ULONG irt_root;				// page number of index root if irt_in_progress is NOT set, or
 									// highest 32 bit of transaction if irt_in_progress is set
 		ULONG irt_transaction;		// transaction in progress (lowest 32 bits)
@@ -379,15 +387,16 @@ struct index_root_page
 
 	} irt_rpt[1];
 
-	static_assert(sizeof(struct irt_repeat) == 12, "struct irt_repeat size mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_root) == 0, "irt_root offset mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_transaction) == 4, "irt_transaction offset mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_desc) == 8, "irt_desc offset mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_keys) == 10, "irt_keys offset mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_flags) == 11, "irt_flags offset mismatch");
+	static_assert(sizeof(struct irt_repeat) == 16, "struct irt_repeat size mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_page_space_id) == 0, "irt_page_space_id offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_root) == 4, "irt_root offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_transaction) == 8, "irt_transaction offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_desc) == 12, "irt_desc offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_keys) == 14, "irt_keys offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_flags) == 15, "irt_flags offset mismatch");
 };
 
-static_assert(sizeof(struct index_root_page) == 32, "struct index_root_page size mismatch");
+static_assert(sizeof(struct index_root_page) == 36, "struct index_root_page size mismatch");
 static_assert(offsetof(struct index_root_page, irt_header) == 0, "irt_header offset mismatch");
 static_assert(offsetof(struct index_root_page, irt_relation) == 16, "irt_relation offset mismatch");
 static_assert(offsetof(struct index_root_page, irt_count) == 18, "irt_count offset mismatch");

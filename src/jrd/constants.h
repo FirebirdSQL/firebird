@@ -393,7 +393,10 @@ static const char* const DDL_TRIGGER_ACTION_NAMES[][2] =
 	{"DROP", "PACKAGE BODY"},
 	{"CREATE", "MAPPING"},
 	{"ALTER", "MAPPING"},
-	{"DROP", "MAPPING"}
+	{"DROP", "MAPPING"},
+	{"CREATE", "TABLESPACE"},
+	{"ALTER", "TABLESPACE"},
+	{"DROP", "TABLESPACE"}
 };
 
 const int DDL_TRIGGER_BEFORE	= 0;
@@ -446,6 +449,9 @@ const int DDL_TRIGGER_DROP_PACKAGE_BODY			= 44;
 const int DDL_TRIGGER_CREATE_MAPPING			= 45;
 const int DDL_TRIGGER_ALTER_MAPPING				= 46;
 const int DDL_TRIGGER_DROP_MAPPING				= 47;
+const int DDL_TRIGGER_CREATE_TABLESPACE			= 48;
+const int DDL_TRIGGER_ALTER_TABLESPACE			= 49;
+const int DDL_TRIGGER_DROP_TABLESPACE			= 50;
 
 // that's how database trigger action types are encoded
 //    (TRIGGER_TYPE_DB | type)

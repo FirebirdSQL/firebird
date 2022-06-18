@@ -1680,7 +1680,7 @@ void CCH_must_write(thread_db* tdbb, WIN* window)
 
 void CCH_precedence(thread_db* tdbb, WIN* window, ULONG pageNum)
 {
-	const USHORT pageSpaceID = pageNum > FIRST_PIP_PAGE ?
+	const ULONG pageSpaceID = pageNum > FIRST_PIP_PAGE ?
 		window->win_page.getPageSpaceID() : DB_PAGE_SPACE;
 
 	CCH_precedence(tdbb, window, PageNumber(pageSpaceID, pageNum));

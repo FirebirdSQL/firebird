@@ -3442,7 +3442,7 @@ static ULONG fast_load(thread_db* tdbb,
 	const USHORT key_length = creation.key_length;
 	Sort* const scb = creation.sort;
 
-	const USHORT pageSpaceID = relation->getPages(tdbb)->rel_pg_space_id;
+	const ULONG pageSpaceID = relation->getPages(tdbb)->rel_pg_space_id;
 
 	// leaf-page and pointer-page size limits, we always need to
 	// leave room for the END_LEVEL node.
@@ -4781,7 +4781,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 	const Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	const USHORT pageSpaceID = window->win_page.getPageSpaceID();
+	const ULONG pageSpaceID = window->win_page.getPageSpaceID();
 	btree_page* gc_page = (btree_page*) window->win_buffer;
 	contents result = contents_above_threshold;
 
@@ -5439,7 +5439,7 @@ static ULONG insert_node(thread_db* tdbb,
 	const Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	const USHORT pageSpaceID = window->win_page.getPageSpaceID();
+	const ULONG pageSpaceID = window->win_page.getPageSpaceID();
 
 	// find the insertion point for the specified key
 	btree_page* bucket = (btree_page*) window->win_buffer;

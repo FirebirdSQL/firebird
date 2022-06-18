@@ -299,3 +299,6 @@ FB_IMPL_MSG(DYN, 306, dyn_rel_not_exist, -901, "42", "000", "Table @1 does not e
 FB_IMPL_MSG(DYN, 307, dyn_exc_not_exist, -901, "42", "000", "Exception @1 does not exist")
 FB_IMPL_MSG(DYN, 308, dyn_gen_not_exist, -901, "42", "000", "Generator/Sequence @1 does not exist")
 FB_IMPL_MSG(DYN, 309, dyn_fld_not_exist, -901, "42", "000", "Field @1 of table @2 does not exist")
+FB_IMPL_MSG(DYN, 310, dyn_ts_not_found, -901, "42", "000", "Tablespace @1 not found")
+FB_IMPL_MSG(DYN, 311, dyn_cant_set_ts_table, -901, "42", "000", "Cannot set tablespace for temporary table @1")
+FB_IMPL_MSG(DYN, 312, dyn_cant_set_ts_index, -901, "42", "000", "Cannot set tablespace for temporary index @1")

@@ -99,6 +99,7 @@ RELATION(nam_indices, rel_indices, ODS_8_0, rel_persistent)
 	FIELD(f_idx_exp_blr, nam_exp_blr, fld_value, 1, ODS_8_0)
 	FIELD(f_idx_exp_source, nam_exp_source, fld_source, 1, ODS_8_0)
 	FIELD(f_idx_statistics, nam_statistics, fld_statistics, 1, ODS_8_0)
+	FIELD(f_idx_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 5 (RDB$RELATION_FIELDS)
@@ -124,6 +125,7 @@ RELATION(nam_r_fields, rel_rfr, ODS_8_0, rel_persistent)
 	FIELD(f_rfr_coll_id, nam_collate_id, fld_collate_id, 1, ODS_8_0)
 	FIELD(f_rfr_gen_name, nam_gen_name, fld_gen_name, 1, ODS_12_0)
 	FIELD(f_rfr_identity_type, nam_identity_type, fld_identity_type, 1, ODS_12_0)
+	FIELD(f_rfr_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 6 (RDB$RELATIONS)
@@ -146,6 +148,9 @@ RELATION(nam_relations, rel_relations, ODS_8_0, rel_persistent)
 	FIELD(f_rel_flags, nam_flags, fld_flag_nullable, 0, ODS_8_0)
 	FIELD(f_rel_type, nam_r_type, fld_r_type, 0, ODS_11_1)
 	FIELD(f_rel_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
+	FIELD(f_rel_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
+	FIELD(f_rel_first_pp, nam_pp_number, fld_pp_number, 0, ODS_14_0)
+	FIELD(f_rel_idx_root, nam_idx_number, fld_idx_number, 0, ODS_14_0)
 END_RELATION
 
 // Relation 7 (RDB$VIEW_RELATIONS)
@@ -753,4 +758,17 @@ RELATION(nam_mon_compiled_statements, rel_mon_compiled_statements, ODS_13_1, rel
 	FIELD(f_mon_cmp_stmt_type, nam_mon_obj_type, fld_obj_type, 0, ODS_13_1)
 	FIELD(f_mon_cmp_stmt_pkg_name, nam_mon_pkg_name, fld_pkg_name, 0, ODS_13_1)
 	FIELD(f_mon_cmp_stmt_stat_id, nam_mon_stat_id, fld_stat_id, 0, ODS_13_1)
+END_RELATION
+
+// Relation 56 (RDB$TABLESPACES)
+RELATION(nam_tablespaces, rel_tablespaces, ODS_14_0, rel_persistent)
+	FIELD(f_ts_id, nam_ts_id, fld_ts_id, 0, ODS_14_0)
+	FIELD(f_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
+	FIELD(f_ts_class, nam_class, fld_class, 1, ODS_14_0)
+	FIELD(f_ts_sys_flag, nam_sys_flag, fld_flag, 1, ODS_14_0)
+	FIELD(f_ts_desc, nam_description, fld_description, 1, ODS_14_0)
+	FIELD(f_ts_owner, nam_owner, fld_user, 1, ODS_14_0)
+	FIELD(f_ts_file, nam_file_name, fld_file_name, 1, ODS_14_0)
+	FIELD(f_ts_offline, nam_ts_offline, fld_bool, 1, ODS_14_0)
+	FIELD(f_ts_readonly, nam_ts_readonly, fld_bool, 1, ODS_14_0)
 END_RELATION

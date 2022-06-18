@@ -98,6 +98,9 @@ const int IN_SW_BURP_CRYPT				= 51;	// name of crypt plugin
 
 const int IN_SW_BURP_INCLUDE_DATA		= 52;	// backup data from tables
 const int IN_SW_BURP_REPLICA			= 53;	// replica mode
+const int IN_SW_BURP_TS_MAPPING_FILE	= 54;	// mapping file for tablespaces
+const int IN_SW_BURP_TS_ORIGINAL_PATHS	= 55;	// restore tablespaces to their original paths
+const int IN_SW_BURP_TS_PATH			= 56;	// set a path for a tablespace
 
 /**************************************************************************/
 

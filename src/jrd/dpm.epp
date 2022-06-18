@@ -76,7 +76,7 @@ using namespace Firebird;
 
 static void check_swept(thread_db*, record_param*);
 static USHORT compress(thread_db*, data_page*);
-static void delete_tail(thread_db*, rhdf*, const USHORT, USHORT);
+static void delete_tail(thread_db*, rhdf*, const ULONG, USHORT);
 static void fragment(thread_db*, record_param*, SSHORT, const Compressor&, SSHORT, const jrd_tra*);
 static void extend_relation(thread_db*, jrd_rel*, WIN*, const Jrd::RecordStorageType type);
 static UCHAR* find_space(thread_db*, record_param*, SSHORT, PageStack&, Record*, const Jrd::RecordStorageType type);
@@ -2525,7 +2525,7 @@ static USHORT compress(thread_db* tdbb, data_page* page)
 }
 
 
-static void delete_tail(thread_db* tdbb, rhdf* header, const USHORT page_space, USHORT length)
+static void delete_tail(thread_db* tdbb, rhdf* header, const ULONG page_space, USHORT length)
 {
 /**************************************
  *

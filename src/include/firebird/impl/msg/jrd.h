@@ -958,3 +958,6 @@ FB_IMPL_MSG(JRD, 956, sysf_invalid_null_empty, -901, "22", "023", "Empty or NULL
 FB_IMPL_MSG(JRD, 957, bad_loctab_num, -901, "HY", "000", "Undefined local table number @1")
 FB_IMPL_MSG(JRD, 958, quoted_str_bad, -901, "22", "024", "Invalid text <@1> after quoted string")
 FB_IMPL_MSG(JRD, 959, quoted_str_miss, -901, "22", "024", "Missing terminating quote <@1> in the end of quoted string")
+FB_IMPL_MSG(JRD, 960, ts_file_exists, -902, "08", "001", "Tablespace \"@1\" creation error. File \"@2\" exists.")
+FB_IMPL_MSG(JRD, 961, tablespace_name, -901, "42", "000", "TABLESPACE @1")
+FB_IMPL_MSG(JRD, 962, ts_file_not_exists, -902, "08", "001", "Tablespace \"@1\" alteration error. File \"@2\" does not exist.")

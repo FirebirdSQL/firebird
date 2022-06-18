@@ -223,3 +223,9 @@
 
 	FIELD(fld_keyword_name	, nam_keyword_name	, dtype_varying	, METADATA_IDENTIFIER_CHAR_LEN, dsc_text_type_ascii		, NULL		, false)
 	FIELD(fld_keyword_reserved, nam_keyword_reserved, dtype_boolean, 1						, 0							, NULL		, false)
+
+	FIELD(fld_ts_id			, nam_ts_id			, dtype_long	, sizeof(SLONG)				, 0							, NULL		, false)
+	FIELD(fld_ts_name		, nam_ts_name		, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true)
+
+	FIELD(fld_pp_number		, nam_pp_number		, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true)
+	FIELD(fld_idx_number	, nam_idx_number	, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true)
