@@ -179,8 +179,6 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 		}
 	}
 
-	storePrivileges(tdbb, transaction, name, obj_tablespace, ALL_PRIVILEGES);
-
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_TABLESPACE,
 		name, NULL);
 }
