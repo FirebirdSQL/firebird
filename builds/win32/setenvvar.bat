@@ -65,8 +65,7 @@
 
 :: Run vsvarsall just once during the build...
 @if DEFINED FB_VSCOMNTOOLS (
-  @devenv /? >nul 2>nul
-  @if errorlevel 9009 (
+  @if not defined VCToolsVersion (
     call "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%
   ) else (
     @echo    The file:
