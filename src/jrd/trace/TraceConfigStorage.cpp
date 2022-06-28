@@ -103,7 +103,8 @@ ConfigStorage::ConfigStorage()
 	PFnProcessIdToSessionId pfnProcessIdToSessionId =
 		(PFnProcessIdToSessionId) GetProcAddress(hmodKernel32, "ProcessIdToSessionId");
 
-	if (fb_utils::isGlobalKernelPrefix() ||
+	if (fb_utils::privateNameSpaceReady() ||
+		fb_utils::isGlobalKernelPrefix() ||
 		!pfnProcessIdToSessionId ||
 		pfnProcessIdToSessionId(GetCurrentProcessId(), &sesID) == 0 ||
 		sesID == 0)

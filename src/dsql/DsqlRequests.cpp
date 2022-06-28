@@ -23,6 +23,7 @@
 #include "../dsql/DsqlRequests.h"
 #include "../dsql/dsql.h"
 #include "../dsql/DsqlBatch.h"
+///#include "../dsql/DsqlStatementCache.h"
 #include "../dsql/Nodes.h"
 #include "../jrd/Statement.h"
 #include "../jrd/req.h"
@@ -812,6 +813,8 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 				"\tQuery:\n%s\n", numTries, request->getStatement()->sqlText->c_str() );
 		}
 
+		TraceManager::event_dsql_restart(req_dbb->dbb_attachment, req_transaction, this, numTries);
+
 		// When restart we must execute query
 		exec = true;
 	}
@@ -1035,6 +1038,9 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 		{
 			AutoSetRestoreFlag<ULONG> execDdl(&tdbb->tdbb_flags, TDBB_repl_in_progress, true);
 
+			//// Doing it in DFW_perform_work to avoid problems with DDL+DML in the same transaction.
+			///req_dbb->dbb_attachment->att_dsql_instance->dbb_statement_cache->purgeAllAttachments(tdbb);
+
 			node->executeDdl(tdbb, internalScratch, req_transaction);
 
 			const bool isInternalRequest =
@@ -1063,8 +1069,6 @@ DsqlTransactionRequest::DsqlTransactionRequest(MemoryPool& pool, dsql_dbb* dbb, 
 	: DsqlRequest(pool, dbb, aStatement),
 	  node(aNode)
 {
-	// Don't trace anything except savepoint statements
-	req_traced = (aStatement->getType() == DsqlStatement::TYPE_SAVEPOINT);
 }
 
 // Execute a dynamic SQL statement.

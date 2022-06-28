@@ -13,14 +13,15 @@ SHELL ["cmd", "/S", "/C"]
 #
 # 16.11.6.0 - https://aka.ms/vs/16/release/201528995_-1285443981/channel
 # 16.11.7.0 - https://aka.ms/vs/16/release/152566872_220409660/channel
+# 16.11.16 - https://aka.ms/vs/16/release/377566269_-1382739058/channel
 
 RUN `
     set chocolateyUseWindowsCompression='false' && `
     powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))" && `
     set "PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin" && `
     `
-    choco install --no-progress --yes visualstudio2019buildtools --version=16.11.7.0 --package-parameters " `
-        --installChannelUri https://aka.ms/vs/16/release/152566872_220409660/channel `
+    choco install --no-progress --yes visualstudio2019buildtools --version=16.11.16 --package-parameters " `
+        --installChannelUri https://aka.ms/vs/16/release/377566269_-1382739058/channel `
         --quiet --wait --norestart --nocache `
         --locale en-US `
         --add Microsoft.Component.MSBuild `

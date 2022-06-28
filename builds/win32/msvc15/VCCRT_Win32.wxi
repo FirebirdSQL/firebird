@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Include xmlns="http://schemas.microsoft.com/wix/2006/wi">
-    <?define PRODUCT_ID=* ?>
 
-    <?define PACKAGE_ID=* ?>
 
     <?define UPGRADE_CODE=272af809-f161-45c3-bcbe-a8594a175e38 ?>
 
-    <?define MSM="microsoft_vc141_crt_x86.msm" ?>
-
-	<?define CPUArch="x86" ?>
-
+    <?define CPUArch="x86" ?>
 
 
 </Include>

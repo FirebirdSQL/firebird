@@ -519,8 +519,24 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 					(RFR.RDB$IDENTITY_TYPE == IDENT_TYPE_BY_DEFAULT ? "BY DEFAULT" :
 					 RFR.RDB$IDENTITY_TYPE == IDENT_TYPE_ALWAYS ? "ALWAYS" : ""));
 
-				if (!GEN.RDB$INITIAL_VALUE.NULL && GEN.RDB$INITIAL_VALUE != 0)
-					isqlGlob.printf(" (START WITH %" SQUADFORMAT ")", GEN.RDB$INITIAL_VALUE);
+				const bool printInitial = !GEN.RDB$INITIAL_VALUE.NULL && GEN.RDB$INITIAL_VALUE != 0;
+				const bool printIncrement = !GEN.RDB$GENERATOR_INCREMENT.NULL && GEN.RDB$GENERATOR_INCREMENT != 1;
+
+				if (printInitial || printIncrement)
+				{
+					isqlGlob.printf(" (");
+
+					if (printInitial)
+					{
+						isqlGlob.printf("START WITH %" SQUADFORMAT "%s",
+							GEN.RDB$INITIAL_VALUE, (printIncrement ? " " : ""));
+					}
+
+					if (printIncrement)
+						isqlGlob.printf("INCREMENT %" SLONGFORMAT, GEN.RDB$GENERATOR_INCREMENT);
+
+					isqlGlob.printf(")");
+				}
 			}
 			END_FOR
 			ON_ERROR

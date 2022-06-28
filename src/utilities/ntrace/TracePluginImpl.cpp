@@ -1651,8 +1651,10 @@ void TracePluginImpl::log_event_dsql_free(ITraceDatabaseConnection* connection,
 
 void TracePluginImpl::log_event_dsql_execute(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, ITraceSQLStatement* statement,
-		bool started, ntrace_result_t req_result)
+		bool started, unsigned number, ntrace_result_t req_result)
 {
+	const bool restart = started && (number > 0);
+
 	if (started && !config.log_statement_start)
 		return;
 
@@ -1663,6 +1665,13 @@ void TracePluginImpl::log_event_dsql_execute(ITraceDatabaseConnection* connectio
 	const PerformanceInfo* info = started ? NULL : statement->getPerf();
 	if (config.time_threshold && info && info->pin_time < config.time_threshold)
 		return;
+
+	if (restart)
+	{
+		string temp;
+		temp.printf("Restarted %d time(s)" NEWLINE, number);
+		record.append(temp);
+	}
 
 	ITraceParams *params = statement->getInputs();
 	if (params && params->getCount())
@@ -1682,26 +1691,31 @@ void TracePluginImpl::log_event_dsql_execute(ITraceDatabaseConnection* connectio
 		appendTableCounts(info);
 	}
 
-	const char* event_type;
+	string event_type;
+
+	if (restart)
+		event_type = "EXECUTE_STATEMENT_RESTART";
+	else if (started)
+		event_type = "EXECUTE_STATEMENT_START";
+	else
+		event_type = "EXECUTE_STATEMENT_FINISH";
+
 	switch (req_result)
 	{
 		case ITracePlugin::RESULT_SUCCESS:
-			event_type = started ? "EXECUTE_STATEMENT_START" :
-								   "EXECUTE_STATEMENT_FINISH";
 			break;
 		case ITracePlugin::RESULT_FAILED:
-			event_type = started ? "FAILED EXECUTE_STATEMENT_START" :
-								   "FAILED EXECUTE_STATEMENT_FINISH";
+			event_type.insert(0, "FAILED ");
 			break;
 		case ITracePlugin::RESULT_UNAUTHORIZED:
-			event_type = started ? "UNAUTHORIZED EXECUTE_STATEMENT_START" :
-								   "UNAUTHORIZED EXECUTE_STATEMENT_FINISH";
+			event_type.insert(0, "UNAUTHORIZED ");
 			break;
 		default:
 			event_type = "Unknown event at executing statement";
 			break;
 	}
-	logRecordStmt(event_type, connection, transaction, statement, true);
+
+	logRecordStmt(event_type.c_str(), connection, transaction, statement, true);
 }
 
 
@@ -2486,7 +2500,23 @@ FB_BOOLEAN TracePluginImpl::trace_dsql_execute(ITraceDatabaseConnection* connect
 {
 	try
 	{
-		log_event_dsql_execute(connection, transaction, statement, started, req_result);
+		log_event_dsql_execute(connection, transaction, statement, started, 0, req_result);
+		return true;
+	}
+	catch (const Firebird::Exception& ex)
+	{
+		marshal_exception(ex);
+		return false;
+	}
+}
+
+FB_BOOLEAN TracePluginImpl::trace_dsql_restart(ITraceDatabaseConnection* connection,
+	ITraceTransaction* transaction, ITraceSQLStatement* statement, unsigned number)
+{
+	try
+	{
+		log_event_dsql_execute(connection, transaction, statement, true, number, 
+			ITracePlugin::RESULT_SUCCESS);
 		return true;
 	}
 	catch (const Firebird::Exception& ex)

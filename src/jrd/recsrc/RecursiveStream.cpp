@@ -39,24 +39,20 @@ using namespace Jrd;
 RecursiveStream::RecursiveStream(CompilerScratch* csb, StreamType stream, StreamType mapStream,
 							     RecordSource* root, RecordSource* inner,
 							     const MapNode* rootMap, const MapNode* innerMap,
-							     FB_SIZE_T streamCount, const StreamType* innerStreams,
+							     const StreamList& innerStreams,
 							     ULONG saveOffset)
 	: RecordStream(csb, stream),
 	  m_mapStream(mapStream),
 	  m_root(root), m_inner(inner),
 	  m_rootMap(rootMap), m_innerMap(innerMap),
-	  m_innerStreams(csb->csb_pool),
+	  m_innerStreams(csb->csb_pool, innerStreams),
 	  m_saveOffset(saveOffset)
 {
 	fb_assert(m_root && m_inner && m_rootMap && m_innerMap);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = root->getCardinality() * inner->getCardinality();
 	m_saveSize = csb->csb_impure - saveOffset;
-
-	m_innerStreams.resize(streamCount);
-
-	for (FB_SIZE_T i = 0; i < streamCount; i++)
-		m_innerStreams[i] = innerStreams[i];
 
 	// To make aggregates, unions and nested recursions inside the inner stream work correctly,
 	// we need to add all the child streams as well. See CORE-3683 for the test case.
@@ -248,6 +244,8 @@ void RecursiveStream::print(thread_db* tdbb, string& plan, bool detailed, unsign
 	if (detailed)
 	{
 		plan += printIndent(++level) + "Recursion";
+		printOptInfo(plan);
+
 		m_root->print(tdbb, plan, true, level);
 		m_inner->print(tdbb, plan, true, level);
 	}

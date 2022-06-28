@@ -51,15 +51,11 @@ static bool texttype_default_init(texttype* tt,
 								  ULONG specificAttributesLength)
 								  //const ASCII* configInfo)
 {
-	charset cs;
-	memset(&cs, 0, sizeof(cs));
+	AutoPtr<charset> cs(FB_NEW charset);
+	memset(cs, 0, sizeof(*cs));
 
 	// test if that ICU charset exist
-	if (CSICU_charset_init(&cs, charSetName))
-	{
-		IntlUtil::finiCharset(&cs);
-	}
-	else
+	if (!CSICU_charset_init(cs, charSetName))
 		return false;
 
 	if ((attributes & ~TEXTTYPE_ATTR_PAD_SPACE) ||
@@ -72,7 +68,7 @@ static bool texttype_default_init(texttype* tt,
 	}
 
 	// name comes from stack. Copy it.
-	ASCII* p = FB_NEW_POOL(*getDefaultMemoryPool()) ASCII[strlen(name) + 1];
+	ASCII* p = FB_NEW ASCII[strlen(name) + 1];
 	strcpy(p, name);
 	tt->texttype_name = p;
 
@@ -93,23 +89,24 @@ static bool texttype_unicode_init(texttype* tt,
 								  ULONG specificAttributesLength,
 								  const ASCII* configInfo)
 {
-	charset* cs = FB_NEW_POOL(*getDefaultMemoryPool())  charset;
+	AutoPtr<charset> cs(FB_NEW charset);
 	memset(cs, 0, sizeof(*cs));
 
 	// test if that charset exist
 	if (!LD_lookup_charset(cs, charSetName, configInfo))
-	{
-		Firebird::SimpleDelete<charset>::clear(cs);
 		return false;
-	}
 
 	Firebird::UCharBuffer specificAttributesBuffer;
 	memcpy(specificAttributesBuffer.getBuffer(specificAttributesLength),
 		specificAttributes, specificAttributesLength);
 
-	// ASF: Don't free "cs". It'will be used in the collation.
-	return Firebird::IntlUtil::initUnicodeCollation(tt, cs, name,
+	auto ret = Firebird::IntlUtil::initUnicodeCollation(tt, cs, name,
 		attributes, specificAttributesBuffer, configInfo);
+
+	// ASF: Don't free "cs". It'will be used in the collation.
+	cs.release();
+
+	return ret;
 }
 
 
@@ -120,7 +117,7 @@ bool LCICU_setup_attributes(const ASCII* name, const ASCII* charSetName, const A
 
 	if (len > 8 && strcmp(name + len - 8, "_UNICODE") == 0)
 	{
-		AutoPtr<charset> cs(FB_NEW_POOL(*getDefaultMemoryPool()) charset);
+		AutoPtr<charset> cs(FB_NEW charset);
 		memset(cs, 0, sizeof(*cs));
 
 		// test if that charset exist

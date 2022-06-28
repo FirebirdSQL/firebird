@@ -40,6 +40,8 @@ void EXE_assignment(Jrd::thread_db* tdbb, const Jrd::ValueExprNode* to, dsc* fro
 void EXE_execute_db_triggers(Jrd::thread_db*, Jrd::jrd_tra*, enum TriggerAction);
 void EXE_execute_ddl_triggers(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction,
 	bool preTriggers, int action);
+bool EXE_get_stack_trace(const Jrd::Request* request, Firebird::string& sTrace);
+
 const Jrd::StmtNode* EXE_looper(Jrd::thread_db* tdbb, Jrd::Request* request,
 	const Jrd::StmtNode* in_node);
 

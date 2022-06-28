@@ -100,6 +100,7 @@ static const TOK tokens[] =
 	{TOK_BIND, "BIND", true},
 	{TOK_BIT_LENGTH, "BIT_LENGTH", false},
 	{TOK_BLOB, "BLOB", false},
+	{TOK_BLOB_APPEND, "BLOB_APPEND", true},
 	{TOK_BLOCK, "BLOCK", true},
 	{TOK_BODY, "BODY", true},
 	{TOK_BOOLEAN, "BOOLEAN", false},

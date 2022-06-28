@@ -200,7 +200,7 @@ HANDLE ISC_make_signal(bool /*create_flag*/, bool manual_reset, int process_idL,
 	TEXT event_name[BUFFER_TINY];
 	sprintf(event_name, "_firebird_process%u_signal%d", process_idL, signal_number);
 
-	if (!fb_utils::prefix_kernel_object_name(event_name, sizeof(event_name)))
+	if (!fb_utils::private_kernel_object_name(event_name, sizeof(event_name)))
 	{
 		SetLastError(ERROR_FILENAME_EXCED_RANGE);
 		return NULL;

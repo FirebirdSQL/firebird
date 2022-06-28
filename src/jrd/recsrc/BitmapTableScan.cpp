@@ -37,13 +37,14 @@ using namespace Jrd;
 
 BitmapTableScan::BitmapTableScan(CompilerScratch* csb, const string& alias,
 								 StreamType stream, jrd_rel* relation,
-								 InversionNode* inversion)
+								 InversionNode* inversion, double selectivity)
 	: RecordStream(csb, stream),
 	  m_alias(csb->csb_pool, alias), m_relation(relation), m_inversion(inversion)
 {
 	fb_assert(m_inversion);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = csb->csb_rpt[stream].csb_cardinality * selectivity;
 }
 
 void BitmapTableScan::open(thread_db* tdbb) const
@@ -129,6 +130,7 @@ void BitmapTableScan::print(thread_db* tdbb, string& plan,
 		plan += printIndent(++level) + "Table " +
 			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
 
+		printOptInfo(plan);
 		printInversion(tdbb, m_inversion, plan, true, level);
 	}
 	else

@@ -501,7 +501,6 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
  *
  **************************************/
 	ThreadCounter counter;
-	FbLocalStatus localStatus;
 
 	if (server_flag & SRVR_inet)
 	{
@@ -527,7 +526,13 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 		}
 	}
 
-	REPL_server(&localStatus, false, &server_shutdown);
+	FbLocalStatus localStatus;
+	if (!REPL_server(&localStatus, false, &server_shutdown))
+	{
+		const char* errorMsg = "Replication server initialization error";
+		iscLogStatus(errorMsg, localStatus->getErrors());
+		Syslog::Record(Syslog::Error, errorMsg);
+	}
 
 	return 0;
 }

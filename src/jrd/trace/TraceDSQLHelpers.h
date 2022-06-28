@@ -40,14 +40,14 @@ class TraceDSQLPrepare
 {
 public:
 	TraceDSQLPrepare(Attachment* attachment, jrd_tra* transaction,
-				FB_SIZE_T string_length, const TEXT* string)
+				FB_SIZE_T string_length, const TEXT* string, bool isInternal)
 		: m_attachment(attachment),
 		  m_transaction(transaction),
 		  m_request(NULL),
 		  m_string_len(string_length),
 		  m_string(string)
 	{
-		m_need_trace = TraceManager::need_dsql_prepare(m_attachment);
+		m_need_trace = !isInternal && TraceManager::need_dsql_prepare(m_attachment);
 		if (!m_need_trace)
 			return;
 
@@ -132,11 +132,11 @@ public:
 		fb_assert(!m_dsqlRequest->req_fetch_baseline);
 		m_dsqlRequest->req_fetch_baseline = NULL;
 
+		MemoryPool* pool = MemoryPool::getContextPool();
 		if (auto request = m_dsqlRequest->getRequest())
-		{
-			MemoryPool* pool = MemoryPool::getContextPool();
 			m_dsqlRequest->req_fetch_baseline = FB_NEW_POOL(*pool) RuntimeStatistics(*pool, request->req_stats);
-		}
+		else
+			m_dsqlRequest->req_fetch_baseline = FB_NEW_POOL(*pool) RuntimeStatistics(*pool, m_attachment->att_stats);
 	}
 
 	void finish(bool have_cursor, ntrace_result_t result)
@@ -152,7 +152,7 @@ public:
 		}
 
 		TraceRuntimeStats stats(m_attachment, m_dsqlRequest->req_fetch_baseline,
-			m_dsqlRequest->getRequest() ? &m_dsqlRequest->getRequest()->req_stats : NULL,
+			m_dsqlRequest->getRequest() ? &m_dsqlRequest->getRequest()->req_stats : &m_attachment->att_stats,
 			fb_utils::query_performance_counter() - m_start_clock,
 			m_dsqlRequest->req_fetch_rowcount);
 

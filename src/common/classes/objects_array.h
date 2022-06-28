@@ -483,6 +483,13 @@ namespace Firebird
 				ObjectCmp> >()
 		{ }
 
+		explicit SortedObjectsArray(MemoryPool& p, const SortedObjectsArray& o) :
+			ObjectsArray <ObjectValue, SortedArray<ObjectValue*,
+				ObjectStorage, const ObjectKey*, ObjectKeyOfValue,
+				ObjectCmp> >(p, o)
+		{
+		}
+
 		bool find(const ObjectKey& item, size_type& pos) const
 		{
 			const ObjectKey* const pItem = &item;

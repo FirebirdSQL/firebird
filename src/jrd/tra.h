@@ -149,6 +149,7 @@ typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, ULONG> >
 const int DEFAULT_LOCK_TIMEOUT = -1; // infinite
 const char* const TRA_BLOB_SPACE = "fb_blob_";
 const char* const TRA_UNDO_SPACE = "fb_undo_";
+const int MAX_TEMP_BLOBS = 1000;
 
 class jrd_tra : public pool_alloc<type_tra>
 {
@@ -285,6 +286,7 @@ public:
 	UCHAR tra_callback_count;			// callback count for 'execute statement'
 	SSHORT tra_lock_timeout;			// in seconds, -1 means infinite, 0 means NOWAIT
 	ULONG tra_next_blob_id;     		// ID of the previous blob or array created in this transaction
+	ULONG tra_temp_blobs_count;			// Number of active temporary blobs
 	const ISC_TIMESTAMP_TZ tra_timestamp;	// transaction start time
 	Request* tra_requests;				// Doubly linked list of requests active in this transaction
 	MonitoringSnapshot* tra_mon_snapshot;	// Database state snapshot (for monitoring purposes)

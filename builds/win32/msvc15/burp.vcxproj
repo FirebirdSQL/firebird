@@ -139,6 +139,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\burp\burp.cpp" />
+    <ClCompile Include="..\..\..\src\burp\BurpTasks.cpp" />
     <ClCompile Include="..\..\..\src\burp\canonical.cpp" />
     <ClCompile Include="..\..\..\src\burp\misc.cpp" />
     <ClCompile Include="..\..\..\src\burp\mvol.cpp" />
@@ -154,6 +155,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\..\src\burp\backu_proto.h" />
     <ClInclude Include="..\..\..\src\burp\burp.h" />
+    <ClInclude Include="..\..\..\src\burp\BurpTasks.h" />
     <ClInclude Include="..\..\..\src\burp\burp_proto.h" />
     <ClInclude Include="..\..\..\src\burp\burpswi.h" />
     <ClInclude Include="..\..\..\src\burp\canon_proto.h" />

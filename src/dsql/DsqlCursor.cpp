@@ -21,10 +21,12 @@
  */
 
 #include "firebird.h"
+#include "../common/classes/ClumpletWriter.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceDSQLHelpers.h"
 
+#include "../dsql/dsql_proto.h"
 #include "../dsql/DsqlCursor.h"
 
 using namespace Firebird;
@@ -208,6 +210,81 @@ int DsqlCursor::fetchRelative(thread_db* tdbb, UCHAR* buffer, SLONG offset)
 	}
 
 	return fetchFromCache(tdbb, buffer, position);
+}
+
+void DsqlCursor::getInfo(thread_db* tdbb,
+						 unsigned int itemsLength, const unsigned char* items,
+						 unsigned int bufferLength, unsigned char* buffer)
+{
+	if (bufferLength < 7) // isc_info_error + 2-byte length + 4-byte error code
+	{
+		if (bufferLength)
+			*buffer = isc_info_truncated;
+		return;
+	}
+
+	const bool isScrollable = (m_flags & IStatement::CURSOR_TYPE_SCROLLABLE);
+
+	ClumpletWriter response(ClumpletReader::InfoResponse, bufferLength - 1); // isc_info_end
+	ISC_STATUS errorCode = 0;
+	bool needLength = false, completed = false;
+
+	try
+	{
+		ClumpletReader infoItems(ClumpletReader::InfoItems, items, itemsLength);
+		for (infoItems.rewind(); !errorCode && !infoItems.isEof(); infoItems.moveNext())
+		{
+			const auto tag = infoItems.getClumpTag();
+
+			switch (tag)
+			{
+			case isc_info_end:
+				break;
+
+			case isc_info_length:
+				needLength = true;
+				break;
+
+			case IResultSet::INF_RECORD_COUNT:
+				if (isScrollable && !m_eof)
+				{
+					cacheInput(tdbb);
+					fb_assert(m_eof);
+				}
+				response.insertInt(tag, isScrollable ? m_cachedCount : -1);
+				break;
+
+			default:
+				errorCode = isc_infunk;
+				break;
+			}
+		}
+
+		completed = infoItems.isEof();
+
+		if (needLength && completed)
+		{
+			response.rewind();
+			response.insertInt(isc_info_length, response.getBufferLength() + 1); // isc_info_end
+		}
+	}
+	catch (const Exception&)
+	{
+		if (!response.hasOverflow())
+			throw;
+	}
+
+	if (errorCode)
+	{
+		response.clear();
+		response.insertInt(isc_info_error, (SLONG) errorCode);
+	}
+
+	fb_assert(response.getBufferLength() <= bufferLength);
+	memcpy(buffer, response.getBuffer(), response.getBufferLength());
+	buffer += response.getBufferLength();
+
+	*buffer = completed ? isc_info_end : isc_info_truncated;
 }
 
 int DsqlCursor::fetchFromCache(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position)

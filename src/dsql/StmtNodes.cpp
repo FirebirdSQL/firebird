@@ -1439,10 +1439,18 @@ DeclareLocalTableNode* DeclareLocalTableNode::pass2(thread_db* /*tdbb*/, Compile
 	return this;
 }
 
-const StmtNode* DeclareLocalTableNode::execute(thread_db* /*tdbb*/, Request* request, ExeState* /*exeState*/) const
+const StmtNode* DeclareLocalTableNode::execute(thread_db* tdbb, Request* request, ExeState* /*exeState*/) const
 {
 	if (request->req_operation == Request::req_evaluate)
+	{
+		if (auto& recordBuffer = getImpure(tdbb, request, false)->recordBuffer)
+		{
+			delete recordBuffer;
+			recordBuffer = nullptr;
+		}
+
 		request->req_operation = Request::req_return;
+	}
 
 	return parentStmt;
 }
@@ -2917,6 +2925,7 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 {
 	SET_TDBB(tdbb);
 
+	const auto blrStartPos = csb->csb_blr_reader.getPos();
 	jrd_prc* procedure = NULL;
 	QualifiedName name;
 
@@ -2949,6 +2958,25 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 
 	if (!procedure)
 		PAR_error(csb, Arg::Gds(isc_prcnotdef) << Arg::Str(name.toString()));
+	else
+	{
+		if (procedure->isImplemented() && !procedure->isDefined())
+		{
+			if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
+			{
+				PAR_warning(
+					Arg::Warning(isc_prcnotdef) << Arg::Str(name.toString()) <<
+					Arg::Warning(isc_modnotfound));
+			}
+			else
+			{
+				csb->csb_blr_reader.setPos(blrStartPos);
+				PAR_error(csb,
+					Arg::Gds(isc_prcnotdef) << Arg::Str(name.toString()) <<
+					Arg::Gds(isc_modnotfound));
+			}
+		}
+	}
 
 	ExecProcedureNode* node = FB_NEW_POOL(pool) ExecProcedureNode(pool);
 	node->procedure = procedure;
@@ -3225,6 +3253,12 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, Request* request) cons
 		status_exception::raise(
 			Arg::Gds(isc_proc_pack_not_implemented) <<
 				Arg::Str(procedure->getName().identifier) << Arg::Str(procedure->getName().package));
+	}
+	else if (!procedure->isDefined())
+	{
+		status_exception::raise(
+			Arg::Gds(isc_prcnotdef) << Arg::Str(procedure->getName().toString()) <<
+			Arg::Gds(isc_modnotfound));
 	}
 
 	const_cast<jrd_prc*>(procedure.getObject())->checkReload(tdbb);
@@ -7999,6 +8033,9 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 	record_param* rpb = &request->req_rpb[stream];
 	jrd_rel* relation = rpb->rpb_relation;
 
+	if ((marks & MARK_BULK_INSERT) || request->req_batch_mode)
+		rpb->rpb_stream_flags |= RPB_s_bulk;
+
 	const auto localTableSource = nodeAs<LocalTableSourceNode>(target);
 	const auto localTable = localTableSource ?
 		request->getStatement()->localTables[localTableSource->tableNumber] :
@@ -10207,7 +10244,7 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 	else if (dsqlScratch->isPsql() && !input->second)
 	{
 		// This trick because we don't copy lexer positions when copying lists.
-		const ValueListNode* errSrc = inputFirst;
+		const ValueListNode* errSrc = input->first;
 		// RETURNING without INTO is not allowed for PSQL
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 				  // Unexpected end of command

@@ -460,7 +460,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 					throw;
 				}
 
-				fb_assert(function->getStatement()->function == function);
+				fb_assert(!function->isDefined() || function->getStatement()->function == function);
 			}
 			else
 			{

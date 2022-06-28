@@ -488,7 +488,7 @@ Int128 MOV_get_int128(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
 namespace Jrd
 {
 
-DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen)
+DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen, USHORT charSetId)
 	: maxLen(mLen)
 {
 	const char* const NULL_KEY_STRING = "NULL";
@@ -501,8 +501,8 @@ DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen)
 
 	fb_assert(!desc->isBlob());
 
-	const bool isBinary = (desc->isText() && desc->getTextType() == ttype_binary);
-	value = MOV_make_string2(tdbb, desc, isBinary ? ttype_binary : ttype_dynamic);
+	const bool isBinary = (desc->isText() && desc->getCharSet() == CS_BINARY);
+	value = MOV_make_string2(tdbb, desc, isBinary ? CS_BINARY : charSetId);
 
 	const char* const str = value.c_str();
 
@@ -510,7 +510,7 @@ DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen)
 	{
 		if (desc->dsc_dtype == dtype_text)
 		{
-			const char* const pad = (desc->dsc_sub_type == ttype_binary) ? "\0" : " ";
+			const char* const pad = (desc->getCharSet() == CS_BINARY) ? "\0" : " ";
 			value.rtrim(pad);
 		}
 
@@ -542,7 +542,7 @@ DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen)
 
 		value.resize(maxLen);
 
-		const CharSet* const cs = INTL_charset_lookup(tdbb, desc->getCharSet());
+		const CharSet* const cs = INTL_charset_lookup(tdbb, charSetId);
 
 		while (value.hasData() && !cs->wellFormed(value.length(), (const UCHAR*) value.c_str()))
 			value.resize(value.length() - 1);

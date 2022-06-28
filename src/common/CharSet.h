@@ -38,8 +38,11 @@ namespace Firebird {
 	template <>
 	inline void SimpleDelete<charset>::clear(charset* cs)
 	{
-		Firebird::IntlUtil::finiCharset(cs);
-		delete cs;
+		if (cs)
+		{
+			Firebird::IntlUtil::finiCharset(cs);
+			delete cs;
+		}
 	}
 
 }

@@ -176,6 +176,7 @@ enum ConfigKey
 	KEY_ENCRYPT_SECURITY_DATABASE,
 	KEY_STMT_TIMEOUT,
 	KEY_CONN_IDLE_TIMEOUT,
+	KEY_ON_DISCONNECT_TRIG_TIMEOUT,
 	KEY_CLIENT_BATCH_BUFFER,
 	KEY_OUTPUT_REDIRECTION_FILE,
 	KEY_EXT_CONN_POOL_SIZE,
@@ -188,6 +189,9 @@ enum ConfigKey
 	KEY_USE_FILESYSTEM_CACHE,
 	KEY_INLINE_SORT_THRESHOLD,
 	KEY_TEMP_PAGESPACE_DIR,
+	KEY_MAX_STATEMENT_CACHE_SIZE,
+	KEY_PARALLEL_WORKERS,
+	KEY_MAX_PARALLEL_WORKERS,
 	MAX_CONFIG_KEY		// keep it last
 };
 
@@ -283,6 +287,7 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_BOOLEAN,	"AllowEncryptedSecurityDatabase",	false,	false},
 	{TYPE_INTEGER,	"StatementTimeout",			false,	0},
 	{TYPE_INTEGER,	"ConnectionIdleTimeout",	false,	0},
+	{TYPE_INTEGER,	"OnDisconnectTriggerTimeout",	false,	180},
 	{TYPE_INTEGER,	"ClientBatchBuffer",		false,	128 * 1024},
 #ifdef DEV_BUILD
 	{TYPE_STRING,	"OutputRedirectionFile", 	true,	"-"},
@@ -302,7 +307,10 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_STRING,	"DataTypeCompatibility",	false,	nullptr},
 	{TYPE_BOOLEAN,	"UseFileSystemCache",		false,	true},
 	{TYPE_INTEGER,	"InlineSortThreshold",		false,	1000},		// bytes
-	{TYPE_STRING,	"TempTableDirectory",		false,	""}
+	{TYPE_STRING,	"TempTableDirectory",		false,	""},
+	{TYPE_INTEGER,	"MaxStatementCacheSize",	false,	2 * 1048576},	// bytes
+	{TYPE_INTEGER,	"ParallelWorkers",			true,	1},
+	{TYPE_INTEGER,	"MaxParallelWorkers",		true,	1}
 };
 
 
@@ -601,6 +609,9 @@ public:
 	// set in minutes
 	CONFIG_GET_PER_DB_KEY(unsigned int, getConnIdleTimeout, KEY_CONN_IDLE_TIMEOUT, getInt);
 
+	// set in seconds
+	CONFIG_GET_PER_DB_KEY(unsigned int, getOnDisconnectTrigTimeout, KEY_ON_DISCONNECT_TRIG_TIMEOUT, getInt);
+
 	CONFIG_GET_PER_DB_KEY(unsigned int, getClientBatchBuffer, KEY_CLIENT_BATCH_BUFFER, getInt);
 
 	CONFIG_GET_GLOBAL_STR(getOutputRedirectionFile, KEY_OUTPUT_REDIRECTION_FILE);
@@ -624,6 +635,12 @@ public:
 	CONFIG_GET_PER_DB_KEY(ULONG, getInlineSortThreshold, KEY_INLINE_SORT_THRESHOLD, getInt);
 
 	CONFIG_GET_PER_DB_STR(getTempPageSpaceDirectory, KEY_TEMP_PAGESPACE_DIR);
+
+	CONFIG_GET_PER_DB_INT(getMaxStatementCacheSize, KEY_MAX_STATEMENT_CACHE_SIZE);
+
+	CONFIG_GET_GLOBAL_INT(getParallelWorkers, KEY_PARALLEL_WORKERS);
+
+	CONFIG_GET_GLOBAL_INT(getMaxParallelWorkers, KEY_MAX_PARALLEL_WORKERS);
 };
 
 // Implementation of interface to access master configuration file

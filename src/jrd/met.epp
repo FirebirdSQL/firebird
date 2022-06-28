@@ -2620,15 +2620,14 @@ void MET_lookup_index_expression(thread_db* tdbb, jrd_rel* relation, index_desc*
 
 		{ // scope
 			Jrd::ContextPoolHolder context(tdbb, attachment->createPool());
-			idx->idx_expression = static_cast<ValueExprNode*>(MET_parse_blob(
-				tdbb, relation, &IDX.RDB$EXPRESSION_BLR, &csb,
-				&idx->idx_expression_statement, false, false));
+
+			MET_parse_blob(tdbb, relation, &IDX.RDB$EXPRESSION_BLR, &csb, nullptr, false, false);
+
+			idx->idx_expression_statement = Statement::makeValueExpression(tdbb,
+				idx->idx_expression, idx->idx_expression_desc, csb, false);
 		} // end scope
 	}
 	END_FOR
-
-	if (csb)
-		idx->idx_expression->getDesc(tdbb, csb, &idx->idx_expression_desc);
 
 	delete csb;
 
@@ -2653,6 +2652,27 @@ void MET_lookup_index_expression(thread_db* tdbb, jrd_rel* relation, index_desc*
 	index_block->idb_expression = idx->idx_expression;
 	index_block->idb_expression_statement = idx->idx_expression_statement;
 	memcpy(&index_block->idb_expression_desc, &idx->idx_expression_desc, sizeof(struct dsc));
+}
+
+
+bool MET_lookup_index_expression_blr(thread_db* tdbb, const MetaName& index_name, bid& blob_id)
+{
+	SET_TDBB(tdbb);
+	Attachment* attachment = tdbb->getAttachment();
+
+	bool found = false;
+	AutoCacheRequest request(tdbb, irq_l_exp_index_blr, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request)
+		IDX IN RDB$INDICES WITH
+		IDX.RDB$INDEX_NAME EQ index_name.c_str()
+	{
+		found = !IDX.RDB$EXPRESSION_BLR.NULL;
+		blob_id = IDX.RDB$EXPRESSION_BLR;
+	}
+	END_FOR;
+
+	return found;
 }
 
 
@@ -3402,6 +3422,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 				procedure->invoker = attachment->getUserId(procedure->owner);
 
 			procedure->setImplemented(true);
+			procedure->setDefined(true);
 			procedure->getInputFields().resize(P.RDB$PROCEDURE_INPUTS);
 			procedure->getOutputFields().resize(P.RDB$PROCEDURE_OUTPUTS);
 			procedure->setDefaultCount(0);
@@ -3526,6 +3547,9 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 
 						dbb->dbb_extManager->makeProcedure(tdbb, csb, procedure, P.RDB$ENGINE_NAME,
 							(P.RDB$ENTRYPOINT.NULL ? "" : P.RDB$ENTRYPOINT), body.begin());
+
+						if (!procedure->getExternal())
+							procedure->setDefined(false);
 					}
 					else
 					{
@@ -3554,7 +3578,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 					throw;
 				}
 
-				fb_assert(procedure->getStatement()->procedure == procedure);
+				fb_assert(!procedure->isDefined() || procedure->getStatement()->procedure == procedure);
 			}
 			else
 			{

@@ -1668,6 +1668,7 @@ namespace Firebird
 			void (CLOOP_CARG *deprecatedClose)(IResultSet* self, IStatus* status) throw();
 			void (CLOOP_CARG *setDelayedOutputFormat)(IResultSet* self, IStatus* status, IMessageMetadata* format) throw();
 			void (CLOOP_CARG *close)(IResultSet* self, IStatus* status) throw();
+			void (CLOOP_CARG *getInfo)(IResultSet* self, IStatus* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) throw();
 		};
 
 	protected:
@@ -1681,7 +1682,9 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 4;
+		static const unsigned VERSION = 5;
+
+		static const unsigned char INF_RECORD_COUNT = 10;
 
 		template <typename StatusType> int fetchNext(StatusType* status, void* message)
 		{
@@ -1784,6 +1787,19 @@ namespace Firebird
 			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->close(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void getInfo(StatusType* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer)
+		{
+			if (cloopVTable->version < 5)
+			{
+				StatusType::setVersionError(status, "IResultSet", cloopVTable->version, 5);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->getInfo(this, status, itemsLength, items, bufferLength, buffer);
 			StatusType::checkException(status);
 		}
 	};
@@ -2715,6 +2731,7 @@ namespace Firebird
 			void (CLOOP_CARG *query)(IService* self, IStatus* status, unsigned sendLength, const unsigned char* sendItems, unsigned receiveLength, const unsigned char* receiveItems, unsigned bufferLength, unsigned char* buffer) throw();
 			void (CLOOP_CARG *start)(IService* self, IStatus* status, unsigned spbLength, const unsigned char* spb) throw();
 			void (CLOOP_CARG *detach)(IService* self, IStatus* status) throw();
+			void (CLOOP_CARG *cancel)(IService* self, IStatus* status) throw();
 		};
 
 	protected:
@@ -2728,7 +2745,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 4;
+		static const unsigned VERSION = 5;
 
 		template <typename StatusType> void deprecatedDetach(StatusType* status)
 		{
@@ -2766,6 +2783,19 @@ namespace Firebird
 			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->detach(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void cancel(StatusType* status)
+		{
+			if (cloopVTable->version < 5)
+			{
+				StatusType::setVersionError(status, "IService", cloopVTable->version, 5);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->cancel(this, status);
 			StatusType::checkException(status);
 		}
 	};
@@ -5840,6 +5870,7 @@ namespace Firebird
 			FB_BOOLEAN (CLOOP_CARG *trace_event_error)(ITracePlugin* self, ITraceConnection* connection, ITraceStatusVector* status, const char* function) throw();
 			FB_BOOLEAN (CLOOP_CARG *trace_event_sweep)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceSweepInfo* sweep, unsigned sweep_state) throw();
 			FB_BOOLEAN (CLOOP_CARG *trace_func_execute)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceFunction* function, FB_BOOLEAN started, unsigned func_result) throw();
+			FB_BOOLEAN (CLOOP_CARG *trace_dsql_restart)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceSQLStatement* statement, unsigned number) throw();
 		};
 
 	protected:
@@ -5853,7 +5884,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 3;
+		static const unsigned VERSION = 4;
 
 		static const unsigned RESULT_SUCCESS = 0;
 		static const unsigned RESULT_FAILED = 1;
@@ -5986,6 +6017,16 @@ namespace Firebird
 		FB_BOOLEAN trace_func_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceFunction* function, FB_BOOLEAN started, unsigned func_result)
 		{
 			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_func_execute(this, connection, transaction, function, started, func_result);
+			return ret;
+		}
+
+		FB_BOOLEAN trace_dsql_restart(ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceSQLStatement* statement, unsigned number)
+		{
+			if (cloopVTable->version < 4)
+			{
+				return 0;
+			}
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_dsql_restart(this, connection, transaction, statement, number);
 			return ret;
 		}
 	};
@@ -9620,6 +9661,7 @@ namespace Firebird
 					this->deprecatedClose = &Name::cloopdeprecatedCloseDispatcher;
 					this->setDelayedOutputFormat = &Name::cloopsetDelayedOutputFormatDispatcher;
 					this->close = &Name::cloopcloseDispatcher;
+					this->getInfo = &Name::cloopgetInfoDispatcher;
 				}
 			} vTable;
 
@@ -9803,6 +9845,20 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopgetInfoDispatcher(IResultSet* self, IStatus* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::getInfo(&status2, itemsLength, items, bufferLength, buffer);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) throw()
 		{
 			try
@@ -9854,6 +9910,7 @@ namespace Firebird
 		virtual void deprecatedClose(StatusType* status) = 0;
 		virtual void setDelayedOutputFormat(StatusType* status, IMessageMetadata* format) = 0;
 		virtual void close(StatusType* status) = 0;
+		virtual void getInfo(StatusType* status, unsigned itemsLength, const unsigned char* items, unsigned bufferLength, unsigned char* buffer) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -11461,6 +11518,7 @@ namespace Firebird
 					this->query = &Name::cloopqueryDispatcher;
 					this->start = &Name::cloopstartDispatcher;
 					this->detach = &Name::cloopdetachDispatcher;
+					this->cancel = &Name::cloopcancelDispatcher;
 				}
 			} vTable;
 
@@ -11523,6 +11581,20 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopcancelDispatcher(IService* self, IStatus* status) throw()
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::cancel(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) throw()
 		{
 			try
@@ -11566,6 +11638,7 @@ namespace Firebird
 		virtual void query(StatusType* status, unsigned sendLength, const unsigned char* sendItems, unsigned receiveLength, const unsigned char* receiveItems, unsigned bufferLength, unsigned char* buffer) = 0;
 		virtual void start(StatusType* status, unsigned spbLength, const unsigned char* spb) = 0;
 		virtual void detach(StatusType* status) = 0;
+		virtual void cancel(StatusType* status) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -18096,6 +18169,7 @@ namespace Firebird
 					this->trace_event_error = &Name::clooptrace_event_errorDispatcher;
 					this->trace_event_sweep = &Name::clooptrace_event_sweepDispatcher;
 					this->trace_func_execute = &Name::clooptrace_func_executeDispatcher;
+					this->trace_dsql_restart = &Name::clooptrace_dsql_restartDispatcher;
 				}
 			} vTable;
 
@@ -18375,6 +18449,19 @@ namespace Firebird
 			}
 		}
 
+		static FB_BOOLEAN CLOOP_CARG clooptrace_dsql_restartDispatcher(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceSQLStatement* statement, unsigned number) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::trace_dsql_restart(connection, transaction, statement, number);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) throw()
 		{
 			try
@@ -18435,6 +18522,7 @@ namespace Firebird
 		virtual FB_BOOLEAN trace_event_error(ITraceConnection* connection, ITraceStatusVector* status, const char* function) = 0;
 		virtual FB_BOOLEAN trace_event_sweep(ITraceDatabaseConnection* connection, ITraceSweepInfo* sweep, unsigned sweep_state) = 0;
 		virtual FB_BOOLEAN trace_func_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceFunction* function, FB_BOOLEAN started, unsigned func_result) = 0;
+		virtual FB_BOOLEAN trace_dsql_restart(ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceSQLStatement* statement, unsigned number) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

@@ -22,6 +22,7 @@
 #include "../jrd/req.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/vio_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -40,6 +41,7 @@ SingularStream::SingularStream(CompilerScratch* csb, RecordSource* next)
 	m_next->findUsedStreams(m_streams);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = MINIMUM_CARDINALITY;
 }
 
 void SingularStream::open(thread_db* tdbb) const
@@ -145,7 +147,10 @@ bool SingularStream::lockRecord(thread_db* tdbb) const
 void SingularStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
 {
 	if (detailed)
+	{
 		plan += printIndent(++level) + "Singularity Check";
+		printOptInfo(plan);
+	}
 
 	m_next->print(tdbb, plan, detailed, level);
 }

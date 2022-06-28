@@ -26,6 +26,7 @@
 
 #include "../jrd/RecordNumber.h"
 #include "../jrd/sbm.h"
+#include "../jrd/vio_proto.h"
 
 // fwd. decl.
 namespace Jrd
@@ -68,7 +69,7 @@ void	DPM_fetch_fragment(Jrd::thread_db*, Jrd::record_param*, USHORT);
 SINT64	DPM_gen_id(Jrd::thread_db*, SLONG, bool, SINT64);
 bool	DPM_get(Jrd::thread_db*, Jrd::record_param*, SSHORT);
 ULONG	DPM_get_blob(Jrd::thread_db*, Jrd::blb*, RecordNumber, bool, ULONG);
-bool	DPM_next(Jrd::thread_db*, Jrd::record_param*, USHORT, bool);
+bool	DPM_next(Jrd::thread_db*, Jrd::record_param*, USHORT, Jrd::FindNextRecordScope);
 void	DPM_pages(Jrd::thread_db*, SSHORT, int, ULONG, ULONG);
 #ifdef SUPERSERVER_V2
 SLONG	DPM_prefetch_bitmap(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::PageBitmap*, SLONG);

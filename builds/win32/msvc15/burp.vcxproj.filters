@@ -39,6 +39,9 @@
     <ClCompile Include="..\..\..\gen\burp\restore.cpp">
       <Filter>BURP files\Generated files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\burp\BurpTasks.cpp">
+      <Filter>BURP files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\src\burp\backup.epp">
@@ -77,6 +80,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\burp\resto_proto.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\burp\BurpTasks.h">
       <Filter>Header files</Filter>
     </ClInclude>
   </ItemGroup>

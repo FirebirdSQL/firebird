@@ -5975,8 +5975,13 @@ void DropSequenceNode::deleteIdentity(thread_db* tdbb, jrd_tra* transaction, con
 		WITH GEN.RDB$GENERATOR_NAME EQ name.c_str()
 	{
 		ERASE GEN;
+
+		if (!GEN.RDB$SECURITY_CLASS.NULL)
+			deleteSecurityClass(tdbb, transaction, GEN.RDB$SECURITY_CLASS);
 	}
 	END_FOR
+
+	deletePrivilegesByRelName(tdbb, transaction, name, obj_generator);
 }
 
 

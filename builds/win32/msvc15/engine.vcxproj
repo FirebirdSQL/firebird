@@ -42,6 +42,7 @@
     <ClCompile Include="..\..\..\src\dsql\DsqlCursor.cpp" />
     <ClCompile Include="..\..\..\src\dsql\DSqlDataTypeUtil.cpp" />
     <ClCompile Include="..\..\..\src\dsql\DsqlRequests.cpp" />
+    <ClCompile Include="..\..\..\src\dsql\DsqlStatementCache.cpp" />
     <ClCompile Include="..\..\..\src\dsql\DsqlStatements.cpp" />
     <ClCompile Include="..\..\..\src\dsql\errd.cpp" />
     <ClCompile Include="..\..\..\src\dsql\ExprNodes.cpp" />
@@ -172,6 +173,7 @@
     <ClCompile Include="..\..\..\src\jrd\validation.cpp" />
     <ClCompile Include="..\..\..\src\jrd\vio.cpp" />
     <ClCompile Include="..\..\..\src\jrd\VirtualTable.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\WorkerAttachment.cpp" />
     <ClCompile Include="..\..\..\src\lock\lock.cpp" />
     <ClCompile Include="..\..\..\src\utilities\gsec\gsec.cpp" />
     <ClCompile Include="..\..\..\src\utilities\gstat\ppg.cpp" />
@@ -190,6 +192,7 @@
     <ClInclude Include="..\..\..\src\dsql\DsqlCursor.h" />
     <ClInclude Include="..\..\..\src\dsql\DSqlDataTypeUtil.h" />
     <ClInclude Include="..\..\..\src\dsql\DsqlRequests.h" />
+    <ClInclude Include="..\..\..\src\dsql\DsqlStatementCache.h" />
     <ClInclude Include="..\..\..\src\dsql\DsqlStatements.h" />
     <ClInclude Include="..\..\..\src\dsql\dsql_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\errd_proto.h" />
@@ -357,6 +360,7 @@
     <ClInclude Include="..\..\..\src\jrd\vio_debug.h" />
     <ClInclude Include="..\..\..\src\jrd\vio_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\VirtualTable.h" />
+    <ClInclude Include="..\..\..\src\jrd\WorkerAttachment.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\src\dsql\DdlNodes.epp" />

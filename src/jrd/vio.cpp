@@ -89,6 +89,8 @@
 #include "../jrd/GarbageCollector.h"
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
+#include "../common/Task.h"
+#include "../jrd/WorkerAttachment.h"
 
 using namespace Jrd;
 using namespace Firebird;
@@ -174,6 +176,394 @@ static void set_owner_name(thread_db*, Record*, USHORT);
 static bool set_security_class(thread_db*, Record*, USHORT);
 static void set_system_flag(thread_db*, Record*, USHORT);
 static void verb_post(thread_db*, jrd_tra*, record_param*, Record*);
+
+namespace Jrd 
+{
+
+class SweepTask : public Task
+{
+	struct RelInfo; // forward decl
+
+public:
+	SweepTask(thread_db* tdbb, MemoryPool* pool, TraceSweepEvent* traceSweep) : Task(),
+		m_pool(pool),
+		m_dbb(NULL),
+		m_trace(traceSweep),
+		m_items(*m_pool),
+		m_stop(false),
+		m_nextRelID(0),
+		m_lastRelID(0),
+		m_relInfo(*m_pool)
+	{
+		m_dbb = tdbb->getDatabase();
+		Attachment* att = tdbb->getAttachment();
+
+		int workers = 1;
+		if (att->att_parallel_workers > 0)
+			workers = att->att_parallel_workers;
+
+		for (int i = 0; i < workers; i++)
+			m_items.add(FB_NEW_POOL(*m_pool) Item(this));
+
+		m_items[0]->m_ownAttach = false;
+		m_items[0]->m_attStable = att->getStable();
+		m_items[0]->m_tra = tdbb->getTransaction();
+
+		m_relInfo.grow(m_items.getCount());
+
+		m_lastRelID = att->att_relations->count();
+	};
+
+	virtual ~SweepTask() 
+	{
+		for (Item** p = m_items.begin(); p < m_items.end(); p++)
+			delete *p;
+	};
+
+	class Item : public Task::WorkItem
+	{
+	public:
+		Item(SweepTask* task) : Task::WorkItem(task),
+			m_inuse(false),
+			m_ownAttach(true),
+			m_tra(NULL),
+			m_relInfo(NULL),
+			m_firstPP(0),
+			m_lastPP(0)
+		{}
+
+		virtual ~Item() 
+		{
+			if (!m_ownAttach || !m_attStable)
+				return;
+
+			Attachment* att = NULL;
+			{
+				AttSyncLockGuard guard(*m_attStable->getSync(), FB_FUNCTION);
+				att = m_attStable->getHandle();
+				if (!att)
+					return;
+				fb_assert(att->att_use_count > 0);
+			}
+
+			FbLocalStatus status;
+			if (m_tra)
+			{
+				BackgroundContextHolder tdbb(att->att_database, att, &status, FB_FUNCTION);
+				TRA_commit(tdbb, m_tra, false);
+			}
+			WorkerAttachment::releaseAttachment(&status, m_attStable);
+		}
+
+		SweepTask* getSweepTask() const 
+		{
+			return reinterpret_cast<SweepTask*> (m_task);
+		}
+
+		bool init(thread_db* tdbb)
+		{
+			FbStatusVector* status = tdbb->tdbb_status_vector;
+
+			Attachment* att = NULL;
+
+			if (m_ownAttach && !m_attStable.hasData())
+				m_attStable = WorkerAttachment::getAttachment(status, getSweepTask()->m_dbb);
+
+			if (m_attStable)
+				att = m_attStable->getHandle();
+
+			if (!att)
+			{
+				Arg::Gds(isc_bad_db_handle).copyTo(status);
+				return false;
+			}
+
+			tdbb->setDatabase(att->att_database);
+			tdbb->setAttachment(att);
+
+			if (m_ownAttach && !m_tra)
+			{
+				const UCHAR sweep_tpb[] =
+				{
+					isc_tpb_version1, isc_tpb_read,
+					isc_tpb_read_committed, isc_tpb_rec_version
+				};
+
+				try
+				{
+					WorkerContextHolder holder(tdbb, FB_FUNCTION);
+					m_tra = TRA_start(tdbb, sizeof(sweep_tpb), sweep_tpb);
+					DPM_scan_pages(tdbb);
+				}
+				catch(const Exception& ex)
+				{
+					ex.stuffException(tdbb->tdbb_status_vector);
+					return false;
+				}
+			}
+
+			tdbb->setTransaction(m_tra);
+			tdbb->tdbb_flags |= TDBB_sweeper;
+
+			return true;
+		}
+
+		bool m_inuse;
+		bool m_ownAttach;
+		RefPtr<StableAttachmentPart> m_attStable;
+		jrd_tra* m_tra;
+
+		// part of work: relation, first and last PP's to work on
+		RelInfo* m_relInfo;
+		ULONG m_firstPP;
+		ULONG m_lastPP;
+	};
+
+	bool handler(WorkItem& _item);
+
+	bool getWorkItem(WorkItem** pItem);
+	bool getResult(IStatus* status)
+	{
+		if (status)
+		{
+			status->init();
+			status->setErrors(m_status.getErrors());
+		}
+
+		return m_status.isSuccess();
+	}
+
+	int getMaxWorkers()
+	{ 
+		return m_items.getCount(); 
+	}
+
+private:
+	// item is handled, get next portion of work and update RelInfo 
+	// also, detect if relation is handled completely
+	// return true if there is some more work to do
+	bool updateRelInfo(Item* item)
+	{
+		RelInfo* relInfo = item->m_relInfo;
+
+		if (relInfo->countPP == 0 || relInfo->nextPP >= relInfo->countPP)
+		{
+			relInfo->workers--;
+			return false;
+		}
+
+		item->m_firstPP = relInfo->nextPP;
+		item->m_lastPP = item->m_firstPP;
+		if (item->m_lastPP >= relInfo->countPP)
+			item->m_lastPP = relInfo->countPP - 1;
+		relInfo->nextPP = item->m_lastPP + 1;
+
+		return true;
+	}
+
+	void setError(IStatus* status, bool stopTask)
+	{
+		const bool copyStatus = (m_status.isSuccess() && status && status->getState() == IStatus::STATE_ERRORS);
+		if (!copyStatus && (!stopTask || m_stop))
+			return;
+
+		MutexLockGuard guard(m_mutex, FB_FUNCTION);
+		if (m_status.isSuccess() && copyStatus)
+			m_status.save(status);
+		if (stopTask)
+			m_stop = true;
+	}
+
+	MemoryPool* m_pool;
+	Database* m_dbb;
+	TraceSweepEvent* m_trace;
+	Mutex m_mutex;
+	HalfStaticArray<Item*, 8> m_items;
+	StatusHolder m_status;
+	volatile bool m_stop;
+
+	struct RelInfo
+	{
+		RelInfo()
+		{
+			memset(this, 0, sizeof(*this));
+		}
+
+		USHORT rel_id;
+		ULONG  countPP;	// number of pointer pages in relation
+		ULONG  nextPP;	// number of PP to assign to next worker
+		ULONG  workers;	// number of workers for this relation
+	};
+
+	USHORT m_nextRelID;		// next relation to work on
+	USHORT m_lastRelID;		// last relation to work on
+	HalfStaticArray<RelInfo, 8> m_relInfo;	// relations worked on
+};
+
+
+bool SweepTask::handler(WorkItem& _item)
+{
+	Item* item = reinterpret_cast<Item*>(&_item);
+
+	ThreadContextHolder tdbb(NULL);
+
+	if (!item->init(tdbb))
+	{
+		setError(tdbb->tdbb_status_vector, true);
+		return false;
+	}
+
+	WorkerContextHolder wrkHolder(tdbb, FB_FUNCTION);
+
+	record_param rpb;
+	jrd_rel* relation = NULL;
+
+	try
+	{
+		RelInfo* relInfo = item->m_relInfo;
+
+		Database* dbb = tdbb->getDatabase();
+		Attachment* att = tdbb->getAttachment();
+
+		/*relation = (*att->att_relations)[relInfo->rel_id];
+		if (relation)*/
+			relation = MET_lookup_relation_id(tdbb, relInfo->rel_id, false);
+
+		if (relation &&
+			!(relation->rel_flags & (REL_deleted | REL_deleting)) &&
+			!relation->isTemporary() &&
+			relation->getPages(tdbb)->rel_pages)
+		{
+			jrd_rel::GCShared gcGuard(tdbb, relation);
+			if (!gcGuard.gcEnabled())
+			{
+				string str;
+				str.printf("Acquire garbage collection lock failed (%s)", relation->rel_name.c_str());
+				status_exception::raise(Arg::Gds(isc_random) << Arg::Str(str));
+			}
+
+			jrd_tra* tran = tdbb->getTransaction();
+
+			if (relInfo->countPP == 0)
+				relInfo->countPP = relation->getPages(tdbb)->rel_pages->count();
+
+			rpb.rpb_relation = relation;
+			rpb.rpb_org_scans = relation->rel_scan_count++;
+			rpb.rpb_record = NULL;
+			rpb.rpb_stream_flags = RPB_s_no_data | RPB_s_sweeper;
+			rpb.getWindow(tdbb).win_flags = WIN_large_scan;
+
+			rpb.rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp, 0, 0, item->m_firstPP);
+			rpb.rpb_number.decrement();
+
+			RecordNumber lastRecNo;
+			lastRecNo.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp, 0, 0, item->m_lastPP + 1);
+			lastRecNo.decrement();
+
+			while (VIO_next_record(tdbb, &rpb, tran, NULL, DPM_next_pointer_page))
+			{
+				CCH_RELEASE(tdbb, &rpb.getWindow(tdbb));
+
+				if (relation->rel_flags & REL_deleting)
+					break;
+
+				if (rpb.rpb_number >= lastRecNo)
+					break;
+
+				if (m_stop)
+					break;
+
+				JRD_reschedule(tdbb);
+
+				tran->tra_oldest_active = dbb->dbb_oldest_snapshot;
+			}
+
+			delete rpb.rpb_record;
+			--relation->rel_scan_count;
+		}
+
+		return !m_stop;
+	}
+	catch(const Exception& ex)
+	{
+		ex.stuffException(tdbb->tdbb_status_vector);
+
+		delete rpb.rpb_record;
+		if (relation)
+		{
+			if (relation->rel_scan_count) {
+				--relation->rel_scan_count;
+			}
+		}
+	}
+
+	setError(tdbb->tdbb_status_vector, true);
+	return false;
+}
+
+bool SweepTask::getWorkItem(WorkItem** pItem)
+{
+	MutexLockGuard guard(m_mutex, FB_FUNCTION);
+
+	Item* item = reinterpret_cast<Item*> (*pItem);
+
+	if (item == NULL)
+	{
+		for (Item** p = m_items.begin(); p < m_items.end(); p++)
+			if (!(*p)->m_inuse)
+			{
+				(*p)->m_inuse = true;
+				*pItem = item = *p;
+				break;
+			}
+	}
+	else if (updateRelInfo(item))
+		return true;
+
+	if (!item)
+		return false;
+
+	// assign part of task to item
+	if (m_nextRelID >= m_lastRelID)
+	{
+		// find not handled relation and help to handle it
+		RelInfo* relInfo = m_relInfo.begin();
+		for (; relInfo < m_relInfo.end(); relInfo++)
+			if (relInfo->workers > 0)
+			{
+				item->m_relInfo = relInfo;
+				relInfo->workers++;
+				if (updateRelInfo(item))
+					return true;
+			}
+
+		item->m_inuse = false;
+		return false;
+	}
+
+	// start to handle next relation
+	USHORT relID = m_nextRelID++;
+	RelInfo* relInfo = m_relInfo.begin();
+	for (; relInfo < m_relInfo.end(); relInfo++)
+		if (relInfo->workers == 0)
+		{
+			relInfo->workers++;
+			relInfo->rel_id = relID;
+			relInfo->countPP = 0;
+			item->m_relInfo = relInfo;
+			item->m_firstPP = item->m_lastPP = 0;
+			relInfo->nextPP = item->m_lastPP + 1;
+
+			return true;
+		}
+
+
+	item->m_inuse = false;
+	return false;
+}
+
+}; // namespace Jrd
+
 
 static bool assert_gc_enabled(const jrd_tra* transaction, const jrd_rel* relation)
 {
@@ -1740,16 +2130,21 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 		case rel_rfr:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
+
 			EVL_field(0, rpb->rpb_record, f_rfr_rname, &desc);
 			DFW_post_work(transaction, dfw_update_format, &desc, 0);
+
 			EVL_field(0, rpb->rpb_record, f_rfr_fname, &desc2);
 			MOV_get_metaname(tdbb, &desc, object_name);
 			if ( (r2 = MET_lookup_relation(tdbb, object_name)) )
-			{
 				DFW_post_work(transaction, dfw_delete_rfr, &desc2, r2->rel_id);
-			}
+
 			EVL_field(0, rpb->rpb_record, f_rfr_sname, &desc2);
-			DFW_post_work(transaction, dfw_delete_global, &desc2, 0);
+			MOV_get_metaname(tdbb, &desc2, object_name);
+
+			if (fb_utils::implicit_domain(object_name.c_str()))
+				DFW_post_work(transaction, dfw_delete_global, &desc2, 0);
+
 			break;
 
 		case rel_prc_prms:
@@ -2941,18 +3336,19 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			break;
 
 		case rel_procedures:
+			EVL_field(0, org_rpb->rpb_record, f_prc_name, &desc1);
 			if (!check_nullify_source(tdbb, org_rpb, new_rpb, f_prc_source))
 				protect_system_table_delupd(tdbb, relation, "UPDATE");
-
-			EVL_field(0, org_rpb->rpb_record, f_prc_name, &desc1);
-
-			if (EVL_field(0, org_rpb->rpb_record, f_prc_pkg_name, &desc2))
-			{
-				MOV_get_metaname(tdbb, &desc2, package_name);
-				SCL_check_package(tdbb, &desc2, SCL_alter);
-			}
 			else
-				SCL_check_procedure(tdbb, &desc1, SCL_alter);
+			{
+				if (EVL_field(0, org_rpb->rpb_record, f_prc_pkg_name, &desc2))
+				{
+					MOV_get_metaname(tdbb, &desc2, package_name);
+					SCL_check_package(tdbb, &desc2, SCL_alter);
+				}
+				else
+					SCL_check_procedure(tdbb, &desc1, SCL_alter);
+			}
 
 			check_class(tdbb, transaction, org_rpb, new_rpb, f_prc_class);
 			check_owner(tdbb, transaction, org_rpb, new_rpb, f_prc_owner);
@@ -3275,7 +3671,7 @@ bool VIO_next_record(thread_db* tdbb,
 					 record_param* rpb,
 					 jrd_tra* transaction,
 					 MemoryPool* pool,
-					 bool onepage)
+					 FindNextRecordScope scope)
 {
 /**************************************
  *
@@ -3311,7 +3707,7 @@ bool VIO_next_record(thread_db* tdbb,
 #endif
 
 	do {
-		if (!DPM_next(tdbb, rpb, lock_type, onepage))
+		if (!DPM_next(tdbb, rpb, lock_type, scope))
 		{
 			return false;
 		}
@@ -3899,6 +4295,25 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 
 	DPM_scan_pages(tdbb);
 
+	if (attachment->att_parallel_workers != 0)
+	{
+		EngineCheckout cout(tdbb, FB_FUNCTION);
+
+		Coordinator coord(dbb->dbb_permanent);
+		SweepTask sweep(tdbb, dbb->dbb_permanent, traceSweep);
+
+		FbLocalStatus local_status;
+		local_status->init();
+
+		coord.runSync(&sweep);
+
+		if (!sweep.getResult(&local_status))
+			local_status.raise();
+
+		return true;
+	}
+
+
 	// hvlad: restore tdbb->transaction since it can be used later
 	tdbb->setTransaction(transaction);
 
@@ -3943,7 +4358,7 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 					gc->sweptRelation(transaction->tra_oldest_active, relation->rel_id);
 				}
 
-				while (VIO_next_record(tdbb, &rpb, transaction, 0, false))
+				while (VIO_next_record(tdbb, &rpb, transaction, 0, DPM_next_all))
 				{
 					CCH_RELEASE(tdbb, &rpb.getWindow(tdbb));
 
@@ -3966,7 +4381,7 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 		delete rpb.rpb_record;
 
 	}	// try
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		delete rpb.rpb_record;
 
@@ -4892,7 +5307,7 @@ void Database::garbage_collector(Database* dbb)
 
 							bool rel_exit = false;
 
-							while (VIO_next_record(tdbb, &rpb, transaction, NULL, true))
+							while (VIO_next_record(tdbb, &rpb, transaction, NULL, DPM_next_data_page))
 							{
 								CCH_RELEASE(tdbb, &rpb.getWindow(tdbb));
 

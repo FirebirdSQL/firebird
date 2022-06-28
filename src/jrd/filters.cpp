@@ -407,7 +407,7 @@ ISC_STATUS filter_format(USHORT action, BlobControl* control)
 		d = desc;
 		d.dsc_address = pBuff;
 
-		DescPrinter val(JRD_get_thread_data(), &d, 32);
+		DescPrinter val(JRD_get_thread_data(), &d, 32, CS_dynamic);
 
 		str.printf(fmt2,
 			fieldId,

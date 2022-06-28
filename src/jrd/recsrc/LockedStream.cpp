@@ -40,6 +40,7 @@ LockedStream::LockedStream(CompilerScratch* csb, RecordSource* next)
 	fb_assert(m_next);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = next->getCardinality();
 }
 
 void LockedStream::open(thread_db* tdbb) const
@@ -105,7 +106,10 @@ bool LockedStream::lockRecord(thread_db* tdbb) const
 void LockedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
 {
 	if (detailed)
+	{
 		plan += printIndent(++level) + "Write Lock";
+		printOptInfo(plan);
+	}
 
 	m_next->print(tdbb, plan, detailed, level);
 }

@@ -316,6 +316,7 @@ enum P_OP
 	op_info_batch			= 111,
 
 	op_fetch_scroll			= 112,
+	op_info_cursor			= 113,
 
 	op_max
 };

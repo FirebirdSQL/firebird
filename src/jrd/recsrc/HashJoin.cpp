@@ -30,6 +30,7 @@
 #include "../jrd/evl_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/intl_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -43,6 +44,15 @@ using namespace Jrd;
 // NS: FIXME - Why use static hash table here??? Hash table shall support dynamic resizing
 static const ULONG HASH_SIZE = 1009;
 static const ULONG BUCKET_PREALLOCATE_SIZE = 32;	// 256 bytes per slot
+
+unsigned HashJoin::maxCapacity()
+{
+	// Binary search across 1000 collisions is computationally similar to
+	// linear searc across 10 collisions. We use this number as a rough
+	// estimation of whether the lookup performance is likely to be acceptable.
+	return HASH_SIZE * 1000;
+}
+
 
 class HashJoin::HashTable : public PermanentStorage
 {
@@ -214,6 +224,7 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 	fb_assert(count >= 2);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = args[0]->getCardinality();
 
 	m_leader.source = args[0];
 	m_leader.keys = keys[0];
@@ -247,6 +258,10 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 	{
 		RecordSource* const sub_rsb = args[i];
 		fb_assert(sub_rsb);
+
+		m_cardinality *= sub_rsb->getCardinality();
+		for (auto keyCount = keys[i]->getCount(); keyCount; keyCount--)
+			m_cardinality *= REDUCE_SELECTIVITY_FACTOR_EQUALITY;
 
 		SubStream sub;
 		sub.buffer = FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, sub_rsb);
@@ -431,6 +446,7 @@ void HashJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned leve
 	if (detailed)
 	{
 		plan += printIndent(++level) + "Hash Join (inner)";
+		printOptInfo(plan);
 
 		m_leader.source->print(tdbb, plan, true, level);
 

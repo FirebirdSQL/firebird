@@ -45,6 +45,7 @@ BufferedStream::BufferedStream(CompilerScratch* csb, RecordSource* next)
 	fb_assert(m_next);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = next->getCardinality();
 
 	StreamList streams;
 	m_next->findUsedStreams(streams);
@@ -319,6 +320,7 @@ void BufferedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigne
 		extras.printf(" (record length: %" ULONGFORMAT")", m_format->fmt_length);
 
 		plan += printIndent(++level) + "Record Buffer" + extras;
+		printOptInfo(plan);
 	}
 
 	m_next->print(tdbb, plan, detailed, level);

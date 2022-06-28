@@ -265,6 +265,7 @@ namespace Jrd {
 		  sync(this),
 		  keyName(getPool()),
 		  pluginName(getPool()),
+		  currentPage(0),
 		  keyProviders(getPool()),
 		  keyConsumers(getPool()),
 		  hash(getPool()),
@@ -849,7 +850,7 @@ namespace Jrd {
 		if (!LCK_lock(tdbb, threadLock, LCK_EX, LCK_NO_WAIT))
 		{
 			// Cleanup lock manager error
-			fb_utils::init_status(tdbb->tdbb_status_vector);
+			tdbb->tdbb_status_vector->init();
 
 			return;
 		}
@@ -914,36 +915,13 @@ namespace Jrd {
 				return;
 			}
 
-			// Establish temp context
-			// Needed to take crypt thread lock
-			UserId user;
-			user.setUserName("Database Crypter");
-
-			Jrd::Attachment* const attachment = Jrd::Attachment::create(&dbb, nullptr);
-			RefPtr<SysStableAttachment> sAtt(FB_NEW SysStableAttachment(attachment));
-			attachment->setStable(sAtt);
-			attachment->att_filename = dbb.dbb_filename;
-			attachment->att_user = &user;
-
-			BackgroundContextHolder tempDbb(&dbb, attachment, &status_vector, FB_FUNCTION);
-
-			LCK_init(tempDbb, LCK_OWNER_attachment);
-			PAG_header(tempDbb, true);
-			PAG_attachment_id(tempDbb);
-
-			Monitoring::publishAttachment(tempDbb);
-
-			sAtt->initDone();
+			// Establish temp context needed to take crypt thread lock
+			ThreadContextHolder tempDbb(&dbb, nullptr, &status_vector);
 
 			// Take exclusive threadLock
 			// If can't take that lock - nothing to do, cryptThread already runs somewhere
 			if (!LCK_lock(tempDbb, threadLock, LCK_EX, LCK_NO_WAIT))
-			{
-				Monitoring::cleanupAttachment(tempDbb);
-				attachment->releaseLocks(tempDbb);
-				LCK_fini(tempDbb, LCK_OWNER_attachment);
 				return;
-			}
 
 			try
 			{
@@ -1016,7 +994,6 @@ namespace Jrd {
 
 							// scheduling
 							JRD_reschedule(tdbb);
-							JRD_reschedule(tempDbb);
 
 							// nbackup state check
 							int bak_state = Ods::hdr_nbak_unknown;
@@ -1073,9 +1050,6 @@ namespace Jrd {
 				// Release exclusive lock on StartCryptThread
 				lckRelease = true;
 				LCK_release(tempDbb, threadLock);
-				Monitoring::cleanupAttachment(tempDbb);
-				attachment->releaseLocks(tempDbb);
-				LCK_fini(tempDbb, LCK_OWNER_attachment);
 			}
 			catch (const Exception&)
 			{
@@ -1085,9 +1059,6 @@ namespace Jrd {
 					{
 						// Release exclusive lock on StartCryptThread
 						LCK_release(tempDbb, threadLock);
-						Monitoring::cleanupAttachment(tempDbb);
-						attachment->releaseLocks(tempDbb);
-						LCK_fini(tempDbb, LCK_OWNER_attachment);
 					}
 				}
 				catch (const Exception&)
@@ -1339,9 +1310,19 @@ namespace Jrd {
 		return PAG_last_page(tdbb) + 1;
 	}
 
-    UCHAR CryptoManager::getCurrentState() const
+    UCHAR CryptoManager::getCurrentState(thread_db* tdbb) const
 	{
-		return (crypt ? fb_info_crypt_encrypted : 0) | (process ? fb_info_crypt_process : 0);
+		bool p = process;
+		bool c = crypt;
+		if (!currentPage)
+		{
+			CchHdr hdr(tdbb, LCK_read);
+
+			p = hdr->hdr_flags & Ods::hdr_crypt_process;
+			c = hdr->hdr_flags & Ods::hdr_encrypted;
+		}
+
+		return (c ? fb_info_crypt_encrypted : 0) | (p ? fb_info_crypt_process : 0);
 	}
 
 	const char* CryptoManager::getKeyName() const

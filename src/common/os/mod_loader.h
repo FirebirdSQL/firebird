@@ -73,7 +73,7 @@ public:
 		const Firebird::PathName fileName;
 
 #ifdef LINUX
-		virtual bool getRealPath(Firebird::PathName& realPath) = 0;
+		virtual bool getRealPath(Firebird::PathName& path) = 0;
 #endif
 
 	protected:

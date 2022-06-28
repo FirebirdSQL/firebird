@@ -9,6 +9,7 @@ set FBBUILD_BUILDTYPE=release
 set FBBUILD_INCLUDE_PDB=
 set FBBUILD_MAKE_KITS_ONLY=
 set FBBUILD_BUILD_ONLY=0
+set FBBUILD_TEST_ONLY=
 
 ::Check if on-line help is required
 for %%v in ( %1 %2 %3 %4 %5 %6 %7 %8 %9 )  do (
@@ -26,9 +27,13 @@ for %%v in ( %* )  do (
 ( if /I "%%v"=="PDB" (set FBBUILD_INCLUDE_PDB=1) )
 ( if /I "%%v"=="REPACK" (set FBBUILD_MAKE_KITS_ONLY=1) )
 ( if /I "%%v"=="JUSTBUILD" (set FBBUILD_BUILD_ONLY=1) )
+( if /I "%%v"=="TESTENV" (set FBBUILD_TEST_ONLY=1) )
 )
 
 call :SETVCENV
+if "%ERRLEV%"=="1" goto :END
+
+if defined FBBUILD_TEST_ONLY ( goto TEST_ENV & goto :EOF )
 
 if defined FBBUILD_MAKE_KITS_ONLY (goto :MAKE_KITS & goto :EOF)
 
@@ -51,10 +56,12 @@ if "%FBBUILD_BUILD_ONLY%"=="1" goto :END
 :: Package everything up
 pushd ..\install\arch-specific\win32
 call BuildExecutableInstall ISX ZIP EMB %FBBUILD_BUILDTYPE%
-if "%ERRLEV%"=="1" ( @echo Oops - some sort of error & popd & goto :END)
+if "%ERRLEV%"=="1" (
+  @echo Oops - some sort of error during packaging & popd & goto :END
+)
 if defined FBBUILD_INCLUDE_PDB (
-set /A FBBUILD_PACKAGE_NUMBER-=1
-call BuildExecutableInstall ISX ZIP EMB %FBBUILD_BUILDTYPE% PDB
+  set /A FBBUILD_PACKAGE_NUMBER-=1
+  call BuildExecutableInstall ISX ZIP EMB %FBBUILD_BUILDTYPE% PDB
 )
 popd
 
@@ -80,6 +87,9 @@ goto :END
 @echo.
 @echo    JUSTBUILD - Just build - don't create packages.
 @echo.
+@echo    TESTENV   - Sanity check - is Visual Studio available?.
+@echo                             - print the build variables that will be used
+@echo.
 @goto :EOF
 ::---------
 
@@ -88,22 +98,25 @@ goto :END
 ::===============================
 :: Set up the compiler environment
 
-if DEFINED VS170COMNTOOLS (
-@devenv /? >nul 2>nul
-@   if errorlevel 9009 (call "%VS170COMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS170COMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
-) else (
-if DEFINED VS160COMNTOOLS (
-@devenv /? >nul 2>nul
-@if errorlevel 9009 (call "%VS160COMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS160COMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
-) else (
-if DEFINED VS150COMNTOOLS (
-@devenv /? >nul 2>nul
-@if errorlevel 9009 (call "%VS150COMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%) else ( echo    The file: & @echo      "%VS150COMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE% & echo    has already been executed.)
-) else (
-@goto :HELP
-)
-)
-)
+@call setenvvar.bat
+if "%ERRLEV%"=="1" goto :END
+
+
+goto :END
+::---------
+
+
+:TEST_ENV
+::===============================
+:: Show variables
+call :SETVCENV
+if "%ERRLEV%"=="1" goto :END
+echo.
+set FB
+set MS
+set VC
+set VS
+echo.
 goto :END
 ::---------
 

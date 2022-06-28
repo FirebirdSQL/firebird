@@ -25,6 +25,7 @@
 #include "../jrd/evl_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/evl_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -35,13 +36,18 @@ using namespace Jrd;
 // Data access: predicate driven filter
 // ------------------------------------
 
-FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next, BoolExprNode* boolean)
+FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next,
+							   BoolExprNode* boolean, double selectivity)
 	: m_next(next), m_boolean(boolean), m_anyBoolean(NULL),
 	  m_ansiAny(false), m_ansiAll(false), m_ansiNot(false)
 {
 	fb_assert(m_next && m_boolean);
 
 	m_impure = csb->allocImpure<Impure>();
+
+	const auto cardinality = next->getCardinality();
+	Optimizer::adjustSelectivity(selectivity, MAXIMUM_SELECTIVITY, cardinality);
+	m_cardinality = cardinality * selectivity;
 }
 
 void FilteredStream::open(thread_db* tdbb) const
@@ -105,7 +111,10 @@ bool FilteredStream::lockRecord(thread_db* tdbb) const
 void FilteredStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
 {
 	if (detailed)
+	{
 		plan += printIndent(++level) + "Filter";
+		printOptInfo(plan);
+	}
 
 	m_next->print(tdbb, plan, detailed, level);
 }

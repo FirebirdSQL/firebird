@@ -38,9 +38,32 @@ namespace Jrd
 {
 	struct SystemProcedureParameter
 	{
+		SystemProcedureParameter(
+			const char* aName,
+			USHORT aFieldId,
+			bool aNullable,
+			const char* aDefaultText = nullptr,
+			std::initializer_list<UCHAR> aDefaultBlr = {}
+		)
+			: name(aName),
+			  fieldId(aFieldId),
+			  nullable(aNullable),
+			  defaultText(aDefaultText),
+			  defaultBlr(*getDefaultMemoryPool(), aDefaultBlr)
+		{
+		}
+
+		SystemProcedureParameter(Firebird::MemoryPool& pool, const SystemProcedureParameter& other)
+			: defaultBlr(pool)
+		{
+			*this = other;
+		}
+
 		const char* name;
 		USHORT fieldId;
 		bool nullable;
+		const char* defaultText = nullptr;
+		Firebird::Array<UCHAR> defaultBlr;
 	};
 
 	struct SystemProcedure
@@ -79,15 +102,38 @@ namespace Jrd
 		const char* name;
 		Factory factory;
 		prc_t type;
-		Firebird::Array<SystemProcedureParameter> inputParameters;
-		Firebird::Array<SystemProcedureParameter> outputParameters;
+		Firebird::ObjectsArray<SystemProcedureParameter> inputParameters;
+		Firebird::ObjectsArray<SystemProcedureParameter> outputParameters;
 	};
 
 	struct SystemFunctionParameter
 	{
+		SystemFunctionParameter(
+			const char* aName,
+			USHORT aFieldId,
+			bool aNullable,
+			const char* aDefaultText = nullptr,
+			std::initializer_list<UCHAR> aDefaultBlr = {}
+		)
+			: name(aName),
+			  fieldId(aFieldId),
+			  nullable(aNullable),
+			  defaultText(aDefaultText),
+			  defaultBlr(*getDefaultMemoryPool(), aDefaultBlr)
+		{
+		}
+
+		SystemFunctionParameter(Firebird::MemoryPool& pool, const SystemFunctionParameter& other)
+			: defaultBlr(pool)
+		{
+			*this = other;
+		}
+
 		const char* name;
 		USHORT fieldId;
 		bool nullable;
+		const char* defaultText = nullptr;
+		Firebird::Array<UCHAR> defaultBlr;
 	};
 
 	struct SystemFunctionReturnType
@@ -128,7 +174,7 @@ namespace Jrd
 
 		const char* name;
 		Factory factory;
-		Firebird::Array<SystemFunctionParameter> parameters;
+		Firebird::ObjectsArray<SystemFunctionParameter> parameters;
 		SystemFunctionReturnType returnType;
 	};
 

@@ -1092,7 +1092,7 @@ bool Applier::lookupRecord(thread_db* tdbb,
 	rpb.rpb_relation = relation;
 	rpb.rpb_number.setValue(BOF_NUMBER);
 
-	while (VIO_next_record(tdbb, &rpb, transaction, m_request->req_pool, false))
+	while (VIO_next_record(tdbb, &rpb, transaction, m_request->req_pool, DPM_next_all))
 	{
 		const auto seq_record = rpb.rpb_record;
 		fb_assert(seq_record);

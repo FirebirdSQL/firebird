@@ -1438,6 +1438,7 @@ public:
 	static const unsigned MARK_MERGE			= 0x02;	// node is part of MERGE statement
 	static const unsigned MARK_FOR_UPDATE		= 0x04;	// implicit cursor used in UPDATE\DELETE\MERGE statement
 	static const unsigned MARK_AVOID_COUNTERS	= 0x08;	// do not touch record counters
+	static const unsigned MARK_BULK_INSERT		= 0x10; // StoreNode is used for bulk operation
 
 	struct ExeState
 	{

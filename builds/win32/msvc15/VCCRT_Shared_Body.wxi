@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?><Include xmlns="http://schemas.microsoft.com/wix/2006/wi">
 
   <Product Id="$(var.PRODUCT_ID)"
-    Name="MSI to redistribute MS VS2017 CRT libraries for $(var.CPUArch)"
+    Name="MSI to redistribute MS Visual Studio Runtime libraries for $(var.CPUArch)"
 	Language="1033"
 	Version="$(var.MS_CRT_VER)"
 	Manufacturer="$(var.MANUFACTURER)"
 	UpgradeCode="$(var.UPGRADE_CODE)"
 	>
 
+  <!-- NOTE - InstallerVersion is hard-coded to 405 - this indicates Windows
+      Installer 4.5 is the minimum required version. Of course there is no
+      product called Windows Installer on your computer. It is actually msiexec -->
   <Package Id="$(var.PACKAGE_ID)"
 		Description="$(var.DESCRIPTION)"
 		Comments="$(var.COMMENTS)"

@@ -46,6 +46,7 @@ ConditionalStream::ConditionalStream(CompilerScratch* csb,
 	fb_assert(m_first && m_second && m_boolean);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = (first->getCardinality() + second->getCardinality()) / 2;
 }
 
 void ConditionalStream::open(thread_db* tdbb) const
@@ -115,6 +116,8 @@ void ConditionalStream::print(thread_db* tdbb, string& plan, bool detailed, unsi
 	if (detailed)
 	{
 		plan += printIndent(++level) + "Condition";
+		printOptInfo(plan);
+
 		m_first->print(tdbb, plan, true, level);
 		m_second->print(tdbb, plan, true, level);
 	}

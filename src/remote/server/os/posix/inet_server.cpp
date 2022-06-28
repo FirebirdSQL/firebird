@@ -41,6 +41,7 @@
 #include "../common/config/config.h"
 #include "../common/os/fbsyslog.h"
 #include "../common/os/os_utils.h"
+#include "../common/status.h"
 #include <sys/param.h>
 
 #ifdef HAVE_SYS_TYPES_H
@@ -468,15 +469,12 @@ int CLIB_ROUTINE main( int argc, char** argv)
 
 		fb_shutdown_callback(NULL, closePort, fb_shut_exit, port);
 
-		Firebird::LocalStatus localStatus;
-		Firebird::CheckStatusWrapper statusWrapper(&localStatus);
-
-		if (!REPL_server(&statusWrapper, false, &serverClosing))
+		Firebird::FbLocalStatus localStatus;
+		if (!REPL_server(&localStatus, false, &serverClosing))
 		{
 			const char* errorMsg = "Replication server initialization error";
-			gds__log_status(errorMsg, localStatus.getErrors());
+			iscLogStatus(errorMsg, localStatus->getErrors());
 			Firebird::Syslog::Record(Firebird::Syslog::Error, errorMsg);
-			exit(STARTUP_ERROR);
 		}
 
 		SRVR_multi_thread(port, INET_SERVER_flag);

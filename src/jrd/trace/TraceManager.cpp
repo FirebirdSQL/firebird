@@ -88,6 +88,7 @@ TraceManager::TraceManager(Attachment* in_att) :
 	attachment(in_att),
 	service(NULL),
 	filename(NULL),
+	callback(NULL),
 	trace_sessions(*in_att->att_pool),
 	active(false)
 {
@@ -98,16 +99,18 @@ TraceManager::TraceManager(Service* in_svc) :
 	attachment(NULL),
 	service(in_svc),
 	filename(NULL),
+	callback(NULL),
 	trace_sessions(in_svc->getPool()),
 	active(true)
 {
 	init();
 }
 
-TraceManager::TraceManager(const char* in_filename) :
+TraceManager::TraceManager(const char* in_filename, ICryptKeyCallback* cb) :
 	attachment(NULL),
 	service(NULL),
 	filename(in_filename),
+	callback(cb),
 	trace_sessions(*getDefaultMemoryPool()),
 	active(true)
 {
@@ -222,6 +225,8 @@ void TraceManager::update_sessions()
 	}
 
 	// add new sessions
+	new_needs = trace_needs;
+	trace_needs = 0;
 	while (newSessions.hasData())
 	{
 		TraceSession* s = newSessions.pop();
@@ -234,6 +239,10 @@ void TraceManager::update_sessions()
 	{
 		trace_needs = 0;
 	}
+	else
+	{
+		trace_needs = new_needs;
+	}
 }
 
 void TraceManager::update_session(const TraceSession& session)
@@ -245,7 +254,8 @@ void TraceManager::update_session(const TraceSession& session)
 	}
 
 	// if this session is not from administrator, it may trace connections
-	// only created by the same user
+	// only created by the same user, or when it has TRACE_ANY_ATTACHMENT
+	// privilege in current context
 	if (!(session.ses_flags & (trs_admin | trs_system)))
 	{
 		const char* curr_user = nullptr;
@@ -259,13 +269,14 @@ void TraceManager::update_session(const TraceSession& session)
 
 			if (attachment)
 			{
-				if ((!attachment->att_user) || (attachment->att_flags & ATT_mapping))
+				if (attachment->att_flags & ATT_mapping)
 					return;
 
-				curr_user = attachment->getUserName().c_str();
+				if (attachment->att_user)
+					curr_user = attachment->att_user->getUserName().c_str();
 
 				if (session.ses_auth.hasData())
-				{ // scope
+				{
 					AutoSetRestoreFlag<ULONG> autoRestore(&attachment->att_flags, ATT_mapping, true);
 
 					Database* dbb = attachment->att_database;
@@ -277,12 +288,14 @@ void TraceManager::update_session(const TraceSession& session)
 					mapping.setSecurityDbAlias(dbb->dbb_config->getSecurityDatabase(), dbb->dbb_filename.c_str());
 					mapping.setDb(attachment->att_filename.c_str(), dbb->dbb_filename.c_str(),
 						attachment->getInterface());
+
+					EngineCheckout guard(attachment, FB_FUNCTION);
 					mapResult = mapping.mapUser(s_user, t_role);
 				}
 			}
 			else if (service)
 			{
-				curr_user = service->getUserName().c_str();
+				curr_user = service->getUserName().nullStr();
 
 				if (session.ses_auth.hasData())
 				{
@@ -296,6 +309,26 @@ void TraceManager::update_session(const TraceSession& session)
 					mapping.setErrorMessagesContextName("services manager");
 					mapping.setSqlRole(session.ses_role);
 					mapping.setSecurityDbAlias(config->getSecurityDatabase(), nullptr);
+
+					mapResult = mapping.mapUser(s_user, t_role);
+				}
+			}
+			else if (filename)
+			{
+				if (session.ses_auth.hasData())
+				{
+					Mapping mapping(Mapping::MAP_NO_FLAGS, callback);
+					mapping.needSystemPrivileges(priv);
+					mapping.setAuthBlock(session.ses_auth);
+					mapping.setSqlRole(session.ses_role);
+
+					RefPtr<const Config> config;
+					PathName org_filename(filename), expanded_name;
+					if (! expandDatabaseName(org_filename, expanded_name, &config))
+						expanded_name = filename;
+
+					mapping.setSecurityDbAlias(config->getSecurityDatabase(), expanded_name.c_str());
+					mapping.setDb(filename, expanded_name.c_str(), nullptr);
 
 					mapResult = mapping.mapUser(s_user, t_role);
 				}
@@ -319,7 +352,7 @@ void TraceManager::update_session(const TraceSession& session)
 
 		t_role.upper();
 		if (s_user != DBA_USER_NAME && t_role != ADMIN_ROLE &&
-			s_user != curr_user && (!priv.test(TRACE_ANY_ATTACHMENT)))
+			((!curr_user) || (s_user != curr_user)) && (!priv.test(TRACE_ANY_ATTACHMENT)))
 		{
 			return;
 		}
@@ -344,7 +377,7 @@ void TraceManager::update_session(const TraceSession& session)
 			sesInfo.ses_id = session.ses_id;
 			trace_sessions.add(sesInfo);
 
-			trace_needs |= info->factory->trace_needs();
+			new_needs |= info->factory->trace_needs();
 		}
 		else if (status->getState() & IStatus::STATE_ERRORS)
 		{
@@ -399,6 +432,16 @@ void TraceManager::event_dsql_execute(Attachment* att, jrd_tra* transaction,
 											   started, req_result);
 }
 
+void TraceManager::event_dsql_restart(Attachment* att, jrd_tra* transaction,
+	DsqlRequest* statement, int number)
+{
+	TraceConnectionImpl conn(att);
+	TraceTransactionImpl tran(transaction);
+	TraceSQLStatementImpl stmt(statement, NULL);
+
+	att->att_trace_manager->event_dsql_restart(&conn, transaction ? &tran : NULL, &stmt,
+											   (unsigned) number);
+}
 
 #define EXECUTE_HOOKS(METHOD, PARAMS) \
 	FB_SIZE_T i = 0; \
@@ -494,6 +537,12 @@ void TraceManager::event_dsql_execute(ITraceDatabaseConnection* connection, ITra
 		(connection, transaction, statement, started, req_result));
 }
 
+void TraceManager::event_dsql_restart(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
+		ITraceSQLStatement* statement, unsigned number)
+{
+	EXECUTE_HOOKS(trace_dsql_restart,
+		(connection, transaction, statement, number));
+}
 
 void TraceManager::event_blr_compile(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, ITraceBLRStatement* statement,

@@ -27,7 +27,6 @@
 
 #include "../../common/classes/TimerImpl.h"
 #include "../../common/StatusHolder.h"
-#include "../../common/ThreadStart.h"
 #include "../../common/utils_proto.h"
 
 namespace Firebird {
@@ -36,7 +35,7 @@ void TimerImpl::handler()
 {
 	{
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
-		fb_assert(!m_inHandler);
+		fb_assert(!m_handlerTid);
 
 		m_fireTime = 0;
 		if (!m_expTime)	// Timer was reset to zero or stopped, do nothing
@@ -54,7 +53,7 @@ void TimerImpl::handler()
 		m_expTime = 0;
 
 		if (m_onTimer)
-			m_inHandler = true;
+			m_handlerTid = Thread::getId();
 	}
 
 	if (!m_onTimer)
@@ -63,7 +62,7 @@ void TimerImpl::handler()
 	m_onTimer(this);
 
 	MutexLockGuard guard(m_mutex, FB_FUNCTION);
-	m_inHandler = false;
+	m_handlerTid = 0;
 }
 
 void TimerImpl::reset(unsigned int timeout)
@@ -108,8 +107,12 @@ void TimerImpl::stop()
 {
 	MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
+	// Allow handler() to call stop()
+	if (m_handlerTid == Thread::getId())
+		return;
+
 	// hvlad: it could be replaced by condition variable when we have good one for Windows
-	while (m_inHandler)
+	while (m_handlerTid)
 	{
 		MutexUnlockGuard unlock(m_mutex, FB_FUNCTION);
 		Thread::sleep(10);

@@ -61,14 +61,18 @@ namespace
 }
 
 
-DATABASE DB = STATIC FILENAME "yachts.lnk";
-
 #define DB			tdgbl->db_handle
 #define fbTrans		tdgbl->tr_handle
 #define gds_trans	tdgbl->tr_handle
 #define fbStatus	(&tdgbl->status_vector)
 #define isc_status	(&tdgbl->status_vector)
 #define gds_status	(&tdgbl->status_vector)
+
+// unused
+#define fbProvider
+#define fbStatus2
+
+DATABASE DB = STATIC FILENAME "yachts.lnk";
 
 
 void detectRuntimeODS()

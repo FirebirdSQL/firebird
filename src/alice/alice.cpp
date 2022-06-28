@@ -272,6 +272,18 @@ int alice(Firebird::UtilSvc* uSvc)
 			}
 		}
 
+		if (table->in_sw_value & sw_parallel_workers)
+		{
+			if (--argc <= 0) {	// TODO: error message!
+				ALICE_error(6);	// msg 6: number of page buffers for cache required
+			}
+			ALICE_upper_case(*argv++, string, sizeof(string));
+			if ((!(tdgbl->ALICE_data.ua_parallel_workers = atoi(string))) && (strcmp(string, "0")))
+			{
+				ALICE_error(7);	// msg 7: numeric value required
+			}
+		}
+
 		if (table->in_sw_value & sw_housekeeping)
 		{
 			if (--argc <= 0) {

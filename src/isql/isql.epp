@@ -313,6 +313,114 @@ static inline int fb_isdigit(const char c)
 }
 
 
+#ifdef WIN_NT
+// This function is highly based on code written by https://github.com/xenu
+// He permitted our usage here: https://github.com/Perl/perl5/pull/18702#issuecomment-1156050577
+static int win32ReadConsole(FILE* file, char* buffer, size_t bufferSize)
+{
+	// This function is a workaround for a bug in Windows:
+	// https://github.com/microsoft/terminal/issues/4551
+	// tl;dr: ReadFile() and ReadConsoleA() return garbage when reading
+	// non-ASCII characters from the console with the 65001 codepage.
+	auto handle = (HANDLE) _get_osfhandle(fileno(file));
+
+	if (handle == INVALID_HANDLE_VALUE)
+	{
+		fb_assert(false);
+		return -1;
+	}
+
+	DWORD mode;
+	if (!GetConsoleMode(handle, &mode))
+	{
+		fb_assert(false);
+		return -1;
+	}
+
+	size_t leftToRead = bufferSize;
+
+	while (leftToRead)
+	{
+		// The purpose of convertedBuf is to preserve partial UTF-8 (or of any
+		// other multibyte encoding) code points between read() calls. Since
+		// there's only one console, the buffer is global. It's needed because
+		// ReadConsoleW() returns a string of UTF-16 code units and its result,
+		// after conversion to the current console codepage, may not fit in the
+		// return buffer.
+		//
+		// The buffer's size is 8 because it will contain at most two UTF-8 code
+		// points.
+		static char convertedBuf[8];
+		static size_t convertedBufLen = 0;
+
+		if (convertedBufLen)
+		{
+			bool newline = false;
+			const size_t toWrite = MIN(convertedBufLen, leftToRead);
+
+			// Don't read anything if the *first* character is ^Z and
+			// ENABLE_PROCESSED_INPUT is enabled. On some versions of Windows,
+			// ReadFile() ignores ENABLE_PROCESSED_INPUT, but apparently it's a
+			// bug: https://github.com/microsoft/terminal/issues/4958
+			if (leftToRead == bufferSize && (mode & ENABLE_PROCESSED_INPUT) && convertedBuf[0] == 0x1A)
+				break;
+
+			// Are we returning a newline?
+			if (memchr(convertedBuf, '\n', toWrite) != 0)
+				newline = true;
+
+			memcpy(buffer, convertedBuf, toWrite);
+			buffer += toWrite;
+
+			// If there's anything left in convertedBuf, move it to the beginning of the buffer.
+			convertedBufLen -= toWrite;
+
+			if (convertedBufLen)
+				memmove(convertedBuf, convertedBuf + toWrite, convertedBufLen);
+
+			leftToRead -= toWrite;
+
+			// With ENABLE_LINE_INPUT enabled, we stop reading after the first
+			// newline, otherwise we stop reading after the first character.
+			if (!leftToRead || newline || (mode & ENABLE_LINE_INPUT) == 0)
+				break;
+		}
+
+		WCHAR wideBuf[2];
+		DWORD charsRead;
+
+		// Reading one code unit at a time is inefficient, but since this code
+		// is used only for the interactive console, that shouldn't matter.
+		if (!ReadConsoleW(handle, wideBuf, 1, &charsRead, 0))
+			return -1;
+
+		if (!charsRead)
+			break;
+
+		DWORD wideBufLen = 1;
+
+		if (wideBuf[0] >= 0xD800 && wideBuf[0] <= 0xDBFF)
+		{
+			// High surrogate, read one more code unit.
+			if (!ReadConsoleW(handle, wideBuf + 1, 1, &charsRead, 0))
+				return -1;
+
+			if (charsRead)
+				++wideBufLen;
+		}
+
+		convertedBufLen = WideCharToMultiByte(GetConsoleCP(), 0, wideBuf, wideBufLen,
+			convertedBuf, sizeof(convertedBuf), NULL, NULL);
+
+		if (!convertedBufLen)
+			return -1;
+	}
+
+	return bufferSize - leftToRead;
+}
+#endif
+
+
 IsqlGlobals::IsqlGlobals()
 {
 	Firebird::AutoPtr<Firebird::IStatus, Firebird::SimpleDispose>
@@ -921,11 +1029,22 @@ static void readNextInputLine(const char* prompt)
 	{
 		// Read the line
 		char buffer[MAX_USHORT];
+		int lineSize;
 
-		if (fgets(buffer, sizeof(buffer), Filelist->Ifp().indev_fpointer) != NULL)
+#ifdef WIN_NT
+		if (!Input_file && isatty(fileno(Filelist->Ifp().indev_fpointer)))
+			lineSize = win32ReadConsole(Filelist->Ifp().indev_fpointer, buffer, sizeof(buffer));
+		else
+#endif
 		{
-			size_t lineSize = strlen(buffer);
+			if (fgets(buffer, sizeof(buffer), Filelist->Ifp().indev_fpointer) != NULL)
+				lineSize = strlen(buffer);
+			else
+				lineSize = -1;
+		}
 
+		if (lineSize > 0)
+		{
 			// If the last non empty line doesn't end in '\n', indev_aux won't be
 			// updated, but then there're no more commands, so it's irrelevant.
 			while (lineSize > 0 &&

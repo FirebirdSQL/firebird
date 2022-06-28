@@ -42,6 +42,7 @@ ExternalTableScan::ExternalTableScan(CompilerScratch* csb, const string& alias,
 	: RecordStream(csb, stream), m_relation(relation), m_alias(csb->csb_pool, alias)
 {
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = csb->csb_rpt[stream].csb_cardinality;
 }
 
 void ExternalTableScan::open(thread_db* tdbb) const
@@ -122,6 +123,7 @@ void ExternalTableScan::print(thread_db* tdbb, string& plan,
 	{
 		plan += printIndent(++level) + "Table " +
 			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan";
+		printOptInfo(plan);
 	}
 	else
 	{

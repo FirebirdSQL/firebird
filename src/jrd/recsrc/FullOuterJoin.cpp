@@ -43,6 +43,7 @@ FullOuterJoin::FullOuterJoin(CompilerScratch* csb, RecordSource* arg1, RecordSou
 	fb_assert(m_arg1 && m_arg2);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = arg1->getCardinality() + arg2->getCardinality();
 }
 
 void FullOuterJoin::open(thread_db* tdbb) const

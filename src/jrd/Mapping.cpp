@@ -656,12 +656,15 @@ public:
 	{
 		if (!sharedMemory)
 			return;
+		MutexLockGuard gLocal(initMutex, FB_FUNCTION);
+		if (!sharedMemory)
+			return;
 
 		{	// scope
 			Guard gShared(this);
-			MappingHeader* sMem = sharedMemory->getHeader();
 
-			startupSemaphore.tryEnter(5);
+			MappingHeader* sMem = sharedMemory->getHeader();
+			fb_assert(sMem->process[process].id);
 			sMem->process[process].flags &= ~MappingHeader::FLAG_ACTIVE;
 
 			(void)  // Ignore errors in cleanup
@@ -773,19 +776,22 @@ public:
 		if (sharedMemory)
 			return;
 
-		Arg::StatusVector statusVector;
+		AutoSharedMemory tempSharedMemory;
 		try
 		{
-			sharedMemory.reset(FB_NEW_POOL(*getDefaultMemoryPool())
+			tempSharedMemory.reset(FB_NEW_POOL(*getDefaultMemoryPool())
 				SharedMemory<MappingHeader>(USER_MAP_FILE, DEFAULT_SIZE, this));
 		}
 		catch (const Exception& ex)
 		{
-			iscLogException("MappingIpc: Cannot initialize the shared memory region", ex);
+			StaticStatusVector s;
+			ex.stuffException(s);
+			if (!fb_utils::containsErrorCode(s.begin(), isc_instance_conflict))
+				iscLogException("MappingIpc: Cannot initialize the shared memory region", ex);
 			throw;
 		}
 
-		MappingHeader* sMem = sharedMemory->getHeader();
+		MappingHeader* sMem = tempSharedMemory->getHeader();
 
 		if (sMem->mhb_type != SharedMemoryBase::SRAM_MAPPING_RESET ||
 			sMem->mhb_header_version != MemoryHeader::HEADER_VERSION ||
@@ -796,20 +802,21 @@ public:
 				sMem->mhb_type, sMem->mhb_header_version, sMem->mhb_version,
 				SharedMemoryBase::SRAM_MAPPING_RESET, MemoryHeader::HEADER_VERSION, MAPPING_VERSION);
 
-			sharedMemory = NULL;
 			(Arg::Gds(isc_random) << Arg::Str(err)).raise();
 		}
 
-		Guard gShared(this);
+		Guard gShared(tempSharedMemory);
 
 		for (process = 0; process < sMem->processes; ++process)
 		{
 			if (!(sMem->process[process].flags & MappingHeader::FLAG_ACTIVE))
 				break;
+
 			if (!ISC_check_process_existence(sMem->process[process].id))
 			{
-				sharedMemory->eventFini(&sMem->process[process].notifyEvent);
-				sharedMemory->eventFini(&sMem->process[process].callbackEvent);
+				tempSharedMemory->eventFini(&sMem->process[process].notifyEvent);
+				tempSharedMemory->eventFini(&sMem->process[process].callbackEvent);
+
 				break;
 			}
 		}
@@ -826,6 +833,8 @@ public:
 
 		sMem->process[process].id = processId;
 		sMem->process[process].flags = MappingHeader::FLAG_ACTIVE;
+		sharedMemory.reset(tempSharedMemory.release());
+
 		if (sharedMemory->eventInit(&sMem->process[process].notifyEvent) != FB_SUCCESS)
 		{
 			(Arg::Gds(isc_map_event) << "INIT").raise();
@@ -844,6 +853,7 @@ public:
 			sMem->process[process].flags &= ~MappingHeader::FLAG_ACTIVE;
 			throw;
 		}
+		startupSemaphore.enter();
 	}
 
 	void exceptionHandler(const Exception& ex, ThreadFinishSync<MappingIpc*>::ThreadRoutine*)
@@ -925,26 +935,36 @@ private:
 
 	class Guard;
 	friend class Guard;
+	typedef SharedMemory<MappingHeader> MappingSharedMemory;
+	typedef AutoPtr<MappingSharedMemory> AutoSharedMemory;
 
 	class Guard
 	{
 	public:
 		explicit Guard(MappingIpc* ptr)
+			: data(ptr->sharedMemory)
+		{
+			fb_assert(data);
+			data->mutexLock();
+		}
+
+		explicit Guard(MappingSharedMemory* ptr)
 			: data(ptr)
 		{
-			data->sharedMemory->mutexLock();
+			fb_assert(data);
+			data->mutexLock();
 		}
 
 		~Guard()
 		{
-			data->sharedMemory->mutexUnlock();
+			data->mutexUnlock();
 		}
 
 	private:
 		Guard(const Guard&);
 		Guard& operator=(const Guard&);
 
-		MappingIpc* const data;
+		MappingSharedMemory* const data;
 	};
 
 	static void clearDelivery(MappingIpc* mapping)
@@ -952,7 +972,7 @@ private:
 		mapping->clearDeliveryThread();
 	}
 
-	AutoPtr<SharedMemory<MappingHeader> > sharedMemory;
+	AutoSharedMemory sharedMemory;
 	Mutex initMutex;
 	const SLONG processId;
 	unsigned process;

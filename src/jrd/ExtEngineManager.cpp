@@ -1298,6 +1298,9 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 	metadata->inputParameters.assignRefNoIncr(Routine::createMetadata(udf->getInputFields(), true));
 	metadata->outputParameters.assignRefNoIncr(Routine::createMetadata(udf->getOutputFields(), true));
 
+	udf->setInputFormat(Routine::createFormat(pool, metadata->inputParameters, false));
+	udf->setOutputFormat(Routine::createFormat(pool, metadata->outputParameters, true));
+
 	FbLocalStatus status;
 
 	RefPtr<IMetadataBuilder> inBuilder(REF_NO_INCR, metadata->inputParameters->getBuilder(&status));
@@ -1314,12 +1317,23 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 
 		externalFunction = attInfo->engine->makeFunction(&status, attInfo->context, metadata,
 			inBuilder, outBuilder);
-		status.check();
 
-		if (!externalFunction)
+		try
 		{
-			status_exception::raise(
-				Arg::Gds(isc_eem_func_not_returned) << udf->getName().toString() << engine);
+			status.check();
+
+			if (!externalFunction)
+			{
+				status_exception::raise(
+					Arg::Gds(isc_eem_func_not_returned) << udf->getName().toString() << engine);
+			}
+		}
+		catch (const Exception&)
+		{
+			if (tdbb->getAttachment()->isGbak())
+				return;
+			else
+				throw;
 		}
 
 		extInputParameters.assignRefNoIncr(inBuilder->getMetadata(&status));
@@ -1328,9 +1342,6 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 		extOutputParameters.assignRefNoIncr(outBuilder->getMetadata(&status));
 		status.check();
 	}
-
-	udf->setInputFormat(Routine::createFormat(pool, metadata->inputParameters, false));
-	udf->setOutputFormat(Routine::createFormat(pool, metadata->outputParameters, true));
 
 	const Format* extInputFormat = Routine::createFormat(pool, extInputParameters, false);
 	const Format* extOutputFormat = Routine::createFormat(pool, extOutputParameters, true);
@@ -1423,6 +1434,9 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 	metadata->inputParameters.assignRefNoIncr(Routine::createMetadata(prc->getInputFields(), true));
 	metadata->outputParameters.assignRefNoIncr(Routine::createMetadata(prc->getOutputFields(), true));
 
+	prc->setInputFormat(Routine::createFormat(pool, metadata->inputParameters, false));
+	prc->setOutputFormat(Routine::createFormat(pool, metadata->outputParameters, true));
+
 	FbLocalStatus status;
 
 	RefPtr<IMetadataBuilder> inBuilder(REF_NO_INCR, metadata->inputParameters->getBuilder(&status));
@@ -1439,13 +1453,24 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 
 		externalProcedure = attInfo->engine->makeProcedure(&status, attInfo->context, metadata,
 			inBuilder, outBuilder);
-		status.check();
 
-		if (!externalProcedure)
+		try
 		{
-			status_exception::raise(
-				Arg::Gds(isc_eem_proc_not_returned) <<
-					prc->getName().toString() << engine);
+			status.check();
+
+			if (!externalProcedure)
+			{
+				status_exception::raise(
+					Arg::Gds(isc_eem_proc_not_returned) <<
+						prc->getName().toString() << engine);
+			}
+		}
+		catch (const Exception&)
+		{
+			if (tdbb->getAttachment()->isGbak())
+				return;
+			else
+				throw;
 		}
 
 		extInputParameters.assignRefNoIncr(inBuilder->getMetadata(&status));
@@ -1454,9 +1479,6 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 		extOutputParameters.assignRefNoIncr(outBuilder->getMetadata(&status));
 		status.check();
 	}
-
-	prc->setInputFormat(Routine::createFormat(pool, metadata->inputParameters, false));
-	prc->setOutputFormat(Routine::createFormat(pool, metadata->outputParameters, true));
 
 	const Format* extInputFormat = Routine::createFormat(pool, extInputParameters, false);
 	const Format* extOutputFormat = Routine::createFormat(pool, extOutputParameters, true);

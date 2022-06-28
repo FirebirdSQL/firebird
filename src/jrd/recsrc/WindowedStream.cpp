@@ -191,6 +191,7 @@ WindowedStream::WindowedStream(thread_db* tdbb, Optimizer* opt,
 
 	m_next = FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, next);
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = next->getCardinality();
 
 	// Process the unpartioned and unordered map, if existent.
 
@@ -874,7 +875,10 @@ void WindowedStream::WindowStream::print(thread_db* tdbb, string& plan, bool det
 	unsigned level) const
 {
 	if (detailed)
+	{
 		plan += printIndent(++level) + "Window";
+		printOptInfo(plan);
+	}
 
 	m_next->print(tdbb, plan, detailed, level);
 }

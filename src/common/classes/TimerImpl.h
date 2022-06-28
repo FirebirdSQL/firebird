@@ -32,6 +32,7 @@
 
 #include "../../common/classes/ImplementHelper.h"
 #include "../../common/classes/locks.h"
+#include "../../common/ThreadStart.h"
 
 namespace Firebird {
 
@@ -51,7 +52,7 @@ public:
 	TimerImpl() :
 		m_fireTime(0),
 		m_expTime(0),
-		m_inHandler(false)
+		m_handlerTid(0)
 	{ }
 
 	// ITimer implementation
@@ -82,9 +83,9 @@ public:
 private:
 	Mutex m_mutex;
 	SINT64 m_fireTime;		// when ITimer will fire, could be less than m_expTime
-	SINT64 m_expTime;		// when actual idle timeout will expire
+	SINT64 m_expTime;		// when actual timeout will expire
 	std::function<OnTimerFunc> m_onTimer;
-	bool m_inHandler;
+	ThreadId m_handlerTid;	// ID of handler thread, if handler is running
 };
 
 

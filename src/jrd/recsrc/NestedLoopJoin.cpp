@@ -24,6 +24,7 @@
 #include "../jrd/evl_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/vio_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -38,11 +39,15 @@ NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, FB_SIZE_T count, RecordSour
 	: m_joinType(INNER_JOIN), m_args(csb->csb_pool), m_boolean(NULL)
 {
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = MINIMUM_CARDINALITY;
 
 	m_args.resize(count);
 
 	for (FB_SIZE_T i = 0; i < count; i++)
+	{
 		m_args[i] = args[i];
+		m_cardinality *= args[i]->getCardinality();
+	}
 }
 
 NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, RecordSource* outer, RecordSource* inner,
@@ -55,6 +60,8 @@ NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, RecordSource* outer, Record
 
 	m_args.add(outer);
 	m_args.add(inner);
+
+	m_cardinality = outer->getCardinality() * inner->getCardinality();
 }
 
 void NestedLoopJoin::open(thread_db* tdbb) const
@@ -225,6 +232,8 @@ void NestedLoopJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigne
 				default:
 					fb_assert(false);
 			}
+
+			printOptInfo(plan);
 
 			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 				m_args[i]->print(tdbb, plan, true, level);

@@ -29,6 +29,7 @@
 #include "../jrd/vio_proto.h"
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -46,6 +47,7 @@ ProcedureScan::ProcedureScan(CompilerScratch* csb, const string& alias, StreamTy
 	  m_procedure(procedure), m_sourceList(sourceList), m_targetList(targetList), m_message(message)
 {
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = DEFAULT_CARDINALITY;
 
 	fb_assert(!sourceList == !targetList);
 
@@ -60,6 +62,12 @@ void ProcedureScan::open(thread_db* tdbb) const
 		status_exception::raise(
 			Arg::Gds(isc_proc_pack_not_implemented) <<
 				Arg::Str(m_procedure->getName().identifier) << Arg::Str(m_procedure->getName().package));
+	}
+	else if (!m_procedure->isDefined())
+	{
+		status_exception::raise(
+			Arg::Gds(isc_prcnotdef) << Arg::Str(m_procedure->getName().toString()) <<
+			Arg::Gds(isc_modnotfound));
 	}
 
 	const_cast<jrd_prc*>(m_procedure)->checkReload(tdbb);
@@ -247,6 +255,7 @@ void ProcedureScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned
 	{
 		plan += printIndent(++level) + "Procedure " +
 			printName(tdbb, m_procedure->getName().toString(), m_alias) + " Scan";
+		printOptInfo(plan);
 	}
 	else
 	{

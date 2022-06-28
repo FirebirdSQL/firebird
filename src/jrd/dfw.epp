@@ -85,6 +85,7 @@
 #include "../jrd/intl.h"
 #include "../intl/charsets.h"
 #include "../jrd/align.h"
+#include "../dsql/DsqlStatementCache.h"
 #include "../common/gdsassert.h"
 #include "../jrd/blb_proto.h"
 #include "../jrd/btr_proto.h"
@@ -1478,6 +1479,9 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 	}
 
 	SET_TDBB(tdbb);
+
+	tdbb->getAttachment()->att_dsql_instance->dbb_statement_cache->purgeAllAttachments(tdbb);
+
 	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
 
 	/* Loop for as long as any of the deferred work routines says that it has
@@ -2755,10 +2759,12 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 
 						if (!IDX.RDB$EXPRESSION_BLR.NULL)
 						{
-							idx.idx_expression = static_cast<ValueExprNode*>(MET_get_dependencies(
-								tdbb, relation, NULL, 0, NULL, &IDX.RDB$EXPRESSION_BLR,
-								&idx.idx_expression_statement, &csb, work->dfw_name, obj_expression_index, 0,
-								transaction));
+							MET_get_dependencies(tdbb, relation, nullptr, 0, nullptr, &IDX.RDB$EXPRESSION_BLR,
+								nullptr, &csb, work->dfw_name, obj_expression_index, 0,
+								transaction);
+
+							idx.idx_expression_statement = Statement::makeValueExpression(tdbb,
+								idx.idx_expression, idx.idx_expression_desc, csb, false);
 						}
 					} // end scope
 
@@ -2766,7 +2772,6 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 
 					idx.idx_count = 1;
 					idx.idx_flags |= idx_expressn;
-					idx.idx_expression->getDesc(tdbb, csb, &idx.idx_expression_desc);
 					idx.idx_rpt[0].idx_itype =
 						DFW_assign_index_type(tdbb, work->dfw_name,
 						idx.idx_expression_desc.dsc_dtype,
@@ -3999,6 +4004,7 @@ void DFW_reset_icu(thread_db* tdbb)
 			"join RDB$CHARACTER_SETS cs on coll.RDB$CHARACTER_SET_ID = cs.RDB$CHARACTER_SET_ID "
 			"where coll.RDB$SPECIFIC_ATTRIBUTES like '%COLL-VERSION=%' "
 			" and coalesce(ind.RDB$INDEX_INACTIVE, 0) = 0 "
+			" and coalesce(rel.RDB$RELATION_TYPE, 0) = 0 "		// rel_persistent
 			"group by ind.RDB$INDEX_NAME, rel.RDB$RELATION_ID, coll.RDB$BASE_COLLATION_NAME, "
 			" coll.RDB$COLLATION_NAME, cs.RDB$CHARACTER_SET_NAME, coll.RDB$SPECIFIC_ATTRIBUTES";
 

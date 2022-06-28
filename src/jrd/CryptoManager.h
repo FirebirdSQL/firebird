@@ -298,7 +298,7 @@ public:
 	void setDbInfo(Firebird::IDbCryptPlugin* cp);
 
 	ULONG getCurrentPage(thread_db* tdbb) const;
-	UCHAR getCurrentState() const;
+	UCHAR getCurrentState(thread_db* tdbb) const;
 	const char* getKeyName() const;
 	const char* getPluginName() const;
 

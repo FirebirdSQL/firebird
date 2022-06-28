@@ -48,8 +48,8 @@ static int strcmpSpace(const char* p, const char* q);
 static void processSource(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 	RecordSourceNode* source, BoolExprNode** boolean, RecordSourceNodeStack& stack);
 static void processMap(thread_db* tdbb, CompilerScratch* csb, MapNode* map, Format** inputFormat);
-static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverStack, MapNode* map,
-	BoolExprNodeStack* parentStack, StreamType shellStream);
+static void genDeliverUnmapped(CompilerScratch* csb, const BoolExprNodeStack& parentStack,
+	BoolExprNodeStack& deliverStack, MapNode* map, StreamType shellStream);
 static ValueExprNode* resolveUsingField(DsqlCompilerScratch* dsqlScratch, const MetaName& name,
 	ValueListNode* list, const FieldNode* flawedNode, const TEXT* side, dsql_ctx*& ctx);
 
@@ -889,6 +889,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 {
 	SET_TDBB(tdbb);
 
+	const auto blrStartPos = csb->csb_blr_reader.getPos();
 	jrd_prc* procedure = NULL;
 	string* aliasString = NULL;
 	QualifiedName name;
@@ -955,6 +956,25 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 
 	if (!procedure)
 		PAR_error(csb, Arg::Gds(isc_prcnotdef) << Arg::Str(name.toString()));
+	else
+	{
+		if (procedure->isImplemented() && !procedure->isDefined())
+		{
+			if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
+			{
+				PAR_warning(
+					Arg::Warning(isc_prcnotdef) << Arg::Str(name.toString()) <<
+					Arg::Warning(isc_modnotfound));
+			}
+			else
+			{
+				csb->csb_blr_reader.setPos(blrStartPos);
+				PAR_error(csb,
+					Arg::Gds(isc_prcnotdef) << Arg::Str(name.toString()) <<
+					Arg::Gds(isc_modnotfound));
+			}
+		}
+	}
 
 	if (procedure->prc_type == prc_executable)
 	{
@@ -1238,14 +1258,6 @@ void ProcedureSourceNode::pass2Rse(thread_db* tdbb, CompilerScratch* csb)
 
 RecordSource* ProcedureSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*innerSubStream*/)
 {
-	return generate(tdbb, opt);
-}
-
-// Compile and optimize a record selection expression into a set of record source blocks (rsb's).
-ProcedureScan* ProcedureSourceNode::generate(thread_db* tdbb, Optimizer* opt)
-{
-	SET_TDBB(tdbb);
-
 	const auto csb = opt->getCompilerScratch();
 	const string alias = opt->makeAlias(stream);
 
@@ -1585,20 +1597,6 @@ bool AggregateSourceNode::containsStream(StreamType checkStream) const
 
 RecordSource* AggregateSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*innerSubStream*/)
 {
-	BoolExprNodeStack conjunctStack;
-	for (auto iter = opt->getConjuncts(); iter.hasData(); ++iter)
-		conjunctStack.push(iter);
-
-	return generate(tdbb, opt, &conjunctStack, stream);
-}
-
-// Generate a RecordSource (Record Source Block) for each aggregate operation.
-// Generate an AggregateSort (Aggregate SortedStream Block) for each DISTINCT aggregate.
-RecordSource* AggregateSourceNode::generate(thread_db* tdbb, Optimizer* opt,
-	BoolExprNodeStack* parentStack, StreamType shellStream)
-{
-	SET_TDBB(tdbb);
-
 	const auto csb = opt->getCompilerScratch();
 	rse->rse_sorted = group;
 
@@ -1606,8 +1604,10 @@ RecordSource* AggregateSourceNode::generate(thread_db* tdbb, Optimizer* opt,
 	// Zip thru stack of booleans looking for fields that belong to shellStream.
 	// Those fields are mappings. Mappings that hold a plain field may be used
 	// to distribute. Handle the simple cases only.
-	BoolExprNodeStack deliverStack;
-	genDeliverUnmapped(csb, &deliverStack, map, parentStack, shellStream);
+	BoolExprNodeStack parentStack, deliverStack;
+	for (auto iter = opt->getConjuncts(); iter.hasData(); ++iter)
+		parentStack.push(*iter);
+	genDeliverUnmapped(csb, parentStack, deliverStack, map, stream);
 
 	// try to optimize MAX and MIN to use an index; for now, optimize
 	// only the simplest case, although it is probably possible
@@ -1635,7 +1635,7 @@ RecordSource* AggregateSourceNode::generate(thread_db* tdbb, Optimizer* opt,
 		rse->flags |= RseNode::FLAG_OPT_FIRST_ROWS;
 	}
 
-	RecordSource* const nextRsb = Optimizer::compile(tdbb, csb, rse, &deliverStack);
+	RecordSource* const nextRsb = opt->compile(rse, &deliverStack);
 
 	// allocate and optimize the record source block
 
@@ -1922,26 +1922,14 @@ bool UnionSourceNode::containsStream(StreamType checkStream) const
 
 RecordSource* UnionSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*innerSubStream*/)
 {
-	StreamList keyStreams;
-	computeDbKeyStreams(keyStreams);
-
-	BoolExprNodeStack conjunctStack;
-	for (auto iter = opt->getConjuncts(); iter.hasData(); ++iter)
-		conjunctStack.push(iter);
-
-	return generate(tdbb, opt, keyStreams.begin(), keyStreams.getCount(), &conjunctStack, stream);
-}
-
-// Generate an union complex.
-RecordSource* UnionSourceNode::generate(thread_db* tdbb, Optimizer* opt, const StreamType* streams,
-	FB_SIZE_T nstreams, BoolExprNodeStack* parentStack, StreamType shellStream)
-{
-	SET_TDBB(tdbb);
-
 	const auto csb = opt->getCompilerScratch();
 	HalfStaticArray<RecordSource*, OPT_STATIC_ITEMS> rsbs;
 
 	const ULONG baseImpure = csb->allocImpure(FB_ALIGNMENT, 0);
+
+	BoolExprNodeStack parentStack;
+	for (auto iter = opt->getConjuncts(); iter.hasData(); ++iter)
+		parentStack.push(*iter);
 
 	NestConst<RseNode>* ptr = clauses.begin();
 	NestConst<MapNode>* ptr2 = maps.begin();
@@ -1956,9 +1944,9 @@ RecordSource* UnionSourceNode::generate(thread_db* tdbb, Optimizer* opt, const S
 		// hvlad: don't do it for recursive unions else they will work wrong !
 		BoolExprNodeStack deliverStack;
 		if (!recursive)
-			genDeliverUnmapped(csb, &deliverStack, map, parentStack, shellStream);
+			genDeliverUnmapped(csb, parentStack, deliverStack, map, stream);
 
-		rsbs.add(Optimizer::compile(tdbb, csb, rse, &deliverStack));
+		rsbs.add(opt->compile(rse, &deliverStack));
 
 		// hvlad: activate recursive union itself after processing first (non-recursive)
 		// member to allow recursive members be optimized
@@ -1966,17 +1954,20 @@ RecordSource* UnionSourceNode::generate(thread_db* tdbb, Optimizer* opt, const S
 			csb->csb_rpt[stream].activate();
 	}
 
+	StreamList keyStreams;
+	computeDbKeyStreams(keyStreams);
+
 	if (recursive)
 	{
 		fb_assert(rsbs.getCount() == 2 && maps.getCount() == 2);
 		// hvlad: save size of inner impure area and context of mapped record
 		// for recursive processing later
 		return FB_NEW_POOL(*tdbb->getDefaultPool()) RecursiveStream(csb, stream, mapStream,
-			rsbs[0], rsbs[1], maps[0], maps[1], nstreams, streams, baseImpure);
+			rsbs[0], rsbs[1], maps[0], maps[1], keyStreams, baseImpure);
 	}
 
 	return FB_NEW_POOL(*tdbb->getDefaultPool()) Union(csb, stream, clauses.getCount(), rsbs.begin(),
-		maps.begin(), nstreams, streams);
+		maps.begin(), keyStreams);
 }
 
 // Identify all of the streams for which a dbkey may need to be carried through a sort.
@@ -2351,7 +2342,7 @@ RecordSource* WindowSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*
 	const auto csb = opt->getCompilerScratch();
 
 	return FB_NEW_POOL(*tdbb->getDefaultPool()) WindowedStream(tdbb, opt,
-		windows, Optimizer::compile(tdbb, csb, rse, NULL));
+		windows, opt->compile(rse, NULL));
 }
 
 bool WindowSourceNode::computable(CompilerScratch* csb, StreamType stream,
@@ -2998,8 +2989,7 @@ RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStr
 			if (opt->isLeftJoin())
 			{
 				// Push all conjuncts except "missing" ones (e.g. IS NULL)
-
-				for (auto iter = opt->getConjuncts(true, false); iter.hasData(); ++iter)
+				for (auto iter = opt->getConjuncts(false, true); iter.hasData(); ++iter)
 					conjunctStack.push(iter);
 			}
 		}
@@ -3009,15 +2999,14 @@ RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStr
 				conjunctStack.push(iter);
 		}
 
-		return Optimizer::compile(tdbb, csb, this, &conjunctStack);
+		return opt->compile(this, &conjunctStack);
 	}
 
 	// Push only parent conjuncts to the outer stream
-
-	for (auto iter = opt->getConjuncts(false, true); iter.hasData(); ++iter)
+	for (auto iter = opt->getConjuncts(true, false); iter.hasData(); ++iter)
 		conjunctStack.push(iter);
 
-	return Optimizer::compile(tdbb, csb, this, &conjunctStack);
+	return opt->compile(this, &conjunctStack);
 }
 
 // Check that all streams in the RseNode have a plan specified for them.
@@ -3579,19 +3568,22 @@ static void processMap(thread_db* tdbb, CompilerScratch* csb, MapNode* map, Form
 }
 
 // Make new boolean nodes from nodes that contain a field from the given shellStream.
-// Those fields are references (mappings) to other nodes and are used by aggregates and union rse's.
-static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverStack, MapNode* map,
-	BoolExprNodeStack* parentStack, StreamType shellStream)
+// Those fields are references (mappings) to other nodes and are used by aggregates and unions.
+static void genDeliverUnmapped(CompilerScratch* csb,
+							   const BoolExprNodeStack& conjunctStack,
+							   BoolExprNodeStack& deliverStack,
+							   MapNode* map,
+							   StreamType shellStream)
 {
 	MemoryPool& pool = csb->csb_pool;
 
-	for (BoolExprNodeStack::iterator stack1(*parentStack); stack1.hasData(); ++stack1)
+	for (BoolExprNodeStack::const_iterator iter(conjunctStack); iter.hasData(); ++iter)
 	{
-		BoolExprNode* const boolean = stack1.object();
+		const auto boolean = iter.object();
 
 		// Handle the "OR" case first
 
-		BinaryBoolNode* const binaryNode = nodeAs<BinaryBoolNode>(boolean);
+		const auto binaryNode = nodeAs<BinaryBoolNode>(boolean);
 		if (binaryNode && binaryNode->blrOp == blr_or)
 		{
 			BoolExprNodeStack orgStack, newStack;
@@ -3599,17 +3591,17 @@ static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverS
 			orgStack.push(binaryNode->arg1);
 			orgStack.push(binaryNode->arg2);
 
-			genDeliverUnmapped(csb, &newStack, map, &orgStack, shellStream);
+			genDeliverUnmapped(csb, orgStack, newStack, map, shellStream);
 
 			if (newStack.getCount() == 2)
 			{
-				BoolExprNode* const newArg2 = newStack.pop();
-				BoolExprNode* const newArg1 = newStack.pop();
+				const auto newArg2 = newStack.pop();
+				const auto newArg1 = newStack.pop();
 
-				BinaryBoolNode* const newBinaryNode =
+				const auto newBinaryNode =
 					FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_or, newArg1, newArg2);
 
-				deliverStack->push(newBinaryNode);
+				deliverStack.push(newBinaryNode);
 			}
 			else
 			{
@@ -3622,8 +3614,8 @@ static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverS
 
 		// Reduce to simple comparisons
 
-		ComparativeBoolNode* const cmpNode = nodeAs<ComparativeBoolNode>(boolean);
-		MissingBoolNode* const missingNode = nodeAs<MissingBoolNode>(boolean);
+		const auto cmpNode = nodeAs<ComparativeBoolNode>(boolean);
+		const auto missingNode = nodeAs<MissingBoolNode>(boolean);
 		HalfStaticArray<ValueExprNode*, 2> children;
 
 		if (cmpNode &&
@@ -3646,7 +3638,7 @@ static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverS
 
 		for (indexArg = 0; (indexArg < children.getCount()) && !mappingFound; ++indexArg)
 		{
-			FieldNode* fieldNode = nodeAs<FieldNode>(children[indexArg]);
+			const auto fieldNode = nodeAs<FieldNode>(children[indexArg]);
 
 			if (fieldNode && fieldNode->fieldStream == shellStream)
 				mappingFound = true;
@@ -3657,12 +3649,12 @@ static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverS
 
 		// Create new node and assign the correct existing arguments
 
-		BoolExprNode* deliverNode = NULL;
+		AutoPtr<BoolExprNode> deliverNode;
 		HalfStaticArray<ValueExprNode**, 2> newChildren;
 
 		if (cmpNode)
 		{
-			ComparativeBoolNode* const newCmpNode =
+			const auto newCmpNode =
 				FB_NEW_POOL(pool) ComparativeBoolNode(pool, cmpNode->blrOp);
 
 			newChildren.add(newCmpNode->arg1.getAddress());
@@ -3672,7 +3664,7 @@ static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverS
 		}
 		else if (missingNode)
 		{
-			MissingBoolNode* const newMissingNode = FB_NEW_POOL(pool) MissingBoolNode(pool);
+			const auto newMissingNode = FB_NEW_POOL(pool) MissingBoolNode(pool);
 
 			newChildren.add(newMissingNode->arg.getAddress());
 
@@ -3691,11 +3683,11 @@ static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverS
 			// forget to leave aggregate-functions alone in case of aggregate rse).
 			// Because this is only to help using an index we keep it simple.
 
-			FieldNode* fieldNode = nodeAs<FieldNode>(children[indexArg]);
+			const auto fieldNode = nodeAs<FieldNode>(children[indexArg]);
 
 			if (fieldNode && fieldNode->fieldStream == shellStream)
 			{
-				const USHORT fieldId = fieldNode->fieldId;
+				const auto fieldId = fieldNode->fieldId;
 
 				if (fieldId >= map->sourceList.getCount())
 					okNode = false;
@@ -3703,7 +3695,7 @@ static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverS
 				{
 					// Check also the expression inside the map, because aggregate
 					// functions aren't allowed to be delivered to the WHERE clause.
-					ValueExprNode* value = map->sourceList[fieldId];
+					const auto value = map->sourceList[fieldId];
 					okNode = value->unmappable(map, shellStream);
 
 					if (okNode)
@@ -3717,10 +3709,8 @@ static void genDeliverUnmapped(CompilerScratch* csb, BoolExprNodeStack* deliverS
 			}
 		}
 
-		if (!okNode)
-			delete deliverNode;
-		else
-			deliverStack->push(deliverNode);
+		if (okNode)
+			deliverStack.push(deliverNode.release());
 	}
 }
 

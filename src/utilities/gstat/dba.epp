@@ -1142,6 +1142,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	{
 		ex.stuffException(permStatus);
 		fb_utils::copyStatus(status_vector, ISC_STATUS_LENGTH, permStatus.value(), permStatus.length());
+		tddba->exit_code = FB_FAILURE;
 	}
 
 	// free mem

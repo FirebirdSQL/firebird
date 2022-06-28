@@ -30,7 +30,9 @@
 #include "intlobj_new.h"
 #include "../common/IntlUtil.h"
 #include "../common/os/mod_loader.h"
+#include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
+#include "../common/classes/GenericMap.h"
 #include "../common/classes/objects_array.h"
 #include <unicode/ucnv.h>
 #include <unicode/ucal.h>
@@ -56,6 +58,7 @@ public:
 											  const UChar *src, int32_t srcLength,
 											  UErrorCode *pErrorCode);
 
+		void (U_EXPORT2* u_getVersion) (UVersionInfo versionArray);
 		UChar32 (U_EXPORT2* u_tolower) (UChar32 c);
 		UChar32 (U_EXPORT2* u_toupper) (UChar32 c);
 		int32_t (U_EXPORT2* u_strCompare) (const UChar* s1, int32_t length1,
@@ -175,7 +178,8 @@ public:
 
 	static ConversionICU& getConversionICU();
 	static ICU* loadICU(const Firebird::string& icuVersion, const Firebird::string& configInfo);
-	static bool getCollVersion(const Firebird::string& icuVersion,
+	static void getICUVersion(ICU* icu, int& majorVersion, int& minorVersion);
+	static ICU* getCollVersion(const Firebird::string& icuVersion,
 		const Firebird::string& configInfo, Firebird::string& collVersion);
 
 	class Utf16Collation
@@ -200,8 +204,47 @@ public:
 		ULONG canonical(ULONG srcLen, const USHORT* src, ULONG dstLen, ULONG* dst, const ULONG* exceptions);
 
 	private:
-		static ICU* loadICU(const Firebird::string& collVersion, const Firebird::string& locale,
-			const Firebird::string& configInfo);
+		template <typename T>
+		class ArrayComparator
+		{
+		public:
+			static bool greaterThan(const Firebird::Array<T>& i1, const Firebird::Array<T>& i2)
+			{
+				FB_SIZE_T minCount = MIN(i1.getCount(), i2.getCount());
+				int cmp = memcmp(i1.begin(), i2.begin(), minCount * sizeof(T));
+
+				if (cmp != 0)
+					return cmp > 0;
+
+				return i1.getCount() > i2.getCount();
+			}
+
+			static bool greaterThan(const Firebird::Array<T>* i1, const Firebird::Array<T>* i2)
+			{
+				return greaterThan(*i1, *i2);
+			}
+		};
+
+		typedef Firebird::SortedObjectsArray<
+					Firebird::Array<UCHAR>,
+					Firebird::InlineStorage<Firebird::Array<UCHAR>*, 3>,
+					Firebird::Array<UCHAR>,
+					Firebird::DefaultKeyValue<const Firebird::Array<UCHAR>*>,
+					ArrayComparator<UCHAR>
+				> SortKeyArray;
+
+		typedef Firebird::GenericMap<
+					Firebird::Pair<
+						Firebird::Full<
+							Firebird::Array<USHORT>,	// UTF-16 string
+							SortKeyArray				// sort keys
+						>
+					>,
+					ArrayComparator<USHORT>
+				> ContractionsPrefixMap;
+
+		static ICU* loadICU(const Firebird::string& icuVersion, const Firebird::string& collVersion,
+			const Firebird::string& locale, const Firebird::string& configInfo);
 
 		void normalize(ULONG* strLen, const USHORT** str, bool forNumericSort,
 			Firebird::HalfStaticArray<USHORT, BUFFER_SMALL / 2>& buffer) const;
@@ -212,7 +255,7 @@ public:
 		UCollator* compareCollator;
 		UCollator* partialCollator;
 		UCollator* sortCollator;
-		Firebird::SortedObjectsArray<Firebird::string> contractionsPrefix;	// UTF-16 string
+		ContractionsPrefixMap contractionsPrefix;
 		unsigned maxContractionsPrefixLength;	// number of characters
 		bool numericSort;
 	};

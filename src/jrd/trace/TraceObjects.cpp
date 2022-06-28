@@ -234,7 +234,7 @@ void TraceSQLStatementImpl::DSQLParamsImpl::fillParams()
 	if (m_descs.getCount() || !m_params || m_params->getCount() == 0)
 		return;
 
-	if (!m_stmt->isDml())
+	if (!m_stmt->getDsqlStatement()->isDml())
 	{
 		fb_assert(false);
 		return;

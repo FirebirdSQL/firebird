@@ -99,6 +99,9 @@ const int IN_SW_BURP_CRYPT				= 51;	// name of crypt plugin
 const int IN_SW_BURP_INCLUDE_DATA		= 52;	// backup data from tables
 const int IN_SW_BURP_REPLICA			= 53;	// replica mode
 
+const int IN_SW_BURP_PARALLEL_WORKERS	= 54;	// parallel workers
+const int IN_SW_BURP_DIRECT_IO			= 55;	// direct IO for backup files
+
 /**************************************************************************/
 
 static const char* const BURP_SW_MODE_NONE = "NONE";
@@ -121,6 +124,8 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 				// msg 254: @1CO(NVERT)  backup external files as tables
 	{IN_SW_BURP_CRYPT,	isc_spb_bkp_crypt,		"CRYPT", 			0, 0, 0, false, false,	373,	3, NULL, boGeneral},
 				// msg 373:@1CRY(PT) plugin name
+	{IN_SW_BURP_DIRECT_IO, isc_spb_bkp_direct_io,"DIRECT_IO",		0, 0, 0, false, true,	409,	1, NULL, boGeneral},
+				// msg 409: @1D(IRECT_IO)            direct IO for backup file(s)
 	{IN_SW_BURP_E,	  isc_spb_bkp_expand,		"EXPAND",			0, 0, 0, false, true,	97, 	1, NULL, boBackup},
 				// msg 97: @1EXPAND no data compression
 	{IN_SW_BURP_FA,   isc_spb_bkp_factor,		"FACTOR",			0, 0, 0, false, false,	181,	2, NULL, boBackup},
@@ -164,6 +169,8 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 				// msg 186: @1OLD_DESCRIPTIONS save old style metadata descriptions
 	{IN_SW_BURP_P,	isc_spb_res_page_size,		"PAGE_SIZE",		0, 0, 0, false, false,	101,	1, NULL, boRestore},
 				// msg 101: @1PAGE_SIZE override default page size
+	{IN_SW_BURP_PARALLEL_WORKERS, isc_spb_bkp_parallel_workers, "PARALLEL", 0, 0, 0, false, false, 406, 3, NULL, boGeneral},
+				// msg 406: @1PAR(ALLEL)          parallel workers
 	{IN_SW_BURP_PASS, 0,						"PASSWORD", 		0, 0, 0, false, false,	190,	3, NULL, boGeneral},
 				// msg 190: @1PA(SSWORD) Firebird password
 	{IN_SW_BURP_RECREATE, 0,					"RECREATE_DATABASE", 0, 0, 0, false, false,	284,	1, NULL, boMain},

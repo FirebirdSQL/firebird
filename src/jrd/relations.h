@@ -752,4 +752,5 @@ RELATION(nam_mon_compiled_statements, rel_mon_compiled_statements, ODS_13_1, rel
 	FIELD(f_mon_cmp_stmt_name, nam_mon_obj_name, fld_gnr_name, 0, ODS_13_1)
 	FIELD(f_mon_cmp_stmt_type, nam_mon_obj_type, fld_obj_type, 0, ODS_13_1)
 	FIELD(f_mon_cmp_stmt_pkg_name, nam_mon_pkg_name, fld_pkg_name, 0, ODS_13_1)
+	FIELD(f_mon_cmp_stmt_stat_id, nam_mon_stat_id, fld_stat_id, 0, ODS_13_1)
 END_RELATION

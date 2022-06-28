@@ -260,7 +260,7 @@ bool ExprNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other
 
 bool ExprNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 {
-	if (other->getType() != getType())
+	if (!other || other->getType() != getType())
 		return false;
 
 	NodeRefsHolder thisHolder;

@@ -379,6 +379,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 			jrd_rel* relation = nullptr;
 			Record* record = nullptr;
 			USHORT fieldId = 0;
+			bool bulk = false;
 
 			if (to)
 			{
@@ -389,12 +390,13 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 					relation = rpb->rpb_relation;
 					record = rpb->rpb_record;
 					fieldId = toField->fieldId;
+					bulk = rpb->rpb_stream_flags & RPB_s_bulk;
 				}
 				else if (!(nodeAs<ParameterNode>(to) || nodeAs<VariableNode>(to)))
 					BUGCHECK(199);	// msg 199 expected field node
 			}
 
-			blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
+			blb::move(tdbb, from_desc, to_desc, relation, record, fieldId, bulk);
 		}
 		else if (!DSC_EQUIV(from_desc, to_desc, false))
 		{
@@ -685,6 +687,12 @@ void EXE_receive(thread_db* tdbb,
 							current->bli_request->req_blobs.fastRemove();
 							current->bli_request = NULL;
 						}
+
+						if (!current->bli_materialized &&
+							(current->bli_blob_object->blb_flags & BLB_close_on_read))
+						{
+							current->bli_blob_object->BLB_close(tdbb);
+					}
 					}
 					else
 					{
@@ -765,6 +773,8 @@ void EXE_release(thread_db* tdbb, Request* request)
 
 		request->req_attachment = NULL;
 	}
+
+	request->req_flags &= ~req_in_use;
 }
 
 
@@ -1207,7 +1217,19 @@ void EXE_execute_triggers(thread_db* tdbb,
 					&tdbb->getAttachment()->att_original_timezone,
 					tdbb->getAttachment()->att_current_timezone);
 
-				EXE_start(tdbb, trigger, transaction);
+				if (trigger_action == TRIGGER_DISCONNECT)
+				{
+					if (!trigger->req_timer)
+						trigger->req_timer = FB_NEW_POOL(*tdbb->getAttachment()->att_pool) TimeoutTimer();
+
+					const unsigned int timeOut = tdbb->getDatabase()->dbb_config->getOnDisconnectTrigTimeout() * 1000;
+					trigger->req_timer->setup(timeOut, isc_cfg_stmt_timeout);
+					trigger->req_timer->start();
+					thread_db::TimerGuard timerGuard(tdbb, trigger->req_timer, true);
+					EXE_start(tdbb, trigger, transaction); // Under timerGuard scope
+				}
+				else
+					EXE_start(tdbb, trigger, transaction);
 			}
 
 			const bool ok = (trigger->req_operation != Request::req_unwind);
@@ -1238,6 +1260,14 @@ void EXE_execute_triggers(thread_db* tdbb,
 			trigger->req_flags &= ~req_in_use;
 
 			ex.stuffException(tdbb->tdbb_status_vector);
+
+			if (trigger_action == TRIGGER_DISCONNECT &&
+				!(tdbb->tdbb_flags & TDBB_stack_trace_done) && (tdbb->tdbb_flags & TDBB_sys_error))
+			{
+				stuff_stack_trace(trigger);
+				tdbb->tdbb_flags |= TDBB_stack_trace_done;
+			}
+
 			trigger_failure(tdbb, trigger);
 		}
 
@@ -1246,10 +1276,9 @@ void EXE_execute_triggers(thread_db* tdbb,
 }
 
 
-static void stuff_stack_trace(const Request* request)
+bool EXE_get_stack_trace(const Request* request, string& sTrace)
 {
-	string sTrace;
-
+	sTrace = "";
 	for (const Request* req = request; req; req = req->req_caller)
 	{
 		const Statement* const statement = req->getStatement();
@@ -1305,7 +1334,14 @@ static void stuff_stack_trace(const Request* request)
 		}
 	}
 
-	if (sTrace.hasData())
+	return sTrace.hasData();
+}
+
+static void stuff_stack_trace(const Request* request)
+{
+	string sTrace;
+
+	if (EXE_get_stack_trace(request, sTrace))
 		ERR_post_nothrow(Arg::Gds(isc_stack_trace) << Arg::Str(sTrace));
 }
 

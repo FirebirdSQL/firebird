@@ -84,6 +84,7 @@ public:
 	ULONG rel_pri_data_space;	// lowest pointer page with primary data page space
 	ULONG rel_sec_data_space;	// lowest pointer page with secondary data page space
 	ULONG rel_last_free_pri_dp;	// last primary data page found with space
+	ULONG rel_last_free_blb_dp;	// last blob data page found with space
 	USHORT rel_pg_space_id;
 
 	RelationPages(Firebird::MemoryPool& pool)

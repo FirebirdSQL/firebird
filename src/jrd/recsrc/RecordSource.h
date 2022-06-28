@@ -85,6 +85,11 @@ namespace Jrd
 			return true;
 		}
 
+		double getCardinality() const
+		{
+			return m_cardinality;
+		}
+
 	protected:
 		// Generic impure block
 		struct Impure
@@ -99,7 +104,7 @@ namespace Jrd
 		static const ULONG irsb_singular_processed = 16;
 
 		RecordSource()
-			: m_impure(0), m_recursive(false)
+			: m_impure(0), m_recursive(false), m_cardinality(0.0)
 		{}
 
 		static Firebird::string printName(thread_db* tdbb, const Firebird::string& name, bool quote = true);
@@ -110,12 +115,14 @@ namespace Jrd
 		static void printInversion(thread_db* tdbb, const InversionNode* inversion,
 								   Firebird::string& plan, bool detailed,
 								   unsigned level, bool navigation = false);
+		void printOptInfo(Firebird::string& plan) const;
 
 		static void saveRecord(thread_db* tdbb, record_param* rpb);
 		static void restoreRecord(thread_db* tdbb, record_param* rpb);
 
 		ULONG m_impure;
 		bool m_recursive;
+		double m_cardinality;
 	};
 
 
@@ -179,7 +186,8 @@ namespace Jrd
 
 	public:
 		BitmapTableScan(CompilerScratch* csb, const Firebird::string& alias,
-						StreamType stream, jrd_rel* relation, InversionNode* inversion);
+						StreamType stream, jrd_rel* relation,
+						InversionNode* inversion, double selectivity);
 
 		void open(thread_db* tdbb) const override;
 		void close(thread_db* tdbb) const override;
@@ -205,6 +213,10 @@ namespace Jrd
 			RecordBitmap** irsb_nav_bitmap;				// bitmap for inversion tree
 			RecordBitmap* irsb_nav_records_visited;		// bitmap of records already retrieved
 			BtrPageGCLock* irsb_nav_btr_gc_lock;		// lock to prevent removal of currently walked index page
+			temporary_key* irsb_nav_lower;				// lower (possible multiple) key
+			temporary_key* irsb_nav_upper;				// upper (possible multiple) key
+			temporary_key* irsb_nav_current_lower;		// current lower key
+			temporary_key* irsb_nav_current_upper;		// current upper key
 			USHORT irsb_nav_offset;						// page offset of current index node
 			USHORT irsb_nav_upper_length;				// length of upper key value
 			USHORT irsb_nav_length;						// length of expanded key
@@ -214,7 +226,8 @@ namespace Jrd
 	public:
 		IndexTableScan(CompilerScratch* csb, const Firebird::string& alias,
 					   StreamType stream, jrd_rel* relation,
-					   InversionNode* index, USHORT keyLength);
+					   InversionNode* index, USHORT keyLength,
+					   double selectivity);
 
 		void open(thread_db* tdbb) const override;
 		void close(thread_db* tdbb) const override;
@@ -234,7 +247,9 @@ namespace Jrd
 	private:
 		int compareKeys(const index_desc*, const UCHAR*, USHORT, const temporary_key*, USHORT) const;
 		bool findSavedNode(thread_db* tdbb, Impure* impure, win* window, UCHAR**) const;
+		void advanceStream(thread_db* tdbb, Impure* impure, win* window) const;
 		UCHAR* getPosition(thread_db* tdbb, Impure* impure, win* window) const;
+		UCHAR* getStreamPosition(thread_db* tdbb, Impure* impure, win* window) const;
 		UCHAR* openStream(thread_db* tdbb, Impure* impure, win* window) const;
 		void setPage(thread_db* tdbb, Impure* impure, win* window) const;
 		void setPosition(thread_db* tdbb, Impure* impure, record_param*,
@@ -467,7 +482,8 @@ namespace Jrd
 	class FilteredStream : public RecordSource
 	{
 	public:
-		FilteredStream(CompilerScratch* csb, RecordSource* next, BoolExprNode* boolean);
+		FilteredStream(CompilerScratch* csb, RecordSource* next,
+					   BoolExprNode* boolean, double selectivity);
 
 		void open(thread_db* tdbb) const override;
 		void close(thread_db* tdbb) const override;
@@ -530,12 +546,21 @@ namespace Jrd
 		public:
 			struct Item
 			{
-				void clear()
+				void reset(NestConst<ValueExprNode> _node, ULONG _flagOffset = 0)
 				{
 					desc.clear();
-					flagOffset = fieldId = 0;
-					stream = 0;
-					node = NULL;
+					stream = fieldId = 0;
+					node = _node;
+					flagOffset = _flagOffset;
+				}
+
+				void reset(StreamType _stream, SSHORT _fieldId, ULONG _flagOffset = 0)
+				{
+					desc.clear();
+					node = nullptr;
+					stream = _stream;
+					fieldId = _fieldId;
+					flagOffset = _flagOffset;
 				}
 
 				StreamType stream;			// stream for field id
@@ -1076,6 +1101,8 @@ namespace Jrd
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
+		static unsigned maxCapacity();
+
 	private:
 		ULONG computeHash(thread_db* tdbb, Request* request,
 						  const SubStream& sub, UCHAR* buffer) const;
@@ -1175,7 +1202,7 @@ namespace Jrd
 	public:
 		Union(CompilerScratch* csb, StreamType stream,
 			  FB_SIZE_T argCount, RecordSource* const* args, NestConst<MapNode>* maps,
-			  FB_SIZE_T streamCount, const StreamType* streams);
+			  const StreamList& streams);
 
 		void open(thread_db* tdbb) const override;
 		void close(thread_db* tdbb) const override;
@@ -1215,7 +1242,7 @@ namespace Jrd
 		RecursiveStream(CompilerScratch* csb, StreamType stream, StreamType mapStream,
 					    RecordSource* root, RecordSource* inner,
 					    const MapNode* rootMap, const MapNode* innerMap,
-					    FB_SIZE_T streamCount, const StreamType* innerStreams,
+					    const StreamList& innerStreams,
 					    ULONG saveOffset);
 
 		void open(thread_db* tdbb) const override;

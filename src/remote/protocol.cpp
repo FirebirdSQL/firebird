@@ -507,6 +507,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 	case op_service_info:
 	case op_info_sql:
 	case op_info_batch:
+	case op_info_cursor:
 		info = &p->p_info;
 		MAP(xdr_short, reinterpret_cast<SSHORT&>(info->p_info_object));
 		MAP(xdr_short, reinterpret_cast<SSHORT&>(info->p_info_incarnation));

@@ -62,7 +62,7 @@ namespace Jrd
 class DescPrinter
 {
 public:
-	DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen);
+	DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen, USHORT charSetId);
 
 	const Firebird::string& get() const
 	{

@@ -26,6 +26,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/NestConst.h"
+#include "../common/classes/RefCounted.h"
 #include "../jrd/jrd.h"
 #include "../jrd/ntrace.h"
 #include "../dsql/DsqlRequests.h"
@@ -67,14 +68,15 @@ public:
 	static void rethrowDdlException(Firebird::status_exception& ex, bool metadataUpdate, DdlNode* node);
 
 public:
-	DsqlStatement(MemoryPool& p, dsql_dbb* aDsqlAttachment)
-		: PermanentStorage(p),
+	DsqlStatement(MemoryPool& pool, dsql_dbb* aDsqlAttachment)
+		: PermanentStorage(pool),
 		  dsqlAttachment(aDsqlAttachment),
 		  type(TYPE_SELECT),
 		  flags(0),
 		  blrVersion(5),
-		  ports(p)
+		  ports(pool)
 	{
+		pool.setStatsGroup(memoryStats);
 	}
 
 protected:
@@ -133,7 +135,15 @@ public:
 	const dsql_par* getEof() const { return eof; }
 	void setEof(dsql_par* value) { eof = value; }
 
+	void setCacheKey(Firebird::RefStrPtr& value) { cacheKey = value; }
+	void resetCacheKey() { cacheKey = nullptr; }
+
 public:
+	virtual bool isDml() const
+	{
+		return false;
+	}
+
 	virtual Statement* getStatement() const
 	{
 		return nullptr;
@@ -149,6 +159,11 @@ public:
 		return true;
 	}
 
+	virtual unsigned getSize() const
+	{
+		return (unsigned) memoryStats.getCurrentUsage();
+	}
+
 	virtual void dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, ntrace_result_t* traceResult) = 0;
 	virtual DsqlRequest* createRequest(thread_db* tdbb, dsql_dbb* dbb) = 0;
 
@@ -157,11 +172,13 @@ protected:
 
 protected:
 	dsql_dbb* dsqlAttachment;
+	Firebird::MemoryStats memoryStats;
 	Type type;					// Type of statement
 	ULONG flags;				// generic flag
 	unsigned blrVersion;
 	Firebird::RefStrPtr sqlText;
 	Firebird::RefStrPtr orgText;
+	Firebird::RefStrPtr cacheKey;
 	Firebird::Array<dsql_msg*> ports;			// Port messages
 	dsql_msg* sendMsg = nullptr;				// Message to be sent to start request
 	dsql_msg* receiveMsg = nullptr;				// Per record message to be received
@@ -182,10 +199,17 @@ public:
 	}
 
 public:
+	bool isDml() const override
+	{
+		return true;
+	}
+
 	Statement* getStatement() const override
 	{
 		return statement;
 	}
+
+	unsigned getSize() const override;
 
 	void dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, ntrace_result_t* traceResult) override;
 	DsqlDmlRequest* createRequest(thread_db* tdbb, dsql_dbb* dbb) override;

@@ -89,6 +89,7 @@ public:
 		holder.add(arg1);
 		holder.add(arg2);
 		holder.add(arg3);
+		holder.add(dsqlSpecialArg);
 	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;

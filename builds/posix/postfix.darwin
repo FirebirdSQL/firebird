@@ -42,7 +42,7 @@ framework:
 	cp ../gen/$(TARGET)/firebird/lib/libtommath.dylib $(FB_FW)/Versions/A/Resources/lib/
 	cp ../gen/$(TARGET)/firebird/lib/libtomcrypt.dylib $(FB_FW)/Versions/A/Resources/lib/
 	cp ../gen/$(TARGET)/firebird/lib/libfbclient.dylib $(FB_FW)/Versions/A/Resources/lib/
-	cp ../gen/$(TARGET)/firebird/lib/libicu{data,i18n,uc}.[0-9][0-9].dylib $(FB_FW)/Versions/A/Resources/lib/
+	cp -R ../gen/$(TARGET)/firebird/lib/libicu{data,i18n,uc}.*dylib $(FB_FW)/Versions/A/Resources/lib/
 	cp ../gen/$(TARGET)/firebird/lib/libib_util.dylib $(FB_FW)/Versions/A/Resources/lib/
 	ln -s ../Resources/lib/libfbclient.dylib $(FB_FW)/Versions/A/Libraries/libfbclient.dylib
 	ln -s ../Resources/lib/libib_util.dylib $(FB_FW)/Versions/A/Libraries/libib_util.dylib

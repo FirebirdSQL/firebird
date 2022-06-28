@@ -27,6 +27,7 @@
 #include "firebird.h"
 #include "init.h"
 #include "alloc.h"
+#include "auto.h"
 #include "../common/SimpleStatusVector.h"
 #include "../common/dllinst.h"
 #include "../common/os/os_utils.h"
@@ -142,17 +143,10 @@ namespace
 	}
 
 #ifndef DEBUG_INIT
-	// This class with it's single instance ensures global cleanup
-	class Cleanup
-	{
-	public:
-		~Cleanup()
-		{
-			allClean();
-		}
-	};
 
-	Cleanup global;
+	// This instance ensures dtors run when program exits
+	Firebird::Cleanup global(allClean);
+
 #endif //DEBUG_INIT
 
 	void init()

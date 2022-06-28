@@ -2456,6 +2456,7 @@ void DatabaseAuth::accept(PACKET* send, Auth::WriterImplementation* authBlock)
 		// remove tags for specific internal attaches
 		case isc_dpb_map_attach:
 		case isc_dpb_sec_attach:
+		case isc_dpb_worker_attach:
 
 		// remove client's config information
 		case isc_dpb_config:
@@ -2681,23 +2682,28 @@ static void cancel_operation(rem_port* port, USHORT kind)
 	if ((port->port_flags & (PORT_async | PORT_disconnect)) || !(port->port_context))
 		return;
 
-	ServAttachment iface;
+	ServAttachment dbIface;
+	ServService svcIface;
 	{
 		RefMutexGuard portGuard(*port->port_cancel_sync, FB_FUNCTION);
 
-		Rdb* rdb;
-		if ((port->port_flags & PORT_disconnect) || !(rdb = port->port_context))
+		Rdb* rdb = port->port_context;
+		if ((port->port_flags & PORT_disconnect) || !rdb)
 			return;
 
-		iface = rdb->rdb_iface;
+		if (rdb->rdb_svc)
+			svcIface = rdb->rdb_svc->svc_iface;
+		else
+			dbIface = rdb->rdb_iface;
 	}
 
-	if (iface)
-	{
-		LocalStatus ls;
-		CheckStatusWrapper status_vector(&ls);
-		iface->cancelOperation(&status_vector, kind);
-	}
+	LocalStatus ls;
+	CheckStatusWrapper status_vector(&ls);
+
+	if (dbIface)
+		dbIface->cancelOperation(&status_vector, kind);
+	else if (svcIface && kind == fb_cancel_raise)
+		svcIface->cancel(&status_vector);
 }
 
 
@@ -4594,7 +4600,7 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 
 	case op_info_sql:
 		getHandle(statement, stuff->p_info_object);
-		statement->checkIface(isc_info_unprepared_stmt);
+		statement->checkIface();
 
 		statement->rsr_iface->getInfo(&status_vector, info_len, info_buffer,
 			buffer_length, buffer);
@@ -4608,6 +4614,18 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 		statement->rsr_batch->getInfo(&status_vector, info_len, info_buffer,
 			buffer_length, buffer);
 		break;
+
+	case op_info_cursor:
+		getHandle(statement, stuff->p_info_object);
+		statement->checkIface();
+		statement->checkCursor();
+
+		statement->rsr_cursor->getInfo(&status_vector, info_len, info_buffer,
+			buffer_length, buffer);
+		break;
+
+	default:
+		fb_assert(false);
 	}
 
 	// Send a response that includes the segment.
@@ -5089,6 +5107,7 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 		case op_service_info:
 		case op_info_sql:
 		case op_info_batch:
+		case op_info_cursor:
 			port->info(op, &receive->p_info, sendL);
 			break;
 
@@ -5215,8 +5234,11 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 		{
 			if (!port->port_parent)
 			{
-				if (!Worker::isShuttingDown() && !(port->port_flags & (PORT_rdb_shutdown | PORT_detached)))
+				if (!Worker::isShuttingDown() && !(port->port_flags & (PORT_rdb_shutdown | PORT_detached)) &&
+					((port->port_server_flags & (SRVR_server | SRVR_multi_client)) != SRVR_server))
+				{
 					gds__log("SERVER/process_packet: broken port, server exiting");
+				}
 				port->disconnect(sendL, receive);
 				return false;
 			}

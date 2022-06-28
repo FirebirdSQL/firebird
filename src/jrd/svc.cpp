@@ -74,6 +74,7 @@
 #include "../utilities/nbackup/nbkswi.h"
 #include "../jrd/trace/traceswi.h"
 #include "../jrd/val_proto.h"
+#include "../jrd/ThreadCollect.h"
 
 // Service threads
 #include "../burp/burp_proto.h"
@@ -120,6 +121,7 @@ int main_gstat(Firebird::UtilSvc* uSvc);
 
 
 using namespace Firebird;
+using namespace Jrd;
 
 const int SVC_user_dba			= 2;
 const int SVC_user_any			= 1;
@@ -138,64 +140,9 @@ namespace {
 	GlobalPtr<Mutex> globalServicesMutex;
 
 	// All that we need to shutdown service threads when shutdown in progress
-	typedef Array<Jrd::Service*> AllServices;
+	typedef Array<Service*> AllServices;
 	GlobalPtr<AllServices> allServices;	// protected by globalServicesMutex
 	volatile bool svcShutdown = false;
-
-	class ThreadCollect
-	{
-	public:
-		ThreadCollect(MemoryPool& p)
-			: threads(p)
-		{ }
-
-		void join()
-		{
-			// join threads to be sure they are gone when shutdown is complete
-			// no need locking something cause this is expected to run when services are closing
-			waitFor(threads);
-		}
-
-		void add(const Thread::Handle& h)
-		{
-			// put thread into completion wait queue when it finished running
-			MutexLockGuard g(threadsMutex, FB_FUNCTION);
-			fb_assert(h);
-			threads.add(h);
-		}
-
-		void houseKeeping()
-		{
-			if (!threads.hasData())
-				return;
-
-			// join finished threads
-			AllThreads t;
-			{ // mutex scope
-				MutexLockGuard g(threadsMutex, FB_FUNCTION);
-				t.assign(threads);
-				threads.clear();
-			}
-
-			waitFor(t);
-		}
-
-	private:
-		typedef Array<Thread::Handle> AllThreads;
-
-		static void waitFor(AllThreads& thr)
-		{
-			while (thr.hasData())
-			{
-				Thread::Handle h(thr.pop());
-				Thread::waitForCompletion(h);
-			}
-		}
-
-		AllThreads threads;
-		Mutex threadsMutex;
-	};
-
 	GlobalPtr<ThreadCollect> threadCollect;
 
 	void spbVersionError()
@@ -206,8 +153,6 @@ namespace {
 
 } // anonymous namespace
 
-
-using namespace Jrd;
 
 namespace {
 const serv_entry services[] =
@@ -751,7 +696,8 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	svc_stdout_head(0), svc_stdout_tail(0), svc_service_run(NULL),
 	svc_resp_alloc(getPool()), svc_resp_buf(0), svc_resp_ptr(0), svc_resp_buf_len(0),
 	svc_resp_len(0), svc_flags(SVC_finished), svc_user_flag(0), svc_spb_version(0),
-	svc_do_shutdown(false), svc_shutdown_in_progress(false), svc_timeout(false),
+	svc_shutdown_server(false), svc_shutdown_request(false),
+	svc_shutdown_in_progress(false), svc_timeout(false),
 	svc_username(getPool()), svc_sql_role(getPool()), svc_auth_block(getPool()),
 	svc_expected_db(getPool()), svc_trusted_role(false), svc_utf8(false),
 	svc_switches(getPool()), svc_perm_sw(getPool()), svc_address_path(getPool()),
@@ -927,7 +873,7 @@ void Service::detach()
 	}
 
 	// save it cause after call to finish() we can't access class members any more
-	const bool localDoShutdown = svc_do_shutdown;
+	const bool localDoShutdown = svc_shutdown_server;
 
 	if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_DETACH))
 	{
@@ -1013,7 +959,7 @@ ULONG Service::totalCount()
 
 bool Service::checkForShutdown()
 {
-	if (svcShutdown)
+	if (svcShutdown || svc_shutdown_request)
 	{
 		if (svc_shutdown_in_progress)
 		{
@@ -1026,6 +972,20 @@ bool Service::checkForShutdown()
 	}
 
 	return false;
+}
+
+
+void Service::cancel(thread_db* /*tdbb*/)
+{
+	svc_shutdown_request = true;
+
+	// signal once
+	if (!(svc_flags & SVC_finished))
+		svc_detach_sem.release();
+	if (svc_stdin_size_requested)
+		svc_stdin_semaphore.release();
+
+	svc_sem_full.release();
 }
 
 
@@ -1221,7 +1181,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 			*info++ = item;
 			if (svc_user_flag & SVC_user_dba)
 			{
-				svc_do_shutdown = false;
+				svc_shutdown_server = false;
 			}
 			else
 				need_admin_privs(status, "isc_info_svc_svr_online");
@@ -1231,7 +1191,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 			*info++ = item;
 			if (svc_user_flag & SVC_user_dba)
 			{
-				svc_do_shutdown = true;
+				svc_shutdown_server = true;
 			}
 			else
 				need_admin_privs(status, "isc_info_svc_svr_offline");
@@ -1676,7 +1636,7 @@ void Service::query(USHORT			send_item_length,
 			*info++ = item;
 			if (svc_user_flag & SVC_user_dba)
 			{
-				svc_do_shutdown = false;
+				svc_shutdown_server = false;
 				*info++ = 0;	// Success
 			}
 			else
@@ -1687,7 +1647,7 @@ void Service::query(USHORT			send_item_length,
 			*info++ = item;
 			if (svc_user_flag & SVC_user_dba)
 			{
-				svc_do_shutdown = true;
+				svc_shutdown_server = true;
 				*info++ = 0;	// Success
 			}
 			else
@@ -1972,10 +1932,10 @@ THREAD_ENTRY_DECLARE Service::run(THREAD_ENTRY_PARAM arg)
 
 		Thread::Handle thrHandle = svc->svc_thread;
 		svc->started();
-		svc->svc_sem_full.release();
+		svc->unblockQueryGet();
 		svc->finish(SVC_finished);
 
-		threadCollect->add(thrHandle);
+		threadCollect->ending(thrHandle);
 	}
 	catch (const Exception& ex)
 	{
@@ -2000,6 +1960,9 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 
 	try
 	{
+	if (!svcShutdown)
+		svc_shutdown_request = svc_shutdown_in_progress = false;
+
 	ClumpletReader spb(ClumpletReader::SpbStart, spb_data, spb_length);
 
 	// The name of the service is the first element of the buffer
@@ -2292,7 +2255,7 @@ void Service::enqueue(const UCHAR* s, ULONG len)
 {
 	if (checkForShutdown() || (svc_flags & SVC_detached))
 	{
-		svc_sem_full.release();
+		unblockQueryGet();
 		return;
 	}
 
@@ -2304,13 +2267,13 @@ void Service::enqueue(const UCHAR* s, ULONG len)
 		{
 			if (flagFirst)
 			{
-				svc_sem_full.release();
+				unblockQueryGet(true);
 				flagFirst = false;
 			}
 			svc_sem_empty.tryEnter(1, 0);
 			if (checkForShutdown() || (svc_flags & SVC_detached))
 			{
-				svc_sem_full.release();
+				unblockQueryGet();
 				return;
 			}
 		}
@@ -2332,6 +2295,13 @@ void Service::enqueue(const UCHAR* s, ULONG len)
 		s += cnt;
 		len -= cnt;
 	}
+	unblockQueryGet();
+}
+
+
+void Service::unblockQueryGet(bool over)
+{
+	svc_output_overflow = over;
 	svc_sem_full.release();
 }
 
@@ -2422,8 +2392,11 @@ void Service::get(UCHAR* buffer, USHORT length, USHORT flags, USHORT timeout, US
 			buffer[(*return_length)++] = ch;
 		}
 
-		if (!(flags & GET_LINE))
+		if (svc_output_overflow || !(flags & GET_LINE))
+		{
+			svc_output_overflow = false;
 			svc_stdout_head = head;
+		}
 	}
 
 	if (flags & GET_LINE)
@@ -2522,7 +2495,7 @@ ULONG Service::getBytes(UCHAR* buffer, ULONG size)
 		svc_stdin_size_requested = size;
 		svc_stdin_buffer = buffer;
 		// Wakeup Service::query() if it waits for data from service
-		svc_sem_full.release();
+		unblockQueryGet();
 	}
 
 	// Wait for data from client
@@ -2562,7 +2535,7 @@ void Service::finish(USHORT flag)
 
 		if (svc_flags & SVC_finished)
 		{
-			svc_sem_full.release();
+			unblockQueryGet();
 		}
 		else
 		{
@@ -2953,6 +2926,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				get_action_svc_data(spb, burp_database, bigint);
 				break;
 			case isc_spb_bkp_factor:
+			case isc_spb_bkp_parallel_workers:
 			case isc_spb_res_buffers:
 			case isc_spb_res_page_size:
 			case isc_spb_verbint:
@@ -3036,6 +3010,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_rpr_commit_trans:
 			case isc_spb_rpr_rollback_trans:
 			case isc_spb_rpr_recover_two_phase:
+			case isc_spb_rpr_par_workers:
 				if (!get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
 				{
 					return false;

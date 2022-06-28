@@ -433,6 +433,9 @@ version:	// 3.0 => 4.0
 
 interface ResultSet : ReferenceCounted
 {
+	// Info items
+	const uchar INF_RECORD_COUNT = 10;		// Number of records in the result set
+
 	[notImplemented(Status::RESULT_ERROR)] int fetchNext(Status status, void* message);
 	[notImplemented(Status::RESULT_ERROR)] int fetchPrior(Status status, void* message);
 	[notImplemented(Status::RESULT_ERROR)] int fetchFirst(Status status, void* message);
@@ -452,6 +455,11 @@ interface ResultSet : ReferenceCounted
 version:	// 3.0.7 => 3.0.8, 4.0.0 => 4.0.1
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedClose(status) endif]
 	void close(Status status);
+
+version:	// 4.0.1 => 5.0
+	void getInfo(Status status,
+				 uint itemsLength, const uchar* items,
+				 uint bufferLength, uchar* buffer);
 }
 
 interface Statement : ReferenceCounted
@@ -718,6 +726,9 @@ interface Service : ReferenceCounted
 version:	// 3.0.7 => 3.0.8, 4.0.0 => 4.0.1
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedDetach(status) endif]
 	void detach(Status status);
+
+version:	// 3.0.9 => 3.0.10, 4.0.1 => 4.0.2
+	void cancel(Status status);
 }
 
 interface Provider : PluginBase
@@ -1529,6 +1540,11 @@ interface TracePlugin : ReferenceCounted
 	[notImplemented(true)]
 	boolean trace_func_execute (TraceDatabaseConnection connection, TraceTransaction transaction, TraceFunction function,
 			boolean started, uint func_result);
+
+version:	// 4.0.1 -> 4.0.2
+	boolean trace_dsql_restart(TraceDatabaseConnection connection, TraceTransaction transaction, TraceSQLStatement statement,
+		uint number);
+
 }
 
 // Trace plugin second level factory (this is what is known to PluginManager as "trace plugin")

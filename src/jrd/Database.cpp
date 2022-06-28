@@ -493,6 +493,15 @@ namespace Jrd
 
 	// Database::GlobalObjectHolder class implementation
 
+	int Database::GlobalObjectHolder::release() const
+	{
+		// Release should be executed under g_mutex protection
+		// in order to modify reference counter & hash table atomically
+		MutexLockGuard guard(g_mutex, FB_FUNCTION);
+
+		return RefCounted::release();
+	}
+
 	Database::GlobalObjectHolder* Database::GlobalObjectHolder::init(const string& id,
 																	 const PathName& filename,
 																	 RefPtr<const Config> config)
@@ -512,17 +521,18 @@ namespace Jrd
 
 	Database::GlobalObjectHolder::~GlobalObjectHolder()
 	{
-		// here we cleanup what should not be globally protected
-		if (m_replMgr)
-			m_replMgr->shutdown();
-
-		MutexLockGuard guard(g_mutex, FB_FUNCTION);
-
+		// dtor is executed under g_mutex protection
 		Database::GlobalObjectHolder::DbId* entry = g_hashTable->lookup(m_id);
 		if (!g_hashTable->remove(m_id))
 			fb_assert(false);
 
-		// these objects should be deleted under g_mutex protection
+		{ // scope
+			// here we cleanup what should not be globally protected
+			MutexUnlockGuard guard(g_mutex, FB_FUNCTION);
+			if (m_replMgr)
+				m_replMgr->shutdown();
+		}
+
 		m_lockMgr = nullptr;
 		m_eventMgr = nullptr;
 		m_replMgr = nullptr;

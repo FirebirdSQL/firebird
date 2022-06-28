@@ -23,6 +23,7 @@
 #include "../jrd/cmp_proto.h"
 #include "../jrd/evl_proto.h"
 #include "../jrd/mov_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -41,6 +42,7 @@ MergeJoin::MergeJoin(CompilerScratch* csb, FB_SIZE_T count,
 {
 	const size_t size = sizeof(struct Impure) + count * sizeof(Impure::irsb_mrg_repeat);
 	m_impure = csb->allocImpure(FB_ALIGNMENT, static_cast<ULONG>(size));
+	m_cardinality = MINIMUM_CARDINALITY;
 
 	m_args.resize(count);
 	m_keys.resize(count);
@@ -49,6 +51,10 @@ MergeJoin::MergeJoin(CompilerScratch* csb, FB_SIZE_T count,
 	{
 		fb_assert(args[i]);
 		m_args[i] = args[i];
+
+		m_cardinality *= args[i]->getCardinality();
+		for (auto keyCount = keys[i]->getCount(); keyCount; keyCount--)
+			m_cardinality *= REDUCE_SELECTIVITY_FACTOR_EQUALITY;
 
 		fb_assert(keys[i]);
 		m_keys[i] = keys[i];
@@ -340,6 +346,7 @@ void MergeJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned lev
 	if (detailed)
 	{
 		plan += printIndent(++level) + "Merge Join (inner)";
+		printOptInfo(plan);
 
 		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 			m_args[i]->print(tdbb, plan, true, level);

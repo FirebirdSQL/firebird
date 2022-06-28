@@ -72,6 +72,7 @@
 #include "../common/utils_proto.h"
 #include "../common/StatusArg.h"
 #include "../dsql/DsqlBatch.h"
+#include "../dsql/DsqlStatementCache.h"
 
 #ifdef HAVE_CTYPE_H
 #include <ctype.h>
@@ -108,6 +109,21 @@ namespace
 #ifdef DSQL_DEBUG
 IMPLEMENT_TRACE_ROUTINE(dsql_trace, "DSQL")
 #endif
+
+dsql_dbb::dsql_dbb(MemoryPool& p, Attachment* attachment)
+	: dbb_relations(p),
+	  dbb_procedures(p),
+	  dbb_functions(p),
+	  dbb_charsets(p),
+	  dbb_collations(p),
+	  dbb_charsets_by_id(p),
+	  dbb_cursors(p),
+	  dbb_pool(p),
+	  dbb_dfl_charset(p)
+{
+	dbb_attachment = attachment;
+	dbb_statement_cache = FB_NEW_POOL(p) DsqlStatementCache(p, dbb_attachment);
+}
 
 dsql_dbb::~dsql_dbb()
 {
@@ -411,8 +427,7 @@ static dsql_dbb* init(thread_db* tdbb, Jrd::Attachment* attachment)
 		return attachment->att_dsql_instance;
 
 	MemoryPool& pool = *attachment->createPool();
-	dsql_dbb* const database = FB_NEW_POOL(pool) dsql_dbb(pool);
-	database->dbb_attachment = attachment;
+	dsql_dbb* const database = FB_NEW_POOL(pool) dsql_dbb(pool, attachment);
 	attachment->att_dsql_instance = database;
 
 	INI_init_dsql(tdbb, database);
@@ -430,7 +445,7 @@ static dsql_dbb* init(thread_db* tdbb, Jrd::Attachment* attachment)
 static DsqlRequest* prepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_tra* transaction,
 	ULONG textLength, const TEXT* text, USHORT clientDialect, bool isInternalRequest)
 {
-	TraceDSQLPrepare trace(database->dbb_attachment, transaction, textLength, text);
+	TraceDSQLPrepare trace(database->dbb_attachment, transaction, textLength, text, isInternalRequest);
 
 	ntrace_result_t traceResult = ITracePlugin::RESULT_SUCCESS;
 	try
@@ -440,7 +455,7 @@ static DsqlRequest* prepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_tra*
 
 		auto dsqlRequest = statement->createRequest(tdbb, database);
 
-		dsqlRequest->req_traced = true;
+		dsqlRequest->req_traced = !isInternalRequest;
 		trace.setStatement(dsqlRequest);
 		trace.prepare(traceResult);
 
@@ -497,12 +512,24 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 				  Arg::Gds(isc_sql_too_long) << Arg::Num(MAX_SQL_LENGTH));
 	}
 
+	string textStr(text, textLength);
+	const bool isStatementCacheActive = database->dbb_statement_cache->isActive();
+
+	RefPtr<DsqlStatement> dsqlStatement;
+
+	if (isStatementCacheActive)
+	{
+		dsqlStatement = database->dbb_statement_cache->getStatement(tdbb, textStr, clientDialect, isInternalRequest);
+
+		if (dsqlStatement)
+			return dsqlStatement;
+	}
+
 	// allocate the statement block, then prepare the statement
 
 	MemoryPool* scratchPool = nullptr;
 	DsqlCompilerScratch* scratch = nullptr;
 	MemoryPool* statementPool = database->createPool();
-	RefPtr<DsqlStatement> dsqlStatement;
 
 	Jrd::ContextPoolHolder statementContext(tdbb, statementPool);
 	try
@@ -592,6 +619,12 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 
 		if (!isInternalRequest && dsqlStatement->mustBeReplicated())
 			dsqlStatement->setOrgText(text, textLength);
+
+		if (isStatementCacheActive && dsqlStatement->isDml())
+		{
+			database->dbb_statement_cache->putStatement(tdbb,
+				textStr, clientDialect, isInternalRequest, dsqlStatement);
+		}
 
 		return dsqlStatement;
 	}

@@ -682,6 +682,10 @@ using namespace Firebird;
 %token <metaNamePtr> DEBUG
 %token <metaNamePtr> PKCS_1_5
 
+// tokens added for Firebird 4.0.2
+
+%token <metaNamePtr> BLOB_APPEND
+
 // tokens added for Firebird 5.0
 
 %token <metaNamePtr> TARGET
@@ -8143,6 +8147,7 @@ system_function_std_syntax
 	| BIN_SHL
 	| BIN_SHR
 	| BIN_XOR
+	| BLOB_APPEND
 	| CEIL
 	| CHAR_TO_UUID
 	| COS
@@ -9102,6 +9107,7 @@ non_reserved_word
 	| ZONE
 	| DEBUG				// added in FB 4.0.1
 	| PKCS_1_5
+	| BLOB_APPEND		// added in FB 4.0.2
 	| TARGET			// added in FB 5.0
 	| TIMEZONE_NAME
 	| UNICODE_CHAR

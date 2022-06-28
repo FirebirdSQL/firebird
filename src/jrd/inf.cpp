@@ -822,7 +822,7 @@ void INF_database_info(thread_db* tdbb,
 
 		case fb_info_crypt_state:
 			length = INF_convert(dbb->dbb_crypto_manager ?
-				dbb->dbb_crypto_manager->getCurrentState() : 0, buffer);
+				dbb->dbb_crypto_manager->getCurrentState(tdbb) : 0, buffer);
 			break;
 
 		case fb_info_crypt_key:

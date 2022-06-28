@@ -961,6 +961,9 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 		if (relPages->rel_last_free_pri_dp == pages[i])
 			relPages->rel_last_free_pri_dp = 0;
 
+		if (relPages->rel_last_free_blb_dp == pages[i])
+			relPages->rel_last_free_blb_dp = 0;
+
 		relPages->setDPNumber(dpSequence + s, 0);
 	}
 
@@ -1651,7 +1654,7 @@ punt:
 }
 
 
-bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage)
+bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextRecordScope scope)
 {
 /**************************************
  *
@@ -1753,16 +1756,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 			}
 		}
 
-		if (window->win_flags & WIN_large_scan)
-			CCH_RELEASE_TAIL(tdbb, window);
-		else if ((window->win_flags & WIN_garbage_collector) &&
-				 (window->win_flags & WIN_garbage_collect))
-		{
-			CCH_RELEASE_TAIL(tdbb, window);
-			window->win_flags &= ~WIN_garbage_collect;
-		}
-		else
-			CCH_RELEASE(tdbb, window);
+		CCH_RELEASE(tdbb, window);
 	}
 
 	// Find the next pointer page, data page, and record
@@ -1850,9 +1844,11 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 					rpb->rpb_number.decrement();
 					check_swept(tdbb, rpb);
 					rpb->rpb_number = saveRecNo;
+
+					tdbb->checkCancelState();
 				}
 
-				if (onepage)
+				if (scope == DPM_next_data_page)
 					return false;
 
 				if (!(ppage = get_pointer_page(tdbb, rpb->rpb_relation, relPages, window,
@@ -1862,7 +1858,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 				}
 			}
 
-			if (onepage)
+			if (scope == DPM_next_data_page)
 			{
 				CCH_RELEASE(tdbb, window);
 				return false;
@@ -1882,11 +1878,8 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 		else
 			CCH_RELEASE(tdbb, window);
 
-		if (flags & ppg_eof || onepage)
+		if ((flags & ppg_eof) || (scope != DPM_next_all))
 			return false;
-
-		if (sweeper)
-			tdbb->checkCancelState();
 	}
 }
 
@@ -2196,6 +2189,10 @@ RecordNumber DPM_store_blob(thread_db* tdbb, blb* blob, Record* record)
 
 	rpb.rpb_relation = blob->blb_relation;
 	rpb.rpb_transaction_nr = tdbb->getTransaction()->tra_number;
+	rpb.rpb_flags = rpb_blob;
+
+	if (blob->blb_flags & BLB_bulk)
+		rpb.rpb_stream_flags |= RPB_s_bulk;
 
 	blh* header = (blh*) locate_space(tdbb, &rpb, (SSHORT) (BLH_SIZE + length),
 									  stack, record, DPM_other);
@@ -3313,14 +3310,20 @@ static rhd* locate_space(thread_db* tdbb,
 		}
 	}
 
-	if (type == DPM_primary && relPages->rel_last_free_pri_dp)
+	const bool isBlob = (type == DPM_other) && (rpb->rpb_flags & rpb_blob);
+	if ((type == DPM_primary) && relPages->rel_last_free_pri_dp ||
+		isBlob && relPages->rel_last_free_blb_dp)
 	{
-		window->win_page = relPages->rel_last_free_pri_dp;
+		window->win_page = (type == DPM_primary) ? relPages->rel_last_free_pri_dp : 
+												   relPages->rel_last_free_blb_dp;
 		data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, LCK_write, pag_undefined);
+
+		const UCHAR wrongFlags = dpg_orphan | 
+			((type == DPM_primary) ? dpg_secondary | dpg_large : 0);
 
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&
-			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_large | dpg_orphan)) &&
+			!(dpage->dpg_header.pag_flags & wrongFlags) &&
 			dpage->dpg_relation == rpb->rpb_relation->rel_id &&
 			//dpage->dpg_sequence == dpSequence &&
 			(dpage->dpg_count > 0);
@@ -3334,7 +3337,10 @@ static rhd* locate_space(thread_db* tdbb,
 		else
 			CCH_RELEASE(tdbb, window);
 
-		relPages->rel_last_free_pri_dp = 0;
+		if (type == DPM_primary)
+			relPages->rel_last_free_pri_dp = 0;
+		else
+			relPages->rel_last_free_blb_dp = 0;
 	}
 
 	// Look for space anywhere
@@ -3347,9 +3353,17 @@ static rhd* locate_space(thread_db* tdbb,
 	ULONG pp_sequence =
 		(type == DPM_primary ? relPages->rel_pri_data_space : relPages->rel_sec_data_space);
 
+	const bool bulkInsert = (type == DPM_primary || isBlob) && (rpb->rpb_stream_flags & RPB_s_bulk);
+
 	for (;; pp_sequence++)
 	{
-		locklevel_t ppLock = LCK_read;
+		// Bulk inserts looks up for empty DP only to avoid contention with
+		// another attachments doing bulk inserts. Note, DP number is saved in
+		// relPages->rel_last_free_pri_dp and next insert by same attachment
+		// will use same DP while concurrent bulk attachments will ignore it as
+		// non-empty. Take write lock on PP early to clear 'empty' flag.
+
+		locklevel_t ppLock = bulkInsert ? LCK_write : LCK_read;
 
 		if (type == DPM_primary)
 			relPages->rel_pri_data_space = pp_sequence;
@@ -3389,6 +3403,9 @@ static rhd* locate_space(thread_db* tdbb,
 			// ppg_dp_empty bit. To do it, we need to re-fetch PP with write lock.
 			bool dp_is_empty = PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty);
 			bool dp_is_secondary = PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary);
+
+			if (bulkInsert && !dp_is_empty)
+				continue;
 
 			if (dp_is_empty)
 			{
@@ -3437,6 +3454,8 @@ static rhd* locate_space(thread_db* tdbb,
 					{
 						if (type == DPM_primary)
 							relPages->rel_last_free_pri_dp = dp_number;
+						else if (isBlob)
+							relPages->rel_last_free_blb_dp = dp_number;
 
 						return (rhd*)space;
 					}
@@ -3469,7 +3488,14 @@ static rhd* locate_space(thread_db* tdbb,
 		space = find_space(tdbb, rpb, size, stack, record, type);
 
 		if (space)
+		{
+			if (type == DPM_primary)
+				relPages->rel_last_free_pri_dp = window->win_page.getPageNum();
+			else if (isBlob)
+				relPages->rel_last_free_blb_dp = window->win_page.getPageNum();
+
 			break;
+		}
 	}
 
 	if (i == 20)

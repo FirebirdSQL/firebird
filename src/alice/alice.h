@@ -93,6 +93,7 @@ struct user_action
 	USHORT ua_db_SQL_dialect;
 	alice_shut_mode ua_shutdown_mode;
 	alice_repl_mode ua_replica_mode;
+	SSHORT ua_parallel_workers;
 };
 
 

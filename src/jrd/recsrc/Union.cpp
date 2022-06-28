@@ -35,9 +35,9 @@ using namespace Jrd;
 
 Union::Union(CompilerScratch* csb, StreamType stream,
 			 FB_SIZE_T argCount, RecordSource* const* args, NestConst<MapNode>* maps,
-			 FB_SIZE_T streamCount, const StreamType* streams)
+			 const StreamList& streams)
 	: RecordStream(csb, stream), m_args(csb->csb_pool), m_maps(csb->csb_pool),
-	  m_streams(csb->csb_pool)
+	  m_streams(csb->csb_pool, streams)
 {
 	fb_assert(argCount);
 
@@ -46,17 +46,15 @@ Union::Union(CompilerScratch* csb, StreamType stream,
 	m_args.resize(argCount);
 
 	for (FB_SIZE_T i = 0; i < argCount; i++)
+	{
 		m_args[i] = args[i];
+		m_cardinality += args[i]->getCardinality();
+	}
 
 	m_maps.resize(argCount);
 
 	for (FB_SIZE_T i = 0; i < argCount; i++)
 		m_maps[i] = maps[i];
-
-	m_streams.resize(streamCount);
-
-	for (FB_SIZE_T i = 0; i < streamCount; i++)
-		m_streams[i] = streams[i];
 }
 
 void Union::open(thread_db* tdbb) const
@@ -169,6 +167,7 @@ void Union::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) 
 	if (detailed)
 	{
 		plan += printIndent(++level) + (m_args.getCount() == 1 ? "Materialize" : "Union");
+		printOptInfo(plan);
 
 		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 			m_args[i]->print(tdbb, plan, true, level);

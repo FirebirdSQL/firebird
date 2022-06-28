@@ -7,13 +7,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
     env:
-      VS_VERSION: ${{ matrix.os == 'windows-2016' && '2017' || (matrix.os == 'windows-2019' && '2019' || (matrix.os == 'windows-2022' && '2022' || '')) }}
+      VS_VERSION: ${{ (matrix.os == 'windows-2019' && '2019' || (matrix.os == 'windows-2022' && '2022' || '')) }}
 
     strategy:
       fail-fast: false
       matrix:
         os:
-          - windows-2016
           - windows-2019
         platform: [x64, x86]
         include:
@@ -113,8 +112,8 @@ jobs:
         popd
         mkdir -p gen/Release/firebird/lib
         mkdir -p gen/Debug/firebird/lib
-        cp $ICU_INSTALL_PATH/lib/libicu{data,i18n,uc}.*dylib gen/Release/firebird/lib/
-        cp $ICU_INSTALL_PATH/lib/libicu{data,i18n,uc}.*dylib gen/Debug/firebird/lib/
+        cp -R $ICU_INSTALL_PATH/lib/libicu{data,i18n,uc}.*dylib gen/Release/firebird/lib/
+        cp -R $ICU_INSTALL_PATH/lib/libicu{data,i18n,uc}.*dylib gen/Debug/firebird/lib/
 
     - name: Build (MacOS)
       if: matrix.os == 'macOS-latest'

@@ -1850,6 +1850,11 @@ public:
 	// Create memory pool instance
 	static MemPool* createPool(MemPool* parent, MemoryStats& stats);
 
+	MemoryStats& getStatsGroup() noexcept
+	{
+		return *stats;
+	}
+
 	// Set statistics group for pool. Usage counters will be decremented from
 	// previously set group and added to new
 	void setStatsGroup(MemoryStats& stats) noexcept;
@@ -2260,6 +2265,11 @@ void MemPool::setStatsGroup(MemoryStats& newStats) noexcept
 
 	stats->increment_mapping(sav_mapped_memory);
 	stats->increment_usage(sav_used_memory);
+}
+
+MemoryStats& MemoryPool::getStatsGroup() noexcept
+{
+	return pool->getStatsGroup();
 }
 
 void MemoryPool::setStatsGroup(MemoryStats& newStats) noexcept

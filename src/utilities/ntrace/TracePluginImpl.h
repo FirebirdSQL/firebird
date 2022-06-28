@@ -242,7 +242,7 @@ private:
 		Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceSQLStatement* statement, unsigned short option);
 	void log_event_dsql_execute(
 		Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
-		Firebird::ITraceSQLStatement* statement, bool started, unsigned req_result);
+		Firebird::ITraceSQLStatement* statement, bool started, unsigned number, unsigned req_result);
 
 	void log_event_blr_compile(
 		Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
@@ -303,6 +303,8 @@ public:
 			unsigned option);
 	FB_BOOLEAN trace_dsql_execute(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 			Firebird::ITraceSQLStatement* statement, FB_BOOLEAN started, unsigned req_result);
+	FB_BOOLEAN trace_dsql_restart(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
+			Firebird::ITraceSQLStatement* statement, unsigned number);
 
 	// BLR requests
 	FB_BOOLEAN trace_blr_compile(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,

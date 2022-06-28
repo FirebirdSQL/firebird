@@ -43,8 +43,10 @@
 
 #include "../common/gdsassert.h"
 #include "../common/utils_proto.h"
+#include "../common/classes/auto.h"
 #include "../common/classes/locks.h"
 #include "../common/classes/init.h"
+#include "../common/isc_proto.h"
 #include "../jrd/constants.h"
 #include "firebird/impl/inf_pub.h"
 #include "../jrd/align.h"
@@ -60,6 +62,7 @@
 #ifdef WIN_NT
 #include <direct.h>
 #include <io.h> // isatty()
+#include <sddl.h>
 #endif
 
 #ifdef HAVE_UNISTD_H
@@ -552,6 +555,147 @@ bool isGlobalKernelPrefix()
 	}
 
 	return false;
+}
+
+
+// Incapsulates Windows private namespace 
+class PrivateNamespace
+{
+public:
+	PrivateNamespace(MemoryPool& pool) :
+		m_hNamespace(NULL)
+	{
+		try
+		{
+			init();
+		}
+		catch (const Firebird::Exception& ex)
+		{
+			iscLogException("Error creating private namespace", ex);
+		}
+	}
+
+	~PrivateNamespace()
+	{
+		if (m_hNamespace != NULL)
+			ClosePrivateNamespace(m_hNamespace, 0);
+	}
+
+	// Add namespace prefix to the name, returns true on success.
+	bool addPrefix(char* name, size_t bufsize)
+	{
+		if (m_hNamespace == NULL)
+			return false;
+
+		if (strchr(name, '\\') != 0)
+			return false;
+
+		const size_t prefixLen = strlen(sPrivateNameSpace) + 1;
+		const size_t nameLen = strlen(name) + 1;
+		if (prefixLen + nameLen > bufsize)
+			return false;
+
+		memmove(name + prefixLen, name, nameLen + 1);
+		memcpy(name, sPrivateNameSpace, prefixLen - 1);
+		name[prefixLen - 1] = '\\';
+		return true;
+	}
+
+	bool isReady() const
+	{
+		return (m_hNamespace != NULL);
+	}
+
+private:
+	const char* sPrivateNameSpace = "FirebirdCommon";
+	const char* sBoundaryName = "FirebirdCommonBoundary";
+
+	void raiseError(const char* apiRoutine)
+	{
+		(Firebird::Arg::Gds(isc_sys_request) << apiRoutine << Firebird::Arg::OsError()).raise();
+	}
+
+	void init()
+	{
+		alignas(SID) char sid[SECURITY_MAX_SID_SIZE];
+		DWORD cbSid = sizeof(sid);
+
+		// For now use EVERYONE, could be changed later
+		cbSid = sizeof(sid);
+		if (!CreateWellKnownSid(WinWorldSid, NULL, &sid, &cbSid))
+			raiseError("CreateWellKnownSid");
+
+		// Create security descriptor which allows generic access to the just created SID
+
+		SECURITY_ATTRIBUTES sa;
+		RtlSecureZeroMemory(&sa, sizeof(sa));
+		sa.nLength = sizeof(sa);
+		sa.bInheritHandle = FALSE;
+
+		char strSecDesc[255];
+		LPSTR strSid = NULL;
+		if (ConvertSidToStringSid(&sid, &strSid))
+		{
+			snprintf(strSecDesc, sizeof(strSecDesc), "D:(A;;GA;;;%s)", strSid);
+			LocalFree(strSid);
+		}
+		else
+			strncpy(strSecDesc, "D:(A;;GA;;;WD)", sizeof(strSecDesc));
+
+		if (!ConvertStringSecurityDescriptorToSecurityDescriptor(strSecDesc, SDDL_REVISION_1,
+			&sa.lpSecurityDescriptor, NULL))
+		{
+			raiseError("ConvertStringSecurityDescriptorToSecurityDescriptor");
+		}
+
+		Firebird::Cleanup cleanSecDesc( [&sa] { 
+				LocalFree(sa.lpSecurityDescriptor);
+			});
+
+		HANDLE hBoundaryDesc = CreateBoundaryDescriptor(sBoundaryName, 0);
+		if (hBoundaryDesc == NULL)
+			raiseError("CreateBoundaryDescriptor");
+
+		Firebird::Cleanup cleanBndDesc( [&hBoundaryDesc] {
+				DeleteBoundaryDescriptor(hBoundaryDesc);
+			});
+
+		if (!AddSIDToBoundaryDescriptor(&hBoundaryDesc, &sid))
+			raiseError("AddSIDToBoundaryDescriptor");
+
+		m_hNamespace = CreatePrivateNamespace(&sa, hBoundaryDesc, sPrivateNameSpace);
+
+		if (m_hNamespace == NULL)
+		{
+			const DWORD err = GetLastError();
+			if (err == ERROR_ALREADY_EXISTS)
+			{
+				m_hNamespace = OpenPrivateNamespace(hBoundaryDesc, sPrivateNameSpace);
+				if (m_hNamespace == NULL)
+					raiseError("OpenPrivateNamespace");
+			}
+			else
+				raiseError("CreatePrivateNamespace");
+		}
+	}
+
+	HANDLE m_hNamespace;
+};
+
+static Firebird::InitInstance<PrivateNamespace> privateNamespace;
+
+
+bool private_kernel_object_name(char* name, size_t bufsize)
+{
+	if (!privateNamespace().addPrefix(name, bufsize))
+		return prefix_kernel_object_name(name, bufsize);
+
+	return true;
+}
+
+bool privateNameSpaceReady()
+{
+	return privateNamespace().isReady();
 }
 
 

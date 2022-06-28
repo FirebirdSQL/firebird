@@ -56,6 +56,7 @@ namespace {
 	void outputFile(FILE* std, const char* text)
 	{
 		outputFile(std, text, strlen(text));
+		fflush(std);
 	}
 }
 

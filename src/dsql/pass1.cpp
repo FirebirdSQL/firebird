@@ -2803,16 +2803,11 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 					field->length = desc.dsc_length;
 					field->flags = (desc.dsc_flags & DSC_nullable) ? FLD_nullable : 0;
 
-					if (desc.dsc_dtype <= dtype_any_text)
+					if (desc.isText() || desc.isBlob())
 					{
-						field->textType = desc.dsc_sub_type;
-						field->charSetId = INTL_GET_CHARSET(&desc);
-						field->collationId = INTL_GET_COLLATE(&desc);
-					}
-					else if (desc.dsc_dtype == dtype_blob)
-					{
-						field->charSetId = desc.dsc_scale;
-						field->collationId = desc.dsc_flags >> 8;
+						field->textType = desc.getTextType();
+						field->charSetId = desc.getCharSet();
+						field->collationId = desc.getCollation();
 					}
 
 					// Finally copy the descriptors to the root nodes and swap

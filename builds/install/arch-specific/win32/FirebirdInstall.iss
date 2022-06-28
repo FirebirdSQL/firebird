@@ -163,24 +163,32 @@
 #pragma warning "msvc runtime major version was not defined. Forcing default value."
 #endif
 
-#if Len(GetEnv("MSVC_RUNTIME_MINOR_VERSION_0")) > 0
-#define msvc_runtime_minor_version_0 GetEnv("MSVC_RUNTIME_MINOR_VERSION_0")
+#if Len(GetEnv("MSVC_RUNTIME_MINOR_VERSION")) > 0
+#define msvc_runtime_minor_version GetEnv("MSVC_RUNTIME_MINOR_VERSION")
 #else
-#define msvc_runtime_minor_version_0 0
+#define msvc_runtime_minor_version 0
 #pragma warning "msvc runtime minor version 0 was not defined. Forcing default value."
+#endif
+
+#if Len(GetEnv("MSVC_RUNTIME_LIBRARY_VERSION")) > 0
+#define msvc_runtime_library_version GetEnv("MSVC_RUNTIME_LIBRARY_VERSION")
+#endif
+
+#if Len(GetEnv("MSVC_RUNTIME_FILE_VERSION")) > 0
+#define msvc_runtime_file_version GetEnv("MSVC_RUNTIME_FILE_VERSION")
 #endif
 
 ;if we are running msvc15 then we sometimes need to look for 140 and sometimes for 141
 ; the rule until MS changes it again is that 141 is always used, except for the filename
 ; of the vcruntime and msvcp dll's.
-#if msvc_version = 15
-#if Len(GetEnv("MSVC_RUNTIME_MINOR_VERSION_1")) > 0
-#define msvc_runtime_minor_version_1 GetEnv("MSVC_RUNTIME_MINOR_VERSION_1")
-#else
-#define msvc_runtime_minor_version_1 1
-#pragma warning "msvc runtime minor version 1 was not defined. Forcing default value."
-#endif
-#endif
+;#if msvc_version = 15
+;#if Len(GetEnv("MSVC_RUNTIME_MINOR_VERSION_2")) > 0
+;#define msvc_runtime_minor_version GetEnv("MSVC_RUNTIME_MINOR_VERSION_2")
+;#else
+;#define msvc_runtime_minor_version 2
+;#pragma warning "msvc runtime minor version 2 was not defined. Forcing default value."
+;#endif
+;#endif
 
 #if Int(msvc_version,15) < 15
 #define msvcr_filename = "msvcr"
@@ -377,14 +385,14 @@ Name: CopyFbClientAsGds32Task; Description: {cm:CopyFbClientAsGds32Task}; Compon
 [Run]
 ; due to the changes required to support MSVC15 support for earlier versions is now broken.
 #if Int(msvc_runtime_major_version,14) >= 14
-Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.log"" "; StatusMsg: "Installing MSVC 32-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
+Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_library_version}_Win32.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_library_version}_Win32.log"" "; StatusMsg: "Installing MSVC 32-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
 #if PlatformTarget == "x64"
-Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.log"" ";  StatusMsg: "Installing MSVC 64-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
+Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_library_version}_x64.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_library_version}_x64.log"" ";  StatusMsg: "Installing MSVC 64-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
 #endif
 #endif
 
 ;Only register Firebird if we are installing AND configuring
-Filename: {app}\instreg.exe; Parameters: "install "; StatusMsg: {cm:instreg}; MinVersion: {#MinVer}; Components: ClientComponent; Flags: runminimized; Check: ConfigureFirebird;
+Filename: {app}\instreg.exe; Parameters: "install "; StatusMsg: {cm:instreg}; MinVersion: {#MinVer}; Components: ServerComponent; Flags: runminimized; Check: ConfigureFirebird;
 
 Filename: {app}\instclient.exe; Parameters: "install fbclient"; StatusMsg: {cm:instclientCopyFbClient}; MinVersion: {#MinVer}; Components: ClientComponent; Flags: runminimized; Check: CopyFBClientLib;
 Filename: {app}\instclient.exe; Parameters: "install gds32"; StatusMsg: {cm:instclientGenGds32}; MinVersion: {#MinVer}; Components: ClientComponent; Flags: runminimized; Check: CopyGds32
@@ -410,7 +418,7 @@ Filename: "{#MyAppURL}/afterinstall"; Description: "After installation - What Ne
 Root: HKLM; Subkey: SOFTWARE\Microsoft\Windows\CurrentVersion\Run; ValueType: string; ValueName: Firebird; ValueData: ; Flags: uninsdeletevalue; Tasks: UseApplicationTask; Check: ConfigureFirebird;
 
 ;This doesn't seem to get cleared automatically by instreg on uninstall, so lets make sure of it
-Root: HKLM; Subkey: "SOFTWARE\Firebird Project"; Flags: uninsdeletekeyifempty; Components: ClientComponent DevAdminComponent ServerComponent
+Root: HKLM; Subkey: "SOFTWARE\Firebird Project"; Flags: uninsdeletekeyifempty; Components: ServerComponent
 
 ;Clean up Invalid registry entries from previous installs.
 Root: HKLM; Subkey: "SOFTWARE\FirebirdSQL"; ValueType: none; Flags: deletekey;
@@ -476,7 +484,7 @@ Source: {#FilesDir}\firebird.exe; DestDir: {app}; Components: ServerComponent; F
 Source: {#FilesDir}\fb_lock_print.exe; DestDir: {app}; Components: ServerComponent; Flags: sharedfile ignoreversion
 Source: {#FilesDir}\ib_util.dll; DestDir: {app}; Components: ServerComponent; Flags: sharedfile ignoreversion
 Source: {#FilesDir}\instclient.exe; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
-Source: {#FilesDir}\instreg.exe; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
+Source: {#FilesDir}\instreg.exe; DestDir: {app}; Components: ServerComponent; Flags: sharedfile ignoreversion
 Source: {#FilesDir}\instsvc.exe; DestDir: {app}; Components: ServerComponent; MinVersion: {#MinVer}; Flags: sharedfile ignoreversion
 Source: {#FilesDir}\isql.exe; DestDir: {app}; Components: DevAdminComponent; Flags: ignoreversion
 Source: {#FilesDir}\nbackup.exe; DestDir: {app}; Components: DevAdminComponent; Flags: ignoreversion
@@ -487,25 +495,36 @@ Source: {#FilesDir}\fbclient.dll; DestDir: {app}; Components: ClientComponent; F
 Source: {#WOW64Dir}\fbclient.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: overwritereadonly sharedfile promptifolder {#SkipFileIfDevStatus}
 Source: {#WOW64Dir}\instclient.exe; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile ignoreversion {#SkipFileIfDevStatus}
 #endif
-Source: {#FilesDir}\icuuc??.dll; DestDir: {app}; Components: ServerComponent; Flags: sharedfile ignoreversion
-Source: {#FilesDir}\icuin??.dll; DestDir: {app}; Components: ServerComponent; Flags: sharedfile ignoreversion
-Source: {#FilesDir}\icudt??.dll; DestDir: {app}; Components: ServerComponent; Flags: sharedfile ignoreversion
-Source: {#FilesDir}\icudt*.dat;  DestDir: {app}; Components: ServerComponent; Flags: sharedfile ignoreversion
+Source: {#FilesDir}\icuuc??.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
+Source: {#FilesDir}\icuin??.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
+Source: {#FilesDir}\icudt??.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
+Source: {#FilesDir}\icudt*.dat;  DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
+#if PlatformTarget == "x64"
+Source: {#WOW64Dir}\icuuc??.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile ignoreversion
+Source: {#WOW64Dir}\icuin??.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile ignoreversion
+Source: {#WOW64Dir}\icudt??.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile ignoreversion
+Source: {#WOW64Dir}\icudt*.dat;  DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile ignoreversion
+#endif
+
 #if PlatformTarget =="Win32"
 Source: {#FilesDir}\fbrmclib.dll; DestDir: {app}; Components: ServerComponent; Flags: sharedfile ignoreversion
 #endif
-Source: {#FilesDir}\zlib1.dll; DestDir: {app}; Components: ServerComponent; Flags: sharedfile ignoreversion
+
+Source: {#FilesDir}\zlib1.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
+#if PlatformTarget == "x64"
+Source: {#WOW64Dir}\zlib1.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile ignoreversion
+#endif
 
 ;Rules for installation of MS runtimes are simplified with MSVC10
 ;We just install the runtimes into the install dir.
 
 #if Int(msvc_runtime_major_version,14) >= 14
-Source: {#FilesDir}\{#msvcr_filename}{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile;
-Source: {#FilesDir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile;
+Source: {#FilesDir}\{#msvcr_filename}{#msvc_runtime_file_version}.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile;
+Source: {#FilesDir}\msvcp{#msvc_runtime_file_version}.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile;
 #if PlatformTarget == "x64"
 ;If we are installing on x64 we need some 32-bit libraries for compatibility with 32-bit applications
-Source: {#WOW64Dir}\{#msvcr_filename}{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile {#SkipFileIfDevStatus};
-Source: {#WOW64Dir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile {#SkipFileIfDevStatus};
+Source: {#WOW64Dir}\{#msvcr_filename}{#msvc_runtime_file_version}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile {#SkipFileIfDevStatus};
+Source: {#WOW64Dir}\msvcp{#msvc_runtime_file_version}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile {#SkipFileIfDevStatus};
 #endif
 #endif  /* #if Int(msvc_runtime_major_version,14) >= 10 */
 
@@ -513,10 +532,10 @@ Source: {#WOW64Dir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_versi
 #if PlatformTarget == "x64"
 ;MinVersion 0,5.0 means no version of Win9x and at least Win2k if NT O/S
 ;In addition, O/S must have Windows Installer 3.0.
-Source: {#FilesDir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.msi; DestDir: {tmp};  Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent; Flags: {#SkipFileIfDevStatus}
-Source: {#WOW64Dir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent; Flags: {#SkipFileIfDevStatus}
+Source: {#FilesDir}\system32\vccrt{#msvc_runtime_library_version}_x64.msi; DestDir: {tmp};  Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent; Flags: {#SkipFileIfDevStatus}
+Source: {#WOW64Dir}\system32\vccrt{#msvc_runtime_library_version}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent; Flags: {#SkipFileIfDevStatus}
 #else
-Source: {#FilesDir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent; Flags: {#SkipFileIfDevStatus}
+Source: {#FilesDir}\system32\vccrt{#msvc_runtime_library_version}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent; Flags: {#SkipFileIfDevStatus}
 #endif
 #endif
 
@@ -542,9 +561,13 @@ Source: {#WOW64Dir}\lib\*.lib; DestDir: {app}\WOW64\lib; Components: DevAdminCom
 ;Source: {#FilesDir}\UDF\*.txt; DestDir: {app}\UDF; Components: ServerComponent; Flags: ignoreversion;
 
 Source: {#FilesDir}\plugins.conf; DestDir: {app}; Components: ServerComponent; Flags: ignoreversion;
-Source: {#FilesDir}\plugins\*.dll; DestDir: {app}\plugins; Components: ServerComponent; Flags: ignoreversion;
+Source: {#FilesDir}\plugins\*.dll; DestDir: {app}\plugins; Components: ServerComponent; Flags: ignoreversion; Check: IsServerInstall;
+Source: {#FilesDir}\plugins\chacha.dll; DestDir: {app}\plugins; Components: ClientComponent; Flags: ignoreversion; Check: IsNotServerInstall;
 Source: {#FilesDir}\plugins\*.conf; DestDir: {app}\plugins; Components: ServerComponent; Flags: ignoreversion;
 Source: {#FilesDir}\plugins\udr\*.*; DestDir: {app}\plugins\udr; Components: ServerComponent; Flags: ignoreversion;
+#if PlatformTarget == "x64"
+Source: {#WOW64Dir}\plugins\chacha*.dll; DestDir: {app}\WOW64\plugins; Components: ClientComponent; Flags: ignoreversion;
+#endif
 
 Source: {#FilesDir}\misc\*.*; DestDir: {app}\misc; Components: ServerComponent; Flags: ignoreversion createallsubdirs recursesubdirs ;
 
@@ -560,7 +583,10 @@ Source: {#FilesDir}\examples\*.*; DestDir: {app}\examples; Components: DevAdminC
 #ifdef ship_pdb
 Source: {#FilesDir}\fbclient.pdb; DestDir: {app}; Components: ClientComponent;
 Source: {#FilesDir}\firebird.pdb; DestDir: {app}; Components: ServerComponent;
-;Source: {#FilesDir}\fbembed.pdb; DestDir: {app}; Components: ClientComponent;
+Source: {#FilesDir}\gbak.pdb; DestDir: {app}; Components: DevAdminComponent;
+Source: {#FilesDir}\gfix.pdb; DestDir: {app}; Components: DevAdminComponent;
+Source: {#FilesDir}\isql.pdb; DestDir: {app}; Components: ClientComponent;
+Source: {#FilesDir}\plugins\*.pdb; DestDir: {app}\plugins; Components: ServerComponent;
 #if PlatformTarget == "x64"
 Source: {#WOW64Dir}\fbclient.pdb; DestDir: {app}\WOW64; Components: ClientComponent;
 #endif
@@ -575,7 +601,7 @@ Filename: {app}\instclient.exe; Parameters: " remove fbclient"; StatusMsg: {cm:i
 Filename: {app}\wow64\instclient.exe; Parameters: " remove gds32"; StatusMsg: {cm:instclientDecLibCountGds32}; MinVersion: {#MinVer}; Flags: runminimized 32bit; RunOnceId: RemoveGDS32x86
 Filename: {app}\wow64\instclient.exe; Parameters: " remove fbclient"; StatusMsg: {cm:instclientDecLibCountFbClient}; MinVersion: {#MinVer}; Flags: runminimized 32bit; RunOnceId: RemoveFbClientx86
 #endif
-Filename: {app}\instreg.exe; Parameters: " remove"; StatusMsg: {cm:instreg}; MinVersion: {#MinVer}; Flags: runminimized; RunOnceId: RemoveRegistryEntry
+Filename: {app}\instreg.exe; Parameters: " remove"; StatusMsg: {cm:instreg}; MinVersion: {#MinVer}; Components: ServerComponent; Flags: runminimized; RunOnceId: RemoveRegistryEntry
 
 [UninstallDelete]
 Type: files; Name: "{app}\*.lck"

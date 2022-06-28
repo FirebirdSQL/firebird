@@ -908,7 +908,7 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	if (dbb->dbb_crypto_manager)
 	{
 		record.storeInteger(f_mon_db_crypt_page, dbb->dbb_crypto_manager->getCurrentPage(tdbb));
-		record.storeInteger(f_mon_db_crypt_state, dbb->dbb_crypto_manager->getCurrentState());
+		record.storeInteger(f_mon_db_crypt_state, dbb->dbb_crypto_manager->getCurrentState(tdbb));
 	}
 
 	// database owner
@@ -1172,7 +1172,13 @@ void Monitoring::putStatement(SnapshotData::DumpRecord& record, const Statement*
 		record.storeInteger(f_mon_cmp_stmt_type, obj_trigger);
 	}
 
+	// statistics
+	const int stat_id = fb_utils::genUniqueId();
+	record.storeGlobalId(f_mon_cmp_stmt_stat_id, getGlobalId(stat_id));
+
 	record.write();
+
+	putMemoryUsage(record, statement->pool->getStatsGroup(), stat_id, stat_cmp_statement);
 }
 
 

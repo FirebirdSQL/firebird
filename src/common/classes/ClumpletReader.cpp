@@ -346,6 +346,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 				return StringSpb;
 			case isc_spb_bkp_factor:
 			case isc_spb_bkp_length:
+			case isc_spb_bkp_parallel_workers:
 			case isc_spb_res_length:
 			case isc_spb_res_buffers:
 			case isc_spb_res_page_size:
@@ -369,6 +370,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_rpr_commit_trans:
 			case isc_spb_rpr_rollback_trans:
 			case isc_spb_rpr_recover_two_phase:
+			case isc_spb_rpr_par_workers:
 				return IntSpb;
 			case isc_spb_rpr_commit_trans_64:
 			case isc_spb_rpr_rollback_trans_64:

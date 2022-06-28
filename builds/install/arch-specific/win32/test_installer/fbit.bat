@@ -18,7 +18,7 @@
 :: scripted install of Firebird. It is designed to test almost all possible
 :: scriptable combinations and is thus far more complicated than a typical
 :: install script need be. However, it can be used for testing. Note that chosen
-:: settings :: used for each test run are saved into an .inf file, along with a
+:: settings used for each test run are saved into an .inf file, along with a
 :: log of the install run.
 
 @goto :MAIN %*
@@ -27,26 +27,32 @@
 ::=======================================================
 :SET_GLOBAL_ENV
 @call :SET_VERBOSE_IF_DEBUG_ON
+::@call :SET_VERBOSE
 @if defined DEBUG @echo Entering %0
 
+:: Uncomment this if the default command prompt takes up too much space
+::@PROMPT=fbit_prompt$G
 
-:: FBINST_EXEC must point to the package we want to test...
-if not defined FBINST_EXEC (
-    rem - if we have just built firebird we can test the install immediately
-    if defined FBBUILD_FILE_ID (
-        if defined FBBUILD_FILENAME_SUFFIX (
-            @set FBINST_EXEC=%FBBUILD_INSTALL_IMAGES%\Firebird-%FBBUILD_FILE_ID%%FBBUILD_FILENAME_SUFFIX%.exe
-        ) else (
-            @set FBINST_EXEC=%FBBUILD_INSTALL_IMAGES%\Firebird-%FBBUILD_FILE_ID%.exe
-        )
-    )
+:: Set this to the location of the firebird installer you want to test.
+::@set FBINST_EXEC=%USERPROFILE%\Desktop\Firebird-5.0.0.0000_x64.exe
+
+:: if we have just built firebird we can test the install immediately
+if defined FBBUILD_FILE_ID (
+	if defined FBBUILD_FILENAME_SUFFIX (
+		@set FBINST_EXEC=%FBBUILD_INSTALL_IMAGES%\Firebird-%FBBUILD_FILE_ID%%FBBUILD_FILENAME_SUFFIX%.exe
+	) else (
+		@set FBINST_EXEC=%FBBUILD_INSTALL_IMAGES%\Firebird-%FBBUILD_FILE_ID%.exe
+	)
 ) else (
+rem FBINST_EXEC must point to the package we want to test...
+    if not defined FBINST_EXEC (
     rem Set the actual path and filename here - or set it in the environment before running fbit.
-    @set FBINST_EXEC=%USERPROFILE%\Desktop\Firebird-4.0.0.2311_0_x64_RC1.exe
+    set FBINST_EXEC=%USERPROFILE%\Desktop\Firebird-5.0.0.0000_0_x64_RC1.exe
+    )
 )
 
 :: This should be set dynamically, perhaps. But for now it is hard-coded.
-@set FIREBIRD_BASE_VER=Firebird_4_0
+@set FIREBIRD_BASE_VER=Firebird_5_0
 
 :: It is possible that successive installs into the same directory may
 :: generate different uninstallers but for now we hard code the default.
@@ -73,14 +79,16 @@ if not defined FBINST_EXEC (
 :: to read.
 @set SHOW_FINAL_CMD=
 
-:: change as reqd, or comment out if ISC_PASSWORD is already set in your env
-@set ISC_PASSWORD="secret"
+:: change as reqd
+@if not defined ISC_PASSWORD (
+    @set ISC_PASSWORD="secret"
+)
 
 @set TAB=	&
 
 @if not defined DRYRUN (
-  if not exist %FBINSTALLLOGDIR% @mkdir %FBINSTALLLOGDIR% >nul 2>nul
-  if not exist %FBINSTALLCOPYDIR% @mkdir %FBINSTALLCOPYDIR% >nul 2>nul
+  if not exist %FBINSTALLLOGDIR% ( @mkdir %FBINSTALLLOGDIR% >nul 2>nul )
+  if not exist %FBINSTALLCOPYDIR% ( @mkdir %FBINSTALLCOPYDIR% >nul 2>nul )
 )
 
 @if defined DEBUG @echo Leaving %0
@@ -92,7 +100,8 @@ if not defined FBINST_EXEC (
 ::=======================================================
 :GET_OPTS
 @call :SET_VERBOSE_IF_DEBUG_ON
-if defined DEBUG @echo Entering %0
+::@call :SET_VERBOSE
+@if defined DEBUG @echo Entering %0
 
 :: Automatically parse the commandline and place all valid options into ENV VARS
 :: Courtesy of this link:
@@ -111,22 +120,22 @@ if defined DEBUG @echo Entering %0
 ::         will end up as
 ::           flagwithdefault=flag
 ::         Basically all this means that these variables should not be passed to runtime:
-::         INTERACTIVE INSTALL INSTALLTYPE SERVER SERVICE_TASK SUPERSERVER
+::         INTERACTIVE INSTALL INSTALLTYPE SERVER_INSTALL SERVICE_TASK SUPERSERVER
 
-set "options=APPTASK: CLASSICSERVER: CLEAN: CLIENT: CMD_PARAMS: COMPONENTS: COPYGDSLIB: DEVINST: DRYRUN: FINALCMD: FULL_CMD: FORCE: HELP: INTERACTIVE:1 INSTALL:1 INSTALLTYPE:ServerInstall NOARCHIVE: NOAUTOSTART: NOCANCEL: NOCOPYFBLIB: NOMSG: NOUNINSTALL: PASSWORD: RUN_TIMESTAMP: SCRIPTED: SERVER:1 SILENT: SP: SERVICE_TASK:1 SUPERCLASSIC: SUPERSERVER:1 TASK_LIST:UseSuperServerTask TESTNAME:"" UNINSTALL: VERYSILENT: XRESULT:0"
-if defined VERBOSE @echo on
+set "options=APPTASK: CLASSICSERVER: CLEAN: CLIENT: CMD_PARAMS: COMPONENTS: COPYGDSLIB: DEVINST: DRYRUN: FINALCMD: FULL_CMD: FORCE: HELP: INTERACTIVE:1 INSTALL:1 INSTALLTYPE:ServerInstall NOARCHIVE: NOAUTOSTART: NOCANCEL: NOCOPYFBLIB: NOMSG: NOUNINSTALL: PASSWORD: RUN_TIMESTAMP: SCRIPTED: SERVER_INSTALL:1 SILENT: SP: SERVICE_TASK: SUPERCLASSIC: SUPERSERVER: TASK_LIST: TESTNAME:"" UNINSTALL: VERYSILENT: XRESULT:0"
+@if defined VERBOSE @echo on
 for %%O in (%options%) do (
   for /f "tokens=1,* delims=:" %%A in ("%%O") do (
     set "%%A=%%~B"
   )
 )
-if defined VERBOSE (
-  call :PRINT_VARS
+@if defined VERBOSE (
+  @call :PRINT_VARS
   if NOT defined DEBUG pause
 )
 
 :loop
-if not "%~1"=="" (
+@if not "%~1"=="" (
   set "test=!options:*%~1:=! "
   if "!test!"=="!options! " (
       echo Error: Invalid option %~1
@@ -144,7 +153,8 @@ if not "%~1"=="" (
   goto :loop
 )
 
-if defined DEBUG @echo Leaving %0
+@if defined VERBOSE ( @call :PRINT_VARS )
+@if defined DEBUG @echo Leaving %0
 @call :UNSET_VERBOSE
 @goto :EOF
 ::=======================================================
@@ -198,46 +208,100 @@ rem We now have everything we need for uninstall so jump to the end
     goto :SET_CMD_PARAMS
 )
 
-:: Fix up any incompatible assignments
+:: Fix up any incompatible assignments :::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-@if defined CLASSICSERVER ( set SUPERSERVER=& set SUPERCLASSIC=)
-@if defined SUPERCLASSIC ( set SUPERSERVER=& set CLASSICSERVER=)
-:: Theoretically this next line is redundant
-@if defined SUPERSERVER ( set SUPERCLASSIC=& set CLASSICSERVER=)
+@if defined CLIENT (
+    set INSTALLTYPE=ClientInstall
+    set DEVINST=
+    set SERVER_INSTALL=
+    set TASK_LIST=
+    set SERVICE_TASK=
+    set CLASSICSERVER=
+    set SUPERCLASSIC=
+    set SUPERSERVER=
 
-@if defined CLIENT ( set INSTALLTYPE=ClientInstall & set DEVINST=& set SERVER=)
-@if defined DEVINST (set INSTALLTYPE=DeveloperInstall & set SERVER=)
+)
+
+@if defined DEVINST (
+    set INSTALLTYPE=DeveloperInstall
+    set CLIENT=
+    set SERVER_INSTALL=
+    set TASK_LIST=
+    set SERVICE_TASK=
+    set CLASSICSERVER=
+    set SUPERCLASSIC=
+    set SUPERSERVER=
+)
+
 :: Theoretically this next line is redundant
-@if defined SERVER (set INSTALLTYPE=ServerInstall )
+@if defined SERVER_INSTALL (
+
+    set INSTALLTYPE=ServerInstall
+    set CLIENT=
+    set DEVINST=
+
+    @if defined CLASSICSERVER (
+        set SUPERSERVER=
+        set SUPERCLASSIC=
+        set TASK_LIST=UseClassicServerTask
+    ) else (
+        @if defined SUPERCLASSIC (
+            set SUPERSERVER=
+            set CLASSICSERVER=
+            set TASK_LIST=UseSuperClassicTask
+        ) else (
+            rem @if defined SUPERSERVER (
+            set SUPERCLASSIC=
+            set CLASSICSERVER=
+            set SUPERSERVER=1
+            set TASK_LIST=UseSuperServerTask
+        )
+    )
+)
+::@call :SET_VERBOSE
+@call :PRINT_VARS In %0 - End of Fixup
+:::::::::: End Fix Up incompatible assignments :::::::::::::::::::::::::::::::::
 
 
 :: Now build our task list
 
-@if defined CLASSICSERVER ( set TASK_LIST=UseClassicServerTask)
-@if defined SUPERCLASSIC ( set TASK_LIST=UseSuperClassicTask)
-:: Theoretically this next line is redundant
-@if defined SUPERSERVER ( set TASK_LIST=UseSuperServerTask)
+:: At this stage, if TASK_LIST is not defined then we are not doing a server install
+@if defined TASK_LIST (
+    if defined APPTASK (
+        set TASK_LIST=!TASK_LIST!,UseApplicationTask
+        set INSTALLTYPE=CustomInstall
+    ) else (
+        set TASK_LIST=!TASK_LIST!,UseServiceTask
+    )
 
-@if defined APPTASK (
-    set TASK_LIST=!TASK_LIST!,UseApplicationTask
-) else (
-    set TASK_LIST=!TASK_LIST!,UseServiceTask
+    if NOT defined NOAUTOSTART (
+        set TASK_LIST=!TASK_LIST!,AutoStartTask
+        set INSTALLTYPE=CustomInstall
+    )
 )
 
-@if NOT defined NOAUTOSTART (
-  set TASK_LIST=!TASK_LIST!,AutoStartTask
+
+@if NOT defined NOCOPYFBLIB (
+    if not defined TASK_LIST (
+        set TASK_LIST=CopyFbClientToSysTask
+    ) else (
+        set TASK_LIST=!TASK_LIST!,CopyFbClientToSysTask
+    )
   set INSTALLTYPE=CustomInstall
 )
 
-if NOT defined NOCOPYFBLIB (
-  set TASK_LIST=!TASK_LIST!,CopyFbClientToSysTask
-  set INSTALLTYPE=CustomInstall
-)
 
 @if defined COPYGDSLIB (
-  set TASK_LIST=!TASK_LIST!,CopyFbClientAsGds32Task
+    if not defined TASK_LIST (
+        set TASK_LIST=CopyFbClientAsGds32Task
+    ) else (
+        set TASK_LIST=!TASK_LIST!,CopyFbClientAsGds32Task
+    )
   set INSTALLTYPE=CustomInstall
 )
+@call :PRINT_VARS In %0 - End of set TASK_LIST
+
 
 :SET_CMD_PARAMS
 :: set up the CMD_PARAMS variable we will use
@@ -248,37 +312,40 @@ if NOT defined NOCOPYFBLIB (
 
 :: Setting PASSWORD is only relevant for a server install
 @if defined PASSWORD (
-    @if defined SERVER (
+    if defined SERVER_INSTALL (
         set SYSDBAPASSWORD=%ISC_PASSWORD%
         set CMD_PARAMS=!CMD_PARAMS! /SYSDBAPASSWORD=%SYSDBAPASSWORD%
         set INSTALLTYPE=CustomInstall
     )
 )
 
-if defined NOMSG set CMD_PARAMS=!CMD_PARAMS! /SUPPRESSMSGBOXES
-if defined SILENT set CMD_PARAMS=!CMD_PARAMS! /SILENT
-if defined SP set CMD_PARAMS=!CMD_PARAMS! /SP-
-if defined VERYSILENT set CMD_PARAMS=!CMD_PARAMS! /VERYSILENT
+@if defined NOMSG set CMD_PARAMS=!CMD_PARAMS! /SUPPRESSMSGBOXES
+@if defined SILENT set CMD_PARAMS=!CMD_PARAMS! /SILENT
+@if defined SP set CMD_PARAMS=!CMD_PARAMS! /SP-
+@if defined VERYSILENT set CMD_PARAMS=!CMD_PARAMS! /VERYSILENT
 
 :: Setting CustomInstall clears the default COMPONENTS list so we
 :: must define it manually
-@if /I %INSTALLTYPE% == "CustomInstall" (
-    @if defined CLIENT ( set COMPONENTS=ClientComponent)
-    @if defined DEVINST ( set COMPONENTS=DevAdminComponent,ClientComponent)
+::echo INSTALLTYPE %INSTALLTYPE%
+@if /I "%INSTALLTYPE%" == "CustomInstall" (
+    if defined CLIENT ( set COMPONENTS=ClientComponent)
+    if defined DEVINST ( set COMPONENTS=DevAdminComponent,ClientComponent)
+    if defined SERVER_INSTALL ( set COMPONENTS=ServerComponent,DevAdminComponent,ClientComponent)
 ) else (
     set COMPONENTS=ServerComponent,DevAdminComponent,ClientComponent
 )
 
-if defined INSTALL (
-    set FULL_CMD=/TYPE=!INSTALLTYPE! /TASKS="!TASK_LIST!" /COMPONENTS="!COMPONENTS!" !CMD_PARAMS!
+@if defined INSTALL (
+    if defined TASK_LIST (
+        set FULL_CMD=/TYPE=!INSTALLTYPE! /TASKS="!TASK_LIST!" /COMPONENTS="!COMPONENTS!" !CMD_PARAMS!
+    ) else (
+        set FULL_CMD=/TYPE=!INSTALLTYPE! /COMPONENTS="!COMPONENTS!" !CMD_PARAMS!
+    )
 ) else (
     set FULL_CMD=!CMD_PARAMS!
 )
+@call :PRINT_VARS In %0 - After setting COMPONENTS and FULL_CMD
 
-@if defined VERBOSE (
-    @call :PRINT_VARS
-    if NOT defined DEBUG pause
-)
 @if defined DEBUG @echo Leaving %0
 @call :UNSET_VERBOSE
 @goto :EOF
@@ -288,8 +355,10 @@ if defined INSTALL (
 :PRINT_VARS
 :: if a variable is not defined we don't print it, except for critical
 :: variables such as FINALCMD that MUST be defined.
+@if not defined VERBOSE goto :EOF
+@if not "%~1" == "" ( echo %* )
 @echo Variables set during script execution are:
-@set ADIRNAME
+@set ADIRNAME 2>nul
 @set APPTASK 2>nul
 @set CLASSICSERVER 2>nul
 @set CLEAN 2>nul
@@ -299,12 +368,15 @@ if defined INSTALL (
 @set COPYGDSLIB 2>nul
 @set DEVINST 2>nul
 @set DRYRUN 2>nul
-@set FBINST_EXEC
+@set FBINST_EXEC 2>nul
+@set FIREBIRD 2>nul
 @set FINALCMD 2>nul
-@set FULL_CMD
+@set FULL_CMD 2>nul
 @set FORCE 2>nul
 @set INTERACTIVE 2>nul
 @set INSTALL 2>nul
+@set ISC_USER 2>nul
+@set ISC_PASSWORD 2>nul
 @set MERGE_TASKS 2>nul
 @set NOARCHIVE= 2>nul
 @set NOAUTOSTART 2>nul
@@ -315,8 +387,7 @@ if defined INSTALL (
 @set PASSWORD 2>nul
 @set RUN_TIMESTAMP 2>nul
 @set SCRIPTED 2>nul
-@set SERVICE_TASK 2>nul
-@set SERVER 2>nul
+@set SERVER_INSTALL 2>nul
 @set SERVICE_TASK 2>nul
 @set SILENT 2>nul
 @set SP 2>nul
@@ -327,7 +398,7 @@ if defined INSTALL (
 @set UNINSTALL 2>nul
 @set VERYSILENT 2>nul
 @echo.
-
+@if NOT defined DEBUG pause
 @goto :EOF
 ::=======================================================
 
@@ -336,56 +407,65 @@ if defined INSTALL (
 @echo.
 @echo.
 @call :SET_VERBOSE_IF_DEBUG_ON
-if defined DEBUG @echo Entering %0 %*
-::@call :CHECK_ENV || (@echo Check the values in SET_ENV & goto :EOF )
+@if defined DEBUG @echo Entering %~0 %*
 @call :CHECK_ENV
-::@call :RESET_INSTALL_ENV
+@if defined _err ( goto :EOF)
+
 @call :GET_OPTS %*
 @call :SET_PARAMS %*
 ::@call :SET_VERBOSE
-@if defined VERBOSE @echo on
 @if defined VERBOSE @echo FULL_CMD is %FULL_CMD%
 @if defined VERBOSE ( if NOT defined DEBUG pause )
 @call :TIMESTAMP
+@if defined DEBUG echo After call TIMESTAMP
 @set RUN_TIMESTAMP=%TIMESTAMP%
 @set INSTALL_TIMESTAMP=%TIMESTAMP%
+@if defined DEBUG echo Before set FINALCMD
+@set FINALCMD=%FBINST_EXEC% %FULL_CMD% /DIR=%FIREBIRD% /LOG=%FBINSTALLLOGDIR%\install%RUN_TIMESTAMP%.log /SAVEINF=%FBINSTALLLOGDIR%\install%RUN_TIMESTAMP%-saved.inf
+@if defined DEBUG echo After set FINALCMD
 
-set FINALCMD=%FBINST_EXEC% %FULL_CMD% /DIR=%FIREBIRD% /LOG=%FBINSTALLLOGDIR%\install%RUN_TIMESTAMP%.log /SAVEINF=%FBINSTALLLOGDIR%\install%RUN_TIMESTAMP%-saved.inf
-if defined DRYRUN (
+@if defined DRYRUN (
     @echo DRYRUN - Not executing call %FINALCMD%
 ) else (
-    @if defined SHOW_FINAL_CMD @echo Executing %FINALCMD%
-    call %FINALCMD%
+    @if defined DEBUG @echo DRYRUN not set
+    @if defined SHOW_FINAL_CMD (@echo Executing %FINALCMD%)
+    @call %FINALCMD%
 
-    @if errorlevel 1 (
+    @if ERRORLEVEL 1 (
     rem  @echo Calling %FBINST_EXEC% failed with %ERRORLEVEL%
         set _err=%ERRORLEVEL%
-        call :ISS_ERROR  %_err% %FBINST_EXEC% %FULL_CMD%
+        @call :ISS_ERROR  %_err% %FBINST_EXEC% %FULL_CMD%
         set /A XRESULT+=1
+        @goto :EOF
     ) else (
         @echo Calling %FBINST_EXEC%......................SUCCESS!
     )
-
     @echo.
     @echo Now checking system state...
-    if not defined NOCOPYFBLIB (
+
+    @if defined SERVER_INSTALL (
+        call :CHECKSERVICECONFIGURED
+        call :CHECKSERVICEINSTALLED
+    )
+    @if not defined NOCOPYFBLIB (
         call :CHECKFILEEXISTS c:\windows\system32\fbclient.dll good bad err_is_fail
     ) else (
         call :CHECKFILEEXISTS c:\windows\system32\fbclient.dll bad good no_err_is_fail
     )
 
-    if not defined COPYGDSLIB (
+    @if not defined COPYGDSLIB (
         call :CHECKFILEEXISTS c:\windows\system32\gds32.dll bad good no_err_is_fail
     ) else (
         call :CHECKFILEEXISTS c:\windows\system32\gds32.dll good bad err_is_fail
     )
-    @echo.
+    @echo Calling COPY_INSTALL
     @call :COPY_INSTALL
     @echo.
 )
-    @echo.
+@echo.
 @echo %0 completed with %XRESULT% errors
 @set XRESULT=0
+
 @if defined DEBUG @echo Leaving %0
 @call :UNSET_VERBOSE
 @echo.
@@ -401,12 +481,14 @@ if defined DRYRUN (
 @call :SET_VERBOSE_IF_DEBUG_ON
 ::@call :SET_VERBOSE
 @if defined DEBUG @echo Entering %0 %*
+@if defined NOUNINSTALL ( echo NOUNINSTALL set. Not running uninstaller & exit /b 1)
+
 ::@call :RESET_INSTALL_ENV
 @call :GET_OPTS %* UNINSTALL
 @call :SET_PARAMS
 ::@call :SET_VERBOSE
 @if defined VERBOSE @echo on
-@if defined VERBOSE call :PRINT_VARS
+@if defined VERBOSE @call :PRINT_VARS
 @if defined VERBOSE @echo FULL_CMD is %FULL_CMD%
 @if defined NOUNINSTALL (
   @echo NOUNINSTALL was passed. Exiting %0.
@@ -418,14 +500,14 @@ if defined DRYRUN (
 @if defined VERBOSE ( if NOT defined DEBUG (pause) )
 @if defined DRYRUN (
     echo DRYRUN - Not executing call %FINALCMD%
-    if defined DEBUG @echo Leaving %0
+    @if defined DEBUG @echo Leaving %0
     @call :UNSET_VERBOSE
     @echo.
     @echo.
     goto :EOF
 )
     @if defined SHOW_FINAL_CMD @echo Executing %FINALCMD%
-    call %FINALCMD% 2>nul
+    @call %FINALCMD% 2>nul
     if errorlevel 1 (
         set _err=%ERRORLEVEL%
     ) else (
@@ -433,7 +515,7 @@ if defined DRYRUN (
     )
     if %_err% GEQ 1 (
         set _err=%ERRORLEVEL%
-        call :ISS_ERROR  %_err% %UNINSTALLEXE% %FULL_CMD%
+        @call :ISS_ERROR  %_err% %UNINSTALLEXE% %FULL_CMD%
         set /A XRESULT+=1
     ) else (
         echo Calling %FIREBIRD%\%UNINSTALLEXE% ................SUCCESS!
@@ -452,23 +534,23 @@ if defined DRYRUN (
 
     echo.
     echo Now checking system state...
-    call :CHECKFILEEXISTS c:\windows\system32\fbclient.dll bad good no_err_is_fail
-    call :CHECKFILEEXISTS c:\windows\system32\gds32.dll bad good no_err_is_fail
+    @call :CHECKFILEEXISTS c:\windows\system32\fbclient.dll bad good no_err_is_fail
+    @call :CHECKFILEEXISTS c:\windows\system32\gds32.dll bad good no_err_is_fail
 
     if defined CLEAN (
-        call :CHECKSHAREDDLLS
-        call :CHECKFILEEXISTS %FIREBIRD% bad good no_err_is_fail
+        @call :CHECKSHAREDDLLS
+        @call :CHECKFILEEXISTS %FIREBIRD% bad good no_err_is_fail
     )
     echo.
-    call :COPY_INSTALL
+    @call :COPY_INSTALL
     echo.
 )
 echo.
 
 echo %0 completed with %XRESULT% errors
 set XRESULT=0
-if defined DEBUG @echo Leaving %0
-call :UNSET_VERBOSE
+@if defined DEBUG @echo Leaving %0
+@call :UNSET_VERBOSE
 @echo.
 @echo.
 @goto :EOF
@@ -477,7 +559,7 @@ call :UNSET_VERBOSE
 
 ::=====================================
 :CHECKFILEEXISTS
-if defined DEBUG @echo Entering %0
+@if defined DEBUG @echo Entering %0
 @call :SET_VERBOSE_IF_DEBUG_ON
 
 :: DIR returns an error if file not found and zero if file is returned so we
@@ -491,66 +573,108 @@ if defined DEBUG @echo Entering %0
 :: - %3 - string to output if DIR throws an error
 :: - %4 - flag to indicate if 0 is an error or not
 ::@call :SET_VERBOSE
-if defined VERBOSE @echo on
-if defined VERBOSE @echo %*
+@if defined VERBOSE @echo on
+@if defined VERBOSE @echo %*
 dir %1 >nul 2>nul
-if errorlevel 1 (
+@if errorlevel 1 (
   set _err=%ERRORLEVEL%
 ) else (
   set _err=0
 )
-if %_err% EQU 0 (
+@if %_err% EQU 0 (
   @echo %TAB% %1 exists - %2 !
 ) else (
   @echo %TAB% %1 not found - %3 !
 )
 
-if "%4"=="err_is_fail" (
+@if "%4"=="err_is_fail" (
   if %_err% GTR 0 (
     set /A XRESULT+=1
     @echo XRESULT++
   )
 )
-if "%4"=="no_err_is_fail" (
+@if "%4"=="no_err_is_fail" (
   if %_err% EQU 0 (
     set /A XRESULT+=1
     @echo XRESULT++
   )
 )
 
-call :RESET_ERRORLEVEL
+@call :RESET_ERRORLEVEL
 @call :UNSET_VERBOSE
-if defined DEBUG @echo Leaving %0
+@if defined DEBUG @echo Leaving %0
 @goto :EOF
 ::===CHECKFILEEXISTS==================================
 
 
 ::=====================================
 :CHECKSHAREDDLLS
-if defined DEBUG @echo Entering %0
+@if defined DEBUG @echo Entering %0
 @call :SET_VERBOSE_IF_DEBUG_ON
 @reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\SharedDLLs > %TEMP%\shareddlls.txt
-@grep --ignore-case --count firebird %TEMP%\shareddlls.txt > %TEMP%\shareddllscount.txt
+::@grep --ignore-case --count firebird %TEMP%\shareddlls.txt > %TEMP%\shareddllscount.txt
+type %TEMP%\shareddlls.txt | find /C /I "firebird" > %TEMP%\shareddllscount.txt
 set /p SHAREDDLLSCOUNT= < %TEMP%\shareddllscount.txt
-if NOT defined DEBUG del /q %TEMP%\shareddll*.txt
-if %SHAREDDLLSCOUNT% GTR 0 (
+@if NOT defined DEBUG del /q %TEMP%\shareddll*.txt
+@if %SHAREDDLLSCOUNT% GTR 0 (
     @echo %TAB% Oops - residue in HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\SharedDLLs
     set /A XRESULT+=1
     @echo XRESULT++
 )
-call :RESET_ERRORLEVEL
-if defined DEBUG @echo Leaving %0
+@call :RESET_ERRORLEVEL
+@if defined DEBUG @echo Leaving %0
 @call :UNSET_VERBOSE
 @goto :EOF
 ::===CHECKSHAREDDLLS===================
 
 
 ::=====================================
+:CHECKSERVICECONFIGURED
+@if defined DEBUG @echo Entering %0
+@call :SET_VERBOSE_IF_DEBUG_ON
+
+:: Add test for server arch set in firebird.conf
+
+  if defined CLASSICSERVER ( set STR_TO_TEST="servermode = classic" )
+  if defined SUPERCLASSIC ( set STR_TO_TEST="servermode = superclassic" )
+  if defined SUPERSERVER ( set STR_TO_TEST="servermode = super" )
+
+  call :CHECKSTRING %STR_TO_TEST% %FIREBIRD%\\firebird.conf
+  if ERRORLEVEL 1 (
+    @echo %TAB% %STR_TO_TEST% not set in %FIREBIRD%\\firebird.conf
+    set /A XRESULT+=1
+    @echo XRESULT++
+  )
+
+@call :RESET_ERRORLEVEL
+@if defined DEBUG @echo Leaving %0
+@call :UNSET_VERBOSE
+@goto :EOF
+::===CHECKSERVICECONFIGURED===================
+
+
+
+::=====================================
+:CHECKSERVICEINSTALLED
+@if defined DEBUG @echo Entering %0
+@call :SET_VERBOSE_IF_DEBUG_ON
+
+  %FIREBIRD%\\instsvc.exe q
+
+
+@call :RESET_ERRORLEVEL
+@if defined DEBUG @echo Leaving %0
+@call :UNSET_VERBOSE
+@goto :EOF
+::===CHECKSERVICEINSTALLED===================
+
+
+::=====================================
 :COPY_INSTALL
 @call :SET_VERBOSE_IF_DEBUG_ON
-if defined DEBUG @echo Entering %0
+@if defined DEBUG @echo Entering %0
 ::@call :SET_VERBOSE
-if defined VERBOSE @echo on
+@if defined VERBOSE @echo on
 
 :: ADIRNAME should normally be set during install and persist for uninstall
 @if not defined ADIRNAME (
@@ -590,10 +714,13 @@ if defined VERBOSE @echo on
 :CHECK_ENV
 :: TODO - add more checks for the environment declared in SET_GLOBAL_ENV
 if not exist %FBINST_EXEC% (
+    echo %~0 failed
     echo Cannot find %FBINST_EXEC%
-    exit /b 1
+    echo Check the setting of FBINST_EXEC
+    set _err=1
+    exit /b %_err%
 )
-@goto :EOF
+goto :EOF
 ::===CHECK_ENV=========================
 
 ::=====================================
@@ -604,6 +731,7 @@ if not exist %FBINST_EXEC% (
 :: not have the same value as the internal ERRORLEVEL. We have to execute an
 :: arbitrary command that cannot fail if we want to really reset the internal
 :: variable.
+@set _err=
 @ver > nul
 @goto :EOF
 ::===RESET_ERRORLEVEL==================
@@ -620,11 +748,14 @@ if not exist %FBINST_EXEC% (
 @goto :EOF
 ::===SET_VERBOSE_IF_DEBUG_ON================
 
+
 ::=====================================
 :SET_VERBOSE
 @set VERBOSE=1
+@echo on
 @goto :EOF
 ::===SET_VERBOSE================
+
 
 ::=====================================
 :UNSET_VERBOSE
@@ -651,50 +782,131 @@ goto :EOF
 :ISS_ERROR
 @echo.
 @echo InnoSetup ErrorCode %1 from calling %~2 %~3 %~4 %~5 %~6 %~7 %~8 %~9
-@echo Definition of Innosetup errorcode %1 is to be added later
+@echo.
+@if "%1"=="1" (
+  @echo Setup failed to initialize.
+  @echo.
+  @goto :EOF
+)
+
+@if "%1"=="2" (
+  @echo The user clicked Cancel in the wizard before the actual installation
+  @echo started, or chose 'No' on the opening 'This will install...' message box.
+  @echo.
+  @goto :EOF
+)
+
+@if "%1" == "3" (
+  @echo A fatal error occurred while preparing to move to the next
+  @echo installation phase (for example, from displaying the pre-installation
+  @echo wizard pages to the actual installation process). This should never
+  @echo happen except under the most unusual of circumstances, such as
+  @echo running out of memory or Windows resources.
+  @echo.
+  @goto :EOF
+)
+
+@if "%1" == "4" (
+  @echo A fatal error occurred during the actual installation process.
+  @echo.
+  @goto :EOF
+)
+
+@if "%1" == "5" (
+  @echo The user clicked Cancel during the actual installation process,
+  @echo or chose Abort at an Abort-Retry-Ignore box.
+  @echo.
+  @goto :EOF
+)
+
+@if "%1" == "6" (
+  @echo The Setup process was forcefully terminated by the debugger
+  @echo (Run | Terminate was used in the Compiler IDE).
+  @echo.
+  @goto :EOF
+)
+
+@if "%1" == "7" (
+  @echo The Preparing to Install stage determined that Setup cannot proceed
+  @echo with installation. (First introduced in Inno Setup 5.4.1.)
+  @echo.
+  @goto :EOF
+)
+
+@if "%1" == "8" (
+  @echo The Preparing to Install stage determined that Setup cannot proceed
+  @echo with installation, and that the system needs to be restarted in
+  @echo order to correct the problem. (First introduced in Inno Setup 5.4.1.)
+  @echo.
+  @goto :EOF
+)
 @echo.
 @goto :EOF
 ::======================================
 
-::================================================================================================================
-:: GENERIC SUPPORT ROUTINES FROM HERE TO END ======================================================================
-::================================================================================================================
+::==============================================================================
+:: GENERIC SUPPORT ROUTINES FROM HERE TO END  ==================================
+::==============================================================================
+
+
+::=====================================
+:CHECKSTRING
+@if defined DEBUG @echo Entering %0
+@call :SET_VERBOSE_IF_DEBUG_ON
+::@if defined VERBOSE echo %0 - %*
+for %%v in ( %* )  do (
+  if /I "%%v"=="" ( @goto :EOF )
+)
+:: === NOTE ====
+:: We use the /x flag here for an exact match!
+@if defined VERBOSE echo calling findstr /x /c:%1 /i %2
+:: findstr /x /c:"servermode = superclassic" /i Firebird_4_0\firebird.conf
+findstr /x /c:%1 /i %2
+
+@call :RESET_ERRORLEVEL
+@if defined DEBUG @echo Leaving %0
+@call :UNSET_VERBOSE
+@goto :EOF
+::===CHECKSTRING===================
+
+
 
 ::=====================================
 :GET_DATE
-if NOT defined DEBUG @echo off
-echo. | date | FIND "(mm" > NUL
-if errorlevel 1 ((set MD=0) & call :ParseDate DD MM) else ((set MD=1) & call :ParseDate MM DD)
+@if NOT defined DEBUG @echo off
+@echo. | date | FIND "(mm" > NUL
+@if errorlevel 1 ((set MD=0) & call :ParseDate DD MM) else ((set MD=1) & call :ParseDate MM DD)
 @goto :EOF
 :ParseDate
-for /f "tokens=1-3 delims=/.- " %%a in ("%DATE%") do (
-set %1=%%a
-set %2=%%b
-set YYYY=%%c
+@for /f "tokens=1-3 delims=/.- " %%a in ("%DATE%") do (
+@set %1=%%a
+@set %2=%%b
+@set YYYY=%%c
 @goto:EOF)
 ::=====================================
 
 ::=====================================
 :GET_TIME
-if NOT defined DEBUG @echo off
-for /f "tokens=1-4 delims=:. " %%a in ("%TIME%") do (
-set hh=%%a
-set nn=%%b
-set ss=%%c
-set ms=%%d
+@if NOT defined DEBUG @echo off
+@for /f "tokens=1-4 delims=:. " %%a in ("%TIME%") do (
+@set hh=%%a
+@set nn=%%b
+@set ss=%%c
+@set ms=%%d
 @goto :EOF)
 ::=====================================
 
 ::=====================================
 :CLEAR_DT_VARS
-if NOT defined DEBUG @echo off
-set MM=
-set DD=
-set YYYY=
-set hh=
-set nn=
-set ss=
-set ms=
+@if NOT defined DEBUG @echo off
+@set MM=
+@set DD=
+@set YYYY=
+@set hh=
+@set nn=
+@set ss=
+@set ms=
+@if defined DEBUG @echo Leaving CLEAR_DT_VARS
 @goto :EOF
 ::=====================================
 
@@ -703,8 +915,8 @@ set ms=
 @call :GET_DATE
 @call :GET_TIME
 @set TIMESTAMP=%YYYY%%MM%%DD%%hh%%nn%%ss%
-if defined DEBUG (@echo Timestamp set to %TIMESTAMP%)
-call :CLEAR_DT_VARS
+@if defined DEBUG (@echo Timestamp set to %TIMESTAMP%)
+@call :CLEAR_DT_VARS
 @goto :EOF
 ::=====================================
 
@@ -724,25 +936,22 @@ call :CLEAR_DT_VARS
 
 :: sometimes it is useful to just tidy up!
 @if /I "%1"=="clean" (
-  @call :RUN_UNINSTALLER SCRIPTED CLEAN
-  @goto :EOF
+  @set NOUNINSTALL=
+  call :RUN_UNINSTALLER SCRIPTED CLEAN
+  goto :EOF
 )
 
 @call :RUN_INSTALLER %*
+@if defined _err ( echo _err is %_err% - quitting. && @goto :EOF)
+
 @call :RUN_UNINSTALLER %*
+
 
 @if defined DEBUG @echo Leaving %0
 @call :UNSET_VERBOSE
 @goto :EOF
 ::===MAIN==============================
 
-:: CONTINUE with
-:: - look at setting up different test recipes and naming them.
-:: - Integrate innosetup exit codes and look at error handling
-:: - Tidy up the relationship between DEBUG and VERBOSE.
-::    - DEBUG should turn on VERBOSE?
-::    - VERBOSE should be routine specific.?
-::    - DEBUG should persist for entire script run?
 
 
 :: NOTHING BEYOND THIS POINT===========

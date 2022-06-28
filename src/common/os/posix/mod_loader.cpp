@@ -46,18 +46,16 @@
 class DlfcnModule : public ModuleLoader::Module
 {
 public:
-	DlfcnModule(MemoryPool& pool, const Firebird::PathName& aFileName, void* m)
-		: ModuleLoader::Module(pool, aFileName),
-		  module(m)
-	{}
-
+	DlfcnModule(MemoryPool& pool, const Firebird::PathName& aFileName, void* m);
 	~DlfcnModule();
-	void* findSymbol(ISC_STATUS*, const Firebird::string&);
 
-	bool getRealPath(Firebird::PathName& realPath);
+	void* findSymbol(ISC_STATUS*, const Firebird::string&) override;
+
+	bool getRealPath(Firebird::PathName& path) override;
 
 private:
 	void* module;
+	Firebird::PathName realPath;
 };
 
 static void makeErrorStatus(ISC_STATUS* status, const char* text)
@@ -154,6 +152,47 @@ ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const Firebir
 	return FB_NEW_POOL(*getDefaultMemoryPool()) DlfcnModule(*getDefaultMemoryPool(), linkPath, module);
 }
 
+DlfcnModule::DlfcnModule(MemoryPool& pool, const Firebird::PathName& aFileName, void* m)
+	: ModuleLoader::Module(pool, aFileName),
+	  module(m),
+	  realPath(pool)
+{
+#ifdef HAVE_DLINFO
+	char b[PATH_MAX];
+
+#ifdef HAVE_RTLD_DI_ORIGIN
+	if (dlinfo(module, RTLD_DI_ORIGIN, b) == 0)
+	{
+		realPath = b;
+		realPath += '/';
+		realPath += fileName;
+
+		if (realpath(realPath.c_str(), b))
+		{
+			realPath = b;
+			return;
+		}
+	}
+#endif
+
+#ifdef HAVE_RTLD_DI_LINKMAP
+	struct link_map* lm;
+	if (dlinfo(module, RTLD_DI_LINKMAP, &lm) == 0)
+	{
+		if (realpath(lm->l_name, b))
+		{
+			realPath = b;
+			return;
+		}
+	}
+#endif
+
+#endif
+
+	// Error getting real path.
+	realPath.clear();
+}
+
 DlfcnModule::~DlfcnModule()
 {
 	if (module)
@@ -165,7 +204,7 @@ void* DlfcnModule::findSymbol(ISC_STATUS* status, const Firebird::string& symNam
 	void* result = dlsym(module, symName.c_str());
 	if (!result)
 	{
-		Firebird::string newSym ='_' + symName;
+		Firebird::string newSym = '_' + symName;
 		result = dlsym(module, newSym.c_str());
 	}
 
@@ -183,20 +222,28 @@ void* DlfcnModule::findSymbol(ISC_STATUS* status, const Firebird::string& symNam
 		return NULL;
 	}
 
+	const auto& libraryPath = realPath.isEmpty() ? fileName : realPath;
+
+	char symbolPathBuffer[PATH_MAX];
+	const char* symbolPath = symbolPathBuffer;
+
+	if (!realpath(info.dli_fname, symbolPathBuffer))
+		symbolPath = info.dli_fname;
+
 	const char* errText = "Actual module name does not match requested";
-	if (PathUtils::isRelative(fileName) || PathUtils::isRelative(info.dli_fname))
+	if (PathUtils::isRelative(libraryPath) || PathUtils::isRelative(symbolPath))
 	{
 		// check only name (not path) of the library
 		Firebird::PathName dummyDir, nm1, nm2;
-		PathUtils::splitLastComponent(dummyDir, nm1, fileName);
-		PathUtils::splitLastComponent(dummyDir, nm2, info.dli_fname);
+		PathUtils::splitLastComponent(dummyDir, nm1, libraryPath);
+		PathUtils::splitLastComponent(dummyDir, nm2, symbolPath);
 		if (nm1 != nm2)
 		{
 			makeErrorStatus(status, errText);
 			return NULL;
 		}
 	}
-	else if (fileName != info.dli_fname)
+	else if (libraryPath != symbolPath)
 	{
 		makeErrorStatus(status, errText);
 		return NULL;
@@ -206,38 +253,11 @@ void* DlfcnModule::findSymbol(ISC_STATUS* status, const Firebird::string& symNam
 	return result;
 }
 
-bool DlfcnModule::getRealPath(Firebird::PathName& realPath)
+bool DlfcnModule::getRealPath(Firebird::PathName& path)
 {
-#ifdef HAVE_DLINFO
-	char b[PATH_MAX];
+	if (realPath.isEmpty())
+		return false;
 
-#ifdef HAVE_RTLD_DI_ORIGIN
-	if (dlinfo(module, RTLD_DI_ORIGIN, b) == 0)
-	{
-		realPath = b;
-		realPath += '/';
-		realPath += fileName;
-
-		if (realpath(realPath.c_str(), b))
-		{
-			realPath = b;
-			return true;
-		}
-	}
-#endif
-
-#ifdef HAVE_RTLD_DI_LINKMAP
-	struct link_map* lm;
-	if (dlinfo(module, RTLD_DI_LINKMAP, &lm) == 0)
-	{
-		if (realpath(lm->l_name, b))
-		{
-			realPath = b;
-			return true;
-		}
-	}
-#endif
-
-#endif
-	return false;
+	path = realPath;
+	return true;
 }

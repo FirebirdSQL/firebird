@@ -61,6 +61,7 @@
 #include "../common/os/os_utils.h"
 #include "../burp/burpswi.h"
 #include "../common/db_alias.h"
+#include "../burp/BurpTasks.h"
 
 #ifdef HAVE_CTYPE_H
 #include <ctype.h>
@@ -83,8 +84,9 @@
 #include <sys/file.h>
 #endif
 
+using namespace Firebird;
 using MsgFormat::SafeArg;
-using Firebird::FbLocalStatus;
+using namespace Burp;
 
 const char* fopen_write_type = "w";
 const char* fopen_read_type	 = "r";
@@ -596,6 +598,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	tdgbl->gbl_sw_old_descriptions = false;
 	tdgbl->gbl_sw_mode = false;
 	tdgbl->gbl_sw_skip_count = 0;
+	tdgbl->gbl_sw_par_workers = 1;
 	tdgbl->action = NULL;
 
 	burp_fil* file = NULL;
@@ -868,6 +871,19 @@ int gbak(Firebird::UtilSvc* uSvc)
 			// skip a service specification
 			in_sw_tab->in_sw_state = false;
 			break;
+		case IN_SW_BURP_PARALLEL_WORKERS:
+			if (++itr >= argc)
+			{
+				BURP_error(407, true);
+				// msg 407 parallel workers parameter missing
+			}
+			tdgbl->gbl_sw_par_workers = get_number(argv[itr]);
+			if (tdgbl->gbl_sw_par_workers <= 0)
+			{
+				BURP_error(408, true, argv[itr]);
+				// msg 408 expected parallel workers, encountered "%s"
+			}
+			break;
 		case IN_SW_BURP_Y:
 			{
 				// want to do output redirect handling now instead of waiting
@@ -964,6 +980,11 @@ int gbak(Firebird::UtilSvc* uSvc)
 			if (tdgbl->gbl_sw_convert_ext_tables)
 				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
 			tdgbl->gbl_sw_convert_ext_tables = true;
+			break;
+		case IN_SW_BURP_DIRECT_IO:
+			if (tdgbl->gbl_sw_direct_io)
+				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
+			tdgbl->gbl_sw_direct_io = true;
 			break;
 		case IN_SW_BURP_E:
 			if (!tdgbl->gbl_sw_compress)
@@ -1380,6 +1401,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	MVOL_init(tdgbl->io_buffer_size);
 
 	int result;
+	tdgbl->gbl_dpb_data.add(dpb.getBuffer(), dpb.getBufferLength());
 
 	tdgbl->uSvc->started();
 	switch (action)
@@ -1490,7 +1512,9 @@ void BURP_abort()
  *	Abandon a failed operation.
  *
  **************************************/
-	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+	BurpMaster master;
+	BurpGlobals* tdgbl = master.get();
+
 	USHORT code = tdgbl->action && tdgbl->action->act_action == ACT_backup_fini ? 351 : 83;
 	// msg 351 Error closing database, but backup file is OK
 	// msg 83 Exiting before completion due to errors
@@ -1517,7 +1541,8 @@ void BURP_error(USHORT errcode, bool abort, const SafeArg& arg)
  * Functional description
  *
  **************************************/
-	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+	BurpMaster master;
+	BurpGlobals* tdgbl = master.get();
 
 	tdgbl->uSvc->setServiceStatus(burp_msg_fac, errcode, arg);
 	tdgbl->uSvc->started();
@@ -1564,6 +1589,7 @@ void BURP_error_redirect(Firebird::IStatus* status_vector, USHORT errcode, const
  *	Issue error message. Output messages then abort.
  *
  **************************************/
+	BurpMaster master;
 
 	BURP_print_status(true, status_vector);
 	BURP_error(errcode, true, arg);
@@ -1672,6 +1698,7 @@ void BURP_print(bool err, USHORT number, const SafeArg& arg)
  *	will accept.
  *
  **************************************/
+	BurpMaster master;
 
 	BURP_msg_partial(err, 169);	// msg 169: gbak:
 	BURP_msg_put(err, number, arg);
@@ -1692,6 +1719,7 @@ void BURP_print(bool err, USHORT number, const char* str)
  *	will accept.
  *
  **************************************/
+	BurpMaster master;
 
 	static const SafeArg dummy;
 	BURP_msg_partial(err, 169, dummy);	// msg 169: gbak:
@@ -1714,11 +1742,13 @@ void BURP_print_status(bool err, Firebird::IStatus* status_vector)
  **************************************/
 	if (status_vector)
 	{
+		BurpMaster master;
+		BurpGlobals* tdgbl = master.get();
+
 		const ISC_STATUS* vector = status_vector->getErrors();
 
 		if (err)
 		{
-			BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 			tdgbl->uSvc->setServiceStatus(vector);
 			tdgbl->uSvc->started();
 
@@ -1759,6 +1789,9 @@ void BURP_print_warning(Firebird::IStatus* status)
  **************************************/
 	if (status && (status->getState() & Firebird::IStatus::STATE_WARNINGS))
 	{
+		BurpMaster master;
+		BurpGlobals* tdgbl = master.get();
+
 		// print the warning message
 		const ISC_STATUS* vector = status->getWarnings();
 		SCHAR s[1024];
@@ -1791,7 +1824,8 @@ void BURP_verbose(USHORT number, const SafeArg& arg)
  *	If not verbose then calls yielding function.
  *
  **************************************/
-	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+	BurpMaster master;
+	BurpGlobals* tdgbl = master.get();
 
 	if (tdgbl->gbl_sw_verbose)
 		BURP_message(number, arg, true);
@@ -1812,7 +1846,8 @@ void BURP_message(USHORT number, const MsgFormat::SafeArg& arg, bool totals)
  *	Calls BURP_msg for formatting & displaying a message.
  *
  **************************************/
-	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+	BurpMaster master;
+	BurpGlobals* tdgbl = master.get();
 
 	if (totals)
 		tdgbl->print_stats_header();
@@ -2108,6 +2143,7 @@ static gbak_action open_files(const TEXT* file1,
 				tdgbl->uSvc->setDataMode(true);
 				fil->fil_fd = GBAK_STDOUT_DESC();
 				tdgbl->stdIoMode = true;
+				tdgbl->gbl_sw_direct_io = false;
 				break;
 			}
 			else
@@ -2116,7 +2152,8 @@ static gbak_action open_files(const TEXT* file1,
 #ifdef WIN_NT
 				if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_WRITE, CREATE_ALWAYS)) == INVALID_HANDLE_VALUE)
 #else
-				if ((fil->fil_fd = os_utils::open(nm.c_str(), MODE_WRITE, open_mask)) == -1)
+				const int wmode = MODE_WRITE | (tdgbl->gbl_sw_direct_io ? O_DIRECT : 0);
+				if ((fil->fil_fd = open(fil->fil_name.c_str(), wmode, open_mask)) == -1)
 #endif // WIN_NT
 				{
 
@@ -2213,6 +2250,7 @@ static gbak_action open_files(const TEXT* file1,
 		fil->fil_fd = GBAK_STDIN_DESC();
 		tdgbl->file_desc = fil->fil_fd;
 		tdgbl->stdIoMode = true;
+		tdgbl->gbl_sw_direct_io = false;
 		tdgbl->gbl_sw_files = fil->fil_next;
 	}
 	else
@@ -2224,7 +2262,8 @@ static gbak_action open_files(const TEXT* file1,
 #ifdef WIN_NT
 		if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_READ, OPEN_EXISTING)) == INVALID_HANDLE_VALUE)
 #else
-		if ((fil->fil_fd = os_utils::open(nm.c_str(), MODE_READ)) == INVALID_HANDLE_VALUE)
+		const int rmode = MODE_READ | (tdgbl->gbl_sw_direct_io ? O_DIRECT : 0);
+		if ((fil->fil_fd = os_utils::open(nm.c_str(), rmode)) == INVALID_HANDLE_VALUE)
 #endif
 		{
 			BURP_error(65, true, fil->fil_name.c_str());
@@ -2269,7 +2308,7 @@ static gbak_action open_files(const TEXT* file1,
 #ifdef WIN_NT
 				if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_READ, OPEN_EXISTING)) == INVALID_HANDLE_VALUE)
 #else
-				if ((fil->fil_fd = os_utils::open(nm.c_str(), MODE_READ)) == INVALID_HANDLE_VALUE)
+				if ((fil->fil_fd = os_utils::open(nm.c_str(), rmode)) == INVALID_HANDLE_VALUE)
 #endif
 				{
 					BURP_error(65, false, fil->fil_name.c_str());
@@ -2427,7 +2466,8 @@ static void burp_output(bool err, const SCHAR* format, ...)
  **************************************/
 	va_list arglist;
 
-	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+	BurpMaster master;
+	BurpGlobals* tdgbl = master.get();
 
 	if (tdgbl->sw_redirect != NOOUTPUT && format[0] != '\0')
 	{
@@ -2709,7 +2749,10 @@ bool BurpGlobals::skipRelation(const char* name)
 		{ false, false, true}  // NM  p
 	};
 
-	return result[checkPattern(skipDataMatcher, name)][checkPattern(includeDataMatcher, name)];
+	const enum Pattern res1 = checkPattern(skipDataMatcher, name);
+	const enum Pattern res2 = checkPattern(includeDataMatcher, name);
+
+	return result[res1][res2];
 }
 
 void BurpGlobals::read_stats(SINT64* stats)

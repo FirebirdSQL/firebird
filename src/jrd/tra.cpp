@@ -1234,6 +1234,8 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 			blb::release_array(transaction->tra_arrays);
 	}
 
+	fb_assert(transaction->tra_temp_blobs_count == 0);
+
 	if (transaction->tra_pool)
 	{
 		// Iterate the doubly linked list of requests for transaction and null out the transaction references
@@ -1689,7 +1691,11 @@ jrd_tra* TRA_start(thread_db* tdbb, ULONG flags, SSHORT lock_timeout, Jrd::jrd_t
 	Database* const dbb = tdbb->getDatabase();
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
-	if (dbb->dbb_ast_flags & DBB_shut_tran)
+	// Starting new transactions should be allowed for threads which
+	// are running purge_attachment() because it's needed for
+	// ON DISCONNECT triggers
+	if (dbb->dbb_ast_flags & DBB_shut_tran &&
+		attachment->att_purge_tid != Thread::getId())
 	{
 		ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(attachment->att_filename));
 	}
@@ -1742,7 +1748,11 @@ jrd_tra* TRA_start(thread_db* tdbb, int tpb_length, const UCHAR* tpb, Jrd::jrd_t
 	Database* dbb = tdbb->getDatabase();
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 
-	if (dbb->dbb_ast_flags & DBB_shut_tran)
+	// Starting new transactions should be allowed for threads which
+	// are running purge_attachment() because it's needed for
+	// ON DISCONNECT triggers
+	if (dbb->dbb_ast_flags & DBB_shut_tran &&
+		attachment->att_purge_tid != Thread::getId())
 	{
 		ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(attachment->att_filename));
 	}
@@ -4053,13 +4063,17 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 		vec<jrd_rel*>* vector = tra_attachment->att_relations;
 		jrd_rel* blb_relation;
 
-		if (rel_id < vector->count() &&	(blb_relation = (*vector)[rel_id]))
+		if ((rel_id < vector->count() && (blb_relation = (*vector)[rel_id])) ||
+			(blb_relation = MET_relation(tdbb, rel_id)))
 		{
-			const MetaName security_name = fld ?
+			MetaName security_name = (fld && fld->fld_security_name.hasData()) ?
 				fld->fld_security_name : blb_relation->rel_security_name;
 
 			if (security_name.isEmpty())
+			{
 				MET_scan_relation(tdbb, blb_relation);
+				security_name = blb_relation->rel_security_name;
+			}
 
 			SecurityClass* s_class = SCL_get_class(tdbb, security_name.c_str());
 
@@ -4155,12 +4169,11 @@ TraceSweepEvent::TraceSweepEvent(thread_db* tdbb)
 
 	TraceManager* trace_mgr = att->att_trace_manager;
 
+	m_start_clock = fb_utils::query_performance_counter();
 	m_need_trace = trace_mgr->needs(ITraceFactory::TRACE_EVENT_SWEEP);
 
 	if (!m_need_trace)
 		return;
-
-	m_start_clock = fb_utils::query_performance_counter();
 
 	TraceConnectionImpl conn(att);
 	trace_mgr->event_sweep(&conn, &m_sweep_info, ITracePlugin::SWEEP_STATE_STARTED);
@@ -4230,12 +4243,19 @@ void TraceSweepEvent::report(ntrace_process_state_t state)
 {
 	Attachment* att = m_tdbb->getAttachment();
 
+	const SINT64 finiTime = fb_utils::query_performance_counter() - m_start_clock;
+
 	if (state == ITracePlugin::SWEEP_STATE_FINISHED)
 	{
+		const SINT64 timeMs = finiTime * 1000 / fb_utils::query_performance_frequency();
+
 		gds__log("Sweep is finished\n"
 			"\tDatabase \"%s\" \n"
+			"\t%i workers, time %" SLONGFORMAT ".%03d sec \n"
 			"\tOIT %" SQUADFORMAT", OAT %" SQUADFORMAT", OST %" SQUADFORMAT", Next %" SQUADFORMAT,
 			att->att_filename.c_str(),
+			att->att_parallel_workers,
+			(int) timeMs / 1000, (unsigned int) timeMs % 1000,
 			m_sweep_info.getOIT(),
 			m_sweep_info.getOAT(),
 			m_sweep_info.getOST(),
@@ -4256,9 +4276,7 @@ void TraceSweepEvent::report(ntrace_process_state_t state)
 
 	jrd_tra* tran = m_tdbb->getTransaction();
 
-	TraceRuntimeStats stats(att, &m_base_stats, &att->att_stats,
-		fb_utils::query_performance_counter() - m_start_clock,
-		0);
+	TraceRuntimeStats stats(att, &m_base_stats, &att->att_stats, finiTime, 0);
 
 	m_sweep_info.setPerf(stats.getPerf());
 	trace_mgr->event_sweep(&conn, &m_sweep_info, state);

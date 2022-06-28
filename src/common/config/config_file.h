@@ -81,7 +81,7 @@ public:
 			  sub(par.sub), line(par.line)
 		{ }
 		Parameter()
-			: AutoStorage(), name(getPool()), value(getPool()), sub(0), line(0)
+			: AutoStorage(), name(getPool()), value(getPool()), line(0)
 		{ }
 
 		SINT64 asInteger() const;

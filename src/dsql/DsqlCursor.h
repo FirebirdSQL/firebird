@@ -61,6 +61,10 @@ public:
 		return (m_state == EOS);
 	}
 
+	void getInfo(thread_db* tdbb,
+				 unsigned int itemsLength, const unsigned char* items,
+				 unsigned int bufferLength, unsigned char* buffer);
+
 private:
 	int fetchFromCache(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position);
 	bool cacheInput(thread_db* tdbb, FB_UINT64 position = MAX_UINT64);

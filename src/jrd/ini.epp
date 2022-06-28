@@ -1787,6 +1787,29 @@ static void store_packages(thread_db* tdbb, const MetaName& owner)
 						PP.RDB$NULL_FLAG = !parameter.nullable;
 
 						PAD(names[gfields[parameter.fieldId].gfld_name], PP.RDB$FIELD_SOURCE);
+
+						fb_assert(parameter.defaultBlr.isEmpty() == !parameter.defaultText);
+
+						if (parameter.defaultBlr.hasData())
+						{
+							attachment->storeMetaDataBlob(tdbb, attachment->getSysTransaction(), &PP.RDB$DEFAULT_SOURCE,
+								string("default ") + parameter.defaultText);
+							PP.RDB$DEFAULT_SOURCE.NULL = FALSE;
+
+							Array<UCHAR> blrData(1 + parameter.defaultBlr.getCount() + 1);
+							blrData.push(blr_version5);
+							blrData.append(parameter.defaultBlr);
+							blrData.push(blr_eoc);
+
+							attachment->storeBinaryBlob(tdbb, attachment->getSysTransaction(), &PP.RDB$DEFAULT_VALUE,
+								blrData);
+							PP.RDB$DEFAULT_VALUE.NULL = FALSE;
+						}
+						else
+						{
+							PP.RDB$DEFAULT_SOURCE.NULL = TRUE;
+							PP.RDB$DEFAULT_VALUE.NULL = TRUE;
+						}
 					}
 					END_STORE
 				}
@@ -1844,6 +1867,29 @@ static void store_packages(thread_db* tdbb, const MetaName& owner)
 					ARG.RDB$NULL_FLAG = !parameter.nullable;
 
 					PAD(names[gfields[parameter.fieldId].gfld_name], ARG.RDB$FIELD_SOURCE);
+
+					fb_assert(parameter.defaultBlr.isEmpty() == !parameter.defaultText);
+
+					if (parameter.defaultBlr.hasData())
+					{
+						attachment->storeMetaDataBlob(tdbb, attachment->getSysTransaction(), &ARG.RDB$DEFAULT_SOURCE,
+							string("default ") + parameter.defaultText);
+						ARG.RDB$DEFAULT_SOURCE.NULL = FALSE;
+
+						Array<UCHAR> blrData(1 + parameter.defaultBlr.getCount() + 1);
+						blrData.push(blr_version5);
+						blrData.append(parameter.defaultBlr);
+						blrData.push(blr_eoc);
+
+						attachment->storeBinaryBlob(tdbb, attachment->getSysTransaction(), &ARG.RDB$DEFAULT_VALUE,
+							blrData);
+						ARG.RDB$DEFAULT_VALUE.NULL = FALSE;
+					}
+					else
+					{
+						ARG.RDB$DEFAULT_SOURCE.NULL = TRUE;
+						ARG.RDB$DEFAULT_VALUE.NULL = TRUE;
+					}
 				}
 				END_STORE
 			}

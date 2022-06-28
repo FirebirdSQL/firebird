@@ -94,7 +94,6 @@ public:
 
 	static bool setupIcuAttributes(charset* cs, const string& specificAttributes,
 		const string& configInfo, string& newSpecificAttributes);
-	static void getDefaultCollationAttributes(UCharBuffer& collAttributes, charset& cs);
 
 private:
 	static string escapeAttribute(Jrd::CharSet* cs, const string& s);

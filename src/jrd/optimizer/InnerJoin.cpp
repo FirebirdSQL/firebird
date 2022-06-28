@@ -59,15 +59,16 @@ using namespace Jrd;
 
 InnerJoin::InnerJoin(thread_db* aTdbb, Optimizer* opt,
 					 const StreamList& streams,
-					 SortNode* sort_clause, bool hasPlan)
+					 SortNode** sortClause, bool hasPlan)
 	: PermanentStorage(*aTdbb->getDefaultPool()),
 	  tdbb(aTdbb),
 	  optimizer(opt),
 	  csb(opt->getCompilerScratch()),
-	  sort(sort_clause),
+	  sortPtr(sortClause),
 	  plan(hasPlan),
 	  innerStreams(getPool(), streams.getCount()),
-	  joinedStreams(getPool())
+	  joinedStreams(getPool()),
+	  bestStreams(getPool())
 {
 	joinedStreams.grow(streams.getCount());
 
@@ -92,12 +93,12 @@ void InnerJoin::calculateStreamInfo()
 	optimizer->printf("Base stream info:\n");
 #endif
 
+	const auto sort = sortPtr ? *sortPtr : nullptr;
+
 	for (auto innerStream : innerStreams)
 	{
 		streams.add(innerStream->stream);
-
-		const auto tail = &csb->csb_rpt[innerStream->stream];
-		tail->activate();
+		csb->csb_rpt[innerStream->stream].activate();
 
 		Retrieval retrieval(tdbb, optimizer, innerStream->stream, false, false, sort, true);
 		const auto candidate = retrieval.getInversion();
@@ -108,33 +109,59 @@ void InnerJoin::calculateStreamInfo()
 		innerStream->baseUnique = candidate->unique;
 		innerStream->baseNavigated = candidate->navigated;
 
-		tail->deactivate();
+		csb->csb_rpt[innerStream->stream].deactivate();
 	}
 
-	StreamStateHolder stateHolder(csb, streams);
-	stateHolder.activate();
+	// Collect dependencies between every pair of streams
 
-	// Collect stream inter-dependencies
-	for (const auto innerStream : innerStreams)
-		getIndexedRelationships(innerStream);
+	for (const auto baseStream : streams)
+	{
+		csb->csb_rpt[baseStream].activate();
+
+		for (const auto innerStream : innerStreams)
+		{
+			const StreamType testStream = innerStream->stream;
+
+			if (baseStream != testStream)
+			{
+				csb->csb_rpt[testStream].activate();
+				getIndexedRelationships(innerStream);
+				csb->csb_rpt[testStream].deactivate();
+			}
+		}
+
+		csb->csb_rpt[baseStream].deactivate();
+	}
+
+	// Collect more complex inter-dependencies (involving three and more streams), if any
+
+	if (streams.getCount() > 2)
+	{
+		StreamStateHolder stateHolder(csb, streams);
+		stateHolder.activate();
+
+		for (const auto innerStream : innerStreams)
+			getIndexedRelationships(innerStream);
+	}
 
 	// Unless PLAN is enforced, sort the streams based on independency and cost
 	if (!plan && (innerStreams.getCount() > 1))
 	{
-		auto compare = [] (const void* a, const void* b)
+		StreamInfoList tempStreams;
+
+		for (const auto innerStream : innerStreams)
 		{
-			const auto first = *static_cast<const StreamInfo* const*>(a);
-			const auto second = *static_cast<const StreamInfo* const*>(b);
+			FB_SIZE_T index = 0;
+			for (; index < tempStreams.getCount(); index++)
+			{
+				if (StreamInfo::cheaperThan(innerStream, tempStreams[index]))
+					break;
+			}
+			tempStreams.insert(index, innerStream);
+		}
 
-			if (StreamInfo::cheaperThan(first, second))
-				return -1;
-			if (StreamInfo::cheaperThan(second, first))
-				return 1;
-
-			return 0;
-		};
-
-		qsort(innerStreams.begin(), innerStreams.getCount(), sizeof(StreamInfo*), compare);
+		// Finally update the innerStreams with the sorted streams
+		innerStreams = tempStreams;
 	}
 }
 
@@ -143,23 +170,25 @@ void InnerJoin::calculateStreamInfo()
 // Estimate the cost for the stream
 //
 
-void InnerJoin::estimateCost(StreamType stream,
+void InnerJoin::estimateCost(unsigned position,
+							 const StreamInfo* stream,
 							 double* cost,
-							 double* resulting_cardinality,
-							 bool start) const
+							 double* resultingCardinality) const
 {
+	const auto sort = (position == 0 && sortPtr) ? *sortPtr : nullptr;
+
 	// Create the optimizer retrieval generation class and calculate
 	// which indexes will be used and the total estimated selectivity will be returned
-	Retrieval retrieval(tdbb, optimizer, stream, false, false, (start ? sort : nullptr), true);
+	Retrieval retrieval(tdbb, optimizer, stream->stream, false, false, sort, true);
 	const auto candidate = retrieval.getInversion();
 
 	*cost = candidate->cost;
 
 	// Calculate cardinality
-	const auto tail = &csb->csb_rpt[stream];
+	const auto tail = &csb->csb_rpt[stream->stream];
 	const double cardinality = tail->csb_cardinality * candidate->selectivity;
 
-	*resulting_cardinality = MAX(cardinality, MINIMUM_CARDINALITY);
+	*resultingCardinality = MAX(cardinality, MINIMUM_CARDINALITY);
 }
 
 
@@ -169,7 +198,7 @@ void InnerJoin::estimateCost(StreamType stream,
 // Next loop through the remaining streams and find the best order.
 //
 
-bool InnerJoin::findJoinOrder(StreamList& bestStreams)
+bool InnerJoin::findJoinOrder()
 {
 	bestStreams.clear();
 	bestCount = 0;
@@ -236,10 +265,6 @@ bool InnerJoin::findJoinOrder(StreamList& bestStreams)
 						break;
 					}
 				}
-#ifdef OPT_DEBUG
-				// Debug
-				printProcessList(indexedRelationships, innerStream->stream);
-#endif
 			}
 		}
 	}
@@ -274,13 +299,11 @@ void InnerJoin::findBestOrder(unsigned position,
 							  double cost,
 							  double cardinality)
 {
-	const bool start = (position == 0);
 	const auto tail = &csb->csb_rpt[stream->stream];
 
 	// Do some initializations
 	tail->activate();
 	joinedStreams[position].number = stream->stream;
-	position++;
 
 	// Save the various flag bits from the optimizer block to reset its
 	// state after each test
@@ -289,21 +312,23 @@ void InnerJoin::findBestOrder(unsigned position,
 		streamFlags.add(innerStream->used);
 
 	// Compute delta and total estimate cost to fetch this stream
-	double position_cost = 0, position_cardinality = 0, new_cost = 0, new_cardinality = 0;
+	double positionCost = 0, positionCardinality = 0, newCost = 0, newCardinality = 0;
 
 	if (!plan)
 	{
-		estimateCost(stream->stream, &position_cost, &position_cardinality, start);
-		new_cost = cost + cardinality * position_cost;
-		new_cardinality = position_cardinality * cardinality;
+		estimateCost(position, stream, &positionCost, &positionCardinality);
+		newCost = cost + cardinality * positionCost;
+		newCardinality = positionCardinality * cardinality;
 	}
+
+	position++;
 
 	// If the partial order is either longer than any previous partial order,
 	// or the same length and cheap, save order as "best"
-	if (position > bestCount || (position == bestCount && new_cost < bestCost))
+	if (position > bestCount || (position == bestCount && newCost < bestCost))
 	{
 		bestCount = position;
-		bestCost = new_cost;
+		bestCost = newCost;
 
 		const auto end = joinedStreams.begin() + position;
 		for (auto iter = joinedStreams.begin(); iter != end; ++iter)
@@ -315,7 +340,7 @@ void InnerJoin::findBestOrder(unsigned position,
 
 #ifdef OPT_DEBUG
 	// Debug information
-	printFoundOrder(position, position_cost, position_cardinality, new_cost, new_cardinality);
+	printFoundOrder(position, positionCost, positionCardinality, newCost, newCardinality);
 #endif
 
 	// Mark this stream as "used" in the sense that it is already included
@@ -329,10 +354,24 @@ void InnerJoin::findBestOrder(unsigned position,
 
 	// If we know a combination with all streams used and the
 	// current cost is higher as the one from the best we're done
-	if (bestCount == remainingStreams && bestCost < new_cost)
+	if (bestCount == remainingStreams && bestCost < newCost)
 		done = true;
 
-	if (!done && !plan)
+	if (plan)
+	{
+		// If a explicit PLAN was specific pick the next relation.
+		// The order in innerStreams is expected to be exactly the order as
+		// specified in the explicit PLAN.
+		for (auto nextStream : innerStreams)
+		{
+			if (!nextStream->used)
+			{
+				findBestOrder(position, nextStream, processList, newCost, newCardinality);
+				break;
+			}
+		}
+	}
+	else if (!done)
 	{
 		// Add these relations to the processing list
 		for (auto& relationship : stream->indexedRelationships)
@@ -371,22 +410,7 @@ void InnerJoin::findBestOrder(unsigned position,
 			auto relationStreamInfo = getStreamInfo(nextRelationship.stream);
 			if (!relationStreamInfo->used)
 			{
-				findBestOrder(position, relationStreamInfo, processList, new_cost, new_cardinality);
-				break;
-			}
-		}
-	}
-
-	if (plan)
-	{
-		// If a explicit PLAN was specific pick the next relation.
-		// The order in innerStreams is expected to be exactly the order as
-		// specified in the explicit PLAN.
-		for (auto nextStream : innerStreams)
-		{
-			if (!nextStream->used)
-			{
-				findBestOrder(position, nextStream, processList, new_cost, new_cardinality);
+				findBestOrder(position, relationStreamInfo, processList, newCost, newCardinality);
 				break;
 			}
 		}
@@ -400,6 +424,37 @@ void InnerJoin::findBestOrder(unsigned position,
 
 
 //
+// Form streams into rivers (combinations of streams)
+//
+
+River* InnerJoin::formRiver()
+{
+	fb_assert(bestCount);
+	fb_assert(bestStreams.hasData());
+
+	if (bestStreams.getCount() != innerStreams.getCount())
+		sortPtr = nullptr;
+
+	HalfStaticArray<RecordSource*, OPT_STATIC_ITEMS> rsbs;
+
+	for (const auto stream : bestStreams)
+	{
+		const auto rsb = optimizer->generateRetrieval(stream, sortPtr, false, false);
+		rsbs.add(rsb);
+		sortPtr = nullptr;
+	}
+
+	const auto rsb = (rsbs.getCount() == 1) ? rsbs[0] :
+		FB_NEW_POOL(getPool()) NestedLoopJoin(csb, rsbs.getCount(), rsbs.begin());
+
+	// Allocate a river block and move the best order into it
+	const auto river = FB_NEW_POOL(getPool()) River(csb, rsb, nullptr, bestStreams);
+	river->deactivate(csb);
+	return river;
+}
+
+
+//
 // Check if the testStream can use a index when the baseStream is active. If so
 // then we create a indexRelationship and fill it with the needed information.
 // The reference is added to the baseStream and the baseStream is added as previous
@@ -409,7 +464,9 @@ void InnerJoin::findBestOrder(unsigned position,
 void InnerJoin::getIndexedRelationships(StreamInfo* testStream)
 {
 #ifdef OPT_DEBUG_RETRIEVAL
-	optimizer->printf("Dependencies for stream %u:\n", testStream->stream);
+	const auto name = optimizer->getStreamName(testStream->stream);
+	optimizer->printf("Dependencies for stream %u (%s):\n",
+					  testStream->stream, name.c_str());
 #endif
 
 	const auto tail = &csb->csb_rpt[testStream->stream];
@@ -422,6 +479,20 @@ void InnerJoin::getIndexedRelationships(StreamInfo* testStream)
 		if (baseStream->stream != testStream->stream &&
 			candidate->dependentFromStreams.exist(baseStream->stream))
 		{
+			// If the base stream already depends on the testing stream, don't store it again
+			bool found = false;
+			for (const auto& relationship : baseStream->indexedRelationships)
+			{
+				if (relationship.stream == testStream->stream)
+				{
+					found = true;
+					break;
+				}
+			}
+
+			if (found)
+				continue;
+
 			// If we could use more conjunctions on the testing stream
 			// with the base stream active as without the base stream
 			// then the test stream has a indexed relationship with the base stream.
@@ -461,15 +532,21 @@ InnerJoin::StreamInfo* InnerJoin::getStreamInfo(StreamType stream)
 // Dump finally selected stream order
 void InnerJoin::printBestOrder() const
 {
-	optimizer->printf(" best order, streams: ");
-	auto iter = joinedStreams.begin();
-	const auto end = iter + bestCount;
-	for (; iter < end; iter++)
+	if (bestStreams.isEmpty())
+		return;
+
+	optimizer->printf("  best order, streams:");
+
+	const auto end = bestStreams.end();
+	for (auto iter = bestStreams.begin(); iter != end; iter++)
 	{
-		optimizer->printf("%u", iter->bestStream);
+		const auto name = optimizer->getStreamName(*iter);
+		optimizer->printf(" %u (%s)", *iter, name.c_str());
+
 		if (iter != end - 1)
-			optimizer->printf(", ");
+			optimizer->printf(",");
 	}
+
 	optimizer->printf("\n");
 }
 
@@ -480,51 +557,53 @@ void InnerJoin::printFoundOrder(StreamType position,
 								double cost,
 								double cardinality) const
 {
-	optimizer->printf("  position %2.2u:", position);
-	optimizer->printf(" pos. cardinality (%10.2f), pos. cost (%10.2f)", positionCardinality, positionCost);
-	optimizer->printf(" cardinality (%10.2f), cost (%10.2f)", cardinality, cost);
-	optimizer->printf(", streams: ");
+	for (auto i = position - 1; i > 0; i--)
+		optimizer->printf("  ");
+
+	optimizer->printf("  #%2.2u, streams:", position);
+
 	auto iter = joinedStreams.begin();
 	const auto end = iter + position;
 	for (; iter < end; iter++)
 	{
-		optimizer->printf("%u", iter->number);
-		if (iter != end - 1)
-			optimizer->printf(", ");
-	}
-	optimizer->printf("\n");
-}
+		const auto name = optimizer->getStreamName(iter->number);
+		optimizer->printf(" %u (%s)", iter->number, name.c_str());
 
-// Dump the processlist to a debug file
-void InnerJoin::printProcessList(const IndexedRelationships& processList,
-								 StreamType stream) const
-{
-	optimizer->printf("   base stream %u, relationships: stream (cost)", stream);
-	const auto end = processList.end();
-	for (auto iter = processList.begin(); iter != end; iter++)
-	{
-		optimizer->printf("%u (%1.2f)", iter->stream, iter->cost);
 		if (iter != end - 1)
-			optimizer->printf(", ");
+			optimizer->printf(",");
 	}
+
+	optimizer->printf("\n");
+
+	for (auto i = position - 1; i > 0; i--)
+		optimizer->printf("  ");
+
+	optimizer->printf("       position cardinality (%10.2f), position cost (%10.2f),", positionCardinality, positionCost);
+	optimizer->printf(" cardinality (%10.2f), cost (%10.2f)", cardinality, cost);
+
 	optimizer->printf("\n");
 }
 
 // Dump finally selected stream order
 void InnerJoin::printStartOrder() const
 {
-	optimizer->printf("Start join order, stream (baseCost): ");
+	optimizer->printf("Start join order, streams:");
+
 	const auto end = innerStreams.end();
 	for (auto iter = innerStreams.begin(); iter != end; iter++)
 	{
 		const auto innerStream = *iter;
 		if (!innerStream->used)
 		{
-			optimizer->printf("%u (%1.2f)", innerStream->stream, innerStream->baseCost);
+			const auto name = optimizer->getStreamName(innerStream->stream);
+			optimizer->printf(" %u (%s) base cost (%1.2f)",
+							  innerStream->stream, name.c_str(), innerStream->baseCost);
+
 			if (iter != end - 1)
-				optimizer->printf(", ");
+				optimizer->printf(",");
 		}
 	}
+
 	optimizer->printf("\n");
 }
 #endif

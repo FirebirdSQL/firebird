@@ -42,7 +42,7 @@ int			INTL_compare(Jrd::thread_db*, const dsc*, const dsc*, ErrorFunction);
 ULONG		INTL_convert_bytes(Jrd::thread_db*, CHARSET_ID, UCHAR*, const ULONG, CHARSET_ID,
 								const BYTE*, const ULONG, ErrorFunction);
 Jrd::CsConvert	INTL_convert_lookup(Jrd::thread_db*, CHARSET_ID, CHARSET_ID);
-int			INTL_convert_string(dsc*, const dsc*, Firebird::Callbacks* cb);
+void		INTL_convert_string(dsc*, const dsc*, Firebird::Callbacks* cb);
 bool		INTL_data(const dsc*);
 bool		INTL_data_or_binary(const dsc*);
 bool		INTL_defined_type(Jrd::thread_db*, USHORT);
@@ -56,10 +56,12 @@ USHORT		INTL_string_to_key(Jrd::thread_db*, USHORT, const dsc*, dsc*, USHORT);
 
 // Built-in charsets/texttypes interface
 INTL_BOOL INTL_builtin_lookup_charset(charset* cs, const ASCII* charset_name, const ASCII* config_info);
-INTL_BOOL INTL_builtin_lookup_texttype(texttype* tt, const ASCII* texttype_name, const ASCII* charset_name,
-									   USHORT attributes, const UCHAR* specific_attributes,
-									   ULONG specific_attributes_length, INTL_BOOL ignore_attributes,
-									   const ASCII* config_info);
+INTL_BOOL INTL_builtin_lookup_texttype_status(
+	char* status_buffer, ULONG status_buffer_length,
+	texttype* tt, const ASCII* texttype_name, const ASCII* charset_name,
+	USHORT attributes, const UCHAR* specific_attributes,
+	ULONG specific_attributes_length, INTL_BOOL ignore_attributes,
+	const ASCII* config_info);
 ULONG INTL_builtin_setup_attributes(const ASCII* textTypeName, const ASCII* charSetName,
 	const ASCII* configInfo, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst);
 

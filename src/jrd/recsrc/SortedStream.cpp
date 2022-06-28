@@ -32,6 +32,7 @@
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/vio_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -48,6 +49,10 @@ SortedStream::SortedStream(CompilerScratch* csb, RecordSource* next, SortMap* ma
 	fb_assert(m_next && m_map);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = next->getCardinality();
+
+	if (m_map->flags & FLAG_PROJECT)
+		m_cardinality *= DEFAULT_SELECTIVITY;
 }
 
 void SortedStream::open(thread_db* tdbb) const
@@ -128,6 +133,7 @@ void SortedStream::print(thread_db* tdbb, string& plan,
 
 		plan += printIndent(++level) +
 			((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
+		printOptInfo(plan);
 
 		m_next->print(tdbb, plan, true, level);
 	}

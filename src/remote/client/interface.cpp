@@ -146,6 +146,8 @@ namespace {
 		cstring* ptr;
 		cstring oldValue;
 	};
+
+	GlobalPtr<PortsCleanup> outPorts;
 }
 
 namespace Remote {
@@ -292,6 +294,9 @@ public:
 	void close(CheckStatusWrapper* status) override;
 	void deprecatedClose(CheckStatusWrapper* status) override;
 	void setDelayedOutputFormat(CheckStatusWrapper* status, IMessageMetadata* format) override;
+	void getInfo(CheckStatusWrapper* status,
+				 unsigned int itemsLength, const unsigned char* items,
+				 unsigned int bufferLength, unsigned char* buffer) override;
 
 	ResultSet(Statement* s, IMessageMetadata* outFmt, unsigned f)
 		: stmt(s), flags(f), tmpStatement(false), delayedFormat(outFmt == DELAYED_OUT_FORMAT)
@@ -933,6 +938,7 @@ public:
 					   unsigned int receiveLength, const unsigned char* receiveItems,
 					   unsigned int bufferLength, unsigned char* buffer) override;
 	void start(CheckStatusWrapper* status, unsigned int spbLength, const unsigned char* spb) override;
+	void cancel(CheckStatusWrapper* status) override;
 
 public:
 	Service(Rdb* handle) : rdb(handle) { }
@@ -995,6 +1001,15 @@ private:
 void RProvider::shutdown(CheckStatusWrapper* status, unsigned int /*timeout*/, const int /*reason*/)
 {
 	status->init();
+
+	try
+	{
+		outPorts->closePorts();
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
 }
 
 void RProvider::setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback)
@@ -1060,7 +1075,7 @@ static void batch_gds_receive(rem_port*, struct rmtque *, USHORT);
 static void batch_dsql_fetch(rem_port*, struct rmtque *, USHORT);
 static void clear_queue(rem_port*);
 static void clear_stmt_que(rem_port*, Rsr*);
-static void disconnect(rem_port*);
+static void disconnect(rem_port*, bool rmRef = true);
 static void enqueue_receive(rem_port*, t_rmtque_fn, Rdb*, void*, Rrq::rrq_repeat*);
 static void dequeue_receive(rem_port*);
 static THREAD_ENTRY_DECLARE event_thread(THREAD_ENTRY_PARAM);
@@ -5062,6 +5077,38 @@ IMessageMetadata* ResultSet::getMetadata(CheckStatusWrapper* status)
 	return outputFormat;
 }
 
+void ResultSet::getInfo(CheckStatusWrapper* status,
+						unsigned int itemsLength, const unsigned char* items,
+						unsigned int bufferLength, unsigned char* buffer)
+{
+	try
+	{
+		reset(status);
+
+		// Check and validate handles, etc.
+
+		if (!stmt)
+			Arg::Gds(isc_dsql_cursor_err).raise();
+
+		const auto statement = stmt->getStatement();
+		CHECK_HANDLE(statement, isc_bad_req_handle);
+
+		const auto rdb = statement->rsr_rdb;
+		const auto port = rdb->rdb_port;
+		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+
+		if (port->port_protocol < PROTOCOL_FETCH_SCROLL)
+			unsupported();
+
+		info(status, rdb, op_info_cursor, statement->rsr_id, 0,
+			 itemsLength, items, 0, 0, bufferLength, buffer);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
 void ResultSet::freeClientData(CheckStatusWrapper* status, bool force)
 {
 /**************************************
@@ -6636,6 +6683,28 @@ void Service::query(CheckStatusWrapper* status,
 }
 
 
+void Service::cancel(CheckStatusWrapper* status)
+{
+	try
+	{
+		reset(status);
+
+		// Check and validate handles, etc.
+		CHECK_HANDLE(rdb, isc_bad_svc_handle);
+/*
+		rem_port* port = rdb->rdb_port;
+		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+*/
+
+		Arg::Gds(isc_wish_list).raise();
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
+
 void Service::start(CheckStatusWrapper* status,
 					unsigned int spbLength, const unsigned char* spb)
 {
@@ -7376,10 +7445,11 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 	}
 	catch (const Exception&)
 	{
-		disconnect(port);
+		disconnect(port, false);
 		throw;
 	}
 
+	outPorts->registerPort(port);
 	return port;
 }
 
@@ -7745,7 +7815,7 @@ static void clear_queue(rem_port* port)
 }
 
 
-static void disconnect( rem_port* port)
+static void disconnect(rem_port* port, bool rmRef)
 {
 /**************************************
  *
@@ -7803,6 +7873,12 @@ static void disconnect( rem_port* port)
 	port->port_flags |= PORT_disconnect;
 	port->disconnect();
 	delete rdb;
+	port->port_context = nullptr;
+
+	// Remove from active ports
+
+	if (rmRef)
+		outPorts->unRegisterPort(port);
 }
 
 

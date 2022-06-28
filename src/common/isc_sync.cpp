@@ -2679,7 +2679,7 @@ static bool make_object_name(TEXT* buffer, size_t bufsize,
 
 	// CVC: I'm not convinced that if this call has no space to put the prefix,
 	// we can ignore that fact, hence I changed that signature, too.
-	if (!fb_utils::prefix_kernel_object_name(buffer, bufsize))
+	if (!fb_utils::private_kernel_object_name(buffer, bufsize))
 	{
 		SetLastError(ERROR_FILENAME_EXCED_RANGE);
 		return false;

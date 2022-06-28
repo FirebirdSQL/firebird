@@ -25,6 +25,7 @@
 #include "../jrd/jrd.h"
 #include "../jrd/req.h"
 #include "../dsql/StmtNodes.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -42,6 +43,7 @@ LocalTableStream::LocalTableStream(CompilerScratch* csb, StreamType stream, cons
 	fb_assert(m_table);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = DEFAULT_CARDINALITY;
 }
 
 void LocalTableStream::open(thread_db* tdbb) const
@@ -113,7 +115,10 @@ void LocalTableStream::print(thread_db* tdbb, string& plan, bool detailed, unsig
 	//// TODO: Use Local Table name/alias.
 
 	if (detailed)
+	{
 		plan += printIndent(++level) + "Local Table Full Scan";
+		printOptInfo(plan);
+	}
 	else
 	{
 		if (!level)

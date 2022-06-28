@@ -45,6 +45,7 @@ FullTableScan::FullTableScan(CompilerScratch* csb, const string& alias,
 	  m_dbkeyRanges(csb->csb_pool, dbkeyRanges)
 {
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = csb->csb_rpt[stream].csb_cardinality;
 }
 
 void FullTableScan::open(thread_db* tdbb) const
@@ -145,7 +146,7 @@ bool FullTableScan::getRecord(thread_db* tdbb) const
 		return false;
 	}
 
-	if (VIO_next_record(tdbb, rpb, request->req_transaction, request->req_pool, false))
+	if (VIO_next_record(tdbb, rpb, request->req_transaction, request->req_pool, DPM_next_all))
 	{
 		if (impure->irsb_upper.isValid() && rpb->rpb_number > impure->irsb_upper)
 		{
@@ -185,6 +186,7 @@ void FullTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned
 
 		plan += printIndent(++level) + "Table " +
 			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan" + bounds;
+		printOptInfo(plan);
 	}
 	else
 	{

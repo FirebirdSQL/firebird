@@ -4884,6 +4884,21 @@ IMessageMetadata* YResultSet::getMetadata(CheckStatusWrapper* status)
 	return NULL;
 }
 
+void YResultSet::getInfo(CheckStatusWrapper* status,
+						 unsigned int itemsLength, const unsigned char* items,
+						 unsigned int bufferLength, unsigned char* buffer)
+{
+	try
+	{
+		YEntry<YResultSet> entry(status, this);
+
+		entry.next()->getInfo(status, itemsLength, items, bufferLength, buffer);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
 
 void YResultSet::close(CheckStatusWrapper* status)
 {
@@ -5417,8 +5432,6 @@ YTransaction* YTransaction::enterDtc(CheckStatusWrapper* status)
 		YEntry<YTransaction> entry(status, this);
 
 		YTransaction* copy = FB_NEW YTransaction(this);
-		// copy is created with zero handle
-		copy->addRef();
 		copy->addRef();
 		next->addRef();		// We use NoIncr in YTransaction ctor
 
@@ -6205,6 +6218,19 @@ void YService::query(CheckStatusWrapper* status, unsigned int sendLength, const 
 		YEntry<YService> entry(status, this);
 		entry.next()->query(status, sendLength, sendItems,
 			receiveLength, receiveItems, bufferLength, buffer);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+void YService::cancel(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YService> entry(status, this);
+		entry.next()->cancel(status);
 	}
 	catch (const Exception& e)
 	{

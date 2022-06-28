@@ -133,3 +133,4 @@ FB_IMPL_MSG_SYMBOL(GFIX, 132, gfix_opt_role, "   -role                set SQL ro
 FB_IMPL_MSG_SYMBOL(GFIX, 133, gfix_role_req, "SQL role name required")
 FB_IMPL_MSG_SYMBOL(GFIX, 134, gfix_opt_repl, "   -repl(ica)           replica mode <none / read_only / read_write>")
 FB_IMPL_MSG_SYMBOL(GFIX, 135, gfix_repl_mode_req, "replica mode (none / read_only / read_write) required")
+FB_IMPL_MSG_SYMBOL(GFIX, 136, gfix_opt_parallel, "   -par(allel)          parallel workers <n> (-sweep)")

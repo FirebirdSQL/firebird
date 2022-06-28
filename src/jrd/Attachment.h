@@ -166,6 +166,7 @@ const ULONG ATT_monitor_init		= 0x100000L; // Attachment is registered in monito
 const ULONG ATT_repl_reset			= 0x200000L; // Replication set has been reset
 const ULONG ATT_replicating			= 0x400000L; // Replication is active
 const ULONG ATT_resetting			= 0x800000L; // Session reset is in progress
+const ULONG ATT_worker				= 0x1000000L; // Worker attachment, managed by the engine
 
 const ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 
@@ -373,7 +374,13 @@ public:
 		return shutError;
 	}
 
-	void onIdleTimer(Firebird::TimerImpl*);
+	void onIdleTimer(Firebird::TimerImpl* timer)
+	{
+		doOnIdleTimer(timer);
+	}
+
+protected:
+	virtual void doOnIdleTimer(Firebird::TimerImpl* timer);
 
 private:
 	Attachment* att;
@@ -602,6 +609,7 @@ public:
 	CoercionArray* att_dest_bind;
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
+	int att_parallel_workers;
 
 	Firebird::RefPtr<Firebird::IReplicatedSession> att_replicator;
 	Firebird::AutoPtr<Replication::TableMatcher> att_repl_matcher;
@@ -807,9 +815,7 @@ private:
 
 	unsigned int att_idle_timeout;		// seconds
 	unsigned int att_stmt_timeout;		// milliseconds
-
-	typedef Firebird::TimerWithRef<StableAttachmentPart> IdleTimer;
-	Firebird::RefPtr<IdleTimer> att_idle_timer;
+	Firebird::RefPtr<Firebird::TimerImpl> att_idle_timer;
 
 	Firebird::Array<JBatch*> att_batches;
 	InitialOptions att_initial_options;	// Initial session options
@@ -961,7 +967,7 @@ public:
 		}
 	}
 
-private:
+protected:
 	void destroy(Attachment* attachment);
 
 	// "public" interface for internal (system) attachment

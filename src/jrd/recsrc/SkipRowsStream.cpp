@@ -42,6 +42,7 @@ SkipRowsStream::SkipRowsStream(CompilerScratch* csb, RecordSource* next, ValueEx
 	fb_assert(m_next && m_value);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = next->getCardinality();
 }
 
 void SkipRowsStream::open(thread_db* tdbb) const
@@ -116,7 +117,10 @@ bool SkipRowsStream::lockRecord(thread_db* tdbb) const
 void SkipRowsStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
 {
 	if (detailed)
+	{
 		plan += printIndent(++level) + "Skip N Records";
+		printOptInfo(plan);
+	}
 
 	m_next->print(tdbb, plan, detailed, level);
 }

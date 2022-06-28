@@ -26,7 +26,8 @@
 #ifndef JRD_VIO_PROTO_H
 #define JRD_VIO_PROTO_H
 
-namespace Jrd {
+namespace Jrd 
+{
 	class jrd_rel;
 	class jrd_tra;
 	class Record;
@@ -35,6 +36,13 @@ namespace Jrd {
 	class Savepoint;
 	class Format;
 	class TraceSweepEvent;
+
+	enum FindNextRecordScope
+	{
+		DPM_next_all,			// all pages
+		DPM_next_data_page,		// one data page only
+		DPM_next_pointer_page	// data pages from one pointer page
+	};
 }
 
 void	VIO_backout(Jrd::thread_db*, Jrd::record_param*, const Jrd::jrd_tra*);
@@ -52,7 +60,7 @@ bool	VIO_get_current(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*,
 void	VIO_init(Jrd::thread_db*);
 bool	VIO_writelock(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
 bool	VIO_modify(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
-bool	VIO_next_record(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*, MemoryPool*, bool);
+bool	VIO_next_record(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*, MemoryPool*, Jrd::FindNextRecordScope);
 Jrd::Record*	VIO_record(Jrd::thread_db*, Jrd::record_param*, const Jrd::Format*, MemoryPool*);
 bool	VIO_refetch_record(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*, bool, bool);
 void	VIO_store(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);

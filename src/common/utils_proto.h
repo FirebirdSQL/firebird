@@ -102,6 +102,8 @@ namespace fb_utils
 #ifdef WIN_NT
 	bool prefix_kernel_object_name(char* name, size_t bufsize);
 	bool isGlobalKernelPrefix();
+	bool private_kernel_object_name(char* name, size_t bufsize);
+	bool privateNameSpaceReady();
 #endif
 
 	// Compare the absolute value of two SINT64 numbers.

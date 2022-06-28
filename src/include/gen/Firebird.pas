@@ -339,6 +339,7 @@ type
 	IResultSet_deprecatedClosePtr = procedure(this: IResultSet; status: IStatus); cdecl;
 	IResultSet_setDelayedOutputFormatPtr = procedure(this: IResultSet; status: IStatus; format: IMessageMetadata); cdecl;
 	IResultSet_closePtr = procedure(this: IResultSet; status: IStatus); cdecl;
+	IResultSet_getInfoPtr = procedure(this: IResultSet; status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IStatement_getInfoPtr = procedure(this: IStatement; status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IStatement_getTypePtr = function(this: IStatement; status: IStatus): Cardinal; cdecl;
 	IStatement_getPlanPtr = function(this: IStatement; status: IStatus; detailed: Boolean): PAnsiChar; cdecl;
@@ -414,6 +415,7 @@ type
 	IService_queryPtr = procedure(this: IService; status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IService_startPtr = procedure(this: IService; status: IStatus; spbLength: Cardinal; spb: BytePtr); cdecl;
 	IService_detachPtr = procedure(this: IService; status: IStatus); cdecl;
+	IService_cancelPtr = procedure(this: IService; status: IStatus); cdecl;
 	IProvider_attachDatabasePtr = function(this: IProvider; status: IStatus; fileName: PAnsiChar; dpbLength: Cardinal; dpb: BytePtr): IAttachment; cdecl;
 	IProvider_createDatabasePtr = function(this: IProvider; status: IStatus; fileName: PAnsiChar; dpbLength: Cardinal; dpb: BytePtr): IAttachment; cdecl;
 	IProvider_attachServiceManagerPtr = function(this: IProvider; status: IStatus; service: PAnsiChar; spbLength: Cardinal; spb: BytePtr): IService; cdecl;
@@ -664,6 +666,7 @@ type
 	ITracePlugin_trace_event_errorPtr = function(this: ITracePlugin; connection: ITraceConnection; status: ITraceStatusVector; function_: PAnsiChar): Boolean; cdecl;
 	ITracePlugin_trace_event_sweepPtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean; cdecl;
 	ITracePlugin_trace_func_executePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean; cdecl;
+	ITracePlugin_trace_dsql_restartPtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean; cdecl;
 	ITraceFactory_trace_needsPtr = function(this: ITraceFactory): QWord; cdecl;
 	ITraceFactory_trace_createPtr = function(this: ITraceFactory; status: IStatus; init_info: ITraceInitInfo): ITracePlugin; cdecl;
 	IUdrFunctionFactory_setupPtr = procedure(this: IUdrFunctionFactory; status: IStatus; context: IExternalContext; metadata: IRoutineMetadata; inBuilder: IMetadataBuilder; outBuilder: IMetadataBuilder); cdecl;
@@ -1425,10 +1428,12 @@ type
 		deprecatedClose: IResultSet_deprecatedClosePtr;
 		setDelayedOutputFormat: IResultSet_setDelayedOutputFormatPtr;
 		close: IResultSet_closePtr;
+		getInfo: IResultSet_getInfoPtr;
 	end;
 
 	IResultSet = class(IReferenceCounted)
-		const VERSION = 4;
+		const VERSION = 5;
+		const INF_RECORD_COUNT = Byte(10);
 
 		function fetchNext(status: IStatus; message: Pointer): Integer;
 		function fetchPrior(status: IStatus; message: Pointer): Integer;
@@ -1442,6 +1447,7 @@ type
 		procedure deprecatedClose(status: IStatus);
 		procedure setDelayedOutputFormat(status: IStatus; format: IMessageMetadata);
 		procedure close(status: IStatus);
+		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 	end;
 
 	IResultSetImpl = class(IResultSet)
@@ -1461,6 +1467,7 @@ type
 		procedure deprecatedClose(status: IStatus); virtual; abstract;
 		procedure setDelayedOutputFormat(status: IStatus; format: IMessageMetadata); virtual; abstract;
 		procedure close(status: IStatus); virtual; abstract;
+		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); virtual; abstract;
 	end;
 
 	StatementVTable = class(ReferenceCountedVTable)
@@ -1818,15 +1825,17 @@ type
 		query: IService_queryPtr;
 		start: IService_startPtr;
 		detach: IService_detachPtr;
+		cancel: IService_cancelPtr;
 	end;
 
 	IService = class(IReferenceCounted)
-		const VERSION = 4;
+		const VERSION = 5;
 
 		procedure deprecatedDetach(status: IStatus);
 		procedure query(status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 		procedure start(status: IStatus; spbLength: Cardinal; spb: BytePtr);
 		procedure detach(status: IStatus);
+		procedure cancel(status: IStatus);
 	end;
 
 	IServiceImpl = class(IService)
@@ -1838,6 +1847,7 @@ type
 		procedure query(status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr); virtual; abstract;
 		procedure start(status: IStatus; spbLength: Cardinal; spb: BytePtr); virtual; abstract;
 		procedure detach(status: IStatus); virtual; abstract;
+		procedure cancel(status: IStatus); virtual; abstract;
 	end;
 
 	ProviderVTable = class(PluginBaseVTable)
@@ -3346,10 +3356,11 @@ type
 		trace_event_error: ITracePlugin_trace_event_errorPtr;
 		trace_event_sweep: ITracePlugin_trace_event_sweepPtr;
 		trace_func_execute: ITracePlugin_trace_func_executePtr;
+		trace_dsql_restart: ITracePlugin_trace_dsql_restartPtr;
 	end;
 
 	ITracePlugin = class(IReferenceCounted)
-		const VERSION = 3;
+		const VERSION = 4;
 		const RESULT_SUCCESS = Cardinal(0);
 		const RESULT_FAILED = Cardinal(1);
 		const RESULT_UNAUTHORIZED = Cardinal(2);
@@ -3379,6 +3390,7 @@ type
 		function trace_event_error(connection: ITraceConnection; status: ITraceStatusVector; function_: PAnsiChar): Boolean;
 		function trace_event_sweep(connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean;
 		function trace_func_execute(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean;
+		function trace_dsql_restart(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean;
 	end;
 
 	ITracePluginImpl = class(ITracePlugin)
@@ -3407,6 +3419,7 @@ type
 		function trace_event_error(connection: ITraceConnection; status: ITraceStatusVector; function_: PAnsiChar): Boolean; virtual; abstract;
 		function trace_event_sweep(connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean; virtual; abstract;
 		function trace_func_execute(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean; virtual; abstract;
+		function trace_dsql_restart(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean; virtual; abstract;
 	end;
 
 	TraceFactoryVTable = class(PluginBaseVTable)
@@ -3747,7 +3760,9 @@ type
 		procedure setSequence(status: IStatus; name: PAnsiChar; value: Int64); virtual; abstract;
 	end;
 
+{$IFNDEF NO_FBCLIENT}
 	function fb_get_master_interface : IMaster; cdecl; external 'fbclient';
+{$ENDIF}
 
 const
 	FB_UsedInYValve = FALSE;
@@ -3849,6 +3864,8 @@ const
 	isc_dpb_decfloat_round = byte(94);
 	isc_dpb_decfloat_traps = byte(95);
 	isc_dpb_clear_map = byte(96);
+	isc_dpb_parallel_workers = byte(100);
+	isc_dpb_worker_attach = byte(101);
 	isc_dpb_address = byte(1);
 	isc_dpb_addr_protocol = byte(1);
 	isc_dpb_addr_endpoint = byte(2);
@@ -4006,6 +4023,7 @@ const
 	isc_spb_bkp_keyname = byte(17);
 	isc_spb_bkp_crypt = byte(18);
 	isc_spb_bkp_include_data = byte(19);
+	isc_spb_bkp_parallel_workers = byte(21);
 	isc_spb_bkp_ignore_checksums = $01;
 	isc_spb_bkp_ignore_limbo = $02;
 	isc_spb_bkp_metadata_only = $04;
@@ -4016,6 +4034,7 @@ const
 	isc_spb_bkp_expand = $80;
 	isc_spb_bkp_no_triggers = $8000;
 	isc_spb_bkp_zip = $010000;
+	isc_spb_bkp_direct_io = $020000;
 	isc_spb_prp_page_buffers = byte(5);
 	isc_spb_prp_sweep_interval = byte(6);
 	isc_spb_prp_shutdown_db = byte(7);
@@ -4071,6 +4090,7 @@ const
 	isc_spb_rpr_commit_trans_64 = byte(49);
 	isc_spb_rpr_rollback_trans_64 = byte(50);
 	isc_spb_rpr_recover_two_phase_64 = byte(51);
+	isc_spb_rpr_par_workers = byte(52);
 	isc_spb_rpr_validate_db = $01;
 	isc_spb_rpr_sweep_db = $02;
 	isc_spb_rpr_mend_db = $04;
@@ -6501,6 +6521,17 @@ begin
 	FbException.checkException(status);
 end;
 
+procedure IResultSet.getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
+begin
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IResultSet', vTable.version, 5);
+	end
+	else begin
+		ResultSetVTable(vTable).getInfo(Self, status, itemsLength, items, bufferLength, buffer);
+	end;
+	FbException.checkException(status);
+end;
+
 procedure IStatement.getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 begin
 	StatementVTable(vTable).getInfo(Self, status, itemsLength, items, bufferLength, buffer);
@@ -7083,6 +7114,17 @@ begin
 	end
 	else begin
 		ServiceVTable(vTable).detach(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IService.cancel(status: IStatus);
+begin
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IService', vTable.version, 5);
+	end
+	else begin
+		ServiceVTable(vTable).cancel(Self, status);
 	end;
 	FbException.checkException(status);
 end;
@@ -8572,6 +8614,16 @@ end;
 function ITracePlugin.trace_func_execute(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean;
 begin
 	Result := TracePluginVTable(vTable).trace_func_execute(Self, connection, transaction, function_, started, func_result);
+end;
+
+function ITracePlugin.trace_dsql_restart(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean;
+begin
+	if (vTable.version < 4) then begin
+		Result := false;
+	end
+	else begin
+		Result := TracePluginVTable(vTable).trace_dsql_restart(Self, connection, transaction, statement, number);
+	end;
 end;
 
 function ITraceFactory.trace_needs(): QWord;
@@ -10435,6 +10487,15 @@ begin
 	end
 end;
 
+procedure IResultSetImpl_getInfoDispatcher(this: IResultSet; status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
+begin
+	try
+		IResultSetImpl(this).getInfo(status, itemsLength, items, bufferLength, buffer);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
 var
 	IResultSetImpl_vTable: ResultSetVTable;
 
@@ -11304,6 +11365,15 @@ procedure IServiceImpl_detachDispatcher(this: IService; status: IStatus); cdecl;
 begin
 	try
 		IServiceImpl(this).detach(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IServiceImpl_cancelDispatcher(this: IService; status: IStatus); cdecl;
+begin
+	try
+		IServiceImpl(this).cancel(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -14703,6 +14773,15 @@ begin
 	end
 end;
 
+function ITracePluginImpl_trace_dsql_restartDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean; cdecl;
+begin
+	try
+		Result := ITracePluginImpl(this).trace_dsql_restart(connection, transaction, statement, number);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
 var
 	ITracePluginImpl_vTable: TracePluginVTable;
 
@@ -15620,7 +15699,7 @@ initialization
 	IMetadataBuilderImpl_vTable.setAlias := @IMetadataBuilderImpl_setAliasDispatcher;
 
 	IResultSetImpl_vTable := ResultSetVTable.create;
-	IResultSetImpl_vTable.version := 4;
+	IResultSetImpl_vTable.version := 5;
 	IResultSetImpl_vTable.addRef := @IResultSetImpl_addRefDispatcher;
 	IResultSetImpl_vTable.release := @IResultSetImpl_releaseDispatcher;
 	IResultSetImpl_vTable.fetchNext := @IResultSetImpl_fetchNextDispatcher;
@@ -15635,6 +15714,7 @@ initialization
 	IResultSetImpl_vTable.deprecatedClose := @IResultSetImpl_deprecatedCloseDispatcher;
 	IResultSetImpl_vTable.setDelayedOutputFormat := @IResultSetImpl_setDelayedOutputFormatDispatcher;
 	IResultSetImpl_vTable.close := @IResultSetImpl_closeDispatcher;
+	IResultSetImpl_vTable.getInfo := @IResultSetImpl_getInfoDispatcher;
 
 	IStatementImpl_vTable := StatementVTable.create;
 	IStatementImpl_vTable.version := 5;
@@ -15742,13 +15822,14 @@ initialization
 	IAttachmentImpl_vTable.dropDatabase := @IAttachmentImpl_dropDatabaseDispatcher;
 
 	IServiceImpl_vTable := ServiceVTable.create;
-	IServiceImpl_vTable.version := 4;
+	IServiceImpl_vTable.version := 5;
 	IServiceImpl_vTable.addRef := @IServiceImpl_addRefDispatcher;
 	IServiceImpl_vTable.release := @IServiceImpl_releaseDispatcher;
 	IServiceImpl_vTable.deprecatedDetach := @IServiceImpl_deprecatedDetachDispatcher;
 	IServiceImpl_vTable.query := @IServiceImpl_queryDispatcher;
 	IServiceImpl_vTable.start := @IServiceImpl_startDispatcher;
 	IServiceImpl_vTable.detach := @IServiceImpl_detachDispatcher;
+	IServiceImpl_vTable.cancel := @IServiceImpl_cancelDispatcher;
 
 	IProviderImpl_vTable := ProviderVTable.create;
 	IProviderImpl_vTable.version := 4;
@@ -16214,7 +16295,7 @@ initialization
 	ITraceInitInfoImpl_vTable.getLogWriter := @ITraceInitInfoImpl_getLogWriterDispatcher;
 
 	ITracePluginImpl_vTable := TracePluginVTable.create;
-	ITracePluginImpl_vTable.version := 3;
+	ITracePluginImpl_vTable.version := 4;
 	ITracePluginImpl_vTable.addRef := @ITracePluginImpl_addRefDispatcher;
 	ITracePluginImpl_vTable.release := @ITracePluginImpl_releaseDispatcher;
 	ITracePluginImpl_vTable.trace_get_error := @ITracePluginImpl_trace_get_errorDispatcher;
@@ -16238,6 +16319,7 @@ initialization
 	ITracePluginImpl_vTable.trace_event_error := @ITracePluginImpl_trace_event_errorDispatcher;
 	ITracePluginImpl_vTable.trace_event_sweep := @ITracePluginImpl_trace_event_sweepDispatcher;
 	ITracePluginImpl_vTable.trace_func_execute := @ITracePluginImpl_trace_func_executeDispatcher;
+	ITracePluginImpl_vTable.trace_dsql_restart := @ITracePluginImpl_trace_dsql_restartDispatcher;
 
 	ITraceFactoryImpl_vTable := TraceFactoryVTable.create;
 	ITraceFactoryImpl_vTable.version := 4;

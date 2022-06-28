@@ -69,9 +69,11 @@ const ObjectType obj_filters = 33;
 
 // Add new codes here if they are used in RDB$DEPENDENCIES or RDB$USER_PRIVILEGES or stored in backup
 // Codes for DDL operations add in isDdlObject function as well (find it below).
-// etc. obj_tablespaces,
+const ObjectType obj_jobs = 34;
+const ObjectType obj_tablespace = 35;
+const ObjectType obj_tablespaces = 36;
 
-const ObjectType obj_type_MAX = 34;
+const ObjectType obj_type_MAX = 37;
 
 // used in the parser only / no relation with obj_type_MAX (should be greater)
 const ObjectType obj_user_or_role= 100;
@@ -98,6 +100,8 @@ inline bool isDdlObject(ObjectType object_type)
 		case obj_roles:
 		case obj_charsets:
 		case obj_collations:
+		case obj_jobs:
+		case obj_tablespaces:
 			return true;
 		default:
 			return false;
@@ -135,6 +139,10 @@ inline const char* getSecurityClassName(ObjectType object_type)
 			return "SQL$CHARSETS";
 		case obj_collations:
 			return "SQL$COLLATIONS";
+		case obj_tablespaces:
+			return "SQL$TABLESPACES";
+		case obj_jobs:
+			return "SQL$JOBS";
 		default:
 			return "";
 	}
@@ -173,6 +181,10 @@ inline const char* getDdlObjectName(ObjectType object_type)
 			return "ROLE";
 		case obj_filters:
 			return "FILTER";
+		case obj_tablespaces:
+			return "TABLESPACE";
+		case obj_jobs:
+			return "JOB";
 		default:
 			fb_assert(false);
 			return "<unknown object type>";

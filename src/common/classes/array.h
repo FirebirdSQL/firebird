@@ -110,6 +110,12 @@ public:
 		ensureCapacity(InitialCapacity);
 	}
 
+	Array(const T* items, const size_type itemsCount)
+		: Storage(), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+	{
+		add(items, itemsCount);
+	}
+
 	Array(const Array<T, Storage>& source)
 		: Storage(), count(0), capacity(this->getStorageSize()), data(this->getStorage())
 	{

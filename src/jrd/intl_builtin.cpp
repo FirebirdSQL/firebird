@@ -1658,10 +1658,12 @@ INTL_BOOL INTL_builtin_lookup_charset(charset* cs, const ASCII* charset_name, co
 }
 
 
-INTL_BOOL INTL_builtin_lookup_texttype(texttype* tt, const ASCII* texttype_name, const ASCII* charset_name,
-									   USHORT attributes, const UCHAR* specific_attributes,
-									   ULONG specific_attributes_length, INTL_BOOL ignore_attributes,
-									   const ASCII* config_info)
+INTL_BOOL INTL_builtin_lookup_texttype_status(
+	char* status_buffer, ULONG status_buffer_length,
+	texttype* tt, const ASCII* texttype_name, const ASCII* charset_name,
+	USHORT attributes, const UCHAR* specific_attributes,
+	ULONG specific_attributes_length, INTL_BOOL ignore_attributes,
+	const ASCII* config_info)
 {
 	if (ignore_attributes)
 	{
@@ -1700,8 +1702,29 @@ INTL_BOOL INTL_builtin_lookup_texttype(texttype* tt, const ASCII* texttype_name,
 
 	if (func)
 	{
-		return func(tt, texttype_name, charset_name, attributes,
-			specific_attributes, specific_attributes_length, ignore_attributes, config_info);
+		Firebird::string errorMsg;
+
+		try
+		{
+			return func(tt, texttype_name, charset_name, attributes,
+				specific_attributes, specific_attributes_length, ignore_attributes, config_info);
+		}
+		catch (const Firebird::status_exception& ex)
+		{
+			auto status = ex.value();
+			TEXT temp[BUFFER_LARGE];
+
+			while (fb_interpret(temp, sizeof(temp), &status))
+			{
+				if (errorMsg.hasData())
+					errorMsg += "\n-";
+
+				errorMsg += temp;
+			}
+
+			if (status_buffer_length)
+				fb_utils::copy_terminate(status_buffer, errorMsg.c_str(), status_buffer_length);
+		}
 	}
 
 	return false;
