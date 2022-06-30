@@ -2528,7 +2528,7 @@ static void compress(thread_db* tdbb,
 
 				if (itype == idx_bcd)
 				{
-					Int128 i = MOV_get_int128(tdbb, desc, 0);
+					Int128 i = MOV_get_int128(tdbb, desc, desc->dsc_scale);
 					length = i.makeIndexKey(&buffer, desc->dsc_scale);
 					ptr = reinterpret_cast<UCHAR*>(buffer.vary_string);
 				}
