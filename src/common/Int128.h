@@ -310,8 +310,8 @@ public:
 		return (UCHAR*)(&v); 
 	}
 
-	static const unsigned Bias = 128;
-	static const unsigned Pmax = 38;
+	static const unsigned BIAS = 128;
+	static const unsigned PMAX = 38;
 
 	ULONG makeIndexKey(vary* buf, int scale);
 
@@ -565,8 +565,8 @@ public:
 		return (UCHAR*)(v.table);
 	}
 
-	static const unsigned Bias = 128;
-	static const unsigned Pmax = 38;
+	static const unsigned BIAS = 128;
+	static const unsigned PMAX = 38;
 
 	ULONG makeIndexKey(vary* buf, int scale);
 
