@@ -398,7 +398,7 @@ void REPL_attach(thread_db* tdbb, bool cleanupTransactions)
 	const auto attachment = tdbb->getAttachment();
 
 	const auto replConfig = dbb->replConfig();
-	if (!replConfig || !replConfig->isMaster())
+	if (!replConfig || (!replConfig->isMaster() && replConfig->pluginName.isEmpty()))
 		return;
 
 	fb_assert(!attachment->att_repl_matcher);

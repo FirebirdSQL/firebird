@@ -395,7 +395,7 @@ namespace Jrd
 	{
 		const auto config = replConfig();
 
-		if (!config || !config->isMaster())
+		if (!config || (!config->isMaster() && config->pluginName.isEmpty()))
 			return false;
 
 		Sync sync(&dbb_repl_sync, FB_FUNCTION);
