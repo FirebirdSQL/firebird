@@ -40,6 +40,8 @@
 							   from metadata primarily to flag
 							   SQLDA (in DSQL)               */
 
+#define DSC_json  		8
+
 #define dtype_unknown	0
 #define dtype_text		1
 #define dtype_cstring	2

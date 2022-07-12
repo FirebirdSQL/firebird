@@ -456,4 +456,7 @@
 #define blr_outer_map_message		(unsigned char) 1
 #define blr_outer_map_variable			(unsigned char) 2
 
+// json
+#define blr_json					(unsigned char) 222
+
 #endif // FIREBIRD_IMPL_BLR_H
