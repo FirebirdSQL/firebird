@@ -29,41 +29,47 @@
 
 namespace Jrd
 {
+	class thread_db;
+
 	class Compressor
 	{
 	public:
-		Compressor(MemoryPool& pool, FB_SIZE_T length, const UCHAR* data);
+		Compressor(thread_db* tdbb, FB_SIZE_T length, const UCHAR* data);
 
 		FB_SIZE_T getPackedLength() const
 		{
 			return m_length;
 		}
 
-		const UCHAR* getControl() const
+		bool isCompressable() const
 		{
-			return m_control.begin();
+			for (const auto length : m_runs)
+			{
+				if (length < 0)
+					return true;
+			}
+
+			return false;
 		}
 
-		FB_SIZE_T getControlSize() const
-		{
-			return m_control.getCount();
-		}
-
-		void pack(const UCHAR*, UCHAR*) const;
-		FB_SIZE_T pack(const UCHAR*, FB_SIZE_T, UCHAR*) const;
-		FB_SIZE_T getPartialLength(FB_SIZE_T, const UCHAR*) const;
+		void pack(const UCHAR* input, UCHAR* output) const;
+		FB_SIZE_T truncate(FB_SIZE_T outLength);
+		FB_SIZE_T truncateTail(FB_SIZE_T outLength);
 
 		static UCHAR* unpack(FB_SIZE_T, const UCHAR*, FB_SIZE_T, UCHAR*);
+
 		static FB_SIZE_T applyDiff(FB_SIZE_T, const UCHAR*, FB_SIZE_T, UCHAR* const);
 		static FB_SIZE_T makeDiff(FB_SIZE_T, const UCHAR*, FB_SIZE_T, UCHAR*, FB_SIZE_T, UCHAR*);
 		static FB_SIZE_T makeNoDiff(FB_SIZE_T, UCHAR*);
 
 	private:
-		Firebird::HalfStaticArray<UCHAR, 2048> m_control;
-		FB_SIZE_T m_length;
+		Compressor();
+		unsigned nonCompressableRun(unsigned length);
+
+		Firebird::HalfStaticArray<int, 256> m_runs;
+		FB_SIZE_T m_length = 0;
 	};
 
 } //namespace Jrd
 
 #endif // JRD_SQZ_H
-
