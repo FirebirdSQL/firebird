@@ -150,14 +150,17 @@
 
 #ifdef MIPSEL
 #define FB_CPU CpuMipsel
+#define RISC_ALIGNMENT
 #endif /* mipsel */
 
 #ifdef MIPSEB
 #define FB_CPU CpuMips
+#define RISC_ALIGNMENT
 #endif /* mips */
 
 #ifdef MIPS64EL
 #define FB_CPU CpuMips64el
+#define RISC_ALIGNMENT
 #endif /* mips64el */
 
 #ifdef IA64
