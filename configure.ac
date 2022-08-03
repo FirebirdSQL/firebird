@@ -230,6 +230,15 @@ dnl CPU_TYPE=ppc64
     SHRLIB_EXT=so
     ;;
 
+  mips64el-*-linux* | mips*64*el-*-linux*)
+    MAKEFILE_PREFIX=linux_mips64el
+    INSTALL_PREFIX=linux
+    PLATFORM=LINUX
+    AC_DEFINE(LINUX)
+    EDITLINE_FLG=Y
+    SHRLIB_EXT=so
+    ;;
+
   x86_64*-*-linux* | x86_64*-*-gnu*)
     MAKEFILE_PREFIX=linux_amd64
     INSTALL_PREFIX=linux

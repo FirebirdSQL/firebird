@@ -300,6 +300,8 @@ enum  info_db_implementations
 
 	isc_info_db_impl_freebsd_ppc64el = 89,
 
+	isc_info_db_impl_linux_mips64el = 90,
+
 	isc_info_db_impl_last_value   // Leave this LAST!
 };
 

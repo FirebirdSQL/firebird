@@ -156,6 +156,10 @@
 #define FB_CPU CpuMips
 #endif /* mips */
 
+#ifdef MIPS64EL
+#define FB_CPU CpuMips64el
+#endif /* mips64el */
+
 #ifdef IA64
 #define FB_CPU CpuIa64
 #define RISC_ALIGNMENT
