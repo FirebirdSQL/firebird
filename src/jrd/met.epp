@@ -4468,7 +4468,7 @@ static int blocking_ast_relation(void* ast_object)
 
 			if (relation->rel_use_count)
 				relation->rel_flags |= REL_blocking;
-			else
+			else if (!(relation->rel_flags & REL_deleting))
 			{
 				relation->rel_flags &= ~REL_blocking;
 				relation->rel_flags |= REL_check_existence;

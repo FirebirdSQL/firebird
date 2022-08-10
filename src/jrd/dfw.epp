@@ -4955,6 +4955,7 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	case 4:
 		relation = MET_lookup_relation_id(tdbb, work->dfw_id, true);
 		if (!relation) {
+			fb_assert(false);
 			return false;
 		}
 
