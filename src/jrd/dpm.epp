@@ -84,7 +84,7 @@ static bool get_header(WIN*, USHORT, record_param*);
 static pointer_page* get_pointer_page(thread_db*, jrd_rel*, RelationPages*, WIN*, ULONG, USHORT);
 static rhd* locate_space(thread_db*, record_param*, SSHORT, PageStack&, Record*, const Jrd::RecordStorageType type);
 static void mark_full(thread_db*, record_param*);
-static void store_big_record(thread_db*, record_param*, PageStack&, Compressor&, ULONG, const Jrd::RecordStorageType type);
+static void store_big_record(thread_db*, record_param*, PageStack&, Compressor&, const Jrd::RecordStorageType type);
 
 namespace
 {
@@ -2105,7 +2105,7 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 
 	if (size > max_data)
 	{
-		store_big_record(tdbb, rpb, stack, dcc, size, type);
+		store_big_record(tdbb, rpb, stack, dcc, type);
 		return;
 	}
 
@@ -3668,7 +3668,6 @@ static void store_big_record(thread_db* tdbb,
 							 record_param* rpb,
 							 PageStack& stack,
 							 Compressor& dcc,
-							 ULONG size,
 							 const Jrd::RecordStorageType type)
 {
 /**************************************
@@ -3705,6 +3704,9 @@ static void store_big_record(thread_db* tdbb,
 
 	// Fill up data pages tail first until what's left fits on a single page.
 
+	ULONG size = (ULONG) dcc.getPackedLength();
+	fb_assert(size > max_data);
+
 	do
 	{
 		// Allocate and format data page and fragment header
@@ -3717,7 +3719,7 @@ static void store_big_record(thread_db* tdbb,
 
 		const auto inLength = dcc.truncateTail(max_data);
 		in -= inLength;
-		size -= inLength;
+		size = (ULONG) dcc.getPackedLength();
 
 		const Compressor tailDcc(tdbb, inLength, in);
 		const auto tail_size = tailDcc.getPackedLength();
@@ -3764,9 +3766,6 @@ static void store_big_record(thread_db* tdbb,
 	// What's left fits on a page. Store it somewhere.
 
 	stack.push(prior);
-
-	size = (ULONG) dcc.getPackedLength();
-	fb_assert(Compressor(tdbb, in - rpb->rpb_address, rpb->rpb_address).getPackedLength() == size);
 
 	rhdf* header = (rhdf*) locate_space(tdbb, rpb, (SSHORT) (RHDF_SIZE + size), stack, NULL, type);
 
