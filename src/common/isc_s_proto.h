@@ -185,9 +185,8 @@ class FileLock
 public:
 	enum LockMode {FLM_EXCLUSIVE, FLM_TRY_EXCLUSIVE, FLM_SHARED, FLM_TRY_SHARED};
 
-	typedef void InitFunction(int fd);
-	explicit FileLock(const char* fileName, InitFunction* init = NULL);		// main ctor
-	FileLock(const FileLock* main, int s);	// creates additional lock for existing file
+	explicit FileLock(const char* fileName);		// main ctor
+	FileLock(const FileLock* main, int s);			// creates additional lock for existing file
 	~FileLock();
 
 	// Main function to lock file
@@ -297,6 +296,8 @@ private:
 	IpcObject* sh_mem_callback;
 #ifdef WIN_NT
 	bool sh_mem_unlink;
+#else
+	bool sh_mem_unlink_called;
 #endif
 	void unlinkFile();
 	void internalUnmap();

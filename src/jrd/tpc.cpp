@@ -130,11 +130,11 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 	// To avoid race conditions, this function might only
 	// be called during database shutdown when AST delivery is already disabled
 
-	// wait for all initializing processes (PR)
+	// wait for other processes
 	Lock lock(tdbb, 0, LCK_tpc_init);
 
-	if (!LCK_lock(tdbb, &lock, LCK_SW, LCK_WAIT))
-		ERR_bugcheck_msg("Unable to obtain TPC lock (SW)");
+	if (!LCK_lock(tdbb, &lock, LCK_EX, LCK_WAIT))
+		ERR_bugcheck_msg("Unable to obtain TPC lock (EX)");
 
 	// Release locks and deallocate all shared memory structures
 	if (m_blocks_memory.getFirst())
@@ -206,11 +206,11 @@ void TipCache::initializeTpc(thread_db *tdbb)
 	// Initialization can only be called on a TipCache that is not initialized
 	fb_assert(!m_transactionsPerBlock);
 
-	// wait for finalizers (SW) locks
+	// wait for other processes
 	Lock lock(tdbb, 0, LCK_tpc_init);
 
-	if (!LCK_lock(tdbb, &lock, LCK_PR, LCK_WAIT))
-		ERR_bugcheck_msg("Unable to obtain TPC lock (PR)");
+	if (!LCK_lock(tdbb, &lock, LCK_EX, LCK_WAIT))
+		ERR_bugcheck_msg("Unable to obtain TPC lock (EX)");
 
 	string fileName;
 

@@ -286,7 +286,7 @@ typedef GenericMap<Pair<NonPooled<DevNode, Firebird::CountedFd*> > > FdNodes;
 static GlobalPtr<Mutex> fdNodesMutex;
 static GlobalPtr<FdNodes> fdNodes;
 
-FileLock::FileLock(const char* fileName, InitFunction* init)
+FileLock::FileLock(const char* fileName)
 	: level(LCK_NONE), oFile(NULL),
 #ifdef USE_FCNTL
 	  lStart(0),
@@ -313,11 +313,6 @@ FileLock::FileLock(const char* fileName, InitFunction* init)
 		CountedFd** put = fdNodes->put(getNode(fd));
 		fb_assert(put);
 		*put = oFile;
-
-		if (init)
-		{
-			init(fd);
-		}
 	}
 
 	rwcl = getRw();
@@ -1168,14 +1163,14 @@ void SharedMemoryBase::removeMapFile()
 
 	if (!sh_mem_header->isDeleted())
 	{
-#ifndef WIN_NT
-		unlinkFile();
-#else
+#ifdef WIN_NT
 		fb_assert(!sh_mem_unlink);
 		sh_mem_unlink = true;
-#endif // WIN_NT
 
 		sh_mem_header->markAsDeleted();
+#else
+		unlinkFile();
+#endif // WIN_NT
 	}
 }
 
@@ -1200,7 +1195,26 @@ void SharedMemoryBase::unlinkFile()
 	if (hFile != INVALID_HANDLE_VALUE)
 		CloseHandle(hFile);
 #else
-	unlink(expanded_filename);
+	if (sh_mem_unlink_called)
+		return;
+
+	// time to release count of attaches to file
+	FileLockHolder finiLock(initFile);
+
+	if (sh_mem_unlink_called)
+		return;
+
+	if (sh_mem_header->mhb_flags < 2)
+		fatal_exception::raiseFmt("Lost connect to shared memory file %s", expanded_filename);
+
+	sh_mem_header->mhb_flags -= 2;
+	if (sh_mem_header->mhb_flags < 2)
+	{
+		sh_mem_header->markAsDeleted();
+		unlink(expanded_filename);
+	}
+
+	sh_mem_unlink_called = true;
 #endif // WIN_NT
 }
 
@@ -1222,7 +1236,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	sh_mem_mutex(0),
 #endif
 	sh_mem_length_mapped(0), sh_mem_header(NULL),
-	sh_mem_callback(callback)
+	sh_mem_callback(callback), sh_mem_unlink_called(false)
 {
 /**************************************
  *
@@ -1460,7 +1474,12 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 		}
 	}
 
+	// time to count our attach to file
+	const USHORT UPPER_BOUND = MAX_USHORT - 1;
+	if (sh_mem_header->mhb_flags >= UPPER_BOUND)
+		(Arg::Gds(isc_random) << "Too many connects to single shared memory file").raise();
 
+	sh_mem_header->mhb_flags += 2;
 
 	autoUnmap.success();
 }
@@ -2786,7 +2805,10 @@ SharedMemoryBase::~SharedMemoryBase()
 	}
 #endif
 
+	unlinkFile();
 	internalUnmap();
+
+	fb_assert(sh_mem_unlink_called);
 }
 
 void SharedMemoryBase::logError(const char* text, const CheckStatusWrapper* status)
