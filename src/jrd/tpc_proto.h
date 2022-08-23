@@ -260,6 +260,8 @@ private:
 	Firebird::SharedMemory<SnapshotList>* m_snapshots; // final
 	ULONG m_transactionsPerBlock; // final. When set, we assume TPC has been initialized.
 
+	Firebird::AutoPtr<Lock> m_lock;
+
 	GlobalTpcInitializer globalTpcInitializer;
 	SnapshotsInitializer snapshotsInitializer;
 	MemBlockInitializer memBlockInitializer;

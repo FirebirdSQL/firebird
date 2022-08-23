@@ -292,6 +292,8 @@ public:
 										  // Also, "volatile" variables should never be used directly, only via atomics API
 										  // because there is no portable barrier semantics for them. Only MS2005+ generate
 										  // barriers, and all other compilers generally do not.
+	static void unlinkFile(const TEXT* expanded_filename) noexcept;
+	Firebird::PathName mapFileName();
 
 private:
 	IpcObject* sh_mem_callback;

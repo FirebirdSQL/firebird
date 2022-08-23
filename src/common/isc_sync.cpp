@@ -1184,6 +1184,19 @@ void SharedMemoryBase::unlinkFile()
 	TEXT expanded_filename[MAXPATHLEN];
 	iscPrefixLock(expanded_filename, sh_mem_name, false);
 
+	unlinkFile(expanded_filename);
+}
+
+PathName SharedMemoryBase::mapFileName()
+{
+	TEXT expanded_filename[MAXPATHLEN];
+	iscPrefixLock(expanded_filename, sh_mem_name, false);
+
+	return PathName(expanded_filename);
+}
+
+void SharedMemoryBase::unlinkFile(const TEXT* expanded_filename) noexcept
+{
 	// We can't do much (specially in dtors) when it fails
 	// therefore do not check for errors - at least it's just /tmp.
 
