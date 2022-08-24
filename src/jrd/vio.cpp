@@ -1760,15 +1760,16 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 	// If the record is a delta version, start with data from prior record.
 	UCHAR* tail;
 	const UCHAR* tail_end;
-	UCHAR differences[MAX_DIFFERENCES];
+
+	Difference difference;
 
 	// Primary record version not uses prior version
 	Record* prior = (rpb->rpb_flags & rpb_chained) ? rpb->rpb_prior : NULL;
 
 	if (prior)
 	{
-		tail = differences;
-		tail_end = differences + sizeof(differences);
+		tail = difference.getData();
+		tail_end = tail + difference.getCapacity();
 
 		if (prior != record)
 			record->copyDataFrom(prior);
@@ -1813,8 +1814,8 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 	ULONG length;
 	if (prior)
 	{
-		length = (ULONG) Compressor::applyDiff(tail - differences, differences,
-											   record->getLength(), record->getData());
+		const auto diffLength = tail - difference.getData();
+		length = (ULONG) difference.apply(diffLength, record->getLength(), record->getData());
 	}
 	else
 	{
@@ -2567,23 +2568,24 @@ void VIO_intermediate_gc(thread_db* tdbb, record_param* rpb, jrd_tra* transactio
 	Record* current_record = const_i.object(), *org_record;
 	++const_i;
 	bool prior_delta = false;
+
+	Difference difference;
+
 	while (const_i.hasData())
 	{
 		org_record = current_record;
 		current_record = const_i.object();
 
-		UCHAR differences[MAX_DIFFERENCES];
-		const size_t l =
-			Compressor::makeDiff(current_record->getLength(), current_record->getData(),
-									org_record->getLength(), org_record->getData(),
-									sizeof(differences), differences);
+		const ULONG diffLength =
+			difference.make(current_record->getLength(), current_record->getData(),
+							org_record->getLength(), org_record->getData());
 
 		staying_chain_rpb.rpb_flags = rpb_chained | (prior_delta ? rpb_delta : 0);
 
-		if ((l < sizeof(differences)) && (l < org_record->getLength()))
+		if (diffLength && diffLength < org_record->getLength())
 		{
-			staying_chain_rpb.rpb_address = differences;
-			staying_chain_rpb.rpb_length = (ULONG) l;
+			staying_chain_rpb.rpb_address = difference.getData();
+			staying_chain_rpb.rpb_length = diffLength;
 			prior_delta = true;
 		}
 		else
@@ -4824,7 +4826,7 @@ static void delete_record(thread_db* tdbb, record_param* rpb, ULONG prior_page, 
 	UCHAR* tail;
 	const UCHAR* tail_end;
 
-	UCHAR differences[MAX_DIFFERENCES];
+	Difference difference;
 
 	Record* record = NULL;
 	const Record* prior = NULL;
@@ -4841,8 +4843,8 @@ static void delete_record(thread_db* tdbb, record_param* rpb, ULONG prior_page, 
 
 		if (prior)
 		{
-			tail = differences;
-			tail_end = differences + sizeof(differences);
+			tail = difference.getData();
+			tail_end = tail + difference.getCapacity();
 
 			if (prior != record)
 				record->copyDataFrom(prior);
@@ -4863,8 +4865,8 @@ static void delete_record(thread_db* tdbb, record_param* rpb, ULONG prior_page, 
 
 	if (pool && prior)
 	{
-		Compressor::applyDiff(tail - differences, differences,
-							  record->getLength(), record->getData());
+		const auto diffLength = tail - difference.getData();
+		difference.apply(diffLength, record->getLength(), record->getData());
 	}
 }
 
@@ -6006,7 +6008,8 @@ static int prepare_update(	thread_db*		tdbb,
 		temp->rpb_flags |= rpb_delta;
 
 	// If it makes sense, store a differences record
-	UCHAR differences[MAX_DIFFERENCES];
+	Difference difference;
+
 	if (new_rpb)
 	{
 		// If both descriptors share the same record, there cannot be any difference.
@@ -6014,20 +6017,28 @@ static int prepare_update(	thread_db*		tdbb,
 		if (new_rpb->rpb_address == temp->rpb_address)
 		{
 			fb_assert(new_rpb->rpb_length == temp->rpb_length);
-			temp->rpb_address = differences;
-			temp->rpb_length = (ULONG) Compressor::makeNoDiff(temp->rpb_length, differences);
-			new_rpb->rpb_flags |= rpb_delta;
+
+			const ULONG diffLength = difference.makeNoDiff(temp->rpb_length);
+
+			if (diffLength)
+			{
+				fb_assert(diffLength < temp->rpb_length);
+
+				temp->rpb_address = difference.getData();
+				temp->rpb_length = diffLength;
+				new_rpb->rpb_flags |= rpb_delta;
+			}
 		}
 		else
 		{
-			const size_t l =
-				Compressor::makeDiff(new_rpb->rpb_length, new_rpb->rpb_address,
-									 temp->rpb_length, temp->rpb_address,
-									 sizeof(differences), differences);
-			if ((l < sizeof(differences)) && (l < temp->rpb_length))
+			const ULONG diffLength =
+				difference.make(new_rpb->rpb_length, new_rpb->rpb_address,
+								temp->rpb_length, temp->rpb_address);
+
+			if (diffLength && diffLength < temp->rpb_length)
 			{
-				temp->rpb_address = differences;
-				temp->rpb_length = (ULONG) l;
+				temp->rpb_address = difference.getData();
+				temp->rpb_length = diffLength;
 				new_rpb->rpb_flags |= rpb_delta;
 			}
 		}

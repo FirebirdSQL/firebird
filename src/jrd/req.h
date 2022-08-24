@@ -138,9 +138,6 @@ const USHORT RPB_just_deleted	= 0x10;	// record was just deleted by us
 const USHORT RPB_UNDO_FLAGS		= (RPB_undo_data | RPB_undo_read | RPB_undo_deleted);
 const USHORT RPB_CLEAR_FLAGS	= (RPB_UNDO_FLAGS | RPB_just_deleted);
 
-const unsigned int MAX_DIFFERENCES	= 1024;	// Max length of generated Differences string
-											// between two records
-
 // List of active blobs controlled by request
 
 typedef Firebird::BePlusTree<ULONG, ULONG, MemoryPool> TempBlobIdTree;

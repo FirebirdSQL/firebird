@@ -56,19 +56,45 @@ namespace Jrd
 		FB_SIZE_T truncate(FB_SIZE_T outLength);
 		FB_SIZE_T truncateTail(FB_SIZE_T outLength);
 
-		static FB_SIZE_T getUnpackedLength(FB_SIZE_T, const UCHAR*);
-		static UCHAR* unpack(FB_SIZE_T, const UCHAR*, FB_SIZE_T, UCHAR*);
-
-		static FB_SIZE_T applyDiff(FB_SIZE_T, const UCHAR*, FB_SIZE_T, UCHAR* const);
-		static FB_SIZE_T makeDiff(FB_SIZE_T, const UCHAR*, FB_SIZE_T, UCHAR*, FB_SIZE_T, UCHAR*);
-		static FB_SIZE_T makeNoDiff(FB_SIZE_T, UCHAR*);
+		static FB_SIZE_T getUnpackedLength(FB_SIZE_T inLength, const UCHAR* input);
+		static UCHAR* unpack(FB_SIZE_T inLength, const UCHAR* input,
+							 FB_SIZE_T outLength, UCHAR* output);
 
 	private:
-		Compressor();
 		unsigned nonCompressableRun(unsigned length);
 
 		Firebird::HalfStaticArray<int, 256> m_runs;
 		FB_SIZE_T m_length = 0;
+	};
+
+	class Difference
+	{
+		// Max length of generated differences string between two records
+		static const unsigned MAX_DIFFERENCES = 1024;
+
+	public:
+		UCHAR* getData()
+		{
+			return m_differences;
+		}
+
+		const UCHAR* getData() const
+		{
+			return m_differences;
+		}
+
+		FB_SIZE_T getCapacity() const
+		{
+			return MAX_DIFFERENCES;
+		}
+
+		FB_SIZE_T apply(FB_SIZE_T diffLength, FB_SIZE_T outLength, UCHAR* output);
+		FB_SIZE_T make(FB_SIZE_T length1, const UCHAR* rec1,
+					   FB_SIZE_T length2, const UCHAR* rec2);
+		FB_SIZE_T makeNoDiff(FB_SIZE_T length);
+
+	private:
+		UCHAR m_differences[MAX_DIFFERENCES];
 	};
 
 } //namespace Jrd

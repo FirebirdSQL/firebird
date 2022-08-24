@@ -386,10 +386,8 @@ FB_SIZE_T Compressor::getUnpackedLength(FB_SIZE_T inLength, const UCHAR* input)
 	return result;
 }
 
-UCHAR* Compressor::unpack(FB_SIZE_T inLength,
-						  const UCHAR* input,
-						  FB_SIZE_T outLength,
-						  UCHAR* output)
+UCHAR* Compressor::unpack(FB_SIZE_T inLength, const UCHAR* input,
+						  FB_SIZE_T outLength, UCHAR* output)
 {
 /**************************************
  *
@@ -443,10 +441,7 @@ UCHAR* Compressor::unpack(FB_SIZE_T inLength,
 	return output;
 }
 
-FB_SIZE_T Compressor::applyDiff(FB_SIZE_T diffLength,
-								const UCHAR* differences,
-								FB_SIZE_T outLength,
-								UCHAR* const output)
+FB_SIZE_T Difference::apply(FB_SIZE_T diffLength, FB_SIZE_T outLength, UCHAR* const output)
 {
 /**************************************
  *
@@ -455,8 +450,9 @@ FB_SIZE_T Compressor::applyDiff(FB_SIZE_T diffLength,
  *
  **************************************/
 	if (diffLength > MAX_DIFFERENCES)
-		BUGCHECK(176);			// msg 176 bad difference record
+		BUGCHECK(176);	// msg 176 bad difference record
 
+	auto differences = m_differences;
 	const auto end = differences + diffLength;
 	auto p = output;
 	const auto p_end = output + outLength;
@@ -491,34 +487,34 @@ FB_SIZE_T Compressor::applyDiff(FB_SIZE_T diffLength,
 	return length;
 }
 
-FB_SIZE_T Compressor::makeNoDiff(FB_SIZE_T outLength, UCHAR* output)
+FB_SIZE_T Difference::makeNoDiff(FB_SIZE_T length)
 {
 /**************************************
  *
  *  Generates differences record marking that there are no differences.
  *
  **************************************/
-	auto temp = output;
-	auto length = (int) outLength;
+	auto output = m_differences;
+	const auto end = output + MAX_DIFFERENCES;
 
-	while (length > 127)
+	while (length)
 	{
-		*temp++ = -127;
-		length -= 127;
+		if (output >= end)
+			return 0;
+
+		const auto max = MIN(length, 127);
+		*output++ = -max;
+		length -= max;
 	}
 
-	if (length)
-		*temp++ = (UCHAR) -length;
+	const auto diffLength = output - m_differences;
+	fb_assert(diffLength <= MAX_DIFFERENCES);
 
-	return temp - output;
+	return diffLength;
 }
 
-FB_SIZE_T Compressor::makeDiff(FB_SIZE_T length1,
-							   const UCHAR* rec1,
-							   FB_SIZE_T length2,
-							   UCHAR* rec2,
-							   FB_SIZE_T outLength,
-							   UCHAR* output)
+FB_SIZE_T Difference::make(FB_SIZE_T length1, const UCHAR* rec1,
+						   FB_SIZE_T length2, const UCHAR* rec2)
 {
 /**************************************
  *
@@ -531,27 +527,12 @@ FB_SIZE_T Compressor::makeDiff(FB_SIZE_T length1,
  *	    control_string := <positive_integer> <positive_integer data bytes>
  *				:= <negative_integer>
  *
- *	Return the total length of the differences string.
+ *	Return length of the difference record if it fits the internal buffer.
+ *	Otherwise, return zero.
  *
  **************************************/
-	UCHAR *p;
-
-#define STUFF(val)	if (output < end) *output++ = val; else return MAX_ULONG;
-
-	/* WHY IS THIS RETURNING MAX_ULONG ???
-	* It returns a large positive value to indicate to the caller that we ran out
-	* of buffer space in the 'out' argument. Thus we could not create a
-	* successful differences record. Now it is upto the caller to check the
-	* return value of this function and figure out whether the differences record
-	* was created or not. Check prepare_update() (JRD/vio.c) for further
-	* information. Of course, the size for a 'differences' record is not expected
-	* to go near 2^32 in the future.
-	*
-	* This was investigated as a part of solving bug 10206, bsriram - 25-Feb-1999.
-	*/
-
-	const auto start = output;
-	const auto end = output + outLength;
+	auto output = m_differences;
+	const auto end = output + MAX_DIFFERENCES;
 	const auto end1 = rec1 + MIN(length1, length2);
 	const auto end2 = rec2 + length2;
 
@@ -559,15 +540,15 @@ FB_SIZE_T Compressor::makeDiff(FB_SIZE_T length1,
 	{
 		if (rec1[0] != rec2[0] || rec1[1] != rec2[1])
 		{
-			p = output++;
-
-			// cast this to LONG to take care of OS/2 pointer arithmetic
-			// when rec1 is at the end of a segment, to avoid wrapping around
+			auto p = output++;
 
 			const auto yellow = (UCHAR*) MIN((U_IPTR) end1, ((U_IPTR) rec1 + 127)) - 1;
 			while (rec1 <= yellow && (rec1[0] != rec2[0] || (rec1 < yellow && rec1[1] != rec2[1])))
 			{
-				STUFF(*rec2++);
+				if (output >= end)
+					return 0;
+
+				*output++ = *rec2++;
 				++rec1;
 			}
 
@@ -575,38 +556,38 @@ FB_SIZE_T Compressor::makeDiff(FB_SIZE_T length1,
 			continue;
 		}
 
-		for (p = rec2; rec1 < end1 && *rec1 == *rec2; rec1++, rec2++)
-			; // no-op
+		unsigned count = 0;
+		while (rec1 < end1 && *rec1 == *rec2)
+			rec1++, rec2++, count++;
 
-		// This "l" could be more than 32K since the Old and New records
-		// could be the same for more than 32K characters.
-		// MAX record size is currently 64K. Hence it is defined as "int".
-		int l = p - rec2;
-
-		while (l < -127)
+		while (count)
 		{
-			STUFF(-127);
-			l += 127;
-		}
+			if (output >= end)
+				return 0;
 
-		if (l)
-			STUFF(l);
+			const auto max = MIN(count, 127);
+			*output++ = -max;
+			count -= max;
+		}
 	}
 
 	while (rec2 < end2)
 	{
-		p = output++;
-
-		// cast this to LONG to take care of OS/2 pointer arithmetic
-		// when rec1 is at the end of a segment, to avoid wrapping around
+		auto p = output++;
 
 		const auto yellow = (UCHAR*) MIN((U_IPTR) end2, ((U_IPTR) rec2 + 127));
 		while (rec2 < yellow)
-			STUFF(*rec2++);
+		{
+			if (output >= end)
+				return 0;
+
+			*output++ = *rec2++;
+		}
 
 		*p = output - p - 1;
 	}
 
-	return output - start;
-#undef STUFF
+	const auto diffLength = output - m_differences;
+
+	return (diffLength <= MAX_DIFFERENCES) ? diffLength : 0;
 }
