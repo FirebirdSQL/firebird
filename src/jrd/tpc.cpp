@@ -38,6 +38,32 @@
 
 using namespace Firebird;
 
+const int debLvl = 0;
+
+static GlobalPtr<ObjectsArray<string>> la;
+
+static void shutdownT()
+{
+	for (auto x = la->begin(); x != la->end(); ++x)
+		fputs(x->c_str(), stderr);
+}
+
+
+void logerr(FILE*, const char* format, ...)
+{
+	if (!la->hasData())
+	{
+		atexit(shutdownT);
+	}
+
+	string& text = la->add();
+
+	va_list params;
+	va_start(params, format);
+	text.vprintf(format, params);
+	va_end(params);
+}
+
 namespace Jrd {
 
 void TipCache::MemoryInitializer::mutexBug(int osErrorCode, const char* text)
@@ -169,13 +195,13 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 
 	LCK_release(tdbb, m_lock);
 
-	//fprintf(stderr, "finalizeTpc dbb=%p\n", tdbb->getDatabase());
+	if (debLvl >= 7) logerr(stderr, "finalizeTpc dbb=%p\n", tdbb->getDatabase());
 
     if (nmSnap.hasData() || nmHdr.hasData())
     {
     	if (LCK_lock(tdbb, m_lock, LCK_EX, LCK_NO_WAIT))
 		{
-			//fprintf(stderr, "finalizeTpc unlink '%s' '%s'\n", nmSnap.c_str(), nmHdr.c_str());
+			if (debLvl >= 7) logerr(stderr, "finalizeTpc unlink '%s' '%s'\n", nmSnap.c_str(), nmHdr.c_str());
 
 			SharedMemoryBase::unlinkFile(nmSnap.c_str());
 			SharedMemoryBase::unlinkFile(nmHdr.c_str());
@@ -232,7 +258,7 @@ void TipCache::initializeTpc(thread_db *tdbb)
 	if (!LCK_lock(tdbb, m_lock, LCK_PR, LCK_WAIT))
 		ERR_bugcheck_msg("Unable to obtain TPC lock (PR)");
 
-	//fprintf(stderr, "initializeTpc dbb=%p %s\n", dbb, dbb->dbb_database_name.c_str());
+	if (debLvl >= 7) logerr(stderr, "initializeTpc dbb=%p %s\n", dbb, dbb->dbb_database_name.c_str());
 	string fileName;
 
 	try
@@ -368,10 +394,10 @@ TipCache::StatusBlockData::StatusBlockData(thread_db* tdbb, TipCache* tipCache, 
 	if (!LCK_lock(tdbb, &existenceLock, LCK_PR, LCK_WAIT))
 		ERR_bugcheck_msg("Unable to obtain memory block lock");
 
-	string fileName;
+	PathName fileName;
 	fileName.printf(TPC_BLOCK_FILE, dbb->getUniqueFileId().c_str(), blockNumber);
 
-	//fprintf(stderr, "StatusBlockData::StatusBlockData '%s'\n", fileName.c_str());
+	if (debLvl >= 7) logerr(stderr, "StatusBlockData::StatusBlockData '%s'\n", fileName.c_str());
 
 	try
 	{
@@ -405,7 +431,10 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 	{
 		// wait for all initializing processes (PR)
 		if (!LCK_convert(tdbb, &existenceLock, LCK_SW, LCK_WAIT))
+		{
+			if (debLvl >= 3) logerr(stderr, "pid %d ERR_bugcheck_msg\n", getpid());
 			ERR_bugcheck_msg("Unable to convert TPC lock (SW)");
+		}
 
 		fName = memory->mapFileName();
 		delete memory;
@@ -416,16 +445,24 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 
 	if (fName.hasData())
 	{
-		//fprintf(stderr, "pid %d StatusBlockData::clear fName '%s'\n", getpid(), fName.c_str());
+		if (debLvl >= 4) logerr(stderr, "pid %d StatusBlockData::clear fName '%s'\n", getpid(), fName.c_str());
 		if (LCK_lock(tdbb, &existenceLock, LCK_EX, LCK_NO_WAIT))
 		{
-			//fprintf(stderr, "pid %d StatusBlockData::clear unlink '%s'\n", getpid(), fName.c_str());
+			if (debLvl >= 3) logerr(stderr, "pid %d StatusBlockData::clear unlink '%s'\n", getpid(), fName.c_str());
 
 			SharedMemoryBase::unlinkFile(fName.c_str());
 			LCK_release(tdbb, &existenceLock);
 		}
 		else
+		{
+			if (debLvl >= 3) logerr(stderr, "pid %d StatusBlockData::clear failed LCK_EX '%s'\n", getpid(), fName.c_str());
+
 			tdbb->tdbb_status_vector->init();
+		}
+	}
+	else
+	{
+		if (debLvl >= 3) logerr(stderr, "pid %d StatusBlockData::clear empty fName\n", getpid());
 	}
 }
 
@@ -666,7 +703,7 @@ void TipCache::updateOldestTransaction(thread_db *tdbb, TraNumber oldest, TraNum
 	TraNumber oldestNow = header->oldest_transaction.load(std::memory_order_relaxed);
 	if (oldestNew > oldestNow)
 	{
-		//fprintf(stderr, "updateOldestTransaction %" SQUADFORMAT "=>%" SQUADFORMAT "\n", oldestNow, oldestNew);
+		if (debLvl >= 7) logerr(stderr, "updateOldestTransaction %" SQUADFORMAT "=>%" SQUADFORMAT "\n", oldestNow, oldestNew);
 
 		header->oldest_transaction.store(oldestNew, std::memory_order_relaxed);
 		releaseSharedMemory(tdbb, oldestNow, oldestNew);
@@ -675,7 +712,7 @@ void TipCache::updateOldestTransaction(thread_db *tdbb, TraNumber oldest, TraNum
 
 int TipCache::tpc_block_blocking_ast(void* arg)
 {
-	//fprintf(stderr, "tpc_block_blocking_ast B %p\n", arg);
+	if (debLvl >= 2) logerr(stderr, "tpc_block_blocking_ast B %p\n", arg);
 	StatusBlockData* data = static_cast<StatusBlockData*>(arg);
 
 	Database* dbb = data->existenceLock.lck_dbb;
@@ -685,7 +722,7 @@ int TipCache::tpc_block_blocking_ast(void* arg)
 	// (it's used only in ctor).
 	// When called with finalization (SW or EX) lock that means resource
 	// is already released or will be released very soon.
-	if (data->existenceLock.lck_logical != LCK_SR)
+	if (data->existenceLock.lck_logical > LCK_SR)
 		return 0;
 
 	TipCache* cache = data->cache;
@@ -693,6 +730,7 @@ int TipCache::tpc_block_blocking_ast(void* arg)
 		cache->m_tpcHeader->getHeader()->oldest_transaction.load(std::memory_order_relaxed);
 
 	// Release shared memory
+	if (debLvl >= 2) logerr(stderr, "data->clear() %p\n", arg);
 	data->clear(tdbb);
 
 	// Check if there is a bug in cleanup code and we were requested to
@@ -700,14 +738,14 @@ int TipCache::tpc_block_blocking_ast(void* arg)
 	if (data->blockNumber >= oldest / cache->m_transactionsPerBlock)
 		ERR_bugcheck_msg("Incorrect attempt to release shared memory");
 
-	//fprintf(stderr, "tpc_block_blocking_ast E %p\n", arg);
+	if (debLvl >= 2) logerr(stderr, "tpc_block_blocking_ast E %p\n", arg);
 	return 0;
 }
 
 
 void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNumber oldest_new)
 {
-	//fprintf(stderr, "releaseSharedMemory 1\n");
+	if (debLvl >= 7) logerr(stderr, "releaseSharedMemory 1\n");
 	Database* dbb = tdbb->getDatabase();
 
 	TpcBlockNumber lastInterestingBlockNumber = oldest_new / m_transactionsPerBlock;
@@ -744,7 +782,7 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 	if (blocksToCleanup.isEmpty())
 		return;
 
-	//fprintf(stderr, "releaseSharedMemory\n");
+	if (debLvl >= 6) logerr(stderr, "pid %d releaseSharedMemory\n", getpid());
 
 	SyncLockGuard sync(&m_sync_status, SYNC_EXCLUSIVE, "TipCache::releaseSharedMemory");
 	while (blocksToCleanup.hasData())
@@ -759,7 +797,8 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 		}
 
 		// Signal other processes to release resources
-	//fprintf(stderr, "b ");
+		if (debLvl >= 5) logerr(stderr, "ast\n");
+
 		Lock temp(tdbb, sizeof(TpcBlockNumber), LCK_tpc_block);
 		temp.setKey(blockNumber);
 		if (!LCK_lock(tdbb, &temp, LCK_EX, LCK_WAIT))
@@ -769,9 +808,13 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 			break;
 		}
 
+		fileName.printf(TPC_BLOCK_FILE, dbb->getUniqueFileId().c_str(), blockNumber);
+		TEXT expanded_filename[MAXPATHLEN];
+		iscPrefixLock(expanded_filename, fileName.c_str(), false);
+		unlink(expanded_filename);
+
 		LCK_release(tdbb, &temp);
 	}
-	//fprintf(stderr, "\n");
 }
 
 SnapshotHandle TipCache::allocateSnapshotSlot()
