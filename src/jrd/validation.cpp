@@ -551,6 +551,7 @@ VI. ADDITIONAL NOTES
 #include "../jrd/btn.h"
 #include "../jrd/cch.h"
 #include "../jrd/tra.h"
+#include "../jrd/sqz.h"
 #include "../jrd/svc.h"
 #include "../jrd/btr_proto.h"
 #include "../jrd/cch_proto.h"
@@ -2686,40 +2687,25 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 
 	const rhdf* fragment = (rhdf*) header;
 
-	const char* p;
-	const char* end;
+	const UCHAR* p;
+
 	if (header->rhd_flags & rhd_incomplete)
 	{
-		p = (SCHAR*) fragment->rhdf_data;
-		end = p + length - offsetof(rhdf, rhdf_data[0]);
+		p = fragment->rhdf_data;
+		length -= offsetof(rhdf, rhdf_data[0]);
 	}
 	else if (header->rhd_flags & rhd_long_tranum)
 	{
-		p = (SCHAR*) ((rhde*) header)->rhde_data;
-		end = p + length - offsetof(rhde, rhde_data[0]);
+		p = ((rhde*) header)->rhde_data;
+		length - offsetof(rhde, rhde_data[0]);
 	}
 	else
 	{
-		p = (SCHAR*) header->rhd_data;
-		end = p + length - offsetof(rhd, rhd_data[0]);
+		p = header->rhd_data;
+		length -= offsetof(rhd, rhd_data[0]);
 	}
 
-	ULONG record_length = 0;
-
-	while (p < end)
-	{
-		const signed char c = *p++;
-		if (c >= 0)
-		{
-			record_length += c;
-			p += c;
-		}
-		else
-		{
-			record_length -= c;
-			p++;
-		}
-	}
+	ULONG record_length = (ULONG) Compressor::getUnpackedLength(length, p);
 
 	// Next, chase down fragments, if any
 
@@ -2734,7 +2720,9 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		window.win_flags = WIN_garbage_collector;
 
 		fetch_page(true, page_number, pag_data, &window, &page);
+
 		const data_page::dpg_repeat* line = &page->dpg_rpt[line_number];
+
 		if (page->dpg_relation != relation->rel_id ||
 			line_number >= page->dpg_count || !(length = line->dpg_length))
 		{
@@ -2742,7 +2730,9 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 			release_page(&window);
 			return rtn_corrupt;
 		}
+
 		fragment = (rhdf*) ((UCHAR*) page + line->dpg_offset);
+
 #ifdef DEBUG_VAL_VERBOSE
 		if (VAL_debug_level)
 		{
@@ -2750,35 +2740,25 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 			print_rhd(line->dpg_length, (rhd*) fragment);
 		}
 #endif
+
 		if (fragment->rhdf_flags & rhd_incomplete)
 		{
-			p = (SCHAR*) fragment->rhdf_data;
-			end = p + line->dpg_length - offsetof(rhdf, rhdf_data[0]);
+			p = fragment->rhdf_data;
+			length -= offsetof(rhdf, rhdf_data[0]);
 		}
 		else if (fragment->rhdf_flags & rhd_long_tranum)
 		{
-			p = (SCHAR*) ((rhde*) fragment)->rhde_data;
-			end = p + line->dpg_length - offsetof(rhde, rhde_data[0]);
+			p = ((rhde*) fragment)->rhde_data;
+			length -= offsetof(rhde, rhde_data[0]);
 		}
 		else
 		{
-			p = (SCHAR*) ((rhd*) fragment)->rhd_data;
-			end = p + line->dpg_length - offsetof(rhd, rhd_data[0]);
+			p = ((rhd*) fragment)->rhd_data;
+			length -= offsetof(rhd, rhd_data[0]);
 		}
-		while (p < end)
-		{
-			const signed char c = *p++;
-			if (c >= 0)
-			{
-				record_length += c;
-				p += c;
-			}
-			else
-			{
-				record_length -= c;
-				p++;
-			}
-		}
+
+		record_length += (ULONG) Compressor::getUnpackedLength(length, p);
+
 		page_number = fragment->rhdf_f_page;
 		line_number = fragment->rhdf_f_line;
 		flags = fragment->rhdf_flags;

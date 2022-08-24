@@ -56,6 +56,7 @@ namespace Jrd
 		FB_SIZE_T truncate(FB_SIZE_T outLength);
 		FB_SIZE_T truncateTail(FB_SIZE_T outLength);
 
+		static FB_SIZE_T getUnpackedLength(FB_SIZE_T, const UCHAR*);
 		static UCHAR* unpack(FB_SIZE_T, const UCHAR*, FB_SIZE_T, UCHAR*);
 
 		static FB_SIZE_T applyDiff(FB_SIZE_T, const UCHAR*, FB_SIZE_T, UCHAR* const);

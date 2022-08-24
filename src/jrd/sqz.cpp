@@ -341,6 +341,51 @@ FB_SIZE_T Compressor::truncateTail(FB_SIZE_T outLength)
 	return inLength;
 }
 
+FB_SIZE_T Compressor::getUnpackedLength(FB_SIZE_T inLength, const UCHAR* input)
+{
+/**************************************
+ *
+ *	Calculate the unpacked length of the input compressed string.
+ *
+ **************************************/
+	const auto end = input + inLength;
+	ULONG result = 0;
+
+	while (input < end)
+	{
+		const int length = (signed char) *input++;
+
+		if (length < 0)
+		{
+			auto zipLength = (unsigned) -length;
+
+			if (length == -1)
+			{
+				zipLength = (USHORT) get_short(input);
+				input += sizeof(SSHORT);
+			}
+			else if (length == -2)
+			{
+				zipLength = (ULONG) get_long(input);
+				input += sizeof(SLONG);
+			}
+
+			if (input >= end)
+				return 0; // decompression error
+
+			input++;
+			result += zipLength;
+		}
+		else
+		{
+			result += length;
+			input += length;
+		}
+	}
+
+	return result;
+}
+
 UCHAR* Compressor::unpack(FB_SIZE_T inLength,
 						  const UCHAR* input,
 						  FB_SIZE_T outLength,
