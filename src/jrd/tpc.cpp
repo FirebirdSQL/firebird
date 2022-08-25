@@ -193,8 +193,6 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 	m_blocks_memory.clear();
 	m_transactionsPerBlock = 0;
 
-	LCK_release(tdbb, m_lock);
-
 	if (debLvl >= 7) logerr(stderr, "finalizeTpc dbb=%p\n", tdbb->getDatabase());
 
     if (nmSnap.hasData() || nmHdr.hasData())
@@ -205,11 +203,12 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 
 			SharedMemoryBase::unlinkFile(nmSnap.c_str());
 			SharedMemoryBase::unlinkFile(nmHdr.c_str());
-			LCK_release(tdbb, m_lock);
 		}
 		else
 			tdbb->tdbb_status_vector->init();
 	}
+
+	LCK_release(tdbb, m_lock);
 }
 
 CommitNumber TipCache::cacheState(TraNumber number)
