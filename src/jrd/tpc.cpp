@@ -201,8 +201,10 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 		{
 			if (debLvl >= 7) logerr(stderr, "finalizeTpc unlink '%s' '%s'\n", nmSnap.c_str(), nmHdr.c_str());
 
-			SharedMemoryBase::unlinkFile(nmSnap.c_str());
-			SharedMemoryBase::unlinkFile(nmHdr.c_str());
+			if (nmSnap.hasData())
+				SharedMemoryBase::unlinkFile(nmSnap.c_str());
+			if (nmHdr.hasData())
+				SharedMemoryBase::unlinkFile(nmHdr.c_str());
 		}
 		else
 			tdbb->tdbb_status_vector->init();
