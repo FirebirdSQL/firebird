@@ -741,8 +741,14 @@ int TipCache::tpc_block_blocking_ast(void* arg)
 		cache->m_tpcHeader->getHeader()->oldest_transaction.load(std::memory_order_relaxed);
 
 	// Release shared memory
-	if (debLvl >= 2) logerr(stderr, "data->clear() %p\n", arg);
-	data->clear(tdbb);
+	if (debLvl >= 2) logerr(stderr, "clear memory %p\n", arg);
+
+	if (data->memory)
+	{
+		delete data->memory;
+		data->memory = NULL;
+	}
+	LCK_release(tdbb, &data->existenceLock);
 
 	// Check if there is a bug in cleanup code and we were requested to
 	// release memory that might be in use
