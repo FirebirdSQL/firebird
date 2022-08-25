@@ -394,8 +394,7 @@ TipCache::StatusBlockData::StatusBlockData(thread_db* tdbb, TipCache* tipCache, 
 	if (!LCK_lock(tdbb, &existenceLock, LCK_PR, LCK_WAIT))
 		ERR_bugcheck_msg("Unable to obtain memory block lock");
 
-	PathName fileName;
-	fileName.printf(TPC_BLOCK_FILE, dbb->getUniqueFileId().c_str(), blockNumber);
+	PathName fileName = makeSharedMemoryFileName(dbb, blockNumber, false);
 
 	if (debLvl >= 7) logerr(stderr, "StatusBlockData::StatusBlockData '%s'\n", fileName.c_str());
 
@@ -415,6 +414,18 @@ TipCache::StatusBlockData::StatusBlockData(thread_db* tdbb, TipCache* tipCache, 
 	}
 
 	fb_assert(memory->getHeader()->mhb_version == TPC_VERSION);
+}
+
+PathName TipCache::StatusBlockData::makeSharedMemoryFileName(Database* dbb, TpcBlockNumber n, bool fullPath)
+{
+	PathName fileName;
+	fileName.printf(TPC_BLOCK_FILE, dbb->getUniqueFileId().c_str(), n);
+	if (!fullPath)
+		return fileName;
+
+	TEXT expanded_filename[MAXPATHLEN];
+	iscPrefixLock(expanded_filename, fileName.c_str(), false);
+	return PathName(expanded_filename);
 }
 
 TipCache::StatusBlockData::~StatusBlockData()
@@ -743,6 +754,8 @@ int TipCache::tpc_block_blocking_ast(void* arg)
 }
 
 
+
+
 void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNumber oldest_new)
 {
 	if (debLvl >= 7) logerr(stderr, "releaseSharedMemory 1\n");
@@ -760,20 +773,18 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 	// Populate array of blocks that might be unmapped and deleted.
 	// We scan for blocks to clean up in descending order, but delete them in
 	// ascending order to ensure for robust operation.
-	string fileName;
+	PathName fileName;
 	Firebird::HalfStaticArray<TpcBlockNumber, 16> blocksToCleanup;
 
 	for (TpcBlockNumber cleanupCounter = lastInterestingBlockNumber - SAFETY_GAP_BLOCKS;
 		cleanupCounter; cleanupCounter--)
 	{
 		TpcBlockNumber blockNumber = cleanupCounter - 1;
-		fileName.printf(TPC_BLOCK_FILE, dbb->getUniqueFileId().c_str(), blockNumber);
-		TEXT expanded_filename[MAXPATHLEN];
-		iscPrefixLock(expanded_filename, fileName.c_str(), false);
+		PathName fileName = StatusBlockData::makeSharedMemoryFileName(dbb, blockNumber, true);
 
 		struct stat st;
 		// If file is not found -- look no further
-		if (stat(expanded_filename, &st) != 0)
+		if (stat(fileName.c_str(), &st) != 0)
 			break;
 
 		blocksToCleanup.add(blockNumber);
@@ -808,10 +819,9 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 			break;
 		}
 
-		fileName.printf(TPC_BLOCK_FILE, dbb->getUniqueFileId().c_str(), blockNumber);
-		TEXT expanded_filename[MAXPATHLEN];
-		iscPrefixLock(expanded_filename, fileName.c_str(), false);
-		unlink(expanded_filename);
+		// Always delete file when EX lock is taken
+		PathName fileName = StatusBlockData::makeSharedMemoryFileName(dbb, blockNumber, true);
+		unlink(fileName.c_str());
 
 		LCK_release(tdbb, &temp);
 	}
