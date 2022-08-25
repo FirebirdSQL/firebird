@@ -1187,7 +1187,7 @@ void SharedMemoryBase::unlinkFile()
 	unlinkFile(expanded_filename);
 }
 
-PathName SharedMemoryBase::mapFileName()
+PathName SharedMemoryBase::getMapFileName()
 {
 	TEXT expanded_filename[MAXPATHLEN];
 	iscPrefixLock(expanded_filename, sh_mem_name, false);

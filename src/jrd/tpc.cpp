@@ -178,14 +178,14 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 	PathName nmSnap, nmHdr;
 	if (m_snapshots)
 	{
-		nmSnap = m_snapshots->mapFileName();
+		nmSnap = m_snapshots->getMapFileName();
 		delete m_snapshots;
 		m_snapshots = NULL;
 	}
 
 	if (m_tpcHeader)
 	{
-		nmHdr = m_tpcHeader->mapFileName();
+		nmHdr = m_tpcHeader->getMapFileName();
 		delete m_tpcHeader;
 		m_tpcHeader = NULL;
 	}
@@ -448,7 +448,7 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 			ERR_bugcheck_msg("Unable to convert TPC lock (SW)");
 		}
 
-		fName = memory->mapFileName();
+		fName = memory->getMapFileName();
 		delete memory;
 		memory = NULL;
 	}
