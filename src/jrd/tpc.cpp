@@ -177,7 +177,10 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 				SharedMemoryBase::unlinkFile(nmHdr.c_str());
 		}
 		else
+		{
 			tdbb->tdbb_status_vector->init();
+			return;
+		}
 	}
 
 	LCK_release(tdbb, m_lock);
@@ -417,18 +420,18 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 		memory = NULL;
 	}
 
-	LCK_release(tdbb, &existenceLock);
-
 	if (fName.hasData())
 	{
 		if (LCK_lock(tdbb, &existenceLock, LCK_EX, LCK_NO_WAIT))
-		{
 			SharedMemoryBase::unlinkFile(fName.c_str());
-			LCK_release(tdbb, &existenceLock);
-		}
 		else
+		{
 			tdbb->tdbb_status_vector->init();
+			return;
+		}
 	}
+
+	LCK_release(tdbb, &existenceLock);
 }
 
 TipCache::TransactionStatusBlock* TipCache::createTransactionStatusBlock(ULONG blockSize, TpcBlockNumber blockNumber)
