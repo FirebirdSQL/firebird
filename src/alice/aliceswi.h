@@ -65,6 +65,7 @@ const SINT64 sw_nolinger		= QUADCONST(0x0000001000000000);
 const SINT64 sw_icu				= QUADCONST(0x0000002000000000);
 const SINT64 sw_role			= QUADCONST(0x0000004000000000);
 const SINT64 sw_replica			= QUADCONST(0x0000008000000000);
+const SINT64 sw_skip_warn		= QUADCONST(0x0000010000000000);
 
 // Popular combination of compatible switches
 const SINT64 sw_auth_set		= sw_user | sw_password | sw_role | sw_fetch_password | sw_trusted_auth;
@@ -124,7 +125,8 @@ enum alice_switches
 	IN_SW_ALICE_NOLINGER			=	47,
 	IN_SW_ALICE_ICU					=	48,
 	IN_SW_ALICE_ROLE				=	49,
-	IN_SW_ALICE_REPLICA				=	50
+	IN_SW_ALICE_REPLICA				=	50,
+	IN_SW_ALICE_SKIP_WARNINGS		=	51
 };
 
 static const char* const ALICE_SW_ASYNC	= "ASYNC";
@@ -310,6 +312,9 @@ static const Switches::in_sw_tab_t alice_in_sw_table[] =
 	{IN_SW_ALICE_TWO_PHASE, isc_spb_rpr_recover_two_phase_64, "TWO_PHASE",
 		0, 0, 0, false, false, 0, 0, NULL},
 /************************************************************************/
+	{ IN_SW_ALICE_SKIP_WARNINGS, isc_spb_rpr_skip_warnings, "SKIP_WARNINGS", sw_skip_warn,
+		sw_validate, 0, false, true, 136, 2, NULL },
+	// msg 136: \t-skip_warnings\t\tignore warnings in log file
 	{IN_SW_ALICE_0, 0, NULL, 0,
      	0, 0, false, false, 0, 0, NULL}
 };

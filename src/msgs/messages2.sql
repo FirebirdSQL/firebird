@@ -1812,6 +1812,7 @@ COMMIT WORK;
 ('gfix_role_req', 'ALICE_gfix', 'alice.c', NULL, 3, 133, NULL, 'SQL role name required', NULL, NULL);
 ('gfix_opt_repl', 'ALICE_gfix', 'alice.c', NULL, 3, 134, NULL, '   -repl(ica)           replica mode <none / read_only / read_write>', NULL, NULL);
 ('gfix_repl_mode_req', 'ALICE_gfix', 'alice.c', NULL, 3, 135, NULL, 'replica mode (none / read_only / read_write) required', NULL, NULL);
+('gfix_opt_skip_warnings', 'ALICE_gfix', 'alice.c', NULL, 3, 136, NULL, '   -sk(ip_warnings)     ignore warnings in log file', NULL, NULL);
 -- DSQL
 ('dsql_dbkey_from_non_table', 'MAKE_desc', 'make.c', NULL, 7, 2, NULL, 'Cannot SELECT RDB$DB_KEY from a stored procedure.', NULL, NULL);
 ('dsql_transitional_numeric', 'dsql_yyparse', 'parse.y', NULL, 7, 3, NULL, 'Precision 10 to 18 changed from DOUBLE PRECISION in SQL dialect 1 to 64-bit scaled integer in SQL dialect 3', NULL, NULL);

@@ -202,7 +202,7 @@
 #define isc_dpb_no_update                 16
 #define isc_dpb_repair                    32
 #define isc_dpb_ignore                    64
-
+#define isc_dpb_skipwarn                  128
 /***********************************/
 /* isc_dpb_shutdown specific flags */
 /***********************************/
@@ -532,7 +532,7 @@
 #define isc_spb_rpr_kill_shadows		0x40
 #define isc_spb_rpr_full				0x80
 #define isc_spb_rpr_icu				  0x0800
-
+#define isc_spb_rpr_skip_warnings	  0x8000
 /*****************************************
  * Parameters for isc_action_svc_restore *
  *****************************************/
