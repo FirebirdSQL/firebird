@@ -12,7 +12,7 @@ Version=`grep ^FirebirdVersion ${MakeVersion}|awk '{print $3;}'`
 Release="Firebird-${Version}.${Build}-0.arm${arm}.tar.gz"
 Debug="Firebird-withDebugInfo-${Version}.${Build}-0.arm${arm}.tar.gz"
 Stripped=strip
-aStrip=${NDK}/toolchains/${cross}-4.9/prebuilt/linux-x86_64/bin/${cross}-strip
+aStrip=${NDK_TOOLCHAIN}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
 fbRootDir=`pwd`
 
 runTar()

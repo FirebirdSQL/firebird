@@ -4,9 +4,9 @@ $(error Must export standalone NDK_TOOLCHAIN location before building for Androi
 endif
 NDK_ROOT:=$(NDK_TOOLCHAIN)
 
-CROSS_SYSROOT:=$(NDK_TOOLCHAIN)/sysroot
-CROSS_PREFIX24:=$(NDK_TOOLCHAIN)/bin/aarch64-linux-android24-
-CROSS_PREFIX:=$(NDK_TOOLCHAIN)/bin/aarch64-linux-android-
+CROSS_SYSROOT:=$(NDK_TOOLCHAIN)/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+CROSS_PREFIX24:=$(NDK_TOOLCHAIN)/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-
+CROSS_PREFIX:=$(NDK_TOOLCHAIN)/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-
 
 CROSS_FLAGS:=--sysroot=$(CROSS_SYSROOT) \
 			 -I$(CROSS_SYSROOT)/usr/include -I$(ROOT)/gen/cross
