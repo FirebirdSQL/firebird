@@ -1,6 +1,6 @@
 ifeq ($(NDK_TOOLCHAIN),)
 ifeq ($(NDK),)
-$(error Must export either NDK or NDK_TOOLCHAIN before building for Android
+$(error Must export either NDK or NDK_TOOLCHAIN before building for Android)
 endif
 endif
 
