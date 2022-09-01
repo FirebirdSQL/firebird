@@ -6,13 +6,15 @@ bits=${1}
 arm=""
 [ "$bits" = "64" ] && arm=64
 
+[ -z "$NDK_TOOLCHAIN" ] && NDK_TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
+
 MakeVersion=gen/Make.Version
 Build=`grep ^BuildNum ${MakeVersion}|awk '{print $3;}'`
 Version=`grep ^FirebirdVersion ${MakeVersion}|awk '{print $3;}'`
 Release="Firebird-${Version}.${Build}-0.arm${arm}.tar.gz"
 Debug="Firebird-withDebugInfo-${Version}.${Build}-0.arm${arm}.tar.gz"
 Stripped=strip
-aStrip=${NDK_TOOLCHAIN}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
+aStrip=${NDK_TOOLCHAIN}/bin/llvm-strip
 fbRootDir=`pwd`
 
 runTar()
