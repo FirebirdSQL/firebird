@@ -20,12 +20,14 @@ fbRootDir=`pwd`
 runTar()
 {
 	tarfile=${1}
-	tar cvfz ${tarfile} --exclude '*.a' firebird
+	tar cvfz ${tarfile} --exclude '*.a' --exclude tests firebird
 }
 
 cd gen/Release
 rm -rf ${Stripped}
 cp ${fbRootDir}/builds/install/arch-specific/android/AfterUntar.sh firebird
+chmod +x firebird/AfterUntar.sh
+cp ${fbRootDir}/src/dbs/security.sql firebird
 echo .
 echo .
 echo "Compress with deb-info"
@@ -42,7 +44,7 @@ cd ${Stripped}
 echo .
 echo .
 echo "Strip"
-for file in `find firebird -executable -type f -print`
+for file in `find firebird -executable -type f -not -name "*.sh" -print`
 do
 	${aStrip} ${file}
 done
