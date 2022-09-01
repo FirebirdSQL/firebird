@@ -1,11 +1,14 @@
 ifeq ($(NDK_TOOLCHAIN),)
-$(error Must export standalone NDK_TOOLCHAIN location before building for Android - use NDK's build/tools/make-standalone-toolchain.sh to build)
+ifeq ($(NDK),)
+$(error Must export either NDK or NDK_TOOLCHAIN before building for Android
 endif
-NDK_ROOT:=$(NDK_TOOLCHAIN)
+endif
 
-CROSS_SYSROOT:=$(NDK_TOOLCHAIN)/toolchains/llvm/prebuilt/linux-x86_64/sysroot
-CROSS_PREFIX24:=$(NDK_TOOLCHAIN)/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-
-CROSS_PREFIX:=$(NDK_TOOLCHAIN)/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-
+NDK_TOOLCHAIN ?= $(NDK)/toolchains/llvm/prebuilt/linux-x86_64
+
+CROSS_SYSROOT:=$(NDK_TOOLCHAIN)/sysroot
+CROSS_PREFIX24:=$(NDK_TOOLCHAIN)/bin/armv7a-linux-androideabi24-
+CROSS_PREFIX:=$(NDK_TOOLCHAIN)/bin/llvm-
 
 CROSS_FLAGS:=--sysroot=$(CROSS_SYSROOT) \
 			 -I$(CROSS_SYSROOT)/usr/include -I$(ROOT)/gen/cross
