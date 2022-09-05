@@ -8687,7 +8687,7 @@ void DropRelationNode::deleteGlobalField(thread_db* tdbb, jrd_tra* transaction,
 }
 
 
-void DropRelationNode::dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction, bool view, jrd_rel* rel_drop, const MetaName& name)
+void DropRelationNode::dropRelation(thread_db* tdbb, jrd_tra* transaction, bool view, jrd_rel* rel_drop, const MetaName& name)
 {
 	if (!view && rel_drop)
 	{
@@ -8698,24 +8698,7 @@ void DropRelationNode::dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 			DPM_scan_pages(tdbb, pag_root, rel_drop->rel_id);
 	}
 
-	const int ddlTriggerAction = (view ? DDL_TRIGGER_DROP_VIEW : DDL_TRIGGER_DROP_TABLE);
-
-	// run all statements under savepoint control
-	AutoSavePoint savePoint(tdbb, transaction);
-
-	AutoCacheRequest request(tdbb, drq_l_relation, DYN_REQUESTS);
-	bool found = false;
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		R IN RDB$RELATIONS
-		WITH R.RDB$RELATION_NAME EQ name.c_str()
-	{
-		executeDdlTrigger(tdbb, transaction, DTW_BEFORE, ddlTriggerAction, name, NULL, *dsqlScratch->getDsqlStatement()->getSqlText());
-		found = true;
-	}
-	END_FOR
-
-	request.reset(tdbb, drq_e_rel_con2, DYN_REQUESTS);
+	AutoCacheRequest request(tdbb, drq_e_rel_con2, DYN_REQUESTS);
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		CRT IN RDB$RELATION_CONSTRAINTS
@@ -8812,12 +8795,6 @@ void DropRelationNode::dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 	}
 	END_FOR
 
-	if (!found)
-	{
-		// msg 61: "Relation not found"
-		status_exception::raise(Arg::PrivateDyn(61));
-	}
-
 	// Triggers must be deleted after check constraints
 
 	MetaName triggerName;
@@ -8870,16 +8847,6 @@ void DropRelationNode::dropRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 		ERASE PTAB;
 	}
 	END_FOR
-
-	if (found)
-		executeDdlTrigger(tdbb, transaction, DTW_AFTER, ddlTriggerAction, name, NULL, *dsqlScratch->getDsqlStatement()->getSqlText());
-	else
-	{
-		// msg 61: "Relation not found"
-		status_exception::raise(Arg::PrivateDyn(61));
-	}
-
-	savePoint.release();	// everything is ok
 
 	METD_drop_relation(transaction, name.c_str());
 	MET_dsql_cache_release(tdbb, SYM_relation, name);
@@ -8940,7 +8907,34 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		}
 	}
 
-	dropRelation(tdbb, dsqlScratch, transaction, view, rel_drop, name);
+	const int ddlTriggerAction = (view ? DDL_TRIGGER_DROP_VIEW : DDL_TRIGGER_DROP_TABLE);
+
+	// run all statements under savepoint control
+	AutoSavePoint savePoint(tdbb, transaction);
+
+	AutoCacheRequest request(tdbb, drq_l_relation, DYN_REQUESTS);
+	bool found = false;
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		R IN RDB$RELATIONS
+		WITH R.RDB$RELATION_NAME EQ name.c_str()
+	{
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, ddlTriggerAction, name, NULL);
+		found = true;
+	}
+	END_FOR
+
+	if (!found)
+	{
+		// msg 61: "Relation not found"
+		status_exception::raise(Arg::PrivateDyn(61));
+	}
+
+	dropRelation(tdbb, transaction, view, rel_drop, name);
+
+	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, ddlTriggerAction, name, NULL);
+
+	savePoint.release();	// everything is ok
 }
 
 
