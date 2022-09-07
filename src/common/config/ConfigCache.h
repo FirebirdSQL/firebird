@@ -60,9 +60,16 @@ private:
 		Firebird::PathName fileName;
 
 	private:
-		volatile time_t fileTime;
+#ifdef WIN_NT
+		volatile DWORD fileTimeLow;
+		volatile DWORD fileTimeHigh;
+		void getTime(DWORD& timeLow, DWORD& timeHigh);
+#else
+		volatile timespec fileTime;
+		void getTime(timespec& time);
+#endif
+
 		File* next;
-		time_t getTime();
 	};
 	File* files;
 
