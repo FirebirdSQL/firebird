@@ -2697,7 +2697,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	else if (header->rhd_flags & rhd_long_tranum)
 	{
 		p = ((rhde*) header)->rhde_data;
-		length - offsetof(rhde, rhde_data[0]);
+		length -= offsetof(rhde, rhde_data[0]);
 	}
 	else
 	{
