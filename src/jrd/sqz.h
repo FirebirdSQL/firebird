@@ -34,37 +34,31 @@ namespace Jrd
 	class Compressor
 	{
 	public:
-		Compressor(thread_db* tdbb, FB_SIZE_T length, const UCHAR* data);
+		Compressor(thread_db* tdbb, ULONG length, const UCHAR* data);
 
-		FB_SIZE_T getPackedLength() const
+		ULONG getPackedLength() const
 		{
 			return m_length;
 		}
 
-		bool isCompressable() const
+		bool isPacked() const
 		{
-			for (const auto length : m_runs)
-			{
-				if (length < 0)
-					return true;
-			}
-
-			return false;
+			return m_runs.hasData();
 		}
 
 		void pack(const UCHAR* input, UCHAR* output) const;
-		FB_SIZE_T truncate(FB_SIZE_T outLength);
-		FB_SIZE_T truncateTail(FB_SIZE_T outLength);
+		ULONG truncate(ULONG outLength);
+		ULONG truncateTail(ULONG outLength);
 
-		static FB_SIZE_T getUnpackedLength(FB_SIZE_T inLength, const UCHAR* input);
-		static UCHAR* unpack(FB_SIZE_T inLength, const UCHAR* input,
-							 FB_SIZE_T outLength, UCHAR* output);
+		static ULONG getUnpackedLength(ULONG inLength, const UCHAR* input);
+		static UCHAR* unpack(ULONG inLength, const UCHAR* input,
+							 ULONG outLength, UCHAR* output);
 
 	private:
 		unsigned nonCompressableRun(unsigned length);
 
 		Firebird::HalfStaticArray<int, 256> m_runs;
-		FB_SIZE_T m_length = 0;
+		ULONG m_length = 0;
 	};
 
 	class Difference
@@ -83,15 +77,15 @@ namespace Jrd
 			return m_differences;
 		}
 
-		FB_SIZE_T getCapacity() const
+		ULONG getCapacity() const
 		{
 			return MAX_DIFFERENCES;
 		}
 
-		FB_SIZE_T apply(FB_SIZE_T diffLength, FB_SIZE_T outLength, UCHAR* output);
-		FB_SIZE_T make(FB_SIZE_T length1, const UCHAR* rec1,
-					   FB_SIZE_T length2, const UCHAR* rec2);
-		FB_SIZE_T makeNoDiff(FB_SIZE_T length);
+		ULONG apply(ULONG diffLength, ULONG outLength, UCHAR* output);
+		ULONG make(ULONG length1, const UCHAR* rec1,
+				   ULONG length2, const UCHAR* rec2);
+		ULONG makeNoDiff(ULONG length);
 
 	private:
 		UCHAR m_differences[MAX_DIFFERENCES];

@@ -835,6 +835,7 @@ const USHORT rhd_damaged		= 128;		// object is known to be damaged
 const USHORT rhd_gc_active		= 256;		// garbage collecting dead record version
 const USHORT rhd_uk_modified	= 512;		// record key field values are changed
 const USHORT rhd_long_tranum	= 1024;		// transaction number is 64-bit
+const USHORT rhd_unpacked		= 2048;		// record (or delta) is stored "as is"
 
 
 // This (not exact) copy of class DSC is used to store descriptors on disk.

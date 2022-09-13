@@ -92,7 +92,7 @@ unsigned Compressor::nonCompressableRun(unsigned length)
 	return result;
 }
 
-Compressor::Compressor(thread_db* tdbb, FB_SIZE_T length, const UCHAR* data)
+Compressor::Compressor(thread_db* tdbb, ULONG length, const UCHAR* data)
 	: m_runs(*tdbb->getDefaultPool())
 {
 	const auto dbb = tdbb->getDatabase();
@@ -180,6 +180,19 @@ Compressor::Compressor(thread_db* tdbb, FB_SIZE_T length, const UCHAR* data)
 			}
 		}
 	}
+
+	// If the compressed length is longer than the original one, then
+	// claim ourselves being incompressible. But only for ODS 13.1 and newer,
+	// as this implies using a new record-level ODS flag.
+	//
+	// dimitr:	maybe we need some more complicated threshold,
+	//			e.g. 80-90% of the original length?
+
+	if (m_length >= length && dbb->getEncodedOdsVersion() >= ODS_13_1)
+	{
+		m_runs.clear();
+		m_length = length;
+	}
 }
 
 void Compressor::pack(const UCHAR* input, UCHAR* output) const
@@ -190,6 +203,13 @@ void Compressor::pack(const UCHAR* input, UCHAR* output) const
  *	Don't check nuttin' -- go for speed, man, raw SPEED!
  *
  **************************************/
+	if (m_runs.isEmpty())
+	{
+		// Perform raw byte copying instead of compressing
+		memcpy(output, input, m_length);
+		return;
+	}
+
 	for (const auto length : m_runs)
 	{
 		if (length < 0)
@@ -230,7 +250,7 @@ void Compressor::pack(const UCHAR* input, UCHAR* output) const
 	}
 }
 
-FB_SIZE_T Compressor::truncate(FB_SIZE_T outLength)
+ULONG Compressor::truncate(ULONG outLength)
 {
 /**************************************
  *
@@ -238,9 +258,17 @@ FB_SIZE_T Compressor::truncate(FB_SIZE_T outLength)
  *	Return the number of leading input bytes that fit the given output length.
  *
  **************************************/
+	fb_assert(m_length > outLength);
+
+	if (m_runs.isEmpty())
+	{
+		m_length = outLength;
+		return outLength;
+	}
+
 	auto space = (int) outLength;
-	FB_SIZE_T inLength = 0;
-	FB_SIZE_T keepRuns = 0;
+	ULONG inLength = 0;
+	ULONG keepRuns = 0;
 
 	for (auto& length : m_runs)
 	{
@@ -282,11 +310,18 @@ FB_SIZE_T Compressor::truncate(FB_SIZE_T outLength)
 	if (m_length > outLength)
 		BUGCHECK(178);	// msg 178 record length inconsistent
 
+	// Check whether the remaining part is still compressible
+	if (m_length >= inLength)
+	{
+		keepRuns = 0;
+		m_length = inLength = outLength;
+	}
+
 	m_runs.resize(keepRuns);
 	return inLength;
 }
 
-FB_SIZE_T Compressor::truncateTail(FB_SIZE_T outLength)
+ULONG Compressor::truncateTail(ULONG outLength)
 {
 /**************************************
  *
@@ -294,8 +329,16 @@ FB_SIZE_T Compressor::truncateTail(FB_SIZE_T outLength)
  *	Return the number of trailing input bytes that fit the given output length.
  *
  **************************************/
+	fb_assert(m_length > outLength);
+
+	if (m_runs.isEmpty())
+	{
+		m_length -= outLength;
+		return outLength;
+	}
+
 	auto space = (int) outLength;
-	FB_SIZE_T inLength = 0;
+	ULONG inLength = 0;
 
 	while (m_runs.hasData())
 	{
@@ -338,10 +381,21 @@ FB_SIZE_T Compressor::truncateTail(FB_SIZE_T outLength)
 
 	fb_assert(m_runs.hasData());
 
+	// Check whether the remaining part is still compressible
+	ULONG orgLength = 0;
+	for (const auto run : m_runs)
+		orgLength += abs(run);
+
+	if (m_length >= orgLength)
+	{
+		m_runs.clear();
+		m_length = orgLength;
+	}
+
 	return inLength;
 }
 
-FB_SIZE_T Compressor::getUnpackedLength(FB_SIZE_T inLength, const UCHAR* input)
+ULONG Compressor::getUnpackedLength(ULONG inLength, const UCHAR* input)
 {
 /**************************************
  *
@@ -386,8 +440,8 @@ FB_SIZE_T Compressor::getUnpackedLength(FB_SIZE_T inLength, const UCHAR* input)
 	return result;
 }
 
-UCHAR* Compressor::unpack(FB_SIZE_T inLength, const UCHAR* input,
-						  FB_SIZE_T outLength, UCHAR* output)
+UCHAR* Compressor::unpack(ULONG inLength, const UCHAR* input,
+						  ULONG outLength, UCHAR* output)
 {
 /**************************************
  *
@@ -436,12 +490,12 @@ UCHAR* Compressor::unpack(FB_SIZE_T inLength, const UCHAR* input,
 	}
 
 	if (output > output_end)
-		BUGCHECK(179);			// msg 179 decompression overran buffer
+		BUGCHECK(179);	// msg 179 decompression overran buffer
 
 	return output;
 }
 
-FB_SIZE_T Difference::apply(FB_SIZE_T diffLength, FB_SIZE_T outLength, UCHAR* const output)
+ULONG Difference::apply(ULONG diffLength, ULONG outLength, UCHAR* const output)
 {
 /**************************************
  *
@@ -479,15 +533,21 @@ FB_SIZE_T Difference::apply(FB_SIZE_T diffLength, FB_SIZE_T outLength, UCHAR* co
 		}
 	}
 
+	while (differences < end)
+	{
+		if (*differences++)
+			BUGCHECK(177);	// msg 177 applied differences will not fit in record
+	}
+
 	const auto length = p - output;
 
-	if (length > outLength || differences < end)
-		BUGCHECK(177);			// msg 177 applied differences will not fit in record
+	if (length > outLength)
+		BUGCHECK(177);	// msg 177 applied differences will not fit in record
 
 	return length;
 }
 
-FB_SIZE_T Difference::makeNoDiff(FB_SIZE_T length)
+ULONG Difference::makeNoDiff(ULONG length)
 {
 /**************************************
  *
@@ -513,8 +573,8 @@ FB_SIZE_T Difference::makeNoDiff(FB_SIZE_T length)
 	return diffLength;
 }
 
-FB_SIZE_T Difference::make(FB_SIZE_T length1, const UCHAR* rec1,
-						   FB_SIZE_T length2, const UCHAR* rec2)
+ULONG Difference::make(ULONG length1, const UCHAR* rec1,
+					   ULONG length2, const UCHAR* rec2)
 {
 /**************************************
  *
@@ -588,6 +648,7 @@ FB_SIZE_T Difference::make(FB_SIZE_T length1, const UCHAR* rec1,
 	}
 
 	const auto diffLength = output - m_differences;
+	fb_assert(diffLength);
 
 	return (diffLength <= MAX_DIFFERENCES) ? diffLength : 0;
 }

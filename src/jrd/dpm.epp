@@ -370,9 +370,9 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 	fb_assert(new_rpb->rpb_length == 0);
 
 	const Compressor dcc(tdbb, new_rpb->rpb_length, new_rpb->rpb_address);
-	const ULONG size = (ULONG) dcc.getPackedLength();
+	const auto size = dcc.getPackedLength();
 
-	const FB_SIZE_T header_size = (new_rpb->rpb_transaction_nr > MAX_ULONG) ? RHDE_SIZE : RHD_SIZE;
+	const ULONG header_size = (new_rpb->rpb_transaction_nr > MAX_ULONG) ? RHDE_SIZE : RHD_SIZE;
 
 	if (!DPM_get(tdbb, org_rpb, LCK_write))
 	{
@@ -508,6 +508,9 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 	header->rhd_format = new_rpb->rpb_format_number;
 	header->rhd_b_page = new_rpb->rpb_b_page;
 	header->rhd_b_line = new_rpb->rpb_b_line;
+
+	if (!dcc.isPacked())
+		header->rhd_flags |= rhd_unpacked;
 
 	UCHAR* const data = (UCHAR*) header + header_size;
 
@@ -1274,7 +1277,8 @@ void DPM_fetch_fragment( thread_db* tdbb, record_param* rpb, USHORT lock)
 		rpb->rpb_b_page, rpb->rpb_b_line);
 #endif
 
-	const RecordNumber number = rpb->rpb_number;
+	const auto number = rpb->rpb_number;
+
 	rpb->rpb_page = rpb->rpb_f_page;
 	rpb->rpb_line = rpb->rpb_f_line;
 	CCH_HANDOFF(tdbb, &rpb->getWindow(tdbb), rpb->rpb_page, lock, pag_data);
@@ -1293,6 +1297,7 @@ void DPM_fetch_fragment( thread_db* tdbb, record_param* rpb, USHORT lock)
 		rpb->rpb_b_page, rpb->rpb_b_line, rpb->rpb_f_page,
 		rpb->rpb_f_line, rpb->rpb_flags);
 #endif
+
 	rpb->rpb_number = number;
 }
 
@@ -2095,10 +2100,10 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 #endif
 
 	Compressor dcc(tdbb, rpb->rpb_length, rpb->rpb_address);
-	const ULONG size = (ULONG) dcc.getPackedLength();
+	const auto size = dcc.getPackedLength();
 
-	const FB_SIZE_T header_size = (rpb->rpb_transaction_nr > MAX_ULONG) ? RHDE_SIZE : RHD_SIZE;
-	const FB_SIZE_T max_data = dbb->dbb_page_size - sizeof(data_page) - header_size;
+	const ULONG header_size = (rpb->rpb_transaction_nr > MAX_ULONG) ? RHDE_SIZE : RHD_SIZE;
+	const ULONG max_data = dbb->dbb_page_size - sizeof(data_page) - header_size;
 
 	// If the record isn't going to fit on a page, even if fragmented,
 	// handle it a little differently.
@@ -2122,6 +2127,9 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 	header->rhd_format = rpb->rpb_format_number;
 	header->rhd_b_page = rpb->rpb_b_page;
 	header->rhd_b_line = rpb->rpb_b_line;
+
+	if (!dcc.isPacked())
+		header->rhd_flags |= rhd_unpacked;
 
 	UCHAR* const data = (UCHAR*) header + header_size;
 
@@ -2324,9 +2332,9 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	data_page* page = (data_page*) rpb->getWindow(tdbb).win_buffer;
 
 	Compressor dcc(tdbb, rpb->rpb_length, rpb->rpb_address);
-	const ULONG size = (ULONG) dcc.getPackedLength();
+	const auto size = dcc.getPackedLength();
 
-	const FB_SIZE_T header_size = (rpb->rpb_transaction_nr > MAX_ULONG) ? RHDE_SIZE : RHD_SIZE;
+	const ULONG header_size = (rpb->rpb_transaction_nr > MAX_ULONG) ? RHDE_SIZE : RHD_SIZE;
 
 	// It is critical that the record be padded, if necessary, to the length of
 	// a fragmented record header.  Compute the amount of fill required.
@@ -2378,6 +2386,9 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	header->rhd_format = rpb->rpb_format_number;
 	header->rhd_b_page = rpb->rpb_b_page;
 	header->rhd_b_line = rpb->rpb_b_line;
+
+	if (!dcc.isPacked())
+		header->rhd_flags |= rhd_unpacked;
 
 	UCHAR* const data = (UCHAR*) header + header_size;
 
@@ -2717,7 +2728,7 @@ static void fragment(thread_db* tdbb,
 			header->rhdf_flags = rhd_deleted;
 			header->rhdf_f_page = header->rhdf_f_line = 0;
 
-			const FB_SIZE_T header_size = (transaction->tra_number > MAX_ULONG) ? RHDE_SIZE : RHD_SIZE;
+			const ULONG header_size = (transaction->tra_number > MAX_ULONG) ? RHDE_SIZE : RHD_SIZE;
 			Ods::writeTraNum(header, transaction->tra_number, header_size);
 
 			page->dpg_rpt[line].dpg_offset = space;
@@ -2749,7 +2760,9 @@ static void fragment(thread_db* tdbb,
 	// first figuring out how much of the original record fits on the
 	// original page.
 
-	const FB_SIZE_T partialLength = dcc.truncate(available_space - RHDF_SIZE);
+	const auto partialLength = dcc.truncate(available_space - RHDF_SIZE);
+	const auto size = dcc.getPackedLength();
+	const auto fill = available_space - RHDF_SIZE - size;
 
 	record_param tail_rpb = *rpb;
 	tail_rpb.rpb_flags = rpb_fragment;
@@ -2788,11 +2801,15 @@ static void fragment(thread_db* tdbb,
 		header->rhdf_b_line = rpb->rpb_b_line;
 	}
 
-	page->dpg_rpt[line].dpg_length = RHDF_SIZE + dcc.getPackedLength();
+	if (!dcc.isPacked())
+		header->rhdf_flags |= rhd_unpacked;
 
 	gcLockGuard.release();
 
 	dcc.pack(rpb->rpb_address, header->rhdf_data);
+
+	if (fill)
+		memset(header->rhdf_data + size, 0, fill);
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_WRITES_INFO,
@@ -3175,17 +3192,13 @@ static bool get_header(WIN* window, USHORT line, record_param* rpb)
 		}
 	}
 
-	FB_SIZE_T header_size;
+	ULONG header_size = (rpb->rpb_flags & rpb_long_tranum) ? RHDE_SIZE : RHD_SIZE;
 
 	if (rpb->rpb_flags & rpb_incomplete)
 	{
 		rpb->rpb_f_page = header->rhdf_f_page;
 		rpb->rpb_f_line = header->rhdf_f_line;
 		header_size = RHDF_SIZE;
-	}
-	else
-	{
-		header_size = (rpb->rpb_flags & rpb_long_tranum) ? RHDE_SIZE : RHD_SIZE;
 	}
 
 	rpb->rpb_address = (UCHAR*) header + header_size;
@@ -3699,12 +3712,12 @@ static void store_big_record(thread_db* tdbb,
 
 	// The last fragment should have rhd header because rhd_incomplete flag won't be set for it.
 	// It's important for get_header() function which relies on rhd_incomplete flag to determine header size.
-	FB_SIZE_T header_size = RHD_SIZE;
-	FB_SIZE_T max_data = dbb->dbb_page_size - sizeof(data_page) - header_size;
+	ULONG header_size = RHD_SIZE;
+	ULONG max_data = dbb->dbb_page_size - sizeof(data_page) - header_size;
 
 	// Fill up data pages tail first until what's left fits on a single page.
 
-	ULONG size = (ULONG) dcc.getPackedLength();
+	auto size = dcc.getPackedLength();
 	fb_assert(size > max_data);
 
 	do
@@ -3719,7 +3732,7 @@ static void store_big_record(thread_db* tdbb,
 
 		const auto inLength = dcc.truncateTail(max_data);
 		in -= inLength;
-		size = (ULONG) dcc.getPackedLength();
+		size = dcc.getPackedLength();
 
 		const Compressor tailDcc(tdbb, inLength, in);
 		const auto tail_size = tailDcc.getPackedLength();
@@ -3737,6 +3750,9 @@ static void store_big_record(thread_db* tdbb,
 			header->rhdf_flags |= rhd_incomplete;
 			header->rhdf_f_page = prior.getPageNum();
 		}
+
+		if (!tailDcc.isPacked())
+			header->rhdf_flags |= rhd_unpacked;
 
 		const auto out = (UCHAR*) header + header_size;
 		tailDcc.pack(in, out);
@@ -3765,6 +3781,9 @@ static void store_big_record(thread_db* tdbb,
 
 	// What's left fits on a page. Store it somewhere.
 
+	const auto inLength = in - rpb->rpb_address;
+	fb_assert(Compressor(tdbb, inLength, rpb->rpb_address).getPackedLength() == size);
+
 	stack.push(prior);
 
 	rhdf* header = (rhdf*) locate_space(tdbb, rpb, (SSHORT) (RHDF_SIZE + size), stack, NULL, type);
@@ -3776,6 +3795,9 @@ static void store_big_record(thread_db* tdbb,
 	header->rhdf_b_line = rpb->rpb_b_line;
 	header->rhdf_f_page = prior.getPageNum();
 	header->rhdf_f_line = 0;
+
+	if (!dcc.isPacked())
+		header->rhdf_flags |= rhd_unpacked;
 
 	dcc.pack(rpb->rpb_address, header->rhdf_data);
 
