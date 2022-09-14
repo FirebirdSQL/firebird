@@ -97,6 +97,9 @@ Compressor::Compressor(thread_db* tdbb, ULONG length, const UCHAR* data)
 {
 	const auto dbb = tdbb->getDatabase();
 
+	if (dbb->getEncodedOdsVersion() < ODS_13_1)
+		m_allowLongRuns = m_allowUnpacked = false;
+
 	const auto end = data + length;
 	const auto input = data;
 
@@ -164,12 +167,12 @@ Compressor::Compressor(thread_db* tdbb, ULONG length, const UCHAR* data)
 
 		// We have found a compressable run which is long enough
 
-		if (dbb->getEncodedOdsVersion() >= ODS_13_1)
+		if (m_allowLongRuns)
 		{
 			m_runs.add(-count);
 			m_length += 2 + adjustRunLength(count);
 		}
-		else // older ODS
+		else
 		{
 			while (count)
 			{
@@ -188,7 +191,7 @@ Compressor::Compressor(thread_db* tdbb, ULONG length, const UCHAR* data)
 	// dimitr:	maybe we need some more complicated threshold,
 	//			e.g. 80-90% of the original length?
 
-	if (m_length >= length && dbb->getEncodedOdsVersion() >= ODS_13_1)
+	if (m_allowUnpacked && m_length >= length)
 	{
 		m_runs.clear();
 		m_length = length;
@@ -311,7 +314,7 @@ ULONG Compressor::truncate(ULONG outLength)
 		BUGCHECK(178);	// msg 178 record length inconsistent
 
 	// Check whether the remaining part is still compressible
-	if (m_length >= inLength)
+	if (m_allowUnpacked && m_length >= inLength)
 	{
 		keepRuns = 0;
 		m_length = inLength = outLength;
@@ -381,15 +384,18 @@ ULONG Compressor::truncateTail(ULONG outLength)
 
 	fb_assert(m_runs.hasData());
 
-	// Check whether the remaining part is still compressible
-	ULONG orgLength = 0;
-	for (const auto run : m_runs)
-		orgLength += abs(run);
-
-	if (m_length >= orgLength)
+	if (m_allowUnpacked)
 	{
-		m_runs.clear();
-		m_length = orgLength;
+		// Check whether the remaining part is still compressible
+		ULONG orgLength = 0;
+		for (const auto run : m_runs)
+			orgLength += abs(run);
+
+		if (m_length >= orgLength)
+		{
+			m_runs.clear();
+			m_length = orgLength;
+		}
 	}
 
 	return inLength;

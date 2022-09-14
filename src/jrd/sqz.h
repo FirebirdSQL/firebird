@@ -59,6 +59,10 @@ namespace Jrd
 
 		Firebird::HalfStaticArray<int, 256> m_runs;
 		ULONG m_length = 0;
+
+		// Compatibility options
+		bool m_allowLongRuns = true;
+		bool m_allowUnpacked = true;
 	};
 
 	class Difference
