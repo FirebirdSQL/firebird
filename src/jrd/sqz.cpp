@@ -272,22 +272,22 @@ ULONG Compressor::truncate(ULONG outLength)
 	auto space = (int) outLength;
 	ULONG inLength = 0;
 	ULONG keepRuns = 0;
+	m_length = 0;
 
 	for (auto& length : m_runs)
 	{
-		m_length = outLength - space;
-
 		if (--space <= 0)
 			break;
 
 		if (length < 0)
 		{
 			const auto zipLength = (unsigned) -length;
-			space -= adjustRunLength(zipLength);
+			const auto runLength = 1 + adjustRunLength(zipLength);
 
-			if (--space < 0)
+			if ((space -= runLength) < 0)
 				break;
 
+			m_length += runLength + 1;
 			inLength += zipLength;
 		}
 		else
@@ -298,12 +298,13 @@ ULONG Compressor::truncate(ULONG outLength)
 			{
 				length += space; // how many bytes fit
 
-				m_length += length;
+				m_length += length + 1;
 				inLength += length;
 				keepRuns++;
 				break;
 			}
 
+			m_length += length + 1;
 			inLength += length;
 		}
 
@@ -353,12 +354,12 @@ ULONG Compressor::truncateTail(ULONG outLength)
 		if (length < 0)
 		{
 			const auto zipLength = (unsigned) -length;
-			length = 1 + adjustRunLength(zipLength);
+			const auto runLength = 1 + adjustRunLength(zipLength);
 
-			if ((space -= length) < 0)
+			if ((space -= runLength) < 0)
 				break;
 
-			m_length -= length + 1;
+			m_length -= runLength + 1;
 			inLength += zipLength;
 		}
 		else
