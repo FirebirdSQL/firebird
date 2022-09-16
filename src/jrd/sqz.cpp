@@ -177,6 +177,11 @@ Compressor::Compressor(thread_db* tdbb, ULONG length, const UCHAR* data)
 			while (count)
 			{
 				const auto max = MIN(count, MAX_SHORT_RUN);
+				if (max < 3) // -1 and -2 should never appear in legacy runs
+				{
+					data -= max;
+					break;
+				}
 				m_runs.add(-max);
 				m_length += 2;
 				count -= max;
