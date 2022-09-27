@@ -1422,7 +1422,7 @@ static void print_rhd(USHORT length, const rhd* header)
 		fprintf(stdout, "%s ", (header->rhd_flags & rhd_delta) ? "DLT" : "   ");
 		fprintf(stdout, "%s ", (header->rhd_flags & rhd_large) ? "LRG" : "   ");
 		fprintf(stdout, "%s ", (header->rhd_flags & rhd_damaged) ? "DAM" : "   ");
-		fprintf(stdout, "%s ", (header->rhd_flags & rhd_unpacked) ? "UNP" : "   ");
+		fprintf(stdout, "%s ", (header->rhd_flags & rhd_not_packed) ? "NPK" : "   ");
 		fprintf(stdout, "\n");
 	}
 }
@@ -2706,7 +2706,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		length -= offsetof(rhd, rhd_data[0]);
 	}
 
-	ULONG record_length = (header->rhd_flags & rhd_unpacked) ?
+	ULONG record_length = (header->rhd_flags & rhd_not_packed) ?
 		length : Compressor::getUnpackedLength(length, p);
 
 	// Next, chase down fragments, if any
@@ -2759,7 +2759,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 			length -= offsetof(rhd, rhd_data[0]);
 		}
 
-		record_length += (fragment->rhdf_flags & rhd_unpacked) ?
+		record_length += (fragment->rhdf_flags & rhd_not_packed) ?
 			length : Compressor::getUnpackedLength(length, p);
 
 		page_number = fragment->rhdf_f_page;

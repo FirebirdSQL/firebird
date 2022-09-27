@@ -118,7 +118,7 @@ const USHORT rpb_damaged		= 128;		// record is busted
 const USHORT rpb_gc_active		= 256;		// garbage collecting dead record version
 const USHORT rpb_uk_modified	= 512;		// record key field values are changed
 const USHORT rpb_long_tranum	= 1024;		// transaction number is 64-bit
-const USHORT rpb_unpacked		= 2048;		// record (or delta) is stored "as is"
+const USHORT rpb_not_packed		= 2048;		// record (or delta) is stored "as is"
 
 // Stream flags
 

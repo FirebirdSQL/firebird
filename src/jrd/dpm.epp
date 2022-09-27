@@ -493,6 +493,7 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 	new_rpb->rpb_b_page = new_rpb->rpb_page = org_rpb->rpb_page;
 	new_rpb->rpb_b_line = slot;
 	new_rpb->rpb_line = org_rpb->rpb_line;
+	new_rpb->rpb_flags &= ~rpb_not_packed;
 
 	data_page::dpg_repeat* index2 = page->dpg_rpt + org_rpb->rpb_line;
 	rhd* header = (rhd*) ((SCHAR *) page + index2->dpg_offset);
@@ -510,7 +511,7 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 	header->rhd_b_line = new_rpb->rpb_b_line;
 
 	if (!dcc.isPacked())
-		header->rhd_flags |= rhd_unpacked;
+		header->rhd_flags |= rhd_not_packed;
 
 	UCHAR* const data = (UCHAR*) header + header_size;
 
@@ -2122,6 +2123,8 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 	const SLONG length = header_size + size + fill;
 	rhd* header = locate_space(tdbb, rpb, (SSHORT) length, stack, NULL, type);
 
+	rpb->rpb_flags &= ~rpb_not_packed;
+
 	header->rhd_flags = rpb->rpb_flags;
 	Ods::writeTraNum(header, rpb->rpb_transaction_nr, header_size);
 	header->rhd_format = rpb->rpb_format_number;
@@ -2129,7 +2132,7 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 	header->rhd_b_line = rpb->rpb_b_line;
 
 	if (!dcc.isPacked())
-		header->rhd_flags |= rhd_unpacked;
+		header->rhd_flags |= rhd_not_packed;
 
 	UCHAR* const data = (UCHAR*) header + header_size;
 
@@ -2380,6 +2383,8 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	page->dpg_rpt[slot].dpg_offset = space;
 	page->dpg_rpt[slot].dpg_length = header_size + size + fill;
 
+	rpb->rpb_flags &= ~rpb_not_packed;
+
 	rhd* header = (rhd*) ((SCHAR *) page + space);
 	header->rhd_flags = rpb->rpb_flags;
 	Ods::writeTraNum(header, rpb->rpb_transaction_nr, header_size);
@@ -2388,7 +2393,7 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	header->rhd_b_line = rpb->rpb_b_line;
 
 	if (!dcc.isPacked())
-		header->rhd_flags |= rhd_unpacked;
+		header->rhd_flags |= rhd_not_packed;
 
 	UCHAR* const data = (UCHAR*) header + header_size;
 
@@ -2788,6 +2793,8 @@ static void fragment(thread_db* tdbb,
 	CCH_precedence(tdbb, window, tail_rpb.rpb_page);
 	CCH_MARK(tdbb, window);
 
+	rpb->rpb_flags &= ~rpb_not_packed;
+
 	header = (rhdf*) ((SCHAR *) page + page->dpg_rpt[line].dpg_offset);
 	header->rhdf_flags = rhd_incomplete | rpb->rpb_flags;
 	Ods::writeTraNum(header, rpb->rpb_transaction_nr, RHDF_SIZE);
@@ -2802,7 +2809,7 @@ static void fragment(thread_db* tdbb,
 	}
 
 	if (!dcc.isPacked())
-		header->rhdf_flags |= rhd_unpacked;
+		header->rhdf_flags |= rhd_not_packed;
 
 	gcLockGuard.release();
 
@@ -3752,7 +3759,7 @@ static void store_big_record(thread_db* tdbb,
 		}
 
 		if (!tailDcc.isPacked())
-			header->rhdf_flags |= rhd_unpacked;
+			header->rhdf_flags |= rhd_not_packed;
 
 		const auto out = (UCHAR*) header + header_size;
 		tailDcc.pack(in, out);
@@ -3788,6 +3795,8 @@ static void store_big_record(thread_db* tdbb,
 
 	rhdf* header = (rhdf*) locate_space(tdbb, rpb, (SSHORT) (RHDF_SIZE + size), stack, NULL, type);
 
+	rpb->rpb_flags &= ~rpb_not_packed;
+
 	header->rhdf_flags = rhd_incomplete | rhd_large | rpb->rpb_flags;
 	Ods::writeTraNum(header, rpb->rpb_transaction_nr, RHDF_SIZE);
 	header->rhdf_format = rpb->rpb_format_number;
@@ -3797,7 +3806,7 @@ static void store_big_record(thread_db* tdbb,
 	header->rhdf_f_line = 0;
 
 	if (!dcc.isPacked())
-		header->rhdf_flags |= rhd_unpacked;
+		header->rhdf_flags |= rhd_not_packed;
 
 	dcc.pack(rpb->rpb_address, header->rhdf_data);
 

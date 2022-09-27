@@ -61,7 +61,7 @@ namespace
 	inline int adjustRunLength(unsigned length)
 	{
 		return (length <= MAX_SHORT_RUN) ? 0 :
-			(length <= MAX_MEDIUM_RUN) ? sizeof(SSHORT) : sizeof(SLONG);
+			(length <= MAX_MEDIUM_RUN) ? sizeof(USHORT) : sizeof(ULONG);
 	}
 };
 
@@ -231,14 +231,14 @@ void Compressor::pack(const UCHAR* input, UCHAR* output) const
 			else if (zipLength <= MAX_MEDIUM_RUN)
 			{
 				*output++ = (UCHAR) -1;
-				put_short(output, (SSHORT) zipLength);
-				output += sizeof(SSHORT);
+				put_short(output, zipLength);
+				output += sizeof(USHORT);
 			}
 			else if (zipLength <= MAX_LONG_RUN)
 			{
 				*output++ = (UCHAR) -2;
-				put_long(output, (SLONG) zipLength);
-				output += sizeof(SLONG);
+				put_long(output, zipLength);
+				output += sizeof(ULONG);
 			}
 			else
 				fb_assert(false);
@@ -427,13 +427,13 @@ ULONG Compressor::getUnpackedLength(ULONG inLength, const UCHAR* input)
 
 			if (length == -1)
 			{
-				zipLength = (USHORT) get_short(input);
-				input += sizeof(SSHORT);
+				zipLength = get_short(input);
+				input += sizeof(USHORT);
 			}
 			else if (length == -2)
 			{
-				zipLength = (ULONG) get_long(input);
-				input += sizeof(SLONG);
+				zipLength = get_long(input);
+				input += sizeof(ULONG);
 			}
 
 			if (input >= end)
@@ -474,16 +474,16 @@ UCHAR* Compressor::unpack(ULONG inLength, const UCHAR* input,
 
 			if (length == -1)
 			{
-				zipLength = (USHORT) get_short(input);
-				input += sizeof(SSHORT);
+				zipLength = get_short(input);
+				input += sizeof(USHORT);
 			}
 			else if (length == -2)
 			{
-				zipLength = (ULONG) get_long(input);
-				input += sizeof(SLONG);
+				zipLength = get_long(input);
+				input += sizeof(ULONG);
 			}
 
-			if (input >= end || (output + zipLength) > output_end)
+			if (input >= end || output + zipLength > output_end)
 				BUGCHECK(179);	// msg 179 decompression overran buffer
 
 			const auto c = *input++;
@@ -492,7 +492,7 @@ UCHAR* Compressor::unpack(ULONG inLength, const UCHAR* input,
 		}
 		else
 		{
-			if (output + length > output_end)
+			if (input + length > end || output + length > output_end)
 				BUGCHECK(179);	// msg 179 decompression overran buffer
 
 			memcpy(output, input, length);

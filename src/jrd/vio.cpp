@@ -570,12 +570,12 @@ namespace
 {
 	inline UCHAR* unpack(record_param* rpb, ULONG outLength, UCHAR* output)
 	{
-		if (rpb->rpb_flags & rpb_unpacked)
+		if (rpb->rpb_flags & rpb_not_packed)
 		{
 			if (outLength < rpb->rpb_length)
 				BUGCHECK(179);	// msg 179 decompression overran buffer
 
-			rpb->rpb_flags &= ~rpb_unpacked;
+			rpb->rpb_flags &= ~rpb_not_packed;
 
 			memcpy(output, rpb->rpb_address, rpb->rpb_length);
 			output += rpb->rpb_length;
@@ -1078,7 +1078,7 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 		{
 			// There is cleanup to be done.  Bring the old version forward first
 
-			rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_chained | rpb_gc_active | rpb_long_tranum | rpb_unpacked);
+			rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_chained | rpb_gc_active | rpb_long_tranum);
 			DPM_update(tdbb, rpb, 0, transaction);
 			delete_tail(tdbb, &temp2, rpb->rpb_page);
 		}
@@ -5604,8 +5604,8 @@ static void list_staying_fast(thread_db* tdbb, record_param* rpb, RecordStack& s
 	fb_assert(temp.rpb_b_page == rpb->rpb_b_page);
 	fb_assert(temp.rpb_b_line == rpb->rpb_b_line);
 
-	fb_assert((temp.rpb_flags & ~(rpb_incomplete | rpb_unpacked)) ==
-			  (rpb->rpb_flags & ~(rpb_incomplete | rpb_unpacked)));
+	fb_assert((temp.rpb_flags & ~(rpb_incomplete | rpb_not_packed)) ==
+			  (rpb->rpb_flags & ~(rpb_incomplete | rpb_not_packed)));
 
 	Record* backout_rec = NULL;
 	RuntimeStatistics::Accumulator backversions(tdbb, rpb->rpb_relation,
@@ -6498,7 +6498,7 @@ static void replace_record(thread_db*		tdbb,
 #endif
 
 	record_param temp = *rpb;
-	rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_chained | rpb_gc_active | rpb_long_tranum | rpb_unpacked);
+	rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_chained | rpb_gc_active | rpb_long_tranum);
 	DPM_update(tdbb, rpb, stack, transaction);
 	delete_tail(tdbb, &temp, rpb->rpb_page);
 
