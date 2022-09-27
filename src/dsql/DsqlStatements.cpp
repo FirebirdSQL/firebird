@@ -84,6 +84,9 @@ void DsqlStatement::doRelease()
 {
 	setSqlText(nullptr);
 	setOrgText(nullptr, 0);
+
+	if (scratch && shouldPreserveScratch())
+		dsqlAttachment->deletePool(&scratch->getPool());
 }
 
 void DsqlStatement::setOrgText(const char* ptr, ULONG len)

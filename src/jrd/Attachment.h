@@ -530,6 +530,26 @@ public:
 		bool dsqlKeepBlr = false;
 	};
 
+	class UseCountHolder
+	{
+	public:
+		explicit UseCountHolder(Attachment* a)
+			: att(a)
+		{
+			if (att)
+				att->att_use_count++;
+		}
+
+		~UseCountHolder()
+		{
+			if (att)
+				att->att_use_count--;
+		}
+
+	private:
+		Attachment* att;
+	};
+
 public:
 	static Attachment* create(Database* dbb, JProvider* provider);
 	static void destroy(Attachment* const attachment);

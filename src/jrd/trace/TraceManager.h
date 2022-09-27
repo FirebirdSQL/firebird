@@ -59,7 +59,7 @@ public:
     /* Initializes plugins. */
 	explicit TraceManager(Attachment* in_att);
 	explicit TraceManager(Service* in_svc);
-	TraceManager(const char* in_filename, Firebird::ICryptKeyCallback* callback);
+	TraceManager(const char* in_filename, Firebird::ICryptKeyCallback* callback, bool failedAttach);
 
 	/* Finalize plugins. Called when database is closed by the engine */
 	~TraceManager();
@@ -265,7 +265,7 @@ private:
 	static Firebird::GlobalPtr<StorageInstance, Firebird::InstanceControl::PRIORITY_DELETE_FIRST> storageInstance;
 
 	ULONG changeNumber;
-	bool active;
+	bool active, failedAttach;
 };
 
 }

@@ -933,11 +933,11 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
  **************************************/
 	SET_TDBB(tdbb);
 
-	USHORT node_type = (USHORT) csb->csb_blr_reader.getByte();
+	auto blrOp = csb->csb_blr_reader.getByte();
 
 	// a join type indicates a cross of two or more streams
 
-	if (node_type == blr_join || node_type == blr_merge)
+	if (blrOp == blr_join || blrOp == blr_merge)
 	{
 		// CVC: bottleneck
 		int count = (USHORT) csb->csb_blr_reader.getByte();
@@ -951,7 +951,10 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 
 	// we have hit a stream; parse the context number and access type
 
-	if (node_type == blr_retrieve)
+	jrd_rel* relation = nullptr;
+	jrd_prc* procedure = nullptr;
+
+	if (blrOp == blr_retrieve)
 	{
 		PlanNode* plan = FB_NEW_POOL(csb->csb_pool) PlanNode(csb->csb_pool, PlanNode::TYPE_RETRIEVE);
 
@@ -959,39 +962,75 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 		// itself is redundant except in the case of a view,
 		// in which case the base relation (and alias) must be specified
 
-		USHORT n = (unsigned int) csb->csb_blr_reader.getByte();
-		//// TODO: LocalTableSourceNode (blr_local_table_id)
-		if (n != blr_relation && n != blr_relation2 && n != blr_rid && n != blr_rid2)
-			PAR_syntax_error(csb, "TABLE");
+		blrOp = csb->csb_blr_reader.getByte();
 
-		// don't make RelationSourceNode::parse() parse the context, because
-		// this would add a new context; while this is a reference to
+		// Don't make RecordSourceNode::parse() to parse the context, because
+		// this would add a new context, while this is a reference to
 		// an existing context
 
-		//// TODO: LocalTableSourceNode
-		plan->relationNode = RelationSourceNode::parse(tdbb, csb, n, false);
+		switch (blrOp)
+		{
+			case blr_relation:
+			case blr_rid:
+			case blr_relation2:
+			case blr_rid2:
+				{
+					const auto relationNode = RelationSourceNode::parse(tdbb, csb, blrOp, false);
+					plan->recordSourceNode = relationNode;
+					relation = relationNode->relation;
+				}
+				break;
 
-		jrd_rel* relation = plan->relationNode->relation;
+			case blr_pid:
+			case blr_pid2:
+			case blr_procedure:
+			case blr_procedure2:
+			case blr_procedure3:
+			case blr_procedure4:
+			case blr_subproc:
+				{
+					const auto procedureNode = ProcedureSourceNode::parse(tdbb, csb, blrOp, false);
+					plan->recordSourceNode = procedureNode;
+					procedure = procedureNode->procedure;
+				}
+				break;
+
+			case blr_local_table_id:
+				// TODO
+
+			default:
+				PAR_syntax_error(csb, "TABLE or PROCEDURE");
+		}
 
 		// CVC: bottleneck
-		n = csb->csb_blr_reader.getByte();
-		if (n >= csb->csb_rpt.getCount() || !(csb->csb_rpt[n].csb_flags & csb_used))
+		const auto context = csb->csb_blr_reader.getByte();
+		if (context >= csb->csb_rpt.getCount() || !(csb->csb_rpt[context].csb_flags & csb_used))
 			PAR_error(csb, Arg::Gds(isc_ctxnotdef));
-		const StreamType stream = csb->csb_rpt[n].csb_stream;
+		const StreamType stream = csb->csb_rpt[context].csb_stream;
 
-		plan->relationNode->setStream(stream);
-		plan->relationNode->context = n;
+		plan->recordSourceNode->setStream(stream);
+//		plan->recordSourceNode->context = context; not needed ???
+
+		if (procedure)
+		{
+			// Skip input parameters count, it's always zero for plans
+			const auto count = csb->csb_blr_reader.getWord();
+			fb_assert(!count);
+		}
 
 		// Access plan types (sequential is default)
 
-		node_type = (USHORT) csb->csb_blr_reader.getByte();
+		blrOp = csb->csb_blr_reader.getByte();
 
 		const bool isGbak = tdbb->getAttachment()->isGbak();
 
-		switch (node_type)
+		switch (blrOp)
 		{
 		case blr_navigational:
 			{
+				if (procedure)
+					PAR_error(csb, Arg::Gds(isc_wrong_proc_plan));
+
 				plan->accessType = FB_NEW_POOL(csb->csb_pool) PlanNode::AccessType(csb->csb_pool,
 					PlanNode::AccessType::TYPE_NAVIGATIONAL);
 
@@ -1049,6 +1088,9 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 			}
 		case blr_indices:
 			{
+				if (procedure)
+					PAR_error(csb, Arg::Gds(isc_wrong_proc_plan));
+
 				if (plan->accessType)
 					csb->csb_blr_reader.getByte(); // skip blr_indices
 				else
@@ -1238,7 +1280,7 @@ RecordSourceNode* PAR_parseRecordSource(thread_db* tdbb, CompilerScratch* csb)
 		case blr_procedure3:
 		case blr_procedure4:
 		case blr_subproc:
-			return ProcedureSourceNode::parse(tdbb, csb, blrOp);
+			return ProcedureSourceNode::parse(tdbb, csb, blrOp, true);
 
 		case blr_rse:
 		case blr_lateral_rse:

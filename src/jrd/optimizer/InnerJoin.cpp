@@ -377,32 +377,47 @@ void InnerJoin::findBestOrder(unsigned position,
 		for (auto& relationship : stream->indexedRelationships)
 		{
 			const auto relationStreamInfo = getStreamInfo(relationship.stream);
-			if (!relationStreamInfo->used)
-			{
-				bool found = false;
-				IndexRelationship* processRelationship = processList.begin();
-				for (FB_SIZE_T index = 0; index < processList.getCount(); index++)
-				{
-					if (relationStreamInfo->stream == processRelationship[index].stream)
-					{
-						// If the cost of this relationship is cheaper then remove the
-						// old relationship and add this one
-						if (IndexRelationship::cheaperThan(relationship, processRelationship[index]))
-						{
-							processList.remove(index);
-							break;
-						}
 
-						found = true;
-						break;
-					}
-				}
-				if (!found)
+			if (relationStreamInfo->used)
+				continue;
+
+			bool usable = true;
+			for (const auto depStream : relationship.depStreams)
+			{
+				if (!(csb->csb_rpt[depStream].csb_flags & csb_active))
 				{
-					// Add relationship sorted on cost (cheapest as first)
-					processList.add(relationship);
+					usable = false;
+					break;
 				}
 			}
+
+			if (!usable)
+				continue;
+
+			bool found = false;
+			IndexRelationship* processRelationship = processList.begin();
+			for (FB_SIZE_T index = 0; index < processList.getCount(); index++)
+			{
+				if (relationStreamInfo->stream == processRelationship[index].stream)
+				{
+					// If the cost of this relationship is cheaper then remove the
+					// old relationship and add this one
+					if (IndexRelationship::cheaperThan(relationship, processRelationship[index]))
+					{
+						processList.remove(index);
+						break;
+					}
+
+					found = true;
+					break;
+				}
+			}
+
+			if (found)
+				continue;
+
+			// Add relationship sorted on cost (cheapest as first)
+			processList.add(relationship);
 		}
 
 		for (const auto& nextRelationship : processList)
@@ -474,7 +489,7 @@ void InnerJoin::getIndexedRelationships(StreamInfo* testStream)
 	Retrieval retrieval(tdbb, optimizer, testStream->stream, false, false, nullptr, true);
 	const auto candidate = retrieval.getInversion();
 
-	for (auto baseStream : innerStreams)
+	for (const auto baseStream : innerStreams)
 	{
 		if (baseStream->stream != testStream->stream &&
 			candidate->dependentFromStreams.exist(baseStream->stream))
@@ -493,6 +508,9 @@ void InnerJoin::getIndexedRelationships(StreamInfo* testStream)
 			if (found)
 				continue;
 
+			if (candidate->dependentFromStreams.getCount() > IndexRelationship::MAX_DEP_STREAMS)
+				continue;
+
 			// If we could use more conjunctions on the testing stream
 			// with the base stream active as without the base stream
 			// then the test stream has a indexed relationship with the base stream.
@@ -502,6 +520,9 @@ void InnerJoin::getIndexedRelationships(StreamInfo* testStream)
 			indexRelationship.cost = candidate->cost;
 			indexRelationship.cardinality = candidate->unique ?
 				tail->csb_cardinality : tail->csb_cardinality * candidate->selectivity;
+
+			for (const auto depStream : candidate->dependentFromStreams)
+				indexRelationship.depStreams.add(depStream);
 
 			// Relationships are kept sorted by cost and uniqueness in the array
 			baseStream->indexedRelationships.add(indexRelationship);

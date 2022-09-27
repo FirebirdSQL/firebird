@@ -1524,8 +1524,9 @@ dsql_rel* METD_get_view_base(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 }
 
 
-dsql_rel* METD_get_view_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
-	const char* view_name, const char* relation_or_alias)
+bool METD_get_view_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
+	const Jrd::MetaName& view_name, const Jrd::MetaName& relation_or_alias,
+	dsql_rel*& relation, dsql_prc*& procedure)
 {
 /**************************************
  *
@@ -1543,32 +1544,36 @@ dsql_rel* METD_get_view_relation(jrd_tra* transaction, DsqlCompilerScratch* dsql
 
 	validateTransaction(transaction);
 
-	dsql_rel* relation = NULL;
-
 	AutoCacheRequest handle(tdbb, irq_view, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-		X IN RDB$VIEW_RELATIONS WITH X.RDB$VIEW_NAME EQ view_name
+		X IN RDB$VIEW_RELATIONS WITH X.RDB$VIEW_NAME EQ view_name.c_str()
 	{
 		fb_utils::exact_name(X.RDB$CONTEXT_NAME);
 		fb_utils::exact_name(X.RDB$RELATION_NAME);
 
-		if (!strcmp(X.RDB$RELATION_NAME, relation_or_alias) ||
-			!strcmp(X.RDB$CONTEXT_NAME, relation_or_alias))
+		if (relation_or_alias == X.RDB$RELATION_NAME ||
+			relation_or_alias == X.RDB$CONTEXT_NAME)
 		{
-			relation = METD_get_relation(transaction, dsqlScratch, X.RDB$RELATION_NAME);
-			return relation;
+			if ( (relation = METD_get_relation(transaction, dsqlScratch, X.RDB$RELATION_NAME)) )
+				return true;
+
+			const QualifiedName procName(X.RDB$RELATION_NAME,
+				X.RDB$PACKAGE_NAME.NULL ? nullptr : X.RDB$PACKAGE_NAME);
+
+			if ( (procedure = METD_get_procedure(transaction, dsqlScratch, procName)) )
+				return true;
 		}
 
-		relation = METD_get_view_relation(transaction, dsqlScratch, X.RDB$RELATION_NAME,
-			relation_or_alias);
-
-		if (relation)
-			return relation;
+		if (METD_get_view_relation(transaction, dsqlScratch, X.RDB$RELATION_NAME,
+			relation_or_alias, relation, procedure))
+		{
+			return true;
+		}
 	}
 	END_FOR
 
-	return NULL;
+	return false;
 }
 
 

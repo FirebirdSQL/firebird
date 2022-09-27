@@ -94,6 +94,11 @@ namespace Firebird
 			fb_utils::copyStatus(to, &localStatusVector);
 		}
 
+		void loadFrom(const SW* to)
+		{
+			fb_utils::copyStatus(&localStatusVector, to);
+		}
+
 		void raise() const
 		{
 			Firebird::status_exception::raise(&localStatus);

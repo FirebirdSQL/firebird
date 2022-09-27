@@ -36,7 +36,8 @@ using namespace Jrd;
 // Data access: predicate driven filter
 // ------------------------------------
 
-FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next, BoolExprNode* boolean, double selectivity)
+FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next,
+							   BoolExprNode* boolean, double selectivity)
 	: RecordSource(csb),
 	  m_next(next),
 	  m_boolean(boolean),
@@ -59,9 +60,12 @@ void FilteredStream::internalOpen(thread_db* tdbb) const
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
-	impure->irsb_flags = irsb_open;
+	if (!m_invariant || m_boolean->execute(tdbb, request))
+	{
+		impure->irsb_flags = irsb_open;
 
-	m_next->open(tdbb);
+		m_next->open(tdbb);
+	}
 }
 
 void FilteredStream::close(thread_db* tdbb) const
@@ -122,6 +126,10 @@ void FilteredStream::print(thread_db* tdbb, string& plan, bool detailed, unsigne
 	if (detailed)
 	{
 		plan += printIndent(++level) + "Filter";
+
+		if (m_invariant)
+			plan += " (preliminary)";
+
 		printOptInfo(plan);
 	}
 

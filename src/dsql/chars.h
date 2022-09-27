@@ -44,7 +44,7 @@ static const SCHAR classes_array[] = {
 /* 009     */ 0 | CHR_WHITE,
 /* 010     */ 0 | CHR_WHITE,
 /* 011     */ 0,
-/* 012     */ 0,
+/* 012     */ 0 | CHR_WHITE,
 /* 013     */ 0 | CHR_WHITE,
 /* 014     */ 0,
 /* 015     */ 0,

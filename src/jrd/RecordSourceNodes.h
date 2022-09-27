@@ -174,9 +174,8 @@ public:
 		: PermanentStorage(pool),
 		  type(aType),
 		  accessType(NULL),
-		  relationNode(NULL),
+		  recordSourceNode(NULL),
 		  subNodes(pool),
-		  dsqlRecordSourceNode(NULL),
 		  dsqlNames(NULL)
 	{
 	}
@@ -198,9 +197,8 @@ private:
 public:
 	Type const type;
 	AccessType* accessType;
-	RelationSourceNode* relationNode;
+	RecordSourceNode* recordSourceNode;
 	Firebird::Array<NestConst<PlanNode> > subNodes;
-	RecordSourceNode* dsqlRecordSourceNode;
 	Firebird::ObjectsArray<MetaName>* dsqlNames;
 };
 
@@ -437,10 +435,10 @@ public:
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_PROCEDURE>(pool),
 		  dsqlName(pool, aDsqlName),
 		  alias(pool),
+		  procedure(NULL),
 		  sourceList(NULL),
 		  targetList(NULL),
 		  in_msg(NULL),
-		  procedure(NULL),
 		  view(NULL),
 		  procedureId(0),
 		  context(0),
@@ -448,7 +446,8 @@ public:
 	{
 	}
 
-	static ProcedureSourceNode* parse(thread_db* tdbb, CompilerScratch* csb, const SSHORT blrOp);
+	static ProcedureSourceNode* parse(thread_db* tdbb, CompilerScratch* csb, const SSHORT blrOp,
+		bool parseContext);
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
@@ -492,11 +491,6 @@ public:
 public:
 	QualifiedName dsqlName;
 	Firebird::string alias;
-	NestConst<ValueListNode> sourceList;
-	NestConst<ValueListNode> targetList;
-
-private:
-	NestConst<MessageNode> in_msg;
 
 	/***
 	dimitr: Referencing procedures via a pointer is not currently reliable, because
@@ -515,7 +509,14 @@ private:
 			explicit unload from the metadata cache. But we don't have clearly established
 			cache management policies yet, so I leave it for the other day.
 	***/
+
 	jrd_prc* procedure;
+	NestConst<ValueListNode> sourceList;
+	NestConst<ValueListNode> targetList;
+
+private:
+	NestConst<MessageNode> in_msg;
+
 	jrd_rel* view;
 	USHORT procedureId;
 	SSHORT context;

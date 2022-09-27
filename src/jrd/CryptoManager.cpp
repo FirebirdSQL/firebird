@@ -959,23 +959,7 @@ namespace Jrd {
 					tdbb->markAsSweeper();
 
 					DatabaseContextHolder dbHolder(tdbb);
-
-					class UseCountHolder
-					{
-					public:
-						explicit UseCountHolder(Attachment* a)
-							: att(a)
-						{
-							att->att_use_count++;
-						}
-						~UseCountHolder()
-						{
-							att->att_use_count--;
-						}
-					private:
-						Attachment* att;
-					};
-					UseCountHolder use_count(att);
+					Attachment::UseCountHolder use_count(att);
 
 					// get ready...
 					AutoSetRestore<Attachment*> attSet(&cryptAtt, att);

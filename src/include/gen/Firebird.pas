@@ -5298,6 +5298,7 @@ const
 	 isc_quoted_str_miss = 335545279;
 	 isc_wrong_shmem_ver = 335545280;
 	 isc_wrong_shmem_bitness = 335545281;
+	 isc_wrong_proc_plan = 335545282;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;

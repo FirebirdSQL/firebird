@@ -640,6 +640,8 @@ class InnerJoin : private Firebird::PermanentStorage
 {
 	struct IndexRelationship
 	{
+		static const unsigned MAX_DEP_STREAMS = 8;
+
 		static bool cheaperThan(const IndexRelationship& item1, const IndexRelationship& item2)
 		{
 			if (item1.cost == 0)
@@ -679,6 +681,7 @@ class InnerJoin : private Firebird::PermanentStorage
 		bool unique = false;
 		double cost = 0;
 		double cardinality = 0;
+		Firebird::Vector<StreamType, MAX_DEP_STREAMS> depStreams;
 	};
 
 	typedef Firebird::SortedArray<IndexRelationship> IndexedRelationships;

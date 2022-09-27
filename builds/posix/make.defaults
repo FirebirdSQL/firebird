@@ -267,8 +267,8 @@ ifeq ($(EDITLINE_FLG),Y)
 	LIBEDITLINE := -l$(READLINE)
   else
 	LIBEDITLINE := $(LIB)/libedit.a
+	TERMLIB := -l@TERMLIB@
   endif
-  TERMLIB := -l@TERMLIB@
 endif
 
 # Shared library name for usage inside of the UDF

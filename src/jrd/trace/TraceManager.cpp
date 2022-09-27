@@ -106,13 +106,14 @@ TraceManager::TraceManager(Service* in_svc) :
 	init();
 }
 
-TraceManager::TraceManager(const char* in_filename, ICryptKeyCallback* cb) :
+TraceManager::TraceManager(const char* in_filename, ICryptKeyCallback* cb, bool failed) :
 	attachment(NULL),
 	service(NULL),
 	filename(in_filename),
 	callback(cb),
 	trace_sessions(*getDefaultMemoryPool()),
-	active(true)
+	active(true),
+	failedAttach(failed)
 {
 	init();
 }
@@ -286,6 +287,8 @@ void TraceManager::update_session(const TraceSession& session)
 					mapping.setAuthBlock(session.ses_auth);
 					mapping.setSqlRole(session.ses_role);
 					mapping.setSecurityDbAlias(dbb->dbb_config->getSecurityDatabase(), dbb->dbb_filename.c_str());
+
+					fb_assert(attachment->getInterface());
 					mapping.setDb(attachment->att_filename.c_str(), dbb->dbb_filename.c_str(),
 						attachment->getInterface());
 
@@ -328,7 +331,8 @@ void TraceManager::update_session(const TraceSession& session)
 						expanded_name = filename;
 
 					mapping.setSecurityDbAlias(config->getSecurityDatabase(), expanded_name.c_str());
-					mapping.setDb(filename, expanded_name.c_str(), nullptr);
+					if (!failedAttach)
+						mapping.setDb(filename, expanded_name.c_str(), nullptr);
 
 					mapResult = mapping.mapUser(s_user, t_role);
 				}

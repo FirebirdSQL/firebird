@@ -358,7 +358,8 @@ InversionCandidate* Retrieval::getInversion()
 			if (setConjunctionsMatched && matched)
 				iter |= Optimizer::CONJUNCT_MATCHED;
 			else if (!setConjunctionsMatched && !matched &&
-				iter->computable(csb, stream, true))
+				iter->computable(csb, stream, true) &&
+				iter->containsStream(stream))
 			{
 				selectivity *= Optimizer::getSelectivity(*iter);
 			}

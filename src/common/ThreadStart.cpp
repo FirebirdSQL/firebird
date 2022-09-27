@@ -345,7 +345,7 @@ void Thread::waitForCompletion(Handle& handle)
 	// exiting, OS notifies every DLL about it, and acquires loader lock. In such
 	// scenario waiting on thread handle will never succeed.
 	if (!Firebird::dDllUnloadTID) {
-		WaitForSingleObject(handle, 500);
+		WaitForSingleObject(handle, 10000);
 	}
 	CloseHandle(handle);
 	handle = 0;

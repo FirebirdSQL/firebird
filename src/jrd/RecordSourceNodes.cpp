@@ -44,7 +44,6 @@ using namespace Jrd;
 
 static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, RecordSourceNode* source);
 static MapNode* parseMap(thread_db* tdbb, CompilerScratch* csb, StreamType stream, bool parseHeader);
-static int strcmpSpace(const char* p, const char* q);
 static void processSource(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 	RecordSourceNode* source, BoolExprNode** boolean, RecordSourceNodeStack& stack);
 static void processMap(thread_db* tdbb, CompilerScratch* csb, MapNode* map, Format** inputFormat);
@@ -187,7 +186,7 @@ PlanNode* PlanNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		node->accessType->items = accessType->items;
 	}
 
-	node->relationNode = relationNode;
+	node->recordSourceNode = recordSourceNode;
 
 	for (NestConst<PlanNode>* i = subNodes.begin(); i != subNodes.end(); ++i)
 		node->subNodes.add((*i)->dsqlPass(dsqlScratch));
@@ -203,22 +202,23 @@ PlanNode* PlanNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		{
 			RelationSourceNode* relNode = FB_NEW_POOL(pool) RelationSourceNode(pool);
 			relNode->dsqlContext = context;
-			node->dsqlRecordSourceNode = relNode;
+			node->recordSourceNode = relNode;
 		}
 		else if (context->ctx_procedure)
 		{
-			// ASF: Note that usage of procedure name in a PLAN clause causes errors when
-			// parsing the BLR.
 			ProcedureSourceNode* procNode = FB_NEW_POOL(pool) ProcedureSourceNode(pool);
 			procNode->dsqlContext = context;
-			node->dsqlRecordSourceNode = procNode;
+			node->recordSourceNode = procNode;
 		}
 		//// TODO: LocalTableSourceNode
 
-		// ASF: I think it's a error to let node->dsqlRecordSourceNode be NULL here, but it happens
+		// ASF: I think it's a error to let node->recordSourceNode be NULL here, but it happens
 		// at least since v2.5. See gen.cpp/gen_plan for more information.
-		///fb_assert(node->dsqlRecordSourceNode);
+		///fb_assert(node->recordSourceNode);
 	}
+
+	if (node->recordSourceNode)
+		node->recordSourceNode->dsqlFlags |= RecordSourceNode::DFLAG_PLAN_ITEM;
 
 	return node;
 }
@@ -253,27 +253,37 @@ dsql_ctx* PlanNode::dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch)
 			{
 				// This must be a VIEW
 				ObjectsArray<MetaName>::iterator startArg = arg;
-				dsql_rel* relation = context->ctx_relation;
+				dsql_rel* viewRelation = context->ctx_relation;
+
+				dsql_rel* relation = nullptr;
+				dsql_prc* procedure = nullptr;
 
 				// find the base table using the specified alias list, skipping the first one
 				// since we already matched it to the context.
-				for (; arg != end; ++arg, --aliasCount)
+				for (; arg != end; ++arg)
 				{
-					relation = METD_get_view_relation(dsqlScratch->getTransaction(),
-						dsqlScratch, relation->rel_name.c_str(), arg->c_str());
+					if (!METD_get_view_relation(dsqlScratch->getTransaction(),
+						dsqlScratch, viewRelation->rel_name, *arg,
+						relation, procedure))
+					{
+						break;
+					};
+
+					--aliasCount;
 
 					if (!relation)
 						break;
 				}
 
 				// Found base relation
-				if (aliasCount == 0 && relation)
+				if (aliasCount == 0 && (relation || procedure))
 				{
 					// AB: Pretty ugly huh?
 					// make up a dummy context to hold the resultant relation.
 					dsql_ctx* newContext = FB_NEW_POOL(dsqlScratch->getPool()) dsql_ctx(dsqlScratch->getPool());
 					newContext->ctx_context = context->ctx_context;
 					newContext->ctx_relation = relation;
+					newContext->ctx_procedure = procedure;
 
 					// Concatenate all the contexts to form the alias name.
 					// Calculate the length leaving room for spaces.
@@ -327,7 +337,7 @@ dsql_ctx* PlanNode::dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch)
 dsql_ctx* PlanNode::dsqlPassAlias(DsqlCompilerScratch* dsqlScratch, DsqlContextStack& stack,
 	const MetaName& alias)
 {
-	dsql_ctx* relation_context = NULL;
+	dsql_ctx* result_context = nullptr;
 
 	DEV_BLKCHK(dsqlScratch, dsql_type_req);
 
@@ -351,14 +361,15 @@ dsql_ctx* PlanNode::dsqlPassAlias(DsqlCompilerScratch* dsqlScratch, DsqlContextS
 
 		// If an unnamed derived table and empty alias.
 		if (context->ctx_rse && !context->ctx_relation && !context->ctx_procedure && alias.isEmpty())
-			relation_context = context;
+			result_context = context;
 
 		// Check for matching relation name; aliases take priority so
 		// save the context in case there is an alias of the same name.
 		// Also to check that there is no self-join in the query.
-		if (context->ctx_relation && context->ctx_relation->rel_name == alias)
+		if ((context->ctx_relation && context->ctx_relation->rel_name == alias) ||
+			(context->ctx_procedure && context->ctx_procedure->prc_name.identifier == alias))
 		{
-			if (relation_context)
+			if (result_context)
 			{
 				// the table %s is referenced twice; use aliases to differentiate
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
@@ -366,11 +377,11 @@ dsql_ctx* PlanNode::dsqlPassAlias(DsqlCompilerScratch* dsqlScratch, DsqlContextS
 						  Arg::Gds(isc_dsql_self_join) << alias);
 			}
 
-			relation_context = context;
+			result_context = context;
 		}
 	}
 
-	return relation_context;
+	return result_context;
 }
 
 
@@ -558,7 +569,7 @@ RelationSourceNode* RelationSourceNode::parse(thread_db* tdbb, CompilerScratch* 
 		*tdbb->getDefaultPool());
 
 	// Find relation either by id or by name
-	string* aliasString = NULL;
+	AutoPtr<string> aliasString;
 	MetaName name;
 
 	switch (blrOp)
@@ -625,13 +636,11 @@ RelationSourceNode* RelationSourceNode::parse(thread_db* tdbb, CompilerScratch* 
 		node->stream = PAR_context(csb, &node->context);
 
 		csb->csb_rpt[node->stream].csb_relation = node->relation;
-		csb->csb_rpt[node->stream].csb_alias = aliasString;
+		csb->csb_rpt[node->stream].csb_alias = aliasString.release();
 
 		if (csb->collectingDependencies())
 			PAR_dependency(tdbb, csb, node->stream, (SSHORT) -1, "");
 	}
-	else
-		delete aliasString;
 
 	return node;
 }
@@ -885,13 +894,13 @@ RecordSource* RelationSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool 
 
 // Parse an procedural view reference.
 ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch* csb,
-	const SSHORT blrOp)
+	const SSHORT blrOp, bool parseContext)
 {
 	SET_TDBB(tdbb);
 
 	const auto blrStartPos = csb->csb_blr_reader.getPos();
-	jrd_prc* procedure = NULL;
-	string* aliasString = NULL;
+	jrd_prc* procedure = nullptr;
+	AutoPtr<string> aliasString;
 	QualifiedName name;
 
 	switch (blrOp)
@@ -929,10 +938,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 				csb->csb_blr_reader.getString(*aliasString);
 
 				if (blrOp == blr_subproc && aliasString->isEmpty())
-				{
-					delete aliasString;
-					aliasString = NULL;
-				}
+					aliasString.reset();
 			}
 
 			if (blrOp == blr_subproc)
@@ -992,16 +998,23 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 	node->procedure = procedure;
 	node->isSubRoutine = procedure->isSubRoutine();
 	node->procedureId = node->isSubRoutine ? 0 : procedure->getId();
-	node->stream = PAR_context(csb, &node->context);
 
-	csb->csb_rpt[node->stream].csb_procedure = procedure;
-	csb->csb_rpt[node->stream].csb_alias = aliasString;
+	if (aliasString)
+		node->alias = *aliasString;
 
-	PAR_procedure_parms(tdbb, csb, procedure, node->in_msg.getAddress(),
-		node->sourceList.getAddress(), node->targetList.getAddress(), true);
+	if (parseContext)
+	{
+		node->stream = PAR_context(csb, &node->context);
 
-	if (csb->collectingDependencies())
-		PAR_dependency(tdbb, csb, node->stream, (SSHORT) -1, "");
+		csb->csb_rpt[node->stream].csb_procedure = procedure;
+		csb->csb_rpt[node->stream].csb_alias = aliasString.release();
+
+		PAR_procedure_parms(tdbb, csb, procedure, node->in_msg.getAddress(),
+			node->sourceList.getAddress(), node->targetList.getAddress(), true);
+
+		if (csb->collectingDependencies())
+			PAR_dependency(tdbb, csb, node->stream, (SSHORT) -1, "");
+	}
 
 	return node;
 }
@@ -1127,7 +1140,7 @@ void ProcedureSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	ValueListNode* inputs = dsqlContext->ctx_proc_inputs;
 
-	if (inputs)
+	if (inputs && !(dsqlFlags & DFLAG_PLAN_ITEM))
 	{
 		dsqlScratch->appendUShort(inputs->items.getCount());
 
@@ -3017,14 +3030,20 @@ void RseNode::planCheck(const CompilerScratch* csb) const
 
 	for (const auto node : rse_relations)
 	{
-		if (nodeIs<RelationSourceNode>(node))
+		if (nodeIs<RelationSourceNode>(node) || nodeIs<ProcedureSourceNode>(node))
 		{
-			const StreamType stream = node->getStream();
+			const auto stream = node->getStream();
 
-			if (!(csb->csb_rpt[stream].csb_plan))
+			const auto relation = csb->csb_rpt[stream].csb_relation;
+			const auto procedure = csb->csb_rpt[stream].csb_procedure;
+			fb_assert(relation || procedure);
+
+			if (!csb->csb_rpt[stream].csb_plan)
 			{
-				ERR_post(Arg::Gds(isc_no_stream_plan) <<
-					Arg::Str(csb->csb_rpt[stream].csb_relation->rel_name));
+				const auto name = relation ? relation->rel_name :
+					procedure ? procedure->getName().toString() : "";
+
+				ERR_post(Arg::Gds(isc_no_stream_plan) << Arg::Str(name));
 			}
 		}
 		else if (const auto rse = nodeAs<RseNode>(node))
@@ -3046,50 +3065,77 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 	if (plan->type != PlanNode::TYPE_RETRIEVE)
 		return;
 
-	const jrd_rel* viewRelation = NULL;
-	const jrd_rel* planRelation = plan->relationNode->relation;
-	const char* planAlias = plan->relationNode->alias.c_str();
+	// Find the tail for the relation/procedure specified in the plan
 
-	// find the tail for the relation specified in the RseNode
+	const auto stream = plan->recordSourceNode->getStream();
+	auto tail = &csb->csb_rpt[stream];
 
-	const StreamType stream = plan->relationNode->getStream();
-	CompilerScratch::csb_repeat* tail = &csb->csb_rpt[stream];
+	string planAlias;
 
-	// if the plan references a view, find the real base relation
+	jrd_rel* planRelation = nullptr;
+	if (const auto relationNode = nodeAs<RelationSourceNode>(plan->recordSourceNode))
+	{
+		planRelation = relationNode->relation;
+		planAlias = relationNode->alias;
+	}
+
+	jrd_prc* planProcedure = nullptr;
+	if (const auto procedureNode = nodeAs<ProcedureSourceNode>(plan->recordSourceNode))
+	{
+		planProcedure = procedureNode->procedure;
+		planAlias = procedureNode->alias;
+	}
+
+	fb_assert(planRelation || planProcedure);
+
+	const auto name = planRelation ? planRelation->rel_name :
+		planProcedure ? planProcedure->getName().toString() : "";
+
+	// If the plan references a view, find the real base relation
 	// we are interested in by searching the view map
-	StreamType* map = NULL;
+	StreamType* map = nullptr;
+	jrd_rel* viewRelation = nullptr;
+	jrd_prc* viewProcedure = nullptr;
 
 	if (tail->csb_map)
 	{
-		const TEXT* p = planAlias;
+		auto tailName = tail->csb_relation ? tail->csb_relation->rel_name :
+			tail->csb_procedure ? tail->csb_procedure->getName().toString() : "";
 
-		// if the user has specified an alias, skip past it to find the alias
+		// If the user has specified an alias, skip past it to find the alias
 		// for the base table (if multiple aliases are specified)
-		if (p && *p &&
-			((tail->csb_relation && !strcmpSpace(tail->csb_relation->rel_name.c_str(), p)) ||
-			 (tail->csb_alias && !strcmpSpace(tail->csb_alias->c_str(), p))))
-		{
-			while (*p && *p != ' ')
-				p++;
 
-			if (*p == ' ')
-				p++;
+		auto tailAlias = tail->csb_alias ? *tail->csb_alias : "";
+
+		if (planAlias.hasData())
+		{
+			const auto spacePos = planAlias.find_first_of(' ');
+			const auto subAlias = planAlias.substr(0, spacePos);
+
+			if (tailName == subAlias || tailAlias == subAlias)
+			{
+				planAlias = planAlias.substr(spacePos);
+				planAlias.ltrim();
+			}
 		}
 
-		// loop through potentially a stack of views to find the appropriate base table
+		// Loop through potentially a stack of views to find the appropriate base table
 		StreamType* mapBase;
-
 		while ( (mapBase = tail->csb_map) )
 		{
 			map = mapBase;
 			tail = &csb->csb_rpt[*map];
 			viewRelation = tail->csb_relation;
+			viewProcedure = tail->csb_procedure;
 
-			// if the plan references the view itself, make sure that
-			// the view is on a single table; if it is, fix up the plan
-			// to point to the base relation
+			// If the plan references the view itself, make sure that
+			// the view is on a single table. If it is, fix up the plan
+			// to point to the base relation.
 
-			if (viewRelation->rel_id == planRelation->rel_id)
+			if ((viewRelation && planRelation &&
+				viewRelation->rel_id == planRelation->rel_id) ||
+				(viewProcedure && planProcedure &&
+				viewProcedure->getId() == planProcedure->getId()))
 			{
 				if (!mapBase[2])
 				{
@@ -3099,41 +3145,47 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 				else
 				{
 					// view %s has more than one base relation; use aliases to distinguish
-					ERR_post(Arg::Gds(isc_view_alias) << Arg::Str(planRelation->rel_name));
+					ERR_post(Arg::Gds(isc_view_alias) << Arg::Str(name));
 				}
 
 				break;
 			}
 
-			viewRelation = NULL;
+			viewRelation = nullptr;
+			viewProcedure = nullptr;
 
-			// if the user didn't specify an alias (or didn't specify one
+			// If the user didn't specify an alias (or didn't specify one
 			// for this level), check to make sure there is one and only one
 			// base relation in the table which matches the plan relation
 
-			if (!*p)
+			if (planAlias.isEmpty())
 			{
-				const jrd_rel* duplicateRelation = NULL;
-				StreamType* duplicateMap = mapBase;
+				auto duplicateMap = mapBase;
+				MetaName duplicateName;
 
-				map = NULL;
+				map = nullptr;
 
 				for (duplicateMap++; *duplicateMap; ++duplicateMap)
 				{
-					CompilerScratch::csb_repeat* duplicateTail = &csb->csb_rpt[*duplicateMap];
-					const jrd_rel* relation = duplicateTail->csb_relation;
+					const auto duplicateTail = &csb->csb_rpt[*duplicateMap];
+					const auto relation = duplicateTail->csb_relation;
+					const auto procedure = duplicateTail->csb_procedure;
 
-					if (relation && relation->rel_id == planRelation->rel_id)
+					if ((relation && planRelation &&
+						relation->rel_id == planRelation->rel_id) ||
+						(procedure && planProcedure &&
+						procedure->getId() == planProcedure->getId()))
 					{
-						if (duplicateRelation)
+						if (duplicateName.hasData())
 						{
 							// table %s is referenced twice in view; use an alias to distinguish
 							ERR_post(Arg::Gds(isc_duplicate_base_table) <<
-								Arg::Str(duplicateRelation->rel_name));
+								Arg::Str(duplicateName));
 						}
 						else
 						{
-							duplicateRelation = relation;
+							duplicateName = relation ? relation->rel_name :
+								procedure ? procedure->getName().toString() : "";
 							map = duplicateMap;
 							tail = duplicateTail;
 						}
@@ -3143,76 +3195,75 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 				break;
 			}
 
-			// look through all the base relations for a match
+			// Look through all the base relations for a match
 
 			map = mapBase;
 			for (map++; *map; map++)
 			{
 				tail = &csb->csb_rpt[*map];
-				const jrd_rel* relation = tail->csb_relation;
 
-				// match the user-supplied alias with the alias supplied
-				// with the view definition; failing that, try the base
-				// table name itself
+				tailName = tail->csb_relation ? tail->csb_relation->rel_name :
+					tail->csb_procedure ? tail->csb_procedure->getName().toString() : "";
 
-				// CVC: I found that "relation" can be NULL, too. This may be an
-				// indication of a logic flaw while parsing the user supplied SQL plan
-				// and not an oversight here. It's hard to imagine a csb->csb_rpt with
-				// a NULL relation. See exe.h for CompilerScratch struct and its inner csb_repeat struct.
+				// Match the user-supplied alias with the alias supplied
+				// with the view definition. Failing that, try the base
+				// table name itself.
 
-				if ((tail->csb_alias && !strcmpSpace(tail->csb_alias->c_str(), p)) ||
-					(relation && !strcmpSpace(relation->rel_name.c_str(), p)))
+				tailAlias = tail->csb_alias ? *tail->csb_alias : "";
+
+				const auto spacePos = planAlias.find_first_of(' ');
+				const auto subAlias = planAlias.substr(0, spacePos);
+
+				if (tailName == subAlias || tailAlias == subAlias)
 				{
+					// Skip past the alias
+					planAlias = planAlias.substr(spacePos);
+					planAlias.ltrim();
 					break;
 				}
 			}
 
-			// skip past the alias
-
-			while (*p && *p != ' ')
-				p++;
-
-			if (*p == ' ')
-				p++;
-
 			if (!*map)
 			{
-				// table %s is referenced in the plan but not the from list
-				ERR_post(Arg::Gds(isc_stream_not_found) << Arg::Str(planRelation->rel_name));
+				// table or procedure %s is referenced in the plan but not the from list
+				ERR_post(Arg::Gds(isc_stream_not_found) << Arg::Str(name));
 			}
 		}
 
-		// fix up the relation node to point to the base relation's stream
+		// Fix up the relation node to point to the base relation's stream
 
 		if (!map || !*map)
 		{
-			// table %s is referenced in the plan but not the from list
-			ERR_post(Arg::Gds(isc_stream_not_found) << Arg::Str(planRelation->rel_name));
+			// table or procedure %s is referenced in the plan but not the from list
+			ERR_post(Arg::Gds(isc_stream_not_found) << Arg::Str(name));
 		}
 
-		plan->relationNode->setStream(*map);
+		plan->recordSourceNode->setStream(*map);
 	}
 
-	// make some validity checks
+	// Make some validity checks
 
-	if (!tail->csb_relation)
+	if (!tail->csb_relation && !tail->csb_procedure)
 	{
-		// table %s is referenced in the plan but not the from list
-		ERR_post(Arg::Gds(isc_stream_not_found) << Arg::Str(planRelation->rel_name));
+		// table or procedure %s is referenced in the plan but not the from list
+		ERR_post(Arg::Gds(isc_stream_not_found) << Arg::Str(name));
 	}
 
-	if ((tail->csb_relation->rel_id != planRelation->rel_id) && !viewRelation)
+	if ((tail->csb_relation && planRelation &&
+		tail->csb_relation->rel_id != planRelation->rel_id && !viewRelation) ||
+		(tail->csb_procedure && planProcedure &&
+		tail->csb_procedure->getId() != planProcedure->getId() && !viewProcedure))
 	{
-		// table %s is referenced in the plan but not the from list
-		ERR_post(Arg::Gds(isc_stream_not_found) << Arg::Str(planRelation->rel_name));
+		// table or procedure %s is referenced in the plan but not the from list
+		ERR_post(Arg::Gds(isc_stream_not_found) << Arg::Str(name));
 	}
 
-	// check if we already have a plan for this stream
+	// Check if we already have a plan for this stream
 
 	if (tail->csb_plan)
 	{
-		// table %s is referenced more than once in plan; use aliases to distinguish
-		ERR_post(Arg::Gds(isc_stream_twice) << Arg::Str(tail->csb_relation->rel_name));
+		// table or procedure %s is referenced more than once in plan; use aliases to distinguish
+		ERR_post(Arg::Gds(isc_stream_twice) << Arg::Str(name));
 	}
 
 	tail->csb_plan = plan;
@@ -3431,22 +3482,6 @@ static MapNode* parseMap(thread_db* tdbb, CompilerScratch* csb, StreamType strea
 
 	return node;
 }
-
-// Compare two strings, which could be either space-terminated or null-terminated.
-static int strcmpSpace(const char* p, const char* q)
-{
-	for (; *p && *p != ' ' && *q && *q != ' '; p++, q++)
-	{
-		if (*p != *q)
-			break;
-	}
-
-	if ((!*p || *p == ' ') && (!*q || *q == ' '))
-		return 0;
-
-	return (*p > *q) ? 1 : -1;
-}
-
 
 // Process a single record source stream from an RseNode.
 // Obviously, if the source is a view, there is more work to do.

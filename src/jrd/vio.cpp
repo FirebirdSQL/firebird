@@ -5215,6 +5215,7 @@ void Database::garbage_collector(Database* dbb)
 		attachment->att_user = &user;
 
 		BackgroundContextHolder tdbb(dbb, attachment, &status_vector, FB_FUNCTION);
+		Jrd::Attachment::UseCountHolder use(attachment);
 		tdbb->markAsSweeper();
 
 		record_param rpb;
@@ -5806,7 +5807,7 @@ static void list_staying(thread_db* tdbb, record_param* rpb, RecordStack& stayin
 
 		bool timed_out = false;
 		while (temp.rpb_b_page &&
-			!(temp.rpb_page == next_page && temp.rpb_line == (SSHORT) next_line))
+			!(temp.rpb_page == next_page && temp.rpb_line == next_line))
 		{
 			temp.rpb_prior = (temp.rpb_flags & rpb_delta) ? data : NULL;
 
@@ -5837,7 +5838,7 @@ static void list_staying(thread_db* tdbb, record_param* rpb, RecordStack& stayin
 		// If there is a next older version, then process it: remember that
 		// version's data in 'staying'.
 
-		if (temp.rpb_page == next_page && temp.rpb_line == (SSHORT) next_line)
+		if (temp.rpb_page == next_page && temp.rpb_line == next_line)
 		{
 			next_page = temp.rpb_b_page;
 			next_line = temp.rpb_b_line;

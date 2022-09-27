@@ -465,10 +465,10 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 		// stuff the relation -- the relation id itself is redundant except
 		// when there is a need to differentiate the base tables of views
 
-		// ASF: node->dsqlRecordSourceNode may be NULL, and then a BLR error will happen.
+		// ASF: node->recordSourceNode may be NULL, and then a BLR error will happen.
 		// Example command: select * from (select * from t1) a plan (a natural);
-		if (node->dsqlRecordSourceNode)
-			node->dsqlRecordSourceNode->genBlr(dsqlScratch);
+		if (node->recordSourceNode)
+			node->recordSourceNode->genBlr(dsqlScratch);
 
 		// now stuff the access method for this stream
 

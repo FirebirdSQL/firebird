@@ -2979,6 +2979,7 @@ void BufferControl::cache_writer(BufferControl* bcb)
 		attachment->att_user = &user;
 
 		BackgroundContextHolder tdbb(dbb, attachment, &status_vector, FB_FUNCTION);
+		Jrd::Attachment::UseCountHolder use(attachment);
 
 		try
 		{
