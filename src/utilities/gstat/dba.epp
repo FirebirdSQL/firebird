@@ -655,7 +655,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 				current->fil_fudge = 1;	// ignore header page once read it
 			*file_name = '\0';
 			const UCHAR* vp = header->hdr_data;
-			for (const UCHAR* const vend = vp + header->hdr_page_size;
+			for (const UCHAR* const vend = (UCHAR*)header + header->hdr_page_size;
 				 vp < vend && *vp != HDR_end; vp += 2 + vp[1])
 			{
 				if (*vp == HDR_file)
