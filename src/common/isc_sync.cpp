@@ -44,7 +44,9 @@
 
 #ifdef SOLARIS
 #include "../common/gdsassert.h"
+#define HARDEN_RWLOCK
 #endif
+#define HARDEN_RWLOCK
 
 #ifdef HPUX
 #include <sys/pstat.h>
@@ -64,7 +66,13 @@
 #include "../common/StatusArg.h"
 #include "../common/ThreadData.h"
 #include "../common/ThreadStart.h"
+
+#ifdef HARDEN_RWLOCK
+#include "../common/classes/SyncObject.h"
+#else
 #include "../common/classes/rwlock.h"
+#endif // HARDEN_RWLOCK
+
 #include "../common/classes/GenericMap.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/classes/array.h"
@@ -189,8 +197,11 @@ namespace Firebird {
 class CountedRWLock
 {
 public:
-	CountedRWLock()
-		: sharedAccessCounter(0)
+	CountedRWLock() :
+#ifdef HARDEN_RWLOCK
+		sync(&syncObject, FB_FUNCTION),
+#endif
+		sharedAccessCounter(0)
 	{ }
 
 	int release()
@@ -203,6 +214,35 @@ public:
 		++cnt;
 	}
 
+#ifdef HARDEN_RWLOCK
+	bool setlock(const FileLock::LockMode mode)
+	{
+		bool rc = true;
+
+		switch (mode)
+		{
+		case FileLock::FLM_TRY_EXCLUSIVE:
+			rc = sync.lockConditional(SYNC_EXCLUSIVE);
+			break;
+		case FileLock::FLM_EXCLUSIVE:
+			sync.lock(SYNC_EXCLUSIVE);
+			break;
+		case FileLock::FLM_TRY_SHARED:
+			rc = sync.lockConditional(SYNC_SHARED);
+			break;
+		case FileLock::FLM_SHARED:
+			sync.lock(SYNC_SHARED);
+			break;
+		}
+
+		return rc;
+	}
+
+	void unlock(bool shared)
+	{
+		sync.unlock();
+	}
+#else
 	bool setlock(const FileLock::LockMode mode)
 	{
 		bool rc = true;
@@ -233,7 +273,7 @@ public:
 		else
 			rwlock.endWrite();
 	}
-
+#endif // HARDEN_RWLOCK
 	class EnsureUnlock : public MutexEnsureUnlock
 	{
 	public:
@@ -259,7 +299,12 @@ public:
 	}
 
 private:
+#ifdef HARDEN_RWLOCK
+	SyncObject syncObject;
+	Sync sync;
+#else
 	RWLock rwlock;
+#endif
 	AtomicCounter cnt;
 	Mutex sharedAccessMutex;
 	int sharedAccessCounter;
