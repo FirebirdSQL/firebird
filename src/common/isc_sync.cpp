@@ -192,6 +192,73 @@ public:
 	CountedRWLock()
 		: sharedAccessCounter(0)
 	{ }
+
+	int release()
+	{
+		return --cnt;
+	}
+
+	void addRef()
+	{
+		++cnt;
+	}
+
+	bool setlock(const FileLock::LockMode mode)
+	{
+		bool rc = true;
+
+		switch (mode)
+		{
+		case FileLock::FLM_TRY_EXCLUSIVE:
+			rc = rwlock.tryBeginWrite(FB_FUNCTION);
+			break;
+		case FileLock::FLM_EXCLUSIVE:
+			rwlock.beginWrite(FB_FUNCTION);
+			break;
+		case FileLock::FLM_TRY_SHARED:
+			rc = rwlock.tryBeginRead(FB_FUNCTION);
+			break;
+		case FileLock::FLM_SHARED:
+			rwlock.beginRead(FB_FUNCTION);
+			break;
+		}
+
+		return rc;
+	}
+
+	void unlock(bool shared)
+	{
+		if (shared)
+			rwlock.endRead();
+		else
+			rwlock.endWrite();
+	}
+
+	class EnsureUnlock : public MutexEnsureUnlock
+	{
+	public:
+		EnsureUnlock(CountedRWLock* rw)
+			: MutexEnsureUnlock(rw->sharedAccessMutex, FB_FUNCTION)
+		{ }
+	};
+
+	bool sharedAdd()
+	{
+		fb_assert(sharedAccessMutex.locked());
+		fb_assert(sharedAccessCounter >= 0);
+
+		return sharedAccessCounter++ > 0;
+	}
+
+	bool sharedSub()
+	{
+		fb_assert(sharedAccessMutex.locked());
+		fb_assert(sharedAccessCounter > 0);
+
+		return --sharedAccessCounter > 0;
+	}
+
+private:
 	RWLock rwlock;
 	AtomicCounter cnt;
 	Mutex sharedAccessMutex;
@@ -334,7 +401,7 @@ FileLock::~FileLock()
 	{ // guard scope
 		MutexLockGuard g(rwlocksMutex, FB_FUNCTION);
 
-		if (--(rwcl->cnt) == 0)
+		if (rwcl->release() == 0)
 		{
 			rwlocks->remove(getLockId());
 			delete rwcl;
@@ -389,33 +456,16 @@ int FileLock::setlock(const LockMode mode)
 	bool rc = true;
 	try
 	{
-		switch (mode)
-		{
-		case FLM_TRY_EXCLUSIVE:
-			rc = rwcl->rwlock.tryBeginWrite(FB_FUNCTION);
-			break;
-		case FLM_EXCLUSIVE:
-			rwcl->rwlock.beginWrite(FB_FUNCTION);
-			break;
-		case FLM_TRY_SHARED:
-			rc = rwcl->rwlock.tryBeginRead(FB_FUNCTION);
-			break;
-		case FLM_SHARED:
-			rwcl->rwlock.beginRead(FB_FUNCTION);
-			break;
-		}
+		if (!rwcl->setlock(mode))
+			return -1;
 	}
 	catch (const system_call_failed& fail)
 	{
 		return fail.getErrorCode();
 	}
-	if (!rc)
-	{
-		return -1;
-	}
 
 	// For shared lock we must take into an account reenterability
-	MutexEnsureUnlock guard(rwcl->sharedAccessMutex, FB_FUNCTION);
+	CountedRWLock::EnsureUnlock guard(rwcl);
 	if (shared)
 	{
 		if (wait)
@@ -427,10 +477,9 @@ int FileLock::setlock(const LockMode mode)
 			return -1;
 		}
 
-		fb_assert(rwcl->sharedAccessCounter >= 0);
-		if (rwcl->sharedAccessCounter++ > 0)
+		if (rwcl->sharedAdd())
 		{
-			// counter is non-zero - we already have file lock
+			// we already have file lock
 			level = LCK_SHARED;
 			return 0;
 		}
@@ -464,11 +513,9 @@ int FileLock::setlock(const LockMode mode)
 		{
 			if (shared)
 			{
-				rwcl->sharedAccessCounter--;
-				rwcl->rwlock.endRead();
+				rwcl->sharedSub();
 			}
-			else
-				rwcl->rwlock.endWrite();
+			rwcl->unlock(shared);
 		}
 		catch (const Exception&)
 		{ }
@@ -500,10 +547,7 @@ void FileLock::rwUnlock()
 
 	try
 	{
-		if (level == LCK_SHARED)
-			rwcl->rwlock.endRead();
-		else
-			rwcl->rwlock.endWrite();
+		rwcl->unlock(level == LCK_SHARED);
 	}
 	catch (const Exception& ex)
 	{
@@ -521,13 +565,12 @@ void FileLock::unlock()
 	}
 
 	// For shared lock we must take into an account reenterability
-	MutexEnsureUnlock guard(rwcl->sharedAccessMutex, FB_FUNCTION);
+	CountedRWLock::EnsureUnlock guard(rwcl);
 	if (level == LCK_SHARED)
 	{
 		guard.enter();
 
-		fb_assert(rwcl->sharedAccessCounter > 0);
-		if (--(rwcl->sharedAccessCounter) > 0)
+		if (rwcl->sharedSub())
 		{
 			// counter is non-zero - we must keep file lock
 			rwUnlock();
@@ -608,7 +651,7 @@ CountedRWLock* FileLock::getRw()
 		*put = rc;
 	}
 
-	++(rc->cnt);
+	rc->addRef();
 
 	return rc;
 }

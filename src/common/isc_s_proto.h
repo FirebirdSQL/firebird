@@ -181,9 +181,12 @@ public:
 #endif
 
 class CountedFd;
+class CountedRWLock;
 
 class FileLock
 {
+	friend class CountedRWLock;
+
 public:
 	enum LockMode {FLM_EXCLUSIVE, FLM_TRY_EXCLUSIVE, FLM_SHARED, FLM_TRY_SHARED};
 
