@@ -44,9 +44,8 @@
 
 #ifdef SOLARIS
 #include "../common/gdsassert.h"
-#define HARDEN_RWLOCK
+#define PER_THREAD_RWLOCK
 #endif
-#define HARDEN_RWLOCK
 
 #ifdef HPUX
 #include <sys/pstat.h>
@@ -67,11 +66,11 @@
 #include "../common/ThreadData.h"
 #include "../common/ThreadStart.h"
 
-#ifdef HARDEN_RWLOCK
+#ifdef PER_THREAD_RWLOCK
 #include "../common/classes/SyncObject.h"
 #else
 #include "../common/classes/rwlock.h"
-#endif // HARDEN_RWLOCK
+#endif // PER_THREAD_RWLOCK
 
 #include "../common/classes/GenericMap.h"
 #include "../common/classes/RefMutex.h"
@@ -104,13 +103,6 @@ static int process_id;
 #endif
 
 #include <sys/mman.h>
-
-#define FTOK_KEY	15
-#define PRIV		S_IRUSR | S_IWUSR
-
-//#ifndef SHMEM_DELTA
-//#define SHMEM_DELTA	(1 << 22)
-//#endif
 
 #endif // UNIX
 
@@ -198,11 +190,16 @@ class CountedRWLock
 {
 public:
 	CountedRWLock() :
-#ifdef HARDEN_RWLOCK
+#ifdef PER_THREAD_RWLOCK
 		sync(&syncObject, FB_FUNCTION),
 #endif
 		sharedAccessCounter(0)
 	{ }
+
+	~CountedRWLock()
+	{
+		fb_assert(cnt == 0);
+	}
 
 	int release()
 	{
@@ -214,7 +211,7 @@ public:
 		++cnt;
 	}
 
-#ifdef HARDEN_RWLOCK
+#ifdef PER_THREAD_RWLOCK
 	bool setlock(const FileLock::LockMode mode)
 	{
 		bool rc = true;
@@ -227,11 +224,10 @@ public:
 		case FileLock::FLM_EXCLUSIVE:
 			sync.lock(SYNC_EXCLUSIVE);
 			break;
-		case FileLock::FLM_TRY_SHARED:
-			rc = sync.lockConditional(SYNC_SHARED);
-			break;
 		case FileLock::FLM_SHARED:
-			sync.lock(SYNC_SHARED);
+			fb_assert(sharedAccessMutex.locked());
+			if (sharedAccessCounter == 0)
+				sync.lock(SYNC_SHARED);
 			break;
 		}
 
@@ -240,6 +236,12 @@ public:
 
 	void unlock(bool shared)
 	{
+		if (shared)
+		{
+			fb_assert(sharedAccessMutex.locked());
+			if (sharedAccessCounter > 0)
+				return;
+		}
 		sync.unlock();
 	}
 #else
@@ -254,9 +256,6 @@ public:
 			break;
 		case FileLock::FLM_EXCLUSIVE:
 			rwlock.beginWrite(FB_FUNCTION);
-			break;
-		case FileLock::FLM_TRY_SHARED:
-			rc = rwlock.tryBeginRead(FB_FUNCTION);
 			break;
 		case FileLock::FLM_SHARED:
 			rwlock.beginRead(FB_FUNCTION);
@@ -273,13 +272,16 @@ public:
 		else
 			rwlock.endWrite();
 	}
-#endif // HARDEN_RWLOCK
-	class EnsureUnlock : public MutexEnsureUnlock
+#endif // PER_THREAD_RWLOCK
+	class EnsureUnlock : private MutexEnsureUnlock
 	{
 	public:
-		EnsureUnlock(CountedRWLock* rw)
+		EnsureUnlock(CountedRWLock* rw, bool shared)
 			: MutexEnsureUnlock(rw->sharedAccessMutex, FB_FUNCTION)
-		{ }
+		{
+			if (shared)
+				enter();
+		}
 	};
 
 	bool sharedAdd()
@@ -299,7 +301,10 @@ public:
 	}
 
 private:
-#ifdef HARDEN_RWLOCK
+	CountedRWLock(const CountedRWLock&);
+	const CountedRWLock& operator=(const CountedRWLock&);
+
+#ifdef PER_THREAD_RWLOCK
 	SyncObject syncObject;
 	Sync sync;
 #else
@@ -480,9 +485,6 @@ int FileLock::setlock(const LockMode mode)
 		case FLM_EXCLUSIVE:
 			shared = false;
 			break;
-		case FLM_TRY_SHARED:
-			wait = false;
-			// fall through
 		case FLM_SHARED:
 			break;
 	}
@@ -497,6 +499,9 @@ int FileLock::setlock(const LockMode mode)
 		return wait ? EBUSY : -1;
 	}
 
+	// Lock shared mutex if needed
+	CountedRWLock::EnsureUnlock guard(rwcl, shared);
+
 	// first take appropriate rwlock to avoid conflicts with other threads in our process
 	bool rc = true;
 	try
@@ -510,24 +515,11 @@ int FileLock::setlock(const LockMode mode)
 	}
 
 	// For shared lock we must take into an account reenterability
-	CountedRWLock::EnsureUnlock guard(rwcl);
-	if (shared)
+	if (shared && rwcl->sharedAdd())
 	{
-		if (wait)
-		{
-			guard.enter();
-		}
-		else if (!guard.tryEnter())
-		{
-			return -1;
-		}
-
-		if (rwcl->sharedAdd())
-		{
-			// we already have file lock
-			level = LCK_SHARED;
-			return 0;
-		}
+		// we already have file lock
+		level = LCK_SHARED;
+		return 0;
 	}
 
 #ifdef USE_FCNTL
@@ -610,17 +602,12 @@ void FileLock::unlock()
 	}
 
 	// For shared lock we must take into an account reenterability
-	CountedRWLock::EnsureUnlock guard(rwcl);
-	if (level == LCK_SHARED)
+	CountedRWLock::EnsureUnlock guard(rwcl, level == LCK_SHARED);
+	if (level == LCK_SHARED && rwcl->sharedSub())
 	{
-		guard.enter();
-
-		if (rwcl->sharedSub())
-		{
-			// counter is non-zero - we must keep file lock
-			rwUnlock();
-			return;
-		}
+		// counter is non-zero - we must keep file lock
+		rwUnlock();
+		return;
 	}
 
 #ifdef USE_FCNTL
