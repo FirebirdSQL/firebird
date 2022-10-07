@@ -231,7 +231,7 @@ void PPG_print_header(const header_page* header, ULONG page,
 	TEXT temp[257];
 
 	const UCHAR* p = header->hdr_data;
-	for (const UCHAR* const end = reinterpret_cast<UCHAR*>(header) + header->hdr_page_size; p < end && *p != HDR_end; p += 2 + p[1])
+	for (const UCHAR* const end = reinterpret_cast<const UCHAR*>(header) + header->hdr_page_size; p < end && *p != HDR_end; p += 2 + p[1])
 	{
 		SLONG number;
 
