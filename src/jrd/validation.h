@@ -139,7 +139,8 @@ private:
 	USHORT vdr_flags;
 	int vdr_errors;
 	int vdr_warns;
-	int vdr_fixed;
+	int vdr_fixed_errors;
+	int vdr_fixed_warnings;
 	TraNumber vdr_max_transaction;
 	FB_UINT64 vdr_rel_backversion_counter;	// Counts slots w/rhd_chain
 	PageBitmap* vdr_backversion_pages;      // 1 bit per visited table page
@@ -188,8 +189,87 @@ private:
 
 	UsedBdbs vdr_used_bdbs;
 
+	class CorruptLogger
+	{
+	public:
+		CorruptLogger(Validation* validation)
+			: validation(validation), is_error(false), error_fixed(false)
+		{}
+
+		template<typename... Args>
+		CorruptLogger(Validation* validation, int err_code, const jrd_rel* relation,
+			bool print_immediately, Args... args)
+			: validation(validation), is_error(false), error_fixed(false)
+		{
+			if (print_immediately)
+				corrupt(err_code, relation, args...);
+			else
+				corrupt_buffer(err_code, relation, log_message, args...);
+		}
+
+		~CorruptLogger()
+		{
+			if (log_message.isEmpty())
+				return;
+
+			int insert_position = log_message.find('\t') + 1;
+			if (is_error)
+			{
+				if (error_fixed)
+				{
+					validation->vdr_fixed_errors++;
+					log_message.insert(insert_position, "Error (FIXED): ");
+				}
+				else
+				{
+					log_message.insert(insert_position, "Error: ");
+				}
+			}
+			else
+			{
+				if (error_fixed)
+				{
+					validation->vdr_fixed_warnings++;
+					log_message.insert(insert_position, "Warning (FIXED): ");
+				}
+				else
+				{
+					log_message.insert(insert_position, "Warning: ");
+				}
+			}
+
+			gds__log("%s", log_message.c_str());
+		}
+
+		template<typename... Args>
+		RTN print_message(int err_code, const jrd_rel* relation, Args... args)
+		{
+			return corrupt(err_code, relation, args...);
+		}
+
+		template<typename... Args>
+		RTN save_message(int err_code, const jrd_rel* relation, Args... args)
+		{
+			fb_assert(log_message.isEmpty());
+			return corrupt_buffer(err_code, relation, log_message, args...);
+		}
+
+		void fixed()
+		{
+			fb_assert(!error_fixed);
+			error_fixed = true;
+		}
+	private:
+		RTN corrupt(int err_code, const jrd_rel* relation, ...);
+		RTN corrupt_buffer(int err_code, const jrd_rel* relation, Firebird::string& log_message, ...);
+	private:
+		Validation* validation;
+		Firebird::string log_message;
+		bool is_error;
+		bool error_fixed;
+	};
+
 	void cleanup();
-	RTN corrupt(int, const jrd_rel*, ...);
 	FETCH_CODE fetch_page(bool mark, ULONG, USHORT, WIN*, void*);
 	void release_page(WIN*);
 	void garbage_collect();
@@ -197,16 +277,16 @@ private:
 	void parse_args(thread_db*);
 	void output(const char*, ...);
 
-	RTN walk_blob(jrd_rel*, const Ods::blh*, USHORT, RecordNumber);
-	RTN walk_chain(jrd_rel*, const Ods::rhd*, RecordNumber);
-	RTN walk_data_page(jrd_rel*, ULONG, ULONG, UCHAR&);
+	RTN walk_blob(jrd_rel*, const Ods::blh*, USHORT, RecordNumber, CorruptLogger&);
+	RTN walk_chain(jrd_rel*, const Ods::rhd*, RecordNumber, CorruptLogger&);
+	RTN walk_data_page(jrd_rel*, ULONG, ULONG, UCHAR&, CorruptLogger&);
 	void walk_database();
 	void walk_generators();
 	void walk_header(ULONG);
 	RTN walk_index(jrd_rel*, Ods::index_root_page&, USHORT);
 	void walk_pip();
 	RTN walk_pointer_page(jrd_rel*, ULONG);
-	RTN walk_record(jrd_rel*, const Ods::rhd*, USHORT, RecordNumber, bool);
+	RTN walk_record(jrd_rel*, const Ods::rhd*, USHORT, RecordNumber, bool, CorruptLogger&);
 	RTN walk_relation(jrd_rel*);
 	RTN walk_root(jrd_rel*);
 	RTN walk_scns();
