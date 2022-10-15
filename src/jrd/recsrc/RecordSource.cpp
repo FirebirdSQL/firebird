@@ -26,6 +26,7 @@
 #include "../jrd/intl.h"
 #include "../jrd/req.h"
 #include "../jrd/ProfilerManager.h"
+#include "../jrd/tra.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/dpm_proto.h"
 #include "../jrd/err_proto.h"
@@ -287,7 +288,7 @@ bool RecordStream::refetchRecord(thread_db* tdbb) const
 	return false;
 }
 
-bool RecordStream::lockRecord(thread_db* tdbb) const
+WriteLockResult RecordStream::lockRecord(thread_db* tdbb, bool skipLocked) const
 {
 	Request* const request = tdbb->getRequest();
 	jrd_tra* const transaction = request->req_transaction;
@@ -299,7 +300,7 @@ bool RecordStream::lockRecord(thread_db* tdbb) const
 
 	RLCK_reserve_relation(tdbb, transaction, relation, true);
 
-	return VIO_writelock(tdbb, rpb, transaction);
+	return VIO_writelock(tdbb, rpb, transaction, skipLocked);
 }
 
 void RecordStream::markRecursive()

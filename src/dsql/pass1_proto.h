@@ -41,7 +41,7 @@ void PASS1_ambiguity_check(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&, cons
 void PASS1_check_unique_fields_names(Jrd::StrArray& names, const Jrd::CompoundStmtNode* fields);
 Jrd::BoolExprNode* PASS1_compose(Jrd::BoolExprNode*, Jrd::BoolExprNode*, UCHAR);
 Jrd::DeclareCursorNode* PASS1_cursor_name(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&, USHORT, bool);
-Jrd::RseNode* PASS1_derived_table(Jrd::DsqlCompilerScratch*, Jrd::SelectExprNode*, const char*, bool);
+Jrd::RseNode* PASS1_derived_table(Jrd::DsqlCompilerScratch*, Jrd::SelectExprNode*, const char*, bool, bool);
 void PASS1_expand_contexts(Jrd::DsqlContextStack& contexts, Jrd::dsql_ctx* context);
 Jrd::ValueListNode* PASS1_expand_select_list(Jrd::DsqlCompilerScratch*, Jrd::ValueListNode*, Jrd::RecSourceListNode*);
 void PASS1_expand_select_node(Jrd::DsqlCompilerScratch*, Jrd::ExprNode*, Jrd::ValueListNode*, bool);
@@ -55,7 +55,7 @@ bool PASS1_node_match(Jrd::DsqlCompilerScratch*, const Jrd::ExprNode*, const Jrd
 Jrd::DsqlMapNode* PASS1_post_map(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, Jrd::dsql_ctx*,
 	Jrd::WindowClause*);
 Jrd::RecordSourceNode* PASS1_relation(Jrd::DsqlCompilerScratch*, Jrd::RecordSourceNode*);
-Jrd::RseNode* PASS1_rse(Jrd::DsqlCompilerScratch*, Jrd::SelectExprNode*, bool);
+Jrd::RseNode* PASS1_rse(Jrd::DsqlCompilerScratch*, Jrd::SelectExprNode*, bool, bool);
 bool PASS1_set_parameter_type(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, std::function<void (dsc*)>, bool);
 bool PASS1_set_parameter_type(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, NestConst<Jrd::ValueExprNode>, bool);
 Jrd::ValueListNode* PASS1_sort(Jrd::DsqlCompilerScratch*, Jrd::ValueListNode*, Jrd::ValueListNode*);

@@ -8735,7 +8735,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 	dsqlScratch->resetContextStack();
 	++dsqlScratch->contextNumber;
-	RseNode* rse = PASS1_rse(dsqlScratch, selectExpr, false);
+	RseNode* rse = PASS1_rse(dsqlScratch, selectExpr, false, false);
 
 	dsqlScratch->getBlrData().clear();
 	dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);

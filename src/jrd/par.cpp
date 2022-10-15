@@ -1403,6 +1403,17 @@ RseNode* PAR_rse(thread_db* tdbb, CompilerScratch* csb, SSHORT rse_op)
 			rse->flags |= RseNode::FLAG_WRITELOCK;
 			break;
 
+		case blr_skip_locked:
+			if (!(rse->flags & RseNode::FLAG_WRITELOCK))
+			{
+				PAR_error(csb,
+					Arg::Gds(isc_random) <<
+						"blr_skip_locked cannot be used without previous blr_writelock",
+					false);
+			}
+			rse->flags |= RseNode::FLAG_SKIP_LOCKED;
+			break;
+
 		default:
 			if (op == (UCHAR) blr_end)
 			{

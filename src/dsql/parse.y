@@ -688,6 +688,7 @@ using namespace Firebird;
 
 // tokens added for Firebird 5.0
 
+%token <metaNamePtr> LOCKED
 %token <metaNamePtr> TARGET
 %token <metaNamePtr> TIMEZONE_NAME
 %token <metaNamePtr> UNICODE_CHAR
@@ -726,6 +727,7 @@ using namespace Firebird;
 	BaseNullable<bool> nullableBoolVal;
 	BaseNullable<Jrd::TriggerDefinition::SqlSecurity> nullableSqlSecurityVal;
 	BaseNullable<Jrd::OverrideClause> nullableOverrideClause;
+	struct { bool first; bool second; } boolPair;
 	bool boolVal;
 	int intVal;
 	unsigned uintVal;
@@ -5766,7 +5768,8 @@ select
 			SelectNode* node = newNode<SelectNode>();
 			node->dsqlExpr = $1;
 			node->dsqlForUpdate = $2;
-			node->dsqlWithLock = $3;
+			node->dsqlWithLock = $3.first;
+			node->dsqlSkipLocked = $3.second;
 			$$ = node;
 		}
 	;
@@ -5783,10 +5786,21 @@ for_update_list
 	| OF column_list	{ $$ = $2; }
 	;
 
-%type <boolVal>	lock_clause
+%type <boolPair> lock_clause
 lock_clause
-	: /* nothing */	{ $$ = false; }
-	| WITH LOCK		{ $$ = true; }
+	: /* nothing */						{ $$ = {false, false}; }
+	| WITH LOCK skip_locked_clause_opt	{ $$ = {true, $3}; }
+	;
+
+%type <boolVal>	skip_locked_clause_opt
+skip_locked_clause_opt
+	: /* nothing */			{ $$ = false; }
+	| skip_locked_clause
+	;
+
+%type <boolVal>	skip_locked_clause
+skip_locked_clause
+	: SKIP LOCKED	{ $$ = true; }
 	;
 
 
@@ -6656,15 +6670,22 @@ delete
 
 %type <stmtNode> delete_searched
 delete_searched
-	: DELETE FROM table_name where_clause plan_clause order_clause_opt rows_clause_optional returning_clause
+	: DELETE FROM table_name
+			where_clause
+			plan_clause
+			order_clause_opt
+			rows_clause_optional
+			skip_locked_clause_opt
+			returning_clause
 		{
-			EraseNode* node = newNode<EraseNode>();
+			const auto node = newNode<EraseNode>();
 			node->dsqlRelation = $3;
 			node->dsqlBoolean = $4;
 			node->dsqlPlan = $5;
 			node->dsqlOrder = $6;
 			node->dsqlRows = $7;
-			node->dsqlReturning = $8;
+			node->dsqlSkipLocked = $8;
+			node->dsqlReturning = $9;
 			$$ = node;
 		}
 	;
@@ -6692,8 +6713,14 @@ update
 
 %type <stmtNode> update_searched
 update_searched
-	: UPDATE table_name SET update_assignments(NOTRIAL(&$2->dsqlName)) where_clause plan_clause
-			order_clause_opt rows_clause_optional returning_clause
+	: UPDATE table_name
+			SET update_assignments(NOTRIAL(&$2->dsqlName))
+			where_clause
+			plan_clause
+			order_clause_opt
+			rows_clause_optional
+			skip_locked_clause_opt
+			returning_clause
 		{
 			ModifyNode* node = newNode<ModifyNode>();
 			node->dsqlRelation = $2;
@@ -6702,7 +6729,8 @@ update_searched
 			node->dsqlPlan = $6;
 			node->dsqlOrder = $7;
 			node->dsqlRows = $8;
-			node->dsqlReturning = $9;
+			node->dsqlSkipLocked = $9;
+			node->dsqlReturning = $10;
 			$$ = node;
 		}
 	;
@@ -9085,7 +9113,8 @@ non_reserved_word
 	| SERVERWIDE
 	| INCREMENT
 	| TRUSTED
-	| BASE64_DECODE		// added in FB 4.0
+	// added in FB 4.0
+	| BASE64_DECODE
 	| BASE64_ENCODE
 	| BIND
 	| CLEAR
@@ -9149,10 +9178,14 @@ non_reserved_word
 	| TOTALORDER
 	| TRAPS
 	| ZONE
-	| DEBUG				// added in FB 4.0.1
+	// added in FB 4.0.1
+	| DEBUG
 	| PKCS_1_5
-	| BLOB_APPEND		// added in FB 4.0.2
-	| TARGET			// added in FB 5.0
+	// added in FB 4.0.2
+	| BLOB_APPEND
+	// added in FB 5.0
+	| LOCKED
+	| TARGET
 	| TIMEZONE_NAME
 	| UNICODE_CHAR
 	| UNICODE_VAL

@@ -550,6 +550,9 @@ void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 	if (rse->flags & RseNode::FLAG_WRITELOCK)
 		dsqlScratch->appendUChar(blr_writelock);
 
+	if (rse->flags & RseNode::FLAG_SKIP_LOCKED)
+		dsqlScratch->appendUChar(blr_skip_locked);
+
 	if (rse->dsqlFirst)
 	{
 		dsqlScratch->appendUChar(blr_first);

@@ -203,10 +203,9 @@ bool NestedLoopJoin::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-bool NestedLoopJoin::lockRecord(thread_db* /*tdbb*/) const
+WriteLockResult NestedLoopJoin::lockRecord(thread_db* /*tdbb*/, bool /*skipLocked*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false; // compiler silencer
 }
 
 void NestedLoopJoin::getChildren(Array<const RecordSource*>& children) const

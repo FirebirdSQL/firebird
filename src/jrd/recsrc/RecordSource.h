@@ -31,6 +31,7 @@
 #include "../jrd/RecordBuffer.h"
 #include "firebird/impl/inf_pub.h"
 #include "../jrd/evl_proto.h"
+#include "../jrd/vio_proto.h"
 
 namespace Jrd
 {
@@ -60,7 +61,7 @@ namespace Jrd
 		virtual void close(thread_db* tdbb) const = 0;
 
 		virtual bool refetchRecord(thread_db* tdbb) const = 0;
-		virtual bool lockRecord(thread_db* tdbb) const = 0;
+		virtual WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const = 0;
 
 		virtual void getChildren(Firebird::Array<const RecordSource*>& children) const = 0;
 
@@ -151,7 +152,7 @@ namespace Jrd
 		RecordStream(CompilerScratch* csb, StreamType stream, const Format* format = NULL);
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -305,7 +306,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -330,7 +331,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -366,7 +367,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -399,7 +400,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -426,12 +427,12 @@ namespace Jrd
 	class LockedStream : public RecordSource
 	{
 	public:
-		LockedStream(CompilerScratch* csb, RecordSource* next);
+		LockedStream(CompilerScratch* csb, RecordSource* next, bool skipLocked);
 
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -450,6 +451,7 @@ namespace Jrd
 
 	private:
 		NestConst<RecordSource> m_next;
+		const bool m_skipLocked;
 	};
 
 	class FirstRowsStream : public RecordSource
@@ -465,7 +467,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -505,7 +507,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -541,7 +543,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -662,7 +664,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -809,7 +811,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -991,7 +993,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -1059,7 +1061,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -1103,7 +1105,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -1136,7 +1138,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -1190,7 +1192,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -1256,7 +1258,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -1294,7 +1296,7 @@ namespace Jrd
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void print(thread_db* tdbb, Firebird::string& plan,
 				   bool detailed, unsigned level, bool recurse) const override;
@@ -1322,7 +1324,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -1367,7 +1369,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
@@ -1409,7 +1411,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		bool lockRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 

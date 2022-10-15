@@ -3445,7 +3445,7 @@ string SelectExprNode::internalPrint(NodePrinter& printer) const
 RseNode* SelectExprNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	fb_assert(dsqlFlags & DFLAG_DERIVED);
-	return PASS1_derived_table(dsqlScratch, this, NULL, false);
+	return PASS1_derived_table(dsqlScratch, this, NULL, false, false);
 }
 
 
@@ -3514,7 +3514,7 @@ static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, Recor
 	dsqlScratch->currCtes.push(cte);
 
 	RseNode* derivedNode = PASS1_derived_table(dsqlScratch,
-		cte, (isRecursive ? relAlias.c_str() : NULL), false);
+		cte, (isRecursive ? relAlias.c_str() : NULL), false, false);
 
 	if (!isRecursive)
 		cte->alias = saveCteName;

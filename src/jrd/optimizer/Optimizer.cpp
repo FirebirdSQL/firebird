@@ -1027,35 +1027,50 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	if (invariantBoolean)
 		rsb = FB_NEW_POOL(getPool()) PreFilteredStream(csb, rsb, invariantBoolean);
 
-    // Handle first and/or skip.  The skip MUST (if present)
-    // appear in the rsb list AFTER the first.  Since the gen_first and gen_skip
-    // functions add their nodes at the beginning of the rsb list we MUST call
-    // gen_skip before gen_first.
+	const auto handleSkipFirstSingular = [&] {
+		// Handle first and/or skip.  The skip MUST (if present)
+		// appear in the rsb list AFTER the first.  Since the gen_first and gen_skip
+		// functions add their nodes at the beginning of the rsb list we MUST call
+		// gen_skip before gen_first.
 
-    if (rse->rse_skip)
-		rsb = FB_NEW_POOL(getPool()) SkipRowsStream(csb, rsb, rse->rse_skip);
+		if (rse->rse_skip)
+			rsb = FB_NEW_POOL(getPool()) SkipRowsStream(csb, rsb, rse->rse_skip);
 
-	if (rse->rse_first)
-		rsb = FB_NEW_POOL(getPool()) FirstRowsStream(csb, rsb, rse->rse_first);
+		if (rse->rse_first)
+			rsb = FB_NEW_POOL(getPool()) FirstRowsStream(csb, rsb, rse->rse_first);
 
-	if (rse->flags & RseNode::FLAG_SINGULAR)
-		rsb = FB_NEW_POOL(getPool()) SingularStream(csb, rsb);
+		if (rse->flags & RseNode::FLAG_SINGULAR)
+			rsb = FB_NEW_POOL(getPool()) SingularStream(csb, rsb);
+	};
 
-	if (rse->flags & RseNode::FLAG_WRITELOCK)
-	{
-		for (const auto compileStream : compileStreams)
+	const auto handleWriteLockSkipLocked = [&] {
+		if (rse->flags & RseNode::FLAG_WRITELOCK)
 		{
-			const auto tail = &csb->csb_rpt[compileStream];
-			tail->csb_flags |= csb_update;
+			for (const auto compileStream : compileStreams)
+			{
+				const auto tail = &csb->csb_rpt[compileStream];
+				tail->csb_flags |= csb_update;
 
-			fb_assert(tail->csb_relation);
+				fb_assert(tail->csb_relation);
 
-			CMP_post_access(tdbb, csb, tail->csb_relation->rel_security_name,
-				tail->csb_view ? tail->csb_view->rel_id : 0,
-				SCL_update, obj_relations, tail->csb_relation->rel_name);
+				CMP_post_access(tdbb, csb, tail->csb_relation->rel_security_name,
+					tail->csb_view ? tail->csb_view->rel_id : 0,
+					SCL_update, obj_relations, tail->csb_relation->rel_name);
+			}
+
+			rsb = FB_NEW_POOL(getPool()) LockedStream(csb, rsb, (rse->flags & RseNode::FLAG_SKIP_LOCKED));
 		}
+	};
 
-		rsb = FB_NEW_POOL(getPool()) LockedStream(csb, rsb);
+	if (rse->flags & RseNode::FLAG_SKIP_LOCKED)
+	{
+		handleWriteLockSkipLocked();
+		handleSkipFirstSingular();
+	}
+	else
+	{
+		handleSkipFirstSingular();
+		handleWriteLockSkipLocked();
 	}
 
 	if (rse->flags & RseNode::FLAG_SCROLLABLE)

@@ -109,10 +109,9 @@ bool BaseAggWinStream<ThisType, NextType>::refetchRecord(thread_db* tdbb) const
 }
 
 template <typename ThisType, typename NextType>
-bool BaseAggWinStream<ThisType, NextType>::lockRecord(thread_db* /*tdbb*/) const
+WriteLockResult BaseAggWinStream<ThisType, NextType>::lockRecord(thread_db* /*tdbb*/, bool /*skipLocked*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false; // compiler silencer
 }
 
 template <typename ThisType, typename NextType>

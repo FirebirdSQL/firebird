@@ -43,6 +43,13 @@ namespace Jrd
 		DPM_next_data_page,		// one data page only
 		DPM_next_pointer_page	// data pages from one pointer page
 	};
+
+	enum class WriteLockResult
+	{
+		LOCKED,
+		CONFLICTED,
+		SKIPPED
+	};
 }
 
 void	VIO_backout(Jrd::thread_db*, Jrd::record_param*, const Jrd::jrd_tra*);
@@ -58,7 +65,7 @@ bool	VIO_get(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*, MemoryPool*);
 bool	VIO_get_current(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*,
 						MemoryPool*, bool, bool&);
 void	VIO_init(Jrd::thread_db*);
-bool	VIO_writelock(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
+Jrd::WriteLockResult VIO_writelock(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*, bool skipLocked);
 bool	VIO_modify(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
 bool	VIO_next_record(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*, MemoryPool*, Jrd::FindNextRecordScope);
 Jrd::Record*	VIO_record(Jrd::thread_db*, Jrd::record_param*, const Jrd::Format*, MemoryPool*);

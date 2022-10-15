@@ -337,10 +337,9 @@ bool MergeJoin::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-bool MergeJoin::lockRecord(thread_db* /*tdbb*/) const
+WriteLockResult MergeJoin::lockRecord(thread_db* /*tdbb*/, bool /*skipLocked*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false; // compiler silencer
 }
 
 void MergeJoin::getChildren(Array<const RecordSource*>& children) const

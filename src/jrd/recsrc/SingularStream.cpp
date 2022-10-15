@@ -141,9 +141,9 @@ bool SingularStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-bool SingularStream::lockRecord(thread_db* tdbb) const
+WriteLockResult SingularStream::lockRecord(thread_db* tdbb, bool skipLocked) const
 {
-	return m_next->lockRecord(tdbb);
+	return m_next->lockRecord(tdbb, skipLocked);
 }
 
 void SingularStream::getChildren(Array<const RecordSource*>& children) const

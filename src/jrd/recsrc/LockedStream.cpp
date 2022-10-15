@@ -24,6 +24,7 @@
 #include "../jrd/jrd.h"
 #include "../jrd/req.h"
 #include "../jrd/cmp_proto.h"
+#include "../jrd/vio_proto.h"
 
 #include "RecordSource.h"
 
@@ -34,9 +35,10 @@ using namespace Jrd;
 // Data access: stream locked for write
 // ------------------------------------
 
-LockedStream::LockedStream(CompilerScratch* csb, RecordSource* next)
+LockedStream::LockedStream(CompilerScratch* csb, RecordSource* next, bool skipLocked)
 	: RecordSource(csb),
-	  m_next(next)
+	  m_next(next),
+	  m_skipLocked(skipLocked)
 {
 	fb_assert(m_next);
 
@@ -84,8 +86,12 @@ bool LockedStream::internalGetRecord(thread_db* tdbb) const
 	{
 		do {
 			// Attempt to lock the record
-			if (m_next->lockRecord(tdbb))
+			const auto lockResult = m_next->lockRecord(tdbb, m_skipLocked);
+
+			if (lockResult == WriteLockResult::LOCKED)
 				return true;	// locked
+			else if (lockResult == WriteLockResult::SKIPPED)
+				break;	// skip locked record
 
 			// Refetch the record and ensure it still fulfils the search condition
 		} while (m_next->refetchRecord(tdbb));
@@ -99,9 +105,9 @@ bool LockedStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-bool LockedStream::lockRecord(thread_db* tdbb) const
+WriteLockResult LockedStream::lockRecord(thread_db* tdbb, bool skipLocked) const
 {
-	return m_next->lockRecord(tdbb);
+	return m_next->lockRecord(tdbb, skipLocked);
 }
 
 void LockedStream::getChildren(Array<const RecordSource*>& children) const

@@ -1948,7 +1948,7 @@ void TRA_sweep(thread_db* tdbb)
 }
 
 
-int TRA_wait(thread_db* tdbb, jrd_tra* trans, TraNumber number, jrd_tra::wait_t wait)
+int TRA_wait(thread_db* tdbb, jrd_tra* trans, TraNumber number, jrd_tra::wait_t wait, Nullable<SSHORT> waitTimeout)
 {
 /**************************************
  *
@@ -1979,7 +1979,7 @@ int TRA_wait(thread_db* tdbb, jrd_tra* trans, TraNumber number, jrd_tra::wait_t 
 		Lock temp_lock(tdbb, sizeof(TraNumber), LCK_tra);
 		temp_lock.setKey(number);
 
-		const SSHORT timeout = (wait == jrd_tra::tra_wait) ? trans->getLockWait() : 0;
+		const SSHORT timeout = (wait == jrd_tra::tra_wait) ? waitTimeout.orElse(trans->getLockWait()) : 0;
 
 		if (!LCK_lock(tdbb, &temp_lock, LCK_read, timeout))
 		{

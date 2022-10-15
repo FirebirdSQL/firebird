@@ -111,9 +111,9 @@ bool SkipRowsStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-bool SkipRowsStream::lockRecord(thread_db* tdbb) const
+WriteLockResult SkipRowsStream::lockRecord(thread_db* tdbb, bool skipLocked) const
 {
-	return m_next->lockRecord(tdbb);
+	return m_next->lockRecord(tdbb, skipLocked);
 }
 
 void SkipRowsStream::getChildren(Array<const RecordSource*>& children) const

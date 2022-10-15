@@ -724,6 +724,7 @@ public:
 	static const USHORT FLAG_DSQL_COMPARATIVE	= 0x10;	// transformed from DSQL ComparativeBoolNode
 	static const USHORT FLAG_OPT_FIRST_ROWS		= 0x20;	// optimize retrieval for first rows
 	static const USHORT FLAG_LATERAL			= 0x40;	// lateral derived table
+	static const USHORT FLAG_SKIP_LOCKED		= 0x80;	// skip locked
 
 	explicit RseNode(MemoryPool& pool)
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RSE>(pool),

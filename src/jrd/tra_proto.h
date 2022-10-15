@@ -24,6 +24,7 @@
 #ifndef JRD_TRA_PROTO_H
 #define JRD_TRA_PROTO_H
 
+#include "../common/classes/Nullable.h"
 #include "../jrd/tra.h"
 
 namespace Jrd {
@@ -60,7 +61,7 @@ Jrd::jrd_tra*	TRA_start(Jrd::thread_db* tdbb, int, const UCHAR*, Jrd::jrd_tra* o
 int		TRA_state(const UCHAR*, TraNumber oldest, TraNumber number);
 void	TRA_sweep(Jrd::thread_db* tdbb);
 void	TRA_update_counters(Jrd::thread_db*, Jrd::Database*);
-int		TRA_wait(Jrd::thread_db* tdbb, Jrd::jrd_tra* trans, TraNumber number, Jrd::jrd_tra::wait_t wait);
+int		TRA_wait(Jrd::thread_db* tdbb, Jrd::jrd_tra* trans, TraNumber number, Jrd::jrd_tra::wait_t wait, Nullable<SSHORT> waitTimeout = {});
 void	TRA_attach_request(Jrd::jrd_tra* transaction, Jrd::Request* request);
 void	TRA_detach_request(Jrd::Request* request);
 void	TRA_setup_request_snapshot(Jrd::thread_db*, Jrd::Request* request);

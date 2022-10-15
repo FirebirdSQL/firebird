@@ -445,10 +445,9 @@ bool HashJoin::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-bool HashJoin::lockRecord(thread_db* /*tdbb*/) const
+WriteLockResult HashJoin::lockRecord(thread_db* /*tdbb*/, bool /*skipLocked*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false; // compiler silencer
 }
 
 void HashJoin::getChildren(Array<const RecordSource*>& children) const

@@ -116,9 +116,9 @@ bool SortedStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-bool SortedStream::lockRecord(thread_db* tdbb) const
+WriteLockResult SortedStream::lockRecord(thread_db* tdbb, bool skipLocked) const
 {
-	return m_next->lockRecord(tdbb);
+	return m_next->lockRecord(tdbb, skipLocked);
 }
 
 void SortedStream::getChildren(Array<const RecordSource*>& children) const

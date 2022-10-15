@@ -290,6 +290,7 @@ static const TOK tokens[] =
 	{TOK_LOCALTIME, "LOCALTIME", false},
 	{TOK_LOCALTIMESTAMP, "LOCALTIMESTAMP", false},
 	{TOK_LOCK, "LOCK", true},
+	{TOK_LOCKED, "LOCKED", true},
 	{TOK_LOG, "LOG", true},
 	{TOK_LOG10, "LOG10", true},
 	{TOK_LONG, "LONG", false},

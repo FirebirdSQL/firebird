@@ -322,6 +322,7 @@
 #define blr_writelock		(unsigned char)179
 #define blr_nullslast       (unsigned char)180
 
+
 /* FB 2.0 specific BLR */
 
 #define blr_lowcase			(unsigned char)181
@@ -444,6 +445,8 @@
 
 #define blr_marks					(unsigned char) 217		// mark some blr code with specific flags
 
+// FB 5.0 specific BLR
+
 #define blr_dcl_local_table			(unsigned char) 218
 
 // subcodes of blr_dcl_local_table
@@ -458,5 +461,7 @@
 
 // json functions (reserved)
 #define blr_json_function			(unsigned char) 222
+
+#define blr_skip_locked				(unsigned char) 223
 
 #endif // FIREBIRD_IMPL_BLR_H

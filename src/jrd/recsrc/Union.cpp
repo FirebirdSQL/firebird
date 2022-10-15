@@ -151,15 +151,15 @@ bool Union::refetchRecord(thread_db* tdbb) const
 	return m_args[impure->irsb_count]->refetchRecord(tdbb);
 }
 
-bool Union::lockRecord(thread_db* tdbb) const
+WriteLockResult Union::lockRecord(thread_db* tdbb, bool skipLocked) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (impure->irsb_count >= m_args.getCount())
-		return false;
+		return WriteLockResult::CONFLICTED;
 
-	return m_args[impure->irsb_count]->lockRecord(tdbb);
+	return m_args[impure->irsb_count]->lockRecord(tdbb, skipLocked);
 }
 
 void Union::getChildren(Array<const RecordSource*>& children) const

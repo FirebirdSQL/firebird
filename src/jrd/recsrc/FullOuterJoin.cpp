@@ -105,12 +105,11 @@ bool FullOuterJoin::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-bool FullOuterJoin::lockRecord(thread_db* tdbb) const
+WriteLockResult FullOuterJoin::lockRecord(thread_db* tdbb, bool skipLocked) const
 {
 	SET_TDBB(tdbb);
 
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false; // compiler silencer
 }
 
 void FullOuterJoin::getChildren(Array<const RecordSource*>& children) const

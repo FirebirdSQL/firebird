@@ -103,15 +103,15 @@ bool ConditionalStream::refetchRecord(thread_db* tdbb) const
 	return impure->irsb_next->refetchRecord(tdbb);
 }
 
-bool ConditionalStream::lockRecord(thread_db* tdbb) const
+WriteLockResult ConditionalStream::lockRecord(thread_db* tdbb, bool skipLocked) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!(impure->irsb_flags & irsb_open))
-		return false;
+		return WriteLockResult::CONFLICTED;
 
-	return impure->irsb_next->lockRecord(tdbb);
+	return impure->irsb_next->lockRecord(tdbb, skipLocked);
 }
 
 void ConditionalStream::getChildren(Array<const RecordSource*>& children) const

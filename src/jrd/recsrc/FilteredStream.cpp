@@ -111,9 +111,9 @@ bool FilteredStream::refetchRecord(thread_db* tdbb) const
 		m_boolean->execute(tdbb, request);
 }
 
-bool FilteredStream::lockRecord(thread_db* tdbb) const
+WriteLockResult FilteredStream::lockRecord(thread_db* tdbb, bool skipLocked) const
 {
-	return m_next->lockRecord(tdbb);
+	return m_next->lockRecord(tdbb, skipLocked);
 }
 
 void FilteredStream::getChildren(Array<const RecordSource*>& children) const

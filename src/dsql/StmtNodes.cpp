@@ -1238,7 +1238,7 @@ DeclareCursorNode* DeclareCursorNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	dt->querySpec = dsqlSelect->dsqlExpr;
 	dt->alias = dsqlName.c_str();
 
-	rse = PASS1_derived_table(dsqlScratch, dt, NULL, dsqlSelect->dsqlWithLock);
+	rse = PASS1_derived_table(dsqlScratch, dt, NULL, dsqlSelect->dsqlWithLock, dsqlSelect->dsqlSkipLocked);
 
 	// Assign number and store in the dsqlScratch stack.
 	cursorNumber = dsqlScratch->cursorNumber++;
@@ -2254,6 +2254,7 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) EraseNode(dsqlScratch->getPool());
 	node->dsqlCursorName = dsqlCursorName;
+	node->dsqlSkipLocked = dsqlSkipLocked;
 
 	if (dsqlCursorName.hasData() && dsqlScratch->isPsql())
 	{
@@ -2302,6 +2303,9 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		if (dsqlRows)
 			PASS1_limit(dsqlScratch, dsqlRows->length, dsqlRows->skip, rse);
+
+		if (dsqlSkipLocked)
+			rse->flags |= RseNode::FLAG_WRITELOCK | RseNode::FLAG_SKIP_LOCKED;
 	}
 
 	if (dsqlReturning && dsqlScratch->isPsql())
@@ -4917,7 +4921,7 @@ ForNode* ForNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		dt->querySpec = dsqlSelect->dsqlExpr;
 		dt->alias = dsqlCursor->dsqlName.c_str();
 
-		node->rse = PASS1_derived_table(dsqlScratch, dt, NULL, dsqlSelect->dsqlWithLock);
+		node->rse = PASS1_derived_table(dsqlScratch, dt, NULL, dsqlSelect->dsqlWithLock, dsqlSelect->dsqlSkipLocked);
 
 		dsqlCursor->rse = node->rse;
 		dsqlCursor->cursorNumber = dsqlScratch->cursorNumber++;
@@ -6583,6 +6587,9 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 
 		if (dsqlRows)
 			PASS1_limit(dsqlScratch, dsqlRows->length, dsqlRows->skip, rse);
+
+		if (dsqlSkipLocked)
+			rse->flags |= RseNode::FLAG_WRITELOCK | RseNode::FLAG_SKIP_LOCKED;
 	}
 
 	node->dsqlReturning = dsqlProcessReturning(dsqlScratch,
@@ -7508,7 +7515,7 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 		if (dsqlRse && dsqlScratch->isPsql() && dsqlReturning)
 			selExpr->dsqlFlags |= RecordSourceNode::DFLAG_SINGLETON;
 
-		RseNode* rse = PASS1_rse(dsqlScratch, selExpr, false);
+		RseNode* rse = PASS1_rse(dsqlScratch, selExpr, false, false);
 		node->dsqlRse = rse;
 		values = rse->dsqlSelectList;
 		needSavePoint = false;
@@ -8188,7 +8195,7 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->dsqlForUpdate = dsqlForUpdate;
 
 	const DsqlContextStack::iterator base(*dsqlScratch->context);
-	node->dsqlRse = PASS1_rse(dsqlScratch, dsqlExpr, dsqlWithLock);
+	node->dsqlRse = PASS1_rse(dsqlScratch, dsqlExpr, dsqlWithLock, dsqlSkipLocked);
 	dsqlScratch->context->clear(base);
 
 	if (dsqlForUpdate)
@@ -10532,7 +10539,7 @@ static void forceWriteLock(thread_db * tdbb, record_param * rpb, jrd_tra * trans
 
 		// VIO_writelock returns false if record has been deleted or modified
 		// by someone else.
-		if (VIO_writelock(tdbb, rpb, transaction))
+		if (VIO_writelock(tdbb, rpb, transaction, false) == WriteLockResult::LOCKED)
 			break;
 	}
 }

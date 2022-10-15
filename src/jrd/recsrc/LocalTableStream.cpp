@@ -108,10 +108,9 @@ bool LocalTableStream::refetchRecord(thread_db* tdbb) const
 	return true;
 }
 
-bool LocalTableStream::lockRecord(thread_db* tdbb) const
+WriteLockResult LocalTableStream::lockRecord(thread_db* tdbb, bool skipLocked) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false;	// compiler silencer
 }
 
 void LocalTableStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const

@@ -1117,7 +1117,7 @@ BoolExprNode* ComparativeBoolNode::createRseNode(DsqlCompilerScratch* dsqlScratc
 	const DsqlContextStack::iterator baseDT(dsqlScratch->derivedContext);
 	const DsqlContextStack::iterator baseUnion(dsqlScratch->unionContext);
 
-	RseNode* rse = PASS1_rse(dsqlScratch, select_expr, false);
+	RseNode* rse = PASS1_rse(dsqlScratch, select_expr, false, false);
 	rse->flags |= RseNode::FLAG_DSQL_COMPARATIVE;
 
 	// Create a conjunct to be injected.
@@ -1480,7 +1480,7 @@ BoolExprNode* RseBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	const DsqlContextStack::iterator base(*dsqlScratch->context);
 
 	RseBoolNode* node = FB_NEW_POOL(dsqlScratch->getPool()) RseBoolNode(dsqlScratch->getPool(), blrOp,
-		PASS1_rse(dsqlScratch, nodeAs<SelectExprNode>(dsqlRse), false));
+		PASS1_rse(dsqlScratch, nodeAs<SelectExprNode>(dsqlRse), false, false));
 
 	// Finish off by cleaning up contexts
 	dsqlScratch->context->clear(base);
