@@ -859,7 +859,8 @@ Validation::Validation(thread_db* tdbb, UtilSvc* uSvc) :
 	vdr_flags = 0;
 	vdr_errors = 0;
 	vdr_warns = 0;
-	vdr_fixed = 0;
+	vdr_fixed_errors = 0;
+	vdr_fixed_warnings = 0;
 	vdr_max_transaction = 0;
 	vdr_rel_backversion_counter = 0;
 	vdr_backversion_pages = NULL;
@@ -1021,7 +1022,7 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 		vdr_flags = flags;
 
 		// initialize validate errors
-		vdr_errors = vdr_warns = vdr_fixed = 0;
+		vdr_errors = vdr_warns = vdr_fixed_errors = vdr_fixed_warnings = 0;
 		for (USHORT i = 0; i < VAL_MAX_ERROR; i++)
 			vdr_err_counts[i] = 0;
 
@@ -1037,7 +1038,7 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 			garbage_collect();
 		}
 
-		if (vdr_fixed)
+		if (vdr_fixed_errors + vdr_fixed_warnings)
 		{
 			const USHORT flushFlags = ((dbb->dbb_flags & DBB_shared) && (vdr_flags & VDR_online)) ?
 				FLUSH_SYSTEM : FLUSH_FINI;
@@ -1046,8 +1047,8 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 
 		cleanup();
 
-		gds__log("Database: %s\n\tValidation finished: %d errors, %d warnings, %d fixed",
-			fileName.c_str(), vdr_errors, vdr_warns, vdr_fixed);
+		gds__log("Database: %s\n\tValidation finished: %d errors (%d fixed), %d warnings (%d fixed)",
+			fileName.c_str(), vdr_errors, vdr_fixed_errors, vdr_warns, vdr_fixed_warnings);
 	}	// try
 	catch (const Firebird::Exception& ex)
 	{
@@ -1089,72 +1090,6 @@ ULONG Validation::getInfo(UCHAR item)
 	}
 
 	return ret;
-}
-
-
-Validation::RTN Validation::corrupt(int err_code, const jrd_rel* relation, ...)
-{
-/**************************************
- *
- *	c o r r u p t
- *
- **************************************
- *
- * Functional description
- *	Corruption has been detected.
- *
- **************************************/
-	fb_assert(sizeof(vdr_msg_table) / sizeof(vdr_msg_table[0]) == VAL_MAX_ERROR);
-
-	Attachment* att = vdr_tdbb->getAttachment();
-	if (err_code < VAL_MAX_ERROR)
-		vdr_err_counts[err_code]++;
-
-	const TEXT* err_string = err_code < VAL_MAX_ERROR ? vdr_msg_table[err_code].msg: "Unknown error code";
-
-	string s;
-	va_list ptr;
-	const char* fn = att->att_filename.c_str();
-
-	va_start(ptr, relation);
-	s.vprintf(err_string, ptr);
-	va_end(ptr);
-
-#ifdef DEBUG_VAL_VERBOSE
-	if (VAL_debug_level >= 0)
-	{
-		if (relation)
-		{
-			fprintf(stdout, "LOG:\tDatabase: %s\n\t%s in table %s (%d)\n",
-				fn, s.c_str(), relation->rel_name.c_str(), relation->rel_id);
-		}
-		else
-			fprintf(stdout, "LOG:\tDatabase: %s\n\t%s\n", fn, s.c_str());
-	}
-#endif
-	if (vdr_msg_table[err_code].error)
-	{
-		++vdr_errors;
-		s.insert(0, "Error: ");
-	}
-	else
-	{
-		++vdr_warns;
-		s.insert(0, "Warning: ");
-	}
-
-	if (relation)
-	{
-		gds__log("Database: %s\n\t%s in table %s (%d)",
-			fn, s.c_str(), relation->rel_name.c_str(), relation->rel_id);
-	}
-	else
-		gds__log("Database: %s\n\t%s", fn, s.c_str());
-
-	s.append("\n");
-	output(s.c_str());
-
-	return rtn_corrupt;
 }
 
 Validation::FETCH_CODE Validation::fetch_page(bool mark, ULONG page_number,
@@ -1208,7 +1143,7 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, ULONG page_number,
 
 	if ((*page_pointer)->pag_type != type && type != pag_undefined)
 	{
-		corrupt(VAL_PAG_WRONG_TYPE, 0, page_number,
+		CorruptLogger corrupt_logger(this, VAL_PAG_WRONG_TYPE, 0, true, page_number,
 			pagtype(type).c_str(), pagtype((*page_pointer)->pag_type).c_str());
 		return fetch_type;
 	}
@@ -1220,7 +1155,7 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, ULONG page_number,
 
 	if ((dbb->dbb_flags & DBB_damaged) && !CCH_validate(window))
 	{
-		corrupt(VAL_PAG_CHECKSUM_ERR, 0, page_number);
+		CorruptLogger corrupt_logger(this, VAL_PAG_CHECKSUM_ERR, 0, true, page_number);
 		if (vdr_flags & VDR_repair)
 			CCH_MARK(vdr_tdbb, window);
 	}
@@ -1239,7 +1174,7 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, ULONG page_number,
 	if (type != pag_data && type != pag_scns &&
 		PageBitmap::test(vdr_page_bitmap, page_number))
 	{
-		corrupt(VAL_PAG_DOUBLE_ALLOC, 0, page_number);
+		CorruptLogger corrupt_logger(this, VAL_PAG_DOUBLE_ALLOC, 0, true, page_number);
 		return fetch_duplicate;
 	}
 
@@ -1261,7 +1196,8 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, ULONG page_number,
 
 		if (scns->scn_pages[scn_slot] != page_scn)
 		{
-			corrupt(VAL_PAG_WRONG_SCN, 0, page_number, page_scn, scns->scn_pages[scn_slot]);
+			CorruptLogger corrupt_logger(this, VAL_PAG_WRONG_SCN, 0, false, page_number,
+				page_scn, scns->scn_pages[scn_slot]);
 
 			if (vdr_flags & VDR_update)
 			{
@@ -1269,7 +1205,7 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, ULONG page_number,
 				CCH_MARK(vdr_tdbb, win);
 
 				scns->scn_pages[scn_slot] = page_scn;
-				vdr_fixed++;
+				corrupt_logger.fixed();
 			}
 		}
 
@@ -1337,12 +1273,12 @@ void Validation::garbage_collect()
 				{
 					if (byte & 1)
 					{
-						corrupt(VAL_PAG_IN_USE, 0, number);
+						CorruptLogger corrupt_logger(this, VAL_PAG_IN_USE, 0, false, number);
 						if (vdr_flags & VDR_update)
 						{
 							CCH_MARK(vdr_tdbb, &window);
 							p[-1] &= ~(1 << (number & 7));
-							vdr_fixed++;
+							corrupt_logger.fixed();
 						}
 					}
 				}
@@ -1351,12 +1287,12 @@ void Validation::garbage_collect()
 					// Page is potentially an orphan - but don't declare it as such
 					// unless we think we walked all pages
 
-					corrupt(VAL_PAG_ORPHAN, 0, number);
+					CorruptLogger corrupt_logger(this, VAL_PAG_ORPHAN, 0, false, number);
 					if (vdr_flags & VDR_update)
 					{
 						CCH_MARK(vdr_tdbb, &window);
 						p[-1] |= 1 << (number & 7);
-						vdr_fixed++;
+						corrupt_logger.fixed();
 
 						const ULONG bit = number - sequence * pageSpaceMgr.pagesPerPIP;
 						if (page->pip_min > bit)
@@ -1429,7 +1365,7 @@ static void print_rhd(USHORT length, const rhd* header)
 #endif
 
 Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHORT length,
-	RecordNumber number)
+	RecordNumber number, CorruptLogger& corrupt_logger)
 {
 /**************************************
  *
@@ -1464,7 +1400,7 @@ Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHO
 	case 2:
 		break;
 	default:
-		corrupt(VAL_BLOB_UNKNOWN_LEVEL, relation, number.getValue(), header->blh_level);
+		corrupt_logger.print_message(VAL_BLOB_UNKNOWN_LEVEL, relation, number.getValue(), header->blh_level);
 	}
 
 	// Level 1 blobs are a little more complicated
@@ -1480,11 +1416,11 @@ Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHO
 		blob_page* page1 = 0;
 		fetch_page(true, *pages1, pag_blob, &window1, &page1);
 		if (page1->blp_lead_page != header->blh_lead_page) {
-			corrupt(VAL_BLOB_INCONSISTENT, relation, number.getValue());
+			corrupt_logger.print_message(VAL_BLOB_INCONSISTENT, relation, number.getValue());
 		}
 		if ((header->blh_level == 1 && page1->blp_sequence != sequence))
 		{
-			corrupt(VAL_BLOB_CORRUPT, relation, number.getValue());
+			corrupt_logger.save_message(VAL_BLOB_CORRUPT, relation, number.getValue());
 			release_page(&window1);
 			return rtn_corrupt;
 		}
@@ -1500,7 +1436,7 @@ Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHO
 				fetch_page(true, *pages2, pag_blob, &window2, &page2);
 				if (page2->blp_lead_page != header->blh_lead_page || page2->blp_sequence != sequence)
 				{
-					corrupt(VAL_BLOB_CORRUPT, relation, number.getValue());
+					corrupt_logger.save_message(VAL_BLOB_CORRUPT, relation, number.getValue());
 					release_page(&window1);
 					release_page(&window2);
 					return rtn_corrupt;
@@ -1512,13 +1448,13 @@ Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHO
 	}
 
 	if (sequence - 1 != header->blh_max_sequence)
-		return corrupt(VAL_BLOB_TRUNCATED, relation, number.getValue());
+		return corrupt_logger.save_message(VAL_BLOB_TRUNCATED, relation, number.getValue());
 
 	return rtn_ok;
 }
 
 Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
-	RecordNumber head_number)
+	RecordNumber head_number, CorruptLogger& corrupt_logger)
 {
 /**************************************
  *
@@ -1553,7 +1489,7 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 		if (page->dpg_relation != relation->rel_id)
 		{
 				 release_page(&window);
-				 return corrupt(VAL_DATA_PAGE_CONFUSED, relation, page_number, page->dpg_sequence);
+				 return corrupt_logger.save_message(VAL_DATA_PAGE_CONFUSED, relation, page_number, page->dpg_sequence);
 		}
 
 		vdr_rel_chain_counter++;
@@ -1565,10 +1501,10 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 			(header->rhd_flags & (rhd_blob | rhd_fragment)) ||
 			!(header->rhd_flags & rhd_chain) ||
 			walk_record(relation, header, line->dpg_length,
-						head_number, delta_flag) != rtn_ok)
+						head_number, delta_flag, corrupt_logger) != rtn_ok)
 		{
 			release_page(&window);
-			return corrupt(VAL_REC_CHAIN_BROKEN, relation, head_number.getValue());
+			return corrupt_logger.save_message(VAL_REC_CHAIN_BROKEN, relation, head_number.getValue());
 		}
 		page_number = header->rhd_b_page;
 		line_number = header->rhd_b_line;
@@ -1677,7 +1613,7 @@ void Validation::walk_database()
 }
 
 Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
-	ULONG sequence, UCHAR& pp_bits)
+	ULONG sequence, UCHAR& pp_bits, CorruptLogger& corrupt_logger)
 {
 /**************************************
  *
@@ -1710,7 +1646,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 	if (page->dpg_relation != relation->rel_id || page->dpg_sequence != sequence)
 	{
 		release_page(&window);
-		return corrupt(VAL_DATA_PAGE_CONFUSED, relation, page_number, sequence);
+		return corrupt_logger.save_message(VAL_DATA_PAGE_CONFUSED, relation, page_number, sequence);
 	}
 
 	pp_bits = 0;
@@ -1756,7 +1692,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 			if ((UCHAR*) header < (UCHAR*) end || (UCHAR*) header + line->dpg_length > end_page)
 			{
 				release_page(&window);
-				return corrupt(VAL_DATA_PAGE_LINE_ERR, relation, page_number,
+				return corrupt_logger.save_message(VAL_DATA_PAGE_LINE_ERR, relation, page_number,
 								sequence, (ULONG) (line - page->dpg_rpt));
 			}
 			if (header->rhd_flags & rhd_chain)
@@ -1805,9 +1741,10 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 			if (!(header->rhd_flags & rhd_chain) &&
 				((header->rhd_flags & rhd_large) || (vdr_flags & VDR_records)))
 			{
+				CorruptLogger corrupt_logger(this);
 				const RTN result = (header->rhd_flags & rhd_blob) ?
-					walk_blob(relation, (const blh*) header, line->dpg_length, number) :
-					walk_record(relation, header, line->dpg_length, number, false);
+					walk_blob(relation, (const blh*) header, line->dpg_length, number, corrupt_logger) :
+					walk_record(relation, header, line->dpg_length, number, false, corrupt_logger);
 
 				if ((result == rtn_corrupt) && (vdr_flags & VDR_repair))
 				{
@@ -1818,7 +1755,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 					}
 
 					header->rhd_flags |= rhd_damaged;
-					vdr_fixed++;
+					corrupt_logger.fixed();
 				}
 			}
 		}
@@ -1830,7 +1767,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 
 	if (primary_versions && (dp_flags & dpg_secondary))
 	{
-		corrupt(VAL_DATA_PAGE_SEC_PRI, relation, page_number, sequence);
+		CorruptLogger corrupt_logger(this, VAL_DATA_PAGE_SEC_PRI, relation, false, page_number, sequence);
 
 		if (vdr_flags & VDR_update)
 		{
@@ -1842,7 +1779,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 
 			page->dpg_header.pag_flags &= ~dpg_secondary;
 			pp_bits &= ~ppg_dp_secondary;
-			vdr_fixed++;
+			corrupt_logger.fixed();
 		}
 	}
 
@@ -2003,7 +1940,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 		}
 		else if (level != page->btr_level)
 		{
-			corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+			CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true,
 				id + 1, next, page->btr_level, 0, __FILE__, __LINE__);
 		}
 
@@ -2011,7 +1948,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 
 		if (page->btr_relation != relation->rel_id || page->btr_id != (UCHAR) (id % 256))
 		{
-			corrupt(VAL_INDEX_PAGE_CORRUPT, relation, id + 1,
+			CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, id + 1,
 					next, page->btr_level, 0, __FILE__, __LINE__);
 			release_page(&window);
 			return rtn_corrupt;
@@ -2021,7 +1958,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 		// Check if firstNodeOffset is not out of page area.
 		if (BTR_SIZE + page->btr_jump_size > page->btr_length)
 		{
-			corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+			CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, 
 					id + 1, next, page->btr_level, (ULONG) (pointer - (UCHAR*) page),
 					__FILE__, __LINE__);
 		}
@@ -2038,7 +1975,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 			if ((jumpNode.offset < BTR_SIZE + page->btr_jump_size) ||
 				(jumpNode.offset > page->btr_length))
 			{
-				corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+				CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, 
 						id + 1, next, page->btr_level, (ULONG) (pointer - (UCHAR*) page),
 						__FILE__, __LINE__);
 			}
@@ -2048,7 +1985,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				checknode.readNode((UCHAR*) page + jumpNode.offset, leafPage);
 				if ((jumpNode.prefix + jumpNode.length) != checknode.prefix)
 				{
-					corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+					CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, 
 							id + 1, next, page->btr_level, (ULONG) jumpNode.offset,
 							__FILE__, __LINE__);
 				}
@@ -2056,7 +1993,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				// First jump node should have zero prefix
 				if (n == page->btr_jump_count && jumpNode.prefix)
 				{
-					corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+					CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true,
 						id + 1, next, page->btr_level, (ULONG) jumpNode.offset,
 						__FILE__, __LINE__);
 				}
@@ -2064,7 +2001,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				// jump node prefix can't be more than previous jump data length
 				if (n != page->btr_jump_count && jumpNode.prefix > jumpDataLen)
 				{
-					corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+					CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, 
 						id + 1, next, page->btr_level, (ULONG) jumpNode.offset,
 						__FILE__, __LINE__);
 				}
@@ -2076,7 +2013,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 
 		if (jumpersSize > page->btr_jump_size)
 		{
-			corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+			CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, 
 				id + 1, next, page->btr_level, (ULONG) page->btr_jump_size + BTR_SIZE,
 				__FILE__, __LINE__);
 		}
@@ -2096,7 +2033,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 
 			if (node.prefix > key.key_length)
 			{
-				corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+				CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, 
 						id + 1, next, page->btr_level, node.nodePointer - (UCHAR*) page, __FILE__, __LINE__);
 				release_page(&window);
 				return rtn_corrupt;
@@ -2117,7 +2054,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				if (*p > *q)
 				{
 					duplicateNode = false;
-					corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+					CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, 
 							id + 1, next, page->btr_level, (ULONG) (q - (UCHAR*) page),
 							__FILE__, __LINE__);
 				}
@@ -2139,7 +2076,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				node.prefix < key.key_length && node.length == 0)
 			{
 				duplicateNode = false;
-				corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+				CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, 
 						id + 1, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
 						__FILE__, __LINE__);
 			}
@@ -2163,7 +2100,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				if (!ok)
 				{
 					duplicateNode = false;
-					corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+					CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, 
 							id + 1, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
 							__FILE__, __LINE__);
 				}
@@ -2184,7 +2121,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 					if ((!unique || (unique && nullKeyNode)) &&
 						(node.recordNumber < lastNode.recordNumber))
 					{
-						corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+						CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, 
 							id + 1, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
 							__FILE__, __LINE__);
 					}
@@ -2244,7 +2181,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				{
 					if (*p < *q)
 					{
-						corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+						CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, 
 								id + 1, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
 								__FILE__, __LINE__);
 					}
@@ -2265,7 +2202,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 					if ((l == 0) && (key.key_length == downNode.length) &&
 						(downNode.recordNumber < down_record_number))
 					{
-						corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
+						CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, 
 								id + 1, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
 								__FILE__, __LINE__);
 					}
@@ -2274,7 +2211,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				// check the left and right sibling pointers against the parent pointers
 				if (previous_number != down_page->btr_left_sibling)
 				{
-					corrupt(VAL_INDEX_BAD_LEFT_SIBLING, relation,
+					CorruptLogger corrupt_logger(this, VAL_INDEX_BAD_LEFT_SIBLING, relation, true, 
 							id + 1, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page));
 				}
 
@@ -2284,12 +2221,12 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				if (!(downNode.isEndBucket || downNode.isEndLevel) &&
 					(next_number != down_page->btr_sibling))
 				{
-					corrupt(VAL_INDEX_MISSES_NODE, relation,
+					CorruptLogger corrupt_logger(this, VAL_INDEX_MISSES_NODE, relation, true, 
 							id + 1, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page));
 				}
 
 				if (downNode.isEndLevel && down_page->btr_sibling) {
-					corrupt(VAL_INDEX_ORPHAN_CHILD, relation, id + 1, next);
+					CorruptLogger corrupt_logger(this, VAL_INDEX_ORPHAN_CHILD, relation, true, id + 1, next);
 				}
 				previous_number = down_number;
 
@@ -2299,7 +2236,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 
 		if (pointer != endPointer || page->btr_length > dbb->dbb_page_size)
 		{
-			corrupt(VAL_INDEX_PAGE_CORRUPT, relation, id + 1,
+			CorruptLogger corrupt_logger(this, VAL_INDEX_PAGE_CORRUPT, relation, true, id + 1,
 					next, page->btr_level, (ULONG) (pointer - (UCHAR*) page), __FILE__, __LINE__);
 		}
 
@@ -2330,7 +2267,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 		// check for circular referenes
 		if (next && visited_pages.test(next))
 		{
-			corrupt(VAL_INDEX_CYCLE, relation, id + 1, next);
+			CorruptLogger corrupt_logger(this, VAL_INDEX_CYCLE, relation, true, id + 1, next);
 			next = 0;
 		}
 		release_page(&window);
@@ -2349,7 +2286,10 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				SINT64 next_number = accessor.current();
 
 				if (!RecordBitmap::test(vdr_idx_records, next_number))
-					return corrupt(VAL_INDEX_MISSING_ROWS, relation, id + 1, next_number);
+				{
+					CorruptLogger corrupt_logger(this);
+					return corrupt_logger.print_message(VAL_INDEX_MISSING_ROWS, relation, id + 1, next_number);
+				}
 			} while (accessor.getNext());
 		}
 	}
@@ -2441,41 +2381,49 @@ void Validation::walk_pip()
 		}
 
 		bool fixme = false;
-		if (pipMin < page->pip_min)
 		{
-			corrupt(VAL_PIP_WRONG_MIN, NULL, page_number, sequence, page->pip_min, pipMin);
-			fixme = (vdr_flags & VDR_update);
-		}
-
-		if (pipExtent < page->pip_extent)
-		{
-			corrupt(VAL_PIP_WRONG_EXTENT, NULL, page_number, sequence, page->pip_extent, pipExtent);
-			fixme = (vdr_flags & VDR_update);
-		}
-
-		if (pipUsed > page->pip_used)
-		{
-			corrupt(VAL_PIP_WRONG_USED, NULL, page_number, sequence, page->pip_used, pipUsed);
-			fixme = (vdr_flags & VDR_update);
-		}
-
-		if (fixme)
-		{
-			CCH_MARK(vdr_tdbb, &window);
+			CorruptLogger corrupt_logger_pip_min(this);
+			CorruptLogger corrupt_logger_pip_extent(this);
+			CorruptLogger corrupt_logger_pip_used(this);
 			if (pipMin < page->pip_min)
 			{
-				page->pip_min = pipMin;
-				vdr_fixed++;
+				corrupt_logger_pip_min.save_message(VAL_PIP_WRONG_MIN, NULL, page_number, 
+					sequence, page->pip_min, pipMin);
+				fixme = (vdr_flags & VDR_update);
 			}
+
 			if (pipExtent < page->pip_extent)
 			{
-				page->pip_extent = pipExtent;
-				vdr_fixed++;
+				corrupt_logger_pip_extent.save_message(VAL_PIP_WRONG_EXTENT, NULL, page_number, 
+					sequence, page->pip_extent, pipExtent);
+				fixme = (vdr_flags & VDR_update);
 			}
+
 			if (pipUsed > page->pip_used)
 			{
-				page->pip_used = pipUsed;
-				vdr_fixed++;
+				corrupt_logger_pip_used.save_message(VAL_PIP_WRONG_USED, NULL, page_number, 
+					sequence, page->pip_used, pipUsed);
+				fixme = (vdr_flags & VDR_update);
+			}
+
+			if (fixme)
+			{
+				CCH_MARK(vdr_tdbb, &window);
+				if (pipMin < page->pip_min)
+				{
+					page->pip_min = pipMin;
+					corrupt_logger_pip_min.fixed();
+				}
+				if (pipExtent < page->pip_extent)
+				{
+					page->pip_extent = pipExtent;
+					corrupt_logger_pip_extent.fixed();
+				}
+				if (pipUsed > page->pip_used)
+				{
+					page->pip_used = pipUsed;
+					corrupt_logger_pip_used.fixed();
+				}
 			}
 		}
 
@@ -2503,7 +2451,10 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 	const vcl* vector = relation->getBasePages()->rel_pages;
 
 	if (!vector || sequence >= vector->count())
-		return corrupt(VAL_P_PAGE_LOST, relation, sequence);
+	{
+		CorruptLogger corrupt_logger(this);
+		return corrupt_logger.print_message(VAL_P_PAGE_LOST, relation, sequence);
+	}
 
 	pointer_page* page = 0;
 	WIN window(DB_PAGE_SPACE, -1);
@@ -2524,7 +2475,9 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 	if (page->ppg_relation != relation->rel_id || page->ppg_sequence != sequence)
 	{
 		release_page(&window);
-		return corrupt(VAL_P_PAGE_INCONSISTENT, relation, (*vector)[sequence], sequence);
+		CorruptLogger corrupt_logger(this);
+		return corrupt_logger.print_message(VAL_P_PAGE_INCONSISTENT, relation,
+			(*vector)[sequence], sequence);
 	}
 
 	// Walk the data pages (someday we may optionally walk pages with "large objects"
@@ -2540,17 +2493,19 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 		if (*pages)
 		{
 			UCHAR new_pp_bits = 0;
-
-			const RTN result = walk_data_page(relation, *pages, seq, new_pp_bits);
-			if (result != rtn_ok && (vdr_flags & VDR_repair))
 			{
-				if (!marked)
+				CorruptLogger corrupt_logger(this);
+				const RTN result = walk_data_page(relation, *pages, seq, new_pp_bits, corrupt_logger);
+				if (result != rtn_ok && (vdr_flags & VDR_repair))
 				{
-					CCH_MARK(vdr_tdbb, &window);
-					marked = true;
+					if (!marked)
+					{
+						CCH_MARK(vdr_tdbb, &window);
+						marked = true;
+					}
+					*pages = 0;
+					corrupt_logger.fixed();
 				}
-				*pages = 0;
-				vdr_fixed++;
 			}
 
 			if (*pages)
@@ -2562,7 +2517,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 					explain_pp_bits(pp_bits, s_pp);
 					explain_pp_bits(new_pp_bits, s_dp);
 
-					corrupt(VAL_P_PAGE_WRONG_BITS, relation,
+					CorruptLogger corrupt_logger(this, VAL_P_PAGE_WRONG_BITS, relation, false, 
 						page->ppg_header.pag_pageno, sequence, pp_bits, s_pp.c_str(),
 						*pages, seq, new_pp_bits, s_dp.c_str());
 
@@ -2574,7 +2529,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 							marked = true;
 						}
 						pp_bits = new_pp_bits;
-						vdr_fixed++;
+						corrupt_logger.fixed();
 					}
 				}
 			}
@@ -2607,7 +2562,8 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 
 			--sequence;
 			if (!vector || sequence >= vector->count()) {
-				return corrupt(VAL_P_PAGE_LOST, relation, sequence);
+				CorruptLogger corrupt_logger(this);
+				return corrupt_logger.print_message(VAL_P_PAGE_LOST, relation, sequence);
 			}
 
 			fetch_page(false, (*vector)[sequence], pag_pointer, &window, &page);
@@ -2622,7 +2578,9 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 				return rtn_ok;
 		}
 
-		return corrupt(VAL_P_PAGE_INCONSISTENT, relation, page->ppg_next, sequence);
+		CorruptLogger corrupt_logger(this);
+		return corrupt_logger.print_message(VAL_P_PAGE_INCONSISTENT, relation, 
+			page->ppg_next, sequence);
 	}
 
 	release_page(&window);
@@ -2631,7 +2589,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 
 
 Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, USHORT length,
-	RecordNumber number, bool delta_flag)
+	RecordNumber number, bool delta_flag, CorruptLogger& corrupt_logger)
 {
 /**************************************
  *
@@ -2657,20 +2615,20 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 
 	if (header->rhd_flags & rhd_damaged)
 	{
-		corrupt(VAL_REC_DAMAGED, relation, number.getValue());
+		corrupt_logger.print_message(VAL_REC_DAMAGED, relation, number.getValue());
 		return rtn_ok;
 	}
 
 	const TraNumber transaction = Ods::getTraNum(header);
 
 	if (transaction > vdr_max_transaction)
-		corrupt(VAL_REC_BAD_TID, relation, number.getValue(), transaction);
+		corrupt_logger.print_message(VAL_REC_BAD_TID, relation, number.getValue(), transaction);
 
 	// If there's a back pointer, verify that it's good
 
 	if (header->rhd_b_page && !(header->rhd_flags & rhd_chain))
 	{
-		const RTN result = walk_chain(relation, header, number);
+		const RTN result = walk_chain(relation, header, number, corrupt_logger);
 		if (result != rtn_ok)
 			return result;
 	}
@@ -2728,7 +2686,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		if (page->dpg_relation != relation->rel_id ||
 			line_number >= page->dpg_count || !(length = line->dpg_length))
 		{
-			corrupt(VAL_REC_FRAGMENT_CORRUPT, relation, number.getValue());
+			corrupt_logger.save_message(VAL_REC_FRAGMENT_CORRUPT, relation, number.getValue());
 			release_page(&window);
 			return rtn_corrupt;
 		}
@@ -2773,7 +2731,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	const Format* format = MET_format(vdr_tdbb, relation, header->rhd_format);
 
 	if (!delta_flag && record_length != format->fmt_length)
-		return corrupt(VAL_REC_WRONG_LENGTH, relation, number.getValue());
+		return corrupt_logger.save_message(VAL_REC_WRONG_LENGTH, relation, number.getValue());
 
 	return rtn_ok;
 }
@@ -2843,7 +2801,8 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 		fetch_page(false, (*vector)[pp_sequence], pag_pointer, &window, &ppage);
 		if (slot >= ppage->ppg_count)
 		{
-			corrupt(VAL_DATA_PAGE_SLOT_NOT_FOUND, relation, page_number, window.win_page.getPageNum(), slot);
+			CorruptLogger corrupt_logger(this, VAL_DATA_PAGE_SLOT_NOT_FOUND, relation, false, 
+				page_number, window.win_page.getPageNum(), slot);
 			if ((vdr_flags & VDR_update) && slot < dbb->dbb_dp_per_pp)
 			{
 				CCH_MARK(vdr_tdbb, &window);
@@ -2861,12 +2820,13 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 				// Restore control fields
 				UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
 				restoreFlags(byte, dpage->dpg_header.pag_flags, dpEmpty);
-				vdr_fixed++;
+				corrupt_logger.fixed();
 			}
 		}
 		else if (page_number != ppage->ppg_page[slot])
 		{
-			corrupt(VAL_DATA_PAGE_SLOT_BAD_VAL, relation, page_number, window.win_page.getPageNum(), slot, ppage->ppg_page[slot]);
+			CorruptLogger corrupt_logger(this, VAL_DATA_PAGE_SLOT_BAD_VAL, relation, false, 
+				page_number, window.win_page.getPageNum(), slot, ppage->ppg_page[slot]);
 			if ((vdr_flags & VDR_update) && !ppage->ppg_page[slot])
 			{
 				CCH_MARK(vdr_tdbb, &window);
@@ -2875,12 +2835,13 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 				// Restore control fields
 				UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
 				restoreFlags(byte, dpage->dpg_header.pag_flags, dpEmpty);
-				vdr_fixed++;
+				corrupt_logger.fixed();
 			}
 		}
 	}
 	else
-		corrupt(VAL_DATA_PAGE_HASNO_PP, relation, page_number, dpage->dpg_sequence);
+		CorruptLogger corrupt_logger(this, VAL_DATA_PAGE_HASNO_PP, relation, true, 
+			page_number, dpage->dpg_sequence);
 
 	release_page(&window);
 }
@@ -2909,12 +2870,13 @@ void Validation::checkDPinPIP(jrd_rel* relation, ULONG page_number)
 	fetch_page(false, pip_window.win_page.getPageNum(), pag_pages, &pip_window, &pages);
 	if (pages->pip_bits[relative_bit >> 3] & (1 << (relative_bit & 7)))
 	{
-		corrupt(VAL_DATA_PAGE_ISNT_IN_PIP, relation, page_number, pip_window.win_page.getPageNum(), relative_bit);
+		CorruptLogger corrupt_logger(this, VAL_DATA_PAGE_ISNT_IN_PIP, relation, false, page_number, 
+			pip_window.win_page.getPageNum(), relative_bit);
 		if (vdr_flags & VDR_update)
 		{
 			CCH_MARK(vdr_tdbb, &pip_window);
 			pages->pip_bits[relative_bit >> 3] &= ~(1 << (relative_bit & 7));
-			vdr_fixed++;
+			corrupt_logger.fixed();
 		}
 	}
 
@@ -3058,7 +3020,8 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 	if ((vdr_flags & VDR_records) &&
 		(vdr_rel_backversion_counter > vdr_rel_chain_counter))
 	{
-		 return corrupt(VAL_REL_CHAIN_ORPHANS, relation,
+		CorruptLogger corrupt_logger(this);
+		 return corrupt_logger.print_message(VAL_REL_CHAIN_ORPHANS, relation,
 						vdr_rel_backversion_counter - vdr_rel_chain_counter, vdr_rel_chain_counter);
 	}
 
@@ -3104,7 +3067,10 @@ Validation::RTN Validation::walk_root(jrd_rel* relation)
 	RelationPages* relPages = relation->getBasePages();
 
 	if (!relPages->rel_index_root)
-		return corrupt(VAL_INDEX_ROOT_MISSING, relation);
+	{
+		CorruptLogger corrupt_logger(this);
+		return corrupt_logger.print_message(VAL_INDEX_ROOT_MISSING, relation);
+	}
 
 	index_root_page* page = 0;
 	WIN window(DB_PAGE_SPACE, -1);
@@ -3158,7 +3124,10 @@ Validation::RTN Validation::walk_tip(TraNumber transaction)
 
 	const vcl* vector = dbb->dbb_t_pages;
 	if (!vector)
-		return corrupt(VAL_TIP_LOST, 0);
+	{
+		CorruptLogger corrupt_logger(this);
+		return corrupt_logger.print_message(VAL_TIP_LOST, 0);
+	}
 
 	tx_inv_page* page = 0;
 	const ULONG pages = transaction / dbb->dbb_page_manager.transPerTIP;
@@ -3167,13 +3136,13 @@ Validation::RTN Validation::walk_tip(TraNumber transaction)
 	{
 		if (!(*vector)[sequence] || sequence >= vector->count())
 		{
-			corrupt(VAL_TIP_LOST_SEQUENCE, 0, sequence);
+			CorruptLogger corrupt_logger(this, VAL_TIP_LOST_SEQUENCE, 0, false, sequence);
 			if (!(vdr_flags & VDR_repair))
 				continue;
 
 			TRA_extend_tip(vdr_tdbb, sequence);
 			vector = dbb->dbb_t_pages;
-			vdr_fixed++;
+			corrupt_logger.fixed();
 		}
 
 		WIN window(DB_PAGE_SPACE, -1);
@@ -3185,7 +3154,7 @@ Validation::RTN Validation::walk_tip(TraNumber transaction)
 #endif
 		if (page->tip_next && page->tip_next != (*vector)[sequence + 1])
 		{
-			corrupt(VAL_TIP_CONFUSED, 0, sequence);
+			CorruptLogger corrupt_logger(this, VAL_TIP_CONFUSED, 0, true, sequence);
 		}
 		release_page(&window);
 	}
@@ -3224,13 +3193,13 @@ Validation::RTN Validation::walk_scns()
 
 		if (scns->scn_sequence != sequence)
 		{
-			corrupt(VAL_SCNS_PAGE_INCONSISTENT, 0, scnPage, sequence);
+			CorruptLogger corrupt_logger(this, VAL_SCNS_PAGE_INCONSISTENT, 0, false, scnPage, sequence);
 
 			if (vdr_flags & VDR_update)
 			{
 				CCH_MARK(vdr_tdbb, &scnWindow);
 				scns->scn_sequence = sequence;
-				vdr_fixed++;
+				corrupt_logger.fixed();
 			}
 		}
 
@@ -3238,6 +3207,133 @@ Validation::RTN Validation::walk_scns()
 	}
 
 	return rtn_ok;
+}
+
+
+Validation::RTN Validation::CorruptLogger::corrupt(int err_code, const jrd_rel* relation, ...)
+{
+	/**************************************
+	*
+	*	c o r r u p t
+	*
+	**************************************
+	*
+	* Functional description
+	*	Corruption has been detected.
+	*
+	**************************************/
+	fb_assert(sizeof(vdr_msg_table) / sizeof(vdr_msg_table[0]) == VAL_MAX_ERROR);
+
+	Attachment* att = validation->vdr_tdbb->getAttachment();
+	if (err_code < VAL_MAX_ERROR)
+		validation->vdr_err_counts[err_code]++;
+
+	const TEXT* err_string = err_code < VAL_MAX_ERROR ? vdr_msg_table[err_code].msg : "Unknown error code";
+
+	string s;
+	va_list ptr;
+	const char* fn = att->att_filename.c_str();
+
+	va_start(ptr, relation);
+	s.vprintf(err_string, ptr);
+	va_end(ptr);
+
+#ifdef DEBUG_VAL_VERBOSE
+	if (VAL_debug_level >= 0)
+	{
+		if (relation)
+		{
+			fprintf(stdout, "LOG:\tDatabase: %s\n\t%s in table %s (%d)\n",
+				fn, s.c_str(), relation->rel_name.c_str(), relation->rel_id);
+		}
+		else
+			fprintf(stdout, "LOG:\tDatabase: %s\n\t%s\n", fn, s.c_str());
+	}
+#endif
+	is_error = vdr_msg_table[err_code].error;
+	if (is_error)
+	{
+		validation->vdr_errors++;
+		s.insert(0, "Error: ");
+	}
+	else
+	{
+		validation->vdr_warns++;
+		s.insert(0, "Warning: ");
+	}
+
+	if (relation)
+	{
+		gds__log("Database: %s\n\t%s in table %s (%d)",
+			fn, s.c_str(), relation->rel_name.c_str(), relation->rel_id);
+	}
+	else
+		gds__log("Database: %s\n\t%s", fn, s.c_str());
+
+	s.append("\n");
+	validation->output(s.c_str());
+
+	return rtn_corrupt;
+}
+
+Validation::RTN Validation::CorruptLogger::corrupt_buffer(int err_code, const jrd_rel* relation,
+	Firebird::string& log_message, ...)
+{
+	/**************************************
+	*
+	*	c o r r u p t _ b u f f e r
+	*
+	***************************************
+	*
+	* Functional description
+	*	Corruption has been detected, but message print after fixing/not fixing
+	*	in destructor.
+	**************************************/
+	fb_assert(sizeof(vdr_msg_table) / sizeof(vdr_msg_table[0]) == VAL_MAX_ERROR);
+
+	Attachment* att = validation->vdr_tdbb->getAttachment();
+	if (err_code < VAL_MAX_ERROR)
+		validation->vdr_err_counts[err_code]++;
+
+	const TEXT* err_string = err_code < VAL_MAX_ERROR ? vdr_msg_table[err_code].msg : "Unknown error code";
+
+	string s;
+	va_list ptr;
+	const char* fn = att->att_filename.c_str();
+
+	va_start(ptr, relation);
+	s.vprintf(err_string, ptr);
+	va_end(ptr);
+
+#ifdef DEBUG_VAL_VERBOSE
+	if (VAL_debug_level >= 0)
+	{
+		if (relation)
+		{
+			fprintf(stdout, "LOG:\tDatabase: %s\n\t%s in table %s (%d)\n",
+				fn, s.c_str(), relation->rel_name.c_str(), relation->rel_id);
+		}
+		else
+			fprintf(stdout, "LOG:\tDatabase: %s\n\t%s\n", fn, s.c_str());
+	}
+#endif
+
+	if (relation)
+	{
+		s.printf("Database: %s\n\t%s in table %s (%d)",
+			fn, s.c_str(), relation->rel_name.c_str(), relation->rel_id);
+	}
+	else
+		s.printf("Database: %s\n\t%s", fn, s.c_str());
+
+	is_error = vdr_msg_table[err_code].error;
+	if (is_error)
+		validation->vdr_errors++;
+	else
+		validation->vdr_warns++;
+
+	log_message = s;
+	return rtn_corrupt;
 }
 
 } // namespace Jrd
