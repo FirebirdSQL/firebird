@@ -4,76 +4,11 @@
 
     Unicode mapping table generated from file asia/OTHER/BIG5.TXT
 
-#
 #	Name:             BIG5 to Unicode table (complete)
 #	Unicode version:  1.1
 #	Table version:    0.0d3
 #	Table format:     Format A
 #	Date:             11 February 1994
-#	Authors:          Glenn Adams <glenn@metis.com>
-#                     John H. Jenkins <John_Jenkins@taligent.com>
-#
-#
-#	This file is provided as-is by Unicode, Inc. (The Unicode Consortium).
-#	No claims are made as to fitness for any particular purpose.  No
-#	warranties of any kind are expressed or implied.  The recipient
-#	agrees to determine applicability of information provided.  If this
-#	file has been provided on magnetic media by Unicode, Inc., the sole
-#	remedy for any claim will be exchange of defective media within 90
-#	days of receipt.
-#
-#	Recipient is granted the right to make copies in any form for
-#	internal distribution and to freely use the information supplied
-#	in the creation of products supporting Unicode.  Unicode, Inc.
-#	specifically excludes the right to re-distribute this file directly
-#	to third parties or other organizations whether for profit or not.
-#
-#	General notes:
-#
-#	This table contains the data Metis and Taligent currently have on how
-#       BIG5 characters map into Unicode.
-#
-#	WARNING!  It is currently impossible to provide round-trip compatibility
-#		between BIG5 and Unicode.
-#
-#	A number of characters are not currently mapped because
-#		of conflicts with other mappings.  They are as follows:
-#
-#       BIG5        Description                    Comments
-#
-#       0xA15A      SPACING UNDERSCORE             duplicates A1C4
-#       0xA1C3      SPACING HEAVY OVERSCORE        not in Unicode
-#       0xA1C5      SPACING HEAVY UNDERSCORE       not in Unicode
-#       0xA1FE      LT DIAG UP RIGHT TO LOW LEFT   duplicates A2AC
-#       0xA240      LT DIAG UP LEFT TO LOW RIGHT   duplicates A2AD
-#       0xA2CC      HANGZHOU NUMERAL TEN           conflicts with A451 mapping
-#       0xA2CE      HANGZHOU NUMERAL THIRTY        conflicts with A4CA mapping
-#
-#	We currently map all of these characters to U+FFFD REPLACEMENT CHARACTER.
-#		It is also possible to map these characters to their duplicates, or to
-#		the user zone.
-#
-#	Notes:
-#
-#	1. In addition to the above, there is some uncertainty about the
-#       mappings in the range C6A1 - C8FE, and F9DD - F9FE.  The ETEN
-#		version of BIG5 organizes the former range differently, and adds
-#		additional characters in the latter range.  The correct mappings
-#		these ranges need to be determined.
-#
-#	2.  There is an uncertainty in the mapping of the Big Five character
-#		0xA3BC.  This character occurs within the Big Five block of tone marks
-#		for bopomofo and is intended to be the tone mark for the first tone in
-#		Mandarin Chinese.  We have selected the mapping U+02C9 MODIFIER LETTER
-#		MACRON (Mandarin Chinese first tone) to reflect this semantic.
-#		However, because bopomofo uses the absense of a tone mark to indicate
-#		the first Mandarin tone, most implementations of Big Five represent
-#		this character with a blank space, and so a mapping such as U+2003 EM SPACE
-#		might be preferred.
-#
-#
-#
-#	Any comments or problems, contact <John_Jenkins@taligent.com>
 
  * The contents of this file are subject to the Interbase Public
  * License Version 1.0 (the "License"); you may not use this file
