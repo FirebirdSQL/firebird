@@ -156,13 +156,17 @@ static void list_staying_fast(thread_db*, record_param*, RecordStack&, record_pa
 static void notify_garbage_collector(thread_db* tdbb, record_param* rpb,
 	TraNumber tranid = MAX_TRA_NUMBER);
 
-const int PREPARE_OK		= 0;
-const int PREPARE_CONFLICT	= 1;
-const int PREPARE_DELETE	= 2;
-const int PREPARE_LOCKERR	= 3;
+enum class PrepareResult
+{
+	SUCCESS,
+	CONFLICT,
+	DELETE,
+	LOCK_ERROR,
+	LOCK
+};
 
-static int prepare_update(thread_db*, jrd_tra*, TraNumber commit_tid_read, record_param*,
-	record_param*, record_param*, PageStack&, Nullable<bool> writeLockSkipLocked = {});
+static PrepareResult prepare_update(thread_db*, jrd_tra*, TraNumber commit_tid_read, record_param*,
+	record_param*, record_param*, PageStack&, TriState writeLockSkipLocked = {});
 
 static void protect_system_table_insert(thread_db* tdbb, const Request* req, const jrd_rel* relation,
 	bool force_flag = false);
@@ -1878,7 +1882,8 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 }
 
 
-static bool check_prepare_result(int prepare_result, jrd_tra* transaction, Request* request, record_param* rpb)
+static bool check_prepare_result(PrepareResult prepare_result, jrd_tra* transaction,
+	Request* request, record_param* rpb)
 {
 /**************************************
  *
@@ -1893,7 +1898,9 @@ static bool check_prepare_result(int prepare_result, jrd_tra* transaction, Reque
  *  handle request restart.
  *
  **************************************/
-	if (prepare_result == PREPARE_OK)
+	fb_assert(prepare_result != PrepareResult::LOCK);
+
+	if (prepare_result == PrepareResult::SUCCESS)
 		return true;
 
 	Request* top_request = request->req_snapshot.m_owner;
@@ -1906,9 +1913,9 @@ static bool check_prepare_result(int prepare_result, jrd_tra* transaction, Reque
 	// cursor. In this case all we can do is restart whole request immediately.
 	const bool secondary = top_request &&
 		(top_request->req_flags & req_update_conflict) &&
-		(prepare_result != PREPARE_LOCKERR);
+		(prepare_result != PrepareResult::LOCK_ERROR);
 
-	if (!(transaction->tra_flags & TRA_read_consistency) || prepare_result == PREPARE_LOCKERR ||
+	if (!(transaction->tra_flags & TRA_read_consistency) || prepare_result == PrepareResult::LOCK_ERROR ||
 		secondary || !restart_ready)
 	{
 		if (secondary)
@@ -2352,7 +2359,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	{
 		// Update stub didn't find one page -- do a long, hard update
 		PageStack stack;
-		int prepare_result = prepare_update(tdbb, transaction, tid_fetch, rpb, &temp, 0, stack);
+		const auto prepare_result = prepare_update(tdbb, transaction, tid_fetch, rpb, &temp, 0, stack);
 		if (!check_prepare_result(prepare_result, transaction, request, rpb))
 			return false;
 
@@ -3650,7 +3657,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	const bool backVersion = (org_rpb->rpb_b_page != 0);
 	record_param temp;
 	PageStack stack;
-	int prepare_result = prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb,
+	const auto prepare_result = prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb,
 										&temp, new_rpb, stack);
 	if (!check_prepare_result(prepare_result, transaction, tdbb->getRequest(), org_rpb))
 		return false;
@@ -4529,10 +4536,10 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 	record_param temp;
 	PageStack stack;
 	switch (prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb, &temp, &new_rpb,
-						   stack, Nullable<bool>(skipLocked)))
+						   stack, TriState(skipLocked)))
 	{
-		case PREPARE_CONFLICT:
-		case PREPARE_DELETE:
+		case PrepareResult::CONFLICT:
+		case PrepareResult::DELETE:
 			if ((transaction->tra_flags & TRA_read_consistency))
 			{
 				Request* top_request = tdbb->getRequest()->req_snapshot.m_owner;
@@ -4551,7 +4558,9 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 			}
 			org_rpb->rpb_runtime_flags |= RPB_refetch;
 			return WriteLockResult::CONFLICTED;
-		case PREPARE_LOCKERR:
+
+		case PrepareResult::LOCK:
+		case PrepareResult::LOCK_ERROR:
 			// We got some kind of locking error (deadlock, timeout or lock_conflict)
 			// Error details should be stuffed into status vector at this point
 			// hvlad: we have no details as TRA_wait has already cleared the status vector
@@ -5967,14 +5976,8 @@ static void notify_garbage_collector(thread_db* tdbb, record_param* rpb, TraNumb
 }
 
 
-static int prepare_update(	thread_db*		tdbb,
-							jrd_tra*		transaction,
-							TraNumber		commit_tid_read,
-							record_param*	rpb,
-							record_param*	temp,
-							record_param*	new_rpb,
-							PageStack&		stack,
-							Nullable<bool>	writeLockSkipLocked)
+static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNumber commit_tid_read,
+	record_param* rpb, record_param* temp, record_param* new_rpb, PageStack& stack, TriState writeLockSkipLocked)
 {
 /**************************************
  *
@@ -6121,7 +6124,7 @@ static int prepare_update(	thread_db*		tdbb,
 				delete_record(tdbb, temp, 0, NULL);
 
 				tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
-				return PREPARE_DELETE;
+				return PrepareResult::DELETE;
 			}
 		}
 
@@ -6166,7 +6169,7 @@ static int prepare_update(	thread_db*		tdbb,
 				if (writeLockSkipLocked.isAssigned() || (transaction->tra_flags & TRA_read_consistency))
 				{
 					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
-					return PREPARE_DELETE;
+					return PrepareResult::DELETE;
 				}
 
 				IBERROR(188);	// msg 188 cannot update erased record
@@ -6187,7 +6190,7 @@ static int prepare_update(	thread_db*		tdbb,
 				delete_record(tdbb, temp, 0, NULL);
 
 				tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
-				return PREPARE_CONFLICT;
+				return PrepareResult::CONFLICT;
 			}
 
 			/*
@@ -6244,7 +6247,7 @@ static int prepare_update(	thread_db*		tdbb,
 				const USHORT pageSpaceID = temp->getWindow(tdbb).win_page.getPageSpaceID();
 				stack.push(PageNumber(pageSpaceID, temp->rpb_page));
 			}
-			return PREPARE_OK;
+			return PrepareResult::SUCCESS;
 
 		case tra_active:
 		case tra_limbo:
@@ -6293,14 +6296,14 @@ static int prepare_update(	thread_db*		tdbb,
 					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
 
 					if (writeLockSkipLocked == true)
-						return PREPARE_LOCKERR;
+						return PrepareResult::LOCK;
 
 					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
 					ERR_post(Arg::Gds(isc_deadlock) <<
 							 Arg::Gds(isc_update_conflict) <<
 							 Arg::Gds(isc_concurrent_transaction) << Arg::Int64(update_conflict_trans));
 				}
-				return PREPARE_CONFLICT;
+				return PrepareResult::CONFLICT;
 
 			case tra_limbo:
 				if (!(transaction->tra_flags & TRA_ignore_limbo))
@@ -6311,7 +6314,7 @@ static int prepare_update(	thread_db*		tdbb,
 				// fall thru
 
 			case tra_active:
-				return PREPARE_LOCKERR;
+				return PrepareResult::LOCK_ERROR;
 
 			case tra_dead:
 				break;
@@ -6335,7 +6338,7 @@ static int prepare_update(	thread_db*		tdbb,
 		VIO_backout(tdbb, rpb, transaction);
 	}
 
-	return PREPARE_OK;
+	return PrepareResult::SUCCESS;
 }
 
 

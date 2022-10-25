@@ -5795,12 +5795,7 @@ lock_clause
 %type <boolVal>	skip_locked_clause_opt
 skip_locked_clause_opt
 	: /* nothing */			{ $$ = false; }
-	| skip_locked_clause
-	;
-
-%type <boolVal>	skip_locked_clause
-skip_locked_clause
-	: SKIP LOCKED	{ $$ = true; }
+	| SKIP LOCKED			{ $$ = true; }
 	;
 
 

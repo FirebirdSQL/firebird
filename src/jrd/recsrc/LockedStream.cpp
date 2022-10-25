@@ -90,7 +90,8 @@ bool LockedStream::internalGetRecord(thread_db* tdbb) const
 
 			if (lockResult == WriteLockResult::LOCKED)
 				return true;	// locked
-			else if (lockResult == WriteLockResult::SKIPPED)
+
+			if (lockResult == WriteLockResult::SKIPPED)
 				break;	// skip locked record
 
 			// Refetch the record and ensure it still fulfils the search condition
