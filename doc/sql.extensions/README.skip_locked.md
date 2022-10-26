@@ -46,11 +46,9 @@ DELETE FROM <sometable>
 
 ## Notes
 
-When `SELECT ... WITH LOCK` or `DELETE`/`UPDATE` statements are used without `SKIP LOCKED`
-but with `FIRST`/`SKIP`/`ROWS`/`OFFSET`/`FETCH` clauses (say, "skip/limit" clauses), lock happens
-in the last step (i.e. after the "skip/limit" is done).
-
-When `SKIP LOCKED` is used with "skip/limit", "lock / skip locked" happens before "skip/limit".
+As it happens with subclauses `FIRST`/`SKIP`/`ROWS`/`OFFSET`/`FETCH` record lock
+(and "skip locked" check) is done in between of skip (`SKIP`/`ROWS`/`OFFSET`/`FETCH`) and
+limit (`FIRST`/`ROWS`/`OFFSET`/`FETCH`) checks.
 
 ## Examples
 
