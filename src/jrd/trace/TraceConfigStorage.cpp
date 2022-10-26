@@ -87,12 +87,12 @@ void checkFileError(const char* filename, const char* operation, ISC_STATUS iscE
 ConfigStorage::ConfigStorage()
 	: m_timer(FB_NEW TouchFile),
 	  m_sharedMemory(NULL),
+	  m_filename(getPool()),
 	  m_recursive(0),
 	  m_mutexTID(0),
 	  m_dirty(false),
 	  m_nextIdx(0)
 {
-	PathName filename;
 #ifdef WIN_NT
 	DWORD sesID = 0;
 
@@ -108,36 +108,23 @@ ConfigStorage::ConfigStorage()
 		pfnProcessIdToSessionId(GetCurrentProcessId(), &sesID) == 0 ||
 		sesID == 0)
 	{
-		filename.printf(TRACE_FILE); // TODO: it must be per engine instance
+		m_filename.printf(TRACE_FILE); // TODO: it must be per engine instance
 	}
 	else
 	{
-		filename.printf("%s.%u", TRACE_FILE, sesID);
+		m_filename.printf("%s.%u", TRACE_FILE, sesID);
 	}
 #else
-	filename.printf(TRACE_FILE); // TODO: it must be per engine instance
+	m_filename.printf(TRACE_FILE); // TODO: it must be per engine instance
 #endif
 
-	try
-	{
-		m_sharedMemory.reset(FB_NEW_POOL(getPool())
-			SharedMemory<TraceCSHeader>(filename.c_str(), TraceCSHeader::TRACE_STORAGE_MIN_SIZE, this));
-	}
-	catch (const Exception& ex)
-	{
-		iscLogException("ConfigStorage: Cannot initialize the shared memory region", ex);
-		throw;
-	}
-
-	fb_assert(m_sharedMemory->getHeader());
-	fb_assert(m_sharedMemory->getHeader()->mhb_version == TraceCSHeader::TRACE_STORAGE_VERSION);
+	initSharedFile();
 
 	StorageGuard guard(this);
 	checkAudit();
 
 	TEXT fullName[MAXPATHLEN];
-	iscPrefixLock(fullName, filename.c_str(), false);
-
+	iscPrefixLock(fullName, m_filename.c_str(), false);
 	m_timer->start(fullName);	// do we still need a timer ?
 
 	++(m_sharedMemory->getHeader()->cnt_uses);
@@ -146,6 +133,23 @@ ConfigStorage::ConfigStorage()
 ConfigStorage::~ConfigStorage()
 {
 	fb_assert(!m_timer);
+}
+
+void ConfigStorage::initSharedFile()
+{
+	try
+	{
+		m_sharedMemory.reset(FB_NEW_POOL(getPool())
+			SharedMemory<TraceCSHeader>(m_filename.c_str(), TraceCSHeader::TRACE_STORAGE_MIN_SIZE, this));
+
+		fb_assert(m_sharedMemory->getHeader());
+		fb_assert(m_sharedMemory->getHeader()->mhb_version == TraceCSHeader::TRACE_STORAGE_VERSION);
+	}
+	catch (const Exception& ex)
+	{
+		iscLogException("ConfigStorage: Cannot initialize the shared memory region", ex);
+		throw;
+	}
 }
 
 void ConfigStorage::shutdown()
@@ -298,6 +302,20 @@ void ConfigStorage::acquire()
 
 	fb_assert(m_mutexTID == 0);
 	m_mutexTID = currTID;
+
+	while (m_sharedMemory->getHeader()->isDeleted())
+	{
+		// Shared memory must be empty at this point
+		fb_assert(m_sharedMemory->getHeader()->cnt_uses == 0);
+
+		m_sharedMemory->mutexUnlock();
+		m_sharedMemory.reset();
+
+		Thread::yield();
+
+		initSharedFile();
+		m_sharedMemory->mutexLock();
+	}
 
 	TraceCSHeader* header = m_sharedMemory->getHeader();
 	if (header->mem_allocated > m_sharedMemory->sh_mem_length_mapped)
@@ -461,7 +479,7 @@ void ConfigStorage::compact()
 	// collect used slots, sort them by offset
 	for (TraceCSHeader::Slot* slot = header->slots; slot < header->slots + header->slots_cnt; slot++)
 	{
-		if (!slot->used && slot->ses_pid != pid &&
+		if (slot->used && slot->ses_pid != pid &&
 			!ISC_check_process_existence(slot->ses_pid))
 		{
 			header->cnt_uses--; // Process that created trace session disappeared, count it out

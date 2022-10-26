@@ -114,6 +114,8 @@ private:
 	void mutexBug(int osErrorCode, const char* text);
 	bool initialize(Firebird::SharedMemoryBase*, bool);
 
+	void initSharedFile();
+
 	void checkAudit();
 
 	class TouchFile FB_FINAL :
@@ -207,6 +209,7 @@ private:
 	};
 
 	Firebird::AutoPtr<Firebird::SharedMemory<TraceCSHeader> > m_sharedMemory;
+	Firebird::PathName m_filename;
 	int m_recursive;
 	ThreadId m_mutexTID;
 	bool m_dirty;
