@@ -160,9 +160,9 @@ enum class PrepareResult
 {
 	SUCCESS,
 	CONFLICT,
-	DELETE,
-	LOCK_ERROR,
-	LOCK
+	DELETED,
+	SKIP_LOCKED,
+	LOCK_ERROR
 };
 
 static PrepareResult prepare_update(thread_db*, jrd_tra*, TraNumber commit_tid_read, record_param*,
@@ -1898,7 +1898,7 @@ static bool check_prepare_result(PrepareResult prepare_result, jrd_tra* transact
  *  handle request restart.
  *
  **************************************/
-	fb_assert(prepare_result != PrepareResult::LOCK);
+	fb_assert(prepare_result != PrepareResult::SKIP_LOCKED);
 
 	if (prepare_result == PrepareResult::SUCCESS)
 		return true;
@@ -4539,7 +4539,7 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 						   stack, TriState(skipLocked)))
 	{
 		case PrepareResult::CONFLICT:
-		case PrepareResult::DELETE:
+		case PrepareResult::DELETED:
 			if ((transaction->tra_flags & TRA_read_consistency))
 			{
 				Request* top_request = tdbb->getRequest()->req_snapshot.m_owner;
@@ -4559,14 +4559,16 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 			org_rpb->rpb_runtime_flags |= RPB_refetch;
 			return WriteLockResult::CONFLICTED;
 
-		case PrepareResult::LOCK:
+		case PrepareResult::SKIP_LOCKED:
+			fb_assert(skipLocked);
+			if (skipLocked)
+				return WriteLockResult::SKIPPED;
+			// fall thru
+
 		case PrepareResult::LOCK_ERROR:
 			// We got some kind of locking error (deadlock, timeout or lock_conflict)
 			// Error details should be stuffed into status vector at this point
 			// hvlad: we have no details as TRA_wait has already cleared the status vector
-
-			if (skipLocked)
-				return WriteLockResult::SKIPPED;
 
 			// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
 			ERR_post(Arg::Gds(isc_deadlock) <<
@@ -6124,7 +6126,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 				delete_record(tdbb, temp, 0, NULL);
 
 				tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
-				return PrepareResult::DELETE;
+				return PrepareResult::DELETED;
 			}
 		}
 
@@ -6169,7 +6171,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 				if (writeLockSkipLocked.isAssigned() || (transaction->tra_flags & TRA_read_consistency))
 				{
 					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
-					return PrepareResult::DELETE;
+					return PrepareResult::DELETED;
 				}
 
 				IBERROR(188);	// msg 188 cannot update erased record
@@ -6296,7 +6298,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
 
 					if (writeLockSkipLocked == true)
-						return PrepareResult::LOCK;
+						return PrepareResult::SKIP_LOCKED;
 
 					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
 					ERR_post(Arg::Gds(isc_deadlock) <<
@@ -6314,7 +6316,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 				// fall thru
 
 			case tra_active:
-				return PrepareResult::LOCK_ERROR;
+				return writeLockSkipLocked == true ? PrepareResult::SKIP_LOCKED : PrepareResult::LOCK_ERROR;
 
 			case tra_dead:
 				break;
