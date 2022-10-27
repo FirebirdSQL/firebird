@@ -4538,8 +4538,12 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 	switch (prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb, &temp, &new_rpb,
 						   stack, TriState(skipLocked)))
 	{
-		case PrepareResult::CONFLICT:
 		case PrepareResult::DELETED:
+			if (skipLocked && (transaction->tra_flags & TRA_read_committed))
+				return WriteLockResult::SKIPPED;
+			// fall thru
+
+		case PrepareResult::CONFLICT:
 			if ((transaction->tra_flags & TRA_read_consistency))
 			{
 				Request* top_request = tdbb->getRequest()->req_snapshot.m_owner;
