@@ -690,13 +690,12 @@ inline void check_gbak_cheating_delete(thread_db* tdbb, const jrd_rel* relation)
 	}
 }
 
-inline int wait(thread_db* tdbb, jrd_tra* transaction, const record_param* rpb,
-	Nullable<SSHORT> waitTimeout = {})
+inline int wait(thread_db* tdbb, jrd_tra* transaction, const record_param* rpb)
 {
-	if (waitTimeout.isUnknown() && transaction->getLockWait())
+	if (transaction->getLockWait())
 		tdbb->bumpRelStats(RuntimeStatistics::RECORD_WAITS, rpb->rpb_relation->rel_id);
 
-	return TRA_wait(tdbb, transaction, rpb->rpb_transaction_nr, jrd_tra::tra_wait, waitTimeout);
+	return TRA_wait(tdbb, transaction, rpb->rpb_transaction_nr, jrd_tra::tra_wait);
 }
 
 inline bool checkGCActive(thread_db* tdbb, record_param* rpb, int& state)
@@ -6265,11 +6264,12 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 #endif
 			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 
-			// Wait as long as it takes for an active transaction which has modified
-			// the record.
+			// Wait as long as it takes (if not skipping locks) for an active
+			// transaction which has modified the record.
 
-			state = wait(tdbb, transaction, rpb,
-				(writeLockSkipLocked == true ? Nullable<SSHORT>(0) : Nullable<SSHORT>()));
+			state = writeLockSkipLocked == true ?
+				TRA_wait(tdbb, transaction, rpb->rpb_transaction_nr, jrd_tra::tra_probe) :
+				wait(tdbb, transaction, rpb);
 
 			if (state == tra_committed)
 				state = check_precommitted(transaction, rpb);
