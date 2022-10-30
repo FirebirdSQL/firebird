@@ -46,7 +46,7 @@
     uint8_t   bytes[DECDOUBLE_Bytes];   /* fields: 1, 5, 8, 50 bits */
     uint16_t shorts[DECDOUBLE_Bytes/2];
     uint32_t  words[DECDOUBLE_Bytes/4];
-    #if DECUSE64
+    #ifdef DECUSE64
     uint64_t  longs[DECDOUBLE_Bytes/8];
     #endif
     } decDouble;

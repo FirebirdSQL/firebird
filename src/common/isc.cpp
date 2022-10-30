@@ -147,7 +147,7 @@ public:
 		if (!InitializeSecurityDescriptor(p_security_desc, SECURITY_DESCRIPTOR_REVISION) ||
 			!SetSecurityDescriptorDacl(p_security_desc, TRUE, NULL, FALSE))
 		{
-			delete p_security_desc;
+			operator delete(p_security_desc);
 			attributes.lpSecurityDescriptor = NULL;
 		}
 	}
@@ -155,7 +155,7 @@ public:
 	~SecurityAttributes()
 	{
 		if (attributes.lpSecurityDescriptor)
-			delete attributes.lpSecurityDescriptor;
+			operator delete(attributes.lpSecurityDescriptor);
 	}
 
 	operator LPSECURITY_ATTRIBUTES()

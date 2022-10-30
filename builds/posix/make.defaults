@@ -106,7 +106,7 @@ GLOB_OPTIONS:=
 #____________________________________________________________________________
 
 # Global c++ flags: firebird needs no RTTI, choose build standard
-PLUSPLUS_FLAGS:= -fno-rtti -std=c++17
+PLUSPLUS_FLAGS:= -fno-rtti -msse4 -std=c++17
 
 # If this is defined then we use special rules useful for developers only
 IsDeveloper = @DEVEL_FLG@
@@ -163,7 +163,7 @@ INLINE_EDIT_SED:= -i
 
 SH=			sh -c
 RM=			rm -f
-RM_R=		rm -rf
+RM_R=			rm -rf
 CHMOD=			chmod
 CHMOD_6=		chmod 666
 CHMOD_7=		chmod 777
@@ -187,6 +187,7 @@ CXX =	@CXX@
 LD =	@CXX@
 OBJCOPY = @OBJCOPY@
 READELF = @READELF@
+WINDRES = @WINDRES@
 
 AC_CFLAGS = @CFLAGS@
 AC_CXXFLAGS = @CXXFLAGS@
@@ -197,6 +198,9 @@ AC_CXXFLAGS = @CXXFLAGS@
 ifeq ($(PLATFORM),DARWIN)
 LIB_LINK = $(CXX) $(GLOB_OPTIONS) $(CXXFLAGS)
 EXE_LINK = $(CXX) $(GLOB_OPTIONS) $(CXXFLAGS)
+else ifeq ($(PLATFORM),win32)
+LIB_LINK = $(CXX) $(GLOB_OPTIONS)
+EXE_LINK = $(CXX) $(GLOB_OPTIONS)
 else
 LIB_LINK = $(CXX) $(GLOB_OPTIONS) $(CXXFLAGS) -static-libstdc++
 EXE_LINK = $(CXX) $(GLOB_OPTIONS) $(CXXFLAGS) -static-libstdc++
@@ -211,7 +215,7 @@ SO_LINK_LIBS = @LIBS@ $(DECLIB) $(RE2LIB) $(I128LIB)
 
 ARCH_EXT=		.a
 EXEC_EXT=		@EXEEXT@
-SHRLIB_EXT=@SHRLIB_EXT@
+SHRLIB_EXT=		@SHRLIB_EXT@
 LIB_PREFIX=		lib
 SHRLIB_FOREIGN_EXT=	$(SHRLIB_EXT)
 
@@ -229,7 +233,7 @@ include $(ROOT)/gen/Make.Version
 
 vpath %.so $(LIB)
 vpath %.a $(LIB)
-vpath %.dll $(LIB)
+vpath %.dll $(BIN)
 
 #_____________________________________________________________________________
 
@@ -324,7 +328,11 @@ UDR_SUPPORT_LIBS=
 ifeq ($(PLATFORM),DARWIN)
     LIB_LINK_RPATH =
 else
+    ifeq ($(PLATFORM),win32)
+	LIB_PLATFORM_RPATH =
+    else
 	LIB_PLATFORM_RPATH = -Wl,-rpath,$(1)
+    endif
 
 ifeq (@USE_RPATH@,1)
     ifeq ($(strip @BINRELOC_CFLAGS@),)
@@ -346,9 +354,14 @@ else
 endif
 
 LIB_PATH_OPTS = $(call LIB_LINK_RPATH,lib) $(call LIB_LINK_RPATH,intl)
+ifeq ($(PLATFORM),win32)
+LIB_LINK_SONAME= -Wl,--out-implib,$(LIB)/lib$(1)$(ARCH_EXT)
+LIB_LINK_MAPFILE=
+else
 LIB_LINK_SONAME= -Wl,-soname,$(1)
 LIB_LINK_MAPFILE= -Wl,--version-script,$(1)
-FIREBIRD_LIBRARY_LINK= -L$(LIB) -lfbclient $(MATHLIB) $(CRYPTLIB)
+endif
+FIREBIRD_LIBRARY_LINK= -L$(LIB) -lfbclient $(CRYPTLIB) $(MATHLIB)
 
 EXE_LINK_OPTIONS= $(LDFLAGS) $(THR_FLAGS) $(UNDEF_FLAGS) $(LIB_PATH_OPTS) $(call LINK_DARWIN_RPATH,..) $(LINK_EMPTY_SYMBOLS)
 LIB_LINK_OPTIONS= $(LDFLAGS) $(THR_FLAGS) -shared
@@ -374,7 +387,7 @@ LINK_TRACE_LIBS = -L$(LIB) $(SO_LINK_LIBS)
 
 LINK_FIREBIRD = $(LIB_LINK) $(LINK_FIREBIRD_SYMBOLS) $(LIB_LINK_OPTIONS) $(LIB_FIREBIRD_OPTIONS) $(UNDEF_FLAGS)\
  $(call LIB_LINK_SONAME,$(LibrarySoName)) $(call LIB_LINK_RPATH,lib) $(call LINK_DARWIN_RPATH,..)
-LINK_FIREBIRD_LIBS = -L$(LIB) $(LIB_GUI) $(SO_LINK_LIBS) $(MATHLIB) $(CRYPTLIB)
+LINK_FIREBIRD_LIBS = -L$(LIB) $(LIB_GUI) $(SO_LINK_LIBS) $(CRYPTLIB) $(MATHLIB)
 
 LINK_ENGINE = $(LIB_LINK) $(LINK_PLUGIN_SYMBOLS) $(LIB_LINK_OPTIONS) $(LIB_FIREBIRD_OPTIONS) $(UNDEF_FLAGS)\
  $(call LIB_LINK_SONAME,$(EngineSoName)) $(call LIB_LINK_RPATH,lib) $(call LINK_DARWIN_RPATH,..)

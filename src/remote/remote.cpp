@@ -1538,7 +1538,7 @@ bool REMOTE_deflate(RemoteXdr* xdrs, ProtoWrite* proto_write, PacketSend* packet
 		expectMoreOut = !strm.avail_out;
 		if ((port->port_buff_size != strm.avail_out) && (flush || !strm.avail_out))
 		{
-#if COMPRESS_DEBUG > 1
+#if defined(COMPRESS_DEBUG) && COMPRESS_DEBUG > 1
 			fprintf(stderr, "Send packet %d bytes size\n", port->port_buff_size - strm.avail_out);
 #endif
 			if (!packet_send(port, (SCHAR*) &port->port_compressed[REM_SEND_OFFSET(port->port_buff_size)],

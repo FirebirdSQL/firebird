@@ -47,7 +47,7 @@
     uint8_t   bytes[DECQUAD_Bytes];     /* fields: 1, 5, 12, 110 bits */
     uint16_t shorts[DECQUAD_Bytes/2];
     uint32_t  words[DECQUAD_Bytes/4];
-    #if DECUSE64
+    #ifdef DECUSE64
     uint64_t  longs[DECQUAD_Bytes/8];
     #endif
     } decQuad;

@@ -38,8 +38,10 @@ BEGIN
       VALUE "CompanyName", "Firebird Project\0"
       VALUE "FileDescription", "Firebird " VER_FILEDESC " (" VER_ARCH VER_DBG ")"
       VALUE "FileVersion", FILE_VER_STRING
+#ifdef _MSC_VER
       VALUE "InternalName", STRINGIZE(RC_TARGET_NAME)
       VALUE "OriginalFilename", STRINGIZE(RC_TARGET_FILENAME)
+#endif
       VALUE "LegalCopyright", "All Copyright (c) retained by individual contributors - original code Copyright (c) 2000 Inprise Corporation\0"
       VALUE "ProductName", "Firebird SQL Server\0"
       VALUE "ProductVersion", PRODUCT_VER_STRING

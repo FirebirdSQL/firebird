@@ -28,7 +28,7 @@
 #include <string>
 #include <stdexcept>
 
-using std::auto_ptr;
+using std::unique_ptr;
 using std::cerr;
 using std::endl;
 using std::exception;
@@ -53,7 +53,7 @@ static void run(int argc, const char* argv[])
 	Parser parser(&lexer);
 	parser.parse();
 
-	auto_ptr<Generator> generator;
+	unique_ptr<Generator> generator;
 
 	if (outFormat == "c++")
 	{

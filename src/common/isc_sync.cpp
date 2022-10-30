@@ -1922,7 +1922,11 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	}
 
 	PathName mappedName;
+#ifdef MINGW
+	if (!getMappedFileName(address, mappedName))
+#else
 	if (!getMappedFileName(address, mappedName) || mappedName != expanded_filename)
+#endif
 	{
 		UnmapViewOfFile(address);
 		CloseHandle(file_obj);

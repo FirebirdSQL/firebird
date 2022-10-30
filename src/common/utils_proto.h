@@ -116,10 +116,10 @@ namespace fb_utils
 
 #if FB_INT64_COMPARE_FAILED
 		// avoid compiler bug when comparing minimum INT64
-		const SINT64 MININT64 = 0x8000000000000000;
-		if (n1 == MININT64)
-			return n2 == MININT64 ? 0 : 2;
-		if (n2 == MININT64)
+		const SINT64 minInt64 = 0x8000000000000000;
+		if (n1 == minInt64)
+			return n2 == minInt64 ? 0 : 2;
+		if (n2 == minInt64)
 			return -2;
 #endif
 

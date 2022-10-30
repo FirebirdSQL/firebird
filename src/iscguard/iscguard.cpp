@@ -726,7 +726,7 @@ THREAD_ENTRY_DECLARE start_and_watch_server(THREAD_ENTRY_PARAM)
 		}
 
 		// wait for process to terminate
-		DWORD exit_status;
+		DWORD exit_status = 0;
 		if (service_flag)
 		{
 			while (WaitForSingleObject(procHandle, 500) == WAIT_OBJECT_0)

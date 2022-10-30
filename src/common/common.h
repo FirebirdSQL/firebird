@@ -539,7 +539,11 @@ extern "C" int remove(const char* path);
 /* The following define is the prefix to go in front of a "d" or "u"
    format item in a printf() format string, to indicate that the argument
    is an SINT64 or FB_UINT64. */
+#if !defined(__USE_MINGW_ANSI_STDIO)
 #define QUADFORMAT "I64"
+#else
+#define QUADFORMAT "ll"
+#endif
 /* The following macro creates a quad-sized constant, possibly one
    which is too large to fit in a long int. */
 #define QUADCONST(n) (n##LL)

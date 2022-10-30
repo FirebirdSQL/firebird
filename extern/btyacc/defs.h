@@ -297,7 +297,7 @@ extern Yshort nunused;
 extern Yshort final_state;
 
 /* system variable */
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__MINGW32__)
 extern int errno;
 #endif
 

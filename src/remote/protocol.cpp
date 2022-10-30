@@ -294,7 +294,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 	if (!xdr_enum(xdrs, reinterpret_cast<xdr_op*>(&p->p_operation)))
 		return P_FALSE(xdrs, p);
 
-#if COMPRESS_DEBUG > 1
+#if defined(COMPRESS_DEBUG) && COMPRESS_DEBUG > 1
 	if (xdrs->x_op != XDR_FREE)
 	{
 		fprintf(stderr, "operation=%d %c\n", p->p_operation,

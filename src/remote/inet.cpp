@@ -1205,7 +1205,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 			forkEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 			forkSockets = FB_NEW SocketsArray(*getDefaultMemoryPool());
 
-			Thread::start(forkThread, (void*) flag, THREAD_medium);
+			Thread::start(forkThread, (void*)(U_IPTR) flag, THREAD_medium);
 		}
 		forkSockets->add(s);
 		SetEvent(forkEvent);
@@ -3180,7 +3180,7 @@ static bool packet_send( rem_port* port, const SCHAR* buffer, SSHORT buffer_leng
 		}
 #endif
 		SSHORT n = send(port->port_handle, data, length, FB_SEND_FLAGS);
-#if COMPRESS_DEBUG > 1
+#if defined(COMPRESS_DEBUG) && COMPRESS_DEBUG > 1
 		fprintf(stderr, "send(%d, %p, %d, FB_SEND_FLAGS) == %d\n", port->port_handle, data, length, n);
 #endif
 #ifdef DEBUG

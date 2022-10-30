@@ -805,6 +805,7 @@ AC_CHECK_TOOL([OBJCOPY], [objcopy])
 AC_CHECK_TOOL([OBJDUMP], [objdump])
 AC_CHECK_TOOL([RANLIB], [ranlib])
 AC_CHECK_TOOL([READELF], [readelf])
+AC_CHECK_TOOL([WINDRES], [windres])
 LT_INIT([dlopen win32-dll])
 
 dnl Check for system header files
@@ -1268,7 +1269,7 @@ case "$PLATFORM" in
     ;;
 
   win32)
-    XE_PREPEND( -mthreads -lmpr -lversion -lws2_32 -lole32,LIBS)
+    XE_PREPEND( -lmpr -lversion -lws2_32 -lole32,LIBS)
     ;;
 
   *)
@@ -1381,6 +1382,7 @@ if test "x$CROSS" != "x"; then
 AC_CONFIG_FILES([gen/make.crossPlatform:builds/posix/make.$CROSS])
 fi
 
+if test $PLATFORM != win32; then
 AC_CONFIG_FILES([
 gen/Release/firebird/bin/fb_config:builds/install/posix-common/fb_config.in
 gen/Release/firebird/bin/posixLibrary.sh:builds/install/posix-common/posixLibrary.sh.in
@@ -1390,6 +1392,7 @@ gen/Release/firebird/bin/changeServerMode.sh:builds/install/posix-common/changeS
 gen/Release/firebird/bin/registerDatabase.sh:builds/install/posix-common/registerDatabase.sh.in
 gen/vers.sh:builds/posix/vers.sh.in
 ])
+fi
 
 dnl: Platform Specific Files
 
@@ -1511,6 +1514,11 @@ case "$PLATFORM" in
   SOLARIS | solx86 )
 AC_CONFIG_FILES(
 gen/make.platform.solaris.examples:${MAKE_SRC_DIR}/make.platform.solaris.examples
+)
+;;
+  win32 )
+AC_CONFIG_FILES(
+examples/extauth/Makefile:${MAKE_SRC_DIR}/Makefile.in.extauth
 )
 ;;
 esac
