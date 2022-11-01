@@ -513,6 +513,7 @@ static bool validate_text_type (thread_db*, const TemporaryField*);
 static void check_partners(thread_db*, const USHORT);
 static string get_string(const dsc* desc);
 static void setupSpecificCollationAttributes(thread_db*, jrd_tra*, const USHORT, const char*);
+static void recalculate_computed_fields(thread_db*, DeferredWork*, jrd_tra*);
 
 static ISC_STATUS getErrorCodeByObjectType(int obj_type)
 {
@@ -1606,6 +1607,7 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 		{
 		case dfw_post_event:
 		case dfw_delete_shadow:
+		case dfw_modify_field:
 			break;
 
 		default:
@@ -1653,6 +1655,9 @@ void DFW_perform_post_commit_work(jrd_tra* transaction)
 
 		switch (work->dfw_type)
 		{
+		case dfw_modify_field:
+			recalculate_computed_fields(JRD_get_thread_data(), work, transaction);
+			break;
 		case dfw_post_event:
 			EventManager::init(transaction->tra_attachment);
 
@@ -4052,6 +4057,77 @@ static void setupSpecificCollationAttributes(thread_db* tdbb, jrd_tra* transacti
 		}
 	}
 	END_FOR
+}
+
+
+static void recalculate_computed_fields(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	r e c a l c u l a t e _ c o m p u t e d _ f i e l d
+ *
+ **************************************
+ *
+ * Checking for dependent calculated fields, and altering their
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+	jrd_tra* oldTransaction = tdbb->getTransaction();
+	transaction = NULL;
+
+	try
+	{
+		transaction = TRA_start(tdbb, 0, 0);
+		tdbb->setTransaction(transaction);
+
+		string where;
+		where.append("'");
+		where.append(work->dfw_name.c_str());
+		where.append("'");
+
+		PreparedStatement::Builder sql;
+		sql << "execute block as"
+				<< "declare variable rname varchar(63);"
+				<< "declare variable fname varchar(63);"
+				<< "declare variable cs blob sub_type 1;"
+				<< "declare variable p_sql blob sub_type 1;"
+			<< "begin"
+				<< "for select rfr2.rdb$relation_name, rfr2.rdb$field_name, flx.rdb$computed_source"
+				<< "from rdb$dependencies dep"
+				<< "join rdb$fields flx on flx.rdb$field_name = dep.rdb$dependent_name"
+				<< "join rdb$relation_fields rfr on rfr.rdb$field_name = dep.rdb$field_name"
+				<< "and rfr.rdb$relation_name = dep.rdb$depended_on_name"
+				<< "join rdb$relation_fields rfr2 on rfr2.rdb$field_source = flx.rdb$field_name"
+				<< "join rdb$relations rel on rel.rdb$relation_name = rfr2.rdb$relation_name"
+				<< "where rfr.rdb$field_source ="
+				<< where.c_str()
+				<< "  and flx.rdb$computed_source is not null"
+				<< "  and rel.rdb$relation_type = 0"
+				<< "and flx.rdb$computed_blr is not null into :rname, :fname, :cs do"
+				<< "begin"
+					<< "p_sql = 'alter table ' || :rname || ' alter column ' || :fname || ' computed by ' || cs;"
+					<< "execute statement (:p_sql);"
+				<< "end "
+			<< "end ";
+		Attachment* attachment = tdbb->getAttachment();
+		AutoPreparedStatement ps(attachment->prepareStatement(tdbb, transaction, sql));
+		ps->execute(tdbb, transaction);
+		// Commit
+		TRA_commit(tdbb, transaction, false);
+		transaction = NULL;
+		tdbb->setTransaction(oldTransaction);
+	}
+	catch (const Firebird::Exception&)
+	{
+		if (transaction)
+		{
+			TRA_rollback(tdbb, transaction, false, true);
+		}
+		tdbb->setTransaction(oldTransaction);
+
+		throw;
+	}
 }
 
 
