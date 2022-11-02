@@ -6,7 +6,7 @@
   FORMAL BUILD NUMBER:2863
 */
 
-#define PRODUCT_VER_STRING "4.0.3.2863-TPC-bugcheck"
+#define PRODUCT_VER_STRING "4.0.3.2863"
 #define FILE_VER_STRING "WI-V4.0.3.2863"
 #define LICENSE_VER_STRING "WI-V4.0.3.2863"
 #define FILE_VER_NUMBER 4, 0, 3, 2863
@@ -15,4 +15,4 @@
 #define FB_REV_NO "3"
 #define FB_BUILD_NO "2863"
 #define FB_BUILD_TYPE "V"
-#define FB_BUILD_SUFFIX "Firebird 4.0 TPC-bugcheck"
+#define FB_BUILD_SUFFIX "Firebird 4.0"

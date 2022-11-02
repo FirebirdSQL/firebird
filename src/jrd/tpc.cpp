@@ -697,17 +697,7 @@ int TipCache::tpc_block_blocking_ast(void* arg)
 	Database* dbb = data->existenceLock.lck_dbb;
 	AsyncContextHolder tdbb(dbb, FB_FUNCTION);
 
-	if (!(data->existenceLock.lck_id && data->existenceLock.lck_physical && data->existenceLock.lck_logical
-		&& data->flAstAccept))
-	{
-		gds__log("tpc_block_blocking_ast BUG: lck_id=%d lck_physical=%d lck_logical=%d flAstAccept=%d",
-			data->existenceLock.lck_id, data->existenceLock.lck_physical, data->existenceLock.lck_logical, data->flAstAccept);
-	}
-
-	// We will never be called with initialization (PR) lock
-	// (it's used only in ctor).
-	// When called with finalization (SW or EX) lock that means resource
-	// is already released or will be released very soon.
+	// Should we try to process AST?
 	if (!data->flAstAccept)
 		return 0;
 
@@ -715,6 +705,7 @@ int TipCache::tpc_block_blocking_ast(void* arg)
 	TraNumber oldest =
 		cache->m_tpcHeader->getHeader()->oldest_transaction.load(std::memory_order_relaxed);
 
+	// Is data block really old?
 	if (data->blockNumber >= oldest / cache->m_transactionsPerBlock)
 		return 0;
 
@@ -725,11 +716,6 @@ int TipCache::tpc_block_blocking_ast(void* arg)
 		data->memory = NULL;
 	}
 	LCK_release(tdbb, &data->existenceLock);
-
-	// Check if there is a bug in cleanup code and we were requested to
-	// release memory that might be in use
-	if (data->blockNumber >= oldest / cache->m_transactionsPerBlock)
-		ERR_bugcheck_msg("Incorrect attempt to release shared memory");
 
 	return 0;
 }

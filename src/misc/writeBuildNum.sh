@@ -11,8 +11,6 @@ MinorVer=0
 RevNo=3
 BuildNum=2863
 
-SPECIAL_BUILD_SUFFIX=TPC-bugcheck
-
 NowAt=`pwd`
 cd `dirname $0`
 Root=`pwd`
