@@ -9131,8 +9131,19 @@ static processing_state process_statement(const TEXT* str2)
 
 	// Find out what kind of statement this is
 	const unsigned statement_type = global_Stmt->getType(fbStatus);
-	if (!statement_type)
+	if (failed())
+	{
+		ISQL_errmsg(fbStatus);
 		return ps_ERR;
+	}
+	if (!statement_type)
+	{
+		TEXT msg[MSG_LENGTH];
+		IUTILS_msg_get(BAD_STMT_TYPE, msg);
+		// Statement type is not recognized
+		isqlGlob.printf("%s%s", msg, NEWLINE);
+		return ps_ERR;
+	}
 
 	if (setValues.Sqlda_display)
 	{
