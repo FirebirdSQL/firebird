@@ -8667,70 +8667,14 @@ static void process_plan()
 	if (!global_Stmt)
 		return;
 
-	// Bug 7565: A plan larger than plan_buffer will not be displayed
-	// Bug 7565: Note also that the plan must fit into Print_Buffer
+	const char* plan = global_Stmt->getPlan(fbStatus, setValues.ExplainPlan ? FB_TRUE : FB_FALSE);
+	if (ISQL_errmsg(fbStatus))
+		return;
 
-	UCHAR plan_info[1];
-	plan_info[0] = setValues.ExplainPlan ? isc_info_sql_explain_plan : isc_info_sql_get_plan;
+	ISQL_warning(fbStatus);
 
-	Firebird::HalfStaticArray<UCHAR, MAX_SSHORT> planBuffer;
-	unsigned planSize = MAX_SSHORT;
-	UCHAR* planPtr = planBuffer.getBuffer(planSize);
-
-	string planString;
-
-	for (int i = 0; i < 2; ++i)
-	{
-		global_Stmt->getInfo(fbStatus, sizeof(plan_info), plan_info, planSize, planPtr);
-		if (ISQL_errmsg(fbStatus))
-			return;
-
-		bool truncated = false;
-
-		for (const UCHAR* ptr = planPtr; ptr < planPtr + planSize;)
-		{
-			const UCHAR tag = *ptr++;
-
-			switch (tag)
-			{
-			case isc_info_sql_get_plan:
-			case isc_info_sql_explain_plan:
-				{
-					const USHORT len = (USHORT) gds__vax_integer(ptr, sizeof(USHORT));
-					ptr += sizeof(USHORT);
-					planString.assign((const char*) ptr, len);
-					ptr += len;
-				}
-				break;
-			case isc_info_truncated:
-				truncated = true;
-				break;
-			case isc_info_end:
-				break;
-			default:
-				IUTILS_printf2(Diag, "Unknown error while retrieving plan%s", NEWLINE);
-				return;
-			}
-
-			if (tag == isc_info_end || tag == isc_info_truncated)
-				break;
-		}
-
-		if (truncated && i == 0 &&
-			// Probably FB 2.1 and before will crash with MAX_USHORT
-			ENCODE_ODS(isqlGlob.major_ods, isqlGlob.minor_ods) >= ODS_11_2)
-		{
-			planSize = MAX_USHORT;
-			planBuffer.resize(planSize);
-			planPtr = planBuffer.begin();
-			continue;
-		}
-
-		break;
-	}
-
-	if (planString.hasData())
-		IUTILS_printf2(Diag, "%s%s", planString.c_str(), NEWLINE);
+	if (plan != nullptr)
+		IUTILS_printf2(Diag, "%s%s", plan, NEWLINE);
 }
 
 
@@ -9086,8 +9030,16 @@ static processing_state process_statement(const TEXT* str2)
 			return (SKIP);
 	}
 
-	global_Stmt = DB->prepare(fbStatus, prepare_trans, 0, str2, isqlGlob.SQL_dialect,
-		Firebird::IStatement::PREPARE_PREFETCH_METADATA);
+	unsigned flags = Firebird::IStatement::PREPARE_PREFETCH_METADATA;
+	if (setValues.Plan)
+	{
+		if (setValues.ExplainPlan)
+			flags |= Firebird::IStatement::PREPARE_PREFETCH_DETAILED_PLAN;
+		else
+			flags |= Firebird::IStatement::PREPARE_PREFETCH_LEGACY_PLAN;
+	}
+
+	global_Stmt = DB->prepare(fbStatus, prepare_trans, 0, str2, isqlGlob.SQL_dialect, flags);
 	if (failed())
 	{
 		if (isqlGlob.SQL_dialect == SQL_DIALECT_V6_TRANSITION && Input_file)
@@ -9144,6 +9096,8 @@ static processing_state process_statement(const TEXT* str2)
 		isqlGlob.printf("%s%s", msg, NEWLINE);
 		return ps_ERR;
 	}
+
+	ISQL_warning(fbStatus);
 
 	if (setValues.Sqlda_display)
 	{
