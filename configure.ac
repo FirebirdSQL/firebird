@@ -1118,7 +1118,7 @@ AC_CHECK_FUNCS(sem_init)
 if test "$ac_cv_func_sem_init" = "yes"; then
 AC_MSG_CHECKING(for working sem_init())
 AC_RUN_IFELSE([AC_LANG_SOURCE([[#include <semaphore.h>
-	main () {
+	int main () {
 		sem_t s;
 		return sem_init(&s,0,0);
 		}
@@ -1159,7 +1159,7 @@ AC_SYS_LARGEFILE
 if test "$ac_cv_sys_file_offset_bits" = "no"; then
   AC_MSG_CHECKING(for native large file support)
   AC_RUN_IFELSE([AC_LANG_SOURCE([[#include <unistd.h>
-    main () {
+    int main () {
     return !(sizeof(off_t) == 8);
   }]])],[ac_cv_sys_file_offset_bits=64; AC_DEFINE(_FILE_OFFSET_BITS,64)
    AC_MSG_RESULT(yes)],[AC_MSG_RESULT(no)],[])
@@ -1206,7 +1206,7 @@ dnl EKU: try to determine the alignment of long and double
 dnl      replaces FB_ALIGNMENT and FB_DOUBLE_ALIGN in src/jrd/common.h
 AC_MSG_CHECKING(alignment of long)
 AC_RUN_IFELSE([AC_LANG_SOURCE([[#include <semaphore.h>
-main () {
+int main () {
   struct s {
     char a;
     union { long long x; sem_t y; } b;
@@ -1217,7 +1217,7 @@ AC_MSG_RESULT($ac_cv_c_alignment)
 AC_DEFINE_UNQUOTED(FB_ALIGNMENT, $ac_cv_c_alignment, [Alignment of long])
 
 AC_MSG_CHECKING(alignment of double)
-AC_RUN_IFELSE([AC_LANG_SOURCE([[main () {
+AC_RUN_IFELSE([AC_LANG_SOURCE([[int main () {
   struct s {
     char a;
     double b;
