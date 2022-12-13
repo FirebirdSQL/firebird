@@ -188,6 +188,16 @@ dnl CPU_TYPE=ppc64
     SHRLIB_EXT=so
     ;;
 
+  powerpc64-*-freebsd*)
+    MAKEFILE_PREFIX=freebsd_powerpc64
+    PLATFORM=FREEBSD
+    INSTALL_PREFIX=freebsd
+    AC_DEFINE(FREEBSD, 1, [Define this if OS is FreeBSD])
+    AC_DEFINE(PPC64, 1, [Define this if CPU is ppc64])
+    EDITLINE_FLG=Y
+    SHRLIB_EXT=so
+    ;;
+
   *-gentoo-freebsd*)
     MAKEFILE_PREFIX=freebsd
     PLATFORM=GENTOOFREEBSD
