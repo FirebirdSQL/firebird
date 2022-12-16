@@ -1634,9 +1634,14 @@ ULONG DPM_get_blob(thread_db* tdbb,
 		// Retrieve the data either into page clump (level 0) or page vector (levels
 		// 1 and 2).
 
-		const USHORT length = index->dpg_length - BLH_SIZE;
-		const UCHAR* q = (UCHAR*) header->blh_page;
-		blob->getFromPage(length, q);
+		if (header->blh_level == 0)
+			blob->getFromPage(index->dpg_length, (UCHAR*) header);
+		else
+		{
+			const USHORT length = index->dpg_length - BLH_SIZE;
+			const UCHAR* q = (UCHAR*) header->blh_page;
+			blob->getFromPage(length, q);
+		}
 
 		if (!delete_flag)
 		{
