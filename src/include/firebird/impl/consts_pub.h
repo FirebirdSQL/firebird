@@ -780,7 +780,8 @@
 #define fb_dbg_map_argument			4
 #define fb_dbg_subproc				5
 #define fb_dbg_subfunc				6
-#define fb_dbg_map_curname			7
+#define fb_dbg_map_curname			7 /* declared cursor */
+#define fb_dbg_map_for_curname		8 /* FOR cursor */
 //// TODO: LocalTable name.
 
 // sub code for fb_dbg_map_argument

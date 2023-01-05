@@ -479,6 +479,7 @@ public:
 		csb_invariants(p),
 		csb_current_nodes(p),
 		csb_current_for_nodes(p),
+		csb_forCursorNames(p),
 		csb_computing_fields(p),
 		csb_inner_booleans(p),
 		csb_variables_used_in_subroutines(p),
@@ -558,6 +559,7 @@ public:
 	Firebird::Array<ExprNode*> csb_current_nodes;	// RseNode's and other invariant
 												// candidates within whose scope we are
 	Firebird::Array<ForNode*> csb_current_for_nodes;
+	Firebird::RightPooledMap<ForNode*, MetaName> csb_forCursorNames;
 	Firebird::SortedArray<jrd_fld*> csb_computing_fields;	// Computed fields being compiled
 	Firebird::Array<BoolExprNode*> csb_inner_booleans;	// Inner booleans at the current scope
 	Firebird::SortedArray<USHORT> csb_variables_used_in_subroutines;

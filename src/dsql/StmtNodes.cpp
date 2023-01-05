@@ -1244,7 +1244,7 @@ DeclareCursorNode* DeclareCursorNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	cursorNumber = dsqlScratch->cursorNumber++;
 	dsqlScratch->cursors.push(this);
 
-	dsqlScratch->putDebugCursor(cursorNumber, dsqlName);
+	dsqlScratch->putDebugDeclaredCursor(cursorNumber, dsqlName);
 
 	++dsqlScratch->scopeLevel;
 
@@ -1303,7 +1303,7 @@ DeclareCursorNode* DeclareCursorNode::pass2(thread_db* tdbb, CompilerScratch* cs
 	ExprNode::doPass2(tdbb, csb, refs.getAddress());
 
 	MetaName cursorName;
-	csb->csb_dbg_info->curIndexToName.get(cursorNumber, cursorName);
+	csb->csb_dbg_info->declaredCursorIndexToName.get(cursorNumber, cursorName);
 
 	// Finish up processing of record selection expressions.
 
@@ -4881,6 +4881,9 @@ DmlNode* ForNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 {
 	ForNode* node = FB_NEW_POOL(pool) ForNode(pool);
 
+	if (auto cursorName = csb->csb_dbg_info->forCursorOffsetToName.get(csb->csb_blr_reader.getOffset() - 1))
+		csb->csb_forCursorNames.put(node, *cursorName);
+
 	if (csb->csb_blr_reader.peekByte() == blr_marks)
 		node->marks |= PAR_marks(csb);
 
@@ -4929,9 +4932,6 @@ ForNode* ForNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		dsqlCursor->rse = node->rse;
 		dsqlCursor->cursorNumber = dsqlScratch->cursorNumber++;
 		dsqlScratch->cursors.push(dsqlCursor);
-
-		// ASF: We cannot write this cursor name in debug info, as dsqlScratch->cursorNumber is
-		// decremented below. But for now we don't need it.
 	}
 	else
 		node->rse = dsqlSelect->dsqlPass(dsqlScratch)->dsqlRse;
@@ -5001,6 +5001,9 @@ void ForNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	// Generate FOR loop
 
+	if (dsqlCursor)
+		dsqlScratch->putDebugForCursor(dsqlCursor->dsqlName);
+
 	dsqlScratch->appendUChar(blr_for);
 
 	if (marks)
@@ -5069,11 +5072,11 @@ StmtNode* ForNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	RecordSource* const rsb = CMP_post_rse(tdbb, csb, rse.getObject());
 
+	MetaName cursorName;
+	csb->csb_forCursorNames.get(this, cursorName);
+
 	cursor = FB_NEW_POOL(*tdbb->getDefaultPool())
-		Cursor(csb, rsb, rse, !(marks & MARK_AVOID_COUNTERS), line, column);
-	// ASF: We cannot define the name of the cursor here, but this is not a problem,
-	// as implicit cursors are always positioned in a valid record, and the name is
-	// only used to raise isc_cursor_not_positioned.
+		Cursor(csb, rsb, rse, !(marks & MARK_AVOID_COUNTERS), line, column, cursorName);
 
 	csb->csb_fors.add(cursor);
 

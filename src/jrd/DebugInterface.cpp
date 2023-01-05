@@ -135,9 +135,40 @@ void DBG_parse_debug_info(ULONG length, const UCHAR* data, DbgInfo& dbgInfo)
 				if (code == fb_dbg_map_varname)
 					dbgInfo.varIndexToName.put(index, MetaName((const TEXT*) data, length));
 				else
-					dbgInfo.curIndexToName.put(index, MetaName((const TEXT*) data, length));
+					dbgInfo.declaredCursorIndexToName.put(index, MetaName((const TEXT*) data, length));
 
 				// variable/cursor name string
+				data += length;
+			}
+			break;
+
+		case fb_dbg_map_for_curname:
+			{
+				if (data + 5 > end)
+				{
+					bad_format = true;
+					break;
+				}
+
+				// fb_dbg_map_for_curname do not exist in DBG_INFO_VERSION_1,
+				// so always use DBG_INFO_VERSION_2 format.
+				ULONG offset = *data++;
+				offset |= *data++ << 8;
+				offset |= *data++ << 16;
+				offset |= *data++ << 24;
+
+				// variable/cursor name string length
+				USHORT length = *data++;
+
+				if (data + length > end)
+				{
+					bad_format = true;
+					break;
+				}
+
+				dbgInfo.forCursorOffsetToName.put(offset, MetaName((const TEXT*) data, length));
+
+				// cursor name string
 				data += length;
 			}
 			break;

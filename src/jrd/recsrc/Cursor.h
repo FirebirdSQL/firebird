@@ -101,7 +101,7 @@ namespace Jrd
 
 	public:
 		Cursor(CompilerScratch* csb, const RecordSource* rsb, const RseNode* rse,
-			   bool updateCounters, ULONG line, ULONG column, const MetaName& name = "");
+			   bool updateCounters, ULONG line, ULONG column, const MetaName& name);
 
 		void open(thread_db* tdbb) const override;
 		void close(thread_db* tdbb) const override;

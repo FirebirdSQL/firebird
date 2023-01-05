@@ -4327,6 +4327,7 @@ const
 	fb_dbg_subproc = byte(5);
 	fb_dbg_subfunc = byte(6);
 	fb_dbg_map_curname = byte(7);
+	fb_dbg_map_for_curname = byte(8);
 	fb_dbg_arg_input = byte(0);
 	fb_dbg_arg_output = byte(1);
 	isc_facility		= 20;
