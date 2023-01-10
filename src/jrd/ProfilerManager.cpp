@@ -464,6 +464,24 @@ SINT64 ProfilerManager::startSession(thread_db* tdbb, Nullable<SLONG> flushInter
 	return currentSession->pluginSession->getId();
 }
 
+void ProfilerManager::prepareCursor(thread_db* tdbb, Request* request, const Cursor* cursor)
+{
+	auto profileStatement = getStatement(request);
+
+	if (!profileStatement)
+		return;
+
+	auto cursorId = cursor->getCursorProfileId();
+
+	if (profileStatement->definedCursors.exist(cursorId))
+		return;
+
+	currentSession->pluginSession->defineCursor(profileStatement->id, cursorId,
+		cursor->getName().nullStr(), cursor->getLine(), cursor->getColumn());
+
+	profileStatement->definedCursors.add(cursorId);
+}
+
 void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const RecordSource* rsb)
 {
 	auto profileStatement = getStatement(request);
@@ -473,6 +491,8 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 
 	if (profileStatement->recSourceSequence.exist(rsb->getRecSourceProfileId()))
 		return;
+
+	fb_assert(profileStatement->definedCursors.exist(rsb->getCursorProfileId()));
 
 	Array<NonPooledPair<const RecordSource*, const RecordSource*>> tree;
 	tree.add({rsb, nullptr});

@@ -248,6 +248,16 @@ Below is the list of tables that stores profile data.
  - `SQL_TEXT` type `BLOB subtype TEXT CHARACTER SET UTF8` - SQL text for BLOCK
  - Primary key: `PROFILE_ID, STATEMENT_ID`
 
+## Table `PLG$PROF_CURSORS`
+
+ - `PROFILE_ID` type `BIGINT` - Profile session ID
+ - `STATEMENT_ID` type `BIGINT` - Statement ID
+ - `CURSOR_ID` type `INTEGER` - Cursor ID
+ - `NAME` type `CHAR(63) CHARACTER SET UTF8` - Name of explicit cursor
+ - `LINE_NUM` type `INTEGER` - Line number of the cursor
+ - `COLUMN_NUM` type `INTEGER` - Column number of the cursor
+ - Primary key: `PROFILE_ID, STATEMENT_ID, CURSOR_ID`
+
 ## Table `PLG$PROF_RECORD_SOURCES`
 
  - `PROFILE_ID` type `BIGINT` - Profile session ID
@@ -403,6 +413,9 @@ select rstat.profile_id,
                 statement_id = coalesce(sta.parent_statement_id, rstat.statement_id)
        ) sql_text,
        rstat.cursor_id,
+       cur.name cursor_name,
+       cur.line_num cursor_line_num,
+       cur.column_num cursor_column_num,
        rstat.record_source_id,
        recsrc.parent_record_source_id,
        recsrc.access_path,
@@ -418,6 +431,10 @@ select rstat.profile_id,
        cast(sum(rstat.fetch_total_elapsed_time) / nullif(sum(rstat.fetch_counter), 0) as bigint) fetch_avg_elapsed_time,
        cast(coalesce(sum(rstat.open_total_elapsed_time), 0) + coalesce(sum(rstat.fetch_total_elapsed_time), 0) as bigint) open_fetch_total_elapsed_time
   from plg$prof_record_source_stats rstat
+  join plg$prof_cursors cur
+    on cur.profile_id = rstat.profile_id and
+       cur.statement_id = rstat.statement_id and
+       cur.cursor_id = rstat.cursor_id
   join plg$prof_record_sources recsrc
     on recsrc.profile_id = rstat.profile_id and
        recsrc.statement_id = rstat.statement_id and
@@ -438,6 +455,9 @@ select rstat.profile_id,
            sta_parent.statement_type,
            sta_parent.routine_name,
            rstat.cursor_id,
+           cur.name,
+           cur.line_num,
+           cur.column_num,
            rstat.record_source_id,
            recsrc.parent_record_source_id,
            recsrc.access_path

@@ -86,6 +86,13 @@ struct Stats
 	FB_UINT64 totalElapsedTime = 0;
 };
 
+struct Cursor
+{
+	MetaString name{defaultPool()};
+	unsigned line;
+	unsigned column;
+};
+
 struct RecordSource
 {
 	Nullable<ULONG> parentId;
@@ -124,6 +131,7 @@ struct Request
 	NonPooledMap<LineColumnKey, Stats> psqlStats{defaultPool()};
 };
 
+using StatementCursorKey = NonPooledPair<SINT64, unsigned>;
 using StatementCursorRecSourceKey = NonPooledPair<NonPooledPair<SINT64, unsigned>, unsigned>;
 
 class Session final :
@@ -159,6 +167,8 @@ public:
 	void defineStatement(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 parentStatementId,
 		const char* type, const char* packageName, const char* routineName, const char* sqlText) override;
 
+	void defineCursor(SINT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column) override;
+
 	void defineRecordSource(SINT64 statementId, unsigned cursorId, unsigned recSourceId,
 		const char* accessPath, unsigned parentRecordSourceId) override;
 
@@ -191,6 +201,7 @@ public:
 public:
 	RefPtr<ProfilerPlugin> plugin;
 	NonPooledMap<SINT64, Statement> statements{defaultPool()};
+	NonPooledMap<StatementCursorKey, Cursor> cursors{defaultPool()};
 	NonPooledMap<StatementCursorRecSourceKey, RecordSource> recordSources{defaultPool()};
 	NonPooledMap<SINT64, Request> requests{defaultPool()};
 	SINT64 id;
@@ -374,6 +385,23 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 	) statementMessage(status, MasterInterfacePtr());
 	statementMessage.clear();
 
+	constexpr auto cursorSql = R"""(
+		update or insert into plg$prof_cursors
+		    (profile_id, statement_id, cursor_id, name, line_num, column_num)
+		    values (?, ?, ?, ?, ?, ?)
+		    matching (profile_id, statement_id, cursor_id)
+	)""";
+
+	FB_MESSAGE(CursorMessage, ThrowStatusExceptionWrapper,
+		(FB_BIGINT, profileId)
+		(FB_BIGINT, statementId)
+		(FB_INTEGER, cursorId)
+		(FB_INTL_VARCHAR(METADATA_IDENTIFIER_CHAR_LEN * 4, CS_UTF8), name)
+		(FB_BIGINT, lineNum)
+		(FB_BIGINT, columnNum)
+	) cursorMessage(status, MasterInterfacePtr());
+	cursorMessage.clear();
+
 	constexpr auto recSrcSql = R"""(
 		update or insert into plg$prof_record_sources
 		    (profile_id, statement_id, cursor_id, record_source_id,
@@ -387,7 +415,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 		(FB_BIGINT, statementId)
 		(FB_INTEGER, cursorId)
 		(FB_INTEGER, recordSourceId)
-		(FB_BIGINT, parentRecordSourceId)
+		(FB_INTEGER, parentRecordSourceId)
 		(FB_INTL_VARCHAR(1024 * 4, CS_UTF8), accessPath)
 	) recSrcMessage(status, MasterInterfacePtr());
 	recSrcMessage.clear();
@@ -523,11 +551,13 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 	auto sessionStmt = makeNoIncRef(userAttachment->prepare(status, transaction, 0, sessionSql, SQL_DIALECT_CURRENT, 0));
 	auto statementStmt = makeNoIncRef(userAttachment->prepare(
 		status, transaction, 0, statementSql, SQL_DIALECT_CURRENT, 0));
-	auto recSrcsStmt = makeNoIncRef(userAttachment->prepare(
+	auto cursorStmt = makeNoIncRef(userAttachment->prepare(
+		status, transaction, 0, cursorSql, SQL_DIALECT_CURRENT, 0));
+	auto recSrcStmt = makeNoIncRef(userAttachment->prepare(
 		status, transaction, 0, recSrcSql, SQL_DIALECT_CURRENT, 0));
 	auto requestBatch = makeNoIncRef(userAttachment->createBatch(status, transaction, 0, requestSql, SQL_DIALECT_CURRENT,
 		requestMessage.getMetadata(), 0, nullptr));
-	auto recSrcStatsBatch = makeNoIncRef(userAttachment->createBatch(
+	auto recSrcStatBatch = makeNoIncRef(userAttachment->createBatch(
 		status, transaction, 0, recSrcStatSql, SQL_DIALECT_CURRENT, recSrcStatMessage.getMetadata(), 0, nullptr));
 	auto psqlStatBatch = makeNoIncRef(userAttachment->createBatch(
 		status, transaction, 0, psqlStatSql, SQL_DIALECT_CURRENT, psqlStatMessage.getMetadata(), 0, nullptr));
@@ -550,7 +580,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 	auto executeBatches = [&]()
 	{
 		executeBatch(requestBatch, requestBatchSize);
-		executeBatch(recSrcStatsBatch, recSrcStatBatchSize);
+		executeBatch(recSrcStatBatch, recSrcStatBatchSize);
 		executeBatch(psqlStatBatch, psqlStatBatchSize);
 	};
 
@@ -653,6 +683,34 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 			}
 		}
 
+		for (const auto& cursorIt : session->cursors)
+		{
+			const auto statementId = cursorIt.first.first;
+			const auto cursorId = cursorIt.first.second;
+			const auto& cursor = cursorIt.second;
+
+			cursorMessage->profileIdNull = FB_FALSE;
+			cursorMessage->profileId = session->getId();
+
+			cursorMessage->statementIdNull = FB_FALSE;
+			cursorMessage->statementId = statementId;
+
+			cursorMessage->cursorIdNull = FB_FALSE;
+			cursorMessage->cursorId = cursorId;
+
+			cursorMessage->nameNull = cursor.name.isEmpty();
+			cursorMessage->name.set(cursor.name.c_str());
+
+			cursorMessage->lineNumNull = cursor.line == 0 ? FB_TRUE : FB_FALSE;
+			cursorMessage->lineNum = cursor.line;
+
+			cursorMessage->columnNumNull = cursor.column == 0 ? FB_TRUE : FB_FALSE;
+			cursorMessage->columnNum = cursor.column;
+
+			cursorStmt->execute(status, transaction, cursorMessage.getMetadata(),
+				cursorMessage.getData(), nullptr, nullptr);
+		}
+
 		for (const auto& recSourceIt : session->recordSources)
 		{
 			const auto statementId = recSourceIt.first.first.first;
@@ -678,7 +736,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 			recSrcMessage->accessPathNull = FB_FALSE;
 			recSrcMessage->accessPath.set(recSrc.accessPath.c_str());
 
-			recSrcsStmt->execute(status, transaction, recSrcMessage.getMetadata(),
+			recSrcStmt->execute(status, transaction, recSrcMessage.getMetadata(),
 				recSrcMessage.getData(), nullptr, nullptr);
 		}
 
@@ -791,7 +849,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					recSrcStatMessage->fetchTotalElapsedTimeNull = FB_FALSE;
 					recSrcStatMessage->fetchTotalElapsedTime = stats.fetchStats.totalElapsedTime;
 
-					addBatch(recSrcStatsBatch, recSrcStatBatchSize, recSrcStatMessage);
+					addBatch(recSrcStatBatch, recSrcStatBatchSize, recSrcStatMessage);
 				}
 
 				profileRequest.recordSourcesStats.clear();
@@ -838,6 +896,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 		{
 			session->statements.clear();
 			session->recordSources.clear();
+			session->cursors.clear();
 
 			for (const auto requestId : finishedRequests)
 				session->requests.remove(requestId);
@@ -906,6 +965,29 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		"grant select, update, insert, delete on table plg$prof_statements to plg$profiler",
 
 		R"""(
+		create table plg$prof_cursors (
+		    profile_id bigint not null
+		        constraint plg$prof_cursors_session_fk
+		            references plg$prof_sessions
+		            on delete cascade
+		            using index plg$prof_cursors_profile,
+		    statement_id bigint not null,
+		    cursor_id integer not null,
+		    name char(63) character set utf8,
+		    line_num integer,
+		    column_num integer,
+		    constraint plg$prof_cursors_pk
+		        primary key (profile_id, statement_id, cursor_id)
+		        using index plg$prof_cursors_profile_statement_cursor,
+		    constraint plg$prof_cursors_statement_fk
+		        foreign key (profile_id, statement_id) references plg$prof_statements
+		        on delete cascade
+		        using index plg$prof_cursors_profile_statement
+		))""",
+
+		"grant select, update, insert, delete on table plg$prof_cursors to plg$profiler",
+
+		R"""(
 		create table plg$prof_record_sources (
 		    profile_id bigint not null
 		        constraint plg$prof_record_sources_session_fk
@@ -924,6 +1006,10 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		        foreign key (profile_id, statement_id) references plg$prof_statements
 		        on delete cascade
 		        using index plg$prof_record_sources_profile_statement,
+		    constraint plg$prof_record_sources_cursor_fk
+		        foreign key (profile_id, statement_id, cursor_id) references plg$prof_cursors
+		        on delete cascade
+		        using index plg$prof_record_sources_profile_statement_cursor,
 		    constraint plg$prof_record_sources_parent_record_source_fk
 		        foreign key (profile_id, statement_id, cursor_id, parent_record_source_id)
 		        references plg$prof_record_sources (profile_id, statement_id, cursor_id, record_source_id)
@@ -1021,6 +1107,10 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		        foreign key (profile_id, statement_id) references plg$prof_statements
 		        on delete cascade
 		        using index plg$prof_record_source_stats_profile_statement,
+		    constraint plg$prof_record_source_stats_cursor_fk
+		        foreign key (profile_id, statement_id, cursor_id) references plg$prof_cursors
+		        on delete cascade
+		        using index plg$prof_record_source_stats_statement_cursor,
 		    constraint plg$prof_record_source_stats_record_source_fk
 		        foreign key (profile_id, statement_id, cursor_id, record_source_id) references plg$prof_record_sources
 		        on delete cascade
@@ -1132,6 +1222,9 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		                statement_id = coalesce(sta.parent_statement_id, rstat.statement_id)
 		       ) sql_text,
 		       rstat.cursor_id,
+		       cur.name cursor_name,
+		       cur.line_num cursor_line_num,
+		       cur.column_num cursor_column_num,
 		       rstat.record_source_id,
 		       recsrc.parent_record_source_id,
 		       recsrc.access_path,
@@ -1147,6 +1240,10 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		       cast(sum(rstat.fetch_total_elapsed_time) / nullif(sum(rstat.fetch_counter), 0) as bigint) fetch_avg_elapsed_time,
 		       cast(coalesce(sum(rstat.open_total_elapsed_time), 0) + coalesce(sum(rstat.fetch_total_elapsed_time), 0) as bigint) open_fetch_total_elapsed_time
 		  from plg$prof_record_source_stats rstat
+		  join plg$prof_cursors cur
+		    on cur.profile_id = rstat.profile_id and
+		       cur.statement_id = rstat.statement_id and
+		       cur.cursor_id = rstat.cursor_id
 		  join plg$prof_record_sources recsrc
 		    on recsrc.profile_id = rstat.profile_id and
 		       recsrc.statement_id = rstat.statement_id and
@@ -1167,6 +1264,9 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		           sta_parent.statement_type,
 		           sta_parent.routine_name,
 		           rstat.cursor_id,
+		           cur.name,
+		           cur.line_num,
+		           cur.column_num,
 		           rstat.record_source_id,
 		           recsrc.parent_record_source_id,
 		           recsrc.access_path
@@ -1275,6 +1375,19 @@ void Session::defineStatement(ThrowStatusExceptionWrapper* status, SINT64 statem
 	statement->routineName = routineName;
 	statement->parentStatementId = parentStatementId;
 	statement->sqlText = sqlText;
+}
+
+void Session::defineCursor(SINT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column)
+{
+	const auto cursor = cursors.put({statementId, cursorId});
+	fb_assert(cursor);
+
+	if (!cursor)
+		return;
+
+	cursor->name = name;
+	cursor->line = line;
+	cursor->column = column;
 }
 
 void Session::defineRecordSource(SINT64 statementId, unsigned cursorId, unsigned recSourceId,

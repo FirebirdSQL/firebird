@@ -146,6 +146,7 @@ bool SubQuery::fetch(thread_db* tdbb) const
 Cursor::Cursor(CompilerScratch* csb, const RecordSource* rsb, const RseNode* rse,
 			   bool updateCounters, ULONG line, ULONG column, const MetaName& name)
 	: Select(rsb, rse, line, column, name),
+	  m_cursorProfileId(rsb->getCursorProfileId()),
 	  m_updateCounters(updateCounters)
 {
 	fb_assert(m_top);
@@ -156,6 +157,9 @@ Cursor::Cursor(CompilerScratch* csb, const RecordSource* rsb, const RseNode* rse
 void Cursor::open(thread_db* tdbb) const
 {
 	const auto request = tdbb->getRequest();
+
+	prepareProfiler(tdbb, request);
+
 	Impure* impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_active = true;
@@ -196,6 +200,8 @@ bool Cursor::fetchNext(thread_db* tdbb) const
 
 	if (impure->irsb_state == EOS)
 		return false;
+
+	prepareProfiler(tdbb, request);
 
 	if (!m_top->getRecord(tdbb))
 	{
@@ -287,6 +293,8 @@ bool Cursor::fetchAbsolute(thread_db* tdbb, SINT64 offset) const
 		return false;
 	}
 
+	prepareProfiler(tdbb, request);
+
 	impure->irsb_position = position;
 	buffer->locate(tdbb, impure->irsb_position);
 
@@ -364,6 +372,8 @@ bool Cursor::fetchRelative(thread_db* tdbb, SINT64 offset) const
 		return false;
 	}
 
+	prepareProfiler(tdbb, request);
+
 	impure->irsb_position = position;
 	buffer->locate(tdbb, impure->irsb_position);
 
@@ -401,4 +411,16 @@ void Cursor::checkState(Request* request) const
 			Arg::Gds(isc_cursor_not_positioned) <<
 			Arg::Str(m_cursorName));
 	}
+}
+
+void Cursor::prepareProfiler(thread_db* tdbb, Request* request) const
+{
+	const auto attachment = tdbb->getAttachment();
+
+	const auto profilerManager = attachment->isProfilerActive() && !request->hasInternalStatement() ?
+		attachment->getProfilerManager(tdbb) :
+		nullptr;
+
+	if (profilerManager)
+		profilerManager->prepareCursor(tdbb, request, this);
 }

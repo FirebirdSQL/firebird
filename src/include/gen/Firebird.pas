@@ -726,6 +726,7 @@ type
 	IProfilerSession_cancelPtr = procedure(this: IProfilerSession; status: IStatus); cdecl;
 	IProfilerSession_finishPtr = procedure(this: IProfilerSession; status: IStatus; timestamp: ISC_TIMESTAMP_TZ); cdecl;
 	IProfilerSession_defineStatementPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
+	IProfilerSession_defineCursorPtr = procedure(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal); cdecl;
 	IProfilerSession_defineRecordSourcePtr = procedure(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); cdecl;
 	IProfilerSession_onRequestStartPtr = procedure(this: IProfilerSession; status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
 	IProfilerSession_onRequestFinishPtr = procedure(this: IProfilerSession; status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
@@ -3814,6 +3815,7 @@ type
 		cancel: IProfilerSession_cancelPtr;
 		finish: IProfilerSession_finishPtr;
 		defineStatement: IProfilerSession_defineStatementPtr;
+		defineCursor: IProfilerSession_defineCursorPtr;
 		defineRecordSource: IProfilerSession_defineRecordSourcePtr;
 		onRequestStart: IProfilerSession_onRequestStartPtr;
 		onRequestFinish: IProfilerSession_onRequestFinishPtr;
@@ -3835,6 +3837,7 @@ type
 		procedure cancel(status: IStatus);
 		procedure finish(status: IStatus; timestamp: ISC_TIMESTAMP_TZ);
 		procedure defineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar);
+		procedure defineCursor(statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal);
 		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal);
 		procedure onRequestStart(status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
 		procedure onRequestFinish(status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
@@ -3855,6 +3858,7 @@ type
 		procedure cancel(status: IStatus); virtual; abstract;
 		procedure finish(status: IStatus; timestamp: ISC_TIMESTAMP_TZ); virtual; abstract;
 		procedure defineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); virtual; abstract;
+		procedure defineCursor(statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal); virtual; abstract;
 		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); virtual; abstract;
 		procedure onRequestStart(status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); virtual; abstract;
 		procedure onRequestFinish(status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); virtual; abstract;
@@ -9080,6 +9084,11 @@ procedure IProfilerSession.defineStatement(status: IStatus; statementId: Int64; 
 begin
 	ProfilerSessionVTable(vTable).defineStatement(Self, status, statementId, parentStatementId, type_, packageName, routineName, sqlText);
 	FbException.checkException(status);
+end;
+
+procedure IProfilerSession.defineCursor(statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal);
+begin
+	ProfilerSessionVTable(vTable).defineCursor(Self, statementId, cursorId, name, line, column);
 end;
 
 procedure IProfilerSession.defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal);
@@ -15788,6 +15797,15 @@ begin
 	end
 end;
 
+procedure IProfilerSessionImpl_defineCursorDispatcher(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal); cdecl;
+begin
+	try
+		IProfilerSessionImpl(this).defineCursor(statementId, cursorId, name, line, column);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
 procedure IProfilerSessionImpl_defineRecordSourceDispatcher(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); cdecl;
 begin
 	try
@@ -16903,6 +16921,7 @@ initialization
 	IProfilerSessionImpl_vTable.cancel := @IProfilerSessionImpl_cancelDispatcher;
 	IProfilerSessionImpl_vTable.finish := @IProfilerSessionImpl_finishDispatcher;
 	IProfilerSessionImpl_vTable.defineStatement := @IProfilerSessionImpl_defineStatementDispatcher;
+	IProfilerSessionImpl_vTable.defineCursor := @IProfilerSessionImpl_defineCursorDispatcher;
 	IProfilerSessionImpl_vTable.defineRecordSource := @IProfilerSessionImpl_defineRecordSourceDispatcher;
 	IProfilerSessionImpl_vTable.onRequestStart := @IProfilerSessionImpl_onRequestStartDispatcher;
 	IProfilerSessionImpl_vTable.onRequestFinish := @IProfilerSessionImpl_onRequestFinishDispatcher;

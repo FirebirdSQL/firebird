@@ -1741,7 +1741,7 @@ interface ProfilerSession : Disposable
 	void defineStatement(Status status, int64 statementId, int64 parentStatementId,
 		const string type, const string packageName, const string routineName, const string sqlText);
 
-	//// TODO: Add defineCursor with line/column
+	void defineCursor(int64 statementId, uint cursorId, const string name, uint line, uint column);
 
 	void defineRecordSource(int64 statementId, uint cursorId, uint recSourceId,
 		const string accessPath, uint parentRecSourceId);

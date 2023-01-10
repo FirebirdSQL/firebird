@@ -6953,6 +6953,7 @@ namespace Firebird
 			void (CLOOP_CARG *cancel)(IProfilerSession* self, IStatus* status) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *finish)(IProfilerSession* self, IStatus* status, ISC_TIMESTAMP_TZ timestamp) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *defineStatement)(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *defineCursor)(IProfilerSession* self, ISC_INT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *defineRecordSource)(IProfilerSession* self, ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, const char* accessPath, unsigned parentRecSourceId) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *onRequestStart)(IProfilerSession* self, IStatus* status, ISC_INT64 requestId, ISC_INT64 statementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *onRequestFinish)(IProfilerSession* self, IStatus* status, ISC_INT64 requestId, ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats) CLOOP_NOEXCEPT;
@@ -7011,6 +7012,11 @@ namespace Firebird
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->defineStatement(this, status, statementId, parentStatementId, type, packageName, routineName, sqlText);
 			StatusType::checkException(status);
+		}
+
+		void defineCursor(ISC_INT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column)
+		{
+			static_cast<VTable*>(this->cloopVTable)->defineCursor(this, statementId, cursorId, name, line, column);
 		}
 
 		void defineRecordSource(ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, const char* accessPath, unsigned parentRecSourceId)
@@ -20426,6 +20432,7 @@ namespace Firebird
 					this->cancel = &Name::cloopcancelDispatcher;
 					this->finish = &Name::cloopfinishDispatcher;
 					this->defineStatement = &Name::cloopdefineStatementDispatcher;
+					this->defineCursor = &Name::cloopdefineCursorDispatcher;
 					this->defineRecordSource = &Name::cloopdefineRecordSourceDispatcher;
 					this->onRequestStart = &Name::clooponRequestStartDispatcher;
 					this->onRequestFinish = &Name::clooponRequestFinishDispatcher;
@@ -20506,6 +20513,18 @@ namespace Firebird
 			catch (...)
 			{
 				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopdefineCursorDispatcher(IProfilerSession* self, ISC_INT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				static_cast<Name*>(self)->Name::defineCursor(statementId, cursorId, name, line, column);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
 			}
 		}
 
@@ -20652,6 +20671,7 @@ namespace Firebird
 		virtual void cancel(StatusType* status) = 0;
 		virtual void finish(StatusType* status, ISC_TIMESTAMP_TZ timestamp) = 0;
 		virtual void defineStatement(StatusType* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText) = 0;
+		virtual void defineCursor(ISC_INT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column) = 0;
 		virtual void defineRecordSource(ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, const char* accessPath, unsigned parentRecSourceId) = 0;
 		virtual void onRequestStart(StatusType* status, ISC_INT64 requestId, ISC_INT64 statementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) = 0;
 		virtual void onRequestFinish(StatusType* status, ISC_INT64 requestId, ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats) = 0;

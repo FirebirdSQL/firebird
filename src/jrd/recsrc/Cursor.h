@@ -57,6 +57,16 @@ namespace Jrd
 			return m_top;
 		}
 
+		ULONG getLine() const
+		{
+			return m_line;
+		}
+
+		ULONG getColumn() const
+		{
+			return m_column;
+		}
+
 		void initializeInvariants(Request* request) const;
 		void printPlan(thread_db* tdbb, Firebird::string& plan, bool detailed) const;
 
@@ -115,10 +125,12 @@ namespace Jrd
 
 		void checkState(Request* request) const;
 
-#if (!defined __GNUC__) || (__GNUC__ > 6)
-		constexpr
-#endif
-				  bool isUpdateCounters() const
+		ULONG getCursorProfileId() const
+		{
+			return m_cursorProfileId;
+		}
+
+		bool isUpdateCounters() const
 		{
 			return m_updateCounters;
 		}
@@ -129,6 +141,10 @@ namespace Jrd
 		}
 
 	private:
+		void prepareProfiler(thread_db* tdbb, Request* request) const;
+
+	private:
+		const ULONG m_cursorProfileId;
 		ULONG m_impure;
 		const bool m_updateCounters;
 	};

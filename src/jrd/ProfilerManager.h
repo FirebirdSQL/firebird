@@ -35,6 +35,7 @@
 namespace Jrd {
 
 class Attachment;
+class Cursor;
 class Request;
 class RecordSource;
 class thread_db;
@@ -71,6 +72,7 @@ private:
 	public:
 		Statement(MemoryPool& pool)
 			: cursorNextSequence(pool),
+			  definedCursors(pool),
 			  recSourceSequence(pool)
 		{
 		}
@@ -80,6 +82,7 @@ private:
 
 		SINT64 id = 0;
 		Firebird::NonPooledMap<ULONG, ULONG> cursorNextSequence;
+		Firebird::SortedArray<ULONG> definedCursors;
 		Firebird::NonPooledMap<ULONG, ULONG> recSourceSequence;
 	};
 
@@ -120,6 +123,7 @@ public:
 	SINT64 startSession(thread_db* tdbb, Nullable<SLONG> flushInterval,
 		const Firebird::PathName& pluginName, const Firebird::string& description, const Firebird::string& options);
 
+	void prepareCursor(thread_db* tdbb, Request* request, const Cursor* cursor);
 	void prepareRecSource(thread_db* tdbb, Request* request, const RecordSource* rsb);
 	void onRequestFinish(Request* request, Stats& stats);
 	void beforePsqlLineColumn(Request* request, ULONG line, ULONG column);
