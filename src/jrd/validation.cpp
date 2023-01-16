@@ -2684,7 +2684,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 
 					corrupt(VAL_P_PAGE_WRONG_BITS, relation, pageSpaceId,
 						page->ppg_header.pag_pageno, sequence, pp_bits, s_pp.c_str(),
-						*pages, seq, new_pp_bits, s_dp.c_str());
+						pageSpaceId, *pages, seq, new_pp_bits, s_dp.c_str());
 
 					if ((vdr_flags & VDR_update))
 					{
