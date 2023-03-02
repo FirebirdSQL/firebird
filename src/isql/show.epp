@@ -227,23 +227,20 @@ static const struct
 	{ 0, NULL}
 };
 
-const int PRIV_DELETE_POS = 0;
-const int PRIV_INSERT_POS = 2;
-const int PRIV_SELECT_POS = 3;
-const int PRIV_UPDATE_POS = 4;
-const int PRIV_REFERENCES_POS = 5;
-
 // strlen of each element above, + strlen(", ") for separators
 
 const int MAX_PRIV_LIST = (6 + 2 + 7 + 2 + 6 + 2 + 6 + 2 + 6 + 2 + 10 + 2 + 6 + 2 + 5 + 2 + 4 + 1);
 
-const char* COMMA_SEPARATOR = ", ";
+const int PRIV_UPDATE_POS = 4;
+const int PRIV_REFERENCES_POS = 5;
 
-const int MAX_RELATION_PRIV_LENGTH = (strlen(privs[PRIV_DELETE_POS].priv_string) + strlen(COMMA_SEPARATOR) +
-									  strlen(privs[PRIV_INSERT_POS].priv_string) + strlen(COMMA_SEPARATOR) +
-									  strlen(privs[PRIV_SELECT_POS].priv_string) + strlen(COMMA_SEPARATOR) +
-									  strlen(privs[PRIV_UPDATE_POS].priv_string) + strlen(COMMA_SEPARATOR) +
-									  strlen(privs[PRIV_REFERENCES_POS].priv_string));
+const int RELATION_PRIV_ALL = priv_SELECT | priv_INSERT | priv_UPDATE | priv_DELETE | priv_REFERENCES;
+
+struct PrivilegeFields
+{
+	const char* privilege;
+	string fields;
+};
 
 // Added support to display FORCED WRITES status. - PR 27-NOV-2001
 // Added support to display transaction info when next_transaction id is fixed.
@@ -796,7 +793,7 @@ static void set_grantee(int user_type, const char* SQL_identifier, char* user_st
 }
 
 
-static USHORT convert_privilage_to_code(char privilege)
+static USHORT convert_privilege_to_code(char privilege)
 {
 	switch (privilege)
 	{
@@ -816,6 +813,36 @@ static USHORT convert_privilage_to_code(char privilege)
 	}
 
 	return priv_UNKNOWN;
+}
+
+
+static void make_privilege_string_with_fields(USHORT priv_flags,
+											  PrivilegeFields* priv_fields,
+											  int priv_fields_count,
+											  char* priv_string,
+											  string& out_result)
+{
+	out_result = "";
+
+	if (priv_flags)
+	{
+		make_priv_string(priv_flags, priv_string, false);
+		out_result.assign(priv_string);
+
+		priv_flags = 0;
+	}
+
+	for (int i = 0; i < priv_fields_count; i++)
+	{
+		if (priv_fields[i].fields.isEmpty())
+			continue;
+
+		if (!out_result.isEmpty())
+			out_result += ", ";
+		out_result += priv_fields[i].privilege + (" (" + priv_fields[i].fields + ")");
+
+		priv_fields[i].fields = "";
+	}
 }
 
 
@@ -851,15 +878,8 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	SCHAR user_string[QUOTED_NAME_SIZE + 20];
 	SCHAR obj_string[QUOTED_NAME_SIZE + 20];
 
-	struct
+	PrivilegeFields priv_fields[] =
 	{
-		const char* privilege;
-		string fields;
-	} priv_fields[] =
-	{
-		{privs[PRIV_DELETE_POS].priv_string, ""},
-		{privs[PRIV_INSERT_POS].priv_string, ""},
-		{privs[PRIV_SELECT_POS].priv_string, ""},
 		{privs[PRIV_UPDATE_POS].priv_string, ""},
 		{privs[PRIV_REFERENCES_POS].priv_string, ""}
 	};
@@ -927,35 +947,17 @@ processing_state SHOW_grants2 (const SCHAR* object,
 					if (*with_option != '\0')
 						strcpy(with_option, " WITH GRANT OPTION");
 
-					if (priv_flags)
-					{
-						make_priv_string(priv_flags, priv_string, false);
-						if (strlen(priv_string) == MAX_RELATION_PRIV_LENGTH)
-							strcpy(priv_string, "ALL");
+					string combine_privileges = "";
+					make_privilege_string_with_fields(priv_flags, priv_fields, priv_fields_count,
+						priv_string, combine_privileges);
 
-						isqlGlob.printf("GRANT %s ON %s TO %s%s%s%s%s",
-							priv_string,
-							SQL_identifier,
-							user_string, with_option, granted_by(buf_grantor, prev_grantor, false),
-							terminator, NEWLINE);
-
-						priv_flags = 0;
-					}
-
-					for (int i = 0; i < priv_fields_count; i++)
-					{
-						if (priv_fields[i].fields.isEmpty())
-							continue;
-
-						isqlGlob.printf("GRANT %s (%s) ON %s TO %s%s%s%s%s",
-							priv_fields[i].privilege, priv_fields[i].fields.c_str(),
-							SQL_identifier,
-							user_string, with_option, granted_by(buf_grantor, prev_grantor, false),
-							terminator, NEWLINE);
-					}
+					isqlGlob.printf("GRANT %s ON %s TO %s%s%s%s%s",
+						combine_privileges.c_str(),
+						SQL_identifier,
+						user_string, with_option, granted_by(buf_grantor, prev_grantor, false),
+						terminator, NEWLINE);
 
 					// re-initialize strings
-
 					with_option[0] = '\0';
 					priv_string[0] = '\0';
 					col_string = "";
@@ -993,10 +995,11 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				// Only the first character is used for permissions
 				const char c = PRV.RDB$PRIVILEGE[0];
 
+				// Column level privileges for update and references only
 				if (PRV.RDB$FIELD_NAME.NULL)
 				{
 					col_string = "";
-					priv_flags |= convert_privilage_to_code(c);
+					priv_flags |= convert_privilege_to_code(c);
 					continue;
 				}
 				else
@@ -1017,8 +1020,8 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				{
 					if (c == priv_fields[i].privilege[0])
 					{
-						priv_fields[i].fields += priv_fields[i].fields.isEmpty() ? col_string :
-							COMMA_SEPARATOR + col_string;
+						priv_fields[i].fields += priv_fields[i].fields.isEmpty() ? col_string
+							: ", " + col_string;
 						break;
 					}
 				}
@@ -1042,32 +1045,18 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				else
 					strcpy(SQL_identifier, object);
 
-				if (priv_flags)
-				{
-					make_priv_string(priv_flags, priv_string, false);
-					if (strlen(priv_string) == MAX_RELATION_PRIV_LENGTH)
-						strcpy(priv_string, "ALL");
+				if (*with_option != '\0')
+					strcpy(with_option, " WITH GRANT OPTION");
 
-					isqlGlob.printf("GRANT %s ON %s TO %s%s%s%s%s",
-						priv_string,
-						SQL_identifier,
-						user_string, with_option, granted_by(buf_grantor, prev_grantor, false),
-						terminator, NEWLINE);
+				string combine_privileges = "";
+				make_privilege_string_with_fields(priv_flags, priv_fields, priv_fields_count,
+					priv_string, combine_privileges);
 
-					priv_flags = 0;
-				}
-
-				for (int i = 0; i < priv_fields_count; i++)
-				{
-					if (priv_fields[i].fields.isEmpty())
-						continue;
-
-					isqlGlob.printf("GRANT %s (%s) ON %s TO %s%s%s%s%s",
-						priv_fields[i].privilege, priv_fields[i].fields.c_str(),
-						SQL_identifier,
-						user_string, with_option, granted_by(buf_grantor, prev_grantor, false),
-						terminator, NEWLINE);
-				}
+				isqlGlob.printf("GRANT %s ON %s TO %s%s%s%s%s",
+					combine_privileges.c_str(),
+					SQL_identifier,
+					user_string, with_option, granted_by(buf_grantor, prev_grantor, false),
+					terminator, NEWLINE);
 			}
 
 		END_FOR
@@ -2831,12 +2820,18 @@ static void make_priv_string(USHORT flags, char* string, bool useAny)
  *	string list.
  *
  **************************************/
+	if (flags == RELATION_PRIV_ALL)
+	{
+		strcat(string, "ALL");
+		return;
+	}
+
 	for (int i = 0; privs[i].priv_string; i++)
 	{
 		if (flags & privs[i].priv_flag)
 		{
 			if (*string)
-				strcat(string, COMMA_SEPARATOR);
+				strcat(string, ", ");
 
 			strcat(string, privs[i].priv_string);
 
