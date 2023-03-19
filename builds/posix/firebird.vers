@@ -69,6 +69,7 @@ gds__get_segment
 gds__get_slice
 gds__interprete
 gds__log
+gds__log__file
 gds__log_status
 gds__map_blobs
 gds__msg_close

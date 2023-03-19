@@ -1170,19 +1170,18 @@ void API_ROUTINE gds__trace(const TEXT* text)
 }
 
 
-void API_ROUTINE gds__log(const TEXT* text, ...)
+void API_ROUTINE vgds__log__file(const char* logfile, const TEXT* text, va_list ptr)
 {
 /**************************************
- *
- *	g d s _ l o g
- *
- **************************************
- *
- * Functional description
- *	Post an event to a log file.
- *
- **************************************/
-	va_list ptr;
+*
+* v g d s _ l o g _ f i l e
+*
+**************************************
+*
+* Functional description
+* Post an event to a specified log file with va_list parameter
+*
+**************************************/
 	time_t now;
 
 #ifdef HAVE_GETTIMEOFDAY
@@ -1206,9 +1205,7 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 		Firebird::MutexLockGuard(logMutex, FB_FUNCTION);
 		fb_utils::snprintf(buffer, sizeof(buffer), "\n\n%s\t%.25s\t", hostName, ctime(&now));
 		unsigned hdrlen = strlen(buffer);
-		va_start(ptr, text);
 		VSNPRINTF(&buffer[hdrlen], sizeof(buffer) - hdrlen, text, ptr);
-		va_end(ptr);
 		buffer[sizeof(buffer) - 1] = '\0';		// be safe
 
 		osLog(buffer);
@@ -1217,12 +1214,20 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 
 #endif // DARWIN
 
-	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
+	Firebird::PathName name;
+	if (logfile[0])
+	{
+		name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, logfile);
+	}
+	else
+	{
+		name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
+	}
 
 #ifdef WIN_NT
 	WaitForSingleObject(CleanupTraceHandles::trace_mutex_handle, INFINITE);
 #endif
-	FILE* file = os_utils::fopen(name.c_str(), "a");
+	FILE* file = os_utils::fopen(name.c_str(), "a+");
 	if (file != NULL)
 	{
 #ifndef WIN_NT
@@ -1244,9 +1249,7 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 #endif
 
 		fprintf(file, "\n%s\t%.25s\t", hostName, ctime(&now));
-		va_start(ptr, text);
 		vfprintf(file, text, ptr);
-		va_end(ptr);
 		fprintf(file, "\n\n");
 
 		// This will release file lock set in posix case
@@ -1255,6 +1258,42 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 #ifdef WIN_NT
 	ReleaseMutex(CleanupTraceHandles::trace_mutex_handle);
 #endif
+}
+
+void API_ROUTINE gds__log(const TEXT* text, ...)
+{
+/**************************************
+*
+* g d s _ l o g
+*
+**************************************
+*
+* Functional description
+* Post an event to a firebird.log file.
+*
+**************************************/
+	va_list ptr;
+	va_start(ptr, text);
+	vgds__log__file(LOGFILE, text, ptr);
+	va_end(ptr);
+}
+
+void API_ROUTINE gds__log__file(const char* logfile, const TEXT* text, ...)
+{
+/**************************************
+*
+* g d s _ l o g _ f i l e
+*
+**************************************
+*
+* Functional description
+* Post an event to a specified log file.
+*
+**************************************/
+	va_list ptr;
+	va_start(ptr, text);
+	vgds__log__file(logfile, text, ptr);
+	va_end(ptr);
 }
 
 #ifdef NOT_USED_OR_REPLACED
