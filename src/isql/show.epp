@@ -880,7 +880,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 		{privs[PRIV_UPDATE_POS].priv_string, ""},
 		{privs[PRIV_REFERENCES_POS].priv_string, ""}
 	};
-	int priv_fields_count = sizeof(priv_fields) / sizeof(priv_fields[0]);
+	const int priv_fields_count = FB_NELEM(priv_fields);
 
 	bool first = true;
 
