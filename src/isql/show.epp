@@ -893,7 +893,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	prev_user[0] = '\0';
 	prev_grantor[0] = '\0';
 	char priv_string[MAX_PRIV_LIST] = "";
-	string col_string = "";
+	string col_string;
 	char with_option[19] = "";
 	SSHORT prev_field_null = -1;
 	USHORT priv_flags = 0;
@@ -1048,7 +1048,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				if (prev_grant_option)
 					strcpy(with_option, " WITH GRANT OPTION");
 
-				string combine_privileges = "";
+				string combine_privileges;
 				make_privilege_string_with_fields(priv_flags, priv_fields, priv_fields_count,
 					priv_string, combine_privileges);
 
