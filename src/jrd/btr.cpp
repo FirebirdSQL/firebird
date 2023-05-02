@@ -353,7 +353,10 @@ IndexCondition::IndexCondition(thread_db* tdbb, index_desc* idx)
 
 	fb_assert(idx->idx_condition_statement);
 	const auto orgRequest = tdbb->getRequest();
-	m_request = idx->idx_condition_statement->findRequest(tdbb);
+	m_request = idx->idx_condition_statement->findRequest(tdbb, true);
+
+	if (!m_request)
+		ERR_post(Arg::Gds(isc_random) << "Attempt to evaluate index condition recursively");
 
 	fb_assert(m_request != orgRequest);
 
@@ -388,7 +391,7 @@ IndexCondition::~IndexCondition()
 
 bool IndexCondition::evaluate(Record* record) const
 {
-	if (!m_request)
+	if (!m_request || !m_condition)
 		return true;
 
 	const auto orgRequest = m_tdbb->getRequest();
@@ -470,7 +473,8 @@ IndexExpression::~IndexExpression()
 
 dsc* IndexExpression::evaluate(Record* record) const
 {
-	fb_assert(m_request);
+	if (!m_request || !m_expression)
+		return nullptr;
 
 	const auto orgRequest = m_tdbb->getRequest();
 	m_tdbb->setRequest(m_request);
@@ -500,26 +504,6 @@ dsc* IndexExpression::evaluate(Record* record) const
 }
 
 
-IndexKey::IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
-	: m_tdbb(tdbb), m_relation(relation), m_index(idx),
-	  m_type((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT),
-	  m_segments(idx->idx_count)
-{
-	if (m_index->idx_flags & idx_expression)
-		m_expression = FB_NEW_POOL(*tdbb->getDefaultPool()) IndexExpression(tdbb, idx);
-}
-
-IndexKey::IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx,
-				   USHORT keyType, USHORT segments)
-	: m_tdbb(tdbb), m_relation(relation), m_index(idx),
-	  m_type(keyType), m_segments(segments)
-{
-	fb_assert(m_segments);
-
-	if (m_index->idx_flags & idx_expression)
-		m_expression = FB_NEW_POOL(*tdbb->getDefaultPool()) IndexExpression(tdbb, idx);
-}
-
 idx_e IndexKey::compose(Record* record)
 {
 	// Compute a key from a record and an index descriptor.
@@ -548,21 +532,21 @@ idx_e IndexKey::compose(Record* record)
 		{
 			// For expression indices, compute the value of the expression
 
-			if (m_expression)
+			if (m_index->idx_flags & idx_expression)
 			{
-				desc_ptr = m_expression->evaluate(record);
+				desc_ptr = m_expression.evaluate(record);
 				// Multi-byte text descriptor is returned already adjusted.
 			}
 			else
 			{
-				desc_ptr = &desc;
-
 				// In order to "map a null to a default" value (in EVL_field()),
 				// the relation block is referenced.
 				// Reference: Bug 10116, 10424
 
-				if (EVL_field(m_relation, record, tail->idx_field, desc_ptr))
+				if (EVL_field(m_relation, record, tail->idx_field, &desc))
 				{
+					desc_ptr = &desc;
+
 					if (desc_ptr->dsc_dtype == dtype_text &&
 						tail->idx_field < record->getFormat()->fmt_desc.getCount())
 					{
@@ -579,7 +563,7 @@ idx_e IndexKey::compose(Record* record)
 
 			m_key.key_flags |= key_empty;
 
-			compress(m_tdbb, desc_ptr, &m_key, tail->idx_itype, descending, m_type);
+			compress(m_tdbb, desc_ptr, &m_key, tail->idx_itype, descending, m_keyType);
 		}
 		else
 		{
@@ -597,14 +581,14 @@ idx_e IndexKey::compose(Record* record)
 						return idx_e_keytoobig;
 				}
 
-				desc_ptr = &desc;
-
 				// In order to "map a null to a default" value (in EVL_field()),
 				// the relation block is referenced.
 				// Reference: Bug 10116, 10424
 
-				if (EVL_field(m_relation, record, tail->idx_field, desc_ptr))
+				if (EVL_field(m_relation, record, tail->idx_field, &desc))
 				{
+					desc_ptr = &desc;
+
 					if (desc_ptr->dsc_dtype == dtype_text &&
 						tail->idx_field < record->getFormat()->fmt_desc.getCount())
 					{
@@ -618,7 +602,7 @@ idx_e IndexKey::compose(Record* record)
 					m_key.key_nulls |= 1 << n;
 				}
 
-				compress(m_tdbb, desc_ptr, &temp, tail->idx_itype, descending, m_type);
+				compress(m_tdbb, desc_ptr, &temp, tail->idx_itype, descending, m_keyType);
 
 				const UCHAR* q = temp.key_data;
 				for (USHORT l = temp.key_length; l; --l, --stuff_count)

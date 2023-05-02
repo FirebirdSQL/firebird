@@ -362,9 +362,19 @@ private:
 class IndexKey
 {
 public:
-	IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx);
+	IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
+		: m_tdbb(tdbb), m_relation(relation), m_index(idx),
+		  m_keyType((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT),
+		  m_segments(idx->idx_count), m_expression(tdbb, idx)
+	{}
+
 	IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx,
-			 USHORT type, USHORT segments);
+			 USHORT keyType, USHORT segments)
+		: m_tdbb(tdbb), m_relation(relation), m_index(idx),
+		  m_keyType(keyType), m_segments(segments), m_expression(tdbb, idx)
+	{
+		fb_assert(m_segments && m_segments <= idx->idx_count);
+	}
 
 	idx_e compose(Record* record);
 
@@ -414,10 +424,10 @@ private:
 	thread_db* const m_tdbb;
 	jrd_rel* const m_relation;
 	index_desc* const m_index;
-	const USHORT m_type;
+	const USHORT m_keyType;
 	const USHORT m_segments;
 	temporary_key m_key;
-	Firebird::AutoPtr<IndexExpression> m_expression;
+	IndexExpression m_expression;
 };
 
 } //namespace Jrd
