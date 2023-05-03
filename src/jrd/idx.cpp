@@ -464,7 +464,6 @@ bool IndexCreateTask::handler(WorkItem& _item)
 	jrd_tra* transaction = item->m_tra ? item->m_tra : m_creation->transaction;
 	Sort* scb = item->m_sort;
 
-	idx_e result = idx_e_ok;
 	RecordStack stack;
 	record_param primary, secondary;
 	secondary.rpb_relation = relation;
@@ -815,8 +814,6 @@ void IDX_create_index(thread_db* tdbb,
  *	Create and populate index.
  *
  **************************************/
-	idx_e result = idx_e_ok;
-
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
 	Jrd::Attachment* attachment = tdbb->getAttachment();
@@ -1797,8 +1794,6 @@ static idx_e check_partner_index(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
-	idx_e result = idx_e_ok;
-
 	// get the index root page for the partner relation
 
 	WIN window(get_root_page(tdbb, partner_relation));
@@ -1855,7 +1850,7 @@ static idx_e check_partner_index(thread_db* tdbb,
 		(tmpIndex.idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT;
 
 	IndexKey key(tdbb, relation, &tmpIndex, keyType, segment);
-	result = key.compose(record);
+	auto result = key.compose(record);
 
 	CCH_RELEASE(tdbb, &window);
 
