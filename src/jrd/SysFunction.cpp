@@ -2668,16 +2668,33 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 #define blr_extract_yearday		(unsigned char)7
 #define blr_extract_millisecond	(unsigned char)8
 #define blr_extract_week		(unsigned char)9
+#define blr_extract_timezone_hour	(unsigned char)10
+#define blr_extract_timezone_minute	(unsigned char)11
+#define blr_extract_timezone_name	(unsigned char)12
+#define blr_extract_quarter		(unsigned char)13
 */
 
-const char* extractParts[10] =
+const char* extractParts[] =
 {
-	"YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "WEEKDAY", "YEARDAY", "MILLISECOND", "WEEK"
+	"YEAR",
+	"MONTH",
+	"DAY",
+	"HOUR",
+	"MINUTE",
+	"SECOND",
+	"WEEKDAY",
+	"YEARDAY",
+	"MILLISECOND",
+	"WEEK",
+	nullptr,
+	nullptr,
+	nullptr,
+	"QUARTER"
 };
 
 const char* getPartName(int n)
 {
-	if (n < 0 || n >= FB_NELEM(extractParts))
+	if (n < 0 || n >= FB_NELEM(extractParts) || !extractParts[n])
 		return "Unknown";
 
 	return extractParts[n];
@@ -4117,6 +4134,7 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 	switch (part)
 	{
 		case blr_extract_year:
+		case blr_extract_quarter:
 		case blr_extract_month:
 		case blr_extract_day:
 		case blr_extract_week:
@@ -4322,6 +4340,11 @@ dsc* evlFirstLastDay(thread_db* tdbb, const SysFunction* function, const NestVal
 			times.tm_mday = 1;
 			break;
 
+		case blr_extract_quarter:
+			times.tm_mon = times.tm_mon / 3 * 3;
+			times.tm_mday = 1;
+			break;
+
 		case blr_extract_week:
 			break;
 
@@ -4344,6 +4367,10 @@ dsc* evlFirstLastDay(thread_db* tdbb, const SysFunction* function, const NestVal
 				++times.tm_year;
 				adjust = -1;
 				break;
+
+			case blr_extract_quarter:
+				times.tm_mon += 2;
+				// fall through
 
 			case blr_extract_month:
 				if (++times.tm_mon == 12)

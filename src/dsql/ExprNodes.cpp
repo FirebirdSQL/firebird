@@ -5276,6 +5276,7 @@ ValueExprNode* ExtractNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	switch (blrSubOp)
 	{
 		case blr_extract_year:
+		case blr_extract_quarter:
 		case blr_extract_month:
 		case blr_extract_day:
 		case blr_extract_weekday:
@@ -5600,6 +5601,10 @@ dsc* ExtractNode::execute(thread_db* tdbb, Request* request) const
 
 		case blr_extract_year:
 			part = times.tm_year + 1900;
+			break;
+
+		case blr_extract_quarter:
+			part = times.tm_mon / 3 + 1;
 			break;
 
 		case blr_extract_month:

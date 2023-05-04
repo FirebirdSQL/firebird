@@ -514,7 +514,7 @@ Function:
     date/timestamp value.
 
 Format:
-    FIRST_DAY( OF { YEAR | MONTH | WEEK } FROM <date_or_timestamp> )
+    FIRST_DAY( OF { YEAR | QUARTER | MONTH | WEEK } FROM <date_or_timestamp> )
 
 Notes:
     1) The first day of the week is considered as Sunday, per the same rules of EXTRACT with WEEKDAY.
@@ -615,7 +615,7 @@ Function:
     date/timestamp value.
 
 Format:
-    LAST_DAY( OF { YEAR | MONTH | WEEK } FROM <date_or_timestamp> )
+    LAST_DAY( OF { YEAR | QUARTER | MONTH | WEEK } FROM <date_or_timestamp> )
 
 Notes:
     1) The last day of the week is considered as Saturday, per the same rules of EXTRACT with WEEKDAY.

@@ -694,6 +694,10 @@ using namespace Firebird;
 %token <metaNamePtr> UNICODE_CHAR
 %token <metaNamePtr> UNICODE_VAL
 
+// tokens added for Firebird 6.0
+
+%token <metaNamePtr> QUARTER
+
 // precedence declarations for expression evaluation
 
 %left	OR
@@ -8457,6 +8461,7 @@ encrypt_decrypt
 %type <blrOp> of_first_last_day_part
 of_first_last_day_part
 	: OF YEAR			{ $$ = blr_extract_year; }
+	| OF QUARTER		{ $$ = blr_extract_quarter; }
 	| OF MONTH			{ $$ = blr_extract_month; }
 	| OF WEEK			{ $$ = blr_extract_week; }
 	;
@@ -8702,6 +8707,7 @@ next_value_expression
 %type <blrOp> timestamp_part
 timestamp_part
 	: YEAR			{ $$ = blr_extract_year; }
+	| QUARTER		{ $$ = blr_extract_quarter; }
 	| MONTH			{ $$ = blr_extract_month; }
 	| DAY			{ $$ = blr_extract_day; }
 	| HOUR			{ $$ = blr_extract_hour; }
@@ -9184,6 +9190,8 @@ non_reserved_word
 	| TIMEZONE_NAME
 	| UNICODE_CHAR
 	| UNICODE_VAL
+	// added in FB 6.0
+	| QUARTER
 	;
 
 %%
