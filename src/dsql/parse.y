@@ -689,14 +689,11 @@ using namespace Firebird;
 // tokens added for Firebird 5.0
 
 %token <metaNamePtr> LOCKED
+%token <metaNamePtr> QUARTER
 %token <metaNamePtr> TARGET
 %token <metaNamePtr> TIMEZONE_NAME
 %token <metaNamePtr> UNICODE_CHAR
 %token <metaNamePtr> UNICODE_VAL
-
-// tokens added for Firebird 6.0
-
-%token <metaNamePtr> QUARTER
 
 // precedence declarations for expression evaluation
 
@@ -9186,12 +9183,11 @@ non_reserved_word
 	| BLOB_APPEND
 	// added in FB 5.0
 	| LOCKED
+	| QUARTER
 	| TARGET
 	| TIMEZONE_NAME
 	| UNICODE_CHAR
 	| UNICODE_VAL
-	// added in FB 6.0
-	| QUARTER
 	;
 
 %%
