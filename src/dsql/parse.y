@@ -5930,19 +5930,23 @@ query_primary
 		{
 			if ($3 || $4 || $5)
 			{
-				SelectExprNode* node = newNode<SelectExprNode>();
-				node->querySpec = $2;
-				node->orderClause = $3;
+				const auto selectExpr = newNode<SelectExprNode>();
+				selectExpr->dsqlFlags |= RecordSourceNode::DFLAG_DERIVED;
+				selectExpr->querySpec = $2;
+				selectExpr->orderClause = $3;
 
 				if ($4 || $5)
 				{
-					RowsClause* rowsNode = newNode<RowsClause>();
+					const auto rowsNode = newNode<RowsClause>();
 					rowsNode->skip = $4;
 					rowsNode->length = $5;
-					node->rowsClause = rowsNode;
+					selectExpr->rowsClause = rowsNode;
 				}
 
-				$$ = node;
+				const auto rse = newNode<RseNode>();
+				rse->dsqlFlags |= RecordSourceNode::DFLAG_BODY_WRAPPER;
+				rse->dsqlFrom = newNode<RecSourceListNode>(selectExpr);
+				$$ = rse;
 			}
 			else
 				$$ = $2;

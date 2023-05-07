@@ -1131,6 +1131,7 @@ public:
 	static const USHORT DFLAG_CURSOR					= 0x40;
 	static const USHORT DFLAG_LATERAL					= 0x80;
 	static const USHORT DFLAG_PLAN_ITEM					= 0x100;
+	static const USHORT DFLAG_BODY_WRAPPER				= 0x200;
 
 	RecordSourceNode(Type aType, MemoryPool& pool)
 		: ExprNode(aType, pool),

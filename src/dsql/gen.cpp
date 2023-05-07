@@ -525,6 +525,12 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
  **/
 void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 {
+	if ((rse->dsqlFlags & RecordSourceNode::DFLAG_BODY_WRAPPER))
+	{
+		GEN_expr(dsqlScratch, rse->dsqlStreams->items[0]);
+		return;
+	}
+
 	if (rse->dsqlFlags & RecordSourceNode::DFLAG_SINGLETON)
 		dsqlScratch->appendUChar(blr_singular);
 
