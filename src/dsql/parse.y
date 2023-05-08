@@ -6060,9 +6060,15 @@ table_reference
 %type <recSourceNode> table_primary
 table_primary
 	: table_proc
-	| derived_table			{ $$ = $1; }
-	| lateral_derived_table	{ $$ = $1; }
-	| '(' joined_table ')'	{ $$ = $2; }
+	| derived_table					{ $$ = $1; }
+	| lateral_derived_table			{ $$ = $1; }
+	| parenthesized_joined_table	{ $$ = $1; }
+	;
+
+%type <recSourceNode> parenthesized_joined_table
+parenthesized_joined_table
+	: '(' parenthesized_joined_table ')'	{ $$ = $2; }
+	| '(' joined_table ')'					{ $$ = $2; }
 	;
 
 %type <selectExprNode> derived_table
