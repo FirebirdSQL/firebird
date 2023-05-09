@@ -33,11 +33,11 @@
 #DYLD_PRINT_LIBRARIES=1
 #export DYLD_PRINT_LIBRARIES
 
-MACOSX_DEPLOYMENT_TARGET=12.0
+MACOSX_DEPLOYMENT_TARGET=11.0
 export MACOSX_DEPLOYMENT_TARGET
 
-PROD_FLAGS=-DDARWIN -DARM64 -pipe -O2 -MMD -fPIC -fno-common -mmacosx-version-min=12.0
-DEV_FLAGS=-ggdb -DDARWIN -DARM64 -pipe -MMD -fPIC -fno-omit-frame-pointer -fno-common -Wall -fno-optimize-sibling-calls -mmacosx-version-min=12.0 -Wno-non-virtual-dtor
+PROD_FLAGS=-DDARWIN -DARM64 -pipe -O2 -MMD -fPIC -fno-common -mmacosx-version-min=11.0
+DEV_FLAGS=-ggdb -DDARWIN -DARM64 -pipe -MMD -fPIC -fno-omit-frame-pointer -fno-common -Wall -fno-optimize-sibling-calls -mmacosx-version-min=11.0 -Wno-non-virtual-dtor
 CXXFLAGS:=$(CXXFLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -stdlib=libc++
 
 UNDEF_PLATFORM=
