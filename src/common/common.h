@@ -214,6 +214,10 @@
 #define FB_CPU CpuM68k
 #endif /* M68K */
 
+#ifdef LOONGARCH64
+#define FB_CPU CpuLoongArch64
+#endif /* loongarch64 */
+
 #endif /* LINUX */
 
 

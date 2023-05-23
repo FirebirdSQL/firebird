@@ -317,6 +317,18 @@ dnl CPU_TYPE=ppc64
     libdir=/usr/lib64
     ;;
 
+  loongarch64*-*-linux*)
+    MAKEFILE_PREFIX=linux_loongarch64
+    INSTALL_PREFIX=linux
+    PLATFORM=LINUX
+    AC_DEFINE(LINUX, 1, [Define this if OS is Linux])
+    EDITLINE_FLG=Y
+    SHRLIB_EXT=so
+    STD_EDITLINE=true
+    STD_ICU=true
+    libdir=/usr/lib64
+    ;;
+
   powerpc64le-*-linux*)
     MAKEFILE_PREFIX=linux_powerpc64el
     INSTALL_PREFIX=linux
