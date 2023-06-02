@@ -733,7 +733,8 @@ enum fld_flags_vals {
 	FLD_update_missing		= 8,
 	FLD_null_flag			= 16,
 	FLD_charset_flag		= 32,	// column has global charset
-	FLD_collate_flag		= 64	// local column has specific collation
+	FLD_collate_flag		= 64,	// local column has specific collation
+	FLD_system_domain		= 128	// field uses a system domain (on restore)
 };
 
 // relation definition - holds useful relation type stuff

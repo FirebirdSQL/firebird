@@ -2987,20 +2987,29 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 				continue;
 
 			const char* dom = field->fld_source;
-			if (strncmp(dom, "RDB$", 4) != 0)
-				continue;
 
-			for (dom += 4; *dom; ++dom)
+			if (strncmp(dom, "RDB$", 4) == 0)
 			{
-#ifdef HAVE_CTYPE_H
-				if (!isdigit(*dom))
-#else
-				if (*dom < '0' || *dom > '9')
-#endif
+				for (dom += 4; *dom; ++dom)
 				{
-					sysDomFlag = true;
-					break;
+#ifdef HAVE_CTYPE_H
+					if (!isdigit(*dom))
+#else
+					if (*dom < '0' || *dom > '9')
+#endif
+					{
+						sysDomFlag = true;
+						break;
+					}
 				}
+			}
+
+			// Not all system domains starts with RDB$
+			// There is also SEC$ fields. Here we are mostly interested in legacy UNICODE_FSS fields - see #7611.
+			if (field->fld_flags & FLD_system_domain)
+			{
+				sysDomFlag = true;
+				break;
 			}
 		}
 
@@ -4446,6 +4455,7 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 				case att_field_system_flag:
 					X.RDB$SYSTEM_FLAG = (USHORT) get_int32(tdgbl);
 					X.RDB$SYSTEM_FLAG.NULL = FALSE;
+					field->fld_flags |= FLD_system_domain;
 					break;
 
 				case att_view_context:
@@ -4650,6 +4660,7 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 				case att_field_system_flag:
 					X.RDB$SYSTEM_FLAG = (USHORT) get_int32(tdgbl);
 					X.RDB$SYSTEM_FLAG.NULL = FALSE;
+					field->fld_flags |= FLD_system_domain;
 					break;
 
 				case att_view_context:
