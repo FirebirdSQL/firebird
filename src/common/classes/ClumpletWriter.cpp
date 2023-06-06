@@ -226,6 +226,11 @@ void ClumpletWriter::reset(const UCHAR* buffer, const FB_SIZE_T buffLen)
 	rewind();
 }
 
+void ClumpletWriter::reset(const ClumpletWriter& from)
+{
+	reset(from.getBuffer(), from.getBufferEnd() - from.getBuffer());
+}
+
 void ClumpletWriter::size_overflow()
 {
 	fatal_exception::raise("Clumplet buffer size limit reached");

@@ -6223,12 +6223,13 @@ YReplicator* YAttachment::createReplicator(CheckStatusWrapper* status)
 //-------------------------------------
 
 
-YService::YService(IProvider* aProvider, IService* aNext, bool utf8)
+YService::YService(IProvider* aProvider, IService* aNext, bool utf8, Dispatcher* yProvider)
 	: YHelper(aNext),
 	  provider(aProvider),
-	  utf8Connection(utf8)
+	  utf8Connection(utf8),
+	  attachSpb(getPool(), ClumpletReader::spbList, MAX_DPB_SIZE, nullptr, 0),
+	  ownProvider(yProvider)
 {
-	provider->addRef();
 	makeHandle(&services, this, handle);
 }
 
@@ -6286,8 +6287,8 @@ void YService::query(CheckStatusWrapper* status, unsigned int sendLength, const 
 	try
 	{
 		YEntry<YService> entry(status, this);
-		entry.next()->query(status, sendLength, sendItems,
-			receiveLength, receiveItems, bufferLength, buffer);
+		(alternativeHandle ? alternativeHandle.getPtr() : entry.next())->
+			query(status, sendLength, sendItems, receiveLength, receiveItems, bufferLength, buffer);
 	}
 	catch (const Exception& e)
 	{
@@ -6320,6 +6321,43 @@ void YService::start(CheckStatusWrapper* status, unsigned int spbLength, const u
 
 		YEntry<YService> entry(status, this);
 		entry.next()->start(status, spb.getBufferLength(), spb.getBuffer());
+
+		FbLocalStatus st;
+		unsigned providerType = provider->getType(&st);
+		const ISC_STATUS retryList[] = {isc_wrong_ods, isc_badodsver, isc_gstat_wrong_ods, 0};
+
+		for (const ISC_STATUS* code = retryList; (providerType == Dispatcher::PTYPE_LOCAL) && *code; ++code)
+		{
+			if (fb_utils::containsErrorCode(status->getErrors(), *code))
+			{
+				if (alternativeHandle)		// first of all try already found provider
+				{
+					alternativeHandle->start(&st, spb.getBufferLength(), spb.getBuffer());
+					if (st.isSuccess())
+					{
+						status->init();
+						return;
+					}
+				}
+
+				// we are not going to attach network providers, therefore const svcName is OK
+				alternativeHandle = ownProvider->internalServiceAttach(&st, "service_mgr", attachSpb,
+					[&spb](CheckStatusWrapper* st, IService* service)
+					{
+						service->start(st, spb.getBufferLength(), spb.getBuffer());
+					}, Dispatcher::PTYPE_LOCAL, nullptr);
+				if (st.isSuccess())
+				{
+					status->init();
+					return;
+				}
+
+				// can't help any more...
+				break;
+			}
+		}
+
+		alternativeHandle = nullptr;
 	}
 	catch (const Exception& e)
 	{
@@ -6515,66 +6553,16 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 			IntlSpb().toUtf8(spbWriter);
 		}
 
-		// Build correct config
-		RefPtr<const Config> config(Config::getDefaultConfig());
-		if (spbWriter.find(isc_spb_config))
-		{
-			string spb_config;
-			spbWriter.getString(spb_config);
-			Config::merge(config, &spb_config);
-		}
-
-		StatusVector temp(NULL);
-		CheckStatusWrapper tempCheckStatusWrapper(&temp);
-		CheckStatusWrapper* currentStatus = status;
-
-		for (GetPlugins<IProvider> providerIterator(IPluginManager::TYPE_PROVIDER, config);
-			 providerIterator.hasData();
-			 providerIterator.next())
-		{
-			IProvider* p = providerIterator.plugin();
-
-			if (cryptCallback)
-			{
-				p->setDbCryptCallback(currentStatus, cryptCallback);
-				if (currentStatus->getState() & IStatus::STATE_ERRORS)
-					continue;
-			}
-
-			service = p->attachServiceManager(currentStatus, svcName.c_str(),
-				spbWriter.getBufferLength(), spbWriter.getBuffer());
-
-			if (!(currentStatus->getState() & IStatus::STATE_ERRORS))
-			{
-				if (status != currentStatus)
-				{
-					status->setErrors(currentStatus->getErrors());
-					status->setWarnings(currentStatus->getWarnings());
-				}
-				YService* r = FB_NEW YService(p, service, utfData);
-				r->addRef();
-				return r;
-			}
-
-			switch (currentStatus->getErrors()[1])
-			{
-				case isc_service_att_err:
-					currentStatus = &tempCheckStatusWrapper;
-					// fall down...
-				case isc_unavailable:
-					break;
-
-				default:
-					return NULL;
-			}
-
-			currentStatus->init();
-		}
+		IProvider* p;
+		service = internalServiceAttach(status, svcName, spbWriter,
+			[](CheckStatusWrapper*, IService*){ }, Dispatcher::PTYPE_ANY, &p);
 
 		if (!(status->getState() & IStatus::STATE_ERRORS))
 		{
-			(Arg::Gds(isc_service_att_err) <<
-			 Arg::Gds(isc_no_providers)).copyTo(status);
+			YService* r = FB_NEW YService(p, service, utfData, this);
+			r->addRef();
+			r->attachSpb.reset(spbWriter);
+			return r;
 		}
 	}
 	catch (const Exception& e)
@@ -6590,6 +6578,95 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 	}
 
 	return NULL;
+}
+
+
+// Attach and probably start a service through the first available subsystem.
+IService* Dispatcher::internalServiceAttach(CheckStatusWrapper* status, const PathName& svcName,
+	ClumpletReader& spb, std::function<void(CheckStatusWrapper*, IService*)> start,
+	const unsigned providerType, IProvider** retProvider)
+{
+	IService* service = NULL;
+
+	// Build correct config
+	RefPtr<const Config> config(Config::getDefaultConfig());
+	if (spb.find(isc_spb_config))
+	{
+		string spb_config;
+		spb.getString(spb_config);
+		Config::merge(config, &spb_config);
+	}
+
+	FbLocalStatus temp1, temp2, temp3;
+	CheckStatusWrapper* currentStatus = &temp1;
+
+	for (GetPlugins<IProvider> providerIterator(IPluginManager::TYPE_PROVIDER, config);
+		 providerIterator.hasData();
+		 providerIterator.next())
+	{
+		IProvider* p = providerIterator.plugin();
+
+		if (providerType != Dispatcher::PTYPE_ANY && p->getType(&temp3) == Dispatcher::PTYPE_NETWORK)
+			continue;
+
+		if (cryptCallback)
+		{
+			p->setDbCryptCallback(currentStatus, cryptCallback);
+			if (currentStatus->getState() & IStatus::STATE_ERRORS)
+				continue;
+		}
+
+		service = p->attachServiceManager(currentStatus, svcName.c_str(),
+			spb.getBufferLength(), spb.getBuffer());
+
+		if (!(currentStatus->getState() & IStatus::STATE_ERRORS))
+		{
+			start(currentStatus, service);
+
+			if (!(currentStatus->getState() & IStatus::STATE_ERRORS))
+			{
+				fb_utils::copyStatus(status, currentStatus);
+				if (retProvider)
+				{
+					p->addRef();
+					*retProvider = p;
+				}
+
+				return service;
+			}
+		}
+
+		switch (currentStatus->getErrors()[1])
+		{
+			case isc_service_att_err:
+				currentStatus = &temp2;
+				// fall down...
+			case isc_unavailable:
+			case isc_wrong_ods:
+			case isc_badodsver:
+			case isc_gstat_wrong_ods:
+				break;
+
+			default:
+				return NULL;
+		}
+
+		currentStatus->init();
+	}
+
+	fb_utils::copyStatus(status, &temp1);
+	if (!(status->getState() & IStatus::STATE_ERRORS))
+	{
+		(Arg::Gds(isc_service_att_err) <<
+		 Arg::Gds(isc_no_providers)).copyTo(status);
+	}
+
+	return NULL;
+}
+
+unsigned int Dispatcher::getType(CheckStatusWrapper* status)
+{
+	return PTYPE_ANY;
 }
 
 static std::atomic<SLONG> shutdownWaiters = 0;

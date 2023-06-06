@@ -734,6 +734,10 @@ version:	// 3.0.9 => 3.0.10, 4.0.1 => 4.0.2
 
 interface Provider : PluginBase
 {
+	const uint PTYPE_ANY		= 0;
+	const uint PTYPE_LOCAL		= 1;
+	const uint PTYPE_NETWORK	= 2;
+
 	Attachment attachDatabase(Status status, const string fileName,
 		uint dpbLength, const uchar* dpb);
 	Attachment createDatabase(Status status, const string fileName,
@@ -742,6 +746,9 @@ interface Provider : PluginBase
 		 uint spbLength, const uchar* spb);
 	void shutdown(Status status, uint timeout, const int reason);
 	void setDbCryptCallback(Status status, CryptKeyCallback cryptCallback);
+
+version:	// 3.0.10 => 3.0.11, 4.0.2 => 4.0.3
+	uint getType(Status status);
 }
 
 // Helper to start transaction over >1 attachments (former TEB)

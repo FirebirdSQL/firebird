@@ -4463,6 +4463,12 @@ void JService::start(CheckStatusWrapper* user_status, unsigned int spbLength, co
 }
 
 
+unsigned int JProvider::getType(CheckStatusWrapper* status)
+{
+	return PTYPE_LOCAL;
+}
+
+
 void JRequest::startAndSend(CheckStatusWrapper* user_status, ITransaction* tra, int level,
 	unsigned int msg_type, unsigned int msg_length, const void* msg)
 {

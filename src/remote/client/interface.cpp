@@ -1002,6 +1002,11 @@ public:
 	void shutdown(CheckStatusWrapper* status, unsigned int timeout, const int reason);
 	void setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* cryptCallback);
 
+	unsigned int getType(CheckStatusWrapper* status) override
+	{
+		return PTYPE_NETWORK;
+	}
+
 protected:
 	IAttachment* attach(CheckStatusWrapper* status, const char* filename, unsigned int dpb_length,
 		const unsigned char* dpb, bool loopback);

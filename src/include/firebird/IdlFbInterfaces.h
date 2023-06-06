@@ -2881,7 +2881,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_IPROVIDER_VERSION 4u
+#define FIREBIRD_IPROVIDER_VERSION 5u
 
 	class IProvider : public IPluginBase
 	{
@@ -2893,6 +2893,7 @@ namespace Firebird
 			IService* (CLOOP_CARG *attachServiceManager)(IProvider* self, IStatus* status, const char* service, unsigned spbLength, const unsigned char* spb) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *shutdown)(IProvider* self, IStatus* status, unsigned timeout, const int reason) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *setDbCryptCallback)(IProvider* self, IStatus* status, ICryptKeyCallback* cryptCallback) CLOOP_NOEXCEPT;
+			unsigned (CLOOP_CARG *getType)(IProvider* self, IStatus* status) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -2907,6 +2908,10 @@ namespace Firebird
 
 	public:
 		static CLOOP_CONSTEXPR unsigned VERSION = FIREBIRD_IPROVIDER_VERSION;
+
+		static CLOOP_CONSTEXPR unsigned PTYPE_ANY = 0;
+		static CLOOP_CONSTEXPR unsigned PTYPE_LOCAL = 1;
+		static CLOOP_CONSTEXPR unsigned PTYPE_NETWORK = 2;
 
 		template <typename StatusType> IAttachment* attachDatabase(StatusType* status, const char* fileName, unsigned dpbLength, const unsigned char* dpb)
 		{
@@ -2944,6 +2949,20 @@ namespace Firebird
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->setDbCryptCallback(this, status, cryptCallback);
 			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> unsigned getType(StatusType* status)
+		{
+			if (cloopVTable->version < 5)
+			{
+				StatusType::setVersionError(status, "IProvider", cloopVTable->version, 5);
+				StatusType::checkException(status);
+				return 0;
+			}
+			StatusType::clearException(status);
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getType(this, status);
+			StatusType::checkException(status);
+			return ret;
 		}
 	};
 
@@ -12080,6 +12099,7 @@ namespace Firebird
 					this->attachServiceManager = &Name::cloopattachServiceManagerDispatcher;
 					this->shutdown = &Name::cloopshutdownDispatcher;
 					this->setDbCryptCallback = &Name::cloopsetDbCryptCallbackDispatcher;
+					this->getType = &Name::cloopgetTypeDispatcher;
 				}
 			} vTable;
 
@@ -12159,6 +12179,21 @@ namespace Firebird
 			}
 		}
 
+		static unsigned CLOOP_CARG cloopgetTypeDispatcher(IProvider* self, IStatus* status) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::getType(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<unsigned>(0);
+			}
+		}
+
 		static void CLOOP_CARG cloopsetOwnerDispatcher(IPluginBase* self, IReferenceCounted* r) CLOOP_NOEXCEPT
 		{
 			try
@@ -12228,6 +12263,7 @@ namespace Firebird
 		virtual IService* attachServiceManager(StatusType* status, const char* service, unsigned spbLength, const unsigned char* spb) = 0;
 		virtual void shutdown(StatusType* status, unsigned timeout, const int reason) = 0;
 		virtual void setDbCryptCallback(StatusType* status, ICryptKeyCallback* cryptCallback) = 0;
+		virtual unsigned getType(StatusType* status) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
