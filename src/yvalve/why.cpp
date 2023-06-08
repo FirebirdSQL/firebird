@@ -6648,6 +6648,7 @@ IService* Dispatcher::internalServiceAttach(CheckStatusWrapper* status, const Pa
 				break;
 
 			default:
+				fb_utils::copyStatus(status, &temp1);
 				return NULL;
 		}
 
