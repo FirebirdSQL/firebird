@@ -1002,11 +1002,6 @@ public:
 	void shutdown(CheckStatusWrapper* status, unsigned int timeout, const int reason);
 	void setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* cryptCallback);
 
-	unsigned int getType(CheckStatusWrapper* status) override
-	{
-		return PTYPE_NETWORK;
-	}
-
 protected:
 	IAttachment* attach(CheckStatusWrapper* status, const char* filename, unsigned int dpb_length,
 		const unsigned char* dpb, bool loopback);
@@ -1102,7 +1097,7 @@ static void enqueue_receive(rem_port*, t_rmtque_fn, Rdb*, void*, Rrq::rrq_repeat
 static void dequeue_receive(rem_port*);
 static THREAD_ENTRY_DECLARE event_thread(THREAD_ENTRY_PARAM);
 static Rvnt* find_event(rem_port*, SLONG);
-static bool get_new_dpb(ClumpletWriter&, const ParametersSet&);
+static bool get_new_dpb(ClumpletWriter&, const ParametersSet&, bool);
 static void info(CheckStatusWrapper*, Rdb*, P_OP, USHORT, USHORT, USHORT,
 	const UCHAR*, USHORT, const UCHAR*, ULONG, UCHAR*);
 static bool init(CheckStatusWrapper*, ClntAuthBlock&, rem_port*, P_OP, PathName&,
@@ -1191,7 +1186,7 @@ IAttachment* RProvider::attach(CheckStatusWrapper* status, const char* filename,
 		ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE, dpb, dpb_length);
 		unsigned flags = ANALYZE_MOUNTS;
 
-		if (get_new_dpb(newDpb, dpbParam))
+		if (get_new_dpb(newDpb, dpbParam, loopback))
 			flags |= ANALYZE_USER_VFY;
 
 		if (loopback)
@@ -1871,7 +1866,7 @@ Firebird::IAttachment* RProvider::create(CheckStatusWrapper* status, const char*
 			reinterpret_cast<const UCHAR*>(dpb), dpb_length);
 		unsigned flags = ANALYZE_MOUNTS;
 
-		if (get_new_dpb(newDpb, dpbParam))
+		if (get_new_dpb(newDpb, dpbParam, loopback))
 			flags |= ANALYZE_USER_VFY;
 
 		if (loopback)
@@ -6537,7 +6532,7 @@ Firebird::IService* RProvider::attachSvc(CheckStatusWrapper* status, const char*
 		PathName node_name, expanded_name(service);
 
 		ClumpletWriter newSpb(ClumpletReader::spbList, MAX_DPB_SIZE, spb, spbLength);
-		const bool user_verification = get_new_dpb(newSpb, spbParam);
+		const bool user_verification = get_new_dpb(newSpb, spbParam, loopback);
 
 		ClntAuthBlock cBlock(NULL, &newSpb, &spbParam);
 		unsigned flags = 0;
@@ -8078,7 +8073,7 @@ static Rvnt* find_event( rem_port* port, SLONG id)
 }
 
 
-static bool get_new_dpb(ClumpletWriter& dpb, const ParametersSet& par)
+static bool get_new_dpb(ClumpletWriter& dpb, const ParametersSet& par, bool loopback)
 {
 /**************************************
  *
@@ -8092,7 +8087,7 @@ static bool get_new_dpb(ClumpletWriter& dpb, const ParametersSet& par)
  *
  **************************************/
 	bool redirection = Config::getRedirection();
-    if (((!redirection) && dpb.find(par.address_path)) || dpb.find(par.map_attach))
+    if (((loopback || !redirection) && dpb.find(par.address_path)) || dpb.find(par.map_attach))
 	{
 		status_exception::raise(Arg::Gds(isc_unavailable));
 	}

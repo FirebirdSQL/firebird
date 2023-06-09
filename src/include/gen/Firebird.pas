@@ -424,7 +424,6 @@ type
 	IProvider_attachServiceManagerPtr = function(this: IProvider; status: IStatus; service: PAnsiChar; spbLength: Cardinal; spb: BytePtr): IService; cdecl;
 	IProvider_shutdownPtr = procedure(this: IProvider; status: IStatus; timeout: Cardinal; reason: Integer); cdecl;
 	IProvider_setDbCryptCallbackPtr = procedure(this: IProvider; status: IStatus; cryptCallback: ICryptKeyCallback); cdecl;
-	IProvider_getTypePtr = function(this: IProvider; status: IStatus): Cardinal; cdecl;
 	IDtcStart_addAttachmentPtr = procedure(this: IDtcStart; status: IStatus; att: IAttachment); cdecl;
 	IDtcStart_addWithTpbPtr = procedure(this: IDtcStart; status: IStatus; att: IAttachment; length: Cardinal; tpb: BytePtr); cdecl;
 	IDtcStart_startPtr = function(this: IDtcStart; status: IStatus): ITransaction; cdecl;
@@ -1880,21 +1879,16 @@ type
 		attachServiceManager: IProvider_attachServiceManagerPtr;
 		shutdown: IProvider_shutdownPtr;
 		setDbCryptCallback: IProvider_setDbCryptCallbackPtr;
-		getType: IProvider_getTypePtr;
 	end;
 
 	IProvider = class(IPluginBase)
-		const VERSION = 5;
-		const PTYPE_ANY = Cardinal(0);
-		const PTYPE_LOCAL = Cardinal(1);
-		const PTYPE_NETWORK = Cardinal(2);
+		const VERSION = 4;
 
 		function attachDatabase(status: IStatus; fileName: PAnsiChar; dpbLength: Cardinal; dpb: BytePtr): IAttachment;
 		function createDatabase(status: IStatus; fileName: PAnsiChar; dpbLength: Cardinal; dpb: BytePtr): IAttachment;
 		function attachServiceManager(status: IStatus; service: PAnsiChar; spbLength: Cardinal; spb: BytePtr): IService;
 		procedure shutdown(status: IStatus; timeout: Cardinal; reason: Integer);
 		procedure setDbCryptCallback(status: IStatus; cryptCallback: ICryptKeyCallback);
-		function getType(status: IStatus): Cardinal;
 	end;
 
 	IProviderImpl = class(IProvider)
@@ -1909,7 +1903,6 @@ type
 		function attachServiceManager(status: IStatus; service: PAnsiChar; spbLength: Cardinal; spb: BytePtr): IService; virtual; abstract;
 		procedure shutdown(status: IStatus; timeout: Cardinal; reason: Integer); virtual; abstract;
 		procedure setDbCryptCallback(status: IStatus; cryptCallback: ICryptKeyCallback); virtual; abstract;
-		function getType(status: IStatus): Cardinal; virtual; abstract;
 	end;
 
 	DtcStartVTable = class(DisposableVTable)
@@ -7646,18 +7639,6 @@ begin
 	FbException.checkException(status);
 end;
 
-function IProvider.getType(status: IStatus): Cardinal;
-begin
-	if (vTable.version < 5) then begin
-		FbException.setVersionError(status, 'IProvider', vTable.version, 5);
-		Result := 0;
-	end
-	else begin
-		Result := ProviderVTable(vTable).getType(Self, status);
-	end;
-	FbException.checkException(status);
-end;
-
 procedure IDtcStart.addAttachment(status: IStatus; att: IAttachment);
 begin
 	DtcStartVTable(vTable).addAttachment(Self, status, att);
@@ -12201,16 +12182,6 @@ procedure IProviderImpl_setDbCryptCallbackDispatcher(this: IProvider; status: IS
 begin
 	try
 		IProviderImpl(this).setDbCryptCallback(status, cryptCallback);
-	except
-		on e: Exception do FbException.catchException(status, e);
-	end
-end;
-
-function IProviderImpl_getTypeDispatcher(this: IProvider; status: IStatus): Cardinal; cdecl;
-begin
-	Result := 0;
-	try
-		Result := IProviderImpl(this).getType(status);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -17083,7 +17054,7 @@ initialization
 	IServiceImpl_vTable.cancel := @IServiceImpl_cancelDispatcher;
 
 	IProviderImpl_vTable := ProviderVTable.create;
-	IProviderImpl_vTable.version := 5;
+	IProviderImpl_vTable.version := 4;
 	IProviderImpl_vTable.addRef := @IProviderImpl_addRefDispatcher;
 	IProviderImpl_vTable.release := @IProviderImpl_releaseDispatcher;
 	IProviderImpl_vTable.setOwner := @IProviderImpl_setOwnerDispatcher;
@@ -17093,7 +17064,6 @@ initialization
 	IProviderImpl_vTable.attachServiceManager := @IProviderImpl_attachServiceManagerDispatcher;
 	IProviderImpl_vTable.shutdown := @IProviderImpl_shutdownDispatcher;
 	IProviderImpl_vTable.setDbCryptCallback := @IProviderImpl_setDbCryptCallbackDispatcher;
-	IProviderImpl_vTable.getType := @IProviderImpl_getTypeDispatcher;
 
 	IDtcStartImpl_vTable := DtcStartVTable.create;
 	IDtcStartImpl_vTable.version := 3;

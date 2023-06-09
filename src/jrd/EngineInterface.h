@@ -549,7 +549,6 @@ public:
 	void shutdown(Firebird::CheckStatusWrapper* status, unsigned int timeout, const int reason);
 	void setDbCryptCallback(Firebird::CheckStatusWrapper* status,
 		Firebird::ICryptKeyCallback* cryptCb);
-	unsigned int getType(Firebird::CheckStatusWrapper* status) override;
 
 private:
 	JAttachment* internalAttach(Firebird::CheckStatusWrapper* status, const char* const fileName,

@@ -647,7 +647,6 @@ public:
 	void shutdown(Firebird::CheckStatusWrapper* status, unsigned int timeout, const int reason);
 	void setDbCryptCallback(Firebird::CheckStatusWrapper* status,
 		Firebird::ICryptKeyCallback* cryptCallback);
-	unsigned int getType(Firebird::CheckStatusWrapper* status);
 
 	void destroy(unsigned)
 	{ }
@@ -656,7 +655,7 @@ public:
 	Firebird::IService* internalServiceAttach(Firebird::CheckStatusWrapper* status,
 		const Firebird::PathName& svcName, Firebird::ClumpletReader& spb,
 		std::function<void(Firebird::CheckStatusWrapper*, Firebird::IService*)> start,
-		const unsigned pt, Firebird::IProvider** retProvider);
+		Firebird::IProvider** retProvider);
 
 private:
 	YAttachment* attachOrCreateDatabase(Firebird::CheckStatusWrapper* status, bool createFlag,

@@ -6322,14 +6322,13 @@ void YService::start(CheckStatusWrapper* status, unsigned int spbLength, const u
 		YEntry<YService> entry(status, this);
 		entry.next()->start(status, spb.getBufferLength(), spb.getBuffer());
 
-		FbLocalStatus st;
-		unsigned providerType = provider->getType(&st);
 		const ISC_STATUS retryList[] = {isc_wrong_ods, isc_badodsver, isc_gstat_wrong_ods, 0};
 
-		for (const ISC_STATUS* code = retryList; (providerType == Dispatcher::PTYPE_LOCAL) && *code; ++code)
+		for (const ISC_STATUS* code = retryList; *code; ++code)
 		{
 			if (fb_utils::containsErrorCode(status->getErrors(), *code))
 			{
+				FbLocalStatus st;
 				if (alternativeHandle)		// first of all try already found provider
 				{
 					alternativeHandle->start(&st, spb.getBufferLength(), spb.getBuffer());
@@ -6338,6 +6337,7 @@ void YService::start(CheckStatusWrapper* status, unsigned int spbLength, const u
 						status->init();
 						return;
 					}
+					st->clearException();
 				}
 
 				// we are not going to attach network providers, therefore const svcName is OK
@@ -6345,7 +6345,7 @@ void YService::start(CheckStatusWrapper* status, unsigned int spbLength, const u
 					[&spb](CheckStatusWrapper* st, IService* service)
 					{
 						service->start(st, spb.getBufferLength(), spb.getBuffer());
-					}, Dispatcher::PTYPE_LOCAL, nullptr);
+					}, nullptr);
 				if (st.isSuccess())
 				{
 					status->init();
@@ -6555,7 +6555,7 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 
 		IProvider* p;
 		service = internalServiceAttach(status, svcName, spbWriter,
-			[](CheckStatusWrapper*, IService*){ }, Dispatcher::PTYPE_ANY, &p);
+			[](CheckStatusWrapper*, IService*){ }, &p);
 
 		if (!(status->getState() & IStatus::STATE_ERRORS))
 		{
@@ -6584,7 +6584,7 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 // Attach and probably start a service through the first available subsystem.
 IService* Dispatcher::internalServiceAttach(CheckStatusWrapper* status, const PathName& svcName,
 	ClumpletReader& spb, std::function<void(CheckStatusWrapper*, IService*)> start,
-	const unsigned providerType, IProvider** retProvider)
+	IProvider** retProvider)
 {
 	IService* service = NULL;
 
@@ -6597,7 +6597,7 @@ IService* Dispatcher::internalServiceAttach(CheckStatusWrapper* status, const Pa
 		Config::merge(config, &spb_config);
 	}
 
-	FbLocalStatus temp1, temp2, temp3;
+	FbLocalStatus temp1, temp2;
 	CheckStatusWrapper* currentStatus = &temp1;
 
 	for (GetPlugins<IProvider> providerIterator(IPluginManager::TYPE_PROVIDER, config);
@@ -6605,9 +6605,6 @@ IService* Dispatcher::internalServiceAttach(CheckStatusWrapper* status, const Pa
 		 providerIterator.next())
 	{
 		IProvider* p = providerIterator.plugin();
-
-		if (providerType != Dispatcher::PTYPE_ANY && p->getType(&temp3) == Dispatcher::PTYPE_NETWORK)
-			continue;
 
 		if (cryptCallback)
 		{
@@ -6663,11 +6660,6 @@ IService* Dispatcher::internalServiceAttach(CheckStatusWrapper* status, const Pa
 	}
 
 	return NULL;
-}
-
-unsigned int Dispatcher::getType(CheckStatusWrapper* status)
-{
-	return PTYPE_ANY;
 }
 
 static std::atomic<SLONG> shutdownWaiters = 0;
