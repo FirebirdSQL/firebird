@@ -224,6 +224,7 @@ static const TOK tokens[] =
 	{TOK_FOLLOWING, "FOLLOWING", true},
 	{TOK_FOR, "FOR", false},
 	{TOK_FOREIGN, "FOREIGN", false},
+	{TOK_FORMAT, "FORMAT", true},
 	{TOK_FREE_IT, "FREE_IT", true},
 	{TOK_FROM, "FROM", false},
 	{TOK_FULL, "FULL", false},

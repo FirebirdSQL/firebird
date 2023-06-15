@@ -450,6 +450,9 @@
 
 #define blr_dcl_local_table			(unsigned char) 218
 
+// subcode of blr_cast
+#define blr_cast_format				(unsigned char) 0
+
 // subcodes of blr_dcl_local_table
 #define blr_dcl_local_table_format	(unsigned char) 1
 

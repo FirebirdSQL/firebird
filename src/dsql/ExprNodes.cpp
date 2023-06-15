@@ -3368,12 +3368,13 @@ dsc* BoolAsValueNode::execute(thread_db* tdbb, Request* request) const
 
 static RegisterNode<CastNode> regCastNode({blr_cast});
 
-CastNode::CastNode(MemoryPool& pool, ValueExprNode* aSource, dsql_fld* aDsqlField)
+CastNode::CastNode(MemoryPool& pool, ValueExprNode* aSource, dsql_fld* aDsqlField, const MetaName& format)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_CAST>(pool),
 	  dsqlAlias("CAST"),
 	  dsqlField(aDsqlField),
 	  source(aSource),
 	  itemInfo(NULL),
+	  format(format),
 	  artificial(false)
 {
 	castDesc.clear();
@@ -3386,6 +3387,11 @@ DmlNode* CastNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb
 
 	ItemInfo itemInfo;
 	PAR_desc(tdbb, csb, &node->castDesc, &itemInfo);
+
+	if (csb->csb_blr_reader.getByte() == blr_cast_format)
+		csb->csb_blr_reader.getMetaName(node->format);
+	else
+		csb->csb_blr_reader.seekBackward(1);
 
 	node->source = PAR_parse_value(tdbb, csb);
 
@@ -3412,6 +3418,9 @@ string CastNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, source);
 	NODE_PRINT(printer, itemInfo);
 
+	if (!format.isEmpty())
+		NODE_PRINT(printer, format);
+
 	return "CastNode";
 }
 
@@ -3421,6 +3430,7 @@ ValueExprNode* CastNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->dsqlAlias = dsqlAlias;
 	node->source = doDsqlPass(dsqlScratch, source);
 	node->dsqlField = dsqlField;
+	node->format = format;
 
 	DDL_resolve_intl_type(dsqlScratch, node->dsqlField, NULL);
 	node->setParameterType(dsqlScratch, NULL, false);
@@ -3467,6 +3477,13 @@ void CastNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->appendUChar(blr_cast);
 	dsqlScratch->putDtype(dsqlField, true);
+
+	if (format.hasData())
+	{
+		dsqlScratch->appendUChar(blr_cast_format);
+		dsqlScratch->appendMetaString(format.c_str());
+	}
+
 	GEN_expr(dsqlScratch, source);
 }
 
@@ -3512,6 +3529,7 @@ ValueExprNode* CastNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	node->source = copier.copy(tdbb, source);
 	node->castDesc = castDesc;
 	node->itemInfo = itemInfo;
+	node->format = format;
 
 	return node;
 }
@@ -3524,7 +3542,7 @@ bool CastNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other
 	const CastNode* o = nodeAs<CastNode>(other);
 	fb_assert(o);
 
-	return dsqlField == o->dsqlField;
+	return dsqlField == o->dsqlField && format == o->format;
 }
 
 bool CastNode::sameAs(const ExprNode* other, bool ignoreStreams) const
@@ -3535,7 +3553,7 @@ bool CastNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 	const CastNode* const otherNode = nodeAs<CastNode>(other);
 	fb_assert(otherNode);
 
-	return DSC_EQUIV(&castDesc, &otherNode->castDesc, true);
+	return DSC_EQUIV(&castDesc, &otherNode->castDesc, true) && format == otherNode->format;
 }
 
 ValueExprNode* CastNode::pass1(thread_db* tdbb, CompilerScratch* csb)
@@ -3629,7 +3647,54 @@ dsc* CastNode::execute(thread_db* tdbb, Request* request) const
 	if (!value)
 		return NULL;
 
-	MOV_move(tdbb, value, &impure->vlu_desc);
+
+	if (format.hasData())
+	{
+		if (DTYPE_IS_TEXT(impure->vlu_desc.dsc_dtype))
+		{
+			string result = CVT_datetime_to_format_string(value, format.c_str(), &EngineCallbacks::instance);
+			USHORT dscLength = DSC_string_length(&impure->vlu_desc);
+			USHORT copyLength = result.length() < dscLength ? result.length() : dscLength;
+			USHORT dscOffset = 0;
+
+			if (impure->vlu_desc.dsc_dtype == dtype_cstring)
+				dscOffset = 1;
+			else if (impure->vlu_desc.dsc_dtype == dtype_varying)
+			{
+				dscOffset = sizeof(USHORT);
+				((vary*) impure->vlu_desc.dsc_address)->vary_length = copyLength;
+			}
+
+			memcpy(impure->vlu_desc.dsc_address + dscOffset, result.c_str(), copyLength);
+		}
+		else
+		{
+			ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format.c_str(),
+				&EngineCallbacks::instance);
+			switch(impure->vlu_desc.dsc_dtype)
+			{
+				case dtype_sql_time:
+					*(ISC_TIME*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_time;
+					break;
+				case dtype_sql_date:
+					*(ISC_DATE*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_date;
+					break;
+				case dtype_timestamp:
+					*(ISC_TIMESTAMP*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp;
+					break;
+				case dtype_sql_time_tz:
+				case dtype_ex_time_tz:
+					*(ISC_TIME_TZ*) impure->vlu_desc.dsc_address = TimeZoneUtil::timeStampTzToTimeTz(timestampTZ);
+					break;
+				case dtype_timestamp_tz:
+				case dtype_ex_timestamp_tz:
+					*(ISC_TIMESTAMP_TZ*) impure->vlu_desc.dsc_address = timestampTZ;
+					break;
+			}
+		}
+	}
+	else
+		MOV_move(tdbb, value, &impure->vlu_desc);
 
 	if (impure->vlu_desc.dsc_dtype == dtype_text)
 		INTL_adjust_text_descriptor(tdbb, &impure->vlu_desc);
@@ -5641,55 +5706,7 @@ dsc* ExtractNode::execute(thread_db* tdbb, Request* request) const
 
 		case blr_extract_week:
 		{
-			// Algorithm for Converting Gregorian Dates to ISO 8601 Week Date by Rick McCarty, 1999
-			// http://personal.ecu.edu/mccartyr/ISOwdALG.txt
-
-			const int y = times.tm_year + 1900;
-			const int dayOfYearNumber = times.tm_yday + 1;
-
-			// Find the jan1Weekday for y (Monday=1, Sunday=7)
-			const int yy = (y - 1) % 100;
-			const int c = (y - 1) - yy;
-			const int g = yy + yy / 4;
-			const int jan1Weekday = 1 + (((((c / 100) % 4) * 5) + g) % 7);
-
-			// Find the weekday for y m d
-			const int h = dayOfYearNumber + (jan1Weekday - 1);
-			const int weekday = 1 + ((h - 1) % 7);
-
-			// Find if y m d falls in yearNumber y-1, weekNumber 52 or 53
-			int yearNumber, weekNumber;
-
-			if ((dayOfYearNumber <= (8 - jan1Weekday)) && (jan1Weekday > 4))
-			{
-				yearNumber = y - 1;
-				weekNumber = ((jan1Weekday == 5) || ((jan1Weekday == 6) &&
-					TimeStamp::isLeapYear(yearNumber))) ? 53 : 52;
-			}
-			else
-			{
-				yearNumber = y;
-
-				// Find if y m d falls in yearNumber y+1, weekNumber 1
-				int i = TimeStamp::isLeapYear(y) ? 366 : 365;
-
-				if ((i - dayOfYearNumber) < (4 - weekday))
-				{
-					yearNumber = y + 1;
-					weekNumber = 1;
-				}
-			}
-
-			// Find if y m d falls in yearNumber y, weekNumber 1 through 53
-			if (yearNumber == y)
-			{
-				int j = dayOfYearNumber + (7 - weekday) + (jan1Weekday - 1);
-				weekNumber = j / 7;
-				if (jan1Weekday > 4)
-					weekNumber--;
-			}
-
-			part = weekNumber;
+			part = NoThrowTimeStamp::convertGregorianDateToWeekDate(times);
 			break;
 		}
 
