@@ -1717,7 +1717,7 @@ interface ReplicatedSession : PluginBase
 
 interface ProfilerPlugin : PluginBase
 {
-	void init(Status status, Attachment attachment);
+	void init(Status status, Attachment attachment, uint64 ticksFrequency);
 
 	ProfilerSession startSession(Status status, const string description,
 		const string options, ISC_TIMESTAMP_TZ timestamp);
@@ -1763,5 +1763,5 @@ interface ProfilerSession : Disposable
 
 interface ProfilerStats : Versioned
 {
-	uint64 getElapsedTime();
+	uint64 getElapsedTicks();
 }

@@ -145,6 +145,7 @@ namespace
 	};
 }	// anonymous namespace
 
+
 class Jrd::ProfilerListener final
 {
 public:
@@ -439,7 +440,7 @@ SINT64 ProfilerManager::startSession(thread_db* tdbb, Nullable<SLONG> flushInter
 		plugin.reset(plugins.plugin());
 		plugin->addRef();
 
-		plugin->init(&status, attachment->getInterface());
+		plugin->init(&status, attachment->getInterface(), (FB_UINT64) fb_utils::query_performance_frequency());
 
 		plugin->addRef();
 		activePlugins.put(pluginName)->reset(plugin.get());

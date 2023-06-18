@@ -6900,7 +6900,7 @@ namespace Firebird
 	public:
 		struct VTable : public IPluginBase::VTable
 		{
-			void (CLOOP_CARG *init)(IProfilerPlugin* self, IStatus* status, IAttachment* attachment) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *init)(IProfilerPlugin* self, IStatus* status, IAttachment* attachment, ISC_UINT64 ticksFrequency) CLOOP_NOEXCEPT;
 			IProfilerSession* (CLOOP_CARG *startSession)(IProfilerPlugin* self, IStatus* status, const char* description, const char* options, ISC_TIMESTAMP_TZ timestamp) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *flush)(IProfilerPlugin* self, IStatus* status) CLOOP_NOEXCEPT;
 		};
@@ -6918,10 +6918,10 @@ namespace Firebird
 	public:
 		static CLOOP_CONSTEXPR unsigned VERSION = FIREBIRD_IPROFILER_PLUGIN_VERSION;
 
-		template <typename StatusType> void init(StatusType* status, IAttachment* attachment)
+		template <typename StatusType> void init(StatusType* status, IAttachment* attachment, ISC_UINT64 ticksFrequency)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->init(this, status, attachment);
+			static_cast<VTable*>(this->cloopVTable)->init(this, status, attachment, ticksFrequency);
 			StatusType::checkException(status);
 		}
 
@@ -7076,7 +7076,7 @@ namespace Firebird
 	public:
 		struct VTable : public IVersioned::VTable
 		{
-			ISC_UINT64 (CLOOP_CARG *getElapsedTime)(IProfilerStats* self) CLOOP_NOEXCEPT;
+			ISC_UINT64 (CLOOP_CARG *getElapsedTicks)(IProfilerStats* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -7092,9 +7092,9 @@ namespace Firebird
 	public:
 		static CLOOP_CONSTEXPR unsigned VERSION = FIREBIRD_IPROFILER_STATS_VERSION;
 
-		ISC_UINT64 getElapsedTime()
+		ISC_UINT64 getElapsedTicks()
 		{
-			ISC_UINT64 ret = static_cast<VTable*>(this->cloopVTable)->getElapsedTime(this);
+			ISC_UINT64 ret = static_cast<VTable*>(this->cloopVTable)->getElapsedTicks(this);
 			return ret;
 		}
 	};
@@ -20301,13 +20301,13 @@ namespace Firebird
 			this->cloopVTable = &vTable;
 		}
 
-		static void CLOOP_CARG cloopinitDispatcher(IProfilerPlugin* self, IStatus* status, IAttachment* attachment) CLOOP_NOEXCEPT
+		static void CLOOP_CARG cloopinitDispatcher(IProfilerPlugin* self, IStatus* status, IAttachment* attachment, ISC_UINT64 ticksFrequency) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::init(&status2, attachment);
+				static_cast<Name*>(self)->Name::init(&status2, attachment, ticksFrequency);
 			}
 			catch (...)
 			{
@@ -20408,7 +20408,7 @@ namespace Firebird
 		{
 		}
 
-		virtual void init(StatusType* status, IAttachment* attachment) = 0;
+		virtual void init(StatusType* status, IAttachment* attachment, ISC_UINT64 ticksFrequency) = 0;
 		virtual IProfilerSession* startSession(StatusType* status, const char* description, const char* options, ISC_TIMESTAMP_TZ timestamp) = 0;
 		virtual void flush(StatusType* status) = 0;
 	};
@@ -20696,18 +20696,18 @@ namespace Firebird
 				VTableImpl()
 				{
 					this->version = Base::VERSION;
-					this->getElapsedTime = &Name::cloopgetElapsedTimeDispatcher;
+					this->getElapsedTicks = &Name::cloopgetElapsedTicksDispatcher;
 				}
 			} vTable;
 
 			this->cloopVTable = &vTable;
 		}
 
-		static ISC_UINT64 CLOOP_CARG cloopgetElapsedTimeDispatcher(IProfilerStats* self) CLOOP_NOEXCEPT
+		static ISC_UINT64 CLOOP_CARG cloopgetElapsedTicksDispatcher(IProfilerStats* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				return static_cast<Name*>(self)->Name::getElapsedTime();
+				return static_cast<Name*>(self)->Name::getElapsedTicks();
 			}
 			catch (...)
 			{
@@ -20730,7 +20730,7 @@ namespace Firebird
 		{
 		}
 
-		virtual ISC_UINT64 getElapsedTime() = 0;
+		virtual ISC_UINT64 getElapsedTicks() = 0;
 	};
 };
 

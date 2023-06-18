@@ -718,7 +718,7 @@ type
 	IReplicatedSession_startTransactionPtr = function(this: IReplicatedSession; status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction; cdecl;
 	IReplicatedSession_cleanupTransactionPtr = procedure(this: IReplicatedSession; status: IStatus; number: Int64); cdecl;
 	IReplicatedSession_setSequencePtr = procedure(this: IReplicatedSession; status: IStatus; name: PAnsiChar; value: Int64); cdecl;
-	IProfilerPlugin_initPtr = procedure(this: IProfilerPlugin; status: IStatus; attachment: IAttachment); cdecl;
+	IProfilerPlugin_initPtr = procedure(this: IProfilerPlugin; status: IStatus; attachment: IAttachment; ticksFrequency: QWord); cdecl;
 	IProfilerPlugin_startSessionPtr = function(this: IProfilerPlugin; status: IStatus; description: PAnsiChar; options: PAnsiChar; timestamp: ISC_TIMESTAMP_TZ): IProfilerSession; cdecl;
 	IProfilerPlugin_flushPtr = procedure(this: IProfilerPlugin; status: IStatus); cdecl;
 	IProfilerSession_getIdPtr = function(this: IProfilerSession): Int64; cdecl;
@@ -736,7 +736,7 @@ type
 	IProfilerSession_afterRecordSourceOpenPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
 	IProfilerSession_beforeRecordSourceGetRecordPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
 	IProfilerSession_afterRecordSourceGetRecordPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
-	IProfilerStats_getElapsedTimePtr = function(this: IProfilerStats): QWord; cdecl;
+	IProfilerStats_getElapsedTicksPtr = function(this: IProfilerStats): QWord; cdecl;
 
 	VersionedVTable = class
 		version: NativeInt;
@@ -3792,7 +3792,7 @@ type
 	IProfilerPlugin = class(IPluginBase)
 		const VERSION = 4;
 
-		procedure init(status: IStatus; attachment: IAttachment);
+		procedure init(status: IStatus; attachment: IAttachment; ticksFrequency: QWord);
 		function startSession(status: IStatus; description: PAnsiChar; options: PAnsiChar; timestamp: ISC_TIMESTAMP_TZ): IProfilerSession;
 		procedure flush(status: IStatus);
 	end;
@@ -3804,7 +3804,7 @@ type
 		function release(): Integer; virtual; abstract;
 		procedure setOwner(r: IReferenceCounted); virtual; abstract;
 		function getOwner(): IReferenceCounted; virtual; abstract;
-		procedure init(status: IStatus; attachment: IAttachment); virtual; abstract;
+		procedure init(status: IStatus; attachment: IAttachment; ticksFrequency: QWord); virtual; abstract;
 		function startSession(status: IStatus; description: PAnsiChar; options: PAnsiChar; timestamp: ISC_TIMESTAMP_TZ): IProfilerSession; virtual; abstract;
 		procedure flush(status: IStatus); virtual; abstract;
 	end;
@@ -3871,19 +3871,19 @@ type
 	end;
 
 	ProfilerStatsVTable = class(VersionedVTable)
-		getElapsedTime: IProfilerStats_getElapsedTimePtr;
+		getElapsedTicks: IProfilerStats_getElapsedTicksPtr;
 	end;
 
 	IProfilerStats = class(IVersioned)
 		const VERSION = 2;
 
-		function getElapsedTime(): QWord;
+		function getElapsedTicks(): QWord;
 	end;
 
 	IProfilerStatsImpl = class(IProfilerStats)
 		constructor create;
 
-		function getElapsedTime(): QWord; virtual; abstract;
+		function getElapsedTicks(): QWord; virtual; abstract;
 	end;
 
 {$IFNDEF NO_FBCLIENT}
@@ -9377,9 +9377,9 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IProfilerPlugin.init(status: IStatus; attachment: IAttachment);
+procedure IProfilerPlugin.init(status: IStatus; attachment: IAttachment; ticksFrequency: QWord);
 begin
-	ProfilerPluginVTable(vTable).init(Self, status, attachment);
+	ProfilerPluginVTable(vTable).init(Self, status, attachment, ticksFrequency);
 	FbException.checkException(status);
 end;
 
@@ -9475,9 +9475,9 @@ begin
 	ProfilerSessionVTable(vTable).afterRecordSourceGetRecord(Self, requestId, cursorId, recSourceId, stats);
 end;
 
-function IProfilerStats.getElapsedTime(): QWord;
+function IProfilerStats.getElapsedTicks(): QWord;
 begin
-	Result := ProfilerStatsVTable(vTable).getElapsedTime(Self);
+	Result := ProfilerStatsVTable(vTable).getElapsedTicks(Self);
 end;
 
 var
@@ -16440,10 +16440,10 @@ begin
 	end
 end;
 
-procedure IProfilerPluginImpl_initDispatcher(this: IProfilerPlugin; status: IStatus; attachment: IAttachment); cdecl;
+procedure IProfilerPluginImpl_initDispatcher(this: IProfilerPlugin; status: IStatus; attachment: IAttachment; ticksFrequency: QWord); cdecl;
 begin
 	try
-		IProfilerPluginImpl(this).init(status, attachment);
+		IProfilerPluginImpl(this).init(status, attachment, ticksFrequency);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -16630,11 +16630,11 @@ begin
 	vTable := IProfilerSessionImpl_vTable;
 end;
 
-function IProfilerStatsImpl_getElapsedTimeDispatcher(this: IProfilerStats): QWord; cdecl;
+function IProfilerStatsImpl_getElapsedTicksDispatcher(this: IProfilerStats): QWord; cdecl;
 begin
 	Result := 0;
 	try
-		Result := IProfilerStatsImpl(this).getElapsedTime();
+		Result := IProfilerStatsImpl(this).getElapsedTicks();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -17670,7 +17670,7 @@ initialization
 
 	IProfilerStatsImpl_vTable := ProfilerStatsVTable.create;
 	IProfilerStatsImpl_vTable.version := 2;
-	IProfilerStatsImpl_vTable.getElapsedTime := @IProfilerStatsImpl_getElapsedTimeDispatcher;
+	IProfilerStatsImpl_vTable.getElapsedTicks := @IProfilerStatsImpl_getElapsedTicksDispatcher;
 
 finalization
 	IVersionedImpl_vTable.destroy;

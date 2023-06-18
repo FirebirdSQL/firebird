@@ -22,6 +22,7 @@
 
 #include "firebird.h"
 #include "firebird/Message.h"
+#include "../common/Int128.h"
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/fb_pair.h"
@@ -45,6 +46,13 @@ namespace
 class ProfilerPlugin;
 
 constexpr unsigned MAX_ACCESS_PATH_CHAR_LEN = 255;
+static const CInt128 ONE_SECOND_IN_NS{1'000'000'000};
+static CInt128 ticksFrequency{0};
+
+SINT64 ticksToNanoseconds(FB_UINT64 ticks)
+{
+	return CInt128((SINT64) ticks).mul(ONE_SECOND_IN_NS).div(ticksFrequency, 0).toInt64(0);
+}
 
 auto& defaultPool()
 {
@@ -70,22 +78,22 @@ void quote(string& name)
 
 struct Stats
 {
-	void hit(FB_UINT64 elapsedTime)
+	void hit(FB_UINT64 elapsedTicks)
 	{
-		if (counter == 0 || elapsedTime < minElapsedTime)
-			minElapsedTime = elapsedTime;
+		if (counter == 0 || elapsedTicks < minElapsedTicks)
+			minElapsedTicks = elapsedTicks;
 
-		if (counter == 0 || elapsedTime > maxElapsedTime)
-			maxElapsedTime = elapsedTime;
+		if (counter == 0 || elapsedTicks > maxElapsedTicks)
+			maxElapsedTicks = elapsedTicks;
 
-		totalElapsedTime += elapsedTime;
+		totalElapsedTicks += elapsedTicks;
 		++counter;
 	}
 
 	FB_UINT64 counter = 0;
-	FB_UINT64 minElapsedTime = 0;
-	FB_UINT64 maxElapsedTime = 0;
-	FB_UINT64 totalElapsedTime = 0;
+	FB_UINT64 minElapsedTicks = 0;
+	FB_UINT64 maxElapsedTicks = 0;
+	FB_UINT64 totalElapsedTicks = 0;
 };
 
 struct Cursor
@@ -128,7 +136,7 @@ struct Request
 	SINT64 callerRequestId;
 	ISC_TIMESTAMP_TZ startTimestamp;
 	Nullable<ISC_TIMESTAMP_TZ> finishTimestamp;
-	Nullable<FB_UINT64> totalTime;
+	Nullable<FB_UINT64> totalElapsedTicks;
 	NonPooledMap<CursorRecSourceKey, RecordSourceStats> recordSourcesStats{defaultPool()};
 	NonPooledMap<LineColumnKey, Stats> psqlStats{defaultPool()};
 };
@@ -220,7 +228,7 @@ public:
 	{
 	}
 
-	void init(ThrowStatusExceptionWrapper* status, IAttachment* attachment) override;
+	void init(ThrowStatusExceptionWrapper* status, IAttachment* attachment, FB_UINT64 ticksFrequency) override;
 
 	IProfilerSession* startSession(ThrowStatusExceptionWrapper* status,
 		const char* description, const char* options, ISC_TIMESTAMP_TZ timestamp) override;
@@ -240,9 +248,10 @@ public:
 
 //--------------------------------------
 
-void ProfilerPlugin::init(ThrowStatusExceptionWrapper* status, IAttachment* attachment)
+void ProfilerPlugin::init(ThrowStatusExceptionWrapper* status, IAttachment* attachment, FB_UINT64 ticksFrequency)
 {
 	userAttachment = attachment;
+	::ticksFrequency = (SINT64) ticksFrequency;
 
 	constexpr auto sql = R"""(
 		select exists(
@@ -796,8 +805,8 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					requestMessage->finishTimestampNull = profileRequest.finishTimestamp.isUnknown();
 					requestMessage->finishTimestamp = profileRequest.finishTimestamp.value;
 
-					requestMessage->totalElapsedTimeNull = profileRequest.totalTime.isUnknown();
-					requestMessage->totalElapsedTime = profileRequest.totalTime.value;
+					requestMessage->totalElapsedTimeNull = profileRequest.totalElapsedTicks.isUnknown();
+					requestMessage->totalElapsedTime = ticksToNanoseconds(profileRequest.totalElapsedTicks.value);
 
 					addBatch(requestBatch, requestBatchSize, requestMessage);
 
@@ -831,25 +840,25 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					recSrcStatMessage->openCounter = stats.openStats.counter;
 
 					recSrcStatMessage->openMinElapsedTimeNull = FB_FALSE;
-					recSrcStatMessage->openMinElapsedTime = stats.openStats.minElapsedTime;
+					recSrcStatMessage->openMinElapsedTime = ticksToNanoseconds(stats.openStats.minElapsedTicks);
 
 					recSrcStatMessage->openMaxElapsedTimeNull = FB_FALSE;
-					recSrcStatMessage->openMaxElapsedTime = stats.openStats.maxElapsedTime;
+					recSrcStatMessage->openMaxElapsedTime = ticksToNanoseconds(stats.openStats.maxElapsedTicks);
 
 					recSrcStatMessage->openTotalElapsedTimeNull = FB_FALSE;
-					recSrcStatMessage->openTotalElapsedTime = stats.openStats.totalElapsedTime;
+					recSrcStatMessage->openTotalElapsedTime = ticksToNanoseconds(stats.openStats.totalElapsedTicks);
 
 					recSrcStatMessage->fetchCounterNull = FB_FALSE;
 					recSrcStatMessage->fetchCounter = stats.fetchStats.counter;
 
 					recSrcStatMessage->fetchMinElapsedTimeNull = FB_FALSE;
-					recSrcStatMessage->fetchMinElapsedTime = stats.fetchStats.minElapsedTime;
+					recSrcStatMessage->fetchMinElapsedTime = ticksToNanoseconds(stats.fetchStats.minElapsedTicks);
 
 					recSrcStatMessage->fetchMaxElapsedTimeNull = FB_FALSE;
-					recSrcStatMessage->fetchMaxElapsedTime = stats.fetchStats.maxElapsedTime;
+					recSrcStatMessage->fetchMaxElapsedTime = ticksToNanoseconds(stats.fetchStats.maxElapsedTicks);
 
 					recSrcStatMessage->fetchTotalElapsedTimeNull = FB_FALSE;
-					recSrcStatMessage->fetchTotalElapsedTime = stats.fetchStats.totalElapsedTime;
+					recSrcStatMessage->fetchTotalElapsedTime = ticksToNanoseconds(stats.fetchStats.totalElapsedTicks);
 
 					addBatch(recSrcStatBatch, recSrcStatBatchSize, recSrcStatMessage);
 				}
@@ -879,13 +888,13 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					psqlStatMessage->counter = statsIt.second.counter;
 
 					psqlStatMessage->minElapsedTimeNull = FB_FALSE;
-					psqlStatMessage->minElapsedTime = statsIt.second.minElapsedTime;
+					psqlStatMessage->minElapsedTime = ticksToNanoseconds(statsIt.second.minElapsedTicks);
 
 					psqlStatMessage->maxElapsedTimeNull = FB_FALSE;
-					psqlStatMessage->maxElapsedTime = statsIt.second.maxElapsedTime;
+					psqlStatMessage->maxElapsedTime = ticksToNanoseconds(statsIt.second.maxElapsedTicks);
 
 					psqlStatMessage->totalElapsedTimeNull = FB_FALSE;
-					psqlStatMessage->totalElapsedTime = statsIt.second.totalElapsedTime;
+					psqlStatMessage->totalElapsedTime = ticksToNanoseconds(statsIt.second.totalElapsedTicks);
 
 					addBatch(psqlStatBatch, psqlStatBatchSize, psqlStatMessage);
 				}
@@ -1452,7 +1461,7 @@ void Session::onRequestFinish(ThrowStatusExceptionWrapper* status, SINT64 reques
 	{
 		request->dirty = true;
 		request->finishTimestamp = timestamp;
-		request->totalTime = stats->getElapsedTime();
+		request->totalElapsedTicks = stats->getElapsedTicks();
 	}
 }
 
@@ -1461,7 +1470,7 @@ void Session::afterPsqlLineColumn(SINT64 requestId, unsigned line, unsigned colu
 	if (auto request = requests.get(requestId))
 	{
 		const auto profileStats = request->psqlStats.getOrPut({line, column});
-		profileStats->hit(stats->getElapsedTime());
+		profileStats->hit(stats->getElapsedTicks());
 	}
 }
 
@@ -1470,7 +1479,7 @@ void Session::afterRecordSourceOpen(SINT64 requestId, unsigned cursorId, unsigne
 	if (auto request = requests.get(requestId))
 	{
 		auto profileStats = request->recordSourcesStats.getOrPut({cursorId, recSourceId});
-		profileStats->openStats.hit(stats->getElapsedTime());
+		profileStats->openStats.hit(stats->getElapsedTicks());
 	}
 }
 
@@ -1479,7 +1488,7 @@ void Session::afterRecordSourceGetRecord(SINT64 requestId, unsigned cursorId, un
 	if (auto request = requests.get(requestId))
 	{
 		auto profileStats = request->recordSourcesStats.getOrPut({cursorId, recSourceId});
-		profileStats->fetchStats.hit(stats->getElapsedTime());
+		profileStats->fetchStats.hit(stats->getElapsedTicks());
 	}
 }
 

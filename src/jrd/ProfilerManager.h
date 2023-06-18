@@ -52,18 +52,18 @@ public:
 	class Stats final : public Firebird::IProfilerStatsImpl<Stats, Firebird::ThrowStatusExceptionWrapper>
 	{
 	public:
-		explicit Stats(FB_UINT64 elapsedPerfCounter)
-			: elapsedTime(elapsedPerfCounter * 1'000'000'000 / fb_utils::query_performance_frequency())
+		explicit Stats(FB_UINT64 aElapsedTicks)
+			: elapsedTicks(aElapsedTicks)
 		{}
 
 	public:
-		FB_UINT64 getElapsedTime() override
+		FB_UINT64 getElapsedTicks() override
 		{
-			return elapsedTime;
+			return elapsedTicks;
 		}
 
 	private:
-		FB_UINT64 elapsedTime;	// in nanoseconds
+		FB_UINT64 elapsedTicks;
 	};
 
 private:
