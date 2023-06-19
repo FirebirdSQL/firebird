@@ -1394,7 +1394,7 @@ static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::st
 
 				patternResult.printf(printfFormat.c_str(), offsetInMinutes);
 			}
-			else if (pattern == "TZD")
+			else if (pattern == "TZR")
 			{
 				patternResult = extract_timezone_name(desc);
 			}
