@@ -228,7 +228,7 @@ public:
 	{
 	}
 
-	void init(ThrowStatusExceptionWrapper* status, IAttachment* attachment, FB_UINT64 ticksFrequency) override;
+	void init(ThrowStatusExceptionWrapper* status, IAttachment* attachment, FB_UINT64 aTicksFrequency) override;
 
 	IProfilerSession* startSession(ThrowStatusExceptionWrapper* status,
 		const char* description, const char* options, ISC_TIMESTAMP_TZ timestamp) override;
@@ -248,10 +248,10 @@ public:
 
 //--------------------------------------
 
-void ProfilerPlugin::init(ThrowStatusExceptionWrapper* status, IAttachment* attachment, FB_UINT64 ticksFrequency)
+void ProfilerPlugin::init(ThrowStatusExceptionWrapper* status, IAttachment* attachment, FB_UINT64 aTicksFrequency)
 {
 	userAttachment = attachment;
-	::ticksFrequency = (SINT64) ticksFrequency;
+	ticksFrequency = (SINT64) aTicksFrequency;
 
 	constexpr auto sql = R"""(
 		select exists(
