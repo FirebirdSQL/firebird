@@ -148,9 +148,9 @@ class DummyException {};
 
 enum class ExpectedDateType
 {
-	Time,
-	Date,
-	TimeZone
+	TIME,
+	DATE,
+	TIMEZONE
 };
 
 
@@ -166,7 +166,7 @@ enum class ExpectedDateType
 static const double eps_double = 1e-14;
 static const double eps_float  = 1e-5;
 
-template<typename T>
+template <typename T>
 constexpr int sign(T value)
 {
 	return (T(0) < value) - (value < T(0));
@@ -1047,21 +1047,21 @@ void CVT_string_to_datetime(const dsc* desc,
 }
 
 
-void date_type_check(ExpectedDateType expected, const dsc* desc, std::string_view pattern, Firebird::Callbacks* cb)
+static void date_type_check(ExpectedDateType expected, const dsc* desc, std::string_view pattern, Firebird::Callbacks* cb)
 {
 	switch (expected)
 	{
-		case ExpectedDateType::Time:
+		case ExpectedDateType::TIME:
 			if (!desc->isDate())
 				return;
 			break;
 
-		case ExpectedDateType::Date:
+		case ExpectedDateType::DATE:
 			if (!desc->isTime())
 				return;
 			break;
 
-		case ExpectedDateType::TimeZone:
+		case ExpectedDateType::TIMEZONE:
 			if (desc->isDateTimeTz())
 				return;
 			break;
@@ -1070,17 +1070,16 @@ void date_type_check(ExpectedDateType expected, const dsc* desc, std::string_vie
 			break;
 	}
 
-	string str(pattern.data(), pattern.length());
-	cb->err(Arg::Gds(isc_incompatible_date_format_with_current_date_type) << Arg::Str(str.c_str()));
+	cb->err(Arg::Gds(isc_incompatible_date_format_with_current_date_type) << string(pattern.data(), pattern.length()));
 }
 
 
-string int_to_roman(int num)
+static string int_to_roman(int num)
 {
-	const char* symbols[] = {"M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"};
-	int values[] = {1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1};
+	static const char* const symbols[] = {"M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"};
+	static const int values[] = {1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1};
 
-	string roman = "";
+	string roman;
 	for (int i = 0; i < 13; i++)
 	{
 		while (num >= values[i])
@@ -1093,7 +1092,52 @@ string int_to_roman(int num)
 }
 
 
-bool is_separator(char symbol)
+static SSHORT extract_timezone_offset(const dsc* desc)
+{
+	SSHORT timezoneOffset = 0;
+
+	switch (desc->dsc_dtype)
+	{
+		case dtype_sql_time_tz:
+		case dtype_ex_time_tz:
+			TimeZoneUtil::extractOffset(*(ISC_TIME_TZ*) desc->dsc_address, &timezoneOffset);
+			break;
+
+		case dtype_timestamp_tz:
+		case dtype_ex_timestamp_tz:
+			TimeZoneUtil::extractOffset(*(ISC_TIMESTAMP_TZ*) desc->dsc_address, &timezoneOffset);
+			break;
+	}
+
+	return timezoneOffset;
+}
+
+
+static string extract_timezone_name(const dsc* desc)
+{
+	char timezoneBuffer[TimeZoneUtil::MAX_SIZE];
+	unsigned int length = 0;
+
+	switch (desc->dsc_dtype)
+	{
+		case dtype_sql_time_tz:
+		case dtype_ex_time_tz:
+			length = TimeZoneUtil::format(timezoneBuffer, sizeof(timezoneBuffer),
+				((ISC_TIME_TZ*) desc->dsc_address)->time_zone);
+			break;
+
+		case dtype_timestamp_tz:
+		case dtype_ex_timestamp_tz:
+			length = TimeZoneUtil::format(timezoneBuffer, sizeof(timezoneBuffer),
+				((ISC_TIMESTAMP_TZ*) desc->dsc_address)->time_zone);
+			break;
+	}
+
+	return string(timezoneBuffer, length);
+}
+
+
+static bool is_separator(char symbol)
 {
 	switch (symbol)
 	{
@@ -1114,8 +1158,8 @@ bool is_separator(char symbol)
 
 
 template<typename InvalidPatternException>
-string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_view pattern,
-	std::string_view previousPattern, const struct tm& times, int fractions, SSHORT timezoneOffset,
+static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_view pattern,
+	std::string_view previousPattern, const struct tm& times, int fractions,
 	Firebird::Callbacks* cb, InvalidPatternException invalidPatternException)
 {
 	string patternResult;
@@ -1124,7 +1168,7 @@ string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_vi
 	{
 		case 'Y':
 		{
-			date_type_check(ExpectedDateType::Date, desc, pattern, cb);
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
 
 			int year = times.tm_year + 1900;
 			if (pattern == "Y")
@@ -1141,7 +1185,7 @@ string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_vi
 		}
 
 		case 'Q':
-			date_type_check(ExpectedDateType::Date, desc, pattern, cb);
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
 
 			if (pattern == "Q")
 			{
@@ -1154,16 +1198,20 @@ string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_vi
 		case 'M':
 			if (pattern == "MI")
 			{
-				date_type_check(ExpectedDateType::Time, desc, pattern, cb);
+				date_type_check(ExpectedDateType::TIME, desc, pattern, cb);
 
-				patternResult.printf("%d", times.tm_min);
+				const char* printfFormat = times.tm_min < 10 ? "0%d" : "%d";
+				patternResult.printf(printfFormat, times.tm_min);
 				break;
 			}
 
-			date_type_check(ExpectedDateType::Date, desc, pattern, cb);
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
 
 			if (pattern == "MM")
-				patternResult.printf("%d", (times.tm_mon + 1));
+			{
+				const char* printfFormat = times.tm_mon + 1 < 10 ? "0%d" : "%d";
+				patternResult.printf(printfFormat, (times.tm_mon + 1));
+			}
 			else if (pattern == "MON")
 				patternResult.printf("%s", FB_SHORT_MONTHS[times.tm_mon]);
 			else if (pattern == "MONTH")
@@ -1171,7 +1219,7 @@ string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_vi
 			break;
 
 		case 'R':
-			date_type_check(ExpectedDateType::Date, desc, pattern, cb);
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
 
 			if (pattern == "RM")
 			{
@@ -1181,7 +1229,7 @@ string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_vi
 			break;
 
 		case 'W':
-			date_type_check(ExpectedDateType::Date, desc, pattern, cb);
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
 
 			if (pattern == "W")
 			{
@@ -1191,27 +1239,41 @@ string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_vi
 			else if (pattern == "WW")
 			{
 				int week = NoThrowTimeStamp::convertGregorianDateToWeekDate(times);
-				patternResult.printf("%d", week);
+				const char* printfFormat = week < 10 ? "0%d" : "%d";
+				patternResult.printf(printfFormat, week);
 			}
 			break;
 
 		case 'D':
-			date_type_check(ExpectedDateType::Date, desc, pattern, cb);
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
 
 			if (pattern == "D")
 				patternResult.printf("%d", times.tm_wday + 1);
 			else if (pattern == "DAY")
 				patternResult.printf("%s", FB_LONG_DAYS_UPPER[times.tm_wday]);
 			else if (pattern == "DD")
-				patternResult.printf("%d", times.tm_mday);
+			{
+				const char* printfFormat = times.tm_mday < 10 ? "0%d" : "%d";
+				patternResult.printf(printfFormat, times.tm_mday);
+			}
 			else if (pattern == "DDD")
-				patternResult.printf("%d", times.tm_yday + 1);
+			{
+				int daysInYear = times.tm_yday + 1;
+				const char* printfFormat = "%d";
+
+				if (daysInYear < 10)
+					printfFormat = "00%d";
+				else if (daysInYear < 100)
+					printfFormat = "0%d";
+
+				patternResult.printf(printfFormat, daysInYear);
+			}
 			else if (pattern == "DY")
 				patternResult.printf("%s", FB_SHORT_DAYS[times.tm_wday]);
 			break;
 
 		case 'J':
-			date_type_check(ExpectedDateType::Date, desc, pattern, cb);
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
 
 			if (pattern == "J")
 			{
@@ -1223,7 +1285,7 @@ string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_vi
 			break;
 
 		case 'H':
-			date_type_check(ExpectedDateType::Time, desc, pattern, cb);
+			date_type_check(ExpectedDateType::TIME, desc, pattern, cb);
 
 			if (pattern == "HH"||
 				pattern == "HH12")
@@ -1244,17 +1306,24 @@ string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_vi
 						hours = 12;
 				}
 
-				patternResult.printf("%d %s", hours, period);
+				const char* printfFormat = hours < 10 ? "0%d %s" : "%d %s";
+				patternResult.printf(printfFormat, hours, period);
 			}
 			else if (pattern == "HH24")
-				patternResult.printf("%d", times.tm_hour);
+			{
+				const char* printfFormat = times.tm_hour < 10 ? "0%d" : "%d";
+				patternResult.printf(printfFormat, times.tm_hour);
+			}
 			break;
 
 		case 'S':
-			date_type_check(ExpectedDateType::Time, desc, pattern, cb);
+			date_type_check(ExpectedDateType::TIME, desc, pattern, cb);
 
 			if (pattern == "SS")
-				patternResult.printf("%d", times.tm_sec);
+			{
+				const char* printfFormat = times.tm_sec < 10 ? "0%d" : "%d";
+				patternResult.printf(printfFormat, times.tm_sec);
+			}
 			else if (pattern == "SSSSS")
 			{
 				int secondsInDay = times.tm_hour * 60 * 60 + times.tm_min * 60 + times.tm_sec;
@@ -1263,7 +1332,7 @@ string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_vi
 			break;
 
 		case 'F':
-			date_type_check(ExpectedDateType::Time, desc, pattern, cb);
+			date_type_check(ExpectedDateType::TIME, desc, pattern, cb);
 
 			if (!strncmp(pattern.data(), "FF", pattern.length() - 1))
 			{
@@ -1287,23 +1356,47 @@ string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_vi
 			break;
 
 		case 'T':
-			date_type_check(ExpectedDateType::TimeZone, desc, pattern, cb);
+			date_type_check(ExpectedDateType::TIMEZONE, desc, pattern, cb);
 
 			if (pattern == "TZH")
 			{
-				if (previousPattern == "TZM")
-					timezoneOffset *= sign(timezoneOffset);
+				SSHORT timezoneOffset = extract_timezone_offset(desc);
+				int timezoneSign = sign(timezoneOffset);
+				SSHORT offsetInHours = abs(timezoneOffset / 60);
 
-				SSHORT offsetInHours = timezoneOffset / 60;
-				patternResult.printf("%d", offsetInHours);
+				string printfFormat = offsetInHours < 10 ? "0%d" : "%d";
+
+				if (previousPattern != "TZM")
+				{
+					if (timezoneSign < 0)
+						printfFormat = "-" + printfFormat;
+					else
+						printfFormat = "+" + printfFormat;
+				}
+
+				patternResult.printf(printfFormat.c_str(), offsetInHours);
 			}
 			else if (pattern == "TZM")
 			{
-				if (previousPattern == "TZH")
-					timezoneOffset *= sign(timezoneOffset);
+				SSHORT timezoneOffset = extract_timezone_offset(desc);
+				int timezoneSign = sign(timezoneOffset);
+				SSHORT offsetInMinutes = abs(timezoneOffset % 60);
 
-				SSHORT offsetInMinutes = timezoneOffset % 60;
-				patternResult.printf("%d", offsetInMinutes);
+				string printfFormat = offsetInMinutes < 10 ? "0%d" : "%d";
+
+				if (previousPattern != "TZH")
+				{
+					if (timezoneSign < 0)
+						printfFormat = "-" + printfFormat;
+					else if (timezoneOffset >= 0)
+						printfFormat = "+" + printfFormat;
+				}
+
+				patternResult.printf(printfFormat.c_str(), offsetInMinutes);
+			}
+			else if (pattern == "TZD")
+			{
+				patternResult = extract_timezone_name(desc);
 			}
 			break;
 
@@ -1314,7 +1407,6 @@ string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_vi
 	if (patternResult.isEmpty())
 		invalidPatternException(pattern, cb);
 
-	previousPattern = pattern;
 	return patternResult;
 }
 
@@ -1326,16 +1418,13 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 
 	auto invalidPatternException = [](std::string_view pattern, Callbacks* cb)
 	{
-		string str(pattern.data(), pattern.length());
-		cb->err(Arg::Gds(isc_invalid_date_format) << Arg::Str(str.c_str()));
+		cb->err(Arg::Gds(isc_invalid_date_format) << string(pattern.data(), pattern.length()));
 	};
 
 	struct tm times;
 	memset(&times, 0, sizeof(struct tm));
 
 	int fractions = 0;
-
-	SSHORT timezoneOffset = 0;
 
 	switch (desc->dsc_dtype)
 	{
@@ -1348,11 +1437,10 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 		case dtype_ex_time_tz:
 			TimeZoneUtil::decodeTime(*(ISC_TIME_TZ*) desc->dsc_address,
 				true, TimeZoneUtil::NO_OFFSET, &times, &fractions);
-			TimeZoneUtil::extractOffset(*(ISC_TIME_TZ*) desc->dsc_address, &timezoneOffset);
 			break;
 
 		case dtype_sql_date:
-			Firebird::TimeStamp::decode_date(*(GDS_DATE *) desc->dsc_address, &times);
+			Firebird::TimeStamp::decode_date(*(GDS_DATE*) desc->dsc_address, &times);
 			break;
 
 		case dtype_timestamp:
@@ -1363,7 +1451,6 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 		case dtype_ex_timestamp_tz:
 			TimeZoneUtil::decodeTimeStamp(*(ISC_TIMESTAMP_TZ*) desc->dsc_address,
 				true, TimeZoneUtil::NO_OFFSET, &times, &fractions);
-			TimeZoneUtil::extractOffset(*(ISC_TIMESTAMP_TZ*) desc->dsc_address, &timezoneOffset);
 			break;
 
 		default:
@@ -1427,21 +1514,21 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 
 		std::string_view pattern(formatUpper.c_str() + offset, patternLength);
 		result += datetime_to_format_string_pattern_matcher<decltype(invalidPatternException)>(desc, pattern,
-			previousPattern, times, fractions, timezoneOffset, cb, invalidPatternException);
+			previousPattern, times, fractions, cb, invalidPatternException);
 
 		previousPattern = pattern;
 
 		if (i < formatUpper.size() && separator != '\"')
 			result += separator;
 
-		offset = i + sizeof(separator);
+		offset = i + 1;
 	}
 
 	return result;
 }
 
 
-int roman_to_int(const char* str, int length, int& offset)
+static int roman_to_int(const char* str, int length, int& offset)
 {
 	int result = 0;
 	int temp = 0;
@@ -1450,7 +1537,7 @@ int roman_to_int(const char* str, int length, int& offset)
 	{
 		int value = 0;
 
-		switch(str[offset])
+		switch (str[offset])
 		{
 			case 'I': value = 1; break;
 			case 'V': value = 5; break;
@@ -1472,7 +1559,7 @@ int roman_to_int(const char* str, int length, int& offset)
 }
 
 
-int parse_string_to_get_int(const char* str, int length, int& offset, int parseLength, bool withSign = false)
+static int parse_string_to_get_int(const char* str, int length, int& offset, int parseLength, bool withSign = false)
 {
 	int result = 0;
 	int sign = 1;
@@ -1493,7 +1580,7 @@ int parse_string_to_get_int(const char* str, int length, int& offset, int parseL
 }
 
 
-std::string_view parse_string_to_get_first_word(const char* str, int length, int& offset, int parseLength)
+static std::string_view parse_string_to_get_first_word(const char* str, int length, int& offset, int parseLength)
 {
 	int wordLen = 0;
 	int startPoint = offset;
@@ -1512,7 +1599,7 @@ std::string_view parse_string_to_get_first_word(const char* str, int length, int
 
 
 template<typename InvalidPatternException>
-void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::string_view previousPattern,
+static void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::string_view previousPattern,
 	const char* str, int strLength, int& strOffset, struct tm& outTimes, int& outFractions,
 	int& outTimezoneInMinutes, Firebird::Callbacks* cb, InvalidPatternException invalidPatternException)
 {
@@ -1548,8 +1635,8 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 				int year = parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset);
 				if (year > 9999)
 				{
-					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range)
-						<< Arg::Str(string(pattern.data(), pattern.length())) << Arg::Num(0) << Arg::Num(9999));
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(0) << Arg::Num(9999));
 				}
 				outTimes.tm_year = year - 1900;
 				return;
@@ -1562,8 +1649,8 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 				int minutes = parse_string_to_get_int(str, strLength, strOffset, 2);
 				if (minutes > 59)
 				{
-					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range)
-						<< Arg::Str(string(pattern.data(), pattern.length())) << Arg::Num(0) << Arg::Num(59));
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(0) << Arg::Num(59));
 				}
 
 				outTimes.tm_min = minutes;
@@ -1574,8 +1661,8 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 				int month = parse_string_to_get_int(str, strLength, strOffset, 2);
 				if (month < 1 || month > 12)
 				{
-					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range)
-						<< Arg::Str(string(pattern.data(), pattern.length())) << Arg::Num(1) << Arg::Num(12));
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(1) << Arg::Num(12));
 				}
 
 				outTimes.tm_mon = month - 1;
@@ -1596,7 +1683,7 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 					}
 				}
 
-				cb->err(Arg::Gds(isc_month_name_mismatch) << Arg::Str(string(monthShortName.data(), monthShortName.length())));
+				cb->err(Arg::Gds(isc_month_name_mismatch) << string(monthShortName.data(), monthShortName.length()));
 			}
 			else if (pattern == "MONTH")
 			{
@@ -1612,7 +1699,7 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 					}
 				}
 
-				cb->err(Arg::Gds(isc_month_name_mismatch) << Arg::Str(string(monthFullName.data(), monthFullName.length())));
+				cb->err(Arg::Gds(isc_month_name_mismatch) << string(monthFullName.data(), monthFullName.length()));
 			}
 			break;
 
@@ -1622,8 +1709,8 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 				int month = roman_to_int(str, strLength, strOffset);
 				if (month == 0 || month > 12)
 				{
-					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range)
-						<< Arg::Str(string(pattern.data(), pattern.length())) << Arg::Num(1) << Arg::Num(12));
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(1) << Arg::Num(12));
 				}
 
 				outTimes.tm_mon = month - 1;
@@ -1637,8 +1724,8 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 				int day = parse_string_to_get_int(str, strLength, strOffset, 2);
 				if (day == 0 || day > 31)
 				{
-					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range)
-						<< Arg::Str(string(pattern.data(), pattern.length())) << Arg::Num(1) << Arg::Num(31));
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(1) << Arg::Num(31));
 				}
 
 				outTimes.tm_mday = day;
@@ -1655,8 +1742,8 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 				constexpr int maxJDN = 5373484; // 31.12.9999
 				if (JDN < minJDN || JDN > maxJDN)
 				{
-					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range)
-						<< Arg::Str(string(pattern.data(), pattern.length())) << Arg::Num(minJDN) << Arg::Num(maxJDN));
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(minJDN) << Arg::Num(maxJDN));
 				}
 
 				int year, month, day;
@@ -1675,8 +1762,8 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 				int hours = parse_string_to_get_int(str, strLength, strOffset, 2);
 				if (hours > 12)
 				{
-					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range)
-						<< Arg::Str(string(pattern.data(), pattern.length())) << Arg::Num(0) << Arg::Num(12));
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(0) << Arg::Num(12));
 				}
 
 				if (str[strOffset] == ' ')
@@ -1700,15 +1787,15 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 					return;
 				}
 
-				cb->err(Arg::Gds(isc_incorrect_hours_period) << Arg::Str(string(period.data(), period.length())));
+				cb->err(Arg::Gds(isc_incorrect_hours_period) << string(period.data(), period.length()));
 			}
 			else if (pattern == "HH24")
 			{
 				int hours = parse_string_to_get_int(str, strLength, strOffset, 2);
 				if (hours > 23)
 				{
-					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range)
-						<< Arg::Str(string(pattern.data(), pattern.length())) << Arg::Num(0) << Arg::Num(23));
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(0) << Arg::Num(23));
 				}
 
 				outTimes.tm_hour = hours;
@@ -1722,8 +1809,8 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 				int seconds = parse_string_to_get_int(str, strLength, strOffset, 2);
 				if (seconds > 59)
 				{
-					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range)
-						<< Arg::Str(string(pattern.data(), pattern.length())) << Arg::Num(0) << Arg::Num(59));
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(0) << Arg::Num(59));
 				}
 
 				outTimes.tm_sec = seconds;
@@ -1736,8 +1823,8 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 				int secondsInDay = parse_string_to_get_int(str, strLength, strOffset, 5);
 				if (secondsInDay > maximumSecondsInDay)
 				{
-					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range)
-						<< Arg::Str(string(pattern.data(), pattern.length())) << Arg::Num(0) << Arg::Num(maximumSecondsInDay));
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(0) << Arg::Num(maximumSecondsInDay));
 				}
 
 				int hours = secondsInDay / 24;
@@ -1771,8 +1858,8 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 			{
 				if (previousPattern == "TZM")
 				{
-					outTimezoneInMinutes += sign(outTimezoneInMinutes)
-						* parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset) * 60;
+					outTimezoneInMinutes += sign(outTimezoneInMinutes) *
+						parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset) * 60;
 				}
 				else
 					outTimezoneInMinutes = parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset, true) * 60;
@@ -1782,8 +1869,8 @@ void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::st
 			{
 				if (previousPattern == "TZH")
 				{
-					outTimezoneInMinutes += sign(outTimezoneInMinutes)
-						* parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset);
+					outTimezoneInMinutes += sign(outTimezoneInMinutes) *
+						parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset);
 				}
 				else
 					outTimezoneInMinutes = parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset, true);
@@ -1806,7 +1893,7 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 
 	auto invalidPatternException = [](std::string_view pattern, Callbacks* cb)
 	{
-		cb->err(Arg::Gds(isc_invalid_date_format) << Arg::Str(string(pattern.data(), pattern.length())));
+		cb->err(Arg::Gds(isc_invalid_date_format) << string(pattern.data(), pattern.length()));
 	};
 
 	USHORT dtype;

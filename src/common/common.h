@@ -994,13 +994,13 @@ inline const TEXT* const FB_LONG_MONTHS_UPPER[] =
 };
 
 // Starts with SUNDAY cuz tm.tm_wday starts with it
-inline const TEXT* const FB_SHORT_DAYS[] =
+inline const TEXT FB_SHORT_DAYS[][4] =
 {
 	"Sun",
 	"Mon",
-	"Tues",
+	"Tue",
 	"Wed",
-	"Thurs",
+	"Thu",
 	"Fri",
 	"Sat",
 	"\0"

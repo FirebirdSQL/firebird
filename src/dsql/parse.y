@@ -8500,7 +8500,7 @@ cast_format_clause
 
 %type <legacyField> date_time_type
 date_time_type
-	:DATE
+	: DATE
 		{
 			$$ = newNode<dsql_fld>();
 			stmt_ambiguous = true;

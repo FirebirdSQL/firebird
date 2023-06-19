@@ -392,14 +392,14 @@ int NoThrowTimeStamp::convertGregorianDateToWeekDate(const struct tm& times)
 
 int NoThrowTimeStamp::convertGregorianDateToJulianDate(int year, int month, int day)
 {
-	int JDN = (1461 * (year + 4800 + (month - 14)/12))/4 + (367 * (month - 2 - 12 * ((month - 14)/12)))
+	int jdn = (1461 * (year + 4800 + (month - 14)/12))/4 + (367 * (month - 2 - 12 * ((month - 14)/12)))
 		/ 12 - (3 * ((year + 4900 + (month - 14)/12)/100))/4 + day - 32075;
-	return JDN;
+	return jdn;
 }
 
-void NoThrowTimeStamp::convertJulianDateToGregorianDate(int JDN, int& outYear, int& outMonth, int& outDay)
+void NoThrowTimeStamp::convertJulianDateToGregorianDate(int jdn, int& outYear, int& outMonth, int& outDay)
 {
-	int a = JDN + 32044;
+	int a = jdn + 32044;
 	int b = (4 * a +3 ) / 146097;
 	int c = a - (146097 * b) / 4;
 	int d = (4 * c + 3) / 1461;

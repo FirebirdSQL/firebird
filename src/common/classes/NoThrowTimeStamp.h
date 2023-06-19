@@ -170,7 +170,7 @@ public:
 
 	static int convertGregorianDateToWeekDate(const struct tm& times);
 	static int convertGregorianDateToJulianDate(int year, int month, int day);
-	static void convertJulianDateToGregorianDate(int JDN, int& outYear, int& outMonth, int& outDay);
+	static void convertJulianDateToGregorianDate(int jdn, int& outYear, int& outMonth, int& outDay);
 
 	static inline bool isLeapYear(const int year) throw()
 	{

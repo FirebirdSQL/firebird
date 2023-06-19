@@ -3366,32 +3366,32 @@ dsc* BoolAsValueNode::execute(thread_db* tdbb, Request* request) const
 //--------------------
 
 
-static RegisterNode<CastNode> regCastNode({blr_cast});
+static RegisterNode<CastNode> regCastNode({blr_cast, blr_cast_format});
 
-CastNode::CastNode(MemoryPool& pool, ValueExprNode* aSource, dsql_fld* aDsqlField, const MetaName& format)
+CastNode::CastNode(MemoryPool& pool, ValueExprNode* aSource, dsql_fld* aDsqlField, const string& format)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_CAST>(pool),
 	  dsqlAlias("CAST"),
 	  dsqlField(aDsqlField),
 	  source(aSource),
 	  itemInfo(NULL),
-	  format(format),
+	  format(pool, format),
 	  artificial(false)
 {
 	castDesc.clear();
 }
 
 // Parse a datatype cast.
-DmlNode* CastNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
+DmlNode* CastNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
+	fb_assert(blrOp == blr_cast || blrOp == blr_cast_format);
+
 	CastNode* node = FB_NEW_POOL(pool) CastNode(pool);
+
+	if (blrOp == blr_cast_format)
+		csb->csb_blr_reader.getString(node->format);
 
 	ItemInfo itemInfo;
 	PAR_desc(tdbb, csb, &node->castDesc, &itemInfo);
-
-	if (csb->csb_blr_reader.getByte() == blr_cast_format)
-		csb->csb_blr_reader.getMetaName(node->format);
-	else
-		csb->csb_blr_reader.seekBackward(1);
 
 	node->source = PAR_parse_value(tdbb, csb);
 
@@ -3417,9 +3417,7 @@ string CastNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, castDesc);
 	NODE_PRINT(printer, source);
 	NODE_PRINT(printer, itemInfo);
-
-	if (!format.isEmpty())
-		NODE_PRINT(printer, format);
+	NODE_PRINT(printer, format);
 
 	return "CastNode";
 }
@@ -3475,14 +3473,15 @@ bool CastNode::setParameterType(DsqlCompilerScratch* /*dsqlScratch*/,
 // Generate BLR for a data-type cast operation.
 void CastNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	dsqlScratch->appendUChar(blr_cast);
-	dsqlScratch->putDtype(dsqlField, true);
-
 	if (format.hasData())
 	{
 		dsqlScratch->appendUChar(blr_cast_format);
-		dsqlScratch->appendMetaString(format.c_str());
+		dsqlScratch->appendString(0, format);
 	}
+	else
+		dsqlScratch->appendUChar(blr_cast);
+
+	dsqlScratch->putDtype(dsqlField, true);
 
 	GEN_expr(dsqlScratch, source);
 }
@@ -3652,7 +3651,7 @@ dsc* CastNode::execute(thread_db* tdbb, Request* request) const
 	{
 		if (DTYPE_IS_TEXT(impure->vlu_desc.dsc_dtype))
 		{
-			string result = CVT_datetime_to_format_string(value, format.c_str(), &EngineCallbacks::instance);
+			string result = CVT_datetime_to_format_string(value, format, &EngineCallbacks::instance);
 			USHORT dscLength = DSC_string_length(&impure->vlu_desc);
 			USHORT copyLength = result.length() < dscLength ? result.length() : dscLength;
 			USHORT dscOffset = 0;
@@ -3669,9 +3668,8 @@ dsc* CastNode::execute(thread_db* tdbb, Request* request) const
 		}
 		else
 		{
-			ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format.c_str(),
-				&EngineCallbacks::instance);
-			switch(impure->vlu_desc.dsc_dtype)
+			ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, &EngineCallbacks::instance);
+			switch (impure->vlu_desc.dsc_dtype)
 			{
 				case dtype_sql_time:
 					*(ISC_TIME*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_time;

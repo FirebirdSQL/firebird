@@ -450,9 +450,6 @@
 
 #define blr_dcl_local_table			(unsigned char) 218
 
-// subcode of blr_cast
-#define blr_cast_format				(unsigned char) 0
-
 // subcodes of blr_dcl_local_table
 #define blr_dcl_local_table_format	(unsigned char) 1
 
@@ -467,5 +464,7 @@
 #define blr_json_function			(unsigned char) 222
 
 #define blr_skip_locked				(unsigned char) 223
+
+#define blr_cast_format				(unsigned char) 224
 
 #endif // FIREBIRD_IMPL_BLR_H
