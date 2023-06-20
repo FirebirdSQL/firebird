@@ -967,7 +967,7 @@ const int HIGH_WORD		= 0;
 #endif
 #endif
 
-inline const TEXT FB_SHORT_MONTHS[][4] =
+static const TEXT FB_SHORT_MONTHS[][4] =
 {
 	"Jan", "Feb", "Mar",
 	"Apr", "May", "Jun",
@@ -976,7 +976,7 @@ inline const TEXT FB_SHORT_MONTHS[][4] =
 	"\0"
 };
 
-inline const TEXT* const FB_LONG_MONTHS_UPPER[] =
+static const TEXT* const FB_LONG_MONTHS_UPPER[] =
 {
 	"JANUARY",
 	"FEBRUARY",
@@ -994,7 +994,7 @@ inline const TEXT* const FB_LONG_MONTHS_UPPER[] =
 };
 
 // Starts with SUNDAY cuz tm.tm_wday starts with it
-inline const TEXT FB_SHORT_DAYS[][4] =
+static const TEXT FB_SHORT_DAYS[][4] =
 {
 	"Sun",
 	"Mon",
@@ -1007,7 +1007,7 @@ inline const TEXT FB_SHORT_DAYS[][4] =
 };
 
 // Starts with SUNDAY cuz tm.tm_wday starts with it
-inline const TEXT* const FB_LONG_DAYS_UPPER[] =
+static const TEXT* const FB_LONG_DAYS_UPPER[] =
 {
 	"SUNDAY",
 	"MONDAY",
