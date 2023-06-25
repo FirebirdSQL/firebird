@@ -560,70 +560,6 @@ void ProfilerManager::onRequestFinish(Request* request, Stats& stats)
 	}
 }
 
-void ProfilerManager::beforePsqlLineColumn(Request* request, ULONG line, ULONG column)
-{
-	if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_BEFORE_EVENTS))
-		currentSession->pluginSession->beforePsqlLineColumn(profileRequestId, line, column);
-}
-
-void ProfilerManager::afterPsqlLineColumn(Request* request, ULONG line, ULONG column, Stats& stats)
-{
-	if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_AFTER_EVENTS))
-		currentSession->pluginSession->afterPsqlLineColumn(profileRequestId, line, column, &stats);
-}
-
-void ProfilerManager::beforeRecordSourceOpen(Request* request, const RecordSource* rsb)
-{
-	if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_BEFORE_EVENTS))
-	{
-		const auto profileStatement = getStatement(request);
-		const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceProfileId());
-		fb_assert(sequencePtr);
-
-		currentSession->pluginSession->beforeRecordSourceOpen(
-			profileRequestId, rsb->getCursorProfileId(), *sequencePtr);
-	}
-}
-
-void ProfilerManager::afterRecordSourceOpen(Request* request, const RecordSource* rsb, Stats& stats)
-{
-	if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_AFTER_EVENTS))
-	{
-		const auto profileStatement = getStatement(request);
-		const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceProfileId());
-		fb_assert(sequencePtr);
-
-		currentSession->pluginSession->afterRecordSourceOpen(
-			profileRequestId, rsb->getCursorProfileId(), *sequencePtr, &stats);
-	}
-}
-
-void ProfilerManager::beforeRecordSourceGetRecord(Request* request, const RecordSource* rsb)
-{
-	if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_BEFORE_EVENTS))
-	{
-		const auto profileStatement = getStatement(request);
-		const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceProfileId());
-		fb_assert(sequencePtr);
-
-		currentSession->pluginSession->beforeRecordSourceGetRecord(
-			profileRequestId, rsb->getCursorProfileId(), *sequencePtr);
-	}
-}
-
-void ProfilerManager::afterRecordSourceGetRecord(Request* request, const RecordSource* rsb, Stats& stats)
-{
-	if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_AFTER_EVENTS))
-	{
-		const auto profileStatement = getStatement(request);
-		const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceProfileId());
-		fb_assert(sequencePtr);
-
-		currentSession->pluginSession->afterRecordSourceGetRecord(
-			profileRequestId, rsb->getCursorProfileId(), *sequencePtr, &stats);
-	}
-}
-
 void ProfilerManager::cancelSession()
 {
 	if (currentSession)
@@ -771,37 +707,6 @@ ProfilerManager::Statement* ProfilerManager::getStatement(Request* request)
 	}
 
 	return mainProfileStatement;
-}
-
-SINT64 ProfilerManager::getRequest(Request* request, unsigned flags)
-{
-	if (!isActive() || (flags && !(currentSession->flags & flags)))
-		return 0;
-
-	const auto mainRequestId = request->getRequestId();
-
-	if (!currentSession->requests.exist(mainRequestId))
-	{
-		const auto timestamp = TimeZoneUtil::getCurrentTimeStamp(request->req_attachment->att_current_timezone);
-
-		do
-		{
-			getStatement(request);  // define the statement and ignore the result
-
-			const StmtNumber callerRequestId = request->req_caller ? request->req_caller->getRequestId() : 0;
-
-			LogLocalStatus status("Profiler onRequestStart");
-			currentSession->pluginSession->onRequestStart(&status,
-				(SINT64) request->getRequestId(), (SINT64) request->getStatement()->getStatementId(),
-				(SINT64) callerRequestId, timestamp);
-
-			currentSession->requests.add(request->getRequestId());
-
-			request = request->req_caller;
-		} while (request && !currentSession->requests.exist(request->getRequestId()));
-	}
-
-	return mainRequestId;
 }
 
 

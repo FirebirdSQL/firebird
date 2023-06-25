@@ -905,7 +905,7 @@ void EXE_start(thread_db* tdbb, Request* request, jrd_tra* transaction)
 	for (auto& rpb : request->req_rpb)
 		rpb.rpb_runtime_flags = 0;
 
-	request->req_profiler_perf_counter = 0;
+	request->req_profiler_ticks = 0;
 
 	// Store request start time for timestamp work
 	request->validateTimeStamp();
@@ -997,9 +997,9 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 
 		const auto attachment = request->req_attachment;
 
-		if (attachment->isProfilerActive() && !request->hasInternalStatement())
+		if (request->req_profiler_ticks && attachment->isProfilerActive() && !request->hasInternalStatement())
 		{
-			ProfilerManager::Stats stats(request->req_profiler_perf_counter);
+			ProfilerManager::Stats stats(request->req_profiler_ticks);
 			attachment->getProfilerManager(tdbb)->onRequestFinish(request, stats);
 		}
 	}
@@ -1387,23 +1387,39 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 
 	// Execute stuff until we drop
 
-	SINT64 initialPerfCounter = fb_utils::query_performance_counter();
-	SINT64 lastPerfCounter = initialPerfCounter;
+	ProfilerManager* profilerManager;
+	SINT64 profilerInitialTicks, profilerInitialAccumulatedOverhead, profilerLastTicks, profilerLastAccumulatedOverhead;
+
+	if (attachment->isProfilerActive() && !request->hasInternalStatement())
+	{
+		profilerManager = attachment->getProfilerManager(tdbb);
+		profilerInitialTicks = profilerLastTicks = profilerManager->queryTicks();
+		profilerInitialAccumulatedOverhead = profilerLastAccumulatedOverhead =
+			profilerManager->getAccumulatedOverhead();
+	}
+	else
+	{
+		profilerManager = nullptr;
+		profilerInitialTicks = 0;
+		profilerLastTicks = 0;
+		profilerInitialAccumulatedOverhead = 0;
+		profilerLastAccumulatedOverhead = 0;
+	}
+
 	const StmtNode* profileNode = nullptr;
 
 	const auto profilerCallAfterPsqlLineColumn = [&] {
-		const SINT64 currentPerfCounter = fb_utils::query_performance_counter();
+		const SINT64 currentProfilerTicks = profilerManager->queryTicks();
 
 		if (profileNode)
 		{
-			ProfilerManager::Stats stats(currentPerfCounter - lastPerfCounter);
-
-			attachment->getProfilerManager(tdbb)->afterPsqlLineColumn(request,
-				profileNode->line, profileNode->column,
-				stats);
+			const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
+				currentProfilerTicks, profilerLastTicks, profilerLastAccumulatedOverhead);
+			ProfilerManager::Stats stats(elapsedTicks);
+			profilerManager->afterPsqlLineColumn(request, profileNode->line, profileNode->column, stats);
 		}
 
-		return currentPerfCounter;
+		return currentProfilerTicks;
 	};
 
 	while (node && !(request->req_flags & req_stall))
@@ -1422,17 +1438,24 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 
 				if (attachment->isProfilerActive() && !request->hasInternalStatement())
 				{
+					if (!profilerInitialTicks)
+					{
+						profilerManager = attachment->getProfilerManager(tdbb);
+						profilerInitialTicks = profilerLastTicks = profilerManager->queryTicks();
+						profilerInitialAccumulatedOverhead = profilerLastAccumulatedOverhead =
+							profilerManager->getAccumulatedOverhead();
+					}
+
 					if (node->hasLineColumn &&
 						node->isProfileAware() &&
 						(!profileNode ||
 						 !(node->line == profileNode->line && node->column == profileNode->column)))
 					{
-						lastPerfCounter = profilerCallAfterPsqlLineColumn();
-
+						profilerLastTicks = profilerCallAfterPsqlLineColumn();
+						profilerLastAccumulatedOverhead = profilerManager->getAccumulatedOverhead();
 						profileNode = node;
 
-						attachment->getProfilerManager(tdbb)->beforePsqlLineColumn(request,
-							profileNode->line, profileNode->column);
+						profilerManager->beforePsqlLineColumn(request, profileNode->line, profileNode->column);
 					}
 				}
 			}
@@ -1441,8 +1464,13 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 
 			if (exeState.exit)
 			{
-				if (attachment->isProfilerActive() && !request->hasInternalStatement())
-					request->req_profiler_perf_counter += profilerCallAfterPsqlLineColumn() - initialPerfCounter;
+				if (profilerInitialTicks && attachment->isProfilerActive() && !request->hasInternalStatement())
+				{
+					const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
+						profilerCallAfterPsqlLineColumn(), profilerInitialTicks, profilerInitialAccumulatedOverhead);
+
+					request->req_profiler_ticks += elapsedTicks;
+				}
 
 				return node;
 			}
@@ -1484,8 +1512,13 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 		}
 	} // while()
 
-	if (attachment->isProfilerActive() && !request->hasInternalStatement())
-		request->req_profiler_perf_counter += profilerCallAfterPsqlLineColumn() - initialPerfCounter;
+	if (profilerInitialTicks && attachment->isProfilerActive() && !request->hasInternalStatement())
+	{
+		const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
+			profilerCallAfterPsqlLineColumn(), profilerInitialTicks, profilerInitialAccumulatedOverhead);
+
+		request->req_profiler_ticks += elapsedTicks;
+	}
 
 	request->adjustCallerStats();
 
@@ -1512,10 +1545,10 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 		request->invalidateTimeStamp();
 		release_blobs(tdbb, request);
 
-		if (attachment->isProfilerActive() && !request->hasInternalStatement())
+		if (profilerInitialTicks && attachment->isProfilerActive() && !request->hasInternalStatement())
 		{
-			ProfilerManager::Stats stats(request->req_profiler_perf_counter);
-			attachment->getProfilerManager(tdbb)->onRequestFinish(request, stats);
+			ProfilerManager::Stats stats(request->req_profiler_ticks);
+			profilerManager->onRequestFinish(request, stats);
 		}
 	}
 

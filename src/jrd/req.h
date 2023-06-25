@@ -410,7 +410,7 @@ public:
 	RuntimeStatistics	req_stats;
 	RuntimeStatistics	req_base_stats;
 	AffectedRows req_records_affected;	// records affected by the last statement
-	FB_UINT64 req_profiler_perf_counter;	// profiler performance counter
+	FB_UINT64 req_profiler_ticks;		// profiler ticks
 
 	const StmtNode*	req_next;			// next node for execution
 	EDS::Statement*	req_ext_stmt;		// head of list of active dynamic statements

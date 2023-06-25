@@ -56,62 +56,18 @@ RecordSource::RecordSource(CompilerScratch* csb)
 
 void RecordSource::open(thread_db* tdbb) const
 {
-	const auto attachment = tdbb->getAttachment();
-	const auto request = tdbb->getRequest();
-
-	const auto profilerManager = attachment->isProfilerActive() && !request->hasInternalStatement() ?
-		attachment->getProfilerManager(tdbb) :
-		nullptr;
-
-	const SINT64 lastPerfCounter = profilerManager ?
-		fb_utils::query_performance_counter() :
-		0;
-
-	if (profilerManager)
-	{
-		profilerManager->prepareRecSource(tdbb, request, this);
-		profilerManager->beforeRecordSourceOpen(request, this);
-	}
+	ProfilerManager::RecordSourceStopWatcher profilerRecordSourceStopWatcher(tdbb, this,
+		ProfilerManager::RecordSourceStopWatcher::Event::OPEN);
 
 	internalOpen(tdbb);
-
-	if (profilerManager)
-	{
-		const SINT64 currentPerfCounter = fb_utils::query_performance_counter();
-		ProfilerManager::Stats stats(currentPerfCounter - lastPerfCounter);
-		profilerManager->afterRecordSourceOpen(request, this, stats);
-	}
 }
 
 bool RecordSource::getRecord(thread_db* tdbb) const
 {
-	const auto attachment = tdbb->getAttachment();
-	const auto request = tdbb->getRequest();
+	ProfilerManager::RecordSourceStopWatcher profilerRecordSourceStopWatcher(tdbb, this,
+		ProfilerManager::RecordSourceStopWatcher::Event::GET_RECORD);
 
-	const auto profilerManager = attachment->isProfilerActive() && !request->hasInternalStatement() ?
-		attachment->getProfilerManager(tdbb) :
-		nullptr;
-
-	const SINT64 lastPerfCounter = profilerManager ?
-		fb_utils::query_performance_counter() :
-		0;
-
-	if (profilerManager)
-	{
-		profilerManager->prepareRecSource(tdbb, request, this);
-		profilerManager->beforeRecordSourceGetRecord(request, this);
-	}
-
-	const auto ret = internalGetRecord(tdbb);
-
-	if (profilerManager)
-	{
-		const SINT64 currentPerfCounter = fb_utils::query_performance_counter();
-		ProfilerManager::Stats stats(currentPerfCounter - lastPerfCounter);
-		profilerManager->afterRecordSourceGetRecord(request, this, stats);
-	}
-
-	return ret;
+	return internalGetRecord(tdbb);
 }
 
 string RecordSource::printName(thread_db* tdbb, const string& name, bool quote)
