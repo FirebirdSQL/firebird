@@ -3653,18 +3653,23 @@ dsc* CastNode::execute(thread_db* tdbb, Request* request) const
 		{
 			string result = CVT_datetime_to_format_string(value, format, &EngineCallbacks::instance);
 			USHORT dscLength = DSC_string_length(&impure->vlu_desc);
-			USHORT copyLength = result.length() < dscLength ? result.length() : dscLength;
-			USHORT dscOffset = 0;
+			string::size_type resultLength = result.length();
+			if (resultLength > dscLength)
+			{
+				ERR_post(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+					Arg::Gds(isc_trunc_limits) << Arg::Num(dscLength) << Arg::Num(resultLength));
+			}
 
+			USHORT dscOffset = 0;
 			if (impure->vlu_desc.dsc_dtype == dtype_cstring)
 				dscOffset = 1;
 			else if (impure->vlu_desc.dsc_dtype == dtype_varying)
 			{
 				dscOffset = sizeof(USHORT);
-				((vary*) impure->vlu_desc.dsc_address)->vary_length = copyLength;
+				((vary*) impure->vlu_desc.dsc_address)->vary_length = resultLength;
 			}
 
-			memcpy(impure->vlu_desc.dsc_address + dscOffset, result.c_str(), copyLength);
+			memcpy(impure->vlu_desc.dsc_address + dscOffset, result.c_str(), resultLength);
 		}
 		else
 		{

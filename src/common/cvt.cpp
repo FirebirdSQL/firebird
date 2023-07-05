@@ -1458,7 +1458,7 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 	}
 
 	string formatUpper(format);
-	for (int i = 0; i < formatUpper.size(); i++)
+	for (int i = 0; i < formatUpper.length(); i++)
 	{
 		const char symbol = formatUpper[i];
 		if (symbol != '\"')
@@ -1467,10 +1467,26 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 			continue;
 		}
 
-		int pos = formatUpper.find('\"', i + 1);
-		if (pos == string::npos)
-			cb->err(Arg::Gds(isc_invalid_raw_string_in_date_format));
-		i = pos;
+		while(true)
+		{
+			int pos = formatUpper.find('\"', i + 1);
+			if (pos == string::npos)
+				cb->err(Arg::Gds(isc_invalid_raw_string_in_date_format));
+			int tempPos = pos;
+			if (formatUpper[--tempPos] == '\\')
+			{
+				int backslashCount = 1;
+				while(formatUpper[--tempPos] == '\\')
+					backslashCount++;
+				if (backslashCount % 2 == 1)
+				{
+					i = pos;
+					continue;
+				}
+			}
+			i = pos;
+			break;
+		}
 	}
 
 	int offset = 0;
@@ -1478,15 +1494,26 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 	std::string_view previousPattern;
 	string result = "";
 
-	for (int i = 0; i < formatUpper.size(); i++)
+	for (int i = 0; i < formatUpper.length(); i++)
 	{
 		const char symbol = formatUpper[i];
 
 		if (separator == '\"')
 		{
-			int endPos = formatUpper.find('\"', i);
-			result += formatUpper.substr(i, endPos - i);
-			i = endPos;
+			int rawStringLength = formatUpper.length() - i;
+			string rawString(rawStringLength, '\0');
+			for (int j = 0; j < rawStringLength; j++, i++)
+			{
+				if (formatUpper[i] == '\"')
+					break;
+				else if (formatUpper[i] == '\\')
+					rawString[j] = formatUpper[++i];
+				else
+					rawString[j] = formatUpper[i];
+			}
+			rawString.recalculate_length();
+			result += rawString;
+
 			offset = i + 1;
 			separator = '\0';
 			continue;
@@ -1496,7 +1523,7 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 			separator = symbol;
 		else
 		{
-			if (i != formatUpper.size() - 1)
+			if (i != formatUpper.length() - 1)
 				continue;
 			++i;
 		}
@@ -1518,7 +1545,7 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 
 		previousPattern = pattern;
 
-		if (i < formatUpper.size() && separator != '\"')
+		if (i < formatUpper.length() && separator != '\"')
 			result += separator;
 
 		offset = i + 1;
@@ -1564,8 +1591,15 @@ static int parse_string_to_get_int(const char* str, int length, int& offset, int
 	int result = 0;
 	int sign = 1;
 
-	if (withSign && offset != 0 && str[offset - 1] == '-')
-		sign = -1;
+	if (withSign)
+	{
+		// To check '-' sign we need to move back, cuz '-' is also used as separator,
+		// so it will be skipped when we trying to remove "empty" space between values
+		if (str[offset] == '+')
+			offset++;
+		else if (offset != 0 && str[offset - 1] == '-')
+			sign = -1;
+	}
 
 	const int parseLengthWithOffset = offset + parseLength;
 	for (; offset < parseLengthWithOffset && offset < length; offset++)
@@ -1905,7 +1939,7 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 		stringUpper[i] = toupper(sourceString[i]);
 
 	string formatUpper(format.length(), '\0');
-	for (int i = 0; i < format.size(); i++)
+	for (int i = 0; i < format.length(); i++)
 		formatUpper[i] = toupper(format[i]);
 
 	struct tm times;
@@ -1914,7 +1948,9 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 	times.tm_mday = 1;
 
 	int fractions = 0;
-	int timezoneOffsetInMinutes = 0;
+
+	constexpr int uninitializedTimezoneOffsetValue = INT32_MIN;
+	int timezoneOffsetInMinutes = uninitializedTimezoneOffsetValue;
 
 	int formatOffset = 0;
 	int stringOffset = 0;
@@ -1933,7 +1969,7 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 		}
 
 		if (stringOffset >= stringLength)
-			cb->err(Arg::Gds(isc_data_for_format_is_exhausted));
+			cb->err(Arg::Gds(isc_data_for_format_is_exhausted) << string(formatUpper.c_str() + formatOffset));
 
 		const int patternLength = i - formatOffset;
 		if (patternLength <= 0)
@@ -1960,9 +1996,23 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 		formatOffset = i + 1;
 	}
 
+	for (; stringOffset < stringLength; stringOffset++)
+	{
+		if (!is_separator(stringUpper[stringOffset]))
+			break;
+	}
+
+	if (stringOffset < stringLength)
+		cb->err(Arg::Gds(isc_trailing_part_of_string) << string(stringUpper.c_str() + stringOffset));
+
 	ISC_TIMESTAMP_TZ timestampTZ;
-	timestampTZ.time_zone = TimeZoneUtil::makeFromOffset(sign(timezoneOffsetInMinutes),
-		abs(timezoneOffsetInMinutes) / 60, abs(timezoneOffsetInMinutes) % 60);
+	if (timezoneOffsetInMinutes == uninitializedTimezoneOffsetValue)
+		timestampTZ.time_zone = cb->getSessionTimeZone();
+	else
+	{
+		timestampTZ.time_zone = TimeZoneUtil::makeFromOffset(sign(timezoneOffsetInMinutes),
+			abs(timezoneOffsetInMinutes) / 60, abs(timezoneOffsetInMinutes) % 60);
+	}
 	timestampTZ.utc_timestamp = NoThrowTimeStamp::encode_timestamp(&times, fractions);
 
 	return timestampTZ;

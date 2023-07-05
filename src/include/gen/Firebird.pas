@@ -5657,6 +5657,7 @@ const
 	 isc_month_name_mismatch = 335545294;
 	 isc_incorrect_hours_period = 335545295;
 	 isc_data_for_format_is_exhausted = 335545296;
+	 isc_trailing_part_of_string = 335545297;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
