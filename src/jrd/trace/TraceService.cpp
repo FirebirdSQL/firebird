@@ -37,7 +37,7 @@
 #include "../../jrd/svc.h"
 #include "../../common/os/guid.h"
 #include "../../jrd/trace/TraceLog.h"
-#include "../../jrd/trace/TraceManager.h"
+#include "../../supplement/trace/JrdTraceManager.h"
 #include "../../jrd/trace/TraceService.h"
 #include "../../jrd/scl.h"
 #include "../../jrd/Mapping.h"
@@ -103,7 +103,7 @@ void TraceSvcJrd::setAttachInfo(const string& /*svc_name*/, const string& user, 
 
 void TraceSvcJrd::startSession(TraceSession& session, bool interactive)
 {
-	if (!TraceManager::pluginsCount())
+	if (!JrdTraceManager::pluginsCount())
 	{
 		m_svc.printf(false, "Can not start trace session. There are no trace plugins loaded\n");
 		return;
@@ -157,7 +157,7 @@ void TraceSvcJrd::stopSession(ULONG id)
 {
 	m_svc.started();
 
-	ConfigStorage* storage = TraceManager::getStorage();
+	ConfigStorage* storage = JrdTraceManager::getStorage();
 	StorageGuard guard(storage);
 
 	TraceSession session(*getDefaultMemoryPool());
@@ -196,7 +196,7 @@ void TraceSvcJrd::setActive(ULONG id, bool active)
 
 bool TraceSvcJrd::changeFlags(ULONG id, int setFlags, int clearFlags)
 {
-	ConfigStorage* storage = TraceManager::getStorage();
+	ConfigStorage* storage = JrdTraceManager::getStorage();
 	StorageGuard guard(storage);
 
 	TraceSession session(*getDefaultMemoryPool());
@@ -228,7 +228,7 @@ void TraceSvcJrd::listSessions()
 {
 	m_svc.started();
 
-	ConfigStorage* storage = TraceManager::getStorage();
+	ConfigStorage* storage = JrdTraceManager::getStorage();
 	StorageGuard guard(storage);
 
 	storage->restart();
@@ -316,7 +316,7 @@ void TraceSvcJrd::readSession(TraceSession& session)
 
 bool TraceSvcJrd::checkAliveAndFlags(ULONG sesId, int& flags)
 {
-	ConfigStorage* storage = TraceManager::getStorage();
+	ConfigStorage* storage = JrdTraceManager::getStorage();
 
 	bool alive = (m_chg_number == storage->getChangeNumber());
 	if (!alive)

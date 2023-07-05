@@ -120,7 +120,7 @@
 #include "../common/db_alias.h"
 #include "../jrd/replication/Publisher.h"
 #include "../jrd/replication/Applier.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/trace/TraceObjects.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "../jrd/IntlManager.h"
@@ -1563,7 +1563,7 @@ static void trace_failed_attach(const char* filename, const DatabaseOptions& opt
 	const char* func = flags & UNWIND_CREATE ? "JProvider::createDatabase" : "JProvider::attachDatabase";
 
 	// Perform actual trace
-	TraceManager tempMgr(origFilename, callback, flags & UNWIND_NEW);
+	JrdTraceManager tempMgr(origFilename, callback, flags & UNWIND_NEW);
 
 	if (tempMgr.needs(ITraceFactory::TRACE_EVENT_ATTACH))
 		tempMgr.event_attach(&conn, flags & UNWIND_CREATE, result);
@@ -4646,9 +4646,9 @@ void JProvider::shutdown(CheckStatusWrapper* status, unsigned int timeout, const
 				shutdown_thread(NULL);
 			}
 
-			// Do not put it into separate shutdown thread - during shutdown of TraceManager
+			// Do not put it into separate shutdown thread - during shutdown of JrdTraceManager
 			// PluginManager wants to lock a mutex, which is sometimes already locked in current thread
-			TraceManager::shutdown();
+			JrdTraceManager::shutdown();
 			Mapping::shutdownIpc();
 		}
 
@@ -8648,7 +8648,7 @@ static void unwindAttach(thread_db* tdbb, const char* filename, const Exception&
 	try
 	{
 		const auto att = tdbb->getAttachment();
-		TraceManager* traceManager = att ? att->att_trace_manager : nullptr;
+		JrdTraceManager* traceManager = att ? att->att_trace_manager : nullptr;
 		if (att && traceManager && traceManager->isActive())
 		{
 			TraceConnectionImpl conn(att);
@@ -8709,7 +8709,7 @@ static void unwindAttach(thread_db* tdbb, const char* filename, const Exception&
 				sAtt->manualLock(flags);
 				if (sAtt->getHandle())
 				{
-					TraceManager* traceManager = attachment->att_trace_manager;
+					JrdTraceManager* traceManager = attachment->att_trace_manager;
 					TraceConnectionImpl conn(attachment);
 
 					if (traceManager->needs(ITraceFactory::TRACE_EVENT_DETACH))

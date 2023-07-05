@@ -29,7 +29,7 @@
 
 #include "../../common/classes/auto.h"
 #include "../../common/utils_proto.h"
-#include "../../jrd/trace/TraceManager.h"
+#include "../../supplement/trace/JrdTraceManager.h"
 #include "../../jrd/trace/TraceLog.h"
 #include "../../jrd/trace/TraceObjects.h"
 #include "../../common/isc_proto.h"
@@ -502,72 +502,6 @@ const char* TraceTriggerImpl::getRelationName()
 }
 
 
-/// TraceLogWriterImpl
-
-class TraceLogWriterImpl final :
-	public RefCntIface<ITraceLogWriterImpl<TraceLogWriterImpl, CheckStatusWrapper> >
-{
-public:
-	TraceLogWriterImpl(const TraceSession& session) :
-		m_log(getPool(), session.ses_logfile, false),
-		m_sesId(session.ses_id)
-	{
-		string s;
-		s.printf("\n--- Session %d is suspended as its log is full ---\n", session.ses_id);
-		m_log.setFullMsg(s.c_str());
-	}
-
-	// TraceLogWriter implementation
-	FB_SIZE_T write(const void* buf, FB_SIZE_T size);
-	FB_SIZE_T write_s(CheckStatusWrapper* status, const void* buf, FB_SIZE_T size);
-
-private:
-	TraceLog m_log;
-	ULONG m_sesId;
-};
-
-FB_SIZE_T TraceLogWriterImpl::write(const void* buf, FB_SIZE_T size)
-{
-	const FB_SIZE_T written = m_log.write(buf, size);
-	if (written == size)
-		return size;
-
-	if (!m_log.isFull())
-		return written;
-
-	ConfigStorage* storage = TraceManager::getStorage();
-	StorageGuard guard(storage);
-
-	TraceSession session(*getDefaultMemoryPool());
-	session.ses_id = m_sesId;
-	if (storage->getSession(session, ConfigStorage::FLAGS))
-	{
-			if (!(session.ses_flags & trs_log_full))
-			{
-				// suspend session
-				session.ses_flags |= trs_log_full;
-			storage->updateFlags(session);
-			}
-		}
-
-	// report successful write
-	return size;
-}
-
-FB_SIZE_T TraceLogWriterImpl::write_s(CheckStatusWrapper* status, const void* buf, FB_SIZE_T size)
-{
-	try
-	{
-		return write(buf, size);
-	}
-	catch (Exception &ex)
-	{
-		ex.stuffException(status);
-	}
-
-	return 0;
-}
-
 
 /// TraceInitInfoImpl
 
@@ -580,7 +514,7 @@ ITraceLogWriter* TraceInitInfoImpl::getLogWriter()
 {
 	if (!m_logWriter && !m_session.ses_logfile.empty())
 	{
-		m_logWriter = FB_NEW TraceLogWriterImpl(m_session);
+		m_logWriter = TraceManager::createSessionLogWriter(m_session);
 	}
 	if (m_logWriter)
 	{

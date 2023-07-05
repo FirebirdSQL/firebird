@@ -33,10 +33,12 @@
 #include "../../jrd/err_proto.h"
 #include "../../common/isc_proto.h"
 #include "../../common/isc_s_proto.h"
-#include "../../jrd/jrd.h"
 #include "../../common/os/path_utils.h"
 #include "../../common/os/os_utils.h"
 #include "../../jrd/trace/TraceConfigStorage.h"
+#include "../../common/file_params.h"
+#include "../../common/config/config.h"
+#include "../../common/status.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

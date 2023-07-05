@@ -27,7 +27,7 @@
 #include "../jrd/exe_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/vio_proto.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "../jrd/optimizer/Optimizer.h"
 

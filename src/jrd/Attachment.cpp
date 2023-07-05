@@ -28,7 +28,7 @@
 #include "../jrd/Database.h"
 #include "../jrd/Function.h"
 #include "../jrd/nbak.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/PreparedStatement.h"
 #include "../jrd/tra.h"
 #include "../jrd/intl.h"
@@ -252,7 +252,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_ext_connection(NULL),
 	  att_ext_parent(NULL),
 	  att_ext_call_depth(0),
-	  att_trace_manager(FB_NEW_POOL(*att_pool) TraceManager(this)),
+	  att_trace_manager(FB_NEW_POOL(*att_pool) JrdTraceManager(this)),
 	  att_bindings(*pool),
 	  att_dest_bind(&att_bindings),
 	  att_original_timezone(TimeZoneUtil::getSystemTimeZone()),

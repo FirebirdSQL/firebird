@@ -54,7 +54,7 @@
 #include "../jrd/scl_proto.h"
 #include "../common/os/guid.h"
 #include "../jrd/license.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/trace/TraceObjects.h"
 #include "../jrd/Collation.h"
 #include "../common/classes/FpeControl.h"

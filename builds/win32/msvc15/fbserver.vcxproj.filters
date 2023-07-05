@@ -34,6 +34,15 @@
     <ClCompile Include="..\..\..\src\remote\server\os\win32\srvr_w32.cpp">
       <Filter>Remote server</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\supplement\trace\TraceManager.cpp">
+      <Filter>Remote server</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\trace\TraceConfigStorage.cpp">
+      <Filter>Remote server</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\trace\TraceLog.cpp">
+      <Filter>Remote server</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\auth\SecureRemotePassword\server\SrpServer.cpp">
       <Filter>AUTH files</Filter>
     </ClCompile>

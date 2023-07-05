@@ -205,6 +205,9 @@
     <ClCompile Include="..\..\..\src\remote\server\ReplServer.cpp" />
     <ClCompile Include="..\..\..\src\jrd\replication\Config.cpp" />
     <ClCompile Include="..\..\..\src\jrd\replication\Utils.cpp" />
+    <ClCompile Include="..\..\..\src\supplement\trace\TraceManager.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\trace\TraceConfigStorage.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\trace\TraceLog.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\src\remote\server\os\win32\caution.ico" />

@@ -195,13 +195,16 @@
     <ClCompile Include="..\..\..\src\jrd\trace\TraceLog.cpp">
       <Filter>JRD files\Trace</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\jrd\trace\TraceManager.cpp">
+    <ClCompile Include="..\..\..\src\supplement\trace\JrdTraceManager.cpp">
       <Filter>JRD files\Trace</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\trace\TraceObjects.cpp">
       <Filter>JRD files\Trace</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\trace\TraceService.cpp">
+      <Filter>JRD files\Trace</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\supplement\trace\TraceManager.cpp">
       <Filter>JRD files\Trace</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\VirtualTable.cpp">
@@ -644,7 +647,7 @@
     <ClInclude Include="..\..\..\src\jrd\trace\TraceLog.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\jrd\trace\TraceManager.h">
+    <ClInclude Include="..\..\..\src\supplement\trace\JrdTraceManager.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\trace\TraceObjects.h">

@@ -200,11 +200,11 @@ void DsqlRequest::destroy(thread_db* tdbb, DsqlRequest* dsqlRequest)
 	}
 
 	Jrd::Attachment* att = dsqlRequest->req_dbb->dbb_attachment;
-	const bool need_trace_free = dsqlRequest->req_traced && TraceManager::need_dsql_free(att);
+	const bool need_trace_free = dsqlRequest->req_traced && JrdTraceManager::need_dsql_free(att);
 	if (need_trace_free)
 	{
 		TraceSQLStatementImpl stmt(dsqlRequest, NULL);
-		TraceManager::event_dsql_free(att, &stmt, DSQL_drop);
+		JrdTraceManager::event_dsql_free(att, &stmt, DSQL_drop);
 	}
 
 	if (dsqlRequest->req_cursor_name.hasData())
@@ -813,7 +813,7 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 				"\tQuery:\n%s\n", numTries, request->getStatement()->sqlText->c_str() );
 		}
 
-		TraceManager::event_dsql_restart(req_dbb->dbb_attachment, req_transaction, this, numTries);
+		JrdTraceManager::event_dsql_restart(req_dbb->dbb_attachment, req_transaction, this, numTries);
 
 		// When restart we must execute query
 		exec = true;

@@ -102,7 +102,7 @@
 #include "../jrd/rpb_chain.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/VirtualTable.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 
 #include "../dsql/Nodes.h"

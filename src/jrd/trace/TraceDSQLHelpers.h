@@ -28,7 +28,7 @@
 #ifndef JRD_TRACE_DSQL_HELPERS_H
 #define JRD_TRACE_DSQL_HELPERS_H
 
-#include "../../jrd/trace/TraceManager.h"
+#include "../../supplement/trace/JrdTraceManager.h"
 #include "../../jrd/trace/TraceObjects.h"
 
 namespace Jrd {
@@ -47,7 +47,7 @@ public:
 		  m_string_len(string_length),
 		  m_string(string)
 	{
-		m_need_trace = !isInternal && TraceManager::need_dsql_prepare(m_attachment);
+		m_need_trace = !isInternal && JrdTraceManager::need_dsql_prepare(m_attachment);
 		if (!m_need_trace)
 			return;
 
@@ -86,14 +86,14 @@ public:
 		if ((result == ITracePlugin::RESULT_SUCCESS) && m_request)
 		{
 			TraceSQLStatementImpl stmt(m_request, NULL);
-			TraceManager::event_dsql_prepare(m_attachment, m_transaction, &stmt, millis, result);
+			JrdTraceManager::event_dsql_prepare(m_attachment, m_transaction, &stmt, millis, result);
 		}
 		else
 		{
 			Firebird::string str(*getDefaultMemoryPool(), m_string, m_string_len);
 
 			TraceFailedSQLStatement stmt(str);
-			TraceManager::event_dsql_prepare(m_attachment, m_transaction, &stmt, millis, result);
+			JrdTraceManager::event_dsql_prepare(m_attachment, m_transaction, &stmt, millis, result);
 		}
 	}
 
@@ -115,13 +115,13 @@ public:
 		m_attachment(attachment),
 		m_dsqlRequest(dsqlRequest)
 	{
-		m_need_trace = m_dsqlRequest->req_traced && TraceManager::need_dsql_execute(m_attachment);
+		m_need_trace = m_dsqlRequest->req_traced && JrdTraceManager::need_dsql_execute(m_attachment);
 		if (!m_need_trace)
 			return;
 
 		{	// scope
 			TraceSQLStatementImpl stmt(dsqlRequest, NULL);
-			TraceManager::event_dsql_execute(m_attachment, dsqlRequest->req_transaction, &stmt, true,
+			JrdTraceManager::event_dsql_execute(m_attachment, dsqlRequest->req_transaction, &stmt, true,
 				ITracePlugin::RESULT_SUCCESS);
 		}
 
@@ -157,7 +157,7 @@ public:
 			m_dsqlRequest->req_fetch_rowcount);
 
 		TraceSQLStatementImpl stmt(m_dsqlRequest, stats.getPerf());
-		TraceManager::event_dsql_execute(m_attachment, m_dsqlRequest->req_transaction, &stmt, false, result);
+		JrdTraceManager::event_dsql_execute(m_attachment, m_dsqlRequest->req_transaction, &stmt, false, result);
 
 		m_dsqlRequest->req_fetch_baseline = NULL;
 	}
@@ -181,7 +181,7 @@ public:
 		m_attachment(attachment),
 		m_dsqlRequest(request)
 	{
-		m_need_trace = m_dsqlRequest->req_traced && TraceManager::need_dsql_execute(m_attachment) &&
+		m_need_trace = m_dsqlRequest->req_traced && JrdTraceManager::need_dsql_execute(m_attachment) &&
 					   m_dsqlRequest->getRequest() && (m_dsqlRequest->getRequest()->req_flags & req_active);
 
 		if (!m_need_trace)
@@ -217,7 +217,7 @@ public:
 
 		TraceSQLStatementImpl stmt(m_dsqlRequest, stats.getPerf());
 
-		TraceManager::event_dsql_execute(m_attachment, m_dsqlRequest->req_transaction,
+		JrdTraceManager::event_dsql_execute(m_attachment, m_dsqlRequest->req_transaction,
 			&stmt, false, result);
 
 		m_dsqlRequest->req_fetch_elapsed = 0;

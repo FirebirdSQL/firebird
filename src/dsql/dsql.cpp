@@ -66,7 +66,7 @@
 #include "../jrd/optimizer/Optimizer.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/replication/Publisher.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/trace/TraceDSQLHelpers.h"
 #include "../common/classes/init.h"
 #include "../common/utils_proto.h"

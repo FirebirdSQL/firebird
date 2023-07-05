@@ -169,9 +169,10 @@
     <ClCompile Include="..\..\..\src\jrd\trace\TraceCmdLine.cpp" />
     <ClCompile Include="..\..\..\src\jrd\trace\TraceConfigStorage.cpp" />
     <ClCompile Include="..\..\..\src\jrd\trace\TraceLog.cpp" />
-    <ClCompile Include="..\..\..\src\jrd\trace\TraceManager.cpp" />
+    <ClCompile Include="..\..\..\src\supplement\trace\JrdTraceManager.cpp" />
     <ClCompile Include="..\..\..\src\jrd\trace\TraceObjects.cpp" />
     <ClCompile Include="..\..\..\src\jrd\trace\TraceService.cpp" />
+    <ClCompile Include="..\..\..\src\supplement\trace\TraceManager.cpp" />
     <ClCompile Include="..\..\..\src\jrd\UserManagement.cpp" />
     <ClCompile Include="..\..\..\src\jrd\validation.cpp" />
     <ClCompile Include="..\..\..\src\jrd\vio.cpp" />
@@ -352,7 +353,7 @@
     <ClInclude Include="..\..\..\src\jrd\trace\TraceDSQLHelpers.h" />
     <ClInclude Include="..\..\..\src\jrd\trace\TraceJrdHelpers.h" />
     <ClInclude Include="..\..\..\src\jrd\trace\TraceLog.h" />
-    <ClInclude Include="..\..\..\src\jrd\trace\TraceManager.h" />
+    <ClInclude Include="..\..\..\src\supplement\trace\JrdTraceManager.h" />
     <ClInclude Include="..\..\..\src\jrd\trace\TraceObjects.h" />
     <ClInclude Include="..\..\..\src\jrd\trace\TraceService.h" />
     <ClInclude Include="..\..\..\src\jrd\trace\TraceSession.h" />

@@ -101,7 +101,7 @@ const int SVC_cmd_line		= 0x80;
 
 // forward decl.
 class thread_db;
-class TraceManager;
+class JrdTraceManager;
 
 // Service manager
 class Service : public Firebird::UtilSvc, public TypedHandle<type_svc>
@@ -147,7 +147,7 @@ public:		// utilities interface with service
 	// get database encryption key transfer callback routine
 	virtual Firebird::ICryptKeyCallback* getCryptCallback();
 
-	virtual TraceManager* getTraceManager()
+	virtual JrdTraceManager* getTraceManager()
 	{
 		return svc_trace_manager;
 	}
@@ -330,7 +330,7 @@ private:
 	Firebird::string	svc_remote_process;
 	SLONG				svc_remote_pid;
 
-	TraceManager*		svc_trace_manager;
+	JrdTraceManager*		svc_trace_manager;
 	Firebird::ICryptKeyCallback* svc_crypt_callback;
 
 public:

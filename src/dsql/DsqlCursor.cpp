@@ -23,7 +23,7 @@
 #include "firebird.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../jrd/tra_proto.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/trace/TraceDSQLHelpers.h"
 
 #include "../dsql/dsql_proto.h"
@@ -86,10 +86,10 @@ void DsqlCursor::close(thread_db* tdbb, DsqlCursor* cursor)
 				trace.fetch(true, ITracePlugin::RESULT_SUCCESS);
 			}
 
-			if (dsqlRequest->req_traced && TraceManager::need_dsql_free(attachment))
+			if (dsqlRequest->req_traced && JrdTraceManager::need_dsql_free(attachment))
 			{
 				TraceSQLStatementImpl stmt(dsqlRequest, NULL);
-				TraceManager::event_dsql_free(attachment, &stmt, DSQL_close);
+				JrdTraceManager::event_dsql_free(attachment, &stmt, DSQL_close);
 			}
 
 			JRD_unwind_request(tdbb, dsqlRequest->getRequest());

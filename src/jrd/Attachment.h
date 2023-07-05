@@ -87,7 +87,7 @@ namespace Jrd
 	class jrd_fld;
 	class dsql_dbb;
 	class PreparedStatement;
-	class TraceManager;
+	class JrdTraceManager;
 	template <typename T> class vec;
 	class jrd_rel;
 	class jrd_prc;
@@ -631,7 +631,7 @@ public:
 	EDS::Connection* att_ext_connection;	// external connection executed by this attachment
 	EDS::Connection* att_ext_parent;		// external connection, parent of this attachment
 	ULONG att_ext_call_depth;				// external connection call depth, 0 for user attachment
-	TraceManager* att_trace_manager;		// Trace API manager
+	JrdTraceManager* att_trace_manager;		// Trace API manager
 
 	CoercionArray att_bindings;
 	CoercionArray* att_dest_bind;

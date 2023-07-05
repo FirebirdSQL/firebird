@@ -98,7 +98,7 @@ public:
 		m_tdbb(tdbb),
 		m_request(request)
 	{
-		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
+		JrdTraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
 		m_need_trace = trace_mgr->needs(ITraceFactory::TRACE_EVENT_PROC_EXECUTE);
 		if (!m_need_trace)
 			return;
@@ -150,7 +150,7 @@ public:
 		TraceTransactionImpl tran(m_tdbb->getTransaction());
 		TraceProcedureImpl proc(m_request, stats.getPerf());
 
-		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
+		JrdTraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
 		trace_mgr->event_proc_execute(&conn, &tran, &proc,  false, result);
 
 		m_request->req_proc_inputs = NULL;
@@ -172,7 +172,7 @@ public:
 		m_tdbb(tdbb),
 		m_request(request)
 	{
-		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
+		JrdTraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
 		m_need_trace = (request->req_flags & req_proc_fetch) &&
 			trace_mgr->needs(ITraceFactory::TRACE_EVENT_PROC_EXECUTE);
 
@@ -207,7 +207,7 @@ public:
 		TraceTransactionImpl tran(m_tdbb->getTransaction());
 		TraceProcedureImpl proc(m_request, stats.getPerf());
 
-		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
+		JrdTraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
 		trace_mgr->event_proc_execute(&conn, &tran, &proc, false, result);
 
 		m_request->req_proc_inputs = NULL;
@@ -234,7 +234,7 @@ public:
 		m_inMsg(inMsg),
 		m_inMsgLength(inMsgLength)
 	{
-		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
+		JrdTraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
 		m_need_trace = trace_mgr->needs(ITraceFactory::TRACE_EVENT_FUNC_EXECUTE);
 		if (!m_need_trace)
 			return;
@@ -290,7 +290,7 @@ public:
 
 		TraceFunctionImpl func(m_request, inputs, stats.getPerf(), value);
 
-		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
+		JrdTraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
 		trace_mgr->event_func_execute(&conn, &tran, &func,  false, result);
 
 		m_request->req_proc_inputs = NULL;
@@ -316,7 +316,7 @@ public:
 		m_request(trigger),
 		m_which_trig(which_trig)
 	{
-		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
+		JrdTraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
 		m_need_trace = !(m_request->getStatement()->flags & Statement::FLAG_SYS_TRIGGER) &&
 			trace_mgr->needs(ITraceFactory::TRACE_EVENT_TRIGGER_EXECUTE);
 
@@ -353,7 +353,7 @@ public:
 		TraceTransactionImpl tran(m_tdbb->getTransaction());
 		TraceTriggerImpl trig(m_request, m_which_trig, stats.getPerf());
 
-		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
+		JrdTraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
 		trace_mgr->event_trigger_execute(&conn, &tran, &trig, false, result);
 
 		m_request->req_fetch_baseline = NULL;
@@ -401,7 +401,7 @@ public:
 
 		m_start_clock = (fb_utils::query_performance_counter() - m_start_clock) * 1000 /
 						 fb_utils::query_performance_frequency();
-		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
+		JrdTraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
 
 		TraceConnectionImpl conn(m_tdbb->getAttachment());
 		TraceTransactionImpl tran(m_tdbb->getTransaction());
@@ -476,7 +476,7 @@ public:
 		TraceTransactionImpl tran(m_tdbb->getTransaction());
 		TraceBLRStatementImpl stmt(m_request->getStatement(), stats.getPerf());
 
-		TraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
+		JrdTraceManager* trace_mgr = m_tdbb->getAttachment()->att_trace_manager;
 		trace_mgr->event_blr_execute(&conn, &tran, &stmt, result);
 
 		m_request->req_fetch_baseline = NULL;

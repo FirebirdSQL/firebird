@@ -1,6 +1,6 @@
 /*
  *	PROGRAM:	JRD Access Method
- *	MODULE:		TraceManager.h
+ *	MODULE:		JrdTraceManager.h
  *	DESCRIPTION:	Trace API manager
  *
  *  The contents of this file are subject to the Initial
@@ -29,15 +29,7 @@
 #ifndef JRD_TRACEMANAGER_H
 #define JRD_TRACEMANAGER_H
 
-#include <time.h>
-#include "../../jrd/ntrace.h"
-#include "../../common/classes/array.h"
-#include "../../common/classes/fb_string.h"
-#include "../../common/classes/init.h"
-#include "../../common/classes/rwlock.h"
-#include "../../common/classes/ImplementHelper.h"
-#include "../../jrd/trace/TraceConfigStorage.h"
-#include "../../jrd/trace/TraceSession.h"
+#include "TraceManager.h"
 
 namespace Firebird {
 
@@ -53,27 +45,17 @@ class jrd_tra;
 class DsqlRequest;
 class Service;
 
-class TraceManager
+class JrdTraceManager : public TraceManager
 {
 public:
     /* Initializes plugins. */
-	explicit TraceManager(Attachment* in_att);
-	explicit TraceManager(Service* in_svc);
-	TraceManager(const char* in_filename, Firebird::ICryptKeyCallback* callback, bool failedAttach);
+	explicit JrdTraceManager(Attachment* in_att);
+	explicit JrdTraceManager(Service* in_svc);
+	JrdTraceManager(const char* in_filename, Firebird::ICryptKeyCallback* callback, bool failedAttach);
 
 	/* Finalize plugins. Called when database is closed by the engine */
-	~TraceManager();
+	~JrdTraceManager();
 
-	static ConfigStorage* getStorage()
-	{ return storageInstance->getStorage(); }
-
-	static size_t pluginsCount()
-	{ return factories->getCount(); }
-
-	void event_attach(Firebird::ITraceDatabaseConnection* connection, bool create_db,
-		ntrace_result_t att_result);
-
-	void event_detach(Firebird::ITraceDatabaseConnection* connection, bool drop_db);
 
 	/* Start/end transaction */
 	void event_transaction_start(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
@@ -173,79 +155,17 @@ public:
 	static void event_dsql_restart(Attachment* att, jrd_tra* transaction, DsqlRequest* statement,
 		int number);
 
-	static void shutdown();
 
 private:
 	Attachment*	attachment;
 	Service* service;
-	const char* filename;
 	Firebird::ICryptKeyCallback* callback;
-	NotificationNeeds trace_needs, new_needs;
 
-	// This structure should be POD-like to be stored in Array
-	struct FactoryInfo
-	{
-		FactoryInfo() : factory(NULL)
-		{
-			memset(name, 0, sizeof(name));
-		}
 
-		Firebird::ITraceFactory* factory;
-		char name[MAXPATHLEN];
-	};
-
-	class Factories : public Firebird::Array<FactoryInfo>
-	{
-	public:
-		explicit Factories(Firebird::MemoryPool& p)
-			: Firebird::Array<FactoryInfo>(p)
-		{ }
-
-		~Factories()
-		{
-			Firebird::PluginManagerInterfacePtr pi;
-
-			for (unsigned int i = 0; i < getCount(); ++i)
-				pi->releasePlugin(getElement(i).factory);
-		}
-	};
-
-	static Factories* factories;
-	static Firebird::GlobalPtr<Firebird::RWLock> init_factories_lock;
-	static volatile bool init_factories;
-
-	struct SessionInfo
-	{
-		FactoryInfo* factory_info;
-		Firebird::ITracePlugin* plugin;
-		ULONG ses_id;
-
-		static ULONG generate(const SessionInfo& item)
-		{ return item.ses_id; }
-	};
-	class Sessions : public Firebird::SortedArray<SessionInfo, Firebird::EmptyStorage<SessionInfo>, ULONG, SessionInfo>
-	{
-	public:
-		explicit Sessions(MemoryPool& p)
-			: Firebird::SortedArray<SessionInfo, Firebird::EmptyStorage<SessionInfo>, ULONG, SessionInfo>(p)
-		{ }
-
-		~Sessions()
-		{
-			for (unsigned int i = 0; i < getCount(); ++i)
-			{
-				getElement(i).plugin->release();
-			}
-		}
-	};
-	Sessions trace_sessions;
 
 	void init();
-	void load_plugins();
 	void update_sessions();
 	void update_session(const Firebird::TraceSession& session);
-
-	bool check_result(Firebird::ITracePlugin* plugin, const char* module, const char* function, bool result);
 
 	/* DSQL statement lifecycle. To be moved to public and used directly when DSQL becomes a part of JRD */
 	void event_dsql_prepare(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
@@ -262,9 +182,6 @@ private:
 	void event_dsql_restart(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction, Firebird::ITraceSQLStatement* statement,
 		unsigned number);
 
-	static Firebird::GlobalPtr<StorageInstance, Firebird::InstanceControl::PRIORITY_DELETE_FIRST> storageInstance;
-
-	ULONG changeNumber;
 	bool active, failedAttach;
 };
 

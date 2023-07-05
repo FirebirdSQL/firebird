@@ -61,7 +61,7 @@
 #include "../dsql/DSqlDataTypeUtil.h"
 #include "../jrd/DataTypeUtil.h"
 #include "../jrd/Collation.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/trace/TraceObjects.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 

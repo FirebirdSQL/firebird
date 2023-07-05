@@ -56,7 +56,7 @@
 #include "../common/db_alias.h"
 #include "../jrd/scl.h"
 #include "../common/msg_encode.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/trace/TraceObjects.h"
 #include "../jrd/EngineInterface.h"
 #include "../jrd/Mapping.h"
@@ -740,7 +740,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 #ifdef DEV_BUILD
 		if (svc_debug)
 		{
-			svc_trace_manager = FB_NEW_POOL(*getDefaultMemoryPool()) TraceManager(this);
+			svc_trace_manager = FB_NEW_POOL(*getDefaultMemoryPool()) JrdTraceManager(this);
 			svc_user_flag = SVC_user_dba;
 			return;
 		}
@@ -804,11 +804,11 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 		svc_perm_sw = switches;
 		svc_user_flag = user_flag;
 
-		svc_trace_manager = FB_NEW_POOL(*getDefaultMemoryPool()) TraceManager(this);
+		svc_trace_manager = FB_NEW_POOL(*getDefaultMemoryPool()) JrdTraceManager(this);
 	}	// try
 	catch (const Firebird::Exception& ex)
 	{
-		TraceManager* trace_manager = NULL;
+		JrdTraceManager* trace_manager = NULL;
 		FbLocalStatus status_vector;
 
 		try
@@ -818,7 +818,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 			if (hasTrace)
 				trace_manager = svc_trace_manager;
 			else
-				trace_manager = FB_NEW_POOL(*getDefaultMemoryPool()) TraceManager(this);
+				trace_manager = FB_NEW_POOL(*getDefaultMemoryPool()) JrdTraceManager(this);
 
 			if (trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_ATTACH))
 			{
