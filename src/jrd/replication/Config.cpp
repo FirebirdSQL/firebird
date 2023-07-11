@@ -438,11 +438,28 @@ bool Config::hasReplicas()
 									 ConfigFile::NATIVE_ORDER |
 									 ConfigFile::CUSTOM_MACROS);
 
+		bool hasDbs = false, hasSource = false;
+
 		for (const auto& section : cfgFile.getParameters())
 		{
 			if (section.name == "database" && section.value.hasData())
-				return true;
+				hasDbs = true;
+
+			if (!section.sub)
+				continue;
+
+			for (const auto& el : section.sub->getParameters())
+			{
+				if (el.name == "journal_source_directory" && el.value.hasData())
+				{
+					hasSource = true;
+					break;
+				}
+			}
 		}
+
+		if (hasDbs && hasSource)
+			return true;
 	}
 	catch (const Exception&)
 	{} // no-op
