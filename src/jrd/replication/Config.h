@@ -38,6 +38,7 @@ namespace Replication
 
 		static Config* get(const Firebird::PathName& dbName);
 		static void enumerate(Firebird::Array<Config*>& replicas);
+		static bool hasReplicas();
 
 		Firebird::PathName dbName;
 		ULONG bufferSize;

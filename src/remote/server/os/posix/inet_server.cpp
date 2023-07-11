@@ -93,6 +93,7 @@
 #include "../auth/SecurityDatabase/LegacyServer.h"
 #include "../auth/trusted/AuthSspi.h"
 #include "../auth/SecureRemotePassword/server/SrpServer.h"
+#include "../jrd/replication/Config.h"
 
 #ifdef HAVE_SYS_SIGNAL_H
 #include <sys/signal.h>
@@ -118,8 +119,6 @@ static void signal_handler(int);
 
 static TEXT protocol[128];
 static int INET_SERVER_start = 0;
-
-static bool serverClosing = false;
 
 #if defined(HAVE_SETRLIMIT) && defined(HAVE_GETRLIMIT)
 #define FB_RAISE_LIMITS 1
@@ -186,6 +185,8 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		bool classic = false;
 		bool standaloneClassic = false;
 		bool super = false;
+
+		int replPid = 0;
 
 		// It's very easy to detect that we are spawned - just check fd 0 to be a socket.
 		const int channel = 0;
@@ -297,6 +298,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			INET_SERVER_flag |= SRVR_multi_client;
 			super = true;
 		}
+
 		{	// scope
 			Firebird::MasterInterfacePtr master;
 			master->serverMode(super ? 1 : 0);
@@ -421,17 +423,82 @@ int CLIB_ROUTINE main( int argc, char** argv)
 
 		if (super || standaloneClassic)
 		{
+			if (standaloneClassic && Replication::Config::hasReplicas())
+			{
+				// Start the replication server now (in the forked process),
+				// because INET_connect() never returns for the standalone Classic
+
+				if ((replPid = fork()) <= 0)
+				{
+					try
+					{
+						if (replPid) // failed fork attempt
+							Firebird::system_error::raise("fork", replPid);
+
+						// We've been forked successfully
+						Firebird::FbLocalStatus localStatus;
+						if (!REPL_server(&localStatus, true))
+							localStatus.check();
+					}
+					catch (const Firebird::Exception& ex)
+					{
+						const char* const errorMsg = "Replication server startup error";
+						iscLogException(errorMsg, ex);
+						Firebird::Syslog::Record(Firebird::Syslog::Error, errorMsg);
+					}
+
+					if (!replPid)
+					{
+						fb_shutdown(10000, fb_shutrsn_exit_called);
+						return FINI_OK;
+					}
+				}
+			}
+
+			// Start the network listener
+
 			try
 			{
 				port = INET_connect(protocol, 0, INET_SERVER_flag, 0, NULL);
 			}
 			catch (const Firebird::Exception& ex)
 			{
-				iscLogException("startup:INET_connect:", ex);
-		 		Firebird::StaticStatusVector st;
-				ex.stuffException(st);
-				gds__print_status(st.begin());
+				iscLogException("INET server startup error", ex);
 				exit(STARTUP_ERROR);
+			}
+
+			// If INET_connect() returns NULL for the standalone classic, then game is over.
+			// Signal the forked replication server process to terminate and then exit.
+
+			if (!port && replPid > 0) // this implies standaloneClassic being true
+			{
+				if (!kill(replPid, SIGTERM))
+				{
+					int status = 0;
+
+					// Wait up to one second for the replicator process to finish gracefully
+					for (unsigned n = 0; n < 10; n++)
+					{
+						Thread::sleep(100); // milliseconds
+
+						const auto res = waitpid(replPid, &status, WNOHANG);
+
+						if (res == replPid) // process is terminated
+							break;
+
+						if (res < 0 && !SYSCALL_INTERRUPTED(errno)) // error
+							break;
+
+						// continue waiting otherwise
+					}
+
+					// Force terminating the replicator process if it's still alive
+					if (!WIFEXITED(status))
+						kill(replPid, SIGKILL);
+				}
+
+				fb_shutdown(10000, fb_shutrsn_exit_called);
+				return FINI_OK;
 			}
 		}
 
@@ -478,17 +545,19 @@ int CLIB_ROUTINE main( int argc, char** argv)
 					logSecurityDatabaseError(path, status);
 				}
 			}
-		} // end scope
+
+			// Start replication server
+
+			Firebird::FbLocalStatus localStatus;
+			if (!REPL_server(&localStatus, false))
+			{
+				const char* const errorMsg = "Replication server startup error";
+				iscLogStatus(errorMsg, localStatus->getErrors());
+				Firebird::Syslog::Record(Firebird::Syslog::Error, errorMsg);
+			}
+		}
 
 		fb_shutdown_callback(NULL, closePort, fb_shut_exit, port);
-
-		Firebird::FbLocalStatus localStatus;
-		if (!REPL_server(&localStatus, false, &serverClosing))
-		{
-			const char* errorMsg = "Replication server initialization error";
-			iscLogStatus(errorMsg, localStatus->getErrors());
-			Firebird::Syslog::Record(Firebird::Syslog::Error, errorMsg);
-		}
 
 		SRVR_multi_thread(port, INET_SERVER_flag);
 

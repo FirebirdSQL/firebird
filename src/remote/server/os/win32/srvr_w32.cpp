@@ -595,7 +595,7 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 	}
 
 	FbLocalStatus localStatus;
-	if (!REPL_server(&localStatus, false, &server_shutdown))
+	if (!REPL_server(&localStatus, false))
 	{
 		const char* errorMsg = "Replication server initialization error";
 		iscLogStatus(errorMsg, localStatus->getErrors());

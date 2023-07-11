@@ -426,3 +426,26 @@ void Config::enumerate(Firebird::Array<Config*>& replicas)
 		logReplicaStatus(dbName, &localStatus);
 	}
 }
+
+bool Config::hasReplicas()
+{
+	try
+	{
+		const PathName filename =
+			fb_utils::getPrefix(IConfigManager::DIR_CONF, REPLICATION_CFGFILE);
+
+		ConfigFile cfgFile(filename, ConfigFile::HAS_SUB_CONF |
+									 ConfigFile::NATIVE_ORDER |
+									 ConfigFile::CUSTOM_MACROS);
+
+		for (const auto& section : cfgFile.getParameters())
+		{
+			if (section.name == "database" && section.value.hasData())
+				return true;
+		}
+	}
+	catch (const Exception&)
+	{} // no-op
+
+	return false;
+}
