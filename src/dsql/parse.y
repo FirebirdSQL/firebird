@@ -8489,8 +8489,8 @@ udf
 cast_specification
 	: CAST '(' value AS data_type_descriptor ')'
 		{ $$ = newNode<CastNode>($3, $5); }
-	| CAST '(' value AS cast_format_type cast_format_clause sql_string ')'
-		{ $$ = newNode<CastNode>($3, $5, $7->getString()); }
+	| CAST '(' value AS cast_format_type cast_format_clause utf_string ')'
+		{ $$ = newNode<CastNode>($3, $5, *$7); }
 	;
 
 %type <metaNamePtr> cast_format_clause
