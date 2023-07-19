@@ -153,6 +153,17 @@ enum class ExpectedDateType
 	TIMEZONE
 };
 
+static const char* const TO_DATETIME_PATTERNS[] = {
+	"YEAR", "YYYY", "YYY", "YY", "Y", "Q", "MM", "MON", "MONTH", "RM", "WW", "W",
+	"D", "DAY", "DD", "DDD", "DY", "J", "HH", "HH12", "HH24", "MI", "SS", "SSSSS",
+	"FF1", "FF2", "FF3", "FF4", "FF5", "FF6", "FF7", "FF8", "FF9", "TZH", "TZM", "TZR"
+};
+
+static const char* const TO_STRING_PATTERNS[] = {
+	"YEAR", "YYYY", "YYY", "YY", "Y", "MM", "MON", "MONTH", "RM", "DD", "J", "HH", "HH12",
+	"HH24", "MI", "SS", "SSSSS", "FF1", "FF2", "FF3", "FF4", "TZH", "TZM"
+};
+
 
 //#ifndef WORDS_BIGENDIAN
 //static const SQUAD quad_min_int = { 0, SLONG_MIN };
@@ -1489,66 +1500,74 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 		}
 	}
 
-	int offset = 0;
-	char separator = '\0';
+	string result;
+	int formatOffset = 0;
+	std::string_view pattern;
 	std::string_view previousPattern;
-	string result = "";
 
 	for (int i = 0; i < formatUpper.length(); i++)
 	{
 		const char symbol = formatUpper[i];
 
-		if (separator == '\"')
-		{
-			int rawStringLength = formatUpper.length() - i;
-			string rawString(rawStringLength, '\0');
-			for (int j = 0; j < rawStringLength; j++, i++)
-			{
-				if (formatUpper[i] == '\"')
-					break;
-				else if (formatUpper[i] == '\\')
-					rawString[j] = formatUpper[++i];
-				else
-					rawString[j] = formatUpper[i];
-			}
-			rawString.recalculate_length();
-			result += rawString;
-
-			offset = i + 1;
-			separator = '\0';
-			continue;
-		}
-
 		if (is_separator(symbol))
-			separator = symbol;
-		else
 		{
-			if (i != formatUpper.length() - 1)
-				continue;
-			++i;
-		}
+			if (formatOffset != i)
+			{
+				result += datetime_to_format_string_pattern_matcher(desc, pattern, previousPattern, times,
+					fractions, cb, invalidPatternException);
+				previousPattern = pattern;
+			}
+			if (symbol == '\"')
+			{
+				i++;
+				int rawStringLength = formatUpper.length() - i;
+				string rawString(rawStringLength, '\0');
+				for (int j = 0; j < rawStringLength; j++, i++)
+				{
+					if (formatUpper[i] == '\"')
+						break;
+					else if (formatUpper[i] == '\\')
+						rawString[j] = formatUpper[++i];
+					else
+						rawString[j] = formatUpper[i];
+				}
+				rawString.recalculate_length();
+				result += rawString;
+			}
+			else
+				result += symbol;
 
-		int patternLength = i - offset;
-		if (patternLength == 0)
-		{
-			if (separator == '\"')
-				continue;
-
-			result += separator;
-			++offset;
+			formatOffset = i + 1;
 			continue;
 		}
 
-		std::string_view pattern(formatUpper.c_str() + offset, patternLength);
-		result += datetime_to_format_string_pattern_matcher<decltype(invalidPatternException)>(desc, pattern,
-			previousPattern, times, fractions, cb, invalidPatternException);
+		pattern = std::string_view(formatUpper.c_str() + formatOffset, i - formatOffset + 1);
+		bool isFound = false;
+		for (int j = 0; j < FB_NELEM(TO_DATETIME_PATTERNS); j++)
+		{
+			if (!strncmp(TO_DATETIME_PATTERNS[j], pattern.data(), pattern.length()))
+			{
+				isFound = true;
+				if (i == formatUpper.length() - 1)
+				{
+					result += datetime_to_format_string_pattern_matcher(desc, pattern, previousPattern, times,
+						fractions, cb, invalidPatternException);
+				}
+				break;
+			}
+		}
+		if (isFound)
+			continue;
 
+		if (pattern.length() <= 1)
+			invalidPatternException(pattern, cb);
+
+		pattern = pattern.substr(0, pattern.length() - 1);
+		result += datetime_to_format_string_pattern_matcher(desc, pattern, previousPattern, times,
+			fractions, cb, invalidPatternException);
 		previousPattern = pattern;
-
-		if (i < formatUpper.length() && separator != '\"')
-			result += separator;
-
-		offset = i + 1;
+		formatOffset = i;
+		i--;
 	}
 
 	return result;
@@ -1806,18 +1825,12 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 				std::string_view period = parse_string_to_get_first_word(str, strLength, strOffset, 2);
 				if (period == "AM")
 				{
-					if (hours == 12)
-						outTimes.tm_hour = 0;
-					else
-						outTimes.tm_hour = hours;
+					outTimes.tm_hour = hours == 12 ? 0 : hours;
 					return;
 				}
 				else if (period == "PM")
 				{
-					if (hours == 12)
-						outTimes.tm_hour = hours;
-					else
-						outTimes.tm_hour = 12 + hours;
+					outTimes.tm_hour = hours == 12 ? hours : 12 + hours;
 					return;
 				}
 
@@ -1955,32 +1968,25 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 	int formatOffset = 0;
 	int stringOffset = 0;
 
+	std::string_view pattern;
 	std::string_view previousPattern;
 
-	for (int i = 0; i < format.length(); i++)
+	for (int i = 0; i < formatUpper.length(); i++)
 	{
-		const char symbol = format[i];
+		const char symbol = formatUpper[i];
 
-		if (!is_separator(symbol))
+		if (is_separator(symbol))
 		{
-			if (i + 1 != format.length())
-				continue;
-			i++;
-		}
+			if (formatOffset != i)
+			{
+				string_to_format_datetime_pattern_matcher(pattern, previousPattern, stringUpper.c_str(),
+					stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, cb, invalidPatternException);
+				previousPattern = pattern;
+			}
 
-		if (stringOffset >= stringLength)
-			cb->err(Arg::Gds(isc_data_for_format_is_exhausted) << string(formatUpper.c_str() + formatOffset));
-
-		const int patternLength = i - formatOffset;
-		if (patternLength <= 0)
-		{
 			formatOffset = i + 1;
 			continue;
 		}
-
-		std::string_view pattern(formatUpper.c_str() + formatOffset, patternLength);
-
-		string patternResult;
 
 		for (; stringOffset < stringLength; stringOffset++)
 		{
@@ -1988,12 +1994,33 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 				break;
 		}
 
-		string_to_format_datetime_pattern_matcher<decltype(invalidPatternException)>(pattern, previousPattern,
-			stringUpper.c_str(), stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes,
-			cb, invalidPatternException);
+		pattern = std::string_view(formatUpper.c_str() + formatOffset, i - formatOffset + 1);
+		bool isFound = false;
+		for (int j = 0; j < FB_NELEM(TO_STRING_PATTERNS); j++)
+		{
+			if (!strncmp(TO_STRING_PATTERNS[j], pattern.data(), pattern.length()))
+			{
+				isFound = true;
+				if (i == formatUpper.length() - 1)
+				{
+					string_to_format_datetime_pattern_matcher(pattern, previousPattern, stringUpper.c_str(),
+						stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, cb, invalidPatternException);
+				}
+				break;
+			}
+		}
+		if (isFound)
+			continue;
 
+		if (pattern.length() <= 1)
+			invalidPatternException(pattern, cb);
+
+		pattern = pattern.substr(0, pattern.length() - 1);
+		string_to_format_datetime_pattern_matcher(pattern, previousPattern, stringUpper.c_str(),
+			stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, cb, invalidPatternException);
 		previousPattern = pattern;
-		formatOffset = i + 1;
+		formatOffset = i;
+		i--;
 	}
 
 	for (; stringOffset < stringLength; stringOffset++)

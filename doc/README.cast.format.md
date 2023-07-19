@@ -42,6 +42,14 @@ The dividers are:
 | 'space' |
 | - |
 
+Patterns can be used without any dividers:
+```
+SELECT CAST(CURRENT_TIMESTAMP AS VARCHAR(50) FORMAT 'YEARMMDD HH24MISS') FROM RDB$DATABASE;
+=========================
+20230719 161757
+```
+However, be careful with patterns like `DDDDD`, it will be interpreted as `DDD` + `DD`.  
+
 It is possible to insert raw text into a format string with `""`: `... FORMAT '"Today is" DAY'` - Today is MONDAY. To add `"` in output raw string use `\"` (to print `\` use `\\`).   
 Also the format is case-insensitive, so `YYYY-MM` == `yyyy-mm`.  
 Example:
@@ -76,7 +84,8 @@ The following flags are currently implemented for string to datetime conversion:
 | TZH | Time zone in Hours  (-14 - 14) |
 | TZM | Time zone in Minutes (0 - 59) |
 
-The dividers are the same as for datetime to string conversion.  
+Dividers are the same as for datetime to string conversion and can also be omitted.
+
 Example:
 ```
 SELECT CAST('2000.12.08 12:35:30.5000' AS TIMESTAMP FORMAT 'YEAR.MM.DD HH24:MI:SS.FF4') FROM RDB$DATABASE;

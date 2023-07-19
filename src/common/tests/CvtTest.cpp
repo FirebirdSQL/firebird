@@ -119,6 +119,16 @@ BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIMESTAMP_TZ)
 	testCVTDatetimeToFormatString(createTimeStampTZ(1982, 4, 21, 0, 0, 0, -160), "TZH MI TZM", "-02 20 -40", cb);
 }
 
+BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_SOLID_PATTERNS)
+{
+	ISC_TIMESTAMP_TZ timestampTZ = createTimeStampTZ(1982, 4, 21, 1, 34, 15, 0, 500);
+
+	testCVTDatetimeToFormatString(timestampTZ, "YEARYYYYYYYYYYJ", "198219821982822445081", cb);
+	testCVTDatetimeToFormatString(timestampTZ, "QMMRMMONMONTH", "204IVAprAPRIL", cb);
+	testCVTDatetimeToFormatString(timestampTZ, "WWWD/DAYDDDDDDY", "1634/WEDNESDAY1111112", cb);
+	testCVTDatetimeToFormatString(timestampTZ, "HHHH12HH24MISSSSSSSFF2TZHTZM", "01 AM01 AM013456551550+0000", cb);
+}
+
 BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_RAW_TEXT)
 {
 	testCVTDatetimeToFormatString(createDate(1981, 7, 12), "YYYY-\"RaW TeXt\"-MON", "1981-RaW TeXt-Jul", cb);
@@ -290,6 +300,12 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_TZ)
 	testCVTStringToFormatDateTime("12:00 +2:30", "HH24:MI TZH:TZM", createTimeStampTZ(1, 1, 1, 12, 0, 0, 150, 0), cb);
 	testCVTStringToFormatDateTime("12:00 -2:30", "HH24:MI TZH:TZM", createTimeStampTZ(1, 1, 1, 12, 0, 0, -150, 0), cb);
 	testCVTStringToFormatDateTime("12:00 +0:00", "HH24:MI TZH:TZM", createTimeStampTZ(1, 1, 1, 12, 0, 0, 0, 0), cb);
+}
+
+BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_SOLID_PATTERNS)
+{
+	testCVTStringToFormatDateTime("1 PM - 25 - 45 - 200", "HHMISSFF4", createTimeStampTZ(1, 1, 1, 13, 25, 45, 0, 200), cb);
+	testCVTStringToFormatDateTime("1981-8/13", "YEARMMDD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
 }
 
 BOOST_AUTO_TEST_SUITE_END()	// FunctionalTest
