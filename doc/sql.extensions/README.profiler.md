@@ -22,6 +22,28 @@ A new session may be started when a session is already active. In that case, it 
 
 To analyze the collected data, the user must flush the data to the snapshot tables, which can be done by finishing or pausing a session (with `FLUSH` parameter set to `TRUE`), or calling `RDB$PROFILER.FLUSH`. Data is flushed using an autonomous transaction (a transaction started and finished for the specific purpose of profiler data update).
 
+## Important
+
+When the profiler is active, there is an overhead that makes everything slower.
+This overhead varies depending on OS, kernel version and CPU hardware and it's difficult to predict.
+
+But sometimes this overhead may be very high, say, greater than 100%.
+
+If this happens in Linux, you may see what clock source it's using with this command:
+
+```
+cat /sys/devices/system/clocksource/clocksource0/current_clocksource
+```
+
+If result is different than `tsc`, that may be the cause of this problem.
+
+You can see [here](https://access.redhat.com/solutions/18627) how to change clocksource, but you must understand
+it may have others consequences.
+
+Another possible source of slowdown in Linux is [this bug](https://bugzilla.kernel.org/show_bug.cgi?id=198961).
+
+## Example usage
+
 Below is a sample profile session and queries for data analysis.
 
 ```
