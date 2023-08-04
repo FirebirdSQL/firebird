@@ -352,44 +352,44 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 	return false;
 }
 
-void IndexTableScan::getChildren(Array<const RecordSource*>& children) const
+void IndexTableScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
+	if (!level)
+		plan += "(";
+
+	plan += printName(tdbb, m_alias, false) + " ORDER ";
+	string index;
+	printInversion(tdbb, m_index, index, false, level);
+	plan += index;
+
+	if (m_inversion)
+	{
+		plan += " INDEX (";
+		string indices;
+		printInversion(tdbb, m_inversion, indices, false, level);
+		plan += indices + ")";
+	}
+
+	if (!level)
+		plan += ")";
 }
 
-void IndexTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void IndexTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Table " +
-			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	planEntry.className = "IndexTableScan";
 
-		printOptInfo(plan);
-		printInversion(tdbb, m_index, plan, true, level, true);
+	planEntry.description = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	printOptInfo(planEntry.description);
 
-		if (m_inversion)
-			printInversion(tdbb, m_inversion, plan, true, ++level);
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+	printInversion(tdbb, m_index, planEntry.description, true, 0, true);
 
-		plan += printName(tdbb, m_alias, false) + " ORDER ";
-		string index;
-		printInversion(tdbb, m_index, index, false, level);
-		plan += index;
+	planEntry.objectName = m_relation->rel_name;
 
-		if (m_inversion)
-		{
-			plan += " INDEX (";
-			string indices;
-			printInversion(tdbb, m_inversion, indices, false, level);
-			plan += indices + ")";
-		}
+	if (m_alias.hasData() && m_relation->rel_name != m_alias)
+		planEntry.alias = m_alias;
 
-		if (!level)
-			plan += ")";
-	}
+	if (m_inversion)
+		printInversion(tdbb, m_inversion, planEntry.description, true, 1);
 }
 
 int IndexTableScan::compareKeys(const index_desc* idx,

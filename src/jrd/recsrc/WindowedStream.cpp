@@ -52,16 +52,12 @@ namespace
 	public:
 		BufferedStreamWindow(CompilerScratch* csb, BufferedStream* next);
 
-		void internalOpen(thread_db* tdbb) const override;
 		void close(thread_db* tdbb) const override;
 
-		bool internalGetRecord(thread_db* tdbb) const override;
 		bool refetchRecord(thread_db* tdbb) const override;
 		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
-		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
-
-		void print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsigned level, bool recurse) const override;
+		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -86,6 +82,11 @@ namespace
 			Impure* const impure = request->getImpure<Impure>(m_impure);
 			return impure->irsb_position;
 		}
+
+	protected:
+		void internalOpen(thread_db* tdbb) const override;
+		bool internalGetRecord(thread_db* tdbb) const override;
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
 
 	public:
 		NestConst<BufferedStream> m_next;
@@ -147,21 +148,23 @@ namespace
 		return m_next->lockRecord(tdbb, skipLocked);
 	}
 
-	void BufferedStreamWindow::getChildren(Array<const RecordSource*>& children) const
+	void BufferedStreamWindow::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 	{
-		children.add(m_next);
+		m_next->getLegacyPlan(tdbb, plan, level);
 	}
 
-	void BufferedStreamWindow::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+	void BufferedStreamWindow::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 	{
-		if (detailed)
-		{
-			plan += printIndent(++level) + "Window Buffer";
-			printOptInfo(plan);
-		}
+		planEntry.className = "BufferedStreamWindow";
+
+		planEntry.description = "Window Buffer";
+		printOptInfo(planEntry.description);
 
 		if (recurse)
-			m_next->print(tdbb, plan, detailed, level, recurse);
+		{
+			++level;
+			m_next->getPlan(tdbb, planEntry.children.add(), level, recurse);
+		}
 	}
 
 	void BufferedStreamWindow::markRecursive()
@@ -404,21 +407,23 @@ WriteLockResult WindowedStream::lockRecord(thread_db* /*tdbb*/, bool /*skipLocke
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
-void WindowedStream::getChildren(Array<const RecordSource*>& children) const
+void WindowedStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_joinedStream);
+	m_joinedStream->getLegacyPlan(tdbb, plan, level);
 }
 
-void WindowedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void WindowedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Window";
-		printOptInfo(plan);
-	}
+	planEntry.className = "WindowedStream";
+
+	planEntry.description = "Window";
+	printOptInfo(planEntry.description);
 
 	if (recurse)
-		m_joinedStream->print(tdbb, plan, detailed, level, recurse);
+	{
+		++level;
+		m_joinedStream->getPlan(tdbb, planEntry.children.add(), level, recurse);
+	}
 }
 
 void WindowedStream::markRecursive()
@@ -899,22 +904,24 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 	return true;
 }
 
-void WindowedStream::WindowStream::getChildren(Array<const RecordSource*>& children) const
+void WindowedStream::WindowStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_next);
+	m_next->getLegacyPlan(tdbb, plan, level);
 }
 
-void WindowedStream::WindowStream::print(thread_db* tdbb, string& plan, bool detailed,
-	unsigned level, bool recurse) const
+
+void WindowedStream::WindowStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Window Partition";
-		printOptInfo(plan);
-	}
+	planEntry.className = "WindowStream";
+
+	planEntry.description = "Window Partition";
+	printOptInfo(planEntry.description);
 
 	if (recurse)
-		m_next->print(tdbb, plan, detailed, level, recurse);
+	{
+		++level;
+		m_next->getPlan(tdbb, planEntry.children.add(), level, recurse);
+	}
 }
 
 void WindowedStream::WindowStream::findUsedStreams(StreamList& streams, bool expandAll) const

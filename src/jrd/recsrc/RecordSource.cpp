@@ -54,6 +54,48 @@ AccessPath::AccessPath(CompilerScratch* csb)
 {
 }
 
+void AccessPath::getPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.accessPath = this;
+	planEntry.level = level;
+
+	internalGetPlan(tdbb, planEntry, level, recurse);
+
+	if (level && planEntry.description.hasData())
+		planEntry.description.insert(0, "-> ");
+}
+
+
+// PlanEntry class
+// -------------------
+
+void PlanEntry::asFlatList(Array<NonPooledPair<const PlanEntry*, const PlanEntry*>>& list)
+{
+	list.clear();
+	list.add({this, nullptr});
+
+	for (unsigned pos = 0; pos < list.getCount(); ++pos)
+	{
+		const auto thisEntry = list[pos].first;
+		unsigned childPos = pos;
+
+		for (const auto& child : thisEntry->children)
+			list.insert(++childPos, {&child, thisEntry});
+	}
+}
+
+void PlanEntry::asString(string& str)
+{
+	Array<NonPooledPair<const PlanEntry*, const PlanEntry*>> list;
+	asFlatList(list);
+
+	for (const auto& pair : list)
+	{
+		const string indent(pair.first->level * 4, ' ');
+		str += "\n" + indent + pair.first->description;
+	}
+}
+
 
 // Record source class
 // -------------------

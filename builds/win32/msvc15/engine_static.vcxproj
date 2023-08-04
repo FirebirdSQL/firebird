@@ -161,6 +161,7 @@
     <ClCompile Include="..\..\..\src\jrd\sqz.cpp" />
     <ClCompile Include="..\..\..\src\jrd\Statement.cpp" />
     <ClCompile Include="..\..\..\src\jrd\svc.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\sys-packages\SqlPackage.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SysFunction.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SystemPackages.cpp" />
     <ClCompile Include="..\..\..\src\jrd\TempSpace.cpp" />
@@ -345,6 +346,7 @@
     <ClInclude Include="..\..\..\src\jrd\status.h" />
     <ClInclude Include="..\..\..\src\jrd\svc.h" />
     <ClInclude Include="..\..\..\src\jrd\svc_undoc.h" />
+    <ClInclude Include="..\..\..\src\jrd\sys-packages\SqlPackage.h" />
     <ClInclude Include="..\..\..\src\jrd\SysFunction.h" />
     <ClInclude Include="..\..\..\src\jrd\SystemPackages.h" />
     <ClInclude Include="..\..\..\src\jrd\TempSpace.h" />

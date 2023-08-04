@@ -730,6 +730,15 @@ string Statement::getPlan(thread_db* tdbb, bool detailed) const
 	return plan;
 }
 
+void Statement::getPlan(thread_db* tdbb, PlanEntry& planEntry) const
+{
+	planEntry.className = "Statement";
+	planEntry.level = 0;
+
+	for (const auto select : fors)
+		select->getPlan(tdbb, planEntry.children.add(), 0, true);
+}
+
 // Check that we have enough rights to access all resources this list of triggers touches.
 void Statement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 	TrigVector* triggers, MetaName userName)

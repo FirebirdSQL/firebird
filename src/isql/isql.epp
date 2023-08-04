@@ -492,6 +492,7 @@ static processing_state get_statement(string&, const TEXT*);
 static bool get_numeric(const UCHAR*, USHORT, SSHORT*, SINT64*);
 static void print_set(const char* str, bool v);
 static processing_state print_sets();
+static processing_state explain(const TEXT*);
 static processing_state help(const TEXT*);
 static bool isyesno(const TEXT*);
 static processing_state newdb(TEXT*, const TEXT*, const TEXT*, int, const TEXT*, bool);
@@ -587,6 +588,7 @@ public:
 		KeepTranParams = true;
 		TranParams->assign(DEFAULT_DML_TRANS_SQL);
 		PerTableStats = false;
+		ExplainCommand = false;
 	}
 
 	ColList global_Cols;
@@ -611,6 +613,7 @@ public:
 	SCHAR ISQL_charset[MAXCHARSET_SIZE];
 	bool KeepTranParams;
 	bool PerTableStats;
+	bool ExplainCommand;
 };
 
 static SetValues setValues;
@@ -5009,7 +5012,7 @@ static processing_state frontend(const TEXT* statement)
 		{
 			show, add, copy,
 			blobview, output, shell, set, create, drop, connect,
-			edit, input, quit, exit, help,
+			edit, input, quit, exit, explain, help,
 #ifdef DEV_BUILD
 			passthrough,
 #endif
@@ -5039,6 +5042,7 @@ static processing_state frontend(const TEXT* statement)
 		{FrontOptions::input, "INPUT", 2},
 		{FrontOptions::quit, "QUIT", 0},
 		{FrontOptions::exit, "EXIT", 0},
+		{FrontOptions::explain, "EXPLAIN", 0},
 		{FrontOptions::help, "?", 0},
 		{FrontOptions::help, "HELP", 0}
 #ifdef DEV_BUILD
@@ -5234,6 +5238,10 @@ static processing_state frontend(const TEXT* statement)
 
 	case FrontOptions::exit:
 		ret = EXIT;
+		break;
+
+	case FrontOptions::explain:
+		ret = explain(cmd + 7);
 		break;
 
 	case FrontOptions::help:
@@ -6501,6 +6509,20 @@ static processing_state print_sets()
 }
 
 
+static processing_state explain(const TEXT* command)
+{
+	Firebird::AutoSetRestore autoExplainCommand(&setValues.ExplainCommand, true);
+	Firebird::AutoSetRestore autoPlanonly(&setValues.Planonly, true);
+	Firebird::AutoSetRestore autoPlan(&setValues.Plan, true);
+	Firebird::AutoSetRestore autoExplainPlan(&setValues.ExplainPlan, true);
+	Firebird::AutoSetRestore autoSqldaDisplay(&setValues.Sqlda_display, false);
+
+	process_statement(command);
+
+	return SKIP;
+}
+
+
 static processing_state help(const TEXT* what)
 {
 /**************************************
@@ -6523,6 +6545,7 @@ static processing_state help(const TEXT* what)
 		HLP_BLOBED,				// BLOBVIEW <blobid>		-- view BLOB in text editor
 		HLP_EDIT,				// EDIT	 [<filename>]		-- edit SQL script file and execute
 		HLP_EDIT2,				// EDIT						-- edit current command buffer and execute
+		HLP_EXPLAIN,			// EXPLAIN					-- explain a query access plan
 		HLP_HELP,				// HELP						-- display this menu
 		HLP_INPUT,				// INput	<filename>		-- take input from the named SQL file
 		HLP_OUTPUT,				// OUTput   [<filename>]	-- write output to named file
@@ -9121,10 +9144,18 @@ static processing_state process_statement(const TEXT* str2)
 		statement_type != isc_info_sql_stmt_set_generator)
 	{
 		process_plan();
-		if (setValues.Planonly && !is_selectable)
+
+		if (setValues.ExplainCommand)
 		{
-			return ret;	// do not execute
+			if (setValues.Stats && (print_performance(perf_before) == ps_ERR))
+				ret = ps_ERR;
+
+			if (setValues.PerTableStats)
+				perTableStats->getStats(DB, false);
 		}
+
+		if (setValues.Planonly && (!is_selectable || setValues.ExplainCommand))
+			return ret;	// do not execute
 	}
 
 	if (setValues.ExecPathDisplay[0])

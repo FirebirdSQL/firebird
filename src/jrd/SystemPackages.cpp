@@ -25,6 +25,7 @@
 #include "../jrd/BlobUtil.h"
 #include "../jrd/TimeZone.h"
 #include "../jrd/ProfilerManager.h"
+#include "../jrd/sys-packages/SqlPackage.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -40,6 +41,7 @@ namespace
 			list->add(TimeZonePackage(pool));
 			list->add(ProfilerPackage(pool));
 			list->add(BlobUtilPackage(pool));
+			list->add(SqlPackage(pool));
 		}
 
 		static InitInstance<SystemPackagesInit> INSTANCE;
