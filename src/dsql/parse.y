@@ -2505,7 +2505,7 @@ column_constraint_def($addColumnClause)
 	: constraint_name_opt column_constraint($addColumnClause)
 		{
 			if ($1)
-				$addColumnClause->constraints.back()->name = *$1;
+				$addColumnClause->constraints.back().name = *$1;
 		}
 	;
 

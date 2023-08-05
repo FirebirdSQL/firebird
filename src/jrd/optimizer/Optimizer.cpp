@@ -1970,7 +1970,7 @@ unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned b
 			ValueExprNodeStack& s = classes.add();
 			s.push(node1);
 			s.push(node2);
-			eq_class = classes.back();
+			eq_class = --classes.end();
 		}
 	}
 

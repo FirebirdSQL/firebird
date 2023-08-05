@@ -306,10 +306,16 @@ namespace Firebird
 			return iterator(this, getCount());
 		}
 
-		iterator back()
+		T& front()
 		{
   			fb_assert(getCount() > 0);
-			return iterator(this, getCount() - 1);
+			return *begin();
+		}
+
+		T& back()
+		{
+			fb_assert(getCount() > 0);
+			return *iterator(this, getCount() - 1);
 		}
 
 		const_iterator begin() const
