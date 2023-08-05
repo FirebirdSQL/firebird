@@ -130,7 +130,7 @@ void ExternalTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, u
 {
 	planEntry.className = "ExternalTableScan";
 
-	planEntry.description = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan";
+	planEntry.description.add() = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan";
 	printOptInfo(planEntry.description);
 
 	planEntry.objectName = m_relation->rel_name;

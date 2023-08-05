@@ -155,7 +155,7 @@ void SingularStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 {
 	planEntry.className = "SingularStream";
 
-	planEntry.description = "Singularity Check";
+	planEntry.description.add() = "Singularity Check";
 	printOptInfo(planEntry.description);
 
 	if (recurse)

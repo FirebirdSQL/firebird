@@ -474,7 +474,7 @@ void HashJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned l
 {
 	planEntry.className = "HashJoin";
 
-	planEntry.description = "Hash Join (inner)";
+	planEntry.description.add() = "Hash Join (inner)";
 	printOptInfo(planEntry.description);
 
 	if (recurse)

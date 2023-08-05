@@ -518,8 +518,11 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 		if (parentPlanEntry)
 			parentSequence = *idSequenceMap.get(parentPlanEntry->accessPath->getRecSourceId());
 
+		string accessPath;
+		planEntry->getDescriptionAsString(accessPath);
+
 		currentSession->pluginSession->defineRecordSource(profileStatement->id, cursorId,
-			*sequencePtr, planEntry->level, planEntry->description.c_str(), parentSequence);
+			*sequencePtr, planEntry->level, accessPath.c_str(), parentSequence);
 
 		profileStatement->recSourceSequence.put(recSourceId, *sequencePtr);
 	}

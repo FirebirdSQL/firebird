@@ -119,8 +119,11 @@ SqlPackage::ExplainResultSet::ExplainResultSet(ThrowStatusExceptionWrapper* stat
 		resultEntry.keyLengthNull = planEntry->keyLength ? FB_FALSE : FB_TRUE;
 		resultEntry.keyLength = planEntry->keyLength;
 
+		string accessPath;
+		planEntry->getDescriptionAsString(accessPath);
+
 		resultEntry.accessPathNull = FB_FALSE;
-		resultEntry.accessPath.set(planEntry->description.c_str(), planEntry->description.length());
+		resultEntry.accessPath.set(accessPath.c_str(), accessPath.length());
 	}
 
 	resultIterator = resultEntries.begin();

@@ -126,7 +126,7 @@ void FullOuterJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsig
 {
 	planEntry.className = "FullOuterJoin";
 
-	planEntry.description = "Full Outer Join";
+	planEntry.description.add() = "Full Outer Join";
 	printOptInfo(planEntry.description);
 
 	if (recurse)

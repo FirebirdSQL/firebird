@@ -137,13 +137,16 @@ void SortedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsign
 	extras.printf(" (record length: %" ULONGFORMAT", key length: %" ULONGFORMAT")",
 		m_map->length, m_map->keyLength);
 
+	auto planDescription = &planEntry.description.add();
+
 	if (m_map->flags & FLAG_REFETCH)
 	{
-		planEntry.description = "Refetch" + printIndent(1);
+		*planDescription = "Refetch";
+		planDescription = &planEntry.description.add();
 		++level;
 	}
 
-	planEntry.description += ((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
+	*planDescription += ((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
 	printOptInfo(planEntry.description);
 
 	planEntry.recordLength = m_map->length;

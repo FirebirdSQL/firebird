@@ -384,7 +384,7 @@ void AggregatedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, un
 {
 	planEntry.className = "AggregatedStream";
 
-	planEntry.description = "Aggregate";
+	planEntry.description.add() = "Aggregate";
 	printOptInfo(planEntry.description);
 
 	if (recurse)

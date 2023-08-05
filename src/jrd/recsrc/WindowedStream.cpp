@@ -157,7 +157,7 @@ namespace
 	{
 		planEntry.className = "BufferedStreamWindow";
 
-		planEntry.description = "Window Buffer";
+		planEntry.description.add() = "Window Buffer";
 		printOptInfo(planEntry.description);
 
 		if (recurse)
@@ -416,7 +416,7 @@ void WindowedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 {
 	planEntry.className = "WindowedStream";
 
-	planEntry.description = "Window";
+	planEntry.description.add() = "Window";
 	printOptInfo(planEntry.description);
 
 	if (recurse)
@@ -914,7 +914,7 @@ void WindowedStream::WindowStream::internalGetPlan(thread_db* tdbb, PlanEntry& p
 {
 	planEntry.className = "WindowStream";
 
-	planEntry.description = "Window Partition";
+	planEntry.description.add() = "Window Partition";
 	printOptInfo(planEntry.description);
 
 	if (recurse)

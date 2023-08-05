@@ -120,7 +120,7 @@ void LockedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsign
 {
 	planEntry.className = "LockedStream";
 
-	planEntry.description = "Write Lock";
+	planEntry.description.add() = "Write Lock";
 	printOptInfo(planEntry.description);
 
 	if (recurse)

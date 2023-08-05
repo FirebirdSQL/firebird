@@ -133,7 +133,7 @@ void ConditionalStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, u
 {
 	planEntry.className = "ConditionalStream";
 
-	planEntry.description = "Condition";
+	planEntry.description.add() = "Condition";
 	printOptInfo(planEntry.description);
 
 	if (recurse)

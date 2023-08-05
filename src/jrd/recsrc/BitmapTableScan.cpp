@@ -140,10 +140,10 @@ void BitmapTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, uns
 {
 	planEntry.className = "BitmapTableScan";
 
-	planEntry.description = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	planEntry.description.add() = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
 	printOptInfo(planEntry.description);
 
-	printInversion(tdbb, m_inversion, planEntry.description, true, 0);
+	printInversion(tdbb, m_inversion, planEntry.description, true);
 
 	planEntry.objectName = m_relation->rel_name;
 

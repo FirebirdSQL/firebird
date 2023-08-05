@@ -378,10 +378,10 @@ void IndexTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 {
 	planEntry.className = "IndexTableScan";
 
-	planEntry.description = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	planEntry.description.add() = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
 	printOptInfo(planEntry.description);
 
-	printInversion(tdbb, m_index, planEntry.description, true, 0, true);
+	printInversion(tdbb, m_index, planEntry.description, true, true);
 
 	planEntry.objectName = m_relation->rel_name;
 
@@ -389,7 +389,7 @@ void IndexTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 		planEntry.alias = m_alias;
 
 	if (m_inversion)
-		printInversion(tdbb, m_inversion, planEntry.description, true, 1);
+		printInversion(tdbb, m_inversion, planEntry.description, true);
 }
 
 int IndexTableScan::compareKeys(const index_desc* idx,

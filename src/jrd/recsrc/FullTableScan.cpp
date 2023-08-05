@@ -195,7 +195,7 @@ void FullTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsig
 	else if (upperBounds)
 		bounds += " (upper bound)";
 
-	planEntry.description = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan" + bounds;
+	planEntry.description.add() = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan" + bounds;
 	printOptInfo(planEntry.description);
 
 	planEntry.objectName = m_relation->rel_name;

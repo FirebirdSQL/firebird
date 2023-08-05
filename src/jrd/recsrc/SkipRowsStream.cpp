@@ -125,7 +125,7 @@ void SkipRowsStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 {
 	planEntry.className = "SkipRowsStream";
 
-	planEntry.description = "Skip N Records";
+	planEntry.description.add() = "Skip N Records";
 	printOptInfo(planEntry.description);
 
 	if (recurse)

@@ -326,7 +326,7 @@ void BufferedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 	string extras;
 	extras.printf(" (record length: %" ULONGFORMAT")", m_format->fmt_length);
 
-	planEntry.description += "Record Buffer" + extras;
+	planEntry.description.add() = "Record Buffer" + extras;
 	printOptInfo(planEntry.description);
 
 	planEntry.recordLength = m_format->fmt_length;

@@ -96,12 +96,13 @@ namespace Jrd
 		PlanEntry() = default;
 
 	public:
-		void asFlatList(Firebird::Array<Firebird::NonPooledPair<const PlanEntry*, const PlanEntry*>>& list);
-		void asString(Firebird::string& str);
+		void getDescriptionAsString(Firebird::string& str, bool initialIndentation = false) const;
+		void asFlatList(Firebird::Array<Firebird::NonPooledPair<const PlanEntry*, const PlanEntry*>>& list) const;
+		void asString(Firebird::string& str) const;
 
 	public:
 		Firebird::string className{getPool()};
-		Firebird::string description{getPool()};
+		Firebird::ObjectsArray<Firebird::string> description{getPool()};
 		Firebird::ObjectsArray<PlanEntry> children{getPool()};
 		MetaName packageName;
 		MetaName objectName;
@@ -165,11 +166,15 @@ namespace Jrd
 		static Firebird::string printName(thread_db* tdbb, const Firebird::string& name,
 										  const Firebird::string& alias);
 
-		static Firebird::string printIndent(unsigned level);
+		static void printInversion(thread_db* tdbb, const InversionNode* inversion,
+								   Firebird::ObjectsArray<Firebird::string>& planLines, bool detailed,
+								   bool navigation = false);
+
 		static void printInversion(thread_db* tdbb, const InversionNode* inversion,
 								   Firebird::string& plan, bool detailed,
 								   unsigned level, bool navigation = false);
-		void printOptInfo(Firebird::string& plan) const;
+
+		void printOptInfo(Firebird::ObjectsArray<Firebird::string>& plan) const;
 
 		static void saveRecord(thread_db* tdbb, record_param* rpb);
 		static void restoreRecord(thread_db* tdbb, record_param* rpb);

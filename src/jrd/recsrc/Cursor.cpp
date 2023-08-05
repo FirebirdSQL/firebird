@@ -119,26 +119,26 @@ void Select::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned lev
 
 	if (m_rse->isSubQuery())
 	{
-		planEntry.description = "Sub-query";
+		planEntry.description.add() = "Sub-query";
 
 		if (m_rse->isInvariant())
-			planEntry.description += " (invariant)";
+			planEntry.description.back() += " (invariant)";
 	}
 	else if (m_cursorName.hasData())
 	{
-		planEntry.description = "Cursor \"" + string(m_cursorName) + "\"";
+		planEntry.description.add() = "Cursor \"" + string(m_cursorName) + "\"";
 
 		if (m_rse->isScrollable())
-			planEntry.description += " (scrollable)";
+			planEntry.description.back() += " (scrollable)";
 	}
 	else
-		planEntry.description = "Select Expression";
+		planEntry.description.add() = "Select Expression";
 
 	if (m_line || m_column)
 	{
 		string pos;
 		pos.printf(" (line %u, column %u)", m_line, m_column);
-		planEntry.description += pos;
+		planEntry.description.back() += pos;
 	}
 
 	if (recurse)

@@ -60,16 +60,33 @@ void AccessPath::getPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, 
 	planEntry.level = level;
 
 	internalGetPlan(tdbb, planEntry, level, recurse);
-
-	if (level && planEntry.description.hasData())
-		planEntry.description.insert(0, "-> ");
 }
 
 
 // PlanEntry class
 // -------------------
 
-void PlanEntry::asFlatList(Array<NonPooledPair<const PlanEntry*, const PlanEntry*>>& list)
+void PlanEntry::getDescriptionAsString(string& str, bool initialIndentation) const
+{
+	auto indentLevel = initialIndentation ? level : 0;
+
+	for (const auto& line : description)
+	{
+		const string indent(indentLevel * 4, ' ');
+
+		if (initialIndentation || indentLevel)
+			str += "\n" + indent;
+
+		if (level)
+			str += "-> ";
+
+		str += line;
+
+		++indentLevel;
+	}
+}
+
+void PlanEntry::asFlatList(Array<NonPooledPair<const PlanEntry*, const PlanEntry*>>& list) const
 {
 	list.clear();
 	list.add({this, nullptr});
@@ -84,16 +101,13 @@ void PlanEntry::asFlatList(Array<NonPooledPair<const PlanEntry*, const PlanEntry
 	}
 }
 
-void PlanEntry::asString(string& str)
+void PlanEntry::asString(string& str) const
 {
 	Array<NonPooledPair<const PlanEntry*, const PlanEntry*>> list;
 	asFlatList(list);
 
 	for (const auto& pair : list)
-	{
-		const string indent(pair.first->level * 4, ' ');
-		str += "\n" + indent + pair.first->description;
-	}
+		pair.first->getDescriptionAsString(str, true);
 }
 
 
@@ -140,40 +154,32 @@ string RecordSource::printName(thread_db* tdbb, const string& name, const string
 	return result;
 }
 
-string RecordSource::printIndent(unsigned level)
-{
-	fb_assert(level);
-
-	const string indent(level * 4, ' ');
-	return string("\n" + indent + "-> ");
-}
-
 void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversion,
-								  string& plan, bool detailed, unsigned level, bool navigation)
+	ObjectsArray<string>& planLines, bool detailed, bool navigation)
 {
-	if (detailed)
-		plan += printIndent(++level);
+	const bool wasEmpty = planLines.isEmpty();
+	auto plan = &planLines.add();
 
 	switch (inversion->type)
 	{
 	case InversionNode::TYPE_AND:
 		if (detailed)
-			plan += "Bitmap And";
-		printInversion(tdbb, inversion->node1, plan, detailed, level);
-		printInversion(tdbb, inversion->node2, plan, detailed, level);
+			*plan += "Bitmap And";
+		printInversion(tdbb, inversion->node1, planLines, detailed);
+		printInversion(tdbb, inversion->node2, planLines, detailed);
 		break;
 
 	case InversionNode::TYPE_OR:
 	case InversionNode::TYPE_IN:
 		if (detailed)
-			plan += "Bitmap Or";
-		printInversion(tdbb, inversion->node1, plan, detailed, level);
-		printInversion(tdbb, inversion->node2, plan, detailed, level);
+			*plan += "Bitmap Or";
+		printInversion(tdbb, inversion->node1, planLines, detailed);
+		printInversion(tdbb, inversion->node2, planLines, detailed);
 		break;
 
 	case InversionNode::TYPE_DBKEY:
 		if (detailed)
-			plan += "DBKEY";
+			*plan += "DBKEY";
 		break;
 
 	case InversionNode::TYPE_INDEX:
@@ -189,7 +195,10 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 			if (detailed)
 			{
 				if (!navigation)
-					plan += "Bitmap" + printIndent(++level);
+				{
+					*plan += "Bitmap";
+					plan = &planLines.add();
+				}
 
 				const index_desc& idx = retrieval->irb_desc;
 				const bool uniqueIdx = (idx.idx_flags & idx_unique);
@@ -236,13 +245,11 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 					}
 				}
 
-				plan += "Index " + printName(tdbb, indexName.c_str()) +
+				*plan += "Index " + printName(tdbb, indexName.c_str()) +
 					(fullscan ? " Full" : unique ? " Unique" : list ? " List" : " Range") + " Scan" + bounds;
 			}
 			else
-			{
-				plan += (plan.hasData() ? ", " : "") + printName(tdbb, indexName.c_str(), false);
-			}
+				*plan += (wasEmpty ? "" : ", ") + printName(tdbb, indexName.c_str(), false);
 		}
 		break;
 
@@ -251,13 +258,28 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 	}
 }
 
-void RecordSource::printOptInfo(string& plan) const
+void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversion,
+								  string& plan, bool detailed, unsigned level, bool navigation)
+{
+	ObjectsArray<string> planLines;
+	printInversion(tdbb, inversion, planLines, detailed, navigation);
+
+	for (const auto& line : planLines)
+	{
+		if (detailed)
+			plan += '\n' + string(++level * 4, ' ');
+		plan += line;
+	}
+}
+
+void RecordSource::printOptInfo(ObjectsArray<string>& planLines) const
 {
 #ifdef PRINT_OPT_INFO
+	fb_assert(planLines.hasData());
 	string info;
 	// Add 0.5 to convert double->int truncation into rounding
 	info.printf(" [rows: %" UQUADFORMAT "]", (FB_UINT64) (m_cardinality + 0.5));
-	plan += info;
+	planLines.back() += info;
 #endif
 }
 
