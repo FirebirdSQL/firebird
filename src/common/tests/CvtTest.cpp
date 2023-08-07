@@ -35,11 +35,11 @@ BOOST_AUTO_TEST_SUITE(FunctionalTest)
 
 BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_DATE)
 {
-	testCVTDatetimeToFormatString(createDate(1, 1, 1), "YEAR.YYYY.YYY.YY.Y", "1.1.1.1.1", cb);
+	testCVTDatetimeToFormatString(createDate(1, 1, 1), "YEAR.YYYY.YYY.YY.Y", "1.0001.001.01.1", cb);
 	testCVTDatetimeToFormatString(createDate(1234, 1, 1), "YEAR.YYYY.YYY.YY.Y", "1234.1234.234.34.4", cb);
 	testCVTDatetimeToFormatString(createDate(9999, 1, 1), "YEAR.YYYY.YYY.YY.Y", "9999.9999.999.99.9", cb);
 
-	testCVTDatetimeToFormatString(createDate(1, 1, 1), "YEAR.YYYY.YYY.YY.Y", "1.1.1.1.1", cb);
+	testCVTDatetimeToFormatString(createDate(1, 1, 1), "YEAR.YYYY.YYY.YY.Y", "1.0001.001.01.1", cb);
 	testCVTDatetimeToFormatString(createDate(1234, 1, 1), "YEAR.YYYY.YYY.YY.Y", "1234.1234.234.34.4", cb);
 	testCVTDatetimeToFormatString(createDate(9999, 1, 1), "YEAR.YYYY.YYY.YY.Y", "9999.9999.999.99.9", cb);
 

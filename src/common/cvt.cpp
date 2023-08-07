@@ -1185,11 +1185,11 @@ static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::st
 			if (pattern == "Y")
 				patternResult.printf("%d", year % 10);
 			else if (pattern == "YY")
-				patternResult.printf("%d", year % 100);
+				patternResult.printf("%02d", year % 100);
 			else if (pattern == "YYY")
-				patternResult.printf("%d", year % 1000);
+				patternResult.printf("%03d", year % 1000);
 			else if (pattern == "YYYY")
-				patternResult.printf("%d", year % 10000);
+				patternResult.printf("%04d", year % 10000);
 			else if (pattern == "YEAR")
 				patternResult.printf("%d", year);
 			break;
@@ -1211,18 +1211,14 @@ static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::st
 			{
 				date_type_check(ExpectedDateType::TIME, desc, pattern, cb);
 
-				const char* printfFormat = times.tm_min < 10 ? "0%d" : "%d";
-				patternResult.printf(printfFormat, times.tm_min);
+				patternResult.printf("%02d", times.tm_min);
 				break;
 			}
 
 			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
 
 			if (pattern == "MM")
-			{
-				const char* printfFormat = times.tm_mon + 1 < 10 ? "0%d" : "%d";
-				patternResult.printf(printfFormat, (times.tm_mon + 1));
-			}
+				patternResult.printf("%02d", (times.tm_mon + 1));
 			else if (pattern == "MON")
 				patternResult.printf("%s", FB_SHORT_MONTHS[times.tm_mon]);
 			else if (pattern == "MONTH")
@@ -1250,8 +1246,7 @@ static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::st
 			else if (pattern == "WW")
 			{
 				int week = NoThrowTimeStamp::convertGregorianDateToWeekDate(times);
-				const char* printfFormat = week < 10 ? "0%d" : "%d";
-				patternResult.printf(printfFormat, week);
+				patternResult.printf("%02d", week);
 			}
 			break;
 
@@ -1263,21 +1258,11 @@ static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::st
 			else if (pattern == "DAY")
 				patternResult.printf("%s", FB_LONG_DAYS_UPPER[times.tm_wday]);
 			else if (pattern == "DD")
-			{
-				const char* printfFormat = times.tm_mday < 10 ? "0%d" : "%d";
-				patternResult.printf(printfFormat, times.tm_mday);
-			}
+				patternResult.printf("%02d", times.tm_mday);
 			else if (pattern == "DDD")
 			{
 				int daysInYear = times.tm_yday + 1;
-				const char* printfFormat = "%d";
-
-				if (daysInYear < 10)
-					printfFormat = "00%d";
-				else if (daysInYear < 100)
-					printfFormat = "0%d";
-
-				patternResult.printf(printfFormat, daysInYear);
+				patternResult.printf("%03d", daysInYear);
 			}
 			else if (pattern == "DY")
 				patternResult.printf("%s", FB_SHORT_DAYS[times.tm_wday]);
@@ -1317,24 +1302,17 @@ static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::st
 						hours = 12;
 				}
 
-				const char* printfFormat = hours < 10 ? "0%d %s" : "%d %s";
-				patternResult.printf(printfFormat, hours, period);
+				patternResult.printf("%02d %s", hours, period);
 			}
 			else if (pattern == "HH24")
-			{
-				const char* printfFormat = times.tm_hour < 10 ? "0%d" : "%d";
-				patternResult.printf(printfFormat, times.tm_hour);
-			}
+				patternResult.printf("%02d", times.tm_hour);
 			break;
 
 		case 'S':
 			date_type_check(ExpectedDateType::TIME, desc, pattern, cb);
 
 			if (pattern == "SS")
-			{
-				const char* printfFormat = times.tm_sec < 10 ? "0%d" : "%d";
-				patternResult.printf(printfFormat, times.tm_sec);
-			}
+				patternResult.printf("%02d", times.tm_sec);
 			else if (pattern == "SSSSS")
 			{
 				int secondsInDay = times.tm_hour * 60 * 60 + times.tm_min * 60 + times.tm_sec;
@@ -1375,7 +1353,7 @@ static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::st
 				int timezoneSign = sign(timezoneOffset);
 				SSHORT offsetInHours = abs(timezoneOffset / 60);
 
-				string printfFormat = offsetInHours < 10 ? "0%d" : "%d";
+				string printfFormat = "%02d";
 
 				if (previousPattern != "TZM")
 				{
@@ -1393,7 +1371,7 @@ static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::st
 				int timezoneSign = sign(timezoneOffset);
 				SSHORT offsetInMinutes = abs(timezoneOffset % 60);
 
-				string printfFormat = offsetInMinutes < 10 ? "0%d" : "%d";
+				string printfFormat = "%02d";
 
 				if (previousPattern != "TZH")
 				{
@@ -1406,9 +1384,7 @@ static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::st
 				patternResult.printf(printfFormat.c_str(), offsetInMinutes);
 			}
 			else if (pattern == "TZR")
-			{
 				patternResult = extract_timezone_name(desc);
-			}
 			break;
 
 		default:
