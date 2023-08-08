@@ -371,7 +371,7 @@ Function:
 Format:
     CRYPT_HASH( <any value> USING <algorithm> )
 
-    algorithm ::= { MD5 | SHA1 | SHA256 | SHA512 }
+    algorithm ::= { MD5 | SHA1 | SHA256 | SHA512 | SHA3_224 | SHA3_256 | SHA3_384 | SHA3_512 }
 
 Important:
     - This function returns VARCHAR strings with OCTETS charset with length depended on algorithm.

@@ -401,6 +401,30 @@ namespace Firebird
 		Sha1HashContext(MemoryPool& pool);
 	};
 
+	class Sha3_512_HashContext final : public LibTomCryptHashContext
+	{
+	public:
+		Sha3_512_HashContext(MemoryPool& pool);
+	};
+
+	class Sha3_384_HashContext final : public LibTomCryptHashContext
+	{
+	public:
+		Sha3_384_HashContext(MemoryPool& pool);
+	};
+
+	class Sha3_256_HashContext final : public LibTomCryptHashContext
+	{
+	public:
+		Sha3_256_HashContext(MemoryPool& pool);
+	};
+
+	class Sha3_224_HashContext final : public LibTomCryptHashContext
+	{
+	public:
+		Sha3_224_HashContext(MemoryPool& pool);
+	};
+
 	class Sha256HashContext final : public LibTomCryptHashContext
 	{
 	public:

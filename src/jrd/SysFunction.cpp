@@ -163,6 +163,10 @@ static const HashAlgorithmDescriptor* cryptHashAlgorithmDescriptors[] = {
 	HashAlgorithmDescriptorFactory<Sha1HashContext>::getInstance("SHA1", 20),
 	HashAlgorithmDescriptorFactory<Sha256HashContext>::getInstance("SHA256", 32),
 	HashAlgorithmDescriptorFactory<Sha512HashContext>::getInstance("SHA512", 64),
+	HashAlgorithmDescriptorFactory<Sha3_512_HashContext>::getInstance("SHA3_512", 64),
+	HashAlgorithmDescriptorFactory<Sha3_384_HashContext>::getInstance("SHA3_384", 48),
+	HashAlgorithmDescriptorFactory<Sha3_256_HashContext>::getInstance("SHA3_256", 32),
+	HashAlgorithmDescriptorFactory<Sha3_224_HashContext>::getInstance("SHA3_224", 28),
 	nullptr
 };
 
@@ -2964,6 +2968,10 @@ public:
 
 		registerHash(md5_desc);
 		registerHash(sha1_desc);
+		registerHash(sha3_512_desc);
+		registerHash(sha3_384_desc);
+		registerHash(sha3_256_desc);
+		registerHash(sha3_224_desc);
 		registerHash(sha256_desc);
 		registerHash(sha512_desc);
 	}
