@@ -1168,10 +1168,15 @@ static bool is_separator(char symbol)
 }
 
 
-template<typename InvalidPatternException>
+static void invalid_pattern_exception(std::string_view pattern, Callbacks* cb)
+{
+	cb->err(Arg::Gds(isc_invalid_date_format) << string(pattern.data(), pattern.length()));
+}
+
+
 static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_view pattern,
 	std::string_view previousPattern, const struct tm& times, int fractions,
-	Firebird::Callbacks* cb, InvalidPatternException invalidPatternException)
+	Firebird::Callbacks* cb)
 {
 	string patternResult;
 
@@ -1328,7 +1333,7 @@ static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::st
 				int number = pattern.back() - '0';
 				if (number < 1 || number > 9)
 				{
-					invalidPatternException(pattern, cb);
+					invalid_pattern_exception(pattern, cb);
 				}
 
 				const int fractionsPrecision = fractions != 0 ? std::log10(fractions) + 1 : 1;
@@ -1388,11 +1393,11 @@ static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::st
 			break;
 
 		default:
-			invalidPatternException(pattern, cb);
+			invalid_pattern_exception(pattern, cb);
 	}
 
 	if (patternResult.isEmpty())
-		invalidPatternException(pattern, cb);
+		invalid_pattern_exception(pattern, cb);
 
 	return patternResult;
 }
@@ -1402,11 +1407,6 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 {
 	if (format.isEmpty())
 		cb->err(Arg::Gds(isc_sysf_invalid_null_empty) << Arg::Str(STRINGIZE(format)));
-
-	auto invalidPatternException = [](std::string_view pattern, Callbacks* cb)
-	{
-		cb->err(Arg::Gds(isc_invalid_date_format) << string(pattern.data(), pattern.length()));
-	};
 
 	struct tm times;
 	memset(&times, 0, sizeof(struct tm));
@@ -1490,7 +1490,7 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 			if (formatOffset != i)
 			{
 				result += datetime_to_format_string_pattern_matcher(desc, pattern, previousPattern, times,
-					fractions, cb, invalidPatternException);
+					fractions, cb);
 				previousPattern = pattern;
 			}
 			if (symbol == '\"')
@@ -1527,7 +1527,7 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 				if (i == formatUpper.length() - 1)
 				{
 					result += datetime_to_format_string_pattern_matcher(desc, pattern, previousPattern, times,
-						fractions, cb, invalidPatternException);
+						fractions, cb);
 				}
 				break;
 			}
@@ -1536,11 +1536,11 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 			continue;
 
 		if (pattern.length() <= 1)
-			invalidPatternException(pattern, cb);
+			invalid_pattern_exception(pattern, cb);
 
 		pattern = pattern.substr(0, pattern.length() - 1);
 		result += datetime_to_format_string_pattern_matcher(desc, pattern, previousPattern, times,
-			fractions, cb, invalidPatternException);
+			fractions, cb);
 		previousPattern = pattern;
 		formatOffset = i;
 		i--;
@@ -1627,10 +1627,9 @@ static std::string_view parse_string_to_get_first_word(const char* str, int leng
 }
 
 
-template<typename InvalidPatternException>
 static void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::string_view previousPattern,
 	const char* str, int strLength, int& strOffset, struct tm& outTimes, int& outFractions,
-	int& outTimezoneInMinutes, Firebird::Callbacks* cb, InvalidPatternException invalidPatternException)
+	int& outTimezoneInMinutes, Firebird::Callbacks* cb)
 {
 	switch (pattern[0])
 	{
@@ -1867,7 +1866,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 				int number = pattern.back() - '0';
 				if (number < 1 || number > -ISC_TIME_SECONDS_PRECISION_SCALE)
 				{
-					invalidPatternException(pattern, cb);
+					invalid_pattern_exception(pattern, cb);
 				}
 
 				const int fractions = parse_string_to_get_int(str, strLength, strOffset, number);
@@ -1902,7 +1901,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 			break;
 	}
 
-	invalidPatternException(pattern, cb);
+	invalid_pattern_exception(pattern, cb);
 }
 
 
@@ -1913,11 +1912,6 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 
 	if (format.isEmpty())
 		cb->err(Arg::Gds(isc_sysf_invalid_null_empty) << Arg::Str(STRINGIZE(format)));
-
-	auto invalidPatternException = [](std::string_view pattern, Callbacks* cb)
-	{
-		cb->err(Arg::Gds(isc_invalid_date_format) << string(pattern.data(), pattern.length()));
-	};
 
 	USHORT dtype;
 	UCHAR* sourceString;
@@ -1956,7 +1950,7 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 			if (formatOffset != i)
 			{
 				string_to_format_datetime_pattern_matcher(pattern, previousPattern, stringUpper.c_str(),
-					stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, cb, invalidPatternException);
+					stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, cb);
 				previousPattern = pattern;
 			}
 
@@ -1980,7 +1974,7 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 				if (i == formatUpper.length() - 1)
 				{
 					string_to_format_datetime_pattern_matcher(pattern, previousPattern, stringUpper.c_str(),
-						stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, cb, invalidPatternException);
+						stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, cb);
 				}
 				break;
 			}
@@ -1989,11 +1983,11 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 			continue;
 
 		if (pattern.length() <= 1)
-			invalidPatternException(pattern, cb);
+			invalid_pattern_exception(pattern, cb);
 
 		pattern = pattern.substr(0, pattern.length() - 1);
 		string_to_format_datetime_pattern_matcher(pattern, previousPattern, stringUpper.c_str(),
-			stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, cb, invalidPatternException);
+			stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, cb);
 		previousPattern = pattern;
 		formatOffset = i;
 		i--;
