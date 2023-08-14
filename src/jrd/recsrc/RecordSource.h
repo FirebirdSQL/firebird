@@ -73,6 +73,11 @@ namespace Jrd
 			return m_recSourceId;
 		}
 
+		double getCardinality() const
+		{
+			return m_cardinality;
+		}
+
 		void getPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const;
 
 		virtual void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const = 0;
@@ -80,6 +85,9 @@ namespace Jrd
 	protected:
 		virtual void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry,
 			unsigned level, bool recurse) const = 0;
+
+	protected:
+		double m_cardinality = 0.0;
 
 	private:
 		const ULONG m_cursorId;
@@ -140,11 +148,6 @@ namespace Jrd
 			return true;
 		}
 
-		double getCardinality() const
-		{
-			return m_cardinality;
-		}
-
 		void open(thread_db* tdbb) const;
 
 		bool getRecord(thread_db* tdbb) const;
@@ -184,7 +187,6 @@ namespace Jrd
 		virtual void internalOpen(thread_db* tdbb) const = 0;
 		virtual bool internalGetRecord(thread_db* tdbb) const = 0;
 
-		double m_cardinality = 0.0;
 		ULONG m_impure = 0;
 		bool m_recursive = false;
 	};

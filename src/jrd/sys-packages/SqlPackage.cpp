@@ -117,6 +117,9 @@ SqlPackage::ExplainResultSet::ExplainResultSet(ThrowStatusExceptionWrapper* stat
 		if (planEntry->alias.hasData())
 			resultEntry.alias.set(planEntry->alias.c_str(), planEntry->alias.length());
 
+		resultEntry.cardinalityNull = planEntry->level > 0 ? FB_FALSE : FB_TRUE;
+		resultEntry.cardinality = planEntry->accessPath->getCardinality();
+
 		resultEntry.recordLengthNull = planEntry->recordLength ? FB_FALSE : FB_TRUE;
 		resultEntry.recordLength = planEntry->recordLength;
 
@@ -173,6 +176,7 @@ SqlPackage::SqlPackage(MemoryPool& pool)
 					{"PACKAGE_NAME", fld_r_name, true},
 					{"OBJECT_NAME", fld_r_name, true},
 					{"ALIAS", fld_r_name, true},
+					{"CARDINALITY", fld_statistics, true},
 					{"RECORD_LENGTH", fld_integer, true},
 					{"KEY_LENGTH", fld_integer, true},
 					{"ACCESS_PATH", fld_short_description, false}
