@@ -101,6 +101,10 @@ SqlPackage::ExplainResultSet::ExplainResultSet(ThrowStatusExceptionWrapper* stat
 		resultEntry.levelNull = FB_FALSE;
 		resultEntry.level = planEntry->level;
 
+		resultEntry.objectTypeNull = !planEntry->objectType.has_value();
+		if (planEntry->objectType.has_value())
+			resultEntry.objectType = planEntry->objectType.value();
+
 		resultEntry.packageNameNull = planEntry->packageName.hasData() ? FB_FALSE : FB_TRUE;
 		if (planEntry->packageName.hasData())
 			resultEntry.packageName.set(planEntry->packageName.c_str(), planEntry->packageName.length());
@@ -165,6 +169,7 @@ SqlPackage::SqlPackage(MemoryPool& pool)
 					{"RECORD_SOURCE_ID", fld_gen_val, false},
 					{"PARENT_RECORD_SOURCE_ID", fld_gen_val, true},
 					{"LEVEL", fld_integer, false},
+					{"OBJECT_TYPE", fld_obj_type, true},
 					{"PACKAGE_NAME", fld_r_name, true},
 					{"OBJECT_NAME", fld_r_name, true},
 					{"ALIAS", fld_r_name, true},

@@ -23,6 +23,7 @@
 #ifndef JRD_RECORD_SOURCE_H
 #define JRD_RECORD_SOURCE_H
 
+#include <optional>
 #include "../common/classes/array.h"
 #include "../common/classes/objects_array.h"
 #include "../common/classes/NestConst.h"
@@ -104,6 +105,7 @@ namespace Jrd
 		Firebird::string className{getPool()};
 		Firebird::ObjectsArray<Firebird::string> description{getPool()};
 		Firebird::ObjectsArray<PlanEntry> children{getPool()};
+		std::optional<ObjectType> objectType;
 		MetaName packageName;
 		MetaName objectName;
 		MetaName alias;

@@ -267,6 +267,7 @@ void ProcedureScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsig
 	planEntry.description.add() = "Procedure " + printName(tdbb, m_procedure->getName().toString(), m_alias) + " Scan";
 	printOptInfo(planEntry.description);
 
+	planEntry.objectType = obj_procedure;
 	planEntry.packageName = m_procedure->getName().package;
 	planEntry.objectName = m_procedure->getName().identifier;
 

@@ -275,6 +275,11 @@ public:
 	bool isVirtual() const;
 	bool isView() const;
 
+	ObjectType getObjectType() const
+	{
+		return isView() ? obj_view : obj_relation;
+	}
+
 	bool isReplicating(thread_db* tdbb);
 
 	// global temporary relations attributes

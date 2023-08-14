@@ -145,6 +145,7 @@ void BitmapTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, uns
 
 	printInversion(tdbb, m_inversion, planEntry.description, true);
 
+	planEntry.objectType = m_relation->getObjectType();
 	planEntry.objectName = m_relation->rel_name;
 
 	if (m_alias.hasData() && m_relation->rel_name != m_alias)
