@@ -2190,6 +2190,8 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			if (fb_utils::implicit_domain(object_name.object.c_str()))
 				DFW_post_work(transaction, dfw_delete_global, &desc2, &schemaDesc, 0);
 
+			MET_eval_relation_fields_dependency(tdbb, transaction, &desc);
+
 			break;
 
 		case rel_prc_prms:
@@ -4525,6 +4527,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			RelationPermanent::newVersion(tdbb, object_name);
 
 			set_system_flag(tdbb, rpb->rpb_record, f_rfr_sys_flag);
+			MET_eval_relation_fields_dependency(tdbb, transaction, &desc);
 			break;
 
 		case rel_classes:

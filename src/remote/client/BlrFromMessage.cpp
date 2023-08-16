@@ -241,6 +241,12 @@ void BlrFromMessage::buildBlr(IMessageMetadata* metadata)
 				dtype = dtype_text;
 				break;
 
+			case SQL_ROWTYPE:
+				appendUChar(blr_rowtype);
+				appendUShort(len);
+				dtype = dtype_rowtype;
+				break;
+
 			default:
 				Arg::Gds(isc_dsql_sqlda_value_err).raise();
 				break;

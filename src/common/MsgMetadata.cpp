@@ -452,6 +452,15 @@ void MsgMetadata::assign(IMessageMetadata* from)
 		items[index].charSet = from->getCharSet(&status, index);
 		check(&status);
 
+		if (items[index].type == SQL_ROWTYPE)
+		{
+			auto buff = from->getCompositeDescriptor(&status, index);
+			items[index].compositeDescriptor.append(
+				reinterpret_cast<const char*>(buff + sizeof(USHORT)),
+				*reinterpret_cast<const USHORT*>(buff));
+			check(&status);
+		}
+
 		items[index].finished = true;
 		check(&status);
 	}

@@ -532,6 +532,7 @@ public:
 		TYPE_WINDOW_CLAUSE_FRAME,
 		TYPE_WINDOW_CLAUSE_FRAME_EXTENT,
 		TYPE_PACKAGE_REFERENCE,
+		TYPE_ROW_VALUE_EXPRESSION,
 
 		// Bool types
 		TYPE_BINARY_BOOL,
@@ -906,6 +907,7 @@ public:
 	}
 
 	virtual void setParameterName(dsql_par* parameter) const = 0;
+	virtual void setParameterCompositeDescriptor(dsql_par* parameter) const {};
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) = 0;
 
 	ValueExprNode* dsqlFieldRemapper(FieldRemapper& visitor) override
@@ -950,6 +952,11 @@ public:
 
 public:
 	void setParameterName(dsql_par* /*parameter*/) const override
+	{
+		fb_assert(false);
+	}
+
+	void setParameterCompositeDescriptor(dsql_par* /*parameter*/) const override
 	{
 		fb_assert(false);
 	}
@@ -1575,7 +1582,9 @@ public:
 		TYPE_USING,
 
 		TYPE_EXT_INIT_PARAMETERS,
-		TYPE_EXT_TRIGGER
+		TYPE_EXT_TRIGGER,
+		TYPE_DECLARE_ROW,
+		TYPE_DECLARE_TYPE
 	};
 
 	enum WhichTrigger : UCHAR

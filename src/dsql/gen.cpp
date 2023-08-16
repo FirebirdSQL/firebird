@@ -91,9 +91,26 @@ void GEN_hidden_variables(DsqlCompilerScratch* dsqlScratch)
 
 	for (const auto var : dsqlScratch->hiddenVariables)
 	{
-		dsqlScratch->appendUChar(blr_dcl_variable);
-		dsqlScratch->appendUShort(var->number);
-		GEN_descriptor(dsqlScratch, &var->desc, true);
+		if (!var->desc.dsc_dtype == dtype_rowtype)
+		{
+			dsqlScratch->appendUChar(blr_dcl_variable);
+			dsqlScratch->appendUShort(var->number);
+			GEN_descriptor(dsqlScratch, &var->desc, true);
+		}
+		else
+		{
+			dsqlScratch->appendUChar(blr_dcl_variable);
+			dsqlScratch->appendUShort(var->number);
+			dsqlScratch->appendUChar(blr_rowtype);
+			dsqlScratch->appendUShort(var->desc.dsc_sub_count);
+			dsqlScratch->appendUShort(var->contextNum);
+			auto subDescriptor = var->desc.dsc_sub_first;
+			while (subDescriptor)
+			{
+				GEN_descriptor(dsqlScratch, subDescriptor, true);
+				subDescriptor = subDescriptor->dsc_next;
+			}
+		}
 	}
 
 	// Clear it for GEN_expr not regenerate them.
@@ -242,7 +259,21 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 			offset = FB_ALIGN(offset, align);
 		parameter->par_desc.dsc_address = (UCHAR*)(IPTR) offset;
 		offset += parameter->par_desc.dsc_length;
-		GEN_descriptor(dsqlScratch, &parameter->par_desc, true);
+
+		if (parameter->par_desc.dsc_dtype == dtype_rowtype)
+		{
+			dsqlScratch->appendUChar(blr_rowtype);
+			dsqlScratch->appendUShort(parameter->par_desc.dsc_sub_count);
+			dsqlScratch->appendUShort(0);
+			auto subDescriptor = parameter->par_desc.dsc_sub_first;
+			while (subDescriptor)
+			{
+				GEN_descriptor(dsqlScratch, subDescriptor, true);
+				subDescriptor = subDescriptor->dsc_next;
+			}
+		}
+		else
+			GEN_descriptor(dsqlScratch, &parameter->par_desc, true);
 	}
 
 	message->msg_length = offset;
@@ -447,6 +478,19 @@ void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool tex
 
 	case dtype_boolean:
 		dsqlScratch->appendUChar(blr_bool);
+		break;
+
+	case dtype_rowtype:
+		{
+			dsqlScratch->appendUChar(blr_rowtype);
+			dsqlScratch->appendUShort(desc->dsc_sub_count);
+			auto subDescriptor = desc->dsc_sub_first;
+			while (subDescriptor)
+			{
+				GEN_descriptor(dsqlScratch, subDescriptor, texttype);
+				subDescriptor = subDescriptor->dsc_next;
+			}
+		}
 		break;
 
 	default:

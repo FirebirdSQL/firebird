@@ -78,6 +78,7 @@ typedef struct
 #define SQL_TYPE_TIME                      560
 #define SQL_TYPE_DATE                      570
 #define SQL_INT64                          580
+#define SQL_ROWTYPE			             32746
 #define SQL_TIMESTAMP_TZ_EX              32748
 #define SQL_TIME_TZ_EX                   32750
 #define SQL_INT128                       32752

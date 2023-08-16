@@ -43,6 +43,7 @@ Maximum alignments for corresponding data types are defined in dsc.h
  *  and also add the required entries to all of the arrays below.
  */
 inline constexpr unsigned char DTYPE_BLR_MAX = blr_blob_id;
+inline constexpr UCHAR dtype_aligned	= dtype_varying;
 
 /*
  the blr types are defined in blr.h
@@ -51,7 +52,6 @@ No need to worry about blr_blob or ?blr_blob_id
 
 */
 
-#include "../common/dsc.h"
 #include "../jrd/RecordNumber.h"
 
 static inline constexpr USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
@@ -77,7 +77,8 @@ static inline constexpr USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
 	dtype_timestamp_tz,			/* blr_timestamp_tz == 29 */
 	dtype_ex_time_tz,			/* blr_ex_time_tz == 30 */
 	dtype_ex_timestamp_tz,		/* blr_ex_timestamp_tz == 31 */
-	0, 0, 0,
+	dtype_rowtype,				/* blr_rowtype == 32 */
+	0, 0,
 	dtype_timestamp,			/* blr_timestamp == 35 */
 	0,
 	dtype_varying,				/* blr_varying == 37 */
@@ -118,7 +119,8 @@ static inline constexpr USHORT type_alignments[DTYPE_TYPE_MAX] =
 	sizeof(GDS_TIME),			/* dtype_sql_time_tz */
 	sizeof(GDS_DATE),			/* dtype_timestamp_tz */
 	sizeof(GDS_TIME),			/* dtype_ex_time_tz */
-	sizeof(GDS_DATE)			/* dtype_ex_timestamp_tz */
+	sizeof(GDS_DATE),			/* dtype_ex_timestamp_tz */
+	0							/* dtype_rowtype */
 };
 
 static inline constexpr USHORT type_lengths[DTYPE_TYPE_MAX] =
@@ -151,7 +153,8 @@ static inline constexpr USHORT type_lengths[DTYPE_TYPE_MAX] =
 	sizeof(ISC_TIME_TZ),			/* dtype_sql_time_tz */
 	sizeof(ISC_TIMESTAMP_TZ),		/* dtype_timestamp_tz */
 	sizeof(ISC_TIME_TZ_EX),			/* dtype_ex_time_tz */
-	sizeof(ISC_TIMESTAMP_TZ_EX)		/* dtype_ex_timestamp_tz */
+	sizeof(ISC_TIMESTAMP_TZ_EX),	/* dtype_ex_timestamp_tz */
+	0								/* dtype_rowtype */
 };
 
 
@@ -187,7 +190,8 @@ static inline constexpr USHORT type_significant_bits[DTYPE_TYPE_MAX] =
 	0,							// dtype_sql_time_tz
 	0,							// dtype_timestamp_tz
 	0,							// dtype_ex_time_tz
-	0							// dtype_ex_timestamp_tz
+	0,							// dtype_ex_timestamp_tz
+	0							// dtype_rowtype
 };
 
 #endif /* JRD_ALIGN_H */

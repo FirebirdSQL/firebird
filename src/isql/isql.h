@@ -40,6 +40,7 @@
 #include <stdlib.h>
 #include <firebird/Interface.h>
 #include "firebird/impl/msg_helper.h"
+#include "../common/MsgUtil.h"
 
 // Define lengths used in isql.e
 
@@ -287,6 +288,8 @@ struct IsqlVar
 	CSetId charSet;
 	bool nullable;
 	short* nullInd;
+	const char* compositeDescriptor = nullptr;
+	unsigned subfieldsNum = 0;
 
 	union TypeMix
 	{
@@ -312,6 +315,8 @@ struct IsqlVar
 		void* setPtr;
 	};
 	TypeMix value;
+
+	Firebird::Array<Firebird::MsgUtil::SubfieldData> subfields;
 };
 
 class IsqlWireStats

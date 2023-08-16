@@ -126,6 +126,180 @@ static void save_trigger_data(thread_db*, Triggers&, jrd_rel*, Statement*, blb*,
 static bool verify_TRG_ignore_perm(thread_db*, const QualifiedName&);
 
 
+bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const MetaName& name, dsc* desc,
+	MapFieldInfo* fieldInfoMap)
+{
+/**************************************
+ *
+ *  M E T _ g e t _ c o m p o s i t e _ t y p e
+ *
+ **************************************
+ *
+ * Functional description
+ *  Fetch composite descriptor related to field
+ *
+ **************************************/
+	SET_TDBB(tdbb);
+	Attachment* attachment = tdbb->getAttachment();
+	bool found = false;
+	bool fromTable = false;
+
+	AutoCacheRequest handle(tdbb, irq_l_composite, IRQ_REQUESTS);
+
+	MetaName relationName;
+	dsc tempDesc;
+	FieldInfo* fieldInfo = nullptr;
+	FieldInfo** nextSubfieldInfo = nullptr;
+
+	FOR(REQUEST_HANDLE handle)
+		FLD IN RDB$FIELDS
+		WITH FLD.RDB$FIELD_NAME EQ name.c_str()
+	{
+		if (DSC_make_descriptor(&tempDesc,
+								FLD.RDB$FIELD_TYPE,
+								FLD.RDB$FIELD_SCALE,
+								FLD.RDB$FIELD_LENGTH,
+								FLD.RDB$FIELD_SUB_TYPE,
+								FLD.RDB$CHARACTER_SET_ID,
+								FLD.RDB$COLLATION_ID))
+		{
+			found = true;
+			relationName = FLD.RDB$RELATION_NAME;
+
+			if (FLD.RDB$NULL_FLAG.NULL && FLD.RDB$NULL_FLAG == 0)
+				tempDesc.dsc_flags |= DSC_nullable;
+
+			if (fieldInfoMap)
+			{
+				MetaNamePair namePair(name, "");
+				fieldInfo = fieldInfoMap->get(namePair);
+				if (!fieldInfo)
+					fieldInfo = fieldInfoMap->put(namePair);
+
+				nextSubfieldInfo = &fieldInfo->subFirst;
+
+				fieldInfo->nullable = FLD.RDB$NULL_FLAG.NULL || FLD.RDB$NULL_FLAG == 0;
+
+				if (FLD.RDB$DEFAULT_VALUE.NULL)
+					fieldInfo->defaultValue = NULL;
+				else
+					fieldInfo->defaultValue = parse_field_default_blr(tdbb, &FLD.RDB$DEFAULT_VALUE);
+
+				if (FLD.RDB$VALIDATION_BLR.NULL)
+					fieldInfo->validationExpr = NULL;
+				else
+				{
+					fieldInfo->validationExpr = parse_field_validation_blr(tdbb,
+						&FLD.RDB$VALIDATION_BLR, name);
+				}
+			}
+		}
+	}
+	END_FOR
+
+	if (!found)
+	{
+		if (!MET_lookup_relation(tdbb, name))
+			ERR_post(Arg::Gds(isc_dyn_composite_not_fount) << name.c_str());
+
+		if (DSC_make_descriptor(&tempDesc, blr_rowtype3, 0, 0, 0, 0, 0))
+								// FLD.RDB$FIELD_TYPE,
+								// FLD.RDB$FIELD_SCALE,
+								// FLD.RDB$FIELD_LENGTH,		// calc from subfields
+								// FLD.RDB$FIELD_SUB_TYPE,
+								// FLD.RDB$CHARACTER_SET_ID,	// should use
+								// FLD.RDB$COLLATION_ID))		// table collation
+		{
+			relationName = name;
+			fromTable = true;
+			found = true;
+		}
+	}
+
+	auto subFieldCount = 0;
+	auto next = &tempDesc.dsc_sub_first;
+	AutoCacheRequest handle1(tdbb, irq_l_composite_subfields, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE handle1)
+		REL IN RDB$RELATION_FIELDS CROSS
+		FLD IN RDB$FIELDS
+		WITH REL.RDB$RELATION_NAME EQ relationName.c_str()
+		AND FLD.RDB$FIELD_NAME EQ REL.RDB$FIELD_SOURCE
+	{
+		auto nextSub = FB_NEW_POOL(*tdbb->getDefaultPool()) dsc;
+		if (DSC_make_descriptor(nextSub,
+								FLD.RDB$FIELD_TYPE,
+								FLD.RDB$FIELD_SCALE,
+								FLD.RDB$FIELD_LENGTH,
+								FLD.RDB$FIELD_SUB_TYPE,
+								FLD.RDB$CHARACTER_SET_ID,
+								FLD.RDB$COLLATION_ID))
+		{
+			if (FLD.RDB$NULL_FLAG.NULL && FLD.RDB$NULL_FLAG == 0)
+				nextSub->dsc_flags |= DSC_nullable;
+			*next = nextSub;
+			next = &nextSub->dsc_next;
+			subFieldCount++;
+
+			if (!fromTable && fieldInfoMap)
+			{
+				MetaName fieldIdString;
+				fieldIdString.printf("%d", REL.RDB$FIELD_POSITION);
+
+				MetaNamePair namePair(name, fieldIdString);
+
+				// use fieldInfoMap as a holder for subfield info's memory
+				// to be able to transfer ownership of this memory to execution state
+				*nextSubfieldInfo = fieldInfoMap->get(namePair);
+				if (!*nextSubfieldInfo)
+					*nextSubfieldInfo = fieldInfoMap->put(namePair);
+
+				(*nextSubfieldInfo)->nullable = FLD.RDB$NULL_FLAG.NULL || FLD.RDB$NULL_FLAG == 0;
+				fieldInfo->nullable &= (*nextSubfieldInfo)->nullable;
+
+				(*nextSubfieldInfo)->fieldId = REL.RDB$FIELD_POSITION;
+
+				if (FLD.RDB$DEFAULT_VALUE.NULL)
+					(*nextSubfieldInfo)->defaultValue = NULL;
+				else
+					(*nextSubfieldInfo)->defaultValue = parse_field_default_blr(tdbb, &FLD.RDB$DEFAULT_VALUE);
+
+				if (FLD.RDB$VALIDATION_BLR.NULL)
+					(*nextSubfieldInfo)->validationExpr = NULL;
+				else
+				{
+					(*nextSubfieldInfo)->validationExpr = parse_field_validation_blr(tdbb,
+						&FLD.RDB$VALIDATION_BLR, FLD.RDB$FIELD_NAME);
+				}
+
+				nextSubfieldInfo = &(*nextSubfieldInfo)->next;
+			}
+		}
+	}
+	END_FOR
+
+	if (subFieldCount == 0)
+	{
+		ERR_post(Arg::Gds(isc_dyn_composite_not_fount) << name.c_str());
+	}
+
+	*desc = tempDesc;
+	desc->dsc_sub_count = subFieldCount;
+
+	desc->dsc_length = FLAG_BYTES(desc->dsc_sub_count);
+
+	next = &desc->dsc_sub_first;
+	while(*next)
+	{
+		if ((*next)->dsc_dtype >= dtype_aligned)
+			desc->dsc_length = FB_ALIGN(desc->dsc_length, type_alignments[(*next)->dsc_dtype]);
+		desc->dsc_length += (*next)->dsc_length;
+		next = &(*next)->dsc_next;
+	}
+
+	return found;
+}
+
 void MET_get_domain(thread_db* tdbb, MemoryPool& csbPool, const QualifiedName& name, dsc* desc,
 	FieldInfo* fieldInfo)
 {
@@ -557,6 +731,108 @@ ULONG MET_align(const dsc* desc, ULONG value)
 	return FB_ALIGN(value, alignment);
 }
 
+void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, const dsc* relation)
+{
+/**************************************
+ *
+ *      M E T _ e v a l _ r e l a t i o n _ f i e l d s _ d e p e n d e n c y
+ *
+ **************************************
+ *
+ * Functional description
+ *      Somebody is modifying RDB$RELATION_FIELDS, check the "type of table" dependencies
+ *      Find all procedures and triggers and schedule a BLR validate.
+ *      Find all functions and schedule a BLR validate.
+ *
+ **************************************/
+	SET_TDBB(tdbb);
+	Attachment* attachment = tdbb->getAttachment();
+
+	dsc relation_name;
+	AutoCacheRequest request(tdbb, irq_g_relations_depended_on, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request)
+		X IN RDB$RELATION_FIELDS WITH
+			X.RDB$RELATION_NAME EQ relation->dsc_address
+	{
+		relation_name.makeText(sizeof(X.RDB$RELATION_NAME) - 1, CS_METADATA,
+			(UCHAR*) X.RDB$RELATION_NAME);
+		SCL_check_relation(tdbb, &relation_name, SCL_alter);
+
+		AutoCacheRequest request2(tdbb, irq_m_rel_fields1, IRQ_REQUESTS);
+
+		FOR(REQUEST_HANDLE request2)
+			DEP IN RDB$DEPENDENCIES CROSS
+			PRC IN RDB$PROCEDURES
+				WITH DEP.RDB$DEPENDED_ON_NAME EQ X.RDB$RELATION_NAME AND
+					 DEP.RDB$DEPENDED_ON_TYPE EQ obj_relation AND
+					 DEP.RDB$DEPENDENT_TYPE EQ obj_procedure AND
+					 DEP.RDB$DEPENDENT_NAME EQ PRC.RDB$PROCEDURE_NAME AND
+					 PRC.RDB$PACKAGE_NAME MISSING
+		{
+			MetaName proc_name(PRC.RDB$PROCEDURE_NAME);
+
+			dsc desc;
+			desc.makeText(proc_name.length(), CS_METADATA, (UCHAR*) proc_name.c_str());
+
+			DeferredWork* dw2 =
+				DFW_post_work(transaction, dfw_modify_procedure, &desc, PRC.RDB$PROCEDURE_ID);
+			DFW_post_work_arg(transaction, dw2, NULL, 0, dfw_arg_check_blr);
+			DFW_post_work_arg(transaction, dw2, NULL, 0, dfw_arg_drop_routine_cache);
+		}
+		END_FOR
+
+		request2.reset(tdbb, irq_m_rel_fields2, IRQ_REQUESTS);
+
+		FOR(REQUEST_HANDLE request2)
+			DEP IN RDB$DEPENDENCIES CROSS
+			TRG IN RDB$TRIGGERS
+				WITH DEP.RDB$DEPENDED_ON_NAME EQ X.RDB$RELATION_NAME AND
+					 DEP.RDB$DEPENDED_ON_TYPE EQ obj_relation AND
+					 DEP.RDB$DEPENDENT_TYPE EQ obj_trigger AND
+					 DEP.RDB$DEPENDENT_NAME EQ TRG.RDB$TRIGGER_NAME
+		{
+			MetaName trigger_name(TRG.RDB$TRIGGER_NAME);
+			MetaName trigger_relation_name(TRG.RDB$RELATION_NAME);
+
+			dsc desc;
+			desc.makeText(trigger_name.length(), CS_METADATA, (UCHAR*) trigger_name.c_str());
+
+			DeferredWork* dw2 = DFW_post_work(transaction, dfw_modify_trigger, &desc, 0);
+			DFW_post_work_arg(transaction, dw2, NULL, TRG.RDB$TRIGGER_TYPE, dfw_arg_trg_type);
+
+			desc.dsc_length = trigger_relation_name.length();
+			desc.dsc_address = (UCHAR*) trigger_relation_name.c_str();
+			DFW_post_work_arg(transaction, dw2, &desc, 0, dfw_arg_check_blr);
+			DFW_post_work_arg(transaction, dw2, &desc, 0, dfw_arg_drop_routine_cache);
+		}
+		END_FOR
+
+		request2.reset(tdbb, irq_m_rel_fields3, IRQ_REQUESTS);
+
+		FOR(REQUEST_HANDLE request2)
+			DEP IN RDB$DEPENDENCIES CROSS
+			FUN IN RDB$FUNCTIONS
+				WITH DEP.RDB$DEPENDED_ON_NAME EQ X.RDB$RELATION_NAME AND
+					 DEP.RDB$DEPENDED_ON_TYPE EQ obj_relation AND
+					 DEP.RDB$DEPENDENT_TYPE EQ obj_udf AND
+					 DEP.RDB$DEPENDENT_NAME EQ FUN.RDB$FUNCTION_NAME AND
+					 FUN.RDB$PACKAGE_NAME MISSING
+		{
+			MetaName name(FUN.RDB$FUNCTION_NAME);
+
+			dsc desc;
+			desc.makeText(name.length(), CS_METADATA, (UCHAR*) name.c_str());
+
+			DeferredWork* dw2 =
+				DFW_post_work(transaction, dfw_modify_function, &desc, FUN.RDB$FUNCTION_ID);
+			DFW_post_work_arg(transaction, dw2, NULL, 0, dfw_arg_check_blr);
+			DFW_post_work_arg(transaction, dw2, NULL, 0, dfw_arg_drop_routine_cache);
+		}
+		END_FOR
+	}
+	END_FOR
+}
 
 Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const dsc* schemaName, const dsc* fieldSource)
 {
@@ -653,6 +929,8 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 			nameDesc.dsc_length = triggerRelationName.length();
 			nameDesc.dsc_address = (UCHAR*) triggerRelationName.c_str();
 			DFW_post_work_arg(transaction, dw2, &nameDesc, &schemaDesc, 0, dfw_arg_check_blr);
+			if (DEP.RDB$FIELD_NAME.NULL)
+				DFW_post_work_arg(transaction, dw2, &nameDesc, 0, dfw_arg_drop_routine_cache);
 		}
 		END_FOR
 
@@ -2864,7 +3142,16 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 				Array<NestConst<Parameter> >::iterator ptr, end;
 				for (ptr = paramArray.begin(), end = paramArray.end(); ptr < end; ++ptr, ++desc)
 				{
-					const Parameter* parameter = *ptr;
+					Parameter* parameter = *ptr;
+
+					if (parameter->prm_desc.dsc_dtype == dtype_rowtype)
+					{
+						FieldInfo fieldInfo;
+						dsc desc;
+						MET_get_composite_type(tdbb, *attachment->att_pool, parameter->prm_field_source, &desc);
+						parameter->prm_desc = desc;
+					}
+
 					// check for parameter to be null, this can only happen if the
 					// parameter numbers get out of sync. This was added to fix bug
 					// 10534. -Shaunak Mistry 12-May-99
@@ -2872,7 +3159,7 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 					{
 						*desc = parameter->prm_desc;
 						length = MET_align(&(*desc), length);
-						desc->dsc_address = (UCHAR *) (IPTR) length;
+						desc->setAddressRecursively((UCHAR *) (IPTR) length);
 						length += desc->dsc_length;
 					}
 				}
@@ -4574,6 +4861,10 @@ void MET_store_dependency(thread_db* tdbb,
 	case obj_package_constant:
 		dpdo_name = &dependency.name;
 		break;
+	case obj_packaged_type:
+		name = *dependency.name;
+		dpdo_name = &name;
+		break;
 	}
 
 	MetaName field_name;
@@ -4637,6 +4928,16 @@ void MET_store_dependency(thread_db* tdbb,
 				 X.RDB$FIELD_NAME MISSING AND
 				 X.RDB$DEPENDENT_TYPE = dependency_type AND
 				 X.RDB$PACKAGE_NAME EQUIV NULLIF(dpdo_name->package.c_str(), '')
+		{
+			found = true;
+		}
+		END_FOR
+
+		// AAM: do not store dependencies for packaged types on the same package
+		AutoCacheRequest request1(tdbb, irq_g_packaged_types, IRQ_REQUESTS);
+		FOR(REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction) X IN RDB$PACKAGED_TYPES WITH
+			X.RDB$FIELD_SOURCE = dpdo_name->c_str() AND
+			X.RDB$PACKAGE_NAME EQUIV NULLIF(object_name.c_str(), '')
 		{
 			found = true;
 		}

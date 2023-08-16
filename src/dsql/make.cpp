@@ -107,7 +107,7 @@ void DsqlDescMaker::fromNode(DsqlCompilerScratch* scratch, dsc* desc,
 	DEV_BLKCHK(node, dsql_type_nod);
 
 	// If we already know the datatype, don't worry about anything.
-	if (node->getDsqlDesc().dsc_dtype)
+	if (node->getDsqlDesc().dsc_dtype && node->getDsqlDesc().dsc_dtype != dtype_rowtype)
 		*desc = node->getDsqlDesc();
 	else
 		node->make(scratch, desc);
@@ -479,6 +479,15 @@ FieldNode* MAKE_field(dsql_ctx* context, dsql_fld* field, ValueListNode* indices
 		node->setDsqlDesc(desc);
 	}
 
+	// TODO: MAYBE WE SHOULD GENERATE CHAINED DESCRIPTOR FOR ROWTYPES HERE?
+	if (desc.dsc_dtype == dtype_rowtype)
+	{
+		// METD_get_domain(jrd_tra* transaction, TypeClause* field, dsc* desc);
+		// METD_get_composite_type(jrd_tra* transaction, TypeClause* field, Dsc* desc);
+		METD_get_composite_type_descriptors(tdbb->getTransaction(), field, &desc);
+		node->setDsqlDesc(desc);
+	}
+
 	if ((field->flags & FLD_nullable) || (context->ctx_flags & CTX_outer_join))
 	{
 		desc = node->getDsqlDesc();
@@ -487,6 +496,41 @@ FieldNode* MAKE_field(dsql_ctx* context, dsql_fld* field, ValueListNode* indices
 	}
 
 	return node;
+}
+
+/**
+
+ 	MAKE_field
+
+    @brief	Make up a dsql_fld from descriptor.
+
+
+    @param field
+    @param desc
+
+ **/
+void MAKE_field(dsql_fld* field, const dsc* desc)
+{
+	DEV_BLKCHK(field, dsql_type_fld);
+
+	field->dtype = desc->dsc_dtype;
+	field->scale = desc->dsc_scale;
+	field->subType = desc->dsc_sub_type;
+	field->length = desc->dsc_length;
+
+	if (desc->dsc_dtype <= dtype_any_text)
+	{
+		field->collationId = DSC_GET_COLLATE(desc);
+		field->charSetId = DSC_GET_CHARSET(desc);
+	}
+	else if (desc->dsc_dtype == dtype_blob)
+	{
+		field->charSetId = desc->dsc_scale;
+		field->collationId = desc->dsc_flags >> 8;
+	}
+
+	if (desc->dsc_flags & DSC_nullable)
+		field->flags |= FLD_nullable;
 }
 
 
@@ -596,7 +640,10 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 	parameter->par_rel_alias = nullptr;
 
 	if (node)
+	{
 		MAKE_parameter_names(parameter, node);
+		MAKE_parameter_composite(parameter, node);
+	}
 
 	// If the parameter is used declared, set SQLDA index
 	if (sqlda_flag)
@@ -641,6 +688,22 @@ void MAKE_parameter_names(dsql_par* parameter, const ValueExprNode* item)
 {
 	fb_assert(parameter && item);
 	item->setParameterName(parameter);
+}
+
+/**
+
+	MAKE_parameter_composite
+
+	@brief  Determine composite flags if needed
+
+	@param parameter
+	@param item
+
+**/
+void MAKE_parameter_composite(dsql_par* parameter, const ValueExprNode* item)
+{
+	fb_assert(parameter && item);
+	item->setParameterCompositeDescriptor(parameter);
 }
 
 

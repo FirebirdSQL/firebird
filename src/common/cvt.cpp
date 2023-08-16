@@ -2237,6 +2237,21 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				return;
 			}
 
+		case dtype_rowtype:
+			{
+				char* text = "ROWTYPE";	// TODO: should we recursevily convert all subfields?
+
+				dsc intermediate;
+				intermediate.dsc_dtype = dtype_text;
+				intermediate.dsc_ttype() = ttype_ascii;
+				intermediate.makeText(static_cast<USHORT>(strlen(text)), CS_ASCII,
+					reinterpret_cast<UCHAR*>(text));
+
+				CVT_move_common(&intermediate, to, decSt, cb);
+
+				return;
+			}
+
 		default:
 			fb_assert(false);
 			[[fallthrough]];
@@ -2351,6 +2366,10 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			break;
 		}
 		break;
+
+	case dtype_rowtype:
+		cb->err(Arg::Gds(isc_random) << "A composite type cannot be converted to a type with a different structure");
+		break;
 	}
 
 	if (from->dsc_dtype == dtype_array || from->dsc_dtype == dtype_blob)
@@ -2381,6 +2400,11 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err, const Exception* o
 	{
 		fb_assert(false);
 		err(Arg::Gds(isc_badblk));
+	}
+
+	if (desc->dsc_dtype == dtype_rowtype)
+	{
+		err(Arg::Gds(isc_random) << "A composite type cannot be converted to a type with a different structure");
 	}
 
 	if (desc->dsc_dtype == dtype_blob)

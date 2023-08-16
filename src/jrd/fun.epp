@@ -1020,7 +1020,7 @@ static ULONG get_scalar_array(thread_db* tdbb,
 }
 
 
-static void invoke(thread_db* tdbb,
+static void invoke_impl(thread_db* tdbb,
 				   const Function* function,
 				   const Parameter* return_ptr,
 				   impure_value* value,
@@ -1042,7 +1042,7 @@ static void invoke(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
-	START_CHECK_FOR_EXCEPTIONS(function->fun_exception_message.c_str());
+	// START_CHECK_FOR_EXCEPTIONS(function->fun_exception_message.c_str());
 	if (function->fun_return_arg)
 	{
 		CALL_UDF<void>(tdbb, function->fun_entrypoint, args);
@@ -1222,6 +1222,20 @@ static void invoke(thread_db* tdbb,
 		else
 			result_is_null = true;
 	}
+	// END_CHECK_FOR_EXCEPTIONS(function->fun_exception_message.c_str());
+}
+
+static void invoke(thread_db* tdbb,
+				   const Function* function,
+				   const Parameter* return_ptr,
+				   impure_value* value,
+				   UDF_ARG* args,
+				   const udf_blob* const return_blob_struct,
+				   bool& result_is_null,
+				   UdfError& udfError)
+{
+	START_CHECK_FOR_EXCEPTIONS(function->fun_exception_message.c_str());
+	invoke_impl(tdbb, function, return_ptr, value, args, return_blob_struct, result_is_null, udfError);
 	END_CHECK_FOR_EXCEPTIONS(function->fun_exception_message.c_str());
 }
 

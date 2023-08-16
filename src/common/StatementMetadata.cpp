@@ -47,6 +47,7 @@ static constexpr UCHAR DESCRIBE_VARS[] =
 	isc_info_sql_relation,
 	isc_info_sql_owner,
 	isc_info_sql_alias,
+	isc_info_sql_composite_descriptor,
 	isc_info_sql_describe_end
 };
 
@@ -358,6 +359,10 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 						case isc_info_truncated:
 							--buffer;
 							finishDescribe = true;
+							break;
+
+						case isc_info_sql_composite_descriptor:
+							getStringInfo(&buffer, bufferEnd, &param->compositeDescriptor);
 							break;
 
 						case isc_info_error:

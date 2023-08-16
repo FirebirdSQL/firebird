@@ -36,6 +36,7 @@ enum class PackageItemType : USHORT
 	PROCEDURE,
 	TABLE,
 	CONSTANT,
+	PACKAGE_TYPE,
 	META_SIZE
 };
 
@@ -267,6 +268,14 @@ public:
 		}
 
 		PackageItemType type;
+		static Item create(DeclarePackageTypeNode* packageType)
+		{
+			Item item;
+			item.type = PACKAGE_TYPE;
+			item.packageType = PackageItemType::PACKAGE_TYPE;
+			item.dsqlScratch = NULL;
+			return item;
+		}
 
 		union
 		{
@@ -274,6 +283,7 @@ public:
 			CreateAlterProcedureNode* procedure;
 			CreateRelationNode* table;
 			CreatePackageConstantNode* constant;
+			DeclarePackageTypeNode* packageType;
 		};
 
 		DsqlCompilerScratch* dsqlScratch;
@@ -290,6 +300,7 @@ public:
 		  procedureNames(pool),
 		  tableNames(pool),
 		  constantNames(pool),
+		  packageTypeNames(pool),
 		  owner(pool)
 	{
 	}
@@ -329,6 +340,7 @@ public:
 	ItemsNameArray constantNames;
 	std::optional<SqlSecurity> ssDefiner;
 	MetaId id;
+	Firebird::SortedArray<MetaName> packageTypeNames;
 
 private:
 	MetaName owner;

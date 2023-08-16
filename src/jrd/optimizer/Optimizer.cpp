@@ -149,7 +149,10 @@ namespace
 		SKD_dec128,					// dtype_dec128
 		SKD_int128,					// dtype_int128
 		SKD_sql_time_tz,			// dtype_sql_time_tz
-		SKD_timestamp_tz			// dtype_timestamp_tz
+		SKD_timestamp_tz,			// dtype_timestamp_tz
+		0,
+		0,
+		SKD_rowtype					// dtype_rowtype
 	};
 
 	struct SortField
@@ -1535,8 +1538,9 @@ void Optimizer::generateAggregateDistincts(MapNode* map)
 			asb->intl = desc->isText() && desc->getTextType() != ttype_none &&
 				desc->getTextType() != ttype_binary && desc->getTextType() != ttype_ascii;
 
+			auto sort_key_index = 0;
 			sort_key_def* sort_key = asb->keyItems.getBuffer(asb->intl ? 2 : 1);
-			sort_key->setSkdOffset();
+			sort_key[sort_key_index].setSkdOffset();
 
 			UCHAR direction = SKD_ascending;
 			if (aggNode->sort)
@@ -1552,36 +1556,36 @@ void Optimizer::generateAggregateDistincts(MapNode* map)
 				const USHORT key_length = ROUNDUP(INTL_key_length(tdbb,
 					INTL_TEXT_TO_INDEX(desc->getTextType()), desc->getStringLength()), sizeof(SINT64));
 
-				sort_key->setSkdLength(SKD_bytes, key_length);
-				sort_key->skd_flags = direction;
-				sort_key->skd_vary_offset = 0;
+				sort_key[sort_key_index].setSkdLength(SKD_bytes, key_length);
+				sort_key[sort_key_index].skd_flags = direction;
+				sort_key[sort_key_index].skd_vary_offset = 0;
 
-				++sort_key;
-				sort_key->setSkdOffset(&sort_key[-1]);
-				asb->length = sort_key->getSkdOffset();
+				++sort_key_index;
+				sort_key[sort_key_index].setSkdOffset(&(sort_key + sort_key_index)[-1]);
+				asb->length = sort_key[sort_key_index].getSkdOffset();
 			}
 
 			fb_assert(desc->dsc_dtype < FB_NELEM(sort_dtypes));
-			sort_key->setSkdLength(sort_dtypes[desc->dsc_dtype], desc->dsc_length);
+			sort_key[sort_key_index].setSkdLength(sort_dtypes[desc->dsc_dtype], desc->dsc_length);
 
-			if (!sort_key->skd_dtype)
+			if (!sort_key[sort_key_index].skd_dtype)
 				ERR_post(Arg::Gds(isc_invalid_sort_datatype) << Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
 
 			if (desc->dsc_dtype == dtype_varying)
 			{
 				// allocate space to store varying length
-				sort_key->skd_vary_offset = sort_key->getSkdOffset() + ROUNDUP(desc->dsc_length, sizeof(SLONG));
-				asb->length = sort_key->skd_vary_offset + sizeof(USHORT);
+				sort_key[sort_key_index].skd_vary_offset = sort_key[sort_key_index].getSkdOffset() + ROUNDUP(desc->dsc_length, sizeof(SLONG));
+				asb->length = sort_key[sort_key_index].skd_vary_offset + sizeof(USHORT);
 			}
 			else
-				asb->length += sort_key->getSkdLength();
+				asb->length += sort_key[sort_key_index].getSkdLength();
 
 			asb->length = ROUNDUP(asb->length, sizeof(SLONG));
 			// dimitr:	allocate an extra longword for the purely artificial counter,
 			// 			see AggNode::aggPass() for details; the length remains rounded properly
 			asb->length += sizeof(ULONG);
 
-			sort_key->skd_flags = direction;
+			sort_key[sort_key_index].skd_flags = direction;
 			asb->impure = csb->allocImpure<impure_agg_sort>();
 			asb->desc = *desc;
 
@@ -1829,8 +1833,6 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 	if (sort->unique)
 		map->flags |= SortedStream::FLAG_UNIQUE;
 
-    sort_key_def* prev_key = nullptr;
-
 	// Loop thru sort keys building sort keys.  Actually, to handle null values
 	// correctly, two sort keys are made for each field, one for the null flag
 	// and one for field itself.
@@ -1839,12 +1841,18 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 
 	SortedStream::SortMap::Item* map_item = map->items.getBuffer(items);
 	sort_key_def* sort_key = map->keyItems.getBuffer(2 * sort->expressions.getCount());
+
+	// We have to depend on indexes instead of pointers due to map->items and map->keyItems
+	// possible realocation for rowtype internal fields
+	auto map_item_index = 0;
+	auto sort_key_index = 0;
+	auto prev_key_index = 0;
 	const SortDirection* direction = sort->direction.begin();
 	const NullsPlacement* nullOrder = sort->nullOrder.begin();
 
 	for (NestConst<ValueExprNode>* node_ptr = sort->expressions.begin();
 		 node_ptr != end_node;
-		 ++node_ptr, ++nullOrder, ++direction, ++map_item)
+		 ++node_ptr, ++nullOrder, ++direction, ++map_item_index)
 	{
 		// Pick up sort key expression.
 
@@ -1872,53 +1880,78 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 		}
 
 		// Make key for null flag
-		sort_key->setSkdLength(SKD_text, 1);
-		sort_key->setSkdOffset(prev_key);
+		sort_key[sort_key_index].setSkdLength(SKD_text, 1);
+		sort_key[sort_key_index].setSkdOffset((sort_key + prev_key_index));
 
 		// Handle nulls placement
-		sort_key->skd_flags = SKD_ascending;
+		sort_key[sort_key_index].skd_flags = SKD_ascending;
 
 		// Have SQL-compliant nulls ordering for ODS11+
 		if ((*nullOrder == NULLS_DEFAULT && *direction != ORDER_DESC) || *nullOrder == NULLS_FIRST)
-			sort_key->skd_flags |= SKD_descending;
+			sort_key[sort_key_index].skd_flags |= SKD_descending;
 
-		prev_key = sort_key++;
-
-		// Make key for sort key proper
-		fb_assert(desc->dsc_dtype < FB_NELEM(sort_dtypes));
-		sort_key->setSkdLength(sort_dtypes[desc->dsc_dtype], desc->dsc_length);
-		sort_key->setSkdOffset(&sort_key[-1], desc);
-		sort_key->skd_flags = SKD_ascending;
-		if (*direction == ORDER_DESC)
-			sort_key->skd_flags |= SKD_descending;
-
-		if (!sort_key->skd_dtype)
-			ERR_post(Arg::Gds(isc_invalid_sort_datatype) << Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
-
-		if (sort_key->skd_dtype == SKD_varying || sort_key->skd_dtype == SKD_cstring)
+		// Makes key for sort key proper
+		auto putSortKeyLambda = [&] (dsc* desc, ULONG nullOffset, NestConst<ValueExprNode> node = nullptr)
 		{
-			if (desc->getTextType() == ttype_binary)
-				sort_key->skd_flags |= SKD_binary;
+			fb_assert(desc->dsc_dtype < FB_NELEM(sort_dtypes));
+			sort_key[sort_key_index].setSkdLength(sort_dtypes[desc->dsc_dtype],
+													desc->isRowType() ? FLAG_BYTES(desc->dsc_sub_count) : desc->dsc_length);
+			sort_key[sort_key_index].setSkdOffset(&(sort_key + sort_key_index)[-1], desc);
+			sort_key[sort_key_index].skd_flags = SKD_ascending;
+			if (*direction == ORDER_DESC)
+				sort_key[sort_key_index].skd_flags |= SKD_descending;
+
+			if (!sort_key[sort_key_index].skd_dtype)
+				ERR_post(Arg::Gds(isc_invalid_sort_datatype) << Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
+
+			if (sort_key[sort_key_index].skd_dtype == SKD_varying || sort_key[sort_key_index].skd_dtype == SKD_cstring)
+			{
+				if (desc->getTextType() == ttype_binary)
+					sort_key[sort_key_index].skd_flags |= SKD_binary;
+			}
+
+			if (SortedStream::hasVolatileKey(desc) && !refetchFlag)
+				sort_key[sort_key_index].skd_flags |= SKD_separate_data;
+
+			map_item[map_item_index].reset(node, nullOffset);
+			map_item[map_item_index].desc = *desc;
+			map_item[map_item_index].desc.dsc_address = (UCHAR*)(IPTR) sort_key[sort_key_index].getSkdOffset();
+
+			if (const auto fieldNode = nodeAs<FieldNode>(node))
+			{
+				map_item[map_item_index].stream = fieldNode->fieldStream;
+				map_item[map_item_index].fieldId = fieldNode->fieldId;
+			}
+		};
+
+		prev_key_index = sort_key_index++;
+
+		auto nullOffset = (sort_key + prev_key_index)->getSkdOffset();
+		putSortKeyLambda(desc, nullOffset, node);
+
+		prev_key_index = sort_key_index++;
+
+		if (desc->isRowType())
+		{
+			// add slots for internal fields
+			sort_key = map->keyItems.getBuffer(map->keyItems.getCount() + desc->dsc_sub_count, true);
+			map_item = map->items.getBuffer(map->items.getCount() + desc->dsc_sub_count, true);
+
+			desc = desc->dsc_sub_first;
+			while (desc)
+			{
+				map_item_index++;
+				putSortKeyLambda(desc, nullOffset);
+
+				prev_key_index = sort_key_index++;
+				desc = desc->dsc_next;
+			}
 		}
 
-		if (SortedStream::hasVolatileKey(desc) && !refetchFlag)
-			sort_key->skd_flags |= SKD_separate_data;
-
-		map_item->reset(node, prev_key->getSkdOffset());
-		map_item->desc = *desc;
-		map_item->desc.dsc_address = (UCHAR*)(IPTR) sort_key->getSkdOffset();
-
-		prev_key = sort_key++;
-
-		if (const auto fieldNode = nodeAs<FieldNode>(node))
-		{
-			map_item->stream = fieldNode->fieldStream;
-			map_item->fieldId = fieldNode->fieldId;
-		}
 	}
 
-	fb_assert(prev_key);
-	ULONG map_length = prev_key ? ROUNDUP(prev_key->getSkdOffset() + prev_key->getSkdLength(), sizeof(SLONG)) : 0;
+	fb_assert((sort_key + prev_key_index));
+	ULONG map_length = (sort_key + prev_key_index) ? ROUNDUP((sort_key + prev_key_index)->getSkdOffset() + (sort_key + prev_key_index)->getSkdLength(), sizeof(SLONG)) : 0;
 	map->keyLength = map_length;
 	ULONG flag_offset = map_length;
 	map_length += fieldCount;
@@ -1933,11 +1966,11 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 		if (item.desc->dsc_dtype >= dtype_aligned)
 			map_length = FB_ALIGN(map_length, type_alignments[item.desc->dsc_dtype]);
 
-		map_item->reset(item.stream, (SSHORT) item.id, flag_offset++);
-		map_item->desc = *item.desc;
-		map_item->desc.dsc_address = (UCHAR*)(IPTR) map_length;
+		map_item[map_item_index].reset(item.stream, (SSHORT) item.id, flag_offset++);
+		map_item[map_item_index].desc = *item.desc;
+		map_item[map_item_index].desc.dsc_address = (UCHAR*)(IPTR) map_length;
 		map_length += item.desc->dsc_length;
-		map_item++;
+		map_item_index++;
 	}
 
 	// Make fields for record numbers and transaction ids for all streams
@@ -1945,15 +1978,15 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 	map_length = ROUNDUP(map_length, sizeof(SINT64));
 	for (const auto stream : streams)
 	{
-		map_item->reset(stream, SortedStream::ID_DBKEY);
-		map_item->desc.makeInt64(0, (SINT64*)(IPTR) map_length);
-		map_length += map_item->desc.dsc_length;
-		map_item++;
+		map_item[map_item_index].reset(stream, SortedStream::ID_DBKEY);
+		map_item[map_item_index].desc.makeInt64(0, (SINT64*)(IPTR) map_length);
+		map_length += map_item[map_item_index].desc.dsc_length;
+		map_item_index++;
 
-		map_item->reset(stream, SortedStream::ID_TRANS);
-		map_item->desc.makeInt64(0, (SINT64*)(IPTR) map_length);
-		map_length += map_item->desc.dsc_length;
-		map_item++;
+		map_item[map_item_index].reset(stream, SortedStream::ID_TRANS);
+		map_item[map_item_index].desc.makeInt64(0, (SINT64*)(IPTR) map_length);
+		map_length += map_item[map_item_index].desc.dsc_length;
+		map_item_index++;
 	}
 
 	if (dbkeyStreams && dbkeyStreams->hasData())
@@ -1962,31 +1995,31 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 
 		for (const auto stream : *dbkeyStreams)
 		{
-			map_item->reset(stream, SortedStream::ID_DBKEY);
-			map_item->desc.makeInt64(0, (SINT64*)(IPTR) map_length);
-			map_length += map_item->desc.dsc_length;
-			map_item++;
+			map_item[map_item_index].reset(stream, SortedStream::ID_DBKEY);
+			map_item[map_item_index].desc.makeInt64(0, (SINT64*)(IPTR) map_length);
+			map_length += map_item[map_item_index].desc.dsc_length;
+			map_item_index++;
 		}
 
 		for (const auto stream : *dbkeyStreams)
 		{
-			map_item->reset(stream, SortedStream::ID_DBKEY_VALID);
-			map_item->desc.makeText(1, CS_BINARY, (UCHAR*)(IPTR) map_length);
-			map_length += map_item->desc.dsc_length;
-			map_item++;
+			map_item[map_item_index].reset(stream, SortedStream::ID_DBKEY_VALID);
+			map_item[map_item_index].desc.makeText(1, CS_BINARY, (UCHAR*)(IPTR) map_length);
+			map_length += map_item[map_item_index].desc.dsc_length;
+			map_item_index++;
 		}
 	}
 
 	for (const auto stream : streams)
 	{
-		map_item->reset(stream, SortedStream::ID_DBKEY_VALID);
-		map_item->desc.makeText(1, CS_BINARY, (UCHAR*)(IPTR) map_length);
-		map_length += map_item->desc.dsc_length;
-		map_item++;
+		map_item[map_item_index].reset(stream, SortedStream::ID_DBKEY_VALID);
+		map_item[map_item_index].desc.makeText(1, CS_BINARY, (UCHAR*)(IPTR) map_length);
+		map_length += map_item[map_item_index].desc.dsc_length;
+		map_item_index++;
 	}
 
-	fb_assert(map_item == map->items.end());
-	fb_assert(sort_key == map->keyItems.end());
+	fb_assert((map_item + map_item_index) == map->items.end());
+	fb_assert((sort_key + sort_key_index) == map->keyItems.end());
 
 	map_length = ROUNDUP(map_length, sizeof(SLONG));
 

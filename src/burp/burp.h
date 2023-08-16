@@ -125,7 +125,9 @@ enum rec_type {
 	rec_publication,		// Publication
 	rec_pub_table,			// Publication table
 	rec_schema,				// Schema
-	rec_constants			// Constants
+	rec_constants,			// Constants
+	rec_packaged_types,		// Packaged types
+	rec_packaged_type_relation_fields	// Packaged type relation fields
 };
 
 
@@ -365,6 +367,7 @@ enum att_type {
 	att_field_generator_name,
 	att_field_identity_type,
 	att_field_schema_name,
+	att_field_relation_name,	// FB6.0, ODS14
 
 	// Index attributes
 
@@ -500,6 +503,7 @@ enum att_type {
 	att_functionarg_schema_name,
 	att_functionarg_field_source_schema_name,
 	att_functionarg_relation_schema_name,
+	att_functionarg_out_arg,
 
 	// TYPE relation attributes
 	att_type_name = SERIES,
@@ -727,6 +731,12 @@ enum att_type {
 	att_constant_source,
 	att_constant_schema_name,
 	att_constant_description,
+
+	// Packaged types
+	att_ptype_field_source = SERIES,
+	att_ptype_name,
+	att_ptype_package_name,
+	att_ptype_private_flag
 };
 
 
@@ -798,6 +808,7 @@ struct burp_fld
 	CollId		fld_collation_id;
 	RCRD_OFFSET	fld_sql;
 	RCRD_OFFSET	fld_null;
+	TEXT		fld_relation_name[GDS_NAME_LEN];
 };
 
 enum fld_flags_vals {
@@ -1229,6 +1240,7 @@ public:
 	Firebird::IRequest*	handles_get_user_privilege_req_handle1;
 	Firebird::IRequest*	handles_get_view_req_handle1;
 	Firebird::IRequest* handles_activateIndex_req_handle1;
+	Firebird::IRequest* handles_get_packaged_types_handle1;
 
 	// The handles_put.. are for backup.
 	Firebird::IRequest*	handles_put_index_req_handle1;

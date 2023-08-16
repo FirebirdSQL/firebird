@@ -274,6 +274,8 @@ const Format* CMP_format(thread_db* tdbb, CompilerScratch* csb, StreamType strea
 		else if (tail->csb_table_value_fun)
 			tail->csb_format = tail->csb_table_value_fun->recordFormat;
 		//// TODO: LocalTableSourceNode
+		else if (tail->csb_row_var_format)
+			tail->csb_format = tail->csb_row_var_format;
 		else
 			IBERROR(222);	// msg 222 bad blr - invalid stream
 	}
@@ -470,13 +472,13 @@ bool CMP_procedure_arguments(
 
 		for (auto& parameter : fields)
 		{
-			const auto argValue = argsByName.get(parameter->prm_name);
+			const auto argValue = argsByName.get(parameter->prm_is_composite ? parameter->prm_composite_name : parameter->prm_name);
 			const bool argExists = argsByName.exist(parameter->prm_name);
 
 			if (argValue)
 			{
 				*sourceArgIt = *argValue;
-				argsByName.remove(parameter->prm_name);
+				argsByName.remove(parameter->prm_is_composite ? parameter->prm_composite_name : parameter->prm_name);
 			}
 
 			if (!argValue || !*argValue)

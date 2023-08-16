@@ -166,6 +166,9 @@ inline constexpr int IMPLICIT_INTEGRITY_PREFIX_LEN = 6;
 // Default publication name
 inline constexpr const char* DEFAULT_PUBLICATION = "RDB$DEFAULT";
 
+// Composite type name
+const char* const IMPLICIT_COMPOSITE_TYPE_PREFIX = "RDB$COMPOSITE_TYPE";
+
 //*****************************************
 // System flag meaning - mainly Firebird.
 //*****************************************

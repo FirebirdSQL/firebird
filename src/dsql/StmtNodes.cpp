@@ -1501,6 +1501,45 @@ void CursorStmtNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		ValueListNode* list = cursor->rse->dsqlSelectList;
 
+		auto index = 0;
+		while(index < dsqlIntoStmt->items.getCount())
+		{
+			auto rowvar = nodeAs<VariableNode>(dsqlIntoStmt->items[index]);
+			if (rowvar && rowvar->dsqlVar->field->dtype == dtype_rowtype
+				&& !(dsqlIntoStmt->items.getCount() > 1 || list->items.getCount() == 1))
+			{
+				dsql_ctx* context;
+				for (DsqlContextStack::iterator stack(*dsqlScratch->context); stack.hasData(); ++stack)
+				{
+					context = stack.object();
+					if (context->ctx_alias.hasData() && context->ctx_flags & CTX_rowtype_var)
+					{
+						if (rowvar->dsqlVar->field->fld_name != context->ctx_alias)
+							continue;
+					}
+					else
+						continue;
+
+					ValueListNode* output = FB_NEW_POOL(dsqlScratch->getPool()) ValueListNode(dsqlScratch->getPool(), 1);
+					output->clear();
+					auto dsqlVar = dsqlScratch->resolveVariable(rowvar->dsqlVar->field->fld_name);
+
+					dsqlIntoStmt->items.remove(index);
+
+					auto currentfield = dsqlVar->field->fld_sub_first;
+					while (currentfield)
+					{
+						dsqlIntoStmt->items.insert(index, MAKE_field(context, currentfield, nullptr));
+						index++;
+						currentfield = currentfield->fld_next;
+					}
+					--index;
+					break;
+				}
+			}
+			++index;
+		}
+
 		if (list->items.getCount() != dsqlIntoStmt->items.getCount())
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-313) <<
@@ -2626,6 +2665,7 @@ string DeclareSubFuncNode::internalPrint(NodePrinter& printer) const
 	return "DeclareSubFuncNode";
 }
 
+// TODO: rowtype variables should work in sub function/procedures
 DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	MemoryPool& pool = dsqlScratch->getPool();
@@ -2651,6 +2691,14 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	dsqlFunction->udf_sub_type = returnType->subType;
 	dsqlFunction->udf_length = returnType->length;
 	dsqlFunction->udf_character_set_id = returnType->charSetId.value_or(CS_NONE);
+
+	DSC desc;
+	desc.dsc_dtype = dsqlFunction->udf_dtype;
+	desc.dsc_scale = dsqlFunction->udf_scale;
+	desc.dsc_sub_type = dsqlFunction->udf_sub_type;
+	desc.dsc_length = dsqlFunction->udf_length;
+	desc.setTextType(dsqlFunction->udf_dtype);
+	dsqlFunction->udf_outputs.add(desc);
 
 	if (dsqlDeterministic)
 		dsqlSignature.flags |= Signature::FLAG_DETERMINISTIC;
@@ -2747,6 +2795,11 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	blockScratch = FB_NEW_POOL(pool) DsqlCompilerScratch(pool,
 		dsqlScratch->getAttachment(), dsqlScratch->getTransaction(), statement, dsqlScratch);
 	blockScratch->clientDialect = dsqlScratch->clientDialect;
+
+	// copy local declarations to subscratch
+	for (const auto& localType : dsqlScratch->localCompositeTypeDeclarations)
+		blockScratch->localCompositeTypeDeclarations.put(localType.first, localType.second);
+
 	blockScratch->flags |=
 		DsqlCompilerScratch::FLAG_FUNCTION |
 		DsqlCompilerScratch::FLAG_SUB_ROUTINE |
@@ -2909,10 +2962,8 @@ DmlNode* DeclareSubProcNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 			dsc& fmtDesc = format->fmt_desc[i / 2u];
 			fmtDesc = parameter->prm_desc;
 
-			if (fmtDesc.dsc_dtype >= dtype_aligned)
-				format->fmt_length = FB_ALIGN(format->fmt_length, type_alignments[fmtDesc.dsc_dtype]);
-
-			fmtDesc.dsc_address = (UCHAR*)(IPTR) format->fmt_length;
+			format->fmt_length = MET_align(&fmtDesc, format->fmt_length);
+			fmtDesc.setAddressRecursively((UCHAR *) (IPTR) format->fmt_length);
 			format->fmt_length += fmtDesc.dsc_length;
 		}
 
@@ -2977,6 +3028,7 @@ string DeclareSubProcNode::internalPrint(NodePrinter& printer) const
 	return "DeclareSubProcNode";
 }
 
+// TODO: rowtype variables should work in sub function/procedures
 DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	MemoryPool& pool = dsqlScratch->getPool();
@@ -3164,6 +3216,184 @@ const StmtNode* DeclareSubProcNode::execute(thread_db* /*tdbb*/, Request* reques
 //--------------------
 
 
+static RegisterNode<DeclareLocalTypeNode> regDeclareTypeNode({blr_dcl_composite_type});
+
+DmlNode* DeclareLocalTypeNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
+{
+	MetaName compositeTypeName;
+	csb->csb_blr_reader.getMetaName(compositeTypeName);
+	DeclareLocalTypeNode* node = FB_NEW_POOL(pool) DeclareLocalTypeNode(pool, compositeTypeName);
+
+	node->defaultList = FB_NEW_POOL(pool) ValueListNode(pool);
+
+	auto count = node->fieldsNum = csb->csb_blr_reader.getByte();
+
+	node->desc = FB_NEW_POOL(pool) dsc;
+	node->desc->dsc_dtype = dtype_rowtype;
+	node->desc->dsc_sub_count = count;
+	auto next = &node->desc->dsc_sub_first;
+
+	FieldInfo** nextSubfieldInfo = nullptr;
+	auto fieldInfoMap = &csb->csb_map_field_info;
+
+	MetaNamePair namePair(compositeTypeName, "");
+	auto fieldInfo = fieldInfoMap->get(namePair);
+	if (!fieldInfo)
+		fieldInfo = fieldInfoMap->put(namePair);
+
+	fieldInfo->nullable = true;
+	fieldInfo->defaultValue = NULL;
+	fieldInfo->validationExpr = NULL;
+	nextSubfieldInfo = &fieldInfo->subFirst;
+
+	auto fieldId = 0;
+	ULONG offset = FLAG_BYTES(node->desc->dsc_sub_count);
+	while (count--)
+	{
+		*next = FB_NEW_POOL(pool) dsc;
+
+		MetaName tmp;
+		csb->csb_blr_reader.getMetaName(tmp);
+		node->fieldNameToIdMap.put(tmp, fieldId);
+
+		ItemInfo itemInfo;
+		const USHORT align = PAR_desc(tdbb, csb, *next, &itemInfo);
+
+		auto hasCheckConstraintFlag = csb->csb_blr_reader.getByte() == DeclareLocalTypeNode::HAS_CHECK_CONSTRAINT;
+
+		MetaName fieldIdString;
+		fieldIdString.printf("%d", fieldId);
+
+		MetaNamePair namePair(compositeTypeName, fieldIdString);
+		*nextSubfieldInfo = fieldInfoMap->get(namePair);
+		if (!*nextSubfieldInfo)
+			*nextSubfieldInfo = fieldInfoMap->put(namePair);
+
+		if (hasCheckConstraintFlag)
+		{
+			csb->csb_local_type_validation_desc = *next;
+			(*nextSubfieldInfo)->validationExpr = PAR_parse_boolean(tdbb, csb);
+			csb->csb_local_type_validation_desc = nullptr;
+		}
+
+		auto hasDefaultValueFlag = csb->csb_blr_reader.getByte() == DeclareLocalTypeNode::HAS_DEFAULT_VALUE;
+		if (hasDefaultValueFlag)
+			node->defaultList->add(PAR_parse_value(tdbb, csb));
+
+		(*nextSubfieldInfo)->nullable = itemInfo.nullable;
+		fieldInfo->nullable &= (*nextSubfieldInfo)->nullable;
+		(*nextSubfieldInfo)->fieldId = fieldId;
+		nextSubfieldInfo = &(*nextSubfieldInfo)->next;
+
+		if (align)
+			offset = FB_ALIGN(offset, align);
+
+		(*next)->dsc_address = (UCHAR*)(IPTR) offset;
+		offset += (*next)->dsc_length;
+
+		next = &(*next)->dsc_next;
+
+		fieldId++;
+	}
+
+	node->desc->dsc_length = offset;
+
+	csb->csb_local_type_declarations.put(node->name, node);
+
+	return node;
+}
+
+DeclareLocalTypeNode* DeclareLocalTypeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	MemoryPool& p = dsqlScratch->getAttachment()->dbb_pool;
+
+	const auto node = FB_NEW_POOL(p) DeclareLocalTypeNode(p, name);
+
+	dsql_fld* dsqlField = node->dsqlField = FB_NEW_POOL(p) dsql_fld(p);
+
+	dsqlField->typeOfName = name;
+	dsqlField->dtype = dtype_rowtype;
+	dsqlField->scale = 0;
+	dsqlField->length = 0;
+
+	node->defaultList = FB_NEW_POOL(p) ValueListNode(p);
+	auto next = &dsqlField->fld_sub_first;
+	auto onlyNulls = true;
+
+	for (auto& it : clauses)
+	{
+		auto clause = (static_cast<RelationNode::AddColumnClause*>(it.getObject()));
+		node->defaultList->add(clause->defaultValue ? doDsqlPass(dsqlScratch, clause->defaultValue->value) : nullptr);
+		onlyNulls &= !clause->defaultValue;
+
+		auto field = clause->field;
+
+		*next = FB_NEW_POOL(p) dsql_fld(p);
+		(*next)->fld_name = field->fld_name;
+		(*next)->fld_id = field->fld_id;
+		(*next)->dtype = field->dtype;
+		(*next)->scale = field->scale;
+		(*next)->subType = field->subType;
+		(*next)->charLength = field->charLength;
+		(*next)->charSetId = field->charSetId;
+		(*next)->charSet = field->charSet;
+		(*next)->length = field->length;
+		(*next)->notNull = clause->notNullSpecified;
+		(*next)->resolve(dsqlScratch);
+
+		dsqlField->length += (*next)->length;
+		dsqlField->fld_sub_count++;
+
+		next = &(*next)->fld_next;
+	}
+
+	// we have to clear the default list if there is no any default value
+	// to prevent not null violation on initialization if there are such subfields
+	if (onlyNulls)
+		node->defaultList->clear();
+
+	node->clauses = clauses;
+	dsqlField->length += FLAG_BYTES(dsqlField->fld_sub_count);
+
+	return node;
+}
+
+Firebird::string DeclareLocalTypeNode::internalPrint(NodePrinter& printer) const
+{
+	return "DeclareLocalTypeNode";
+}
+
+void DeclareLocalTypeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+
+}
+
+DeclareLocalTypeNode* DeclareLocalTypeNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	return nullptr;
+}
+
+DeclareLocalTypeNode* DeclareLocalTypeNode::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	return this;
+}
+
+DeclareLocalTypeNode* DeclareLocalTypeNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	return this;
+}
+
+const StmtNode* DeclareLocalTypeNode::execute(thread_db* tdbb, Request* request, ExeState* exeState) const
+{
+	if (request->req_operation == Request::req_evaluate)
+		request->req_operation = Request::req_return;
+
+	return parentStmt;
+}
+
+
+//--------------------
+
 static RegisterNode<DeclareVariableNode> regDeclareVariableNode({blr_dcl_variable});
 
 DmlNode* DeclareVariableNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
@@ -3175,6 +3405,40 @@ DmlNode* DeclareVariableNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerS
 	ItemInfo itemInfo;
 	PAR_desc(tdbb, csb, &node->varDesc, &itemInfo);
 
+	if (node->varDesc.dsc_dtype == dtype_rowtype)
+	{
+		node->compositeContextNum = itemInfo.compositeContextNum;
+		StreamType stream = csb->nextStream();
+		while (stream != itemInfo.compositeContextNum)
+			stream = csb->nextStream();
+		CompilerScratch::csb_repeat* t1 = CMP_csb_element(csb, stream);
+		t1->csb_flags |= csb_used | csb_active | csb_row_var;
+		t1->csb_stream = stream;
+
+		auto count = node->varDesc.dsc_sub_count;
+		auto format = Format::newFormat(csb->csb_pool, count);
+		format->fmt_length = FLAG_BYTES(count);
+		auto nextDesc = &node->varDesc.dsc_sub_first;
+
+		for (FB_SIZE_T i = 0; i < count; i++)
+		{
+			fb_assert(*nextDesc);
+			dsc& desc = format->fmt_desc[i] = **nextDesc;
+			desc.dsc_next = nullptr;
+			nextDesc = &(*nextDesc)->dsc_next;
+
+			if (desc.dsc_dtype >= dtype_aligned)
+				format->fmt_length = FB_ALIGN(format->fmt_length, type_alignments[desc.dsc_dtype]);
+
+			desc.dsc_address = (UCHAR*)(IPTR) format->fmt_length;
+			format->fmt_length += desc.dsc_length;
+		}
+
+		t1->csb_row_var_format = format;
+
+		node->compositeRecord = FB_NEW_POOL(pool) Record(pool, csb->csb_rpt[itemInfo.compositeContextNum].csb_row_var_format);
+	}
+
 	csb->csb_variables = vec<DeclareVariableNode*>::newVector(
 		*tdbb->getDefaultPool(), csb->csb_variables, node->varId + 1);
 
@@ -3182,6 +3446,8 @@ DmlNode* DeclareVariableNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerS
 	{
 		csb->csb_dbg_info->varIndexToName.get(node->varId, itemInfo.name);
 		csb->csb_map_item_info.put(Item(Item::TYPE_VARIABLE, node->varId), itemInfo);
+		if (node->varDesc.dsc_dtype == dtype_rowtype)
+			csb->csb_map_context_variable_names.put(itemInfo.compositeContextNum, itemInfo.name);
 	}
 
 	if (csb->collectingDependencies() && itemInfo.explicitCollation)
@@ -3249,6 +3515,10 @@ DeclareVariableNode* DeclareVariableNode::pass1(thread_db* tdbb, CompilerScratch
 DeclareVariableNode* DeclareVariableNode::pass2(thread_db* /*tdbb*/, CompilerScratch* csb)
 {
 	impureOffset = csb->allocImpure<impure_value>();
+	if (varDesc.dsc_dtype == dtype_rowtype)
+	{
+		varDesc.setAddressRecursively(compositeRecord->getData());
+	}
 	return this;
 }
 
@@ -3256,11 +3526,18 @@ const StmtNode* DeclareVariableNode::execute(thread_db* tdbb, Request* request, 
 {
 	if (request->req_operation == Request::req_evaluate)
 	{
-		impure_value* variable = request->getImpure<impure_value>(impureOffset);
-		variable->vlu_desc = varDesc;
-		variable->vlu_desc.clearFlags();
+		if (varDesc.dsc_dtype == dtype_rowtype)
+		{
+			request->req_rpb[compositeContextNum].rpb_record = compositeRecord;
+		}
+		else
+		{
+			impure_value* variable = request->getImpure<impure_value>(impureOffset);
+			variable->vlu_desc = varDesc;
+			variable->vlu_desc.clearFlags();
 
-		variable->makeValueAddress(*tdbb->getDefaultPool());
+			variable->makeValueAddress(*tdbb->getDefaultPool());
+		}
 
 		request->req_operation = Request::req_return;
 	}
@@ -5999,7 +6276,7 @@ DmlNode* InitVariableNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, Compiler
 
 	vec<DeclareVariableNode*>* vector = csb->csb_variables;
 
-	if (!vector || node->varId >= vector->count())
+	if ((!vector || node->varId >= vector->count()))
 		PAR_error(csb, Arg::Gds(isc_badvarnum));
 
 	return node;
@@ -6059,6 +6336,13 @@ const StmtNode* InitVariableNode::execute(thread_db* tdbb, Request* request, Exe
 		if (varInfo)
 		{
 			dsc* toDesc = &varImpure->vlu_desc;
+
+			if (varDecl->varDesc.dsc_dtype == dtype_rowtype)
+			{
+				*toDesc = varDecl->varDesc;
+				memset(toDesc->dsc_address, 0xFF, FLAG_BYTES(toDesc->dsc_sub_count));
+			}
+
 			toDesc->dsc_flags |= DSC_null;
 
 			MapFieldInfo::ValueType fieldInfo;
@@ -6167,6 +6451,10 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			node->returns[index - 1]->type->fld_next = newRet->type;
 	}
 
+	dsqlScratch->genLocalTypes(localDeclList);
+	node->localDeclList = localDeclList;
+	node->body = body;
+
 	LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, &parameters, &returns);
 
 	if (localDeclList)
@@ -6217,13 +6505,71 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		 i != dsqlScratch->outputVariables.end();
 		 ++i)
 	{
-		VariableNode* varNode = FB_NEW_POOL(*tdbb->getDefaultPool()) VariableNode(*tdbb->getDefaultPool());
-		varNode->dsqlVar = *i;
+		auto field = (*i)->field;
+		auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+		if (isRowtype)
+		{
+			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str());
+			dsql_fld* fld = NULL;
 
-		dsql_par* param = MAKE_parameter(statement->getReceiveMsg(), true, true,
-			(i - dsqlScratch->outputVariables.begin()) + 1, varNode);
-		param->par_node = varNode;
-		DsqlDescMaker::fromNode(dsqlScratch, &param->par_desc, varNode, true);
+			if (!relation && field->packageName.hasData())
+			{
+				METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, fld);
+				field->fieldSource = field->typeOfName;
+				field->fld_sub_first = fld;
+			}
+
+			if (relation)
+			{
+				field->fld_sub_first = relation->rel_fields;
+				field->fld_sub_count = relation->rel_fields_number;
+			}
+			else if (!fld)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+				Arg::Gds(isc_invalid_parameter_decl) <<
+				Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+			}
+
+			calculateCompositeFieldLength(*field);
+			field->flags |= FLD_nullable;
+
+			VariableNode* varNode = FB_NEW_POOL(*tdbb->getDefaultPool()) VariableNode(*tdbb->getDefaultPool());
+			varNode->dsqlVar = *i;
+
+			dsql_par* param = MAKE_parameter(statement->getReceiveMsg(), true, true,
+				(i - dsqlScratch->outputVariables.begin()) + 1,
+				varNode);
+			param->par_node = varNode;
+			DsqlDescMaker::fromField(&param->par_desc, field);
+
+			// If the field is a rowtype, we need to create a descriptor for each field in the rowtype
+			// it's not recursive (so we can store only one level of rowtype), it should be improved later
+			if (field->fld_sub_first)
+			{
+				auto* nextField = &field->fld_sub_first;
+				auto* nextDsc = &param->par_desc.dsc_sub_first;
+				while (*nextField)
+				{
+					*nextDsc = FB_NEW_POOL(*tdbb->getDefaultPool()) dsc;
+					DsqlDescMaker::fromField(*nextDsc, *nextField);
+					nextDsc = &(*nextDsc)->dsc_next;
+					nextField = &(*nextField)->fld_next;
+					param->par_desc.dsc_sub_count++;
+				}
+			}
+		}
+		else
+		{
+			VariableNode* varNode = FB_NEW_POOL(*tdbb->getDefaultPool()) VariableNode(*tdbb->getDefaultPool());
+			varNode->dsqlVar = *i;
+
+			dsql_par* param = MAKE_parameter(statement->getReceiveMsg(), true, true,
+				(i - dsqlScratch->outputVariables.begin()) + 1,
+				varNode);
+			param->par_node = varNode;
+			DsqlDescMaker::fromNode(dsqlScratch, &param->par_desc, varNode, true);
+		}
 	}
 
 	if (returns.hasData())
@@ -6287,6 +6633,59 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (localDeclList)
 		localDeclList->genBlr(dsqlScratch);
+
+	// TODO ROWTYPE FBPORT: uncomment and fix this after merge
+	// dsqlScratch->putLocalTypes();
+
+	// auto inputCompositeVarIdOffset = 0;
+	// for (const auto variable : dsqlScratch->variables)
+	// {
+	// 	auto field = variable->field;
+	// 	auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+
+	// 	if (subRoutine && !isRowtype && variable->type == dsql_var::TYPE_INPUT)
+	// 		continue;
+
+	// 	if (subRoutine && isRowtype)
+	// 	{
+	// 		if (variable->type == dsql_var::TYPE_INPUT)
+	// 			inputCompositeVarIdOffset++;
+	// 	}
+	// 	else if (isRowtype)
+	// 	{
+	// 		if (auto relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str()))
+	// 		{
+	// 			field->fld_sub_first = relation->rel_fields;
+	// 			field->fld_sub_count = relation->rel_fields_number;
+	// 		}
+	// 		else if (field->packageName.hasData())
+	// 		{
+	// 			METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first);
+	// 			field->fieldSource = field->typeOfName;
+	// 		}
+
+	// 		if (!field->fld_sub_first)
+	// 		{
+	// 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+	// 			Arg::Gds(isc_invalid_parameter_decl) << Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+	// 		}
+
+	// 		dsql_ctx* new_context = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_ctx(*tdbb->getDefaultPool());
+	// 		variable->contextNum = new_context->ctx_context = dsqlScratch->contextNumber++;
+	// 		new_context->ctx_scope_level = dsqlScratch->scopeLevel;
+	// 		new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
+	// 		new_context->ctx_flags = CTX_rowtype_var;
+	// 		new_context->ctx_rowtype_var = variable;
+	// 		dsqlScratch->context->push(new_context);
+	// 	}
+
+	// 	dsqlScratch->putLocalVariable(variable, nullptr, {});
+	// }
+
+	// dsqlScratch->setPsql(true);
+
+	// dsqlScratch->putLocalVariables(localDeclList,
+	// 	USHORT( (subRoutine ? inputCompositeVarIdOffset : parameters.getCount() ) + returns.getCount()));
 
 	dsqlScratch->loopLevel = 0;
 
@@ -6880,6 +7279,45 @@ void ForNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (dsqlInto)
 	{
+		auto index = 0;
+		while(index < dsqlInto->items.getCount())
+		{
+			auto rowvar = nodeAs<VariableNode>(dsqlInto->items[index]);
+			if (rowvar && rowvar->dsqlVar->field->dtype == dtype_rowtype
+				&& !(dsqlInto->items.getCount() > 1 || list->items.getCount() == 1))
+			{
+				dsql_ctx* context;
+				for (DsqlContextStack::iterator stack(*dsqlScratch->context); stack.hasData(); ++stack)
+				{
+					context = stack.object();
+					if (context->ctx_alias.hasData() && context->ctx_flags & CTX_rowtype_var)
+					{
+						if (rowvar->dsqlVar->field->fld_name != context->ctx_alias)
+							continue;
+					}
+					else
+						continue;
+
+					ValueListNode* output = FB_NEW_POOL(dsqlScratch->getPool()) ValueListNode(dsqlScratch->getPool(), 1);
+					output->clear();
+					auto dsqlVar = dsqlScratch->resolveVariable(rowvar->dsqlVar->field->fld_name);
+
+					dsqlInto->items.remove(index);
+
+					auto currentfield = dsqlVar->field->fld_sub_first;
+					while (currentfield)
+					{
+						dsqlInto->items.insert(index, MAKE_field(context, currentfield, nullptr));
+						index++;
+						currentfield = currentfield->fld_next;
+					}
+					--index;
+					break;
+				}
+			}
+			++index;
+		}
+
 		if (list->items.getCount() != dsqlInto->items.getCount())
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-313) <<
@@ -8856,14 +9294,17 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 	Array<NestConst<ValueExprNode>> orgValues, newValues;
 
 	const auto assignments = nodeAs<CompoundStmtNode>(statement);
-	fb_assert(assignments);
+	// fb_assert(assignments);
 
-	for (FB_SIZE_T i = 0; i < assignments->statements.getCount(); ++i)
+	if (assignments)
 	{
-		AssignmentNode* const assign = nodeAs<AssignmentNode>(assignments->statements[i]);
-		fb_assert(assign);
-		orgValues.add(assign->asgnFrom);
-		newValues.add(assign->asgnTo);
+		for (FB_SIZE_T i = 0; i < assignments->statements.getCount(); ++i)
+		{
+			AssignmentNode* const assign = nodeAs<AssignmentNode>(assignments->statements[i]);
+			fb_assert(assign);
+			orgValues.add(assign->asgnFrom);
+			newValues.add(assign->asgnTo);
+		}
 	}
 
 	NestConst<RelationSourceNode> relation = nodeAs<RelationSourceNode>(dsqlRelation);
@@ -8953,6 +9394,108 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 	doDsqlPass(dsqlScratch, node->dsqlRelation, relation, false);
 	dsql_ctx* mod_context = dsqlGetContext(node->dsqlRelation);
 
+	if (fullRowUpdate)
+	{
+		dsql_rel* rel = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, relation->dsqlName.c_str());
+
+		if (!rel)
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+			Arg::Gds(isc_relnotdef) << Arg::Str(relation->dsqlName) <<
+			Arg::Gds(isc_dsql_line_col_error) << Arg::Num(relation->line) << Arg::Num(relation->column));
+		}
+
+		dsql_var* variable = dsqlScratch->makeVariable(nullptr, nullptr, dsql_var::TYPE_HIDDEN,
+			0, 0, dsqlScratch->variables.getCount() + dsqlScratch->hiddenVariables.getCount());
+
+		dsql_fld* field = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+		field->fld_name = relation->dsqlName.c_str();
+		field->fld_relation = rel;
+		field->typeOfTable = relation->dsqlName.c_str();
+		field->dtype = dtype_rowtype;
+		field->fld_sub_first = rel->rel_fields;
+		field->fld_sub_count = rel->rel_fields_number;
+		variable->field = field;
+
+		dsql_ctx* new_context = FB_NEW_POOL(dsqlScratch->getPool()) dsql_ctx(dsqlScratch->getPool());
+		new_context->ctx_context = dsqlScratch->contextNumber++;
+		new_context->ctx_scope_level = dsqlScratch->scopeLevel;
+		new_context->ctx_alias = new_context->ctx_internal_alias = relation->dsqlName.c_str();
+		new_context->ctx_flags = CTX_rowtype_var;
+		new_context->ctx_rowtype_var = variable;
+		variable->contextNum = new_context->ctx_context;
+
+		DsqlDescMaker::fromField(&variable->desc, variable->field);
+		// If the field is a rowtype, we need to create a descriptor for each field in the rowtype
+		// it's not recursive (so we can store only one level of rowtype), it should be improved later
+		if (field->fld_sub_first)
+		{
+			auto* nextField = &field->fld_sub_first;
+			auto* nextDsc = &variable->desc.dsc_sub_first;
+			while (*nextField)
+			{
+				*nextDsc = FB_NEW_POOL(dsqlScratch->getPool()) dsc;
+				DsqlDescMaker::fromField(*nextDsc, *nextField);
+				nextDsc = &(*nextDsc)->dsc_next;
+				nextField = &(*nextField)->fld_next;
+				variable->desc.dsc_sub_count++;
+			}
+		}
+
+		VariableNode* variableNode = FB_NEW_POOL(dsqlScratch->getPool()) VariableNode(dsqlScratch->getPool());
+		variableNode->line = line;
+		variableNode->column = column;
+		variableNode->dsqlVar = variable;
+
+		auto nextField = variableNode->dsqlVar->field->fld_sub_first;
+		while (nextField)
+		{
+			ValueExprNode* node;
+			if (!rowExpression)
+			{
+				node = FB_NEW_POOL(dsqlScratch->getPool()) DefaultNode(dsqlScratch->getPool(), relation->dsqlName, nextField->fld_name);
+			}
+			else
+			{
+				FieldNode* fieldNode = FB_NEW_POOL(dsqlScratch->getPool()) FieldNode(dsqlScratch->getPool(), new_context, nextField);
+				fieldNode->dsqlQualifier = variableNode->dsqlName;
+				fieldNode->dsqlName = nextField->fld_name;
+				node = fieldNode;
+			}
+
+			orgValues.add(node);
+			nextField = nextField->fld_next;
+		};
+
+
+		if (rowExpression)
+		{
+			auto row = nodeAs<RowValueExpressionNode>(rowExpression);
+			if (row)
+				row->defaultSource = field;
+
+			AssignmentNode* assign = FB_NEW_POOL(pool) AssignmentNode(pool);
+			assign->asgnFrom = rowExpression->dsqlPass(dsqlScratch);
+			assign->asgnTo = variableNode;
+			node->rowAssignmentNode = assign;
+
+			dsc desc;
+			DsqlDescMaker::fromNode(dsqlScratch, &desc, assign->asgnFrom);
+			if (desc.dsc_sub_count != orgValues.getCount())
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+						Arg::Gds(isc_dsql_var_count_err) <<
+						Arg::Gds(isc_dsql_line_col_error) << Arg::Num(line) << Arg::Num(column));
+			}
+		}
+
+		NestValueArray fields;
+		dsqlExplodeFields(mod_context->ctx_relation, fields, false);
+
+		for (auto& field : fields)
+			newValues.add(field);
+	}
+
 	// Process new context values.
 	for (auto& value : newValues)
 		value = doDsqlPass(dsqlScratch, value, false);
@@ -9014,9 +9557,12 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 	const auto assignStatements = FB_NEW_POOL(pool) CompoundStmtNode(pool);
 	node->statement = assignStatements;
 
-	assignStatements->statements.resize(assignments->statements.getCount());
+	assignStatements->statements.clear();
 
-	for (FB_SIZE_T j = 0; j < assignStatements->statements.getCount(); ++j)
+	if (node->rowAssignmentNode)
+		assignStatements->statements.insert(0, node->rowAssignmentNode);
+
+	for (FB_SIZE_T j = 0; j < orgValues.getCount(); ++j)
 	{
 		if (!PASS1_set_parameter_type(dsqlScratch, orgValues[j], newValues[j], false))
 			PASS1_set_parameter_type(dsqlScratch, newValues[j], orgValues[j], false);
@@ -9024,7 +9570,7 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 		AssignmentNode* assign = FB_NEW_POOL(pool) AssignmentNode(pool);
 		assign->asgnFrom = orgValues[j];
 		assign->asgnTo = newValues[j];
-		assignStatements->statements[j] = assign;
+		assignStatements->statements.add(assign);
 	}
 
 	// We do not allow cases like UPDATE T SET f1 = v1, f2 = v2, f1 = v3...
@@ -10070,7 +10616,8 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 	}
 	else
 	{
-		values = doDsqlPass(dsqlScratch, dsqlValues, false);
+		values = doDsqlPass(dsqlScratch, dsqlValues, dsqlScratch->isPsql());
+		// values = doDsqlPass(dsqlScratch, dsqlValues, false);
 		// If this INSERT belongs to some PSQL code block and has subqueries
 		// inside its VALUES part, signal the caller to create a savepoint frame.
 		// See bug #5613 (aka CORE-5337) for details.
@@ -10142,12 +10689,76 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 	const auto assignStatements = FB_NEW_POOL(dsqlScratch->getPool()) CompoundStmtNode(dsqlScratch->getPool());
 	node->statement = assignStatements;
 
+	AssignmentNode* assign = nullptr;
+	dsql_ctx* new_context = nullptr;
+
 	if (values)
 	{
 		if (fields.getCount() != values->items.getCount())
 		{
-			// count of column list and value list don't match
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+			// if we have only one value and it is a row value, we can split it into fields
+			if (values->items.getCount() == 1 && values->items[0]->getDsqlDesc().dsc_dtype == dtype_rowtype
+				&& fields.getCount() == values->items[0]->getDsqlDesc().dsc_sub_count)
+			{
+				// create hidden variable for "values list"
+				auto variableNode = FB_NEW_POOL(dsqlScratch->getPool()) VariableNode(dsqlScratch->getPool());
+				variableNode->dsqlVar = dsqlScratch->makeVariable(
+					nullptr, nullptr, dsql_var::TYPE_HIDDEN, 0, 0, dsqlScratch->variables.getCount() + dsqlScratch->hiddenVariables.getCount());
+
+				// add assign statement for hidden variable
+				auto temp = FB_NEW_POOL(dsqlScratch->getPool()) AssignmentNode(dsqlScratch->getPool());
+				temp->asgnFrom = values->items.pop();
+				temp->asgnTo = variableNode;
+				assign = temp;
+				// assignStatements->statements.add(temp);
+
+				// create context for hidden variable fields
+				new_context = FB_NEW_POOL(dsqlScratch->getPool()) dsql_ctx(dsqlScratch->getPool());
+				// new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
+				new_context->ctx_flags = CTX_rowtype_var;
+				new_context->ctx_rowtype_var = variableNode->dsqlVar;
+				// dsqlScratch->context->push(new_context);
+				new_context->ctx_context = dsqlScratch->contextNumber++;
+				new_context->ctx_scope_level = dsqlScratch->scopeLevel;
+				variableNode->dsqlVar->contextNum = new_context->ctx_context;
+
+				// iterate over descriptors and generate subfields
+				auto desc = &temp->asgnFrom->getDsqlDesc();
+
+				dsql_fld* tmpFld = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+				tmpFld->dtype = desc->dsc_dtype;
+				tmpFld->scale = desc->dsc_scale;
+				tmpFld->subType = desc->dsc_sub_type;
+				tmpFld->length = desc->dsc_length;
+				auto nextFld = &tmpFld->fld_sub_first;
+				desc = desc->dsc_sub_first;
+
+				variableNode->dsqlVar->field = tmpFld;
+
+				auto fieldIdCounter = 0;
+				while (desc)
+				{
+					tmpFld = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+					tmpFld->dtype = desc->dsc_dtype;
+					tmpFld->scale = desc->dsc_scale;
+					tmpFld->subType = desc->dsc_sub_type;
+					tmpFld->length = desc->dsc_length;
+					tmpFld->fld_id = fieldIdCounter++;
+					*nextFld = tmpFld;
+					nextFld = &tmpFld->fld_next;
+					desc = desc->dsc_next;
+
+					// generate fields from rowtype descriptor for replacement of "values list"
+					FieldNode* fieldNode = FB_NEW_POOL(dsqlScratch->getPool()) FieldNode(dsqlScratch->getPool(), new_context, tmpFld);
+					values->items.add(fieldNode);
+				}
+
+				variableNode->dsqlVar->field->fld_sub_count = fieldIdCounter;
+				variableNode->dsqlVar->desc = temp->asgnFrom->getDsqlDesc();
+			}
+			else
+				// count of column list and value list don't match
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 					  Arg::Gds(isc_dsql_var_count_err));
 		}
 
@@ -10214,7 +10825,13 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 
 	dsqlSetParametersName(dsqlScratch, assignStatements, node->target);
 
+	if (assign)
+		assignStatements->statements.insert(0, assign);
+
 	dsqlScratch->context->pop();
+
+	if (new_context)
+		dsqlScratch->context->push(new_context);
 
 	return node;
 }
@@ -10496,7 +11113,9 @@ void StoreNode::makeDefaults(thread_db* tdbb, CompilerScratch* csb)
 				if (assign)
 				{
 					const FieldNode* fieldNode = nodeAs<FieldNode>(assign->asgnTo);
-					fb_assert(fieldNode);
+					// fb_assert(fieldNode);
+					if (!fieldNode)
+						continue;
 
 					if (fieldNode && fieldNode->fieldStream == stream && fieldNode->fieldId == fieldId)
 					{
@@ -11268,7 +11887,7 @@ void ReturnNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->appendUChar(blr_assignment);
 	GEN_expr(dsqlScratch, value);
 	dsqlScratch->appendUChar(blr_variable);
-	dsqlScratch->appendUShort(0);
+	dsqlScratch->appendUShort(dsqlScratch->functionOutputVariableNumber);
 
 	if (dsqlScratch->aggregatePhaseReturn)
 		dsqlScratch->appendUChar(blr_leave);
@@ -12718,7 +13337,15 @@ static ValueListNode* dsqlPassArray(DsqlCompilerScratch* dsqlScratch, ValueListN
 	NestConst<ValueExprNode>* ptr2 = output->items.begin();
 
 	for (const NestConst<ValueExprNode>* const end = input->items.end(); ptr != end; ++ptr, ++ptr2)
+	{
 		*ptr2 = Node::doDsqlPass(dsqlScratch, *ptr);
+		// // auto so = (ExprNode*)ptr2;
+		// auto someptr = nodeAs<ValueListNode>(ptr2);
+		// if (someptr)
+		// {
+		// 	output->items.insert(0, someptr->items);
+		// }
+	}
 
 	return output;
 }
@@ -13065,6 +13692,47 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 	{
 		fb_assert(dsqlScratch->isPsql());
 
+		auto& dsqlInto = node->second;
+
+		auto index = 0;
+		while(index < dsqlInto->items.getCount())
+		{
+			auto rowvar = nodeAs<VariableNode>(dsqlInto->items[index]);
+			if (rowvar && rowvar->dsqlVar->field->dtype == dtype_rowtype
+				&& !(dsqlInto->items.getCount() > 1 || count == 1))
+			{
+				dsql_ctx* context;
+				for (DsqlContextStack::iterator stack(*dsqlScratch->context); stack.hasData(); ++stack)
+				{
+					context = stack.object();
+					if (context->ctx_alias.hasData() && context->ctx_flags & CTX_rowtype_var)
+					{
+						if (rowvar->dsqlVar->field->fld_name != context->ctx_alias)
+							continue;
+					}
+					else
+						continue;
+
+					ValueListNode* output = FB_NEW_POOL(dsqlScratch->getPool()) ValueListNode(dsqlScratch->getPool(), 1);
+					output->clear();
+					auto dsqlVar = dsqlScratch->resolveVariable(rowvar->dsqlVar->field->fld_name);
+
+					dsqlInto->items.remove(index);
+
+					auto currentfield = dsqlVar->field->fld_sub_first;
+					while (currentfield)
+					{
+						dsqlInto->items.insert(index, MAKE_field(context, currentfield, nullptr));
+						index++;
+						currentfield = currentfield->fld_next;
+					}
+					--index;
+					break;
+				}
+			}
+			++index;
+		}
+
 		if (count != node->second->items.getCount())
 		{
 			// count of column list and value list don't match
@@ -13213,6 +13881,9 @@ static void dsqlSetParameterName(DsqlCompilerScratch* dsqlScratch, ExprNode* exp
 	DEV_BLKCHK(relation, dsql_type_dsql_rel);
 
 	if (!exprNode)
+		return;
+
+	if (nodeAs<VariableNode>(fld_node))
 		return;
 
 	const FieldNode* fieldNode = nodeAs<FieldNode>(fld_node);

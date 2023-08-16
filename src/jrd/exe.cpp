@@ -148,6 +148,12 @@ string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 		s.printf("[input parameter number %d]", (oneBasedIndex - 1) / 2 + 1);
 	else if (type == Item::TYPE_PARAMETER && subType == 1)
 		s.printf("[output parameter number %d]", oneBasedIndex);
+	else if (type == Item::TYPE_FIELD)
+	{
+		MetaName variableName;
+		request->getStatement()->mapContextVariableNames.get(itemInfo->compositeContextNum, variableName);
+		s.printf("%s, subfield ID %d", variableName.c_str(), itemInfo->fieldId);
+	}
 
 	if (s.isEmpty())
 		s = UNKNOWN_STRING_MARK;
@@ -353,6 +359,8 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 	if (toVar && toVar->outerDecl)
 		request = toVar->getVarRequest(request);
 
+	const auto toField = nodeAs<FieldNode>(to);
+
 	AutoSetRestore2<Request*, thread_db> autoSetRequest(
 		tdbb, &thread_db::getRequest, &thread_db::setRequest, request);
 
@@ -363,7 +371,12 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 		missing = EVL_expr(tdbb, request, missing_node);
 
 	// Get descriptor of target field/parameter/variable, etc.
-	dsc* to_desc = EVL_assign_to(tdbb, to);
+	dsc* to_desc;
+	if (from_desc && from_desc->dsc_dtype == dtype_rowtype)	// this is dummy check for debug purposes	// TODO ROWTYPE remove
+		from_desc->dsc_dtype = dtype_rowtype;
+	to_desc = EVL_assign_to(tdbb, to);
+	if (to_desc && to_desc->dsc_dtype == dtype_rowtype)	// this is dummy check for debug purposes	// TODO ROWTYPE remove
+		to_desc->dsc_dtype = dtype_rowtype;
 
 	// NS: If we are assigning to NULL, we finished.
 	// This functionality is currently used to allow calling UDF routines
@@ -409,8 +422,12 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 				toVar->varInfo, from_desc, null == -1);
 		}
 
-		impure_flags = &varRequest->getImpure<impure_value>(
-			toVar->varDecl->impureOffset)->vlu_flags;
+		impure_flags = &varRequest->getImpure<impure_value>( toVar->varDecl->impureOffset)->vlu_flags;
+	}
+	else if (toField && toField->itemInfo)
+	{
+		EVL_validate(tdbb, Item(Item::TYPE_FIELD, toField->contextNum, toField->fieldId),
+				toField->itemInfo, from_desc, null == -1);
 	}
 
 	if (impure_flags)
@@ -422,109 +439,153 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 
 	if (!null)
 	{
-		// Validate range for datetime values
-
-		if (DTYPE_IS_DATE(from_desc->dsc_dtype))
+		auto assignmentWrapper = [&](dsc* from_desc, dsc* to_desc)
 		{
-			switch (from_desc->dsc_dtype)
+			// Validate range for datetime values
+			if (DTYPE_IS_DATE(from_desc->dsc_dtype))
 			{
-				case dtype_sql_date:
-					if (!TimeStamp::isValidDate(*(GDS_DATE*) from_desc->dsc_address))
-					{
-						ERR_post(Arg::Gds(isc_date_range_exceeded));
-					}
-					break;
-
-				case dtype_sql_time:
-				case dtype_sql_time_tz:
-				case dtype_ex_time_tz:
-					if (!TimeStamp::isValidTime(*(GDS_TIME*) from_desc->dsc_address))
-					{
-						ERR_post(Arg::Gds(isc_time_range_exceeded));
-					}
-					break;
-
-				case dtype_timestamp:
-				case dtype_timestamp_tz:
-				case dtype_ex_timestamp_tz:
-					if (!TimeStamp::isValidTimeStamp(*(GDS_TIMESTAMP*) from_desc->dsc_address))
-					{
-						ERR_post(Arg::Gds(isc_datetime_range_exceeded));
-					}
-					break;
-
-				default:
-					fb_assert(false);
-			}
-		}
-
-		// Strings will be validated in CVT_move()
-
-		if (DSC_EQUIV(from_desc, to_desc, false) && from_desc->dsc_address == to_desc->dsc_address)
-		{
-			// Self-assignment. No need to do anything.
-			return;
-		}
-		else if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
-		{
-			// ASF: Don't let MOV_move call blb::move because MOV
-			// will not pass the destination field to blb::move.
-
-			jrd_rel* relation = nullptr;
-			Record* record = nullptr;
-			USHORT fieldId = 0;
-			FB_UINT64 tempInstanceId = 0;
-
-			if (to)
-			{
-				const FieldNode* toField = nodeAs<FieldNode>(to);
-				if (toField)
+				switch (from_desc->dsc_dtype)
 				{
-					const auto rpb = &request->req_rpb[toField->fieldStream];
-					relation = rpb->rpb_relation;
-					record = rpb->rpb_record;
-					fieldId = toField->fieldId;
-					tempInstanceId = rpb->rpb_temp_instance_id;
+					case dtype_sql_date:
+						if (!TimeStamp::isValidDate(*(GDS_DATE*) from_desc->dsc_address))
+						{
+							ERR_post(Arg::Gds(isc_date_range_exceeded));
+						}
+						break;
+
+					case dtype_sql_time:
+					case dtype_sql_time_tz:
+					case dtype_ex_time_tz:
+						if (!TimeStamp::isValidTime(*(GDS_TIME*) from_desc->dsc_address))
+						{
+							ERR_post(Arg::Gds(isc_time_range_exceeded));
+						}
+						break;
+
+					case dtype_timestamp:
+					case dtype_timestamp_tz:
+					case dtype_ex_timestamp_tz:
+						if (!TimeStamp::isValidTimeStamp(*(GDS_TIMESTAMP*) from_desc->dsc_address))
+						{
+							ERR_post(Arg::Gds(isc_datetime_range_exceeded));
+						}
+						break;
+
+					default:
+						fb_assert(false);
 				}
-				else if (!(nodeAs<ParameterNode>(to) || nodeAs<VariableNode>(to)))
-					BUGCHECK(199);	// msg 199 expected field node
 			}
 
-			if (tempInstanceId)
+			if (DSC_EQUIV(from_desc, to_desc, false) && from_desc->dsc_address == to_desc->dsc_address)
 			{
-				AutoSetRestore<FB_UINT64> autoFrameId(&tdbb->tdbb_temp_frame_id, tempInstanceId);
-				blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
+				// Self-assignment. No need to do anything.
+				return;
+			}
+			else if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
+			{
+				// ASF: Don't let MOV_move call blb::move because MOV
+				// will not pass the destination field to blb::move.
+
+				jrd_rel* relation = nullptr;
+				Record* record = nullptr;
+				USHORT fieldId = 0;
+				FB_UINT64 tempInstanceId = 0;
+
+				if (to)
+				{
+					const FieldNode* toField = nodeAs<FieldNode>(to);
+					if (toField)
+					{
+						const auto rpb = &request->req_rpb[toField->fieldStream];
+						relation = rpb->rpb_relation;
+						record = rpb->rpb_record;
+						fieldId = toField->fieldId;
+						tempInstanceId = rpb->rpb_temp_instance_id;
+					}
+					else if (!(nodeAs<ParameterNode>(to) || nodeAs<VariableNode>(to)))
+						BUGCHECK(199);	// msg 199 expected field node
+				}
+
+				if (tempInstanceId)
+				{
+					AutoSetRestore<FB_UINT64> autoFrameId(&tdbb->tdbb_temp_frame_id, tempInstanceId);
+					blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
+				}
+				else
+					blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
+			}
+			else if (!DSC_EQUIV(from_desc, to_desc, false))
+			{
+				MOV_move(tdbb, from_desc, to_desc);
+			}
+			else if (DTYPE_IS_TEXT(from_desc->dsc_dtype))
+			{
+				// Force slow move to properly handle the case when source string is provided with real length instead of padded length
+				MOV_move(tdbb, from_desc, to_desc);
+			}
+			else if (from_desc->dsc_dtype == dtype_short)
+			{
+				*((SSHORT*) to_desc->dsc_address) = *((SSHORT*) from_desc->dsc_address);
+			}
+			else if (from_desc->dsc_dtype == dtype_long)
+			{
+				*((SLONG*) to_desc->dsc_address) = *((SLONG*) from_desc->dsc_address);
+			}
+			else if (from_desc->dsc_dtype == dtype_int64)
+			{
+				*((SINT64*) to_desc->dsc_address) = *((SINT64*) from_desc->dsc_address);
+			}
+			else if (from_desc->dsc_dtype == dtype_rowtype)
+			{
+				// assign null mask bytes, the actual data will be assigned in the following iterations
+				memcpy(to_desc->dsc_address, from_desc->dsc_address, FLAG_BYTES(from_desc->dsc_sub_count));
 			}
 			else
-				blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
-		}
-		else if (!DSC_EQUIV(from_desc, to_desc, false))
-		{
-			MOV_move(tdbb, from_desc, to_desc);
-		}
-		else if (DTYPE_IS_TEXT(from_desc->dsc_dtype))
-		{
-			// Force slow move to properly handle the case when source string is provided with real length instead of padded length
-			MOV_move(tdbb, from_desc, to_desc);
-		}
-		else if (from_desc->dsc_dtype == dtype_short)
-		{
-			*((SSHORT*) to_desc->dsc_address) = *((SSHORT*) from_desc->dsc_address);
-		}
-		else if (from_desc->dsc_dtype == dtype_long)
-		{
-			*((SLONG*) to_desc->dsc_address) = *((SLONG*) from_desc->dsc_address);
-		}
-		else if (from_desc->dsc_dtype == dtype_int64)
-		{
-			*((SINT64*) to_desc->dsc_address) = *((SINT64*) from_desc->dsc_address);
-		}
-		else
-		{
-			memcpy(to_desc->dsc_address, from_desc->dsc_address, from_desc->dsc_length);
-		}
+			{
+				memcpy(to_desc->dsc_address, from_desc->dsc_address, from_desc->dsc_length);
+			}
 
-		to_desc->dsc_flags &= ~DSC_null;
+			to_desc->dsc_flags &= ~DSC_null;
+		};
+
+		if (from_desc->dsc_sub_count != to_desc->dsc_sub_count)
+			ERR_post(Arg::Gds(isc_random) << "A composite type cannot be converted to a type with a different structure");
+
+		HalfStaticArray<dsc*, BUFFER_TINY> fromStackArray;
+		auto fromStack = fromStackArray.getBuffer(2); // one for next descriptor and second for first sub descriptor
+		HalfStaticArray<dsc*, BUFFER_TINY> toStackArray;
+		auto toStack = toStackArray.getBuffer(2);
+		int stackIndex = 0;
+
+		fromStack[stackIndex] = from_desc;
+		toStack[stackIndex] = to_desc;
+		stackIndex++;
+
+		while (stackIndex > 0)
+		{
+			stackIndex--;
+			dsc* from = fromStack[stackIndex];
+			dsc* to = toStack[stackIndex];
+
+			assignmentWrapper(from, to);
+
+			if (from->dsc_next && to->dsc_next)
+			{
+				fromStack[stackIndex] = from->dsc_next;
+				toStack[stackIndex] = to->dsc_next;
+				stackIndex++;
+			}
+
+			if (from->dsc_sub_first && to->dsc_sub_first)
+			{
+				// increase size of stack by one element to store additional descriptor
+				fromStack = fromStackArray.getBuffer(fromStackArray.getCount() + 1);
+				toStack = toStackArray.getBuffer(toStackArray.getCount() + 1);
+				fromStack[stackIndex] = from->dsc_sub_first;
+				toStack[stackIndex] = to->dsc_sub_first;
+				stackIndex++;
+			}
+		}
 	}
 	else
 	{
@@ -533,12 +594,15 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 		else
 			memset(to_desc->dsc_address, 0, to_desc->dsc_length);
 
-		to_desc->dsc_flags |= DSC_null;
+		to_desc->setNull();	// here we should set every sub descriptor to null
+
+		// For rowtype, we need to set all fields (via flag bytes) to 0xff what means NULL
+		if (to_desc->dsc_dtype == dtype_rowtype)
+			memset(to_desc->dsc_address, 0xFF, FLAG_BYTES(to_desc->dsc_sub_count));
 	}
 
 	// Handle the null flag as appropriate for fields and message arguments.
 
-	const FieldNode* toField = nodeAs<FieldNode>(to);
 	if (toField)
 	{
 		Record* record = request->req_rpb[toField->fieldStream].rpb_record;

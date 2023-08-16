@@ -149,7 +149,16 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 
 		auto impure = request->getImpure<impure_value>(node->impureOffset);
 
-		impure->vlu_desc.dsc_address = message->getBuffer(paramRequest) + (IPTR) desc->dsc_address;
+		if (desc->dsc_dtype == dtype_rowtype)
+		{
+			impure->vlu_desc = *desc;
+			impure->vlu_desc.setAddressRecursively(paramNode->getParamRequest(request)->getImpure<UCHAR>(
+				message->impureOffset + (IPTR) desc->dsc_address));
+			return &impure->vlu_desc;
+		}
+
+		impure->vlu_desc.dsc_address = paramNode->getParamRequest(request)->getImpure<UCHAR>(
+			message->impureOffset + (IPTR) desc->dsc_address);
 		impure->vlu_desc.dsc_dtype = desc->dsc_dtype;
 		impure->vlu_desc.dsc_length = desc->dsc_length;
 		impure->vlu_desc.dsc_scale = desc->dsc_scale;
@@ -174,6 +183,8 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 	else if (auto varNode = nodeAs<VariableNode>(node))
 	{
 		auto impure = varNode->getVarRequest(request)->getImpure<impure_value>(varNode->varDecl->impureOffset);
+		if (varNode->varDecl->varDesc.dsc_dtype == dtype_rowtype)
+			impure->vlu_desc = varNode->varDecl->varDesc;
 		return &impure->vlu_desc;
 	}
 	else if (auto fieldNode = nodeAs<FieldNode>(node))
@@ -181,7 +192,7 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 		auto record = request->req_rpb[fieldNode->fieldStream].rpb_record;
 		auto impure = request->getImpure<impure_value>(node->impureOffset);
 
-		if (!EVL_field(0, record, fieldNode->fieldId, &impure->vlu_desc))
+		if (!EVL_field(nullptr, record, fieldNode->fieldId, &impure->vlu_desc))
 		{
 			// The below condition means that EVL_field() returned
 			// a read-only dummy value which cannot be assigned to.
@@ -450,7 +461,7 @@ bool EVL_field(jrd_rel* relation, Record* record, USHORT id, dsc* desc)
 	if (!desc->dsc_address)
 		return false;
 
-	desc->dsc_address = record->getData() + (IPTR) desc->dsc_address;
+	desc->setAddressRecursively(record->getData() + (IPTR) desc->dsc_address);
 
 	if (record->isNull(id))
 	{
@@ -545,6 +556,7 @@ void EVL_make_value(thread_db* tdbb, const dsc* desc, impure_value* value, Memor
 	case dtype_varying:
 	case dtype_cstring:
 	case dtype_dbkey:
+	case dtype_rowtype:
 		break;
 
 	case dtype_blob:
@@ -558,6 +570,17 @@ void EVL_make_value(thread_db* tdbb, const dsc* desc, impure_value* value, Memor
 	default:
 		fb_assert(false);
 		break;
+	}
+
+	if (from.dsc_dtype == dtype_rowtype)
+	{
+		if (!pool)
+			pool = tdbb->getDefaultPool();
+
+		value->vlu_rowvalue = FB_NEW_POOL(*pool) UCHAR[value->vlu_desc.dsc_length];
+		value->vlu_desc.setAddressRecursively(value->vlu_rowvalue);
+		memcpy(value->vlu_rowvalue, from.dsc_address, value->vlu_desc.dsc_length);
+		return;
 	}
 
 	VaryStr<TEMP_STR_LENGTH> temp;
@@ -620,35 +643,97 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 	const char* value = NULL_STRING_MARK;
 	VaryStr<TEMP_STR_LENGTH> temp;
 
+	auto fromComposite = desc ? desc->dsc_dtype == dtype_rowtype : false;
+	auto invalidatedCompositeFieldId = -1;
+
 	MapFieldInfo::ValueType fieldInfo;
+	auto found = request->getStatement()->mapFieldInfo.get(itemInfo->field, fieldInfo);
+
 	if (!err && itemInfo->fullDomain &&
-		request->getStatement()->mapFieldInfo.get(itemInfo->field, fieldInfo) &&
-		fieldInfo.validationExpr)
+		found && (fieldInfo.validationExpr || (fieldInfo.subFirst && desc && desc->dsc_sub_first)))
 	{
-		if (desc && null)
-			desc->dsc_flags |= DSC_null;
-
-		const bool desc_is_null = !desc || (desc->dsc_flags & DSC_null);
-
-		request->req_domain_validation = desc;
-		const ULONG flags = request->req_flags;
-
-		if (fieldInfo.validationExpr->execute(tdbb, request) == TriState(false))
+		auto checkWrapper = [&](dsc* desc, FieldInfo& fieldInfo, bool null = false)
 		{
-			const USHORT length = desc_is_null ? 0 :
-				MOV_make_string(tdbb, desc, ttype_dynamic, &value, &temp, sizeof(temp) - 1);
+			if (null && !fieldInfo.nullable)
+			{
+				err = true;
+				return;
+			}
 
-			if (desc_is_null)
-				value = NULL_STRING_MARK;
-			else if (!length)
-				value = "";
-			else
-				const_cast<char*>(value)[length] = 0;	// safe cast - data is on our local stack
+			if (desc && null)
+				desc->dsc_flags |= DSC_null;
 
-			err = true;
+			const bool desc_is_null = !desc || (desc->dsc_flags & DSC_null);
+
+			request->req_domain_validation = desc;
+			const ULONG flags = request->req_flags;
+
+			if (fieldInfo.validationExpr && fieldInfo.validationExpr->execute(tdbb, request) == TriState(false))
+			{
+				const USHORT length = desc_is_null ? 0 :
+					MOV_make_string(tdbb, desc, ttype_dynamic, &value, &temp, sizeof(temp) - 1);
+
+				if (desc_is_null)
+					value = NULL_STRING_MARK;
+				else if (!length)
+					value = "";
+				else
+					const_cast<char*>(value)[length] = 0;	// safe cast - data is on our local stack
+
+				err = true;
+			}
+
+			request->req_flags = flags;
+		};
+
+		Stack <dsc*> fromSubFields;
+		Stack <FieldInfo*> toFieldInfos;
+
+		fromSubFields.push(desc);
+		toFieldInfos.push(&fieldInfo);
+
+		while (fromSubFields.hasData() && toFieldInfos.hasData())
+		{
+			// do not get inside composite structure if top field is null
+			if (fromSubFields.object()->dsc_sub_first && toFieldInfos.object()->subFirst && !null)
+			{
+				fromSubFields.push(fromSubFields.object()->dsc_sub_first);
+				toFieldInfos.push(toFieldInfos.object()->subFirst);
+				continue;
+			}
+
+			auto from = fromSubFields.pop();
+			auto to = toFieldInfos.pop();
+			checkWrapper(from, *to, from ? from->dsc_flags & DSC_null : false);
+			if (err)
+			{
+				invalidatedCompositeFieldId = to->fieldId;
+				break;
+			}
+
+			if (from->dsc_next && to->next)
+			{
+				fromSubFields.push(from->dsc_next);
+				toFieldInfos.push(to->next);
+			}
+			else if (fromSubFields.hasData() && toFieldInfos.hasData())
+			{
+				from = fromSubFields.pop();
+				to = toFieldInfos.pop();
+				checkWrapper(from, *to);
+				if (err)
+				{
+					invalidatedCompositeFieldId = to->fieldId;
+					break;
+				}
+
+				if (from->dsc_next && to->next)
+				{
+					fromSubFields.push(from->dsc_next);
+					toFieldInfos.push(to->next);
+				}
+			}
 		}
-
-		request->req_flags = flags;
 	}
 
 	if (err)
@@ -665,6 +750,9 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 		else
 		{
 			s = item.getDescription(request, itemInfo);
+			if (fromComposite && invalidatedCompositeFieldId >= 0)
+				s.printf("%s, subfield ID %d", s.c_str(), invalidatedCompositeFieldId);
+
 			arg = s.c_str();
 		}
 

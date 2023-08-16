@@ -386,6 +386,15 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 			// Special processing below
 			break;
 
+		case dtype_rowtype:
+			// checking null bytes of the composite type
+			{
+				auto cmpResult = memcmp(p1, p2, FLAG_BYTES(arg1->dsc_sub_count));
+				if (cmpResult != 0)
+					return cmpResult;
+			}
+			break;
+
 		default:
 			// the two arguments have identical dtype and scale, but the
 			// dtype is not one of your defined types!

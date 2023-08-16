@@ -91,7 +91,24 @@ namespace Jrd
 
 inline void CVT_move(const dsc* from, dsc* to, Firebird::DecimalStatus decSt)
 {
-	CVT_move_common(from, to, decSt, &Jrd::EngineCallbacks::instance);
+	if (to->dsc_dtype == dtype_rowtype || from->dsc_dtype == dtype_rowtype)
+	{
+		if (to->dsc_sub_count != from->dsc_sub_count || to->dsc_dtype != from->dsc_dtype)
+			CVT_conversion_error(from, Jrd::EngineCallbacks::instance->err);
+
+		auto next_to = to->dsc_sub_first;
+		auto next_from = from->dsc_sub_first;
+		while (next_to && next_from)
+		{
+			CVT_move(next_from, next_to, decSt);
+			next_to = next_to->dsc_next;
+			next_from = next_from->dsc_next;
+		}
+
+		memcpy(to->dsc_address, from->dsc_address, FLAG_BYTES(to->dsc_sub_count));
+	}
+	else
+		CVT_move_common(from, to, decSt, &Jrd::EngineCallbacks::instance);
 }
 
 inline USHORT CVT_get_string_ptr(const dsc* desc, TTypeId* ttype, UCHAR** address,

@@ -351,11 +351,11 @@ int BaseAggWinStream<ThisType, NextType>::lookForChange(thread_db* tdbb, Request
 		}
 		else if (!vtemp->vlu_desc.dsc_address)
 			return 1 * nullsPlacement;
-		else if ((n = MOV_compare(tdbb, desc, &vtemp->vlu_desc)) != 0)
+		else if ((n = MOV_recursive_compare(tdbb, desc, &vtemp->vlu_desc, true)) != EQUAL)
 			return n * sortDirection;
 	}
 
-	return 0;
+	return EQUAL;
 }
 
 template <typename ThisType, typename NextType>

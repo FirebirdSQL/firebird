@@ -1143,6 +1143,17 @@ void Sort::diddleKey(UCHAR* record, bool direction, bool duplicateHandling)
 			}
 			break;
 
+		case SKD_rowtype:
+			{
+				// For rowtype, we have to nullify null mask bytes
+				// because sorting should not depend on them.
+				UCHAR* pp = p;
+				do {
+					*pp++ = 0;
+				} while (--n);
+			}
+			break;
+
 		default:
 			fb_assert(false);
 			break;

@@ -17,18 +17,59 @@
  *  and all contributors signed below.
  *
  *  All Rights Reserved.
- *  Contributor(s): ______________________________________.
+ *  Contributor(s): Alexey Mochalov.
  */
 
 #ifndef FB_COMMON_MSG_UTIL_H
 #define FB_COMMON_MSG_UTIL_H
 
 #include "firebird.h"
+#include "../common/StatusHolder.h"
 
 
 namespace Firebird {
 	namespace MsgUtil {
+		struct SubfieldData
+		{
+			// const char* field;
+			// const char* relation;
+			// const char* owner;
+			const char* alias;
+			int subType, scale;
+			unsigned type, length, charSet;
+			bool nullable, nullFlag;
+			// short* nullInd;
+			const char* compositeDescriptor = nullptr;
+			unsigned subfieldsNum = 0;
+
+			union TypeMix
+			{
+				ISC_TIMESTAMP* asDateTime;
+				ISC_TIMESTAMP_TZ* asDateTimeTz;
+				ISC_TIMESTAMP_TZ_EX* asDateTimeTzEx;
+				ISC_TIME* asTime;
+				ISC_TIME_TZ* asTimeTz;
+				ISC_TIME_TZ_EX* asTimeTzEx;
+				ISC_DATE* asDate;
+				SSHORT* asSmallint;
+				SLONG* asInteger;
+				SINT64* asBigint;
+				float* asFloat;
+				double* asDouble;
+				FB_BOOLEAN* asBoolean;
+				ISC_QUAD* blobid;
+				vary* asVary;
+				char* asChar;
+				FB_DEC16* asDec16;
+				FB_DEC34* asDec34;
+				FB_I128* asInt128;
+				void* setPtr;
+			};
+			TypeMix value;
+		};
+
 		ISC_STATUS getCodeByName(const char* name);
+		Array<SubfieldData> getSubfieldsData(CheckStatusWrapper* status, IMessageMetadata* msgMetadata, const UCHAR* msgDataBuffer, unsigned fieldIndex);
 	}
 } // namespace Firebird
 

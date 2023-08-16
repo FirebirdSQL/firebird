@@ -143,7 +143,8 @@ class dsql_rel : public pool_alloc<dsql_type_rel>
 public:
 	explicit dsql_rel(MemoryPool& p)
 		: rel_name(p),
-		  rel_owner(p)
+		  rel_owner(p),
+		  rel_fields_number(0)
 	{
 	}
 
@@ -161,6 +162,7 @@ public:
 	USHORT rel_flags = 0;
 	std::optional<USHORT> rel_local_table_number;
 	bool rel_private = false;		// Packaged private relation
+	USHORT rel_fields_number = 0;	// number of fields in relation
 };
 
 // rel_flags bits
@@ -184,6 +186,8 @@ public:
 		  collate(pool, aCollate),
 		  charSet(pool),
 		  subTypeName(pool, nullptr)
+		  packageName(pool),
+		  relationName(pool)
 	{
 	}
 
@@ -245,6 +249,9 @@ public:
 	SSHORT dimensions = 0;				// Non-zero means array
 	ValueListNode* ranges = nullptr;	// ranges for multi dimension array
 	bool explicitCollation = false;		// COLLATE was explicit specified
+	MetaName packageName;
+	MetaName relationName;
+	bool privateFlag = false;
 };
 
 class dsql_fld : public TypeClause
@@ -268,7 +275,13 @@ public:
 	USHORT fld_id = 0;							// Field ID in database
 	USHORT fld_pos = 0;							// Field position in relation
 	MetaName fld_name;
+	dsql_fld* fld_sub_first  = nullptr;	// First sub field
+	USHORT    fld_sub_count = 0;		// Sub fields number
 };
+
+//----------------------
+
+int calculateCompositeFieldLength(dsql_fld& fld);
 
 // values used in fld_flags
 
@@ -349,8 +362,12 @@ public:
 	dsql_udf(MemoryPool& p, const class Function* jfun);
 
 	explicit dsql_udf(MemoryPool& p)
-		: udf_name(p), udf_arguments(p)
-	{ }
+		: udf_name(p),
+		  udf_arguments(p),
+		  udf_outputs(p),
+		  udf_outfield(p) // TODO ROWTYPE: make these one-liner
+	{
+	}
 
 	USHORT udf_dtype = 0;
 	SSHORT udf_scale = 0;
@@ -363,6 +380,8 @@ public:
 	bool udf_private = false;	// Packaged private function
 	bool udf_aggregate = false;
 	SSHORT udf_def_count = 0;	// number of inputs with default values
+	Firebird::Array<dsc> udf_outputs;
+	dsql_fld	udf_outfield;
 };
 
 // udf_flags bits
@@ -397,6 +416,9 @@ public:
 	USHORT msgItem = 0;			// Item number in message
 	USHORT number = 0;			// Local variable number
 	bool initialized = false;	// Is variable initialized?
+
+	dsql_fld* row_typeclause = nullptr;	// rowtype field base
+	UCHAR contextNum = 0;
 	dsc desc;
 };
 
@@ -482,6 +504,7 @@ public:
 	dsql_rel* ctx_relation = nullptr;			// Relation for context
 	dsql_prc* ctx_procedure = nullptr;			// Procedure for context
 	dsql_tab_func* ctx_table_value_fun = nullptr;	// Table value function context
+	dsql_var* ctx_rowtype_var = nullptr;		// Rowtype variable for context
 	NestConst<ValueListNode> ctx_proc_inputs;	// Procedure input parameters
 	dsql_map* ctx_map = nullptr;				// Maps for aggregates and unions
 	RseNode* ctx_rse = nullptr;					// Sub-rse for aggregates
@@ -505,6 +528,7 @@ public:
 		ctx_relation = v.ctx_relation;
 		ctx_procedure = v.ctx_procedure;
 		ctx_table_value_fun = v.ctx_table_value_fun;
+		ctx_rowtype_var = v.ctx_rowtype_var;
 		ctx_proc_inputs = v.ctx_proc_inputs;
 		ctx_map = v.ctx_map;
 		ctx_rse = v.ctx_rse;
@@ -531,6 +555,8 @@ public:
 			return ctx_relation->rel_name.toQuotedString();
 		if (ctx_procedure)
 			return ctx_procedure->prc_name.toQuotedString();
+		if (ctx_rowtype_var)
+			return getConcatenatedAlias();
 		return "";
 	}
 
@@ -568,6 +594,7 @@ inline constexpr USHORT CTX_cursor					= 0x80;		// Context is a cursor
 inline constexpr USHORT CTX_lateral					= 0x100;	// Context is a lateral derived table
 inline constexpr USHORT CTX_blr_fields				= 0x200;	// Fields of the context are defined inside BLR
 inline constexpr USHORT CTX_package					= 0x400;	// The context is related to a package
+inline constexpr USHORT CTX_rowtype_var				= 0x800;	// Context is a row type variable
 
 //! Aggregate/union map block to map virtual fields to their base
 //! TMN: NOTE! This datatype should definitely be renamed!
@@ -607,7 +634,9 @@ public:
 		  par_rel_name(p),
 		  par_owner_name(p),
 		  par_rel_alias(p),
-		  par_alias(p)
+		  par_alias(p),
+		  par_composite_name(p),
+		  par_composite_descriptor(p)
 	{
 	}
 
@@ -623,7 +652,15 @@ public:
 	USHORT par_parameter = 0;			// BLR parameter number
 	USHORT par_index = 0;				// Index into SQLDA, if appropriate
 	bool par_is_text = false;			// Parameter should be dtype_text (SQL_TEXT) externaly
+	USHORT par_composite = 0;			// composite + last_composite_field flags
+	MetaName par_composite_name;		// composite variable name
+	Firebird::string par_composite_descriptor; // composite descriptor
 };
+
+// Flag values for par_composite
+
+const USHORT PAR_composite_object 			= 0x01;		// parameter is part (field) of a composite object
+const USHORT PAR_composite_last_field		= 0x02;		// last field of a composite object
 
 class CStrCmp
 {
@@ -916,6 +953,7 @@ enum class AggregateFunctionPhase : UCHAR
 	FINISH = 3
 };
 
+USHORT serialize_composite_parameter_descriptor(dsql_fld& parameterField, Firebird::string& serializedDescriptor);
 
 } // namespace
 

@@ -42,5 +42,6 @@ bool	DYN_UTIL_check_unique_name_nothrow(Jrd::thread_db* tdbb,
 void	DYN_UTIL_check_unique_name(Jrd::thread_db* tdbb,
 			const Jrd::QualifiedName& object_name, int object_type);
 SINT64	DYN_UTIL_gen_unique_id(Jrd::thread_db*, SSHORT, const char*);
+void	DYN_UTIL_generate_composite_type_relation_name(Jrd::thread_db* tdbb, Jrd::MetaName& buffer);
 
 #endif // JRD_DYN_UT_PROTO_H

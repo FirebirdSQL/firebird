@@ -158,6 +158,7 @@ private:
 	Firebird::RefPtr<VersionedObjects> latestVer;
 	Firebird::Mutex lvMutex;			// Protects upgrade of latestVer
 	Firebird::Array<MessageNode*> messages;	// Input/output messages
+	MapContextVariableName mapContextVariableNames;	// Map of variable names related to context number
 };
 
 

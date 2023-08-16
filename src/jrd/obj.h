@@ -81,7 +81,9 @@ inline constexpr ObjectType obj_schemas = 39;
 
 inline constexpr ObjectType obj_package_constant = 40;
 
-inline constexpr ObjectType obj_type_MAX = 41;
+inline constexpr ObjectType obj_packaged_type = 41;
+
+inline constexpr ObjectType obj_type_MAX = 42;
 
 // used in the parser only / no relation with obj_type_MAX (should be greater)
 inline constexpr ObjectType obj_user_or_role = 100;

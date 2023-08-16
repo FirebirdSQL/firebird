@@ -1495,6 +1495,63 @@ UCHAR sqlTypeToDscType(SSHORT sqlType) noexcept
 		return dtype_ex_time_tz;
 	case SQL_TIMESTAMP_TZ_EX:
 		return dtype_ex_timestamp_tz;
+	case SQL_ROWTYPE:
+		return dtype_rowtype;
+	default:
+		return dtype_unknown;
+	}
+}
+
+USHORT dscTypeToSqlType(SSHORT dscType)
+{
+	switch (dscType)
+	{
+	case dtype_varying:
+		return SQL_VARYING;
+	case dtype_text:
+		return SQL_TEXT;
+	case dtype_double:
+		return SQL_DOUBLE;
+	case dtype_real:
+		return SQL_FLOAT;
+	case dtype_d_float:
+		return SQL_D_FLOAT;
+	case dtype_sql_date:
+		return SQL_TYPE_DATE;
+	case dtype_sql_time:
+		return SQL_TYPE_TIME;
+	case dtype_timestamp:
+		return SQL_TIMESTAMP;
+	case dtype_blob:
+		return SQL_BLOB;
+	case dtype_array:
+		return SQL_ARRAY;
+	case dtype_long:
+		return SQL_LONG;
+	case dtype_short:
+		return SQL_SHORT;
+	case dtype_int64:
+		return SQL_INT64;
+	case dtype_quad:
+		return SQL_QUAD;
+	case dtype_boolean:
+		return SQL_BOOLEAN;
+	case dtype_dec64:
+		return SQL_DEC16;
+	case dtype_dec128:
+		return SQL_DEC34;
+	case dtype_int128:
+		return SQL_INT128;
+	case dtype_sql_time_tz:
+		return SQL_TIME_TZ;
+	case dtype_timestamp_tz:
+		return SQL_TIMESTAMP_TZ;
+	case dtype_ex_time_tz:
+		return SQL_TIME_TZ_EX;
+	case dtype_ex_timestamp_tz:
+		return SQL_TIMESTAMP_TZ_EX;
+	case dtype_rowtype:
+		return SQL_ROWTYPE;
 	default:
 		return dtype_unknown;
 	}

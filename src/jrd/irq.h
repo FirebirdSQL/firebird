@@ -178,6 +178,16 @@ enum irq_type_t
 	irq_index_scan,			// scan index for caching
 	irq_index_id_erase,		// cleanup index ID
 	irq_l_index_cnstrt,     // lookup index for constraint
+	irq_composite,			// DSQL/METD: get composite type
+	irq_l_composite,		// lookup composite type
+	irq_l_composite_subfields,	// lookup composite type subfields
+	irq_g_packaged_type_fields,
+	irq_g_composite_fields,
+	irq_g_relations_depended_on,	// get relations depended on
+	irq_m_rel_fields1,		// process a modification of RDB$RELATION_FIELDS for composite procedures
+	irq_m_rel_fields2,		// process a modification of RDB$RELATION_FIELDS for composite triggers
+	irq_m_rel_fields3,		// process a modification of RDB$RELATION_FIELDS for composite functions
+	irq_g_packaged_types,	// get packaged types from RDB$PACKAGED_TYPES
 
 	irq_MAX
 };

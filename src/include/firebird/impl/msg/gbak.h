@@ -423,3 +423,7 @@ FB_IMPL_MSG(GBAK, 424, gbak_writing_constant, -901, "00", "000", "writing consta
 FB_IMPL_MSG(GBAK, 425, gbak_constant, -901, "00", "000", "constant (in RDB$CONSTANTS)")
 FB_IMPL_MSG(GBAK, 426, gbak_restoring_constant, -901, "00", "000", "restoring constant %s")
 FB_IMPL_MSG_NO_SYMBOL(GBAK, 427, "skipping data for table @1")
+FB_IMPL_MSG_NO_SYMBOL(GBAK, 428, "restoring @1 packaged type")  // TODO ROWTYPE: possibly rewrite to *_MSG
+FB_IMPL_MSG_NO_SYMBOL(GBAK, 429, "packaged type")
+FB_IMPL_MSG_NO_SYMBOL(GBAK, 430, "writing packaged type @1")
+FB_IMPL_MSG_NO_SYMBOL(GBAK, 431, "writing packaged type")

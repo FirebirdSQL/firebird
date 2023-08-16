@@ -426,6 +426,92 @@ QualifiedName METD_get_database_charset(jrd_tra* transaction)
 	return dbb->dbb_dfl_charset;
 }
 
+bool METD_get_composite_type_descriptors(jrd_tra* transaction, TypeClause* fld, dsc* desc)
+{
+/**************************************
+ *
+ *  M E T D _ g e t _ c o m p o s i t e _ t y p e _ d e s c r i p t o r s
+ *
+ **************************************
+ *
+ * Functional description
+ *  Fetch composite descriptor related to field
+ *  TODO: add construction of composite types with composite fields
+ *
+ **************************************/
+	thread_db* tdbb = JRD_get_thread_data();
+
+	validateTransaction(transaction);
+
+	bool found = false;
+
+	AutoCacheRequest handle(tdbb, irq_composite, IRQ_REQUESTS);
+
+	auto descriptor = &desc->dsc_sub_first;
+	auto name = fld->fieldSource;
+	auto packageName = fld->packageName;
+	auto subDescriptorsNumber = 0;
+
+	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
+		REL IN RDB$RELATION_FIELDS CROSS
+		FLX IN RDB$FIELDS
+		WITH REL.RDB$RELATION_NAME EQ fld->typeOfTable.c_str()
+		AND FLX.RDB$FIELD_NAME EQ REL.RDB$FIELD_SOURCE
+	{
+		found = true;
+		dsql_fld field(*tdbb->getDefaultPool());
+
+		field.length = FLX.RDB$FIELD_LENGTH;
+		field.scale = FLX.RDB$FIELD_SCALE;
+		field.subType = FLX.RDB$FIELD_SUB_TYPE;
+		field.dimensions = FLX.RDB$DIMENSIONS.NULL ? 0 : FLX.RDB$DIMENSIONS;
+
+		field.charSetId = Nullable<SSHORT>::empty();
+		if (!FLX.RDB$CHARACTER_SET_ID.NULL)
+			field.charSetId = FLX.RDB$CHARACTER_SET_ID;
+		field.collationId = 0;
+		if (!FLX.RDB$COLLATION_ID.NULL)
+			field.collationId = FLX.RDB$COLLATION_ID;
+		field.charLength = 0;
+		if (!FLX.RDB$CHARACTER_LENGTH.NULL)
+			field.charLength = FLX.RDB$CHARACTER_LENGTH;
+
+		if (!FLX.RDB$COMPUTED_BLR.NULL)
+			field.flags |= FLD_computed;
+
+		if (FLX.RDB$NULL_FLAG.NULL || !FLX.RDB$NULL_FLAG)
+			field.flags |= FLD_nullable;
+
+		if (FLX.RDB$SYSTEM_FLAG == 1)
+			field.flags |= FLD_system;
+
+		convert_dtype(&field, FLX.RDB$FIELD_TYPE);
+
+		if (FLX.RDB$FIELD_TYPE == blr_blob) {
+			field.segLength = FLX.RDB$SEGMENT_LENGTH;
+		}
+
+		*descriptor = FB_NEW_POOL(*tdbb->getDefaultPool()) dsc;
+		subDescriptorsNumber++;
+		DsqlDescMaker::fromField(*descriptor, &field);
+		descriptor = &(*descriptor)->dsc_next;
+	}
+	END_FOR
+
+	desc->dsc_sub_count = subDescriptorsNumber;
+	desc->dsc_length = FLAG_BYTES(desc->dsc_sub_count);
+
+	auto next = &desc->dsc_sub_first;
+	while(*next)
+	{
+		if ((*next)->dsc_dtype >= dtype_aligned)
+			desc->dsc_length = FB_ALIGN(desc->dsc_length, type_alignments[(*next)->dsc_dtype]);
+		desc->dsc_length += (*next)->dsc_length;
+		next = &(*next)->dsc_next;
+	}
+
+	return found;
+}
 
 // Find the default character set for a schema
 QualifiedName METD_get_schema_charset(jrd_tra* transaction, const MetaName& schema)
@@ -521,6 +607,80 @@ bool METD_get_domain(jrd_tra* transaction, TypeClause* field, const QualifiedNam
 
 		if (FLX.RDB$SYSTEM_FLAG == 1)
 			field->flags |= FLD_system;
+
+		convert_dtype(field, FLX.RDB$FIELD_TYPE);
+
+		if (FLX.RDB$FIELD_TYPE == blr_blob) {
+			field->segLength = FLX.RDB$SEGMENT_LENGTH;
+		}
+	}
+	END_FOR
+
+	return found;
+}
+
+bool METD_get_packaged_type(jrd_tra* transaction, TypeClause* field, const MetaName& type_name, const MetaName& packet_name) // UTF-8
+{
+/**************************************
+ *
+ *  M E T D _ g e t _ p a c k a g e d _ t y p e
+ *
+ **************************************
+ *
+ * Functional description
+ *  Fetch packaged type information for field defined as 'packet.name'
+ *
+ **************************************/
+	thread_db* tdbb = JRD_get_thread_data();
+
+	validateTransaction(transaction);
+
+	bool found = false;
+
+	AutoCacheRequest handle(tdbb, irq_g_packaged_type_fields, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
+		FLX IN RDB$FIELDS CROSS
+		PKGT IN RDB$PACKAGED_TYPES
+		WITH PKGT.RDB$TYPE_NAME EQ type_name.c_str()
+		AND PKGT.RDB$PACKAGE_NAME EQ packet_name.c_str()
+		AND FLX.RDB$FIELD_NAME EQ PKGT.RDB$FIELD_SOURCE
+	{
+		found = true;
+		field->fullDomain = true;
+		field->length = FLX.RDB$FIELD_LENGTH;
+		field->scale = FLX.RDB$FIELD_SCALE;
+		field->subType = FLX.RDB$FIELD_SUB_TYPE;
+		field->dimensions = FLX.RDB$DIMENSIONS.NULL ? 0 : FLX.RDB$DIMENSIONS;
+
+		field->charSetId = Nullable<SSHORT>::empty();
+		if (!FLX.RDB$CHARACTER_SET_ID.NULL)
+			field->charSetId = FLX.RDB$CHARACTER_SET_ID;
+		field->collationId = 0;
+		if (!FLX.RDB$COLLATION_ID.NULL)
+			field->collationId = FLX.RDB$COLLATION_ID;
+		field->charLength = 0;
+		if (!FLX.RDB$CHARACTER_LENGTH.NULL)
+			field->charLength = FLX.RDB$CHARACTER_LENGTH;
+
+		if (!FLX.RDB$COMPUTED_BLR.NULL)
+			field->flags |= FLD_computed;
+
+		if (FLX.RDB$NULL_FLAG.NULL || !FLX.RDB$NULL_FLAG)
+			field->flags |= FLD_nullable;
+
+		if (FLX.RDB$SYSTEM_FLAG == 1)
+			field->flags |= FLD_system;
+
+		if (!PKGT.RDB$PRIVATE_FLAG.NULL)
+			field->privateFlag = PKGT.RDB$PRIVATE_FLAG;
+
+		if (!PKGT.RDB$PACKAGE_NAME.NULL)
+			field->packageName = PKGT.RDB$PACKAGE_NAME;
+
+		field->typeOfName = FLX.RDB$FIELD_NAME;
+
+		field->relationName = FLX.RDB$RELATION_NAME;
 
 		convert_dtype(field, FLX.RDB$FIELD_TYPE);
 
@@ -683,6 +843,87 @@ dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 	return nullptr;
 }
 
+int METD_gen_composite_type_fields(Jrd::jrd_tra* transaction, Jrd::DsqlCompilerScratch* dsqlScratch,
+	const MetaName& relationName, Jrd::dsql_fld*& field)
+{
+/**************************************
+ *
+ *  M E T D _ g e n _ c o m p o s i t e _ t y p e _ f i e l d s
+ *
+ **************************************
+ *
+ * Functional description
+ *  Look up a composite type fields. If it doesn't exist, return NULL.
+ *  If it does, fetch fields information as well.
+ *
+ **************************************/
+	thread_db* tdbb = JRD_get_thread_data();
+
+	validateTransaction(transaction);
+
+	dsql_dbb* dbb = transaction->getDsqlAttachment();
+
+	int fieldsNum = 0;
+
+	AutoCacheRequest handle(tdbb, irq_g_composite_fields, IRQ_REQUESTS);
+
+	dsql_fld** next = &field;
+	auto fieldIdCounter = 0;
+
+	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
+		REL IN RDB$RELATION_FIELDS CROSS
+		FLX IN RDB$FIELDS
+		WITH REL.RDB$RELATION_NAME EQ relationName.c_str()
+		AND FLX.RDB$FIELD_NAME EQ REL.RDB$FIELD_SOURCE
+		SORTED BY REL.RDB$FIELD_POSITION
+	{
+		fieldsNum++;
+
+		dsql_fld* field = FB_NEW_POOL(dbb->dbb_pool) dsql_fld(dbb->dbb_pool);
+		*next = field;
+		next = &field->fld_next;
+
+		field->fld_id = fieldIdCounter++;
+
+		field->length = FLX.RDB$FIELD_LENGTH;
+		field->scale = FLX.RDB$FIELD_SCALE;
+		field->subType = FLX.RDB$FIELD_SUB_TYPE;
+		field->dimensions = FLX.RDB$DIMENSIONS.NULL ? 0 : FLX.RDB$DIMENSIONS;
+
+		field->charSetId = Nullable<SSHORT>::empty();
+		if (!FLX.RDB$CHARACTER_SET_ID.NULL)
+			field->charSetId = FLX.RDB$CHARACTER_SET_ID;
+		field->collationId = 0;
+		if (!FLX.RDB$COLLATION_ID.NULL)
+			field->collationId = FLX.RDB$COLLATION_ID;
+		field->charLength = 0;
+		if (!FLX.RDB$CHARACTER_LENGTH.NULL)
+			field->charLength = FLX.RDB$CHARACTER_LENGTH;
+
+		if (!FLX.RDB$COMPUTED_BLR.NULL)
+			field->flags |= FLD_computed;
+
+		if (FLX.RDB$NULL_FLAG.NULL || !FLX.RDB$NULL_FLAG)
+			field->flags |= FLD_nullable;
+
+		if (FLX.RDB$SYSTEM_FLAG == 1)
+			field->flags |= FLD_system;
+
+		field->typeOfName = FLX.RDB$FIELD_NAME;
+		field->fld_name = REL.RDB$FIELD_NAME;
+		field->typeOfTable = relationName;
+		field->fieldSource = REL.RDB$FIELD_SOURCE;
+
+		convert_dtype(field, FLX.RDB$FIELD_TYPE);
+
+		if (FLX.RDB$FIELD_TYPE == blr_blob) {
+			field->segLength = FLX.RDB$SEGMENT_LENGTH;
+		}
+	}
+	END_FOR
+
+	return fieldsNum;
+}
 
 dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
 	const QualifiedName& name)
@@ -1072,6 +1313,9 @@ static void convert_dtype(TypeClause* field, SSHORT field_type)
 	case blr_blob:
 		field->dtype = dtype_blob;
 		field->length = type_lengths[field->dtype];
+		break;
+	case blr_rowtype:
+		field->dtype = dtype_rowtype;
 		break;
 	default:
 		field->dtype = gds_cvt_blr_dtype[field_type];

@@ -31,7 +31,16 @@
 struct dsc;
 struct vary;
 
+typedef enum
+{
+	LESS = -1,
+	EQUAL = 0,
+	GREATER = 1,
+	UNKNOWN = 2
+} ComparisonResult;
+
 int		MOV_compare(Jrd::thread_db*, const dsc*, const dsc*);
+int		MOV_recursive_compare(Jrd::thread_db* tdbb, dsc* desc1, dsc* desc2, bool use_null_equility = false);
 double	MOV_date_to_double(const dsc*);
 void	MOV_double_to_date(double, SLONG[2]);
 bool	MOV_get_boolean(const dsc*);

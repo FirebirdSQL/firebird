@@ -39,8 +39,6 @@
 #include "../jrd/align.h"
 #include "../common/sha2/sha2.h"
 
-#define FLAG_BYTES(n)	(((n + BITS_PER_LONG) & ~((ULONG)BITS_PER_LONG - 1)) >> 3)
-
 // Random string block -- as long as impure areas don't have
 // constructors and destructors, the need this varying string
 
@@ -137,6 +135,7 @@ struct impure_value
 	dsc vlu_desc;
 	USHORT vlu_flags; // Computed/invariant flags
 	VaryingString* vlu_string;
+	UCHAR* vlu_rowvalue;
 
 	union
 	{

@@ -107,8 +107,34 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 		const NestConst<ValueExprNode>* sourcePtr = m_sourceList->items.begin();
 		const NestConst<ValueExprNode>* targetPtr = m_targetList->items.begin();
 
-		for (; sourcePtr != sourceEnd; ++sourcePtr, ++targetPtr)
-			EXE_assignment(tdbb, *sourcePtr, *targetPtr);
+		auto skip = 0;
+		for (; sourcePtr != sourceEnd - skip; ++sourcePtr, ++targetPtr + skip)
+		// 	EXE_assignment(tdbb, *sourcePtr, *targetPtr);
+		{
+			SET_TDBB(tdbb);
+			Request* request = tdbb->getRequest();
+
+			// Get descriptors of src field/parameter/variable, etc.
+			request->req_flags &= ~req_null;
+			dsc* from_desc = EVL_expr(tdbb, request, *(sourcePtr+skip));
+			if (!from_desc)
+			{
+				EXE_assignment(tdbb, *(targetPtr+skip), nullptr, (request->req_flags & req_null), NULL, NULL);
+				continue;
+			}
+
+			do
+			{
+				auto clonedDsc = *from_desc;
+				clonedDsc.dsc_next = nullptr;
+				EXE_assignment(tdbb, *(targetPtr+skip), &clonedDsc, (request->req_flags & req_null), NULL, NULL);
+
+				from_desc = from_desc->dsc_next;
+				if (from_desc)
+					skip++;
+			}
+			while (from_desc);
+		}
 	}
 	else
 	{

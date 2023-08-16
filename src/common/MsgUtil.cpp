@@ -17,7 +17,7 @@
  *  and all contributors signed below.
  *
  *  All Rights Reserved.
- *  Contributor(s): ______________________________________.
+ *  Contributor(s): Alexey Mochalov.
  */
 
 #include "firebird.h"
@@ -28,6 +28,7 @@
 #include "../common/classes/GenericMap.h"
 #include "../common/classes/init.h"
 #include "utils_proto.h"
+#include "../common/dsc.h"
 
 using namespace Firebird;
 
@@ -83,4 +84,98 @@ ISC_STATUS MsgUtil::getCodeByName(const char* name)
 		code = 0;
 
 	return code;
+}
+
+Array<MsgUtil::SubfieldData> MsgUtil::getSubfieldsData(CheckStatusWrapper* status,
+	IMessageMetadata* msgMetadata, const UCHAR* msgDataBuffer, unsigned fieldIndex)
+{
+	Array<MsgUtil::SubfieldData> subfields;
+
+	if (msgMetadata && msgMetadata->getType(status, fieldIndex) == SQL_ROWTYPE && msgDataBuffer)
+	{
+		auto hostNullFlag = reinterpret_cast<const short*>(&msgDataBuffer[msgMetadata->getNullOffset(status, fieldIndex)]);
+		if (!(*hostNullFlag))
+		{
+			auto serializedDescriptor = msgMetadata->getCompositeDescriptor(status, fieldIndex);
+			if (serializedDescriptor)
+			{
+				ULONG dataOffset = 0;
+				ULONG hostDataOffset = msgMetadata->getOffset(status, fieldIndex);
+
+				auto curchar = serializedDescriptor;
+				USHORT stackCounter = 0;
+
+				while (true)
+				{
+					if (*curchar == 0)
+					{
+						curchar += 1;
+						stackCounter--;
+
+						if (stackCounter == 0)
+							break;
+
+						continue;
+					}
+
+					stackCounter++;
+
+					USHORT serFieldId = *reinterpret_cast<const USHORT*>(curchar);
+					curchar += 2;
+
+					UCHAR curStringLength = *curchar;
+					curchar += 1;
+					auto alias = curchar;
+					curchar += curStringLength;
+
+					USHORT serFieldType = *reinterpret_cast<const USHORT*>(curchar);
+					curchar += 2;
+
+					ULONG serFieldLength = *reinterpret_cast<const ULONG*>(curchar);
+					curchar += 4;
+
+					SSHORT subType = *reinterpret_cast<const SSHORT*>(curchar);
+					curchar += 2;
+
+					SSHORT scale = *reinterpret_cast<const SSHORT*>(curchar);
+					curchar += 2;
+
+					SSHORT charSet = *reinterpret_cast<const SSHORT*>(curchar);
+					curchar += 2;
+
+					auto length = serFieldLength;
+
+					if (serFieldId > 1)
+					{
+						subfields.add();
+						auto subfield = &subfields.back();
+
+						subfield->alias = alias;
+						subfield->type = serFieldType;
+						subfield->length = length;
+						subfield->subType = subType;
+						subfield->scale = scale;
+						subfield->charSet = charSet;
+
+						auto dtype = fb_utils::sqlTypeToDscType(serFieldType);
+						if (dtype >= dtype_aligned)
+							dataOffset = FB_ALIGN(dataOffset, type_alignments[dtype]);
+						subfield->value.setPtr = (char*)(msgDataBuffer) + dataOffset + hostDataOffset;
+
+						dataOffset += serFieldLength;
+
+						subfield->nullFlag = (((msgDataBuffer + hostDataOffset)[(serFieldId - 2) >> 3] & (1 << ((serFieldId - 2) & 7))) != 0) ? -1 : 0;
+					}
+				}
+
+				ULONG offset = FLAG_BYTES(subfields.getCount());
+				for (auto& it : subfields)
+				{
+					it.value.setPtr = (char*)it.value.setPtr + offset;
+				}
+			}
+		}
+	}
+
+	return subfields;
 }

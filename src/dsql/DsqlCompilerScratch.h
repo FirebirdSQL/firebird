@@ -49,6 +49,7 @@ class StmtNode;
 class TypeClause;
 class VariableNode;
 class WithClause;
+class DeclarePackageTypeNode;
 
 typedef Firebird::Pair<
 	Firebird::NonPooled<NestConst<ValueListNode>, NestConst<ValueListNode>>> ReturningClause;
@@ -114,7 +115,11 @@ public:
 		  subFunctions(p),
 		  subProcedures(p),
 		  procedures(p),
-		  functions(p)
+		  functions(p),
+		  rowtypeVarsMsgItemOffsetCounter(0),
+		  functionOutputVariableNumber(0),
+		  localCompositeTypeDeclarations(p),
+		  packagedTypesCache(p)
 	{
 	}
 
@@ -188,6 +193,8 @@ public:
 	void putType(const TypeClause* type, bool useSubType);
 	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, QualifiedName& collationName);
 	void putLocalVariableInit(dsql_var* variable, const DeclareVariableNode* hostParam);
+	void genLocalTypes(CompoundStmtNode* declarations);
+	void putLocalTypes();
 
 	void putLocalVariable(dsql_var* variable)
 	{
@@ -195,6 +202,9 @@ public:
 		putLocalVariableDecl(variable, nullptr, dummyCollationName);
 		putLocalVariableInit(variable, nullptr);
 	}
+
+	bool getTypeFromCache(dsql_fld* field, const MetaName& typeName);
+	bool genCompositeTypeFromCache(dsql_fld* srcField, dsql_fld*& resField);
 
 	void putOuterMaps();
 	dsql_var* makeVariable(dsql_fld*, const char*, const dsql_var::Type type, USHORT,
@@ -363,6 +373,10 @@ public:
 	Firebird::AutoPtr<Firebird::ObjectsArray<Firebird::MetaString>> cachedDdlSchemaSearchPath;
 	dsql_msg* recordKeyMessage = nullptr;	// Side message for positioned DML
 
+	Firebird::LeftPooledMap<MetaName, StmtNode*> localCompositeTypeDeclarations;
+	USHORT functionOutputVariableNumber;
+	Firebird::Array<NestConst<DeclarePackageTypeNode> > packagedTypesCache;
+
 private:
 	Firebird::HalfStaticArray<SelectExprNode*, 4> ctes; // common table expressions
 	Firebird::HalfStaticArray<const Firebird::string*, 4> cteAliases; // CTE aliases in recursive members
@@ -375,6 +389,7 @@ public:
 	Firebird::LeftPooledMap<QualifiedName, class dsql_prc*>	procedures;	// known procedures
 	Firebird::LeftPooledMap<QualifiedName, class dsql_udf*>	functions;	// known functions
 	bool regularCacheValid = false;										// flag for relations cache
+	USHORT rowtypeVarsMsgItemOffsetCounter;
 };
 
 class PsqlChanger

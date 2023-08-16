@@ -69,7 +69,8 @@
 #define dtype_timestamp_tz	26
 #define dtype_ex_time_tz	27
 #define dtype_ex_timestamp_tz	28
-#define DTYPE_TYPE_MAX	29
+#define dtype_rowtype	29
+#define DTYPE_TYPE_MAX	30
 
 #define ISC_TIME_SECONDS_PRECISION		10000
 #define ISC_TIME_SECONDS_PRECISION_SCALE	(-4)

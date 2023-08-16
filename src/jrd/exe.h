@@ -86,6 +86,7 @@ class Cursor;
 class DeclareSubFuncNode;
 class DeclareSubProcNode;
 class DeclareVariableNode;
+class DeclareLocalTypeNode;
 class ItemInfo;
 class MessageNode;
 class PlanNode;
@@ -126,6 +127,7 @@ inline constexpr int csb_unmatched		= 512;		// stream has conjuncts unmatched by
 inline constexpr int csb_update			= 1024;		// erase or modify for relation
 inline constexpr int csb_unstable		= 2048;		// unstable explicit cursor
 inline constexpr int csb_skip_locked	= 4096;		// skip locked record
+inline constexpr int csb_row_var		= 8192;		// row variable stream
 
 
 // Aggregate Sort Block (for DISTINCT aggregates)
@@ -288,7 +290,8 @@ struct Item
 	{
 		TYPE_VARIABLE,
 		TYPE_PARAMETER,
-		TYPE_CAST
+		TYPE_CAST,
+		TYPE_FIELD
 	};
 
 	Item(Type aType, UCHAR aSubType, USHORT aIndex) noexcept
@@ -328,12 +331,18 @@ struct Item
 struct FieldInfo
 {
 	FieldInfo() noexcept
-		: nullable(false), defaultValue(NULL), validationExpr(NULL)
+		: nullable(false), defaultValue(NULL), validationExpr(NULL),
+		  subFirst(NULL), next(NULL), fieldId(0)
 	{}
 
 	bool nullable;
 	NestConst<ValueExprNode> defaultValue;
 	NestConst<BoolExprNode> validationExpr;
+
+	FieldInfo* subFirst;
+	FieldInfo* next;
+
+	USHORT fieldId;
 };
 
 class ItemInfo : public Printable
@@ -344,7 +353,9 @@ public:
 		  field(p, o.field),
 		  nullable(o.nullable),
 		  explicitCollation(o.explicitCollation),
-		  fullDomain(o.fullDomain)
+		  fullDomain(o.fullDomain),
+		  compositeContextNum(o.compositeContextNum),
+		  fieldId(o.fieldId)
 	{
 	}
 
@@ -353,7 +364,9 @@ public:
 		  field(p),
 		  nullable(true),
 		  explicitCollation(false),
-		  fullDomain(false)
+		  fullDomain(false),
+		  compositeContextNum(0),
+		  fieldId(0)
 	{
 	}
 
@@ -362,7 +375,9 @@ public:
 		  field(),
 		  nullable(true),
 		  explicitCollation(false),
-		  fullDomain(false)
+		  fullDomain(false),
+		  compositeContextNum(0),
+		  fieldId(0)
 	{
 	}
 
@@ -391,10 +406,14 @@ public:
 	bool nullable;
 	bool explicitCollation;
 	bool fullDomain;
+	USHORT compositeContextNum;
+	USHORT fieldId;
 };
 
 typedef Firebird::LeftPooledMap<QualifiedNameMetaNamePair, FieldInfo> MapFieldInfo;
 typedef Firebird::RightPooledMap<Item, ItemInfo> MapItemInfo;
+typedef Firebird::GenericMap<Firebird::Pair<Firebird::Right<int, MetaName> > > MapContextTypeName;
+typedef Firebird::GenericMap<Firebird::Pair<Firebird::Right<int, MetaName> > > MapContextVariableName;
 
 // Table value function block
 
@@ -486,7 +505,9 @@ public:
 		csb_variables_used_in_subroutines(p),
 		csb_pool(p),
 		csb_map_field_info(p),
+		csb_map_context_type(p),
 		csb_map_item_info(p),
+		csb_map_context_variable_names(p),
 		csb_message_pad(p),
 		subFunctions(p),
 		subProcedures(p),
@@ -498,7 +519,9 @@ public:
 		csb_currentDMLNode(NULL),
 		csb_currentAssignTarget(NULL),
 		csb_preferredDesc(NULL),
-		csb_rpt(p)
+		csb_rpt(p),
+		csb_local_type_declarations(p),
+		csb_local_type_validation_desc(nullptr)
 	{
 		csb_dbg_info = FB_NEW_POOL(p) Firebird::DbgInfo(p);
 	}
@@ -577,6 +600,7 @@ public:
 	AccessItemList	csb_access;					// Access items to be checked
 	vec<DeclareVariableNode*>*	csb_variables;	// Vector of variables, if any
 	Resources*	csb_resources;					// Resources (relations, indexes, routines, etc.)
+	Firebird::LeftPooledMap<MetaName, DeclareLocalTypeNode*>	csb_local_type_declarations;	// Map of ROW types declarations
 	Firebird::Array<Dependency>	csb_dependencies;	// objects that this statement depends upon
 	Firebird::Array<const Select*> csb_fors;	// select expressions
 	Firebird::Array<const DeclareLocalTableNode*> csb_localTables;	// local tables
@@ -595,12 +619,15 @@ public:
 	MemoryPool&		csb_pool;					// Memory pool to be used by csb
 	Firebird::AutoPtr<Firebird::DbgInfo> csb_dbg_info;	// Debug information
 	MapFieldInfo		csb_map_field_info;		// Map field name to field info
+	MapContextTypeName		csb_map_context_type;	// Map composite context field source name
 	MapItemInfo			csb_map_item_info;		// Map item to item info
+	MapContextVariableName csb_map_context_variable_names;	// Map of variable names related to context number
 
 	// Map of message number to field number to pad for external routines.
 	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, USHORT> > > csb_message_pad;
 
 	QualifiedName	csb_domain_validation;	// Parsing domain constraint in PSQL
+	dsc*		csb_local_type_validation_desc;	// Validation descriptor for local type
 
 	// used in cmp.cpp/pass1
 	Rsc::Rel	csb_view;
@@ -660,6 +687,8 @@ public:
 		StreamType* csb_map;			// Stream map for views
 		RecordSource** csb_rsb_ptr;		// point to rsb for nod_stream
 		jrd_table_value_fun* csb_table_value_fun;  // Table value function
+
+		Format* csb_row_var_format;
 	};
 
 	typedef csb_repeat* rpt_itr;
@@ -684,7 +713,8 @@ inline CompilerScratch::csb_repeat::csb_repeat() noexcept
 	  csb_plan(0),
 	  csb_map(0),
 	  csb_rsb_ptr(0),
-	  csb_table_value_fun(0)
+	  csb_table_value_fun(0),
+	  csb_row_var_format(nullptr)
 {
 }
 

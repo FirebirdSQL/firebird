@@ -56,6 +56,9 @@ Jrd::dsql_intlsym* METD_get_collation(Jrd::jrd_tra*, const Jrd::QualifiedName&, 
 Jrd::QualifiedName METD_get_database_charset(Jrd::jrd_tra*);
 Jrd::QualifiedName METD_get_schema_charset(Jrd::jrd_tra*, const Jrd::MetaName&);
 bool METD_get_domain(Jrd::jrd_tra*, class Jrd::TypeClause*, const Jrd::QualifiedName& name);
+bool METD_get_composite_type_descriptors(Jrd::jrd_tra* transaction, Jrd::TypeClause* field, dsc* desc);
+bool METD_get_packaged_type(Jrd::jrd_tra*, Jrd::TypeClause*, const Jrd::QualifiedName& name,
+	const Jrd::QualifiedName& packet);
 Jrd::dsql_udf* METD_get_function(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*,
 	const Jrd::QualifiedName&);
 void METD_get_primary_key(Jrd::jrd_tra*, const Jrd::QualifiedName&,
@@ -68,5 +71,7 @@ Jrd::dsql_rel* METD_get_view_base(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, cons
 	Jrd::MetaNamePairMap& fields);
 bool METD_get_view_relation(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, const Jrd::QualifiedName& view_name,
 	const Jrd::QualifiedName& relation_or_alias, Jrd::dsql_rel*& relation, Jrd::dsql_prc*& procedure);
+int METD_gen_composite_type_fields(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, const Jrd::QualifiedName&,
+	Jrd::dsql_fld*&);
 
 #endif // DSQL_METD_PROTO_H

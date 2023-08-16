@@ -149,6 +149,7 @@ inline constexpr int SKD_dec128			= 17;
 inline constexpr int SKD_sql_time_tz	= 18;
 inline constexpr int SKD_timestamp_tz	= 19;
 inline constexpr int SKD_int128			= 20;
+inline constexpr int SKD_rowtype		= 21;
 
 // skd_flags
 inline constexpr UCHAR SKD_ascending		= 0;	// default initializer

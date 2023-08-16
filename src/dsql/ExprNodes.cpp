@@ -5177,6 +5177,41 @@ DmlNode* DefaultNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 				}
 			}
 		}
+		else
+		{
+			FieldInfo fieldInfo;
+			dsc desc;
+			try
+			{
+				if (!MET_get_relation_field(tdbb, pool, relationName, fieldName, &desc, &fieldInfo).isEmpty())
+				{
+					DefaultNode* node = FB_NEW_POOL(pool) DefaultNode(pool, relationName, fieldName);
+					node->field = FB_NEW_POOL(pool) jrd_fld(pool);
+					node->field->fld_default_value = fieldInfo.defaultValue;
+
+					return node;
+				}
+			}
+			catch(const Firebird::Exception& e)
+			{
+				// If we are here, it means that the field is not found in the relation,
+				// so we will try to find it in the local type declarations.
+				// If it is not found there, we will rethrow the exception.
+				if (auto typeDeclaration = csb->csb_local_type_declarations.get(relationName))
+				{
+					tdbb->tdbb_status_vector->clearException();
+					DefaultNode* node = FB_NEW_POOL(pool) DefaultNode(pool, relationName, fieldName);
+					node->field = FB_NEW_POOL(pool) jrd_fld(pool);
+					auto defaultValueFieldIndex = *(*typeDeclaration)->fieldNameToIdMap.get(fieldName);
+					node->field->fld_default_value = (*typeDeclaration)->defaultList->items[defaultValueFieldIndex];
+
+					return node;
+				}
+				else
+					throw;
+			}
+
+		}
 
 		return NullNode::instance();
 	}
@@ -5273,6 +5308,14 @@ bool DefaultNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* ot
 	fb_assert(o);
 
 	return relationName == o->relationName && fieldName == o->fieldName;
+}
+
+ValueExprNode* DefaultNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	DefaultNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) DefaultNode(*tdbb->getDefaultPool(), relationName, fieldName);
+	node->field = field;
+
+	return node;
 }
 
 ValueExprNode* DefaultNode::pass1(thread_db* tdbb, CompilerScratch* csb)
@@ -5977,8 +6020,12 @@ FieldNode::FieldNode(MemoryPool& pool, dsql_ctx* context, dsql_fld* field, Value
 	  format(NULL),
 	  fieldStream(0),
 	  fieldId(0),
+	  contextNum(context ? context->ctx_context : 0),
 	  byId(false),
-	  dsqlCursorField(false)
+	  dsqlCursorField(false),
+	  nullable(true),
+	  contextTypeName(pool),
+	  itemInfo(NULL)
 {
 }
 
@@ -5992,8 +6039,12 @@ FieldNode::FieldNode(MemoryPool& pool, StreamType stream, USHORT id, bool aById)
 	  format(NULL),
 	  fieldStream(stream),
 	  fieldId(id),
+	  contextNum(stream),
 	  byId(aById),
-	  dsqlCursorField(false)
+	  dsqlCursorField(false),
+	  nullable(true),
+	  contextTypeName(pool),
+	  itemInfo(NULL)
 {
 }
 
@@ -6003,8 +6054,9 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 	const USHORT context = csb->csb_blr_reader.getByte();
 
 	// check if this is a VALUE of domain's check constraint
-	if (!csb->csb_domain_validation.object.isEmpty() && context == 0 &&
-		(blrOp == blr_fid || blrOp == blr_field))
+	if ((!csb->csb_domain_validation.object.isEmpty() || csb->csb_local_type_validation_desc)
+		&& context == 0
+		&& (blrOp == blr_fid || blrOp == blr_field))
 	{
 		if (blrOp == blr_fid)
 		{
@@ -6021,7 +6073,10 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 		}
 
 		DomainValidationNode* domNode = FB_NEW_POOL(pool) DomainValidationNode(pool);
-		MET_get_domain(tdbb, csb->csb_pool, csb->csb_domain_validation, &domNode->domDesc, NULL);
+		if (csb->csb_local_type_validation_desc)
+			domNode->domDesc = *csb->csb_local_type_validation_desc;
+		else
+			MET_get_domain(tdbb, csb->csb_pool, csb->csb_domain_validation, &domNode->domDesc, NULL);
 
 		// Cast to the target type - see CORE-3545.
 		CastNode* castNode = FB_NEW_POOL(pool) CastNode(pool);
@@ -6144,7 +6199,23 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 		}
 	}
 
-	return PAR_gen_field(tdbb, stream, id, byId);
+	auto fieldNode = FB_NEW_POOL(*tdbb->getDefaultPool()) FieldNode(*tdbb->getDefaultPool(), stream, id, byId);
+	if (csb->csb_map_context_type.get(context, fieldNode->contextTypeName))
+	{
+		fieldNode->itemInfo = FB_NEW_POOL(*tdbb->getDefaultPool()) ItemInfo(*tdbb->getDefaultPool());
+		fieldNode->itemInfo->fullDomain = true;
+		fieldNode->itemInfo->fieldId = fieldNode->fieldId;
+		fieldNode->itemInfo->compositeContextNum = fieldNode->contextNum;
+		fieldNode->itemInfo->nullable = true;
+		fieldNode->itemInfo->field.first = fieldNode->contextTypeName;
+		fieldNode->itemInfo->field.second.printf("%d", fieldNode->fieldId);
+
+		FieldInfo fieldInfo;
+		if (csb->csb_map_field_info.get(fieldNode->itemInfo->field, fieldInfo))
+			fieldNode->itemInfo->nullable = fieldInfo.nullable;
+	}
+
+	return fieldNode;
 }
 
 string FieldNode::internalPrint(NodePrinter& printer) const
@@ -6316,6 +6387,9 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 
 				for (; field; field = field->fld_next)
 				{
+					if (!context->ctx_procedure && field->fld_sub_first)
+						field = field->fld_sub_first;
+
 					if (field->fld_name == dsqlName.c_str())
 					{
 						if (dsqlQualifier.object.isEmpty())
@@ -6549,7 +6623,7 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Qual
 		dsqlName.object = tableValueFunctionContext->funName;
 		outputField = tableValueFunctionContext->outputField;
 	}
-	else
+	else if (!(context->ctx_flags & CTX_rowtype_var) || !qualifier.hasData())
 		return nullptr;
 
 	// AB: If this context is a system generated context as in NEW/OLD inside
@@ -6562,6 +6636,9 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Qual
 		return nullptr;
 
 	auto aliasName = context->ctx_internal_alias;
+	const TEXT* rowtype_var_name = NULL;
+	if (aliasName.object.hasData() && context->ctx_flags & CTX_rowtype_var)
+		rowtype_var_name = aliasName.object.c_str();
 
 	// AB: For a check constraint we should ignore the alias if the alias
 	// contains the "NEW" alias. This is because it is possible
@@ -6592,7 +6669,8 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Qual
 	if (qualifier.object.hasData() && !PASS1_compare_alias(aliasName, qualifier))
 		return nullptr;
 
-	// Lookup field in relation or procedure
+	if (rowtype_var_name)
+		return context->ctx_rowtype_var->field;
 
 	return outputField;
 }
@@ -6677,6 +6755,12 @@ void FieldNode::setParameterName(dsql_par* parameter) const
 	setParameterInfo(parameter, dsqlContext);
 }
 
+void FieldNode::setParameterCompositeDescriptor(dsql_par* parameter) const
+{
+	if (dsqlField->dtype == dtype_rowtype)
+		Jrd::serialize_composite_parameter_descriptor(*dsqlField, parameter->par_composite_descriptor);
+}
+
 // Generate blr for a field - field id's are preferred but not for trigger or view blr.
 void FieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
@@ -6684,7 +6768,8 @@ void FieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->appendUChar(blr_index);
 
 	if (DDL_ids(dsqlScratch) ||
-		(dsqlContext->ctx_relation && (dsqlContext->ctx_relation->rel_flags & REL_ltt_declared)))
+		(dsqlContext->ctx_relation && (dsqlContext->ctx_relation->rel_flags & REL_ltt_declared)) ||
+		dsqlContext->ctx_flags & CTX_rowtype_var)
 	{
 		dsqlScratch->appendUChar(blr_fid);
 		GEN_stuff_context(dsqlScratch, dsqlContext);
@@ -7783,6 +7868,8 @@ DmlNode* LiteralNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 
 	csb->csb_blr_reader.seekForward(l);
 
+	node->dsqlDesc = node->litDesc;
+
 	return node;
 }
 
@@ -8548,6 +8635,11 @@ void DsqlAliasNode::setParameterName(dsql_par* parameter) const
 {
 	value->setParameterName(parameter);
 	parameter->par_alias = name;
+}
+
+void DsqlAliasNode::setParameterCompositeDescriptor(dsql_par* parameter) const
+{
+	value->setParameterCompositeDescriptor(parameter);
 }
 
 void DsqlAliasNode::genBlr(DsqlCompilerScratch* dsqlScratch)
@@ -10043,11 +10135,9 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 
 	desc = &message->getFormat(paramRequest)->fmt_desc[argNumber];
 
-	retDesc->dsc_address = message->getBuffer(paramRequest) + (IPTR) desc->dsc_address;
-	retDesc->dsc_dtype = desc->dsc_dtype;
-	retDesc->dsc_length = desc->dsc_length;
-	retDesc->dsc_scale = desc->dsc_scale;
-	retDesc->dsc_sub_type = desc->dsc_sub_type;
+	*retDesc = *desc;
+	retDesc->setAddressRecursively(paramRequest->getImpure<UCHAR>(message->impureOffset + (IPTR) desc->dsc_address));
+	retDesc->propagateNullMask();
 
 	if (!isNull)
 	{
@@ -13335,7 +13425,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 				else
 					*argIt = NullNode::instance();
 			}
-			else
+			else if (!parameter->prm_is_composite)
 				mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
 		}
 
@@ -13389,6 +13479,12 @@ string UdfCallNode::internalPrint(NodePrinter& printer) const
 void UdfCallNode::setParameterName(dsql_par* parameter) const
 {
 	parameter->par_name = parameter->par_alias = dsqlFunction->udf_name.object;
+}
+
+void UdfCallNode::setParameterCompositeDescriptor(dsql_par* parameter) const
+{
+	if (dsqlFunction->udf_outfield.dtype == dtype_rowtype)
+		Jrd::serialize_composite_parameter_descriptor(dsqlFunction->udf_outfield, parameter->par_composite_descriptor);
 }
 
 void UdfCallNode::genBlr(DsqlCompilerScratch* dsqlScratch)
@@ -13457,19 +13553,16 @@ void UdfCallNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 void UdfCallNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 {
-	desc->dsc_dtype = static_cast<UCHAR>(dsqlFunction->udf_dtype);
-	desc->dsc_length = dsqlFunction->udf_length;
-	desc->dsc_scale = static_cast<SCHAR>(dsqlFunction->udf_scale);
-	// CVC: Setting flags to zero obviously impeded DSQL to acknowledge
-	// the fact that any UDF can return NULL simply returning a NULL
-	// pointer.
+	*desc = dsqlFunction->udf_outputs[0];
 	desc->setNullable(true);
 
 	if (!desc->isText())
-		desc->dsc_sub_type = dsqlFunction->udf_sub_type;
+		// desc->dsc_ttype() = dsqlFunction->udf_sub_type;
+		desc->dsc_sub_type = dsqlFunction->udf_outputs[0].getSubType();
 
 	if (desc->isText() || (desc->isBlob() && desc->getBlobSubType() == isc_blob_text))
-		desc->setTextType(dsqlFunction->udf_character_set_id);
+		// desc->setTextType(dsqlFunction->udf_character_set_id);
+		desc->setTextType(dsqlFunction->udf_outputs[0].getTextType());
 }
 
 bool UdfCallNode::deterministic(thread_db* tdbb) const
@@ -13487,7 +13580,7 @@ void UdfCallNode::getDesc(thread_db* tdbb, CompilerScratch* /*csb*/, dsc* desc)
 	// For normal requests, function would never be null. We would have
 	// created a valid block while parsing.
 	if (function)
-		*desc = function(tdbb)->getOutputFields()[0]->prm_desc;
+		*desc = function(tdbb)->getOutputFormat()->fmt_desc[0];
 	else
 		desc->clear();
 }
@@ -13624,8 +13717,9 @@ ValueExprNode* UdfCallNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 			fb_assert(f->getInputFormat()->fmt_length);
 			csb->allocImpure(FB_ALIGNMENT, f->getInputFormat()->fmt_length);
 		}
+		// fb_assert(function->getOutputFormat()->fmt_count == 3);
 
-		fb_assert(f->getOutputFormat()->fmt_count == 3);
+		// fb_assert(f->getOutputFormat()->fmt_count == 3);
 
 		fb_assert(f->getOutputFormat()->fmt_length);
 		csb->allocImpure(FB_ALIGNMENT, f->getOutputFormat()->fmt_length);
@@ -13704,26 +13798,49 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 		{
 			const dsc* fmtDesc = func->getInputFormat()->fmt_desc.begin();
 
-			for (auto& source : args->items)
+			auto skip = 0;
+			for (auto source = args->items.begin(); source < (args->items.end() - skip); source++)
 			{
-				const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
-				const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
+
+				ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
+				ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
 
 				dsc argDesc = fmtDesc[0];
-				argDesc.dsc_address = inMsg + argOffset;
+				argDesc.setAddressRecursively(inMsg + argOffset);
 
-				SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(inMsg + nullOffset);
+				SSHORT* nullPtr = reinterpret_cast<SSHORT*>(inMsg + nullOffset);
 
-				dsc* const srcDesc = EVL_expr(tdbb, request, source);
-				if (srcDesc)
+				dsc* srcDesc = EVL_expr(tdbb, request, *source);
+
+				do
 				{
-					*nullPtr = 0;
-					MOV_move(tdbb, srcDesc, &argDesc);
-				}
-				else
-					*nullPtr = -1;
+					if (srcDesc)
+					{
+						*nullPtr = 0;
+						MOV_move(tdbb, srcDesc, &argDesc);
+					}
+					else
+					{
+						*nullPtr = -1;
+					}
 
-				fmtDesc += 2;
+					fmtDesc += 2;
+					if (srcDesc && srcDesc->dsc_next)
+					{
+						srcDesc = srcDesc->dsc_next;
+						skip++;
+						argOffset = (IPTR) fmtDesc[0].dsc_address;
+						nullOffset = (IPTR) fmtDesc[1].dsc_address;
+
+						argDesc = fmtDesc[0];
+						argDesc.dsc_address = inMsg + argOffset;
+
+						nullPtr = reinterpret_cast<SSHORT*>(inMsg + nullOffset);
+					}
+					else
+						srcDesc = nullptr;
+				}
+				while(srcDesc);
 			}
 		}
 
@@ -13774,23 +13891,56 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 			throw;
 		}
 
-		const dsc* fmtDesc = func->getOutputFormat()->fmt_desc.begin();
-		const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
-		SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(outMsg + nullOffset);
-
-		if (*nullPtr)
+		auto outfieldsNum = function->getOutputFields().getCount();
+		if (outfieldsNum > 1) // does it still needed?
 		{
-			value = nullptr;
-			trace.finish(ITracePlugin::RESULT_SUCCESS);
+			const dsc* fmtDesc = function->getOutputFormat()->fmt_desc.begin();
+			auto curdesc = &value->vlu_desc;
+			while(outfieldsNum > 0)
+			{
+				const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
+				const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
+
+				*curdesc = *fmtDesc;
+				SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(outMsg + nullOffset);
+				if (*nullPtr)
+					curdesc->dsc_flags |= DSC_null;
+					// curdesc->dsc_flags |= DSC_nullable | DSC_null;
+				else
+					request->req_flags &= ~req_null;
+				curdesc->dsc_address = outMsg + argOffset;
+				fmtDesc += 2;
+				outfieldsNum--;
+				if (outfieldsNum > 0)
+				{
+					curdesc->dsc_next = FB_NEW_POOL(*tdbb->getDefaultPool()) dsc;
+					curdesc = curdesc->dsc_next;
+				}
+			}
+
 		}
 		else
 		{
-			const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
-			value->vlu_desc = *fmtDesc;
-			value->vlu_desc.dsc_address = outMsg + argOffset;
+			const dsc* fmtDesc = function->getOutputFormat()->fmt_desc.begin();
+			const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
+			SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(outMsg + nullOffset);
 
-			trace.finish(ITracePlugin::RESULT_SUCCESS, &value->vlu_desc);
+			if (*nullPtr)
+			{
+				value = nullptr;
+				trace.finish(ITracePlugin::RESULT_SUCCESS);
+			}
+			else
+			{
+
+				const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
+				value->vlu_desc = *fmtDesc;
+				value->vlu_desc.setAddressRecursively(outMsg + argOffset);
+
+				trace.finish(ITracePlugin::RESULT_SUCCESS, &value->vlu_desc);
+			}
 		}
+
 
 		EXE_unwind(tdbb, funcRequest);
 
@@ -13859,6 +14009,10 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				[&] (dsc* desc) { *desc = node->dsqlFunction->udf_arguments[pos].desc; },
 				false);
 		}
+		else
+		{
+			ERRD_post(Arg::Gds(isc_fun_param_mismatch) << Arg::Str(name.toString()));
+		}
 
 		++pos;
 	}
@@ -13907,6 +14061,7 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 			Arg::Gds(isc_dsql_command_err));
 	}
+	node->dsqlDesc = node->dsqlFunction->udf_outputs[0];
 
 	return node;
 }
@@ -14272,12 +14427,20 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			Arg::Gds(isc_dsql_agg_param_not_accum));
 	}
 
+	node->setDsqlDesc(node->dsqlVar->desc);
+
 	return node;
 }
 
 void VariableNode::setParameterName(dsql_par* parameter) const
 {
 	parameter->par_name = parameter->par_alias = dsqlVar->field->fld_name.c_str();
+}
+
+void VariableNode::setParameterCompositeDescriptor(dsql_par* parameter) const
+{
+	if (dsqlVar->desc.dsc_dtype == dtype_rowtype)
+		Jrd::serialize_composite_parameter_descriptor(*dsqlVar->field, parameter->par_composite_descriptor);
 }
 
 void VariableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
@@ -14287,7 +14450,7 @@ void VariableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	const bool execBlockOrUsing = (varScratch->flags &
 		(DsqlCompilerScratch::FLAG_EXEC_BLOCK | DsqlCompilerScratch::FLAG_USING_STATEMENT));
 
-	if (dsqlVar->type == dsql_var::TYPE_INPUT && !execBlockOrUsing)
+	if (dsqlVar->type == dsql_var::TYPE_INPUT && !execBlockOrUsing && dsqlVar->field->dtype != dtype_rowtype)
 	{
 		dsqlScratch->appendUChar(blr_parameter2);
 
@@ -14394,7 +14557,7 @@ ValueExprNode* VariableNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	ValueExprNode::pass2(tdbb, csb);
 
-	if (varDecl->usedInSubRoutines)
+	if (varDecl && varDecl->usedInSubRoutines)
 		impureOffset = csb->allocImpure<impure_value>();
 	else
 		impureOffset = csb->allocImpure<dsc>();
@@ -14402,10 +14565,63 @@ ValueExprNode* VariableNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
+bool isDescNull(const dsc& desc)
+{
+	bool null = desc.dsc_flags & DSC_null;
+	if (null == true && desc.dsc_sub_first)
+		null = isDescNull(*desc.dsc_sub_first);
+
+	if (null == true && desc.dsc_next)
+		null = isDescNull(*desc.dsc_next);
+
+	return null;
+}
+
+// Synchronize composite sub fields descriptors with record's FLAG_BYTES
+// AAM: if you are brave enough and know how composite descriptors serialized
+// (especialy their nulls) you could provide sequential id (sid) by yourself,
+// but if you aren't, use the sidless overload
+static void syncDescriptorsWithRecord(USHORT& sid, Record& record, dsc& desc)
+{
+	if (record.isNull(sid))
+		desc.dsc_flags |= DSC_null;
+	else
+		desc.dsc_flags &= ~DSC_null;
+
+	sid++;
+
+	if (desc.dsc_sub_first)
+		syncDescriptorsWithRecord(sid, record, *desc.dsc_sub_first);
+
+	if (desc.dsc_next)
+		syncDescriptorsWithRecord(sid, record, *desc.dsc_next);
+
+}
+
+// Synchronize composite sub fields descriptors with record's FLAG_BYTES
+// AAM: sidless overload where you should provide first dsc_sub_first as descriptor
+static void syncDescriptorsWithRecord(Record& record, dsc& desc)
+{
+	USHORT sid = 0;
+	syncDescriptorsWithRecord(sid, record, desc);
+}
+
 dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 {
 	const auto varRequest = getVarRequest(request);
-	const auto varImpure = varRequest->getImpure<impure_value>(varDecl->impureOffset);
+	Jrd::impure_value *varImpure = nullptr;
+	if (varDecl)
+		varImpure = varRequest->getImpure<impure_value>(varDecl->impureOffset);
+
+	// TODO: Adriano ignored the posibility of varImpure absence due to nullptr initialization and assignment under condition
+	if (varDecl && !(varImpure->vlu_flags & VLU_initialized))
+	{
+		const Item item(Item::TYPE_VARIABLE, varId);
+
+		//// FIXME: Variable with simple type has no varInfo.
+		const auto s = item.getDescription(request, varInfo);
+		ERR_post(Arg::Gds(isc_uninitialized_var) << s);
+	}
 
 	if (!(varImpure->vlu_flags & VLU_initialized))
 	{
@@ -14420,7 +14636,7 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 
 	dsc* desc;
 
-	if (varDecl->usedInSubRoutines)
+	if (varDecl && varDecl->usedInSubRoutines)
 	{
 		const auto impure = request->getImpure<impure_value>(impureOffset);
 
@@ -14456,8 +14672,17 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 	{
 		desc = request->getImpure<dsc>(impureOffset);
 
-		if (varImpure->vlu_desc.dsc_flags & DSC_null)
+		if (varImpure && varImpure->vlu_desc.dsc_flags & DSC_null)	// IMPORTANT here is setting up of a null flag for result
 			isNull = true;
+
+		if (varImpure && varImpure->vlu_desc.dsc_dtype == dtype_rowtype)
+		{
+			auto record = varDecl->compositeRecord;
+			syncDescriptorsWithRecord(*record, *varImpure->vlu_desc.dsc_sub_first);
+
+			if (!isDescNull(*varImpure->vlu_desc.dsc_sub_first))
+				request->req_flags &= ~req_null;
+		}
 
 		*desc = varImpure->vlu_desc;
 
@@ -14477,6 +14702,350 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 	}
 
 	return isNull ? nullptr : desc;
+}
+
+//--------------------
+
+static RegisterNode<RowValueExpressionNode> regRowValueExpressionNode({blr_row_value_expression});
+
+RowValueExpressionNode::RowValueExpressionNode(MemoryPool& pool)
+	: TypedNode<ValueExprNode, ExprNode::TYPE_ROW_VALUE_EXPRESSION>(pool),
+	  rowValueExpressionList(nullptr),
+	  compositeRecord(nullptr),
+	  subFieldsNumber(0),
+	  defaultSource(nullptr)
+{
+}
+
+DmlNode* RowValueExpressionNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
+{
+	RowValueExpressionNode* node = FB_NEW_POOL(pool) RowValueExpressionNode(pool);
+
+	node->subFieldsNumber = csb->csb_blr_reader.getWord();
+	node->rowValueExpressionList = FB_NEW_POOL(pool) ValueListNode(pool);
+
+	for (auto i = 0; i < node->subFieldsNumber; i++)
+		node->rowValueExpressionList->add(PAR_parse_value(tdbb, csb));
+
+	return node;
+}
+
+string RowValueExpressionNode::internalPrint(NodePrinter& printer) const
+{
+	ValueExprNode::internalPrint(printer);
+
+	NODE_PRINT(printer, rowValueExpressionList);
+
+	return "RowValueExpressionNode";
+}
+
+ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	// TODO: refactor this method, it's ugly
+	auto& pool = dsqlScratch->getPool();
+
+	RowValueExpressionNode* node = FB_NEW_POOL(pool) RowValueExpressionNode(pool);
+	node->rowValueExpressionList = rowValueExpressionList;
+
+	node->rowField = FB_NEW_POOL(pool) dsql_fld(pool);
+	node->rowField->dtype = dtype_rowtype;
+	node->rowField->scale = 0;
+	node->rowField->fld_name = "ROW";
+	node->rowField->fld_sub_count = node->rowValueExpressionList->items.getCount();
+	node->rowField->length = FLAG_BYTES(rowDesc.dsc_sub_count);
+
+	// TODO: implement dsc generating via fromField() for rowtype fields
+	rowDesc.dsc_dtype = dtype_rowtype;
+	rowDesc.dsc_sub_count = node->rowValueExpressionList->items.getCount();
+	rowDesc.dsc_length += FLAG_BYTES(rowDesc.dsc_sub_count);
+	rowDesc.dsc_sub_first = FB_NEW_POOL(pool) dsc;
+	rowDesc.setNullable(true);
+	auto nextDsc = &rowDesc.dsc_sub_first;
+
+	auto nextFld = &node->rowField->fld_sub_first;
+	auto subfieldSerialNumber = 0;
+
+	for (auto& valueExprNode : node->rowValueExpressionList->items)
+	{
+		valueExprNode = doDsqlPass(dsqlScratch, valueExprNode);
+		if (!*nextDsc)
+			*nextDsc = FB_NEW_POOL(pool) dsc;
+
+		if (!valueExprNode)	// it's nullptr for DEFAULT
+		{
+			MetaName relationSource = "";
+			MetaName fieldName = "";
+			if (defaultSource)
+			{
+				auto rel = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, defaultSource->typeOfTable);
+				if (rel)
+				{
+					dsql_fld* field = rel->rel_fields;
+					auto counter = subfieldSerialNumber;
+					while (counter-- && field)
+						field = field->fld_next;
+
+					if (field)
+					{
+						fieldName = field->fld_name;
+						relationSource = rel->rel_name;
+					}
+				}
+				else if (defaultSource->packageName.hasData() || defaultSource->typeOfName.hasData())
+				{
+					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, defaultSource->relationName, defaultSource->fld_sub_first))
+						dsqlScratch->genCompositeTypeFromCache(defaultSource, defaultSource->fld_sub_first);
+
+					defaultSource->fieldSource = defaultSource->typeOfName;
+
+					dsql_fld* field = defaultSource->fld_sub_first;
+					auto counter = subfieldSerialNumber;
+					while (counter-- && field)
+						field = field->fld_next;
+
+					if (field)
+					{
+						fieldName = field->fld_name;
+						relationSource = defaultSource->relationName.hasData() ? defaultSource->relationName : defaultSource->typeOfName;
+					}
+				}
+			}
+
+			if (relationSource.isEmpty() || fieldName.isEmpty())
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+						  Arg::Gds(isc_dsql_field_err) <<
+						  Arg::Gds(isc_random) << Arg::Str("DEFAULT"));
+
+			valueExprNode = FB_NEW_POOL(pool) DefaultNode(pool, relationSource, fieldName);
+			valueExprNode = doDsqlPass(dsqlScratch, valueExprNode, false);
+		}
+
+		DsqlDescMaker::fromNode(dsqlScratch, *nextDsc, valueExprNode, true);
+
+		if ((*nextDsc)->dsc_dtype >= dtype_aligned)
+			rowDesc.dsc_length = FB_ALIGN(rowDesc.dsc_length, type_alignments[(*nextDsc)->dsc_dtype]);
+
+		rowDesc.dsc_length += (*nextDsc)->dsc_length;
+
+		*nextFld = FB_NEW_POOL(pool) dsql_fld(pool);
+		(*nextFld)->dtype = (*nextDsc)->dsc_dtype;
+		(*nextFld)->scale = (*nextDsc)->dsc_scale;
+		(*nextFld)->subType = (*nextDsc)->dsc_sub_type;
+		(*nextFld)->charSetId = (*nextDsc)->getCharSet();
+
+		dsql_par dummyPar(pool);
+		valueExprNode->setParameterName(&dummyPar);
+		(*nextFld)->length = (*nextDsc)->dsc_length;
+		(*nextFld)->fld_name = dummyPar.par_alias;
+		(*nextFld)->resolve(dsqlScratch);
+
+		if ((*nextDsc)->dsc_dtype >= dtype_aligned)
+			node->rowField->length = FB_ALIGN(node->rowField->length, type_alignments[(*nextDsc)->dsc_dtype]);
+
+		node->rowField->length += (*nextFld)->length;
+
+		nextFld = &(*nextFld)->fld_next;
+		nextDsc = &(*nextDsc)->dsc_next;
+
+		subfieldSerialNumber++;
+	}
+
+	node->rowDesc = rowDesc;
+	return node;
+}
+
+void RowValueExpressionNode::setParameterName(dsql_par* parameter) const
+{
+	parameter->par_name = parameter->par_alias = "ROW";
+}
+
+void RowValueExpressionNode::setParameterCompositeDescriptor(dsql_par* parameter) const
+{
+	if (rowDesc.dsc_dtype == dtype_rowtype)
+		Jrd::serialize_composite_parameter_descriptor(*rowField, parameter->par_composite_descriptor);
+}
+
+void RowValueExpressionNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	dsqlScratch->appendUChar(blr_row_value_expression);
+	dsqlScratch->appendUShort(rowValueExpressionList->items.getCount());
+
+	for (auto& valueExprNode : rowValueExpressionList->items)
+	{
+		valueExprNode->genBlr(dsqlScratch);
+	}
+}
+
+void RowValueExpressionNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
+{
+	*desc = rowDesc;
+}
+
+bool RowValueExpressionNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
+{
+	if (!ExprNode::dsqlMatch(dsqlScratch, other, ignoreMapCast))
+		return false;
+
+	const RowValueExpressionNode* o = nodeAs<RowValueExpressionNode>(other);
+	fb_assert(o);
+
+	// return args == o->args;
+	return true;
+}
+
+void RowValueExpressionNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* desc)
+{
+	*desc = rowDesc;
+}
+
+ValueExprNode* RowValueExpressionNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	auto& pool = *tdbb->getDefaultPool();
+	RowValueExpressionNode* node = FB_NEW_POOL(pool) RowValueExpressionNode(pool);
+
+	node->rowDesc = dsqlDesc;
+
+	auto count = dsqlDesc.dsc_sub_count;
+	auto format = Format::newFormat(pool, count);
+	format->fmt_length = FLAG_BYTES(count);
+	auto nextDesc = &dsqlDesc.dsc_sub_first;
+
+	for (FB_SIZE_T i = 0; i < count; i++)
+	{
+		fb_assert(*nextDesc);
+		dsc& desc = format->fmt_desc[i] = **nextDesc;
+		desc.dsc_next = nullptr;
+		nextDesc = &(*nextDesc)->dsc_next;
+
+		if (desc.dsc_dtype >= dtype_aligned)
+			format->fmt_length = FB_ALIGN(format->fmt_length, type_alignments[desc.dsc_dtype]);
+
+		desc.dsc_address = (UCHAR*)(IPTR) format->fmt_length;
+		format->fmt_length += desc.dsc_length;
+	}
+
+	node->compositeRecord = FB_NEW_POOL(pool) Record(pool, format);
+
+	node->dsqlDesc = dsqlDesc;
+
+	node->rowValueExpressionList = FB_NEW_POOL(pool) ValueListNode(pool);
+	for (auto& valueExprNode : rowValueExpressionList->items)
+	{
+		node->rowValueExpressionList->add(copier.copy(tdbb, valueExprNode));
+	}
+
+	node->subFieldsNumber = subFieldsNumber;
+
+	return node;
+}
+
+ValueExprNode* RowValueExpressionNode::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	ValueExprNode::pass1(tdbb, csb);
+
+	return this;
+}
+
+ValueExprNode* RowValueExpressionNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	auto& pool = *tdbb->getDefaultPool();
+
+	rowDesc.dsc_dtype = dtype_rowtype;
+	rowDesc.dsc_sub_count = subFieldsNumber;
+
+	auto curDesc = &rowDesc.dsc_sub_first;
+
+	rowDesc.dsc_length = FLAG_BYTES(subFieldsNumber);
+	auto subFieldsLengthSum = 0;
+	for (auto& valueExprNode : rowValueExpressionList->items)
+	{
+		*curDesc = FB_NEW_POOL(pool) dsc();
+		valueExprNode->getDesc(tdbb, csb, *curDesc);
+
+		if ((*curDesc)->dsc_dtype >= dtype_aligned)
+			rowDesc.dsc_length = FB_ALIGN(rowDesc.dsc_length, type_alignments[(*curDesc)->dsc_dtype]);
+
+		rowDesc.dsc_length += (*curDesc)->dsc_length;
+		curDesc = &(*curDesc)->dsc_next;
+	}
+
+	auto count = rowDesc.dsc_sub_count;
+	auto format = Format::newFormat(csb->csb_pool, count);
+	format->fmt_length = FLAG_BYTES(count);
+	auto nextDesc = &rowDesc.dsc_sub_first;
+
+	for (FB_SIZE_T i = 0; i < count; i++)
+	{
+		fb_assert(*nextDesc);
+		dsc& desc = format->fmt_desc[i] = **nextDesc;
+		desc.dsc_next = nullptr;
+		nextDesc = &(*nextDesc)->dsc_next;
+
+		if (desc.dsc_dtype >= dtype_aligned)
+			format->fmt_length = FB_ALIGN(format->fmt_length, type_alignments[desc.dsc_dtype]);
+
+		desc.dsc_address = (UCHAR*)(IPTR) format->fmt_length;
+		format->fmt_length += desc.dsc_length;
+	}
+
+	compositeRecord = FB_NEW_POOL(pool) Record(pool, format);
+
+	rowDesc.setNullable(true);
+	dsqlDesc = rowDesc;
+
+	ValueExprNode::pass2(tdbb, csb);
+	impureOffset = csb->allocImpure<impure_value>();
+	rowDesc.setAddressRecursively(compositeRecord->getData());
+
+	return this;
+}
+
+dsc* RowValueExpressionNode::execute(thread_db* tdbb, Request* request) const
+{
+	const auto impure = request->getImpure<impure_value>(impureOffset);
+
+	// set null flags to composite record's null bytes
+	memset(rowDesc.dsc_address, 0xFF, FLAG_BYTES(rowDesc.dsc_sub_count));
+
+	auto nextDesc = &rowDesc.dsc_sub_first;
+
+	auto fieldSequencialId = 0;
+	for (auto& valueExprNode : rowValueExpressionList->items)
+	{
+		auto to_desc = *nextDesc;
+		auto from_desc = valueExprNode->execute(tdbb, request);	// AAM: TODO??? just replace descriptor from internal executed node in rowtype descriptor?
+
+		if (from_desc)
+		{
+			memcpy(to_desc->dsc_address, from_desc->dsc_address, from_desc->dsc_length);
+			// MOV_move(tdbb, from_desc, to_desc);
+			to_desc->clearNull();
+			compositeRecord->clearNull(fieldSequencialId);
+			to_desc->dsc_length = from_desc->dsc_length;
+		}
+		else
+		{
+			memset(to_desc->dsc_address, 0, to_desc->dsc_length);
+			to_desc->setNull();
+
+			// For rowtype, we need to set all fields (via flag bytes) to 0xff what means NULL
+			if (to_desc->dsc_dtype == dtype_rowtype)
+				memset(to_desc->dsc_address, 0xFF, FLAG_BYTES(to_desc->dsc_sub_count));
+		}
+
+		nextDesc = &to_desc->dsc_next;
+		fieldSequencialId++;
+	}
+
+	impure->vlu_desc = rowDesc;
+
+	if (isDescNull(*impure->vlu_desc.dsc_sub_first))
+	{
+		impure->vlu_desc.setNull();
+		return nullptr;
+	}
+
+	return &impure->vlu_desc;
 }
 
 

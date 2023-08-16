@@ -62,7 +62,8 @@ public:
 			  offset(0),
 			  nullInd(0),
 			  nullable(false),
-			  finished(false)
+			  finished(false),
+			  compositeDescriptor(pool)
 		{
 		}
 
@@ -80,7 +81,8 @@ public:
 			  offset(v.offset),
 			  nullInd(v.nullInd),
 			  nullable(v.nullable),
-			  finished(v.finished)
+			  finished(v.finished),
+			  compositeDescriptor(pool, v.compositeDescriptor)
 		{
 		}
 
@@ -98,6 +100,7 @@ public:
 		unsigned nullInd;
 		bool nullable;
 		bool finished;
+		string compositeDescriptor;
 	};
 
 public:
@@ -291,6 +294,15 @@ public:
 	unsigned getAlignedLength(CheckStatusWrapper* /*status*/) override
 	{
 		return alignedLength;
+	}
+
+	const char* getCompositeDescriptor(CheckStatusWrapper* status, unsigned index)
+	{
+		if (index < items.getCount())
+			return items[index].compositeDescriptor.c_str();
+
+		raiseIndexError(status, index, "getCompositeDescriptor");
+		return NULL;
 	}
 
 public:

@@ -31,9 +31,12 @@
 #include "firebird/impl/consts_pub.h"
 #include "../jrd/ods.h"
 #include "../jrd/intl.h"
+#include "../jrd/align.h"
 #include "../intl/charsets.h"
 #include "../common/DecFloat.h"
 #include "../common/Int128.h"
+
+#define FLAG_BYTES(n)	(((n + BITS_PER_LONG) & ~((ULONG)BITS_PER_LONG - 1)) >> 3)
 
 // Data type information
 
@@ -98,12 +101,111 @@ typedef struct dsc
 		  dsc_address((UCHAR*)(IPTR)(od.dsc_offset))
 	{}
 
+	dsc(const dsc& r)
+	{
+		makeDeepCopy(*this, r);
+	}
+
+	dsc(MemoryPool* p, const dsc& r)
+	{
+		makeDeepCopy(*this, r, p);
+	}
+
+	dsc& operator=(const dsc& r)
+	{
+		makeDeepCopy(*this, r);
+		return *this;
+	}
+
+	// TODO: make this function non-recursive if you want cyclic/self-reference descriptors
+	dsc& makeDeepCopy(dsc& l, const dsc& r, MemoryPool* p = nullptr)
+	{
+		l.dsc_dtype = r.dsc_dtype;
+		l.dsc_scale = r.dsc_scale;
+		l.dsc_length = r.dsc_length;
+		l.dsc_sub_type = r.dsc_sub_type;
+		l.dsc_flags = r.dsc_flags;
+		l.dsc_address = r.dsc_address;
+		l.dsc_sub_count = r.dsc_sub_count;
+
+		l.dsc_sub_first = nullptr;
+		l.dsc_next = nullptr;
+
+		if (r.dsc_sub_first || r.dsc_next)
+		{
+			if (r.dsc_next)
+			{
+				if (!p)
+					l.dsc_next = FB_NEW dsc;
+				else
+					l.dsc_next = FB_NEW_POOL(*p) dsc;
+				makeDeepCopy(*l.dsc_next, *r.dsc_next, p);
+			}
+
+			if (r.dsc_sub_first)
+			{
+				if (!p)
+					l.dsc_sub_first = FB_NEW dsc;
+				else
+					l.dsc_sub_first = FB_NEW_POOL(*p) dsc;
+				makeDeepCopy(*l.dsc_sub_first, *r.dsc_sub_first, p);
+			}
+		}
+
+		return l;
+	}
+
+	~dsc()
+	{
+		if (dsc_sub_first)
+			delete dsc_sub_first;
+
+		if (dsc_next)
+			delete dsc_next;
+	}
+
+	void setAddressRecursively(UCHAR* newAddress)
+	{
+		ULONG recordLength = 0;
+		setAddressRecursively(newAddress, recordLength);
+	}
+
+	void setAddressRecursively(UCHAR* baseAddress, ULONG& recordLength)
+	{
+		if (dsc_sub_first)
+		{
+			dsc_address = baseAddress + recordLength;
+			recordLength = recordLength + FLAG_BYTES(dsc_sub_count);
+			dsc_sub_first->setAddressRecursively(baseAddress, recordLength);
+		}
+
+		if (dsc_next)
+		{
+			if (dsc_dtype >= dtype_aligned)
+				recordLength = FB_ALIGN(recordLength, type_alignments[dsc_dtype]);
+
+			dsc_address = baseAddress + recordLength;
+			recordLength += dsc_length;
+			dsc_next->setAddressRecursively(baseAddress, recordLength);
+		}
+		else if (!dsc_sub_first)
+		{
+			if (dsc_dtype >= dtype_aligned)
+				recordLength = FB_ALIGN(recordLength, type_alignments[dsc_dtype]);
+
+			dsc_address = baseAddress + recordLength;
+		}
+	}
+
 	UCHAR	dsc_dtype = 0;
 	SCHAR	dsc_scale = 0;
 	USHORT	dsc_length = 0;
 	SSHORT	dsc_sub_type = 0;
 	USHORT	dsc_flags = 0;
 	UCHAR*	dsc_address = nullptr; // Used either as offset in a message or as a pointer
+	dsc*	dsc_sub_first = nullptr;
+	dsc*	dsc_next = nullptr;
+	USHORT	dsc_sub_count = 0;
 
 #ifdef __cplusplus
 	TTypeId dsc_blob_ttype() const noexcept
@@ -132,11 +234,37 @@ typedef struct dsc
 	void setNull() noexcept
 	{
 		dsc_flags |= DSC_null | DSC_nullable;
+
+		// If the descriptor is composite, set all sub descriptors to null
+		if (dsc_sub_first)
+			dsc_sub_first->setNull();
+
+		if (dsc_next)
+			dsc_next->setNull();
 	}
 
 	void clearNull() noexcept
 	{
 		dsc_flags &= ~DSC_null;
+	}
+
+	// synchronize composite null mask with subfields descriptors null flags
+	void propagateNullMask() noexcept
+	{
+		if (dsc_sub_first)
+			dsc_sub_first->propagateNullMask();
+
+		if (dsc_next)
+			dsc_next->propagateNullMask();
+
+		auto next = dsc_sub_first;
+		for (auto i = 0; next; i++, next = next->dsc_next)
+		{
+			if (dsc_address[i/8] & 1 << i)
+				next->dsc_flags |= DSC_null;
+			else
+				next->dsc_flags &= ~DSC_null;
+		}
 	}
 
 	bool isBlob() const noexcept
@@ -223,6 +351,11 @@ typedef struct dsc
 	bool isApprox() const noexcept
 	{
 		return DTYPE_IS_APPROX(dsc_dtype);
+	}
+
+	bool isRowType() const noexcept
+	{
+		return dsc_dtype == dtype_rowtype;
 	}
 
 	bool isUnknown() const noexcept
@@ -592,6 +725,12 @@ inline bool DSC_EQUIV(const dsc* d1, const dsc* d2, bool check_collate) noexcept
 		return true;
 	}
 
+	if (d1->dsc_dtype >= dtype_rowtype && d2->dsc_dtype <= dtype_rowtype)
+	{
+		if (d1->dsc_sub_count == d2->dsc_sub_count)
+			return true;
+	}
+
 	return false;
 }
 
@@ -603,7 +742,6 @@ inline constexpr UCHAR DTYPE_CANNOT	= 127;
 // Historical alias definition
 inline constexpr UCHAR dtype_date		= dtype_timestamp;
 
-inline constexpr UCHAR dtype_aligned	= dtype_varying;
 inline constexpr UCHAR dtype_any_text	= dtype_varying;
 inline constexpr UCHAR dtype_min_comp	= dtype_packed;
 inline constexpr UCHAR dtype_max_comp	= dtype_d_float;
@@ -636,7 +774,7 @@ inline constexpr SSHORT dsc_num_type_decimal	= 2;	// defined as DECIMAL(n,m)
 
 // Date type information
 
-inline constexpr SCHAR NUMERIC_SCALE(const dsc desc) noexcept
+inline SCHAR NUMERIC_SCALE(const dsc desc) noexcept
 {
 	return ((DTYPE_IS_TEXT(desc.dsc_dtype)) ? 0 : desc.dsc_scale);
 }

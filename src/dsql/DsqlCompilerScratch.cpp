@@ -418,6 +418,102 @@ void DsqlCompilerScratch::putTypeName(const TypeClause& type, const bool useExpl
 	}
 }
 
+void DsqlCompilerScratch::genLocalTypes(CompoundStmtNode* declarations)
+{
+	if (!declarations)
+		return;
+
+	NestConst<StmtNode>* ptr = declarations->statements.begin();
+
+	for (const NestConst<StmtNode>* end = declarations->statements.end(); ptr != end;)
+	{
+		StmtNode* declaration = *ptr;
+
+		putDebugSrcInfo(declaration->line, declaration->column);
+
+		DeclareLocalTypeNode* declarationNode;
+
+		if ((declarationNode = nodeAs<DeclareLocalTypeNode>(declaration)))
+		{
+			auto fieldIdCounter = 0;
+			auto curclause = declarationNode->clauses.begin();
+
+			dsql_fld** tail = nullptr;
+			while (curclause != declarationNode->clauses.end())
+			{
+				auto clause = (static_cast<RelationNode::AddColumnClause*>(curclause->getObject()));
+				if (tail)
+					*tail = clause->field;
+				tail = &clause->field->fld_next;
+				curclause++;
+				clause->field->fld_id = fieldIdCounter++;
+			}
+
+			declarationNode = declarationNode->dsqlPass(this);
+			ptr = declarations->statements.remove(ptr);
+			localCompositeTypeDeclarations.put(declarationNode->name, declarationNode);
+			end = declarations->statements.end();
+			continue;
+		}
+		++ptr;
+	}
+}
+
+void DsqlCompilerScratch::putLocalTypes()
+{
+	for (auto& pair : localCompositeTypeDeclarations)
+	{
+		appendUChar(blr_dcl_composite_type);
+		appendMetaString(pair.first.c_str());
+		auto declarationNode = nodeAs<DeclareLocalTypeNode>(pair.second);
+
+		appendUChar(declarationNode->dsqlField->fld_sub_count);
+
+		auto defaultsExist = declarationNode->defaultList->items.hasData();
+		auto defaultNode = defaultsExist ? declarationNode->defaultList->items.begin() : nullptr;
+		auto curClause = declarationNode->clauses.begin();
+		auto fld = declarationNode->dsqlField->fld_sub_first;
+		while (fld)
+		{
+			appendMetaString(fld->fld_name.c_str());
+			putDtype(fld, false);
+			auto clause = (static_cast<RelationNode::AddColumnClause*>(curClause->getObject()));
+			UCHAR hasCheckConstraint = false;
+			for (auto& constraint : clause->constraints)
+			{
+				if (constraint.constraintType == RelationNode::AddConstraintClause::CTYPE_CHECK)
+				{
+					appendUChar(DeclareLocalTypeNode::HAS_CHECK_CONSTRAINT);
+					hasCheckConstraint = true;
+					GEN_expr(this, constraint.check->value);
+				}
+			}
+
+			if (hasCheckConstraint == false)
+				appendUChar(DeclareLocalTypeNode::NO_CHECK_CONSTRAINT);
+
+			curClause++;
+
+			fld = fld->fld_next;
+
+			if (defaultsExist)
+			{
+				// set NULL as default if default value is nullptr
+				if (!*defaultNode)
+					*defaultNode = NullNode::instance();
+
+				appendUChar(DeclareLocalTypeNode::HAS_DEFAULT_VALUE);
+				GEN_expr(this, *defaultNode);
+				++defaultNode;
+			}
+			else
+			{
+				appendUChar(DeclareLocalTypeNode::NO_DEFAULT_VALUE);
+			}
+		}
+	}
+}
+
 // Write out local variable field data type.
 void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam,
 	QualifiedName& collationName)
@@ -428,7 +524,47 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 	appendUShort(variable->number);
 	DDL_resolve_intl_type(this, field, collationName);
 
-	putType(field, true);
+	if (field->dtype == dtype_rowtype)
+	{
+		if (field->notNull)
+			appendUChar(blr_not_nullable);
+
+		if (field->typeOfTable.hasData())
+		{
+			appendUChar(blr_rowtype3);
+			appendUShort(field->fld_sub_count);
+			appendUShort(variable->contextNum);
+			appendMetaString(field->typeOfTable.c_str());
+		}
+		else if (field->fieldSource.hasData())
+		{
+			appendUChar(blr_rowtype2);
+			appendUShort(field->fld_sub_count);
+			appendUShort(variable->contextNum);
+			appendMetaString(field->fieldSource.c_str());
+		}
+		else if (field->typeOfName.hasData())
+		{
+			appendUChar(blr_rowtype4);
+			appendUShort(field->fld_sub_count);
+			appendUShort(variable->contextNum);
+			appendMetaString(field->typeOfName.c_str());
+		}
+		else
+		{
+			appendUChar(blr_rowtype);
+			appendUShort(field->fld_sub_count);
+			appendUShort(variable->contextNum);
+			auto next = field->fld_sub_first;
+			while (next)
+			{
+				putType(next, true);
+				next = next->fld_next;
+			}
+		}
+	}
+	else
+		putType(field, true);
 
 	if (variable->field->fld_name.hasData())	// Not a function return value
 		putDebugVariable(variable->number, variable->field->fld_name);
@@ -448,7 +584,7 @@ void DsqlCompilerScratch::putLocalVariableInit(dsql_var* variable, const Declare
 	const dsql_fld* field = variable->field;
 
 	// Check for a default value, borrowed from define_domain
-	NestConst<ValueSourceClause> node = hostParam ? hostParam->dsqlDef->defaultClause : nullptr;
+	NestConst<ValueSourceClause> initializer = hostParam ? hostParam->dsqlDef->defaultClause : nullptr;
 
 	if (variable->type == dsql_var::TYPE_INPUT)
 	{
@@ -464,12 +600,12 @@ void DsqlCompilerScratch::putLocalVariableInit(dsql_var* variable, const Declare
 		appendUChar(blr_variable);
 		appendUShort(variable->number);
 	}
-	else if (node || (!field->fullDomain && !field->notNull))
+	else if (initializer || (!field->fullDomain && !field->notNull))
 	{
 		appendUChar(blr_assignment);
 
-		if (node)
-			GEN_expr(this, node->value);
+		if (initializer)
+			GEN_expr(this, initializer->value);
 		else
 			appendUChar(blr_null);	// Initialize variable to NULL
 
@@ -481,6 +617,75 @@ void DsqlCompilerScratch::putLocalVariableInit(dsql_var* variable, const Declare
 		appendUChar(blr_init_variable);
 		appendUShort(variable->number);
 	}
+}
+
+bool DsqlCompilerScratch::genCompositeTypeFromCache(dsql_fld* srcField, dsql_fld*& resFields)
+{
+	for (auto it : localCompositeTypeDeclarations)
+	{
+		if (it.first == srcField->typeOfName)
+		{
+			auto tmp = nodeAs<DeclareLocalTypeNode>(it.second)->dsqlField;
+			resFields = tmp->fld_sub_first;
+			srcField->fieldSource = tmp->fieldSource;
+			srcField->relationName = tmp->relationName;
+			srcField->fld_sub_count = tmp->fld_sub_count;
+
+			return true;
+		}
+	}
+
+	for(auto it : packagedTypesCache)
+	{
+		if (it->typeName == srcField->typeOfName)
+		{
+			srcField->fieldSource = srcField->typeOfName = it->fieldSource;
+			srcField->relationName = it->relationName;
+
+			auto nextPtr = &resFields;
+			for (auto decl : it->fieldDeclarations)
+			{
+				dsql_fld* field123 = FB_NEW_POOL(this->getPool()) dsql_fld(this->getPool());
+				*nextPtr = field123;
+				*field123 = *(decl->type);
+				field123->relationName = it->relationName;
+				nextPtr = &(*nextPtr)->fld_next;
+				srcField->fld_sub_count++;
+			}
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool DsqlCompilerScratch::getTypeFromCache(dsql_fld* field, const MetaName& typeName)
+{
+	for (auto it : localCompositeTypeDeclarations)
+	{
+		if (it.first == typeName)
+		{
+			field->dtype = dtype_rowtype;
+			field->typeOfName = it.first;
+			field->fullDomain = true;
+			return true;
+		}
+	}
+
+	for (auto it : packagedTypesCache)
+	{
+		if (it->fieldSource == typeName)
+		{
+			field->dtype = it->compositeTypeDeclaration ? dtype_rowtype : it->typeClause->type->dtype;
+			field->typeOfName = it->fieldSource;
+			field->packageName = it->package;
+			// field->fullDomain = false;
+			return true;
+		}
+	}
+
+	return false;
 }
 
 // Put maps in subroutines for outer variables/parameters usage.
@@ -634,6 +839,7 @@ void DsqlCompilerScratch::genReturn(bool eosFlag)
 void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& parameters,
 	Array<NestConst<ParameterClause> >& returns)
 {
+	auto parameterCounter = 0;
 	if (parameters.hasData())
 	{
 		fb_assert(parameters.getCount() < MAX_USHORT / 2);
@@ -644,15 +850,99 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 		for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
 		{
 			ParameterClause* parameter = parameters[i];
-			putDebugArgument(fb_dbg_arg_input, i, parameter->name.c_str());
-			putType(parameter->type, true);
 
-			// Add slot for null flag (parameter2).
-			appendUChar(blr_short);
-			appendUChar(0);
+			auto field = parameter->type;
+			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+			if (isRowtype)
+			{
+				dsql_rel* relation = METD_get_relation(getTransaction(), this, field->typeOfTable.c_str());
+				dsql_fld* fld = NULL;
 
-			makeVariable(parameter->type, parameter->name.c_str(),
-				dsql_var::TYPE_INPUT, 0, (USHORT) (2 * i), 0);
+				if (!field->packageName.hasData() && getTypeFromCache(field, field->typeOfName))
+				{
+					genCompositeTypeFromCache(field, fld);
+					field->fld_sub_first = fld;
+				}
+				else if (!relation && field->packageName.hasData())
+				{
+					if (!METD_gen_composite_type_fields(getTransaction(), this, field->relationName, fld))
+						genCompositeTypeFromCache(field, fld);
+
+					field->fieldSource = field->typeOfName;
+					field->fld_sub_first = fld;
+				}
+
+				if (relation)
+				{
+					fld = field->fld_sub_first = relation->rel_fields;
+					field->fld_sub_count = relation->rel_fields_number;
+				}
+				else if (!fld)
+				{
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+					Arg::Gds(isc_invalid_parameter_decl) <<
+					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+				}
+
+				calculateCompositeFieldLength(*field);
+
+				dsql_var* variable = makeVariable(nullptr, field->fld_name.c_str(),
+					dsql_var::TYPE_INPUT, 0, (USHORT) (2 * i), parameterCounter++);
+
+				dsql_ctx* new_context = FB_NEW_POOL(getPool()) dsql_ctx(getPool());
+				new_context->ctx_context = contextNumber++;
+				new_context->ctx_scope_level = scopeLevel;
+				new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
+				new_context->ctx_flags = CTX_rowtype_var;
+				new_context->ctx_rowtype_var = variable;
+				context->push(new_context);
+				variable->contextNum = new_context->ctx_context;
+
+				putDebugArgument(fb_dbg_arg_output, i, parameter->name.c_str());
+				variable->field = field;
+				if (field->fieldSource.hasData())
+				{
+					appendUChar(blr_rowtype2);
+					appendUShort(field->fld_sub_count);
+					appendUShort(variable->contextNum);
+					appendMetaString(field->fieldSource.c_str());
+				}
+				else if (field->typeOfTable.hasData())
+				{
+					appendUChar(blr_rowtype3);
+					appendUShort(field->fld_sub_count);
+					appendUShort(variable->contextNum);
+					appendMetaString(field->typeOfTable.c_str());
+				}
+				else
+				{
+					appendUChar(blr_rowtype);
+					appendUShort(field->fld_sub_count);
+					appendUShort(variable->contextNum);
+					auto next = field->fld_sub_first;
+					while (next)
+					{
+						putDtype(next, true);
+						next = next->fld_next;
+					}
+				}
+
+				// Add slot for null flag (parameter2).
+				appendUChar(blr_short);
+				appendUChar(0);
+			}
+			else
+			{
+				putDebugArgument(fb_dbg_arg_input, i, parameter->name.c_str());
+				putType(parameter->type, true);
+
+				// Add slot for null flag (parameter2).
+				appendUChar(blr_short);
+				appendUChar(0);
+
+				makeVariable(parameter->type, parameter->name.c_str(),
+					dsql_var::TYPE_INPUT, 0, (USHORT) (2 * i), 0);
+			}
 		}
 	}
 
@@ -666,15 +956,103 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 		for (FB_SIZE_T i = 0; i < returns.getCount(); ++i)
 		{
 			ParameterClause* parameter = returns[i];
-			putDebugArgument(fb_dbg_arg_output, i, parameter->name.c_str());
-			putType(parameter->type, true);
 
-			// Add slot for null flag (parameter2).
-			appendUChar(blr_short);
-			appendUChar(0);
+			auto field = parameter->type;
+			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+			if (isRowtype)
+			{
+				dsql_rel* relation = METD_get_relation(getTransaction(), this, field->typeOfTable.c_str());
+				dsql_fld* fld = nullptr;
 
-			makeVariable(parameter->type, parameter->name.c_str(),
-				dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * i), i);
+				if (!field->packageName.hasData() && getTypeFromCache(field, field->typeOfName))
+				{
+					genCompositeTypeFromCache(field, fld);
+					field->fld_sub_first = fld;
+				}
+				else if (!relation && field->packageName.hasData())
+				{
+					if (!METD_gen_composite_type_fields(getTransaction(), this, field->relationName, fld))
+						genCompositeTypeFromCache(field, fld);
+
+					field->fieldSource = field->typeOfName;
+					field->fld_sub_first = fld;
+				}
+
+				if (relation)
+				{
+					fld = field->fld_sub_first = relation->rel_fields;
+					field->fld_sub_count = relation->rel_fields_number;
+				}
+				else if (!fld)
+				{
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+					Arg::Gds(isc_invalid_parameter_decl) <<
+					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+				}
+
+				calculateCompositeFieldLength(*field);
+
+				dsql_var* variable = makeVariable(nullptr, field->fld_name.c_str(),
+					dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * i), i + parameterCounter);
+
+				dsql_ctx* new_context = FB_NEW_POOL(this->getPool()) dsql_ctx(this->getPool());
+				new_context->ctx_context = this->contextNumber++;
+				new_context->ctx_scope_level = this->scopeLevel;
+				new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
+				new_context->ctx_flags = CTX_rowtype_var;
+				new_context->ctx_rowtype_var = variable;
+				this->context->push(new_context);
+				variable->contextNum = new_context->ctx_context;
+
+				putDebugArgument(fb_dbg_arg_output, i, parameter->name.c_str());
+				variable->field = field;
+				if (field->fieldSource.hasData())
+				{
+					appendUChar(blr_rowtype2);
+					appendUShort(field->fld_sub_count);
+					appendUShort(variable->contextNum);
+					appendMetaString(field->fieldSource.c_str());
+				}
+				else if (field->typeOfTable.hasData())
+				{
+					appendUChar(blr_rowtype3);
+					appendUShort(field->fld_sub_count);
+					appendUShort(variable->contextNum);
+					appendMetaString(field->typeOfTable.c_str());
+				}
+				else
+				{
+					appendUChar(blr_rowtype);
+					appendUShort(field->fld_sub_count);
+					appendUShort(variable->contextNum);
+					auto next = field->fld_sub_first;
+					while (next)
+					{
+						putDtype(next, true);
+						next = next->fld_next;
+					}
+				}
+
+				// Add slot for null flag (parameter2).
+				appendUChar(blr_short);
+				appendUChar(0);
+
+				functionOutputVariableNumber = variable->number;
+			}
+			else
+			{
+				putDebugArgument(fb_dbg_arg_output, i, parameter->name.c_str());
+				putType(parameter->type, true);
+
+				// Add slot for null flag (parameter2).
+				appendUChar(blr_short);
+				appendUChar(0);
+
+				dsql_var* variable = makeVariable(parameter->type, parameter->name.c_str(),
+					dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * i), i + parameterCounter);
+
+				functionOutputVariableNumber = variable->number;
+			}
 		}
 	}
 

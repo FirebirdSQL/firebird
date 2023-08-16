@@ -221,24 +221,34 @@ Sort* SortedStream::init(thread_db* tdbb) const
 		// Loop thru all field (keys and hangers on) involved in the sort.
 		// Be careful to null field all unused bytes in the sort key.
 
+		auto subfieldsSkipCounter = 0;
+
 		const SortMap::Item* const end_item = m_map->items.begin() + m_map->items.getCount();
 		for (const SortMap::Item* item = m_map->items.begin(); item < end_item; item++)
 		{
 			to = item->desc;
-			to.dsc_address = data + (IPTR) to.dsc_address;
+			to.setAddressRecursively(data + (IPTR) to.dsc_address);
 			bool flag = false;
 			dsc* from = nullptr;
 
 			if (item->node)
 			{
 				from = EVL_expr(tdbb, request, item->node);
+
+				if (item->desc.isRowType())
+					subfieldsSkipCounter = item->desc.dsc_sub_count;
+
 				if (!from)
 					flag = true;
+			}
+			else if (subfieldsSkipCounter != 0)
+			{
+				subfieldsSkipCounter--;
+				continue;
 			}
 			else
 			{
 				from = &temp;
-
 				record_param* const rpb = &request->req_rpb[item->stream];
 
 				if (item->fieldId < 0)
@@ -346,14 +356,24 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 	StreamType stream = INVALID_STREAM;
 	dsc from, to;
 	StreamList refetchStreams;
+	auto subfieldsSkipCounter = 0;
 
 	for (const auto& item : m_map->items)
 	{
 		const auto flag = (*(data + item.flagOffset) == TRUE);
 		from = item.desc;
-		from.dsc_address = data + (IPTR) from.dsc_address;
+		from.setAddressRecursively(data + (IPTR) from.dsc_address);
+
+		// If we are dealing with a row type, then we need to set skip counter to the number of fields in
+		// the rowvalue. Dew to the fact that rowvalue itself has a node which will be skipped on next if,
+		// then first skip of a subfield will accure on next item.
+		if (from.dsc_dtype == dtype_rowtype)
+			subfieldsSkipCounter = from.dsc_sub_count;
 
 		if (item.node && !nodeIs<FieldNode>(item.node))
+			continue;
+
+		if (subfieldsSkipCounter != 0 && subfieldsSkipCounter--)
 			continue;
 
 		// Some fields may have volatile keys, so that their value

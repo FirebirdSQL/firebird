@@ -149,6 +149,25 @@ void dsql_fld::resolve(DsqlCompilerScratch* dsqlScratch, bool modifying)
 }
 
 
+int Jrd::calculateCompositeFieldLength(dsql_fld& fld)
+{
+	auto curFld = &fld;
+	fld.length = FLAG_BYTES(fld.fld_sub_count);
+
+	curFld = fld.fld_sub_first;
+	do
+	{
+		if (curFld->dtype >= dtype_aligned)
+			fld.length = FB_ALIGN(fld.length, type_alignments[curFld->dtype]);
+
+		fld.length += curFld->length;
+		curFld = curFld->fld_next;
+	}
+	while (curFld);
+
+	return fld.length;
+}
+
 // Execute a dynamic SQL statement.
 void DSQL_execute(thread_db* tdbb,
 			  	  jrd_tra** tra_handle,
@@ -1229,6 +1248,7 @@ static UCHAR* var_info(const dsql_msg* message,
 				USHORT length;
 				string str;
 				MetaName name;
+				string stringBuffer;
 				const UCHAR* buffer = buf;
 				UCHAR item = *describe++;
 
@@ -1323,6 +1343,17 @@ static UCHAR* var_info(const dsql_msg* message,
 						name = attachment->nameToUserCharSet(tdbb, param->par_alias);
 						length = name.length();
 						buffer = reinterpret_cast<const UCHAR*>(name.c_str());
+					}
+					else
+						length = 0;
+					break;
+
+				case isc_info_sql_composite_descriptor:
+					if (param->par_composite_descriptor.hasData())
+					{
+						stringBuffer = param->par_composite_descriptor;
+						length = stringBuffer.length();
+						buffer = reinterpret_cast<const UCHAR*>(stringBuffer.c_str());
 					}
 					else
 						length = 0;
@@ -1524,4 +1555,70 @@ dsql_udf::dsql_udf(MemoryPool& p, const class Function* jfun)
 			arg.desc.dsc_flags |= FLD_nullable;
 		udf_arguments.add(arg);
 	}
+}
+
+
+static void parseParameterFieldForDscData(USHORT& id, dsql_fld& parameterField, string& outstringbuff)
+{
+	id++;
+	auto name = parameterField.fld_name;
+	USHORT type = fb_utils::dscTypeToSqlType(parameterField.dtype);
+	ULONG length = parameterField.length;
+	SSHORT subType = parameterField.subType;
+	SSHORT scale = parameterField.scale;
+	SSHORT charset = parameterField.charSetId.isAssigned() ? parameterField.charSetId.value : 0;
+	const char endByte = 0x00;
+
+	outstringbuff.append(reinterpret_cast<const char*>(&id), sizeof(id));
+	UCHAR nameLength = name.length();	// name of a field can't be longer than 255 bytes
+	outstringbuff.append(reinterpret_cast<const char*>(&nameLength), sizeof(nameLength));
+	outstringbuff.append(reinterpret_cast<const char*>(name.c_str()), name.length());
+	outstringbuff.append(reinterpret_cast<const char*>(&type), sizeof(type));
+	outstringbuff.append(reinterpret_cast<const char*>(&length), sizeof(length));
+	outstringbuff.append(reinterpret_cast<const char*>(&subType), sizeof(subType));
+	outstringbuff.append(reinterpret_cast<const char*>(&scale), sizeof(scale));
+	outstringbuff.append(reinterpret_cast<const char*>(&charset), sizeof(charset));
+
+	if (parameterField.fld_sub_first)
+	{
+		parseParameterFieldForDscData(id, *parameterField.fld_sub_first, outstringbuff);
+		outstringbuff.append(&endByte, sizeof(endByte));
+	}
+	else
+		outstringbuff.append(&endByte, sizeof(endByte));
+
+	if (parameterField.fld_next)
+		parseParameterFieldForDscData(id, *parameterField.fld_next, outstringbuff);
+}
+
+
+/**
+
+ 	Jrd::serialize_composite_parameter_descriptor
+
+    @brief	Serializes the composite field descriptor for subsequent sending to the client
+
+
+    @param parameterField
+    @param serializedDescriptor
+
+ **/
+USHORT Jrd::serialize_composite_parameter_descriptor(dsql_fld& parameterField, string& serializedDescriptor)
+{
+	if (parameterField.dtype != dtype_rowtype)
+		return 0;
+
+	thread_db* tdbb = JRD_get_thread_data();
+	Jrd::Attachment* attachment = tdbb->getAttachment();
+
+	string outstringbuff;
+
+	USHORT id = 0;
+	parseParameterFieldForDscData(id, parameterField, outstringbuff);
+	USHORT serializedDescriptorLength = outstringbuff.length();
+	outstringbuff.insert(0, reinterpret_cast<const char*>(&serializedDescriptorLength), sizeof(serializedDescriptorLength));
+
+	serializedDescriptor = outstringbuff;
+
+	return serializedDescriptorLength;
 }

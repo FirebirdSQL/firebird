@@ -1022,3 +1022,6 @@ FB_IMPL_MSG(JRD, 1019, dsql_agg_exit_group, -204, "42", "000", "EXIT is not allo
 FB_IMPL_MSG(JRD, 1020, dsql_agg_return, -204, "42", "000", "RETURN is not allowed in ON START DO, ON ACCUMULATE DO or ON FINISH DO sections of aggregate function; use EXIT instead")
 FB_IMPL_MSG(JRD, 1021, hypfun_args_non_equal_sort_item, -833, "42", "000", "Number of arguments of hypothetical-set aggregate function @1 must match number of sort items in WITHIN GROUP clause")
 FB_IMPL_MSG(JRD, 1022, old_format, -804, "07", "000", "Statement format outdated, need to be reprepared")
+FB_IMPL_MSG(JRD, 1023, invalid_parameter_decl, -901, "HY", "000", "Invalid parameter declaration")
+FB_IMPL_MSG(JRD, 1024, composite_type_notdef, -104, "HY", "000", "composite type @1 not defined (BLR error)")
+FB_IMPL_MSG(JRD, 1025, packaged_type_notdef, -104, "HY", "000", "packaged type @1 of @2 is not defined or private")

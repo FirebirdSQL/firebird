@@ -242,6 +242,9 @@ namespace fb_utils
 	// On incorrect sqlType returns dsc_unknown
 	UCHAR sqlTypeToDscType(SSHORT sqlType) noexcept;
 
+	// On incorrect dscType returns dsc_unknown
+	USHORT dscTypeToSqlType(SSHORT dscType);
+
 	// Returns next offset value
 	unsigned sqlTypeToDsc(unsigned prevOffset, unsigned sqlType, unsigned sqlLength,
 		unsigned* dtype, unsigned* len, unsigned* offset, unsigned* nullOffset);

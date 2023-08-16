@@ -1523,6 +1523,12 @@ bool DSC_make_descriptor(DSC* desc,
 		desc->dsc_dtype = dtype_boolean;
 		break;
 
+	case blr_rowtype:
+	case blr_rowtype2:
+	case blr_rowtype3:
+		desc->dsc_dtype = dtype_rowtype;
+		break;
+
 	default:
 		fb_assert(FALSE);
 		desc->dsc_dtype = dtype_unknown;
@@ -1787,6 +1793,10 @@ void dsc::getSqlInfo(SLONG* sqlLength, SLONG* sqlSubType, SLONG* sqlScale, SLONG
 
 		case dtype_ex_time_tz:
 			*sqlType = SQL_TIME_TZ_EX;
+			break;
+
+		case dtype_rowtype:
+			*sqlType = SQL_ROWTYPE;
 			break;
 
 		default:

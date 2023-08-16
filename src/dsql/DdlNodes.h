@@ -152,6 +152,7 @@ public:
 	MetaName name;
 	NestConst<dsql_fld> type;
 	NestConst<ValueSourceClause> defaultClause;
+	NestConst<BoolSourceClause> checkClause;
 	NestConst<ValueExprNode> parameterExpr;
 	std::optional<int> udfMechanism;
 };
@@ -445,7 +446,8 @@ private:
 
 	void storeArgument(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		unsigned pos, bool returnArg, ParameterClause* parameter,
-		const CollectedParameter* collectedParameter);
+		const CollectedParameter* collectedParameter,
+		int composite_pos = -1, ValueExprNode* defaultValue = nullptr);
 	void compile(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
 	void collectParameters(thread_db* tdbb, CollectedParameterMap& items);
 
@@ -599,7 +601,7 @@ private:
 
 	void storeParameter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		USHORT parameterType, unsigned pos, ParameterClause* parameter,
-		const CollectedParameter* collectedParameter);
+		const CollectedParameter* collectedParameter, ValueExprNode* defaultValue = nullptr);
 	void compile(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
 	void collectParameters(thread_db* tdbb, CollectedParameterMap& items);
 
@@ -943,6 +945,116 @@ public:
 	bool silent = false;
 };
 
+class DeclarePackageTypeNode : public DdlNode
+{
+public:
+	DeclarePackageTypeNode(MemoryPool& p, ParameterClause* aNameType)
+		: DdlNode(p),
+		  typeClause(aNameType),
+		  fieldSource(p),
+		  create(true),
+		  alter(false),
+		  package(p),
+		  privateScope(false),
+		  preserveDefaults(false),
+		  packageOwner(p),
+		  fieldDeclarations(p),
+		  compositeTypeDeclaration(false),
+		  privateFlag(false),
+		  typeName(p),
+		  relationName(p),
+		  notNull(false),
+		  check(NULL)
+	{
+		fieldSource = typeName = typeClause->name;
+		fieldDeclarations.add(aNameType);
+	}
+
+	DeclarePackageTypeNode(MemoryPool& p, MetaName& tName)
+		: DdlNode(p),
+		  typeClause(nullptr),
+		  fieldSource(p),
+		  create(true),
+		  alter(false),
+		  package(p),
+		  privateScope(false),
+		  preserveDefaults(false),
+		  packageOwner(p),
+		  fieldDeclarations(p),
+		  compositeTypeDeclaration(true),
+		  privateFlag(false),
+		  typeName(p),
+		  relationName(p),
+		  notNull(false),
+		  check(NULL)
+	{
+		fieldSource = typeName = tName;
+	}
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
+	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+
+protected:
+	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	{
+		statusVector << Firebird::Arg::Gds(isc_dsql_create_domain_failed) << fieldSource;
+	}
+
+private:
+	bool updateFieldDefaultAndValidation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
+		MetaName& name, ValueSourceClause* defaultClause, BoolSourceClause* check, bool notNull);
+
+public:
+	NestConst<ParameterClause> typeClause;
+	bool notNull;
+	NestConst<BoolSourceClause> check;
+	MetaName fieldSource;
+	bool create;
+	bool alter;
+	MetaName package;
+	bool privateScope;
+	bool preserveDefaults;
+	MetaName packageOwner;
+	Firebird::Array<NestConst<ParameterClause> > fieldDeclarations;
+	bool compositeTypeDeclaration;
+	bool privateFlag;
+	MetaName typeName;
+	MetaName relationName;
+};
+
+class DropPackageTypeNode : public DdlNode
+{
+public:
+	DropPackageTypeNode(MemoryPool& p, const MetaName& aName)
+		: DdlNode(p),
+		  name(p, aName),
+		  package(p)
+	{
+	}
+
+	static bool deleteDimensionRecords(thread_db* tdbb, jrd_tra* transaction,
+		const MetaName& name);
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
+	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+
+protected:
+	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	{
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_domain_failed) << name;
+	}
+
+private:
+	void check(thread_db* tdbb, jrd_tra* transaction);
+
+public:
+	MetaName name;
+	MetaName package;
+};
 
 class CreateDomainNode final : public DdlNode
 {

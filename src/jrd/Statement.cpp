@@ -79,7 +79,8 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	  blr(*p),
 	  mapFieldInfo(*p),
 	  resources(nullptr),
-	  messages(*p, 2) // Most statements have two messages, preallocate space for them
+	  messages(*p, 2), // Most statements has two messages, preallocate space for them
+	  mapContextVariableNames(*p)
 {
 	if (csb->csb_resources)
 	{
@@ -102,6 +103,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 		csb->csb_external.clear();
 
 		mapFieldInfo.takeOwnership(csb->csb_map_field_info);
+		mapContextVariableNames.takeOwnership(csb->csb_map_context_variable_names);
 
 		impureSize = csb->csb_impure;
 

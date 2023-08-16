@@ -208,6 +208,13 @@ MetadataFromBlr::MetadataFromBlr(unsigned aBlrLength, const unsigned char* aBlr,
 			item->scale = rdr.getByte();
 			break;
 
+		case blr_rowtype:
+		case blr_rowtype2:
+		case blr_rowtype3:
+			item->type = SQL_ROWTYPE;
+			item->length = rdr.getWord();
+			break;
+
 		default:
 			(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 			 Arg::Gds(isc_dsql_sqlda_err)

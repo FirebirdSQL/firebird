@@ -243,6 +243,17 @@ enum drq_type_t
 	drq_l_rel_con,			// lookup relation constraint
 	drq_l_rel_fld_name,		// lookup relation field name
 	drq_g_nxt_package_id,	// lookup next package ID
+	drq_domain_exist,		// check if domain exists
+	drq_filter_exist,		// check if filter exists
+	drq_g_nxt_ct_rel,		// generate next composite type relation name
+	drq_f_nxt_ct_rel,		// find next composite type relation name
+	drq_l_pkg_types,		// lookup packaged types
+	drq_e_pkg_types,		// erase packaged types
+	drq_e_pkg_type_rel_fields,	// erase packaged type relation fields
+	drq_s_pkg_type,			// store packaged type
+	drq_g_nxt_pkg_type_name,// generate next packaged type field source name
+	drq_f_nxt_pkg_type_name,// find next packaged type field source name
+	drq_c_domain_pkg_type,	// check domain is packaged type
 
 	drq_MAX
 };

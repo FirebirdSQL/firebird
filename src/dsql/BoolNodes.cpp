@@ -129,7 +129,6 @@ namespace
 
 } // namespace
 
-
 //--------------------
 
 
@@ -842,19 +841,25 @@ TriState ComparativeBoolNode::execute(thread_db* tdbb, Request* request) const
 		case blr_lss:
 		case blr_leq:
 		case blr_neq:
-			comparison = MOV_compare(tdbb, desc[0], desc[1]);
+			comparison = MOV_recursive_compare(tdbb, desc[0], desc[1]);
 			break;
 
 		case blr_between:
 			if (!null2)
 			{
-				comparison = MOV_compare(tdbb, desc[0], desc[1]);
-				if (comparison < 0)
+				comparison = MOV_recursive_compare(tdbb, desc[0], desc[1]);
+				if (comparison < 0 || comparison == UNKNOWN)
 					return TriState(false);
 			}
 			else
 				comparison = -1;
 			break;
+	}
+
+	if (comparison == UNKNOWN && (blrOp != blr_between))
+	{
+		request->req_flags |= req_null;
+		return TriState(false);
 	}
 
 	// If we are checking equality of record_version
@@ -895,7 +900,7 @@ TriState ComparativeBoolNode::execute(thread_db* tdbb, Request* request) const
 
 			{
 				// arg1 <= arg3
-				const bool cmp1_3 = (MOV_compare(tdbb, desc[0], desc[1]) <= 0);
+				const bool cmp1_3 = (MOV_recursive_compare(tdbb, desc[0], desc[1]) <= 0);
 				return (null2 && cmp1_3) ? TriState::empty() : TriState(cmp1_3);
 			}
 

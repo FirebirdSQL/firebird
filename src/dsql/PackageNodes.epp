@@ -339,6 +339,17 @@ void PackageItemsHolder::collectPackagedItems(thread_db* tdbb, jrd_tra* transact
 		END_FOR
 	}
 
+	requestHandle.reset(tdbb, drq_l_pkg_types, DYN_REQUESTS);
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		PT IN RDB$PACKAGED_TYPES
+		WITH PT.RDB$PACKAGE_NAME EQ metaName.c_str()
+	{
+		Signature type(PT.RDB$TYPE_NAME);
+		type.defined = true;
+		packageTypes.add(type);
+	}
+	END_FOR
+
 	static const CachedRequestId requestTableCacheId;
 	AutoCacheRequest requestTable(tdbb, requestTableCacheId);
 
@@ -942,6 +953,22 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				break;
 			}
 
+			case CreateAlterPackageNode::Item::PACKAGE_TYPE:
+			{
+				DeclarePackageTypeNode* const type = (*items)[i].packageType;
+				ddlNode = type;
+
+				packageTypeNames.checkDuplicate<PackageItemType::PACKAGE_TYPE>(type->name);
+				packageTypeNames.addName<PackageItemType::PACKAGE_TYPE>(type->name);
+
+				type->alter = true;
+				type->package = name;
+				type->privateFlag = false;
+				type->name.schema = name.schema;
+				type->name.package = name.object;
+				break;
+			}
+
 			default:
 				ddlNode = nullptr; // Warning
 				fb_assert(false);
@@ -957,6 +984,7 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		itemScratch->clientDialect = dsqlScratch->clientDialect;
 		itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
 		itemScratch->package = name;
+		itemScratch->packagedTypesCache = dsqlScratch->packagedTypesCache;
 
 		if (itemScratch->clientDialect > SQL_DIALECT_V5)
 			itemStatement->setBlrVersion(5);
@@ -1237,6 +1265,11 @@ void CreateAlterPackageNode::executeItems(thread_db* tdbb, DsqlCompilerScratch* 
 				(*items)[i].constant->package = package;
 				(*items)[i].constant->executeDdl(tdbb, (*items)[i].dsqlScratch, transaction, true);
 				break;
+
+			case PackageItemType::PACKAGE_TYPE:
+				(*items)[i].packageType->packageOwner = owner;
+				(*items)[i].packageType->executeDdl(tdbb, (*items)[i].dsqlScratch, transaction, true);
+				break;
 		}
 	}
 }
@@ -1437,6 +1470,25 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 						constant->alter = true;
 
 					constant->makePrivate();
+
+					break;
+				}
+
+				case PackageItemType::PACKAGE_TYPE:
+				{
+					DeclarePackageTypeNode* const type = (*arrays[i])[j].packageType;
+					ddlNode = type;
+
+					names[i].packageTypes.addName<PackageItemType::PACKAGE_TYPE>(type->name);
+
+					type->package = name;
+					type->create = true;
+					type->privateFlag = true;
+					dsqlScratch->packagedTypesCache.add(type);
+
+					if (arrays[i] == items)
+						type->alter = true;
+
 					break;
 				}
 
@@ -1455,6 +1507,7 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			itemScratch->clientDialect = dsqlScratch->clientDialect;
 			itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
 			itemScratch->package = name;
+			itemScratch->packagedTypesCache = dsqlScratch->packagedTypesCache;
 
 			if (itemScratch->clientDialect > SQL_DIALECT_V5)
 				itemStatement->setBlrVersion(5);
@@ -1655,6 +1708,20 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					constant->executeDdl(tdbb, elem.dsqlScratch, transaction, true);
 					break;
 				}
+
+				case CreateAlterPackageNode::Item::PACKAGE_TYPE:
+				{
+					DeclarePackageTypeNode* type = elem.packageType;
+
+					headerItems.packageTypes.checkDuplicate<PackageItemType::PACKAGE_TYPE>(type->name);
+					existingItems.packageTypes.checkDuplicate<PackageItemType::PACKAGE_TYPE>(type->name);
+
+					type->packageOwner = owner;
+					type->preserveDefaults =
+						existingItems.packageTypes.exist(Signature(type->fieldSource)) && arrays[i] == items;
+					type->executeDdl(tdbb, elem.dsqlScratch, transaction, true);
+					break;
+				}
 			}
 		}
 	}
@@ -1817,6 +1884,16 @@ void DropPackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		ERASE CONST;
 	}
 	END_FOR
+
+	PackageItemsHolder existingItems(pool);
+	existingItems.collectPackagedItems(tdbb, transaction, name, true, false);
+	for (auto i = existingItems.packageTypes.begin(); i != existingItems.packageTypes.end(); ++i)
+	{
+		DropPackageTypeNode dropNode(pool, i->name);
+		dropNode.package = name.object;
+		dropNode.dsqlPass(dsqlScratch);
+		dropNode.execute(tdbb, dsqlScratch, transaction);
+	}
 
 	MetadataCache::newVersion<Cached::Package>(tdbb, id);
 

@@ -572,6 +572,49 @@ public:
 };
 
 
+class DeclareLocalTypeNode final : public TypedNode<StmtNode, StmtNode::TYPE_DECLARE_TYPE>
+{
+public:
+	enum
+	{
+		NO_CHECK_CONSTRAINT = 0,
+		HAS_CHECK_CONSTRAINT = 1,
+		NO_DEFAULT_VALUE = 0,
+		HAS_DEFAULT_VALUE = 1
+	};
+
+	explicit DeclareLocalTypeNode(MemoryPool& pool, const MetaName& aName)
+		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_TYPE>(pool),
+			name(pool, aName),
+			clauses(pool),
+			fieldsNum(0),
+			desc(nullptr),
+			fieldNameToIdMap(pool)
+	{
+	}
+
+public:
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual DeclareLocalTypeNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
+	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	virtual DeclareLocalTypeNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	virtual DeclareLocalTypeNode* pass1(thread_db* tdbb, CompilerScratch* csb);
+	virtual DeclareLocalTypeNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+
+public:
+	MetaName name;
+	Firebird::Array<NestConst<RelationNode::Clause> > clauses;
+	int fieldsNum;
+	dsc* desc;
+	dsql_fld* dsqlField;
+	NestConst<ValueListNode> defaultList;
+	Firebird::LeftPooledMap<MetaName, int> fieldNameToIdMap;	// Map field names to field id
+};
+
+
 class DeclareVariableNode final : public TypedNode<StmtNode, StmtNode::TYPE_DECLARE_VARIABLE>
 {
 public:
@@ -597,6 +640,8 @@ public:
 	dsql_var* dsqlVar = nullptr;
 	USHORT varId = 0;
 	bool usedInSubRoutines = false;
+	Record* compositeRecord;
+	USHORT compositeContextNum = 0;
 };
 
 
@@ -1300,7 +1345,9 @@ public:
 	explicit ModifyNode(MemoryPool& pool)
 		: TypedNode<StmtNode, StmtNode::TYPE_MODIFY>(pool),
 		  dsqlCursorName(pool),
-		  validations(pool)
+		  validations(pool),
+		  rowExpression(nullptr),
+		  rowAssignmentNode(nullptr)
 	{
 	}
 
@@ -1343,6 +1390,9 @@ public:
 	std::optional<USHORT> dsqlReturningLocalTableNumber;
 	std::optional<USHORT> localTableNumber;
 	bool localTableOuterDecl = false;
+	ValueExprNode* rowExpression;
+	StmtNode* rowAssignmentNode;
+	bool fullRowUpdate = false;
 };
 
 
@@ -1438,7 +1488,8 @@ public:
 		: TypedNode<StmtNode, StmtNode::TYPE_STORE>(pool),
 		  dsqlFields(pool),
 		  validations(pool),
-		  marks(0)
+		  marks(0),
+		  recordForm(false)
 	{
 	}
 

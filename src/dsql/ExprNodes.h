@@ -692,6 +692,7 @@ public:
 
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
 
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	ValueExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 
 public:
@@ -858,6 +859,7 @@ public:
 	ValueExprNode* dsqlFieldRemapper(FieldRemapper& visitor) override;
 
 	void setParameterName(dsql_par* parameter) const override;
+	void setParameterCompositeDescriptor(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
@@ -920,8 +922,12 @@ public:
 	const StreamType fieldStream;
 	std::optional<USHORT> cursorNumber;
 	const USHORT fieldId;
+	USHORT contextNum;
 	const bool byId;
 	bool dsqlCursorField;
+	bool nullable;
+	MetaName contextTypeName;
+	ItemInfo* itemInfo;
 };
 
 
@@ -1088,6 +1094,7 @@ public:
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	void setParameterName(dsql_par* parameter) const override;
+	void setParameterCompositeDescriptor(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
@@ -2302,6 +2309,7 @@ public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
+	void setParameterCompositeDescriptor(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
@@ -2402,6 +2410,7 @@ public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
+	void setParameterCompositeDescriptor(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
@@ -2433,6 +2442,60 @@ public:
 	bool outerDecl = false;
 };
 
+
+class RowValueExpressionNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_ROW_VALUE_EXPRESSION>
+{
+public:
+	explicit RowValueExpressionNode(MemoryPool& pool);
+
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
+	virtual void setParameterName(dsql_par* parameter) const;
+	virtual void setParameterCompositeDescriptor(dsql_par* parameter) const;
+	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
+
+	void setDsqlDesc(const dsc& desc)
+	{
+		dsqlDesc = desc;
+	}
+
+	virtual bool deterministic() const override
+	{
+		return false;
+	}
+
+	void setDefaultSource(dsql_fld* target)
+	{
+		defaultSource = target;
+	}
+
+	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	{
+		ValueExprNode::getChildren(holder, dsql);
+
+		for (auto& valueExprNode : rowValueExpressionList->items)
+			holder.add(valueExprNode);
+	}
+
+	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
+	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	virtual ValueExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
+	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	virtual dsc* execute(thread_db* tdbb, Request* request) const;
+
+public:
+	NestConst<ValueListNode> rowValueExpressionList;
+	USHORT contextNumber;
+	Record* compositeRecord;
+	dsc rowDesc;
+	dsql_fld *rowField;
+	int subFieldsNumber;
+	dsql_fld* defaultSource;
+};
 
 } // namespace
 

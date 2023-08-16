@@ -76,6 +76,7 @@ RELATION(nam_fields, rel_fields, ODS_8_0, rel_persistent)
 	FIELD(f_fld_class, nam_class, fld_class, 1, ODS_12_0)
 	FIELD(f_fld_owner, nam_owner, fld_user, 1, ODS_12_0)
 	FIELD(f_fld_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_fld_r_name, nam_r_name, fld_r_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 3 (RDB$INDEX_SEGMENTS)
@@ -860,4 +861,12 @@ RELATION(nam_constants, rel_constants, ODS_14_0, rel_persistent)
 	FIELD(f_const_source, nam_const_source, fld_source, 1, ODS_14_0)
 	FIELD(f_const_package_schema, nam_sch_name, fld_sch_name, 0, ODS_14_0)
 	FIELD(f_const_description, nam_description, fld_description, 1, ODS_14_0)
+END_RELATION
+
+// Relation 60 (RDB$PACKAGED_TYPES)
+RELATION(nam_pkg_types, rel_pkg_types, ODS_14_0, rel_persistent)
+	FIELD(f_pt_fld_src, nam_f_source, fld_f_name, 0, ODS_14_0)
+	FIELD(f_pt_type_name, nam_typ_name, fld_typ_name, 1, ODS_14_0)
+	FIELD(f_pt_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
+	FIELD(f_pt_private_flag, nam_private_flag, fld_flag_nullable, 1, ODS_14_0)
 END_RELATION

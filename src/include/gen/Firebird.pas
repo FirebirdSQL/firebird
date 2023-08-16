@@ -322,6 +322,7 @@ type
 	IMessageMetadata_getAlignmentPtr = function(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 	IMessageMetadata_getAlignedLengthPtr = function(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 	IMessageMetadata_getSchemaPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
+	IMessageMetadata_getCompositeDescriptorPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
 	IMetadataBuilder_setTypePtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; type_: Cardinal); cdecl;
 	IMetadataBuilder_setSubTypePtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; subType: Integer); cdecl;
 	IMetadataBuilder_setLengthPtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; length: Cardinal); cdecl;
@@ -1398,6 +1399,7 @@ type
 		getAlignment: IMessageMetadata_getAlignmentPtr;
 		getAlignedLength: IMessageMetadata_getAlignedLengthPtr;
 		getSchema: IMessageMetadata_getSchemaPtr;
+		getCompositeDescriptor: IMessageMetadata_getCompositeDescriptorPtr;
 	end;
 
 	IMessageMetadata = class(IReferenceCounted)
@@ -1421,6 +1423,7 @@ type
 		function getAlignment(status: IStatus): Cardinal;
 		function getAlignedLength(status: IStatus): Cardinal;
 		function getSchema(status: IStatus; index: Cardinal): PAnsiChar;
+		function getCompositeDescriptor(status: IStatus; index: Cardinal): PAnsiChar;
 	end;
 
 	IMessageMetadataImpl = class(IMessageMetadata)
@@ -1446,6 +1449,7 @@ type
 		function getAlignment(status: IStatus): Cardinal; virtual; abstract;
 		function getAlignedLength(status: IStatus): Cardinal; virtual; abstract;
 		function getSchema(status: IStatus; index: Cardinal): PAnsiChar; virtual; abstract;
+		function getCompositeDescriptor(status: IStatus; index: Cardinal): PAnsiChar; virtual; abstract;
 	end;
 
 	MetadataBuilderVTable = class(ReferenceCountedVTable)
@@ -5024,6 +5028,9 @@ const
 	isc_info_sql_exec_path_blr_bytes = byte(31);
 	isc_info_sql_exec_path_blr_text = byte(32);
 	isc_info_sql_relation_schema = byte(33);
+	isc_info_sql_composite = byte(33);
+	isc_info_sql_composite_name = byte(34);
+	isc_info_sql_composite_descriptor = byte(35);
 	isc_info_sql_stmt_select = byte(1);
 	isc_info_sql_stmt_insert = byte(2);
 	isc_info_sql_stmt_update = byte(3);
@@ -6073,6 +6080,9 @@ const
 	 isc_dsql_agg_return = 335545340;
 	 isc_hypfun_args_non_equal_sort_item = 335545341;
 	 isc_old_format = 335545342;
+	 isc_invalid_parameter_decl = 335545319;
+	 isc_composite_type_notdef = 335545320;
+	 isc_packaged_type_notdef = 335545321;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -6240,6 +6250,10 @@ const
 	 isc_dyn_cannot_infer_schema = 336068929;
 	 isc_dyn_column_name_exists = 336068931;
 	 isc_dyn_function_mismatch = 336068935;
+	 isc_dyn_wrong_default_syntax = 336068930;
+	 isc_dyn_wrong_default_param_number = 336068931;
+	 isc_dyn_composite_not_fount = 336068932;
+	 isc_dyn_packaged_type_is_used = 336068933;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;
@@ -7271,6 +7285,18 @@ begin
 	end
 	else begin
 		Result := MessageMetadataVTable(vTable).getSchema(Self, status, index);
+	end;
+	FbException.checkException(status);
+end;
+
+function IMessageMetadata.getCompositeDescriptor(status: IStatus; index: Cardinal): PAnsiChar;
+begin
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IMessageMetadata', vTable.version, 5);
+		Result := nil;
+	end
+	else begin
+		Result := MessageMetadataVTable(vTable).getCompositeDescriptor(Self, status, index);
 	end;
 	FbException.checkException(status);
 end;
@@ -11861,6 +11887,16 @@ begin
 	Result := nil;
 	try
 		Result := IMessageMetadataImpl(this).getSchema(status, index);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+function IMessageMetadataImpl_getCompositeDescriptorDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := IMessageMetadataImpl(this).getCompositeDescriptor(status, index);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -18538,6 +18574,7 @@ initialization
 	IMessageMetadataImpl_vTable.getAlignment := @IMessageMetadataImpl_getAlignmentDispatcher;
 	IMessageMetadataImpl_vTable.getAlignedLength := @IMessageMetadataImpl_getAlignedLengthDispatcher;
 	IMessageMetadataImpl_vTable.getSchema := @IMessageMetadataImpl_getSchemaDispatcher;
+	IMessageMetadataImpl_vTable.getCompositeDescriptor := @IMessageMetadataImpl_getCompositeDescriptorDispatcher;
 
 	IMetadataBuilderImpl_vTable := MetadataBuilderVTable.create;
 	IMetadataBuilderImpl_vTable.version := 5;

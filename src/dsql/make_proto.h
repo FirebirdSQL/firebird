@@ -89,6 +89,7 @@ void MAKE_field(Jrd::dsql_fld*, const dsc*);
 Jrd::FieldNode* MAKE_field_name(const char*);
 Jrd::dsql_par* MAKE_parameter(Jrd::dsql_msg*, bool, bool, USHORT, const Jrd::ValueExprNode*);
 void MAKE_parameter_names(Jrd::dsql_par*, const Jrd::ValueExprNode*);
+void MAKE_parameter_composite(Jrd::dsql_par*, const Jrd::ValueExprNode*);
 Jrd::LiteralNode* MAKE_system_privilege(const char*);
 
 Jrd::ValueExprNode* MAKE_constant_from_literal(Jrd::LiteralNode*, const dsc*);

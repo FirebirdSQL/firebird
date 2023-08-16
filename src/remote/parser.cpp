@@ -372,6 +372,14 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			desc->dsc_length = sizeof(UCHAR);
 			break;
 
+		case blr_rowtype:
+		case blr_rowtype2:
+		case blr_rowtype3:
+			desc->dsc_dtype = dtype_rowtype;
+			desc->dsc_length = *blr++;
+			desc->dsc_length += (*blr++) << 8;
+			break;
+
 		default:
 			fb_assert(false);
 			return NULL;

@@ -902,6 +902,10 @@ using namespace Firebird;
 	Jrd::SessionResetNode* sessionResetNode;
 	Jrd::ForRangeNode::Direction forRangeDirection;
 	Jrd::CreatePackageConstantNode* createPackageConstantNode;
+	Jrd::DeclareLocalTypeNode* declareLocalTypeNode;
+	Jrd::DeclareLocalTypeNode* localTypeNode;
+	Jrd::DeclarePackageTypeNode* declarePackageTypeNode;
+	Jrd::ParameterClause* parameterClause;
 }
 
 %include types.y
@@ -2436,6 +2440,83 @@ db_rem_option($alterDatabaseNode)
 	;
 
 
+// CREATE COMPOSITE TYPE
+
+%type <declareLocalTypeNode> composite_type_clause
+composite_type_clause
+	: symbol_table_name
+			{
+				$<declareLocalTypeNode>$ = newNode<DeclareLocalTypeNode>(NOTRIAL(*$1));
+			}
+		'(' composite_type_elements($2) ')'
+			{
+				$$ = $2;
+			}
+	;
+
+%type composite_type_elements(<declareLocalTypeNode>)
+composite_type_elements($declareLocalTypeNode)
+	: composite_type_element($declareLocalTypeNode)
+	| composite_type_elements ',' composite_type_element($declareLocalTypeNode)
+	;
+
+%type composite_type_element(<declareLocalTypeNode>)
+composite_type_element($declareLocalTypeNode)
+	: column_type_def($declareLocalTypeNode)
+	;
+
+// column type definition
+
+%type column_type_def(<localTypeNode>)
+column_type_def($localTypeNode)
+	: symbol_column_name data_type_or_domain domain_default_opt
+			{
+				RelationNode::AddColumnClause* clause = $<addColumnClause>$ =
+					newNode<RelationNode::AddColumnClause>();
+				clause->field = $2;
+				clause->field->fld_name = *$1;
+				clause->defaultValue = $3;
+				$localTypeNode->clauses.add(clause);
+			}
+		column_constraint_clause(NOTRIAL($<addColumnClause>4)) collate_clause
+			{
+				if ($6)
+					$<addColumnClause>4->collate = *$6;
+			}
+	| symbol_column_name data_type_or_domain identity_clause
+			{
+				RelationNode::AddColumnClause* clause = $<addColumnClause>$ =
+					newNode<RelationNode::AddColumnClause>();
+				clause->field = $2;
+				clause->field->fld_name = *$1;
+				clause->identityOptions = $3;
+				$localTypeNode->clauses.add(clause);
+			}
+		column_constraint_clause(NOTRIAL($<addColumnClause>4)) collate_clause
+			{
+				if ($6)
+					$<addColumnClause>4->collate = *$6;
+			}
+	| symbol_column_name non_array_type def_computed
+		{
+			RelationNode::AddColumnClause* clause = newNode<RelationNode::AddColumnClause>();
+			clause->field = $2;
+			clause->field->fld_name = *$1;
+			clause->computed = $3;
+			$localTypeNode->clauses.add(clause);
+			clause->field->flags |= FLD_computed;
+		}
+	| symbol_column_name def_computed
+		{
+			RelationNode::AddColumnClause* clause = newNode<RelationNode::AddColumnClause>();
+			clause->field = newNode<dsql_fld>();
+			clause->field->fld_name = *$1;
+			clause->computed = $2;
+			$localTypeNode->clauses.add(clause);
+			clause->field->flags |= FLD_computed;
+		}
+	;
+
 // CREATE TABLE
 
 // Helper rule to capture AS <query> for table creation with a regular trailing action.
@@ -2793,6 +2874,7 @@ default_value
 	| internal_info					{ $$ = $1; }
 	| null_value					{ $$ = $1; }
 	| datetime_value_expression		{ $$ = $1; }
+	| row_value_expression			{ $$ = $1; }
 	;
 
 %type column_constraint_clause(<addColumnClause>)
@@ -3051,6 +3133,54 @@ partial_alter_procedure_clause
 				$$ = $2;
 				$$->ssDefiner = $3.toOptional();
 			}
+%type package_type_subfields_definition_list(<parametersClause>)
+package_type_subfields_definition_list($parameters)
+	: '(' package_type_subfield_definitions($parameters) ')'
+	;
+
+%type package_type_subfield_definitions(<parametersClause>)
+package_type_subfield_definitions($parameters)
+	: package_type_subfield_definition($parameters)
+	| package_type_subfield_definitions ',' package_type_subfield_definition($parameters)
+	;
+
+%type <parameterClause> package_type_subfield_definition(<parametersClause>)
+package_type_subfield_definition($parameters)
+	: column_domain_or_non_array_type collate_clause default_par_opt
+		{
+			// special processing for row value expressions as default parameter values
+			if ($3 && nodeAs<RowValueExpressionNode>($3->value))
+				nodeAs<RowValueExpressionNode>($3->value)->setDefaultSource($1);
+
+			$$ = newNode<ParameterClause>($1, optName($2), $3);
+			$parameters->add($$);
+		}
+		package_type_fields_constraint($4)
+	;
+
+%type package_type_fields_constraint(<parameterClause>)
+package_type_fields_constraint($parameterClause)
+	: // nothing
+	| check_constraint
+		{
+			setClause($parameterClause->checkClause, "PACKAGED TYPE FIELD CHECK CONSTRAINT", $1);
+		}
+	;
+
+%type <declarePackageTypeNode> package_type_clause_start
+package_type_clause_start
+	: symbol_package_type_name data_type domain_default_opt
+		{
+			$2->fld_name = *$1;
+			$$ = newNode<DeclarePackageTypeNode>(
+				newNode<ParameterClause>($2, MetaName(), $3));
+		}
+	| symbol_package_type_name
+		{
+			$$ = newNode<DeclarePackageTypeNode>(*$1);
+		}
+		package_type_subfields_definition_list(NOTRIAL(&$2->fieldDeclarations))
+		{ $$ = $2; }
 	;
 
 %type <createAlterProcedureNode> alter_procedure_clause
@@ -3102,6 +3232,10 @@ input_proc_parameter($parameters)
 	: column_domain_or_non_array_type collate_clause default_par_opt
 		{
 			setCollate($1, $2);
+			// special processing for row value expressions as default parameter values
+			if ($3 && nodeAs<RowValueExpressionNode>($3->value))
+				nodeAs<RowValueExpressionNode>($3->value)->setDefaultSource($1);
+
 			$parameters->add(newNode<ParameterClause>($1, $3));
 		}
 	;
@@ -3432,6 +3566,8 @@ package_item
 		{ $$ = CreateAlterPackageNode::Item::create($3); }
 	| CONSTANT package_const_item ';'
 		{ $$ = CreateAlterPackageNode::Item::create($2); }
+	| DECLARE TYPE package_type_clause_start ';'
+		{ $$ = CreateAlterPackageNode::Item::create($3); }
 	;
 
 %type <createAlterPackageNode> alter_package_clause
@@ -3685,6 +3821,7 @@ local_nonforward_declaration
 			$$->line = YYPOSNARG(1).firstLine;
 			$$->column = YYPOSNARG(1).firstColumn;
 		}
+	| DECLARE TYPE composite_type_clause ';'				{ $$ = $3; }
 	| DECLARE var_decl_opt local_declaration_item ';'
 		{
 			$$ = $3;
@@ -3787,6 +3924,11 @@ var_declaration_item
 		{
 			// Set collate before node allocation to prevent memory leak on throw
 			setCollate($1, $2);
+
+			// special processing for row value expressions as default parameter values
+			if ($3 && nodeAs<RowValueExpressionNode>($3->value))
+				nodeAs<RowValueExpressionNode>($3->value)->setDefaultSource($1);
+
 			DeclareVariableNode* node = newNode<DeclareVariableNode>();
 			node->dsqlDef = newNode<ParameterClause>($1, $3);
 			$$ = node;
@@ -5614,6 +5756,24 @@ domain_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->typeOfName = *$1;
+			$$->fullDomain = true;
+		}
+	| TYPE OF TABLE symbol_column_name
+		{
+			$$ = newNode<dsql_fld>();
+			$$->typeOfTable = *$4;
+		}
+	| TYPE OF symbol_package_name '.' symbol_package_type_name	// packaged type without constraints
+		{
+			$$ = newNode<dsql_fld>();
+			$$->typeOfName = *$3;
+			$$->packageName = *$1;
+		}
+	| symbol_package_name '.' symbol_package_type_name	// packaged type with constraints
+		{
+			$$ = newNode<dsql_fld>();
+			$$->typeOfName = *$3;
+			$$->packageName = *$1;
 			$$->fullDomain = true;
 		}
 	;
@@ -7566,6 +7726,15 @@ insert
 			node->dsqlValues = $6;
 			node->dsqlReturning = $8;
 		}
+	| insert_start ins_column_parens_opt(NOTRIAL(&$1->dsqlFields)) override_opt VALUES value_or_default_list
+			returning_clause
+		{
+			StoreNode* node = $$ = $1;
+			node->recordForm = true;
+			node->overrideClause = $3;
+			node->dsqlValues = $5;
+			node->dsqlReturning = $6;
+		}
 	| insert_start ins_column_parens_opt(NOTRIAL(&$1->dsqlFields)) override_opt select_expr returning_clause
 		{
 			StoreNode* node = $$ = $1;
@@ -7603,6 +7772,11 @@ override_opt
 value_or_default_list
 	: value_or_default								{ $$ = newNode<ValueListNode>($1); }
 	| value_or_default_list ',' value_or_default	{ $$ = $1->add($3); }
+	;
+
+%type <valueListNode> value_or_default_list_min_two
+value_or_default_list_min_two
+	: value_or_default_list ',' value_or_default	{ $$ = $1->add($3); }
 	;
 
 %type <valueExprNode> value_or_default
@@ -7765,6 +7939,27 @@ update_searched
 			node->dsqlRows = $8;
 			node->dsqlSkipLocked = $9;
 			node->dsqlReturning = $10;
+			$$ = node;
+		}
+	| UPDATE table_name
+			SET ROW '=' value_or_default
+			where_clause
+			plan_clause
+			order_clause_opt
+			rows_clause_optional
+			skip_locked_clause_opt
+			returning_clause
+		{
+			ModifyNode* node = newNode<ModifyNode>();
+			node->dsqlRelation = $2;
+			node->rowExpression = $6;
+			node->dsqlBoolean = $7;
+			node->dsqlPlan = $8;
+			node->dsqlOrder = $9;
+			node->dsqlRows = $10;
+			node->dsqlSkipLocked = $11;
+			node->dsqlReturning = $12;
+			node->fullRowUpdate = true;
 			$$ = node;
 		}
 	;
@@ -8559,6 +8754,7 @@ value_special
 value_primary
 	: nonparenthesized_value
 	| '(' value_primary ')'				{ $$ = $2; }
+	| row_value_expression				{ $$ = $1; }
 	;
 
 // Matches definition of <simple value specification> in SQL standard
@@ -8712,6 +8908,22 @@ array_element
 		{
 			ArrayNode* node = newNode<ArrayNode>($1);
 			node->field->dsqlIndices = $3;
+			$$ = node;
+		}
+	;
+
+%type <valueExprNode> row_value_expression
+row_value_expression
+	: ROW '(' value_or_default_list ')'
+		{
+			RowValueExpressionNode* node = newNode<RowValueExpressionNode>();
+			node->rowValueExpressionList = $3;
+			$$ = node;
+		}
+	| '(' value_or_default_list_min_two ')'
+		{
+			RowValueExpressionNode* node = newNode<RowValueExpressionNode>();
+			node->rowValueExpressionList = $2;
 			$$ = node;
 		}
 	;
@@ -10221,6 +10433,11 @@ symbol_label_name
 %type <qualifiedNamePtr> symbol_procedure_name
 symbol_procedure_name
 	: schema_opt_qualified_name
+	;
+
+%type <metaNamePtr> symbol_package_type_name
+symbol_package_type_name
+	: valid_symbol_name
 	;
 
 %type <metaNamePtr> symbol_role_name

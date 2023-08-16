@@ -134,6 +134,7 @@
 #include "../jrd/ProtectRelations.h"
 
 #include "../jrd/Package.h"
+#include "../dsql/metd_proto.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -673,6 +674,10 @@ namespace
 					if (work->dfw_package.isEmpty())
 						MET_delete_dependencies(tdbb, work->getQualifiedName(), objType);
 
+					// drop routine cache if routine is being altered because of relation dependency change
+					if (work->findArg(dfw_arg_drop_routine_cache))
+						Self::dropRoutineCache(tdbb, transaction, work);
+
 					// Now handle the new definition
 					bool compile = !work->findArg(dfw_arg_check_blr);
 					getDependencies(work, compile, transaction);
@@ -887,6 +892,7 @@ namespace
 		static void validate(thread_db* tdbb, jrd_tra* transaction, DeferredWork* work,
 			SSHORT validBlr);
 		static void checkParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction);
+		static void dropRoutineCache(thread_db* tdbb, jrd_tra* transaction, DeferredWork* work);
 	};
 
 	class ProcedureManager : public RoutineManager<ProcedureManager, Cached::Procedure, obj_procedure,
@@ -902,6 +908,7 @@ namespace
 		static void validate(thread_db* tdbb, jrd_tra* transaction, DeferredWork* work,
 			SSHORT validBlr);
 		static void checkParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction);
+		static void dropRoutineCache(thread_db* tdbb, jrd_tra* transaction, DeferredWork* work);
 	};
 
 	// These methods cannot be defined inline, because GPRE generates wrong code.
@@ -945,6 +952,14 @@ namespace
 			END_MODIFY
 		}
 		END_FOR
+	}
+
+	void FunctionManager::dropRoutineCache(thread_db* tdbb, jrd_tra* transaction, DeferredWork* work)
+	{
+		Jrd::Attachment* attachment = tdbb->getAttachment();
+		// Update DSQL cache
+		METD_drop_function(transaction, QualifiedName(work->dfw_name, work->dfw_package));
+		MET_dsql_cache_release(tdbb, SYM_udf, work->dfw_name, work->dfw_package);
 	}
 
 	void FunctionManager::checkParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction)
@@ -1034,6 +1049,14 @@ namespace
 			END_MODIFY
 		}
 		END_FOR
+	}
+
+	void ProcedureManager::dropRoutineCache(thread_db* tdbb, jrd_tra* transaction, DeferredWork* work)
+	{
+		Jrd::Attachment* attachment = tdbb->getAttachment();
+		// Update DSQL cache
+		METD_drop_procedure(transaction, QualifiedName(work->dfw_name, work->dfw_package));
+		MET_dsql_cache_release(tdbb, SYM_procedure, work->dfw_name, work->dfw_package);
 	}
 
 	void ProcedureManager::checkParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction)

@@ -37,7 +37,10 @@ void MOVD_move(thread_db* tdbb, dsc* from, dsc* to)
 {
 	try
 	{
-		MOV_move(tdbb, from, to);
+		if (to->dsc_dtype == dtype_rowtype)
+			memcpy(to->dsc_address, from->dsc_address, to->dsc_length);
+		else
+			MOV_move(tdbb, from, to);
 	}
 	catch (const status_exception& ex)
 	{

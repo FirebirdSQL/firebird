@@ -174,6 +174,33 @@ void DataTypeUtilBase::makeFromList(dsc* result, const char* expressionName, int
 			else if (result->dsc_dtype != arg->dsc_dtype)
 				makeBlobOrText(result, arg, true);
 		}
+		else if (arg->dsc_dtype == dtype_rowtype)
+		{
+			if (result->isUnknown())
+				*result = *arg;
+			else if (result->dsc_sub_count != arg->dsc_sub_count)
+			{
+				// Datatypes @1are not comparable in expression @2
+				status_exception::raise(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					Arg::Gds(isc_dsql_datatypes_not_comparable) << Arg::Str("") <<
+						Arg::Str(expressionName));
+			}
+			else
+			{
+				auto resSubDesc = result->dsc_sub_first;
+				auto argSubDesc = arg->dsc_sub_first;
+				while (argSubDesc)
+				{
+					dsc tempDesc;
+					const dsc* descs[] = {resSubDesc, argSubDesc};
+					makeFromList(&tempDesc, expressionName, FB_NELEM(descs), descs);
+					tempDesc.dsc_next = resSubDesc->dsc_next;
+					*resSubDesc = tempDesc;
+					resSubDesc = resSubDesc->dsc_next;
+					argSubDesc = argSubDesc->dsc_next;
+				}
+			}
+		}
 		else	// we don't support this datatype here
 		{
 			// Unknown datatype
