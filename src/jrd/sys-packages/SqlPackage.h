@@ -56,7 +56,7 @@ private:
 		(FB_DOUBLE, cardinality)
 		(FB_INTEGER, recordLength)
 		(FB_INTEGER, keyLength)
-		(FB_INTL_VARCHAR(255 * METADATA_BYTES_PER_CHAR, CS_METADATA), accessPath)
+		(FB_BLOB, accessPath)
 	);
 
 	class ExplainResultSet :

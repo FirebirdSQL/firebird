@@ -129,8 +129,18 @@ SqlPackage::ExplainResultSet::ExplainResultSet(ThrowStatusExceptionWrapper* stat
 		string accessPath;
 		planEntry->getDescriptionAsString(accessPath);
 
+		constexpr UCHAR bpb[] = {
+			isc_bpb_version1,
+			isc_bpb_storage, 1, isc_bpb_storage_temp
+		};
+
+		bid blobId;
+		const auto blob = blb::create2(tdbb, transaction, &blobId, sizeof(bpb), bpb);
+		blob->BLB_put_data(tdbb, (const UCHAR*) accessPath.c_str(), accessPath.length());
+		blob->BLB_close(tdbb);
+
 		resultEntry.accessPathNull = FB_FALSE;
-		resultEntry.accessPath.set(accessPath.c_str(), accessPath.length());
+		resultEntry.accessPath = blobId;
 	}
 
 	resultIterator = resultEntries.begin();
@@ -179,7 +189,7 @@ SqlPackage::SqlPackage(MemoryPool& pool)
 					{"CARDINALITY", fld_statistics, true},
 					{"RECORD_LENGTH", fld_integer, true},
 					{"KEY_LENGTH", fld_integer, true},
-					{"ACCESS_PATH", fld_short_description, false}
+					{"ACCESS_PATH", fld_description, false}
 				}
 			),
 		},
