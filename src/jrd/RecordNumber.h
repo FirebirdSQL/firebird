@@ -299,6 +299,11 @@ struct bid
 		return temp;
 	}
 
+	operator ISC_QUAD() const
+	{
+		return {ISC_LONG(bid_quad.bid_quad_high), bid_quad.bid_quad_low};
+	}
+
 	bool operator == (const bid& other) const
 	{
 		// Make sure that compiler packed structure like we wanted
