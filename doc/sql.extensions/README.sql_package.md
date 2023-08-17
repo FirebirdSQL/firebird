@@ -6,6 +6,9 @@
 
 `RDB$SQL.EXPLAIN` returns tabular information of a query's plan, without execute the query.
 
+Since `SQL` text generally is multi-line string and have quotes, you may use `<alternate string literal>`
+(strings prefixed by `Q`) as a way to make escape easy.
+
 Input parameters:
 - `SQL` type `BLOB SUB_TYPE TEXT CHARACTER SET UTF8 NOT NULL` - query statement
 
