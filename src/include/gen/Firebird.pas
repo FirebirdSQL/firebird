@@ -4044,6 +4044,7 @@ const
 	isc_dpb_upgrade_db = byte(97);
 	isc_dpb_parallel_workers = byte(100);
 	isc_dpb_worker_attach = byte(101);
+	isc_dpb_owner = byte(102);
 	isc_dpb_address = byte(1);
 	isc_dpb_addr_protocol = byte(1);
 	isc_dpb_addr_endpoint = byte(2);

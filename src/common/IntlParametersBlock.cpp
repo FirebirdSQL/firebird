@@ -194,6 +194,7 @@ IntlParametersBlock::TagType IntlDpb::checkTag(UCHAR tag, const char** tagName)
 	FB_IPB_TAG(isc_dpb_process_name);
 	FB_IPB_TAG(isc_dpb_host_name);
 	FB_IPB_TAG(isc_dpb_os_user);
+	FB_IPB_TAG(isc_dpb_owner);
 		return TAG_STRING;
 	}
 
