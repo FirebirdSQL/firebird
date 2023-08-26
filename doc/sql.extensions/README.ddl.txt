@@ -603,3 +603,9 @@ ALTER TABLE <name> ... [ {ENABLE | DISABLE} PUBLICATION ]
 
 Defines whether replication is enabled for the specified table.
 If not specified in the CREATE TABLE statement, the database-level default behaviour is applied.
+
+24) Added OWNER clause to CREATE DATABASE statement.
+(Dmitry Sibiryakov)
+
+<db_initial_option> list is expanded by "OWNER username" clause which allows to set an owner user name for the created database.
+Only users with administrator rights can use this option.
