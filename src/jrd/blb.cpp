@@ -448,6 +448,7 @@ void BLB_garbage_collect(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
+	fb_assert(prior_page > 0);
 	RecordBitmap bmGoing;
 	ULONG cntGoing = 0;
 

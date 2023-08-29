@@ -2485,25 +2485,26 @@ static void delete_version_chain(thread_db* tdbb, record_param* rpb, bool delete
 
 	ULONG prior_page = 0;
 
-	if (!delete_head)
+	// Note that the page number of the oldest version in the chain should
+	// be stored in rpb->rpb_page before exiting this function because
+	// VIO_intermediate_gc will use it as a prior page number.
+	while (rpb->rpb_b_page != 0 || delete_head)
 	{
-		prior_page = rpb->rpb_page;
-		rpb->rpb_page = rpb->rpb_b_page;
-		rpb->rpb_line = rpb->rpb_b_line;
-	}
+		if (!delete_head)
+		{
+			prior_page = rpb->rpb_page;
+			rpb->rpb_page = rpb->rpb_b_page;
+			rpb->rpb_line = rpb->rpb_b_line;
+		}
+		else
+			delete_head = false;
 
-	while (rpb->rpb_page != 0)
-	{
 		if (!DPM_fetch(tdbb, rpb, LCK_write))
 			BUGCHECK(291);		// msg 291 cannot find record back version
 
 		record_param temp_rpb = *rpb;
 		DPM_delete(tdbb, &temp_rpb, prior_page);
 		delete_tail(tdbb, &temp_rpb, temp_rpb.rpb_page);
-
-		prior_page = rpb->rpb_page;
-		rpb->rpb_page = rpb->rpb_b_page;
-		rpb->rpb_line = rpb->rpb_b_line;
 	}
 }
 
@@ -3677,6 +3678,8 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	org_rpb->rpb_length = new_rpb->rpb_length;
 	org_rpb->rpb_flags &= ~(rpb_delta | rpb_uk_modified);
 	org_rpb->rpb_flags |= new_rpb->rpb_flags & (rpb_delta | rpb_uk_modified);
+
+	stack.merge(new_rpb->rpb_record->getPrecedence());
 
 	replace_record(tdbb, org_rpb, &stack, transaction);
 
