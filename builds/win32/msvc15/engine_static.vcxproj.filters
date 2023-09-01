@@ -1085,6 +1085,7 @@
     <ClInclude Include="..\..\..\src\jrd\WorkerAttachment.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\PageToBufferMap.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\src\dsql\DdlNodes.epp">

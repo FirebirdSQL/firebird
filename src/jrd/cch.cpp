@@ -62,6 +62,7 @@
 #include "../common/classes/MsgPrint.h"
 #include "../jrd/CryptoManager.h"
 #include "../common/utils_proto.h"
+#include "../jrd/PageToBufferMap.h"
 
 // Use lock-free lists in hash table implementation
 #define HASH_USE_CDS_LIST
@@ -131,6 +132,7 @@ static void prefetch_init(Prefetch*, thread_db*);
 static void prefetch_io(Prefetch*, FbStatusVector *);
 static void prefetch_prologue(Prefetch*, SLONG *);
 #endif
+static void cacheBuffer(Attachment* att, BufferDesc* bdb);
 static void check_precedence(thread_db*, WIN*, PageNumber);
 static void clear_precedence(thread_db*, BufferDesc*);
 static void down_grade(thread_db*, BufferDesc*, int high = 0);
@@ -3152,6 +3154,18 @@ void BufferControl::exceptionHandler(const Firebird::Exception& ex, BcbThreadSyn
 }
 
 
+static void cacheBuffer(Attachment* att, BufferDesc* bdb)
+{
+	if (att)
+	{
+		if (!att->att_bdb_cache)
+			att->att_bdb_cache = FB_NEW_POOL(*att->att_pool) PageToBufferMap(*att->att_pool);
+
+		att->att_bdb_cache->put(bdb);
+	}
+}
+
+
 static void check_precedence(thread_db* tdbb, WIN* window, PageNumber page)
 {
 /**************************************
@@ -3782,6 +3796,33 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
 	BufferControl* bcb = dbb->dbb_bcb;
+	Attachment* att = tdbb->getAttachment();
+
+	if (att && att->att_bdb_cache)
+	{
+		BufferDesc* bdb = att->att_bdb_cache->get(page);
+		if (bdb)
+		{
+			if (bdb->addRef(tdbb, syncType, wait))
+			{
+				if (bdb->bdb_page == page)
+				{
+					recentlyUsed(bdb);
+					tdbb->bumpStats(RuntimeStatistics::PAGE_FETCHES);
+					return bdb;
+				}
+
+				bdb->release(tdbb, true);
+				att->att_bdb_cache->remove(page);
+			}
+			else
+			{
+				fb_assert(wait <= 0);
+				if (bdb->bdb_page == page)
+					return nullptr;
+			}
+		}
+	}
 
 	while (true)
 	{
@@ -3811,6 +3852,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 				{
 					recentlyUsed(bdb);
 					tdbb->bumpStats(RuntimeStatistics::PAGE_FETCHES);
+					cacheBuffer(att, bdb);
 					return bdb;
 				}
 
@@ -3850,6 +3892,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 					bdb->downgrade(syncType);
 					recentlyUsed(bdb);
 					tdbb->bumpStats(RuntimeStatistics::PAGE_FETCHES);
+					cacheBuffer(att, bdb);
 					return bdb;
 				}
 			}
@@ -3893,6 +3936,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 							recentlyUsed(bdb);
 					}
 					tdbb->bumpStats(RuntimeStatistics::PAGE_FETCHES);
+					cacheBuffer(att, bdb);
 					return bdb;
 				}
 			}
@@ -3910,6 +3954,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 				}
 				recentlyUsed(bdb2);
 				tdbb->bumpStats(RuntimeStatistics::PAGE_FETCHES);
+				cacheBuffer(att, bdb2);
 			}
 			else
 				bdb2 = nullptr;
