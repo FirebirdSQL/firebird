@@ -36,10 +36,10 @@ namespace Jrd {
 
 class PageToBufferMap
 {
-public:
 	static const size_t MAP_SIZE = 64;
 
-	PageToBufferMap(MemoryPool& pool) :
+public:
+	explicit PageToBufferMap(MemoryPool& pool) :
 		m_map(pool)
 	{
 		Item* items = FB_NEW_POOL(pool) Item[MAP_SIZE];

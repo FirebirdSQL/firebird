@@ -3800,8 +3800,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 
 	if (att && att->att_bdb_cache)
 	{
-		BufferDesc* bdb = att->att_bdb_cache->get(page);
-		if (bdb)
+		if (BufferDesc* bdb = att->att_bdb_cache->get(page))
 		{
 			if (bdb->addRef(tdbb, syncType, wait))
 			{
