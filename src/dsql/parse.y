@@ -919,6 +919,7 @@ mng_statement
 	| session_reset								{ $$ = $1; }
 	| set_time_zone								{ $$ = $1; }
 	| set_bind									{ $$ = $1; }
+	| set_optimize								{ $$ = $1; }
 	;
 
 
@@ -5482,6 +5483,14 @@ decfloat_trap($setDecFloatTrapsNode)
 		{ $setDecFloatTrapsNode->trap($1); }
 	;
 
+%type <mngNode> set_optimize
+set_optimize
+	: SET OPTIMIZE optimize_mode
+		{ $$ = newNode<SetOptimizeNode>($3); }
+	| SET OPTIMIZE TO DEFAULT
+		{ $$ = newNode<SetOptimizeNode>(); }
+	;
+
 %type <setSessionNode> session_statement
 session_statement
 	: SET SESSION IDLE TIMEOUT long_integer timepart_sesion_idle_tout
@@ -5803,13 +5812,20 @@ skip_locked_clause_opt
 
 %type <nullableBoolVal>	optimize_clause
 optimize_clause
-	: OPTIMIZE FOR FIRST ROWS
-		{ $$ = Nullable<bool>::val(true); }
-	| OPTIMIZE FOR ALL ROWS
-		{ $$ = Nullable<bool>::val(false); }
+	: OPTIMIZE optimize_mode
+		{ $$ = Nullable<bool>::val($2); }
 	| // nothing
 		{ $$ = Nullable<bool>::empty(); }
 	;
+
+%type <boolVal> optimize_mode
+optimize_mode
+	: FOR FIRST ROWS
+		{ $$ = true; }
+	| FOR ALL ROWS
+		{ $$ = false; }
+	;
+
 
 // SELECT expression
 

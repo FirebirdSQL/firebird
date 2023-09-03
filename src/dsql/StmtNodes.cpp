@@ -63,6 +63,7 @@
 #include "../dsql/gen_proto.h"
 #include "../dsql/make_proto.h"
 #include "../dsql/pass1_proto.h"
+#include "../dsql/DsqlStatementCache.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -9164,6 +9165,25 @@ void SetSessionNode::execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** /*
 	case TYPE_STMT_TIMEOUT:
 		att->setStatementTimeout(m_value);
 		break;
+	}
+}
+
+
+//--------------------
+
+
+void SetOptimizeNode::execute(thread_db* tdbb, DsqlRequest* /*request*/, jrd_tra** /*traHandle*/) const
+{
+	const auto attachment = tdbb->getAttachment();
+
+	if (attachment->att_opt_first_rows != optimizeMode)
+	{
+		attachment->att_opt_first_rows = optimizeMode;
+
+		// Clear the local compiled statements cache to allow queries
+		// to be re-optimized accordingly to the new rules
+
+		attachment->att_dsql_instance->dbb_statement_cache->purge(tdbb, false);
 	}
 }
 

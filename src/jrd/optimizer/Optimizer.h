@@ -402,7 +402,10 @@ public:
 		const auto dbb = tdbb->getDatabase();
 		const auto defaultFirstRows = dbb->dbb_config->getOptimizeForFirstRows();
 
-		return Optimizer(tdbb, csb, rse, defaultFirstRows).compile(nullptr);
+		const auto attachment = tdbb->getAttachment();
+		const auto firstRows = attachment->att_opt_first_rows.orElse(defaultFirstRows);
+
+		return Optimizer(tdbb, csb, rse, firstRows).compile(nullptr);
 	}
 
 	~Optimizer();
