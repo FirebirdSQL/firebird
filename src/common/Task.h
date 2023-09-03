@@ -74,11 +74,10 @@ public:
 };
 
 // Worker: handle work items, optionally uses separate thread
-class Worker
+class Worker final
 {
 public:
 	Worker(Coordinator* coordinator) :
-	  m_coordinator(coordinator),
 	  m_thread(NULL),
 	  m_task(NULL),
 	  m_state(IDLE)
@@ -101,7 +100,6 @@ public:
 protected:
 	enum STATE {IDLE, READY, WORKING};
 
-	Coordinator* const m_coordinator; // set in constructor, not changed
 	WorkerThread* m_thread;
 	Task* m_task;
 	STATE m_state;
@@ -109,7 +107,7 @@ protected:
 
 // Accept Task(s) to handle, creates and assigns Workers to work on task(s),
 // bind Workers to Threads, synchronize task completion and get results.
-class Coordinator
+class Coordinator final
 {
 public:
 	Coordinator(MemoryPool* pool) :
@@ -162,11 +160,10 @@ private:
 };
 
 
-class WorkerThread
+class WorkerThread final
 {
 public:
 	enum STATE {STARTING, IDLE, RUNNING, STOPPING, SHUTDOWN};
-
 
 	~WorkerThread()
 	{
@@ -188,7 +185,6 @@ public:
 
 private:
 	WorkerThread(Coordinator* coordinator) :
-		m_coordinator(coordinator),
 		m_worker(NULL),
 		m_state(STARTING)
 	{}
@@ -196,7 +192,6 @@ private:
 	static THREAD_ENTRY_DECLARE workerThreadRoutine(THREAD_ENTRY_PARAM);
 	int threadRoutine();
 
-	Coordinator* const m_coordinator;
 	Worker* m_worker;
 	Semaphore m_waitSem;		// idle thread waits on this semaphore to start work or go out
 	Semaphore m_signalSem;	// semaphore is released when thread going idle

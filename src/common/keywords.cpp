@@ -380,6 +380,7 @@ static const TOK tokens[] =
 	{TOK_PROTECTED, "PROTECTED", true},
 	{TOK_PUBLICATION, "PUBLICATION", false},
 	{TOK_QUANTIZE, "QUANTIZE", true},
+	{TOK_QUARTER, "QUARTER", true},
 	{TOK_RAND, "RAND", true},
 	{TOK_RANGE, "RANGE", true},
 	{TOK_RANK, "RANK", true},

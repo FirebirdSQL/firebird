@@ -1446,16 +1446,9 @@ public:
 class SavepointEncloseNode final : public TypedNode<StmtNode, StmtNode::TYPE_SAVEPOINT>
 {
 public:
-	explicit SavepointEncloseNode(MemoryPool& pool, StmtNode* stmt)
-		: TypedNode<StmtNode, StmtNode::TYPE_SAVEPOINT>(pool),
-		  statement(stmt)
-	{
-	}
-
-public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	static StmtNode* make(MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, StmtNode* node);
+	static StmtNode* make(MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, StmtNode* node, bool force = false);
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual SavepointEncloseNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
@@ -1466,7 +1459,13 @@ public:
 
 	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
 
-public:
+private:
+	explicit SavepointEncloseNode(MemoryPool& pool, StmtNode* stmt)
+		: TypedNode<StmtNode, StmtNode::TYPE_SAVEPOINT>(pool),
+		  statement(stmt)
+	{
+	}
+
 	NestConst<StmtNode> statement;
 };
 

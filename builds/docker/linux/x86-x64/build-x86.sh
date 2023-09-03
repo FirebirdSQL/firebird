@@ -1,5 +1,6 @@
 #!/bin/sh
 docker build \
+	--pull \
 	--build-arg ARG_BASE=i386/ubuntu:18.04 \
 	--build-arg ARG_SET_ARCH=i686 \
 	--build-arg ARG_TARGET_ARCH=i586-pc-linux-gnu \

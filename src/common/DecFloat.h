@@ -112,6 +112,9 @@ struct DecimalStatus
 	static const DecimalStatus DEFAULT;
 
 	USHORT decExtFlag, roundingMode;
+
+	string getTxtRound();
+	string getTxtTraps();
 };
 
 struct NumericBinding

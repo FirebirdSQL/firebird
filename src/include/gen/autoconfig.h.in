@@ -140,7 +140,7 @@
 /* message files DIR (PREFIX) */
 #define FB_MSGDIR "@FB_MSGDIR@"
 
-/* plugins DIR (PREFIX) */
+/* plugins DIR (PREFIX/plugins) */
 #define FB_PLUGDIR "@FB_PLUGDIR@"
 
 /* examples database DIR (PREFIX/examples/empbuild) */

@@ -129,6 +129,7 @@
 #define isc_dpb_decfloat_round            94
 #define isc_dpb_decfloat_traps            95
 #define isc_dpb_clear_map				  96
+#define isc_dpb_upgrade_db				  97
 #define isc_dpb_parallel_workers		 100
 #define isc_dpb_worker_attach			 101
 
@@ -536,6 +537,7 @@
 #define isc_spb_rpr_kill_shadows		0x40
 #define isc_spb_rpr_full				0x80
 #define isc_spb_rpr_icu				  0x0800
+#define isc_spb_rpr_upgrade_db		  0x1000
 
 /*****************************************
  * Parameters for isc_action_svc_restore *
@@ -778,7 +780,8 @@
 #define fb_dbg_map_argument			4
 #define fb_dbg_subproc				5
 #define fb_dbg_subfunc				6
-#define fb_dbg_map_curname			7
+#define fb_dbg_map_curname			7 /* declared cursor */
+#define fb_dbg_map_for_curname		8 /* FOR cursor */
 //// TODO: LocalTable name.
 
 // sub code for fb_dbg_map_argument

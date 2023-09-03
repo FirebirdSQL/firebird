@@ -1236,22 +1236,7 @@ bool ISQL_errmsg(Firebird::IStatus* st)
 			}
 		}
 
-		/*
-		if (state & Firebird::IStatus::STATE_WARNINGS)
-		{
-			const ISC_STATUS* w = st->getWarnings();
-			TEXT* err = errbuf;
-			unsigned es = sizeof(errbuf);
-			while (fb_interpret(err, es, &w)) {
-				STDERROUT(errbuf);
-				if (err == errbuf)
-				{
-					*err++ = '-';
-					--es;
-				}
-			}
-		}
-		*/
+		ISQL_warning(st);
 
 		if (Input_file)
 		{
@@ -1315,7 +1300,7 @@ bool ISQL_errmsg(Firebird::IStatus* st)
 }
 
 
-void ISQL_warning(Firebird::CheckStatusWrapper* st)
+void ISQL_warning(Firebird::IStatus* st)
 {
 /**************************************
  *
@@ -8812,8 +8797,8 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 		// Record the length of name and var, then convert to print
 		// length, later to be stored in pad array
 
-		unsigned data_length, disp_length, alignment;
-		data_length = disp_length = alignment = var.length;
+		unsigned disp_length, alignment;
+		disp_length = alignment = var.length;
 		unsigned namelength = IcuUtil::charLength(isqlGlob.att_charset,
 			static_cast<unsigned>(strlen(var.alias)), var.alias);
 
@@ -8871,7 +8856,6 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 			break;
 		case SQL_TEXT:
 			alignment = 1;
-			data_length++;
 			// OCTETS data is displayed in hex
 			if (charSet == CS_BINARY)
 				disp_length = 2 * var.length;
@@ -8881,7 +8865,6 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 				disp_length /= 4;
 			break;
 		case SQL_VARYING:
-			data_length += sizeof(USHORT) + 1;
 			alignment = sizeof(USHORT);
 			// OCTETS data is displayed in hex
 			if (charSet == CS_BINARY)

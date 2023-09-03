@@ -124,19 +124,7 @@ namespace Jrd
 			}
 		}
 
-		inline void cacheRequest()
-		{
-			Jrd::Attachment* att = JRD_get_thread_data()->getAttachment();
-
-			if (which == IRQ_REQUESTS)
-				att->att_internal[id] = request->getStatement();
-			else if (which == DYN_REQUESTS)
-				att->att_dyn_req[id] = request->getStatement();
-			else
-			{
-				fb_assert(false);
-			}
-		}
+		void cacheRequest();
 
 	private:
 		USHORT id;

@@ -41,6 +41,10 @@
 #include "../common/ScanDir.h"
 #include "../common/config/config_file.h"
 
+#ifdef ANDROID
+#include "../common/os/path_utils.h"
+#endif
+
 using namespace Firebird;
 
 
@@ -475,6 +479,16 @@ bool IntlManager::initialize()
 					if (!exists)
 					{
 						mod = ModuleLoader::fixAndLoadModule(status, filename);
+
+#ifdef ANDROID
+						if (!mod)
+						{
+							PathName path, file;
+							PathUtils::splitLastComponent(path, file, filename);
+							mod = ModuleLoader::fixAndLoadModule(status, file);
+						}
+#endif
+
 						if (mod)
 						{
 							exists = modules->exist(filename);

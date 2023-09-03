@@ -15,6 +15,9 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\src\jrd\tests\CompressorTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\tests\EngineTest.cpp">
       <Filter>source</Filter>
     </ClCompile>

@@ -257,6 +257,8 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 		m_leader.totalKeyLength += keyLength;
 	}
 
+	auto keyCount = 0;
+
 	for (FB_SIZE_T i = 1; i < count; i++)
 	{
 		RecordSource* const sub_rsb = args[i];
@@ -270,6 +272,8 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 		const FB_SIZE_T subKeyCount = sub.keys->getCount();
 		sub.keyLengths = FB_NEW_POOL(csb->csb_pool) ULONG[subKeyCount];
 		sub.totalKeyLength = 0;
+
+		keyCount += subKeyCount;
 
 		for (FB_SIZE_T j = 0; j < subKeyCount; j++)
 		{
@@ -299,7 +303,7 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 	if (!selectivity)
 	{
 		selectivity = MAXIMUM_SELECTIVITY;
-		for (auto keyCount = m_leader.keys->getCount(); keyCount; keyCount--)
+		while (keyCount--)
 			selectivity *= REDUCE_SELECTIVITY_FACTOR_EQUALITY;
 	}
 

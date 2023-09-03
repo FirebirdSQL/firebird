@@ -80,6 +80,7 @@
 
 #include "../remote/remote.h"
 #include "../jrd/license.h"
+#include "../jrd/replication/Config.h"
 #include "../common/file_params.h"
 #include "../remote/inet_proto.h"
 #include "../remote/server/serve_proto.h"
@@ -87,6 +88,7 @@
 #include "../yvalve/gds_proto.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/fb_string.h"
+#include "../common/classes/semaphore.h"
 
 #include "firebird/Interface.h"
 #include "../common/classes/ImplementHelper.h"
@@ -109,8 +111,6 @@
 #endif
 
 
-#include "../common/classes/semaphore.h"
-
 const char* TEMP_DIR = "/tmp";
 
 static void set_signal(int, void (*)(int));
@@ -119,12 +119,13 @@ static void signal_handler(int);
 static TEXT protocol[128];
 static int INET_SERVER_start = 0;
 
-static bool serverClosing = false;
-
 #if defined(HAVE_SETRLIMIT) && defined(HAVE_GETRLIMIT)
 #define FB_RAISE_LIMITS 1
 static void raiseLimit(int resource);
 #endif
+
+using namespace Firebird;
+
 
 static void logSecurityDatabaseError(const char* path, ISC_STATUS* status)
 {
@@ -133,12 +134,15 @@ static void logSecurityDatabaseError(const char* path, ISC_STATUS* status)
 	if (fb_utils::containsErrorCode(status, isc_io_error))
 		return;
 
-	const int SHUTDOWN_TIMEOUT = 5000;  // 5 sec
-
+	Syslog::Record(Syslog::Error, "Security database error");
 	gds__log_status(path, status);
-	gds__put_error(path);
-	gds__print_status(status);
-	Firebird::Syslog::Record(Firebird::Syslog::Error, "Security database error");
+	if (isatty(2))
+	{
+		gds__put_error(path);
+		gds__print_status(status);
+	}
+
+	const int SHUTDOWN_TIMEOUT = 5000;  // 5 sec
 	fb_shutdown(SHUTDOWN_TIMEOUT, fb_shutrsn_exit_called);
 	exit(STARTUP_ERROR);
 }
@@ -183,6 +187,8 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		bool classic = false;
 		bool standaloneClassic = false;
 		bool super = false;
+
+		int replPid = 0;
 
 		// It's very easy to detect that we are spawned - just check fd 0 to be a socket.
 		const int channel = 0;
@@ -278,7 +284,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			}
 		}
 
-		if (Firebird::Config::getServerMode() == Firebird::MODE_CLASSIC)
+		if (Config::getServerMode() == MODE_CLASSIC)
 		{
 			if (!classic)
 				standaloneClassic = true;
@@ -288,14 +294,15 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			if (classic)
 			{
 				gds__log("Server misconfigured - to start it from (x)inetd add ServerMode=Classic to firebird.conf");
-				Firebird::Syslog::Record(Firebird::Syslog::Error, "Server misconfigured - add ServerMode=Classic to firebird.conf");
+				Syslog::Record(Syslog::Error, "Server misconfigured - add ServerMode=Classic to firebird.conf");
 				exit(STARTUP_ERROR);
 			}
 			INET_SERVER_flag |= SRVR_multi_client;
 			super = true;
 		}
+
 		{	// scope
-			Firebird::MasterInterfacePtr master;
+			MasterInterfacePtr master;
 			master->serverMode(super ? 1 : 0);
 		}
 
@@ -326,22 +333,22 @@ int CLIB_ROUTINE main( int argc, char** argv)
 #endif
 
 #if !(defined(DEV_BUILD))
-		if (Firebird::Config::getBugcheckAbort())
+		if (Config::getBugcheckAbort())
 #endif
 		{
 			// try to force core files creation
 			raiseLimit(RLIMIT_CORE);
+		}
 
 #ifdef LINUX
-			// instruct kernel to include shared memory regions into core dump
-			FILE* coreproc = fopen("/proc/self/coredump_filter", "r+");
-			if (coreproc)
-			{
-				fprintf(coreproc, "0x3f\n");
-				fclose(coreproc);
-			}
-#endif
+		// instruct kernel to include shared memory regions into core dump
+		FILE* coreproc = fopen("/proc/self/coredump_filter", "r+");
+		if (coreproc)
+		{
+			fprintf(coreproc, "0x3f\n");
+			fclose(coreproc);
 		}
+#endif
 
 #if (defined SOLARIS || defined HPUX || defined LINUX)
 		if (super)
@@ -370,15 +377,15 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		}
 
 		// check firebird.conf presence - must be for server
-		if (Firebird::Config::missFirebirdConf())
+		if (Config::missFirebirdConf())
 		{
-			Firebird::Syslog::Record(Firebird::Syslog::Error, "Missing master config file firebird.conf");
+			Syslog::Record(Syslog::Error, "Missing master config file firebird.conf");
 			exit(STARTUP_ERROR);
 		}
 
 		if (!debug)
 		{
-			const char* redirection_file = Firebird::Config::getOutputRedirectionFile();
+			const char* redirection_file = Config::getOutputRedirectionFile();
 
 			int stdout_no = fileno(stdout);
 			int stderr_no = fileno(stderr);
@@ -416,19 +423,87 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			}
 		}
 
+		Replication::Config::ReplicaList replicas;
+		Replication::Config::enumerate(replicas);
+
 		if (super || standaloneClassic)
 		{
+			if (standaloneClassic && replicas.hasData())
+			{
+				// Start the replication server now (in the forked process),
+				// because INET_connect() never returns for the standalone Classic
+
+				if ((replPid = fork()) <= 0)
+				{
+					try
+					{
+						if (replPid) // failed fork attempt
+							system_error::raise("fork", replPid);
+
+						// We've been forked successfully
+						FbLocalStatus localStatus;
+						if (!REPL_server(&localStatus, replicas, true))
+							localStatus.check();
+					}
+					catch (const Exception& ex)
+					{
+						const char* const errorMsg = "Replication server startup error";
+						iscLogException(errorMsg, ex);
+						Syslog::Record(Syslog::Error, errorMsg);
+					}
+
+					if (!replPid)
+					{
+						fb_shutdown(10000, fb_shutrsn_exit_called);
+						return FINI_OK;
+					}
+				}
+			}
+
+			// Start the network listener
+
 			try
 			{
 				port = INET_connect(protocol, 0, INET_SERVER_flag, 0, NULL);
 			}
-			catch (const Firebird::Exception& ex)
+			catch (const Exception& ex)
 			{
-				iscLogException("startup:INET_connect:", ex);
-		 		Firebird::StaticStatusVector st;
-				ex.stuffException(st);
-				gds__print_status(st.begin());
+				iscLogException("INET server startup error", ex);
 				exit(STARTUP_ERROR);
+			}
+
+			// If INET_connect() returns NULL for the standalone classic, then game is over.
+			// Signal the forked replication server process to terminate and then exit.
+
+			if (!port && replPid > 0) // this implies standaloneClassic being true
+			{
+				if (!kill(replPid, SIGTERM))
+				{
+					int status = 0;
+
+					// Wait up to one second for the replicator process to finish gracefully
+					for (unsigned n = 0; n < 10; n++)
+					{
+						Thread::sleep(100); // milliseconds
+
+						const auto res = waitpid(replPid, &status, WNOHANG);
+
+						if (res == replPid) // process is terminated
+							break;
+
+						if (res < 0 && !SYSCALL_INTERRUPTED(errno)) // error
+							break;
+
+						// continue waiting otherwise
+					}
+
+					// Force terminating the replicator process if it's still alive
+					if (!WIFEXITED(status))
+						kill(replPid, SIGKILL);
+				}
+
+				fb_shutdown(10000, fb_shutrsn_exit_called);
+				return FINI_OK;
 			}
 		}
 
@@ -438,13 +513,13 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			if (!port)
 			{
 				gds__log("Unable to start INET_server");
-				Firebird::Syslog::Record(Firebird::Syslog::Error, "Unable to start INET_server");
+				Syslog::Record(Syslog::Error, "Unable to start INET_server");
 				exit(STARTUP_ERROR);
 			}
 		}
 
 		{ // scope for interface ptr
-			Firebird::PluginManagerInterfacePtr pi;
+			PluginManagerInterfacePtr pi;
 			Auth::registerSrpServer(pi);
 		}
 
@@ -458,7 +533,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			ISC_STATUS_ARRAY status;
 			isc_db_handle db_handle = 0L;
 
-			const Firebird::RefPtr<const Firebird::Config> defConf(Firebird::Config::getDefaultConfig());
+			const RefPtr<const Config> defConf(Config::getDefaultConfig());
 			const char* path = defConf->getSecurityDatabase();
 			const char dpb[] = {isc_dpb_version1, isc_dpb_sec_attach, 1, 1, isc_dpb_address_path, 0};
 
@@ -477,15 +552,17 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			}
 		} // end scope
 
-		fb_shutdown_callback(NULL, closePort, fb_shut_exit, port);
+		// Start replication server
 
-		Firebird::FbLocalStatus localStatus;
-		if (!REPL_server(&localStatus, false, &serverClosing))
+		FbLocalStatus localStatus;
+		if (!REPL_server(&localStatus, replicas, false))
 		{
-			const char* errorMsg = "Replication server initialization error";
+			const char* const errorMsg = "Replication server startup error";
 			iscLogStatus(errorMsg, localStatus->getErrors());
-			Firebird::Syslog::Record(Firebird::Syslog::Error, errorMsg);
+			Syslog::Record(Syslog::Error, errorMsg);
 		}
+
+		fb_shutdown_callback(NULL, closePort, fb_shut_exit, port);
 
 		SRVR_multi_thread(port, INET_SERVER_flag);
 
@@ -495,9 +572,9 @@ int CLIB_ROUTINE main( int argc, char** argv)
 
 		return FINI_OK;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
- 		Firebird::StaticStatusVector st;
+		StaticStatusVector st;
 		ex.stuffException(st);
 
 		char s[100];
@@ -505,8 +582,8 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		fb_interpret(s, sizeof(s), &status);
 
 		iscLogException("Firebird startup error:", ex);
-		Firebird::Syslog::Record(Firebird::Syslog::Error, "Firebird startup error");
-		Firebird::Syslog::Record(Firebird::Syslog::Error, s);
+		Syslog::Record(Syslog::Error, "Firebird startup error");
+		Syslog::Record(Syslog::Error, s);
 
 		exit(STARTUP_ERROR);
 	}

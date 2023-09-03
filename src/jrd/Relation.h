@@ -384,22 +384,21 @@ const ULONG REL_scanned					= 0x0001;	// Field expressions scanned (or being sca
 const ULONG REL_system					= 0x0002;
 const ULONG REL_deleted					= 0x0004;	// Relation known gonzo
 const ULONG REL_get_dependencies		= 0x0008;	// New relation needs dependencies during scan
-const ULONG REL_force_scan				= 0x0010;	// system relation has been updated since ODS change, force a scan
-const ULONG REL_check_existence			= 0x0020;	// Existence lock released pending drop of relation
-const ULONG REL_blocking				= 0x0040;	// Blocking someone from dropping relation
-const ULONG REL_sys_triggers			= 0x0080;	// The relation has system triggers to compile
-const ULONG REL_sql_relation			= 0x0100;	// Relation defined as sql table
-const ULONG REL_check_partners			= 0x0200;	// Rescan primary dependencies and foreign references
-const ULONG REL_being_scanned			= 0x0400;	// relation scan in progress
-const ULONG REL_sys_trigs_being_loaded	= 0x0800;	// System triggers being loaded
-const ULONG REL_deleting				= 0x1000;	// relation delete in progress
-const ULONG REL_temp_tran				= 0x2000;	// relation is a GTT delete rows
-const ULONG REL_temp_conn				= 0x4000;	// relation is a GTT preserve rows
-const ULONG REL_virtual					= 0x8000;	// relation is virtual
-const ULONG REL_jrd_view				= 0x10000;	// relation is VIEW
-const ULONG REL_gc_blocking				= 0x20000;	// request to downgrade\release gc lock
-const ULONG REL_gc_disabled				= 0x40000;	// gc is disabled temporarily
-const ULONG REL_gc_lockneed				= 0x80000;	// gc lock should be acquired
+const ULONG REL_check_existence			= 0x0010;	// Existence lock released pending drop of relation
+const ULONG REL_blocking				= 0x0020;	// Blocking someone from dropping relation
+const ULONG REL_sys_triggers			= 0x0040;	// The relation has system triggers to compile
+const ULONG REL_sql_relation			= 0x0080;	// Relation defined as sql table
+const ULONG REL_check_partners			= 0x0100;	// Rescan primary dependencies and foreign references
+const ULONG REL_being_scanned			= 0x0200;	// relation scan in progress
+const ULONG REL_sys_trigs_being_loaded	= 0x0400;	// System triggers being loaded
+const ULONG REL_deleting				= 0x0800;	// relation delete in progress
+const ULONG REL_temp_tran				= 0x1000;	// relation is a GTT delete rows
+const ULONG REL_temp_conn				= 0x2000;	// relation is a GTT preserve rows
+const ULONG REL_virtual					= 0x4000;	// relation is virtual
+const ULONG REL_jrd_view				= 0x8000;	// relation is VIEW
+const ULONG REL_gc_blocking				= 0x10000;	// request to downgrade\release gc lock
+const ULONG REL_gc_disabled				= 0x20000;	// gc is disabled temporarily
+const ULONG REL_gc_lockneed				= 0x40000;	// gc lock should be acquired
 
 
 /// class jrd_rel

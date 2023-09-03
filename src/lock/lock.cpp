@@ -1398,7 +1398,19 @@ void LockManager::blocking_action(thread_db* tdbb, SRQ_PTR blocking_owner_offset
 			{ // checkout scope
 				LockTableCheckout checkout(this, FB_FUNCTION);
 				EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-				(*routine)(arg);
+
+				try
+				{
+					(*routine)(arg);
+				}
+				catch (const Exception& ex)
+				{
+					iscLogException("Exception from AST routine - this should never happen", ex);
+				}
+				catch (...)
+				{
+					gds__log("Unknown C++ exception from AST routine - this should never happen");
+				}
 			}
 
 			owner = (own*) SRQ_ABS_PTR(blocking_owner_offset);

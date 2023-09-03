@@ -87,6 +87,33 @@ Sha1HashContext::Sha1HashContext(MemoryPool& pool)
 {
 }
 
+static LibTomCryptHashContext::Descriptor sha3_512_Descriptor{&sha3_512_desc};
+
+Sha3_512_HashContext::Sha3_512_HashContext(MemoryPool& pool)
+	: LibTomCryptHashContext(pool, &sha3_512_Descriptor)
+{
+}
+
+static LibTomCryptHashContext::Descriptor sha3_384_Descriptor{&sha3_384_desc};
+
+Sha3_384_HashContext::Sha3_384_HashContext(MemoryPool& pool)
+	: LibTomCryptHashContext(pool, &sha3_384_Descriptor)
+{
+}
+
+static LibTomCryptHashContext::Descriptor sha3_256_Descriptor{&sha3_256_desc};
+
+Sha3_256_HashContext::Sha3_256_HashContext(MemoryPool& pool)
+	: LibTomCryptHashContext(pool, &sha3_256_Descriptor)
+{
+}
+
+static LibTomCryptHashContext::Descriptor sha3_224_Descriptor{&sha3_224_desc};
+
+Sha3_224_HashContext::Sha3_224_HashContext(MemoryPool& pool)
+	: LibTomCryptHashContext(pool, &sha3_224_Descriptor)
+{
+}
 
 static LibTomCryptHashContext::Descriptor sha256Descriptor{&sha256_desc};
 

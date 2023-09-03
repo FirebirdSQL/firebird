@@ -237,6 +237,15 @@ void TRA_detach_request(Jrd::Request* request)
 
 	// Release stored looper savepoints
 	Savepoint::destroy(request->req_savepoints);
+	fb_assert(!request->req_savepoints);
+
+	// Release procedure savepoints used by this request
+	if (request->req_proc_sav_point)
+	{
+		fb_assert(request->req_flags & req_proc_fetch);
+		Savepoint::destroy(request->req_proc_sav_point);
+		fb_assert(!request->req_proc_sav_point);
+	}
 
 	// Remove request from the doubly linked list
 	if (request->req_tra_next)
@@ -804,8 +813,7 @@ void TRA_init(Jrd::Attachment* attachment)
 	CHECK_DBB(dbb);
 
 	MemoryPool* const pool = dbb->dbb_permanent;
-	jrd_tra* const trans = FB_NEW_POOL(*pool) jrd_tra(pool, &dbb->dbb_memory_stats, NULL, NULL);
-	trans->tra_attachment = attachment;
+	jrd_tra* const trans = FB_NEW_POOL(*pool) jrd_tra(pool, &dbb->dbb_memory_stats, attachment, NULL);
 	attachment->setSysTransaction(trans);
 	trans->tra_flags |= TRA_system | TRA_ignore_limbo;
 }
@@ -1210,6 +1218,17 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 
 	if (!transaction->tra_outer)
 	{
+		for (auto& item : transaction->tra_blob_util_map)
+		{
+			auto blb = item.second;
+
+			// Let temporary blobs be cancelled in the block below.
+			if (!(blb->blb_flags & BLB_temporary))
+				blb->BLB_close(tdbb);
+		}
+
+		transaction->tra_blob_util_map.clear();
+
 		if (transaction->tra_blobs->getFirst())
 		{
 			while (true)

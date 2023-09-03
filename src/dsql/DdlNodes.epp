@@ -1664,15 +1664,15 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->flags |= (DsqlCompilerScratch::FLAG_BLOCK | DsqlCompilerScratch::FLAG_FUNCTION);
 
-	// check for duplicated parameter names
+	// check for duplicated parameters and declaration names
 
-	SortedArray<MetaName> names;
+	StrArray names;
 
 	for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
 	{
 		const ParameterClause* const parameter = parameters[i];
 
-		if (names.exist(parameter->name))
+		if (names.exist(parameter->name.c_str()))
 		{
 			status_exception::raise(
 				Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
@@ -1680,34 +1680,10 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		}
 
 		if (parameter->name.hasData())	// legacy UDFs has unnamed parameters
-			names.add(parameter->name);
+			names.add(parameter->name.c_str());
 	}
 
-	const CompoundStmtNode* variables = localDeclList;
-	if (variables)
-	{
-		// insure that variable names do not duplicate parameter names
-
-		const NestConst<StmtNode>* ptr = variables->statements.begin();
-		for (const NestConst<StmtNode>* const end = variables->statements.end(); ptr != end; ++ptr)
-		{
-			const DeclareVariableNode* varNode = nodeAs<DeclareVariableNode>(*ptr);
-
-			if (varNode)
-			{
-				const dsql_fld* field = varNode->dsqlDef->type;
-				DEV_BLKCHK(field, dsql_type_fld);
-
-				if (names.exist(field->fld_name))
-				{
-					status_exception::raise(
-						Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-						Arg::Gds(isc_dsql_var_conflict) <<
-						Arg::Str(field->fld_name));
-				}
-			}
-		}
-	}
+	PASS1_check_unique_fields_names(names, localDeclList);
 
 	source.ltrim("\n\r\t ");
 
@@ -2659,63 +2635,39 @@ DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->flags |= (DsqlCompilerScratch::FLAG_BLOCK | DsqlCompilerScratch::FLAG_PROCEDURE);
 
-	// check for duplicated parameter names
+	// check for duplicated parameters and declaration names
 
-	SortedArray<MetaName> names;
+	StrArray names;
 
 	for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
 	{
 		const ParameterClause* const parameter = parameters[i];
 
-		if (names.exist(parameter->name))
+		if (names.exist(parameter->name.c_str()))
 		{
 			status_exception::raise(
 				Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
 				Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
 		}
 
-		names.add(parameter->name);
+		names.add(parameter->name.c_str());
 	}
 
 	for (FB_SIZE_T i = 0; i < returns.getCount(); ++i)
 	{
 		const ParameterClause* const parameter = returns[i];
 
-		if (names.exist(parameter->name))
+		if (names.exist(parameter->name.c_str()))
 		{
 			status_exception::raise(
 				Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
 				Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
 		}
 
-		names.add(parameter->name);
+		names.add(parameter->name.c_str());
 	}
 
-	const CompoundStmtNode* variables = localDeclList;
-	if (variables)
-	{
-		// insure that variable names do not duplicate parameter names
-
-		const NestConst<StmtNode>* ptr = variables->statements.begin();
-		for (const NestConst<StmtNode>* const end = variables->statements.end(); ptr != end; ++ptr)
-		{
-			const DeclareVariableNode* varNode = nodeAs<DeclareVariableNode>(*ptr);
-
-			if (varNode)
-			{
-				const dsql_fld* field = varNode->dsqlDef->type;
-				DEV_BLKCHK(field, dsql_type_fld);
-
-				if (names.exist(field->fld_name))
-				{
-					status_exception::raise(
-						Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-						Arg::Gds(isc_dsql_var_conflict) <<
-						Arg::Str(field->fld_name));
-				}
-			}
-		}
-	}
+	PASS1_check_unique_fields_names(names, localDeclList);
 
 	source.ltrim("\n\r\t ");
 

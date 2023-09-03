@@ -17,7 +17,7 @@ enabled. There are two ways to enable parallelism in user attachment:
   firebird.conf.
 
   For gfix utility there is new command-line switch -parallel that allows to
-set number of parallel workers for the sweep task. For example:
+set number of parallel workers for the "sweep" and "icu" tasks. For example:
 
   gfix -sweep -parallel 4 <database>
 

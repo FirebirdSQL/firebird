@@ -58,6 +58,7 @@
 #include "../common/classes/UserBlob.h"
 #include "../common/classes/VaryStr.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../common/classes/MetaString.h"
 #include "../common/TimeZoneUtil.h"
 #include "../isql/OptionsBase.h"
 
@@ -68,6 +69,7 @@
 #endif
 
 using Firebird::string;
+using Firebird::MetaString;
 using MsgFormat::SafeArg;
 
 
@@ -97,21 +99,24 @@ static processing_state show_dialect();
 static processing_state show_domains(const SCHAR*);
 static processing_state show_exceptions(const SCHAR*);
 static processing_state show_filters(const SCHAR*);
-static processing_state show_functions(const SCHAR*);
+static processing_state show_functions(const SCHAR*, bool);
 static processing_state show_sys_functions(const char* msg);
-static processing_state show_func_legacy(const SCHAR*);
-static processing_state show_func(const SCHAR*);
+static processing_state show_func_legacy(const MetaString&);
+static processing_state show_func(const MetaString&, const MetaString&);
 static processing_state show_generators(const SCHAR*);
 static void show_index(SCHAR*, SCHAR*, const SSHORT, const SSHORT, const SSHORT);
 static processing_state show_indices(const SCHAR* const*);
-static processing_state show_proc(const SCHAR*);
-static processing_state show_packages(const SCHAR* package_name);
+static processing_state show_proc(const SCHAR*, bool, bool, const char* msg = nullptr);
+static processing_state show_packages(const SCHAR* package_name, bool, const SCHAR* = NULL);
+static processing_state show_publications(const SCHAR* pub_name, bool, const SCHAR* = NULL);
+static void show_pub_table(const SCHAR* table_name);
 static processing_state show_role(const SCHAR*, bool, const char* msg = NULL);
 static processing_state show_secclass(const char* object, const char* opt);
 static processing_state show_table(const SCHAR*, bool);
 static processing_state show_trigger(const SCHAR*, bool, bool);
 static processing_state show_users();
 static processing_state show_users12();
+static void parse_package(const char* procname, MetaString& package, MetaString& procedure);
 
 const char* const spaces = "                                ";
 static TEXT Print_buffer[512];
@@ -231,6 +236,17 @@ static const struct
 
 const int MAX_PRIV_LIST = (6 + 2 + 7 + 2 + 6 + 2 + 6 + 2 + 6 + 2 + 10 + 2 + 6 + 2 + 5 + 2 + 4 + 1);
 
+const int PRIV_UPDATE_POS = 4;
+const int PRIV_REFERENCES_POS = 5;
+
+const int RELATION_PRIV_ALL = priv_SELECT | priv_INSERT | priv_UPDATE | priv_DELETE | priv_REFERENCES;
+
+struct PrivilegeFields
+{
+	const char* privilege;
+	string fields;
+};
+
 // Added support to display FORCED WRITES status. - PR 27-NOV-2001
 // Added support to display transaction info when next_transaction id is fixed.
 // Added support to display ODS version. CVC 26-Aug-2004.
@@ -257,6 +273,7 @@ static const UCHAR db_items[] =
 	fb_info_wire_crypt,
 	fb_info_creation_timestamp_tz,
 	isc_info_creation_date,
+	fb_info_replica_mode,
 	isc_info_end
 };
 
@@ -587,9 +604,9 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				struct tm time;
 				isc_decode_timestamp(&ts, &time);
 
-				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d\n",
+				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d%s",
 					FB_SHORT_MONTHS[time.tm_mon], time.tm_mday, time.tm_year + 1900,
-					time.tm_hour, time.tm_min, time.tm_sec);
+					time.tm_hour, time.tm_min, time.tm_sec, separator);
 			}
 			break;
 
@@ -614,9 +631,9 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				if (ISQL_errmsg(fbStatus))
 					break;
 
-				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d %s\n",
+				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d %s%s",
 					FB_SHORT_MONTHS[month - 1], day, year,
-					hours, minutes, seconds, timeZone);
+					hours, minutes, seconds, timeZone, separator);
 
 				crdatePrinted = true;
 			}
@@ -642,6 +659,18 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			}
 			break;
 #endif
+
+		case fb_info_replica_mode:
+			{
+				value_out = p.getInt();
+				const char* mode =
+					(value_out == fb_info_replica_none) ? "NONE" :
+					(value_out == fb_info_replica_read_only) ? "READ_ONLY" :
+					(value_out == fb_info_replica_read_write) ? "READ_WRITE" :
+					"unknown";
+				sprintf(info, "Replica mode: %s%s", mode, separator);
+			}
+			break;
 
 		case isc_info_truncated:
 			return info > info_buf; // If we got some items, we are (partially) successful.
@@ -782,6 +811,56 @@ static void set_grantee(int user_type, const char* SQL_identifier, char* user_st
 }
 
 
+static USHORT convert_privilege_to_code(char privilege)
+{
+	switch (privilege)
+	{
+	case 'S':
+		return priv_SELECT;
+	case 'I':
+		return priv_INSERT;
+	case 'U':
+		return priv_UPDATE;
+	case 'D':
+		return priv_DELETE;
+	case 'R':
+		return priv_REFERENCES;
+	case 'X':
+	case 'G':
+		// Execute should not be here
+		return 0;
+	}
+
+	return priv_UNKNOWN;
+}
+
+
+static void make_privilege_string_with_fields(USHORT priv_flags,
+											  const PrivilegeFields* priv_fields,
+											  int priv_fields_count,
+											  char* priv_string,
+											  string& out_result)
+{
+	out_result = "";
+
+	if (priv_flags)
+	{
+		make_priv_string(priv_flags, priv_string, false);
+		out_result.assign(priv_string);
+	}
+
+	for (int i = 0; i < priv_fields_count; i++)
+	{
+		if (priv_fields[i].fields.isEmpty())
+			continue;
+
+		if (!out_result.isEmpty())
+			out_result += ", ";
+		out_result += priv_fields[i].privilege + (" (" + priv_fields[i].fields + ")");
+	}
+}
+
+
 processing_state SHOW_grants2 (const SCHAR* object,
 				  const SCHAR* terminator,
 				  ObjectType obj_type,
@@ -808,14 +887,19 @@ processing_state SHOW_grants2 (const SCHAR* object,
  *
  **************************************/
 	BASED_ON RDB$USER_PRIVILEGES.RDB$USER prev_user;
-	BASED_ON RDB$USER_PRIVILEGES.RDB$GRANT_OPTION prev_option;
-	BASED_ON RDB$USER_PRIVILEGES.RDB$FIELD_NAME prev_field;
-	BASED_ON RDB$USER_PRIVILEGES.RDB$USER_TYPE prev_user_type;
+	BASED_ON RDB$USER_PRIVILEGES.RDB$GRANT_OPTION prev_grant_option;
 	BASED_ON RDB$USER_PRIVILEGES.RDB$GRANTOR prev_grantor;
-	BASED_ON RDB$USER_PRIVILEGES.RDB$OBJECT_TYPE prev_object_type;
 	SCHAR buf_grantor[sizeof(prev_grantor) + 20];
 	SCHAR user_string[QUOTED_NAME_SIZE + 20];
 	SCHAR obj_string[QUOTED_NAME_SIZE + 20];
+
+	PrivilegeFields priv_fields[] =
+	{
+		{privs[PRIV_UPDATE_POS].priv_string, ""},
+		{privs[PRIV_REFERENCES_POS].priv_string, ""}
+	};
+	const int priv_fields_count = FB_NELEM(priv_fields);
+
 	bool first = true;
 
 	if (!*object)
@@ -823,17 +907,13 @@ processing_state SHOW_grants2 (const SCHAR* object,
 
 	// Query against user_privileges instead of looking at rdb$security_classes
 
-	prev_option = -1;
+	prev_grant_option = -1;
 	prev_user[0] = '\0';
-	prev_field[0] = '\0';
 	prev_grantor[0] = '\0';
-	prev_user_type = -1;
-	prev_object_type = -1;
 	char priv_string[MAX_PRIV_LIST] = "";
-	char col_string[BUFFER_LENGTH512] = "";
+	string col_string;
 	char with_option[19] = "";
 	USHORT priv_flags = 0;
-	SSHORT prev_field_null = -1;
 
 	if (obj_type == obj_relation || obj_type == obj_any)
 	{
@@ -850,7 +930,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				REL.RDB$RELATION_NAME EQ object AND
 				PRV.RDB$PRIVILEGE     NE 'M'    AND
 				REL.RDB$OWNER_NAME    NE PRV.RDB$USER
-				SORTED BY PRV.RDB$USER, PRV.RDB$FIELD_NAME, PRV.RDB$GRANT_OPTION;
+				SORTED BY PRV.RDB$USER, PRV.RDB$GRANT_OPTION, PRV.RDB$FIELD_NAME;
 
 				fb_utils::exact_name(PRV.RDB$USER);
 
@@ -864,21 +944,13 @@ processing_state SHOW_grants2 (const SCHAR* object,
 
 				// Print a new grant statement for each new user or change of option
 
-				if ((prev_user[0] && strcmp (prev_user, PRV.RDB$USER)) ||
-					(prev_field_null != -1 &&
-					 prev_field_null != PRV.RDB$FIELD_NAME.NULL) ||
-					(!prev_field_null && strcmp (prev_field, PRV.RDB$FIELD_NAME)) ||
-					(prev_option != -1 && prev_option != PRV.RDB$GRANT_OPTION) ||
-					(prev_user_type != -1 && prev_user_type != PRV.RDB$USER_TYPE) ||
-					(prev_grantor[0] && strcmp (prev_grantor, PRV.RDB$GRANTOR)) ||
-					(prev_object_type != -1 && prev_object_type != PRV.RDB$OBJECT_TYPE))
+				if (prev_grant_option != -1 &&
+					(strcmp(prev_user, PRV.RDB$USER) ||
+					prev_grant_option != PRV.RDB$GRANT_OPTION ||
+					strcmp(prev_grantor, PRV.RDB$GRANTOR)))
 				{
-
-					make_priv_string(priv_flags, priv_string, false);
-
 					if (first && optional_msg)
 						isqlGlob.prints(optional_msg);
-
 					first = false;
 
 					if (mangle && isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
@@ -886,29 +958,33 @@ processing_state SHOW_grants2 (const SCHAR* object,
 					else
 						strcpy(SQL_identifier, object);
 
-					isqlGlob.printf("GRANT %s%s ON %s TO %s%s%s%s%s",
-						priv_string, col_string,
+					if (prev_grant_option)
+						strcpy(with_option, " WITH GRANT OPTION");
+
+					string combine_privileges = "";
+					make_privilege_string_with_fields(priv_flags, priv_fields, priv_fields_count,
+						priv_string, combine_privileges);
+
+					isqlGlob.printf("GRANT %s ON %s TO %s%s%s%s%s",
+						combine_privileges.c_str(),
 						SQL_identifier,
 						user_string, with_option, granted_by(buf_grantor, prev_grantor, false),
 						terminator, NEWLINE);
 
-					// re-initialize strings
-
-					priv_string[0] = '\0';
-					with_option[0] = '\0';
-					col_string[0] = '\0';
+					// re-initialize
 					priv_flags = 0;
+					with_option[0] = '\0';
+					priv_string[0] = '\0';
+					col_string = "";
+					for (int i = 0; i < priv_fields_count; i++)
+						priv_fields[i].fields = "";
 				}
 
 				// At each row, store this value for the next compare of contol break
 
 				strcpy (prev_user, PRV.RDB$USER);
-				prev_option = PRV.RDB$GRANT_OPTION;
-				prev_field_null = PRV.RDB$FIELD_NAME.NULL;
-				strcpy (prev_field, PRV.RDB$FIELD_NAME);
-				prev_user_type = PRV.RDB$USER_TYPE;
+				prev_grant_option = PRV.RDB$GRANT_OPTION;
 				strcpy (prev_grantor, PRV.RDB$GRANTOR);
-				prev_object_type = PRV.RDB$OBJECT_TYPE;
 
 				switch (PRV.RDB$USER_TYPE)
 				{
@@ -933,37 +1009,14 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
 
 				// Only the first character is used for permissions
-
 				const char c = PRV.RDB$PRIVILEGE[0];
 
-				switch (c)
-				{
-				case 'S':
-					priv_flags |= priv_SELECT;
-				break;
-				case 'I':
-					priv_flags |= priv_INSERT;
-					break;
-				case 'U':
-					priv_flags |= priv_UPDATE;
-					break;
-				case 'D':
-					priv_flags |= priv_DELETE;
-					break;
-				case 'R':
-					priv_flags |= priv_REFERENCES;
-					break;
-				case 'X':
-				case 'G':
-					// Execute should not be here -- special handling below
-					break;
-				default:
-					priv_flags |= priv_UNKNOWN;
-				}
-
 				// Column level privileges for update and references only
-				if (PRV.RDB$FIELD_NAME.NULL) {
-					*col_string = '\0';
+				if (PRV.RDB$FIELD_NAME.NULL)
+				{
+					col_string = "";
+					priv_flags |= convert_privilege_to_code(c);
+					continue;
 				}
 				else
 				{
@@ -971,15 +1024,23 @@ processing_state SHOW_grants2 (const SCHAR* object,
 					if (mangle && isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
 					{
 						IUTILS_copy_SQL_id(PRV.RDB$FIELD_NAME, SQL_identifier, DBL_QUOTE);
-						sprintf(col_string, " (%s)", SQL_identifier);
+						col_string = SQL_identifier;
 					}
-					else {
-						sprintf(col_string, " (%s)", PRV.RDB$FIELD_NAME);
+					else
+					{
+						col_string = PRV.RDB$FIELD_NAME;
 					}
 				}
 
-				if (PRV.RDB$GRANT_OPTION)
-					strcpy(with_option, " WITH GRANT OPTION");
+				for (int i = 0; i < priv_fields_count; i++)
+				{
+					if (c == priv_fields[i].privilege[0])
+					{
+						priv_fields[i].fields += priv_fields[i].fields.isEmpty() ? col_string
+							: ", " + col_string;
+						break;
+					}
+				}
 
 			END_FOR
 			ON_ERROR
@@ -989,9 +1050,8 @@ processing_state SHOW_grants2 (const SCHAR* object,
 
 			// Print last case if there was anything to print
 
-			if (prev_option != -1)
+			if (prev_grant_option != -1)
 			{
-				make_priv_string(priv_flags, priv_string, false);
 				if (first && optional_msg)
 					isqlGlob.prints(optional_msg);
 				first = false;
@@ -1001,10 +1061,18 @@ processing_state SHOW_grants2 (const SCHAR* object,
 				else
 					strcpy(SQL_identifier, object);
 
-				isqlGlob.printf("GRANT %s%s ON %s TO %s%s%s%s%s",
-					priv_string, col_string,
+				if (prev_grant_option)
+					strcpy(with_option, " WITH GRANT OPTION");
+
+				string combine_privileges;
+				make_privilege_string_with_fields(priv_flags, priv_fields, priv_fields_count,
+					priv_string, combine_privileges);
+
+				isqlGlob.printf("GRANT %s ON %s TO %s%s%s%s%s",
+					combine_privileges.c_str(),
 					SQL_identifier,
-					user_string, with_option, granted_by(buf_grantor, prev_grantor, false), terminator, NEWLINE);
+					user_string, with_option, granted_by(buf_grantor, prev_grantor, false),
+					terminator, NEWLINE);
 			}
 
 		END_FOR
@@ -2031,7 +2099,7 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 			role, table, view, system, index, domain, exception,
 			filter, function, generator, grant, procedure, trigger,
 			check, database, comment, dependency, collation, security_class,
-			users, package, schema, map, wrong
+			users, package, publication, schema, map, wrong
 		};
 		ShowOptions(const optionsMap* inmap, size_t insize, int wrongval)
 			: OptionsBase(inmap, insize, wrongval)
@@ -2088,7 +2156,8 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 		{ShowOptions::users, "USERS", 0},
 		{ShowOptions::package, "PACKAGES", 4},
 		{ShowOptions::schema, "SCHEMAS", 4},
-		{ShowOptions::map, "MAPPING", 3}
+		{ShowOptions::map, "MAPPING", 3},
+		{ShowOptions::publication, "PUBLICATIONS", 3}
 	};
 
 	const ShowOptions showoptions(options, FB_NELEM(options), ShowOptions::wrong);
@@ -2245,6 +2314,18 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 				show_role(NULL, true);
 				break;
 
+			case ShowOptions::procedure:
+				show_proc(NULL, false, true);
+				break;
+
+			case ShowOptions::package:
+				show_packages(NULL, true);
+				break;
+
+			case ShowOptions::publication:
+				show_publications(NULL, true);
+				break;
+
 			default:
 				return ps_ERR;
 			}
@@ -2257,10 +2338,16 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 			show_all_tables(1);
 			IUTILS_msg_get(MSG_FUNCTIONS, msg);
 			show_sys_functions(msg);
+			IUTILS_msg_get(MSG_PROCEDURES, msg);
+			show_proc(NULL, false, true, msg);
+			IUTILS_msg_get(MSG_PACKAGES, msg);
+			show_packages(NULL, true, msg);
 			IUTILS_msg_get(MSG_COLLATIONS, msg);
 			show_collations("", 1, msg, true);
 			IUTILS_msg_get(MSG_ROLES, msg);
 			show_role(NULL, true, msg);
+			IUTILS_msg_get(MSG_PUBLICATIONS, msg);
+			show_publications(NULL, true, msg);
 		}
 		break;
 
@@ -2355,10 +2442,10 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 		if (*cmd[2] == '"')
 		{
 			remove_delimited_double_quotes(lcmd[2]);
-			ret = show_functions(lcmd[2]);
+			ret = show_functions(lcmd[2], true);
 		}
 		else
-			ret = show_functions(cmd[2]);
+			ret = show_functions(cmd[2], false);
 
 		if (ret == OBJECT_NOT_FOUND)
 		{
@@ -2531,10 +2618,10 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 		if (*cmd[2] == '"')
 		{
 			remove_delimited_double_quotes(lcmd[2]);
-			ret = show_proc(lcmd[2]);
+			ret = show_proc(lcmd[2], true, false);
 		}
 		else
-			ret = show_proc(cmd[2]);
+			ret = show_proc(cmd[2], false, false);
 
 		if (ret == OBJECT_NOT_FOUND)
 		{
@@ -2673,10 +2760,10 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 		if (*cmd[2] == '"')
 		{
 			remove_delimited_double_quotes(lcmd[2]);
-			ret = show_packages(lcmd[2]);
+			ret = show_packages(lcmd[2], false);
 		}
 		else
-			ret = show_packages(cmd[2]);
+			ret = show_packages(cmd[2], false);
 
 		if (ret == OBJECT_NOT_FOUND)
 		{
@@ -2702,6 +2789,24 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 				key = NO_MAP;
 			else
 				key = NO_MAPS;
+		}
+		break;
+
+	case ShowOptions::publication:
+		if (*cmd[2] == '"')
+		{
+			remove_delimited_double_quotes(lcmd[2]);
+			ret = show_publications(lcmd[2], false);
+		}
+		else
+			ret = show_publications(cmd[2], false);
+
+		if (ret == OBJECT_NOT_FOUND)
+		{
+			if (*cmd[2])
+				key = NO_PUBLICATION;
+			else
+				key = NO_PUBLICATIONS;
 		}
 		break;
 
@@ -2757,6 +2862,12 @@ static void make_priv_string(USHORT flags, char* string, bool useAny)
  *	string list.
  *
  **************************************/
+	if (flags == RELATION_PRIV_ALL)
+	{
+		strcat(string, "ALL");
+		return;
+	}
+
 	for (int i = 0; privs[i].priv_string; i++)
 	{
 		if (flags & privs[i].priv_flag)
@@ -3448,6 +3559,49 @@ static processing_state show_comments(const commentMode showextract, const char*
 		return ps_ERR;
 	END_ERROR
 
+	if (isqlGlob.major_ods >= ODS_VERSION12)
+	{
+		FOR PACK IN RDB$PACKAGES
+			WITH PACK.RDB$DESCRIPTION NOT MISSING
+			AND (PACK.RDB$SYSTEM_FLAG EQ 0 OR PACK.RDB$SYSTEM_FLAG MISSING)
+			SORTED BY PACK.RDB$PACKAGE_NAME
+
+			show_comment("PACKAGE", NULL, PACK.RDB$PACKAGE_NAME, NULL, &PACK.RDB$DESCRIPTION,
+				showextract, first ? banner : 0);
+			first = false;
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+
+		FOR M IN RDB$AUTH_MAPPING
+			WITH M.RDB$DESCRIPTION NOT MISSING
+			AND (M.RDB$SYSTEM_FLAG EQ 0 OR M.RDB$SYSTEM_FLAG MISSING)
+			SORTED BY M.RDB$MAP_NAME
+
+			show_comment("MAPPING", NULL, M.RDB$MAP_NAME, NULL, &M.RDB$DESCRIPTION,
+				showextract, first ? banner : 0);
+			first = false;
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+
+		FOR M IN SEC$GLOBAL_AUTH_MAPPING
+			WITH M.SEC$DESCRIPTION NOT MISSING
+			SORTED BY M.SEC$MAP_NAME
+
+			show_comment("GLOBAL MAPPING", NULL, M.SEC$MAP_NAME, NULL, &M.SEC$DESCRIPTION,
+				showextract, first ? banner : 0);
+			first = false;
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+	}
 	return first ? OBJECT_NOT_FOUND : SKIP;
 }
 
@@ -3596,6 +3750,25 @@ static void show_db()
 		ISQL_errmsg(fbStatus);
 		return;
 	END_ERROR;
+
+	if (isqlGlob.major_ods >= ODS_VERSION13)
+	{
+		bool published = false;
+
+		FOR PUB IN RDB$PUBLICATIONS WITH
+			PUB.RDB$ACTIVE_FLAG > 0
+
+			published = true;
+			break;
+
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return;
+		END_ERROR;
+
+		isqlGlob.printf("Publication: %s%s", published ? "Enabled" : "Disabled", NEWLINE);
+	}
 }
 
 
@@ -4143,9 +4316,8 @@ static processing_state show_sys_functions(const SCHAR* msg)
 	bool first = true;
 
 	FOR FUN IN RDB$FUNCTIONS
-		WITH FUN.RDB$SYSTEM_FLAG EQ 1 AND
-			 FUN.RDB$PACKAGE_NAME MISSING
-		SORTED BY FUN.RDB$FUNCTION_NAME
+		WITH FUN.RDB$SYSTEM_FLAG EQ 1
+		SORTED BY FUN.RDB$PACKAGE_NAME, FUN.RDB$FUNCTION_NAME
 	{
 		if (first)
 		{
@@ -4154,7 +4326,11 @@ static processing_state show_sys_functions(const SCHAR* msg)
 				isqlGlob.printf("%s%s", msg, NEWLINE);
 		}
 
-		isqlGlob.printf("%s%s", fb_utils::exact_name(FUN.RDB$FUNCTION_NAME), NEWLINE);
+		// Strip trailing blanks
+		MetaString package(FUN.RDB$PACKAGE_NAME);
+		MetaString function(FUN.RDB$FUNCTION_NAME);
+
+		isqlGlob.printf("%s%s%s%s", package.c_str(), package.hasData() ? "." : "", function.c_str(), NEWLINE);
 	}
 	END_FOR
 	ON_ERROR
@@ -4166,7 +4342,7 @@ static processing_state show_sys_functions(const SCHAR* msg)
 }
 
 
-static processing_state show_functions(const SCHAR* funcname)
+static processing_state show_functions(const SCHAR* funcname, bool quoted)
 {
 /**************************************
  *
@@ -4183,42 +4359,20 @@ static processing_state show_functions(const SCHAR* funcname)
 
 	if (!funcname || !strlen(funcname))
 	{
+		bool first = true;
+
 		// This query gets the function name; the next query
 		// gets all the dependencies if any
-
-		bool first = true;
-		string prevPackage;
 
 		FOR FUN IN RDB$FUNCTIONS
 			SORTED BY FUN.RDB$PACKAGE_NAME, FUN.RDB$FUNCTION_NAME
 		{
-			string package;
+			first = false;
 
-			if (!FUN.RDB$PACKAGE_NAME.NULL)
-			{
-				fb_utils::exact_name(FUN.RDB$PACKAGE_NAME);
-				package = FUN.RDB$PACKAGE_NAME;
-			}
+			MetaString package(FUN.RDB$PACKAGE_NAME);
+			MetaString function(FUN.RDB$FUNCTION_NAME);
 
-			if (first || package != prevPackage)
-			{
-				if (package.isEmpty())
-					isqlGlob.printf("Global functions%s%s", NEWLINE, NEWLINE);
-				else
-				{
-					if (!first)
-						isqlGlob.printf("%s", NEWLINE);
-
-					isqlGlob.printf("Package: %s%s%s", package.c_str(), NEWLINE, NEWLINE);
-				}
-
-				first = false;
-			}
-
-			prevPackage = package;
-
-			fb_utils::exact_name(FUN.RDB$FUNCTION_NAME);
-			isqlGlob.printf("%s", FUN.RDB$FUNCTION_NAME);
+			isqlGlob.printf("%s%s%s", package.c_str(), package.hasData() ? "." : "", function.c_str());
 
 			if (!(FUN.RDB$VALID_BLR.NULL || FUN.RDB$VALID_BLR))
 				isqlGlob.printf("; Invalid");
@@ -4266,14 +4420,24 @@ static processing_state show_functions(const SCHAR* funcname)
 
 	processing_state return_state = OBJECT_NOT_FOUND;
 
+	bool first = true;
+	MetaString package, function;
+	if (quoted)
+		function = funcname;
+	else
+		parse_package(funcname, package, function);
+
 	FOR FUN IN RDB$FUNCTIONS
-		WITH FUN.RDB$FUNCTION_NAME EQ funcname AND
-			 FUN.RDB$PACKAGE_NAME MISSING
+		WITH FUN.RDB$FUNCTION_NAME EQ function.c_str()
+			AND FUN.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '')
 
 		if (!FUN.RDB$MODULE_NAME.NULL)
-			return_state = show_func_legacy(funcname);
+		{
+			fb_assert(package.isEmpty());
+			return_state = show_func_legacy(function);
+		}
 		else if (isqlGlob.major_ods >= ODS_VERSION12)
-			return_state = show_func(funcname);
+			return_state = show_func(package, function);
 
 	END_FOR
 
@@ -4281,7 +4445,7 @@ static processing_state show_functions(const SCHAR* funcname)
 }
 
 
-static processing_state show_func(const SCHAR* funcname)
+static processing_state show_func(const MetaString& package, const MetaString& function)
 {
 /**************************************
  *
@@ -4298,8 +4462,8 @@ static processing_state show_func(const SCHAR* funcname)
 	bool first = true;
 
 	FOR FUN IN RDB$FUNCTIONS
-		WITH FUN.RDB$FUNCTION_NAME EQ funcname AND
-			 FUN.RDB$PACKAGE_NAME MISSING
+		WITH FUN.RDB$FUNCTION_NAME EQ function.c_str()
+			AND FUN.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '')
 
 		first = false;
 
@@ -4337,7 +4501,7 @@ static processing_state show_func(const SCHAR* funcname)
 		FOR ARG IN RDB$FUNCTION_ARGUMENTS CROSS
 			FLD IN RDB$FIELDS WITH
 			FUN.RDB$FUNCTION_NAME EQ ARG.RDB$FUNCTION_NAME AND
-			ARG.RDB$PACKAGE_NAME MISSING AND
+			ARG.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '') AND
 			ARG.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME
 			SORTED BY ARG.RDB$ARGUMENT_POSITION
 
@@ -4487,7 +4651,7 @@ static processing_state show_func(const SCHAR* funcname)
 }
 
 
-static processing_state show_func_legacy(const SCHAR* object)
+static processing_state show_func_legacy(const MetaString& function)
 {
 /**************************************
  *
@@ -4504,8 +4668,9 @@ static processing_state show_func_legacy(const SCHAR* object)
 	FOR FUN IN RDB$FUNCTIONS CROSS
 		FNA IN RDB$FUNCTION_ARGUMENTS WITH
 		FUN.RDB$FUNCTION_NAME EQ FNA.RDB$FUNCTION_NAME AND
+		FNA.RDB$PACKAGE_NAME MISSING AND
+		FUN.RDB$FUNCTION_NAME EQ function.c_str() AND
 		FUN.RDB$PACKAGE_NAME MISSING AND
-		FUN.RDB$FUNCTION_NAME EQ object AND
 		FUN.RDB$MODULE_NAME NOT MISSING
 		SORTED BY FNA.RDB$ARGUMENT_POSITION
 
@@ -4865,7 +5030,7 @@ static processing_state show_indices(const SCHAR* const* cmd)
 }
 
 
-static processing_state show_packages(const SCHAR* package_name)
+static processing_state show_packages(const SCHAR* package_name, bool sys, const SCHAR* msg)
 {
 /*************************************
 *
@@ -4881,15 +5046,22 @@ static processing_state show_packages(const SCHAR* package_name)
 
 	bool first = true;
 
-	if (!*package_name)
+	if (!(package_name && *package_name))
 	{
 		//  List all package names in columns
-		FOR PACK IN RDB$PACKAGES WITH
-			(PACK.RDB$SYSTEM_FLAG NE 1 OR PACK.RDB$SYSTEM_FLAG MISSING)
+		FOR PACK IN RDB$PACKAGES
 			SORTED BY PACK.RDB$PACKAGE_NAME
 		{
-			first = false;
-			isqlGlob.printf("%s%s", fb_utils::exact_name(PACK.RDB$PACKAGE_NAME), NEWLINE);
+			bool system_flag = !PACK.RDB$SYSTEM_FLAG.NULL && PACK.RDB$SYSTEM_FLAG > 0;
+
+			if (system_flag == sys)
+			{
+				if (first && msg)
+					isqlGlob.printf("%s%s", msg, NEWLINE);
+				first = false;
+
+				isqlGlob.printf("%s%s", fb_utils::exact_name(PACK.RDB$PACKAGE_NAME), NEWLINE);
+			}
 		}
 		END_FOR
 		ON_ERROR
@@ -5095,7 +5267,7 @@ processing_state SHOW_maps(bool extract, const SCHAR* map_name)
 }
 
 
-static processing_state show_proc(const SCHAR* procname)
+static processing_state show_proc(const SCHAR* procname, bool quoted, bool sys, const char* msg)
 {
 /**************************************
  *
@@ -5119,73 +5291,60 @@ static processing_state show_proc(const SCHAR* procname)
 		// gets all the dependencies if any
 
 		bool first_proc = true;
-		string prevPackage;
 
 		FOR PRC IN RDB$PROCEDURES
 			SORTED BY PRC.RDB$PACKAGE_NAME, PRC.RDB$PROCEDURE_NAME
 		{
-			string package;
+			bool system_flag = !PRC.RDB$SYSTEM_FLAG.NULL && PRC.RDB$SYSTEM_FLAG > 0;
 
-			if (!PRC.RDB$PACKAGE_NAME.NULL)
+			if (system_flag == sys)
 			{
-				fb_utils::exact_name(PRC.RDB$PACKAGE_NAME);
-				package = PRC.RDB$PACKAGE_NAME;
-			}
-
-			if (first_proc || package != prevPackage)
-			{
-				if (package.isEmpty())
-					isqlGlob.printf("Global procedures%s%s", NEWLINE, NEWLINE);
-				else
+				if (first_proc)
 				{
-					if (!first_proc)
-						isqlGlob.printf("%s", NEWLINE);
-
-					isqlGlob.printf("Package: %s%s%s", package.c_str(), NEWLINE, NEWLINE);
+					if (msg)
+						isqlGlob.printf("%s%s%s", NEWLINE, msg, NEWLINE);
+					first_proc = false;
 				}
 
-				first_proc = false;
-			}
+				// Strip trailing blanks
+				MetaString package(PRC.RDB$PACKAGE_NAME);
+				MetaString procedure(PRC.RDB$PROCEDURE_NAME);
 
-			prevPackage = package;
+				isqlGlob.printf("%s%s%s", package.c_str(), package.hasData() ? "." : "", procedure.c_str());
 
-			// Strip trailing blanks
+				if (!(PRC.RDB$VALID_BLR.NULL || PRC.RDB$VALID_BLR))
+					isqlGlob.printf("; Invalid");
 
-			fb_utils::exact_name(PRC.RDB$PROCEDURE_NAME);
-			isqlGlob.printf("%s", PRC.RDB$PROCEDURE_NAME);
-
-			if (!(PRC.RDB$VALID_BLR.NULL || PRC.RDB$VALID_BLR))
-				isqlGlob.printf("; Invalid");
-
-			if (PRC.RDB$PACKAGE_NAME.NULL)
-			{
-				bool first_dep = true;
-				FOR DEP IN RDB$DEPENDENCIES WITH
-					PRC.RDB$PROCEDURE_NAME EQ DEP.RDB$DEPENDENT_NAME
-					REDUCED TO DEP.RDB$DEPENDED_ON_TYPE, DEP.RDB$DEPENDED_ON_NAME
-					SORTED BY DEP.RDB$DEPENDED_ON_TYPE, DEP.RDB$DEPENDED_ON_NAME
+				if (PRC.RDB$PACKAGE_NAME.NULL)
 				{
-					fb_utils::exact_name(DEP.RDB$DEPENDED_ON_NAME);
-
-					if (first_dep)
+					bool first_dep = true;
+					FOR DEP IN RDB$DEPENDENCIES WITH
+						PRC.RDB$PROCEDURE_NAME EQ DEP.RDB$DEPENDENT_NAME
+						REDUCED TO DEP.RDB$DEPENDED_ON_TYPE, DEP.RDB$DEPENDED_ON_NAME
+						SORTED BY DEP.RDB$DEPENDED_ON_TYPE, DEP.RDB$DEPENDED_ON_NAME
 					{
-						isqlGlob.printf("; Dependencies: ");
-						first_dep = false;
-					}
-					else
-						isqlGlob.printf(", ");
+						fb_utils::exact_name(DEP.RDB$DEPENDED_ON_NAME);
 
-					isqlGlob.printf("%s (%s)", fb_utils::exact_name(DEP.RDB$DEPENDED_ON_NAME),
+						if (first_dep)
+						{
+							isqlGlob.printf("; Dependencies: ");
+							first_dep = false;
+						}
+						else
+							isqlGlob.printf(", ");
+
+						isqlGlob.printf("%s (%s)", fb_utils::exact_name(DEP.RDB$DEPENDED_ON_NAME),
 							 Object_types[DEP.RDB$DEPENDED_ON_TYPE]);
+					}
+					END_FOR
+					ON_ERROR
+						ISQL_errmsg (fbStatus);
+						return ps_ERR;
+					END_ERROR;
 				}
-				END_FOR
-				ON_ERROR
-					ISQL_errmsg (fbStatus);
-					return ps_ERR;
-				END_ERROR;
-			}
 
-			isqlGlob.printf(NEWLINE);
+				isqlGlob.printf(NEWLINE);
+			}
 		}
 		END_FOR
 		ON_ERROR
@@ -5195,16 +5354,24 @@ static processing_state show_proc(const SCHAR* procname)
 
 		if (first_proc)
 			return OBJECT_NOT_FOUND;
+
+		isqlGlob.printf(NEWLINE);
 		return (SKIP);
 	}
 
 	// A procedure was named, so print all the info on that procedure
 
 	bool first = true;
+	MetaString package, procedure;
+	if (quoted)
+		procedure = procname;
+	else
+		parse_package(procname, package, procedure);
 
 	FOR PRC IN RDB$PROCEDURES WITH
-		PRC.RDB$PROCEDURE_NAME EQ procname AND
-		PRC.RDB$PACKAGE_NAME MISSING
+		PRC.RDB$PROCEDURE_NAME EQ procedure.c_str() AND
+		PRC.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '')
+
 		first = false;
 
 		if (!PRC.RDB$ENTRYPOINT.NULL)
@@ -5237,8 +5404,8 @@ static processing_state show_proc(const SCHAR* procname)
 
 		FOR PRM IN RDB$PROCEDURE_PARAMETERS CROSS
 			FLD IN RDB$FIELDS WITH
-			PRC.RDB$PROCEDURE_NAME EQ PRM.RDB$PROCEDURE_NAME AND
-			PRM.RDB$PACKAGE_NAME MISSING AND
+			PRM.RDB$PROCEDURE_NAME EQ PRC.RDB$PROCEDURE_NAME AND
+			PRM.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '') AND
 			PRM.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME
 			SORTED BY PRM.RDB$PARAMETER_TYPE, PRM.RDB$PARAMETER_NUMBER
 
@@ -5372,13 +5539,11 @@ static processing_state show_proc(const SCHAR* procname)
 			}
 
 			isqlGlob.printf(NEWLINE);
-
 		END_FOR
 		ON_ERROR
 			ISQL_errmsg (fbStatus);
 			return ps_ERR;
 		END_ERROR;
-
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
@@ -5387,6 +5552,154 @@ static processing_state show_proc(const SCHAR* procname)
 	if (first)
 		return (OBJECT_NOT_FOUND);
 	return (SKIP);
+}
+
+
+static void parse_package(const char* procname, MetaString& package, MetaString& procedure)
+{
+	for (const char* point = procname; *point; ++point)
+	{
+		if (*point == '.')
+		{
+			package.assign(procname, point - procname);
+			procedure = ++point;
+			return;
+		}
+	}
+
+	package = "";
+	procedure = procname;
+}
+
+
+static processing_state show_publications(const SCHAR* pub_name, bool sys, const SCHAR* msg)
+{
+/**************************************
+ *
+ *	s h o w _ p u b l i c a t i o n s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Show publications.
+ *
+ **************************************/
+	if (isqlGlob.major_ods < ODS_VERSION13)
+		return OBJECT_NOT_FOUND;
+
+	bool first = true;
+
+	if (pub_name && *pub_name)
+	{
+		// List named publication
+
+		FOR PUB IN RDB$PUBLICATIONS WITH
+			PUB.RDB$PUBLICATION_NAME EQ pub_name
+
+			first = false;
+
+			fb_utils::exact_name(PUB.RDB$PUBLICATION_NAME);
+			isqlGlob.printf("%s: ", PUB.RDB$PUBLICATION_NAME);
+
+			const bool active_flag = (!PUB.RDB$ACTIVE_FLAG.NULL && PUB.RDB$ACTIVE_FLAG > 0);
+			isqlGlob.printf("%s", active_flag ? "Enabled" : "Disabled");
+
+			if (!PUB.RDB$AUTO_ENABLE.NULL && PUB.RDB$AUTO_ENABLE > 0)
+				isqlGlob.printf(", Auto-enable");
+
+			isqlGlob.printf(NEWLINE);
+
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR;
+	}
+	else
+	{
+		//  List all publications
+
+		FOR PUB IN RDB$PUBLICATIONS
+			SORTED BY PUB.RDB$PUBLICATION_NAME
+
+			const bool system_flag = (!PUB.RDB$SYSTEM_FLAG.NULL && PUB.RDB$SYSTEM_FLAG > 0);
+
+			if (system_flag == sys)
+			{
+				if (first && msg)
+					isqlGlob.printf("%s%s", msg, NEWLINE);
+
+				first = false;
+
+				isqlGlob.printf("%s%s", fb_utils::exact_name(PUB.RDB$PUBLICATION_NAME), NEWLINE);
+			}
+
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR;
+
+		if (!first)
+			isqlGlob.printf(NEWLINE);
+	}
+
+	if (first)
+		return (OBJECT_NOT_FOUND);
+
+	return (SKIP);
+}
+
+
+static void show_pub_table(const SCHAR* table_name)
+{
+/**************************************
+ *
+ *	s h o w _ p u b _ t a b l e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Show publication status for the given table.
+ *
+ **************************************/
+	if (isqlGlob.major_ods < ODS_VERSION13)
+		return;
+
+	bool first = true;
+
+	if (table_name && *table_name)
+	{
+		FOR PTAB IN RDB$PUBLICATION_TABLES CROSS
+			PUB IN RDB$PUBLICATIONS OVER RDB$PUBLICATION_NAME WITH
+			PTAB.RDB$TABLE_NAME EQ table_name
+			SORTED BY DESCENDING PUB.RDB$SYSTEM_FLAG, PUB.RDB$PUBLICATION_NAME
+
+			const auto pub_name = fb_utils::exact_name(PUB.RDB$PUBLICATION_NAME);
+
+			if (first)
+			{
+				TEXT msg[MSG_LENGTH];
+				IUTILS_msg_get(MSG_PUBLICATIONS, msg);
+				isqlGlob.printf("%s %s", msg, pub_name);
+			}
+			else
+				isqlGlob.printf(", %s", pub_name);
+
+			const bool active_flag = (!PUB.RDB$ACTIVE_FLAG.NULL && PUB.RDB$ACTIVE_FLAG > 0);
+			isqlGlob.printf(" (%s)", active_flag ? "Enabled" : "Disabled");
+
+			first = false;
+
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return;
+		END_ERROR;
+	}
+
+	if (!first)
+		isqlGlob.printf(NEWLINE);
 }
 
 
@@ -6082,6 +6395,10 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 	// Do triggers
 
 	show_trigger(relation_name, false, false);
+
+	// Do publications
+
+	show_pub_table(relation_name);
 
 	if (first)
 		return (OBJECT_NOT_FOUND);

@@ -49,7 +49,8 @@ public:
 	{}
 
 	~DlfcnModule();
-	void* findSymbol (ISC_STATUS*, const Firebird::string&);
+	void* findSymbol(ISC_STATUS*, const Firebird::string&) override;
+	bool getRealPath(const Firebird::string& anySymbol, Firebird::PathName& path) override;
 
 private:
 	void* module;
@@ -155,4 +156,30 @@ void* DlfcnModule::findSymbol(ISC_STATUS* status, const Firebird::string& symNam
 	return result;
 }
 
+bool DlfcnModule::getRealPath(const Firebird::string& anySymbol, Firebird::PathName& path)
+{
+#ifdef HAVE_DLADDR
+	void* symbolPtr = dlsym(module, anySymbol.c_str());
 
+	if (!symbolPtr)
+		symbolPtr = dlsym(module, ('_' + anySymbol).c_str());
+
+	if (symbolPtr)
+	{
+		Dl_info info;
+		if (dladdr(symbolPtr, &info))
+		{
+			char buffer[PATH_MAX];
+
+			if (realpath(info.dli_fname, buffer))
+			{
+				path = buffer;
+				return true;
+			}
+		}
+	}
+#endif	// HAVE_DLADDR
+
+	path.clear();
+	return false;
+}

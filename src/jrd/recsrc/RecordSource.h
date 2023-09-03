@@ -53,20 +53,42 @@ namespace Jrd
 
 	enum JoinType { INNER_JOIN, OUTER_JOIN, SEMI_JOIN, ANTI_JOIN };
 
-	// Abstract base class
+	// Common base for record sources, sub-queries and cursors.
+	class AccessPath
+	{
+	public:
+		explicit AccessPath(CompilerScratch* csb);
+		virtual ~AccessPath() = default;
 
-	class RecordSource
+	public:
+		ULONG getCursorId() const
+		{
+			return m_cursorId;
+		}
+
+		ULONG getRecSourceId() const
+		{
+			return m_recSourceId;
+		}
+
+		virtual void print(thread_db* tdbb, Firebird::string& plan,
+			bool detailed, unsigned level, bool recurse) const = 0;
+
+		virtual void getChildren(Firebird::Array<const RecordSource*>& children) const = 0;
+
+	private:
+		const ULONG m_cursorId;
+		const ULONG m_recSourceId;
+	};
+
+	// Abstract base class for record sources.
+	class RecordSource : public AccessPath
 	{
 	public:
 		virtual void close(thread_db* tdbb) const = 0;
 
 		virtual bool refetchRecord(thread_db* tdbb) const = 0;
 		virtual WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const = 0;
-
-		virtual void getChildren(Firebird::Array<const RecordSource*>& children) const = 0;
-
-		virtual void print(thread_db* tdbb, Firebird::string& plan,
-						   bool detailed, unsigned level, bool recurse) const = 0;
 
 		virtual void markRecursive() = 0;
 		virtual void invalidateRecords(Request* request) const = 0;
@@ -79,8 +101,6 @@ namespace Jrd
 			fb_assert(false);
 		}
 
-		virtual ~RecordSource();
-
 		static bool rejectDuplicate(const UCHAR* /*data1*/, const UCHAR* /*data2*/, void* /*userArg*/)
 		{
 			return true;
@@ -89,16 +109,6 @@ namespace Jrd
 		double getCardinality() const
 		{
 			return m_cardinality;
-		}
-
-		ULONG getCursorProfileId() const
-		{
-			return m_cursorProfileId;
-		}
-
-		ULONG getRecSourceProfileId() const
-		{
-			return m_recSourceProfileId;
 		}
 
 		void open(thread_db* tdbb) const;
@@ -139,8 +149,6 @@ namespace Jrd
 		double m_cardinality = 0.0;
 		ULONG m_impure = 0;
 		bool m_recursive = false;
-		ULONG m_cursorProfileId;
-		ULONG m_recSourceProfileId;
 	};
 
 
@@ -765,6 +773,15 @@ namespace Jrd
 			return savedPosition;
 		}
 
+		void restore()
+		{
+			if (!moved)
+				return;
+
+			// Position the stream where we received it.
+			moveWithinPartition(0);
+		}
+
 		bool moveWithinPartition(SINT64 delta);
 		bool moveWithinFrame(SINT64 delta);
 
@@ -776,7 +793,7 @@ namespace Jrd
 		FB_UINT64 frameStart;
 		FB_UINT64 frameEnd;
 		FB_UINT64 savedPosition;
-		bool moved;
+		bool moved = false;
 	};
 
 	template <typename ThisType, typename NextType>

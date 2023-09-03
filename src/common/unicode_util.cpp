@@ -65,6 +65,11 @@ const char* const ucTemplate = "lib/libicuuc.%s.dylib";
 #elif defined(HPUX)
 const char* const inTemplate = "libicui18n.sl.%s";
 const char* const ucTemplate = "libicuuc.sl.%s";
+#elif defined(ANDROID)
+const char* const inTemplate = "libicui18n.%s.so";
+const char* const ucTemplate = "libicuuc.%s.so";
+// In Android we need to load this library before others.
+const char* const dataTemplate = "libicudata.%s.so";
 #else
 const char* const inTemplate = "libicui18n.so.%s";
 const char* const ucTemplate = "libicuuc.so.%s";
@@ -80,22 +85,22 @@ private:
 public:
 	BaseICU(int aMajorVersion, int aMinorVersion)
 		: majorVersion(aMajorVersion),
-		  minorVersion(aMinorVersion)
+		  minorVersion(aMinorVersion),
+		  isSystem(aMajorVersion == 0)
 	{
 	}
 
+	ModuleLoader::Module* formatAndLoad(const char* templateName);
 	void initialize(ModuleLoader::Module* module);
 
-	template <typename T> void getEntryPoint(const char* name, ModuleLoader::Module* module, T& ptr,
+	template <typename T> string getEntryPoint(const char* name, ModuleLoader::Module* module, T& ptr,
 		bool optional = false)
 	{
 		// System-wide ICU have no version number at entries names
 		if (!majorVersion)
 		{
-			fb_assert(false);	// ASF: I don't think this code path is correct.
-
 			if (module->findSymbol(NULL, name, ptr))
-				return;
+				return name;
 		}
 		else
 		{
@@ -111,63 +116,149 @@ public:
 			{
 				symbol.printf(pattern, name, majorVersion, minorVersion);
 				if (module->findSymbol(NULL, symbol, ptr))
-					return;
+					return symbol;
 			}
 		}
 
 		if (!optional)
 			(Arg::Gds(isc_icu_entrypoint) << name).raise();
+
+		return "";
 	}
 
 	int majorVersion;
 	int minorVersion;
+	bool isSystem;
+	void (U_EXPORT2* u_getVersion) (UVersionInfo versionArray) = nullptr;
 };
+
+ModuleLoader::Module* BaseICU::formatAndLoad(const char* templateName)
+{
+	ModuleLoader::Module* module = nullptr;
+
+	// System-wide ICU have no version number at file names
+	if (isSystem)
+	{
+		PathName filename;
+		filename.printf(templateName, "");
+		filename.rtrim(".");
+
+		//gds__log("ICU: link %s", filename.c_str());
+
+		module = ModuleLoader::fixAndLoadModule(NULL, filename);
+	}
+	else
+	{
+		fb_assert(majorVersion);
+
+		// ICU has several schemas for placing version into file name
+		const char* const patterns[] =
+		{
+#ifdef WIN_NT
+			"%d",
+#endif
+			"%d.%d",
+			"%d_%d",
+			"%d%d"
+		};
+
+		PathName s, filename;
+		for (auto pattern : patterns)
+		{
+			s.printf(pattern, majorVersion, minorVersion);
+			filename.printf(templateName, s.c_str());
+
+			module = ModuleLoader::fixAndLoadModule(NULL, filename);
+			if (module)
+				break;
+		}
+
+#ifndef WIN_NT
+		// There is no sence to try pattern "%d" for different minor versions
+		// ASF: In Windows ICU 63.1 libraries use 63.dll suffix. This is handled in 'patterns' above.
+		if (!module && minorVersion == 0)
+		{
+			s.printf("%d", majorVersion);
+			filename.printf(templateName, s.c_str());
+
+			module = ModuleLoader::fixAndLoadModule(NULL, filename);
+		}
+#endif
+	}
+
+	return module;
+}
 
 void BaseICU::initialize(ModuleLoader::Module* module)
 {
+	getEntryPoint("u_getVersion", module, u_getVersion);
+
+	UVersionInfo versionInfo;
+	u_getVersion(versionInfo);
+
+	if (!isSystem && (versionInfo[0] != majorVersion || versionInfo[1] != minorVersion))
+	{
+		string err;
+		err.printf(
+			"Wrong version of icu module: loaded %d.%d, expected %d.%d",
+			(int) versionInfo[0], (int) versionInfo[1],
+			this->majorVersion, this->minorVersion);
+
+		(Arg::Gds(isc_random) << Arg::Str(err)).raise();
+	}
+
+	majorVersion = versionInfo[0];
+	minorVersion = versionInfo[1];
+
 	void (U_EXPORT2 *uInit)(UErrorCode* status);
 	void (U_EXPORT2 *uSetTimeZoneFilesDirectory)(const char* path, UErrorCode* status);
 	void (U_EXPORT2 *uSetDataDirectory)(const char* directory);
 
 	getEntryPoint("u_init", module, uInit, true);
 	getEntryPoint("u_setTimeZoneFilesDirectory", module, uSetTimeZoneFilesDirectory, true);
-	getEntryPoint("u_setDataDirectory", module, uSetDataDirectory, true);
+	const auto uSetDataDirectorySymbolName = getEntryPoint("u_setDataDirectory", module, uSetDataDirectory, true);
 
-#if defined(WIN_NT) || defined(DARWIN) || defined(ANDROID)
 	if (uSetDataDirectory)
 	{
-		// call uSetDataDirectory only if .dat file is exists at same folder
-		// as the loaded module
+		// call uSetDataDirectory only if .dat file exists at same folder as the loaded module
 
-		PathName path, file, fullName;
-		PathUtils::splitLastComponent(path, file, module->fileName);
+		ObjectsArray<PathName> pathsToTry;
+		PathName file;
 
-#ifdef WIN_NT
-		// icuucXX.dll -> icudtXX.dll
-		file.replace(3, 2, "dt");
+		{	// scope
+			PathName modulePathName;
+			if (!module->getRealPath(uSetDataDirectorySymbolName.c_str(), modulePathName))
+				modulePathName = module->fileName;
 
-		// icudtXX.dll -> icudtXXl.dat
-		const FB_SIZE_T pos = file.find_last_of('.');
-		file.erase(pos);
-		file.append("l.dat");
-#else
-		// libicuuc.so.XX -> icudtXX
-		const FB_SIZE_T pos = file.find_last_of('.');
-		if (pos > 0 && pos != file.npos)
-		{
-			file.replace(0, pos + 1, "icudt");
+			PathName path;
+			PathUtils::splitLastComponent(path, file, modulePathName);
+
+			if (path.hasData())
+				pathsToTry.add(path);
 		}
 
-		// icudtXX -> icudtXXl.dat
-		file += "l.dat";
+		pathsToTry.add(Config::getRootDirectory());
+
+		file.printf("icudt%u%c.dat", majorVersion,
+#ifdef WORDS_BIGENDIAN
+			'b'
+#else
+			'l'
 #endif
+		);
 
-		PathUtils::concatPath(fullName, path, file);
+		for (const auto& path : pathsToTry)
+		{
+			PathName fullName;
+			PathUtils::concatPath(fullName, path, file);
 
-		if (PathUtils::canAccess(fullName, 0))
-			uSetDataDirectory(path.c_str());
+			if (PathUtils::canAccess(fullName, 0))
+			{
+				uSetDataDirectory(path.c_str());
+				break;
+			}
+		}
 	}
-#endif
 
 	if (uInit)
 	{
@@ -194,10 +285,6 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 }
 
 namespace Jrd {
-
-static ModuleLoader::Module* formatAndLoad(const char* templateName,
-	int& majorVersion, int& minorVersion);
-
 
 // encapsulate ICU collations libraries
 struct UnicodeUtil::ICU : public BaseICU
@@ -316,7 +403,16 @@ private:
 	ImplementConversionICU(int aMajorVersion, int aMinorVersion)
 		: BaseICU(aMajorVersion, aMinorVersion)
 	{
-		module = formatAndLoad(ucTemplate, this->majorVersion, this->minorVersion);
+#ifdef ANDROID
+		auto dataModule = formatAndLoad(dataTemplate);
+#endif
+
+		module = formatAndLoad(ucTemplate);
+
+#ifdef ANDROID
+		delete dataModule;
+#endif
+
 		if (!module)
 			return;
 
@@ -325,7 +421,6 @@ private:
 		getEntryPoint("ucnv_open", module, ucnv_open);
 		getEntryPoint("ucnv_close", module, ucnv_close);
 		getEntryPoint("ucnv_fromUChars", module, ucnv_fromUChars);
-		getEntryPoint("u_getVersion", module, u_getVersion);
 		getEntryPoint("u_tolower", module, u_tolower);
 		getEntryPoint("u_toupper", module, u_toupper);
 		getEntryPoint("u_strCompare", module, u_strCompare);
@@ -344,18 +439,9 @@ private:
 
 		getEntryPoint("u_strcmp", module, ustrcmp);
 
-		inModule = formatAndLoad(inTemplate, aMajorVersion, aMinorVersion);
+		inModule = formatAndLoad(inTemplate);
 		if (!inModule)
 			return;
-
-		if (aMajorVersion != this->majorVersion || aMinorVersion != this->minorVersion)
-		{
-			string err;
-			err.printf("Wrong version of IN icu module: loaded %d.%d, expected %d.%d",
-						aMajorVersion, aMinorVersion, this->majorVersion, this->minorVersion);
-
-			(Arg::Gds(isc_random) << Arg::Str(err)).raise();
-		}
 
 		getEntryPoint("ucal_getTZDataVersion", inModule, ucalGetTZDataVersion);
 		getEntryPoint("ucal_getDefaultTimeZone", inModule, ucalGetDefaultTimeZone);
@@ -384,11 +470,8 @@ public:
 
 		if (o)
 		{
-			UVersionInfo versionInfo;
-			o->u_getVersion(versionInfo);
-
-			o->vMajor = versionInfo[0];
-			o->vMinor = versionInfo[1];
+			o->vMajor = o->majorVersion;
+			o->vMinor = o->minorVersion;
 		}
 
 		return o;
@@ -429,128 +512,6 @@ public:
 static const char* const COLL_30_VERSION = "41.128.4.4";	// ICU 3.0 collator version
 
 static GlobalPtr<UnicodeUtil::ICUModules> icuModules;
-
-#ifdef LINUX
-static bool extractVersionFromPath(const PathName& realPath, int& major, int& minor)
-{
-	major = 0;
-	minor = 0;
-	int mult = 1;
-
-	const FB_SIZE_T len = realPath.length();
-	const char* buf = realPath.begin();
-
-	bool dot = false;
-	for (const char* p = buf + len - 1; p >= buf; p--)
-	{
-		if (*p >= '0' && *p < '9')
-		{
-			major += (*p - '0') * mult;
-			mult *= 10;
-		}
-		else if (*p == '.' && !dot)
-		{
-			dot = true;
-			minor = major;
-			major = 0;
-			mult = 1;
-		}
-		else
-		{
-			break;
-		}
-	}
-
-	if (minor && !major)
-	{
-		major = minor;
-		minor = 0;
-	}
-
-	return major != 0;
-}
-#endif
-
-static ModuleLoader::Module* formatAndLoad(const char* templateName,
-	int& majorVersion, int& minorVersion)
-{
-#ifdef ANDROID
-	static ModuleLoader::Module* dat = ModuleLoader::loadModule(NULL,
-		fb_utils::getPrefix(Firebird::IConfigManager::DIR_LIB, "libicudata.so"));
-
-	Firebird::PathName newName = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LIB, templateName);
-	templateName = newName.c_str();
-#endif
-
-	ModuleLoader::Module* module = nullptr;
-
-	// System-wide ICU have no version number at file names
-	if (!majorVersion)
-	{
-		PathName filename;
-		filename.printf(templateName, "");
-		filename.rtrim(".");
-
-		//gds__log("ICU: link %s", filename.c_str());
-
-		module = ModuleLoader::fixAndLoadModule(NULL, filename);
-
-#ifdef LINUX
-		// try to resolve symlinks and extract version numbers from suffix
-		PathName realPath;
-		if (module && module->getRealPath(realPath))
-		{
-			//gds__log("ICU: module name %s, real path %s", module->fileName.c_str(), realPath.c_str());
-
-			int major, minor;
-			if (extractVersionFromPath(realPath, major, minor))
-			{
-				//gds__log("ICU: extracted version %d.%d", major, minor);
-				majorVersion = major;
-				minorVersion = minor;
-			}
-		}
-#endif
-	}
-	else
-	{
-		// ICU has several schemas for placing version into file name
-		const char* const patterns[] =
-		{
-#ifdef WIN_NT
-			"%d",
-#endif
-			"%d_%d",
-			"%d.%d",
-			"%d%d"
-		};
-
-		PathName s, filename;
-		for (auto pattern : patterns)
-		{
-			s.printf(pattern, majorVersion, minorVersion);
-			filename.printf(templateName, s.c_str());
-
-			module = ModuleLoader::fixAndLoadModule(NULL, filename);
-			if (module)
-				break;
-		}
-
-#ifndef WIN_NT
-		// There is no sence to try pattern "%d" for different minor versions
-		// ASF: In Windows ICU 63.1 libraries use 63.dll suffix. This is handled in 'patterns' above.
-		if (!module && minorVersion == 0)
-		{
-			s.printf("%d", majorVersion);
-			filename.printf(templateName, s.c_str());
-
-			module = ModuleLoader::fixAndLoadModule(NULL, filename);
-		}
-#endif
-	}
-
-	return module;
-}
 
 
 static void getVersions(const string& configInfo, ObjectsArray<string>& versions)
@@ -1220,7 +1181,16 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 
 		icu = FB_NEW_POOL(*getDefaultMemoryPool()) ICU(majorVersion, minorVersion);
 
-		icu->ucModule = formatAndLoad(ucTemplate, icu->majorVersion, icu->minorVersion);
+#ifdef ANDROID
+		auto dataModule = icu->formatAndLoad(dataTemplate);
+#endif
+
+		icu->ucModule = icu->formatAndLoad(ucTemplate);
+
+#ifdef ANDROID
+		delete dataModule;
+#endif
+
 		if (!icu->ucModule)
 		{
 			gds__log("failed to load UC icu module version %s", configVersion.c_str());
@@ -1228,25 +1198,17 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 			continue;
 		}
 
-		icu->inModule = formatAndLoad(inTemplate, majorVersion, minorVersion);
-		if (!icu->inModule)
-		{
-			gds__log("failed to load IN icu module version %s", configVersion.c_str());
-			delete icu;
-			continue;
-		}
-
-		if (icu->majorVersion != majorVersion || icu->minorVersion != minorVersion)
-		{
-			gds__log("Wrong version of IN icu module: loaded %d.%d, expected %d.%d",
-					 majorVersion, minorVersion, icu->majorVersion, icu->minorVersion);
-			delete icu;
-			continue;
-		}
-
 		try
 		{
 			icu->initialize(icu->ucModule);
+
+			icu->inModule = icu->formatAndLoad(inTemplate);
+			if (!icu->inModule)
+			{
+				gds__log("failed to load IN icu module version %s", configVersion.c_str());
+				delete icu;
+				continue;
+			}
 
 			icu->getEntryPoint("u_versionToString", icu->ucModule, icu->uVersionToString);
 			icu->getEntryPoint("uloc_countAvailable", icu->ucModule, icu->ulocCountAvailable);

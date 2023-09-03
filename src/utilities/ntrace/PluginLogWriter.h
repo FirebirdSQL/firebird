@@ -62,8 +62,8 @@ public:
 	~PluginLogWriter();
 
 	// TraceLogWriter implementation
-	virtual FB_SIZE_T write(const void* buf, FB_SIZE_T size);
-	virtual FB_SIZE_T write_s(Firebird::CheckStatusWrapper* status, const void* buf, unsigned size);
+	virtual FB_SIZE_T write(const void* buf, FB_SIZE_T size) override;
+	virtual FB_SIZE_T write_s(Firebird::CheckStatusWrapper* status, const void* buf, unsigned size) override;
 
 private:
 	const USHORT PLUGIN_LOG_VERSION = 1;

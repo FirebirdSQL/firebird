@@ -305,6 +305,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 				if (par.name.isEmpty())		// not good - no key
 					return LINE_BAD;
 				valStart = n + 1;
+				par.hasValue = true;
 			}
 			else if (inString >= 2)		// Something after the end of line
 				return LINE_BAD;

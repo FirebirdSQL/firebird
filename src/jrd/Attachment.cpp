@@ -837,10 +837,10 @@ void Jrd::Attachment::releaseLocks(thread_db* tdbb)
 	for (bool getResult = accessor.getFirst(); getResult; getResult = accessor.getNext())
 		LCK_release(tdbb, accessor.current()->second.lock);
 
-	// Release dsql statement cache lock
+	// Release DSQL statement cache lock
 
 	if (att_dsql_instance)
-		att_dsql_instance->dbb_statement_cache->purge(tdbb);
+		att_dsql_instance->dbb_statement_cache->shutdown(tdbb);
 
 	// Release the remaining locks
 
@@ -1178,6 +1178,15 @@ ProfilerManager* Attachment::getProfilerManager(thread_db* tdbb)
 	if (!profilerManager)
 		att_profiler_manager.reset(profilerManager = ProfilerManager::create(tdbb));
 	return profilerManager;
+}
+
+ProfilerManager* Attachment::getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb)
+{
+	const auto request = tdbb->getRequest();
+
+	return isProfilerActive() && !request->hasInternalStatement() ?
+		getProfilerManager(tdbb) :
+		nullptr;
 }
 
 bool Attachment::isProfilerActive()

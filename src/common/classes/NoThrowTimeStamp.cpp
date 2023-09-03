@@ -184,10 +184,12 @@ void NoThrowTimeStamp::decode_date(ISC_DATE nday, struct tm* times) throw()
 	// There is a further cycle of 100 4 year cycles.
 	// Every 100 years, the normally expected leap year is not present. Every 400 years it is.
 	// This cycle takes 100 * 1461 - 3 == 146097 days.
-	// The origin of the constant 2400001 is unknown.
+	// The difference between Julian date (January 1, 4713 BC proleptic Julian calendar)
+	//   and Modified Julian date (November 17, 1858 -- used as a base date in Firebird)
+	//   is 2400001 days.
 	// The origin of the constant 1721119 is unknown.
-	// The difference between 2400001 and 1721119 is the
-	// number of days from 0/0/0000 to our base date of 11/xx/1858 (678882)
+	// The difference between 2400001 and 1721119 == 678882 is the
+	//   number of days from date 0/0/0000 to our base date of November 17, 1858
 	// The origin of the constant 153 is unknown.
 	//
 	// This whole routine has problems with ndates less than -678882 (Approx 2/1/0000).

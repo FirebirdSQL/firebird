@@ -1136,6 +1136,12 @@ void PascalGenerator::generate()
 			if (!isProcedure)
 				fprintf(out, ": %s", convertType(method->returnTypeRef).c_str());
 
+			// Methods that present in TObject should be "reintroduce"d.
+			// So far there is just one case. For more cases better solution required.
+
+			if (method->name == "toString")
+				fprintf(out, "; reintroduce");
+
 			fprintf(out, ";\n");
 		}
 
@@ -1331,6 +1337,39 @@ void PascalGenerator::generate()
 
 			fprintf(out, "; cdecl;\n");
 			fprintf(out, "begin\n");
+
+			if (!isProcedure)
+			{
+				if (method->returnTypeRef.isPointer) {
+					fprintf(out, "\tResult := nil;\n");
+				}
+				else
+				{
+					const char* sResult;
+					switch (method->returnTypeRef.token.type)
+					{
+						case Token::TYPE_STRING:
+							sResult = "nil";
+							break;
+
+						case Token::TYPE_BOOLEAN:
+							sResult = "false";
+							break;
+
+						case Token::TYPE_IDENTIFIER:
+							if (method->returnTypeRef.type == BaseType::TYPE_INTERFACE)
+							{
+								sResult = "nil";
+								break;
+							}
+							// fallthru
+						default:
+							sResult = "0";
+							break;
+					}
+					fprintf(out, "\tResult := %s;\n", sResult);
+				}
+			}
 
 			if (!exceptionClass.empty())
 				fprintf(out, "\ttry\n\t");

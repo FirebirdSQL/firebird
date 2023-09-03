@@ -242,7 +242,7 @@ void Config::loadValues(const ConfigFile& file, const char* srcName)
 		const ConfigFile::Parameter* par = file.findParameter(entry.key);
 
 		// Don't assign values to the global keys at non-default config
-		if (par && (defaultConfig || !entry.is_global))
+		if (par && (defaultConfig || !entry.is_global) && (par->hasValue || par->sub))
 		{
 			// Assign the actual value
 
@@ -350,7 +350,7 @@ void Config::checkValues()
 
 	checkIntForLoBound(KEY_DEFAULT_DB_CACHE_PAGES, 0, true);
 
-	checkIntForLoBound(KEY_LOCK_MEM_SIZE, 64 * 1024, false);
+	checkIntForLoBound(KEY_LOCK_MEM_SIZE, 256 * 1024, false);
 
 	const char* strVal = values[KEY_GC_POLICY].strVal;
 	if (strVal)

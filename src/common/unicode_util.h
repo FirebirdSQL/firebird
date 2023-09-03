@@ -58,7 +58,6 @@ public:
 											  const UChar *src, int32_t srcLength,
 											  UErrorCode *pErrorCode);
 
-		void (U_EXPORT2* u_getVersion) (UVersionInfo versionArray);
 		UChar32 (U_EXPORT2* u_tolower) (UChar32 c);
 		UChar32 (U_EXPORT2* u_toupper) (UChar32 c);
 		int32_t (U_EXPORT2* u_strCompare) (const UChar* s1, int32_t length1,

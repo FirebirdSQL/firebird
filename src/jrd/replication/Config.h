@@ -33,11 +33,13 @@ namespace Replication
 {
 	struct Config : public Firebird::GlobalStorage
 	{
+		typedef Firebird::HalfStaticArray<Config*, 4> ReplicaList;
+
 		Config();
 		Config(const Config& other);
 
 		static Config* get(const Firebird::PathName& dbName);
-		static void enumerate(Firebird::Array<Config*>& replicas);
+		static void enumerate(ReplicaList& replicas);
 
 		Firebird::PathName dbName;
 		ULONG bufferSize;

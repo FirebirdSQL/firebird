@@ -98,6 +98,7 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 	transactions(getDefaultMemoryPool()),
 	statements(getDefaultMemoryPool()),
 	services(getDefaultMemoryPool()),
+	routines(*getDefaultMemoryPool()),
 	include_codes(*getDefaultMemoryPool()),
 	exclude_codes(*getDefaultMemoryPool())
 {
@@ -215,6 +216,45 @@ TracePluginImpl::~TracePluginImpl()
 	}
 }
 
+bool TracePluginImpl::checkRoutine(StmtNumber stmt_id)
+{
+	{ // scope
+		ReadLockGuard lock(routinesLock, FB_FUNCTION);
+
+		if (routines.exist(stmt_id))
+			return true;
+	}
+
+	WriteLockGuard lock(routinesLock, FB_FUNCTION);
+
+	if (!routines.exist(stmt_id))
+		routines.add(stmt_id);
+
+	return false;
+}
+
+template <class C>
+string TracePluginImpl::getPlan(C* routine)
+{
+	const char* access_path = config.print_plan ?
+		(config.explain_plan ? routine->getExplainedPlan() : routine->getPlan())
+		: NULL;
+
+	if (access_path && *access_path)
+	{
+		const size_t access_path_length = strlen(access_path);
+
+		string temp;
+		temp.printf(NEWLINE
+			"^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+			"%.*s" NEWLINE, access_path_length, access_path);
+
+		return temp;
+	}
+
+	return NEWLINE;
+}
+
 void TracePluginImpl::logRecord(const char* action)
 {
 	// We use atomic file appends for logging. Do not try to break logging
@@ -329,11 +369,123 @@ void TracePluginImpl::logRecordTrans(const char* action, ITraceDatabaseConnectio
 	logRecordConn(action, connection);
 }
 
-void TracePluginImpl::logRecordProcFunc(const char* action, ITraceDatabaseConnection* connection,
-	ITraceTransaction* transaction, const char* obj_type, const char* obj_name)
+void TracePluginImpl::logRecordProc(const char* action, ITraceDatabaseConnection* connection,
+	ITraceTransaction* transaction, ITraceProcedure* procedure)
 {
+	const StmtNumber stmt_id = procedure->getStmtID();
+
 	string temp;
-	temp.printf(NEWLINE "%s %s:" NEWLINE, obj_type, obj_name);
+	temp.printf(NEWLINE "%s %s:", "Procedure", procedure->getProcName());
+
+	temp += (stmt_id && !checkRoutine(stmt_id)) ? getPlan(procedure) : NEWLINE;
+
+	record.insert(0, temp);
+
+	if (!transaction) {
+		logRecordConn(action, connection);
+	}
+	else {
+		logRecordTrans(action, connection, transaction);
+	}
+}
+
+void TracePluginImpl::logRecordFunc(const char* action, ITraceDatabaseConnection* connection,
+	ITraceTransaction* transaction, ITraceFunction* function)
+{
+	const StmtNumber stmt_id = function->getStmtID();
+
+	string temp;
+	temp.printf(NEWLINE "%s %s:", "Function", function->getFuncName());
+
+	temp += (stmt_id && !checkRoutine(stmt_id)) ? getPlan(function) : NEWLINE;
+
+	record.insert(0, temp);
+
+	if (!transaction) {
+		logRecordConn(action, connection);
+	}
+	else {
+		logRecordTrans(action, connection, transaction);
+	}
+}
+
+void TracePluginImpl::logRecordTrig(const char* action, ITraceDatabaseConnection* connection,
+	ITraceTransaction* transaction, ITraceTrigger* trigger)
+{
+	const StmtNumber stmt_id = trigger->getStmtID();
+
+	string name = "Trigger";
+
+	if (trigger->getTriggerName())
+	{
+		string trgname;
+		trgname.printf(" %s", trigger->getTriggerName());
+		name += trgname;
+	}
+
+	if ((trigger->getWhich() != ITraceTrigger::TYPE_ALL) && trigger->getRelationName())
+	{
+		string relation;
+		relation.printf(" FOR %s", trigger->getRelationName());
+		name += relation;
+	}
+
+	string extras;
+	switch (trigger->getWhich())
+	{
+		case ITraceTrigger::TYPE_ALL:
+			extras = "ON ";	//// TODO: Why ALL means ON (DATABASE) triggers?
+			break;
+		case ITraceTrigger::TYPE_BEFORE:
+			extras = "BEFORE ";
+			break;
+		case ITraceTrigger::TYPE_AFTER:
+			extras = "AFTER ";
+			break;
+		default:
+			extras = "<unknown> ";
+			break;
+	}
+
+	switch (trigger->getAction())
+	{
+		case TRIGGER_INSERT:
+			extras += "INSERT";
+			break;
+		case TRIGGER_UPDATE:
+			extras += "UPDATE";
+			break;
+		case TRIGGER_DELETE:
+			extras += "DELETE";
+			break;
+		case TRIGGER_CONNECT:
+			extras += "CONNECT";
+			break;
+		case TRIGGER_DISCONNECT:
+			extras += "DISCONNECT";
+			break;
+		case TRIGGER_TRANS_START:
+			extras += "TRANSACTION_START";
+			break;
+		case TRIGGER_TRANS_COMMIT:
+			extras += "TRANSACTION_COMMIT";
+			break;
+		case TRIGGER_TRANS_ROLLBACK:
+			extras + "TRANSACTION_ROLLBACK";
+			break;
+		case TRIGGER_DDL:
+			extras += "DDL";
+			break;
+		default:
+			extras += "Unknown trigger action";
+			break;
+	}
+
+	string temp;
+	temp.printf(NEWLINE "%s (%s):", name.c_str(), extras.c_str());
+
+	temp += (stmt_id && !checkRoutine(stmt_id)) ? getPlan(trigger) : NEWLINE;
+
 	record.insert(0, temp);
 
 	if (!transaction) {
@@ -1402,6 +1554,29 @@ void TracePluginImpl::log_event_set_context(ITraceDatabaseConnection* connection
 	}
 }
 
+void TracePluginImpl::log_event_proc_compile(ITraceDatabaseConnection* connection,
+	ITraceProcedure* procedure, ntrace_counter_t time_millis, ntrace_result_t proc_result)
+{
+	if (config.log_procedure_compile)
+	{
+		const char* event_type;
+		switch (proc_result)
+		{
+			case ITracePlugin::RESULT_SUCCESS:
+				event_type = "COMPILE_PROCEDURE";
+				break;
+			case ITracePlugin::RESULT_FAILED:
+				event_type = "FAILED COMPILE_PROCEDURE";
+				break;
+			default:
+				event_type = "Unknown event in COMPILE_PROCEDURE";
+				break;
+		}
+		record.printf("%7d ms" NEWLINE, time_millis);
+		logRecordProc(event_type, connection, nullptr, procedure);
+	}
+}
+
 void TracePluginImpl::log_event_proc_execute(ITraceDatabaseConnection* connection,
 	ITraceTransaction* transaction, ITraceProcedure* procedure, bool started,
 	ntrace_result_t proc_result)
@@ -1420,6 +1595,7 @@ void TracePluginImpl::log_event_proc_execute(ITraceDatabaseConnection* connectio
 	ITraceParams* params = procedure->getInputs();
 	if (params && params->getCount())
 	{
+		record.append(NEWLINE);
 		appendParams(params);
 		record.append(NEWLINE);
 	}
@@ -1456,7 +1632,30 @@ void TracePluginImpl::log_event_proc_execute(ITraceDatabaseConnection* connectio
 			break;
 	}
 
-	logRecordProcFunc(event_type, connection, transaction, "Procedure", procedure->getProcName());
+	logRecordProc(event_type, connection, transaction, procedure);
+}
+
+void TracePluginImpl::log_event_func_compile(ITraceDatabaseConnection* connection,
+	ITraceFunction* function, ntrace_counter_t time_millis, ntrace_result_t func_result)
+{
+	if (config.log_function_compile)
+	{
+		const char* event_type;
+		switch (func_result)
+		{
+			case ITracePlugin::RESULT_SUCCESS:
+				event_type = "COMPILE_FUNCTION";
+				break;
+			case ITracePlugin::RESULT_FAILED:
+				event_type = "FAILED COMPILE_FUNCTION";
+				break;
+			default:
+				event_type = "Unknown event in COMPILE_FUNCTION";
+				break;
+		}
+		record.printf("%7d ms" NEWLINE, time_millis);
+		logRecordFunc(event_type, connection, nullptr, function);
+	}
 }
 
 void TracePluginImpl::log_event_func_execute(ITraceDatabaseConnection* connection,
@@ -1477,6 +1676,7 @@ void TracePluginImpl::log_event_func_execute(ITraceDatabaseConnection* connectio
 	ITraceParams* params = function->getInputs();
 	if (params && params->getCount())
 	{
+		record.append(NEWLINE);
 		appendParams(params);
 		record.append(NEWLINE);
 	}
@@ -1523,7 +1723,73 @@ void TracePluginImpl::log_event_func_execute(ITraceDatabaseConnection* connectio
 			break;
 	}
 
-	logRecordProcFunc(event_type, connection, transaction, "Function", function->getFuncName());
+	logRecordFunc(event_type, connection, transaction, function);
+}
+
+void TracePluginImpl::log_event_trigger_compile(ITraceDatabaseConnection* connection,
+	ITraceTrigger* trigger, ntrace_counter_t time_millis, ntrace_result_t trig_result)
+{
+	if (config.log_trigger_compile)
+	{
+		const char* event_type;
+		switch (trig_result)
+		{
+			case ITracePlugin::RESULT_SUCCESS:
+				event_type = "COMPILE_TRIGGER";
+				break;
+			case ITracePlugin::RESULT_FAILED:
+				event_type = "FAILED COMPILE_TRIGGER";
+				break;
+			default:
+				event_type = "Unknown event in COMPILE_TRIGGER";
+				break;
+		}
+		record.printf("%7d ms" NEWLINE, time_millis);
+		logRecordTrig(event_type, connection, nullptr, trigger);
+	}
+}
+
+void TracePluginImpl::log_event_trigger_execute(ITraceDatabaseConnection* connection,
+	ITraceTransaction* transaction, ITraceTrigger* trigger, bool started, ntrace_result_t trig_result)
+{
+	if (!config.log_trigger_start && started)
+		return;
+
+	if (!config.log_trigger_finish && !started)
+		return;
+
+	// Do not log operation if it is below time threshold
+	const PerformanceInfo* info = started ? NULL : trigger->getPerf();
+	if (config.time_threshold && info && info->pin_time < config.time_threshold)
+		return;
+
+	if (info)
+	{
+		appendGlobalCounts(info);
+		appendTableCounts(info);
+	}
+
+	const char* event_type;
+	switch (trig_result)
+	{
+		case ITracePlugin::RESULT_SUCCESS:
+			event_type = started ? "EXECUTE_TRIGGER_START" :
+								   "EXECUTE_TRIGGER_FINISH";
+			break;
+		case ITracePlugin::RESULT_FAILED:
+			event_type = started ? "FAILED EXECUTE_TRIGGER_START" :
+								   "FAILED EXECUTE_TRIGGER_FINISH";
+			break;
+		case ITracePlugin::RESULT_UNAUTHORIZED:
+			event_type = started ? "UNAUTHORIZED EXECUTE_TRIGGER_START" :
+								   "UNAUTHORIZED EXECUTE_TRIGGER_FINISH";
+			break;
+		default:
+			event_type = "Unknown event at executing trigger";
+			break;
+	}
+
+	logRecordTrig(event_type, connection, transaction, trigger);
 }
 
 void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
@@ -1572,23 +1838,7 @@ void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
 		}
 		*stmt_data.description += temp;
 
-		const char* access_path = config.print_plan ?
-			(config.explain_plan ? statement->getExplainedPlan() : statement->getPlan())
-			: NULL;
-
-		if (access_path && *access_path)
-		{
-			const size_t access_path_length = strlen(access_path);
-			temp.printf(NEWLINE
-				"^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
-				"%.*s" NEWLINE, access_path_length, access_path);
-
-			*stmt_data.description += temp;
-		}
-		else
-		{
-			*stmt_data.description += NEWLINE;
-		}
+		*stmt_data.description += getPlan(statement);
 	}
 	else
 	{
@@ -2127,114 +2377,6 @@ void TracePluginImpl::log_event_service_detach(ITraceServiceConnection* service,
 	}
 }
 
-void TracePluginImpl::log_event_trigger_execute(ITraceDatabaseConnection* connection,
-	ITraceTransaction* transaction, ITraceTrigger* trigger, bool started, ntrace_result_t trig_result)
-{
-	if (!config.log_trigger_start && started)
-		return;
-
-	if (!config.log_trigger_finish && !started)
-		return;
-
-	// Do not log operation if it is below time threshold
-	const PerformanceInfo* info = started ? NULL : trigger->getPerf();
-	if (config.time_threshold && info && info->pin_time < config.time_threshold)
-		return;
-
-	string trgname(trigger->getTriggerName());
-
-	if (trgname.empty())
-		trgname = "<unknown>";
-
-	if ((trigger->getWhich() != ITraceTrigger::TYPE_ALL) && trigger->getRelationName())
-	{
-		string relation;
-		relation.printf(" FOR %s", trigger->getRelationName());
-		trgname.append(relation);
-	}
-
-	string action;
-	switch (trigger->getWhich())
-	{
-		case ITraceTrigger::TYPE_ALL:
-			action = "ON ";	//// TODO: Why ALL means ON (DATABASE) triggers?
-			break;
-		case ITraceTrigger::TYPE_BEFORE:
-			action = "BEFORE ";
-			break;
-		case ITraceTrigger::TYPE_AFTER:
-			action = "AFTER ";
-			break;
-		default:
-			action = "<unknown> ";
-			break;
-	}
-
-	switch (trigger->getAction())
-	{
-		case TRIGGER_INSERT:
-			action.append("INSERT");
-			break;
-		case TRIGGER_UPDATE:
-			action.append("UPDATE");
-			break;
-		case TRIGGER_DELETE:
-			action.append("DELETE");
-			break;
-		case TRIGGER_CONNECT:
-			action.append("CONNECT");
-			break;
-		case TRIGGER_DISCONNECT:
-			action.append("DISCONNECT");
-			break;
-		case TRIGGER_TRANS_START:
-			action.append("TRANSACTION_START");
-			break;
-		case TRIGGER_TRANS_COMMIT:
-			action.append("TRANSACTION_COMMIT");
-			break;
-		case TRIGGER_TRANS_ROLLBACK:
-			action.append("TRANSACTION_ROLLBACK");
-			break;
-		case TRIGGER_DDL:
-			action.append("DDL");
-			break;
-		default:
-			action.append("Unknown trigger action");
-			break;
-	}
-
-	record.printf("\t%s (%s) " NEWLINE, trgname.c_str(), action.c_str());
-
-	if (info)
-	{
-		appendGlobalCounts(info);
-		appendTableCounts(info);
-	}
-
-	const char* event_type;
-	switch (trig_result)
-	{
-		case ITracePlugin::RESULT_SUCCESS:
-			event_type = started ? "EXECUTE_TRIGGER_START" :
-								   "EXECUTE_TRIGGER_FINISH";
-			break;
-		case ITracePlugin::RESULT_FAILED:
-			event_type = started ? "FAILED EXECUTE_TRIGGER_START" :
-								   "FAILED EXECUTE_TRIGGER_FINISH";
-			break;
-		case ITracePlugin::RESULT_UNAUTHORIZED:
-			event_type = started ? "UNAUTHORIZED EXECUTE_TRIGGER_START" :
-								   "UNAUTHORIZED EXECUTE_TRIGGER_FINISH";
-			break;
-		default:
-			event_type = "Unknown event at executing trigger";
-			break;
-	}
-
-	logRecordTrans(event_type, connection, transaction);
-}
-
 void TracePluginImpl::log_event_error(ITraceConnection* connection, ITraceStatusVector* status,
 	const char* function)
 {
@@ -2411,6 +2553,22 @@ FB_BOOLEAN TracePluginImpl::trace_set_context(ITraceDatabaseConnection* connecti
 	}
 }
 
+// Stored procedure compiling
+FB_BOOLEAN TracePluginImpl::trace_proc_compile(ITraceDatabaseConnection* connection,
+	ITraceProcedure* procedure, ISC_INT64 time_millis, ntrace_result_t proc_result)
+{
+	try
+	{
+		log_event_proc_compile(connection, procedure, time_millis, proc_result);
+		return true;
+	}
+	catch (const Firebird::Exception& ex)
+	{
+		marshal_exception(ex);
+		return false;
+	}
+}
+
 // Stored procedure executing
 FB_BOOLEAN TracePluginImpl::trace_proc_execute(ITraceDatabaseConnection* connection,
 	ITraceTransaction* transaction, ITraceProcedure* procedure,
@@ -2419,6 +2577,22 @@ FB_BOOLEAN TracePluginImpl::trace_proc_execute(ITraceDatabaseConnection* connect
 	try
 	{
 		log_event_proc_execute(connection, transaction, procedure, started, proc_result);
+		return true;
+	}
+	catch (const Firebird::Exception& ex)
+	{
+		marshal_exception(ex);
+		return false;
+	}
+}
+
+// Stored function compiling
+FB_BOOLEAN TracePluginImpl::trace_func_compile(ITraceDatabaseConnection* connection,
+	ITraceFunction* function, ISC_INT64 time_millis, ntrace_result_t func_result)
+{
+	try
+	{
+		log_event_func_compile(connection, function, time_millis, func_result);
 		return true;
 	}
 	catch (const Firebird::Exception& ex)
@@ -2445,6 +2619,23 @@ FB_BOOLEAN TracePluginImpl::trace_func_execute(ITraceDatabaseConnection* connect
 	}
 }
 
+// Stored trigger compiling
+FB_BOOLEAN TracePluginImpl::trace_trigger_compile(ITraceDatabaseConnection* connection,
+	ITraceTrigger* trigger, ISC_INT64 time_millis, ntrace_result_t trig_result)
+{
+	try
+	{
+		log_event_trigger_compile(connection, trigger, time_millis, trig_result);
+		return true;
+	}
+	catch (const Firebird::Exception& ex)
+	{
+		marshal_exception(ex);
+		return false;
+	}
+}
+
+// Stored trigger executing
 FB_BOOLEAN TracePluginImpl::trace_trigger_execute(ITraceDatabaseConnection* connection,
 	ITraceTransaction* transaction, ITraceTrigger* trigger,
 	FB_BOOLEAN started, ntrace_result_t trig_result)

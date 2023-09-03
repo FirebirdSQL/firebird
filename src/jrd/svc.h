@@ -146,6 +146,7 @@ public:		// utilities interface with service
 	virtual bool utf8FileNames();
 	// get database encryption key transfer callback routine
 	virtual Firebird::ICryptKeyCallback* getCryptCallback();
+	virtual int getParallelWorkers() { return svc_parallel_workers; }
 
 	virtual TraceManager* getTraceManager()
 	{
@@ -324,6 +325,7 @@ private:
 	Firebird::string	svc_perm_sw;	// Switches, taken from services table and/or passed using spb_command_line
 	Firebird::UCharBuffer	svc_address_path;
 	Firebird::string	svc_command_line;
+	int					svc_parallel_workers;
 
 	Firebird::string	svc_network_protocol;
 	Firebird::string	svc_remote_address;

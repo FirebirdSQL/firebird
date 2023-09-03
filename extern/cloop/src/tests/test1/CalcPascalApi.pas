@@ -299,6 +299,7 @@ end;
 
 function StatusImpl_getCodeDispatcher(this: Status): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := StatusImpl(this).getCode();
 	except
@@ -334,6 +335,7 @@ end;
 
 function FactoryImpl_createStatusDispatcher(this: Factory): Status; cdecl;
 begin
+	Result := nil;
 	try
 		Result := FactoryImpl(this).createStatus();
 	except
@@ -343,6 +345,7 @@ end;
 
 function FactoryImpl_createCalculatorDispatcher(this: Factory; status: Status): Calculator; cdecl;
 begin
+	Result := nil;
 	try
 		Result := FactoryImpl(this).createCalculator(status);
 	except
@@ -352,6 +355,7 @@ end;
 
 function FactoryImpl_createCalculator2Dispatcher(this: Factory; status: Status): Calculator2; cdecl;
 begin
+	Result := nil;
 	try
 		Result := FactoryImpl(this).createCalculator2(status);
 	except
@@ -361,6 +365,7 @@ end;
 
 function FactoryImpl_createBrokenCalculatorDispatcher(this: Factory; status: Status): Calculator; cdecl;
 begin
+	Result := nil;
 	try
 		Result := FactoryImpl(this).createBrokenCalculator(status);
 	except
@@ -387,6 +392,7 @@ end;
 
 function CalculatorImpl_sumDispatcher(this: Calculator; status: Status; n1: Integer; n2: Integer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := CalculatorImpl(this).sum(status, n1, n2);
 	except
@@ -396,6 +402,7 @@ end;
 
 function CalculatorImpl_getMemoryDispatcher(this: Calculator): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := CalculatorImpl(this).getMemory();
 	except
@@ -440,6 +447,7 @@ end;
 
 function Calculator2Impl_sumDispatcher(this: Calculator2; status: Status; n1: Integer; n2: Integer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := Calculator2Impl(this).sum(status, n1, n2);
 	except
@@ -449,6 +457,7 @@ end;
 
 function Calculator2Impl_getMemoryDispatcher(this: Calculator2): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := Calculator2Impl(this).getMemory();
 	except
@@ -476,6 +485,7 @@ end;
 
 function Calculator2Impl_multiplyDispatcher(this: Calculator2; status: Status; n1: Integer; n2: Integer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := Calculator2Impl(this).multiply(status, n1, n2);
 	except

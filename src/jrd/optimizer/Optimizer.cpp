@@ -615,7 +615,7 @@ RecordSource* Optimizer::compile(RseNode* subRse, BoolExprNodeStack* parentStack
 			{
 				if (*selfIter == *subIter)
 				{
-					selfIter |= (subIter & (CONJUNCT_USED | CONJUNCT_MATCHED));
+					selfIter |= subIter.getFlags();
 					break;
 				}
 			}
@@ -685,29 +685,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		{
 			const auto node = iter.object();
 
-			StreamList streams;
-
-			if (!isInnerJoin())
-			{
-				fb_assert(rse->rse_relations.getCount() == 2);
-
-				const auto rse1 = rse->rse_relations[0];
-				const auto rse2 = rse->rse_relations[1];
-				fb_assert(rse1 && rse2);
-
-				if (isFullJoin())
-				{
-					rse1->computeRseStreams(streams);
-					rse2->computeRseStreams(streams);
-				}
-				else // left outer join
-				{
-					fb_assert(rse->rse_jointype == blr_left);
-					rse2->computeRseStreams(streams);
-				}
-			}
-
-			if (streams.hasData() && node->possiblyUnknown(streams))
+			if (!isInnerJoin() && node->possiblyUnknown())
 			{
 				// parent missing conjunctions shouldn't be
 				// distributed to FULL OUTER JOIN streams at all
@@ -1035,7 +1013,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	if (rse->rse_skip)
 		rsb = FB_NEW_POOL(getPool()) SkipRowsStream(csb, rsb, rse->rse_skip);
 
-	if (rse->flags & RseNode::FLAG_WRITELOCK)
+	if (rse->hasWriteLock())
 	{
 		for (const auto compileStream : compileStreams)
 		{
@@ -1049,16 +1027,16 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 				SCL_update, obj_relations, tail->csb_relation->rel_name);
 		}
 
-		rsb = FB_NEW_POOL(getPool()) LockedStream(csb, rsb, (rse->flags & RseNode::FLAG_SKIP_LOCKED));
+		rsb = FB_NEW_POOL(getPool()) LockedStream(csb, rsb, rse->hasSkipLocked());
 	}
 
 	if (rse->rse_first)
 		rsb = FB_NEW_POOL(getPool()) FirstRowsStream(csb, rsb, rse->rse_first);
 
-	if (rse->flags & RseNode::FLAG_SINGULAR)
+	if (rse->isSingular())
 		rsb = FB_NEW_POOL(getPool()) SingularStream(csb, rsb);
 
-	if (rse->flags & RseNode::FLAG_SCROLLABLE)
+	if (rse->isScrollable())
 		rsb = FB_NEW_POOL(getPool()) BufferedStream(csb, rsb);
 
 	return rsb;
@@ -1597,41 +1575,6 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 
 
 //
-// Find conjuncts local to the given river and compose an appropriate filter
-//
-
-RecordSource* Optimizer::applyLocalBoolean(RecordSource* rsb,
-										   const StreamList& streams,
-										   ConjunctIterator& iter)
-{
-	StreamStateHolder globalHolder(csb);
-	globalHolder.deactivate();
-
-	StreamStateHolder localHolder(csb, streams);
-	localHolder.activate(csb);
-
-	BoolExprNode* boolean = nullptr;
-	double selectivity = MAXIMUM_SELECTIVITY;
-
-	for (iter.rewind(); iter.hasData(); ++iter)
-	{
-		if (!(iter & CONJUNCT_USED) &&
-			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
-			iter->computable(csb, INVALID_STREAM, false))
-		{
-			compose(getPool(), &boolean, iter);
-			iter |= CONJUNCT_USED;
-
-			if (!(iter & CONJUNCT_MATCHED))
-				selectivity *= getSelectivity(*iter);
-		}
-	}
-
-	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity) : rsb;
-}
-
-
-//
 // Check to make sure that the user-specified indices were actually utilized by the optimizer
 //
 
@@ -1655,10 +1598,15 @@ void Optimizer::checkIndices()
 		// If there were no indices fetched at all but the user specified some,
 		// error out using the first index specified
 
-		if (!tail->csb_idx && plan->accessType && !tdbb->getAttachment()->isGbak())
+		const bool isGbak = tdbb->getAttachment()->isGbak();
+
+		if (!tail->csb_idx && plan->accessType)
 		{
 			// index %s cannot be used in the specified plan
-			ERR_post(Arg::Gds(isc_index_unused) << plan->accessType->items[0].indexName);
+			if (isGbak)
+				ERR_post_warning(Arg::Warning(isc_index_unused) << plan->accessType->items[0].indexName);
+			else
+				ERR_post(Arg::Gds(isc_index_unused) << plan->accessType->items[0].indexName);
 		}
 
 		if (!tail->csb_idx)
@@ -1679,7 +1627,10 @@ void Optimizer::checkIndices()
 					index_name = "";
 
 				// index %s cannot be used in the specified plan
-				ERR_post(Arg::Gds(isc_index_unused) << Arg::Str(index_name));
+				if (isGbak)
+					ERR_post_warning(Arg::Warning(isc_index_unused) << Arg::Str(index_name));
+				else
+					ERR_post(Arg::Gds(isc_index_unused) << Arg::Str(index_name));
 			}
 		}
 	}
@@ -2298,9 +2249,7 @@ bool Optimizer::generateEquiJoin(RiverList& orgRivers)
 				if (!river1->isReferenced(node2))
 					continue;
 
-				ValueExprNode* const temp = node1;
-				node1 = node2;
-				node2 = temp;
+				std::swap(node1, node2);
 			}
 
 			for (unsigned j = i + 1; j < orgRivers.getCount(); j++)
@@ -2323,6 +2272,8 @@ bool Optimizer::generateEquiJoin(RiverList& orgRivers)
 
 					if (eq_class == last_class)
 						last_class += orgCount;
+
+					iter |= Optimizer::CONJUNCT_JOINED;
 				}
 			}
 		}
@@ -2675,7 +2626,7 @@ RecordSource* Optimizer::generateResidualBoolean(RecordSource* rsb)
 			compose(getPool(), &boolean, iter);
 			iter |= CONJUNCT_USED;
 
-			if (!(iter & CONJUNCT_MATCHED))
+			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
 				selectivity *= getSelectivity(*iter);
 		}
 	}
@@ -2842,9 +2793,10 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 				{
 					if (!outerFlag)
 						tail->csb_flags |= csb_unmatched;
-
-					filterSelectivity *= getSelectivity(*iter);
 				}
+
+				if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
+					filterSelectivity *= getSelectivity(*iter);
 			}
 		}
 	}
@@ -2876,6 +2828,41 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 	}
 
 	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, filterSelectivity) : rsb;
+}
+
+
+//
+// Find conjuncts local to the given river and compose an appropriate filter
+//
+
+RecordSource* Optimizer::applyLocalBoolean(RecordSource* rsb,
+										   const StreamList& streams,
+										   ConjunctIterator& iter)
+{
+	StreamStateHolder globalHolder(csb);
+	globalHolder.deactivate();
+
+	StreamStateHolder localHolder(csb, streams);
+	localHolder.activate(csb);
+
+	BoolExprNode* boolean = nullptr;
+	double selectivity = MAXIMUM_SELECTIVITY;
+
+	for (iter.rewind(); iter.hasData(); ++iter)
+	{
+		if (!(iter & CONJUNCT_USED) &&
+			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
+			iter->computable(csb, INVALID_STREAM, false))
+		{
+			compose(getPool(), &boolean, iter);
+			iter |= CONJUNCT_USED;
+
+			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
+				selectivity *= getSelectivity(*iter);
+		}
+	}
+
+	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity) : rsb;
 }
 
 

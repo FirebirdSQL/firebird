@@ -343,7 +343,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 			switch (from_desc->dsc_dtype)
 			{
 				case dtype_sql_date:
-					if (!Firebird::TimeStamp::isValidDate(*(GDS_DATE*) from_desc->dsc_address))
+					if (!TimeStamp::isValidDate(*(GDS_DATE*) from_desc->dsc_address))
 					{
 						ERR_post(Arg::Gds(isc_date_range_exceeded));
 					}
@@ -352,7 +352,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 				case dtype_sql_time:
 				case dtype_sql_time_tz:
 				case dtype_ex_time_tz:
-					if (!Firebird::TimeStamp::isValidTime(*(GDS_TIME*) from_desc->dsc_address))
+					if (!TimeStamp::isValidTime(*(GDS_TIME*) from_desc->dsc_address))
 					{
 						ERR_post(Arg::Gds(isc_time_range_exceeded));
 					}
@@ -361,7 +361,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 				case dtype_timestamp:
 				case dtype_timestamp_tz:
 				case dtype_ex_timestamp_tz:
-					if (!Firebird::TimeStamp::isValidTimeStamp(*(GDS_TIMESTAMP*) from_desc->dsc_address))
+					if (!TimeStamp::isValidTimeStamp(*(GDS_TIMESTAMP*) from_desc->dsc_address))
 					{
 						ERR_post(Arg::Gds(isc_datetime_range_exceeded));
 					}
@@ -540,7 +540,7 @@ void EXE_execute_db_triggers(thread_db* tdbb, jrd_tra* transaction, TriggerActio
 				NULL, NULL, trigger_action, StmtNode::ALL_TRIGS);
 			tdbb->setTransaction(old_transaction);
 		}
-		catch (...)
+		catch (const Exception&)
 		{
 			tdbb->setTransaction(old_transaction);
 			throw;
@@ -558,34 +558,37 @@ void EXE_execute_ddl_triggers(thread_db* tdbb, jrd_tra* transaction, bool preTri
 
 	if (attachment->att_ddl_triggers)
 	{
-		jrd_tra* const oldTransaction = tdbb->getTransaction();
-		tdbb->setTransaction(transaction);
+		TrigVector triggers;
+		TrigVector* triggersPtr = &triggers;
 
-		try
+		for (const auto& trigger : *attachment->att_ddl_triggers)
 		{
-			TrigVector triggers;
-			TrigVector* triggersPtr = &triggers;
+			const auto type = trigger.type & ~TRIGGER_TYPE_MASK;
+			const bool preTrigger = ((type & 1) == 0);
 
-			for (TrigVector::iterator i = attachment->att_ddl_triggers->begin();
-				 i != attachment->att_ddl_triggers->end();
-				 ++i)
+			if ((type & (1LL << action)) && (preTriggers == preTrigger))
 			{
-				if ((i->type & (1LL << action)) &&
-					((preTriggers && (i->type & 0x1) == 0) || (!preTriggers && (i->type & 0x1) == 0x1)))
-				{
-					triggers.add() = *i;
-				}
+				triggers.add() = trigger;
 			}
-
-			EXE_execute_triggers(tdbb, &triggersPtr, NULL, NULL, TRIGGER_DDL,
-				StmtNode::ALL_TRIGS);
-
-			tdbb->setTransaction(oldTransaction);
 		}
-		catch (...)
+
+		if (triggers.hasData())
 		{
-			tdbb->setTransaction(oldTransaction);
-			throw;
+			jrd_tra* const oldTransaction = tdbb->getTransaction();
+			tdbb->setTransaction(transaction);
+
+			try
+			{
+				EXE_execute_triggers(tdbb, &triggersPtr, NULL, NULL, TRIGGER_DDL,
+					preTriggers ? StmtNode::PRE_TRIG : StmtNode::POST_TRIG);
+
+				tdbb->setTransaction(oldTransaction);
+			}
+			catch (const Exception&)
+			{
+				tdbb->setTransaction(oldTransaction);
+				throw;
+			}
 		}
 	}
 }
@@ -693,7 +696,7 @@ void EXE_receive(thread_db* tdbb,
 							(current->bli_blob_object->blb_flags & BLB_close_on_read))
 						{
 							current->bli_blob_object->BLB_close(tdbb);
-					}
+						}
 					}
 					else
 					{
@@ -900,7 +903,10 @@ void EXE_start(thread_db* tdbb, Request* request, jrd_tra* transaction)
 
 	request->req_records_affected.clear();
 
-	request->req_profiler_time = 0;
+	for (auto& rpb : request->req_rpb)
+		rpb.rpb_runtime_flags = 0;
+
+	request->req_profiler_ticks = 0;
 
 	// Store request start time for timestamp work
 	request->validateTimeStamp();
@@ -945,31 +951,30 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 	{
 		const Statement* statement = request->getStatement();
 
-		if (statement->fors.getCount() || request->req_ext_resultset || request->req_ext_stmt)
+		if (statement->fors.hasData() || request->req_ext_resultset || request->req_ext_stmt)
 		{
 			Jrd::ContextPoolHolder context(tdbb, request->req_pool);
 			Request* old_request = tdbb->getRequest();
 			jrd_tra* old_transaction = tdbb->getTransaction();
-			try {
+
+			try
+			{
 				tdbb->setRequest(request);
 				tdbb->setTransaction(request->req_transaction);
 
-				for (const RecordSource* const* ptr = statement->fors.begin();
-					 ptr != statement->fors.end(); ++ptr)
-				{
-					(*ptr)->close(tdbb);
-				}
+				for (const auto select : statement->fors)
+					select->close(tdbb);
 
 				if (request->req_ext_resultset)
 				{
 					delete request->req_ext_resultset;
-					request->req_ext_resultset = NULL;
+					request->req_ext_resultset = nullptr;
 				}
 
 				while (request->req_ext_stmt)
 					request->req_ext_stmt->close(tdbb);
 			}
-			catch (const Firebird::Exception&)
+			catch (const Exception&)
 			{
 				tdbb->setRequest(old_request);
 				tdbb->setTransaction(old_transaction);
@@ -986,29 +991,21 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 				continue;
 
 			auto impure = localTable->getImpure(tdbb, request, false);
-			delete impure->recordBuffer;
-			impure->recordBuffer = nullptr;
+			impure->recordBuffer->reset();
 		}
 
 		release_blobs(tdbb, request);
 
 		const auto attachment = request->req_attachment;
 
-		if (attachment->isProfilerActive() && !request->hasInternalStatement())
+		if (request->req_profiler_ticks && attachment->isProfilerActive() && !request->hasInternalStatement())
 		{
-			ProfilerManager::Stats stats(request->req_profiler_time);
+			ProfilerManager::Stats stats(request->req_profiler_ticks);
 			attachment->getProfilerManager(tdbb)->onRequestFinish(request, stats);
 		}
 	}
 
 	request->req_sorts.unlinkAll();
-
-	if (request->req_proc_sav_point && (request->req_flags & req_proc_fetch))
-	{
-		// Release savepoints used by this request
-		Savepoint::destroy(request->req_proc_sav_point);
-		fb_assert(!request->req_proc_sav_point);
-	}
 
 	TRA_release_request_snapshot(tdbb, request);
 	TRA_detach_request(request);
@@ -1120,10 +1117,11 @@ static void execute_looper(thread_db* tdbb,
 
 
 void EXE_execute_triggers(thread_db* tdbb,
-								TrigVector** triggers,
-								record_param* old_rpb,
-								record_param* new_rpb,
-								TriggerAction trigger_action, StmtNode::WhichTrigger which_trig)
+						  TrigVector** triggers,
+						  record_param* old_rpb,
+						  record_param* new_rpb,
+						  TriggerAction trigger_action,
+						  StmtNode::WhichTrigger which_trig)
 {
 /**************************************
  *
@@ -1259,7 +1257,7 @@ void EXE_execute_triggers(thread_db* tdbb,
 		if (vector != *triggers)
 			MET_release_triggers(tdbb, &vector, true);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		if (vector != *triggers)
 			MET_release_triggers(tdbb, &vector, true);
@@ -1391,23 +1389,39 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 
 	// Execute stuff until we drop
 
-	SINT64 initialPerfCounter = fb_utils::query_performance_counter();
-	SINT64 lastPerfCounter = initialPerfCounter;
+	ProfilerManager* profilerManager;
+	SINT64 profilerInitialTicks, profilerInitialAccumulatedOverhead, profilerLastTicks, profilerLastAccumulatedOverhead;
+
+	if (attachment->isProfilerActive() && !request->hasInternalStatement())
+	{
+		profilerManager = attachment->getProfilerManager(tdbb);
+		profilerInitialTicks = profilerLastTicks = profilerManager->queryTicks();
+		profilerInitialAccumulatedOverhead = profilerLastAccumulatedOverhead =
+			profilerManager->getAccumulatedOverhead();
+	}
+	else
+	{
+		profilerManager = nullptr;
+		profilerInitialTicks = 0;
+		profilerLastTicks = 0;
+		profilerInitialAccumulatedOverhead = 0;
+		profilerLastAccumulatedOverhead = 0;
+	}
+
 	const StmtNode* profileNode = nullptr;
 
 	const auto profilerCallAfterPsqlLineColumn = [&] {
-		const SINT64 currentPerfCounter = fb_utils::query_performance_counter();
+		const SINT64 currentProfilerTicks = profilerManager->queryTicks();
 
 		if (profileNode)
 		{
-			ProfilerManager::Stats stats(currentPerfCounter - lastPerfCounter);
-
-			attachment->getProfilerManager(tdbb)->afterPsqlLineColumn(request,
-				profileNode->line, profileNode->column,
-				stats);
+			const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
+				currentProfilerTicks, profilerLastTicks, profilerLastAccumulatedOverhead);
+			ProfilerManager::Stats stats(elapsedTicks);
+			profilerManager->afterPsqlLineColumn(request, profileNode->line, profileNode->column, stats);
 		}
 
-		return currentPerfCounter;
+		return currentProfilerTicks;
 	};
 
 	while (node && !(request->req_flags & req_stall))
@@ -1426,17 +1440,24 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 
 				if (attachment->isProfilerActive() && !request->hasInternalStatement())
 				{
+					if (!profilerInitialTicks)
+					{
+						profilerManager = attachment->getProfilerManager(tdbb);
+						profilerInitialTicks = profilerLastTicks = profilerManager->queryTicks();
+						profilerInitialAccumulatedOverhead = profilerLastAccumulatedOverhead =
+							profilerManager->getAccumulatedOverhead();
+					}
+
 					if (node->hasLineColumn &&
 						node->isProfileAware() &&
 						(!profileNode ||
 						 !(node->line == profileNode->line && node->column == profileNode->column)))
 					{
-						lastPerfCounter = profilerCallAfterPsqlLineColumn();
-
+						profilerLastTicks = profilerCallAfterPsqlLineColumn();
+						profilerLastAccumulatedOverhead = profilerManager->getAccumulatedOverhead();
 						profileNode = node;
 
-						attachment->getProfilerManager(tdbb)->beforePsqlLineColumn(request,
-							profileNode->line, profileNode->column);
+						profilerManager->beforePsqlLineColumn(request, profileNode->line, profileNode->column);
 					}
 				}
 			}
@@ -1445,13 +1466,18 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 
 			if (exeState.exit)
 			{
-				if (attachment->isProfilerActive() && !request->hasInternalStatement())
-					request->req_profiler_time += profilerCallAfterPsqlLineColumn() - initialPerfCounter;
+				if (profilerInitialTicks && attachment->isProfilerActive() && !request->hasInternalStatement())
+				{
+					const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
+						profilerCallAfterPsqlLineColumn(), profilerInitialTicks, profilerInitialAccumulatedOverhead);
+
+					request->req_profiler_ticks += elapsedTicks;
+				}
 
 				return node;
 			}
 		}	// try
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(tdbb->tdbb_status_vector);
 
@@ -1473,7 +1499,7 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 
 			// If the database is already bug-checked, then get out
 			if (dbb->dbb_flags & DBB_bugcheck)
-				Firebird::status_exception::raise(tdbb->tdbb_status_vector);
+				status_exception::raise(tdbb->tdbb_status_vector);
 
 			exeState.errorPending = true;
 			exeState.catchDisabled = true;
@@ -1488,8 +1514,13 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 		}
 	} // while()
 
-	if (attachment->isProfilerActive() && !request->hasInternalStatement())
-		request->req_profiler_time += profilerCallAfterPsqlLineColumn() - initialPerfCounter;
+	if (profilerInitialTicks && attachment->isProfilerActive() && !request->hasInternalStatement())
+	{
+		const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
+			profilerCallAfterPsqlLineColumn(), profilerInitialTicks, profilerInitialAccumulatedOverhead);
+
+		request->req_profiler_ticks += elapsedTicks;
+	}
 
 	request->adjustCallerStats();
 
@@ -1516,10 +1547,10 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 		request->invalidateTimeStamp();
 		release_blobs(tdbb, request);
 
-		if (attachment->isProfilerActive() && !request->hasInternalStatement())
+		if (profilerInitialTicks && attachment->isProfilerActive() && !request->hasInternalStatement())
 		{
-			ProfilerManager::Stats stats(request->req_profiler_time);
-			attachment->getProfilerManager(tdbb)->onRequestFinish(request, stats);
+			ProfilerManager::Stats stats(request->req_profiler_ticks);
+			profilerManager->onRequestFinish(request, stats);
 		}
 	}
 
@@ -1616,7 +1647,7 @@ static void release_blobs(thread_db* tdbb, Request* request)
 						// we need to reestablish accessor position
 					}
 
-					if (request->req_blobs.locate(Firebird::locGreat, blob_temp_id))
+					if (request->req_blobs.locate(locGreat, blob_temp_id))
 						continue;
 
 					break;
@@ -1690,3 +1721,29 @@ static void trigger_failure(thread_db* tdbb, Request* trigger)
 		ERR_punt();
 	}
 }
+
+
+void AutoCacheRequest::cacheRequest()
+{
+	thread_db* tdbb = JRD_get_thread_data();
+	Attachment* att = tdbb->getAttachment();
+
+	Statement** stmt = which == IRQ_REQUESTS ? &att->att_internal[id] :
+		which == DYN_REQUESTS ? &att->att_dyn_req[id] : nullptr;
+	if (!stmt)
+	{
+		fb_assert(false);
+		return;
+	}
+
+	if (*stmt)
+	{
+		// self resursive call already filled cache
+		request->getStatement()->release(tdbb);
+		request = att->findSystemRequest(tdbb, id, which);
+		fb_assert(request);
+	}
+	else
+		*stmt = request->getStatement();
+}
+

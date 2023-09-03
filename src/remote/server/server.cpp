@@ -730,8 +730,13 @@ public:
 
 		if (st.hasData())
 		{
-			if (st.getErrors()[1] == isc_missing_data_structures)
+			switch (st.getErrors()[1])
+			{
+			case isc_missing_data_structures:
+			case isc_login:
 				status_exception::raise(&st);
+				break;
+			}
 
 			iscLogStatus("Authentication error", &st);
 			Arg::Gds loginError(isc_login_error);
@@ -2100,19 +2105,25 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 		HANDSHAKE_DEBUG(fprintf(stderr, "!accepted, sending reject\n"));
 		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
 		{
-			if (status.getErrors()[1] != isc_missing_data_structures)
+			switch (status.getErrors()[1])
 			{
-				iscLogStatus("Authentication error", &status);
-				Arg::Gds loginError(isc_login_error);
-#ifdef DEV_BUILD
-				loginError << Arg::StatusVector(&status);
-#endif
-				LocalStatus tmp;
-				loginError.copyTo(&tmp);
-				port->send_response(send, 0, 0, &tmp, false);
-			}
-			else
+			case isc_missing_data_structures:
+			case isc_login:
 				port->send_response(send, 0, 0, &status, false);
+				break;
+
+			default:
+				{
+					iscLogStatus("Authentication error", &status);
+					Arg::Gds loginError(isc_login_error);
+#ifdef DEV_BUILD
+					loginError << Arg::StatusVector(&status);
+#endif
+					LocalStatus tmp;
+					loginError.copyTo(&tmp);
+					port->send_response(send, 0, 0, &tmp, false);
+				}
+			}
 		}
 		else
 			port->send(send);
@@ -4859,13 +4870,6 @@ ISC_STATUS rem_port::prepare_statement(P_SQLST * prepareL, PACKET* sendL)
 		prepareL->p_sqlst_SQL_dialect, flags);
 	if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
 		return this->send_response(sendL, 0, 0, &status_vector, false);
-
-	if (statement->rsr_cursor_name.hasData())
-	{
-		statement->rsr_iface->setCursorName(&status_vector, statement->rsr_cursor_name.c_str());
-		if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
-			return this->send_response(sendL, 0, 0, &status_vector, false);
-	}
 
 	LocalStatus ls2;
 	CheckStatusWrapper s2(&ls2);

@@ -32,22 +32,24 @@ const char* const SCRATCH = "fb_recbuf_";
 using namespace Jrd;
 
 RecordBuffer::RecordBuffer(MemoryPool& pool, const Format* format)
-	: count(0)
+	: PermanentStorage(pool)
 {
-	space = FB_NEW_POOL(pool) TempSpace(pool, SCRATCH);
 	record = FB_NEW_POOL(pool) Record(pool, format);
 }
 
-RecordBuffer::~RecordBuffer()
+void RecordBuffer::reset()
 {
-	delete record;
-	delete space;
+	count = 0;
+	space.reset();
 }
 
 offset_t RecordBuffer::store(const Record* new_record)
 {
 	const ULONG length = record->getLength();
 	fb_assert(new_record->getLength() == length);
+
+	if (!space)
+		space = FB_NEW_POOL(getPool()) TempSpace(getPool(), SCRATCH);
 
 	space->write(count * length, new_record->getData(), length);
 
@@ -62,6 +64,7 @@ bool RecordBuffer::fetch(offset_t position, Record* to_record)
 	if (position >= count)
 		return false;
 
+	fb_assert(space.hasData());
 	space->read(position * length, to_record->getData(), length);
 
 	return true;

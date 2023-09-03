@@ -300,6 +300,12 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 			stmt->free(fbStatus);
 	}
 
+	if (tdgbl->gbl_sw_par_workers)
+	{
+		BURP_verbose(410, SafeArg() << tdgbl->gbl_sw_par_workers);
+		// msg 410 use up to @1 parallel workers
+	}
+
 	// decide what type of database we've got
 
 	detectRuntimeODS();
@@ -1527,8 +1533,8 @@ void put_data(burp_rel* relation, ReadRelationReq* request)
 	else
 		xdr_buffer.lstr_address = NULL;
 
-	RCRD_OFFSET record_length = reqMeta->m_outRecLen;
-	FB_UINT64 records = 0;
+	RCRD_LENGTH record_length = reqMeta->m_outRecLen;
+
 	while (true)
 	{
 		if (task->isStopped())
@@ -1542,8 +1548,6 @@ void put_data(burp_rel* relation, ReadRelationReq* request)
 		}
 		if (!request->eof())
 			break;
-
-		records++;
 
 		put(tdgbl, (UCHAR) rec_data);
 		put_int32(att_data_length, record_length);
@@ -4669,7 +4673,7 @@ void ReadRelationMeta::setRelation(const burp_rel* relation, bool partition)
 	m_outRecLen = offset;
 	m_outEofOffset = FB_ALIGN(offset, sizeof(SSHORT));
 	// To be used later for the buffer size to receive data
-	m_outMsgLen = (USHORT) (m_outEofOffset + sizeof(SSHORT));
+	m_outMsgLen = m_outEofOffset + sizeof(SSHORT);
 
 	if (partition)
 	{

@@ -57,6 +57,7 @@
 #include "../common/dsc_proto.h"
 #include "../common/utils_proto.h"
 #include "../common/StatusArg.h"
+#include "../common/status.h"
 
 
 #ifdef HAVE_SYS_TYPES_H
@@ -140,6 +141,7 @@ static void integer_to_text(const dsc*, dsc*, Callbacks*);
 static void int128_to_text(const dsc*, dsc*, Callbacks* cb);
 static void localError(const Firebird::Arg::StatusVector&);
 static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err);
+static void make_null_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
 
 class DummyException {};
 
@@ -1789,11 +1791,12 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 					ptr += sizeof(USHORT);
 
 				Jrd::CharSet* charSet = cb->getToCharset(to->getCharSet());
+				UCHAR maxBytesPerChar = charSet ? charSet->maxBytesPerChar() : 1;
 
-				if (len / charSet->maxBytesPerChar() < from->dsc_length)
+				if (len / maxBytesPerChar < from->dsc_length)
 				{
 					cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
-						Arg::Gds(isc_trunc_limits) << Arg::Num(len / charSet->maxBytesPerChar()) <<
+						Arg::Gds(isc_trunc_limits) << Arg::Num(len / maxBytesPerChar) <<
 						Arg::Num(from->dsc_length));
 				}
 
@@ -2081,7 +2084,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 }
 
 
-void CVT_conversion_error(const dsc* desc, ErrorFunction err)
+void CVT_conversion_error(const dsc* desc, ErrorFunction err, const Exception* original)
 {
 /**************************************
  *
@@ -2107,6 +2110,8 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
 		message = "ARRAY";
 	else if (desc->dsc_dtype == dtype_boolean)
 		message = "BOOLEAN";
+	else if (desc->dsc_dtype == dtype_dbkey)
+		message = "DBKEY";
 	else
 	{
 		// CVC: I don't have access here to JRD_get_thread_data())->tdbb_status_vector
@@ -2126,6 +2131,18 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
 			const USHORT length =
 				CVT_make_string(desc, ttype_ascii, &p, &s, sizeof(s), 0, localError);
 			message.assign(p, length);
+
+			// Convert to \xDD surely non-printable characters
+			for (FB_SIZE_T n = 0; n < message.getCount(); ++n)
+			{
+				if (message[n] < ' ')
+				{
+					string hex;
+					hex.printf("#x%02x", UCHAR(message[n]));
+					message.replace(n, 1, hex);
+					n += (hex.length() - 1);
+				}
+			}
 		}
 		/*
 		catch (status_exception& e)
@@ -2148,7 +2165,11 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
 	}
 
 	//// TODO: Need access to transliterate here to convert message to metadata charset.
-	err(Arg::Gds(isc_convert_error) << message);
+	Arg::StatusVector vector;
+	if (original)
+		vector.assign(*original);
+	vector << Arg::Gds(isc_convert_error) << message;
+	err(vector);
 }
 
 
@@ -2297,13 +2318,13 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 }
 
 
-void CVT_make_null_string(const dsc*    desc,
-						  USHORT        to_interp,
-						  const char**  address,
-						  vary*         temp,
-						  USHORT        length,
-						  DecimalStatus decSt,
-						  ErrorFunction err)
+void make_null_string(const dsc*    desc,
+					  USHORT        to_interp,
+					  const char**  address,
+					  vary*         temp,
+					  USHORT        length,
+					  DecimalStatus decSt,
+					  ErrorFunction err)
 {
 /**************************************
  *
@@ -2336,6 +2357,12 @@ void CVT_make_null_string(const dsc*    desc,
 
 	fb_assert(temp->vary_length == len);
 	temp->vary_string[len] = 0;
+
+	for (USHORT n = 0; n < len; ++n)
+	{
+		if (!temp->vary_string[n])		// \0 in the middle of a string
+			CVT_conversion_error(desc, err);
+	}
 }
 
 
@@ -2957,6 +2984,15 @@ USHORT CVT_get_string_ptr_common(const dsc* desc, USHORT* ttype, UCHAR** address
 }
 
 
+static void checkForIndeterminant(const Exception& e, const dsc* desc, ErrorFunction err)
+{
+	StaticStatusVector st;
+	e.stuffException(st);
+	if (fb_utils::containsErrorCode(st.begin(), isc_decfloat_invalid_operation))
+		CVT_conversion_error(desc, err, &e);
+}
+
+
 static inline void SINT64_to_SQUAD(const SINT64 input, const SQUAD& value)
 {
 	((SLONG*) &value)[LOW_WORD] = (SLONG) (input & 0xffffffff);
@@ -3005,8 +3041,16 @@ Decimal64 CVT_get_dec64(const dsc* desc, DecimalStatus decSt, ErrorFunction err)
 		case dtype_varying:
 		case dtype_cstring:
 		case dtype_text:
-			CVT_make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
-			return d64.set(buffer.vary_string, decSt);
+			make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
+			try
+			{
+				return d64.set(buffer.vary_string, decSt);
+			}
+			catch (const Exception& e)
+			{
+				checkForIndeterminant(e, desc, err);
+				throw;
+			}
 
 		case dtype_real:
 			return d64.set(*((float*) p), decSt);
@@ -3081,8 +3125,16 @@ Decimal128 CVT_get_dec128(const dsc* desc, DecimalStatus decSt, ErrorFunction er
 		case dtype_varying:
 		case dtype_cstring:
 		case dtype_text:
-			CVT_make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
-			return d128.set(buffer.vary_string, decSt);
+			make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
+			try
+			{
+				return d128.set(buffer.vary_string, decSt);
+			}
+			catch (const Exception& e)
+			{
+				checkForIndeterminant(e, desc, err);
+				throw;
+			}
 
 		case dtype_real:
 			return d128.set(*((float*) p), decSt);

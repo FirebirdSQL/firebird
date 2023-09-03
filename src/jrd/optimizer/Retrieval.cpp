@@ -453,7 +453,7 @@ void Retrieval::analyzeNavigation(const InversionCandidateList& inversions)
 			HalfStaticArray<ValueExprNode*, OPT_STATIC_ITEMS> nodes;
 			nodes.add(orgNode);
 
-			for (auto iter = optimizer->getConjuncts(); iter.hasData(); ++iter)
+			for (auto iter = optimizer->getConjuncts(outerFlag, innerFlag); iter.hasData(); ++iter)
 			{
 				const auto cmpNode = nodeAs<ComparativeBoolNode>(*iter);
 
@@ -1097,32 +1097,39 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 		retrieval->irb_generic |= irb_descending;
 	}
 
-	bool ignoreNullsOnScan = true;
 	const auto& segments = indexScratch->segments;
 
-	const auto count = MAX(indexScratch->lowerCount, indexScratch->upperCount);
-	for (unsigned i = 0; i < count; i++)
+	if (const auto count = MAX(indexScratch->lowerCount, indexScratch->upperCount))
 	{
-		if (segments[i].scanType == segmentScanMissing)
-		{
-			*lower++ = *upper++ = NullNode::instance();
-			ignoreNullsOnScan = false;
-		}
-		else
-		{
-			if (i < indexScratch->lowerCount)
-				*lower++ = segments[i].lowerValue;
+		bool ignoreNullsOnScan = true;
 
-			if (i < indexScratch->upperCount)
-				*upper++ = segments[i].upperValue;
-
-			if (segments[i].scanType == segmentScanEquivalent)
+		for (unsigned i = 0; i < count; i++)
+		{
+			if (segments[i].scanType == segmentScanMissing)
+			{
+				*lower++ = *upper++ = NullNode::instance();
 				ignoreNullsOnScan = false;
-		}
-	}
+			}
+			else
+			{
+				if (i < indexScratch->lowerCount)
+					*lower++ = segments[i].lowerValue;
 
-	if (count)
-	{
+				if (i < indexScratch->upperCount)
+					*upper++ = segments[i].upperValue;
+
+				if (segments[i].scanType == segmentScanEquivalent)
+					ignoreNullsOnScan = false;
+			}
+		}
+
+		// This index is never used for IS NULL, thus we can ignore NULLs
+		// already at index scan. But this rule doesn't apply to nod_equiv
+		// which requires NULLs to be found in the index.
+		// A second exception is when this index is used for navigation.
+		if (ignoreNullsOnScan && !(idx->idx_runtime_flags & idx_navigate))
+			retrieval->irb_generic |= irb_ignore_null_value_key;
+
 		if (segments[count - 1].scanType == segmentScanStarting)
 			retrieval->irb_generic |= irb_starting;
 
@@ -1141,13 +1148,6 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 		// Flag the need to use INTL_KEY_MULTI_STARTING in btr.
 		retrieval->irb_generic |= irb_multi_starting | irb_starting;
 	}
-
-	// This index is never used for IS NULL, thus we can ignore NULLs
-	// already at index scan. But this rule doesn't apply to nod_equiv
-	// which requires NULLs to be found in the index.
-	// A second exception is when this index is used for navigation.
-	if (ignoreNullsOnScan && !(idx->idx_runtime_flags & idx_navigate))
-		retrieval->irb_generic |= irb_ignore_null_value_key;
 
 	// Check to see if this is really an equality retrieval
 	if (retrieval->irb_lower_count == retrieval->irb_upper_count)

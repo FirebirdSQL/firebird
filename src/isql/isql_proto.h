@@ -35,7 +35,7 @@ void	ISQL_array_dimensions(const TEXT*);
 bool	ISQL_dbcheck();
 void	ISQL_disconnect_database(bool);
 bool	ISQL_errmsg(Firebird::IStatus*);
-void	ISQL_warning(ISC_STATUS*);
+void	ISQL_warning(Firebird::IStatus*);
 void	ISQL_exit_db();
 // CVC: Not found.
 //int		ISQL_extract(TEXT*, int, FILE*, FILE*, FILE*);

@@ -233,14 +233,18 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 	bool exclusive = notify_shutdown(tdbb, flag, delay, guard);
 	bool successful = exclusive;
 
-	// Try to get exclusive database lock periodically up to specified delay. If we
-	// haven't gotten it report shutdown error for weaker forms. For forced shutdown
-	// keep notifying until successful.
-
 	SSHORT timeout = delay ? delay - 1 : 0;
 
-	if (!exclusive)
+	if (exclusive)
 	{
+		// Ensure we have the proper DBB_shutdown_* flags in place
+		shutdown(tdbb, flag, false);
+	}
+	else
+	{
+		// Try to get exclusive database lock periodically up to specified delay. If we
+		// haven't gotten it report shutdown error for weaker forms. For forced shutdown
+		// keep notifying until successful.
 		do
 		{
 			if (!(dbb->dbb_ast_flags & (DBB_shut_attach | DBB_shut_tran | DBB_shut_force)))

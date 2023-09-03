@@ -277,12 +277,10 @@ public:
 			return totalLocksCounter;
 		}
 
-#ifdef DEV_BUILD
 		bool locked() const
 		{
 			return threadId == getThreadId();
 		}
-#endif
 
 		~Sync()
 		{
@@ -303,8 +301,6 @@ public:
 		volatile FB_UINT64 totalLocksCounter;
 		int currentLocksCounter;
 	};
-
-	typedef Firebird::RaiiLockGuard<StableAttachmentPart> SyncGuard;
 
 	explicit StableAttachmentPart(Attachment* handle)
 		: att(handle), jAtt(NULL), shutError(0)
@@ -592,7 +588,15 @@ public:
 	ULONG		att_flags;					// Flags describing the state of the attachment
 	SSHORT		att_client_charset;			// user's charset specified in dpb
 	SSHORT		att_charset;				// current (client or external) attachment charset
+
+	// ASF: Attention: att_in_system_routine was initially added to support the profiler plugin
+	// writing to system tables. But a modified implementation used non-system tables and
+	// a problem was discovered that when writing to user's table from a "system context"
+	// (csb_internal) FK validations are not enforced becase MET_scan_relation is not called
+	// for the relation.
+	// Currently all "turning on" code for att_in_system_routine are disabled in SystemPackages.h.
 	bool 		att_in_system_routine = false;	// running a system routine
+
 	Lock*		att_long_locks;				// outstanding two phased locks
 #ifdef DEBUG_LCK_LIST
 	UCHAR		att_long_locks_type;		// Lock type of the first lock in list
@@ -833,6 +837,7 @@ public:
 	void invalidateReplSet(thread_db* tdbb, bool broadcast);
 
 	ProfilerManager* getProfilerManager(thread_db* tdbb);
+	ProfilerManager* getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb);
 	bool isProfilerActive();
 	void releaseProfilerManager();
 
@@ -945,9 +950,13 @@ public:
 		: m_attachments(p)
 	{}
 
+	AttachmentsRefHolder()
+		: m_attachments(*MemoryPool::getContextPool())
+	{}
+
 	AttachmentsRefHolder& operator=(const AttachmentsRefHolder& other)
 	{
-		this->~AttachmentsRefHolder();
+		clear();
 
 		for (FB_SIZE_T i = 0; i < other.m_attachments.getCount(); i++)
 			add(other.m_attachments[i]);
@@ -955,12 +964,17 @@ public:
 		return *this;
 	}
 
-	~AttachmentsRefHolder()
+	void clear()
 	{
 		while (m_attachments.hasData())
 		{
 			m_attachments.pop()->release();
 		}
+	}
+
+	~AttachmentsRefHolder()
+	{
+		clear();
 	}
 
 	void add(StableAttachmentPart* jAtt)
@@ -970,11 +984,6 @@ public:
 			jAtt->addRef();
 			m_attachments.add(jAtt);
 		}
-	}
-
-	void remove(Iterator& iter)
-	{
-		iter.remove();
 	}
 
 	bool hasData() const

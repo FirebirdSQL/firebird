@@ -85,11 +85,20 @@ public:
 	void event_set_context(Firebird::ITraceDatabaseConnection* connection,
 		Firebird::ITraceTransaction* transaction, Firebird::ITraceContextVariable* variable);
 
+	void event_proc_compile(Firebird::ITraceDatabaseConnection* connection,
+		Firebird::ITraceProcedure* procedure, ntrace_counter_t time_millis, ntrace_result_t proc_result);
+
 	void event_proc_execute(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 		Firebird::ITraceProcedure* procedure, bool started, ntrace_result_t proc_result);
 
+	void event_func_compile(Firebird::ITraceDatabaseConnection* connection,
+		Firebird::ITraceFunction* function, ntrace_counter_t time_millis, ntrace_result_t func_result);
+
 	void event_func_execute(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 		Firebird::ITraceFunction* function, bool started, ntrace_result_t func_result);
+
+	void event_trigger_compile(Firebird::ITraceDatabaseConnection* connection,
+		Firebird::ITraceTrigger* trigger, ntrace_counter_t time_millis, ntrace_result_t trig_result);
 
 	void event_trigger_execute(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 		Firebird::ITraceTrigger* trigger, bool started, ntrace_result_t trig_result);

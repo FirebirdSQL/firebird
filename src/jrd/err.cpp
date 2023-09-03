@@ -370,7 +370,8 @@ void ERR_warning(const Arg::StatusVector& v)
 	FbStatusVector* s = tdbb->tdbb_status_vector;
 
 	v.copyTo(s);
-	tdbb->getRequest()->req_flags |= req_warning;
+	if (auto request = tdbb->getRequest())
+		request->req_flags |= req_warning;
 }
 
 

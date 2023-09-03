@@ -138,6 +138,11 @@ typedef struct dsc
 		return dsc_dtype == dtype_blob || dsc_dtype == dtype_quad;
 	}
 
+	bool isBoolean() const
+	{
+		return dsc_dtype == dtype_boolean;
+	}
+
 	bool isExact() const
 	{
 		return dsc_dtype == dtype_int128 || dsc_dtype == dtype_int64 ||

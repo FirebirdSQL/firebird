@@ -26,6 +26,7 @@
  */
 
 #include "../common/Task.h"
+#include "../common/isc_proto.h"
 
 namespace Firebird {
 
@@ -49,28 +50,40 @@ WorkerThread* WorkerThread::start(Coordinator* coordinator)
 int WorkerThread::threadRoutine()
 {
 	m_state = IDLE;
-	m_signalSem.release();
-
-	while(m_state != STOPPING)
+	try
 	{
-		m_waitSem.enter();
+		m_signalSem.release();
 
-		if (m_state == RUNNING && m_worker != NULL)
+		while (m_state != STOPPING)
 		{
-			m_worker->work(this);
-			m_worker = NULL;
-		}
+			m_waitSem.enter();
 
-		if (m_state == RUNNING)
-		{
-			m_state = IDLE;
-			m_signalSem.release();
-		}
+			if (m_state == RUNNING && m_worker != NULL)
+			{
+				m_worker->work(this);
+				m_worker = NULL;
+			}
 
-		if (m_state == STOPPING)
-			break;
+			if (m_state == RUNNING)
+			{
+				m_state = IDLE;
+				m_signalSem.release();
+			}
+
+			if (m_state == STOPPING)
+				break;
+		}
+		return 0;
 	}
-	return 0;
+	catch (const Firebird::Exception& ex)
+	{
+		iscLogException("Unexpected exception at WorkerThread", ex);
+	}
+
+	if (m_state != SHUTDOWN)
+		m_state = STOPPING;
+
+	return 1;
 }
 
 void WorkerThread::runWorker(Worker* worker)

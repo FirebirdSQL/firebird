@@ -125,6 +125,8 @@ static InitInstance<Mutex> mutex;	// guard InitCDS::m_pools
 MemoryPool* InitCDS::createPool()
 {
 	MemoryPool* pool = MemoryPool::createPool(nullptr, m_stats);
+	MemoryStats* newStats = FB_NEW_POOL(*pool) MemoryStats;
+	pool->setStatsGroup(*newStats);
 
 	MutexLockGuard guard(mutex(), FB_FUNCTION);
 	m_pools->push(pool);

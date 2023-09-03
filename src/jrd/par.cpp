@@ -81,6 +81,7 @@ static void par_error(BlrReader& blrReader, const Arg::StatusVector& v, bool isS
 static PlanNode* par_plan(thread_db*, CompilerScratch*);
 static void getBlrVersion(CompilerScratch* csb);
 static void parseSubRoutines(thread_db* tdbb, CompilerScratch* csb);
+static void setNodeLineColumn(CompilerScratch* csb, DmlNode* node, ULONG blrOffset);
 
 
 namespace
@@ -1319,8 +1320,11 @@ RseNode* PAR_rse(thread_db* tdbb, CompilerScratch* csb, SSHORT rse_op)
 {
 	SET_TDBB(tdbb);
 
+	const ULONG blrOffset = csb->csb_blr_reader.getOffset() - 1;
 	int count = (unsigned int) csb->csb_blr_reader.getByte();
 	RseNode* rse = FB_NEW_POOL(*tdbb->getDefaultPool()) RseNode(*tdbb->getDefaultPool());
+
+	setNodeLineColumn(csb, rse, blrOffset);
 
 	if (rse_op == blr_lateral_rse)
 		rse->flags |= RseNode::FLAG_LATERAL;
@@ -1404,7 +1408,7 @@ RseNode* PAR_rse(thread_db* tdbb, CompilerScratch* csb, SSHORT rse_op)
 			break;
 
 		case blr_skip_locked:
-			if (!(rse->flags & RseNode::FLAG_WRITELOCK))
+			if (!rse->hasWriteLock())
 			{
 				PAR_error(csb,
 					Arg::Gds(isc_random) <<
@@ -1456,34 +1460,35 @@ RseNode* PAR_rse(thread_db* tdbb, CompilerScratch* csb)
 {
 	SET_TDBB(tdbb);
 
+	const ULONG blrOffset = csb->csb_blr_reader.getOffset();
 	const SSHORT blrOp = csb->csb_blr_reader.getByte();
+	RseNode* rseNode = nullptr;
 
 	switch (blrOp)
 	{
 		case blr_rse:
 		case blr_lateral_rse:
 		case blr_rs_stream:
-			return PAR_rse(tdbb, csb, blrOp);
+			rseNode = PAR_rse(tdbb, csb, blrOp);
+			break;
 
 		case blr_singular:
-		{
-			RseNode* rseNode = PAR_rse(tdbb, csb);
+			rseNode = PAR_rse(tdbb, csb);
 			rseNode->flags |= RseNode::FLAG_SINGULAR;
-			return rseNode;
-		}
+			break;
 
 		case blr_scrollable:
-		{
-			RseNode* rseNode = PAR_rse(tdbb, csb);
+			rseNode = PAR_rse(tdbb, csb);
 			rseNode->flags |= RseNode::FLAG_SCROLLABLE;
-			return rseNode;
-		}
+			break;
 
 		default:
 			PAR_syntax_error(csb, "RecordSelExpr");
 	}
 
-	return NULL;	// warning
+	setNodeLineColumn(csb, rseNode, blrOffset);
+
+	return rseNode;
 }
 
 
@@ -1604,10 +1609,10 @@ DmlNode* PAR_parse_node(thread_db* tdbb, CompilerScratch* csb)
 {
 	SET_TDBB(tdbb);
 
-	const ULONG blr_offset = csb->csb_blr_reader.getOffset();
-	const SSHORT blr_operator = csb->csb_blr_reader.getByte();
+	const ULONG blrOffset = csb->csb_blr_reader.getOffset();
+	const SSHORT blrOperator = csb->csb_blr_reader.getByte();
 
-	if (blr_operator < 0 || blr_operator >= FB_NELEM(blr_parsers))
+	if (blrOperator < 0 || blrOperator >= FB_NELEM(blr_parsers))
 	{
         // NS: This error string is correct, please do not mangle it again and again.
 		// The whole error message is "BLR syntax error: expected %s at offset %d, encountered %d"
@@ -1616,7 +1621,7 @@ DmlNode* PAR_parse_node(thread_db* tdbb, CompilerScratch* csb)
 
 	// Dispatch on operator type.
 
-	switch (blr_operator)
+	switch (blrOperator)
 	{
 		case blr_rse:
 		case blr_lateral_rse:
@@ -1646,21 +1651,11 @@ DmlNode* PAR_parse_node(thread_db* tdbb, CompilerScratch* csb)
 			return PAR_parseRecordSource(tdbb, csb);
 	}
 
-	if (!blr_parsers[blr_operator])
+	if (!blr_parsers[blrOperator])
 		PAR_syntax_error(csb, "valid BLR code");
 
-	DmlNode* node = blr_parsers[blr_operator](tdbb, *tdbb->getDefaultPool(), csb, blr_operator);
-	FB_SIZE_T pos = 0;
-
-	if (node->getKind() == DmlNode::KIND_STATEMENT && csb->csb_dbg_info->blrToSrc.find(blr_offset, pos))
-	{
-		MapBlrToSrcItem& i = csb->csb_dbg_info->blrToSrc[pos];
-		StmtNode* stmt = static_cast<StmtNode*>(node);
-
-		stmt->hasLineColumn = true;
-		stmt->line = i.mbs_src_line;
-		stmt->column = i.mbs_src_col;
-	}
+	DmlNode* node = blr_parsers[blrOperator](tdbb, *tdbb->getDefaultPool(), csb, blrOperator);
+	setNodeLineColumn(csb, node, blrOffset);
 
 	return node;
 }
@@ -1710,17 +1705,7 @@ void PAR_warning(const Arg::StatusVector& v)
  *
  **************************************/
 	fb_assert(v.value()[0] == isc_arg_warning);
-
-	thread_db* tdbb = JRD_get_thread_data();
-
-	// Make sure that the [1] position is 0 indicating that no error has occurred
-	Arg::Gds p(FB_SUCCESS);
-
-	// Now place your warning messages
-	p.append(v);
-
-	// Save into tdbb
-	p.copyTo(tdbb->tdbb_status_vector);
+	ERR_post_warning(v);
 }
 
 
@@ -1762,5 +1747,22 @@ static void parseSubRoutines(thread_db* tdbb, CompilerScratch* csb)
 		const auto node = pair.second;
 		Jrd::ContextPoolHolder context(tdbb, &node->subCsb->csb_pool);
 		PAR_blr(tdbb, nullptr, node->blrStart, node->blrLength, nullptr, &node->subCsb, nullptr, false, 0);
+	}
+}
+
+
+// Set node line/column for a given blr offset.
+static void setNodeLineColumn(CompilerScratch* csb, DmlNode* node, ULONG blrOffset)
+{
+	FB_SIZE_T pos;
+
+	if (node && csb->csb_dbg_info->blrToSrc.find(blrOffset, pos))
+	{
+		MapBlrToSrcItem& i = csb->csb_dbg_info->blrToSrc[pos];
+		node->line = i.mbs_src_line;
+		node->column = i.mbs_src_col;
+
+		if (node->getKind() == DmlNode::KIND_STATEMENT)
+			static_cast<StmtNode*>(node)->hasLineColumn = true;
 	}
 }

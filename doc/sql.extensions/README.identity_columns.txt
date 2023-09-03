@@ -100,7 +100,6 @@ following:
 
 insert into objects (id, name) overriding system value values (11, 'Laptop');
 
-OVERRIDING also supports a subclause to be used with BY DEFAULT columns, to ignore the value passed in INSERT and use
-the defined sequence:
+OVERRIDING also supports a subclause to ignore the value passed in INSERT and use the defined sequence:
 
 insert into objects (id, name) overriding user value values (12, 'Laptop');  -- 12 is not used

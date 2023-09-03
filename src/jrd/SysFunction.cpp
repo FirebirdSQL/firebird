@@ -163,6 +163,10 @@ static const HashAlgorithmDescriptor* cryptHashAlgorithmDescriptors[] = {
 	HashAlgorithmDescriptorFactory<Sha1HashContext>::getInstance("SHA1", 20),
 	HashAlgorithmDescriptorFactory<Sha256HashContext>::getInstance("SHA256", 32),
 	HashAlgorithmDescriptorFactory<Sha512HashContext>::getInstance("SHA512", 64),
+	HashAlgorithmDescriptorFactory<Sha3_512_HashContext>::getInstance("SHA3_512", 64),
+	HashAlgorithmDescriptorFactory<Sha3_384_HashContext>::getInstance("SHA3_384", 48),
+	HashAlgorithmDescriptorFactory<Sha3_256_HashContext>::getInstance("SHA3_256", 32),
+	HashAlgorithmDescriptorFactory<Sha3_224_HashContext>::getInstance("SHA3_224", 28),
 	nullptr
 };
 
@@ -392,6 +396,9 @@ const char
 	STATEMENT_TIMEOUT[] = "STATEMENT_TIMEOUT",
 	EFFECTIVE_USER_NAME[] = "EFFECTIVE_USER",
 	SESSION_TIMEZONE[] = "SESSION_TIMEZONE",
+	PARALLEL_WORKERS[] = "PARALLEL_WORKERS",
+	DECFLOAT_ROUND[] = "DECFLOAT_ROUND",
+	DECFLOAT_TRAPS[] = "DECFLOAT_TRAPS",
 	// SYSTEM namespace: transaction wise items
 	TRANSACTION_ID_NAME[] = "TRANSACTION_ID",
 	ISOLATION_LEVEL_NAME[] = "ISOLATION_LEVEL",
@@ -1282,18 +1289,30 @@ bool makeBlobAppendBlob(dsc* result, const dsc* arg, bid* blob_id = nullptr)
 void makeBlobAppend(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result,
 	int argsCount, const dsc** args)
 {
+	fb_assert(argsCount >= function->minArgCount);
+
+	result->makeBlob(isc_blob_untyped, ttype_binary);
+	result->setNullable(true);
+
 	if (argsCount > 0)
 	{
-		const dsc** ppArg = args;
-		const dsc** const end = args + argsCount;
+		for (int i = 0; i < argsCount; ++i)
+		{
+			if (makeBlobAppendBlob(result, args[i]))
+				break;
+		}
 
-		for (; ppArg < end; ppArg++)
-			if (makeBlobAppendBlob(result, *ppArg))
-				return;
+		result->setNullable(true);
+
+		for (int i = 0; i < argsCount; ++i)
+		{
+			if (!args[i]->isNullable())
+			{
+				result->setNullable(false);
+				break;
+			}
+		}
 	}
-
-	fb_assert(false);
-	result->makeBlob(isc_blob_untyped, ttype_binary);
 }
 
 
@@ -2655,16 +2674,33 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 #define blr_extract_yearday		(unsigned char)7
 #define blr_extract_millisecond	(unsigned char)8
 #define blr_extract_week		(unsigned char)9
+#define blr_extract_timezone_hour	(unsigned char)10
+#define blr_extract_timezone_minute	(unsigned char)11
+#define blr_extract_timezone_name	(unsigned char)12
+#define blr_extract_quarter		(unsigned char)13
 */
 
-const char* extractParts[10] =
+const char* extractParts[] =
 {
-	"YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "WEEKDAY", "YEARDAY", "MILLISECOND", "WEEK"
+	"YEAR",
+	"MONTH",
+	"DAY",
+	"HOUR",
+	"MINUTE",
+	"SECOND",
+	"WEEKDAY",
+	"YEARDAY",
+	"MILLISECOND",
+	"WEEK",
+	nullptr,
+	nullptr,
+	nullptr,
+	"QUARTER"
 };
 
 const char* getPartName(int n)
 {
-	if (n < 0 || n >= FB_NELEM(extractParts))
+	if (n < 0 || n >= FB_NELEM(extractParts) || !extractParts[n])
 		return "Unknown";
 
 	return extractParts[n];
@@ -2932,6 +2968,10 @@ public:
 
 		registerHash(md5_desc);
 		registerHash(sha1_desc);
+		registerHash(sha3_512_desc);
+		registerHash(sha3_384_desc);
+		registerHash(sha3_256_desc);
+		registerHash(sha3_224_desc);
 		registerHash(sha256_desc);
 		registerHash(sha512_desc);
 	}
@@ -4104,6 +4144,7 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 	switch (part)
 	{
 		case blr_extract_year:
+		case blr_extract_quarter:
 		case blr_extract_month:
 		case blr_extract_day:
 		case blr_extract_week:
@@ -4309,6 +4350,11 @@ dsc* evlFirstLastDay(thread_db* tdbb, const SysFunction* function, const NestVal
 			times.tm_mday = 1;
 			break;
 
+		case blr_extract_quarter:
+			times.tm_mon = times.tm_mon / 3 * 3;
+			times.tm_mday = 1;
+			break;
+
 		case blr_extract_week:
 			break;
 
@@ -4331,6 +4377,10 @@ dsc* evlFirstLastDay(thread_db* tdbb, const SysFunction* function, const NestVal
 				++times.tm_year;
 				adjust = -1;
 				break;
+
+			case blr_extract_quarter:
+				times.tm_mon += 2;
+				// fall through
 
 			case blr_extract_month:
 				if (++times.tm_mon == 12)
@@ -4689,6 +4739,12 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 			TimeZoneUtil::format(timeZoneBuffer, sizeof(timeZoneBuffer), attachment->att_current_timezone);
 			resultStr = timeZoneBuffer;
 		}
+		else if (nameStr == PARALLEL_WORKERS)
+			resultStr.printf("%d", attachment->att_parallel_workers);
+		else if (nameStr == DECFLOAT_ROUND)
+			resultStr = attachment->att_dec_status.getTxtRound();
+		else if (nameStr == DECFLOAT_TRAPS)
+			resultStr = attachment->att_dec_status.getTxtTraps();
 		else
 		{
 			// "Context variable %s is not found in namespace %s"
@@ -4833,7 +4889,7 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 	{
 		// "Invalid namespace name %s passed to %s"
 		ERR_post(Arg::Gds(isc_ctx_namespace_invalid) <<
-			Arg::Str(nameStr) << Arg::Str(RDB_SET_CONTEXT));
+			Arg::Str(nameSpaceStr) << Arg::Str(RDB_SET_CONTEXT));
 	}
 
 	string valueStr;

@@ -620,10 +620,10 @@ RelationSourceNode* RelationSourceNode::parse(thread_db* tdbb, CompilerScratch* 
 
 	// Scan the relation if it hasn't already been scanned for meta data
 
-	if ((!(node->relation->rel_flags & REL_scanned) || (node->relation->rel_flags & REL_being_scanned)) &&
-		((node->relation->rel_flags & REL_force_scan) || !(csb->csb_g_flags & csb_internal)))
+	if ((!(node->relation->rel_flags & REL_scanned) ||
+		(node->relation->rel_flags & REL_being_scanned)) &&
+		!(csb->csb_g_flags & csb_internal))
 	{
-		node->relation->rel_flags &= ~REL_force_scan;
 		MET_scan_relation(tdbb, node->relation);
 	}
 	else if (node->relation->rel_flags & REL_sys_triggers)
@@ -2754,6 +2754,8 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 RseNode* RseNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
 	RseNode* newSource = FB_NEW_POOL(*tdbb->getDefaultPool()) RseNode(*tdbb->getDefaultPool());
+	newSource->line = line;
+	newSource->column = column;
 
 	for (const auto sub : rse_relations)
 		newSource->rse_relations.add(sub->copy(tdbb, copier));
@@ -2907,9 +2909,7 @@ void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 
 			for (const auto boolean : csb->csb_inner_booleans)
 			{
-				if (boolean &&
-					boolean->containsAnyStream(streams) &&
-					!boolean->possiblyUnknown(streams))
+				if (boolean && boolean->ignoreNulls(streams))
 				{
 					rse_jointype = blr_left;
 					break;
@@ -2923,9 +2923,7 @@ void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 
 		for (const auto boolean : csb->csb_inner_booleans)
 		{
-			if (boolean &&
-				boolean->containsAnyStream(streams) &&
-				!boolean->possiblyUnknown(streams))
+			if (boolean && boolean->ignoreNulls(streams))
 			{
 				if (rse_jointype == blr_full)
 				{
@@ -2951,9 +2949,7 @@ void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 	// where we are just trying to inner join more than 2 streams. If possible,
 	// try to flatten the tree out before we go any further.
 
-	const auto isLateral = (this->flags & RseNode::FLAG_LATERAL) != 0;
-
-	if (!isLateral &&
+	if (!isLateral() &&
 		rse->rse_jointype == blr_inner &&
 		rse_jointype == blr_inner &&
 		!rse_sorted && !rse_projection &&
@@ -3046,8 +3042,6 @@ RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStr
 
 	BoolExprNodeStack conjunctStack;
 
-	const auto isLateral = (this->flags & RseNode::FLAG_LATERAL) != 0;
-
 	// pass RseNode boolean only to inner substreams because join condition
 	// should never exclude records from outer substreams
 	if (opt->isInnerJoin() || (opt->isLeftJoin() && innerSubStream))
@@ -3060,7 +3054,7 @@ RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStr
 
 		StreamStateHolder stateHolder(csb, opt->getOuterStreams());
 
-		if (opt->isLeftJoin() || isLateral)
+		if (opt->isLeftJoin() || isLateral())
 		{
 			stateHolder.activate();
 

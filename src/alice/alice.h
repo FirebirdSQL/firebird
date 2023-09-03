@@ -73,7 +73,6 @@ enum alice_repl_mode {
 
 struct user_action
 {
-	ULONG ua_switches;
 	const char* ua_user;
 	const char* ua_role;
 	const char* ua_password;

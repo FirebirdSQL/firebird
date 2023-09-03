@@ -70,9 +70,9 @@ static const USHORT _DSC_convert_to_text_length[DTYPE_TYPE_MAX] =
 	42,							// dtype_dec128		+-  .   e   +-  coeff  + exp
 	47,							// dtype_int128
 	14 + TimeZoneUtil::MAX_LEN,	// dtype_sql_time_tz      HH:MM:SS.MMMM +NN:NN
-	25 + TimeZoneUtil::MAX_LEN,	// dtype_timestamp_tz     YYYY-MM-DD HH:MM:SS.MMMM +NN:NN
+	26 + TimeZoneUtil::MAX_LEN,	// dtype_timestamp_tz     YYYY-MM-DD HH:MM:SS.MMMM +NN:NN
 	14 + TimeZoneUtil::MAX_LEN,	// dtype_ex_time_tz       HH:MM:SS.MMMM +NN:NN
-	25 + TimeZoneUtil::MAX_LEN	// dtype_ex_timestamp_tz  YYYY-MM-DD HH:MM:SS.MMMM +NN:NN
+	26 + TimeZoneUtil::MAX_LEN	// dtype_ex_timestamp_tz  YYYY-MM-DD HH:MM:SS.MMMM +NN:NN
 };
 
 // Unimplemented names are in lowercase & <brackets>

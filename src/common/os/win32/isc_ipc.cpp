@@ -45,6 +45,7 @@
 #include "../common/isc_proto.h"
 #include "../common/os/isc_i_proto.h"
 #include "../common/isc_s_proto.h"
+#include "../common/file_params.h"
 
 #include <windows.h>
 #include <process.h>
@@ -198,7 +199,7 @@ HANDLE ISC_make_signal(bool /*create_flag*/, bool manual_reset, int process_idL,
 		return CreateEvent(NULL, man_rst, FALSE, NULL);
 
 	TEXT event_name[BUFFER_TINY];
-	sprintf(event_name, "_firebird_process%u_signal%d", process_idL, signal_number);
+	sprintf(event_name, SHARED_EVENT, process_idL, signal_number);
 
 	if (!fb_utils::private_kernel_object_name(event_name, sizeof(event_name)))
 	{

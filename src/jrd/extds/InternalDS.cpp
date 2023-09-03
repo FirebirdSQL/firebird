@@ -197,6 +197,9 @@ void InternalConnection::doDetach(thread_db* tdbb)
 			att->detach(&status);
 		}
 
+		if (!(status->getState() & IStatus::STATE_ERRORS))
+			att.clear();
+
 		if (status->getErrors()[1] == isc_att_shutdown || status->getErrors()[1] == isc_shutdown)
 		{
 			status->init();

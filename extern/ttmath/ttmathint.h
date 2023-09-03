@@ -1797,6 +1797,24 @@ public:
 	}
 
 
+	Int<value_size> operator>>(int move) const
+	{
+	Int<value_size> temp( *this );
+
+		temp.Rcr(move, UInt<value_size>::IsTheHighestBitSet() ? 1 : 0);
+
+	return temp;
+	}
+
+
+	UInt<value_size> & operator>>=(int move)
+	{
+		UInt<value_size>::Rcr(move, UInt<value_size>::IsTheHighestBitSet() ? 1 : 0);
+
+	return *this;
+	}
+
+
 
 	/*!
 	*

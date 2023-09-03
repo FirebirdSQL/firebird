@@ -63,7 +63,6 @@ goto :EOF
 
 @set GPRE=%FB_BIN_DIR%\gpre_boot
 @for %%i in (alice_meta) do @call :PREPROCESS alice %%i
-@for %%i in (array, blob) do @call :PREPROCESS yvalve %%i
 @for %%i in (metd, DdlNodes, PackageNodes) do @call :PREPROCESS dsql %%i -gds_cxx
 @for %%i in (gpre_meta) do @call :PREPROCESS gpre/std %%i
 @for %%i in (dfw, dpm, dyn_util, fun, grant, ini, met, scl, Function) do @call :PREPROCESS jrd %%i -gds_cxx
@@ -76,7 +75,6 @@ goto :EOF
 @for %%i in (alice_meta) do @call :PREPROCESS alice %%i
 @for %%i in (LegacyManagement) do @call :PREPROCESS auth/SecurityDatabase %%i
 @for %%i in (backup, restore, OdsDetection) do @call :PREPROCESS burp %%i -ocxx -m
-@for %%i in (array, blob) do @call :PREPROCESS yvalve %%i
 @for %%i in (metd) do @call :PREPROCESS dsql %%i -gds_cxx
 @for %%i in (DdlNodes, PackageNodes) do @call :PREPROCESS dsql %%i -gds_cxx
 @for %%i in (gpre_meta) do @call :PREPROCESS gpre/std %%i

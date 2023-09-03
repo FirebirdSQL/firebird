@@ -19,7 +19,7 @@
     --with-cross-build=$CROSS_BUILD_DIR \
     CFLAGS='-Os' \
     CXXFLAGS='--std=c++17' \
-    LDFLAGS='-static-libstdc++' \
+    LDFLAGS='-static-libstdc++ -Wl,-rpath=\$$ORIGIN' \
     CC=i686-linux-android24-clang \
     CXX=i686-linux-android24-clang++ \
     AR=llvm-ar \

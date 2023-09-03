@@ -33,6 +33,7 @@
 #include "../common/classes/rwlock.h"
 #include "../common/classes/ImplementHelper.h"
 #include "../common/StatementMetadata.h"
+#include "../common/classes/GetPlugins.h"
 
 struct dsc;
 
@@ -209,7 +210,20 @@ private:
 	};
 
 public:
-	class Function
+	class ExtRoutine
+	{
+	public:
+		ExtRoutine(thread_db* tdbb, ExtEngineManager* aExtManager,
+			Firebird::IExternalEngine* aEngine, RoutineMetadata* aMetadata);
+
+	protected:
+		ExtEngineManager* extManager;
+		Firebird::AutoPlugin<Firebird::IExternalEngine> engine;
+		Firebird::AutoPtr<RoutineMetadata> metadata;
+		Database* database;
+	};
+
+	class Function : public ExtRoutine
 	{
 	public:
 		Function(thread_db* tdbb, ExtEngineManager* aExtManager,
@@ -222,17 +236,13 @@ public:
 		void execute(thread_db* tdbb, UCHAR* inMsg, UCHAR* outMsg) const;
 
 	private:
-		ExtEngineManager* extManager;
-		Firebird::IExternalEngine* engine;
-		Firebird::AutoPtr<RoutineMetadata> metadata;
 		Firebird::IExternalFunction* function;
 		const Jrd::Function* udf;
-		Database* database;
 	};
 
 	class ResultSet;
 
-	class Procedure
+	class Procedure : public ExtRoutine
 	{
 	public:
 		Procedure(thread_db* tdbb, ExtEngineManager* aExtManager,
@@ -245,12 +255,8 @@ public:
 		ResultSet* open(thread_db* tdbb, UCHAR* inMsg, UCHAR* outMsg) const;
 
 	private:
-		ExtEngineManager* extManager;
-		Firebird::IExternalEngine* engine;
-		Firebird::AutoPtr<RoutineMetadata> metadata;
 		Firebird::IExternalProcedure* procedure;
 		const jrd_prc* prc;
-		Database* database;
 
 	friend class ResultSet;
 	};
@@ -272,7 +278,7 @@ public:
 		USHORT charSet;
 	};
 
-	class Trigger
+	class Trigger : public ExtRoutine
 	{
 	public:
 		Trigger(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, ExtEngineManager* aExtManager,
@@ -291,15 +297,11 @@ public:
 		Firebird::Array<NestConst<StmtNode>> computedStatements;
 
 	private:
-		ExtEngineManager* extManager;
-		Firebird::IExternalEngine* engine;
-		Firebird::AutoPtr<RoutineMetadata> metadata;
 		Firebird::AutoPtr<Format> format;
 		Firebird::IExternalTrigger* trigger;
 		const Jrd::Trigger* trg;
 		Firebird::Array<USHORT> fieldsPos;
 		Firebird::Array<const DeclareVariableNode*> varDecls;
-		Database* database;
 		USHORT computedCount;
 	};
 

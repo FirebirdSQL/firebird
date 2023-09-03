@@ -19,8 +19,6 @@
 # 2 Oct 2002, Nickolay Samofatov - Major Cleanup
 
 TARGET ?= Release
-ICU_VERS = icu54
-ICU_LOC ?= $(HOME)/$(ICU_VERS)/icu/source/lib/
 FB_FW = ../gen/$(TARGET)/frameworks/Firebird5.framework
 
 all: framework
@@ -28,8 +26,6 @@ all: framework
 framework:
 	-$(RM) -rf $(FB_FW)
 	mkdir -p $(FB_FW)/Versions/A/Libraries
-
-	cp $(ICU_LOC)*.dylib ../gen/$(TARGET)/firebird/lib/
 
 	ln -s Versions/Current/Firebird $(FB_FW)/Firebird
 	ln -s Versions/Current/Headers $(FB_FW)/Headers

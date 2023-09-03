@@ -16,6 +16,8 @@
 ::
 ::=============================================================================
 @echo off
+set SCRIPT_FULL_NAME=%~d0%~p0%~n0%~x0
+set SCRIPT_SHORT_NAME=%~n0%~x0
 
 @goto :MAIN
 @goto :EOF
@@ -26,7 +28,7 @@
 
 @echo off
 :: reset ERRLEV to clear error from last run in same cmd shell
-set ERRLEV=0
+set ERRLEV=
 
 :: Assume we are preparing a production build
 set FBBUILD_BUILDTYPE=release
@@ -75,7 +77,7 @@ if "%FB2_SNAPSHOT%"=="1" (
 @for /f "usebackq tokens=*" %%c in (`where /f touch 2^>nul`) do set TOUCH_COMMAND=%%c
 if defined TOUCH_COMMAND (
   @%TOUCH_COMMAND% --version <nul >nul 2>nul
-  if not errorlevel 1 (
+  if not ERRORLEVEL 1 (
     @echo     o POSIX touch utility found at %TOUCH_COMMAND%
   ) else ( @set TOUCH_COMMAND= )
 )
@@ -176,9 +178,9 @@ set FBBUILD_PROD_STATUS=DEV
 )
 
 if "%FB_TARGET_PLATFORM%"=="x64" (
-set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%-windows-x64
+set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows-x64
 ) else (
-set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%-windows-x86
+set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows-x86
 )
 
 @setlocal
@@ -229,13 +231,13 @@ set SED_COMMAND=sed -e s/\$MAJOR/%FB_MAJOR_VER%/g ^
 for %%f in ( msvcp%MSVC_RUNTIME_FILE_VERSION%.dll vcruntime%MSVC_RUNTIME_FILE_VERSION%.dll  ) do (
     echo Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f"
     copy  "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" %FB_OUTPUT_DIR%\ >nul
-    if %ERRORLEVEL% GEQ 1 (
-       call :ERROR Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" failed with error %ERRORLEVEL% ) && (goto :EOF)
+    if ERRORLEVEL 1 (
+    call :ERROR Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" failed with error %ERRLEV% ) & (goto :EOF)
     )
 )
 
 @where /Q implib.exe
-@if not errorlevel 1 (
+@if not ERRORLEVEL 1 (
 if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
   @echo   Generating fbclient_bor.lib
   @implib %FB_OUTPUT_DIR%\lib\fbclient_bor.lib %FB_OUTPUT_DIR%\fbclient.dll > nul
@@ -262,8 +264,8 @@ if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
 @mkdir %FB_OUTPUT_DIR%\doc
 @copy %FB_ROOT_PATH%\*.md %FB_OUTPUT_DIR%\doc\ > nul
 @copy %FB_ROOT_PATH%\doc\*.* %FB_OUTPUT_DIR%\doc\ > nul
-@if %ERRORLEVEL% GEQ 1 (
-  call :ERROR COPY of main documentation tree failed with error %ERRORLEVEL%
+@if ERRORLEVEL 1 (
+  call :ERROR COPY of main documentation tree failed.
   goto :EOF
 )
 
@@ -272,16 +274,16 @@ if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
 for %%d in ( v3.0 v4.0 ) do (
     mkdir %FB_OUTPUT_DIR%\misc\upgrade\%%d 2>nul
     @copy %FB_ROOT_PATH%\src\misc\upgrade\%%d\*.* %FB_OUTPUT_DIR%\misc\upgrade\%%d > nul
-    @if %ERRORLEVEL% GEQ 1 (
-        call :ERROR copy %FB_ROOT_PATH%\src\misc\upgrade\%%d\*.* %FB_OUTPUT_DIR%\misc\upgrade\%%d failed with error %ERRORLEVEL%.
+    @if ERRORLEVEL 1 (
+        call :ERROR copy %FB_ROOT_PATH%\src\misc\upgrade\%%d\*.* %FB_OUTPUT_DIR%\misc\upgrade\%%d failed.
         goto :EOF
     )
 )
 
 :: INTL script
 @copy %FB_ROOT_PATH%\src\misc\intl.sql %FB_OUTPUT_DIR%\misc\ > nul
-@if %ERRORLEVEL% GEQ 1 (
-  call :ERROR copy %FB_ROOT_PATH%\src\misc\intl.sql %FB_OUTPUT_DIR%\misc failed with error %ERRORLEVEL%.
+@if ERRORLEVEL 1 (
+  call :ERROR copy %FB_ROOT_PATH%\src\misc\intl.sql %FB_OUTPUT_DIR%\misc failed.
   goto :EOF
 )
 
@@ -298,38 +300,36 @@ for %%d in ( v3.0 v4.0 ) do (
 ::)
 
 @mkdir %FB_OUTPUT_DIR%\doc\sql.extensions 2>nul
-@if %ERRORLEVEL% GEQ 2 ( (call :ERROR MKDIR for doc\sql.extensions dir failed) & (@goto :EOF))
+@if ERRORLEVEL 2 ( ( call :ERROR MKDIR for doc\sql.extensions dir failed) & ( goto :EOF ) )
 @copy %FB_ROOT_PATH%\doc\sql.extensions\*.* %FB_OUTPUT_DIR%\doc\sql.extensions\ > nul
-@if %ERRORLEVEL% GEQ 1 ( (call :ERROR Copying doc\sql.extensions failed  ) & (goto :EOF))
+@if ERRORLEVEL 1 ( ( call :ERROR Copying doc\sql.extensions failed  ) & ( goto :EOF ) )
 
 :: External docs aren't necessary for a snapshot build, so we don't throw
 :: an error if FB_EXTERNAL_DOCS is not defined. On the other hand,
-:: if the docs are available then we can include them.
-if defined FB_EXTERNAL_DOCS (
-    @echo   Copying pdf docs...
-    @for %%v in ( Firebird_v%FB_MAJOR_VER%.%FB_MINOR_VER%.%FB_REV_NO%.ReleaseNotes.pdf ) do (
-        @echo     ... %%v
-        @copy /Y %FB_EXTERNAL_DOCS%\%%v %FB_OUTPUT_DIR%\doc\%%v > nul
-        if %ERRORLEVEL% GEQ 1 (call :ERROR Copying %FB_EXTERNAL_DOCS%\%%v failed.)
+:: if the docs are available then we must include them.
+@if defined FB_EXTERNAL_DOCS (
+    echo   Copying pdf docs...
+    for %%v in ( Firebird-%FB_MAJOR_VER%.%FB_MINOR_VER%.%FB_REV_NO%%FBBUILD_FILENAME_SUFFIX%-ReleaseNotes.pdf ) do (
+        echo     ... %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v
+        copy /Y %FB_EXTERNAL_DOCS%\%%v %FB_OUTPUT_DIR%\doc\%%v > nul
+        if ERRORLEVEL 1 ( call :ERROR Copying %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v FAILED. & (@goto :EOF) )
     )
 
-    @for %%v in ( Firebird-%FB_MAJOR_VER%.%FB_MINOR_VER%-QuickStart.pdf  ) do (
-        @echo     ... %%v
-        @copy /Y %FB_EXTERNAL_DOCS%\%%v %FB_OUTPUT_DIR%\doc\%%v > nul
-        if %ERRORLEVEL% GEQ 1 (
+    for %%v in ( Firebird-%FB_MAJOR_VER%.%FB_MINOR_VER%-QuickStart.pdf  ) do (
+        echo     ... %%v
+        copy /Y %FB_EXTERNAL_DOCS%\%%v %FB_OUTPUT_DIR%\doc\%%v > nul
+        if ERRORLEVEL 1 (
             REM - As of RC1 there is no quick start guide so we do not want
             REM   the packaging to fail for something that doesn't exist
             if "%FBBUILD_FILENAME_SUFFIX%" == "-RC1" (
                 echo Copying %FB_EXTERNAL_DOCS%\%%v failed.
             ) else (
-                call :ERROR Copying %FB_EXTERNAL_DOCS%\%%v failed.
+                call :WARNING Copying %FB_EXTERNAL_DOCS%\%%v failed.
             )
         )
     )
-
-
-@echo   Finished copying pdf docs...
-@echo.
+    echo   Finished copying pdf docs...
+    echo.
 )
 
 @echo   Cleaning irrelevant files...
@@ -384,11 +384,11 @@ if %FB2_SNAPSHOT% EQU 1 (
 @if %MSVC_VERSION% EQU 15 (
   if not exist %FB_OUTPUT_DIR%\system32\vccrt%MSVC_RUNTIME_LIBRARY_VERSION%_%FB_TARGET_PLATFORM%.msi (
     "%WIX%\bin\candle.exe" -v -sw1091 %FB_ROOT_PATH%\builds\win32\msvc%MSVC_VERSION%\VCCRT_%FB_TARGET_PLATFORM%.wxs -out %FB_GEN_DIR%\vccrt_%FB_TARGET_PLATFORM%.wixobj
-    @if %ERRORLEVEL% GEQ 1 (
+    @if ERRORLEVEL 1 (
         ( call :ERROR Could not generate wixobj for MSVC Runtime MSI ) & (goto :EOF)
     ) else (
         "%WIX%\bin\light.exe" -sw1076 %FB_GEN_DIR%\vccrt_%FB_TARGET_PLATFORM%.wixobj -out %FB_OUTPUT_DIR%\system32\vccrt%MSVC_RUNTIME_LIBRARY_VERSION%_%FB_TARGET_PLATFORM%.msi
-        @if %ERRORLEVEL% GEQ 1 ( (call :ERROR Could not generate MSVCC Runtime MSI %MSVC_RUNTIME_LIBRARY_VERSION% ) & (goto :EOF))
+        @if ERRORLEVEL 1 ( ( call :ERROR Could not generate MSVCC Runtime MSI %MSVC_RUNTIME_LIBRARY_VERSION% ) & ( goto :EOF ) )
     )
   ) else (
     @echo   Using an existing build of %FB_OUTPUT_DIR%\system32\vccrt%MSVC_RUNTIME_LIBRARY_VERSION%_%FB_TARGET_PLATFORM%.msi
@@ -414,7 +414,7 @@ setlocal
 set OUTPATH=%FB_OUTPUT_DIR%\include
 @copy %FB_ROOT_PATH%\src\yvalve\perf.h %OUTPATH%\ > nul
 @copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\ > nul || (@call :ERROR Failure executing copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\  )
-@if %ERRLEV% GEQ 1 goto :END
+@if ERRORLEVEL 1 goto :END
 
 endlocal
 
@@ -440,8 +440,8 @@ copy %FB_ROOT_PATH%\builds\install\misc\databases.conf %FB_OUTPUT_DIR%\databases
 :: in builds\win32 by build_msg.bat. Copying from there to output dir
 ::=================================================================
 @if not exist %FB_OUTPUT_DIR%\firebird.msg (
-    (@copy %FB_GEN_DIR%\firebird.msg %FB_OUTPUT_DIR%\firebird.msg > nul)
-    (@if %ERRORLEVEL% GEQ 1 ( (call :ERROR Could not copy firebird.msg ) & (goto :EOF)))
+    (copy %FB_GEN_DIR%\firebird.msg %FB_OUTPUT_DIR%\firebird.msg > nul)
+    (if ERRORLEVEL 1 ( ( call :ERROR Could not copy firebird.msg ) & ( goto :EOF ) ) )
 )
 
 ::End of FB_MSG
@@ -470,9 +470,9 @@ setlocal DisableDelayedExpansion
 set SKIP_FILES=-x!*.log -x!*.exp -x!*_test.exe -x!installation_readme.txt
 
 if "%FBBUILD_SHIP_PDB%" == "ship_pdb" (
-    set FBBUILD_ZIPFILE=%FBBUILD_INSTALL_IMAGES%\Firebird-%FBBUILD_FILE_ID%-withDebugSymbols%FBBUILD_FILENAME_SUFFIX%.zip
+    set FBBUILD_ZIPFILE=%FBBUILD_INSTALL_IMAGES%\Firebird-%FBBUILD_FILE_ID%-withDebugSymbols.zip
 ) else (
-    set FBBUILD_ZIPFILE=%FBBUILD_INSTALL_IMAGES%\Firebird-%FBBUILD_FILE_ID%%FBBUILD_FILENAME_SUFFIX%.zip
+    set FBBUILD_ZIPFILE=%FBBUILD_INSTALL_IMAGES%\Firebird-%FBBUILD_FILE_ID%.zip
     set SKIP_FILES=%SKIP_FILES% -x!*.pdb
 )
 
@@ -547,16 +547,19 @@ if not defined MD5_COMMAND (
   call :WARNING md5sum utility not found. Cannot generate md5 sums.
   @goto :EOF
 )
-@echo Generating md5sums for Firebird-%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%
+set FBBUILD_MD5SUMS_FILENAME=Firebird-%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows.md5sum
+@echo Generating md5sums for %FBBUILD_MD5SUMS_FILENAME%
 
 :: write sums into temporary file to avoid including it into the process
 pushd %FBBUILD_INSTALL_IMAGES%
-call %MD5_COMMAND% Firebird-%PRODUCT_VER_STRING%?%FBBUILD_PACKAGE_NUMBER%*.* >md5sum.tmp
+call %MD5_COMMAND% Firebird-%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%*.* > md5sum.tmp
 
 :: then rename it to the proper name
-if not errorlevel 1 (
-  del Firebird-%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%.md5sum >nul 2>nul
-  ren md5sum.tmp Firebird-%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%.md5sum
+if not ERRORLEVEL 1 (
+  del %FBBUILD_MD5SUMS_FILENAME% >nul 2>nul
+  ren md5sum.tmp %FBBUILD_MD5SUMS_FILENAME%
+) else (
+     (@echo Error calling %0 & popd & @goto :END)
 )
 popd
 
@@ -621,20 +624,19 @@ popd
 
 :ERROR
 ::====
-:: errorlevel gets reset automatically so capture it before we lose it.
-set ERRLEV=%errorlevel%
+set ERRLEV=%ERRORLEVEL%
 @echo.
-@echo   Error %ERRLEV% in BuildExecutableInstall
+@echo   Error code %ERRLEV% in %SCRIPT_SHORT_NAME%
 @echo     %*
 @echo.
 ::End of ERROR
 ::------------
-@goto :EOF
+@goto :END
 
 
 :WARNING
 ::======
-set ERRLEV=%errorlevel%
+set ERRLEV=%ERRORLEVEL%
 @echo.
 @echo   **** WARNING - Execution of a non-critical component failed with error level %ERRLEV%. ****
 @echo   %*
@@ -645,8 +647,11 @@ if "%FBBUILD_PROD_STATUS%"=="PROD" (
 @echo   Error %ERRLEV% must be fixed before continuing
 @echo.
 ) else (
-set ERRLEV=0
+set ERRLEV=
+@ver > nul
 )
+::End of WARNING
+::--------------
 @goto :EOF
 
 
@@ -662,15 +667,15 @@ for %%v in ( %1 %2 %3 %4 %5 %6 %7 %8 %9 )  do (
 pushd ..\..\..\win32
 ::This must be called from the directory it resides in.
 @call setenvvar.bat %*
+@if ERRORLEVEL 1 (popd & (call :ERROR Failure after calling setenvvar.bat ) & goto :END )
 popd
-@if errorlevel 1 (goto :END)
 
 @if not defined FB2_ISS_DEBUG (set FB2_ISS_DEBUG=0)
 
 @echo.
 @echo   Reading command-line parameters...
 @(@call :SET_PARAMS %* )
-@if "%ERRLEV%"=="1" (@goto :ERROR %errorlevel% calling SET_PARAMS && @goto :END)
+@if ERRORLEVEL 1 (@call :ERROR Calling SET_PARAMS & goto :END)
 
 @echo.
 @echo   Checking that all required components are available...
@@ -730,10 +735,13 @@ if %FBBUILD_ISX_PACK% EQU 1 (
 
 @(@call :DO_MD5SUMS ) || (@echo Error calling DO_MD5SUMS && @goto :END)
 
-
 @echo.
 @echo Completed building installation kit(s)
 @echo.
+
+:: If we got this far then be sure to reset ERRLEV
+:: because run_all.bat will check for ERRLEV
+@set ERRLEV=
 
 ::@if %FB2_ISS_DEBUG% equ 0 (ENDLOCAL)
 ::End of MAIN

@@ -218,7 +218,7 @@ UTIL_Objects:= $(call makeObjects,extlib,ib_util.cpp)
 # UDR backward compatible with distributed UDFs
 COMPAT_Objects:= $(call makeObjects,extlib,UdfBackwardCompatibility.cpp)
 SRC_COMPAT_SQL:= $(SRC_ROOT)/extlib/UdfBackwardCompatibility.sql
-COMPAT_SQL:= $(PLUGINS)/udr/udf_compat.sql
+COMPAT_SQL?= $(call buildSubDirectory,plugins/udr)/udf_compat.sql
 
 AllObjects += $(UTIL_Objects) $(COMPAT_Objects)
 

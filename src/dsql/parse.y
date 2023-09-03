@@ -690,6 +690,7 @@ using namespace Firebird;
 
 %token <metaNamePtr> LOCKED
 %token <metaNamePtr> OPTIMIZE
+%token <metaNamePtr> QUARTER
 %token <metaNamePtr> TARGET
 %token <metaNamePtr> TIMEZONE_NAME
 %token <metaNamePtr> UNICODE_CHAR
@@ -5940,19 +5941,23 @@ query_primary
 		{
 			if ($3 || $4 || $5)
 			{
-				SelectExprNode* node = newNode<SelectExprNode>();
-				node->querySpec = $2;
-				node->orderClause = $3;
+				const auto selectExpr = newNode<SelectExprNode>();
+				selectExpr->dsqlFlags |= RecordSourceNode::DFLAG_DERIVED;
+				selectExpr->querySpec = $2;
+				selectExpr->orderClause = $3;
 
 				if ($4 || $5)
 				{
-					RowsClause* rowsNode = newNode<RowsClause>();
+					const auto rowsNode = newNode<RowsClause>();
 					rowsNode->skip = $4;
 					rowsNode->length = $5;
-					node->rowsClause = rowsNode;
+					selectExpr->rowsClause = rowsNode;
 				}
 
-				$$ = node;
+				const auto rse = newNode<RseNode>();
+				rse->dsqlFlags |= RecordSourceNode::DFLAG_BODY_WRAPPER;
+				rse->dsqlFrom = newNode<RecSourceListNode>(selectExpr);
+				$$ = rse;
 			}
 			else
 				$$ = $2;
@@ -6070,20 +6075,26 @@ table_reference
 %type <recSourceNode> table_primary
 table_primary
 	: table_proc
-	| derived_table			{ $$ = $1; }
-	| lateral_derived_table	{ $$ = $1; }
-	| '(' joined_table ')'	{ $$ = $2; }
+	| derived_table					{ $$ = $1; }
+	| lateral_derived_table			{ $$ = $1; }
+	| parenthesized_joined_table	{ $$ = $1; }
+	;
+
+%type <recSourceNode> parenthesized_joined_table
+parenthesized_joined_table
+	: '(' parenthesized_joined_table ')'	{ $$ = $2; }
+	| '(' joined_table ')'					{ $$ = $2; }
 	;
 
 %type <selectExprNode> derived_table
 derived_table
-	: '(' select_expr ')' as_noise correlation_name derived_column_list
+	: '(' select_expr ')' correlation_name_opt derived_column_list
 		{
 			$$ = $2;
 			$$->dsqlFlags |= RecordSourceNode::DFLAG_DERIVED;
-			if ($5)
-				$$->alias = $5->c_str();
-			$$->columns = $6;
+			if ($4)
+				$$->alias = $4->c_str();
+			$$->columns = $5;
 		}
 	;
 
@@ -6096,10 +6107,11 @@ lateral_derived_table
 		}
 	;
 
-%type <metaNamePtr> correlation_name
-correlation_name
-	: /* nothing */				{ $$ = NULL; }
+%type <metaNamePtr> correlation_name_opt
+correlation_name_opt
+	: /* nothing */					{ $$ = nullptr; }
 	| symbol_table_alias_name
+	| AS symbol_table_alias_name	{ $$ = $2; }
 	;
 
 %type <metaNameArray> derived_column_list
@@ -8468,6 +8480,7 @@ encrypt_decrypt
 %type <blrOp> of_first_last_day_part
 of_first_last_day_part
 	: OF YEAR			{ $$ = blr_extract_year; }
+	| OF QUARTER		{ $$ = blr_extract_quarter; }
 	| OF MONTH			{ $$ = blr_extract_month; }
 	| OF WEEK			{ $$ = blr_extract_week; }
 	;
@@ -8713,6 +8726,7 @@ next_value_expression
 %type <blrOp> timestamp_part
 timestamp_part
 	: YEAR			{ $$ = blr_extract_year; }
+	| QUARTER		{ $$ = blr_extract_quarter; }
 	| MONTH			{ $$ = blr_extract_month; }
 	| DAY			{ $$ = blr_extract_day; }
 	| HOUR			{ $$ = blr_extract_hour; }
@@ -9192,6 +9206,7 @@ non_reserved_word
 	// added in FB 5.0
 	| LOCKED
 	| OPTIMIZE
+	| QUARTER
 	| TARGET
 	| TIMEZONE_NAME
 	| UNICODE_CHAR

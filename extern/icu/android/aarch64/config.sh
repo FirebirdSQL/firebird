@@ -19,9 +19,9 @@
     --with-cross-build=$CROSS_BUILD_DIR \
     CFLAGS='-Os' \
     CXXFLAGS='--std=c++17' \
-    LDFLAGS='-static-libstdc++' \
+    LDFLAGS='-static-libstdc++ -Wl,-rpath=\$$ORIGIN' \
     CC=aarch64-linux-android24-clang \
     CXX=aarch64-linux-android24-clang++ \
-    AR=aarch64-linux-android-ar \
-    RANLIB=aarch64-linux-android-ranlib \
+    AR=llvm-ar \
+    RANLIB=llvm-ranlib \
     --with-data-packaging=archive

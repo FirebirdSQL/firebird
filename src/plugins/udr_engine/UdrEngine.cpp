@@ -275,7 +275,6 @@ public:
 		  info(*getDefaultMemoryPool()),
 		  children(*getDefaultMemoryPool())
 	{
-		engine->addRef();
 		module = engine->loadModule(status, metadata, &moduleName, &entryPoint);
 
 		IUdrFunctionFactory* factory = engine->findNode<IUdrFunctionFactory>(
@@ -312,7 +311,7 @@ public:
 	}
 
 public:
-	AutoPlugin<Engine> engine;
+	Engine* engine;
 	IRoutineMetadata* metadata;
 	PathName moduleName;
 	string entryPoint;
@@ -338,7 +337,6 @@ public:
 		  info(*getDefaultMemoryPool()),
 		  children(*getDefaultMemoryPool())
 	{
-		engine->addRef();
 		module = engine->loadModule(status, metadata, &moduleName, &entryPoint);
 
 		IUdrProcedureFactory* factory = engine->findNode<IUdrProcedureFactory>(
@@ -375,7 +373,7 @@ public:
 	}
 
 public:
-	AutoPlugin<Engine> engine;
+	Engine* engine;
 	IRoutineMetadata* metadata;
 	PathName moduleName;
 	string entryPoint;
@@ -400,7 +398,6 @@ public:
 		  info(*getDefaultMemoryPool()),
 		  children(*getDefaultMemoryPool())
 	{
-		engine->addRef();
 		module = engine->loadModule(status, metadata, &moduleName, &entryPoint);
 
 		IUdrTriggerFactory* factory = engine->findNode<IUdrTriggerFactory>(
@@ -438,7 +435,7 @@ public:
 	}
 
 public:
-	AutoPlugin<Engine> engine;
+	Engine* engine;
 	IRoutineMetadata* metadata;
 	PathName moduleName;
 	string entryPoint;

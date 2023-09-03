@@ -50,7 +50,7 @@ public:
 
 	void setRule(const TypeClause* from, const TypeClause *to);
 	dsc* makeLegacy(USHORT mask = 0);
-	bool coerce(dsc* d) const;
+	bool coerce(thread_db* tdbb, dsc* d) const;
 	bool match(const dsc* d) const;
 	bool operator==(const CoercionRule& rule) const;
 
@@ -68,7 +68,7 @@ public:
 	{
 	}
 
-	bool coerce(dsc* d, unsigned startItem = 0) const;
+	bool coerce(thread_db* tdbb, dsc* d, unsigned startItem = 0) const;
 	void setRule(const TypeClause* from, const TypeClause *to);
 };
 

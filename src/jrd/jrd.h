@@ -771,22 +771,20 @@ class ThreadContextHolder
 {
 public:
 	explicit ThreadContextHolder(Firebird::CheckStatusWrapper* status = NULL)
-		: currentStatus(status ? status : &localStatus), context(currentStatus)
+		: context(status ? status : &localStatus)
 	{
 		context.putSpecific();
-		currentStatus->init();
 
 		if (!cds::threading::Manager::isThreadAttached())
 			cds::threading::Manager::attachThread();
 	}
 
 	ThreadContextHolder(Database* dbb, Jrd::Attachment* att, FbStatusVector* status = NULL)
-		: currentStatus(status ? status : &localStatus), context(currentStatus)
+		: context(status ? status : &localStatus)
 	{
 		context.putSpecific();
 		context.setDatabase(dbb);
 		context.setAttachment(att);
-		currentStatus->init();
 
 		if (!cds::threading::Manager::isThreadAttached())
 			cds::threading::Manager::attachThread();
@@ -813,7 +811,6 @@ private:
 	ThreadContextHolder& operator= (const ThreadContextHolder&);
 
 	Firebird::FbLocalStatus localStatus;
-	FbStatusVector* currentStatus;
 	thread_db context;
 };
 
@@ -1147,15 +1144,18 @@ namespace Jrd {
 			}
 		}
 
-		EngineCheckout(Attachment* att, const char* from, bool optional = false)
+		EngineCheckout(Attachment* att, const char* from, Type type = REQUIRED)
 			: m_tdbb(nullptr), m_from(from)
 		{
-			fb_assert(optional || att);
-
-			if (att && att->att_use_count)
+			if (type != AVOID)
 			{
-				m_ref = att->getStable();
-				m_ref->getSync()->leave();
+				fb_assert(type == UNNECESSARY || att);
+
+				if (att && att->att_use_count)
+				{
+					m_ref = att->getStable();
+					m_ref->getSync()->leave();
+				}
 			}
 		}
 

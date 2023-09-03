@@ -105,7 +105,7 @@ public:
 	Statement* parentStatement;		// Sub routine's parent statement
 	Firebird::Array<Statement*> subStatements;	// Array of subroutines' statements
 	const StmtNode* topNode;			// top of execution tree
-	Firebird::Array<const RecordSource*> fors;	// record sources
+	Firebird::Array<const Select*> fors;	// select expressions
 	Firebird::Array<const DeclareLocalTableNode*> localTables;	// local tables
 	Firebird::Array<ULONG*> invariants;	// pointer to nodes invariant offsets
 	Firebird::RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)

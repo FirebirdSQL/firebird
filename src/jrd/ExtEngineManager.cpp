@@ -279,8 +279,10 @@ namespace
 	class MessageMoverNode : public CompoundStmtNode
 	{
 	public:
-		MessageMoverNode(MemoryPool& pool, MessageNode* fromMessage, MessageNode* toMessage)
-			: CompoundStmtNode(pool)
+		MessageMoverNode(MemoryPool& pool, MessageNode* fromMessage, MessageNode* toMessage,
+					MessageNode* aCheckMessageEof = nullptr)
+			: CompoundStmtNode(pool),
+			  checkMessageEof(aCheckMessageEof)
 		{
 			// Iterate over the format items, except the EOF item.
 			for (USHORT i = 0; i < (fromMessage->format->fmt_count / 2) * 2; i += 2)
@@ -314,6 +316,25 @@ namespace
 				assign->asgnTo = param;
 			}
 		}
+
+		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override
+		{
+			if (checkMessageEof &&
+				request->req_operation == Request::req_evaluate &&
+				(request->req_flags & req_proc_select))
+			{
+				const auto msg = request->getImpure<UCHAR>(checkMessageEof->impureOffset);
+				const auto eof = (SSHORT*) (msg + (IPTR) checkMessageEof->format->fmt_desc.back().dsc_address);
+
+				if (!*eof)
+					request->req_operation = Request::req_return;
+			}
+
+			return CompoundStmtNode::execute(tdbb, request, exeState);
+		}
+
+	private:
+		MessageNode* checkMessageEof;
 	};
 
 	// External function node.
@@ -362,7 +383,8 @@ namespace
 		{
 			SuspendNode* suspend = FB_NEW_POOL(pool) SuspendNode(pool);
 			suspend->message = intOutMessageNode;
-			suspend->statement = FB_NEW_POOL(pool) MessageMoverNode(pool, extOutMessageNode, intOutMessageNode);
+			suspend->statement = FB_NEW_POOL(pool) MessageMoverNode(pool,
+				extOutMessageNode, intOutMessageNode, intOutMessageNode);
 
 			statements.add(suspend);
 			statements.add(FB_NEW_POOL(pool) StallNode(pool));
@@ -381,34 +403,37 @@ namespace
 			switch (request->req_operation)
 			{
 				case Request::req_evaluate:
+					impure->sta_state = 0;
+					*eof = 0;
+
 					fb_assert(!resultSet);
 					resultSet = procedure->open(tdbb, extInMsg, extOutMsg);
 
 					if (!resultSet)
-					{
-						*eof = 0;
 						break;
-					}
-					else
-						*eof = -1;
 					// fall into
 
 				case Request::req_proceed:
 				case Request::req_sync:
+					*eof = 0;
 					if (resultSet)
 					{
 						if (resultSet->fetch(tdbb) && (request->req_flags & req_proc_fetch))
 							*eof = -1;
 						else
 						{
-							*eof = 0;
 							delete resultSet;
 							resultSet = NULL;
 						}
 					}
 
 					impure->sta_state = 0;	// suspend node
-					request->req_operation = Request::req_sync;
+
+					if (!*eof)
+						request->req_operation = Request::req_return;
+					else
+						request->req_operation = Request::req_sync;
+
 					break;
 
 				case Request::req_unwind:
@@ -712,15 +737,26 @@ void* ExtEngineManager::ExternalContextImpl::setInfo(int code, void* value)
 //---------------------
 
 
-ExtEngineManager::Function::Function(thread_db* tdbb, ExtEngineManager* aExtManager,
-		IExternalEngine* aEngine, RoutineMetadata* aMetadata, IExternalFunction* aFunction,
-		const Jrd::Function* aUdf)
+ExtEngineManager::ExtRoutine::ExtRoutine(thread_db* tdbb, ExtEngineManager* aExtManager,
+		IExternalEngine* aEngine, RoutineMetadata* aMetadata)
 	: extManager(aExtManager),
 	  engine(aEngine),
 	  metadata(aMetadata),
-	  function(aFunction),
-	  udf(aUdf),
 	  database(tdbb->getDatabase())
+{
+	engine->addRef();
+}
+
+
+//---------------------
+
+
+ExtEngineManager::Function::Function(thread_db* tdbb, ExtEngineManager* aExtManager,
+		IExternalEngine* aEngine, RoutineMetadata* aMetadata, IExternalFunction* aFunction,
+		const Jrd::Function* aUdf)
+	: ExtRoutine(tdbb, aExtManager, aEngine, aMetadata),
+	  function(aFunction),
+	  udf(aUdf)
 {
 }
 
@@ -755,12 +791,9 @@ void ExtEngineManager::Function::execute(thread_db* tdbb, UCHAR* inMsg, UCHAR* o
 ExtEngineManager::Procedure::Procedure(thread_db* tdbb, ExtEngineManager* aExtManager,
 	    IExternalEngine* aEngine, RoutineMetadata* aMetadata, IExternalProcedure* aProcedure,
 		const jrd_prc* aPrc)
-	: extManager(aExtManager),
-	  engine(aEngine),
-	  metadata(aMetadata),
+	: ExtRoutine(tdbb, aExtManager, aEngine, aMetadata),
 	  procedure(aProcedure),
-	  prc(aPrc),
-	  database(tdbb->getDatabase())
+	  prc(aPrc)
 {
 }
 
@@ -845,15 +878,12 @@ bool ExtEngineManager::ResultSet::fetch(thread_db* tdbb)
 ExtEngineManager::Trigger::Trigger(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 			ExtEngineManager* aExtManager, IExternalEngine* aEngine, RoutineMetadata* aMetadata,
 			IExternalTrigger* aTrigger, const Jrd::Trigger* aTrg)
-	: computedStatements(pool),
-	  extManager(aExtManager),
-	  engine(aEngine),
-	  metadata(aMetadata),
+	: ExtRoutine(tdbb, aExtManager, aEngine, aMetadata),
+	  computedStatements(pool),
 	  trigger(aTrigger),
 	  trg(aTrg),
 	  fieldsPos(pool),
 	  varDecls(pool),
-	  database(tdbb->getDatabase()),
 	  computedCount(0)
 {
 	jrd_rel* relation = trg->relation;
@@ -1135,6 +1165,12 @@ namespace
 		}
 
 	public:
+		int release() override
+		{
+			// Never delete static instance of SystemEngine
+			return 1;
+		}
+
 		void open(ThrowStatusExceptionWrapper* status, IExternalContext* context,
 			char* name, unsigned nameSize) override
 		{
@@ -1252,25 +1288,28 @@ void ExtEngineManager::closeAttachment(thread_db* tdbb, Attachment* attachment)
 				FbLocalStatus status;
 				engine->closeAttachment(&status, attInfo->context);	//// FIXME: log status
 
-				// Check whether the engine is used by other attachments.
+				// Check whether a non-SYSTEM engine is used by other attachments.
 				// If no one uses, release it.
-				bool close = true;
-				WriteLockGuard writeGuard(enginesLock, FB_FUNCTION);
-
-				EnginesAttachmentsMap::Accessor ea_accessor(&enginesAttachments);
-				for (bool ea_found = ea_accessor.getFirst(); ea_found; ea_found = ea_accessor.getNext())
+				if (engine != SystemEngine::INSTANCE)
 				{
-					if (ea_accessor.current()->first.engine == engine)
+					bool close = true;
+					WriteLockGuard writeGuard(enginesLock, FB_FUNCTION);
+
+					EnginesAttachmentsMap::Accessor ea_accessor(&enginesAttachments);
+					for (bool ea_found = ea_accessor.getFirst(); ea_found; ea_found = ea_accessor.getNext())
 					{
-						close = false; // engine is in use, no need to release
-						break;
+						if (ea_accessor.current()->first.engine == engine)
+						{
+							close = false; // engine is in use, no need to release
+							break;
+						}
 					}
-				}
 
-				if (close)
-				{
-					if (engines.remove(accessor.current()->first)) // If engine has already been deleted - nothing to do
-						PluginManagerInterfacePtr()->releasePlugin(engine);
+					if (close)
+					{
+						if (engines.remove(accessor.current()->first)) // If engine has already been deleted - nothing to do
+							PluginManagerInterfacePtr()->releasePlugin(engine);
+					}
 				}
 			}
 

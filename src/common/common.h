@@ -143,6 +143,10 @@
 #define FB_CPU CpuRiscV64
 #endif /* RISCV64 */
 
+#ifdef LOONGARCH
+#define FB_CPU CpuLoongArch
+#endif /* LOONGARCH */
+
 #ifdef sparc
 #define FB_CPU CpuUltraSparc
 #define RISC_ALIGNMENT
@@ -285,6 +289,14 @@
 
 #ifdef PPC64EL
 #define FB_CPU CpuPowerPc64el
+#endif
+
+#ifdef PPC64
+#define FB_CPU CpuPowerPc64
+#endif
+
+#ifdef PPC
+#define FB_CPU CpuPowerPc
 #endif
 
 #if defined(i386) || defined(__i386) || defined(__i386__)

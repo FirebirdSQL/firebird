@@ -289,14 +289,28 @@ bool ExprNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 	return true;
 }
 
-bool ExprNode::possiblyUnknown(const StreamList& streams) const
+bool ExprNode::possiblyUnknown() const
 {
 	NodeRefsHolder holder;
 	getChildren(holder, false);
 
 	for (auto i : holder.refs)
 	{
-		if (*i && (*i)->possiblyUnknown(streams))
+		if (*i && (*i)->possiblyUnknown())
+			return true;
+	}
+
+	return false;
+}
+
+bool ExprNode::ignoreNulls(const StreamList& streams) const
+{
+	NodeRefsHolder holder;
+	getChildren(holder, false);
+
+	for (auto i : holder.refs)
+	{
+		if (*i && (*i)->ignoreNulls(streams))
 			return true;
 	}
 
@@ -4989,6 +5003,17 @@ DmlNode* DerivedExprNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScrat
 	return node;
 }
 
+void DerivedExprNode::collectStreams(SortedStreamList& streamList) const
+{
+	arg->collectStreams(streamList);
+
+	for (const auto i : internalStreamList)
+	{
+		if (!streamList.exist(i))
+			streamList.add(i);
+	}
+}
+
 bool DerivedExprNode::computable(CompilerScratch* csb, StreamType stream,
 	bool allowOnlyCurrentStream, ValueExprNode* /*value*/)
 {
@@ -5251,6 +5276,7 @@ ValueExprNode* ExtractNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	switch (blrSubOp)
 	{
 		case blr_extract_year:
+		case blr_extract_quarter:
 		case blr_extract_month:
 		case blr_extract_day:
 		case blr_extract_weekday:
@@ -5575,6 +5601,10 @@ dsc* ExtractNode::execute(thread_db* tdbb, Request* request) const
 
 		case blr_extract_year:
 			part = times.tm_year + 1900;
+			break;
+
+		case blr_extract_quarter:
+			part = times.tm_mon / 3 + 1;
 			break;
 
 		case blr_extract_month:
@@ -6539,8 +6569,6 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
 	StreamType stream = fieldStream;
 
-	markVariant(csb, stream);
-
 	CompilerScratch::csb_repeat* tail = &csb->csb_rpt[stream];
 	jrd_rel* relation = tail->csb_relation;
 	jrd_fld* field;
@@ -6551,6 +6579,7 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		if (relation && (relation->rel_flags & REL_being_scanned))
 			csb->csb_g_flags |= csb_reload;
 
+		markVariant(csb, stream);
 		return ValueExprNode::pass1(tdbb, csb);
 	}
 
@@ -6628,9 +6657,11 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	if (!(sub = field->fld_computation) && !(sub = field->fld_source))
 	{
-
 		if (!relation->rel_view_rse)
+		{
+			markVariant(csb, stream);
 			return ValueExprNode::pass1(tdbb, csb);
+		}
 
 		// Msg 364 "cannot access column %s in view %s"
 		ERR_post(Arg::Gds(isc_no_field_access) << Arg::Str(field->fld_name) <<
@@ -6651,7 +6682,10 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		// dimitr:	added an extra check for views, because we don't
 		//			want their old/new contexts to be substituted
 		if (relation->rel_view_rse || !field->fld_computation)
+		{
+			markVariant(csb, stream);
 			return ValueExprNode::pass1(tdbb, csb);
+		}
 	}
 
 	StreamMap localMap;
@@ -6758,11 +6792,7 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	if (computingField)
 	{
-		FB_SIZE_T pos;
-
-		if (csb->csb_computing_fields.find(field, pos))
-			csb->csb_computing_fields.remove(pos);
-		else
+		if (!csb->csb_computing_fields.findAndRemove(field))
 			fb_assert(false);
 	}
 
@@ -11024,6 +11054,7 @@ DmlNode* SubQueryNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch*
 	SubQueryNode* node = FB_NEW_POOL(pool) SubQueryNode(pool, (blrOp == blr_from ? blr_via : blrOp));
 
 	node->rse = PAR_rse(tdbb, csb);
+	node->rse->flags |= RseNode::FLAG_SUB_QUERY;
 
 	if (blrOp != blr_count)
 		node->value1 = PAR_parse_value(tdbb, csb);
@@ -11037,6 +11068,12 @@ DmlNode* SubQueryNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch*
 
 		if (csb->csb_currentDMLNode)
 			node->ownSavepoint = false;
+
+		if (!csb->csb_currentForNode && !csb->csb_currentDMLNode &&
+			(csb->csb_g_flags & csb_computed_field))
+		{
+			node->ownSavepoint = false;
+		}
 	}
 
 	return node;
@@ -11085,6 +11122,9 @@ ValueExprNode* SubQueryNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	SubQueryNode* node = FB_NEW_POOL(dsqlScratch->getPool()) SubQueryNode(dsqlScratch->getPool(), blrOp, rse,
 		rse->dsqlSelectList->items[0], NullNode::instance());
 
+	node->line = line;
+	node->column = column;
+
 	// Finish off by cleaning up contexts.
 	dsqlScratch->context->clear(base);
 
@@ -11099,7 +11139,10 @@ void SubQueryNode::setParameterName(dsql_par* parameter) const
 void SubQueryNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->appendUChar(blrOp);
+
+	dsqlScratch->putDebugSrcInfo(line, column);
 	GEN_expr(dsqlScratch, dsqlRse);
+
 	GEN_expr(dsqlScratch, value1);
 	GEN_expr(dsqlScratch, value2);
 }
@@ -11308,11 +11351,13 @@ ValueExprNode* SubQueryNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	if (!rse)
 		ERR_post(Arg::Gds(isc_wish_list));
 
-	if (!(rse->flags & RseNode::FLAG_VARIANT))
+	if (rse->isInvariant())
 	{
 		nodFlags |= FLAG_INVARIANT;
 		csb->csb_invariants.push(&impureOffset);
 	}
+
+	AutoSetCurrentCursorId autoSetCurrentCursorId(csb);
 
 	rse->pass2Rse(tdbb, csb);
 
@@ -11324,6 +11369,7 @@ ValueExprNode* SubQueryNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 		dsc desc;
 		getDesc(tdbb, csb, &desc);
 	}
+
 	if (blrOp == blr_average && !(nodFlags & FLAG_DECFLOAT))
 		nodFlags |= FLAG_DOUBLE;
 
@@ -11345,9 +11391,8 @@ ValueExprNode* SubQueryNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	// Finish up processing of record selection expressions.
 
 	RecordSource* const rsb = CMP_post_rse(tdbb, csb, rse);
-	csb->csb_fors.add(rsb);
-
-	subQuery = FB_NEW_POOL(*tdbb->getDefaultPool()) SubQuery(rsb, rse->rse_invariants);
+	subQuery = FB_NEW_POOL(*tdbb->getDefaultPool()) SubQuery(csb, rsb, rse);
+	csb->csb_fors.add(subQuery);
 
 	return this;
 }
@@ -12852,10 +12897,11 @@ void UdfCallNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 	// pointer.
 	desc->setNullable(true);
 
-	if (desc->dsc_dtype <= dtype_any_text)
-		desc->dsc_ttype() = dsqlFunction->udf_character_set_id;
-	else
+	if (!desc->isText())
 		desc->dsc_ttype() = dsqlFunction->udf_sub_type;
+
+	if (desc->isText() || (desc->isBlob() && desc->getBlobSubType() == isc_blob_text))
+		desc->setTextType(dsqlFunction->udf_character_set_id);
 }
 
 void UdfCallNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* desc)

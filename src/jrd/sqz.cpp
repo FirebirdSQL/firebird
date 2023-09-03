@@ -93,13 +93,20 @@ unsigned Compressor::nonCompressableRun(unsigned length)
 }
 
 Compressor::Compressor(thread_db* tdbb, ULONG length, const UCHAR* data)
-	: m_runs(*tdbb->getDefaultPool())
+	: Compressor(
+		*tdbb->getDefaultPool(),
+		tdbb->getDatabase()->getEncodedOdsVersion() >= ODS_13_1,
+		tdbb->getDatabase()->getEncodedOdsVersion() >= ODS_13_1,
+		length,
+		data)
 {
-	const auto dbb = tdbb->getDatabase();
+}
 
-	if (dbb->getEncodedOdsVersion() < ODS_13_1)
-		m_allowLongRuns = m_allowUnpacked = false;
-
+Compressor::Compressor(MemoryPool& pool, bool allowLongRuns, bool allowUnpacked, ULONG length, const UCHAR* data)
+	: m_runs(pool),
+	  m_allowLongRuns(allowLongRuns),
+	  m_allowUnpacked(allowUnpacked)
+{
 	const auto end = data + length;
 	const auto input = data;
 

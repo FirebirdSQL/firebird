@@ -544,7 +544,12 @@ bool expandDatabaseName(Firebird::PathName alias,
 			{
 				Id* i = aliasesConf().idHash.lookup(id);
 				if (i)
-					db = i->db;
+				{
+					UCharBuffer oldId;
+					os_utils::getUniqueFileId(i->db->name.c_str(), oldId);
+					if (oldId == id)	// Yes, that's really same file, and we should use same config
+						db = i->db;
+				}
 			}
 		}
 #endif

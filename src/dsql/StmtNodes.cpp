@@ -1244,7 +1244,7 @@ DeclareCursorNode* DeclareCursorNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	cursorNumber = dsqlScratch->cursorNumber++;
 	dsqlScratch->cursors.push(this);
 
-	dsqlScratch->putDebugCursor(cursorNumber, dsqlName);
+	dsqlScratch->putDebugDeclaredCursor(cursorNumber, dsqlName);
 
 	++dsqlScratch->scopeLevel;
 
@@ -1297,22 +1297,27 @@ DeclareCursorNode* DeclareCursorNode::pass1(thread_db* tdbb, CompilerScratch* cs
 
 DeclareCursorNode* DeclareCursorNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
+	AutoSetCurrentCursorId autoSetCurrentCursorId(csb);
+
 	rse->pass2Rse(tdbb, csb);
 
 	ExprNode::doPass2(tdbb, csb, rse.getAddress());
 	ExprNode::doPass2(tdbb, csb, refs.getAddress());
 
+	MetaName cursorName;
+	csb->csb_dbg_info->declaredCursorIndexToName.get(cursorNumber, cursorName);
+
 	// Finish up processing of record selection expressions.
 
 	RecordSource* const rsb = CMP_post_rse(tdbb, csb, rse.getObject());
-	csb->csb_fors.add(rsb);
 
-	cursor = FB_NEW_POOL(*tdbb->getDefaultPool()) Cursor(csb, rsb, rse->rse_invariants,
-		(rse->flags & RseNode::FLAG_SCROLLABLE), true);
-	csb->csb_dbg_info->curIndexToName.get(cursorNumber, cursor->name);
+	cursor = FB_NEW_POOL(*tdbb->getDefaultPool())
+		Cursor(csb, rsb, rse, true, line, column, cursorName);
+
+	csb->csb_fors.add(cursor);
 
 	StreamList cursorStreams;
-	cursor->getAccessPath()->findUsedStreams(cursorStreams);
+	cursor->getRootRecordSource()->findUsedStreams(cursorStreams);
 
 	// Activate cursor streams to allow index usage for <cursor>.<field> references, see CORE-4675.
 	// It's also useful for correlated sub-queries in the select list, see CORE-4379.
@@ -1444,10 +1449,7 @@ const StmtNode* DeclareLocalTableNode::execute(thread_db* tdbb, Request* request
 	if (request->req_operation == Request::req_evaluate)
 	{
 		if (auto& recordBuffer = getImpure(tdbb, request, false)->recordBuffer)
-		{
-			delete recordBuffer;
-			recordBuffer = nullptr;
-		}
+			recordBuffer->reset();
 
 		request->req_operation = Request::req_return;
 	}
@@ -4038,7 +4040,6 @@ const StmtNode* InAutonomousTransactionNode::execute(thread_db* tdbb, Request* r
 		jrd_tra* const org_transaction = request->req_transaction;
 		fb_assert(tdbb->getTransaction() == org_transaction);
 
-
 		ULONG transaction_flags = org_transaction->tra_flags;
 
 		// Replace Read Consistency by Concurrecy isolation mode
@@ -4049,6 +4050,7 @@ const StmtNode* InAutonomousTransactionNode::execute(thread_db* tdbb, Request* r
 											   org_transaction->tra_lock_timeout,
 											   org_transaction);
 
+		request->pushTransaction();
 		TRA_attach_request(transaction, request);
 		tdbb->setTransaction(transaction);
 
@@ -4059,12 +4061,13 @@ const StmtNode* InAutonomousTransactionNode::execute(thread_db* tdbb, Request* r
 		}
 		catch (Exception&)
 		{
+			TRA_detach_request(request);
+			request->popTransaction();
 			TRA_attach_request(org_transaction, request);
 			tdbb->setTransaction(org_transaction);
 			throw;
 		}
 
-		request->pushTransaction(org_transaction);
 		impure->traNumber = transaction->tra_number;
 
 		const Savepoint* const savepoint = transaction->startSavepoint();
@@ -4170,6 +4173,10 @@ const StmtNode* InAutonomousTransactionNode::execute(thread_db* tdbb, Request* r
 	}
 
 	impure->traNumber = impure->savNumber = 0;
+
+	// Normally request is detached by commit/rollback, but they may fail.
+	// It should be done before request->popTransaction().
+	TRA_detach_request(request);
 	transaction = request->popTransaction();
 
 	TRA_attach_request(transaction, request);
@@ -4878,6 +4885,9 @@ DmlNode* ForNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 {
 	ForNode* node = FB_NEW_POOL(pool) ForNode(pool);
 
+	if (auto cursorName = csb->csb_dbg_info->forCursorOffsetToName.get(csb->csb_blr_reader.getOffset() - 1))
+		csb->csb_forCursorNames.put(node, *cursorName);
+
 	if (csb->csb_blr_reader.peekByte() == blr_marks)
 		node->marks |= PAR_marks(csb);
 
@@ -4926,9 +4936,6 @@ ForNode* ForNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		dsqlCursor->rse = node->rse;
 		dsqlCursor->cursorNumber = dsqlScratch->cursorNumber++;
 		dsqlScratch->cursors.push(dsqlCursor);
-
-		// ASF: We cannot write this cursor name in debug info, as dsqlScratch->cursorNumber is
-		// decremented below. But for now we don't need it.
 	}
 	else
 		node->rse = dsqlSelect->dsqlPass(dsqlScratch)->dsqlRse;
@@ -4998,6 +5005,9 @@ void ForNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	// Generate FOR loop
 
+	if (dsqlCursor)
+		dsqlScratch->putDebugForCursor(dsqlCursor->dsqlName);
+
 	dsqlScratch->appendUChar(blr_for);
 
 	if (marks)
@@ -5053,6 +5063,8 @@ StmtNode* ForNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 StmtNode* ForNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
+	AutoSetCurrentCursorId autoSetCurrentCursorId(csb);
+
 	rse->pass2Rse(tdbb, csb);
 
 	doPass2(tdbb, csb, stall.getAddress(), this);
@@ -5065,15 +5077,16 @@ StmtNode* ForNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	// Finish up processing of record selection expressions.
 
 	RecordSource* const rsb = CMP_post_rse(tdbb, csb, rse.getObject());
-	csb->csb_fors.add(rsb);
 
-	cursor = FB_NEW_POOL(*tdbb->getDefaultPool()) Cursor(csb, rsb, rse->rse_invariants,
-		(rse->flags & RseNode::FLAG_SCROLLABLE), !(marks & MARK_AVOID_COUNTERS));
-	// ASF: We cannot define the name of the cursor here, but this is not a problem,
-	// as implicit cursors are always positioned in a valid record, and the name is
-	// only used to raise isc_cursor_not_positioned.
+	MetaName cursorName;
+	csb->csb_forCursorNames.get(this, cursorName);
 
-	if (rse->flags & RseNode::FLAG_WRITELOCK)
+	cursor = FB_NEW_POOL(*tdbb->getDefaultPool())
+		Cursor(csb, rsb, rse, !(marks & MARK_AVOID_COUNTERS), line, column, cursorName);
+
+	csb->csb_fors.add(cursor);
+
+	if (rse->hasWriteLock())
 		withLock = true;
 
 	if (marks & MARK_MERGE)
@@ -7523,7 +7536,11 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 	else
 	{
 		values = doDsqlPass(dsqlScratch, dsqlValues, false);
-		needSavePoint = SubSelectFinder::find(dsqlScratch->getPool(), values);
+		// If this INSERT belongs to some PSQL code block and has subqueries
+		// inside its VALUES part, signal the caller to create a savepoint frame.
+		// See bug #5613 (aka CORE-5337) for details.
+		needSavePoint = (dsqlScratch->flags & DsqlCompilerScratch::FLAG_BLOCK) &&
+			SubSelectFinder::find(dsqlScratch->getPool(), values);
 	}
 
 	// Process relation
@@ -7668,13 +7685,9 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 StmtNode* StoreNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	bool needSavePoint;
-	StmtNode* node = SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch,
-		internalDsqlPass(dsqlScratch, false, needSavePoint));
+	const auto node = internalDsqlPass(dsqlScratch, false, needSavePoint);
 
-	if (!needSavePoint || nodeIs<SavepointEncloseNode>(node))
-		return node;
-
-	return FB_NEW_POOL(dsqlScratch->getPool()) SavepointEncloseNode(dsqlScratch->getPool(), node);
+	return SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, node, needSavePoint);
 }
 
 string StoreNode::internalPrint(NodePrinter& printer) const
@@ -8746,12 +8759,18 @@ DmlNode* SavepointEncloseNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 	return node;
 }
 
-StmtNode* SavepointEncloseNode::make(MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, StmtNode* node)
+StmtNode* SavepointEncloseNode::make(MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, StmtNode* node, bool force)
 {
-	// Add savepoint wrapper around the statement having error handlers
+	// Add savepoint wrapper around the statement having error handlers, or if requested explicitly
 
-	return dsqlScratch->errorHandlers ?
-		FB_NEW_POOL(pool) SavepointEncloseNode(pool, node) : node;
+	if (dsqlScratch->errorHandlers || force)
+	{
+		// Ensure that savepoints are never created around a DSQL statement
+		fb_assert(dsqlScratch->flags & DsqlCompilerScratch::FLAG_BLOCK);
+		return FB_NEW_POOL(pool) SavepointEncloseNode(pool, node);
+	}
+
+	return node;
 }
 
 SavepointEncloseNode* SavepointEncloseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -9208,10 +9227,7 @@ const StmtNode* TruncateLocalTableNode::execute(thread_db* tdbb, Request* reques
 		const auto localTable = request->getStatement()->localTables[tableNumber];
 
 		if (auto& recordBuffer = localTable->getImpure(tdbb, request, false)->recordBuffer)
-		{
-			delete recordBuffer;
-			recordBuffer = nullptr;
-		}
+			recordBuffer->reset();
 
 		request->req_operation = Request::req_return;
 	}
@@ -9408,7 +9424,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (!returning)
 		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_INSERT);
 
-	return SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, node);
+	return SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, node, needSavePoint);
 }
 
 string UpdateOrInsertNode::internalPrint(NodePrinter& printer) const
@@ -10914,14 +10930,11 @@ static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
 
 		if (identityType == IDENT_TYPE_BY_DEFAULT && *insertOverride == OverrideClause::SYSTEM_VALUE)
 			ERR_post(Arg::Gds(isc_overriding_system_invalid) << relation->rel_name);
-
-		if (identityType == IDENT_TYPE_ALWAYS && *insertOverride == OverrideClause::USER_VALUE)
-			ERR_post(Arg::Gds(isc_overriding_user_invalid) << relation->rel_name);
 	}
 	else
 	{
 		if (identityType == IDENT_TYPE_ALWAYS)
-			ERR_post(Arg::Gds(isc_overriding_system_missing) << relation->rel_name);
+			ERR_post(Arg::Gds(isc_overriding_missing) << relation->rel_name);
 	}
 }
 

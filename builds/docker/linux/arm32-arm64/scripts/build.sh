@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 ./autogen.sh \
 	--host=$BUILD_ARCH \

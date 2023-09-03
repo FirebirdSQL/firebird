@@ -257,9 +257,12 @@ class MonitoringData final : public Firebird::PermanentStorage, public Firebird:
 		TEXT userName[USERNAME_LENGTH + 1];
 		ULONG generation;
 		ULONG length;
-	};
 
-	static ULONG alignOffset(ULONG absoluteOffset);
+		inline ULONG getBlockLength() const
+		{
+			return (ULONG) FB_ALIGN(sizeof(Element) + length, FB_ALIGNMENT);
+		}
+	};
 
 public:
 	class Guard

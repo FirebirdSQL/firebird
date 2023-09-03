@@ -574,8 +574,6 @@ namespace
 	{
 		if (rpb->rpb_flags & rpb_not_packed)
 		{
-			rpb->rpb_flags &= ~rpb_not_packed;
-
 			const auto length = MIN(rpb->rpb_length, outLength);
 
 			memcpy(output, rpb->rpb_address, length);
@@ -1093,8 +1091,6 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 		else
 		{
 			// There is cleanup to be done.  Bring the old version forward first
-
-			rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_chained | rpb_gc_active | rpb_long_tranum);
 			DPM_update(tdbb, rpb, 0, transaction);
 			delete_tail(tdbb, &temp2, rpb->rpb_page);
 		}
@@ -1833,6 +1829,8 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 		const ULONG back_page  = rpb->rpb_b_page;
 		const USHORT back_line = rpb->rpb_b_line;
 		const USHORT save_flags = rpb->rpb_flags;
+		const ULONG save_f_page = rpb->rpb_f_page;
+		const USHORT save_f_line = rpb->rpb_f_line;
 
 		while (rpb->rpb_flags & rpb_incomplete)
 		{
@@ -1844,6 +1842,8 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 		rpb->rpb_b_page = back_page;
 		rpb->rpb_b_line = back_line;
 		rpb->rpb_flags = save_flags;
+		rpb->rpb_f_page = save_f_page;
+		rpb->rpb_f_line = save_f_line;
 	}
 
 	CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
@@ -2106,6 +2106,10 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_funs:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
 			EVL_field(0, rpb->rpb_record, f_fun_name, &desc);
+
+			if (EVL_field(0, rpb->rpb_record, f_fun_pkg_name, &desc2))
+				MOV_get_metaname(tdbb, &desc2, package_name);
+
 			EVL_field(0, rpb->rpb_record, f_fun_id, &desc2);
 			id = MOV_get_long(tdbb, &desc2, 0);
 
@@ -5261,7 +5265,6 @@ void Database::garbage_collector(Database* dbb)
 		{
 			LCK_init(tdbb, LCK_OWNER_attachment);
 			INI_init(tdbb);
-			INI_init2(tdbb);
 			PAG_header(tdbb, true);
 			PAG_attachment_id(tdbb);
 			TRA_init(attachment);
@@ -6527,7 +6530,6 @@ static void replace_record(thread_db*		tdbb,
 #endif
 
 	record_param temp = *rpb;
-	rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_chained | rpb_gc_active | rpb_long_tranum);
 	DPM_update(tdbb, rpb, stack, transaction);
 	delete_tail(tdbb, &temp, rpb->rpb_page);
 

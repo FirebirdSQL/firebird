@@ -327,6 +327,145 @@ private:
 	bool isLocationDefined;
 };
 
+// Helper classes to allow efficient evaluation of index conditions/expressions
+
+class IndexCondition
+{
+public:
+	IndexCondition(thread_db* tdbb, index_desc* idx);
+
+	IndexCondition(const IndexCondition& other)
+		: m_tdbb(other.m_tdbb), m_condition(other.m_condition), m_request(other.m_request)
+	{}
+
+	~IndexCondition();
+
+	bool evaluate(Record* record) const;
+
+private:
+	thread_db* const m_tdbb;
+	BoolExprNode* m_condition = nullptr;
+	Request* m_request = nullptr;
+};
+
+class IndexExpression
+{
+public:
+	IndexExpression(thread_db* tdbb, index_desc* idx);
+
+	IndexExpression(const IndexExpression& other)
+		: m_tdbb(other.m_tdbb), m_expression(other.m_expression), m_request(other.m_request)
+	{}
+
+	~IndexExpression();
+
+	dsc* evaluate(Record* record) const;
+
+private:
+	thread_db* const m_tdbb;
+	ValueExprNode* m_expression = nullptr;
+	Request* m_request = nullptr;
+};
+
+typedef Firebird::AutoPtr<IndexExpression> AutoIndexExpression;
+
+// Index key wrapper
+
+class IndexKey
+{
+public:
+	IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
+		: m_tdbb(tdbb), m_relation(relation), m_index(idx),
+		  m_keyType((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT),
+		  m_segments(idx->idx_count), m_expression(m_localExpression)
+	{
+		fb_assert(m_index->idx_count);
+	}
+
+	IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx, AutoIndexExpression& expr)
+		: m_tdbb(tdbb), m_relation(relation), m_index(idx),
+		  m_keyType((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT),
+		  m_segments(idx->idx_count), m_expression(expr)
+	{
+		fb_assert(m_index->idx_count);
+	}
+
+	IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx,
+			 USHORT keyType, USHORT segments)
+		: m_tdbb(tdbb), m_relation(relation), m_index(idx),
+		  m_keyType(keyType), m_segments(segments), m_expression(m_localExpression)
+	{
+		fb_assert(m_index->idx_count && m_segments && m_segments <= m_index->idx_count);
+	}
+
+	IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx,
+			 USHORT keyType, USHORT segments, AutoIndexExpression& expr)
+		: m_tdbb(tdbb), m_relation(relation), m_index(idx),
+		  m_keyType(keyType), m_segments(segments), m_expression(expr)
+	{
+		fb_assert(m_index->idx_count && m_segments && m_segments <= m_index->idx_count);
+	}
+
+	IndexKey(const IndexKey& other)
+		: m_tdbb(other.m_tdbb), m_relation(other.m_relation), m_index(other.m_index),
+		  m_keyType(other.m_keyType), m_segments(other.m_segments), m_expression(other.m_expression)
+	{
+	}
+
+	idx_e compose(Record* record);
+
+	operator temporary_key*()
+	{
+		return &m_key;
+	}
+
+	temporary_key* operator->()
+	{
+		return &m_key;
+	}
+
+	bool operator==(const IndexKey& other) const
+	{
+		if (m_key.key_length != other.m_key.key_length)
+			return false;
+
+		return !memcmp(m_key.key_data, other.m_key.key_data, m_key.key_length);
+	}
+
+	bool operator!=(const IndexKey& other) const
+	{
+		if (m_key.key_length != other.m_key.key_length)
+			return true;
+
+		return memcmp(m_key.key_data, other.m_key.key_data, m_key.key_length);
+	}
+
+	// Return ordinal number of the first NULL segment
+	USHORT getNullSegment() const
+	{
+		USHORT nulls = m_key.key_nulls;
+
+		for (USHORT i = 0; nulls; i++)
+		{
+			if (nulls & 1)
+				return i;
+
+			nulls >>= 1;
+		}
+
+		return MAX_USHORT;
+	}
+
+private:
+	thread_db* const m_tdbb;
+	jrd_rel* const m_relation;
+	index_desc* const m_index;
+	const USHORT m_keyType;
+	const USHORT m_segments;
+	temporary_key m_key;
+	AutoIndexExpression& m_expression;
+	AutoIndexExpression m_localExpression;
+};
 
 } //namespace Jrd
 

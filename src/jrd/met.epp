@@ -93,6 +93,7 @@
 #include "../common/classes/Hash.h"
 #include "../common/classes/MsgPrint.h"
 #include "../jrd/Function.h"
+#include "../jrd/trace/TraceJrdHelpers.h"
 
 
 #ifdef HAVE_CTYPE_H
@@ -1443,6 +1444,10 @@ Format* MET_format(thread_db* tdbb, jrd_rel* relation, USHORT number)
 		return format;
 	}
 
+	// System relations don't have their formats stored inside RDB$FORMATS,
+	// so it's absolutely pointless trying to find one there
+	fb_assert(!relation->isSystem());
+
 	format = NULL;
 	AutoCacheRequest request(tdbb, irq_r_format, IRQ_REQUESTS);
 
@@ -2030,17 +2035,19 @@ void MET_load_trigger(thread_db* tdbb,
 
 		if (TRG.RDB$RELATION_NAME.NULL)
 		{
+			fb_assert(!relation);
+
 			if ((TRG.RDB$TRIGGER_TYPE & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DB ||
 				(TRG.RDB$TRIGGER_TYPE & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DDL)
 			{
-				// this is a database trigger
+				// this is a database or DDL trigger
 				get_trigger(tdbb,
 							relation,
 							&TRG.RDB$TRIGGER_BLR,
 							&debug_blob_id,
 							triggers,
 							TRG.RDB$TRIGGER_NAME,
-							TRG.RDB$TRIGGER_TYPE & ~TRIGGER_TYPE_MASK,
+							TRG.RDB$TRIGGER_TYPE,
 							(bool) TRG.RDB$SYSTEM_FLAG,
 							trig_flags,
 							engine,
@@ -2681,7 +2688,7 @@ void MET_lookup_index_expression(thread_db* tdbb, jrd_rel* relation, index_desc*
 	{
 		idx->idx_expression = index_block->idb_expression;
 		idx->idx_expression_statement = index_block->idb_expression_statement;
-		memcpy(&idx->idx_expression_desc, &index_block->idb_expression_desc, sizeof(struct dsc));
+		idx->idx_expression_desc = index_block->idb_expression_desc;
 		return;
 	}
 
@@ -2701,7 +2708,7 @@ void MET_lookup_index_expression(thread_db* tdbb, jrd_rel* relation, index_desc*
 		if (idx->idx_expression_statement)
 		{
 			idx->idx_expression_statement->release(tdbb);
-			idx->idx_expression_statement = NULL;
+			idx->idx_expression_statement = nullptr;
 		}
 
 		// parse the blr, making sure to create the resulting expression
@@ -2745,8 +2752,21 @@ void MET_lookup_index_expression(thread_db* tdbb, jrd_rel* relation, index_desc*
 }
 
 
-bool MET_lookup_index_expression_blr(thread_db* tdbb, const MetaName& index_name, bid& blob_id)
+bool MET_lookup_index_expr_cond_blr(thread_db* tdbb, const MetaName& index_name, bid& expr_blob_id, bid& cond_blob_id)
 {
+/**************************************
+ *
+ *      M E T _ l o o k u p _ i n d e x _ e x p r _ c o n d _ b l r
+ *
+ **************************************
+ *
+ * Functional description
+ *		Lookup index expression and\or condition blob ID to use it later by many
+ *		attachments and avoid of run of same lookup queries by all of them.
+ *		Used by parallel index creation code.
+ *
+ **************************************/
+
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
 
@@ -2757,8 +2777,9 @@ bool MET_lookup_index_expression_blr(thread_db* tdbb, const MetaName& index_name
 		IDX IN RDB$INDICES WITH
 		IDX.RDB$INDEX_NAME EQ index_name.c_str()
 	{
-		found = !IDX.RDB$EXPRESSION_BLR.NULL;
-		blob_id = IDX.RDB$EXPRESSION_BLR;
+		found = !IDX.RDB$EXPRESSION_BLR.NULL || !IDX.RDB$CONDITION_BLR.NULL;
+		expr_blob_id = IDX.RDB$EXPRESSION_BLR;
+		cond_blob_id = IDX.RDB$CONDITION_BLR;
 	}
 	END_FOR;
 
@@ -3663,16 +3684,21 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 					}
 					else
 					{
+						const string name = procedure->getName().toString();
+
 						try
 						{
+							TraceProcCompile trace(tdbb, name);
+
 							procedure->parseBlr(tdbb, csb, &P.RDB$PROCEDURE_BLR,
 								P.RDB$DEBUG_INFO.NULL ? NULL : &P.RDB$DEBUG_INFO);
+
+							trace.finish(procedure->getStatement(), ITracePlugin::RESULT_SUCCESS);
 						}
 						catch (const Exception& ex)
 						{
 							StaticStatusVector temp_status;
 							ex.stuffException(temp_status);
-							const string name = procedure->getName().toString();
 							(Arg::Gds(isc_bad_proc_BLR) << Arg::Str(name)
 								<< Arg::StatusVector(temp_status.begin())).raise();
 						}
@@ -3827,10 +3853,6 @@ jrd_rel* MET_relation(thread_db* tdbb, USHORT id)
 	if (relation)
 		return relation;
 
-	// From ODS 9 onwards, the first 128 relation IDS have been
-	// reserved for system relations
-	const USHORT max_sys_rel = USER_DEF_REL_INIT_ID - 1;
-
 	relation = FB_NEW_POOL(*pool) jrd_rel(*pool);
 	(*vector)[id] = relation;
 	relation->rel_id = id;
@@ -3849,8 +3871,7 @@ jrd_rel* MET_relation(thread_db* tdbb, USHORT id)
 		lock->setKey(relation->rel_id);
 	}
 
-	// This should check system flag instead.
-	if (relation->rel_id <= max_sys_rel)
+	if (relation->rel_id < rel_MAX)
 		return relation;
 
 	{ // Scope block.
@@ -4213,8 +4234,8 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 					DmlNode* nod = dependencies ?
 						MET_get_dependencies(tdbb, relation, p, length, csb, NULL, NULL, NULL,
-							field->fld_name, obj_computed, 0, depTrans) :
-						PAR_blr(tdbb, relation, p, length, csb, NULL, NULL, false, 0);
+							field->fld_name, obj_computed, csb_computed_field, depTrans) :
+						PAR_blr(tdbb, relation, p, length, csb, NULL, NULL, false, csb_computed_field);
 
 					field->fld_computation = static_cast<ValueExprNode*>(nod);
 				}
@@ -5561,10 +5582,8 @@ static bool verify_TRG_ignore_perm(thread_db* tdbb, const MetaName& trig_name)
 
 	// See if this is a system trigger, with the flag set as TRG_ignore_perm
 
-	if (INI_get_trig_flags(trig_name.c_str()) & TRG_ignore_perm)
-	{
+	if (INI_get_trig_flags(trig_name) & TRG_ignore_perm)
 		return true;
-	}
 
 	// See if this is a RI trigger
 

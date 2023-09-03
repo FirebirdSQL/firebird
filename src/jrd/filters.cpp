@@ -1432,8 +1432,8 @@ ISC_STATUS filter_debug_info(USHORT action, BlobControl* control)
 
 	string str;
 
-	MapArgumentInfoToName::ConstAccessor args(&dbgInfo.argInfoToName);
-	if (args.getFirst())
+	if (auto args = dbgInfo.argInfoToName.constAccessor();
+		args.getFirst())
 	{
 		string_put(control, "Parameters:");
 		str.printf("%10s %-32s %-6s", "Number", "Name", "Type");
@@ -1453,8 +1453,8 @@ ISC_STATUS filter_debug_info(USHORT action, BlobControl* control)
 		string_put(control, "");
 	}
 
-	MapVarIndexToName::ConstAccessor vars(&dbgInfo.varIndexToName);
-	if (vars.getFirst())
+	if (auto vars = dbgInfo.varIndexToName.constAccessor();
+		vars.getFirst())
 	{
 		string_put(control, "Variables:");
 		str.printf("%10s %-32s", "Number", "Name");
@@ -1471,11 +1471,29 @@ ISC_STATUS filter_debug_info(USHORT action, BlobControl* control)
 		string_put(control, "");
 	}
 
-	MapVarIndexToName::ConstAccessor cursors(&dbgInfo.curIndexToName);
-	if (cursors.getFirst())
+	if (auto cursors = dbgInfo.declaredCursorIndexToName.constAccessor();
+		cursors.getFirst())
 	{
 		string_put(control, "Cursors:");
 		str.printf("%10s %-32s", "Number", "Name");
+		string_put(control, str.c_str());
+		str.replace(str.begin(), str.end(), str.length(), '-');
+		string_put(control, str.c_str());
+
+		do
+		{
+			str.printf("%10d %-32s", cursors.current()->first, cursors.current()->second.c_str());
+			string_put(control, str.c_str());
+		} while (cursors.getNext());
+
+		string_put(control, "");
+	}
+
+	if (auto cursors = dbgInfo.forCursorOffsetToName.constAccessor();
+		cursors.getFirst())
+	{
+		string_put(control, "FOR Cursors:");
+		str.printf("%10s %-32s", "Offset", "Name");
 		string_put(control, str.c_str());
 		str.replace(str.begin(), str.end(), str.length(), '-');
 		string_put(control, str.c_str());

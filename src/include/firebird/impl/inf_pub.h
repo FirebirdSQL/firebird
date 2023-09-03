@@ -176,6 +176,8 @@ enum db_info_types
 	fb_info_username = 147,
 	fb_info_sqlrole = 148,
 
+	fb_info_parallel_workers = 149,
+
 	isc_info_db_last_value   /* Leave this LAST! */
 };
 
@@ -301,6 +303,9 @@ enum  info_db_implementations
 	isc_info_db_impl_freebsd_ppc64el = 89,
 
 	isc_info_db_impl_linux_mips64el = 90,
+
+	isc_info_db_impl_freebsd_ppc64 = 91,
+	isc_info_db_impl_freebsd_ppc = 92,
 
 	isc_info_db_impl_last_value   // Leave this LAST!
 };

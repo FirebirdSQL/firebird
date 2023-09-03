@@ -34,11 +34,7 @@
 #include "../common/classes/alloc.h"
 #include "../common/classes/array.h"
 #include "../common/MsgMetadata.h"
-
-namespace Firebird
-{
-	class ClumpletWriter;
-}
+#include "../common/classes/ClumpletWriter.h"
 
 namespace Why
 {
@@ -52,6 +48,7 @@ class YService;
 class YStatement;
 class IscStatement;
 class YTransaction;
+class Dispatcher;
 
 class YObject
 {
@@ -600,7 +597,7 @@ class YService final :
 public:
 	static const ISC_STATUS ERROR_CODE = isc_bad_svc_handle;
 
-	YService(Firebird::IProvider* aProvider, Firebird::IService* aNext, bool utf8);
+	YService(Firebird::IProvider* aProvider, Firebird::IService* aNext, bool utf8, Dispatcher* yProvider);
 	~YService();
 
 	void shutdown();
@@ -625,6 +622,11 @@ public:
 private:
 	Firebird::IProvider* provider;
 	bool utf8Connection;		// Client talks to us using UTF8, else - system default charset
+
+public:
+	Firebird::RefPtr<IService> alternativeHandle;
+	Firebird::ClumpletWriter attachSpb;
+	Firebird::RefPtr<Dispatcher> ownProvider;
 };
 
 class Dispatcher final :
@@ -648,6 +650,12 @@ public:
 
 	void destroy(unsigned)
 	{ }
+
+public:
+	Firebird::IService* internalServiceAttach(Firebird::CheckStatusWrapper* status,
+		const Firebird::PathName& svcName, Firebird::ClumpletReader& spb,
+		std::function<void(Firebird::CheckStatusWrapper*, Firebird::IService*)> start,
+		Firebird::IProvider** retProvider);
 
 private:
 	YAttachment* attachOrCreateDatabase(Firebird::CheckStatusWrapper* status, bool createFlag,

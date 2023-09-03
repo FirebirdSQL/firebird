@@ -45,73 +45,38 @@ using namespace Jrd;
 //#define PRINT_OPT_INFO	// print optimizer info (cardinality, cost) in plans
 
 
+// AccessPath class
+// -------------------
+
+AccessPath::AccessPath(CompilerScratch* csb)
+	: m_cursorId(csb->csb_currentCursorId),
+	  m_recSourceId(csb->csb_nextRecSourceId++)
+{
+}
+
+
 // Record source class
 // -------------------
 
 RecordSource::RecordSource(CompilerScratch* csb)
-	: m_cursorProfileId(csb->csb_currentCursorProfileId),
-	  m_recSourceProfileId(csb->csb_nextRecSourceProfileId++)
+	: AccessPath(csb)
 {
 }
 
 void RecordSource::open(thread_db* tdbb) const
 {
-	const auto attachment = tdbb->getAttachment();
-	const auto request = tdbb->getRequest();
-
-	const auto profilerManager = attachment->isProfilerActive() && !request->hasInternalStatement() ?
-		attachment->getProfilerManager(tdbb) :
-		nullptr;
-
-	const SINT64 lastPerfCounter = profilerManager ?
-		fb_utils::query_performance_counter() :
-		0;
-
-	if (profilerManager)
-	{
-		profilerManager->prepareRecSource(tdbb, request, this);
-		profilerManager->beforeRecordSourceOpen(request, this);
-	}
+	ProfilerManager::RecordSourceStopWatcher profilerRecordSourceStopWatcher(tdbb, this,
+		ProfilerManager::RecordSourceStopWatcher::Event::OPEN);
 
 	internalOpen(tdbb);
-
-	if (profilerManager)
-	{
-		const SINT64 currentPerfCounter = fb_utils::query_performance_counter();
-		ProfilerManager::Stats stats(currentPerfCounter - lastPerfCounter);
-		profilerManager->afterRecordSourceOpen(request, this, stats);
-	}
 }
 
 bool RecordSource::getRecord(thread_db* tdbb) const
 {
-	const auto attachment = tdbb->getAttachment();
-	const auto request = tdbb->getRequest();
+	ProfilerManager::RecordSourceStopWatcher profilerRecordSourceStopWatcher(tdbb, this,
+		ProfilerManager::RecordSourceStopWatcher::Event::GET_RECORD);
 
-	const auto profilerManager = attachment->isProfilerActive() && !request->hasInternalStatement() ?
-		attachment->getProfilerManager(tdbb) :
-		nullptr;
-
-	const SINT64 lastPerfCounter = profilerManager ?
-		fb_utils::query_performance_counter() :
-		0;
-
-	if (profilerManager)
-	{
-		profilerManager->prepareRecSource(tdbb, request, this);
-		profilerManager->beforeRecordSourceGetRecord(request, this);
-	}
-
-	const auto ret = internalGetRecord(tdbb);
-
-	if (profilerManager)
-	{
-		const SINT64 currentPerfCounter = fb_utils::query_performance_counter();
-		ProfilerManager::Stats stats(currentPerfCounter - lastPerfCounter);
-		profilerManager->afterRecordSourceGetRecord(request, this, stats);
-	}
-
-	return ret;
+	return internalGetRecord(tdbb);
 }
 
 string RecordSource::printName(thread_db* tdbb, const string& name, bool quote)
@@ -251,10 +216,6 @@ void RecordSource::printOptInfo(string& plan) const
 	info.printf(" [rows: %" UQUADFORMAT "]", (FB_UINT64) (m_cardinality + 0.5));
 	plan += info;
 #endif
-}
-
-RecordSource::~RecordSource()
-{
 }
 
 

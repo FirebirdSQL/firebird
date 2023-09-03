@@ -728,7 +728,7 @@ USHORT blb::BLB_get_segment(thread_db* tdbb, void* segment, USHORT buffer_length
 		else
 		{
 			blb_space_remaining = blb_length - seek;
-			blb_segment = getBuffer() + seek;
+			blb_segment = ((UCHAR*) ((blob_page*) getBuffer())->blp_page) + seek;
 		}
 	}
 
@@ -1481,7 +1481,7 @@ blb* blb::open2(thread_db* tdbb,
 		// Get first data page in anticipation of reading.
 
 		if (blob->blb_level == 0)
-			blob->blb_segment = blob->getBuffer();
+			blob->blb_segment = (UCHAR*) ((blob_page*) blob->getBuffer())->blp_page;
 	}
 
 	UCharBuffer new_bpb;
@@ -2969,7 +2969,7 @@ void blb::getFromPage(USHORT length, const UCHAR* data)
 {
 	if (blb_level == 0)
 	{
-		blb_space_remaining = length;
+		blb_space_remaining = length - BLH_SIZE;
 		if (length)
 			memcpy(getBuffer(), data, length);
 	}

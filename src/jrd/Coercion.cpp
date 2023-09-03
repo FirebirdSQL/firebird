@@ -32,6 +32,7 @@
 #include "../dsql/dsql.h"
 #include "../dsql/make_proto.h"
 #include "../jrd/align.h"
+#include "../jrd/DataTypeUtil.h"
 
 using namespace Jrd;
 using namespace Firebird;
@@ -41,12 +42,12 @@ static const USHORT FROM_MASK = FLD_has_len | FLD_has_chset | FLD_has_scale |
 static const USHORT TO_MASK = FLD_has_len | FLD_has_chset | FLD_has_scale |
 	FLD_legacy | FLD_native | FLD_has_sub | FLD_has_prec | FLD_extended;
 
-bool CoercionArray::coerce(dsc* d, unsigned startItem) const
+bool CoercionArray::coerce(thread_db* tdbb, dsc* d, unsigned startItem) const
 {
 	// move down through array to ensure correct order: newer rule overrides older one
 	for (unsigned n = getCount(); n-- > startItem; )
 	{
-		if (getElement(n).coerce(d))
+		if (getElement(n).coerce(tdbb, d))
 			return true;
 	}
 
@@ -111,15 +112,30 @@ void CoercionRule::setRule(const TypeClause* from, const TypeClause *to)
 		raiseError();
 
 	// Generic check
+	class BufSize
+	{
+	public:
+		static constexpr unsigned makeSize(unsigned len)
+		{
+			return (len + FB_ALIGNMENT) * 2;
+		}
+	};
+
 	const unsigned DATASIZE = 256;
-	UCHAR buf[DATASIZE * 2 + FB_ALIGNMENT];
-	memset(buf, 0, sizeof buf);
+	HalfStaticArray<UCHAR, BufSize::makeSize(DATASIZE)> buffer;
+
+	unsigned datasize = MAX(toMask & FLD_has_len ? toDsc.dsc_length : 0,
+		fromMask & FLD_has_len ? fromDsc.dsc_length : 0);
+	datasize = MAX(DATASIZE, datasize);
+	UCHAR* buf = buffer.getBuffer(BufSize::makeSize(datasize));
+	memset(buf, 0, buffer.getCount());
+
 	toDsc.dsc_address = FB_ALIGN(buf, FB_ALIGNMENT);
 	if (! (toMask & FLD_has_len))
 	{
-		toDsc.dsc_length = DATASIZE - 2;
+		toDsc.dsc_length = datasize - 2;
 	}
-	fromDsc.dsc_address = toDsc.dsc_address + DATASIZE;
+	fromDsc.dsc_address = FB_ALIGN(toDsc.dsc_address + datasize, FB_ALIGNMENT);
 
 	try
 	{
@@ -224,7 +240,7 @@ static const USHORT subTypeCompatibility[DTYPE_TYPE_MAX] =
 };
 
 
-bool CoercionRule::coerce(dsc* d) const
+bool CoercionRule::coerce(thread_db* tdbb, dsc* d) const
 {
 	// check does descriptor match FROM clause
 	if (! match(d))
@@ -295,6 +311,8 @@ bool CoercionRule::coerce(dsc* d) const
 
 	// final pass - order is important
 
+	const auto srcCharSet = d->getCharSet();
+
 	// scale
 	if (toMask & FLD_has_scale)
 		d->dsc_scale = toDsc.dsc_scale;
@@ -319,24 +337,30 @@ bool CoercionRule::coerce(dsc* d) const
 		subTypeCompatibility[d->dsc_dtype] != COMPATIBLE_INT ||
 		subTypeCompatibility[toDsc.dsc_dtype] != COMPATIBLE_INT)
 	{
-		if (!type_lengths[toDsc.dsc_dtype])
+		if (!(toMask & FLD_has_len))
 		{
-			fb_assert(toDsc.isText());
-			d->dsc_length = d->getStringLength();
+			if (!type_lengths[toDsc.dsc_dtype])
+			{
+				fb_assert(toDsc.isText());
+				d->dsc_length = d->getStringLength();
+			}
+			else
+				d->dsc_length = type_lengths[toDsc.dsc_dtype];
 		}
-		else
-			d->dsc_length = type_lengths[toDsc.dsc_dtype];
 
 		d->dsc_dtype = toDsc.dsc_dtype;
 	}
 
-	// varchar length
-	if (d->dsc_dtype == dtype_varying)
-		d->dsc_length += sizeof(USHORT);
-
 	// charset
 	if (toMask & FLD_has_chset)
 		d->setTextType(toDsc.getTextType());
+
+	if (d->isText())
+		d->dsc_length = DataTypeUtil(tdbb).convertLength(d->dsc_length, srcCharSet, toDsc.getCharSet());
+
+	// varchar length
+	if (d->dsc_dtype == dtype_varying && !(toMask & FLD_has_len))
+		d->dsc_length += sizeof(USHORT);
 
 	// subtype - special processing for BLOBs
 	if (toMask & FLD_has_sub)

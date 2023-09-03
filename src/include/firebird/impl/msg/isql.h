@@ -196,3 +196,8 @@ FB_IMPL_MSG_SYMBOL(ISQL, 196, NO_TIMEOUTS, "Timeouts are not supported by server
 FB_IMPL_MSG_SYMBOL(ISQL, 197, HLP_SETKEEPTRAN, "    SET KEEP_TRAN_params   -- toggle to keep or not to keep text of following successful SET TRANSACTION statement")
 FB_IMPL_MSG_SYMBOL(ISQL, 198, HLP_SETPERTAB, "    SET PER_TABle_stats    -- toggle display of detailed per-table statistics")
 FB_IMPL_MSG_SYMBOL(ISQL, 199, BAD_STMT_TYPE, "Statement type is not recognized")
+FB_IMPL_MSG_SYMBOL(ISQL, 200, MSG_PACKAGES, "Packages:")
+FB_IMPL_MSG_SYMBOL(ISQL, 201, NO_PUBLICATION, "There is no publication @1 in this database")
+FB_IMPL_MSG_SYMBOL(ISQL, 202, NO_PUBLICATIONS, "There is no publications in this database")
+FB_IMPL_MSG_SYMBOL(ISQL, 203, MSG_PUBLICATIONS, "Publications:")
+FB_IMPL_MSG_SYMBOL(ISQL, 204, MSG_PROCEDURES, "Procedures:")

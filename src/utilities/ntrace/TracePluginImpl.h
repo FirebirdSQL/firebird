@@ -130,6 +130,14 @@ public:
 	typedef Firebird::BePlusTree<ServiceData, ServiceId, Firebird::MemoryPool, ServiceData>
 		ServicesTree;
 
+	template <class C>
+	struct RoutineHelper
+	{
+		C* const routine;
+	};
+
+	typedef Firebird::SortedArray<StmtNumber> RoutinesList;
+
 	TracePluginImpl(Firebird::IPluginBase* factory, const TracePluginConfig& configuration, Firebird::ITraceInitInfo* initInfo);
 
 private:
@@ -161,6 +169,9 @@ private:
 	Firebird::RWLock servicesLock;
 	ServicesTree services;
 
+	Firebird::RWLock routinesLock;
+	RoutinesList routines;
+
 	// Lock for log rotation
 	Firebird::RWLock renameLock;
 
@@ -187,15 +198,26 @@ private:
 	void register_blr_statement(Firebird::ITraceBLRStatement* statement);
 	void register_service(Firebird::ITraceServiceConnection* service);
 
+	void register_procedure(Firebird::ITraceProcedure* procedure);
+	void register_function(Firebird::ITraceFunction* function);
+	void register_trigger(Firebird::ITraceTrigger* trigger);
+
 	bool checkServiceFilter(Firebird::ITraceServiceConnection* service, bool started);
+
+	bool checkRoutine(StmtNumber stmt_id);
+	template <class C> Firebird::string getPlan(C* routine);
 
 	// Write message to text log file
 	void logRecord(const char* action);
 	void logRecordConn(const char* action, Firebird::ITraceDatabaseConnection* connection);
 	void logRecordTrans(const char* action, Firebird::ITraceDatabaseConnection* connection,
 		Firebird::ITraceTransaction* transaction);
-	void logRecordProcFunc(const char* action, Firebird::ITraceDatabaseConnection* connection,
-		Firebird::ITraceTransaction* transaction, const char* obj_type, const char* obj_name);
+	void logRecordProc(const char* action, Firebird::ITraceDatabaseConnection* connection,
+		Firebird::ITraceTransaction* transaction, Firebird::ITraceProcedure* procedure);
+	void logRecordFunc(const char* action, Firebird::ITraceDatabaseConnection* connection,
+		Firebird::ITraceTransaction* transaction, Firebird::ITraceFunction* function);
+	void logRecordTrig(const char* action, Firebird::ITraceDatabaseConnection* connection,
+		Firebird::ITraceTransaction* transaction, Firebird::ITraceTrigger* trigger);
 	void logRecordStmt(const char* action, Firebird::ITraceDatabaseConnection* connection,
 		Firebird::ITraceTransaction* transaction, Firebird::ITraceStatement* statement,
 		bool isSQL);
@@ -223,14 +245,23 @@ private:
 		Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 		Firebird::ITraceContextVariable* variable);
 
+	void log_event_proc_compile(
+		Firebird::ITraceDatabaseConnection* connection,
+		Firebird::ITraceProcedure* procedure, ntrace_counter_t time_millis, unsigned proc_result);
 	void log_event_proc_execute(
 		Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 		Firebird::ITraceProcedure* procedure, bool started, unsigned proc_result);
 
+	void log_event_func_compile(
+		Firebird::ITraceDatabaseConnection* connection,
+		Firebird::ITraceFunction* function, ntrace_counter_t time_millis, unsigned func_result);
 	void log_event_func_execute(
 		Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 		Firebird::ITraceFunction* function, bool started, unsigned func_result);
 
+	void log_event_trigger_compile(
+		Firebird::ITraceDatabaseConnection* connection,
+		Firebird::ITraceTrigger* trigger, ntrace_counter_t time_millis, unsigned trig_result);
 	void log_event_trigger_execute(
 		Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 		Firebird::ITraceTrigger* trigger, bool started, unsigned trig_result);
@@ -283,14 +314,19 @@ public:
 	FB_BOOLEAN trace_transaction_end(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 			FB_BOOLEAN commit, FB_BOOLEAN retain_context, unsigned tra_result);
 
-	// Stored procedures, functions and triggers execution
-	FB_BOOLEAN trace_proc_execute (Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
+	// Stored procedures, functions and triggers compilation and execution
+	FB_BOOLEAN trace_proc_compile(Firebird::ITraceDatabaseConnection* connection,
+			Firebird::ITraceProcedure* procedure, ISC_INT64 time_millis, unsigned proc_result);
+	FB_BOOLEAN trace_proc_execute(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 			Firebird::ITraceProcedure* procedure, FB_BOOLEAN started, unsigned proc_result);
-	FB_BOOLEAN trace_func_execute (Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
+	FB_BOOLEAN trace_func_compile(Firebird::ITraceDatabaseConnection* connection,
+			Firebird::ITraceFunction* function, ISC_INT64 time_millis, unsigned func_result);
+	FB_BOOLEAN trace_func_execute(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 			Firebird::ITraceFunction* function, FB_BOOLEAN started, unsigned func_result);
+	FB_BOOLEAN trace_trigger_compile(Firebird::ITraceDatabaseConnection* connection,
+			Firebird::ITraceTrigger* trigger, ISC_INT64 time_millis, unsigned trig_result);
 	FB_BOOLEAN trace_trigger_execute(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
-			Firebird::ITraceTrigger* trigger,
-			FB_BOOLEAN started, unsigned trig_result);
+			Firebird::ITraceTrigger* trigger, FB_BOOLEAN started, unsigned trig_result);
 
 	// Assignment to context variables
 	FB_BOOLEAN trace_set_context(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,

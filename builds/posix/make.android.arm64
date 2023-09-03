@@ -27,6 +27,12 @@ export CC
 export AR
 export CROSS_FLAGS
 
+# Android uses flat tree.
+buildSubDirectory=$(FB_BUILD)
+LIB_PLATFORM_RPATH=-Wl,-rpath,\$$ORIGIN
+LibraryFullName=$(LibraryBaseName)
+LibrarySoName=$(LibraryBaseName)
+
 COMMON_FLAGS=-ggdb -DFB_SEND_FLAGS=MSG_NOSIGNAL -DLINUX -DANDROID -DARM64 -pipe -MMD -fPIC -fmessage-length=0 \
 			 -I$(ROOT)/extern/libtommath -I$(ROOT)/extern/libtomcrypt/src/headers \
 			 $(CROSS_FLAGS) -fsigned-char \
@@ -41,7 +47,7 @@ DEV_FLAGS=$(COMMON_FLAGS) $(WARN_FLAGS)
 CROSS_CONFIG=android.arm64
 
 LDFLAGS += -static-libstdc++
-DroidLibs := -lm -ldl $(DECLIB) $(RE2LIB) $(I128LIB) $(LIBCDSLIB)
+DroidLibs := -lm -ldl -llog $(DECLIB) $(I128LIB)
 UDR_SUPPORT_LIBS :=
 
 LINK_LIBS = $(DroidLibs)

@@ -58,8 +58,6 @@ typedef Firebird::SortedArray<
 	ULONG,
 	MapBlrToSrcItem> MapBlrToSrc;
 
-typedef GenericMap<Pair<Right<USHORT, Jrd::MetaName> > > MapVarIndexToName;
-
 struct ArgumentInfo
 {
 	ArgumentInfo(UCHAR aType, USHORT aIndex)
@@ -86,8 +84,6 @@ struct ArgumentInfo
 	}
 };
 
-typedef GenericMap<Pair<Right<ArgumentInfo, Jrd::MetaName> > > MapArgumentInfoToName;
-
 struct DbgInfo : public PermanentStorage
 {
 	explicit DbgInfo(MemoryPool& p)
@@ -95,7 +91,8 @@ struct DbgInfo : public PermanentStorage
 		  blrToSrc(p),
 		  varIndexToName(p),
 		  argInfoToName(p),
-		  curIndexToName(p),
+		  declaredCursorIndexToName(p),
+		  forCursorOffsetToName(p),
 		  subFuncs(p),
 		  subProcs(p)
 	{
@@ -111,10 +108,11 @@ struct DbgInfo : public PermanentStorage
 		blrToSrc.clear();
 		varIndexToName.clear();
 		argInfoToName.clear();
-		curIndexToName.clear();
+		declaredCursorIndexToName.clear();
+		forCursorOffsetToName.clear();
 
 		{	// scope
-			GenericMap<Pair<Left<Jrd::MetaName, DbgInfo*> > >::Accessor accessor(&subFuncs);
+			LeftPooledMap<Jrd::MetaName, DbgInfo*>::Accessor accessor(&subFuncs);
 
 			for (bool found = accessor.getFirst(); found; found = accessor.getNext())
 				delete accessor.current()->second;
@@ -123,7 +121,7 @@ struct DbgInfo : public PermanentStorage
 		}
 
 		{	// scope
-			GenericMap<Pair<Left<Jrd::MetaName, DbgInfo*> > >::Accessor accessor(&subProcs);
+			LeftPooledMap<Jrd::MetaName, DbgInfo*>::Accessor accessor(&subProcs);
 
 			for (bool found = accessor.getFirst(); found; found = accessor.getNext())
 				delete accessor.current()->second;
@@ -133,11 +131,12 @@ struct DbgInfo : public PermanentStorage
 	}
 
 	MapBlrToSrc blrToSrc;					// mapping between blr offsets and source text position
-	MapVarIndexToName varIndexToName;		// mapping between variable index and name
-	MapArgumentInfoToName argInfoToName;	// mapping between argument info (type, index) and name
-	MapVarIndexToName curIndexToName;		// mapping between cursor index and name
-	GenericMap<Pair<Left<Jrd::MetaName, DbgInfo*> > > subFuncs;	// sub functions
-	GenericMap<Pair<Left<Jrd::MetaName, DbgInfo*> > > subProcs;	// sub procedures
+	RightPooledMap<USHORT, Jrd::MetaName> varIndexToName;		// mapping between variable index and name
+	RightPooledMap<ArgumentInfo, Jrd::MetaName> argInfoToName;	// mapping between argument info (type, index) and name
+	RightPooledMap<USHORT, Jrd::MetaName> declaredCursorIndexToName;	// mapping between declared cursor index and name
+	RightPooledMap<ULONG, Jrd::MetaName> forCursorOffsetToName;	// mapping between for-cursor offset and name
+	LeftPooledMap<Jrd::MetaName, DbgInfo*> subFuncs;	// sub functions
+	LeftPooledMap<Jrd::MetaName, DbgInfo*> subProcs;	// sub procedures
 };
 
 } // namespace Firebird

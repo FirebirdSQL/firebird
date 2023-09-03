@@ -30,6 +30,12 @@
     <ClCompile Include="..\..\..\src\yvalve\alt.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\yvalve\array.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\yvalve\blob.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\yvalve\DistributedTransaction.cpp">
       <Filter>source</Filter>
     </ClCompile>
@@ -56,12 +62,6 @@
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\os\win32\ibinitdll.cpp">
       <Filter>source</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\gen\yvalve\array.cpp">
-      <Filter>preprocessed</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\gen\yvalve\blob.cpp">
-      <Filter>preprocessed</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\remote\client\interface.cpp">
       <Filter>Remote client</Filter>
@@ -145,11 +145,5 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\defs\firebird.def" />
-    <None Include="..\..\..\src\yvalve\array.epp">
-      <Filter>GPRE files</Filter>
-    </None>
-    <None Include="..\..\..\src\yvalve\blob.epp">
-      <Filter>GPRE files</Filter>
-    </None>
   </ItemGroup>
 </Project>

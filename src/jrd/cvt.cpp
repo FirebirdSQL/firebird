@@ -274,8 +274,6 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 	if ((local_scale > MAX_SCHAR) || (local_scale < MIN_SCHAR))
 		over = true;
 
-	*scale = local_scale;
-
 	if ((!over) && ((p < end) ||		// there is an exponent
 		((value < 0) && (sign != -1)))) // MAX_SINT64+1 wrapped around
 	{
@@ -284,6 +282,8 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 		if (!over)
 			return dtype_double;
 	}
+
+	*scale = local_scale;
 
 	if (over)
 	{

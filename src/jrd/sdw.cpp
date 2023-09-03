@@ -581,7 +581,11 @@ void SDW_get_shadows(thread_db* tdbb)
 	// to prevent missing any new ones later on, although it does not
 	// matter for the purposes of the current page being written
 
-	MET_get_shadow_files(tdbb, false);
+	// no use even trying to get shadow files in a case when we invoked from
+	// JRD_shutdown_database, i.e. there are no attachments to database
+
+	if (tdbb->getAttachment())
+		MET_get_shadow_files(tdbb, false);
 }
 
 

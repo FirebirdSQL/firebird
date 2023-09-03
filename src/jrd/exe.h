@@ -36,6 +36,7 @@
 #include "../jrd/Relation.h"
 #include "../common/classes/array.h"
 #include "../jrd/MetaName.h"
+#include "../common/classes/auto.h"
 #include "../common/classes/fb_pair.h"
 #include "../common/classes/NestConst.h"
 
@@ -83,6 +84,7 @@ class DeclareVariableNode;
 class MessageNode;
 class PlanNode;
 class RecordSource;
+class Select;
 
 // Direction for each column in sort order
 enum SortDirection { ORDER_ANY, ORDER_ASC, ORDER_DESC };
@@ -101,6 +103,7 @@ const int csb_validation		= 64;	// we're in a validation expression (RDB hack)
 const int csb_reuse_context		= 128;	// allow context reusage
 const int csb_subroutine		= 256;	// sub routine
 const int csb_reload			= 512;	// request's BLR should be loaded and parsed again
+const int csb_computed_field	= 1024;	// computed field expression
 
 // CompilerScratch.csb_rpt[].csb_flags's values.
 const int csb_active		= 1;		// stream is active
@@ -478,6 +481,7 @@ public:
 		csb_invariants(p),
 		csb_current_nodes(p),
 		csb_current_for_nodes(p),
+		csb_forCursorNames(p),
 		csb_computing_fields(p),
 		csb_inner_booleans(p),
 		csb_variables_used_in_subroutines(p),
@@ -551,12 +555,13 @@ public:
 	vec<DeclareVariableNode*>*	csb_variables;	// Vector of variables, if any
 	ResourceList	csb_resources;				// Resources (relations and indexes)
 	Firebird::Array<Dependency>	csb_dependencies;	// objects that this statement depends upon
-	Firebird::Array<const RecordSource*> csb_fors;	// record sources
+	Firebird::Array<const Select*> csb_fors;	// select expressions
 	Firebird::Array<const DeclareLocalTableNode*> csb_localTables;	// local tables
 	Firebird::Array<ULONG*> csb_invariants;		// stack of pointer to nodes invariant offsets
 	Firebird::Array<ExprNode*> csb_current_nodes;	// RseNode's and other invariant
 												// candidates within whose scope we are
 	Firebird::Array<ForNode*> csb_current_for_nodes;
+	Firebird::RightPooledMap<ForNode*, MetaName> csb_forCursorNames;
 	Firebird::SortedArray<jrd_fld*> csb_computing_fields;	// Computed fields being compiled
 	Firebird::Array<BoolExprNode*> csb_inner_booleans;	// Inner booleans at the current scope
 	Firebird::SortedArray<USHORT> csb_variables_used_in_subroutines;
@@ -594,9 +599,9 @@ public:
 	ExprNode*	csb_currentAssignTarget;
 	dsc*		csb_preferredDesc;		// expected by receiving side data format
 
-	ULONG		csb_currentCursorProfileId = 0;
-	ULONG		csb_nextCursorProfileId = 1;
-	ULONG		csb_nextRecSourceProfileId = 1;
+	ULONG		csb_currentCursorId = 0;
+	ULONG		csb_nextCursorId = 1;
+	ULONG		csb_nextRecSourceId = 1;
 
 	struct csb_repeat
 	{
@@ -665,6 +670,17 @@ inline void CompilerScratch::csb_repeat::deactivate()
 {
 	csb_flags &= ~csb_active;
 }
+
+
+class AutoSetCurrentCursorId : private Firebird::AutoSetRestore<ULONG>
+{
+public:
+	explicit AutoSetCurrentCursorId(CompilerScratch* csb)
+		: AutoSetRestore(&csb->csb_currentCursorId,
+			(csb->csb_currentCursorId == 0 ? csb->csb_nextCursorId++ : csb->csb_currentCursorId))
+	{
+	}
+};
 
 
 class StatusXcp

@@ -62,6 +62,8 @@ public:
 		**/
 		virtual void* findSymbol(ISC_STATUS*, const Firebird::string&) = 0;
 
+		virtual bool getRealPath(const Firebird::string& anySymbol, Firebird::PathName& path) = 0;
+
 		template <typename T> T& findSymbol(ISC_STATUS* status, const Firebird::string& symbol, T& ptr)
 		{
 			return (ptr = (T)(findSymbol(status, symbol)));
@@ -71,10 +73,6 @@ public:
 		virtual ~Module() {}
 
 		const Firebird::PathName fileName;
-
-#ifdef LINUX
-		virtual bool getRealPath(Firebird::PathName& path) = 0;
-#endif
 
 	protected:
 		/// The constructor is protected so normal code can't allocate instances

@@ -51,7 +51,7 @@ public:
 
 	void* findSymbol(ISC_STATUS*, const Firebird::string&) override;
 
-	bool getRealPath(Firebird::PathName& path) override;
+	bool getRealPath(const Firebird::string& anySymbol, Firebird::PathName& path) override;
 
 private:
 	void* module;
@@ -157,40 +157,7 @@ DlfcnModule::DlfcnModule(MemoryPool& pool, const Firebird::PathName& aFileName, 
 	  module(m),
 	  realPath(pool)
 {
-#ifdef HAVE_DLINFO
-	char b[PATH_MAX];
-
-#ifdef HAVE_RTLD_DI_ORIGIN
-	if (dlinfo(module, RTLD_DI_ORIGIN, b) == 0)
-	{
-		realPath = b;
-		realPath += '/';
-		realPath += fileName;
-
-		if (realpath(realPath.c_str(), b))
-		{
-			realPath = b;
-			return;
-		}
-	}
-#endif
-
-#ifdef HAVE_RTLD_DI_LINKMAP
-	struct link_map* lm;
-	if (dlinfo(module, RTLD_DI_LINKMAP, &lm) == 0)
-	{
-		if (realpath(lm->l_name, b))
-		{
-			realPath = b;
-			return;
-		}
-	}
-#endif
-
-#endif
-
-	// Error getting real path.
-	realPath.clear();
+	getRealPath("", realPath);
 }
 
 DlfcnModule::~DlfcnModule()
@@ -202,6 +169,7 @@ DlfcnModule::~DlfcnModule()
 void* DlfcnModule::findSymbol(ISC_STATUS* status, const Firebird::string& symName)
 {
 	void* result = dlsym(module, symName.c_str());
+
 	if (!result)
 	{
 		Firebird::string newSym = '_' + symName;
@@ -253,11 +221,69 @@ void* DlfcnModule::findSymbol(ISC_STATUS* status, const Firebird::string& symNam
 	return result;
 }
 
-bool DlfcnModule::getRealPath(Firebird::PathName& path)
+bool DlfcnModule::getRealPath(const Firebird::string& anySymbol, Firebird::PathName& path)
 {
-	if (realPath.isEmpty())
-		return false;
+	if (realPath.hasData())
+	{
+		path = realPath;
+		return true;
+	}
 
-	path = realPath;
-	return true;
+	char buffer[PATH_MAX];
+
+#ifdef HAVE_DLINFO
+#ifdef HAVE_RTLD_DI_ORIGIN
+	if (dlinfo(module, RTLD_DI_ORIGIN, buffer) == 0)
+	{
+		path = buffer;
+		path += '/';
+		path += fileName;
+
+		if (realpath(path.c_str(), buffer))
+		{
+			path = buffer;
+			return true;
+		}
+	}
+#endif
+
+#ifdef HAVE_RTLD_DI_LINKMAP
+	struct link_map* lm;
+	if (dlinfo(module, RTLD_DI_LINKMAP, &lm) == 0)
+	{
+		if (realpath(lm->l_name, buffer))
+		{
+			path = buffer;
+			return true;
+		}
+	}
+#endif
+
+#endif
+
+#ifdef HAVE_DLADDR
+	if (anySymbol.hasData())
+	{
+		void* symbolPtr = dlsym(module, anySymbol.c_str());
+
+		if (!symbolPtr)
+			symbolPtr = dlsym(module, ('_' + anySymbol).c_str());
+
+		if (symbolPtr)
+		{
+			Dl_info info;
+			if (dladdr(symbolPtr, &info))
+			{
+				if (realpath(info.dli_fname, buffer))
+				{
+					path = buffer;
+					return true;
+				}
+			}
+		}
+	}
+#endif	// HAVE_DLADDR
+
+	path.clear();
+	return false;
 }

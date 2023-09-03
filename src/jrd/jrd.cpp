@@ -886,8 +886,10 @@ void Trigger::compile(thread_db* tdbb)
 	{
 		// Allocate statement memory pool
 		MemoryPool* new_pool = att->createPool();
+
 		// Trigger request is not compiled yet. Lets do it now
 		USHORT par_flags = (USHORT) (flags & TRG_ignore_perm) ? csb_ignore_perm : 0;
+
 		if (type & 1)
 			par_flags |= csb_pre_trigger;
 		else
@@ -904,6 +906,8 @@ void Trigger::compile(thread_db* tdbb)
 
 			if (engine.isEmpty())
 			{
+				TraceTrigCompile trace(tdbb, this);
+
 				if (debugInfo.hasData())
 				{
 					DBG_parse_debug_info((ULONG) debugInfo.getCount(), debugInfo.begin(),
@@ -912,6 +916,8 @@ void Trigger::compile(thread_db* tdbb)
 
 				PAR_blr(tdbb, relation, blr.begin(), (ULONG) blr.getCount(), NULL, &csb, &statement,
 					(relation ? true : false), par_flags);
+
+				trace.finish(statement, ITracePlugin::RESULT_SUCCESS);
 			}
 			else
 			{
@@ -1083,6 +1089,7 @@ namespace Jrd
 		ReplicaMode	dpb_replica_mode;
 		bool	dpb_set_db_replica;
 		bool	dpb_clear_map;
+		bool	dpb_upgrade_db;
 
 		// here begin compound objects
 		// for constructor to work properly dpb_user_name
@@ -1627,6 +1634,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 		PathName org_filename, expanded_name;
 		bool is_alias = false;
 		MutexEnsureUnlock guardDbInit(dbInitMutex, FB_FUNCTION);
+		LateRefGuard lateBlocking(FB_FUNCTION);
 		Mapping mapping(Mapping::MAP_THROW_NOT_FOUND, cryptCallback);
 
 		try
@@ -1739,7 +1747,10 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				guardDbInit.leave();
 			}
 
-			EngineContextHolder tdbb(user_status, jAtt, FB_FUNCTION, AttachmentHolder::ATT_DONT_LOCK);
+			// Don't pass user_status into ctor to keep warnings
+			EngineContextHolder tdbb(nullptr, jAtt, FB_FUNCTION, AttachmentHolder::ATT_DONT_LOCK);
+			tdbb->tdbb_status_vector = user_status;
+			lateBlocking.lock(jAtt->getStable()->getBlockingMutex(), jAtt->getStable());
 
 			attachment->att_crypt_callback = getDefCryptCallback(cryptCallback);
 			attachment->att_client_charset = attachment->att_charset = options.dpb_interp;
@@ -1799,7 +1810,6 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				INI_init(tdbb);
 				SHUT_init(tdbb);
 				PAG_header_init(tdbb);
-				INI_init2(tdbb);
 				PAG_init(tdbb);
 
 				if (options.dpb_set_page_buffers)
@@ -1859,7 +1869,6 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				jAtt->getStable()->manualAsyncUnlock(attachment->att_flags);
 
 				INI_init(tdbb);
-				INI_init2(tdbb);
 				PAG_header(tdbb, true);
 				dbb->dbb_crypto_manager->attach(tdbb, attachment);
 			}
@@ -2056,6 +2065,18 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 					attachment->att_utility == Attachment::UTIL_GBAK ? USE_GBAK_UTILITY :
 					attachment->att_utility == Attachment::UTIL_GFIX ? USE_GFIX_UTILITY :
 					USE_GSTAT_UTILITY);
+			}
+
+			if (options.dpb_upgrade_db)
+			{
+				validateAccess(tdbb, attachment, USE_GFIX_UTILITY);
+				if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, NULL))
+				{
+					ERR_post(Arg::Gds(isc_lock_timeout) <<
+							 Arg::Gds(isc_obj_in_use) << Arg::Str(org_filename));
+				}
+
+				INI_upgrade(tdbb);
 			}
 
 			if (options.dpb_verify)
@@ -2785,6 +2806,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 		bool is_alias = false;
 		Firebird::RefPtr<const Config> config;
 		Mapping mapping(Mapping::MAP_THROW_NOT_FOUND, cryptCallback);
+		LateRefGuard lateBlocking(FB_FUNCTION);
 
 		try
 		{
@@ -2898,7 +2920,10 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			Sync dbbGuard(&dbb->dbb_sync, "createDatabase");
 			dbbGuard.lock(SYNC_EXCLUSIVE);
 
-			EngineContextHolder tdbb(user_status, jAtt, FB_FUNCTION, AttachmentHolder::ATT_DONT_LOCK);
+			// Don't pass user_status into ctor to keep warnings
+			EngineContextHolder tdbb(nullptr, jAtt, FB_FUNCTION, AttachmentHolder::ATT_DONT_LOCK);
+			tdbb->tdbb_status_vector = user_status;
+			lateBlocking.lock(jAtt->getStable()->getBlockingMutex(), jAtt->getStable());
 
 			attachment->att_crypt_callback = getDefCryptCallback(cryptCallback);
 
@@ -3057,7 +3082,6 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			dbb->dbb_monitoring_data = FB_NEW_POOL(*dbb->dbb_permanent) MonitoringData(dbb);
 
 			PAG_format_header(tdbb);
-			INI_init2(tdbb);
 			PAG_format_pip(tdbb, *pageSpace);
 
 			dbb->dbb_page_manager.initTempPageSpace(tdbb);
@@ -3072,7 +3096,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				PAG_set_no_reserve(tdbb, options.dpb_no_reserve);
 
 			fb_assert(attachment->att_user);	// set by UserId::sclInit()
-			INI_format(attachment->getUserName().c_str(), options.dpb_set_db_charset.c_str());
+			INI_format(tdbb, options.dpb_set_db_charset);
 
 			// If we have not allocated first TIP page, do it now.
 			if (!dbb->dbb_t_pages || !dbb->dbb_t_pages->count())
@@ -6473,9 +6497,8 @@ void JReplicator::freeEngineData(Firebird::CheckStatusWrapper* user_status)
 
 		try
 		{
-			AutoPtr<Applier> cleanupApplier(applier);
-			cleanupApplier->shutdown(tdbb);
-			fb_assert(!applier);
+			applier->shutdown(tdbb);
+			applier = nullptr;
 		}
 		catch (const Exception& ex)
 		{
@@ -7231,18 +7254,29 @@ void DatabaseOptions::get(const UCHAR* dpb, USHORT dpb_length, bool& invalid_cli
 		case isc_dpb_parallel_workers:
 			dpb_parallel_workers = (SSHORT) rdr.getInt();
 
-			if (dpb_parallel_workers > Config::getMaxParallelWorkers() ||
-				dpb_parallel_workers < 0)
 			{
-				string str;
-				str.printf("Wrong parallel workers value %i, valid range are from 1 to %i",
-							dpb_parallel_workers, Config::getMaxParallelWorkers());
-				ERR_post(Arg::Gds(isc_bad_dpb_content) << Arg::Gds(isc_random) << Arg::Str(str));
+				const auto maxWorkers = Config::getMaxParallelWorkers();
+				if (dpb_parallel_workers > maxWorkers || dpb_parallel_workers < 0)
+				{
+					// "Wrong parallel workers value @1, valid range are from 1 to @2"
+					ERR_post_warning(Arg::Warning(isc_bad_par_workers) <<
+						Arg::Num(dpb_parallel_workers) <<
+						Arg::Num(maxWorkers));
+
+					if (dpb_parallel_workers < 0)
+						dpb_parallel_workers = 1;
+					else
+						dpb_parallel_workers = maxWorkers;
+				}
 			}
 			break;
 
 		case isc_dpb_worker_attach:
 			dpb_worker_attach = true;
+			break;
+
+		case isc_dpb_upgrade_db:
+			dpb_upgrade_db = true;
 			break;
 
 		default:
@@ -7634,13 +7668,10 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 	attachment->att_replicator = nullptr;
 
 	if (attachment->att_dsql_instance)
-		attachment->att_dsql_instance->dbb_statement_cache->purge(tdbb);
+		attachment->att_dsql_instance->dbb_statement_cache->shutdown(tdbb);
 
 	while (attachment->att_repl_appliers.hasData())
-	{
-		AutoPtr<Applier> cleanupApplier(attachment->att_repl_appliers.pop());
-		cleanupApplier->shutdown(tdbb);
-	}
+		attachment->att_repl_appliers.pop()->shutdown(tdbb);
 
 	if (dbb->dbb_crypto_manager)
 		dbb->dbb_crypto_manager->detach(tdbb, attachment);

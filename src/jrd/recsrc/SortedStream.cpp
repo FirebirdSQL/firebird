@@ -179,7 +179,6 @@ Sort* SortedStream::init(thread_db* tdbb) const
 	Request* const request = tdbb->getRequest();
 
 	m_next->open(tdbb);
-	ULONG records = 0;
 
 	// Initialize for sort. If this is really a project operation,
 	// establish a callback routine to reject duplicate records.
@@ -198,8 +197,6 @@ Sort* SortedStream::init(thread_db* tdbb) const
 
 	while (m_next->getRecord(tdbb))
 	{
-		records++;
-
 		// "Put" a record to sort. Actually, get the address of a place
 		// to build a record.
 
@@ -395,8 +392,9 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 					if (!refetchStreams.exist(item.stream))
 						refetchStreams.add(item.stream);
 				}
-				else // delay refetch until really necessary
-					rpb->rpb_runtime_flags |= RPB_refetch;
+
+				// Ensure records are also refetched before update/delete
+				rpb->rpb_runtime_flags |= RPB_refetch;
 			}
 
 			continue;

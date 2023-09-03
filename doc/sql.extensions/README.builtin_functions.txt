@@ -371,7 +371,7 @@ Function:
 Format:
     CRYPT_HASH( <any value> USING <algorithm> )
 
-    algorithm ::= { MD5 | SHA1 | SHA256 | SHA512 }
+    algorithm ::= { MD5 | SHA1 | SHA256 | SHA512 | SHA3_224 | SHA3_256 | SHA3_384 | SHA3_512 }
 
 Important:
     - This function returns VARCHAR strings with OCTETS charset with length depended on algorithm.
@@ -514,7 +514,7 @@ Function:
     date/timestamp value.
 
 Format:
-    FIRST_DAY( OF { YEAR | MONTH | WEEK } FROM <date_or_timestamp> )
+    FIRST_DAY( OF { YEAR | QUARTER | MONTH | WEEK } FROM <date_or_timestamp> )
 
 Notes:
     1) The first day of the week is considered as Sunday, per the same rules of EXTRACT with WEEKDAY.
@@ -615,7 +615,7 @@ Function:
     date/timestamp value.
 
 Format:
-    LAST_DAY( OF { YEAR | MONTH | WEEK } FROM <date_or_timestamp> )
+    LAST_DAY( OF { YEAR | QUARTER | MONTH | WEEK } FROM <date_or_timestamp> )
 
 Notes:
     1) The last day of the week is considered as Saturday, per the same rules of EXTRACT with WEEKDAY.

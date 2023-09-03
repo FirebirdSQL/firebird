@@ -36,6 +36,7 @@
 #include "../common/classes/objects_array.h"
 #include "../common/classes/condition.h"
 #include "../jrd/MetaName.h"
+#include "../jrd/Attachment.h"
 #include "../common/classes/GetPlugins.h"
 #include "../common/ThreadStart.h"
 #include "../jrd/ods.h"
@@ -266,7 +267,6 @@ class CryptoManager final : public Firebird::PermanentStorage, public BarSync::I
 {
 public:
 	typedef Firebird::GetPlugins<Firebird::IDbCryptPlugin> Factory;
-	typedef Firebird::HalfStaticArray<Attachment*, 16> AttVector;
 
 	explicit CryptoManager(thread_db* tdbb);
 	~CryptoManager();
@@ -374,7 +374,7 @@ private:
 	MetaName keyName, pluginName;
 	ULONG currentPage;
 	Firebird::Mutex pluginLoadMtx, cryptThreadMtx, holdersMutex;
-	AttVector keyProviders, keyConsumers;
+	AttachmentsRefHolder keyProviders, keyConsumers;
 	Firebird::string hash;
 	Firebird::RefPtr<DbInfo> dbInfo;
 	Thread::Handle cryptThreadId;

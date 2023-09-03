@@ -124,7 +124,7 @@ type
 
 		class procedure checkException(status: IStatus);
 		class procedure catchException(status: IStatus; e: Exception);
-		class procedure setVersionError(status: IStatus; interfaceName: string;
+		class procedure setVersionError(status: IStatus; interfaceName: AnsiString;
 			currentVersion, expectedVersion: NativeInt);
 
 	private
@@ -618,15 +618,24 @@ type
 	ITraceProcedure_getProcNamePtr = function(this: ITraceProcedure): PAnsiChar; cdecl;
 	ITraceProcedure_getInputsPtr = function(this: ITraceProcedure): ITraceParams; cdecl;
 	ITraceProcedure_getPerfPtr = function(this: ITraceProcedure): PerformanceInfoPtr; cdecl;
+	ITraceProcedure_getStmtIDPtr = function(this: ITraceProcedure): Int64; cdecl;
+	ITraceProcedure_getPlanPtr = function(this: ITraceProcedure): PAnsiChar; cdecl;
+	ITraceProcedure_getExplainedPlanPtr = function(this: ITraceProcedure): PAnsiChar; cdecl;
 	ITraceFunction_getFuncNamePtr = function(this: ITraceFunction): PAnsiChar; cdecl;
 	ITraceFunction_getInputsPtr = function(this: ITraceFunction): ITraceParams; cdecl;
 	ITraceFunction_getResultPtr = function(this: ITraceFunction): ITraceParams; cdecl;
 	ITraceFunction_getPerfPtr = function(this: ITraceFunction): PerformanceInfoPtr; cdecl;
+	ITraceFunction_getStmtIDPtr = function(this: ITraceFunction): Int64; cdecl;
+	ITraceFunction_getPlanPtr = function(this: ITraceFunction): PAnsiChar; cdecl;
+	ITraceFunction_getExplainedPlanPtr = function(this: ITraceFunction): PAnsiChar; cdecl;
 	ITraceTrigger_getTriggerNamePtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
 	ITraceTrigger_getRelationNamePtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
 	ITraceTrigger_getActionPtr = function(this: ITraceTrigger): Integer; cdecl;
 	ITraceTrigger_getWhichPtr = function(this: ITraceTrigger): Integer; cdecl;
 	ITraceTrigger_getPerfPtr = function(this: ITraceTrigger): PerformanceInfoPtr; cdecl;
+	ITraceTrigger_getStmtIDPtr = function(this: ITraceTrigger): Int64; cdecl;
+	ITraceTrigger_getPlanPtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
+	ITraceTrigger_getExplainedPlanPtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
 	ITraceServiceConnection_getServiceIDPtr = function(this: ITraceServiceConnection): Pointer; cdecl;
 	ITraceServiceConnection_getServiceMgrPtr = function(this: ITraceServiceConnection): PAnsiChar; cdecl;
 	ITraceServiceConnection_getServiceNamePtr = function(this: ITraceServiceConnection): PAnsiChar; cdecl;
@@ -670,6 +679,9 @@ type
 	ITracePlugin_trace_event_sweepPtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean; cdecl;
 	ITracePlugin_trace_func_executePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean; cdecl;
 	ITracePlugin_trace_dsql_restartPtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean; cdecl;
+	ITracePlugin_trace_proc_compilePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean; cdecl;
+	ITracePlugin_trace_func_compilePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean; cdecl;
+	ITracePlugin_trace_trigger_compilePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean; cdecl;
 	ITraceFactory_trace_needsPtr = function(this: ITraceFactory): QWord; cdecl;
 	ITraceFactory_trace_createPtr = function(this: ITraceFactory; status: IStatus; init_info: ITraceInitInfo): ITracePlugin; cdecl;
 	IUdrFunctionFactory_setupPtr = procedure(this: IUdrFunctionFactory; status: IStatus; context: IExternalContext; metadata: IRoutineMetadata; inBuilder: IMetadataBuilder; outBuilder: IMetadataBuilder); cdecl;
@@ -718,7 +730,7 @@ type
 	IReplicatedSession_startTransactionPtr = function(this: IReplicatedSession; status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction; cdecl;
 	IReplicatedSession_cleanupTransactionPtr = procedure(this: IReplicatedSession; status: IStatus; number: Int64); cdecl;
 	IReplicatedSession_setSequencePtr = procedure(this: IReplicatedSession; status: IStatus; name: PAnsiChar; value: Int64); cdecl;
-	IProfilerPlugin_initPtr = procedure(this: IProfilerPlugin; status: IStatus; attachment: IAttachment); cdecl;
+	IProfilerPlugin_initPtr = procedure(this: IProfilerPlugin; status: IStatus; attachment: IAttachment; ticksFrequency: QWord); cdecl;
 	IProfilerPlugin_startSessionPtr = function(this: IProfilerPlugin; status: IStatus; description: PAnsiChar; options: PAnsiChar; timestamp: ISC_TIMESTAMP_TZ): IProfilerSession; cdecl;
 	IProfilerPlugin_flushPtr = procedure(this: IProfilerPlugin; status: IStatus); cdecl;
 	IProfilerSession_getIdPtr = function(this: IProfilerSession): Int64; cdecl;
@@ -726,16 +738,17 @@ type
 	IProfilerSession_cancelPtr = procedure(this: IProfilerSession; status: IStatus); cdecl;
 	IProfilerSession_finishPtr = procedure(this: IProfilerSession; status: IStatus; timestamp: ISC_TIMESTAMP_TZ); cdecl;
 	IProfilerSession_defineStatementPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
-	IProfilerSession_defineRecordSourcePtr = procedure(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); cdecl;
-	IProfilerSession_onRequestStartPtr = procedure(this: IProfilerSession; status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
-	IProfilerSession_onRequestFinishPtr = procedure(this: IProfilerSession; status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
-	IProfilerSession_beforePsqlLineColumnPtr = procedure(this: IProfilerSession; requestId: Int64; line: Cardinal; column: Cardinal); cdecl;
-	IProfilerSession_afterPsqlLineColumnPtr = procedure(this: IProfilerSession; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); cdecl;
-	IProfilerSession_beforeRecordSourceOpenPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
-	IProfilerSession_afterRecordSourceOpenPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
-	IProfilerSession_beforeRecordSourceGetRecordPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
-	IProfilerSession_afterRecordSourceGetRecordPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
-	IProfilerStats_getElapsedTimePtr = function(this: IProfilerStats): QWord; cdecl;
+	IProfilerSession_defineCursorPtr = procedure(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal); cdecl;
+	IProfilerSession_defineRecordSourcePtr = procedure(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); cdecl;
+	IProfilerSession_onRequestStartPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
+	IProfilerSession_onRequestFinishPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
+	IProfilerSession_beforePsqlLineColumnPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal); cdecl;
+	IProfilerSession_afterPsqlLineColumnPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); cdecl;
+	IProfilerSession_beforeRecordSourceOpenPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
+	IProfilerSession_afterRecordSourceOpenPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+	IProfilerSession_beforeRecordSourceGetRecordPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
+	IProfilerSession_afterRecordSourceGetRecordPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+	IProfilerStats_getElapsedTicksPtr = function(this: IProfilerStats): QWord; cdecl;
 
 	VersionedVTable = class
 		version: NativeInt;
@@ -3143,14 +3156,20 @@ type
 		getProcName: ITraceProcedure_getProcNamePtr;
 		getInputs: ITraceProcedure_getInputsPtr;
 		getPerf: ITraceProcedure_getPerfPtr;
+		getStmtID: ITraceProcedure_getStmtIDPtr;
+		getPlan: ITraceProcedure_getPlanPtr;
+		getExplainedPlan: ITraceProcedure_getExplainedPlanPtr;
 	end;
 
 	ITraceProcedure = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 
 		function getProcName(): PAnsiChar;
 		function getInputs(): ITraceParams;
 		function getPerf(): PerformanceInfoPtr;
+		function getStmtID(): Int64;
+		function getPlan(): PAnsiChar;
+		function getExplainedPlan(): PAnsiChar;
 	end;
 
 	ITraceProcedureImpl = class(ITraceProcedure)
@@ -3159,6 +3178,9 @@ type
 		function getProcName(): PAnsiChar; virtual; abstract;
 		function getInputs(): ITraceParams; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getStmtID(): Int64; virtual; abstract;
+		function getPlan(): PAnsiChar; virtual; abstract;
+		function getExplainedPlan(): PAnsiChar; virtual; abstract;
 	end;
 
 	TraceFunctionVTable = class(VersionedVTable)
@@ -3166,15 +3188,21 @@ type
 		getInputs: ITraceFunction_getInputsPtr;
 		getResult: ITraceFunction_getResultPtr;
 		getPerf: ITraceFunction_getPerfPtr;
+		getStmtID: ITraceFunction_getStmtIDPtr;
+		getPlan: ITraceFunction_getPlanPtr;
+		getExplainedPlan: ITraceFunction_getExplainedPlanPtr;
 	end;
 
 	ITraceFunction = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 
 		function getFuncName(): PAnsiChar;
 		function getInputs(): ITraceParams;
 		function getResult(): ITraceParams;
 		function getPerf(): PerformanceInfoPtr;
+		function getStmtID(): Int64;
+		function getPlan(): PAnsiChar;
+		function getExplainedPlan(): PAnsiChar;
 	end;
 
 	ITraceFunctionImpl = class(ITraceFunction)
@@ -3184,6 +3212,9 @@ type
 		function getInputs(): ITraceParams; virtual; abstract;
 		function getResult(): ITraceParams; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getStmtID(): Int64; virtual; abstract;
+		function getPlan(): PAnsiChar; virtual; abstract;
+		function getExplainedPlan(): PAnsiChar; virtual; abstract;
 	end;
 
 	TraceTriggerVTable = class(VersionedVTable)
@@ -3192,10 +3223,13 @@ type
 		getAction: ITraceTrigger_getActionPtr;
 		getWhich: ITraceTrigger_getWhichPtr;
 		getPerf: ITraceTrigger_getPerfPtr;
+		getStmtID: ITraceTrigger_getStmtIDPtr;
+		getPlan: ITraceTrigger_getPlanPtr;
+		getExplainedPlan: ITraceTrigger_getExplainedPlanPtr;
 	end;
 
 	ITraceTrigger = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 		const TYPE_ALL = Cardinal(0);
 		const TYPE_BEFORE = Cardinal(1);
 		const TYPE_AFTER = Cardinal(2);
@@ -3205,6 +3239,9 @@ type
 		function getAction(): Integer;
 		function getWhich(): Integer;
 		function getPerf(): PerformanceInfoPtr;
+		function getStmtID(): Int64;
+		function getPlan(): PAnsiChar;
+		function getExplainedPlan(): PAnsiChar;
 	end;
 
 	ITraceTriggerImpl = class(ITraceTrigger)
@@ -3215,6 +3252,9 @@ type
 		function getAction(): Integer; virtual; abstract;
 		function getWhich(): Integer; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getStmtID(): Int64; virtual; abstract;
+		function getPlan(): PAnsiChar; virtual; abstract;
+		function getExplainedPlan(): PAnsiChar; virtual; abstract;
 	end;
 
 	TraceServiceConnectionVTable = class(TraceConnectionVTable)
@@ -3379,10 +3419,13 @@ type
 		trace_event_sweep: ITracePlugin_trace_event_sweepPtr;
 		trace_func_execute: ITracePlugin_trace_func_executePtr;
 		trace_dsql_restart: ITracePlugin_trace_dsql_restartPtr;
+		trace_proc_compile: ITracePlugin_trace_proc_compilePtr;
+		trace_func_compile: ITracePlugin_trace_func_compilePtr;
+		trace_trigger_compile: ITracePlugin_trace_trigger_compilePtr;
 	end;
 
 	ITracePlugin = class(IReferenceCounted)
-		const VERSION = 4;
+		const VERSION = 5;
 		const RESULT_SUCCESS = Cardinal(0);
 		const RESULT_FAILED = Cardinal(1);
 		const RESULT_UNAUTHORIZED = Cardinal(2);
@@ -3413,6 +3456,9 @@ type
 		function trace_event_sweep(connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean;
 		function trace_func_execute(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean;
 		function trace_dsql_restart(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean;
+		function trace_proc_compile(connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean;
+		function trace_func_compile(connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean;
+		function trace_trigger_compile(connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean;
 	end;
 
 	ITracePluginImpl = class(ITracePlugin)
@@ -3442,6 +3488,9 @@ type
 		function trace_event_sweep(connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean; virtual; abstract;
 		function trace_func_execute(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean; virtual; abstract;
 		function trace_dsql_restart(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean; virtual; abstract;
+		function trace_proc_compile(connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean; virtual; abstract;
+		function trace_func_compile(connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean; virtual; abstract;
+		function trace_trigger_compile(connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean; virtual; abstract;
 	end;
 
 	TraceFactoryVTable = class(PluginBaseVTable)
@@ -3471,7 +3520,10 @@ type
 		const TRACE_EVENT_ERROR = Cardinal(17);
 		const TRACE_EVENT_SWEEP = Cardinal(18);
 		const TRACE_EVENT_FUNC_EXECUTE = Cardinal(19);
-		const TRACE_EVENT_MAX = Cardinal(20);
+		const TRACE_EVENT_PROC_COMPILE = Cardinal(20);
+		const TRACE_EVENT_FUNC_COMPILE = Cardinal(21);
+		const TRACE_EVENT_TRIGGER_COMPILE = Cardinal(22);
+		const TRACE_EVENT_MAX = Cardinal(23);
 
 		function trace_needs(): QWord;
 		function trace_create(status: IStatus; init_info: ITraceInitInfo): ITracePlugin;
@@ -3586,7 +3638,7 @@ type
 		const STRING_SIZE = Cardinal(24);
 
 		procedure toBcd(from: FB_DEC16Ptr; sign: IntegerPtr; bcd: BytePtr; exp: IntegerPtr);
-		procedure toString(status: IStatus; from: FB_DEC16Ptr; bufferLength: Cardinal; buffer: PAnsiChar);
+		procedure toString(status: IStatus; from: FB_DEC16Ptr; bufferLength: Cardinal; buffer: PAnsiChar); reintroduce;
 		procedure fromBcd(sign: Integer; bcd: BytePtr; exp: Integer; to_: FB_DEC16Ptr);
 		procedure fromString(status: IStatus; from: PAnsiChar; to_: FB_DEC16Ptr);
 	end;
@@ -3613,7 +3665,7 @@ type
 		const STRING_SIZE = Cardinal(43);
 
 		procedure toBcd(from: FB_DEC34Ptr; sign: IntegerPtr; bcd: BytePtr; exp: IntegerPtr);
-		procedure toString(status: IStatus; from: FB_DEC34Ptr; bufferLength: Cardinal; buffer: PAnsiChar);
+		procedure toString(status: IStatus; from: FB_DEC34Ptr; bufferLength: Cardinal; buffer: PAnsiChar); reintroduce;
 		procedure fromBcd(sign: Integer; bcd: BytePtr; exp: Integer; to_: FB_DEC34Ptr);
 		procedure fromString(status: IStatus; from: PAnsiChar; to_: FB_DEC34Ptr);
 	end;
@@ -3636,7 +3688,7 @@ type
 		const VERSION = 2;
 		const STRING_SIZE = Cardinal(46);
 
-		procedure toString(status: IStatus; from: FB_I128Ptr; scale: Integer; bufferLength: Cardinal; buffer: PAnsiChar);
+		procedure toString(status: IStatus; from: FB_I128Ptr; scale: Integer; bufferLength: Cardinal; buffer: PAnsiChar); reintroduce;
 		procedure fromString(status: IStatus; scale: Integer; from: PAnsiChar; to_: FB_I128Ptr);
 	end;
 
@@ -3791,7 +3843,7 @@ type
 	IProfilerPlugin = class(IPluginBase)
 		const VERSION = 4;
 
-		procedure init(status: IStatus; attachment: IAttachment);
+		procedure init(status: IStatus; attachment: IAttachment; ticksFrequency: QWord);
 		function startSession(status: IStatus; description: PAnsiChar; options: PAnsiChar; timestamp: ISC_TIMESTAMP_TZ): IProfilerSession;
 		procedure flush(status: IStatus);
 	end;
@@ -3803,7 +3855,7 @@ type
 		function release(): Integer; virtual; abstract;
 		procedure setOwner(r: IReferenceCounted); virtual; abstract;
 		function getOwner(): IReferenceCounted; virtual; abstract;
-		procedure init(status: IStatus; attachment: IAttachment); virtual; abstract;
+		procedure init(status: IStatus; attachment: IAttachment; ticksFrequency: QWord); virtual; abstract;
 		function startSession(status: IStatus; description: PAnsiChar; options: PAnsiChar; timestamp: ISC_TIMESTAMP_TZ): IProfilerSession; virtual; abstract;
 		procedure flush(status: IStatus); virtual; abstract;
 	end;
@@ -3814,6 +3866,7 @@ type
 		cancel: IProfilerSession_cancelPtr;
 		finish: IProfilerSession_finishPtr;
 		defineStatement: IProfilerSession_defineStatementPtr;
+		defineCursor: IProfilerSession_defineCursorPtr;
 		defineRecordSource: IProfilerSession_defineRecordSourcePtr;
 		onRequestStart: IProfilerSession_onRequestStartPtr;
 		onRequestFinish: IProfilerSession_onRequestFinishPtr;
@@ -3835,15 +3888,16 @@ type
 		procedure cancel(status: IStatus);
 		procedure finish(status: IStatus; timestamp: ISC_TIMESTAMP_TZ);
 		procedure defineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar);
-		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal);
-		procedure onRequestStart(status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
-		procedure onRequestFinish(status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
-		procedure beforePsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal);
-		procedure afterPsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats);
-		procedure beforeRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
-		procedure afterRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
-		procedure beforeRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
-		procedure afterRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+		procedure defineCursor(statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal);
+		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal);
+		procedure onRequestStart(status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
+		procedure onRequestFinish(status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
+		procedure beforePsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal);
+		procedure afterPsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats);
+		procedure beforeRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
+		procedure afterRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+		procedure beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
+		procedure afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
 	end;
 
 	IProfilerSessionImpl = class(IProfilerSession)
@@ -3855,31 +3909,32 @@ type
 		procedure cancel(status: IStatus); virtual; abstract;
 		procedure finish(status: IStatus; timestamp: ISC_TIMESTAMP_TZ); virtual; abstract;
 		procedure defineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); virtual; abstract;
-		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); virtual; abstract;
-		procedure onRequestStart(status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); virtual; abstract;
-		procedure onRequestFinish(status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); virtual; abstract;
-		procedure beforePsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal); virtual; abstract;
-		procedure afterPsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); virtual; abstract;
-		procedure beforeRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
-		procedure afterRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
-		procedure beforeRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
-		procedure afterRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
+		procedure defineCursor(statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal); virtual; abstract;
+		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); virtual; abstract;
+		procedure onRequestStart(status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); virtual; abstract;
+		procedure onRequestFinish(status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); virtual; abstract;
+		procedure beforePsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal); virtual; abstract;
+		procedure afterPsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); virtual; abstract;
+		procedure beforeRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
+		procedure afterRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
+		procedure beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
+		procedure afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
 	end;
 
 	ProfilerStatsVTable = class(VersionedVTable)
-		getElapsedTime: IProfilerStats_getElapsedTimePtr;
+		getElapsedTicks: IProfilerStats_getElapsedTicksPtr;
 	end;
 
 	IProfilerStats = class(IVersioned)
 		const VERSION = 2;
 
-		function getElapsedTime(): QWord;
+		function getElapsedTicks(): QWord;
 	end;
 
 	IProfilerStatsImpl = class(IProfilerStats)
 		constructor create;
 
-		function getElapsedTime(): QWord; virtual; abstract;
+		function getElapsedTicks(): QWord; virtual; abstract;
 	end;
 
 {$IFNDEF NO_FBCLIENT}
@@ -3986,6 +4041,7 @@ const
 	isc_dpb_decfloat_round = byte(94);
 	isc_dpb_decfloat_traps = byte(95);
 	isc_dpb_clear_map = byte(96);
+	isc_dpb_upgrade_db = byte(97);
 	isc_dpb_parallel_workers = byte(100);
 	isc_dpb_worker_attach = byte(101);
 	isc_dpb_address = byte(1);
@@ -4222,6 +4278,7 @@ const
 	isc_spb_rpr_kill_shadows = $40;
 	isc_spb_rpr_full = $80;
 	isc_spb_rpr_icu = $0800;
+	isc_spb_rpr_upgrade_db = $1000;
 	isc_spb_res_buffers = byte(9);
 	isc_spb_res_page_size = byte(10);
 	isc_spb_res_length = byte(11);
@@ -4325,8 +4382,343 @@ const
 	fb_dbg_subproc = byte(5);
 	fb_dbg_subfunc = byte(6);
 	fb_dbg_map_curname = byte(7);
+	fb_dbg_map_for_curname = byte(8);
 	fb_dbg_arg_input = byte(0);
 	fb_dbg_arg_output = byte(1);
+	isc_info_end = byte(1);
+	isc_info_truncated = byte(2);
+	isc_info_error = byte(3);
+	isc_info_data_not_ready = byte(4);
+	isc_info_length = byte(126);
+	isc_info_flag_end = byte(127);
+	isc_info_db_id = byte(4);
+	isc_info_reads = byte(5);
+	isc_info_writes = byte(6);
+	isc_info_fetches = byte(7);
+	isc_info_marks = byte(8);
+	isc_info_implementation = byte(11);
+	isc_info_isc_version = byte(12);
+	isc_info_base_level = byte(13);
+	isc_info_page_size = byte(14);
+	isc_info_num_buffers = byte(15);
+	isc_info_limbo = byte(16);
+	isc_info_current_memory = byte(17);
+	isc_info_max_memory = byte(18);
+	isc_info_window_turns = byte(19);
+	isc_info_license = byte(20);
+	isc_info_allocation = byte(21);
+	isc_info_attachment_id = byte(22);
+	isc_info_read_seq_count = byte(23);
+	isc_info_read_idx_count = byte(24);
+	isc_info_insert_count = byte(25);
+	isc_info_update_count = byte(26);
+	isc_info_delete_count = byte(27);
+	isc_info_backout_count = byte(28);
+	isc_info_purge_count = byte(29);
+	isc_info_expunge_count = byte(30);
+	isc_info_sweep_interval = byte(31);
+	isc_info_ods_version = byte(32);
+	isc_info_ods_minor_version = byte(33);
+	isc_info_no_reserve = byte(34);
+	isc_info_logfile = byte(35);
+	isc_info_cur_logfile_name = byte(36);
+	isc_info_cur_log_part_offset = byte(37);
+	isc_info_num_wal_buffers = byte(38);
+	isc_info_wal_buffer_size = byte(39);
+	isc_info_wal_ckpt_length = byte(40);
+	isc_info_wal_cur_ckpt_interval = byte(41);
+	isc_info_wal_prv_ckpt_fname = byte(42);
+	isc_info_wal_prv_ckpt_poffset = byte(43);
+	isc_info_wal_recv_ckpt_fname = byte(44);
+	isc_info_wal_recv_ckpt_poffset = byte(45);
+	isc_info_wal_grpc_wait_usecs = byte(47);
+	isc_info_wal_num_io = byte(48);
+	isc_info_wal_avg_io_size = byte(49);
+	isc_info_wal_num_commits = byte(50);
+	isc_info_wal_avg_grpc_size = byte(51);
+	isc_info_forced_writes = byte(52);
+	isc_info_user_names = byte(53);
+	isc_info_page_errors = byte(54);
+	isc_info_record_errors = byte(55);
+	isc_info_bpage_errors = byte(56);
+	isc_info_dpage_errors = byte(57);
+	isc_info_ipage_errors = byte(58);
+	isc_info_ppage_errors = byte(59);
+	isc_info_tpage_errors = byte(60);
+	isc_info_set_page_buffers = byte(61);
+	isc_info_db_sql_dialect = byte(62);
+	isc_info_db_read_only = byte(63);
+	isc_info_db_size_in_pages = byte(64);
+	frb_info_att_charset = byte(101);
+	isc_info_db_class = byte(102);
+	isc_info_firebird_version = byte(103);
+	isc_info_oldest_transaction = byte(104);
+	isc_info_oldest_active = byte(105);
+	isc_info_oldest_snapshot = byte(106);
+	isc_info_next_transaction = byte(107);
+	isc_info_db_provider = byte(108);
+	isc_info_active_transactions = byte(109);
+	isc_info_active_tran_count = byte(110);
+	isc_info_creation_date = byte(111);
+	isc_info_db_file_size = byte(112);
+	fb_info_page_contents = byte(113);
+	fb_info_implementation = byte(114);
+	fb_info_page_warns = byte(115);
+	fb_info_record_warns = byte(116);
+	fb_info_bpage_warns = byte(117);
+	fb_info_dpage_warns = byte(118);
+	fb_info_ipage_warns = byte(119);
+	fb_info_ppage_warns = byte(120);
+	fb_info_tpage_warns = byte(121);
+	fb_info_pip_errors = byte(122);
+	fb_info_pip_warns = byte(123);
+	fb_info_pages_used = byte(124);
+	fb_info_pages_free = byte(125);
+	fb_info_ses_idle_timeout_db = byte(129);
+	fb_info_ses_idle_timeout_att = byte(130);
+	fb_info_ses_idle_timeout_run = byte(131);
+	fb_info_conn_flags = byte(132);
+	fb_info_crypt_key = byte(133);
+	fb_info_crypt_state = byte(134);
+	fb_info_statement_timeout_db = byte(135);
+	fb_info_statement_timeout_att = byte(136);
+	fb_info_protocol_version = byte(137);
+	fb_info_crypt_plugin = byte(138);
+	fb_info_creation_timestamp_tz = byte(139);
+	fb_info_wire_crypt = byte(140);
+	fb_info_features = byte(141);
+	fb_info_next_attachment = byte(142);
+	fb_info_next_statement = byte(143);
+	fb_info_db_guid = byte(144);
+	fb_info_db_file_id = byte(145);
+	fb_info_replica_mode = byte(146);
+	fb_info_username = byte(147);
+	fb_info_sqlrole = byte(148);
+	fb_info_parallel_workers = byte(149);
+	fb_info_crypt_encrypted = $01;
+	fb_info_crypt_process = $02;
+	fb_feature_multi_statements = byte(1);
+	fb_feature_multi_transactions = byte(2);
+	fb_feature_named_parameters = byte(3);
+	fb_feature_session_reset = byte(4);
+	fb_feature_read_consistency = byte(5);
+	fb_feature_statement_timeout = byte(6);
+	fb_feature_statement_long_life = byte(7);
+	fb_info_replica_none = byte(0);
+	fb_info_replica_read_only = byte(1);
+	fb_info_replica_read_write = byte(2);
+	isc_info_db_impl_rdb_vms = byte(1);
+	isc_info_db_impl_rdb_eln = byte(2);
+	isc_info_db_impl_rdb_eln_dev = byte(3);
+	isc_info_db_impl_rdb_vms_y = byte(4);
+	isc_info_db_impl_rdb_eln_y = byte(5);
+	isc_info_db_impl_jri = byte(6);
+	isc_info_db_impl_jsv = byte(7);
+	isc_info_db_impl_isc_apl_68K = byte(25);
+	isc_info_db_impl_isc_vax_ultr = byte(26);
+	isc_info_db_impl_isc_vms = byte(27);
+	isc_info_db_impl_isc_sun_68k = byte(28);
+	isc_info_db_impl_isc_os2 = byte(29);
+	isc_info_db_impl_isc_sun4 = byte(30);
+	isc_info_db_impl_isc_hp_ux = byte(31);
+	isc_info_db_impl_isc_sun_386i = byte(32);
+	isc_info_db_impl_isc_vms_orcl = byte(33);
+	isc_info_db_impl_isc_mac_aux = byte(34);
+	isc_info_db_impl_isc_rt_aix = byte(35);
+	isc_info_db_impl_isc_mips_ult = byte(36);
+	isc_info_db_impl_isc_xenix = byte(37);
+	isc_info_db_impl_isc_dg = byte(38);
+	isc_info_db_impl_isc_hp_mpexl = byte(39);
+	isc_info_db_impl_isc_hp_ux68K = byte(40);
+	isc_info_db_impl_isc_sgi = byte(41);
+	isc_info_db_impl_isc_sco_unix = byte(42);
+	isc_info_db_impl_isc_cray = byte(43);
+	isc_info_db_impl_isc_imp = byte(44);
+	isc_info_db_impl_isc_delta = byte(45);
+	isc_info_db_impl_isc_next = byte(46);
+	isc_info_db_impl_isc_dos = byte(47);
+	isc_info_db_impl_m88K = byte(48);
+	isc_info_db_impl_unixware = byte(49);
+	isc_info_db_impl_isc_winnt_x86 = byte(50);
+	isc_info_db_impl_isc_epson = byte(51);
+	isc_info_db_impl_alpha_osf = byte(52);
+	isc_info_db_impl_alpha_vms = byte(53);
+	isc_info_db_impl_netware_386 = byte(54);
+	isc_info_db_impl_win_only = byte(55);
+	isc_info_db_impl_ncr_3000 = byte(56);
+	isc_info_db_impl_winnt_ppc = byte(57);
+	isc_info_db_impl_dg_x86 = byte(58);
+	isc_info_db_impl_sco_ev = byte(59);
+	isc_info_db_impl_i386 = byte(60);
+	isc_info_db_impl_freebsd = byte(61);
+	isc_info_db_impl_netbsd = byte(62);
+	isc_info_db_impl_darwin_ppc = byte(63);
+	isc_info_db_impl_sinixz = byte(64);
+	isc_info_db_impl_linux_sparc = byte(65);
+	isc_info_db_impl_linux_amd64 = byte(66);
+	isc_info_db_impl_freebsd_amd64 = byte(67);
+	isc_info_db_impl_winnt_amd64 = byte(68);
+	isc_info_db_impl_linux_ppc = byte(69);
+	isc_info_db_impl_darwin_x86 = byte(70);
+	isc_info_db_impl_linux_mipsel = byte(71);
+	isc_info_db_impl_linux_mips = byte(72);
+	isc_info_db_impl_darwin_x64 = byte(73);
+	isc_info_db_impl_sun_amd64 = byte(74);
+	isc_info_db_impl_linux_arm = byte(75);
+	isc_info_db_impl_linux_ia64 = byte(76);
+	isc_info_db_impl_darwin_ppc64 = byte(77);
+	isc_info_db_impl_linux_s390x = byte(78);
+	isc_info_db_impl_linux_s390 = byte(79);
+	isc_info_db_impl_linux_sh = byte(80);
+	isc_info_db_impl_linux_sheb = byte(81);
+	isc_info_db_impl_linux_hppa = byte(82);
+	isc_info_db_impl_linux_alpha = byte(83);
+	isc_info_db_impl_linux_arm64 = byte(84);
+	isc_info_db_impl_linux_ppc64el = byte(85);
+	isc_info_db_impl_linux_ppc64 = byte(86);
+	isc_info_db_impl_linux_m68k = byte(87);
+	isc_info_db_impl_linux_riscv64 = byte(88);
+	isc_info_db_impl_freebsd_ppc64el = byte(89);
+	isc_info_db_impl_linux_mips64el = byte(90);
+	isc_info_db_impl_freebsd_ppc64 = byte(91);
+	isc_info_db_impl_freebsd_ppc = byte(92);
+	isc_info_db_class_access = byte(1);
+	isc_info_db_class_y_valve = byte(2);
+	isc_info_db_class_rem_int = byte(3);
+	isc_info_db_class_rem_srvr = byte(4);
+	isc_info_db_class_pipe_int = byte(7);
+	isc_info_db_class_pipe_srvr = byte(8);
+	isc_info_db_class_sam_int = byte(9);
+	isc_info_db_class_sam_srvr = byte(10);
+	isc_info_db_class_gateway = byte(11);
+	isc_info_db_class_cache = byte(12);
+	isc_info_db_class_classic_access = byte(13);
+	isc_info_db_class_server_access = byte(14);
+	isc_info_db_code_rdb_eln = byte(1);
+	isc_info_db_code_rdb_vms = byte(2);
+	isc_info_db_code_interbase = byte(3);
+	isc_info_db_code_firebird = byte(4);
+	isc_info_number_messages = byte(4);
+	isc_info_max_message = byte(5);
+	isc_info_max_send = byte(6);
+	isc_info_max_receive = byte(7);
+	isc_info_state = byte(8);
+	isc_info_message_number = byte(9);
+	isc_info_message_size = byte(10);
+	isc_info_request_cost = byte(11);
+	isc_info_access_path = byte(12);
+	isc_info_req_select_count = byte(13);
+	isc_info_req_insert_count = byte(14);
+	isc_info_req_update_count = byte(15);
+	isc_info_req_delete_count = byte(16);
+	isc_info_rsb_end = byte(0);
+	isc_info_rsb_begin = byte(1);
+	isc_info_rsb_type = byte(2);
+	isc_info_rsb_relation = byte(3);
+	isc_info_rsb_plan = byte(4);
+	isc_info_rsb_unknown = byte(1);
+	isc_info_rsb_indexed = byte(2);
+	isc_info_rsb_navigate = byte(3);
+	isc_info_rsb_sequential = byte(4);
+	isc_info_rsb_cross = byte(5);
+	isc_info_rsb_sort = byte(6);
+	isc_info_rsb_first = byte(7);
+	isc_info_rsb_boolean = byte(8);
+	isc_info_rsb_union = byte(9);
+	isc_info_rsb_aggregate = byte(10);
+	isc_info_rsb_merge = byte(11);
+	isc_info_rsb_ext_sequential = byte(12);
+	isc_info_rsb_ext_indexed = byte(13);
+	isc_info_rsb_ext_dbkey = byte(14);
+	isc_info_rsb_left_cross = byte(15);
+	isc_info_rsb_select = byte(16);
+	isc_info_rsb_sql_join = byte(17);
+	isc_info_rsb_simulate = byte(18);
+	isc_info_rsb_sim_cross = byte(19);
+	isc_info_rsb_once = byte(20);
+	isc_info_rsb_procedure = byte(21);
+	isc_info_rsb_skip = byte(22);
+	isc_info_rsb_virt_sequential = byte(23);
+	isc_info_rsb_recursive = byte(24);
+	isc_info_rsb_window = byte(25);
+	isc_info_rsb_singular = byte(26);
+	isc_info_rsb_writelock = byte(27);
+	isc_info_rsb_buffer = byte(28);
+	isc_info_rsb_hash = byte(29);
+	isc_info_rsb_and = byte(1);
+	isc_info_rsb_or = byte(2);
+	isc_info_rsb_dbkey = byte(3);
+	isc_info_rsb_index = byte(4);
+	isc_info_req_active = byte(2);
+	isc_info_req_inactive = byte(3);
+	isc_info_req_send = byte(4);
+	isc_info_req_receive = byte(5);
+	isc_info_req_select = byte(6);
+	isc_info_req_sql_stall = byte(7);
+	isc_info_blob_num_segments = byte(4);
+	isc_info_blob_max_segment = byte(5);
+	isc_info_blob_total_length = byte(6);
+	isc_info_blob_type = byte(7);
+	isc_info_tra_id = byte(4);
+	isc_info_tra_oldest_interesting = byte(5);
+	isc_info_tra_oldest_snapshot = byte(6);
+	isc_info_tra_oldest_active = byte(7);
+	isc_info_tra_isolation = byte(8);
+	isc_info_tra_access = byte(9);
+	isc_info_tra_lock_timeout = byte(10);
+	fb_info_tra_dbpath = byte(11);
+	fb_info_tra_snapshot_number = byte(12);
+	isc_info_tra_consistency = byte(1);
+	isc_info_tra_concurrency = byte(2);
+	isc_info_tra_read_committed = byte(3);
+	isc_info_tra_no_rec_version = byte(0);
+	isc_info_tra_rec_version = byte(1);
+	isc_info_tra_read_consistency = byte(2);
+	isc_info_tra_readonly = byte(0);
+	isc_info_tra_readwrite = byte(1);
+	isc_info_sql_select = byte(4);
+	isc_info_sql_bind = byte(5);
+	isc_info_sql_num_variables = byte(6);
+	isc_info_sql_describe_vars = byte(7);
+	isc_info_sql_describe_end = byte(8);
+	isc_info_sql_sqlda_seq = byte(9);
+	isc_info_sql_message_seq = byte(10);
+	isc_info_sql_type = byte(11);
+	isc_info_sql_sub_type = byte(12);
+	isc_info_sql_scale = byte(13);
+	isc_info_sql_length = byte(14);
+	isc_info_sql_null_ind = byte(15);
+	isc_info_sql_field = byte(16);
+	isc_info_sql_relation = byte(17);
+	isc_info_sql_owner = byte(18);
+	isc_info_sql_alias = byte(19);
+	isc_info_sql_sqlda_start = byte(20);
+	isc_info_sql_stmt_type = byte(21);
+	isc_info_sql_get_plan = byte(22);
+	isc_info_sql_records = byte(23);
+	isc_info_sql_batch_fetch = byte(24);
+	isc_info_sql_relation_alias = byte(25);
+	isc_info_sql_explain_plan = byte(26);
+	isc_info_sql_stmt_flags = byte(27);
+	isc_info_sql_stmt_timeout_user = byte(28);
+	isc_info_sql_stmt_timeout_run = byte(29);
+	isc_info_sql_stmt_blob_align = byte(30);
+	isc_info_sql_exec_path_blr_bytes = byte(31);
+	isc_info_sql_exec_path_blr_text = byte(32);
+	isc_info_sql_stmt_select = byte(1);
+	isc_info_sql_stmt_insert = byte(2);
+	isc_info_sql_stmt_update = byte(3);
+	isc_info_sql_stmt_delete = byte(4);
+	isc_info_sql_stmt_ddl = byte(5);
+	isc_info_sql_stmt_get_segment = byte(6);
+	isc_info_sql_stmt_put_segment = byte(7);
+	isc_info_sql_stmt_exec_procedure = byte(8);
+	isc_info_sql_stmt_start_trans = byte(9);
+	isc_info_sql_stmt_commit = byte(10);
+	isc_info_sql_stmt_rollback = byte(11);
+	isc_info_sql_stmt_select_for_upd = byte(12);
+	isc_info_sql_stmt_set_generator = byte(13);
+	isc_info_sql_stmt_savepoint = byte(14);
 	isc_facility		= 20;
 	isc_err_base		= 335544320;
 	isc_err_factor		= 1;
@@ -5156,7 +5548,7 @@ const
 	 isc_overriding_without_identity = 335545134;
 	 isc_overriding_system_invalid = 335545135;
 	 isc_overriding_user_invalid = 335545136;
-	 isc_overriding_system_missing = 335545137;
+	 isc_overriding_missing = 335545137;
 	 isc_decprecision_err = 335545138;
 	 isc_decfloat_divide_by_zero = 335545139;
 	 isc_decfloat_inexact_result = 335545140;
@@ -5302,6 +5694,12 @@ const
 	 isc_wrong_shmem_ver = 335545280;
 	 isc_wrong_shmem_bitness = 335545281;
 	 isc_wrong_proc_plan = 335545282;
+	 isc_invalid_blob_util_handle = 335545283;
+	 isc_bad_temp_blob_id = 335545284;
+	 isc_ods_upgrade_err = 335545285;
+	 isc_bad_par_workers = 335545286;
+	 isc_idx_expr_not_found = 335545287;
+	 isc_idx_cond_not_found = 335545288;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -8487,6 +8885,36 @@ begin
 	Result := TraceProcedureVTable(vTable).getPerf(Self);
 end;
 
+function ITraceProcedure.getStmtID(): Int64;
+begin
+	if (vTable.version < 3) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceProcedureVTable(vTable).getStmtID(Self);
+	end;
+end;
+
+function ITraceProcedure.getPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceProcedureVTable(vTable).getPlan(Self);
+	end;
+end;
+
+function ITraceProcedure.getExplainedPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceProcedureVTable(vTable).getExplainedPlan(Self);
+	end;
+end;
+
 function ITraceFunction.getFuncName(): PAnsiChar;
 begin
 	Result := TraceFunctionVTable(vTable).getFuncName(Self);
@@ -8505,6 +8933,36 @@ end;
 function ITraceFunction.getPerf(): PerformanceInfoPtr;
 begin
 	Result := TraceFunctionVTable(vTable).getPerf(Self);
+end;
+
+function ITraceFunction.getStmtID(): Int64;
+begin
+	if (vTable.version < 3) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceFunctionVTable(vTable).getStmtID(Self);
+	end;
+end;
+
+function ITraceFunction.getPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceFunctionVTable(vTable).getPlan(Self);
+	end;
+end;
+
+function ITraceFunction.getExplainedPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceFunctionVTable(vTable).getExplainedPlan(Self);
+	end;
 end;
 
 function ITraceTrigger.getTriggerName(): PAnsiChar;
@@ -8530,6 +8988,36 @@ end;
 function ITraceTrigger.getPerf(): PerformanceInfoPtr;
 begin
 	Result := TraceTriggerVTable(vTable).getPerf(Self);
+end;
+
+function ITraceTrigger.getStmtID(): Int64;
+begin
+	if (vTable.version < 3) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceTriggerVTable(vTable).getStmtID(Self);
+	end;
+end;
+
+function ITraceTrigger.getPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceTriggerVTable(vTable).getPlan(Self);
+	end;
+end;
+
+function ITraceTrigger.getExplainedPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceTriggerVTable(vTable).getExplainedPlan(Self);
+	end;
 end;
 
 function ITraceServiceConnection.getServiceID(): Pointer;
@@ -8756,6 +9244,36 @@ begin
 	end
 	else begin
 		Result := TracePluginVTable(vTable).trace_dsql_restart(Self, connection, transaction, statement, number);
+	end;
+end;
+
+function ITracePlugin.trace_proc_compile(connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean;
+begin
+	if (vTable.version < 5) then begin
+		Result := false;
+	end
+	else begin
+		Result := TracePluginVTable(vTable).trace_proc_compile(Self, connection, procedure_, time_millis, proc_result);
+	end;
+end;
+
+function ITracePlugin.trace_func_compile(connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean;
+begin
+	if (vTable.version < 5) then begin
+		Result := false;
+	end
+	else begin
+		Result := TracePluginVTable(vTable).trace_func_compile(Self, connection, function_, time_millis, func_result);
+	end;
+end;
+
+function ITracePlugin.trace_trigger_compile(connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean;
+begin
+	if (vTable.version < 5) then begin
+		Result := false;
+	end
+	else begin
+		Result := TracePluginVTable(vTable).trace_trigger_compile(Self, connection, trigger, time_millis, trig_result);
 	end;
 end;
 
@@ -9030,9 +9548,9 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IProfilerPlugin.init(status: IStatus; attachment: IAttachment);
+procedure IProfilerPlugin.init(status: IStatus; attachment: IAttachment; ticksFrequency: QWord);
 begin
-	ProfilerPluginVTable(vTable).init(Self, status, attachment);
+	ProfilerPluginVTable(vTable).init(Self, status, attachment, ticksFrequency);
 	FbException.checkException(status);
 end;
 
@@ -9076,56 +9594,61 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IProfilerSession.defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal);
+procedure IProfilerSession.defineCursor(statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal);
 begin
-	ProfilerSessionVTable(vTable).defineRecordSource(Self, statementId, cursorId, recSourceId, accessPath, parentRecSourceId);
+	ProfilerSessionVTable(vTable).defineCursor(Self, statementId, cursorId, name, line, column);
 end;
 
-procedure IProfilerSession.onRequestStart(status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
+procedure IProfilerSession.defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal);
 begin
-	ProfilerSessionVTable(vTable).onRequestStart(Self, status, requestId, statementId, callerRequestId, timestamp);
+	ProfilerSessionVTable(vTable).defineRecordSource(Self, statementId, cursorId, recSourceId, level, accessPath, parentRecSourceId);
+end;
+
+procedure IProfilerSession.onRequestStart(status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
+begin
+	ProfilerSessionVTable(vTable).onRequestStart(Self, status, statementId, requestId, callerStatementId, callerRequestId, timestamp);
 	FbException.checkException(status);
 end;
 
-procedure IProfilerSession.onRequestFinish(status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
+procedure IProfilerSession.onRequestFinish(status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
 begin
-	ProfilerSessionVTable(vTable).onRequestFinish(Self, status, requestId, timestamp, stats);
+	ProfilerSessionVTable(vTable).onRequestFinish(Self, status, statementId, requestId, timestamp, stats);
 	FbException.checkException(status);
 end;
 
-procedure IProfilerSession.beforePsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal);
+procedure IProfilerSession.beforePsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal);
 begin
-	ProfilerSessionVTable(vTable).beforePsqlLineColumn(Self, requestId, line, column);
+	ProfilerSessionVTable(vTable).beforePsqlLineColumn(Self, statementId, requestId, line, column);
 end;
 
-procedure IProfilerSession.afterPsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats);
+procedure IProfilerSession.afterPsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats);
 begin
-	ProfilerSessionVTable(vTable).afterPsqlLineColumn(Self, requestId, line, column, stats);
+	ProfilerSessionVTable(vTable).afterPsqlLineColumn(Self, statementId, requestId, line, column, stats);
 end;
 
-procedure IProfilerSession.beforeRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
+procedure IProfilerSession.beforeRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
 begin
-	ProfilerSessionVTable(vTable).beforeRecordSourceOpen(Self, requestId, cursorId, recSourceId);
+	ProfilerSessionVTable(vTable).beforeRecordSourceOpen(Self, statementId, requestId, cursorId, recSourceId);
 end;
 
-procedure IProfilerSession.afterRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+procedure IProfilerSession.afterRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
 begin
-	ProfilerSessionVTable(vTable).afterRecordSourceOpen(Self, requestId, cursorId, recSourceId, stats);
+	ProfilerSessionVTable(vTable).afterRecordSourceOpen(Self, statementId, requestId, cursorId, recSourceId, stats);
 end;
 
-procedure IProfilerSession.beforeRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
+procedure IProfilerSession.beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
 begin
-	ProfilerSessionVTable(vTable).beforeRecordSourceGetRecord(Self, requestId, cursorId, recSourceId);
+	ProfilerSessionVTable(vTable).beforeRecordSourceGetRecord(Self, statementId, requestId, cursorId, recSourceId);
 end;
 
-procedure IProfilerSession.afterRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+procedure IProfilerSession.afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
 begin
-	ProfilerSessionVTable(vTable).afterRecordSourceGetRecord(Self, requestId, cursorId, recSourceId, stats);
+	ProfilerSessionVTable(vTable).afterRecordSourceGetRecord(Self, statementId, requestId, cursorId, recSourceId, stats);
 end;
 
-function IProfilerStats.getElapsedTime(): QWord;
+function IProfilerStats.getElapsedTicks(): QWord;
 begin
-	Result := ProfilerStatsVTable(vTable).getElapsedTime(Self);
+	Result := ProfilerStatsVTable(vTable).getElapsedTicks(Self);
 end;
 
 var
@@ -9147,6 +9670,7 @@ end;
 
 function IReferenceCountedImpl_releaseDispatcher(this: IReferenceCounted): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IReferenceCountedImpl(this).release();
 	except
@@ -9199,6 +9723,7 @@ end;
 
 function IStatusImpl_getStateDispatcher(this: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IStatusImpl(this).getState();
 	except
@@ -9244,6 +9769,7 @@ end;
 
 function IStatusImpl_getErrorsDispatcher(this: IStatus): NativeIntPtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IStatusImpl(this).getErrors();
 	except
@@ -9253,6 +9779,7 @@ end;
 
 function IStatusImpl_getWarningsDispatcher(this: IStatus): NativeIntPtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IStatusImpl(this).getWarnings();
 	except
@@ -9262,6 +9789,7 @@ end;
 
 function IStatusImpl_cloneDispatcher(this: IStatus): IStatus; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IStatusImpl(this).clone();
 	except
@@ -9279,6 +9807,7 @@ end;
 
 function IMasterImpl_getStatusDispatcher(this: IMaster): IStatus; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMasterImpl(this).getStatus();
 	except
@@ -9288,6 +9817,7 @@ end;
 
 function IMasterImpl_getDispatcherDispatcher(this: IMaster): IProvider; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMasterImpl(this).getDispatcher();
 	except
@@ -9297,6 +9827,7 @@ end;
 
 function IMasterImpl_getPluginManagerDispatcher(this: IMaster): IPluginManager; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMasterImpl(this).getPluginManager();
 	except
@@ -9306,6 +9837,7 @@ end;
 
 function IMasterImpl_getTimerControlDispatcher(this: IMaster): ITimerControl; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMasterImpl(this).getTimerControl();
 	except
@@ -9315,6 +9847,7 @@ end;
 
 function IMasterImpl_getDtcDispatcher(this: IMaster): IDtc; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMasterImpl(this).getDtc();
 	except
@@ -9324,6 +9857,7 @@ end;
 
 function IMasterImpl_registerAttachmentDispatcher(this: IMaster; provider: IProvider; attachment: IAttachment): IAttachment; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMasterImpl(this).registerAttachment(provider, attachment);
 	except
@@ -9333,6 +9867,7 @@ end;
 
 function IMasterImpl_registerTransactionDispatcher(this: IMaster; attachment: IAttachment; transaction: ITransaction): ITransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMasterImpl(this).registerTransaction(attachment, transaction);
 	except
@@ -9342,6 +9877,7 @@ end;
 
 function IMasterImpl_getMetadataBuilderDispatcher(this: IMaster; status: IStatus; fieldCount: Cardinal): IMetadataBuilder; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMasterImpl(this).getMetadataBuilder(status, fieldCount);
 	except
@@ -9351,6 +9887,7 @@ end;
 
 function IMasterImpl_serverModeDispatcher(this: IMaster; mode: Integer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMasterImpl(this).serverMode(mode);
 	except
@@ -9360,6 +9897,7 @@ end;
 
 function IMasterImpl_getUtilInterfaceDispatcher(this: IMaster): IUtil; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMasterImpl(this).getUtilInterface();
 	except
@@ -9369,6 +9907,7 @@ end;
 
 function IMasterImpl_getConfigManagerDispatcher(this: IMaster): IConfigManager; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMasterImpl(this).getConfigManager();
 	except
@@ -9378,6 +9917,7 @@ end;
 
 function IMasterImpl_getProcessExitingDispatcher(this: IMaster): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IMasterImpl(this).getProcessExiting();
 	except
@@ -9404,6 +9944,7 @@ end;
 
 function IPluginBaseImpl_releaseDispatcher(this: IPluginBase): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IPluginBaseImpl(this).release();
 	except
@@ -9422,6 +9963,7 @@ end;
 
 function IPluginBaseImpl_getOwnerDispatcher(this: IPluginBase): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IPluginBaseImpl(this).getOwner();
 	except
@@ -9448,6 +9990,7 @@ end;
 
 function IPluginSetImpl_releaseDispatcher(this: IPluginSet): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IPluginSetImpl(this).release();
 	except
@@ -9457,6 +10000,7 @@ end;
 
 function IPluginSetImpl_getNameDispatcher(this: IPluginSet): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IPluginSetImpl(this).getName();
 	except
@@ -9466,6 +10010,7 @@ end;
 
 function IPluginSetImpl_getModuleNameDispatcher(this: IPluginSet): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IPluginSetImpl(this).getModuleName();
 	except
@@ -9475,6 +10020,7 @@ end;
 
 function IPluginSetImpl_getPluginDispatcher(this: IPluginSet; status: IStatus): IPluginBase; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IPluginSetImpl(this).getPlugin(status);
 	except
@@ -9519,6 +10065,7 @@ end;
 
 function IConfigEntryImpl_releaseDispatcher(this: IConfigEntry): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IConfigEntryImpl(this).release();
 	except
@@ -9528,6 +10075,7 @@ end;
 
 function IConfigEntryImpl_getNameDispatcher(this: IConfigEntry): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigEntryImpl(this).getName();
 	except
@@ -9537,6 +10085,7 @@ end;
 
 function IConfigEntryImpl_getValueDispatcher(this: IConfigEntry): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigEntryImpl(this).getValue();
 	except
@@ -9546,6 +10095,7 @@ end;
 
 function IConfigEntryImpl_getIntValueDispatcher(this: IConfigEntry): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IConfigEntryImpl(this).getIntValue();
 	except
@@ -9555,6 +10105,7 @@ end;
 
 function IConfigEntryImpl_getBoolValueDispatcher(this: IConfigEntry): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IConfigEntryImpl(this).getBoolValue();
 	except
@@ -9564,6 +10115,7 @@ end;
 
 function IConfigEntryImpl_getSubConfigDispatcher(this: IConfigEntry; status: IStatus): IConfig; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigEntryImpl(this).getSubConfig(status);
 	except
@@ -9590,6 +10142,7 @@ end;
 
 function IConfigImpl_releaseDispatcher(this: IConfig): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IConfigImpl(this).release();
 	except
@@ -9599,6 +10152,7 @@ end;
 
 function IConfigImpl_findDispatcher(this: IConfig; status: IStatus; name: PAnsiChar): IConfigEntry; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigImpl(this).find(status, name);
 	except
@@ -9608,6 +10162,7 @@ end;
 
 function IConfigImpl_findValueDispatcher(this: IConfig; status: IStatus; name: PAnsiChar; value: PAnsiChar): IConfigEntry; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigImpl(this).findValue(status, name, value);
 	except
@@ -9617,6 +10172,7 @@ end;
 
 function IConfigImpl_findPosDispatcher(this: IConfig; status: IStatus; name: PAnsiChar; pos: Cardinal): IConfigEntry; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigImpl(this).findPos(status, name, pos);
 	except
@@ -9643,6 +10199,7 @@ end;
 
 function IFirebirdConfImpl_releaseDispatcher(this: IFirebirdConf): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IFirebirdConfImpl(this).release();
 	except
@@ -9652,6 +10209,7 @@ end;
 
 function IFirebirdConfImpl_getKeyDispatcher(this: IFirebirdConf; name: PAnsiChar): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IFirebirdConfImpl(this).getKey(name);
 	except
@@ -9661,6 +10219,7 @@ end;
 
 function IFirebirdConfImpl_asIntegerDispatcher(this: IFirebirdConf; key: Cardinal): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IFirebirdConfImpl(this).asInteger(key);
 	except
@@ -9670,6 +10229,7 @@ end;
 
 function IFirebirdConfImpl_asStringDispatcher(this: IFirebirdConf; key: Cardinal): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IFirebirdConfImpl(this).asString(key);
 	except
@@ -9679,6 +10239,7 @@ end;
 
 function IFirebirdConfImpl_asBooleanDispatcher(this: IFirebirdConf; key: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IFirebirdConfImpl(this).asBoolean(key);
 	except
@@ -9688,6 +10249,7 @@ end;
 
 function IFirebirdConfImpl_getVersionDispatcher(this: IFirebirdConf; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IFirebirdConfImpl(this).getVersion(status);
 	except
@@ -9714,6 +10276,7 @@ end;
 
 function IPluginConfigImpl_releaseDispatcher(this: IPluginConfig): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IPluginConfigImpl(this).release();
 	except
@@ -9723,6 +10286,7 @@ end;
 
 function IPluginConfigImpl_getConfigFileNameDispatcher(this: IPluginConfig): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IPluginConfigImpl(this).getConfigFileName();
 	except
@@ -9732,6 +10296,7 @@ end;
 
 function IPluginConfigImpl_getDefaultConfigDispatcher(this: IPluginConfig; status: IStatus): IConfig; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IPluginConfigImpl(this).getDefaultConfig(status);
 	except
@@ -9741,6 +10306,7 @@ end;
 
 function IPluginConfigImpl_getFirebirdConfDispatcher(this: IPluginConfig; status: IStatus): IFirebirdConf; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IPluginConfigImpl(this).getFirebirdConf(status);
 	except
@@ -9767,6 +10333,7 @@ end;
 
 function IPluginFactoryImpl_createPluginDispatcher(this: IPluginFactory; status: IStatus; factoryParameter: IPluginConfig): IPluginBase; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IPluginFactoryImpl(this).createPlugin(status, factoryParameter);
 	except
@@ -9837,6 +10404,7 @@ end;
 
 function IPluginManagerImpl_getPluginsDispatcher(this: IPluginManager; status: IStatus; pluginType: Cardinal; namesList: PAnsiChar; firebirdConf: IFirebirdConf): IPluginSet; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IPluginManagerImpl(this).getPlugins(status, pluginType, namesList, firebirdConf);
 	except
@@ -9846,6 +10414,7 @@ end;
 
 function IPluginManagerImpl_getConfigDispatcher(this: IPluginManager; status: IStatus; filename: PAnsiChar): IConfig; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IPluginManagerImpl(this).getConfig(status, filename);
 	except
@@ -9890,6 +10459,7 @@ end;
 
 function ICryptKeyImpl_getEncryptKeyDispatcher(this: ICryptKey; length: CardinalPtr): Pointer; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ICryptKeyImpl(this).getEncryptKey(length);
 	except
@@ -9899,6 +10469,7 @@ end;
 
 function ICryptKeyImpl_getDecryptKeyDispatcher(this: ICryptKey; length: CardinalPtr): Pointer; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ICryptKeyImpl(this).getDecryptKey(length);
 	except
@@ -9916,6 +10487,7 @@ end;
 
 function IConfigManagerImpl_getDirectoryDispatcher(this: IConfigManager; code: Cardinal): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigManagerImpl(this).getDirectory(code);
 	except
@@ -9925,6 +10497,7 @@ end;
 
 function IConfigManagerImpl_getFirebirdConfDispatcher(this: IConfigManager): IFirebirdConf; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigManagerImpl(this).getFirebirdConf();
 	except
@@ -9934,6 +10507,7 @@ end;
 
 function IConfigManagerImpl_getDatabaseConfDispatcher(this: IConfigManager; dbName: PAnsiChar): IFirebirdConf; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigManagerImpl(this).getDatabaseConf(dbName);
 	except
@@ -9943,6 +10517,7 @@ end;
 
 function IConfigManagerImpl_getPluginConfigDispatcher(this: IConfigManager; configuredPlugin: PAnsiChar): IConfig; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigManagerImpl(this).getPluginConfig(configuredPlugin);
 	except
@@ -9952,6 +10527,7 @@ end;
 
 function IConfigManagerImpl_getInstallDirectoryDispatcher(this: IConfigManager): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigManagerImpl(this).getInstallDirectory();
 	except
@@ -9961,6 +10537,7 @@ end;
 
 function IConfigManagerImpl_getRootDirectoryDispatcher(this: IConfigManager): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigManagerImpl(this).getRootDirectory();
 	except
@@ -9970,6 +10547,7 @@ end;
 
 function IConfigManagerImpl_getDefaultSecurityDbDispatcher(this: IConfigManager): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IConfigManagerImpl(this).getDefaultSecurityDb();
 	except
@@ -9996,6 +10574,7 @@ end;
 
 function IEventCallbackImpl_releaseDispatcher(this: IEventCallback): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IEventCallbackImpl(this).release();
 	except
@@ -10031,6 +10610,7 @@ end;
 
 function IBlobImpl_releaseDispatcher(this: IBlob): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IBlobImpl(this).release();
 	except
@@ -10049,6 +10629,7 @@ end;
 
 function IBlobImpl_getSegmentDispatcher(this: IBlob; status: IStatus; bufferLength: Cardinal; buffer: Pointer; segmentLength: CardinalPtr): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IBlobImpl(this).getSegment(status, bufferLength, buffer, segmentLength);
 	except
@@ -10085,6 +10666,7 @@ end;
 
 function IBlobImpl_seekDispatcher(this: IBlob; status: IStatus; mode: Integer; offset: Integer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IBlobImpl(this).seek(status, mode, offset);
 	except
@@ -10129,6 +10711,7 @@ end;
 
 function ITransactionImpl_releaseDispatcher(this: ITransaction): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITransactionImpl(this).release();
 	except
@@ -10201,6 +10784,7 @@ end;
 
 function ITransactionImpl_joinDispatcher(this: ITransaction; status: IStatus; transaction: ITransaction): ITransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITransactionImpl(this).join(status, transaction);
 	except
@@ -10210,6 +10794,7 @@ end;
 
 function ITransactionImpl_validateDispatcher(this: ITransaction; status: IStatus; attachment: IAttachment): ITransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITransactionImpl(this).validate(status, attachment);
 	except
@@ -10219,6 +10804,7 @@ end;
 
 function ITransactionImpl_enterDtcDispatcher(this: ITransaction; status: IStatus): ITransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITransactionImpl(this).enterDtc(status);
 	except
@@ -10272,6 +10858,7 @@ end;
 
 function IMessageMetadataImpl_releaseDispatcher(this: IMessageMetadata): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMessageMetadataImpl(this).release();
 	except
@@ -10281,6 +10868,7 @@ end;
 
 function IMessageMetadataImpl_getCountDispatcher(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMessageMetadataImpl(this).getCount(status);
 	except
@@ -10290,6 +10878,7 @@ end;
 
 function IMessageMetadataImpl_getFieldDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMessageMetadataImpl(this).getField(status, index);
 	except
@@ -10299,6 +10888,7 @@ end;
 
 function IMessageMetadataImpl_getRelationDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMessageMetadataImpl(this).getRelation(status, index);
 	except
@@ -10308,6 +10898,7 @@ end;
 
 function IMessageMetadataImpl_getOwnerDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMessageMetadataImpl(this).getOwner(status, index);
 	except
@@ -10317,6 +10908,7 @@ end;
 
 function IMessageMetadataImpl_getAliasDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMessageMetadataImpl(this).getAlias(status, index);
 	except
@@ -10326,6 +10918,7 @@ end;
 
 function IMessageMetadataImpl_getTypeDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMessageMetadataImpl(this).getType(status, index);
 	except
@@ -10335,6 +10928,7 @@ end;
 
 function IMessageMetadataImpl_isNullableDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IMessageMetadataImpl(this).isNullable(status, index);
 	except
@@ -10344,6 +10938,7 @@ end;
 
 function IMessageMetadataImpl_getSubTypeDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMessageMetadataImpl(this).getSubType(status, index);
 	except
@@ -10353,6 +10948,7 @@ end;
 
 function IMessageMetadataImpl_getLengthDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMessageMetadataImpl(this).getLength(status, index);
 	except
@@ -10362,6 +10958,7 @@ end;
 
 function IMessageMetadataImpl_getScaleDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMessageMetadataImpl(this).getScale(status, index);
 	except
@@ -10371,6 +10968,7 @@ end;
 
 function IMessageMetadataImpl_getCharSetDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMessageMetadataImpl(this).getCharSet(status, index);
 	except
@@ -10380,6 +10978,7 @@ end;
 
 function IMessageMetadataImpl_getOffsetDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMessageMetadataImpl(this).getOffset(status, index);
 	except
@@ -10389,6 +10988,7 @@ end;
 
 function IMessageMetadataImpl_getNullOffsetDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMessageMetadataImpl(this).getNullOffset(status, index);
 	except
@@ -10398,6 +10998,7 @@ end;
 
 function IMessageMetadataImpl_getBuilderDispatcher(this: IMessageMetadata; status: IStatus): IMetadataBuilder; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMessageMetadataImpl(this).getBuilder(status);
 	except
@@ -10407,6 +11008,7 @@ end;
 
 function IMessageMetadataImpl_getMessageLengthDispatcher(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMessageMetadataImpl(this).getMessageLength(status);
 	except
@@ -10416,6 +11018,7 @@ end;
 
 function IMessageMetadataImpl_getAlignmentDispatcher(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMessageMetadataImpl(this).getAlignment(status);
 	except
@@ -10425,6 +11028,7 @@ end;
 
 function IMessageMetadataImpl_getAlignedLengthDispatcher(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMessageMetadataImpl(this).getAlignedLength(status);
 	except
@@ -10451,6 +11055,7 @@ end;
 
 function IMetadataBuilderImpl_releaseDispatcher(this: IMetadataBuilder): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMetadataBuilderImpl(this).release();
 	except
@@ -10532,6 +11137,7 @@ end;
 
 function IMetadataBuilderImpl_addFieldDispatcher(this: IMetadataBuilder; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IMetadataBuilderImpl(this).addField(status);
 	except
@@ -10541,6 +11147,7 @@ end;
 
 function IMetadataBuilderImpl_getMetadataDispatcher(this: IMetadataBuilder; status: IStatus): IMessageMetadata; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IMetadataBuilderImpl(this).getMetadata(status);
 	except
@@ -10603,6 +11210,7 @@ end;
 
 function IResultSetImpl_releaseDispatcher(this: IResultSet): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IResultSetImpl(this).release();
 	except
@@ -10612,6 +11220,7 @@ end;
 
 function IResultSetImpl_fetchNextDispatcher(this: IResultSet; status: IStatus; message: Pointer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IResultSetImpl(this).fetchNext(status, message);
 	except
@@ -10621,6 +11230,7 @@ end;
 
 function IResultSetImpl_fetchPriorDispatcher(this: IResultSet; status: IStatus; message: Pointer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IResultSetImpl(this).fetchPrior(status, message);
 	except
@@ -10630,6 +11240,7 @@ end;
 
 function IResultSetImpl_fetchFirstDispatcher(this: IResultSet; status: IStatus; message: Pointer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IResultSetImpl(this).fetchFirst(status, message);
 	except
@@ -10639,6 +11250,7 @@ end;
 
 function IResultSetImpl_fetchLastDispatcher(this: IResultSet; status: IStatus; message: Pointer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IResultSetImpl(this).fetchLast(status, message);
 	except
@@ -10648,6 +11260,7 @@ end;
 
 function IResultSetImpl_fetchAbsoluteDispatcher(this: IResultSet; status: IStatus; position: Integer; message: Pointer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IResultSetImpl(this).fetchAbsolute(status, position, message);
 	except
@@ -10657,6 +11270,7 @@ end;
 
 function IResultSetImpl_fetchRelativeDispatcher(this: IResultSet; status: IStatus; offset: Integer; message: Pointer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IResultSetImpl(this).fetchRelative(status, offset, message);
 	except
@@ -10666,6 +11280,7 @@ end;
 
 function IResultSetImpl_isEofDispatcher(this: IResultSet; status: IStatus): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IResultSetImpl(this).isEof(status);
 	except
@@ -10675,6 +11290,7 @@ end;
 
 function IResultSetImpl_isBofDispatcher(this: IResultSet; status: IStatus): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IResultSetImpl(this).isBof(status);
 	except
@@ -10684,6 +11300,7 @@ end;
 
 function IResultSetImpl_getMetadataDispatcher(this: IResultSet; status: IStatus): IMessageMetadata; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IResultSetImpl(this).getMetadata(status);
 	except
@@ -10746,6 +11363,7 @@ end;
 
 function IStatementImpl_releaseDispatcher(this: IStatement): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IStatementImpl(this).release();
 	except
@@ -10764,6 +11382,7 @@ end;
 
 function IStatementImpl_getTypeDispatcher(this: IStatement; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IStatementImpl(this).getType(status);
 	except
@@ -10773,6 +11392,7 @@ end;
 
 function IStatementImpl_getPlanDispatcher(this: IStatement; status: IStatus; detailed: Boolean): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IStatementImpl(this).getPlan(status, detailed);
 	except
@@ -10782,6 +11402,7 @@ end;
 
 function IStatementImpl_getAffectedRecordsDispatcher(this: IStatement; status: IStatus): QWord; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IStatementImpl(this).getAffectedRecords(status);
 	except
@@ -10791,6 +11412,7 @@ end;
 
 function IStatementImpl_getInputMetadataDispatcher(this: IStatement; status: IStatus): IMessageMetadata; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IStatementImpl(this).getInputMetadata(status);
 	except
@@ -10800,6 +11422,7 @@ end;
 
 function IStatementImpl_getOutputMetadataDispatcher(this: IStatement; status: IStatus): IMessageMetadata; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IStatementImpl(this).getOutputMetadata(status);
 	except
@@ -10809,6 +11432,7 @@ end;
 
 function IStatementImpl_executeDispatcher(this: IStatement; status: IStatus; transaction: ITransaction; inMetadata: IMessageMetadata; inBuffer: Pointer; outMetadata: IMessageMetadata; outBuffer: Pointer): ITransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IStatementImpl(this).execute(status, transaction, inMetadata, inBuffer, outMetadata, outBuffer);
 	except
@@ -10818,6 +11442,7 @@ end;
 
 function IStatementImpl_openCursorDispatcher(this: IStatement; status: IStatus; transaction: ITransaction; inMetadata: IMessageMetadata; inBuffer: Pointer; outMetadata: IMessageMetadata; flags: Cardinal): IResultSet; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IStatementImpl(this).openCursor(status, transaction, inMetadata, inBuffer, outMetadata, flags);
 	except
@@ -10845,6 +11470,7 @@ end;
 
 function IStatementImpl_getFlagsDispatcher(this: IStatement; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IStatementImpl(this).getFlags(status);
 	except
@@ -10854,6 +11480,7 @@ end;
 
 function IStatementImpl_getTimeoutDispatcher(this: IStatement; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IStatementImpl(this).getTimeout(status);
 	except
@@ -10872,6 +11499,7 @@ end;
 
 function IStatementImpl_createBatchDispatcher(this: IStatement; status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IStatementImpl(this).createBatch(status, inMetadata, parLength, par);
 	except
@@ -10907,6 +11535,7 @@ end;
 
 function IBatchImpl_releaseDispatcher(this: IBatch): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IBatchImpl(this).release();
 	except
@@ -10961,6 +11590,7 @@ end;
 
 function IBatchImpl_executeDispatcher(this: IBatch; status: IStatus; transaction: ITransaction): IBatchCompletionState; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IBatchImpl(this).execute(status, transaction);
 	except
@@ -10979,6 +11609,7 @@ end;
 
 function IBatchImpl_getBlobAlignmentDispatcher(this: IBatch; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IBatchImpl(this).getBlobAlignment(status);
 	except
@@ -10988,6 +11619,7 @@ end;
 
 function IBatchImpl_getMetadataDispatcher(this: IBatch; status: IStatus): IMessageMetadata; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IBatchImpl(this).getMetadata(status);
 	except
@@ -11050,6 +11682,7 @@ end;
 
 function IBatchCompletionStateImpl_getSizeDispatcher(this: IBatchCompletionState; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IBatchCompletionStateImpl(this).getSize(status);
 	except
@@ -11059,6 +11692,7 @@ end;
 
 function IBatchCompletionStateImpl_getStateDispatcher(this: IBatchCompletionState; status: IStatus; pos: Cardinal): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IBatchCompletionStateImpl(this).getState(status, pos);
 	except
@@ -11068,6 +11702,7 @@ end;
 
 function IBatchCompletionStateImpl_findErrorDispatcher(this: IBatchCompletionState; status: IStatus; pos: Cardinal): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IBatchCompletionStateImpl(this).findError(status, pos);
 	except
@@ -11103,6 +11738,7 @@ end;
 
 function IReplicatorImpl_releaseDispatcher(this: IReplicator): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IReplicatorImpl(this).release();
 	except
@@ -11156,6 +11792,7 @@ end;
 
 function IRequestImpl_releaseDispatcher(this: IRequest): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IRequestImpl(this).release();
 	except
@@ -11254,6 +11891,7 @@ end;
 
 function IEventsImpl_releaseDispatcher(this: IEvents): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IEventsImpl(this).release();
 	except
@@ -11298,6 +11936,7 @@ end;
 
 function IAttachmentImpl_releaseDispatcher(this: IAttachment): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IAttachmentImpl(this).release();
 	except
@@ -11316,6 +11955,7 @@ end;
 
 function IAttachmentImpl_startTransactionDispatcher(this: IAttachment; status: IStatus; tpbLength: Cardinal; tpb: BytePtr): ITransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAttachmentImpl(this).startTransaction(status, tpbLength, tpb);
 	except
@@ -11325,6 +11965,7 @@ end;
 
 function IAttachmentImpl_reconnectTransactionDispatcher(this: IAttachment; status: IStatus; length: Cardinal; id: BytePtr): ITransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAttachmentImpl(this).reconnectTransaction(status, length, id);
 	except
@@ -11334,6 +11975,7 @@ end;
 
 function IAttachmentImpl_compileRequestDispatcher(this: IAttachment; status: IStatus; blrLength: Cardinal; blr: BytePtr): IRequest; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAttachmentImpl(this).compileRequest(status, blrLength, blr);
 	except
@@ -11352,6 +11994,7 @@ end;
 
 function IAttachmentImpl_createBlobDispatcher(this: IAttachment; status: IStatus; transaction: ITransaction; id: ISC_QUADPtr; bpbLength: Cardinal; bpb: BytePtr): IBlob; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAttachmentImpl(this).createBlob(status, transaction, id, bpbLength, bpb);
 	except
@@ -11361,6 +12004,7 @@ end;
 
 function IAttachmentImpl_openBlobDispatcher(this: IAttachment; status: IStatus; transaction: ITransaction; id: ISC_QUADPtr; bpbLength: Cardinal; bpb: BytePtr): IBlob; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAttachmentImpl(this).openBlob(status, transaction, id, bpbLength, bpb);
 	except
@@ -11370,6 +12014,7 @@ end;
 
 function IAttachmentImpl_getSliceDispatcher(this: IAttachment; status: IStatus; transaction: ITransaction; id: ISC_QUADPtr; sdlLength: Cardinal; sdl: BytePtr; paramLength: Cardinal; param: BytePtr; sliceLength: Integer; slice: BytePtr): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IAttachmentImpl(this).getSlice(status, transaction, id, sdlLength, sdl, paramLength, param, sliceLength, slice);
 	except
@@ -11397,6 +12042,7 @@ end;
 
 function IAttachmentImpl_prepareDispatcher(this: IAttachment; status: IStatus; tra: ITransaction; stmtLength: Cardinal; sqlStmt: PAnsiChar; dialect: Cardinal; flags: Cardinal): IStatement; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAttachmentImpl(this).prepare(status, tra, stmtLength, sqlStmt, dialect, flags);
 	except
@@ -11406,6 +12052,7 @@ end;
 
 function IAttachmentImpl_executeDispatcher(this: IAttachment; status: IStatus; transaction: ITransaction; stmtLength: Cardinal; sqlStmt: PAnsiChar; dialect: Cardinal; inMetadata: IMessageMetadata; inBuffer: Pointer; outMetadata: IMessageMetadata; outBuffer: Pointer): ITransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAttachmentImpl(this).execute(status, transaction, stmtLength, sqlStmt, dialect, inMetadata, inBuffer, outMetadata, outBuffer);
 	except
@@ -11415,6 +12062,7 @@ end;
 
 function IAttachmentImpl_openCursorDispatcher(this: IAttachment; status: IStatus; transaction: ITransaction; stmtLength: Cardinal; sqlStmt: PAnsiChar; dialect: Cardinal; inMetadata: IMessageMetadata; inBuffer: Pointer; outMetadata: IMessageMetadata; cursorName: PAnsiChar; cursorFlags: Cardinal): IResultSet; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAttachmentImpl(this).openCursor(status, transaction, stmtLength, sqlStmt, dialect, inMetadata, inBuffer, outMetadata, cursorName, cursorFlags);
 	except
@@ -11424,6 +12072,7 @@ end;
 
 function IAttachmentImpl_queEventsDispatcher(this: IAttachment; status: IStatus; callback: IEventCallback; length: Cardinal; events: BytePtr): IEvents; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAttachmentImpl(this).queEvents(status, callback, length, events);
 	except
@@ -11469,6 +12118,7 @@ end;
 
 function IAttachmentImpl_getIdleTimeoutDispatcher(this: IAttachment; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IAttachmentImpl(this).getIdleTimeout(status);
 	except
@@ -11487,6 +12137,7 @@ end;
 
 function IAttachmentImpl_getStatementTimeoutDispatcher(this: IAttachment; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IAttachmentImpl(this).getStatementTimeout(status);
 	except
@@ -11505,6 +12156,7 @@ end;
 
 function IAttachmentImpl_createBatchDispatcher(this: IAttachment; status: IStatus; transaction: ITransaction; stmtLength: Cardinal; sqlStmt: PAnsiChar; dialect: Cardinal; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAttachmentImpl(this).createBatch(status, transaction, stmtLength, sqlStmt, dialect, inMetadata, parLength, par);
 	except
@@ -11514,6 +12166,7 @@ end;
 
 function IAttachmentImpl_createReplicatorDispatcher(this: IAttachment; status: IStatus): IReplicator; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAttachmentImpl(this).createReplicator(status);
 	except
@@ -11558,6 +12211,7 @@ end;
 
 function IServiceImpl_releaseDispatcher(this: IService): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IServiceImpl(this).release();
 	except
@@ -11629,6 +12283,7 @@ end;
 
 function IProviderImpl_releaseDispatcher(this: IProvider): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IProviderImpl(this).release();
 	except
@@ -11647,6 +12302,7 @@ end;
 
 function IProviderImpl_getOwnerDispatcher(this: IProvider): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IProviderImpl(this).getOwner();
 	except
@@ -11656,6 +12312,7 @@ end;
 
 function IProviderImpl_attachDatabaseDispatcher(this: IProvider; status: IStatus; fileName: PAnsiChar; dpbLength: Cardinal; dpb: BytePtr): IAttachment; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IProviderImpl(this).attachDatabase(status, fileName, dpbLength, dpb);
 	except
@@ -11665,6 +12322,7 @@ end;
 
 function IProviderImpl_createDatabaseDispatcher(this: IProvider; status: IStatus; fileName: PAnsiChar; dpbLength: Cardinal; dpb: BytePtr): IAttachment; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IProviderImpl(this).createDatabase(status, fileName, dpbLength, dpb);
 	except
@@ -11674,6 +12332,7 @@ end;
 
 function IProviderImpl_attachServiceManagerDispatcher(this: IProvider; status: IStatus; service: PAnsiChar; spbLength: Cardinal; spb: BytePtr): IService; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IProviderImpl(this).attachServiceManager(status, service, spbLength, spb);
 	except
@@ -11736,6 +12395,7 @@ end;
 
 function IDtcStartImpl_startDispatcher(this: IDtcStart; status: IStatus): ITransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IDtcStartImpl(this).start(status);
 	except
@@ -11753,6 +12413,7 @@ end;
 
 function IDtcImpl_joinDispatcher(this: IDtc; status: IStatus; one: ITransaction; two: ITransaction): ITransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IDtcImpl(this).join(status, one, two);
 	except
@@ -11762,6 +12423,7 @@ end;
 
 function IDtcImpl_startBuilderDispatcher(this: IDtc; status: IStatus): IDtcStart; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IDtcImpl(this).startBuilder(status);
 	except
@@ -11788,6 +12450,7 @@ end;
 
 function IAuthImpl_releaseDispatcher(this: IAuth): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IAuthImpl(this).release();
 	except
@@ -11806,6 +12469,7 @@ end;
 
 function IAuthImpl_getOwnerDispatcher(this: IAuth): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAuthImpl(this).getOwner();
 	except
@@ -11867,6 +12531,7 @@ end;
 
 function IServerBlockImpl_getLoginDispatcher(this: IServerBlock): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IServerBlockImpl(this).getLogin();
 	except
@@ -11876,6 +12541,7 @@ end;
 
 function IServerBlockImpl_getDataDispatcher(this: IServerBlock; length: CardinalPtr): BytePtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IServerBlockImpl(this).getData(length);
 	except
@@ -11894,6 +12560,7 @@ end;
 
 function IServerBlockImpl_newKeyDispatcher(this: IServerBlock; status: IStatus): ICryptKey; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IServerBlockImpl(this).newKey(status);
 	except
@@ -11920,6 +12587,7 @@ end;
 
 function IClientBlockImpl_releaseDispatcher(this: IClientBlock): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IClientBlockImpl(this).release();
 	except
@@ -11929,6 +12597,7 @@ end;
 
 function IClientBlockImpl_getLoginDispatcher(this: IClientBlock): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IClientBlockImpl(this).getLogin();
 	except
@@ -11938,6 +12607,7 @@ end;
 
 function IClientBlockImpl_getPasswordDispatcher(this: IClientBlock): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IClientBlockImpl(this).getPassword();
 	except
@@ -11947,6 +12617,7 @@ end;
 
 function IClientBlockImpl_getDataDispatcher(this: IClientBlock; length: CardinalPtr): BytePtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IClientBlockImpl(this).getData(length);
 	except
@@ -11965,6 +12636,7 @@ end;
 
 function IClientBlockImpl_newKeyDispatcher(this: IClientBlock; status: IStatus): ICryptKey; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IClientBlockImpl(this).newKey(status);
 	except
@@ -11974,6 +12646,7 @@ end;
 
 function IClientBlockImpl_getAuthBlockDispatcher(this: IClientBlock; status: IStatus): IAuthBlock; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IClientBlockImpl(this).getAuthBlock(status);
 	except
@@ -12000,6 +12673,7 @@ end;
 
 function IServerImpl_releaseDispatcher(this: IServer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IServerImpl(this).release();
 	except
@@ -12018,6 +12692,7 @@ end;
 
 function IServerImpl_getOwnerDispatcher(this: IServer): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IServerImpl(this).getOwner();
 	except
@@ -12027,6 +12702,7 @@ end;
 
 function IServerImpl_authenticateDispatcher(this: IServer; status: IStatus; sBlock: IServerBlock; writerInterface: IWriter): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IServerImpl(this).authenticate(status, sBlock, writerInterface);
 	except
@@ -12062,6 +12738,7 @@ end;
 
 function IClientImpl_releaseDispatcher(this: IClient): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IClientImpl(this).release();
 	except
@@ -12080,6 +12757,7 @@ end;
 
 function IClientImpl_getOwnerDispatcher(this: IClient): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IClientImpl(this).getOwner();
 	except
@@ -12089,6 +12767,7 @@ end;
 
 function IClientImpl_authenticateDispatcher(this: IClient; status: IStatus; cBlock: IClientBlock): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IClientImpl(this).authenticate(status, cBlock);
 	except
@@ -12106,6 +12785,7 @@ end;
 
 function IUserFieldImpl_enteredDispatcher(this: IUserField): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IUserFieldImpl(this).entered();
 	except
@@ -12115,6 +12795,7 @@ end;
 
 function IUserFieldImpl_specifiedDispatcher(this: IUserField): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IUserFieldImpl(this).specified();
 	except
@@ -12141,6 +12822,7 @@ end;
 
 function ICharUserFieldImpl_enteredDispatcher(this: ICharUserField): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ICharUserFieldImpl(this).entered();
 	except
@@ -12150,6 +12832,7 @@ end;
 
 function ICharUserFieldImpl_specifiedDispatcher(this: ICharUserField): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ICharUserFieldImpl(this).specified();
 	except
@@ -12168,6 +12851,7 @@ end;
 
 function ICharUserFieldImpl_getDispatcher(this: ICharUserField): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ICharUserFieldImpl(this).get();
 	except
@@ -12194,6 +12878,7 @@ end;
 
 function IIntUserFieldImpl_enteredDispatcher(this: IIntUserField): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IIntUserFieldImpl(this).entered();
 	except
@@ -12203,6 +12888,7 @@ end;
 
 function IIntUserFieldImpl_specifiedDispatcher(this: IIntUserField): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IIntUserFieldImpl(this).specified();
 	except
@@ -12221,6 +12907,7 @@ end;
 
 function IIntUserFieldImpl_getDispatcher(this: IIntUserField): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IIntUserFieldImpl(this).get();
 	except
@@ -12247,6 +12934,7 @@ end;
 
 function IUserImpl_operationDispatcher(this: IUser): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IUserImpl(this).operation();
 	except
@@ -12256,6 +12944,7 @@ end;
 
 function IUserImpl_userNameDispatcher(this: IUser): ICharUserField; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUserImpl(this).userName();
 	except
@@ -12265,6 +12954,7 @@ end;
 
 function IUserImpl_passwordDispatcher(this: IUser): ICharUserField; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUserImpl(this).password();
 	except
@@ -12274,6 +12964,7 @@ end;
 
 function IUserImpl_firstNameDispatcher(this: IUser): ICharUserField; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUserImpl(this).firstName();
 	except
@@ -12283,6 +12974,7 @@ end;
 
 function IUserImpl_lastNameDispatcher(this: IUser): ICharUserField; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUserImpl(this).lastName();
 	except
@@ -12292,6 +12984,7 @@ end;
 
 function IUserImpl_middleNameDispatcher(this: IUser): ICharUserField; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUserImpl(this).middleName();
 	except
@@ -12301,6 +12994,7 @@ end;
 
 function IUserImpl_commentDispatcher(this: IUser): ICharUserField; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUserImpl(this).comment();
 	except
@@ -12310,6 +13004,7 @@ end;
 
 function IUserImpl_attributesDispatcher(this: IUser): ICharUserField; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUserImpl(this).attributes();
 	except
@@ -12319,6 +13014,7 @@ end;
 
 function IUserImpl_activeDispatcher(this: IUser): IIntUserField; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUserImpl(this).active();
 	except
@@ -12328,6 +13024,7 @@ end;
 
 function IUserImpl_adminDispatcher(this: IUser): IIntUserField; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUserImpl(this).admin();
 	except
@@ -12371,6 +13068,7 @@ end;
 
 function ILogonInfoImpl_nameDispatcher(this: ILogonInfo): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ILogonInfoImpl(this).name();
 	except
@@ -12380,6 +13078,7 @@ end;
 
 function ILogonInfoImpl_roleDispatcher(this: ILogonInfo): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ILogonInfoImpl(this).role();
 	except
@@ -12389,6 +13088,7 @@ end;
 
 function ILogonInfoImpl_networkProtocolDispatcher(this: ILogonInfo): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ILogonInfoImpl(this).networkProtocol();
 	except
@@ -12398,6 +13098,7 @@ end;
 
 function ILogonInfoImpl_remoteAddressDispatcher(this: ILogonInfo): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ILogonInfoImpl(this).remoteAddress();
 	except
@@ -12407,6 +13108,7 @@ end;
 
 function ILogonInfoImpl_authBlockDispatcher(this: ILogonInfo; length: CardinalPtr): BytePtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ILogonInfoImpl(this).authBlock(length);
 	except
@@ -12416,6 +13118,7 @@ end;
 
 function ILogonInfoImpl_attachmentDispatcher(this: ILogonInfo; status: IStatus): IAttachment; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ILogonInfoImpl(this).attachment(status);
 	except
@@ -12425,6 +13128,7 @@ end;
 
 function ILogonInfoImpl_transactionDispatcher(this: ILogonInfo; status: IStatus): ITransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ILogonInfoImpl(this).transaction(status);
 	except
@@ -12451,6 +13155,7 @@ end;
 
 function IManagementImpl_releaseDispatcher(this: IManagement): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IManagementImpl(this).release();
 	except
@@ -12469,6 +13174,7 @@ end;
 
 function IManagementImpl_getOwnerDispatcher(this: IManagement): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IManagementImpl(this).getOwner();
 	except
@@ -12487,6 +13193,7 @@ end;
 
 function IManagementImpl_executeDispatcher(this: IManagement; status: IStatus; user: IUser; callback: IListUsers): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IManagementImpl(this).execute(status, user, callback);
 	except
@@ -12522,6 +13229,7 @@ end;
 
 function IAuthBlockImpl_getTypeDispatcher(this: IAuthBlock): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAuthBlockImpl(this).getType();
 	except
@@ -12531,6 +13239,7 @@ end;
 
 function IAuthBlockImpl_getNameDispatcher(this: IAuthBlock): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAuthBlockImpl(this).getName();
 	except
@@ -12540,6 +13249,7 @@ end;
 
 function IAuthBlockImpl_getPluginDispatcher(this: IAuthBlock): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAuthBlockImpl(this).getPlugin();
 	except
@@ -12549,6 +13259,7 @@ end;
 
 function IAuthBlockImpl_getSecurityDbDispatcher(this: IAuthBlock): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAuthBlockImpl(this).getSecurityDb();
 	except
@@ -12558,6 +13269,7 @@ end;
 
 function IAuthBlockImpl_getOriginalPluginDispatcher(this: IAuthBlock): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IAuthBlockImpl(this).getOriginalPlugin();
 	except
@@ -12567,6 +13279,7 @@ end;
 
 function IAuthBlockImpl_nextDispatcher(this: IAuthBlock; status: IStatus): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IAuthBlockImpl(this).next(status);
 	except
@@ -12576,6 +13289,7 @@ end;
 
 function IAuthBlockImpl_firstDispatcher(this: IAuthBlock; status: IStatus): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IAuthBlockImpl(this).first(status);
 	except
@@ -12602,6 +13316,7 @@ end;
 
 function IWireCryptPluginImpl_releaseDispatcher(this: IWireCryptPlugin): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IWireCryptPluginImpl(this).release();
 	except
@@ -12620,6 +13335,7 @@ end;
 
 function IWireCryptPluginImpl_getOwnerDispatcher(this: IWireCryptPlugin): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IWireCryptPluginImpl(this).getOwner();
 	except
@@ -12629,6 +13345,7 @@ end;
 
 function IWireCryptPluginImpl_getKnownTypesDispatcher(this: IWireCryptPlugin; status: IStatus): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IWireCryptPluginImpl(this).getKnownTypes(status);
 	except
@@ -12665,6 +13382,7 @@ end;
 
 function IWireCryptPluginImpl_getSpecificDataDispatcher(this: IWireCryptPlugin; status: IStatus; keyType: PAnsiChar; length: CardinalPtr): BytePtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IWireCryptPluginImpl(this).getSpecificData(status, keyType, length);
 	except
@@ -12691,6 +13409,7 @@ end;
 
 function ICryptKeyCallbackImpl_callbackDispatcher(this: ICryptKeyCallback; dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ICryptKeyCallbackImpl(this).callback(dataLength, data, bufferLength, buffer);
 	except
@@ -12717,6 +13436,7 @@ end;
 
 function IKeyHolderPluginImpl_releaseDispatcher(this: IKeyHolderPlugin): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IKeyHolderPluginImpl(this).release();
 	except
@@ -12735,6 +13455,7 @@ end;
 
 function IKeyHolderPluginImpl_getOwnerDispatcher(this: IKeyHolderPlugin): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IKeyHolderPluginImpl(this).getOwner();
 	except
@@ -12744,6 +13465,7 @@ end;
 
 function IKeyHolderPluginImpl_keyCallbackDispatcher(this: IKeyHolderPlugin; status: IStatus; callback: ICryptKeyCallback): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IKeyHolderPluginImpl(this).keyCallback(status, callback);
 	except
@@ -12753,6 +13475,7 @@ end;
 
 function IKeyHolderPluginImpl_keyHandleDispatcher(this: IKeyHolderPlugin; status: IStatus; keyName: PAnsiChar): ICryptKeyCallback; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IKeyHolderPluginImpl(this).keyHandle(status, keyName);
 	except
@@ -12762,6 +13485,7 @@ end;
 
 function IKeyHolderPluginImpl_useOnlyOwnKeysDispatcher(this: IKeyHolderPlugin; status: IStatus): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IKeyHolderPluginImpl(this).useOnlyOwnKeys(status);
 	except
@@ -12771,6 +13495,7 @@ end;
 
 function IKeyHolderPluginImpl_chainHandleDispatcher(this: IKeyHolderPlugin; status: IStatus): ICryptKeyCallback; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IKeyHolderPluginImpl(this).chainHandle(status);
 	except
@@ -12797,6 +13522,7 @@ end;
 
 function IDbCryptInfoImpl_releaseDispatcher(this: IDbCryptInfo): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IDbCryptInfoImpl(this).release();
 	except
@@ -12806,6 +13532,7 @@ end;
 
 function IDbCryptInfoImpl_getDatabaseFullPathDispatcher(this: IDbCryptInfo; status: IStatus): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IDbCryptInfoImpl(this).getDatabaseFullPath(status);
 	except
@@ -12832,6 +13559,7 @@ end;
 
 function IDbCryptPluginImpl_releaseDispatcher(this: IDbCryptPlugin): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IDbCryptPluginImpl(this).release();
 	except
@@ -12850,6 +13578,7 @@ end;
 
 function IDbCryptPluginImpl_getOwnerDispatcher(this: IDbCryptPlugin): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IDbCryptPluginImpl(this).getOwner();
 	except
@@ -12903,6 +13632,7 @@ end;
 
 function IExternalContextImpl_getMasterDispatcher(this: IExternalContext): IMaster; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalContextImpl(this).getMaster();
 	except
@@ -12912,6 +13642,7 @@ end;
 
 function IExternalContextImpl_getEngineDispatcher(this: IExternalContext; status: IStatus): IExternalEngine; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalContextImpl(this).getEngine(status);
 	except
@@ -12921,6 +13652,7 @@ end;
 
 function IExternalContextImpl_getAttachmentDispatcher(this: IExternalContext; status: IStatus): IAttachment; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalContextImpl(this).getAttachment(status);
 	except
@@ -12930,6 +13662,7 @@ end;
 
 function IExternalContextImpl_getTransactionDispatcher(this: IExternalContext; status: IStatus): ITransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalContextImpl(this).getTransaction(status);
 	except
@@ -12939,6 +13672,7 @@ end;
 
 function IExternalContextImpl_getUserNameDispatcher(this: IExternalContext): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalContextImpl(this).getUserName();
 	except
@@ -12948,6 +13682,7 @@ end;
 
 function IExternalContextImpl_getDatabaseNameDispatcher(this: IExternalContext): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalContextImpl(this).getDatabaseName();
 	except
@@ -12957,6 +13692,7 @@ end;
 
 function IExternalContextImpl_getClientCharSetDispatcher(this: IExternalContext): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalContextImpl(this).getClientCharSet();
 	except
@@ -12966,6 +13702,7 @@ end;
 
 function IExternalContextImpl_obtainInfoCodeDispatcher(this: IExternalContext): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IExternalContextImpl(this).obtainInfoCode();
 	except
@@ -12975,6 +13712,7 @@ end;
 
 function IExternalContextImpl_getInfoDispatcher(this: IExternalContext; code: Integer): Pointer; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalContextImpl(this).getInfo(code);
 	except
@@ -12984,6 +13722,7 @@ end;
 
 function IExternalContextImpl_setInfoDispatcher(this: IExternalContext; code: Integer; value: Pointer): Pointer; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalContextImpl(this).setInfo(code, value);
 	except
@@ -13010,6 +13749,7 @@ end;
 
 function IExternalResultSetImpl_fetchDispatcher(this: IExternalResultSet; status: IStatus): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IExternalResultSetImpl(this).fetch(status);
 	except
@@ -13080,6 +13820,7 @@ end;
 
 function IExternalProcedureImpl_openDispatcher(this: IExternalProcedure; status: IStatus; context: IExternalContext; inMsg: Pointer; outMsg: Pointer): IExternalResultSet; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalProcedureImpl(this).open(status, context, inMsg, outMsg);
 	except
@@ -13132,6 +13873,7 @@ end;
 
 function IRoutineMetadataImpl_getPackageDispatcher(this: IRoutineMetadata; status: IStatus): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IRoutineMetadataImpl(this).getPackage(status);
 	except
@@ -13141,6 +13883,7 @@ end;
 
 function IRoutineMetadataImpl_getNameDispatcher(this: IRoutineMetadata; status: IStatus): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IRoutineMetadataImpl(this).getName(status);
 	except
@@ -13150,6 +13893,7 @@ end;
 
 function IRoutineMetadataImpl_getEntryPointDispatcher(this: IRoutineMetadata; status: IStatus): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IRoutineMetadataImpl(this).getEntryPoint(status);
 	except
@@ -13159,6 +13903,7 @@ end;
 
 function IRoutineMetadataImpl_getBodyDispatcher(this: IRoutineMetadata; status: IStatus): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IRoutineMetadataImpl(this).getBody(status);
 	except
@@ -13168,6 +13913,7 @@ end;
 
 function IRoutineMetadataImpl_getInputMetadataDispatcher(this: IRoutineMetadata; status: IStatus): IMessageMetadata; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IRoutineMetadataImpl(this).getInputMetadata(status);
 	except
@@ -13177,6 +13923,7 @@ end;
 
 function IRoutineMetadataImpl_getOutputMetadataDispatcher(this: IRoutineMetadata; status: IStatus): IMessageMetadata; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IRoutineMetadataImpl(this).getOutputMetadata(status);
 	except
@@ -13186,6 +13933,7 @@ end;
 
 function IRoutineMetadataImpl_getTriggerMetadataDispatcher(this: IRoutineMetadata; status: IStatus): IMessageMetadata; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IRoutineMetadataImpl(this).getTriggerMetadata(status);
 	except
@@ -13195,6 +13943,7 @@ end;
 
 function IRoutineMetadataImpl_getTriggerTableDispatcher(this: IRoutineMetadata; status: IStatus): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IRoutineMetadataImpl(this).getTriggerTable(status);
 	except
@@ -13204,6 +13953,7 @@ end;
 
 function IRoutineMetadataImpl_getTriggerTypeDispatcher(this: IRoutineMetadata; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IRoutineMetadataImpl(this).getTriggerType(status);
 	except
@@ -13230,6 +13980,7 @@ end;
 
 function IExternalEngineImpl_releaseDispatcher(this: IExternalEngine): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IExternalEngineImpl(this).release();
 	except
@@ -13248,6 +13999,7 @@ end;
 
 function IExternalEngineImpl_getOwnerDispatcher(this: IExternalEngine): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalEngineImpl(this).getOwner();
 	except
@@ -13284,6 +14036,7 @@ end;
 
 function IExternalEngineImpl_makeFunctionDispatcher(this: IExternalEngine; status: IStatus; context: IExternalContext; metadata: IRoutineMetadata; inBuilder: IMetadataBuilder; outBuilder: IMetadataBuilder): IExternalFunction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalEngineImpl(this).makeFunction(status, context, metadata, inBuilder, outBuilder);
 	except
@@ -13293,6 +14046,7 @@ end;
 
 function IExternalEngineImpl_makeProcedureDispatcher(this: IExternalEngine; status: IStatus; context: IExternalContext; metadata: IRoutineMetadata; inBuilder: IMetadataBuilder; outBuilder: IMetadataBuilder): IExternalProcedure; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalEngineImpl(this).makeProcedure(status, context, metadata, inBuilder, outBuilder);
 	except
@@ -13302,6 +14056,7 @@ end;
 
 function IExternalEngineImpl_makeTriggerDispatcher(this: IExternalEngine; status: IStatus; context: IExternalContext; metadata: IRoutineMetadata; fieldsBuilder: IMetadataBuilder): IExternalTrigger; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IExternalEngineImpl(this).makeTrigger(status, context, metadata, fieldsBuilder);
 	except
@@ -13328,6 +14083,7 @@ end;
 
 function ITimerImpl_releaseDispatcher(this: ITimer): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITimerImpl(this).release();
 	except
@@ -13433,6 +14189,7 @@ end;
 
 function IUtilImpl_executeCreateDatabaseDispatcher(this: IUtil; status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; stmtIsCreateDb: BooleanPtr): IAttachment; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUtilImpl(this).executeCreateDatabase(status, stmtLength, creatDBstatement, dialect, stmtIsCreateDb);
 	except
@@ -13460,6 +14217,7 @@ end;
 
 function IUtilImpl_encodeDateDispatcher(this: IUtil; year: Cardinal; month: Cardinal; day: Cardinal): ISC_DATE; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IUtilImpl(this).encodeDate(year, month, day);
 	except
@@ -13469,6 +14227,7 @@ end;
 
 function IUtilImpl_encodeTimeDispatcher(this: IUtil; hours: Cardinal; minutes: Cardinal; seconds: Cardinal; fractions: Cardinal): ISC_TIME; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IUtilImpl(this).encodeTime(hours, minutes, seconds, fractions);
 	except
@@ -13478,6 +14237,7 @@ end;
 
 function IUtilImpl_formatStatusDispatcher(this: IUtil; buffer: PAnsiChar; bufferSize: Cardinal; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IUtilImpl(this).formatStatus(buffer, bufferSize, status);
 	except
@@ -13487,6 +14247,7 @@ end;
 
 function IUtilImpl_getClientVersionDispatcher(this: IUtil): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IUtilImpl(this).getClientVersion();
 	except
@@ -13496,6 +14257,7 @@ end;
 
 function IUtilImpl_getXpbBuilderDispatcher(this: IUtil; status: IStatus; kind: Cardinal; buf: BytePtr; len: Cardinal): IXpbBuilder; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUtilImpl(this).getXpbBuilder(status, kind, buf, len);
 	except
@@ -13505,6 +14267,7 @@ end;
 
 function IUtilImpl_setOffsetsDispatcher(this: IUtil; status: IStatus; metadata: IMessageMetadata; callback: IOffsetsCallback): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IUtilImpl(this).setOffsets(status, metadata, callback);
 	except
@@ -13514,6 +14277,7 @@ end;
 
 function IUtilImpl_getDecFloat16Dispatcher(this: IUtil; status: IStatus): IDecFloat16; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUtilImpl(this).getDecFloat16(status);
 	except
@@ -13523,6 +14287,7 @@ end;
 
 function IUtilImpl_getDecFloat34Dispatcher(this: IUtil; status: IStatus): IDecFloat34; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUtilImpl(this).getDecFloat34(status);
 	except
@@ -13568,6 +14333,7 @@ end;
 
 function IUtilImpl_getInt128Dispatcher(this: IUtil; status: IStatus): IInt128; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUtilImpl(this).getInt128(status);
 	except
@@ -13692,6 +14458,7 @@ end;
 
 function IXpbBuilderImpl_isEofDispatcher(this: IXpbBuilder; status: IStatus): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IXpbBuilderImpl(this).isEof(status);
 	except
@@ -13719,6 +14486,7 @@ end;
 
 function IXpbBuilderImpl_findFirstDispatcher(this: IXpbBuilder; status: IStatus; tag: Byte): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IXpbBuilderImpl(this).findFirst(status, tag);
 	except
@@ -13728,6 +14496,7 @@ end;
 
 function IXpbBuilderImpl_findNextDispatcher(this: IXpbBuilder; status: IStatus): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IXpbBuilderImpl(this).findNext(status);
 	except
@@ -13737,6 +14506,7 @@ end;
 
 function IXpbBuilderImpl_getTagDispatcher(this: IXpbBuilder; status: IStatus): Byte; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IXpbBuilderImpl(this).getTag(status);
 	except
@@ -13746,6 +14516,7 @@ end;
 
 function IXpbBuilderImpl_getLengthDispatcher(this: IXpbBuilder; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IXpbBuilderImpl(this).getLength(status);
 	except
@@ -13755,6 +14526,7 @@ end;
 
 function IXpbBuilderImpl_getIntDispatcher(this: IXpbBuilder; status: IStatus): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IXpbBuilderImpl(this).getInt(status);
 	except
@@ -13764,6 +14536,7 @@ end;
 
 function IXpbBuilderImpl_getBigIntDispatcher(this: IXpbBuilder; status: IStatus): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IXpbBuilderImpl(this).getBigInt(status);
 	except
@@ -13773,6 +14546,7 @@ end;
 
 function IXpbBuilderImpl_getStringDispatcher(this: IXpbBuilder; status: IStatus): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IXpbBuilderImpl(this).getString(status);
 	except
@@ -13782,6 +14556,7 @@ end;
 
 function IXpbBuilderImpl_getBytesDispatcher(this: IXpbBuilder; status: IStatus): BytePtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IXpbBuilderImpl(this).getBytes(status);
 	except
@@ -13791,6 +14566,7 @@ end;
 
 function IXpbBuilderImpl_getBufferLengthDispatcher(this: IXpbBuilder; status: IStatus): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IXpbBuilderImpl(this).getBufferLength(status);
 	except
@@ -13800,6 +14576,7 @@ end;
 
 function IXpbBuilderImpl_getBufferDispatcher(this: IXpbBuilder; status: IStatus): BytePtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IXpbBuilderImpl(this).getBuffer(status);
 	except
@@ -13817,6 +14594,7 @@ end;
 
 function ITraceConnectionImpl_getKindDispatcher(this: ITraceConnection): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceConnectionImpl(this).getKind();
 	except
@@ -13826,6 +14604,7 @@ end;
 
 function ITraceConnectionImpl_getProcessIDDispatcher(this: ITraceConnection): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceConnectionImpl(this).getProcessID();
 	except
@@ -13835,6 +14614,7 @@ end;
 
 function ITraceConnectionImpl_getUserNameDispatcher(this: ITraceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceConnectionImpl(this).getUserName();
 	except
@@ -13844,6 +14624,7 @@ end;
 
 function ITraceConnectionImpl_getRoleNameDispatcher(this: ITraceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceConnectionImpl(this).getRoleName();
 	except
@@ -13853,6 +14634,7 @@ end;
 
 function ITraceConnectionImpl_getCharSetDispatcher(this: ITraceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceConnectionImpl(this).getCharSet();
 	except
@@ -13862,6 +14644,7 @@ end;
 
 function ITraceConnectionImpl_getRemoteProtocolDispatcher(this: ITraceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceConnectionImpl(this).getRemoteProtocol();
 	except
@@ -13871,6 +14654,7 @@ end;
 
 function ITraceConnectionImpl_getRemoteAddressDispatcher(this: ITraceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceConnectionImpl(this).getRemoteAddress();
 	except
@@ -13880,6 +14664,7 @@ end;
 
 function ITraceConnectionImpl_getRemoteProcessIDDispatcher(this: ITraceConnection): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceConnectionImpl(this).getRemoteProcessID();
 	except
@@ -13889,6 +14674,7 @@ end;
 
 function ITraceConnectionImpl_getRemoteProcessNameDispatcher(this: ITraceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceConnectionImpl(this).getRemoteProcessName();
 	except
@@ -13906,6 +14692,7 @@ end;
 
 function ITraceDatabaseConnectionImpl_getKindDispatcher(this: ITraceDatabaseConnection): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceDatabaseConnectionImpl(this).getKind();
 	except
@@ -13915,6 +14702,7 @@ end;
 
 function ITraceDatabaseConnectionImpl_getProcessIDDispatcher(this: ITraceDatabaseConnection): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceDatabaseConnectionImpl(this).getProcessID();
 	except
@@ -13924,6 +14712,7 @@ end;
 
 function ITraceDatabaseConnectionImpl_getUserNameDispatcher(this: ITraceDatabaseConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceDatabaseConnectionImpl(this).getUserName();
 	except
@@ -13933,6 +14722,7 @@ end;
 
 function ITraceDatabaseConnectionImpl_getRoleNameDispatcher(this: ITraceDatabaseConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceDatabaseConnectionImpl(this).getRoleName();
 	except
@@ -13942,6 +14732,7 @@ end;
 
 function ITraceDatabaseConnectionImpl_getCharSetDispatcher(this: ITraceDatabaseConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceDatabaseConnectionImpl(this).getCharSet();
 	except
@@ -13951,6 +14742,7 @@ end;
 
 function ITraceDatabaseConnectionImpl_getRemoteProtocolDispatcher(this: ITraceDatabaseConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceDatabaseConnectionImpl(this).getRemoteProtocol();
 	except
@@ -13960,6 +14752,7 @@ end;
 
 function ITraceDatabaseConnectionImpl_getRemoteAddressDispatcher(this: ITraceDatabaseConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceDatabaseConnectionImpl(this).getRemoteAddress();
 	except
@@ -13969,6 +14762,7 @@ end;
 
 function ITraceDatabaseConnectionImpl_getRemoteProcessIDDispatcher(this: ITraceDatabaseConnection): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceDatabaseConnectionImpl(this).getRemoteProcessID();
 	except
@@ -13978,6 +14772,7 @@ end;
 
 function ITraceDatabaseConnectionImpl_getRemoteProcessNameDispatcher(this: ITraceDatabaseConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceDatabaseConnectionImpl(this).getRemoteProcessName();
 	except
@@ -13987,6 +14782,7 @@ end;
 
 function ITraceDatabaseConnectionImpl_getConnectionIDDispatcher(this: ITraceDatabaseConnection): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceDatabaseConnectionImpl(this).getConnectionID();
 	except
@@ -13996,6 +14792,7 @@ end;
 
 function ITraceDatabaseConnectionImpl_getDatabaseNameDispatcher(this: ITraceDatabaseConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceDatabaseConnectionImpl(this).getDatabaseName();
 	except
@@ -14013,6 +14810,7 @@ end;
 
 function ITraceTransactionImpl_getTransactionIDDispatcher(this: ITraceTransaction): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceTransactionImpl(this).getTransactionID();
 	except
@@ -14022,6 +14820,7 @@ end;
 
 function ITraceTransactionImpl_getReadOnlyDispatcher(this: ITraceTransaction): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITraceTransactionImpl(this).getReadOnly();
 	except
@@ -14031,6 +14830,7 @@ end;
 
 function ITraceTransactionImpl_getWaitDispatcher(this: ITraceTransaction): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceTransactionImpl(this).getWait();
 	except
@@ -14040,6 +14840,7 @@ end;
 
 function ITraceTransactionImpl_getIsolationDispatcher(this: ITraceTransaction): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceTransactionImpl(this).getIsolation();
 	except
@@ -14049,6 +14850,7 @@ end;
 
 function ITraceTransactionImpl_getPerfDispatcher(this: ITraceTransaction): PerformanceInfoPtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceTransactionImpl(this).getPerf();
 	except
@@ -14058,6 +14860,7 @@ end;
 
 function ITraceTransactionImpl_getInitialIDDispatcher(this: ITraceTransaction): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceTransactionImpl(this).getInitialID();
 	except
@@ -14067,6 +14870,7 @@ end;
 
 function ITraceTransactionImpl_getPreviousIDDispatcher(this: ITraceTransaction): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceTransactionImpl(this).getPreviousID();
 	except
@@ -14084,6 +14888,7 @@ end;
 
 function ITraceParamsImpl_getCountDispatcher(this: ITraceParams): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceParamsImpl(this).getCount();
 	except
@@ -14093,6 +14898,7 @@ end;
 
 function ITraceParamsImpl_getParamDispatcher(this: ITraceParams; idx: Cardinal): dscPtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceParamsImpl(this).getParam(idx);
 	except
@@ -14102,6 +14908,7 @@ end;
 
 function ITraceParamsImpl_getTextUTF8Dispatcher(this: ITraceParams; status: IStatus; idx: Cardinal): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceParamsImpl(this).getTextUTF8(status, idx);
 	except
@@ -14119,6 +14926,7 @@ end;
 
 function ITraceStatementImpl_getStmtIDDispatcher(this: ITraceStatement): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceStatementImpl(this).getStmtID();
 	except
@@ -14128,6 +14936,7 @@ end;
 
 function ITraceStatementImpl_getPerfDispatcher(this: ITraceStatement): PerformanceInfoPtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceStatementImpl(this).getPerf();
 	except
@@ -14145,6 +14954,7 @@ end;
 
 function ITraceSQLStatementImpl_getStmtIDDispatcher(this: ITraceSQLStatement): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceSQLStatementImpl(this).getStmtID();
 	except
@@ -14154,6 +14964,7 @@ end;
 
 function ITraceSQLStatementImpl_getPerfDispatcher(this: ITraceSQLStatement): PerformanceInfoPtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceSQLStatementImpl(this).getPerf();
 	except
@@ -14163,6 +14974,7 @@ end;
 
 function ITraceSQLStatementImpl_getTextDispatcher(this: ITraceSQLStatement): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceSQLStatementImpl(this).getText();
 	except
@@ -14172,6 +14984,7 @@ end;
 
 function ITraceSQLStatementImpl_getPlanDispatcher(this: ITraceSQLStatement): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceSQLStatementImpl(this).getPlan();
 	except
@@ -14181,6 +14994,7 @@ end;
 
 function ITraceSQLStatementImpl_getInputsDispatcher(this: ITraceSQLStatement): ITraceParams; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceSQLStatementImpl(this).getInputs();
 	except
@@ -14190,6 +15004,7 @@ end;
 
 function ITraceSQLStatementImpl_getTextUTF8Dispatcher(this: ITraceSQLStatement): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceSQLStatementImpl(this).getTextUTF8();
 	except
@@ -14199,6 +15014,7 @@ end;
 
 function ITraceSQLStatementImpl_getExplainedPlanDispatcher(this: ITraceSQLStatement): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceSQLStatementImpl(this).getExplainedPlan();
 	except
@@ -14216,6 +15032,7 @@ end;
 
 function ITraceBLRStatementImpl_getStmtIDDispatcher(this: ITraceBLRStatement): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceBLRStatementImpl(this).getStmtID();
 	except
@@ -14225,6 +15042,7 @@ end;
 
 function ITraceBLRStatementImpl_getPerfDispatcher(this: ITraceBLRStatement): PerformanceInfoPtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceBLRStatementImpl(this).getPerf();
 	except
@@ -14234,6 +15052,7 @@ end;
 
 function ITraceBLRStatementImpl_getDataDispatcher(this: ITraceBLRStatement): BytePtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceBLRStatementImpl(this).getData();
 	except
@@ -14243,6 +15062,7 @@ end;
 
 function ITraceBLRStatementImpl_getDataLengthDispatcher(this: ITraceBLRStatement): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceBLRStatementImpl(this).getDataLength();
 	except
@@ -14252,6 +15072,7 @@ end;
 
 function ITraceBLRStatementImpl_getTextDispatcher(this: ITraceBLRStatement): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceBLRStatementImpl(this).getText();
 	except
@@ -14269,6 +15090,7 @@ end;
 
 function ITraceDYNRequestImpl_getDataDispatcher(this: ITraceDYNRequest): BytePtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceDYNRequestImpl(this).getData();
 	except
@@ -14278,6 +15100,7 @@ end;
 
 function ITraceDYNRequestImpl_getDataLengthDispatcher(this: ITraceDYNRequest): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceDYNRequestImpl(this).getDataLength();
 	except
@@ -14287,6 +15110,7 @@ end;
 
 function ITraceDYNRequestImpl_getTextDispatcher(this: ITraceDYNRequest): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceDYNRequestImpl(this).getText();
 	except
@@ -14304,6 +15128,7 @@ end;
 
 function ITraceContextVariableImpl_getNameSpaceDispatcher(this: ITraceContextVariable): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceContextVariableImpl(this).getNameSpace();
 	except
@@ -14313,6 +15138,7 @@ end;
 
 function ITraceContextVariableImpl_getVarNameDispatcher(this: ITraceContextVariable): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceContextVariableImpl(this).getVarName();
 	except
@@ -14322,6 +15148,7 @@ end;
 
 function ITraceContextVariableImpl_getVarValueDispatcher(this: ITraceContextVariable): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceContextVariableImpl(this).getVarValue();
 	except
@@ -14339,6 +15166,7 @@ end;
 
 function ITraceProcedureImpl_getProcNameDispatcher(this: ITraceProcedure): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceProcedureImpl(this).getProcName();
 	except
@@ -14348,6 +15176,7 @@ end;
 
 function ITraceProcedureImpl_getInputsDispatcher(this: ITraceProcedure): ITraceParams; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceProcedureImpl(this).getInputs();
 	except
@@ -14357,8 +15186,39 @@ end;
 
 function ITraceProcedureImpl_getPerfDispatcher(this: ITraceProcedure): PerformanceInfoPtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceProcedureImpl(this).getPerf();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceProcedureImpl_getStmtIDDispatcher(this: ITraceProcedure): Int64; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ITraceProcedureImpl(this).getStmtID();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceProcedureImpl_getPlanDispatcher(this: ITraceProcedure): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceProcedureImpl(this).getPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceProcedureImpl_getExplainedPlanDispatcher(this: ITraceProcedure): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceProcedureImpl(this).getExplainedPlan();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -14374,6 +15234,7 @@ end;
 
 function ITraceFunctionImpl_getFuncNameDispatcher(this: ITraceFunction): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceFunctionImpl(this).getFuncName();
 	except
@@ -14383,6 +15244,7 @@ end;
 
 function ITraceFunctionImpl_getInputsDispatcher(this: ITraceFunction): ITraceParams; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceFunctionImpl(this).getInputs();
 	except
@@ -14392,6 +15254,7 @@ end;
 
 function ITraceFunctionImpl_getResultDispatcher(this: ITraceFunction): ITraceParams; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceFunctionImpl(this).getResult();
 	except
@@ -14401,8 +15264,39 @@ end;
 
 function ITraceFunctionImpl_getPerfDispatcher(this: ITraceFunction): PerformanceInfoPtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceFunctionImpl(this).getPerf();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceFunctionImpl_getStmtIDDispatcher(this: ITraceFunction): Int64; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ITraceFunctionImpl(this).getStmtID();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceFunctionImpl_getPlanDispatcher(this: ITraceFunction): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceFunctionImpl(this).getPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceFunctionImpl_getExplainedPlanDispatcher(this: ITraceFunction): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceFunctionImpl(this).getExplainedPlan();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -14418,6 +15312,7 @@ end;
 
 function ITraceTriggerImpl_getTriggerNameDispatcher(this: ITraceTrigger): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceTriggerImpl(this).getTriggerName();
 	except
@@ -14427,6 +15322,7 @@ end;
 
 function ITraceTriggerImpl_getRelationNameDispatcher(this: ITraceTrigger): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceTriggerImpl(this).getRelationName();
 	except
@@ -14436,6 +15332,7 @@ end;
 
 function ITraceTriggerImpl_getActionDispatcher(this: ITraceTrigger): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceTriggerImpl(this).getAction();
 	except
@@ -14445,6 +15342,7 @@ end;
 
 function ITraceTriggerImpl_getWhichDispatcher(this: ITraceTrigger): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceTriggerImpl(this).getWhich();
 	except
@@ -14454,8 +15352,39 @@ end;
 
 function ITraceTriggerImpl_getPerfDispatcher(this: ITraceTrigger): PerformanceInfoPtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceTriggerImpl(this).getPerf();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceTriggerImpl_getStmtIDDispatcher(this: ITraceTrigger): Int64; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ITraceTriggerImpl(this).getStmtID();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceTriggerImpl_getPlanDispatcher(this: ITraceTrigger): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceTriggerImpl(this).getPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceTriggerImpl_getExplainedPlanDispatcher(this: ITraceTrigger): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceTriggerImpl(this).getExplainedPlan();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -14471,6 +15400,7 @@ end;
 
 function ITraceServiceConnectionImpl_getKindDispatcher(this: ITraceServiceConnection): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceServiceConnectionImpl(this).getKind();
 	except
@@ -14480,6 +15410,7 @@ end;
 
 function ITraceServiceConnectionImpl_getProcessIDDispatcher(this: ITraceServiceConnection): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceServiceConnectionImpl(this).getProcessID();
 	except
@@ -14489,6 +15420,7 @@ end;
 
 function ITraceServiceConnectionImpl_getUserNameDispatcher(this: ITraceServiceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceServiceConnectionImpl(this).getUserName();
 	except
@@ -14498,6 +15430,7 @@ end;
 
 function ITraceServiceConnectionImpl_getRoleNameDispatcher(this: ITraceServiceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceServiceConnectionImpl(this).getRoleName();
 	except
@@ -14507,6 +15440,7 @@ end;
 
 function ITraceServiceConnectionImpl_getCharSetDispatcher(this: ITraceServiceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceServiceConnectionImpl(this).getCharSet();
 	except
@@ -14516,6 +15450,7 @@ end;
 
 function ITraceServiceConnectionImpl_getRemoteProtocolDispatcher(this: ITraceServiceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceServiceConnectionImpl(this).getRemoteProtocol();
 	except
@@ -14525,6 +15460,7 @@ end;
 
 function ITraceServiceConnectionImpl_getRemoteAddressDispatcher(this: ITraceServiceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceServiceConnectionImpl(this).getRemoteAddress();
 	except
@@ -14534,6 +15470,7 @@ end;
 
 function ITraceServiceConnectionImpl_getRemoteProcessIDDispatcher(this: ITraceServiceConnection): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceServiceConnectionImpl(this).getRemoteProcessID();
 	except
@@ -14543,6 +15480,7 @@ end;
 
 function ITraceServiceConnectionImpl_getRemoteProcessNameDispatcher(this: ITraceServiceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceServiceConnectionImpl(this).getRemoteProcessName();
 	except
@@ -14552,6 +15490,7 @@ end;
 
 function ITraceServiceConnectionImpl_getServiceIDDispatcher(this: ITraceServiceConnection): Pointer; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceServiceConnectionImpl(this).getServiceID();
 	except
@@ -14561,6 +15500,7 @@ end;
 
 function ITraceServiceConnectionImpl_getServiceMgrDispatcher(this: ITraceServiceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceServiceConnectionImpl(this).getServiceMgr();
 	except
@@ -14570,6 +15510,7 @@ end;
 
 function ITraceServiceConnectionImpl_getServiceNameDispatcher(this: ITraceServiceConnection): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceServiceConnectionImpl(this).getServiceName();
 	except
@@ -14587,6 +15528,7 @@ end;
 
 function ITraceStatusVectorImpl_hasErrorDispatcher(this: ITraceStatusVector): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITraceStatusVectorImpl(this).hasError();
 	except
@@ -14596,6 +15538,7 @@ end;
 
 function ITraceStatusVectorImpl_hasWarningDispatcher(this: ITraceStatusVector): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITraceStatusVectorImpl(this).hasWarning();
 	except
@@ -14605,6 +15548,7 @@ end;
 
 function ITraceStatusVectorImpl_getStatusDispatcher(this: ITraceStatusVector): IStatus; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceStatusVectorImpl(this).getStatus();
 	except
@@ -14614,6 +15558,7 @@ end;
 
 function ITraceStatusVectorImpl_getTextDispatcher(this: ITraceStatusVector): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceStatusVectorImpl(this).getText();
 	except
@@ -14631,6 +15576,7 @@ end;
 
 function ITraceSweepInfoImpl_getOITDispatcher(this: ITraceSweepInfo): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceSweepInfoImpl(this).getOIT();
 	except
@@ -14640,6 +15586,7 @@ end;
 
 function ITraceSweepInfoImpl_getOSTDispatcher(this: ITraceSweepInfo): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceSweepInfoImpl(this).getOST();
 	except
@@ -14649,6 +15596,7 @@ end;
 
 function ITraceSweepInfoImpl_getOATDispatcher(this: ITraceSweepInfo): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceSweepInfoImpl(this).getOAT();
 	except
@@ -14658,6 +15606,7 @@ end;
 
 function ITraceSweepInfoImpl_getNextDispatcher(this: ITraceSweepInfo): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceSweepInfoImpl(this).getNext();
 	except
@@ -14667,6 +15616,7 @@ end;
 
 function ITraceSweepInfoImpl_getPerfDispatcher(this: ITraceSweepInfo): PerformanceInfoPtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceSweepInfoImpl(this).getPerf();
 	except
@@ -14693,6 +15643,7 @@ end;
 
 function ITraceLogWriterImpl_releaseDispatcher(this: ITraceLogWriter): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceLogWriterImpl(this).release();
 	except
@@ -14702,6 +15653,7 @@ end;
 
 function ITraceLogWriterImpl_writeDispatcher(this: ITraceLogWriter; buf: Pointer; size: Cardinal): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceLogWriterImpl(this).write(buf, size);
 	except
@@ -14711,6 +15663,7 @@ end;
 
 function ITraceLogWriterImpl_write_sDispatcher(this: ITraceLogWriter; status: IStatus; buf: Pointer; size: Cardinal): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceLogWriterImpl(this).write_s(status, buf, size);
 	except
@@ -14728,6 +15681,7 @@ end;
 
 function ITraceInitInfoImpl_getConfigTextDispatcher(this: ITraceInitInfo): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceInitInfoImpl(this).getConfigText();
 	except
@@ -14737,6 +15691,7 @@ end;
 
 function ITraceInitInfoImpl_getTraceSessionIDDispatcher(this: ITraceInitInfo): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceInitInfoImpl(this).getTraceSessionID();
 	except
@@ -14746,6 +15701,7 @@ end;
 
 function ITraceInitInfoImpl_getTraceSessionNameDispatcher(this: ITraceInitInfo): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceInitInfoImpl(this).getTraceSessionName();
 	except
@@ -14755,6 +15711,7 @@ end;
 
 function ITraceInitInfoImpl_getFirebirdRootDirectoryDispatcher(this: ITraceInitInfo): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceInitInfoImpl(this).getFirebirdRootDirectory();
 	except
@@ -14764,6 +15721,7 @@ end;
 
 function ITraceInitInfoImpl_getDatabaseNameDispatcher(this: ITraceInitInfo): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceInitInfoImpl(this).getDatabaseName();
 	except
@@ -14773,6 +15731,7 @@ end;
 
 function ITraceInitInfoImpl_getConnectionDispatcher(this: ITraceInitInfo): ITraceDatabaseConnection; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceInitInfoImpl(this).getConnection();
 	except
@@ -14782,6 +15741,7 @@ end;
 
 function ITraceInitInfoImpl_getLogWriterDispatcher(this: ITraceInitInfo): ITraceLogWriter; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceInitInfoImpl(this).getLogWriter();
 	except
@@ -14808,6 +15768,7 @@ end;
 
 function ITracePluginImpl_releaseDispatcher(this: ITracePlugin): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITracePluginImpl(this).release();
 	except
@@ -14817,6 +15778,7 @@ end;
 
 function ITracePluginImpl_trace_get_errorDispatcher(this: ITracePlugin): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITracePluginImpl(this).trace_get_error();
 	except
@@ -14826,6 +15788,7 @@ end;
 
 function ITracePluginImpl_trace_attachDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; create_db: Boolean; att_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_attach(connection, create_db, att_result);
 	except
@@ -14835,6 +15798,7 @@ end;
 
 function ITracePluginImpl_trace_detachDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; drop_db: Boolean): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_detach(connection, drop_db);
 	except
@@ -14844,6 +15808,7 @@ end;
 
 function ITracePluginImpl_trace_transaction_startDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; tpb_length: Cardinal; tpb: BytePtr; tra_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_transaction_start(connection, transaction, tpb_length, tpb, tra_result);
 	except
@@ -14853,6 +15818,7 @@ end;
 
 function ITracePluginImpl_trace_transaction_endDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; commit: Boolean; retain_context: Boolean; tra_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_transaction_end(connection, transaction, commit, retain_context, tra_result);
 	except
@@ -14862,6 +15828,7 @@ end;
 
 function ITracePluginImpl_trace_proc_executeDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; procedure_: ITraceProcedure; started: Boolean; proc_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_proc_execute(connection, transaction, procedure_, started, proc_result);
 	except
@@ -14871,6 +15838,7 @@ end;
 
 function ITracePluginImpl_trace_trigger_executeDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; trigger: ITraceTrigger; started: Boolean; trig_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_trigger_execute(connection, transaction, trigger, started, trig_result);
 	except
@@ -14880,6 +15848,7 @@ end;
 
 function ITracePluginImpl_trace_set_contextDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; variable: ITraceContextVariable): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_set_context(connection, transaction, variable);
 	except
@@ -14889,6 +15858,7 @@ end;
 
 function ITracePluginImpl_trace_dsql_prepareDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; time_millis: Int64; req_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_dsql_prepare(connection, transaction, statement, time_millis, req_result);
 	except
@@ -14898,6 +15868,7 @@ end;
 
 function ITracePluginImpl_trace_dsql_freeDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; statement: ITraceSQLStatement; option: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_dsql_free(connection, statement, option);
 	except
@@ -14907,6 +15878,7 @@ end;
 
 function ITracePluginImpl_trace_dsql_executeDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; started: Boolean; req_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_dsql_execute(connection, transaction, statement, started, req_result);
 	except
@@ -14916,6 +15888,7 @@ end;
 
 function ITracePluginImpl_trace_blr_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceBLRStatement; time_millis: Int64; req_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_blr_compile(connection, transaction, statement, time_millis, req_result);
 	except
@@ -14925,6 +15898,7 @@ end;
 
 function ITracePluginImpl_trace_blr_executeDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceBLRStatement; req_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_blr_execute(connection, transaction, statement, req_result);
 	except
@@ -14934,6 +15908,7 @@ end;
 
 function ITracePluginImpl_trace_dyn_executeDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; request: ITraceDYNRequest; time_millis: Int64; req_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_dyn_execute(connection, transaction, request, time_millis, req_result);
 	except
@@ -14943,6 +15918,7 @@ end;
 
 function ITracePluginImpl_trace_service_attachDispatcher(this: ITracePlugin; service: ITraceServiceConnection; att_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_service_attach(service, att_result);
 	except
@@ -14952,6 +15928,7 @@ end;
 
 function ITracePluginImpl_trace_service_startDispatcher(this: ITracePlugin; service: ITraceServiceConnection; switches_length: Cardinal; switches: PAnsiChar; start_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_service_start(service, switches_length, switches, start_result);
 	except
@@ -14961,6 +15938,7 @@ end;
 
 function ITracePluginImpl_trace_service_queryDispatcher(this: ITracePlugin; service: ITraceServiceConnection; send_item_length: Cardinal; send_items: BytePtr; recv_item_length: Cardinal; recv_items: BytePtr; query_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_service_query(service, send_item_length, send_items, recv_item_length, recv_items, query_result);
 	except
@@ -14970,6 +15948,7 @@ end;
 
 function ITracePluginImpl_trace_service_detachDispatcher(this: ITracePlugin; service: ITraceServiceConnection; detach_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_service_detach(service, detach_result);
 	except
@@ -14979,6 +15958,7 @@ end;
 
 function ITracePluginImpl_trace_event_errorDispatcher(this: ITracePlugin; connection: ITraceConnection; status: ITraceStatusVector; function_: PAnsiChar): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_event_error(connection, status, function_);
 	except
@@ -14988,6 +15968,7 @@ end;
 
 function ITracePluginImpl_trace_event_sweepDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_event_sweep(connection, sweep, sweep_state);
 	except
@@ -14997,6 +15978,7 @@ end;
 
 function ITracePluginImpl_trace_func_executeDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_func_execute(connection, transaction, function_, started, func_result);
 	except
@@ -15006,8 +15988,39 @@ end;
 
 function ITracePluginImpl_trace_dsql_restartDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_dsql_restart(connection, transaction, statement, number);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITracePluginImpl_trace_proc_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean; cdecl;
+begin
+	Result := false;
+	try
+		Result := ITracePluginImpl(this).trace_proc_compile(connection, procedure_, time_millis, proc_result);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITracePluginImpl_trace_func_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean; cdecl;
+begin
+	Result := false;
+	try
+		Result := ITracePluginImpl(this).trace_func_compile(connection, function_, time_millis, func_result);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITracePluginImpl_trace_trigger_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean; cdecl;
+begin
+	Result := false;
+	try
+		Result := ITracePluginImpl(this).trace_trigger_compile(connection, trigger, time_millis, trig_result);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -15032,6 +16045,7 @@ end;
 
 function ITraceFactoryImpl_releaseDispatcher(this: ITraceFactory): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceFactoryImpl(this).release();
 	except
@@ -15050,6 +16064,7 @@ end;
 
 function ITraceFactoryImpl_getOwnerDispatcher(this: ITraceFactory): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceFactoryImpl(this).getOwner();
 	except
@@ -15059,6 +16074,7 @@ end;
 
 function ITraceFactoryImpl_trace_needsDispatcher(this: ITraceFactory): QWord; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceFactoryImpl(this).trace_needs();
 	except
@@ -15068,6 +16084,7 @@ end;
 
 function ITraceFactoryImpl_trace_createDispatcher(this: ITraceFactory; status: IStatus; init_info: ITraceInitInfo): ITracePlugin; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceFactoryImpl(this).trace_create(status, init_info);
 	except
@@ -15103,6 +16120,7 @@ end;
 
 function IUdrFunctionFactoryImpl_newItemDispatcher(this: IUdrFunctionFactory; status: IStatus; context: IExternalContext; metadata: IRoutineMetadata): IExternalFunction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUdrFunctionFactoryImpl(this).newItem(status, context, metadata);
 	except
@@ -15138,6 +16156,7 @@ end;
 
 function IUdrProcedureFactoryImpl_newItemDispatcher(this: IUdrProcedureFactory; status: IStatus; context: IExternalContext; metadata: IRoutineMetadata): IExternalProcedure; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUdrProcedureFactoryImpl(this).newItem(status, context, metadata);
 	except
@@ -15173,6 +16192,7 @@ end;
 
 function IUdrTriggerFactoryImpl_newItemDispatcher(this: IUdrTriggerFactory; status: IStatus; context: IExternalContext; metadata: IRoutineMetadata): IExternalTrigger; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUdrTriggerFactoryImpl(this).newItem(status, context, metadata);
 	except
@@ -15190,6 +16210,7 @@ end;
 
 function IUdrPluginImpl_getMasterDispatcher(this: IUdrPlugin): IMaster; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IUdrPluginImpl(this).getMaster();
 	except
@@ -15348,6 +16369,7 @@ end;
 
 function IReplicatedFieldImpl_getNameDispatcher(this: IReplicatedField): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IReplicatedFieldImpl(this).getName();
 	except
@@ -15357,6 +16379,7 @@ end;
 
 function IReplicatedFieldImpl_getTypeDispatcher(this: IReplicatedField): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IReplicatedFieldImpl(this).getType();
 	except
@@ -15366,6 +16389,7 @@ end;
 
 function IReplicatedFieldImpl_getSubTypeDispatcher(this: IReplicatedField): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IReplicatedFieldImpl(this).getSubType();
 	except
@@ -15375,6 +16399,7 @@ end;
 
 function IReplicatedFieldImpl_getScaleDispatcher(this: IReplicatedField): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IReplicatedFieldImpl(this).getScale();
 	except
@@ -15384,6 +16409,7 @@ end;
 
 function IReplicatedFieldImpl_getLengthDispatcher(this: IReplicatedField): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IReplicatedFieldImpl(this).getLength();
 	except
@@ -15393,6 +16419,7 @@ end;
 
 function IReplicatedFieldImpl_getCharSetDispatcher(this: IReplicatedField): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IReplicatedFieldImpl(this).getCharSet();
 	except
@@ -15402,6 +16429,7 @@ end;
 
 function IReplicatedFieldImpl_getDataDispatcher(this: IReplicatedField): Pointer; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IReplicatedFieldImpl(this).getData();
 	except
@@ -15419,6 +16447,7 @@ end;
 
 function IReplicatedRecordImpl_getCountDispatcher(this: IReplicatedRecord): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IReplicatedRecordImpl(this).getCount();
 	except
@@ -15428,6 +16457,7 @@ end;
 
 function IReplicatedRecordImpl_getFieldDispatcher(this: IReplicatedRecord; index: Cardinal): IReplicatedField; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IReplicatedRecordImpl(this).getField(index);
 	except
@@ -15437,6 +16467,7 @@ end;
 
 function IReplicatedRecordImpl_getRawLengthDispatcher(this: IReplicatedRecord): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IReplicatedRecordImpl(this).getRawLength();
 	except
@@ -15446,6 +16477,7 @@ end;
 
 function IReplicatedRecordImpl_getRawDataDispatcher(this: IReplicatedRecord): BytePtr; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IReplicatedRecordImpl(this).getRawData();
 	except
@@ -15588,6 +16620,7 @@ end;
 
 function IReplicatedSessionImpl_releaseDispatcher(this: IReplicatedSession): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IReplicatedSessionImpl(this).release();
 	except
@@ -15606,6 +16639,7 @@ end;
 
 function IReplicatedSessionImpl_getOwnerDispatcher(this: IReplicatedSession): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IReplicatedSessionImpl(this).getOwner();
 	except
@@ -15615,6 +16649,7 @@ end;
 
 function IReplicatedSessionImpl_initDispatcher(this: IReplicatedSession; status: IStatus; attachment: IAttachment): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := IReplicatedSessionImpl(this).init(status, attachment);
 	except
@@ -15624,6 +16659,7 @@ end;
 
 function IReplicatedSessionImpl_startTransactionDispatcher(this: IReplicatedSession; status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IReplicatedSessionImpl(this).startTransaction(status, transaction, number);
 	except
@@ -15668,6 +16704,7 @@ end;
 
 function IProfilerPluginImpl_releaseDispatcher(this: IProfilerPlugin): Integer; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IProfilerPluginImpl(this).release();
 	except
@@ -15686,6 +16723,7 @@ end;
 
 function IProfilerPluginImpl_getOwnerDispatcher(this: IProfilerPlugin): IReferenceCounted; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IProfilerPluginImpl(this).getOwner();
 	except
@@ -15693,10 +16731,10 @@ begin
 	end
 end;
 
-procedure IProfilerPluginImpl_initDispatcher(this: IProfilerPlugin; status: IStatus; attachment: IAttachment); cdecl;
+procedure IProfilerPluginImpl_initDispatcher(this: IProfilerPlugin; status: IStatus; attachment: IAttachment; ticksFrequency: QWord); cdecl;
 begin
 	try
-		IProfilerPluginImpl(this).init(status, attachment);
+		IProfilerPluginImpl(this).init(status, attachment, ticksFrequency);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -15704,6 +16742,7 @@ end;
 
 function IProfilerPluginImpl_startSessionDispatcher(this: IProfilerPlugin; status: IStatus; description: PAnsiChar; options: PAnsiChar; timestamp: ISC_TIMESTAMP_TZ): IProfilerSession; cdecl;
 begin
+	Result := nil;
 	try
 		Result := IProfilerPluginImpl(this).startSession(status, description, options, timestamp);
 	except
@@ -15739,6 +16778,7 @@ end;
 
 function IProfilerSessionImpl_getIdDispatcher(this: IProfilerSession): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IProfilerSessionImpl(this).getId();
 	except
@@ -15748,6 +16788,7 @@ end;
 
 function IProfilerSessionImpl_getFlagsDispatcher(this: IProfilerSession): Cardinal; cdecl;
 begin
+	Result := 0;
 	try
 		Result := IProfilerSessionImpl(this).getFlags();
 	except
@@ -15782,82 +16823,91 @@ begin
 	end
 end;
 
-procedure IProfilerSessionImpl_defineRecordSourceDispatcher(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); cdecl;
+procedure IProfilerSessionImpl_defineCursorDispatcher(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).defineRecordSource(statementId, cursorId, recSourceId, accessPath, parentRecSourceId);
+		IProfilerSessionImpl(this).defineCursor(statementId, cursorId, name, line, column);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_onRequestStartDispatcher(this: IProfilerSession; status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
+procedure IProfilerSessionImpl_defineRecordSourceDispatcher(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).onRequestStart(status, requestId, statementId, callerRequestId, timestamp);
+		IProfilerSessionImpl(this).defineRecordSource(statementId, cursorId, recSourceId, level, accessPath, parentRecSourceId);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+procedure IProfilerSessionImpl_onRequestStartDispatcher(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
+begin
+	try
+		IProfilerSessionImpl(this).onRequestStart(status, statementId, requestId, callerStatementId, callerRequestId, timestamp);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_onRequestFinishDispatcher(this: IProfilerSession; status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
+procedure IProfilerSessionImpl_onRequestFinishDispatcher(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).onRequestFinish(status, requestId, timestamp, stats);
+		IProfilerSessionImpl(this).onRequestFinish(status, statementId, requestId, timestamp, stats);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_beforePsqlLineColumnDispatcher(this: IProfilerSession; requestId: Int64; line: Cardinal; column: Cardinal); cdecl;
+procedure IProfilerSessionImpl_beforePsqlLineColumnDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).beforePsqlLineColumn(requestId, line, column);
+		IProfilerSessionImpl(this).beforePsqlLineColumn(statementId, requestId, line, column);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_afterPsqlLineColumnDispatcher(this: IProfilerSession; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); cdecl;
+procedure IProfilerSessionImpl_afterPsqlLineColumnDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).afterPsqlLineColumn(requestId, line, column, stats);
+		IProfilerSessionImpl(this).afterPsqlLineColumn(statementId, requestId, line, column, stats);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_beforeRecordSourceOpenDispatcher(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
+procedure IProfilerSessionImpl_beforeRecordSourceOpenDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).beforeRecordSourceOpen(requestId, cursorId, recSourceId);
+		IProfilerSessionImpl(this).beforeRecordSourceOpen(statementId, requestId, cursorId, recSourceId);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_afterRecordSourceOpenDispatcher(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+procedure IProfilerSessionImpl_afterRecordSourceOpenDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).afterRecordSourceOpen(requestId, cursorId, recSourceId, stats);
+		IProfilerSessionImpl(this).afterRecordSourceOpen(statementId, requestId, cursorId, recSourceId, stats);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_beforeRecordSourceGetRecordDispatcher(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
+procedure IProfilerSessionImpl_beforeRecordSourceGetRecordDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).beforeRecordSourceGetRecord(requestId, cursorId, recSourceId);
+		IProfilerSessionImpl(this).beforeRecordSourceGetRecord(statementId, requestId, cursorId, recSourceId);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_afterRecordSourceGetRecordDispatcher(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+procedure IProfilerSessionImpl_afterRecordSourceGetRecordDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).afterRecordSourceGetRecord(requestId, cursorId, recSourceId, stats);
+		IProfilerSessionImpl(this).afterRecordSourceGetRecord(statementId, requestId, cursorId, recSourceId, stats);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -15871,10 +16921,11 @@ begin
 	vTable := IProfilerSessionImpl_vTable;
 end;
 
-function IProfilerStatsImpl_getElapsedTimeDispatcher(this: IProfilerStats): QWord; cdecl;
+function IProfilerStatsImpl_getElapsedTicksDispatcher(this: IProfilerStats): QWord; cdecl;
 begin
+	Result := 0;
 	try
-		Result := IProfilerStatsImpl(this).getElapsedTime();
+		Result := IProfilerStatsImpl(this).getElapsedTicks();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -15916,11 +16967,14 @@ var
 	statusVector: array[0..4] of NativeIntPtr;
 	msg: AnsiString;
 begin
+	if (not Assigned(status)) then
+		Exit;
+
 	if (e.inheritsFrom(FbException)) then
 		status.setErrors(FbException(e).getStatus.getErrors)
 	else
 	begin
-		msg := e.message;
+		msg := AnsiString(e.message);
 
 		statusVector[0] := NativeIntPtr(isc_arg_gds);
 		statusVector[1] := NativeIntPtr(isc_random);
@@ -15932,14 +16986,11 @@ begin
 	end
 end;
 
-class procedure FbException.setVersionError(status: IStatus; interfaceName: string;
+class procedure FbException.setVersionError(status: IStatus; interfaceName: AnsiString;
 		currentVersion, expectedVersion: NativeInt);
 var
 	statusVector: array[0..8] of NativeIntPtr;
-	msg: AnsiString;
 begin
-	msg := interfaceName;
-
 	statusVector[0] := NativeIntPtr(isc_arg_gds);
 	statusVector[1] := NativeIntPtr(isc_interface_version_too_old);
 	statusVector[2] := NativeIntPtr(isc_arg_number);
@@ -15947,7 +16998,7 @@ begin
 	statusVector[4] := NativeIntPtr(isc_arg_number);
 	statusVector[5] := NativeIntPtr(currentVersion);
 	statusVector[6] := NativeIntPtr(isc_arg_string);
-	statusVector[7] := NativeIntPtr(PAnsiChar(msg));
+	statusVector[7] := NativeIntPtr(PAnsiChar(interfaceName));
 	statusVector[8] := NativeIntPtr(isc_arg_end);
 
 	status.setErrors(@statusVector);
@@ -16689,25 +17740,34 @@ initialization
 	ITraceContextVariableImpl_vTable.getVarValue := @ITraceContextVariableImpl_getVarValueDispatcher;
 
 	ITraceProcedureImpl_vTable := TraceProcedureVTable.create;
-	ITraceProcedureImpl_vTable.version := 2;
+	ITraceProcedureImpl_vTable.version := 3;
 	ITraceProcedureImpl_vTable.getProcName := @ITraceProcedureImpl_getProcNameDispatcher;
 	ITraceProcedureImpl_vTable.getInputs := @ITraceProcedureImpl_getInputsDispatcher;
 	ITraceProcedureImpl_vTable.getPerf := @ITraceProcedureImpl_getPerfDispatcher;
+	ITraceProcedureImpl_vTable.getStmtID := @ITraceProcedureImpl_getStmtIDDispatcher;
+	ITraceProcedureImpl_vTable.getPlan := @ITraceProcedureImpl_getPlanDispatcher;
+	ITraceProcedureImpl_vTable.getExplainedPlan := @ITraceProcedureImpl_getExplainedPlanDispatcher;
 
 	ITraceFunctionImpl_vTable := TraceFunctionVTable.create;
-	ITraceFunctionImpl_vTable.version := 2;
+	ITraceFunctionImpl_vTable.version := 3;
 	ITraceFunctionImpl_vTable.getFuncName := @ITraceFunctionImpl_getFuncNameDispatcher;
 	ITraceFunctionImpl_vTable.getInputs := @ITraceFunctionImpl_getInputsDispatcher;
 	ITraceFunctionImpl_vTable.getResult := @ITraceFunctionImpl_getResultDispatcher;
 	ITraceFunctionImpl_vTable.getPerf := @ITraceFunctionImpl_getPerfDispatcher;
+	ITraceFunctionImpl_vTable.getStmtID := @ITraceFunctionImpl_getStmtIDDispatcher;
+	ITraceFunctionImpl_vTable.getPlan := @ITraceFunctionImpl_getPlanDispatcher;
+	ITraceFunctionImpl_vTable.getExplainedPlan := @ITraceFunctionImpl_getExplainedPlanDispatcher;
 
 	ITraceTriggerImpl_vTable := TraceTriggerVTable.create;
-	ITraceTriggerImpl_vTable.version := 2;
+	ITraceTriggerImpl_vTable.version := 3;
 	ITraceTriggerImpl_vTable.getTriggerName := @ITraceTriggerImpl_getTriggerNameDispatcher;
 	ITraceTriggerImpl_vTable.getRelationName := @ITraceTriggerImpl_getRelationNameDispatcher;
 	ITraceTriggerImpl_vTable.getAction := @ITraceTriggerImpl_getActionDispatcher;
 	ITraceTriggerImpl_vTable.getWhich := @ITraceTriggerImpl_getWhichDispatcher;
 	ITraceTriggerImpl_vTable.getPerf := @ITraceTriggerImpl_getPerfDispatcher;
+	ITraceTriggerImpl_vTable.getStmtID := @ITraceTriggerImpl_getStmtIDDispatcher;
+	ITraceTriggerImpl_vTable.getPlan := @ITraceTriggerImpl_getPlanDispatcher;
+	ITraceTriggerImpl_vTable.getExplainedPlan := @ITraceTriggerImpl_getExplainedPlanDispatcher;
 
 	ITraceServiceConnectionImpl_vTable := TraceServiceConnectionVTable.create;
 	ITraceServiceConnectionImpl_vTable.version := 3;
@@ -16757,7 +17817,7 @@ initialization
 	ITraceInitInfoImpl_vTable.getLogWriter := @ITraceInitInfoImpl_getLogWriterDispatcher;
 
 	ITracePluginImpl_vTable := TracePluginVTable.create;
-	ITracePluginImpl_vTable.version := 4;
+	ITracePluginImpl_vTable.version := 5;
 	ITracePluginImpl_vTable.addRef := @ITracePluginImpl_addRefDispatcher;
 	ITracePluginImpl_vTable.release := @ITracePluginImpl_releaseDispatcher;
 	ITracePluginImpl_vTable.trace_get_error := @ITracePluginImpl_trace_get_errorDispatcher;
@@ -16782,6 +17842,9 @@ initialization
 	ITracePluginImpl_vTable.trace_event_sweep := @ITracePluginImpl_trace_event_sweepDispatcher;
 	ITracePluginImpl_vTable.trace_func_execute := @ITracePluginImpl_trace_func_executeDispatcher;
 	ITracePluginImpl_vTable.trace_dsql_restart := @ITracePluginImpl_trace_dsql_restartDispatcher;
+	ITracePluginImpl_vTable.trace_proc_compile := @ITracePluginImpl_trace_proc_compileDispatcher;
+	ITracePluginImpl_vTable.trace_func_compile := @ITracePluginImpl_trace_func_compileDispatcher;
+	ITracePluginImpl_vTable.trace_trigger_compile := @ITracePluginImpl_trace_trigger_compileDispatcher;
 
 	ITraceFactoryImpl_vTable := TraceFactoryVTable.create;
 	ITraceFactoryImpl_vTable.version := 4;
@@ -16897,6 +17960,7 @@ initialization
 	IProfilerSessionImpl_vTable.cancel := @IProfilerSessionImpl_cancelDispatcher;
 	IProfilerSessionImpl_vTable.finish := @IProfilerSessionImpl_finishDispatcher;
 	IProfilerSessionImpl_vTable.defineStatement := @IProfilerSessionImpl_defineStatementDispatcher;
+	IProfilerSessionImpl_vTable.defineCursor := @IProfilerSessionImpl_defineCursorDispatcher;
 	IProfilerSessionImpl_vTable.defineRecordSource := @IProfilerSessionImpl_defineRecordSourceDispatcher;
 	IProfilerSessionImpl_vTable.onRequestStart := @IProfilerSessionImpl_onRequestStartDispatcher;
 	IProfilerSessionImpl_vTable.onRequestFinish := @IProfilerSessionImpl_onRequestFinishDispatcher;
@@ -16909,7 +17973,7 @@ initialization
 
 	IProfilerStatsImpl_vTable := ProfilerStatsVTable.create;
 	IProfilerStatsImpl_vTable.version := 2;
-	IProfilerStatsImpl_vTable.getElapsedTime := @IProfilerStatsImpl_getElapsedTimeDispatcher;
+	IProfilerStatsImpl_vTable.getElapsedTicks := @IProfilerStatsImpl_getElapsedTicksDispatcher;
 
 finalization
 	IVersionedImpl_vTable.destroy;

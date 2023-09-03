@@ -236,6 +236,7 @@ static decFloat * decFinalize(decFloat *df, bcdnum *num,
   uByte *ulsd=num->lsd;       // ..
   uInt   encode;              // encoding accumulator
   Int    length;              // coefficient length
+  uByte  buffer[ROUNDUP(DECPMAX+3, 4)]; // [+3 allows uInt padding]
 
   #if DECCHECK
   Int clen=ulsd-umsd+1;
@@ -456,7 +457,6 @@ static decFloat * decFinalize(decFloat *df, bcdnum *num,
           // fold down needed; must copy to buffer in order to pad
           // with zeros safely; fortunately this is not the worst case
           // path because cannot have had a round
-          uByte buffer[ROUNDUP(DECPMAX+3, 4)]; // [+3 allows uInt padding]
           uByte *s=umsd;                // source
           uByte *t=buffer;              // safe target
           uByte *tlsd=buffer+(ulsd-umsd)+shift; // target LSD
@@ -905,16 +905,20 @@ decFloat * decFloatFromString(decFloat *result, const char *string,
        else {                                // too long for buffer
         // [This is a rare and unusual case; arbitrary-length input]
         // strip leading zeros [but leave final 0 if all 0's]
-        if (*cfirst=='.') cfirst++;          // step past dot at start
-        if (*cfirst=='0') {                  // [cfirst always -> digit]
-          for (; cfirst<clast; cfirst++) {
-            if (*cfirst!='0') {              // non-zero found
-              if (*cfirst=='.') continue;    // [ignore]
-              break;                         // done
-              }
-            digits--;                        // 0 stripped
+        {
+          const char* cfirst2=NULL;
+
+          for (; cfirst<=clast; cfirst++) {
+            if (*cfirst == '.') continue;  // [ignore]
+            cfirst2=cfirst;                // let's save the position of this digit
+            if (*cfirst!='0') break;       // done
+            digits--;                      // 0 stripped
             } // cfirst
-          } // at least one leading 0
+          if(clast<cfirst) { // all the symbols are ZEROs
+            digits=1;
+            }
+          cfirst=cfirst2;
+        } // local - at least one leading 0
 
         // the coefficient is now as short as possible, but may still
         // be too long; copy up to Pmax+1 digits to the buffer, then

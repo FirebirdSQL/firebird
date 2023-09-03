@@ -253,6 +253,7 @@ static const struct
 	{"local_table_truncate", one_word},
 	{"local_table_id", local_table},
 	{"outer_map", outer_map},
+	{NULL, NULL},	// blr_json_function
 	{"skip_locked", zero},
 	{0, 0}
 };

@@ -31,26 +31,85 @@ namespace Jrd
 	class thread_db;
 	class CompilerScratch;
 	class RecordSource;
+	class RseNode;
+
+	// Select class (common base for sub-queries and cursors)
+
+	class Select : public AccessPath
+	{
+	public:
+		enum : ULONG {
+			SUB_QUERY = 1,
+			INVARIANT = 2
+		};
+
+		Select(CompilerScratch* csb, const RecordSource* source, const RseNode* rse, ULONG line = 0, ULONG column = 0,
+			const MetaName& cursorName = {});
+
+		const RecordSource* getRootRecordSource() const
+		{
+			return m_root;
+		}
+
+		const MetaName& getName() const
+		{
+			return m_cursorName;
+		}
+
+		ULONG getLine() const
+		{
+			return m_line;
+		}
+
+		ULONG getColumn() const
+		{
+			return m_column;
+		}
+
+		void initializeInvariants(Request* request) const;
+
+		void printPlan(thread_db* tdbb, Firebird::string& plan, bool detailed) const
+		{
+			print(tdbb, plan, detailed, 0, true);
+		}
+
+		void print(thread_db* tdbb, Firebird::string& plan,
+			bool detailed, unsigned level, bool recurse) const override;
+
+		void getChildren(Firebird::Array<const RecordSource*>& children) const override
+		{
+			children.add(m_root);
+		}
+
+		virtual void open(thread_db* tdbb) const = 0;
+		virtual void close(thread_db* tdbb) const = 0;
+
+	protected:
+		const RecordSource* const m_root;
+		const RseNode* const m_rse;
+
+	private:
+		MetaName m_cursorName;	// optional name for explicit PSQL cursors
+		ULONG m_line = 0;
+		ULONG m_column = 0;
+	};
 
 	// SubQuery class (simplified forward-only cursor)
 
-	class SubQuery
+	class SubQuery final : public Select
 	{
 	public:
-		SubQuery(const RecordSource* rsb, const VarInvariantArray* invariants);
+		SubQuery(CompilerScratch* csb, const RecordSource* rsb, const RseNode* rse);
 
-		void open(thread_db* tdbb) const;
-		void close(thread_db* tdbb) const;
+		void open(thread_db* tdbb) const override;
+		void close(thread_db* tdbb) const override;
+
 		bool fetch(thread_db* tdbb) const;
-
-	private:
-		const RecordSource* const m_top;
-		const VarInvariantArray* const m_invariants;
 	};
 
 	// Cursor class (wrapper around the whole access tree)
 
-	class Cursor
+	class Cursor final : public Select
 	{
 		enum State { BOS, POSITIONED, EOS };
 
@@ -62,11 +121,11 @@ namespace Jrd
 		};
 
 	public:
-		Cursor(CompilerScratch* csb, const RecordSource* rsb, const VarInvariantArray* invariants,
-			bool scrollable, bool updateCounters);
+		Cursor(CompilerScratch* csb, const RecordSource* rsb, const RseNode* rse,
+			   bool updateCounters, ULONG line, ULONG column, const MetaName& name);
 
-		void open(thread_db* tdbb) const;
-		void close(thread_db* tdbb) const;
+		void open(thread_db* tdbb) const override;
+		void close(thread_db* tdbb) const override;
 
 		bool fetchNext(thread_db* tdbb) const;
 		bool fetchPrior(thread_db* tdbb) const;
@@ -77,27 +136,13 @@ namespace Jrd
 
 		void checkState(Request* request) const;
 
-		const RecordSource* getAccessPath() const
-		{
-			return m_top;
-		}
-
-#if (!defined __GNUC__) || (__GNUC__ > 6)
-		constexpr
-#endif
-				  bool isUpdateCounters() const
+		bool isUpdateCounters() const
 		{
 			return m_updateCounters;
 		}
 
-	public:
-		MetaName name;	// optional name for explicit PSQL cursors
-
 	private:
 		ULONG m_impure;
-		const RecordSource* const m_top;
-		const VarInvariantArray* const m_invariants;
-		const bool m_scrollable;
 		const bool m_updateCounters;
 	};
 

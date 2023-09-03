@@ -532,6 +532,7 @@ RELATION(nam_mon_attachments, rel_mon_attachments, ODS_11_1, rel_virtual)
 	FIELD(f_mon_att_wire_encrypted, nam_wire_encrypted, fld_bool, 0, ODS_13_0)
 	FIELD(f_mon_att_remote_crypt, nam_wire_crypt_plugin, fld_remote_crypt, 0, ODS_13_0)
 	FIELD(f_mon_att_session_tz, nam_mon_session_tz, fld_tz_name, 0, ODS_13_1)
+	FIELD(f_mon_att_par_workers, nam_par_workers, fld_par_workers, 0, ODS_13_1)
 END_RELATION
 
 // Relation 35 (MON$TRANSACTIONS)

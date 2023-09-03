@@ -206,6 +206,8 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 			memcpy(upper.key_data, impure->irsb_nav_data + m_length, upper.key_length);
 		}
 
+		IndexKey recordKey(tdbb, m_relation, idx);
+
 		// Find the next interesting node. If necessary, skip to the next page.
 		RecordNumber number;
 		IndexNode node;
@@ -263,18 +265,13 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 
 			if (VIO_get(tdbb, rpb, request->req_transaction, request->req_pool))
 			{
-				temporary_key value;
-
-				const idx_e result = BTR_key(tdbb, m_relation, rpb->rpb_record, idx, &value,
-					((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT));
-
-				if (result != idx_e_ok)
+				if (const auto result = recordKey.compose(rpb->rpb_record))
 				{
 					IndexErrorContext context(m_relation, idx);
 					context.raise(tdbb, result, rpb->rpb_record);
 				}
 
-				if (!compareKeys(idx, key.key_data, key.key_length, &value, 0))
+				if (!compareKeys(idx, key.key_data, key.key_length, recordKey, 0))
 				{
 					// mark in the navigational bitmap that we have visited this record
 					RBM_SET(tdbb->getDefaultPool(), &impure->irsb_nav_records_visited,

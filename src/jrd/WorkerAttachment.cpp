@@ -63,7 +63,6 @@ WorkerStableAttachment::WorkerStableAttachment(FbStatusVector* status, Jrd::Atta
 
 	LCK_init(tdbb, LCK_OWNER_attachment);
 	INI_init(tdbb);
-	INI_init2(tdbb);
 	PAG_header(tdbb, true);
 	PAG_attachment_id(tdbb);
 	TRA_init(attachment);
@@ -277,7 +276,10 @@ StableAttachmentPart* WorkerAttachment::getAttachment(FbStatusVector* status, Da
 
 		sAtt = item->m_idleAtts.pop();
 		if (sAtt->getHandle())
+		{
+			status->init();
 			break;
+		}
 
 		// idle worker attachment was unexpectedly deleted, clean up and try next one
 		MutexUnlockGuard unlock(item->m_mutex, FB_FUNCTION);
@@ -319,6 +321,7 @@ StableAttachmentPart* WorkerAttachment::getAttachment(FbStatusVector* status, Da
 		if (att)
 		{
 			att->att_use_count++;
+			att->att_utility = Attachment::UTIL_NONE;
 			att->setupIdleTimer(true);
 		}
 	}

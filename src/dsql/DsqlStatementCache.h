@@ -95,6 +95,11 @@ public:
 		return maxCacheSize > 0;
 	}
 
+	bool isEmpty() const
+	{
+		return activeStatementList.isEmpty() && inactiveStatementList.isEmpty();
+	}
+
 	Firebird::RefPtr<DsqlStatement> getStatement(thread_db* tdbb, const Firebird::string& text,
 		USHORT clientDialect, bool isInternalRequest);
 
@@ -103,8 +108,13 @@ public:
 
 	void statementGoingInactive(Firebird::RefStrPtr& key);
 
-	void purge(thread_db* tdbb);
+	void purge(thread_db* tdbb, bool releaseLock);
 	void purgeAllAttachments(thread_db* tdbb);
+
+	void shutdown(thread_db* tdbb)
+	{
+		purge(tdbb, true);
+	}
 
 private:
 	void buildStatementKey(thread_db* tdbb, Firebird::RefStrPtr& key, const Firebird::string& text,

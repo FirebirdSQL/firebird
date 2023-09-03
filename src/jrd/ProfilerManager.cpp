@@ -27,6 +27,7 @@
 #include "../jrd/tra.h"
 #include "../jrd/ids.h"
 #include "../jrd/recsrc/Cursor.h"
+#include "../dsql/BoolNodes.h"
 #include "../jrd/dpm_proto.h"
 #include "../jrd/lck_proto.h"
 #include "../jrd/met_proto.h"
@@ -144,6 +145,7 @@ namespace
 	};
 }	// anonymous namespace
 
+
 class Jrd::ProfilerListener final
 {
 public:
@@ -184,7 +186,7 @@ IExternalResultSet* ProfilerPackage::discardProcedure(ThrowStatusExceptionWrappe
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (in->attachmentId != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::DISCARD, in);
@@ -204,7 +206,7 @@ IExternalResultSet* ProfilerPackage::flushProcedure(ThrowStatusExceptionWrapper*
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (in->attachmentId != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::FLUSH, in);
@@ -224,7 +226,7 @@ IExternalResultSet* ProfilerPackage::cancelSessionProcedure(ThrowStatusException
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (in->attachmentId != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::CANCEL_SESSION, in);
@@ -245,7 +247,7 @@ IExternalResultSet* ProfilerPackage::finishSessionProcedure(ThrowStatusException
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (in->attachmentId != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::FINISH_SESSION, in);
@@ -265,7 +267,7 @@ IExternalResultSet* ProfilerPackage::pauseSessionProcedure(ThrowStatusExceptionW
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (in->attachmentId != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::PAUSE_SESSION, in);
@@ -285,7 +287,7 @@ IExternalResultSet* ProfilerPackage::resumeSessionProcedure(ThrowStatusException
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (in->attachmentId != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::RESUME_SESSION, in);
@@ -305,7 +307,7 @@ IExternalResultSet* ProfilerPackage::setFlushIntervalProcedure(ThrowStatusExcept
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (in->attachmentId != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::SET_FLUSH_INTERVAL, in);
@@ -325,7 +327,7 @@ void ProfilerPackage::startSessionFunction(ThrowStatusExceptionWrapper* /*status
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (in->attachmentId != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.sendAndReceive(tdbb, ProfilerIpc::Tag::START_SESSION, in, out);
@@ -438,7 +440,7 @@ SINT64 ProfilerManager::startSession(thread_db* tdbb, Nullable<SLONG> flushInter
 		plugin.reset(plugins.plugin());
 		plugin->addRef();
 
-		plugin->init(&status, attachment->getInterface());
+		plugin->init(&status, attachment->getInterface(), (FB_UINT64) fb_utils::query_performance_frequency());
 
 		plugin->addRef();
 		activePlugins.put(pluginName)->reset(plugin.get());
@@ -464,45 +466,64 @@ SINT64 ProfilerManager::startSession(thread_db* tdbb, Nullable<SLONG> flushInter
 	return currentSession->pluginSession->getId();
 }
 
-void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const RecordSource* rsb)
+void ProfilerManager::prepareCursor(thread_db* tdbb, Request* request, const Select* select)
 {
 	auto profileStatement = getStatement(request);
 
 	if (!profileStatement)
 		return;
 
-	if (profileStatement->recSourceSequence.exist(rsb->getRecSourceProfileId()))
-		return;
+	auto cursorId = select->getCursorId();
 
-	Array<NonPooledPair<const RecordSource*, const RecordSource*>> tree;
-	tree.add({rsb, nullptr});
-
-	for (unsigned pos = 0; pos < tree.getCount(); ++pos)
+	if (!profileStatement->definedCursors.exist(cursorId))
 	{
-		const auto thisRsb = tree[pos].first;
+		currentSession->pluginSession->defineCursor(profileStatement->id, cursorId,
+			select->getName().nullStr(), select->getLine(), select->getColumn());
 
-		Array<const RecordSource*> children;
-		thisRsb->getChildren(children);
-
-		unsigned childPos = pos;
-
-		for (const auto child : children)
-			tree.insert(++childPos, {child, thisRsb});
+		profileStatement->definedCursors.add(cursorId);
 	}
 
-	NonPooledMap<ULONG, ULONG> idSequenceMap;
-	auto sequencePtr = profileStatement->cursorNextSequence.getOrPut(rsb->getCursorProfileId());
+	prepareRecSource(tdbb, request, select);
+}
 
-	for (const auto& pair : tree)
+void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const AccessPath* recordSource)
+{
+	auto profileStatement = getStatement(request);
+
+	if (!profileStatement)
+		return;
+
+	if (profileStatement->recSourceSequence.exist(recordSource->getRecSourceId()))
+		return;
+
+	fb_assert(profileStatement->definedCursors.exist(recordSource->getCursorId()));
+
+	struct PlanItem : PermanentStorage
 	{
-		const auto cursorId = pair.first->getCursorProfileId();
-		const auto recSourceId = pair.first->getRecSourceProfileId();
-		idSequenceMap.put(recSourceId, ++*sequencePtr);
+		explicit PlanItem(MemoryPool& p)
+			: PermanentStorage(p)
+		{
+		}
 
-		string accessPath;
-		pair.first->print(tdbb, accessPath, true, 0, false);
+		const AccessPath* recordSource = nullptr;
+		const AccessPath* parentRecordSource = nullptr;
+		string accessPath{getPool()};
+		unsigned level = 0;
+	};
+
+	ObjectsArray<PlanItem> planItems;
+	planItems.add().recordSource = recordSource;
+
+	for (unsigned pos = 0; pos < planItems.getCount(); ++pos)
+	{
+		auto& planItem = planItems[pos];
+		const auto thisRsb = planItem.recordSource;
+
+		string& accessPath = planItem.accessPath;
+		thisRsb->print(tdbb, accessPath, true, 0, false);
 
 		constexpr auto INDENT_MARKER = "\n    ";
+		constexpr unsigned INDENT_COUNT = 4;
 
 		if (accessPath.find(INDENT_MARKER) == 0)
 		{
@@ -513,13 +534,44 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 			} while ((pos = accessPath.find(INDENT_MARKER, pos + 1)) != string::npos);
 		}
 
+		if (accessPath.hasData() && accessPath[0] == '\n')
+			accessPath.erase(0, 1);
+
+		Array<const RecordSource*> children;
+		thisRsb->getChildren(children);
+
+		unsigned level = planItem.level;
+
+		if (const auto lastLinePos = accessPath.find_last_of('\n'); lastLinePos != string::npos)
+			level += (accessPath.find_first_not_of(' ', lastLinePos + 1) - lastLinePos + 1) / INDENT_COUNT;
+
+		unsigned childPos = pos;
+
+		for (const auto child : children)
+		{
+			auto& inserted = planItems.insert(++childPos);
+			inserted.recordSource = child;
+			inserted.parentRecordSource = thisRsb;
+			inserted.level = level + 1;
+		}
+	}
+
+	NonPooledMap<ULONG, ULONG> idSequenceMap;
+	auto sequencePtr = profileStatement->cursorNextSequence.getOrPut(recordSource->getCursorId());
+
+	for (const auto& planItem : planItems)
+	{
+		const auto cursorId = planItem.recordSource->getCursorId();
+		const auto recSourceId = planItem.recordSource->getRecSourceId();
+		idSequenceMap.put(recSourceId, ++*sequencePtr);
+
 		ULONG parentSequence = 0;
 
-		if (pair.second)
-			parentSequence = *idSequenceMap.get(pair.second->getRecSourceProfileId());
+		if (planItem.parentRecordSource)
+			parentSequence = *idSequenceMap.get(planItem.parentRecordSource->getRecSourceId());
 
 		currentSession->pluginSession->defineRecordSource(profileStatement->id, cursorId,
-			*sequencePtr, accessPath.c_str(), parentSequence);
+			*sequencePtr, planItem.level, planItem.accessPath.c_str(), parentSequence);
 
 		profileStatement->recSourceSequence.put(recSourceId, *sequencePtr);
 	}
@@ -529,76 +581,14 @@ void ProfilerManager::onRequestFinish(Request* request, Stats& stats)
 {
 	if (const auto profileRequestId = getRequest(request, 0))
 	{
+		const auto profileStatement = getStatement(request);
 		const auto timestamp = TimeZoneUtil::getCurrentTimeStamp(request->req_attachment->att_current_timezone);
 
 		LogLocalStatus status("Profiler onRequestFinish");
-		currentSession->pluginSession->onRequestFinish(&status, profileRequestId, timestamp, &stats);
+		currentSession->pluginSession->onRequestFinish(&status, profileStatement->id, profileRequestId,
+			timestamp, &stats);
 
 		currentSession->requests.findAndRemove(profileRequestId);
-	}
-}
-
-void ProfilerManager::beforePsqlLineColumn(Request* request, ULONG line, ULONG column)
-{
-	if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_BEFORE_EVENTS))
-		currentSession->pluginSession->beforePsqlLineColumn(profileRequestId, line, column);
-}
-
-void ProfilerManager::afterPsqlLineColumn(Request* request, ULONG line, ULONG column, Stats& stats)
-{
-	if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_AFTER_EVENTS))
-		currentSession->pluginSession->afterPsqlLineColumn(profileRequestId, line, column, &stats);
-}
-
-void ProfilerManager::beforeRecordSourceOpen(Request* request, const RecordSource* rsb)
-{
-	if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_BEFORE_EVENTS))
-	{
-		const auto profileStatement = getStatement(request);
-		const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceProfileId());
-		fb_assert(sequencePtr);
-
-		currentSession->pluginSession->beforeRecordSourceOpen(
-			profileRequestId, rsb->getCursorProfileId(), *sequencePtr);
-	}
-}
-
-void ProfilerManager::afterRecordSourceOpen(Request* request, const RecordSource* rsb, Stats& stats)
-{
-	if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_AFTER_EVENTS))
-	{
-		const auto profileStatement = getStatement(request);
-		const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceProfileId());
-		fb_assert(sequencePtr);
-
-		currentSession->pluginSession->afterRecordSourceOpen(
-			profileRequestId, rsb->getCursorProfileId(), *sequencePtr, &stats);
-	}
-}
-
-void ProfilerManager::beforeRecordSourceGetRecord(Request* request, const RecordSource* rsb)
-{
-	if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_BEFORE_EVENTS))
-	{
-		const auto profileStatement = getStatement(request);
-		const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceProfileId());
-		fb_assert(sequencePtr);
-
-		currentSession->pluginSession->beforeRecordSourceGetRecord(
-			profileRequestId, rsb->getCursorProfileId(), *sequencePtr);
-	}
-}
-
-void ProfilerManager::afterRecordSourceGetRecord(Request* request, const RecordSource* rsb, Stats& stats)
-{
-	if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_AFTER_EVENTS))
-	{
-		const auto profileStatement = getStatement(request);
-		const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceProfileId());
-		fb_assert(sequencePtr);
-
-		currentSession->pluginSession->afterRecordSourceGetRecord(
-			profileRequestId, rsb->getCursorProfileId(), *sequencePtr, &stats);
 	}
 }
 
@@ -749,37 +739,6 @@ ProfilerManager::Statement* ProfilerManager::getStatement(Request* request)
 	}
 
 	return mainProfileStatement;
-}
-
-SINT64 ProfilerManager::getRequest(Request* request, unsigned flags)
-{
-	if (!isActive() || (flags && !(currentSession->flags & flags)))
-		return 0;
-
-	const auto mainRequestId = request->getRequestId();
-
-	if (!currentSession->requests.exist(mainRequestId))
-	{
-		const auto timestamp = TimeZoneUtil::getCurrentTimeStamp(request->req_attachment->att_current_timezone);
-
-		do
-		{
-			getStatement(request);  // define the statement and ignore the result
-
-			const StmtNumber callerRequestId = request->req_caller ? request->req_caller->getRequestId() : 0;
-
-			LogLocalStatus status("Profiler onRequestStart");
-			currentSession->pluginSession->onRequestStart(&status,
-				(SINT64) request->getRequestId(), (SINT64) request->getStatement()->getStatementId(),
-				(SINT64) callerRequestId, timestamp);
-
-			currentSession->requests.add(request->getRequestId());
-
-			request = request->req_caller;
-		} while (request && !currentSession->requests.exist(request->getRequestId()));
-	}
-
-	return mainRequestId;
 }
 
 
@@ -1123,8 +1082,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				prc_executable,
 				// input parameters
 				{
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1137,8 +1095,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				prc_executable,
 				// input parameters
 				{
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1152,8 +1109,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				// input parameters
 				{
 					{"FLUSH", fld_bool, false, "true", {blr_literal, blr_bool, 1}},
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1166,8 +1122,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				prc_executable,
 				// input parameters
 				{
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1181,8 +1136,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				// input parameters
 				{
 					{"FLUSH", fld_bool, false, "false", {blr_literal, blr_bool, 0}},
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1195,8 +1149,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				prc_executable,
 				// input parameters
 				{
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1210,8 +1163,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				// input parameters
 				{
 					{"FLUSH_INTERVAL", fld_seconds_interval, false},
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1228,8 +1180,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				{
 					{"DESCRIPTION", fld_short_description, true, "null", {blr_null}},
 					{"FLUSH_INTERVAL", fld_seconds_interval, true, "null", {blr_null}},
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}},
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}},
 					{"PLUGIN_NAME", fld_file_name2, true, "null", {blr_null}},
 					{"PLUGIN_OPTIONS", fld_short_description, true, "null", {blr_null}},
 				},

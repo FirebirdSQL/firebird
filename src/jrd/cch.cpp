@@ -143,8 +143,6 @@ static ULONG memory_init(thread_db*, BufferControl*, ULONG);
 static void page_validation_error(thread_db*, win*, SSHORT);
 static void purgePrecedence(BufferControl*, BufferDesc*);
 static SSHORT related(BufferDesc*, const BufferDesc*, SSHORT, const ULONG);
-static bool writeable(BufferDesc*);
-static bool is_writeable(BufferDesc*, const ULONG);
 static int write_buffer(thread_db*, BufferDesc*, const PageNumber, const bool, FbStatusVector* const,
 	const bool);
 static bool write_page(thread_db*, BufferDesc*, FbStatusVector* const, const bool);
@@ -544,7 +542,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
  *	return false.
  *
  **************************************/
-	const int CCH_EXCLUSIVE_RETRY_INTERVAL = 1;	// retry interval in seconds
+	const int CCH_EXCLUSIVE_RETRY_INTERVAL = 10;	// retry interval in millseconds
 
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
@@ -564,7 +562,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
 
 	attachment->att_flags |= (level == LCK_none) ? ATT_attach_pending : ATT_exclusive_pending;
 
-	const SLONG timeout = (wait_flag == LCK_WAIT) ? 1L << 30 : -wait_flag;
+	const SLONG timeout = (wait_flag == LCK_WAIT) ? 1L << 30 : (-wait_flag * 1000 / CCH_EXCLUSIVE_RETRY_INTERVAL);
 
 	// If requesting exclusive database access, then re-position attachment as the
 	// youngest so that pending attachments may pass.
@@ -642,7 +640,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
 			if (remaining >= CCH_EXCLUSIVE_RETRY_INTERVAL)
 			{
 				SyncUnlockGuard unlock(exLock ? (*exGuard) : dsGuard);
-				Thread::sleep(CCH_EXCLUSIVE_RETRY_INTERVAL * 1000);
+				Thread::sleep(CCH_EXCLUSIVE_RETRY_INTERVAL);
 			}
 
 		} // try
@@ -1741,8 +1739,8 @@ void CCH_mark(thread_db* tdbb, WIN* window, bool mark_system, bool must_write)
 	if (mark_system)
 		newFlags |= BDB_system_dirty;
 
-	/*if (bcb->bcb_flags & BCB_exclusive) */
-		newFlags |= BDB_db_dirty;
+	/// if (bcb->bcb_flags & BCB_exclusive)
+	newFlags |= BDB_db_dirty;
 
 	if (must_write || dbb->dbb_backup_manager->databaseFlushInProgress())
 		newFlags |= BDB_must_write;
@@ -4577,6 +4575,7 @@ static SSHORT related(BufferDesc* low, const BufferDesc* high, SSHORT limit, con
 }
 
 
+#ifdef NOT_USED_OR_REPLACED
 static inline bool writeable(BufferDesc* bdb)
 {
 /**************************************
@@ -4655,6 +4654,7 @@ static bool is_writeable(BufferDesc* bdb, const ULONG mark)
 	bdb->bdb_prec_walk_mark = mark;
 	return true;
 }
+#endif	// NOT_USED_OR_REPLACED
 
 
 static int write_buffer(thread_db* tdbb,
@@ -5454,10 +5454,9 @@ class InitPool
 {
 public:
 	explicit InitPool(MemoryPool&)
-	{
-		m_pool = InitCDS::createPool();
-		m_pool->setStatsGroup(m_stats);
-	}
+		: m_pool(InitCDS::createPool()),
+		  m_stats(m_pool->getStatsGroup())
+	{ }
 
 	~InitPool()
 	{
@@ -5488,7 +5487,7 @@ public:
 
 private:
 	MemoryPool* m_pool;
-	MemoryStats m_stats;
+	MemoryStats& m_stats;
 };
 
 static InitInstance<InitPool> initPool;

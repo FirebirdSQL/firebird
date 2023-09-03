@@ -5,6 +5,7 @@ on: [push, pull_request]
 jobs:
 
   build-linux-ubuntu-x64-clang:
+    if: github.ref_type != 'tag'
     runs-on: ubuntu-20.04
 
     steps:
@@ -54,6 +55,9 @@ jobs:
         with:
           fetch-depth: 10
 
+      - name: Get Release Notes
+        uses: ./.github/actions/get-release-notes
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         if: ${{ startsWith(matrix.arch, 'arm') }}
@@ -75,56 +79,40 @@ jobs:
           name: firebird-linux-${{ matrix.arch }}-debugSymbols
           path: gen/Firebird-*-linux-${{ matrix.arch }}-debugSymbols.tar.gz
 
-      - name: Snapshot - prepare
-        id: snapshot_prepare
-        if: |
-          github.repository == 'FirebirdSQL/firebird' &&
-          github.event.head_commit.message == 'increment build number' &&
-          github.ref_name == 'master'
+      - name: Create release
+        uses: ./.github/actions/create-release
+        with:
+          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
+          deletePatterns: Firebird-*-linux-${{ matrix.arch }}*.tar.gz
+          uploadFiles: gen/Firebird-*-linux-${{ matrix.arch }}*.tar.gz
+
+  build-src-bundle-docker:
+    name: build-src-bundle-docker
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 10
+
+      - name: Get Release Notes
+        uses: ./.github/actions/get-release-notes
+
+      - name: Build
         run: |
-          echo "snapshot_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          cd builds/docker/linux/x86-x64
+          ./run-src-bundle.sh
 
-      - name: Snapshot - delete old assets
-        uses: mknejp/delete-release-assets@v1
-        if: steps.snapshot_prepare.outputs.snapshot_name
+      - name: Create release
+        uses: ./.github/actions/create-release
         with:
-          repository: FirebirdSQL/snapshots
           token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          tag: snapshot-${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          fail-if-no-release: false
-          fail-if-no-assets: false
-          assets: |
-            Firebird-*-linux-${{ matrix.arch }}*.tar.gz
-
-      - name: Snapshot - release
-        id: snapshot_release_try1
-        uses: softprops/action-gh-release@v1
-        if: steps.snapshot_prepare.outputs.snapshot_name
-        continue-on-error: true
-        with:
-          repository: FirebirdSQL/snapshots
-          name: Latest snapshots for ${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          tag_name: snapshot-${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          prerelease: true
-          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          files: |
-            gen/Firebird-*-linux-${{ matrix.arch }}*.tar.gz
-
-      - name: Snapshot - release (retry)
-        uses: softprops/action-gh-release@v1
-        if: |
-          steps.snapshot_prepare.outputs.snapshot_name &&
-          steps.snapshot_release_try1.outcome == 'failure'
-        with:
-          repository: FirebirdSQL/snapshots
-          name: Latest snapshots for ${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          tag_name: snapshot-${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          prerelease: true
-          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          files: |
-            gen/Firebird-*-linux-${{ matrix.arch }}*.tar.gz
+          deletePatterns: Firebird-*-source.tar.xz
+          uploadFiles: gen/Firebird-*-source.tar.xz
 
   build-alpine-x64:
+    if: github.ref_type != 'tag'
     runs-on: ubuntu-20.04
     container: alpine:3.14
 
@@ -153,6 +141,7 @@ jobs:
           path: gen/Firebird-*-linux-x64.tar.gz
 
   build-windows:
+    if: github.ref_type != 'tag'
     runs-on: ${{ matrix.os }}
     env:
       VS_VERSION: ${{ (matrix.os == 'windows-2019' && '2019' || (matrix.os == 'windows-2022' && '2022' || '')) }}
@@ -209,8 +198,6 @@ jobs:
 
   build-windows-docker:
     runs-on: windows-2022
-    env:
-      VS_VERSION: ${{ (matrix.os == 'windows-2019' && '2019' || (matrix.os == 'windows-2022' && '2022' || '')) }}
 
     strategy:
       fail-fast: false
@@ -222,6 +209,9 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 10
+
+      - name: Get Release Notes
+        uses: ./.github/actions/get-release-notes
 
       - name: Build
         id: build
@@ -259,168 +249,50 @@ jobs:
           name: firebird-windows-${{ matrix.platform }}-withDebugSymbols-installer
           path: builds/install_images/*-windows-${{ matrix.platform }}-withDebugSymbols.exe
 
-      - name: Snapshot - prepare
-        id: snapshot_prepare
-        if: |
-          github.repository == 'FirebirdSQL/firebird' &&
-          github.event.head_commit.message == 'increment build number' &&
-          github.ref_name == 'master'
-        shell: cmd
-        run: |
-          echo snapshot_name=${{ github.ref_name }}>> %GITHUB_OUTPUT%
-
-      - name: Snapshot - delete old assets
-        uses: mknejp/delete-release-assets@v1
-        if: steps.snapshot_prepare.outputs.snapshot_name
+      - name: Create release
+        uses: ./.github/actions/create-release
         with:
-          repository: FirebirdSQL/snapshots
           token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          tag: snapshot-${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          fail-if-no-release: false
-          fail-if-no-assets: false
-          assets: |
+          deletePatterns:  |
             Firebird-*-windows-${{ steps.build.outputs.arch_suffix }}*.exe
             Firebird-*-windows-${{ steps.build.outputs.arch_suffix }}*.zip
-
-      - name: Snapshot - release
-        id: snapshot_release_try1
-        uses: softprops/action-gh-release@v1
-        if: steps.snapshot_prepare.outputs.snapshot_name
-        continue-on-error: true
-        with:
-          repository: FirebirdSQL/snapshots
-          name: Latest snapshots for ${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          tag_name: snapshot-${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          prerelease: true
-          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          files: |
+          uploadFiles: |
             builds/install_images/Firebird-*-windows-*.exe
             builds/install_images/Firebird-*-windows-*.zip
 
-      - name: Snapshot - release (retry)
-        uses: softprops/action-gh-release@v1
-        if: |
-          steps.snapshot_prepare.outputs.snapshot_name &&
-          steps.snapshot_release_try1.outcome == 'failure'
-        with:
-          repository: FirebirdSQL/snapshots
-          name: Latest snapshots for ${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          tag_name: snapshot-${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          prerelease: true
-          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          files: |
-            builds/install_images/Firebird-*windows-*.exe
-            builds/install_images/Firebird-*windows-*.zip
-
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-12
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 10
+          submodules: 'true'
 
       - name: Prepare - Install tools
         run: |
-          brew install automake cmake libtool ninja
+          brew install automake autoconf-archive cmake libtool ninja
 
-      - name: Cache - libc++ install
-        id: cache-libcxx-install-macos
+      - name: Cache - vcpkg
         uses: actions/cache@v3
         with:
-          key: ${{ runner.os }}-libcxx-install-13.0.1
+          key: ${{ runner.os }}-vcpkg
           path: |
-            extern/libcxx-macos-install
-
-      - name: Download libc++ sources
-        if: steps.cache-libcxx-install-macos.outputs.cache-hit != 'true'
-        run: |
-          mkdir extern/libcxx-macos
-          pushd extern/libcxx-macos
-          curl -OL https://github.com/llvm/llvm-project/releases/download/llvmorg-13.0.1/llvm-project-13.0.1.src.tar.xz
-          tar xJf llvm-project-13.0.1.src.tar.xz
-          popd
-
-      - name: Build libc++
-        if: steps.cache-libcxx-install-macos.outputs.cache-hit != 'true'
-        run: |
-          LIBCXX_BUILD_PATH=`pwd`/extern/libcxx-macos-build
-          LIBCXX_INSTALL_PATH=`pwd`/extern/libcxx-macos-install
-          mkdir $LIBCXX_BUILD_PATH
-          pushd extern/libcxx-macos/llvm-project-13.0.1.src
-          export MACOSX_DEPLOYMENT_TARGET=10.9
-          cmake -G Ninja -S llvm -B $LIBCXX_BUILD_PATH \
-            -DLLVM_ENABLE_PROJECTS="libcxx;libcxxabi" \
-            -DCMAKE_INSTALL_PREFIX=$LIBCXX_INSTALL_PATH \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DLIBCXX_ENABLE_SHARED=false \
-            -DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=true
-          ninja -C $LIBCXX_BUILD_PATH cxx cxxabi
-          ninja -C $LIBCXX_BUILD_PATH install-cxx install-cxxabi
-          popd
-
-      - name: Cache - libicu install
-        id: cache-libicu-install-macos
-        uses: actions/cache@v3
-        with:
-          key: ${{ runner.os }}-libicu-install-63.2
-          path: |
-            extern/libicu-macos-install
-
-      - name: Download and patch libicu sources
-        if: steps.cache-libicu-install-macos.outputs.cache-hit != 'true'
-        run: |
-          mkdir extern/libicu-macos
-          pushd extern/libicu-macos
-          curl -OL https://github.com/unicode-org/icu/releases/download/release-63-2/icu4c-63_2-src.tgz
-          curl -OL https://github.com/unicode-org/icu/commit/24aeb9a5a5874f4ce5db912e30670ac3ae236971.patch
-          tar xzf icu4c-63_2-src.tgz
-          cd icu/source
-          patch -p3 < ../../24aeb9a5a5874f4ce5db912e30670ac3ae236971.patch
-          popd
-
-      - name: Build libicu
-        if: steps.cache-libicu-install-macos.outputs.cache-hit != 'true'
-        run: |
-          export LIBTOOLIZE=glibtoolize
-          export LIBTOOL=glibtool
-
-          LIBICU_INSTALL_PATH=`pwd`/extern/libicu-macos-install
-          pushd extern/libicu-macos/icu/source
-          ./runConfigureICU MacOSX --prefix=$LIBICU_INSTALL_PATH
-          make -j4
-          make install
-          install_name_tool -id @rpath/lib/libicuuc.dylib $LIBICU_INSTALL_PATH/lib/libicuuc.dylib
-          install_name_tool -id @rpath/lib/libicui18n.dylib $LIBICU_INSTALL_PATH/lib/libicui18n.dylib
-          install_name_tool -id @rpath/lib/libicudata.dylib $LIBICU_INSTALL_PATH/lib/libicudata.dylib
-          install_name_tool -change libicudata.63.dylib @loader_path/libicudata.63.dylib $LIBICU_INSTALL_PATH/lib/libicuuc.63.dylib
-          install_name_tool -change libicudata.63.dylib @loader_path/libicudata.63.dylib $LIBICU_INSTALL_PATH/lib/libicui18n.63.dylib
-          install_name_tool -change libicuuc.63.dylib @loader_path/libicuuc.63.dylib $LIBICU_INSTALL_PATH/lib/libicui18n.63.dylib
-          popd
+            $HOME/.cache/vcpkg/archives
 
       - name: Build
         run: |
           export LIBTOOLIZE=glibtoolize
           export LIBTOOL=glibtool
 
-          LIBCXX_INSTALL_PATH=`pwd`/extern/libcxx-macos-install
-          LIBICU_INSTALL_PATH=`pwd`/extern/libicu-macos-install
-
-          mkdir -p gen/Release/firebird/lib
-          cp -R $LIBICU_INSTALL_PATH/lib/libicu{data,i18n,uc}.*dylib gen/Release/firebird/lib/
-
-          export C_INCLUDE_PATH="$LIBICU_INSTALL_PATH/include:`xcrun --show-sdk-path`/usr/include"
-          export CPLUS_INCLUDE_PATH="$LIBCXX_INSTALL_PATH/include/c++/v1:$LIBICU_INSTALL_PATH/include:`xcrun --show-sdk-path`/usr/include"
-          export LIBRARY_PATH="$LIBCXX_INSTALL_PATH/lib:$LIBICU_INSTALL_PATH/lib:$LIBRARY_PATH"
-
           ./autogen.sh --with-builtin-tommath --with-builtin-tomcrypt
           make -j4
           make tests -j4
           make run_tests
 
-          (cd gen; make -B -f make.platform.postfix ICU_LOC="$LIBICU_INSTALL_PATH/lib/")
-          (cd gen; make -B -f Makefile.install)
+          make -C gen -B -f make.platform.postfix
+          make -C gen -B -f Makefile.install
 
           # Rename directory to make sure the build is relocatable.
           mv gen gen2
@@ -441,54 +313,12 @@ jobs:
           name: firebird-macos
           path: gen/artifacts
 
-      - name: Snapshot - prepare
-        id: snapshot_prepare
-        if: |
-          github.repository == 'FirebirdSQL/firebird' &&
-          github.event.head_commit.message == 'increment build number' &&
-          github.ref_name == 'master'
-        run: |
-          echo "snapshot_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-
-      - name: Snapshot - delete old assets
-        uses: mknejp/delete-release-assets@v1
-        if: steps.snapshot_prepare.outputs.snapshot_name
+      - name: Create release
+        uses: ./.github/actions/create-release
         with:
-          repository: FirebirdSQL/snapshots
           token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          tag: snapshot-${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          fail-if-no-release: false
-          fail-if-no-assets: false
-          assets: |
-            Firebird-*-macos-x64*.pkg
-
-      - name: Snapshot - release
-        id: snapshot_release_try1
-        uses: softprops/action-gh-release@v1
-        if: steps.snapshot_prepare.outputs.snapshot_name
-        continue-on-error: true
-        with:
-          repository: FirebirdSQL/snapshots
-          name: Latest snapshots for ${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          tag_name: snapshot-${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          prerelease: true
-          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          files: |
-            gen/artifacts/Firebird-*-macos-x64*.pkg
-
-      - name: Snapshot - release (retry)
-        uses: softprops/action-gh-release@v1
-        if: |
-          steps.snapshot_prepare.outputs.snapshot_name &&
-          steps.snapshot_release_try1.outcome == 'failure'
-        with:
-          repository: FirebirdSQL/snapshots
-          name: Latest snapshots for ${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          tag_name: snapshot-${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          prerelease: true
-          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          files: |
-            gen/artifacts/Firebird-*-macos-x64*.pkg
+          deletePatterns: Firebird-*-macos-x64*.pkg
+          uploadFiles: gen/artifacts/Firebird-*-macos-x64*.pkg
 
   build-android-initial:
     name: build-android-${{ matrix.arch }}-initial
@@ -587,6 +417,7 @@ jobs:
           target: google_apis
           ndk: 25.1.8937393
           emulator-options: -no-window -noaudio -no-boot-anim -camera-back none -port 5554
+          emulator-boot-timeout: 900
           script: |
             echo "Generated AVD snapshot for caching."
 
@@ -599,6 +430,7 @@ jobs:
           target: google_apis
           ndk: 25.1.8937393
           emulator-options: -no-snapshot-save -no-window -noaudio -no-boot-anim -camera-back none -port 5554
+          emulator-boot-timeout: 900
           script: |
             sleep 20
             adb wait-for-device
@@ -622,51 +454,77 @@ jobs:
         with:
           name: firebird-android-initial-${{ matrix.arch }}
 
-      - name: Snapshot - prepare
-        id: snapshot_prepare
-        if: |
-          github.repository == 'FirebirdSQL/firebird' &&
-          github.event.head_commit.message == 'increment build number' &&
-          github.ref_name == 'master'
+      - name: Create release
+        uses: ./.github/actions/create-release
+        with:
+          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
+          deletePatterns: Firebird-*-android-${{ matrix.arch }}*.tar.gz
+          uploadFiles: gen/Firebird-*-android-${{ matrix.arch }}*.tar.gz
+
+  build-android-aar:
+    needs: build-android-final
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 10
+
+      - name: Download final build (x86)
+        uses: actions/download-artifact@v3
+        with:
+          name: firebird-android-x86
+          path: android/temp
+
+      - name: Download final build (x64)
+        uses: actions/download-artifact@v3
+        with:
+          name: firebird-android-x64
+          path: android/temp
+
+      - name: Download final build (arm32)
+        uses: actions/download-artifact@v3
+        with:
+          name: firebird-android-arm32
+          path: android/temp
+
+      - name: Download final build (arm64)
+        uses: actions/download-artifact@v3
+        with:
+          name: firebird-android-arm64
+          path: android/temp
+
+      - name: Extract final builds
+        working-directory: android
         run: |
-          echo "snapshot_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          mkdir -p embedded/src/main/jniLibs/{x86,x86_64,armeabi-v7a,arm64-v8a}
+          tar xzvf temp/Firebird-*-android-x86.tar.gz -C embedded/src/main/jniLibs/x86 --strip-components=1
+          tar xzvf temp/Firebird-*-android-x64.tar.gz -C embedded/src/main/jniLibs/x86_64 --strip-components=1
+          tar xzvf temp/Firebird-*-android-arm32.tar.gz -C embedded/src/main/jniLibs/armeabi-v7a --strip-components=1
+          tar xzvf temp/Firebird-*-android-arm64.tar.gz -C embedded/src/main/jniLibs/arm64-v8a --strip-components=1
 
-      - name: Snapshot - delete old assets
-        uses: mknejp/delete-release-assets@v1
-        if: steps.snapshot_prepare.outputs.snapshot_name
-        with:
-          repository: FirebirdSQL/snapshots
-          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          tag: snapshot-${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          fail-if-no-release: false
-          fail-if-no-assets: false
-          assets: |
-            Firebird-*-android-${{ matrix.arch }}*.tar.gz
+          mkdir -p embedded/src/main/assets/firebird
+          mv embedded/src/main/jniLibs/x86/{*.conf,*.msg,*.dat,*.res} embedded/src/main/assets/firebird/
+          find embedded/src/main/jniLibs -type f ! -iname "*.so" -delete
 
-      - name: Snapshot - release
-        id: snapshot_release_try1
-        uses: softprops/action-gh-release@v1
-        if: steps.snapshot_prepare.outputs.snapshot_name
-        continue-on-error: true
-        with:
-          repository: FirebirdSQL/snapshots
-          name: Latest snapshots for ${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          tag_name: snapshot-${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          prerelease: true
-          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          files: |
-            gen/Firebird-*-android-${{ matrix.arch }}*.tar.gz
+      - name: Assemble AAR
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease
+          FB_VERSION=`cd ../src/misc/ && . writeBuildNum.sh && echo $PRODUCT_VER_STRING-$FIREBIRD_PACKAGE_VERSION`
+          mv embedded/build/outputs/aar/firebird-embedded-release.aar \
+             embedded/build/outputs/aar/Firebird-$FB_VERSION-android-embedded.aar
 
-      - name: Snapshot - release (retry)
-        uses: softprops/action-gh-release@v1
-        if: |
-          steps.snapshot_prepare.outputs.snapshot_name &&
-          steps.snapshot_release_try1.outcome == 'failure'
+      - name: Upload installer
+        uses: actions/upload-artifact@main
         with:
-          repository: FirebirdSQL/snapshots
-          name: Latest snapshots for ${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          tag_name: snapshot-${{ steps.snapshot_prepare.outputs.snapshot_name }}
-          prerelease: true
+          name: firebird-android-aar
+          path: android/embedded/build/outputs/aar/Firebird-*-android-embedded.aar
+
+      - name: Create release
+        uses: ./.github/actions/create-release
+        with:
           token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          files: |
-            gen/Firebird-*-android-${{ matrix.arch }}*.tar.gz
+          deletePatterns: Firebird-*-android-embedded.aar
+          uploadFiles: android/embedded/build/outputs/aar/Firebird-*-android-embedded.aar

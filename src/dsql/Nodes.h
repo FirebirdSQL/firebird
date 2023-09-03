@@ -658,7 +658,10 @@ public:
 	}
 
 	// Check if expression could return NULL or expression can turn NULL into a true/false.
-	virtual bool possiblyUnknown(const StreamList& streams) const;
+	virtual bool possiblyUnknown() const;
+
+	// Check if expression is known to ignore NULLs
+	virtual bool ignoreNulls(const StreamList& streams) const;
 
 	// Verify if this node is allowed in an unmapped boolean.
 	virtual bool unmappable(const MapNode* mapNode, StreamType shellStream) const;
@@ -728,40 +731,37 @@ public:
 	{
 	}
 
-	virtual Kind getKind()
+	Kind getKind() override
 	{
 		return KIND_BOOLEAN;
 	}
 
-	virtual BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
+	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
 		ExprNode::dsqlPass(dsqlScratch);
 		return this;
 	}
 
-	virtual BoolExprNode* dsqlFieldRemapper(FieldRemapper& visitor)
+	BoolExprNode* dsqlFieldRemapper(FieldRemapper& visitor) override
 	{
 		ExprNode::dsqlFieldRemapper(visitor);
 		return this;
 	}
 
-	virtual BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb)
+	BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override
 	{
 		ExprNode::pass1(tdbb, csb);
 		return this;
 	}
 
-	virtual BoolExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	BoolExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override final;
 
-	virtual void pass2Boolean1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
+	virtual void pass2Boolean(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, std::function<void ()> process)
 	{
+		process();
 	}
 
-	virtual void pass2Boolean2(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
-	{
-	}
-
-	virtual BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const = 0;
+	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override = 0;
 	virtual bool execute(thread_db* tdbb, Request* request) const = 0;
 };
 
@@ -1042,9 +1042,14 @@ public:
 
 	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual bool possiblyUnknown(const StreamList& /*streams*/) const
+	virtual bool possiblyUnknown() const
 	{
 		return true;
+	}
+
+	virtual bool ignoreNulls(const StreamList& /*streams*/) const
+	{
+		return false;
 	}
 
 	virtual void collectStreams(SortedStreamList& /*streamList*/) const
@@ -1126,6 +1131,7 @@ public:
 	static const USHORT DFLAG_CURSOR					= 0x40;
 	static const USHORT DFLAG_LATERAL					= 0x80;
 	static const USHORT DFLAG_PLAN_ITEM					= 0x100;
+	static const USHORT DFLAG_BODY_WRAPPER				= 0x200;
 
 	RecordSourceNode(Type aType, MemoryPool& pool)
 		: ExprNode(aType, pool),
@@ -1177,9 +1183,14 @@ public:
 		fb_assert(false);
 	}
 
-	virtual bool possiblyUnknown(const StreamList& /*streams*/) const
+	virtual bool possiblyUnknown() const
 	{
 		return true;
+	}
+
+	virtual bool ignoreNulls(const StreamList& /*streams*/) const
+	{
+		return false;
 	}
 
 	virtual bool unmappable(const MapNode* /*mapNode*/, StreamType /*shellStream*/) const

@@ -7,7 +7,7 @@ ARG ARG_CTNG_VERSION=1.25.0
 ARG ARG_LIBTOOL_VERSION=2.4.6
 ARG ARG_NCURSES_VERSION=6.3
 ARG ARG_LTM_VERSION=1.2.0
-ARG ARG_ZLIB_VERSION=1.2.12
+ARG ARG_ZLIB_VERSION=1.2.13
 ARG ARG_ICU_VERSION=70-1
 
 ARG ARG_CPUCOUNT=6
@@ -201,8 +201,10 @@ ARG ARG_CTNG_GID
 
 RUN apt-get update && \
 	apt-get -y install \
+		cmake \
 		libfile-copy-recursive-perl \
-		unzip && \
+		unzip \
+		xz-utils && \
 	rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g $ARG_CTNG_GID ctng && \

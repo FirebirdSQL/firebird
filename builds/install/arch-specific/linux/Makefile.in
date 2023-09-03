@@ -42,6 +42,8 @@ include     $(ROOT)/gen/make.shared.variables
 # root of the build tree.
 
 BuildRoot=$(GEN_ROOT)
+CLIENT_ONLY_FLG=@CLIENT_ONLY_FLG@
+WITH_TOMCRYPT=@WITH_TOMCRYPT@
 
 InstallRoot=.
 
@@ -112,8 +114,10 @@ buildImageDir: buildDebugInfo
 
 buildTarDir: buildImageDir
 	mkdir -p $(GEN_ROOT)/$(TarDir)
+ifeq ($(CLIENT_ONLY_FLG),N)
 	cp -r $(GEN_ROOT)/install/install.sh $(GEN_ROOT)/$(TarDir)
 	chmod a+x $(GEN_ROOT)/$(TarDir)/*.sh
+endif
 	(cd $(GEN_ROOT)/$(TarDir); tar -C ../buildroot -czf buildroot.tar.gz . )
 	(cd $(GEN_ROOT)/$(TarDir); tar -tzf buildroot.tar.gz > manifest.txt )
 

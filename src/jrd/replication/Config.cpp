@@ -303,7 +303,11 @@ Config* Config::get(const PathName& lookupName)
 
 		if (config->journalDirectory.hasData() || config->syncReplicas.hasData())
 		{
-			// If log_directory is specified, then replication is enabled
+			// If either journal_directory or sync_replicas is specified,
+			// then replication is enabled
+
+			if (config->dbName.isEmpty())
+				config->dbName = lookupName;
 
 			if (config->filePrefix.isEmpty())
 			{
@@ -329,7 +333,7 @@ Config* Config::get(const PathName& lookupName)
 // This routine is used to retrieve the list of replica databases.
 // Therefore it checks only the necessary settings.
 
-void Config::enumerate(Firebird::Array<Config*>& replicas)
+void Config::enumerate(ReplicaList& replicas)
 {
 	PathName dbName;
 

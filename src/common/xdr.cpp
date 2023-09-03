@@ -291,7 +291,7 @@ bool_t xdr_datum( xdr_t* xdrs, const dsc* desc, UCHAR* buffer)
 		break;
 
 	case dtype_timestamp_tz:
-		fb_assert(desc->dsc_length >= 2 * sizeof(SLONG) + 1);
+		fb_assert(desc->dsc_length >= 2 * sizeof(SLONG) + sizeof(SSHORT));
 		if (!xdr_long(xdrs, &((SLONG*) p)[0]))
 			return FALSE;
 		if (!xdr_long(xdrs, &((SLONG*) p)[1]))

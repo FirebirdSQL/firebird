@@ -19,8 +19,6 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\gen\yvalve\array.cpp" />
-    <ClCompile Include="..\..\..\gen\yvalve\blob.cpp" />
     <ClCompile Include="..\..\..\src\auth\SecureRemotePassword\client\SrpClient.cpp" />
     <ClCompile Include="..\..\..\src\auth\SecurityDatabase\LegacyClient.cpp" />
     <ClCompile Include="..\..\..\src\jrd\os\win32\ibinitdll.cpp" />
@@ -28,6 +26,8 @@
     <ClCompile Include="..\..\..\src\remote\client\BlrFromMessage.cpp" />
     <ClCompile Include="..\..\..\src\remote\client\interface.cpp" />
     <ClCompile Include="..\..\..\src\yvalve\alt.cpp" />
+    <ClCompile Include="..\..\..\src\yvalve\array.cpp" />
+    <ClCompile Include="..\..\..\src\yvalve\blob.cpp" />
     <ClCompile Include="..\..\..\src\yvalve\config\os\win32\config_root.cpp" />
     <ClCompile Include="..\..\..\src\yvalve\DistributedTransaction.cpp" />
     <ClCompile Include="..\..\..\src\yvalve\gds.cpp" />
@@ -81,8 +81,6 @@
     <ResourceCompile Include="..\..\..\src\jrd\version.rc" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\..\src\yvalve\array.epp" />
-    <None Include="..\..\..\src\yvalve\blob.epp" />
     <None Include="..\defs\firebird.def" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -97,7 +95,7 @@
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141_xp</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
@@ -105,7 +103,7 @@
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141_xp</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
@@ -179,10 +177,6 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <Optimization>MaxSpeed</Optimization>
-      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;SUPERSERVER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
@@ -210,10 +204,6 @@
       <TargetEnvironment>X64</TargetEnvironment>
     </Midl>
     <ClCompile>
-      <Optimization>MaxSpeed</Optimization>
-      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;SUPERSERVER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>

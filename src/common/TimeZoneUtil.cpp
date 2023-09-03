@@ -102,7 +102,13 @@ namespace
 			if (FB_TZDATADIR[0])
 				temp = FB_TZDATADIR;
 			else
+			{
+#ifdef ANDROID
+				temp = Config::getRootDirectory();
+#else
 				PathUtils::concatPath(temp, Config::getRootDirectory(), "tzdata");
+#endif
+			}
 
 			const static char* const ICU_TIMEZONE_FILES_DIR = "ICU_TIMEZONE_FILES_DIR";
 
@@ -1114,7 +1120,10 @@ bool TimeZoneRuleIterator::next()
 	}
 
 	if (!hasNext || icuDate > MAX_ICU_TIMESTAMP)
+	{
 		icuDate = MAX_ICU_TIMESTAMP;
+		hasNext = false;
+	}
 
 	icuLib.ucalSetMillis(icuCalendar, icuDate, &icuErrorCode);
 
@@ -1124,7 +1133,7 @@ bool TimeZoneRuleIterator::next()
 		(icuDate == MAX_ICU_TIMESTAMP ? ISC_TIME_SECONDS_PRECISION / 1000 : 0));
 	endTimestamp.time_zone = TimeZoneUtil::GMT_ZONE;
 
-	startTicks = endTicks + 1;
+	startTicks = (hasNext ? endTicks : toTicks) + 1;
 
 	return true;
 }

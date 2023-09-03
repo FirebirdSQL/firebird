@@ -225,6 +225,11 @@ namespace Firebird
 			return !hasData();
 		}
 
+		bool isSuccess() const
+		{
+			return isEmpty();
+		}
+
 		static void setVersionError(IStatus* status, const char* interfaceName,
 			unsigned currentVersion, unsigned expectedVersion)
 		{

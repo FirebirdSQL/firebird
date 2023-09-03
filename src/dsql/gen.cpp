@@ -525,6 +525,12 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
  **/
 void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 {
+	if ((rse->dsqlFlags & RecordSourceNode::DFLAG_BODY_WRAPPER))
+	{
+		GEN_expr(dsqlScratch, rse->dsqlStreams->items[0]);
+		return;
+	}
+
 	if (rse->dsqlFlags & RecordSourceNode::DFLAG_SINGLETON)
 		dsqlScratch->appendUChar(blr_singular);
 
@@ -547,10 +553,10 @@ void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 	for (const NestConst<RecordSourceNode>* const end = rse->dsqlStreams->items.end(); ptr != end; ++ptr)
 		GEN_expr(dsqlScratch, *ptr);
 
-	if (rse->flags & RseNode::FLAG_WRITELOCK)
+	if (rse->hasWriteLock())
 		dsqlScratch->appendUChar(blr_writelock);
 
-	if (rse->flags & RseNode::FLAG_SKIP_LOCKED)
+	if (rse->hasSkipLocked())
 		dsqlScratch->appendUChar(blr_skip_locked);
 
 	if (rse->dsqlFirst)

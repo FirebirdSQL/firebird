@@ -518,7 +518,7 @@ RecordSource* CMP_post_rse(thread_db* tdbb, CompilerScratch* csb, RseNode* rse)
  **************************************/
 	SET_TDBB(tdbb);
 
-	AutoSetRestore<ULONG> autoCurrentCursorProfileId(&csb->csb_currentCursorProfileId, csb->csb_nextCursorProfileId++);
+	fb_assert(csb->csb_currentCursorId);
 
 	const auto rsb = Optimizer::compile(tdbb, csb, rse);
 

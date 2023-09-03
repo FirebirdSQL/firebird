@@ -87,7 +87,7 @@ namespace
 			if (fb_utils::bootBuild())
 				return;
 
-#if defined(WIN_NT)
+#if defined(WIN_NT) || defined(ANDROID)
 			libUtilPath.assign(LIBNAME);
 #elif defined(DARWIN)
 			libUtilPath = "/Library/Frameworks/Firebird.framework/Versions/A/Libraries/" LIBNAME;

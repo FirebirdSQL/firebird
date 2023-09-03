@@ -947,6 +947,10 @@ void INF_database_info(thread_db* tdbb,
 			}
 			continue;
 
+		case fb_info_parallel_workers:
+			length = INF_convert(att->att_parallel_workers, buffer);
+			break;
+
 		default:
 			buffer[0] = item;
 			item = isc_info_error;

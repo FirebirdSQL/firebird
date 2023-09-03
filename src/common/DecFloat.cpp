@@ -1196,4 +1196,32 @@ void Decimal128::getBcd(BCD* bcd) const
 	bcd->sign = decQuadToBCD(&dec, &bcd->exp, bcd->bcd);
 }
 
+string DecimalStatus::getTxtRound()
+{
+	for (auto c = FB_DEC_RoundModes; c->name; ++c)
+	{
+		if (c->val == roundingMode)
+			return &c->name[FB_DEC_RMODE_OFFSET];
+	}
+
+	return "Illegal";
+}
+
+string DecimalStatus::getTxtTraps()
+{
+	string rc;
+	for (auto c = FB_DEC_IeeeTraps; c->name; ++c)
+	{
+		if (c->val & decExtFlag)
+		{
+			if (rc.hasData())
+				rc += ',';
+			rc += &c->name[FB_DEC_TRAPS_OFFSET];
+		}
+	}
+
+	if (rc.hasData())
+		return rc;
+	return "None";
+}
 } // namespace Firebird

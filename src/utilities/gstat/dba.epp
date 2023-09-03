@@ -618,14 +618,15 @@ int gstat(Firebird::UtilSvc* uSvc)
 	tddba->page_number = -1;
 	const header_page* header = (const header_page*) db_read((SLONG) 0);
 
-	uSvc->started();
-
 	if (!Ods::isSupported(header))
 	{
 		const int oversion = (header->hdr_ods_version & ~ODS_FIREBIRD_FLAG);
 		dba_error(3, SafeArg() << ODS_VERSION << oversion);
 		// msg 3: Wrong ODS version, expected %d, encountered %d?
 	}
+
+	// it's important for provider auto-select to mark as 'started' after possible network error
+	uSvc->started();
 
 	char file_name[1024];
 	fileName.copyTo(file_name, sizeof(file_name));

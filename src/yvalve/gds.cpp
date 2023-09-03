@@ -112,6 +112,10 @@
 #undef leave
 #endif // WIN_NT
 
+#ifdef ANDROID
+#include <android/log.h>
+#endif
+
 static char fb_prefix_val[MAXPATHLEN];
 static char fb_prefix_lock_val[MAXPATHLEN];
 static char fb_prefix_msg_val[MAXPATHLEN];
@@ -1281,6 +1285,7 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 #ifdef WIN_NT
 	WaitForSingleObject(CleanupTraceHandles::trace_mutex_handle, INFINITE);
 #endif
+
 	FILE* file = os_utils::fopen(name.c_str(), "a");
 	if (file != NULL)
 	{
@@ -1311,7 +1316,12 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 		// This will release file lock set in posix case
 		fclose(file);
 	}
-#ifdef WIN_NT
+
+#ifdef ANDROID
+	va_start(ptr, text);
+	__android_log_vprint(ANDROID_LOG_INFO, "FIREBIRD", text, ptr);
+	va_end(ptr);
+#elif defined(WIN_NT)
 	ReleaseMutex(CleanupTraceHandles::trace_mutex_handle);
 #endif
 }

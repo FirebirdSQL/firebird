@@ -28,6 +28,7 @@
 #include "TraceConfiguration.h"
 #include "../../common/SimilarToRegex.h"
 #include "../../common/isc_f_proto.h"
+#include "../../common/db_alias.h"
 
 using namespace Firebird;
 
@@ -125,9 +126,14 @@ void TraceCfgReader::readConfig()
 		{
 			PathName noQuotePattern = pattern.ToPathName();
 			noQuotePattern.alltrim(" '\'");
+			PathName expandedName;
 
-			if (m_databaseName == noQuotePattern)
+			if (m_databaseName == noQuotePattern ||
+				(expandDatabaseName(noQuotePattern, expandedName, nullptr),
+				m_databaseName == expandedName) )
+			{
 				match = exactMatch = true;
+			}
 			else
 			{
 				bool regExpOk = false;

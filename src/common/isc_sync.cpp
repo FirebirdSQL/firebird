@@ -903,9 +903,24 @@ int SharedMemoryBase::eventWait(event_t* event, const SLONG value, const SLONG m
 	struct timespec timer;
 	if (micro_seconds > 0)
 	{
-		timer.tv_sec = time(NULL);
-		timer.tv_sec += micro_seconds / 1000000;
-		timer.tv_nsec = 1000 * (micro_seconds % 1000000);
+#if defined(HAVE_CLOCK_GETTIME)
+		clock_gettime(CLOCK_REALTIME, &timer);
+#elif defined(HAVE_GETTIMEOFDAY)
+		struct timeval tp;
+		GETTIMEOFDAY(&tp);
+		timer.tv_sec = tp.tv_sec;
+		timer.tv_nsec = tp.tv_usec * 1000;
+#else
+		struct timeb time_buffer;
+		ftime(&time_buffer);
+		timer.tv_sec = time_buffer.time;
+		timer.tv_nsec = time_buffer.millitm * 1000000;
+#endif
+		const SINT64 BILLION = 1000000000;
+		const SINT64 nanos = (SINT64) timer.tv_sec * BILLION + timer.tv_nsec +
+			(SINT64) micro_seconds * 1000;
+		timer.tv_sec = nanos / BILLION;
+		timer.tv_nsec = nanos % BILLION;
 	}
 
 	int ret = FB_SUCCESS;

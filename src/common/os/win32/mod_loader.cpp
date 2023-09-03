@@ -172,7 +172,9 @@ public:
 
 	~Win32Module();
 
-	void *findSymbol(ISC_STATUS* status, const string&);
+	void* findSymbol(ISC_STATUS* status, const string&) override;
+
+	bool getRealPath(const string& anySymbol, PathName& path) override;
 
 private:
 	const HMODULE module;
@@ -271,4 +273,17 @@ void* Win32Module::findSymbol(ISC_STATUS* status, const string& symName)
 	}
 
 	return (void*) result;
+}
+
+bool Win32Module::getRealPath(const string& /*anySymbol*/, PathName& path)
+{
+	char moduleFileName[MAX_PATH];
+
+	if (GetModuleFileName(module, moduleFileName, sizeof(moduleFileName)) != 0)
+	{
+		path = moduleFileName;
+		return true;
+	}
+
+	return false;
 }

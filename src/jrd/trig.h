@@ -62,6 +62,7 @@ struct gen
 	const char*		gen_name;
 	USHORT			gen_id;
 	const char*		gen_description;
+	USHORT			gen_ods_version;
 };
 
 } //namespace Jrd
@@ -70,18 +71,18 @@ struct gen
 // Keep in sync with constants.h
 static const Jrd::gen generators[] =
 {
-	{ "RDB$SECURITY_CLASS", 1, NULL },
-	{ "SQL$DEFAULT", 2, NULL },
-	{ PROCEDURES_GENERATOR, 3, "Procedure ID" },
-	{ "RDB$EXCEPTIONS", 4, "Exception ID" },
-	{ "RDB$CONSTRAINT_NAME", 5, "Implicit constraint name" },
-	{ "RDB$FIELD_NAME", 6, "Implicit domain name" },
-	{ "RDB$INDEX_NAME", 7, "Implicit index name" },
-	{ "RDB$TRIGGER_NAME", 8, "Implicit trigger name" },
-	{ "RDB$BACKUP_HISTORY", 9, "Nbackup technology" },
-	{ FUNCTIONS_GENERATOR, 10, "Function ID" },
-	{ "RDB$GENERATOR_NAME", 11, "Implicit generator name" },
-	{ nullptr, 0, nullptr }
+	{ "RDB$SECURITY_CLASS", 1, NULL, ODS_13_0 },
+	{ "SQL$DEFAULT", 2, NULL, ODS_13_0 },
+	{ PROCEDURES_GENERATOR, 3, "Procedure ID", ODS_13_0 },
+	{ "RDB$EXCEPTIONS", 4, "Exception ID", ODS_13_0 },
+	{ "RDB$CONSTRAINT_NAME", 5, "Implicit constraint name", ODS_13_0 },
+	{ "RDB$FIELD_NAME", 6, "Implicit domain name", ODS_13_0 },
+	{ "RDB$INDEX_NAME", 7, "Implicit index name", ODS_13_0 },
+	{ "RDB$TRIGGER_NAME", 8, "Implicit trigger name", ODS_13_0 },
+	{ "RDB$BACKUP_HISTORY", 9, "Nbackup technology", ODS_13_0 },
+	{ FUNCTIONS_GENERATOR, 10, "Function ID", ODS_13_0 },
+	{ "RDB$GENERATOR_NAME", 11, "Implicit generator name", ODS_13_0 },
+	{ nullptr, 0, nullptr, 0 }
 };
 
 

@@ -1,6 +1,13 @@
-# v5.0 Beta 1 (planned)
+# v5.0 Beta 1 (27-Mar-2023)
 
 ## New features
+
+* [#7447](https://github.com/FirebirdSQL/firebird/pull/7447): Parallel sweeping and index creation inside the engine  
+  Reference(s): [/doc/README.parallel_features](https://github.com/FirebirdSQL/firebird/raw/master/doc/README.parallel_features)  
+  Contributor(s): Vlad Khorsun
+
+* [#7397](https://github.com/FirebirdSQL/firebird/pull/7397): Inline minor ODS upgrade  
+  Contributor(s): Dmitry Yemanov
 
 * [#7350](https://github.com/FirebirdSQL/firebird/pull/7350): SKIP LOCKED clause for SELECT WITH LOCK, UPDATE and DELETE  
   Reference(s): [/doc/sql.extensions/README.skip_locked.md](https://github.com/FirebirdSQL/firebird/raw/master/doc/sql.extensions/README.skip_locked.md)  
@@ -39,7 +46,26 @@
   Reference(s): [/doc/sql.extensions/README.partial_indices](https://github.com/FirebirdSQL/firebird/raw/master/doc/sql.extensions/README.partial_indices)  
   Contributor(s): Dmitry Yemanov, Vlad Khorsun
 
+* [#1783](https://github.com/FirebirdSQL/firebird/issues/1783): New GBAK switch to backup / restore tables/indexes in parallel  
+  Reference(s): [/doc/README.gbak](https://github.com/FirebirdSQL/firebird/raw/master/doc/README.gbak)  
+  Contributor(s): Vlad Khorsun
+
 ## Improvements
+
+* [#7441](https://github.com/FirebirdSQL/firebird/pull/7441): More cursor-related details in the plan output  
+  Contributor(s): Dmitry Yemanov
+
+* [#7437](https://github.com/FirebirdSQL/firebird/issues/7437): Update _zlib_ to 1.2.13  
+  Contributor(s): Vlad Khorsun
+
+* [#7411](https://github.com/FirebirdSQL/firebird/issues/7411): Unify display of system procedures & packages with other system objects  
+  Contributor(s): Alexander Peshkov
+
+* [#7399](https://github.com/FirebirdSQL/firebird/pull/7399): Simplify client library build  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7382](https://github.com/FirebirdSQL/firebird/issues/7382): Performance improvement for BLOB copying  
+  Contributor(s): Adriano dos Santos Fernandes
 
 * [#7331](https://github.com/FirebirdSQL/firebird/issues/7331): Cost-based choice between nested loop join and hash join  
   Contributor(s): Dmitry Yemanov
@@ -72,9 +98,6 @@
   Contributor(s): Adriano dos Santos Fernandes
 
 * [#7165](https://github.com/FirebirdSQL/firebird/issues/7165): Provide ability to see in the trace log events related to missing security context  
-  Contributor(s): Vlad Khorsun
-
-* [#7161](https://github.com/FirebirdSQL/firebird/issues/7161): Update _zlib_ to 1.2.12  
   Contributor(s): Vlad Khorsun
 
 * [#7093](https://github.com/FirebirdSQL/firebird/issues/7093): Improve indexed lookup speed of strings when the last keys characters are part of collated contractions  
@@ -173,7 +196,13 @@
 * [#1708](https://github.com/FirebirdSQL/firebird/issues/1708): Avoid data retrieval if the `WHERE` clause always evaluates to `FALSE` [CORE1287]  
   Contributor(s): Dmitry Yemanov
 
+* [#281](https://github.com/FirebirdSQL/firebird/pull/281): `RDB$BLOB_UTIL` system package  
+  Contributor(s): Adriano dos Santos Fernandes
+
 ## Bugfixes
+
+* [#7388](https://github.com/FirebirdSQL/firebird/issues/7388): Different invariants optimization between views and CTEs  
+  Contributor(s): Dmitry Yemanov
 
 * [#7314](https://github.com/FirebirdSQL/firebird/issues/7314): Multitreaded activating indices restarts server process  
   Contributor(s): Vlad Khorsun

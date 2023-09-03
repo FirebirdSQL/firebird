@@ -2,7 +2,7 @@
 <Include xmlns="http://schemas.microsoft.com/wix/2006/wi">
 
 
-    <?define UPGRADE_CODE=272af809-f161-45c3-bcbe-a8594a175e38 ?>
+    <?define UPGRADE_CODE=0a7e7a9d-c7ce-4b0a-bd8d-897bc8edd45b ?>
 
     <?define CPUArch="x86" ?>
 

@@ -111,8 +111,8 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 
 	// req_proc_fetch flag used only when fetching rows, so
 	// is set at end of open()
-
 	proc_request->req_flags &= ~req_proc_fetch;
+	AutoSetRestoreFlag<ULONG> autoSetReqProcSelect(&proc_request->req_flags, req_proc_select, true);
 
 	try
 	{
@@ -197,6 +197,7 @@ bool ProcedureScan::internalGetRecord(thread_db* tdbb) const
 
 	TraceProcFetch trace(tdbb, proc_request);
 
+	AutoSetRestoreFlag<ULONG> autoSetReqProcSelect(&proc_request->req_flags, req_proc_select, true);
 	AutoSetRestore<USHORT> autoOriginalTimeZone(
 		&tdbb->getAttachment()->att_original_timezone,
 		tdbb->getAttachment()->att_current_timezone);

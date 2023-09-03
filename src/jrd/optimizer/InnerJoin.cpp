@@ -185,12 +185,8 @@ void InnerJoin::estimateCost(unsigned position,
 	const auto candidate = retrieval.getInversion();
 	fb_assert(!position || candidate->dependencies);
 
-	// Calculate the relationship selectivity
-	double selectivity = candidate->selectivity;
-	if (selectivity < stream->baseSelectivity)
-		selectivity /= stream->baseSelectivity;
-
-	joinedStreams[position].selectivity = selectivity;
+	// Remember selectivity of this stream
+	joinedStreams[position].selectivity = candidate->selectivity;
 
 	// Get the stream cardinality
 	const auto tail = &csb->csb_rpt[stream->number];
@@ -202,11 +198,14 @@ void InnerJoin::estimateCost(unsigned position,
 
 	if (position)
 	{
-		// Calculate the hashing cost. It's estimated as the hashed stream retrieval cost
-		// plus two cardinalities. Hashed stream cardinality means the cost of copying rows
-		// into the hash table and the outer cardinality represents probing the hash table.
+		// Calculate the hashing cost. It consists of the following parts:
+		//  - hashed stream retrieval
+		//  - copying rows into the hash table
+		//  - probing the hash table and copying the matched rows
+
 		const auto hashCardinality = stream->baseSelectivity * streamCardinality;
-		const auto hashCost = stream->baseCost + hashCardinality + cardinality;
+		const auto hashCost = stream->baseCost + hashCardinality +
+			cardinality * (1.0 + candidate->selectivity * streamCardinality);
 
 		if (hashCost <= loopCost && hashCardinality <= HashJoin::maxCapacity())
 		{
@@ -502,6 +501,7 @@ River* InnerJoin::formRiver()
 	RecordSource* rsb;
 	StreamList streams;
 	HalfStaticArray<RecordSource*, OPT_STATIC_ITEMS> rsbs;
+	HalfStaticArray<BoolExprNode*, OPT_STATIC_ITEMS> equiMatches;
 
 	for (const auto& stream : bestStreams)
 	{
@@ -532,8 +532,6 @@ River* InnerJoin::formRiver()
 			const auto priorRsb = (rsbs.getCount() == 1) ? rsbs[0] :
 				FB_NEW_POOL(getPool()) NestedLoopJoin(csb, rsbs.getCount(), rsbs.begin());
 
-			const River priorRiver(csb, priorRsb, nullptr, streams);
-
 			// Prepare record sources and corresponding equivalence keys for hash-joining
 			RecordSource* hashJoinRsbs[] = {priorRsb, rsb};
 
@@ -550,9 +548,9 @@ River* InnerJoin::formRiver()
 				if (!optimizer->getEquiJoinKeys(match, &node1, &node2))
 					fb_assert(false);
 
-				if (!priorRiver.isReferenced(node1))
+				if (!node2->containsStream(stream.number))
 				{
-					fb_assert(priorRiver.isReferenced(node2));
+					fb_assert(node1->containsStream(stream.number));
 
 					// Swap the sides
 					std::swap(node1, node2);
@@ -560,11 +558,15 @@ River* InnerJoin::formRiver()
 
 				keys[0]->add(node1);
 				keys[1]->add(node2);
+
+				equiMatches.add(match);
 			}
 
-			// Ensure the smallest stream is the one to be hashed.
+			// Ensure the smallest stream is the one to be hashed,
+			// unless the prior record source is already a join.
 			// But we can swap the streams only if the sort node was not utilized.
-			if (rsb->getCardinality() > priorRsb->getCardinality() && !sortUtilized)
+			if (rsb->getCardinality() > priorRsb->getCardinality() &&
+				(streams.getCount() == 1) && !sortUtilized)
 			{
 				// Swap the sides
 				std::swap(hashJoinRsbs[0], hashJoinRsbs[1]);
@@ -589,6 +591,20 @@ River* InnerJoin::formRiver()
 	// Create a nested loop join from the processed streams
 	rsb = (rsbs.getCount() == 1) ? rsbs[0] :
 		FB_NEW_POOL(getPool()) NestedLoopJoin(csb, rsbs.getCount(), rsbs.begin());
+
+	// Ensure matching booleans are rechecked early
+	if (equiMatches.hasData())
+	{
+		auto iter = optimizer->getConjuncts();
+
+		for (; iter.hasData(); ++iter)
+		{
+			if (equiMatches.exist(*iter))
+				iter |= Optimizer::CONJUNCT_JOINED;
+		}
+
+		rsb = optimizer->applyLocalBoolean(rsb, streams, iter);
+	}
 
 	// Allocate a river block and move the best order into it
 	const auto river = FB_NEW_POOL(getPool()) River(csb, rsb, nullptr, streams);

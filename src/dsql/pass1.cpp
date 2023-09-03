@@ -2185,13 +2185,13 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 		parentRse->dsqlStreams = streamList = FB_NEW_POOL(pool) RecSourceListNode(pool, 1);
 		streamList->items[0] = window;
 
-		if (rse->flags & RseNode::FLAG_WRITELOCK)
+		if (rse->hasWriteLock())
 		{
 			parentRse->flags |= RseNode::FLAG_WRITELOCK;
 			rse->flags &= ~RseNode::FLAG_WRITELOCK;
 		}
 
-		if (rse->flags & RseNode::FLAG_SKIP_LOCKED)
+		if (rse->hasSkipLocked())
 		{
 			parentRse->flags |= RseNode::FLAG_SKIP_LOCKED;
 			rse->flags &= ~RseNode::FLAG_SKIP_LOCKED;

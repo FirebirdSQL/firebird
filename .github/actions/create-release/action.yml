@@ -1,0 +1,87 @@
+# TODO: Replace asfernandes/action-gh-release@master by softprops/action-gh-release@v1
+# once https://github.com/softprops/action-gh-release/pull/343 is merged.
+
+name: Create release
+description: Create release
+
+inputs:
+  token:
+    description: Token
+    required: true
+  deletePatterns:
+    description: Pattern to delete old assets
+    required: true
+  uploadFiles:
+    description: Files to upload
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Get release info
+      id: release-info
+      if: github.event.head_commit.message == 'increment build number' || github.ref_type == 'tag'
+      uses: ./.github/actions/release-info
+
+    - name: Delete old assets
+      uses: mknejp/delete-release-assets@v1
+      if: steps.release-info.outputs.artifacts-tag && github.ref_type != 'tag'
+      with:
+        repository: ${{
+            (steps.release-info.outputs.artifacts-repository != github.repository &&
+              steps.release-info.outputs.artifacts-repository) ||
+            null
+          }}
+        token: ${{
+            (steps.release-info.outputs.artifacts-repository != github.repository &&
+              inputs.token) ||
+            github.token
+          }}
+        tag: ${{ steps.release-info.outputs.artifacts-tag }}
+        fail-if-no-release: false
+        fail-if-no-assets: false
+        assets: ${{ inputs.deletePatterns }}
+
+    - name: Release
+      id: release_try1
+      uses: asfernandes/action-gh-release@master
+      if: steps.release-info.outputs.artifacts-tag
+      continue-on-error: true
+      with:
+        repository: ${{
+            (steps.release-info.outputs.artifacts-repository != github.repository &&
+              steps.release-info.outputs.artifacts-repository) ||
+            null
+          }}
+        token: ${{
+            (steps.release-info.outputs.artifacts-repository != github.repository &&
+              inputs.token) ||
+            github.token
+          }}
+        name: ${{ steps.release-info.outputs.artifacts-tag-description }}
+        tag_name: ${{ steps.release-info.outputs.artifacts-tag }}
+        prerelease: true
+        overwrite_files: github.ref_type != 'tag'
+        files: ${{ inputs.uploadFiles }}
+
+    - name: Release (retry)
+      uses: asfernandes/action-gh-release@master
+      if: |
+        steps.release-info.outputs.artifacts-tag &&
+        steps.release_try1.outcome == 'failure'
+      with:
+        repository: ${{
+            (steps.release-info.outputs.artifacts-repository != github.repository &&
+              steps.release-info.outputs.artifacts-repository) ||
+            null
+          }}
+        token: ${{
+            (steps.release-info.outputs.artifacts-repository != github.repository &&
+              inputs.token) ||
+            github.token
+          }}
+        name: ${{ steps.release-info.outputs.artifacts-tag-description }}
+        tag_name: ${{ steps.release-info.outputs.artifacts-tag }}
+        prerelease: true
+        overwrite_files: github.ref_type != 'tag'
+        files: ${{ inputs.uploadFiles }}

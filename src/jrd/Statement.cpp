@@ -36,6 +36,7 @@
 #include "../jrd/met_proto.h"
 #include "../jrd/scl_proto.h"
 #include "../jrd/Collation.h"
+#include "../jrd/recsrc/Cursor.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -723,11 +724,8 @@ string Statement::getPlan(thread_db* tdbb, bool detailed) const
 {
 	string plan;
 
-	for (const auto rsb : fors)
-	{
-		plan += detailed ? "\nSelect Expression" : "\nPLAN ";
-		rsb->print(tdbb, plan, detailed, 0, true);
-	}
+	for (const auto select : fors)
+		select->printPlan(tdbb, plan, detailed);
 
 	return plan;
 }

@@ -111,8 +111,6 @@ static inline void put(BurpGlobals* tdgbl, UCHAR c)
 static UCHAR debug_on = 0;		// able to turn this on in debug mode
 #endif
 
-const int burp_msg_fac = 12;
-
 #ifdef HAVE_ZLIB_H
 static Firebird::InitInstance<Firebird::ZLib> zlib;
 #endif // HAVE_ZLIB_H

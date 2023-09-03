@@ -146,6 +146,7 @@ int alice(Firebird::UtilSvc* uSvc)
 #ifdef TRUSTED_AUTH
 	tdgbl->ALICE_data.ua_trusted = false;
 #endif
+	tdgbl->ALICE_data.ua_parallel_workers = uSvc->getParallelWorkers();
 
 	//  Start by parsing switches
 

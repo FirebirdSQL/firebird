@@ -374,7 +374,7 @@ public:
 		m_parts.add(item);
 	}
 
-	void buidMergeTree();
+	void buildMergeTree();
 
 private:
 	sort_record* getMerge();
@@ -389,8 +389,8 @@ private:
 class SortOwner
 {
 public:
-	explicit SortOwner(MemoryPool& p)
-		: pool(p), sorts(p)
+	SortOwner(MemoryPool& p, Database* database)
+		: pool(p), dbb(database), sorts(p), buffers(p)
 	{}
 
 	~SortOwner()
@@ -426,9 +426,14 @@ public:
 		return pool;
 	}
 
+	UCHAR* allocateBuffer();
+	void releaseBuffer(UCHAR*);
+
 private:
 	MemoryPool& pool;
+	Database* const dbb;
 	Firebird::SortedArray<Sort*> sorts;
+	Firebird::HalfStaticArray<UCHAR*, 4> buffers;
 };
 
 } //namespace Jrd

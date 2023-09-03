@@ -82,11 +82,11 @@ private:
 	struct IdxInfo
 	{
 		IdxInfo()
-		  : m_recs(nullptr)
 		{}
 
 		index_desc m_desc;
-		RecordBitmap* m_recs;
+		RecordBitmap* m_recs = nullptr;
+		IndexCondition* m_condition = nullptr;
 	};
 
 	enum VAL_ERRORS

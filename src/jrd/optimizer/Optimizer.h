@@ -245,6 +245,7 @@ public:
 
 	static const unsigned CONJUNCT_USED		= 1;	// conjunct is used
 	static const unsigned CONJUNCT_MATCHED	= 2;	// conjunct matches an index segment
+	static const unsigned CONJUNCT_JOINED	= 4;	// conjunct used for equi-join
 
 	typedef Firebird::HalfStaticArray<Conjunct, OPT_STATIC_ITEMS> ConjunctList;
 
@@ -286,6 +287,11 @@ public:
 		bool hasData() const
 		{
 			return (iter < end);
+		}
+
+		unsigned getFlags() const
+		{
+			return iter->flags;
 		}
 
 		void rewind()
@@ -445,6 +451,9 @@ public:
 		return firstRows;
 	}
 
+	RecordSource* applyLocalBoolean(RecordSource* rsb,
+									const StreamList& streams,
+									ConjunctIterator& iter);
 	bool checkEquiJoin(BoolExprNode* boolean);
 	bool getEquiJoinKeys(BoolExprNode* boolean,
 						 NestConst<ValueExprNode>* node1,
@@ -459,9 +468,6 @@ private:
 
 	RecordSource* compile(BoolExprNodeStack* parentStack);
 
-	RecordSource* applyLocalBoolean(RecordSource* rsb,
-									const StreamList& streams,
-									ConjunctIterator& iter);
 	void checkIndices();
 	void checkSorts();
 	unsigned distributeEqualities(BoolExprNodeStack& orgStack, unsigned baseCount);

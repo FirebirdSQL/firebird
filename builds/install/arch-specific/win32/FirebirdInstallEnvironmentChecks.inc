@@ -920,9 +920,6 @@ end;
 
 function ConfigureFirebird: boolean;
 begin
-  if IsNotServerInstall then
-    Result := False
-  else
     Result := (InstallAndConfigure AND Configure) = Configure;
 end;
 
@@ -1210,12 +1207,16 @@ begin
 end;
 }
 
+
 function ConfigureAuthentication: boolean;
 begin
-  if FileExists(WizardDirValue + '\security5.fdb') then
-		Result := false
-	else
-		Result := true;
+  if IsNotServerInstall then
+    Result := false
+  else
+    if FileExists(WizardDirValue + '\security5.fdb') then
+      Result := false
+    else
+      Result := true;
 end;
 
 

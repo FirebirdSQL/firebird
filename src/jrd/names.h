@@ -466,3 +466,10 @@ NAME("MON$COMPILED_STATEMENT_ID", nam_mon_cmp_stmt_id)
 NAME("RDB$SHORT_DESCRIPTION", nam_short_description)
 NAME("RDB$SECONDS_INTERVAL", nam_seconds_interval)
 NAME("RDB$PROFILE_SESSION_ID", nam_prof_ses_id)
+
+NAME("RDB$BLOB_UTIL_HANDLE", nam_butil_handle)
+NAME("RDB$BLOB", nam_blob)
+NAME("RDB$VARBINARY_MAX", nam_varbinary_max)
+NAME("RDB$INTEGER", nam_integer)
+
+NAME("MON$PARALLEL_WORKERS", nam_par_workers)

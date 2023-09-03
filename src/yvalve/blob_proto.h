@@ -1,7 +1,7 @@
 /*
  *	PROGRAM:	Dynamic SQL runtime support
  *	MODULE:		blob_proto.h
- *	DESCRIPTION:	Prototype Header file for blob.epp
+ *	DESCRIPTION:	Prototype Header file for blob.cpp
  *
  * The contents of this file are subject to the Interbase Public
  * License Version 1.0 (the "License"); you may not use this file
@@ -24,12 +24,22 @@
 #ifndef DSQL_BLOB_PROTO_H
 #define DSQL_BLOB_PROTO_H
 
+#include "../common/classes/RefCounted.h"
+
+namespace Why {
+	class YAttachment;
+	class YTransaction;
+}
+
 ISC_STATUS API_ROUTINE isc_blob_gen_bpb(ISC_STATUS*, const ISC_BLOB_DESC*,
 										const ISC_BLOB_DESC*, USHORT, UCHAR*, USHORT*);
 ISC_STATUS API_ROUTINE isc_blob_lookup_desc(ISC_STATUS*, void**, void**,
 											const UCHAR*, const UCHAR*, ISC_BLOB_DESC*, UCHAR*);
 ISC_STATUS API_ROUTINE isc_blob_set_desc(ISC_STATUS*, const UCHAR*, const UCHAR*,
 										 SSHORT, SSHORT, SSHORT, ISC_BLOB_DESC*);
+
+void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* transaction,
+	const UCHAR* relationName, const UCHAR* fieldName, ISC_BLOB_DESC* desc, UCHAR* global);
 
 // Only declared in ibase.h:
 //void API_ROUTINE isc_blob_default_desc(ISC_BLOB_DESC* desc,

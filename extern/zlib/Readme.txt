@@ -4,7 +4,7 @@ architectures.
 
 The source code of zlib library was downloaded from 
 
-  http://zlib.net/zlib1212.zip
+  http://zlib.net/zlib1213.zip
 
 It was built with MSVC17 compilers using commands specified at win32/Makefile.msc:
 

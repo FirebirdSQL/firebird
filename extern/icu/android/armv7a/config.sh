@@ -19,9 +19,9 @@
     --with-cross-build=$CROSS_BUILD_DIR \
     CFLAGS='-Os -march=armv7-a -mfloat-abi=softfp -mfpu=neon' \
     CXXFLAGS='--std=c++17 -march=armv7-a -mfloat-abi=softfp -mfpu=neon' \
-    LDFLAGS='-static-libstdc++ -march=armv7-a -Wl,--fix-cortex-a8' \
-    CC=arm-linux-androideabi-clang \
-    CXX=arm-linux-androideabi-clang++ \
-    AR=arm-linux-androideabi-ar \
-    RANLIB=arm-linux-androideabi-ranlib \
+    LDFLAGS='-static-libstdc++ -march=armv7-a -Wl,--fix-cortex-a8 -Wl,-rpath=\$$ORIGIN' \
+    CC=armv7a-linux-androideabi24-clang \
+    CXX=armv7a-linux-androideabi24-clang++ \
+    AR=llvm-ar \
+    RANLIB=llvm-ranlib \
     --with-data-packaging=archive

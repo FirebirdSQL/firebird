@@ -279,6 +279,11 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
 		itemScratch->package = name;
 
+		if (itemScratch->clientDialect > SQL_DIALECT_V5)
+			itemStatement->setBlrVersion(5);
+		else
+			itemStatement->setBlrVersion(4);
+
 		ddlNode->dsqlPass(itemScratch);
 	}
 
@@ -695,6 +700,11 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			itemScratch->clientDialect = dsqlScratch->clientDialect;
 			itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
 			itemScratch->package = name;
+
+			if (itemScratch->clientDialect > SQL_DIALECT_V5)
+				itemStatement->setBlrVersion(5);
+			else
+				itemStatement->setBlrVersion(4);
 
 			ddlNode->dsqlPass(itemScratch);
 		}

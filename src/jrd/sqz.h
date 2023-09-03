@@ -35,6 +35,7 @@ namespace Jrd
 	{
 	public:
 		Compressor(thread_db* tdbb, ULONG length, const UCHAR* data);
+		Compressor(MemoryPool& pool, bool allowLongRuns, bool allowUnpacked, ULONG length, const UCHAR* data);
 
 		ULONG getPackedLength() const
 		{

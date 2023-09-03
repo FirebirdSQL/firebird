@@ -1,7 +1,7 @@
 /*
  *	PROGRAM:	Dynamic SQL runtime support
  *	MODULE:		array_proto.h
- *	DESCRIPTION:	Prototype Header file for array.epp
+ *	DESCRIPTION:	Prototype Header file for array.cpp
  *
  * The contents of this file are subject to the Interbase Public
  * License Version 1.0 (the "License"); you may not use this file
@@ -23,6 +23,11 @@
 
 #ifndef DSQL_ARRAY_PROTO_H
 #define DSQL_ARRAY_PROTO_H
+
+namespace Why {
+	class YAttachment;
+	class YTransaction;
+}
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,6 +54,10 @@ ISC_STATUS API_ROUTINE isc_array_set_desc(ISC_STATUS*, const SCHAR*, const SCHAR
 }   /* extern "C"  */
 #endif
 
+void iscArrayLookupBoundsImpl(Why::YAttachment* attachment, Why::YTransaction* transaction,
+	const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc);
+
+void iscArrayLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* transaction,
+	const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc);
 
 #endif // DSQL_ARRAY_PROTO_H
-
