@@ -1344,7 +1344,7 @@ public:
 	bool dsqlForUpdate = false;
 	bool dsqlWithLock = false;
 	bool dsqlSkipLocked = false;
-	TriState dsqlOptimize;
+	TriState dsqlOptimizeForFirstRows;
 };
 
 

@@ -5781,7 +5781,7 @@ select
 			node->dsqlForUpdate = $2;
 			node->dsqlWithLock = $3.first;
 			node->dsqlSkipLocked = $3.second;
-			node->dsqlOptimize = $4;
+			node->dsqlOptimizeForFirstRows = $4;
 			$$ = node;
 		}
 	;

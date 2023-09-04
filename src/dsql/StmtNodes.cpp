@@ -8207,7 +8207,7 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	SelectNode* node = FB_NEW_POOL(dsqlScratch->getPool()) SelectNode(dsqlScratch->getPool());
 	node->dsqlForUpdate = dsqlForUpdate;
-	node->dsqlOptimize = dsqlOptimize;
+	node->dsqlOptimizeForFirstRows = dsqlOptimizeForFirstRows;
 
 	const DsqlContextStack::iterator base(*dsqlScratch->context);
 	node->dsqlRse = PASS1_rse(dsqlScratch, dsqlExpr, this);

@@ -593,7 +593,7 @@ RseNode* PASS1_rse(DsqlCompilerScratch* dsqlScratch,
 	dsqlScratch->scopeLevel--;
 
 	if (select)
-		node->firstRows = select->dsqlOptimize;
+		node->firstRows = select->dsqlOptimizeForFirstRows;
 
 	return node;
 }
