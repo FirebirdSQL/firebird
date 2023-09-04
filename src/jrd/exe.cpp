@@ -560,8 +560,9 @@ void EXE_execute_ddl_triggers(thread_db* tdbb, jrd_tra* transaction, bool preTri
 	{
 		TrigVector triggers;
 		TrigVector* triggersPtr = &triggers;
+		HalfStaticArray<Trigger*, 4> cachedTriggers;
 
-		for (const auto& trigger : *attachment->att_ddl_triggers)
+		for (auto& trigger : *attachment->att_ddl_triggers)
 		{
 			const auto type = trigger.type & ~TRIGGER_TYPE_MASK;
 			const bool preTrigger = ((type & 1) == 0);
@@ -569,11 +570,14 @@ void EXE_execute_ddl_triggers(thread_db* tdbb, jrd_tra* transaction, bool preTri
 			if ((type & (1LL << action)) && (preTriggers == preTrigger))
 			{
 				triggers.add() = trigger;
+				cachedTriggers.add(&trigger);
 			}
 		}
 
 		if (triggers.hasData())
 		{
+			FbLocalStatus tempStatus;
+
 			jrd_tra* const oldTransaction = tdbb->getTransaction();
 			tdbb->setTransaction(transaction);
 
@@ -581,14 +585,24 @@ void EXE_execute_ddl_triggers(thread_db* tdbb, jrd_tra* transaction, bool preTri
 			{
 				EXE_execute_triggers(tdbb, &triggersPtr, NULL, NULL, TRIGGER_DDL,
 					preTriggers ? StmtNode::PRE_TRIG : StmtNode::POST_TRIG);
-
-				tdbb->setTransaction(oldTransaction);
 			}
-			catch (const Exception&)
+			catch (const Exception& ex)
 			{
-				tdbb->setTransaction(oldTransaction);
-				throw;
+				ex.stuffException(&tempStatus);
 			}
+
+			tdbb->setTransaction(oldTransaction);
+
+			// Triggers could be compiled inside EXE_execute_triggers(),
+			// so ensure the new pointers are copied back to the cache
+			fb_assert(triggers.getCount() == cachedTriggers.getCount());
+			for (unsigned i = 0; i < triggers.getCount(); i++)
+			{
+				*cachedTriggers[i] = triggers[i];
+				triggers[i].extTrigger = nullptr; // avoid deletion inside d'tor
+			}
+
+			tempStatus.check();
 		}
 	}
 }
