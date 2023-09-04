@@ -510,6 +510,7 @@ public:
 		TYPE_MISSING_BOOL,
 		TYPE_NOT_BOOL,
 		TYPE_RSE_BOOL,
+		TYPE_IN_LIST_BOOL,
 
 		// RecordSource types
 		TYPE_AGGREGATE_SOURCE,
@@ -1297,6 +1298,7 @@ public:
 	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 
 	virtual ValueListNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{

@@ -249,6 +249,7 @@ namespace Jrd
 			temporary_key* irsb_nav_upper;				// upper (possible multiple) key
 			temporary_key* irsb_nav_current_lower;		// current lower key
 			temporary_key* irsb_nav_current_upper;		// current upper key
+			IndexScanListIterator* irsb_iterator;		// key list iterator
 			USHORT irsb_nav_offset;						// page offset of current index node
 			USHORT irsb_nav_upper_length;				// length of upper key value
 			USHORT irsb_nav_length;						// length of expanded key

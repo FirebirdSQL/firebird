@@ -412,7 +412,8 @@ static const UCHAR
 	marks[] = { op_byte, op_literal, op_line, op_verb, 0},
 	erase[] = { op_erase, 0},
 	local_table[] = { op_word, op_byte, op_literal, op_byte, op_line, 0},
-	outer_map[] = { op_outer_map, 0 };
+	outer_map[] = { op_outer_map, 0 },
+	in_list[] = { op_verb, op_line, op_word, op_line, op_args, 0};
 
 
 #include "../jrd/blp.h"

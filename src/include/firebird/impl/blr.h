@@ -168,8 +168,9 @@
 #define blr_missing		(unsigned char)61
 #define blr_unique		(unsigned char)62
 #define blr_like		(unsigned char)63
+#define blr_in_list		(unsigned char)64
 
-// unused codes: 64..66
+// unused codes: 65..66
 
 #define blr_rse			(unsigned char)67
 #define blr_first		(unsigned char)68

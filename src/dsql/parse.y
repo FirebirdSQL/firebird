@@ -7055,12 +7055,7 @@ comparison_operator
 %type <boolExprNode> quantified_predicate
 quantified_predicate
 	: value comparison_operator quantified_flag '(' column_select ')'
-		{
-			ComparativeBoolNode* node = newNode<ComparativeBoolNode>($2, $1);
-			node->dsqlFlag = $3;
-			node->dsqlSpecialArg = $5;
-			$$ = node;
-		}
+		{ $$ = newNode<ComparativeBoolNode>($2, $1, $3, $5); }
 	;
 
 %type <cmpBoolFlag> quantified_flag
@@ -7151,16 +7146,13 @@ ternary_pattern_predicate
 in_predicate
 	: value IN in_predicate_value
 		{
-			ComparativeBoolNode* node = newNode<ComparativeBoolNode>(blr_eql, $1);
-			node->dsqlFlag = ComparativeBoolNode::DFLAG_ANSI_ANY;
-			node->dsqlSpecialArg = $3;
-			$$ = node;
+			$$ = newNode<ComparativeBoolNode>(blr_eql, $1,
+				ComparativeBoolNode::DFLAG_ANSI_ANY, $3);
 		}
 	| value NOT IN in_predicate_value
 		{
-			ComparativeBoolNode* node = newNode<ComparativeBoolNode>(blr_eql, $1);
-			node->dsqlFlag = ComparativeBoolNode::DFLAG_ANSI_ANY;
-			node->dsqlSpecialArg = $4;
+			const auto node = newNode<ComparativeBoolNode>(blr_eql, $1,
+				ComparativeBoolNode::DFLAG_ANSI_ANY, $4);
 			$$ = newNode<NotBoolNode>(node);
 		}
 	;

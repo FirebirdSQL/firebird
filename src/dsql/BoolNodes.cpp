@@ -41,6 +41,7 @@
 #include "../dsql/gen_proto.h"
 #include "../dsql/make_proto.h"
 #include "../dsql/pass1_proto.h"
+#include "../dsql/DSqlDataTypeUtil.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -49,8 +50,8 @@ namespace Jrd {
 
 
 // Maximum members in "IN" list. For eg. SELECT * FROM T WHERE F IN (1, 2, 3, ...)
-// Bug 10061, bsriram - 19-Apr-1999
-static const int MAX_MEMBER_LIST = 1500;
+// Beware: raising the limit beyond the 16-bit boundaries would be an incompatible BLR change.
+static const unsigned MAX_MEMBER_LIST = MAX_USHORT;
 
 
 //--------------------
@@ -306,7 +307,20 @@ ComparativeBoolNode::ComparativeBoolNode(MemoryPool& pool, UCHAR aBlrOp,
 	  arg1(aArg1),
 	  arg2(aArg2),
 	  arg3(aArg3),
-	  dsqlSpecialArg(NULL)
+	  dsqlSpecialArg(nullptr)
+{
+}
+
+ComparativeBoolNode::ComparativeBoolNode(MemoryPool& pool, UCHAR aBlrOp,
+			ValueExprNode* aArg1, DsqlFlag aDsqlFlag, ExprNode* aSpecialArg)
+	: TypedNode<BoolExprNode, ExprNode::TYPE_COMPARATIVE_BOOL>(pool),
+	  blrOp(aBlrOp),
+	  dsqlCheckBoolean(false),
+	  dsqlFlag(aDsqlFlag),
+	  arg1(aArg1),
+	  arg2(nullptr),
+	  arg3(nullptr),
+	  dsqlSpecialArg(aSpecialArg)
 {
 }
 
@@ -355,34 +369,35 @@ BoolExprNode* ComparativeBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (dsqlSpecialArg)
 	{
-		ValueListNode* listNode = nodeAs<ValueListNode>(dsqlSpecialArg);
-		if (listNode)
+		if (const auto listNode = nodeAs<ValueListNode>(dsqlSpecialArg))
 		{
-			int listItemCount = 0;
-			BoolExprNode* resultNode = NULL;
-			NestConst<ValueExprNode>* ptr = listNode->items.begin();
-
-			for (const NestConst<ValueExprNode>* const end = listNode->items.end();
-				 ptr != end;
-				 ++listItemCount, ++ptr)
+			if (listNode->items.getCount() > MAX_MEMBER_LIST)
 			{
-				if (listItemCount >= MAX_MEMBER_LIST)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-							  Arg::Gds(isc_imp_exc) <<
-							  Arg::Gds(isc_dsql_too_many_values) << Arg::Num(MAX_MEMBER_LIST));
-				}
-
-				ComparativeBoolNode* temp = FB_NEW_POOL(dsqlScratch->getPool()) ComparativeBoolNode(
-					dsqlScratch->getPool(), blrOp, procArg1, *ptr);
-				resultNode = PASS1_compose(resultNode, temp, blr_or);
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
+					Arg::Gds(isc_imp_exc) <<
+					Arg::Gds(isc_dsql_too_many_values) << Arg::Num(MAX_MEMBER_LIST));
 			}
+
+			if (listNode->items.getCount() == 1)
+			{
+				// Convert A IN (B) into A = B
+
+				ComparativeBoolNode* const resultNode = FB_NEW_POOL(dsqlScratch->getPool())
+					ComparativeBoolNode(dsqlScratch->getPool(),
+						blr_eql, arg1, listNode->items.front());
+
+				return resultNode->dsqlPass(dsqlScratch);
+			}
+
+			// Generate the IN LIST boolean
+
+			InListBoolNode* const resultNode = FB_NEW_POOL(dsqlScratch->getPool())
+				InListBoolNode(dsqlScratch->getPool(), procArg1, listNode);
 
 			return resultNode->dsqlPass(dsqlScratch);
 		}
 
-		SelectExprNode* selNode = nodeAs<SelectExprNode>(dsqlSpecialArg);
-		if (selNode)
+		if (const auto selNode = nodeAs<SelectExprNode>(dsqlSpecialArg))
 		{
 			fb_assert(!(selNode->dsqlFlags & RecordSourceNode::DFLAG_SINGLETON));
 			UCHAR newBlrOp = blr_any;
@@ -573,18 +588,13 @@ BoolExprNode* ComparativeBoolNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		if ((nodFlags & FLAG_INVARIANT) &&
 			(!nodeIs<LiteralNode>(arg2) || (arg3 && !nodeIs<LiteralNode>(arg3))))
 		{
-			ExprNode* const* ctx_node;
-			ExprNode* const* end;
-
-			for (ctx_node = csb->csb_current_nodes.begin(), end = csb->csb_current_nodes.end();
-				 ctx_node != end; ++ctx_node)
+			for (const auto& ctxNode : csb->csb_current_nodes)
 			{
-				if (nodeAs<RseNode>(*ctx_node))
-					break;
+				if (nodeIs<RseNode>(ctxNode))
+					return this;
 			}
 
-			if (ctx_node >= end)
-				nodFlags &= ~FLAG_INVARIANT;
+			nodFlags &= ~FLAG_INVARIANT;
 		}
 	}
 
@@ -1137,6 +1147,260 @@ BoolExprNode* ComparativeBoolNode::createRseNode(DsqlCompilerScratch* dsqlScratc
 	dsqlScratch->context->clear(base);
 
 	return rseBoolNode;
+}
+
+
+//--------------------
+
+
+static RegisterBoolNode<InListBoolNode> regInListBoolNode({blr_in_list});
+
+InListBoolNode::InListBoolNode(MemoryPool& pool, ValueExprNode* aArg, ValueListNode* aList)
+	: TypedNode<BoolExprNode, ExprNode::TYPE_IN_LIST_BOOL>(pool),
+	  arg(aArg),
+	  list(aList)
+{
+}
+
+DmlNode* InListBoolNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
+{
+	const auto arg = PAR_parse_value(tdbb, csb);
+
+	const auto count = csb->csb_blr_reader.getWord();
+	const auto list = PAR_args(tdbb, csb, count, count);
+
+	return FB_NEW_POOL(pool) InListBoolNode(pool, arg, list);
+}
+
+string InListBoolNode::internalPrint(NodePrinter& printer) const
+{
+	BoolExprNode::internalPrint(printer);
+
+	NODE_PRINT(printer, blrOp);
+	NODE_PRINT(printer, arg);
+	NODE_PRINT(printer, list);
+
+	return "InListBoolNode";
+}
+
+BoolExprNode* InListBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	const auto procArg = doDsqlPass(dsqlScratch, arg);
+	const auto procList = doDsqlPass(dsqlScratch, list);
+
+	const auto node = FB_NEW_POOL(dsqlScratch->getPool())
+		InListBoolNode(dsqlScratch->getPool(), procArg, procList);
+
+	dsc argDesc;
+	DsqlDescMaker::fromNode(dsqlScratch, &argDesc, procArg);
+
+	dsc listDesc;
+	DsqlDescMaker::fromList(dsqlScratch, &listDesc, procList, "IN LIST");
+
+	if (argDesc.isText() && listDesc.isText())
+	{
+		const dsc* descs[] = {&argDesc, &listDesc};
+		dsc commonDesc;
+		DSqlDataTypeUtil(dsqlScratch).makeFromList(&commonDesc, "IN LIST",
+			FB_NELEM(descs), descs);
+
+		if (IS_INTL_DATA(&argDesc) || IS_INTL_DATA(&listDesc))
+		{
+			const auto charset1 = argDesc.getCharSet();
+			const auto charset2 = listDesc.getCharSet();
+
+			if ((charset1 != CS_BINARY) && (charset2 != CS_BINARY) &&
+				((charset1 != CS_ASCII) || (charset2 != CS_ASCII)) &&
+				((charset1 != CS_NONE) || (charset2 != CS_NONE)))
+			{
+				const auto ttype = MAX(argDesc.getTextType(), listDesc.getTextType());
+				commonDesc.setTextType(ttype);
+			}
+		}
+
+		listDesc = commonDesc;
+	}
+
+	for (auto& item : procList->items)
+	{
+		const auto desc = item->getDsqlDesc();
+
+		if (!DSC_EQUIV(&listDesc, &desc, true))
+		{
+			auto field = FB_NEW_POOL(dsqlScratch->getPool())
+				dsql_fld(dsqlScratch->getPool());
+
+			field->dtype = listDesc.dsc_dtype;
+			field->scale = listDesc.dsc_scale;
+			field->subType = listDesc.dsc_sub_type;
+			field->length = listDesc.dsc_length;
+			field->flags = (listDesc.dsc_flags & DSC_nullable) ? FLD_nullable : 0;
+
+			if (desc.isText() || desc.isBlob())
+			{
+				field->textType = listDesc.getTextType();
+				field->charSetId = listDesc.getCharSet();
+				field->collationId = listDesc.getCollation();
+			}
+
+			const auto castNode = FB_NEW_POOL(dsqlScratch->getPool())
+				CastNode(dsqlScratch->getPool(), item, field);
+			item = castNode->dsqlPass(dsqlScratch);
+		}
+	}
+
+	// Try to force arg to be same type as list eg: ? = (FIELD, ...) case
+	for (auto item : procList->items)
+		PASS1_set_parameter_type(dsqlScratch, node->arg, item, false);
+
+	// Try to force list to be same type as arg eg: FIELD = (?, ...) case
+	for (auto item : procList->items)
+		PASS1_set_parameter_type(dsqlScratch, item, node->arg, false);
+
+	return node;
+}
+
+void InListBoolNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	dsqlScratch->appendUChar(blrOp);
+
+	GEN_expr(dsqlScratch, arg);
+
+	fb_assert(list->items.getCount() <= MAX_USHORT);
+	dsqlScratch->appendUShort(list->items.getCount());
+
+	for (auto item : list->items)
+		GEN_expr(dsqlScratch, item);
+}
+
+bool InListBoolNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
+{
+	if (!BoolExprNode::dsqlMatch(dsqlScratch, other, ignoreMapCast))
+		return false;
+
+	return nodeIs<InListBoolNode>(other);
+}
+
+bool InListBoolNode::sameAs(const ExprNode* other, bool ignoreStreams) const
+{
+	const auto otherNode = nodeAs<InListBoolNode>(other);
+
+	if (!otherNode)
+		return false;
+
+	return (arg->sameAs(otherNode->arg, ignoreStreams) &&
+		list->sameAs(otherNode->list, ignoreStreams));
+}
+
+BoolExprNode* InListBoolNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	const auto newArg = copier.copy(tdbb, arg);
+	const auto newList = copier.copy(tdbb, list);
+
+	const auto node = FB_NEW_POOL(*tdbb->getDefaultPool())
+		InListBoolNode(*tdbb->getDefaultPool(), newArg, newList);
+	node->nodFlags = nodFlags;
+
+	return node;
+}
+
+BoolExprNode* InListBoolNode::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	doPass1(tdbb, csb, arg.getAddress());
+
+	nodFlags |= FLAG_INVARIANT;
+	csb->csb_current_nodes.push(this);
+
+	doPass1(tdbb, csb, list.getAddress());
+
+	csb->csb_current_nodes.pop();
+
+	if (nodFlags & FLAG_INVARIANT)
+	{
+		// If there is no top-level RSE present and list items are not constant, unmark node as invariant
+		// because it may be dependent on data or variables
+
+		for (const auto& ctxNode : csb->csb_current_nodes)
+		{
+			if (nodeIs<RseNode>(ctxNode))
+				return this;
+		}
+
+		for (auto item : list->items)
+		{
+			while (auto castNode = nodeAs<CastNode>(item))
+				item = castNode->source;
+
+			if (!nodeIs<LiteralNode>(item) && !nodeIs<ParameterNode>(item))
+			{
+				nodFlags &= ~FLAG_INVARIANT;
+				break;
+			}
+		}
+	}
+
+	return this;
+}
+
+void InListBoolNode::pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process)
+{
+	if (nodFlags & FLAG_INVARIANT)
+		csb->csb_invariants.push(&impureOffset);
+
+	process();
+
+	if (const auto keyNode = nodeAs<RecordKeyNode>(arg))
+	{
+		if (keyNode->aggregate)
+			ERR_post(Arg::Gds(isc_bad_dbkey));
+	}
+
+	dsc descriptor_a, descriptor_b;
+	arg->getDesc(tdbb, csb, &descriptor_a);
+	list->getDesc(tdbb, csb, &descriptor_b);
+
+	if (DTYPE_IS_DATE(descriptor_a.dsc_dtype))
+		arg->nodFlags |= FLAG_DATE;
+	else if (DTYPE_IS_DATE(descriptor_b.dsc_dtype))
+	{
+		for (auto item : list->items)
+			item->nodFlags |= FLAG_DATE;
+	}
+
+	if (nodFlags & FLAG_INVARIANT)
+	{
+		impureOffset = csb->allocImpure<impure_value>();
+		lookup = FB_NEW_POOL(csb->csb_pool) LookupValueList(csb->csb_pool, list, impureOffset);
+	}
+}
+
+bool InListBoolNode::execute(thread_db* tdbb, Request* request) const
+{
+	if (const auto argDesc = EVL_expr(tdbb, request, arg))
+	{
+		if (nodFlags & FLAG_INVARIANT)
+		{
+			const auto res = lookup->find(tdbb, request, arg, argDesc);
+
+			if (res.isAssigned())
+				return res.value;
+
+			fb_assert(list->items.hasData());
+			request->req_flags |= req_null;
+			return false;
+		}
+
+		for (const auto value : list->items)
+		{
+			if (const auto valueDesc = EVL_expr(tdbb, request, value))
+			{
+				if (!MOV_compare(tdbb, argDesc, valueDesc))
+					return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 

@@ -39,13 +39,15 @@ dsc*	BTR_eval_expression(Jrd::thread_db*, Jrd::index_desc*, Jrd::Record*);
 void	BTR_evaluate(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::RecordBitmap**, Jrd::RecordBitmap*);
 UCHAR*	BTR_find_leaf(Ods::btree_page*, Jrd::temporary_key*, UCHAR*, USHORT*, bool, int);
 Ods::btree_page*	BTR_find_page(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::win*, Jrd::index_desc*,
-								 Jrd::temporary_key*, Jrd::temporary_key*, bool = true);
+	Jrd::temporary_key*, Jrd::temporary_key*);
 void	BTR_insert(Jrd::thread_db*, Jrd::win*, Jrd::index_insertion*);
 USHORT	BTR_key_length(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::index_desc*);
 Ods::btree_page*	BTR_left_handoff(Jrd::thread_db*, Jrd::win*, Ods::btree_page*, SSHORT);
 bool	BTR_lookup(Jrd::thread_db*, Jrd::jrd_rel*, USHORT, Jrd::index_desc*, Jrd::RelationPages*);
+void	BTR_make_bounds(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::IndexScanListIterator*,
+	Jrd::temporary_key*, Jrd::temporary_key*);
 Jrd::idx_e	BTR_make_key(Jrd::thread_db*, USHORT, const Jrd::ValueExprNode* const*, const Jrd::index_desc*,
-						 Jrd::temporary_key*, USHORT);
+	Jrd::temporary_key*, USHORT);
 void	BTR_make_null_key(Jrd::thread_db*, const Jrd::index_desc*, Jrd::temporary_key*);
 bool	BTR_next_index(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::jrd_tra*, Jrd::index_desc*, Jrd::win*);
 void	BTR_remove(Jrd::thread_db*, Jrd::win*, Jrd::index_insertion*);

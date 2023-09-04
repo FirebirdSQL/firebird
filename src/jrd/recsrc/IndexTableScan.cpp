@@ -116,6 +116,7 @@ void IndexTableScan::close(thread_db* tdbb) const
 			delete impure->irsb_nav_btr_gc_lock;
 			impure->irsb_nav_btr_gc_lock = NULL;
 		}
+
 		impure->irsb_nav_page = 0;
 
 		if (impure->irsb_nav_lower)
@@ -128,6 +129,12 @@ void IndexTableScan::close(thread_db* tdbb) const
 		{
 			delete impure->irsb_nav_upper;
 			impure->irsb_nav_current_upper = impure->irsb_nav_upper = NULL;
+		}
+
+		if (impure->irsb_iterator)
+		{
+			delete impure->irsb_iterator;
+			impure->irsb_iterator = NULL;
 		}
 	}
 #ifdef DEBUG_LCK_LIST
@@ -164,6 +171,13 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 	{
 		impure->irsb_flags &= ~irsb_first;
 		setPage(tdbb, impure, NULL);
+
+		impure->irsb_iterator = m_index->retrieval->irb_list ?
+			FB_NEW_POOL(*tdbb->getDefaultPool()) IndexScanListIterator(tdbb, m_index->retrieval) :
+			nullptr;
+
+		BTR_make_bounds(tdbb, m_index->retrieval, impure->irsb_iterator,
+			impure->irsb_nav_lower, impure->irsb_nav_upper);
 	}
 
 	// If this is the first time, start at the beginning
@@ -240,6 +254,40 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 			if (retrieval->irb_upper_count &&
 				compareKeys(idx, key.key_data, key.key_length, &upper, flags) > 0)
 			{
+				const auto nextLower = impure->irsb_nav_current_lower;
+				const auto nextUpper = impure->irsb_nav_current_upper;
+
+				if (impure->irsb_iterator && impure->irsb_iterator->getNext(nextLower, nextUpper))
+				{
+					if (retrieval->irb_generic & irb_root_list_scan)
+					{
+						CCH_RELEASE(tdbb, &window);
+						page = BTR_find_page(tdbb, retrieval, &window, idx, nextLower, nextUpper);
+						setPage(tdbb, impure, &window);
+					}
+
+					// If END_BUCKET is reached BTR_find_leaf will return NULL
+					while (!(nextPointer = BTR_find_leaf(page, nextLower, nullptr, nullptr,
+						(idx->idx_flags & idx_descending),
+						(retrieval->irb_generic & (irb_starting | irb_partial)))))
+					{
+						page = (Ods::btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
+					}
+
+					// Update the local keys
+					key.key_length = nextLower->key_length;
+					memcpy(key.key_data, nextLower->key_data, key.key_length);
+					upper.key_length = nextUpper->key_length;
+					memcpy(upper.key_data, nextUpper->key_data, upper.key_length);
+
+					// Update the keys in the impure area
+					impure->irsb_nav_length = key.key_length;
+					impure->irsb_nav_upper_length = MIN(m_length + 1, upper.key_length);
+					memcpy(impure->irsb_nav_data + m_length, upper.key_data, impure->irsb_nav_upper_length);
+
+					continue;
+				}
+
 				break;
 			}
 
@@ -569,7 +617,6 @@ UCHAR* IndexTableScan::openStream(thread_db* tdbb, Impure* impure, win* window) 
 {
 	temporary_key* lower = impure->irsb_nav_current_lower;
 	temporary_key* upper = impure->irsb_nav_current_upper;
-	const bool firstKeys = lower == impure->irsb_nav_lower;
 
 	setPage(tdbb, impure, NULL);
 	impure->irsb_nav_length = 0;
@@ -577,7 +624,8 @@ UCHAR* IndexTableScan::openStream(thread_db* tdbb, Impure* impure, win* window) 
 	// Find the starting leaf page
 	const IndexRetrieval* const retrieval = m_index->retrieval;
 	index_desc* const idx = (index_desc*) ((SCHAR*) impure + m_offset);
-	Ods::btree_page* page = BTR_find_page(tdbb, retrieval, window, idx, lower, upper, firstKeys);
+
+	Ods::btree_page* page = BTR_find_page(tdbb, retrieval, window, idx, lower, upper);
 	setPage(tdbb, impure, window);
 
 	// find the upper limit for the search

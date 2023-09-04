@@ -190,7 +190,7 @@ public:
 	IndexRetrieval(jrd_rel* relation, const index_desc* idx, USHORT count, temporary_key* key)
 		: irb_relation(relation), irb_index(idx->idx_id),
 		  irb_generic(0), irb_lower_count(count), irb_upper_count(count), irb_key(key),
-		  irb_name(NULL), irb_value(NULL)
+		  irb_name(nullptr), irb_value(nullptr), irb_list(nullptr)
 	{
 		memcpy(&irb_desc, idx, sizeof(irb_desc));
 	}
@@ -200,7 +200,8 @@ public:
 		: irb_relation(relation), irb_index(idx->idx_id),
 		  irb_generic(0), irb_lower_count(0), irb_upper_count(0), irb_key(NULL),
 		  irb_name(FB_NEW_POOL(pool) MetaName(name)),
-		  irb_value(FB_NEW_POOL(pool) ValueExprNode*[idx->idx_count * 2])
+		  irb_value(FB_NEW_POOL(pool) ValueExprNode*[idx->idx_count * 2]),
+		  irb_list(nullptr)
 	{
 		memcpy(&irb_desc, idx, sizeof(irb_desc));
 	}
@@ -218,8 +219,9 @@ public:
 	USHORT irb_lower_count;			// Number of segments for retrieval
 	USHORT irb_upper_count;			// Number of segments for retrieval
 	temporary_key* irb_key;			// Key for equality retrieval
-	MetaName* irb_name;	// Index name
-	ValueExprNode** irb_value;
+	MetaName* irb_name;				// Index name
+	ValueExprNode** irb_value;		// Matching value (for equality search)
+	LookupValueList* irb_list;		// Matching values list (for IN <list>)
 };
 
 // Flag values for irb_generic
@@ -232,6 +234,7 @@ const int irb_descending	= 16;			// Base index uses descending order
 const int irb_exclude_lower	= 32;			// exclude lower bound keys while scanning index
 const int irb_exclude_upper	= 64;			// exclude upper bound keys while scanning index
 const int irb_multi_starting	= 128;		// Use INTL_KEY_MULTI_STARTING
+const int irb_root_list_scan	= 256;		// Locate list items from the root
 
 typedef Firebird::HalfStaticArray<float, 4> SelectivityList;
 
@@ -306,8 +309,8 @@ class IndexErrorContext
 	};
 
 public:
-	IndexErrorContext(jrd_rel* relation, index_desc* index, const char* indexName = NULL)
-		: m_relation(relation), m_index(index), m_indexName(indexName), isLocationDefined(false)
+	IndexErrorContext(jrd_rel* relation, index_desc* index, const char* indexName = nullptr)
+		: m_relation(relation), m_index(index), m_indexName(indexName)
 	{}
 
 	void setErrorLocation(jrd_rel* relation, USHORT indexId)
@@ -317,14 +320,14 @@ public:
 		m_location.indexId = indexId;
 	}
 
-	void raise(thread_db*, idx_e, Record*);
+	void raise(thread_db*, idx_e, Record* = nullptr);
 
 private:
 	jrd_rel* const m_relation;
 	index_desc* const m_index;
 	const char* const m_indexName;
 	Location m_location;
-	bool isLocationDefined;
+	bool isLocationDefined = false;
 };
 
 // Helper classes to allow efficient evaluation of index conditions/expressions
@@ -465,6 +468,47 @@ private:
 	temporary_key m_key;
 	AutoIndexExpression& m_expression;
 	AutoIndexExpression m_localExpression;
+};
+
+// List scan iterator
+
+class IndexScanListIterator
+{
+public:
+	IndexScanListIterator(thread_db* tdbb, const IndexRetrieval* retrieval);
+
+	bool getNext(temporary_key* lower, temporary_key* upper)
+	{
+		if (++m_iterator < m_listValues.end())
+		{
+			makeKeys(lower, upper);
+			return true;
+		}
+
+		m_iterator = nullptr;
+		return false;
+	}
+
+	ValueExprNode* const* getLowerValues() const
+	{
+		return m_lowerValues.begin();
+	}
+
+	ValueExprNode* const* getUpperValues() const
+	{
+		return m_upperValues.begin();
+	}
+
+private:
+	void makeKeys(temporary_key* lower, temporary_key* upper);
+
+	thread_db* const m_tdbb;
+	const IndexRetrieval* const m_retrieval;
+	Firebird::HalfStaticArray<ValueExprNode*, 4> m_listValues;
+	Firebird::HalfStaticArray<ValueExprNode*, 4> m_lowerValues;
+	Firebird::HalfStaticArray<ValueExprNode*, 4> m_upperValues;
+	ValueExprNode* const* m_iterator;
+	USHORT m_segno = MAX_USHORT;
 };
 
 } //namespace Jrd

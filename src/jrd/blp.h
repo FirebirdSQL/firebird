@@ -89,7 +89,7 @@ static const struct
 	{"missing", one},
 	{"unique", one},
 	{"like", two},
-	{NULL, NULL},
+	{"in_list", in_list},
 	{NULL, NULL},
 	{NULL, NULL},
 	{"rse", rse},

@@ -4316,9 +4316,7 @@ void CreateDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 	type->resolve(dsqlScratch);
 
-	dsqlScratch->domainValue.dsc_dtype = type->dtype;
-	dsqlScratch->domainValue.dsc_length = type->length;
-	dsqlScratch->domainValue.dsc_scale = type->scale;
+	DsqlDescMaker::fromField(&dsqlScratch->domainValue, type);
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -5003,9 +5001,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 						Arg::Gds(isc_dsql_domain_not_found) << name);
 				}
 
-				dsqlScratch->domainValue.dsc_dtype = localField.dtype;
-				dsqlScratch->domainValue.dsc_length = localField.length;
-				dsqlScratch->domainValue.dsc_scale = localField.scale;
+				DsqlDescMaker::fromField(&dsqlScratch->domainValue, &localField);
 
 				FLD.RDB$VALIDATION_SOURCE.NULL = FALSE;
 				attachment->storeMetaDataBlob(tdbb, transaction, &FLD.RDB$VALIDATION_SOURCE,

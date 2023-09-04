@@ -3710,6 +3710,7 @@ static void genDeliverUnmapped(CompilerScratch* csb,
 
 		const auto cmpNode = nodeAs<ComparativeBoolNode>(boolean);
 		const auto missingNode = nodeAs<MissingBoolNode>(boolean);
+		const auto listNode = nodeAs<InListBoolNode>(boolean);
 		HalfStaticArray<ValueExprNode*, 2> children;
 
 		if (cmpNode &&
@@ -3721,6 +3722,8 @@ static void genDeliverUnmapped(CompilerScratch* csb,
 			children.add(cmpNode->arg1);
 			children.add(cmpNode->arg2);
 		}
+		else if (listNode)
+			children.add(listNode->arg);
 		else if (missingNode)
 			children.add(missingNode->arg);
 		else
@@ -3755,6 +3758,18 @@ static void genDeliverUnmapped(CompilerScratch* csb,
 			newChildren.add(newCmpNode->arg2.getAddress());
 
 			deliverNode = newCmpNode;
+		}
+		else if (listNode)
+		{
+			const auto newListNode = FB_NEW_POOL(pool) InListBoolNode(pool);
+			const auto count = listNode->list->items.getCount();
+			newListNode->list = FB_NEW_POOL(pool) ValueListNode(pool, count);
+
+			newChildren.add(newListNode->arg.getAddress());
+			for (auto item : newListNode->list->items)
+				newChildren.add(item.getAddress());
+
+			deliverNode = newListNode;
 		}
 		else if (missingNode)
 		{
