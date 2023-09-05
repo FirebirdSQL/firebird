@@ -550,16 +550,16 @@ int CLIB_ROUTINE main( int argc, char** argv)
 					logSecurityDatabaseError(path, status);
 				}
 			}
-		} // end scope
 
-		// Start replication server
+			// Start replication server
 
-		FbLocalStatus localStatus;
-		if (!REPL_server(&localStatus, replicas, false))
-		{
-			const char* const errorMsg = "Replication server startup error";
-			iscLogStatus(errorMsg, localStatus->getErrors());
-			Syslog::Record(Syslog::Error, errorMsg);
+			FbLocalStatus localStatus;
+			if (!REPL_server(&localStatus, replicas, false))
+			{
+				const char* const errorMsg = "Replication server startup error";
+				iscLogStatus(errorMsg, localStatus->getErrors());
+				Syslog::Record(Syslog::Error, errorMsg);
+			}
 		}
 
 		fb_shutdown_callback(NULL, closePort, fb_shut_exit, port);
