@@ -685,8 +685,6 @@ IndexScanListIterator::IndexScanListIterator(thread_db* tdbb, const IndexRetriev
 	  m_lowerValues(*tdbb->getDefaultPool()), m_upperValues(*tdbb->getDefaultPool()),
 	  m_iterator(m_listValues.begin())
 {
-	fb_assert(retrieval->irb_list && retrieval->irb_list->getCount());
-
 	// Find and store the position of the variable key segment
 
 	const auto count = MIN(retrieval->irb_lower_count, retrieval->irb_upper_count);
@@ -703,24 +701,38 @@ IndexScanListIterator::IndexScanListIterator(thread_db* tdbb, const IndexRetriev
 
 	fb_assert(m_segno < count);
 
-	// Copy the list values. Reverse them if index is descending.
+	// Copy the sorted values, skipping duplicates
 
-	m_listValues.assign(retrieval->irb_list->begin(), retrieval->irb_list->getCount());
+	const auto sortedList = retrieval->irb_list->init(tdbb, tdbb->getRequest());
+	fb_assert(sortedList);
 
-	if (retrieval->irb_generic & irb_descending)
-		std::reverse(m_listValues.begin(), m_listValues.end());
+	const SortValueItem* prior = nullptr;
+	for (const auto& item : *sortedList)
+	{
+		if (!prior || *prior != item)
+			m_listValues.add(item.value);
+		prior = &item;
+	}
 
-	// Prepare the lower/upper key expressions for evaluation
+	if (m_listValues.hasData())
+	{
+		// Reverse the list if index is descending
 
-	auto values = m_retrieval->irb_value;
-	m_lowerValues.assign(values, m_retrieval->irb_lower_count);
-	fb_assert(!m_lowerValues[m_segno]);
-	m_lowerValues[m_segno] = *m_iterator;
+		if (retrieval->irb_generic & irb_descending)
+			std::reverse(m_listValues.begin(), m_listValues.end());
 
-	values += m_retrieval->irb_desc.idx_count;
-	m_upperValues.assign(values, m_retrieval->irb_upper_count);
-	fb_assert(!m_upperValues[m_segno]);
-	m_upperValues[m_segno] = *m_iterator;
+		// Prepare the lower/upper key expressions for evaluation
+
+		auto values = m_retrieval->irb_value;
+		m_lowerValues.assign(values, m_retrieval->irb_lower_count);
+		fb_assert(!m_lowerValues[m_segno]);
+		m_lowerValues[m_segno] = *m_iterator;
+
+		values += m_retrieval->irb_desc.idx_count;
+		m_upperValues.assign(values, m_retrieval->irb_upper_count);
+		fb_assert(!m_upperValues[m_segno]);
+		m_upperValues[m_segno] = *m_iterator;
+	}
 }
 
 void IndexScanListIterator::makeKeys(temporary_key* lower, temporary_key* upper)
@@ -1118,7 +1130,9 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 
 	temporary_key* lower = &lowerKey;
 	temporary_key* upper = &upperKey;
-	BTR_make_bounds(tdbb, retrieval, iterator, lower, upper);
+
+	if (!BTR_make_bounds(tdbb, retrieval, iterator, lower, upper))
+		return;
 
 	index_desc idx;
 	btree_page* page = nullptr;
@@ -1719,7 +1733,7 @@ bool BTR_lookup(thread_db* tdbb, jrd_rel* relation, USHORT id, index_desc* buffe
 }
 
 
-void BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
+bool BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
 					 IndexScanListIterator* iterator,
 					 temporary_key* lower, temporary_key* upper)
 {
@@ -1743,6 +1757,9 @@ void BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
 	}
 	else
 	{
+		if (iterator && iterator->isEmpty())
+			return false;
+
 		idx_e errorCode = idx_e_ok;
 		const auto idx = &retrieval->irb_desc;
 
@@ -1778,6 +1795,8 @@ void BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
 			context.raise(tdbb, errorCode);
 		}
 	}
+
+	return true;
 }
 
 

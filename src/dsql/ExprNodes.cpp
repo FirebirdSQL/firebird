@@ -204,7 +204,7 @@ LookupValueList::LookupValueList(MemoryPool& pool, ValueListNode* values, ULONG 
 		m_values.add(item);
 }
 
-TriState LookupValueList::find(thread_db* tdbb, Request* request, const ValueExprNode* value, const dsc* desc) const
+const SortedValueList* LookupValueList::init(thread_db* tdbb, Request* request) const
 {
 	const auto impure = request->getImpure<impure_value>(m_impureOffset);
 	auto sortedList = impure->vlu_misc.vlu_sortedList;
@@ -230,6 +230,14 @@ TriState LookupValueList::find(thread_db* tdbb, Request* request, const ValueExp
 
 		impure->vlu_flags |= VLU_computed;
 	}
+
+	return sortedList;
+}
+
+TriState LookupValueList::find(thread_db* tdbb, Request* request, const ValueExprNode* value, const dsc* desc) const
+{
+	const auto sortedList = init(tdbb, request);
+	fb_assert(sortedList);
 
 	if (sortedList->isEmpty())
 		return TriState();

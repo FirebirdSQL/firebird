@@ -477,6 +477,11 @@ class IndexScanListIterator
 public:
 	IndexScanListIterator(thread_db* tdbb, const IndexRetrieval* retrieval);
 
+	bool isEmpty() const
+	{
+		return m_listValues.isEmpty();
+	}
+
 	bool getNext(temporary_key* lower, temporary_key* upper)
 	{
 		if (++m_iterator < m_listValues.end())
@@ -489,12 +494,12 @@ public:
 		return false;
 	}
 
-	ValueExprNode* const* getLowerValues() const
+	const ValueExprNode* const* getLowerValues() const
 	{
 		return m_lowerValues.begin();
 	}
 
-	ValueExprNode* const* getUpperValues() const
+	const ValueExprNode* const* getUpperValues() const
 	{
 		return m_upperValues.begin();
 	}
@@ -504,10 +509,10 @@ private:
 
 	thread_db* const m_tdbb;
 	const IndexRetrieval* const m_retrieval;
-	Firebird::HalfStaticArray<ValueExprNode*, 4> m_listValues;
-	Firebird::HalfStaticArray<ValueExprNode*, 4> m_lowerValues;
-	Firebird::HalfStaticArray<ValueExprNode*, 4> m_upperValues;
-	ValueExprNode* const* m_iterator;
+	Firebird::HalfStaticArray<const ValueExprNode*, 16> m_listValues;
+	Firebird::HalfStaticArray<const ValueExprNode*, 4> m_lowerValues;
+	Firebird::HalfStaticArray<const ValueExprNode*, 4> m_upperValues;
+	const ValueExprNode* const* m_iterator;
 	USHORT m_segno = MAX_USHORT;
 };
 

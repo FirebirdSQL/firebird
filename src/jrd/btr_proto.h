@@ -44,7 +44,7 @@ void	BTR_insert(Jrd::thread_db*, Jrd::win*, Jrd::index_insertion*);
 USHORT	BTR_key_length(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::index_desc*);
 Ods::btree_page*	BTR_left_handoff(Jrd::thread_db*, Jrd::win*, Ods::btree_page*, SSHORT);
 bool	BTR_lookup(Jrd::thread_db*, Jrd::jrd_rel*, USHORT, Jrd::index_desc*, Jrd::RelationPages*);
-void	BTR_make_bounds(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::IndexScanListIterator*,
+bool	BTR_make_bounds(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::IndexScanListIterator*,
 	Jrd::temporary_key*, Jrd::temporary_key*);
 Jrd::idx_e	BTR_make_key(Jrd::thread_db*, USHORT, const Jrd::ValueExprNode* const*, const Jrd::index_desc*,
 	Jrd::temporary_key*, USHORT);

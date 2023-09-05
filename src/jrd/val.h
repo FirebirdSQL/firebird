@@ -71,6 +71,16 @@ struct SortValueItem
 
 	static int compare(const dsc* desc1, const dsc* desc2);
 
+	bool operator==(const SortValueItem& other) const
+	{
+		return (compare(desc, other.desc) == 0);
+	}
+
+	bool operator!=(const SortValueItem& other) const
+	{
+		return (compare(desc, other.desc) != 0);
+	}
+
 	bool operator>(const SortValueItem& other) const
 	{
 		return (compare(desc, other.desc) > 0);
@@ -90,6 +100,8 @@ public:
 	ULONG getCount() const { return m_values.getCount(); }
 	ValueExprNode** begin() { return m_values.begin(); }
 	ValueExprNode** end() { return m_values.end(); }
+
+	const SortedValueList* init(thread_db* tdbb, Request* request) const;
 
 	TriState find(thread_db* tdbb, Request* request,
 				  const ValueExprNode* value, const dsc* desc) const;

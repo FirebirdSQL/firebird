@@ -176,8 +176,12 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 			FB_NEW_POOL(*tdbb->getDefaultPool()) IndexScanListIterator(tdbb, m_index->retrieval) :
 			nullptr;
 
-		BTR_make_bounds(tdbb, m_index->retrieval, impure->irsb_iterator,
-			impure->irsb_nav_lower, impure->irsb_nav_upper);
+		if (!BTR_make_bounds(tdbb, m_index->retrieval, impure->irsb_iterator,
+							 impure->irsb_nav_lower, impure->irsb_nav_upper))
+		{
+			rpb->rpb_number.setValid(false);
+			return false;
+		}
 	}
 
 	// If this is the first time, start at the beginning
