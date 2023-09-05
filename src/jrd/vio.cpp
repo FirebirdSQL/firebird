@@ -1976,7 +1976,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	if (rpb->rpb_runtime_flags & (RPB_refetch | RPB_undo_read))
 	{
-		VIO_refetch_record(tdbb, rpb, transaction, RecordLock::DONT, true);
+		VIO_refetch_record(tdbb, rpb, transaction, RecordLock::NONE, true);
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
 		fb_assert(!(rpb->rpb_runtime_flags & RPB_undo_read));
 	}
@@ -2905,7 +2905,7 @@ bool VIO_get(thread_db* tdbb, record_param* rpb, jrd_tra* transaction, MemoryPoo
 	const USHORT lock_type = (rpb->rpb_stream_flags & RPB_s_update) ? LCK_write : LCK_read;
 
 	if (!DPM_get(tdbb, rpb, lock_type) ||
-		!VIO_chase_record_version(tdbb, rpb, transaction, pool, RecordLock::DONT, false))
+		!VIO_chase_record_version(tdbb, rpb, transaction, pool, RecordLock::NONE, false))
 	{
 		return false;
 	}
@@ -3280,7 +3280,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			old_record->copyFrom(org_rpb->rpb_record);
 		}
 
-		VIO_refetch_record(tdbb, org_rpb, transaction, RecordLock::DONT, true);
+		VIO_refetch_record(tdbb, org_rpb, transaction, RecordLock::NONE, true);
 		org_rpb->rpb_runtime_flags &= ~RPB_refetch;
 		fb_assert(!(org_rpb->rpb_runtime_flags & RPB_undo_read));
 
@@ -3761,7 +3761,7 @@ bool VIO_next_record(thread_db* tdbb,
 		{
 			return false;
 		}
-	} while (!VIO_chase_record_version(tdbb, rpb, transaction, pool, RecordLock::DONT, false));
+	} while (!VIO_chase_record_version(tdbb, rpb, transaction, pool, RecordLock::NONE, false));
 
 	if (rpb->rpb_runtime_flags & RPB_undo_data)
 		fb_assert(rpb->getWindow(tdbb).win_bdb == NULL);

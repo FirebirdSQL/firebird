@@ -2658,7 +2658,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 
 	if (rpb->rpb_runtime_flags & RPB_refetch)
 	{
-		VIO_refetch_record(tdbb, rpb, transaction, RecordLock::DONT, false);
+		VIO_refetch_record(tdbb, rpb, transaction, RecordLock::NONE, false);
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
 	}
 
@@ -7112,7 +7112,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 	if (orgRpb->rpb_runtime_flags & RPB_refetch)
 	{
-		VIO_refetch_record(tdbb, orgRpb, transaction, RecordLock::DONT, false);
+		VIO_refetch_record(tdbb, orgRpb, transaction, RecordLock::NONE, false);
 		orgRpb->rpb_runtime_flags &= ~RPB_refetch;
 	}
 

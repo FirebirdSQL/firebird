@@ -46,7 +46,7 @@ namespace Jrd
 
 	enum class RecordLock
 	{
-		DONT,
+		NONE,
 		LOCK,
 		SKIP
 	};
