@@ -1026,7 +1026,10 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 			}
 		}
 		fb_assert(bdb->bdb_page == window->win_page);
-		fb_assert(bdb->bdb_buffer->pag_pageno == window->win_page.getPageNum());
+		fb_assert(bdb->bdb_buffer->pag_pageno == window->win_page.getPageNum() ||
+			bdb->bdb_buffer->pag_type == pag_undefined &&
+			bdb->bdb_buffer->pag_generation == 0 &&
+			bdb->bdb_buffer->pag_scn == 0);
 	}
 	else
 	{
