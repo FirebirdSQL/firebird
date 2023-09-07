@@ -1368,10 +1368,9 @@ void InListBoolNode::pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::fu
 	}
 
 	if (nodFlags & FLAG_INVARIANT)
-	{
 		impureOffset = csb->allocImpure<impure_value>();
-		lookup = FB_NEW_POOL(csb->csb_pool) LookupValueList(csb->csb_pool, list, impureOffset);
-	}
+
+	lookup = FB_NEW_POOL(csb->csb_pool) LookupValueList(csb->csb_pool, list, impureOffset);
 }
 
 bool InListBoolNode::execute(thread_db* tdbb, Request* request) const

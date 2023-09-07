@@ -1885,19 +1885,17 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 			if (!((segment->scanType == segmentScanEqual) ||
 				(segment->scanType == segmentScanEquivalent)))
 			{
-				if (auto lookup = listNode->lookup)
+				fb_assert(listNode->lookup);
+				for (auto& item : *listNode->lookup)
 				{
-					for (auto& item : *lookup)
-					{
-						cast = nullptr; // create new cast node for every value
-						item = injectCast(csb, item, cast, matchDesc);
-					}
-					segment->lowerValue = segment->upperValue = nullptr;
-					segment->valueList = lookup;
-					segment->scanType = segmentScanList;
-					segment->excludeLower = false;
-					segment->excludeUpper = false;
+					cast = nullptr; // create new cast node for every value
+					item = injectCast(csb, item, cast, matchDesc);
 				}
+				segment->lowerValue = segment->upperValue = nullptr;
+				segment->valueList = listNode->lookup;
+				segment->scanType = segmentScanList;
+				segment->excludeLower = false;
+				segment->excludeUpper = false;
 			}
 		}
 		else if (missingNode)

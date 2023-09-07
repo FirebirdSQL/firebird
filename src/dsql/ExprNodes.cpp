@@ -206,17 +206,10 @@ LookupValueList::LookupValueList(MemoryPool& pool, ValueListNode* values, ULONG 
 
 const SortedValueList* LookupValueList::init(thread_db* tdbb, Request* request) const
 {
-	const auto impure = request->getImpure<impure_value>(m_impureOffset);
-	auto sortedList = impure->vlu_misc.vlu_sortedList;
-
-	if (!(impure->vlu_flags & VLU_computed))
+	auto createList = [&]()
 	{
-		delete impure->vlu_misc.vlu_sortedList;
-		impure->vlu_misc.vlu_sortedList = nullptr;
-
-		sortedList = impure->vlu_misc.vlu_sortedList =
-			FB_NEW_POOL(*tdbb->getDefaultPool())
-				SortedValueList(*tdbb->getDefaultPool(), m_values.getCount());
+		const auto sortedList = FB_NEW_POOL(*tdbb->getDefaultPool())
+			SortedValueList(*tdbb->getDefaultPool(), m_values.getCount());
 
 		sortedList->setSortMode(FB_ARRAY_SORT_MANUAL);
 
@@ -228,10 +221,32 @@ const SortedValueList* LookupValueList::init(thread_db* tdbb, Request* request) 
 
 		sortedList->sort();
 
-		impure->vlu_flags |= VLU_computed;
+		return sortedList;
+	};
+
+	// Non-zero impure offset means that the list expression is invariant,
+	// so the sorted list can be cached inside the impure area
+
+	if (m_impureOffset)
+	{
+		const auto impure = request->getImpure<impure_value>(m_impureOffset);
+		auto sortedList = impure->vlu_misc.vlu_sortedList;
+
+		if (!(impure->vlu_flags & VLU_computed))
+		{
+			delete impure->vlu_misc.vlu_sortedList;
+			impure->vlu_misc.vlu_sortedList = nullptr;
+
+			sortedList = impure->vlu_misc.vlu_sortedList = createList();
+			impure->vlu_flags |= VLU_computed;
+		}
+
+		return sortedList;
 	}
 
-	return sortedList;
+	// Otherwise, create a temporary list for early evaluation during index lookup
+
+	return createList();
 }
 
 TriState LookupValueList::find(thread_db* tdbb, Request* request, const ValueExprNode* value, const dsc* desc) const
