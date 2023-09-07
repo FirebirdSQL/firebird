@@ -429,9 +429,10 @@ public:
 		m_tdbb(tdbb)
 	{
 		const auto attachment = m_tdbb->getAttachment();
-
 		const auto trace_mgr = attachment->att_trace_manager;
-		m_need_trace = trace_mgr->needs(ITraceFactory::TRACE_EVENT_TRIGGER_COMPILE);
+
+		m_need_trace = !trigger->sysTrigger &&
+			trace_mgr->needs(ITraceFactory::TRACE_EVENT_TRIGGER_COMPILE);
 
 		if (!m_need_trace)
 			return;
