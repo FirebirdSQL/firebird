@@ -2281,7 +2281,7 @@ MemBlock* MemPool::allocateInternal(size_t from, size_t& length, bool flagRedire
 	if (block)
 		return block;
 
-	// Parent redirection of medium blocks 
+	// Parent redirection of medium blocks
 
 	if (parent_redirect && flagRedirect && length < PARENT_REDIRECT_THRESHOLD)
 	{
