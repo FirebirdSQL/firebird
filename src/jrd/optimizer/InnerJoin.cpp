@@ -200,12 +200,16 @@ void InnerJoin::estimateCost(unsigned position,
 	{
 		// Calculate the hashing cost. It consists of the following parts:
 		//  - hashed stream retrieval
-		//  - copying rows into the hash table
+		//  - copying rows into the hash table (including hash calculation)
 		//  - probing the hash table and copying the matched rows
 
 		const auto hashCardinality = stream->baseSelectivity * streamCardinality;
-		const auto hashCost = stream->baseCost + hashCardinality +
-			cardinality * (1.0 + candidate->selectivity * streamCardinality);
+		const auto hashCost = stream->baseCost +
+			// hashing cost
+			hashCardinality * (COST_FACTOR_MEMCOPY + COST_FACTOR_HASHING) +
+			// probing + copying cost
+			cardinality * (COST_FACTOR_HASHING +
+				candidate->selectivity * streamCardinality * COST_FACTOR_MEMCOPY);
 
 		if (hashCost <= loopCost && hashCardinality <= HashJoin::maxCapacity())
 		{

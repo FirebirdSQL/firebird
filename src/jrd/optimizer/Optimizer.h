@@ -52,6 +52,10 @@ const double REDUCE_SELECTIVITY_FACTOR_GREATER = 0.05;
 const double REDUCE_SELECTIVITY_FACTOR_STARTING = 0.01;
 const double REDUCE_SELECTIVITY_FACTOR_OTHER = 0.01;
 
+// Cost of simple (CPU bound) operations is less than the page access cost
+const double COST_FACTOR_MEMCOPY = 0.5;
+const double COST_FACTOR_HASHING = 0.5;
+
 const double MAXIMUM_SELECTIVITY = 1.0;
 const double DEFAULT_SELECTIVITY = 0.1;
 
