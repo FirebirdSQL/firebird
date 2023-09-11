@@ -898,6 +898,17 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 					// Add matches for this segment to the main matches list
 					matches.join(segment.matches);
 
+					// When selectivity is zero the statement is prepared on an
+					// empty table or the statistics aren't updated.
+					// For an unique index, estimate the selectivity via the stream cardinality.
+					// For a non-unique one, assume 1/10 of the maximum selectivity, so that
+					// at least some indexes could be chosen by the optimizer.
+					if (scratch.selectivity <= 0)
+					{
+						scratch.selectivity = (unique && cardinality > MINIMUM_CARDINALITY) ?
+							1 / cardinality : DEFAULT_SELECTIVITY;
+					}
+
 					// An equality scan for any unique index cannot retrieve more
 					// than one row. The same is true for an equivalence scan for
 					// any primary index.
@@ -988,15 +999,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 
 			if (scratch.scopeCandidate)
 			{
-				// When selectivity is zero the statement is prepared on an
-				// empty table or the statistics aren't updated.
-				// For an unique index, estimate the selectivity via the stream cardinality.
-				// For a non-unique one, assume 1/10 of the maximum selectivity, so that
-				// at least some indexes could be chosen by the optimizer.
 				double selectivity = scratch.selectivity;
-
-				if (selectivity <= 0)
-					selectivity = unique ? 1 / cardinality : DEFAULT_SELECTIVITY;
 
 				// Calculate the cost (only index pages) for this index
 				auto cost = DEFAULT_INDEX_COST + selectivity * scratch.cardinality;
@@ -1007,8 +1010,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 					selectivity *= listCount;
 					selectivity = MIN(selectivity, maxSelectivity);
 
-					const auto rootScanCost = DEFAULT_INDEX_COST * listCount +
-						scratch.cardinality * selectivity;
+					const auto rootScanCost = cost * listCount;
 					const auto siblingScanCost = DEFAULT_INDEX_COST +
 						scratch.cardinality * maxSelectivity * (listCount - 1) / (listCount + 1);
 
