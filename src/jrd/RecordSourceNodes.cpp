@@ -3723,7 +3723,11 @@ static void genDeliverUnmapped(CompilerScratch* csb,
 			children.add(cmpNode->arg2);
 		}
 		else if (listNode)
+		{
 			children.add(listNode->arg);
+			for (auto item : listNode->list->items)
+				children.add(item);
+		}
 		else if (missingNode)
 			children.add(missingNode->arg);
 		else
@@ -3766,7 +3770,7 @@ static void genDeliverUnmapped(CompilerScratch* csb,
 			newListNode->list = FB_NEW_POOL(pool) ValueListNode(pool, count);
 
 			newChildren.add(newListNode->arg.getAddress());
-			for (auto item : newListNode->list->items)
+			for (auto& item : newListNode->list->items)
 				newChildren.add(item.getAddress());
 
 			deliverNode = newListNode;
@@ -3819,7 +3823,17 @@ static void genDeliverUnmapped(CompilerScratch* csb,
 		}
 
 		if (okNode)
-			deliverStack.push(deliverNode.release());
+		{
+			const auto node = deliverNode.release();
+
+			if (const auto newListNode = nodeAs<InListBoolNode>(node))
+			{
+				newListNode->lookup = FB_NEW_POOL(pool)
+					LookupValueList(pool, newListNode->list, newListNode->impureOffset);
+			}
+
+			deliverStack.push(node);
+		}
 	}
 }
 
