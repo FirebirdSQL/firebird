@@ -898,17 +898,6 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 					// Add matches for this segment to the main matches list
 					matches.join(segment.matches);
 
-					// When selectivity is zero the statement is prepared on an
-					// empty table or the statistics aren't updated.
-					// For an unique index, estimate the selectivity via the stream cardinality.
-					// For a non-unique one, assume 1/10 of the maximum selectivity, so that
-					// at least some indexes could be chosen by the optimizer.
-					if (scratch.selectivity <= 0)
-					{
-						scratch.selectivity = (unique && cardinality > MINIMUM_CARDINALITY) ?
-							1 / cardinality : DEFAULT_SELECTIVITY;
-					}
-
 					// An equality scan for any unique index cannot retrieve more
 					// than one row. The same is true for an equivalence scan for
 					// any primary index.
@@ -1000,6 +989,19 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 			if (scratch.scopeCandidate)
 			{
 				double selectivity = scratch.selectivity;
+
+				// When the index selectivity is zero then the statement is prepared
+				// on an empty table or the statistics aren't updated. The priorly
+				// calculated selectivity is meaningless in this case. So instead:
+				// - for an unique match, estimate the selectivity via the stream cardinality;
+				// - for a non-unique one, assume 1/10 of the maximum selectivity, so that
+				//   at least some indexes could be utilized by the optimizer.
+				if (idx->idx_selectivity <= 0)
+				{
+					selectivity = unique ?
+						MIN(MAXIMUM_SELECTIVITY / cardinality, DEFAULT_SELECTIVITY) :
+						DEFAULT_SELECTIVITY;
+				}
 
 				// Calculate the cost (only index pages) for this index
 				auto cost = DEFAULT_INDEX_COST + selectivity * scratch.cardinality;
