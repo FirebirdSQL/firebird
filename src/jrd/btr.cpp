@@ -962,7 +962,7 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 		idx_desc->idx_selectivity = key_descriptor->irtd_selectivity;
 		ptr += sizeof(irtd);
 	}
-	idx->idx_selectivity = idx_desc->idx_selectivity;
+	idx->idx_selectivity = idx->idx_rpt[idx->idx_count - 1].idx_selectivity;
 
 	ISC_STATUS error = 0;
 	if (idx->idx_flags & idx_expression)
