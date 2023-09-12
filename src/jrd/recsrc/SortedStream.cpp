@@ -126,10 +126,9 @@ void SortedStream::getChildren(Array<const RecordSource*>& children) const
 	children.add(m_next);
 }
 
-void SortedStream::print(thread_db* tdbb, string& plan,
-						 bool detailed, unsigned level, bool recurse) const
+void SortedStream::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		string extras;
 		extras.printf(" (record length: %" ULONGFORMAT", key length: %" ULONGFORMAT")",
@@ -142,14 +141,14 @@ void SortedStream::print(thread_db* tdbb, string& plan,
 			((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
 		printOptInfo(plan);
 
-		if (recurse)
-			m_next->print(tdbb, plan, true, level, recurse);
+		if (plan.goDeeper())
+			m_next->print(tdbb, plan, level);
 	}
 	else
 	{
 		level++;
 		plan += "SORT (";
-		m_next->print(tdbb, plan, false, level, recurse);
+		m_next->print(tdbb, plan, level);
 		plan += ")";
 	}
 }

@@ -166,9 +166,9 @@ void FullTableScan::getChildren(Array<const RecordSource*>& children) const
 {
 }
 
-void FullTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void FullTableScan::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		auto lowerBounds = 0, upperBounds = 0;
 		for (const auto range : m_dbkeyRanges)

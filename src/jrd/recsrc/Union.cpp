@@ -168,17 +168,17 @@ void Union::getChildren(Array<const RecordSource*>& children) const
 		children.add(m_args[i]);
 }
 
-void Union::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void Union::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + (m_args.getCount() == 1 ? "Materialize" : "Union");
 		printOptInfo(plan);
 
-		if (recurse)
+		if (plan.goDeeper())
 		{
 			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-				m_args[i]->print(tdbb, plan, true, level, recurse);
+				m_args[i]->print(tdbb, plan, level);
 		}
 	}
 	else
@@ -191,7 +191,7 @@ void Union::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, 
 			if (i)
 				plan += ", ";
 
-			m_args[i]->print(tdbb, plan, false, level + 1, recurse);
+			m_args[i]->print(tdbb, plan, level + 1);
 		}
 
 		if (!level)

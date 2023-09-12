@@ -53,6 +53,59 @@ namespace Jrd
 
 	enum JoinType { INNER_JOIN, OUTER_JOIN, SEMI_JOIN, ANTI_JOIN };
 
+	// Plan print helper class
+	class PlanPrintContext : public Firebird::AutoStorage
+	{
+	public:
+		PlanPrintContext(const Database* dbb, Firebird::string& plan,
+						 bool detailed, bool recurse)
+			: m_plan(plan), m_detailed(detailed), m_recurse(recurse),
+			  m_depth(0), m_limit(dbb->dbb_config->getPlanRecursionLimit()),
+			  m_statements(getPool())
+		{}
+
+		PlanPrintContext(const PlanPrintContext& other, const Statement* statement)
+			: m_plan(other.m_plan), m_detailed(other.m_detailed), m_recurse(other.m_recurse),
+			  m_depth(other.m_depth + 1), m_limit(other.m_limit),
+			  m_statements(getPool(), other.m_statements)
+		{
+			m_statements.add(statement);
+		}
+
+		bool isDetailed() const
+		{
+			return m_detailed;
+		}
+
+		bool goDeeper() const
+		{
+			return m_recurse;
+		}
+
+		bool mayRecurse(const Statement* statement) const
+		{
+			return (m_depth < m_limit) && !m_statements.exist(statement);
+		}
+
+		operator Firebird::string&()
+		{
+			return m_plan;
+		}
+
+		void operator +=(const Firebird::string& plan)
+		{
+			m_plan += plan;
+		}
+
+	private:
+		Firebird::string& m_plan;
+		const bool m_detailed;
+		const bool m_recurse;
+		const unsigned m_depth;
+		const unsigned m_limit;
+		Firebird::HalfStaticArray<const Statement*, 16> m_statements;
+	};
+
 	// Common base for record sources, sub-queries and cursors.
 	class AccessPath
 	{
@@ -71,8 +124,7 @@ namespace Jrd
 			return m_recSourceId;
 		}
 
-		virtual void print(thread_db* tdbb, Firebird::string& plan,
-			bool detailed, unsigned level, bool recurse) const = 0;
+		virtual void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const = 0;
 
 		virtual void getChildren(Firebird::Array<const RecordSource*>& children) const = 0;
 
@@ -115,6 +167,8 @@ namespace Jrd
 
 		bool getRecord(thread_db* tdbb) const;
 
+		static Firebird::string printIndent(unsigned level);
+
 	protected:
 		// Generic impure block
 		struct Impure
@@ -134,7 +188,6 @@ namespace Jrd
 		static Firebird::string printName(thread_db* tdbb, const Firebird::string& name,
 										  const Firebird::string& alias);
 
-		static Firebird::string printIndent(unsigned level);
 		static void printInversion(thread_db* tdbb, const InversionNode* inversion,
 								   Firebird::string& plan, bool detailed,
 								   unsigned level, bool navigation = false);
@@ -193,8 +246,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 	protected:
 		void internalOpen(thread_db* tdbb) const override;
@@ -222,8 +274,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 	protected:
 		void internalOpen(thread_db* tdbb) const override;
@@ -266,8 +317,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void setInversion(InversionNode* inversion, BoolExprNode* condition)
 		{
@@ -319,8 +369,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 	protected:
 		void internalOpen(thread_db* tdbb) const override;
@@ -344,8 +393,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 	protected:
 		void internalOpen(thread_db* tdbb) const override;
@@ -380,8 +428,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 	protected:
 		void internalOpen(thread_db* tdbb) const override;
@@ -413,8 +460,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -445,8 +491,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -480,8 +525,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -520,8 +564,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -556,8 +599,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -677,8 +719,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -902,7 +943,7 @@ namespace Jrd
 
 	public:
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
-		void print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 	protected:
 		bool internalGetRecord(thread_db* tdbb) const override;
@@ -973,7 +1014,7 @@ namespace Jrd
 
 			void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-			void print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsigned level, bool recurse) const override;
+			void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 			void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
 			void nullRecords(thread_db* tdbb) const override;
 
@@ -1015,8 +1056,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-			bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -1083,8 +1123,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -1127,8 +1166,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -1160,8 +1198,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -1214,8 +1251,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -1280,8 +1316,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -1316,8 +1351,7 @@ namespace Jrd
 		bool refetchRecord(thread_db* tdbb) const override;
 		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 	protected:
 		void internalOpen(thread_db* tdbb) const override;
@@ -1346,8 +1380,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -1391,8 +1424,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -1433,8 +1465,7 @@ namespace Jrd
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-				   bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;

@@ -351,17 +351,17 @@ void MergeJoin::getChildren(Array<const RecordSource*>& children) const
 		children.add(m_args[i]);
 }
 
-void MergeJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void MergeJoin::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Merge Join (inner)";
 		printOptInfo(plan);
 
-		if (recurse)
+		if (plan.goDeeper())
 		{
 			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-				m_args[i]->print(tdbb, plan, true, level, recurse);
+				m_args[i]->print(tdbb, plan, level);
 		}
 	}
 	else
@@ -373,7 +373,7 @@ void MergeJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned lev
 			if (i)
 				plan += ", ";
 
-			m_args[i]->print(tdbb, plan, false, level, recurse);
+			m_args[i]->print(tdbb, plan, level);
 		}
 		plan += ")";
 	}

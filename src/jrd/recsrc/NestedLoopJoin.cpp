@@ -214,11 +214,11 @@ void NestedLoopJoin::getChildren(Array<const RecordSource*>& children) const
 		children.add(m_args[i]);
 }
 
-void NestedLoopJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void NestedLoopJoin::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
 	if (m_args.hasData())
 	{
-		if (detailed)
+		if (plan.isDetailed())
 		{
 			plan += printIndent(++level) + "Nested Loop Join ";
 
@@ -246,10 +246,10 @@ void NestedLoopJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigne
 
 			printOptInfo(plan);
 
-			if (recurse)
+			if (plan.goDeeper())
 			{
 				for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-					m_args[i]->print(tdbb, plan, true, level, recurse);
+					m_args[i]->print(tdbb, plan, level);
 			}
 		}
 		else
@@ -261,7 +261,7 @@ void NestedLoopJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigne
 				if (i)
 					plan += ", ";
 
-				m_args[i]->print(tdbb, plan, false, level, recurse);
+				m_args[i]->print(tdbb, plan, level);
 			}
 			plan += ")";
 		}

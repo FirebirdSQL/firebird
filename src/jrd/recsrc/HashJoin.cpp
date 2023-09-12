@@ -462,33 +462,33 @@ void HashJoin::getChildren(Array<const RecordSource*>& children) const
 		children.add(m_args[i].source);
 }
 
-void HashJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void HashJoin::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Hash Join (inner)";
 		printOptInfo(plan);
 
-		if (recurse)
+		if (plan.goDeeper())
 		{
-			m_leader.source->print(tdbb, plan, true, level, recurse);
+			m_leader.source->print(tdbb, plan, level);
 
 			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-				m_args[i].source->print(tdbb, plan, true, level, recurse);
+				m_args[i].source->print(tdbb, plan, level);
 		}
 	}
 	else
 	{
 		level++;
 		plan += "HASH (";
-		m_leader.source->print(tdbb, plan, false, level, recurse);
+		m_leader.source->print(tdbb, plan, level);
 		plan += ", ";
 		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 		{
 			if (i)
 				plan += ", ";
 
-			m_args[i].source->print(tdbb, plan, false, level, recurse);
+			m_args[i].source->print(tdbb, plan, level);
 		}
 		plan += ")";
 	}

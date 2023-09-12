@@ -244,17 +244,17 @@ void RecursiveStream::getChildren(Array<const RecordSource*>& children) const
 	children.add(m_inner);
 }
 
-void RecursiveStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void RecursiveStream::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Recursion";
 		printOptInfo(plan);
 
-		if (recurse)
+		if (plan.goDeeper())
 		{
-			m_root->print(tdbb, plan, true, level, recurse);
-			m_inner->print(tdbb, plan, true, level, recurse);
+			m_root->print(tdbb, plan, level);
+			m_inner->print(tdbb, plan, level);
 		}
 	}
 	else
@@ -262,11 +262,11 @@ void RecursiveStream::print(thread_db* tdbb, string& plan, bool detailed, unsign
 		if (!level)
 			plan += "(";
 
-		m_root->print(tdbb, plan, false, level + 1, recurse);
+		m_root->print(tdbb, plan, level + 1);
 
 		plan += ", ";
 
-		m_inner->print(tdbb, plan, false, level + 1, recurse);
+		m_inner->print(tdbb, plan, level + 1);
 
 		if (!level)
 			plan += ")";

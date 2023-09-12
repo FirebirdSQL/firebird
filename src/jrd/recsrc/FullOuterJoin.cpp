@@ -118,25 +118,25 @@ void FullOuterJoin::getChildren(Array<const RecordSource*>& children) const
 	children.add(m_arg2);
 }
 
-void FullOuterJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void FullOuterJoin::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Full Outer Join";
 
-		if (recurse)
+		if (plan.goDeeper())
 		{
-			m_arg1->print(tdbb, plan, true, level, recurse);
-			m_arg2->print(tdbb, plan, true, level, recurse);
+			m_arg1->print(tdbb, plan, level);
+			m_arg2->print(tdbb, plan, level);
 		}
 	}
 	else
 	{
 		level++;
 		plan += "JOIN (";
-		m_arg1->print(tdbb, plan, false, level, recurse);
+		m_arg1->print(tdbb, plan, level);
 		plan += ", ";
-		m_arg2->print(tdbb, plan, false, level, recurse);
+		m_arg2->print(tdbb, plan, level);
 		plan += ")";
 	}
 }

@@ -380,16 +380,16 @@ void AggregatedStream::getChildren(Array<const RecordSource*>& children) const
 	children.add(m_next);
 }
 
-void AggregatedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void AggregatedStream::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Aggregate";
 		printOptInfo(plan);
 	}
 
-	if (recurse)
-		m_next->print(tdbb, plan, detailed, level, recurse);
+	if (plan.goDeeper())
+		m_next->print(tdbb, plan, level);
 }
 
 bool AggregatedStream::internalGetRecord(thread_db* tdbb) const

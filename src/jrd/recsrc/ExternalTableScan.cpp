@@ -119,10 +119,9 @@ void ExternalTableScan::getChildren(Array<const RecordSource*>& children) const
 {
 }
 
-void ExternalTableScan::print(thread_db* tdbb, string& plan,
-							  bool detailed, unsigned level, bool recurse) const
+void ExternalTableScan::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Table " +
 			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan";

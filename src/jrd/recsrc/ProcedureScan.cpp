@@ -30,6 +30,7 @@
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "../jrd/optimizer/Optimizer.h"
+#include "../jrd/recsrc/Cursor.h"
 
 #include "RecordSource.h"
 
@@ -253,13 +254,38 @@ void ProcedureScan::getChildren(Array<const RecordSource*>& children) const
 {
 }
 
-void ProcedureScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void ProcedureScan::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	const auto statement = m_procedure->getStatement();
+
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Procedure " +
 			printName(tdbb, m_procedure->getName().toString(), m_alias) + " Scan";
 		printOptInfo(plan);
+
+		if (statement && statement->fors.hasData() &&
+			plan.goDeeper() && plan.mayRecurse(statement))
+		{
+			PlanPrintContext nested(plan, statement);
+			++level;
+
+			for (const auto select : statement->fors)
+				select->print(tdbb, nested, level);
+		}
+	}
+	else if (statement && statement->fors.hasData() &&
+		plan.goDeeper() && plan.mayRecurse(statement))
+	{
+		PlanPrintContext nested(plan, statement);
+		++level;
+
+		for (const auto select : statement->fors)
+		{
+			plan += "(";
+			select->print(tdbb, nested, level);
+			plan += ")";
+		}
 	}
 	else
 	{

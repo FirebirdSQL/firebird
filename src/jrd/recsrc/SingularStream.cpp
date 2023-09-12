@@ -151,16 +151,16 @@ void SingularStream::getChildren(Array<const RecordSource*>& children) const
 	children.add(m_next);
 }
 
-void SingularStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void SingularStream::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Singularity Check";
 		printOptInfo(plan);
 	}
 
-	if (recurse)
-		m_next->print(tdbb, plan, detailed, level, recurse);
+	if (plan.goDeeper())
+		m_next->print(tdbb, plan, level);
 }
 
 void SingularStream::markRecursive()

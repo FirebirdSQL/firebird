@@ -25,12 +25,12 @@
 
 #include "../common/classes/array.h"
 #include "../jrd/MetaName.h"
+#include "../jrd/recsrc/RecordSource.h"
 
 namespace Jrd
 {
 	class thread_db;
 	class CompilerScratch;
-	class RecordSource;
 	class RseNode;
 
 	// Select class (common base for sub-queries and cursors)
@@ -70,11 +70,11 @@ namespace Jrd
 
 		void printPlan(thread_db* tdbb, Firebird::string& plan, bool detailed) const
 		{
-			print(tdbb, plan, detailed, 0, true);
+			PlanPrintContext context(tdbb->getDatabase(), plan, detailed, true);
+			print(tdbb, context, 0);
 		}
 
-		void print(thread_db* tdbb, Firebird::string& plan,
-			bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override
 		{

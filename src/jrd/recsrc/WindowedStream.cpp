@@ -61,7 +61,7 @@ namespace
 
 		void getChildren(Firebird::Array<const RecordSource*>& children) const override;
 
-		void print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsigned level, bool recurse) const override;
+		void print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -152,16 +152,16 @@ namespace
 		children.add(m_next);
 	}
 
-	void BufferedStreamWindow::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+	void BufferedStreamWindow::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 	{
-		if (detailed)
+		if (plan.isDetailed())
 		{
 			plan += printIndent(++level) + "Window Buffer";
 			printOptInfo(plan);
 		}
 
-		if (recurse)
-			m_next->print(tdbb, plan, detailed, level, recurse);
+		if (plan.goDeeper())
+			m_next->print(tdbb, plan, level);
 	}
 
 	void BufferedStreamWindow::markRecursive()
@@ -409,16 +409,16 @@ void WindowedStream::getChildren(Array<const RecordSource*>& children) const
 	children.add(m_joinedStream);
 }
 
-void WindowedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void WindowedStream::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Window";
 		printOptInfo(plan);
 	}
 
-	if (recurse)
-		m_joinedStream->print(tdbb, plan, detailed, level, recurse);
+	if (plan.goDeeper())
+		m_joinedStream->print(tdbb, plan, level);
 }
 
 void WindowedStream::markRecursive()
@@ -904,17 +904,16 @@ void WindowedStream::WindowStream::getChildren(Array<const RecordSource*>& child
 	children.add(m_next);
 }
 
-void WindowedStream::WindowStream::print(thread_db* tdbb, string& plan, bool detailed,
-	unsigned level, bool recurse) const
+void WindowedStream::WindowStream::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Window Partition";
 		printOptInfo(plan);
 	}
 
-	if (recurse)
-		m_next->print(tdbb, plan, detailed, level, recurse);
+	if (plan.goDeeper())
+		m_next->print(tdbb, plan, level);
 }
 
 void WindowedStream::WindowStream::findUsedStreams(StreamList& streams, bool expandAll) const

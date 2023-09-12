@@ -120,17 +120,17 @@ void ConditionalStream::getChildren(Array<const RecordSource*>& children) const
 	children.add(m_second);
 }
 
-void ConditionalStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void ConditionalStream::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Condition";
 		printOptInfo(plan);
 
-		if (recurse)
+		if (plan.goDeeper())
 		{
-			m_first->print(tdbb, plan, true, level, recurse);
-			m_second->print(tdbb, plan, true, level, recurse);
+			m_first->print(tdbb, plan, level);
+			m_second->print(tdbb, plan, level);
 		}
 	}
 	else
@@ -138,11 +138,11 @@ void ConditionalStream::print(thread_db* tdbb, string& plan, bool detailed, unsi
 		if (!level)
 			plan += "(";
 
-		m_first->print(tdbb, plan, false, level + 1, recurse);
+		m_first->print(tdbb, plan, level + 1);
 
 		plan += ", ";
 
-		m_second->print(tdbb, plan, false, level + 1, recurse);
+		m_second->print(tdbb, plan, level + 1);
 
 		if (!level)
 			plan += ")";

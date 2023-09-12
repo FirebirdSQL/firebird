@@ -121,16 +121,16 @@ void SkipRowsStream::getChildren(Array<const RecordSource*>& children) const
 	children.add(m_next);
 }
 
-void SkipRowsStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void SkipRowsStream::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Skip N Records";
 		printOptInfo(plan);
 	}
 
-	if (recurse)
-		m_next->print(tdbb, plan, detailed, level, recurse);
+	if (plan.goDeeper())
+		m_next->print(tdbb, plan, level);
 }
 
 void SkipRowsStream::markRecursive()

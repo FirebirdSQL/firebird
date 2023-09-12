@@ -520,7 +520,9 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 		const auto thisRsb = planItem.recordSource;
 
 		string& accessPath = planItem.accessPath;
-		thisRsb->print(tdbb, accessPath, true, 0, false);
+
+		PlanPrintContext context(tdbb->getDatabase(), accessPath, true, false);
+		thisRsb->print(tdbb, context, 0);
 
 		constexpr auto INDENT_MARKER = "\n    ";
 		constexpr unsigned INDENT_COUNT = 4;

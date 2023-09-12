@@ -319,9 +319,9 @@ void BufferedStream::getChildren(Array<const RecordSource*>& children) const
 	children.add(m_next);
 }
 
-void BufferedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void BufferedStream::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		string extras;
 		extras.printf(" (record length: %" ULONGFORMAT")", m_format->fmt_length);
@@ -330,8 +330,8 @@ void BufferedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigne
 		printOptInfo(plan);
 	}
 
-	if (recurse)
-		m_next->print(tdbb, plan, detailed, level, recurse);
+	if (plan.goDeeper())
+		m_next->print(tdbb, plan, level);
 }
 
 void BufferedStream::markRecursive()

@@ -107,26 +107,28 @@ void Select::initializeInvariants(Request* request) const
 	}
 }
 
-void Select::print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsigned level, bool recurse) const
+void Select::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
-	if (detailed)
+	if (plan.isDetailed())
 	{
+		plan += level ? RecordSource::printIndent(level) : "\n";
+
 		if (m_rse->isSubQuery())
 		{
-			plan += "\nSub-query";
+			plan += "Sub-query";
 
 			if (m_rse->isInvariant())
 				plan += " (invariant)";
 		}
 		else if (m_cursorName.hasData())
 		{
-			plan += "\nCursor \"" + string(m_cursorName) + "\"";
+			plan += "Cursor \"" + string(m_cursorName) + "\"";
 
 			if (m_rse->isScrollable())
 				plan += " (scrollable)";
 		}
 		else
-			plan += "\nSelect Expression";
+			plan += "Select Expression";
 
 		if (m_line || m_column)
 		{
@@ -135,7 +137,7 @@ void Select::print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsig
 			plan += pos;
 		}
 	}
-	else
+	else if (!level)
 	{
 		if (m_line || m_column)
 		{
@@ -147,8 +149,8 @@ void Select::print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsig
 		plan += "\nPLAN ";
 	}
 
-	if (recurse)
-		m_root->print(tdbb, plan, detailed, level, true);
+	if (plan.goDeeper())
+		m_root->print(tdbb, plan, level);
 }
 
 // ---------------------

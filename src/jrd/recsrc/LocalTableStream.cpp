@@ -113,11 +113,11 @@ WriteLockResult LocalTableStream::lockRecord(thread_db* tdbb, bool skipLocked) c
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
-void LocalTableStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void LocalTableStream::print(thread_db* tdbb, PlanPrintContext& plan, unsigned level) const
 {
 	//// TODO: Use Local Table name/alias.
 
-	if (detailed)
+	if (plan.isDetailed())
 	{
 		plan += printIndent(++level) + "Local Table Full Scan";
 		printOptInfo(plan);
