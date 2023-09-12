@@ -53,16 +53,24 @@ public:
 	{
 		Item* item = m_map.lookup(page);
 
-		if (!item)
-			return nullptr;
-
-		if (m_list != item)
+		if (item)
 		{
-			listRemove(item);
-			listInsert(item);
+			if (item->m_bdb->bdb_page == page)
+			{
+				// Move item into MRU position
+				if (m_list != item)
+				{
+					listRemove(item);
+					listInsert(item);
+				}
+				return item->m_bdb;
+			}
+
+			// bdb was reassigned
+			remove(page);
 		}
 
-		return item->m_bdb;
+		return nullptr;
 	}
 
 	void put(BufferDesc* bdb)
@@ -70,6 +78,7 @@ public:
 		Item* item = m_map.lookup(bdb->bdb_page);
 		if (item)
 		{
+			fb_assert(item->m_bdb != bdb);
 			if (m_list != item)
 				listRemove(item);
 		}
