@@ -603,3 +603,8 @@ ALTER TABLE <name> ... [ {ENABLE | DISABLE} PUBLICATION ]
 
 Defines whether replication is enabled for the specified table.
 If not specified in the CREATE TABLE statement, the database-level default behaviour is applied.
+
+24) COLLATE clause can be used as a part of character data type as per SQL standard.
+(Dmitry Sibiryakov)
+
+If is used twice, an error is returned.

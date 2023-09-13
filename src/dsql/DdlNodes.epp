@@ -1127,7 +1127,9 @@ ParameterClause::ParameterClause(MemoryPool& pool, dsql_fld* field, const MetaNa
 	  defaultClause(aDefaultClause),
 	  parameterExpr(aParameterExpr)
 {
-	type->collate = aCollate;
+	// Explicit collation has precedence over data type collation
+	if (aCollate.hasData())
+		type->collate = aCollate;
 }
 
 string ParameterClause::internalPrint(NodePrinter& printer) const
@@ -6380,12 +6382,17 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 					computedSource, computedValue);
 			}
 
-			field->collate = clause->collate;
 			field->resolve(dsqlScratch);
 
 			// Generate a domain.
 			storeGlobalField(tdbb, transaction, fieldDefinition.fieldSource, field,
 				computedSource, computedValue);
+		}
+		else
+		{
+			// Resolve possible additional collation for domains. For plain types it is already resolved above.
+			if (field->collate.hasData())
+				DDL_resolve_intl_type(dsqlScratch, field, field->collate);
 		}
 
 		if ((relation->rel_flags & REL_external) &&
@@ -6398,9 +6405,6 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 				Arg::Gds(isc_dsql_command_err) <<
 				Arg::Gds(isc_dsql_type_not_supp_ext_tab) << typeName << name << field->fld_name);
 		}
-
-		if (clause->collate.hasData())
-			DDL_resolve_intl_type(dsqlScratch, field, clause->collate);
 
 		if (clause->identityOptions)
 		{
@@ -6445,10 +6449,7 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		}
 
 		fieldDefinition.defaultValue = defaultValue;
-
-		if (clause->collate.hasData())
-			fieldDefinition.collationId = field->collationId;
-
+		fieldDefinition.collationId = field->collationId;
 		fieldDefinition.store(tdbb, transaction);
 
 		// Define the field constraints.

@@ -1732,7 +1732,7 @@ domain_clause
 			{
 				$$ = $5;
 				if ($7)
-					$$->nameType->type->collate = *$7;
+					setClause($$->nameType->type->collate, "COLLATE", *$7);
 			}
 	;
 
@@ -2333,7 +2333,7 @@ column_def($relationNode)
 		column_constraint_clause(NOTRIAL($<addColumnClause>4)) collate_clause
 			{
 				if ($6)
-					$<addColumnClause>4->collate = *$6;
+					setClause($2->collate, "COLLATE", *$6);
 			}
 	| symbol_column_name data_type_or_domain identity_clause
 			{
@@ -2347,7 +2347,7 @@ column_def($relationNode)
 		column_constraint_clause(NOTRIAL($<addColumnClause>4)) collate_clause
 			{
 				if ($6)
-					$<addColumnClause>4->collate = *$6;
+					setClause($2->collate, "COLLATE", *$6);
 			}
 	| symbol_column_name non_array_type def_computed
 		{
@@ -4737,7 +4737,7 @@ array_range
 %type <legacyField> simple_type
 simple_type
 	: non_charset_simple_type
-	| character_type charset_clause
+	| character_type charset_clause collate_clause
 		{
 			$$ = $1;
 			if ($2)
@@ -4745,6 +4745,8 @@ simple_type
 				$$->charSet = *$2;
 				$$->flags |= FLD_has_chset;
 			}
+			if ($3)
+				$$->collate = *$3;
 		}
 	;
 
