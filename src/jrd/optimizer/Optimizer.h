@@ -409,11 +409,17 @@ public:
 
 	static RecordSource* compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse)
 	{
-		const auto dbb = tdbb->getDatabase();
-		const auto defaultFirstRows = dbb->dbb_config->getOptimizeForFirstRows();
+		bool firstRows = false;
 
-		const auto attachment = tdbb->getAttachment();
-		const auto firstRows = attachment->att_opt_first_rows.orElse(defaultFirstRows);
+		// System requests should not be affected by user-specified settings
+		if (!(csb->csb_g_flags & csb_internal))
+		{
+			const auto dbb = tdbb->getDatabase();
+			const auto defaultFirstRows = dbb->dbb_config->getOptimizeForFirstRows();
+
+			const auto attachment = tdbb->getAttachment();
+			firstRows = attachment->att_opt_first_rows.orElse(defaultFirstRows);
+		}
 
 		return Optimizer(tdbb, csb, rse, firstRows).compile(nullptr);
 	}

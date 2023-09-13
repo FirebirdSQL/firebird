@@ -192,8 +192,21 @@ void InnerJoin::estimateCost(unsigned position,
 	const auto tail = &csb->csb_rpt[stream->number];
 	const auto streamCardinality = tail->csb_cardinality;
 
+	auto currentCardinality = streamCardinality * candidate->selectivity;
+	auto currentCost = candidate->cost;
+
+	// Unless an external sort is to be applied, adjust estimated cost and cardinality
+	// accordingly to the "first-rows" retrieval (if specified)
+	if ((!sort || candidate->navigated) && optimizer->favorFirstRows())
+	{
+		currentCost -= DEFAULT_INDEX_COST;
+		currentCost /= MAX(currentCardinality, MINIMUM_CARDINALITY);
+		currentCost += DEFAULT_INDEX_COST;
+		currentCardinality = MINIMUM_CARDINALITY;
+	}
+
 	// Calculate the nested loop cost, it's our default option
-	const auto loopCost = candidate->cost * cardinality;
+	const auto loopCost = currentCost * cardinality;
 	cost = loopCost;
 
 	if (position)
@@ -208,8 +221,7 @@ void InnerJoin::estimateCost(unsigned position,
 			// hashing cost
 			hashCardinality * (COST_FACTOR_MEMCOPY + COST_FACTOR_HASHING) +
 			// probing + copying cost
-			cardinality * (COST_FACTOR_HASHING +
-				candidate->selectivity * streamCardinality * COST_FACTOR_MEMCOPY);
+			cardinality * (COST_FACTOR_HASHING + currentCardinality * COST_FACTOR_MEMCOPY);
 
 		if (hashCost <= loopCost && hashCardinality <= HashJoin::maxCapacity())
 		{
@@ -242,8 +254,7 @@ void InnerJoin::estimateCost(unsigned position,
 		}
 	}
 
-	const auto resultingCardinality = streamCardinality * candidate->selectivity;
-	cardinality = MAX(resultingCardinality, MINIMUM_CARDINALITY);
+	cardinality = MAX(currentCardinality, MINIMUM_CARDINALITY);
 }
 
 
@@ -264,23 +275,11 @@ bool InnerJoin::findJoinOrder()
 	printStartOrder();
 #endif
 
-	int filters = 0, navigations = 0;
-
 	for (const auto innerStream : innerStreams)
 	{
 		if (!innerStream->used)
 		{
 			remainingStreams++;
-
-			const int currentFilter = innerStream->isFiltered() ? 1 : 0;
-
-			if (navigations && currentFilter)
-				navigations = 0;
-
-			filters += currentFilter;
-
-			if (innerStream->baseNavigated && currentFilter == filters)
-				navigations++;
 
 			if (innerStream->isIndependent())
 			{
@@ -303,24 +302,11 @@ bool InnerJoin::findJoinOrder()
 		{
 			if (!innerStream->used)
 			{
-				// If optimization for first rows has been requested and index navigations are
-				// possible, then consider only join orders starting with a navigational stream.
-				// Except cases when other streams have local predicates applied.
+				indexedRelationships.clear();
+				findBestOrder(0, innerStream, indexedRelationships, 0.0, 1.0);
 
-				const int currentFilter = innerStream->isFiltered() ? 1 : 0;
-
-				if (!optimizer->favorFirstRows() || !navigations ||
-					(innerStream->baseNavigated && currentFilter == filters))
-				{
-					indexedRelationships.clear();
-					findBestOrder(0, innerStream, indexedRelationships, 0.0, 1.0);
-
-					if (plan)
-					{
-						// If a explicit PLAN was specified we should be ready;
-						break;
-					}
-				}
+				if (plan) // if an explicit PLAN was specified we should be ready
+					break;
 			}
 		}
 	}
