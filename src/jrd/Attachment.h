@@ -643,6 +643,8 @@ public:
 
 	PageToBufferMap* att_bdb_cache;			// managed in CCH, created in att_pool, freed with it
 
+	PageToBufferMap* att_bdb_cache;			// managed in CCH, created in att_pool, freed with it
+
 	Firebird::RefPtr<Firebird::IReplicatedSession> att_replicator;
 	Firebird::AutoPtr<Replication::TableMatcher> att_repl_matcher;
 	Firebird::Array<Applier*> att_repl_appliers;
