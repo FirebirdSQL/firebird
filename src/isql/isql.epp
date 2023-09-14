@@ -1438,7 +1438,8 @@ SSHORT ISQL_get_char_length(
 }
 
 
-void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation, bool collate_only,
+void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
+							 bool getCharset, bool getCollation,
 							 bool not_null, bool quote, TEXT* string)
 {
 /**************************************
@@ -1460,8 +1461,7 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation, bool collate_
 	if (!frontendTransaction())
 		return;
 
-	//if (collation) {
-	if (collation || collate_only)
+	if (getCollation)
 	{
 		FOR FIRST 1 COL IN RDB$COLLATIONS CROSS
 			CST IN RDB$CHARACTER_SETS WITH
@@ -1494,12 +1494,12 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation, bool collate_
 			// Is specified collation the default collation for character set?
 			if (strcmp (CST.RDB$DEFAULT_COLLATE_NAME, COL.RDB$COLLATION_NAME) == 0)
 			{
-				if (!collate_only)
+				if (getCharset)
 					sprintf (string, " CHARACTER SET %s%s", charSetName, notNullStr);
 			}
-			else if (collate_only)
+			else if (!getCharset) // Only collation is requested
 				sprintf (string, "%s COLLATE %s", notNullStr, collateName);
-			else
+			else // Both
 				sprintf (string, " CHARACTER SET %s%s COLLATE %s",
 						 charSetName, notNullStr, collateName);
 		END_FOR

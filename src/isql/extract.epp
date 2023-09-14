@@ -397,14 +397,12 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			// International character sets
 			// Print only the character set
 			if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
-				!RFR.RDB$COLLATION_ID.NULL && RFR.RDB$COLLATION_ID)
+				!RFR.RDB$COLLATION_ID.NULL)
 			{
-				char_sets[0] = '\0';
+				// There is no need to print character set for domain at all because it cannot be overriden.
+				// Collation will be printed later.
 				collation = RFR.RDB$COLLATION_ID;
 				char_set_id = FLD.RDB$CHARACTER_SET_ID;
-				ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, 0, true, false, true, char_sets);
-				if (char_sets[0])
-					isqlGlob.prints(char_sets);
 			}
 		}
 		else
@@ -461,8 +459,8 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 
 				if (!FLD.RDB$CHARACTER_SET_ID.NULL)
 					char_set_id = FLD.RDB$CHARACTER_SET_ID;
-				if ((char_set_id != default_char_set_id) || collation)
-					ISQL_get_character_sets (char_set_id, 0, false, false, true, char_sets);
+				if (char_set_id != default_char_set_id)
+					ISQL_get_character_sets(char_set_id, 0, true, false, false, true, char_sets);
 				if (char_sets[0])
 					isqlGlob.prints(char_sets);
 				// CVC: Someone deleted the code that checks intchar when handling collations
@@ -482,11 +480,11 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 				if (!FLD.RDB$COMPUTED_SOURCE.NULL)
 					ISQL_print_validation (isqlGlob.Out, &FLD.RDB$COMPUTED_SOURCE, true, fbTrans);
 			}
-			else if (collation)
+			else if (!RFR.RDB$COLLATION_ID.NULL)
 			{
 				SCHAR collate_name[CHARSET_COLLATE_SIZE];
 				collate_name[0] = '\0';
-				ISQL_get_character_sets(char_set_id, collation, true, false, true, collate_name);
+				ISQL_get_character_sets(char_set_id, collation, false, true, false, true, collate_name);
 
 				if (collate_name[0])
 				{
@@ -582,10 +580,10 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 
 		// Handle collations after defaults
 
-		if (collation)
+		if (!RFR.RDB$COLLATION_ID.NULL)
 		{
 			char_sets[0] = '\0';
-			ISQL_get_character_sets (char_set_id, collation, true, false, true, char_sets);
+			ISQL_get_character_sets(char_set_id, collation, false, true, false, true, char_sets);
 			if (char_sets[0])
 				isqlGlob.prints(char_sets);
 		}
@@ -819,10 +817,10 @@ static void get_procedure_args(const char* proc_name)
 				// International character sets
 				// Print only the collation
 				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
-					!prm_collation_id_null && prm_collation_id)
+					!prm_collation_id_null)
 				{
 					char_sets[0] = '\0';
-					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id, true,
+					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id, false, true,
 						!prm_null_flag_null && prm_null_flag, true, char_sets);
 					if (char_sets[0])
 						isqlGlob.prints(char_sets);
@@ -878,7 +876,7 @@ static void get_procedure_args(const char* proc_name)
 					if (FLD.RDB$CHARACTER_SET_ID.NULL)
 						FLD.RDB$CHARACTER_SET_ID = 0;
 
-					ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, collation, false,
+					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, collation, true, true,
 						!prm_null_flag_null && prm_null_flag, true, char_sets);
 					if (char_sets[0])
 						isqlGlob.prints(char_sets);
@@ -1043,10 +1041,10 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 				// International character sets
 				// Print only the collation
 				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
-					!prm_collation_id_null && prm_collation_id)
+					!prm_collation_id_null)
 				{
 					char_sets[0] = '\0';
-					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id, true,
+					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id, false, true,
 						!prm_null_flag_null && prm_null_flag, true, char_sets);
 					if (char_sets[0])
 						isqlGlob.prints(char_sets);
@@ -1102,7 +1100,7 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 					if (FLD.RDB$CHARACTER_SET_ID.NULL)
 						FLD.RDB$CHARACTER_SET_ID = 0;
 
-					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, collation, false,
+					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, collation, true, true,
 						!prm_null_flag_null && prm_null_flag, true, char_sets);
 
 					if (char_sets[0])
@@ -2333,10 +2331,9 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 		{
 
 			char_sets[0] = 0;
-			if ((FLD.RDB$CHARACTER_SET_ID != default_char_set_id) ||
-				(!FLD.RDB$COLLATION_ID.NULL && FLD.RDB$COLLATION_ID != 0))
+			if (FLD.RDB$CHARACTER_SET_ID != default_char_set_id)
 			{
-				ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, 0, false, false, true,
+				ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, 0, true, false, false, true,
 					char_sets);
 			}
 			if (char_sets[0])
@@ -2361,14 +2358,13 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 		   order is the default for the character set being used, then no collation
 		   order will be shown ( because it isn't needed ).
 
-		If the collation id is 0, then the default for the character set is
-		being used so there is no need to retrieve the collation information.*/
+		Even if the collation id is 0, it may be non-default for the character set.*/
 
-		if (!FLD.RDB$COLLATION_ID.NULL && FLD.RDB$COLLATION_ID != 0)
+		if (!FLD.RDB$COLLATION_ID.NULL)
 		{
 			char_sets[0] = 0;
-			ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, true, false,
-				true, char_sets);
+			ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, false, true,
+				false, true, char_sets);
 
 			if (char_sets[0])
 				isqlGlob.prints(char_sets);
@@ -2460,10 +2456,9 @@ static void list_domains(SSHORT default_char_set_id)
 			  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 		{
 			char_sets[0] = 0;
-			if ((FLD.RDB$CHARACTER_SET_ID != default_char_set_id) ||
-				(!FLD.RDB$COLLATION_ID.NULL && FLD.RDB$COLLATION_ID != 0))
+			if (FLD.RDB$CHARACTER_SET_ID != default_char_set_id)
 			{
-				ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, 0, false, false, true,
+				ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, 0, true, false, false, true,
 					char_sets);
 			}
 			if (char_sets[0])
@@ -2484,14 +2479,13 @@ static void list_domains(SSHORT default_char_set_id)
 		   order is the default for the character set being used, then no collation
 		   order will be shown ( because it isn't needed
 
-		   If the collation id is 0, then the default for the character set is
-		   being used so there is no need to retrieve the collation information.*/
+		   Even if the collation id is 0, it may be non-default for the character.*/
 
-		if (!FLD.RDB$COLLATION_ID.NULL && FLD.RDB$COLLATION_ID != 0)
+		if (!FLD.RDB$COLLATION_ID.NULL)
 		{
 			char_sets[0] = 0;
-			ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, true, false,
-				true, char_sets);
+			ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, false, true,
+				false, true, char_sets);
 
 			if (char_sets[0])
 				isqlGlob.prints(char_sets);
@@ -2630,13 +2624,12 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 				// International character sets
 				// Print only the character set
 				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
-					!RFR.RDB$COLLATION_ID.NULL && RFR.RDB$COLLATION_ID)
+					!RFR.RDB$COLLATION_ID.NULL)
 				{
 					char_sets[0] = '\0';
 					collation = RFR.RDB$COLLATION_ID;
 					char_set_id = FLD.RDB$CHARACTER_SET_ID;
-					ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, 0, true, false, true,
-						char_sets);
+					ISQL_get_character_sets(char_set_id, collation, false, true, false, true, char_sets);
 
 					if (char_sets[0])
 						isqlGlob.prints(char_sets);
@@ -2696,8 +2689,8 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 
 					if (!FLD.RDB$CHARACTER_SET_ID.NULL)
 						char_set_id = FLD.RDB$CHARACTER_SET_ID;
-					if ((char_set_id != default_char_set_id) || collation)
-						ISQL_get_character_sets (char_set_id, 0, false, false, true, char_sets);
+					if (char_set_id != default_char_set_id)
+						ISQL_get_character_sets(char_set_id, collation, false, true, false, true, char_sets);
 					if (char_sets[0])
 						isqlGlob.prints(char_sets);
 					// CVC: Someone deleted the code that checks intchar when handling collations
