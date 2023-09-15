@@ -27,7 +27,6 @@
 #include "../dsql/chars.h"
 #include "../jrd/jrd.h"
 #include "../jrd/DataTypeUtil.h"
-#include "../common/keywords.h"
 #include "../jrd/intl_proto.h"
 
 #ifdef HAVE_FLOAT_H
@@ -38,64 +37,6 @@
 
 using namespace Firebird;
 using namespace Jrd;
-
-
-namespace Jrd
-{
-	struct Keyword
-	{
-		Keyword(int aKeyword, MetaName* aStr)
-			: keyword(aKeyword), str(aStr)
-		{}
-
-		int keyword;
-		MetaName* str;
-	};
-
-	class KeywordsMap : public GenericMap<Pair<Left<MetaName, Keyword> > >
-	{
-	public:
-		explicit KeywordsMap(MemoryPool& pool)
-			: GenericMap<Pair<Left<MetaName, Keyword> > >(pool)
-		{
-			for (const TOK* token = keywordGetTokens(); token->tok_string; ++token)
-			{
-				MetaName* str = FB_NEW_POOL(pool) MetaName(token->tok_string);
-				put(*str, Keyword(token->tok_ident, str));
-			}
-		}
-
-		~KeywordsMap()
-		{
-			Accessor accessor(this);
-			for (bool found = accessor.getFirst(); found; found = accessor.getNext())
-				delete accessor.current()->second.str;
-		}
-	};
-
-	KeywordsMap* KeywordsMapAllocator::create()
-	{
-		thread_db* tdbb = JRD_get_thread_data();
-		fb_assert(tdbb);
-		Database* dbb = tdbb->getDatabase();
-		fb_assert(dbb);
-
-		return FB_NEW_POOL(*dbb->dbb_permanent) KeywordsMap(*dbb->dbb_permanent);
-	}
-
-	void KeywordsMapAllocator::destroy(KeywordsMap* inst)
-	{
-		delete inst;
-	}
-}
-
-namespace
-{
-	const Keyword* getKeyword(Database* dbb, const MetaName& str)
-	{
-		return dbb->dbb_keywords_map().get(str);
-	}
-}
 
 
 Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
@@ -1267,9 +1208,9 @@ int Parser::yylexAux()
 			yyabandon(yyposn, -104, isc_dyn_name_longer);
 
 		const MetaName str(string, p - string);
-		const Keyword* const keyVer = getKeyword(dbb, str);
 
-		if (keyVer && (keyVer->keyword != TOK_COMMENT || lex.prev_keyword == -1))
+		if (const auto keyVer = dbb->dbb_keywords().get(str);
+			keyVer && (keyVer->keyword != TOK_COMMENT || lex.prev_keyword == -1))
 		{
 			yylval.metaNamePtr = keyVer->str;
 			lex.last_token_bk = lex.last_token;
@@ -1290,9 +1231,8 @@ int Parser::yylexAux()
 	if (lex.last_token + 1 < lex.end && !isspace(UCHAR(lex.last_token[1])))
 	{
 		const MetaName str(lex.last_token, 2);
-		const Keyword* const keyVer = getKeyword(dbb, str);
 
-		if (keyVer)
+		if (const auto keyVer = dbb->dbb_keywords().get(str))
 		{
 			++lex.ptr;
 			return keyVer->keyword;
