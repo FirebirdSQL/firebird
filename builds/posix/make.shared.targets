@@ -42,20 +42,9 @@
 # This rule creates parse.cpp from parse.y
 # With make 4.3 this can be simplified with a simple group target (&:) dependency.
 
-.INTERMEDIATE: parse-gen
+$(OBJ)/dsql/parse.cpp $(SRC_ROOT)/include/gen/parse.h: $(OBJ)/.parse-gen-sentinel ;
 
-$(OBJ)/dsql/parse.cpp: $(GEN_ROOT)/y_tab.c parse-gen
-	$(CP) $< $@
-	touch $@
-
-$(SRC_ROOT)/include/gen/parse.h: $(GEN_ROOT)/y_tab.h parse-gen
-	$(CP) $< $@
-	touch $@
-
-$(GEN_ROOT)/y_tab.c: parse-gen
-$(GEN_ROOT)/y_tab.h: parse-gen
-
-parse-gen: $(SRC_ROOT)/dsql/parse.y $(SRC_ROOT)/dsql/btyacc_fb.ske
+$(OBJ)/.parse-gen-sentinel: $(SRC_ROOT)/dsql/parse.y $(SRC_ROOT)/dsql/btyacc_fb.ske
 	sed -n '/%type .*/p' < $< > $(GEN_ROOT)/types.y
 	sed 's/%type .*//' < $< > $(GEN_ROOT)/y.y
 	($(BTYACC) -l -d -S $(SRC_ROOT)/dsql/btyacc_fb.ske $(GEN_ROOT)/y.y; echo $$? > $(GEN_ROOT)/y.status) 2>&1 | tee $(GEN_ROOT)/y.txt
@@ -63,6 +52,9 @@ parse-gen: $(SRC_ROOT)/dsql/parse.y $(SRC_ROOT)/dsql/btyacc_fb.ske
 	sed -n -e "s/.*btyacc: \(.*conflicts.*\)/\1/p" $(GEN_ROOT)/y.txt > $(SRC_ROOT)/dsql/parse-conflicts.txt
 	sed -i -e 's/#define \([A-Z].*\)/#define TOK_\1/' $(GEN_ROOT)/y_tab.h
 	sed -i -e 's/#define TOK_YY\(.*\)/#define YY\1/' $(GEN_ROOT)/y_tab.h
+	$(MV) $(GEN_ROOT)/y_tab.h $(SRC_ROOT)/include/gen/parse.h
+	$(MV) $(GEN_ROOT)/y_tab.c $(OBJ)/dsql/parse.cpp
+	touch $@
 
 
 # gpre_meta needs a special boot build since there is no database.
