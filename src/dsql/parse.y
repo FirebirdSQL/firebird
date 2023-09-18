@@ -7747,7 +7747,7 @@ ul_numeric_constant
 u_constant
 	: u_numeric_constant
 	| sql_string
-		{ $$ = MAKE_str_constant($1, lex.att_charset); }
+		{ $$ = MAKE_str_constant($1, lex.charSetId); }
 	| DATE STRING
 		{
 			if (client_dialect < SQL_DIALECT_V6_TRANSITION)
@@ -7837,12 +7837,18 @@ error_context
 %type <intlStringPtr> sql_string
 sql_string
 	: STRING					// string in current charset
-	| INTRODUCER STRING			// string in specific charset
+	| INTRODUCER
+			[
+				// feedback for lexer
+				introducerCharSetName = $1;
+			]
+		 STRING			// string in specific charset
+			[ introducerCharSetName = nullptr; ]
 		{
-			$$ = $2;
+			$$ = $3;
 			$$->setCharSet(*$1);
 
-			StrMark* mark = strMarks.get($2);
+			StrMark* mark = strMarks.get($3);
 
 			if (mark)	// hex string is not in strMarks
 				mark->introduced = true;
@@ -8179,7 +8185,7 @@ window_frame_exclusion_opt
 
 %type <valueExprNode> delimiter_opt
 delimiter_opt
-	: /* nothing */		{ $$ = MAKE_str_constant(newIntlString(","), lex.att_charset); }
+	: /* nothing */		{ $$ = MAKE_str_constant(newIntlString(","), lex.charSetId); }
 	| ',' value			{ $$ = $2; }
 	;
 

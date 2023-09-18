@@ -99,7 +99,7 @@ private:
 		const TEXT* line_start;
 		const TEXT* last_token_bk;
 		const TEXT* line_start_bk;
-		SSHORT att_charset;
+		SSHORT charSetId;
 		SLONG lines, lines_bk;
 		int prev_keyword;
 		USHORT param_number;
@@ -131,7 +131,7 @@ public:
 
 public:
 	Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
-		USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length, SSHORT characterSet);
+		USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length, SSHORT charSetId);
 	~Parser();
 
 public:
@@ -375,12 +375,16 @@ private:
 	USHORT client_dialect;
 	USHORT db_dialect;
 	USHORT parser_version;
+	CharSet* charSet;
 
 	CharSet* metadataCharSet;
 	Firebird::string transformedString;
 	Firebird::GenericMap<Firebird::NonPooled<IntlString*, StrMark> > strMarks;
 	bool stmt_ambiguous;
 	DsqlStatement* parsedStatement;
+
+	// Parser feedback for lexer
+	MetaName* introducerCharSetName = nullptr;
 
 	// These value/posn are taken from the lexer
 	YYSTYPE yylval;
