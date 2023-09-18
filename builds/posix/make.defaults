@@ -420,7 +420,7 @@ FBGUARD		= $(BIN)/fbguard$(EXEC_EXT)
 INSTREG		= $(BIN)/instreg$(EXEC_EXT)
 INSTSVC		= $(BIN)/instsvc$(EXEC_EXT)
 
-SECURITY_FDB	= $(FIREBIRD)/security5.fdb
+SECURITY_FDB	= $(FIREBIRD)/security6.fdb
 
 # From isql
 ISQL            = $(BIN)/isql$(EXEC_EXT)

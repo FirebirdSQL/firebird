@@ -25,6 +25,7 @@
  */
 
 #include "../interfaces/ifaceExamples.h"
+#include <atomic>
 
 using namespace Firebird;
 
@@ -121,7 +122,7 @@ private:
 	char savedKeyName[32];
 	ISC_UCHAR key;
 
-	FbSampleAtomic refCounter;
+	std::atomic_int refCounter;
 	IReferenceCounted* owner;
 
 	void noKeyError(CheckStatusWrapper* status);

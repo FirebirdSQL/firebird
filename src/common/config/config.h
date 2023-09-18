@@ -192,6 +192,7 @@ enum ConfigKey
 	KEY_MAX_STATEMENT_CACHE_SIZE,
 	KEY_PARALLEL_WORKERS,
 	KEY_MAX_PARALLEL_WORKERS,
+	KEY_OPTIMIZE_FOR_FIRST_ROWS,
 	MAX_CONFIG_KEY		// keep it last
 };
 
@@ -310,7 +311,8 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_STRING,	"TempTableDirectory",		false,	""},
 	{TYPE_INTEGER,	"MaxStatementCacheSize",	false,	2 * 1048576},	// bytes
 	{TYPE_INTEGER,	"ParallelWorkers",			true,	1},
-	{TYPE_INTEGER,	"MaxParallelWorkers",		true,	1}
+	{TYPE_INTEGER,	"MaxParallelWorkers",		true,	1},
+	{TYPE_BOOLEAN,	"OptimizeForFirstRows",		false,	false}
 };
 
 
@@ -638,6 +640,8 @@ public:
 	CONFIG_GET_GLOBAL_INT(getParallelWorkers, KEY_PARALLEL_WORKERS);
 
 	CONFIG_GET_GLOBAL_INT(getMaxParallelWorkers, KEY_MAX_PARALLEL_WORKERS);
+
+	CONFIG_GET_PER_DB_BOOL(getOptimizeForFirstRows, KEY_OPTIMIZE_FOR_FIRST_ROWS);
 };
 
 // Implementation of interface to access master configuration file

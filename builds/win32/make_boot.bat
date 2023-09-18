@@ -112,8 +112,8 @@ for %%v in (firebird plugins) do (
 	if "!ERRLEV!"=="1" goto :END
 
 	:: copy security db if not exists already
-	if not exist %FB_BIN_DIR%\security5.fdb (
-		copy %FB_GEN_DIR%\dbs\security5.fdb %FB_BIN_DIR%
+	if not exist %FB_BIN_DIR%\security6.fdb (
+		copy %FB_GEN_DIR%\dbs\security6.fdb %FB_BIN_DIR%
 	)
 
 	::=======
@@ -270,17 +270,17 @@ goto :EOF
 @rmdir /s /q %FB_GEN_DIR%\dbs 2>nul
 @mkdir %FB_GEN_DIR%\dbs 2>nul
 
-@echo Create security5.fdb...
-@echo create database '%FB_GEN_DB_DIR%\dbs\security5.fdb'; | "%FB_BIN_DIR%\isql" -q > nul
+@echo Create security6.fdb...
+@echo create database '%FB_GEN_DB_DIR%\dbs\security6.fdb'; | "%FB_BIN_DIR%\isql" -q > nul
 if errorlevel 1 call :boot2 databases & goto :EOF
 
 @echo Apply security.sql...
-@"%FB_BIN_DIR%\isql" -q %FB_GEN_DB_DIR%/dbs/security5.fdb -i %FB_ROOT_PATH%\src\dbs\security.sql > nul
+@"%FB_BIN_DIR%\isql" -q %FB_GEN_DB_DIR%/dbs/security6.fdb -i %FB_ROOT_PATH%\src\dbs\security.sql > nul
 if errorlevel 1 call :boot2 databases & goto :EOF
 
-@mklink %FB_GEN_DIR%\dbs\security.fdb %FB_GEN_DIR%\dbs\security5.fdb > nul
+@mklink %FB_GEN_DIR%\dbs\security.fdb %FB_GEN_DIR%\dbs\security6.fdb > nul
 if errorlevel 1 (
-  @copy %FB_GEN_DIR%\dbs\security5.fdb %FB_GEN_DIR%\dbs\security.fdb > nul
+  @copy %FB_GEN_DIR%\dbs\security6.fdb %FB_GEN_DIR%\dbs\security.fdb > nul
 )
 if errorlevel 1 call :boot2 databases & goto :EOF
 

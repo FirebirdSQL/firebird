@@ -578,14 +578,22 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 
 // Compile a record selection expression, bumping up the statement scope level everytime an rse is
 // seen. The scope level controls parsing of aliases.
-RseNode* PASS1_rse(DsqlCompilerScratch* dsqlScratch, SelectExprNode* input, bool updateLock, bool skipLocked)
+RseNode* PASS1_rse(DsqlCompilerScratch* dsqlScratch,
+				   SelectExprNode* input,
+				   const SelectNode* select)
 {
 	DEV_BLKCHK(dsqlScratch, dsql_type_req);
 	DEV_BLKCHK(input, dsql_type_nod);
 
+	const bool updateLock = select ? select->dsqlWithLock : false;
+	const bool skipLocked = select ? select->dsqlSkipLocked : false;
+
 	dsqlScratch->scopeLevel++;
 	RseNode* node = pass1_rse(dsqlScratch, input, NULL, NULL, updateLock, skipLocked, 0);
 	dsqlScratch->scopeLevel--;
+
+	if (select)
+		node->firstRows = select->dsqlOptimizeForFirstRows;
 
 	return node;
 }
@@ -975,7 +983,7 @@ void PASS1_expand_contexts(DsqlContextStack& contexts, dsql_ctx* context)
 
 // Process derived table which is part of a from clause.
 RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* input,
-	const char* cte_alias, bool updateLock, bool skipLocked)
+	const char* cte_alias, const SelectNode* select)
 {
 	DEV_BLKCHK(dsqlScratch, dsql_type_req);
 
@@ -1076,7 +1084,7 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 			rse = pass1_union(dsqlScratch, unionExpr, NULL, NULL, false, false, 0);
 		}
 		else
-			rse = PASS1_rse(dsqlScratch, input, updateLock, skipLocked);
+			rse = PASS1_rse(dsqlScratch, input, select);
 
 		// Finish off by cleaning up contexts and put them into derivedContext
 		// so create view (ddl) can deal with it.
@@ -1237,7 +1245,7 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 			dsqlScratch->currCteAlias ? *dsqlScratch->currCteAlias : NULL;
 		dsqlScratch->resetCTEAlias(alias);
 
-		rse = PASS1_rse(dsqlScratch, input, updateLock, skipLocked);
+		rse = PASS1_rse(dsqlScratch, input, select);
 
 		if (saveCteAlias)
 			dsqlScratch->resetCTEAlias(*saveCteAlias);

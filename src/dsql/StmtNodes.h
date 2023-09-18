@@ -1344,6 +1344,7 @@ public:
 	bool dsqlForUpdate = false;
 	bool dsqlWithLock = false;
 	bool dsqlSkipLocked = false;
+	TriState dsqlOptimizeForFirstRows;
 };
 
 
@@ -1837,6 +1838,37 @@ public:
 public:
 	dsql_fld* from;
 	dsql_fld* to;
+};
+
+
+class SetOptimizeNode : public SessionManagementNode
+{
+public:
+	explicit SetOptimizeNode(MemoryPool& pool)
+		: SessionManagementNode(pool)
+	{
+	}
+
+	SetOptimizeNode(MemoryPool& pool, bool mode)
+		: SessionManagementNode(pool),
+		  optimizeMode(mode)
+	{
+	}
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	{
+		SessionManagementNode::internalPrint(printer);
+
+		NODE_PRINT(printer, optimizeMode);
+
+		return "SetOptimizeNode";
+	}
+
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
+
+public:
+	TriState optimizeMode;
 };
 
 

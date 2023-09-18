@@ -272,8 +272,6 @@ private:
 
 	DsqlRequest* const m_stmt;
 	Firebird::PerformanceInfo* const m_perf;
-	Firebird::string m_plan;
-	bool m_planExplained = false;
 	DSQLParamsImpl m_inputs;
 	Firebird::string m_textUTF8;
 };

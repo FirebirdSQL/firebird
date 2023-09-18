@@ -409,7 +409,19 @@ public:
 
 	static RecordSource* compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse)
 	{
-		return Optimizer(tdbb, csb, rse).compile(nullptr);
+		bool firstRows = false;
+
+		// System requests should not be affected by user-specified settings
+		if (!(csb->csb_g_flags & csb_internal))
+		{
+			const auto dbb = tdbb->getDatabase();
+			const auto defaultFirstRows = dbb->dbb_config->getOptimizeForFirstRows();
+
+			const auto attachment = tdbb->getAttachment();
+			firstRows = attachment->att_opt_first_rows.orElse(defaultFirstRows);
+		}
+
+		return Optimizer(tdbb, csb, rse, firstRows).compile(nullptr);
 	}
 
 	~Optimizer();
@@ -455,7 +467,7 @@ public:
 
 	bool favorFirstRows() const
 	{
-		return (rse->flags & RseNode::FLAG_OPT_FIRST_ROWS) != 0;
+		return firstRows;
 	}
 
 	RecordSource* applyLocalBoolean(RecordSource* rsb,
@@ -471,7 +483,7 @@ public:
 	void printf(const char* format, ...);
 
 private:
-	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse);
+	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, bool parentFirstRows);
 
 	RecordSource* compile(BoolExprNodeStack* parentStack);
 
@@ -504,6 +516,8 @@ private:
 	thread_db* const tdbb;
 	CompilerScratch* const csb;
 	RseNode* const rse;
+
+	bool firstRows = false;					// optimize for first rows
 
 	FILE* debugFile = nullptr;
 	unsigned baseConjuncts = 0;				// number of conjuncts in our rse, next conjuncts are distributed parent

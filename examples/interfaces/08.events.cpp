@@ -26,6 +26,7 @@
  */
 
 #include "ifaceExamples.h"
+#include <atomic>
 
 #ifndef WIN32
 #include <unistd.h>
@@ -115,7 +116,7 @@ namespace
 			status.dispose();
 		}
 
-		FbSampleAtomic refCounter;
+		std::atomic_int refCounter;
 		IAttachment* attachment;
 		volatile int counter;
 		ThrowStatusWrapper status;

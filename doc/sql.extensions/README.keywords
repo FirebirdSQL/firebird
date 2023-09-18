@@ -376,3 +376,16 @@ Firebird 4.0
     TOTALORDER *
     TRAPS *
     ZONE
+
+Firebird 5.0
+------------
+
+  Added as non-reserved words:
+
+    LOCKED
+	OPTIMIZE
+	QUARTER
+	TARGET
+	TIMEZONE_NAME
+	UNICODE_CHAR
+	UNICODE_VAL

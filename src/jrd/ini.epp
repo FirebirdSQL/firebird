@@ -207,6 +207,22 @@ namespace
 		{ 0, 0, 0, 0 }
 	};
 
+	unsigned getLatestFormat(thread_db* tdbb, int relId, int maxFieldId)
+	{
+		const auto relation = MET_relation(tdbb, relId);
+		fb_assert(relation && relation->rel_formats);
+		fb_assert(relation->rel_formats->count());
+
+		const auto formatNumber = relation->rel_formats->count() - 1;
+		fb_assert(formatNumber < MAX_TABLE_VERSIONS);
+
+		const auto format = (*relation->rel_formats)[formatNumber];
+		fb_assert(format->fmt_count == maxFieldId);
+		fb_assert(format->fmt_version == formatNumber);
+
+		return formatNumber;
+	}
+
 	bool getCharsetByTextType(SSHORT& charSet, const USHORT subType)
 	{
 		switch (subType)
@@ -1003,6 +1019,7 @@ void INI_init(thread_db* tdbb)
 		relation->rel_formats = vec<Format*>::newVector(*pool, 1);
 
 		const auto majorVersion = ODS_VERSION;
+		const auto dbMinorVersion = dbb->dbb_ods_version ? dbb->dbb_minor_version : ODS_CURRENT;
 		// We need only the latest format for virtual tables
 		auto minorVersion = isPersistent ? ODS_RELEASED : ODS_CURRENT;
 		unsigned formatNumber = 0, currentFormat = 0;
@@ -1032,9 +1049,6 @@ void INI_init(thread_db* tdbb)
 			const auto format = Format::newFormat(*pool, fieldCount);
 			format->fmt_version = formatNumber;
 			format->fmt_length = FLAG_BYTES(format->fmt_count);
-
-			if (minorVersion == dbb->dbb_minor_version)
-				currentFormat = formatNumber;
 
 			relation->rel_formats->resize(formatNumber + 1);
 			(*relation->rel_formats)[formatNumber] = format;
@@ -1072,6 +1086,9 @@ void INI_init(thread_db* tdbb)
 				desc->dsc_address = (UCHAR*)(IPTR) format->fmt_length;
 				format->fmt_length += desc->dsc_length;
 			}
+
+			if (minorVersion == dbMinorVersion)
+				currentFormat = formatNumber;
 
 			minorVersion++;
 			formatNumber++;
@@ -1320,17 +1337,12 @@ void INI_upgrade(thread_db* tdbb)
 			{
 				// New format number is the latest we're aware of
 
-				const auto relation = MET_relation(tdbb, relId);
-				fb_assert(relation->rel_formats->count());
-				const unsigned formatNumber = relation->rel_formats->count() - 1;
-				fb_assert(formatNumber < MAX_TABLE_VERSIONS);
-
 				FOR(REQUEST_HANDLE handle3 TRANSACTION_HANDLE transaction)
 					REL IN RDB$RELATIONS
 					WITH REL.RDB$RELATION_ID = relId
 				{
 					MODIFY REL USING
-						REL.RDB$FORMAT = formatNumber;
+						REL.RDB$FORMAT = getLatestFormat(tdbb, relId, fieldId);
 					END_MODIFY
 				}
 				END_FOR
@@ -1966,21 +1978,6 @@ static void store_relation(thread_db* tdbb,
 	MetaName securityClass, defaultClass;
 	security.storeSecurityClass(tdbb, securityClass, defaultClass);
 
-	// Find the format matching the number of stored fields
-	// and pass it to RDB$RELATIONS
-
-	USHORT formatNumber = 0;
-	const auto relation = MET_relation(tdbb, relId);
-	fb_assert(relation && relation->rel_formats);
-	for (const auto format : *relation->rel_formats)
-	{
-		if (format->fmt_count == fieldId)
-		{
-			formatNumber = format->fmt_version;
-			break;
-		}
-	}
-
 	STORE(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
 		X IN RDB$RELATIONS
 	{
@@ -2000,7 +1997,7 @@ static void store_relation(thread_db* tdbb,
 		X.RDB$DEFAULT_CLASS.NULL = FALSE;
 
 		X.RDB$FIELD_ID = fieldId;
-		X.RDB$FORMAT = formatNumber;
+		X.RDB$FORMAT = getLatestFormat(tdbb, relId, fieldId);
 		X.RDB$SYSTEM_FLAG = RDB_system;
 		X.RDB$DBKEY_LENGTH = 8;
 	}

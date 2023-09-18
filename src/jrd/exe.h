@@ -81,6 +81,7 @@ class Cursor;
 class DeclareSubFuncNode;
 class DeclareSubProcNode;
 class DeclareVariableNode;
+class ItemInfo;
 class MessageNode;
 class PlanNode;
 class RecordSource;
@@ -357,6 +358,8 @@ struct Item
 
 		return type > x.type;
 	}
+
+	Firebird::string getDescription(Request* request, const ItemInfo* itemInfo) const;
 };
 
 struct FieldInfo

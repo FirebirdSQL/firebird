@@ -181,8 +181,15 @@ public:
 	void putDtype(const TypeClause* field, bool useSubType);
 	void putType(const TypeClause* type, bool useSubType);
 	void putLocalVariables(CompoundStmtNode* parameters, USHORT locals);
-	void putLocalVariable(dsql_var* variable, const DeclareVariableNode* hostParam,
-		const MetaName& collationName);
+	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, const MetaName& collationName);
+	void putLocalVariableInit(dsql_var* variable, const DeclareVariableNode* hostParam);
+
+	void putLocalVariable(dsql_var* variable, DeclareVariableNode* hostParam, const MetaName& collationName)
+	{
+		putLocalVariableDecl(variable, hostParam, collationName);
+		putLocalVariableInit(variable, hostParam);
+	}
+
 	void putOuterMaps();
 	dsql_var* makeVariable(dsql_fld*, const char*, const dsql_var::Type type, USHORT,
 		USHORT, USHORT);

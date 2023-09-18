@@ -562,9 +562,10 @@ namespace
 // Constructor
 //
 
-Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse)
+Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, bool parentFirstRows)
 	: PermanentStorage(*aTdbb->getDefaultPool()),
 	  tdbb(aTdbb), csb(aCsb), rse(aRse),
+	  firstRows(rse->firstRows.orElse(parentFirstRows)),
 	  compileStreams(getPool()),
 	  bedStreams(getPool()),
 	  keyStreams(getPool()),
@@ -572,6 +573,24 @@ Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse)
 	  outerStreams(getPool()),
 	  conjuncts(getPool())
 {
+    // Ignore optimization for first rows in impossible cases
+	if (firstRows)
+	{
+		// Projection is currently always performed using an external sort,
+		// so all underlying records will be fetched anyway
+		if (rse->rse_projection)
+			firstRows = false;
+		// Aggregation without GROUP BY will also cause all records to be fetched.
+		// Exception is when MIN/MAX functions could be mapped to an index,
+		// but this is handled separately inside AggregateSourceNode::compile().
+		else if (rse->rse_relations.getCount() == 1)
+		{
+			const auto subRse = rse->rse_relations[0];
+			const auto aggregate = nodeAs<AggregateSourceNode>(subRse);
+			if (aggregate && !aggregate->group)
+				firstRows = false;
+		}
+	}
 }
 
 
@@ -599,7 +618,7 @@ Optimizer::~Optimizer()
 
 RecordSource* Optimizer::compile(RseNode* subRse, BoolExprNodeStack* parentStack)
 {
-	Optimizer subOpt(tdbb, csb, subRse);
+	Optimizer subOpt(tdbb, csb, subRse, firstRows);
 	const auto rsb = subOpt.compile(parentStack);
 
 	if (parentStack && subOpt.isInnerJoin())

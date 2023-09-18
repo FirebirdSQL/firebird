@@ -289,26 +289,24 @@ void DsqlCompilerScratch::putLocalVariables(CompoundStmtNode* parameters, USHORT
 	if (!parameters)
 		return;
 
-	NestConst<StmtNode>* ptr = parameters->statements.begin();
+	Array<dsql_var*> declaredVariables;
 
-	for (const NestConst<StmtNode>* const end = parameters->statements.end(); ptr != end; ++ptr)
+	const auto end = parameters->statements.end();
+
+	for (auto ptr = parameters->statements.begin(); ptr != end; ++ptr)
 	{
-		StmtNode* parameter = *ptr;
+		auto parameter = *ptr;
 
 		putDebugSrcInfo(parameter->line, parameter->column);
 
-		DeclareVariableNode* varNode;
-
-		if ((varNode = nodeAs<DeclareVariableNode>(parameter)))
+		if (const auto varNode = nodeAs<DeclareVariableNode>(parameter))
 		{
 			dsql_fld* field = varNode->dsqlDef->type;
 			const NestConst<StmtNode>* rest = ptr;
 
 			while (++rest != end)
 			{
-				const DeclareVariableNode* varNode2;
-
-				if ((varNode2 = nodeAs<DeclareVariableNode>(*rest)))
+				if (const auto varNode2 = nodeAs<DeclareVariableNode>(*rest))
 				{
 					const dsql_fld* rest_field = varNode2->dsqlDef->type;
 
@@ -320,10 +318,10 @@ void DsqlCompilerScratch::putLocalVariables(CompoundStmtNode* parameters, USHORT
 				}
 			}
 
-			dsql_var* variable = makeVariable(field, field->fld_name.c_str(), dsql_var::TYPE_LOCAL,
-				0, 0, locals);
+			const auto variable = makeVariable(field, field->fld_name.c_str(), dsql_var::TYPE_LOCAL, 0, 0, locals);
+			declaredVariables.add(variable);
 
-			putLocalVariable(variable, varNode, varNode->dsqlDef->type->collate);
+			putLocalVariableDecl(variable, varNode, varNode->dsqlDef->type->collate);
 
 			// Some field attributes are calculated inside putLocalVariable(), so we reinitialize
 			// the descriptor.
@@ -340,6 +338,14 @@ void DsqlCompilerScratch::putLocalVariables(CompoundStmtNode* parameters, USHORT
 		}
 		else
 			fb_assert(false);
+	}
+
+	auto declVarIt = declaredVariables.begin();
+
+	for (const auto parameter : parameters->statements)
+	{
+		if (const auto varNode = nodeAs<DeclareVariableNode>(parameter))
+			putLocalVariableInit(*declVarIt++, varNode);
 	}
 
 	if (!(flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE))
@@ -369,22 +375,38 @@ void DsqlCompilerScratch::putLocalVariables(CompoundStmtNode* parameters, USHORT
 }
 
 // Write out local variable field data type.
-void DsqlCompilerScratch::putLocalVariable(dsql_var* variable, const DeclareVariableNode* hostParam,
+void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam,
 	const MetaName& collationName)
 {
-	dsql_fld* field = variable->field;
+	const auto field = variable->field;
 
 	appendUChar(blr_dcl_variable);
 	appendUShort(variable->number);
 	DDL_resolve_intl_type(this, field, collationName);
 
-	//const USHORT dtype = field->dtype;
-
 	putDtype(field, true);
-	//field->dtype = dtype;
+
+	if (variable->field->fld_name.hasData())	// Not a function return value
+		putDebugVariable(variable->number, variable->field->fld_name);
+
+	++hiddenVarsNumber;
+
+	if (variable->type != dsql_var::TYPE_INPUT && hostParam && hostParam->dsqlDef->defaultClause)
+	{
+		hostParam->dsqlDef->defaultClause->value =
+			Node::doDsqlPass(this, hostParam->dsqlDef->defaultClause->value, true);
+	}
+
+	variable->initialized = true;
+}
+
+// Write out local variable initialization.
+void DsqlCompilerScratch::putLocalVariableInit(dsql_var* variable, const DeclareVariableNode* hostParam)
+{
+	const dsql_fld* field = variable->field;
 
 	// Check for a default value, borrowed from define_domain
-	NestConst<ValueSourceClause> node = hostParam ? hostParam->dsqlDef->defaultClause : NULL;
+	NestConst<ValueSourceClause> node = hostParam ? hostParam->dsqlDef->defaultClause : nullptr;
 
 	if (variable->type == dsql_var::TYPE_INPUT)
 	{
@@ -405,7 +427,7 @@ void DsqlCompilerScratch::putLocalVariable(dsql_var* variable, const DeclareVari
 		appendUChar(blr_assignment);
 
 		if (node)
-			GEN_expr(this, Node::doDsqlPass(this, node->value, false));
+			GEN_expr(this, node->value);
 		else
 			appendUChar(blr_null);	// Initialize variable to NULL
 
@@ -417,11 +439,6 @@ void DsqlCompilerScratch::putLocalVariable(dsql_var* variable, const DeclareVari
 		appendUChar(blr_init_variable);
 		appendUShort(variable->number);
 	}
-
-	if (variable->field->fld_name.hasData())	// Not a function return value
-		putDebugVariable(variable->number, variable->field->fld_name);
-
-	++hiddenVarsNumber;
 }
 
 // Put maps in subroutines for outer variables/parameters usage.

@@ -968,3 +968,4 @@ FB_IMPL_MSG(JRD, 965, ods_upgrade_err, -901, "HY", "000", "ODS upgrade failed wh
 FB_IMPL_MSG(JRD, 966, bad_par_workers, -924, "HY", "000", "Wrong parallel workers value @1, valid range are from 1 to @2")
 FB_IMPL_MSG(JRD, 967, idx_expr_not_found, -902, "42", "000", "Definition of index expression is not found for index @1")
 FB_IMPL_MSG(JRD, 968, idx_cond_not_found, -902, "42", "000", "Definition of index condition is not found for index @1")
+FB_IMPL_MSG(JRD, 969, uninitialized_var, -625, "42", "000", "Variable @1 is not initialized")

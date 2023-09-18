@@ -386,21 +386,17 @@ public:
 
 public:
 	explicit dsql_var(MemoryPool& p)
-		: PermanentStorage(p),
-		  field(NULL),
-		  type(TYPE_INPUT),
-		  msgNumber(0),
-		  msgItem(0),
-		  number(0)
+		: PermanentStorage(p)
 	{
 		desc.clear();
 	}
 
-	dsql_fld* field;	// Field on which variable is based
-	Type type;			// Input, output, local or hidden variable
-	USHORT msgNumber;	// Message number containing variable
-	USHORT msgItem;		// Item number in message
-	USHORT number;		// Local variable number
+	dsql_fld* field = nullptr;	// Field on which variable is based
+	Type type = TYPE_INPUT;		// Input, output, local or hidden variable
+	USHORT msgNumber = 0;		// Message number containing variable
+	USHORT msgItem = 0;			// Item number in message
+	USHORT number = 0;			// Local variable number
+	bool initialized = false;	// Is variable initialized?
 	dsc desc;
 };
 

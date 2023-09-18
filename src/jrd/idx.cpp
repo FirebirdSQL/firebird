@@ -554,7 +554,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 
 	// Checkout a garbage collect record block for fetching data.
 
-	AutoGCRecord gc_record(VIO_gc_record(tdbb, relation));
+	AutoTempRecord gc_record(VIO_gc_record(tdbb, relation));
 
 	if (m_flags & IS_LARGE_SCAN)
 	{

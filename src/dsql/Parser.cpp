@@ -27,7 +27,7 @@
 #include "../dsql/chars.h"
 #include "../jrd/jrd.h"
 #include "../jrd/DataTypeUtil.h"
-#include "../common/keywords.h"
+#include "../dsql/metd_proto.h"
 #include "../jrd/intl_proto.h"
 
 #ifdef HAVE_FLOAT_H
@@ -40,66 +40,8 @@ using namespace Firebird;
 using namespace Jrd;
 
 
-namespace Jrd
-{
-	struct Keyword
-	{
-		Keyword(int aKeyword, MetaName* aStr)
-			: keyword(aKeyword), str(aStr)
-		{}
-
-		int keyword;
-		MetaName* str;
-	};
-
-	class KeywordsMap : public GenericMap<Pair<Left<MetaName, Keyword> > >
-	{
-	public:
-		explicit KeywordsMap(MemoryPool& pool)
-			: GenericMap<Pair<Left<MetaName, Keyword> > >(pool)
-		{
-			for (const TOK* token = keywordGetTokens(); token->tok_string; ++token)
-			{
-				MetaName* str = FB_NEW_POOL(pool) MetaName(token->tok_string);
-				put(*str, Keyword(token->tok_ident, str));
-			}
-		}
-
-		~KeywordsMap()
-		{
-			Accessor accessor(this);
-			for (bool found = accessor.getFirst(); found; found = accessor.getNext())
-				delete accessor.current()->second.str;
-		}
-	};
-
-	KeywordsMap* KeywordsMapAllocator::create()
-	{
-		thread_db* tdbb = JRD_get_thread_data();
-		fb_assert(tdbb);
-		Database* dbb = tdbb->getDatabase();
-		fb_assert(dbb);
-
-		return FB_NEW_POOL(*dbb->dbb_permanent) KeywordsMap(*dbb->dbb_permanent);
-	}
-
-	void KeywordsMapAllocator::destroy(KeywordsMap* inst)
-	{
-		delete inst;
-	}
-}
-
-namespace
-{
-	const Keyword* getKeyword(Database* dbb, const MetaName& str)
-	{
-		return dbb->dbb_keywords_map().get(str);
-	}
-}
-
-
 Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
-			USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length, SSHORT characterSet)
+			USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length, SSHORT charSetId)
 	: PermanentStorage(pool),
 	  statementPool(aStatementPool),
 	  scratch(aScratch),
@@ -109,6 +51,8 @@ Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, Ds
 	  strMarks(pool),
 	  stmt_ambiguous(false)
 {
+	charSet = INTL_charset_lookup(tdbb, charSetId);
+
 	yyps = 0;
 	yypath = 0;
 	yylvals = 0;
@@ -135,7 +79,7 @@ Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, Ds
 	lex.line_start = lex.last_token = lex.ptr = lex.leadingPtr = string;
 	lex.end = string + length;
 	lex.lines = 1;
-	lex.att_charset = characterSet;
+	lex.charSetId = charSetId;
 	lex.line_start_bk = lex.line_start;
 	lex.lines_bk = lex.lines;
 	lex.param_number = 1;
@@ -774,31 +718,66 @@ int Parser::yylexAux()
 
 	if ((c == 'q' || c == 'Q') && lex.ptr + 3 < lex.end && *lex.ptr == '\'')
 	{
+		auto currentCharSet = charSet;
+
+		if (introducerCharSetName)
+		{
+			const auto symbol = METD_get_charset(scratch->getTransaction(),
+				introducerCharSetName->length(), introducerCharSetName->c_str());
+
+			if (!symbol)
+			{
+				// character set name is not defined
+				ERRD_post(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
+					Arg::Gds(isc_charset_not_found) << *introducerCharSetName);
+			}
+
+			currentCharSet = INTL_charset_lookup(tdbb, symbol->intlsym_ttype);
+		}
+
 		StrMark mark;
 		mark.pos = lex.last_token - lex.start;
 
-		char endChar = *++lex.ptr;
-		switch (endChar)
+		const auto* endChar = ++lex.ptr;
+		ULONG endCharSize = 0;
+
+		if (!IntlUtil::readOneChar(currentCharSet, reinterpret_cast<const UCHAR**>(&lex.ptr),
+				reinterpret_cast<const UCHAR*>(lex.end), &endCharSize))
 		{
-			case '{':
-				endChar = '}';
-				break;
-			case '(':
-				endChar = ')';
-				break;
-			case '[':
-				endChar = ']';
-				break;
-			case '<':
-				endChar = '>';
-				break;
+			endCharSize = 1;
 		}
 
-		while (++lex.ptr + 1 < lex.end)
+		if (endCharSize == 1)
 		{
-			if (*lex.ptr == endChar && lex.ptr[1] == '\'')
+			switch (*endChar)
 			{
-				size_t len = ++lex.ptr - lex.last_token - 4;
+				case '{':
+					endChar = "}";
+					break;
+				case '(':
+					endChar = ")";
+					break;
+				case '[':
+					endChar = "]";
+					break;
+				case '<':
+					endChar = ">";
+					break;
+			}
+		}
+
+		const auto start = lex.ptr + endCharSize;
+		ULONG charSize = endCharSize;
+
+		while (IntlUtil::readOneChar(currentCharSet, reinterpret_cast<const UCHAR**>(&lex.ptr),
+					reinterpret_cast<const UCHAR*>(lex.end), &charSize))
+		{
+			if (charSize == endCharSize &&
+				memcmp(lex.ptr, endChar, endCharSize) == 0 &&
+				lex.ptr[endCharSize] == '\'')
+			{
+				size_t len = lex.ptr - start;
 
 				if (len > MAX_STR_SIZE)
 				{
@@ -808,9 +787,9 @@ int Parser::yylexAux()
 							  Arg::Num(MAX_STR_SIZE));
 				}
 
-				yylval.intlStringPtr = newIntlString(Firebird::string(lex.last_token + 3, len));
+				yylval.intlStringPtr = newIntlString(Firebird::string(start, len));
 
-				++lex.ptr;
+				lex.ptr += endCharSize + 1;
 
 				mark.length = lex.ptr - lex.last_token;
 				mark.str = yylval.intlStringPtr;
@@ -1267,9 +1246,9 @@ int Parser::yylexAux()
 			yyabandon(yyposn, -104, isc_dyn_name_longer);
 
 		const MetaName str(string, p - string);
-		const Keyword* const keyVer = getKeyword(dbb, str);
 
-		if (keyVer && (keyVer->keyword != TOK_COMMENT || lex.prev_keyword == -1))
+		if (const auto keyVer = dbb->dbb_keywords().get(str);
+			keyVer && (keyVer->keyword != TOK_COMMENT || lex.prev_keyword == -1))
 		{
 			yylval.metaNamePtr = keyVer->str;
 			lex.last_token_bk = lex.last_token;
@@ -1290,9 +1269,8 @@ int Parser::yylexAux()
 	if (lex.last_token + 1 < lex.end && !isspace(UCHAR(lex.last_token[1])))
 	{
 		const MetaName str(lex.last_token, 2);
-		const Keyword* const keyVer = getKeyword(dbb, str);
 
-		if (keyVer)
+		if (const auto keyVer = dbb->dbb_keywords().get(str))
 		{
 			++lex.ptr;
 			return keyVer->keyword;

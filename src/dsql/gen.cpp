@@ -605,6 +605,12 @@ void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 		gen_plan(dsqlScratch, rse->rse_plan);
 	}
 
+	if (rse->firstRows.isAssigned())
+	{
+		dsqlScratch->appendUChar(blr_optimize);
+		dsqlScratch->appendUChar(rse->firstRows.value);
+	}
+
 	dsqlScratch->appendUChar(blr_end);
 }
 

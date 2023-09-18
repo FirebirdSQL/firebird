@@ -689,11 +689,16 @@ using namespace Firebird;
 // tokens added for Firebird 5.0
 
 %token <metaNamePtr> LOCKED
+%token <metaNamePtr> OPTIMIZE
 %token <metaNamePtr> QUARTER
 %token <metaNamePtr> TARGET
 %token <metaNamePtr> TIMEZONE_NAME
 %token <metaNamePtr> UNICODE_CHAR
 %token <metaNamePtr> UNICODE_VAL
+
+// tokens added for Firebird 6.0
+
+%token <metaNamePtr> ANY_VALUE
 
 // precedence declarations for expression evaluation
 
@@ -918,6 +923,7 @@ mng_statement
 	| session_reset								{ $$ = $1; }
 	| set_time_zone								{ $$ = $1; }
 	| set_bind									{ $$ = $1; }
+	| set_optimize								{ $$ = $1; }
 	;
 
 
@@ -3152,11 +3158,31 @@ local_declaration_item
 
 %type <stmtNode> var_declaration_item
 var_declaration_item
-	: column_domain_or_non_array_type collate_clause default_par_opt
+	: column_domain_or_non_array_type collate_clause var_declaration_initializer
 		{
 			DeclareVariableNode* node = newNode<DeclareVariableNode>();
 			node->dsqlDef = newNode<ParameterClause>($1, optName($2), $3);
 			$$ = node;
+		}
+	;
+
+%type <valueSourceClause> var_declaration_initializer
+var_declaration_initializer
+	: // nothing
+		{ $$ = nullptr; }
+	| DEFAULT value
+		{
+			const auto clause = newNode<ValueSourceClause>();
+			clause->value = $2;
+			clause->source = makeParseStr(YYPOSNARG(1), YYPOSNARG(2));
+			$$ = clause;
+		}
+	| '=' value
+		{
+			const auto clause = newNode<ValueSourceClause>();
+			clause->value = $2;
+			clause->source = makeParseStr(YYPOSNARG(1), YYPOSNARG(2));
+			$$ = clause;
 		}
 	;
 
@@ -5483,6 +5509,14 @@ decfloat_trap($setDecFloatTrapsNode)
 		{ $setDecFloatTrapsNode->trap($1); }
 	;
 
+%type <mngNode> set_optimize
+set_optimize
+	: SET OPTIMIZE optimize_mode
+		{ $$ = newNode<SetOptimizeNode>($3); }
+	| SET OPTIMIZE TO DEFAULT
+		{ $$ = newNode<SetOptimizeNode>(); }
+	;
+
 %type <setSessionNode> session_statement
 session_statement
 	: SET SESSION IDLE TIMEOUT long_integer timepart_sesion_idle_tout
@@ -5766,13 +5800,14 @@ ddl_desc
 
 %type <selectNode> select
 select
-	: select_expr for_update_clause lock_clause
+	: select_expr for_update_clause lock_clause optimize_clause
 		{
 			SelectNode* node = newNode<SelectNode>();
 			node->dsqlExpr = $1;
 			node->dsqlForUpdate = $2;
 			node->dsqlWithLock = $3.first;
 			node->dsqlSkipLocked = $3.second;
+			node->dsqlOptimizeForFirstRows = $4;
 			$$ = node;
 		}
 	;
@@ -5799,6 +5834,22 @@ lock_clause
 skip_locked_clause_opt
 	: /* nothing */			{ $$ = false; }
 	| SKIP LOCKED			{ $$ = true; }
+	;
+
+%type <nullableBoolVal>	optimize_clause
+optimize_clause
+	: OPTIMIZE optimize_mode
+		{ $$ = Nullable<bool>::val($2); }
+	| // nothing
+		{ $$ = Nullable<bool>::empty(); }
+	;
+
+%type <boolVal> optimize_mode
+optimize_mode
+	: FOR FIRST ROWS
+		{ $$ = true; }
+	| FOR ALL ROWS
+		{ $$ = false; }
 	;
 
 
@@ -7722,7 +7773,7 @@ ul_numeric_constant
 u_constant
 	: u_numeric_constant
 	| sql_string
-		{ $$ = MAKE_str_constant($1, lex.att_charset); }
+		{ $$ = MAKE_str_constant($1, lex.charSetId); }
 	| DATE STRING
 		{
 			if (client_dialect < SQL_DIALECT_V6_TRANSITION)
@@ -7812,12 +7863,18 @@ error_context
 %type <intlStringPtr> sql_string
 sql_string
 	: STRING					// string in current charset
-	| INTRODUCER STRING			// string in specific charset
+	| INTRODUCER
+			[
+				// feedback for lexer
+				introducerCharSetName = $1;
+			]
+		 STRING			// string in specific charset
+			[ introducerCharSetName = nullptr; ]
 		{
-			$$ = $2;
+			$$ = $3;
 			$$->setCharSet(*$1);
 
-			StrMark* mark = strMarks.get($2);
+			StrMark* mark = strMarks.get($3);
 
 			if (mark)	// hex string is not in strMarks
 				mark->introduced = true;
@@ -7998,6 +8055,8 @@ aggregate_function_prefix
 		{ $$ = newNode<RegrAggNode>(RegrAggNode::TYPE_REGR_SXY, $3, $5); }
 	| REGR_SYY '(' value ',' value ')'
 		{ $$ = newNode<RegrAggNode>(RegrAggNode::TYPE_REGR_SYY, $3, $5); }
+	| ANY_VALUE '(' distinct_noise value ')'
+		{ $$ = newNode<AnyValueAggNode>($4); }
 	;
 
 %type <aggNode> window_function
@@ -8154,7 +8213,7 @@ window_frame_exclusion_opt
 
 %type <valueExprNode> delimiter_opt
 delimiter_opt
-	: /* nothing */		{ $$ = MAKE_str_constant(newIntlString(","), lex.att_charset); }
+	: /* nothing */		{ $$ = MAKE_str_constant(newIntlString(","), lex.charSetId); }
 	| ',' value			{ $$ = $2; }
 	;
 
@@ -9188,11 +9247,14 @@ non_reserved_word
 	| BLOB_APPEND
 	// added in FB 5.0
 	| LOCKED
+	| OPTIMIZE
 	| QUARTER
 	| TARGET
 	| TIMEZONE_NAME
 	| UNICODE_CHAR
 	| UNICODE_VAL
+	// added in FB 6.0
+	| ANY_VALUE
 	;
 
 %%

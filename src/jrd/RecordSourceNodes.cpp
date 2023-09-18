@@ -1645,7 +1645,7 @@ RecordSource* AggregateSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool
 		// 10-Aug-2004. Nickolay Samofatov - Unneeded nulls seem to be skipped somehow.
 		aggregate->nullOrder.add(NULLS_DEFAULT);
 
-		rse->flags |= RseNode::FLAG_OPT_FIRST_ROWS;
+		rse->firstRows = true;
 	}
 
 	RecordSource* const nextRsb = opt->compile(rse, &deliverStack);
@@ -3439,7 +3439,7 @@ string SelectExprNode::internalPrint(NodePrinter& printer) const
 RseNode* SelectExprNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	fb_assert(dsqlFlags & DFLAG_DERIVED);
-	return PASS1_derived_table(dsqlScratch, this, NULL, false, false);
+	return PASS1_derived_table(dsqlScratch, this, NULL);
 }
 
 
@@ -3508,7 +3508,7 @@ static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, Recor
 	dsqlScratch->currCtes.push(cte);
 
 	RseNode* derivedNode = PASS1_derived_table(dsqlScratch,
-		cte, (isRecursive ? relAlias.c_str() : NULL), false, false);
+		cte, (isRecursive ? relAlias.c_str() : NULL));
 
 	if (!isRecursive)
 		cte->alias = saveCteName;

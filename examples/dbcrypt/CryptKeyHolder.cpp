@@ -25,6 +25,7 @@
  */
 
 #include "../interfaces/ifaceExamples.h"
+#include <atomic>
 
 namespace
 {
@@ -189,7 +190,7 @@ private:
 	IPluginConfig* config;
 	ISC_UCHAR key;
 
-	FbSampleAtomic refCounter;
+	std::atomic_int refCounter;
 	IReferenceCounted* owner;
 
 	IConfigEntry* getEntry(CheckStatusWrapper* status, const char* entryName);

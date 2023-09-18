@@ -115,6 +115,44 @@
 using namespace Jrd;
 using namespace Firebird;
 
+// Item class implementation
+
+string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
+{
+	if (itemInfo && itemInfo->name.hasData())
+		return itemInfo->name.c_str();
+
+	int oneBasedIndex = index + 1;
+	string s;
+
+	if (type == Item::TYPE_VARIABLE)
+	{
+		const auto* const procedure = request->getStatement()->procedure;
+
+		if (procedure)
+		{
+			if (oneBasedIndex <= int(procedure->getOutputFields().getCount()))
+				s.printf("[output parameter number %d]", oneBasedIndex);
+			else
+			{
+				s.printf("[number %d]",
+					oneBasedIndex - int(procedure->getOutputFields().getCount()));
+			}
+		}
+		else
+			s.printf("[number %d]", oneBasedIndex);
+	}
+	else if (type == Item::TYPE_PARAMETER && subType == 0)
+		s.printf("[input parameter number %d]", (oneBasedIndex - 1) / 2 + 1);
+	else if (type == Item::TYPE_PARAMETER && subType == 1)
+		s.printf("[output parameter number %d]", oneBasedIndex);
+
+	if (s.isEmpty())
+		s = UNKNOWN_STRING_MARK;
+
+	return s;
+}
+
 // AffectedRows class implementation
 
 AffectedRows::AffectedRows()
@@ -327,8 +365,8 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 			toVar->varDecl->impureOffset)->vlu_flags;
 	}
 
-	if (impure_flags != NULL)
-		*impure_flags |= VLU_checked;
+	if (impure_flags)
+		*impure_flags |= VLU_initialized | VLU_checked;
 
 	// If the value is non-missing, move/convert it.  Otherwise fill the
 	// field with appropriate nulls.

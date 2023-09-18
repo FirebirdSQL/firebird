@@ -1346,7 +1346,7 @@ RseNode* PAR_rse(thread_db* tdbb, CompilerScratch* csb, SSHORT rse_op)
 			if (rse_op == blr_rs_stream)
 				PAR_syntax_error(csb, "RecordSelExpr stream clause");
 			rse->rse_first = PAR_parse_value(tdbb, csb);
-			rse->flags |= RseNode::FLAG_OPT_FIRST_ROWS;
+			rse->firstRows = true;
 			break;
 
 		case blr_skip:
@@ -1416,6 +1416,10 @@ RseNode* PAR_rse(thread_db* tdbb, CompilerScratch* csb, SSHORT rse_op)
 					false);
 			}
 			rse->flags |= RseNode::FLAG_SKIP_LOCKED;
+			break;
+
+		case blr_optimize:
+			rse->firstRows = (csb->csb_blr_reader.getByte() != 0);
 			break;
 
 		default:

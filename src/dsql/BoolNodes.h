@@ -166,7 +166,7 @@ public:
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
 	bool sameAs(const ExprNode* other, bool ignoreStreams) const override;
 	BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
-	void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process);
+	void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process) override;
 	bool execute(thread_db* tdbb, Request* request) const override;
 
 public:

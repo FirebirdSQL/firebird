@@ -1649,7 +1649,7 @@ AC_OUTPUT
 dnl Print out the build configuration (the most interesting thing)
 echo
 echo
-echo The Firebird5 package has been configured with the following options:
+echo The Firebird6 package has been configured with the following options:
 echo
 
 case $DEVEL_FLG in

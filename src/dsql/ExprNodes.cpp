@@ -11208,7 +11208,7 @@ ValueExprNode* SubQueryNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	const DsqlContextStack::iterator base(*dsqlScratch->context);
 
-	RseNode* rse = PASS1_rse(dsqlScratch, nodeAs<SelectExprNode>(dsqlRse), false, false);
+	RseNode* rse = PASS1_rse(dsqlScratch, nodeAs<SelectExprNode>(dsqlRse));
 
 	SubQueryNode* node = FB_NEW_POOL(dsqlScratch->getPool()) SubQueryNode(dsqlScratch->getPool(), blrOp, rse,
 		rse->dsqlSelectList->items[0], NullNode::instance());
@@ -13703,8 +13703,11 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		}
 	}
 
-	if (!node->dsqlVar)
+	if (!node->dsqlVar ||
+		(node->dsqlVar->type == dsql_var::TYPE_LOCAL && !node->dsqlVar->initialized && !dsqlScratch->mainScratch))
+	{
 		PASS1_field_unknown(NULL, dsqlName.c_str(), this);
+	}
 
 	return node;
 }
@@ -13843,6 +13846,15 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 {
 	const auto varRequest = getVarRequest(request);
 	const auto varImpure = varRequest->getImpure<impure_value>(varDecl->impureOffset);
+
+	if (!(varImpure->vlu_flags & VLU_initialized))
+	{
+		const Item item(Item::TYPE_VARIABLE, varId);
+
+		//// FIXME: Variable with simple type has no varInfo.
+		const auto s = item.getDescription(request, varInfo);
+		ERR_post(Arg::Gds(isc_uninitialized_var) << s);
+	}
 
 	request->req_flags &= ~req_null;
 
