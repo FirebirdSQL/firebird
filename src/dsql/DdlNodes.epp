@@ -1726,19 +1726,31 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 	AutoSavePoint savePoint(tdbb, transaction);
 	bool altered = false;
 
+	bool alterIndividualParameters = !(body || external);
+
 	// first pass
 	if (alter)
 	{
-		if (executeAlter(tdbb, dsqlScratch, transaction, false, true))
+		if (alterIndividualParameters)
 		{
-			altered = true;
+			if (executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, true))
+				altered = true;
+			else
+				status_exception::raise(Arg::Gds(isc_dyn_func_not_found) << Arg::Str(name));
 		}
 		else
 		{
-			if (create)	// create or alter
-				executeCreate(tdbb, dsqlScratch, transaction);
+			if (executeAlter(tdbb, dsqlScratch, transaction, false, true))
+			{
+				altered = true;
+			}
 			else
-				status_exception::raise(Arg::Gds(isc_dyn_func_not_found) << Arg::Str(name));
+			{
+				if (create)	// create or alter
+					executeCreate(tdbb, dsqlScratch, transaction);
+				else
+					status_exception::raise(Arg::Gds(isc_dyn_func_not_found) << Arg::Str(name));
+			}
 		}
 	}
 	else
@@ -1746,7 +1758,12 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 
 	compile(tdbb, dsqlScratch);
 
-	executeAlter(tdbb, dsqlScratch, transaction, true, false);	// second pass
+	// second pass
+	if (alterIndividualParameters)
+		executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, true, false);
+	else
+		executeAlter(tdbb, dsqlScratch, transaction, true, false);
+
 
 	if (package.isEmpty())
 	{
@@ -2060,6 +2077,43 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 	}
 
 	return modified;
+}
+
+bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction, bool secondPass, bool runTriggers)
+{
+	Attachment* const attachment = transaction->getAttachment();
+
+	bool modifed = false;
+
+	AutoCacheRequest requestHandle(tdbb, drq_m_prm_funcs2, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FUN IN RDB$FUNCTIONS
+		WITH FUN.RDB$FUNCTION_NAME EQ name.c_str() AND
+			 FUN.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '')
+	{
+		if (FUN.RDB$SYSTEM_FLAG)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_dyn_cannot_mod_sysfunc) << MetaName(FUN.RDB$FUNCTION_NAME));
+		}
+
+		if (!secondPass && runTriggers && package.isEmpty())
+		{
+			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+				DDL_TRIGGER_ALTER_FUNCTION, name, NULL);
+		}
+
+		MODIFY FUN
+			FUN.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
+			FUN.RDB$DETERMINISTIC_FLAG = deterministic ? TRUE : FALSE;
+
+			modifed = true;
+		END_MODIFY
+	}
+	END_FOR
+
+	return modifed;
 }
 
 void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,

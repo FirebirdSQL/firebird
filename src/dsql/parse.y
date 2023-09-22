@@ -2831,6 +2831,11 @@ function_clause
 	: psql_function_clause
 	| external_function_clause;
 
+%type <createAlterFunctionNode> change_opt_function_clause
+change_opt_function_clause
+	: change_deterministic_opt_function_clause
+	;
+
 %type <createAlterFunctionNode> psql_function_clause
 psql_function_clause
 	: function_clause_start sql_security_clause_opt AS local_declarations_opt full_proc_block
@@ -2859,7 +2864,7 @@ function_clause_start
 	: symbol_UDF_name
 			{ $$ = newNode<CreateAlterFunctionNode>(*$1); }
 		input_parameters(NOTRIAL(&$2->parameters))
-		RETURNS domain_or_non_array_type collate_clause deterministic_opt
+		RETURNS domain_or_non_array_type collate_clause deterministic_clause_opt
 			{
 				$$ = $2;
 				$$->returnType = newNode<ParameterClause>($5, optName($6));
@@ -2867,11 +2872,28 @@ function_clause_start
 			}
 	;
 
-%type <boolVal> deterministic_opt
-deterministic_opt
-	:					{ $$ = false; }
-	| NOT DETERMINISTIC	{ $$ = false; }
+%type <createAlterFunctionNode> change_deterministic_opt_function_clause
+change_deterministic_opt_function_clause
+	: symbol_UDF_name
+			{ $$ = newNode<CreateAlterFunctionNode>(*$1); }
+		deterministic_clause
+			{
+				$$ = $2;
+				$$->deterministic = $3;
+			}
+	;
+
+
+%type <boolVal> deterministic_clause
+deterministic_clause
+	: NOT DETERMINISTIC	{ $$ = false; }
 	| DETERMINISTIC		{ $$ = true; }
+	;
+
+%type <boolVal> deterministic_clause_opt
+deterministic_clause_opt
+	:						{ $$ = false; }
+	| deterministic_clause	{ $$ = $1; }
 	;
 
 %type <externalClause> external_clause
@@ -2898,6 +2920,12 @@ external_body_clause_opt
 %type <createAlterFunctionNode> alter_function_clause
 alter_function_clause
 	: function_clause
+		{
+			$$ = $1;
+			$$->alter = true;
+			$$->create = false;
+		}
+	| change_opt_function_clause
 		{
 			$$ = $1;
 			$$->alter = true;
@@ -3149,7 +3177,7 @@ local_declaration_subfunc_start
 				$$->dsqlBlock = newNode<ExecBlockNode>();
 			}
 		input_parameters(NOTRIAL(&$4->dsqlBlock->parameters))
-		RETURNS domain_or_non_array_type collate_clause deterministic_opt
+		RETURNS domain_or_non_array_type collate_clause deterministic_clause_opt
 			{
 				$$ = $4;
 				$$->dsqlBlock->returns.add(newNode<ParameterClause>($<legacyField>7, optName($8)));
