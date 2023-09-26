@@ -1468,90 +1468,72 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
 	if (!frontendTransaction())
 		return;
 
-	if (getCollation)
-	{
-		FOR FIRST 1 COL IN RDB$COLLATIONS CROSS
-			CST IN RDB$CHARACTER_SETS WITH
-			COL.RDB$CHARACTER_SET_ID EQ CST.RDB$CHARACTER_SET_ID AND
-			COL.RDB$COLLATION_ID EQ collation AND
-			CST.RDB$CHARACTER_SET_ID EQ char_set_id
-			SORTED BY COL.RDB$COLLATION_NAME, CST.RDB$CHARACTER_SET_NAME
+	FOR FIRST 1 COL IN RDB$COLLATIONS CROSS
+		CST IN RDB$CHARACTER_SETS WITH
+		COL.RDB$CHARACTER_SET_ID EQ CST.RDB$CHARACTER_SET_ID AND
+		COL.RDB$COLLATION_ID EQ collation AND
+		CST.RDB$CHARACTER_SET_ID EQ char_set_id
+		SORTED BY COL.RDB$COLLATION_NAME, CST.RDB$CHARACTER_SET_NAME
 
 #ifdef DEV_BUILD
-			found = true;
+		found = true;
 #endif
-			fb_utils::exact_name(CST.RDB$CHARACTER_SET_NAME);
-			fb_utils::exact_name(COL.RDB$COLLATION_NAME);
-			fb_utils::exact_name(CST.RDB$DEFAULT_COLLATE_NAME);
+		fb_utils::exact_name(CST.RDB$CHARACTER_SET_NAME);
+		fb_utils::exact_name(COL.RDB$COLLATION_NAME);
+		fb_utils::exact_name(CST.RDB$DEFAULT_COLLATE_NAME);
 
-			char charSetName[QUOTED_NAME_SIZE];
-			char collateName[QUOTED_NAME_SIZE];
+		char charSetName[QUOTED_NAME_SIZE];
+		char collateName[QUOTED_NAME_SIZE];
 
-			if (quote && isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			{
-				IUTILS_copy_SQL_id(CST.RDB$CHARACTER_SET_NAME, charSetName, DBL_QUOTE);
-				IUTILS_copy_SQL_id(COL.RDB$COLLATION_NAME, collateName, DBL_QUOTE);
-			}
-			else
-			{
-				strcpy(charSetName, CST.RDB$CHARACTER_SET_NAME);
-				strcpy(collateName, COL.RDB$COLLATION_NAME);
-			}
-
-			// Is specified collation the default collation for character set?
-			if (strcmp (CST.RDB$DEFAULT_COLLATE_NAME, COL.RDB$COLLATION_NAME) == 0)
-			{
-				if (getCharset)
-					sprintf (string, " CHARACTER SET %s%s", charSetName, notNullStr);
-			}
-			else if (!getCharset) // Only collation is requested
-				sprintf (string, "%s COLLATE %s", notNullStr, collateName);
-			else // Both
-				sprintf (string, " CHARACTER SET %s%s COLLATE %s",
-						 charSetName, notNullStr, collateName);
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return;
-		END_ERROR;
-#ifdef DEV_BUILD
-		if (!found)
+		if (quote && isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
 		{
-			TEXT Print_buffer[PRINT_BUFFER_LENGTH];
-			sprintf(Print_buffer,
-					"ISQL_get_character_set: charset %d collation %d not found.\n",
-					char_set_id, collation);
-			STDERROUT(Print_buffer);
+			IUTILS_copy_SQL_id(CST.RDB$CHARACTER_SET_NAME, charSetName, DBL_QUOTE);
+			IUTILS_copy_SQL_id(COL.RDB$COLLATION_NAME, collateName, DBL_QUOTE);
 		}
-#endif
-	}
-	else
-	{
-		FOR FIRST 1 CST IN RDB$CHARACTER_SETS WITH
-			CST.RDB$CHARACTER_SET_ID EQ char_set_id
-			SORTED BY CST.RDB$CHARACTER_SET_NAME
-
-#ifdef DEV_BUILD
-			found = true;
-#endif
-			fb_utils::exact_name(CST.RDB$CHARACTER_SET_NAME);
-
-			sprintf (string, " CHARACTER SET %s%s", CST.RDB$CHARACTER_SET_NAME, notNullStr);
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return;
-		END_ERROR;
-#ifdef DEV_BUILD
-		if (!found)
+		else
 		{
-			TEXT Print_buffer[PRINT_BUFFER_LENGTH];
-			sprintf(Print_buffer, "ISQL_get_character_set: charset %d not found.\n",
-					char_set_id);
-			STDERROUT(Print_buffer);
+			strcpy(charSetName, CST.RDB$CHARACTER_SET_NAME);
+			strcpy(collateName, COL.RDB$COLLATION_NAME);
 		}
-#endif
+
+		bool collationIsDefault = strcmp(CST.RDB$DEFAULT_COLLATE_NAME, COL.RDB$COLLATION_NAME) == 0;
+
+		if (getCharset && getCollation)
+		{
+			sprintf(string, " CHARACTER SET %s%s COLLATE %s",
+					 charSetName, notNullStr, collateName);
+		}
+		else if (getCollation && !collationIsDefault)
+		{
+			// Collation is requested
+			// Suppress default collation output
+			sprintf(string, "%s COLLATE %s", notNullStr, collateName);
+		}
+		else if (getCharset || !collationIsDefault)
+		{
+			// Force charset output for non-default collation to satisfy QA tests (such as core_4418 and core_6044)
+			sprintf(string, " CHARACTER SET %s%s", charSetName, notNullStr);
+		}
+		else if (not_null)
+		{
+			// No need to write charset or collation but still must print "NOT NULL"
+			sprintf(string, "%s", notNullStr);
+		}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR;
+#ifdef DEV_BUILD
+	if (!found)
+	{
+		TEXT Print_buffer[PRINT_BUFFER_LENGTH];
+		sprintf(Print_buffer,
+				"ISQL_get_character_set: charset %d collation %d not found.\n",
+				char_set_id, collation);
+		STDERROUT(Print_buffer);
 	}
+#endif
 }
 
 

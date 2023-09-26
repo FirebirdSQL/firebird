@@ -2961,14 +2961,11 @@ static void show_charsets(SSHORT char_set_id, SSHORT collation,
 *	Show names of character set and collations
 *
 **************************************/
-	const SSHORT default_char_set_id = ISQL_get_default_char_set_id();
-
 	TEXT char_sets[CHARSET_COLLATE_SIZE];
 	char_sets[0] = 0;
-	if ((char_set_id != default_char_set_id) || show_collation)
-	{
-		ISQL_get_character_sets(char_set_id, collation, show_charset, show_collation, false, false, char_sets);
-	}
+
+	ISQL_get_character_sets(char_set_id, collation, show_charset, show_collation, false, false, char_sets);
+
 	if (char_sets[0])
 	{
 		if (doIndent)
@@ -4000,6 +3997,7 @@ static processing_state show_domains(const SCHAR* domain_name)
 	else
 	{
 		// List named domain
+		const SSHORT default_char_set_id = ISQL_get_default_char_set_id();
 
 		FOR FLD IN RDB$FIELDS WITH
 			FLD.RDB$FIELD_NAME EQ domain_name;
@@ -4054,7 +4052,7 @@ static processing_state show_domains(const SCHAR* domain_name)
 				FLD.RDB$FIELD_TYPE == blr_varying) && FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_binary) ||
 				FLD.RDB$FIELD_TYPE == blr_blob)
 			{
-				show_charsets(char_set_id, collation, true, false, false, false);
+				show_charsets(char_set_id, collation, char_set_id != default_char_set_id, false, false, false);
 			}
 
 			if (FLD.RDB$NULL_FLAG != 1) {
@@ -4453,6 +4451,7 @@ static processing_state show_func(const MetaString& package, const MetaString& f
 		}
 
 		bool first_param = true;
+		const SSHORT default_charset = ISQL_get_default_char_set_id();
 
 		FOR ARG IN RDB$FUNCTION_ARGUMENTS CROSS
 			FLD IN RDB$FIELDS WITH
@@ -4559,15 +4558,10 @@ static processing_state show_func(const MetaString& package, const MetaString& f
 				if (prm_collation_null && !FLD.RDB$COLLATION_ID.NULL)
 					collation = FLD.RDB$COLLATION_ID;
 
-				const SSHORT default_charset = ISQL_get_default_char_set_id();
-
 				TEXT charset_collation[CHARSET_COLLATE_SIZE];
 				charset_collation[0] = 0;
 
-				if (charset != default_charset)
-				{
-					ISQL_get_character_sets(charset, collation, true, true, false, false, charset_collation);
-				}
+				ISQL_get_character_sets(charset, collation, charset != default_charset, true, false, false, charset_collation);
 
 				if (charset_collation[0])
 					isqlGlob.prints(charset_collation);
@@ -5356,6 +5350,7 @@ static processing_state show_proc(const SCHAR* procname, bool quoted, bool sys, 
 		}
 
 		bool first_param = true;
+		const SSHORT default_charset = ISQL_get_default_char_set_id();
 
 		FOR PRM IN RDB$PROCEDURE_PARAMETERS CROSS
 			FLD IN RDB$FIELDS WITH
@@ -5464,16 +5459,10 @@ static processing_state show_proc(const SCHAR* procname, bool quoted, bool sys, 
 				if (!FLD.RDB$CHARACTER_SET_ID.NULL)
 					charset = FLD.RDB$CHARACTER_SET_ID;
 
-				const SSHORT default_charset = ISQL_get_default_char_set_id();
-
 				TEXT charset_collation[CHARSET_COLLATE_SIZE];
 				charset_collation[0] = 0;
 
-				if (charset != default_charset)
-				{
-					ISQL_get_character_sets(charset, collation, true, true, false, false,
-						charset_collation);
-				}
+				ISQL_get_character_sets(charset, collation, charset != default_charset, true, false, false, charset_collation);
 
 				if (charset_collation[0])
 					isqlGlob.prints(charset_collation);
@@ -6079,6 +6068,8 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 		SORTED BY RFR.RDB$FIELD_POSITION, RFR.RDB$FIELD_NAME
 	*/
 
+	const SSHORT default_char_set_id = ISQL_get_default_char_set_id();
+
 	FOR RFR IN RDB$RELATION_FIELDS CROSS
 		FLD IN RDB$FIELDS WITH
 		RFR.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
@@ -6142,7 +6133,7 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 			if (FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_binary)
 			{
 				// Show international character sets and collations
-				show_charsets(char_set_id, collation, true, false, false, false);
+				show_charsets(char_set_id, collation, char_set_id != default_char_set_id, false, false, false);
 			}
 		}
 
@@ -6161,7 +6152,7 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 
 			// Show international character sets and collations
 
-			show_charsets(char_set_id, collation, true, false, false, false);
+			show_charsets(char_set_id, collation, char_set_id != default_char_set_id, false, false, false);
 		}
 
 		if (!FLD.RDB$COMPUTED_BLR.NULL)

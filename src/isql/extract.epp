@@ -459,8 +459,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 
 				if (!FLD.RDB$CHARACTER_SET_ID.NULL)
 					char_set_id = FLD.RDB$CHARACTER_SET_ID;
-				if (char_set_id != default_char_set_id)
-					ISQL_get_character_sets(char_set_id, 0, true, false, false, true, char_sets);
+				ISQL_get_character_sets(char_set_id, collation, char_set_id != default_char_set_id, false, false, true, char_sets);
 				if (char_sets[0])
 					isqlGlob.prints(char_sets);
 				// CVC: Someone deleted the code that checks intchar when handling collations
@@ -2331,11 +2330,7 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 		{
 
 			char_sets[0] = 0;
-			if (FLD.RDB$CHARACTER_SET_ID != default_char_set_id)
-			{
-				ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, 0, true, false, false, true,
-					char_sets);
-			}
+			ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, 0, FLD.RDB$CHARACTER_SET_ID != default_char_set_id, false, false, true, char_sets);
 			if (char_sets[0])
 				isqlGlob.prints(char_sets);
 		}
@@ -2456,11 +2451,7 @@ static void list_domains(SSHORT default_char_set_id)
 			  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 		{
 			char_sets[0] = 0;
-			if (FLD.RDB$CHARACTER_SET_ID != default_char_set_id)
-			{
-				ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, 0, true, false, false, true,
-					char_sets);
-			}
+			ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, 0, FLD.RDB$CHARACTER_SET_ID != default_char_set_id, false, false, true, char_sets);
 			if (char_sets[0])
 				isqlGlob.prints(char_sets);
 		}
