@@ -1129,7 +1129,15 @@ ParameterClause::ParameterClause(MemoryPool& pool, dsql_fld* field, const MetaNa
 {
 	// Explicit collation has precedence over data type collation
 	if (aCollate.hasData())
+	{
+		if (type->collate.hasData())
+		{
+			status_exception::raise(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
+				Arg::Gds(isc_dsql_duplicate_spec) << "COLLATE");
+		}
 		type->collate = aCollate;
+	}
 }
 
 string ParameterClause::internalPrint(NodePrinter& printer) const
