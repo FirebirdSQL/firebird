@@ -4778,7 +4778,12 @@ simple_type
 
 %type <legacyField> non_charset_simple_type
 non_charset_simple_type
-	: national_character_type
+	: national_character_type collate_clause
+		{
+			$$ = $1;
+			if ($2)
+				$$->collate = *$2;
+		}
 	| binary_character_type
 	| numeric_type
 	| float_type
