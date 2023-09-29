@@ -55,8 +55,11 @@ MergeJoin::MergeJoin(CompilerScratch* csb, FB_SIZE_T count,
 		m_args[i] = args[i];
 
 		m_cardinality *= args[i]->getCardinality();
-		for (auto keyCount = keys[i]->getCount(); keyCount; keyCount--)
-			m_cardinality *= REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+		if (i)
+		{
+			for (auto keyCount = keys[i]->getCount(); keyCount; keyCount--)
+				m_cardinality *= REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+		}
 
 		fb_assert(keys[i]);
 		m_keys[i] = keys[i];
@@ -342,37 +345,33 @@ WriteLockResult MergeJoin::lockRecord(thread_db* /*tdbb*/, bool /*skipLocked*/) 
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
-void MergeJoin::getChildren(Array<const RecordSource*>& children) const
+void MergeJoin::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
+	level++;
+	plan += "MERGE (";
 	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		children.add(m_args[i]);
+	{
+		if (i)
+			plan += ", ";
+
+		m_args[i]->getLegacyPlan(tdbb, plan, level);
+	}
+	plan += ")";
 }
 
-void MergeJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void MergeJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Merge Join (inner)";
-		printOptInfo(plan);
+	planEntry.className = "MergeJoin";
 
-		if (recurse)
-		{
-			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-				m_args[i]->print(tdbb, plan, true, level, recurse);
-		}
-	}
-	else
-	{
-		level++;
-		plan += "MERGE (";
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		{
-			if (i)
-				plan += ", ";
+	planEntry.lines.add().text = "Merge Join (inner)";
+	printOptInfo(planEntry.lines);
 
-			m_args[i]->print(tdbb, plan, false, level, recurse);
-		}
-		plan += ")";
+	if (recurse)
+	{
+		++level;
+
+		for (const auto arg : m_args)
+			arg->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 

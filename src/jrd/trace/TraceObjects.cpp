@@ -58,6 +58,18 @@ using namespace Firebird;
 
 namespace Jrd {
 
+const char* StatementHolder::ensurePlan(bool explained)
+{
+	if (m_statement && (m_plan.isEmpty() || m_planExplained != explained))
+	{
+		m_planExplained = explained;
+		m_plan = Optimizer::getPlan(JRD_get_thread_data(), m_statement, explained);
+	}
+
+	return m_plan.c_str();
+}
+
+
 /// TraceConnectionImpl
 
 unsigned TraceConnectionImpl::getKind()
@@ -192,28 +204,6 @@ const char* TraceSQLStatementImpl::getTextUTF8()
 	}
 
 	return m_textUTF8.c_str();
-}
-
-const char* TraceSQLStatementImpl::getPlan()
-{
-	fillPlan(false);
-	return m_plan.c_str();
-}
-
-const char* TraceSQLStatementImpl::getExplainedPlan()
-{
-	fillPlan(true);
-	return m_plan.c_str();
-}
-
-void TraceSQLStatementImpl::fillPlan(bool explained)
-{
-	if (m_plan.isEmpty() || m_planExplained != explained)
-	{
-		m_planExplained = explained;
-		if (m_stmt->getStatement())
-			m_plan = Optimizer::getPlan(JRD_get_thread_data(), m_stmt->getStatement(), m_planExplained);
-	}
 }
 
 PerformanceInfo* TraceSQLStatementImpl::getPerf()
@@ -400,7 +390,7 @@ const char* TraceParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T i
 
 void TraceDscFromValues::fillParams()
 {
-	if (m_descs.getCount() || !m_params)
+	if (m_descs.getCount() || !m_request || !m_params)
 		return;
 
 	thread_db* tdbb = JRD_get_thread_data();
@@ -482,23 +472,6 @@ void TraceDscFromMsg::fillParams()
 		if (*nullPtr == -1)
 			desc->setNull();
 	}
-}
-
-
-/// TraceTriggerImpl
-
-const char* TraceTriggerImpl::getTriggerName()
-{
-	return m_trig->getStatement()->triggerName.c_str();
-}
-
-const char* TraceTriggerImpl::getRelationName()
-{
-	if (m_trig->req_rpb.getCount() == 0)
-		return NULL;
-
-	const jrd_rel* rel = m_trig->req_rpb[0].rpb_relation;
-	return rel ? rel->rel_name.c_str() : NULL;
 }
 
 

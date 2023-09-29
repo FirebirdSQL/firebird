@@ -187,7 +187,7 @@ public:
 		tra_outer(outer),
 		tra_snapshot_handle(0),
 		tra_snapshot_number(0),
-		tra_sorts(*p),
+		tra_sorts(*p, attachment->att_database),
 		tra_gen_ids(NULL),
 		tra_replicator(NULL),
 		tra_interface(NULL),
@@ -364,15 +364,16 @@ public:
 			Record* const record = *iter;
 			fb_assert(record);
 
-			if (!record->testFlags(REC_undo_active))
+			if (!record->isTempActive())
 			{
 				// initialize record for reuse
-				record->reset(format, REC_undo_active);
+				record->reset(format);
+				record->setTempActive();
 				return record;
 			}
 		}
 
-		Record* const record = FB_NEW_POOL(*tra_pool) Record(*tra_pool, format, REC_undo_active);
+		Record* const record = FB_NEW_POOL(*tra_pool) Record(*tra_pool, format, true);
 		tra_undo_records.add(record);
 
 		return record;

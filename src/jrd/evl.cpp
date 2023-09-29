@@ -677,41 +677,8 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 		}
 		else
 		{
-			if (itemInfo->name.isEmpty())
-			{
-				int index = item.index + 1;
-
-				status = isc_not_valid_for;
-
-				if (item.type == Item::TYPE_VARIABLE)
-				{
-					const jrd_prc* procedure = request->getStatement()->procedure;
-
-					if (procedure)
-					{
-						if (index <= int(procedure->getOutputFields().getCount()))
-							s.printf("output parameter number %d", index);
-						else
-						{
-							s.printf("variable number %d",
-								index - int(procedure->getOutputFields().getCount()));
-						}
-					}
-					else
-						s.printf("variable number %d", index);
-				}
-				else if (item.type == Item::TYPE_PARAMETER && item.subType == 0)
-					s.printf("input parameter number %d", (index - 1) / 2 + 1);
-				else if (item.type == Item::TYPE_PARAMETER && item.subType == 1)
-					s.printf("output parameter number %d", index);
-
-				if (s.isEmpty())
-					arg = UNKNOWN_STRING_MARK;
-				else
-					arg = s.c_str();
-			}
-			else
-				arg = itemInfo->name.c_str();
+			s = item.getDescription(request, itemInfo);
+			arg = s.c_str();
 		}
 
 		ERR_post(Arg::Gds(status) << Arg::Str(arg) << Arg::Str(value));

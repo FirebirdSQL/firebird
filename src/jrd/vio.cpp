@@ -574,8 +574,6 @@ namespace
 	{
 		if (rpb->rpb_flags & rpb_not_packed)
 		{
-			rpb->rpb_flags &= ~rpb_not_packed;
-
 			const auto length = MIN(rpb->rpb_length, outLength);
 
 			memcpy(output, rpb->rpb_address, length);
@@ -777,7 +775,7 @@ inline void clearRecordStack(RecordStack& stack)
 	{
 		Record* r = stack.pop();
 		// records from undo log must not be deleted
-		if (!r->testFlags(REC_undo_active))
+		if (!r->isTempActive())
 			delete r;
 	}
 }
@@ -879,8 +877,8 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 	Record* data = NULL;
 	Record* old_data = NULL;
 
-	AutoGCRecord gc_rec1;
-	AutoGCRecord gc_rec2;
+	AutoTempRecord gc_rec1;
+	AutoTempRecord gc_rec2;
 
 	bool samePage;
 	bool deleted;
@@ -1093,8 +1091,6 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 		else
 		{
 			// There is cleanup to be done.  Bring the old version forward first
-
-			rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_chained | rpb_gc_active | rpb_long_tranum);
 			DPM_update(tdbb, rpb, 0, transaction);
 			delete_tail(tdbb, &temp2, rpb->rpb_page);
 		}
@@ -1113,7 +1109,7 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 
 bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 							  jrd_tra* transaction, MemoryPool* pool,
-							  bool writelock, bool noundo)
+							  RecordLock recordLock, bool noundo)
 {
 /**************************************
  *
@@ -1262,9 +1258,10 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 		// If the transaction is a read committed and chooses the no version
 		// option, wait for reads also!
 
-		if ((transaction->tra_flags & TRA_read_committed) &&
+		if (recordLock != RecordLock::SKIP &&
+			(transaction->tra_flags & TRA_read_committed) &&
 			!(transaction->tra_flags & TRA_read_consistency) &&
-			(!(transaction->tra_flags & TRA_rec_version) || writelock))
+			(!(transaction->tra_flags & TRA_rec_version) || recordLock == RecordLock::LOCK))
 		{
 			if (state == tra_limbo)
 			{
@@ -1833,6 +1830,8 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 		const ULONG back_page  = rpb->rpb_b_page;
 		const USHORT back_line = rpb->rpb_b_line;
 		const USHORT save_flags = rpb->rpb_flags;
+		const ULONG save_f_page = rpb->rpb_f_page;
+		const USHORT save_f_line = rpb->rpb_f_line;
 
 		while (rpb->rpb_flags & rpb_incomplete)
 		{
@@ -1844,6 +1843,8 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 		rpb->rpb_b_page = back_page;
 		rpb->rpb_b_line = back_line;
 		rpb->rpb_flags = save_flags;
+		rpb->rpb_f_page = save_f_page;
+		rpb->rpb_f_line = save_f_line;
 	}
 
 	CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
@@ -1975,7 +1976,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	if (rpb->rpb_runtime_flags & (RPB_refetch | RPB_undo_read))
 	{
-		VIO_refetch_record(tdbb, rpb, transaction, false, true);
+		VIO_refetch_record(tdbb, rpb, transaction, RecordLock::NONE, true);
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
 		fb_assert(!(rpb->rpb_runtime_flags & RPB_undo_read));
 	}
@@ -2485,25 +2486,26 @@ static void delete_version_chain(thread_db* tdbb, record_param* rpb, bool delete
 
 	ULONG prior_page = 0;
 
-	if (!delete_head)
+	// Note that the page number of the oldest version in the chain should
+	// be stored in rpb->rpb_page before exiting this function because
+	// VIO_intermediate_gc will use it as a prior page number.
+	while (rpb->rpb_b_page != 0 || delete_head)
 	{
-		prior_page = rpb->rpb_page;
-		rpb->rpb_page = rpb->rpb_b_page;
-		rpb->rpb_line = rpb->rpb_b_line;
-	}
+		if (!delete_head)
+		{
+			prior_page = rpb->rpb_page;
+			rpb->rpb_page = rpb->rpb_b_page;
+			rpb->rpb_line = rpb->rpb_b_line;
+		}
+		else
+			delete_head = false;
 
-	while (rpb->rpb_page != 0)
-	{
 		if (!DPM_fetch(tdbb, rpb, LCK_write))
 			BUGCHECK(291);		// msg 291 cannot find record back version
 
 		record_param temp_rpb = *rpb;
 		DPM_delete(tdbb, &temp_rpb, prior_page);
 		delete_tail(tdbb, &temp_rpb, temp_rpb.rpb_page);
-
-		prior_page = rpb->rpb_page;
-		rpb->rpb_page = rpb->rpb_b_page;
-		rpb->rpb_line = rpb->rpb_b_line;
 	}
 }
 
@@ -2858,10 +2860,11 @@ Record* VIO_gc_record(thread_db* tdbb, jrd_rel* relation)
 		Record* const record = *iter;
 		fb_assert(record);
 
-		if (!record->testFlags(REC_gc_active))
+		if (!record->isTempActive())
 		{
 			// initialize record for reuse
-			record->reset(format, REC_gc_active);
+			record->reset(format);
+			record->setTempActive();
 			return record;
 		}
 	}
@@ -2869,7 +2872,7 @@ Record* VIO_gc_record(thread_db* tdbb, jrd_rel* relation)
 	// Allocate a garbage collect record block if all are active
 
 	Record* const record = FB_NEW_POOL(*relation->rel_pool)
-		Record(*relation->rel_pool, format, REC_gc_active);
+		Record(*relation->rel_pool, format, true);
 	relation->rel_gc_records.add(record);
 	return record;
 }
@@ -2904,7 +2907,7 @@ bool VIO_get(thread_db* tdbb, record_param* rpb, jrd_tra* transaction, MemoryPoo
 	const USHORT lock_type = (rpb->rpb_stream_flags & RPB_s_update) ? LCK_write : LCK_read;
 
 	if (!DPM_get(tdbb, rpb, lock_type) ||
-		!VIO_chase_record_version(tdbb, rpb, transaction, pool, false, false))
+		!VIO_chase_record_version(tdbb, rpb, transaction, pool, RecordLock::NONE, false))
 	{
 		return false;
 	}
@@ -3272,14 +3275,14 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	if (org_rpb->rpb_runtime_flags & (RPB_refetch | RPB_undo_read))
 	{
 		const bool undo_read = (org_rpb->rpb_runtime_flags & RPB_undo_read);
-		AutoGCRecord old_record;
+		AutoTempRecord old_record;
 		if (undo_read)
 		{
 			old_record = VIO_gc_record(tdbb, relation);
 			old_record->copyFrom(org_rpb->rpb_record);
 		}
 
-		VIO_refetch_record(tdbb, org_rpb, transaction, false, true);
+		VIO_refetch_record(tdbb, org_rpb, transaction, RecordLock::NONE, true);
 		org_rpb->rpb_runtime_flags &= ~RPB_refetch;
 		fb_assert(!(org_rpb->rpb_runtime_flags & RPB_undo_read));
 
@@ -3678,6 +3681,8 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	org_rpb->rpb_flags &= ~(rpb_delta | rpb_uk_modified);
 	org_rpb->rpb_flags |= new_rpb->rpb_flags & (rpb_delta | rpb_uk_modified);
 
+	stack.merge(new_rpb->rpb_record->getPrecedence());
+
 	replace_record(tdbb, org_rpb, &stack, transaction);
 
 	if (!(transaction->tra_flags & TRA_system) &&
@@ -3760,7 +3765,7 @@ bool VIO_next_record(thread_db* tdbb,
 		{
 			return false;
 		}
-	} while (!VIO_chase_record_version(tdbb, rpb, transaction, pool, false, false));
+	} while (!VIO_chase_record_version(tdbb, rpb, transaction, pool, RecordLock::NONE, false));
 
 	if (rpb->rpb_runtime_flags & RPB_undo_data)
 		fb_assert(rpb->getWindow(tdbb).win_bdb == NULL);
@@ -3838,7 +3843,7 @@ Record* VIO_record(thread_db* tdbb, record_param* rpb, const Format* format, Mem
 
 
 bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction,
-						bool writelock, bool noundo)
+						RecordLock recordLock, bool noundo)
 {
 /**************************************
  *
@@ -3861,9 +3866,9 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 	const TraNumber tid_fetch = rpb->rpb_transaction_nr;
 
 	if (!DPM_get(tdbb, rpb, LCK_read) ||
-		!VIO_chase_record_version(tdbb, rpb, transaction, tdbb->getDefaultPool(), writelock, noundo))
+		!VIO_chase_record_version(tdbb, rpb, transaction, tdbb->getDefaultPool(), recordLock, noundo))
 	{
-		if (writelock)
+		if (recordLock == RecordLock::LOCK)
 			return false;
 
 		ERR_post(Arg::Gds(isc_no_cur_rec));
@@ -3887,7 +3892,7 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 	// make sure the record has not been updated.  Also, punt after
 	// VIO_data() call which will release the page.
 
-	if (!writelock &&
+	if (recordLock != RecordLock::LOCK &&
 		(transaction->tra_flags & TRA_read_committed) &&
 		(tid_fetch != rpb->rpb_transaction_nr) &&
 		// added to check that it was not current transaction,
@@ -4483,7 +4488,7 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 
 	if (org_rpb->rpb_runtime_flags & (RPB_refetch | RPB_undo_read))
 	{
-		if (!VIO_refetch_record(tdbb, org_rpb, transaction, true, true))
+		if (!VIO_refetch_record(tdbb, org_rpb, transaction, (skipLocked ? RecordLock::SKIP : RecordLock::LOCK), true))
 			return WriteLockResult::CONFLICTED;
 
 		org_rpb->rpb_runtime_flags &= ~RPB_refetch;
@@ -5559,7 +5564,7 @@ static UndoDataRet get_undo_data(thread_db* tdbb, jrd_tra* transaction,
 		rpb->rpb_runtime_flags |= RPB_undo_data;
 		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 
-		AutoUndoRecord undoRecord(undo.setupRecord(transaction));
+		AutoTempRecord undoRecord(undo.setupRecord(transaction));
 
 		Record* const record = VIO_record(tdbb, rpb, undoRecord->getFormat(), pool);
 		record->copyFrom(undoRecord);
@@ -6270,7 +6275,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 			// Wait as long as it takes (if not skipping locks) for an active
 			// transaction which has modified the record.
 
-			state = writeLockSkipLocked == true ?
+			state = writeLockSkipLocked.asBool() ?
 				TRA_wait(tdbb, transaction, rpb->rpb_transaction_nr, jrd_tra::tra_probe) :
 				wait(tdbb, transaction, rpb);
 
@@ -6304,7 +6309,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 				{
 					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
 
-					if (writeLockSkipLocked == true)
+					if (writeLockSkipLocked.asBool())
 						return PrepareResult::SKIP_LOCKED;
 
 					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
@@ -6323,7 +6328,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 				// fall thru
 
 			case tra_active:
-				return writeLockSkipLocked == true ? PrepareResult::SKIP_LOCKED : PrepareResult::LOCK_ERROR;
+				return writeLockSkipLocked.asBool() ? PrepareResult::SKIP_LOCKED : PrepareResult::LOCK_ERROR;
 
 			case tra_dead:
 				break;
@@ -6454,7 +6459,7 @@ static void purge(thread_db* tdbb, record_param* rpb)
 	// the record.
 
 	record_param temp = *rpb;
-	AutoGCRecord gc_rec(VIO_gc_record(tdbb, relation));
+	AutoTempRecord gc_rec(VIO_gc_record(tdbb, relation));
 	Record* record = rpb->rpb_record = gc_rec;
 
 	VIO_data(tdbb, rpb, relation->rel_pool);
@@ -6530,7 +6535,6 @@ static void replace_record(thread_db*		tdbb,
 #endif
 
 	record_param temp = *rpb;
-	rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_chained | rpb_gc_active | rpb_long_tranum);
 	DPM_update(tdbb, rpb, stack, transaction);
 	delete_tail(tdbb, &temp, rpb->rpb_page);
 
@@ -6804,7 +6808,7 @@ void VIO_update_in_place(thread_db* tdbb,
 	// becomes meaningless.  What we need to do is replace the old "delta" record
 	// with an old "complete" record, update in placement, then delete the old delta record
 
-	AutoGCRecord gc_rec;
+	AutoTempRecord gc_rec;
 
 	record_param temp2;
 	const Record* prior = org_rpb->rpb_prior;

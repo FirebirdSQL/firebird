@@ -111,8 +111,8 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 
 	// req_proc_fetch flag used only when fetching rows, so
 	// is set at end of open()
-
 	proc_request->req_flags &= ~req_proc_fetch;
+	AutoSetRestoreFlag<ULONG> autoSetReqProcSelect(&proc_request->req_flags, req_proc_select, true);
 
 	try
 	{
@@ -197,6 +197,7 @@ bool ProcedureScan::internalGetRecord(thread_db* tdbb) const
 
 	TraceProcFetch trace(tdbb, proc_request);
 
+	AutoSetRestoreFlag<ULONG> autoSetReqProcSelect(&proc_request->req_flags, req_proc_select, true);
 	AutoSetRestore<USHORT> autoOriginalTimeZone(
 		&tdbb->getAttachment()->att_original_timezone,
 		tdbb->getAttachment()->att_current_timezone);
@@ -248,28 +249,30 @@ WriteLockResult ProcedureScan::lockRecord(thread_db* /*tdbb*/, bool /*skipLocked
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
-void ProcedureScan::getChildren(Array<const RecordSource*>& children) const
+void ProcedureScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
+	if (!level)
+		plan += "(";
+
+	plan += printName(tdbb, m_alias, false) + " NATURAL";
+
+	if (!level)
+		plan += ")";
 }
 
-void ProcedureScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void ProcedureScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Procedure " +
-			printName(tdbb, m_procedure->getName().toString(), m_alias) + " Scan";
-		printOptInfo(plan);
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+	planEntry.className = "ProcedureScan";
 
-		plan += printName(tdbb, m_alias, false) + " NATURAL";
+	planEntry.lines.add().text = "Procedure " + printName(tdbb, m_procedure->getName().toString(), m_alias) + " Scan";
+	printOptInfo(planEntry.lines);
 
-		if (!level)
-			plan += ")";
-	}
+	planEntry.objectType = obj_procedure;
+	planEntry.packageName = m_procedure->getName().package;
+	planEntry.objectName = m_procedure->getName().identifier;
+
+	if (m_alias.hasData() && m_procedure->getName().toString() != m_alias)
+		planEntry.alias = m_alias;
 }
 
 void ProcedureScan::assignParams(thread_db* tdbb,

@@ -48,6 +48,11 @@ namespace Firebird
 			return refCnt;
 		}
 
+		void assertNonZero()
+		{
+			fb_assert(m_refCnt.value() > 0);
+		}
+
 	protected:
 		RefCounted() : m_refCnt(0) {}
 
@@ -116,13 +121,13 @@ namespace Firebird
 			}
 		}
 
-		RefPtr(RefPtr&& r)
+		RefPtr(RefPtr&& r) noexcept
 			: ptr(r.ptr)
 		{
 			r.ptr = nullptr;
 		}
 
-		RefPtr(MemoryPool&, RefPtr&& r)
+		RefPtr(MemoryPool&, RefPtr&& r) noexcept
 			: ptr(r.ptr)
 		{
 			r.ptr = nullptr;

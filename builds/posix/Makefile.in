@@ -490,7 +490,7 @@ gpre: $(GPRE) databases
 $(GPRE):	$(GPRE_Objects) $(COMMON_LIB)
 	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
 
-SECURITY_FDB = $(FIREBIRD)/security5.fdb
+SECURITY_FDB = $(FIREBIRD)/security6.fdb
 SECURITY_TMP = security.tmp
 
 databases:		yachts.lnk $(SECURITY_FDB)
@@ -820,6 +820,7 @@ clean_vers:
 clean_misc:
 	$(RM) security.tmp test.header.txt
 	$(RM) $(TMP_FUNCS_PAS) $(RPL_AWK) $(RPL_GREP)
+	$(TOUCH) -c -t 200001010000 $(API_H_FILE) $(API_PAS_FILE)
 
 
 ifeq ($(EDITLINE_FLG),Y)

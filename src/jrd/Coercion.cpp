@@ -112,15 +112,30 @@ void CoercionRule::setRule(const TypeClause* from, const TypeClause *to)
 		raiseError();
 
 	// Generic check
+	class BufSize
+	{
+	public:
+		static constexpr unsigned makeSize(unsigned len)
+		{
+			return (len + FB_ALIGNMENT) * 2;
+		}
+	};
+
 	const unsigned DATASIZE = 256;
-	UCHAR buf[DATASIZE * 2 + FB_ALIGNMENT];
-	memset(buf, 0, sizeof buf);
+	HalfStaticArray<UCHAR, BufSize::makeSize(DATASIZE)> buffer;
+
+	unsigned datasize = MAX(toMask & FLD_has_len ? toDsc.dsc_length : 0,
+		fromMask & FLD_has_len ? fromDsc.dsc_length : 0);
+	datasize = MAX(DATASIZE, datasize);
+	UCHAR* buf = buffer.getBuffer(BufSize::makeSize(datasize));
+	memset(buf, 0, buffer.getCount());
+
 	toDsc.dsc_address = FB_ALIGN(buf, FB_ALIGNMENT);
 	if (! (toMask & FLD_has_len))
 	{
-		toDsc.dsc_length = DATASIZE - 2;
+		toDsc.dsc_length = datasize - 2;
 	}
-	fromDsc.dsc_address = toDsc.dsc_address + DATASIZE;
+	fromDsc.dsc_address = FB_ALIGN(toDsc.dsc_address + datasize, FB_ALIGNMENT);
 
 	try
 	{
@@ -322,13 +337,16 @@ bool CoercionRule::coerce(thread_db* tdbb, dsc* d) const
 		subTypeCompatibility[d->dsc_dtype] != COMPATIBLE_INT ||
 		subTypeCompatibility[toDsc.dsc_dtype] != COMPATIBLE_INT)
 	{
-		if (!type_lengths[toDsc.dsc_dtype])
+		if (!(toMask & FLD_has_len))
 		{
-			fb_assert(toDsc.isText());
-			d->dsc_length = d->getStringLength();
+			if (!type_lengths[toDsc.dsc_dtype])
+			{
+				fb_assert(toDsc.isText());
+				d->dsc_length = d->getStringLength();
+			}
+			else
+				d->dsc_length = type_lengths[toDsc.dsc_dtype];
 		}
-		else
-			d->dsc_length = type_lengths[toDsc.dsc_dtype];
 
 		d->dsc_dtype = toDsc.dsc_dtype;
 	}
@@ -341,7 +359,7 @@ bool CoercionRule::coerce(thread_db* tdbb, dsc* d) const
 		d->dsc_length = DataTypeUtil(tdbb).convertLength(d->dsc_length, srcCharSet, toDsc.getCharSet());
 
 	// varchar length
-	if (d->dsc_dtype == dtype_varying)
+	if (d->dsc_dtype == dtype_varying && !(toMask & FLD_has_len))
 		d->dsc_length += sizeof(USHORT);
 
 	// subtype - special processing for BLOBs

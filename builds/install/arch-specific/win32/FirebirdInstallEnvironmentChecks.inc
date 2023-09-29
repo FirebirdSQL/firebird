@@ -795,7 +795,7 @@ else
 SharedFileArray[27].Filename := ExpandConstant('{app}')+'databases.conf';
 SharedFileArray[28].Filename := ExpandConstant('{app}')+'firebird.conf';
 SharedFileArray[29].Filename := ExpandConstant('{app}')+'firebird.log';
-SharedFileArray[30].Filename := ExpandConstant('{app}')+'security5.fdb';
+SharedFileArray[30].Filename := ExpandConstant('{app}')+'security6.fdb';
 SharedFileArray[31].Filename := ExpandConstant('{app}')+'fbtrace.conf';
 SharedFileArray[32].Filename := ExpandConstant('{app}')+'fbsvcmgr.exe';
 SharedFileArray[33].Filename := ExpandConstant('{app}')+'fbrmclib.dll';
@@ -891,18 +891,8 @@ end;
 
 
 function IsServerInstall: Boolean;
-var
-  SetupType: String;
 begin
-
-  // DOC NOTE - WizardSetupType is not well documented. If parameter is set to
-  // True the Description of the setup type is returned. (This is useless for us
-  // as our descriptions are I18n'ised. ) If set False the string declared in
-  // the TYPES section is returned. BUT LOWERCASED! Aargh!!
-  // To protect against future changes each side is the comparison is lowercased.
-
-  SetupType := WizardSetupType ( false );
-  if LowerCase( SetupType ) = LowerCase( 'ServerInstall' ) then
+  if WizardIsComponentSelected('ServerComponent') then
     Result := true
   else
     Result := False;
@@ -1201,7 +1191,7 @@ begin
     LoadStringFromFile( GetAppPath+'\firebird.conf', FirebirdConfStr );
     if  pos('SharedDatabase', FirebirdConfStr) > 0 then begin
       RenameFile(GetAppPath+'\firebird.conf', GetAppPath+'\firebird.conf.preRC1');
-      RenameFile(GetAppPath+'\security5.fdb', GetAppPath+'\security5.fdb.preRC1');
+      RenameFile(GetAppPath+'\security6.fdb', GetAppPath+'\security6.fdb.preRC1');
     end
   end
 end;
@@ -1213,7 +1203,7 @@ begin
   if IsNotServerInstall then
     Result := false
   else
-    if FileExists(WizardDirValue + '\security5.fdb') then
+    if FileExists(WizardDirValue + '\security6.fdb') then
       Result := false
     else
       Result := true;

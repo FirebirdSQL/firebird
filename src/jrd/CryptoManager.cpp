@@ -823,12 +823,17 @@ namespace Jrd {
 
 	void CryptoManager::blockingAstChangeCryptState()
 	{
-		AsyncContextHolder tdbb(&dbb, FB_FUNCTION);
-
-		if (stateLock->lck_physical != CRYPT_CHANGE && stateLock->lck_physical != CRYPT_INIT)
+		try
 		{
-			sync.ast(tdbb);
+			AsyncContextHolder tdbb(&dbb, FB_FUNCTION);
+
+			if (stateLock->lck_physical != CRYPT_CHANGE && stateLock->lck_physical != CRYPT_INIT)
+			{
+				sync.ast(tdbb);
+			}
 		}
+		catch (const Exception&)
+		{ }
 	}
 
 	void CryptoManager::doOnAst(thread_db* tdbb)

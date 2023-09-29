@@ -29,6 +29,7 @@
 
 #include "../common/classes/array.h"
 #include "../common/classes/init.h"
+#include "../common/classes/GenericMap.h"
 #include "../common/gdsassert.h"
 #include "../common/os/guid.h"
 #include "../common/os/os_utils.h"
@@ -558,6 +559,65 @@ void getUniqueFileId(HANDLE fd, UCharBuffer& id)
 		   sizeof(file_info.nFileIndexHigh));
 	id.add(reinterpret_cast<UCHAR*>(&file_info.nFileIndexLow),
 		   sizeof(file_info.nFileIndexLow));
+}
+
+void setDefaultAffinity()
+{
+	HANDLE hCurrProc = GetCurrentProcess();
+
+	DWORD_PTR procMask, sysMask, newMask;
+	GetProcessAffinityMask(hCurrProc, &procMask, &sysMask);
+
+	// Don't change affinity if it was set by caller process
+	if (procMask != sysMask)
+		return;
+
+	newMask = sysMask;
+
+	DWORD len = 0;
+
+	if (!GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &len))
+	{
+		if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+			return;
+	}
+
+ 	HalfStaticArray<UCHAR, 1024, SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX> buff;
+	auto p = buff.getBuffer(len);
+	auto const end = p + len;
+	auto pSLPI = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(p);
+
+	if (!GetLogicalProcessorInformationEx(RelationProcessorCore, pSLPI, &len))
+		return;
+
+	// Efficiency Class to Cores map
+	GenericMap<NonPooledPair<int, DWORD_PTR>> effClassMasks;
+
+	while (p < end)
+	{
+		if (pSLPI->Relationship == RelationProcessorCore)
+		{
+			DWORD_PTR coreMask = 0;
+			for (size_t i = 0; i < pSLPI->Processor.GroupCount; i++)
+				coreMask |= pSLPI->Processor.GroupMask[i].Mask;
+
+			DWORD_PTR* pMask = effClassMasks.get(pSLPI->Processor.EfficiencyClass);
+			if (!pMask)
+				effClassMasks.put(pSLPI->Processor.EfficiencyClass, coreMask);
+			else
+				*pMask |= coreMask;
+		}
+
+		p += pSLPI->Size;
+		pSLPI = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(p);
+	}
+
+	// Exclude efficient cores, i.e. cores with lowest efficient class
+	if (effClassMasks.count() > 1)
+		newMask &= ~(*effClassMasks.begin()).second;
+
+	if (newMask && newMask != procMask)
+		SetProcessAffinityMask(hCurrProc, newMask);
 }
 
 

@@ -75,7 +75,6 @@
     <ClCompile Include="..\..\..\src\common\isc.cpp" />
     <ClCompile Include="..\..\..\src\common\isc_file.cpp" />
     <ClCompile Include="..\..\..\src\common\isc_sync.cpp" />
-    <ClCompile Include="..\..\..\src\common\keywords.cpp" />
     <ClCompile Include="..\..\..\src\common\MsgMetadata.cpp" />
     <ClCompile Include="..\..\..\src\common\MsgUtil.cpp" />
     <ClCompile Include="..\..\..\src\common\os\win32\fbsyslog.cpp" />
@@ -142,7 +141,6 @@
     <ClInclude Include="..\..\..\src\common\classes\MsgPrint.h" />
     <ClInclude Include="..\..\..\src\common\classes\NestConst.h" />
     <ClInclude Include="..\..\..\src\common\classes\NoThrowTimeStamp.h" />
-    <ClInclude Include="..\..\..\src\common\classes\Nullable.h" />
     <ClInclude Include="..\..\..\src\common\classes\objects_array.h" />
     <ClInclude Include="..\..\..\src\common\classes\ParsedList.h" />
     <ClInclude Include="..\..\..\src\common\classes\QualifiedName.h" />
@@ -160,6 +158,7 @@
     <ClInclude Include="..\..\..\src\common\classes\TimerImpl.h" />
     <ClInclude Include="..\..\..\src\common\classes\timestamp.h" />
     <ClInclude Include="..\..\..\src\common\classes\tree.h" />
+    <ClInclude Include="..\..\..\src\common\classes\TriState.h" />
     <ClInclude Include="..\..\..\src\common\classes\UserBlob.h" />
     <ClInclude Include="..\..\..\src\common\classes\VaryStr.h" />
     <ClInclude Include="..\..\..\src\common\classes\vector.h" />
@@ -189,7 +188,6 @@
     <ClInclude Include="..\..\..\src\common\isc_f_proto.h" />
     <ClInclude Include="..\..\..\src\common\isc_proto.h" />
     <ClInclude Include="..\..\..\src\common\isc_s_proto.h" />
-    <ClInclude Include="..\..\..\src\common\keywords.h" />
     <ClInclude Include="..\..\..\src\common\MsgMetadata.h" />
     <ClInclude Include="..\..\..\src\common\MsgUtil.h" />
     <ClInclude Include="..\..\..\src\common\os\divorce.h" />
@@ -199,6 +197,7 @@
     <ClInclude Include="..\..\..\src\common\os\mod_loader.h" />
     <ClInclude Include="..\..\..\src\common\os\os_utils.h" />
     <ClInclude Include="..\..\..\src\common\os\path_utils.h" />
+    <ClInclude Include="..\..\..\src\common\ParserTokens.h" />
     <ClInclude Include="..\..\..\src\common\prett_proto.h" />
     <ClInclude Include="..\..\..\src\common\ScanDir.h" />
     <ClInclude Include="..\..\..\src\common\sdl.h" />
@@ -218,6 +217,7 @@
     <ClInclude Include="..\..\..\src\common\ThreadStart.h" />
     <ClInclude Include="..\..\..\src\common\TimeZones.h" />
     <ClInclude Include="..\..\..\src\common\TimeZoneUtil.h" />
+    <ClInclude Include="..\..\..\src\common\Token.h" />
     <ClInclude Include="..\..\..\src\common\Tokens.h" />
     <ClInclude Include="..\..\..\src\common\unicode_util.h" />
     <ClInclude Include="..\..\..\src\common\UtilSvc.h" />
@@ -237,7 +237,7 @@
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141_xp</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
@@ -245,7 +245,7 @@
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141_xp</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
@@ -310,10 +310,6 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <Optimization>MaxSpeed</Optimization>
-      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;SUPERSERVER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Lib>
@@ -337,10 +333,6 @@
       <TargetEnvironment>X64</TargetEnvironment>
     </Midl>
     <ClCompile>
-      <Optimization>MaxSpeed</Optimization>
-      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;SUPERSERVER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Lib>

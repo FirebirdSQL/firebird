@@ -80,7 +80,7 @@ public:
 		this->push(isc_arg_end);
 	}
 
-	ISC_STATUS* makeEmergencyStatus() throw()
+	ISC_STATUS* makeEmergencyStatus() noexcept
 	{
 		// Should not throw - see assertions in constructors
 		return this->getBuffer(3);

@@ -40,7 +40,7 @@ public:
 
 	jrd_tra* getTransaction() const;
 	Attachment* getAttachment() const;
-	void setInterfacePtr(JResultSet* interfacePtr) throw();
+	void setInterfacePtr(JResultSet* interfacePtr) noexcept;
 
 	static void close(thread_db* tdbb, DsqlCursor* cursor);
 

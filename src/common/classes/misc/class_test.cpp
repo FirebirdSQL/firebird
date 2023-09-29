@@ -35,38 +35,6 @@
 
 using namespace Firebird;
 
-void testVector()
-{
-	printf("Test Firebird::Vector: ");
-	Vector<int, 100> v;
-	int i;
-	for (i = 0; i < 100; i++)
-		v.add(i);
-	for (i = 0; i < 50; i++)
-		v.remove(0);
-	bool passed = true;
-	for (i = 50; i < 100; i++)
-		if (v[i - 50] != i)
-			passed = false;
-	printf(passed ? "PASSED\n" : "FAILED\n");
-}
-
-void testSortedVector()
-{
-	printf("Test Firebird::SortedVector: ");
-	SortedVector<int, 100> v;
-	int i;
-	for (i = 0; i < 100; i++)
-		v.add(99 - i);
-	for (i = 0; i < 50; i++)
-		v.remove(0);
-	bool passed = true;
-	for (i = 50; i < 100; i++)
-		if (v[i - 50] != i)
-			passed = false;
-	printf(passed ? "PASSED\n" : "FAILED\n");
-}
-
 const int BITMAP_ITEMS = 1000000;
 
 void testBitmap()
@@ -628,8 +596,6 @@ void testAllocator()
 
 int main()
 {
-	testVector();
-	testSortedVector();
 	testBePlusTree();
 	testAllocator();
 	testBitmap();

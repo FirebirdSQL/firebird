@@ -160,22 +160,22 @@ namespace fb_utils
 	}
 
 	unsigned int copyStatus(ISC_STATUS* const to, const unsigned int space,
-							const ISC_STATUS* const from, const unsigned int count) throw();
-	void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from) throw();
-	unsigned int mergeStatus(ISC_STATUS* const to, unsigned int space, const Firebird::IStatus* from) throw();
-	void setIStatus(Firebird::CheckStatusWrapper* to, const ISC_STATUS* from) throw();
-	unsigned int statusLength(const ISC_STATUS* const status) throw();
+							const ISC_STATUS* const from, const unsigned int count) noexcept;
+	void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from) noexcept;
+	unsigned int mergeStatus(ISC_STATUS* const to, unsigned int space, const Firebird::IStatus* from) noexcept;
+	void setIStatus(Firebird::CheckStatusWrapper* to, const ISC_STATUS* from) noexcept;
+	unsigned int statusLength(const ISC_STATUS* const status) noexcept;
 	unsigned int subStatus(const ISC_STATUS* in, unsigned int cin,
-						   const ISC_STATUS* sub, unsigned int csub) throw();
-	bool cmpStatus(unsigned int len, const ISC_STATUS* a, const ISC_STATUS* b) throw();
-	const ISC_STATUS* nextCode(const ISC_STATUS* v) throw();
+						   const ISC_STATUS* sub, unsigned int csub) noexcept;
+	bool cmpStatus(unsigned int len, const ISC_STATUS* a, const ISC_STATUS* b) noexcept;
+	const ISC_STATUS* nextCode(const ISC_STATUS* v) noexcept;
 
-	inline unsigned nextArg(const ISC_STATUS v) throw()
+	inline unsigned nextArg(const ISC_STATUS v) noexcept
 	{
 		return v == isc_arg_cstring ? 3 : 2;
 	}
 
-	inline bool isStr(const ISC_STATUS v) throw()
+	inline bool isStr(const ISC_STATUS v) noexcept
 	{
 		switch (v)
 		{

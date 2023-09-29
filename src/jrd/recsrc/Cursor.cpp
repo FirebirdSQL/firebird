@@ -46,16 +46,47 @@ namespace
 
 		return true;
 	}
+
+	class ProfilerSelectPrepare final
+	{
+	public:
+		ProfilerSelectPrepare(thread_db* tdbb, const Select* select)
+			: profilerManager(tdbb->getAttachment()->getActiveProfilerManagerForNonInternalStatement(tdbb))
+		{
+			const auto request = tdbb->getRequest();
+
+			if (profilerManager)
+				profilerManager->prepareCursor(tdbb, request, select);
+		}
+
+	public:
+		ProfilerManager* const profilerManager;
+	};
+
+	class ProfilerSelectStopWatcher
+	{
+	public:
+		ProfilerSelectStopWatcher(thread_db* tdbb, const Select* select, ProfilerManager::RecordSourceStopWatcher::Event event)
+			: profilerSelectPrepare(tdbb, select),
+			  recordSourceStopWatcher(tdbb, profilerSelectPrepare.profilerManager, select, event)
+		{
+		}
+
+	private:
+		ProfilerSelectPrepare profilerSelectPrepare;
+		ProfilerManager::RecordSourceStopWatcher recordSourceStopWatcher;
+	};
 }
 
 // ---------------------
 // Select implementation
 // ---------------------
 
-Select::Select(const RecordSource* source, const RseNode* rse, ULONG line, ULONG column, const MetaName& cursorName)
-	: m_top(source),
+Select::Select(CompilerScratch* csb, const RecordSource* source, const RseNode* rse, ULONG line, ULONG column,
+			const MetaName& cursorName)
+	: AccessPath(csb),
+	  m_root(source),
 	  m_rse(rse),
-	  m_cursorProfileId(source->getCursorProfileId()),
 	  m_cursorName(cursorName),
 	  m_line(line),
 	  m_column(column)
@@ -76,82 +107,73 @@ void Select::initializeInvariants(Request* request) const
 	}
 }
 
-void Select::printPlan(thread_db* tdbb, string& plan, bool detailed) const
+void Select::getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const
 {
-	if (detailed)
+	if (m_line || m_column)
 	{
-		if (m_rse->isSubQuery())
-		{
-			plan += "\nSub-query";
-
-			if (m_rse->isInvariant())
-				plan += " (invariant)";
-		}
-		else if (m_cursorName.hasData())
-		{
-			plan += "\nCursor \"" + string(m_cursorName) + "\"";
-
-			if (m_rse->isScrollable())
-				plan += " (scrollable)";
-		}
-		else
-			plan += "\nSelect Expression";
-
-		if (m_line || m_column)
-		{
-			string pos;
-			pos.printf(" (line %u, column %u)", m_line, m_column);
-			plan += pos;
-		}
-	}
-	else
-	{
-		if (m_line || m_column)
-		{
-			string pos;
-			pos.printf("\n-- line %u, column %u", m_line, m_column);
-			plan += pos;
-		}
-
-		plan += "\nPLAN ";
+		string pos;
+		pos.printf("\n-- line %u, column %u", m_line, m_column);
+		plan += pos;
 	}
 
-	m_top->print(tdbb, plan, detailed, 0, true);
+	plan += "\nPLAN ";
+	m_root->getLegacyPlan(tdbb, plan, level);
 }
 
-void Select::prepareProfiler(thread_db* tdbb, Request* request) const
+void Select::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	const auto attachment = tdbb->getAttachment();
+	planEntry.className = "Select";
 
-	const auto profilerManager = attachment->isProfilerActive() && !request->hasInternalStatement() ?
-		attachment->getProfilerManager(tdbb) :
-		nullptr;
+	if (m_rse->isSubQuery())
+	{
+		planEntry.lines.add().text = "Sub-query";
 
-	if (profilerManager)
-		profilerManager->prepareCursor(tdbb, request, this);
+		if (m_rse->isInvariant())
+			planEntry.lines.back().text += " (invariant)";
+	}
+	else if (m_cursorName.hasData())
+	{
+		planEntry.lines.add().text = "Cursor \"" + string(m_cursorName) + "\"";
+
+		if (m_rse->isScrollable())
+			planEntry.lines.back().text += " (scrollable)";
+	}
+	else
+		planEntry.lines.add().text = "Select Expression";
+
+	if (m_line || m_column)
+	{
+		string pos;
+		pos.printf(" (line %u, column %u)", m_line, m_column);
+		planEntry.lines.back().text += pos;
+	}
+
+	if (recurse)
+		m_root->getPlan(tdbb, planEntry.children.add(), level + 1, recurse);
 }
 
 // ---------------------
 // SubQuery implementation
 // ---------------------
 
-SubQuery::SubQuery(const RecordSource* rsb, const RseNode* rse)
-	: Select(rsb, rse, rse->line, rse->column)
+SubQuery::SubQuery(CompilerScratch* csb, const RecordSource* rsb, const RseNode* rse)
+	: Select(csb, rsb, rse, rse->line, rse->column)
 {
-	fb_assert(m_top);
+	fb_assert(m_root);
 }
 
 void SubQuery::open(thread_db* tdbb) const
 {
-	prepareProfiler(tdbb, tdbb->getRequest());
+	ProfilerSelectStopWatcher profilerSelectStopWatcher(tdbb, this,
+		ProfilerManager::RecordSourceStopWatcher::Event::OPEN);
 
 	initializeInvariants(tdbb->getRequest());
-	m_top->open(tdbb);
+	m_root->open(tdbb);
 }
 
 void SubQuery::close(thread_db* tdbb) const
 {
-	m_top->close(tdbb);
+	m_root->close(tdbb);
 }
 
 bool SubQuery::fetch(thread_db* tdbb) const
@@ -159,9 +181,10 @@ bool SubQuery::fetch(thread_db* tdbb) const
 	if (!validate(tdbb))
 		return false;
 
-	prepareProfiler(tdbb, tdbb->getRequest());
+	ProfilerSelectStopWatcher profilerSelectStopWatcher(tdbb, this,
+		ProfilerManager::RecordSourceStopWatcher::Event::GET_RECORD);
 
-	return m_top->getRecord(tdbb);
+	return m_root->getRecord(tdbb);
 }
 
 
@@ -171,10 +194,10 @@ bool SubQuery::fetch(thread_db* tdbb) const
 
 Cursor::Cursor(CompilerScratch* csb, const RecordSource* rsb, const RseNode* rse,
 			   bool updateCounters, ULONG line, ULONG column, const MetaName& name)
-	: Select(rsb, rse, line, column, name),
+	: Select(csb, rsb, rse, line, column, name),
 	  m_updateCounters(updateCounters)
 {
-	fb_assert(m_top);
+	fb_assert(m_root);
 
 	m_impure = csb->allocImpure<Impure>();
 }
@@ -183,7 +206,8 @@ void Cursor::open(thread_db* tdbb) const
 {
 	const auto request = tdbb->getRequest();
 
-	prepareProfiler(tdbb, request);
+	ProfilerSelectStopWatcher profilerSelectStopWatcher(tdbb, this,
+		ProfilerManager::RecordSourceStopWatcher::Event::OPEN);
 
 	Impure* impure = request->getImpure<Impure>(m_impure);
 
@@ -191,7 +215,7 @@ void Cursor::open(thread_db* tdbb) const
 	impure->irsb_state = BOS;
 
 	initializeInvariants(request);
-	m_top->open(tdbb);
+	m_root->open(tdbb);
 }
 
 void Cursor::close(thread_db* tdbb) const
@@ -202,7 +226,7 @@ void Cursor::close(thread_db* tdbb) const
 	if (impure->irsb_active)
 	{
 		impure->irsb_active = false;
-		m_top->close(tdbb);
+		m_root->close(tdbb);
 	}
 }
 
@@ -226,9 +250,10 @@ bool Cursor::fetchNext(thread_db* tdbb) const
 	if (impure->irsb_state == EOS)
 		return false;
 
-	prepareProfiler(tdbb, request);
+	ProfilerSelectStopWatcher profilerSelectStopWatcher(tdbb, this,
+		ProfilerManager::RecordSourceStopWatcher::Event::GET_RECORD);
 
-	if (!m_top->getRecord(tdbb))
+	if (!m_root->getRecord(tdbb))
 	{
 		impure->irsb_state = EOS;
 		return false;
@@ -303,7 +328,7 @@ bool Cursor::fetchAbsolute(thread_db* tdbb, SINT64 offset) const
 		return false;
 	}
 
-	const auto buffer = static_cast<const BufferedStream*>(m_top);
+	const auto buffer = static_cast<const BufferedStream*>(m_root);
 	const auto count = buffer->getCount(tdbb);
 	const SINT64 position = (offset > 0) ? offset - 1 : count + offset;
 
@@ -318,7 +343,8 @@ bool Cursor::fetchAbsolute(thread_db* tdbb, SINT64 offset) const
 		return false;
 	}
 
-	prepareProfiler(tdbb, request);
+	ProfilerSelectStopWatcher profilerSelectStopWatcher(tdbb, this,
+		ProfilerManager::RecordSourceStopWatcher::Event::GET_RECORD);
 
 	impure->irsb_position = position;
 	buffer->locate(tdbb, impure->irsb_position);
@@ -363,7 +389,7 @@ bool Cursor::fetchRelative(thread_db* tdbb, SINT64 offset) const
 	if (!offset)
 		return (impure->irsb_state == POSITIONED);
 
-	const auto buffer = static_cast<const BufferedStream*>(m_top);
+	const auto buffer = static_cast<const BufferedStream*>(m_root);
 	const auto count = buffer->getCount(tdbb);
 	SINT64 position = impure->irsb_position;
 
@@ -397,7 +423,8 @@ bool Cursor::fetchRelative(thread_db* tdbb, SINT64 offset) const
 		return false;
 	}
 
-	prepareProfiler(tdbb, request);
+	ProfilerSelectStopWatcher profilerSelectStopWatcher(tdbb, this,
+		ProfilerManager::RecordSourceStopWatcher::Event::GET_RECORD);
 
 	impure->irsb_position = position;
 	buffer->locate(tdbb, impure->irsb_position);

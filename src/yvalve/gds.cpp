@@ -235,6 +235,7 @@ static void		blr_print_cond(gds_ctl*, SSHORT);
 static int		blr_print_dtype(gds_ctl*);
 static void		blr_print_join(gds_ctl*);
 static SLONG	blr_print_line(gds_ctl*, SSHORT);
+static void		blr_print_name(gds_ctl*);
 static void		blr_print_verb(gds_ctl*, SSHORT);
 static int		blr_print_word(gds_ctl*);
 
@@ -323,6 +324,8 @@ const int op_window_win		= 29;
 const int op_erase			= 30;	// special due to optional blr_marks after blr_erase
 const int op_dcl_local_table	= 31;
 const int op_outer_map		= 32;
+const int op_invoke_function	= 33;
+const int op_invsel_procedure	= 34;
 
 static const UCHAR
 	// generic print formats
@@ -412,7 +415,10 @@ static const UCHAR
 	marks[] = { op_byte, op_literal, op_line, op_verb, 0},
 	erase[] = { op_erase, 0},
 	local_table[] = { op_word, op_byte, op_literal, op_byte, op_line, 0},
-	outer_map[] = { op_outer_map, 0 };
+	outer_map[] = { op_outer_map, 0 },
+	in_list[] = { op_verb, op_line, op_word, op_line, op_args, 0},
+	invoke_function[] = { op_invoke_function, 0 },
+	invsel_procedure[] = { op_invsel_procedure, 0 };
 
 
 #include "../jrd/blp.h"
@@ -3324,6 +3330,15 @@ static SLONG blr_print_line(gds_ctl* control, SSHORT offset)
 }
 
 
+static void blr_print_name(gds_ctl* control)
+{
+	auto len = blr_print_byte(control);
+
+	while (len-- > 0)
+		blr_print_char(control);
+}
+
+
 static void blr_print_verb(gds_ctl* control, SSHORT level)
 {
 /**************************************
@@ -3923,6 +3938,210 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 					case blr_outer_map_variable:
 						blr_print_word(control);
 						n = blr_print_word(control);
+						offset = blr_print_line(control, offset);
+						break;
+
+					default:
+						fb_assert(false);
+				}
+			}
+
+			// print blr_end
+			control->ctl_blr_reader.seekBackward(1);
+			blr_print_verb(control, level);
+			break;
+		}
+
+		case op_invoke_function:
+		{
+			offset = blr_print_line(control, offset);
+
+			static const char* subCodes[] =
+			{
+				nullptr,
+				"type",
+				"arg_names",
+				"args"
+			};
+
+			static const char* typeSubCodes[] =
+			{
+				nullptr,
+				"standalone",
+				"packaged",
+				"sub"
+			};
+
+			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
+			{
+				blr_indent(control, level);
+
+				if (blr_operator == 0 || blr_operator >= FB_NELEM(subCodes))
+					blr_error(control, "*** invalid blr_invoke_function sub code ***");
+
+				blr_format(control, "blr_invoke_function_%s, ", subCodes[blr_operator]);
+
+				switch (blr_operator)
+				{
+					case blr_invoke_function_type:
+						n = control->ctl_blr_reader.getByte();
+
+						if (n == 0 || n >= FB_NELEM(typeSubCodes))
+							blr_error(control, "*** invalid blr_invoke_function_type sub code ***");
+
+						blr_format(control, "blr_invoke_function_type_%s,", typeSubCodes[n]);
+						offset = blr_print_line(control, (SSHORT) offset);
+
+						blr_indent(control, level + 1);
+						blr_print_name(control);
+						offset = blr_print_line(control, (SSHORT) offset);
+
+						if (n == blr_invoke_function_type_packaged)
+						{
+							blr_indent(control, level + 1);
+							blr_print_name(control);
+							offset = blr_print_line(control, (SSHORT) offset);
+						}
+
+						break;
+
+					case blr_invoke_function_arg_names:
+						n = blr_print_word(control);
+						offset = blr_print_line(control, offset);
+
+						++level;
+
+						while (n-- > 0)
+						{
+							blr_indent(control, level);
+							blr_print_name(control);
+							offset = blr_print_line(control, (SSHORT) offset);
+						}
+
+						--level;
+						break;
+
+					case blr_invoke_function_args:
+						n = blr_print_word(control);
+						offset = blr_print_line(control, offset);
+
+						++level;
+
+						while (n-- > 0)
+							blr_print_verb(control, level);
+
+						--level;
+						break;
+
+					default:
+						fb_assert(false);
+				}
+			}
+
+			// print blr_end
+			control->ctl_blr_reader.seekBackward(1);
+			blr_print_verb(control, level);
+			break;
+		}
+
+		case op_invsel_procedure:
+		{
+			offset = blr_print_line(control, offset);
+
+			static const char* subCodes[] =
+			{
+				nullptr,
+				"type",
+				"in_arg_names",
+				"in_args",
+				"out_arg_names",
+				"out_args",
+				"inout_arg_names",
+				"inout_args",
+				"context",
+				"alias"
+			};
+
+			static const char* typeSubCodes[] =
+			{
+				nullptr,
+				"standalone",
+				"packaged",
+				"sub"
+			};
+
+			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
+			{
+				blr_indent(control, level);
+
+				if (blr_operator == 0 || blr_operator >= FB_NELEM(subCodes))
+					blr_error(control, "*** invalid blr_invsel_procedure sub code ***");
+
+				blr_format(control, "blr_invsel_procedure_%s, ", subCodes[blr_operator]);
+
+				switch (blr_operator)
+				{
+					case blr_invsel_procedure_type:
+						n = control->ctl_blr_reader.getByte();
+
+						if (n == 0 || n >= FB_NELEM(typeSubCodes))
+							blr_error(control, "*** invalid blr_invsel_procedure_type sub code ***");
+
+						blr_format(control, "blr_invsel_procedure_type_%s,", typeSubCodes[n]);
+						offset = blr_print_line(control, (SSHORT) offset);
+
+						blr_indent(control, level + 1);
+						blr_print_name(control);
+						offset = blr_print_line(control, (SSHORT) offset);
+
+						if (n == blr_invsel_procedure_type_packaged)
+						{
+							blr_indent(control, level + 1);
+							blr_print_name(control);
+							offset = blr_print_line(control, (SSHORT) offset);
+						}
+
+						break;
+
+					case blr_invsel_procedure_in_arg_names:
+					case blr_invsel_procedure_out_arg_names:
+					case blr_invsel_procedure_inout_arg_names:
+						n = blr_print_word(control);
+						offset = blr_print_line(control, offset);
+
+						++level;
+
+						while (n-- > 0)
+						{
+							blr_indent(control, level);
+							blr_print_name(control);
+							offset = blr_print_line(control, (SSHORT) offset);
+						}
+
+						--level;
+						break;
+
+					case blr_invsel_procedure_in_args:
+					case blr_invsel_procedure_out_args:
+					case blr_invsel_procedure_inout_args:
+						n = blr_print_word(control);
+						offset = blr_print_line(control, offset);
+
+						++level;
+
+						while (n-- > 0)
+							blr_print_verb(control, level);
+
+						--level;
+						break;
+
+					case blr_invsel_procedure_context:
+						blr_print_word(control);
+						offset = blr_print_line(control, offset);
+						break;
+
+					case blr_invsel_procedure_alias:
+						blr_print_name(control);
 						offset = blr_print_line(control, offset);
 						break;
 

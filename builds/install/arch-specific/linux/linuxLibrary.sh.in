@@ -530,9 +530,17 @@ haveLibrary() {
 # Fix .so version of libtommath
 
 fixTomMath() {
-	tm1=`checkLibName libtommath.so.1 | awk '{print $4}'`
+	[ -z "$LIBTOMMATH" ] && return
+	if [ "$LIBTOMMATH" = "libtommath.so.1" ]
+	then
+		checklib=libtommath.so.0
+	else
+		checklib=libtommath.so.1
+	fi
+
+	tm1=`checkLibName $checklib | awk '{print $4}'`
 	[ -z "$tm1" ] && return
-	tm0=`dirname $tm1`/`basename $tm1 .1`.0
+	tm0=`dirname $tm1`/$LIBTOMMATH
 	[ -e "$tm0" ] && return
 	ln -s $tm1 $tm0
 }

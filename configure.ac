@@ -67,6 +67,26 @@ AC_CANONICAL_BUILD
 CPU_TYPE=$build_cpu
 AC_SUBST(CPU_TYPE)
 
+case "$build" in
+  aarch64-*-darwin*)
+    VCPKG_TRIPLET=fb-arm64-osx
+    ;;
+
+  x*64-*-darwin*)
+    VCPKG_TRIPLET=fb-x64-osx
+    ;;
+esac
+
+if test "x$VCPKG_TRIPLET" != "x" ; then
+  if ! test -f ./vcpkg/vcpkg; then
+    ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+  fi
+
+  ./vcpkg/vcpkg install --triplet=$VCPKG_TRIPLET
+
+  VCPKG_INSTALLED=`pwd`/vcpkg_installed/$VCPKG_TRIPLET
+  AC_SUBST(VCPKG_INSTALLED)
+fi
 
 dnl EKU: set appropiate defaults for each platform
 dnl      EDITLINE_FLG     : support fancy command line editing in isql
@@ -300,6 +320,18 @@ dnl CPU_TYPE=ppc64
     EDITLINE_FLG=Y
     SHRLIB_EXT=so
     CPU_TYPE=arm64
+    STD_EDITLINE=true
+    STD_ICU=true
+    libdir=/usr/lib64
+    ;;
+
+  loongarch*-*-linux*)
+    MAKEFILE_PREFIX=linux_loongarch
+    INSTALL_PREFIX=linux
+    PLATFORM=LINUX
+    AC_DEFINE(LINUX, 1, [Define this if OS is Linux])
+    EDITLINE_FLG=Y
+    SHRLIB_EXT=so
     STD_EDITLINE=true
     STD_ICU=true
     libdir=/usr/lib64
@@ -668,6 +700,14 @@ dnl Later we always build threaded binaries
 CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
 CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS"
 LIBS="$LIBS $PTHREAD_LIBS"
+
+case "$build" in
+  *-*-darwin*)
+    CFLAGS="$CFLAGS -I${VCPKG_INSTALLED}/include"
+    CXXFLAGS="$CXXFLAGS -nostdinc++ -isystem ${VCPKG_INSTALLED}/include/c++/v1 -I${VCPKG_INSTALLED}/include"
+    LDFLAGS="$LDFLAGS -nostdlib++ -stdlib=libc++ -L${VCPKG_INSTALLED}/lib -lc++"
+    ;;
+esac
 
 AC_ARG_ENABLE(raw-devices,
   [  --enable-raw-devices    enable databases on raw devices (default on POSIX)],
@@ -1397,6 +1437,18 @@ dnl # output
 		fi
 	fi
 
+  case "$build" in
+    *-*-darwin*)
+      cp -a $VCPKG_INSTALLED/lib/libicu* gen/\$fb_tgt/firebird/lib/
+      install_name_tool -id @rpath/lib/libicuuc.dylib gen/\$fb_tgt/firebird/lib/libicuuc.dylib
+      install_name_tool -id @rpath/lib/libicui18n.dylib gen/\$fb_tgt/firebird/lib/libicui18n.dylib
+      install_name_tool -id @rpath/lib/libicudata.dylib gen/\$fb_tgt/firebird/lib/libicudata.dylib
+      install_name_tool -change @rpath/libicudata.71.dylib @loader_path/libicudata.71.dylib gen/\$fb_tgt/firebird/lib/libicuuc.71.dylib
+      install_name_tool -change @rpath/libicudata.71.dylib @loader_path/libicudata.71.dylib gen/\$fb_tgt/firebird/lib/libicui18n.71.dylib
+      install_name_tool -change @rpath/libicuuc.71.dylib @loader_path/libicuuc.71.dylib gen/\$fb_tgt/firebird/lib/libicui18n.71.dylib
+      ;;
+  esac
+
 dnl ### TEMP ### directories for generated .cpp, .o and .d by module name
 	for src_dir in `cd src; ls -R -1 * | grep : | tr -d : | tr "\n" " "; cd ..`; do
     	mkdir -p temp/\$fb_tgt/\$src_dir
@@ -1597,7 +1649,7 @@ AC_OUTPUT
 dnl Print out the build configuration (the most interesting thing)
 echo
 echo
-echo The Firebird5 package has been configured with the following options:
+echo The Firebird6 package has been configured with the following options:
 echo
 
 case $DEVEL_FLG in

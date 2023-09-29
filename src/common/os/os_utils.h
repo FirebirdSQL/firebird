@@ -358,6 +358,10 @@ namespace os_utils
 
 #endif	// WIN_NT
 
+#ifdef WIN_NT
+	void setDefaultAffinity();
+#endif
+
 	class CtrlCHandler
 	{
 	public:

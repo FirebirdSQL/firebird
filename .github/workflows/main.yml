@@ -213,13 +213,22 @@ jobs:
       - name: Get Release Notes
         uses: ./.github/actions/get-release-notes
 
+      - name: Build x86 for client package in x64
+        id: build-x86
+        shell: cmd
+        if: ${{ matrix.platform == 'x64' }}
+        run: |
+          mkdir builds\install_images
+          cd builds\docker\windows
+          call build.bat
+          call run.bat C:\fbscripts\build-x86.bat
+
       - name: Build
         id: build
         shell: cmd
         env:
           PLATFORM: ${{ matrix.platform }}
         run: |
-          echo arch_suffix=%PLATFORM%>> %GITHUB_OUTPUT%
           mkdir builds\install_images
           cd builds\docker\windows
           call build.bat
@@ -254,121 +263,45 @@ jobs:
         with:
           token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
           deletePatterns:  |
-            Firebird-*-windows-${{ steps.build.outputs.arch_suffix }}*.exe
-            Firebird-*-windows-${{ steps.build.outputs.arch_suffix }}*.zip
+            Firebird-*-windows-${{ matrix.platform }}*.exe
+            Firebird-*-windows-${{ matrix.platform }}*.zip
           uploadFiles: |
-            builds/install_images/Firebird-*-windows-*.exe
-            builds/install_images/Firebird-*-windows-*.zip
+            builds/install_images/Firebird-*-windows-${{ matrix.platform }}*.exe
+            builds/install_images/Firebird-*-windows-${{ matrix.platform }}*.zip
 
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-12
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 10
+          submodules: 'true'
 
       - name: Prepare - Install tools
         run: |
-          brew install automake cmake libtool ninja
+          brew install automake autoconf-archive cmake libtool ninja
 
-      - name: Cache - libc++ install
-        id: cache-libcxx-install-macos
+      - name: Cache - vcpkg
         uses: actions/cache@v3
         with:
-          key: ${{ runner.os }}-libcxx-install-13.0.1
+          key: ${{ runner.os }}-vcpkg
           path: |
-            extern/libcxx-macos-install
-
-      - name: Download libc++ sources
-        if: steps.cache-libcxx-install-macos.outputs.cache-hit != 'true'
-        run: |
-          mkdir extern/libcxx-macos
-          pushd extern/libcxx-macos
-          curl -OL https://github.com/llvm/llvm-project/releases/download/llvmorg-13.0.1/llvm-project-13.0.1.src.tar.xz
-          tar xJf llvm-project-13.0.1.src.tar.xz
-          popd
-
-      - name: Build libc++
-        if: steps.cache-libcxx-install-macos.outputs.cache-hit != 'true'
-        run: |
-          LIBCXX_BUILD_PATH=`pwd`/extern/libcxx-macos-build
-          LIBCXX_INSTALL_PATH=`pwd`/extern/libcxx-macos-install
-          mkdir $LIBCXX_BUILD_PATH
-          pushd extern/libcxx-macos/llvm-project-13.0.1.src
-          export MACOSX_DEPLOYMENT_TARGET=10.9
-          cmake -G Ninja -S llvm -B $LIBCXX_BUILD_PATH \
-            -DLLVM_ENABLE_PROJECTS="libcxx;libcxxabi" \
-            -DCMAKE_INSTALL_PREFIX=$LIBCXX_INSTALL_PATH \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DLIBCXX_ENABLE_SHARED=false \
-            -DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=true
-          ninja -C $LIBCXX_BUILD_PATH cxx cxxabi
-          ninja -C $LIBCXX_BUILD_PATH install-cxx install-cxxabi
-          popd
-
-      - name: Cache - libicu install
-        id: cache-libicu-install-macos
-        uses: actions/cache@v3
-        with:
-          key: ${{ runner.os }}-libicu-install-63.2
-          path: |
-            extern/libicu-macos-install
-
-      - name: Download and patch libicu sources
-        if: steps.cache-libicu-install-macos.outputs.cache-hit != 'true'
-        run: |
-          mkdir extern/libicu-macos
-          pushd extern/libicu-macos
-          curl -OL https://github.com/unicode-org/icu/releases/download/release-63-2/icu4c-63_2-src.tgz
-          curl -OL https://github.com/unicode-org/icu/commit/24aeb9a5a5874f4ce5db912e30670ac3ae236971.patch
-          tar xzf icu4c-63_2-src.tgz
-          cd icu/source
-          patch -p3 < ../../24aeb9a5a5874f4ce5db912e30670ac3ae236971.patch
-          popd
-
-      - name: Build libicu
-        if: steps.cache-libicu-install-macos.outputs.cache-hit != 'true'
-        run: |
-          export LIBTOOLIZE=glibtoolize
-          export LIBTOOL=glibtool
-
-          LIBICU_INSTALL_PATH=`pwd`/extern/libicu-macos-install
-          pushd extern/libicu-macos/icu/source
-          ./runConfigureICU MacOSX --prefix=$LIBICU_INSTALL_PATH
-          make -j4
-          make install
-          install_name_tool -id @rpath/lib/libicuuc.dylib $LIBICU_INSTALL_PATH/lib/libicuuc.dylib
-          install_name_tool -id @rpath/lib/libicui18n.dylib $LIBICU_INSTALL_PATH/lib/libicui18n.dylib
-          install_name_tool -id @rpath/lib/libicudata.dylib $LIBICU_INSTALL_PATH/lib/libicudata.dylib
-          install_name_tool -change libicudata.63.dylib @loader_path/libicudata.63.dylib $LIBICU_INSTALL_PATH/lib/libicuuc.63.dylib
-          install_name_tool -change libicudata.63.dylib @loader_path/libicudata.63.dylib $LIBICU_INSTALL_PATH/lib/libicui18n.63.dylib
-          install_name_tool -change libicuuc.63.dylib @loader_path/libicuuc.63.dylib $LIBICU_INSTALL_PATH/lib/libicui18n.63.dylib
-          popd
+            $HOME/.cache/vcpkg/archives
 
       - name: Build
         run: |
           export LIBTOOLIZE=glibtoolize
           export LIBTOOL=glibtool
 
-          LIBCXX_INSTALL_PATH=`pwd`/extern/libcxx-macos-install
-          LIBICU_INSTALL_PATH=`pwd`/extern/libicu-macos-install
-
-          mkdir -p gen/Release/firebird/lib
-          cp -R $LIBICU_INSTALL_PATH/lib/libicu{data,i18n,uc}.*dylib gen/Release/firebird/lib/
-
-          export C_INCLUDE_PATH="$LIBICU_INSTALL_PATH/include:`xcrun --show-sdk-path`/usr/include"
-          export CPLUS_INCLUDE_PATH="$LIBCXX_INSTALL_PATH/include/c++/v1:$LIBICU_INSTALL_PATH/include:`xcrun --show-sdk-path`/usr/include"
-          export LIBRARY_PATH="$LIBCXX_INSTALL_PATH/lib:$LIBICU_INSTALL_PATH/lib:$LIBRARY_PATH"
-
           ./autogen.sh --with-builtin-tommath --with-builtin-tomcrypt
           make -j4
           make tests -j4
           make run_tests
 
-          (cd gen; make -B -f make.platform.postfix ICU_LOC="$LIBICU_INSTALL_PATH/lib/")
-          (cd gen; make -B -f Makefile.install)
+          make -C gen -B -f make.platform.postfix
+          make -C gen -B -f Makefile.install
 
           # Rename directory to make sure the build is relocatable.
           mv gen gen2

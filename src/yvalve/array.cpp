@@ -157,7 +157,7 @@ void iscArrayLookupBoundsImpl(Why::YAttachment* attachment,
 		       fd.rdb$upper_bound
 		    from rdb$field_dimensions fd
 		    where fd.rdb$field_name = ?
-		    order by fd.dimension
+		    order by fd.rdb$dimension
 	)""";
 
 	FB_MESSAGE(InputMessage, CheckStatusWrapper,

@@ -85,7 +85,7 @@ for %%v in (gpre_boot build_msg common_test engine_test) do (
 	copy %FB_ROOT_PATH%\src\plugins\udr_engine\udr_engine.conf %FB_OUTPUT_DIR%\plugins\udr_engine.conf >nul
 
 	:: DATABASES
-	copy %FB_GEN_DIR%\dbs\security5.FDB %FB_OUTPUT_DIR%\security5.fdb >nul
+	copy %FB_GEN_DIR%\dbs\security6.FDB %FB_OUTPUT_DIR%\security6.fdb >nul
 
 	:: DOCS
 	copy %FB_ROOT_PATH%\*.md %FB_OUTPUT_DIR%\doc\ >nul

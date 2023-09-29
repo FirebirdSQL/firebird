@@ -1790,17 +1790,22 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 				// is a backversion then at least one of the record versions is
 				// committed. If there's no backversion then check transaction
 				// state of the lone primary record version. Unless it is already deleted.
+				// Note, if the primary record version is deleted and committed, the
+				// existence of an index entry is not required for such version chain
+				// because it is all garbage.
+				const bool deleted_flag = header->rhd_flags & rhd_deleted;
 
-				if (header->rhd_b_page)
+				if (header->rhd_b_page && !deleted_flag)
 					RBM_SET(pool, &vdr_rel_records, number.getValue());
-				else if ((header->rhd_flags & rhd_deleted) == 0)
+				else if (header->rhd_b_page || !deleted_flag)
 				{
 					const TraNumber transaction = Ods::getTraNum(header);
 
 					const int state = (transaction < dbb->dbb_oldest_transaction) ?
 						tra_committed : TRA_fetch_state(vdr_tdbb, transaction);
 
-					if (state == tra_committed || state == tra_limbo)
+					if (!deleted_flag && (state == tra_committed || state == tra_limbo) ||
+						deleted_flag && state != tra_committed)
 						RBM_SET(pool, &vdr_rel_records, number.getValue());
 				}
 

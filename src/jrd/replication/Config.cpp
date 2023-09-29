@@ -333,7 +333,7 @@ Config* Config::get(const PathName& lookupName)
 // This routine is used to retrieve the list of replica databases.
 // Therefore it checks only the necessary settings.
 
-void Config::enumerate(Firebird::Array<Config*>& replicas)
+void Config::enumerate(ReplicaList& replicas)
 {
 	PathName dbName;
 

@@ -52,6 +52,10 @@ const double REDUCE_SELECTIVITY_FACTOR_GREATER = 0.05;
 const double REDUCE_SELECTIVITY_FACTOR_STARTING = 0.01;
 const double REDUCE_SELECTIVITY_FACTOR_OTHER = 0.01;
 
+// Cost of simple (CPU bound) operations is less than the page access cost
+const double COST_FACTOR_MEMCOPY = 0.5;
+const double COST_FACTOR_HASHING = 0.5;
+
 const double MAXIMUM_SELECTIVITY = 1.0;
 const double DEFAULT_SELECTIVITY = 0.1;
 
@@ -245,6 +249,7 @@ public:
 
 	static const unsigned CONJUNCT_USED		= 1;	// conjunct is used
 	static const unsigned CONJUNCT_MATCHED	= 2;	// conjunct matches an index segment
+	static const unsigned CONJUNCT_JOINED	= 4;	// conjunct used for equi-join
 
 	typedef Firebird::HalfStaticArray<Conjunct, OPT_STATIC_ITEMS> ConjunctList;
 
@@ -286,6 +291,11 @@ public:
 		bool hasData() const
 		{
 			return (iter < end);
+		}
+
+		unsigned getFlags() const
+		{
+			return iter->flags;
 		}
 
 		void rewind()
@@ -372,6 +382,12 @@ public:
 				break;
 			}
 		}
+		else if (const auto listNode = nodeAs<InListBoolNode>(node))
+		{
+			const auto selectivity = REDUCE_SELECTIVITY_FACTOR_EQUALITY *
+				listNode->list->items.getCount();
+			return MIN(selectivity, MAXIMUM_SELECTIVITY);
+		}
 		else if (nodeIs<MissingBoolNode>(node))
 		{
 			return REDUCE_SELECTIVITY_FACTOR_EQUALITY;
@@ -393,7 +409,19 @@ public:
 
 	static RecordSource* compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse)
 	{
-		return Optimizer(tdbb, csb, rse).compile(nullptr);
+		bool firstRows = false;
+
+		// System requests should not be affected by user-specified settings
+		if (!(csb->csb_g_flags & csb_internal))
+		{
+			const auto dbb = tdbb->getDatabase();
+			const auto defaultFirstRows = dbb->dbb_config->getOptimizeForFirstRows();
+
+			const auto attachment = tdbb->getAttachment();
+			firstRows = attachment->att_opt_first_rows.valueOr(defaultFirstRows);
+		}
+
+		return Optimizer(tdbb, csb, rse, firstRows).compile(nullptr);
 	}
 
 	~Optimizer();
@@ -439,9 +467,12 @@ public:
 
 	bool favorFirstRows() const
 	{
-		return (rse->flags & RseNode::FLAG_OPT_FIRST_ROWS) != 0;
+		return firstRows;
 	}
 
+	RecordSource* applyLocalBoolean(RecordSource* rsb,
+									const StreamList& streams,
+									ConjunctIterator& iter);
 	bool checkEquiJoin(BoolExprNode* boolean);
 	bool getEquiJoinKeys(BoolExprNode* boolean,
 						 NestConst<ValueExprNode>* node1,
@@ -452,13 +483,10 @@ public:
 	void printf(const char* format, ...);
 
 private:
-	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse);
+	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, bool parentFirstRows);
 
 	RecordSource* compile(BoolExprNodeStack* parentStack);
 
-	RecordSource* applyLocalBoolean(RecordSource* rsb,
-									const StreamList& streams,
-									ConjunctIterator& iter);
 	void checkIndices();
 	void checkSorts();
 	unsigned distributeEqualities(BoolExprNodeStack& orgStack, unsigned baseCount);
@@ -489,6 +517,8 @@ private:
 	CompilerScratch* const csb;
 	RseNode* const rse;
 
+	bool firstRows = false;					// optimize for first rows
+
 	FILE* debugFile = nullptr;
 	unsigned baseConjuncts = 0;				// number of conjuncts in our rse, next conjuncts are distributed parent
 	unsigned baseParentConjuncts = 0;		// number of conjuncts in our rse + distributed with parent, next are parent
@@ -511,7 +541,8 @@ enum segmentScanType {
 	segmentScanEqual,
 	segmentScanEquivalent,
 	segmentScanMissing,
-	segmentScanStarting
+	segmentScanStarting,
+	segmentScanList
 };
 
 typedef Firebird::HalfStaticArray<BoolExprNode*, OPT_STATIC_ITEMS> MatchedBooleanList;
@@ -525,6 +556,7 @@ struct IndexScratchSegment
 	explicit IndexScratchSegment(MemoryPool& p, const IndexScratchSegment& other)
 		: lowerValue(other.lowerValue),
 		  upperValue(other.upperValue),
+		  valueList(other.valueList),
 		  excludeLower(other.excludeLower),
 		  excludeUpper(other.excludeUpper),
 		  scope(other.scope),
@@ -534,6 +566,7 @@ struct IndexScratchSegment
 
 	ValueExprNode* lowerValue = nullptr;		// lower bound on index value
 	ValueExprNode* upperValue = nullptr;		// upper bound on index value
+	LookupValueList* valueList = nullptr;		// values to match
 	bool excludeLower = false;					// exclude lower bound value from scan
 	bool excludeUpper = false;					// exclude upper bound value from scan
 	unsigned scope = 0;							// highest scope level
@@ -557,6 +590,7 @@ struct IndexScratch
 	unsigned nonFullMatchedSegments = 0;
 	bool usePartialKey = false;				// Use INTL_KEY_PARTIAL
 	bool useMultiStartingKeys = false;		// Use INTL_KEY_MULTI_STARTING
+	bool useRootListScan = false;
 
 	Firebird::ObjectsArray<IndexScratchSegment> segments;
 	MatchedBooleanList matches;					// matched booleans (partial indices only)

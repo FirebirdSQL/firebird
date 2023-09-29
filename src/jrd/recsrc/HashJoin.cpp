@@ -257,6 +257,8 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 		m_leader.totalKeyLength += keyLength;
 	}
 
+	auto keyCount = 0;
+
 	for (FB_SIZE_T i = 1; i < count; i++)
 	{
 		RecordSource* const sub_rsb = args[i];
@@ -270,6 +272,8 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 		const FB_SIZE_T subKeyCount = sub.keys->getCount();
 		sub.keyLengths = FB_NEW_POOL(csb->csb_pool) ULONG[subKeyCount];
 		sub.totalKeyLength = 0;
+
+		keyCount += subKeyCount;
 
 		for (FB_SIZE_T j = 0; j < subKeyCount; j++)
 		{
@@ -299,7 +303,7 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 	if (!selectivity)
 	{
 		selectivity = MAXIMUM_SELECTIVITY;
-		for (auto keyCount = m_leader.keys->getCount(); keyCount; keyCount--)
+		while (keyCount--)
 			selectivity *= REDUCE_SELECTIVITY_FACTOR_EQUALITY;
 	}
 
@@ -450,43 +454,37 @@ WriteLockResult HashJoin::lockRecord(thread_db* /*tdbb*/, bool /*skipLocked*/) c
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
-void HashJoin::getChildren(Array<const RecordSource*>& children) const
+void HashJoin::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_leader.source);
-
+	level++;
+	plan += "HASH (";
+	m_leader.source->getLegacyPlan(tdbb, plan, level);
+	plan += ", ";
 	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		children.add(m_args[i].source);
+	{
+		if (i)
+			plan += ", ";
+
+		m_args[i].source->getLegacyPlan(tdbb, plan, level);
+	}
+	plan += ")";
 }
 
-void HashJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void HashJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
+	planEntry.className = "HashJoin";
+
+	planEntry.lines.add().text = "Hash Join (inner)";
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
 	{
-		plan += printIndent(++level) + "Hash Join (inner)";
-		printOptInfo(plan);
+		++level;
 
-		if (recurse)
-		{
-			m_leader.source->print(tdbb, plan, true, level, recurse);
+		m_leader.source->getPlan(tdbb, planEntry.children.add(), level, recurse);
 
-			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-				m_args[i].source->print(tdbb, plan, true, level, recurse);
-		}
-	}
-	else
-	{
-		level++;
-		plan += "HASH (";
-		m_leader.source->print(tdbb, plan, false, level, recurse);
-		plan += ", ";
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		{
-			if (i)
-				plan += ", ";
-
-			m_args[i].source->print(tdbb, plan, false, level, recurse);
-		}
-		plan += ")";
+		for (const auto& arg : m_args)
+			arg.source->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 

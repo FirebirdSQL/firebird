@@ -111,21 +111,23 @@ WriteLockResult LockedStream::lockRecord(thread_db* tdbb, bool skipLocked) const
 	return m_next->lockRecord(tdbb, skipLocked);
 }
 
-void LockedStream::getChildren(Array<const RecordSource*>& children) const
+void LockedStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_next);
+	m_next->getLegacyPlan(tdbb, plan, level);
 }
 
-void LockedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void LockedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Write Lock";
-		printOptInfo(plan);
-	}
+	planEntry.className = "LockedStream";
+
+	planEntry.lines.add().text = "Write Lock";
+	printOptInfo(planEntry.lines);
 
 	if (recurse)
-		m_next->print(tdbb, plan, detailed, level, recurse);
+	{
+		++level;
+		m_next->getPlan(tdbb, planEntry.children.add(), level, recurse);
+	}
 }
 
 void LockedStream::markRecursive()

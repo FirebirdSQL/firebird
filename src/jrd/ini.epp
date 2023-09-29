@@ -207,7 +207,24 @@ namespace
 		{ 0, 0, 0, 0 }
 	};
 
-	bool getCharsetByTextType(SSHORT& charSet, const USHORT subType)
+	unsigned getLatestFormat(thread_db* tdbb, int relId, int maxFieldId)
+	{
+		const auto relation = MET_relation(tdbb, relId);
+		fb_assert(relation && relation->rel_formats);
+		fb_assert(relation->rel_formats->count());
+
+		const auto formatNumber = relation->rel_formats->count() - 1;
+		fb_assert(formatNumber < MAX_TABLE_VERSIONS);
+
+		const auto format = (*relation->rel_formats)[formatNumber];
+		fb_assert(format->fmt_count == maxFieldId);
+		fb_assert(format->fmt_version == formatNumber);
+
+		return formatNumber;
+	}
+
+	template <typename T>
+	bool getCharsetByTextType(T& charSet, const USHORT subType)
 	{
 		switch (subType)
 		{
@@ -1003,6 +1020,7 @@ void INI_init(thread_db* tdbb)
 		relation->rel_formats = vec<Format*>::newVector(*pool, 1);
 
 		const auto majorVersion = ODS_VERSION;
+		const auto dbMinorVersion = dbb->dbb_ods_version ? dbb->dbb_minor_version : ODS_CURRENT;
 		// We need only the latest format for virtual tables
 		auto minorVersion = isPersistent ? ODS_RELEASED : ODS_CURRENT;
 		unsigned formatNumber = 0, currentFormat = 0;
@@ -1032,9 +1050,6 @@ void INI_init(thread_db* tdbb)
 			const auto format = Format::newFormat(*pool, fieldCount);
 			format->fmt_version = formatNumber;
 			format->fmt_length = FLAG_BYTES(format->fmt_count);
-
-			if (minorVersion == dbb->dbb_minor_version)
-				currentFormat = formatNumber;
 
 			relation->rel_formats->resize(formatNumber + 1);
 			(*relation->rel_formats)[formatNumber] = format;
@@ -1072,6 +1087,9 @@ void INI_init(thread_db* tdbb)
 				desc->dsc_address = (UCHAR*)(IPTR) format->fmt_length;
 				format->fmt_length += desc->dsc_length;
 			}
+
+			if (minorVersion == dbMinorVersion)
+				currentFormat = formatNumber;
 
 			minorVersion++;
 			formatNumber++;
@@ -1152,10 +1170,7 @@ void INI_init_dsql(thread_db* tdbb, dsql_dbb* database)
 			}
 
 			if (DTYPE_IS_TEXT(gfield->gfld_dtype))
-			{
-				if (getCharsetByTextType(field->charSetId.value, gfield->gfld_sub_type))
-					field->charSetId.specified = true;
-			}
+				getCharsetByTextType(field->charSetId, gfield->gfld_sub_type);
 
 			if (gfield->gfld_nullable)
 				field->flags |= FLD_nullable;
@@ -1320,17 +1335,12 @@ void INI_upgrade(thread_db* tdbb)
 			{
 				// New format number is the latest we're aware of
 
-				const auto relation = MET_relation(tdbb, relId);
-				fb_assert(relation->rel_formats->count());
-				const unsigned formatNumber = relation->rel_formats->count() - 1;
-				fb_assert(formatNumber < MAX_TABLE_VERSIONS);
-
 				FOR(REQUEST_HANDLE handle3 TRANSACTION_HANDLE transaction)
 					REL IN RDB$RELATIONS
 					WITH REL.RDB$RELATION_ID = relId
 				{
 					MODIFY REL USING
-						REL.RDB$FORMAT = formatNumber;
+						REL.RDB$FORMAT = getLatestFormat(tdbb, relId, fieldId);
 					END_MODIFY
 				}
 				END_FOR
@@ -1985,7 +1995,7 @@ static void store_relation(thread_db* tdbb,
 		X.RDB$DEFAULT_CLASS.NULL = FALSE;
 
 		X.RDB$FIELD_ID = fieldId;
-		X.RDB$FORMAT = 0;
+		X.RDB$FORMAT = getLatestFormat(tdbb, relId, fieldId);
 		X.RDB$SYSTEM_FLAG = RDB_system;
 		X.RDB$DBKEY_LENGTH = 8;
 	}

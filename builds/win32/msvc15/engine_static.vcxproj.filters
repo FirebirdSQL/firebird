@@ -156,6 +156,9 @@
     <ClCompile Include="..\..\..\src\dsql\gen.cpp">
       <Filter>DSQL</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\dsql\Keywords.cpp">
+      <Filter>DSQL</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\dsql\make.cpp">
       <Filter>DSQL</Filter>
     </ClCompile>
@@ -375,6 +378,9 @@
     <ClCompile Include="..\..\..\src\jrd\svc.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\sys-packages\SqlPackage.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\SysFunction.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
@@ -585,6 +591,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\dsql\gen_proto.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\dsql\Keywords.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\dsql\make_proto.h">
@@ -1067,6 +1076,9 @@
     <ClInclude Include="..\..\..\src\dsql\DsqlBatch.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\sys-packages\SqlPackage.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\SystemPackages.h">
       <Filter>Header files</Filter>
     </ClInclude>
@@ -1085,6 +1097,7 @@
     <ClInclude Include="..\..\..\src\jrd\WorkerAttachment.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\PageToBufferMap.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\src\dsql\DdlNodes.epp">

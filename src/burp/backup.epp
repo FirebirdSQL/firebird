@@ -300,6 +300,12 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 			stmt->free(fbStatus);
 	}
 
+	if (tdgbl->gbl_sw_par_workers)
+	{
+		BURP_verbose(410, SafeArg() << tdgbl->gbl_sw_par_workers);
+		// msg 410 use up to @1 parallel workers
+	}
+
 	// decide what type of database we've got
 
 	detectRuntimeODS();

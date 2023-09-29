@@ -341,7 +341,7 @@ void defineComputed(DsqlCompilerScratch* dsqlScratch, RelationSourceNode* relati
 		fb_assert(field->scale <= MAX_SCHAR);
 		saveDesc.dsc_scale = (SCHAR) field->scale;
 		saveDesc.dsc_sub_type = field->subType;
-		saveCharSetIdSpecified = field->charSetId.specified;
+		saveCharSetIdSpecified = field->charSetId.has_value();
 
 		field->dtype = 0;
 		field->length = 0;
@@ -376,8 +376,7 @@ void defineComputed(DsqlCompilerScratch* dsqlScratch, RelationSourceNode* relati
 
 		if (field->dtype <= dtype_any_text)
 		{
-			field->charSetId = DSC_GET_CHARSET(&saveDesc);
-			field->charSetId.specified = saveCharSetIdSpecified;
+			field->charSetId = saveCharSetIdSpecified ? std::optional{DSC_GET_CHARSET(&saveDesc)} : std::nullopt;
 			field->collationId = DSC_GET_COLLATE(&saveDesc);
 		}
 		else
@@ -396,7 +395,7 @@ void defineComputed(DsqlCompilerScratch* dsqlScratch, RelationSourceNode* relati
 			field->collationId = DSC_GET_COLLATE(&desc);
 
 			const USHORT adjust = field->dtype == dtype_varying ? sizeof(USHORT) : 0;
-			const USHORT bpc = METD_get_charset_bpc(dsqlScratch->getTransaction(), field->charSetId.value);
+			const USHORT bpc = METD_get_charset_bpc(dsqlScratch->getTransaction(), field->charSetId.value_or(CS_NONE));
 			field->charLength = (field->length - adjust) / bpc;
 		}
 		else if (field->dtype == dtype_blob)
@@ -845,7 +844,7 @@ static void updateRdbFields(const TypeClause* type,
 		if (type->subType == isc_blob_text)
 		{
 			characterSetIdNull = FALSE;
-			characterSetId = type->charSetId.value;
+			characterSetId = type->charSetId.value_or(CS_NONE);
 
 			collationIdNull = FALSE;
 			collationId = type->collationId;
@@ -872,7 +871,7 @@ static void updateRdbFields(const TypeClause* type,
 		}
 
 		characterSetIdNull = FALSE;
-		characterSetId = type->charSetId.value;
+		characterSetId = type->charSetId.value_or(CS_NONE);
 
 		collationIdNull = FALSE;
 		collationId = type->collationId;
@@ -1605,7 +1604,7 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 			return;
 	}
 
-	Nullable<string> description;
+	std::optional<string> description;
 	if (text.hasData())
 		description = text;
 
@@ -1664,50 +1663,7 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->flags |= (DsqlCompilerScratch::FLAG_BLOCK | DsqlCompilerScratch::FLAG_FUNCTION);
 
-	// check for duplicated parameter names
-
-	SortedArray<MetaName> names;
-
-	for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
-	{
-		const ParameterClause* const parameter = parameters[i];
-
-		if (names.exist(parameter->name))
-		{
-			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
-		}
-
-		if (parameter->name.hasData())	// legacy UDFs has unnamed parameters
-			names.add(parameter->name);
-	}
-
-	const CompoundStmtNode* variables = localDeclList;
-	if (variables)
-	{
-		// insure that variable names do not duplicate parameter names
-
-		const NestConst<StmtNode>* ptr = variables->statements.begin();
-		for (const NestConst<StmtNode>* const end = variables->statements.end(); ptr != end; ++ptr)
-		{
-			const DeclareVariableNode* varNode = nodeAs<DeclareVariableNode>(*ptr);
-
-			if (varNode)
-			{
-				const dsql_fld* field = varNode->dsqlDef->type;
-				DEV_BLKCHK(field, dsql_type_fld);
-
-				if (names.exist(field->fld_name))
-				{
-					status_exception::raise(
-						Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-						Arg::Gds(isc_dsql_var_conflict) <<
-						Arg::Str(field->fld_name));
-				}
-			}
-		}
-	}
+	LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, &parameters, nullptr);
 
 	source.ltrim("\n\r\t ");
 
@@ -1739,7 +1695,7 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		returnType->type->resolve(dsqlScratch);
 
 	// check SQL SECURITY is not set if function declared in package
-	if (package.hasData() && ssDefiner.specified)
+	if (package.hasData() && ssDefiner.isAssigned())
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 				  Arg::Gds(isc_invalid_clause) << Arg::Str("SQL SECURITY for functions is prohibit in packages"));
@@ -1939,10 +1895,10 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 				FUN.RDB$DETERMINISTIC_FLAG = deterministic ? TRUE : FALSE;
 				FUN.RDB$RETURN_ARGUMENT = 0;
 
-				if (ssDefiner.specified)
+				if (ssDefiner.isAssigned())
 				{
 					FUN.RDB$SQL_SECURITY.NULL = FALSE;
-					FUN.RDB$SQL_SECURITY = ssDefiner.value ? FB_TRUE : FB_FALSE;
+					FUN.RDB$SQL_SECURITY = ssDefiner.asBool() ? FB_TRUE : FB_FALSE;
 				}
 				else
 					FUN.RDB$SQL_SECURITY.NULL = TRUE;
@@ -1959,7 +1915,7 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 						// CVC: This is case of "returns <type> [by value|reference]".
 						// Some data types can not be returned as value.
 
-						if (returnType->udfMechanism.value == FUN_value &&
+						if (returnType->udfMechanism.value() == FUN_value &&
 							(field->dtype == dtype_text || field->dtype == dtype_varying ||
 							 field->dtype == dtype_cstring || field->dtype == dtype_blob ||
 							 field->dtype == dtype_timestamp))
@@ -2012,8 +1968,8 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 						// We'll verify that SCALAR_ARRAY can't be used as a return type.
 						// The support for SCALAR_ARRAY is only for input parameters.
 
-						if (parameters[udfReturnPos - 1]->udfMechanism.specified &&
-							parameters[udfReturnPos - 1]->udfMechanism.value == FUN_scalar_array)
+						if (parameters[udfReturnPos - 1]->udfMechanism.has_value() &&
+							parameters[udfReturnPos - 1]->udfMechanism.value() == FUN_scalar_array)
 						{
 							status_exception::raise(
 								Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
@@ -2275,12 +2231,12 @@ void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch
 			{
 				// CVC: I need to test returning blobs by descriptor before allowing the
 				// change there. For now, I ignore the return type specification.
-				const bool freeIt = parameter->udfMechanism.value < 0;
+				const bool freeIt = parameter->udfMechanism.value() < 0;
 				ARG.RDB$MECHANISM = (SSHORT) ((freeIt ? -1 : 1) * FUN_blob_struct);
 				// If we have the FREE_IT set then the blob has to be freed on return.
 			}
-			else if (parameter->udfMechanism.specified)
-				ARG.RDB$MECHANISM = (SSHORT) parameter->udfMechanism.value;
+			else if (parameter->udfMechanism.has_value())
+				ARG.RDB$MECHANISM = (SSHORT) parameter->udfMechanism.value();
 			else if (type->dtype == dtype_blob)
 				ARG.RDB$MECHANISM = (SSHORT) FUN_blob_struct;
 			else
@@ -2347,13 +2303,14 @@ void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* 
 		}
 
 		dsql_var* const variable = dsqlScratch->outputVariables[0];
-		dsqlScratch->putLocalVariable(variable, 0, NULL);
+		dsqlScratch->putLocalVariable(variable, nullptr, {});
 
 		// ASF: This is here to not change the old logic (proc_flag)
 		// of previous calls to PASS1_node and PASS1_statement.
 		dsqlScratch->setPsql(true);
 
-		dsqlScratch->putLocalVariables(localDeclList, 1);
+		if (localDeclList)
+			localDeclList->genBlr(dsqlScratch);
 
 		dsqlScratch->loopLevel = 0;
 		dsqlScratch->cursorNumber = 0;
@@ -2659,63 +2616,7 @@ DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->flags |= (DsqlCompilerScratch::FLAG_BLOCK | DsqlCompilerScratch::FLAG_PROCEDURE);
 
-	// check for duplicated parameter names
-
-	SortedArray<MetaName> names;
-
-	for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
-	{
-		const ParameterClause* const parameter = parameters[i];
-
-		if (names.exist(parameter->name))
-		{
-			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
-		}
-
-		names.add(parameter->name);
-	}
-
-	for (FB_SIZE_T i = 0; i < returns.getCount(); ++i)
-	{
-		const ParameterClause* const parameter = returns[i];
-
-		if (names.exist(parameter->name))
-		{
-			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
-		}
-
-		names.add(parameter->name);
-	}
-
-	const CompoundStmtNode* variables = localDeclList;
-	if (variables)
-	{
-		// insure that variable names do not duplicate parameter names
-
-		const NestConst<StmtNode>* ptr = variables->statements.begin();
-		for (const NestConst<StmtNode>* const end = variables->statements.end(); ptr != end; ++ptr)
-		{
-			const DeclareVariableNode* varNode = nodeAs<DeclareVariableNode>(*ptr);
-
-			if (varNode)
-			{
-				const dsql_fld* field = varNode->dsqlDef->type;
-				DEV_BLKCHK(field, dsql_type_fld);
-
-				if (names.exist(field->fld_name))
-				{
-					status_exception::raise(
-						Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-						Arg::Gds(isc_dsql_var_conflict) <<
-						Arg::Str(field->fld_name));
-				}
-			}
-		}
-	}
+	LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, &parameters, &returns);
 
 	source.ltrim("\n\r\t ");
 
@@ -2747,7 +2648,7 @@ DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		returns[i]->type->resolve(dsqlScratch);
 
 	// check SQL SECURITY is not set if procedure declared in package
-	if (package.hasData() && ssDefiner.specified)
+	if (package.hasData() && ssDefiner.isAssigned())
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 				  Arg::Gds(isc_invalid_clause) << Arg::Str("SQL SECURITY for procedures is prohibit in packages"));
@@ -2945,10 +2846,10 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 				else
 					P.RDB$PRIVATE_FLAG.NULL = TRUE;
 
-				if (ssDefiner.specified)
+				if (ssDefiner.isAssigned())
 				{
 					P.RDB$SQL_SECURITY.NULL = FALSE;
-					P.RDB$SQL_SECURITY = ssDefiner.value ? FB_TRUE : FB_FALSE;
+					P.RDB$SQL_SECURITY = ssDefiner.asBool() ? FB_TRUE : FB_FALSE;
 				}
 				else
 					P.RDB$SQL_SECURITY.NULL = TRUE;
@@ -3241,14 +3142,15 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 		 i != dsqlScratch->outputVariables.end();
 		 ++i)
 	{
-		dsqlScratch->putLocalVariable(*i, 0, NULL);
+		dsqlScratch->putLocalVariable(*i, nullptr, {});
 	}
 
 	// ASF: This is here to not change the old logic (proc_flag)
 	// of previous calls to PASS1_node and PASS1_statement.
 	dsqlScratch->setPsql(true);
 
-	dsqlScratch->putLocalVariables(localDeclList, returns.getCount());
+	if (localDeclList)
+		localDeclList->genBlr(dsqlScratch);
 
 	dsqlScratch->loopLevel = 0;
 	dsqlScratch->cursorNumber = 0;
@@ -3451,11 +3353,11 @@ void TriggerDefinition::store(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		TRG.RDB$RELATION_NAME.NULL = relationName.isEmpty();
 		strcpy(TRG.RDB$RELATION_NAME, relationName.c_str());
 
-		fb_assert(type.specified);
-		TRG.RDB$TRIGGER_TYPE = type.value;
+		fb_assert(type.has_value());
+		TRG.RDB$TRIGGER_TYPE = type.value();
 
-		TRG.RDB$TRIGGER_SEQUENCE = (!position.specified ? 0 : position.value);
-		TRG.RDB$TRIGGER_INACTIVE = (!active.specified ? 0 : (USHORT) !active.value);
+		TRG.RDB$TRIGGER_SEQUENCE = position.value_or(0);
+		TRG.RDB$TRIGGER_INACTIVE = (active.isUnknown() ? 0 : (USHORT) !active.asBool());
 	}
 	END_STORE
 
@@ -3474,7 +3376,7 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		TRG IN RDB$TRIGGERS
 		WITH TRG.RDB$TRIGGER_NAME EQ name.c_str()
 	{
-		if (type.specified && type.value != (FB_UINT64) TRG.RDB$TRIGGER_TYPE &&
+		if (type.has_value() && type != (FB_UINT64) TRG.RDB$TRIGGER_TYPE &&
 			TRG.RDB$RELATION_NAME.NULL)
 		{
 			status_exception::raise(
@@ -3521,14 +3423,14 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 			if (relationName.hasData())
 				strcpy(TRG.RDB$RELATION_NAME, relationName.c_str());
 
-			if (type.specified)
-				TRG.RDB$TRIGGER_TYPE = type.value;
+			if (type.has_value())
+				TRG.RDB$TRIGGER_TYPE = type.value();
 
-			if (position.specified)
-				TRG.RDB$TRIGGER_SEQUENCE = position.value;
+			if (position.has_value())
+				TRG.RDB$TRIGGER_SEQUENCE = position.value();
 
-			if (active.specified)
-				TRG.RDB$TRIGGER_INACTIVE = (USHORT) !active.value;
+			if (active.isAssigned())
+				TRG.RDB$TRIGGER_INACTIVE = (USHORT) !active.asBool();
 
 			if (external)
 			{
@@ -3562,12 +3464,12 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 				attachment->storeMetaDataBlob(tdbb, transaction, &TRG.RDB$TRIGGER_SOURCE, source);
 			}
 
-			if (ssDefiner.specified)
+			if (ssDefiner.has_value())
 			{
-				if (ssDefiner.value != SS_DROP)
+				if (ssDefiner.value() != SS_DROP)
 				{
 					TRG.RDB$SQL_SECURITY.NULL = FALSE;
-					TRG.RDB$SQL_SECURITY = ssDefiner.value == SS_DEFINER ? FB_TRUE : FB_FALSE;
+					TRG.RDB$SQL_SECURITY = ssDefiner.value() == SS_DEFINER ? FB_TRUE : FB_FALSE;
 				}
 				else
 					TRG.RDB$SQL_SECURITY.NULL = TRUE;
@@ -3606,14 +3508,14 @@ DdlNode* CreateAlterTriggerNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->flags |= (DsqlCompilerScratch::FLAG_BLOCK | DsqlCompilerScratch::FLAG_TRIGGER);
 
-	if (type.specified)
+	if (type.has_value())
 	{
 		if (create &&	// ALTER TRIGGER doesn't accept table name
 			((relationName.hasData() &&
-				(type.value & (unsigned) TRIGGER_TYPE_MASK) != (unsigned) TRIGGER_TYPE_DML) ||
+				(type.value() & (unsigned) TRIGGER_TYPE_MASK) != (unsigned) TRIGGER_TYPE_DML) ||
 			 (relationName.isEmpty() &&
-				(type.value & (unsigned) TRIGGER_TYPE_MASK) != (unsigned) TRIGGER_TYPE_DB &&
-				(type.value & (unsigned) TRIGGER_TYPE_MASK) != (unsigned) TRIGGER_TYPE_DDL)))
+				(type.value() & (unsigned) TRIGGER_TYPE_MASK) != (unsigned) TRIGGER_TYPE_DB &&
+				(type.value() & (unsigned) TRIGGER_TYPE_MASK) != (unsigned) TRIGGER_TYPE_DDL)))
 		{
 			status_exception::raise(
 				Arg::Gds(isc_dsql_command_err) <<
@@ -3621,7 +3523,7 @@ DdlNode* CreateAlterTriggerNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		}
 	}
 
-	if (create && ssDefiner.specified && ssDefiner.value == TriggerDefinition::SS_DROP)
+	if (create && ssDefiner.has_value() && ssDefiner.value() == TriggerDefinition::SS_DROP)
 		status_exception::raise(Arg::Gds(isc_dsql_command_err) << Arg::Gds(isc_dsql_invalid_drop_ss_clause));
 
 	return DdlNode::dsqlPass(dsqlScratch);
@@ -3637,7 +3539,7 @@ void CreateAlterTriggerNode::checkPermission(thread_db* tdbb, jrd_tra* transacti
 			TRG IN RDB$TRIGGERS
 			WITH TRG.RDB$TRIGGER_NAME EQ name.c_str()
 		{
-			if (!type.specified && !TRG.RDB$TRIGGER_TYPE.NULL)
+			if (!type.has_value() && !TRG.RDB$TRIGGER_TYPE.NULL)
 				type = TRG.RDB$TRIGGER_TYPE;
 
 			if (relationName.isEmpty() && !TRG.RDB$RELATION_NAME.NULL)
@@ -3645,7 +3547,7 @@ void CreateAlterTriggerNode::checkPermission(thread_db* tdbb, jrd_tra* transacti
 		}
 		END_FOR
 
-		if (!type.specified)
+		if (!type.has_value())
 			status_exception::raise(Arg::Gds(isc_dyn_trig_not_found) << Arg::Str(name));
 	}
 
@@ -3734,7 +3636,7 @@ void CreateAlterTriggerNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* d
 
 			const string temp = relationNode->alias;	// always empty?
 
-			if (hasOldContext(type.value))
+			if (hasOldContext(type.value()))
 			{
 				relationNode->alias = OLD_CONTEXT_NAME;
 				dsql_ctx* oldContext = PASS1_make_context(dsqlScratch, relationNode);
@@ -3743,7 +3645,7 @@ void CreateAlterTriggerNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* d
 			else
 				dsqlScratch->contextNumber++;
 
-			if (hasNewContext(type.value))
+			if (hasNewContext(type.value()))
 			{
 				relationNode->alias = NEW_CONTEXT_NAME;
 				dsql_ctx* newContext = PASS1_make_context(dsqlScratch, relationNode);
@@ -3765,7 +3667,9 @@ void CreateAlterTriggerNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* d
 		dsqlScratch->appendUChar(blr_begin);
 
 		dsqlScratch->setPsql(true);
-		dsqlScratch->putLocalVariables(localDeclList, 0);
+
+		if (localDeclList)
+			localDeclList->genBlr(dsqlScratch);
 
 		dsqlScratch->loopLevel = 0;
 		dsqlScratch->cursorNumber = 0;
@@ -4364,9 +4268,7 @@ void CreateDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 	type->resolve(dsqlScratch);
 
-	dsqlScratch->domainValue.dsc_dtype = type->dtype;
-	dsqlScratch->domainValue.dsc_length = type->length;
-	dsqlScratch->domainValue.dsc_scale = type->scale;
+	DsqlDescMaker::fromField(&dsqlScratch->domainValue, type);
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -5051,9 +4953,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 						Arg::Gds(isc_dsql_domain_not_found) << name);
 				}
 
-				dsqlScratch->domainValue.dsc_dtype = localField.dtype;
-				dsqlScratch->domainValue.dsc_length = localField.length;
-				dsqlScratch->domainValue.dsc_scale = localField.scale;
+				DsqlDescMaker::fromField(&dsqlScratch->domainValue, &localField);
 
 				FLD.RDB$VALIDATION_SOURCE.NULL = FALSE;
 				attachment->storeMetaDataBlob(tdbb, transaction, &FLD.RDB$VALIDATION_SOURCE,
@@ -5107,12 +5007,12 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 					dsqlScratch->getBlrData());
 			}
 
-			if (notNullFlag.specified)
+			if (notNullFlag.isAssigned())
 			{
 				FLD.RDB$NULL_FLAG.NULL = FALSE;
-				FLD.RDB$NULL_FLAG = notNullFlag.value;
+				FLD.RDB$NULL_FLAG = notNullFlag.asBool();
 
-				if (!notNullFlag.value)
+				if (!notNullFlag.asBool())
 				{
 					AutoRequest request2;
 
@@ -5177,7 +5077,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 				}
 
 				DSC_make_descriptor(&newDom.dyn_dsc, blr_dtypes[type->dtype], type->scale,
-					typeLength, type->subType, type->charSetId.value, type->collationId);
+					typeLength, type->subType, type->charSetId.value_or(CS_NONE), type->collationId);
 
 				newDom.dyn_fld_name = name;
 				newDom.dyn_charbytelen = typeLength;
@@ -5742,11 +5642,11 @@ void CreateAlterSequenceNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_SEQUENCE,
 		name, NULL);
 
-	const SINT64 val = value.orElse(1);
+	const SINT64 val = value.value_or(1);
 	SLONG initialStep = 1;
-	if (step.specified)
+	if (step.has_value())
 	{
-		initialStep = step.value;
+		initialStep = step.value();
 		if (initialStep == 0)
 			status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_increment) << Arg::Str(name));
 	}
@@ -5780,11 +5680,11 @@ bool CreateAlterSequenceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_SEQUENCE,
 			name, NULL);
 
-		fb_assert(restartSpecified && value.specified);
-		const SINT64 val = value.specified ? value.value : 0;
-		if (step.specified)
+		fb_assert(restartSpecified && value.has_value());
+		const SINT64 val = value.value_or(0);
+		if (step.has_value())
 		{
-			const SLONG newStep = step.value;
+			const SLONG newStep = step.value();
 			if (newStep == 0)
 				status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_increment) << Arg::Str(name));
 
@@ -5823,9 +5723,9 @@ bool CreateAlterSequenceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 
 		const SLONG id = X.RDB$GENERATOR_ID;
 
-		if (step.specified)
+		if (step.has_value())
 		{
-			const SLONG newStep = step.value;
+			const SLONG newStep = step.value();
 			if (newStep == 0)
 				status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_increment) << Arg::Str(name));
 
@@ -5840,7 +5740,7 @@ bool CreateAlterSequenceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 		if (restartSpecified)
 		{
 			const SINT64 oldValue = !X.RDB$INITIAL_VALUE.NULL ? X.RDB$INITIAL_VALUE : 0;
-			const SINT64 newValue = value.specified ? value.value : oldValue;
+			const SINT64 newValue = value.value_or(oldValue);
 
 			transaction->getGenIdCache()->put(id,
 				newValue - (!X.RDB$GENERATOR_INCREMENT.NULL ? X.RDB$GENERATOR_INCREMENT : 1));
@@ -6046,16 +5946,16 @@ void RelationNode::FieldDefinition::modify(thread_db* tdbb, jrd_tra* transaction
 			RFR.RDB$BASE_FIELD.NULL = TRUE;
 			///RFR.RDB$UPDATE_FLAG.NULL = TRUE;
 
-			if (collationId.specified)
+			if (collationId.has_value())
 			{
 				RFR.RDB$COLLATION_ID.NULL = FALSE;
-				RFR.RDB$COLLATION_ID = collationId.value;
+				RFR.RDB$COLLATION_ID = collationId.value();
 			}
 
 			SLONG fieldPos = -1;
 
-			if (position.specified)
-				fieldPos = position.value;
+			if (position.has_value())
+				fieldPos = position.value();
 			else
 			{
 				DYN_UTIL_generate_field_position(tdbb, relationName, &fieldPos);
@@ -6075,14 +5975,14 @@ void RelationNode::FieldDefinition::modify(thread_db* tdbb, jrd_tra* transaction
 				strcpy(RFR.RDB$BASE_FIELD, baseField.c_str());
 			}
 
-			if (viewContext.specified)
+			if (viewContext.has_value())
 			{
 				fb_assert(baseField.hasData());
 
 				RFR.RDB$VIEW_CONTEXT.NULL = FALSE;
-				RFR.RDB$VIEW_CONTEXT = viewContext.value;
+				RFR.RDB$VIEW_CONTEXT = viewContext.value();
 
-				DYN_UTIL_find_field_source(tdbb, transaction, relationName, viewContext.value,
+				DYN_UTIL_find_field_source(tdbb, transaction, relationName, viewContext.value(),
 					baseField.c_str(), RFR.RDB$FIELD_SOURCE);
 			}
 		END_MODIFY
@@ -6116,10 +6016,10 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 		RFR.RDB$BASE_FIELD.NULL = TRUE;
 		///RFR.RDB$UPDATE_FLAG.NULL = TRUE;
 
-		if (collationId.specified)
+		if (collationId.has_value())
 		{
 			RFR.RDB$COLLATION_ID.NULL = FALSE;
-			RFR.RDB$COLLATION_ID = collationId.value;
+			RFR.RDB$COLLATION_ID = collationId.value();
 		}
 
 		if (identitySequence.hasData())
@@ -6128,13 +6028,13 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 			strcpy(RFR.RDB$GENERATOR_NAME, identitySequence.c_str());
 
 			RFR.RDB$IDENTITY_TYPE.NULL = FALSE;
-			RFR.RDB$IDENTITY_TYPE = identityType.value;
+			RFR.RDB$IDENTITY_TYPE = identityType.value();
 		}
 
-		if (notNullFlag.specified)
+		if (notNullFlag.isAssigned())
 		{
 			RFR.RDB$NULL_FLAG.NULL = FALSE;
-			RFR.RDB$NULL_FLAG = notNullFlag.value;
+			RFR.RDB$NULL_FLAG = notNullFlag.asBool();
 		}
 
 		if (defaultSource.hasData())
@@ -6152,8 +6052,8 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 
 		SLONG fieldPos = -1;
 
-		if (position.specified)
-			fieldPos = position.value;
+		if (position.has_value())
+			fieldPos = position.value();
 		else
 		{
 			DYN_UTIL_generate_field_position(tdbb, relationName, &fieldPos);
@@ -6173,14 +6073,14 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 			strcpy(RFR.RDB$BASE_FIELD, baseField.c_str());
 		}
 
-		if (viewContext.specified)
+		if (viewContext.has_value())
 		{
 			fb_assert(baseField.hasData());
 
 			RFR.RDB$VIEW_CONTEXT.NULL = FALSE;
-			RFR.RDB$VIEW_CONTEXT = viewContext.value;
+			RFR.RDB$VIEW_CONTEXT = viewContext.value();
 
-			DYN_UTIL_find_field_source(tdbb, transaction, relationName, viewContext.value,
+			DYN_UTIL_find_field_source(tdbb, transaction, relationName, viewContext.value(),
 				baseField.c_str(), RFR.RDB$FIELD_SOURCE);
 		}
 	}
@@ -6456,7 +6356,7 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 		if (clause->identityOptions)
 		{
-			if (clause->identityOptions->increment.orElse(1) == 0)
+			if (clause->identityOptions->increment.value_or(1) == 0)
 			{
 				status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_inc_ident) <<
 					Arg::Str(field->fld_name) <<
@@ -6477,8 +6377,8 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 			CreateAlterSequenceNode::store(tdbb, transaction, fieldDefinition.identitySequence,
 				fb_sysflag_identity_generator,
-				clause->identityOptions->startValue.orElse(1),
-				clause->identityOptions->increment.orElse(1));
+				clause->identityOptions->startValue.value_or(1),
+				clause->identityOptions->increment.value_or(1));
 		}
 
 		BlrDebugWriter::BlrData defaultValue;
@@ -7440,9 +7340,9 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_relation);
 
-	fb_assert(relationType.specified);
+	fb_assert(relationType.has_value());
 
-	checkRelationTempScope(tdbb, transaction, name, relationType.value);
+	checkRelationTempScope(tdbb, transaction, name, relationType.value());
 
 	AutoCacheRequest request(tdbb, drq_s_rels2, DYN_REQUESTS);
 
@@ -7452,12 +7352,12 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		strcpy(REL.RDB$RELATION_NAME, name.c_str());
 		REL.RDB$SYSTEM_FLAG = 0;
 		REL.RDB$FLAGS = REL_sql;
-		REL.RDB$RELATION_TYPE = relationType.value;
+		REL.RDB$RELATION_TYPE = relationType.value();
 
-		if (ssDefiner.specified)
+		if (ssDefiner.isAssigned())
 		{
 			REL.RDB$SQL_SECURITY.NULL = FALSE;
-			REL.RDB$SQL_SECURITY = ssDefiner.value ? FB_TRUE : FB_FALSE;
+			REL.RDB$SQL_SECURITY = ssDefiner.asBool() ? FB_TRUE : FB_FALSE;
 		}
 		else
 			REL.RDB$SQL_SECURITY.NULL = TRUE;
@@ -7483,8 +7383,8 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 	bool replicationEnabled;
 
-	if (replicationState.specified)
-		replicationEnabled = replicationState.value;
+	if (replicationState.isAssigned())
+		replicationEnabled = replicationState.asBool();
 	else
 	{
 		// Apply the default replication state to the table being created
@@ -7833,10 +7733,10 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					{
 						MODIFY REL
 						{
-							if (ssDefiner.specified)
+							if (ssDefiner.isAssigned())
 							{
 								REL.RDB$SQL_SECURITY.NULL = FALSE;
-								REL.RDB$SQL_SECURITY = ssDefiner.value ? FB_TRUE : FB_FALSE;
+								REL.RDB$SQL_SECURITY = ssDefiner.asBool() ? FB_TRUE : FB_FALSE;
 							}
 							else
 								REL.RDB$SQL_SECURITY.NULL = TRUE;
@@ -7850,9 +7750,9 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 				case Clause::TYPE_ALTER_PUBLICATION:
 				{
-					fb_assert(replicationState.specified);
+					fb_assert(replicationState.isAssigned());
 
-					if (replicationState.value)
+					if (replicationState.asBool())
 					{
 						// Add table to the publication
 
@@ -8140,23 +8040,23 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					{
 						const SINT64 val =
 							clause->identityOptions->startValue
-								.orElse(!GEN.RDB$INITIAL_VALUE.NULL ? GEN.RDB$INITIAL_VALUE : 0) -
+								.value_or(!GEN.RDB$INITIAL_VALUE.NULL ? GEN.RDB$INITIAL_VALUE : 0) -
 							clause->identityOptions->increment
-								.orElse(!GEN.RDB$GENERATOR_INCREMENT.NULL ? GEN.RDB$GENERATOR_INCREMENT : 1);
+								.value_or(!GEN.RDB$GENERATOR_INCREMENT.NULL ? GEN.RDB$GENERATOR_INCREMENT : 1);
 
 						transaction->getGenIdCache()->put(id, val);
 					}
 
-					if (clause->identityOptions->type.specified)
+					if (clause->identityOptions->type.has_value())
 					{
 						MODIFY RFR
-							RFR.RDB$IDENTITY_TYPE = clause->identityOptions->type.value;
+							RFR.RDB$IDENTITY_TYPE = clause->identityOptions->type.value();
 						END_MODIFY
 					}
 
-					if (clause->identityOptions->increment.specified)
+					if (clause->identityOptions->increment.has_value())
 					{
-						if (clause->identityOptions->increment.value == 0)
+						if (clause->identityOptions->increment.value() == 0)
 						{
 							status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_inc_ident) <<
 								Arg::Str(field->fld_name) <<
@@ -8164,7 +8064,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 						}
 
 						MET_update_generator_increment(tdbb, id,
-							clause->identityOptions->increment.value);
+							clause->identityOptions->increment.value());
 					}
 
 					dsc desc;
@@ -8735,7 +8635,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 	dsqlScratch->resetContextStack();
 	++dsqlScratch->contextNumber;
-	RseNode* rse = PASS1_rse(dsqlScratch, selectExpr, false, false);
+	RseNode* rse = PASS1_rse(dsqlScratch, selectExpr);
 
 	dsqlScratch->getBlrData().clear();
 	dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
@@ -9113,7 +9013,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 				const USHORT adjust =
 					(desc.dsc_dtype == dtype_varying) ? sizeof(USHORT) : 0;
 				const USHORT bpc =
-					METD_get_charset_bpc(dsqlScratch->getTransaction(), newField.charSetId.value);
+					METD_get_charset_bpc(dsqlScratch->getTransaction(), newField.charSetId.value_or(CS_NONE));
 
 				newField.charLength = (newField.length - adjust) / bpc;
 			}
@@ -9530,22 +9430,22 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 		}
 		END_FOR
 
-		if (definition.unique.specified)
+		if (definition.unique.isAssigned())
 		{
 			IDX.RDB$UNIQUE_FLAG.NULL = FALSE;
-			IDX.RDB$UNIQUE_FLAG = SSHORT(definition.unique.value);
+			IDX.RDB$UNIQUE_FLAG = SSHORT(definition.unique.asBool());
 		}
 
-		if (definition.inactive.specified)
+		if (definition.inactive.isAssigned())
 		{
 			IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
-			IDX.RDB$INDEX_INACTIVE = SSHORT(definition.inactive.value);
+			IDX.RDB$INDEX_INACTIVE = SSHORT(definition.inactive.asBool());
 		}
 
-		if (definition.descending.specified)
+		if (definition.descending.isAssigned())
 		{
 			IDX.RDB$INDEX_TYPE.NULL = FALSE;
-			IDX.RDB$INDEX_TYPE = SSHORT(definition.descending.value);
+			IDX.RDB$INDEX_TYPE = SSHORT(definition.descending.asBool());
 		}
 
 		request2.reset(tdbb, drq_l_lfield, DYN_REQUESTS);
@@ -10281,7 +10181,6 @@ string CreateShadowNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, number);
 	NODE_PRINT(printer, manual);
 	NODE_PRINT(printer, conditional);
-	NODE_PRINT(printer, firstLength);
 	NODE_PRINT(printer, files);
 
 	return "CreateShadowNode";
@@ -11139,7 +11038,7 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	if (mode != USER_ADD)
 	{
 		if (!password && !firstName && !middleName && !lastName &&
-			!adminRole.specified && !active.specified && !comment && !properties.hasData())
+			adminRole.isUnknown() && active.isUnknown() && !comment && !properties.hasData())
 		{
 			// 283: ALTER USER requires at least one clause to be specified
 			status_exception::raise(Arg::PrivateDyn(283));
@@ -11194,17 +11093,17 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	if (plugin)
 		userData->plugin = *plugin;
 
-	if (adminRole.specified)
+	if (adminRole.isAssigned())
 	{
-		userData->adm.set(&statusWrapper, adminRole.value);
+		userData->adm.set(&statusWrapper, adminRole.asBool());
 		check(&statusWrapper);
 		userData->adm.setEntered(&statusWrapper, 1);
 		check(&statusWrapper);
 	}
 
-	if (active.specified)
+	if (active.isAssigned())
 	{
-		userData->act.set(&statusWrapper, (int) active.value);
+		userData->act.set(&statusWrapper, (int) active.asBool());
 		check(&statusWrapper);
 		userData->act.setEntered(&statusWrapper, 1);
 		check(&statusWrapper);
@@ -12746,7 +12645,7 @@ void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 		changeBackupMode(tdbb, transaction, CLAUSE_END_BACKUP);
 
 	if (setDefaultCharSet.hasData() || setDefaultCollation.hasData() || linger >= 0 ||
-		ssDefiner.specified)
+		ssDefiner.isAssigned())
 	{
 		AutoCacheRequest request(tdbb, drq_m_database, DYN_REQUESTS);
 		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -12782,10 +12681,10 @@ void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 				DBB.RDB$LINGER = linger;
 			}
 
-			if (ssDefiner.specified)
+			if (ssDefiner.isAssigned())
 			{
 				DBB.RDB$SQL_SECURITY.NULL = FALSE;
-				DBB.RDB$SQL_SECURITY = ssDefiner.value ? FB_TRUE : FB_FALSE;
+				DBB.RDB$SQL_SECURITY = ssDefiner.asBool() ? FB_TRUE : FB_FALSE;
 			}
 
 			END_MODIFY

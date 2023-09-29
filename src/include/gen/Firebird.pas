@@ -618,15 +618,24 @@ type
 	ITraceProcedure_getProcNamePtr = function(this: ITraceProcedure): PAnsiChar; cdecl;
 	ITraceProcedure_getInputsPtr = function(this: ITraceProcedure): ITraceParams; cdecl;
 	ITraceProcedure_getPerfPtr = function(this: ITraceProcedure): PerformanceInfoPtr; cdecl;
+	ITraceProcedure_getStmtIDPtr = function(this: ITraceProcedure): Int64; cdecl;
+	ITraceProcedure_getPlanPtr = function(this: ITraceProcedure): PAnsiChar; cdecl;
+	ITraceProcedure_getExplainedPlanPtr = function(this: ITraceProcedure): PAnsiChar; cdecl;
 	ITraceFunction_getFuncNamePtr = function(this: ITraceFunction): PAnsiChar; cdecl;
 	ITraceFunction_getInputsPtr = function(this: ITraceFunction): ITraceParams; cdecl;
 	ITraceFunction_getResultPtr = function(this: ITraceFunction): ITraceParams; cdecl;
 	ITraceFunction_getPerfPtr = function(this: ITraceFunction): PerformanceInfoPtr; cdecl;
+	ITraceFunction_getStmtIDPtr = function(this: ITraceFunction): Int64; cdecl;
+	ITraceFunction_getPlanPtr = function(this: ITraceFunction): PAnsiChar; cdecl;
+	ITraceFunction_getExplainedPlanPtr = function(this: ITraceFunction): PAnsiChar; cdecl;
 	ITraceTrigger_getTriggerNamePtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
 	ITraceTrigger_getRelationNamePtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
 	ITraceTrigger_getActionPtr = function(this: ITraceTrigger): Integer; cdecl;
 	ITraceTrigger_getWhichPtr = function(this: ITraceTrigger): Integer; cdecl;
 	ITraceTrigger_getPerfPtr = function(this: ITraceTrigger): PerformanceInfoPtr; cdecl;
+	ITraceTrigger_getStmtIDPtr = function(this: ITraceTrigger): Int64; cdecl;
+	ITraceTrigger_getPlanPtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
+	ITraceTrigger_getExplainedPlanPtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
 	ITraceServiceConnection_getServiceIDPtr = function(this: ITraceServiceConnection): Pointer; cdecl;
 	ITraceServiceConnection_getServiceMgrPtr = function(this: ITraceServiceConnection): PAnsiChar; cdecl;
 	ITraceServiceConnection_getServiceNamePtr = function(this: ITraceServiceConnection): PAnsiChar; cdecl;
@@ -670,6 +679,9 @@ type
 	ITracePlugin_trace_event_sweepPtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean; cdecl;
 	ITracePlugin_trace_func_executePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean; cdecl;
 	ITracePlugin_trace_dsql_restartPtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean; cdecl;
+	ITracePlugin_trace_proc_compilePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean; cdecl;
+	ITracePlugin_trace_func_compilePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean; cdecl;
+	ITracePlugin_trace_trigger_compilePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean; cdecl;
 	ITraceFactory_trace_needsPtr = function(this: ITraceFactory): QWord; cdecl;
 	ITraceFactory_trace_createPtr = function(this: ITraceFactory; status: IStatus; init_info: ITraceInitInfo): ITracePlugin; cdecl;
 	IUdrFunctionFactory_setupPtr = procedure(this: IUdrFunctionFactory; status: IStatus; context: IExternalContext; metadata: IRoutineMetadata; inBuilder: IMetadataBuilder; outBuilder: IMetadataBuilder); cdecl;
@@ -718,7 +730,7 @@ type
 	IReplicatedSession_startTransactionPtr = function(this: IReplicatedSession; status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction; cdecl;
 	IReplicatedSession_cleanupTransactionPtr = procedure(this: IReplicatedSession; status: IStatus; number: Int64); cdecl;
 	IReplicatedSession_setSequencePtr = procedure(this: IReplicatedSession; status: IStatus; name: PAnsiChar; value: Int64); cdecl;
-	IProfilerPlugin_initPtr = procedure(this: IProfilerPlugin; status: IStatus; attachment: IAttachment); cdecl;
+	IProfilerPlugin_initPtr = procedure(this: IProfilerPlugin; status: IStatus; attachment: IAttachment; ticksFrequency: QWord); cdecl;
 	IProfilerPlugin_startSessionPtr = function(this: IProfilerPlugin; status: IStatus; description: PAnsiChar; options: PAnsiChar; timestamp: ISC_TIMESTAMP_TZ): IProfilerSession; cdecl;
 	IProfilerPlugin_flushPtr = procedure(this: IProfilerPlugin; status: IStatus); cdecl;
 	IProfilerSession_getIdPtr = function(this: IProfilerSession): Int64; cdecl;
@@ -727,16 +739,16 @@ type
 	IProfilerSession_finishPtr = procedure(this: IProfilerSession; status: IStatus; timestamp: ISC_TIMESTAMP_TZ); cdecl;
 	IProfilerSession_defineStatementPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
 	IProfilerSession_defineCursorPtr = procedure(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal); cdecl;
-	IProfilerSession_defineRecordSourcePtr = procedure(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); cdecl;
-	IProfilerSession_onRequestStartPtr = procedure(this: IProfilerSession; status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
-	IProfilerSession_onRequestFinishPtr = procedure(this: IProfilerSession; status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
-	IProfilerSession_beforePsqlLineColumnPtr = procedure(this: IProfilerSession; requestId: Int64; line: Cardinal; column: Cardinal); cdecl;
-	IProfilerSession_afterPsqlLineColumnPtr = procedure(this: IProfilerSession; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); cdecl;
-	IProfilerSession_beforeRecordSourceOpenPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
-	IProfilerSession_afterRecordSourceOpenPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
-	IProfilerSession_beforeRecordSourceGetRecordPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
-	IProfilerSession_afterRecordSourceGetRecordPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
-	IProfilerStats_getElapsedTimePtr = function(this: IProfilerStats): QWord; cdecl;
+	IProfilerSession_defineRecordSourcePtr = procedure(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); cdecl;
+	IProfilerSession_onRequestStartPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
+	IProfilerSession_onRequestFinishPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
+	IProfilerSession_beforePsqlLineColumnPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal); cdecl;
+	IProfilerSession_afterPsqlLineColumnPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); cdecl;
+	IProfilerSession_beforeRecordSourceOpenPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
+	IProfilerSession_afterRecordSourceOpenPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+	IProfilerSession_beforeRecordSourceGetRecordPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
+	IProfilerSession_afterRecordSourceGetRecordPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+	IProfilerStats_getElapsedTicksPtr = function(this: IProfilerStats): QWord; cdecl;
 
 	VersionedVTable = class
 		version: NativeInt;
@@ -3144,14 +3156,20 @@ type
 		getProcName: ITraceProcedure_getProcNamePtr;
 		getInputs: ITraceProcedure_getInputsPtr;
 		getPerf: ITraceProcedure_getPerfPtr;
+		getStmtID: ITraceProcedure_getStmtIDPtr;
+		getPlan: ITraceProcedure_getPlanPtr;
+		getExplainedPlan: ITraceProcedure_getExplainedPlanPtr;
 	end;
 
 	ITraceProcedure = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 
 		function getProcName(): PAnsiChar;
 		function getInputs(): ITraceParams;
 		function getPerf(): PerformanceInfoPtr;
+		function getStmtID(): Int64;
+		function getPlan(): PAnsiChar;
+		function getExplainedPlan(): PAnsiChar;
 	end;
 
 	ITraceProcedureImpl = class(ITraceProcedure)
@@ -3160,6 +3178,9 @@ type
 		function getProcName(): PAnsiChar; virtual; abstract;
 		function getInputs(): ITraceParams; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getStmtID(): Int64; virtual; abstract;
+		function getPlan(): PAnsiChar; virtual; abstract;
+		function getExplainedPlan(): PAnsiChar; virtual; abstract;
 	end;
 
 	TraceFunctionVTable = class(VersionedVTable)
@@ -3167,15 +3188,21 @@ type
 		getInputs: ITraceFunction_getInputsPtr;
 		getResult: ITraceFunction_getResultPtr;
 		getPerf: ITraceFunction_getPerfPtr;
+		getStmtID: ITraceFunction_getStmtIDPtr;
+		getPlan: ITraceFunction_getPlanPtr;
+		getExplainedPlan: ITraceFunction_getExplainedPlanPtr;
 	end;
 
 	ITraceFunction = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 
 		function getFuncName(): PAnsiChar;
 		function getInputs(): ITraceParams;
 		function getResult(): ITraceParams;
 		function getPerf(): PerformanceInfoPtr;
+		function getStmtID(): Int64;
+		function getPlan(): PAnsiChar;
+		function getExplainedPlan(): PAnsiChar;
 	end;
 
 	ITraceFunctionImpl = class(ITraceFunction)
@@ -3185,6 +3212,9 @@ type
 		function getInputs(): ITraceParams; virtual; abstract;
 		function getResult(): ITraceParams; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getStmtID(): Int64; virtual; abstract;
+		function getPlan(): PAnsiChar; virtual; abstract;
+		function getExplainedPlan(): PAnsiChar; virtual; abstract;
 	end;
 
 	TraceTriggerVTable = class(VersionedVTable)
@@ -3193,10 +3223,13 @@ type
 		getAction: ITraceTrigger_getActionPtr;
 		getWhich: ITraceTrigger_getWhichPtr;
 		getPerf: ITraceTrigger_getPerfPtr;
+		getStmtID: ITraceTrigger_getStmtIDPtr;
+		getPlan: ITraceTrigger_getPlanPtr;
+		getExplainedPlan: ITraceTrigger_getExplainedPlanPtr;
 	end;
 
 	ITraceTrigger = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 		const TYPE_ALL = Cardinal(0);
 		const TYPE_BEFORE = Cardinal(1);
 		const TYPE_AFTER = Cardinal(2);
@@ -3206,6 +3239,9 @@ type
 		function getAction(): Integer;
 		function getWhich(): Integer;
 		function getPerf(): PerformanceInfoPtr;
+		function getStmtID(): Int64;
+		function getPlan(): PAnsiChar;
+		function getExplainedPlan(): PAnsiChar;
 	end;
 
 	ITraceTriggerImpl = class(ITraceTrigger)
@@ -3216,6 +3252,9 @@ type
 		function getAction(): Integer; virtual; abstract;
 		function getWhich(): Integer; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getStmtID(): Int64; virtual; abstract;
+		function getPlan(): PAnsiChar; virtual; abstract;
+		function getExplainedPlan(): PAnsiChar; virtual; abstract;
 	end;
 
 	TraceServiceConnectionVTable = class(TraceConnectionVTable)
@@ -3380,10 +3419,13 @@ type
 		trace_event_sweep: ITracePlugin_trace_event_sweepPtr;
 		trace_func_execute: ITracePlugin_trace_func_executePtr;
 		trace_dsql_restart: ITracePlugin_trace_dsql_restartPtr;
+		trace_proc_compile: ITracePlugin_trace_proc_compilePtr;
+		trace_func_compile: ITracePlugin_trace_func_compilePtr;
+		trace_trigger_compile: ITracePlugin_trace_trigger_compilePtr;
 	end;
 
 	ITracePlugin = class(IReferenceCounted)
-		const VERSION = 4;
+		const VERSION = 5;
 		const RESULT_SUCCESS = Cardinal(0);
 		const RESULT_FAILED = Cardinal(1);
 		const RESULT_UNAUTHORIZED = Cardinal(2);
@@ -3414,6 +3456,9 @@ type
 		function trace_event_sweep(connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean;
 		function trace_func_execute(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean;
 		function trace_dsql_restart(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean;
+		function trace_proc_compile(connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean;
+		function trace_func_compile(connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean;
+		function trace_trigger_compile(connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean;
 	end;
 
 	ITracePluginImpl = class(ITracePlugin)
@@ -3443,6 +3488,9 @@ type
 		function trace_event_sweep(connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean; virtual; abstract;
 		function trace_func_execute(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean; virtual; abstract;
 		function trace_dsql_restart(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean; virtual; abstract;
+		function trace_proc_compile(connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean; virtual; abstract;
+		function trace_func_compile(connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean; virtual; abstract;
+		function trace_trigger_compile(connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean; virtual; abstract;
 	end;
 
 	TraceFactoryVTable = class(PluginBaseVTable)
@@ -3472,7 +3520,10 @@ type
 		const TRACE_EVENT_ERROR = Cardinal(17);
 		const TRACE_EVENT_SWEEP = Cardinal(18);
 		const TRACE_EVENT_FUNC_EXECUTE = Cardinal(19);
-		const TRACE_EVENT_MAX = Cardinal(20);
+		const TRACE_EVENT_PROC_COMPILE = Cardinal(20);
+		const TRACE_EVENT_FUNC_COMPILE = Cardinal(21);
+		const TRACE_EVENT_TRIGGER_COMPILE = Cardinal(22);
+		const TRACE_EVENT_MAX = Cardinal(23);
 
 		function trace_needs(): QWord;
 		function trace_create(status: IStatus; init_info: ITraceInitInfo): ITracePlugin;
@@ -3792,7 +3843,7 @@ type
 	IProfilerPlugin = class(IPluginBase)
 		const VERSION = 4;
 
-		procedure init(status: IStatus; attachment: IAttachment);
+		procedure init(status: IStatus; attachment: IAttachment; ticksFrequency: QWord);
 		function startSession(status: IStatus; description: PAnsiChar; options: PAnsiChar; timestamp: ISC_TIMESTAMP_TZ): IProfilerSession;
 		procedure flush(status: IStatus);
 	end;
@@ -3804,7 +3855,7 @@ type
 		function release(): Integer; virtual; abstract;
 		procedure setOwner(r: IReferenceCounted); virtual; abstract;
 		function getOwner(): IReferenceCounted; virtual; abstract;
-		procedure init(status: IStatus; attachment: IAttachment); virtual; abstract;
+		procedure init(status: IStatus; attachment: IAttachment; ticksFrequency: QWord); virtual; abstract;
 		function startSession(status: IStatus; description: PAnsiChar; options: PAnsiChar; timestamp: ISC_TIMESTAMP_TZ): IProfilerSession; virtual; abstract;
 		procedure flush(status: IStatus); virtual; abstract;
 	end;
@@ -3838,15 +3889,15 @@ type
 		procedure finish(status: IStatus; timestamp: ISC_TIMESTAMP_TZ);
 		procedure defineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar);
 		procedure defineCursor(statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal);
-		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal);
-		procedure onRequestStart(status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
-		procedure onRequestFinish(status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
-		procedure beforePsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal);
-		procedure afterPsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats);
-		procedure beforeRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
-		procedure afterRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
-		procedure beforeRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
-		procedure afterRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal);
+		procedure onRequestStart(status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
+		procedure onRequestFinish(status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
+		procedure beforePsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal);
+		procedure afterPsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats);
+		procedure beforeRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
+		procedure afterRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+		procedure beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
+		procedure afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
 	end;
 
 	IProfilerSessionImpl = class(IProfilerSession)
@@ -3859,31 +3910,31 @@ type
 		procedure finish(status: IStatus; timestamp: ISC_TIMESTAMP_TZ); virtual; abstract;
 		procedure defineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); virtual; abstract;
 		procedure defineCursor(statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal); virtual; abstract;
-		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); virtual; abstract;
-		procedure onRequestStart(status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); virtual; abstract;
-		procedure onRequestFinish(status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); virtual; abstract;
-		procedure beforePsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal); virtual; abstract;
-		procedure afterPsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); virtual; abstract;
-		procedure beforeRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
-		procedure afterRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
-		procedure beforeRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
-		procedure afterRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
+		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); virtual; abstract;
+		procedure onRequestStart(status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); virtual; abstract;
+		procedure onRequestFinish(status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); virtual; abstract;
+		procedure beforePsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal); virtual; abstract;
+		procedure afterPsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); virtual; abstract;
+		procedure beforeRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
+		procedure afterRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
+		procedure beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
+		procedure afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
 	end;
 
 	ProfilerStatsVTable = class(VersionedVTable)
-		getElapsedTime: IProfilerStats_getElapsedTimePtr;
+		getElapsedTicks: IProfilerStats_getElapsedTicksPtr;
 	end;
 
 	IProfilerStats = class(IVersioned)
 		const VERSION = 2;
 
-		function getElapsedTime(): QWord;
+		function getElapsedTicks(): QWord;
 	end;
 
 	IProfilerStatsImpl = class(IProfilerStats)
 		constructor create;
 
-		function getElapsedTime(): QWord; virtual; abstract;
+		function getElapsedTicks(): QWord; virtual; abstract;
 	end;
 
 {$IFNDEF NO_FBCLIENT}
@@ -5497,7 +5548,7 @@ const
 	 isc_overriding_without_identity = 335545134;
 	 isc_overriding_system_invalid = 335545135;
 	 isc_overriding_user_invalid = 335545136;
-	 isc_overriding_system_missing = 335545137;
+	 isc_overriding_missing = 335545137;
 	 isc_decprecision_err = 335545138;
 	 isc_decfloat_divide_by_zero = 335545139;
 	 isc_decfloat_inexact_result = 335545140;
@@ -5649,15 +5700,19 @@ const
 	 isc_bad_par_workers = 335545286;
 	 isc_idx_expr_not_found = 335545287;
 	 isc_idx_cond_not_found = 335545288;
-	 isc_invalid_date_format = 335545289;
-	 isc_invalid_raw_string_in_date_format = 335545290;
-	 isc_invalid_data_type_for_date_format = 335545291;
-	 isc_incompatible_date_format_with_current_date_type = 335545292;
-	 isc_value_for_pattern_is_out_of_range = 335545293;
-	 isc_month_name_mismatch = 335545294;
-	 isc_incorrect_hours_period = 335545295;
-	 isc_data_for_format_is_exhausted = 335545296;
-	 isc_trailing_part_of_string = 335545297;
+	 isc_uninitialized_var = 335545289;
+	 isc_param_not_exist = 335545290;
+	 isc_param_no_default_not_specified = 335545291;
+	 isc_param_multiple_assignments = 335545292;
+	 isc_invalid_date_format = 335545293;
+	 isc_invalid_raw_string_in_date_format = 335545294;
+	 isc_invalid_data_type_for_date_format = 335545295;
+	 isc_incompatible_date_format_with_current_date_type = 335545296;
+	 isc_value_for_pattern_is_out_of_range = 335545297;
+	 isc_month_name_mismatch = 335545298;
+	 isc_incorrect_hours_period = 335545299;
+	 isc_data_for_format_is_exhausted = 335545300;
+	 isc_trailing_part_of_string = 335545301;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -8843,6 +8898,36 @@ begin
 	Result := TraceProcedureVTable(vTable).getPerf(Self);
 end;
 
+function ITraceProcedure.getStmtID(): Int64;
+begin
+	if (vTable.version < 3) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceProcedureVTable(vTable).getStmtID(Self);
+	end;
+end;
+
+function ITraceProcedure.getPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceProcedureVTable(vTable).getPlan(Self);
+	end;
+end;
+
+function ITraceProcedure.getExplainedPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceProcedureVTable(vTable).getExplainedPlan(Self);
+	end;
+end;
+
 function ITraceFunction.getFuncName(): PAnsiChar;
 begin
 	Result := TraceFunctionVTable(vTable).getFuncName(Self);
@@ -8861,6 +8946,36 @@ end;
 function ITraceFunction.getPerf(): PerformanceInfoPtr;
 begin
 	Result := TraceFunctionVTable(vTable).getPerf(Self);
+end;
+
+function ITraceFunction.getStmtID(): Int64;
+begin
+	if (vTable.version < 3) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceFunctionVTable(vTable).getStmtID(Self);
+	end;
+end;
+
+function ITraceFunction.getPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceFunctionVTable(vTable).getPlan(Self);
+	end;
+end;
+
+function ITraceFunction.getExplainedPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceFunctionVTable(vTable).getExplainedPlan(Self);
+	end;
 end;
 
 function ITraceTrigger.getTriggerName(): PAnsiChar;
@@ -8886,6 +9001,36 @@ end;
 function ITraceTrigger.getPerf(): PerformanceInfoPtr;
 begin
 	Result := TraceTriggerVTable(vTable).getPerf(Self);
+end;
+
+function ITraceTrigger.getStmtID(): Int64;
+begin
+	if (vTable.version < 3) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceTriggerVTable(vTable).getStmtID(Self);
+	end;
+end;
+
+function ITraceTrigger.getPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceTriggerVTable(vTable).getPlan(Self);
+	end;
+end;
+
+function ITraceTrigger.getExplainedPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceTriggerVTable(vTable).getExplainedPlan(Self);
+	end;
 end;
 
 function ITraceServiceConnection.getServiceID(): Pointer;
@@ -9112,6 +9257,36 @@ begin
 	end
 	else begin
 		Result := TracePluginVTable(vTable).trace_dsql_restart(Self, connection, transaction, statement, number);
+	end;
+end;
+
+function ITracePlugin.trace_proc_compile(connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean;
+begin
+	if (vTable.version < 5) then begin
+		Result := false;
+	end
+	else begin
+		Result := TracePluginVTable(vTable).trace_proc_compile(Self, connection, procedure_, time_millis, proc_result);
+	end;
+end;
+
+function ITracePlugin.trace_func_compile(connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean;
+begin
+	if (vTable.version < 5) then begin
+		Result := false;
+	end
+	else begin
+		Result := TracePluginVTable(vTable).trace_func_compile(Self, connection, function_, time_millis, func_result);
+	end;
+end;
+
+function ITracePlugin.trace_trigger_compile(connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean;
+begin
+	if (vTable.version < 5) then begin
+		Result := false;
+	end
+	else begin
+		Result := TracePluginVTable(vTable).trace_trigger_compile(Self, connection, trigger, time_millis, trig_result);
 	end;
 end;
 
@@ -9386,9 +9561,9 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IProfilerPlugin.init(status: IStatus; attachment: IAttachment);
+procedure IProfilerPlugin.init(status: IStatus; attachment: IAttachment; ticksFrequency: QWord);
 begin
-	ProfilerPluginVTable(vTable).init(Self, status, attachment);
+	ProfilerPluginVTable(vTable).init(Self, status, attachment, ticksFrequency);
 	FbException.checkException(status);
 end;
 
@@ -9437,56 +9612,56 @@ begin
 	ProfilerSessionVTable(vTable).defineCursor(Self, statementId, cursorId, name, line, column);
 end;
 
-procedure IProfilerSession.defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal);
+procedure IProfilerSession.defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal);
 begin
-	ProfilerSessionVTable(vTable).defineRecordSource(Self, statementId, cursorId, recSourceId, accessPath, parentRecSourceId);
+	ProfilerSessionVTable(vTable).defineRecordSource(Self, statementId, cursorId, recSourceId, level, accessPath, parentRecSourceId);
 end;
 
-procedure IProfilerSession.onRequestStart(status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
+procedure IProfilerSession.onRequestStart(status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
 begin
-	ProfilerSessionVTable(vTable).onRequestStart(Self, status, requestId, statementId, callerRequestId, timestamp);
+	ProfilerSessionVTable(vTable).onRequestStart(Self, status, statementId, requestId, callerStatementId, callerRequestId, timestamp);
 	FbException.checkException(status);
 end;
 
-procedure IProfilerSession.onRequestFinish(status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
+procedure IProfilerSession.onRequestFinish(status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
 begin
-	ProfilerSessionVTable(vTable).onRequestFinish(Self, status, requestId, timestamp, stats);
+	ProfilerSessionVTable(vTable).onRequestFinish(Self, status, statementId, requestId, timestamp, stats);
 	FbException.checkException(status);
 end;
 
-procedure IProfilerSession.beforePsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal);
+procedure IProfilerSession.beforePsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal);
 begin
-	ProfilerSessionVTable(vTable).beforePsqlLineColumn(Self, requestId, line, column);
+	ProfilerSessionVTable(vTable).beforePsqlLineColumn(Self, statementId, requestId, line, column);
 end;
 
-procedure IProfilerSession.afterPsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats);
+procedure IProfilerSession.afterPsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats);
 begin
-	ProfilerSessionVTable(vTable).afterPsqlLineColumn(Self, requestId, line, column, stats);
+	ProfilerSessionVTable(vTable).afterPsqlLineColumn(Self, statementId, requestId, line, column, stats);
 end;
 
-procedure IProfilerSession.beforeRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
+procedure IProfilerSession.beforeRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
 begin
-	ProfilerSessionVTable(vTable).beforeRecordSourceOpen(Self, requestId, cursorId, recSourceId);
+	ProfilerSessionVTable(vTable).beforeRecordSourceOpen(Self, statementId, requestId, cursorId, recSourceId);
 end;
 
-procedure IProfilerSession.afterRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+procedure IProfilerSession.afterRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
 begin
-	ProfilerSessionVTable(vTable).afterRecordSourceOpen(Self, requestId, cursorId, recSourceId, stats);
+	ProfilerSessionVTable(vTable).afterRecordSourceOpen(Self, statementId, requestId, cursorId, recSourceId, stats);
 end;
 
-procedure IProfilerSession.beforeRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
+procedure IProfilerSession.beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
 begin
-	ProfilerSessionVTable(vTable).beforeRecordSourceGetRecord(Self, requestId, cursorId, recSourceId);
+	ProfilerSessionVTable(vTable).beforeRecordSourceGetRecord(Self, statementId, requestId, cursorId, recSourceId);
 end;
 
-procedure IProfilerSession.afterRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+procedure IProfilerSession.afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
 begin
-	ProfilerSessionVTable(vTable).afterRecordSourceGetRecord(Self, requestId, cursorId, recSourceId, stats);
+	ProfilerSessionVTable(vTable).afterRecordSourceGetRecord(Self, statementId, requestId, cursorId, recSourceId, stats);
 end;
 
-function IProfilerStats.getElapsedTime(): QWord;
+function IProfilerStats.getElapsedTicks(): QWord;
 begin
-	Result := ProfilerStatsVTable(vTable).getElapsedTime(Self);
+	Result := ProfilerStatsVTable(vTable).getElapsedTicks(Self);
 end;
 
 var
@@ -15032,6 +15207,36 @@ begin
 	end
 end;
 
+function ITraceProcedureImpl_getStmtIDDispatcher(this: ITraceProcedure): Int64; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ITraceProcedureImpl(this).getStmtID();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceProcedureImpl_getPlanDispatcher(this: ITraceProcedure): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceProcedureImpl(this).getPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceProcedureImpl_getExplainedPlanDispatcher(this: ITraceProcedure): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceProcedureImpl(this).getExplainedPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
 var
 	ITraceProcedureImpl_vTable: TraceProcedureVTable;
 
@@ -15075,6 +15280,36 @@ begin
 	Result := nil;
 	try
 		Result := ITraceFunctionImpl(this).getPerf();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceFunctionImpl_getStmtIDDispatcher(this: ITraceFunction): Int64; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ITraceFunctionImpl(this).getStmtID();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceFunctionImpl_getPlanDispatcher(this: ITraceFunction): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceFunctionImpl(this).getPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceFunctionImpl_getExplainedPlanDispatcher(this: ITraceFunction): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceFunctionImpl(this).getExplainedPlan();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -15133,6 +15368,36 @@ begin
 	Result := nil;
 	try
 		Result := ITraceTriggerImpl(this).getPerf();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceTriggerImpl_getStmtIDDispatcher(this: ITraceTrigger): Int64; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ITraceTriggerImpl(this).getStmtID();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceTriggerImpl_getPlanDispatcher(this: ITraceTrigger): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceTriggerImpl(this).getPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceTriggerImpl_getExplainedPlanDispatcher(this: ITraceTrigger): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceTriggerImpl(this).getExplainedPlan();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -15739,6 +16004,36 @@ begin
 	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_dsql_restart(connection, transaction, statement, number);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITracePluginImpl_trace_proc_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean; cdecl;
+begin
+	Result := false;
+	try
+		Result := ITracePluginImpl(this).trace_proc_compile(connection, procedure_, time_millis, proc_result);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITracePluginImpl_trace_func_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean; cdecl;
+begin
+	Result := false;
+	try
+		Result := ITracePluginImpl(this).trace_func_compile(connection, function_, time_millis, func_result);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITracePluginImpl_trace_trigger_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean; cdecl;
+begin
+	Result := false;
+	try
+		Result := ITracePluginImpl(this).trace_trigger_compile(connection, trigger, time_millis, trig_result);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -16449,10 +16744,10 @@ begin
 	end
 end;
 
-procedure IProfilerPluginImpl_initDispatcher(this: IProfilerPlugin; status: IStatus; attachment: IAttachment); cdecl;
+procedure IProfilerPluginImpl_initDispatcher(this: IProfilerPlugin; status: IStatus; attachment: IAttachment; ticksFrequency: QWord); cdecl;
 begin
 	try
-		IProfilerPluginImpl(this).init(status, attachment);
+		IProfilerPluginImpl(this).init(status, attachment, ticksFrequency);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -16550,82 +16845,82 @@ begin
 	end
 end;
 
-procedure IProfilerSessionImpl_defineRecordSourceDispatcher(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); cdecl;
+procedure IProfilerSessionImpl_defineRecordSourceDispatcher(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).defineRecordSource(statementId, cursorId, recSourceId, accessPath, parentRecSourceId);
+		IProfilerSessionImpl(this).defineRecordSource(statementId, cursorId, recSourceId, level, accessPath, parentRecSourceId);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_onRequestStartDispatcher(this: IProfilerSession; status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
+procedure IProfilerSessionImpl_onRequestStartDispatcher(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).onRequestStart(status, requestId, statementId, callerRequestId, timestamp);
+		IProfilerSessionImpl(this).onRequestStart(status, statementId, requestId, callerStatementId, callerRequestId, timestamp);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_onRequestFinishDispatcher(this: IProfilerSession; status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
+procedure IProfilerSessionImpl_onRequestFinishDispatcher(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).onRequestFinish(status, requestId, timestamp, stats);
+		IProfilerSessionImpl(this).onRequestFinish(status, statementId, requestId, timestamp, stats);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_beforePsqlLineColumnDispatcher(this: IProfilerSession; requestId: Int64; line: Cardinal; column: Cardinal); cdecl;
+procedure IProfilerSessionImpl_beforePsqlLineColumnDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).beforePsqlLineColumn(requestId, line, column);
+		IProfilerSessionImpl(this).beforePsqlLineColumn(statementId, requestId, line, column);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_afterPsqlLineColumnDispatcher(this: IProfilerSession; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); cdecl;
+procedure IProfilerSessionImpl_afterPsqlLineColumnDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).afterPsqlLineColumn(requestId, line, column, stats);
+		IProfilerSessionImpl(this).afterPsqlLineColumn(statementId, requestId, line, column, stats);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_beforeRecordSourceOpenDispatcher(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
+procedure IProfilerSessionImpl_beforeRecordSourceOpenDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).beforeRecordSourceOpen(requestId, cursorId, recSourceId);
+		IProfilerSessionImpl(this).beforeRecordSourceOpen(statementId, requestId, cursorId, recSourceId);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_afterRecordSourceOpenDispatcher(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+procedure IProfilerSessionImpl_afterRecordSourceOpenDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).afterRecordSourceOpen(requestId, cursorId, recSourceId, stats);
+		IProfilerSessionImpl(this).afterRecordSourceOpen(statementId, requestId, cursorId, recSourceId, stats);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_beforeRecordSourceGetRecordDispatcher(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
+procedure IProfilerSessionImpl_beforeRecordSourceGetRecordDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).beforeRecordSourceGetRecord(requestId, cursorId, recSourceId);
+		IProfilerSessionImpl(this).beforeRecordSourceGetRecord(statementId, requestId, cursorId, recSourceId);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_afterRecordSourceGetRecordDispatcher(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+procedure IProfilerSessionImpl_afterRecordSourceGetRecordDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).afterRecordSourceGetRecord(requestId, cursorId, recSourceId, stats);
+		IProfilerSessionImpl(this).afterRecordSourceGetRecord(statementId, requestId, cursorId, recSourceId, stats);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -16639,11 +16934,11 @@ begin
 	vTable := IProfilerSessionImpl_vTable;
 end;
 
-function IProfilerStatsImpl_getElapsedTimeDispatcher(this: IProfilerStats): QWord; cdecl;
+function IProfilerStatsImpl_getElapsedTicksDispatcher(this: IProfilerStats): QWord; cdecl;
 begin
 	Result := 0;
 	try
-		Result := IProfilerStatsImpl(this).getElapsedTime();
+		Result := IProfilerStatsImpl(this).getElapsedTicks();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -17458,25 +17753,34 @@ initialization
 	ITraceContextVariableImpl_vTable.getVarValue := @ITraceContextVariableImpl_getVarValueDispatcher;
 
 	ITraceProcedureImpl_vTable := TraceProcedureVTable.create;
-	ITraceProcedureImpl_vTable.version := 2;
+	ITraceProcedureImpl_vTable.version := 3;
 	ITraceProcedureImpl_vTable.getProcName := @ITraceProcedureImpl_getProcNameDispatcher;
 	ITraceProcedureImpl_vTable.getInputs := @ITraceProcedureImpl_getInputsDispatcher;
 	ITraceProcedureImpl_vTable.getPerf := @ITraceProcedureImpl_getPerfDispatcher;
+	ITraceProcedureImpl_vTable.getStmtID := @ITraceProcedureImpl_getStmtIDDispatcher;
+	ITraceProcedureImpl_vTable.getPlan := @ITraceProcedureImpl_getPlanDispatcher;
+	ITraceProcedureImpl_vTable.getExplainedPlan := @ITraceProcedureImpl_getExplainedPlanDispatcher;
 
 	ITraceFunctionImpl_vTable := TraceFunctionVTable.create;
-	ITraceFunctionImpl_vTable.version := 2;
+	ITraceFunctionImpl_vTable.version := 3;
 	ITraceFunctionImpl_vTable.getFuncName := @ITraceFunctionImpl_getFuncNameDispatcher;
 	ITraceFunctionImpl_vTable.getInputs := @ITraceFunctionImpl_getInputsDispatcher;
 	ITraceFunctionImpl_vTable.getResult := @ITraceFunctionImpl_getResultDispatcher;
 	ITraceFunctionImpl_vTable.getPerf := @ITraceFunctionImpl_getPerfDispatcher;
+	ITraceFunctionImpl_vTable.getStmtID := @ITraceFunctionImpl_getStmtIDDispatcher;
+	ITraceFunctionImpl_vTable.getPlan := @ITraceFunctionImpl_getPlanDispatcher;
+	ITraceFunctionImpl_vTable.getExplainedPlan := @ITraceFunctionImpl_getExplainedPlanDispatcher;
 
 	ITraceTriggerImpl_vTable := TraceTriggerVTable.create;
-	ITraceTriggerImpl_vTable.version := 2;
+	ITraceTriggerImpl_vTable.version := 3;
 	ITraceTriggerImpl_vTable.getTriggerName := @ITraceTriggerImpl_getTriggerNameDispatcher;
 	ITraceTriggerImpl_vTable.getRelationName := @ITraceTriggerImpl_getRelationNameDispatcher;
 	ITraceTriggerImpl_vTable.getAction := @ITraceTriggerImpl_getActionDispatcher;
 	ITraceTriggerImpl_vTable.getWhich := @ITraceTriggerImpl_getWhichDispatcher;
 	ITraceTriggerImpl_vTable.getPerf := @ITraceTriggerImpl_getPerfDispatcher;
+	ITraceTriggerImpl_vTable.getStmtID := @ITraceTriggerImpl_getStmtIDDispatcher;
+	ITraceTriggerImpl_vTable.getPlan := @ITraceTriggerImpl_getPlanDispatcher;
+	ITraceTriggerImpl_vTable.getExplainedPlan := @ITraceTriggerImpl_getExplainedPlanDispatcher;
 
 	ITraceServiceConnectionImpl_vTable := TraceServiceConnectionVTable.create;
 	ITraceServiceConnectionImpl_vTable.version := 3;
@@ -17526,7 +17830,7 @@ initialization
 	ITraceInitInfoImpl_vTable.getLogWriter := @ITraceInitInfoImpl_getLogWriterDispatcher;
 
 	ITracePluginImpl_vTable := TracePluginVTable.create;
-	ITracePluginImpl_vTable.version := 4;
+	ITracePluginImpl_vTable.version := 5;
 	ITracePluginImpl_vTable.addRef := @ITracePluginImpl_addRefDispatcher;
 	ITracePluginImpl_vTable.release := @ITracePluginImpl_releaseDispatcher;
 	ITracePluginImpl_vTable.trace_get_error := @ITracePluginImpl_trace_get_errorDispatcher;
@@ -17551,6 +17855,9 @@ initialization
 	ITracePluginImpl_vTable.trace_event_sweep := @ITracePluginImpl_trace_event_sweepDispatcher;
 	ITracePluginImpl_vTable.trace_func_execute := @ITracePluginImpl_trace_func_executeDispatcher;
 	ITracePluginImpl_vTable.trace_dsql_restart := @ITracePluginImpl_trace_dsql_restartDispatcher;
+	ITracePluginImpl_vTable.trace_proc_compile := @ITracePluginImpl_trace_proc_compileDispatcher;
+	ITracePluginImpl_vTable.trace_func_compile := @ITracePluginImpl_trace_func_compileDispatcher;
+	ITracePluginImpl_vTable.trace_trigger_compile := @ITracePluginImpl_trace_trigger_compileDispatcher;
 
 	ITraceFactoryImpl_vTable := TraceFactoryVTable.create;
 	ITraceFactoryImpl_vTable.version := 4;
@@ -17679,7 +17986,7 @@ initialization
 
 	IProfilerStatsImpl_vTable := ProfilerStatsVTable.create;
 	IProfilerStatsImpl_vTable.version := 2;
-	IProfilerStatsImpl_vTable.getElapsedTime := @IProfilerStatsImpl_getElapsedTimeDispatcher;
+	IProfilerStatsImpl_vTable.getElapsedTicks := @IProfilerStatsImpl_getElapsedTicksDispatcher;
 
 finalization
 	IVersionedImpl_vTable.destroy;

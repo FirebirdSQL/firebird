@@ -1066,7 +1066,7 @@ void StableAttachmentPart::doOnIdleTimer(TimerImpl*)
 	JRD_shutdown_attachment(att);
 }
 
-JAttachment* Attachment::getInterface() throw()
+JAttachment* Attachment::getInterface() noexcept
 {
 	return att_stable->getInterface();
 }
@@ -1138,7 +1138,7 @@ void Attachment::invalidateReplSet(thread_db* tdbb, bool broadcast)
 		for (auto relation : *att_relations)
 		{
 			if (relation)
-				relation->rel_repl_state.invalidate();
+				relation->rel_repl_state.reset();
 		}
 	}
 
@@ -1178,6 +1178,15 @@ ProfilerManager* Attachment::getProfilerManager(thread_db* tdbb)
 	if (!profilerManager)
 		att_profiler_manager.reset(profilerManager = ProfilerManager::create(tdbb));
 	return profilerManager;
+}
+
+ProfilerManager* Attachment::getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb)
+{
+	const auto request = tdbb->getRequest();
+
+	return isProfilerActive() && !request->hasInternalStatement() ?
+		getProfilerManager(tdbb) :
+		nullptr;
 }
 
 bool Attachment::isProfilerActive()

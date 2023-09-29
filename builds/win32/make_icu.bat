@@ -7,13 +7,31 @@
 ::==========
 :: MAIN
 
-@echo Extracting pre-built ICU
-unzip -o %FB_ROOT_PATH%\extern\icu\icu_windows.zip -d %FB_ROOT_PATH%\extern\icu
-unzip -o %FB_ROOT_PATH%\extern\icu\icudt.zip -d %FB_ROOT_PATH%\extern\icu
-if errorlevel 1 call :ERROR build failed - see make_icu_%FB_TARGET_PLATFORM%.log for details
+@echo Extracting pre-built ICU and tzdata
+mkdir %FB_ROOT_PATH%\extern\icu\tzdata-extract 2> nul
 
-@echo Extracting tzdata
-unzip -o %FB_ROOT_PATH%\extern\icu\tzdata\le.zip -d %FB_ROOT_PATH%\extern\icu\tzdata-extract
+:: FB_UNZIP could be set by caller, else try to find unzip in PATH or at the GIT folder
+
+if not defined FB_UNZIP (
+  @for /f "tokens=*" %%a in ('where unzip.exe 2^> nul') do (@SET FB_UNZIP=%%a)
+)
+
+if not defined FB_UNZIP (
+  @for /f "tokens=*" %%a in ('where git 2^> nul') do (@SET FB_UNZIP=%%~dpa..\usr\bin\unzip.exe)
+)
+
+if not exist "%FB_UNZIP%" set FB_UNZIP=
+
+if not defined FB_UNZIP (
+  cscript /nologo unzip.vbs %FB_ROOT_PATH%\extern\icu\icu_windows.zip %FB_ROOT_PATH%\extern\icu
+  cscript /nologo unzip.vbs %FB_ROOT_PATH%\extern\icu\icudt.zip %FB_ROOT_PATH%\extern\icu
+  cscript /nologo unzip.vbs %FB_ROOT_PATH%\extern\icu\tzdata\le.zip %FB_ROOT_PATH%\extern\icu\tzdata-extract
+) else (
+  "%FB_UNZIP%" -o %FB_ROOT_PATH%\extern\icu\icu_windows.zip -d %FB_ROOT_PATH%\extern\icu
+  "%FB_UNZIP%" -o %FB_ROOT_PATH%\extern\icu\icudt.zip -d %FB_ROOT_PATH%\extern\icu
+  "%FB_UNZIP%" -o %FB_ROOT_PATH%\extern\icu\tzdata\le.zip -d %FB_ROOT_PATH%\extern\icu\tzdata-extract
+)
+if errorlevel 1 call :ERROR build failed - see make_icu_%FB_TARGET_PLATFORM%.log for details
 
 @goto :EOF
 

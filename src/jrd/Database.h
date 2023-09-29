@@ -54,6 +54,7 @@
 #include "../common/classes/GenericMap.h"
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/semaphore.h"
+#include "../common/classes/TriState.h"
 #include "../common/classes/XThreadMutex.h"
 #include "../common/utils_proto.h"
 #include "../jrd/RandomGenerator.h"
@@ -71,6 +72,7 @@
 #include "../common/classes/SyncObject.h"
 #include "../common/classes/Synchronize.h"
 #include "../jrd/replication/Manager.h"
+#include "../dsql/Keywords.h"
 #include "fb_types.h"
 
 
@@ -90,14 +92,6 @@ class MonitoringData;
 class GarbageCollector;
 class CryptoManager;
 class KeywordsMap;
-
-// allocator for keywords table
-class KeywordsMapAllocator
-{
-public:
-	static KeywordsMap* create();
-	static void destroy(KeywordsMap* inst);
-};
 
 // general purpose vector
 template <class T, BlockType TYPE = type_vec>
@@ -546,7 +540,7 @@ public:
 
 	unsigned dbb_compatibility_index;	// datatype backward compatibility level
 	Dictionary dbb_dic;					// metanames dictionary
-	Firebird::InitInstance<KeywordsMap, KeywordsMapAllocator, Firebird::TraditionalDelete> dbb_keywords_map;
+	Firebird::InitInstance<Keywords, Keywords::Allocator, Firebird::TraditionalDelete> dbb_keywords;
 
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;

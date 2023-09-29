@@ -100,7 +100,10 @@ namespace
 	private:
 		TempSpace& tempSpace;
 	};
-}
+
+	const ULONG HEADER_SIZE = (ULONG) FB_ALIGN(sizeof(MonitoringHeader), FB_ALIGNMENT);
+
+} // namespace
 
 
 const Format* MonitoringTableScan::getFormat(thread_db* tdbb, jrd_rel* relation) const
@@ -171,7 +174,7 @@ MonitoringData::~MonitoringData()
 	try
 	{
 		if (m_sharedMemory->getHeader() &&
-			m_sharedMemory->getHeader()->used == alignOffset(sizeof(Header)))
+			m_sharedMemory->getHeader()->used == HEADER_SIZE)
 		{
 			m_sharedMemory->removeMapFile();
 		}
@@ -212,7 +215,7 @@ void MonitoringData::acquire()
 	while (m_sharedMemory->getHeader()->isDeleted())
 	{
 		// Shared memory must be empty at this point
-		fb_assert(m_sharedMemory->getHeader()->used == alignOffset(sizeof(Header)));
+		fb_assert(m_sharedMemory->getHeader()->used == HEADER_SIZE);
 
 		m_sharedMemory->mutexUnlock();
 		m_sharedMemory.reset();
@@ -254,11 +257,11 @@ void MonitoringData::enumerate(const char* userName, ULONG generation, SessionLi
 	// When initializing, collect all sessions older than the given generation.
 	// Otherwise, remove sessions that have updated their generation.
 
-	for (ULONG offset = alignOffset(sizeof(Header)); offset < m_sharedMemory->getHeader()->used;)
+	for (ULONG offset = HEADER_SIZE; offset < m_sharedMemory->getHeader()->used;)
 	{
 		const auto ptr = (UCHAR*) m_sharedMemory->getHeader() + offset;
 		const auto element = (Element*) ptr;
-		const ULONG length = alignOffset(sizeof(Element) + element->length);
+		const ULONG length = element->getBlockLength();
 
 		if (!userName || !strcmp(element->userName, userName)) // permitted
 		{
@@ -282,11 +285,11 @@ void MonitoringData::read(const char* userName, TempSpace& temp)
 
 	// Copy data of all permitted sessions
 
-	for (ULONG offset = alignOffset(sizeof(Header)); offset < m_sharedMemory->getHeader()->used;)
+	for (ULONG offset = HEADER_SIZE; offset < m_sharedMemory->getHeader()->used;)
 	{
 		const auto ptr = (UCHAR*) m_sharedMemory->getHeader() + offset;
 		const auto element = (Element*) ptr;
-		const ULONG length = alignOffset(sizeof(Element) + element->length);
+		const ULONG length = element->getBlockLength();
 
 		if (!userName || !strcmp(element->userName, userName)) // permitted
 		{
@@ -301,7 +304,7 @@ void MonitoringData::read(const char* userName, TempSpace& temp)
 
 ULONG MonitoringData::setup(AttNumber att_id, const char* userName, ULONG generation)
 {
-	const ULONG offset = alignOffset(m_sharedMemory->getHeader()->used);
+	const FB_UINT64 offset = FB_ALIGN(m_sharedMemory->getHeader()->used, FB_ALIGNMENT);
 	const ULONG delta = offset + sizeof(Element) - m_sharedMemory->getHeader()->used;
 
 	ensureSpace(delta);
@@ -337,11 +340,11 @@ void MonitoringData::cleanup(AttNumber att_id)
 {
 	// Remove information about the given session
 
-	for (ULONG offset = alignOffset(sizeof(Header)); offset < m_sharedMemory->getHeader()->used;)
+	for (ULONG offset = HEADER_SIZE; offset < m_sharedMemory->getHeader()->used;)
 	{
 		const auto ptr = (UCHAR*) m_sharedMemory->getHeader() + offset;
 		const auto element = (Element*) ptr;
-		const ULONG length = alignOffset(sizeof(Element) + element->length);
+		const ULONG length = element->getBlockLength();
 
 		if (element->attId == att_id)
 		{
@@ -365,15 +368,23 @@ void MonitoringData::cleanup(AttNumber att_id)
 
 void MonitoringData::ensureSpace(ULONG length)
 {
-	ULONG newSize = m_sharedMemory->getHeader()->used + length;
+	FB_UINT64 newSize = m_sharedMemory->getHeader()->used + length;
 
 	if (newSize > m_sharedMemory->getHeader()->allocated)
 	{
-		newSize = FB_ALIGN(newSize, DEFAULT_SIZE);
+		if (newSize > MAX_ULONG)
+		{
+			(Arg::Gds(isc_montabexh) <<
+				Arg::Gds(isc_random) << Arg::Str("storage size exceeds limit")).raise();
+		}
+
+		FB_UINT64 remapSize = FB_ALIGN(newSize, DEFAULT_SIZE);
+		if (remapSize > MAX_ULONG)
+			remapSize = newSize;
 
 #ifdef HAVE_OBJECT_MAP
 		FbLocalStatus statusVector;
-		if (!m_sharedMemory->remapFile(&statusVector, newSize, true))
+		if (!m_sharedMemory->remapFile(&statusVector, (ULONG) remapSize, true))
 		{
 			status_exception::raise(&statusVector);
 		}
@@ -402,17 +413,11 @@ bool MonitoringData::initialize(SharedMemoryBase* sm, bool initialize)
 		// Initialize the shared data header
 		initHeader(header);
 
-		header->used = alignOffset(sizeof(Header));
+		header->used = HEADER_SIZE;
 		header->allocated = sm->sh_mem_length_mapped;
 	}
 
 	return true;
-}
-
-
-ULONG MonitoringData::alignOffset(ULONG unaligned)
-{
-	return (ULONG) Firebird::MEM_ALIGN(unaligned);
 }
 
 

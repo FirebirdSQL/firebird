@@ -214,16 +214,16 @@ public:
 
 	IndexCreateTask(thread_db* tdbb, MemoryPool* pool, IndexCreation* creation) : Task(),
 		m_pool(pool),
+		m_dbb(tdbb->getDatabase()),
 		m_tdbb_flags(tdbb->tdbb_flags),
 		m_flags(0),
 		m_creation(creation),
-		m_sorts(*m_pool),
+		m_sorts(*m_pool, m_dbb),
 		m_items(*m_pool),
 		m_stop(false),
 		m_countPP(0),
 		m_nextPP(0)
 	{
-		m_dbb = tdbb->getDatabase();
 		Attachment* att = tdbb->getAttachment();
 
 		if (att->isGbak())
@@ -554,7 +554,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 
 	// Checkout a garbage collect record block for fetching data.
 
-	AutoGCRecord gc_record(VIO_gc_record(tdbb, relation));
+	AutoTempRecord gc_record(VIO_gc_record(tdbb, relation));
 
 	if (m_flags & IS_LARGE_SCAN)
 	{
@@ -1510,12 +1510,16 @@ void IDX_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		IndexErrorContext context(rpb->rpb_relation, &idx);
 		idx_e error_code;
 
-		IndexKey key(tdbb, rpb->rpb_relation, &idx);
+		AutoIndexExpression expression;
+		IndexKey key(tdbb, rpb->rpb_relation, &idx, expression);
+
 		if ( (error_code = key.compose(rpb->rpb_record)) )
 		{
 			CCH_RELEASE(tdbb, &window);
 			context.raise(tdbb, error_code, rpb->rpb_record);
 		}
+
+		expression.reset();
 
 		insertion.iib_key = key;
 

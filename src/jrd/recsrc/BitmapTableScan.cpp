@@ -122,32 +122,32 @@ bool BitmapTableScan::internalGetRecord(thread_db* tdbb) const
 	return false;
 }
 
-void BitmapTableScan::getChildren(Array<const RecordSource*>& children) const
+void BitmapTableScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
+	if (!level)
+		plan += "(";
+
+	plan += printName(tdbb, m_alias, false) + " INDEX (";
+	string indices;
+	printLegacyInversion(tdbb, m_inversion, indices);
+	plan += indices + ")";
+
+	if (!level)
+		plan += ")";
 }
 
-void BitmapTableScan::print(thread_db* tdbb, string& plan,
-							bool detailed, unsigned level, bool recurse) const
+void BitmapTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Table " +
-			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	planEntry.className = "BitmapTableScan";
 
-		printOptInfo(plan);
-		printInversion(tdbb, m_inversion, plan, true, level);
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+	planEntry.lines.add().text = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	printOptInfo(planEntry.lines);
 
-		plan += printName(tdbb, m_alias, false) + " INDEX (";
-		string indices;
-		printInversion(tdbb, m_inversion, indices, false, level);
-		plan += indices + ")";
+	printInversion(tdbb, m_inversion, planEntry.lines, true, 1, false);
 
-		if (!level)
-			plan += ")";
-	}
+	planEntry.objectType = m_relation->getObjectType();
+	planEntry.objectName = m_relation->rel_name;
+
+	if (m_alias.hasData() && m_relation->rel_name != m_alias)
+		planEntry.alias = m_alias;
 }

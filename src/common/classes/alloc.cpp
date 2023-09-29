@@ -70,12 +70,7 @@
 #ifdef USE_VALGRIND
 #include <valgrind/memcheck.h>
 
-#ifndef VALGRIND_MAKE_WRITABLE	// Valgrind 3.3
-#define VALGRIND_MAKE_WRITABLE	VALGRIND_MAKE_MEM_UNDEFINED
-#define VALGRIND_MAKE_NOACCESS	VALGRIND_MAKE_MEM_NOACCESS
-#endif
-
-#define VALGRIND_FIX_IT		// overrides suspicious valgrind behavior
+//#define VALGRIND_FIX_IT		// overrides suspicious valgrind behavior
 #endif	// USE_VALGRIND
 
 namespace {
@@ -124,7 +119,6 @@ struct DelayedExtent
 {
 	void* memory; // Extent pointer
 	size_t size;  // Size of extent
-	int handle;   // Valgrind handle of protected extent block
 };
 
 DelayedExtent delayedExtents[DELAYED_EXTENT_COUNT];
@@ -345,6 +339,8 @@ public:
 
 	void resetRedirect(MemPool* parent)
 	{
+		valgrindInternal();
+
 		fb_assert(redirected());
 		hdrLength &= ~MEM_REDIRECT;
 		pool = parent;
@@ -413,6 +409,8 @@ public:
 		if (p == pool && !isExtent())
 			vUse += getSize();
 	}
+
+	void valgrindInternal();
 };
 
 class MemBlock : public MemHeader
@@ -437,6 +435,13 @@ public:
 	{ }
 };
 
+inline void MemHeader::valgrindInternal()
+{
+#ifdef USE_VALGRIND
+	VALGRIND_MAKE_MEM_DEFINED(this, sizeof(MemBlock));
+	VALGRIND_MAKE_MEM_UNDEFINED(((UCHAR*)this) + sizeof(MemBlock), getSize() - sizeof(MemBlock));
+#endif
+}
 
 template <typename H>
 class MemBaseHunk
@@ -1808,12 +1813,12 @@ private:
 	};
 #endif // VALIDATE_POOL
 
-	MemBlock* alloc(size_t from, size_t& length, bool flagRedirect);
+	MemBlock* allocateInternal(size_t from, size_t& length, bool flagRedirect);
 	void releaseBlock(MemBlock *block, bool flagDecr) noexcept;
 
 public:
 	void* allocate(size_t size ALLOC_PARAMS);
-	MemBlock* allocate2(size_t from, size_t& size ALLOC_PARAMS);
+	MemBlock* allocateRange(size_t from, size_t& size ALLOC_PARAMS);
 
 private:
 	virtual void memoryIsExhausted(void);
@@ -2062,12 +2067,9 @@ void MemoryPool::initDefaultPool()
 void MemoryPool::cleanupDefaultPool()
 {
 #ifdef VALGRIND_FIX_IT
-	VALGRIND_DISCARD(
-		VALGRIND_MAKE_MEM_DEFINED(cache_mutex, sizeof(Mutex)));
-	VALGRIND_DISCARD(
-		VALGRIND_MAKE_MEM_DEFINED(default_stats_group, sizeof(MemoryStats)));
-	VALGRIND_DISCARD(
-		VALGRIND_MAKE_MEM_DEFINED(defaultMemoryManager, sizeof(MemPool)));
+	VALGRIND_MAKE_MEM_DEFINED(cache_mutex, sizeof(Mutex));
+	VALGRIND_MAKE_MEM_DEFINED(default_stats_group, sizeof(MemoryStats));
+	VALGRIND_MAKE_MEM_DEFINED(defaultMemoryManager, sizeof(MemPool));
 #endif
 
 	if (defaultMemoryManager)
@@ -2149,17 +2151,8 @@ MemPool::~MemPool(void)
 #ifdef USE_VALGRIND
 	VALGRIND_DESTROY_MEMPOOL(this);
 
-	// Do not forget to discard stack traces for delayed free blocks
 	for (size_t i = 0; i < delayedFreeCount; i++)
-	{
-		MemBlock* block = delayedFree[i];
-		void* object = &block->body;
-
-		VALGRIND_DISCARD(
-            VALGRIND_MAKE_MEM_DEFINED(block, offsetof(MemBlock, body)));
-		VALGRIND_DISCARD(
-            VALGRIND_MAKE_WRITABLE(object, block->getSize()));
-	}
+		delayedFree[i]->valgrindInternal();
 #endif
 
 	// release big objects
@@ -2274,9 +2267,9 @@ void MemoryPool::setStatsGroup(MemoryStats& newStats) noexcept
 	pool->setStatsGroup(newStats);
 }
 
-MemBlock* MemPool::alloc(size_t from, size_t& length, bool flagRedirect)
+MemBlock* MemPool::allocateInternal(size_t from, size_t& length, bool flagRedirect)
 {
-	MutexEnsureUnlock guard(mutex, "MemPool::alloc");
+	MutexEnsureUnlock guard(mutex, "MemPool::allocateInternal");
 	guard.enter();
 
 	++blocksAllocated;
@@ -2288,10 +2281,12 @@ MemBlock* MemPool::alloc(size_t from, size_t& length, bool flagRedirect)
 	if (block)
 		return block;
 
+	// Parent redirection of medium blocks
+
 	if (parent_redirect && flagRedirect && length < PARENT_REDIRECT_THRESHOLD)
 	{
 		guard.leave();
-		block = parent->alloc(from, length, false);
+		block = parent->allocateInternal(from, length, false);
 		guard.enter();
 
 		if (block)
@@ -2332,21 +2327,20 @@ MemBlock* MemPool::alloc(size_t from, size_t& length, bool flagRedirect)
 	return hunk->block;
 }
 
-MemBlock* MemPool::allocate2(size_t from, size_t& size
+MemBlock* MemPool::allocateRange(size_t from, size_t& size
 #ifdef DEBUG_GDS_ALLOC
 	, const char* fileName, int line
 #endif
 )
 {
 	size_t length = from ? size : ROUNDUP(size + VALGRIND_REDZONE, roundingSize) + GUARD_BYTES;
-	MemBlock* memory = alloc(from, length, true);
+	MemBlock* memory = allocateInternal(from, length, true);
 	size = length - (VALGRIND_REDZONE + GUARD_BYTES);
+	memory->pool = this;
 
 #ifdef USE_VALGRIND
 	VALGRIND_MEMPOOL_ALLOC(this, &memory->body, size);
 #endif
-
-	memory->pool = this;
 
 #ifdef DEBUG_GDS_ALLOC
 	memory->fileName = fileName;
@@ -2370,7 +2364,7 @@ void* MemPool::allocate(size_t size ALLOC_PARAMS)
 	Validator vld(this);
 #endif
 
-	MemBlock* memory = allocate2(0, size ALLOC_PASS_ARGS);
+	MemBlock* memory = allocateRange(0, size ALLOC_PASS_ARGS);
 
 	increment_usage(memory->getSize());
 
@@ -2399,7 +2393,7 @@ void MemPool::releaseMemory(void* object, bool flagExtent) noexcept
 		VALGRIND_MEMPOOL_FREE(pool, object);
 
 		// block is placed in delayed buffer - mark as NOACCESS for that time
-		VALGRIND_DISCARD(VALGRIND_MAKE_NOACCESS(block, offsetof(MemBlock, body)));
+		VALGRIND_MAKE_MEM_NOACCESS(block, block->getSize());
 
 		// Extend circular buffer if possible
 		if (pool->delayedFreeCount < FB_NELEM(pool->delayedFree))
@@ -2415,18 +2409,6 @@ void MemPool::releaseMemory(void* object, bool flagExtent) noexcept
 		block = pool->delayedFree[pool->delayedFreePos];
 		object = &block->body;
 
-		// Re-enable access to MemBlock
-		VALGRIND_DISCARD(VALGRIND_MAKE_MEM_DEFINED(block, offsetof(MemBlock, body)));
-
-		// Remove protection from memory block
-#ifdef VALGRIND_FIX_IT
-		VALGRIND_DISCARD(
-			VALGRIND_MAKE_MEM_DEFINED(object, block->getSize() - VALGRIND_REDZONE));
-#else
-		VALGRIND_DISCARD(
-			VALGRIND_MAKE_WRITABLE(object, block->getSize() - VALGRIND_REDZONE));
-#endif
-
 		// Replace element in circular buffer
 		pool->delayedFree[pool->delayedFreePos] = requested_block;
 
@@ -2435,9 +2417,14 @@ void MemPool::releaseMemory(void* object, bool flagExtent) noexcept
 			pool->delayedFreePos = 0;
 #endif
 
+		// Re-enable access to MemBlock
+		block->valgrindInternal();
+
 #ifdef DEBUG_GDS_ALLOC
 		block->fileName = NULL;
 #endif
+
+		// Finally delete it
 		pool->releaseBlock(block, !flagExtent);
 	}
 }
@@ -2580,7 +2567,7 @@ void* MemPool::allocRaw(size_t size)
 
 #ifdef USE_VALGRIND
 	// Let Valgrind forget that block was zero-initialized
-	VALGRIND_DISCARD(VALGRIND_MAKE_WRITABLE(result, size));
+	VALGRIND_MAKE_MEM_UNDEFINED(result, size);
 #endif
 
 	increment_mapping(size);
@@ -2593,7 +2580,7 @@ void* MemPool::getExtent(size_t from, size_t& to)		// pass desired minimum size,
 #ifdef VALIDATE_POOL
 	MutexLockGuard guard(mutex, "MemPool::getExtent");
 #endif
-	MemBlock* extent = allocate2(from, to ALLOC_ARGS);
+	MemBlock* extent = allocateRange(from, to ALLOC_ARGS);
 	extent->setExtent();
 	return &extent->body;
 }
@@ -2624,9 +2611,13 @@ void MemPool::releaseRaw(bool destroying, void* block, size_t size, ExtentsCache
 			return;
 		}
 	}
+
+#define unmapBlockPtr block
+#define unmapBlockSize size
+
 #else
 	// Set access protection for block to prevent memory from deleted pool being accessed
-	int handle = /* //VALGRIND_MAKE_NOACCESS */ VALGRIND_MAKE_MEM_DEFINED(block, size);
+	VALGRIND_MAKE_MEM_NOACCESS(block, size);
 
 	size = FB_ALIGN(size, get_map_page_size());
 
@@ -2646,15 +2637,11 @@ void MemPool::releaseRaw(bool destroying, void* block, size_t size, ExtentsCache
 			DelayedExtent* item = &delayedExtents[delayedExtentCount];
 			item->memory = block;
 			item->size = size;
-			item->handle = handle;
 			delayedExtentCount++;
 			return;
 		}
 
 		DelayedExtent* item = &delayedExtents[delayedExtentsPos];
-
-		// Free message associated with old extent in Valgrind
-		VALGRIND_DISCARD(item->handle);
 
 		// Set up the block we are going to unmap
 		unmapBlockPtr = item->memory;
@@ -2662,18 +2649,12 @@ void MemPool::releaseRaw(bool destroying, void* block, size_t size, ExtentsCache
 
 		// Replace element in circular buffer
 		item->memory = block;
-		item->handle = handle;
 		item->size = size;
 
 		// Move queue pointer to next element and cycle if needed
 		delayedExtentsPos++;
 		if (delayedExtentsPos >= FB_NELEM(delayedExtents))
 			delayedExtentsPos = 0;
-	}
-	else
-	{
-		// Let Valgrind forget about unmapped block
-		VALGRIND_DISCARD(handle);
 	}
 #endif
 
@@ -2684,16 +2665,19 @@ void MemPool::releaseRaw(bool destroying, void* block, size_t size, ExtentsCache
 #else // WIN_NT
 
 #if (defined SOLARIS) && (defined HAVE_CADDR_T)
-	int rc = munmap((caddr_t) block, size);
+	int rc = munmap((caddr_t) unmapBlockPtr, unmapBlockSize);
 #else
-	int rc = munmap(block, size);
+	int rc = munmap(unmapBlockPtr, unmapBlockSize);
 #endif
 	if (rc)
 	{
 		if (errno == ENOMEM)
 		{
-			FailedBlock* failed = (FailedBlock*) block;
-			failed->blockSize = size;
+			FailedBlock* failed = (FailedBlock*) unmapBlockPtr;
+#ifdef USE_VALGRIND
+			VALGRIND_MAKE_MEM_UNDEFINED(failed, sizeof(FailedBlock));
+#endif
+			failed->blockSize = unmapBlockSize;
 
 			MutexLockGuard guard(cache_mutex, "MemPool::releaseRaw");
 			SemiDoubleLink::push(&failedList, failed);

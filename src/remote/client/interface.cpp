@@ -66,6 +66,7 @@
 #include "../common/IntlParametersBlock.h"
 #include "../common/status.h"
 #include "../common/db_alias.h"
+#include "../common/classes/auto.h"
 
 #include "../auth/SecurityDatabase/LegacyClient.h"
 #include "../auth/SecureRemotePassword/client/SrpClient.h"
@@ -1138,7 +1139,7 @@ static const unsigned ANALYZE_LOOPBACK =	0x02;
 static const unsigned ANALYZE_MOUNTS =		0x04;
 static const unsigned ANALYZE_EMP_NAME =	0x08;
 
-inline static void reset(IStatus* status) throw()
+inline static void reset(IStatus* status) noexcept
 {
 	status->init();
 }
@@ -9420,9 +9421,10 @@ void Attachment::cancelOperation(CheckStatusWrapper* status, int kind)
 			unsupported();
 		}
 
-		MutexEnsureUnlock guard(rdb->rdb_async_lock, FB_FUNCTION);	// This is async operation
-		if (!guard.tryEnter())
+		Cleanup unlockAsyncLock([this] { --(rdb->rdb_async_lock); });
+		if (++(rdb->rdb_async_lock) != 1)
 		{
+			// Something async already runs
 			Arg::Gds(isc_async_active).raise();
 		}
 

@@ -11,6 +11,7 @@ set ERRLEV=0
 @call setenvvar.bat %*
 @if errorlevel 1 (goto :END)
 
+@setlocal EnableDelayedExpansion
 
 ::===========
 :MAIN
@@ -29,37 +30,37 @@ for %%v in ( alice auth burp dsql gpre isql jrd misc msgs examples yvalve utilit
 @mkdir %FB_BIN_DIR%\tzdata 2>nul
 
 call :interfaces
-if "%ERRLEV%"=="1" goto :END
+if "!ERRLEV!"=="1" goto :END
 
 call :LibTom
-if "%ERRLEV%"=="1" goto :END
+if "!ERRLEV!"=="1" goto :END
 
 call :decNumber
-if "%ERRLEV%"=="1" goto :END
+if "!ERRLEV!"=="1" goto :END
 
 if "%FB_TARGET_PLATFORM%"=="x64" call :ttmath
-if "%ERRLEV%"=="1" goto :END
+if "!ERRLEV!"=="1" goto :END
 
 call :zlib
-if "%ERRLEV%"=="1" goto :END
+if "!ERRLEV!"=="1" goto :END
 
 @if "%FB_CLIENT_ONLY%"=="" (
 	call :re2
-	if "%ERRLEV%"=="1" goto :END
+	if "!ERRLEV!"=="1" goto :END
 
 	call :btyacc
-	if "%ERRLEV%"=="1" goto :END
+	if "!ERRLEV!"=="1" goto :END
 
 	call :libcds
-	if "%ERRLEV%"=="1" goto :END
+	if "!ERRLEV!"=="1" goto :END
 
 	echo Generating DSQL parser...
 	call parse.bat %*
-	if "%ERRLEV%"=="1" goto :END
+	if "!ERRLEV!"=="1" goto :END
 
 	::=======
 	call :gpre_boot
-	if "%ERRLEV%"=="1" goto :END
+	if "!ERRLEV!"=="1" goto :END
 
 	::=======
 	echo Preprocessing the source files needed to build gpre and isql...
@@ -67,13 +68,13 @@ if "%ERRLEV%"=="1" goto :END
 
 	::=======
 	call :engine
-	if "%ERRLEV%"=="1" goto :END
+	if "!ERRLEV!"=="1" goto :END
 
 	call :gpre
-	if "%ERRLEV%"=="1" goto :END
+	if "!ERRLEV!"=="1" goto :END
 
 	call :isql
-	if "%ERRLEV%"=="1" goto :END
+	if "!ERRLEV!"=="1" goto :END
 )
 
 @mkdir %FB_BIN_DIR% >nul 2>&1
@@ -108,10 +109,11 @@ for %%v in (firebird plugins) do (
 @if "%FB_CLIENT_ONLY%"=="" (
 	::=======
 	call :databases
+	if "!ERRLEV!"=="1" goto :END
 
 	:: copy security db if not exists already
-	if not exist %FB_BIN_DIR%\security5.fdb (
-		copy %FB_GEN_DIR%\dbs\security5.fdb %FB_BIN_DIR%
+	if not exist %FB_BIN_DIR%\security6.fdb (
+		copy %FB_GEN_DIR%\dbs\security6.fdb %FB_BIN_DIR%
 	)
 
 	::=======
@@ -268,17 +270,29 @@ goto :EOF
 @rmdir /s /q %FB_GEN_DIR%\dbs 2>nul
 @mkdir %FB_GEN_DIR%\dbs 2>nul
 
-@echo Create security5.fdb...
-@echo create database '%FB_GEN_DB_DIR%\dbs\security5.fdb'; | "%FB_BIN_DIR%\isql" -q
+@echo Create security6.fdb...
+@echo create database '%FB_GEN_DB_DIR%\dbs\security6.fdb'; | "%FB_BIN_DIR%\isql" -q > nul
+if errorlevel 1 call :boot2 databases & goto :EOF
+
 @echo Apply security.sql...
-@"%FB_BIN_DIR%\isql" -q %FB_GEN_DB_DIR%/dbs/security5.fdb -i %FB_ROOT_PATH%\src\dbs\security.sql
-@mklink %FB_GEN_DIR%\dbs\security.fdb %FB_GEN_DIR%\dbs\security5.fdb
-rem @copy %FB_GEN_DIR%\dbs\security5.fdb %FB_GEN_DIR%\dbs\security.fdb > nul
+@"%FB_BIN_DIR%\isql" -q %FB_GEN_DB_DIR%/dbs/security6.fdb -i %FB_ROOT_PATH%\src\dbs\security.sql > nul
+if errorlevel 1 call :boot2 databases & goto :EOF
+
+@mklink %FB_GEN_DIR%\dbs\security.fdb %FB_GEN_DIR%\dbs\security6.fdb > nul
+if errorlevel 1 (
+  @copy %FB_GEN_DIR%\dbs\security6.fdb %FB_GEN_DIR%\dbs\security.fdb > nul
+)
+if errorlevel 1 call :boot2 databases & goto :EOF
 
 @echo Creating metadata.fdb...
-@echo create database '%FB_GEN_DB_DIR%/dbs/metadata.fdb'; | "%FB_BIN_DIR%\isql" -q -sqldialect 1
-@mklink %FB_GEN_DIR%\dbs\yachts.lnk %FB_GEN_DIR%\dbs\metadata.fdb
-rem @copy %FB_GEN_DIR%\dbs\metadata.fdb %FB_GEN_DIR%\dbs\yachts.lnk > nul
+@echo create database '%FB_GEN_DB_DIR%/dbs/metadata.fdb'; | "%FB_BIN_DIR%\isql" -q -sqldialect 1 > nul
+if errorlevel 1 call :boot2 databases & goto :EOF
+
+@mklink %FB_GEN_DIR%\dbs\yachts.lnk %FB_GEN_DIR%\dbs\metadata.fdb > nul
+if errorlevel 1 (
+  @copy %FB_GEN_DIR%\dbs\metadata.fdb %FB_GEN_DIR%\dbs\yachts.lnk > nul
+)
+if errorlevel 1 call :boot2 databases
 
 @goto :EOF
 
@@ -291,3 +305,4 @@ rem @copy %FB_GEN_DIR%\dbs\metadata.fdb %FB_GEN_DIR%\dbs\yachts.lnk > nul
 @goto :EOF
 
 :END
+endlocal

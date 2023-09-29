@@ -14,7 +14,7 @@ jobs:
 
     steps:
     - name: Generate ChangeLog
-      uses: asfernandes/changelog-generator@v1
+      uses: asfernandes/changelog-generator@v2
       with:
         fix-version-label: "fix-version: ${{ github.event.inputs.version }}"
         token: ${{ secrets.GITHUB_TOKEN }}

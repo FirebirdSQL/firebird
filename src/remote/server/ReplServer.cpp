@@ -81,11 +81,8 @@ namespace
 
 	int shutdownHandler(const int, const int, void*)
 	{
-		if (activeThreads.value())
+		if (!shutdownFlag && activeThreads.value())
 		{
-			gds__log("Shutting down the replication server with %d replicated database(s)",
-					 (int) activeThreads.value());
-
 			shutdownFlag = true;
 			shutdownSemaphore.release(activeThreads.value() + 1);
 
@@ -562,30 +559,12 @@ namespace
 			(SINT64) finish.value().timestamp_time / 10;
 
 		const SINT64 delta = finishMsec - startMsec;
+		const double seconds = (double) delta / 1000;
 
 		string value;
-
-		if (delta < 1000) // less than 1 second
-			value.printf("%u ms", (unsigned) delta);
-		else if (delta < 60 * 1000) // less than 1 minute
-			value.printf("%u second(s)", (unsigned) (delta / 1000));
-		else if (delta < 60 * 60 * 1000) // less than 1 hour
-			value.printf("%u minute(s)", (unsigned) (delta / 1000 / 60));
-		else if (delta < 24 * 60 * 60 * 1000) // less than 1 day
-			value.printf("%u hour(s)", (unsigned) (delta / 1000 / 60 / 60));
-		else
-			value.printf("%u day(s)", (unsigned) (delta / 1000 / 60 / 60 / 24));
+		value.printf("%.3lfs", seconds);
 
 		return value;
-	}
-
-	void readConfig(TargetList& targets)
-	{
-		Array<Replication::Config*> replicas;
-		Replication::Config::enumerate(replicas);
-
-		for (auto replica : replicas)
-			targets.add(FB_NEW Target(replica));
 	}
 
 	bool validateHeader(const SegmentHeader* header)
@@ -758,12 +737,11 @@ namespace
 
 			if (queue.isEmpty())
 			{
-				target->verbose("No new segments found, suspending for %u seconds",
-								config->applyIdleTimeout);
+				target->verbose("No new segments found, suspending");
 				return ret;
 			}
 
-			target->verbose("Added %u segment(s) to the processing queue", (ULONG) queue.getCount());
+			target->verbose("Added %u segment(s) to the queue", (ULONG) queue.getCount());
 
 			// Second pass: replicate the chain of contiguous segments
 
@@ -774,12 +752,11 @@ namespace
 			FB_UINT64 next_sequence = 0;
 			const bool restart = target->isShutdown();
 
-			for (Segment** iter = queue.begin(); iter != queue.end(); ++iter)
+			for (auto segment : queue)
 			{
 				if (shutdownFlag)
 					return PROCESS_SHUTDOWN;
 
-				Segment* const segment = *iter;
 				const FB_UINT64 sequence = segment->header.hdr_sequence;
 				const Guid& guid = segment->header.hdr_guid;
 
@@ -812,8 +789,7 @@ namespace
 				// then there's no point in replaying the whole sequence
 				if (max_sequence == last_sequence && !last_offset)
 				{
-					target->verbose("No new segments found, suspending for %u seconds",
-									config->applyIdleTimeout);
+					target->verbose("No new segments found, suspending");
 					return ret;
 				}
 
@@ -914,12 +890,12 @@ namespace
 				if (oldest)
 				{
 					const TraNumber oldest_trans = oldest->tra_id;
-					extra.printf("preserving the file due to %u active transaction(s) (oldest: %" UQUADFORMAT " in segment %" UQUADFORMAT ")",
-								 (unsigned) transactions.getCount(), oldest_trans, oldest_sequence);
+					extra.printf("preserving (OAT: %" UQUADFORMAT " in segment %" UQUADFORMAT ")",
+								 oldest_trans, oldest_sequence);
 				}
 				else
 				{
-					extra += "deleting the file";
+					extra = "deleting";
 				}
 
 				target->verbose("Segment %" UQUADFORMAT " (%u bytes) is replicated in %s, %s",
@@ -973,7 +949,7 @@ namespace
 
 			target->logError(message);
 
-			target->verbose("Suspending for %u seconds", config->applyErrorTimeout);
+			target->verbose("Disconnecting and suspending");
 
 			ret = PROCESS_ERROR;
 		}
@@ -988,14 +964,15 @@ namespace
 	{
 		AutoPtr<Target> target(static_cast<Target*>(arg));
 		const auto config = target->getConfig();
+		const auto dbName = config->dbName.c_str();
 
-		target->verbose("Started replication thread");
+		AutoMemoryPool workingPool(MemoryPool::createPool());
+		ContextPoolHolder threadContext(workingPool);
+
+		target->verbose("Started replication for database %s", dbName);
 
 		while (!shutdownFlag)
 		{
-			AutoMemoryPool workingPool(MemoryPool::createPool());
-			ContextPoolHolder threadContext(workingPool);
-
 			const ProcessStatus ret = process_archive(*workingPool, target);
 
 			if (ret == PROCESS_CONTINUE)
@@ -1003,10 +980,7 @@ namespace
 
 			target->shutdown();
 
-			if (ret == PROCESS_SHUTDOWN)
-				break;
-
-			if (!shutdownFlag)
+			if (ret != PROCESS_SHUTDOWN)
 			{
 				const ULONG timeout =
 					(ret == PROCESS_SUSPEND) ? config->applyIdleTimeout : config->applyErrorTimeout;
@@ -1015,7 +989,7 @@ namespace
 			}
 		}
 
-		target->verbose("Finished replication thread");
+		target->verbose("Finished replication for database %s", dbName);
 		--activeThreads;
 
 		return 0;
@@ -1023,17 +997,15 @@ namespace
 }
 
 
-bool REPL_server(CheckStatusWrapper* status, bool wait)
+bool REPL_server(CheckStatusWrapper* status, const Replication::Config::ReplicaList& replicas, bool wait)
 {
 	try
 	{
-		fb_shutdown_callback(0, shutdownHandler, fb_shut_finish, 0);
+		fb_shutdown_callback(0, shutdownHandler, fb_shut_preproviders, 0);
 
-		TargetList targets;
-		readConfig(targets);
-
-		for (auto target : targets)
+		for (const auto replica : replicas)
 		{
+			const auto target = FB_NEW Target(replica);
 			Thread::start(process_thread, target, THREAD_medium, NULL);
 			++activeThreads;
 		}

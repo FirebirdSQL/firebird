@@ -268,12 +268,12 @@ JAttachment::JAttachment(StableAttachmentPart* sa)
 {
 }
 
-Attachment* JAttachment::getHandle() throw()
+Attachment* JAttachment::getHandle() noexcept
 {
 	return att ? att->getHandle() : NULL;
 }
 
-const Attachment* JAttachment::getHandle() const throw()
+const Attachment* JAttachment::getHandle() const noexcept
 {
 	return att ? att->getHandle() : NULL;
 }
@@ -886,8 +886,10 @@ void Trigger::compile(thread_db* tdbb)
 	{
 		// Allocate statement memory pool
 		MemoryPool* new_pool = att->createPool();
+
 		// Trigger request is not compiled yet. Lets do it now
 		USHORT par_flags = (USHORT) (flags & TRG_ignore_perm) ? csb_ignore_perm : 0;
+
 		if (type & 1)
 			par_flags |= csb_pre_trigger;
 		else
@@ -904,6 +906,8 @@ void Trigger::compile(thread_db* tdbb)
 
 			if (engine.isEmpty())
 			{
+				TraceTrigCompile trace(tdbb, this);
+
 				if (debugInfo.hasData())
 				{
 					DBG_parse_debug_info((ULONG) debugInfo.getCount(), debugInfo.begin(),
@@ -912,6 +916,8 @@ void Trigger::compile(thread_db* tdbb)
 
 				PAR_blr(tdbb, relation, blr.begin(), (ULONG) blr.getCount(), NULL, &csb, &statement,
 					(relation ? true : false), par_flags);
+
+				trace.finish(statement, ITracePlugin::RESULT_SUCCESS);
 			}
 			else
 			{
@@ -935,7 +941,7 @@ void Trigger::compile(thread_db* tdbb)
 		}
 
 		statement->triggerName = name;
-		if (ssDefiner.orElse(false))
+		if (ssDefiner.asBool())
 			statement->triggerInvoker = att->getUserId(owner);
 
 		if (sysTrigger)
@@ -1412,7 +1418,7 @@ static void successful_completion(CheckStatusWrapper* s, ISC_STATUS acceptCode =
 
 // Stuff exception transliterated to the client charset.
 static ISC_STATUS transliterateException(thread_db* tdbb, const Exception& ex, FbStatusVector* vector,
-	const char* func) throw()
+	const char* func) noexcept
 {
 	ex.stuffException(vector);
 
@@ -1432,7 +1438,7 @@ static ISC_STATUS transliterateException(thread_db* tdbb, const Exception& ex, F
 
 
 // Transliterate status vector to the client charset.
-void JRD_transliterate(thread_db* tdbb, Firebird::IStatus* vector) throw()
+void JRD_transliterate(thread_db* tdbb, Firebird::IStatus* vector) noexcept
 {
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	USHORT charSet;
@@ -1628,6 +1634,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 		PathName org_filename, expanded_name;
 		bool is_alias = false;
 		MutexEnsureUnlock guardDbInit(dbInitMutex, FB_FUNCTION);
+		LateRefGuard lateBlocking(FB_FUNCTION);
 		Mapping mapping(Mapping::MAP_THROW_NOT_FOUND, cryptCallback);
 
 		try
@@ -1743,6 +1750,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			// Don't pass user_status into ctor to keep warnings
 			EngineContextHolder tdbb(nullptr, jAtt, FB_FUNCTION, AttachmentHolder::ATT_DONT_LOCK);
 			tdbb->tdbb_status_vector = user_status;
+			lateBlocking.lock(jAtt->getStable()->getBlockingMutex(), jAtt->getStable());
 
 			attachment->att_crypt_callback = getDefCryptCallback(cryptCallback);
 			attachment->att_client_charset = attachment->att_charset = options.dpb_interp;
@@ -2798,6 +2806,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 		bool is_alias = false;
 		Firebird::RefPtr<const Config> config;
 		Mapping mapping(Mapping::MAP_THROW_NOT_FOUND, cryptCallback);
+		LateRefGuard lateBlocking(FB_FUNCTION);
 
 		try
 		{
@@ -2914,6 +2923,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			// Don't pass user_status into ctor to keep warnings
 			EngineContextHolder tdbb(nullptr, jAtt, FB_FUNCTION, AttachmentHolder::ATT_DONT_LOCK);
 			tdbb->tdbb_status_vector = user_status;
+			lateBlocking.lock(jAtt->getStable()->getBlockingMutex(), jAtt->getStable());
 
 			attachment->att_crypt_callback = getDefCryptCallback(cryptCallback);
 

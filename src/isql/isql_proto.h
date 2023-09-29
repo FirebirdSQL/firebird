@@ -35,13 +35,16 @@ void	ISQL_array_dimensions(const TEXT*);
 bool	ISQL_dbcheck();
 void	ISQL_disconnect_database(bool);
 bool	ISQL_errmsg(Firebird::IStatus*);
-void	ISQL_warning(ISC_STATUS*);
+void	ISQL_warning(Firebird::IStatus*);
 void	ISQL_exit_db();
 // CVC: Not found.
 //int		ISQL_extract(TEXT*, int, FILE*, FILE*, FILE*);
 int		ISQL_frontend_command(TEXT*, FILE*, FILE*, FILE*);
 bool	ISQL_get_base_column_null_flag(const TEXT*, const SSHORT, const TEXT*);
-void	ISQL_get_character_sets(SSHORT, SSHORT, bool, bool, bool, TEXT*);
+void	ISQL_get_character_sets(
+	SSHORT char_set_id, SSHORT collation,
+	bool getCharset, bool getCollation,
+	bool not_null, bool quote, TEXT* string);
 SSHORT	ISQL_get_default_char_set_id();
 void	ISQL_get_default_source(const TEXT*, TEXT*, ISC_QUAD*);
 SSHORT	ISQL_get_field_length(const TEXT*);

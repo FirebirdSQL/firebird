@@ -515,7 +515,6 @@ namespace Firebird
 			return size_t(-1) / sizeof(T);
 		}
 
-		/* C++17
 		template <typename U, typename... Args>
 		constexpr void construct(U* ptr, Args&&... args)
 		{
@@ -523,27 +522,6 @@ namespace Firebird
 				new ((void*) ptr) U(pool, std::forward<Args>(args)...);
 			else
 				new ((void*) ptr) U(std::forward<Args>(args)...);
-		}
-		*/
-
-		template <
-			typename U,
-			typename... Args,
-			std::enable_if_t<std::is_constructible<U, MemoryPool&, Args...>::value, bool> = true
-		>
-		constexpr void construct(U* ptr, Args&&... args)
-		{
-			new ((void*) ptr) U(pool, std::forward<Args>(args)...);
-		}
-
-		template <
-			typename U,
-			typename... Args,
-			std::enable_if_t<!std::is_constructible<U, MemoryPool&, Args...>::value, bool> = true
-		>
-		constexpr void construct(U* ptr, Args&&... args)
-		{
-			new ((void*) ptr) U(std::forward<Args>(args)...);
 		}
 
 		template <typename U>

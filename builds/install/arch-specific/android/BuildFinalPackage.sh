@@ -46,7 +46,7 @@ $ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName shell "(cd $AndroidDir &&
 $ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName shell "(cd $AndroidDir/firebird && ./common_test --log_level=all && ./libEngine13_test --log_level=all)"
 $ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName shell "(cd $AndroidDir/firebird && ./AfterUntar.sh)"
 $ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName pull $AndroidDir/firebird/firebird.msg gen/Release/firebird/
-$ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName pull $AndroidDir/firebird/security5.fdb gen/Release/firebird/
+$ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName pull $AndroidDir/firebird/security6.fdb gen/Release/firebird/
 #$ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName pull $AndroidDir/firebird/examples/empbuild/employe2.fdb gen/Release/firebird/examples/empbuild/
 $ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName shell "(rm -rf $AndroidDir)"
 

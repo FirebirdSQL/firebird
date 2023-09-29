@@ -96,6 +96,7 @@
 #include "../common/classes/semaphore.h"
 #include "../common/classes/FpeControl.h"
 #include "../jrd/license.h"
+#include "../jrd/replication/Config.h"
 #include "../utilities/install/install_nt.h"
 #include "../remote/remote.h"
 #include "../remote/server/os/win32/cntl_proto.h"
@@ -219,6 +220,8 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 	const DWORD_PTR affinity = Config::getCpuAffinityMask();
 	if (affinity)
 		SetProcessAffinityMask(GetCurrentProcess(), affinity);
+	else
+		os_utils::setDefaultAffinity();
 
 	protocol_inet[0] = 0;
 
@@ -304,38 +307,40 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 
 		fb_shutdown(10 * 1000 /*10 seconds*/, fb_shutrsn_no_connection);
 	}
-	else if (!(server_flag & SRVR_non_service))
-	{
-		string service_name;
-		service_name.printf(REMOTE_SERVICE, instance);
-
-		CNTL_init(start_connections_thread, instance);
-
-		const SERVICE_TABLE_ENTRY service_table[] =
-		{
-			{const_cast<char*>(service_name.c_str()), CNTL_main_thread},
-			{NULL, NULL}
-		};
-
-		// BRS There is a error in MinGW (3.1.0) headers
-		// the parameter of StartServiceCtrlDispatcher is declared const in msvc headers
-#if defined(MINGW)
-		if (!StartServiceCtrlDispatcher(const_cast<SERVICE_TABLE_ENTRY*>(service_table)))
-		{
-#else
-		if (!StartServiceCtrlDispatcher(service_table))
-		{
-#endif
-			if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED) {
-				CNTL_shutdown_service("StartServiceCtrlDispatcher failed");
-			}
-			server_flag |= SRVR_non_service;
-		}
-	}
 	else
 	{
-		start_connections_thread(0);
-		nReturnValue = WINDOW_main(hThisInst, nWndMode, server_flag);
+		if (!(server_flag & SRVR_non_service))
+		{
+			string service_name;
+			service_name.printf(REMOTE_SERVICE, instance);
+
+			CNTL_init(start_connections_thread, instance);
+
+			const SERVICE_TABLE_ENTRY service_table[] =
+			{
+				{const_cast<char*>(service_name.c_str()), CNTL_main_thread},
+				{NULL, NULL}
+			};
+
+			if (!StartServiceCtrlDispatcher(service_table))
+			{
+				const DWORD err = GetLastError();
+				if (err == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT || err == ERROR_CALL_NOT_IMPLEMENTED)
+				{
+					server_flag |= SRVR_non_service;
+				}
+				else
+				{
+					CNTL_shutdown_service("StartServiceCtrlDispatcher failed");
+				}
+			}
+		}
+
+		if (server_flag & SRVR_non_service)
+		{
+			start_connections_thread(0);
+			nReturnValue = WINDOW_main(hThisInst, nWndMode, server_flag);
+		}
 	}
 
 #ifdef DEBUG_GDS_ALLOC
@@ -526,12 +531,18 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 		}
 	}
 
-	FbLocalStatus localStatus;
-	if (!REPL_server(&localStatus, false))
+	Replication::Config::ReplicaList replicas;
+	Replication::Config::enumerate(replicas);
+
+	if (replicas.hasData())
 	{
-		const char* errorMsg = "Replication server initialization error";
-		iscLogStatus(errorMsg, localStatus->getErrors());
-		Syslog::Record(Syslog::Error, errorMsg);
+		FbLocalStatus localStatus;
+		if (!REPL_server(&localStatus, replicas, false))
+		{
+			const char* errorMsg = "Replication server initialization error";
+			iscLogStatus(errorMsg, localStatus->getErrors());
+			Syslog::Record(Syslog::Error, errorMsg);
+		}
 	}
 
 	return 0;

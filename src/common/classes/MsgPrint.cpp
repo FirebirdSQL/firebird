@@ -359,9 +359,8 @@ int MsgPrintErr(const char* format, const SafeArg& arg, bool userFormatting)
 int fb_msg_format(void* handle, USHORT facility, USHORT number, unsigned int bsize, TEXT* buffer,
 	const MsgFormat::SafeArg& arg)
 {
-	// The field MESSAGES.TEXT is 138 bytes long.
 	int total_msg = 0;
-	char msg[138 + 2] = "";
+	char msg[BUFFER_SMALL] = "";
 	const int n = gds__msg_lookup(handle, facility, number, sizeof(msg), msg, NULL);
 
 	if (n > 0 && unsigned(n) < sizeof(msg))

@@ -1127,9 +1127,8 @@ static UCHAR* var_info(const dsql_msg* message,
 	for (FB_SIZE_T i = 0; i < parameters.getCount(); i++)
 	{
 		const dsql_par* param = parameters[i];
-		fb_assert(param);
 
-		if (param->par_index >= first_index)
+		if (param && param->par_index >= first_index)
 		{
 			dsc desc = param->par_desc;
 

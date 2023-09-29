@@ -8,8 +8,8 @@ m4/
 autom4te.cache/
 builds/install_images
 aclocal.m4
-*.patch
-*.diff
+/*.patch
+/*.diff
 config.status
 configure
 config*~
@@ -29,3 +29,4 @@ extern/ttmath/release/
 /src/include/gen/autoconfig.auto
 /src/include/gen/autoconfig.h
 extern/libcds/lib/
+/vcpkg_installed/

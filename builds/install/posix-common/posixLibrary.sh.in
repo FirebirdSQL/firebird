@@ -85,7 +85,7 @@ OrigPasswd=""
 TmpFile=""
 MANIFEST_TXT=""
 Manifest=manifest.txt
-SecurityDatabase=security5.fdb
+SecurityDatabase=security6.fdb
 DefaultLibrary=libfbclient
 UninstallScript=FirebirdUninstall.sh
 XINETD=/etc/xinetd.d/
@@ -222,11 +222,12 @@ checkLibrary() {
 #------------------------------------------------------------------------
 # Make sure we have required libraries installed
 checkLibraries() {
-	if [ "@TOMMATH_BUILD@" != "Y" -o "${fb_install_prefix}" != "${default_prefix}" ]
+#	if [ "@TOMMATH_BUILD@" != "Y" -o "${fb_install_prefix}" != "${default_prefix}" ]
+	if [ "@TOMMATH_BUILD@" != "Y" ]
 	then
 		fixTommath=
-		checkLibrary tommath
-		haveLibrary libtommath.so.0 || [ "$fixTommath" ] && $fixTommath
+		checkLibrary tommath	# Should have at least some version of it
+		[ $LIBTOMMATH ] && haveLibrary $LIBTOMMATH || [ "$fixTommath" ] && $fixTommath
 	fi
 
 #	if [ "@TOMCRYPT_BUILD@" != "Y" -o "${fb_install_prefix}" != "${default_prefix}" ]

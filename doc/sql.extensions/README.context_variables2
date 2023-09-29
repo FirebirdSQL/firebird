@@ -133,6 +133,11 @@ Usage:
    EXT_CONN_POOL_LIFETIME       | Idle connection lifetime, in seconds
                                 |
    SESSION_TIMEZONE             | Current session time zone.
+                                |
+   DECFLOAT_ROUND               | Rounding mode used in operations with DECFLOAT values.
+                                |
+   DECFLOAT_TRAPS               | Exceptional conditions in operations with DECFLOAT
+                                | values that cause a trap.
 
 Notes:
    To prevent DoS attacks against Firebird Server you are not allowed to have

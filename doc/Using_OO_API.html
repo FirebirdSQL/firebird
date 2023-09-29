@@ -1512,7 +1512,7 @@ MyPlugin : public ISomePluginImpl&lt;MyPlugin, CheckStatusWrapper&gt;</i></font>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>{</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>public:</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>explicit
-MyPlugin(<a href="#PluginConfig">IPluginConfig</a>* cnf) throw()</i></font></p>
+MyPlugin(<a href="#PluginConfig">IPluginConfig</a>* cnf) noexcept</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>:
 config(cnf), refCounter(0), owner(NULL)</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>{</i></font></p>
@@ -1604,7 +1604,7 @@ ISomePlugin implementation</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>private:</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>IPluginConfig*
 config;</i></font></p>
-<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>FbSampleAtomic
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>std::atomic_int
 refCounter;</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>IReferenceCounted*
 owner;</i></font></p>
@@ -2777,7 +2777,7 @@ interface – replaces (partially) isc_stmt_handle.</font></p>
 	behavior.</font></p>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	setCursorName(StatusType* status, const char* name) – replaces
-	isc_dsql_set_cursor_name().</font> 
+	isc_dsql_set_cursor_name().</font>
 	</p>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	free(StatusType* status) – free statement, releases interface on

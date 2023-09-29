@@ -46,6 +46,7 @@
 #include "firebird/Interface.h"
 
 #include <type_traits>	// std::is_unsigned
+#include <atomic>
 
 #ifndef WIN_NT
 #include <signal.h>
@@ -177,13 +178,13 @@ private:
 	ThreadId		rdb_async_thread_id;	// Id of async thread (when active)
 
 public:
-	Firebird::Mutex	rdb_async_lock;			// Sync to avoid 2 async calls at once
+	std::atomic<int> rdb_async_lock;		// Atomic to avoid >1 async calls at once
 
 public:
 	Rdb() :
 		rdb_iface(NULL), rdb_port(0),
 		rdb_transactions(0), rdb_requests(0), rdb_events(0), rdb_sql_requests(0),
-		rdb_id(0), rdb_async_thread_id(0)
+		rdb_id(0), rdb_async_thread_id(0), rdb_async_lock(0)
 	{
 	}
 
@@ -414,8 +415,8 @@ public:
 
 	static ISC_STATUS badHandle() { return isc_bad_req_handle; }
 
-	void saveStatus(const Firebird::Exception& ex) throw();
-	void saveStatus(Firebird::IStatus* ex) throw();
+	void saveStatus(const Firebird::Exception& ex) noexcept;
+	void saveStatus(Firebird::IStatus* ex) noexcept;
 };
 
 

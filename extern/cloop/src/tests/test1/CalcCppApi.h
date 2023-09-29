@@ -7,6 +7,23 @@
 #define CLOOP_CARG
 #endif
 
+#ifndef CLOOP_NOEXCEPT
+#if __cplusplus >= 201103L
+#define CLOOP_NOEXCEPT noexcept
+#else
+#define CLOOP_NOEXCEPT throw()
+#endif
+#endif
+
+
+#ifndef CLOOP_CONSTEXPR
+#if __cplusplus >= 201103L
+#define CLOOP_CONSTEXPR constexpr
+#else
+#define CLOOP_CONSTEXPR const
+#endif
+#endif
+
 
 namespace calc
 {
@@ -34,6 +51,8 @@ namespace calc
 
 	// Interfaces declarations
 
+#define CALC_IDISPOSABLE_VERSION 1u
+
 	class IDisposable
 	{
 	public:
@@ -41,7 +60,7 @@ namespace calc
 		{
 			void* cloopDummy[1];
 			uintptr_t version;
-			void (CLOOP_CARG *dispose)(IDisposable* self) throw();
+			void (CLOOP_CARG *dispose)(IDisposable* self) CLOOP_NOEXCEPT;
 		};
 
 		void* cloopDummy[1];
@@ -57,7 +76,7 @@ namespace calc
 		}
 
 	public:
-		static const unsigned VERSION = 1;
+		static CLOOP_CONSTEXPR unsigned VERSION = CALC_IDISPOSABLE_VERSION;
 
 		void dispose()
 		{
@@ -65,13 +84,15 @@ namespace calc
 		}
 	};
 
+#define CALC_ISTATUS_VERSION 2u
+
 	class IStatus : public IDisposable
 	{
 	public:
 		struct VTable : public IDisposable::VTable
 		{
-			int (CLOOP_CARG *getCode)(const IStatus* self) throw();
-			void (CLOOP_CARG *setCode)(IStatus* self, int code) throw();
+			int (CLOOP_CARG *getCode)(const IStatus* self) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *setCode)(IStatus* self, int code) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -85,11 +106,11 @@ namespace calc
 		}
 
 	public:
-		static const unsigned VERSION = 2;
+		static CLOOP_CONSTEXPR unsigned VERSION = CALC_ISTATUS_VERSION;
 
-		static const int ERROR_1 = 1;
-		static const int ERROR_2 = 0x2;
-		static const int ERROR_12 = IStatus::ERROR_1 | IStatus::ERROR_2;
+		static CLOOP_CONSTEXPR int ERROR_1 = 1;
+		static CLOOP_CONSTEXPR int ERROR_2 = 0x2;
+		static CLOOP_CONSTEXPR int ERROR_12 = IStatus::ERROR_1 | IStatus::ERROR_2;
 
 		int getCode() const
 		{
@@ -103,15 +124,17 @@ namespace calc
 		}
 	};
 
+#define CALC_IFACTORY_VERSION 2u
+
 	class IFactory : public IDisposable
 	{
 	public:
 		struct VTable : public IDisposable::VTable
 		{
-			IStatus* (CLOOP_CARG *createStatus)(IFactory* self) throw();
-			ICalculator* (CLOOP_CARG *createCalculator)(IFactory* self, IStatus* status) throw();
-			ICalculator2* (CLOOP_CARG *createCalculator2)(IFactory* self, IStatus* status) throw();
-			ICalculator* (CLOOP_CARG *createBrokenCalculator)(IFactory* self, IStatus* status) throw();
+			IStatus* (CLOOP_CARG *createStatus)(IFactory* self) CLOOP_NOEXCEPT;
+			ICalculator* (CLOOP_CARG *createCalculator)(IFactory* self, IStatus* status) CLOOP_NOEXCEPT;
+			ICalculator2* (CLOOP_CARG *createCalculator2)(IFactory* self, IStatus* status) CLOOP_NOEXCEPT;
+			ICalculator* (CLOOP_CARG *createBrokenCalculator)(IFactory* self, IStatus* status) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -125,7 +148,7 @@ namespace calc
 		}
 
 	public:
-		static const unsigned VERSION = 2;
+		static CLOOP_CONSTEXPR unsigned VERSION = CALC_IFACTORY_VERSION;
 
 		IStatus* createStatus()
 		{
@@ -158,15 +181,17 @@ namespace calc
 		}
 	};
 
+#define CALC_ICALCULATOR_VERSION 4u
+
 	class ICalculator : public IDisposable
 	{
 	public:
 		struct VTable : public IDisposable::VTable
 		{
-			int (CLOOP_CARG *sum)(const ICalculator* self, IStatus* status, int n1, int n2) throw();
-			int (CLOOP_CARG *getMemory)(const ICalculator* self) throw();
-			void (CLOOP_CARG *setMemory)(ICalculator* self, int n) throw();
-			void (CLOOP_CARG *sumAndStore)(ICalculator* self, IStatus* status, int n1, int n2) throw();
+			int (CLOOP_CARG *sum)(const ICalculator* self, IStatus* status, int n1, int n2) CLOOP_NOEXCEPT;
+			int (CLOOP_CARG *getMemory)(const ICalculator* self) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *setMemory)(ICalculator* self, int n) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *sumAndStore)(ICalculator* self, IStatus* status, int n1, int n2) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -180,7 +205,7 @@ namespace calc
 		}
 
 	public:
-		static const unsigned VERSION = 4;
+		static CLOOP_CONSTEXPR unsigned VERSION = CALC_ICALCULATOR_VERSION;
 
 		template <typename StatusType> int sum(StatusType* status, int n1, int n2) const
 		{
@@ -223,14 +248,16 @@ namespace calc
 		}
 	};
 
+#define CALC_ICALCULATOR2_VERSION 6u
+
 	class ICalculator2 : public ICalculator
 	{
 	public:
 		struct VTable : public ICalculator::VTable
 		{
-			int (CLOOP_CARG *multiply)(const ICalculator2* self, IStatus* status, int n1, int n2) throw();
-			void (CLOOP_CARG *copyMemory)(ICalculator2* self, const ICalculator* calculator) throw();
-			void (CLOOP_CARG *copyMemory2)(ICalculator2* self, const int* address) throw();
+			int (CLOOP_CARG *multiply)(const ICalculator2* self, IStatus* status, int n1, int n2) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *copyMemory)(ICalculator2* self, const ICalculator* calculator) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *copyMemory2)(ICalculator2* self, const int* address) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -244,7 +271,7 @@ namespace calc
 		}
 
 	public:
-		static const unsigned VERSION = 6;
+		static CLOOP_CONSTEXPR unsigned VERSION = CALC_ICALCULATOR2_VERSION;
 
 		template <typename StatusType> int multiply(StatusType* status, int n1, int n2) const
 		{
@@ -291,7 +318,7 @@ namespace calc
 			this->cloopVTable = &vTable;
 		}
 
-		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) throw()
+		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -342,7 +369,7 @@ namespace calc
 			this->cloopVTable = &vTable;
 		}
 
-		static int CLOOP_CARG cloopgetCodeDispatcher(const IStatus* self) throw()
+		static int CLOOP_CARG cloopgetCodeDispatcher(const IStatus* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -355,7 +382,7 @@ namespace calc
 			}
 		}
 
-		static void CLOOP_CARG cloopsetCodeDispatcher(IStatus* self, int code) throw()
+		static void CLOOP_CARG cloopsetCodeDispatcher(IStatus* self, int code) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -367,7 +394,7 @@ namespace calc
 			}
 		}
 
-		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) throw()
+		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -421,7 +448,7 @@ namespace calc
 			this->cloopVTable = &vTable;
 		}
 
-		static IStatus* CLOOP_CARG cloopcreateStatusDispatcher(IFactory* self) throw()
+		static IStatus* CLOOP_CARG cloopcreateStatusDispatcher(IFactory* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -434,7 +461,7 @@ namespace calc
 			}
 		}
 
-		static ICalculator* CLOOP_CARG cloopcreateCalculatorDispatcher(IFactory* self, IStatus* status) throw()
+		static ICalculator* CLOOP_CARG cloopcreateCalculatorDispatcher(IFactory* self, IStatus* status) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
@@ -449,7 +476,7 @@ namespace calc
 			}
 		}
 
-		static ICalculator2* CLOOP_CARG cloopcreateCalculator2Dispatcher(IFactory* self, IStatus* status) throw()
+		static ICalculator2* CLOOP_CARG cloopcreateCalculator2Dispatcher(IFactory* self, IStatus* status) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
@@ -464,7 +491,7 @@ namespace calc
 			}
 		}
 
-		static ICalculator* CLOOP_CARG cloopcreateBrokenCalculatorDispatcher(IFactory* self, IStatus* status) throw()
+		static ICalculator* CLOOP_CARG cloopcreateBrokenCalculatorDispatcher(IFactory* self, IStatus* status) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
@@ -479,7 +506,7 @@ namespace calc
 			}
 		}
 
-		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) throw()
+		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -535,7 +562,7 @@ namespace calc
 			this->cloopVTable = &vTable;
 		}
 
-		static int CLOOP_CARG cloopsumDispatcher(const ICalculator* self, IStatus* status, int n1, int n2) throw()
+		static int CLOOP_CARG cloopsumDispatcher(const ICalculator* self, IStatus* status, int n1, int n2) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
@@ -550,7 +577,7 @@ namespace calc
 			}
 		}
 
-		static int CLOOP_CARG cloopgetMemoryDispatcher(const ICalculator* self) throw()
+		static int CLOOP_CARG cloopgetMemoryDispatcher(const ICalculator* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -563,7 +590,7 @@ namespace calc
 			}
 		}
 
-		static void CLOOP_CARG cloopsetMemoryDispatcher(ICalculator* self, int n) throw()
+		static void CLOOP_CARG cloopsetMemoryDispatcher(ICalculator* self, int n) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -575,7 +602,7 @@ namespace calc
 			}
 		}
 
-		static void CLOOP_CARG cloopsumAndStoreDispatcher(ICalculator* self, IStatus* status, int n1, int n2) throw()
+		static void CLOOP_CARG cloopsumAndStoreDispatcher(ICalculator* self, IStatus* status, int n1, int n2) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
@@ -589,7 +616,7 @@ namespace calc
 			}
 		}
 
-		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) throw()
+		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -648,7 +675,7 @@ namespace calc
 			this->cloopVTable = &vTable;
 		}
 
-		static int CLOOP_CARG cloopmultiplyDispatcher(const ICalculator2* self, IStatus* status, int n1, int n2) throw()
+		static int CLOOP_CARG cloopmultiplyDispatcher(const ICalculator2* self, IStatus* status, int n1, int n2) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
@@ -663,7 +690,7 @@ namespace calc
 			}
 		}
 
-		static void CLOOP_CARG cloopcopyMemoryDispatcher(ICalculator2* self, const ICalculator* calculator) throw()
+		static void CLOOP_CARG cloopcopyMemoryDispatcher(ICalculator2* self, const ICalculator* calculator) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -675,7 +702,7 @@ namespace calc
 			}
 		}
 
-		static void CLOOP_CARG cloopcopyMemory2Dispatcher(ICalculator2* self, const int* address) throw()
+		static void CLOOP_CARG cloopcopyMemory2Dispatcher(ICalculator2* self, const int* address) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -687,7 +714,7 @@ namespace calc
 			}
 		}
 
-		static int CLOOP_CARG cloopsumDispatcher(const ICalculator* self, IStatus* status, int n1, int n2) throw()
+		static int CLOOP_CARG cloopsumDispatcher(const ICalculator* self, IStatus* status, int n1, int n2) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
@@ -702,7 +729,7 @@ namespace calc
 			}
 		}
 
-		static int CLOOP_CARG cloopgetMemoryDispatcher(const ICalculator* self) throw()
+		static int CLOOP_CARG cloopgetMemoryDispatcher(const ICalculator* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -715,7 +742,7 @@ namespace calc
 			}
 		}
 
-		static void CLOOP_CARG cloopsetMemoryDispatcher(ICalculator* self, int n) throw()
+		static void CLOOP_CARG cloopsetMemoryDispatcher(ICalculator* self, int n) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -727,7 +754,7 @@ namespace calc
 			}
 		}
 
-		static void CLOOP_CARG cloopsumAndStoreDispatcher(ICalculator* self, IStatus* status, int n1, int n2) throw()
+		static void CLOOP_CARG cloopsumAndStoreDispatcher(ICalculator* self, IStatus* status, int n1, int n2) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
@@ -741,7 +768,7 @@ namespace calc
 			}
 		}
 
-		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) throw()
+		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) CLOOP_NOEXCEPT
 		{
 			try
 			{

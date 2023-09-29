@@ -23,7 +23,7 @@
 #include "../jrd/KeywordsTable.h"
 #include "../jrd/ini.h"
 #include "../jrd/ids.h"
-#include "../common/keywords.h"
+#include "../common/Token.h"
 
 using namespace Jrd;
 using namespace Firebird;
@@ -42,16 +42,18 @@ RecordBuffer* KeywordsTable::getRecords(thread_db* tdbb, jrd_rel* relation)
 
 	const auto record = recordBuffer->getTempRecord();
 
-	for (const auto* token = keywordGetTokens(); token->tok_string; ++token)
+	for (const auto& token : tdbb->getDatabase()->dbb_keywords())
 	{
-		if (isalpha(token->tok_string[0]))
+		const auto& tokenString = token.first;
+
+		if (isalpha(tokenString[0]))
 		{
 			record->nullify();
 
 			putField(tdbb, record,
-				DumpField(f_keyword_name, VALUE_STRING, strlen(token->tok_string), token->tok_string));
+				DumpField(f_keyword_name, VALUE_STRING, tokenString.length(), tokenString.c_str()));
 
-			const bool reserved = !token->nonReserved;
+			const bool reserved = !token.second.nonReserved;
 			putField(tdbb, record, DumpField(f_keyword_reserved, VALUE_BOOLEAN, 1, &reserved));
 
 			recordBuffer->store(record);

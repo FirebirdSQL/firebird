@@ -270,6 +270,13 @@ struct FbVarChar
 		length = (ISC_USHORT) (len <= N ? len : N);
 		memcpy(str, s, length);
 	}
+
+	void set(const char* s, unsigned len)
+	{
+		assert(len <= N);
+		length = (ISC_USHORT) (len <= N ? len : N);
+		memcpy(str, s, length);
+	}
 };
 
 // This class has memory layout identical to ISC_DATE.

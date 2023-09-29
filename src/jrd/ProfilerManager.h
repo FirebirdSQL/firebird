@@ -25,11 +25,14 @@
 
 #include "firebird.h"
 #include "firebird/Message.h"
+#include <optional>
+#include "../common/PerformanceStopWatch.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/Nullable.h"
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/TimerImpl.h"
+#include "../jrd/recsrc/RecordSource.h"
+#include "../jrd/req.h"
 #include "../jrd/SystemPackages.h"
 
 namespace Jrd {
@@ -43,7 +46,7 @@ class thread_db;
 class ProfilerListener;
 
 
-class ProfilerManager final
+class ProfilerManager final : public Firebird::PerformanceStopWatch
 {
 	friend class ProfilerListener;
 	friend class ProfilerPackage;
@@ -52,18 +55,82 @@ public:
 	class Stats final : public Firebird::IProfilerStatsImpl<Stats, Firebird::ThrowStatusExceptionWrapper>
 	{
 	public:
-		explicit Stats(FB_UINT64 elapsedPerfCounter)
-			: elapsedTime(elapsedPerfCounter * 1'000'000'000 / fb_utils::query_performance_frequency())
+		explicit Stats(FB_UINT64 aElapsedTicks)
+			: elapsedTicks(aElapsedTicks)
 		{}
 
 	public:
-		FB_UINT64 getElapsedTime() override
+		FB_UINT64 getElapsedTicks() override
 		{
-			return elapsedTime;
+			return elapsedTicks;
 		}
 
 	private:
-		FB_UINT64 elapsedTime;	// in nanoseconds
+		FB_UINT64 elapsedTicks;
+	};
+
+	class RecordSourceStopWatcher final
+	{
+	public:
+		enum class Event
+		{
+			OPEN,
+			GET_RECORD
+		};
+
+	public:
+		RecordSourceStopWatcher(thread_db* tdbb, const RecordSource* recordSource, Event aEvent)
+			: RecordSourceStopWatcher(tdbb, tdbb->getAttachment()->getActiveProfilerManagerForNonInternalStatement(tdbb),
+				recordSource, aEvent)
+		{
+		}
+
+		RecordSourceStopWatcher(thread_db* tdbb, ProfilerManager* aProfilerManager,
+					const AccessPath* recordSource, Event aEvent)
+			: request(tdbb->getRequest()),
+			  profilerManager(aProfilerManager),
+			  recordSource(recordSource),
+			  event(aEvent)
+		{
+			if (profilerManager)
+			{
+				lastTicks = profilerManager->queryTicks();
+
+				if (profilerManager->currentSession->flags & Firebird::IProfilerSession::FLAG_BEFORE_EVENTS)
+				{
+					if (event == Event::OPEN)
+						profilerManager->beforeRecordSourceOpen(request, recordSource);
+					else
+						profilerManager->beforeRecordSourceGetRecord(request, recordSource);
+				}
+
+				lastAccumulatedOverhead = profilerManager->getAccumulatedOverhead();
+			}
+		}
+
+		~RecordSourceStopWatcher()
+		{
+			if (profilerManager)
+			{
+				const SINT64 currentTicks = profilerManager->queryTicks();
+				const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
+					currentTicks, lastTicks, lastAccumulatedOverhead);
+				Stats stats(elapsedTicks);
+
+				if (event == Event::OPEN)
+					profilerManager->afterRecordSourceOpen(request, recordSource, stats);
+				else
+					profilerManager->afterRecordSourceGetRecord(request, recordSource, stats);
+			}
+		}
+
+	private:
+		Request* request;
+		ProfilerManager* profilerManager;
+		const AccessPath* recordSource;
+		SINT64 lastTicks;
+		SINT64 lastAccumulatedOverhead;
+		Event event;
 	};
 
 private:
@@ -120,18 +187,86 @@ public:
 	void operator=(const ProfilerManager&) = delete;
 
 public:
-	SINT64 startSession(thread_db* tdbb, Nullable<SLONG> flushInterval,
+	SINT64 startSession(thread_db* tdbb, std::optional<SLONG> flushInterval,
 		const Firebird::PathName& pluginName, const Firebird::string& description, const Firebird::string& options);
 
 	void prepareCursor(thread_db* tdbb, Request* request, const Select* select);
-	void prepareRecSource(thread_db* tdbb, Request* request, const RecordSource* rsb);
 	void onRequestFinish(Request* request, Stats& stats);
-	void beforePsqlLineColumn(Request* request, ULONG line, ULONG column);
-	void afterPsqlLineColumn(Request* request, ULONG line, ULONG column, Stats& stats);
-	void beforeRecordSourceOpen(Request* request, const RecordSource* rsb);
-	void afterRecordSourceOpen(Request* request, const RecordSource* rsb, Stats& stats);
-	void beforeRecordSourceGetRecord(Request* request, const RecordSource* rsb);
-	void afterRecordSourceGetRecord(Request* request, const RecordSource* rsb, Stats& stats);
+
+	void beforePsqlLineColumn(Request* request, ULONG line, ULONG column)
+	{
+		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
+		{
+			const auto profileStatement = getStatement(request);
+			currentSession->pluginSession->beforePsqlLineColumn(profileStatement->id, profileRequestId, line, column);
+		}
+	}
+
+	void afterPsqlLineColumn(Request* request, ULONG line, ULONG column, Stats& stats)
+	{
+		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
+		{
+			const auto profileStatement = getStatement(request);
+			currentSession->pluginSession->afterPsqlLineColumn(profileStatement->id, profileRequestId,
+				line, column, &stats);
+		}
+	}
+
+	void beforeRecordSourceOpen(Request* request, const AccessPath* recordSource)
+	{
+		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
+		{
+			const auto profileStatement = getStatement(request);
+
+			if (const auto sequencePtr = profileStatement->recSourceSequence.get(recordSource->getRecSourceId()))
+			{
+				currentSession->pluginSession->beforeRecordSourceOpen(
+					profileStatement->id, profileRequestId, recordSource->getCursorId(), *sequencePtr);
+			}
+		}
+	}
+
+	void afterRecordSourceOpen(Request* request, const AccessPath* recordSource, Stats& stats)
+	{
+		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
+		{
+			const auto profileStatement = getStatement(request);
+
+			if (const auto sequencePtr = profileStatement->recSourceSequence.get(recordSource->getRecSourceId()))
+			{
+				currentSession->pluginSession->afterRecordSourceOpen(
+					profileStatement->id, profileRequestId, recordSource->getCursorId(), *sequencePtr, &stats);
+			}
+		}
+	}
+
+	void beforeRecordSourceGetRecord(Request* request, const AccessPath* recordSource)
+	{
+		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
+		{
+			const auto profileStatement = getStatement(request);
+
+			if (const auto sequencePtr = profileStatement->recSourceSequence.get(recordSource->getRecSourceId()))
+			{
+				currentSession->pluginSession->beforeRecordSourceGetRecord(
+					profileStatement->id, profileRequestId, recordSource->getCursorId(), *sequencePtr);
+			}
+		}
+	}
+
+	void afterRecordSourceGetRecord(Request* request, const AccessPath* recordSource, Stats& stats)
+	{
+		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
+		{
+			const auto profileStatement = getStatement(request);
+
+			if (const auto sequencePtr = profileStatement->recSourceSequence.get(recordSource->getRecSourceId()))
+			{
+				currentSession->pluginSession->afterRecordSourceGetRecord(
+					profileStatement->id, profileRequestId, recordSource->getCursorId(), *sequencePtr, &stats);
+			}
+		}
+	}
 
 	bool isActive() const
 	{
@@ -150,6 +285,8 @@ public:
 	}
 
 private:
+	void prepareRecSource(thread_db* tdbb, Request* request, const AccessPath* recordSource);
+
 	void cancelSession();
 	void finishSession(thread_db* tdbb, bool flushData);
 	void pauseSession(bool flushData);
@@ -161,7 +298,41 @@ private:
 	void updateFlushTimer(bool canStopTimer = true);
 
 	Statement* getStatement(Request* request);
-	SINT64 getRequest(Request* request, unsigned flags);
+
+	SINT64 getRequest(Request* request, unsigned flags)
+	{
+		using namespace Firebird;
+
+		if (!isActive() || (flags && !(currentSession->flags & flags)))
+			return 0;
+
+		const auto mainRequestId = request->getRequestId();
+
+		if (!currentSession->requests.exist(mainRequestId))
+		{
+			const auto timestamp = TimeZoneUtil::getCurrentTimeStamp(request->req_attachment->att_current_timezone);
+
+			do
+			{
+				getStatement(request);  // define the statement and ignore the result
+
+				const StmtNumber callerStatementId = request->req_caller ?
+					request->req_caller->getStatement()->getStatementId() : 0;
+				const StmtNumber callerRequestId = request->req_caller ? request->req_caller->getRequestId() : 0;
+
+				LogLocalStatus status("Profiler onRequestStart");
+				currentSession->pluginSession->onRequestStart(&status,
+					(SINT64) request->getStatement()->getStatementId(), (SINT64) request->getRequestId(),
+					(SINT64) callerStatementId, (SINT64) callerRequestId, timestamp);
+
+				currentSession->requests.add(request->getRequestId());
+
+				request = request->req_caller;
+			} while (request && !currentSession->requests.exist(request->getRequestId()));
+		}
+
+		return mainRequestId;
+	}
 
 private:
 	Firebird::AutoPtr<ProfilerListener> listener;
@@ -250,11 +421,11 @@ private:
 	//----------
 
 	FB_MESSAGE(StartSessionInput, Firebird::ThrowStatusExceptionWrapper,
-		(FB_INTL_VARCHAR(255, CS_METADATA), description)
+		(FB_INTL_VARCHAR(255 * METADATA_BYTES_PER_CHAR, CS_METADATA), description)
 		(FB_INTEGER, flushInterval)
 		(FB_BIGINT, attachmentId)
-		(FB_INTL_VARCHAR(255, CS_METADATA), pluginName)
-		(FB_INTL_VARCHAR(255, CS_METADATA), pluginOptions)
+		(FB_INTL_VARCHAR(255 * METADATA_BYTES_PER_CHAR, CS_METADATA), pluginName)
+		(FB_INTL_VARCHAR(255 * METADATA_BYTES_PER_CHAR, CS_METADATA), pluginOptions)
 	);
 
 	FB_MESSAGE(StartSessionOutput, Firebird::ThrowStatusExceptionWrapper,

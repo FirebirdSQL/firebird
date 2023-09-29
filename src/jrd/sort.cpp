@@ -68,12 +68,6 @@ const USHORT MAX_MERGE_LEVEL	= 2;
 using namespace Jrd;
 using namespace Firebird;
 
-void SortOwner::unlinkAll()
-{
-	while (sorts.getCount())
-		delete sorts.pop();
-}
-
 // The sort buffer size should be just under a multiple of the
 // hardware memory page size to account for memory allocator
 // overhead. On most platforms, this saves 4KB to 8KB per sort
@@ -165,10 +159,11 @@ Sort::Sort(Database* dbb,
 		   FPTR_REJECT_DUP_CALLBACK call_back,
 		   void* user_arg,
 		   FB_UINT64 max_records)
-	: m_dbb(dbb), m_last_record(NULL), m_next_pointer(NULL), m_records(0),
+	: m_dbb(dbb), m_owner(owner),
+	  m_last_record(NULL), m_next_pointer(NULL), m_records(0),
 	  m_runs(NULL), m_merge(NULL), m_free_runs(NULL),
 	  m_flags(0), m_merge_pool(NULL),
-	  m_description(owner->getPool(), keys)
+	  m_description(m_owner->getPool(), keys)
 {
 /**************************************
  *
@@ -185,7 +180,7 @@ Sort::Sort(Database* dbb,
  *		  includes index key (which must be unique) and record numbers.
  *
  **************************************/
-	fb_assert(owner);
+	fb_assert(m_owner);
 	fb_assert(unique_keys <= keys);
 
 	try
@@ -194,7 +189,7 @@ Sort::Sort(Database* dbb,
 		// key description vector. Round the record length up to the next
 		// longword, and add a longword to a pointer back to the pointer slot.
 
-		MemoryPool& pool = owner->getPool();
+		MemoryPool& pool = m_owner->getPool();
 
 		const ULONG record_size = ROUNDUP(record_length + SIZEOF_SR_BCKPTR, FB_ALIGNMENT);
 		m_longs = record_size >> SHIFTLONG;
@@ -248,8 +243,7 @@ Sort::Sort(Database* dbb,
 
 		// Link in new sort block
 
-		m_owner = owner;
-		owner->linkSort(this);
+		m_owner->linkSort(this);
 	}
 	catch (const BadAlloc&)
 	{
@@ -610,15 +604,12 @@ void Sort::sort(thread_db* tdbb)
 
 void Sort::allocateBuffer(MemoryPool& pool)
 {
-	if (m_dbb->dbb_sort_buffers.hasData() && m_max_alloc_size <= MAX_SORT_BUFFER_SIZE)
+	if (m_max_alloc_size <= MAX_SORT_BUFFER_SIZE)
 	{
-		SyncLockGuard guard(&m_dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, "Sort::allocateBuffer");
-
-		if (m_dbb->dbb_sort_buffers.hasData())
+		m_memory = m_owner->allocateBuffer();
+		if (m_memory)
 		{
-			// The sort buffer cache has at least one big block, let's use it
 			m_size_memory = MAX_SORT_BUFFER_SIZE;
-			m_memory = m_dbb->dbb_sort_buffers.pop();
 			m_flags |= scb_reuse_buffer;
 			return;
 		}
@@ -666,23 +657,14 @@ void Sort::allocateBuffer(MemoryPool& pool)
 
 void Sort::releaseBuffer()
 {
-	// Here we cache blocks to be reused later, but only the biggest ones
-
-	const size_t MAX_CACHED_SORT_BUFFERS = 8; // 1MB
-
-	SyncLockGuard guard(&m_dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, "Sort::releaseBuffer");
-
-	if ((m_flags & scb_reuse_buffer) &&
-		m_dbb->dbb_sort_buffers.getCount() < MAX_CACHED_SORT_BUFFERS)
+	if (m_flags & scb_reuse_buffer)
 	{
 		fb_assert(m_size_memory == MAX_SORT_BUFFER_SIZE);
-
-		m_dbb->dbb_sort_buffers.push(m_memory);
+		m_flags &= ~scb_reuse_buffer;
+		m_owner->releaseBuffer(m_memory);
 	}
 	else
 		delete[] m_memory;
-
-	m_flags &= ~scb_reuse_buffer;
 }
 
 
@@ -2178,6 +2160,53 @@ void Sort::sortRunsBySeek(int n)
 		run = rs->run;
 	}
 	run->run_next = tail;
+}
+
+
+/// class SortOwner
+
+UCHAR* SortOwner::allocateBuffer()
+{
+	if (buffers.hasData())
+		return buffers.pop();
+
+	if (dbb->dbb_sort_buffers.hasData())
+	{
+		SyncLockGuard guard(&dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
+
+		// The sort buffer cache has at least one big block, let's use it
+		if (dbb->dbb_sort_buffers.hasData())
+			return dbb->dbb_sort_buffers.pop();
+	}
+
+	return nullptr;
+}
+
+void SortOwner::releaseBuffer(UCHAR* memory)
+{
+	buffers.push(memory);
+}
+
+
+void SortOwner::unlinkAll()
+{
+	while (sorts.getCount())
+		delete sorts.pop();
+
+	if (buffers.hasData())
+	{
+		// Move cached buffers to the database level cache to be reused later by other attachments
+
+		const size_t MAX_CACHED_SORT_BUFFERS = 8; // 1MB
+
+		SyncLockGuard guard(&dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
+
+		while (buffers.hasData() && dbb->dbb_sort_buffers.getCount() < MAX_CACHED_SORT_BUFFERS)
+			dbb->dbb_sort_buffers.push(buffers.pop());
+	}
+
+	while (buffers.hasData())
+		delete[] buffers.pop();
 }
 
 

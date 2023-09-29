@@ -42,6 +42,7 @@
 #include "../common/classes/stack.h"
 #include "../common/classes/timestamp.h"
 #include "../common/classes/TimerImpl.h"
+#include "../common/classes/TriState.h"
 #include "../common/ThreadStart.h"
 #include "../common/TimeZoneUtil.h"
 
@@ -73,6 +74,7 @@ namespace Jrd
 	class jrd_file;
 	class Format;
 	class BufferControl;
+	class PageToBufferMap;
 	class SparseBitmap;
 	class jrd_rel;
 	class ExternalFile;
@@ -306,7 +308,7 @@ public:
 		: att(handle), jAtt(NULL), shutError(0)
 	{ }
 
-	Attachment* getHandle() throw()
+	Attachment* getHandle() noexcept
 	{
 		return att;
 	}
@@ -588,7 +590,15 @@ public:
 	ULONG		att_flags;					// Flags describing the state of the attachment
 	SSHORT		att_client_charset;			// user's charset specified in dpb
 	SSHORT		att_charset;				// current (client or external) attachment charset
+
+	// ASF: Attention: att_in_system_routine was initially added to support the profiler plugin
+	// writing to system tables. But a modified implementation used non-system tables and
+	// a problem was discovered that when writing to user's table from a "system context"
+	// (csb_internal) FK validations are not enforced becase MET_scan_relation is not called
+	// for the relation.
+	// Currently all "turning on" code for att_in_system_routine are disabled in SystemPackages.h.
 	bool 		att_in_system_routine = false;	// running a system routine
+
 	Lock*		att_long_locks;				// outstanding two phased locks
 #ifdef DEBUG_LCK_LIST
 	UCHAR		att_long_locks_type;		// Lock type of the first lock in list
@@ -630,6 +640,9 @@ public:
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
 	int att_parallel_workers;
+	TriState att_opt_first_rows;
+
+	PageToBufferMap* att_bdb_cache;			// managed in CCH, created in att_pool, freed with it
 
 	Firebird::RefPtr<Firebird::IReplicatedSession> att_replicator;
 	Firebird::AutoPtr<Replication::TableMatcher> att_repl_matcher;
@@ -731,17 +744,17 @@ public:
 	bool backupStateReadLock(thread_db* tdbb, SSHORT wait);
 	void backupStateReadUnLock(thread_db* tdbb);
 
-	StableAttachmentPart* getStable() throw()
+	StableAttachmentPart* getStable() noexcept
 	{
 		return att_stable;
 	}
 
-	void setStable(StableAttachmentPart *js) throw()
+	void setStable(StableAttachmentPart *js) noexcept
 	{
 		att_stable = js;
 	}
 
-	JAttachment* getInterface() throw();
+	JAttachment* getInterface() noexcept;
 
 	unsigned int getIdleTimeout() const
 	{
@@ -829,6 +842,7 @@ public:
 	void invalidateReplSet(thread_db* tdbb, bool broadcast);
 
 	ProfilerManager* getProfilerManager(thread_db* tdbb);
+	ProfilerManager* getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb);
 	bool isProfilerActive();
 	void releaseProfilerManager();
 

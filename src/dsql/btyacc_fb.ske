@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <optional>
 #include "../dsql/Nodes.h"
 #include "../dsql/AggNodes.h"
 #include "../dsql/DdlNodes.h"
@@ -26,7 +27,7 @@
 #include "../dsql/StmtNodes.h"
 #include "../dsql/WinNodes.h"
 #include "../jrd/RecordSourceNodes.h"
-#include "../common/classes/Nullable.h"
+#include "../common/classes/TriState.h"
 #include "gen/parse.h"
 #include "../dsql/Parser.h"
 

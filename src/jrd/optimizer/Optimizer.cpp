@@ -562,9 +562,10 @@ namespace
 // Constructor
 //
 
-Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse)
+Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, bool parentFirstRows)
 	: PermanentStorage(*aTdbb->getDefaultPool()),
 	  tdbb(aTdbb), csb(aCsb), rse(aRse),
+	  firstRows(rse->firstRows.valueOr(parentFirstRows)),
 	  compileStreams(getPool()),
 	  bedStreams(getPool()),
 	  keyStreams(getPool()),
@@ -572,6 +573,24 @@ Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse)
 	  outerStreams(getPool()),
 	  conjuncts(getPool())
 {
+    // Ignore optimization for first rows in impossible cases
+	if (firstRows)
+	{
+		// Projection is currently always performed using an external sort,
+		// so all underlying records will be fetched anyway
+		if (rse->rse_projection)
+			firstRows = false;
+		// Aggregation without GROUP BY will also cause all records to be fetched.
+		// Exception is when MIN/MAX functions could be mapped to an index,
+		// but this is handled separately inside AggregateSourceNode::compile().
+		else if (rse->rse_relations.getCount() == 1)
+		{
+			const auto subRse = rse->rse_relations[0];
+			const auto aggregate = nodeAs<AggregateSourceNode>(subRse);
+			if (aggregate && !aggregate->group)
+				firstRows = false;
+		}
+	}
 }
 
 
@@ -599,7 +618,7 @@ Optimizer::~Optimizer()
 
 RecordSource* Optimizer::compile(RseNode* subRse, BoolExprNodeStack* parentStack)
 {
-	Optimizer subOpt(tdbb, csb, subRse);
+	Optimizer subOpt(tdbb, csb, subRse, firstRows);
 	const auto rsb = subOpt.compile(parentStack);
 
 	if (parentStack && subOpt.isInnerJoin())
@@ -614,7 +633,7 @@ RecordSource* Optimizer::compile(RseNode* subRse, BoolExprNodeStack* parentStack
 			{
 				if (*selfIter == *subIter)
 				{
-					selfIter |= (subIter & (CONJUNCT_USED | CONJUNCT_MATCHED));
+					selfIter |= subIter.getFlags();
 					break;
 				}
 			}
@@ -1574,41 +1593,6 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 
 
 //
-// Find conjuncts local to the given river and compose an appropriate filter
-//
-
-RecordSource* Optimizer::applyLocalBoolean(RecordSource* rsb,
-										   const StreamList& streams,
-										   ConjunctIterator& iter)
-{
-	StreamStateHolder globalHolder(csb);
-	globalHolder.deactivate();
-
-	StreamStateHolder localHolder(csb, streams);
-	localHolder.activate(csb);
-
-	BoolExprNode* boolean = nullptr;
-	double selectivity = MAXIMUM_SELECTIVITY;
-
-	for (iter.rewind(); iter.hasData(); ++iter)
-	{
-		if (!(iter & CONJUNCT_USED) &&
-			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
-			iter->computable(csb, INVALID_STREAM, false))
-		{
-			compose(getPool(), &boolean, iter);
-			iter |= CONJUNCT_USED;
-
-			if (!(iter & CONJUNCT_MATCHED))
-				selectivity *= getSelectivity(*iter);
-		}
-	}
-
-	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity) : rsb;
-}
-
-
-//
 // Check to make sure that the user-specified indices were actually utilized by the optimizer
 //
 
@@ -1986,7 +1970,7 @@ unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned b
 			ValueExprNodeStack& s = classes.add();
 			s.push(node1);
 			s.push(node2);
-			eq_class = classes.back();
+			eq_class = --classes.end();
 		}
 	}
 
@@ -2283,9 +2267,7 @@ bool Optimizer::generateEquiJoin(RiverList& orgRivers)
 				if (!river1->isReferenced(node2))
 					continue;
 
-				ValueExprNode* const temp = node1;
-				node1 = node2;
-				node2 = temp;
+				std::swap(node1, node2);
 			}
 
 			for (unsigned j = i + 1; j < orgRivers.getCount(); j++)
@@ -2308,6 +2290,8 @@ bool Optimizer::generateEquiJoin(RiverList& orgRivers)
 
 					if (eq_class == last_class)
 						last_class += orgCount;
+
+					iter |= Optimizer::CONJUNCT_JOINED;
 				}
 			}
 		}
@@ -2660,7 +2644,7 @@ RecordSource* Optimizer::generateResidualBoolean(RecordSource* rsb)
 			compose(getPool(), &boolean, iter);
 			iter |= CONJUNCT_USED;
 
-			if (!(iter & CONJUNCT_MATCHED))
+			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
 				selectivity *= getSelectivity(*iter);
 		}
 	}
@@ -2827,9 +2811,10 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 				{
 					if (!outerFlag)
 						tail->csb_flags |= csb_unmatched;
-
-					filterSelectivity *= getSelectivity(*iter);
 				}
+
+				if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
+					filterSelectivity *= getSelectivity(*iter);
 			}
 		}
 	}
@@ -2861,6 +2846,41 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 	}
 
 	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, filterSelectivity) : rsb;
+}
+
+
+//
+// Find conjuncts local to the given river and compose an appropriate filter
+//
+
+RecordSource* Optimizer::applyLocalBoolean(RecordSource* rsb,
+										   const StreamList& streams,
+										   ConjunctIterator& iter)
+{
+	StreamStateHolder globalHolder(csb);
+	globalHolder.deactivate();
+
+	StreamStateHolder localHolder(csb, streams);
+	localHolder.activate(csb);
+
+	BoolExprNode* boolean = nullptr;
+	double selectivity = MAXIMUM_SELECTIVITY;
+
+	for (iter.rewind(); iter.hasData(); ++iter)
+	{
+		if (!(iter & CONJUNCT_USED) &&
+			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
+			iter->computable(csb, INVALID_STREAM, false))
+		{
+			compose(getPool(), &boolean, iter);
+			iter |= CONJUNCT_USED;
+
+			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
+				selectivity *= getSelectivity(*iter);
+		}
+	}
+
+	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity) : rsb;
 }
 
 

@@ -68,6 +68,7 @@ endif
 
 WCFLAGS = $(WFLAGS) $(CFLAGS) $(AC_CFLAGS) $(GLOB_OPTIONS)
 WCXXFLAGS = $(WFLAGS) $(PLUSPLUS_FLAGS) $(PLATFORM_PLUSPLUS_FLAGS) $(CXXFLAGS) $(AC_CXXFLAGS) $(GLOB_OPTIONS)
+WLDFLAGS = $(LDFLAGS) $(AC_LDFLAGS)
 
 # Here we have definitions for using the preprocessor.
 

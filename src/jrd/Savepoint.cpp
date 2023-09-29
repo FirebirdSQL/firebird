@@ -86,7 +86,7 @@ void VerbAction::garbageCollectIdxLite(thread_db* tdbb, jrd_tra* transaction, SI
 	rpb.rpb_transaction_nr = transaction->tra_number;
 
 	Record* next_ver;
-	AutoUndoRecord undo_next_ver(transaction->findNextUndo(this, vct_relation, recordNumber));
+	AutoTempRecord undo_next_ver(transaction->findNextUndo(this, vct_relation, recordNumber));
 	AutoPtr<Record> real_next_ver;
 
 	next_ver = undo_next_ver;
@@ -108,7 +108,7 @@ void VerbAction::garbageCollectIdxLite(thread_db* tdbb, jrd_tra* transaction, SI
 		BUGCHECK(185);	// msg 185 wrong record version
 
 	Record* prev_ver = NULL;
-	AutoUndoRecord undo_prev_ver;
+	AutoTempRecord undo_prev_ver;
 	AutoPtr<Record> real_prev_ver;
 
 	if (nextAction && nextAction->vct_undo && nextAction->vct_undo->locate(recordNumber))
@@ -197,7 +197,7 @@ void VerbAction::mergeTo(thread_db* tdbb, jrd_tra* transaction, VerbAction* next
 				// because going version for sure has all index entries successfully set up (in contrast with undo)
 				// we can use lightweigth version of garbage collection without collection of full staying list
 
-				AutoUndoRecord this_ver(item.setupRecord(transaction));
+				AutoTempRecord this_ver(item.setupRecord(transaction));
 
 				garbageCollectIdxLite(tdbb, transaction, recordNumber, nextAction, this_ver);
 
@@ -313,7 +313,7 @@ void VerbAction::undo(thread_db* tdbb, jrd_tra* transaction, bool preserveLocks,
 			}
 			else
 			{
-				AutoUndoRecord record(vct_undo->current().setupRecord(transaction));
+				AutoTempRecord record(vct_undo->current().setupRecord(transaction));
 
 				Record* const save_record = rpb.rpb_record;
 				record_param new_rpb = rpb;

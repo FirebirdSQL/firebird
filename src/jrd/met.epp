@@ -93,6 +93,7 @@
 #include "../common/classes/Hash.h"
 #include "../common/classes/MsgPrint.h"
 #include "../jrd/Function.h"
+#include "../jrd/trace/TraceJrdHelpers.h"
 
 
 #ifdef HAVE_CTYPE_H
@@ -115,7 +116,7 @@ static int partners_ast_relation(void*);
 static int rescan_ast_relation(void*);
 static ULONG get_rel_flags_from_FLAGS(USHORT);
 static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, TrigVector**, const TEXT*, FB_UINT64, bool,
-	USHORT, const MetaName&, const string&, const bid*, Nullable<bool> ssDefiner);
+	USHORT, const MetaName&, const string&, const bid*, TriState ssDefiner);
 static bool get_type(thread_db*, USHORT*, const UCHAR*, const TEXT*);
 static void lookup_view_contexts(thread_db*, jrd_rel*);
 static void make_relation_scope_name(const TEXT*, const USHORT, string& str);
@@ -124,7 +125,7 @@ static BoolExprNode* parse_field_validation_blr(thread_db* tdbb, bid* blob_id, c
 static bool resolve_charset_and_collation(thread_db*, USHORT*, const UCHAR*, const UCHAR*);
 static void save_trigger_data(thread_db*, TrigVector**, jrd_rel*, Statement*, blb*, blb*,
 	const TEXT*, FB_UINT64, bool, USHORT, const MetaName&, const string&,
-	const bid*, Nullable<bool> ssDefiner);
+	const bid*, TriState ssDefiner);
 static void scan_partners(thread_db*, jrd_rel*);
 static bool verify_TRG_ignore_perm(thread_db*, const MetaName&);
 
@@ -684,109 +685,66 @@ void MET_clear_cache(thread_db* tdbb)
 		}
 	}
 
+	const auto walkProcFunc = [&att](std::function<void (Routine*)> func)
+	{
+		for (const auto routine : att->att_procedures)
+		{
+			if (routine)
+				func(routine);
+		}
+
+		for (const auto routine : att->att_functions)
+		{
+			if (routine)
+				func(routine);
+		}
+	};
+
 	// Walk routines and calculate internal dependencies.
 
-	for (jrd_prc** iter = att->att_procedures.begin(); iter != att->att_procedures.end(); ++iter)
+	walkProcFunc([](Routine* routine)
 	{
-		Routine* const routine = *iter;
-
-		if (routine && routine->getStatement() &&
+		if (routine->getStatement() &&
 			!(routine->flags & Routine::FLAG_OBSOLETE) )
 		{
 			inc_int_use_count(routine->getStatement());
 		}
-	}
-
-	for (Function** iter = att->att_functions.begin(); iter != att->att_functions.end(); ++iter)
-	{
-		Function* const routine = *iter;
-
-		if (routine && routine->getStatement() &&
-			!(routine->flags & Routine::FLAG_OBSOLETE) )
-		{
-			inc_int_use_count(routine->getStatement());
-		}
-	}
+	});
 
 	// Walk routines again and adjust dependencies for routines which will not be removed.
 
-	for (jrd_prc** iter = att->att_procedures.begin(); iter != att->att_procedures.end(); ++iter)
+	walkProcFunc([](Routine* routine)
 	{
-		Routine* const routine = *iter;
-
-		if (routine && routine->getStatement() &&
+		if (routine->getStatement() &&
 			!(routine->flags & Routine::FLAG_OBSOLETE) &&
 			routine->useCount != routine->intUseCount )
 		{
 			adjust_dependencies(routine);
 		}
-	}
-
-	for (Function** iter = att->att_functions.begin(); iter != att->att_functions.end(); ++iter)
-	{
-		Function* const routine = *iter;
-
-		if (routine && routine->getStatement() &&
-			!(routine->flags & Routine::FLAG_OBSOLETE) &&
-			routine->useCount != routine->intUseCount )
-		{
-			adjust_dependencies(routine);
-		}
-	}
+	});
 
 	// Deallocate all used requests.
 
-	for (jrd_prc** iter = att->att_procedures.begin(); iter != att->att_procedures.end(); ++iter)
+	walkProcFunc([&tdbb](Routine* routine)
 	{
-		Routine* const routine = *iter;
-
-		if (routine)
+		if (routine->getStatement() && !(routine->flags & Routine::FLAG_OBSOLETE) &&
+			routine->intUseCount >= 0 &&
+			routine->useCount == routine->intUseCount)
 		{
-			if (routine->getStatement() && !(routine->flags & Routine::FLAG_OBSOLETE) &&
-				routine->intUseCount >= 0 &&
-				routine->useCount == routine->intUseCount)
-			{
-				routine->releaseStatement(tdbb);
+			routine->releaseStatement(tdbb);
 
-				if (routine->existenceLock)
-					LCK_release(tdbb, routine->existenceLock);
-				routine->existenceLock = NULL;
-				routine->flags |= Routine::FLAG_OBSOLETE;
-			}
-
-			// Leave it in state 0 to avoid extra pass next time to clear it
-			// Note: we need to adjust intUseCount for all routines
-			// in cache because any of them may have been affected from
-			// dependencies earlier. Even routines that were not scanned yet !
-			routine->intUseCount = 0;
+			if (routine->existenceLock)
+				LCK_release(tdbb, routine->existenceLock);
+			routine->existenceLock = NULL;
+			routine->flags |= Routine::FLAG_OBSOLETE;
 		}
-	}
 
-	for (Function** iter = att->att_functions.begin(); iter != att->att_functions.end(); ++iter)
-	{
-		Function* const routine = *iter;
-
-		if (routine)
-		{
-			if (routine->getStatement() && !(routine->flags & Routine::FLAG_OBSOLETE) &&
-				routine->intUseCount >= 0 &&
-				routine->useCount == routine->intUseCount)
-			{
-				routine->releaseStatement(tdbb);
-
-				if (routine->existenceLock)
-					LCK_release(tdbb, routine->existenceLock);
-				routine->existenceLock = NULL;
-				routine->flags |= Routine::FLAG_OBSOLETE;
-			}
-
-			// Leave it in state 0 to avoid extra pass next time to clear it
-			// Note: we need to adjust intUseCount for all routines
-			// in cache because any of them may have been affected from
-			// dependencies earlier. Even routines that were not scanned yet !
-			routine->intUseCount = 0;
-		}
-	}
+		// Leave it in state 0 to avoid extra pass next time to clear it
+		// Note: we need to adjust intUseCount for all routines
+		// in cache because any of them may have been affected from
+		// dependencies earlier. Even routines that were not scanned yet !
+		routine->intUseCount = 0;
+	});
 
 #ifdef DEV_BUILD
 	MET_verify_cache(tdbb);
@@ -2024,7 +1982,7 @@ void MET_load_trigger(thread_db* tdbb,
 		if (!TRG.RDB$ENTRYPOINT.NULL)	// ODS_12_0
 			entryPoint = TRG.RDB$ENTRYPOINT;
 
-		Nullable<bool> ssDefiner;
+		TriState ssDefiner;
 
 		// If SQL SECURITY for relation was not specified it will re-use DB default so we should not care about it
 		if (!TRG.RDB$SQL_SECURITY.NULL)
@@ -2034,17 +1992,19 @@ void MET_load_trigger(thread_db* tdbb,
 
 		if (TRG.RDB$RELATION_NAME.NULL)
 		{
+			fb_assert(!relation);
+
 			if ((TRG.RDB$TRIGGER_TYPE & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DB ||
 				(TRG.RDB$TRIGGER_TYPE & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DDL)
 			{
-				// this is a database trigger
+				// this is a database or DDL trigger
 				get_trigger(tdbb,
 							relation,
 							&TRG.RDB$TRIGGER_BLR,
 							&debug_blob_id,
 							triggers,
 							TRG.RDB$TRIGGER_NAME,
-							TRG.RDB$TRIGGER_TYPE & ~TRIGGER_TYPE_MASK,
+							TRG.RDB$TRIGGER_TYPE,
 							(bool) TRG.RDB$SYSTEM_FLAG,
 							trig_flags,
 							engine,
@@ -3348,7 +3308,7 @@ void MET_parse_sys_trigger(thread_db* tdbb, jrd_rel* relation)
 				statement->flags |= Statement::FLAG_IGNORE_PERM;
 
 			save_trigger_data(tdbb, ptr, relation, statement, NULL, NULL, NULL, type, true, 0, "",
-				"", NULL, Nullable<bool>());
+				"", NULL, TriState());
 		}
 	}
 	END_FOR
@@ -3503,7 +3463,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 			}
 
 			procedure->setId(P.RDB$PROCEDURE_ID);
-			Nullable<bool> ssDefiner;
+			TriState ssDefiner;
 
 			if (!P.RDB$SECURITY_CLASS.NULL)
 				procedure->setSecurityName(P.RDB$SECURITY_CLASS);
@@ -3524,7 +3484,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 				END_FOR
 			}
 
-			if (!ssDefiner.specified)
+			if (ssDefiner.isUnknown())
 			{
 				if (!P.RDB$SQL_SECURITY.NULL)
 					ssDefiner = (bool) P.RDB$SQL_SECURITY;
@@ -3534,7 +3494,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 
 			procedure->owner = P.RDB$OWNER_NAME;
 
-			if (ssDefiner.orElse(false))
+			if (ssDefiner.asBool())
 				procedure->invoker = attachment->getUserId(procedure->owner);
 
 			procedure->setImplemented(true);
@@ -3681,16 +3641,21 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 					}
 					else
 					{
+						const string name = procedure->getName().toString();
+
 						try
 						{
+							TraceProcCompile trace(tdbb, name);
+
 							procedure->parseBlr(tdbb, csb, &P.RDB$PROCEDURE_BLR,
 								P.RDB$DEBUG_INFO.NULL ? NULL : &P.RDB$DEBUG_INFO);
+
+							trace.finish(procedure->getStatement(), ITracePlugin::RESULT_SUCCESS);
 						}
 						catch (const Exception& ex)
 						{
 							StaticStatusVector temp_status;
 							ex.stuffException(temp_status);
-							const string name = procedure->getName().toString();
 							(Arg::Gds(isc_bad_proc_BLR) << Arg::Str(name)
 								<< Arg::StatusVector(temp_status.begin())).raise();
 						}
@@ -4226,8 +4191,8 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 					DmlNode* nod = dependencies ?
 						MET_get_dependencies(tdbb, relation, p, length, csb, NULL, NULL, NULL,
-							field->fld_name, obj_computed, 0, depTrans) :
-						PAR_blr(tdbb, relation, p, length, csb, NULL, NULL, false, 0);
+							field->fld_name, obj_computed, csb_computed_field, depTrans) :
+						PAR_blr(tdbb, relation, p, length, csb, NULL, NULL, false, csb_computed_field);
 
 					field->fld_computation = static_cast<ValueExprNode*>(nod);
 				}
@@ -4282,7 +4247,7 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 			case RSR_field_generator_name:
 				field->fld_generator_name = (const TEXT*) p;
-				if (!field->fld_identity_type.specified)
+				if (!field->fld_identity_type.has_value())
 					field->fld_identity_type = IDENT_TYPE_BY_DEFAULT;
 				break;
 
@@ -4706,7 +4671,7 @@ static void get_trigger(thread_db* tdbb, jrd_rel* relation,
 						const TEXT* name, FB_UINT64 type,
 						bool sys_trigger, USHORT flags,
 						const MetaName& engine, const string& entryPoint,
-						const bid* body, Nullable<bool> ssDefiner)
+						const bid* body, TriState ssDefiner)
 {
 /**************************************
  *
@@ -5088,7 +5053,7 @@ static void save_trigger_data(thread_db* tdbb, TrigVector** ptr, jrd_rel* relati
 							  const TEXT* name, FB_UINT64 type,
 							  bool sys_trigger, USHORT flags,
 							  const MetaName& engine, const string& entryPoint,
-							  const bid* body, Nullable<bool> ssDefiner)
+							  const bid* body, TriState ssDefiner)
 {
 /**************************************
  *
@@ -5636,7 +5601,7 @@ int MET_get_linger(thread_db* tdbb)
 	return rc;
 }
 
-Nullable<bool> MET_get_ss_definer(Jrd::thread_db* tdbb)
+TriState MET_get_ss_definer(Jrd::thread_db* tdbb)
 {
 /**************************************
  *
@@ -5650,7 +5615,7 @@ Nullable<bool> MET_get_ss_definer(Jrd::thread_db* tdbb)
  **************************************/
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
-	Nullable<bool> r;
+	TriState r;
 
 	AutoCacheRequest request(tdbb, irq_dbb_ss_definer, IRQ_REQUESTS);
 

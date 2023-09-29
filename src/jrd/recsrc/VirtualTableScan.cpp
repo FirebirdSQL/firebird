@@ -109,26 +109,27 @@ WriteLockResult VirtualTableScan::lockRecord(thread_db* /*tdbb*/, bool /*skipLoc
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
-void VirtualTableScan::getChildren(Array<const RecordSource*>& children) const
+void VirtualTableScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
+	if (!level)
+		plan += "(";
+
+	plan += printName(tdbb, m_alias, false) + " NATURAL";
+
+	if (!level)
+		plan += ")";
 }
 
-void VirtualTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void VirtualTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Table " +
-			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan";
-		printOptInfo(plan);
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+	planEntry.className = "VirtualTableScan";
 
-		plan += printName(tdbb, m_alias, false) + " NATURAL";
+	planEntry.lines.add().text = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan";
+	printOptInfo(planEntry.lines);
 
-		if (!level)
-			plan += ")";
-	}
+	planEntry.objectType = m_relation->getObjectType();
+	planEntry.objectName = m_relation->rel_name;
+
+	if (m_alias.hasData() && m_relation->rel_name != m_alias)
+		planEntry.alias = m_alias;
 }

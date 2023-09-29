@@ -1481,7 +1481,7 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&
-			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_large | dpg_orphan)) &&
+			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_orphan)) &&
 			dpage->dpg_relation == rpb->rpb_relation->rel_id &&
 			dpage->dpg_sequence == dpSequence &&
 			(dpage->dpg_count > 0);
@@ -1745,7 +1745,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&
-			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_large | dpg_orphan)) &&
+			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_orphan)) &&
 			dpage->dpg_relation == rpb->rpb_relation->rel_id &&
 			dpage->dpg_sequence == dpSequence &&
 			(dpage->dpg_count > 0);
@@ -2312,6 +2312,8 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
+	rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_large | rpb_chained | rpb_gc_active | rpb_long_tranum);
+
 #ifdef VIO_DEBUG
 	jrd_rel* relation = rpb->rpb_relation;
 	VIO_trace(DEBUG_WRITES,
@@ -2579,20 +2581,31 @@ static void delete_tail(thread_db* tdbb, rhdf* header, const USHORT page_space, 
 
 	if (!(header->rhdf_flags & rhd_blob))
 	{
+		USHORT flags = header->rhdf_flags;
 		ULONG page_number = header->rhdf_f_page;
-		while (true)
+		fb_assert(flags & rhd_incomplete);
+
+		while (flags & rhd_incomplete)
 		{
 			window.win_page = page_number;
 			data_page* dpage = (data_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_data);
-			header = (rhdf*) ((UCHAR *) dpage + dpage->dpg_rpt[0].dpg_offset);
-			const USHORT flags = header->rhdf_flags;
-			page_number = header->rhdf_f_page;
 
-			CCH_RELEASE_TAIL(tdbb, &window);
-			PAG_release_page(tdbb, window.win_page, ZERO_PAGE_NUMBER);
+			if (dpage->dpg_header.pag_flags & dpg_orphan &&
+				dpage->dpg_header.pag_flags & dpg_full &&
+				dpage->dpg_count == 1)
+			{
+				header = (rhdf*) ((UCHAR *) dpage + dpage->dpg_rpt[0].dpg_offset);
+				flags = header->rhdf_flags;
+				page_number = header->rhdf_f_page;
 
-			if (!(flags & rhd_incomplete))
+				CCH_RELEASE_TAIL(tdbb, &window);
+				PAG_release_page(tdbb, window.win_page, ZERO_PAGE_NUMBER);
+			}
+			else
+			{
+				fb_assert(false);
 				break;
+			}
 		}
 		return;
 	}
@@ -3339,7 +3352,7 @@ static rhd* locate_space(thread_db* tdbb,
 		data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, LCK_write, pag_undefined);
 
 		const UCHAR wrongFlags = dpg_orphan |
-			((type == DPM_primary) ? dpg_secondary | dpg_large : 0);
+			((type == DPM_primary) ? dpg_secondary : 0);
 
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&

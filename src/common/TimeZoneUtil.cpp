@@ -1133,7 +1133,10 @@ bool TimeZoneRuleIterator::next()
 	}
 
 	if (!hasNext || icuDate > MAX_ICU_TIMESTAMP)
+	{
 		icuDate = MAX_ICU_TIMESTAMP;
+		hasNext = false;
+	}
 
 	icuLib.ucalSetMillis(icuCalendar, icuDate, &icuErrorCode);
 
@@ -1143,7 +1146,7 @@ bool TimeZoneRuleIterator::next()
 		(icuDate == MAX_ICU_TIMESTAMP ? ISC_TIME_SECONDS_PRECISION / 1000 : 0));
 	endTimestamp.time_zone = TimeZoneUtil::GMT_ZONE;
 
-	startTicks = endTicks + 1;
+	startTicks = (hasNext ? endTicks : toTicks) + 1;
 
 	return true;
 }

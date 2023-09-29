@@ -46,6 +46,7 @@
 #include "../jrd/vio_proto.h"
 #include "../common/utils_proto.h"
 #include "../jrd/DebugInterface.h"
+#include "../jrd/trace/TraceJrdHelpers.h"
 
 #include "../jrd/Function.h"
 
@@ -223,7 +224,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 				(X.RDB$PACKAGE_NAME.NULL ? NULL : X.RDB$PACKAGE_NAME)));
 
 			function->owner = X.RDB$OWNER_NAME;
-			Nullable<bool> ssDefiner;
+			TriState ssDefiner;
 
 			if (!X.RDB$SECURITY_CLASS.NULL)
 			{
@@ -249,7 +250,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 				END_FOR
 			}
 
-			if (!ssDefiner.specified)
+			if (!ssDefiner.isAssigned())
 			{
 				if (!X.RDB$SQL_SECURITY.NULL)
 					ssDefiner = (bool) X.RDB$SQL_SECURITY;
@@ -257,7 +258,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 					ssDefiner = MET_get_ss_definer(tdbb);
 			}
 
-			if (ssDefiner.orElse(false))
+			if (ssDefiner.asBool())
 				function->invoker = attachment->getUserId(function->owner);
 
 			size_t count = 0;
@@ -454,16 +455,21 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 					}
 					else if (!X.RDB$FUNCTION_BLR.NULL)
 					{
+						const string name = function->getName().toString();
+
 						try
 						{
+							TraceFuncCompile trace(tdbb, name);
+
 							function->parseBlr(tdbb, csb, &X.RDB$FUNCTION_BLR,
 								X.RDB$DEBUG_INFO.NULL ? NULL : &X.RDB$DEBUG_INFO);
+
+							trace.finish(function->getStatement(), ITracePlugin::RESULT_SUCCESS);
 						}
 						catch (const Exception& ex)
 						{
 							StaticStatusVector temp_status;
 							ex.stuffException(temp_status);
-							const string name = function->getName().toString();
 							(Arg::Gds(isc_bad_fun_BLR) << Arg::Str(name)
 								<< Arg::StatusVector(temp_status.begin())).raise();
 						}

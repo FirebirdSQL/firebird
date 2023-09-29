@@ -510,6 +510,7 @@ public:
 		TYPE_MISSING_BOOL,
 		TYPE_NOT_BOOL,
 		TYPE_RSE_BOOL,
+		TYPE_IN_LIST_BOOL,
 
 		// RecordSource types
 		TYPE_AGGREGATE_SOURCE,
@@ -769,10 +770,8 @@ class ValueExprNode : public ExprNode
 {
 public:
 	ValueExprNode(Type aType, MemoryPool& pool)
-		: ExprNode(aType, pool),
-		  nodScale(0)
+		: ExprNode(aType, pool)
 	{
-		dsqlDesc.clear();
 	}
 
 public:
@@ -847,7 +846,7 @@ public:
 	virtual dsc* execute(thread_db* tdbb, Request* request) const = 0;
 
 public:
-	SCHAR nodScale;
+	SCHAR nodScale = 0;
 
 protected:
 	dsc dsqlDesc;
@@ -1271,6 +1270,12 @@ public:
 		items.push(arg1);
 	}
 
+	ValueListNode(MemoryPool& pool)
+		: TypedNode<ListExprNode, ExprNode::TYPE_VALUE_LIST>(pool),
+		  items(pool, INITIAL_CAPACITY)
+	{
+	}
+
 	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
 	{
 		ListExprNode::getChildren(holder, dsql);
@@ -1291,12 +1296,18 @@ public:
 		return this;
 	}
 
+	void ensureCapacity(unsigned count)
+	{
+		items.ensureCapacity(count);
+	}
+
 	void clear()
 	{
 		items.clear();
 	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 
 	virtual ValueListNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
@@ -1432,6 +1443,7 @@ public:
 		TYPE_HANDLER,
 		TYPE_LABEL,
 		TYPE_LINE_COLUMN,
+		TYPE_LOCAL_DECLARATIONS,
 		TYPE_LOOP,
 		TYPE_MERGE,
 		TYPE_MERGE_SEND,
@@ -1443,6 +1455,7 @@ public:
 		TYPE_RETURN,
 		TYPE_SAVEPOINT,
 		TYPE_SELECT,
+		TYPE_SELECT_MESSAGE,
 		TYPE_SESSION_MANAGEMENT_WRAPPER,
 		TYPE_SET_GENERATOR,
 		TYPE_STALL,

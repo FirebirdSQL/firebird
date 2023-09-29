@@ -1,3 +1,273 @@
+# v5.0 Release Candidate 1
+
+## New features
+
+* [#7682](https://github.com/FirebirdSQL/firebird/issues/7682): Use _ParallelWorkers_ setting from firebird.conf as default for all parallelised operations  
+  Contributor(s): Vlad Khorsun
+
+* [#7469](https://github.com/FirebirdSQL/firebird/pull/7469): Make Android port (client / embedded) work inside apps  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#5959](https://github.com/FirebirdSQL/firebird/issues/5959): Add support for `QUARTER` to `EXTRACT`, `FIRST_DAY` and `LAST_DAY`  
+  Contributor(s): Adriano dos Santos Fernandes
+
+## Improvements
+
+* [#7720](https://github.com/FirebirdSQL/firebird/pull/7720): MacOS: build _libicu_ and static _libc++_ using _vcpkg_  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7707](https://github.com/FirebirdSQL/firebird/pull/7707): Better processing and optimization if `IN <list>` predicates  
+  Contributor(s): Dmitry Yemanov
+
+* [#7692](https://github.com/FirebirdSQL/firebird/issues/7692): Make trace config parser resolve symlinks in database file path in trace configuration  
+  Contributor(s): Vlad Khorsun
+
+* [#7688](https://github.com/FirebirdSQL/firebird/issues/7688): Profiler should not miss query's top-level access paths nodes  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7687](https://github.com/FirebirdSQL/firebird/issues/7687): Add `LEVEL` column to `PLG$PROF_RECORD_SOURCES` and `PLG$PROF_RECORD_SOURCE_STATS_VIEW`  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7685](https://github.com/FirebirdSQL/firebird/issues/7685): Add overload `FbVarChar::set` function for non null-terminated string  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7680](https://github.com/FirebirdSQL/firebird/pull/7680): Make boot build on Windows a bit more user-friendly  
+  Contributor(s): Vlad Khorsun
+
+* [#7652](https://github.com/FirebirdSQL/firebird/issues/7652): Make the profiler store aggregated requests by default, with option for detailed store  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7642](https://github.com/FirebirdSQL/firebird/issues/7642): Getting the current `DECFLOAT ROUND/TRAPS` settings  
+  Contributor(s): Alexander Peshkov
+
+* [#7637](https://github.com/FirebirdSQL/firebird/issues/7637): Run as application not specifying switch -a  
+  Contributor(s): Vlad Khorsun
+
+* [#7634](https://github.com/FirebirdSQL/firebird/issues/7634): Include Performance Cores only in default affinity mask  
+  Contributor(s): Vlad Khorsun
+
+* [#7576](https://github.com/FirebirdSQL/firebird/issues/7576): Allow nested parenthesized joined table  
+  Contributor(s): Mark Rotteveel
+
+* [#7559](https://github.com/FirebirdSQL/firebird/pull/7559): Optimize creation of expression and partial indices  
+  Contributor(s): Dmitry Yemanov
+
+* [#7550](https://github.com/FirebirdSQL/firebird/issues/7550): Add support for _-parallel_ in combination with _gfix -icu_  
+  Contributor(s): Vlad Khorsun
+
+* [#7542](https://github.com/FirebirdSQL/firebird/issues/7542): Compiler warnings raise when build cloop generated Firebird.pas in RAD Studio 11.3  
+  Contributor(s): Vlad Khorsun
+
+* [#7539](https://github.com/FirebirdSQL/firebird/issues/7539): `RDB$GET/SET_CONTEXT()`: enclosing in apostrophes or double quotes  of a missed namespace/variable will make output more readable  
+  Contributor(s): Vlad Khorsun
+
+* [#7536](https://github.com/FirebirdSQL/firebird/issues/7536): Add ability to query current value of parallel workers for an attachment  
+  Contributor(s): Vlad Khorsun
+
+* [#7506](https://github.com/FirebirdSQL/firebird/pull/7506): Reduce output of the `SHOW GRANTS` command  
+  Contributor(s): Artyom Ivanov
+
+* [#7494](https://github.com/FirebirdSQL/firebird/issues/7494): Firebird performance issue - unnecessary index reads  
+  Contributor(s): Vlad Khorsun
+
+* [#7475](https://github.com/FirebirdSQL/firebird/issues/7475): `SHOW SYSTEM` command: provide list of functions belonging to system packages  
+  Contributor(s): Alexander Peshkov
+
+* [#7466](https://github.com/FirebirdSQL/firebird/pull/7466): Add _COMPILE_ trace events for procedures/functions/triggers  
+  Contributor(s): Dmitry Yemanov
+
+* [#7425](https://github.com/FirebirdSQL/firebird/issues/7425): Add _REPLICA MODE_ to the output of the _isql_ `SHOW DATABASE` command  
+  Contributor(s): Dmitry Yemanov
+
+* [#7405](https://github.com/FirebirdSQL/firebird/pull/7405): Surface internal optimization modes (all rows vs first rows) at the SQL and configuration levels  
+  Contributor(s): Dmitry Yemanov
+
+* [#7213](https://github.com/FirebirdSQL/firebird/pull/7213): Use Windows private namespace for kernel objects used in server-to-server IPC  
+  Contributor(s): Vlad Khorsun
+
+* [#7046](https://github.com/FirebirdSQL/firebird/issues/7046): Make ability to add comment to mapping (`COMMENT ON MAPPING ... IS ...`)  
+  Contributor(s): Alexander Peshkov
+
+* [#7001](https://github.com/FirebirdSQL/firebird/issues/7001): _ISQL_ showing publication status  
+  Contributor(s): Dmitry Yemanov
+
+## Bugfixes
+
+* [#7747](https://github.com/FirebirdSQL/firebird/pull/7747): Fix an issue where the garbage collection in indexes and blobs is not performed in _VIO_backout_  
+  Contributor(s): Ilya Eremin
+
+* [#7738](https://github.com/FirebirdSQL/firebird/issues/7738): Crash on multiple connections/disconnections  
+  Contributor(s): Alexander Peshkov
+
+* [#7737](https://github.com/FirebirdSQL/firebird/pull/7737): Fix cases where the precedence relationship between a record page and a blob page is not set  
+  Contributor(s): Ilya Eremin
+
+* [#7731](https://github.com/FirebirdSQL/firebird/issues/7731): Display length of timestamp with timezone is wrong in dialect 1  
+  Contributor(s): Alexander Peshkov
+
+* [#7730](https://github.com/FirebirdSQL/firebird/issues/7730): Server ignores the size of VARCHAR when performing `SET BIND ... TO VARCHAR(N)`  
+  Contributor(s): Alexander Peshkov
+
+* [#7729](https://github.com/FirebirdSQL/firebird/issues/7729): `SET BIND OF TS WITH TZ TO VARCHAR(128)` uses the date format of dialect 1  
+  Contributor(s): Alexander Peshkov
+
+* [#7727](https://github.com/FirebirdSQL/firebird/issues/7727): Index for integer column cannot be used when `INT128/DECFLOAT` value is being searched  
+  Contributor(s): Dmitry Yemanov
+
+* [#7723](https://github.com/FirebirdSQL/firebird/issues/7723): Wrong error message on login if the user doesn't exists and WireCrypt is disabled  
+  Contributor(s): Alexander Peshkov
+
+* [#7713](https://github.com/FirebirdSQL/firebird/issues/7713): `FOR SELECT` statement can not see any changes made in `DO` block  
+  Contributor(s): Vlad Khorsun
+
+* [#7710](https://github.com/FirebirdSQL/firebird/issues/7710): Expression index - more than one null value cause attempt to store duplicate value error - FB5.0 beta 2  
+  Contributor(s): Vlad Khorsun
+
+* [#7703](https://github.com/FirebirdSQL/firebird/issues/7703): Requests leak in _AutoCacheRequest_  
+  Contributor(s): Alexander Peshkov
+
+* [#7696](https://github.com/FirebirdSQL/firebird/issues/7696): `select from external procedure` validates output parameters even when fetch method returns false  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7694](https://github.com/FirebirdSQL/firebird/pull/7694): Fix false positives of "missing entries for record X" error during index validation when a deleted record version is committed and has a backversion  
+  Contributor(s): Ilya Eremin
+
+* [#7691](https://github.com/FirebirdSQL/firebird/issues/7691): `with caller privileges` has no effect in triggers   
+  Contributor(s): Alexander Peshkov
+
+* [#7683](https://github.com/FirebirdSQL/firebird/issues/7683): `rdb$time_zone_util.transitions` returns an infinite resultset  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7676](https://github.com/FirebirdSQL/firebird/issues/7676): "Attempt to evaluate index expression recursively"  
+  Contributor(s): Dmitry Yemanov
+
+* [#7670](https://github.com/FirebirdSQL/firebird/issues/7670): Cursor name can duplicate parameter and variable names in procedures and functions  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7665](https://github.com/FirebirdSQL/firebird/issues/7665): Wrong result ordering in `LEFT JOIN` query  
+  Contributor(s): Dmitry Yemanov
+
+* [#7664](https://github.com/FirebirdSQL/firebird/issues/7664): `DROP TABLE` executed for a table with big records may lead to "wrong page type" or "end of file" error  
+  Contributor(s): Vlad Khorsun, Ilya Eremin
+
+* [#7662](https://github.com/FirebirdSQL/firebird/pull/7662): Fix performance issues in _prepare_update()_  
+  Contributor(s): Ilya Eremin
+
+* [#7661](https://github.com/FirebirdSQL/firebird/issues/7661): Classic Server rejects new connections  
+  Contributor(s): Vlad Khorsun
+
+* [#7658](https://github.com/FirebirdSQL/firebird/issues/7658): Segfault when closing database in valgrind-enabled build  
+  Contributor(s): Alexander Peshkov
+
+* [#7649](https://github.com/FirebirdSQL/firebird/issues/7649): Switch Linux performance counter timer to CLOCK_MONOTONIC_RAW  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7641](https://github.com/FirebirdSQL/firebird/pull/7641): Fix wrong profiler measurements due to overflow.  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7638](https://github.com/FirebirdSQL/firebird/issues/7638): `OVERRIDING USER VALUE` should be allowed for `GENERATED ALWAYS AS IDENTITY`  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7627](https://github.com/FirebirdSQL/firebird/issues/7627): The size of the database with big records becomes bigger after backup/restore  
+  Contributor(s): Ilya Eremin
+
+* [#7626](https://github.com/FirebirdSQL/firebird/issues/7626): Segfault when new attachment is done to shutting down database  
+  Contributor(s): Alexander Peshkov
+
+* [#7611](https://github.com/FirebirdSQL/firebird/issues/7611): Can't backup/restore database from v3 to v4 with `SEC$USER_NAME` field longer than 10 characters  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7610](https://github.com/FirebirdSQL/firebird/issues/7610): Uninitialized/random value assigned to `RDB$ROLES` -> `RDB$SYSTEM PRIVILEGES` when restoring from FB3 backup  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7604](https://github.com/FirebirdSQL/firebird/issues/7604): PSQL functions do not convert the output BLOB to the connection character set.  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7603](https://github.com/FirebirdSQL/firebird/issues/7603): `BIN_SHR` on `INT128` does not apply sign extension  
+  Contributor(s): Alexander Peshkov
+
+* [#7599](https://github.com/FirebirdSQL/firebird/issues/7599): Conversion of text with '\0' to `DECFLOAT` without errors  
+  Contributor(s): Alexander Peshkov
+
+* [#7598](https://github.com/FirebirdSQL/firebird/issues/7598): DDL statements hang when the compiled statements cache is enabled  
+  Contributor(s): Vlad Khorsun
+
+* [#7582](https://github.com/FirebirdSQL/firebird/issues/7582): Missing _isc_info_end_ in _Firebird.pas_  
+  Contributor(s): Alexander Peshkov
+
+* [#7579](https://github.com/FirebirdSQL/firebird/issues/7579): Cannot _nbackup_ a firebird 3.0 database in firebird 4.0 service with _engine12_ setup in _Providers_  
+  Contributor(s): Alexander Peshkov
+
+* [#7574](https://github.com/FirebirdSQL/firebird/issues/7574): Derived table syntax allows dangling `AS`  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7569](https://github.com/FirebirdSQL/firebird/issues/7569): Multi-level order by and offset/fetch ignored on parenthesized query expressions  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7562](https://github.com/FirebirdSQL/firebird/issues/7562): Profiler elapsed times are incorrect in Windows  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7556](https://github.com/FirebirdSQL/firebird/issues/7556): FB Classic can hang when attempts to attach DB while it is starting to encrypt/decrypt  
+  Contributor(s): Alexander Peshkov
+
+* [#7555](https://github.com/FirebirdSQL/firebird/issues/7555): Invalid configuration for random fresh created database may be used after drop of another one with alias in databases.conf  
+  Contributor(s): Alexander Peshkov
+
+* [#7554](https://github.com/FirebirdSQL/firebird/issues/7554): Firebird 5 partial index creation causes server hang up  
+  Contributor(s): Vlad Khorsun
+
+* [#7553](https://github.com/FirebirdSQL/firebird/issues/7553): Firebird 5 profiler error with subselects  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7548](https://github.com/FirebirdSQL/firebird/issues/7548): `SET BIND OF TIMESTAMP WITH TIME ZONE TO CHAR` is not working with UTF8 connection charset  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7537](https://github.com/FirebirdSQL/firebird/issues/7537): Wrong name in error message when unknown namespace is passed into RDB$SET_CONTEXT()  
+  Contributor(s): Vlad Khorsun
+
+* [#7535](https://github.com/FirebirdSQL/firebird/issues/7535): High CPU usage connect to Firebird 3 database using Firebird 4 Classic and SuperClassic service  
+  Contributor(s): Vlad Khorsun
+
+* [#7514](https://github.com/FirebirdSQL/firebird/issues/7514): Segfault when detaching after deleting shadow on Classic  
+  Contributor(s): Alexander Peshkov
+
+* [#7504](https://github.com/FirebirdSQL/firebird/issues/7504): Segfault when closing SQL statement in remote provider during shutdown  
+  Contributor(s): Alexander Peshkov
+
+* [#7499](https://github.com/FirebirdSQL/firebird/issues/7499): Problem with restore  
+  Contributor(s): Vlad Khorsun
+
+* [#7488](https://github.com/FirebirdSQL/firebird/issues/7488): Invalid real to string cast   
+  Contributor(s): Alexander Peshkov, Artyom Abakumov
+
+* [#7486](https://github.com/FirebirdSQL/firebird/issues/7486): No initialization of rpb's runtime flags causes problems with `SKIP LOCKED` when config _ReadConsistency = 0_ and SuperServer  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7484](https://github.com/FirebirdSQL/firebird/issues/7484): External engine `SYSTEM` not found  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7480](https://github.com/FirebirdSQL/firebird/issues/7480): Firebird server stops accepting new connections after some time  
+  Contributor(s): Alexander Peshkov
+
+* [#7472](https://github.com/FirebirdSQL/firebird/issues/7472): Window functions may lead to crash interacting with others exceptions  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7464](https://github.com/FirebirdSQL/firebird/issues/7464): Crash on repeating update in 5.0  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7456](https://github.com/FirebirdSQL/firebird/issues/7456): Impossible drop function in package with name of PSQL-function  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7445](https://github.com/FirebirdSQL/firebird/pull/7445): Fix problem with client-only build requiring _btyacc's_ generated files present  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7387](https://github.com/FirebirdSQL/firebird/issues/7387): Unreliable replication behaviour in Linux Classic  
+  Contributor(s): Dmitry Yemanov
+
+* [#7233](https://github.com/FirebirdSQL/firebird/pull/7233): Postfix for #5385 (CORE-5101): Fix slow database restore when Classic server mode is used  
+  Contributor(s): Ilya Eremin
+
+
 # v5.0 Beta 1 (27-Mar-2023)
 
 ## New features

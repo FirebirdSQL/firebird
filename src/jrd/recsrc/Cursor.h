@@ -35,7 +35,7 @@ namespace Jrd
 
 	// Select class (common base for sub-queries and cursors)
 
-	class Select
+	class Select : public AccessPath
 	{
 	public:
 		enum : ULONG {
@@ -43,20 +43,12 @@ namespace Jrd
 			INVARIANT = 2
 		};
 
-		Select(const RecordSource* source, const RseNode* rse, ULONG line = 0, ULONG column = 0,
+		Select(CompilerScratch* csb, const RecordSource* source, const RseNode* rse, ULONG line = 0, ULONG column = 0,
 			const MetaName& cursorName = {});
 
-		virtual ~Select()
-		{}
-
-		ULONG getCursorProfileId() const
+		const RecordSource* getRootRecordSource() const
 		{
-			return m_cursorProfileId;
-		}
-
-		const RecordSource* getAccessPath() const
-		{
-			return m_top;
+			return m_root;
 		}
 
 		const MetaName& getName() const
@@ -75,20 +67,33 @@ namespace Jrd
 		}
 
 		void initializeInvariants(Request* request) const;
-		void printPlan(thread_db* tdbb, Firebird::string& plan, bool detailed) const;
+
+		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
+
+		void printPlan(thread_db* tdbb, Firebird::string& plan, bool detailed) const
+		{
+			if (detailed)
+			{
+				PlanEntry planEntry;
+				getPlan(tdbb, planEntry, 0, true);
+				planEntry.asString(plan);
+			}
+			else
+				getLegacyPlan(tdbb, plan, 0);
+		}
 
 		virtual void open(thread_db* tdbb) const = 0;
 		virtual void close(thread_db* tdbb) const = 0;
 
 	protected:
-		void prepareProfiler(thread_db* tdbb, Request* request) const;
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry,
+			unsigned level, bool recurse) const override;
 
 	protected:
-		const RecordSource* const m_top;
+		const RecordSource* const m_root;
 		const RseNode* const m_rse;
 
 	private:
-		const ULONG m_cursorProfileId;
 		MetaName m_cursorName;	// optional name for explicit PSQL cursors
 		ULONG m_line = 0;
 		ULONG m_column = 0;
@@ -99,7 +104,7 @@ namespace Jrd
 	class SubQuery final : public Select
 	{
 	public:
-		SubQuery(const RecordSource* rsb, const RseNode* rse);
+		SubQuery(CompilerScratch* csb, const RecordSource* rsb, const RseNode* rse);
 
 		void open(thread_db* tdbb) const override;
 		void close(thread_db* tdbb) const override;

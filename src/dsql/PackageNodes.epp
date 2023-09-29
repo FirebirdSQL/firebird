@@ -33,6 +33,7 @@
 #include "../dsql/make_proto.h"
 #include "../dsql/pass1_proto.h"
 #include "../common/StatusArg.h"
+#include "../common/classes/TriState.h"
 #include "../jrd/Attachment.h"
 #include "../jrd/scl_proto.h"
 
@@ -370,10 +371,10 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 		PKG.RDB$PACKAGE_HEADER_SOURCE.NULL = FALSE;
 		attachment->storeMetaDataBlob(tdbb, transaction, &PKG.RDB$PACKAGE_HEADER_SOURCE, source);
 
-		if (ssDefiner.specified)
+		if (ssDefiner.isAssigned())
 		{
 			PKG.RDB$SQL_SECURITY.NULL = FALSE;
-			PKG.RDB$SQL_SECURITY = ssDefiner.value ? FB_TRUE : FB_FALSE;
+			PKG.RDB$SQL_SECURITY = ssDefiner.asBool() ? FB_TRUE : FB_FALSE;
 		}
 		else
 			PKG.RDB$SQL_SECURITY.NULL = TRUE;
@@ -444,10 +445,10 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 			if (!PKG.RDB$VALID_BODY_FLAG.NULL)
 				PKG.RDB$VALID_BODY_FLAG = FALSE;
 
-			if (ssDefiner.specified)
+			if (ssDefiner.isAssigned())
 			{
 				PKG.RDB$SQL_SECURITY.NULL = FALSE;
-				PKG.RDB$SQL_SECURITY = ssDefiner.value ? FB_TRUE : FB_FALSE;
+				PKG.RDB$SQL_SECURITY = ssDefiner.asBool() ? FB_TRUE : FB_FALSE;
 			}
 			else
 				PKG.RDB$SQL_SECURITY.NULL = TRUE;

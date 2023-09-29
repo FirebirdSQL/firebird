@@ -77,6 +77,7 @@ public:
 	virtual unsigned int getAuthBlock(const unsigned char** bytes) = 0;
 	virtual bool utf8FileNames() = 0;
 	virtual Firebird::ICryptKeyCallback* getCryptCallback() = 0;
+	virtual int getParallelWorkers() = 0;
 
 	void setDataMode(bool value)
 	{

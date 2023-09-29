@@ -19,20 +19,11 @@
  *       2001.07.28   John Bellardo added tokens for FIRST and LIMIT
    See dsql/parse.y for a chronological list. */
 
-/*
- * This file is included in parse.y and isql/isql.epp - at some point a
- * smarter way of doing it so only one instance is needed would be best.
- * MOD 29-Jun-2002
- */
-
-struct tok
+struct Token
 {
     USHORT tok_ident;
     const char* tok_string;
     bool nonReserved;
 };
 
-typedef tok TOK;
-typedef const TOK* Tokens;
-
-Tokens keywordGetTokens();
+typedef const Token* ConstTokenPtr;

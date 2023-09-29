@@ -238,38 +238,33 @@ WriteLockResult RecursiveStream::lockRecord(thread_db* /*tdbb*/, bool /*skipLock
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
-void RecursiveStream::getChildren(Array<const RecordSource*>& children) const
+void RecursiveStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_root);
-	children.add(m_inner);
+	if (!level)
+		plan += "(";
+
+	m_root->getLegacyPlan(tdbb, plan, level + 1);
+
+	plan += ", ";
+
+	m_inner->getLegacyPlan(tdbb, plan, level + 1);
+
+	if (!level)
+		plan += ")";
 }
 
-void RecursiveStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void RecursiveStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
+	planEntry.className = "RecursiveStream";
+
+	planEntry.lines.add().text = "Recursion";
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
 	{
-		plan += printIndent(++level) + "Recursion";
-		printOptInfo(plan);
-
-		if (recurse)
-		{
-			m_root->print(tdbb, plan, true, level, recurse);
-			m_inner->print(tdbb, plan, true, level, recurse);
-		}
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
-
-		m_root->print(tdbb, plan, false, level + 1, recurse);
-
-		plan += ", ";
-
-		m_inner->print(tdbb, plan, false, level + 1, recurse);
-
-		if (!level)
-			plan += ")";
+		++level;
+		m_root->getPlan(tdbb, planEntry.children.add(), level, recurse);
+		m_inner->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 

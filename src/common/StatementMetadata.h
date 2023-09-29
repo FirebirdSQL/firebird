@@ -25,9 +25,9 @@
 #ifndef COMMON_STATEMENT_METADATA_H
 #define COMMON_STATEMENT_METADATA_H
 
+#include <optional>
 #include "firebird/Interface.h"
 #include "iberror.h"
-#include "../common/classes/Nullable.h"
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/objects_array.h"
@@ -82,7 +82,7 @@ private:
 
 private:
 	IStatement* statement;
-	Nullable<unsigned> type, flags;
+	std::optional<unsigned> type, flags;
 	string legacyPlan, detailedPlan;
 	RefPtr<Parameters> inputParameters, outputParameters;
 };
