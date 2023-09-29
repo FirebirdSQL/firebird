@@ -1120,24 +1120,13 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, MetaName& 
 //----------------------
 
 
-ParameterClause::ParameterClause(MemoryPool& pool, dsql_fld* field, const MetaName& aCollate,
+ParameterClause::ParameterClause(MemoryPool& pool, dsql_fld* field,
 			ValueSourceClause* aDefaultClause, ValueExprNode* aParameterExpr)
 	: name(pool, field ? field->fld_name : ""),
 	  type(field),
 	  defaultClause(aDefaultClause),
 	  parameterExpr(aParameterExpr)
 {
-	// Explicit collation has precedence over data type collation
-	if (aCollate.hasData())
-	{
-		if (type->collate.hasData())
-		{
-			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
-				Arg::Gds(isc_dsql_duplicate_spec) << "COLLATE");
-		}
-		type->collate = aCollate;
-	}
 }
 
 string ParameterClause::internalPrint(NodePrinter& printer) const
