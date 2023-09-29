@@ -1191,6 +1191,15 @@ BoolExprNode* InListBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	const auto node = FB_NEW_POOL(dsqlScratch->getPool())
 		InListBoolNode(dsqlScratch->getPool(), procArg, procList);
 
+	// Try to force arg to be same type as list eg: ? = (FIELD, ...) case
+	for (auto item : procList->items)
+		PASS1_set_parameter_type(dsqlScratch, node->arg, item, false);
+
+	// Try to force list to be same type as arg eg: FIELD = (?, ...) case
+	for (auto item : procList->items)
+		PASS1_set_parameter_type(dsqlScratch, item, node->arg, false);
+
+	// Derive a common data type for the list items
 	dsc argDesc;
 	DsqlDescMaker::fromNode(dsqlScratch, &argDesc, procArg);
 
@@ -1221,6 +1230,7 @@ BoolExprNode* InListBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		listDesc = commonDesc;
 	}
 
+	// Cast to the common data type where necessary
 	for (auto& item : procList->items)
 	{
 		const auto desc = item->getDsqlDesc();
@@ -1248,14 +1258,6 @@ BoolExprNode* InListBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			item = castNode->dsqlPass(dsqlScratch);
 		}
 	}
-
-	// Try to force arg to be same type as list eg: ? = (FIELD, ...) case
-	for (auto item : procList->items)
-		PASS1_set_parameter_type(dsqlScratch, node->arg, item, false);
-
-	// Try to force list to be same type as arg eg: FIELD = (?, ...) case
-	for (auto item : procList->items)
-		PASS1_set_parameter_type(dsqlScratch, item, node->arg, false);
 
 	return node;
 }
@@ -1382,7 +1384,7 @@ bool InListBoolNode::execute(thread_db* tdbb, Request* request) const
 			const auto res = lookup->find(tdbb, request, arg, argDesc);
 
 			if (res.isAssigned())
-				return res.value;
+				return res.asBool();
 
 			fb_assert(list->items.hasData());
 			request->req_flags |= req_null;

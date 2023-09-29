@@ -28,7 +28,8 @@ RUN `
         --add Microsoft.VisualStudio.Component.VC.ATLMFC `
         --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
         --add Microsoft.VisualStudio.Component.VC.CMake.Project `
-        --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+        --add Microsoft.VisualStudio.Component.VC.Redist.14.Latest `
+        --add Microsoft.VisualStudio.Component.VC.Redist.MSM `
         --add Microsoft.VisualStudio.Component.Windows10SDK.19041 `
         --add Microsoft.VisualStudio.ComponentGroup.NativeDesktop.Core `
         --add Microsoft.VisualStudio.Workload.NativeDesktop `
@@ -40,11 +41,13 @@ RUN `
     choco install --no-progress --yes git --version=2.33.1 && `
     choco install --no-progress --yes 7zip.install --version=19.0 && `
     choco install --no-progress --yes innosetup --version=6.1.2 && `
+    choco install --no-progress --yes wixtoolset --version=3.11.2 && `
     `
     refreshenv && `
     setx PATH "%PATH%;C:\Program Files\Git\usr\bin"
 
 ENV SEVENZIP='C:\Program Files\7-Zip'
 ENV INNO6_SETUP_PATH='C:\Program Files (x86)\Inno Setup 6'
+ENV WIX='C:\Program Files (x86)\WiX Toolset v3.11'
 
 COPY scripts\* C:\fbscripts\

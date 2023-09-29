@@ -42,6 +42,7 @@
 #include "../common/classes/stack.h"
 #include "../common/classes/timestamp.h"
 #include "../common/classes/TimerImpl.h"
+#include "../common/classes/TriState.h"
 #include "../common/ThreadStart.h"
 #include "../common/TimeZoneUtil.h"
 
@@ -307,7 +308,7 @@ public:
 		: att(handle), jAtt(NULL), shutError(0)
 	{ }
 
-	Attachment* getHandle() throw()
+	Attachment* getHandle() noexcept
 	{
 		return att;
 	}
@@ -743,17 +744,17 @@ public:
 	bool backupStateReadLock(thread_db* tdbb, SSHORT wait);
 	void backupStateReadUnLock(thread_db* tdbb);
 
-	StableAttachmentPart* getStable() throw()
+	StableAttachmentPart* getStable() noexcept
 	{
 		return att_stable;
 	}
 
-	void setStable(StableAttachmentPart *js) throw()
+	void setStable(StableAttachmentPart *js) noexcept
 	{
 		att_stable = js;
 	}
 
-	JAttachment* getInterface() throw();
+	JAttachment* getInterface() noexcept;
 
 	unsigned int getIdleTimeout() const
 	{

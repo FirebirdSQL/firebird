@@ -434,21 +434,14 @@ public:
 			const QualifiedName& aDsqlName = QualifiedName())
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_PROCEDURE>(pool),
 		  dsqlName(pool, aDsqlName),
-		  alias(pool),
-		  procedure(NULL),
-		  sourceList(NULL),
-		  targetList(NULL),
-		  in_msg(NULL),
-		  view(NULL),
-		  procedureId(0),
-		  context(0),
-		  isSubRoutine(false)
+		  alias(pool)
 	{
 	}
 
 	static ProcedureSourceNode* parse(thread_db* tdbb, CompilerScratch* csb, const SSHORT blrOp,
 		bool parseContext);
 
+public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 
@@ -510,17 +503,18 @@ public:
 			cache management policies yet, so I leave it for the other day.
 	***/
 
-	jrd_prc* procedure;
-	NestConst<ValueListNode> sourceList;
-	NestConst<ValueListNode> targetList;
+	jrd_prc* procedure = nullptr;
+	NestConst<ValueListNode> inputSources;
+	NestConst<ValueListNode> inputTargets;
+	NestConst<Firebird::ObjectsArray<MetaName>> dsqlInputArgNames;
 
 private:
-	NestConst<MessageNode> in_msg;
+	NestConst<MessageNode> inputMessage;
 
-	jrd_rel* view;
-	USHORT procedureId;
-	SSHORT context;
-	bool isSubRoutine;
+	jrd_rel* view = nullptr;
+	USHORT procedureId = 0;
+	SSHORT context = 0;
+	bool isSubRoutine = false;
 };
 
 class AggregateSourceNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_AGGREGATE_SOURCE>

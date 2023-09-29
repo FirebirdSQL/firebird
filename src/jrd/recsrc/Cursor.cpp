@@ -107,48 +107,49 @@ void Select::initializeInvariants(Request* request) const
 	}
 }
 
-void Select::print(thread_db* tdbb, Firebird::string& plan, bool detailed, unsigned level, bool recurse) const
+void Select::getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const
 {
-	if (detailed)
+	if (m_line || m_column)
 	{
-		if (m_rse->isSubQuery())
-		{
-			plan += "\nSub-query";
+		string pos;
+		pos.printf("\n-- line %u, column %u", m_line, m_column);
+		plan += pos;
+	}
 
-			if (m_rse->isInvariant())
-				plan += " (invariant)";
-		}
-		else if (m_cursorName.hasData())
-		{
-			plan += "\nCursor \"" + string(m_cursorName) + "\"";
+	plan += "\nPLAN ";
+	m_root->getLegacyPlan(tdbb, plan, level);
+}
 
-			if (m_rse->isScrollable())
-				plan += " (scrollable)";
-		}
-		else
-			plan += "\nSelect Expression";
+void Select::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "Select";
 
-		if (m_line || m_column)
-		{
-			string pos;
-			pos.printf(" (line %u, column %u)", m_line, m_column);
-			plan += pos;
-		}
+	if (m_rse->isSubQuery())
+	{
+		planEntry.lines.add().text = "Sub-query";
+
+		if (m_rse->isInvariant())
+			planEntry.lines.back().text += " (invariant)";
+	}
+	else if (m_cursorName.hasData())
+	{
+		planEntry.lines.add().text = "Cursor \"" + string(m_cursorName) + "\"";
+
+		if (m_rse->isScrollable())
+			planEntry.lines.back().text += " (scrollable)";
 	}
 	else
-	{
-		if (m_line || m_column)
-		{
-			string pos;
-			pos.printf("\n-- line %u, column %u", m_line, m_column);
-			plan += pos;
-		}
+		planEntry.lines.add().text = "Select Expression";
 
-		plan += "\nPLAN ";
+	if (m_line || m_column)
+	{
+		string pos;
+		pos.printf(" (line %u, column %u)", m_line, m_column);
+		planEntry.lines.back().text += pos;
 	}
 
 	if (recurse)
-		m_root->print(tdbb, plan, detailed, level, true);
+		m_root->getPlan(tdbb, planEntry.children.add(), level + 1, recurse);
 }
 
 // ---------------------

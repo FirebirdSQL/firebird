@@ -30,6 +30,7 @@ namespace Jrd
 	class ValueListNode;
 }
 
+void	GEN_arg(Jrd::DsqlCompilerScratch*, Jrd::ExprNode*);
 void	GEN_descriptor(Jrd::DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool texttype);
 void	GEN_expr(Jrd::DsqlCompilerScratch*, Jrd::ExprNode*);
 void	GEN_hidden_variables(Jrd::DsqlCompilerScratch* dsqlScratch);

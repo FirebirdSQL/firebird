@@ -855,31 +855,24 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 	if (!(request->req_flags & req_active))
 		ERR_post(Arg::Gds(isc_req_sync));
 
-	const StmtNode* message = NULL;
-	const StmtNode* node;
-
 	if (request->req_operation != Request::req_receive)
 		ERR_post(Arg::Gds(isc_req_sync));
-	node = request->req_message;
 
-	jrd_tra* transaction = request->req_transaction;
-
-	const SelectNode* selectNode;
+	const auto node = request->req_message;
+	const StmtNode* message = nullptr;
 
 	if (nodeIs<MessageNode>(node))
 		message = node;
-	else if ((selectNode = nodeAs<SelectNode>(node)))
+	else if (const auto* const selectMessageNode = nodeAs<SelectMessageNode>(node))
 	{
-		const NestConst<StmtNode>* ptr = selectNode->statements.begin();
-
-		for (const NestConst<StmtNode>* end = selectNode->statements.end(); ptr != end; ++ptr)
+		for (const auto statement : selectMessageNode->statements)
 		{
-			const ReceiveNode* receiveNode = nodeAs<ReceiveNode>(*ptr);
+			const auto receiveNode = nodeAs<ReceiveNode>(statement);
 			message = receiveNode->message;
 
 			if (nodeAs<MessageNode>(message)->messageNumber == msg)
 			{
-				request->req_next = *ptr;
+				request->req_next = statement;
 				break;
 			}
 		}
@@ -887,7 +880,7 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 	else
 		BUGCHECK(167);	// msg 167 invalid SEND request
 
-	const Format* format = nodeAs<MessageNode>(message)->format;
+	const auto format = nodeAs<MessageNode>(message)->format;
 
 	if (msg != nodeAs<MessageNode>(message)->messageNumber)
 		ERR_post(Arg::Gds(isc_req_sync));
@@ -897,7 +890,7 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 
 	memcpy(request->getImpure<UCHAR>(message->impureOffset), buffer, length);
 
-	execute_looper(tdbb, request, transaction, request->req_next, Request::req_proceed);
+	execute_looper(tdbb, request, request->req_transaction, request->req_next, Request::req_proceed);
 }
 
 

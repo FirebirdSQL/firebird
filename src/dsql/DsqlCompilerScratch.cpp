@@ -283,97 +283,6 @@ void DsqlCompilerScratch::putType(const TypeClause* type, bool useSubType)
 	}
 }
 
-// Emit dyn for the local variables declared in a procedure or trigger.
-void DsqlCompilerScratch::putLocalVariables(CompoundStmtNode* parameters, USHORT locals)
-{
-	if (!parameters)
-		return;
-
-	Array<dsql_var*> declaredVariables;
-
-	const auto end = parameters->statements.end();
-
-	for (auto ptr = parameters->statements.begin(); ptr != end; ++ptr)
-	{
-		auto parameter = *ptr;
-
-		putDebugSrcInfo(parameter->line, parameter->column);
-
-		if (const auto varNode = nodeAs<DeclareVariableNode>(parameter))
-		{
-			dsql_fld* field = varNode->dsqlDef->type;
-			const NestConst<StmtNode>* rest = ptr;
-
-			while (++rest != end)
-			{
-				if (const auto varNode2 = nodeAs<DeclareVariableNode>(*rest))
-				{
-					const dsql_fld* rest_field = varNode2->dsqlDef->type;
-
-					if (field->fld_name == rest_field->fld_name)
-					{
-						ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
-								  Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(field->fld_name));
-					}
-				}
-			}
-
-			const auto variable = makeVariable(field, field->fld_name.c_str(), dsql_var::TYPE_LOCAL, 0, 0, locals);
-			declaredVariables.add(variable);
-
-			putLocalVariableDecl(variable, varNode, varNode->dsqlDef->type->collate);
-
-			// Some field attributes are calculated inside putLocalVariable(), so we reinitialize
-			// the descriptor.
-			DsqlDescMaker::fromField(&variable->desc, field);
-
-			++locals;
-		}
-		else if (nodeIs<DeclareCursorNode>(parameter) ||
-			nodeIs<DeclareSubProcNode>(parameter) ||
-			nodeIs<DeclareSubFuncNode>(parameter))
-		{
-			parameter->dsqlPass(this);
-			parameter->genBlr(this);
-		}
-		else
-			fb_assert(false);
-	}
-
-	auto declVarIt = declaredVariables.begin();
-
-	for (const auto parameter : parameters->statements)
-	{
-		if (const auto varNode = nodeAs<DeclareVariableNode>(parameter))
-			putLocalVariableInit(*declVarIt++, varNode);
-	}
-
-	if (!(flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE))
-	{
-		// Check not implemented sub-functions.
-		for (const auto& funcPair : subFunctions)
-		{
-			if (!funcPair.second->dsqlBlock)
-			{
-				status_exception::raise(
-					Arg::Gds(isc_subfunc_not_impl) <<
-					funcPair.first.c_str());
-			}
-		}
-
-		// Check not implemented sub-procedures.
-		for (const auto& procPair : subProcedures)
-		{
-			if (!procPair.second->dsqlBlock)
-			{
-				status_exception::raise(
-					Arg::Gds(isc_subproc_not_impl) <<
-					procPair.first.c_str());
-			}
-		}
-	}
-}
-
 // Write out local variable field data type.
 void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam,
 	const MetaName& collationName)
@@ -449,18 +358,18 @@ void DsqlCompilerScratch::putOuterMaps()
 
 	appendUChar(blr_outer_map);
 
-	for (auto& pair : outerVarsMap)
+	for (auto& [inner, outer] : outerVarsMap)
 	{
 		appendUChar(blr_outer_map_variable);
-		appendUShort(pair.first);
-		appendUShort(pair.second);
+		appendUShort(inner);
+		appendUShort(outer);
 	}
 
-	for (auto& pair : outerMessagesMap)
+	for (auto& [inner, outer] : outerMessagesMap)
 	{
 		appendUChar(blr_outer_map_message);
-		appendUShort(pair.first);
-		appendUShort(pair.second);
+		appendUShort(inner);
+		appendUShort(outer);
 	}
 
 	appendUChar(blr_end);

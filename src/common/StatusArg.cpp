@@ -57,7 +57,7 @@ Base::Base(ISC_STATUS k, ISC_STATUS c) :
 {
 }
 
-StatusVector::ImplStatusVector::ImplStatusVector(const ISC_STATUS* s) throw()
+StatusVector::ImplStatusVector::ImplStatusVector(const ISC_STATUS* s) noexcept
 	: Base::ImplBase(0, 0),
 	  m_status_vector(*getDefaultMemoryPool()),
 	  m_strings(*getDefaultMemoryPool())
@@ -71,7 +71,7 @@ StatusVector::ImplStatusVector::ImplStatusVector(const ISC_STATUS* s) throw()
 		append(s);
 }
 
-StatusVector::ImplStatusVector::ImplStatusVector(const IStatus* s) throw()
+StatusVector::ImplStatusVector::ImplStatusVector(const IStatus* s) noexcept
 	: Base::ImplBase(0, 0),
 	  m_status_vector(*getDefaultMemoryPool()),
 	  m_strings(*getDefaultMemoryPool())
@@ -86,7 +86,7 @@ StatusVector::ImplStatusVector::ImplStatusVector(const IStatus* s) throw()
 		append(s->getWarnings());
 }
 
-StatusVector::ImplStatusVector::ImplStatusVector(const Exception& ex) throw()
+StatusVector::ImplStatusVector::ImplStatusVector(const Exception& ex) noexcept
 	: Base::ImplBase(0, 0),
 	  m_status_vector(*getDefaultMemoryPool()),
 	  m_strings(*getDefaultMemoryPool())
@@ -122,7 +122,7 @@ StatusVector::StatusVector() :
 {
 }
 
-void StatusVector::ImplStatusVector::clear() throw()
+void StatusVector::ImplStatusVector::clear() noexcept
 {
 	m_warning = 0;
 	m_status_vector.clear();
@@ -130,18 +130,18 @@ void StatusVector::ImplStatusVector::clear() throw()
 	m_strings.erase();
 }
 
-bool StatusVector::ImplStatusVector::compare(const StatusVector& v) const throw()
+bool StatusVector::ImplStatusVector::compare(const StatusVector& v) const noexcept
 {
 	return length() == v.length() && fb_utils::cmpStatus(length(), value(), v.value());
 }
 
-void StatusVector::ImplStatusVector::assign(const StatusVector& v) throw()
+void StatusVector::ImplStatusVector::assign(const StatusVector& v) noexcept
 {
 	clear();
 	append(v);
 }
 
-void StatusVector::ImplStatusVector::assign(const Exception& ex) throw()
+void StatusVector::ImplStatusVector::assign(const Exception& ex) noexcept
 {
 	clear();
 	ex.stuffException(m_status_vector);
@@ -194,7 +194,7 @@ void StatusVector::ImplStatusVector::setStrPointers(const char* oldBase)
 	}
 }
 
-void StatusVector::ImplStatusVector::append(const StatusVector& v) throw()
+void StatusVector::ImplStatusVector::append(const StatusVector& v) noexcept
 {
 	ImplStatusVector newVector(getKind(), getCode());
 
@@ -210,7 +210,7 @@ void StatusVector::ImplStatusVector::append(const StatusVector& v) throw()
 	*this = newVector;
 }
 
-void StatusVector::ImplStatusVector::prepend(const StatusVector& v) throw()
+void StatusVector::ImplStatusVector::prepend(const StatusVector& v) noexcept
 {
 	ImplStatusVector newVector(getKind(), getCode());
 
@@ -236,19 +236,19 @@ StatusVector::ImplStatusVector& StatusVector::ImplStatusVector::operator=(const 
 	return *this;
 }
 
-bool StatusVector::ImplStatusVector::appendErrors(const ImplBase* const v) throw()
+bool StatusVector::ImplStatusVector::appendErrors(const ImplBase* const v) noexcept
 {
 	return append(v->value(), v->firstWarning() ? v->firstWarning() : v->length());
 }
 
-bool StatusVector::ImplStatusVector::appendWarnings(const ImplBase* const v) throw()
+bool StatusVector::ImplStatusVector::appendWarnings(const ImplBase* const v) noexcept
 {
 	if (! v->firstWarning())
 		return true;
 	return append(v->value() + v->firstWarning(), v->length() - v->firstWarning());
 }
 
-bool StatusVector::ImplStatusVector::append(const ISC_STATUS* const from, const unsigned int count) throw()
+bool StatusVector::ImplStatusVector::append(const ISC_STATUS* const from, const unsigned int count) noexcept
 {
 	// CVC: I didn't expect count to be zero but it's, in some calls
 	fb_assert(count >= 0);
@@ -279,13 +279,13 @@ bool StatusVector::ImplStatusVector::append(const ISC_STATUS* const from, const 
 	return copied == count;
 }
 
-void StatusVector::ImplStatusVector::append(const ISC_STATUS* const from) throw()
+void StatusVector::ImplStatusVector::append(const ISC_STATUS* const from) noexcept
 {
 	unsigned l = fb_utils::statusLength(from);
 	append(from, l + 1);
 }
 
-void StatusVector::ImplStatusVector::shiftLeft(const Base& arg) throw()
+void StatusVector::ImplStatusVector::shiftLeft(const Base& arg) noexcept
 {
 	m_status_vector[length()] = arg.getKind();
 	m_status_vector.push(arg.getCode());
@@ -294,7 +294,7 @@ void StatusVector::ImplStatusVector::shiftLeft(const Base& arg) throw()
 	putStrArg(length() - 2);
 }
 
-void StatusVector::ImplStatusVector::shiftLeft(const Warning& arg) throw()
+void StatusVector::ImplStatusVector::shiftLeft(const Warning& arg) noexcept
 {
 	const int cur = m_warning ? 0 : length();
 	shiftLeft(*static_cast<const Base*>(&arg));
@@ -302,17 +302,17 @@ void StatusVector::ImplStatusVector::shiftLeft(const Warning& arg) throw()
 		m_warning = cur;
 }
 
-void StatusVector::ImplStatusVector::shiftLeft(const char* text) throw()
+void StatusVector::ImplStatusVector::shiftLeft(const char* text) noexcept
 {
 	shiftLeft(Str(text));
 }
 
-void StatusVector::ImplStatusVector::shiftLeft(const AbstractString& text) throw()
+void StatusVector::ImplStatusVector::shiftLeft(const AbstractString& text) noexcept
 {
 	shiftLeft(Str(text));
 }
 
-void StatusVector::ImplStatusVector::shiftLeft(const MetaString& text) throw()
+void StatusVector::ImplStatusVector::shiftLeft(const MetaString& text) noexcept
 {
 	shiftLeft(Str(text));
 }
@@ -326,7 +326,7 @@ void StatusVector::raise() const
 	status_exception::raise(Gds(isc_random) << Str("Attempt to raise empty exception"));
 }
 
-ISC_STATUS StatusVector::ImplStatusVector::copyTo(ISC_STATUS* dest) const throw()
+ISC_STATUS StatusVector::ImplStatusVector::copyTo(ISC_STATUS* dest) const noexcept
 {
 	if (hasData())
 	{
@@ -341,7 +341,7 @@ ISC_STATUS StatusVector::ImplStatusVector::copyTo(ISC_STATUS* dest) const throw(
 	return dest[1];
 }
 
-void StatusVector::ImplStatusVector::copyTo(IStatus* dest) const throw()
+void StatusVector::ImplStatusVector::copyTo(IStatus* dest) const noexcept
 {
 	dest->init();
 	if (hasData())
@@ -361,7 +361,7 @@ void StatusVector::ImplStatusVector::copyTo(IStatus* dest) const throw()
 	}
 }
 
-void StatusVector::ImplStatusVector::appendTo(IStatus* dest) const throw()
+void StatusVector::ImplStatusVector::appendTo(IStatus* dest) const noexcept
 {
 	if (hasData())
 	{
@@ -387,75 +387,75 @@ void StatusVector::ImplStatusVector::appendTo(IStatus* dest) const throw()
 	}
 }
 
-Gds::Gds(ISC_STATUS s) throw() :
+Gds::Gds(ISC_STATUS s) noexcept :
 	StatusVector(isc_arg_gds, s) { }
 
-PrivateDyn::PrivateDyn(ISC_STATUS codeWithoutFacility) throw() :
+PrivateDyn::PrivateDyn(ISC_STATUS codeWithoutFacility) noexcept :
 	Gds(ENCODE_ISC_MSG(codeWithoutFacility, DYN_MSG_FAC)) { }
 
-Num::Num(ISC_STATUS s) throw() :
+Num::Num(ISC_STATUS s) noexcept :
 	Base(isc_arg_number, s) { }
 
-Int64::Int64(SINT64 val) throw() :
+Int64::Int64(SINT64 val) noexcept :
 	Str(text)
 {
 	sprintf(text, "%" SQUADFORMAT, val);
 }
 
-Int64::Int64(FB_UINT64 val) throw() :
+Int64::Int64(FB_UINT64 val) noexcept :
 	Str(text)
 {
 	sprintf(text, "%" UQUADFORMAT, val);
 }
 
-Quad::Quad(const ISC_QUAD* quad) throw() :
+Quad::Quad(const ISC_QUAD* quad) noexcept :
 	Str(text)
 {
 	sprintf(text, "%x:%x", quad->gds_quad_high, quad->gds_quad_low);
 }
 
-Interpreted::Interpreted(const char* text) throw() :
+Interpreted::Interpreted(const char* text) noexcept :
 	StatusVector(isc_arg_interpreted, (ISC_STATUS)(IPTR) text) { }
 
-Interpreted::Interpreted(const AbstractString& text) throw() :
+Interpreted::Interpreted(const AbstractString& text) noexcept :
 	StatusVector(isc_arg_interpreted, (ISC_STATUS)(IPTR) text.c_str()) { }
 
-Unix::Unix(ISC_STATUS s) throw() :
+Unix::Unix(ISC_STATUS s) noexcept :
 	Base(isc_arg_unix, s) { }
 
-Mach::Mach(ISC_STATUS s) throw() :
+Mach::Mach(ISC_STATUS s) noexcept :
 	Base(isc_arg_next_mach, s) { }
 
-Windows::Windows(ISC_STATUS s) throw() :
+Windows::Windows(ISC_STATUS s) noexcept :
 	Base(isc_arg_win32, s) { }
 
-Warning::Warning(ISC_STATUS s) throw() :
+Warning::Warning(ISC_STATUS s) noexcept :
 	StatusVector(isc_arg_warning, s) { }
 
 // Str overloading.
-Str::Str(const char* text) throw() :
+Str::Str(const char* text) noexcept :
 	Base(isc_arg_string, (ISC_STATUS)(IPTR) text) { }
 
-Str::Str(const AbstractString& text) throw() :
+Str::Str(const AbstractString& text) noexcept :
 	Base(isc_arg_string, (ISC_STATUS)(IPTR) text.c_str()) { }
 
-Str::Str(const MetaString& text) throw() :
+Str::Str(const MetaString& text) noexcept :
 	Base(isc_arg_string, (ISC_STATUS)(IPTR) text.c_str()) { }
 
-SqlState::SqlState(const char* text) throw() :
+SqlState::SqlState(const char* text) noexcept :
 	Base(isc_arg_sql_state, (ISC_STATUS)(IPTR) text) { }
 
-SqlState::SqlState(const AbstractString& text) throw() :
+SqlState::SqlState(const AbstractString& text) noexcept :
 	Base(isc_arg_sql_state, (ISC_STATUS)(IPTR) text.c_str()) { }
 
-OsError::OsError() throw() :
+OsError::OsError() noexcept :
 #ifdef WIN_NT
 	Base(isc_arg_win32, GetLastError()) { }
 #else
 	Base(isc_arg_unix, errno) { }
 #endif
 
-OsError::OsError(ISC_STATUS s) throw() :
+OsError::OsError(ISC_STATUS s) noexcept :
 #ifdef WIN_NT
 	Base(isc_arg_win32, s) { }
 #else

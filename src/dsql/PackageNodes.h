@@ -110,7 +110,7 @@ public:
 	Firebird::Array<Item>* items;
 	Firebird::SortedArray<MetaName> functionNames;
 	Firebird::SortedArray<MetaName> procedureNames;
-	Nullable<bool> ssDefiner;
+	TriState ssDefiner;
 
 private:
 	MetaName owner;

@@ -133,32 +133,32 @@ unsigned StatementMetadata::buildInfoFlags(unsigned itemsLength, const UCHAR* it
 // Get statement type.
 unsigned StatementMetadata::getType()
 {
-	if (!type.specified)
+	if (!type.has_value())
 	{
 		UCHAR info[] = {isc_info_sql_stmt_type};
 		UCHAR result[16];
 
 		getAndParse(sizeof(info), info, sizeof(result), result);
 
-		fb_assert(type.specified);
+		fb_assert(type.has_value());
 	}
 
-	return type.value;
+	return type.value();
 }
 
 unsigned StatementMetadata::getFlags()
 {
-	if (!flags.specified)
+	if (!flags.has_value())
 	{
 		UCHAR info[] = {isc_info_sql_stmt_flags};
 		UCHAR result[16];
 
 		getAndParse(sizeof(info), info, sizeof(result), result);
 
-		fb_assert(flags.specified);
+		fb_assert(flags.has_value());
 	}
 
-	return flags.value;
+	return flags.value();
 }
 
 // Get statement plan.
@@ -228,7 +228,7 @@ ISC_UINT64 StatementMetadata::getAffectedRecords()
 // Reset the object to its initial state.
 void StatementMetadata::clear()
 {
-	type.specified = false;
+	type.reset();
 	legacyPlan = detailedPlan = "";
 	inputParameters->items.clear();
 	outputParameters->items.clear();
@@ -432,14 +432,14 @@ bool StatementMetadata::fillFromCache(unsigned itemsLength, const UCHAR* items,
 	if (((itemsLength == 1 && items[0] == isc_info_sql_stmt_type) ||
 			(itemsLength == 2 && items[0] == isc_info_sql_stmt_type &&
 				(items[1] == isc_info_end || items[1] == 0))) &&
-		type.specified)
+		type.has_value())
 	{
 		if (bufferLength >= 8)
 		{
 			*buffer++ = isc_info_sql_stmt_type;
 			put_vax_short(buffer, 4);
 			buffer += 2;
-			put_vax_long(buffer, type.value);
+			put_vax_long(buffer, type.value());
 			buffer += 4;
 			*buffer = isc_info_end;
 		}

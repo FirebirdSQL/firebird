@@ -121,36 +121,41 @@ WriteLockResult SortedStream::lockRecord(thread_db* tdbb, bool skipLocked) const
 	return m_next->lockRecord(tdbb, skipLocked);
 }
 
-void SortedStream::getChildren(Array<const RecordSource*>& children) const
+void SortedStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_next);
+	level++;
+	plan += "SORT (";
+	m_next->getLegacyPlan(tdbb, plan, level);
+	plan += ")";
 }
 
-void SortedStream::print(thread_db* tdbb, string& plan,
-						 bool detailed, unsigned level, bool recurse) const
+void SortedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
+	planEntry.className = "SortedStream";
+
+	string extras;
+	extras.printf(" (record length: %" ULONGFORMAT", key length: %" ULONGFORMAT")",
+		m_map->length, m_map->keyLength);
+
+	auto planDescription = &planEntry.lines.add();
+
+	if (m_map->flags & FLAG_REFETCH)
 	{
-		string extras;
-		extras.printf(" (record length: %" ULONGFORMAT", key length: %" ULONGFORMAT")",
-					  m_map->length, m_map->keyLength);
-
-		if (m_map->flags & FLAG_REFETCH)
-			plan += printIndent(++level) + "Refetch";
-
-		plan += printIndent(++level) +
-			((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
-		printOptInfo(plan);
-
-		if (recurse)
-			m_next->print(tdbb, plan, true, level, recurse);
+		planDescription->text = "Refetch";
+		planDescription = &planEntry.lines.add();
+		++level;
 	}
-	else
+
+	planDescription->text += ((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
+	printOptInfo(planEntry.lines);
+
+	planEntry.recordLength = m_map->length;
+	planEntry.keyLength = m_map->keyLength;
+
+	if (recurse)
 	{
-		level++;
-		plan += "SORT (";
-		m_next->print(tdbb, plan, false, level, recurse);
-		plan += ")";
+		++level;
+		m_next->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 

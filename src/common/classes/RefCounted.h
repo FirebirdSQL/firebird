@@ -121,13 +121,13 @@ namespace Firebird
 			}
 		}
 
-		RefPtr(RefPtr&& r)
+		RefPtr(RefPtr&& r) noexcept
 			: ptr(r.ptr)
 		{
 			r.ptr = nullptr;
 		}
 
-		RefPtr(MemoryPool&, RefPtr&& r)
+		RefPtr(MemoryPool&, RefPtr&& r) noexcept
 			: ptr(r.ptr)
 		{
 			r.ptr = nullptr;

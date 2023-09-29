@@ -268,12 +268,12 @@ JAttachment::JAttachment(StableAttachmentPart* sa)
 {
 }
 
-Attachment* JAttachment::getHandle() throw()
+Attachment* JAttachment::getHandle() noexcept
 {
 	return att ? att->getHandle() : NULL;
 }
 
-const Attachment* JAttachment::getHandle() const throw()
+const Attachment* JAttachment::getHandle() const noexcept
 {
 	return att ? att->getHandle() : NULL;
 }
@@ -941,7 +941,7 @@ void Trigger::compile(thread_db* tdbb)
 		}
 
 		statement->triggerName = name;
-		if (ssDefiner.orElse(false))
+		if (ssDefiner.asBool())
 			statement->triggerInvoker = att->getUserId(owner);
 
 		if (sysTrigger)
@@ -1418,7 +1418,7 @@ static void successful_completion(CheckStatusWrapper* s, ISC_STATUS acceptCode =
 
 // Stuff exception transliterated to the client charset.
 static ISC_STATUS transliterateException(thread_db* tdbb, const Exception& ex, FbStatusVector* vector,
-	const char* func) throw()
+	const char* func) noexcept
 {
 	ex.stuffException(vector);
 
@@ -1438,7 +1438,7 @@ static ISC_STATUS transliterateException(thread_db* tdbb, const Exception& ex, F
 
 
 // Transliterate status vector to the client charset.
-void JRD_transliterate(thread_db* tdbb, Firebird::IStatus* vector) throw()
+void JRD_transliterate(thread_db* tdbb, Firebird::IStatus* vector) noexcept
 {
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	USHORT charSet;

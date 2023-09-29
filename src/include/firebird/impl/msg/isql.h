@@ -201,3 +201,4 @@ FB_IMPL_MSG_SYMBOL(ISQL, 201, NO_PUBLICATION, "There is no publication @1 in thi
 FB_IMPL_MSG_SYMBOL(ISQL, 202, NO_PUBLICATIONS, "There is no publications in this database")
 FB_IMPL_MSG_SYMBOL(ISQL, 203, MSG_PUBLICATIONS, "Publications:")
 FB_IMPL_MSG_SYMBOL(ISQL, 204, MSG_PROCEDURES, "Procedures:")
+FB_IMPL_MSG_SYMBOL(ISQL, 205, HLP_EXPLAIN, "EXPLAIN                    -- explain a query access plan")

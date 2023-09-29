@@ -415,8 +415,8 @@ public:
 
 	static ISC_STATUS badHandle() { return isc_bad_req_handle; }
 
-	void saveStatus(const Firebird::Exception& ex) throw();
-	void saveStatus(Firebird::IStatus* ex) throw();
+	void saveStatus(const Firebird::Exception& ex) noexcept;
+	void saveStatus(Firebird::IStatus* ex) noexcept;
 };
 
 

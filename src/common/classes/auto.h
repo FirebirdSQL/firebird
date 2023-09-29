@@ -103,11 +103,11 @@ class AutoPtr
 private:
 	Where* ptr;
 public:
-	AutoPtr(Where* v = NULL)
+	AutoPtr(Where* v = nullptr) noexcept
 		: ptr(v)
 	{}
 
-	AutoPtr(AutoPtr&& v)
+	AutoPtr(AutoPtr&& v) noexcept
 		: ptr(v.ptr)
 	{
 		v.ptr = nullptr;

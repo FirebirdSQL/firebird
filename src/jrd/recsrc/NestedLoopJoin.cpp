@@ -208,63 +208,59 @@ WriteLockResult NestedLoopJoin::lockRecord(thread_db* /*tdbb*/, bool /*skipLocke
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
-void NestedLoopJoin::getChildren(Array<const RecordSource*>& children) const
-{
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		children.add(m_args[i]);
-}
-
-void NestedLoopJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void NestedLoopJoin::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
 	if (m_args.hasData())
 	{
-		if (detailed)
+		level++;
+		plan += "JOIN (";
+		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 		{
-			plan += printIndent(++level) + "Nested Loop Join ";
+			if (i)
+				plan += ", ";
 
-			switch (m_joinType)
-			{
-				case INNER_JOIN:
-					plan += "(inner)";
-					break;
-
-				case OUTER_JOIN:
-					plan += "(outer)";
-					break;
-
-				case SEMI_JOIN:
-					plan += "(semi)";
-					break;
-
-				case ANTI_JOIN:
-					plan += "(anti)";
-					break;
-
-				default:
-					fb_assert(false);
-			}
-
-			printOptInfo(plan);
-
-			if (recurse)
-			{
-				for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-					m_args[i]->print(tdbb, plan, true, level, recurse);
-			}
+			m_args[i]->getLegacyPlan(tdbb, plan, level);
 		}
-		else
-		{
-			level++;
-			plan += "JOIN (";
-			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-			{
-				if (i)
-					plan += ", ";
+		plan += ")";
+	}
+}
 
-				m_args[i]->print(tdbb, plan, false, level, recurse);
-			}
-			plan += ")";
-		}
+void NestedLoopJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "NestedLoopJoin";
+
+	planEntry.lines.add().text = "Nested Loop Join ";
+
+	switch (m_joinType)
+	{
+		case INNER_JOIN:
+			planEntry.lines.back().text += "(inner)";
+			break;
+
+		case OUTER_JOIN:
+			planEntry.lines.back().text += "(outer)";
+			break;
+
+		case SEMI_JOIN:
+			planEntry.lines.back().text += "(semi)";
+			break;
+
+		case ANTI_JOIN:
+			planEntry.lines.back().text += "(anti)";
+			break;
+
+		default:
+			fb_assert(false);
+	}
+
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
+	{
+		++level;
+
+		for (const auto arg : m_args)
+			arg->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 

@@ -891,18 +891,8 @@ end;
 
 
 function IsServerInstall: Boolean;
-var
-  SetupType: String;
 begin
-
-  // DOC NOTE - WizardSetupType is not well documented. If parameter is set to
-  // True the Description of the setup type is returned. (This is useless for us
-  // as our descriptions are I18n'ised. ) If set False the string declared in
-  // the TYPES section is returned. BUT LOWERCASED! Aargh!!
-  // To protect against future changes each side is the comparison is lowercased.
-
-  SetupType := WizardSetupType ( false );
-  if LowerCase( SetupType ) = LowerCase( 'ServerInstall' ) then
+  if WizardIsComponentSelected('ServerComponent') then
     Result := true
   else
     Result := False;

@@ -82,7 +82,7 @@ namespace Firebird
 void setLogin(Firebird::ClumpletWriter& dpb, bool spbFlag);
 
 // Put status vector strings into strings circular buffer
-void makePermanentVector(ISC_STATUS* v) throw();
+void makePermanentVector(ISC_STATUS* v) noexcept;
 
 namespace Why
 {

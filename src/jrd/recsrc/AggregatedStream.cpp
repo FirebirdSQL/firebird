@@ -375,21 +375,23 @@ AggregatedStream::AggregatedStream(thread_db* tdbb, CompilerScratch* csb, Stream
 	fb_assert(map);
 }
 
-void AggregatedStream::getChildren(Array<const RecordSource*>& children) const
+void AggregatedStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_next);
+	m_next->getLegacyPlan(tdbb, plan, level);
 }
 
-void AggregatedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void AggregatedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Aggregate";
-		printOptInfo(plan);
-	}
+	planEntry.className = "AggregatedStream";
+
+	planEntry.lines.add().text = "Aggregate";
+	printOptInfo(planEntry.lines);
 
 	if (recurse)
-		m_next->print(tdbb, plan, detailed, level, recurse);
+	{
+		++level;
+		m_next->getPlan(tdbb, planEntry.children.add(), level, recurse);
+	}
 }
 
 bool AggregatedStream::internalGetRecord(thread_db* tdbb) const

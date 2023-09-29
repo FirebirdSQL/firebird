@@ -400,9 +400,9 @@ public:
 	class ExcReadDone : public Firebird::Exception
 	{
 	public:
-		ExcReadDone() throw() : Firebird::Exception() { }
-		virtual void stuffByException(Firebird::StaticStatusVector& status_vector) const throw();
-		virtual const char* what() const throw();
+		ExcReadDone() noexcept : Firebird::Exception() { }
+		virtual void stuffByException(Firebird::StaticStatusVector& status_vector) const noexcept;
+		virtual const char* what() const noexcept;
 		static void raise();
 	};
 

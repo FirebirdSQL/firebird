@@ -459,6 +459,161 @@ ItemInfo* CMP_pass2_validation(thread_db* tdbb, CompilerScratch* csb, const Item
 }
 
 
+Arg::StatusVector CMP_procedure_arguments(
+	thread_db* tdbb,
+	CompilerScratch* csb,
+	Routine* routine,
+	bool isInput,
+	USHORT argCount,
+	ObjectsArray<MetaName>* argNames,
+	NestConst<ValueListNode>& sources,
+	NestConst<ValueListNode>& targets,
+	NestConst<MessageNode>& message)
+{
+	Arg::StatusVector mismatchStatus;
+
+	auto& pool = *tdbb->getDefaultPool();
+	auto& fields = isInput ? routine->getInputFields() : routine->getOutputFields();
+	const auto format = isInput ? routine->getInputFormat() : routine->getOutputFormat();
+
+	if ((isInput && fields.hasData() && (argCount || routine->getDefaultCount())) ||
+		(!isInput && argCount))
+	{
+		if (isInput)
+			sources->items.resize(fields.getCount());
+		else
+			targets = FB_NEW_POOL(pool) ValueListNode(pool, argCount);
+
+		// We have a few parameters. Get on with creating the message block
+		// Outer messages map may start with 2, but they are always in the routine start.
+		USHORT n = ++csb->csb_msg_number;
+		if (n < 2)
+			csb->csb_msg_number = n = 2;
+		const auto tail = CMP_csb_element(csb, n);
+
+		message = tail->csb_message = FB_NEW_POOL(pool) MessageNode(pool);
+		message->messageNumber = n;
+
+		/* dimitr: procedure (with its parameter formats) is allocated out of
+					its own pool (prc_request->req_pool) and can be freed during
+					the cache cleanup (MET_clear_cache). Since the current
+					tdbb default pool is different from the procedure's one,
+					it's dangerous to copy a pointer from one request to another.
+					As an experiment, I've decided to copy format by value
+					instead of copying the reference. Since Format structure
+					doesn't contain any pointers, it should be safe to use a
+					default assignment operator which does a simple byte copy.
+					This change fixes one serious bug in the current codebase.
+					I think that this situation can (and probably should) be
+					handled by the metadata cache (via incrementing prc_use_count)
+					to avoid unexpected cache cleanups, but that area is out of my
+					knowledge. So this fix should be considered a temporary solution.
+
+		message->format = format;
+		*/
+		const auto fmtCopy = Format::newFormat(pool, format->fmt_count);
+		*fmtCopy = *format;
+		message->format = fmtCopy;
+		// --- end of fix ---
+
+		const auto positionalArgCount = argNames ? argCount - argNames->getCount() : argCount;
+		auto sourceArgIt = sources->items.begin();
+		LeftPooledMap<MetaName, NestConst<ValueExprNode>> argsByName;
+
+		if (positionalArgCount)
+		{
+			if (argCount > fields.getCount())
+				mismatchStatus << Arg::Gds(isc_wronumarg);
+
+			for (auto pos = 0; pos < positionalArgCount; ++pos)
+			{
+				if (pos < fields.getCount())
+				{
+					const auto& parameter = fields[pos];
+
+					if (argsByName.put(parameter->prm_name, *sourceArgIt))
+						mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << parameter->prm_name;
+				}
+
+				++sourceArgIt;
+			}
+		}
+
+		if (argNames)
+		{
+			for (const auto& argName : *argNames)
+			{
+				if (argsByName.put(argName, *sourceArgIt++))
+					mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << argName;
+			}
+		}
+
+		sourceArgIt = sources->items.begin();
+		auto targetArgIt = targets->items.begin();
+
+		for (auto& parameter : fields)
+		{
+			const auto argValue = argsByName.get(parameter->prm_name);
+
+			if (argValue)
+			{
+				*sourceArgIt = *argValue;
+				argsByName.remove(parameter->prm_name);
+			}
+
+			if (isInput && (!argValue || !*argValue))
+			{
+				if (parameter->prm_default_value)
+					*sourceArgIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+				else
+					mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+			}
+
+			++sourceArgIt;
+
+			const auto paramNode = FB_NEW_POOL(csb->csb_pool) ParameterNode(csb->csb_pool);
+			paramNode->messageNumber = message->messageNumber;
+			paramNode->message = message;
+			paramNode->argNumber = parameter->prm_number * 2;
+
+			const auto paramFlagNode = FB_NEW_POOL(csb->csb_pool) ParameterNode(csb->csb_pool);
+			paramFlagNode->messageNumber = message->messageNumber;
+			paramFlagNode->message = message;
+			paramFlagNode->argNumber = parameter->prm_number * 2 + 1;
+
+			paramNode->argFlag = paramFlagNode;
+
+			*targetArgIt++ = paramNode;
+		}
+
+		if (argsByName.hasData())
+		{
+			for (const auto& argPair : argsByName)
+				mismatchStatus << Arg::Gds(isc_param_not_exist) << argPair.first;
+		}
+	}
+	else if (isInput && !argNames)
+	{
+		if (argCount > fields.getCount())
+			mismatchStatus << Arg::Gds(isc_wronumarg);
+
+		for (unsigned i = 0; i < fields.getCount(); ++i)
+		{
+			// default value for parameter
+			if (i >= argCount)
+			{
+				auto parameter = fields[i];
+
+				if (!parameter->prm_default_value)
+					mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+			}
+		}
+	}
+
+	return mismatchStatus;
+}
+
+
 void CMP_post_procedure_access(thread_db* tdbb, CompilerScratch* csb, jrd_prc* procedure)
 {
 /**************************************

@@ -876,7 +876,7 @@ namespace Why
 	class StatusVector : public AutoIface<BaseStatus<StatusVector> >
 	{
 	public:
-		explicit StatusVector(ISC_STATUS* v = NULL) throw()
+		explicit StatusVector(ISC_STATUS* v = NULL) noexcept
 			: localVector(v ? v : localStatus)
 		{ }
 

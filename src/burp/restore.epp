@@ -27,6 +27,7 @@
  */
 
 #include "firebird.h"
+#include <optional>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -577,8 +578,8 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 	dpb.insertByte(isc_dpb_force_write, tdgbl->hdr_forced_writes ? 1 : 0);
 
 	// set up the replica mode, if needed
-	if (tdgbl->gbl_sw_replica.isAssigned())
-		dpb.insertByte(isc_dpb_set_db_replica, tdgbl->gbl_sw_replica.value);
+	if (tdgbl->gbl_sw_replica.has_value())
+		dpb.insertByte(isc_dpb_set_db_replica, tdgbl->gbl_sw_replica.value());
 
 	Firebird::IAttachment* db_handle = provider->attachDatabase(&tdgbl->status_vector, database_name,
 		dpb.getBufferLength(), dpb.getBuffer());
@@ -860,7 +861,7 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 	bool forced_writes = true; // turned on by default
 	ULONG page_buffers = 0;
 	USHORT SQL_dialect = 0;
-	Nullable<ReplicaMode> replica_mode;
+	std::optional<ReplicaMode> replica_mode;
 
 	tdgbl->gbl_database_file_name = file_name;
 
@@ -949,7 +950,7 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 		tdgbl->gbl_sw_mode_val = db_read_only;
 	}
 
-	if (!tdgbl->gbl_sw_replica.isAssigned())
+	if (!tdgbl->gbl_sw_replica.has_value())
 		tdgbl->gbl_sw_replica = replica_mode;
 
 	if (tdgbl->gbl_sw_page_buffers)

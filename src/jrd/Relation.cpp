@@ -49,7 +49,7 @@ bool jrd_rel::isReplicating(thread_db* tdbb)
 	if (rel_repl_state.isUnknown())
 		rel_repl_state = MET_get_repl_state(tdbb, rel_name);
 
-	return rel_repl_state.value;
+	return rel_repl_state.asBool();
 }
 
 RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages)

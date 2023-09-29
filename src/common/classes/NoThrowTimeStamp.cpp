@@ -49,7 +49,7 @@ const ISC_TIMESTAMP NoThrowTimeStamp::MAX_TIMESTAMP =
 const ISC_TIME NoThrowTimeStamp::POW_10_TABLE[] =
 	{1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
 
-NoThrowTimeStamp NoThrowTimeStamp::getCurrentTimeStamp(const char** error) throw()
+NoThrowTimeStamp NoThrowTimeStamp::getCurrentTimeStamp(const char** error) noexcept
 {
 	if (error)
 		*error = NULL;
@@ -148,7 +148,7 @@ NoThrowTimeStamp NoThrowTimeStamp::getCurrentTimeStamp(const char** error) throw
 	return result;
 }
 
-int NoThrowTimeStamp::yday(const struct tm* times) throw()
+int NoThrowTimeStamp::yday(const struct tm* times) noexcept
 {
 	// Convert a calendar date to the day-of-year.
 	//
@@ -175,7 +175,7 @@ int NoThrowTimeStamp::yday(const struct tm* times) throw()
 }
 
 
-void NoThrowTimeStamp::decode_date(ISC_DATE nday, struct tm* times) throw()
+void NoThrowTimeStamp::decode_date(ISC_DATE nday, struct tm* times) noexcept
 {
 	// Convert a numeric day to [day, month, year].
 	//
@@ -232,7 +232,7 @@ void NoThrowTimeStamp::decode_date(ISC_DATE nday, struct tm* times) throw()
 }
 
 
-ISC_DATE NoThrowTimeStamp::encode_date(const struct tm* times) throw()
+ISC_DATE NoThrowTimeStamp::encode_date(const struct tm* times) noexcept
 {
 	// Convert a calendar date to a numeric day
 	// (the number of days since the base date)
@@ -257,7 +257,7 @@ ISC_DATE NoThrowTimeStamp::encode_date(const struct tm* times) throw()
 					   (153 * month + 2) / 5 + day + 1721119 - 2400001);
 }
 
-void NoThrowTimeStamp::decode_time(ISC_TIME ntime, int* hours, int* minutes, int* seconds, int* fractions) throw()
+void NoThrowTimeStamp::decode_time(ISC_TIME ntime, int* hours, int* minutes, int* seconds, int* fractions) noexcept
 {
 	fb_assert(hours);
 	fb_assert(minutes);
@@ -275,20 +275,20 @@ void NoThrowTimeStamp::decode_time(ISC_TIME ntime, int* hours, int* minutes, int
 	}
 }
 
-ISC_TIME NoThrowTimeStamp::encode_time(int hours, int minutes, int seconds, int fractions) throw()
+ISC_TIME NoThrowTimeStamp::encode_time(int hours, int minutes, int seconds, int fractions) noexcept
 {
 	fb_assert(fractions	>= 0 && fractions < ISC_TIME_SECONDS_PRECISION);
 
 	return ((hours * 60 + minutes) * 60 + seconds) * ISC_TIME_SECONDS_PRECISION + fractions;
 }
 
-void NoThrowTimeStamp::decode_timestamp(const ISC_TIMESTAMP ts, struct tm* times, int* fractions) throw()
+void NoThrowTimeStamp::decode_timestamp(const ISC_TIMESTAMP ts, struct tm* times, int* fractions) noexcept
 {
 	decode_date(ts.timestamp_date, times);
 	decode_time(ts.timestamp_time, &times->tm_hour, &times->tm_min, &times->tm_sec, fractions);
 }
 
-ISC_TIMESTAMP NoThrowTimeStamp::encode_timestamp(const struct tm* times, const int fractions) throw()
+ISC_TIMESTAMP NoThrowTimeStamp::encode_timestamp(const struct tm* times, const int fractions) noexcept
 {
 	fb_assert(fractions >= 0 && fractions < ISC_TIME_SECONDS_PRECISION);
 

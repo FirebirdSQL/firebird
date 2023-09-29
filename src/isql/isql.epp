@@ -492,6 +492,7 @@ static processing_state get_statement(string&, const TEXT*);
 static bool get_numeric(const UCHAR*, USHORT, SSHORT*, SINT64*);
 static void print_set(const char* str, bool v);
 static processing_state print_sets();
+static processing_state explain(const TEXT*);
 static processing_state help(const TEXT*);
 static bool isyesno(const TEXT*);
 static processing_state newdb(TEXT*, const TEXT*, const TEXT*, int, const TEXT*, bool);
@@ -587,6 +588,7 @@ public:
 		KeepTranParams = true;
 		TranParams->assign(DEFAULT_DML_TRANS_SQL);
 		PerTableStats = false;
+		ExplainCommand = false;
 	}
 
 	ColList global_Cols;
@@ -611,6 +613,7 @@ public:
 	SCHAR ISQL_charset[MAXCHARSET_SIZE];
 	bool KeepTranParams;
 	bool PerTableStats;
+	bool ExplainCommand;
 };
 
 static SetValues setValues;
@@ -1236,10 +1239,10 @@ bool ISQL_errmsg(Firebird::IStatus* st)
 			}
 		}
 
-		ISQL_warning(st);
-
 		if (Input_file)
 		{
+			// This must be done before call ISQL_warning, as it init the status object.
+
 			int linenum = -1;
 			if (status[0] == isc_arg_gds && status[1] == isc_dsql_error &&
 				status[2] == isc_arg_gds && status[3] == isc_sqlerr && vec > &status[9])
@@ -1292,8 +1295,12 @@ bool ISQL_errmsg(Firebird::IStatus* st)
 			else
                 IUTILS_msg_get(AFTERLINE, errbuf, SafeArg() << Ifp.indev_line << Ifp.fileName(true).c_str());
 
+			ISQL_warning(st);
+
 			STDERROUT(errbuf);
 		}
+		else
+			ISQL_warning(st);
 	}
 
 	return (state & Firebird::IStatus::STATE_ERRORS);
@@ -1438,7 +1445,8 @@ SSHORT ISQL_get_char_length(
 }
 
 
-void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation, bool collate_only,
+void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
+							 bool getCharset, bool getCollation,
 							 bool not_null, bool quote, TEXT* string)
 {
 /**************************************
@@ -1460,91 +1468,72 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation, bool collate_
 	if (!frontendTransaction())
 		return;
 
-	//if (collation) {
-	if (collation || collate_only)
-	{
-		FOR FIRST 1 COL IN RDB$COLLATIONS CROSS
-			CST IN RDB$CHARACTER_SETS WITH
-			COL.RDB$CHARACTER_SET_ID EQ CST.RDB$CHARACTER_SET_ID AND
-			COL.RDB$COLLATION_ID EQ collation AND
-			CST.RDB$CHARACTER_SET_ID EQ char_set_id
-			SORTED BY COL.RDB$COLLATION_NAME, CST.RDB$CHARACTER_SET_NAME
+	FOR FIRST 1 COL IN RDB$COLLATIONS CROSS
+		CST IN RDB$CHARACTER_SETS WITH
+		COL.RDB$CHARACTER_SET_ID EQ CST.RDB$CHARACTER_SET_ID AND
+		COL.RDB$COLLATION_ID EQ collation AND
+		CST.RDB$CHARACTER_SET_ID EQ char_set_id
+		SORTED BY COL.RDB$COLLATION_NAME, CST.RDB$CHARACTER_SET_NAME
 
 #ifdef DEV_BUILD
-			found = true;
+		found = true;
 #endif
-			fb_utils::exact_name(CST.RDB$CHARACTER_SET_NAME);
-			fb_utils::exact_name(COL.RDB$COLLATION_NAME);
-			fb_utils::exact_name(CST.RDB$DEFAULT_COLLATE_NAME);
+		fb_utils::exact_name(CST.RDB$CHARACTER_SET_NAME);
+		fb_utils::exact_name(COL.RDB$COLLATION_NAME);
+		fb_utils::exact_name(CST.RDB$DEFAULT_COLLATE_NAME);
 
-			char charSetName[QUOTED_NAME_SIZE];
-			char collateName[QUOTED_NAME_SIZE];
+		char charSetName[QUOTED_NAME_SIZE];
+		char collateName[QUOTED_NAME_SIZE];
 
-			if (quote && isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			{
-				IUTILS_copy_SQL_id(CST.RDB$CHARACTER_SET_NAME, charSetName, DBL_QUOTE);
-				IUTILS_copy_SQL_id(COL.RDB$COLLATION_NAME, collateName, DBL_QUOTE);
-			}
-			else
-			{
-				strcpy(charSetName, CST.RDB$CHARACTER_SET_NAME);
-				strcpy(collateName, COL.RDB$COLLATION_NAME);
-			}
-
-			// Is specified collation the default collation for character set?
-			if (strcmp (CST.RDB$DEFAULT_COLLATE_NAME, COL.RDB$COLLATION_NAME) == 0)
-			{
-				if (!collate_only)
-					sprintf (string, " CHARACTER SET %s%s", charSetName, notNullStr);
-			}
-			else if (collate_only)
-				sprintf (string, "%s COLLATE %s", notNullStr, collateName);
-			else
-				sprintf (string, " CHARACTER SET %s%s COLLATE %s",
-						 charSetName, notNullStr, collateName);
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return;
-		END_ERROR;
-#ifdef DEV_BUILD
-		if (!found)
+		if (quote && isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
 		{
-			TEXT Print_buffer[PRINT_BUFFER_LENGTH];
-			sprintf(Print_buffer,
-					"ISQL_get_character_set: charset %d collation %d not found.\n",
-					char_set_id, collation);
-			STDERROUT(Print_buffer);
+			IUTILS_copy_SQL_id(CST.RDB$CHARACTER_SET_NAME, charSetName, DBL_QUOTE);
+			IUTILS_copy_SQL_id(COL.RDB$COLLATION_NAME, collateName, DBL_QUOTE);
 		}
-#endif
-	}
-	else
-	{
-		FOR FIRST 1 CST IN RDB$CHARACTER_SETS WITH
-			CST.RDB$CHARACTER_SET_ID EQ char_set_id
-			SORTED BY CST.RDB$CHARACTER_SET_NAME
-
-#ifdef DEV_BUILD
-			found = true;
-#endif
-			fb_utils::exact_name(CST.RDB$CHARACTER_SET_NAME);
-
-			sprintf (string, " CHARACTER SET %s%s", CST.RDB$CHARACTER_SET_NAME, notNullStr);
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return;
-		END_ERROR;
-#ifdef DEV_BUILD
-		if (!found)
+		else
 		{
-			TEXT Print_buffer[PRINT_BUFFER_LENGTH];
-			sprintf(Print_buffer, "ISQL_get_character_set: charset %d not found.\n",
-					char_set_id);
-			STDERROUT(Print_buffer);
+			strcpy(charSetName, CST.RDB$CHARACTER_SET_NAME);
+			strcpy(collateName, COL.RDB$COLLATION_NAME);
 		}
-#endif
+
+		bool collationIsDefault = strcmp(CST.RDB$DEFAULT_COLLATE_NAME, COL.RDB$COLLATION_NAME) == 0;
+
+		if (getCharset && getCollation)
+		{
+			sprintf(string, " CHARACTER SET %s%s COLLATE %s",
+					 charSetName, notNullStr, collateName);
+		}
+		else if (getCollation && !collationIsDefault)
+		{
+			// Collation is requested
+			// Suppress default collation output
+			sprintf(string, "%s COLLATE %s", notNullStr, collateName);
+		}
+		else if (getCharset || !collationIsDefault)
+		{
+			// Force charset output for non-default collation to satisfy QA tests (such as core_4418 and core_6044)
+			sprintf(string, " CHARACTER SET %s%s", charSetName, notNullStr);
+		}
+		else if (not_null)
+		{
+			// No need to write charset or collation but still must print "NOT NULL"
+			sprintf(string, "%s", notNullStr);
+		}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR;
+#ifdef DEV_BUILD
+	if (!found)
+	{
+		TEXT Print_buffer[PRINT_BUFFER_LENGTH];
+		sprintf(Print_buffer,
+				"ISQL_get_character_set: charset %d collation %d not found.\n",
+				char_set_id, collation);
+		STDERROUT(Print_buffer);
 	}
+#endif
 }
 
 
@@ -5009,7 +4998,7 @@ static processing_state frontend(const TEXT* statement)
 		{
 			show, add, copy,
 			blobview, output, shell, set, create, drop, connect,
-			edit, input, quit, exit, help,
+			edit, input, quit, exit, explain, help,
 #ifdef DEV_BUILD
 			passthrough,
 #endif
@@ -5039,6 +5028,7 @@ static processing_state frontend(const TEXT* statement)
 		{FrontOptions::input, "INPUT", 2},
 		{FrontOptions::quit, "QUIT", 0},
 		{FrontOptions::exit, "EXIT", 0},
+		{FrontOptions::explain, "EXPLAIN", 0},
 		{FrontOptions::help, "?", 0},
 		{FrontOptions::help, "HELP", 0}
 #ifdef DEV_BUILD
@@ -5234,6 +5224,10 @@ static processing_state frontend(const TEXT* statement)
 
 	case FrontOptions::exit:
 		ret = EXIT;
+		break;
+
+	case FrontOptions::explain:
+		ret = explain(cmd + 7);
 		break;
 
 	case FrontOptions::help:
@@ -6501,6 +6495,20 @@ static processing_state print_sets()
 }
 
 
+static processing_state explain(const TEXT* command)
+{
+	Firebird::AutoSetRestore autoExplainCommand(&setValues.ExplainCommand, true);
+	Firebird::AutoSetRestore autoPlanonly(&setValues.Planonly, true);
+	Firebird::AutoSetRestore autoPlan(&setValues.Plan, true);
+	Firebird::AutoSetRestore autoExplainPlan(&setValues.ExplainPlan, true);
+	Firebird::AutoSetRestore autoSqldaDisplay(&setValues.Sqlda_display, false);
+
+	process_statement(command);
+
+	return SKIP;
+}
+
+
 static processing_state help(const TEXT* what)
 {
 /**************************************
@@ -6523,6 +6531,7 @@ static processing_state help(const TEXT* what)
 		HLP_BLOBED,				// BLOBVIEW <blobid>		-- view BLOB in text editor
 		HLP_EDIT,				// EDIT	 [<filename>]		-- edit SQL script file and execute
 		HLP_EDIT2,				// EDIT						-- edit current command buffer and execute
+		HLP_EXPLAIN,			// EXPLAIN					-- explain a query access plan
 		HLP_HELP,				// HELP						-- display this menu
 		HLP_INPUT,				// INput	<filename>		-- take input from the named SQL file
 		HLP_OUTPUT,				// OUTput   [<filename>]	-- write output to named file
@@ -9121,10 +9130,18 @@ static processing_state process_statement(const TEXT* str2)
 		statement_type != isc_info_sql_stmt_set_generator)
 	{
 		process_plan();
-		if (setValues.Planonly && !is_selectable)
+
+		if (setValues.ExplainCommand)
 		{
-			return ret;	// do not execute
+			if (setValues.Stats && (print_performance(perf_before) == ps_ERR))
+				ret = ps_ERR;
+
+			if (setValues.PerTableStats)
+				perTableStats->getStats(DB, false);
 		}
+
+		if (setValues.Planonly && (!is_selectable || setValues.ExplainCommand))
+			return ret;	// do not execute
 	}
 
 	if (setValues.ExecPathDisplay[0])

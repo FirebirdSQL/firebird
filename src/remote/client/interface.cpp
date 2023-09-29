@@ -1139,7 +1139,7 @@ static const unsigned ANALYZE_LOOPBACK =	0x02;
 static const unsigned ANALYZE_MOUNTS =		0x04;
 static const unsigned ANALYZE_EMP_NAME =	0x08;
 
-inline static void reset(IStatus* status) throw()
+inline static void reset(IStatus* status) noexcept
 {
 	status->init();
 }

@@ -420,14 +420,14 @@ namespace Jrd
 			}
 		}
 
-		return dbb_repl_state.value;
+		return dbb_repl_state.asBool();
 	}
 
 	void Database::invalidateReplState(thread_db* tdbb, bool broadcast)
 	{
 		SyncLockGuard guard(&dbb_repl_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
 
-		dbb_repl_state.invalidate();
+		dbb_repl_state.reset();
 
 		if (broadcast)
 		{

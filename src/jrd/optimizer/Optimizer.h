@@ -418,7 +418,7 @@ public:
 			const auto defaultFirstRows = dbb->dbb_config->getOptimizeForFirstRows();
 
 			const auto attachment = tdbb->getAttachment();
-			firstRows = attachment->att_opt_first_rows.orElse(defaultFirstRows);
+			firstRows = attachment->att_opt_first_rows.valueOr(defaultFirstRows);
 		}
 
 		return Optimizer(tdbb, csb, rse, firstRows).compile(nullptr);

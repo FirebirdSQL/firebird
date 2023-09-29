@@ -71,10 +71,6 @@ void LocalTableStream::close(thread_db* tdbb) const
 		impure->irsb_flags &= ~irsb_open;
 }
 
-void LocalTableStream::getChildren(Array<const RecordSource*>& children) const
-{
-}
-
 bool LocalTableStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
@@ -113,24 +109,26 @@ WriteLockResult LocalTableStream::lockRecord(thread_db* tdbb, bool skipLocked) c
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
-void LocalTableStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void LocalTableStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
 	//// TODO: Use Local Table name/alias.
 
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Local Table Full Scan";
-		printOptInfo(plan);
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+	if (!level)
+		plan += "(";
 
-		plan += "Local_Table";
-		plan += " NATURAL";
+	plan += "Local_Table";
+	plan += " NATURAL";
 
-		if (!level)
-			plan += ")";
-	}
+	if (!level)
+		plan += ")";
+}
+
+void LocalTableStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "LocalTableStream";
+
+	//// TODO: Use Local Table name/alias.
+
+	planEntry.lines.add().text = "Local Table Full Scan";
+	printOptInfo(planEntry.lines);
 }

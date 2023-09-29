@@ -54,6 +54,7 @@
 #include "../common/classes/GenericMap.h"
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/semaphore.h"
+#include "../common/classes/TriState.h"
 #include "../common/classes/XThreadMutex.h"
 #include "../common/utils_proto.h"
 #include "../jrd/RandomGenerator.h"

@@ -561,7 +561,7 @@ bool METD_get_domain(jrd_tra* transaction, TypeClause* field, const MetaName& na
 		field->subType = FLX.RDB$FIELD_SUB_TYPE;
 		field->dimensions = FLX.RDB$DIMENSIONS.NULL ? 0 : FLX.RDB$DIMENSIONS;
 
-		field->charSetId = Nullable<SSHORT>::empty();
+		field->charSetId = std::nullopt;
 		if (!FLX.RDB$CHARACTER_SET_ID.NULL)
 			field->charSetId = FLX.RDB$CHARACTER_SET_ID;
 		field->collationId = 0;
@@ -770,7 +770,9 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 						defaults++;
 					}
 
-					userFunc->udf_arguments.add(d);
+					auto& argument = userFunc->udf_arguments.add();
+					argument.name = X.RDB$ARGUMENT_NAME;
+					argument.desc = d;
 				}
 			}
 			END_FOR
@@ -842,7 +844,9 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 					defaults++;
 				}
 
-				userFunc->udf_arguments.add(d);
+				auto& argument = userFunc->udf_arguments.add();
+				argument.name = X.RDB$ARGUMENT_NAME;
+				argument.desc = d;
 			}
 		}
 	}

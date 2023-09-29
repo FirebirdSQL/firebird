@@ -1318,7 +1318,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 			errNum = IN_SW_BURP_S;
 		else if (tdgbl->gbl_sw_no_reserve)
 			errNum = IN_SW_BURP_US;
-		else if (tdgbl->gbl_sw_replica.isAssigned())
+		else if (tdgbl->gbl_sw_replica.has_value())
 			errNum = IN_SW_BURP_REPLICA;
 
 		if (errNum != IN_SW_BURP_0)

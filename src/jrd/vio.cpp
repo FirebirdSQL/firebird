@@ -6275,7 +6275,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 			// Wait as long as it takes (if not skipping locks) for an active
 			// transaction which has modified the record.
 
-			state = writeLockSkipLocked == true ?
+			state = writeLockSkipLocked.asBool() ?
 				TRA_wait(tdbb, transaction, rpb->rpb_transaction_nr, jrd_tra::tra_probe) :
 				wait(tdbb, transaction, rpb);
 
@@ -6309,7 +6309,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 				{
 					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
 
-					if (writeLockSkipLocked == true)
+					if (writeLockSkipLocked.asBool())
 						return PrepareResult::SKIP_LOCKED;
 
 					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
@@ -6328,7 +6328,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 				// fall thru
 
 			case tra_active:
-				return writeLockSkipLocked == true ? PrepareResult::SKIP_LOCKED : PrepareResult::LOCK_ERROR;
+				return writeLockSkipLocked.asBool() ? PrepareResult::SKIP_LOCKED : PrepareResult::LOCK_ERROR;
 
 			case tra_dead:
 				break;

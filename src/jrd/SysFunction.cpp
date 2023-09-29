@@ -209,7 +209,7 @@ const int ONE_DAY = 86400;
 const unsigned MAX_CTX_VAR_SIZE = 255;
 
 // auxiliary functions
-double fbcot(double value) throw();
+double fbcot(double value) noexcept;
 
 // generic setParams functions
 void setParamsDouble(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
@@ -431,7 +431,7 @@ static const char
 	TRUE_VALUE[] = "TRUE";
 
 
-double fbcot(double value) throw()
+double fbcot(double value) noexcept
 {
 	return 1.0 / tan(value);
 }
@@ -2387,10 +2387,9 @@ dsc* evlBlobAppend(thread_db* tdbb, const SysFunction* function, const NestValue
 
 	blb* blob = NULL;
 	bid blob_id;
-	dsc blobDsc;
-
 	blob_id.clear();
-	blobDsc.clear();
+
+	dsc blobDsc;
 
 	const dsc* argDsc = EVL_expr(tdbb, request, args[0]);
 	const bool arg0_null = (request->req_flags & req_null) || (argDsc == NULL);

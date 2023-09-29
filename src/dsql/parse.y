@@ -699,6 +699,8 @@ using namespace Firebird;
 // tokens added for Firebird 6.0
 
 %token <metaNamePtr> ANY_VALUE
+%token <metaNamePtr> CALL
+%token <metaNamePtr> NAMED_ARG_ASSIGN
 
 // precedence declarations for expression evaluation
 
@@ -727,23 +729,24 @@ using namespace Firebird;
 %nonassoc ALTER
 %nonassoc COLUMN
 
-%union
+%union YYSTYPE
 {
-	BaseNullable<int> nullableIntVal;
-	BaseNullable<bool> nullableBoolVal;
-	BaseNullable<Jrd::TriggerDefinition::SqlSecurity> nullableSqlSecurityVal;
-	BaseNullable<Jrd::OverrideClause> nullableOverrideClause;
+	YYSTYPE()
+	{}
+
+	std::optional<int> nullableIntVal;
+	TriState triState;
+	std::optional<Jrd::TriggerDefinition::SqlSecurity> nullableSqlSecurityVal;
+	std::optional<Jrd::OverrideClause> nullableOverrideClause;
 	struct { bool first; bool second; } boolPair;
 	bool boolVal;
 	int intVal;
 	unsigned uintVal;
 	SLONG int32Val;
-	BaseNullable<SLONG> nullableInt32Val;
 	SINT64 int64Val;
 	FB_UINT64 uint64Val;
-	BaseNullable<SINT64> nullableInt64Val;
-	BaseNullable<BaseNullable<SINT64> > nullableNullableInt64Val;
-	BaseNullable<FB_UINT64> nullableUint64Val;
+	std::optional<SINT64> nullableInt64Val;
+	std::optional<FB_UINT64> nullableUint64Val;
 	Jrd::ScaledNumber scaledNumber;
 	UCHAR blrOp;
 	Jrd::OrderNode::NullsPlacement nullsPlacement;
@@ -760,6 +763,8 @@ using namespace Firebird;
 	Jrd::DbFileClause* dbFileClause;
 	Firebird::Array<NestConst<Jrd::DbFileClause> >* dbFilesClause;
 	Jrd::ExternalClause* externalClause;
+	Firebird::NonPooledPair<Jrd::MetaName*, Jrd::ValueExprNode*>* namedArgument;
+	Firebird::NonPooledPair<Firebird::ObjectsArray<Jrd::MetaName>*, Jrd::ValueListNode*>* namedArguments;
 	Firebird::Array<NestConst<Jrd::ParameterClause> >* parametersClause;
 	Jrd::WindowClause* windowClause;
 	Jrd::WindowClause::FrameExtent* windowClauseFrameExtent;
@@ -831,6 +836,7 @@ using namespace Firebird;
 	Jrd::DeclareCursorNode* declCursorNode;
 	Jrd::ErrorHandlerNode* errorHandlerNode;
 	Jrd::ExecStatementNode* execStatementNode;
+	Jrd::LocalDeclarationsNode* localDeclarationsNode;
 	Jrd::MergeNode* mergeNode;
 	Jrd::MergeNode::NotMatched* mergeNotMatchedClause;
 	Jrd::MergeNode::Matched* mergeMatchedClause;
@@ -885,6 +891,7 @@ dml_statement
 	| insert									{ $$ = $1; }
 	| merge										{ $$ = $1; }
 	| exec_procedure							{ $$ = $1; }
+	| call										{ $$ = $1; }
 	| exec_block								{ $$ = $1; }
 	| select									{ $$ = $1; }
 	| update									{ $$ = $1; }
@@ -1448,10 +1455,10 @@ arg_desc($parameters)
 
 %type <nullableIntVal> param_mechanism
 param_mechanism
-	: /* nothing */		{ $$ = Nullable<int>::empty(); }	// Beware: This means FUN_reference or FUN_blob_struct.
-	| BY DESCRIPTOR		{ $$ = Nullable<int>::val(FUN_descriptor); }
-	| BY SCALAR_ARRAY	{ $$ = Nullable<int>::val(FUN_scalar_array); }
-	| NULL				{ $$ = Nullable<int>::val(FUN_ref_with_null); }
+	: /* nothing */		{ $$ = std::nullopt; }	// Beware: This means FUN_reference or FUN_blob_struct.
+	| BY DESCRIPTOR		{ $$ = FUN_descriptor; }
+	| BY SCALAR_ARRAY	{ $$ = FUN_scalar_array; }
+	| NULL				{ $$ = FUN_ref_with_null; }
 	;
 
 %type return_value1(<createAlterFunctionNode>)
@@ -1851,7 +1858,7 @@ replace_sequence_clause
 	  replace_sequence_options($2)
 		{
 			// Remove this to implement CORE-5137
-			if (!$2->restartSpecified && !$2->step.specified)
+			if (!$2->restartSpecified && !$2->step.has_value())
 				yyerrorIncompleteCmd(YYPOSNARG(3));
 			$$ = $2;
 		}
@@ -1884,7 +1891,7 @@ alter_sequence_clause
 		}
 	  alter_sequence_options($2)
 		{
-			if (!$2->restartSpecified && !$2->value.specified && !$2->step.specified)
+			if (!$2->restartSpecified && !$2->value.has_value() && !$2->step.has_value())
 				yyerrorIncompleteCmd(YYPOSNARG(3));
 			$$ = $2;
 		}
@@ -1912,8 +1919,8 @@ restart_option($seqNode)
 
 %type <nullableInt64Val> with_opt
 with_opt
-	: /* Nothign */			{ $$ = BaseNullable<SINT64>::empty(); }
-	| WITH sequence_value	{ $$ = BaseNullable<SINT64>::val($2); }
+	: /* Nothign */			{ $$ = std::nullopt; }
+	| WITH sequence_value	{ $$ = $2; }
 	;
 
 %type <createAlterSequenceNode> set_generator_clause
@@ -1925,7 +1932,7 @@ set_generator_clause
 			node->alter = true;
 			node->legacy = true;
 			node->restartSpecified = true;
-			node->value = BaseNullable<SINT64>::val($5);
+			node->value = $5;
 			$$ = node;
 		}
 	;
@@ -2260,10 +2267,10 @@ sql_security_clause
 	| SQL SECURITY INVOKER		{ $$ = false; }
 	;
 
-%type <nullableBoolVal> sql_security_clause_opt
+%type <triState> sql_security_clause_opt
 sql_security_clause_opt
-	: /* nothing */				{ $$ = Nullable<bool>::empty(); }
-	| sql_security_clause		{ $$ = Nullable<bool>::val($1); }
+	: /* nothing */				{ $$ = TriState(); }
+	| sql_security_clause		{ $$ = $1; }
 	;
 
 %type <boolVal> publication_state
@@ -2277,12 +2284,12 @@ gtt_table_clause
 	: simple_table_name
 			{
 				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
-				$<createRelationNode>$->relationType = Nullable<rel_t>::empty();
+				$<createRelationNode>$->relationType = std::nullopt;
 			}
 		'(' table_elements($2) ')' gtt_ops($2)
 			{
 				$$ = $2;
-				if (!$$->relationType.specified)
+				if (!$$->relationType.has_value())
 					$$->relationType = rel_global_temp_delete;
 			}
 	;
@@ -2503,7 +2510,7 @@ column_constraint_def($addColumnClause)
 	: constraint_name_opt column_constraint($addColumnClause)
 		{
 			if ($1)
-				$addColumnClause->constraints.back()->name = *$1;
+				$addColumnClause->constraints.back().name = *$1;
 		}
 	;
 
@@ -3037,12 +3044,12 @@ package_body_item
 	;
 
 
-%type <compoundStmtNode> local_declarations_opt
+%type <localDeclarationsNode> local_declarations_opt
 local_declarations_opt
 	: local_forward_declarations_opt local_nonforward_declarations_opt
 		{
-			CompoundStmtNode* forward = $1;
-			CompoundStmtNode* nonForward = $2;
+			LocalDeclarationsNode* forward = $1;
+			LocalDeclarationsNode* nonForward = $2;
 
 			if (!forward)
 				$$ = nonForward;
@@ -3056,17 +3063,17 @@ local_declarations_opt
 		}
 	;
 
-%type <compoundStmtNode> local_forward_declarations_opt
+%type <localDeclarationsNode> local_forward_declarations_opt
 local_forward_declarations_opt
-	: /* nothing */					{ $$ = NULL; }
+	: /* nothing */					{ $$ = nullptr; }
 	| local_forward_declarations
 	;
 
-%type <compoundStmtNode> local_forward_declarations
+%type <localDeclarationsNode> local_forward_declarations
 local_forward_declarations
 	: local_forward_declaration
 		{
-			$$ = newNode<CompoundStmtNode>();
+			$$ = newNode<LocalDeclarationsNode>();
 			$$->statements.add($1);
 		}
 	| local_forward_declarations local_forward_declaration
@@ -3082,17 +3089,17 @@ local_forward_declaration
 	| local_declaration_subfunc_start ';'	{ $$ = $1; }
 	;
 
-%type <compoundStmtNode> local_nonforward_declarations_opt
+%type <localDeclarationsNode> local_nonforward_declarations_opt
 local_nonforward_declarations_opt
-	: /* nothing */						{ $$ = NULL; }
+	: /* nothing */						{ $$ = nullptr; }
 	| local_nonforward_declarations
 	;
 
-%type <compoundStmtNode> local_nonforward_declarations
+%type <localDeclarationsNode> local_nonforward_declarations
 local_nonforward_declarations
 	: local_nonforward_declaration
 		{
-			$$ = newNode<CompoundStmtNode>();
+			$$ = newNode<LocalDeclarationsNode>();
 			$$->statements.add($1);
 		}
 	| local_nonforward_declarations local_nonforward_declaration
@@ -3113,9 +3120,6 @@ local_nonforward_declaration
 	| local_declaration_subproc_start AS local_declarations_opt full_proc_block
 		{
 			DeclareSubProcNode* node = $1;
-			node->dsqlBlock = newNode<ExecBlockNode>();
-			node->dsqlBlock->parameters = node->dsqlParameters;
-			node->dsqlBlock->returns = node->dsqlReturns;
 			node->dsqlBlock->localDeclList = $3;
 			node->dsqlBlock->body = $4;
 
@@ -3127,9 +3131,6 @@ local_nonforward_declaration
 	| local_declaration_subfunc_start AS local_declarations_opt full_proc_block
 		{
 			DeclareSubFuncNode* node = $1;
-			node->dsqlBlock = newNode<ExecBlockNode>();
-			node->dsqlBlock->parameters = node->dsqlParameters;
-			node->dsqlBlock->returns = node->dsqlReturns;
 			node->dsqlBlock->localDeclList = $3;
 			node->dsqlBlock->body = $4;
 
@@ -3143,24 +3144,30 @@ local_nonforward_declaration
 %type <declareSubProcNode> local_declaration_subproc_start
 local_declaration_subproc_start
 	: DECLARE PROCEDURE symbol_procedure_name
-			{ $$ = newNode<DeclareSubProcNode>(NOTRIAL(*$3)); }
-		input_parameters(NOTRIAL(&$4->dsqlParameters))
-		output_parameters(NOTRIAL(&$4->dsqlReturns))
+			{
+				$$ = newNode<DeclareSubProcNode>(NOTRIAL(*$3));
+				$$->dsqlBlock = newNode<ExecBlockNode>();
+			}
+		input_parameters(NOTRIAL(&$4->dsqlBlock->parameters))
+		output_parameters(NOTRIAL(&$4->dsqlBlock->returns))
 			{ $$ = $4; }
 	;
 
 %type <declareSubFuncNode> local_declaration_subfunc_start
 local_declaration_subfunc_start
 	: DECLARE FUNCTION symbol_UDF_name
-			{ $$ = newNode<DeclareSubFuncNode>(NOTRIAL(*$3)); }
-		input_parameters(NOTRIAL(&$4->dsqlParameters))
+			{
+				$$ = newNode<DeclareSubFuncNode>(NOTRIAL(*$3));
+				$$->dsqlBlock = newNode<ExecBlockNode>();
+			}
+		input_parameters(NOTRIAL(&$4->dsqlBlock->parameters))
 		RETURNS domain_or_non_array_type collate_clause deterministic_opt
 			{
 				$$ = $4;
 				AutoPtr<ParameterClause> clause(newNode<ParameterClause>($<legacyField>7));
 				if ($8)
 					setClause(clause->type->collate, "COLLATE", *$8);
-				$$->dsqlReturns.add(clause.release());
+				$$->dsqlBlock->returns.add(clause.release());
 				$$->dsqlDeterministic = $9;
 			}
 	;
@@ -3290,6 +3297,7 @@ simple_proc_statement
 	| delete
 	| singleton_select
 	| exec_procedure
+	| call				{ $$ = $1; }
 	| exec_sql			{ $$ = $1; }
 	| exec_into			{ $$ = $1; }
 	| exec_function
@@ -3768,16 +3776,28 @@ fetch_scroll($cursorStmtNode)
 %type <stmtNode> exec_procedure
 exec_procedure
 	: EXECUTE PROCEDURE symbol_procedure_name proc_inputs proc_outputs_opt
-		{ $$ = newNode<ExecProcedureNode>(QualifiedName(*$3), $4, $5); }
+		{
+			$$ = newNode<ExecProcedureNode>(
+				QualifiedName(*$3),
+				($4 ? $4->second : nullptr),
+				$5,
+				($4 ? $4->first : nullptr));
+		}
 	| EXECUTE PROCEDURE symbol_package_name '.' symbol_procedure_name proc_inputs proc_outputs_opt
-		{ $$ = newNode<ExecProcedureNode>(QualifiedName(*$5, *$3), $6, $7); }
+		{
+			$$ = newNode<ExecProcedureNode>(
+				QualifiedName(*$5, *$3),
+				($6 ? $6->second : nullptr),
+				$7,
+				($6 ? $6->first : nullptr));
+		}
 	;
 
-%type <valueListNode> proc_inputs
+%type <namedArguments> proc_inputs
 proc_inputs
-	: /* nothing */			{ $$ = NULL; }
-	| value_list			{ $$ = $1; }
-	| '(' value_list ')'	{ $$ = $2; }
+	: /* nothing */			{ $$ = nullptr; }
+	| argument_list			{ $$ = $1; }
+	| '(' argument_list ')'	{ $$ = $2; }
 	;
 
 %type <valueListNode> proc_outputs_opt
@@ -3785,6 +3805,31 @@ proc_outputs_opt
 	: /* nothing */								{ $$ = NULL; }
 	| RETURNING_VALUES variable_list			{ $$ = $2; }
 	| RETURNING_VALUES '(' variable_list ')'	{ $$ = $3; }
+	;
+
+// CALL
+
+%type <stmtNode> call
+call
+	: CALL symbol_procedure_name '(' argument_list_opt ')'
+		{
+			auto node = newNode<ExecProcedureNode>(QualifiedName(*$2),
+				($4 ? $4->second : nullptr),
+				nullptr,
+				($4 ? $4->first : nullptr));
+			node->dsqlCallSyntax = true;
+			$$ = node;
+		}
+	| CALL symbol_package_name '.' symbol_procedure_name '(' argument_list_opt ')'
+			into_variable_list_opt
+		{
+			auto node = newNode<ExecProcedureNode>(QualifiedName(*$4, *$2),
+				($6 ? $6->second : nullptr),
+				nullptr,
+				($6 ? $6->first : nullptr));
+			node->dsqlCallSyntax = true;
+			$$ = node;
+		}
 	;
 
 // EXECUTE BLOCK
@@ -3922,14 +3967,14 @@ replace_trigger_clause
 		}
 	;
 
-%type <nullableBoolVal> trigger_active
+%type <triState> trigger_active
 trigger_active
 	: ACTIVE
-		{ $$ = Nullable<bool>::val(true); }
+		{ $$ = TriState(true); }
 	| INACTIVE
-		{ $$ = Nullable<bool>::val(false); }
+		{ $$ = TriState(false); }
 	| // nothing
-		{ $$ = Nullable<bool>::empty(); }
+		{ $$ = TriState(); }
 	;
 
 %type <uint64Val> trigger_type(<createAlterTriggerNode>)
@@ -4046,8 +4091,8 @@ trigger_type_suffix
 
 %type <nullableIntVal> trigger_position
 trigger_position
-	: /* nothing */					{ $$ = Nullable<int>::empty(); }
-	| POSITION nonneg_short_integer	{ $$ = Nullable<int>::val($2); }
+	: /* nothing */					{ $$ = std::nullopt; }
+	| POSITION nonneg_short_integer	{ $$ = $2; }
 	;
 
 // ALTER statement
@@ -4256,7 +4301,7 @@ alter_op($relationNode)
 		}
 	| DROP SQL SECURITY
 		{
-			setClause($relationNode->ssDefiner, "SQL SECURITY", Nullable<bool>::empty());
+			setClause($relationNode->ssDefiner, "SQL SECURITY", TriState());
 			RelationNode::Clause* clause =
 				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_SQL_SECURITY);
 			$relationNode->clauses.add(clause);
@@ -4381,6 +4426,7 @@ keyword_or_column
 	| VARBINARY
 	| WINDOW
 	| WITHOUT
+	| CALL					// added in FB 6.0
 	;
 
 col_opt
@@ -4615,21 +4661,21 @@ alter_trigger_clause
 %type <nullableUint64Val> trigger_type_opt
 trigger_type_opt	// we do not allow alter database triggers, hence we do not use trigger_type here
 	: trigger_type_prefix trigger_type_suffix
-		{ $$ = Nullable<FB_UINT64>::val($1 + $2 - 1); }
+		{ $$ = $1 + $2 - 1; }
 	|
-		{ $$ = Nullable<FB_UINT64>::empty(); }
+		{ $$ = std::nullopt; }
 	;
 
 %type <nullableSqlSecurityVal> trg_sql_security_clause
 trg_sql_security_clause
 	: // nothing
-		{ $$ = Nullable<TriggerDefinition::SqlSecurity>::empty(); }
+		{ $$ = std::nullopt; }
 	| SQL SECURITY DEFINER
-		{ $$ = Nullable<TriggerDefinition::SqlSecurity>::val(TriggerDefinition::SS_DEFINER); }
+		{ $$ = TriggerDefinition::SS_DEFINER; }
 	| SQL SECURITY INVOKER
-		{ $$ = Nullable<TriggerDefinition::SqlSecurity>::val(TriggerDefinition::SS_INVOKER); }
+		{ $$ = TriggerDefinition::SS_INVOKER; }
 	| DROP SQL SECURITY
-		{ $$ = Nullable<TriggerDefinition::SqlSecurity>::val(TriggerDefinition::SS_DROP); }
+		{ $$ = TriggerDefinition::SS_DROP; }
 	;
 
 // DROP metadata operations
@@ -5830,11 +5876,11 @@ select
 	: select_expr for_update_clause lock_clause optimize_clause
 		{
 			SelectNode* node = newNode<SelectNode>();
-			node->dsqlExpr = $1;
-			node->dsqlForUpdate = $2;
-			node->dsqlWithLock = $3.first;
-			node->dsqlSkipLocked = $3.second;
-			node->dsqlOptimizeForFirstRows = $4;
+			node->selectExpr = $1;
+			node->forUpdate = $2;
+			node->withLock = $3.first;
+			node->skipLocked = $3.second;
+			node->optimizeForFirstRows = $4;
 			$$ = node;
 		}
 	;
@@ -5863,12 +5909,12 @@ skip_locked_clause_opt
 	| SKIP LOCKED			{ $$ = true; }
 	;
 
-%type <nullableBoolVal>	optimize_clause
+%type <triState> optimize_clause
 optimize_clause
 	: OPTIMIZE optimize_mode
-		{ $$ = Nullable<bool>::val($2); }
+		{ $$ = TriState($2); }
 	| // nothing
-		{ $$ = Nullable<bool>::empty(); }
+		{ $$ = TriState(); }
 	;
 
 %type <boolVal> optimize_mode
@@ -6275,38 +6321,42 @@ named_columns_join
 table_proc
 	: symbol_procedure_name table_proc_inputs as_noise symbol_table_alias_name
 		{
-			ProcedureSourceNode* node = newNode<ProcedureSourceNode>(QualifiedName(*$1));
-			node->sourceList = $2;
+			const auto node = newNode<ProcedureSourceNode>(QualifiedName(*$1));
+			node->inputSources = $2 ? $2->second : nullptr;
+			node->dsqlInputArgNames = $2 ? $2->first : nullptr;
 			node->alias = $4->c_str();
 			$$ = node;
 		}
 	| symbol_procedure_name table_proc_inputs
 		{
-			ProcedureSourceNode* node = newNode<ProcedureSourceNode>(QualifiedName(*$1));
-			node->sourceList = $2;
+			const auto node = newNode<ProcedureSourceNode>(QualifiedName(*$1));
+			node->inputSources = $2 ? $2->second : nullptr;
+			node->dsqlInputArgNames = $2 ? $2->first : nullptr;
 			$$ = node;
 		}
 	| symbol_package_name '.' symbol_procedure_name table_proc_inputs as_noise symbol_table_alias_name
 		{
-			ProcedureSourceNode* node = newNode<ProcedureSourceNode>(
+			const auto node = newNode<ProcedureSourceNode>(
 				QualifiedName(*$3, *$1));
-			node->sourceList = $4;
+			node->inputSources = $4 ? $4->second : nullptr;
+			node->dsqlInputArgNames = $4 ? $4->first : nullptr;
 			node->alias = $6->c_str();
 			$$ = node;
 		}
 	| symbol_package_name '.' symbol_procedure_name table_proc_inputs
 		{
-			ProcedureSourceNode* node = newNode<ProcedureSourceNode>(
+			const auto node = newNode<ProcedureSourceNode>(
 				QualifiedName(*$3, *$1));
-			node->sourceList = $4;
+			node->inputSources = $4 ? $4->second : nullptr;
+			node->dsqlInputArgNames = $4 ? $4->first : nullptr;
 			$$ = node;
 		}
 	;
 
-%type <valueListNode> table_proc_inputs
+%type <namedArguments> table_proc_inputs
 table_proc_inputs
-	: /* nothing */			{ $$ = NULL; }
-	| '(' value_list ')'	{ $$ = $2; }
+	: /* nothing */			{ $$ = nullptr; }
+	| '(' argument_list ')'	{ $$ = $2; }
 	;
 
 %type <relSourceNode> table_name
@@ -6647,9 +6697,9 @@ insert_start
 
 %type <nullableOverrideClause> override_opt
 override_opt
-	: /* nothing */				{ $$ = Nullable<OverrideClause>::empty(); }
-	| OVERRIDING USER VALUE		{ $$ = Nullable<OverrideClause>::val(OverrideClause::USER_VALUE); }
-	| OVERRIDING SYSTEM VALUE	{ $$ = Nullable<OverrideClause>::val(OverrideClause::SYSTEM_VALUE); }
+	: /* nothing */				{ $$ = std::nullopt; }
+	| OVERRIDING USER VALUE		{ $$ = OverrideClause::USER_VALUE; }
+	| OVERRIDING SYSTEM VALUE	{ $$ = OverrideClause::SYSTEM_VALUE; }
 	;
 
 %type <valueListNode> value_or_default_list
@@ -8607,14 +8657,64 @@ trim_specification
 
 %type <valueExprNode> udf
 udf
-	: symbol_UDF_call_name '(' value_list ')'
-		{ $$ = newNode<UdfCallNode>(QualifiedName(*$1, ""), $3); }
-	| symbol_UDF_call_name '(' ')'
-		{ $$ = newNode<UdfCallNode>(QualifiedName(*$1, ""), newNode<ValueListNode>(0)); }
-	| symbol_package_name '.' symbol_UDF_name '(' value_list ')'
-		{ $$ = newNode<UdfCallNode>(QualifiedName(*$3, *$1), $5); }
-	| symbol_package_name '.' symbol_UDF_name '(' ')'
-		{ $$ = newNode<UdfCallNode>(QualifiedName(*$3, *$1), newNode<ValueListNode>(0)); }
+	: symbol_UDF_call_name '(' argument_list_opt ')'
+		{ $$ = newNode<UdfCallNode>(QualifiedName(*$1, ""), $3->second, $3->first); }
+	| symbol_package_name '.' symbol_UDF_name '(' argument_list_opt ')'
+		{ $$ = newNode<UdfCallNode>(QualifiedName(*$3, *$1), $5->second, $5->first); }
+	;
+
+%type <namedArguments> argument_list_opt
+argument_list_opt
+	: // nothing
+		{
+			$$ = newNode<NonPooledPair<ObjectsArray<MetaName>*, ValueListNode*>>();
+			$$->second = newNode<ValueListNode>();
+		}
+	| argument_list
+	;
+
+%type <namedArguments> argument_list
+argument_list
+	: named_argument_list
+	| value_or_default_list
+		{
+			$$ = newNode<NonPooledPair<ObjectsArray<MetaName>*, ValueListNode*>>();
+			$$->second = $1;
+		}
+	| value_or_default_list ',' named_argument_list
+		{
+			$$ = $3;
+
+			for (auto item : $$->second->items)
+				$1->add(item);
+
+			delete $$->second;
+			$$->second = $1;
+		}
+	;
+
+%type <namedArguments> named_argument_list
+named_argument_list
+	: named_argument
+		{
+			$$ = newNode<NonPooledPair<ObjectsArray<MetaName>*, ValueListNode*>>();
+			$$->first = newNode<ObjectsArray<MetaName>>();
+			$$->first->add(*$1->first);
+			$$->second = newNode<ValueListNode>();
+			$$->second->add($1->second);
+		}
+	| named_argument_list ',' named_argument
+		{
+			$$ = $1;
+			$$->first->add(*$3->first);
+			$$->second->add($3->second);
+		}
+	;
+
+%type <namedArgument> named_argument
+named_argument
+	: symbol_column_name NAMED_ARG_ASSIGN value_or_default
+		{ $$ = newNode<NonPooledPair<MetaName*, ValueExprNode*>>($1, $3); }
 	;
 
 %type <valueExprNode> cast_specification
@@ -8739,6 +8839,8 @@ searched_when_clause
 	| searched_when_clause WHEN search_condition THEN case_result
 		{
 			ValueIfNode* cond = newNode<ValueIfNode>($3, $5, NullNode::instance());
+			cond->dsqlGenCast = false;
+
 			ValueIfNode* last = $1;
 			ValueIfNode* next;
 

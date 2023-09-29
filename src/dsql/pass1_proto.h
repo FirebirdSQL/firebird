@@ -39,7 +39,6 @@ namespace Jrd
 }
 
 void PASS1_ambiguity_check(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&, const Jrd::DsqlContextStack&);
-void PASS1_check_unique_fields_names(Jrd::StrArray& names, const Jrd::CompoundStmtNode* fields);
 Jrd::BoolExprNode* PASS1_compose(Jrd::BoolExprNode*, Jrd::BoolExprNode*, UCHAR);
 Jrd::DeclareCursorNode* PASS1_cursor_name(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&, USHORT, bool);
 Jrd::RseNode* PASS1_derived_table(Jrd::DsqlCompilerScratch*, Jrd::SelectExprNode*, const char*,

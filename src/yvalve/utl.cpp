@@ -3430,7 +3430,7 @@ const char* circularAlloc(const char* s, unsigned len)
 
 // CVC: Do not let "perm" be incremented before "trans", because it may lead to serious memory errors,
 // since our code blindly passes the same vector twice.
-void makePermanentVector(ISC_STATUS* perm, const ISC_STATUS* trans) throw()
+void makePermanentVector(ISC_STATUS* perm, const ISC_STATUS* trans) noexcept
 {
 	try
 	{
@@ -3490,7 +3490,7 @@ void makePermanentVector(ISC_STATUS* perm, const ISC_STATUS* trans) throw()
 
 } // anonymous namespace
 
-void makePermanentVector(ISC_STATUS* v) throw()
+void makePermanentVector(ISC_STATUS* v) noexcept
 {
 	makePermanentVector(v, v);
 }

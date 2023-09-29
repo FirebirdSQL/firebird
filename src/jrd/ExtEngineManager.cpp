@@ -932,9 +932,10 @@ void ExtEngineManager::Trigger::execute(thread_db* tdbb, Request* request, unsig
 	record_param* oldRpb, record_param* newRpb) const
 {
 	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine);
-	const Nullable<bool>& ssDefiner = trg->ssDefiner.specified ? trg->ssDefiner :
-		(trg->relation && trg->relation->rel_ss_definer.specified ? trg->relation->rel_ss_definer : Nullable<bool>() );
-	const MetaString& userName = ssDefiner.specified && ssDefiner.value ? trg->relation->rel_owner_name.c_str() : "";
+	const TriState& ssDefiner = trg->ssDefiner.isAssigned() ? trg->ssDefiner :
+		(trg->relation && trg->relation->rel_ss_definer.isAssigned() ? trg->relation->rel_ss_definer : TriState());
+	const MetaString& userName = ssDefiner.asBool() ?
+		trg->relation->rel_owner_name.c_str() : "";
 	ContextManager<IExternalTrigger> ctxManager(tdbb, attInfo, trigger,
 		CallerName(obj_trigger, trg->name, userName));
 
@@ -1606,7 +1607,7 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 	entryPointTrimmed.trim();
 
 	EngineAttachmentInfo* attInfo = getEngineAttachment(tdbb, engine);
-	const MetaString& userName = trg->ssDefiner.specified && trg->ssDefiner.value ? trg->owner.c_str() : "";
+	const MetaString& userName = trg->ssDefiner.asBool() ? trg->owner.c_str() : "";
 	ContextManager<IExternalTrigger> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
 		CallerName(obj_trigger, trg->name, userName));
 
