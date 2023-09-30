@@ -1744,8 +1744,7 @@ domain_clause
 		domain_constraints_opt($5) collate_clause
 			{
 				$$ = $5;
-				if ($7)
-					setClause($$->nameType->type->collate, "COLLATE", *$7);
+				setCollate($3, $7);
 			}
 	;
 
@@ -2345,8 +2344,7 @@ column_def($relationNode)
 			}
 		column_constraint_clause(NOTRIAL($<addColumnClause>4)) collate_clause
 			{
-				if ($6)
-					setClause($2->collate, "COLLATE", *$6);
+				setCollate($2, $6);
 			}
 	| symbol_column_name data_type_or_domain identity_clause
 			{
@@ -2359,8 +2357,7 @@ column_def($relationNode)
 			}
 		column_constraint_clause(NOTRIAL($<addColumnClause>4)) collate_clause
 			{
-				if ($6)
-					setClause($2->collate, "COLLATE", *$6);
+				setCollate($2, $6);
 			}
 	| symbol_column_name non_array_type def_computed
 		{
@@ -2780,10 +2777,8 @@ input_proc_parameters($parameters)
 input_proc_parameter($parameters)
 	: column_domain_or_non_array_type collate_clause default_par_opt
 		{
-			AutoPtr<ParameterClause> clause(newNode<ParameterClause>($1, $3));
-			if ($2)
-				setClause(clause->type->collate, "COLLATE", *$2);
-			$parameters->add(clause.release());
+			setCollate($1, $2);
+			$parameters->add(newNode<ParameterClause>($1, $3));
 		}
 	;
 
@@ -2797,10 +2792,8 @@ output_proc_parameters($parameters)
 output_proc_parameter($parameters)
 	: column_domain_or_non_array_type collate_clause
 		{
-			AutoPtr<ParameterClause> clause(newNode<ParameterClause>($1));
-			if ($2)
-				setClause(clause->type->collate, "COLLATE", *$2);
-			$parameters->add(clause.release());
+			setCollate($1, $2);
+			$parameters->add(newNode<ParameterClause>($1));
 		}
 	;
 
@@ -2873,8 +2866,7 @@ function_clause_start
 			{
 				$$ = $2;
 				$$->returnType = newNode<ParameterClause>($5);
-				if ($6)
-					setClause($$->returnType->type->collate, "COLLATE", *$6);
+				setCollate($5, $6);
 				$$->deterministic = $7;
 			}
 	;
@@ -3164,10 +3156,8 @@ local_declaration_subfunc_start
 		RETURNS domain_or_non_array_type collate_clause deterministic_opt
 			{
 				$$ = $4;
-				AutoPtr<ParameterClause> clause(newNode<ParameterClause>($<legacyField>7));
-				if ($8)
-					setClause(clause->type->collate, "COLLATE", *$8);
-				$$->dsqlBlock->returns.add(clause.release());
+				setCollate($7, $8);
+				$$->dsqlBlock->returns.add(newNode<ParameterClause>($<legacyField>7));
 				$$->dsqlDeterministic = $9;
 			}
 	;
@@ -3182,10 +3172,10 @@ local_declaration_item
 var_declaration_item
 	: column_domain_or_non_array_type collate_clause var_declaration_initializer
 		{
+			// Set collate before node allocation to prevent memory leak on throw
+			setCollate($1, $2);
 			DeclareVariableNode* node = newNode<DeclareVariableNode>();
 			node->dsqlDef = newNode<ParameterClause>($1, $3);
-			if ($2)
-				setClause(node->dsqlDef->type->collate, "COLLATE", *$2);
 			$$ = node;
 		}
 	;
@@ -3866,10 +3856,8 @@ block_parameters($parameters)
 block_parameter($parameters)
 	: column_domain_or_non_array_type collate_clause '=' parameter
 		{
-			AutoPtr<ParameterClause> clause(newNode<ParameterClause>($1, (ValueSourceClause*) NULL, $4));
-			if ($2)
-				setClause(clause->type->collate, "COLLATE", *$2);
-			$parameters->add(clause.release());
+			setCollate($1, $2);
+			$parameters->add(newNode<ParameterClause>($1, (ValueSourceClause*) NULL, $4));
 		}
 	;
 
