@@ -1427,7 +1427,7 @@ SSHORT ISQL_get_char_length(
 
 
 void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
-							 bool getCharset, bool getCollation,
+							 SSHORT default_char_set_id, Get what,
 							 bool not_null, bool quote, TEXT* string)
 {
 /**************************************
@@ -1477,27 +1477,45 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
 			strcpy(collateName, COL.RDB$COLLATION_NAME);
 		}
 
+		bool charsetIsDefault = char_set_id == default_char_set_id;
 		bool collationIsDefault = strcmp(CST.RDB$DEFAULT_COLLATE_NAME, COL.RDB$COLLATION_NAME) == 0;
 
-		if (getCharset && getCollation)
+		switch (what)
 		{
-			sprintf(string, " CHARACTER SET %s%s COLLATE %s",
-					 charSetName, notNullStr, collateName);
+		case Get::CHARSET_ONLY:
+			// Charset is printed if it is not default one
+			// or if collation is not default to preserve stability of output script
+			// Because otherwise it would fail with "collation not found for character set" error
+			// if global default charset has been changed.
+			if (!charsetIsDefault || !collationIsDefault)
+			{
+				sprintf(string, " CHARACTER SET %s%s", charSetName, notNullStr);
+				return;
+			}
+			break;
+
+		case Get::COLLATE_ONLY:
+			// Default colation is not printed to allow easy global change
+			if (!collationIsDefault)
+			{
+				sprintf(string, "%s COLLATE %s", notNullStr, collateName);
+				return;
+			}
+			break;
+
+		case Get::BOTH:
+			// If they both are default - supress output completely
+			if (!charsetIsDefault || !collationIsDefault)
+			{
+				sprintf(string, " CHARACTER SET %s%s COLLATE %s", charSetName, notNullStr, collateName);
+				return;
+			}
+			break;
+
 		}
-		else if (getCollation && !collationIsDefault)
+		// No need to write charset or collation but still must print "NOT NULL"
+		if (not_null)
 		{
-			// Collation is requested
-			// Suppress default collation output
-			sprintf(string, "%s COLLATE %s", notNullStr, collateName);
-		}
-		else if (getCharset || !collationIsDefault)
-		{
-			// Force charset output for non-default collation to satisfy QA tests (such as core_4418 and core_6044)
-			sprintf(string, " CHARACTER SET %s%s", charSetName, notNullStr);
-		}
-		else if (not_null)
-		{
-			// No need to write charset or collation but still must print "NOT NULL"
 			sprintf(string, "%s", notNullStr);
 		}
 	END_FOR
