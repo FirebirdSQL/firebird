@@ -1726,7 +1726,7 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 	AutoSavePoint savePoint(tdbb, transaction);
 	bool altered = false;
 
-	bool alterIndividualParameters = !(body || external);
+	const bool alterIndividualParameters = !(body || external);
 
 	// first pass
 	if (alter)
@@ -1738,19 +1738,16 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 			else
 				status_exception::raise(Arg::Gds(isc_dyn_func_not_found) << Arg::Str(name));
 		}
+		else if (executeAlter(tdbb, dsqlScratch, transaction, false, true))
+		{
+			altered = true;
+		}
 		else
 		{
-			if (executeAlter(tdbb, dsqlScratch, transaction, false, true))
-			{
-				altered = true;
-			}
+			if (create)	// create or alter
+				executeCreate(tdbb, dsqlScratch, transaction);
 			else
-			{
-				if (create)	// create or alter
-					executeCreate(tdbb, dsqlScratch, transaction);
-				else
-					status_exception::raise(Arg::Gds(isc_dyn_func_not_found) << Arg::Str(name));
-			}
+				status_exception::raise(Arg::Gds(isc_dyn_func_not_found) << Arg::Str(name));
 		}
 	}
 	else
