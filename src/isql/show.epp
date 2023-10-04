@@ -2974,8 +2974,18 @@ static void show_charsets(SSHORT char_set_id, SSHORT collation)
 #endif
 		fb_utils::exact_name(CST.RDB$CHARACTER_SET_NAME);
 		fb_utils::exact_name(COL.RDB$COLLATION_NAME);
+		fb_utils::exact_name(CST.RDB$DEFAULT_COLLATE_NAME);
 
-		isqlGlob.printf(" CHARACTER SET %s COLLATE %s", CST.RDB$CHARACTER_SET_NAME, COL.RDB$COLLATION_NAME);
+		if (strcmp(CST.RDB$DEFAULT_COLLATE_NAME, COL.RDB$COLLATION_NAME) == 0 &&
+			strcmp(CST.RDB$CHARACTER_SET_NAME, COL.RDB$COLLATION_NAME) == 0)
+		{
+			// Collation is default and match charset name - do not show it.
+			isqlGlob.printf(" CHARACTER SET %s", CST.RDB$CHARACTER_SET_NAME);
+		}
+		else
+		{
+			isqlGlob.printf(" CHARACTER SET %s COLLATE %s", CST.RDB$CHARACTER_SET_NAME, COL.RDB$COLLATION_NAME);
+		}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
