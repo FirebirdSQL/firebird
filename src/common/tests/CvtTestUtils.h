@@ -21,7 +21,7 @@ namespace CvtTestUtils {
 	" IsDST:" << times.tm_isdst << \
 	" WDay:" << times.tm_wday << \
 	" YDay:" << times.tm_yday << \
-	" TZ:" << timezone \
+	" TZ Offset:" << timezone \
 
 template<typename T>
 static constexpr int sign(T value)
@@ -99,7 +99,7 @@ public:
 		const USHORT size) override { return 0; }
 	SLONG getLocalDate() override { return 0; }
 	ISC_TIMESTAMP getCurrentGmtTimeStamp() override { ISC_TIMESTAMP ts; return ts; }
-	USHORT getSessionTimeZone() override { return 0; }
+	USHORT getSessionTimeZone() override { return 1439; }
 	void isVersion4(bool& v4) override { }
 };
 

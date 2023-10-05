@@ -180,7 +180,7 @@ static const double eps_float  = 1e-5;
 template <typename T>
 static constexpr int sign(T value)
 {
-	return (T(0) < value) - (value < T(0));
+	return (value >= T(0)) ? 1 : -1;
 }
 
 

@@ -165,16 +165,21 @@ static void testCVTStringToFormatDateTime(const string& date, const string& form
 	memset(&resultTimes, 0, sizeof(resultTimes));
 	int resultFractions;
 	NoThrowTimeStamp::decode_timestamp(result.utc_timestamp, &resultTimes, &resultFractions);
+	SSHORT resultOffset;
+	TimeZoneUtil::extractOffset(result, &resultOffset);
 
 	struct tm expectedTimes;
 	memset(&expectedTimes, 0, sizeof(expectedTimes));
 	int expectedFractions;
 	NoThrowTimeStamp::decode_timestamp(expected.utc_timestamp, &expectedTimes, &expectedFractions);
+	SSHORT expectedOffset;
+	TimeZoneUtil::extractOffset(expected, &expectedOffset);
 
-	bool isEqual = !((bool) memcmp(&resultTimes, &expectedTimes, sizeof(struct tm))) && resultFractions == expectedFractions;
+	bool isEqual = !((bool) memcmp(&resultTimes, &expectedTimes, sizeof(struct tm)))
+		&& resultFractions == expectedFractions && resultOffset == expectedOffset;
 
-	BOOST_TEST(isEqual, "\nRESULT: " << DECOMPOSE_TM_STRUCT(resultTimes, resultFractions, result.time_zone)
-		<< "\nEXPECTED: " << DECOMPOSE_TM_STRUCT(expectedTimes, expectedFractions, expected.time_zone));
+	BOOST_TEST(isEqual, "\nRESULT: " << DECOMPOSE_TM_STRUCT(resultTimes, resultFractions, resultOffset)
+		<< "\nEXPECTED: " << DECOMPOSE_TM_STRUCT(expectedTimes, expectedFractions, expectedOffset));
 }
 
 BOOST_AUTO_TEST_SUITE(FunctionalTest)
@@ -299,6 +304,7 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_TZ)
 	testCVTStringToFormatDateTime("12:00  2:30", "HH24:MI TZH:TZM", createTimeStampTZ(1, 1, 1, 12, 0, 0, 150, 0), cb);
 	testCVTStringToFormatDateTime("12:00 +2:30", "HH24:MI TZH:TZM", createTimeStampTZ(1, 1, 1, 12, 0, 0, 150, 0), cb);
 	testCVTStringToFormatDateTime("12:00 -2:30", "HH24:MI TZH:TZM", createTimeStampTZ(1, 1, 1, 12, 0, 0, -150, 0), cb);
+	testCVTStringToFormatDateTime("12:00 +0:30", "HH24:MI TZH:TZM", createTimeStampTZ(1, 1, 1, 12, 0, 0, 30, 0), cb);
 	testCVTStringToFormatDateTime("12:00 +0:00", "HH24:MI TZH:TZM", createTimeStampTZ(1, 1, 1, 12, 0, 0, 0, 0), cb);
 }
 
