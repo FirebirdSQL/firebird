@@ -243,7 +243,7 @@ class CastNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_CAST>
 {
 public:
 	explicit CastNode(MemoryPool& pool, ValueExprNode* aSource = NULL, dsql_fld* aDsqlField = NULL,
-		const Firebird::string& format = NULL);
+		const Firebird::string& aFormat = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 

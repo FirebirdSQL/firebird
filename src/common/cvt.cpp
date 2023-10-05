@@ -178,7 +178,7 @@ static const double eps_double = 1e-14;
 static const double eps_float  = 1e-5;
 
 template <typename T>
-constexpr int sign(T value)
+static constexpr int sign(T value)
 {
 	return (T(0) < value) - (value < T(0));
 }
@@ -1840,7 +1840,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 			}
 			else if (pattern == "SSSSS")
 			{
-				constexpr int maximumSecondsInDay = 23 * 60 * 60 + 59 * 60 + 59;
+				constexpr int maximumSecondsInDay = 24 * 60 * 60 - 1;
 
 				int secondsInDay = parse_string_to_get_int(str, strLength, strOffset, 5);
 				if (secondsInDay > maximumSecondsInDay)

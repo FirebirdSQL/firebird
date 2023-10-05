@@ -695,12 +695,12 @@ using namespace Firebird;
 %token <metaNamePtr> TIMEZONE_NAME
 %token <metaNamePtr> UNICODE_CHAR
 %token <metaNamePtr> UNICODE_VAL
-%token <metaNamePtr> FORMAT
 
 // tokens added for Firebird 6.0
 
 %token <metaNamePtr> ANY_VALUE
 %token <metaNamePtr> CALL
+%token <metaNamePtr> FORMAT
 %token <metaNamePtr> NAMED_ARG_ASSIGN
 
 // precedence declarations for expression evaluation

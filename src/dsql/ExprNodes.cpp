@@ -3483,13 +3483,13 @@ dsc* BoolAsValueNode::execute(thread_db* tdbb, Request* request) const
 
 static RegisterNode<CastNode> regCastNode({blr_cast, blr_cast_format});
 
-CastNode::CastNode(MemoryPool& pool, ValueExprNode* aSource, dsql_fld* aDsqlField, const string& format)
+CastNode::CastNode(MemoryPool& pool, ValueExprNode* aSource, dsql_fld* aDsqlField, const string& aFormat)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_CAST>(pool),
 	  dsqlAlias("CAST"),
 	  dsqlField(aDsqlField),
 	  source(aSource),
 	  itemInfo(NULL),
-	  format(pool, format),
+	  format(pool, aFormat),
 	  artificial(false)
 {
 	castDesc.clear();
