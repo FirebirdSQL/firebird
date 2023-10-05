@@ -83,6 +83,7 @@ The following flags are currently implemented for string to datetime conversion:
 | FF1 - FF4 | Fractional seconds with the specified accuracy |
 | TZH | Time zone in Hours  (-14 - 14) |
 | TZM | Time zone in Minutes (0 - 59) |
+| TZR | Time zone Name |
 
 Dividers are the same as for datetime to string conversion and can also be omitted.
 

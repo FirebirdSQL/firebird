@@ -58,6 +58,7 @@
 #include "../common/utils_proto.h"
 #include "../common/StatusArg.h"
 #include "../common/status.h"
+#include "../common/TimeZones.h"
 
 
 #ifdef HAVE_SYS_TYPES_H
@@ -146,6 +147,106 @@ static void make_null_string(const dsc*, USHORT, const char**, vary*, USHORT, Fi
 
 class DummyException {};
 
+namespace
+{
+	class TimeZoneTrie
+	{
+	public:
+		static constexpr int EnglishAlphabet = 26;
+		static constexpr int Digits = 10;
+		static constexpr int OtherSymbols = 4; // '/' + '-' + '+' + '_'
+
+		static constexpr int MaxPatternDiversity = EnglishAlphabet + Digits + OtherSymbols;
+
+		static constexpr USHORT UninitializedTimezoneId = 0;
+
+		struct TrieNode
+		{
+			AutoPtr<TrieNode> childrens[MaxPatternDiversity];
+			USHORT timezoneId = UninitializedTimezoneId;
+		};
+
+		TimeZoneTrie(MemoryPool& pool)
+			: m_root(FB_NEW_POOL(pool) TrieNode()), m_pool(pool)
+		{
+			USHORT id = 0;
+			for (const char* p : BUILTIN_TIME_ZONE_LIST)
+			{
+				string timezoneName(p);
+				timezoneName.upper();
+				insertValue(timezoneName.c_str(), MAX_USHORT - id++);
+			}
+		}
+
+		bool contains(const char* value, USHORT& outTimezoneId, int& outParsedTimezoneLength)
+		{
+			const TrieNode* currentNode = m_root;
+			FB_SIZE_T valueLength = fb_strlen(value);
+
+			for (outParsedTimezoneLength = 0; outParsedTimezoneLength < valueLength; outParsedTimezoneLength++)
+			{
+				int index = calculateIndex(value[outParsedTimezoneLength]);
+
+				if (index < 0 || currentNode->childrens[index] == nullptr)
+					break;
+				currentNode = currentNode->childrens[index];
+			}
+
+			if (currentNode->timezoneId == UninitializedTimezoneId)
+				return false;
+
+			outTimezoneId = currentNode->timezoneId;
+			return true;
+		}
+
+	private:
+		void insertValue(const char* value, USHORT timezoneId)
+		{
+			TrieNode* currentNode = m_root;
+			FB_SIZE_T valueLength = fb_strlen(value);
+
+			for (int i = 0; i < valueLength; i++)
+			{
+				int index = calculateIndex(value[i]);
+
+				if (currentNode->childrens[index] == nullptr)
+					currentNode->childrens[index] = FB_NEW_POOL(m_pool) TrieNode();
+				currentNode = currentNode->childrens[index];
+			}
+
+			currentNode->timezoneId = timezoneId;
+		}
+
+		int calculateIndex(char symbol) const
+		{
+			int index = -1;
+			symbol = UPPER(symbol);
+
+			if (symbol >= '0' && symbol <= '9')
+				index = symbol - '0';
+			else if (symbol >= 'A' && symbol <= 'Z')
+				index = symbol - 'A' + Digits;
+			else
+			{
+				switch (symbol)
+				{
+					case '/': index = Digits + EnglishAlphabet; break;
+					case '-': index = Digits + EnglishAlphabet + 1; break;
+					case '+': index = Digits + EnglishAlphabet + 2; break;
+					case '_': index = Digits + EnglishAlphabet + 3; break;
+				}
+			}
+
+			fb_assert(index < MaxPatternDiversity);
+			return index;
+		}
+
+	private:
+		AutoPtr<TrieNode> m_root;
+		MemoryPool& m_pool;
+	};
+}
+
 enum class ExpectedDateType
 {
 	TIME,
@@ -161,8 +262,10 @@ static const char* const TO_DATETIME_PATTERNS[] = {
 
 static const char* const TO_STRING_PATTERNS[] = {
 	"YEAR", "YYYY", "YYY", "YY", "Y", "MM", "MON", "MONTH", "RM", "DD", "J", "HH", "HH12",
-	"HH24", "MI", "SS", "SSSSS", "FF1", "FF2", "FF3", "FF4", "TZH", "TZM"
+	"HH24", "MI", "SS", "SSSSS", "FF1", "FF2", "FF3", "FF4", "TZH", "TZM", "TZR"
 };
+
+static InitInstance<TimeZoneTrie> timeZoneTrie;
 
 
 //#ifndef WORDS_BIGENDIAN
@@ -1629,7 +1732,7 @@ static std::string_view parse_string_to_get_first_word(const char* str, int leng
 
 static void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::string_view previousPattern,
 	const char* str, int strLength, int& strOffset, struct tm& outTimes, int& outFractions,
-	int& outTimezoneInMinutes, Firebird::Callbacks* cb)
+	SSHORT& outTimezoneInMinutes, USHORT& outTimezoneId, Firebird::Callbacks* cb)
 {
 	switch (pattern[0])
 	{
@@ -1898,6 +2001,18 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 					outTimezoneInMinutes = parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset, true);
 				return;
 			}
+			else if (pattern == "TZR")
+			{
+				USHORT timezoneId;
+
+				int parsedTimezoneNameLength;
+				bool timezoneNameIsCorrect = timeZoneTrie().contains(str + strOffset, outTimezoneId, parsedTimezoneNameLength);
+				if (!timezoneNameIsCorrect)
+					status_exception::raise(Arg::Gds(isc_invalid_timezone_region) << string(str + strOffset, parsedTimezoneNameLength));
+
+				strOffset += parsedTimezoneNameLength;
+				return;
+			}
 			break;
 	}
 
@@ -1932,8 +2047,9 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 
 	int fractions = 0;
 
-	constexpr int uninitializedTimezoneOffsetValue = INT32_MIN;
-	int timezoneOffsetInMinutes = uninitializedTimezoneOffsetValue;
+	constexpr SSHORT uninitializedTimezoneOffsetValue = INT16_MIN;
+	SSHORT timezoneOffsetInMinutes = uninitializedTimezoneOffsetValue;
+	USHORT timezoneId = TimeZoneTrie::UninitializedTimezoneId;
 
 	int formatOffset = 0;
 	int stringOffset = 0;
@@ -1950,7 +2066,7 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 			if (formatOffset != i)
 			{
 				string_to_format_datetime_pattern_matcher(pattern, previousPattern, stringUpper.c_str(),
-					stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, cb);
+					stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, timezoneId, cb);
 				previousPattern = pattern;
 			}
 
@@ -1974,7 +2090,7 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 				if (i == formatUpper.length() - 1)
 				{
 					string_to_format_datetime_pattern_matcher(pattern, previousPattern, stringUpper.c_str(),
-						stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, cb);
+						stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, timezoneId, cb);
 				}
 				break;
 			}
@@ -1987,7 +2103,7 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 
 		pattern = pattern.substr(0, pattern.length() - 1);
 		string_to_format_datetime_pattern_matcher(pattern, previousPattern, stringUpper.c_str(),
-			stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, cb);
+			stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, timezoneId, cb);
 		previousPattern = pattern;
 		formatOffset = i;
 		i--;
@@ -2003,8 +2119,10 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 		cb->err(Arg::Gds(isc_trailing_part_of_string) << string(stringUpper.c_str() + stringOffset));
 
 	ISC_TIMESTAMP_TZ timestampTZ;
-	if (timezoneOffsetInMinutes == uninitializedTimezoneOffsetValue)
+	if (timezoneOffsetInMinutes == uninitializedTimezoneOffsetValue && timezoneId == TimeZoneTrie::UninitializedTimezoneId)
 		timestampTZ.time_zone = cb->getSessionTimeZone();
+	else if (timezoneId != TimeZoneTrie::UninitializedTimezoneId)
+		timestampTZ.time_zone = timezoneId;
 	else
 	{
 		timestampTZ.time_zone = TimeZoneUtil::makeFromOffset(sign(timezoneOffsetInMinutes),
