@@ -2681,7 +2681,10 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 					if (!FLD.RDB$CHARACTER_SET_ID.NULL)
 						char_set_id = FLD.RDB$CHARACTER_SET_ID;
 					if (char_set_id != default_char_set_id)
-						ISQL_get_character_sets(char_set_id, collation, default_char_set_id, Get::BOTH, false, true, char_sets);
+					{
+						// Currently ALTER TABLE syntax doesn't allow collation here.
+						ISQL_get_character_sets(char_set_id, collation, default_char_set_id, Get::CHARSET_ONLY, false, true, char_sets);
+					}
 					if (char_sets[0])
 						isqlGlob.prints(char_sets);
 					// CVC: Someone deleted the code that checks intchar when handling collations

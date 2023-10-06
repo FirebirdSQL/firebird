@@ -4076,7 +4076,7 @@ static processing_state show_domains(const SCHAR* domain_name)
 
 			if (((FLD.RDB$FIELD_TYPE == blr_text ||
 				FLD.RDB$FIELD_TYPE == blr_varying) && FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_binary) ||
-				FLD.RDB$FIELD_TYPE == blr_blob && FLD.RDB$FIELD_SUB_TYPE != isc_blob_text)
+				FLD.RDB$FIELD_TYPE == blr_blob && FLD.RDB$FIELD_SUB_TYPE == isc_blob_text)
 			{
 				show_charsets(char_set_id, collation);
 			}

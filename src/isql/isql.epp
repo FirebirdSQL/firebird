@@ -1507,7 +1507,10 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
 			// If they both are default - supress output completely
 			if (!charsetIsDefault || !collationIsDefault)
 			{
-				sprintf(string, " CHARACTER SET %s%s COLLATE %s", charSetName, notNullStr, collateName);
+				if (collationIsDefault) // Suppress collation only
+					sprintf(string, " CHARACTER SET %s%s", charSetName, notNullStr);
+				else
+					sprintf(string, " CHARACTER SET %s%s COLLATE %s", charSetName, notNullStr, collateName);
 				return;
 			}
 			break;
