@@ -1504,7 +1504,7 @@ void PAG_init2(thread_db* tdbb, USHORT shadow_number)
 }
 
 
-SLONG PAG_last_page(thread_db* tdbb)
+ULONG PAG_last_page(thread_db* tdbb)
 {
 /**************************************
  *

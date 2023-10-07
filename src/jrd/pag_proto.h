@@ -54,7 +54,7 @@ void	PAG_header(Jrd::thread_db*, bool);
 void	PAG_header_init(Jrd::thread_db*);
 void	PAG_init(Jrd::thread_db*);
 void	PAG_init2(Jrd::thread_db*, USHORT);
-SLONG	PAG_last_page(Jrd::thread_db* tdbb);
+ULONG	PAG_last_page(Jrd::thread_db* tdbb);
 void	PAG_release_page(Jrd::thread_db* tdbb, const Jrd::PageNumber&, const Jrd::PageNumber&);
 void	PAG_release_pages(Jrd::thread_db* tdbb, USHORT pageSpaceID, int cntRelease,
 			const ULONG* pgNums, const ULONG prior_page);

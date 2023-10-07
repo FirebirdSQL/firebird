@@ -808,6 +808,8 @@ pag* CCH_fetch(thread_db* tdbb, WIN* window, int lock_type, SCHAR page_type, int
 	case lsLocked:
 		CCH_TRACE(("FE PAGE %d:%06d", window->win_page.getPageSpaceID(), window->win_page.getPageNum()));
 		CCH_fetch_page(tdbb, window, read_shadow);	// must read page from disk
+		if (!window->win_bdb)						// read failed
+			return NULL;
 		if (syncType != SYNC_EXCLUSIVE)
 			bdb->downgrade(syncType);
 		break;
@@ -1006,6 +1008,8 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 			bdb->bdb_page.getPageSpaceID(), bdb->bdb_page.getPageNum(), bak_state, diff_page));
 	}
 
+	bool readFailed = false;
+
 	// In merge mode, if we are reading past beyond old end of file and page is in .delta file
 	// then we maintain actual page in difference file. Always read it from there.
 	if (isTempPage || bak_state == Ods::hdr_nbak_normal || !diff_page)
@@ -1017,11 +1021,12 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 
 		// Read page from disk as normal
 		Pio io(file, bdb, isTempPage, read_shadow, pageSpace);
-		if (!dbb->dbb_crypto_manager->read(tdbb, status, page, &io))
+		readFailed = !dbb->dbb_crypto_manager->read(tdbb, status, page, &io);
+		if (readFailed)
 		{
-			if (read_shadow && !isTempPage)
+			PAGE_LOCK_RELEASE(tdbb, bcb, bdb->bdb_lock);
+			if (read_shadow)
 			{
-				PAGE_LOCK_RELEASE(tdbb, bcb, bdb->bdb_lock);
 				CCH_unwind(tdbb, true);
 			}
 		}
@@ -1035,7 +1040,8 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 	{
 		NBAK_TRACE(("Reading page %d, state=%d, diff page=%d from DIFFERENCE",
 			bdb->bdb_page, bak_state, diff_page));
-		if (!bm->readDifference(tdbb, diff_page, page))
+		readFailed = !bm->readDifference(tdbb, diff_page, page);
+		if (readFailed)
 		{
 			PAGE_LOCK_RELEASE(tdbb, bcb, bdb->bdb_lock);
 			CCH_unwind(tdbb, true);
@@ -1053,19 +1059,32 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 				bdb->bdb_page, bak_state, diff_page));
 
 			Pio io(file, bdb, false, read_shadow, pageSpace);
-			if (!dbb->dbb_crypto_manager->read(tdbb, status, page, &io))
+			readFailed = !dbb->dbb_crypto_manager->read(tdbb, status, page, &io);
+			if (readFailed)
 			{
+				PAGE_LOCK_RELEASE(tdbb, bcb, bdb->bdb_lock);
 				if (read_shadow)
 				{
-					PAGE_LOCK_RELEASE(tdbb, bcb, bdb->bdb_lock);
 					CCH_unwind(tdbb, true);
 				}
 			}
 		}
 	}
 
-	bdb->bdb_flags &= ~(BDB_not_valid | BDB_read_pending);
-	window->win_buffer = bdb->bdb_buffer;
+	if (readFailed)
+	{
+		bdb->bdb_flags |= BDB_not_valid;
+		bdb->bdb_flags &= ~(BDB_writer | BDB_read_pending);
+		bdb->release(tdbb, true);
+
+		window->win_buffer = NULL;
+		window->win_bdb = NULL;
+	}
+	else
+	{
+		bdb->bdb_flags &= ~(BDB_not_valid | BDB_read_pending);
+		window->win_buffer = bdb->bdb_buffer;
+	}
 }
 
 

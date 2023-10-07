@@ -456,7 +456,7 @@ void SDW_dump_pages(thread_db* tdbb)
 	SyncLockGuard guard(&dbb->dbb_shadow_sync, SYNC_EXCLUSIVE, "SDW_dump_pages");
 
 	gds__log("conditional shadow dumped for database %s", dbb->dbb_filename.c_str());
-	const SLONG max = PAG_last_page(tdbb);
+	const ULONG max = PAG_last_page(tdbb);
 
 	// mark the first shadow in the list because we don't
 	// want to start shadowing to any files that are added
@@ -468,15 +468,15 @@ void SDW_dump_pages(thread_db* tdbb)
 	window.win_flags = WIN_large_scan;
 	window.win_scans = 1;
 
-	for (SLONG page_number = HEADER_PAGE + 1; page_number <= max; page_number++)
+	for (ULONG page_number = HEADER_PAGE + 1; page_number <= max; page_number++)
 	{
 #ifdef SUPERSERVER_V2
 		if (!(page_number % dbb->dbb_prefetch_sequence))
 		{
-			SLONG pages[PREFETCH_MAX_PAGES];
+			ULONG pages[PREFETCH_MAX_PAGES];
 
-			SLONG number = page_number;
-			SLONG i = 0;
+			ULONG number = page_number;
+			ULONG i = 0;
 			while (i < dbb->dbb_prefetch_pages && number <= max) {
 				pages[i++] = number++;
 			}

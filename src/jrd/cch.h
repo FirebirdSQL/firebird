@@ -32,7 +32,6 @@
 #include "../common/ThreadStart.h"
 #ifdef SUPERSERVER_V2
 #include "../jrd/sbm.h"
-#include "../jrd/pag.h"
 #endif
 
 #include "../jrd/que.h"

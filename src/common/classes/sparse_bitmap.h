@@ -206,6 +206,10 @@ public:
 	// Note: this method uses one of the bitmaps to return result
 	static SparseBitmap** bit_and(SparseBitmap** bitmap1, SparseBitmap** bitmap2);
 
+	// Compute the subtraction of two bitmaps.
+	// Note: this method uses bitmap1 to return result
+	static SparseBitmap** bit_subtract(SparseBitmap** bitmap1, SparseBitmap** bitmap2);
+
 protected:
 	// Internal types and constants
 	typedef typename InternalTypes::BUNCH_T BUNCH_T;
@@ -643,11 +647,9 @@ SparseBitmap<T, InternalTypes>::bit_or(SparseBitmap<T, InternalTypes>** bitmap1,
 		return result;
 	}
 
-	// Both source and destination are empty. Return destination FWIW.
+	// Theoretically destFound never be false because dest "seems bigger then" source.
 	bool destFound = dest->tree.getFirst();
-	if (!destFound) {
-		return result;
-	}
+	fb_assert(destFound);
 
 	T destValue = dest->tree.current().start_value;
 	T sourceValue = source->tree.current().start_value;
@@ -766,11 +768,9 @@ SparseBitmap<T, InternalTypes>::bit_and(SparseBitmap<T, InternalTypes>** bitmap1
 	if (!destFound)
 		return result;
 
+	// Theoretically sourceFound never be false because source "seems bigger then" dest.
 	bool sourceFound = source->tree.getFirst();
-
-	// Both source and destination are empty. Return destination FWIW.
-	if (!sourceFound)
-		return result;
+	fb_assert(sourceFound);
 
 	T destValue = dest->tree.current().start_value;
 	T sourceValue = source->tree.current().start_value;
@@ -823,6 +823,81 @@ SparseBitmap<T, InternalTypes>::bit_and(SparseBitmap<T, InternalTypes>** bitmap1
 
 	return result;
 }
+
+template <typename T, typename InternalTypes>
+SparseBitmap<T, InternalTypes>**
+SparseBitmap<T, InternalTypes>::bit_subtract(SparseBitmap<T, InternalTypes>** bitmap1,
+											 SparseBitmap<T, InternalTypes>** bitmap2
+)
+{
+	SparseBitmap *map1, *map2;
+
+	if (!bitmap1 || !(map1 = *bitmap1))
+		return NULL;
+
+	if (!bitmap2 || !(map2 = *bitmap2))
+		return bitmap1;
+
+	fb_assert(map1 != map2);
+
+	if (map1->singular)
+	{
+		if (map2->test(map1->singular_value))
+			return NULL;
+
+		return bitmap1;
+	}
+
+	if (map2->singular)
+	{
+		map1->clear(map2->singular_value);
+		return bitmap1;
+	}
+
+	bool map1Found = map1->tree.getFirst();
+	if (!map1Found)
+		return NULL;
+
+	bool map2Found = map2->tree.getFirst();
+	if (!map2Found)
+		return bitmap1;
+
+	T map1Value = map1->tree.current().start_value;
+	T map2Value = map2->tree.current().start_value;
+
+	while (map2Found)
+	{
+		// See if we need to skip value in bitmap1 (result) tree
+		if (map1Value < map2Value)
+		{
+			if ((map1Found = map1->tree.getNext()))
+				map1Value = map1->tree.current().start_value;
+			continue;
+		}
+
+		// Positions of our trees match
+		if (map1Value == map2Value)
+		{
+			const BUNCH_T bits = map1->tree.current().bits &= ~map2->tree.current().bits;
+
+			// Move to the next item of destination tree
+			if (bits)
+				map1Found = map1->tree.getNext();
+			else
+				map1Found = map1->tree.fastRemove();
+
+			if (map1Found)
+				map1Value = map1->tree.current().start_value;
+		}
+
+		// Move to the next item of source tree
+		if ((map2Found = map2->tree.getNext()))
+			map2Value = map2->tree.current().start_value;
+	}
+
+	return bitmap1;
+}
+
 
 } // namespace Firebird
 
