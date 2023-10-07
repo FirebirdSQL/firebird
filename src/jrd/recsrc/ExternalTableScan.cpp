@@ -108,7 +108,7 @@ bool ExternalTableScan::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-WriteLockResult ExternalTableScan::lockRecord(thread_db* tdbb, bool skipLocked) const
+WriteLockResult ExternalTableScan::lockRecord(thread_db* tdbb) const
 {
 	SET_TDBB(tdbb);
 

@@ -11287,7 +11287,7 @@ static void forceWriteLock(thread_db* tdbb, record_param* rpb, jrd_tra* transact
 
 		// VIO_writelock returns false if record has been deleted or modified
 		// by someone else.
-		if (VIO_writelock(tdbb, rpb, transaction, false) == WriteLockResult::LOCKED)
+		if (VIO_writelock(tdbb, rpb, transaction) == WriteLockResult::LOCKED)
 			break;
 	}
 }

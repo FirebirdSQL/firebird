@@ -111,9 +111,9 @@ bool SkipRowsStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-WriteLockResult SkipRowsStream::lockRecord(thread_db* tdbb, bool skipLocked) const
+WriteLockResult SkipRowsStream::lockRecord(thread_db* tdbb) const
 {
-	return m_next->lockRecord(tdbb, skipLocked);
+	return m_next->lockRecord(tdbb);
 }
 
 void SkipRowsStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const

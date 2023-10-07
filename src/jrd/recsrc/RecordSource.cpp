@@ -316,7 +316,7 @@ bool RecordStream::refetchRecord(thread_db* tdbb) const
 	return false;
 }
 
-WriteLockResult RecordStream::lockRecord(thread_db* tdbb, bool skipLocked) const
+WriteLockResult RecordStream::lockRecord(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	jrd_tra* const transaction = request->req_transaction;
@@ -328,7 +328,7 @@ WriteLockResult RecordStream::lockRecord(thread_db* tdbb, bool skipLocked) const
 
 	RLCK_reserve_relation(tdbb, transaction, relation, true);
 
-	return VIO_writelock(tdbb, rpb, transaction, skipLocked);
+	return VIO_writelock(tdbb, rpb, transaction);
 }
 
 void RecordStream::markRecursive()

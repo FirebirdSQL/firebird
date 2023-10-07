@@ -4452,7 +4452,7 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 }
 
 
-WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction, bool skipLocked)
+WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -4479,6 +4479,8 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 		org_rpb->rpb_flags, org_rpb->rpb_b_page, org_rpb->rpb_b_line,
 		org_rpb->rpb_f_page, org_rpb->rpb_f_line);
 #endif
+
+	bool skipLocked = false; // TODO fixme
 
 	if (transaction->tra_flags & TRA_system)
 	{

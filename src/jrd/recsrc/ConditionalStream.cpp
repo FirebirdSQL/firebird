@@ -103,7 +103,7 @@ bool ConditionalStream::refetchRecord(thread_db* tdbb) const
 	return impure->irsb_next->refetchRecord(tdbb);
 }
 
-WriteLockResult ConditionalStream::lockRecord(thread_db* tdbb, bool skipLocked) const
+WriteLockResult ConditionalStream::lockRecord(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -111,7 +111,7 @@ WriteLockResult ConditionalStream::lockRecord(thread_db* tdbb, bool skipLocked) 
 	if (!(impure->irsb_flags & irsb_open))
 		return WriteLockResult::CONFLICTED;
 
-	return impure->irsb_next->lockRecord(tdbb, skipLocked);
+	return impure->irsb_next->lockRecord(tdbb);
 }
 
 void ConditionalStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const

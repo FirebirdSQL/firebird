@@ -116,9 +116,9 @@ bool SortedStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-WriteLockResult SortedStream::lockRecord(thread_db* tdbb, bool skipLocked) const
+WriteLockResult SortedStream::lockRecord(thread_db* tdbb) const
 {
-	return m_next->lockRecord(tdbb, skipLocked);
+	return m_next->lockRecord(tdbb);
 }
 
 void SortedStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
