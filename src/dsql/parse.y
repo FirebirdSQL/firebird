@@ -1566,7 +1566,7 @@ create_clause
 				node->relation = $7;
 				$$ = node;
 			}
-		index_definition(static_cast<CreateIndexNode*>($8)) tablespace_name_clause
+		index_definition(static_cast<CreateIndexNode*>($8)) tablespace_name_clause_opt
 			{
 				if ($10)
 					static_cast<CreateIndexNode*>($8)->tableSpace = *$10;
@@ -2662,7 +2662,7 @@ column_constraint($addColumnClause)
 			constraint.check = $1;
 		}
 	| REFERENCES symbol_table_name column_parens_opt
-			referential_trigger_action constraint_index_opt tablespace_name_clause
+			referential_trigger_action constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_FK;
@@ -2685,7 +2685,7 @@ column_constraint($addColumnClause)
 			if ($6)
 				constraint.tableSpace = *$6;
 		}
-	| UNIQUE constraint_index_opt tablespace_name_clause
+	| UNIQUE constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_UNIQUE;
@@ -2694,7 +2694,7 @@ column_constraint($addColumnClause)
 			if ($3)
 				constraint.tableSpace = *$3;
 		}
-	| PRIMARY KEY constraint_index_opt tablespace_name_clause
+	| PRIMARY KEY constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_PK;
@@ -2726,7 +2726,7 @@ constraint_name_opt
 
 %type <addConstraintClause> table_constraint(<relationNode>)
 table_constraint($relationNode)
-	: UNIQUE column_parens constraint_index_opt tablespace_name_clause
+	: UNIQUE column_parens constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = *newNode<RelationNode::AddConstraintClause>();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_UNIQUE;
@@ -2745,7 +2745,7 @@ table_constraint($relationNode)
 			$relationNode->clauses.add(&constraint);
 			$$ = &constraint;
 		}
-	| PRIMARY KEY column_parens constraint_index_opt tablespace_name_clause
+	| PRIMARY KEY column_parens constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = *newNode<RelationNode::AddConstraintClause>();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_PK;
@@ -2765,7 +2765,7 @@ table_constraint($relationNode)
 			$$ = &constraint;
 		}
 	| FOREIGN KEY column_parens REFERENCES symbol_table_name column_parens_opt
-		referential_trigger_action constraint_index_opt tablespace_name_clause
+		referential_trigger_action constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = *newNode<RelationNode::AddConstraintClause>();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_FK;
@@ -5286,7 +5286,7 @@ without_time_zone_opt
 
 %type <legacyField> blob_type
 blob_type
-	: BLOB { $$ = newNode<dsql_fld>(); } blob_subtype(NOTRIAL($2)) blob_segsize charset_clause /*tablespace_name_clause*/
+	: BLOB { $$ = newNode<dsql_fld>(); } blob_subtype(NOTRIAL($2)) blob_segsize charset_clause /*tablespace_name_clause_opt*/
 		{
 			$$ = $2;
 			$$->dtype = dtype_blob;
@@ -5301,7 +5301,7 @@ blob_type
 			//if ($6)
 			//	$$->fld_ts_name = *$6;
 		}
-	| BLOB '(' unsigned_short_integer ')' /*tablespace_name_clause*/
+	| BLOB '(' unsigned_short_integer ')' /*tablespace_name_clause_opt*/
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_blob;
@@ -5312,7 +5312,7 @@ blob_type
 			//if ($5)
 			//	$$->fld_ts_name = *$5;
 		}
-	| BLOB '(' unsigned_short_integer ',' signed_short_integer ')' /*tablespace_name_clause*/
+	| BLOB '(' unsigned_short_integer ',' signed_short_integer ')' /*tablespace_name_clause_opt*/
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_blob;
@@ -5324,7 +5324,7 @@ blob_type
 			//if ($7)
 			//	$$->fld_ts_name = *$7;
 		}
-	| BLOB '(' ',' signed_short_integer ')' /*tablespace_name_clause*/
+	| BLOB '(' ',' signed_short_integer ')' /*tablespace_name_clause_opt*/
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_blob;
@@ -8003,8 +8003,13 @@ replace_tablespace_clause
 
 %type <metaNamePtr> tablespace_name_clause
 tablespace_name_clause
+	: in_opt TABLESPACE symbol_tablespace_name { $$ = $3; }
+	;
+
+%type <metaNamePtr> tablespace_name_clause_opt
+tablespace_name_clause_opt
 	: /* nothing */ { $$ = NULL; }
-	| in_opt TABLESPACE symbol_tablespace_name { $$ = $3; }
+	| tablespace_name_clause { $$ = $1; }
 	;
 
 %type <dropTablespaceNode> drop_tablespace_clause
