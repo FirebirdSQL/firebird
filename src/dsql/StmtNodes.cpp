@@ -152,6 +152,40 @@ namespace
 		{}
 	};
 
+	// Combined conditional savepoint and its change marker.
+	class CondSavepointAndMarker
+	{
+	public:
+		CondSavepointAndMarker(thread_db* tdbb, jrd_tra* trans, bool cond) :
+			m_savepoint(tdbb, trans, cond),
+			m_marker(cond ? trans->tra_save_point : nullptr)
+		{}
+
+		~CondSavepointAndMarker()
+		{
+			rollback();
+		}
+
+		void release()
+		{
+			m_marker.done();
+			m_savepoint.release();
+		}
+
+		void rollback()
+		{
+			m_marker.done();
+			m_savepoint.rollback();
+		}
+
+	private:
+		// Prohibit unwanted creation/copying
+		CondSavepointAndMarker(const CondSavepointAndMarker&) = delete;
+		CondSavepointAndMarker& operator=(const CondSavepointAndMarker&) = delete;
+
+		AutoSavePoint m_savepoint;
+		Savepoint::ChangeMarker m_marker;
+	};
 }	// namespace
 
 
@@ -2314,7 +2348,7 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			PASS1_limit(dsqlScratch, dsqlRows->length, dsqlRows->skip, rse);
 
 		if (dsqlSkipLocked)
-			rse->flags |= RseNode::FLAG_WRITELOCK | RseNode::FLAG_SKIP_LOCKED;
+			rse->flags |= RseNode::FLAG_SKIP_LOCKED;
 	}
 
 	if (dsqlReturning && dsqlScratch->isPsql())
@@ -2348,6 +2382,7 @@ string EraseNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, dsqlReturning);
 	NODE_PRINT(printer, dsqlRse);
 	NODE_PRINT(printer, dsqlContext);
+	NODE_PRINT(printer, dsqlSkipLocked);
 	NODE_PRINT(printer, statement);
 	NODE_PRINT(printer, subStatement);
 	NODE_PRINT(printer, stream);
@@ -2665,7 +2700,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 
 	if (rpb->rpb_runtime_flags & RPB_refetch)
 	{
-		VIO_refetch_record(tdbb, rpb, transaction, RecordLock::NONE, false);
+		VIO_refetch_record(tdbb, rpb, transaction, false, false);
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
 	}
 
@@ -2673,6 +2708,12 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 		return parentStmt;
 
 	SavepointChangeMarker scMarker(transaction);
+
+	// Prepare to undo changes by PRE-triggers if record is locked by another
+	// transaction and delete should be skipped.
+	const bool skipLocked = rpb->rpb_stream_flags & RPB_s_skipLocked;
+	CondSavepointAndMarker spPreTriggers(tdbb, transaction,
+		skipLocked && !(transaction->tra_flags & TRA_system) && relation->rel_pre_erase);
 
 	// Handle pre-operation trigger.
 	preModifyEraseTriggers(tdbb, &relation->rel_pre_erase, whichTrig, rpb, NULL, TRIGGER_DELETE);
@@ -2683,23 +2724,31 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 		VirtualTable::erase(tdbb, rpb);
 	else if (!relation->rel_view_rse)
 	{
-		// VIO_erase returns false if there is an update conflict in Read Consistency
-		// transaction. Before returning false it disables statement-level snapshot
-		// (via setting req_update_conflict flag) so re-fetch should see new data.
+		// VIO_erase returns false if:
+		// a) there is an update conflict in Read Consistency transaction.
+		// Before returning false it disables statement-level snapshot (via
+		// setting req_update_conflict flag) so re-fetch should see new data.
+		// b) record is locked by another transaction and should be skipped.
 
 		if (!VIO_erase(tdbb, rpb, transaction))
 		{
-			forceWriteLock(tdbb, rpb, transaction);
+			if (!skipLocked)
+			{
+				spPreTriggers.release();
 
-			if (!forNode)
-				restartRequest(request, transaction);
+				forceWriteLock(tdbb, rpb, transaction);
 
-			forNode->setWriteLockMode(request);
+				if (!forNode)
+					restartRequest(request, transaction);
+
+				forNode->setWriteLockMode(request);
+			}
 			return parentStmt;
 		}
 
 		REPL_erase(tdbb, rpb, transaction);
 	}
+	spPreTriggers.release();
 
 	// Handle post operation trigger.
 	if (relation->rel_post_erase && whichTrig != PRE_TRIG)
@@ -5632,6 +5681,16 @@ StmtNode* ForNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	if (rse->hasWriteLock())
 		withLock = true;
 
+	if (rse->hasSkipLocked())
+	{
+		SortedStreamList streamList;
+		rse->collectStreams(streamList);
+		for (auto stream : streamList)
+		{
+			csb->csb_rpt[stream].csb_flags |= csb_skip_locked;
+		}
+	}
+
 	if (marks & MARK_MERGE)
 		impureOffset = csb->allocImpure<ImpureMerge>();
 	else
@@ -7199,6 +7258,7 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 	}
 
 	node->dsqlCursorName = dsqlCursorName;
+	node->dsqlSkipLocked = dsqlSkipLocked;
 
 	if (dsqlCursorName.hasData() && dsqlScratch->isPsql())
 	{
@@ -7305,7 +7365,7 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 			PASS1_limit(dsqlScratch, dsqlRows->length, dsqlRows->skip, rse);
 
 		if (dsqlSkipLocked)
-			rse->flags |= RseNode::FLAG_WRITELOCK | RseNode::FLAG_SKIP_LOCKED;
+			rse->flags |= RseNode::FLAG_SKIP_LOCKED;
 	}
 
 	node->dsqlReturning = dsqlProcessReturning(dsqlScratch,
@@ -7366,6 +7426,7 @@ string ModifyNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, dsqlRseFlags);
 	NODE_PRINT(printer, dsqlRse);
 	NODE_PRINT(printer, dsqlContext);
+	NODE_PRINT(printer, dsqlSkipLocked);
 	NODE_PRINT(printer, statement);
 	NODE_PRINT(printer, statement2);
 	NODE_PRINT(printer, subMod);
@@ -7715,6 +7776,12 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 				SavepointChangeMarker scMarker(transaction);
 
+				// Prepare to undo changed by PRE-triggers if record is locked by another
+				// transaction and update should be skipped.
+				const bool skipLocked = orgRpb->rpb_stream_flags & RPB_s_skipLocked;
+				CondSavepointAndMarker spPreTriggers(tdbb, transaction,
+					skipLocked && !(transaction->tra_flags & TRA_system) && relation->rel_pre_modify);
+
 				preModifyEraseTriggers(tdbb, &relation->rel_pre_modify, whichTrig, orgRpb, newRpb,
 					TRIGGER_UPDATE);
 
@@ -7727,24 +7794,31 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 					VirtualTable::modify(tdbb, orgRpb, newRpb);
 				else if (!relation->rel_view_rse)
 				{
-					// VIO_modify returns false if there is an update conflict in Read Consistency
-					// transaction. Before returning false it disables statement-level snapshot
-					// (via setting req_update_conflict flag) so re-fetch should see new data.
+					// VIO_modify returns false if:
+					// a) there is an update conflict in Read Consistency transaction.
+					// Before returning false it disables statement-level snapshot (via
+					// setting req_update_conflict flag) so re-fetch should see new data.
+					// b) record is locked by another transaction and should be skipped.
 
 					if (!VIO_modify(tdbb, orgRpb, newRpb, transaction))
 					{
-						forceWriteLock(tdbb, orgRpb, transaction);
+						if (!skipLocked)
+						{
+							spPreTriggers.release();
+							forceWriteLock(tdbb, orgRpb, transaction);
 
-						if (!forNode)
-							restartRequest(request, transaction);
+							if (!forNode)
+								restartRequest(request, transaction);
 
-						forNode->setWriteLockMode(request);
+							forNode->setWriteLockMode(request);
+						}
 						return parentStmt;
 					}
 
 					IDX_modify(tdbb, orgRpb, newRpb, transaction);
 					REPL_modify(tdbb, orgRpb, newRpb, transaction);
 				}
+				spPreTriggers.release();
 
 				newRpb->rpb_number = orgRpb->rpb_number;
 				newRpb->rpb_number.setValid(true);
@@ -7815,7 +7889,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 	if (orgRpb->rpb_runtime_flags & RPB_refetch)
 	{
-		VIO_refetch_record(tdbb, orgRpb, transaction, RecordLock::NONE, false);
+		VIO_refetch_record(tdbb, orgRpb, transaction, false, false);
 		orgRpb->rpb_runtime_flags &= ~RPB_refetch;
 	}
 
@@ -11281,7 +11355,7 @@ static void cleanupRpb(thread_db* tdbb, record_param* rpb)
 // Try to set write lock on record until success or record exists
 static void forceWriteLock(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 {
-	while (VIO_refetch_record(tdbb, rpb, transaction, RecordLock::LOCK, true))
+	while (VIO_refetch_record(tdbb, rpb, transaction, true, true))
 	{
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
 

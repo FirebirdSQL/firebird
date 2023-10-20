@@ -620,9 +620,12 @@ Savepoint* Savepoint::release(Savepoint* prior)
 
 // AutoSavePoint implementation
 
-AutoSavePoint::AutoSavePoint(thread_db* tdbb, jrd_tra* trans)
+AutoSavePoint::AutoSavePoint(thread_db* tdbb, jrd_tra* trans, bool cond)
 	: m_tdbb(tdbb), m_transaction(trans), m_number(0)
 {
+	if (!cond)
+		return;
+
 	const auto savepoint = trans->startSavepoint();
 	m_number = savepoint->getNumber();
 }

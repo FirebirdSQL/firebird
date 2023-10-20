@@ -483,7 +483,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 
 		tdbb->bumpRelStats(RuntimeStatistics::RECORD_RPT_READS, relation->rel_id);
 
-		if (VIO_chase_record_version(tdbb, &temp, transaction, tdbb->getDefaultPool(), RecordLock::NONE, false))
+		if (VIO_chase_record_version(tdbb, &temp, transaction, tdbb->getDefaultPool(), false, false))
 		{
 			if (!(temp.rpb_runtime_flags & RPB_undo_data))
 				VIO_data(tdbb, &temp, tdbb->getDefaultPool());

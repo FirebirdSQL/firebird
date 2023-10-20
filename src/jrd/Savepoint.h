@@ -291,6 +291,15 @@ namespace Jrd
 					++m_savepoint->m_count;
 			}
 
+			void done()
+			{
+				if (m_savepoint)
+				{
+					--m_savepoint->m_count;
+					m_savepoint = nullptr;
+				}
+			}
+
 			~ChangeMarker()
 			{
 				if (m_savepoint)
@@ -301,7 +310,7 @@ namespace Jrd
 			ChangeMarker(const ChangeMarker&);
 			ChangeMarker& operator=(const ChangeMarker&);
 
-			Savepoint* const m_savepoint;
+			Savepoint* m_savepoint;
 		};
 
 	private:
@@ -330,7 +339,7 @@ namespace Jrd
 	class AutoSavePoint
 	{
 	public:
-		AutoSavePoint(thread_db* tdbb, jrd_tra* trans);
+		AutoSavePoint(thread_db* tdbb, jrd_tra* trans, bool cond = true);
 		~AutoSavePoint();
 
 		void release();

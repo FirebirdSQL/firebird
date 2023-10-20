@@ -306,7 +306,7 @@ bool RecordStream::refetchRecord(thread_db* tdbb) const
 
 	if (rpb->rpb_runtime_flags & RPB_refetch)
 	{
-		if (VIO_refetch_record(tdbb, rpb, transaction, RecordLock::LOCK, false))
+		if (VIO_refetch_record(tdbb, rpb, transaction, false, false))
 		{
 			rpb->rpb_runtime_flags &= ~RPB_refetch;
 			return true;
