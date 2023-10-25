@@ -1214,6 +1214,12 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 	const bool skipLocked = rpb->rpb_stream_flags & RPB_s_skipLocked;
 
+	if (skipLocked && (state == tra_active || state == tra_limbo))
+	{
+		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
+		return false;
+	}
+
 	// First, save the record indentifying information to be restored on exit
 
 	while (true)
@@ -1263,12 +1269,12 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 		if ((transaction->tra_flags & TRA_read_committed) &&
 			!(transaction->tra_flags & TRA_read_consistency) &&
-			(!(transaction->tra_flags & TRA_rec_version) || writelock || skipLocked))
+			(!(transaction->tra_flags & TRA_rec_version) || writelock))
 		{
 			if (state == tra_limbo)
 			{
 				CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
-				state = wait(tdbb, transaction, rpb, skipLocked);
+				state = wait(tdbb, transaction, rpb, false);
 
 				if (!DPM_get(tdbb, rpb, LCK_read))
 					return false;
@@ -1279,9 +1285,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 				if (state == tra_active)
 				{
-					if (skipLocked)
-						return false;
-
 					// error if we cannot ignore limbo, else fall through
 					// to next version
 
@@ -1302,7 +1305,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				// of a dead record version.
 
 				CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
-				state = wait(tdbb, transaction, rpb, skipLocked);
+				state = wait(tdbb, transaction, rpb, false);
 
 				if (state == tra_committed)
 					state = check_precommitted(transaction, rpb);
@@ -1310,9 +1313,6 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				if (state == tra_active)
 				{
 					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
-
-					if (skipLocked)
-						return false;
 
 					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
 					ERR_post(Arg::Gds(isc_deadlock) <<

@@ -2391,6 +2391,8 @@ string EraseNode::internalPrint(NodePrinter& printer) const
 	return "EraseNode";
 }
 
+// The EraseNode::erase() depends on generated nodes layout in case when
+// RETURNING specified.
 void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	std::optional<USHORT> tableNumber;
@@ -2423,7 +2425,6 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (dsqlReturning)
 	{
 		dsqlScratch->appendUChar(blr_begin);
-		dsqlGenReturning(dsqlScratch, dsqlReturning, tableNumber);
 	}
 
 	dsqlScratch->appendUChar(blr_erase);
@@ -2434,6 +2435,8 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (dsqlReturning)
 	{
+		dsqlGenReturning(dsqlScratch, dsqlReturning, tableNumber);
+
 		dsqlScratch->appendUChar(blr_end);
 
 		if (!dsqlScratch->isPsql() && dsqlCursorName.isEmpty())
@@ -2732,18 +2735,23 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 
 		if (!VIO_erase(tdbb, rpb, transaction))
 		{
-			if (!skipLocked)
-			{
-				spPreTriggers.release();
+			// Record was not deleted, flow control should be passed to the
+			// parent ForNode. Note, If RETURNING clause was specified, then
+			// parent node is CompoundStmtNode, not ForNode. If\when this
+			// will be changed, the code below should be changed accordingly.
 
-				forceWriteLock(tdbb, rpb, transaction);
+			if (skipLocked)
+				return forNode;
 
-				if (!forNode)
-					restartRequest(request, transaction);
+			spPreTriggers.release();
 
-				forNode->setWriteLockMode(request);
-			}
-			return parentStmt;
+			forceWriteLock(tdbb, rpb, transaction);
+
+			if (!forNode)
+				restartRequest(request, transaction);
+
+			forNode->setWriteLockMode(request);
+			return forNode;
 		}
 
 		REPL_erase(tdbb, rpb, transaction);
