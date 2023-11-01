@@ -159,11 +159,13 @@ set /A FBBUILD_PACKAGE_NUMBER+=1
 )
 @echo   Setting FBBUILD_PACKAGE_NUMBER to %FBBUILD_PACKAGE_NUMBER%
 
-:: If a suffix is defined (usually for an RC) ensure it is prefixed correctly.
-if defined FBBUILD_FILENAME_SUFFIX (
-if not "%FBBUILD_FILENAME_SUFFIX:~0,1%"=="-" (
-(set FBBUILD_FILENAME_SUFFIX=-%FBBUILD_FILENAME_SUFFIX%)
-)
+:: Generate FBBUILD_FILENAME_SUFFIX from FB_BUILD_SUFFIX and add prefix '-'
+@for /f "tokens=3-5" %%a in ( "%FB_BUILD_SUFFIX%" ) do (
+  if "%%~a" == "Release"  (
+    set FBBUILD_FILENAME_SUFFIX=-RC%%~c
+  ) else (
+    set FBBUILD_FILENAME_SUFFIX=-%%~a%%~b
+  )
 )
 
 :: Set up our final destination

@@ -1106,7 +1106,7 @@ RestoreRelationTask::Item::EnsureUnlockBuffer::~EnsureUnlockBuffer()
 
 /// class RestoreRelationTask::ExcReadDone
 
-void RestoreRelationTask::ExcReadDone::stuffByException(StaticStatusVector& status) const throw()
+void RestoreRelationTask::ExcReadDone::stuffByException(StaticStatusVector& status) const noexcept
 {
 	ISC_STATUS sv[] = {isc_arg_gds, isc_random, isc_arg_string,
 		(ISC_STATUS)(IPTR) "Unexpected call to RestoreRelationTask::ExcReadDone::stuffException()", isc_arg_end};
@@ -1121,7 +1121,7 @@ void RestoreRelationTask::ExcReadDone::stuffByException(StaticStatusVector& stat
 	}
 }
 
-const char* RestoreRelationTask::ExcReadDone::what() const throw()
+const char* RestoreRelationTask::ExcReadDone::what() const noexcept
 {
 	return "RestoreRelationTask::ExcReadDone";
 }

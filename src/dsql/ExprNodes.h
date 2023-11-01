@@ -23,10 +23,12 @@
 #ifndef DSQL_EXPR_NODES_H
 #define DSQL_EXPR_NODES_H
 
+#include <optional>
 #include "firebird/impl/blr.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/NodePrinter.h"
 #include "../common/classes/init.h"
+#include "../common/classes/TriState.h"
 #include "../dsql/pass1_proto.h"
 
 class SysFunction;
@@ -240,7 +242,8 @@ public:
 class CastNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_CAST>
 {
 public:
-	explicit CastNode(MemoryPool& pool, ValueExprNode* aSource = NULL, dsql_fld* aDsqlField = NULL);
+	explicit CastNode(MemoryPool& pool, ValueExprNode* aSource = NULL, dsql_fld* aDsqlField = NULL,
+		const Firebird::string& aFormat = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
@@ -271,11 +274,15 @@ public:
 	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual dsc* execute(thread_db* tdbb, Request* request) const;
 
+	static dsc* perform(thread_db* tdbb, impure_value* impure, dsc* value,
+		const dsc* castDesc, const ItemInfo* itemInfo, const Firebird::string& format = nullptr);
+
 public:
 	MetaName dsqlAlias;
 	dsql_fld* dsqlField;
 	NestConst<ValueExprNode> source;
 	NestConst<ItemInfo> itemInfo;
+	Firebird::string format;
 	dsc castDesc;
 	bool artificial;
 };
@@ -288,6 +295,7 @@ public:
 		: TypedNode<ValueExprNode, ExprNode::TYPE_COALESCE>(pool),
 		  args(aArgs)
 	{
+		castDesc.clear();
 	}
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
@@ -324,6 +332,7 @@ public:
 
 public:
 	NestConst<ValueListNode> args;
+	dsc castDesc;
 };
 
 
@@ -683,7 +692,7 @@ public:
 public:
 	NestConst<ValueExprNode> arg;
 	Firebird::Array<StreamType> internalStreamList;
-	Nullable<USHORT> cursorNumber;
+	std::optional<USHORT> cursorNumber;
 };
 
 
@@ -693,7 +702,6 @@ public:
 	explicit DomainValidationNode(MemoryPool& pool)
 		: TypedNode<ValueExprNode, ExprNode::TYPE_DOMAIN_VALIDATION>(pool)
 	{
-		domDesc.clear();
 	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -826,7 +834,7 @@ public:
 	NestConst<ValueListNode> dsqlIndices;
 	const Format* format;
 	const StreamType fieldStream;
-	Nullable<USHORT> cursorNumber;
+	std::optional<USHORT> cursorNumber;
 	const USHORT fieldId;
 	const bool byId;
 	bool dsqlCursorField;
@@ -918,7 +926,10 @@ public:
 class LiteralNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_LITERAL>
 {
 public:
-	explicit LiteralNode(MemoryPool& pool);
+	explicit LiteralNode(MemoryPool& pool)
+		: TypedNode<ValueExprNode, ExprNode::TYPE_LITERAL>(pool)
+	{
+	}
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 	static void genConstant(DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool negateValue, USHORT numStringLength = 0);
@@ -956,9 +967,9 @@ public:
 	void fixMinSInt128(MemoryPool& pool);
 
 public:
-	const IntlString* dsqlStr;
+	const IntlString* dsqlStr = nullptr;
 	dsc litDesc;
-	USHORT litNumStringLength;
+	USHORT litNumStringLength = 0;
 };
 
 
@@ -1577,7 +1588,7 @@ class ParameterNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_PARAM
 private:
 	// CVC: This is a guess for the length of the parameter for LIKE and others, when the
 	// original dtype isn't string and force_varchar is true.
-	static const int LIKE_PARAM_LEN = 30;
+	static constexpr int LIKE_PARAM_LEN = 30;
 
 public:
 	explicit ParameterNode(MemoryPool& pool);
@@ -2125,11 +2136,12 @@ private:
 	};
 
 public:
-	explicit UdfCallNode(MemoryPool& pool, const QualifiedName& aName,
-		ValueListNode* aArgs = NULL);
+	UdfCallNode(MemoryPool& pool, const QualifiedName& aName = {},
+		ValueListNode* aArgs = nullptr, Firebird::ObjectsArray<MetaName>* aDsqlArgNames = nullptr);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
+public:
 	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
 	{
 		ValueExprNode::getChildren(holder, dsql);
@@ -2163,11 +2175,12 @@ public:
 public:
 	QualifiedName name;
 	NestConst<ValueListNode> args;
+	NestConst<Firebird::ObjectsArray<MetaName>> dsqlArgNames;
 	NestConst<Function> function;
 
 private:
-	dsql_udf* dsqlFunction;
-	bool isSubRoutine;
+	dsql_udf* dsqlFunction = nullptr;
+	bool isSubRoutine = false;
 };
 
 
@@ -2216,6 +2229,7 @@ public:
 	NestConst<BoolExprNode> condition;
 	NestConst<ValueExprNode> trueValue;
 	NestConst<ValueExprNode> falseValue;
+	bool dsqlGenCast = true;
 };
 
 

@@ -22,6 +22,7 @@
 
 #include "firebird.h"
 #include "firebird/Message.h"
+#include <optional>
 #include "../common/Int128.h"
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/auto.h"
@@ -29,13 +30,11 @@
 #include "../common/classes/fb_string.h"
 #include "../common/classes/GenericMap.h"
 #include "../common/classes/MetaString.h"
-#include "../common/classes/Nullable.h"
 #include "../common/classes/objects_array.h"
 #include "../common/classes/stack.h"
 #include "../common/status.h"
 #include "../intl/charsets.h"
 #include "../jrd/intl.h"
-#include <unicode/utf8.h>
 
 using namespace Firebird;
 
@@ -45,7 +44,12 @@ namespace
 
 class ProfilerPlugin;
 
-constexpr unsigned MAX_ACCESS_PATH_CHAR_LEN = 255;
+
+static constexpr UCHAR STREAM_BLOB_BPB[] = {
+	isc_bpb_version1,
+	isc_bpb_type, 1, isc_bpb_type_stream,
+};
+
 static const CInt128 ONE_SECOND_IN_NS{1'000'000'000};
 static CInt128 ticksFrequency{0};
 
@@ -105,7 +109,7 @@ struct Cursor
 
 struct RecordSource
 {
-	Nullable<ULONG> parentId;
+	std::optional<ULONG> parentId;
 	unsigned level;
 	string accessPath{defaultPool()};
 };
@@ -137,8 +141,8 @@ struct Request
 	SINT64 callerStatementId = 0;
 	SINT64 callerRequestId = 0;
 	ISC_TIMESTAMP_TZ startTimestamp;
-	Nullable<ISC_TIMESTAMP_TZ> finishTimestamp;
-	Nullable<FB_UINT64> totalElapsedTicks;
+	std::optional<ISC_TIMESTAMP_TZ> finishTimestamp;
+	std::optional<FB_UINT64> totalElapsedTicks;
 	NonPooledMap<CursorRecSourceKey, RecordSourceStats> recordSourcesStats{defaultPool()};
 	NonPooledMap<LineColumnKey, Stats> psqlStats{defaultPool()};
 };
@@ -226,7 +230,7 @@ public:
 	NonPooledMap<SINT64, Request> requests{defaultPool()};
 	SINT64 id;
 	ISC_TIMESTAMP_TZ startTimestamp;
-	Nullable<ISC_TIMESTAMP_TZ> finishTimestamp;
+	std::optional<ISC_TIMESTAMP_TZ> finishTimestamp;
 	string description{defaultPool()};
 	bool detailedRequests = false;
 	bool dirty = true;
@@ -454,7 +458,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 		(FB_INTEGER, recordSourceId)
 		(FB_INTEGER, parentRecordSourceId)
 		(FB_INTEGER, level)
-		(FB_INTL_VARCHAR(MAX_ACCESS_PATH_CHAR_LEN * 4, CS_UTF8), accessPath)
+		(FB_BLOB, accessPath)
 	) recSrcMessage(status, MasterInterfacePtr());
 	recSrcMessage.clear();
 
@@ -649,8 +653,9 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 			sessionMessage->startTimestampNull = FB_FALSE;
 			sessionMessage->startTimestamp = session->startTimestamp;
 
-			sessionMessage->finishTimestampNull = session->finishTimestamp.isUnknown();
-			sessionMessage->finishTimestamp = session->finishTimestamp.value;
+			sessionMessage->finishTimestampNull = !session->finishTimestamp.has_value();
+			if (session->finishTimestamp.has_value())
+				sessionMessage->finishTimestamp = session->finishTimestamp.value();
 
 			sessionStmt->execute(status, transaction, sessionMessage.getMetadata(),
 				sessionMessage.getData(), nullptr, nullptr);
@@ -714,7 +719,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 				if (profileStatement.sqlText.hasData())
 				{
 					auto blob = makeNoIncRef(userAttachment->createBlob(
-						status, transaction, &statementMessage->sqlText, 0, nullptr));
+						status, transaction, &statementMessage->sqlText, sizeof(STREAM_BLOB_BPB), STREAM_BLOB_BPB));
 					blob->putSegment(status, profileStatement.sqlText.length(), profileStatement.sqlText.c_str());
 					blob->close(status);
 					blob.clear();
@@ -772,14 +777,20 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 			recSrcMessage->recordSourceIdNull = FB_FALSE;
 			recSrcMessage->recordSourceId = recSourceId;
 
-			recSrcMessage->parentRecordSourceIdNull = !recSrc.parentId.specified;
-			recSrcMessage->parentRecordSourceId = recSrc.parentId.value;
+			recSrcMessage->parentRecordSourceIdNull = !recSrc.parentId.has_value();
+			recSrcMessage->parentRecordSourceId = recSrc.parentId.value_or(0);
 
 			recSrcMessage->levelNull = FB_FALSE;
 			recSrcMessage->level = recSrc.level;
 
 			recSrcMessage->accessPathNull = FB_FALSE;
-			recSrcMessage->accessPath.set(recSrc.accessPath.c_str());
+			{	// scope
+				auto blob = makeNoIncRef(userAttachment->createBlob(status, transaction, &recSrcMessage->accessPath,
+					sizeof(STREAM_BLOB_BPB), STREAM_BLOB_BPB));
+				blob->putSegment(status, recSrc.accessPath.length(), recSrc.accessPath.c_str());
+				blob->close(status);
+				blob.clear();
+			}
 
 			recSrcStmt->execute(status, transaction, recSrcMessage.getMetadata(),
 				recSrcMessage.getData(), nullptr, nullptr);
@@ -839,25 +850,23 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					requestMessage->startTimestampNull = FB_FALSE;
 					requestMessage->startTimestamp = profileRequest.startTimestamp;
 
-					requestMessage->finishTimestampNull = profileRequest.finishTimestamp.isUnknown();
-					requestMessage->finishTimestamp = profileRequest.finishTimestamp.value;
+					requestMessage->finishTimestampNull = !profileRequest.finishTimestamp.has_value();
+					if (profileRequest.finishTimestamp.has_value())
+						requestMessage->finishTimestamp = profileRequest.finishTimestamp.value();
 
-					requestMessage->totalElapsedTimeNull = profileRequest.totalElapsedTicks.isUnknown();
-					requestMessage->totalElapsedTime = ticksToNanoseconds(profileRequest.totalElapsedTicks.value);
+					requestMessage->totalElapsedTimeNull = !profileRequest.totalElapsedTicks.has_value();
+					requestMessage->totalElapsedTime = ticksToNanoseconds(profileRequest.totalElapsedTicks.value_or(0));
 
 					addBatch(requestBatch, requestBatchSize, requestMessage);
 
-					if (profileRequest.finishTimestamp.isAssigned())
+					if (profileRequest.finishTimestamp.has_value())
 						finishedRequests.add(requestIt->first);
 
 					profileRequest.dirty = false;
 				}
 
-				for (const auto& statsIt : profileRequest.recordSourcesStats)
+				for (const auto& [cursorRecSource, stats] : profileRequest.recordSourcesStats)
 				{
-					const auto& cursorRecSource = statsIt.first;
-					const auto& stats = statsIt.second;
-
 					recSrcStatMessage->profileIdNull = FB_FALSE;
 					recSrcStatMessage->profileId = session->getId();
 
@@ -940,7 +949,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 			}
 		}
 
-		if (session->finishTimestamp.isUnknown())
+		if (!session->finishTimestamp.has_value())
 		{
 			session->statements.clear();
 			session->recordSources.clear();
@@ -1047,7 +1056,7 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		    record_source_id integer not null,
 		    parent_record_source_id integer,
 		    level integer not null,
-		    access_path varchar(255) character set utf8 not null,
+		    access_path blob sub_type text character set utf8 not null,
 		    constraint plg$prof_record_sources_pk
 		        primary key (profile_id, statement_id, cursor_id, record_source_id)
 		        using index plg$prof_record_sources_profile_statement_cursor_recsource,
@@ -1458,30 +1467,6 @@ void Session::defineRecordSource(SINT64 statementId, unsigned cursorId, unsigned
 
 	recSource->level = level;
 	recSource->accessPath = accessPath;
-
-	if (unsigned len = recSource->accessPath.length(); len > MAX_ACCESS_PATH_CHAR_LEN)
-	{
-		const auto str = recSource->accessPath.c_str();
-		unsigned charLen = 0;
-		unsigned pos = 0;
-		unsigned truncPos = 0;
-
-		while (pos < len && charLen <= MAX_ACCESS_PATH_CHAR_LEN)
-		{
-			UChar32 c;
-			U8_NEXT_UNSAFE(str, pos, c);
-			++charLen;
-
-			if (charLen == MAX_ACCESS_PATH_CHAR_LEN - 3)
-				truncPos = pos;
-		}
-
-		if (charLen > MAX_ACCESS_PATH_CHAR_LEN)
-		{
-			recSource->accessPath.resize(truncPos);
-			recSource->accessPath += "...";
-		}
-	}
 
 	if (parentRecordSourceId)
 		recSource->parentId = parentRecordSourceId;

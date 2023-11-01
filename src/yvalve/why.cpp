@@ -876,7 +876,7 @@ namespace Why
 	class StatusVector : public AutoIface<BaseStatus<StatusVector> >
 	{
 	public:
-		explicit StatusVector(ISC_STATUS* v = NULL) throw()
+		explicit StatusVector(ISC_STATUS* v = NULL) noexcept
 			: localVector(v ? v : localStatus)
 		{ }
 
@@ -1652,7 +1652,7 @@ ISC_STATUS API_ROUTINE isc_attach_database(ISC_STATUS* userStatus, SSHORT fileLe
 			return status[1];
 
 		YAttachment* attachment = dispatcher->attachDatabase(&statusWrapper, pathName.c_str(),
-			dpbLength, reinterpret_cast<const UCHAR*>(dpb));
+			static_cast<USHORT>(dpbLength), reinterpret_cast<const UCHAR*>(dpb));
 		if (status.getState() & IStatus::STATE_ERRORS)
 			return status[1];
 

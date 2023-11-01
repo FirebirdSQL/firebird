@@ -60,7 +60,7 @@ Attachment* DsqlCursor::getAttachment() const
 	return m_dsqlRequest->req_dbb->dbb_attachment;
 }
 
-void DsqlCursor::setInterfacePtr(JResultSet* interfacePtr) throw()
+void DsqlCursor::setInterfacePtr(JResultSet* interfacePtr) noexcept
 {
 	fb_assert(!m_resultSet);
 	m_resultSet = interfacePtr;

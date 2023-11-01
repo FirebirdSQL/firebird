@@ -68,7 +68,7 @@ private:
 class CryptKeyHolder : public IKeyHolderPluginImpl<CryptKeyHolder, CheckStatusWrapper>
 {
 public:
-	explicit CryptKeyHolder(IPluginConfig* cnf) throw()
+	explicit CryptKeyHolder(IPluginConfig* cnf) noexcept
 		: callbackInterface(this), named(NULL), tempStatus(master->getStatus()),
 		  config(cnf), key(0), owner(NULL)
 	{

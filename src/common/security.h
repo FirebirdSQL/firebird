@@ -88,7 +88,7 @@ public:
 		value.assign(newValue, len);
 	}
 
-	void clear() throw()
+	void clear() noexcept
 	{
 		e = s = 0;
 		value.erase();		// should not call allocation function - no throw
@@ -142,7 +142,7 @@ public:
 		value = newValue;
 	}
 
-	void clear() throw()
+	void clear() noexcept
 	{
 		e = s = 0;
 		value = 0;
@@ -235,7 +235,7 @@ public:
 class StackUserData final : public UserData
 {
 public:
-	void* operator new(size_t, void* memory) throw()
+	void* operator new(size_t, void* memory) noexcept
 	{
 		return memory;
 	}

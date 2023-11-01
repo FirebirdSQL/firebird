@@ -747,6 +747,12 @@ ExtEngineManager::ExtRoutine::ExtRoutine(thread_db* tdbb, ExtEngineManager* aExt
 	engine->addRef();
 }
 
+void ExtEngineManager::ExtRoutine::PluginDeleter::operator()(IPluginBase* ptr)
+{
+	if (ptr)
+		PluginManagerInterfacePtr()->releasePlugin(ptr);
+}
+
 
 //---------------------
 
@@ -770,7 +776,7 @@ ExtEngineManager::Function::~Function()
 
 void ExtEngineManager::Function::execute(thread_db* tdbb, UCHAR* inMsg, UCHAR* outMsg) const
 {
-	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine);
+	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
 	const MetaString& userName = udf->invoker ? udf->invoker->getUserName() : "";
 	ContextManager<IExternalFunction> ctxManager(tdbb, attInfo, function,
 		(udf->getName().package.isEmpty() ?
@@ -821,7 +827,7 @@ ExtEngineManager::ResultSet::ResultSet(thread_db* tdbb, UCHAR* inMsg, UCHAR* out
 	  attachment(tdbb->getAttachment()),
 	  firstFetch(true)
 {
-	attInfo = procedure->extManager->getEngineAttachment(tdbb, procedure->engine);
+	attInfo = procedure->extManager->getEngineAttachment(tdbb, procedure->engine.get());
 	const MetaString& userName = procedure->prc->invoker ? procedure->prc->invoker->getUserName() : "";
 	ContextManager<IExternalProcedure> ctxManager(tdbb, attInfo, procedure->procedure,
 		(procedure->prc->getName().package.isEmpty() ?
@@ -931,10 +937,11 @@ ExtEngineManager::Trigger::~Trigger()
 void ExtEngineManager::Trigger::execute(thread_db* tdbb, Request* request, unsigned action,
 	record_param* oldRpb, record_param* newRpb) const
 {
-	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine);
-	const Nullable<bool>& ssDefiner = trg->ssDefiner.specified ? trg->ssDefiner :
-		(trg->relation && trg->relation->rel_ss_definer.specified ? trg->relation->rel_ss_definer : Nullable<bool>() );
-	const MetaString& userName = ssDefiner.specified && ssDefiner.value ? trg->relation->rel_owner_name.c_str() : "";
+	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
+	const TriState& ssDefiner = trg->ssDefiner.isAssigned() ? trg->ssDefiner :
+		(trg->relation && trg->relation->rel_ss_definer.isAssigned() ? trg->relation->rel_ss_definer : TriState());
+	const MetaString& userName = ssDefiner.asBool() ?
+		trg->relation->rel_owner_name.c_str() : "";
 	ContextManager<IExternalTrigger> ctxManager(tdbb, attInfo, trigger,
 		CallerName(obj_trigger, trg->name, userName));
 
@@ -1606,7 +1613,7 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 	entryPointTrimmed.trim();
 
 	EngineAttachmentInfo* attInfo = getEngineAttachment(tdbb, engine);
-	const MetaString& userName = trg->ssDefiner.specified && trg->ssDefiner.value ? trg->owner.c_str() : "";
+	const MetaString& userName = trg->ssDefiner.asBool() ? trg->owner.c_str() : "";
 	ContextManager<IExternalTrigger> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
 		CallerName(obj_trigger, trg->name, userName));
 

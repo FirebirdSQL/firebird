@@ -25,10 +25,10 @@
 
 #include "firebird.h"
 #include "firebird/Message.h"
+#include <optional>
 #include "../common/PerformanceStopWatch.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/Nullable.h"
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/TimerImpl.h"
 #include "../jrd/recsrc/RecordSource.h"
@@ -187,7 +187,7 @@ public:
 	void operator=(const ProfilerManager&) = delete;
 
 public:
-	SINT64 startSession(thread_db* tdbb, Nullable<SLONG> flushInterval,
+	SINT64 startSession(thread_db* tdbb, std::optional<SLONG> flushInterval,
 		const Firebird::PathName& pluginName, const Firebird::string& description, const Firebird::string& options);
 
 	void prepareCursor(thread_db* tdbb, Request* request, const Select* select);

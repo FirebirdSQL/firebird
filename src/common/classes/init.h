@@ -147,15 +147,15 @@ public:
 		FB_NEW InstanceControl::InstanceLink<GlobalPtr, P>(this);
 	}
 
-	T* operator->() throw()
+	T* operator->() noexcept
 	{
 		return instance;
 	}
-	operator T&() throw()
+	operator T&() noexcept
 	{
 		return *instance;
 	}
-	T* operator&() throw()
+	T* operator&() noexcept
 	{
 		return instance;
 	}

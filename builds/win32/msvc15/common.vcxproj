@@ -141,7 +141,6 @@
     <ClInclude Include="..\..\..\src\common\classes\MsgPrint.h" />
     <ClInclude Include="..\..\..\src\common\classes\NestConst.h" />
     <ClInclude Include="..\..\..\src\common\classes\NoThrowTimeStamp.h" />
-    <ClInclude Include="..\..\..\src\common\classes\Nullable.h" />
     <ClInclude Include="..\..\..\src\common\classes\objects_array.h" />
     <ClInclude Include="..\..\..\src\common\classes\ParsedList.h" />
     <ClInclude Include="..\..\..\src\common\classes\QualifiedName.h" />
@@ -159,6 +158,7 @@
     <ClInclude Include="..\..\..\src\common\classes\TimerImpl.h" />
     <ClInclude Include="..\..\..\src\common\classes\timestamp.h" />
     <ClInclude Include="..\..\..\src\common\classes\tree.h" />
+    <ClInclude Include="..\..\..\src\common\classes\TriState.h" />
     <ClInclude Include="..\..\..\src\common\classes\UserBlob.h" />
     <ClInclude Include="..\..\..\src\common\classes\VaryStr.h" />
     <ClInclude Include="..\..\..\src\common\classes\vector.h" />

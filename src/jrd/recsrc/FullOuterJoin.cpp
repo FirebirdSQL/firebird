@@ -112,32 +112,28 @@ WriteLockResult FullOuterJoin::lockRecord(thread_db* tdbb, bool skipLocked) cons
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
-void FullOuterJoin::getChildren(Array<const RecordSource*>& children) const
+void FullOuterJoin::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_arg1);
-	children.add(m_arg2);
+	level++;
+	plan += "JOIN (";
+	m_arg1->getLegacyPlan(tdbb, plan, level);
+	plan += ", ";
+	m_arg2->getLegacyPlan(tdbb, plan, level);
+	plan += ")";
 }
 
-void FullOuterJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void FullOuterJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Full Outer Join";
+	planEntry.className = "FullOuterJoin";
 
-		if (recurse)
-		{
-			m_arg1->print(tdbb, plan, true, level, recurse);
-			m_arg2->print(tdbb, plan, true, level, recurse);
-		}
-	}
-	else
+	planEntry.lines.add().text = "Full Outer Join";
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
 	{
-		level++;
-		plan += "JOIN (";
-		m_arg1->print(tdbb, plan, false, level, recurse);
-		plan += ", ";
-		m_arg2->print(tdbb, plan, false, level, recurse);
-		plan += ")";
+		++level;
+		m_arg1->getPlan(tdbb, planEntry.children.add(), level, recurse);
+		m_arg2->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 

@@ -70,9 +70,13 @@ Usage:
    CLIENT_HOST                  | The wire protocol host name of remote client. Value is
                                 | returned for all supported protocols.
                                 |
+   CLIENT_OS_USER               | Remote OS user name
+                                |
    CLIENT_PID                   | Process ID of remote client application
                                 |
    CLIENT_PROCESS               | Process name of remote client application
+                                |
+   CLIENT_VERSION               | Version of the client library used by client application
                                 |
    DB_NAME                      | Canonical name of current database. It is either alias
                                 | name if connectivity via file names is not allowed or

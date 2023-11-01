@@ -103,11 +103,11 @@ class AutoPtr
 private:
 	Where* ptr;
 public:
-	AutoPtr(Where* v = NULL)
+	AutoPtr(Where* v = nullptr) noexcept
 		: ptr(v)
 	{}
 
-	AutoPtr(AutoPtr&& v)
+	AutoPtr(AutoPtr&& v) noexcept
 		: ptr(v.ptr)
 	{
 		v.ptr = nullptr;
@@ -136,12 +136,22 @@ public:
 		return *this;
 	}
 
-	Where* get() const
+	const Where* get() const
 	{
 		return ptr;
 	}
 
-	operator Where*() const
+	operator const Where*() const
+	{
+		return ptr;
+	}
+
+	Where* get()
+	{
+		return ptr;
+	}
+
+	operator Where*()
 	{
 		return ptr;
 	}

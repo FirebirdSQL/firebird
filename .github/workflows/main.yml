@@ -213,13 +213,22 @@ jobs:
       - name: Get Release Notes
         uses: ./.github/actions/get-release-notes
 
+      - name: Build x86 for client package in x64
+        id: build-x86
+        shell: cmd
+        if: ${{ matrix.platform == 'x64' }}
+        run: |
+          mkdir builds\install_images
+          cd builds\docker\windows
+          call build.bat
+          call run.bat C:\fbscripts\build-x86.bat
+
       - name: Build
         id: build
         shell: cmd
         env:
           PLATFORM: ${{ matrix.platform }}
         run: |
-          echo arch_suffix=%PLATFORM%>> %GITHUB_OUTPUT%
           mkdir builds\install_images
           cd builds\docker\windows
           call build.bat
@@ -254,11 +263,11 @@ jobs:
         with:
           token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
           deletePatterns:  |
-            Firebird-*-windows-${{ steps.build.outputs.arch_suffix }}*.exe
-            Firebird-*-windows-${{ steps.build.outputs.arch_suffix }}*.zip
+            Firebird-*-windows-${{ matrix.platform }}*.exe
+            Firebird-*-windows-${{ matrix.platform }}*.zip
           uploadFiles: |
-            builds/install_images/Firebird-*-windows-*.exe
-            builds/install_images/Firebird-*-windows-*.zip
+            builds/install_images/Firebird-*-windows-${{ matrix.platform }}*.exe
+            builds/install_images/Firebird-*-windows-${{ matrix.platform }}*.zip
 
   build-macos:
     runs-on: macos-12

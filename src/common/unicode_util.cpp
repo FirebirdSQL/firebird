@@ -1708,16 +1708,16 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 					++secondKeyDataIt;
 				}
 
-				unsigned backSize = commonKeys.back()->getCount();
+				unsigned backSize = commonKeys.back().getCount();
 
 				if (common > backSize)
-					commonKeys.back()->append(secondKeyIt->begin() + backSize, common - backSize);
+					commonKeys.back().append(secondKeyIt->begin() + backSize, common - backSize);
 				else if (common < backSize)
 				{
 					if (common == 0)
 						commonKeys.push(*secondKeyIt);
 					else
-						commonKeys.back()->resize(common);
+						commonKeys.back().resize(common);
 				}
 
 				if (++secondKeyIt != keySet.end())

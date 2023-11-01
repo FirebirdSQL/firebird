@@ -60,43 +60,43 @@ protected:
 		ISC_STATUS kind, code;
 
 	public:
-		ISC_STATUS getKind() const throw() { return kind; }
-		ISC_STATUS getCode() const throw() { return code; }
+		ISC_STATUS getKind() const noexcept { return kind; }
+		ISC_STATUS getCode() const noexcept { return code; }
 
-		virtual const ISC_STATUS* value() const throw() { return NULL; }
-		virtual unsigned int length() const throw() { return 0; }
-		virtual unsigned int firstWarning() const throw() { return 0; }
-		virtual bool hasData() const throw() { return false; }
-		virtual void clear() throw() { }
-		virtual void append(const StatusVector&) throw() { }
-		virtual void prepend(const StatusVector&) throw() { }
-		virtual void assign(const StatusVector& ex) throw() { }
-		virtual void assign(const Exception& ex) throw() { }
-		virtual ISC_STATUS copyTo(ISC_STATUS*) const throw() { return 0; }
-		virtual void copyTo(IStatus*) const throw() { }
-		virtual void appendTo(IStatus*) const throw() { }
+		virtual const ISC_STATUS* value() const noexcept { return NULL; }
+		virtual unsigned int length() const noexcept { return 0; }
+		virtual unsigned int firstWarning() const noexcept { return 0; }
+		virtual bool hasData() const noexcept { return false; }
+		virtual void clear() noexcept { }
+		virtual void append(const StatusVector&) noexcept { }
+		virtual void prepend(const StatusVector&) noexcept { }
+		virtual void assign(const StatusVector& ex) noexcept { }
+		virtual void assign(const Exception& ex) noexcept { }
+		virtual ISC_STATUS copyTo(ISC_STATUS*) const noexcept { return 0; }
+		virtual void copyTo(IStatus*) const noexcept { }
+		virtual void appendTo(IStatus*) const noexcept { }
 
-		virtual void shiftLeft(const Base&) throw() { }
-		virtual void shiftLeft(const Warning&) throw() { }
-		virtual void shiftLeft(const char*) throw() { }
-		virtual void shiftLeft(const AbstractString&) throw() { }
-		virtual void shiftLeft(const MetaString&) throw() { }
+		virtual void shiftLeft(const Base&) noexcept { }
+		virtual void shiftLeft(const Warning&) noexcept { }
+		virtual void shiftLeft(const char*) noexcept { }
+		virtual void shiftLeft(const AbstractString&) noexcept { }
+		virtual void shiftLeft(const MetaString&) noexcept { }
 
-		virtual bool compare(const StatusVector& /*v*/) const throw() { return false; }
+		virtual bool compare(const StatusVector& /*v*/) const noexcept { return false; }
 
-		ImplBase(ISC_STATUS k, ISC_STATUS c) throw() : kind(k), code(c) { }
+		ImplBase(ISC_STATUS k, ISC_STATUS c) noexcept : kind(k), code(c) { }
 		virtual ~ImplBase() { }
 	};
 
 	Base(ISC_STATUS k, ISC_STATUS c);
-	explicit Base(ImplBase* i) throw() : implementation(i) { }
-	~Base() throw() { delete implementation; }
+	explicit Base(ImplBase* i) noexcept : implementation(i) { }
+	~Base() noexcept { delete implementation; }
 
 	ImplBase* const implementation;
 
 public:
-	ISC_STATUS getKind() const throw() { return implementation->getKind(); }
-	ISC_STATUS getCode() const throw() { return implementation->getCode(); }
+	ISC_STATUS getKind() const noexcept { return implementation->getKind(); }
+	ISC_STATUS getCode() const noexcept { return implementation->getCode(); }
 };
 
 class StatusVector : public Base
@@ -113,34 +113,34 @@ protected:
 		void putStrArg(unsigned startWith);
 		void setStrPointers(const char* oldBase);
 
-		bool appendErrors(const ImplBase* const v) throw();
-		bool appendWarnings(const ImplBase* const v) throw();
-		bool append(const ISC_STATUS* const from, const unsigned int count) throw();
-		void append(const ISC_STATUS* const from) throw();
+		bool appendErrors(const ImplBase* const v) noexcept;
+		bool appendWarnings(const ImplBase* const v) noexcept;
+		bool append(const ISC_STATUS* const from, const unsigned int count) noexcept;
+		void append(const ISC_STATUS* const from) noexcept;
 
 		ImplStatusVector& operator=(const ImplStatusVector& src);
 
 	public:
-		virtual const ISC_STATUS* value() const throw() { return m_status_vector.begin(); }
-		virtual unsigned int length() const throw() { return m_status_vector.getCount() - 1u; }
-		virtual unsigned int firstWarning() const throw() { return m_warning; }
-		virtual bool hasData() const throw() { return length() > 0u; }
-		virtual void clear() throw();
-		virtual void append(const StatusVector& v) throw();
-		virtual void prepend(const StatusVector& v) throw();
-		virtual void assign(const StatusVector& v) throw();
-		virtual void assign(const Exception& ex) throw();
-		virtual ISC_STATUS copyTo(ISC_STATUS* dest) const throw();
-		virtual void copyTo(IStatus* dest) const throw();
-		virtual void appendTo(IStatus* dest) const throw();
-		virtual void shiftLeft(const Base& arg) throw();
-		virtual void shiftLeft(const Warning& arg) throw();
-		virtual void shiftLeft(const char* text) throw();
-		virtual void shiftLeft(const AbstractString& text) throw();
-		virtual void shiftLeft(const MetaString& text) throw();
-		virtual bool compare(const StatusVector& v) const throw();
+		virtual const ISC_STATUS* value() const noexcept { return m_status_vector.begin(); }
+		virtual unsigned int length() const noexcept { return m_status_vector.getCount() - 1u; }
+		virtual unsigned int firstWarning() const noexcept { return m_warning; }
+		virtual bool hasData() const noexcept { return length() > 0u; }
+		virtual void clear() noexcept;
+		virtual void append(const StatusVector& v) noexcept;
+		virtual void prepend(const StatusVector& v) noexcept;
+		virtual void assign(const StatusVector& v) noexcept;
+		virtual void assign(const Exception& ex) noexcept;
+		virtual ISC_STATUS copyTo(ISC_STATUS* dest) const noexcept;
+		virtual void copyTo(IStatus* dest) const noexcept;
+		virtual void appendTo(IStatus* dest) const noexcept;
+		virtual void shiftLeft(const Base& arg) noexcept;
+		virtual void shiftLeft(const Warning& arg) noexcept;
+		virtual void shiftLeft(const char* text) noexcept;
+		virtual void shiftLeft(const AbstractString& text) noexcept;
+		virtual void shiftLeft(const MetaString& text) noexcept;
+		virtual bool compare(const StatusVector& v) const noexcept;
 
-		ImplStatusVector(ISC_STATUS k, ISC_STATUS c) throw()
+		ImplStatusVector(ISC_STATUS k, ISC_STATUS c) noexcept
 			: ImplBase(k, c),
 			  m_status_vector(*getDefaultMemoryPool()),
 			  m_strings(*getDefaultMemoryPool())
@@ -148,9 +148,9 @@ protected:
 			clear();
 		}
 
-		explicit ImplStatusVector(const ISC_STATUS* s) throw();
-		explicit ImplStatusVector(const IStatus* s) throw();
-		explicit ImplStatusVector(const Exception& ex) throw();
+		explicit ImplStatusVector(const ISC_STATUS* s) noexcept;
+		explicit ImplStatusVector(const IStatus* s) noexcept;
+		explicit ImplStatusVector(const Exception& ex) noexcept;
 	};
 
 	StatusVector(ISC_STATUS k, ISC_STATUS v);
@@ -162,67 +162,71 @@ public:
 	StatusVector();
 	~StatusVector() { }
 
-	const ISC_STATUS* value() const throw() { return implementation->value(); }
-	unsigned int length() const throw() { return implementation->length(); }
-	bool hasData() const throw() { return implementation->hasData(); }
-	bool isEmpty() const throw() { return !implementation->hasData(); }
+	// copying is prohibited
+	StatusVector(const StatusVector&) = delete;
+	void operator=(const StatusVector&) = delete;
 
-	void clear() throw() { implementation->clear(); }
-	void append(const StatusVector& v) throw() { implementation->append(v); }
-	void prepend(const StatusVector& v) throw() { implementation->prepend(v); }
-	void assign(const StatusVector& v) throw() { implementation->assign(v); }
-	void assign(const Exception& ex) throw() { implementation->assign(ex); }
+	const ISC_STATUS* value() const noexcept { return implementation->value(); }
+	unsigned int length() const noexcept { return implementation->length(); }
+	bool hasData() const noexcept { return implementation->hasData(); }
+	bool isEmpty() const noexcept { return !implementation->hasData(); }
+
+	void clear() noexcept { implementation->clear(); }
+	void append(const StatusVector& v) noexcept { implementation->append(v); }
+	void prepend(const StatusVector& v) noexcept { implementation->prepend(v); }
+	void assign(const StatusVector& v) noexcept { implementation->assign(v); }
+	void assign(const Exception& ex) noexcept { implementation->assign(ex); }
 	[[noreturn]] void raise() const;
-	ISC_STATUS copyTo(ISC_STATUS* dest) const throw() { return implementation->copyTo(dest); }
-	void copyTo(IStatus* dest) const throw() { implementation->copyTo(dest); }
-	void appendTo(IStatus* dest) const throw() { implementation->appendTo(dest); }
+	ISC_STATUS copyTo(ISC_STATUS* dest) const noexcept { return implementation->copyTo(dest); }
+	void copyTo(IStatus* dest) const noexcept { implementation->copyTo(dest); }
+	void appendTo(IStatus* dest) const noexcept { implementation->appendTo(dest); }
 
 	// generic argument insert
-	StatusVector& operator<<(const Base& arg) throw()
+	StatusVector& operator<<(const Base& arg) noexcept
 	{
 		implementation->shiftLeft(arg);
 		return *this;
 	}
 
 	// StatusVector case - append multiple args
-	StatusVector& operator<<(const StatusVector& arg) throw()
+	StatusVector& operator<<(const StatusVector& arg) noexcept
 	{
 		implementation->append(arg);
 		return *this;
 	}
 
 	// warning special case - to setup first warning location
-	StatusVector& operator<<(const Warning& arg) throw()
+	StatusVector& operator<<(const Warning& arg) noexcept
 	{
 		implementation->shiftLeft(arg);
 		return *this;
 	}
 
 	// Str special case - make the code simpler & better readable
-	StatusVector& operator<<(const char* text) throw()
+	StatusVector& operator<<(const char* text) noexcept
 	{
 		implementation->shiftLeft(text);
 		return *this;
 	}
 
-	StatusVector& operator<<(const AbstractString& text) throw()
+	StatusVector& operator<<(const AbstractString& text) noexcept
 	{
 		implementation->shiftLeft(text);
 		return *this;
 	}
 
-	StatusVector& operator<<(const MetaString& text) throw()
+	StatusVector& operator<<(const MetaString& text) noexcept
 	{
 		implementation->shiftLeft(text);
 		return *this;
 	}
 
-	bool operator==(const StatusVector& arg) const throw()
+	bool operator==(const StatusVector& arg) const noexcept
 	{
 		return implementation->compare(arg);
 	}
 
-	bool operator!=(const StatusVector& arg) const throw()
+	bool operator!=(const StatusVector& arg) const noexcept
 	{
 		return !(*this == arg);
 	}
@@ -232,7 +236,7 @@ public:
 class Gds : public StatusVector
 {
 public:
-	explicit Gds(ISC_STATUS s) throw();
+	explicit Gds(ISC_STATUS s) noexcept;
 };
 
 // To simplify calls to DYN messages from DSQL, only for private DYN messages
@@ -240,21 +244,21 @@ public:
 class PrivateDyn : public Gds
 {
 public:
-	explicit PrivateDyn(ISC_STATUS codeWithoutFacility) throw();
+	explicit PrivateDyn(ISC_STATUS codeWithoutFacility) noexcept;
 };
 
 class Str : public Base
 {
 public:
-	explicit Str(const char* text) throw();
-	explicit Str(const AbstractString& text) throw();
-	explicit Str(const MetaString& text) throw();
+	explicit Str(const char* text) noexcept;
+	explicit Str(const AbstractString& text) noexcept;
+	explicit Str(const MetaString& text) noexcept;
 };
 
 class Num : public Base
 {
 public:
-	explicit Num(ISC_STATUS s) throw();
+	explicit Num(ISC_STATUS s) noexcept;
 };
 
 // On 32-bit architecture ISC_STATUS can't fit 64-bit integer therefore
@@ -264,8 +268,8 @@ public:
 class Int64 : public Str
 {
 public:
-	explicit Int64(SINT64 val) throw();
-	explicit Int64(FB_UINT64 val) throw();
+	explicit Int64(SINT64 val) noexcept;
+	explicit Int64(FB_UINT64 val) noexcept;
 private:
 	char text[24];
 };
@@ -273,7 +277,7 @@ private:
 class Quad : public Str
 {
 public:
-	explicit Quad(const ISC_QUAD* quad) throw();
+	explicit Quad(const ISC_QUAD* quad) noexcept;
 private:
 	//		high  :  low  \0
 	char text[8 + 1 + 8 + 1];
@@ -282,46 +286,46 @@ private:
 class Interpreted : public StatusVector
 {
 public:
-	explicit Interpreted(const char* text) throw();
-	explicit Interpreted(const AbstractString& text) throw();
+	explicit Interpreted(const char* text) noexcept;
+	explicit Interpreted(const AbstractString& text) noexcept;
 };
 
 class Unix : public Base
 {
 public:
-	explicit Unix(ISC_STATUS s) throw();
+	explicit Unix(ISC_STATUS s) noexcept;
 };
 
 class Mach : public Base
 {
 public:
-	explicit Mach(ISC_STATUS s) throw();
+	explicit Mach(ISC_STATUS s) noexcept;
 };
 
 class Windows : public Base
 {
 public:
-	explicit Windows(ISC_STATUS s) throw();
+	explicit Windows(ISC_STATUS s) noexcept;
 };
 
 class Warning : public StatusVector
 {
 public:
-	explicit Warning(ISC_STATUS s) throw();
+	explicit Warning(ISC_STATUS s) noexcept;
 };
 
 class SqlState : public Base
 {
 public:
-	explicit SqlState(const char* text) throw();
-	explicit SqlState(const AbstractString& text) throw();
+	explicit SqlState(const char* text) noexcept;
+	explicit SqlState(const AbstractString& text) noexcept;
 };
 
 class OsError : public Base
 {
 public:
-	OsError() throw();
-	explicit OsError(ISC_STATUS s) throw();
+	OsError() noexcept;
+	explicit OsError(ISC_STATUS s) noexcept;
 };
 
 } // namespace Arg

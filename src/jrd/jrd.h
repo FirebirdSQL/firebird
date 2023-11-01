@@ -148,7 +148,7 @@ public:
 	Firebird::string	entryPoint;			// External trigger entrypoint
 	Firebird::string	extBody;			// External trigger body
 	ExtEngineManager::Trigger* extTrigger;	// External trigger
-	Nullable<bool> ssDefiner;
+	TriState ssDefiner;
 	MetaName	owner;				// Owner for SQL SECURITY
 
 	bool isActive() const;
@@ -291,7 +291,7 @@ public:
 	MetaName prm_field_source;
 	MetaName prm_type_of_column;
 	MetaName prm_type_of_table;
-	Nullable<USHORT> prm_text_type;
+	std::optional<USHORT> prm_text_type;
 	FUN_T		prm_fun_mechanism;
 
 public:
@@ -498,6 +498,7 @@ const ULONG TDBB_reset_stack			= 2048;		// stack should be reset after stack ove
 const ULONG TDBB_dfw_cleanup			= 4096;		// DFW cleanup phase is active
 const ULONG TDBB_repl_in_progress		= 8192;		// Prevent recursion in replication
 const ULONG TDBB_replicator				= 16384;	// Replicator
+const ULONG TDBB_async					= 32768;	// Async context (set in AST)
 
 class thread_db : public Firebird::ThreadData
 {
@@ -624,7 +625,11 @@ public:
 		reqStat->bumpValue(index, delta);
 		traStat->bumpValue(index, delta);
 		attStat->bumpValue(index, delta);
-		dbbStat->bumpValue(index, delta);
+
+		if ((tdbb_flags & TDBB_async) && !attachment)
+			dbbStat->bumpValue(index, delta);
+
+		// else dbbStat is adjusted from attStat, see Attachment::mergeAsyncStats()
 	}
 
 	void bumpRelStats(const RuntimeStatistics::StatType index, SLONG relation_id, SINT64 delta = 1)
@@ -1109,6 +1114,8 @@ namespace Jrd {
 
 				fb_assert((operator thread_db*())->getAttachment());
 			}
+
+			(*this)->tdbb_flags |= TDBB_async;
 		}
 
 	private:

@@ -16,9 +16,9 @@ namespace Firebird {
 
 // ********************************* Exception *******************************
 
-Exception::~Exception() throw() { }
+Exception::~Exception() noexcept { }
 
-void Exception::stuffException(DynamicStatusVector& status_vector) const throw()
+void Exception::stuffException(DynamicStatusVector& status_vector) const noexcept
 {
 	StaticStatusVector status;
 	stuffException(status);
@@ -34,14 +34,14 @@ void Exception::stuffException(DynamicStatusVector& status_vector) const throw()
 	}
 }
 
-void Exception::stuffException(CheckStatusWrapper* status_vector) const throw()
+void Exception::stuffException(CheckStatusWrapper* status_vector) const noexcept
 {
 	StaticStatusVector status;
 	stuffException(status);
 	fb_utils::setIStatus(status_vector, status.begin());
 }
 
-void Exception::processUnexpectedException(ISC_STATUS* vector) throw()
+void Exception::processUnexpectedException(ISC_STATUS* vector) noexcept
 {
 	// do not use stuffException() here to avoid endless loop
 	try
@@ -62,13 +62,13 @@ void Exception::processUnexpectedException(ISC_STATUS* vector) throw()
 
 // ********************************* status_exception *******************************
 
-status_exception::status_exception() throw()
+status_exception::status_exception() noexcept
 	: m_status_vector(m_buffer)
 {
 	fb_utils::init_status(m_status_vector);
 }
 
-status_exception::status_exception(const ISC_STATUS *status_vector) throw()
+status_exception::status_exception(const ISC_STATUS *status_vector) noexcept
 	: m_status_vector(m_buffer)
 {
 	fb_utils::init_status(m_status_vector);
@@ -79,7 +79,7 @@ status_exception::status_exception(const ISC_STATUS *status_vector) throw()
 	}
 }
 
-status_exception::status_exception(const status_exception& from) throw()
+status_exception::status_exception(const status_exception& from) noexcept
 	: m_status_vector(m_buffer)
 {
 	fb_utils::init_status(m_status_vector);
@@ -87,7 +87,7 @@ status_exception::status_exception(const status_exception& from) throw()
 	set_status(from.m_status_vector);
 }
 
-void status_exception::set_status(const ISC_STATUS *new_vector) throw()
+void status_exception::set_status(const ISC_STATUS *new_vector) noexcept
 {
 	fb_assert(new_vector != 0);
 	unsigned len = fb_utils::statusLength(new_vector);
@@ -112,7 +112,7 @@ void status_exception::set_status(const ISC_STATUS *new_vector) throw()
 	}
 }
 
-status_exception::~status_exception() throw()
+status_exception::~status_exception() noexcept
 {
 	delete[] findDynamicStrings(fb_utils::statusLength(m_status_vector), m_status_vector);
 	if (m_status_vector != m_buffer)
@@ -121,7 +121,7 @@ status_exception::~status_exception() throw()
 	}
 }
 
-const char* status_exception::what() const throw()
+const char* status_exception::what() const noexcept
 {
 	return "Firebird::status_exception";
 }
@@ -143,7 +143,7 @@ void status_exception::raise(const Arg::StatusVector& statusVector)
 	throw status_exception(statusVector.value());
 }
 
-void status_exception::stuffByException(StaticStatusVector& status) const throw()
+void status_exception::stuffByException(StaticStatusVector& status) const noexcept
 {
 	try
 	{
@@ -162,12 +162,12 @@ void BadAlloc::raise()
 	throw BadAlloc();
 }
 
-void BadAlloc::stuffByException(StaticStatusVector& status) const throw()
+void BadAlloc::stuffByException(StaticStatusVector& status) const noexcept
 {
 	fb_utils::statusBadAlloc(status.makeEmergencyStatus());
 }
 
-const char* BadAlloc::what() const throw()
+const char* BadAlloc::what() const noexcept
 {
 	return "Firebird::BadAlloc";
 }
@@ -179,7 +179,7 @@ void LongJump::raise()
 	throw LongJump();
 }
 
-void LongJump::stuffByException(StaticStatusVector& status) const throw()
+void LongJump::stuffByException(StaticStatusVector& status) const noexcept
 {
 	ISC_STATUS sv[] = {isc_arg_gds, isc_random, isc_arg_string,
 		(ISC_STATUS)(IPTR) "Unexpected call to Firebird::LongJump::stuffException()", isc_arg_end};
@@ -194,7 +194,7 @@ void LongJump::stuffByException(StaticStatusVector& status) const throw()
 	}
 }
 
-const char* LongJump::what() const throw()
+const char* LongJump::what() const noexcept
 {
 	return "Firebird::LongJump";
 }
@@ -286,7 +286,7 @@ fatal_exception::fatal_exception(const char* message) :
 
 // Keep in sync with the constructor above, please; "message" becomes 4th element
 // after initialization of status vector in constructor.
-const char* fatal_exception::what() const throw()
+const char* fatal_exception::what() const noexcept
 {
 	return reinterpret_cast<const char*>(value()[3]);
 }

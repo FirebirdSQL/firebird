@@ -23,6 +23,7 @@
 #ifndef DSQL_DDL_NODES_H
 #define DSQL_DDL_NODES_H
 
+#include <optional>
 #include "firebird/impl/blr.h"
 #include "../jrd/dyn.h"
 #include "../common/msg_encode.h"
@@ -33,13 +34,13 @@
 #include "../dsql/NodePrinter.h"
 #include "../common/classes/array.h"
 #include "../common/classes/ByteChunk.h"
-#include "../common/classes/Nullable.h"
+#include "../common/classes/TriState.h"
 #include "../jrd/Savepoint.h"
 #include "../dsql/errd_proto.h"
 
 namespace Jrd {
 
-class CompoundStmtNode;
+class LocalDeclarationsNode;
 class RelationSourceNode;
 class ValueListNode;
 class SecDbContext;
@@ -174,7 +175,7 @@ public:
 	NestConst<dsql_fld> type;
 	NestConst<ValueSourceClause> defaultClause;
 	NestConst<ValueExprNode> parameterExpr;
-	Nullable<int> udfMechanism;
+	std::optional<int> udfMechanism;
 };
 
 
@@ -454,6 +455,8 @@ private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		bool secondPass, bool runTriggers);
+	bool executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
+		bool secondPass, bool runTriggers);
 
 	void storeArgument(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		unsigned pos, bool returnArg, ParameterClause* parameter,
@@ -469,7 +472,7 @@ public:
 	bool deterministic;
 	Firebird::Array<NestConst<ParameterClause> > parameters;
 	NestConst<ParameterClause> returnType;
-	NestConst<CompoundStmtNode> localDeclList;
+	NestConst<LocalDeclarationsNode> localDeclList;
 	Firebird::string source;
 	NestConst<StmtNode> body;
 	bool compiled;
@@ -479,7 +482,7 @@ public:
 	bool privateScope;
 	bool preserveDefaults;
 	SLONG udfReturnPos;
-	Nullable<bool> ssDefiner;
+	TriState ssDefiner;
 };
 
 
@@ -605,7 +608,7 @@ public:
 	Firebird::Array<NestConst<ParameterClause> > parameters;
 	Firebird::Array<NestConst<ParameterClause> > returns;
 	Firebird::string source;
-	NestConst<CompoundStmtNode> localDeclList;
+	NestConst<LocalDeclarationsNode> localDeclList;
 	NestConst<StmtNode> body;
 	bool compiled;
 	bool invalid;
@@ -613,7 +616,7 @@ public:
 	MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
-	Nullable<bool> ssDefiner;
+	TriState ssDefiner;
 };
 
 
@@ -696,16 +699,16 @@ protected:
 public:
 	MetaName name;
 	MetaName relationName;
-	Nullable<FB_UINT64> type;
-	Nullable<bool> active;
-	Nullable<int> position;
+	std::optional<FB_UINT64> type;
+	TriState active;
+	std::optional<int> position;
 	NestConst<ExternalClause> external;
 	Firebird::string source;
 	Firebird::ByteChunk blrData;
 	Firebird::ByteChunk debugData;
 	USHORT systemFlag;
 	bool fkTrigger;
-	Nullable<SqlSecurity> ssDefiner;
+	std::optional<SqlSecurity> ssDefiner;
 };
 
 
@@ -782,7 +785,7 @@ private:
 public:
 	bool create;
 	bool alter;
-	NestConst<CompoundStmtNode> localDeclList;
+	NestConst<LocalDeclarationsNode> localDeclList;
 	NestConst<StmtNode> body;
 	bool compiled;
 	bool invalid;
@@ -987,7 +990,7 @@ public:
 	NestConst<ValueSourceClause> setDefault;
 	MetaName renameTo;
 	Firebird::AutoPtr<dsql_fld> type;
-	Nullable<bool> notNullFlag;	// true = NOT NULL / false = NULL
+	TriState notNullFlag;	// true = NOT NULL / false = NULL
 };
 
 
@@ -1116,7 +1119,6 @@ public:
 													Arg::Num(this->column));
 		}
 		*/
-		value.specified = false;
 	}
 
 	static SSHORT store(thread_db* tdbb, jrd_tra* transaction, const MetaName& name,
@@ -1147,8 +1149,8 @@ public:
 	bool legacy;
 	bool restartSpecified;
 	const MetaName name;
-	BaseNullable<SINT64> value;
-	Nullable<SLONG> step;
+	std::optional<SINT64> value;
+	std::optional<SLONG> step;
 };
 
 
@@ -1210,13 +1212,13 @@ public:
 		MetaName relationName;
 		MetaName fieldSource;
 		MetaName identitySequence;
-		Nullable<IdentityType> identityType;
-		Nullable<USHORT> collationId;
-		Nullable<bool> notNullFlag;	// true = NOT NULL / false = NULL
-		Nullable<USHORT> position;
+		std::optional<IdentityType> identityType;
+		std::optional<USHORT> collationId;
+		TriState notNullFlag;	// true = NOT NULL / false = NULL
+		std::optional<USHORT> position;
 		Firebird::string defaultSource;
 		Firebird::ByteChunk defaultValue;
-		Nullable<USHORT> viewContext;
+		std::optional<USHORT> viewContext;
 		MetaName baseField;
 	};
 
@@ -1386,9 +1388,9 @@ public:
 		{
 		}
 
-		Nullable<IdentityType> type;
-		Nullable<SINT64> startValue;
-		Nullable<SLONG> increment;
+		std::optional<IdentityType> type;
+		std::optional<SINT64> startValue;
+		std::optional<SLONG> increment;
 		bool restart;	// used in ALTER
 	};
 
@@ -1551,8 +1553,8 @@ public:
 	NestConst<RelationSourceNode> dsqlNode;
 	MetaName name;
 	Firebird::Array<NestConst<Clause> > clauses;
-	Nullable<bool> ssDefiner;
-	Nullable<bool> replicationState;
+	TriState ssDefiner;
+	TriState replicationState;
 };
 
 
@@ -1562,8 +1564,7 @@ public:
 	CreateRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode,
 				const Firebird::string* aExternalFile = NULL)
 		: RelationNode(p, aDsqlNode),
-		  externalFile(aExternalFile),
-		  relationType(rel_persistent)
+		  externalFile(aExternalFile)
 	{
 	}
 
@@ -1583,7 +1584,7 @@ private:
 
 public:
 	const Firebird::string* externalFile;
-	Nullable<rel_t> relationType;
+	std::optional<rel_t> relationType = rel_persistent;
 	bool preserveRowsOpt;
 	bool deleteRowsOpt;
 };
@@ -1725,9 +1726,9 @@ public:
 
 		MetaName relation;
 		Firebird::ObjectsArray<MetaName> columns;
-		Nullable<bool> unique;
-		Nullable<bool> descending;
-		Nullable<bool> inactive;
+		TriState unique;
+		TriState descending;
+		TriState inactive;
 		SSHORT type;
 		bid expressionBlr;
 		bid expressionSource;
@@ -1977,7 +1978,6 @@ public:
 	SSHORT number;
 	bool manual;
 	bool conditional;
-	Nullable<SLONG> firstLength;
 	Firebird::Array<NestConst<DbFileClause> > files;
 };
 
@@ -2219,8 +2219,8 @@ public:
 	Firebird::string* lastName;
 	MetaName* plugin;
 	Firebird::string* comment;
-	Nullable<bool> adminRole;
-	Nullable<bool> active;
+	TriState adminRole;
+	TriState active;
 	Mode mode;
 
 	void addProperty(MetaName* pr, Firebird::string* val = NULL)
@@ -2461,21 +2461,11 @@ public:
 	Firebird::Array<NestConst<DbFileClause> > files;
 	MetaName cryptPlugin;
 	MetaName keyName;
-	Nullable<bool> ssDefiner;
+	TriState ssDefiner;
 	Firebird::Array<MetaName> pubTables;
 };
 
 
 } // namespace
-
-template <>
-class NullableClear<Jrd::TriggerDefinition::SqlSecurity>	// TriggerDefinition::SqlSecurity especialization for NullableClear
-{
-public:
-	static void clear(Jrd::TriggerDefinition::SqlSecurity& v)
-	{
-		v = Jrd::TriggerDefinition::SS_INVOKER;
-	}
-};
 
 #endif // DSQL_DDL_NODES_H

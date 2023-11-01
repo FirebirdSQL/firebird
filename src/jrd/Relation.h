@@ -22,12 +22,14 @@
 #ifndef JRD_RELATION_H
 #define JRD_RELATION_H
 
+#include <optional>
 #include "../jrd/jrd.h"
 #include "../jrd/btr.h"
 #include "../jrd/lck.h"
 #include "../jrd/pag.h"
 #include "../jrd/val.h"
 #include "../jrd/Attachment.h"
+#include "../common/classes/TriState.h"
 
 namespace Jrd
 {
@@ -262,7 +264,7 @@ public:
 	TrigVector*	rel_post_store;			// Post-operation store trigger
 	prim		rel_primary_dpnds;		// foreign dependencies on this relation's primary key
 	frgn		rel_foreign_refs;		// foreign references to other relations' primary keys
-	Nullable<bool>	rel_ss_definer;
+	TriState	rel_ss_definer;
 
 	TriState	rel_repl_state;			// replication state
 
@@ -272,6 +274,11 @@ public:
 	bool isTemporary() const;
 	bool isVirtual() const;
 	bool isView() const;
+
+	ObjectType getObjectType() const
+	{
+		return isView() ? obj_view : obj_relation;
+	}
 
 	bool isReplicating(thread_db* tdbb);
 
@@ -490,7 +497,7 @@ public:
 	MetaName	fld_security_name;	// security class name for field
 	MetaName	fld_generator_name;	// identity generator name
 	MetaNamePair	fld_source_rel_field;	// Relation/field source name
-	Nullable<IdentityType> fld_identity_type;
+	std::optional<IdentityType> fld_identity_type;
 	USHORT fld_flags;
 
 public:

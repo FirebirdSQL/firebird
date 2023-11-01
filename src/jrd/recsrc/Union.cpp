@@ -162,40 +162,36 @@ WriteLockResult Union::lockRecord(thread_db* tdbb, bool skipLocked) const
 	return m_args[impure->irsb_count]->lockRecord(tdbb, skipLocked);
 }
 
-void Union::getChildren(Array<const RecordSource*>& children) const
+void Union::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
+	if (!level)
+		plan += "(";
+
 	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		children.add(m_args[i]);
+	{
+		if (i)
+			plan += ", ";
+
+		m_args[i]->getLegacyPlan(tdbb, plan, level + 1);
+	}
+
+	if (!level)
+		plan += ")";
 }
 
-void Union::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void Union::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
+	planEntry.className = "Union";
+
+	planEntry.lines.add().text = (m_args.getCount() == 1 ? "Materialize" : "Union");
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
 	{
-		plan += printIndent(++level) + (m_args.getCount() == 1 ? "Materialize" : "Union");
-		printOptInfo(plan);
+		++level;
 
-		if (recurse)
-		{
-			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-				m_args[i]->print(tdbb, plan, true, level, recurse);
-		}
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
-
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		{
-			if (i)
-				plan += ", ";
-
-			m_args[i]->print(tdbb, plan, false, level + 1, recurse);
-		}
-
-		if (!level)
-			plan += ")";
+		for (const auto arg : m_args)
+			arg->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 

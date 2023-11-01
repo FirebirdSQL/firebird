@@ -68,7 +68,7 @@ private:
 class DbCrypt : public IDbCryptPluginImpl<DbCrypt, CheckStatusWrapper>
 {
 public:
-	explicit DbCrypt(IPluginConfig* cnf) throw()
+	explicit DbCrypt(IPluginConfig* cnf) noexcept
 		: config(cnf), key(0), refCounter(0), owner(NULL)
 	{
 		config->addRef();

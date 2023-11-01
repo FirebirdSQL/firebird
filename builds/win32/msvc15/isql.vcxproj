@@ -169,31 +169,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\src\isql\ColList.cpp" />
-    <ClCompile Include="..\..\..\src\isql\Extender.cpp" />
-    <ClCompile Include="..\..\..\gen\isql\extract.cpp" />
-    <ClCompile Include="..\..\..\src\common\fb_exception.cpp" />
-    <ClCompile Include="..\..\..\src\isql\InputDevices.cpp" />
-    <ClCompile Include="..\..\..\gen\isql\isql.cpp" />
-    <ClCompile Include="..\..\..\src\isql\iutils.cpp" />
-    <ClCompile Include="..\..\..\src\isql\OptionsBase.cpp" />
-    <ClCompile Include="..\..\..\gen\isql\show.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\..\src\isql\extract.epp" />
-    <None Include="..\..\..\src\isql\isql.epp" />
-    <None Include="..\..\..\src\isql\show.epp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\..\..\src\isql\ColList.h" />
-    <ClInclude Include="..\..\..\src\isql\Extender.h" />
-    <ClInclude Include="..\..\..\src\isql\extra_proto.h" />
-    <ClInclude Include="..\..\..\src\isql\InputDevices.h" />
-    <ClInclude Include="..\..\..\src\isql\isql.h" />
-    <ClInclude Include="..\..\..\src\isql\isql_proto.h" />
-    <ClInclude Include="..\..\..\src\isql\iutils_proto.h" />
-    <ClInclude Include="..\..\..\src\isql\OptionsBase.h" />
-    <ClInclude Include="..\..\..\src\isql\show_proto.h" />
+    <ClCompile Include="..\..\..\src\isql\main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\..\src\jrd\version.rc">
@@ -206,10 +182,27 @@
   <ItemGroup>
     <ProjectReference Include="common.vcxproj">
       <Project>{15605f44-bffd-444f-ad4c-55dc9d704465}</Project>
+      <Private>true</Private>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+      <UseLibraryDependencyInputs>false</UseLibraryDependencyInputs>
+    </ProjectReference>
+    <ProjectReference Include="isql_static.vcxproj">
+      <Project>{54ecae83-4e1c-4433-9270-5708bc3a3a80}</Project>
+      <Private>true</Private>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+      <UseLibraryDependencyInputs>true</UseLibraryDependencyInputs>
     </ProjectReference>
     <ProjectReference Include="yvalve.vcxproj">
       <Project>{4fe03933-98cd-4879-a135-fd9430087a6b}</Project>
+      <Private>true</Private>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+      <UseLibraryDependencyInputs>false</UseLibraryDependencyInputs>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

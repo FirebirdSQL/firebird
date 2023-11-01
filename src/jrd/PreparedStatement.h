@@ -24,6 +24,8 @@
 #define JRD_PREPARED_STATEMENT_H
 
 #include "firebird.h"
+#include <utility>
+#include <optional>
 #include "../common/dsc.h"
 #include "../common/MsgMetadata.h"
 #include "../jrd/intl.h"
@@ -33,7 +35,6 @@
 #include "../common/classes/fb_string.h"
 #include "../common/classes/MetaString.h"
 #include "../jrd/MetaName.h"
-#include "../common/classes/Nullable.h"
 
 namespace Jrd {
 
@@ -45,6 +46,9 @@ class dsql_msg;
 class ResultSet;
 
 
+template <typename T>
+struct PreparedStatementTypeDiscriminator {};
+
 class PreparedStatement : public Firebird::PermanentStorage
 {
 friend class ResultSet;
@@ -52,7 +56,7 @@ friend class ResultSet;
 public:
 	class Builder
 	{
-	private:
+	public:
 		enum Type
 		{
 			TYPE_SSHORT,
@@ -83,7 +87,7 @@ public:
 			Type type;
 			unsigned number;
 			const void* address;
-			const bool* specifiedAddress;
+			bool isOptional;
 		};
 
 		struct OutputSlot
@@ -91,7 +95,7 @@ public:
 			Type type;
 			unsigned number;
 			void* address;
-			bool* specifiedAddress;
+			bool isOptional;
 		};
 
 	public:
@@ -103,16 +107,15 @@ public:
 	public:
 		// Output variables.
 
-		template <typename T> OutputParam operator ()(const char* chunk, Nullable<T>& param)
+		template <typename T> OutputParam operator ()(const char* chunk, std::optional<T>& param)
 		{
-			OutputParam ret = (*this)(chunk, param.value);
-			outputSlots[outputSlots.getCount() - 1].specifiedAddress = &param.specified;
-			return ret;
+			addOutput(PreparedStatementTypeDiscriminator<T>::TYPE, &param, true, outputSlots);
+			return OutputParam(chunk, outputSlots.getCount() - 1);
 		}
 
 		template <typename T> OutputParam operator ()(const char* chunk, T& param)
 		{
-			addOutput(getType(param), &param, outputSlots);
+			addOutput(PreparedStatementTypeDiscriminator<T>::TYPE, &param, false, outputSlots);
 			return OutputParam(chunk, outputSlots.getCount() - 1);
 		}
 
@@ -134,16 +137,16 @@ public:
 			return *this;
 		}
 
-		template <typename T> Builder& operator <<(const Nullable<T>& param)
+		template <typename T> Builder& operator <<(const std::optional<T>& param)
 		{
-			*this << param.value;
-			inputSlots[inputSlots.getCount() - 1].specifiedAddress = &param.specified;
+			addInput(PreparedStatementTypeDiscriminator<T>::TYPE, &param, true, inputSlots);
+			text += "?";
 			return *this;
 		}
 
 		template <typename T> Builder& operator <<(const T& param)
 		{
-			addInput(getType(param), &param, inputSlots);
+			addInput(PreparedStatementTypeDiscriminator<T>::TYPE, &param, false, inputSlots);
 			text += "?";
 			return *this;
 		}
@@ -158,32 +161,23 @@ public:
 		void moveToStatement(thread_db* tdbb, PreparedStatement* stmt) const;
 
 	private:
-		// Make the C++ template engine return the constant for each type.
-		static Type getType(SSHORT)								{ return TYPE_SSHORT; }
-		static Type getType(SLONG)								{ return TYPE_SLONG; }
-		static Type getType(SINT64)								{ return TYPE_SINT64; }
-		static Type getType(double)								{ return TYPE_DOUBLE; }
-		static Type getType(const Firebird::AbstractString&)	{ return TYPE_STRING; }
-		static Type getType(const MetaName&)				{ return TYPE_METANAME; }
-		static Type getType(const Firebird::MetaString&)		{ return TYPE_METASTRING; }
-
-		void addInput(Type type, const void* address, Firebird::Array<InputSlot>& slots)
+		void addInput(Type type, const void* address, bool isOptional, Firebird::Array<InputSlot>& slots)
 		{
 			InputSlot slot;
 			slot.type = type;
 			slot.number = (unsigned) slots.getCount() + 1;
 			slot.address = address;
-			slot.specifiedAddress = NULL;
+			slot.isOptional = isOptional;
 			slots.add(slot);
 		}
 
-		void addOutput(Type type, void* address, Firebird::Array<OutputSlot>& slots)
+		void addOutput(Type type, void* address, bool isOptional, Firebird::Array<OutputSlot>& slots)
 		{
 			OutputSlot slot;
 			slot.type = type;
 			slot.number = (unsigned) slots.getCount() + 1;
 			slot.address = address;
-			slot.specifiedAddress = NULL;
+			slot.isOptional = isOptional;
 			slots.add(slot);
 		}
 
@@ -324,7 +318,7 @@ public:
 		setDesc(tdbb, param, desc);
 	}
 
-	void setString(thread_db* tdbb, unsigned param, const Firebird::AbstractString& value)
+	void setString(thread_db* tdbb, unsigned param, const Firebird::string& value)
 	{
 		fb_assert(param > 0);
 
@@ -377,6 +371,50 @@ private:
 };
 
 typedef Firebird::AutoPtr<PreparedStatement> AutoPreparedStatement;
+
+// PreparedStatementTypeDiscriminator specializations.
+
+template <>
+struct PreparedStatementTypeDiscriminator<SSHORT>
+{
+	static constexpr PreparedStatement::Builder::Type TYPE = PreparedStatement::Builder::TYPE_SSHORT;
+};
+
+template <>
+struct PreparedStatementTypeDiscriminator<SLONG>
+{
+	static constexpr PreparedStatement::Builder::Type TYPE = PreparedStatement::Builder::TYPE_SLONG;
+};
+
+template <>
+struct PreparedStatementTypeDiscriminator<SINT64>
+{
+	static constexpr PreparedStatement::Builder::Type TYPE = PreparedStatement::Builder::TYPE_SINT64;
+};
+
+template <>
+struct PreparedStatementTypeDiscriminator<double>
+{
+	static constexpr PreparedStatement::Builder::Type TYPE = PreparedStatement::Builder::TYPE_DOUBLE;
+};
+
+template <>
+struct PreparedStatementTypeDiscriminator<Firebird::string>
+{
+	static constexpr PreparedStatement::Builder::Type TYPE = PreparedStatement::Builder::TYPE_STRING;
+};
+
+template <>
+struct PreparedStatementTypeDiscriminator<MetaName>
+{
+	static constexpr PreparedStatement::Builder::Type TYPE = PreparedStatement::Builder::TYPE_METANAME;
+};
+
+template <>
+struct PreparedStatementTypeDiscriminator<Firebird::MetaString>
+{
+	static constexpr PreparedStatement::Builder::Type TYPE = PreparedStatement::Builder::TYPE_METASTRING;
+};
 
 
 }	// namespace

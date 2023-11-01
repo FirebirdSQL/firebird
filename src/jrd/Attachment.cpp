@@ -637,11 +637,15 @@ void Jrd::Attachment::signalShutdown(ISC_STATUS code)
 }
 
 
-void Jrd::Attachment::mergeStats()
+void Jrd::Attachment::mergeStats(bool pageStatsOnly)
 {
 	MutexLockGuard guard(att_database->dbb_stats_mutex, FB_FUNCTION);
-	att_database->dbb_stats.adjust(att_base_stats, att_stats, true);
-	att_base_stats.assign(att_stats);
+	att_database->dbb_stats.adjustPageStats(att_base_stats, att_stats);
+	if (!pageStatsOnly)
+	{
+		att_database->dbb_stats.adjust(att_base_stats, att_stats, true);
+		att_base_stats.assign(att_stats);
+	}
 }
 
 
@@ -1066,7 +1070,7 @@ void StableAttachmentPart::doOnIdleTimer(TimerImpl*)
 	JRD_shutdown_attachment(att);
 }
 
-JAttachment* Attachment::getInterface() throw()
+JAttachment* Attachment::getInterface() noexcept
 {
 	return att_stable->getInterface();
 }
@@ -1138,7 +1142,7 @@ void Attachment::invalidateReplSet(thread_db* tdbb, bool broadcast)
 		for (auto relation : *att_relations)
 		{
 			if (relation)
-				relation->rel_repl_state.invalidate();
+				relation->rel_repl_state.reset();
 		}
 	}
 

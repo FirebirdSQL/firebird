@@ -24,6 +24,9 @@
 #define JRD_EXT_ENGINE_MANAGER_H
 
 #include "firebird/Interface.h"
+
+#include <memory>
+
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/GenericMap.h"
@@ -216,9 +219,16 @@ public:
 		ExtRoutine(thread_db* tdbb, ExtEngineManager* aExtManager,
 			Firebird::IExternalEngine* aEngine, RoutineMetadata* aMetadata);
 
+	private:
+		class PluginDeleter
+		{
+		public:
+			void operator()(Firebird::IPluginBase* ptr);
+		};
+
 	protected:
 		ExtEngineManager* extManager;
-		Firebird::AutoPlugin<Firebird::IExternalEngine> engine;
+		std::unique_ptr<Firebird::IExternalEngine, PluginDeleter> engine;
 		Firebird::AutoPtr<RoutineMetadata> metadata;
 		Database* database;
 	};

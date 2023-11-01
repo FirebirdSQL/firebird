@@ -68,21 +68,26 @@ namespace Jrd
 
 		void initializeInvariants(Request* request) const;
 
+		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
+
 		void printPlan(thread_db* tdbb, Firebird::string& plan, bool detailed) const
 		{
-			print(tdbb, plan, detailed, 0, true);
-		}
-
-		void print(thread_db* tdbb, Firebird::string& plan,
-			bool detailed, unsigned level, bool recurse) const override;
-
-		void getChildren(Firebird::Array<const RecordSource*>& children) const override
-		{
-			children.add(m_root);
+			if (detailed)
+			{
+				PlanEntry planEntry;
+				getPlan(tdbb, planEntry, 0, true);
+				planEntry.asString(plan);
+			}
+			else
+				getLegacyPlan(tdbb, plan, 0);
 		}
 
 		virtual void open(thread_db* tdbb) const = 0;
 		virtual void close(thread_db* tdbb) const = 0;
+
+	protected:
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry,
+			unsigned level, bool recurse) const override;
 
 	protected:
 		const RecordSource* const m_root;

@@ -86,7 +86,7 @@ enum commentMode {cmmShow, cmmExtract};
 static void remove_delimited_double_quotes(TEXT*);
 static void make_priv_string(USHORT, char*, bool);
 static processing_state show_all_tables(SSHORT);
-static void show_charsets(const SCHAR*, const SCHAR*, const bool, bool, bool, bool);
+static void show_charsets(SSHORT char_set_id, SSHORT collation);
 static processing_state show_check(const SCHAR*);
 static processing_state show_collations(const SCHAR*, SSHORT sys_flag, const char* msg = 0, bool compact = false);
 static void show_comment(const char* objtype, char* packageName, char* name1, char* name2,
@@ -2947,9 +2947,7 @@ static processing_state show_all_tables(SSHORT sys_flag)
 }
 
 
-static void show_charsets(const SCHAR* relation_name, const SCHAR* field_name,
-						  bool show_charset, bool show_collation,
-						  bool doIndent, bool doNewLine)
+static void show_charsets(SSHORT char_set_id, SSHORT collation)
 {
 /*************************************
 *
@@ -2958,77 +2956,51 @@ static void show_charsets(const SCHAR* relation_name, const SCHAR* field_name,
 **************************************
 *
 * Functional description
-*	Show character set and collations
+*	Show names of character set and collations
 *
 **************************************/
-	SSHORT collation = -1, char_set_id = -1;
-	const SSHORT default_char_set_id = ISQL_get_default_char_set_id();
-
-	// If there is a relation_name, this is a real column, look up collation
-	// in rdb$relation_fields
-
-	if (relation_name)
-	{
-		FOR RRF IN RDB$RELATION_FIELDS CROSS
-			FLD IN RDB$FIELDS
-			WITH RRF.RDB$FIELD_NAME EQ field_name AND
-			RRF.RDB$RELATION_NAME EQ relation_name AND
-			RRF.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME
-
-			char_set_id = 0;
-			if (!FLD.RDB$CHARACTER_SET_ID.NULL)
-				char_set_id = FLD.RDB$CHARACTER_SET_ID;
-			collation = 0;
-			if (!RRF.RDB$COLLATION_ID.NULL)
-				collation = RRF.RDB$COLLATION_ID;
-			else if (!FLD.RDB$COLLATION_ID.NULL)
-				collation = FLD.RDB$COLLATION_ID;
-		END_FOR
-		ON_ERROR
-#ifdef DEV_BUILD
-			fprintf(stderr, "show_charsets(%s %s) failed\n", relation_name, field_name);
+#ifdef	DEV_BUILD
+	bool found = false;
 #endif
-		END_ERROR;
-	}
-	else
-	{
-		FOR FLD IN RDB$FIELDS WITH
-			FLD.RDB$FIELD_NAME EQ field_name
 
-			char_set_id = 0;
-			collation = 0;
-			if (!FLD.RDB$CHARACTER_SET_ID.NULL)
-				char_set_id = FLD.RDB$CHARACTER_SET_ID;
-			if (!FLD.RDB$COLLATION_ID.NULL)
-				collation = FLD.RDB$COLLATION_ID;
-		END_FOR
-		ON_ERROR
+	FOR COL IN RDB$COLLATIONS CROSS
+		CST IN RDB$CHARACTER_SETS WITH
+		COL.RDB$CHARACTER_SET_ID EQ CST.RDB$CHARACTER_SET_ID AND
+		COL.RDB$COLLATION_ID EQ collation AND
+		CST.RDB$CHARACTER_SET_ID EQ char_set_id
+
 #ifdef DEV_BUILD
-			fprintf(stderr, "show_charsets(NULL %s) failed\n",
-					   field_name);
+		found = true;
 #endif
-		END_ERROR;
-	}
+		fb_utils::exact_name(CST.RDB$CHARACTER_SET_NAME);
+		fb_utils::exact_name(COL.RDB$COLLATION_NAME);
+		fb_utils::exact_name(CST.RDB$DEFAULT_COLLATE_NAME);
 
-	TEXT char_sets[CHARSET_COLLATE_SIZE];
-	char_sets[0] = 0;
-	if ((char_set_id != default_char_set_id) || collation)
-	{
-		if (show_charset && !show_collation)
-			ISQL_get_character_sets(char_set_id, 0, false, false, false, char_sets);
-		else if (!show_charset && show_collation)
-			ISQL_get_character_sets(char_set_id, collation, true, false, false, char_sets);
+		if (strcmp(CST.RDB$DEFAULT_COLLATE_NAME, COL.RDB$COLLATION_NAME) == 0 &&
+			strcmp(CST.RDB$CHARACTER_SET_NAME, COL.RDB$COLLATION_NAME) == 0)
+		{
+			// Collation is default and match charset name - do not show it.
+			isqlGlob.printf(" CHARACTER SET %s", CST.RDB$CHARACTER_SET_NAME);
+		}
 		else
-			ISQL_get_character_sets(char_set_id, collation, false, false, false, char_sets);
-	}
-	if (char_sets[0])
+		{
+			isqlGlob.printf(" CHARACTER SET %s COLLATE %s", CST.RDB$CHARACTER_SET_NAME, COL.RDB$COLLATION_NAME);
+		}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR;
+#ifdef DEV_BUILD
+	if (!found)
 	{
-		if (doIndent)
-			isqlGlob.printf(spaces);
-		isqlGlob.prints(char_sets);
-		if (doNewLine)
-			isqlGlob.printf(NEWLINE);
+		TEXT Print_buffer[PRINT_BUFFER_LENGTH];
+		sprintf(Print_buffer,
+				"ISQL_get_character_set: charset %d collation %d not found.\n",
+				char_set_id, collation);
+		STDERROUT(Print_buffer);
 	}
+#endif
 }
 
 
@@ -4094,11 +4066,19 @@ static processing_state show_domains(const SCHAR* domain_name)
 			}
 
 			// Show international character sets
+			SSHORT char_set_id = 0;
+			if (!FLD.RDB$CHARACTER_SET_ID.NULL)
+				char_set_id = FLD.RDB$CHARACTER_SET_ID;
+
+			SSHORT collation = 0;
+			if (!FLD.RDB$COLLATION_ID.NULL)
+				collation = FLD.RDB$COLLATION_ID;
+
 			if (((FLD.RDB$FIELD_TYPE == blr_text ||
 				FLD.RDB$FIELD_TYPE == blr_varying) && FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_binary) ||
-				FLD.RDB$FIELD_TYPE == blr_blob)
+				FLD.RDB$FIELD_TYPE == blr_blob && FLD.RDB$FIELD_SUB_TYPE == isc_blob_text)
 			{
-				show_charsets(NULL, FLD.RDB$FIELD_NAME, true, false, false, false);
+				show_charsets(char_set_id, collation);
 			}
 
 			if (FLD.RDB$NULL_FLAG != 1) {
@@ -4123,14 +4103,6 @@ static processing_state show_domains(const SCHAR* domain_name)
 				isqlGlob.printf("                                ");
 				SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$VALIDATION_SOURCE);
 				isqlGlob.printf(NEWLINE);
-			}
-
-			// Show collations
-			if (FLD.RDB$FIELD_TYPE == blr_text ||
-				FLD.RDB$FIELD_TYPE == blr_varying ||
-				FLD.RDB$FIELD_TYPE == blr_blob)
-			{
-				show_charsets(NULL, FLD.RDB$FIELD_NAME, false, true, true, true);
 			}
 
 		END_FOR
@@ -4497,6 +4469,7 @@ static processing_state show_func(const MetaString& package, const MetaString& f
 		}
 
 		bool first_param = true;
+		const SSHORT default_charset = ISQL_get_default_char_set_id();
 
 		FOR ARG IN RDB$FUNCTION_ARGUMENTS CROSS
 			FLD IN RDB$FIELDS WITH
@@ -4603,19 +4576,7 @@ static processing_state show_func(const MetaString& package, const MetaString& f
 				if (prm_collation_null && !FLD.RDB$COLLATION_ID.NULL)
 					collation = FLD.RDB$COLLATION_ID;
 
-				const SSHORT default_charset = ISQL_get_default_char_set_id();
-
-				TEXT charset_collation[CHARSET_COLLATE_SIZE];
-				charset_collation[0] = 0;
-
-				if ((charset != default_charset) || collation)
-				{
-					ISQL_get_character_sets(charset, collation, false, false, false,
-						charset_collation);
-				}
-
-				if (charset_collation[0])
-					isqlGlob.prints(charset_collation);
+				show_charsets(charset, collation);
 			}
 
 			if (ARG.RDB$ARGUMENT_POSITION != FUN.RDB$RETURN_ARGUMENT) // input, try to show default and make Vlad happy.
@@ -5509,19 +5470,7 @@ static processing_state show_proc(const SCHAR* procname, bool quoted, bool sys, 
 				if (!FLD.RDB$CHARACTER_SET_ID.NULL)
 					charset = FLD.RDB$CHARACTER_SET_ID;
 
-				const SSHORT default_charset = ISQL_get_default_char_set_id();
-
-				TEXT charset_collation[CHARSET_COLLATE_SIZE];
-				charset_collation[0] = 0;
-
-				if ((charset != default_charset) || collation)
-				{
-					ISQL_get_character_sets(charset, collation, false, false, false,
-						charset_collation);
-				}
-
-				if (charset_collation[0])
-					isqlGlob.prints(charset_collation);
+				show_charsets(charset, collation);
 			}
 
 			if (PRM.RDB$PARAMETER_TYPE == 0) // input, try to show default and make Vlad happy.
@@ -6171,13 +6120,23 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 			return ps_ERR;
 		}
 
+		SSHORT char_set_id = 0;
+		if (!FLD.RDB$CHARACTER_SET_ID.NULL)
+			char_set_id = FLD.RDB$CHARACTER_SET_ID;
+
+		SSHORT collation = 0;
+		if (!RFR.RDB$COLLATION_ID.NULL)
+			collation = RFR.RDB$COLLATION_ID;
+		else if (!FLD.RDB$COLLATION_ID.NULL)
+			collation = FLD.RDB$COLLATION_ID;
+
 		if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying)) {
 			isqlGlob.printf("(%d)", ISQL_get_field_length(FLD.RDB$FIELD_NAME));
 
 			if (FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_binary)
 			{
 				// Show international character sets and collations
-				show_charsets(relation_name, RFR.RDB$FIELD_NAME, true, false, false, false);
+				show_charsets(char_set_id, collation);
 			}
 		}
 
@@ -6194,9 +6153,11 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 				isqlGlob.printf("%d", subtype);
 			}
 
-			// Show international character sets and collations
-
-			show_charsets(relation_name, RFR.RDB$FIELD_NAME, true, false, false, false);
+			if (subtype == isc_blob_text)
+			{
+				// Show international character sets and collations
+				show_charsets(char_set_id, collation);
+			}
 		}
 
 		if (!FLD.RDB$COMPUTED_BLR.NULL)
@@ -6239,13 +6200,6 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 			isqlGlob.printf("                                ");
 			SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$VALIDATION_SOURCE);
 			isqlGlob.printf(NEWLINE);
-		}
-
-		// Handle collations
-		if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying) ||
-			(FLD.RDB$FIELD_TYPE == blr_blob))
-		{
-			show_charsets(relation_name, RFR.RDB$FIELD_NAME, false, true, true, true);
 		}
 
 	END_FOR

@@ -286,7 +286,7 @@ private:
 	// Does info buffer have enough space for SLONG?
 	static bool ck_space_for_numeric(UCHAR*& info, const UCHAR* const end);
 	// Make status vector permamnent, if one present in worker thread's space
-	void makePermanentStatusVector() throw();
+	void makePermanentStatusVector() noexcept;
 	// Read SPB on attach
 	void getOptions(Firebird::ClumpletReader&);
 	// Invoke appropriate service thread entry and finalize it correctly

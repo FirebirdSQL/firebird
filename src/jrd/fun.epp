@@ -292,7 +292,8 @@ enum UdfError
 static SSHORT blob_get_segment(blb*, UCHAR*, USHORT, USHORT*);
 static void blob_put_segment(blb*, const UCHAR*, USHORT);
 static SLONG blob_lseek(blb*, USHORT, SLONG);
-static SLONG get_scalar_array(const Parameter*, DSC*, scalar_array_desc*, UCharStack&);
+static ULONG get_scalar_array(thread_db* tdbb, const Parameter*, DSC*,
+							  scalar_array_desc*, UCharStack&);
 static void invoke(thread_db* tdbb,
 				   const Function* function,
 				   const Parameter* return_ptr,
@@ -436,8 +437,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 
 		temp_desc = parameter->prm_desc;
 		temp_desc.dsc_address = temp_ptr;
-		// CVC: There's a theoretical possibility of overflowing "length" here.
-		USHORT length = FB_ALIGN(temp_desc.dsc_length, FB_DOUBLE_ALIGN);
+		ULONG length = FB_ALIGN(temp_desc.dsc_length, FB_DOUBLE_ALIGN);
 
 		// If we've got a null argument, just pass zeros (got any better ideas?)
 
@@ -446,7 +446,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 			if (parameter->prm_fun_mechanism == FUN_value)
 			{
 				UCHAR* p = (UCHAR *) arg_ptr;
-				MOVE_CLEAR(p, (SLONG) length);
+				MOVE_CLEAR(p, length);
 				p += length;
 				arg_ptr = reinterpret_cast<UDF_ARG*>(p);
 				continue;
@@ -458,7 +458,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 			}
 
 			if (parameter->prm_fun_mechanism != FUN_ref_with_null)
-				MOVE_CLEAR(temp_ptr, (SLONG) length);
+				MOVE_CLEAR(temp_ptr, length);
 			else
 			{
 				// Probably for arrays and blobs it's better to preserve the
@@ -468,7 +468,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 				case dtype_quad:
 				case dtype_array:
 				case dtype_blob:
-					MOVE_CLEAR(temp_ptr, (SLONG) length);
+					MOVE_CLEAR(temp_ptr, length);
 					break;
 				default: // FUN_ref_with_null, non-blob, non-array: we send null pointer.
 					*arg_ptr++ = 0;
@@ -478,7 +478,8 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 		}
 		else if (parameter->prm_fun_mechanism == FUN_scalar_array)
 		{
-			length = get_scalar_array(parameter, input, (scalar_array_desc*)temp_ptr, array_stack);
+			length = get_scalar_array(tdbb, parameter, input, (scalar_array_desc*) temp_ptr,
+									  array_stack);
 		}
 		else
 		{
@@ -975,10 +976,11 @@ static SSHORT blob_get_segment(blb* blob, UCHAR* buffer, USHORT length, USHORT* 
 }
 
 
-static SLONG get_scalar_array(const Parameter* arg,
-							  DSC*	value,
-							  scalar_array_desc*	scalar_desc,
-							  UCharStack&	stack)
+static ULONG get_scalar_array(thread_db* tdbb,
+							  const Parameter* arg,
+							  DSC* value,
+							  scalar_array_desc* scalar_desc,
+							  UCharStack& stack)
 {
 /**************************************
  *
@@ -992,17 +994,16 @@ static SLONG get_scalar_array(const Parameter* arg,
  *	Return length of array desc.
  *
  **************************************/
-	thread_db* tdbb = JRD_get_thread_data();
+	MemoryPool& pool = *tdbb->getDefaultPool();
 
 	// Get first the array descriptor, then the array
 
 	SLONG stuff[IAD_LEN(16) / 4];
 	Ods::InternalArrayDesc* array_desc = (Ods::InternalArrayDesc*) stuff;
-	blb* blob = blb::get_array(tdbb, tdbb->getRequest()->req_transaction, (bid*)value->dsc_address,
-							  array_desc);
+	blb* blob = blb::get_array(tdbb, tdbb->getRequest()->req_transaction,
+							   (bid*) value->dsc_address, array_desc);
 
-	fb_assert(array_desc->iad_total_length >= 0); // check before upcasting to size_t
-	UCHAR* data = FB_NEW_POOL(*getDefaultMemoryPool()) UCHAR[static_cast<size_t>(array_desc->iad_total_length)];
+	AutoPtr<UCHAR, ArrayDelete> data(FB_NEW_POOL(pool) UCHAR[array_desc->iad_total_length]);
 	blob->BLB_get_data(tdbb, data, array_desc->iad_total_length);
 	const USHORT dimensions = array_desc->iad_dimensions;
 
@@ -1012,39 +1013,29 @@ static SLONG get_scalar_array(const Parameter* arg,
 	dsc from = array_desc->iad_rpt[0].iad_desc;
 
 	if (to.dsc_dtype != from.dsc_dtype ||
-		to.dsc_scale != from.dsc_scale || to.dsc_length != from.dsc_length)
+		to.dsc_scale != from.dsc_scale ||
+		to.dsc_length != from.dsc_length)
 	{
-		SLONG n = array_desc->iad_count;
-		UCHAR* const temp = FB_NEW_POOL(*getDefaultMemoryPool()) UCHAR[static_cast<size_t>(to.dsc_length * n)];
+		ULONG n = array_desc->iad_count;
+		AutoPtr<UCHAR, ArrayDelete> temp(FB_NEW_POOL(pool) UCHAR[to.dsc_length * n]);
 		to.dsc_address = temp;
 		from.dsc_address = data;
 
-		// This loop may call ERR_post indirectly.
-		try
+		for (; n; --n, to.dsc_address += to.dsc_length,
+			from.dsc_address += array_desc->iad_element_length)
 		{
-			for (; n; --n, to.dsc_address += to.dsc_length,
-				from.dsc_address += array_desc->iad_element_length)
-			{
-				MOV_move(tdbb, &from, &to);
-			}
-		}
-		catch (const Exception&)
-		{
-			delete[] data;
-			delete[] temp;
-			throw;
+			MOV_move(tdbb, &from, &to);
 		}
 
-		delete[] data;
-		data = temp;
+		data = temp.release();
 	}
 
 	// Fill out the scalar array descriptor
 
-	stack.push(data);
 	scalar_desc->sad_desc = arg->prm_desc;
 	scalar_desc->sad_desc.dsc_address = data;
 	scalar_desc->sad_dimensions = dimensions;
+	stack.push(data.release());
 
 	const Ods::InternalArrayDesc::iad_repeat* tail1 = array_desc->iad_rpt;
 	scalar_array_desc::sad_repeat* tail2 = scalar_desc->sad_rpt;
@@ -1055,7 +1046,8 @@ static SLONG get_scalar_array(const Parameter* arg,
 		tail2->sad_lower = tail1->iad_lower;
 	}
 
-	return static_cast<SLONG>(sizeof(scalar_array_desc) + (dimensions - 1u) * sizeof(scalar_array_desc::sad_repeat));
+	return static_cast<ULONG>(sizeof(scalar_array_desc) +
+		(dimensions - 1u) * sizeof(scalar_array_desc::sad_repeat));
 }
 
 

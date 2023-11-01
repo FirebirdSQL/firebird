@@ -223,7 +223,8 @@ namespace
 		return formatNumber;
 	}
 
-	bool getCharsetByTextType(SSHORT& charSet, const USHORT subType)
+	template <typename T>
+	bool getCharsetByTextType(T& charSet, const USHORT subType)
 	{
 		switch (subType)
 		{
@@ -1169,10 +1170,7 @@ void INI_init_dsql(thread_db* tdbb, dsql_dbb* database)
 			}
 
 			if (DTYPE_IS_TEXT(gfield->gfld_dtype))
-			{
-				if (getCharsetByTextType(field->charSetId.value, gfield->gfld_sub_type))
-					field->charSetId.specified = true;
-			}
+				getCharsetByTextType(field->charSetId, gfield->gfld_sub_type);
 
 			if (gfield->gfld_nullable)
 				field->flags |= FLD_nullable;

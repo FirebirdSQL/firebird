@@ -1326,7 +1326,7 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 }
 
 unsigned int copyStatus(ISC_STATUS* const to, const unsigned int space,
-						const ISC_STATUS* const from, const unsigned int count) throw()
+						const ISC_STATUS* const from, const unsigned int count) noexcept
 {
 	unsigned int copied = 0;
 
@@ -1351,7 +1351,7 @@ unsigned int copyStatus(ISC_STATUS* const to, const unsigned int space,
 }
 
 unsigned int mergeStatus(ISC_STATUS* const dest, unsigned int space,
-						 const Firebird::IStatus* from) throw()
+						 const Firebird::IStatus* from) noexcept
 {
 	const ISC_STATUS* s;
 	unsigned int copied = 0;
@@ -1386,7 +1386,7 @@ unsigned int mergeStatus(ISC_STATUS* const dest, unsigned int space,
 	return copied;
 }
 
-void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from) throw()
+void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from) noexcept
 {
 	to->init();
 
@@ -1397,7 +1397,7 @@ void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from)
 		to->setWarnings(from->getWarnings());
 }
 
-void setIStatus(Firebird::CheckStatusWrapper* to, const ISC_STATUS* from) throw()
+void setIStatus(Firebird::CheckStatusWrapper* to, const ISC_STATUS* from) noexcept
 {
 	try
 	{
@@ -1419,7 +1419,7 @@ void setIStatus(Firebird::CheckStatusWrapper* to, const ISC_STATUS* from) throw(
 	}
 }
 
-unsigned int statusLength(const ISC_STATUS* const status) throw()
+unsigned int statusLength(const ISC_STATUS* const status) noexcept
 {
 	unsigned int l = 0;
 	for(;;)
@@ -1432,7 +1432,7 @@ unsigned int statusLength(const ISC_STATUS* const status) throw()
 	}
 }
 
-bool cmpStatus(unsigned int len, const ISC_STATUS* a, const ISC_STATUS* b) throw()
+bool cmpStatus(unsigned int len, const ISC_STATUS* a, const ISC_STATUS* b) noexcept
 {
 	for (unsigned i = 0; i < len; )
 	{
@@ -1480,7 +1480,7 @@ bool cmpStatus(unsigned int len, const ISC_STATUS* a, const ISC_STATUS* b) throw
 }
 
 unsigned int subStatus(const ISC_STATUS* in, unsigned int cin,
-					   const ISC_STATUS* sub, unsigned int csub) throw()
+					   const ISC_STATUS* sub, unsigned int csub) noexcept
 {
 	for (unsigned pos = 0; csub <= cin - pos; )
 	{
@@ -1767,7 +1767,7 @@ unsigned sqlTypeToDsc(unsigned runOffset, unsigned sqlType, unsigned sqlLength,
 	return runOffset + sizeof(SSHORT);
 }
 
-const ISC_STATUS* nextCode(const ISC_STATUS* v) throw()
+const ISC_STATUS* nextCode(const ISC_STATUS* v) noexcept
 {
 	do
 	{

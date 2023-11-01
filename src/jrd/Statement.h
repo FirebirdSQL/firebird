@@ -28,6 +28,8 @@
 
 namespace Jrd {
 
+class PlanEntry;
+
 // Compiled statement.
 class Statement : public pool_alloc<type_req>
 {
@@ -78,6 +80,7 @@ public:
 	void release(thread_db* tdbb);
 
 	Firebird::string getPlan(thread_db* tdbb, bool detailed) const;
+	void getPlan(thread_db* tdbb, PlanEntry& planEntry) const;
 
 private:
 	static void verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation, TrigVector* triggers,

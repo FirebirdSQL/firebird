@@ -176,6 +176,7 @@ enum drq_type_t
 	drq_s_funcs2,			// store functions (CreateAlterFunctionNode)
 	drq_s_func_args2,		// store function arguments (CreateAlterFunctionNode)
 	drq_m_funcs2,			// modify functions (CreateAlterFunctionNode)
+	drq_m_prm_funcs2,		// modify individual function parameters (CreateAlterFunctionNode)
 	drq_e_func_args2,		// erase function arguments (CreateAlterFunctionNode)
 	drq_s_prcs2,
 	drq_s_prms4,

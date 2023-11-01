@@ -163,7 +163,7 @@ public:
 		return ptr != r.ptr;
 	}
 
-	void clear() throw()	// Used after detach/commit/close/etc., i.e. release() not needed
+	void clear() noexcept	// Used after detach/commit/close/etc., i.e. release() not needed
 	{
 		ptr = NULL;
 	}

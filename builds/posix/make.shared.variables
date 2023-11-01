@@ -87,7 +87,8 @@ AllObjects += $(Profiler_Objects)
 
 # Engine
 Engine_Objects:= $(call dirObjects,jrd) $(call dirObjects,dsql) $(call dirObjects,jrd/extds) \
-				 $(call dirObjects,jrd/optimizer) $(call dirObjects,jrd/recsrc) $(call dirObjects,jrd/replication) $(call dirObjects,jrd/trace) \
+				 $(call dirObjects,jrd/optimizer) $(call dirObjects,jrd/recsrc) $(call dirObjects,jrd/replication) \
+				 $(call dirObjects,jrd/sys-packages) $(call dirObjects,jrd/trace) \
 				 $(call makeObjects,lock,lock.cpp)
 
 Engine_Test_Objects:= $(call dirObjects,jrd/tests)
@@ -178,7 +179,9 @@ AllObjects += $(GSPLIT_Objects)
 # Interactive sql
 ISQL_Objects:= $(call dirObjects,isql)
 
-AllObjects += $(ISQL_Objects)
+ISQL_Test_Objects:= $(call dirObjects,isql/tests)
+
+AllObjects += $(ISQL_Objects) $(ISQL_Test_Objects)
 
 
 # Legacy users management in security database

@@ -324,3 +324,32 @@ RDB$RELATIONS                   |       59|         |         |         |       
 
 -- turn per-table stats off, using shortened name
 SQL> SET PER_TAB OFF;
+
+
+
+Isql enhancements in Firebird v6.
+---------------------------------
+
+EXPLAIN statement.
+
+Author: Adriano dos Santos Fernandes
+
+A new ISQL statement was created to easily show a query plan without execute it.
+
+Note: If SET STATS is ON, stats are still shown.
+
+Examples:
+
+SQL> explain select * from employees where id = ?;
+
+SQL> set term !;
+SQL>
+SQL> explain
+CON> execute block
+CON> as
+CON>     declare id integer;
+CON> begin
+CON>     select id from employees where id = ? into id;
+CON> end!
+SQL>
+SQL> set term ;!

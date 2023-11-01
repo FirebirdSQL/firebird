@@ -67,8 +67,8 @@ using MsgFormat::SafeArg;
 DATABASE DB = EXTERN COMPILETIME "yachts.lnk" RUNTIME isqlGlob.global_Db_name;
 
 static bool extract_rel_constraints(const char* relation_name);
-static void get_procedure_args(const char*);
-static void get_function_args_ods12(const char*, USHORT);
+static void get_procedure_args(const char* proc_name, SSHORT default_char_set_id);
+static void get_function_args_ods12(const char*, USHORT, SSHORT default_char_set_id);
 static void list_all_grants();
 static processing_state list_all_grants2(bool, const SCHAR*);
 static void list_all_tables(LegacyTables flag, SSHORT);
@@ -84,15 +84,15 @@ static void listRelationComputed(LegacyTables flag, SSHORT);
 static void list_exceptions();
 static void list_filters();
 static void list_foreign();
-static void list_functions_ods12_headers();
-static void list_functions_ods12_bodies();
+static void list_functions_ods12_headers(SSHORT default_char_set_id);
+static void list_functions_ods12_bodies(SSHORT default_char_set_id);
 static void list_functions_legacy();
 static void list_generators();
 static void list_indexes();
 static void list_package_bodies();
 static void list_package_headers();
-static void list_procedure_bodies();
-static void list_procedure_headers();
+static void list_procedure_bodies(SSHORT default_char_set_id);
+static void list_procedure_headers(SSHORT default_char_set_id);
 static void list_views();
 
 static const char* const Procterm = "^";	// TXNN: script use only
@@ -179,15 +179,15 @@ int EXTRACT_ddl(LegacyTables flag, const SCHAR* tabname)
 		list_domains(default_char_set_id);
 		list_all_tables(flag, default_char_set_id);
 		list_functions_legacy();
-		list_functions_ods12_headers();
-		list_procedure_headers();
+		list_functions_ods12_headers(default_char_set_id);
+		list_procedure_headers(default_char_set_id);
 		list_package_headers();
 		list_indexes();
 		list_foreign();
 		list_views();
 		list_exceptions();
-		list_functions_ods12_bodies();
-		list_procedure_bodies();
+		list_functions_ods12_bodies(default_char_set_id);
+		list_procedure_bodies(default_char_set_id);
 		list_package_bodies();
 		listDomainConstraints();
 		list_check();
@@ -397,14 +397,12 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			// International character sets
 			// Print only the character set
 			if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
-				!RFR.RDB$COLLATION_ID.NULL && RFR.RDB$COLLATION_ID)
+				!RFR.RDB$COLLATION_ID.NULL)
 			{
-				char_sets[0] = '\0';
+				// There is no need to print character set for domain at all because it cannot be overriden.
+				// Collation will be printed later.
 				collation = RFR.RDB$COLLATION_ID;
 				char_set_id = FLD.RDB$CHARACTER_SET_ID;
-				ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, 0, true, false, true, char_sets);
-				if (char_sets[0])
-					isqlGlob.prints(char_sets);
 			}
 		}
 		else
@@ -461,8 +459,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 
 				if (!FLD.RDB$CHARACTER_SET_ID.NULL)
 					char_set_id = FLD.RDB$CHARACTER_SET_ID;
-				if ((char_set_id != default_char_set_id) || collation)
-					ISQL_get_character_sets (char_set_id, 0, false, false, true, char_sets);
+				ISQL_get_character_sets(char_set_id, collation, default_char_set_id, Get::CHARSET_ONLY, false, true, char_sets);
 				if (char_sets[0])
 					isqlGlob.prints(char_sets);
 				// CVC: Someone deleted the code that checks intchar when handling collations
@@ -482,11 +479,11 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 				if (!FLD.RDB$COMPUTED_SOURCE.NULL)
 					ISQL_print_validation (isqlGlob.Out, &FLD.RDB$COMPUTED_SOURCE, true, fbTrans);
 			}
-			else if (collation)
+			else if (!RFR.RDB$COLLATION_ID.NULL)
 			{
 				SCHAR collate_name[CHARSET_COLLATE_SIZE];
 				collate_name[0] = '\0';
-				ISQL_get_character_sets(char_set_id, collation, true, false, true, collate_name);
+				ISQL_get_character_sets(char_set_id, collation, default_char_set_id, Get::COLLATE_ONLY, false, true, collate_name);
 
 				if (collate_name[0])
 				{
@@ -582,10 +579,10 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 
 		// Handle collations after defaults
 
-		if (collation)
+		if (!RFR.RDB$COLLATION_ID.NULL)
 		{
 			char_sets[0] = '\0';
-			ISQL_get_character_sets (char_set_id, collation, true, false, true, char_sets);
+			ISQL_get_character_sets(char_set_id, collation, default_char_set_id, Get::COLLATE_ONLY, false, true, char_sets);
 			if (char_sets[0])
 				isqlGlob.prints(char_sets);
 		}
@@ -694,7 +691,7 @@ static bool extract_rel_constraints(const char* relation_name)
 }
 
 
-static void get_procedure_args(const char* proc_name)
+static void get_procedure_args(const char* proc_name, SSHORT default_char_set_id)
 {
 /**************************************
  *
@@ -819,10 +816,10 @@ static void get_procedure_args(const char* proc_name)
 				// International character sets
 				// Print only the collation
 				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
-					!prm_collation_id_null && prm_collation_id)
+					!prm_collation_id_null)
 				{
 					char_sets[0] = '\0';
-					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id, true,
+					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id, default_char_set_id, Get::COLLATE_ONLY,
 						!prm_null_flag_null && prm_null_flag, true, char_sets);
 					if (char_sets[0])
 						isqlGlob.prints(char_sets);
@@ -878,7 +875,7 @@ static void get_procedure_args(const char* proc_name)
 					if (FLD.RDB$CHARACTER_SET_ID.NULL)
 						FLD.RDB$CHARACTER_SET_ID = 0;
 
-					ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, collation, false,
+					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, collation, default_char_set_id, Get::BOTH,
 						!prm_null_flag_null && prm_null_flag, true, char_sets);
 					if (char_sets[0])
 						isqlGlob.prints(char_sets);
@@ -915,7 +912,7 @@ static void get_procedure_args(const char* proc_name)
 }
 
 
-static void get_function_args_ods12(const char* func_name, USHORT out_arg)
+static void get_function_args_ods12(const char* func_name, USHORT out_arg, SSHORT default_char_set_id)
 {
 /**************************************
  *
@@ -1043,10 +1040,10 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 				// International character sets
 				// Print only the collation
 				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
-					!prm_collation_id_null && prm_collation_id)
+					!prm_collation_id_null)
 				{
 					char_sets[0] = '\0';
-					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id, true,
+					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id, default_char_set_id, Get::COLLATE_ONLY,
 						!prm_null_flag_null && prm_null_flag, true, char_sets);
 					if (char_sets[0])
 						isqlGlob.prints(char_sets);
@@ -1102,7 +1099,7 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg)
 					if (FLD.RDB$CHARACTER_SET_ID.NULL)
 						FLD.RDB$CHARACTER_SET_ID = 0;
 
-					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, collation, false,
+					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, collation, default_char_set_id, Get::BOTH,
 						!prm_null_flag_null && prm_null_flag, true, char_sets);
 
 					if (char_sets[0])
@@ -1482,7 +1479,7 @@ static void print_proc_suffix(int obj_type)
 		isqlGlob.printf("SET AUTODDL ON%s%s", isqlGlob.global_Term, NEWLINE);
 }
 
-static void list_procedure_headers()
+static void list_procedure_headers(SSHORT default_char_set_id)
 {
 /**************************************
  *
@@ -1526,10 +1523,10 @@ static void list_procedure_headers()
 		}
 		else
 		{
-			isqlGlob.printf(create_procedure, PRC.RDB$PROCEDURE_NAME);
+			isqlGlob.printf(create_procedure, PRC.RDB$PROCEDURE_NAME, default_char_set_id);
 		}
 
-		get_procedure_args(PRC.RDB$PROCEDURE_NAME);
+		get_procedure_args(PRC.RDB$PROCEDURE_NAME, default_char_set_id);
 		isqlGlob.printf("AS %s", NEWLINE);
 
 		prc_t proc_type = PRC.RDB$PROCEDURE_TYPE.NULL ? prc_legacy : (prc_t) PRC.RDB$PROCEDURE_TYPE;
@@ -1552,7 +1549,7 @@ static void list_procedure_headers()
 
 
 
-static void list_procedure_bodies()
+static void list_procedure_bodies(SSHORT default_char_set_id)
 {
 /**************************************
  *
@@ -1592,7 +1589,7 @@ static void list_procedure_bodies()
 		else
 			isqlGlob.printf("%sALTER PROCEDURE %s ", NEWLINE, PRC.RDB$PROCEDURE_NAME);
 
-		get_procedure_args(PRC.RDB$PROCEDURE_NAME);
+		get_procedure_args(PRC.RDB$PROCEDURE_NAME, default_char_set_id);
 
 		// Print the procedure body
 
@@ -2333,12 +2330,7 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 		{
 
 			char_sets[0] = 0;
-			if ((FLD.RDB$CHARACTER_SET_ID != default_char_set_id) ||
-				(!FLD.RDB$COLLATION_ID.NULL && FLD.RDB$COLLATION_ID != 0))
-			{
-				ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, 0, false, false, true,
-					char_sets);
-			}
+			ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, default_char_set_id, Get::CHARSET_ONLY, false, true, char_sets);
 			if (char_sets[0])
 				isqlGlob.prints(char_sets);
 		}
@@ -2361,14 +2353,13 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 		   order is the default for the character set being used, then no collation
 		   order will be shown ( because it isn't needed ).
 
-		If the collation id is 0, then the default for the character set is
-		being used so there is no need to retrieve the collation information.*/
+		Even if the collation id is 0, it may be non-default for the character set.*/
 
-		if (!FLD.RDB$COLLATION_ID.NULL && FLD.RDB$COLLATION_ID != 0)
+		if (!FLD.RDB$COLLATION_ID.NULL)
 		{
 			char_sets[0] = 0;
-			ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, true, false,
-				true, char_sets);
+			ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, default_char_set_id, Get::COLLATE_ONLY,
+				false, true, char_sets);
 
 			if (char_sets[0])
 				isqlGlob.prints(char_sets);
@@ -2460,12 +2451,7 @@ static void list_domains(SSHORT default_char_set_id)
 			  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 		{
 			char_sets[0] = 0;
-			if ((FLD.RDB$CHARACTER_SET_ID != default_char_set_id) ||
-				(!FLD.RDB$COLLATION_ID.NULL && FLD.RDB$COLLATION_ID != 0))
-			{
-				ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, 0, false, false, true,
-					char_sets);
-			}
+			ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, default_char_set_id, Get::CHARSET_ONLY, false, true, char_sets);
 			if (char_sets[0])
 				isqlGlob.prints(char_sets);
 		}
@@ -2484,14 +2470,13 @@ static void list_domains(SSHORT default_char_set_id)
 		   order is the default for the character set being used, then no collation
 		   order will be shown ( because it isn't needed
 
-		   If the collation id is 0, then the default for the character set is
-		   being used so there is no need to retrieve the collation information.*/
+		   Even if the collation id is 0, it may be non-default for the character.*/
 
-		if (!FLD.RDB$COLLATION_ID.NULL && FLD.RDB$COLLATION_ID != 0)
+		if (!FLD.RDB$COLLATION_ID.NULL)
 		{
 			char_sets[0] = 0;
-			ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, true, false,
-				true, char_sets);
+			ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, default_char_set_id, Get::COLLATE_ONLY,
+				false, true, char_sets);
 
 			if (char_sets[0])
 				isqlGlob.prints(char_sets);
@@ -2628,15 +2613,14 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 					isqlGlob.prints(FLD.RDB$FIELD_NAME);
 
 				// International character sets
-				// Print only the character set
+				// Print only the collation
 				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
-					!RFR.RDB$COLLATION_ID.NULL && RFR.RDB$COLLATION_ID)
+					!RFR.RDB$COLLATION_ID.NULL)
 				{
 					char_sets[0] = '\0';
 					collation = RFR.RDB$COLLATION_ID;
 					char_set_id = FLD.RDB$CHARACTER_SET_ID;
-					ISQL_get_character_sets (FLD.RDB$CHARACTER_SET_ID, 0, true, false, true,
-						char_sets);
+					ISQL_get_character_sets(char_set_id, collation, default_char_set_id, Get::COLLATE_ONLY, false, true, char_sets);
 
 					if (char_sets[0])
 						isqlGlob.prints(char_sets);
@@ -2696,8 +2680,11 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 
 					if (!FLD.RDB$CHARACTER_SET_ID.NULL)
 						char_set_id = FLD.RDB$CHARACTER_SET_ID;
-					if ((char_set_id != default_char_set_id) || collation)
-						ISQL_get_character_sets (char_set_id, 0, false, false, true, char_sets);
+					if (char_set_id != default_char_set_id)
+					{
+						// Currently ALTER TABLE syntax doesn't allow collation here.
+						ISQL_get_character_sets(char_set_id, collation, default_char_set_id, Get::CHARSET_ONLY, false, true, char_sets);
+					}
 					if (char_sets[0])
 						isqlGlob.prints(char_sets);
 					// CVC: Someone deleted the code that checks intchar when handling collations
@@ -3110,7 +3097,7 @@ static void list_functions_legacy()
 	END_ERROR;
 }
 
-static void list_functions_ods12_headers()
+static void list_functions_ods12_headers(SSHORT default_char_set_id)
 {
 	fb_assert(isqlGlob.major_ods >= ODS_VERSION12);
 
@@ -3143,7 +3130,7 @@ static void list_functions_ods12_headers()
 			isqlGlob.printf(create_function, FUN.RDB$FUNCTION_NAME);
 		}
 
-		get_function_args_ods12(FUN.RDB$FUNCTION_NAME, FUN.RDB$RETURN_ARGUMENT);
+		get_function_args_ods12(FUN.RDB$FUNCTION_NAME, FUN.RDB$RETURN_ARGUMENT, default_char_set_id);
 
 		if (!FUN.RDB$DETERMINISTIC_FLAG.NULL && FUN.RDB$DETERMINISTIC_FLAG)
 			isqlGlob.printf("DETERMINISTIC %s", NEWLINE);
@@ -3162,7 +3149,7 @@ static void list_functions_ods12_headers()
 		print_proc_suffix(obj_udf);
 }
 
-static void list_functions_ods12_bodies()
+static void list_functions_ods12_bodies(SSHORT default_char_set_id)
 {
 	fb_assert(isqlGlob.major_ods >= ODS_VERSION12);
 
@@ -3192,7 +3179,7 @@ static void list_functions_ods12_bodies()
 		else
 			isqlGlob.printf("%sALTER FUNCTION %s ", NEWLINE, FUN.RDB$FUNCTION_NAME);
 
-		get_function_args_ods12(FUN.RDB$FUNCTION_NAME, FUN.RDB$RETURN_ARGUMENT);
+		get_function_args_ods12(FUN.RDB$FUNCTION_NAME, FUN.RDB$RETURN_ARGUMENT, default_char_set_id);
 
 		if (!FUN.RDB$DETERMINISTIC_FLAG.NULL && FUN.RDB$DETERMINISTIC_FLAG)
 			isqlGlob.printf("DETERMINISTIC %s", NEWLINE);

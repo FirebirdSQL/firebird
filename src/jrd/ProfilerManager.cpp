@@ -335,8 +335,8 @@ void ProfilerPackage::startSessionFunction(ThrowStatusExceptionWrapper* /*status
 	}
 
 	const string description(in->description.str, in->descriptionNull ? 0 : in->description.length);
-	const Nullable<SLONG> flushInterval(in->flushIntervalNull ?
-		Nullable<SLONG>() : Nullable<SLONG>(in->flushInterval));
+	const std::optional<SLONG> flushInterval(in->flushIntervalNull ?
+		std::nullopt : std::optional{in->flushInterval});
 	const PathName pluginName(in->pluginName.str, in->pluginNameNull ? 0 : in->pluginName.length);
 	const string pluginOptions(in->pluginOptions.str, in->pluginOptionsNull ? 0 : in->pluginOptions.length);
 
@@ -398,11 +398,11 @@ int ProfilerManager::blockingAst(void* astObject)
 	return 0;
 }
 
-SINT64 ProfilerManager::startSession(thread_db* tdbb, Nullable<SLONG> flushInterval,
+SINT64 ProfilerManager::startSession(thread_db* tdbb, std::optional<SLONG> flushInterval,
 	const PathName& pluginName, const string& description, const string& options)
 {
-	if (flushInterval.isAssigned())
-		checkFlushInterval(flushInterval.value);
+	if (flushInterval.has_value())
+		checkFlushInterval(flushInterval.value());
 
 	AutoSetRestore<bool> pauseProfiler(&paused, true);
 
@@ -460,8 +460,8 @@ SINT64 ProfilerManager::startSession(thread_db* tdbb, Nullable<SLONG> flushInter
 
 	paused = false;
 
-	if (flushInterval.isAssigned())
-		setFlushInterval(flushInterval.value);
+	if (flushInterval.has_value())
+		setFlushInterval(flushInterval.value());
 
 	return currentSession->pluginSession->getId();
 }
@@ -498,80 +498,31 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 
 	fb_assert(profileStatement->definedCursors.exist(recordSource->getCursorId()));
 
-	struct PlanItem : PermanentStorage
-	{
-		explicit PlanItem(MemoryPool& p)
-			: PermanentStorage(p)
-		{
-		}
+	PlanEntry rootEntry;
+	recordSource->getPlan(tdbb, rootEntry, 0, true);
 
-		const AccessPath* recordSource = nullptr;
-		const AccessPath* parentRecordSource = nullptr;
-		string accessPath{getPool()};
-		unsigned level = 0;
-	};
-
-	ObjectsArray<PlanItem> planItems;
-	planItems.add().recordSource = recordSource;
-
-	for (unsigned pos = 0; pos < planItems.getCount(); ++pos)
-	{
-		auto& planItem = planItems[pos];
-		const auto thisRsb = planItem.recordSource;
-
-		string& accessPath = planItem.accessPath;
-		thisRsb->print(tdbb, accessPath, true, 0, false);
-
-		constexpr auto INDENT_MARKER = "\n    ";
-		constexpr unsigned INDENT_COUNT = 4;
-
-		if (accessPath.find(INDENT_MARKER) == 0)
-		{
-			unsigned pos = 0;
-
-			do {
-				accessPath.erase(pos + 1, 4);
-			} while ((pos = accessPath.find(INDENT_MARKER, pos + 1)) != string::npos);
-		}
-
-		if (accessPath.hasData() && accessPath[0] == '\n')
-			accessPath.erase(0, 1);
-
-		Array<const RecordSource*> children;
-		thisRsb->getChildren(children);
-
-		unsigned level = planItem.level;
-
-		if (const auto lastLinePos = accessPath.find_last_of('\n'); lastLinePos != string::npos)
-			level += (accessPath.find_first_not_of(' ', lastLinePos + 1) - lastLinePos + 1) / INDENT_COUNT;
-
-		unsigned childPos = pos;
-
-		for (const auto child : children)
-		{
-			auto& inserted = planItems.insert(++childPos);
-			inserted.recordSource = child;
-			inserted.parentRecordSource = thisRsb;
-			inserted.level = level + 1;
-		}
-	}
+	Array<NonPooledPair<const PlanEntry*, const PlanEntry*>> flatPlan;
+	rootEntry.asFlatList(flatPlan);
 
 	NonPooledMap<ULONG, ULONG> idSequenceMap;
 	auto sequencePtr = profileStatement->cursorNextSequence.getOrPut(recordSource->getCursorId());
 
-	for (const auto& planItem : planItems)
+	for (const auto& [planEntry, parentPlanEntry] : flatPlan)
 	{
-		const auto cursorId = planItem.recordSource->getCursorId();
-		const auto recSourceId = planItem.recordSource->getRecSourceId();
+		const auto cursorId = planEntry->accessPath->getCursorId();
+		const auto recSourceId = planEntry->accessPath->getRecSourceId();
 		idSequenceMap.put(recSourceId, ++*sequencePtr);
 
 		ULONG parentSequence = 0;
 
-		if (planItem.parentRecordSource)
-			parentSequence = *idSequenceMap.get(planItem.parentRecordSource->getRecSourceId());
+		if (parentPlanEntry)
+			parentSequence = *idSequenceMap.get(parentPlanEntry->accessPath->getRecSourceId());
+
+		string accessPath;
+		planEntry->getDescriptionAsString(accessPath);
 
 		currentSession->pluginSession->defineRecordSource(profileStatement->id, cursorId,
-			*sequencePtr, planItem.level, planItem.accessPath.c_str(), parentSequence);
+			*sequencePtr, planEntry->level, accessPath.c_str(), parentSequence);
 
 		profileStatement->recSourceSequence.put(recSourceId, *sequencePtr);
 	}
@@ -661,8 +612,7 @@ void ProfilerManager::flush(bool updateTimer)
 
 		for (bool hasNext = pluginAccessor.getFirst(); hasNext;)
 		{
-			auto& pluginName = pluginAccessor.current()->first;
-			auto& plugin = pluginAccessor.current()->second;
+			auto& [pluginName, plugin] = *pluginAccessor.current();
 
 			LogLocalStatus status("Profiler flush");
 			plugin->flush(&status);
@@ -1039,8 +989,8 @@ void ProfilerListener::processCommand(thread_db* tdbb)
 
 			const string description(in->description.str,
 				in->descriptionNull ? 0 : in->description.length);
-			const Nullable<SLONG> flushInterval(in->flushIntervalNull ?
-				Nullable<SLONG>() : Nullable<SLONG>(in->flushInterval));
+			const std::optional<SLONG> flushInterval(in->flushIntervalNull ?
+				std::nullopt : std::optional{in->flushInterval});
 			const PathName pluginName(in->pluginName.str,
 				in->pluginNameNull ? 0 : in->pluginName.length);
 			const string pluginOptions(in->pluginOptions.str,

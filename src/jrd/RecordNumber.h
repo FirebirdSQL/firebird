@@ -239,51 +239,33 @@ struct bid
 
 	ULONG& bid_temp_id()
 	{
-		// Make sure that compiler packed structure like we wanted
-		fb_assert(sizeof(*this) == 8);
-
 		return bid_internal.bid_temp_id();
 	}
 
 	ULONG bid_temp_id() const
 	{
-		// Make sure that compiler packed structure like we wanted
-		fb_assert(sizeof(*this) == 8);
-
 		return bid_internal.bid_temp_id();
 	}
 
 	bool isEmpty() const
 	{
-		// Make sure that compiler packed structure like we wanted
-		fb_assert(sizeof(*this) == 8);
-
 		return bid_quad.bid_quad_high == 0 && bid_quad.bid_quad_low == 0;
 	}
 
 	void clear()
 	{
-		// Make sure that compiler packed structure like we wanted
-		fb_assert(sizeof(*this) == 8);
-
 		bid_quad.bid_quad_high = 0;
 		bid_quad.bid_quad_low = 0;
 	}
 
 	void set_temporary(ULONG temp_id)
 	{
-		// Make sure that compiler packed structure like we wanted
-		fb_assert(sizeof(*this) == 8);
-
 		clear();
 		bid_temp_id() = temp_id;
 	}
 
 	void set_permanent(USHORT relation_id, RecordNumber num)
 	{
-		// Make sure that compiler packed structure like we wanted
-		fb_assert(sizeof(*this) == 8);
-
 		clear();
 		bid_internal.bid_relation_id = relation_id;
 		num.bid_encode(&bid_internal);
@@ -291,19 +273,18 @@ struct bid
 
 	RecordNumber get_permanent_number() const
 	{
-		// Make sure that compiler packed structure like we wanted
-		fb_assert(sizeof(*this) == 8);
-
 		RecordNumber temp;
 		temp.bid_decode(&bid_internal);
 		return temp;
 	}
 
+	operator ISC_QUAD() const
+	{
+		return {ISC_LONG(bid_quad.bid_quad_high), bid_quad.bid_quad_low};
+	}
+
 	bool operator == (const bid& other) const
 	{
-		// Make sure that compiler packed structure like we wanted
-		fb_assert(sizeof(*this) == 8);
-
 		return bid_quad.bid_quad_high == other.bid_quad.bid_quad_high &&
 			bid_quad.bid_quad_low == other.bid_quad.bid_quad_low;
 	}
@@ -315,6 +296,8 @@ struct bid
 				bid_quad.bid_quad_low > other.bid_quad.bid_quad_low);
 	}
 };
+
+static_assert(sizeof(bid) == 8);	// make sure that compiler packed structure like we wanted
 
 } // namespace Jrd
 

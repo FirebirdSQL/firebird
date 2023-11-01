@@ -113,6 +113,12 @@ void IscConnection::attach(thread_db* tdbb)
 	validatePassword(tdbb, m_dbName, newDpb);
 	newDpb.insertInt(isc_dpb_ext_call_depth, attachment->att_ext_call_depth + 1);
 
+	if (newDpb.getBufferLength() > MAX_USHORT)
+	{
+		ERR_post(Arg::Gds(isc_imp_exc) <<
+			Arg::Gds(isc_random) << Arg::Str("DPB size greater than 64KB"));
+	}
+
 	FbLocalStatus status;
 	{
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);

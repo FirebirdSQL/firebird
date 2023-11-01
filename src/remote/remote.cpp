@@ -837,25 +837,25 @@ ServerCallbackBase::~ServerCallbackBase()
 }
 
 /*
-void Rdb::set_async_vector(ISC_STATUS* userStatus) throw()
+void Rdb::set_async_vector(ISC_STATUS* userStatus) noexcept
 {
 	rdb_async_status_vector = userStatus;
 	rdb_async_thread_id = getThreadId();
 }
 
-void Rdb::reset_async_vector() throw()
+void Rdb::reset_async_vector() noexcept
 {
 	rdb_async_thread_id = 0;
 	rdb_async_status_vector = NULL;
 }
 
-ISC_STATUS* Rdb::get_status_vector() throw()
+ISC_STATUS* Rdb::get_status_vector() noexcept
 {
 	return rdb_async_thread_id == getThreadId() ? rdb_async_status_vector : rdb_status_vector;
 }
 */
 
-void Rrq::saveStatus(const Firebird::Exception& ex) throw()
+void Rrq::saveStatus(const Firebird::Exception& ex) noexcept
 {
 	if (rrqStatus.isSuccess())
 	{
@@ -866,7 +866,7 @@ void Rrq::saveStatus(const Firebird::Exception& ex) throw()
 	}
 }
 
-void Rrq::saveStatus(Firebird::IStatus* v) throw()
+void Rrq::saveStatus(Firebird::IStatus* v) noexcept
 {
 	if (rrqStatus.isSuccess())
 	{

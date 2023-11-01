@@ -565,7 +565,7 @@ namespace
 Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, bool parentFirstRows)
 	: PermanentStorage(*aTdbb->getDefaultPool()),
 	  tdbb(aTdbb), csb(aCsb), rse(aRse),
-	  firstRows(rse->firstRows.orElse(parentFirstRows)),
+	  firstRows(rse->firstRows.valueOr(parentFirstRows)),
 	  compileStreams(getPool()),
 	  bedStreams(getPool()),
 	  keyStreams(getPool()),
@@ -1970,7 +1970,7 @@ unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned b
 			ValueExprNodeStack& s = classes.add();
 			s.push(node1);
 			s.push(node2);
-			eq_class = classes.back();
+			eq_class = --classes.end();
 		}
 	}
 

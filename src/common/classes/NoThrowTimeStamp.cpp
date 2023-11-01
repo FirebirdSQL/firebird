@@ -49,7 +49,7 @@ const ISC_TIMESTAMP NoThrowTimeStamp::MAX_TIMESTAMP =
 const ISC_TIME NoThrowTimeStamp::POW_10_TABLE[] =
 	{1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
 
-NoThrowTimeStamp NoThrowTimeStamp::getCurrentTimeStamp(const char** error) throw()
+NoThrowTimeStamp NoThrowTimeStamp::getCurrentTimeStamp(const char** error) noexcept
 {
 	if (error)
 		*error = NULL;
@@ -148,7 +148,7 @@ NoThrowTimeStamp NoThrowTimeStamp::getCurrentTimeStamp(const char** error) throw
 	return result;
 }
 
-int NoThrowTimeStamp::yday(const struct tm* times) throw()
+int NoThrowTimeStamp::yday(const struct tm* times) noexcept
 {
 	// Convert a calendar date to the day-of-year.
 	//
@@ -175,7 +175,7 @@ int NoThrowTimeStamp::yday(const struct tm* times) throw()
 }
 
 
-void NoThrowTimeStamp::decode_date(ISC_DATE nday, struct tm* times) throw()
+void NoThrowTimeStamp::decode_date(ISC_DATE nday, struct tm* times) noexcept
 {
 	// Convert a numeric day to [day, month, year].
 	//
@@ -232,7 +232,7 @@ void NoThrowTimeStamp::decode_date(ISC_DATE nday, struct tm* times) throw()
 }
 
 
-ISC_DATE NoThrowTimeStamp::encode_date(const struct tm* times) throw()
+ISC_DATE NoThrowTimeStamp::encode_date(const struct tm* times) noexcept
 {
 	// Convert a calendar date to a numeric day
 	// (the number of days since the base date)
@@ -257,7 +257,7 @@ ISC_DATE NoThrowTimeStamp::encode_date(const struct tm* times) throw()
 					   (153 * month + 2) / 5 + day + 1721119 - 2400001);
 }
 
-void NoThrowTimeStamp::decode_time(ISC_TIME ntime, int* hours, int* minutes, int* seconds, int* fractions) throw()
+void NoThrowTimeStamp::decode_time(ISC_TIME ntime, int* hours, int* minutes, int* seconds, int* fractions) noexcept
 {
 	fb_assert(hours);
 	fb_assert(minutes);
@@ -275,20 +275,20 @@ void NoThrowTimeStamp::decode_time(ISC_TIME ntime, int* hours, int* minutes, int
 	}
 }
 
-ISC_TIME NoThrowTimeStamp::encode_time(int hours, int minutes, int seconds, int fractions) throw()
+ISC_TIME NoThrowTimeStamp::encode_time(int hours, int minutes, int seconds, int fractions) noexcept
 {
 	fb_assert(fractions	>= 0 && fractions < ISC_TIME_SECONDS_PRECISION);
 
 	return ((hours * 60 + minutes) * 60 + seconds) * ISC_TIME_SECONDS_PRECISION + fractions;
 }
 
-void NoThrowTimeStamp::decode_timestamp(const ISC_TIMESTAMP ts, struct tm* times, int* fractions) throw()
+void NoThrowTimeStamp::decode_timestamp(const ISC_TIMESTAMP ts, struct tm* times, int* fractions) noexcept
 {
 	decode_date(ts.timestamp_date, times);
 	decode_time(ts.timestamp_time, &times->tm_hour, &times->tm_min, &times->tm_sec, fractions);
 }
 
-ISC_TIMESTAMP NoThrowTimeStamp::encode_timestamp(const struct tm* times, const int fractions) throw()
+ISC_TIMESTAMP NoThrowTimeStamp::encode_timestamp(const struct tm* times, const int fractions) noexcept
 {
 	fb_assert(fractions >= 0 && fractions < ISC_TIME_SECONDS_PRECISION);
 
@@ -335,6 +335,80 @@ void NoThrowTimeStamp::round_time(ISC_TIME &ntime, const int precision)
 	const ISC_TIME period = POW_10_TABLE[scale];
 
 	ntime -= (ntime % period);
+}
+
+int NoThrowTimeStamp::convertGregorianDateToWeekDate(const struct tm& times)
+{
+	// Algorithm for Converting Gregorian Dates to ISO 8601 Week Date by Rick McCarty, 1999
+	// http://personal.ecu.edu/mccartyr/ISOwdALG.txt
+
+	const int y = times.tm_year + 1900;
+	const int dayOfYearNumber = times.tm_yday + 1;
+
+	// Find the jan1Weekday for y (Monday=1, Sunday=7)
+	const int yy = (y - 1) % 100;
+	const int c = (y - 1) - yy;
+	const int g = yy + yy / 4;
+	const int jan1Weekday = 1 + (((((c / 100) % 4) * 5) + g) % 7);
+
+	// Find the weekday for y m d
+	const int h = dayOfYearNumber + (jan1Weekday - 1);
+	const int weekday = 1 + ((h - 1) % 7);
+
+	// Find if y m d falls in yearNumber y-1, weekNumber 52 or 53
+	int yearNumber, weekNumber;
+
+	if ((dayOfYearNumber <= (8 - jan1Weekday)) && (jan1Weekday > 4))
+	{
+		yearNumber = y - 1;
+		weekNumber = ((jan1Weekday == 5) || ((jan1Weekday == 6) &&
+			isLeapYear(yearNumber))) ? 53 : 52;
+	}
+	else
+	{
+		yearNumber = y;
+
+		// Find if y m d falls in yearNumber y+1, weekNumber 1
+		int i = isLeapYear(y) ? 366 : 365;
+
+		if ((i - dayOfYearNumber) < (4 - weekday))
+		{
+			yearNumber = y + 1;
+			weekNumber = 1;
+		}
+	}
+
+	// Find if y m d falls in yearNumber y, weekNumber 1 through 53
+	if (yearNumber == y)
+	{
+		int j = dayOfYearNumber + (7 - weekday) + (jan1Weekday - 1);
+		weekNumber = j / 7;
+		if (jan1Weekday > 4)
+			weekNumber--;
+	}
+
+	return weekNumber;
+}
+
+int NoThrowTimeStamp::convertGregorianDateToJulianDate(int year, int month, int day)
+{
+	int jdn = (1461 * (year + 4800 + (month - 14)/12))/4 + (367 * (month - 2 - 12 * ((month - 14)/12)))
+		/ 12 - (3 * ((year + 4900 + (month - 14)/12)/100))/4 + day - 32075;
+	return jdn;
+}
+
+void NoThrowTimeStamp::convertJulianDateToGregorianDate(int jdn, int& outYear, int& outMonth, int& outDay)
+{
+	int a = jdn + 32044;
+	int b = (4 * a +3 ) / 146097;
+	int c = a - (146097 * b) / 4;
+	int d = (4 * c + 3) / 1461;
+	int e = c - (1461 * d) / 4;
+	int m = (5 * e + 2) / 153;
+
+	outDay = e - (153 * m + 2) / 5 + 1;
+	outMonth  = m + 3 - 12 * (m / 10);
+	outYear = 100 * b + d - 4800 + (m / 10);
 }
 
 // Encode timestamp from UNIX datetime structure

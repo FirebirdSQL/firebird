@@ -182,7 +182,8 @@ enum irq_type_t
 	irq_c_relation3,		// lookup relation in phase 0 to cleanup
 	irq_linger,				// get database linger value
 	irq_dbb_ss_definer,		// get database sql security value
-	irq_out_proc_param_dep,	// check output procedure parameter dependency
+	irq_proc_param_dep,		// check procedure parameter dependency
+	irq_func_param_dep,		// check function parameter dependency
 	irq_l_pub_tab_state,	// lookup publication state for a table
 
 	irq_MAX

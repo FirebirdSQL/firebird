@@ -32,6 +32,7 @@
 #ifndef JRD_EXE_H
 #define JRD_EXE_H
 
+#include <optional>
 #include "../jrd/blb.h"
 #include "../jrd/Relation.h"
 #include "../common/classes/array.h"
@@ -128,12 +129,8 @@ class AggregateSort : protected Firebird::PermanentStorage, public Printable
 public:
 	explicit AggregateSort(Firebird::MemoryPool& p)
 		: PermanentStorage(p),
-		  length(0),
-		  intl(false),
-		  impure(0),
 		  keyItems(p)
 	{
-		desc.clear();
 	}
 
 public:
@@ -144,9 +141,9 @@ public:
 
 public:
 	dsc desc;
-	ULONG length;
-	bool intl;
-	ULONG impure;
+	ULONG length = 0;
+	bool intl = false;
+	ULONG impure = 0;
 	Firebird::HalfStaticArray<sort_key_def, 2> keyItems;
 };
 
@@ -614,7 +611,7 @@ public:
 		void activate(bool subStream = false);
 		void deactivate();
 
-		Nullable<USHORT> csb_cursor_number;	// Cursor number for this stream
+		std::optional<USHORT> csb_cursor_number;	// Cursor number for this stream
 		StreamType csb_stream;			// Map user context to internal stream
 		StreamType csb_view_stream;		// stream number for view relation, below
 		USHORT csb_flags;

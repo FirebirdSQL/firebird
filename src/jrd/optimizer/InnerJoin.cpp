@@ -189,21 +189,19 @@ void InnerJoin::estimateCost(unsigned position,
 	joinedStreams[position].selectivity = candidate->selectivity;
 
 	// Get the stream cardinality
-	const auto tail = &csb->csb_rpt[stream->number];
-	const auto streamCardinality = tail->csb_cardinality;
+	const auto streamCardinality = csb->csb_rpt[stream->number].csb_cardinality;
 
-	auto currentCardinality = streamCardinality * candidate->selectivity;
+	auto currentCardinality = candidate->unique ?
+		MINIMUM_CARDINALITY : streamCardinality * candidate->selectivity;
 	auto currentCost = candidate->cost;
 
-	// Unless an external sort is to be applied, adjust estimated cost and cardinality
-	// accordingly to the "first-rows" retrieval (if specified)
+	// Given the "first-rows" mode specified (or implied)
+	// and unless an external sort is to be applied afterwards,
+	// fake the expected cardinality to look as low as possible
+	// to estimate the cost just for a single row being produced
+
 	if ((!sort || candidate->navigated) && optimizer->favorFirstRows())
-	{
-		currentCost -= DEFAULT_INDEX_COST;
-		currentCost /= MAX(currentCardinality, MINIMUM_CARDINALITY);
-		currentCost += DEFAULT_INDEX_COST;
 		currentCardinality = MINIMUM_CARDINALITY;
-	}
 
 	// Calculate the nested loop cost, it's our default option
 	const auto loopCost = currentCost * cardinality;
@@ -687,7 +685,7 @@ InnerJoin::StreamInfo* InnerJoin::getStreamInfo(StreamType stream)
 // Dump finally selected stream order
 void InnerJoin::printBestOrder() const
 {
-	if (bestStreams.isEmpty())
+	if (bestStreams.getCount() < 2)
 		return;
 
 	optimizer->printf("  best order, streams:");
@@ -742,7 +740,7 @@ void InnerJoin::printFoundOrder(StreamType position,
 // Dump finally selected stream order
 void InnerJoin::printStartOrder() const
 {
-	optimizer->printf("Start join order, streams:");
+	bool found = false;
 
 	const auto end = innerStreams.end();
 	for (auto iter = innerStreams.begin(); iter != end; iter++)
@@ -750,6 +748,12 @@ void InnerJoin::printStartOrder() const
 		const auto innerStream = *iter;
 		if (!innerStream->used)
 		{
+			if (!found)
+			{
+				optimizer->printf("Start join order, streams:");
+				found = true;
+			}
+
 			const auto name = optimizer->getStreamName(innerStream->number);
 			optimizer->printf(" %u (%s) base cost (%1.2f)",
 							  innerStream->number, name.c_str(), innerStream->baseCost);

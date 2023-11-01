@@ -65,7 +65,7 @@ public:
 		unsigned parLength, const UCHAR* par);
 
 	Attachment* getAttachment() const;
-	void setInterfacePtr(JBatch* interfacePtr) throw();
+	void setInterfacePtr(JBatch* interfacePtr) noexcept;
 
 	void add(thread_db* tdbb, ULONG count, const void* inBuffer);
 	void addBlob(thread_db* tdbb, ULONG length, const void* inBuffer, ISC_QUAD* blobId, unsigned parLength, const unsigned char* par);
@@ -102,15 +102,15 @@ private:
 	}
 
 	DsqlDmlRequest* const m_dsqlRequest;
-	JBatch* m_batch;
-	Firebird::IMessageMetadata* m_meta;
+	JBatch* m_batch = nullptr;
+	Firebird::IMessageMetadata* const m_meta;
 
 	class DataCache : public Firebird::PermanentStorage
 	{
 	public:
 		DataCache(MemoryPool& p)
-			: PermanentStorage(p), m_cache(getPool()),
-			  m_used(0), m_got(0), m_limit(0), m_shift(0), m_cacheCapacity(0)
+			: PermanentStorage(p),
+			  m_cache(p)
 		{ }
 
 		void setBuf(ULONG size, ULONG cacheCapacity);
@@ -125,12 +125,17 @@ private:
 		ULONG getSize() const;
 		ULONG getCapacity() const;
 		void clear();
+		void flush();
 
 	private:
 		typedef Firebird::Array<UCHAR> Cache;
 		Cache m_cache;
 		Firebird::AutoPtr<TempSpace> m_space;
-		ULONG m_used, m_got, m_limit, m_shift, m_cacheCapacity;
+		ULONG m_used = 0;
+		ULONG m_got = 0;
+		ULONG m_limit = 0;
+		ULONG m_shift = 0;
+		ULONG m_cacheCapacity = 0;
 	};
 
 	struct BlobMeta
@@ -141,21 +146,28 @@ private:
 	class QuadComparator
 	{
 	public:
-	    static bool greaterThan(const ISC_QUAD& i1, const ISC_QUAD& i2)
-    	{
-        	return memcmp(&i1, &i2, sizeof(ISC_QUAD)) > 0;
-	    }
+		static bool greaterThan(const ISC_QUAD& i1, const ISC_QUAD& i2)
+		{
+			return memcmp(&i1, &i2, sizeof(ISC_QUAD)) > 0;
+		}
 	};
 
-	DataCache m_messages, m_blobs;
-	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<ISC_QUAD, ISC_QUAD> >, QuadComparator> m_blobMap;
+	DataCache m_messages;
+	DataCache m_blobs;
+	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<ISC_QUAD, ISC_QUAD>>, QuadComparator> m_blobMap;
 	Firebird::HalfStaticArray<BlobMeta, 4> m_blobMeta;
 	typedef Firebird::HalfStaticArray<UCHAR, 64> Bpb;
 	Bpb m_defaultBpb;
 	ISC_QUAD m_genId;
-	ULONG m_messageSize, m_alignedMessage, m_alignment, m_flags, m_detailed, m_bufferSize, m_lastBlob;
-	bool m_setBlobSize;
-	UCHAR m_blobPolicy;
+	ULONG m_messageSize = 0;
+	ULONG m_alignedMessage = 0;
+	ULONG m_alignment = 0;
+	ULONG m_flags = 0;
+	ULONG m_detailed = DETAILED_LIMIT;
+	ULONG m_bufferSize = BUFFER_LIMIT;
+	ULONG m_lastBlob = MAX_ULONG;
+	bool m_setBlobSize = false;
+	UCHAR m_blobPolicy = Firebird::IBatch::BLOB_NONE;
 };
 
 } // namespace
