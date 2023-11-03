@@ -147,6 +147,10 @@
 #define FB_CPU CpuLoongArch
 #endif /* LOONGARCH */
 
+#ifdef sw_64
+#define FB_CPU Cpusw_64
+#endif /* sw_64 */
+
 #ifdef sparc
 #define FB_CPU CpuUltraSparc
 #define RISC_ALIGNMENT
