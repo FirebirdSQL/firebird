@@ -5749,7 +5749,7 @@ YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* st
 			}
 
 			if (currentStatus != status &&
-				currentStatus->getErrors[1] != isc_unavailable &&
+				currentStatus->getErrors()[1] != isc_unavailable &&
 				status->getErrors()[1] == isc_instance_conflict)
 			{
 				status->setErrors(currentStatus->getErrors());
