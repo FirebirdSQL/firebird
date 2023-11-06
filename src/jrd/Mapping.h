@@ -42,6 +42,7 @@ bool mapUser(Firebird::string& name, Firebird::string& trusted_role, Firebird::s
 	const char* alias, const char* db, const char* securityDb, Firebird::ICryptKeyCallback* cryptCb,
 	Firebird::IAttachment* att, bool logMsgs);
 void clearMap(const char* dbName);
+void initMappingIpc();
 void shutdownMappingIpc();
 
 class GlobalMappingScan : public VirtualTableScan

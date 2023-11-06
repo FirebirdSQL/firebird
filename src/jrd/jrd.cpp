@@ -2456,6 +2456,10 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 	RefDeb(DEB_AR_JATT, "JProvider::createDatabase");
 	try
 	{
+		// In case of problems when creating shared memory, it is better to
+		// fail early, before attempt to create database file.
+		initMappingIpc();
+
 		ThreadContextHolder tdbb(user_status);
 		MutexEnsureUnlock guardDbInit(dbInitMutex, FB_FUNCTION);
 

@@ -602,6 +602,7 @@ class MappingIpc FB_FINAL : public Firebird::IpcObject
 public:
 	explicit MappingIpc(MemoryPool&)
 		: processId(getpid()),
+		  globalNamespace(true),
 		  cleanupSync(*getDefaultMemoryPool(), clearDelivery, THREAD_high)
 	{ }
 
@@ -652,74 +653,90 @@ public:
 
 		setup();
 
-		Guard gShared(this);
+		// If current process runs as embedded, have no access to the global
+		// namespace and is the only user of shared memory - shutdown own mapping
+		// to let future service process to create same mapping in global namespace.
 
-		MappingHeader* sMem = sharedMemory->getHeader();
-		target.copyTo(sMem->databaseForReset, sizeof(sMem->databaseForReset));
+		const bool embedded = MasterInterfacePtr()->serverMode(-1) < 0;
+		bool shutdownShmem = embedded && !globalNamespace;
 
-		// Set currentProcess
-		sMem->currentProcess = -1;
-		for (unsigned n = 0; n < sMem->processes; ++n)
-		{
-			MappingHeader::Process* p = &sMem->process[n];
-			if (!(p->flags & MappingHeader::FLAG_ACTIVE))
-				continue;
+		{  // Guard scope
+			Guard gShared(this);
 
-			if (p->id == processId)
+			MappingHeader* sMem = sharedMemory->getHeader();
+			target.copyTo(sMem->databaseForReset, sizeof(sMem->databaseForReset));
+
+			// Set currentProcess
+			sMem->currentProcess = -1;
+			for (unsigned n = 0; n < sMem->processes; ++n)
 			{
-				sMem->currentProcess = n;
-				break;
-			}
-		}
+				MappingHeader::Process* p = &sMem->process[n];
+				if (!(p->flags & MappingHeader::FLAG_ACTIVE))
+					continue;
 
-		if (sMem->currentProcess < 0)
-		{
-			// did not find current process
-			// better ignore delivery than fail in it
-			gds__log("MappingIpc::clearMap() failed to find current process %d in shared memory", processId);
-			return;
-		}
-		MappingHeader::Process* current = &sMem->process[sMem->currentProcess];
-
-		// Deliver
-		for (unsigned n = 0; n < sMem->processes; ++n)
-		{
-			MappingHeader::Process* p = &sMem->process[n];
-			if (!(p->flags & MappingHeader::FLAG_ACTIVE))
-				continue;
-
-			if (p->id == processId)
-			{
-				MAP_DEBUG(fprintf(stderr, "Internal resetMap(%s)\n", sMem->databaseForReset));
-				resetMap(sMem->databaseForReset);
-				continue;
-			}
-
-			SLONG value = sharedMemory->eventClear(&current->callbackEvent);
-			p->flags |= MappingHeader::FLAG_DELIVER;
-			if (sharedMemory->eventPost(&p->notifyEvent) != FB_SUCCESS)
-			{
-				(Arg::Gds(isc_random) << "Error posting notifyEvent in mapping shared memory").raise();
-			}
-
-			int tout = 0;
-			while (sharedMemory->eventWait(&current->callbackEvent, value, 10000) != FB_SUCCESS)
-			{
-				if (!ISC_check_process_existence(p->id))
+				if (p->id == processId)
 				{
-					MAP_DEBUG(fprintf(stderr, "clearMapping: dead process found %d", p->id));
-
-					p->flags &= ~MappingHeader::FLAG_ACTIVE;
-					sharedMemory->eventFini(&p->notifyEvent);
-					sharedMemory->eventFini(&p->callbackEvent);
+					sMem->currentProcess = n;
 					break;
 				}
-
-				if (++tout >= 1000) // 10 sec
-					(Arg::Gds(isc_random) << "Timeout when waiting callback from other process.").raise();
 			}
-			MAP_DEBUG(fprintf(stderr, "Notified pid %d about reset map %s\n", p->id, sMem->databaseForReset));
-		}
+
+			if (sMem->currentProcess < 0)
+			{
+				// did not find current process
+				// better ignore delivery than fail in it
+				gds__log("MappingIpc::clearMap() failed to find current process %d in shared memory", processId);
+				return;
+			}
+			MappingHeader::Process* current = &sMem->process[sMem->currentProcess];
+
+			// Deliver
+			for (unsigned n = 0; n < sMem->processes; ++n)
+			{
+				MappingHeader::Process* p = &sMem->process[n];
+				if (!(p->flags & MappingHeader::FLAG_ACTIVE))
+					continue;
+
+				if (p->id == processId)
+				{
+					MAP_DEBUG(fprintf(stderr, "Internal resetMap(%s)\n", sMem->databaseForReset));
+					resetMap(sMem->databaseForReset);
+					continue;
+				}
+
+				SLONG value = sharedMemory->eventClear(&current->callbackEvent);
+				p->flags |= MappingHeader::FLAG_DELIVER;
+				if (sharedMemory->eventPost(&p->notifyEvent) != FB_SUCCESS)
+				{
+					(Arg::Gds(isc_random) << "Error posting notifyEvent in mapping shared memory").raise();
+				}
+
+				int tout = 0;
+				while (sharedMemory->eventWait(&current->callbackEvent, value, 10000) != FB_SUCCESS)
+				{
+					if (!ISC_check_process_existence(p->id))
+					{
+						MAP_DEBUG(fprintf(stderr, "clearMapping: dead process found %d", p->id));
+
+						p->flags &= ~MappingHeader::FLAG_ACTIVE;
+						sharedMemory->eventFini(&p->notifyEvent);
+						sharedMemory->eventFini(&p->callbackEvent);
+						break;
+					}
+
+					if (++tout >= 1000) // 10 sec
+						(Arg::Gds(isc_random) << "Timeout when waiting callback from other process.").raise();
+				}
+
+				if (p->flags & MappingHeader::FLAG_ACTIVE)
+					shutdownShmem = false;
+
+				MAP_DEBUG(fprintf(stderr, "Notified pid %d about reset map %s\n", p->id, sMem->databaseForReset));
+			}
+		}  // Guard scope
+
+		if (shutdownShmem)
+			shutdown();
 	}
 
 	void setup()
@@ -729,6 +746,11 @@ public:
 		MutexLockGuard gLocal(initMutex, FB_FUNCTION);
 		if (sharedMemory)
 			return;
+
+		const bool embedded = MasterInterfacePtr()->serverMode(-1) < 0;
+#ifdef WIN_NT
+		globalNamespace = fb_utils::isGlobalKernelPrefix();
+#endif
 
 		AutoSharedMemory tempSharedMemory;
 		try
@@ -740,7 +762,10 @@ public:
 		{
 			StaticStatusVector s;
 			ex.stuffException(s);
-			iscLogException("MappingIpc: Cannot initialize the shared memory region", ex);
+			if (!embedded)
+			{
+				iscLogException("MappingIpc: Cannot initialize the shared memory region", ex);
+			}
 			throw;
 		}
 		fb_assert(tempSharedMemory->getHeader()->mhb_header_version == MemoryHeader::HEADER_VERSION);
@@ -936,6 +961,7 @@ private:
 	Mutex initMutex;
 	const SLONG processId;
 	unsigned process;
+	bool globalNamespace;
 	Semaphore startupSemaphore;
 	ThreadFinishSync<MappingIpc*> cleanupSync;
 };
@@ -1275,6 +1301,12 @@ void clearMap(const char* dbName)
 {
 	mappingIpc->clearMap(dbName);
 }
+
+void initMappingIpc()
+{
+	mappingIpc->setup();
+}
+
 
 const Format* GlobalMappingScan::getFormat(thread_db* tdbb, jrd_rel* relation) const
 {

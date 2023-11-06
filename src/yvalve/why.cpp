@@ -5748,11 +5748,20 @@ YAttachment* Dispatcher::attachOrCreateDatabase(Firebird::CheckStatusWrapper* st
 				return r;
 			}
 
+			if (currentStatus != status &&
+				currentStatus->getErrors[1] != isc_unavailable &&
+				status->getErrors()[1] == isc_instance_conflict)
+			{
+				status->setErrors(currentStatus->getErrors());
+				status->setWarnings(currentStatus->getWarnings());
+			}
+
 			switch (currentStatus->getErrors()[1])
 			{
 			case isc_io_error:
 			case isc_lock_dir_access:
 			case isc_no_priv:
+			case isc_instance_conflict:
 				currentStatus = &tempCheckStatusWrapper;
 				// fall down...
 			case isc_unavailable:
