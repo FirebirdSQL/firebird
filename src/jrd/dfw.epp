@@ -694,7 +694,7 @@ namespace
 					getDependencies(work, compile, transaction);
 
 					T* routine = lookupByName(tdbb,
-						QualifiedName(work->dfw_name, work->dfw_package), compile);
+						QualifiedName(work->dfw_name, work->dfw_package), !compile);
 
 					if (!routine)
 						return false;
