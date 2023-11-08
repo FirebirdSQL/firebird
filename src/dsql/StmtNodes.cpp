@@ -10292,7 +10292,7 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 	else if (dsqlScratch->isPsql() && !input->second)
 	{
 		// This trick because we don't copy lexer positions when copying lists.
-		const ValueListNode* errSrc = input->first;
+		const ValueListNode* errSrc = inputFirst;
 		// RETURNING without INTO is not allowed for PSQL
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 				  // Unexpected end of command
