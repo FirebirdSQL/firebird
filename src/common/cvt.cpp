@@ -2020,7 +2020,8 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 }
 
 
-ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::string& format, Firebird::Callbacks* cb)
+ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::string& format, Firebird::Callbacks* cb,
+	bool convertToUtc)
 {
 	if (!DTYPE_IS_TEXT(desc->dsc_dtype))
 		cb->err(Arg::Gds(isc_invalid_data_type_for_date_format));
@@ -2080,6 +2081,9 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 				break;
 		}
 
+		if (stringOffset >= stringLength)
+			cb->err(Arg::Gds(isc_data_for_format_is_exhausted) << string(formatUpper.c_str() + formatOffset));
+
 		pattern = std::string_view(formatUpper.c_str() + formatOffset, i - formatOffset + 1);
 		bool isFound = false;
 		for (int j = 0; j < FB_NELEM(TO_STRING_PATTERNS); j++)
@@ -2119,6 +2123,8 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 		cb->err(Arg::Gds(isc_trailing_part_of_string) << string(stringUpper.c_str() + stringOffset));
 
 	ISC_TIMESTAMP_TZ timestampTZ;
+	timestampTZ.utc_timestamp = NoThrowTimeStamp::encode_timestamp(&times, fractions);
+
 	if (timezoneOffsetInMinutes == uninitializedTimezoneOffsetValue && timezoneId == TimeZoneTrie::UninitializedTimezoneId)
 		timestampTZ.time_zone = cb->getSessionTimeZone();
 	else if (timezoneId != TimeZoneTrie::UninitializedTimezoneId)
@@ -2128,7 +2134,9 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 		timestampTZ.time_zone = TimeZoneUtil::makeFromOffset(sign(timezoneOffsetInMinutes),
 			abs(timezoneOffsetInMinutes) / 60, abs(timezoneOffsetInMinutes) % 60);
 	}
-	timestampTZ.utc_timestamp = NoThrowTimeStamp::encode_timestamp(&times, fractions);
+
+	if (convertToUtc)
+		TimeZoneUtil::localTimeStampToUtc(timestampTZ);
 
 	return timestampTZ;
 }

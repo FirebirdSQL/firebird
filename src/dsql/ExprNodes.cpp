@@ -3811,7 +3811,9 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 		}
 		else
 		{
-			ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, &EngineCallbacks::instance);
+			ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, &EngineCallbacks::instance,
+				impure->vlu_desc.isDateTimeTz());
+
 			switch (impure->vlu_desc.dsc_dtype)
 			{
 				case dtype_sql_time:

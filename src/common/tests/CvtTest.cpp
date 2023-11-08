@@ -94,12 +94,12 @@ BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIMESTAMP)
 BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIME_TZ)
 {
 	testCVTDatetimeToFormatString(createTimeTZ(15, 35, 59, 0, 900), "HH-HH12-HH24-MI-SS-SSSSS.FF1/TZH/TZM", "03 PM-03 PM-15-35-59-56159.9/+00/00", cb);
-	testCVTDatetimeToFormatString(createTimeTZ(15, 35, 59, 160), "HH24:MI-TZH:TZM", "18:15-+02:40", cb);
-	testCVTDatetimeToFormatString(createTimeTZ(15, 35, 59, -160), "HH24:MI TZH:TZM", "12:55 -02:40", cb);
+	testCVTDatetimeToFormatString(createTimeTZ(15, 35, 59, 160), "HH24:MI-TZH:TZM", "15:35-+02:40", cb);
+	testCVTDatetimeToFormatString(createTimeTZ(15, 35, 59, -160), "HH24:MI TZH:TZM", "15:35 -02:40", cb);
 
 	testCVTDatetimeToFormatString(createTimeTZ(0, 0, 0, 160), "TZM:TZH", "+40:02", cb);
-	testCVTDatetimeToFormatString(createTimeTZ(0, 0, 0, 160), "TZH MI TZM", "+02 40 +40", cb);
-	testCVTDatetimeToFormatString(createTimeTZ(0, 0, 0, -160), "TZH MI TZM", "-02 20 -40", cb);
+	testCVTDatetimeToFormatString(createTimeTZ(0, 0, 0, 160), "TZH MI TZM", "+02 00 +40", cb);
+	testCVTDatetimeToFormatString(createTimeTZ(0, 0, 0, -160), "TZH MI TZM", "-02 00 -40", cb);
 }
 
 BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIMESTAMP_TZ)
@@ -111,12 +111,12 @@ BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIMESTAMP_TZ)
 	testCVTDatetimeToFormatString(timestampTZ, "WW,W-D;DAY:DD DDD.DY", "16,3-4;WEDNESDAY:21 111.Wed", cb);
 	testCVTDatetimeToFormatString(timestampTZ, "HH-HH12-HH24-MI-SS-SSSSS.FF2/TZH/TZM", "01 AM-01 AM-01-34-15-5655.50/+00/00", cb);
 
-	testCVTDatetimeToFormatString(createTimeStampTZ(1982, 4, 21, 1, 34, 15, 70), "HH24:MI-TZH:TZM", "02:44-+01:10", cb);
-	testCVTDatetimeToFormatString(createTimeStampTZ(1982, 4, 21, 1, 34, 15, -70), "HH24:MI TZH:TZM", "00:24 -01:10", cb);
+	testCVTDatetimeToFormatString(createTimeStampTZ(1982, 4, 21, 1, 34, 15, 70), "HH24:MI-TZH:TZM", "01:34-+01:10", cb);
+	testCVTDatetimeToFormatString(createTimeStampTZ(1982, 4, 21, 1, 34, 15, -70), "HH24:MI TZH:TZM", "01:34 -01:10", cb);
 
 	testCVTDatetimeToFormatString(createTimeStampTZ(1982, 4, 21, 0, 0, 0, 160), "TZM:TZH", "+40:02", cb);
-	testCVTDatetimeToFormatString(createTimeStampTZ(1982, 4, 21, 0, 0, 0, 160), "TZH MI TZM", "+02 40 +40", cb);
-	testCVTDatetimeToFormatString(createTimeStampTZ(1982, 4, 21, 0, 0, 0, -160), "TZH MI TZM", "-02 20 -40", cb);
+	testCVTDatetimeToFormatString(createTimeStampTZ(1982, 4, 21, 0, 0, 0, 160), "TZH MI TZM", "+02 00 +40", cb);
+	testCVTDatetimeToFormatString(createTimeStampTZ(1982, 4, 21, 0, 0, 0, -160), "TZH MI TZM", "-02 00 -40", cb);
 }
 
 BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_SOLID_PATTERNS)
@@ -159,7 +159,7 @@ static void testCVTStringToFormatDateTime(const string& date, const string& form
 	desc.dsc_address = (UCHAR*) varyingString.data();
 	desc.dsc_scale = 0;
 
-	const ISC_TIMESTAMP_TZ result = CVT_string_to_format_datetime(&desc, format, &cb);
+	const ISC_TIMESTAMP_TZ result = CVT_string_to_format_datetime(&desc, format, &cb, true);
 
 	struct tm resultTimes;
 	memset(&resultTimes, 0, sizeof(resultTimes));

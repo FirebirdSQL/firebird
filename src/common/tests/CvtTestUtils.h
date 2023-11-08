@@ -63,16 +63,6 @@ static ISC_TIMESTAMP createTimeStamp(int year, int month, int day, int hours, in
 	return NoThrowTimeStamp::encode_timestamp(&times, fractions);
 }
 
-static ISC_TIME_TZ createTimeTZ(int hours, int minutes, int seconds, int offsetInMinutes, int fractions = 0)
-{
-	ISC_TIME_TZ timeTZ;
-	timeTZ.time_zone = TimeZoneUtil::makeFromOffset(sign(offsetInMinutes), abs(offsetInMinutes / 60),
-		abs(offsetInMinutes % 60));
-	timeTZ.utc_time = createTime(hours, minutes, seconds, fractions);
-
-	return timeTZ;
-}
-
 static ISC_TIMESTAMP_TZ createTimeStampTZ(int year, int month, int day, int hours, int minutes, int seconds,
 	int offsetInMinutes, int fractions = 0)
 {
@@ -81,8 +71,18 @@ static ISC_TIMESTAMP_TZ createTimeStampTZ(int year, int month, int day, int hour
 		abs(offsetInMinutes % 60));
 	timestampTZ.utc_timestamp = createTimeStamp(year, month, day, hours, minutes, seconds, fractions);
 
+	TimeZoneUtil::localTimeStampToUtc(timestampTZ);
+
 	return timestampTZ;
 }
+
+static ISC_TIME_TZ createTimeTZ(int hours, int minutes, int seconds, int offsetInMinutes, int fractions = 0)
+{
+	// Day is 2 because we need to handle 00:00 with negative timezone offset, and anyway date is not used in TIME WITH TIME ZONE
+	ISC_TIMESTAMP_TZ timestampTz = createTimeStampTZ(1, 1, 2, hours, minutes, seconds, offsetInMinutes, fractions);
+	return { timestampTz.utc_timestamp.timestamp_time, timestampTz.time_zone };
+}
+
 
 class CVTCallback : public Firebird::Callbacks
 {
@@ -99,9 +99,10 @@ public:
 		const USHORT size) override { return 0; }
 	SLONG getLocalDate() override { return 0; }
 	ISC_TIMESTAMP getCurrentGmtTimeStamp() override { ISC_TIMESTAMP ts; return ts; }
-	USHORT getSessionTimeZone() override { return 1439; }
+	USHORT getSessionTimeZone() override { return 1439; } // 1439 is ONE_DAY, so we have no offset
 	void isVersion4(bool& v4) override { }
 };
+
 
 template<typename T>
 static UCHAR getDSCTypeFromDateType() { return 0; }
