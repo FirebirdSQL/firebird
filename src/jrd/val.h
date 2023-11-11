@@ -31,7 +31,6 @@
 
 #include "../include/fb_blk.h"
 #include "../common/classes/array.h"
-#include "../common/classes/TriState.h"
 #include "../jrd/intl_classes.h"
 #include "../jrd/MetaName.h"
 #include "../jrd/QualifiedName.h"

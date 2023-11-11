@@ -137,19 +137,19 @@ class Trigger
 public:
 	Firebird::HalfStaticArray<UCHAR, 128> blr;			// BLR code
 	Firebird::HalfStaticArray<UCHAR, 128> debugInfo;	// Debug info
-	Statement* statement;							// Compiled statement
-	bool		releaseInProgress;
-	bool		sysTrigger;
-	FB_UINT64	type;						// Trigger type
-	USHORT		flags;						// Flags as they are in RDB$TRIGGERS table
-	jrd_rel*	relation;					// Trigger parent relation
-	MetaName	name;				// Trigger name
-	MetaName	engine;				// External engine name
-	Firebird::string	entryPoint;			// External trigger entrypoint
-	Firebird::string	extBody;			// External trigger body
-	ExtEngineManager::Trigger* extTrigger;	// External trigger
-	TriState ssDefiner;
-	MetaName	owner;				// Owner for SQL SECURITY
+	Statement* statement = nullptr;						// Compiled statement
+	bool releaseInProgress = false;
+	bool sysTrigger = false;
+	FB_UINT64 type = 0;					// Trigger type
+	USHORT flags = 0;					// Flags as they are in RDB$TRIGGERS table
+	jrd_rel* relation = nullptr;		// Trigger parent relation
+	MetaName name;						// Trigger name
+	MetaName engine;					// External engine name
+	MetaName owner;						// Owner for SQL SECURITY
+	Firebird::string entryPoint;		// External trigger entrypoint
+	Firebird::string extBody;			// External trigger body
+	Firebird::TriState ssDefiner;		// SQL SECURITY
+	std::unique_ptr<ExtEngineManager::Trigger> extTrigger;	// External trigger
 
 	bool isActive() const;
 
@@ -157,20 +157,8 @@ public:
 	void release(thread_db*);				// Try to free trigger request
 
 	explicit Trigger(MemoryPool& p)
-		: blr(p),
-		  debugInfo(p),
-		  releaseInProgress(false),
-		  name(p),
-		  engine(p),
-		  entryPoint(p),
-		  extBody(p),
-		  extTrigger(NULL)
+		: blr(p), debugInfo(p), entryPoint(p), extBody(p)
 	{}
-
-	virtual ~Trigger()
-	{
-		delete extTrigger;
-	}
 };
 
 

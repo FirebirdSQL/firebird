@@ -215,6 +215,9 @@ string CreateAlterPackageNode::internalPrint(NodePrinter& printer) const
 
 DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
+	if (alter && !items)
+		return DdlNode::dsqlPass(dsqlScratch);
+
 	MemoryPool& pool = dsqlScratch->getPool();
 
 	source.ltrim("\n\r\t ");
@@ -319,9 +322,18 @@ void CreateAlterPackageNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
+	const bool alterIndividualParameters = (alter && !items);
+
 	if (alter)
 	{
-		if (!executeAlter(tdbb, dsqlScratch, transaction))
+		if (alterIndividualParameters)
+		{
+			if (!executeAlterIndividualParameters(tdbb, dsqlScratch, transaction))
+				status_exception::raise(
+					Arg::Gds(isc_no_meta_update) <<
+					Arg::Gds(isc_dyn_package_not_found) << Arg::Str(name));
+		}
+		else if (!executeAlter(tdbb, dsqlScratch, transaction))
 		{
 			if (create)	// create or alter
 				executeCreate(tdbb, dsqlScratch, transaction);
@@ -371,10 +383,10 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 		PKG.RDB$PACKAGE_HEADER_SOURCE.NULL = FALSE;
 		attachment->storeMetaDataBlob(tdbb, transaction, &PKG.RDB$PACKAGE_HEADER_SOURCE, source);
 
-		if (ssDefiner.isAssigned())
+		if (ssDefiner.has_value())
 		{
 			PKG.RDB$SQL_SECURITY.NULL = FALSE;
-			PKG.RDB$SQL_SECURITY = ssDefiner.asBool() ? FB_TRUE : FB_FALSE;
+			PKG.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
 		}
 		else
 			PKG.RDB$SQL_SECURITY.NULL = TRUE;
@@ -445,10 +457,10 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 			if (!PKG.RDB$VALID_BODY_FLAG.NULL)
 				PKG.RDB$VALID_BODY_FLAG = FALSE;
 
-			if (ssDefiner.isAssigned())
+			if (ssDefiner.has_value())
 			{
 				PKG.RDB$SQL_SECURITY.NULL = FALSE;
-				PKG.RDB$SQL_SECURITY = ssDefiner.asBool() ? FB_TRUE : FB_FALSE;
+				PKG.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
 			}
 			else
 				PKG.RDB$SQL_SECURITY.NULL = TRUE;
@@ -474,6 +486,44 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 	return modified;
 }
 
+
+bool CreateAlterPackageNode::executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+{
+	AutoCacheRequest requestHandle(tdbb, drq_m_prm_pkg, DYN_REQUESTS);
+	bool modified = false;
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		PKG IN RDB$PACKAGES
+		WITH PKG.RDB$PACKAGE_NAME EQ name.c_str()
+	{
+		modified = true;
+
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+			DDL_TRIGGER_ALTER_PACKAGE, name, NULL);
+
+		MODIFY PKG
+			if (ssDefiner.has_value())
+			{
+				if (ssDefiner.value() != SqlSecurity::SS_DROP)
+				{
+					PKG.RDB$SQL_SECURITY.NULL = FALSE;
+					PKG.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
+				}
+				else
+					PKG.RDB$SQL_SECURITY.NULL = TRUE;
+			}
+		END_MODIFY
+	}
+	END_FOR
+
+	if (modified)
+	{
+		executeDdlTrigger(tdbb, dsqlScratch, transaction,
+			DTW_AFTER, DDL_TRIGGER_ALTER_PACKAGE, name, NULL);
+	}
+
+	return modified;
+}
 
 void CreateAlterPackageNode::executeItems(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)

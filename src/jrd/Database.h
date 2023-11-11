@@ -532,7 +532,7 @@ public:
 	time_t dbb_linger_end;
 	Firebird::RefPtr<Firebird::IPluginConfig> dbb_plugin_config;
 
-	TriState dbb_repl_state;			// replication state
+	Firebird::TriState dbb_repl_state;	// replication state
 	Lock* dbb_repl_lock;				// replication state lock
 	Firebird::SyncObject dbb_repl_sync;
 	FB_UINT64 dbb_repl_sequence;		// replication sequence

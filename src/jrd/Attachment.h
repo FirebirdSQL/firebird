@@ -640,7 +640,7 @@ public:
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
 	int att_parallel_workers;
-	TriState att_opt_first_rows;
+	Firebird::TriState att_opt_first_rows;
 
 	PageToBufferMap* att_bdb_cache;			// managed in CCH, created in att_pool, freed with it
 

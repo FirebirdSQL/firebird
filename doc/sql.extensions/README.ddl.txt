@@ -604,12 +604,22 @@ ALTER TABLE <name> ... [ {ENABLE | DISABLE} PUBLICATION ]
 Defines whether replication is enabled for the specified table.
 If not specified in the CREATE TABLE statement, the database-level default behaviour is applied.
 
-24) Added the ability to change deterministic option without specifying the entire body of the function.
+24) Added the ability to change deterministic and sql security option without specifying the entire body of the function.
 (Alexander Zhdanov)
 
-ALTER FUNCTION <name> {DETERMINISTIC | NOT DETERMINISTIC}
+ALTER FUNCTION <name> [ {DETERMINISTIC | NOT DETERMINISTIC} ] [ SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY ]
 
-25) Added OWNER clause to CREATE DATABASE statement.
+25) Added the ability to change sql security option without specifying the entire body of the procedure
+(Alexander Zhdanov)
+
+ALTER PROCEDURE <name> SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY
+
+26) Added the ability to change sql security option without specifying the entire body of the package
+(Alexander Zhdanov)
+
+ALTER PACKAGE <name> SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY
+
+27) Added OWNER clause to CREATE DATABASE statement.
 (Dmitry Sibiryakov)
 
 <db_initial_option> list is expanded by "OWNER username" clause which allows to set an owner user name for the created database.

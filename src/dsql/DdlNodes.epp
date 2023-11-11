@@ -1695,7 +1695,7 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		returnType->type->resolve(dsqlScratch);
 
 	// check SQL SECURITY is not set if function declared in package
-	if (package.hasData() && ssDefiner.isAssigned())
+	if (package.hasData() && ssDefiner.has_value())
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 				  Arg::Gds(isc_invalid_clause) << Arg::Str("SQL SECURITY for functions is prohibit in packages"));
@@ -1905,13 +1905,13 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 					attachment->storeMetaDataBlob(tdbb, transaction, &FUN.RDB$FUNCTION_SOURCE, source);
 
 				FUN.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
-				FUN.RDB$DETERMINISTIC_FLAG = deterministic ? TRUE : FALSE;
+				FUN.RDB$DETERMINISTIC_FLAG = deterministic.asBool() ? TRUE : FALSE;
 				FUN.RDB$RETURN_ARGUMENT = 0;
 
-				if (ssDefiner.isAssigned())
+				if (ssDefiner.has_value())
 				{
 					FUN.RDB$SQL_SECURITY.NULL = FALSE;
-					FUN.RDB$SQL_SECURITY = ssDefiner.asBool() ? FB_TRUE : FB_FALSE;
+					FUN.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
 				}
 				else
 					FUN.RDB$SQL_SECURITY.NULL = TRUE;
@@ -2101,8 +2101,21 @@ bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, 
 		}
 
 		MODIFY FUN
-			FUN.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
-			FUN.RDB$DETERMINISTIC_FLAG = deterministic ? TRUE : FALSE;
+			if(deterministic.isAssigned())
+			{
+				FUN.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
+				FUN.RDB$DETERMINISTIC_FLAG = deterministic.asBool() ? TRUE : FALSE;
+			}
+			if (ssDefiner.has_value())
+			{
+				if(ssDefiner.value() != SqlSecurity::SS_DROP)
+				{
+					FUN.RDB$SQL_SECURITY.NULL = FALSE;
+					FUN.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
+				}
+				else
+					FUN.RDB$SQL_SECURITY.NULL = TRUE;
+			}
 
 			modifed = true;
 		END_MODIFY
@@ -2698,7 +2711,7 @@ DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		returns[i]->type->resolve(dsqlScratch);
 
 	// check SQL SECURITY is not set if procedure declared in package
-	if (package.hasData() && ssDefiner.isAssigned())
+	if (package.hasData() && ssDefiner.has_value())
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 				  Arg::Gds(isc_invalid_clause) << Arg::Str("SQL SECURITY for procedures is prohibit in packages"));
@@ -2729,8 +2742,17 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 	AutoSavePoint savePoint(tdbb, transaction);
 	bool altered = false;
 
+	const bool alterIndividualParameters = (alter && !(body || external));
+
 	// first pass
-	if (alter)
+	if (alterIndividualParameters)
+	{
+		if (executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, true))
+			altered = true;
+		else
+			status_exception::raise(Arg::Gds(isc_dyn_proc_not_found) << Arg::Str(name));
+	}
+	else if (alter)
 	{
 		if (executeAlter(tdbb, dsqlScratch, transaction, false, true))
 			altered = true;
@@ -2747,7 +2769,11 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 
 	compile(tdbb, dsqlScratch);
 
-	executeAlter(tdbb, dsqlScratch, transaction, true, false);	// second pass
+	// second pass
+	if (alterIndividualParameters)
+		executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, true, false);
+	else
+		executeAlter(tdbb, dsqlScratch, transaction, true, false);
 
 	if (package.isEmpty())
 	{
@@ -2896,10 +2922,10 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 				else
 					P.RDB$PRIVATE_FLAG.NULL = TRUE;
 
-				if (ssDefiner.isAssigned())
+				if (ssDefiner.has_value())
 				{
 					P.RDB$SQL_SECURITY.NULL = FALSE;
-					P.RDB$SQL_SECURITY = ssDefiner.asBool() ? FB_TRUE : FB_FALSE;
+					P.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
 				}
 				else
 					P.RDB$SQL_SECURITY.NULL = TRUE;
@@ -3009,6 +3035,52 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 	}
 
 	return modified;
+}
+
+bool CreateAlterProcedureNode::executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction, bool secondPass, bool runTriggers)
+{
+	Attachment* const attachment = transaction->getAttachment();
+
+	bool modifed = false;
+
+	AutoCacheRequest requestHandle(tdbb, drq_m_prm_prcs2, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		P IN RDB$PROCEDURES
+		WITH P.RDB$PROCEDURE_NAME EQ name.c_str() AND
+			 P.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '')
+	{
+		if (P.RDB$SYSTEM_FLAG)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_dyn_cannot_mod_sysproc) <<
+				MetaName(P.RDB$PROCEDURE_NAME));
+		}
+
+		if (!secondPass && runTriggers && package.isEmpty())
+		{
+			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+				DDL_TRIGGER_ALTER_PROCEDURE, name, NULL);
+		}
+
+		MODIFY P
+			if (ssDefiner.has_value())
+			{
+				if(ssDefiner.value() != SqlSecurity::SS_DROP)
+				{
+					P.RDB$SQL_SECURITY.NULL = FALSE;
+					P.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
+				}
+				else
+					P.RDB$SQL_SECURITY.NULL = TRUE;
+			}
+
+			modifed = true;
+		END_MODIFY
+	}
+	END_FOR
+
+	return modifed;
 }
 
 void CreateAlterProcedureNode::storeParameter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -3516,10 +3588,10 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 			if (ssDefiner.has_value())
 			{
-				if (ssDefiner.value() != SS_DROP)
+				if (ssDefiner.value() != SqlSecurity::SS_DROP)
 				{
 					TRG.RDB$SQL_SECURITY.NULL = FALSE;
-					TRG.RDB$SQL_SECURITY = ssDefiner.value() == SS_DEFINER ? FB_TRUE : FB_FALSE;
+					TRG.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
 				}
 				else
 					TRG.RDB$SQL_SECURITY.NULL = TRUE;
@@ -3573,7 +3645,7 @@ DdlNode* CreateAlterTriggerNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		}
 	}
 
-	if (create && ssDefiner.has_value() && ssDefiner.value() == TriggerDefinition::SS_DROP)
+	if (create && ssDefiner.has_value() && ssDefiner.value() == SqlSecurity::SS_DROP)
 		status_exception::raise(Arg::Gds(isc_dsql_command_err) << Arg::Gds(isc_dsql_invalid_drop_ss_clause));
 
 	return DdlNode::dsqlPass(dsqlScratch);

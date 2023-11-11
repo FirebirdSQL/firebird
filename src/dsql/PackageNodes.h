@@ -100,6 +100,7 @@ protected:
 private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	bool executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	void executeItems(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
@@ -110,7 +111,7 @@ public:
 	Firebird::Array<Item>* items;
 	Firebird::SortedArray<MetaName> functionNames;
 	Firebird::SortedArray<MetaName> procedureNames;
-	TriState ssDefiner;
+	std::optional<SqlSecurity> ssDefiner;
 
 private:
 	MetaName owner;

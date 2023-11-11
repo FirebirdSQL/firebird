@@ -730,39 +730,52 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 				else
 				{
 					DSC d;
-					d.dsc_dtype = (F.RDB$FIELD_TYPE != blr_blob) ?
-						gds_cvt_blr_dtype[F.RDB$FIELD_TYPE] : dtype_blob;
-					// dimitr: adjust the UDF arguments for CSTRING
-					if (d.dsc_dtype == dtype_cstring) {
-						d.dsc_dtype = dtype_text;
-					}
-					d.dsc_scale = F.RDB$FIELD_SCALE;
-					if (!F.RDB$FIELD_SUB_TYPE.NULL) {
-						d.dsc_sub_type = F.RDB$FIELD_SUB_TYPE;
-					}
-					else {
+
+					if (X.RDB$MECHANISM == FUN_scalar_array)
+					{
+						d.dsc_dtype = dtype_array;
+						d.dsc_scale = 0;
 						d.dsc_sub_type = 0;
-					}
-					d.dsc_length = F.RDB$FIELD_LENGTH;
-					if (d.dsc_dtype == dtype_varying) {
-						d.dsc_length += sizeof(USHORT);
-					}
-					d.dsc_address = NULL;
-
-					if (!F.RDB$CHARACTER_SET_ID.NULL)
-					{
-						if (d.dsc_dtype != dtype_blob) {
-							d.dsc_ttype() = F.RDB$CHARACTER_SET_ID;
-						}
-						else {
-							d.dsc_scale = F.RDB$CHARACTER_SET_ID;
-						}
-					}
-
-					if (X.RDB$MECHANISM != FUN_value && X.RDB$MECHANISM != FUN_reference)
-					{
+						d.dsc_length = sizeof(ISC_QUAD);
 						d.dsc_flags = DSC_nullable;
 					}
+					else
+					{
+						d.dsc_dtype = (F.RDB$FIELD_TYPE != blr_blob) ?
+							gds_cvt_blr_dtype[F.RDB$FIELD_TYPE] : dtype_blob;
+						// dimitr: adjust the UDF arguments for CSTRING
+						if (d.dsc_dtype == dtype_cstring) {
+							d.dsc_dtype = dtype_text;
+						}
+						d.dsc_scale = F.RDB$FIELD_SCALE;
+						if (!F.RDB$FIELD_SUB_TYPE.NULL) {
+							d.dsc_sub_type = F.RDB$FIELD_SUB_TYPE;
+						}
+						else {
+							d.dsc_sub_type = 0;
+						}
+						d.dsc_length = F.RDB$FIELD_LENGTH;
+						if (d.dsc_dtype == dtype_varying) {
+							d.dsc_length += sizeof(USHORT);
+						}
+
+						if (!F.RDB$CHARACTER_SET_ID.NULL)
+						{
+							if (d.dsc_dtype != dtype_blob) {
+								d.dsc_ttype() = F.RDB$CHARACTER_SET_ID;
+							}
+							else {
+								d.dsc_scale = F.RDB$CHARACTER_SET_ID;
+							}
+						}
+
+						if (X.RDB$MECHANISM != FUN_value && X.RDB$MECHANISM != FUN_reference)
+						{
+							d.dsc_flags = DSC_nullable;
+						}
+					}
+
+					d.dsc_address = NULL;
 
 					if (!X.RDB$DEFAULT_VALUE.NULL ||
 						(fb_utils::implicit_domain(F.RDB$FIELD_NAME) && !F.RDB$DEFAULT_VALUE.NULL))
@@ -805,39 +818,52 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 			else
 			{
 				DSC d;
-				d.dsc_dtype = (X.RDB$FIELD_TYPE != blr_blob) ?
-					gds_cvt_blr_dtype[X.RDB$FIELD_TYPE] : dtype_blob;
-				// dimitr: adjust the UDF arguments for CSTRING
-				if (d.dsc_dtype == dtype_cstring) {
-					d.dsc_dtype = dtype_text;
-				}
-				d.dsc_scale = X.RDB$FIELD_SCALE;
-				if (!X.RDB$FIELD_SUB_TYPE.NULL) {
-					d.dsc_sub_type = X.RDB$FIELD_SUB_TYPE;
-				}
-				else {
+
+				if (X.RDB$MECHANISM == FUN_scalar_array)
+				{
+					d.dsc_dtype = dtype_array;
+					d.dsc_scale = 0;
 					d.dsc_sub_type = 0;
-				}
-				d.dsc_length = X.RDB$FIELD_LENGTH;
-				if (d.dsc_dtype == dtype_varying) {
-					d.dsc_length += sizeof(USHORT);
-				}
-				d.dsc_address = NULL;
-
-				if (!X.RDB$CHARACTER_SET_ID.NULL)
-				{
-					if (d.dsc_dtype != dtype_blob) {
-						d.dsc_ttype() = X.RDB$CHARACTER_SET_ID;
-					}
-					else {
-						d.dsc_scale = X.RDB$CHARACTER_SET_ID;
-					}
-				}
-
-				if (X.RDB$MECHANISM != FUN_value && X.RDB$MECHANISM != FUN_reference)
-				{
+					d.dsc_length = sizeof(ISC_QUAD);
 					d.dsc_flags = DSC_nullable;
 				}
+				else
+				{
+					d.dsc_dtype = (X.RDB$FIELD_TYPE != blr_blob) ?
+						gds_cvt_blr_dtype[X.RDB$FIELD_TYPE] : dtype_blob;
+					// dimitr: adjust the UDF arguments for CSTRING
+					if (d.dsc_dtype == dtype_cstring) {
+						d.dsc_dtype = dtype_text;
+					}
+					d.dsc_scale = X.RDB$FIELD_SCALE;
+					if (!X.RDB$FIELD_SUB_TYPE.NULL) {
+						d.dsc_sub_type = X.RDB$FIELD_SUB_TYPE;
+					}
+					else {
+						d.dsc_sub_type = 0;
+					}
+					d.dsc_length = X.RDB$FIELD_LENGTH;
+					if (d.dsc_dtype == dtype_varying) {
+						d.dsc_length += sizeof(USHORT);
+					}
+
+					if (!X.RDB$CHARACTER_SET_ID.NULL)
+					{
+						if (d.dsc_dtype != dtype_blob) {
+							d.dsc_ttype() = X.RDB$CHARACTER_SET_ID;
+						}
+						else {
+							d.dsc_scale = X.RDB$CHARACTER_SET_ID;
+						}
+					}
+
+					if (X.RDB$MECHANISM != FUN_value && X.RDB$MECHANISM != FUN_reference)
+					{
+						d.dsc_flags = DSC_nullable;
+					}
+				}
+
+				d.dsc_address = NULL;
 
 				if (!X.RDB$DEFAULT_VALUE.NULL)
 				{

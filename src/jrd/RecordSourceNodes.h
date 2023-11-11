@@ -878,7 +878,7 @@ public:
 	Firebird::Array<NestConst<RecordSourceNode> > rse_relations;
 	USHORT flags = 0;
 	USHORT rse_jointype = blr_inner;	// inner, left, full
-	TriState firstRows;					// optimize for first rows
+	Firebird::TriState firstRows;					// optimize for first rows
 };
 
 class SelectExprNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_SELECT_EXPR>

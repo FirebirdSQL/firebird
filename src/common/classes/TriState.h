@@ -29,6 +29,7 @@
 #ifndef CLASSES_TRISTATE_H
 #define CLASSES_TRISTATE_H
 
+namespace Firebird {
 
 class TriState
 {
@@ -129,5 +130,6 @@ inline bool TriState::toggle()
 	return true;
 }
 
+} // namespace Firebird
 
 #endif // CLASSES_TRISTATE_H

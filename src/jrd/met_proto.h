@@ -148,6 +148,6 @@ void MET_store_dependencies(Jrd::thread_db*, Firebird::Array<Jrd::CompilerScratc
 	const Jrd::jrd_rel*, const Jrd::MetaName&, int, Jrd::jrd_tra*);
 
 int			MET_get_linger(Jrd::thread_db*);
-TriState	MET_get_ss_definer(Jrd::thread_db*);
+Firebird::TriState	MET_get_ss_definer(Jrd::thread_db*);
 
 #endif // JRD_MET_PROTO_H

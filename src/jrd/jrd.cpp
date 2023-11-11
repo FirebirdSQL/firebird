@@ -877,91 +877,83 @@ bool Trigger::isActive() const
 
 void Trigger::compile(thread_db* tdbb)
 {
-	SET_TDBB(tdbb);
-
-	Database* dbb = tdbb->getDatabase();
-	Jrd::Attachment* const att = tdbb->getAttachment();
-
-	if (extTrigger)
+	if (extTrigger || statement)
 		return;
 
-	if (!statement)
+	const auto dbb = tdbb->getDatabase();
+	const auto att = tdbb->getAttachment();
+
+	// Allocate statement memory pool
+	MemoryPool* new_pool = att->createPool();
+
+	// Trigger request is not compiled yet. Lets do it now
+	USHORT par_flags = (USHORT) (flags & TRG_ignore_perm) ? csb_ignore_perm : 0;
+
+	if (type & 1)
+		par_flags |= csb_pre_trigger;
+	else
+		par_flags |= csb_post_trigger;
+
+	try
 	{
-		// Allocate statement memory pool
-		MemoryPool* new_pool = att->createPool();
+		Jrd::ContextPoolHolder context(tdbb, new_pool);
 
-		// Trigger request is not compiled yet. Lets do it now
-		USHORT par_flags = (USHORT) (flags & TRG_ignore_perm) ? csb_ignore_perm : 0;
+		AutoPtr<CompilerScratch> auto_csb(FB_NEW_POOL(*new_pool) CompilerScratch(*new_pool));
+		CompilerScratch* csb = auto_csb;
 
-		if (type & 1)
-			par_flags |= csb_pre_trigger;
+		csb->csb_g_flags |= par_flags;
+
+		if (engine.isEmpty())
+		{
+			TraceTrigCompile trace(tdbb, this);
+
+			if (debugInfo.hasData())
+			{
+				DBG_parse_debug_info((ULONG) debugInfo.getCount(), debugInfo.begin(),
+									 *csb->csb_dbg_info);
+			}
+
+			PAR_blr(tdbb, relation, blr.begin(), (ULONG) blr.getCount(), NULL, &csb, &statement,
+				(relation ? true : false), par_flags);
+
+			trace.finish(statement, ITracePlugin::RESULT_SUCCESS);
+		}
 		else
-			par_flags |= csb_post_trigger;
-
-		try
 		{
-			Jrd::ContextPoolHolder context(tdbb, new_pool);
-
-			AutoPtr<CompilerScratch> auto_csb(FB_NEW_POOL(*new_pool) CompilerScratch(*new_pool));
-			CompilerScratch* csb = auto_csb;
-
-			csb->csb_g_flags |= par_flags;
-
-			if (engine.isEmpty())
-			{
-				TraceTrigCompile trace(tdbb, this);
-
-				if (debugInfo.hasData())
-				{
-					DBG_parse_debug_info((ULONG) debugInfo.getCount(), debugInfo.begin(),
-										 *csb->csb_dbg_info);
-				}
-
-				PAR_blr(tdbb, relation, blr.begin(), (ULONG) blr.getCount(), NULL, &csb, &statement,
-					(relation ? true : false), par_flags);
-
-				trace.finish(statement, ITracePlugin::RESULT_SUCCESS);
-			}
-			else
-			{
-				dbb->dbb_extManager->makeTrigger(tdbb, csb, this, engine, entryPoint, extBody.c_str(),
-					(relation ?
-						(type & 1 ? IExternalTrigger::TYPE_BEFORE : IExternalTrigger::TYPE_AFTER) :
-						IExternalTrigger::TYPE_DATABASE));
-			}
+			dbb->dbb_extManager->makeTrigger(tdbb, csb, this, engine, entryPoint, extBody.c_str(),
+				(relation ?
+					(type & 1 ? IExternalTrigger::TYPE_BEFORE : IExternalTrigger::TYPE_AFTER) :
+					IExternalTrigger::TYPE_DATABASE));
 		}
-		catch (const Exception&)
-		{
-			if (statement)
-			{
-				statement->release(tdbb);
-				statement = NULL;
-			}
-			else
-				att->deletePool(new_pool);
-
-			throw;
-		}
-
-		statement->triggerName = name;
-		if (ssDefiner.asBool())
-			statement->triggerInvoker = att->getUserId(owner);
-
-		if (sysTrigger)
-			statement->flags |= Statement::FLAG_SYS_TRIGGER | Statement::FLAG_INTERNAL;
-
-		if (flags & TRG_ignore_perm)
-			statement->flags |= Statement::FLAG_IGNORE_PERM;
 	}
+	catch (const Exception&)
+	{
+		if (statement)
+		{
+			statement->release(tdbb);
+			statement = NULL;
+		}
+		else
+			att->deletePool(new_pool);
+
+		throw;
+	}
+
+	statement->triggerName = name;
+
+	if (ssDefiner.asBool())
+		statement->triggerInvoker = att->getUserId(owner);
+
+	if (sysTrigger)
+		statement->flags |= Statement::FLAG_SYS_TRIGGER | Statement::FLAG_INTERNAL;
+
+	if (flags & TRG_ignore_perm)
+		statement->flags |= Statement::FLAG_IGNORE_PERM;
 }
 
 void Trigger::release(thread_db* tdbb)
 {
-	if (extTrigger)
-	{
-		delete extTrigger;
-		extTrigger = NULL;
-	}
+	extTrigger.reset();
 
 	// dimitr:	We should never release triggers created by MET_parse_sys_trigger().
 	//			System triggers do have BLR, but it's not stored inside the trigger object.
